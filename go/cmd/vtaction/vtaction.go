@@ -36,7 +36,7 @@ func init() {
 }
 
 func main() {
-	dbconfigs.RegisterCommonFlags()
+	dbconfigs.RegisterFlags()
 	flag.Parse()
 	servenv.Init()
 	defer servenv.Close()

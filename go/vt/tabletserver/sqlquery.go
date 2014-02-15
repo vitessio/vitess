@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
@@ -66,6 +67,7 @@ type SqlQuery struct {
 	state   sync2.AtomicInt64
 
 	qe        *QueryEngine
+	rci       *RowcacheInvalidator
 	sessionId int64
 	dbconfig  *dbconfigs.DBConfig
 }
@@ -73,6 +75,7 @@ type SqlQuery struct {
 func NewSqlQuery(config Config) *SqlQuery {
 	sq := &SqlQuery{}
 	sq.qe = NewQueryEngine(config)
+	sq.rci = NewRowcacheInvalidator(sq.qe)
 	stats.PublishJSONFunc("Voltron", sq.statsJSON)
 	stats.Publish("TabletState", stats.IntFunc(sq.state.Get))
 	stats.Publish("TabletStateName", stats.StringFunc(sq.GetState))
@@ -90,12 +93,13 @@ func (sq *SqlQuery) setState(state int64) {
 	sq.state.Set(state)
 }
 
-func (sq *SqlQuery) allowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules) {
+func (sq *SqlQuery) allowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules, mysqld *mysqlctl.Mysqld) {
 	sq.statemu.Lock()
+	defer sq.statemu.Unlock()
+
 	v := sq.state.Get()
 	switch v {
 	case CONNECTING, ABORT, SERVING:
-		sq.statemu.Unlock()
 		log.Infof("Ignoring allowQueries request, current state: %v", v)
 		return
 	case INITIALIZING, SHUTTING_DOWN:
@@ -103,38 +107,34 @@ func (sq *SqlQuery) allowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides [
 	}
 	// state is NOT_SERVING
 	sq.setState(CONNECTING)
-	sq.statemu.Unlock()
 
-	// Try connecting. disallowQueries can change the state to ABORT during this time.
-	waitTime := time.Second
-	for {
-		params, err := dbconfigs.MysqlParams(&dbconfig.ConnectionParams)
-		if err == nil {
-			c, err := mysql.Connect(params)
+	// When this function exits, state can be CONNECTING or ABORT
+	func() {
+		sq.statemu.Unlock()
+		defer sq.statemu.Lock()
+
+		waitTime := time.Second
+		// disallowQueries can change the state to ABORT during this time.
+		for sq.state.Get() != ABORT {
+			params, err := dbconfigs.MysqlParams(&dbconfig.ConnectionParams)
 			if err == nil {
-				c.Close()
-				break
+				c, err := mysql.Connect(params)
+				if err == nil {
+					c.Close()
+					break
+				}
+				log.Errorf("mysql.Connect() error: %v", err)
+			} else {
+				log.Errorf("dbconfigs.MysqlParams error: %v", err)
 			}
-			log.Errorf("mysql.Connect() error: %v", err)
-		} else {
-			log.Errorf("dbconfigs.MysqlParams error: %v", err)
+			time.Sleep(waitTime)
+			// Cap at 32 seconds
+			if waitTime < 30*time.Second {
+				waitTime = waitTime * 2
+			}
 		}
-		time.Sleep(waitTime)
-		// Cap at 32 seconds
-		if waitTime < 30*time.Second {
-			waitTime = waitTime * 2
-		}
-		if sq.state.Get() == ABORT {
-			// Exclusive transition. No need to lock statemu.
-			sq.setState(NOT_SERVING)
-			log.Infof("allowQueries aborting")
-			return
-		}
-	}
+	}()
 
-	// Connection successful. Keep statemu locked.
-	sq.statemu.Lock()
-	defer sq.statemu.Unlock()
 	if sq.state.Get() == ABORT {
 		sq.setState(NOT_SERVING)
 		log.Infof("allowQueries aborting")
@@ -146,13 +146,17 @@ func (sq *SqlQuery) allowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides [
 		if x := recover(); x != nil {
 			log.Errorf("%s", x.(*TabletError).Message)
 			sq.qe.Close()
+			sq.rci.Close()
 			sq.setState(NOT_SERVING)
 			return
 		}
 		sq.setState(SERVING)
 	}()
 
-	sq.qe.Open(&dbconfig.ConnectionParams, schemaOverrides, qrs)
+	sq.qe.Open(&dbconfig.ConnectionParams, schemaOverrides, qrs, dbconfig.EnableRowcache)
+	if dbconfig.EnableRowcache && dbconfig.EnableInvalidator {
+		sq.rci.Open(dbconfig.DbName, mysqld)
+	}
 	sq.dbconfig = dbconfig
 	sq.sessionId = Rand()
 	log.Infof("Session id: %d", sq.sessionId)
@@ -161,6 +165,7 @@ func (sq *SqlQuery) allowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides [
 func (sq *SqlQuery) disallowQueries() {
 	sq.statemu.Lock()
 	defer sq.statemu.Unlock()
+
 	switch sq.state.Get() {
 	case CONNECTING:
 		sq.setState(ABORT)
@@ -178,6 +183,7 @@ func (sq *SqlQuery) disallowQueries() {
 
 	log.Infof("Stopping query service: %d", sq.sessionId)
 	sq.qe.Close()
+	sq.rci.Close()
 	sq.sessionId = 0
 	sq.dbconfig = &dbconfigs.DBConfig{}
 }

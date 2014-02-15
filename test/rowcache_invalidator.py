@@ -127,7 +127,7 @@ class RowCacheInvalidator(unittest.TestCase):
     invalidatorStats = self.replica_vars()
     logging.debug("Invalidations %d InvalidatorStats %s" %
                   (invalidations,
-                   invalidatorStats['RowcacheInvalidationCheckPoint']))
+                   invalidatorStats['RowcacheInvalidatorPosition']))
     self.assertTrue(invalidations > 0, "Invalidations are not flowing through.")
 
     res = replica_tablet.mquery('vt_test_keyspace',
@@ -220,8 +220,8 @@ class RowCacheInvalidator(unittest.TestCase):
     # check and display some stats
     invalidatorStats = self.replica_vars()
     logging.debug("invalidatorStats %s" %
-                  invalidatorStats['RowcacheInvalidationCheckPoint'])
-    self.assertEqual(invalidatorStats["RowcacheInvalidationState"], "Enabled",
+                  invalidatorStats['RowcacheInvalidatorPosition'])
+    self.assertEqual(invalidatorStats["RowcacheInvalidatorState"], "Running",
                      "Row-cache invalidator should be enabled")
 
   def test_cache_hit(self):
@@ -256,17 +256,17 @@ class RowCacheInvalidator(unittest.TestCase):
       time.sleep(0.1)
       invStats_after = self.replica_vars()
       logging.debug("Got state %s" %
-                    invStats_after["RowcacheInvalidationState"])
-      if invStats_after["RowcacheInvalidationState"] == "Disabled":
+                    invStats_after["RowcacheInvalidatorState"])
+      if invStats_after["RowcacheInvalidatorState"] == "Stopped":
         break
 
     # check all data is right
     inv_after = self.replica_stats()['Totals']['Invalidations']
     invStats_after = self.replica_vars()
-    logging.debug("Tablet Replica->Spare\n\tBefore: Invalidations: %d InvalidatorStats %s\n\tAfter: Invalidations: %d InvalidatorStats %s" % (inv_before, invStats_before['RowcacheInvalidationCheckPoint'], inv_after, invStats_after['RowcacheInvalidationCheckPoint']))
+    logging.debug("Tablet Replica->Spare\n\tBefore: Invalidations: %d InvalidatorStats %s\n\tAfter: Invalidations: %d InvalidatorStats %s" % (inv_before, invStats_before['RowcacheInvalidatorPosition'], inv_after, invStats_after['RowcacheInvalidatorPosition']))
     self.assertEqual(inv_after, 0,
                      "Row-cache invalid. should be disabled, no invalidations")
-    self.assertEqual(invStats_after["RowcacheInvalidationState"], "Disabled",
+    self.assertEqual(invStats_after["RowcacheInvalidatorState"], "Stopped",
                      "Row-cache invalidator should be disabled")
 
     # and restore the type

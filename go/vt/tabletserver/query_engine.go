@@ -78,6 +78,9 @@ type CacheInvalidator interface {
 	Delete(key string) bool
 }
 
+// NewQueryEngine creates a new QueryEngine.
+// This is a singleton class.
+// You must call this only once.
 func NewQueryEngine(config Config) *QueryEngine {
 	qe := &QueryEngine{}
 
@@ -115,14 +118,18 @@ func NewQueryEngine(config Config) *QueryEngine {
 	return qe
 }
 
-func (qe *QueryEngine) Open(info *mysql.ConnectionParams, schemaOverrides []SchemaOverride, qrs *QueryRules) {
+func (qe *QueryEngine) Open(info *mysql.ConnectionParams, schemaOverrides []SchemaOverride, qrs *QueryRules, enableRowcache bool) {
 	// Wait for Close, in case it's running
 	qe.mu.Lock()
 	defer qe.mu.Unlock()
 
 	connFactory := GenericConnectionCreator(info)
 
-	qe.cachePool.Open()
+	if enableRowcache {
+		qe.cachePool.Open()
+	} else {
+		log.Infof("rowcache not enabled")
+	}
 	start := time.Now()
 	qe.schemaInfo.Open(connFactory, schemaOverrides, qe.cachePool, qrs)
 	log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))

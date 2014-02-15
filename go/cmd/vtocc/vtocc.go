@@ -12,28 +12,38 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
 	ts "github.com/youtube/vitess/go/vt/tabletserver"
 )
 
 var (
-	port          = flag.Int("port", 6510, "tcp port to serve on")
-	overridesFile = flag.String("schema-override", "", "schema overrides file")
+	port              = flag.Int("port", 6510, "tcp port to serve on")
+	overridesFile     = flag.String("schema-override", "", "schema overrides file")
+	enableRowcache    = flag.Bool("enable-rowcache", false, "enable rowcacche")
+	enableInvalidator = flag.Bool("enable-invalidator", false, "enable rowcache invalidator")
+	binlogPath        = flag.String("binlog-path", "", "binlog path used by rowcache invalidator")
 )
 
 var schemaOverrides []ts.SchemaOverride
 
 func main() {
-	defaultDBConfig := dbconfigs.DefaultDBConfigs.App
-	defaultDBConfig.Host = "localhost"
-	dbconfigs.RegisterAppFlags(defaultDBConfig)
+	dbconfigs.RegisterFlags()
 	flag.Parse()
 	servenv.Init()
 
-	dbConfig, err := dbconfigs.InitApp("")
+	dbConfigs, err := dbconfigs.Init("")
 	if err != nil {
 		log.Fatalf("Cannot initialize App dbconfig: %v", err)
 	}
+	if *enableRowcache {
+		dbConfigs.App.EnableRowcache = true
+		if *enableInvalidator {
+			dbConfigs.App.EnableInvalidator = true
+		}
+	}
+	mycnf := &mysqlctl.Mycnf{BinLogPath: *binlogPath}
+	mysqld := mysqlctl.NewMysqld(mycnf, &dbConfigs.Dba, &dbConfigs.Repl)
 
 	unmarshalFile(*overridesFile, &schemaOverrides)
 	data, _ := json.MarshalIndent(schemaOverrides, "", "  ")
@@ -41,7 +51,7 @@ func main() {
 
 	ts.InitQueryService()
 
-	ts.AllowQueries(dbConfig, schemaOverrides, ts.LoadCustomRules())
+	ts.AllowQueries(&dbConfigs.App, schemaOverrides, ts.LoadCustomRules(), mysqld)
 
 	log.Infof("starting vtocc %v", *port)
 	servenv.OnClose(func() {
