@@ -124,8 +124,7 @@ func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) error {
 		rci.handleDmlEvent(event)
 	case "ERR":
 		dbname, err := sqlparser.GetDBName(event.Sql)
-		// TODO(sougou): Also check if dbname matches current db name
-		if err != nil || dbname == "" {
+		if err != nil || dbname == "" || dbname == rci.dbname {
 			log.Errorf("Unrecognized: %s", event.Sql)
 			internalErrors.Add("Invalidation", 1)
 		} else {
