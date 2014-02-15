@@ -100,10 +100,10 @@ func MysqlParams(cp *mysql.ConnectionParams) (mysql.ConnectionParams, error) {
 // shard.
 type DBConfig struct {
 	mysql.ConnectionParams
-	Keyspace          string `json:"keyspace"`
-	Shard             string `json:"shard"`
-	EnableRowcache    bool   `json:"enable_rowcache"`
-	EnableInvalidator bool   `json:"enable_invalidator"`
+	Keyspace          string
+	Shard             string
+	EnableRowcache    bool
+	EnableInvalidator bool
 }
 
 func (d *DBConfig) String() string {
@@ -119,9 +119,9 @@ func (d *DBConfig) String() string {
 // - Dba access for any dba-type operation (db creation, replication, ...)
 // - Replication access to change master
 type DBConfigs struct {
-	App  DBConfig               `json:"app"`
-	Dba  mysql.ConnectionParams `json:"dba"`
-	Repl mysql.ConnectionParams `json:"repl"`
+	App  DBConfig
+	Dba  mysql.ConnectionParams
+	Repl mysql.ConnectionParams
 }
 
 func (dbcfgs *DBConfigs) String() string {
@@ -160,7 +160,7 @@ func Init(socketFile string) (*DBConfigs, error) {
 
 	toLog := dbConfigs
 	toLog.Redact()
-	log.Infof("DBConfigs: %s\n", toLog)
+	log.Infof("DBConfigs: %v\n", toLog.String())
 	return &dbConfigs, nil
 }
 
