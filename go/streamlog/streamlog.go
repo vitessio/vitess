@@ -1,3 +1,7 @@
+// Copyright 2012, Google Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package streamlog
 
 import (
@@ -13,49 +17,22 @@ import (
 
 var droppedMessages = stats.NewCounters("StreamlogDroppedMessages")
 
-// A StreamLogger makes messages sent to it available through HTTP.
+// StreamLogger is a non-blocking broadcaster of messages.
+// Subscribers can use channels or HTTP.
 type StreamLogger struct {
-	dataQueue  chan Formatter
-	subscribed map[io.Writer]subscription
 	name       string
+	dataQueue  chan Formatter
 	mu         sync.Mutex
+	subscribed map[chan string]url.Values
 	// size is used to check if there are any subscriptions. Keep
 	// it atomically in sync with the size of subscribed.
 	size sync2.AtomicUint32
-	// seq is a guard for modifications of subscribed - increment
-	// it atomically whenever you modify it.
-	seq sync2.AtomicUint32
 }
 
-type subscription struct {
-	done   chan bool
-	params url.Values
-}
-
+// Formatter defines the interface that messages have to satisfy
+// to be broadcast through StreamLogger.
 type Formatter interface {
 	Format(url.Values) string
-}
-
-func (logger *StreamLogger) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-	}
-	<-logger.subscribe(w, r.Form)
-}
-
-func (logger *StreamLogger) String() string {
-	return logger.name
-}
-
-func (logger *StreamLogger) subscribe(w io.Writer, params url.Values) chan bool {
-	done := make(chan bool)
-	logger.mu.Lock()
-	defer logger.mu.Unlock()
-
-	logger.subscribed[w] = subscription{done: done, params: params}
-	logger.seq.Add(1)
-	logger.size.Set(uint32(len(logger.subscribed)))
-	return done
 }
 
 // New returns a new StreamLogger with a buffer that can contain size
@@ -64,55 +41,17 @@ func New(name string, size int) *StreamLogger {
 	logger := &StreamLogger{
 		name:       name,
 		dataQueue:  make(chan Formatter, size),
-		subscribed: make(map[io.Writer]subscription),
+		subscribed: make(map[chan string]url.Values),
 	}
 	go logger.stream()
 	return logger
 }
 
-// Handle makes logs sent to logger available throught HTTP at url.
+// ServeLogs registers the URL on which messages will be broadcast.
+// It is safe to register multiple URLs for the same StreamLogger.
 func (logger *StreamLogger) ServeLogs(url string) {
 	http.Handle(url, logger)
 	log.Infof("Streaming logs from %v at %v.", logger, url)
-}
-
-// stream sends messages sent to logger to all of its subscribed
-// writers. This method should be called in a goroutine.
-func (logger *StreamLogger) stream() {
-	seq := uint32(0)
-	var subscribed map[io.Writer]subscription
-
-	for message := range logger.dataQueue {
-
-		if s := logger.seq.Get(); s != seq {
-			logger.mu.Lock()
-			subscribed = make(map[io.Writer]subscription, len(logger.subscribed))
-			for w, subscription := range logger.subscribed {
-				subscribed[w] = subscription
-			}
-			seq = logger.seq.Get()
-			logger.mu.Unlock()
-		}
-
-		if len(subscribed) == 0 {
-			continue
-		}
-
-		for w, subscription := range subscribed {
-			messageString := message.Format(subscription.params)
-			if _, err := io.WriteString(w, messageString); err != nil {
-				subscription.done <- true
-
-				logger.mu.Lock()
-				delete(logger.subscribed, w)
-				logger.seq.Add(1)
-				logger.size.Set(uint32(len(logger.subscribed)))
-				logger.mu.Unlock()
-			} else {
-				w.(http.Flusher).Flush()
-			}
-		}
-	}
 }
 
 // Send sends message to all the writers subscribed to logger. Calling
@@ -126,5 +65,69 @@ func (logger *StreamLogger) Send(message Formatter) {
 	case logger.dataQueue <- message:
 	default:
 		droppedMessages.Add(logger.name, 1)
+	}
+}
+
+// Subscribe returns a channel which can be used to listen
+// for messages.
+func (logger *StreamLogger) Subscribe(params url.Values) chan string {
+	logger.mu.Lock()
+	defer logger.mu.Unlock()
+
+	ch := make(chan string, 1)
+	logger.subscribed[ch] = params
+	logger.size.Set(uint32(len(logger.subscribed)))
+	return ch
+}
+
+// Unsubscribe removes the channel from the subscription.
+func (logger *StreamLogger) Unsubscribe(ch chan string) {
+	logger.mu.Lock()
+	defer logger.mu.Unlock()
+
+	delete(logger.subscribed, ch)
+	logger.size.Set(uint32(len(logger.subscribed)))
+}
+
+// stream sends messages sent to logger to all of its subscribed
+// writers. This method should be called in a goroutine.
+func (logger *StreamLogger) stream() {
+	for message := range logger.dataQueue {
+		logger.transmit(message)
+	}
+}
+
+func (logger *StreamLogger) transmit(message Formatter) {
+	logger.mu.Lock()
+	defer logger.mu.Unlock()
+
+	for ch, params := range logger.subscribed {
+		messageString := message.Format(params)
+		select {
+		case ch <- messageString:
+		default:
+			droppedMessages.Add(logger.name, 1)
+		}
+	}
+}
+
+// Name returns the name of StreamLogger.
+func (logger *StreamLogger) Name() string {
+	return logger.name
+}
+
+// ServeHTTP is the http handler for StreamLogger.
+func (logger *StreamLogger) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
+	ch := logger.Subscribe(r.Form)
+	defer logger.Unsubscribe(ch)
+
+	for messageString := range ch {
+		if _, err := io.WriteString(w, messageString); err != nil {
+			return
+		}
+		w.(http.Flusher).Flush()
 	}
 }

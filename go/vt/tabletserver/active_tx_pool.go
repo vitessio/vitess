@@ -204,9 +204,11 @@ func (txc *TxConnection) RecordQuery(query string) {
 func (txc *TxConnection) discard(conclusion string) {
 	txc.conclusion = conclusion
 	txc.endTime = time.Now()
-	TxLogger.Send(txc)
 	txc.pool.pool.Unregister(txc.transactionId)
 	txc.PoolConnection.Recycle()
+	// Ensure PoolConnection won't be accessed after Recycle.
+	txc.PoolConnection = nil
+	TxLogger.Send(txc)
 }
 
 func (txc *TxConnection) Format(params url.Values) string {
