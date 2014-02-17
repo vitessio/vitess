@@ -211,12 +211,14 @@ func (txc *TxConnection) discard(conclusion string) {
 	TxLogger.Send(txc)
 }
 
+const txTimeLayout = "2006-01-02 15:04:05.9999"
+
 func (txc *TxConnection) Format(params url.Values) string {
 	return fmt.Sprintf(
-		"%v\t%v\t%v\t%.9f\t%v\t%v\t\n",
+		"%v\t%v\t%v\t%.6f\t%v\t%v\t\n",
 		txc.transactionId,
-		txc.startTime,
-		txc.endTime,
+		txc.startTime.Format(txTimeLayout),
+		txc.endTime.Format(txTimeLayout),
 		txc.endTime.Sub(txc.startTime).Seconds(),
 		txc.conclusion,
 		strings.Join(txc.queries, ";"),
