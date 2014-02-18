@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"sort"
 
-	log "github.com/golang/glog"
-
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
 	"github.com/youtube/vitess/go/vt/key"
@@ -121,9 +119,6 @@ func (ss *SrvShard) UnmarshalBson(buf *bytes.Buffer) {
 		case "TabletTypes":
 			ss.TabletTypes = DecodeTabletTypeArray(buf, kind)
 		default:
-			// we can afford to log here as we don't have a lot
-			// of QPS on this
-			log.Warningf("Unknown field %v in SrvShard, skipping it", keyName)
 			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
@@ -204,9 +199,6 @@ func (kp *KeyspacePartition) UnmarshalBson(buf *bytes.Buffer) {
 		case "Shards":
 			kp.Shards = DecodeSrvShardArray(buf, kind)
 		default:
-			// we can afford to log here as we don't have a lot
-			// of QPS on this
-			log.Warningf("Unknown field %v in KeyspacePartition, skipping it", keyName)
 			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
@@ -353,9 +345,6 @@ func (sk *SrvKeyspace) UnmarshalBson(buf *bytes.Buffer) {
 		case "ServedFrom":
 			sk.ServedFrom = DecodeServedFrom(buf, kind)
 		default:
-			// we can afford to log here as we don't have a lot
-			// of QPS on this
-			log.Warningf("Unknown field %v in SrvKeyspace, skipping it", keyName)
 			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
