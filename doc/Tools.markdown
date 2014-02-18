@@ -33,6 +33,16 @@ tasks initiated from vtctl.
 It also provides streaming services that are used for
 filtered replication and data export.
 
+#### vtocc
+Vtocc is the previous version of vttablet. It handles query management
+(same as vttablet) but is not part of a larger system, it's a standalone
+program that doesn't require a Topology Server. It is useful for
+unit tests and when the only required feature is the query service
+(with connection pooling, query de-dup, ...).
+
+Note we may eventually produce a version of vttablet that runs
+without a Topology Server, and use it instead of vttablet.
+
 ### vtgate
 vtgate's goal is to provide a unified view of the entire fleet.
 It will be the server that applications will connect to for
