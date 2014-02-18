@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"sort"
 
+	log "github.com/golang/glog"
+
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
 	"github.com/youtube/vitess/go/vt/key"
@@ -19,7 +21,7 @@ import (
 const SHARD_ZERO = "0"
 
 // SrvShard contains a roll-up of the shard in the local namespace.
-// In zk, it is under /zk/local/vt/ns/<keyspace>/<shard>
+// In zk, it is under /zk/<cell>/vt/ns/<keyspace>/<shard>
 type SrvShard struct {
 	// Copied from Shard
 	KeyRange    key.KeyRange
@@ -119,7 +121,10 @@ func (ss *SrvShard) UnmarshalBson(buf *bytes.Buffer) {
 		case "TabletTypes":
 			ss.TabletTypes = DecodeTabletTypeArray(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", keyName))
+			// we can afford to log here as we don't have a lot
+			// of QPS on this
+			log.Warningf("Unknown field %v in SrvShard, skipping it", keyName)
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}
@@ -199,7 +204,10 @@ func (kp *KeyspacePartition) UnmarshalBson(buf *bytes.Buffer) {
 		case "Shards":
 			kp.Shards = DecodeSrvShardArray(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", keyName))
+			// we can afford to log here as we don't have a lot
+			// of QPS on this
+			log.Warningf("Unknown field %v in KeyspacePartition, skipping it", keyName)
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}
@@ -345,7 +353,10 @@ func (sk *SrvKeyspace) UnmarshalBson(buf *bytes.Buffer) {
 		case "ServedFrom":
 			sk.ServedFrom = DecodeServedFrom(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", keyName))
+			// we can afford to log here as we don't have a lot
+			// of QPS on this
+			log.Warningf("Unknown field %v in SrvKeyspace, skipping it", keyName)
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}
