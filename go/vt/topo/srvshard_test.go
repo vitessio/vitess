@@ -97,8 +97,7 @@ func TestSrvKeySpace(t *testing.T) {
 		t.Error(err)
 	}
 	err = bson.Unmarshal(unexpected, &unmarshalled)
-	want = "Unrecognized tag Extra"
-	if err == nil || want != err.Error() {
-		t.Errorf("want %v, got %v", want, err)
+	if err != nil {
+		t.Error(err)
 	}
 }
