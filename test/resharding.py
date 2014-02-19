@@ -604,6 +604,13 @@ primary key (name)
     # rebuild the serving graph, all mentions of the old shards shoud be gone
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
+    # test RemoveShardCell
+    utils.run_vtctl(['RemoveShardCell', 'test_keyspace/-80', 'test_nj'], auto_log=True, expect_fail=True)
+    utils.run_vtctl(['RemoveShardCell', 'test_keyspace/80-', 'test_nj'], auto_log=True)
+    shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/80-'])
+    self.assertEqual(shard['Cells'], [],
+                     "Non-empty Cells record for shard: %s" % str(shard))
+
     # delete the original shard
     utils.run_vtctl(['DeleteShard', 'test_keyspace/80-'], auto_log=True)
 

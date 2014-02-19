@@ -160,6 +160,9 @@ var commands = []commandGroup{
 			command{"ShardReplicationFix", commandShardReplicationFix,
 				"<cell> <keyspace/shard|zk shard path>",
 				"Walks through a ShardReplication object and fixes the first error it encrounters"},
+			command{"RemoveShardCell", commandRemoveShardCell,
+				"[-force] <keyspace/shard|zk shard path> <cell>",
+				"Removes the cell in the shard's Cells list."},
 			command{"DeleteShard", commandDeleteShard,
 				"<keyspace/shard|zk shard path> ...",
 				"Deletes the given shard(s)"},
@@ -1175,6 +1178,17 @@ func commandShardReplicationFix(wr *wrangler.Wrangler, subFlags *flag.FlagSet, a
 	cell := subFlags.Arg(0)
 	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(1))
 	return "", topo.FixShardReplication(wr.TopoServer(), cell, keyspace, shard)
+}
+
+func commandRemoveShardCell(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (status string, err error) {
+	force := subFlags.Bool("force", false, "will keep going even we can't reach the cell's topology server to check for tablets")
+	subFlags.Parse(args)
+	if subFlags.NArg() != 2 {
+		log.Fatalf("action RemoveShardCell requires <keyspace/shard|zk shard path> <cell>")
+	}
+
+	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
+	return "", wr.RemoveShardCell(keyspace, shard, subFlags.Arg(1), *force)
 }
 
 func commandDeleteShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (status string, err error) {

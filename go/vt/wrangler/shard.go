@@ -105,3 +105,74 @@ func (wr *Wrangler) DeleteShard(keyspace, shard string) error {
 
 	return wr.ts.DeleteShard(keyspace, shard)
 }
+
+// RemoveShardCell will remove a cell from the Cells list in a shard.
+// It will first check the shard has no tablets there.  if 'force' is
+// specified, it will remove the cell even when the tablet map cannot
+// be retrieved. This is intended to be used when a cell is completely
+// down and its topology server cannot even be reached.
+func (wr *Wrangler) RemoveShardCell(keyspace, shard, cell string, force bool) error {
+	actionNode := actionnode.UpdateShard()
+	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
+	if err != nil {
+		return err
+	}
+
+	err = wr.removeShardCell(keyspace, shard, cell, force)
+	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
+}
+
+func (wr *Wrangler) removeShardCell(keyspace, shard, cell string, force bool) error {
+	shardInfo, err := wr.ts.GetShardCritical(keyspace, shard)
+	if err != nil {
+		return err
+	}
+
+	// check the cell is in the list already
+	if !topo.InCellList(cell, shardInfo.Cells) {
+		return fmt.Errorf("Cell %v in not in shard info", cell)
+	}
+
+	// check the master alias is not in the cell
+	if shardInfo.MasterAlias.Cell == cell {
+		return fmt.Errorf("Master %v is in the cell '%v' we want to remove", shardInfo.MasterAlias, cell)
+	}
+
+	// get the ShardReplication object in the cell
+	sri, err := wr.ts.GetShardReplication(cell, keyspace, shard)
+	switch err {
+	case nil:
+		if len(sri.ReplicationLinks) > 0 {
+			return fmt.Errorf("Cell %v has %v possible tablets in replication graph", cell, len(sri.ReplicationLinks))
+		}
+
+		// ShardReplication object is now useless, remove it
+		if err := wr.ts.DeleteShardReplication(cell, keyspace, shard); err != nil {
+			return fmt.Errorf("Error deleting ShardReplication object in cell %v: %v", cell, err)
+		}
+
+		// we keep going
+	case topo.ErrNoNode:
+		// no ShardReplication object, we keep going
+	default:
+		// we can't get the object, assume topo server is down there,
+		// so we look at force flag
+		if force {
+			log.Warningf("Cannot get ShardReplication from cell %v, assuming cell topo server is down, and forcing the removal", cell)
+		} else {
+			return err
+		}
+	}
+
+	// now we can update the shard
+	log.Infof("Removing cell %v from shard %v/%v", cell, keyspace, shard)
+	newCells := make([]string, 0, len(shardInfo.Cells)-1)
+	for _, c := range shardInfo.Cells {
+		if c != cell {
+			newCells = append(newCells, c)
+		}
+	}
+	shardInfo.Cells = newCells
+
+	return wr.ts.UpdateShard(shardInfo)
+}
