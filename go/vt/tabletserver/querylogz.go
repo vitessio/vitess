@@ -115,7 +115,7 @@ func queryLogzHandler(w http.ResponseWriter, r *http.Request) {
 				Value.MySQL = strs[12]
 				Value.Conn = strs[13]
 				Value.PlanType = strs[6]
-				Value.Sql = strs[7]
+				Value.Sql = strings.Trim(strs[7], "\"")
 				Value.Queries = strs[9]
 				Value.Sources = strs[11]
 				Value.Rows = strs[14]
