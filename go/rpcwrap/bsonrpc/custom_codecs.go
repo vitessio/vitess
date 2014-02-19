@@ -37,7 +37,7 @@ func (req *RequestBson) UnmarshalBson(buf *bytes.Buffer) {
 		case "Seq":
 			req.Seq = bson.DecodeUint64(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}
@@ -72,7 +72,7 @@ func (resp *ResponseBson) UnmarshalBson(buf *bytes.Buffer) {
 		case "Error":
 			resp.Error = bson.DecodeString(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}

@@ -41,7 +41,7 @@ unit tests and when the only required feature is the query service
 (with connection pooling, query de-dup, ...).
 
 Note we may eventually produce a version of vttablet that runs
-without a Topology Server, and use it instead of vttablet.
+without a Topology Server, and use it instead of vtocc.
 
 ### vtgate
 vtgate's goal is to provide a unified view of the entire fleet.

@@ -151,12 +151,12 @@ func (log *sqlQueryStats) Username() string {
 func (log *sqlQueryStats) Format(params url.Values) string {
 	_, fullBindParams := params["full"]
 	return fmt.Sprintf(
-		"%v\t%v\t%v\t%v\t%v\t%.9f\t%v\t%q\t%v\t%v\t%q\t%v\t%.9f\t%.9f\t%v\t%v\t%v\t%v\t%v\t\n",
+		"%v\t%v\t%v\t%v\t%v\t%.6f\t%v\t%q\t%v\t%v\t%q\t%v\t%.6f\t%.6f\t%v\t%v\t%v\t%v\t%v\t\n",
 		log.Method,
 		log.RemoteAddr(),
 		log.Username(),
-		log.StartTime,
-		log.EndTime,
+		log.StartTime.Format(time.StampMicro),
+		log.EndTime.Format(time.StampMicro),
 		log.TotalTime().Seconds(),
 		log.PlanType,
 		log.OriginalSql,

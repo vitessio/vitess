@@ -16,7 +16,7 @@ type reflectBinlogTransaction struct {
 	GroupId    int64
 }
 
-type badBinlogTransaction struct {
+type extraBinlogTransaction struct {
 	Extra      int
 	Statements []reflectStatement
 	GroupId    int64
@@ -69,13 +69,12 @@ func TestBinlogTransaction(t *testing.T) {
 		t.Errorf("%#v != %#v", custom, unmarshalled)
 	}
 
-	unexpected, err := bson.Marshal(&badBinlogTransaction{})
+	extra, err := bson.Marshal(&extraBinlogTransaction{})
 	if err != nil {
 		t.Error(err)
 	}
-	err = bson.Unmarshal(unexpected, &unmarshalled)
-	want = "Unrecognized tag Extra"
-	if err == nil || want != err.Error() {
-		t.Errorf("want %v, got %v", want, err)
+	err = bson.Unmarshal(extra, &unmarshalled)
+	if err != nil {
+		t.Error(err)
 	}
 }

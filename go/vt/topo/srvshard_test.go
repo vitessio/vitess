@@ -22,7 +22,7 @@ type reflectSrvKeyspace struct {
 	version            int64
 }
 
-type badSrvKeyspace struct {
+type extraSrvKeyspace struct {
 	Extra              int
 	Partitions         map[TabletType]*KeyspacePartition
 	Shards             []SrvShard
@@ -92,13 +92,12 @@ func TestSrvKeySpace(t *testing.T) {
 		t.Errorf("want \n%#v, got \n%#v", custom, unmarshalled)
 	}
 
-	unexpected, err := bson.Marshal(&badSrvKeyspace{})
+	extra, err := bson.Marshal(&extraSrvKeyspace{})
 	if err != nil {
 		t.Error(err)
 	}
-	err = bson.Unmarshal(unexpected, &unmarshalled)
-	want = "Unrecognized tag Extra"
-	if err == nil || want != err.Error() {
-		t.Errorf("want %v, got %v", want, err)
+	err = bson.Unmarshal(extra, &unmarshalled)
+	if err != nil {
+		t.Error(err)
 	}
 }

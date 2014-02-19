@@ -32,7 +32,7 @@ func (zkPath *ZkPath) UnmarshalBson(buf *bytes.Buffer) {
 		case "Path":
 			zkPath.Path = bson.DecodeString(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}
@@ -57,7 +57,7 @@ func (zkPathV *ZkPathV) UnmarshalBson(buf *bytes.Buffer) {
 		case "Paths":
 			zkPathV.Paths = bson.DecodeStringArray(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s for ZkPathV.Paths", key))
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}
@@ -112,7 +112,7 @@ func (zkStat *ZkStat) UnmarshalBson(buf *bytes.Buffer) {
 		case "Pzxid":
 			zkStat.pzxid = bson.DecodeInt64(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s for ZkStat", key))
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}
@@ -158,7 +158,7 @@ func (zkNode *ZkNode) UnmarshalBson(buf *bytes.Buffer) {
 		case "Stale":
 			zkNode.Stale = bson.DecodeBool(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s for ZkNode", key))
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}
@@ -224,7 +224,7 @@ func (zkNodeV *ZkNodeV) UnmarshalBson(buf *bytes.Buffer) {
 		case "Nodes":
 			zkNodeV.Nodes = unmarshalZkNodeArray(buf, "ZkNodeV.Nodes", kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s for ZkStat", key))
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}
