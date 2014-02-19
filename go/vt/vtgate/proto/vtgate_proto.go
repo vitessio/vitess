@@ -84,7 +84,7 @@ func (session *Session) UnmarshalBson(buf *bytes.Buffer) {
 		case "ShardSessions":
 			session.ShardSessions = decodeShardSessionsBson(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", keyName))
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}
@@ -133,7 +133,7 @@ func (shardSession *ShardSession) UnmarshalBson(buf *bytes.Buffer) {
 		case "TransactionId":
 			shardSession.TransactionId = bson.DecodeInt64(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", keyName))
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}
@@ -188,10 +188,12 @@ func (qrs *QueryShard) UnmarshalBson(buf *bytes.Buffer) {
 		case "Shards":
 			qrs.Shards = bson.DecodeStringArray(buf, kind)
 		case "Session":
-			qrs.Session = new(Session)
-			qrs.Session.UnmarshalBson(buf)
+			if kind != bson.Null {
+				qrs.Session = new(Session)
+				qrs.Session.UnmarshalBson(buf)
+			}
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", keyName))
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}
@@ -253,12 +255,14 @@ func (qr *QueryResult) UnmarshalBson(buf *bytes.Buffer) {
 		case "Rows":
 			qr.Rows = mproto.DecodeRowsBson(buf, kind)
 		case "Session":
-			qr.Session = new(Session)
-			qr.Session.UnmarshalBson(buf)
+			if kind != bson.Null {
+				qr.Session = new(Session)
+				qr.Session.UnmarshalBson(buf)
+			}
 		case "Error":
 			qr.Error = bson.DecodeString(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", keyName))
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}
@@ -309,10 +313,12 @@ func (bqs *BatchQueryShard) UnmarshalBson(buf *bytes.Buffer) {
 		case "TabletType":
 			bqs.TabletType = topo.TabletType(bson.DecodeString(buf, kind))
 		case "Session":
-			bqs.Session = new(Session)
-			bqs.Session.UnmarshalBson(buf)
+			if kind != bson.Null {
+				bqs.Session = new(Session)
+				bqs.Session.UnmarshalBson(buf)
+			}
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", keyName))
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}
@@ -355,12 +361,14 @@ func (qrl *QueryResultList) UnmarshalBson(buf *bytes.Buffer) {
 		case "List":
 			qrl.List = tproto.DecodeResultsBson(buf, kind)
 		case "Session":
-			qrl.Session = new(Session)
-			qrl.Session.UnmarshalBson(buf)
+			if kind != bson.Null {
+				qrl.Session = new(Session)
+				qrl.Session.UnmarshalBson(buf)
+			}
 		case "Error":
 			qrl.Error = bson.DecodeString(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", keyName))
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}
@@ -411,10 +419,12 @@ func (sqs *StreamQueryKeyRange) UnmarshalBson(buf *bytes.Buffer) {
 		case "TabletType":
 			sqs.TabletType = topo.TabletType(bson.DecodeString(buf, kind))
 		case "Session":
-			sqs.Session = new(Session)
-			sqs.Session.UnmarshalBson(buf)
+			if kind != bson.Null {
+				sqs.Session = new(Session)
+				sqs.Session.UnmarshalBson(buf)
+			}
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", keyName))
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}

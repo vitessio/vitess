@@ -35,7 +35,7 @@ func UnmarshalFieldBson(field *Field, buf *bytes.Buffer) {
 		case "Type":
 			field.Type = bson.DecodeInt64(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}
@@ -103,7 +103,7 @@ func (qr *QueryResult) UnmarshalBson(buf *bytes.Buffer) {
 		case "Rows":
 			qr.Rows = DecodeRowsBson(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}

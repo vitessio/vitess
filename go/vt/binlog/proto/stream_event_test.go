@@ -21,7 +21,7 @@ type reflectStreamEvent struct {
 	GroupId    int64
 }
 
-type badStreamEvent struct {
+type extraStreamEvent struct {
 	Extra      int
 	Category   string
 	TableName  string
@@ -90,13 +90,12 @@ func TestStreamEvent(t *testing.T) {
 		t.Errorf("want\n%#v, got\n%#v", want, got)
 	}
 
-	unexpected, err := bson.Marshal(&badStreamEvent{})
+	extra, err := bson.Marshal(&extraStreamEvent{})
 	if err != nil {
 		t.Error(err)
 	}
-	err = bson.Unmarshal(unexpected, &unmarshalled)
-	want = "Unrecognized tag Extra"
-	if err == nil || want != err.Error() {
-		t.Errorf("want %v, got %v", want, err)
+	err = bson.Unmarshal(extra, &unmarshalled)
+	if err != nil {
+		t.Error(err)
 	}
 }

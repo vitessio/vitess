@@ -100,7 +100,7 @@ func (a *alltypes) UnmarshalBson(buf *bytes.Buffer) {
 		case "Nil":
 			verifyKind("Nil", Null, kind)
 		default:
-			panic(NewBsonError("Unrecognized tag %s", key))
+			Skip(buf, kind)
 		}
 		kind = NextByte(buf)
 	}
@@ -361,8 +361,9 @@ type LotsMoreFields struct {
 	ExtraField1  string
 	ExtraField2  HasPrivate
 	ExtraField3  []string
+	ExtraField4  int
 	CommonField2 string
-	ExtraField4  uint64
+	ExtraField5  uint64
 }
 
 type LotsFewerFields struct {
@@ -378,6 +379,7 @@ func TestSkipUnknownFields(t *testing.T) {
 		ExtraField3:  []string{"s1", "s2"},
 		CommonField2: "value3",
 		ExtraField4:  6455,
+		ExtraField5:  345,
 	}
 	marshaled := VerifyMarshal(t, v)
 	unmarshaled := new(LotsFewerFields)

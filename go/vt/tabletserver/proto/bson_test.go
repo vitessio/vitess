@@ -17,7 +17,7 @@ type reflectQuery struct {
 	SessionId     int64
 }
 
-type badQuery struct {
+type extraQuery struct {
 	Extra         int
 	Sql           string
 	BindVariables map[string]interface{}
@@ -70,14 +70,13 @@ func TestQuery(t *testing.T) {
 		t.Errorf("want %v, got %v", custom.BindVariables["val"], unmarshalled.BindVariables["val"])
 	}
 
-	unexpected, err := bson.Marshal(&badQuery{})
+	extra, err := bson.Marshal(&extraQuery{})
 	if err != nil {
 		t.Error(err)
 	}
-	err = bson.Unmarshal(unexpected, &unmarshalled)
-	want = "Unrecognized tag Extra"
-	if err == nil || want != err.Error() {
-		t.Errorf("want %v, got %v", want, err)
+	err = bson.Unmarshal(extra, &unmarshalled)
+	if err != nil {
+		t.Error(err)
 	}
 }
 
@@ -86,7 +85,7 @@ type reflectSession struct {
 	SessionId     int64
 }
 
-type badSession struct {
+type extraSession struct {
 	Extra         int
 	TransactionId int64
 	SessionId     int64
@@ -124,14 +123,13 @@ func TestSession(t *testing.T) {
 		t.Errorf("want %v, got %#v", custom, unmarshalled)
 	}
 
-	unexpected, err := bson.Marshal(&badSession{})
+	extra, err := bson.Marshal(&extraSession{})
 	if err != nil {
 		t.Error(err)
 	}
-	err = bson.Unmarshal(unexpected, &unmarshalled)
-	want = "Unrecognized tag Extra"
-	if err == nil || want != err.Error() {
-		t.Errorf("want %v, got %v", want, err)
+	err = bson.Unmarshal(extra, &unmarshalled)
+	if err != nil {
+		t.Error(err)
 	}
 }
 
@@ -140,7 +138,7 @@ type reflectBoundQuery struct {
 	BindVariables map[string]interface{}
 }
 
-type badBoundQuery struct {
+type extraBoundQuery struct {
 	Extra         int
 	Sql           string
 	BindVariables map[string]interface{}
@@ -181,14 +179,13 @@ func TestBoundQuery(t *testing.T) {
 		t.Errorf("want %v, got %v", custom.BindVariables["val"], unmarshalled.BindVariables["val"])
 	}
 
-	unexpected, err := bson.Marshal(&badBoundQuery{})
+	extra, err := bson.Marshal(&extraBoundQuery{})
 	if err != nil {
 		t.Error(err)
 	}
-	err = bson.Unmarshal(unexpected, &unmarshalled)
-	want = "Unrecognized tag Extra"
-	if err == nil || want != err.Error() {
-		t.Errorf("want %v, got %v", want, err)
+	err = bson.Unmarshal(extra, &unmarshalled)
+	if err != nil {
+		t.Error(err)
 	}
 }
 
@@ -198,7 +195,7 @@ type reflectQueryList struct {
 	SessionId     int64
 }
 
-type badQueryList struct {
+type extraQueryList struct {
 	Extra         int
 	Queries       []BoundQuery
 	TransactionId int64
@@ -254,13 +251,12 @@ func TestQueryList(t *testing.T) {
 		t.Errorf("want %v, got %v", custom.Queries[0].BindVariables["val"], unmarshalled.Queries[0].BindVariables["val"])
 	}
 
-	unexpected, err := bson.Marshal(&badQueryList{})
+	extra, err := bson.Marshal(&extraQueryList{})
 	if err != nil {
 		t.Error(err)
 	}
-	err = bson.Unmarshal(unexpected, &unmarshalled)
-	want = "Unrecognized tag Extra"
-	if err == nil || want != err.Error() {
-		t.Errorf("want %v, got %v", want, err)
+	err = bson.Unmarshal(extra, &unmarshalled)
+	if err != nil {
+		t.Error(err)
 	}
 }

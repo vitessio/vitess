@@ -16,7 +16,7 @@ type reflectRequestBson struct {
 	Seq           int64
 }
 
-type badRequestBson struct {
+type extraRequestBson struct {
 	Extra         int
 	ServiceMethod string
 	Seq           int64
@@ -59,14 +59,13 @@ func TestRequestBson(t *testing.T) {
 		t.Errorf("want %v, got %#v", custom.Seq, unmarshalled.Seq)
 	}
 
-	unexpected, err := bson.Marshal(&badRequestBson{})
+	extra, err := bson.Marshal(&extraRequestBson{})
 	if err != nil {
 		t.Error(err)
 	}
-	err = bson.Unmarshal(unexpected, &unmarshalled)
-	want = "Unrecognized tag Extra"
-	if err == nil || want != err.Error() {
-		t.Errorf("want %v, got %v", want, err)
+	err = bson.Unmarshal(extra, &unmarshalled)
+	if err != nil {
+		t.Error(err)
 	}
 }
 
@@ -76,7 +75,7 @@ type reflectResponseBson struct {
 	Error         string
 }
 
-type badResponseBson struct {
+type extraResponseBson struct {
 	Extra         int
 	ServiceMethod string
 	Seq           int64
@@ -125,13 +124,12 @@ func TestResponseBson(t *testing.T) {
 		t.Errorf("want %v, got %#v", custom.Error, unmarshalled.Error)
 	}
 
-	unexpected, err := bson.Marshal(&badResponseBson{})
+	extra, err := bson.Marshal(&extraResponseBson{})
 	if err != nil {
 		t.Error(err)
 	}
-	err = bson.Unmarshal(unexpected, &unmarshalled)
-	want = "Unrecognized tag Extra"
-	if err == nil || want != err.Error() {
-		t.Errorf("want %v, got %v", want, err)
+	err = bson.Unmarshal(extra, &unmarshalled)
+	if err != nil {
+		t.Error(err)
 	}
 }

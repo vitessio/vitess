@@ -66,7 +66,7 @@ func (blt *BinlogTransaction) UnmarshalBson(buf *bytes.Buffer) {
 		case "GroupId":
 			blt.GroupId = bson.DecodeInt64(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}
@@ -118,7 +118,7 @@ func (stmt *Statement) UnmarshalBson(buf *bytes.Buffer) {
 		case "Sql":
 			stmt.Sql = bson.DecodeBytes(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}

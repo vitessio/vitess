@@ -176,7 +176,7 @@ func (kr *KeyRange) UnmarshalBson(buf *bytes.Buffer) {
 		case "End":
 			kr.End = KeyspaceId(bson.DecodeString(buf, kind))
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}

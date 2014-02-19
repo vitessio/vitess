@@ -17,7 +17,7 @@ type reflectField struct {
 	Type int64
 }
 
-type badQueryResult struct {
+type extraQueryResult struct {
 	Extra        int
 	Fields       []reflectField
 	RowsAffected uint64
@@ -68,13 +68,12 @@ func TestQueryResult(t *testing.T) {
 		t.Errorf("want %s, got %s", custom.Rows[0][0].Raw(), unmarshalled.Rows[0][0].Raw())
 	}
 
-	unexpected, err := bson.Marshal(&badQueryResult{})
+	extra, err := bson.Marshal(&extraQueryResult{})
 	if err != nil {
 		t.Error(err)
 	}
-	err = bson.Unmarshal(unexpected, &unmarshalled)
-	want = "Unrecognized tag Extra"
-	if err == nil || want != err.Error() {
-		t.Errorf("want %v, got %v", want, err)
+	err = bson.Unmarshal(extra, &unmarshalled)
+	if err != nil {
+		t.Error(err)
 	}
 }

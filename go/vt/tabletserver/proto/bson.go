@@ -53,7 +53,7 @@ func (query *Query) UnmarshalBson(buf *bytes.Buffer) {
 		case "SessionId":
 			query.SessionId = bson.DecodeInt64(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}
@@ -152,7 +152,7 @@ func (session *Session) UnmarshalBson(buf *bytes.Buffer) {
 		case "SessionId":
 			session.SessionId = bson.DecodeInt64(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}
@@ -180,7 +180,7 @@ func (bdq *BoundQuery) UnmarshalBson(buf *bytes.Buffer) {
 		case "BindVariables":
 			bdq.BindVariables = DecodeBindVariablesBson(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}
@@ -245,7 +245,7 @@ func (ql *QueryList) UnmarshalBson(buf *bytes.Buffer) {
 		case "SessionId":
 			ql.SessionId = bson.DecodeInt64(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}
@@ -279,7 +279,7 @@ func (qrl *QueryResultList) UnmarshalBson(buf *bytes.Buffer) {
 		case "List":
 			qrl.List = DecodeResultsBson(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}

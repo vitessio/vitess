@@ -35,7 +35,7 @@ type reflectSession struct {
 	ShardSessions []*ShardSession
 }
 
-type badSession struct {
+type extraSession struct {
 	Extra         int
 	InTransaction bool
 	ShardSessions []*ShardSession
@@ -80,14 +80,13 @@ func TestSession(t *testing.T) {
 		t.Errorf("want \n%#v, got \n%#v", custom, unmarshalled)
 	}
 
-	unexpected, err := bson.Marshal(&badSession{})
+	extra, err := bson.Marshal(&extraSession{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = bson.Unmarshal(extra, &unmarshalled)
 	if err != nil {
 		t.Error(err)
-	}
-	err = bson.Unmarshal(unexpected, &unmarshalled)
-	want = "Unrecognized tag Extra"
-	if err == nil || want != err.Error() {
-		t.Errorf("want %v, got %v", want, err)
 	}
 }
 
@@ -100,7 +99,7 @@ type reflectQueryShard struct {
 	Session       *Session
 }
 
-type badQueryShard struct {
+type extraQueryShard struct {
 	Extra         int
 	Sql           string
 	BindVariables map[string]interface{}
@@ -150,14 +149,13 @@ func TestQueryShard(t *testing.T) {
 		t.Errorf("want \n%#v, got \n%#v", custom, unmarshalled)
 	}
 
-	unexpected, err := bson.Marshal(&badQueryShard{})
+	extra, err := bson.Marshal(&extraQueryShard{})
 	if err != nil {
 		t.Error(err)
 	}
-	err = bson.Unmarshal(unexpected, &unmarshalled)
-	want = "Unrecognized tag Extra"
-	if err == nil || want != err.Error() {
-		t.Errorf("want %v, got %v", want, err)
+	err = bson.Unmarshal(extra, &unmarshalled)
+	if err != nil {
+		t.Error(err)
 	}
 }
 
@@ -236,7 +234,7 @@ type reflectBatchQueryShard struct {
 	Session    *Session
 }
 
-type badBatchQueryShard struct {
+type extraBatchQueryShard struct {
 	Extra      int
 	Queries    []reflectBoundQuery
 	Keyspace   string
@@ -299,14 +297,13 @@ func TestBatchQueryShard(t *testing.T) {
 		t.Errorf("want \n%#v, got \n%#v", custom, unmarshalled)
 	}
 
-	unexpected, err := bson.Marshal(&badBatchQueryShard{})
+	extra, err := bson.Marshal(&extraBatchQueryShard{})
 	if err != nil {
 		t.Error(err)
 	}
-	err = bson.Unmarshal(unexpected, &unmarshalled)
-	want = "Unrecognized tag Extra"
-	if err == nil || want != err.Error() {
-		t.Errorf("want %v, got %v", want, err)
+	err = bson.Unmarshal(extra, &unmarshalled)
+	if err != nil {
+		t.Error(err)
 	}
 }
 
@@ -337,7 +334,7 @@ type reflectQueryResultList struct {
 	Error   string
 }
 
-type badQueryResultList struct {
+type extraQueryResultList struct {
 	Extra   int
 	List    []mproto.QueryResult
 	Session *Session
@@ -392,15 +389,13 @@ func TestQueryResultList(t *testing.T) {
 		t.Errorf("want \n%#v, got \n%#v", custom, unmarshalled)
 	}
 
-	unexpected, err := bson.Marshal(&badQueryResultList{})
-
+	extra, err := bson.Marshal(&extraQueryResultList{})
 	if err != nil {
 		t.Error(err)
 	}
-	err = bson.Unmarshal(unexpected, &unmarshalled)
-	want = "Unrecognized tag Extra"
-	if err == nil || want != err.Error() {
-		t.Errorf("want %v, got %v", want, err)
+	err = bson.Unmarshal(extra, &unmarshalled)
+	if err != nil {
+		t.Error(err)
 	}
 }
 
@@ -413,7 +408,7 @@ type reflectStreamQueryKeyRange struct {
 	Session       *Session
 }
 
-type badStreamQueryKeyRange struct {
+type extraStreamQueryKeyRange struct {
 	Extra         int
 	Sql           string
 	BindVariables map[string]interface{}
@@ -464,13 +459,12 @@ func TestStreamQueryKeyRange(t *testing.T) {
 		t.Errorf("want \n%#v, got \n%#v", custom, unmarshalled)
 	}
 
-	unexpected, err := bson.Marshal(&badStreamQueryKeyRange{})
+	extra, err := bson.Marshal(&extraStreamQueryKeyRange{})
 	if err != nil {
 		t.Error(err)
 	}
-	err = bson.Unmarshal(unexpected, &unmarshalled)
-	want = "Unrecognized tag Extra"
-	if err == nil || want != err.Error() {
-		t.Errorf("want %v, got %v", want, err)
+	err = bson.Unmarshal(extra, &unmarshalled)
+	if err != nil {
+		t.Error(err)
 	}
 }

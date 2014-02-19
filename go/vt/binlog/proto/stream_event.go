@@ -86,7 +86,7 @@ func (ste *StreamEvent) UnmarshalBson(buf *bytes.Buffer) {
 		case "GroupId":
 			ste.GroupId = bson.DecodeInt64(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
+			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}
