@@ -51,7 +51,7 @@ func New(name string, size int) *StreamLogger {
 // It is safe to register multiple URLs for the same StreamLogger.
 func (logger *StreamLogger) ServeLogs(url string) {
 	http.Handle(url, logger)
-	log.Infof("Streaming logs from %v at %v.", logger, url)
+	log.Infof("Streaming logs from %s at %v.", logger.Name(), url)
 }
 
 // Send sends message to all the writers subscribed to logger. Calling
