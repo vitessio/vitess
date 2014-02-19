@@ -83,6 +83,7 @@ const (
 	REASON_PK_CHANGE
 	REASON_COMPOSITE_PK
 	REASON_HAS_HINTS
+	REASON_UPSERT
 )
 
 // Must exactly match order of reason constants.
@@ -101,6 +102,7 @@ var reasonName = []string{
 	"PK_CHANGE",
 	"COMPOSITE_PK",
 	"HAS_HINTS",
+	"UPSERT",
 }
 
 func (rt ReasonType) String() string {
@@ -143,8 +145,7 @@ type ExecPlan struct {
 	// PLAN_INSERT_PK: values clause
 	PKValues []interface{}
 
-	// For update: set clause
-	// For insert: on duplicate key clause
+	// For update: set clause if pk is changing
 	SecondaryPKValues []interface{}
 
 	// For PLAN_INSERT_SUBQUERY: pk columns in the subquery result
@@ -364,11 +365,8 @@ func (node *Node) execAnalyzeInsert(getTable TableGetter) (plan *ExecPlan) {
 	pkColumnNumbers := node.At(INSERT_COLUMN_LIST_OFFSET).getInsertPKColumns(tableInfo)
 
 	if node.At(INSERT_ON_DUP_OFFSET).Len() != 0 {
-		var ok bool
-		if plan.SecondaryPKValues, ok = node.At(INSERT_ON_DUP_OFFSET).At(0).execAnalyzeUpdateExpressions(tableInfo.Indexes[0]); !ok {
-			plan.Reason = REASON_PK_CHANGE
-			return plan
-		}
+		plan.Reason = REASON_UPSERT
+		return plan
 	}
 
 	rowValues := node.At(INSERT_VALUES_OFFSET) // VALUES/SELECT

@@ -126,27 +126,15 @@ cases = [
        "begin",
        "insert into vtocc_cached2(eid, bid, name, foo) values (1, 'bar', 'abcd1', 'efgh')",
        Case2(sql="commit",
-            cache_invalidations=1)]),
+            cache_invalidations=0)]),
   # (1.foo, 2.foo)
-
-  MultiCase(
-      "insert on dup key",
-      ['begin',
-       "insert into vtocc_cached2(eid, bid, name, foo) values (2, 'foo', 'abcd2', 'efgh') on duplicate key update foo='fghi'",
-       Case2(sql="commit",
-            cache_invalidations=1),
-       Case2(sql="select * from vtocc_cached2 where eid = 2 and bid = 'foo'",
-            result=[(2L, 'foo', 'abcd2', 'fghi')],
-            rewritten=["select eid, bid, name, foo from vtocc_cached2 where eid = 2 and bid = 'foo'"],
-            cache_misses=1)]),
-  # (1.foo)
 
   Case2(doc="Verify 1.foo is in cache",
        sql="select * from vtocc_cached2 where eid = 1 and bid = 'foo'",
        result=[(1, 'foo', 'abcd1', 'efgh')],
        rewritten=["select * from vtocc_cached2 where 1 != 1"],
        cache_hits=1),
-  # (1.foo) is in cache
+  # (1.foo, 2.foo) is in cache
 
   # DDL
   "alter table vtocc_cached2 comment 'test'",
