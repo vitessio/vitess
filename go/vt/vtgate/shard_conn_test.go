@@ -15,12 +15,12 @@ import (
 
 func TestShardConnExecute(t *testing.T) {
 	testShardConnGeneric(t, func() error {
-		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3)
+		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
 		_, err := sdc.Execute(nil, "query", nil, 0)
 		return err
 	})
 	testShardConnTransact(t, func() error {
-		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3)
+		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
 		_, err := sdc.Execute(nil, "query", nil, 1)
 		return err
 	})
@@ -28,13 +28,13 @@ func TestShardConnExecute(t *testing.T) {
 
 func TestShardConnExecuteBatch(t *testing.T) {
 	testShardConnGeneric(t, func() error {
-		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3)
+		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
 		queries := []tproto.BoundQuery{{"query", nil}}
 		_, err := sdc.ExecuteBatch(nil, queries, 0)
 		return err
 	})
 	testShardConnTransact(t, func() error {
-		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3)
+		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
 		queries := []tproto.BoundQuery{{"query", nil}}
 		_, err := sdc.ExecuteBatch(nil, queries, 1)
 		return err
@@ -43,12 +43,12 @@ func TestShardConnExecuteBatch(t *testing.T) {
 
 func TestShardConnExecuteStream(t *testing.T) {
 	testShardConnGeneric(t, func() error {
-		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3)
+		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
 		_, errfunc := sdc.StreamExecute(nil, "query", nil, 0)
 		return errfunc()
 	})
 	testShardConnTransact(t, func() error {
-		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3)
+		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
 		_, errfunc := sdc.StreamExecute(nil, "query", nil, 1)
 		return errfunc()
 	})
@@ -56,7 +56,7 @@ func TestShardConnExecuteStream(t *testing.T) {
 
 func TestShardConnBegin(t *testing.T) {
 	testShardConnGeneric(t, func() error {
-		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3)
+		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
 		_, err := sdc.Begin(nil)
 		return err
 	})
@@ -64,14 +64,14 @@ func TestShardConnBegin(t *testing.T) {
 
 func TestShardConnCommi(t *testing.T) {
 	testShardConnTransact(t, func() error {
-		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3)
+		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
 		return sdc.Commit(nil, 1)
 	})
 }
 
 func TestShardConnRollback(t *testing.T) {
 	testShardConnTransact(t, func() error {
-		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3)
+		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
 		return sdc.Rollback(nil, 1)
 	})
 }
@@ -240,7 +240,7 @@ func TestShardConnBeginOther(t *testing.T) {
 	resetSandbox()
 	sbc := &sandboxConn{mustFailTxPool: 1}
 	testConns[0] = sbc
-	sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 10*time.Millisecond, 3)
+	sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 10*time.Millisecond, 3, 1*time.Millisecond)
 	startTime := time.Now()
 	_, err := sdc.Begin(nil)
 	// If transaction pool is full, Begin should wait and retry.

@@ -38,7 +38,7 @@ func NewQueryResultReaderForTablet(ts topo.Server, tabletAlias topo.TabletAlias,
 	}
 
 	addr := fmt.Sprintf("%v:%v", tablet.IPAddr, tablet.Portmap["vt"])
-	rpcClient, err := bsonrpc.DialHTTP("tcp", addr, 0, nil)
+	rpcClient, err := bsonrpc.DialHTTP("tcp", addr, 30*time.Second, nil)
 	if err != nil {
 		return nil, err
 	}

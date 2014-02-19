@@ -153,7 +153,9 @@ class TestFailures(unittest.TestCase):
     master_conn._execute("delete from vt_insert_test", {})
     master_conn.commit()
 
-  def test_query_timeout(self):
+  # test timeout between py client and vtgate
+  # the default timeout is 10 seconds
+  def test_vtgate_timeout(self):
     try:
       replica_conn = vtdb_test.get_connection(db_type='replica', shard_index=self.shard_index)
     except Exception, e:
@@ -167,6 +169,25 @@ class TestFailures(unittest.TestCase):
       self.fail("Connection to shard0 master failed with error %s" % str(e))
     with self.assertRaises(dbexceptions.TimeoutError):
       master_conn._execute("select sleep(12) from dual", {})
+
+  # test timeout between vtgate and vttablet
+  # the default timeout is 5 seconds
+  def test_tablet_timeout(self):
+    try:
+      replica_conn = vtdb_test.get_connection(db_type='replica', shard_index=self.shard_index)
+    except Exception, e:
+      self.fail("Connection to shard0 replica failed with error %s" % str(e))
+    with self.assertRaises(dbexceptions.DatabaseError):
+      replica_conn.begin()
+      replica_conn._execute("select sleep(7) from dual", {})
+
+    try:
+      master_conn = vtdb_test.get_connection(db_type='master')
+    except Exception, e:
+      self.fail("Connection to shard0 master failed with error %s" % str(e))
+    with self.assertRaises(dbexceptions.DatabaseError):
+      master_conn.begin()
+      master_conn._execute("select sleep(7) from dual", {})
 
   def test_restart_mysql_failure(self):
     try:

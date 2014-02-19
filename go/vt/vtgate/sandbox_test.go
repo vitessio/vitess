@@ -197,7 +197,7 @@ func (sct *sandboxTopo) GetEndPoints(cell, keyspace, shard string, tabletType to
 
 var testConns map[uint32]tabletconn.TabletConn
 
-func sandboxDialer(context interface{}, endPoint topo.EndPoint, keyspace, shard string) (tabletconn.TabletConn, error) {
+func sandboxDialer(context interface{}, endPoint topo.EndPoint, keyspace, shard string, timeout time.Duration) (tabletconn.TabletConn, error) {
 	sandmu.Lock()
 	defer sandmu.Unlock()
 	dialCounter++

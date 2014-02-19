@@ -17,7 +17,7 @@ import (
 // This file uses the sandbox_test framework.
 
 func init() {
-	Init(new(sandboxTopo), "aa", 1*time.Second, 10)
+	Init(new(sandboxTopo), "aa", 1*time.Second, 10, 1*time.Millisecond)
 }
 
 func TestVTGateExecuteShard(t *testing.T) {
