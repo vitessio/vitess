@@ -50,18 +50,18 @@ class Keyspace(object):
       return []
 
   def get_shard_count(self, db_type):
-    shards = get_shards(db_type)
+    shards = self.get_shards(db_type)
     return len(shards)
 
   def get_shard_max_keys(self, db_type):
-    shards = get_shards(db_type)
+    shards = self.get_shards(db_type)
     shard_max_keys = [shard['KeyRange']['End']
                       for shard in shards]
     return shard_max_keys
 
   def get_shard_names(self, db_type):
     names = []
-    shards = get_shards(db_type)
+    shards = self.get_shards(db_type)
     shard_max_keys = self.get_shard_max_keys(db_type)
     if len(shard_max_keys) == 1 and shard_max_keys[0] == keyrange_constants.MAX_KEY:
       return [keyrange_constants.SHARD_ZERO,]
@@ -74,7 +74,7 @@ class Keyspace(object):
       names.append(shard_name)
     return names
 
-  def keyspace_id_to_shard_index(self, keyspace_id, db_type):
+  def keyspace_id_to_shard_index_for_db_type(self, keyspace_id, db_type):
     # Pack this into big-endian and do a byte-wise comparison.
     pkid = pack_keyspace_id(keyspace_id)
     shard_max_keys = self.get_shard_max_keys(db_type)
