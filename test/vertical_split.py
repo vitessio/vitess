@@ -189,11 +189,23 @@ index by_msg (msg)
 
   def _check_blacklisted_tables(self, tablet, expected):
     ti = utils.run_vtctl_json(['GetTablet', tablet.tablet_alias])
-    logging.debug("Tablet %s has balcklisted tables: %s", tablet.tablet_alias,
+    logging.debug("Tablet %s has blacklisted tables: %s", tablet.tablet_alias,
                   ti['BlacklistedTables'])
     self.assertEqual(ti['BlacklistedTables'], expected,
                      "Got unexpected BlacklistedTables: %s (expecting %s)" %(
                          ti['BlacklistedTables'], expected))
+
+    # check we can or cannot access the tables
+    utils.run_vtctl(['ReloadSchema', tablet.tablet_alias])
+    for t in ["moving1", "moving2"]:
+      if expected and t in expected:
+        # table is blacklisted, should get the error
+        out, err = tablet.vquery("select count(1) from %s" % t,
+                                 path='source_keyspace/0', raise_on_error=False)
+        self.assertTrue(err.find("Query disallowed due to rule: enforce blacklisted tables") != -1, "Cannot find the right error message in query for blacklisted table: out=\n%serr=\n%s" % (out, err))
+      else:
+        # table is not blacklisted, should just work
+        tablet.vquery("select count(1) from %s" % t, path='source_keyspace/0')
 
   def _check_client_conn_redirection(self, source_ks, destination_ks, db_types, servedfrom_db_types, moved_tables=None):
     # check that the ServedFrom indirection worked correctly.
@@ -318,6 +330,8 @@ index by_msg (msg)
     self._check_blacklisted_tables(source_replica, None)
     self._check_blacklisted_tables(source_rdonly, ['moving1', 'moving2'])
     self._check_client_conn_redirection('source_keyspace', 'destination_keyspace', ['rdonly'], ['master', 'replica'], ['moving1', 'moving2'])
+
+    utils.pause("AAAAAAAAAAAAAAAA")
 
     # then serve replica from the destination shards
     utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'replica'],

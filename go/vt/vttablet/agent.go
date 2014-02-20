@@ -9,6 +9,8 @@ package vttablet
 
 import (
 	"encoding/json"
+	"reflect"
+	"strings"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
@@ -104,10 +106,21 @@ func InitAgent(
 			} else {
 				dbcfgs.App.EnableInvalidator = false
 			}
-			// Transitioning from replica to master, first disconnect
-			// existing connections. "false" indicateds that clients must
-			// re-resolve their endpoint before reconnecting.
-			if newTablet.Type == topo.TYPE_MASTER && oldTablet.Type != topo.TYPE_MASTER {
+
+			// There are a few transitions when we're
+			// going to need to restart the query service:
+			// - transitioning from replica to master, so clients
+			//   that were already connected don't keep on using
+			//   the master as replica or rdonly.
+			// - having different parameters for the query
+			//   service. It needs to stop and restart with the
+			//   new parameters. That includes:
+			//   - changing KeyRange
+			//   - changing the BlacklistedTables list
+			if (newTablet.Type == topo.TYPE_MASTER &&
+				oldTablet.Type != topo.TYPE_MASTER) ||
+				(newTablet.KeyRange != oldTablet.KeyRange) ||
+				!reflect.DeepEqual(newTablet.BlacklistedTables, oldTablet.BlacklistedTables) {
 				ts.DisallowQueries()
 			}
 			qrs := ts.LoadCustomRules()
@@ -120,6 +133,14 @@ func InitAgent(
 				} else {
 					qrs.Add(qr)
 				}
+			}
+			if len(newTablet.BlacklistedTables) > 0 {
+				log.Infof("Blacklisting tables %v", strings.Join(newTablet.BlacklistedTables, ", "))
+				qr := ts.NewQueryRule("enforce blacklisted tables", "blacklisted_table", ts.QR_FAIL_QUERY)
+				for _, t := range newTablet.BlacklistedTables {
+					qr.AddTableCond(t)
+				}
+				qrs.Add(qr)
 			}
 			ts.AllowQueries(&dbcfgs.App, schemaOverrides, qrs, mysqld)
 			// Disable before enabling to force existing streams to stop.
