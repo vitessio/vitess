@@ -7,6 +7,7 @@ import utils
 from vtdb import dbexceptions
 from vtdb import keyspace
 from vtdb import keyrange
+from vtdb import keyrange_constants
 
 # This unittest tests the computation of task map
 # and where clauses for streaming queries.
@@ -92,7 +93,7 @@ class TestKeyRange(unittest.TestCase):
     stm = keyrange.create_streaming_task_map(16, 16)
     for i, kr in enumerate(stm.keyrange_list):
       kr_parts = kr.split('-')
-      where_clause, bind_vars = keyrange.create_where_clause_for_keyrange(kr, keyspace_col_type=keyrange.KIT_BYTES)
+      where_clause, bind_vars = keyrange.create_where_clause_for_keyrange(kr, keyspace_col_type=keyrange_constants.KIT_BYTES)
       if len(bind_vars.keys()) == 1:
         if kr_parts[0] == '':
           self.assertNotEqual(where_clause.find('<'), -1)

@@ -11,13 +11,13 @@ import struct
 import time
 import unittest
 
-from vtdb import keyrange
+from vtdb import keyrange_constants
 
 import environment
 import utils
 import tablet
 
-keyspace_id_type = keyrange.KIT_UINT64
+keyspace_id_type = keyrange_constants.KIT_UINT64
 pack_keyspace_id = struct.Struct('!Q').pack
 
 # initial shards
@@ -113,7 +113,7 @@ class InsertThread(threading.Thread):
     self.object_name = object_name
     self.user_id = user_id
     self.keyspace_id = keyspace_id
-    if keyspace_id_type == keyrange.KIT_BYTES:
+    if keyspace_id_type == keyrange_constants.KIT_BYTES:
       self.str_keyspace_id = base64.b64encode(pack_keyspace_id(keyspace_id))
     else:
       self.str_keyspace_id = "%u" % keyspace_id
@@ -177,7 +177,7 @@ class TestResharding(unittest.TestCase):
   # create_schema will create the same schema on the keyspace
   # then insert some values
   def _create_schema(self):
-    if keyspace_id_type == keyrange.KIT_BYTES:
+    if keyspace_id_type == keyrange_constants.KIT_BYTES:
       t = 'varbinary(64)'
     else:
       t = 'bigint(20) unsigned'
@@ -220,7 +220,7 @@ primary key (name)
   # _insert_value inserts a value in the MySQL database along with the comments
   # required for routing.
   def _insert_value(self, tablet, table, id, msg, keyspace_id):
-    if keyspace_id_type == keyrange.KIT_BYTES:
+    if keyspace_id_type == keyrange_constants.KIT_BYTES:
       k = base64.b64encode(pack_keyspace_id(keyspace_id))
     else:
       k = "%u" % keyspace_id
@@ -236,7 +236,7 @@ primary key (name)
   def _check_value(self, tablet, table, id, msg, keyspace_id,
                    should_be_here=True):
     result = self._get_value(tablet, table, id)
-    if keyspace_id_type == keyrange.KIT_BYTES:
+    if keyspace_id_type == keyrange_constants.KIT_BYTES:
       fmt = "%s"
       keyspace_id = pack_keyspace_id(keyspace_id)
     else:
@@ -260,7 +260,7 @@ primary key (name)
     result = self._get_value(tablet, table, id)
     if len(result) == 0:
       return False
-    if keyspace_id_type == keyrange.KIT_BYTES:
+    if keyspace_id_type == keyrange_constants.KIT_BYTES:
       fmt = "%s"
       keyspace_id = pack_keyspace_id(keyspace_id)
     else:

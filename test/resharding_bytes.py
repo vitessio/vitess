@@ -7,10 +7,10 @@
 import resharding
 import utils
 
-from vtdb import keyrange
+from vtdb import keyrange_constants
 
 # this test is just re-running an entire resharding.py with a
 # varbinary keyspace_id
 if __name__ == '__main__':
-  resharding.keyspace_id_type = keyrange.KIT_BYTES
+  resharding.keyspace_id_type = keyrange_constants.KIT_BYTES
   utils.main(resharding)
