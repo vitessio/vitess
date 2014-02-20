@@ -130,12 +130,12 @@ func (wr *Wrangler) removeShardCell(keyspace, shard, cell string, force bool) er
 
 	// check the cell is in the list already
 	if !topo.InCellList(cell, shardInfo.Cells) {
-		return fmt.Errorf("Cell %v in not in shard info", cell)
+		return fmt.Errorf("cell %v in not in shard info", cell)
 	}
 
 	// check the master alias is not in the cell
 	if shardInfo.MasterAlias.Cell == cell {
-		return fmt.Errorf("Master %v is in the cell '%v' we want to remove", shardInfo.MasterAlias, cell)
+		return fmt.Errorf("master %v is in the cell '%v' we want to remove", shardInfo.MasterAlias, cell)
 	}
 
 	// get the ShardReplication object in the cell
@@ -143,12 +143,12 @@ func (wr *Wrangler) removeShardCell(keyspace, shard, cell string, force bool) er
 	switch err {
 	case nil:
 		if len(sri.ReplicationLinks) > 0 {
-			return fmt.Errorf("Cell %v has %v possible tablets in replication graph", cell, len(sri.ReplicationLinks))
+			return fmt.Errorf("cell %v has %v possible tablets in replication graph", cell, len(sri.ReplicationLinks))
 		}
 
 		// ShardReplication object is now useless, remove it
 		if err := wr.ts.DeleteShardReplication(cell, keyspace, shard); err != nil {
-			return fmt.Errorf("Error deleting ShardReplication object in cell %v: %v", cell, err)
+			return fmt.Errorf("error deleting ShardReplication object in cell %v: %v", cell, err)
 		}
 
 		// we keep going
@@ -157,11 +157,10 @@ func (wr *Wrangler) removeShardCell(keyspace, shard, cell string, force bool) er
 	default:
 		// we can't get the object, assume topo server is down there,
 		// so we look at force flag
-		if force {
-			log.Warningf("Cannot get ShardReplication from cell %v, assuming cell topo server is down, and forcing the removal", cell)
-		} else {
+		if !force {
 			return err
 		}
+		log.Warningf("Cannot get ShardReplication from cell %v, assuming cell topo server is down, and forcing the removal", cell)
 	}
 
 	// now we can update the shard
