@@ -1238,19 +1238,16 @@ insert into a values (1, 2)
 # on dup
 insert into b (eid, id) values (1, 2) on duplicate key update name = values(a)
 {
-  "PlanId": "INSERT_PK",
-  "Reason": "DEFAULT",
+  "PlanId": "PASS_DML",
+  "Reason": "UPSERT",
   "TableName": "b",
   "FieldQuery": null,
   "FullQuery": "insert into b(eid, id) values (1, 2) on duplicate key update name = values(a)",
-  "OuterQuery": "insert into b(eid, id) values (1, 2) on duplicate key update name = values(a)",
+  "OuterQuery": null,
   "Subquery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
-  "PKValues": [
-    1,
-    2
-  ],
+  "PKValues": null,
   "SecondaryPKValues": null,
   "SubqueryPKColumns": null,
   "SetKey": "",
@@ -1260,23 +1257,17 @@ insert into b (eid, id) values (1, 2) on duplicate key update name = values(a)
 # on dup pk change
 insert into b (eid, id) values (1, 2) on duplicate key update eid = 2
 {
-  "PlanId": "INSERT_PK",
-  "Reason": "DEFAULT",
+  "PlanId": "PASS_DML",
+  "Reason": "UPSERT",
   "TableName": "b",
   "FieldQuery": null,
   "FullQuery": "insert into b(eid, id) values (1, 2) on duplicate key update eid = 2",
-  "OuterQuery": "insert into b(eid, id) values (1, 2) on duplicate key update eid = 2",
+  "OuterQuery": null,
   "Subquery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
-  "PKValues": [
-    1,
-    2
-  ],
-  "SecondaryPKValues": [
-    2,
-    null
-  ],
+  "PKValues": null,
+  "SecondaryPKValues": null,
   "SubqueryPKColumns": null,
   "SetKey": "",
   "SetValue": null
@@ -1286,7 +1277,7 @@ insert into b (eid, id) values (1, 2) on duplicate key update eid = 2
 insert into b (id, eid) values (1, 2) on duplicate key update eid = values(a)
 {
   "PlanId": "PASS_DML",
-  "Reason": "PK_CHANGE",
+  "Reason": "UPSERT",
   "TableName": "b",
   "FieldQuery": null,
   "FullQuery": "insert into b(id, eid) values (1, 2) on duplicate key update eid = values(a)",

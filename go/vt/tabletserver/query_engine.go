@@ -612,14 +612,6 @@ func (qe *QueryEngine) execInsertPKRows(logStats *sqlQueryStats, conn PoolConnec
 	secondaryList := buildSecondaryList(plan.TableInfo, pkRows, plan.SecondaryPKValues, plan.BindVars)
 	bsc := buildStreamComment(plan.TableInfo, pkRows, secondaryList)
 	result = qe.directFetch(logStats, conn, plan.OuterQuery, plan.BindVars, nil, bsc)
-	// TODO: We need to do this only if insert has on duplicate key clause
-	if invalidator != nil {
-		for _, pk := range pkRows {
-			if key := buildKey(pk); key != "" {
-				invalidator.Delete(key)
-			}
-		}
-	}
 	return result
 }
 
