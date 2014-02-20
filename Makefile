@@ -47,3 +47,4 @@ integration_test:
 	cd test ; echo "vertical_split_vtgate test"; time ./vertical_split_vtgate.py $$VT_TEST_FLAGS
 	cd test ; echo "initial_sharding test"; time ./initial_sharding.py $$VT_TEST_FLAGS
 	cd test ; echo "initial_sharding_bytes test"; time ./initial_sharding_bytes.py $$VT_TEST_FLAGS
+	cd test ; echo "keyspace_test test"; time ./keyspace_test.py $$VT_TEST_FLAGS
