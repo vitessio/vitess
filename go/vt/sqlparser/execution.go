@@ -365,6 +365,8 @@ func (node *Node) execAnalyzeInsert(getTable TableGetter) (plan *ExecPlan) {
 	pkColumnNumbers := node.At(INSERT_COLUMN_LIST_OFFSET).getInsertPKColumns(tableInfo)
 
 	if node.At(INSERT_ON_DUP_OFFSET).Len() != 0 {
+		// Upserts are not safe for statement based replication:
+		// http://bugs.mysql.com/bug.php?id=58637
 		plan.Reason = REASON_UPSERT
 		return plan
 	}
