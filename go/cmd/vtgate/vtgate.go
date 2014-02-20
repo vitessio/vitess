@@ -21,6 +21,7 @@ var (
 	cell       = flag.String("cell", "test_nj", "cell to use")
 	retryDelay = flag.Duration("retry-delay", 200*time.Millisecond, "retry delay")
 	retryCount = flag.Int("retry-count", 10, "retry count")
+	timeout    = flag.Duration("timeout", 5*time.Second, "connection and call timeout")
 )
 
 var topoReader *TopoReader
@@ -40,7 +41,7 @@ func main() {
 	topoReader = NewTopoReader(rts)
 	topo.RegisterTopoReader(topoReader)
 
-	vtgate.Init(rts, *cell, *retryDelay, *retryCount)
+	vtgate.Init(rts, *cell, *retryDelay, *retryCount, *timeout)
 	log.Infof("vtgate listening to port %v", *port)
 	servenv.Run(*port)
 }

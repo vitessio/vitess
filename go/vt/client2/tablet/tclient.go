@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/db"
@@ -47,6 +48,7 @@ type Conn struct {
 	stream        bool
 	tabletConn    tabletconn.TabletConn
 	TransactionId int64
+	timeout       time.Duration
 }
 
 type Tx struct {
@@ -80,12 +82,13 @@ func parseDbi(dbi string) (*url.URL, error) {
 	return url.Parse(dbi)
 }
 
-func DialTablet(dbi string, stream bool) (conn *Conn, err error) {
+func DialTablet(dbi string, stream bool, timeout time.Duration) (conn *Conn, err error) {
 	conn = new(Conn)
 	if conn.dbi, err = parseDbi(dbi); err != nil {
 		return
 	}
 	conn.stream = stream
+	conn.timeout = timeout
 	if err = conn.dial(); err != nil {
 		return nil, conn.fmtErr(err)
 	}
@@ -114,7 +117,7 @@ func (conn *Conn) dial() (err error) {
 	}
 
 	// and dial
-	tabletConn, err := tabletconn.GetDialer()(nil, endPoint, conn.keyspace(), conn.shard())
+	tabletConn, err := tabletconn.GetDialer()(nil, endPoint, conn.keyspace(), conn.shard(), conn.timeout)
 	if err != nil {
 		return err
 	}

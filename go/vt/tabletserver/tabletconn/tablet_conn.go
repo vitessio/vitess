@@ -6,6 +6,7 @@ package tabletconn
 
 import (
 	"flag"
+	"time"
 
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
@@ -51,7 +52,7 @@ func (e OperationalError) Error() string { return string(e) }
 // context.
 
 // TabletDialer represents a function that will return a TabletConn object that can communicate with a tablet.
-type TabletDialer func(context interface{}, endPoint topo.EndPoint, keyspace, shard string) (TabletConn, error)
+type TabletDialer func(context interface{}, endPoint topo.EndPoint, keyspace, shard string, timeout time.Duration) (TabletConn, error)
 
 // TabletConn defines the interface for a vttablet client. It should
 // not be concurrently used across goroutines.

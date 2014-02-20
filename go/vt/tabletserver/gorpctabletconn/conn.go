@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcplus"
@@ -38,7 +39,7 @@ type TabletBson struct {
 	sessionId int64
 }
 
-func DialTablet(context interface{}, endPoint topo.EndPoint, keyspace, shard string) (tabletconn.TabletConn, error) {
+func DialTablet(context interface{}, endPoint topo.EndPoint, keyspace, shard string, timeout time.Duration) (tabletconn.TabletConn, error) {
 	var addr string
 	var config *tls.Config
 	if *tabletBsonEncrypted {
@@ -52,9 +53,9 @@ func DialTablet(context interface{}, endPoint topo.EndPoint, keyspace, shard str
 	conn := &TabletBson{endPoint: endPoint}
 	var err error
 	if *tabletBsonUsername != "" {
-		conn.rpcClient, err = bsonrpc.DialAuthHTTP("tcp", addr, *tabletBsonUsername, *tabletBsonPassword, 0, config)
+		conn.rpcClient, err = bsonrpc.DialAuthHTTP("tcp", addr, *tabletBsonUsername, *tabletBsonPassword, timeout, config)
 	} else {
-		conn.rpcClient, err = bsonrpc.DialHTTP("tcp", addr, 0, config)
+		conn.rpcClient, err = bsonrpc.DialHTTP("tcp", addr, timeout, config)
 	}
 	if err != nil {
 		return nil, tabletError(err)

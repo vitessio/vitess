@@ -29,12 +29,12 @@ type RegisterVTGate func(*VTGate)
 
 var RegisterVTGates []RegisterVTGate
 
-func Init(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount int) {
+func Init(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount int, timeout time.Duration) {
 	if RpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
 	RpcVTGate = &VTGate{
-		scatterConn: NewScatterConn(serv, cell, retryDelay, retryCount),
+		scatterConn: NewScatterConn(serv, cell, retryDelay, retryCount, timeout),
 	}
 	for _, f := range RegisterVTGates {
 		f(RpcVTGate)

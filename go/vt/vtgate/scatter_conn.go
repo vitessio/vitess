@@ -27,6 +27,7 @@ type ScatterConn struct {
 	cell       string
 	retryDelay time.Duration
 	retryCount int
+	timeout    time.Duration
 
 	mu         sync.Mutex
 	shardConns map[string]*ShardConn
@@ -41,12 +42,13 @@ type shardActionFunc func(conn *ShardConn, transactionId int64, sResults chan<- 
 
 // NewScatterConn creates a new ScatterConn. All input parameters are passed through
 // for creating the appropriate ShardConn.
-func NewScatterConn(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount int) *ScatterConn {
+func NewScatterConn(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount int, timeout time.Duration) *ScatterConn {
 	return &ScatterConn{
 		toposerv:   serv,
 		cell:       cell,
 		retryDelay: retryDelay,
 		retryCount: retryCount,
+		timeout:    timeout,
 		shardConns: make(map[string]*ShardConn),
 	}
 }
@@ -304,7 +306,7 @@ func (stc *ScatterConn) getConnection(keyspace, shard string, tabletType topo.Ta
 	key := fmt.Sprintf("%s.%s.%s", keyspace, shard, tabletType)
 	sdc, ok := stc.shardConns[key]
 	if !ok {
-		sdc = NewShardConn(stc.toposerv, stc.cell, keyspace, shard, tabletType, stc.retryDelay, stc.retryCount)
+		sdc = NewShardConn(stc.toposerv, stc.cell, keyspace, shard, tabletType, stc.retryDelay, stc.retryCount, stc.timeout)
 		stc.shardConns[key] = sdc
 	}
 	return sdc

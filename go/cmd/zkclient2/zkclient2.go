@@ -25,6 +25,7 @@ than one value is asked for, will use getv.
 `
 var mode = flag.String("mode", "get", "which operation to run on the node (get, children, qps, qps2)")
 var server = flag.String("server", "localhost:3801", "zkocc server to dial")
+var timeout = flag.Duration("timeout", 5*time.Second, "connection timeout")
 
 func init() {
 	flag.Usage = func() {
@@ -35,7 +36,7 @@ func init() {
 }
 
 func connect() *rpcplus.Client {
-	rpcClient, err := bsonrpc.DialHTTP("tcp", *server, 0, nil)
+	rpcClient, err := bsonrpc.DialHTTP("tcp", *server, *timeout, nil)
 	if err != nil {
 		log.Fatalf("Can't connect to zkocc: %v", err)
 	}

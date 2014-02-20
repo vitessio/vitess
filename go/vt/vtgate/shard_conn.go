@@ -25,6 +25,7 @@ type ShardConn struct {
 	tabletType topo.TabletType
 	retryDelay time.Duration
 	retryCount int
+	timeout    time.Duration
 	balancer   *Balancer
 
 	// conn needs a mutex because it can change during the lifetime of ShardConn.
@@ -35,7 +36,7 @@ type ShardConn struct {
 // NewShardConn creates a new ShardConn. It creates a Balancer using
 // serv, cell, keyspace, tabletType and retryDelay. retryCount is the max
 // number of retries before a ShardConn returns an error on an operation.
-func NewShardConn(serv SrvTopoServer, cell, keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int) *ShardConn {
+func NewShardConn(serv SrvTopoServer, cell, keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int, timeout time.Duration) *ShardConn {
 	getAddresses := func() (*topo.EndPoints, error) {
 		endpoints, err := serv.GetEndPoints(cell, keyspace, shard, tabletType)
 		if err != nil {
@@ -50,6 +51,7 @@ func NewShardConn(serv SrvTopoServer, cell, keyspace, shard string, tabletType t
 		tabletType: tabletType,
 		retryDelay: retryDelay,
 		retryCount: retryCount,
+		timeout:    timeout,
 		balancer:   blc,
 	}
 }
@@ -158,7 +160,20 @@ func (sdc *ShardConn) withRetry(context interface{}, action func(conn tabletconn
 			}
 			return sdc.WrapError(err, conn, inTransaction)
 		}
-		if err = action(conn); sdc.canRetry(err, transactionId, conn) {
+		timer := time.After(sdc.timeout)
+		done := make(chan int)
+		var errAction error
+		go func() {
+			errAction = action(conn)
+			close(done)
+		}()
+		select {
+		case <-timer:
+			err = tabletconn.OperationalError("vttablet: call timeout")
+		case <-done:
+			err = errAction
+		}
+		if sdc.canRetry(err, transactionId, conn) {
 			continue
 		}
 		return sdc.WrapError(err, conn, inTransaction)
@@ -180,7 +195,7 @@ func (sdc *ShardConn) getConn(context interface{}) (conn tabletconn.TabletConn, 
 	if err != nil {
 		return nil, err, false
 	}
-	conn, err = tabletconn.GetDialer()(context, endPoint, sdc.keyspace, sdc.shard)
+	conn, err = tabletconn.GetDialer()(context, endPoint, sdc.keyspace, sdc.shard, sdc.timeout)
 	if err != nil {
 		sdc.balancer.MarkDown(endPoint.Uid)
 		return nil, err, true
