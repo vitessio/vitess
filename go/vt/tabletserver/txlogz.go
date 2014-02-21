@@ -14,6 +14,16 @@ import (
 )
 
 var (
+	txlogzHeader = []byte(`
+		<tr>
+			<th>Transaction id</th>
+			<th>Start</th>
+			<th>End</th>
+			<th>Duration</th>
+			<th>Decision</th>
+			<th>Statements</th>
+		</tr>
+	`)
 	txlogzTmpl = template.Must(template.New("example").Parse(`
 		<tr class="{{.Color}}">
 			<td>{{.Tid}}</td>
@@ -30,58 +40,52 @@ var (
 	`))
 )
 
-func init() {
-	http.HandleFunc("/txlogz", txLogzHandler)
+type txlogzRow struct {
+	Tid        string
+	Start, End string
+	Duration   string
+	Decision   string
+	Statements []string
+	Color      string
 }
 
-// txLogzHandler serves a human readable snapshot of the
+func init() {
+	http.HandleFunc("/txlogz", txlogzHandler)
+}
+
+// txlogzHandler serves a human readable snapshot of the
 // current transaction log.
-func txLogzHandler(w http.ResponseWriter, r *http.Request) {
+func txlogzHandler(w http.ResponseWriter, r *http.Request) {
 	ch := TxLogger.Subscribe(nil)
 	defer TxLogger.Unsubscribe(ch)
 	startHTMLTable(w)
 	defer endHTMLTable(w)
-	w.Write([]byte(`
-		<tr>
-			<th>Transaction id</th>
-			<th>Start</th>
-			<th>End</th>
-			<th>Duration</th>
-			<th>Decision</th>
-			<th>Statements</th>
-		</tr>
-	`))
+	w.Write(txlogzHeader)
 
 	deadline := time.After(10 * time.Second)
 	for i := 0; i < 300; i++ {
 		select {
 		case out := <-ch:
 			strs := strings.Split(strings.Trim(out, "\n"), "\t")
-			Value := &struct {
-				Tid        string
-				Start, End string
-				Duration   string
-				Decision   string
-				Statements []string
-				Color      string
-			}{}
 			if len(strs) < 6 {
-				Value.Tid = fmt.Sprintf("Short: %d", len(strs))
+				txlogzTmpl.Execute(w, &txlogzRow{Tid: fmt.Sprintf("Short: %d", len(strs))})
+				continue
+			}
+			Value := &txlogzRow{
+				Tid:        strs[0],
+				Start:      strs[1],
+				End:        strs[2],
+				Duration:   strs[3],
+				Decision:   strs[4],
+				Statements: strings.Split(strs[5], ";"),
+			}
+			duration, _ := strconv.ParseFloat(Value.Duration, 64)
+			if duration < 0.1 {
+				Value.Color = "low"
+			} else if duration < 1.0 {
+				Value.Color = "medium"
 			} else {
-				Value.Tid = strs[0]
-				Value.Start = strs[1]
-				Value.End = strs[2]
-				Value.Duration = strs[3]
-				Value.Decision = strs[4]
-				Value.Statements = strings.Split(strs[5], ";")
-				duration, _ := strconv.ParseFloat(Value.Duration, 64)
-				if duration < 0.1 {
-					Value.Color = "low"
-				} else if duration < 1.0 {
-					Value.Color = "medium"
-				} else {
-					Value.Color = "high"
-				}
+				Value.Color = "high"
 			}
 			txlogzTmpl.Execute(w, Value)
 		case <-deadline:
