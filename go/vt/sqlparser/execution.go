@@ -46,6 +46,9 @@ var planName = []string{
 }
 
 func (pt PlanType) String() string {
+	if pt < 0 || pt >= NumPlans {
+		return ""
+	}
 	return planName[pt]
 }
 
