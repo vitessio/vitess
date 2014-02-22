@@ -5,7 +5,10 @@
 package gorpcbinlogplayer
 
 import (
+	"time"
+
 	"github.com/youtube/vitess/go/rpcplus"
+	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 )
@@ -24,9 +27,9 @@ type GoRpcBinlogPlayerClient struct {
 	*rpcplus.Client
 }
 
-func (client *GoRpcBinlogPlayerClient) Dial(addr string) error {
+func (client *GoRpcBinlogPlayerClient) Dial(addr string, connTimeout time.Duration) error {
 	var err error
-	client.Client, err = rpcplus.DialHTTP("tcp", addr)
+	client.Client, err = bsonrpc.DialHTTP("tcp", addr, connTimeout, nil)
 	return err
 }
 
