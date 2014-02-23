@@ -5,6 +5,7 @@
 package main
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -13,6 +14,68 @@ import (
 
 	"github.com/youtube/vitess/go/testfiles"
 )
+
+type TypeInfo struct {
+	Name   string
+	Fields []FieldInfo
+}
+
+type FieldInfo struct {
+	Name string
+	Type string
+}
+
+func FindType(file *ast.File, name string) (*TypeInfo, error) {
+	for _, decl := range file.Decls {
+		genDecl, ok := decl.(*ast.GenDecl)
+		if !ok {
+			continue
+		}
+		if genDecl.Tok != token.TYPE {
+			continue
+		}
+		if len(genDecl.Specs) != 1 {
+			continue
+		}
+		typeSpec, ok := genDecl.Specs[0].(*ast.TypeSpec)
+		if !ok {
+			continue
+		}
+		if typeSpec.Name.Name != name {
+			continue
+		}
+		structType, ok := typeSpec.Type.(*ast.StructType)
+		if !ok {
+			return nil, fmt.Errorf("%s is not a struct", name)
+		}
+		fields, err := BuildFields(structType)
+		if err != nil {
+			return nil, err
+		}
+		return &TypeInfo{
+			Name:   name,
+			Fields: fields,
+		}, nil
+	}
+	return nil, fmt.Errorf("%s not found", name)
+}
+
+func BuildFields(structType *ast.StructType) ([]FieldInfo, error) {
+	fieldInfo := make([]FieldInfo, 0, 8)
+	for _, field := range structType.Fields.List {
+		ident, ok := field.Type.(*ast.Ident)
+		if !ok {
+			return nil, fmt.Errorf("%s is not a simple type", field.Names)
+		}
+		if ident.Name != "int64" {
+			return nil, fmt.Errorf("%s is not a recognized type", ident.Name)
+		}
+		for _, name := range field.Names {
+			fieldInfo = append(fieldInfo, FieldInfo{Name: name.Name, Type: ident.Name})
+		}
+	}
+	return fieldInfo, nil
+}
 
 func main() {
 	input := testfiles.Locate("bson_test/simple_type.go")
@@ -27,5 +90,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	ast.Print(fset, f)
+	typeInfo, err := FindType(f, "MyType")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Printf("%+v\n", typeInfo)
 }
