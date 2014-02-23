@@ -11,13 +11,18 @@ import (
 	"go/token"
 	"io/ioutil"
 	"log"
+	"os"
+	"strings"
+	"text/template"
 
 	"github.com/youtube/vitess/go/testfiles"
 )
 
 type TypeInfo struct {
-	Name   string
-	Fields []FieldInfo
+	Package string
+	Name    string
+	Var     string
+	Fields  []FieldInfo
 }
 
 type FieldInfo struct {
@@ -26,6 +31,9 @@ type FieldInfo struct {
 }
 
 func FindType(file *ast.File, name string) (*TypeInfo, error) {
+	typeInfo := &TypeInfo{
+		Package: file.Name.Name,
+	}
 	for _, decl := range file.Decls {
 		genDecl, ok := decl.(*ast.GenDecl)
 		if !ok {
@@ -44,6 +52,8 @@ func FindType(file *ast.File, name string) (*TypeInfo, error) {
 		if typeSpec.Name.Name != name {
 			continue
 		}
+		typeInfo.Name = name
+		typeInfo.Var = strings.ToLower(name[:1]) + name[1:]
 		structType, ok := typeSpec.Type.(*ast.StructType)
 		if !ok {
 			return nil, fmt.Errorf("%s is not a struct", name)
@@ -52,10 +62,8 @@ func FindType(file *ast.File, name string) (*TypeInfo, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &TypeInfo{
-			Name:   name,
-			Fields: fields,
-		}, nil
+		typeInfo.Fields = fields
+		return typeInfo, nil
 	}
 	return nil, fmt.Errorf("%s not found", name)
 }
@@ -79,21 +87,55 @@ func BuildFields(structType *ast.StructType) ([]FieldInfo, error) {
 
 func main() {
 	input := testfiles.Locate("bson_test/simple_type.go")
-	bytes, err := ioutil.ReadFile(input)
+	b, err := ioutil.ReadFile(input)
 	if err != nil {
 		log.Fatal(err)
 	}
-	src := string(bytes)
+	src := string(b)
 
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, "", src, 0)
 	if err != nil {
 		log.Fatal(err)
 	}
+	ast.Print(fset, f)
 	typeInfo, err := FindType(f, "MyType")
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	fmt.Printf("%+v\n", typeInfo)
+	generator.Execute(os.Stdout, typeInfo)
 }
+
+var generator = template.Must(template.New("Generator").Parse(`{{$Top := .}}
+// Copyright 2012, Google Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package {{.Package}}
+
+func ({{.Var}} *{{.Name}}) MarshalBson(buf *bytes2.ChunkedWriter) {
+	lenWriter := bson.NewLenWriter(buf)
+	{{range .Fields}}
+	bson.EncodeInt64(buf, "{{.Name}}", {{$Top.Var}}.{{.Name}})
+	{{end}}
+	buf.WriteByte(0)
+	lenWriter.RecordLen()
+}
+
+func ({{.Var}} *{{.Name}}) UnmarshalBson(buf *bytes.Buffer) {
+	bson.Next(buf, 4)
+
+	kind := bson.NextByte(buf)
+	for kind != bson.EOO {
+		key := bson.ReadCString(buf)
+		switch key {
+{{range .Fields}}		case "{{.Name}}":
+			{{$Top.Var}}.{{.Name}} = DecondeInt64(buf, kind){{end}}
+		default:
+			bson.Skip(buf, kind)
+		}
+		kind = bson.NextByte(buf)
+	}
+}
+`))
