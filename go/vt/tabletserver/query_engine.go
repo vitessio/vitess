@@ -513,7 +513,7 @@ func (qe *QueryEngine) fetchMulti(logStats *sqlQueryStats, plan *CompiledPlan, p
 	tableInfo.hits.Add(hits)
 	tableInfo.absent.Add(absent)
 	tableInfo.misses.Add(misses)
-	result.RowsAffected = uint64(len(rows))
+	result.RowsAffected = int64(len(rows))
 	result.Rows = rows
 	return result
 }
@@ -639,7 +639,7 @@ func (qe *QueryEngine) execDMLPKRows(logStats *sqlQueryStats, conn PoolConnectio
 	if len(pkRows) == 0 {
 		return &mproto.QueryResult{RowsAffected: 0}
 	}
-	rowsAffected := uint64(0)
+	rowsAffected := int64(0)
 	singleRow := make([][]sqltypes.Value, 1)
 	for _, pkRow := range pkRows {
 		singleRow[0] = pkRow

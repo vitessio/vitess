@@ -45,8 +45,8 @@ func (qr *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
 	EncodeFieldsBson(qr.Fields, "Fields", buf)
-	bson.EncodeInt64(buf, "RowsAffected", int64(qr.RowsAffected))
-	bson.EncodeInt64(buf, "InsertId", int64(qr.InsertId))
+	bson.EncodeInt64(buf, "RowsAffected", qr.RowsAffected)
+	bson.EncodeInt64(buf, "InsertId", qr.InsertId)
 	EncodeRowsBson(qr.Rows, "Rows", buf)
 
 	buf.WriteByte(0)
@@ -97,9 +97,9 @@ func (qr *QueryResult) UnmarshalBson(buf *bytes.Buffer) {
 		case "Fields":
 			qr.Fields = DecodeFieldsBson(buf, kind)
 		case "RowsAffected":
-			qr.RowsAffected = bson.DecodeUint64(buf, kind)
+			qr.RowsAffected = bson.DecodeInt64(buf, kind)
 		case "InsertId":
-			qr.InsertId = bson.DecodeUint64(buf, kind)
+			qr.InsertId = bson.DecodeInt64(buf, kind)
 		case "Rows":
 			qr.Rows = DecodeRowsBson(buf, kind)
 		default:

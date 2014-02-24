@@ -6,6 +6,7 @@ package bsonrpc
 
 import (
 	"bytes"
+
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
 	rpc "github.com/youtube/vitess/go/rpcplus"
@@ -19,7 +20,7 @@ func (req *RequestBson) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodeString(buf, "ServiceMethod", req.ServiceMethod)
-	bson.EncodeInt64(buf, "Seq", int64(req.Seq))
+	bson.EncodeUint64(buf, "Seq", req.Seq)
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
@@ -51,7 +52,7 @@ func (resp *ResponseBson) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodeString(buf, "ServiceMethod", resp.ServiceMethod)
-	bson.EncodeInt64(buf, "Seq", int64(resp.Seq))
+	bson.EncodeUint64(buf, "Seq", resp.Seq)
 	bson.EncodeString(buf, "Error", resp.Error)
 
 	buf.WriteByte(0)
