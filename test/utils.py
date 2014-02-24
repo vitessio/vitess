@@ -22,6 +22,10 @@ options = None
 devnull = open('/dev/null', 'w')
 hostname = socket.gethostname()
 
+# binlog_player_protocol_flags defines the flags to use for the binlog players.
+# A test can overwrite these flags before calling utils.main().
+binlog_player_protocol_flags = ['-binlog_player_protocol', 'gorpc']
+
 class TestError(Exception):
   pass
 
