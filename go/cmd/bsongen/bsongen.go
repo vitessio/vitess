@@ -18,11 +18,38 @@ import (
 	"github.com/youtube/vitess/go/testfiles"
 )
 
+var (
+	encoderMap = map[string]string{
+		"float64": "EncodeFloat64",
+		"string":  "EncodeString",
+		"bool":    "EncodeBool",
+		"int64":   "EncodeInt64",
+		"int32":   "EncodeInt32",
+		"int":     "EncodeInt",
+		"uint64":  "EncodeUint64",
+		"uint32":  "EncodeUint32",
+		"uint":    "EncodeUint",
+	}
+	decoderMap = map[string]string{
+		"float64": "DecodeFloat64",
+		"string":  "DecodeString",
+		"bool":    "DecodeBool",
+		"int64":   "DecodeInt64",
+		"int32":   "DecodeInt32",
+		"int":     "DecodeInt",
+		"uint64":  "DecodeUint64",
+		"uint32":  "DecodeUint32",
+		"uint":    "DecodeUint",
+	}
+)
+
 type TypeInfo struct {
-	Package string
-	Name    string
-	Var     string
-	Fields  []FieldInfo
+	Package    string
+	Name       string
+	Var        string
+	Fields     []FieldInfo
+	EncoderMap map[string]string
+	DecoderMap map[string]string
 }
 
 type FieldInfo struct {
@@ -32,7 +59,9 @@ type FieldInfo struct {
 
 func FindType(file *ast.File, name string) (*TypeInfo, error) {
 	typeInfo := &TypeInfo{
-		Package: file.Name.Name,
+		Package:    file.Name.Name,
+		EncoderMap: encoderMap,
+		DecoderMap: decoderMap,
 	}
 	for _, decl := range file.Decls {
 		genDecl, ok := decl.(*ast.GenDecl)
@@ -75,7 +104,7 @@ func BuildFields(structType *ast.StructType) ([]FieldInfo, error) {
 		if !ok {
 			return nil, fmt.Errorf("%s is not a simple type", field.Names)
 		}
-		if ident.Name != "int64" {
+		if encoderMap[ident.Name] == "" {
 			return nil, fmt.Errorf("%s is not a recognized type", ident.Name)
 		}
 		for _, name := range field.Names {
@@ -98,7 +127,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	ast.Print(fset, f)
 	typeInfo, err := FindType(f, "MyType")
 	if err != nil {
 		fmt.Println(err)
@@ -107,17 +135,23 @@ func main() {
 	generator.Execute(os.Stdout, typeInfo)
 }
 
-var generator = template.Must(template.New("Generator").Parse(`{{$Top := .}}
-// Copyright 2012, Google Inc. All rights reserved.
+var generator = template.Must(template.New("Generator").Parse(`{{$Top := .}}// Copyright 2012, Google Inc. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
 package {{.Package}}
 
+import (
+	"bytes"
+
+	"github.com/youtube/vitess/go/bson"
+	"github.com/youtube/vitess/go/bytes2"
+)
+
 func ({{.Var}} *{{.Name}}) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
-	{{range .Fields}}
-	bson.EncodeInt64(buf, "{{.Name}}", {{$Top.Var}}.{{.Name}})
+
+	{{range .Fields}}bson.{{index $Top.EncoderMap .Type}}(buf, "{{.Name}}", {{$Top.Var}}.{{.Name}})
 	{{end}}
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
@@ -128,11 +162,10 @@ func ({{.Var}} *{{.Name}}) UnmarshalBson(buf *bytes.Buffer) {
 
 	kind := bson.NextByte(buf)
 	for kind != bson.EOO {
-		key := bson.ReadCString(buf)
-		switch key {
+		switch bson.ReadCString(buf) {
 {{range .Fields}}		case "{{.Name}}":
-			{{$Top.Var}}.{{.Name}} = DecondeInt64(buf, kind){{end}}
-		default:
+			{{$Top.Var}}.{{.Name}} = bson.{{index $Top.DecoderMap .Type}}(buf, kind)
+{{end}}		default:
 			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)

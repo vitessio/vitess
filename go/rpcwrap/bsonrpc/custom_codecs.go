@@ -6,6 +6,7 @@ package bsonrpc
 
 import (
 	"bytes"
+
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
 	rpc "github.com/youtube/vitess/go/rpcplus"

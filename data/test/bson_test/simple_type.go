@@ -5,5 +5,6 @@
 package mytype
 
 type MyType struct {
-	Int int64
+	Int1, Int2 int
+	Float      float64
 }
