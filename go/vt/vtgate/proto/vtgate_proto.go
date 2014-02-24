@@ -202,8 +202,8 @@ func (qrs *QueryShard) UnmarshalBson(buf *bytes.Buffer) {
 // QueryResult is mproto.QueryResult+Session (for now).
 type QueryResult struct {
 	Fields       []mproto.Field
-	RowsAffected uint64
-	InsertId     uint64
+	RowsAffected int64
+	InsertId     int64
 	Rows         [][]sqltypes.Value
 	Session      *Session
 	Error        string
@@ -221,8 +221,8 @@ func (qr *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
 	mproto.EncodeFieldsBson(qr.Fields, "Fields", buf)
-	bson.EncodeInt64(buf, "RowsAffected", int64(qr.RowsAffected))
-	bson.EncodeInt64(buf, "InsertId", int64(qr.InsertId))
+	bson.EncodeInt64(buf, "RowsAffected", qr.RowsAffected)
+	bson.EncodeInt64(buf, "InsertId", qr.InsertId)
 	mproto.EncodeRowsBson(qr.Rows, "Rows", buf)
 
 	if qr.Session != nil {
@@ -249,9 +249,9 @@ func (qr *QueryResult) UnmarshalBson(buf *bytes.Buffer) {
 		case "Fields":
 			qr.Fields = mproto.DecodeFieldsBson(buf, kind)
 		case "RowsAffected":
-			qr.RowsAffected = bson.DecodeUint64(buf, kind)
+			qr.RowsAffected = bson.DecodeInt64(buf, kind)
 		case "InsertId":
-			qr.InsertId = bson.DecodeUint64(buf, kind)
+			qr.InsertId = bson.DecodeInt64(buf, kind)
 		case "Rows":
 			qr.Rows = mproto.DecodeRowsBson(buf, kind)
 		case "Session":

@@ -53,8 +53,8 @@ type Field struct {
 // them back if needed, using the following functions.
 type QueryResult struct {
 	Fields       []Field
-	RowsAffected uint64
-	InsertId     uint64
+	RowsAffected int64
+	InsertId     int64
 	Rows         [][]sqltypes.Value
 }
 
