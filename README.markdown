@@ -3,7 +3,7 @@
 Vitess is a set of servers and tools meant to facilitate scaling of MySQL databases for the web.
 It's currently used as a fundamental component of YouTube's MySQL infrastructure.
 
-[sougou](https://github.com/sougou) presented Vitess at Fosdem '14 in the go devroom. [Here are the slides](https://github.com/youtube/vitess/blob/master/doc/Vitess2014.pdf?raw=true). We'll share the video links when they become available.
+[sougou](https://github.com/sougou) presented Vitess at Fosdem '14 in the go devroom. [Here are the slides](https://github.com/youtube/vitess/blob/master/doc/Vitess2014.pdf?raw=true), and here is the [video](http://youtu.be/qATTTSg6zXk).
 
 * [Vision](https://github.com/youtube/vitess/blob/master/doc/Vision.markdown)
 * Concepts 
