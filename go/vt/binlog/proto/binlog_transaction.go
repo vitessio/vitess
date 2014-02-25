@@ -116,7 +116,7 @@ func (stmt *Statement) UnmarshalBson(buf *bytes.Buffer) {
 		case "Category":
 			stmt.Category = int(bson.DecodeInt64(buf, kind))
 		case "Sql":
-			stmt.Sql = bson.DecodeBytes(buf, kind)
+			stmt.Sql = bson.DecodeBinary(buf, kind)
 		default:
 			bson.Skip(buf, kind)
 		}

@@ -172,7 +172,7 @@ func DecodeRowBson(buf *bytes.Buffer, kind byte) []sqltypes.Value {
 	for i := 0; kind != bson.EOO; i++ {
 		bson.ExpectIndex(buf, i)
 		if kind != bson.Null {
-			row = append(row, sqltypes.MakeString(bson.DecodeBytes(buf, kind)))
+			row = append(row, sqltypes.MakeString(bson.DecodeBinary(buf, kind)))
 		} else {
 			row = append(row, sqltypes.Value{})
 		}
