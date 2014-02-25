@@ -14,7 +14,28 @@ import (
 )
 
 var (
-	queryLogzTmpl = template.Must(template.New("example").Parse(`
+	querylogzHeader = []byte(`
+		<tr>
+			<th>Method</th>
+			<th>Client</th>
+			<th>User</th>
+			<th>Start</th>
+			<th>End</th>
+			<th>Duration</th>
+			<th>MySQL time</th>
+			<th>Conn wait</th>
+			<th>Plan</th>
+			<th>SQL</th>
+			<th>Queries</th>
+			<th>Sources</th>
+			<th>Rows</th>
+			<th>Hits</th>
+			<th>Misses</th>
+			<th>Absent</th>
+			<th>Invalidations</th>
+		</tr>
+	`)
+	querylogzTmpl = template.Must(template.New("example").Parse(`
 		<tr class="{{.Color}}">
 			<td>{{.Method}}</td>
 			<td>{{.RemoteAddr}}</td>
@@ -37,94 +58,77 @@ var (
 	`))
 )
 
-func init() {
-	http.HandleFunc("/querylogz", queryLogzHandler)
+type querylogzRow struct {
+	Method        string
+	RemoteAddr    string
+	Username      string
+	Start         string
+	End           string
+	Duration      string
+	MySQL         string
+	Conn          string
+	PlanType      string
+	Sql           string
+	Queries       string
+	Sources       string
+	Rows          string
+	Hits          string
+	Misses        string
+	Absent        string
+	Invalidations string
+	Color         string
 }
 
-// queryLogzHandler serves a human readable snapshot of the
+func init() {
+	http.HandleFunc("/querylogz", querylogzHandler)
+}
+
+// querylogzHandler serves a human readable snapshot of the
 // current query log.
-func queryLogzHandler(w http.ResponseWriter, r *http.Request) {
+func querylogzHandler(w http.ResponseWriter, r *http.Request) {
 	ch := SqlQueryLogger.Subscribe(nil)
 	defer SqlQueryLogger.Unsubscribe(ch)
 	startHTMLTable(w)
 	defer endHTMLTable(w)
-	w.Write([]byte(`
-		<tr>
-			<th>Method</th>
-			<th>Client</th>
-			<th>User</th>
-			<th>Start</th>
-			<th>End</th>
-			<th>Duration</th>
-			<th>MySQL time</th>
-			<th>Conn wait</th>
-			<th>Plan</th>
-			<th>SQL</th>
-			<th>Queries</th>
-			<th>Sources</th>
-			<th>Rows</th>
-			<th>Hits</th>
-			<th>Misses</th>
-			<th>Absent</th>
-			<th>Invalidations</th>
-		</tr>
-	`))
+	w.Write(querylogzHeader)
 
 	deadline := time.After(10 * time.Second)
 	for i := 0; i < 300; i++ {
 		select {
 		case out := <-ch:
 			strs := strings.Split(strings.Trim(out, "\n"), "\t")
-			Value := &struct {
-				Method        string
-				RemoteAddr    string
-				Username      string
-				Start         string
-				End           string
-				Duration      string
-				MySQL         string
-				Conn          string
-				PlanType      string
-				Sql           string
-				Queries       string
-				Sources       string
-				Rows          string
-				Hits          string
-				Misses        string
-				Absent        string
-				Invalidations string
-				Color         string
-			}{}
 			if len(strs) < 19 {
-				Value.Method = fmt.Sprintf("Short: %d", len(strs))
-			} else {
-				Value.Method = strs[0]
-				Value.RemoteAddr = strs[1]
-				Value.Username = strs[2]
-				Value.Start = strs[3]
-				Value.End = strs[4]
-				Value.Duration = strs[5]
-				duration, _ := strconv.ParseFloat(Value.Duration, 64)
-				if duration < 0.01 {
-					Value.Color = "low"
-				} else if duration < 0.1 {
-					Value.Color = "medium"
-				} else {
-					Value.Color = "high"
-				}
-				Value.MySQL = strs[12]
-				Value.Conn = strs[13]
-				Value.PlanType = strs[6]
-				Value.Sql = strings.Trim(strs[7], "\"")
-				Value.Queries = strs[9]
-				Value.Sources = strs[11]
-				Value.Rows = strs[14]
-				Value.Hits = strs[15]
-				Value.Misses = strs[16]
-				Value.Absent = strs[17]
-				Value.Invalidations = strs[18]
+				querylogzTmpl.Execute(w, &querylogzRow{Method: fmt.Sprintf("Short: %d", len(strs))})
+				continue
 			}
-			queryLogzTmpl.Execute(w, Value)
+			Value := &querylogzRow{
+				Method:        strs[0],
+				RemoteAddr:    strs[1],
+				Username:      strs[2],
+				Start:         strs[3],
+				End:           strs[4],
+				Duration:      strs[5],
+				MySQL:         strs[12],
+				Conn:          strs[13],
+				PlanType:      strs[6],
+				Sql:           strings.Trim(strs[7], "\""),
+				Queries:       strs[9],
+				Sources:       strs[11],
+				Rows:          strs[14],
+				Hits:          strs[15],
+				Misses:        strs[16],
+				Absent:        strs[17],
+				Invalidations: strs[18],
+			}
+			duration, _ := strconv.ParseFloat(Value.Duration, 64)
+			if duration < 0.01 {
+				Value.Color = "low"
+			} else if duration < 0.1 {
+				Value.Color = "medium"
+			} else {
+				Value.Color = "high"
+			}
+			querylogzTmpl.Execute(w, Value)
 		case <-deadline:
 			return
 		}

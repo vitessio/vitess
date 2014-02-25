@@ -221,8 +221,8 @@ func (qr *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
 	mproto.EncodeFieldsBson(qr.Fields, "Fields", buf)
-	bson.EncodeInt64(buf, "RowsAffected", int64(qr.RowsAffected))
-	bson.EncodeInt64(buf, "InsertId", int64(qr.InsertId))
+	bson.EncodeUint64(buf, "RowsAffected", qr.RowsAffected)
+	bson.EncodeUint64(buf, "InsertId", qr.InsertId)
 	mproto.EncodeRowsBson(qr.Rows, "Rows", buf)
 
 	if qr.Session != nil {

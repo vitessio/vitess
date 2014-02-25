@@ -287,7 +287,7 @@ class Tablet(object):
             '-tablet-path', self.tablet_alias,
             '-log_dir', environment.vtlogroot]
     args.extend(environment.topo_server_flags())
-    args.extend(environment.binlog_player_protocol_flags())
+    args.extend(utils.binlog_player_protocol_flags)
 
     dbconfigs = self._get_db_configs_file(repl_extra_flags)
     for key1 in dbconfigs:

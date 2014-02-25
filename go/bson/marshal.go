@@ -113,12 +113,18 @@ func encodeField(buf *bytes2.ChunkedWriter, key string, val reflect.Value) {
 		EncodeString(buf, key, val.String())
 	case reflect.Bool:
 		EncodeBool(buf, key, val.Bool())
+	case reflect.Int64:
+		EncodeInt64(buf, key, val.Int())
 	case reflect.Int32:
 		EncodeInt32(buf, key, int32(val.Int()))
-	case reflect.Int, reflect.Int64:
-		EncodeInt64(buf, key, val.Int())
-	case reflect.Uint, reflect.Uint32, reflect.Uint64:
+	case reflect.Int:
+		EncodeInt(buf, key, int(val.Int()))
+	case reflect.Uint64:
 		EncodeUint64(buf, key, uint64(val.Uint()))
+	case reflect.Uint32:
+		EncodeUint32(buf, key, uint32(val.Uint()))
+	case reflect.Uint:
+		EncodeUint(buf, key, uint(val.Uint()))
 	case reflect.Struct:
 		if val.Type() == TimeType {
 			EncodeTime(buf, key, val.Interface().(time.Time))
@@ -182,19 +188,31 @@ func EncodeBool(buf *bytes2.ChunkedWriter, key string, val bool) {
 	}
 }
 
-func EncodeInt32(buf *bytes2.ChunkedWriter, key string, val int32) {
-	EncodePrefix(buf, Int, key)
-	putUint32(buf, uint32(val))
-}
-
 func EncodeInt64(buf *bytes2.ChunkedWriter, key string, val int64) {
 	EncodePrefix(buf, Long, key)
 	putUint64(buf, uint64(val))
 }
 
+func EncodeInt32(buf *bytes2.ChunkedWriter, key string, val int32) {
+	EncodePrefix(buf, Int, key)
+	putUint32(buf, uint32(val))
+}
+
+func EncodeInt(buf *bytes2.ChunkedWriter, key string, val int) {
+	EncodeInt64(buf, key, int64(val))
+}
+
 func EncodeUint64(buf *bytes2.ChunkedWriter, key string, val uint64) {
 	EncodePrefix(buf, Ulong, key)
 	putUint64(buf, val)
+}
+
+func EncodeUint32(buf *bytes2.ChunkedWriter, key string, val uint32) {
+	EncodeUint64(buf, key, uint64(val))
+}
+
+func EncodeUint(buf *bytes2.ChunkedWriter, key string, val uint) {
+	EncodeUint64(buf, key, uint64(val))
 }
 
 func EncodeTime(buf *bytes2.ChunkedWriter, key string, val time.Time) {

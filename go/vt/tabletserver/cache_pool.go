@@ -124,11 +124,11 @@ func (cp *CachePool) startMemcache() {
 	}
 	attempts := 0
 	for {
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 		c, err := memcache.Connect(cp.port)
 		if err != nil {
 			attempts++
-			if attempts >= 30 {
+			if attempts >= 50 {
 				cp.cmd.Process.Kill()
 				// Avoid zombies
 				go cp.cmd.Wait()

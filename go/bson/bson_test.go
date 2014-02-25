@@ -6,6 +6,7 @@ package bson
 
 import (
 	"bytes"
+	"reflect"
 	"testing"
 	"time"
 
@@ -52,10 +53,12 @@ type alltypes struct {
 	String  string
 	Bool    bool
 	Time    time.Time
+	Int64   int64
 	Int32   int32
 	Int     int
-	Int64   int64
 	Uint64  uint64
+	Uint32  uint32
+	Uint    uint
 	Strings []string
 	Nil     interface{}
 }
@@ -69,7 +72,7 @@ func (a *alltypes) UnmarshalBson(buf *bytes.Buffer) {
 		switch key {
 		case "Bytes":
 			verifyKind("Bytes", Binary, kind)
-			a.Bytes = DecodeBytes(buf, kind)
+			a.Bytes = DecodeBinary(buf, kind)
 		case "Float64":
 			verifyKind("Float64", Number, kind)
 			a.Float64 = DecodeFloat64(buf, kind)
@@ -94,6 +97,12 @@ func (a *alltypes) UnmarshalBson(buf *bytes.Buffer) {
 		case "Uint64":
 			verifyKind("Uint64", Ulong, kind)
 			a.Uint64 = DecodeUint64(buf, kind)
+		case "Uint32":
+			verifyKind("Uint32", Ulong, kind)
+			a.Uint32 = DecodeUint32(buf, kind)
+		case "Uint":
+			verifyKind("Uint", Ulong, kind)
+			a.Uint = DecodeUint(buf, kind)
 		case "Strings":
 			verifyKind("Strings", Array, kind)
 			a.Strings = DecodeStringArray(buf, kind)
@@ -120,10 +129,12 @@ func TestCustom(t *testing.T) {
 		String:  "string",
 		Bool:    true,
 		Time:    time.Unix(1136243045, 0),
+		Int64:   int64(-0x8000000000000000),
 		Int32:   int32(-0x80000000),
 		Int:     int(-0x80000000),
-		Int64:   int64(-0x8000000000000000),
 		Uint64:  uint64(0xFFFFFFFFFFFFFFFF),
+		Uint32:  uint32(0xFFFFFFFF),
+		Uint:    uint(0xFFFFFFFF),
 		Strings: []string{"a", "b"},
 		Nil:     nil,
 	}
@@ -133,35 +144,13 @@ func TestCustom(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unmarshal fail: %v\n", err)
 	}
-	if string(out.Bytes) != "bytes" {
-		t.Errorf("bytes fail: %s", out.Bytes)
-	}
-	if out.Float64 != 64 {
-		t.Errorf("float fail: %v", out.Float64)
-	}
-	if out.String != "string" {
-		t.Errorf("string fail: %v", out.String)
-	}
-	if !out.Bool {
-		t.Errorf("bool fail: %v", out.Bool)
-	}
+	// Time doesn't compare well with DeepEqual
 	if out.Time.Unix() != 1136243045 {
 		t.Errorf("time fail: %v", out.Time)
 	}
-	if out.Int32 != -0x80000000 {
-		t.Errorf("int32 fail: %v", out.Int32)
-	}
-	if out.Int != -0x80000000 {
-		t.Errorf("int fail: %v", out.Int)
-	}
-	if out.Int64 != -0x8000000000000000 {
-		t.Errorf("int64 fail: %v", out.Int64)
-	}
-	if out.Uint64 != 0xFFFFFFFFFFFFFFFF {
-		t.Errorf("uint64 fail: %v", out.Uint64)
-	}
-	if out.Strings[0] != "a" || out.Strings[1] != "b" {
-		t.Errorf("strings fail: %v", out.Strings)
+	out.Time = a.Time
+	if !reflect.DeepEqual(a, out) {
+		t.Errorf("want\n%+v, got\n%+v", a, out)
 	}
 
 	b := alltypes{Bytes: []byte(""), Strings: []string{"a"}}
@@ -183,12 +172,12 @@ func TestTypes(t *testing.T) {
 	in["string"] = "string"
 	in["bool"] = true
 	in["time"] = time.Unix(1136243045, 0)
+	in["int64"] = int64(-0x8000000000000000)
 	in["int32"] = int32(-0x80000000)
 	in["int"] = int(-0x80000000)
-	in["int64"] = int64(-0x8000000000000000)
-	in["uint"] = uint(0xFFFFFFFF)
-	in["uint32"] = uint32(0xFFFFFFFF)
 	in["uint64"] = uint64(0xFFFFFFFFFFFFFFFF)
+	in["uint32"] = uint32(0xFFFFFFFF)
+	in["uint"] = uint(0xFFFFFFFF)
 	in["slice"] = []interface{}{1, nil}
 	in["nil"] = nil
 	encoded := VerifyMarshal(t, in)
@@ -218,23 +207,23 @@ func TestTypes(t *testing.T) {
 	if tm.Unix() != 1136243045 {
 		t.Error("time failed")
 	}
+	if v := out["int64"].(int64); v != int64(-0x8000000000000000) {
+		t.Errorf("int64 fail: %v", v)
+	}
 	if v := out["int32"].(int32); v != int32(-0x80000000) {
 		t.Errorf("int32 fail: %v", v)
 	}
 	if v := out["int"].(int64); v != int64(-0x80000000) {
 		t.Errorf("int fail: %v", v)
 	}
-	if v := out["int64"].(int64); v != int64(-0x8000000000000000) {
-		t.Errorf("int64 fail: %v", v)
-	}
-	if v := out["uint"].(uint64); v != uint64(0xFFFFFFFF) {
-		t.Errorf("uint fail: %v", v)
+	if v := out["uint64"].(uint64); v != uint64(0xFFFFFFFFFFFFFFFF) {
+		t.Errorf("uint64 fail: %v", v)
 	}
 	if v := out["uint32"].(uint64); v != uint64(0xFFFFFFFF) {
 		t.Errorf("uint32 fail: %v", v)
 	}
-	if v := out["uint64"].(uint64); v != uint64(0xFFFFFFFFFFFFFFFF) {
-		t.Errorf("uint64 fail: %v", v)
+	if v := out["uint"].(uint64); v != uint64(0xFFFFFFFF) {
+		t.Errorf("uint fail: %v", v)
 	}
 	if v := out["slice"].([]interface{})[0].(int64); v != 1 {
 		t.Errorf("slice fail: %v", v)
@@ -411,12 +400,12 @@ func init() {
 	in["string"] = "string"
 	in["bool"] = true
 	in["time"] = time.Unix(1136243045, 0)
+	in["int64"] = int64(-0x8000000000000000)
 	in["int32"] = int32(-0x80000000)
 	in["int"] = int(-0x80000000)
-	in["int64"] = int64(-0x8000000000000000)
-	in["uint"] = uint(0xFFFFFFFF)
-	in["uint32"] = uint32(0xFFFFFFFF)
 	in["uint64"] = uint64(0xFFFFFFFFFFFFFFFF)
+	in["uint32"] = uint32(0xFFFFFFFF)
+	in["uint"] = uint(0xFFFFFFFF)
 	in["slice"] = []interface{}{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, nil}
 	in["nil"] = nil
 	testMap = in

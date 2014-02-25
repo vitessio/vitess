@@ -45,8 +45,8 @@ func (qr *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
 	EncodeFieldsBson(qr.Fields, "Fields", buf)
-	bson.EncodeInt64(buf, "RowsAffected", int64(qr.RowsAffected))
-	bson.EncodeInt64(buf, "InsertId", int64(qr.InsertId))
+	bson.EncodeUint64(buf, "RowsAffected", qr.RowsAffected)
+	bson.EncodeUint64(buf, "InsertId", qr.InsertId)
 	EncodeRowsBson(qr.Rows, "Rows", buf)
 
 	buf.WriteByte(0)
@@ -172,7 +172,7 @@ func DecodeRowBson(buf *bytes.Buffer, kind byte) []sqltypes.Value {
 	for i := 0; kind != bson.EOO; i++ {
 		bson.ExpectIndex(buf, i)
 		if kind != bson.Null {
-			row = append(row, sqltypes.MakeString(bson.DecodeBytes(buf, kind)))
+			row = append(row, sqltypes.MakeString(bson.DecodeBinary(buf, kind)))
 		} else {
 			row = append(row, sqltypes.Value{})
 		}

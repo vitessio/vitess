@@ -19,6 +19,16 @@ var (
 	emptybytes = []byte{}
 )
 
+func DecodeFloat64(buf *bytes.Buffer, kind byte) float64 {
+	switch kind {
+	case Number:
+		return float64(math.Float64frombits(Pack.Uint64(buf.Next(8))))
+	case Null:
+		return 0
+	}
+	panic(NewBsonError("Unexpected data type %v for int", kind))
+}
+
 func DecodeString(buf *bytes.Buffer, kind byte) string {
 	switch kind {
 	case String:
@@ -36,21 +46,32 @@ func DecodeString(buf *bytes.Buffer, kind byte) string {
 	panic(NewBsonError("Unexpected data type %v for string", kind))
 }
 
-func DecodeBytes(buf *bytes.Buffer, kind byte) []byte {
+func DecodeBool(buf *bytes.Buffer, kind byte) bool {
 	switch kind {
-	case String:
-		l := int(Pack.Uint32(buf.Next(4)))
-		b := buf.Next(l - 1)
-		NextByte(buf)
-		return b
-	case Binary:
-		l := int(Pack.Uint32(buf.Next(4)))
-		NextByte(buf)
-		return buf.Next(l)
+	case Boolean:
+		b, _ := buf.ReadByte()
+		return (b != 0)
+	case Int:
+		return (Pack.Uint32(buf.Next(4)) != 0)
+	case Long, Ulong:
+		return (Pack.Uint64(buf.Next(8)) != 0)
 	case Null:
-		return emptybytes
+		return false
+	default:
+		panic(NewBsonError("Unexpected data type %v for boolean", kind))
 	}
-	panic(NewBsonError("Unexpected data type %v for string", kind))
+}
+
+func DecodeInt64(buf *bytes.Buffer, kind byte) int64 {
+	switch kind {
+	case Int:
+		return int64(int32(Pack.Uint32(buf.Next(4))))
+	case Long, Ulong:
+		return int64(Pack.Uint64(buf.Next(8)))
+	case Null:
+		return 0
+	}
+	panic(NewBsonError("Unexpected data type %v for int", kind))
 }
 
 func DecodeInt32(buf *bytes.Buffer, kind byte) int32 {
@@ -75,18 +96,6 @@ func DecodeInt(buf *bytes.Buffer, kind byte) int {
 	panic(NewBsonError("Unexpected data type %v for int", kind))
 }
 
-func DecodeInt64(buf *bytes.Buffer, kind byte) int64 {
-	switch kind {
-	case Int:
-		return int64(int32(Pack.Uint32(buf.Next(4))))
-	case Long, Ulong:
-		return int64(Pack.Uint64(buf.Next(8)))
-	case Null:
-		return 0
-	}
-	panic(NewBsonError("Unexpected data type %v for int", kind))
-}
-
 func DecodeUint64(buf *bytes.Buffer, kind byte) uint64 {
 	switch kind {
 	case Int:
@@ -99,14 +108,45 @@ func DecodeUint64(buf *bytes.Buffer, kind byte) uint64 {
 	panic(NewBsonError("Unexpected data type %v for int", kind))
 }
 
-func DecodeFloat64(buf *bytes.Buffer, kind byte) float64 {
+func DecodeUint32(buf *bytes.Buffer, kind byte) uint32 {
 	switch kind {
-	case Number:
-		return float64(math.Float64frombits(Pack.Uint64(buf.Next(8))))
+	case Int:
+		return Pack.Uint32(buf.Next(4))
+	case Ulong:
+		return uint32(Pack.Uint64(buf.Next(8)))
 	case Null:
 		return 0
 	}
 	panic(NewBsonError("Unexpected data type %v for int", kind))
+}
+
+func DecodeUint(buf *bytes.Buffer, kind byte) uint {
+	switch kind {
+	case Int:
+		return uint(Pack.Uint32(buf.Next(4)))
+	case Long, Ulong:
+		return uint(Pack.Uint64(buf.Next(8)))
+	case Null:
+		return 0
+	}
+	panic(NewBsonError("Unexpected data type %v for int", kind))
+}
+
+func DecodeBinary(buf *bytes.Buffer, kind byte) []byte {
+	switch kind {
+	case String:
+		l := int(Pack.Uint32(buf.Next(4)))
+		b := buf.Next(l - 1)
+		NextByte(buf)
+		return b
+	case Binary:
+		l := int(Pack.Uint32(buf.Next(4)))
+		NextByte(buf)
+		return buf.Next(l)
+	case Null:
+		return emptybytes
+	}
+	panic(NewBsonError("Unexpected data type %v for string", kind))
 }
 
 func DecodeTime(buf *bytes.Buffer, kind byte) time.Time {
@@ -142,22 +182,6 @@ func DecodeStringArray(buf *bytes.Buffer, kind byte) []string {
 		kind = NextByte(buf)
 	}
 	return values
-}
-
-func DecodeBool(buf *bytes.Buffer, kind byte) bool {
-	switch kind {
-	case Boolean:
-		b, _ := buf.ReadByte()
-		return (b != 0)
-	case Int:
-		return (Pack.Uint32(buf.Next(4)) != 0)
-	case Long, Ulong:
-		return (Pack.Uint64(buf.Next(8)) != 0)
-	case Null:
-		return false
-	default:
-		panic(NewBsonError("Unexpected data type %v for boolean", kind))
-	}
 }
 
 func ExpectIndex(buf *bytes.Buffer, index int) {

@@ -100,7 +100,7 @@ func UnmarshalStatementsBson(buf *bytes.Buffer, kind byte) []Statement {
 
 func (stmt *Statement) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
-	bson.EncodeInt64(buf, "Category", int64(stmt.Category))
+	bson.EncodeInt(buf, "Category", stmt.Category)
 	bson.EncodeBinary(buf, "Sql", stmt.Sql)
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
@@ -116,7 +116,7 @@ func (stmt *Statement) UnmarshalBson(buf *bytes.Buffer) {
 		case "Category":
 			stmt.Category = int(bson.DecodeInt64(buf, kind))
 		case "Sql":
-			stmt.Sql = bson.DecodeBytes(buf, kind)
+			stmt.Sql = bson.DecodeBinary(buf, kind)
 		default:
 			bson.Skip(buf, kind)
 		}
