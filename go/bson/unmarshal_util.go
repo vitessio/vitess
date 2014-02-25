@@ -132,7 +132,7 @@ func DecodeUint(buf *bytes.Buffer, kind byte) uint {
 	panic(NewBsonError("Unexpected data type %v for int", kind))
 }
 
-func DecodeBytes(buf *bytes.Buffer, kind byte) []byte {
+func DecodeBinary(buf *bytes.Buffer, kind byte) []byte {
 	switch kind {
 	case String:
 		l := int(Pack.Uint32(buf.Next(4)))

@@ -5,6 +5,14 @@
 package mytype
 
 type MyType struct {
-	Int1, Int2 int
-	Float      float64
+	Float64 float64
+	String  string
+	Bool    bool
+	Int64   int64
+	Int32   int32
+	Int     int
+	Uint64  uint64
+	Uint32  uint32
+	Uint    uint
+	Bytes   []byte
 }

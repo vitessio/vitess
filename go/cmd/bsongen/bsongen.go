@@ -29,6 +29,7 @@ var (
 		"uint64":  "EncodeUint64",
 		"uint32":  "EncodeUint32",
 		"uint":    "EncodeUint",
+		"[]byte":  "EncodeBinary",
 	}
 	decoderMap = map[string]string{
 		"float64": "DecodeFloat64",
@@ -40,6 +41,7 @@ var (
 		"uint64":  "DecodeUint64",
 		"uint32":  "DecodeUint32",
 		"uint":    "DecodeUint",
+		"[]byte":  "DecodeBinary",
 	}
 )
 
@@ -99,17 +101,36 @@ func FindType(file *ast.File, name string) (*TypeInfo, error) {
 
 func BuildFields(structType *ast.StructType) ([]FieldInfo, error) {
 	fieldInfo := make([]FieldInfo, 0, 8)
+	var typeName string
 	for _, field := range structType.Fields.List {
-		ident, ok := field.Type.(*ast.Ident)
-		if !ok {
-			return nil, fmt.Errorf("%s is not a simple type", field.Names)
-		}
-		if encoderMap[ident.Name] == "" {
-			return nil, fmt.Errorf("%s is not a recognized type", ident.Name)
+		switch ident := field.Type.(type) {
+		case *ast.Ident:
+			if encoderMap[ident.Name] == "" {
+				return nil, fmt.Errorf("%s is not a recognized type", ident.Name)
+			}
+			typeName = ident.Name
+		case *ast.ArrayType:
+			if ident.Len != nil {
+				goto notSimple
+			}
+			innerIdent, ok := ident.Elt.(*ast.Ident)
+			if !ok {
+				goto notSimple
+			}
+			if innerIdent.Name != "byte" {
+				goto notSimple
+			}
+			typeName = "[]byte"
+		default:
+			goto notSimple
 		}
 		for _, name := range field.Names {
-			fieldInfo = append(fieldInfo, FieldInfo{Name: name.Name, Type: ident.Name})
+			fieldInfo = append(fieldInfo, FieldInfo{Name: name.Name, Type: typeName})
 		}
+		continue
+
+	notSimple:
+		return nil, fmt.Errorf("%s is not a simple type", field.Names)
 	}
 	return fieldInfo, nil
 }
@@ -127,6 +148,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	ast.Print(fset, f)
 	typeInfo, err := FindType(f, "MyType")
 	if err != nil {
 		fmt.Println(err)
@@ -148,6 +170,7 @@ import (
 	"github.com/youtube/vitess/go/bytes2"
 )
 
+// MarshalBson bson-encodes {{.Name}}.
 func ({{.Var}} *{{.Name}}) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
@@ -157,6 +180,7 @@ func ({{.Var}} *{{.Name}}) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
+// UnmarshalBson bson-decodes into {{.Name}}.
 func ({{.Var}} *{{.Name}}) UnmarshalBson(buf *bytes.Buffer) {
 	bson.Next(buf, 4)
 
