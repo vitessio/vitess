@@ -60,8 +60,10 @@ def test_unpack_uint64():
 
 def test_bool():
   """
-  >>> cbson.loads(cbson.dumps({'yes': True, 'no': False}))
-  {'yes': True, 'no': False}
+  >>> cbson.loads(cbson.dumps({'yes': True, 'no': False}))['yes']
+  True
+  >>> cbson.loads(cbson.dumps({'yes': True, 'no': False}))['no']
+  False
   """
 
 def test_none():
@@ -183,6 +185,16 @@ def test_encode_invalid():
   ...
   TypeError: unsupported type for BSON encode
   """
+
+# test_random_segfaults makes sure we can decode a partial buffer
+# without a seg fault in the C code.
+def test_random_segfaults():
+  a = cbson.dumps({"A": [1, 2, 3, 4, 5, "6", u"7", {"C": u"DS"}]})
+  for i in range(len(a))[1:]:
+    try:
+      unused = cbson.loads(a[:-i] + (" " * i))
+    except Exception:
+      pass
 
 def BSON(*l):
   buf = ''.join(l)
