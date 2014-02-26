@@ -28,9 +28,9 @@ import (
 
 type PrimeCache struct {
 	// set from constructor
-	dbcfgs      *dbconfigs.DBConfigs
-	mycnf       *mysqlctl.Mycnf
-	workerCount int
+	dbcfgs       *dbconfigs.DBConfigs
+	relayLogPath string
+	workerCount  int
 
 	// reset for every run
 	dbConn         *mysql.Connection
@@ -39,9 +39,9 @@ type PrimeCache struct {
 
 func NewPrimeCache(dbcfgs *dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf) *PrimeCache {
 	return &PrimeCache{
-		dbcfgs:      dbcfgs,
-		mycnf:       mycnf,
-		workerCount: 4,
+		dbcfgs:       dbcfgs,
+		relayLogPath: path.Dir(mycnf.RelayLogPath),
+		workerCount:  4,
 	}
 }
 
@@ -151,11 +151,10 @@ func (pc *PrimeCache) OpenBinlog(slavestat *slaveStatus) (io.ReadCloser, error) 
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Running %v/bin/mysqlbinlog --start-position=%v %v/%v", dir, slavestat.relayLogPos, pc.mycnf.RelayLogPath, slavestat.relayLogFile)
 	cmd := exec.Command(
 		path.Join(dir, "bin/mysqlbinlog"),
 		fmt.Sprintf("--start-position=%v", slavestat.relayLogPos),
-		path.Join(pc.mycnf.RelayLogPath, slavestat.relayLogFile),
+		path.Join(pc.relayLogPath, slavestat.relayLogFile),
 	)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -171,20 +170,20 @@ func (pc *PrimeCache) OpenBinlog(slavestat *slaveStatus) (io.ReadCloser, error) 
 
 // parseLogPos parse a comment line that has a log_pos() in it.
 // It returns isComment=true if the line is a comment.
-// It may return pos!=0 if the line is a comment, and it has a log_pos.
+// It may return pos!=0 if the line is a comment, and it has a end_log_pos.
 func parseLogPos(line string) (pos uint64, isComment bool) {
 	if !strings.HasPrefix(line, "#") {
 		return
 	}
 	isComment = true
 
-	lpi := strings.Index(line, "log_pos (")
-	if lpi == -1 {
+	elp := strings.Index(line, "end_log_pos ")
+	if elp == -1 {
 		return
 	}
 
-	line = line[lpi+9:]
-	end := strings.Index(line, ")")
+	line = line[elp+12:]
+	end := strings.Index(line, " ")
 	if end == -1 {
 		return
 	}
@@ -294,7 +293,7 @@ func (pc *PrimeCache) OneRun() {
 	}
 
 	maxLineCount := 10000
-	var maxLeadBytes uint64 = 5000000
+	var maxLeadBytes int64 = 5000000
 
 	// and start the loop
 	lineCount := 0
@@ -308,43 +307,36 @@ func (pc *PrimeCache) OneRun() {
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
 		line := scanner.Text()
+		lowerLine := strings.ToLower(line)
 		lineCount++
 
-		println(line)
-
-		// handle the comments with a log pos
 		if p, isComment := parseLogPos(line); isComment {
+			// handle the comments with a log pos
 			if p > logPos {
 				logPos = p
 			}
-			continue
-		}
 
-		// handle deletes
-		lowerLine := strings.ToLower(line)
-		if s, isDelete := parseDeleteStatement(line, lowerLine); isDelete {
+		} else if s, isDelete := parseDeleteStatement(line, lowerLine); isDelete {
+			// handle delete statements
 			deleteCount++
 			if s != "" {
 				appliedDeleteCount++
 				pc.workerChannels[workerIndex%pc.workerCount] <- s
 				workerIndex++
 			}
-			continue
-		}
 
-		// handle updates
-		if s, isUpdate := parseUpdateStatement(line, lowerLine); isUpdate {
+		} else if s, isUpdate := parseUpdateStatement(line, lowerLine); isUpdate {
+			// handle update statements
 			updateCount++
 			if s != "" {
 				appliedUpdateCount++
 				pc.workerChannels[workerIndex%pc.workerCount] <- s
 				workerIndex++
 			}
-			continue
 		}
 
 		if lineCount%maxLineCount == 0 {
-			var leadBytes uint64
+			var leadBytes int64
 			for {
 				slavestat, err = pc.GetSlaveStatus()
 				if err != nil {
@@ -352,10 +344,12 @@ func (pc *PrimeCache) OneRun() {
 					return
 				}
 
-				leadBytes = logPos - slavestat.execMasterLogPos
+				// see how far ahead we are (it's signed because
+				// we can be behind too)
+				leadBytes = int64(logPos) - int64(slavestat.execMasterLogPos)
 				if leadBytes > maxLeadBytes {
 					sleepCount++
-					log.Infof("Sleeping for 1 second waiting for SQL thread to advance")
+					log.Infof("Sleeping for 1 second waiting for SQL thread to advance: %v > %v", leadBytes, maxLeadBytes)
 					time.Sleep(1 * time.Second)
 					continue
 				} else {
