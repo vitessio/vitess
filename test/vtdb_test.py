@@ -31,6 +31,7 @@ shard_1_replica = tablet.Tablet()
 
 vtgate_server = None
 vtgate_port = None
+vtgate_secure_port = None
 
 shard_names = ['-80', '80-']
 shard_kid_map = {'-80': [527875958493693904, 626750931627689502,
@@ -106,6 +107,7 @@ def tearDownModule():
 def setup_tablets():
   global vtgate_server
   global vtgate_port
+  global vtgate_secure_port
 
   # Start up a master mysql and vttablet
   logging.debug("Setting up tablets")
@@ -141,7 +143,7 @@ def setup_tablets():
                            'Partitions(replica): -80 80-\n' +
                            'TabletTypes: master,replica')
 
-  vtgate_server, vtgate_port = utils.vtgate_start()
+  vtgate_server, vtgate_port, vtgate_secure_port = utils.vtgate_start()
 
 
 def get_connection(db_type='master', shard_index=0, user=None, password=None):
@@ -150,7 +152,7 @@ def get_connection(db_type='master', shard_index=0, user=None, password=None):
   timeout = 10.0
   conn = None
   shard = shard_names[shard_index]
-  vtgate_addrs = ["localhost:%s" % (vtgate_port),]
+  vtgate_addrs = {"_vtocc": ["localhost:%s" % (vtgate_port),]}
   vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
                                         "test_nj", 30.0)
   conn = vtclient.VtOCCConnection(vtgate_client, 'test_keyspace', shard,
@@ -451,13 +453,13 @@ class TestFailures(unittest.TestCase):
 class TestAuthentication(unittest.TestCase):
 
   def setUp(self):
-    global vtgate_server, vtgate_port
+    global vtgate_server, vtgate_port, vtgate_secure_port
     self.shard_index = 0
     self.replica_tablet = shard_0_replica
     self.replica_tablet.kill_vttablet()
     self.replica_tablet.start_vttablet(auth=True)
     utils.vtgate_kill(vtgate_server)
-    vtgate_server, vtgate_port = utils.vtgate_start(auth=True)
+    vtgate_server, vtgate_port, vtgate_secure_port = utils.vtgate_start(auth=True)
     credentials_file_name = os.path.join(environment.vttop, 'test', 'test_data',
                                          'authcredentials_test.json')
     credentials_file = open(credentials_file_name, 'r')

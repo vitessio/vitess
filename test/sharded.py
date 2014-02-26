@@ -123,7 +123,7 @@ class TestSharded(unittest.TestCase):
       zkocc_server = utils.zkocc_start()
 
     # start vtgate, we'll use it later
-    vtgate_server, vtgate_port = utils.vtgate_start()
+    vtgate_server, vtgate_port, vtgate_secure_port = utils.vtgate_start()
 
     for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
       t.reset_replication()

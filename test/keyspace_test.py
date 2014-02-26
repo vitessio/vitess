@@ -23,7 +23,7 @@ from zk import zkocc
 SHARDED_KEYSPACE = "TEST_KEYSPACE_SHARDED"
 UNSHARDED_KEYSPACE = "TEST_KEYSPACE_UNSHARDED"
 
-# shards for SHARDED_KEYSPACE 
+# shards for SHARDED_KEYSPACE
 # range "" - 80
 shard_0_master = tablet.Tablet()
 shard_0_replica = tablet.Tablet()
@@ -40,6 +40,7 @@ unsharded_rdonly = tablet.Tablet()
 
 vtgate_server = None
 vtgate_port = None
+vtgate_secure_port = None
 
 shard_names = ['-80', '80-']
 shard_kid_map = {'-80': [527875958493693904, 626750931627689502,
@@ -124,10 +125,11 @@ def tearDownModule():
 def setup_tablets():
   global vtgate_server
   global vtgate_port
+  global vtgate_secure_port
 
   setup_sharded_keyspace()
   setup_unsharded_keyspace()
-  vtgate_server, vtgate_port = utils.vtgate_start()
+  vtgate_server, vtgate_port, vtgate_secure_port = utils.vtgate_start()
 
 
 def setup_sharded_keyspace():
