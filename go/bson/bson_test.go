@@ -72,7 +72,7 @@ func (a *alltypes) UnmarshalBson(buf *bytes.Buffer) {
 		switch key {
 		case "Bytes":
 			verifyKind("Bytes", Binary, kind)
-			a.Bytes = DecodeBytes(buf, kind)
+			a.Bytes = DecodeBinary(buf, kind)
 		case "Float64":
 			verifyKind("Float64", Number, kind)
 			a.Float64 = DecodeFloat64(buf, kind)

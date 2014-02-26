@@ -6,6 +6,7 @@ package binlogplayer
 
 import (
 	"flag"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
@@ -16,6 +17,7 @@ This file contains the API and registration mechanism for binlog player client.
 */
 
 var binlogPlayerProtocol = flag.String("binlog_player_protocol", "gorpc", "the protocol to download binlogs from a vttablet")
+var binlogPlayerConnTimeout = flag.Duration("binlog_player_conn_timeout", 5*time.Second, "binlog player connection timeout")
 
 // BinlogPlayerResponse is the return value for streaming events
 type BinlogPlayerResponse interface {
@@ -25,7 +27,7 @@ type BinlogPlayerResponse interface {
 // BinlogPlayerClient is the interface all clients must satisfy
 type BinlogPlayerClient interface {
 	// Dial a server
-	Dial(addr string) error
+	Dial(addr string, connTimeout time.Duration) error
 
 	// Close the connection
 	Close()

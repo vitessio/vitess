@@ -231,13 +231,13 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 	if !ok {
 		return fmt.Errorf("no binlog player client factory named %v", *binlogPlayerProtocol)
 	}
-	rpcClient := binlogPlayerClientFactory()
-	err := rpcClient.Dial(blp.addr)
+	blplClient := binlogPlayerClientFactory()
+	err := blplClient.Dial(blp.addr, *binlogPlayerConnTimeout)
 	if err != nil {
 		log.Errorf("Error dialing binlog server: %v", err)
 		return fmt.Errorf("error dialing binlog server: %v", err)
 	}
-	defer rpcClient.Close()
+	defer blplClient.Close()
 
 	responseChan := make(chan *proto.BinlogTransaction)
 	var resp BinlogPlayerResponse
@@ -246,14 +246,14 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 			Tables:  blp.tables,
 			GroupId: blp.blpPos.GroupId,
 		}
-		resp = rpcClient.StreamTables(req, responseChan)
+		resp = blplClient.StreamTables(req, responseChan)
 	} else {
 		req := &proto.KeyRangeRequest{
 			KeyspaceIdType: blp.keyspaceIdType,
 			KeyRange:       blp.keyRange,
 			GroupId:        blp.blpPos.GroupId,
 		}
-		resp = rpcClient.StreamKeyRange(req, responseChan)
+		resp = blplClient.StreamKeyRange(req, responseChan)
 	}
 
 processLoop:
