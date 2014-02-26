@@ -15,4 +15,5 @@ type MyType struct {
 	Uint32  uint32
 	Uint    uint
 	Bytes   []byte
+	Ptr     **int64
 }
