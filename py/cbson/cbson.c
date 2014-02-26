@@ -494,7 +494,11 @@ static inline PyObject* decode_string(BufIter* buf_iter) {
   if (!scan_int32(buf_iter, &elem_size, "string-length"))
     return 0;
   if (!next_cstring(buf_iter, "string-body")) return 0;
-  if (strlen(PTR_AT(buf_iter, const char*))+1 != elem_size) return 0;
+  if (strlen(PTR_AT(buf_iter, const char*))+1 != elem_size) {
+    PyErr_Format(BSONError, "invalid string length: %u != %u",
+                 strlen(PTR_AT(buf_iter, const char*))+1, elem_size);
+    return 0;
+  }
 
   result = PyUnicode_FromStringAndSize(PTR_AT(buf_iter, const char*), elem_size-1);
   if (!result)
