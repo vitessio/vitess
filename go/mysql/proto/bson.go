@@ -122,11 +122,11 @@ func DecodeFieldsBson(buf *bytes.Buffer, kind byte) []Field {
 	bson.Next(buf, 4)
 	fields := make([]Field, 0, 8)
 	kind = bson.NextByte(buf)
-	for i := 0; kind != bson.EOO; i++ {
+	for kind != bson.EOO {
 		if kind != bson.Object {
 			panic(bson.NewBsonError("Unexpected data type %v for Query.Field", kind))
 		}
-		bson.ExpectIndex(buf, i)
+		bson.SkipIndex(buf)
 		var field Field
 		UnmarshalFieldBson(&field, buf)
 		fields = append(fields, field)
@@ -148,8 +148,8 @@ func DecodeRowsBson(buf *bytes.Buffer, kind byte) [][]sqltypes.Value {
 	bson.Next(buf, 4)
 	rows := make([][]sqltypes.Value, 0, 8)
 	kind = bson.NextByte(buf)
-	for i := 0; kind != bson.EOO; i++ {
-		bson.ExpectIndex(buf, i)
+	for kind != bson.EOO {
+		bson.SkipIndex(buf)
 		rows = append(rows, DecodeRowBson(buf, kind))
 		kind = bson.NextByte(buf)
 	}
@@ -169,8 +169,8 @@ func DecodeRowBson(buf *bytes.Buffer, kind byte) []sqltypes.Value {
 	bson.Next(buf, 4)
 	row := make([]sqltypes.Value, 0, 8)
 	kind = bson.NextByte(buf)
-	for i := 0; kind != bson.EOO; i++ {
-		bson.ExpectIndex(buf, i)
+	for kind != bson.EOO {
+		bson.SkipIndex(buf)
 		if kind != bson.Null {
 			row = append(row, sqltypes.MakeString(bson.DecodeBinary(buf, kind)))
 		} else {
