@@ -370,10 +370,16 @@ _decode_document(BufIter* buf_iter, int is_array) {
       element_value = PyTuple_Pack(1, element_types[max]);
     }
     else {
-      PyErr_Format(BSONError,
-                   "invalid element type id 0x%x at buffer[%d] for %s",
-                   type_id, INDEX_OF(buf_iter),
-                   PyString_AsString(element_name));
+      if (!is_array) {
+        PyErr_Format(BSONError,
+                     "invalid element type id 0x%x at buffer[%d] for %s",
+                     type_id, INDEX_OF(buf_iter),
+                     PyString_AsString(element_name));
+      } else {
+        PyErr_Format(BSONError,
+                     "invalid element type id 0x%x at buffer[%d]",
+                     type_id, INDEX_OF(buf_iter));
+      }
       goto error;
     }
 
@@ -488,6 +494,7 @@ static inline PyObject* decode_string(BufIter* buf_iter) {
   if (!scan_int32(buf_iter, &elem_size, "string-length"))
     return 0;
   if (!next_cstring(buf_iter, "string-body")) return 0;
+  if (strlen(PTR_AT(buf_iter, const char*))+1 != elem_size) return 0;
 
   result = PyUnicode_FromStringAndSize(PTR_AT(buf_iter, const char*), elem_size-1);
   if (!result)
