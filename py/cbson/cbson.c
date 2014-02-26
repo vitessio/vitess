@@ -495,7 +495,7 @@ static inline PyObject* decode_string(BufIter* buf_iter) {
     return 0;
   if (!next_cstring(buf_iter, "string-body")) return 0;
   if (strlen(PTR_AT(buf_iter, const char*))+1 != elem_size) {
-    PyErr_Format(BSONError, "invalid string length: %lu != %u",
+    PyErr_Format(BSONError, "invalid string length: %zu != %u",
                  strlen(PTR_AT(buf_iter, const char*))+1, elem_size);
     return 0;
   }
