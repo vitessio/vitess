@@ -147,13 +147,13 @@ func (conn *Connection) ExecuteFetch(query string, maxrows int, wantfields bool)
 	defer conn.CloseResult()
 
 	qr = &proto.QueryResult{}
-	qr.RowsAffected = int64(conn.c.affected_rows)
-	qr.InsertId = int64(conn.c.insert_id)
+	qr.RowsAffected = uint64(conn.c.affected_rows)
+	qr.InsertId = uint64(conn.c.insert_id)
 	if conn.c.num_fields == 0 {
 		return qr, nil
 	}
 
-	if qr.RowsAffected > int64(maxrows) {
+	if qr.RowsAffected > uint64(maxrows) {
 		return nil, &SqlError{0, fmt.Sprintf("Row count exceeded %d", maxrows), string(query)}
 	}
 	if wantfields {

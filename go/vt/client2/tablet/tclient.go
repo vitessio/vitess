@@ -207,8 +207,8 @@ func NewResult(rowCount, rowsAffected, insertId int64, fields []mproto.Field) *R
 		qr: &mproto.QueryResult{
 			Rows:         make([][]sqltypes.Value, int(rowCount)),
 			Fields:       fields,
-			RowsAffected: rowsAffected,
-			InsertId:     insertId,
+			RowsAffected: uint64(rowsAffected),
+			InsertId:     uint64(insertId),
 		},
 	}
 }
