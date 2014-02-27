@@ -4,6 +4,18 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
+# This test is not automated, it depends on flushing the Linux OS buffer cache,
+# which can only be done by root. Also, it is fairly big and runs for a long time.
+# On a server with a SSD drive, it takes:
+# - 96s to insert the data on the master
+# - 30s to clone the master to a replica
+# - then we change random data for 30s on the master (with replication stopped)
+# - then we run primecache in the background (optional)
+# - and we see how long it takes to catch up:
+#   - 29s without primecache
+#   - 19s with primecache at 4 db connections
+#   - <17s with primecache at 8 db connections, not much less with 16 connections.
+
 import logging
 import random
 import time
@@ -94,6 +106,7 @@ primary key (id)
 
   def catch_up(self):
     start = time.time()
+    time.sleep(5) # no need to start too early
     while True:
       s = replica.mquery('', 'show slave status')
       sbm = s[0][32]
@@ -124,19 +137,43 @@ primary key (id)
                      master.tablet_alias, replica.tablet_alias],
                     auto_log=True)
 
-    utils.pause("now is a good time to clear the cache, run:   sync ; sudo bash -c \"echo 1 > /proc/sys/vm/drop_caches\"")
+    # sync the buffer cache, and clear it. This will prompt for user's password
+    utils.run(['sync'])
+    utils.run(['sudo', 'bash', '-c', 'echo 1 > /proc/sys/vm/drop_caches'])
 
+    # we can now change data on the master for 30s, while slave is stopped.
+    # master's binlog will be in OS buffer cache now.
     replica.mquery('', 'slave stop')
-
     self._change_random_data()
-    logging.info("google3 primecache: ~/alainjobart-yt-main/google3/blaze-bin/video/youtube/db/primecache --mysql_socket /mnt/ssd/alainjobart/vt/vt_0000062345/mysql.sock --mysql_bin_path /mnt/ssd/alainjobart/git/dist/mysql/bin --binlog_path /mnt/ssd/alainjobart/vt/vt_0000062345/relay-logs --prime_user vt_dba --alsologtostderr")
-    logging.info("vtprimecache: vtprimecache -db-config-dba-uname vt_dba -db-config-dba-charset utf8 -db-config-d-dbname vt_test_keyspace -db-config-app-uname vt_app -db-config-app-charset utf8 -db-config-app-dbname vt_test_keyspace -db-config-repl-uname vt_repl -db-config-repl-charset utf8 -db-config-repl-dbname vt_test_keyspace -mycnf_file /mnt/ssd/alainjobart/vt/vt_0000062345/my.cnf -alsologtostderr")
-    utils.pause("after data changed, can start primecache")
 
+    use_primecache = True # easy to test without
+    if use_primecache:
+      # starting vtprimecache, sleeping for a couple seconds
+      args = [environment.binary_path('vtprimecache'),
+              '-db-config-dba-uname', 'vt_dba',
+              '-db-config-dba-charset', 'utf8',
+              '-db-config-dba-dbname', 'vt_test_keyspace',
+              '-db-config-app-uname', 'vt_app',
+              '-db-config-app-charset', 'utf8',
+              '-db-config-app-dbname', 'vt_test_keyspace',
+              '-db-config-repl-uname', 'vt_repl',
+              '-db-config-repl-charset', 'utf8',
+              '-db-config-repl-dbname', 'vt_test_keyspace',
+              '-mycnf_file', replica.tablet_dir+'/my.cnf',
+              '-log_dir', environment.vtlogroot,
+              '-worker_count', '4',
+              '-alsologtostderr',
+             ]
+      vtprimecache = utils.run_bg(args)
+      time.sleep(2)
+
+    # start slave, see how longs it takes to catch up on replication
     replica.mquery('', 'slave start')
-
-    # see how longs it takes to catch up on replication
     self.catch_up()
+
+    if use_primecache:
+      # TODO(alainjobart): read and check stats
+      utils.kill_sub_process(vtprimecache)
 
     tablet.kill_tablets([master, replica])
 

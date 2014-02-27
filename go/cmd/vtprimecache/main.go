@@ -7,6 +7,7 @@ package main
 
 import (
 	"flag"
+	"path"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -15,7 +16,8 @@ import (
 )
 
 var (
-	mycnfFile = flag.String("mycnf_file", "", "my.cnf file")
+	mycnfFile   = flag.String("mycnf_file", "", "my.cnf file")
+	workerCount = flag.Int("worker_count", 4, "number of connections to use to talk to mysql")
 )
 
 func main() {
@@ -32,7 +34,8 @@ func main() {
 		log.Warning(err)
 	}
 
-	pc := primecache.NewPrimeCache(dbcfgs, mycnf)
+	pc := primecache.NewPrimeCache(dbcfgs, path.Dir(mycnf.RelayLogPath))
+	pc.WorkerCount = *workerCount
 
 	pc.Loop()
 }

@@ -23,25 +23,26 @@ import (
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	vtenv "github.com/youtube/vitess/go/vt/env"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
 )
 
 type PrimeCache struct {
 	// set from constructor
 	dbcfgs       *dbconfigs.DBConfigs
 	relayLogPath string
-	workerCount  int
+
+	// parameters with default values that can be changed by client
+	WorkerCount int
 
 	// reset for every run
 	dbConn         *mysql.Connection
 	workerChannels []chan string
 }
 
-func NewPrimeCache(dbcfgs *dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf) *PrimeCache {
+func NewPrimeCache(dbcfgs *dbconfigs.DBConfigs, relayLogPath string) *PrimeCache {
 	return &PrimeCache{
 		dbcfgs:       dbcfgs,
-		relayLogPath: path.Dir(mycnf.RelayLogPath),
-		workerCount:  4,
+		relayLogPath: relayLogPath,
+		WorkerCount:  4,
 	}
 }
 
@@ -103,7 +104,8 @@ func ApplyLoop(dbConn *mysql.Connection, c chan string) {
 	for sql := range c {
 		_, err := dbConn.ExecuteFetch(sql, 10000, false)
 		if err != nil {
-			// TODO(alainjobart) try to reconnect
+			// TODO(alainjobart) try to reconnect or just abort the whole loop
+			// (feedback to main loop is tricky a bit)
 			log.Warningf("Failed to execute sql '%v': %v", sql, err)
 		}
 	}
@@ -112,8 +114,8 @@ func ApplyLoop(dbConn *mysql.Connection, c chan string) {
 }
 
 func (pc *PrimeCache) SetupPrimerConnections() error {
-	pc.workerChannels = make([]chan string, pc.workerCount)
-	for i := 0; i < pc.workerCount; i++ {
+	pc.workerChannels = make([]chan string, pc.WorkerCount)
+	for i := 0; i < pc.WorkerCount; i++ {
 		pc.workerChannels[i] = make(chan string, 100)
 
 		// connect to the database using client for a replay connection
@@ -321,7 +323,7 @@ func (pc *PrimeCache) OneRun() {
 			deleteCount++
 			if s != "" {
 				appliedDeleteCount++
-				pc.workerChannels[workerIndex%pc.workerCount] <- s
+				pc.workerChannels[workerIndex%pc.WorkerCount] <- s
 				workerIndex++
 			}
 
@@ -330,7 +332,7 @@ func (pc *PrimeCache) OneRun() {
 			updateCount++
 			if s != "" {
 				appliedUpdateCount++
-				pc.workerChannels[workerIndex%pc.workerCount] <- s
+				pc.workerChannels[workerIndex%pc.WorkerCount] <- s
 				workerIndex++
 			}
 		}
