@@ -103,11 +103,11 @@ func decodeShardSessionsBson(buf *bytes.Buffer, kind byte) []*ShardSession {
 	bson.Next(buf, 4)
 	shardSessions := make([]*ShardSession, 0, 8)
 	kind = bson.NextByte(buf)
-	for i := 0; kind != bson.EOO; i++ {
+	for kind != bson.EOO {
 		if kind != bson.Object {
 			panic(bson.NewBsonError("Unexpected data type %v for ShardSession", kind))
 		}
-		bson.ExpectIndex(buf, i)
+		bson.SkipIndex(buf)
 		shardSession := new(ShardSession)
 		shardSession.UnmarshalBson(buf)
 		shardSessions = append(shardSessions, shardSession)

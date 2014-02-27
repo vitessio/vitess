@@ -55,20 +55,43 @@ type TypeInfo struct {
 type FieldInfo struct {
 	Tag      string
 	Name     string
-	Type     string
+	typ      string
 	Subfield *FieldInfo
 }
 
 func (f *FieldInfo) IsPointer() bool {
-	return f.Type == "*"
+	return f.typ == "*"
+}
+
+func (f *FieldInfo) IsSlice() bool {
+	return f.typ == "[]"
 }
 
 func (f *FieldInfo) Encoder() string {
-	return encoderMap[f.Type]
+	return encoderMap[f.typ]
 }
 
 func (f *FieldInfo) Decoder() string {
-	return decoderMap[f.Type]
+	return decoderMap[f.typ]
+}
+
+func (f *FieldInfo) NewType() string {
+	if f.typ != "*" {
+		return ""
+	}
+	typ := ""
+	for field := f.Subfield; field != nil; field = field.Subfield {
+		typ += field.typ
+	}
+	return typ
+}
+
+func (f *FieldInfo) Type() string {
+	typ := f.typ
+	for field := f.Subfield; field != nil; field = field.Subfield {
+		typ += field.typ
+	}
+	return typ
 }
 
 func FindType(file *ast.File, name string) (*TypeInfo, error) {
@@ -114,7 +137,7 @@ func buildFields(structType *ast.StructType, varName string) ([]*FieldInfo, erro
 	for _, field := range structType.Fields.List {
 		for _, name := range field.Names {
 			fullName := varName + "." + name.Name
-			fieldInfo, err := buildField(field.Type, name.Name, fullName)
+			fieldInfo, err := buildField(field.Type, "\""+name.Name+"\"", fullName)
 			if err != nil {
 				return nil, err
 			}
@@ -130,28 +153,29 @@ func buildField(fieldType ast.Expr, tag, name string) (*FieldInfo, error) {
 		if encoderMap[ident.Name] == "" {
 			return nil, fmt.Errorf("%s is not a recognized type", ident.Name)
 		}
-		return &FieldInfo{Tag: tag, Name: name, Type: ident.Name}, nil
+		return &FieldInfo{Tag: tag, Name: name, typ: ident.Name}, nil
 	case *ast.ArrayType:
 		if ident.Len != nil {
 			goto notSimple
 		}
 		innerIdent, ok := ident.Elt.(*ast.Ident)
-		if !ok {
-			goto notSimple
+		if ok && innerIdent.Name == "byte" {
+			return &FieldInfo{Tag: tag, Name: name, typ: "[]byte"}, nil
 		}
-		if innerIdent.Name != "byte" {
-			goto notSimple
+		subfield, err := buildField(ident.Elt, "Itoa(i)", "v")
+		if err != nil {
+			return nil, err
 		}
-		return &FieldInfo{Tag: tag, Name: name, Type: "[]byte"}, nil
+		return &FieldInfo{Tag: tag, Name: name, typ: "[]", Subfield: subfield}, nil
 	case *ast.StarExpr:
 		subfield, err := buildField(ident.X, tag, "*"+name)
 		if err != nil {
 			return nil, err
 		}
-		return &FieldInfo{Tag: tag, Name: name, Type: "*", Subfield: subfield}, nil
+		return &FieldInfo{Tag: tag, Name: name, typ: "*", Subfield: subfield}, nil
 	}
 notSimple:
-	return nil, fmt.Errorf("%v is not a simple type", fieldType)
+	return nil, fmt.Errorf("%#v is not a simple type", fieldType)
 }
 
 func main() {
@@ -167,7 +191,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	ast.Print(fset, f)
+	//ast.Print(fset, f)
 	typeInfo, err := FindType(f, "MyType")
 	if err != nil {
 		fmt.Println(err)
@@ -177,15 +201,56 @@ func main() {
 }
 
 var generator = template.Must(template.New("Generator").Parse(`
-{{define "SimpleEncoder"}}bson.{{.Encoder}}(buf, "{{.Tag}}", {{.Name}}){{end}}
+{{define "SimpleEncoder"}}bson.{{.Encoder}}(buf, {{.Tag}}, {{.Name}}){{end}}
 
 {{define "StarEncoder"}}if {{.Name}} == nil {
-		bson.EncodePrefix(buf, bson.Null, "{{.Tag}}")
+		bson.EncodePrefix(buf, bson.Null, {{.Tag}})
 	} else {
 		{{template "Encoder" .Subfield}}
 	}{{end}}
 
-{{define "Encoder"}}{{if .IsPointer}}{{template "StarEncoder" .}}{{else}}{{template "SimpleEncoder" .}}{{end}}{{end}}
+{{define "SliceEncoder"}}if {{.Name}} == nil {
+	bson.EncodePrefix(buf, bson.Null, {{.Tag}})
+} else {
+	bson.EncodePrefix(buf, bson.Array, key)
+	lenWriter := bson.NewLenWriter(buf)
+	for i, v := range {{.Name}} {
+		{{template "Encoder" .Subfield}}
+	}
+	buf.WriteByte(0)
+	lenWriter.RecordLen()
+}{{end}}
+
+{{define "Encoder"}}{{if .IsPointer}}{{template "StarEncoder" .}}{{else if .IsSlice}}{{template "SliceEncoder" .}}{{else}}{{template "SimpleEncoder" .}}{{end}}{{end}}
+
+{{define "SimpleDecoder"}}{{.Name}} = bson.{{.Decoder}}(buf, kind){{end}}
+
+{{define "StarDecoder"}}if kind == bson.Null {
+		{{.Name}} = nil
+	} else {
+		{{.Name}} = new({{.NewType}})
+		{{template "Decoder" .Subfield}}
+	}{{end}}
+
+{{define "SliceDecoder"}}if kind != bson.Array {
+		panic(bson.NewBsonError("Unexpected data type %v for {{.Name}}", kind))
+	}
+	if kind == bson.Null {
+		{{.Name}} = nil
+	} else {
+		bson.Next(buf, 4)
+		{{.Name}} = make({{.Type}}, 0, 8)
+		kind = bson.NextByte(buf)
+		var v {{.Subfield.Type}}
+		for kind != bson.EOO {
+			bson.SkipIndex(buf)
+			{{template "Decoder" .Subfield}}
+			{{.Name}} = append({{.Name}}, {{.Subfield.Name}})
+			kind = bson.NextByte(buf)
+		}
+	}{{end}}
+
+{{define "Decoder"}}{{if .IsPointer}}{{template "StarDecoder" .}}{{else if .IsSlice}}{{template "SliceDecoder" .}}{{else}}{{template "SimpleDecoder" .}}{{end}}{{end}}
 
 {{define "Body"}}// Copyright 2012, Google Inc. All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -217,8 +282,8 @@ func ({{.Var}} *{{.Name}}) UnmarshalBson(buf *bytes.Buffer) {
 	kind := bson.NextByte(buf)
 	for kind != bson.EOO {
 		switch bson.ReadCString(buf) {
-{{range .Fields}}		case "{{.Tag}}":
-			{{.Name}} = bson.{{.Decoder}}(buf, kind)
+{{range .Fields}}		case {{.Tag}}:
+			{{template "Decoder" .}}
 {{end}}		default:
 			bson.Skip(buf, kind)
 		}
