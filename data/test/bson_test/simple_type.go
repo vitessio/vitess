@@ -17,4 +17,5 @@ type MyType struct {
 	Bytes   []byte
 	Ptr     *int64
 	Strings *[]*string
+	Map     map[string]int64
 }
