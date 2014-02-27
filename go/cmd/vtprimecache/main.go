@@ -7,35 +7,32 @@ package main
 
 import (
 	"flag"
-	"path"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/primecache"
 )
 
 var (
-	mycnfFile   = flag.String("mycnf_file", "", "my.cnf file")
-	workerCount = flag.Int("worker_count", 4, "number of connections to use to talk to mysql")
+	mysqlSocketFile = flag.String("mysql_socket_file", "", "location of the mysql socket file")
+	relayLogsPath   = flag.String("relay_logs_path", "", "location of the relay logs for the mysql instance")
+	sleepDuration   = flag.Duration("sleep_duration", 1*time.Second, "how long to sleep in between each run")
+	workerCount     = flag.Int("worker_count", 4, "number of connections to use to talk to mysql")
 )
 
 func main() {
 	dbconfigs.RegisterFlags()
 	flag.Parse()
 
-	mycnf, err := mysqlctl.ReadMycnf(*mycnfFile)
-	if err != nil {
-		log.Fatalf("mycnf read failed: %v", err)
-	}
-
-	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile)
+	dbcfgs, err := dbconfigs.Init(*mysqlSocketFile)
 	if err != nil {
 		log.Warning(err)
 	}
 
-	pc := primecache.NewPrimeCache(dbcfgs, path.Dir(mycnf.RelayLogPath))
+	pc := primecache.NewPrimeCache(dbcfgs, *relayLogsPath)
 	pc.WorkerCount = *workerCount
+	pc.SleepDuration = *sleepDuration
 
 	pc.Loop()
 }

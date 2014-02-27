@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// primecache primes the mysql buffer cache with the rows that are
+// primecache primes the MySQL buffer cache with the rows that are
 // going to be modified by the replication stream. It only activates
 // if we're falling behind on replication.
 package primecache
@@ -25,27 +25,35 @@ import (
 	vtenv "github.com/youtube/vitess/go/vt/env"
 )
 
+// PrimeCache is the main object for this module: it handles a player
+// that will run in a loop to prime the MySQL cache.
 type PrimeCache struct {
 	// set from constructor
-	dbcfgs       *dbconfigs.DBConfigs
-	relayLogPath string
+	dbcfgs        *dbconfigs.DBConfigs
+	relayLogsPath string
 
 	// parameters with default values that can be changed by client
-	WorkerCount int
+	WorkerCount   int
+	SleepDuration time.Duration
 
 	// reset for every run
-	dbConn         *mysql.Connection
-	workerChannels []chan string
+	dbConn        *mysql.Connection
+	workerChannel chan string
 }
 
-func NewPrimeCache(dbcfgs *dbconfigs.DBConfigs, relayLogPath string) *PrimeCache {
+// NewPrimeCache creates a PrimeCache object with default parameters.
+// The user can modify the public values before running the loop.
+func NewPrimeCache(dbcfgs *dbconfigs.DBConfigs, relayLogsPath string) *PrimeCache {
 	return &PrimeCache{
-		dbcfgs:       dbcfgs,
-		relayLogPath: relayLogPath,
-		WorkerCount:  4,
+		dbcfgs:        dbcfgs,
+		relayLogsPath: relayLogsPath,
+		WorkerCount:   4,
+		SleepDuration: 1 * time.Second,
 	}
 }
 
+// slaveStatus is a small structure containing the info we need about
+// replication
 type slaveStatus struct {
 	relayLogFile        string
 	relayLogPos         string
@@ -55,7 +63,8 @@ type slaveStatus struct {
 	execMasterLogPos    uint64
 }
 
-func (pc *PrimeCache) GetSlaveStatus() (*slaveStatus, error) {
+// getSlaveStatus returns the known replication values.
+func (pc *PrimeCache) getSlaveStatus() (*slaveStatus, error) {
 	qr, err := pc.dbConn.ExecuteFetch("show slave status", 1, true)
 	if err != nil {
 		return nil, err
@@ -100,7 +109,8 @@ func (pc *PrimeCache) GetSlaveStatus() (*slaveStatus, error) {
 	return result, nil
 }
 
-func ApplyLoop(dbConn *mysql.Connection, c chan string) {
+// applyLoop is the function run by the workers to empty the work queue.
+func applyLoop(dbConn *mysql.Connection, c chan string) {
 	for sql := range c {
 		_, err := dbConn.ExecuteFetch(sql, 10000, false)
 		if err != nil {
@@ -113,11 +123,11 @@ func ApplyLoop(dbConn *mysql.Connection, c chan string) {
 	dbConn.Close()
 }
 
-func (pc *PrimeCache) SetupPrimerConnections() error {
-	pc.workerChannels = make([]chan string, pc.WorkerCount)
+// setupPrimerConnections creates the channel and the consumers for
+// the sql statements
+func (pc *PrimeCache) setupPrimerConnections() error {
+	pc.workerChannel = make(chan string, 1000)
 	for i := 0; i < pc.WorkerCount; i++ {
-		pc.workerChannels[i] = make(chan string, 100)
-
 		// connect to the database using client for a replay connection
 		params, err := dbconfigs.MysqlParams(&pc.dbcfgs.App.ConnectionParams)
 		if err != nil {
@@ -130,25 +140,13 @@ func (pc *PrimeCache) SetupPrimerConnections() error {
 		}
 
 		// and launch the go routine that applies the statements
-		go ApplyLoop(dbConn, pc.workerChannels[i])
+		go applyLoop(dbConn, pc.workerChannel)
 	}
 	return nil
 }
 
-func (pc *PrimeCache) Cleanup() {
-	if pc.dbConn != nil {
-		pc.dbConn.Close()
-		pc.dbConn = nil
-	}
-	if pc.workerChannels != nil {
-		for _, c := range pc.workerChannels {
-			close(c)
-		}
-		pc.workerChannels = nil
-	}
-}
-
-func (pc *PrimeCache) OpenBinlog(slavestat *slaveStatus) (io.ReadCloser, error) {
+// openBinlog opens the binlog and returns a ReadCloser on them
+func (pc *PrimeCache) openBinlog(slavestat *slaveStatus) (io.ReadCloser, error) {
 	dir, err := vtenv.VtMysqlRoot()
 	if err != nil {
 		return nil, err
@@ -156,7 +154,7 @@ func (pc *PrimeCache) OpenBinlog(slavestat *slaveStatus) (io.ReadCloser, error) 
 	cmd := exec.Command(
 		path.Join(dir, "bin/mysqlbinlog"),
 		fmt.Sprintf("--start-position=%v", slavestat.relayLogPos),
-		path.Join(pc.relayLogPath, slavestat.relayLogFile),
+		path.Join(pc.relayLogsPath, slavestat.relayLogFile),
 	)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -170,7 +168,7 @@ func (pc *PrimeCache) OpenBinlog(slavestat *slaveStatus) (io.ReadCloser, error) 
 	return stdout, nil
 }
 
-// parseLogPos parse a comment line that has a log_pos() in it.
+// parseLogPos parses a comment line that has a end_log_pos in it.
 // It returns isComment=true if the line is a comment.
 // It may return pos!=0 if the line is a comment, and it has a end_log_pos.
 func parseLogPos(line string) (pos uint64, isComment bool) {
@@ -246,6 +244,8 @@ func parseUpdateStatement(line, lowerLine string) (statement string, isUpdate bo
 	return
 }
 
+// OneRun tries a single cycle connecting to MySQL, and if behind on
+// replication, starts playing the logs ahead to prime the cache.
 func (pc *PrimeCache) OneRun() {
 	// connect to the database using dba for a control connection
 	params, err := dbconfigs.MysqlParams(&pc.dbcfgs.Dba)
@@ -261,9 +261,9 @@ func (pc *PrimeCache) OneRun() {
 	}
 
 	// get the slave status
-	slavestat, err := pc.GetSlaveStatus()
+	slavestat, err := pc.getSlaveStatus()
 	if err != nil {
-		log.Errorf("GetSlaveStatus failed: %v", err)
+		log.Errorf("getSlaveStatus failed: %v", err)
 		return
 	}
 
@@ -282,15 +282,15 @@ func (pc *PrimeCache) OneRun() {
 	}
 
 	// setup the connections to the db to apply the statements
-	if err := pc.SetupPrimerConnections(); err != nil {
-		log.Errorf("SetupPrimerConnections failed: %v", err)
+	if err := pc.setupPrimerConnections(); err != nil {
+		log.Errorf("setupPrimerConnections failed: %v", err)
 		return
 	}
 
 	// open the binlogs from where we are on
-	reader, err := pc.OpenBinlog(slavestat)
+	reader, err := pc.openBinlog(slavestat)
 	if err != nil {
-		log.Errorf("OpenBinlog failed: %v", err)
+		log.Errorf("openBinlog failed: %v", err)
 		return
 	}
 
@@ -305,7 +305,6 @@ func (pc *PrimeCache) OneRun() {
 	appliedUpdateCount := 0
 	sleepCount := 0
 	var logPos uint64
-	workerIndex := 0
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -323,8 +322,7 @@ func (pc *PrimeCache) OneRun() {
 			deleteCount++
 			if s != "" {
 				appliedDeleteCount++
-				pc.workerChannels[workerIndex%pc.WorkerCount] <- s
-				workerIndex++
+				pc.workerChannel <- s
 			}
 
 		} else if s, isUpdate := parseUpdateStatement(line, lowerLine); isUpdate {
@@ -332,17 +330,16 @@ func (pc *PrimeCache) OneRun() {
 			updateCount++
 			if s != "" {
 				appliedUpdateCount++
-				pc.workerChannels[workerIndex%pc.WorkerCount] <- s
-				workerIndex++
+				pc.workerChannel <- s
 			}
 		}
 
 		if lineCount%maxLineCount == 0 {
 			var leadBytes int64
 			for {
-				slavestat, err = pc.GetSlaveStatus()
+				slavestat, err = pc.getSlaveStatus()
 				if err != nil {
-					log.Errorf("GetSlaveStatus failed: %v", err)
+					log.Errorf("getSlaveStatus failed: %v", err)
 					return
 				}
 
@@ -363,16 +360,31 @@ func (pc *PrimeCache) OneRun() {
 				leadBytes, slavestat.secondsBehindMaster, sleepCount, deleteCount, updateCount-appliedUpdateCount, appliedUpdateCount)
 		}
 	}
+	reader.Close()
 	if err := scanner.Err(); err != nil {
 		log.Errorf("Scanner failed: %v", err)
 	}
 }
 
+// Cleanup will release all resources help by this object.
+// Closing pc.workerChannel will end up finishing the consumer tasks.
+func (pc *PrimeCache) Cleanup() {
+	if pc.dbConn != nil {
+		pc.dbConn.Close()
+		pc.dbConn = nil
+	}
+	if pc.workerChannel != nil {
+		close(pc.workerChannel)
+		pc.workerChannel = nil
+	}
+}
+
+// Loop runs the primecache loop and never returns.
 func (pc *PrimeCache) Loop() {
 	for {
 		log.Info("Prime cache starting run")
 		pc.OneRun()
 		pc.Cleanup()
-		time.Sleep(1 * time.Second)
+		time.Sleep(pc.SleepDuration)
 	}
 }
