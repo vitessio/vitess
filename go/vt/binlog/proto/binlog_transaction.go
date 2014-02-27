@@ -85,11 +85,11 @@ func UnmarshalStatementsBson(buf *bytes.Buffer, kind byte) []Statement {
 	bson.Next(buf, 4)
 	statements := make([]Statement, 0, 8)
 	kind = bson.NextByte(buf)
-	for i := 0; kind != bson.EOO; i++ {
+	for kind != bson.EOO {
 		if kind != bson.Object {
 			panic(bson.NewBsonError("Unexpected data type %v for Query.Field", kind))
 		}
-		bson.ExpectIndex(buf, i)
+		bson.SkipIndex(buf)
 		var statement Statement
 		statement.UnmarshalBson(buf)
 		statements = append(statements, statement)

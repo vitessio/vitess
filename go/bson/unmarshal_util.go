@@ -9,7 +9,6 @@ package bson
 import (
 	"bytes"
 	"math"
-	"strconv"
 	"time"
 
 	"github.com/youtube/vitess/go/hack"
@@ -173,26 +172,19 @@ func DecodeStringArray(buf *bytes.Buffer, kind byte) []string {
 	Next(buf, 4)
 	values := make([]string, 0, 8)
 	kind = NextByte(buf)
-	for i := 0; kind != EOO; i++ {
+	for kind != EOO {
 		if kind != Binary {
 			panic(NewBsonError("Unexpected data type %v for string array", kind))
 		}
-		ExpectIndex(buf, i)
+		SkipIndex(buf)
 		values = append(values, DecodeString(buf, kind))
 		kind = NextByte(buf)
 	}
 	return values
 }
 
-func ExpectIndex(buf *bytes.Buffer, index int) {
-	key := ReadCString(buf)
-	received, err := strconv.Atoi(key)
-	if err != nil {
-		panic(NewBsonError("%s", err))
-	}
-	if received != index {
-		panic(NewBsonError("non-sequential index in array. Expected: %d, Received: %d", index, received))
-	}
+func SkipIndex(buf *bytes.Buffer) {
+	ReadCString(buf)
 }
 
 func ReadCString(buf *bytes.Buffer) string {

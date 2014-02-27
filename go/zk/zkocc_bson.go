@@ -9,6 +9,7 @@ package zk
 
 import (
 	"bytes"
+
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
 )
@@ -192,11 +193,11 @@ func unmarshalZkNodeArray(buf *bytes.Buffer, name string, kind byte) []*ZkNode {
 	bson.Next(buf, 4)
 	values := make([]*ZkNode, 0, 8)
 	kind = bson.NextByte(buf)
-	for i := 0; kind != bson.EOO; i++ {
+	for kind != bson.EOO {
 		if kind != bson.Object {
 			panic(bson.NewBsonError("Unexpected data type %v for %v", kind, name))
 		}
-		bson.ExpectIndex(buf, i)
+		bson.SkipIndex(buf)
 		zkNode := &ZkNode{}
 		zkNode.UnmarshalBson(buf)
 		values = append(values, zkNode)

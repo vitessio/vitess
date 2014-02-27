@@ -60,8 +60,10 @@ def test_unpack_uint64():
 
 def test_bool():
   """
-  >>> cbson.loads(cbson.dumps({'yes': True, 'no': False}))
-  {'yes': True, 'no': False}
+  >>> cbson.loads(cbson.dumps({'yes': True, 'no': False}))['yes']
+  True
+  >>> cbson.loads(cbson.dumps({'yes': True, 'no': False}))['no']
+  False
   """
 
 def test_none():

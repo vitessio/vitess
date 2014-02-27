@@ -105,8 +105,8 @@ func UnmarshalPKValuesBson(buf *bytes.Buffer, kind byte) [][]interface{} {
 	bson.Next(buf, 4)
 	rows := make([][]interface{}, 0, 8)
 	kind = bson.NextByte(buf)
-	for i := 0; kind != bson.EOO; i++ {
-		bson.ExpectIndex(buf, i)
+	for kind != bson.EOO {
+		bson.SkipIndex(buf)
 		rows = append(rows, UnmarshalPKRowBson(buf, kind))
 		kind = bson.NextByte(buf)
 	}
@@ -126,8 +126,8 @@ func UnmarshalPKRowBson(buf *bytes.Buffer, kind byte) []interface{} {
 	bson.Next(buf, 4)
 	row := make([]interface{}, 0, 8)
 	kind = bson.NextByte(buf)
-	for i := 0; kind != bson.EOO; i++ {
-		bson.ExpectIndex(buf, i)
+	for kind != bson.EOO {
+		bson.SkipIndex(buf)
 		var val interface{}
 		switch kind {
 		case bson.Binary, bson.String:

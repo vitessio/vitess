@@ -80,11 +80,11 @@ func DecodeTabletTypeArray(buf *bytes.Buffer, kind byte) []TabletType {
 	bson.Next(buf, 4)
 	values := make([]TabletType, 0, 8)
 	kind = bson.NextByte(buf)
-	for i := 0; kind != bson.EOO; i++ {
+	for kind != bson.EOO {
 		if kind != bson.Binary {
 			panic(bson.NewBsonError("Unexpected data type %v for TabletType array", kind))
 		}
-		bson.ExpectIndex(buf, i)
+		bson.SkipIndex(buf)
 		values = append(values, TabletType(bson.DecodeString(buf, kind)))
 		kind = bson.NextByte(buf)
 	}
@@ -167,11 +167,11 @@ func DecodeSrvShardArray(buf *bytes.Buffer, kind byte) []SrvShard {
 	bson.Next(buf, 4)
 	values := make([]SrvShard, 0, 8)
 	kind = bson.NextByte(buf)
-	for i := 0; kind != bson.EOO; i++ {
+	for kind != bson.EOO {
 		if kind != bson.Object {
 			panic(bson.NewBsonError("Unexpected data type %v for SrvShard array", kind))
 		}
-		bson.ExpectIndex(buf, i)
+		bson.SkipIndex(buf)
 		value := &SrvShard{}
 		value.UnmarshalBson(buf)
 		values = append(values, *value)

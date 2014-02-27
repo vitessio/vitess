@@ -90,16 +90,15 @@ class Tablet(object):
     return self.mysqlctl(['teardown', '-force'], quiet=True)
 
   def remove_tree(self):
-    path = '%s/vt_%010d' % (environment.vtdataroot, self.tablet_uid)
     try:
-      shutil.rmtree(path)
+      shutil.rmtree(self.tablet_dir)
     except OSError as e:
       if utils.options.verbose == 2:
-        print >> sys.stderr, e, path
+        print >> sys.stderr, e, self.tablet_dir
 
   def mysql_connection_parameters(self, dbname, user='vt_dba'):
     return dict(user=user,
-                unix_socket='%s/vt_%010d/mysql.sock' % (environment.vtdataroot, self.tablet_uid),
+                unix_socket=self.tablet_dir+'/mysql.sock',
                 db=dbname)
 
   def connect(self, dbname='', user='vt_dba'):
