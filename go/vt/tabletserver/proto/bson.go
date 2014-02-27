@@ -211,8 +211,8 @@ func DecodeQueriesBson(buf *bytes.Buffer, kind byte) (queries []BoundQuery) {
 	queries = make([]BoundQuery, 0, 8)
 	kind = bson.NextByte(buf)
 	var bdq BoundQuery
-	for i := 0; kind != bson.EOO; i++ {
-		bson.ExpectIndex(buf, i)
+	for kind != bson.EOO {
+		bson.SkipIndex(buf)
 		bdq.UnmarshalBson(buf)
 		queries = append(queries, bdq)
 		kind = bson.NextByte(buf)
@@ -299,8 +299,8 @@ func DecodeResultsBson(buf *bytes.Buffer, kind byte) (results []mproto.QueryResu
 	results = make([]mproto.QueryResult, 0, 8)
 	kind = bson.NextByte(buf)
 	var result mproto.QueryResult
-	for i := 0; kind != bson.EOO; i++ {
-		bson.ExpectIndex(buf, i)
+	for kind != bson.EOO {
+		bson.SkipIndex(buf)
 		result.UnmarshalBson(buf)
 		results = append(results, result)
 		kind = bson.NextByte(buf)
