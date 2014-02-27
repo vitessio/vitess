@@ -53,7 +53,7 @@ class TestFailures(unittest.TestCase):
     utils.vtgate_kill(vtdb_test.vtgate_server)
     with self.assertRaises(dbexceptions.OperationalError):
       replica_conn._execute("select 1 from vt_insert_test", {})
-    vtdb_test.vtgate_server, vtdb_test.vtgate_port, vtdb_test.vtgate_secure_port = utils.vtgate_start(vtdb_test.vtgate_port)
+    vtdb_test.vtgate_server, vtdb_test.vtgate_port = utils.vtgate_start(vtdb_test.vtgate_port)
     try:
       results = replica_conn._execute("select 1 from vt_insert_test", {})
     except Exception, e:
@@ -86,7 +86,7 @@ class TestFailures(unittest.TestCase):
     utils.vtgate_kill(vtdb_test.vtgate_server)
     with self.assertRaises(dbexceptions.OperationalError):
       stream_cursor.execute("select * from vt_insert_test", {})
-    vtdb_test.vtgate_server, vtdb_test.vtgate_port, vtdb_test.vtgate_secure_port = utils.vtgate_start(vtdb_test.vtgate_port)
+    vtdb_test.vtgate_server, vtdb_test.vtgate_port = utils.vtgate_start(vtdb_test.vtgate_port)
     try:
       stream_cursor.execute("select * from vt_insert_test", {})
     except Exception, e:
@@ -116,7 +116,7 @@ class TestFailures(unittest.TestCase):
     utils.vtgate_kill(vtdb_test.vtgate_server)
     with self.assertRaises(dbexceptions.OperationalError):
       master_conn.begin()
-    vtdb_test.vtgate_server, vtdb_test.vtgate_port, vtdb_test.vtgate_secure_port = utils.vtgate_start(vtdb_test.vtgate_port)
+    vtdb_test.vtgate_server, vtdb_test.vtgate_port = utils.vtgate_start(vtdb_test.vtgate_port)
     master_conn.begin()
 
   def test_tablet_fail_write(self):
@@ -144,7 +144,7 @@ class TestFailures(unittest.TestCase):
       utils.vtgate_kill(vtdb_test.vtgate_server)
       master_conn._execute("delete from vt_insert_test", {})
       master_conn.commit()
-    vtdb_test.vtgate_server, vtdb_test.vtgate_port, vtdb_test.vtgate_secure_port = utils.vtgate_start(vtdb_test.vtgate_port)
+    vtdb_test.vtgate_server, vtdb_test.vtgate_port = utils.vtgate_start(vtdb_test.vtgate_port)
     try:
       master_conn = vtdb_test.get_connection(db_type='master')
     except Exception, e:

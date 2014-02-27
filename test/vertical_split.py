@@ -77,13 +77,13 @@ def tearDownModule():
 
 class TestVerticalSplit(unittest.TestCase):
   def setUp(self):
-    self.vtgate_server, self.vtgate_port, self.vtgate_secure_port = utils.vtgate_start(cache_ttl='0s')
+    self.vtgate_server, self.vtgate_port = utils.vtgate_start(cache_ttl='0s')
     self.vtgate_client = zkocc.ZkOccConnection("localhost:%u"%self.vtgate_port,
                                                "test_nj", 30.0)
     self.vtgate_addrs = None
     if vtgate_protocol == VTGATE_PROTOCOL_V1BSON:
       global vtgate_addrs
-      self.vtgate_addrs = {"_vtocc": ["localhost:%s"%(self.vtgate_port),]}
+      self.vtgate_addrs = {"_vt": ["localhost:%s"%(self.vtgate_port),]}
 
     self.insert_index = 0
 

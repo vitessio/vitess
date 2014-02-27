@@ -29,7 +29,6 @@ master_host = "localhost:%u" % master_tablet.port
 
 vtgate_server = None
 vtgate_port = None
-vtgate_secure_port = None
 
 master_start_position = None
 
@@ -69,7 +68,6 @@ def _get_repl_current_position():
 def setUpModule():
   global vtgate_server
   global vtgate_port
-  global vtgate_secure_port
   global master_start_position
 
   try:
@@ -93,7 +91,7 @@ def setUpModule():
 
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'])
 
-    vtgate_server, vtgate_port, vtgate_secure_port = utils.vtgate_start()
+    vtgate_server, vtgate_port = utils.vtgate_start()
 
     master_tablet.start_vttablet()
     replica_tablet.start_vttablet()

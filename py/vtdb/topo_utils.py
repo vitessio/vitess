@@ -38,7 +38,7 @@ def get_db_params_for_vtgate_conn(vtgate_addrs, keyspace_name, shard, db_type, t
       vt_params = VTConnParams(keyspace_name, shard, db_type, addr, timeout, encrypted, user, password).__dict__
       db_params_list.append(vt_params)
   elif isinstance(vtgate_addrs, dict):
-    service = '_vtocc'
+    service = '_vt'
     if encrypted:
       service = '_vts'
     if service not in vtgate_addrs:

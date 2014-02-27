@@ -24,7 +24,6 @@ replica_tablet = tablet.Tablet()
 
 vtgate_server = None
 vtgate_port = None
-vtgate_secure_port = None
 
 create_vt_insert_test = '''create table vt_insert_test (
 id bigint auto_increment,
@@ -36,7 +35,6 @@ primary key (id)
 def setUpModule():
   global vtgate_server
   global vtgate_port
-  global vtgate_secure_port
 
   try:
     environment.topo_server_setup()
@@ -57,7 +55,7 @@ def setUpModule():
     master_tablet.populate('vt_test_keyspace', create_vt_insert_test)
     replica_tablet.populate('vt_test_keyspace', create_vt_insert_test)
 
-    vtgate_server, vtgate_port, vtgate_secure_port = utils.vtgate_start()
+    vtgate_server, vtgate_port = utils.vtgate_start()
 
     master_tablet.start_vttablet(memcache=True, wait_for_state=None)
     replica_tablet.start_vttablet(memcache=True, wait_for_state=None)

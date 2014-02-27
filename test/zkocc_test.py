@@ -34,10 +34,10 @@ def tearDownModule():
 class TopoOccTest(unittest.TestCase):
   def setUp(self):
     environment.topo_server_wipe()
-    self.vtgate_zk, self.vtgate_zk_port, self.vtgate_zk_secure_port = utils.vtgate_start()
+    self.vtgate_zk, self.vtgate_zk_port = utils.vtgate_start()
     if environment.topo_server_implementation == 'zookeeper':
       self.zkocc_server = utils.zkocc_start()
-      self.vtgate_zkocc, self.vtgate_zkocc_port, self.vtgate_zkocc_secure_port = utils.vtgate_start(topo_impl="zkocc")
+      self.vtgate_zkocc, self.vtgate_zkocc_port = utils.vtgate_start(topo_impl="zkocc")
       self.topo = zkocc.ZkOccConnection("localhost:%u" % environment.zkocc_port_base, 'test_nj', 30)
       self.topo.dial()
 
@@ -376,7 +376,7 @@ class TestZkocc(unittest.TestCase):
     utils.run_vtctl('RebuildKeyspaceGraph test_keyspace', auto_log=True)
 
     # start vtgate and the qps-er
-    vtgate_proc, vtgate_port, vtgate_secure_port = utils.vtgate_start()
+    vtgate_proc, vtgate_port = utils.vtgate_start()
     qpser = utils.run_bg(environment.binary_path('zkclient2')+' -server localhost:%u -mode qps2 test_nj test_keyspace' % vtgate_port)
     time.sleep(10)
     utils.kill_sub_process(qpser)

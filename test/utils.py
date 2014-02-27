@@ -362,9 +362,10 @@ def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1, topo
   sp = run_bg(args)
   if cert:
     wait_for_vars("vtgate", port, "SecureConnections")
+    return sp, port, secure_port
   else:
     wait_for_vars("vtgate", port)
-  return sp, port, secure_port
+    return sp, port
 
 def vtgate_kill(sp):
   if sp is None:

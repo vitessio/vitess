@@ -131,7 +131,7 @@ class TestTabletManager(unittest.TestCase):
                           self._populate_vt_select_test)
 
     tablet_62344.start_vttablet()
-    gate_proc, gate_port, gate_secure_port = utils.vtgate_start()
+    gate_proc, gate_port = utils.vtgate_start()
 
     conn = vtgate.connect("localhost:%s"%(gate_port), "master", "test_keyspace", "0", 2.0)
 
