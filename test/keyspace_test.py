@@ -253,7 +253,7 @@ class TestKeyspace(unittest.TestCase):
         self.assertEqual(sharded_ks.keyspace_id_to_shard_index(keyspace_id), i)
         self.assertEqual(sharded_ks.keyspace_id_to_shard_index_for_db_type(keyspace_id, 'master'), i)
 
-  def test_keyspace_id_to_shard_index(self):
+  def test_keyspace_id_to_shard_name(self):
     sharded_ks = self._read_keyspace(SHARDED_KEYSPACE)
     for _, sn in enumerate(shard_names):
       for keyspace_id in shard_kid_map[sn]:
