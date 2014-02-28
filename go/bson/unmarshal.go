@@ -268,25 +268,6 @@ func (builder *valueBuilder) Binary(bindata []byte) {
 	}
 }
 
-func (builder *valueBuilder) Elem(i int) *valueBuilder {
-	if i < 0 {
-		panic(NewBsonError("negative index %v for array element", i))
-	}
-	switch builder.val.Kind() {
-	case reflect.Array:
-		if i < builder.val.Len() {
-			return ValueBuilder(builder.val.Index(i))
-		} else {
-			panic(NewBsonError("array index %v out of bounds", i))
-		}
-	case reflect.Slice:
-		zero := reflect.Zero(builder.val.Type().Elem())
-		builder.val.Set(reflect.Append(builder.val, zero))
-		return ValueBuilder(builder.val.Index(builder.val.Len() - 1))
-	}
-	panic(NewBsonError("unexpected type %s, expecting slice or array", builder.val.Type()))
-}
-
 func (builder *valueBuilder) Object() {
 	switch builder.val.Kind() {
 	case reflect.Map:
@@ -322,7 +303,7 @@ func (builder *valueBuilder) Key(k string) *valueBuilder {
 		}
 		key := reflect.ValueOf(k)
 		return MapBuilder(t.Elem(), builder.val, key)
-	case reflect.Slice, reflect.Array:
+	case reflect.Array:
 		if builder.isSimple {
 			builder.isSimple = false
 			return builder
@@ -331,7 +312,18 @@ func (builder *valueBuilder) Key(k string) *valueBuilder {
 		if err != nil {
 			panic(BsonError{err.Error()})
 		}
-		return builder.Elem(index)
+		if index < 0 || index >= builder.val.Len() {
+			panic(NewBsonError("array index %v out of bounds", index))
+		}
+		return ValueBuilder(builder.val.Index(index))
+	case reflect.Slice:
+		if builder.isSimple {
+			builder.isSimple = false
+			return builder
+		}
+		zero := reflect.Zero(builder.val.Type().Elem())
+		builder.val.Set(reflect.Append(builder.val, zero))
+		return ValueBuilder(builder.val.Index(builder.val.Len() - 1))
 	case reflect.Float64, reflect.String, reflect.Bool,
 		reflect.Int, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint32, reflect.Uint64:
