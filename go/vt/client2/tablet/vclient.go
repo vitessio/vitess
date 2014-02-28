@@ -35,9 +35,8 @@ var zeroTime time.Time
 
 type VtConn struct {
 	Conn
-	maxAttempts    int           // How many times should try each retriable operation?
-	timeout        time.Duration // How long should we wait for a given operation?
-	timeFailed     time.Time     // This is the time a client transitioned from presumable health to failure.
+	maxAttempts    int       // How many times should try each retriable operation?
+	timeFailed     time.Time // This is the time a client transitioned from presumable health to failure.
 	reconnectDelay time.Duration
 }
 
@@ -155,7 +154,6 @@ func DialVtdb(dbi string, stream bool, timeout time.Duration) (*VtConn, error) {
 	conn := &VtConn{
 		Conn:           Conn{dbi: url, stream: stream},
 		maxAttempts:    DefaultMaxAttempts,
-		timeout:        timeout,
 		reconnectDelay: DefaultReconnectDelay,
 	}
 
