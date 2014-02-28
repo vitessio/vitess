@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
-	"sort"
 
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
@@ -38,7 +37,6 @@ func (tr *TopoReader) GetSrvKeyspaceNames(req topo.GetSrvKeyspaceNamesArgs, repl
 		return err
 	}
 	reply.Entries = zkrReply.Children
-	sort.Strings(reply.Entries)
 	return nil
 }
 
