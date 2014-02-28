@@ -152,7 +152,7 @@ func DialVtdb(dbi string, stream bool, timeout time.Duration) (*VtConn, error) {
 		return nil, err
 	}
 	conn := &VtConn{
-		Conn:           Conn{dbi: url, stream: stream},
+		Conn:           Conn{dbi: url, stream: stream, timeout: timeout},
 		maxAttempts:    DefaultMaxAttempts,
 		reconnectDelay: DefaultReconnectDelay,
 	}
