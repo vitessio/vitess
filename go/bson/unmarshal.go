@@ -280,26 +280,9 @@ func (builder *valueBuilder) Elem(i int) *valueBuilder {
 			panic(NewBsonError("array index %v out of bounds", i))
 		}
 	case reflect.Slice:
-		if i >= builder.val.Cap() {
-			n := builder.val.Cap()
-			if n < 8 {
-				n = 8
-			}
-			for n <= i {
-				n *= 2
-			}
-			nv := reflect.MakeSlice(builder.val.Type(), builder.val.Len(), n)
-			reflect.Copy(nv, builder.val)
-			builder.val.Set(nv)
-		}
-		if builder.val.Len() <= i && i < builder.val.Cap() {
-			builder.val.SetLen(i + 1)
-		}
-		if i < builder.val.Len() {
-			return ValueBuilder(builder.val.Index(i))
-		} else {
-			panic(NewBsonError("internal error, realloc failed?"))
-		}
+		zero := reflect.Zero(builder.val.Type().Elem())
+		builder.val.Set(reflect.Append(builder.val, zero))
+		return ValueBuilder(builder.val.Index(builder.val.Len() - 1))
 	}
 	panic(NewBsonError("unexpected type %s, expecting slice or array", builder.val.Type()))
 }
