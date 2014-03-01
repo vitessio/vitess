@@ -165,9 +165,10 @@ func (scheduler *Scheduler) runJanitor(name string) {
 	if !ok {
 		panic("janitor " + name + " not enabled")
 	}
-	log.Infof("running janitor %v", name)
+	active := janitor.Active && scheduler.IsMaster()
+	log.Infof("running janitor %v (active: %v)", name, active)
 	start := time.Now()
-	if err := janitor.Run(janitor.Active && scheduler.IsMaster()); err != nil {
+	if err := janitor.Run(active); err != nil {
 		// TODO(szopa): Add some exponential
 		// backoff if an error occurs.
 		log.Errorf("janitor %v run: %v", name, err)

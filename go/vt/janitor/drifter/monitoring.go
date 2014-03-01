@@ -28,7 +28,7 @@ func (janitor *Janitor) HandleEvent(state TabletState) (drifting bool) {
 			TabletState: state,
 			Time:        time.Now(),
 		})
-		varDrifterCount.Add(state.Tablet.Keyspace, 1)
+		varDrifterCount.Add(state.Tablet.Alias.Cell, 1)
 	}
 
 	switch result {
