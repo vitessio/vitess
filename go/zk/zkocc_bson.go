@@ -14,7 +14,8 @@ import (
 	"github.com/youtube/vitess/go/bytes2"
 )
 
-func (zkPath *ZkPath) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (zkPath *ZkPath) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodeString(buf, "Path", zkPath.Path)
@@ -23,10 +24,11 @@ func (zkPath *ZkPath) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
-func (zkPath *ZkPath) UnmarshalBson(buf *bytes.Buffer) {
+func (zkPath *ZkPath) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		key := bson.ReadCString(buf)
 		switch key {
@@ -39,7 +41,8 @@ func (zkPath *ZkPath) UnmarshalBson(buf *bytes.Buffer) {
 	}
 }
 
-func (zkPathV *ZkPathV) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (zkPathV *ZkPathV) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodeStringArray(buf, "Paths", zkPathV.Paths)
@@ -48,10 +51,11 @@ func (zkPathV *ZkPathV) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
-func (zkPathV *ZkPathV) UnmarshalBson(buf *bytes.Buffer) {
+func (zkPathV *ZkPathV) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		key := bson.ReadCString(buf)
 		switch key {
@@ -64,7 +68,8 @@ func (zkPathV *ZkPathV) UnmarshalBson(buf *bytes.Buffer) {
 	}
 }
 
-func (zkStat *ZkStat) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (zkStat *ZkStat) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodeInt64(buf, "Czxid", zkStat.czxid)
@@ -83,10 +88,11 @@ func (zkStat *ZkStat) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
-func (zkStat *ZkStat) UnmarshalBson(buf *bytes.Buffer) {
+func (zkStat *ZkStat) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		key := bson.ReadCString(buf)
 		switch key {
@@ -119,15 +125,13 @@ func (zkStat *ZkStat) UnmarshalBson(buf *bytes.Buffer) {
 	}
 }
 
-func (zkNode *ZkNode) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (zkNode *ZkNode) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodeString(buf, "Path", zkNode.Path)
 	bson.EncodeString(buf, "Data", zkNode.Data)
-
-	bson.EncodePrefix(buf, bson.Object, "Stat")
-	zkNode.Stat.MarshalBson(buf)
-
+	zkNode.Stat.MarshalBson(buf, "Stat")
 	bson.EncodeStringArray(buf, "Children", zkNode.Children)
 	bson.EncodeBool(buf, "Cached", zkNode.Cached)
 	bson.EncodeBool(buf, "Stale", zkNode.Stale)
@@ -136,10 +140,11 @@ func (zkNode *ZkNode) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
-func (zkNode *ZkNode) UnmarshalBson(buf *bytes.Buffer) {
+func (zkNode *ZkNode) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		key := bson.ReadCString(buf)
 		switch key {
@@ -151,7 +156,7 @@ func (zkNode *ZkNode) UnmarshalBson(buf *bytes.Buffer) {
 			if kind != bson.Object {
 				panic(bson.NewBsonError("Unexpected data type %v for Stat", kind))
 			}
-			zkNode.Stat.UnmarshalBson(buf)
+			zkNode.Stat.UnmarshalBson(buf, kind)
 		case "Children":
 			zkNode.Children = bson.DecodeStringArray(buf, kind)
 		case "Cached":
@@ -172,8 +177,7 @@ func marshalZkNodeArray(buf *bytes2.ChunkedWriter, name string, values []*ZkNode
 		bson.EncodePrefix(buf, bson.Array, name)
 		lenWriter := bson.NewLenWriter(buf)
 		for i, val := range values {
-			bson.EncodePrefix(buf, bson.Object, bson.Itoa(i))
-			val.MarshalBson(buf)
+			val.MarshalBson(buf, bson.Itoa(i))
 		}
 		buf.WriteByte(0)
 		lenWriter.RecordLen()
@@ -199,14 +203,15 @@ func unmarshalZkNodeArray(buf *bytes.Buffer, name string, kind byte) []*ZkNode {
 		}
 		bson.SkipIndex(buf)
 		zkNode := &ZkNode{}
-		zkNode.UnmarshalBson(buf)
+		zkNode.UnmarshalBson(buf, kind)
 		values = append(values, zkNode)
 		kind = bson.NextByte(buf)
 	}
 	return values
 }
 
-func (zkNodeV *ZkNodeV) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (zkNodeV *ZkNodeV) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
 	marshalZkNodeArray(buf, "Nodes", zkNodeV.Nodes)
@@ -215,10 +220,11 @@ func (zkNodeV *ZkNodeV) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
-func (zkNodeV *ZkNodeV) UnmarshalBson(buf *bytes.Buffer) {
+func (zkNodeV *ZkNodeV) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		key := bson.ReadCString(buf)
 		switch key {

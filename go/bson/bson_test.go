@@ -68,9 +68,7 @@ type alltypes struct {
 }
 
 func (a *alltypes) UnmarshalBson(buf *bytes.Buffer, kind byte) {
-	if kind != EOO && kind != Object {
-		panic(NewBsonError("unexpected kind: %v", kind))
-	}
+	VerifyObject(kind)
 	Next(buf, 4)
 
 	kind = NextByte(buf)
@@ -308,9 +306,7 @@ type PrivateStructMap struct {
 }
 
 func (ps *PrivateStruct) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
-	if key != "" {
-		EncodePrefix(buf, Object, key)
-	}
+	EncodeOptionalPrefix(buf, Object, key)
 	lenWriter := NewLenWriter(buf)
 
 	EncodeUint64(buf, "Type", ps.veryPrivate)
@@ -320,9 +316,7 @@ func (ps *PrivateStruct) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 }
 
 func (ps *PrivateStruct) UnmarshalBson(buf *bytes.Buffer, kind byte) {
-	if kind != EOO && kind != Object {
-		panic(NewBsonError("unexpected kind: %v", kind))
-	}
+	VerifyObject(kind)
 	Next(buf, 4)
 
 	for kind := NextByte(buf); kind != EOO; kind = NextByte(buf) {

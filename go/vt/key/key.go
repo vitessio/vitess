@@ -154,7 +154,8 @@ func (kr KeyRange) IsPartial() bool {
 	return !(kr.Start == MinKey && kr.End == MaxKey)
 }
 
-func (kr *KeyRange) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (kr *KeyRange) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodeString(buf, "Start", string(kr.Start))
@@ -164,10 +165,11 @@ func (kr *KeyRange) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
-func (kr *KeyRange) UnmarshalBson(buf *bytes.Buffer) {
+func (kr *KeyRange) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		key := bson.ReadCString(buf)
 		switch key {

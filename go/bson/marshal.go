@@ -46,11 +46,15 @@ type Marshaler interface {
 }
 
 func CanMarshal(val reflect.Value) Marshaler {
-	// check the Marshaler interface on T
+	// Check the Marshaler interface on T.
 	if marshaler, ok := val.Interface().(Marshaler); ok {
+		// Don't call custom marshaler for nil values.
+		if val.IsNil() {
+			return nil
+		}
 		return marshaler
 	}
-	// check the Marshaler interface on *T
+	// Check the Marshaler interface on *T.
 	if val.CanAddr() {
 		if marshaler, ok := val.Addr().Interface().(Marshaler); ok {
 			return marshaler
@@ -64,9 +68,7 @@ type SimpleContainer struct {
 }
 
 func (sc *SimpleContainer) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
-	if key != "" {
-		EncodePrefix(buf, Object, key)
-	}
+	EncodeOptionalPrefix(buf, Object, key)
 	lenWriter := NewLenWriter(buf)
 	EncodeField(buf, "_Val_", sc._Val_)
 	buf.WriteByte(0)
@@ -182,6 +184,13 @@ func encodeField(buf *bytes2.ChunkedWriter, key string, val reflect.Value) {
 	default:
 		panic(NewBsonError("don't know how to marshal %v\n", val.Type()))
 	}
+}
+
+func EncodeOptionalPrefix(buf *bytes2.ChunkedWriter, etype byte, key string) {
+	if key == "" {
+		return
+	}
+	EncodePrefix(buf, etype, key)
 }
 
 func EncodePrefix(buf *bytes2.ChunkedWriter, etype byte, key string) {

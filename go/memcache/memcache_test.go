@@ -262,6 +262,6 @@ func expect(t *testing.T, c *Connection, key, value string) {
 		got = string(results[0].Value)
 	}
 	if got != value {
-		t.Errorf("want %s, got %s", value, results[0].Value)
+		t.Errorf("want %s, got %s", value, got)
 	}
 }

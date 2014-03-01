@@ -18,6 +18,12 @@ var (
 	emptybytes = []byte{}
 )
 
+func VerifyObject(kind byte) {
+	if kind != EOO && kind != Object {
+		panic(NewBsonError("unexpected kind: %v", kind))
+	}
+}
+
 func DecodeFloat64(buf *bytes.Buffer, kind byte) float64 {
 	switch kind {
 	case Number:
