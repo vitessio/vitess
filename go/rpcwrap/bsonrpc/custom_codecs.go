@@ -16,7 +16,8 @@ type RequestBson struct {
 	*rpc.Request
 }
 
-func (req *RequestBson) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (req *RequestBson) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodeString(buf, "ServiceMethod", req.ServiceMethod)
@@ -26,10 +27,11 @@ func (req *RequestBson) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
-func (req *RequestBson) UnmarshalBson(buf *bytes.Buffer) {
+func (req *RequestBson) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		key := bson.ReadCString(buf)
 		switch key {
@@ -48,7 +50,8 @@ type ResponseBson struct {
 	*rpc.Response
 }
 
-func (resp *ResponseBson) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (resp *ResponseBson) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodeString(buf, "ServiceMethod", resp.ServiceMethod)
@@ -59,10 +62,11 @@ func (resp *ResponseBson) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
-func (resp *ResponseBson) UnmarshalBson(buf *bytes.Buffer) {
+func (resp *ResponseBson) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		key := bson.ReadCString(buf)
 		switch key {

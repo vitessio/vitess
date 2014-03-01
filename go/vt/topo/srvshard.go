@@ -91,12 +91,11 @@ func DecodeTabletTypeArray(buf *bytes.Buffer, kind byte) []TabletType {
 	return values
 }
 
-func (ss *SrvShard) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (ss *SrvShard) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
-	bson.EncodePrefix(buf, bson.Object, "KeyRange")
-	ss.KeyRange.MarshalBson(buf)
-
+	ss.KeyRange.MarshalBson(buf, "KeyRange")
 	EncodeTabletTypeArray(buf, "ServedTypes", ss.ServedTypes)
 	EncodeTabletTypeArray(buf, "TabletTypes", ss.TabletTypes)
 
@@ -105,15 +104,16 @@ func (ss *SrvShard) MarshalBson(buf *bytes2.ChunkedWriter) {
 
 }
 
-func (ss *SrvShard) UnmarshalBson(buf *bytes.Buffer) {
+func (ss *SrvShard) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		keyName := bson.ReadCString(buf)
 		switch keyName {
 		case "KeyRange":
-			ss.KeyRange.UnmarshalBson(buf)
+			ss.KeyRange.UnmarshalBson(buf, kind)
 		case "ServedTypes":
 			ss.ServedTypes = DecodeTabletTypeArray(buf, kind)
 		case "TabletTypes":
@@ -146,8 +146,7 @@ func EncodeSrvShardArray(buf *bytes2.ChunkedWriter, name string, values []SrvSha
 		bson.EncodePrefix(buf, bson.Array, name)
 		lenWriter := bson.NewLenWriter(buf)
 		for i, val := range values {
-			bson.EncodePrefix(buf, bson.Object, bson.Itoa(i))
-			val.MarshalBson(buf)
+			val.MarshalBson(buf, bson.Itoa(i))
 		}
 		buf.WriteByte(0)
 		lenWriter.RecordLen()
@@ -173,14 +172,15 @@ func DecodeSrvShardArray(buf *bytes.Buffer, kind byte) []SrvShard {
 		}
 		bson.SkipIndex(buf)
 		value := &SrvShard{}
-		value.UnmarshalBson(buf)
+		value.UnmarshalBson(buf, kind)
 		values = append(values, *value)
 		kind = bson.NextByte(buf)
 	}
 	return values
 }
 
-func (kp *KeyspacePartition) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (kp *KeyspacePartition) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
 	EncodeSrvShardArray(buf, "Shards", kp.Shards)
@@ -189,10 +189,11 @@ func (kp *KeyspacePartition) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
-func (kp *KeyspacePartition) UnmarshalBson(buf *bytes.Buffer) {
+func (kp *KeyspacePartition) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		keyName := bson.ReadCString(buf)
 		switch keyName {
@@ -243,8 +244,7 @@ func EncodeKeyspacePartitionMap(buf *bytes2.ChunkedWriter, name string, values m
 		bson.EncodePrefix(buf, bson.Object, name)
 		lenWriter := bson.NewLenWriter(buf)
 		for i, val := range values {
-			bson.EncodePrefix(buf, bson.Object, string(i))
-			val.MarshalBson(buf)
+			val.MarshalBson(buf, string(i))
 		}
 		buf.WriteByte(0)
 		lenWriter.RecordLen()
@@ -270,7 +270,7 @@ func DecodeKeyspacePartitionMap(buf *bytes.Buffer, kind byte) map[TabletType]*Ke
 		}
 		keyName := bson.ReadCString(buf)
 		value := &KeyspacePartition{}
-		value.UnmarshalBson(buf)
+		value.UnmarshalBson(buf, kind)
 		values[TabletType(keyName)] = value
 		kind = bson.NextByte(buf)
 	}
@@ -309,7 +309,8 @@ func DecodeServedFrom(buf *bytes.Buffer, kind byte) map[TabletType]string {
 	return servedFrom
 }
 
-func (sk *SrvKeyspace) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (sk *SrvKeyspace) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
 	EncodeKeyspacePartitionMap(buf, "Partitions", sk.Partitions)
@@ -325,10 +326,11 @@ func (sk *SrvKeyspace) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
-func (sk *SrvKeyspace) UnmarshalBson(buf *bytes.Buffer) {
+func (sk *SrvKeyspace) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		keyName := bson.ReadCString(buf)
 		switch keyName {

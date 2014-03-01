@@ -307,7 +307,8 @@ import (
 )
 
 // MarshalBson bson-encodes {{.Name}}.
-func ({{.Var}} *{{.Name}}) MarshalBson(buf *bytes2.ChunkedWriter) {
+func ({{.Var}} *{{.Name}}) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
 {{range .Fields}}	{{template "Encoder" .}}
@@ -317,7 +318,8 @@ func ({{.Var}} *{{.Name}}) MarshalBson(buf *bytes2.ChunkedWriter) {
 }
 
 // UnmarshalBson bson-decodes into {{.Name}}.
-func ({{.Var}} *{{.Name}}) UnmarshalBson(buf *bytes.Buffer) {
+func ({{.Var}} *{{.Name}}) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	VerifyObject(kind)
 	bson.Next(buf, 4)
 
 	kind := bson.NextByte(buf)

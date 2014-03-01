@@ -31,8 +31,10 @@ type StreamEvent struct {
 	GroupId int64
 }
 
-func (ste *StreamEvent) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (ste *StreamEvent) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
+
 	bson.EncodeString(buf, "Category", ste.Category)
 	bson.EncodeString(buf, "TableName", ste.TableName)
 	bson.EncodeStringArray(buf, "PKColNames", ste.PKColNames)
@@ -40,6 +42,7 @@ func (ste *StreamEvent) MarshalBson(buf *bytes2.ChunkedWriter) {
 	bson.EncodeString(buf, "Sql", ste.Sql)
 	bson.EncodeInt64(buf, "Timestamp", ste.Timestamp)
 	bson.EncodeInt64(buf, "GroupId", ste.GroupId)
+
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
 }
@@ -64,10 +67,11 @@ func MarshalPKRowBson(buf *bytes2.ChunkedWriter, key string, pkRow []interface{}
 	lenWriter.RecordLen()
 }
 
-func (ste *StreamEvent) UnmarshalBson(buf *bytes.Buffer) {
+func (ste *StreamEvent) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		key := bson.ReadCString(buf)
 		switch key {
