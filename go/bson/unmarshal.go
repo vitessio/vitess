@@ -14,8 +14,6 @@ import (
 	"reflect"
 	"strconv"
 	"time"
-
-	log "github.com/golang/glog"
 )
 
 // BSON documents are lttle endian
@@ -294,7 +292,6 @@ func (builder *valueBuilder) Key(k string) *valueBuilder {
 				return ValueBuilder(builder.val.Field(i))
 			}
 		}
-		log.Warningf("Could not find field '%s' in struct object, skipping it", k)
 		return nil
 	case reflect.Map:
 		t := builder.val.Type()
@@ -398,7 +395,7 @@ func UnmarshalFromBuffer(buf *bytes.Buffer, val interface{}) (err error) {
 	if terr != nil {
 		return terr
 	}
-	buf.Next(4)
+	Next(buf, 4)
 	Parse(buf, sb)
 	sb.Flush()
 	return
@@ -417,26 +414,26 @@ func Parse(buf *bytes.Buffer, builder *valueBuilder) {
 		} else {
 			switch kind {
 			case Number:
-				ui64 := Pack.Uint64(buf.Next(8))
+				ui64 := Pack.Uint64(Next(buf, 8))
 				fl64 := math.Float64frombits(ui64)
 				b2.Float64(fl64)
 			case String:
-				l := int(Pack.Uint32(buf.Next(4)))
-				s := buf.Next(l - 1)
+				l := int(Pack.Uint32(Next(buf, 4)))
+				s := Next(buf, l-1)
 				buf.ReadByte()
 				b2.String(s)
 			case Object:
 				b2.Object()
-				buf.Next(4)
+				Next(buf, 4)
 				Parse(buf, b2)
 			case Array:
 				b2.Array()
-				buf.Next(4)
+				Next(buf, 4)
 				Parse(buf, b2)
 			case Binary:
-				l := int(Pack.Uint32(buf.Next(4)))
-				buf.Next(1) // Skip the subtype, we don't care
-				b2.Binary(buf.Next(l))
+				l := int(Pack.Uint32(Next(buf, 4)))
+				Next(buf, 1) // Skip the subtype, we don't care
+				b2.Binary(Next(buf, l))
 			case Boolean:
 				b, _ := buf.ReadByte()
 				if b == 1 {
@@ -445,16 +442,16 @@ func Parse(buf *bytes.Buffer, builder *valueBuilder) {
 					b2.Bool(false)
 				}
 			case Datetime:
-				ui64 := Pack.Uint64(buf.Next(8))
+				ui64 := Pack.Uint64(Next(buf, 8))
 				b2.Datetime(time.Unix(0, int64(ui64)*1e6).UTC())
 			case Int:
-				ui32 := Pack.Uint32(buf.Next(4))
+				ui32 := Pack.Uint32(Next(buf, 4))
 				b2.Int32(int32(ui32))
 			case Long:
-				ui64 := Pack.Uint64(buf.Next(8))
+				ui64 := Pack.Uint64(Next(buf, 8))
 				b2.Int64(int64(ui64))
 			case Ulong:
-				ui64 := Pack.Uint64(buf.Next(8))
+				ui64 := Pack.Uint64(Next(buf, 8))
 				b2.Uint64(ui64)
 			case Null:
 				// no op
@@ -472,32 +469,32 @@ func Parse(buf *bytes.Buffer, builder *valueBuilder) {
 func Skip(buf *bytes.Buffer, kind byte) {
 	switch kind {
 	case Number:
-		buf.Next(8)
+		Next(buf, 8)
 	case String:
 		// length of a string includes the 0 at the end, but not the size
-		l := int(Pack.Uint32(buf.Next(4)))
-		buf.Next(l)
+		l := int(Pack.Uint32(Next(buf, 4)))
+		Next(buf, l)
 	case Object, Array:
 		// the encoded length includes the 4 bytes for the size
-		l := int(Pack.Uint32(buf.Next(4)))
+		l := int(Pack.Uint32(Next(buf, 4)))
 		if l < 4 {
 			panic(NewBsonError("Object or Array should at least be 4 bytes long"))
 		}
-		buf.Next(l - 4)
+		Next(buf, l-4)
 	case Binary:
 		// length of a binary doesn't include the subtype
-		l := int(Pack.Uint32(buf.Next(4)))
-		buf.Next(l + 1)
+		l := int(Pack.Uint32(Next(buf, 4)))
+		Next(buf, l+1)
 	case Boolean:
 		buf.ReadByte()
 	case Datetime:
-		buf.Next(8)
+		Next(buf, 8)
 	case Int:
-		buf.Next(4)
+		Next(buf, 4)
 	case Long:
-		buf.Next(8)
+		Next(buf, 8)
 	case Ulong:
-		buf.Next(8)
+		Next(buf, 8)
 	case Null:
 		// no op
 	default:
