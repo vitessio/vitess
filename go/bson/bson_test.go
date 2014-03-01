@@ -15,35 +15,39 @@ import (
 
 func TestVariety(t *testing.T) {
 	in := map[string]string{"Val": "test"}
-	encoded := VerifyMarshal(t, in)
-	expected := []byte("\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00")
-	compare(t, encoded, expected)
+	got := VerifyMarshal(t, in)
+	want := "\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00"
+	if string(got) != want {
+		t.Errorf("got: %q, want: %q", string(got), want)
+	}
 
 	out := make(map[string]interface{})
-	err := Unmarshal(encoded, &out)
-	if in["Val"] != string(out["Val"].([]byte)) {
-		t.Errorf("unmarshal doesn't match input: %v\n%v\n%v\n", err, in, out)
+	err := Unmarshal(got, &out)
+	got2 := string(out["Val"].([]byte))
+	if got2 != in["Val"] {
+		t.Errorf("got: %q, want: %q", got2, in["Val"])
 	}
 
-	var out1 string
-	err = Unmarshal(encoded, &out1)
-	if out1 != "test" {
-		t.Errorf("unmarshal doesn't match input: %v\n%v\n%v\n", err, in, out1)
+	var got3 string
+	err = Unmarshal(got, &got3)
+	if got3 != "test" {
+		t.Errorf("got: %q, want: %q, err: %v", got3, "test", err)
 	}
 
-	var out2 interface{}
-	err = Unmarshal(encoded, &out2)
-	if string(out2.(map[string]interface{})["Val"].([]byte)) != "test" {
-		t.Errorf("unmarshal doesn't match input: %v\n%v\n%v\n", err, in, out2)
+	var got4 interface{}
+	err = Unmarshal(got, &got4)
+	sgot4 := string(got4.(map[string]interface{})["Val"].([]byte))
+	if sgot4 != "test" {
+		t.Errorf("got: %q, want: %q", sgot4, "test")
 	}
 
 	type mystruct struct {
 		Val string
 	}
-	var out3 mystruct
-	err = Unmarshal(encoded, &out3)
-	if out3.Val != "test" {
-		t.Errorf("unmarshal doesn't match input: %v\n%v\n%v\n", err, in, out3)
+	var got5 mystruct
+	err = Unmarshal(got, &got5)
+	if got5.Val != "test" {
+		t.Errorf("got: %q, want: %q", got5.Val, "test")
 	}
 }
 
@@ -63,10 +67,13 @@ type alltypes struct {
 	Nil     interface{}
 }
 
-func (a *alltypes) UnmarshalBson(buf *bytes.Buffer) {
+func (a *alltypes) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	if kind != EOO && kind != Object {
+		panic(NewBsonError("unexpected kind: %v", kind))
+	}
 	Next(buf, 4)
 
-	kind := NextByte(buf)
+	kind = NextByte(buf)
 	for kind != EOO {
 		key := ReadCString(buf)
 		switch key {
@@ -78,7 +85,8 @@ func (a *alltypes) UnmarshalBson(buf *bytes.Buffer) {
 			a.Float64 = DecodeFloat64(buf, kind)
 		case "String":
 			verifyKind("String", Binary, kind)
-			a.String = DecodeString(buf, kind)
+			// Put an easter egg here to verify the function is called
+			a.String = DecodeString(buf, kind) + "1"
 		case "Bool":
 			verifyKind("Bool", Boolean, kind)
 			a.Bool = DecodeBool(buf, kind)
@@ -115,14 +123,13 @@ func (a *alltypes) UnmarshalBson(buf *bytes.Buffer) {
 	}
 }
 
-func verifyKind(tag string, expecting, actual byte) {
-	if expecting != actual {
-		panic(NewBsonError("Decode %s: expecting %v, actual %v", tag, expecting, actual))
+func verifyKind(tag string, want, got byte) {
+	if want != got {
+		panic(NewBsonError("Decode %s: got %v, want %v", tag, got, want))
 	}
 }
 
-// TestCustom tests custom unmarshalling
-func TestCustom(t *testing.T) {
+func TestUnmarshalUtil(t *testing.T) {
 	a := alltypes{
 		Bytes:   []byte("bytes"),
 		Float64: float64(64),
@@ -138,9 +145,9 @@ func TestCustom(t *testing.T) {
 		Strings: []string{"a", "b"},
 		Nil:     nil,
 	}
-	encoded := VerifyMarshal(t, a)
+	got := VerifyMarshal(t, a)
 	var out alltypes
-	err := Unmarshal(encoded, &out)
+	err := Unmarshal(got, &out)
 	if err != nil {
 		t.Fatalf("unmarshal fail: %v\n", err)
 	}
@@ -149,19 +156,24 @@ func TestCustom(t *testing.T) {
 		t.Errorf("time fail: %v", out.Time)
 	}
 	out.Time = a.Time
+	// Verify easter egg
+	if out.String != "string1" {
+		t.Errorf("got: %s, want %s", out.String, "string1")
+	}
+	out.String = "string"
 	if !reflect.DeepEqual(a, out) {
-		t.Errorf("want\n%+v, got\n%+v", a, out)
+		t.Errorf("got\n%+v, want\n%+v", out, a)
 	}
 
 	b := alltypes{Bytes: []byte(""), Strings: []string{"a"}}
-	encoded = VerifyMarshal(t, b)
+	got = VerifyMarshal(t, b)
 	var outb alltypes
-	err = Unmarshal(encoded, &outb)
+	err = Unmarshal(got, &outb)
 	if err != nil {
 		t.Fatalf("unmarshal fail: %v\n", err)
 	}
 	if outb.Bytes == nil || len(outb.Bytes) != 0 {
-		t.Errorf("nil bytes fail: %s", outb.Bytes)
+		t.Errorf("got: %q, want nil", string(outb.Bytes))
 	}
 }
 
@@ -180,97 +192,101 @@ func TestTypes(t *testing.T) {
 	in["uint"] = uint(0xFFFFFFFF)
 	in["slice"] = []interface{}{1, nil}
 	in["nil"] = nil
-	encoded := VerifyMarshal(t, in)
+	got := VerifyMarshal(t, in)
 
 	out := make(map[string]interface{})
-	err := Unmarshal(encoded, &out)
+	err := Unmarshal(got, &out)
 	if err != nil {
 		t.Fatalf("unmarshal fail: %v\n", err)
 	}
 
 	if string(in["bytes"].([]byte)) != "bytes" {
-		t.Errorf("bytes fail")
+		t.Errorf("got: %v, want %v", string(in["bytes"].([]byte)), "bytes")
 	}
 	if out["float64"].(float64) != float64(64) {
-		t.Errorf("float fail")
+		t.Errorf("got: %v, want %v", out["float64"].(float64), float64(64))
 	}
 	if string(out["string"].([]byte)) != "string" {
-		t.Errorf("string fail")
+		t.Errorf("got: %v, want %v", string(out["string"].([]byte)), "string")
 	}
 	if out["bool"].(bool) == false {
-		t.Errorf("bool fail")
+		t.Errorf("got: %v, want %v", out["bool"].(bool), false)
 	}
 	tm, ok := out["time"].(time.Time)
 	if !ok {
-		t.Errorf("time type failed")
+		t.Errorf("got: %T, want time.Time", out["time"].(time.Time))
 	}
 	if tm.Unix() != 1136243045 {
-		t.Error("time failed")
+		t.Errorf("got: %v, want %v", tm.Unix(), 1136243045)
 	}
 	if v := out["int64"].(int64); v != int64(-0x8000000000000000) {
-		t.Errorf("int64 fail: %v", v)
+		t.Errorf("got: %v, want %v", v, int64(-0x8000000000000000))
 	}
 	if v := out["int32"].(int32); v != int32(-0x80000000) {
-		t.Errorf("int32 fail: %v", v)
+		t.Errorf("got: %v, want %v", v, int32(-0x80000000))
 	}
 	if v := out["int"].(int64); v != int64(-0x80000000) {
-		t.Errorf("int fail: %v", v)
+		t.Errorf("got: %v, want %v", v, int64(-0x80000000))
 	}
 	if v := out["uint64"].(uint64); v != uint64(0xFFFFFFFFFFFFFFFF) {
-		t.Errorf("uint64 fail: %v", v)
+		t.Errorf("got: %v, want %v", v, uint64(0xFFFFFFFFFFFFFFFF))
 	}
 	if v := out["uint32"].(uint64); v != uint64(0xFFFFFFFF) {
-		t.Errorf("uint32 fail: %v", v)
+		t.Errorf("got: %v, want %v", v, uint64(0xFFFFFFFF))
 	}
 	if v := out["uint"].(uint64); v != uint64(0xFFFFFFFF) {
-		t.Errorf("uint fail: %v", v)
+		t.Errorf("got: %v, want %v", v, uint64(0xFFFFFFFF))
 	}
 	if v := out["slice"].([]interface{})[0].(int64); v != 1 {
-		t.Errorf("slice fail: %v", v)
+		t.Errorf("got: %v, want %v", v, 1)
 	}
 	if v := out["slice"].([]interface{})[1]; v != nil {
-		t.Errorf("slice fail: %v", v)
+		t.Errorf("got: %v, want %v", v, nil)
 	}
 	if nilval, ok := out["nil"]; !ok || nilval != nil {
-		t.Errorf("nil fail")
+		t.Errorf("got: %v, want %v", out["nil"], nil)
 	}
 }
 
 func TestBinary(t *testing.T) {
 	in := map[string][]byte{"Val": []byte("test")}
-	encoded := VerifyMarshal(t, in)
-	expected := []byte("\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00")
-	compare(t, encoded, expected)
+	got := VerifyMarshal(t, in)
+	want := "\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00"
+	if string(got) != want {
+		t.Errorf("got: %v, want %v", string(got), want)
+	}
 
 	out := make(map[string]interface{})
-	err := Unmarshal(encoded, &out)
+	err := Unmarshal(got, &out)
 	if string(out["Val"].([]byte)) != "test" {
-		t.Errorf("unmarshal doesn't match input: %v\n%v\n%v\n", err, in, out)
+		t.Errorf("got: %v, want %v, err: %v", string(out["Val"].([]byte)), "test", err)
 	}
 
 	var out1 []byte
-	err = Unmarshal(encoded, &out1)
+	err = Unmarshal(got, &out1)
 	if string(out1) != "test" {
-		t.Errorf("unmarshal doesn't match input: %v\n%v\n%v\n", err, in, out1)
+		t.Errorf("got: %v, want %v", string(out1), "test")
 	}
 }
 
 func TestInt(t *testing.T) {
 	in := map[string]int{"Val": 20}
-	encoded := VerifyMarshal(t, in)
-	expected := []byte("\x12\x00\x00\x00\x12Val\x00\x14\x00\x00\x00\x00\x00\x00\x00\x00")
-	compare(t, encoded, expected)
+	got := VerifyMarshal(t, in)
+	want := "\x12\x00\x00\x00\x12Val\x00\x14\x00\x00\x00\x00\x00\x00\x00\x00"
+	if string(got) != want {
+		t.Errorf("got: %v, want %v", string(got), want)
+	}
 
 	out := make(map[string]interface{})
-	err := Unmarshal(encoded, &out)
+	err := Unmarshal(got, &out)
 	if out["Val"].(int64) != 20 {
-		t.Errorf("unmarshal doesn't match input: %v\n%v\n%v\n", err, in, out)
+		t.Errorf("got: %v, want %v", out["Val"].(int64), 20)
 	}
 
 	var out1 int
-	err = Unmarshal(encoded, &out1)
+	err = Unmarshal(got, &out1)
 	if out1 != 20 {
-		t.Errorf("unmarshal doesn't match input: %v\n%v\n%vn", err, in, out1)
+		t.Errorf("got: %v, want %v, err: %v", out1, 20, err)
 	}
 }
 
@@ -291,7 +307,10 @@ type PrivateStructMap struct {
 	Map map[string]*PrivateStruct
 }
 
-func (ps *PrivateStruct) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (ps *PrivateStruct) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	if key != "" {
+		EncodePrefix(buf, Object, key)
+	}
 	lenWriter := NewLenWriter(buf)
 
 	EncodeUint64(buf, "Type", ps.veryPrivate)
@@ -300,34 +319,101 @@ func (ps *PrivateStruct) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
+func (ps *PrivateStruct) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	if kind != EOO && kind != Object {
+		panic(NewBsonError("unexpected kind: %v", kind))
+	}
+	Next(buf, 4)
+
+	for kind := NextByte(buf); kind != EOO; kind = NextByte(buf) {
+		key := ReadCString(buf)
+		switch key {
+		case "Type":
+			verifyKind("Type", Ulong, kind)
+			ps.veryPrivate = DecodeUint64(buf, kind)
+		default:
+			Skip(buf, kind)
+		}
+	}
+}
+
 func TestCustomMarshaler(t *testing.T) {
-	s := &PrivateStruct{1}
-	_, err := Marshal(s)
+	// This should use the custom marshaller & unmarshaller
+	s := PrivateStruct{1}
+	got, err := Marshal(&s)
 	if err != nil {
-		t.Errorf("Marshal error 1: %s\n", err)
+		t.Errorf("Marshal error: %v\n", err)
+	}
+	want := "\x13\x00\x00\x00?Type\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00"
+	if string(got) != want {
+		t.Errorf("got: %q, want: %q", string(got), want)
+	}
+	var s2 PrivateStruct
+	err = Unmarshal(got, &s2)
+	if s2 != s {
+		t.Errorf("got: %#v, want: %#v, err: %v", s2, s, err)
 	}
 
-	sl := &PrivateStructList{make([]PrivateStruct, 1)}
-	sl.List[0] = *s
-	_, err = Marshal(sl)
+	// This should use the custom marshaller & unmarshaller
+	sl := PrivateStructList{make([]PrivateStruct, 1)}
+	sl.List[0] = s
+	got, err = Marshal(&sl)
 	if err != nil {
-		t.Errorf("Marshal error 2: %s\n", err)
+		t.Errorf("Marshal error: %v\n", err)
+	}
+	want = "&\x00\x00\x00\x04List\x00\x1b\x00\x00\x00\x030\x00\x13\x00\x00\x00?Type\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+	if string(got) != want {
+		t.Errorf("got: %q, want: %q", string(got), want)
+	}
+	var sl2 PrivateStructList
+	err = Unmarshal(got, &sl2)
+	if !reflect.DeepEqual(sl2, sl) {
+		t.Errorf("got: %#v, want: %#v, err: %v", sl2, sl, err)
 	}
 
-	sm := &PrivateStructMap{make(map[string]*PrivateStruct)}
-	sm.Map["first"] = s
-	_, err = Marshal(sm)
+	// This should use the custom marshaller & unmarshaller
+	sm := make(map[string]*PrivateStruct)
+	sm["first"] = &s
+	got, err = Marshal(sm)
 	if err != nil {
-		t.Errorf("Marshal error 3: %s\n", err)
+		t.Errorf("Marshal error: %v\n", err)
+	}
+	want = "\x1f\x00\x00\x00\x03first\x00\x13\x00\x00\x00?Type\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+	if string(got) != want {
+		t.Errorf("got: %q, want: %q", string(got), want)
+	}
+	sm2 := make(map[string]*PrivateStruct)
+	err = Unmarshal(got, &sm2)
+	if !reflect.DeepEqual(sm2, sm) {
+		t.Errorf("got: %#v, want: %#v, err: %v", sm2, sm, err)
+	}
+
+	// This should not use the custom unmarshaller
+	sm3 := make(map[string]PrivateStruct)
+	err = Unmarshal(got, &sm3)
+	if reflect.DeepEqual(sm3, sm) {
+		t.Errorf("got: %#v, want 0 in prvateStruct, err: %v", sm3, sm, err)
+	}
+
+	// This should not use the custom marshaller
+	sm4 := make(map[string]PrivateStruct)
+	sm4["first"] = s
+	got, err = Marshal(sm4)
+	if err != nil {
+		t.Errorf("Marshal error: %v\n", err)
+	}
+	want = "\x11\x00\x00\x00\x03first\x00\x05\x00\x00\x00\x00\x00"
+	if string(got) != want {
+		t.Errorf("got: %q, want: %q", string(got), want)
 	}
 }
 
 func VerifyMarshal(t *testing.T, Val interface{}) []byte {
-	encoded, err := Marshal(Val)
+	got, err := Marshal(Val)
 	if err != nil {
-		t.Errorf("marshal2 error: %s\n", err)
+		t.Errorf("Marshal error: %v\n", err)
 	}
-	return encoded
+	return got
 }
 
 type HasPrivate struct {
@@ -373,20 +459,7 @@ func TestSkipUnknownFields(t *testing.T) {
 	marshaled := VerifyMarshal(t, v)
 	unmarshaled := new(LotsFewerFields)
 	if err := Unmarshal(marshaled, unmarshaled); err != nil {
-		t.Errorf("Unmarshal should have worked but returned: %v", err)
-	}
-}
-
-func compare(t *testing.T, encoded []byte, expected []byte) {
-	if len(encoded) != len(expected) {
-		t.Errorf("encoding mismatch:\n%#v\n%#v\n", string(encoded), string(expected))
-	} else {
-		for i := range encoded {
-			if encoded[i] != expected[i] {
-				t.Errorf("encoding mismatch:\n%#v\n%#v\n", string(encoded), string(expected))
-				break
-			}
-		}
+		t.Errorf("Marshal error: %v", err)
 	}
 }
 

@@ -336,8 +336,21 @@ func (builder *valueBuilder) Key(k string) *valueBuilder {
 	panic(NewBsonError("%s not supported as a BSON document", builder.val.Type()))
 }
 
+func (builder *valueBuilder) CanUnmarshal() Unmarshaler {
+	// No support for map values
+	if builder.map_.IsValid() {
+		return nil
+	}
+	if builder.val.CanAddr() {
+		if unmarshaler, ok := builder.val.Addr().Interface().(Unmarshaler); ok {
+			return unmarshaler
+		}
+	}
+	return nil
+}
+
 type Unmarshaler interface {
-	UnmarshalBson(buf *bytes.Buffer)
+	UnmarshalBson(buf *bytes.Buffer, kind byte)
 }
 
 func Unmarshal(b []byte, val interface{}) (err error) {
@@ -377,7 +390,7 @@ func UnmarshalFromBuffer(buf *bytes.Buffer, val interface{}) (err error) {
 	defer handleError(&err)
 
 	if unmarshaler, ok := val.(Unmarshaler); ok {
-		unmarshaler.UnmarshalBson(buf)
+		unmarshaler.UnmarshalBson(buf, EOO)
 		return
 	}
 
@@ -395,9 +408,12 @@ func Parse(buf *bytes.Buffer, builder *valueBuilder) {
 	kind, _ := buf.ReadByte()
 
 	for kind != EOO {
-		b2 := builder.Key(ReadCString(buf))
+		key := ReadCString(buf)
+		b2 := builder.Key(key)
 		if b2 == nil {
 			Skip(buf, kind)
+		} else if unmarshaler := b2.CanUnmarshal(); unmarshaler != nil {
+			unmarshaler.UnmarshalBson(buf, kind)
 		} else {
 			switch kind {
 			case Number:

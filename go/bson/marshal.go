@@ -42,14 +42,31 @@ func (lw LenWriter) RecordLen() {
 }
 
 type Marshaler interface {
-	MarshalBson(buf *bytes2.ChunkedWriter)
+	MarshalBson(buf *bytes2.ChunkedWriter, key string)
+}
+
+func CanMarshal(val reflect.Value) Marshaler {
+	// check the Marshaler interface on T
+	if marshaler, ok := val.Interface().(Marshaler); ok {
+		return marshaler
+	}
+	// check the Marshaler interface on *T
+	if val.CanAddr() {
+		if marshaler, ok := val.Addr().Interface().(Marshaler); ok {
+			return marshaler
+		}
+	}
+	return nil
 }
 
 type SimpleContainer struct {
 	_Val_ interface{}
 }
 
-func (sc *SimpleContainer) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (sc *SimpleContainer) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	if key != "" {
+		EncodePrefix(buf, Object, key)
+	}
 	lenWriter := NewLenWriter(buf)
 	EncodeField(buf, "_Val_", sc._Val_)
 	buf.WriteByte(0)
@@ -82,6 +99,10 @@ func MarshalToBuffer(buf *bytes2.ChunkedWriter, val interface{}) (err error) {
 
 	// Dereference pointer types
 	v := reflect.Indirect(reflect.ValueOf(val))
+	if marshaler := CanMarshal(v); marshaler != nil {
+		marshaler.MarshalBson(buf, "")
+		return
+	}
 
 	switch v.Kind() {
 	case reflect.Float64, reflect.String, reflect.Bool,
@@ -90,7 +111,7 @@ func MarshalToBuffer(buf *bytes2.ChunkedWriter, val interface{}) (err error) {
 		reflect.Slice, reflect.Array:
 		// Wrap simple types in a container
 		val := SimpleContainer{v.Interface()}
-		val.MarshalBson(buf)
+		val.MarshalBson(buf, "")
 	case reflect.Struct:
 		EncodeStructContent(buf, v)
 	case reflect.Map:
@@ -106,6 +127,11 @@ func EncodeField(buf *bytes2.ChunkedWriter, key string, val interface{}) {
 }
 
 func encodeField(buf *bytes2.ChunkedWriter, key string, val reflect.Value) {
+	if marshaler := CanMarshal(val); marshaler != nil {
+		marshaler.MarshalBson(buf, key)
+		return
+	}
+
 	switch val.Kind() {
 	case reflect.Float64:
 		EncodeFloat64(buf, key, val.Float())
@@ -234,19 +260,6 @@ func EncodeStruct(buf *bytes2.ChunkedWriter, key string, val reflect.Value) {
 }
 
 func EncodeStructContent(buf *bytes2.ChunkedWriter, val reflect.Value) {
-	// check the Marshaler interface on T
-	if marshaler, ok := val.Interface().(Marshaler); ok {
-		marshaler.MarshalBson(buf)
-		return
-	}
-	// check the Marshaler interface on *T
-	if val.CanAddr() {
-		if marshaler, ok := val.Addr().Interface().(Marshaler); ok {
-			marshaler.MarshalBson(buf)
-			return
-		}
-	}
-
 	lenWriter := NewLenWriter(buf)
 	t := val.Type()
 	for i := 0; i < t.NumField(); i++ {
@@ -270,7 +283,7 @@ func EncodeMap(buf *bytes2.ChunkedWriter, key string, val reflect.Value) {
 
 // a map seems to lose the 'CanAddr' property. So if we want
 // to use a custom marshaler with a struct pointer receiver, like:
-//   func (ps *PrivateStruct) MarshalBson(buf *bytes2.ChunkedWriter) {
+//   func (ps *PrivateStruct) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 // the map has to be using pointers, i.e:
 //   map[string]*PrivateStruct
 // and not:
