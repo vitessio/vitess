@@ -32,10 +32,22 @@ class VTConnParams(object):
 
 def get_db_params_for_vtgate_conn(vtgate_addrs, keyspace_name, shard, db_type, timeout, encrypted, user, password):
   db_params_list = []
-  random.shuffle(vtgate_addrs)
-  for addr in vtgate_addrs:
-    vt_params = VTConnParams(keyspace_name, shard, db_type, addr, timeout, encrypted, user, password).__dict__
-    db_params_list.append(vt_params)
+  if isinstance(vtgate_addrs, list):
+    random.shuffle(vtgate_addrs)
+    for addr in vtgate_addrs:
+      vt_params = VTConnParams(keyspace_name, shard, db_type, addr, timeout, encrypted, user, password).__dict__
+      db_params_list.append(vt_params)
+  elif isinstance(vtgate_addrs, dict):
+    service = '_vt'
+    if encrypted:
+      service = '_vts'
+    if service not in vtgate_addrs:
+      raise Exception("required vtgate service addrs %s not exist" % service)
+    addrs = vtgate_addrs[service]
+    random.shuffle(addrs)
+    for addr in addrs:
+      vt_params = VTConnParams(keyspace_name, shard, db_type, addr, timeout, encrypted, user, password).__dict__
+      db_params_list.append(vt_params)
   return db_params_list
 
 

@@ -24,7 +24,7 @@ def register_conn_class(protocol, c):
 def get_vt_connection_params_list(topo_client, keyspace, shard, db_type, timeout, encrypted, user, password, vtgate_protocol, vtgate_addrs):
   if vtgate_protocol != 'v0':
     if vtgate_addrs is None:
-      return []
+      return {}
     return topo_utils.get_db_params_for_vtgate_conn(vtgate_addrs, keyspace, shard, db_type, timeout, encrypted, user, password)
 
   return topo_utils.get_db_params_for_tablet_conn(topo_client, keyspace, shard, db_type, timeout, encrypted, user, password)
@@ -58,7 +58,7 @@ def reconnect(method):
 class VtOCCConnection(object):
   cursorclass = cursor.TabletCursor
 
-  def __init__(self, zkocc_client, keyspace, shard, db_type, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None, vtgate_protocol='v0', vtgate_addrs=[]):
+  def __init__(self, zkocc_client, keyspace, shard, db_type, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None, vtgate_protocol='v0', vtgate_addrs=None):
     self.zkocc_client = zkocc_client
     self.keyspace = keyspace
     self.shard = str(shard)

@@ -150,7 +150,7 @@ def get_connection(db_type='master', shard_index=0, user=None, password=None):
   timeout = 10.0
   conn = None
   shard = shard_names[shard_index]
-  vtgate_addrs = ["localhost:%s" % (vtgate_port),]
+  vtgate_addrs = {"_vt": ["localhost:%s" % (vtgate_port),]}
   vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
                                         "test_nj", 30.0)
   conn = vtclient.VtOCCConnection(vtgate_client, 'test_keyspace', shard,

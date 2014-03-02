@@ -18,10 +18,16 @@ var (
 	emptybytes = []byte{}
 )
 
+func VerifyObject(kind byte) {
+	if kind != EOO && kind != Object {
+		panic(NewBsonError("unexpected kind: %v", kind))
+	}
+}
+
 func DecodeFloat64(buf *bytes.Buffer, kind byte) float64 {
 	switch kind {
 	case Number:
-		return float64(math.Float64frombits(Pack.Uint64(buf.Next(8))))
+		return float64(math.Float64frombits(Pack.Uint64(Next(buf, 8))))
 	case Null:
 		return 0
 	}
@@ -31,14 +37,14 @@ func DecodeFloat64(buf *bytes.Buffer, kind byte) float64 {
 func DecodeString(buf *bytes.Buffer, kind byte) string {
 	switch kind {
 	case String:
-		l := int(Pack.Uint32(buf.Next(4)))
-		s := buf.Next(l - 1)
+		l := int(Pack.Uint32(Next(buf, 4)))
+		s := Next(buf, l-1)
 		NextByte(buf)
 		return string(s)
 	case Binary:
-		l := int(Pack.Uint32(buf.Next(4)))
+		l := int(Pack.Uint32(Next(buf, 4)))
 		NextByte(buf)
-		return string(buf.Next(l))
+		return string(Next(buf, l))
 	case Null:
 		return ""
 	}
@@ -51,9 +57,9 @@ func DecodeBool(buf *bytes.Buffer, kind byte) bool {
 		b, _ := buf.ReadByte()
 		return (b != 0)
 	case Int:
-		return (Pack.Uint32(buf.Next(4)) != 0)
+		return (Pack.Uint32(Next(buf, 4)) != 0)
 	case Long, Ulong:
-		return (Pack.Uint64(buf.Next(8)) != 0)
+		return (Pack.Uint64(Next(buf, 8)) != 0)
 	case Null:
 		return false
 	default:
@@ -64,9 +70,9 @@ func DecodeBool(buf *bytes.Buffer, kind byte) bool {
 func DecodeInt64(buf *bytes.Buffer, kind byte) int64 {
 	switch kind {
 	case Int:
-		return int64(int32(Pack.Uint32(buf.Next(4))))
+		return int64(int32(Pack.Uint32(Next(buf, 4))))
 	case Long, Ulong:
-		return int64(Pack.Uint64(buf.Next(8)))
+		return int64(Pack.Uint64(Next(buf, 8)))
 	case Null:
 		return 0
 	}
@@ -76,7 +82,7 @@ func DecodeInt64(buf *bytes.Buffer, kind byte) int64 {
 func DecodeInt32(buf *bytes.Buffer, kind byte) int32 {
 	switch kind {
 	case Int:
-		return int32(Pack.Uint32(buf.Next(4)))
+		return int32(Pack.Uint32(Next(buf, 4)))
 	case Null:
 		return 0
 	}
@@ -86,9 +92,9 @@ func DecodeInt32(buf *bytes.Buffer, kind byte) int32 {
 func DecodeInt(buf *bytes.Buffer, kind byte) int {
 	switch kind {
 	case Int:
-		return int(Pack.Uint32(buf.Next(4)))
+		return int(Pack.Uint32(Next(buf, 4)))
 	case Long, Ulong:
-		return int(Pack.Uint64(buf.Next(8)))
+		return int(Pack.Uint64(Next(buf, 8)))
 	case Null:
 		return 0
 	}
@@ -98,9 +104,9 @@ func DecodeInt(buf *bytes.Buffer, kind byte) int {
 func DecodeUint64(buf *bytes.Buffer, kind byte) uint64 {
 	switch kind {
 	case Int:
-		return uint64(Pack.Uint32(buf.Next(4)))
+		return uint64(Pack.Uint32(Next(buf, 4)))
 	case Long, Ulong:
-		return Pack.Uint64(buf.Next(8))
+		return Pack.Uint64(Next(buf, 8))
 	case Null:
 		return 0
 	}
@@ -110,9 +116,9 @@ func DecodeUint64(buf *bytes.Buffer, kind byte) uint64 {
 func DecodeUint32(buf *bytes.Buffer, kind byte) uint32 {
 	switch kind {
 	case Int:
-		return Pack.Uint32(buf.Next(4))
+		return Pack.Uint32(Next(buf, 4))
 	case Ulong:
-		return uint32(Pack.Uint64(buf.Next(8)))
+		return uint32(Pack.Uint64(Next(buf, 8)))
 	case Null:
 		return 0
 	}
@@ -122,9 +128,9 @@ func DecodeUint32(buf *bytes.Buffer, kind byte) uint32 {
 func DecodeUint(buf *bytes.Buffer, kind byte) uint {
 	switch kind {
 	case Int:
-		return uint(Pack.Uint32(buf.Next(4)))
+		return uint(Pack.Uint32(Next(buf, 4)))
 	case Long, Ulong:
-		return uint(Pack.Uint64(buf.Next(8)))
+		return uint(Pack.Uint64(Next(buf, 8)))
 	case Null:
 		return 0
 	}
@@ -134,14 +140,14 @@ func DecodeUint(buf *bytes.Buffer, kind byte) uint {
 func DecodeBinary(buf *bytes.Buffer, kind byte) []byte {
 	switch kind {
 	case String:
-		l := int(Pack.Uint32(buf.Next(4)))
-		b := buf.Next(l - 1)
+		l := int(Pack.Uint32(Next(buf, 4)))
+		b := Next(buf, l-1)
 		NextByte(buf)
 		return b
 	case Binary:
-		l := int(Pack.Uint32(buf.Next(4)))
+		l := int(Pack.Uint32(Next(buf, 4)))
 		NextByte(buf)
-		return buf.Next(l)
+		return Next(buf, l)
 	case Null:
 		return emptybytes
 	}
@@ -151,7 +157,7 @@ func DecodeBinary(buf *bytes.Buffer, kind byte) []byte {
 func DecodeTime(buf *bytes.Buffer, kind byte) time.Time {
 	switch kind {
 	case Datetime:
-		ui64 := Pack.Uint64(buf.Next(8))
+		ui64 := Pack.Uint64(Next(buf, 8))
 		return time.Unix(0, int64(ui64)*1e6).UTC()
 	case Null:
 		return time.Time{}
@@ -194,7 +200,7 @@ func ReadCString(buf *bytes.Buffer) string {
 	}
 	// Read including null termination, but
 	// return the string without the null.
-	return hack.String(buf.Next(index + 1)[:index])
+	return hack.String(Next(buf, index+1)[:index])
 }
 
 func Next(buf *bytes.Buffer, n int) []byte {
@@ -202,7 +208,7 @@ func Next(buf *bytes.Buffer, n int) []byte {
 	if len(b) != n {
 		panic(NewBsonError("Unexpected EOF"))
 	}
-	return b
+	return b[:n:n]
 }
 
 func NextByte(buf *bytes.Buffer) byte {

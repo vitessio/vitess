@@ -35,7 +35,8 @@ type Statement struct {
 	Sql      []byte
 }
 
-func (blt *BinlogTransaction) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (blt *BinlogTransaction) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 	MarshalStatementsBson(buf, "Statements", blt.Statements)
 	bson.EncodeInt64(buf, "GroupId", blt.GroupId)
@@ -47,17 +48,17 @@ func MarshalStatementsBson(buf *bytes2.ChunkedWriter, key string, statements []S
 	bson.EncodePrefix(buf, bson.Array, key)
 	lenWriter := bson.NewLenWriter(buf)
 	for i, v := range statements {
-		bson.EncodePrefix(buf, bson.Object, bson.Itoa(i))
-		v.MarshalBson(buf)
+		v.MarshalBson(buf, bson.Itoa(i))
 	}
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
 }
 
-func (blt *BinlogTransaction) UnmarshalBson(buf *bytes.Buffer) {
+func (blt *BinlogTransaction) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		key := bson.ReadCString(buf)
 		switch key {
@@ -91,14 +92,15 @@ func UnmarshalStatementsBson(buf *bytes.Buffer, kind byte) []Statement {
 		}
 		bson.SkipIndex(buf)
 		var statement Statement
-		statement.UnmarshalBson(buf)
+		statement.UnmarshalBson(buf, kind)
 		statements = append(statements, statement)
 		kind = bson.NextByte(buf)
 	}
 	return statements
 }
 
-func (stmt *Statement) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (stmt *Statement) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 	bson.EncodeInt(buf, "Category", stmt.Category)
 	bson.EncodeBinary(buf, "Sql", stmt.Sql)
@@ -106,10 +108,11 @@ func (stmt *Statement) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
-func (stmt *Statement) UnmarshalBson(buf *bytes.Buffer) {
+func (stmt *Statement) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		key := bson.ReadCString(buf)
 		switch key {

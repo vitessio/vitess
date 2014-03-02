@@ -15,7 +15,8 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 )
 
-func (query *Query) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (query *Query) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodeString(buf, "Sql", query.Sql)
@@ -37,10 +38,11 @@ func EncodeBindVariablesBson(buf *bytes2.ChunkedWriter, key string, bindVars map
 	lenWriter.RecordLen()
 }
 
-func (query *Query) UnmarshalBson(buf *bytes.Buffer) {
+func (query *Query) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		key := bson.ReadCString(buf)
 		switch key {
@@ -130,7 +132,8 @@ func slimit(s string) string {
 	return s[:l]
 }
 
-func (session *Session) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (session *Session) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodeInt64(buf, "TransactionId", session.TransactionId)
@@ -140,10 +143,11 @@ func (session *Session) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
-func (session *Session) UnmarshalBson(buf *bytes.Buffer) {
+func (session *Session) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		key := bson.ReadCString(buf)
 		switch key {
@@ -158,7 +162,8 @@ func (session *Session) UnmarshalBson(buf *bytes.Buffer) {
 	}
 }
 
-func (bdq *BoundQuery) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (bdq *BoundQuery) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodeString(buf, "Sql", bdq.Sql)
@@ -168,10 +173,11 @@ func (bdq *BoundQuery) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
-func (bdq *BoundQuery) UnmarshalBson(buf *bytes.Buffer) {
+func (bdq *BoundQuery) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		key := bson.ReadCString(buf)
 		switch key {
@@ -190,8 +196,7 @@ func EncodeQueriesBson(queries []BoundQuery, key string, buf *bytes2.ChunkedWrit
 	bson.EncodePrefix(buf, bson.Array, key)
 	lenWriter := bson.NewLenWriter(buf)
 	for i, v := range queries {
-		bson.EncodePrefix(buf, bson.Object, bson.Itoa(i))
-		v.MarshalBson(buf)
+		v.MarshalBson(buf, bson.Itoa(i))
 	}
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
@@ -213,14 +218,15 @@ func DecodeQueriesBson(buf *bytes.Buffer, kind byte) (queries []BoundQuery) {
 	var bdq BoundQuery
 	for kind != bson.EOO {
 		bson.SkipIndex(buf)
-		bdq.UnmarshalBson(buf)
+		bdq.UnmarshalBson(buf, kind)
 		queries = append(queries, bdq)
 		kind = bson.NextByte(buf)
 	}
 	return queries
 }
 
-func (ql *QueryList) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (ql *QueryList) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
 	EncodeQueriesBson(ql.Queries, "Queries", buf)
@@ -231,10 +237,11 @@ func (ql *QueryList) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
-func (ql *QueryList) UnmarshalBson(buf *bytes.Buffer) {
+func (ql *QueryList) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		key := bson.ReadCString(buf)
 		switch key {
@@ -251,7 +258,8 @@ func (ql *QueryList) UnmarshalBson(buf *bytes.Buffer) {
 	}
 }
 
-func (qrl *QueryResultList) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (qrl *QueryResultList) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 	EncodeResultsBson(qrl.List, "List", buf)
 	buf.WriteByte(0)
@@ -262,17 +270,17 @@ func EncodeResultsBson(results []mproto.QueryResult, key string, buf *bytes2.Chu
 	bson.EncodePrefix(buf, bson.Array, key)
 	lenWriter := bson.NewLenWriter(buf)
 	for i, v := range results {
-		bson.EncodePrefix(buf, bson.Object, bson.Itoa(i))
-		v.MarshalBson(buf)
+		v.MarshalBson(buf, bson.Itoa(i))
 	}
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
 }
 
-func (qrl *QueryResultList) UnmarshalBson(buf *bytes.Buffer) {
+func (qrl *QueryResultList) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		key := bson.ReadCString(buf)
 		switch key {
@@ -301,7 +309,7 @@ func DecodeResultsBson(buf *bytes.Buffer, kind byte) (results []mproto.QueryResu
 	var result mproto.QueryResult
 	for kind != bson.EOO {
 		bson.SkipIndex(buf)
-		result.UnmarshalBson(buf)
+		result.UnmarshalBson(buf, kind)
 		results = append(results, result)
 		kind = bson.NextByte(buf)
 	}

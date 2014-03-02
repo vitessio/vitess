@@ -14,8 +14,6 @@ import (
 	"reflect"
 	"strconv"
 	"time"
-
-	log "github.com/golang/glog"
 )
 
 // BSON documents are lttle endian
@@ -268,42 +266,6 @@ func (builder *valueBuilder) Binary(bindata []byte) {
 	}
 }
 
-func (builder *valueBuilder) Elem(i int) *valueBuilder {
-	if i < 0 {
-		panic(NewBsonError("negative index %v for array element", i))
-	}
-	switch builder.val.Kind() {
-	case reflect.Array:
-		if i < builder.val.Len() {
-			return ValueBuilder(builder.val.Index(i))
-		} else {
-			panic(NewBsonError("array index %v out of bounds", i))
-		}
-	case reflect.Slice:
-		if i >= builder.val.Cap() {
-			n := builder.val.Cap()
-			if n < 8 {
-				n = 8
-			}
-			for n <= i {
-				n *= 2
-			}
-			nv := reflect.MakeSlice(builder.val.Type(), builder.val.Len(), n)
-			reflect.Copy(nv, builder.val)
-			builder.val.Set(nv)
-		}
-		if builder.val.Len() <= i && i < builder.val.Cap() {
-			builder.val.SetLen(i + 1)
-		}
-		if i < builder.val.Len() {
-			return ValueBuilder(builder.val.Index(i))
-		} else {
-			panic(NewBsonError("internal error, realloc failed?"))
-		}
-	}
-	panic(NewBsonError("unexpected type %s, expecting slice or array", builder.val.Type()))
-}
-
 func (builder *valueBuilder) Object() {
 	switch builder.val.Kind() {
 	case reflect.Map:
@@ -330,7 +292,6 @@ func (builder *valueBuilder) Key(k string) *valueBuilder {
 				return ValueBuilder(builder.val.Field(i))
 			}
 		}
-		log.Warningf("Could not find field '%s' in struct object, skipping it", k)
 		return nil
 	case reflect.Map:
 		t := builder.val.Type()
@@ -339,7 +300,7 @@ func (builder *valueBuilder) Key(k string) *valueBuilder {
 		}
 		key := reflect.ValueOf(k)
 		return MapBuilder(t.Elem(), builder.val, key)
-	case reflect.Slice, reflect.Array:
+	case reflect.Array:
 		if builder.isSimple {
 			builder.isSimple = false
 			return builder
@@ -348,7 +309,18 @@ func (builder *valueBuilder) Key(k string) *valueBuilder {
 		if err != nil {
 			panic(BsonError{err.Error()})
 		}
-		return builder.Elem(index)
+		if index < 0 || index >= builder.val.Len() {
+			panic(NewBsonError("array index %v out of bounds", index))
+		}
+		return ValueBuilder(builder.val.Index(index))
+	case reflect.Slice:
+		if builder.isSimple {
+			builder.isSimple = false
+			return builder
+		}
+		zero := reflect.Zero(builder.val.Type().Elem())
+		builder.val.Set(reflect.Append(builder.val, zero))
+		return ValueBuilder(builder.val.Index(builder.val.Len() - 1))
 	case reflect.Float64, reflect.String, reflect.Bool,
 		reflect.Int, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint32, reflect.Uint64:
@@ -361,8 +333,21 @@ func (builder *valueBuilder) Key(k string) *valueBuilder {
 	panic(NewBsonError("%s not supported as a BSON document", builder.val.Type()))
 }
 
+func (builder *valueBuilder) CanUnmarshal() Unmarshaler {
+	// No support for map values
+	if builder.map_.IsValid() {
+		return nil
+	}
+	if builder.val.CanAddr() {
+		if unmarshaler, ok := builder.val.Addr().Interface().(Unmarshaler); ok {
+			return unmarshaler
+		}
+	}
+	return nil
+}
+
 type Unmarshaler interface {
-	UnmarshalBson(buf *bytes.Buffer)
+	UnmarshalBson(buf *bytes.Buffer, kind byte)
 }
 
 func Unmarshal(b []byte, val interface{}) (err error) {
@@ -402,7 +387,7 @@ func UnmarshalFromBuffer(buf *bytes.Buffer, val interface{}) (err error) {
 	defer handleError(&err)
 
 	if unmarshaler, ok := val.(Unmarshaler); ok {
-		unmarshaler.UnmarshalBson(buf)
+		unmarshaler.UnmarshalBson(buf, EOO)
 		return
 	}
 
@@ -410,7 +395,7 @@ func UnmarshalFromBuffer(buf *bytes.Buffer, val interface{}) (err error) {
 	if terr != nil {
 		return terr
 	}
-	buf.Next(4)
+	Next(buf, 4)
 	Parse(buf, sb)
 	sb.Flush()
 	return
@@ -420,32 +405,35 @@ func Parse(buf *bytes.Buffer, builder *valueBuilder) {
 	kind, _ := buf.ReadByte()
 
 	for kind != EOO {
-		b2 := builder.Key(ReadCString(buf))
+		key := ReadCString(buf)
+		b2 := builder.Key(key)
 		if b2 == nil {
 			Skip(buf, kind)
+		} else if unmarshaler := b2.CanUnmarshal(); unmarshaler != nil {
+			unmarshaler.UnmarshalBson(buf, kind)
 		} else {
 			switch kind {
 			case Number:
-				ui64 := Pack.Uint64(buf.Next(8))
+				ui64 := Pack.Uint64(Next(buf, 8))
 				fl64 := math.Float64frombits(ui64)
 				b2.Float64(fl64)
 			case String:
-				l := int(Pack.Uint32(buf.Next(4)))
-				s := buf.Next(l - 1)
+				l := int(Pack.Uint32(Next(buf, 4)))
+				s := Next(buf, l-1)
 				buf.ReadByte()
 				b2.String(s)
 			case Object:
 				b2.Object()
-				buf.Next(4)
+				Next(buf, 4)
 				Parse(buf, b2)
 			case Array:
 				b2.Array()
-				buf.Next(4)
+				Next(buf, 4)
 				Parse(buf, b2)
 			case Binary:
-				l := int(Pack.Uint32(buf.Next(4)))
-				buf.Next(1) // Skip the subtype, we don't care
-				b2.Binary(buf.Next(l))
+				l := int(Pack.Uint32(Next(buf, 4)))
+				Next(buf, 1) // Skip the subtype, we don't care
+				b2.Binary(Next(buf, l))
 			case Boolean:
 				b, _ := buf.ReadByte()
 				if b == 1 {
@@ -454,16 +442,16 @@ func Parse(buf *bytes.Buffer, builder *valueBuilder) {
 					b2.Bool(false)
 				}
 			case Datetime:
-				ui64 := Pack.Uint64(buf.Next(8))
+				ui64 := Pack.Uint64(Next(buf, 8))
 				b2.Datetime(time.Unix(0, int64(ui64)*1e6).UTC())
 			case Int:
-				ui32 := Pack.Uint32(buf.Next(4))
+				ui32 := Pack.Uint32(Next(buf, 4))
 				b2.Int32(int32(ui32))
 			case Long:
-				ui64 := Pack.Uint64(buf.Next(8))
+				ui64 := Pack.Uint64(Next(buf, 8))
 				b2.Int64(int64(ui64))
 			case Ulong:
-				ui64 := Pack.Uint64(buf.Next(8))
+				ui64 := Pack.Uint64(Next(buf, 8))
 				b2.Uint64(ui64)
 			case Null:
 				// no op
@@ -481,32 +469,32 @@ func Parse(buf *bytes.Buffer, builder *valueBuilder) {
 func Skip(buf *bytes.Buffer, kind byte) {
 	switch kind {
 	case Number:
-		buf.Next(8)
+		Next(buf, 8)
 	case String:
 		// length of a string includes the 0 at the end, but not the size
-		l := int(Pack.Uint32(buf.Next(4)))
-		buf.Next(l)
+		l := int(Pack.Uint32(Next(buf, 4)))
+		Next(buf, l)
 	case Object, Array:
 		// the encoded length includes the 4 bytes for the size
-		l := int(Pack.Uint32(buf.Next(4)))
+		l := int(Pack.Uint32(Next(buf, 4)))
 		if l < 4 {
 			panic(NewBsonError("Object or Array should at least be 4 bytes long"))
 		}
-		buf.Next(l - 4)
+		Next(buf, l-4)
 	case Binary:
 		// length of a binary doesn't include the subtype
-		l := int(Pack.Uint32(buf.Next(4)))
-		buf.Next(l + 1)
+		l := int(Pack.Uint32(Next(buf, 4)))
+		Next(buf, l+1)
 	case Boolean:
 		buf.ReadByte()
 	case Datetime:
-		buf.Next(8)
+		Next(buf, 8)
 	case Int:
-		buf.Next(4)
+		Next(buf, 4)
 	case Long:
-		buf.Next(8)
+		Next(buf, 8)
 	case Ulong:
-		buf.Next(8)
+		Next(buf, 8)
 	case Null:
 		// no op
 	default:

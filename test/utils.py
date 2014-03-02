@@ -299,12 +299,14 @@ def get_vars(port):
     print data
     raise
 
-def wait_for_vars(name, port):
+def wait_for_vars(name, port, var=None):
   timeout = 5.0
   while True:
     v = get_vars(port)
     if v == None:
       logging.debug("  %s not answering at /debug/vars, waiting..." % (name))
+    elif var != None and var not in v:
+      logging.debug("  %s not having %s at /debug/vars, waiting..." % (name, var))
     else:
       break
 
@@ -329,8 +331,9 @@ def zkocc_kill(sp):
   sp.wait()
 
 # vtgate helpers, assuming it always restarts on the same port
-def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1, topo_impl=None, tablet_bson_encrypted=False, cache_ttl='1s', auth=False, timeout="5s"):
+def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1, topo_impl=None, tablet_bson_encrypted=False, cache_ttl='1s', auth=False, timeout="5s", cert=None, key=None, ca_cert=None):
   port = vtport or environment.reserve_ports(1)
+  secure_port = None
   args = [environment.binary_path('vtgate'),
           '-port', str(port),
           '-cell', cell,
@@ -348,9 +351,21 @@ def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1, topo
     args.append('-tablet-bson-encrypted')
   if auth:
     args.extend(['-auth-credentials', os.path.join(environment.vttop, 'test', 'test_data', 'authcredentials_test.json')])
+  if cert:
+    secure_port = environment.reserve_ports(1)
+    args.extend(['-secure-port', '%s' % secure_port,
+                 '-cert', cert,
+                 '-key', key])
+    if ca_cert:
+      args.extend(['-ca-cert', ca_cert])
+
   sp = run_bg(args)
-  wait_for_vars("vtgate", port)
-  return sp, port
+  if cert:
+    wait_for_vars("vtgate", port, "SecureConnections")
+    return sp, port, secure_port
+  else:
+    wait_for_vars("vtgate", port)
+    return sp, port
 
 def vtgate_kill(sp):
   if sp is None:

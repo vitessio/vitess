@@ -279,14 +279,48 @@ class TestSecure(unittest.TestCase):
       logging.debug("Got the right exception for SSL timeout: %s", str(e))
 
     # start a vtgate to connect to that tablet
-    gate_proc, gate_port = utils.vtgate_start(tablet_bson_encrypted=True)
-    conn = vtgate.connect("localhost:%s"%(gate_port), "master", "test_keyspace", "0", 2.0)
+    gate_proc, gate_port, gate_secure_port = utils.vtgate_start(
+        tablet_bson_encrypted=True,
+        cert=cert_dir + "/vt-server-cert.pem",
+        key=cert_dir + "/vt-server-key.pem")
 
-    # _execute
-    (result, count, lastrow, fields) = conn._execute("select 1 from dual", {})
-    logging.debug("Got result: %s", str(result))
-    self.assertEqual(count, 1, "want 1, got %d" % (count))
+    # try to connect to vtgate with regular client
+    try:
+      conn = vtgate.VtgateConnection("localhost:%s" % (gate_secure_port),
+                                      "master", "test_keyspace", "0", 2.0)
+      conn.dial()
+      self.fail("No exception raised to VTGate secure port")
+    except dbexceptions.FatalError as e:
+      if not e.args[0][0].startswith('Unexpected EOF in handshake to'):
+        self.fail("Unexpected exception: %s" % str(e))
+
+    sconn = utils.get_vars(gate_port)["SecureConnections"]
+    if sconn != 0:
+      self.fail("unexpected conns %s" % sconn)
+
+    # connect to vtgate with encrypted port
+    conn = vtgate.VtgateConnection("localhost:%s" % (gate_secure_port),
+                                    "master", "test_keyspace", "0", 2.0, encrypted=True)
+    conn.dial()
+    (results, rowcount, lastrowid, fields) = conn._execute("select 1 from dual", {})
+    self.assertEqual(rowcount, 1, "want 1, got %d" % (rowcount))
     self.assertEqual(len(fields), 1, "want 1, got %d" % (len(fields)))
+    self.assertEqual(results, [(1,),], 'wrong conn._execute output: %s' % str(results))
+
+    sconn = utils.get_vars(gate_port)["SecureConnections"]
+    if sconn != 1:
+      self.fail("unexpected conns %s" % sconn)
+    saccept = utils.get_vars(gate_port)["SecureAccepts"]
+    if saccept == 0:
+      self.fail("unexpected accepts %s" % saccept)
+
+    # trigger a time out on a vtgate secure connection, see what exception we get
+    try:
+      conn._execute("select sleep(4) from dual", {})
+      self.fail("No timeout exception")
+    except dbexceptions.TimeoutError as e:
+      logging.debug("Got the right exception for SSL timeout: %s", str(e))
+
 
     conn.close()
     utils.vtgate_kill(gate_proc)

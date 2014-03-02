@@ -44,22 +44,30 @@ class Keyspace(object):
     self.shard_names = self._make_shard_names()
 
   def get_shards(self, db_type):
+    if not db_type:
+      raise ValueError('db_type is not set')
     try:
       return self.partitions[db_type]['Shards']
     except KeyError:
       return []
 
   def get_shard_count(self, db_type):
+    if not db_type:
+      raise ValueError('db_type is not set')
     shards = self.get_shards(db_type)
     return len(shards)
 
   def get_shard_max_keys(self, db_type):
+    if not db_type:
+      raise ValueError('db_type is not set')
     shards = self.get_shards(db_type)
     shard_max_keys = [shard['KeyRange']['End']
                       for shard in shards]
     return shard_max_keys
 
   def get_shard_names(self, db_type):
+    if not db_type:
+      raise ValueError('db_type is not set')
     names = []
     shards = self.get_shards(db_type)
     shard_max_keys = self.get_shard_max_keys(db_type)
@@ -75,6 +83,10 @@ class Keyspace(object):
     return names
 
   def keyspace_id_to_shard_index_for_db_type(self, keyspace_id, db_type):
+    if not keyspace_id:
+      raise ValueError('keyspace_id is not set')
+    if not db_type:
+      raise ValueError('db_type is not set')
     # Pack this into big-endian and do a byte-wise comparison.
     pkid = pack_keyspace_id(keyspace_id)
     shard_max_keys = self.get_shard_max_keys(db_type)
@@ -91,7 +103,25 @@ class Keyspace(object):
     #              shard_names)
     return shard_index
 
+  def keyspace_id_to_shard_name_for_db_type(self, keyspace_id, db_type):
+    if not keyspace_id:
+      raise ValueError('keyspace_id is not set')
+    if not db_type:
+      raise ValueError('db_type is not set')
+    # Pack this into big-endian and do a byte-wise comparison.
+    pkid = pack_keyspace_id(keyspace_id)
+    shard_max_keys = self.get_shard_max_keys(db_type)
+    shard_names = self.get_shard_names(db_type)
+    if not shard_max_keys:
+      raise ValueError('Keyspace is not range sharded', self.name)
+    for shard_index, shard_max in enumerate(shard_max_keys):
+      if pkid < shard_max:
+        break
+    return shard_names[shard_index]
+
   def keyspace_id_to_shard_index(self, keyspace_id):
+    if not keyspace_id:
+      raise ValueError('keyspace_id is not set')
     # Pack this into big-endian and do a byte-wise comparison.
     pkid = pack_keyspace_id(keyspace_id)
     if not self.shard_max_keys:
