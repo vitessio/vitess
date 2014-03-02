@@ -23,16 +23,26 @@ type LenWriter struct {
 	b   []byte
 }
 
+// NewLenWriter returns a LenWriter that reserves the
+// bytes buf so they can store the length later.
 func NewLenWriter(buf *bytes2.ChunkedWriter) LenWriter {
 	off := buf.Len()
 	b := buf.Reserve(WORD32)
 	return LenWriter{buf, off, b}
 }
 
+// RecordLen records the number of bytes written in the
+// space reserved.
 func (lw LenWriter) RecordLen() {
 	Pack.PutUint32(lw.b, uint32(lw.buf.Len()-lw.off))
 }
 
+// Marshaler is the interface that needs to be
+// satisfied by types that want to implement a custom
+// marshaler.
+// When being invoked as a top level object, key will
+// be "". In such cases, MarshalBson must not encode
+// any prefix.
 type Marshaler interface {
 	MarshalBson(buf *bytes2.ChunkedWriter, key string)
 }
@@ -55,20 +65,10 @@ func canMarshal(val reflect.Value) Marshaler {
 	return nil
 }
 
-type SimpleContainer struct {
-	_Val_ interface{}
-}
-
-func (sc *SimpleContainer) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
-	EncodeOptionalPrefix(buf, Object, key)
-	lenWriter := NewLenWriter(buf)
-	EncodeField(buf, MAGICTAG, sc._Val_)
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
-}
-
+// DefaultBufferSize is the default allocation size for ChunkedWriter.
 const DefaultBufferSize = 1024 * 16
 
+// MarshalToStream marshals val into writer.
 func MarshalToStream(writer io.Writer, val interface{}) (err error) {
 	buf := bytes2.NewChunkedWriter(DefaultBufferSize)
 	if err = MarshalToBuffer(buf, val); err != nil {
@@ -78,20 +78,21 @@ func MarshalToStream(writer io.Writer, val interface{}) (err error) {
 	return err
 }
 
+// Marshal marshals val into encoded.
 func Marshal(val interface{}) (encoded []byte, err error) {
 	buf := bytes2.NewChunkedWriter(DefaultBufferSize)
 	err = MarshalToBuffer(buf, val)
 	return buf.Bytes(), err
 }
 
+// MarshalToBuffer marshals val into buf. This is the most efficient
+// function to use, especially when marshaling large nested objects.
 func MarshalToBuffer(buf *bytes2.ChunkedWriter, val interface{}) (err error) {
 	defer handleError(&err)
-
 	if val == nil {
 		return NewBsonError("Cannot marshal empty object")
 	}
 
-	// Dereference pointer types
 	v := reflect.Indirect(reflect.ValueOf(val))
 	if marshaler := canMarshal(v); marshaler != nil {
 		marshaler.MarshalBson(buf, "")
@@ -123,9 +124,13 @@ func MarshalToBuffer(buf *bytes2.ChunkedWriter, val interface{}) (err error) {
 	return nil
 }
 
+// EncodeSimple marshals simple objects that cannot be
+// encoded as a top level bson document.
 func EncodeSimple(buf *bytes2.ChunkedWriter, val interface{}) {
-	v := SimpleContainer{_Val_: val}
-	v.MarshalBson(buf, "")
+	lenWriter := NewLenWriter(buf)
+	EncodeField(buf, MAGICTAG, val)
+	buf.WriteByte(0)
+	lenWriter.RecordLen()
 }
 
 func EncodeField(buf *bytes2.ChunkedWriter, key string, val interface{}) {

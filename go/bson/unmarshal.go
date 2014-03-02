@@ -12,6 +12,143 @@ import (
 	"time"
 )
 
+// Unmarshaler is the interface that needs to be satisfied
+// by types that want to perform custom unmarshaling.
+// If kind is EOO, then the type is being unmarshalled
+// as a top level object. Otherwise, it's an embedded
+// object, and kind will need to be type-checked
+// before unmarshaling.
+type Unmarshaler interface {
+	UnmarshalBson(buf *bytes.Buffer, kind byte)
+}
+
+func (builder *valueBuilder) canUnMarshal() Unmarshaler {
+	// Don't use custom unmarshalers for map values.
+	// It loses symmetry.
+	if builder.map_.IsValid() {
+		return nil
+	}
+	if builder.val.CanAddr() {
+		if unmarshaler, ok := builder.val.Addr().Interface().(Unmarshaler); ok {
+			return unmarshaler
+		}
+	}
+	return nil
+}
+
+// Unmarshal unmarshals b into val.
+func Unmarshal(b []byte, val interface{}) (err error) {
+	return UnmarshalFromBuffer(bytes.NewBuffer(b), val)
+}
+
+// UnmarshalFromStream unmarshals from reader into val.
+func UnmarshalFromStream(reader io.Reader, val interface{}) (err error) {
+	lenbuf := make([]byte, 4)
+	var n int
+	n, err = io.ReadFull(reader, lenbuf)
+	if err != nil {
+		return err
+	}
+	if n != 4 {
+		return io.ErrUnexpectedEOF
+	}
+	length := Pack.Uint32(lenbuf)
+	b := make([]byte, length)
+	Pack.PutUint32(b, length)
+	n, err = io.ReadFull(reader, b[4:])
+	if err != nil {
+		if err == io.EOF {
+			return io.ErrUnexpectedEOF
+		}
+		return err
+	}
+	if n != int(length-4) {
+		return io.ErrUnexpectedEOF
+	}
+	if val == nil {
+		return nil
+	}
+	return UnmarshalFromBuffer(bytes.NewBuffer(b), val)
+}
+
+// UnmarshalFromBuffer unmarshals from buf into val.
+func UnmarshalFromBuffer(buf *bytes.Buffer, val interface{}) (err error) {
+	defer handleError(&err)
+
+	if unmarshaler, ok := val.(Unmarshaler); ok {
+		unmarshaler.UnmarshalBson(buf, EOO)
+		return
+	}
+
+	sb, terr := topLevelBuilder(val)
+	if terr != nil {
+		return terr
+	}
+	decodeDocument(buf, sb, EOO)
+	sb.save()
+	return
+}
+
+func decodeDocument(buf *bytes.Buffer, builder *valueBuilder, kind byte) {
+	if kind != EOO && kind != Object && kind != Array {
+		panic(NewBsonError("unexpected kind: %v", kind))
+	}
+	Next(buf, 4)
+	for kind := NextByte(buf); kind != EOO; kind = NextByte(buf) {
+		key := ReadCString(buf)
+		if kind == Null {
+			builder.setNull(key)
+			continue
+		}
+		b2 := builder.getField(key)
+		if b2 == nil {
+			Skip(buf, kind)
+			continue
+		}
+		if unmarshaler := b2.canUnMarshal(); unmarshaler != nil {
+			unmarshaler.UnmarshalBson(buf, kind)
+			continue
+		}
+		switch b2.val.Kind() {
+		case reflect.Float64:
+			b2.setFloat(DecodeFloat64(buf, kind))
+		case reflect.String:
+			b2.setString(DecodeString(buf, kind))
+		case reflect.Bool:
+			b2.setBool(DecodeBool(buf, kind))
+		case reflect.Int64:
+			b2.setInt(DecodeInt64(buf, kind))
+		case reflect.Int32:
+			b2.setInt(int64(DecodeInt32(buf, kind)))
+		case reflect.Int:
+			b2.setInt(int64(DecodeInt(buf, kind)))
+		case reflect.Uint64:
+			b2.setUint(DecodeUint64(buf, kind))
+		case reflect.Uint32:
+			b2.setUint(uint64(DecodeUint32(buf, kind)))
+		case reflect.Uint:
+			b2.setUint(uint64(DecodeUint(buf, kind)))
+		case reflect.Slice:
+			if b2.val.Type() == bytesType {
+				b2.setBytes(DecodeBinary(buf, kind))
+			} else {
+				decodeDocument(buf, b2, kind)
+			}
+		case reflect.Struct:
+			if b2.val.Type() == timeType {
+				b2.setTime(DecodeTime(buf, kind))
+			} else {
+				decodeDocument(buf, b2, kind)
+			}
+		case reflect.Map:
+			decodeDocument(buf, b2, kind)
+		case reflect.Interface:
+			b2.setInterface(DecodeInterface(buf, kind))
+		}
+		b2.save()
+	}
+}
+
 // Maps & interface values will not give you a reference to their underlying object.
 // You can only update them through their Set methods.
 type valueBuilder struct {
@@ -168,193 +305,34 @@ func (builder *valueBuilder) getField(k string) *valueBuilder {
 	panic(NewBsonError("%s not supported as a BSON document", builder.val.Type()))
 }
 
-func (builder *valueBuilder) SetInt(i int64) {
+func (builder *valueBuilder) setInt(i int64) {
 	builder.val.SetInt(i)
 }
 
-func (builder *valueBuilder) SetUint(u uint64) {
+func (builder *valueBuilder) setUint(u uint64) {
 	builder.val.SetUint(u)
 }
 
-func (builder *valueBuilder) SetFloat(f float64) {
+func (builder *valueBuilder) setFloat(f float64) {
 	builder.val.SetFloat(f)
 }
 
-func (builder *valueBuilder) SetString(s string) {
+func (builder *valueBuilder) setString(s string) {
 	builder.val.SetString(s)
 }
 
-func (builder *valueBuilder) SetBool(tf bool) {
+func (builder *valueBuilder) setBool(tf bool) {
 	builder.val.SetBool(tf)
 }
 
-func (builder *valueBuilder) SetTime(t time.Time) {
+func (builder *valueBuilder) setTime(t time.Time) {
 	builder.val.Set(reflect.ValueOf(t))
 }
 
-func (builder *valueBuilder) SetBytes(b []byte) {
+func (builder *valueBuilder) setBytes(b []byte) {
 	builder.val.Set(reflect.ValueOf(b))
 }
 
-func (builder *valueBuilder) SetInterface(i interface{}) {
+func (builder *valueBuilder) setInterface(i interface{}) {
 	builder.val.Set(reflect.ValueOf(i))
-}
-
-func (builder *valueBuilder) CanUnmarshal() Unmarshaler {
-	// Don't use custom unmarshalers for map values.
-	// It loses symmetry.
-	if builder.map_.IsValid() {
-		return nil
-	}
-	if builder.val.CanAddr() {
-		if unmarshaler, ok := builder.val.Addr().Interface().(Unmarshaler); ok {
-			return unmarshaler
-		}
-	}
-	return nil
-}
-
-type Unmarshaler interface {
-	UnmarshalBson(buf *bytes.Buffer, kind byte)
-}
-
-func Unmarshal(b []byte, val interface{}) (err error) {
-	return UnmarshalFromBuffer(bytes.NewBuffer(b), val)
-}
-
-func UnmarshalFromStream(reader io.Reader, val interface{}) (err error) {
-	lenbuf := make([]byte, 4)
-	var n int
-	n, err = io.ReadFull(reader, lenbuf)
-	if err != nil {
-		return err
-	}
-	if n != 4 {
-		return io.ErrUnexpectedEOF
-	}
-	length := Pack.Uint32(lenbuf)
-	b := make([]byte, length)
-	Pack.PutUint32(b, length)
-	n, err = io.ReadFull(reader, b[4:])
-	if err != nil {
-		if err == io.EOF {
-			return io.ErrUnexpectedEOF
-		}
-		return err
-	}
-	if n != int(length-4) {
-		return io.ErrUnexpectedEOF
-	}
-	if val == nil {
-		return nil
-	}
-	return UnmarshalFromBuffer(bytes.NewBuffer(b), val)
-}
-
-func UnmarshalFromBuffer(buf *bytes.Buffer, val interface{}) (err error) {
-	defer handleError(&err)
-
-	if unmarshaler, ok := val.(Unmarshaler); ok {
-		unmarshaler.UnmarshalBson(buf, EOO)
-		return
-	}
-
-	sb, terr := topLevelBuilder(val)
-	if terr != nil {
-		return terr
-	}
-	Parse(buf, sb, EOO)
-	sb.save()
-	return
-}
-
-func Parse(buf *bytes.Buffer, builder *valueBuilder, kind byte) {
-	if kind != EOO && kind != Object && kind != Array {
-		panic(NewBsonError("unexpected kind: %v", kind))
-	}
-	Next(buf, 4)
-	for kind := NextByte(buf); kind != EOO; kind = NextByte(buf) {
-		key := ReadCString(buf)
-		if kind == Null {
-			builder.setNull(key)
-			continue
-		}
-		b2 := builder.getField(key)
-		if b2 == nil {
-			Skip(buf, kind)
-			continue
-		}
-		if unmarshaler := b2.CanUnmarshal(); unmarshaler != nil {
-			unmarshaler.UnmarshalBson(buf, kind)
-			continue
-		}
-		switch b2.val.Kind() {
-		case reflect.Float64:
-			b2.SetFloat(DecodeFloat64(buf, kind))
-		case reflect.String:
-			b2.SetString(DecodeString(buf, kind))
-		case reflect.Bool:
-			b2.SetBool(DecodeBool(buf, kind))
-		case reflect.Int64:
-			b2.SetInt(DecodeInt64(buf, kind))
-		case reflect.Int32:
-			b2.SetInt(int64(DecodeInt32(buf, kind)))
-		case reflect.Int:
-			b2.SetInt(int64(DecodeInt(buf, kind)))
-		case reflect.Uint64:
-			b2.SetUint(DecodeUint64(buf, kind))
-		case reflect.Uint32:
-			b2.SetUint(uint64(DecodeUint32(buf, kind)))
-		case reflect.Uint:
-			b2.SetUint(uint64(DecodeUint(buf, kind)))
-		case reflect.Slice:
-			if b2.val.Type() == bytesType {
-				b2.SetBytes(DecodeBinary(buf, kind))
-			} else {
-				Parse(buf, b2, kind)
-			}
-		case reflect.Struct:
-			if b2.val.Type() == timeType {
-				b2.SetTime(DecodeTime(buf, kind))
-			} else {
-				Parse(buf, b2, kind)
-			}
-		case reflect.Map:
-			Parse(buf, b2, kind)
-		case reflect.Interface:
-			b2.SetInterface(DecodeInterface(buf, kind))
-		}
-		b2.save()
-	}
-}
-
-// Skip will skip a field we don't want to read
-func Skip(buf *bytes.Buffer, kind byte) {
-	switch kind {
-	case Number, Datetime, Long, Ulong:
-		Next(buf, 8)
-	case String:
-		// length of a string includes the 0 at the end, but not the size
-		l := int(Pack.Uint32(Next(buf, 4)))
-		Next(buf, l)
-	case Object, Array:
-		// the encoded length includes the 4 bytes for the size
-		l := int(Pack.Uint32(Next(buf, 4)))
-		if l < 4 {
-			panic(NewBsonError("Object or Array should at least be 4 bytes long"))
-		}
-		Next(buf, l-4)
-	case Binary:
-		// length of a binary doesn't include the subtype
-		l := int(Pack.Uint32(Next(buf, 4)))
-		Next(buf, l+1)
-	case Boolean:
-		buf.ReadByte()
-	case Int:
-		Next(buf, 4)
-	case Null:
-		// no op
-	default:
-		panic(NewBsonError("don't know how to skip kind %v yet", kind))
-	}
 }
