@@ -165,6 +165,62 @@ func DecodeTime(buf *bytes.Buffer, kind byte) time.Time {
 	panic(NewBsonError("Unexpected data type %v for time", kind))
 }
 
+func DecodeInterface(buf *bytes.Buffer, kind byte) interface{} {
+	switch kind {
+	case Number:
+		return DecodeFloat64(buf, kind)
+	case String:
+		return DecodeString(buf, kind)
+	case Object:
+		return DecodeMap(buf, kind)
+	case Array:
+		return DecodeArray(buf, kind)
+	case Binary:
+		return DecodeBinary(buf, kind)
+	case Boolean:
+		return DecodeBool(buf, kind)
+	case Datetime:
+		return DecodeTime(buf, kind)
+	case Null:
+		return nil
+	case Int:
+		return DecodeInt32(buf, kind)
+	case Long:
+		return DecodeInt64(buf, kind)
+	case Ulong:
+		return DecodeUint64(buf, kind)
+	}
+	panic(NewBsonError("Unexpected bson kind %v for interface", kind))
+}
+
+func DecodeMap(buf *bytes.Buffer, kind byte) map[string]interface{} {
+	result := make(map[string]interface{})
+	Next(buf, 4)
+	for kind := NextByte(buf); kind != EOO; kind = NextByte(buf) {
+		key := ReadCString(buf)
+		if kind == Null {
+			result[key] = nil
+			continue
+		}
+		result[key] = DecodeInterface(buf, kind)
+	}
+	return result
+}
+
+func DecodeArray(buf *bytes.Buffer, kind byte) []interface{} {
+	result := make([]interface{}, 0, 8)
+	Next(buf, 4)
+	for kind := NextByte(buf); kind != EOO; kind = NextByte(buf) {
+		ReadCString(buf)
+		if kind == Null {
+			result = append(result, nil)
+			continue
+		}
+		result = append(result, DecodeInterface(buf, kind))
+	}
+	return result
+}
+
 func DecodeStringArray(buf *bytes.Buffer, kind byte) []string {
 	switch kind {
 	case Array:

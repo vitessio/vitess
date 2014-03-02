@@ -30,25 +30,26 @@ func TestVariety(t *testing.T) {
 		t.Errorf("got \n%+v, want \n%+v", got2, want2)
 	}
 
-	var got3 string
-	verifyUnmarshal(t, got, &got3)
-	if got3 != "test" {
-		t.Errorf("got \n%+v, want \n%+v", got3, want2)
-	}
-
-	var got4 interface{}
-	verifyUnmarshal(t, got, &got4)
-	if !reflect.DeepEqual(got4, want2) {
-		t.Errorf("got \n%+v, want \n%+v", got4, want2)
-	}
-
 	type mystruct struct {
 		Val string
 	}
-	var got5 mystruct
-	verifyUnmarshal(t, got, &got5)
-	if got5.Val != "test" {
-		t.Errorf("got %q, want %q", got5.Val, "test")
+	var got3 mystruct
+	verifyUnmarshal(t, got, &got3)
+	if got3.Val != "test" {
+		t.Errorf("got %q, want %q", got3.Val, "test")
+	}
+}
+
+func TestSimple(t *testing.T) {
+	got := verifyMarshal(t, "test")
+	want := "\x15\x00\x00\x00\x05_Val_\x00\x04\x00\x00\x00\x00test\x00"
+	if string(got) != want {
+		t.Errorf("got %q, want %q", string(got), want)
+	}
+	var got2 string
+	verifyUnmarshal(t, got, &got2)
+	if got2 != "test" {
+		t.Errorf("got \n%+v, want \n%+v", got2, "test")
 	}
 }
 
@@ -226,12 +227,6 @@ func TestBinary(t *testing.T) {
 	if string(out["Val"].([]byte)) != "test" {
 		t.Errorf("got %v, want %v", string(out["Val"].([]byte)), "test")
 	}
-
-	var out1 []byte
-	verifyUnmarshal(t, got, &out1)
-	if string(out1) != "test" {
-		t.Errorf("got %v, want %v", string(out1), "test")
-	}
 }
 
 func TestInt(t *testing.T) {
@@ -246,12 +241,6 @@ func TestInt(t *testing.T) {
 	verifyUnmarshal(t, got, &out)
 	if out["Val"].(int64) != 20 {
 		t.Errorf("got %v, want %v", out["Val"].(int64), 20)
-	}
-
-	var out1 int
-	verifyUnmarshal(t, got, &out1)
-	if out1 != 20 {
-		t.Errorf("got %v, want %v", out1, 20)
 	}
 }
 
