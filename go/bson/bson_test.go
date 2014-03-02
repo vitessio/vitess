@@ -320,30 +320,30 @@ func TestCustomStruct(t *testing.T) {
 	}
 
 	// This should use the custom marshaller & unmarshaller
-	sm := make(map[string]*PrivateStruct)
-	sm["first"] = &s
-	got = verifyMarshal(t, sm)
+	smp := make(map[string]*PrivateStruct)
+	smp["first"] = &s
+	got = verifyMarshal(t, smp)
 	want = "\x1f\x00\x00\x00\x03first\x00\x13\x00\x00\x00?Type\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 	if string(got) != want {
 		t.Errorf("got %q, want %q", string(got), want)
 	}
-	sm2 := make(map[string]*PrivateStruct)
+	smp2 := make(map[string]*PrivateStruct)
+	verifyUnmarshal(t, got, &smp2)
+	if !reflect.DeepEqual(smp2, smp) {
+		t.Errorf("got \n%+v, want \n%+v", smp2, smp)
+	}
+
+	// This should notuse the custom unmarshaler
+	sm := make(map[string]PrivateStruct)
+	sm["first"] = s
+	sm2 := make(map[string]PrivateStruct)
 	verifyUnmarshal(t, got, &sm2)
-	if !reflect.DeepEqual(sm2, sm) {
+	if reflect.DeepEqual(sm2, sm) {
 		t.Errorf("got \n%+v, want \n%+v", sm2, sm)
 	}
 
-	// This should not use the custom unmarshaller
-	sm3 := make(map[string]PrivateStruct)
-	verifyUnmarshal(t, got, &sm3)
-	if reflect.DeepEqual(sm3, sm) {
-		t.Errorf("got %+v, want 0 in privateStruct", sm3, sm)
-	}
-
-	// This should not use the custom marshaller
-	sm4 := make(map[string]PrivateStruct)
-	sm4["first"] = s
-	got = verifyMarshal(t, sm4)
+	// This should not use the custom marshaler
+	got = verifyMarshal(t, sm)
 	want = "\x11\x00\x00\x00\x03first\x00\x05\x00\x00\x00\x00\x00"
 	if string(got) != want {
 		t.Errorf("got %q, want %q", string(got), want)

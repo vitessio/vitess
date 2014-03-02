@@ -254,6 +254,11 @@ func (builder *valueBuilder) SetInterface(i interface{}) {
 }
 
 func (builder *valueBuilder) CanUnmarshal() Unmarshaler {
+	// Don't use custom unmarshalers for map values.
+	// It loses symmetry.
+	if builder.map_.IsValid() {
+		return nil
+	}
 	if builder.val.CanAddr() {
 		if unmarshaler, ok := builder.val.Addr().Interface().(Unmarshaler); ok {
 			return unmarshaler
