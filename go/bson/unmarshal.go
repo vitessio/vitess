@@ -65,9 +65,6 @@ func UnmarshalFromStream(reader io.Reader, val interface{}) (err error) {
 	if n != int(length-4) {
 		return io.ErrUnexpectedEOF
 	}
-	if val == nil {
-		return nil
-	}
 	return UnmarshalFromBuffer(bytes.NewBuffer(b), val)
 }
 
@@ -110,12 +107,8 @@ func decodeDocument(buf *bytes.Buffer, builder *valueBuilder, kind byte) {
 			continue
 		}
 		switch b2.val.Kind() {
-		case reflect.Float64:
-			b2.setFloat(DecodeFloat64(buf, kind))
 		case reflect.String:
 			b2.setString(DecodeString(buf, kind))
-		case reflect.Bool:
-			b2.setBool(DecodeBool(buf, kind))
 		case reflect.Int64:
 			b2.setInt(DecodeInt64(buf, kind))
 		case reflect.Int32:
@@ -128,12 +121,10 @@ func decodeDocument(buf *bytes.Buffer, builder *valueBuilder, kind byte) {
 			b2.setUint(uint64(DecodeUint32(buf, kind)))
 		case reflect.Uint:
 			b2.setUint(uint64(DecodeUint(buf, kind)))
-		case reflect.Slice:
-			if b2.val.Type() == bytesType {
-				b2.setBytes(DecodeBinary(buf, kind))
-			} else {
-				decodeDocument(buf, b2, kind)
-			}
+		case reflect.Float64:
+			b2.setFloat(DecodeFloat64(buf, kind))
+		case reflect.Bool:
+			b2.setBool(DecodeBool(buf, kind))
 		case reflect.Struct:
 			if b2.val.Type() == timeType {
 				b2.setTime(DecodeTime(buf, kind))
@@ -142,6 +133,12 @@ func decodeDocument(buf *bytes.Buffer, builder *valueBuilder, kind byte) {
 			}
 		case reflect.Map:
 			decodeDocument(buf, b2, kind)
+		case reflect.Slice:
+			if b2.val.Type() == bytesType {
+				b2.setBytes(DecodeBinary(buf, kind))
+			} else {
+				decodeDocument(buf, b2, kind)
+			}
 		case reflect.Interface:
 			b2.setInterface(DecodeInterface(buf, kind))
 		}
@@ -164,6 +161,9 @@ type valueBuilder struct {
 
 // topLevelBuilder returns a valid unmarshalable valueBuilder or an error
 func topLevelBuilder(val interface{}) (sb *valueBuilder, err error) {
+	if val == nil {
+		return nil, fmt.Errorf("expecting non-nil value to unmarshal into")
+	}
 	ival := reflect.ValueOf(val)
 	if ival.Kind() != reflect.Ptr {
 		return nil, fmt.Errorf("expecting pointer value, received %v", ival.Type())

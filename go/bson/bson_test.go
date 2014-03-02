@@ -13,43 +13,250 @@ import (
 	"github.com/youtube/vitess/go/bytes2"
 )
 
-func TestVariety(t *testing.T) {
-	in := map[string]string{"Val": "test"}
-	got := verifyMarshal(t, in)
-	want := "\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00"
-	if string(got) != want {
-		t.Errorf("got %q, want %q", string(got), want)
-	}
+var marshaltest = []struct {
+	desc string
+	in   interface{}
+	out  string
+}{{
+	"struct encode",
+	struct{ Val string }{"test"},
+	"\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00",
+}, {
+	"map encode",
+	map[string]string{"Val": "test"},
+	"\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00",
+}, {
+	"slice encode",
+	[]string{"test1", "test2"},
+	"\x1f\x00\x00\x00\x050\x00\x05\x00\x00\x00\x00test1\x051\x00\x05\x00\x00\x00\x00test2\x00",
+}, {
+	"array encode",
+	[2]string{"test1", "test2"},
+	"\x1f\x00\x00\x00\x050\x00\x05\x00\x00\x00\x00test1\x051\x00\x05\x00\x00\x00\x00test2\x00",
+}, {
+	"string encode",
+	"test",
+	"\x15\x00\x00\x00\x05_Val_\x00\x04\x00\x00\x00\x00test\x00",
+}, {
+	"bytes encode",
+	[]byte("test"),
+	"\x15\x00\x00\x00\x05_Val_\x00\x04\x00\x00\x00\x00test\x00",
+}, {
+	"int64 encode",
+	int64(1),
+	"\x14\x00\x00\x00\x12_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+}, {
+	"int32 encode",
+	int32(1),
+	"\x10\x00\x00\x00\x10_Val_\x00\x01\x00\x00\x00\x00",
+}, {
+	"int encode",
+	int(1),
+	"\x14\x00\x00\x00\x12_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+}, {
+	"unit64 encode",
+	uint64(1),
+	"\x14\x00\x00\x00?_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+}, {
+	"uint32 encode",
+	uint32(1),
+	"\x14\x00\x00\x00?_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+}, {
+	"uint encode",
+	uint(1),
+	"\x14\x00\x00\x00?_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+}, {
+	"float encode",
+	float64(1.0),
+	"\x14\x00\x00\x00\x01_Val_\x00\x00\x00\x00\x00\x00\x00\xf0?\x00",
+}, {
+	"bool encode",
+	true,
+	"\r\x00\x00\x00\b_Val_\x00\x01\x00",
+}, {
+	"time encode",
+	time.Unix(1136243045, 0).UTC(),
+	"\x14\x00\x00\x00\t_Val_\x00\x88\xf2\\\x8d\b\x01\x00\x00\x00",
+}}
 
-	got2 := make(map[string]interface{})
-	verifyUnmarshal(t, got, &got2)
-	want2 := map[string]interface{}{
-		"Val": []byte("test"),
-	}
-	if !reflect.DeepEqual(got2, want2) {
-		t.Errorf("got \n%+v, want \n%+v", got2, want2)
-	}
-
-	type mystruct struct {
-		Val string
-	}
-	var got3 mystruct
-	verifyUnmarshal(t, got, &got3)
-	if got3.Val != "test" {
-		t.Errorf("got %q, want %q", got3.Val, "test")
+func TestMarshal(t *testing.T) {
+	for _, tcase := range marshaltest {
+		got := verifyMarshal(t, tcase.in)
+		if string(got) != tcase.out {
+			t.Errorf("%s: encoded: \n%q, want\n%q", tcase.desc, got, tcase.out)
+		}
 	}
 }
 
-func TestSimple(t *testing.T) {
-	got := verifyMarshal(t, "test")
-	want := "\x15\x00\x00\x00\x05_Val_\x00\x04\x00\x00\x00\x00test\x00"
-	if string(got) != want {
-		t.Errorf("got %q, want %q", string(got), want)
-	}
-	var got2 string
-	verifyUnmarshal(t, got, &got2)
-	if got2 != "test" {
-		t.Errorf("got \n%+v, want \n%+v", got2, "test")
+func newstring(v string) *string     { return &v }
+func newint64(v int64) *int64        { return &v }
+func newint32(v int32) *int32        { return &v }
+func newint(v int) *int              { return &v }
+func newuint64(v uint64) *uint64     { return &v }
+func newuint32(v uint32) *uint32     { return &v }
+func newuint(v uint) *uint           { return &v }
+func newfloat64(v float64) *float64  { return &v }
+func newbool(v bool) *bool           { return &v }
+func newtime(v time.Time) *time.Time { return &v }
+
+var unmarshaltest = []struct {
+	desc string
+	in   string
+	out  interface{}
+	want interface{}
+}{{
+	"struct decode",
+	"\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00",
+	&struct{ Val string }{},
+	&struct{ Val string }{"test"},
+}, {
+	"map decode",
+	"\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00",
+	&map[string]string{},
+	&map[string]string{"Val": "test"},
+}, {
+	"slice decode",
+	"\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00",
+	&[]string{},
+	&[]string{"test"},
+}, {
+	"array decode",
+	"\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00",
+	&[2]string{},
+	&[2]string{"test", ""},
+}, {
+	"string decode from Binary",
+	"\x15\x00\x00\x00\x05_Val_\x00\x04\x00\x00\x00\x00test\x00",
+	newstring(""),
+	newstring("test"),
+}, {
+	"string decode from String",
+	"\x15\x00\x00\x00\x02_Val_\x00\x05\x00\x00\x00test\x00\x00",
+	newstring(""),
+	newstring("test"),
+}, {
+	"bytes decode from Binary",
+	"\x15\x00\x00\x00\x05_Val_\x00\x04\x00\x00\x00\x00test\x00",
+	&[]byte{},
+	&[]byte{'t', 'e', 's', 't'},
+}, {
+	"bytes decode from String",
+	"\x15\x00\x00\x00\x02_Val_\x00\x05\x00\x00\x00test\x00\x00",
+	&[]byte{},
+	&[]byte{'t', 'e', 's', 't'},
+}, {
+	"int64 decode from Long",
+	"\x14\x00\x00\x00\x12_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+	newint64(0),
+	newint64(1),
+}, {
+	"int64 decode from Int",
+	"\x10\x00\x00\x00\x10_Val_\x00\x01\x00\x00\x00\x00",
+	newint64(0),
+	newint64(1),
+}, {
+	"int64 decode from Ulong",
+	"\x14\x00\x00\x00?_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+	newint64(0),
+	newint64(1),
+}, {
+	"int32 decode from Int",
+	"\x10\x00\x00\x00\x10_Val_\x00\x01\x00\x00\x00\x00",
+	newint32(0),
+	newint32(1),
+}, {
+	"int decode from Long",
+	"\x14\x00\x00\x00\x12_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+	newint(0),
+	newint(1),
+}, {
+	"int decode from Int",
+	"\x10\x00\x00\x00\x10_Val_\x00\x01\x00\x00\x00\x00",
+	newint(0),
+	newint(1),
+}, {
+	"int decode from Ulong",
+	"\x14\x00\x00\x00?_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+	newint(0),
+	newint(1),
+}, {
+	"uint64 decode from Ulong",
+	"\x14\x00\x00\x00?_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+	newuint64(0),
+	newuint64(1),
+}, {
+	"uint64 decode from Long",
+	"\x14\x00\x00\x00\x12_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+	newuint64(0),
+	newuint64(1),
+}, {
+	"uint64 decode from Int",
+	"\x10\x00\x00\x00\x10_Val_\x00\x01\x00\x00\x00\x00",
+	newuint64(0),
+	newuint64(1),
+}, {
+	"uint32 decode from Ulong",
+	"\x14\x00\x00\x00?_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+	newuint32(0),
+	newuint32(1),
+}, {
+	"uint32 decode from Int",
+	"\x10\x00\x00\x00\x10_Val_\x00\x01\x00\x00\x00\x00",
+	newuint32(0),
+	newuint32(1),
+}, {
+	"uint decode from Ulong",
+	"\x14\x00\x00\x00?_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+	newuint(0),
+	newuint(1),
+}, {
+	"uint decode from Long",
+	"\x14\x00\x00\x00\x12_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+	newuint(0),
+	newuint(1),
+}, {
+	"uint decode from Int",
+	"\x10\x00\x00\x00\x10_Val_\x00\x01\x00\x00\x00\x00",
+	newuint(0),
+	newuint(1),
+}, {
+	"float64 decode",
+	"\x14\x00\x00\x00\x01_Val_\x00\x00\x00\x00\x00\x00\x00\xf0?\x00",
+	newfloat64(0),
+	newfloat64(1.0),
+}, {
+	"bool decode from Boolean",
+	"\r\x00\x00\x00\b_Val_\x00\x01\x00",
+	newbool(false),
+	newbool(true),
+}, {
+	"bool decode from Int",
+	"\x10\x00\x00\x00\x10_Val_\x00\x01\x00\x00\x00\x00",
+	newbool(false),
+	newbool(true),
+}, {
+	"bool decode from Long",
+	"\x14\x00\x00\x00\x12_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+	newbool(false),
+	newbool(true),
+}, {
+	"bool decode from Ulong",
+	"\x14\x00\x00\x00?_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+	newbool(false),
+	newbool(true),
+}, {
+	"time decode",
+	"\x14\x00\x00\x00\t_Val_\x00\x88\xf2\\\x8d\b\x01\x00\x00\x00",
+	newtime(time.Now()),
+	newtime(time.Unix(1136243045, 0).UTC()),
+}}
+
+func TestUnmarshal(t *testing.T) {
+	for _, tcase := range unmarshaltest {
+		verifyUnmarshal(t, []byte(tcase.in), tcase.out)
+		if !reflect.DeepEqual(tcase.out, tcase.want) {
+			t.Errorf("%s: decoded: \n%#v, want\n%#v", tcase.desc, tcase.out, tcase.want)
+		}
 	}
 }
 

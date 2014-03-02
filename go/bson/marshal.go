@@ -100,9 +100,10 @@ func MarshalToBuffer(buf *bytes2.ChunkedWriter, val interface{}) (err error) {
 	}
 
 	switch v.Kind() {
-	case reflect.Float64, reflect.String, reflect.Bool,
-		reflect.Int, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint32, reflect.Uint64:
+	case reflect.String,
+		reflect.Int64, reflect.Int32, reflect.Int,
+		reflect.Uint64, reflect.Uint32, reflect.Uint,
+		reflect.Float64, reflect.Bool:
 		EncodeSimple(buf, v.Interface())
 	case reflect.Struct:
 		if v.Type() == timeType {
@@ -144,12 +145,8 @@ func encodeField(buf *bytes2.ChunkedWriter, key string, val reflect.Value) {
 	}
 
 	switch val.Kind() {
-	case reflect.Float64:
-		EncodeFloat64(buf, key, val.Float())
 	case reflect.String:
 		EncodeString(buf, key, val.String())
-	case reflect.Bool:
-		EncodeBool(buf, key, val.Bool())
 	case reflect.Int64:
 		EncodeInt64(buf, key, val.Int())
 	case reflect.Int32:
@@ -162,6 +159,10 @@ func encodeField(buf *bytes2.ChunkedWriter, key string, val reflect.Value) {
 		EncodeUint32(buf, key, uint32(val.Uint()))
 	case reflect.Uint:
 		EncodeUint(buf, key, uint(val.Uint()))
+	case reflect.Float64:
+		EncodeFloat64(buf, key, val.Float())
+	case reflect.Bool:
+		EncodeBool(buf, key, val.Bool())
 	case reflect.Struct:
 		if val.Type() == timeType {
 			EncodeTime(buf, key, val.Interface().(time.Time))
@@ -209,12 +210,6 @@ func EncodePrefix(buf *bytes2.ChunkedWriter, etype byte, key string) {
 	b[len(b)-1] = 0
 }
 
-func EncodeFloat64(buf *bytes2.ChunkedWriter, key string, val float64) {
-	EncodePrefix(buf, Number, key)
-	bits := math.Float64bits(val)
-	putUint64(buf, bits)
-}
-
 func EncodeString(buf *bytes2.ChunkedWriter, key string, val string) {
 	// Encode strings as binary; go strings are not necessarily unicode
 	EncodePrefix(buf, Binary, key)
@@ -223,13 +218,11 @@ func EncodeString(buf *bytes2.ChunkedWriter, key string, val string) {
 	buf.WriteString(val)
 }
 
-func EncodeBool(buf *bytes2.ChunkedWriter, key string, val bool) {
-	EncodePrefix(buf, Boolean, key)
-	if val {
-		buf.WriteByte(1)
-	} else {
-		buf.WriteByte(0)
-	}
+func EncodeBinary(buf *bytes2.ChunkedWriter, key string, val []byte) {
+	EncodePrefix(buf, Binary, key)
+	putUint32(buf, uint32(len(val)))
+	buf.WriteByte(0)
+	buf.Write(val)
 }
 
 func EncodeInt64(buf *bytes2.ChunkedWriter, key string, val int64) {
@@ -259,17 +252,25 @@ func EncodeUint(buf *bytes2.ChunkedWriter, key string, val uint) {
 	EncodeUint64(buf, key, uint64(val))
 }
 
+func EncodeFloat64(buf *bytes2.ChunkedWriter, key string, val float64) {
+	EncodePrefix(buf, Number, key)
+	bits := math.Float64bits(val)
+	putUint64(buf, bits)
+}
+
+func EncodeBool(buf *bytes2.ChunkedWriter, key string, val bool) {
+	EncodePrefix(buf, Boolean, key)
+	if val {
+		buf.WriteByte(1)
+	} else {
+		buf.WriteByte(0)
+	}
+}
+
 func EncodeTime(buf *bytes2.ChunkedWriter, key string, val time.Time) {
 	EncodePrefix(buf, Datetime, key)
 	mtime := val.UnixNano() / 1e6
 	putUint64(buf, uint64(mtime))
-}
-
-func EncodeBinary(buf *bytes2.ChunkedWriter, key string, val []byte) {
-	EncodePrefix(buf, Binary, key)
-	putUint32(buf, uint32(len(val)))
-	buf.WriteByte(0)
-	buf.Write(val)
 }
 
 func encodeStruct(buf *bytes2.ChunkedWriter, key string, val reflect.Value) {

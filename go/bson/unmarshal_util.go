@@ -22,18 +22,6 @@ func VerifyObject(kind byte) {
 	}
 }
 
-// DecodeFloat64 decodes a float64 from buf.
-// Allowed types: Number, Null.
-func DecodeFloat64(buf *bytes.Buffer, kind byte) float64 {
-	switch kind {
-	case Number:
-		return float64(math.Float64frombits(Pack.Uint64(Next(buf, 8))))
-	case Null:
-		return 0
-	}
-	panic(NewBsonError("Unexpected data type %v for int", kind))
-}
-
 // DecodeString decodes a string from buf.
 // Allowed types: String, Binary, Null,
 func DecodeString(buf *bytes.Buffer, kind byte) string {
@@ -53,22 +41,23 @@ func DecodeString(buf *bytes.Buffer, kind byte) string {
 	panic(NewBsonError("Unexpected data type %v for string", kind))
 }
 
-// DecodeBool decodes a bool from buf.
-// Allowed types: Boolean, Int, Long, Ulong, Null.
-func DecodeBool(buf *bytes.Buffer, kind byte) bool {
+// DecodeBinary decodes a []byte from buf.
+// Allowed types: String, Binary, Null.
+func DecodeBinary(buf *bytes.Buffer, kind byte) []byte {
 	switch kind {
-	case Boolean:
-		b, _ := buf.ReadByte()
-		return (b != 0)
-	case Int:
-		return (Pack.Uint32(Next(buf, 4)) != 0)
-	case Long, Ulong:
-		return (Pack.Uint64(Next(buf, 8)) != 0)
+	case String:
+		l := int(Pack.Uint32(Next(buf, 4)))
+		b := Next(buf, l-1)
+		NextByte(buf)
+		return b
+	case Binary:
+		l := int(Pack.Uint32(Next(buf, 4)))
+		NextByte(buf)
+		return Next(buf, l)
 	case Null:
-		return false
-	default:
-		panic(NewBsonError("Unexpected data type %v for boolean", kind))
+		return nil
 	}
+	panic(NewBsonError("Unexpected data type %v for string", kind))
 }
 
 // DecodeInt64 decodes a int64 from buf.
@@ -153,23 +142,34 @@ func DecodeUint(buf *bytes.Buffer, kind byte) uint {
 	panic(NewBsonError("Unexpected data type %v for int", kind))
 }
 
-// DecodeBinary decodes a []byte from buf.
-// Allowed types: String, Binary, Null.
-func DecodeBinary(buf *bytes.Buffer, kind byte) []byte {
+// DecodeFloat64 decodes a float64 from buf.
+// Allowed types: Number, Null.
+func DecodeFloat64(buf *bytes.Buffer, kind byte) float64 {
 	switch kind {
-	case String:
-		l := int(Pack.Uint32(Next(buf, 4)))
-		b := Next(buf, l-1)
-		NextByte(buf)
-		return b
-	case Binary:
-		l := int(Pack.Uint32(Next(buf, 4)))
-		NextByte(buf)
-		return Next(buf, l)
+	case Number:
+		return float64(math.Float64frombits(Pack.Uint64(Next(buf, 8))))
 	case Null:
-		return nil
+		return 0
 	}
-	panic(NewBsonError("Unexpected data type %v for string", kind))
+	panic(NewBsonError("Unexpected data type %v for int", kind))
+}
+
+// DecodeBool decodes a bool from buf.
+// Allowed types: Boolean, Int, Long, Ulong, Null.
+func DecodeBool(buf *bytes.Buffer, kind byte) bool {
+	switch kind {
+	case Boolean:
+		b, _ := buf.ReadByte()
+		return (b != 0)
+	case Int:
+		return (Pack.Uint32(Next(buf, 4)) != 0)
+	case Long, Ulong:
+		return (Pack.Uint64(Next(buf, 8)) != 0)
+	case Null:
+		return false
+	default:
+		panic(NewBsonError("Unexpected data type %v for boolean", kind))
+	}
 }
 
 // DecodeBinary decodes a time.Time from buf.
