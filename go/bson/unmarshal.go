@@ -6,64 +6,11 @@ package bson
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"io"
 	"reflect"
 	"time"
 )
-
-// BSON documents are lttle endian
-var Pack = binary.LittleEndian
-
-// Words size in bytes.
-const (
-	_WORD32 = 4
-	_WORD64 = 8
-)
-
-const (
-	EOO = iota
-	Number
-	String
-	Object
-	Array
-	Binary
-	Undefined // deprecated
-	OID       // unsupported
-	Boolean
-	Datetime
-	Null
-	Regex         // unsupported
-	Ref           // deprecated
-	Code          // unsupported
-	Symbol        // unsupported
-	CodeWithScope // unsupported
-	Int
-	Timestamp // unsupported
-	Long
-	Ulong  = 0x3F // nonstandard extension
-	MinKey = 0xFF // unsupported
-	MaxKey = 0x7F // unsupported
-)
-
-type BsonError struct {
-	Message string
-}
-
-func NewBsonError(format string, args ...interface{}) BsonError {
-	return BsonError{fmt.Sprintf(format, args...)}
-}
-
-func (err BsonError) Error() string {
-	return err.Message
-}
-
-func handleError(err *error) {
-	if x := recover(); x != nil {
-		*err = x.(BsonError)
-	}
-}
 
 // Maps & interface values will not give you a reference to their underlying object.
 // You can only update them through their Set methods.
@@ -133,7 +80,7 @@ func (builder *valueBuilder) save() {
 
 // setNull sets field k of builder to its zero value.
 func (builder *valueBuilder) setNull(k string) {
-	if k == "_Val_" {
+	if k == MAGICTAG {
 		setZero(builder.val)
 		return
 	}
@@ -187,7 +134,7 @@ func setZero(v reflect.Value) {
 // key allocates memory as needed. So, bson Null values must
 // be handled before calling key.
 func (builder *valueBuilder) getField(k string) *valueBuilder {
-	if k == "_Val_" {
+	if k == MAGICTAG {
 		return builder
 	}
 	switch builder.val.Kind() {
@@ -201,7 +148,7 @@ func (builder *valueBuilder) getField(k string) *valueBuilder {
 		return nil
 	case reflect.Map:
 		t := builder.val.Type()
-		if t.Key() != reflect.TypeOf(k) {
+		if t.Key().Kind() != reflect.String {
 			break
 		}
 		key := reflect.ValueOf(k)
@@ -361,13 +308,13 @@ func Parse(buf *bytes.Buffer, builder *valueBuilder, kind byte) {
 		case reflect.Uint:
 			b2.SetUint(uint64(DecodeUint(buf, kind)))
 		case reflect.Slice:
-			if b2.val.Type() == BytesType {
+			if b2.val.Type() == bytesType {
 				b2.SetBytes(DecodeBinary(buf, kind))
 			} else {
 				Parse(buf, b2, kind)
 			}
 		case reflect.Struct:
-			if b2.val.Type() == TimeType {
+			if b2.val.Type() == timeType {
 				b2.SetTime(DecodeTime(buf, kind))
 			} else {
 				Parse(buf, b2, kind)

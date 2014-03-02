@@ -194,6 +194,15 @@ func DecodeInterface(buf *bytes.Buffer, kind byte) interface{} {
 }
 
 func DecodeMap(buf *bytes.Buffer, kind byte) map[string]interface{} {
+	switch kind {
+	case Object:
+		// valid
+	case Null:
+		return nil
+	default:
+		panic(NewBsonError("Unexpected data type %v for string array", kind))
+	}
+
 	result := make(map[string]interface{})
 	Next(buf, 4)
 	for kind := NextByte(buf); kind != EOO; kind = NextByte(buf) {
@@ -208,6 +217,15 @@ func DecodeMap(buf *bytes.Buffer, kind byte) map[string]interface{} {
 }
 
 func DecodeArray(buf *bytes.Buffer, kind byte) []interface{} {
+	switch kind {
+	case Array:
+		// valid
+	case Null:
+		return nil
+	default:
+		panic(NewBsonError("Unexpected data type %v for string array", kind))
+	}
+
 	result := make([]interface{}, 0, 8)
 	Next(buf, 4)
 	for kind := NextByte(buf); kind != EOO; kind = NextByte(buf) {

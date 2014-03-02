@@ -65,6 +65,7 @@ type alltypes struct {
 	Uint64  uint64
 	Uint32  uint32
 	Uint    uint
+	Map     map[string]int64
 	Strings []string
 	Nil     interface{}
 }
@@ -111,6 +112,7 @@ func (a *alltypes) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 		case "Uint":
 			verifyKind("Uint", Ulong, kind)
 			a.Uint = DecodeUint(buf, kind)
+		case "Map":
 		case "Strings":
 			verifyKind("Strings", Array, kind)
 			a.Strings = DecodeStringArray(buf, kind)
@@ -125,7 +127,7 @@ func (a *alltypes) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 
 func verifyKind(tag string, want, got byte) {
 	if want != got {
-		panic(NewBsonError("Decode %s: got %v, want %v", tag, got, want))
+		panic(NewBsonError("Decode %s, kind is %v, want %v", tag, got, want))
 	}
 }
 
@@ -135,7 +137,7 @@ func TestUnmarshalUtil(t *testing.T) {
 		Float64: float64(64),
 		String:  "string",
 		Bool:    true,
-		Time:    time.Unix(1136243045, 0),
+		Time:    time.Unix(1136243045, 0).UTC(),
 		Int64:   int64(-0x8000000000000000),
 		Int32:   int32(-0x80000000),
 		Int:     int(-0x80000000),
@@ -148,11 +150,6 @@ func TestUnmarshalUtil(t *testing.T) {
 	got := verifyMarshal(t, a)
 	var out alltypes
 	verifyUnmarshal(t, got, &out)
-	// Time doesn't compare well with DeepEqual
-	if out.Time.Unix() != 1136243045 {
-		t.Errorf("time fail: %v", out.Time)
-	}
-	out.Time = a.Time
 	// Verify easter egg
 	if out.String != "string1" {
 		t.Errorf("got %s, want %s", out.String, "string1")
@@ -292,7 +289,7 @@ func (ps *PrivateStruct) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 }
 
 func TestCustomStruct(t *testing.T) {
-	// This should use the custom marshaller & unmarshaller
+	// This should use the custom marshaler & unmarshaler
 	s := PrivateStruct{1}
 	got := verifyMarshal(t, &s)
 	want := "\x13\x00\x00\x00?Type\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00"
@@ -305,7 +302,7 @@ func TestCustomStruct(t *testing.T) {
 		t.Errorf("got \n%+v, want \n%+v", s2, s)
 	}
 
-	// This should use the custom marshaller & unmarshaller
+	// This should use the custom marshaler & unmarshaler
 	sl := PrivateStructList{make([]PrivateStruct, 1)}
 	sl.List[0] = s
 	got = verifyMarshal(t, &sl)
@@ -319,7 +316,7 @@ func TestCustomStruct(t *testing.T) {
 		t.Errorf("got \n%+v, want \n%+v", sl2, sl)
 	}
 
-	// This should use the custom marshaller & unmarshaller
+	// This should use the custom marshaler & unmarshaler
 	smp := make(map[string]*PrivateStruct)
 	smp["first"] = &s
 	got = verifyMarshal(t, smp)
@@ -333,7 +330,7 @@ func TestCustomStruct(t *testing.T) {
 		t.Errorf("got \n%+v, want \n%+v", smp2, smp)
 	}
 
-	// This should notuse the custom unmarshaler
+	// This should not use the custom unmarshaler
 	sm := make(map[string]PrivateStruct)
 	sm["first"] = s
 	sm2 := make(map[string]PrivateStruct)
@@ -349,7 +346,7 @@ func TestCustomStruct(t *testing.T) {
 		t.Errorf("got %q, want %q", string(got), want)
 	}
 
-	// This should not use the custom marshaller (or crash)
+	// This should not use the custom marshaler (or crash)
 	nilinner := PrivateStructStruct{}
 	got = verifyMarshal(t, &nilinner)
 	want = "\f\x00\x00\x00\nInner\x00\x00"
