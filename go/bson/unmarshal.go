@@ -71,19 +71,22 @@ func UnmarshalFromStream(reader io.Reader, val interface{}) (err error) {
 // UnmarshalFromBuffer unmarshals from buf into val.
 func UnmarshalFromBuffer(buf *bytes.Buffer, val interface{}) (err error) {
 	defer handleError(&err)
+	if val == nil {
+		Skip(buf, Object)
+		return nil
+	}
 
 	if unmarshaler, ok := val.(Unmarshaler); ok {
 		unmarshaler.UnmarshalBson(buf, EOO)
-		return
+		return nil
 	}
-
 	sb, terr := topLevelBuilder(val)
 	if terr != nil {
 		return terr
 	}
 	decodeDocument(buf, sb, EOO)
 	sb.save()
-	return
+	return nil
 }
 
 func decodeDocument(buf *bytes.Buffer, builder *valueBuilder, kind byte) {
@@ -161,9 +164,6 @@ type valueBuilder struct {
 
 // topLevelBuilder returns a valid unmarshalable valueBuilder or an error
 func topLevelBuilder(val interface{}) (sb *valueBuilder, err error) {
-	if val == nil {
-		return nil, fmt.Errorf("expecting non-nil value to unmarshal into")
-	}
 	ival := reflect.ValueOf(val)
 	if ival.Kind() != reflect.Ptr {
 		return nil, fmt.Errorf("expecting pointer value, received %v", ival.Type())
