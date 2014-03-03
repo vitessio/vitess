@@ -131,7 +131,7 @@ func decodeDocument(buf *bytes.Buffer, builder *valueBuilder, kind byte) {
 			} else {
 				decodeDocument(buf, b2, kind)
 			}
-		case reflect.Map:
+		case reflect.Map, reflect.Array:
 			decodeDocument(buf, b2, kind)
 		case reflect.Slice:
 			if b2.val.Type() == bytesType {

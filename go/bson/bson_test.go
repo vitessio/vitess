@@ -13,22 +13,18 @@ import (
 	"github.com/youtube/vitess/go/bytes2"
 )
 
-type testStruct struct {
-	Val string
-}
-
 var marshaltest = []struct {
 	desc string
 	in   interface{}
 	out  string
 }{{
 	"struct encode",
-	testStruct{"test"},
+	struct{ Val string }{"test"},
 	"\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00",
 }, {
-	"embedded struct encode",
-	struct{ Inner testStruct }{testStruct{"test"}},
-	"\x1f\x00\x00\x00\x03Inner\x00\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00\x00",
+	"struct encode nil",
+	struct{ Val *int }{},
+	"\n\x00\x00\x00\nVal\x00\x00",
 }, {
 	"map encode",
 	map[string]string{"Val": "test"},
@@ -89,6 +85,49 @@ var marshaltest = []struct {
 	"time encode",
 	time.Unix(1136243045, 0).UTC(),
 	"\x14\x00\x00\x00\t_Val_\x00\x88\xf2\\\x8d\b\x01\x00\x00\x00",
+}, {
+
+	// Following encodes are for reference. They're used for
+	// the decode tests.
+	"embedded Object encode",
+	struct{ Val struct{ Val2 string } }{struct{ Val2 string }{"test"}},
+	"\x1e\x00\x00\x00\x03Val\x00\x14\x00\x00\x00\x05Val2\x00\x04\x00\x00\x00\x00test\x00\x00",
+}, {
+	"embedded Array encode",
+	struct{ Val []string }{Val: []string{"test"}},
+	"\x1b\x00\x00\x00\x04Val\x00\x11\x00\x00\x00\x050\x00\x04\x00\x00\x00\x00test\x00\x00",
+}, {
+	"embedded Number encode",
+	struct{ Val float64 }{1.0},
+	"\x12\x00\x00\x00\x01Val\x00\x00\x00\x00\x00\x00\x00\xf0?\x00",
+}, {
+	"embedded Binary encode",
+	struct{ Val string }{"test"},
+	"\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00",
+}, {
+	"embedded Boolean encode",
+	struct{ Val bool }{true},
+	"\v\x00\x00\x00\bVal\x00\x01\x00",
+}, {
+	"embedded Datetime encode",
+	struct{ Val time.Time }{time.Unix(1136243045, 0).UTC()},
+	"\x12\x00\x00\x00\tVal\x00\x88\xf2\\\x8d\b\x01\x00\x00\x00",
+}, {
+	"embedded Null encode",
+	struct{ Val *int }{},
+	"\n\x00\x00\x00\nVal\x00\x00",
+}, {
+	"embedded Int encode",
+	struct{ Val int32 }{1},
+	"\x0e\x00\x00\x00\x10Val\x00\x01\x00\x00\x00\x00",
+}, {
+	"embedded Long encode",
+	struct{ Val int64 }{1},
+	"\x12\x00\x00\x00\x12Val\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+}, {
+	"embedded Ulong encode",
+	struct{ Val uint64 }{1},
+	"\x12\x00\x00\x00?Val\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
 }}
 
 func TestMarshal(t *testing.T) {
@@ -118,207 +157,383 @@ var unmarshaltest = []struct {
 	out  interface{}
 	want interface{}
 }{{
-	"struct decode",
+
+	// top level decodes
+	"top level struct decode",
 	"\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00",
 	&struct{ Val string }{},
 	&struct{ Val string }{"test"},
 }, {
-	"map decode",
+	"top level map decode",
 	"\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00",
 	&map[string]string{},
 	&map[string]string{"Val": "test"},
 }, {
-	"slice decode",
+	"top level slice decode",
 	"\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00",
 	&[]string{},
 	&[]string{"test"},
 }, {
-	"array decode",
+	"top level array decode",
 	"\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00",
 	&[2]string{},
 	&[2]string{"test", ""},
 }, {
-	"string decode from String",
-	"\x15\x00\x00\x00\x02_Val_\x00\x05\x00\x00\x00test\x00\x00",
-	newstring(""),
-	newstring("test"),
-}, {
-	"string decode from Binary",
+	"top level string decode",
 	"\x15\x00\x00\x00\x05_Val_\x00\x04\x00\x00\x00\x00test\x00",
 	newstring(""),
 	newstring("test"),
 }, {
-	"bytes decode from String",
-	"\x15\x00\x00\x00\x02_Val_\x00\x05\x00\x00\x00test\x00\x00",
-	&[]byte{},
-	&[]byte{'t', 'e', 's', 't'},
+	"top level string decode from Null",
+	"\x0c\x00\x00\x00\n_Val_\x00\x00",
+	newstring("test"),
+	newstring(""),
 }, {
-	"bytes decode from Binary",
+	"top level bytes decode",
 	"\x15\x00\x00\x00\x05_Val_\x00\x04\x00\x00\x00\x00test\x00",
 	&[]byte{},
 	&[]byte{'t', 'e', 's', 't'},
 }, {
-	"int64 decode from Int",
-	"\x10\x00\x00\x00\x10_Val_\x00\x01\x00\x00\x00\x00",
-	newint64(0),
-	newint64(1),
-}, {
-	"int64 decode from Long",
+	"top level int64 decode",
 	"\x14\x00\x00\x00\x12_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
 	newint64(0),
 	newint64(1),
 }, {
-	"int32 decode from Int",
+	"top level int32 decode",
 	"\x10\x00\x00\x00\x10_Val_\x00\x01\x00\x00\x00\x00",
 	newint32(0),
 	newint32(1),
 }, {
-	"int decode from Long",
-	"\x14\x00\x00\x00\x12_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
-	newint(0),
-	newint(1),
-}, {
-	"int64 decode from Ulong",
-	"\x14\x00\x00\x00?_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
-	newint64(0),
-	newint64(1),
-}, {
-	"int decode from Int",
+	"top level int decode",
 	"\x10\x00\x00\x00\x10_Val_\x00\x01\x00\x00\x00\x00",
 	newint(0),
 	newint(1),
 }, {
-	"int decode from Ulong",
-	"\x14\x00\x00\x00?_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
-	newint(0),
-	newint(1),
-}, {
-	"uint64 decode from Int",
-	"\x10\x00\x00\x00\x10_Val_\x00\x01\x00\x00\x00\x00",
-	newuint64(0),
-	newuint64(1),
-}, {
-	"uint64 decode from Long",
-	"\x14\x00\x00\x00\x12_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
-	newuint64(0),
-	newuint64(1),
-}, {
-	"uint64 decode from Ulong",
+	"top level uint64 decode",
 	"\x14\x00\x00\x00?_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
 	newuint64(0),
 	newuint64(1),
 }, {
-	"uint32 decode from Int",
-	"\x10\x00\x00\x00\x10_Val_\x00\x01\x00\x00\x00\x00",
-	newuint32(0),
-	newuint32(1),
-}, {
-	"uint32 decode from Ulong",
+	"top level uint32 decode",
 	"\x14\x00\x00\x00?_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
 	newuint32(0),
 	newuint32(1),
 }, {
-	"uint decode from Int",
-	"\x10\x00\x00\x00\x10_Val_\x00\x01\x00\x00\x00\x00",
-	newuint(0),
-	newuint(1),
-}, {
-	"uint decode from Long",
+	"top level uint decode",
 	"\x14\x00\x00\x00\x12_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
 	newuint(0),
 	newuint(1),
 }, {
-	"uint decode from Ulong",
-	"\x14\x00\x00\x00?_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
-	newuint(0),
-	newuint(1),
-}, {
-	"float64 decode from Number",
+	"top level float64 decode",
 	"\x14\x00\x00\x00\x01_Val_\x00\x00\x00\x00\x00\x00\x00\xf0?\x00",
 	newfloat64(0),
 	newfloat64(1.0),
 }, {
-	"bool decode from Boolean",
+	"top level bool decode",
 	"\r\x00\x00\x00\b_Val_\x00\x01\x00",
 	newbool(false),
 	newbool(true),
 }, {
-	"bool decode from Int",
-	"\x10\x00\x00\x00\x10_Val_\x00\x01\x00\x00\x00\x00",
-	newbool(false),
-	newbool(true),
-}, {
-	"bool decode from Long",
-	"\x14\x00\x00\x00\x12_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
-	newbool(false),
-	newbool(true),
-}, {
-	"bool decode from Ulong",
-	"\x14\x00\x00\x00?_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
-	newbool(false),
-	newbool(true),
-}, {
-	"time decode from Datetime",
+	"top level time decode",
 	"\x14\x00\x00\x00\t_Val_\x00\x88\xf2\\\x8d\b\x01\x00\x00\x00",
 	newtime(time.Now()),
 	newtime(time.Unix(1136243045, 0).UTC()),
 }, {
-	"interface decode from Number",
+	"top level interface decode",
 	"\x14\x00\x00\x00\x01_Val_\x00\x00\x00\x00\x00\x00\x00\xf0?\x00",
 	newinterface(nil),
 	newinterface(float64(1.0)),
 }, {
+
+	// embedded decodes
+	"struct decode from Object",
+	"\x1e\x00\x00\x00\x03Val\x00\x14\x00\x00\x00\x05Val2\x00\x04\x00\x00\x00\x00test\x00\x00",
+	&struct{ Val struct{ Val2 string } }{},
+	&struct{ Val struct{ Val2 string } }{struct{ Val2 string }{"test"}},
+}, {
+	"struct decode from Null",
+	"\n\x00\x00\x00\nVal\x00\x00",
+	&struct{ Val struct{ Val2 string } }{struct{ Val2 string }{"test"}},
+	&struct{ Val struct{ Val2 string } }{},
+}, {
+	"map decode from Object",
+	"\x1e\x00\x00\x00\x03Val\x00\x14\x00\x00\x00\x05Val2\x00\x04\x00\x00\x00\x00test\x00\x00",
+	&struct{ Val map[string]string }{},
+	&struct{ Val map[string]string }{map[string]string{"Val2": "test"}},
+}, {
+	"map decode from Null",
+	"\n\x00\x00\x00\nVal\x00\x00",
+	&struct{ Val map[string]string }{map[string]string{"Val2": "test"}},
+	&struct{ Val map[string]string }{},
+}, {
+	"slice decode from Array",
+	"\x1b\x00\x00\x00\x04Val\x00\x11\x00\x00\x00\x050\x00\x04\x00\x00\x00\x00test\x00\x00",
+	&struct{ Val []string }{},
+	&struct{ Val []string }{[]string{"test"}},
+}, {
+	"slice decode from Null",
+	"\n\x00\x00\x00\nVal\x00\x00",
+	&struct{ Val []string }{[]string{"test"}},
+	&struct{ Val []string }{},
+}, {
+	"array decode from Array",
+	"\x1b\x00\x00\x00\x04Val\x00\x11\x00\x00\x00\x050\x00\x04\x00\x00\x00\x00test\x00\x00",
+	&struct{ Val [2]string }{},
+	&struct{ Val [2]string }{[2]string{"test", ""}},
+}, {
+	"array decode from Null",
+	"\n\x00\x00\x00\nVal\x00\x00",
+	&struct{ Val [2]string }{[2]string{"test", ""}},
+	&struct{ Val [2]string }{},
+}, {
+	"string decode from String",
+	"\x13\x00\x00\x00\x02Val\x00\x05\x00\x00\x00test\x00\x00",
+	&struct{ Val string }{},
+	&struct{ Val string }{"test"},
+}, {
+	"string decode from Binary",
+	"\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00",
+	&struct{ Val string }{},
+	&struct{ Val string }{"test"},
+}, {
+	"string decode from Null",
+	"\n\x00\x00\x00\nVal\x00\x00",
+	&struct{ Val string }{"test"},
+	&struct{ Val string }{},
+}, {
+	"bytes decode from String",
+	"\x13\x00\x00\x00\x02Val\x00\x05\x00\x00\x00test\x00\x00",
+	&struct{ Val []byte }{},
+	&struct{ Val []byte }{[]byte("test")},
+}, {
+	"bytes decode from Binary",
+	"\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00",
+	&struct{ Val []byte }{},
+	&struct{ Val []byte }{[]byte("test")},
+}, {
+	"bytes decode from Null",
+	"\n\x00\x00\x00\nVal\x00\x00",
+	&struct{ Val []byte }{[]byte("test")},
+	&struct{ Val []byte }{},
+}, {
+	"int64 decode from Int",
+	"\x0e\x00\x00\x00\x10Val\x00\x01\x00\x00\x00\x00",
+	&struct{ Val int64 }{},
+	&struct{ Val int64 }{1},
+}, {
+	"int64 decode from Long",
+	"\x12\x00\x00\x00\x12Val\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+	&struct{ Val int64 }{},
+	&struct{ Val int64 }{1},
+}, {
+	"int64 decode from Ulong",
+	"\x12\x00\x00\x00?Val\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+	&struct{ Val int64 }{},
+	&struct{ Val int64 }{1},
+}, {
+	"int64 decode from Null",
+	"\n\x00\x00\x00\nVal\x00\x00",
+	&struct{ Val int64 }{1},
+	&struct{ Val int64 }{},
+}, {
+	"int32 decode from Int",
+	"\x0e\x00\x00\x00\x10Val\x00\x01\x00\x00\x00\x00",
+	&struct{ Val int32 }{},
+	&struct{ Val int32 }{1},
+}, {
+	"int32 decode from Null",
+	"\n\x00\x00\x00\nVal\x00\x00",
+	&struct{ Val int32 }{1},
+	&struct{ Val int32 }{},
+}, {
+	"int decode from Long",
+	"\x12\x00\x00\x00\x12Val\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+	&struct{ Val int }{},
+	&struct{ Val int }{1},
+}, {
+	"int decode from Int",
+	"\x0e\x00\x00\x00\x10Val\x00\x01\x00\x00\x00\x00",
+	&struct{ Val int }{},
+	&struct{ Val int }{1},
+}, {
+	"int decode from Ulong",
+	"\x12\x00\x00\x00?Val\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+	&struct{ Val int }{},
+	&struct{ Val int }{1},
+}, {
+	"int decode from Null",
+	"\n\x00\x00\x00\nVal\x00\x00",
+	&struct{ Val int }{1},
+	&struct{ Val int }{},
+}, {
+	"uint64 decode from Int",
+	"\x0e\x00\x00\x00\x10Val\x00\x01\x00\x00\x00\x00",
+	&struct{ Val uint64 }{},
+	&struct{ Val uint64 }{1},
+}, {
+	"uint64 decode from Long",
+	"\x12\x00\x00\x00\x12Val\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+	&struct{ Val uint64 }{},
+	&struct{ Val uint64 }{1},
+}, {
+	"uint64 decode from Ulong",
+	"\x12\x00\x00\x00?Val\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+	&struct{ Val uint64 }{},
+	&struct{ Val uint64 }{1},
+}, {
+	"uint64 decode from Null",
+	"\n\x00\x00\x00\nVal\x00\x00",
+	&struct{ Val uint64 }{1},
+	&struct{ Val uint64 }{},
+}, {
+	"uint32 decode from Int",
+	"\x0e\x00\x00\x00\x10Val\x00\x01\x00\x00\x00\x00",
+	&struct{ Val uint32 }{},
+	&struct{ Val uint32 }{1},
+}, {
+	"uint32 decode from Ulong",
+	"\x12\x00\x00\x00?Val\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+	&struct{ Val uint32 }{},
+	&struct{ Val uint32 }{1},
+}, {
+	"uint32 decode from Null",
+	"\n\x00\x00\x00\nVal\x00\x00",
+	&struct{ Val uint32 }{1},
+	&struct{ Val uint32 }{},
+}, {
+	"uint decode from Int",
+	"\x0e\x00\x00\x00\x10Val\x00\x01\x00\x00\x00\x00",
+	&struct{ Val uint }{},
+	&struct{ Val uint }{1},
+}, {
+	"uint decode from Long",
+	"\x12\x00\x00\x00\x12Val\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+	&struct{ Val uint }{},
+	&struct{ Val uint }{1},
+}, {
+	"uint decode from Ulong",
+	"\x12\x00\x00\x00?Val\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+	&struct{ Val uint }{},
+	&struct{ Val uint }{1},
+}, {
+	"uint decode from Null",
+	"\n\x00\x00\x00\nVal\x00\x00",
+	&struct{ Val uint }{1},
+	&struct{ Val uint }{},
+}, {
+	"float64 decode from Number",
+	"\x12\x00\x00\x00\x01Val\x00\x00\x00\x00\x00\x00\x00\xf0?\x00",
+	&struct{ Val float64 }{},
+	&struct{ Val float64 }{1.0},
+}, {
+	"float64 decode from Null",
+	"\n\x00\x00\x00\nVal\x00\x00",
+	&struct{ Val float64 }{1.0},
+	&struct{ Val float64 }{},
+}, {
+	"bool decode from Boolean",
+	"\v\x00\x00\x00\bVal\x00\x01\x00",
+	&struct{ Val bool }{},
+	&struct{ Val bool }{true},
+}, {
+	"bool decode from Int",
+	"\x0e\x00\x00\x00\x10Val\x00\x01\x00\x00\x00\x00",
+	&struct{ Val bool }{},
+	&struct{ Val bool }{true},
+}, {
+	"bool decode from Long",
+	"\x12\x00\x00\x00\x12Val\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+	&struct{ Val bool }{},
+	&struct{ Val bool }{true},
+}, {
+	"bool decode from Ulong",
+	"\x12\x00\x00\x00?Val\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+	&struct{ Val bool }{},
+	&struct{ Val bool }{true},
+}, {
+	"bool decode from Null",
+	"\n\x00\x00\x00\nVal\x00\x00",
+	&struct{ Val bool }{true},
+	&struct{ Val bool }{},
+}, {
+	"time decode from Datetime",
+	"\x12\x00\x00\x00\tVal\x00\x88\xf2\\\x8d\b\x01\x00\x00\x00",
+	&struct{ Val time.Time }{},
+	&struct{ Val time.Time }{time.Unix(1136243045, 0).UTC()},
+}, {
+	"time decode from Null",
+	"\n\x00\x00\x00\nVal\x00\x00",
+	&struct{ Val time.Time }{time.Unix(1136243045, 0).UTC()},
+	&struct{ Val time.Time }{},
+}, {
+	"interface decode from Number",
+	"\x12\x00\x00\x00\x01Val\x00\x00\x00\x00\x00\x00\x00\xf0?\x00",
+	&struct{ Val interface{} }{},
+	&struct{ Val interface{} }{float64(1.0)},
+}, {
 	"interface decode from String",
-	"\x15\x00\x00\x00\x02_Val_\x00\x05\x00\x00\x00test\x00\x00",
-	newinterface(nil),
-	newinterface("test"),
+	"\x13\x00\x00\x00\x02Val\x00\x05\x00\x00\x00test\x00\x00",
+	&struct{ Val interface{} }{},
+	&struct{ Val interface{} }{"test"},
 }, {
 	"interface decode from Binary",
-	"\x15\x00\x00\x00\x05_Val_\x00\x04\x00\x00\x00\x00test\x00",
-	newinterface(nil),
-	newinterface([]byte("test")),
+	"\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00",
+	&struct{ Val interface{} }{},
+	&struct{ Val interface{} }{[]byte("test")},
 }, {
 	"interface decode from Boolean",
-	"\r\x00\x00\x00\b_Val_\x00\x01\x00",
-	newinterface(nil),
-	newinterface(true),
+	"\v\x00\x00\x00\bVal\x00\x01\x00",
+	&struct{ Val interface{} }{},
+	&struct{ Val interface{} }{true},
 }, {
 	"interface decode from DateTime",
-	"\x14\x00\x00\x00\t_Val_\x00\x88\xf2\\\x8d\b\x01\x00\x00\x00",
-	newinterface(nil),
-	newinterface(time.Unix(1136243045, 0).UTC()),
+	"\x12\x00\x00\x00\tVal\x00\x88\xf2\\\x8d\b\x01\x00\x00\x00",
+	&struct{ Val interface{} }{},
+	&struct{ Val interface{} }{time.Unix(1136243045, 0).UTC()},
 }, {
 	"interface decode from Int",
-	"\x10\x00\x00\x00\x10_Val_\x00\x01\x00\x00\x00\x00",
-	newinterface(nil),
-	newinterface(int32(1)),
+	"\x0e\x00\x00\x00\x10Val\x00\x01\x00\x00\x00\x00",
+	&struct{ Val interface{} }{},
+	&struct{ Val interface{} }{int32(1)},
 }, {
 	"interface decode from Long",
-	"\x14\x00\x00\x00\x12_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
-	newinterface(nil),
-	newinterface(int64(1)),
+	"\x12\x00\x00\x00\x12Val\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+	&struct{ Val interface{} }{},
+	&struct{ Val interface{} }{int64(1)},
 }, {
 	"interface decode from Ulong",
-	"\x14\x00\x00\x00?_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
-	newinterface(nil),
-	newinterface(uint64(1)),
+	"\x12\x00\x00\x00?Val\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+	&struct{ Val interface{} }{},
+	&struct{ Val interface{} }{uint64(1)},
 }, {
 	"interface decode from Object",
-	"\x1f\x00\x00\x00\x03Inner\x00\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00\x00",
-	&struct{ Inner interface{} }{},
-	&struct{ Inner interface{} }{Inner: map[string]interface{}{"Val": []byte("test")}},
+	"\x1e\x00\x00\x00\x03Val\x00\x14\x00\x00\x00\x05Val2\x00\x04\x00\x00\x00\x00test\x00\x00",
+	&struct{ Val interface{} }{},
+	&struct{ Val interface{} }{map[string]interface{}{"Val2": []byte("test")}},
 }, {
 	"interface decode from Array",
-	"+\x00\x00\x00\x04Inner\x00\x1f\x00\x00\x00\x050\x00\x05\x00\x00\x00\x00test1\x051\x00\x05\x00\x00\x00\x00test2\x00\x00",
-	&struct{ Inner interface{} }{},
-	&struct{ Inner interface{} }{Inner: []interface{}{[]byte("test1"), []byte("test2")}},
+	"\x1b\x00\x00\x00\x04Val\x00\x11\x00\x00\x00\x050\x00\x04\x00\x00\x00\x00test\x00\x00",
+	&struct{ Val interface{} }{},
+	&struct{ Val interface{} }{[]interface{}{[]byte("test")}},
+}, {
+	"interface decode from Null",
+	"\n\x00\x00\x00\nVal\x00\x00",
+	&struct{ Val interface{} }{uint64(1)},
+	&struct{ Val interface{} }{},
+}, {
+	"pointer decode from Int",
+	"\x0e\x00\x00\x00\x10Val\x00\x01\x00\x00\x00\x00",
+	&struct{ Val *int64 }{},
+	&struct{ Val *int64 }{newint64(1)},
 }}
 
 func TestUnmarshal(t *testing.T) {
 	for _, tcase := range unmarshaltest {
 		verifyUnmarshal(t, []byte(tcase.in), tcase.out)
 		if !reflect.DeepEqual(tcase.out, tcase.want) {
-			t.Errorf("%s: decoded: \n%#v, want\n%#v", tcase.desc, tcase.out, tcase.want)
+			out := reflect.ValueOf(tcase.out).Elem().Interface()
+			want := reflect.ValueOf(tcase.want).Elem().Interface()
+			t.Fatalf("%s: decoded: \n%#v, want\n%#v", tcase.desc, out, want)
 		}
 	}
 }
