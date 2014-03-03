@@ -80,9 +80,9 @@ func UnmarshalFromBuffer(buf *bytes.Buffer, val interface{}) (err error) {
 		unmarshaler.UnmarshalBson(buf, EOO)
 		return nil
 	}
-	sb, terr := topLevelBuilder(val)
-	if terr != nil {
-		return terr
+	sb, err := topLevelBuilder(val)
+	if err != nil {
+		return err
 	}
 	decodeDocument(buf, sb, EOO)
 	sb.save()
@@ -95,12 +95,7 @@ func decodeDocument(buf *bytes.Buffer, builder *valueBuilder, kind byte) {
 	}
 	Next(buf, 4)
 	for kind := NextByte(buf); kind != EOO; kind = NextByte(buf) {
-		key := ReadCString(buf)
-		if kind == Null {
-			builder.setNull(key)
-			continue
-		}
-		b2 := builder.getField(key)
+		b2 := builder.initField(ReadCString(buf), kind)
 		if b2 == nil {
 			Skip(buf, kind)
 			continue
@@ -144,6 +139,8 @@ func decodeDocument(buf *bytes.Buffer, builder *valueBuilder, kind byte) {
 			}
 		case reflect.Interface:
 			b2.setInterface(DecodeInterface(buf, kind))
+		default:
+			panic(NewBsonError("cannot unmarshal into %v", b2.val.Kind()))
 		}
 		b2.save()
 	}
@@ -215,52 +212,7 @@ func (builder *valueBuilder) save() {
 	}
 }
 
-// setNull sets field k of builder to its zero value.
-func (builder *valueBuilder) setNull(k string) {
-	if k == MAGICTAG {
-		setZero(builder.val)
-		return
-	}
-
-	switch builder.val.Kind() {
-	case reflect.Struct:
-		t := builder.val.Type()
-		for i := 0; i < t.NumField(); i++ {
-			if t.Field(i).Name == k {
-				setZero(builder.val.Field(i))
-				return
-			}
-		}
-	case reflect.Map:
-		t := builder.val.Type()
-		if t.Key().Kind() != reflect.String {
-			panic(NewBsonError("map index is not a string: %s", k))
-		}
-		key := reflect.ValueOf(k)
-		zero := reflect.Zero(t.Elem())
-		builder.val.SetMapIndex(key, zero)
-		return
-	case reflect.Array:
-		if builder.index >= builder.val.Len() {
-			panic(NewBsonError("array index %v out of bounds", builder.index))
-		}
-		ind := builder.index
-		builder.index++
-		setZero(builder.val.Index(ind))
-		return
-	case reflect.Slice:
-		zero := reflect.Zero(builder.val.Type().Elem())
-		builder.val.Set(reflect.Append(builder.val, zero))
-		setZero(builder.val.Index(builder.val.Len() - 1))
-		return
-	}
-}
-
-func setZero(v reflect.Value) {
-	v.Set(reflect.Zero(v.Type()))
-}
-
-// getField returns a valueBuilder based on the requested key.
+// initField returns a valueBuilder based on the requested key.
 // If the key is a the magic tag _Val_, it returns itself.
 // If builder is a struct, it looks for a field of that name.
 // If builder is a map, it creates an entry for that key.
@@ -268,10 +220,14 @@ func setZero(v reflect.Value) {
 // element of the array.
 // If builder is a slice, it returns a newly appended element.
 // If the key cannot be resolved, it returns null.
-// key allocates memory as needed. So, bson Null values must
-// be handled before calling key.
-func (builder *valueBuilder) getField(k string) *valueBuilder {
+// If kind is Null, it initializes the field to the zero value.
+// Otherwise, it allocates memory as needed.
+func (builder *valueBuilder) initField(k string, kind byte) *valueBuilder {
 	if k == MAGICTAG {
+		if kind == Null {
+			setZero(builder.val)
+			return nil
+		}
 		return builder
 	}
 	switch builder.val.Kind() {
@@ -279,6 +235,10 @@ func (builder *valueBuilder) getField(k string) *valueBuilder {
 		t := builder.val.Type()
 		for i := 0; i < t.NumField(); i++ {
 			if t.Field(i).Name == k {
+				if kind == Null {
+					setZero(builder.val.Field(i))
+					return nil
+				}
 				return newValueBuilder(builder.val.Field(i))
 			}
 		}
@@ -289,6 +249,11 @@ func (builder *valueBuilder) getField(k string) *valueBuilder {
 			panic(NewBsonError("map index is not a string: %s", k))
 		}
 		key := reflect.ValueOf(k)
+		if kind == Null {
+			zero := reflect.Zero(t.Elem())
+			builder.val.SetMapIndex(key, zero)
+			return nil
+		}
 		return mapValueBuilder(t.Elem(), builder.val, key)
 	case reflect.Array:
 		if builder.index >= builder.val.Len() {
@@ -296,13 +261,25 @@ func (builder *valueBuilder) getField(k string) *valueBuilder {
 		}
 		ind := builder.index
 		builder.index++
+		if kind == Null {
+			setZero(builder.val.Index(ind))
+			return nil
+		}
 		return newValueBuilder(builder.val.Index(ind))
 	case reflect.Slice:
 		zero := reflect.Zero(builder.val.Type().Elem())
 		builder.val.Set(reflect.Append(builder.val, zero))
+		if kind == Null {
+			return nil
+		}
 		return newValueBuilder(builder.val.Index(builder.val.Len() - 1))
 	}
-	panic(NewBsonError("%s not supported as a BSON document", builder.val.Type()))
+	// Failsafe: this code is actually unreachable.
+	panic(NewBsonError("internal error: unindexable type %v", builder.val.Type()))
+}
+
+func setZero(v reflect.Value) {
+	v.Set(reflect.Zero(v.Type()))
 }
 
 func (builder *valueBuilder) setInt(i int64) {

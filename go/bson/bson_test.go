@@ -179,6 +179,11 @@ var unmarshaltest = []struct {
 }{{
 
 	// top level decodes
+	"top level nil decode",
+	"\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00",
+	nil,
+	nil,
+}, {
 	"top level struct decode",
 	"\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00",
 	&struct{ Val string }{},
@@ -578,7 +583,87 @@ func TestUnmarshal(t *testing.T) {
 		if !reflect.DeepEqual(tcase.out, tcase.want) {
 			out := reflect.ValueOf(tcase.out).Elem().Interface()
 			want := reflect.ValueOf(tcase.want).Elem().Interface()
-			t.Fatalf("%s: decoded: \n%#v, want\n%#v", tcase.desc, out, want)
+			t.Errorf("%s: decoded: \n%#v, want\n%#v", tcase.desc, out, want)
+		}
+	}
+}
+
+var marshalErrorCases = []struct {
+	desc string
+	in   interface{}
+	out  string
+}{{
+	"nil input",
+	nil,
+	"cannot marshal nil",
+}, {
+	"chan input",
+	make(chan int),
+	"unexpected type chan int",
+}, {
+	"embedded chan input",
+	struct{ Val chan int }{},
+	"don't know how to marshal chan int",
+}, {
+	"map with int key",
+	map[int]int{},
+	"can't marshall maps with non-string key types",
+}}
+
+func TestMarshalErrors(t *testing.T) {
+	for _, tcase := range marshalErrorCases {
+		_, err := Marshal(tcase.in)
+		got := ""
+		if err != nil {
+			got = err.Error()
+		}
+		if got != tcase.out {
+			t.Errorf("%s: received: %q, want %q", tcase.desc, got, tcase.out)
+		}
+	}
+}
+
+var unmarshalErrorCases = []struct {
+	desc string
+	in   string
+	out  interface{}
+	want string
+}{{
+	"non pointer input",
+	"",
+	10,
+	"expecting pointer value, received int",
+}, {
+	"invalid bson kind",
+	"\x0e\x00\x00\x00\x10Val\x00\x01\x00\x00\x00\x00",
+	&struct{ Val struct{ Val2 int } }{},
+	"unexpected kind: 16",
+}, {
+	"map with int key",
+	"\x0e\x00\x00\x00\x10Val\x00\x01\x00\x00\x00\x00",
+	&map[int]int{},
+	"map index is not a string: Val",
+}, {
+	"small array",
+	"\x1f\x00\x00\x00\x050\x00\x05\x00\x00\x00\x00test1\x051\x00\x05\x00\x00\x00\x00test2\x00",
+	&[1]string{},
+	"array index 1 out of bounds",
+}, {
+	"chan in struct",
+	"\x0e\x00\x00\x00\x10Val\x00\x01\x00\x00\x00\x00",
+	&struct{ Val chan int }{},
+	"cannot unmarshal into chan",
+}}
+
+func TestUnmarshalErrors(t *testing.T) {
+	for _, tcase := range unmarshalErrorCases {
+		err := Unmarshal([]byte(tcase.in), tcase.out)
+		got := ""
+		if err != nil {
+			got = err.Error()
+		}
+		if got != tcase.want {
+			t.Errorf("%s: received: %q, want %q", tcase.desc, got, tcase.want)
 		}
 	}
 }

@@ -90,7 +90,7 @@ func Marshal(val interface{}) (encoded []byte, err error) {
 func MarshalToBuffer(buf *bytes2.ChunkedWriter, val interface{}) (err error) {
 	defer handleError(&err)
 	if val == nil {
-		return NewBsonError("Cannot marshal empty object")
+		return NewBsonError("cannot marshal nil")
 	}
 
 	v := reflect.Indirect(reflect.ValueOf(val))
@@ -120,7 +120,7 @@ func MarshalToBuffer(buf *bytes2.ChunkedWriter, val interface{}) (err error) {
 			encodeSliceContent(buf, v)
 		}
 	default:
-		return NewBsonError("Unexpected type %v\n", v.Type())
+		return NewBsonError("unexpected type %v", v.Type())
 	}
 	return nil
 }
@@ -189,10 +189,8 @@ func encodeField(buf *bytes2.ChunkedWriter, key string, val reflect.Value) {
 		} else {
 			encodeField(buf, key, val.Elem())
 		}
-	case reflect.Invalid: // nil interfaces are represented like this
-		EncodePrefix(buf, Null, key)
 	default:
-		panic(NewBsonError("don't know how to marshal %v\n", val.Type()))
+		panic(NewBsonError("don't know how to marshal %v", val.Type()))
 	}
 }
 
