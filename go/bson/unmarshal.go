@@ -233,8 +233,8 @@ func (builder *valueBuilder) setNull(k string) {
 		}
 	case reflect.Map:
 		t := builder.val.Type()
-		if t.Key() != reflect.TypeOf(k) {
-			break
+		if t.Key().Kind() != reflect.String {
+			panic(NewBsonError("map index is not a string: %s", k))
 		}
 		key := reflect.ValueOf(k)
 		zero := reflect.Zero(t.Elem())
@@ -286,7 +286,7 @@ func (builder *valueBuilder) getField(k string) *valueBuilder {
 	case reflect.Map:
 		t := builder.val.Type()
 		if t.Key().Kind() != reflect.String {
-			break
+			panic(NewBsonError("map index is not a string: %s", k))
 		}
 		key := reflect.ValueOf(k)
 		return mapValueBuilder(t.Elem(), builder.val, key)

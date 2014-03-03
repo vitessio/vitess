@@ -26,9 +26,17 @@ var marshaltest = []struct {
 	struct{ Val *int }{},
 	"\n\x00\x00\x00\nVal\x00\x00",
 }, {
+	"struct encode nil interface",
+	struct{ Val interface{} }{},
+	"\n\x00\x00\x00\nVal\x00\x00",
+}, {
 	"map encode",
 	map[string]string{"Val": "test"},
 	"\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00",
+}, {
+	"embedded map encode",
+	struct{ Inner map[string]string }{map[string]string{"Val": "test"}},
+	"\x1f\x00\x00\x00\x03Inner\x00\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00\x00",
 }, {
 	"slice encode",
 	[]string{"test1", "test2"},
@@ -37,6 +45,10 @@ var marshaltest = []struct {
 	"embedded slice encode",
 	struct{ Inner []string }{[]string{"test1", "test2"}},
 	"+\x00\x00\x00\x04Inner\x00\x1f\x00\x00\x00\x050\x00\x05\x00\x00\x00\x00test1\x051\x00\x05\x00\x00\x00\x00test2\x00\x00",
+}, {
+	"embedded slice encode nil",
+	struct{ Inner []string }{},
+	"\f\x00\x00\x00\nInner\x00\x00",
 }, {
 	"array encode",
 	[2]string{"test1", "test2"},
@@ -93,9 +105,17 @@ var marshaltest = []struct {
 	struct{ Val struct{ Val2 string } }{struct{ Val2 string }{"test"}},
 	"\x1e\x00\x00\x00\x03Val\x00\x14\x00\x00\x00\x05Val2\x00\x04\x00\x00\x00\x00test\x00\x00",
 }, {
+	"embedded Object encode nil element",
+	struct{ Val struct{ Val2 *int64 } }{struct{ Val2 *int64 }{nil}},
+	"\x15\x00\x00\x00\x03Val\x00\v\x00\x00\x00\nVal2\x00\x00\x00",
+}, {
 	"embedded Array encode",
 	struct{ Val []string }{Val: []string{"test"}},
 	"\x1b\x00\x00\x00\x04Val\x00\x11\x00\x00\x00\x050\x00\x04\x00\x00\x00\x00test\x00\x00",
+}, {
+	"Array encode nil element",
+	struct{ Val []*int64 }{Val: []*int64{nil, newint64(1)}},
+	"\x1d\x00\x00\x00\x04Val\x00\x13\x00\x00\x00\n0\x00\x121\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00",
 }, {
 	"embedded Number encode",
 	struct{ Val float64 }{1.0},
@@ -266,6 +286,11 @@ var unmarshaltest = []struct {
 	&struct{ Val map[string]string }{map[string]string{"Val2": "test"}},
 	&struct{ Val map[string]string }{},
 }, {
+	"map decode from Null element",
+	"\x15\x00\x00\x00\x03Val\x00\v\x00\x00\x00\nVal2\x00\x00\x00",
+	&struct{ Val map[string]string }{},
+	&struct{ Val map[string]string }{map[string]string{"Val2": ""}},
+}, {
 	"slice decode from Array",
 	"\x1b\x00\x00\x00\x04Val\x00\x11\x00\x00\x00\x050\x00\x04\x00\x00\x00\x00test\x00\x00",
 	&struct{ Val []string }{},
@@ -276,6 +301,11 @@ var unmarshaltest = []struct {
 	&struct{ Val []string }{[]string{"test"}},
 	&struct{ Val []string }{},
 }, {
+	"slice decode from Null element",
+	"\x1d\x00\x00\x00\x04Val\x00\x13\x00\x00\x00\n0\x00\x121\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00",
+	&struct{ Val []*int64 }{},
+	&struct{ Val []*int64 }{[]*int64{nil, newint64(1)}},
+}, {
 	"array decode from Array",
 	"\x1b\x00\x00\x00\x04Val\x00\x11\x00\x00\x00\x050\x00\x04\x00\x00\x00\x00test\x00\x00",
 	&struct{ Val [2]string }{},
@@ -285,6 +315,11 @@ var unmarshaltest = []struct {
 	"\n\x00\x00\x00\nVal\x00\x00",
 	&struct{ Val [2]string }{[2]string{"test", ""}},
 	&struct{ Val [2]string }{},
+}, {
+	"array decode from Null element",
+	"\x1d\x00\x00\x00\x04Val\x00\x13\x00\x00\x00\n0\x00\x121\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00",
+	&struct{ Val [2]*int64 }{},
+	&struct{ Val [2]*int64 }{[2]*int64{nil, newint64(1)}},
 }, {
 	"string decode from String",
 	"\x13\x00\x00\x00\x02Val\x00\x05\x00\x00\x00test\x00\x00",
@@ -511,10 +546,20 @@ var unmarshaltest = []struct {
 	&struct{ Val interface{} }{},
 	&struct{ Val interface{} }{map[string]interface{}{"Val2": []byte("test")}},
 }, {
+	"interface decode from Object with Null element",
+	"\x15\x00\x00\x00\x03Val\x00\v\x00\x00\x00\nVal2\x00\x00\x00",
+	&struct{ Val interface{} }{},
+	&struct{ Val interface{} }{map[string]interface{}{"Val2": nil}},
+}, {
 	"interface decode from Array",
 	"\x1b\x00\x00\x00\x04Val\x00\x11\x00\x00\x00\x050\x00\x04\x00\x00\x00\x00test\x00\x00",
 	&struct{ Val interface{} }{},
 	&struct{ Val interface{} }{[]interface{}{[]byte("test")}},
+}, {
+	"interface decode from Array null element",
+	"\x1d\x00\x00\x00\x04Val\x00\x13\x00\x00\x00\n0\x00\x121\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00",
+	&struct{ Val interface{} }{},
+	&struct{ Val interface{} }{[]interface{}{nil, int64(1)}},
 }, {
 	"interface decode from Null",
 	"\n\x00\x00\x00\nVal\x00\x00",
@@ -857,12 +902,18 @@ func TestIgnorePrivateFields(t *testing.T) {
 
 type LotsMoreFields struct {
 	CommonField1 string
-	ExtraField1  string
-	ExtraField2  HasPrivate
-	ExtraField3  []string
-	ExtraField4  int
+	ExtraField1  float64
+	ExtraField2  string
+	ExtraField3  HasPrivate
+	ExtraField4  []string
 	CommonField2 string
-	ExtraField5  uint64
+	ExtraField5  []byte
+	ExtraField6  bool
+	ExtraField7  time.Time
+	ExtraField8  *int
+	ExtraField9  int32
+	ExtraField10 int64
+	ExtraField11 uint64
 }
 
 type LotsFewerFields struct {
@@ -873,12 +924,14 @@ type LotsFewerFields struct {
 func TestSkipUnknownFields(t *testing.T) {
 	v := LotsMoreFields{
 		CommonField1: "value1",
-		ExtraField1:  "value2",
-		ExtraField2:  HasPrivate{private: "private", Public: "public"},
-		ExtraField3:  []string{"s1", "s2"},
+		ExtraField1:  1.0,
+		ExtraField2:  "abcd",
+		ExtraField3:  HasPrivate{private: "private", Public: "public"},
+		ExtraField4:  []string{"s1", "s2"},
 		CommonField2: "value3",
-		ExtraField4:  6455,
-		ExtraField5:  345,
+		ExtraField5:  []byte("abcd"),
+		ExtraField6:  true,
+		ExtraField7:  time.Now(),
 	}
 	marshaled := verifyMarshal(t, v)
 	unmarshaled := LotsFewerFields{}
