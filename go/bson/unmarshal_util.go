@@ -38,7 +38,7 @@ func DecodeString(buf *bytes.Buffer, kind byte) string {
 	case Null:
 		return ""
 	}
-	panic(NewBsonError("Unexpected data type %v for string", kind))
+	panic(NewBsonError("unexpected kind %v for string", kind))
 }
 
 // DecodeBinary decodes a []byte from buf.
@@ -57,7 +57,7 @@ func DecodeBinary(buf *bytes.Buffer, kind byte) []byte {
 	case Null:
 		return nil
 	}
-	panic(NewBsonError("Unexpected data type %v for string", kind))
+	panic(NewBsonError("unexpected kind %v for []byte", kind))
 }
 
 // DecodeInt64 decodes a int64 from buf.
@@ -71,7 +71,7 @@ func DecodeInt64(buf *bytes.Buffer, kind byte) int64 {
 	case Null:
 		return 0
 	}
-	panic(NewBsonError("Unexpected data type %v for int", kind))
+	panic(NewBsonError("unexpected kind %v for int64", kind))
 }
 
 // DecodeInt32 decodes a int32 from buf.
@@ -83,7 +83,7 @@ func DecodeInt32(buf *bytes.Buffer, kind byte) int32 {
 	case Null:
 		return 0
 	}
-	panic(NewBsonError("Unexpected data type %v for int", kind))
+	panic(NewBsonError("unexpected kind %v for int32", kind))
 }
 
 // DecodeInt decodes a int64 from buf.
@@ -97,7 +97,7 @@ func DecodeInt(buf *bytes.Buffer, kind byte) int {
 	case Null:
 		return 0
 	}
-	panic(NewBsonError("Unexpected data type %v for int", kind))
+	panic(NewBsonError("unexpected kind %v for int", kind))
 }
 
 // DecodeUint64 decodes a uint64 from buf.
@@ -111,7 +111,7 @@ func DecodeUint64(buf *bytes.Buffer, kind byte) uint64 {
 	case Null:
 		return 0
 	}
-	panic(NewBsonError("Unexpected data type %v for int", kind))
+	panic(NewBsonError("unexpected kind %v for uint64", kind))
 }
 
 // DecodeUint32 decodes a uint32 from buf.
@@ -125,7 +125,7 @@ func DecodeUint32(buf *bytes.Buffer, kind byte) uint32 {
 	case Null:
 		return 0
 	}
-	panic(NewBsonError("Unexpected data type %v for int", kind))
+	panic(NewBsonError("unexpected kind %v for uint32", kind))
 }
 
 // DecodeUint decodes a uint64 from buf.
@@ -139,7 +139,7 @@ func DecodeUint(buf *bytes.Buffer, kind byte) uint {
 	case Null:
 		return 0
 	}
-	panic(NewBsonError("Unexpected data type %v for int", kind))
+	panic(NewBsonError("unexpected kind %v for uint", kind))
 }
 
 // DecodeFloat64 decodes a float64 from buf.
@@ -151,7 +151,7 @@ func DecodeFloat64(buf *bytes.Buffer, kind byte) float64 {
 	case Null:
 		return 0
 	}
-	panic(NewBsonError("Unexpected data type %v for int", kind))
+	panic(NewBsonError("unexpected kind %v for float64", kind))
 }
 
 // DecodeBool decodes a bool from buf.
@@ -168,7 +168,7 @@ func DecodeBool(buf *bytes.Buffer, kind byte) bool {
 	case Null:
 		return false
 	default:
-		panic(NewBsonError("Unexpected data type %v for boolean", kind))
+		panic(NewBsonError("unexpected kind %v for bool", kind))
 	}
 }
 
@@ -182,7 +182,7 @@ func DecodeTime(buf *bytes.Buffer, kind byte) time.Time {
 	case Null:
 		return time.Time{}
 	}
-	panic(NewBsonError("Unexpected data type %v for time", kind))
+	panic(NewBsonError("unexpected kind %v for time.Time", kind))
 }
 
 // DecodeInterface decodes the next object into an interface.
@@ -213,7 +213,7 @@ func DecodeInterface(buf *bytes.Buffer, kind byte) interface{} {
 	case Ulong:
 		return DecodeUint64(buf, kind)
 	}
-	panic(NewBsonError("Unexpected bson kind %v for interface", kind))
+	panic(NewBsonError("unexpected kind %v for interface{}", kind))
 }
 
 // DecodeMap decodes a map[string]interface{} from buf.
@@ -225,7 +225,7 @@ func DecodeMap(buf *bytes.Buffer, kind byte) map[string]interface{} {
 	case Null:
 		return nil
 	default:
-		panic(NewBsonError("Unexpected data type %v for string array", kind))
+		panic(NewBsonError("unexpected kind %v for map", kind))
 	}
 
 	result := make(map[string]interface{})
@@ -250,7 +250,7 @@ func DecodeArray(buf *bytes.Buffer, kind byte) []interface{} {
 	case Null:
 		return nil
 	default:
-		panic(NewBsonError("Unexpected data type %v for string array", kind))
+		panic(NewBsonError("unexpected kind %v for slice", kind))
 	}
 
 	result := make([]interface{}, 0, 8)
@@ -275,14 +275,14 @@ func DecodeStringArray(buf *bytes.Buffer, kind byte) []string {
 	case Null:
 		return nil
 	default:
-		panic(NewBsonError("Unexpected data type %v for string array", kind))
+		panic(NewBsonError("unexpected kind %v for []string", kind))
 	}
 
 	result := make([]string, 0, 8)
 	Next(buf, 4)
 	for kind := NextByte(buf); kind != EOO; kind = NextByte(buf) {
 		if kind != Binary {
-			panic(NewBsonError("Unexpected data type %v for string array", kind))
+			panic(NewBsonError("unexpected kind %v for string", kind))
 		}
 		SkipIndex(buf)
 		result = append(result, DecodeString(buf, kind))
@@ -317,7 +317,7 @@ func Skip(buf *bytes.Buffer, kind byte) {
 	case Null:
 		// no op
 	default:
-		panic(NewBsonError("don't know how to skip kind %v yet", kind))
+		panic(NewBsonError("unexpected kind %v for skip", kind))
 	}
 }
 
@@ -330,7 +330,7 @@ func SkipIndex(buf *bytes.Buffer) {
 func ReadCString(buf *bytes.Buffer) string {
 	index := bytes.IndexByte(buf.Bytes(), 0)
 	if index < 0 {
-		panic(NewBsonError("Unexpected EOF"))
+		panic(NewBsonError("unexpected EOF"))
 	}
 	// Read including null termination, but
 	// return the string without the null.
@@ -341,7 +341,7 @@ func ReadCString(buf *bytes.Buffer) string {
 func Next(buf *bytes.Buffer, n int) []byte {
 	b := buf.Next(n)
 	if len(b) != n {
-		panic(NewBsonError("Unexpected EOF"))
+		panic(NewBsonError("unexpected EOF"))
 	}
 	return b[:n:n]
 }

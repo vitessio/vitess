@@ -139,6 +139,11 @@ func EncodeField(buf *bytes2.ChunkedWriter, key string, val interface{}) {
 }
 
 func encodeField(buf *bytes2.ChunkedWriter, key string, val reflect.Value) {
+	// nil interfaces show up as invalid
+	if !val.IsValid() {
+		EncodePrefix(buf, Null, key)
+		return
+	}
 	if marshaler := canMarshal(val); marshaler != nil {
 		marshaler.MarshalBson(buf, key)
 		return
