@@ -964,6 +964,96 @@ var customUnmarshalCases = []struct {
 	func(buf *bytes.Buffer, kind byte) interface{} { return DecodeArray(buf, kind) },
 	[]interface{}(nil),
 }, {
+	"Number->Skip",
+	"\x00\x00\x00\x00\x00\x00\xf0?",
+	Number,
+	func(buf *bytes.Buffer, kind byte) interface{} { Skip(buf, kind); return nil },
+	nil,
+}, {
+	"String->Skip",
+	"\x05\x00\x00\x00test\x00",
+	String,
+	func(buf *bytes.Buffer, kind byte) interface{} { Skip(buf, kind); return nil },
+	nil,
+}, {
+	"Object->Skip",
+	"\x14\x00\x00\x00\x05Val2\x00\x04\x00\x00\x00\x00test\x00",
+	Object,
+	func(buf *bytes.Buffer, kind byte) interface{} { Skip(buf, kind); return nil },
+	nil,
+}, {
+	"Object->Skip with null element",
+	"\v\x00\x00\x00\nVal2\x00\x00",
+	Object,
+	func(buf *bytes.Buffer, kind byte) interface{} { Skip(buf, kind); return nil },
+	nil,
+}, {
+	"Array->Skip",
+	"\x11\x00\x00\x00\x050\x00\x04\x00\x00\x00\x00test\x00",
+	Array,
+	func(buf *bytes.Buffer, kind byte) interface{} { Skip(buf, kind); return nil },
+	nil,
+}, {
+	"Array->Skip with null element",
+	"\x13\x00\x00\x00\n0\x00\x121\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+	Array,
+	func(buf *bytes.Buffer, kind byte) interface{} { Skip(buf, kind); return nil },
+	nil,
+}, {
+	"Binary->Skip",
+	"\x04\x00\x00\x00\x00test",
+	Binary,
+	func(buf *bytes.Buffer, kind byte) interface{} { Skip(buf, kind); return nil },
+	nil,
+}, {
+	"Boolean->Skip",
+	"\x01",
+	Boolean,
+	func(buf *bytes.Buffer, kind byte) interface{} { Skip(buf, kind); return nil },
+	nil,
+}, {
+	"Datetime->Skip",
+	"\x88\xf2\\\x8d\b\x01\x00\x00",
+	Datetime,
+	func(buf *bytes.Buffer, kind byte) interface{} { Skip(buf, kind); return nil },
+	nil,
+}, {
+	"Int->Skip",
+	"\x01\x00\x00\x00",
+	Int,
+	func(buf *bytes.Buffer, kind byte) interface{} { Skip(buf, kind); return nil },
+	nil,
+}, {
+	"Long->Skip",
+	"\x01\x00\x00\x00\x00\x00\x00\x00",
+	Long,
+	func(buf *bytes.Buffer, kind byte) interface{} { Skip(buf, kind); return nil },
+	nil,
+}, {
+	"Ulong->Skip",
+	"\x01\x00\x00\x00\x00\x00\x00\x00",
+	Ulong,
+	func(buf *bytes.Buffer, kind byte) interface{} { Skip(buf, kind); return nil },
+	nil,
+}, {
+	"Null->Skip",
+	"",
+	Null,
+	func(buf *bytes.Buffer, kind byte) interface{} { Skip(buf, kind); return nil },
+	nil,
+}, {
+	"Null->map[string]interface{}",
+	"",
+	Null,
+	func(buf *bytes.Buffer, kind byte) interface{} { return DecodeMap(buf, kind) },
+	map[string]interface{}(nil),
+}, {
+	"Null->[]interface{}",
+	"",
+	Null,
+	func(buf *bytes.Buffer, kind byte) interface{} { return DecodeArray(buf, kind) },
+	[]interface{}(nil),
+}, {
 	"Array->[]string",
 	"\x1f\x00\x00\x00\x050\x00\x05\x00\x00\x00\x00test1\x051\x00\x05\x00\x00\x00\x00test2\x00",
 	Array,
@@ -1084,6 +1174,16 @@ func TestCustomUnmarshalFailures(t *testing.T) {
 				t.Errorf("got no error, want %s", want)
 			}()
 		}
+	}
+}
+
+func TestEncodeFieldNil(t *testing.T) {
+	buf := bytes2.NewChunkedWriter(DefaultBufferSize)
+	EncodeField(buf, "Val", nil)
+	got := string(buf.Bytes())
+	want := "\nVal\x00"
+	if got != want {
+		t.Errorf("nil encode: got %q, want %q", got, want)
 	}
 }
 

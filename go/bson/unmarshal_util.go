@@ -330,7 +330,7 @@ func SkipIndex(buf *bytes.Buffer) {
 func ReadCString(buf *bytes.Buffer) string {
 	index := bytes.IndexByte(buf.Bytes(), 0)
 	if index < 0 {
-		panic(NewBsonError("Unexpected EOF"))
+		panic(NewBsonError("unexpected EOF"))
 	}
 	// Read including null termination, but
 	// return the string without the null.
@@ -341,7 +341,7 @@ func ReadCString(buf *bytes.Buffer) string {
 func Next(buf *bytes.Buffer, n int) []byte {
 	b := buf.Next(n)
 	if len(b) != n {
-		panic(NewBsonError("Unexpected EOF"))
+		panic(NewBsonError("unexpected EOF"))
 	}
 	return b[:n:n]
 }
