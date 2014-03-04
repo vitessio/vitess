@@ -2,23 +2,21 @@ package janitor
 
 import (
 	"errors"
+	"github.com/youtube/vitess/go/vt/wrangler"
 	"math"
 	"testing"
 	"time"
-
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
 //var testCells = []string{"oe", "wj"}
 
 type testJanitor struct {
 	run       func(bool) error
-	configure func(ts topo.Server, wr *wrangler.Wrangler, keyspace, shard string) error
+	configure func(wr *wrangler.Wrangler, keyspace, shard string) error
 }
 
-func (janitor *testJanitor) Configure(ts topo.Server, wr *wrangler.Wrangler, keyspace, shard string) error {
-	return janitor.configure(ts, wr, keyspace, shard)
+func (janitor *testJanitor) Configure(wr *wrangler.Wrangler, keyspace, shard string) error {
+	return janitor.configure(wr, keyspace, shard)
 }
 
 func (janitor *testJanitor) Run(active bool) error {
@@ -28,7 +26,7 @@ func (janitor *testJanitor) Run(active bool) error {
 func newTestJanitor() *testJanitor {
 	return &testJanitor{
 		run: func(bool) error { return nil },
-		configure: func(ts topo.Server, wr *wrangler.Wrangler, keyspace, shard string) error {
+		configure: func(wr *wrangler.Wrangler, keyspace, shard string) error {
 			return nil
 		},
 	}

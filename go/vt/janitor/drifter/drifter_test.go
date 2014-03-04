@@ -42,7 +42,7 @@ func TestUpdate(t *testing.T) {
 
 	janitor := New()
 
-	if err := janitor.Configure(fix.Topo, fix.Wrangler, faketopo.TestKeyspace, faketopo.TestShard); err != nil {
+	if err := janitor.Configure(fix.Wrangler, faketopo.TestKeyspace, faketopo.TestShard); err != nil {
 		t.Fatal(err)
 	}
 

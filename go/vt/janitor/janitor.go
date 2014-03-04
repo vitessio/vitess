@@ -47,7 +47,7 @@ type Janitor interface {
 	Run(active bool) error
 
 	// Initialize initializes the Janitor.
-	Configure(ts topo.Server, wr *wrangler.Wrangler, keyspace, shard string) error
+	Configure(wr *wrangler.Wrangler, keyspace, shard string) error
 }
 
 type Scheduler struct {
@@ -139,7 +139,7 @@ func (scheduler *Scheduler) enable(name string, active bool) error {
 		return fmt.Errorf("janitor not registered: %q", name)
 	}
 	scheduler.janitors[name] = &JanitorInfo{Janitor: janitor, Active: active}
-	return janitor.Configure(scheduler.ts, scheduler.wrangler, scheduler.Keyspace, scheduler.Shard)
+	return janitor.Configure(scheduler.wrangler, scheduler.Keyspace, scheduler.Shard)
 }
 
 func (scheduler *Scheduler) Enable(janitorNames []string) error {

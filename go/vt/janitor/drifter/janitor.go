@@ -94,8 +94,8 @@ type Janitor struct {
 	History *history.History
 }
 
-func (janitor *Janitor) Configure(ts topo.Server, wr *wrangler.Wrangler, keyspace, shard string) error {
-	janitor.ts = ts
+func (janitor *Janitor) Configure(wr *wrangler.Wrangler, keyspace, shard string) error {
+	janitor.ts = wr.TopoServer()
 	janitor.wr = wr
 	janitor.Keyspace = keyspace
 	janitor.Shard = shard
