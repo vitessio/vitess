@@ -1,6 +1,7 @@
 package servenv
 
 import (
+	"flag"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -14,18 +15,20 @@ import (
 var (
 	onCloseHooks hooks
 
+	Port = flag.Int("port", 0, "port for the server")
+
 	// filled in when calling Run or RunSecure
 	ListeningURL url.URL
 )
 
-// Run starts listening for RPC and HTTP requests on the given port,
+// Run starts listening for RPC and HTTP requests,
 // and blocks until it the process gets a signal.
 // It may also listen on a secure port, or on a unix socket.
-func Run(port int) {
+func Run() {
 	onRunHooks.Fire()
 	ServeRPC()
 
-	l, err := proc.Listen(fmt.Sprintf("%v", port))
+	l, err := proc.Listen(fmt.Sprintf("%v", *Port))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -39,7 +42,7 @@ func Run(port int) {
 	}
 	ListeningURL = url.URL{
 		Scheme: "http",
-		Host:   fmt.Sprintf("%v:%v", host, port),
+		Host:   fmt.Sprintf("%v:%v", host, *Port),
 		Path:   "/",
 	}
 

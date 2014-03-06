@@ -31,7 +31,6 @@ import (
 
 var (
 	cell = flag.String("cell", "", "cell to pick servers from")
-	port = flag.Int("port", 8080, "port for the status / interactive mode")
 )
 
 // signal handling, centralized here
@@ -98,5 +97,5 @@ func main() {
 	}
 	initStatusHandling()
 
-	servenv.Run(*port)
+	servenv.Run()
 }

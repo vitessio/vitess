@@ -21,7 +21,6 @@ import (
 )
 
 var (
-	port           = flag.Int("port", 6509, "port for the server")
 	tabletPath     = flag.String("tablet-path", "", "tablet alias or path to zk node representing the tablet")
 	mycnfFile      = flag.String("mycnf-file", "", "my.cnf file")
 	enableRowcache = flag.Bool("enable-rowcache", false, "enable rowcacche")
@@ -57,7 +56,7 @@ func main() {
 	binlog.RegisterUpdateStreamService(mycnf)
 
 	// Depends on both query and updateStream.
-	agent, err = vttablet.InitAgent(tabletAlias, dbcfgs, mycnf, *port, *servenv.SecurePort, *overridesFile)
+	agent, err = vttablet.InitAgent(tabletAlias, dbcfgs, mycnf, *servenv.Port, *servenv.SecurePort, *overridesFile)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -70,5 +69,5 @@ func main() {
 		topo.CloseServers()
 		agent.Stop()
 	})
-	servenv.Run(*port)
+	servenv.Run()
 }
