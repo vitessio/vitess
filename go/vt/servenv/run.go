@@ -56,6 +56,7 @@ func RunSecure(port int, securePort int, cert, key, caCert string) {
 		log.Infof("listening on secure port %v", securePort)
 		SecureServe(fmt.Sprintf(":%d", securePort), cert, key, caCert)
 	}
+	serveSocketFile()
 	proc.Wait()
 	l.Close()
 	Close()

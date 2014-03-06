@@ -331,7 +331,10 @@ def zkocc_kill(sp):
   sp.wait()
 
 # vtgate helpers, assuming it always restarts on the same port
-def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1, topo_impl=None, tablet_bson_encrypted=False, cache_ttl='1s', auth=False, timeout="5s", cert=None, key=None, ca_cert=None):
+def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1,
+                 topo_impl=None, tablet_bson_encrypted=False, cache_ttl='1s',
+                 auth=False, timeout="5s", cert=None, key=None, ca_cert=None,
+                 socket_file=None):
   port = vtport or environment.reserve_ports(1)
   secure_port = None
   args = [environment.binary_path('vtgate'),
@@ -358,6 +361,8 @@ def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1, topo
                  '-key', key])
     if ca_cert:
       args.extend(['-ca-cert', ca_cert])
+  if socket_file:
+    args.extend(['-socket_file', socket_file])
 
   sp = run_bg(args)
   if cert:
