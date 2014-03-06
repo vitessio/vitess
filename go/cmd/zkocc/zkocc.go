@@ -18,7 +18,8 @@ import (
 var usage = `Cache open zookeeper connections and allow cheap read requests
 through a lightweight RPC interface.  The optional parameters are cell
 names to try to connect to at startup, versus waiting for the first
-request to connect.`
+request to connect.
+`
 
 var (
 	resolveLocal = flag.Bool("resolve-local", false, "if specified, will try to resolve /zk/local/ paths. If not set, they will fail.")

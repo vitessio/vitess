@@ -18,13 +18,14 @@ var (
 
 func serveSocketFile() {
 	if *socketFile == "" {
+		log.Infof("Not listening on socket file")
 		return
 	}
 
-	log.Infof("Listening on socket file %v", *socketFile)
 	l, err := net.Listen("unix", *socketFile)
 	if err != nil {
 		log.Fatalf("Error listening on socket file %v: %v", *socketFile, err)
 	}
+	log.Infof("Listening on socket file %v", *socketFile)
 	go http.Serve(l, nil)
 }

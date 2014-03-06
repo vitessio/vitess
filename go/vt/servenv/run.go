@@ -20,15 +20,8 @@ var (
 
 // Run starts listening for RPC and HTTP requests on the given port,
 // and blocks until it the process gets a signal.
+// It may also listen on a secure port, or on a unix socket.
 func Run(port int) {
-	onRunHooks.Fire()
-	RunSecure(port, 0, "", "", "")
-}
-
-// RunSecure is like Run, but it additionally listens for RPC and HTTP
-// requests using TLS on securePort, using the passed certificate,
-// key, and CA certificate.
-func RunSecure(port int, securePort int, cert, key, caCert string) {
 	onRunHooks.Fire()
 	ServeRPC()
 
@@ -51,12 +44,9 @@ func RunSecure(port int, securePort int, cert, key, caCert string) {
 	}
 
 	go http.Serve(l, nil)
-
-	if securePort != 0 {
-		log.Infof("listening on secure port %v", securePort)
-		SecureServe(fmt.Sprintf(":%d", securePort), cert, key, caCert)
-	}
+	serveSecurePort()
 	serveSocketFile()
+
 	proc.Wait()
 	l.Close()
 	Close()

@@ -27,11 +27,6 @@ var (
 	enableRowcache = flag.Bool("enable-rowcache", false, "enable rowcacche")
 	overridesFile  = flag.String("schema-override", "", "schema overrides file")
 
-	securePort = flag.Int("secure-port", 0, "port for the secure server")
-	cert       = flag.String("cert", "", "cert file")
-	key        = flag.String("key", "", "key file")
-	caCert     = flag.String("ca-cert", "", "ca-cert file")
-
 	agent *tabletmanager.ActionAgent
 )
 
@@ -62,7 +57,7 @@ func main() {
 	binlog.RegisterUpdateStreamService(mycnf)
 
 	// Depends on both query and updateStream.
-	agent, err = vttablet.InitAgent(tabletAlias, dbcfgs, mycnf, *port, *securePort, *overridesFile)
+	agent, err = vttablet.InitAgent(tabletAlias, dbcfgs, mycnf, *port, *servenv.SecurePort, *overridesFile)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -75,5 +70,5 @@ func main() {
 		topo.CloseServers()
 		agent.Stop()
 	})
-	servenv.RunSecure(*port, *securePort, *cert, *key, *caCert)
+	servenv.Run(*port)
 }
