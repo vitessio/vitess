@@ -360,7 +360,7 @@ def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1,
                  '-cert', cert,
                  '-key', key])
     if ca_cert:
-      args.extend(['-ca-cert', ca_cert])
+      args.extend(['-ca_cert', ca_cert])
   if socket_file:
     args.extend(['-socket_file', socket_file])
 

@@ -317,7 +317,7 @@ class Tablet(object):
                    '-cert', cert,
                    '-key', key])
       if ca_cert:
-        args.extend(['-ca-cert', ca_cert])
+        args.extend(['-ca_cert', ca_cert])
 
     stderr_fd = open(os.path.join(self.tablet_dir, "vttablet.stderr"), "w")
     # increment count only the first time
