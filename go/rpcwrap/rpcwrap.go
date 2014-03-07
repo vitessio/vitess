@@ -123,14 +123,10 @@ func ServeRPC(codecName string, cFactory ServerCodecFactory) {
 	http.Handle(GetRpcPath(codecName, false), &rpcHandler{cFactory, false})
 }
 
-// ServeRPC handles rpc requests using the hijack scheme of rpc
+// ServeAuthRPC handles authenticated rpc requests using the hijack
+// scheme of rpc
 func ServeAuthRPC(codecName string, cFactory ServerCodecFactory) {
 	http.Handle(GetRpcPath(codecName, true), &rpcHandler{cFactory, true})
-}
-
-// ServeHTTP handles rpc requests in HTTP compliant POST form
-func ServeHTTP(codecName string, cFactory ServerCodecFactory) {
-	http.Handle(GetHttpPath(codecName), &httpHandler{cFactory})
 }
 
 // AuthenticatedServer is an rpc.Server instance that serves
@@ -148,6 +144,12 @@ func RegisterAuthenticated(rcvr interface{}) error {
 	return AuthenticatedServer.Register(rcvr)
 }
 
+// rpcHandler handles rpc queries for a 'CONNECT' method.
+type rpcHandler struct {
+	cFactory ServerCodecFactory
+	useAuth  bool
+}
+
 // ServeCodec calls ServeCodec for the appropriate server
 // (authenticated or default).
 func (h *rpcHandler) ServeCodecWithContext(c rpc.ServerCodec, context *proto.Context) {
@@ -158,12 +160,13 @@ func (h *rpcHandler) ServeCodecWithContext(c rpc.ServerCodec, context *proto.Con
 	}
 }
 
-type rpcHandler struct {
-	cFactory ServerCodecFactory
-	useAuth  bool
-}
-
 func (h *rpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
+	if req.Method != "CONNECT" {
+		c.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		c.WriteHeader(http.StatusMethodNotAllowed)
+		io.WriteString(c, "405 must CONNECT\n")
+		return
+	}
 	conn, _, err := c.(http.Hijacker).Hijack()
 	if err != nil {
 		log.Errorf("rpc hijacking %s: %v", req.RemoteAddr, err)
@@ -190,30 +193,4 @@ func GetRpcPath(codecName string, auth bool) string {
 		path += "/auth"
 	}
 	return path
-}
-
-type httpHandler struct {
-	cFactory ServerCodecFactory
-}
-
-func (hh *httpHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
-	conn := &httpConnectionBroker{c, req.Body}
-	codec := hh.cFactory(conn)
-	if err := rpc.ServeRequestWithContext(codec, &proto.Context{RemoteAddr: req.RemoteAddr}); err != nil {
-		log.Errorf("rpcwrap: %v", err)
-	}
-}
-
-// Emulate a read/write connection for the server codec
-type httpConnectionBroker struct {
-	http.ResponseWriter
-	io.Reader
-}
-
-func (*httpConnectionBroker) Close() error {
-	return nil
-}
-
-func GetHttpPath(codecName string) string {
-	return "/_" + codecName + "_http_"
 }

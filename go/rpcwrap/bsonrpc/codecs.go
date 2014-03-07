@@ -101,7 +101,3 @@ func ServeRPC() {
 func ServeAuthRPC() {
 	rpcwrap.ServeAuthRPC(codecName, NewServerCodec)
 }
-
-func ServeHTTP() {
-	rpcwrap.ServeHTTP(codecName, NewServerCodec)
-}
