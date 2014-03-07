@@ -5,6 +5,7 @@ import hmac
 import json
 import logging
 import os
+import time
 import traceback
 import unittest
 
@@ -13,8 +14,10 @@ import tablet
 import utils
 
 from net import gorpc
-from vtdb import tablet as tablet3
 from vtdb import cursor
+from vtdb import keyrange_constants
+from vtdb import tablet as tablet3
+from vtdb import topology
 from vtdb import vtclient
 from vtdb import dbexceptions
 from zk import zkocc
@@ -514,6 +517,90 @@ class TestAuthentication(unittest.TestCase):
         break
     else:
       self.fail("Too many requests were allowed (%s)." % (i + 1))
+
+__topo_rtt = 0
+def count_topo_rtt(keyspace_name, fetch_time):
+  global __topo_rtt
+  __topo_rtt += 1
+
+def get_topo_rtt():
+  global __topo_rtt
+  return __topo_rtt
+
+
+class TestTopoReResolve(unittest.TestCase):
+  def setUp(self):
+    global vtgate_port
+    self.keyspace_fetch_throttle = 2
+    self.shard_index = 0
+    self.replica_tablet = shard_0_replica
+    # Lowering the keyspace refresh throttle so things are testable.
+    topology.set_keyspace_fetch_throttle(self.keyspace_fetch_throttle)
+    topology.register_topo_fetch_log_callback(count_topo_rtt)
+    self.vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
+                                               "test_nj", 30.0)
+    keyspace_obj = topology.read_and_get_keyspace(self.vtgate_client, "test_keyspace")
+
+  def test_topo_read_threshold(self):
+    before_topo_rtt = get_topo_rtt()
+    # Check original state.
+    keyspace_obj = topology.get_keyspace('test_keyspace')
+    self.assertNotEqual(keyspace_obj, None, "test_keyspace should be not None")
+    self.assertEqual(get_topo_rtt() - before_topo_rtt, 0, "No additional round-trips to topo server")
+
+    # Change the keyspace object.
+    utils.run_vtctl(['SetKeyspaceShardingInfo', '-force', 'test_keyspace',
+                     'keyspace_id', keyrange_constants.KIT_BYTES])
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
+    ks = utils.run_vtctl_json(['GetSrvKeyspace', 'test_nj', 'test_keyspace'])
+
+    # Since the last read wasn't throttle time back, we expect to still see old value.
+    topology.clear_and_read_keyspace(self.vtgate_client, 'test_keyspace')
+    keyspace_obj = topology.get_keyspace('test_keyspace')
+    after_1st_clear = get_topo_rtt()
+    self.assertEqual(keyspace_obj.sharding_col_type, keyrange_constants.KIT_UINT64, "ShardingColumnType be %s" % keyrange_constants.KIT_UINT64)
+    self.assertEqual(after_1st_clear - before_topo_rtt, 0, "No additional round-trips to topo server")
+
+    # sleep throttle interval and check values again.
+    # the keyspace should have changed and also caused a rtt to topo server.
+    time.sleep(self.keyspace_fetch_throttle)
+    topology.clear_and_read_keyspace(self.vtgate_client, 'test_keyspace')
+    keyspace_obj = topology.get_keyspace('test_keyspace')
+    after_throttle_clear = get_topo_rtt()
+    self.assertEqual(after_throttle_clear - after_1st_clear, 1, "One additional round-trips to topo server")
+    self.assertEqual(keyspace_obj.sharding_col_type, keyrange_constants.KIT_BYTES, "ShardingColumnType be %s" % keyrange_constants.KIT_BYTES)
+
+  def test_keyspace_reresolve_on_execute(self):
+    before_topo_rtt = get_topo_rtt()
+    try:
+      replica_conn = get_connection(db_type='replica', shard_index=self.shard_index)
+    except Exception, e:
+      self.fail("Connection to shard %s replica failed with error %s" % (shard_names[self.shard_index], str(e)))
+    self.replica_tablet.kill_vttablet()
+    time.sleep(self.keyspace_fetch_throttle)
+
+    # this should cause a refresh of the topology.
+    try:
+      results = replica_conn._execute("select 1 from vt_insert_test", {})
+    except Exception, e:
+      pass
+
+    after_tablet_error = get_topo_rtt()
+    self.assertEqual(after_tablet_error - before_topo_rtt, 1, "One additional round-trips to topo server")
+    self.replica_tablet.start_vttablet()
+
+  def test_keyspace_reresolve_on_conn_failure(self):
+    before_topo_rtt = get_topo_rtt()
+    self.replica_tablet.kill_vttablet()
+    time.sleep(self.keyspace_fetch_throttle)
+    try:
+      replica_conn = get_connection(db_type='replica', shard_index=self.shard_index)
+    except Exception, e:
+      pass
+
+    after_tablet_conn_error = get_topo_rtt()
+    self.assertEqual(after_tablet_conn_error - before_topo_rtt, 1, "One additional round-trips to topo server")
+    self.replica_tablet.start_vttablet()
 
 
 if __name__ == '__main__':

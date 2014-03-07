@@ -11,6 +11,7 @@ import time
 import unittest
 
 from zk import zkocc
+from vtdb import topology
 from vtdb import vtclient
 
 import environment
@@ -86,6 +87,8 @@ class TestVerticalSplit(unittest.TestCase):
       self.vtgate_addrs = {"_vt": ["localhost:%s"%(self.vtgate_port),]}
 
     self.insert_index = 0
+    # Lowering the keyspace refresh throttle so things are testable.
+    topology.set_keyspace_fetch_throttle(1)
 
   def tearDown(self):
     self.vtgate_client.close()
@@ -208,7 +211,10 @@ index by_msg (msg)
         tablet.vquery("select count(1) from %s" % t, path='source_keyspace/0')
 
   def _check_client_conn_redirection(self, source_ks, destination_ks, db_types, servedfrom_db_types, moved_tables=None):
-    # check that the ServedFrom indirection worked correctly.
+    # In normal operations, it takes the first error for keyspce to be re-read.
+    # For testing purposes, refreshing the topology manually.
+    topology.clear_and_read_keyspace(self.vtgate_client, destination_ks)
+
     for db_type in servedfrom_db_types:
       conn = self._vtdb_conn(db_type, keyspace=destination_ks)
       self.assertEqual(conn.db_params['keyspace'], source_ks)
@@ -216,6 +222,7 @@ index by_msg (msg)
     # check that the connection to db_type for destination keyspace works too.
     for db_type in db_types:
       dest_conn = self._vtdb_conn(db_type, keyspace=destination_ks)
+      keyspace_obj = topology.get_keyspace(destination_ks)
       self.assertEqual(dest_conn.db_params['keyspace'], destination_ks)
 
   def test_vertical_split(self):
@@ -340,6 +347,8 @@ index by_msg (msg)
     self._check_blacklisted_tables(source_master, None)
     self._check_blacklisted_tables(source_replica, ['moving1', 'moving2'])
     self._check_blacklisted_tables(source_rdonly, ['moving1', 'moving2'])
+    # This is so that keyspace can be refreshed.
+    time.sleep(1)
     self._check_client_conn_redirection('source_keyspace', 'destination_keyspace', ['replica', 'rdonly'], ['master'], ['moving1', 'moving2'])
 
     # move replica back and forth
@@ -365,6 +374,8 @@ index by_msg (msg)
     self._check_blacklisted_tables(source_master, ['moving1', 'moving2'])
     self._check_blacklisted_tables(source_replica, ['moving1', 'moving2'])
     self._check_blacklisted_tables(source_rdonly, ['moving1', 'moving2'])
+    # This is so that keyspace can be refreshed.
+    time.sleep(1)
     self._check_client_conn_redirection('source_keyspace', 'destination_keyspace', ['replica', 'rdonly', 'master'], [], ['moving1', 'moving2'])
 
     # check 'vtctl SetBlacklistedTables' command works as expected

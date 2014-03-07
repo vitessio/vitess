@@ -11,18 +11,42 @@
 
 import logging
 import random
+import time
 
 from vtdb import keyspace
 from zk import zkocc
+
 
 # keeps a global version of the topology
 __keyspace_map = {}
 
 
+# Throttle to clear the keyspace cache and re-read it.
+__keyspace_fetch_throttle = 5
+
+
+__keyspace_fetch_logging = None
+
+
+def set_keyspace_fetch_throttle(throttle):
+  global __keyspace_fetch_throttle
+  __keyspace_fetch_throttle = throttle
+
+
+def log_keyspace_fetch(keyspace_name, topo_rtt):
+  logging.info("Fetched keyspace %s from topo_client in %f secs", keyspace_name, topo_rtt)
+
+
+def register_topo_fetch_log_callback(func):
+  global __keyspace_fetch_logging
+  if func is not None:
+    __keyspace_fetch_logging = func
+
+
 def read_and_get_keyspace(zkocc_client, name):
   ks = None
   try:
-    ks = __keyspace_map[name]
+    ks = __keyspace_map[name][0]
   except KeyError:
     ks = keyspace.read_keyspace(zkocc_client, name)
     if ks is not None:
@@ -32,15 +56,50 @@ def read_and_get_keyspace(zkocc_client, name):
   return ks
 
 
+def clear_keyspace(name):
+  try:
+    del __keyspace_map[name]
+  except KeyError:
+    pass
+
+
 def get_keyspace(name):
   try:
-    return __keyspace_map[name]
+    return __keyspace_map[name][0]
+  except KeyError:
+    return None
+
+
+def get_time_last_fetch(name):
+  try:
+    return __keyspace_map[name][1]
   except KeyError:
     return None
 
 
 def __add_keyspace(ks):
-  __keyspace_map[ks.name] = ks
+  __keyspace_map[ks.name] = (ks, time.time())
+
+
+def clear_and_read_keyspace(zkocc_client, name):
+  global __keyspace_fetch_throttle
+  global __keyspace_fetch_logging
+
+  time_last_fetch = get_time_last_fetch(name)
+
+  clear_and_read = False
+  if time_last_fetch is not None and time_last_fetch < (time.time() - __keyspace_fetch_throttle):
+    clear_and_read = True
+
+  if clear_and_read:
+    clear_keyspace(name)
+    start_time = time.time()
+    read_and_get_keyspace(zkocc_client, name)
+    topo_rtt = time.time() - start_time
+    if __keyspace_fetch_logging is not None:
+      __keyspace_fetch_logging(name, topo_rtt)
+    else:
+      log_keyspace_fetch(name, topo_rtt)
 
 
 # read all the keyspaces, populates __keyspace_map, can call get_keyspace
