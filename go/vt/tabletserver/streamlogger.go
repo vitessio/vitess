@@ -43,11 +43,16 @@ type sqlQueryStats struct {
 	QuerySources         byte
 	Rows                 [][]sqltypes.Value
 	context              *Context
+	sensitiveMode        bool
 }
 
-func newSqlQueryStats(methodName string, context *Context) *sqlQueryStats {
-	s := &sqlQueryStats{Method: methodName, StartTime: time.Now(), context: context}
-	return s
+func newSqlQueryStats(methodName string, context *Context, sensitiveMode bool) *sqlQueryStats {
+	return &sqlQueryStats{
+		Method:        methodName,
+		StartTime:     time.Now(),
+		context:       context,
+		sensitiveMode: sensitiveMode,
+	}
 }
 
 func (stats *sqlQueryStats) Send() {
@@ -56,6 +61,9 @@ func (stats *sqlQueryStats) Send() {
 }
 
 func (stats *sqlQueryStats) AddRewrittenSql(sql string) {
+	if stats.sensitiveMode {
+		return
+	}
 	stats.rewrittenSqls = append(stats.rewrittenSqls, sql)
 }
 
@@ -66,6 +74,9 @@ func (stats *sqlQueryStats) TotalTime() time.Duration {
 // RewrittenSql returns a semicolon separated list of SQL statements
 // that were executed.
 func (stats *sqlQueryStats) RewrittenSql() string {
+	if stats.sensitiveMode {
+		return ""
+	}
 	return strings.Join(stats.rewrittenSqls, "; ")
 }
 
@@ -89,6 +100,9 @@ func (stats *sqlQueryStats) SizeOfResponse() int {
 // values that are strings or byte slices it only reports their type
 // and length.
 func (stats *sqlQueryStats) FmtBindVariables(full bool) string {
+	if stats.sensitiveMode {
+		return ""
+	}
 	var out map[string]interface{}
 	if full {
 		out = stats.BindVariables

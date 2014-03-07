@@ -86,7 +86,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 
 	// services
 	qe.cachePool = NewCachePool("RowcachePool", config.RowCache, time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
-	qe.schemaInfo = NewSchemaInfo(config.QueryCacheSize, time.Duration(config.SchemaReloadTime*1e9), time.Duration(config.IdleTimeout*1e9))
+	qe.schemaInfo = NewSchemaInfo(config.QueryCacheSize, time.Duration(config.SchemaReloadTime*1e9), time.Duration(config.IdleTimeout*1e9), config.SensitiveMode)
 	qe.connPool = NewConnectionPool("ConnPool", config.PoolSize, time.Duration(config.IdleTimeout*1e9))
 	qe.streamConnPool = NewConnectionPool("StreamConnPool", config.StreamPoolSize, time.Duration(config.IdleTimeout*1e9))
 	qe.txPool = NewConnectionPool("TransactionPool", config.TransactionCap, time.Duration(config.IdleTimeout*1e9)) // connections in pool has to be > transactionCap
@@ -213,12 +213,12 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 		query.BindVariables = make(map[string]interface{})
 	}
 	logStats.BindVariables = query.BindVariables
-	logStats.OriginalSql = query.Sql
 	// cheap hack: strip trailing comment into a special bind var
 	stripTrailing(query)
 	basePlan := qe.schemaInfo.GetPlan(logStats, query.Sql)
 	planName := basePlan.PlanId.String()
 	logStats.PlanType = planName
+	logStats.OriginalSql = basePlan.DisplayQuery
 	defer func(start time.Time) {
 		duration := time.Now().Sub(start)
 		queryStats.Add(planName, duration)
@@ -249,7 +249,7 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 		// Need upfront connection for DMLs and transactions
 		conn := qe.activeTxPool.Get(query.TransactionId)
 		defer conn.Recycle()
-		conn.RecordQuery(plan.Query)
+		conn.RecordQuery(plan.DisplayQuery)
 		var invalidator CacheInvalidator
 		if plan.TableInfo != nil && plan.TableInfo.CacheType != schema.CACHE_NONE {
 			invalidator = conn.DirtyKeys(plan.TableName)
@@ -312,12 +312,12 @@ func (qe *QueryEngine) StreamExecute(logStats *sqlQueryStats, query *proto.Query
 		query.BindVariables = make(map[string]interface{})
 	}
 	logStats.BindVariables = query.BindVariables
-	logStats.OriginalSql = query.Sql
 	// cheap hack: strip trailing comment into a special bind var
 	stripTrailing(query)
 
 	plan := qe.schemaInfo.GetStreamPlan(query.Sql)
 	logStats.PlanType = "SELECT_STREAM"
+	logStats.OriginalSql = plan.DisplayQuery
 	defer queryStats.Record("SELECT_STREAM", time.Now())
 
 	// does the real work: first get a connection

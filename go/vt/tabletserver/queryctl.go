@@ -36,6 +36,7 @@ func init() {
 	flag.Float64Var(&qsConfig.IdleTimeout, "queryserver-config-idle-timeout", DefaultQsConfig.IdleTimeout, "query server idle timeout")
 	flag.Float64Var(&qsConfig.SpotCheckRatio, "queryserver-config-spot-check-ratio", DefaultQsConfig.SpotCheckRatio, "query server rowcache spot check frequency")
 	flag.Float64Var(&qsConfig.StreamWaitTimeout, "queryserver-config-stream-exec-timeout", DefaultQsConfig.StreamWaitTimeout, "Timeout for stream-exec-throttle")
+	flag.BoolVar(&qsConfig.SensitiveMode, "queryserver-config-sensitive-mode", DefaultQsConfig.SensitiveMode, "enabling sensitive mode anonymizes queries when displaying diagnositcs")
 	flag.StringVar(&qsConfig.RowCache.Binary, "rowcache-bin", DefaultQsConfig.RowCache.Binary, "rowcache binary file")
 	flag.IntVar(&qsConfig.RowCache.Memory, "rowcache-memory", DefaultQsConfig.RowCache.Memory, "rowcache max memory usage in MB")
 	flag.StringVar(&qsConfig.RowCache.Socket, "rowcache-socket", DefaultQsConfig.RowCache.Socket, "rowcache socket path to listen on")
@@ -97,6 +98,7 @@ type Config struct {
 	RowCache           RowCacheConfig
 	SpotCheckRatio     float64
 	StreamWaitTimeout  float64
+	SensitiveMode      bool
 }
 
 // DefaultQSConfig is the default value for the query service config.
@@ -121,6 +123,7 @@ var DefaultQsConfig = Config{
 	RowCache:           RowCacheConfig{Memory: -1, TcpPort: -1, Connections: -1, Threads: -1},
 	SpotCheckRatio:     0,
 	StreamWaitTimeout:  4 * 60,
+	SensitiveMode:      false,
 }
 
 var qsConfig Config
