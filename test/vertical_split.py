@@ -222,7 +222,6 @@ index by_msg (msg)
     # check that the connection to db_type for destination keyspace works too.
     for db_type in db_types:
       dest_conn = self._vtdb_conn(db_type, keyspace=destination_ks)
-      keyspace_obj = topology.get_keyspace(destination_ks)
       self.assertEqual(dest_conn.db_params['keyspace'], destination_ks)
 
   def test_vertical_split(self):
