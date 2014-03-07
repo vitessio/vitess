@@ -2,22 +2,33 @@
 
 import logging
 import optparse
+import subprocess
 import unittest
 import sys
 
 import utils
 import framework
 
-from queryservice_tests import cache_tests
-from queryservice_tests import nocache_tests
-from queryservice_tests import stream_tests
+from queryservice_tests.cases_framework import Case
 from queryservice_tests import test_env
 
+class SensitiveModeTest(framework.TestCase):
+  def test_query_stats(self):
+    cu = self.env.execute("select * from vtocc_test limit 2")
+    stats = self.env.query_stats()
+    want = "select * from vtocc_test limit ?"
+    for query in stats:
+      if query["Query"] == want:
+        return
+    self.fail("%s not found in %s" % (want, stats))
+
+    self.env.conn._stream_execute("select intval, 1 from vtocc_test limit 2", {})
+    r = self.env.conn._stream_next()
+    while r:
+      r = self.env.conn._stream_next()
 
 if __name__ == "__main__":
   parser = optparse.OptionParser(usage="usage: %prog [options] [test_names]")
-  parser.add_option("-m", "--memcache", action="store_true", default=False,
-                    help="starts a memcache d, and tests rowcache")
   parser.add_option("-e", "--env", default='vttablet,vtocc',
                     help="Environment that will be used. Valid options: vttablet, vtocc")
   parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=1)
@@ -26,38 +37,21 @@ if __name__ == "__main__":
   utils.options = options
   logging.getLogger().setLevel(logging.ERROR)
 
-  suite = unittest.TestSuite()
-  if args:
-    for arg in args:
-      if hasattr(nocache_tests.TestNocache, arg):
-        suite.addTest(nocache_tests.TestNocache(arg))
-      elif hasattr(stream_tests.TestStream, arg):
-        suite.addTest(stream_tests.TestStream(arg))
-      elif hasattr(cache_tests.TestCache, arg) and options.memcache:
-        suite.addTest(cache_tests.TestCache(arg))
-      elif hasattr(cache_tests.TestWillNotBeCached, arg) and options.memcache:
-        suite.addTest(cache_tests.TestWillNotBeCached(arg))
-
-      else:
-        raise Exception(arg, "not found in tests")
-  else:
-    suite.addTests(unittest.TestLoader().loadTestsFromModule(nocache_tests))
-    suite.addTests(unittest.TestLoader().loadTestsFromModule(stream_tests))
-    if options.memcache:
-      suite.addTests(unittest.TestLoader().loadTestsFromModule(cache_tests))
+  suite = unittest.TestLoader().loadTestsFromTestCase(SensitiveModeTest)
 
   for env_name in options.env.split(','):
     try:
       if env_name == 'vttablet':
         env = test_env.VttabletTestEnv()
+        env.sensitive_mode = True
       elif env_name == 'vtocc':
         env = test_env.VtoccTestEnv()
+        env.sensitive_mode = True
       else:
         raise Exception("Valid options for -e: vtocc, vttablet")
 
-      env.memcache = options.memcache
       env.setUp()
-      print "Starting queryservice_test.py: %s" % env_name
+      print "Starting sensitive_info_test.py: %s" % env_name
       sys.stdout.flush()
       framework.TestCase.setenv(env)
       result = unittest.TextTestRunner(verbosity=options.verbose).run(suite)
@@ -65,3 +59,4 @@ if __name__ == "__main__":
         raise Exception("test failures")
     finally:
       env.tearDown()
+
