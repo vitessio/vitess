@@ -163,6 +163,22 @@ func TestParse(t *testing.T) {
 	}
 }
 
+func TestAnonymizer(t *testing.T) {
+	sql := "select 'abcd', 20, 30.0, e from t where 1=val and val2='3'"
+	tree, err := Parse(sql)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+	buf := NewTrackedBuffer(AnonymizedFormatter)
+	buf.Fprintf("%v", tree)
+	got := buf.ParsedQuery().Query
+	want := "select ?, ?, ?, e from t where ? = val and val2 = ?"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
 func TestRouting(t *testing.T) {
 	tabletkeys := []key.KeyspaceId{
 		"\x00\x00\x00\x00\x00\x00\x00\x02",
