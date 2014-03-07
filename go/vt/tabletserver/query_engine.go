@@ -316,7 +316,7 @@ func (qe *QueryEngine) StreamExecute(logStats *sqlQueryStats, query *proto.Query
 	// cheap hack: strip trailing comment into a special bind var
 	stripTrailing(query)
 
-	fullQuery := qe.schemaInfo.GetStreamPlan(query.Sql)
+	plan := qe.schemaInfo.GetStreamPlan(query.Sql)
 	logStats.PlanType = "SELECT_STREAM"
 	defer queryStats.Record("SELECT_STREAM", time.Now())
 
@@ -327,7 +327,7 @@ func (qe *QueryEngine) StreamExecute(logStats *sqlQueryStats, query *proto.Query
 	defer conn.Recycle()
 
 	// then let's stream!
-	qe.fullStreamFetch(logStats, conn, fullQuery, query.BindVariables, nil, nil, sendReply)
+	qe.fullStreamFetch(logStats, conn, plan.FullQuery, query.BindVariables, nil, nil, sendReply)
 }
 
 func (qe *QueryEngine) InvalidateForDml(dml *proto.DmlType) {

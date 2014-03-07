@@ -313,7 +313,7 @@ func (si *SchemaInfo) GetPlan(logStats *sqlQueryStats, sql string) (plan *ExecPl
 		}
 		return tableInfo.Table, true
 	}
-	splan, err := sqlparser.ExecParse(sql, GetTable)
+	splan, err := sqlparser.ExecParse(sql, GetTable, false)
 	if err != nil {
 		panic(NewTabletError(FAIL, "%s", err))
 	}
@@ -344,12 +344,12 @@ func (si *SchemaInfo) GetPlan(logStats *sqlQueryStats, sql string) (plan *ExecPl
 
 // GetStreamPlan is similar to GetPlan, but doesn't use the cache
 // and doesn't enforce a limit. It also just returns the parsed query.
-func (si *SchemaInfo) GetStreamPlan(sql string) *sqlparser.ParsedQuery {
-	fullQuery, err := sqlparser.StreamExecParse(sql)
+func (si *SchemaInfo) GetStreamPlan(sql string) *sqlparser.StreamExecPlan {
+	plan, err := sqlparser.StreamExecParse(sql, false)
 	if err != nil {
 		panic(NewTabletError(FAIL, "%s", err))
 	}
-	return fullQuery
+	return plan
 }
 
 func (si *SchemaInfo) SetRules(qrs *QueryRules) {

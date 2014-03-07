@@ -126,10 +126,10 @@ type ExecPlan struct {
 	Reason    ReasonType
 	TableName string
 
-	// AnonymizedQuery is the anonymized version of the
-	// original query to prevent accidental
-	// view of sensitive data.
-	AnonymizedQuery string
+	// DisplayQuery is the displayable version of the
+	// original query. Depending on the mode, it may be
+	// the original query, or an anonymized version.
+	DisplayQuery string
 
 	// FieldQuery is used to fetch field info
 	FieldQuery *ParsedQuery
@@ -170,9 +170,14 @@ type DDLPlan struct {
 	NewName   string
 }
 
+type StreamExecPlan struct {
+	DisplayQuery string
+	FullQuery    *ParsedQuery
+}
+
 type TableGetter func(tableName string) (*schema.Table, bool)
 
-func ExecParse(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
+func ExecParse(sql string, getTable TableGetter, sensitiveMode bool) (plan *ExecPlan, err error) {
 	defer handleError(&err)
 
 	tree, err := Parse(sql)
@@ -183,10 +188,15 @@ func ExecParse(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
 	if plan.PlanId == PLAN_PASS_DML {
 		log.Warningf("PASS_DML: %s", sql)
 	}
+	if sensitiveMode {
+		plan.DisplayQuery = tree.GenerateAnonymizedQuery()
+	} else {
+		plan.DisplayQuery = sql
+	}
 	return plan, nil
 }
 
-func StreamExecParse(sql string) (fullQuery *ParsedQuery, err error) {
+func StreamExecParse(sql string, sensitiveMode bool) (plan *StreamExecPlan, err error) {
 	defer handleError(&err)
 
 	tree, err := Parse(sql)
@@ -203,8 +213,15 @@ func StreamExecParse(sql string) (fullQuery *ParsedQuery, err error) {
 	default:
 		return nil, NewParserError("%s not allowed for streaming", string(tree.Value))
 	}
+	plan = &StreamExecPlan{FullQuery: tree.GenerateFullQuery()}
 
-	return tree.GenerateFullQuery(), nil
+	if sensitiveMode {
+		plan.DisplayQuery = tree.GenerateAnonymizedQuery()
+	} else {
+		plan.DisplayQuery = sql
+	}
+
+	return plan, nil
 }
 
 func DDLParse(sql string) (plan *DDLPlan) {
@@ -245,10 +262,7 @@ func (node *Node) execAnalyzeSql(getTable TableGetter) (plan *ExecPlan) {
 	case SET:
 		return node.execAnalyzeSet()
 	case CREATE, ALTER, DROP, RENAME:
-		return &ExecPlan{
-			PlanId:          PLAN_DDL,
-			AnonymizedQuery: node.GenerateAnonymizedQuery(),
-		}
+		return &ExecPlan{PlanId: PLAN_DDL}
 	}
 	panic(NewParserError("Invalid SQL"))
 }
@@ -256,10 +270,9 @@ func (node *Node) execAnalyzeSql(getTable TableGetter) (plan *ExecPlan) {
 func (node *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 	// Default plan
 	plan = &ExecPlan{
-		PlanId:          PLAN_PASS_SELECT,
-		FieldQuery:      node.GenerateFieldQuery(),
-		FullQuery:       node.GenerateSelectLimitQuery(),
-		AnonymizedQuery: node.GenerateAnonymizedQuery(),
+		PlanId:     PLAN_PASS_SELECT,
+		FieldQuery: node.GenerateFieldQuery(),
+		FullQuery:  node.GenerateSelectLimitQuery(),
 	}
 
 	// There are bind variables in the SELECT list
@@ -365,9 +378,8 @@ func (node *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 
 func (node *Node) execAnalyzeInsert(getTable TableGetter) (plan *ExecPlan) {
 	plan = &ExecPlan{
-		PlanId:          PLAN_PASS_DML,
-		FullQuery:       node.GenerateFullQuery(),
-		AnonymizedQuery: node.GenerateAnonymizedQuery(),
+		PlanId:    PLAN_PASS_DML,
+		FullQuery: node.GenerateFullQuery(),
 	}
 	tableName := node.At(INSERT_TABLE_OFFSET).collectTableName()
 	if tableName == "" {
@@ -421,9 +433,8 @@ func (node *Node) execAnalyzeInsert(getTable TableGetter) (plan *ExecPlan) {
 func (node *Node) execAnalyzeUpdate(getTable TableGetter) (plan *ExecPlan) {
 	// Default plan
 	plan = &ExecPlan{
-		PlanId:          PLAN_PASS_DML,
-		FullQuery:       node.GenerateFullQuery(),
-		AnonymizedQuery: node.GenerateAnonymizedQuery(),
+		PlanId:    PLAN_PASS_DML,
+		FullQuery: node.GenerateFullQuery(),
 	}
 
 	tableName := node.At(UPDATE_TABLE_OFFSET).collectTableName()
@@ -468,9 +479,8 @@ func (node *Node) execAnalyzeUpdate(getTable TableGetter) (plan *ExecPlan) {
 func (node *Node) execAnalyzeDelete(getTable TableGetter) (plan *ExecPlan) {
 	// Default plan
 	plan = &ExecPlan{
-		PlanId:          PLAN_PASS_DML,
-		FullQuery:       node.GenerateFullQuery(),
-		AnonymizedQuery: node.GenerateAnonymizedQuery(),
+		PlanId:    PLAN_PASS_DML,
+		FullQuery: node.GenerateFullQuery(),
 	}
 
 	tableName := node.At(DELETE_TABLE_OFFSET).collectTableName()
@@ -508,9 +518,8 @@ func (node *Node) execAnalyzeDelete(getTable TableGetter) (plan *ExecPlan) {
 
 func (node *Node) execAnalyzeSet() (plan *ExecPlan) {
 	plan = &ExecPlan{
-		PlanId:          PLAN_SET,
-		FullQuery:       node.GenerateFullQuery(),
-		AnonymizedQuery: node.GenerateAnonymizedQuery(),
+		PlanId:    PLAN_SET,
+		FullQuery: node.GenerateFullQuery(),
 	}
 	update_list := node.At(1)  // NODE_LIST
 	if update_list.Len() > 1 { // Multiple set values
