@@ -59,8 +59,8 @@ def get_db_params_for_tablet_conn(topo_client, keyspace_name, shard, db_type, ti
   else:
     service = '_vtocc'
   db_key = "%s.%s.%s:%s" % (keyspace_name, shard, db_type, service)
-  # This will read the cached keyspace, otherwise read from the topo server.
-  keyspace_object = topology.read_and_get_keyspace(topo_client, keyspace_name)
+  # This will read the cached keyspace.
+  keyspace_object = topology.get_keyspace(keyspace_name)
 
   # Handle vertical split by checking 'ServedFrom' field.
   new_keyspace = None

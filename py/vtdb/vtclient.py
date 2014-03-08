@@ -173,4 +173,4 @@ class VtOCCConnection(object):
   # This function clears the cached value for the keyspace
   # and re-reads it from the toposerver once per 'n' secs.
   def resolve_topology(self):
-    topology.clear_and_read_keyspace(self.zkocc_client, self.keyspace),
+    topology.refresh_keyspace(self.zkocc_client, self.keyspace)

@@ -18,6 +18,9 @@ from zk import zkocc
 
 
 # keeps a global version of the topology
+# This is a map of keyspace_name: (keyspace object, time when keyspace was last fetched)
+# eg - {'keyspace_name': (keyspace_object, time_of_last_fetch)}
+# keyspace object is defined at py/vtdb/keyspace.py:Keyspace
 __keyspace_map = {}
 
 
@@ -25,6 +28,7 @@ __keyspace_map = {}
 __keyspace_fetch_throttle = 5
 
 
+# Callback function for logging/instrumenting the calls to topo server.
 __keyspace_fetch_logging = None
 
 
@@ -33,36 +37,28 @@ def set_keyspace_fetch_throttle(throttle):
   __keyspace_fetch_throttle = throttle
 
 
+# Default function to log the calls to the topo server.
 def log_keyspace_fetch(keyspace_name, topo_rtt):
   logging.info("Fetched keyspace %s from topo_client in %f secs", keyspace_name, topo_rtt)
 
 
+# Register the callback function for logging or instrumentation.
 def register_topo_fetch_log_callback(func):
   global __keyspace_fetch_logging
   if func is not None:
     __keyspace_fetch_logging = func
 
 
-def read_and_get_keyspace(zkocc_client, name):
-  ks = None
-  try:
-    ks = __keyspace_map[name][0]
-  except KeyError:
-    ks = keyspace.read_keyspace(zkocc_client, name)
-    if ks is not None:
-      __add_keyspace(ks)
-    else:
-      raise
-  return ks
-
-
-def clear_keyspace(name):
+# Clear the keyspace from cache.
+def __clear_keyspace(name):
   try:
     del __keyspace_map[name]
   except KeyError:
     pass
 
 
+# This returns the keyspace object for the keyspace name
+# from the cached topology map or None if not found.
 def get_keyspace(name):
   try:
     return __keyspace_map[name][0]
@@ -70,6 +66,8 @@ def get_keyspace(name):
     return None
 
 
+# This returns the time of last fetch for the keyspace name
+# from the cached topology map or None if not found.
 def get_time_last_fetch(name):
   try:
     return __keyspace_map[name][1]
@@ -77,29 +75,36 @@ def get_time_last_fetch(name):
     return None
 
 
+# This adds the keyspace object to the cached topology map.
 def __add_keyspace(ks):
   __keyspace_map[ks.name] = (ks, time.time())
 
 
-def clear_and_read_keyspace(zkocc_client, name):
+# This function refreshes the keyspace in the cached topology
+# map throttled by __keyspace_fetch_throttle secs. If the topo
+# server is unavailable, it retains the old keyspace object.
+def refresh_keyspace(zkocc_client, name):
   global __keyspace_fetch_throttle
   global __keyspace_fetch_logging
 
   time_last_fetch = get_time_last_fetch(name)
+  if time_last_fetch is None:
+    return
 
-  clear_and_read = False
-  if time_last_fetch is not None and time_last_fetch < (time.time() - __keyspace_fetch_throttle):
-    clear_and_read = True
+  if (time_last_fetch + __keyspace_fetch_throttle) > time.time():
+    return
 
-  if clear_and_read:
-    clear_keyspace(name)
-    start_time = time.time()
-    read_and_get_keyspace(zkocc_client, name)
-    topo_rtt = time.time() - start_time
-    if __keyspace_fetch_logging is not None:
-      __keyspace_fetch_logging(name, topo_rtt)
-    else:
-      log_keyspace_fetch(name, topo_rtt)
+  start_time = time.time()
+  ks = keyspace.read_keyspace(zkocc_client, name)
+  topo_rtt = time.time() - start_time
+  if ks is not None:
+    __clear_keyspace(name)
+    __add_keyspace(ks)
+
+  if __keyspace_fetch_logging is not None:
+    __keyspace_fetch_logging(name, topo_rtt)
+  else:
+    log_keyspace_fetch(name, topo_rtt)
 
 
 # read all the keyspaces, populates __keyspace_map, can call get_keyspace
