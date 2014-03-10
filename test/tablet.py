@@ -275,7 +275,7 @@ class Tablet(object):
   def flush(self):
     utils.run(['curl', '-s', '-N', 'http://localhost:%s/debug/flushlogs' % (self.port)], stderr=utils.devnull, stdout=utils.devnull)
 
-  def start_vttablet(self, port=None, auth=False, memcache=False, wait_for_state="SERVING", customrules=None, schema_override=None, cert=None, key=None, ca_cert=None, repl_extra_flags={}):
+  def start_vttablet(self, port=None, auth=False, memcache=False, wait_for_state="SERVING", customrules=None, schema_override=None, cert=None, key=None, ca_cert=None, repl_extra_flags={}, sensitive_mode=False):
     """
     Starts a vttablet process, and returns it.
     The process is also saved in self.proc, so it's easy to kill as well.
@@ -318,6 +318,8 @@ class Tablet(object):
                    '-key', key])
       if ca_cert:
         args.extend(['-ca_cert', ca_cert])
+    if sensitive_mode:
+      args.extend(['-queryserver-config-sensitive-mode'])
 
     stderr_fd = open(os.path.join(self.tablet_dir, "vttablet.stderr"), "w")
     # increment count only the first time

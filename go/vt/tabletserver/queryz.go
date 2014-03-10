@@ -128,7 +128,7 @@ func queryzHandler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		Value := &queryzRow{
-			Query: v,
+			Query: plan.DisplayQuery,
 			Table: plan.TableName,
 			Plan:  plan.PlanId,
 		}

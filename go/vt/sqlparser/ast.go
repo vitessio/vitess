@@ -83,7 +83,7 @@ func (node *Node) Len() int {
 
 func (node *Node) String() (out string) {
 	buf := NewTrackedBuffer(nil)
-	FormatNode(buf, node)
+	buf.Fprintf("%v", node)
 	return buf.String()
 }
 
@@ -104,6 +104,8 @@ func (node *Node) NodeString(level int, buf *bytes.Buffer) {
 	}
 }
 
+// FormatNode is the standard node formatter that
+// generates the SQL statement from the AST.
 func FormatNode(buf *TrackedBuffer, node *Node) {
 	switch node.Type {
 	case SELECT:
@@ -257,6 +259,17 @@ func FormatNode(buf *TrackedBuffer, node *Node) {
 		buf.Fprintf("%s ", node.Value)
 	default:
 		buf.Fprintf("Unknown: %s", node.Value)
+	}
+}
+
+// AnonymizedFormatNode is just like FormatNode except that
+// it anonymizes all values in the SQL.
+func AnonymizedFormatNode(buf *TrackedBuffer, node *Node) {
+	switch node.Type {
+	case STRING, NUMBER:
+		buf.Fprintf("?")
+	default:
+		FormatNode(buf, node)
 	}
 }
 

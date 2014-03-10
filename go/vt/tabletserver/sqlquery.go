@@ -69,6 +69,7 @@ type SqlQuery struct {
 	qe        *QueryEngine
 	rci       *RowcacheInvalidator
 	sessionId int64
+	config    Config
 	dbconfig  *dbconfigs.DBConfig
 }
 
@@ -76,6 +77,7 @@ func NewSqlQuery(config Config) *SqlQuery {
 	sq := &SqlQuery{}
 	sq.qe = NewQueryEngine(config)
 	sq.rci = NewRowcacheInvalidator(sq.qe)
+	sq.config = config
 	stats.PublishJSONFunc("Voltron", sq.statsJSON)
 	stats.Publish("TabletState", stats.IntFunc(sq.state.Get))
 	stats.Publish("TabletStateName", stats.StringFunc(sq.GetState))
@@ -227,7 +229,7 @@ func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo
 }
 
 func (sq *SqlQuery) Begin(context *Context, session *proto.Session, txInfo *proto.TransactionInfo) (err error) {
-	logStats := newSqlQueryStats("Begin", context)
+	logStats := newSqlQueryStats("Begin", context, sq.config.SensitiveMode)
 	logStats.OriginalSql = "begin"
 	defer handleError(&err, logStats)
 	sq.checkState(session.SessionId, false)
@@ -237,7 +239,7 @@ func (sq *SqlQuery) Begin(context *Context, session *proto.Session, txInfo *prot
 }
 
 func (sq *SqlQuery) Commit(context *Context, session *proto.Session) (err error) {
-	logStats := newSqlQueryStats("Commit", context)
+	logStats := newSqlQueryStats("Commit", context, sq.config.SensitiveMode)
 	logStats.OriginalSql = "commit"
 	defer handleError(&err, logStats)
 	sq.checkState(session.SessionId, true)
@@ -247,7 +249,7 @@ func (sq *SqlQuery) Commit(context *Context, session *proto.Session) (err error)
 }
 
 func (sq *SqlQuery) Rollback(context *Context, session *proto.Session) (err error) {
-	logStats := newSqlQueryStats("Rollback", context)
+	logStats := newSqlQueryStats("Rollback", context, sq.config.SensitiveMode)
 	logStats.OriginalSql = "rollback"
 	defer handleError(&err, logStats)
 	sq.checkState(session.SessionId, true)
@@ -308,7 +310,7 @@ func handleExecError(query *proto.Query, err *error, logStats *sqlQueryStats) {
 }
 
 func (sq *SqlQuery) Execute(context *Context, query *proto.Query, reply *mproto.QueryResult) (err error) {
-	logStats := newSqlQueryStats("Execute", context)
+	logStats := newSqlQueryStats("Execute", context, sq.config.SensitiveMode)
 	defer handleExecError(query, &err, logStats)
 
 	// allow shutdown state if we're in a transaction
@@ -322,7 +324,7 @@ func (sq *SqlQuery) Execute(context *Context, query *proto.Query, reply *mproto.
 // the first QueryResult will have Fields set (and Rows nil)
 // the subsequent QueryResult will have Rows set (and Fields nil)
 func (sq *SqlQuery) StreamExecute(context *Context, query *proto.Query, sendReply func(*mproto.QueryResult) error) (err error) {
-	logStats := newSqlQueryStats("StreamExecute", context)
+	logStats := newSqlQueryStats("StreamExecute", context, sq.config.SensitiveMode)
 	defer handleExecError(query, &err, logStats)
 
 	// check cases we don't handle yet
