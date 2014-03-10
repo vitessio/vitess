@@ -937,7 +937,7 @@ func (node *Node) GenerateFullQuery() *ParsedQuery {
 }
 
 func (node *Node) GenerateAnonymizedQuery() string {
-	buf := NewTrackedBuffer(AnonymizedFormatter)
+	buf := NewTrackedBuffer(AnonymizedFormatNode)
 	buf.Fprintf("%v", node)
 	return buf.ParsedQuery().Query
 }

@@ -262,9 +262,9 @@ func FormatNode(buf *TrackedBuffer, node *Node) {
 	}
 }
 
-// AnonymizedFormatter is just like FormatNode except that
+// AnonymizedFormatNode is just like FormatNode except that
 // it anonymizes all values in the SQL.
-func AnonymizedFormatter(buf *TrackedBuffer, node *Node) {
+func AnonymizedFormatNode(buf *TrackedBuffer, node *Node) {
 	switch node.Type {
 	case STRING, NUMBER:
 		buf.Fprintf("?")

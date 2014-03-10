@@ -36,7 +36,7 @@ func init() {
 	flag.Float64Var(&qsConfig.IdleTimeout, "queryserver-config-idle-timeout", DefaultQsConfig.IdleTimeout, "query server idle timeout")
 	flag.Float64Var(&qsConfig.SpotCheckRatio, "queryserver-config-spot-check-ratio", DefaultQsConfig.SpotCheckRatio, "query server rowcache spot check frequency")
 	flag.Float64Var(&qsConfig.StreamWaitTimeout, "queryserver-config-stream-exec-timeout", DefaultQsConfig.StreamWaitTimeout, "Timeout for stream-exec-throttle")
-	flag.BoolVar(&qsConfig.SensitiveMode, "queryserver-config-sensitive-mode", DefaultQsConfig.SensitiveMode, "enabling sensitive mode anonymizes queries when displaying diagnositcs")
+	flag.BoolVar(&qsConfig.SensitiveMode, "queryserver-config-sensitive-mode", DefaultQsConfig.SensitiveMode, "enabling sensitive mode anonymizes queries when displaying diagnostics")
 	flag.StringVar(&qsConfig.RowCache.Binary, "rowcache-bin", DefaultQsConfig.RowCache.Binary, "rowcache binary file")
 	flag.IntVar(&qsConfig.RowCache.Memory, "rowcache-memory", DefaultQsConfig.RowCache.Memory, "rowcache max memory usage in MB")
 	flag.StringVar(&qsConfig.RowCache.Socket, "rowcache-socket", DefaultQsConfig.RowCache.Socket, "rowcache socket path to listen on")
