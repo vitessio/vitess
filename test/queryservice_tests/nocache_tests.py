@@ -144,6 +144,19 @@ class TestNocache(framework.TestCase):
     finally:
       self.env.conn.rollback()
 
+  def test_pass_dml(self):
+    self.env.execute("set vt_allow_pass_dml=1")
+    self.env.conn.begin()
+    try:
+      self.env.execute("insert into vtocc_a(eid, id, name, foo) values (7, 1+1, '', '')")
+      self.env.execute("insert into vtocc_d(eid, id) values (1, 1)")
+      self.env.execute("insert into vtocc_a(eid, id, name, foo) values (8, 2, '', '') on duplicate key update id = 2+1")
+      self.env.execute("update vtocc_a set eid = 1+1 where eid = 1 and id = 1")
+      self.env.execute("insert into vtocc_d(eid, id) values (1, 1)")
+    finally:
+      self.env.conn.rollback()
+      self.env.execute("set vt_allow_pass_dml=0")
+
   def test_for_update(self):
     try:
       self.env.execute("select * from vtocc_test where intval=2 for update")

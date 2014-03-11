@@ -45,7 +45,7 @@ type QueryEngine struct {
 	consolidator   *Consolidator
 
 	spotCheckFreq sync2.AtomicInt64
-	allowPassDML  bool
+	allowPassDML  sync2.AtomicInt64
 
 	maxResultSize    sync2.AtomicInt64
 	streamBufferSize sync2.AtomicInt64
@@ -97,7 +97,9 @@ func NewQueryEngine(config Config) *QueryEngine {
 
 	// vars
 	qe.spotCheckFreq = sync2.AtomicInt64(config.SpotCheckRatio * SPOT_CHECK_MULTIPLIER)
-	qe.allowPassDML = config.AllowPassDML
+	if config.AllowPassDML {
+		qe.allowPassDML.Set(1)
+	}
 	qe.maxResultSize = sync2.AtomicInt64(config.MaxResultSize)
 	qe.streamBufferSize = sync2.AtomicInt64(config.StreamBufferSize)
 
@@ -258,7 +260,7 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 		}
 		switch plan.PlanId {
 		case sqlparser.PLAN_PASS_DML:
-			if !qe.allowPassDML {
+			if qe.allowPassDML.Get() == 0 {
 				panic(NewTabletError(FAIL, "DML too complex"))
 			}
 			reply = qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
@@ -660,43 +662,66 @@ func (qe *QueryEngine) execDMLPKRows(logStats *sqlQueryStats, conn PoolConnectio
 func (qe *QueryEngine) execSet(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan) (result *mproto.QueryResult) {
 	switch plan.SetKey {
 	case "vt_pool_size":
-		qe.connPool.SetCapacity(int(plan.SetValue.(float64)))
+		qe.connPool.SetCapacity(int(getInt64(plan.SetValue)))
 	case "vt_stream_pool_size":
-		qe.streamConnPool.SetCapacity(int(plan.SetValue.(float64)))
+		qe.streamConnPool.SetCapacity(int(getInt64(plan.SetValue)))
 	case "vt_transaction_cap":
-		qe.txPool.SetCapacity(int(plan.SetValue.(float64)))
+		qe.txPool.SetCapacity(int(getInt64(plan.SetValue)))
 	case "vt_transaction_timeout":
-		qe.activeTxPool.SetTimeout(time.Duration(plan.SetValue.(float64) * 1e9))
+		qe.activeTxPool.SetTimeout(getDuration(plan.SetValue))
 	case "vt_schema_reload_time":
-		qe.schemaInfo.SetReloadTime(time.Duration(plan.SetValue.(float64) * 1e9))
+		qe.schemaInfo.SetReloadTime(getDuration(plan.SetValue))
 	case "vt_query_cache_size":
-		qe.schemaInfo.SetQueryCacheSize(int(plan.SetValue.(float64)))
+		qe.schemaInfo.SetQueryCacheSize(int(getInt64(plan.SetValue)))
 	case "vt_max_result_size":
-		val := int64(plan.SetValue.(float64))
+		val := getInt64(plan.SetValue)
 		if val < 1 {
 			panic(NewTabletError(FAIL, "max result size out of range %v", val))
 		}
 		qe.maxResultSize.Set(val)
 	case "vt_stream_buffer_size":
-		val := int64(plan.SetValue.(float64))
+		val := getInt64(plan.SetValue)
 		if val < 1024 {
 			panic(NewTabletError(FAIL, "stream buffer size out of range %v", val))
 		}
 		qe.streamBufferSize.Set(val)
 	case "vt_query_timeout":
-		qe.activePool.SetTimeout(time.Duration(plan.SetValue.(float64) * 1e9))
+		qe.activePool.SetTimeout(getDuration(plan.SetValue))
 	case "vt_idle_timeout":
-		t := plan.SetValue.(float64) * 1e9
-		qe.connPool.SetIdleTimeout(time.Duration(t))
-		qe.streamConnPool.SetIdleTimeout(time.Duration(t))
-		qe.txPool.SetIdleTimeout(time.Duration(t))
-		qe.activePool.SetIdleTimeout(time.Duration(t))
+		t := getDuration(plan.SetValue)
+		qe.connPool.SetIdleTimeout(t)
+		qe.streamConnPool.SetIdleTimeout(t)
+		qe.txPool.SetIdleTimeout(t)
+		qe.activePool.SetIdleTimeout(t)
 	case "vt_spot_check_ratio":
-		qe.spotCheckFreq.Set(int64(plan.SetValue.(float64) * SPOT_CHECK_MULTIPLIER))
+		qe.spotCheckFreq.Set(int64(getFloat64(plan.SetValue) * SPOT_CHECK_MULTIPLIER))
+	case "vt_allow_pass_dml":
+		qe.allowPassDML.Set(getInt64(plan.SetValue))
 	default:
 		return qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
 	}
 	return &mproto.QueryResult{}
+}
+
+func getInt64(v interface{}) int64 {
+	if ival, ok := v.(int64); ok {
+		return ival
+	}
+	panic(NewTabletError(FAIL, "expecting int"))
+}
+
+func getFloat64(v interface{}) float64 {
+	if ival, ok := v.(int64); ok {
+		return float64(ival)
+	}
+	if fval, ok := v.(float64); ok {
+		return fval
+	}
+	panic(NewTabletError(FAIL, "expecting number"))
+}
+
+func getDuration(v interface{}) time.Duration {
+	return time.Duration(getFloat64(v) * 1e9)
 }
 
 func (qe *QueryEngine) qFetch(logStats *sqlQueryStats, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value) (result *mproto.QueryResult) {

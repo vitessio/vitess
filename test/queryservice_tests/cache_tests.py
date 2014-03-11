@@ -95,17 +95,6 @@ class TestCache(framework.TestCase):
     tend = self.env.table_stats()["vtocc_cached2"]
     self.assertEqual(tstart["Hits"]+1, tend["Hits"])
 
-  def test_nopass(self):
-    try:
-      self.env.conn.begin()
-      self.env.execute("insert into vtocc_cached2(eid, bid, name, foo) values(unix_time(), 'foo', 'bar', 'bar')")
-    except dbexceptions.DatabaseError as e:
-      self.assertContains(str(e), "error: DML too complex")
-    else:
-      self.fail("Did not receive exception")
-    finally:
-      self.env.conn.rollback()
-
   def test_overrides(self):
     tstart = self.env.table_stats()["vtocc_view"]
     self.env.querylog.reset()
