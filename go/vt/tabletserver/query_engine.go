@@ -45,6 +45,7 @@ type QueryEngine struct {
 	consolidator   *Consolidator
 
 	spotCheckFreq sync2.AtomicInt64
+	allowPassDML  bool
 
 	maxResultSize    sync2.AtomicInt64
 	streamBufferSize sync2.AtomicInt64
@@ -96,6 +97,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 
 	// vars
 	qe.spotCheckFreq = sync2.AtomicInt64(config.SpotCheckRatio * SPOT_CHECK_MULTIPLIER)
+	qe.allowPassDML = config.AllowPassDML
 	qe.maxResultSize = sync2.AtomicInt64(config.MaxResultSize)
 	qe.streamBufferSize = sync2.AtomicInt64(config.StreamBufferSize)
 
@@ -256,9 +258,10 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 		}
 		switch plan.PlanId {
 		case sqlparser.PLAN_PASS_DML:
-			// TODO(sougou): Delete code path that leads here.
-			// We need to permanently disallow this plan.
-			panic(NewTabletError(FAIL, "DML too complex"))
+			if !qe.allowPassDML {
+				panic(NewTabletError(FAIL, "DML too complex"))
+			}
+			reply = qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
 		case sqlparser.PLAN_INSERT_PK:
 			reply = qe.execInsertPK(logStats, conn, plan, invalidator)
 		case sqlparser.PLAN_INSERT_SUBQUERY:
