@@ -33,6 +33,7 @@ It has two execution models:
 package tabletmanager
 
 import (
+	"flag"
 	"fmt"
 	"net"
 	"os"
@@ -51,6 +52,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 )
+
+var vtactionBinaryPath = flag.String("vtaction_binary_path", "", "Full path (including filename) to vtaction binary. If not set, tries VTROOT/bin/vtaction.")
 
 // Each TabletChangeCallback must be idempotent and "threadsafe".  The
 // agent will execute these in a new goroutine each time a change is
@@ -152,15 +155,20 @@ func (agent *ActionAgent) Tablet() *topo.TabletInfo {
 }
 
 func (agent *ActionAgent) resolvePaths() error {
-	vtroot, err := env.VtRoot()
-	if err != nil {
-		return err
+	var p string
+	if *vtactionBinaryPath != "" {
+		p = *vtactionBinaryPath
+	} else {
+		vtroot, err := env.VtRoot()
+		if err != nil {
+			return err
+		}
+		p = path.Join(vtroot, "bin/vtaction")
 	}
-	path := path.Join(vtroot, "bin/vtaction")
-	if _, err := os.Stat(path); err != nil {
-		return fmt.Errorf("vtaction binary %s not found: %v", path, err)
+	if _, err := os.Stat(p); err != nil {
+		return fmt.Errorf("vtaction binary %s not found: %v", p, err)
 	}
-	agent.vtActionBinFile = path
+	agent.vtActionBinFile = p
 	return nil
 }
 
