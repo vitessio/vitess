@@ -528,10 +528,12 @@ func (node *Node) execAnalyzeSet() (plan *ExecPlan) {
 	update_expression := update_list.At(0)              // '='
 	plan.SetKey = string(update_expression.At(0).Value) // ID
 	expression := update_expression.At(1)
+	valstr := string(expression.Value)
 	if expression.Type == NUMBER {
-		// TODO: Try integer conversions first
-		if val, err := strconv.ParseFloat(string(expression.Value), 64); err == nil {
-			plan.SetValue = val
+		if ival, err := strconv.ParseInt(valstr, 0, 64); err == nil {
+			plan.SetValue = ival
+		} else if fval, err := strconv.ParseFloat(valstr, 64); err == nil {
+			plan.SetValue = fval
 		}
 	}
 	return plan
