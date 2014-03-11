@@ -186,10 +186,7 @@ class VttabletTestEnv(TestEnv):
     self.create_customrules(customrules)
     schema_override = '/tmp/schema_override.json'
     self.create_schema_override(schema_override)
-    if self.memcache:
-      self.tablet.start_vttablet(memcache=True, customrules=customrules, schema_override=schema_override, sensitive_mode=self.sensitive_mode)
-    else:
-      self.tablet.start_vttablet(customrules=customrules, schema_override=schema_override, sensitive_mode=self.sensitive_mode)
+    self.tablet.start_vttablet(memcache=self.memcache, customrules=customrules, schema_override=schema_override, sensitive_mode=self.sensitive_mode)
 
     # FIXME(szopa): This is necessary here only because of a bug that
     # makes the qs reload its config only after an action.
