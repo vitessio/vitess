@@ -318,7 +318,7 @@ def wait_for_vars(name, port, var=None):
 
 # zkocc helpers
 def zkocc_start(cells=['test_nj'], extra_params=[]):
-  args = [environment.binary_path('zkocc'),
+  args = e[nvironment.binary_path('zkocc'),
           '-port', str(environment.zkocc_port_base),
           '-stderrthreshold=ERROR',
           ] + extra_params + cells
@@ -537,3 +537,6 @@ def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
   if keyspace_id_type != ks.get('ShardingColumnType'):
     raise Exception("Got wrong ShardingColumnType in SrvKeyspace: %s" %
                    str(ks))
+
+def get_status(port):
+  return urllib.urlopen('http://localhost:%u%s' % (port, environment.status_url)).read()
