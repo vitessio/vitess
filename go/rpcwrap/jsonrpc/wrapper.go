@@ -24,7 +24,3 @@ func ServeRPC() {
 func ServeAuthRPC() {
 	rpcwrap.ServeAuthRPC("json", oldjson.NewServerCodec)
 }
-
-func ServeHTTP() {
-	rpcwrap.ServeHTTP("json", oldjson.NewServerCodec)
-}
