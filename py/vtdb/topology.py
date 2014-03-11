@@ -49,14 +49,6 @@ def register_topo_fetch_log_callback(func):
     __keyspace_fetch_logging = func
 
 
-# Clear the keyspace from cache.
-def __clear_keyspace(name):
-  try:
-    del __keyspace_map[name]
-  except KeyError:
-    pass
-
-
 # This returns the keyspace object for the keyspace name
 # from the cached topology map or None if not found.
 def get_keyspace(name):
@@ -76,7 +68,7 @@ def get_time_last_fetch(name):
 
 
 # This adds the keyspace object to the cached topology map.
-def __add_keyspace(ks):
+def __set_keyspace(ks):
   __keyspace_map[ks.name] = (ks, time.time())
 
 
@@ -98,8 +90,7 @@ def refresh_keyspace(zkocc_client, name):
   ks = keyspace.read_keyspace(zkocc_client, name)
   topo_rtt = time.time() - start_time
   if ks is not None:
-    __clear_keyspace(name)
-    __add_keyspace(ks)
+    __set_keyspace(ks)
 
   if __keyspace_fetch_logging is not None:
     __keyspace_fetch_logging(name, topo_rtt)
@@ -130,7 +121,7 @@ def read_topology(zkocc_client, read_fqdb_keys=True):
   for keyspace_name in keyspace_list:
     try:
       ks = keyspace.read_keyspace(zkocc_client, keyspace_name)
-      __add_keyspace(ks)
+      __set_keyspace(ks)
       for shard_name in ks.shard_names:
         for db_type in ks.db_types:
           db_key_parts = [ks.name, shard_name, db_type]
