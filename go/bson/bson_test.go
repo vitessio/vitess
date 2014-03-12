@@ -355,6 +355,36 @@ func TestEncodeFieldNil(t *testing.T) {
 	}
 }
 
+func TestStream(t *testing.T) {
+	buf := bytes.NewBuffer(nil)
+	err := MarshalToStream(buf, 1)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	want := "\x14\x00\x00\x00\x12_Val_\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00"
+	got := buf.String()
+	if got != want {
+		t.Errorf("got \n%q, want %q", got, want)
+	}
+	readbuf := bytes.NewBuffer(buf.Bytes())
+	var out int64
+	err = UnmarshalFromStream(readbuf, &out)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if out != 1 {
+		t.Errorf("got %d, want 1", out)
+	}
+	err = MarshalToStream(buf, make(chan int))
+	want = "unexpected type chan int"
+	got = err.Error()
+	if got != want {
+		t.Errorf("got \n%q, want %q", got, want)
+	}
+}
+
 var testMap map[string]interface{}
 var testBlob []byte
 
