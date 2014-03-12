@@ -270,7 +270,7 @@ func EncodeUint(buf *bytes2.ChunkedWriter, key string, val uint) {
 	EncodeUint64(buf, key, uint64(val))
 }
 
-// EncodeFlat64 encodes a float64.
+// EncodeFloat64 encodes a float64.
 func EncodeFloat64(buf *bytes2.ChunkedWriter, key string, val float64) {
 	EncodePrefix(buf, Number, key)
 	bits := math.Float64bits(val)
