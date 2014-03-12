@@ -134,6 +134,9 @@ func EncodeSimple(buf *bytes2.ChunkedWriter, val interface{}) {
 	lenWriter.RecordLen()
 }
 
+// EncodeField encodes val using the supplied key as embedded tag.
+// Unlike EncodeInterface, EncodeField can handle complex objects
+// like structs, pointers, etc.
 func EncodeField(buf *bytes2.ChunkedWriter, key string, val interface{}) {
 	encodeField(buf, key, reflect.ValueOf(val))
 }
@@ -199,6 +202,9 @@ func encodeField(buf *bytes2.ChunkedWriter, key string, val reflect.Value) {
 	}
 }
 
+// EncodeOptionalPrefix encodes the key as prefix if it's not empty.
+// If it is empty, then it's a no-op, with the assumption that
+// it's a top level object.
 func EncodeOptionalPrefix(buf *bytes2.ChunkedWriter, etype byte, key string) {
 	if key == "" {
 		return
@@ -206,6 +212,7 @@ func EncodeOptionalPrefix(buf *bytes2.ChunkedWriter, etype byte, key string) {
 	EncodePrefix(buf, etype, key)
 }
 
+// EncodePrefix encodes key as prefix for the next object or value.
 func EncodePrefix(buf *bytes2.ChunkedWriter, etype byte, key string) {
 	b := buf.Reserve(len(key) + 2)
 	b[0] = etype
@@ -213,6 +220,7 @@ func EncodePrefix(buf *bytes2.ChunkedWriter, etype byte, key string) {
 	b[len(b)-1] = 0
 }
 
+// EncodeString encodes a string.
 func EncodeString(buf *bytes2.ChunkedWriter, key string, val string) {
 	// Encode strings as binary; go strings are not necessarily unicode
 	EncodePrefix(buf, Binary, key)
@@ -221,6 +229,7 @@ func EncodeString(buf *bytes2.ChunkedWriter, key string, val string) {
 	buf.WriteString(val)
 }
 
+// EncodeBinary encodes a []byte as binary.
 func EncodeBinary(buf *bytes2.ChunkedWriter, key string, val []byte) {
 	EncodePrefix(buf, Binary, key)
 	putUint32(buf, uint32(len(val)))
@@ -228,39 +237,47 @@ func EncodeBinary(buf *bytes2.ChunkedWriter, key string, val []byte) {
 	buf.Write(val)
 }
 
+// EncodeInt64 encodes an int64.
 func EncodeInt64(buf *bytes2.ChunkedWriter, key string, val int64) {
 	EncodePrefix(buf, Long, key)
 	putUint64(buf, uint64(val))
 }
 
+// EncodeInt32 encodes an int32.
 func EncodeInt32(buf *bytes2.ChunkedWriter, key string, val int32) {
 	EncodePrefix(buf, Int, key)
 	putUint32(buf, uint32(val))
 }
 
+// EncodeInt encodes an int.
 func EncodeInt(buf *bytes2.ChunkedWriter, key string, val int) {
 	EncodeInt64(buf, key, int64(val))
 }
 
+// EncodeUint64 encodes an uint64.
 func EncodeUint64(buf *bytes2.ChunkedWriter, key string, val uint64) {
 	EncodePrefix(buf, Ulong, key)
 	putUint64(buf, val)
 }
 
+// EncodeUint32 encodes an uint32.
 func EncodeUint32(buf *bytes2.ChunkedWriter, key string, val uint32) {
 	EncodeUint64(buf, key, uint64(val))
 }
 
+// EncodeUint encodes an uint.
 func EncodeUint(buf *bytes2.ChunkedWriter, key string, val uint) {
 	EncodeUint64(buf, key, uint64(val))
 }
 
+// EncodeFloat64 encodes a float64.
 func EncodeFloat64(buf *bytes2.ChunkedWriter, key string, val float64) {
 	EncodePrefix(buf, Number, key)
 	bits := math.Float64bits(val)
 	putUint64(buf, bits)
 }
 
+// EncodeBool encodes a bool.
 func EncodeBool(buf *bytes2.ChunkedWriter, key string, val bool) {
 	EncodePrefix(buf, Boolean, key)
 	if val {
@@ -270,6 +287,7 @@ func EncodeBool(buf *bytes2.ChunkedWriter, key string, val bool) {
 	}
 }
 
+// EncodeTime encodes a time.Time.
 func EncodeTime(buf *bytes2.ChunkedWriter, key string, val time.Time) {
 	EncodePrefix(buf, Datetime, key)
 	mtime := val.UnixNano() / 1e6

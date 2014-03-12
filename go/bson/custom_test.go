@@ -10,7 +10,74 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/youtube/vitess/go/bytes2"
 )
+
+const (
+	bsonValNil     = "\nVal\x00"
+	bsonValBytes   = "\x05Val\x00\x04\x00\x00\x00\x00test"
+	bsonValInt64   = "\x12Val\x00\x01\x00\x00\x00\x00\x00\x00\x00"
+	bsonValInt32   = "\x10Val\x00\x01\x00\x00\x00"
+	bsonValUint64  = "?Val\x00\x01\x00\x00\x00\x00\x00\x00\x00"
+	bsonValFloat64 = "\x01Val\x00\x00\x00\x00\x00\x00\x00\xf0?"
+	bsonValBool    = "\bVal\x00\x01"
+	bsonValMap     = "\x03Val\x00\x13\x00\x00\x00\x12Val1\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00"
+	bsonValSlice   = "\x04Val\x00\x10\x00\x00\x00\x120\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00"
+	bsonValTime    = "\tVal\x00\x88\xf2\\\x8d\b\x01\x00\x00"
+)
+
+var interfaceMarshalCases = []struct {
+	desc string
+	in   interface{}
+	out  string
+}{
+	{"nil", nil, bsonValNil},
+	{"string", "test", bsonValBytes},
+	{"[]byte", []byte("test"), bsonValBytes},
+	{"int64", int64(1), bsonValInt64},
+	{"int32", int32(1), bsonValInt32},
+	{"int", int(1), bsonValInt64},
+	{"uint64", uint64(1), bsonValUint64},
+	{"uint32", uint32(1), bsonValUint64},
+	{"uint", uint(1), bsonValUint64},
+	{"float64", float64(1.0), bsonValFloat64},
+	{"bool", true, bsonValBool},
+	{"nil map", map[string]interface{}(nil), bsonValNil},
+	{"map", map[string]interface{}{"Val1": 1}, bsonValMap},
+	{"nil slice", []interface{}(nil), bsonValNil},
+	{"slice", []interface{}{1}, bsonValSlice},
+	{"time", time.Unix(1136243045, 0).UTC(), bsonValTime},
+}
+
+func TestInterfaceMarshal(t *testing.T) {
+	for _, tcase := range interfaceMarshalCases {
+		buf := bytes2.NewChunkedWriter(DefaultBufferSize)
+		EncodeInterface(buf, "Val", tcase.in)
+		got := string(buf.Bytes())
+		if got != tcase.out {
+			t.Errorf("%s: got \n%q, want \n%q", tcase.desc, got, tcase.out)
+		}
+	}
+}
+
+func TestInterfaceMarshalFailure(t *testing.T) {
+	want := "don't know how to marshal chan int"
+	func() {
+		defer func() {
+			if x := recover(); x != nil {
+				got := x.(BsonError).Error()
+				if got != want {
+					t.Errorf("got %s, want %s", got, want)
+				}
+				return
+			}
+		}()
+		buf := bytes2.NewChunkedWriter(DefaultBufferSize)
+		EncodeInterface(buf, "Val", make(chan int))
+		t.Errorf("got no error, want %s", want)
+	}()
+}
 
 const (
 	bsonString      = "\x05\x00\x00\x00test\x00"
