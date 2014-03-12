@@ -20,28 +20,30 @@ import (
 
 var (
 	encoderMap = map[string]string{
-		"float64": "EncodeFloat64",
-		"string":  "EncodeString",
-		"bool":    "EncodeBool",
-		"int64":   "EncodeInt64",
-		"int32":   "EncodeInt32",
-		"int":     "EncodeInt",
-		"uint64":  "EncodeUint64",
-		"uint32":  "EncodeUint32",
-		"uint":    "EncodeUint",
-		"[]byte":  "EncodeBinary",
+		"float64":     "EncodeFloat64",
+		"string":      "EncodeString",
+		"bool":        "EncodeBool",
+		"int64":       "EncodeInt64",
+		"int32":       "EncodeInt32",
+		"int":         "EncodeInt",
+		"uint64":      "EncodeUint64",
+		"uint32":      "EncodeUint32",
+		"uint":        "EncodeUint",
+		"[]byte":      "EncodeBinary",
+		"interface{}": "EncodeInterface",
 	}
 	decoderMap = map[string]string{
-		"float64": "DecodeFloat64",
-		"string":  "DecodeString",
-		"bool":    "DecodeBool",
-		"int64":   "DecodeInt64",
-		"int32":   "DecodeInt32",
-		"int":     "DecodeInt",
-		"uint64":  "DecodeUint64",
-		"uint32":  "DecodeUint32",
-		"uint":    "DecodeUint",
-		"[]byte":  "DecodeBinary",
+		"float64":     "DecodeFloat64",
+		"string":      "DecodeString",
+		"bool":        "DecodeBool",
+		"int64":       "DecodeInt64",
+		"int32":       "DecodeInt32",
+		"int":         "DecodeInt",
+		"uint64":      "DecodeUint64",
+		"uint32":      "DecodeUint32",
+		"uint":        "DecodeUint",
+		"[]byte":      "DecodeBinary",
+		"interface{}": "DecodeInterface",
 	}
 )
 
@@ -158,6 +160,11 @@ func buildField(fieldType ast.Expr, tag, name string) (*FieldInfo, error) {
 			return nil, fmt.Errorf("%s is not a recognized type", ident.Name)
 		}
 		return &FieldInfo{Tag: tag, Name: name, typ: ident.Name}, nil
+	case *ast.InterfaceType:
+		if ident.Methods.List != nil {
+			goto notSimple
+		}
+		return &FieldInfo{Tag: tag, Name: name, typ: "interface{}"}, nil
 	case *ast.ArrayType:
 		if ident.Len != nil {
 			goto notSimple
