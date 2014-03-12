@@ -426,6 +426,24 @@ func BenchmarkUnmarshal(b *testing.B) {
 	}
 }
 
+func BenchmarkEncodeField(b *testing.B) {
+	values := []interface{}{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	for i := 0; i < b.N; i++ {
+		buf := bytes2.NewChunkedWriter(2048)
+		EncodeField(buf, "Val", values)
+		buf.Reset()
+	}
+}
+
+func BenchmarkEncodeInterface(b *testing.B) {
+	values := []interface{}{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	for i := 0; i < b.N; i++ {
+		buf := bytes2.NewChunkedWriter(2048)
+		EncodeInterface(buf, "Val", values)
+		buf.Reset()
+	}
+}
+
 func verifyMarshal(t *testing.T, val interface{}) []byte {
 	got, err := Marshal(val)
 	if err != nil {

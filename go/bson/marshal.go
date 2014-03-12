@@ -136,7 +136,7 @@ func EncodeSimple(buf *bytes2.ChunkedWriter, val interface{}) {
 
 // EncodeField encodes val using the supplied key as embedded tag.
 // Unlike EncodeInterface, EncodeField can handle complex objects
-// like structs, pointers, etc.
+// like structs, pointers, etc. But it is slower.
 func EncodeField(buf *bytes2.ChunkedWriter, key string, val interface{}) {
 	encodeField(buf, key, reflect.ValueOf(val))
 }
