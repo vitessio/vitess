@@ -9,12 +9,11 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-func (wr *Wrangler) ShardExternallyReparented(keyspace, shard string, masterElectTabletAlias topo.TabletAlias, scrapStragglers, continueOnUnexpectedMaster bool, acceptSuccessPercents int) error {
+func (wr *Wrangler) ShardExternallyReparented(keyspace, shard string, masterElectTabletAlias topo.TabletAlias) error {
 	// grab the shard lock
 	actionNode := actionnode.ShardExternallyReparented(masterElectTabletAlias)
 	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
@@ -23,13 +22,13 @@ func (wr *Wrangler) ShardExternallyReparented(keyspace, shard string, masterElec
 	}
 
 	// do the work
-	err = wr.shardExternallyReparentedLocked(keyspace, shard, masterElectTabletAlias, scrapStragglers, continueOnUnexpectedMaster, acceptSuccessPercents)
+	err = wr.shardExternallyReparentedLocked(keyspace, shard, masterElectTabletAlias)
 
 	// release the lock in any case
 	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 }
 
-func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, masterElectTabletAlias topo.TabletAlias, scrapStragglers, continueOnUnexpectedMaster bool, acceptSuccessPercents int) error {
+func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, masterElectTabletAlias topo.TabletAlias) error {
 	// read the shard, make sure the master is not already good.
 	// critical read, we want up to date info (and the shard is locked).
 	shardInfo, err := wr.ts.GetShardCritical(keyspace, shard)
@@ -66,7 +65,7 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 
 	// sort the tablets, and handle them
 	slaveTabletMap, masterTabletMap := sortedTabletMap(tabletMap)
-	err = wr.reparentShardExternal(slaveTabletMap, masterTabletMap, masterElectTablet, scrapStragglers, continueOnUnexpectedMaster, acceptSuccessPercents)
+	err = wr.reparentShardExternal(slaveTabletMap, masterTabletMap, masterElectTablet)
 	if err != nil {
 		log.Infof("Skipping shard rebuild with failed reparent")
 		return err
@@ -86,7 +85,7 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 		rebuildShardOptions{IgnorePartialResult: partialTopology, Critical: true})
 }
 
-func (wr *Wrangler) reparentShardExternal(slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo, scrapStragglers, continueOnUnexpectedMaster bool, acceptSuccessPercents int) error {
+func (wr *Wrangler) reparentShardExternal(slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo) error {
 	// we fix the new master in the replication graph
 	err := wr.slaveWasPromoted(masterElectTablet)
 	if err != nil {
@@ -106,20 +105,15 @@ func (wr *Wrangler) reparentShardExternal(slaveTabletMap, masterTabletMap map[to
 	}
 
 	// then fix all the slaves, including the old master
-	return wr.restartSlavesExternal(slaveTabletMap, masterTabletMap, masterElectTablet, scrapStragglers, continueOnUnexpectedMaster, acceptSuccessPercents)
+	wr.restartSlavesExternal(slaveTabletMap, masterTabletMap, masterElectTablet)
+	return nil
 }
 
-func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo, scrapStragglers, continueOnUnexpectedMaster bool, acceptSuccessPercents int) error {
-	recorder := concurrency.AllErrorRecorder{}
+func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo) {
 	wg := sync.WaitGroup{}
 
 	swrd := actionnode.SlaveWasRestartedArgs{
-		Parent:               masterElectTablet.Alias,
-		ExpectedMasterAddr:   masterElectTablet.GetMysqlAddr(),
-		ExpectedMasterIpAddr: masterElectTablet.GetMysqlIpAddr(),
-		ScrapStragglers:      scrapStragglers,
-		// Disabled for now
-		// ContinueOnUnexpectedMaster: continueOnUnexpectedMaster,
+		Parent: masterElectTablet.Alias,
 	}
 
 	// The following two blocks of actions are very likely to time
@@ -128,19 +122,20 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[to
 	// we get to wr.actionTimeout(). After this, no other action
 	// with a timeout is executed, so even if we got to the
 	// timeout, we're still good.
-	log.Infof("Making sure all tablets have the right master:")
+	log.Infof("Updating individual tablets with the right master...")
 
 	// do all the slaves
 	for _, ti := range slaveTabletMap {
 		wg.Add(1)
 		go func(ti *topo.TabletInfo) {
-			recorder.RecordError(wr.slaveWasRestarted(ti, &swrd))
+			if err := wr.slaveWasRestarted(ti, &swrd); err != nil {
+				log.Warningf("Slave %v had an error: %v", ti.Alias, err)
+			}
 			wg.Done()
 		}(ti)
 	}
 
-	// and do the old master and any straggler, if possible, but
-	// do not record errors for these
+	// and do the old master and any straggler, if possible.
 	for _, ti := range masterTabletMap {
 		wg.Add(1)
 		go func(ti *topo.TabletInfo) {
@@ -159,19 +154,6 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[to
 		}(ti)
 	}
 	wg.Wait()
-
-	if !recorder.HasErrors() {
-		return nil
-	}
-
-	// report errors only above a threshold
-	failurePercent := 100 * len(recorder.Errors) / (len(slaveTabletMap) + 1)
-	if failurePercent < 100-acceptSuccessPercents {
-		log.Warningf("Encountered %v%% failure, we keep going. Errors: %v", failurePercent, recorder.Error())
-		return nil
-	}
-
-	return recorder.Error()
 }
 
 func (wr *Wrangler) slaveWasPromoted(ti *topo.TabletInfo) error {
@@ -202,23 +184,4 @@ func (wr *Wrangler) slaveWasRestarted(ti *topo.TabletInfo, swrd *actionnode.Slav
 		}
 		return wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 	}
-}
-
-// SlaveWasRestarted notifies the tablet identified by tablet that its
-// master has changed to masterAlias.
-func (wr *Wrangler) SlaveWasRestarted(alias, masterAlias topo.TabletAlias, scrapStragglers bool) error {
-	master, err := wr.TopoServer().GetTablet(masterAlias)
-	if err != nil {
-		return err
-	}
-	tablet, err := wr.TopoServer().GetTablet(alias)
-	if err != nil {
-		return err
-	}
-	return wr.slaveWasRestarted(tablet, &actionnode.SlaveWasRestartedArgs{
-		Parent:               masterAlias,
-		ExpectedMasterAddr:   master.GetMysqlAddr(),
-		ExpectedMasterIpAddr: master.GetMysqlIpAddr(),
-		ScrapStragglers:      scrapStragglers,
-	})
 }

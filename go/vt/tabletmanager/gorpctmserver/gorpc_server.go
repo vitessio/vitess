@@ -207,13 +207,13 @@ func (tm *TabletManager) RunBlpUntil(context *rpcproto.Context, args *gorpcproto
 
 func (tm *TabletManager) SlaveWasPromoted(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SLAVE_WAS_PROMOTED, args, reply, func() error {
-		return tabletmanager.SlaveWasPromoted(tm.agent.TopoServer, tm.agent.Mysqld, tm.agent.TabletAlias)
+		return tabletmanager.SlaveWasPromoted(tm.agent.TopoServer, tm.agent.TabletAlias)
 	})
 }
 
 func (tm *TabletManager) SlaveWasRestarted(context *rpcproto.Context, args *actionnode.SlaveWasRestartedArgs, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SLAVE_WAS_RESTARTED, args, reply, func() error {
-		return tabletmanager.SlaveWasRestarted(tm.agent.TopoServer, tm.agent.Mysqld, tm.agent.TabletAlias, args)
+		return tabletmanager.SlaveWasRestarted(tm.agent.TopoServer, tm.agent.TabletAlias, args)
 	})
 }
 

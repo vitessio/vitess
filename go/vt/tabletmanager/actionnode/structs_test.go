@@ -11,8 +11,8 @@ import (
 )
 
 // These tests encode a slaveWasRestartedTestArgs (same as
-// SlaveWasRestartedArgs but without the ContinueOnUnexpectedMaster
-// field) and try to decode it as a SlaveWasRestartedArgs, and vice versa
+// SlaveWasRestartedArgs but with a few more arguments) and try to
+// decode it as a SlaveWasRestartedArgs, and vice versa
 
 type slaveWasRestartedTestArgs struct {
 	Parent               topo.TabletAlias
@@ -47,11 +47,6 @@ func TestExtraFieldsJson(t *testing.T) {
 			Uid:  1,
 			Cell: "aa",
 		},
-		ExpectedMasterAddr:   "a1",
-		ExpectedMasterIpAddr: "i1",
-		ScrapStragglers:      true,
-		// Disabled for now
-		// ContinueOnUnexpectedMaster: true,
 	}
 	data := jscfg.ToJson(swra)
 
@@ -91,11 +86,6 @@ func TestExtraFieldsBson(t *testing.T) {
 			Uid:  1,
 			Cell: "aa",
 		},
-		ExpectedMasterAddr:   "a1",
-		ExpectedMasterIpAddr: "i1",
-		ScrapStragglers:      true,
-		// Disabled for now
-		// ContinueOnUnexpectedMaster: true,
 	}
 	data, err := bson.Marshal(swra)
 	if err != nil {
@@ -106,7 +96,6 @@ func TestExtraFieldsBson(t *testing.T) {
 
 	err = bson.Unmarshal(data, output)
 	if err != nil {
-		// This should not error out. See b/12857170
-		// t.Error(err)
+		t.Error(err)
 	}
 }

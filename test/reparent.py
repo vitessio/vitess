@@ -368,13 +368,8 @@ class TestReparent(unittest.TestCase):
       if environment.topo_server_implementation == 'zookeeper':
         utils.run(environment.binary_path('zk')+' rm -rf ' + tablet_62344.zk_tablet_path)
 
-    # try to pretend the wrong host is the master, should fail
-    stdout, stderr = utils.run_vtctl('ShardExternallyReparented -scrap-stragglers test_keyspace/0 %s' % tablet_41983.tablet_alias, auto_log=True, expect_fail=True)
-    if not "new master is a slave" in stderr:
-      self.fail('Unexpected error message in output: %v' % stderr)
-
     # update zk with the new graph
-    utils.run_vtctl('ShardExternallyReparented -scrap-stragglers test_keyspace/0 %s' % tablet_62044.tablet_alias, auto_log=True)
+    utils.run_vtctl('ShardExternallyReparented test_keyspace/0 %s' % tablet_62044.tablet_alias, auto_log=True)
 
     self._test_reparent_from_outside_check(brutal)
 
