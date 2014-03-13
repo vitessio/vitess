@@ -318,7 +318,7 @@ def wait_for_vars(name, port, var=None):
 
 # zkocc helpers
 def zkocc_start(cells=['test_nj'], extra_params=[]):
-  args = e[nvironment.binary_path('zkocc'),
+  args = [environment.binary_path('zkocc'),
           '-port', str(environment.zkocc_port_base),
           '-stderrthreshold=ERROR',
           ] + extra_params + cells
