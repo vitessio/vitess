@@ -143,14 +143,6 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 			continue
 		}
 
-		// if the tablet doesn't have the right master, ignore it
-		if tablet.Type != topo.TYPE_MASTER {
-			if tablet.Parent != shardInfo.MasterAlias {
-				log.Warningf("Tablet %v doesn't have the right master (it has %v expecting %v), skipping it", tablet.Alias, tablet.Parent, shardInfo.MasterAlias)
-				continue
-			}
-		}
-
 		// this is {cell,keyspace,shard}
 		// we'll get the children to find the existing types
 		shardLocation := cellKeyspaceShard{tablet.Tablet.Alias.Cell, tablet.Tablet.Keyspace, tablet.Shard}
