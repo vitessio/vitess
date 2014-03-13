@@ -4,6 +4,8 @@
 
 package mytype
 
+import "time"
+
 type MyType struct {
 	Float64   float64
 	String    string
@@ -19,4 +21,5 @@ type MyType struct {
 	Strings   *[]*string
 	Map       map[string]int64
 	Interface interface{}
+	Time      time.Time
 }

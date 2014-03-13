@@ -20,30 +20,32 @@ import (
 
 var (
 	encoderMap = map[string]string{
-		"float64":     "EncodeFloat64",
 		"string":      "EncodeString",
-		"bool":        "EncodeBool",
+		"[]byte":      "EncodeBinary",
 		"int64":       "EncodeInt64",
 		"int32":       "EncodeInt32",
 		"int":         "EncodeInt",
 		"uint64":      "EncodeUint64",
 		"uint32":      "EncodeUint32",
 		"uint":        "EncodeUint",
-		"[]byte":      "EncodeBinary",
+		"float64":     "EncodeFloat64",
+		"bool":        "EncodeBool",
 		"interface{}": "EncodeInterface",
+		"time.Time":   "EncodeTime",
 	}
 	decoderMap = map[string]string{
-		"float64":     "DecodeFloat64",
 		"string":      "DecodeString",
-		"bool":        "DecodeBool",
+		"[]byte":      "DecodeBinary",
 		"int64":       "DecodeInt64",
 		"int32":       "DecodeInt32",
 		"int":         "DecodeInt",
 		"uint64":      "DecodeUint64",
 		"uint32":      "DecodeUint32",
 		"uint":        "DecodeUint",
-		"[]byte":      "DecodeBinary",
+		"float64":     "DecodeFloat64",
+		"bool":        "DecodeBool",
 		"interface{}": "DecodeInterface",
+		"time.Time":   "DecodeTime",
 	}
 )
 
@@ -194,6 +196,15 @@ func buildField(fieldType ast.Expr, tag, name string) (*FieldInfo, error) {
 			return nil, err
 		}
 		return &FieldInfo{Tag: tag, Name: name, typ: "map[string]", Subfield: subfield}, nil
+	case *ast.SelectorExpr:
+		pkg, ok := ident.X.(*ast.Ident)
+		if !ok || pkg.Name != "time" {
+			goto notSimple
+		}
+		if ident.Sel.Name != "Time" {
+			goto notSimple
+		}
+		return &FieldInfo{Tag: tag, Name: name, typ: "time.Time"}, nil
 	}
 notSimple:
 	return nil, fmt.Errorf("%#v is not a simple type", fieldType)
