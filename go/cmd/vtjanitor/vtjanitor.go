@@ -15,7 +15,6 @@ import (
 )
 
 var (
-	port          = flag.Int("port", 0, "port to bind")
 	sleepTime     = flag.Duration("sleep_time", 3*time.Minute, "how long to sleep between janitor runs")
 	lockTimeout   = flag.Duration("lock_timeout", 15*time.Second, "lock time for wrangler/chubby operations")
 	actionTimeout = flag.Duration("action_timeout", 60*time.Second, "time to wait for an action before resorting to force")
@@ -60,5 +59,5 @@ func main() {
 	scheduler.Enable(activeModules)
 	scheduler.EnableDryRun(dryRunModules)
 	go scheduler.Run()
-	servenv.Run(*port)
+	servenv.Run()
 }
