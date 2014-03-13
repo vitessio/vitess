@@ -75,6 +75,13 @@ func (f *FieldInfo) IsMap() bool {
 	return f.typ == "map[string]"
 }
 
+func (f *FieldInfo) IsCustom() bool {
+	if f.IsPointer() || f.IsSlice() || f.IsMap() {
+		return false
+	}
+	return encoderMap[f.typ] == ""
+}
+
 func (f *FieldInfo) Encoder() string {
 	return encoderMap[f.typ]
 }
@@ -158,9 +165,6 @@ func buildFields(structType *ast.StructType, varName string) ([]*FieldInfo, erro
 func buildField(fieldType ast.Expr, tag, name string) (*FieldInfo, error) {
 	switch ident := fieldType.(type) {
 	case *ast.Ident:
-		if encoderMap[ident.Name] == "" {
-			return nil, fmt.Errorf("%s is not a recognized type", ident.Name)
-		}
 		return &FieldInfo{Tag: tag, Name: name, typ: ident.Name}, nil
 	case *ast.InterfaceType:
 		if ident.Methods.List != nil {
@@ -198,13 +202,10 @@ func buildField(fieldType ast.Expr, tag, name string) (*FieldInfo, error) {
 		return &FieldInfo{Tag: tag, Name: name, typ: "map[string]", Subfield: subfield}, nil
 	case *ast.SelectorExpr:
 		pkg, ok := ident.X.(*ast.Ident)
-		if !ok || pkg.Name != "time" {
+		if !ok {
 			goto notSimple
 		}
-		if ident.Sel.Name != "Time" {
-			goto notSimple
-		}
-		return &FieldInfo{Tag: tag, Name: name, typ: "time.Time"}, nil
+		return &FieldInfo{Tag: tag, Name: name, typ: pkg.Name + "." + ident.Sel.Name}, nil
 	}
 notSimple:
 	return nil, fmt.Errorf("%#v is not a simple type", fieldType)
@@ -234,6 +235,8 @@ func main() {
 
 var generator = template.Must(template.New("Generator").Parse(`
 {{define "SimpleEncoder"}}bson.{{.Encoder}}(buf, {{.Tag}}, {{.Name}}){{end}}
+
+{{define "CustomEncoder"}}{{.Name}}.MarshalBson(buf, {{.Tag}}){{end}}
 
 {{define "StarEncoder"}}if {{.Name}} == nil {
 	bson.EncodePrefix(buf, bson.Null, {{.Tag}})
@@ -265,9 +268,11 @@ var generator = template.Must(template.New("Generator").Parse(`
 	lenWriter.RecordLen()
 }{{end}}
 
-{{define "Encoder"}}{{if .IsPointer}}{{template "StarEncoder" .}}{{else if .IsSlice}}{{template "SliceEncoder" .}}{{else if .IsMap}}{{template "MapEncoder" .}}{{else}}{{template "SimpleEncoder" .}}{{end}}{{end}}
+{{define "Encoder"}}{{if .IsPointer}}{{template "StarEncoder" .}}{{else if .IsSlice}}{{template "SliceEncoder" .}}{{else if .IsMap}}{{template "MapEncoder" .}}{{else if .IsCustom}}{{template "CustomEncoder" .}}{{else}}{{template "SimpleEncoder" .}}{{end}}{{end}}
 
 {{define "SimpleDecoder"}}{{.Name}} = bson.{{.Decoder}}(buf, kind){{end}}
+
+{{define "CustomDecoder"}}{{.Name}}.UnmarshalBson(buf, kind){{end}}
 
 {{define "StarDecoder"}}if kind == bson.Null {
 	{{.Name}} = nil
@@ -305,11 +310,11 @@ if kind == bson.Null {
 	for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 		k = bson.ReadCString(buf)
 		{{template "Decoder" .Subfield}}
-		({{.Name}})[k] = {{.Subfield.Name}}
+		{{.Name}}[k] = {{.Subfield.Name}}
 	}
 }{{end}}
 
-{{define "Decoder"}}{{if .IsPointer}}{{template "StarDecoder" .}}{{else if .IsSlice}}{{template "SliceDecoder" .}}{{else if .IsMap}}{{template "MapDecoder" .}}{{else}}{{template "SimpleDecoder" .}}{{end}}{{end}}
+{{define "Decoder"}}{{if .IsPointer}}{{template "StarDecoder" .}}{{else if .IsSlice}}{{template "SliceDecoder" .}}{{else if .IsMap}}{{template "MapDecoder" .}}{{else if .IsCustom}}{{template "CustomDecoder" .}}{{else}}{{template "SimpleDecoder" .}}{{end}}{{end}}
 
 {{define "Body"}}// Copyright 2012, Google Inc. All rights reserved.
 // Use of this source code is governed by a BSD-style
