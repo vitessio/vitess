@@ -264,7 +264,7 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 		}
 		switch plan.PlanId {
 		case sqlparser.PLAN_PASS_DML:
-			if qe.strictMode.Get() == 1 {
+			if qe.strictMode.Get() != 0 {
 				panic(NewTabletError(FAIL, "DML too complex"))
 			}
 			reply = qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
