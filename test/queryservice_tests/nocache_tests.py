@@ -145,7 +145,7 @@ class TestNocache(framework.TestCase):
       self.env.conn.rollback()
 
   def test_pass_dml(self):
-    self.env.execute("set vt_allow_pass_dml=1")
+    self.env.execute("set vt_strict_mode=0")
     self.env.conn.begin()
     try:
       self.env.execute("insert into vtocc_a(eid, id, name, foo) values (7, 1+1, '', '')")
@@ -155,7 +155,7 @@ class TestNocache(framework.TestCase):
       self.env.execute("insert into vtocc_d(eid, id) values (1, 1)")
     finally:
       self.env.conn.rollback()
-      self.env.execute("set vt_allow_pass_dml=0")
+      self.env.execute("set vt_strict_mode=1")
 
   def test_for_update(self):
     try:

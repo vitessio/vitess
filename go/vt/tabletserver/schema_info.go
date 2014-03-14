@@ -120,12 +120,12 @@ func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout tim
 	return si
 }
 
-func (si *SchemaInfo) Open(connFactory CreateConnectionFunc, schemaOverrides []SchemaOverride, cachePool *CachePool, qrs *QueryRules) {
+func (si *SchemaInfo) Open(connFactory CreateConnectionFunc, schemaOverrides []SchemaOverride, cachePool *CachePool, qrs *QueryRules, strictMode bool) {
 	si.connPool.Open(connFactory)
 	conn := si.connPool.Get()
 	defer conn.Recycle()
 
-	if !conn.VerifyStrict() {
+	if strictMode && !conn.VerifyStrict() {
 		panic(NewTabletError(FATAL, "Could not verify strict mode"))
 	}
 

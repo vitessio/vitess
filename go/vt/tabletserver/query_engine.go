@@ -45,7 +45,7 @@ type QueryEngine struct {
 	consolidator   *Consolidator
 
 	spotCheckFreq sync2.AtomicInt64
-	allowPassDML  sync2.AtomicInt64
+	strictMode    sync2.AtomicInt64
 
 	maxResultSize    sync2.AtomicInt64
 	streamBufferSize sync2.AtomicInt64
@@ -97,8 +97,8 @@ func NewQueryEngine(config Config) *QueryEngine {
 
 	// vars
 	qe.spotCheckFreq = sync2.AtomicInt64(config.SpotCheckRatio * SPOT_CHECK_MULTIPLIER)
-	if config.AllowPassDML {
-		qe.allowPassDML.Set(1)
+	if config.StrictMode {
+		qe.strictMode.Set(1)
 	}
 	qe.maxResultSize = sync2.AtomicInt64(config.MaxResultSize)
 	qe.streamBufferSize = sync2.AtomicInt64(config.StreamBufferSize)
@@ -135,7 +135,11 @@ func (qe *QueryEngine) Open(dbconfig *dbconfigs.DBConfig, schemaOverrides []Sche
 		log.Infof("rowcache not enabled")
 	}
 	start := time.Now()
-	qe.schemaInfo.Open(connFactory, schemaOverrides, qe.cachePool, qrs)
+	strictMode := false
+	if qe.strictMode.Get() != 0 {
+		strictMode = true
+	}
+	qe.schemaInfo.Open(connFactory, schemaOverrides, qe.cachePool, qrs, strictMode)
 	log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))
 	qe.connPool.Open(connFactory)
 	qe.streamConnPool.Open(connFactory)
@@ -260,7 +264,7 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 		}
 		switch plan.PlanId {
 		case sqlparser.PLAN_PASS_DML:
-			if qe.allowPassDML.Get() == 0 {
+			if qe.strictMode.Get() == 1 {
 				panic(NewTabletError(FAIL, "DML too complex"))
 			}
 			reply = qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
@@ -695,8 +699,8 @@ func (qe *QueryEngine) execSet(logStats *sqlQueryStats, conn PoolConnection, pla
 		qe.activePool.SetIdleTimeout(t)
 	case "vt_spot_check_ratio":
 		qe.spotCheckFreq.Set(int64(getFloat64(plan.SetValue) * SPOT_CHECK_MULTIPLIER))
-	case "vt_allow_pass_dml":
-		qe.allowPassDML.Set(getInt64(plan.SetValue))
+	case "vt_strict_mode":
+		qe.strictMode.Set(getInt64(plan.SetValue))
 	default:
 		return qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
 	}

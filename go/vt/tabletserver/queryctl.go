@@ -37,7 +37,7 @@ func init() {
 	flag.Float64Var(&qsConfig.SpotCheckRatio, "queryserver-config-spot-check-ratio", DefaultQsConfig.SpotCheckRatio, "query server rowcache spot check frequency")
 	flag.Float64Var(&qsConfig.StreamWaitTimeout, "queryserver-config-stream-exec-timeout", DefaultQsConfig.StreamWaitTimeout, "Timeout for stream-exec-throttle")
 	flag.BoolVar(&qsConfig.SensitiveMode, "queryserver-config-sensitive-mode", DefaultQsConfig.SensitiveMode, "enabling sensitive mode anonymizes queries when displaying diagnostics")
-	flag.BoolVar(&qsConfig.AllowPassDML, "queryserver-config-allow-pass-dml", DefaultQsConfig.AllowPassDML, "allow all DMLs including those that are too complex to be analyzed")
+	flag.BoolVar(&qsConfig.StrictMode, "queryserver-config-strict-mode-dml", DefaultQsConfig.StrictMode, "stict mode allows all DMLs and does not enforce MySQL's STRICT_TRANS_TABLES")
 	flag.StringVar(&qsConfig.RowCache.Binary, "rowcache-bin", DefaultQsConfig.RowCache.Binary, "rowcache binary file")
 	flag.IntVar(&qsConfig.RowCache.Memory, "rowcache-memory", DefaultQsConfig.RowCache.Memory, "rowcache max memory usage in MB")
 	flag.StringVar(&qsConfig.RowCache.Socket, "rowcache-socket", DefaultQsConfig.RowCache.Socket, "rowcache socket path to listen on")
@@ -100,7 +100,7 @@ type Config struct {
 	SpotCheckRatio     float64
 	StreamWaitTimeout  float64
 	SensitiveMode      bool
-	AllowPassDML       bool
+	StrictMode         bool
 }
 
 // DefaultQSConfig is the default value for the query service config.
@@ -126,7 +126,7 @@ var DefaultQsConfig = Config{
 	SpotCheckRatio:     0,
 	StreamWaitTimeout:  4 * 60,
 	SensitiveMode:      false,
-	AllowPassDML:       false,
+	StrictMode:         true,
 }
 
 var qsConfig Config
