@@ -68,7 +68,7 @@ func TestSession(t *testing.T) {
 	}
 	got := string(encoded)
 	if want != got {
-		t.Errorf("want\n%#v, got\n%#v", want, got)
+		t.Errorf("want\n%+v, got\n%+v", want, got)
 	}
 
 	var unmarshalled Session
@@ -77,7 +77,7 @@ func TestSession(t *testing.T) {
 		t.Error(err)
 	}
 	if !reflect.DeepEqual(custom, unmarshalled) {
-		t.Errorf("want \n%#v, got \n%#v", custom, unmarshalled)
+		t.Errorf("want \n%+v, got \n%+v", custom, unmarshalled)
 	}
 
 	extra, err := bson.Marshal(&extraSession{})
@@ -137,7 +137,7 @@ func TestQueryShard(t *testing.T) {
 	}
 	got := string(encoded)
 	if want != got {
-		t.Errorf("want\n%#v, got\n%#v", want, got)
+		t.Errorf("want\n%+v, got\n%+v", want, got)
 	}
 
 	var unmarshalled QueryShard
@@ -146,7 +146,7 @@ func TestQueryShard(t *testing.T) {
 		t.Error(err)
 	}
 	if !reflect.DeepEqual(custom, unmarshalled) {
-		t.Errorf("want \n%#v, got \n%#v", custom, unmarshalled)
+		t.Errorf("want \n%+v, got \n%+v", custom, unmarshalled)
 	}
 
 	extra, err := bson.Marshal(&extraQueryShard{})
@@ -208,7 +208,7 @@ func TestQueryResult(t *testing.T) {
 	}
 	got := string(encoded)
 	if want != got {
-		t.Errorf("want\n%#v, got\n%#v", want, got)
+		t.Errorf("want\n%+v, got\n%+v", want, got)
 	}
 
 	var unmarshalled QueryResult
@@ -217,7 +217,7 @@ func TestQueryResult(t *testing.T) {
 		t.Error(err)
 	}
 	if !reflect.DeepEqual(custom, unmarshalled) {
-		t.Errorf("want \n%#v, got \n%#v", custom, unmarshalled)
+		t.Errorf("want \n%+v, got \n%+v", custom, unmarshalled)
 	}
 }
 
@@ -285,7 +285,7 @@ func TestBatchQueryShard(t *testing.T) {
 	}
 	got := string(encoded)
 	if want != got {
-		t.Errorf("want\n%#v, got\n%#v", want, got)
+		t.Errorf("want\n%+v, got\n%+v", want, got)
 	}
 
 	var unmarshalled BatchQueryShard
@@ -294,7 +294,7 @@ func TestBatchQueryShard(t *testing.T) {
 		t.Error(err)
 	}
 	if !reflect.DeepEqual(custom, unmarshalled) {
-		t.Errorf("want \n%#v, got \n%#v", custom, unmarshalled)
+		t.Errorf("want \n%+v, got \n%+v", custom, unmarshalled)
 	}
 
 	extra, err := bson.Marshal(&extraBatchQueryShard{})
@@ -377,7 +377,7 @@ func TestQueryResultList(t *testing.T) {
 	}
 	got := string(encoded)
 	if want != got {
-		t.Errorf("want\n%#v, got\n%#v", want, got)
+		t.Errorf("want\n%+v, got\n%+v", want, got)
 	}
 
 	var unmarshalled QueryResultList
@@ -386,7 +386,7 @@ func TestQueryResultList(t *testing.T) {
 		t.Error(err)
 	}
 	if !reflect.DeepEqual(custom, unmarshalled) {
-		t.Errorf("want \n%#v, got \n%#v", custom, unmarshalled)
+		t.Errorf("want \n%+v, got \n%+v", custom, unmarshalled)
 	}
 
 	extra, err := bson.Marshal(&extraQueryResultList{})
@@ -399,7 +399,77 @@ func TestQueryResultList(t *testing.T) {
 	}
 }
 
-type reflectStreamQueryKeyRange struct {
+type reflectKeyspaceIdQuery struct {
+	Sql           string
+	BindVariables map[string]interface{}
+	Keyspace      string
+	KeyspaceIds   []string
+	TabletType    topo.TabletType
+	Session       *Session
+}
+
+type extraKeyspaceIdQuery struct {
+	Extra         int
+	Sql           string
+	BindVariables map[string]interface{}
+	Keyspace      string
+	KeyspaceIds   []string
+	TabletType    topo.TabletType
+	Session       *Session
+}
+
+func TestKeyspaceIdQuery(t *testing.T) {
+	reflected, err := bson.Marshal(&reflectKeyspaceIdQuery{
+		Sql:           "query",
+		BindVariables: map[string]interface{}{"val": int64(1)},
+		Keyspace:      "keyspace",
+		KeyspaceIds:   []string{"10", "18"},
+		TabletType:    "replica",
+		Session:       &commonSession,
+	})
+
+	if err != nil {
+		t.Error(err)
+	}
+	want := string(reflected)
+
+	custom := KeyspaceIdQuery{
+		Sql:           "query",
+		BindVariables: map[string]interface{}{"val": int64(1)},
+		Keyspace:      "keyspace",
+		KeyspaceIds:   []string{"10", "18"},
+		TabletType:    "replica",
+		Session:       &commonSession,
+	}
+	encoded, err := bson.Marshal(&custom)
+	if err != nil {
+		t.Error(err)
+	}
+	got := string(encoded)
+	if want != got {
+		t.Errorf("want\n%+v, got\n%+v", want, got)
+	}
+
+	var unmarshalled KeyspaceIdQuery
+	err = bson.Unmarshal(encoded, &unmarshalled)
+	if err != nil {
+		t.Error(err)
+	}
+	if !reflect.DeepEqual(custom, unmarshalled) {
+		t.Errorf("want \n%+v, got \n%+v", custom, unmarshalled)
+	}
+
+	extra, err := bson.Marshal(&extraKeyspaceIdQuery{})
+	if err != nil {
+		t.Error(err)
+	}
+	err = bson.Unmarshal(extra, &unmarshalled)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+type reflectKeyRangeQuery struct {
 	Sql           string
 	BindVariables map[string]interface{}
 	Keyspace      string
@@ -408,7 +478,7 @@ type reflectStreamQueryKeyRange struct {
 	Session       *Session
 }
 
-type extraStreamQueryKeyRange struct {
+type extraKeyRangeQuery struct {
 	Extra         int
 	Sql           string
 	BindVariables map[string]interface{}
@@ -418,8 +488,8 @@ type extraStreamQueryKeyRange struct {
 	Session       *Session
 }
 
-func TestStreamQueryKeyRange(t *testing.T) {
-	reflected, err := bson.Marshal(&reflectStreamQueryKeyRange{
+func TestKeyRangeQuery(t *testing.T) {
+	reflected, err := bson.Marshal(&reflectKeyRangeQuery{
 		Sql:           "query",
 		BindVariables: map[string]interface{}{"val": int64(1)},
 		Keyspace:      "keyspace",
@@ -433,7 +503,7 @@ func TestStreamQueryKeyRange(t *testing.T) {
 	}
 	want := string(reflected)
 
-	custom := StreamQueryKeyRange{
+	custom := KeyRangeQuery{
 		Sql:           "query",
 		BindVariables: map[string]interface{}{"val": int64(1)},
 		Keyspace:      "keyspace",
@@ -447,24 +517,126 @@ func TestStreamQueryKeyRange(t *testing.T) {
 	}
 	got := string(encoded)
 	if want != got {
-		t.Errorf("want\n%#v, got\n%#v", want, got)
+		t.Errorf("want\n%+v, got\n%+v", want, got)
 	}
 
-	var unmarshalled StreamQueryKeyRange
+	var unmarshalled KeyRangeQuery
 	err = bson.Unmarshal(encoded, &unmarshalled)
 	if err != nil {
 		t.Error(err)
 	}
 	if !reflect.DeepEqual(custom, unmarshalled) {
-		t.Errorf("want \n%#v, got \n%#v", custom, unmarshalled)
+		t.Errorf("want \n%+v, got \n%+v", custom, unmarshalled)
 	}
 
-	extra, err := bson.Marshal(&extraStreamQueryKeyRange{})
+	extra, err := bson.Marshal(&extraKeyRangeQuery{})
 	if err != nil {
 		t.Error(err)
 	}
 	err = bson.Unmarshal(extra, &unmarshalled)
 	if err != nil {
 		t.Error(err)
+	}
+}
+
+type reflectKeyspaceIdBatchQuery struct {
+	Queries     []reflectBoundQuery
+	Keyspace    string
+	KeyspaceIds []string
+	TabletType  topo.TabletType
+	Session     *Session
+}
+
+type extraKeyspaceIdBatchQuery struct {
+	Extra       int
+	Queries     []reflectBoundQuery
+	Keyspace    string
+	KeyspaceIds []string
+	TabletType  topo.TabletType
+	Session     *Session
+}
+
+func TestKeyspaceIdBatchQuery(t *testing.T) {
+	reflected, err := bson.Marshal(&reflectKeyspaceIdBatchQuery{
+		Queries: []reflectBoundQuery{{
+			Sql:           "query",
+			BindVariables: map[string]interface{}{"val": int64(1)},
+		}},
+		Keyspace:    "keyspace",
+		KeyspaceIds: []string{"10", "20"},
+		Session: &Session{InTransaction: true,
+			ShardSessions: []*ShardSession{{
+				Keyspace:      "a",
+				Shard:         "0",
+				TabletType:    topo.TabletType("replica"),
+				TransactionId: 1,
+			}, {
+				Keyspace:      "b",
+				Shard:         "1",
+				TabletType:    topo.TabletType("master"),
+				TransactionId: 2,
+			}},
+		},
+	})
+	if err != nil {
+		t.Error(err)
+	}
+	want := string(reflected)
+
+	custom := KeyspaceIdBatchQuery{
+		Queries: []tproto.BoundQuery{{
+			Sql:           "query",
+			BindVariables: map[string]interface{}{"val": int64(1)},
+		}},
+		Keyspace:    "keyspace",
+		KeyspaceIds: []string{"10", "20"},
+		Session:     &commonSession,
+	}
+	encoded, err := bson.Marshal(&custom)
+	if err != nil {
+		t.Error(err)
+	}
+	got := string(encoded)
+	if want != got {
+		t.Errorf("want\n%+v, got\n%+v", want, got)
+	}
+
+	var unmarshalled KeyspaceIdBatchQuery
+	err = bson.Unmarshal(encoded, &unmarshalled)
+	if err != nil {
+		t.Error(err)
+	}
+	if !reflect.DeepEqual(custom, unmarshalled) {
+		t.Errorf("want \n%+v, got \n%+v", custom, unmarshalled)
+	}
+
+	extra, err := bson.Marshal(&extraKeyspaceIdBatchQuery{})
+	if err != nil {
+		t.Error(err)
+	}
+	err = bson.Unmarshal(extra, &unmarshalled)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+type badTypeKeyspaceIdsBatchQuery struct {
+	Queries     string
+	Keyspace    string
+	KeyspaceIds []string
+	TabletType  topo.TabletType
+	Session     *Session
+}
+
+func TestKeyspaceIdsBatchQueryBadType(t *testing.T) {
+	unexpected, err := bson.Marshal(&badTypeKeyspaceIdsBatchQuery{})
+	if err != nil {
+		t.Error(err)
+	}
+	var unmarshalled KeyspaceIdBatchQuery
+	err = bson.Unmarshal(unexpected, &unmarshalled)
+	want := "Unexpected data type 5 for Queries"
+	if err == nil || want != err.Error() {
+		t.Errorf("want %v, got %v", want, err)
 	}
 }

@@ -21,8 +21,20 @@ func (vtg *VTGate) ExecuteShard(context *rpcproto.Context, query *proto.QuerySha
 	return vtg.server.ExecuteShard(context, query, reply)
 }
 
+func (vtg *VTGate) ExecuteKeyspaceIds(context *rpcproto.Context, query *proto.KeyspaceIdQuery, reply *proto.QueryResult) error {
+	return vtg.server.ExecuteKeyspaceIds(context, query, reply)
+}
+
+func (vtg *VTGate) ExecuteKeyRange(context *rpcproto.Context, query *proto.KeyRangeQuery, reply *proto.QueryResult) error {
+	return vtg.server.ExecuteKeyRange(context, query, reply)
+}
+
 func (vtg *VTGate) ExecuteBatchShard(context *rpcproto.Context, batchQuery *proto.BatchQueryShard, reply *proto.QueryResultList) error {
 	return vtg.server.ExecuteBatchShard(context, batchQuery, reply)
+}
+
+func (vtg *VTGate) ExecuteBatchKeyspaceIds(context *rpcproto.Context, batchQuery *proto.KeyspaceIdBatchQuery, reply *proto.QueryResultList) error {
+	return vtg.server.ExecuteBatchKeyspaceIds(context, batchQuery, reply)
 }
 
 func (vtg *VTGate) StreamExecuteShard(context *rpcproto.Context, query *proto.QueryShard, sendReply func(interface{}) error) error {
@@ -31,7 +43,7 @@ func (vtg *VTGate) StreamExecuteShard(context *rpcproto.Context, query *proto.Qu
 	})
 }
 
-func (vtg *VTGate) StreamExecuteKeyRange(context *rpcproto.Context, query *proto.StreamQueryKeyRange, sendReply func(interface{}) error) error {
+func (vtg *VTGate) StreamExecuteKeyRange(context *rpcproto.Context, query *proto.KeyRangeQuery, sendReply func(interface{}) error) error {
 	return vtg.server.StreamExecuteKeyRange(context, query, func(value *proto.QueryResult) error {
 		return sendReply(value)
 	})
