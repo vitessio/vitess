@@ -5,6 +5,8 @@
 package main
 
 import (
+	"bytes"
+	"flag"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -12,11 +14,29 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"strings"
 	"text/template"
-
-	"github.com/youtube/vitess/go/testfiles"
 )
+
+var (
+	filename = flag.String("file", "", "input file name")
+	typename = flag.String("type", "", "type to generate code for")
+)
+
+func main() {
+	flag.Parse()
+	b, err := ioutil.ReadFile(*filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+	out, err := generateCode(string(b), *typename)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		return
+	}
+	fmt.Printf("%s\n", out)
+}
 
 var (
 	encoderMap = map[string]string{
@@ -185,7 +205,7 @@ func buildField(fieldType ast.Expr, tag, name string) (*FieldInfo, error) {
 		}
 		return &FieldInfo{Tag: tag, Name: name, typ: "[]", Subfield: subfield}, nil
 	case *ast.StarExpr:
-		subfield, err := buildField(ident.X, tag, "*"+name)
+		subfield, err := buildField(ident.X, tag, "(*"+name+")")
 		if err != nil {
 			return nil, err
 		}
@@ -211,26 +231,57 @@ notSimple:
 	return nil, fmt.Errorf("%#v is not a simple type", fieldType)
 }
 
-func main() {
-	input := testfiles.Locate("bson_test/simple_type.go")
-	b, err := ioutil.ReadFile(input)
+func generateCode(in string, typename string) (out []byte, err error) {
+	raw, err := generateRawCode(in, typename)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
-	src := string(b)
+	return formatCode(raw)
+}
 
+func generateRawCode(in string, typename string) (out []byte, err error) {
 	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, "", src, 0)
+	f, err := parser.ParseFile(fset, "", in, 0)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	//ast.Print(fset, f)
-	typeInfo, err := FindType(f, "MyType")
+	typeInfo, err := FindType(f, typename)
 	if err != nil {
-		fmt.Println(err)
-		return
+		return nil, err
 	}
-	generator.ExecuteTemplate(os.Stdout, "Body", typeInfo)
+	buf := bytes.NewBuffer(nil)
+	err = generator.ExecuteTemplate(buf, "Body", typeInfo)
+	if err != nil {
+		return nil, err
+	}
+	return formatCode(buf.Bytes())
+}
+
+func formatCode(in []byte) (out []byte, err error) {
+	cmd := exec.Command("goimports")
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, err
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	err = cmd.Start()
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		bytes.NewBuffer(in).WriteTo(stdin)
+		stdin.Close()
+	}()
+	b, err := ioutil.ReadAll(stdout)
+	if err != nil {
+		return nil, err
+	}
+	cmd.Wait()
+	return b, nil
 }
 
 var generator = template.Must(template.New("Generator").Parse(`
