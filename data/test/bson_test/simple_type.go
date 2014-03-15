@@ -19,9 +19,9 @@ type MyType struct {
 	Bytes     []byte
 	Ptr       *int64
 	Strings   *[]*string
-	Map       map[string]CustomStruct
+	Map       map[string]time.Time
 	Interface interface{}
 	Time      time.Time
-	Custom1   CustomStruct
-	Custom2   pkg.CustomStruct
+	Custom1   *CustomStruct
+	Custom2   *pkg.CustomStruct
 }
