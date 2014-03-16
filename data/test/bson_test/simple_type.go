@@ -19,7 +19,8 @@ type MyType struct {
 	Bytes     []byte
 	Ptr       *int64
 	Strings   *[]*string
-	Map       map[string]time.Time
+	Strings2  *[][]string
+	Map       map[string]map[string]time.Time
 	Interface interface{}
 	Time      time.Time
 	Custom1   *CustomStruct

@@ -16,6 +16,7 @@ import (
 
 // VerifyObject verifies kind to make sure it's
 // either a top level document (EOO) or an Object.
+// TODO(sougou): deprecate this function.
 func VerifyObject(kind byte) {
 	if kind != EOO && kind != Object {
 		panic(NewBsonError("unexpected kind: %v", kind))

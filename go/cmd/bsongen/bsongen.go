@@ -22,6 +22,7 @@ import (
 var (
 	filename = flag.String("file", "", "input file name")
 	typename = flag.String("type", "", "type to generate code for")
+	counter  = 0
 )
 
 func main() {
@@ -199,7 +200,7 @@ func buildField(fieldType ast.Expr, tag, name string) (*FieldInfo, error) {
 		if ok && innerIdent.Name == "byte" {
 			return &FieldInfo{Tag: tag, Name: name, typ: "[]byte"}, nil
 		}
-		subfield, err := buildField(ident.Elt, "Itoa(i)", "v")
+		subfield, err := buildField(ident.Elt, "bson.Itoa(i)", newVarName())
 		if err != nil {
 			return nil, err
 		}
@@ -215,7 +216,7 @@ func buildField(fieldType ast.Expr, tag, name string) (*FieldInfo, error) {
 		if !ok || key.Name != "string" {
 			goto notSimple
 		}
-		subfield, err := buildField(ident.Value, "k", "v")
+		subfield, err := buildField(ident.Value, "k", newVarName())
 		if err != nil {
 			return nil, err
 		}
@@ -229,6 +230,11 @@ func buildField(fieldType ast.Expr, tag, name string) (*FieldInfo, error) {
 	}
 notSimple:
 	return nil, fmt.Errorf("%#v is not a simple type", fieldType)
+}
+
+func newVarName() string {
+	counter++
+	return fmt.Sprintf("v%d", counter)
 }
 
 func generateCode(in string, typename string) (out []byte, err error) {
@@ -300,7 +306,7 @@ var generator = template.Must(template.New("Generator").Parse(`
 } else {
 	bson.EncodePrefix(buf, bson.Array, {{.Tag}})
 	lenWriter := bson.NewLenWriter(buf)
-	for i, v := range {{.Name}} {
+	for i, {{.Subfield.Name}} := range {{.Name}} {
 		{{template "Encoder" .Subfield}}
 	}
 	buf.WriteByte(0)
@@ -312,7 +318,7 @@ var generator = template.Must(template.New("Generator").Parse(`
 } else {
 	bson.EncodePrefix(buf, bson.Object, {{.Tag}})
 	lenWriter := bson.NewLenWriter(buf)
-	for k, v := range {{.Name}} {
+	for k, {{.Subfield.Name}} := range {{.Name}} {
 		{{template "Encoder" .Subfield}}
 	}
 	buf.WriteByte(0)
@@ -325,44 +331,39 @@ var generator = template.Must(template.New("Generator").Parse(`
 
 {{define "CustomDecoder"}}{{.Name}}.UnmarshalBson(buf, kind){{end}}
 
-{{define "StarDecoder"}}if kind == bson.Null {
-	{{.Name}} = nil
-} else {
-	{{.Name}} = new({{.NewType}})
-	{{template "Decoder" .Subfield}}
-}{{end}}
+{{define "StarDecoder"}}{{.Name}} = new({{.NewType}})
+{{template "Decoder" .Subfield}}{{end}}
 
 {{define "SliceDecoder"}}if kind != bson.Array {
-	panic(bson.NewBsonError("Unexpected data type %v for {{.Name}}", kind))
+	panic(bson.NewBsonError("unexpected kind %v for {{.Name}}", kind))
 }
-if kind == bson.Null {
-	{{.Name}} = nil
-} else {
-	bson.Next(buf, 4)
-	{{.Name}} = make({{.Type}}, 0, 8)
-	var v {{.Subfield.Type}}
-	for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
-		bson.SkipIndex(buf)
-		{{template "Decoder" .Subfield}}
-		{{.Name}} = append({{.Name}}, {{.Subfield.Name}})
+bson.Next(buf, 4)
+{{.Name}} = make({{.Type}}, 0, 8)
+for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
+	if kind == bson.Mull {
+		bson.ReadCString(buf)
+		continue
 	}
+	bson.SkipIndex(buf)
+	var {{.Subfield.Name}} {{.Subfield.Type}}
+	{{template "Decoder" .Subfield}}
+	{{.Name}} = append({{.Name}}, {{.Subfield.Name}})
 }{{end}}
 
 {{define "MapDecoder"}}if kind != bson.Object {
-	panic(bson.NewBsonError("Unexpected data type %v for {{.Name}}", kind))
+	panic(bson.NewBsonError("unexpected kind %v for {{.Name}}", kind))
 }
-if kind == bson.Null {
-	{{.Name}} = nil
-} else {
-	bson.Next(buf, 4)
-	{{.Name}} = make({{.Type}})
-	var k string
-	var v {{.Subfield.Type}}
-	for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
-		k = bson.ReadCString(buf)
-		{{template "Decoder" .Subfield}}
-		{{.Name}}[k] = {{.Subfield.Name}}
+bson.Next(buf, 4)
+{{.Name}} = make({{.Type}})
+for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
+	if kind == bson.Mull {
+		bson.ReadCString(buf)
+		continue
 	}
+	k := bson.ReadCString(buf)
+	var {{.Subfield.Name}} {{.Subfield.Type}}
+	{{template "Decoder" .Subfield}}
+	{{.Name}}[k] = {{.Subfield.Name}}
 }{{end}}
 
 {{define "Decoder"}}{{if .IsPointer}}{{template "StarDecoder" .}}{{else if .IsSlice}}{{template "SliceDecoder" .}}{{else if .IsMap}}{{template "MapDecoder" .}}{{else if .IsCustom}}{{template "CustomDecoder" .}}{{else}}{{template "SimpleDecoder" .}}{{end}}{{end}}
@@ -396,11 +397,17 @@ func ({{.Var}} *{{.Name}}) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 
 // UnmarshalBson bson-decodes into {{.Name}}.
 func ({{.Var}} *{{.Name}}) UnmarshalBson(buf *bytes.Buffer, kind byte) {
-	VerifyObject(kind)
+	if kind != EOO && kind != Object {
+		panic(bson.NewBsonError("unexpected kind %v for {{.Name}}", kind))
+	}
 	bson.Next(buf, 4)
 
 	kind := bson.NextByte(buf)
 	for kind != bson.EOO {
+		if kind == bson.Mull {
+			bson.ReadCString(buf)
+			continue
+		}
 		switch bson.ReadCString(buf) {
 {{range .Fields}}		case {{.Tag}}:
 			{{template "Decoder" .}}
