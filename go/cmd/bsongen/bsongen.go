@@ -130,7 +130,7 @@ func (f *FieldInfo) Type() string {
 	return typ
 }
 
-func FindType(file *ast.File, name string) (*TypeInfo, error) {
+func findType(file *ast.File, name string) (*TypeInfo, error) {
 	typeInfo := &TypeInfo{
 		Package: file.Name.Name,
 	}
@@ -171,6 +171,9 @@ func FindType(file *ast.File, name string) (*TypeInfo, error) {
 func buildFields(structType *ast.StructType, varName string) ([]*FieldInfo, error) {
 	fields := make([]*FieldInfo, 0, 8)
 	for _, field := range structType.Fields.List {
+		if field.Names == nil {
+			return nil, fmt.Errorf("anonymous embeds not supported: %#v", field.Type)
+		}
 		for _, name := range field.Names {
 			fullName := varName + "." + name.Name
 			fieldInfo, err := buildField(field.Type, "\""+name.Name+"\"", fullName)
@@ -252,7 +255,7 @@ func generateRawCode(in string, typename string) (out []byte, err error) {
 		return nil, err
 	}
 	//ast.Print(fset, f)
-	typeInfo, err := FindType(f, typename)
+	typeInfo, err := findType(f, typename)
 	if err != nil {
 		return nil, err
 	}
@@ -278,6 +281,7 @@ func formatCode(in []byte) (out []byte, err error) {
 	if err != nil {
 		return nil, err
 	}
+	defer cmd.Wait()
 	go func() {
 		bytes.NewBuffer(in).WriteTo(stdin)
 		stdin.Close()
@@ -286,7 +290,6 @@ func formatCode(in []byte) (out []byte, err error) {
 	if err != nil {
 		return nil, err
 	}
-	cmd.Wait()
 	return b, nil
 }
 
@@ -340,13 +343,11 @@ var generator = template.Must(template.New("Generator").Parse(`
 bson.Next(buf, 4)
 {{.Name}} = make({{.Type}}, 0, 8)
 for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
-	if kind == bson.Mull {
-		bson.ReadCString(buf)
-		continue
-	}
 	bson.SkipIndex(buf)
 	var {{.Subfield.Name}} {{.Subfield.Type}}
-	{{template "Decoder" .Subfield}}
+	if kind != bson.Null {
+		{{template "Decoder" .Subfield}}
+	}
 	{{.Name}} = append({{.Name}}, {{.Subfield.Name}})
 }{{end}}
 
@@ -356,13 +357,11 @@ for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 bson.Next(buf, 4)
 {{.Name}} = make({{.Type}})
 for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
-	if kind == bson.Mull {
-		bson.ReadCString(buf)
-		continue
-	}
 	_k := bson.ReadCString(buf)
 	var {{.Subfield.Name}} {{.Subfield.Type}}
-	{{template "Decoder" .Subfield}}
+	if kind != bson.Null {
+		{{template "Decoder" .Subfield}}
+	}
 	{{.Name}}[_k] = {{.Subfield.Name}}
 }{{end}}
 
@@ -397,14 +396,18 @@ func ({{.Var}} *{{.Name}}) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 
 // UnmarshalBson bson-decodes into {{.Name}}.
 func ({{.Var}} *{{.Name}}) UnmarshalBson(buf *bytes.Buffer, kind byte) {
-	if kind != EOO && kind != Object {
+	switch kind {
+	case bson.EOO, bson.Object:
+		// valid
+	case bson.Null:
+		return
+	default:
 		panic(bson.NewBsonError("unexpected kind %v for {{.Name}}", kind))
 	}
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
-	for kind != bson.EOO {
-		if kind == bson.Mull {
+	for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
+		if kind == bson.Null {
 			bson.ReadCString(buf)
 			continue
 		}
@@ -414,7 +417,6 @@ func ({{.Var}} *{{.Name}}) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 {{end}}		default:
 			bson.Skip(buf, kind)
 		}
-		kind = bson.NextByte(buf)
 	}
 }
 {{end}}`))

@@ -17,12 +17,12 @@ type MyType struct {
 	Uint32    uint32
 	Uint      uint
 	Bytes     []byte
-	Ptr       *int64
-	Strings   *[]*string
-	Strings2  *[][]string
-	Map       map[string]map[string]time.Time
 	Interface interface{}
 	Time      time.Time
+	Ptr       *int64
+	Strings   *[]*Custom
+	Strings2  *[][]string
+	Map       map[string]map[string]time.Time
 	Custom1   *CustomStruct
 	Custom2   *pkg.CustomStruct
 }
