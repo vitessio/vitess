@@ -334,35 +334,37 @@ var generator = template.Must(template.New("Generator").Parse(`
 
 {{define "CustomDecoder"}}{{.Name}}.UnmarshalBson(buf, kind){{end}}
 
-{{define "StarDecoder"}}{{.Name}} = new({{.NewType}})
-{{template "Decoder" .Subfield}}{{end}}
-
-{{define "SliceDecoder"}}if kind != bson.Array {
-	panic(bson.NewBsonError("unexpected kind %v for {{.Name}}", kind))
-}
-bson.Next(buf, 4)
-{{.Name}} = make({{.Type}}, 0, 8)
-for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
-	bson.SkipIndex(buf)
-	var {{.Subfield.Name}} {{.Subfield.Type}}
-	if kind != bson.Null {
-		{{template "Decoder" .Subfield}}
-	}
-	{{.Name}} = append({{.Name}}, {{.Subfield.Name}})
+{{define "StarDecoder"}}if kind != bson.Null {
+	{{.Name}} = new({{.NewType}})
+	{{template "Decoder" .Subfield}}
 }{{end}}
 
-{{define "MapDecoder"}}if kind != bson.Object {
-	panic(bson.NewBsonError("unexpected kind %v for {{.Name}}", kind))
-}
-bson.Next(buf, 4)
-{{.Name}} = make({{.Type}})
-for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
-	_k := bson.ReadCString(buf)
-	var {{.Subfield.Name}} {{.Subfield.Type}}
-	if kind != bson.Null {
-		{{template "Decoder" .Subfield}}
+{{define "SliceDecoder"}}if kind != bson.Null {
+	if kind != bson.Array {
+		panic(bson.NewBsonError("unexpected kind %v for {{.Name}}", kind))
 	}
-	{{.Name}}[_k] = {{.Subfield.Name}}
+	bson.Next(buf, 4)
+	{{.Name}} = make({{.Type}}, 0, 8)
+	for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
+		bson.SkipIndex(buf)
+		var {{.Subfield.Name}} {{.Subfield.Type}}
+		{{template "Decoder" .Subfield}}
+		{{.Name}} = append({{.Name}}, {{.Subfield.Name}})
+	}
+}{{end}}
+
+{{define "MapDecoder"}}if kind != bson.Null {
+	if kind != bson.Object {
+		panic(bson.NewBsonError("unexpected kind %v for {{.Name}}", kind))
+	}
+	bson.Next(buf, 4)
+	{{.Name}} = make({{.Type}})
+	for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
+		_k := bson.ReadCString(buf)
+		var {{.Subfield.Name}} {{.Subfield.Type}}
+		{{template "Decoder" .Subfield}}
+		{{.Name}}[_k] = {{.Subfield.Name}}
+	}
 }{{end}}
 
 {{define "Decoder"}}{{if .IsPointer}}{{template "StarDecoder" .}}{{else if .IsSlice}}{{template "SliceDecoder" .}}{{else if .IsMap}}{{template "MapDecoder" .}}{{else if .IsCustom}}{{template "CustomDecoder" .}}{{else}}{{template "SimpleDecoder" .}}{{end}}{{end}}
@@ -407,10 +409,6 @@ func ({{.Var}} *{{.Name}}) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 	bson.Next(buf, 4)
 
 	for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
-		if kind == bson.Null {
-			bson.ReadCString(buf)
-			continue
-		}
 		switch bson.ReadCString(buf) {
 {{range .Fields}}		case {{.Tag}}:
 			{{template "Decoder" .}}
