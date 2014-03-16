@@ -200,7 +200,7 @@ func buildField(fieldType ast.Expr, tag, name string) (*FieldInfo, error) {
 		if ok && innerIdent.Name == "byte" {
 			return &FieldInfo{Tag: tag, Name: name, typ: "[]byte"}, nil
 		}
-		subfield, err := buildField(ident.Elt, "bson.Itoa(i)", newVarName())
+		subfield, err := buildField(ident.Elt, "bson.Itoa(_i)", newVarName())
 		if err != nil {
 			return nil, err
 		}
@@ -216,7 +216,7 @@ func buildField(fieldType ast.Expr, tag, name string) (*FieldInfo, error) {
 		if !ok || key.Name != "string" {
 			goto notSimple
 		}
-		subfield, err := buildField(ident.Value, "k", newVarName())
+		subfield, err := buildField(ident.Value, "_k", newVarName())
 		if err != nil {
 			return nil, err
 		}
@@ -234,7 +234,7 @@ notSimple:
 
 func newVarName() string {
 	counter++
-	return fmt.Sprintf("v%d", counter)
+	return fmt.Sprintf("_v%d", counter)
 }
 
 func generateCode(in string, typename string) (out []byte, err error) {
@@ -306,7 +306,7 @@ var generator = template.Must(template.New("Generator").Parse(`
 } else {
 	bson.EncodePrefix(buf, bson.Array, {{.Tag}})
 	lenWriter := bson.NewLenWriter(buf)
-	for i, {{.Subfield.Name}} := range {{.Name}} {
+	for _i, {{.Subfield.Name}} := range {{.Name}} {
 		{{template "Encoder" .Subfield}}
 	}
 	buf.WriteByte(0)
@@ -318,7 +318,7 @@ var generator = template.Must(template.New("Generator").Parse(`
 } else {
 	bson.EncodePrefix(buf, bson.Object, {{.Tag}})
 	lenWriter := bson.NewLenWriter(buf)
-	for k, {{.Subfield.Name}} := range {{.Name}} {
+	for _k, {{.Subfield.Name}} := range {{.Name}} {
 		{{template "Encoder" .Subfield}}
 	}
 	buf.WriteByte(0)
@@ -360,10 +360,10 @@ for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 		bson.ReadCString(buf)
 		continue
 	}
-	k := bson.ReadCString(buf)
+	_k := bson.ReadCString(buf)
 	var {{.Subfield.Name}} {{.Subfield.Type}}
 	{{template "Decoder" .Subfield}}
-	{{.Name}}[k] = {{.Subfield.Name}}
+	{{.Name}}[_k] = {{.Subfield.Name}}
 }{{end}}
 
 {{define "Decoder"}}{{if .IsPointer}}{{template "StarDecoder" .}}{{else if .IsSlice}}{{template "SliceDecoder" .}}{{else if .IsMap}}{{template "MapDecoder" .}}{{else if .IsCustom}}{{template "CustomDecoder" .}}{{else}}{{template "SimpleDecoder" .}}{{end}}{{end}}
