@@ -171,17 +171,13 @@ func (zkNode *ZkNode) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 }
 
 func marshalZkNodeArray(buf *bytes2.ChunkedWriter, name string, values []*ZkNode) {
-	if values == nil {
-		bson.EncodePrefix(buf, bson.Null, name)
-	} else {
-		bson.EncodePrefix(buf, bson.Array, name)
-		lenWriter := bson.NewLenWriter(buf)
-		for i, val := range values {
-			val.MarshalBson(buf, bson.Itoa(i))
-		}
-		buf.WriteByte(0)
-		lenWriter.RecordLen()
+	bson.EncodePrefix(buf, bson.Array, name)
+	lenWriter := bson.NewLenWriter(buf)
+	for i, val := range values {
+		val.MarshalBson(buf, bson.Itoa(i))
 	}
+	buf.WriteByte(0)
+	lenWriter.RecordLen()
 }
 
 func unmarshalZkNodeArray(buf *bytes.Buffer, name string, kind byte) []*ZkNode {

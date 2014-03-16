@@ -54,17 +54,13 @@ func NewSrvShard(version int64) *SrvShard {
 }
 
 func EncodeTabletTypeArray(buf *bytes2.ChunkedWriter, name string, values []TabletType) {
-	if len(values) == 0 {
-		bson.EncodePrefix(buf, bson.Null, name)
-	} else {
-		bson.EncodePrefix(buf, bson.Array, name)
-		lenWriter := bson.NewLenWriter(buf)
-		for i, val := range values {
-			bson.EncodeString(buf, bson.Itoa(i), string(val))
-		}
-		buf.WriteByte(0)
-		lenWriter.RecordLen()
+	bson.EncodePrefix(buf, bson.Array, name)
+	lenWriter := bson.NewLenWriter(buf)
+	for i, val := range values {
+		bson.EncodeString(buf, bson.Itoa(i), string(val))
 	}
+	buf.WriteByte(0)
+	lenWriter.RecordLen()
 }
 
 func DecodeTabletTypeArray(buf *bytes.Buffer, kind byte) []TabletType {
@@ -140,17 +136,13 @@ type KeyspacePartition struct {
 }
 
 func EncodeSrvShardArray(buf *bytes2.ChunkedWriter, name string, values []SrvShard) {
-	if len(values) == 0 {
-		bson.EncodePrefix(buf, bson.Null, name)
-	} else {
-		bson.EncodePrefix(buf, bson.Array, name)
-		lenWriter := bson.NewLenWriter(buf)
-		for i, val := range values {
-			val.MarshalBson(buf, bson.Itoa(i))
-		}
-		buf.WriteByte(0)
-		lenWriter.RecordLen()
+	bson.EncodePrefix(buf, bson.Array, name)
+	lenWriter := bson.NewLenWriter(buf)
+	for i, val := range values {
+		val.MarshalBson(buf, bson.Itoa(i))
 	}
+	buf.WriteByte(0)
+	lenWriter.RecordLen()
 }
 
 func DecodeSrvShardArray(buf *bytes.Buffer, kind byte) []SrvShard {
@@ -238,17 +230,13 @@ func NewSrvKeyspace(version int64) *SrvKeyspace {
 }
 
 func EncodeKeyspacePartitionMap(buf *bytes2.ChunkedWriter, name string, values map[TabletType]*KeyspacePartition) {
-	if len(values) == 0 {
-		bson.EncodePrefix(buf, bson.Null, name)
-	} else {
-		bson.EncodePrefix(buf, bson.Object, name)
-		lenWriter := bson.NewLenWriter(buf)
-		for i, val := range values {
-			val.MarshalBson(buf, string(i))
-		}
-		buf.WriteByte(0)
-		lenWriter.RecordLen()
+	bson.EncodePrefix(buf, bson.Object, name)
+	lenWriter := bson.NewLenWriter(buf)
+	for i, val := range values {
+		val.MarshalBson(buf, string(i))
 	}
+	buf.WriteByte(0)
+	lenWriter.RecordLen()
 }
 
 func DecodeKeyspacePartitionMap(buf *bytes.Buffer, kind byte) map[TabletType]*KeyspacePartition {
