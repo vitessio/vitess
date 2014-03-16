@@ -304,9 +304,7 @@ var generator = template.Must(template.New("Generator").Parse(`
 	{{template "Encoder" .Subfield}}
 }{{end}}
 
-{{define "SliceEncoder"}}if {{.Name}} == nil {
-	bson.EncodePrefix(buf, bson.Null, {{.Tag}})
-} else {
+{{define "SliceEncoder"}}{
 	bson.EncodePrefix(buf, bson.Array, {{.Tag}})
 	lenWriter := bson.NewLenWriter(buf)
 	for _i, {{.Subfield.Name}} := range {{.Name}} {
@@ -316,9 +314,7 @@ var generator = template.Must(template.New("Generator").Parse(`
 	lenWriter.RecordLen()
 }{{end}}
 
-{{define "MapEncoder"}}if {{.Name}} == nil {
-	bson.EncodePrefix(buf, bson.Null, {{.Tag}})
-} else {
+{{define "MapEncoder"}}{
 	bson.EncodePrefix(buf, bson.Object, {{.Tag}})
 	lenWriter := bson.NewLenWriter(buf)
 	for _k, {{.Subfield.Name}} := range {{.Name}} {

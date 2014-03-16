@@ -34,6 +34,10 @@ var marshaltest = []struct {
 	struct{ Inner map[string]string }{map[string]string{"Val": "test"}},
 	"\x1f\x00\x00\x00\x03Inner\x00\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00\x00",
 }, {
+	"embedded map encode nil",
+	struct{ Inner map[string]string }{},
+	"\x11\x00\x00\x00\x03Inner\x00\x05\x00\x00\x00\x00\x00",
+}, {
 	"slice encode",
 	[]string{"test1", "test2"},
 	"\x1f\x00\x00\x00\x050\x00\x05\x00\x00\x00\x00test1\x051\x00\x05\x00\x00\x00\x00test2\x00",
@@ -44,7 +48,7 @@ var marshaltest = []struct {
 }, {
 	"embedded slice encode nil",
 	struct{ Inner []string }{},
-	"\f\x00\x00\x00\nInner\x00\x00",
+	"\x11\x00\x00\x00\x04Inner\x00\x05\x00\x00\x00\x00\x00",
 }, {
 	"array encode",
 	[2]string{"test1", "test2"},
