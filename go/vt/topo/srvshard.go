@@ -59,8 +59,7 @@ func EncodeTabletTypeArray(buf *bytes2.ChunkedWriter, name string, values []Tabl
 	for i, val := range values {
 		bson.EncodeString(buf, bson.Itoa(i), string(val))
 	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func DecodeTabletTypeArray(buf *bytes.Buffer, kind byte) []TabletType {
@@ -95,8 +94,7 @@ func (ss *SrvShard) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	EncodeTabletTypeArray(buf, "ServedTypes", ss.ServedTypes)
 	EncodeTabletTypeArray(buf, "TabletTypes", ss.TabletTypes)
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 
 }
 
@@ -141,8 +139,7 @@ func EncodeSrvShardArray(buf *bytes2.ChunkedWriter, name string, values []SrvSha
 	for i, val := range values {
 		val.MarshalBson(buf, bson.Itoa(i))
 	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func DecodeSrvShardArray(buf *bytes.Buffer, kind byte) []SrvShard {
@@ -177,8 +174,7 @@ func (kp *KeyspacePartition) MarshalBson(buf *bytes2.ChunkedWriter, key string) 
 
 	EncodeSrvShardArray(buf, "Shards", kp.Shards)
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func (kp *KeyspacePartition) UnmarshalBson(buf *bytes.Buffer, kind byte) {
@@ -235,8 +231,7 @@ func EncodeKeyspacePartitionMap(buf *bytes2.ChunkedWriter, name string, values m
 	for i, val := range values {
 		val.MarshalBson(buf, string(i))
 	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func DecodeKeyspacePartitionMap(buf *bytes.Buffer, kind byte) map[TabletType]*KeyspacePartition {
@@ -271,8 +266,7 @@ func EncodeServedFrom(buf *bytes2.ChunkedWriter, name string, servedFrom map[Tab
 	for k, v := range servedFrom {
 		bson.EncodeString(buf, string(k), v)
 	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func DecodeServedFrom(buf *bytes.Buffer, kind byte) map[TabletType]string {
@@ -310,8 +304,7 @@ func (sk *SrvKeyspace) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	bson.EncodeString(buf, "ShardingColumnType", string(sk.ShardingColumnType))
 	EncodeServedFrom(buf, "ServedFrom", sk.ServedFrom)
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func (sk *SrvKeyspace) UnmarshalBson(buf *bytes.Buffer, kind byte) {

@@ -22,11 +22,16 @@ import (
 var (
 	filename = flag.String("file", "", "input file name")
 	typename = flag.String("type", "", "type to generate code for")
+	outfile  = flag.String("o", "", "output file name, default stdout")
 	counter  = 0
 )
 
 func main() {
 	flag.Parse()
+	if *filename == "" || *typename == "" {
+		flag.PrintDefaults()
+		return
+	}
 	b, err := ioutil.ReadFile(*filename)
 	if err != nil {
 		log.Fatal(err)
@@ -36,7 +41,16 @@ func main() {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		return
 	}
-	fmt.Printf("%s\n", out)
+	fout := os.Stdout
+	if *outfile != "" {
+		fout, err = os.Create(*outfile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			return
+		}
+		defer fout.Close()
+	}
+	fmt.Fprintf(fout, "%s\n", out)
 }
 
 var (
@@ -298,30 +312,31 @@ var generator = template.Must(template.New("Generator").Parse(`
 
 {{define "CustomEncoder"}}{{.Name}}.MarshalBson(buf, {{.Tag}}){{end}}
 
-{{define "StarEncoder"}}if {{.Name}} == nil {
+{{define "StarEncoder"}}// {{.Type}}
+if {{.Name}} == nil {
 	bson.EncodePrefix(buf, bson.Null, {{.Tag}})
 } else {
 	{{template "Encoder" .Subfield}}
 }{{end}}
 
-{{define "SliceEncoder"}}{
+{{define "SliceEncoder"}}// {{.Type}}
+{
 	bson.EncodePrefix(buf, bson.Array, {{.Tag}})
 	lenWriter := bson.NewLenWriter(buf)
 	for _i, {{.Subfield.Name}} := range {{.Name}} {
 		{{template "Encoder" .Subfield}}
 	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }{{end}}
 
-{{define "MapEncoder"}}{
+{{define "MapEncoder"}}// {{.Type}}
+{
 	bson.EncodePrefix(buf, bson.Object, {{.Tag}})
 	lenWriter := bson.NewLenWriter(buf)
 	for _k, {{.Subfield.Name}} := range {{.Name}} {
 		{{template "Encoder" .Subfield}}
 	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }{{end}}
 
 {{define "Encoder"}}{{if .IsPointer}}{{template "StarEncoder" .}}{{else if .IsSlice}}{{template "SliceEncoder" .}}{{else if .IsMap}}{{template "MapEncoder" .}}{{else if .IsCustom}}{{template "CustomEncoder" .}}{{else}}{{template "SimpleEncoder" .}}{{end}}{{end}}
@@ -330,12 +345,14 @@ var generator = template.Must(template.New("Generator").Parse(`
 
 {{define "CustomDecoder"}}{{.Name}}.UnmarshalBson(buf, kind){{end}}
 
-{{define "StarDecoder"}}if kind != bson.Null {
+{{define "StarDecoder"}}// {{.Type}}
+if kind != bson.Null {
 	{{.Name}} = new({{.NewType}})
 	{{template "Decoder" .Subfield}}
 }{{end}}
 
-{{define "SliceDecoder"}}if kind != bson.Null {
+{{define "SliceDecoder"}}// {{.Type}}
+if kind != bson.Null {
 	if kind != bson.Array {
 		panic(bson.NewBsonError("unexpected kind %v for {{.Name}}", kind))
 	}
@@ -349,7 +366,8 @@ var generator = template.Must(template.New("Generator").Parse(`
 	}
 }{{end}}
 
-{{define "MapDecoder"}}if kind != bson.Null {
+{{define "MapDecoder"}}// {{.Type}}
+if kind != bson.Null {
 	if kind != bson.Object {
 		panic(bson.NewBsonError("unexpected kind %v for {{.Name}}", kind))
 	}
@@ -388,8 +406,7 @@ func ({{.Var}} *{{.Name}}) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 
 {{range .Fields}}	{{template "Encoder" .}}
 {{end}}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 // UnmarshalBson bson-decodes into {{.Name}}.

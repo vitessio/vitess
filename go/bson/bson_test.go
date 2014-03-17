@@ -183,8 +183,7 @@ func (ps *PrivateStruct) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 
 	EncodeUint64(buf, "Type", ps.veryPrivate)
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func (ps *PrivateStruct) UnmarshalBson(buf *bytes.Buffer, kind byte) {

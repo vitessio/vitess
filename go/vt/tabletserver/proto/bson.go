@@ -24,8 +24,7 @@ func (query *Query) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	bson.EncodeInt64(buf, "TransactionId", query.TransactionId)
 	bson.EncodeInt64(buf, "SessionId", query.SessionId)
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func EncodeBindVariablesBson(buf *bytes2.ChunkedWriter, key string, bindVars map[string]interface{}) {
@@ -34,8 +33,7 @@ func EncodeBindVariablesBson(buf *bytes2.ChunkedWriter, key string, bindVars map
 	for k, v := range bindVars {
 		bson.EncodeField(buf, k, v)
 	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func (query *Query) UnmarshalBson(buf *bytes.Buffer, kind byte) {
@@ -139,8 +137,7 @@ func (session *Session) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	bson.EncodeInt64(buf, "TransactionId", session.TransactionId)
 	bson.EncodeInt64(buf, "SessionId", session.SessionId)
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func (session *Session) UnmarshalBson(buf *bytes.Buffer, kind byte) {
@@ -169,8 +166,7 @@ func (bdq *BoundQuery) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	bson.EncodeString(buf, "Sql", bdq.Sql)
 	EncodeBindVariablesBson(buf, "BindVariables", bdq.BindVariables)
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func (bdq *BoundQuery) UnmarshalBson(buf *bytes.Buffer, kind byte) {
@@ -198,8 +194,7 @@ func EncodeQueriesBson(queries []BoundQuery, key string, buf *bytes2.ChunkedWrit
 	for i, v := range queries {
 		v.MarshalBson(buf, bson.Itoa(i))
 	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func DecodeQueriesBson(buf *bytes.Buffer, kind byte) (queries []BoundQuery) {
@@ -233,8 +228,7 @@ func (ql *QueryList) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	bson.EncodeInt64(buf, "TransactionId", ql.TransactionId)
 	bson.EncodeInt64(buf, "SessionId", ql.SessionId)
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func (ql *QueryList) UnmarshalBson(buf *bytes.Buffer, kind byte) {
@@ -262,8 +256,7 @@ func (qrl *QueryResultList) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 	EncodeResultsBson(qrl.List, "List", buf)
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func EncodeResultsBson(results []mproto.QueryResult, key string, buf *bytes2.ChunkedWriter) {
@@ -272,8 +265,7 @@ func EncodeResultsBson(results []mproto.QueryResult, key string, buf *bytes2.Chu
 	for i, v := range results {
 		v.MarshalBson(buf, bson.Itoa(i))
 	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func (qrl *QueryResultList) UnmarshalBson(buf *bytes.Buffer, kind byte) {
