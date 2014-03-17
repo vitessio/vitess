@@ -377,7 +377,7 @@ func dumpAllTablets(ts topo.Server, zkVtPath string) error {
 }
 
 func dumpTablets(ts topo.Server, tabletAliases []topo.TabletAlias) error {
-	tabletMap, err := wrangler.GetTabletMap(ts, tabletAliases)
+	tabletMap, err := topo.GetTabletMap(ts, tabletAliases)
 	if err != nil {
 		return err
 	}

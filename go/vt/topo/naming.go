@@ -33,9 +33,10 @@ const (
 )
 
 type EndPoint struct {
-	Uid          uint32         `json:"uid"` // Keep track of which tablet this corresponds to.
-	Host         string         `json:"host"`
-	NamedPortMap map[string]int `json:"named_port_map"`
+	Uid          uint32            `json:"uid"` // Keep track of which tablet this corresponds to.
+	Host         string            `json:"host"`
+	NamedPortMap map[string]int    `json:"named_port_map"`
+	Health       map[string]string `json:"health"`
 }
 
 type EndPoints struct {

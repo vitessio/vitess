@@ -39,6 +39,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"reflect"
 	"sync"
 	"time"
 
@@ -284,28 +285,11 @@ func (agent *ActionAgent) verifyServingAddrs() error {
 	}
 
 	// Check to see our address is registered in the right place.
-	addr, err := EndPointForTablet(agent.Tablet().Tablet)
+	addr, err := agent.Tablet().Tablet.EndPoint()
 	if err != nil {
 		return err
 	}
 	return agent.TopoServer.UpdateTabletEndpoint(agent.Tablet().Tablet.Alias.Cell, agent.Tablet().Keyspace, agent.Tablet().Shard, agent.Tablet().Type, addr)
-}
-
-func EndPointForTablet(tablet *topo.Tablet) (*topo.EndPoint, error) {
-	entry := topo.NewAddr(tablet.Alias.Uid, tablet.Hostname)
-	if err := tablet.ValidatePortmap(); err != nil {
-		return nil, err
-	}
-
-	// TODO(szopa): Rename _vtocc to vt.
-	entry.NamedPortMap = map[string]int{
-		"_vtocc": tablet.Portmap["vt"],
-		"_mysql": tablet.Portmap["mysql"],
-	}
-	if port, ok := tablet.Portmap["vts"]; ok {
-		entry.NamedPortMap["_vts"] = port
-	}
-	return entry, nil
 }
 
 // bindAddr: the address for the query service advertised by this agent
@@ -398,4 +382,75 @@ func (agent *ActionAgent) actionEventLoop() {
 		return agent.dispatchAction(actionPath, data)
 	}
 	agent.TopoServer.ActionEventLoop(agent.TabletAlias, f, agent.done)
+}
+
+// RunHealthCheck takes the action mutex, runs the health check,
+// and if we need to change our state, do it.
+// If we are the master, we don't change our type, healthy or not.
+// If we are not the master, we change to spare if not healthy,
+// or to the passed in targetTabletType if healthy.
+//
+// Note we only update the topo record if we need to, that is if our type or
+// health details changed.
+func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType) {
+	agent.actionMutex.Lock()
+	defer agent.actionMutex.Unlock()
+
+	// read the current tablet record
+	agent.mutex.Lock()
+	tablet := agent._tablet
+	agent.mutex.Unlock()
+
+	// run the health check
+	typeForHealthCheck := targetTabletType
+	if tablet.Type == topo.TYPE_MASTER {
+		typeForHealthCheck = topo.TYPE_MASTER
+	}
+
+	// TODO: link in with health module
+	// healthDetails, err := checkHealth(typeForHealthCheck)
+	log.Infof("Would call checkHealth(%v)", typeForHealthCheck)
+	healthDetails := map[string]string{} // XXX
+	var err error                        // XXX
+
+	newTabletType := targetTabletType
+	if err != nil {
+		switch tablet.Type {
+		case topo.TYPE_SPARE:
+			// we are not healthy, already spare, we're good
+			log.Infof("Tablet not healthy, staying as spare: %v", err)
+			return
+		case topo.TYPE_MASTER:
+			// we are master, not healthy, what can we do about it?
+			log.Infof("Tablet not healthy, but is the master, so keeping it as master")
+			return
+		}
+
+		log.Infof("Tablet not healthy, converting to spare: %v", err)
+		newTabletType = topo.TYPE_SPARE
+	} else {
+		// we are healthy, maybe with healthDetails, see if we
+		// need to update the record
+		if tablet.Type == topo.TYPE_MASTER {
+			newTabletType = topo.TYPE_MASTER
+		}
+		if tablet.Type == newTabletType && reflect.DeepEqual(healthDetails, tablet.Health) {
+			// no change in health, not logging anything,
+			// and we're done
+			return
+		}
+
+		// we need to update our state
+		log.Infof("Updating tablet record as healthy type %v with health details %v", newTabletType, healthDetails)
+	}
+
+	// TODO: add healthDetails to ChangeType
+	if err := ChangeType(agent.TopoServer, tablet.Alias, newTabletType, true /*runHooks*/); err != nil {
+		log.Infof("Error updating tablet record: %v", err)
+		return
+	}
+
+	// TODO: rebuild the serving graph in our cell.
+	// That's tough, since that is part of wrangler... So need to
+	// move the logic to topo, as it's more topo related anyway.
 }
