@@ -52,9 +52,11 @@ func canMarshal(val reflect.Value) Marshaler {
 	// Check the Marshaler interface on T.
 	if marshaler, ok := val.Interface().(Marshaler); ok {
 		// Don't call custom marshaler for nil values.
-		// TODO(sougou): This doesn't work for non-pointer marshalers.
-		if val.IsNil() {
-			return nil
+		switch val.Kind() {
+		case reflect.Ptr, reflect.Interface, reflect.Map, reflect.Slice:
+			if val.IsNil() {
+				return nil
+			}
 		}
 		return marshaler
 	}
