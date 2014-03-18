@@ -1689,8 +1689,8 @@ func installSignalHandlers() {
 	go func() {
 		<-sigChan
 		// we got a signal, notify our modules:
-		// - tm will interrupt anything waiting on a tablet action
-		// - wr will interrupt anything waiting on a shard or
+		// - initiator will interrupt anything waiting on a tablet action
+		// - wrangler will interrupt anything waiting on a shard or
 		//   keyspace lock
 		initiator.SignalInterrupt()
 		wrangler.SignalInterrupt()
