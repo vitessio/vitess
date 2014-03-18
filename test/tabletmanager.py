@@ -457,5 +457,38 @@ class TestTabletManager(unittest.TestCase):
                                         'test_keyspace/0'])
     self.assertEqual(1, len(after_scrap['ReplicationLinks']), 'wrong replication links after fix: %s' % str(after_fix))
 
+  def test_health_check(self):
+    utils.run_vtctl('CreateKeyspace test_keyspace')
+
+    # one master, one replica that starts in spare
+    tablet_62344.init_tablet('master', 'test_keyspace', '0')
+    tablet_62044.init_tablet('spare', 'test_keyspace', '0')
+
+    for t in tablet_62344, tablet_62044:
+      t.create_db('vt_test_keyspace')
+
+    tablet_62344.start_vttablet(wait_for_state=None)
+    tablet_62044.start_vttablet(wait_for_state=None, target_tablet_type='replica')
+
+    tablet_62344.wait_for_vttablet_state('SERVING')
+    tablet_62044.wait_for_vttablet_state('NOT_SERVING')
+
+    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/0', tablet_62344.tablet_alias])
+
+    timeout = 10
+    while True:
+      ti = utils.run_vtctl_json(['GetTablet', tablet_62044.tablet_alias])
+      if ti['Type'] == "replica":
+        logging.info("Slave tablet went to replica, good")
+        break
+      print ti
+      timeout -= 1
+      if timeout == 0:
+        self.fail("State did not change from health check")
+      logging.info("Sleeping for 1s waiting for health check to kick in")
+      time.sleep(1.0)
+
+    tablet.kill_tablets([tablet_62344, tablet_62044])
+
 if __name__ == '__main__':
   utils.main()

@@ -412,6 +412,9 @@ func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType) {
 	log.Infof("Would call checkHealth(%v)", typeForHealthCheck)
 	health := map[string]string{} // XXX
 	var err error                 // XXX
+	if len(health) == 0 {
+		health = nil
+	}
 
 	newTabletType := targetTabletType
 	if err != nil {
@@ -441,7 +444,7 @@ func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType) {
 		}
 
 		// we need to update our state
-		log.Infof("Updating tablet record as healthy type %v with health details %v", newTabletType, health)
+		log.Infof("Updating tablet record as healthy type %v -> %v with health details %v -> %v", tablet.Type, newTabletType, tablet.Health, health)
 	}
 
 	// Change the Type, update the health
@@ -466,4 +469,7 @@ func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType) {
 		log.Warningf("UnlockShard returned an error: %v", err)
 		return
 	}
+
+	// run the post action callbacks
+	agent.afterAction("healthcheck", false /* reloadSchema */)
 }
