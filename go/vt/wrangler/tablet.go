@@ -271,7 +271,7 @@ func (wr *Wrangler) ChangeTypeNoRebuild(tabletAlias topo.TabletAlias, tabletType
 	}
 
 	if force {
-		if err := tabletmanager.ChangeType(wr.ts, tabletAlias, tabletType, false); err != nil {
+		if err := tabletmanager.ChangeType(wr.ts, tabletAlias, tabletType, nil, false); err != nil {
 			return false, "", "", "", err
 		}
 	} else {

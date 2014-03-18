@@ -82,7 +82,7 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 	// master record, we already did it)
 	log.Infof("Rebuilding shard serving graph data")
 	return topo.RebuildShard(wr.ts, masterElectTablet.Keyspace, masterElectTablet.Shard,
-		topo.RebuildShardOptions{IgnorePartialResult: partialTopology, Critical: true})
+		topo.RebuildShardOptions{IgnorePartialResult: partialTopology})
 }
 
 func (wr *Wrangler) reparentShardExternal(slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo) error {

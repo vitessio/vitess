@@ -270,7 +270,7 @@ func (ta *TabletActor) setReadOnly(rdonly bool) error {
 
 func (ta *TabletActor) changeType(actionNode *actionnode.ActionNode) error {
 	dbType := actionNode.Args.(*topo.TabletType)
-	return ChangeType(ta.ts, ta.tabletAlias, *dbType, true /*runHooks*/)
+	return ChangeType(ta.ts, ta.tabletAlias, *dbType, nil, true /*runHooks*/)
 }
 
 func (ta *TabletActor) demoteMaster() error {
@@ -720,7 +720,7 @@ func (ta *TabletActor) restore(actionNode *actionnode.ActionNode) error {
 	}
 
 	// change to TYPE_SPARE, we're done!
-	return ChangeType(ta.ts, ta.tabletAlias, topo.TYPE_SPARE, true)
+	return ChangeType(ta.ts, ta.tabletAlias, topo.TYPE_SPARE, nil, true)
 }
 
 func (ta *TabletActor) multiSnapshot(actionNode *actionnode.ActionNode) error {
@@ -860,8 +860,14 @@ func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
 	return nil
 }
 
-// Make this external, since these transitions need to be forced from time to time.
-func ChangeType(ts topo.Server, tabletAlias topo.TabletAlias, newType topo.TabletType, runHooks bool) error {
+// ChangeType changes the type of the tablet and possibly also updates
+// the health informaton for it. Make this external, since these
+// transitions need to be forced from time to time.
+//
+// - if health is nil, we don't touch the Tablet's Health record.
+// - if health is an empty map, we clear the Tablet's Health record.
+// - if health has values, we overwrite the Tablet's Health record.
+func ChangeType(ts topo.Server, tabletAlias topo.TabletAlias, newType topo.TabletType, health map[string]string, runHooks bool) error {
 	tablet, err := ts.GetTablet(tabletAlias)
 	if err != nil {
 		return err
@@ -915,6 +921,14 @@ func ChangeType(ts topo.Server, tabletAlias topo.TabletAlias, newType topo.Table
 		tablet.Keyspace = ""
 		tablet.Shard = ""
 		tablet.KeyRange = key.KeyRange{}
+		tablet.Health = health
+	}
+	if health != nil {
+		if len(health) == 0 {
+			tablet.Health = nil
+		} else {
+			tablet.Health = health
+		}
 	}
 	return topo.UpdateTablet(ts, tablet)
 }

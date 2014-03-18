@@ -408,10 +408,10 @@ func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType) {
 	}
 
 	// TODO: link in with health module
-	// healthDetails, err := checkHealth(typeForHealthCheck)
+	// health, err := checkHealth(typeForHealthCheck)
 	log.Infof("Would call checkHealth(%v)", typeForHealthCheck)
-	healthDetails := map[string]string{} // XXX
-	var err error                        // XXX
+	health := map[string]string{} // XXX
+	var err error                 // XXX
 
 	newTabletType := targetTabletType
 	if err != nil {
@@ -429,28 +429,41 @@ func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType) {
 		log.Infof("Tablet not healthy, converting to spare: %v", err)
 		newTabletType = topo.TYPE_SPARE
 	} else {
-		// we are healthy, maybe with healthDetails, see if we
+		// we are healthy, maybe with health, see if we
 		// need to update the record
 		if tablet.Type == topo.TYPE_MASTER {
 			newTabletType = topo.TYPE_MASTER
 		}
-		if tablet.Type == newTabletType && reflect.DeepEqual(healthDetails, tablet.Health) {
+		if tablet.Type == newTabletType && reflect.DeepEqual(health, tablet.Health) {
 			// no change in health, not logging anything,
 			// and we're done
 			return
 		}
 
 		// we need to update our state
-		log.Infof("Updating tablet record as healthy type %v with health details %v", newTabletType, healthDetails)
+		log.Infof("Updating tablet record as healthy type %v with health details %v", newTabletType, health)
 	}
 
-	// TODO: add healthDetails to ChangeType
-	if err := ChangeType(agent.TopoServer, tablet.Alias, newTabletType, true /*runHooks*/); err != nil {
+	// Change the Type, update the health
+	if err := ChangeType(agent.TopoServer, tablet.Alias, newTabletType, health, true /*runHooks*/); err != nil {
 		log.Infof("Error updating tablet record: %v", err)
 		return
 	}
 
-	// TODO: rebuild the serving graph in our cell.
-	// That's tough, since that is part of wrangler... So need to
-	// move the logic to topo, as it's more topo related anyway.
+	// Rebuild the serving graph in our cell.
+	// TODO: timeout
+	// TODO: interrupted
+	interrupted := make(chan struct{})
+	actionNode := actionnode.RebuildShard()
+	lockPath, err := actionNode.LockShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, 5*time.Second, interrupted)
+	if err != nil {
+		log.Warningf("Cannot lock shard for rebuild: %v", err)
+		return
+	}
+	err = topo.RebuildShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, topo.RebuildShardOptions{Cells: []string{tablet.Alias.Cell}, IgnorePartialResult: true})
+	err = actionNode.UnlockShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, lockPath, err)
+	if err != nil {
+		log.Warningf("UnlockShard returned an error: %v", err)
+		return
+	}
 }

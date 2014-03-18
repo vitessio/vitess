@@ -36,5 +36,3 @@ func initHeathCheck(agent *tabletmanager.ActionAgent) {
 		}
 	}()
 }
-
-// TODO: move rebuild serving graph to topo code.

@@ -17,10 +17,8 @@ type RebuildShardOptions struct {
 	// Cells that should be rebuilt. If nil, rebuild in all cells.
 	Cells []string
 	// It is OK to ignore ErrPartialResult (which may mean
-	// that some cell is unavailable.
+	// that some cell is unavailable).
 	IgnorePartialResult bool
-	// If true, call GetShardCritical instead of GetShard.
-	Critical bool
 }
 
 // Update shard file with new master, replicas, etc.
@@ -32,20 +30,10 @@ type RebuildShardOptions struct {
 // - otherwise the consistency of the serving graph data can't be
 // guaranteed.
 func RebuildShard(ts Server, keyspace, shard string, options RebuildShardOptions) error {
-	log.Infof("rebuildShard %v/%v", keyspace, shard)
+	log.Infof("RebuildShard %v/%v", keyspace, shard)
 
 	// read the existing shard info. It has to exist.
-
-	var (
-		shardInfo *ShardInfo
-		err       error
-	)
-	if options.Critical {
-		shardInfo, err = ts.GetShardCritical(keyspace, shard)
-	} else {
-		shardInfo, err = ts.GetShard(keyspace, shard)
-	}
-
+	shardInfo, err := ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
 	}
