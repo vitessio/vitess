@@ -322,7 +322,8 @@ class Tablet(object):
       args.extend(['-queryserver-config-sensitive-mode'])
     if target_tablet_type:
       args.extend(['-target_tablet_type', target_tablet_type,
-                   '-health_check_interval', '2s'])
+                   '-health_check_interval', '2s',
+                   '-allowed_replication_lag', '30'])
 
     stderr_fd = open(os.path.join(self.tablet_dir, "vttablet.stderr"), "w")
     # increment count only the first time

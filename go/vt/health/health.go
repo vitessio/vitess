@@ -24,7 +24,7 @@ const (
 )
 
 func init() {
-	defaultAggregator = new(Aggregator)
+	defaultAggregator = NewAggregator()
 }
 
 // Reporter reports the health status of a tablet.
