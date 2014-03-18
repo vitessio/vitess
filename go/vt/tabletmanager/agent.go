@@ -47,6 +47,7 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/env"
+	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
@@ -406,12 +407,7 @@ func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType) {
 	if tablet.Type == topo.TYPE_MASTER {
 		typeForHealthCheck = topo.TYPE_MASTER
 	}
-
-	// TODO: link in with health module
-	// health, err := checkHealth(typeForHealthCheck)
-	log.Infof("Would call checkHealth(%v)", typeForHealthCheck)
-	health := map[string]string{} // XXX
-	var err error                 // XXX
+	health, err := health.Run(typeForHealthCheck)
 	if len(health) == 0 {
 		health = nil
 	}
@@ -449,8 +445,8 @@ func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType) {
 	}
 
 	// Rebuild the serving graph in our cell.
-	// TODO: timeout
-	// TODO: interrupted
+	// TODO: timeout should be configurable
+	// TODO: interrupted may need to be a global one closed when we exit
 	interrupted := make(chan struct{})
 	actionNode := actionnode.RebuildShard()
 	lockPath, err := actionNode.LockShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, 5*time.Second, interrupted)
