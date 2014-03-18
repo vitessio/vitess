@@ -416,26 +416,21 @@ func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType) {
 		health = nil
 	}
 
-	newTabletType := targetTabletType
+	// start with no change
+	newTabletType := tablet.Type
 	if err != nil {
-		switch tablet.Type {
-		case topo.TYPE_SPARE:
-			// we are not healthy, already spare, we're good
-			log.Infof("Tablet not healthy, staying as spare: %v", err)
-			return
-		case topo.TYPE_MASTER:
-			// we are master, not healthy, what can we do about it?
-			log.Infof("Tablet not healthy, but is the master, so keeping it as master")
+		if tablet.Type != targetTabletType {
+			log.Infof("Tablet not healthy and in state %v, not changing it: %v", tablet.Type, err)
 			return
 		}
-
-		log.Infof("Tablet not healthy, converting to spare: %v", err)
+		log.Infof("Tablet not healthy, converting it from %v to spare: %v", targetTabletType, err)
 		newTabletType = topo.TYPE_SPARE
 	} else {
-		// we are healthy, maybe with health, see if we
-		// need to update the record
-		if tablet.Type == topo.TYPE_MASTER {
-			newTabletType = topo.TYPE_MASTER
+		// We are healthy, maybe with health, see if we need
+		// to update the record. We only change from spare to
+		// our target type.
+		if tablet.Type == topo.TYPE_SPARE {
+			newTabletType = targetTabletType
 		}
 		if tablet.Type == newTabletType && reflect.DeepEqual(health, tablet.Health) {
 			// no change in health, not logging anything,
