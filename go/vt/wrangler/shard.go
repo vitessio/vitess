@@ -15,30 +15,11 @@ import (
 // shard related methods for Wrangler
 
 func (wr *Wrangler) lockShard(keyspace, shard string, actionNode *actionnode.ActionNode) (lockPath string, err error) {
-	log.Infof("Locking shard %v/%v for action %v", keyspace, shard, actionNode.Action)
-	return wr.ts.LockShardForAction(keyspace, shard, actionNode.ToJson(), wr.lockTimeout, interrupted)
+	return actionNode.LockShard(wr.ts, keyspace, shard, wr.lockTimeout, interrupted)
 }
 
 func (wr *Wrangler) unlockShard(keyspace, shard string, actionNode *actionnode.ActionNode, lockPath string, actionError error) error {
-	// first update the actionNode
-	if actionError != nil {
-		log.Infof("Unlocking shard %v/%v for action %v with error %v", keyspace, shard, actionNode.Action, actionError)
-		actionNode.Error = actionError.Error()
-		actionNode.State = actionnode.ACTION_STATE_FAILED
-	} else {
-		log.Infof("Unlocking shard %v/%v for successful action %v", keyspace, shard, actionNode.Action)
-		actionNode.Error = ""
-		actionNode.State = actionnode.ACTION_STATE_DONE
-	}
-	err := wr.ts.UnlockShardForAction(keyspace, shard, lockPath, actionNode.ToJson())
-	if actionError != nil {
-		if err != nil {
-			// this will be masked
-			log.Warningf("UnlockShardForAction failed: %v", err)
-		}
-		return actionError
-	}
-	return err
+	return actionNode.UnlockShard(wr.ts, keyspace, shard, lockPath, actionError)
 }
 
 // SetShardServedTypes changes the ServedTypes parameter of a shard.
@@ -74,7 +55,7 @@ func (wr *Wrangler) DeleteShard(keyspace, shard string) error {
 		return err
 	}
 
-	tabletMap, err := GetTabletMapForShard(wr.ts, keyspace, shard)
+	tabletMap, err := topo.GetTabletMapForShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}

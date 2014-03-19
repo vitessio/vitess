@@ -35,6 +35,9 @@ func main() {
 
 	servenv.Init()
 
+	if *tabletPath == "" {
+		log.Fatalf("tabletPath required")
+	}
 	tabletAlias := vttablet.TabletParamToTabletAlias(*tabletPath)
 
 	if *mycnfFile == "" {
