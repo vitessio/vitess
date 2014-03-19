@@ -11,6 +11,7 @@ import framework
 from queryservice_tests import cache_tests
 from queryservice_tests import nocache_tests
 from queryservice_tests import stream_tests
+from queryservice_tests import status_tests
 from queryservice_tests import test_env
 
 
@@ -41,10 +42,12 @@ if __name__ == "__main__":
       else:
         raise Exception(arg, "not found in tests")
   else:
-    suite.addTests(unittest.TestLoader().loadTestsFromModule(nocache_tests))
-    suite.addTests(unittest.TestLoader().loadTestsFromModule(stream_tests))
+    modules = [nocache_tests, stream_tests, status_tests]
     if options.memcache:
-      suite.addTests(unittest.TestLoader().loadTestsFromModule(cache_tests))
+      modules.append(cache_tests)
+
+    for m in modules:
+      suite.addTests(unittest.TestLoader().loadTestsFromModule(m))
 
   for env_name in options.env.split(','):
     try:
@@ -55,6 +58,7 @@ if __name__ == "__main__":
       else:
         raise Exception("Valid options for -e: vtocc, vttablet")
 
+      env.memcache = options.memcache
       env.setUp()
       print "Starting queryservice_test.py: %s" % env_name
       sys.stdout.flush()

@@ -41,7 +41,8 @@ func UnmarshalFieldBson(field *Field, buf *bytes.Buffer) {
 	}
 }
 
-func (qr *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (qr *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
 	EncodeFieldsBson(qr.Fields, "Fields", buf)
@@ -87,10 +88,11 @@ func EncodeRowBson(row []sqltypes.Value, key string, buf *bytes2.ChunkedWriter) 
 	lenWriter.RecordLen()
 }
 
-func (qr *QueryResult) UnmarshalBson(buf *bytes.Buffer) {
+func (qr *QueryResult) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		key := bson.ReadCString(buf)
 		switch key {

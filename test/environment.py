@@ -24,6 +24,9 @@ vtlogroot = tmproot
 # where to start allocating ports from
 vtportstart = int(os.environ.get('VTPORTSTART', '6700'))
 
+# url in which binaries export their status.
+status_url = '/debug/status'
+
 def setup():
   global tmproot
   try:

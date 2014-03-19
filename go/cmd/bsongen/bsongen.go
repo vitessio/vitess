@@ -5,6 +5,8 @@
 package main
 
 import (
+	"bytes"
+	"flag"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -12,36 +14,58 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"strings"
 	"text/template"
-
-	"github.com/youtube/vitess/go/testfiles"
 )
 
 var (
+	filename = flag.String("file", "", "input file name")
+	typename = flag.String("type", "", "type to generate code for")
+)
+
+func main() {
+	flag.Parse()
+	b, err := ioutil.ReadFile(*filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+	out, err := generateCode(string(b), *typename)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		return
+	}
+	fmt.Printf("%s\n", out)
+}
+
+var (
 	encoderMap = map[string]string{
-		"float64": "EncodeFloat64",
-		"string":  "EncodeString",
-		"bool":    "EncodeBool",
-		"int64":   "EncodeInt64",
-		"int32":   "EncodeInt32",
-		"int":     "EncodeInt",
-		"uint64":  "EncodeUint64",
-		"uint32":  "EncodeUint32",
-		"uint":    "EncodeUint",
-		"[]byte":  "EncodeBinary",
+		"string":      "EncodeString",
+		"[]byte":      "EncodeBinary",
+		"int64":       "EncodeInt64",
+		"int32":       "EncodeInt32",
+		"int":         "EncodeInt",
+		"uint64":      "EncodeUint64",
+		"uint32":      "EncodeUint32",
+		"uint":        "EncodeUint",
+		"float64":     "EncodeFloat64",
+		"bool":        "EncodeBool",
+		"interface{}": "EncodeInterface",
+		"time.Time":   "EncodeTime",
 	}
 	decoderMap = map[string]string{
-		"float64": "DecodeFloat64",
-		"string":  "DecodeString",
-		"bool":    "DecodeBool",
-		"int64":   "DecodeInt64",
-		"int32":   "DecodeInt32",
-		"int":     "DecodeInt",
-		"uint64":  "DecodeUint64",
-		"uint32":  "DecodeUint32",
-		"uint":    "DecodeUint",
-		"[]byte":  "DecodeBinary",
+		"string":      "DecodeString",
+		"[]byte":      "DecodeBinary",
+		"int64":       "DecodeInt64",
+		"int32":       "DecodeInt32",
+		"int":         "DecodeInt",
+		"uint64":      "DecodeUint64",
+		"uint32":      "DecodeUint32",
+		"uint":        "DecodeUint",
+		"float64":     "DecodeFloat64",
+		"bool":        "DecodeBool",
+		"interface{}": "DecodeInterface",
+		"time.Time":   "DecodeTime",
 	}
 )
 
@@ -69,6 +93,13 @@ func (f *FieldInfo) IsSlice() bool {
 
 func (f *FieldInfo) IsMap() bool {
 	return f.typ == "map[string]"
+}
+
+func (f *FieldInfo) IsCustom() bool {
+	if f.IsPointer() || f.IsSlice() || f.IsMap() {
+		return false
+	}
+	return encoderMap[f.typ] == ""
 }
 
 func (f *FieldInfo) Encoder() string {
@@ -154,10 +185,12 @@ func buildFields(structType *ast.StructType, varName string) ([]*FieldInfo, erro
 func buildField(fieldType ast.Expr, tag, name string) (*FieldInfo, error) {
 	switch ident := fieldType.(type) {
 	case *ast.Ident:
-		if encoderMap[ident.Name] == "" {
-			return nil, fmt.Errorf("%s is not a recognized type", ident.Name)
-		}
 		return &FieldInfo{Tag: tag, Name: name, typ: ident.Name}, nil
+	case *ast.InterfaceType:
+		if ident.Methods.List != nil {
+			goto notSimple
+		}
+		return &FieldInfo{Tag: tag, Name: name, typ: "interface{}"}, nil
 	case *ast.ArrayType:
 		if ident.Len != nil {
 			goto notSimple
@@ -172,7 +205,7 @@ func buildField(fieldType ast.Expr, tag, name string) (*FieldInfo, error) {
 		}
 		return &FieldInfo{Tag: tag, Name: name, typ: "[]", Subfield: subfield}, nil
 	case *ast.StarExpr:
-		subfield, err := buildField(ident.X, tag, "*"+name)
+		subfield, err := buildField(ident.X, tag, "(*"+name+")")
 		if err != nil {
 			return nil, err
 		}
@@ -187,35 +220,74 @@ func buildField(fieldType ast.Expr, tag, name string) (*FieldInfo, error) {
 			return nil, err
 		}
 		return &FieldInfo{Tag: tag, Name: name, typ: "map[string]", Subfield: subfield}, nil
+	case *ast.SelectorExpr:
+		pkg, ok := ident.X.(*ast.Ident)
+		if !ok {
+			goto notSimple
+		}
+		return &FieldInfo{Tag: tag, Name: name, typ: pkg.Name + "." + ident.Sel.Name}, nil
 	}
 notSimple:
 	return nil, fmt.Errorf("%#v is not a simple type", fieldType)
 }
 
-func main() {
-	input := testfiles.Locate("bson_test/simple_type.go")
-	b, err := ioutil.ReadFile(input)
+func generateCode(in string, typename string) (out []byte, err error) {
+	raw, err := generateRawCode(in, typename)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
-	src := string(b)
+	return formatCode(raw)
+}
 
+func generateRawCode(in string, typename string) (out []byte, err error) {
 	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, "", src, 0)
+	f, err := parser.ParseFile(fset, "", in, 0)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	//ast.Print(fset, f)
-	typeInfo, err := FindType(f, "MyType")
+	typeInfo, err := FindType(f, typename)
 	if err != nil {
-		fmt.Println(err)
-		return
+		return nil, err
 	}
-	generator.ExecuteTemplate(os.Stdout, "Body", typeInfo)
+	buf := bytes.NewBuffer(nil)
+	err = generator.ExecuteTemplate(buf, "Body", typeInfo)
+	if err != nil {
+		return nil, err
+	}
+	return formatCode(buf.Bytes())
+}
+
+func formatCode(in []byte) (out []byte, err error) {
+	cmd := exec.Command("goimports")
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, err
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	err = cmd.Start()
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		bytes.NewBuffer(in).WriteTo(stdin)
+		stdin.Close()
+	}()
+	b, err := ioutil.ReadAll(stdout)
+	if err != nil {
+		return nil, err
+	}
+	cmd.Wait()
+	return b, nil
 }
 
 var generator = template.Must(template.New("Generator").Parse(`
 {{define "SimpleEncoder"}}bson.{{.Encoder}}(buf, {{.Tag}}, {{.Name}}){{end}}
+
+{{define "CustomEncoder"}}{{.Name}}.MarshalBson(buf, {{.Tag}}){{end}}
 
 {{define "StarEncoder"}}if {{.Name}} == nil {
 	bson.EncodePrefix(buf, bson.Null, {{.Tag}})
@@ -247,9 +319,11 @@ var generator = template.Must(template.New("Generator").Parse(`
 	lenWriter.RecordLen()
 }{{end}}
 
-{{define "Encoder"}}{{if .IsPointer}}{{template "StarEncoder" .}}{{else if .IsSlice}}{{template "SliceEncoder" .}}{{else if .IsMap}}{{template "MapEncoder" .}}{{else}}{{template "SimpleEncoder" .}}{{end}}{{end}}
+{{define "Encoder"}}{{if .IsPointer}}{{template "StarEncoder" .}}{{else if .IsSlice}}{{template "SliceEncoder" .}}{{else if .IsMap}}{{template "MapEncoder" .}}{{else if .IsCustom}}{{template "CustomEncoder" .}}{{else}}{{template "SimpleEncoder" .}}{{end}}{{end}}
 
 {{define "SimpleDecoder"}}{{.Name}} = bson.{{.Decoder}}(buf, kind){{end}}
+
+{{define "CustomDecoder"}}{{.Name}}.UnmarshalBson(buf, kind){{end}}
 
 {{define "StarDecoder"}}if kind == bson.Null {
 	{{.Name}} = nil
@@ -287,17 +361,20 @@ if kind == bson.Null {
 	for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 		k = bson.ReadCString(buf)
 		{{template "Decoder" .Subfield}}
-		({{.Name}})[k] = {{.Subfield.Name}}
+		{{.Name}}[k] = {{.Subfield.Name}}
 	}
 }{{end}}
 
-{{define "Decoder"}}{{if .IsPointer}}{{template "StarDecoder" .}}{{else if .IsSlice}}{{template "SliceDecoder" .}}{{else if .IsMap}}{{template "MapDecoder" .}}{{else}}{{template "SimpleDecoder" .}}{{end}}{{end}}
+{{define "Decoder"}}{{if .IsPointer}}{{template "StarDecoder" .}}{{else if .IsSlice}}{{template "SliceDecoder" .}}{{else if .IsMap}}{{template "MapDecoder" .}}{{else if .IsCustom}}{{template "CustomDecoder" .}}{{else}}{{template "SimpleDecoder" .}}{{end}}{{end}}
 
 {{define "Body"}}// Copyright 2012, Google Inc. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
 package {{.Package}}
+
+// DO NOT EDIT.
+// FILE GENERATED BY BSONGEN.
 
 import (
 	"bytes"
@@ -307,7 +384,8 @@ import (
 )
 
 // MarshalBson bson-encodes {{.Name}}.
-func ({{.Var}} *{{.Name}}) MarshalBson(buf *bytes2.ChunkedWriter) {
+func ({{.Var}} *{{.Name}}) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
 {{range .Fields}}	{{template "Encoder" .}}
@@ -317,7 +395,8 @@ func ({{.Var}} *{{.Name}}) MarshalBson(buf *bytes2.ChunkedWriter) {
 }
 
 // UnmarshalBson bson-decodes into {{.Name}}.
-func ({{.Var}} *{{.Name}}) UnmarshalBson(buf *bytes.Buffer) {
+func ({{.Var}} *{{.Name}}) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	VerifyObject(kind)
 	bson.Next(buf, 4)
 
 	kind := bson.NextByte(buf)

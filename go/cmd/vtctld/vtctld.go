@@ -21,7 +21,6 @@ import (
 )
 
 var (
-	port        = flag.Int("port", 8080, "port for the server")
 	templateDir = flag.String("templates", "", "directory containing templates")
 	debug       = flag.Bool("debug", false, "recompile templates for every request")
 )
@@ -630,5 +629,5 @@ func main() {
 		}
 		http.Redirect(w, r, target, http.StatusFound)
 	})
-	servenv.Run(*port)
+	servenv.Run()
 }

@@ -4,18 +4,24 @@
 
 package mytype
 
+import "time"
+
 type MyType struct {
-	Float64 float64
-	String  string
-	Bool    bool
-	Int64   int64
-	Int32   int32
-	Int     int
-	Uint64  uint64
-	Uint32  uint32
-	Uint    uint
-	Bytes   []byte
-	Ptr     *int64
-	Strings *[]*string
-	Map     map[string]int64
+	Float64   float64
+	String    string
+	Bool      bool
+	Int64     int64
+	Int32     int32
+	Int       int
+	Uint64    uint64
+	Uint32    uint32
+	Uint      uint
+	Bytes     []byte
+	Ptr       *int64
+	Strings   *[]*string
+	Map       map[string]time.Time
+	Interface interface{}
+	Time      time.Time
+	Custom1   *CustomStruct
+	Custom2   *pkg.CustomStruct
 }

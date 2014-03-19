@@ -28,6 +28,8 @@ class EnvironmentError(Exception):
 
 
 class TestEnv(object):
+  memcache = False
+  sensitive_mode = False
 
   def connect(self):
     c = tablet_conn.connect("localhost:%s" % self.tablet.port, '', 'test_keyspace', '0', 2)
@@ -184,10 +186,7 @@ class VttabletTestEnv(TestEnv):
     self.create_customrules(customrules)
     schema_override = '/tmp/schema_override.json'
     self.create_schema_override(schema_override)
-    if utils.options.memcache:
-      self.tablet.start_vttablet(memcache=True, customrules=customrules, schema_override=schema_override)
-    else:
-      self.tablet.start_vttablet(customrules=customrules, schema_override=schema_override)
+    self.tablet.start_vttablet(memcache=self.memcache, customrules=customrules, schema_override=schema_override, sensitive_mode=self.sensitive_mode)
 
     # FIXME(szopa): This is necessary here only because of a bug that
     # makes the qs reload its config only after an action.
@@ -309,11 +308,14 @@ class VtoccTestEnv(TestEnv):
       "-db-config-app-keyspace", "test_keyspace",
       "-db-config-app-shard", "0"
     ]
-    if utils.options.memcache:
+    if self.memcache:
       memcache = self.mysqldir+"/memcache.sock"
       occ_args.extend(["-rowcache-bin", "memcached"])
       occ_args.extend(["-rowcache-socket", memcache])
       occ_args.extend(["-enable-rowcache"])
+
+    if self.sensitive_mode:
+      occ_args.extend(['-queryserver-config-sensitive-mode'])
 
     self.vtstderr = open("/tmp/vtocc_stderr.log", "a+")
     self.vtstdout = open("/tmp/vtocc_stdout.log", "a+")

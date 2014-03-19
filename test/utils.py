@@ -288,7 +288,7 @@ def get_vars(port):
   if we can't get them.
   """
   try:
-    f = urllib.urlopen('http://localhost:%u/debug/vars' % port)
+    f = urllib.urlopen('http://localhost:%u/debug/vars' % int(port))
     data = f.read()
     f.close()
   except:
@@ -331,7 +331,10 @@ def zkocc_kill(sp):
   sp.wait()
 
 # vtgate helpers, assuming it always restarts on the same port
-def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1, topo_impl=None, tablet_bson_encrypted=False, cache_ttl='1s', auth=False, timeout="5s", cert=None, key=None, ca_cert=None):
+def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1,
+                 topo_impl=None, tablet_bson_encrypted=False, cache_ttl='1s',
+                 auth=False, timeout="5s", cert=None, key=None, ca_cert=None,
+                 socket_file=None):
   port = vtport or environment.reserve_ports(1)
   secure_port = None
   args = [environment.binary_path('vtgate'),
@@ -357,7 +360,9 @@ def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1, topo
                  '-cert', cert,
                  '-key', key])
     if ca_cert:
-      args.extend(['-ca-cert', ca_cert])
+      args.extend(['-ca_cert', ca_cert])
+  if socket_file:
+    args.extend(['-socket_file', socket_file])
 
   sp = run_bg(args)
   if cert:
@@ -532,3 +537,6 @@ def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
   if keyspace_id_type != ks.get('ShardingColumnType'):
     raise Exception("Got wrong ShardingColumnType in SrvKeyspace: %s" %
                    str(ks))
+
+def get_status(port):
+  return urllib.urlopen('http://localhost:%u%s' % (port, environment.status_url)).read()

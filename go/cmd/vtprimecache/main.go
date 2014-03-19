@@ -27,7 +27,7 @@ func main() {
 
 	dbcfgs, err := dbconfigs.Init(*mysqlSocketFile)
 	if err != nil {
-		log.Warning(err)
+		log.Fatalf("Failed to init dbconfigs: %v", err)
 	}
 
 	pc := primecache.NewPrimeCache(dbcfgs, *relayLogsPath)

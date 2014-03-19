@@ -45,6 +45,7 @@ type QueryEngine struct {
 	consolidator   *Consolidator
 
 	spotCheckFreq sync2.AtomicInt64
+	strictMode    sync2.AtomicInt64
 
 	maxResultSize    sync2.AtomicInt64
 	streamBufferSize sync2.AtomicInt64
@@ -86,7 +87,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 
 	// services
 	qe.cachePool = NewCachePool("RowcachePool", config.RowCache, time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
-	qe.schemaInfo = NewSchemaInfo(config.QueryCacheSize, time.Duration(config.SchemaReloadTime*1e9), time.Duration(config.IdleTimeout*1e9))
+	qe.schemaInfo = NewSchemaInfo(config.QueryCacheSize, time.Duration(config.SchemaReloadTime*1e9), time.Duration(config.IdleTimeout*1e9), config.SensitiveMode)
 	qe.connPool = NewConnectionPool("ConnPool", config.PoolSize, time.Duration(config.IdleTimeout*1e9))
 	qe.streamConnPool = NewConnectionPool("StreamConnPool", config.StreamPoolSize, time.Duration(config.IdleTimeout*1e9))
 	qe.txPool = NewConnectionPool("TransactionPool", config.TransactionCap, time.Duration(config.IdleTimeout*1e9)) // connections in pool has to be > transactionCap
@@ -96,6 +97,9 @@ func NewQueryEngine(config Config) *QueryEngine {
 
 	// vars
 	qe.spotCheckFreq = sync2.AtomicInt64(config.SpotCheckRatio * SPOT_CHECK_MULTIPLIER)
+	if config.StrictMode {
+		qe.strictMode.Set(1)
+	}
 	qe.maxResultSize = sync2.AtomicInt64(config.MaxResultSize)
 	qe.streamBufferSize = sync2.AtomicInt64(config.StreamBufferSize)
 
@@ -131,7 +135,11 @@ func (qe *QueryEngine) Open(dbconfig *dbconfigs.DBConfig, schemaOverrides []Sche
 		log.Infof("rowcache not enabled")
 	}
 	start := time.Now()
-	qe.schemaInfo.Open(connFactory, schemaOverrides, qe.cachePool, qrs)
+	strictMode := false
+	if qe.strictMode.Get() != 0 {
+		strictMode = true
+	}
+	qe.schemaInfo.Open(connFactory, schemaOverrides, qe.cachePool, qrs, strictMode)
 	log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))
 	qe.connPool.Open(connFactory)
 	qe.streamConnPool.Open(connFactory)
@@ -213,12 +221,12 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 		query.BindVariables = make(map[string]interface{})
 	}
 	logStats.BindVariables = query.BindVariables
-	logStats.OriginalSql = query.Sql
 	// cheap hack: strip trailing comment into a special bind var
 	stripTrailing(query)
 	basePlan := qe.schemaInfo.GetPlan(logStats, query.Sql)
 	planName := basePlan.PlanId.String()
 	logStats.PlanType = planName
+	logStats.OriginalSql = basePlan.DisplayQuery
 	defer func(start time.Time) {
 		duration := time.Now().Sub(start)
 		queryStats.Add(planName, duration)
@@ -249,16 +257,17 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 		// Need upfront connection for DMLs and transactions
 		conn := qe.activeTxPool.Get(query.TransactionId)
 		defer conn.Recycle()
-		conn.RecordQuery(plan.Query)
+		conn.RecordQuery(plan.DisplayQuery)
 		var invalidator CacheInvalidator
 		if plan.TableInfo != nil && plan.TableInfo.CacheType != schema.CACHE_NONE {
 			invalidator = conn.DirtyKeys(plan.TableName)
 		}
 		switch plan.PlanId {
 		case sqlparser.PLAN_PASS_DML:
-			// TODO(sougou): Delete code path that leads here.
-			// We need to permanently disallow this plan.
-			panic(NewTabletError(FAIL, "DML too complex"))
+			if qe.strictMode.Get() != 0 {
+				panic(NewTabletError(FAIL, "DML too complex"))
+			}
+			reply = qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
 		case sqlparser.PLAN_INSERT_PK:
 			reply = qe.execInsertPK(logStats, conn, plan, invalidator)
 		case sqlparser.PLAN_INSERT_SUBQUERY:
@@ -312,12 +321,12 @@ func (qe *QueryEngine) StreamExecute(logStats *sqlQueryStats, query *proto.Query
 		query.BindVariables = make(map[string]interface{})
 	}
 	logStats.BindVariables = query.BindVariables
-	logStats.OriginalSql = query.Sql
 	// cheap hack: strip trailing comment into a special bind var
 	stripTrailing(query)
 
-	fullQuery := qe.schemaInfo.GetStreamPlan(query.Sql)
+	plan := qe.schemaInfo.GetStreamPlan(query.Sql)
 	logStats.PlanType = "SELECT_STREAM"
+	logStats.OriginalSql = plan.DisplayQuery
 	defer queryStats.Record("SELECT_STREAM", time.Now())
 
 	// does the real work: first get a connection
@@ -327,7 +336,7 @@ func (qe *QueryEngine) StreamExecute(logStats *sqlQueryStats, query *proto.Query
 	defer conn.Recycle()
 
 	// then let's stream!
-	qe.fullStreamFetch(logStats, conn, fullQuery, query.BindVariables, nil, nil, sendReply)
+	qe.fullStreamFetch(logStats, conn, plan.FullQuery, query.BindVariables, nil, nil, sendReply)
 }
 
 func (qe *QueryEngine) InvalidateForDml(dml *proto.DmlType) {
@@ -657,43 +666,66 @@ func (qe *QueryEngine) execDMLPKRows(logStats *sqlQueryStats, conn PoolConnectio
 func (qe *QueryEngine) execSet(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan) (result *mproto.QueryResult) {
 	switch plan.SetKey {
 	case "vt_pool_size":
-		qe.connPool.SetCapacity(int(plan.SetValue.(float64)))
+		qe.connPool.SetCapacity(int(getInt64(plan.SetValue)))
 	case "vt_stream_pool_size":
-		qe.streamConnPool.SetCapacity(int(plan.SetValue.(float64)))
+		qe.streamConnPool.SetCapacity(int(getInt64(plan.SetValue)))
 	case "vt_transaction_cap":
-		qe.txPool.SetCapacity(int(plan.SetValue.(float64)))
+		qe.txPool.SetCapacity(int(getInt64(plan.SetValue)))
 	case "vt_transaction_timeout":
-		qe.activeTxPool.SetTimeout(time.Duration(plan.SetValue.(float64) * 1e9))
+		qe.activeTxPool.SetTimeout(getDuration(plan.SetValue))
 	case "vt_schema_reload_time":
-		qe.schemaInfo.SetReloadTime(time.Duration(plan.SetValue.(float64) * 1e9))
+		qe.schemaInfo.SetReloadTime(getDuration(plan.SetValue))
 	case "vt_query_cache_size":
-		qe.schemaInfo.SetQueryCacheSize(int(plan.SetValue.(float64)))
+		qe.schemaInfo.SetQueryCacheSize(int(getInt64(plan.SetValue)))
 	case "vt_max_result_size":
-		val := int64(plan.SetValue.(float64))
+		val := getInt64(plan.SetValue)
 		if val < 1 {
 			panic(NewTabletError(FAIL, "max result size out of range %v", val))
 		}
 		qe.maxResultSize.Set(val)
 	case "vt_stream_buffer_size":
-		val := int64(plan.SetValue.(float64))
+		val := getInt64(plan.SetValue)
 		if val < 1024 {
 			panic(NewTabletError(FAIL, "stream buffer size out of range %v", val))
 		}
 		qe.streamBufferSize.Set(val)
 	case "vt_query_timeout":
-		qe.activePool.SetTimeout(time.Duration(plan.SetValue.(float64) * 1e9))
+		qe.activePool.SetTimeout(getDuration(plan.SetValue))
 	case "vt_idle_timeout":
-		t := plan.SetValue.(float64) * 1e9
-		qe.connPool.SetIdleTimeout(time.Duration(t))
-		qe.streamConnPool.SetIdleTimeout(time.Duration(t))
-		qe.txPool.SetIdleTimeout(time.Duration(t))
-		qe.activePool.SetIdleTimeout(time.Duration(t))
+		t := getDuration(plan.SetValue)
+		qe.connPool.SetIdleTimeout(t)
+		qe.streamConnPool.SetIdleTimeout(t)
+		qe.txPool.SetIdleTimeout(t)
+		qe.activePool.SetIdleTimeout(t)
 	case "vt_spot_check_ratio":
-		qe.spotCheckFreq.Set(int64(plan.SetValue.(float64) * SPOT_CHECK_MULTIPLIER))
+		qe.spotCheckFreq.Set(int64(getFloat64(plan.SetValue) * SPOT_CHECK_MULTIPLIER))
+	case "vt_strict_mode":
+		qe.strictMode.Set(getInt64(plan.SetValue))
 	default:
 		return qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
 	}
 	return &mproto.QueryResult{}
+}
+
+func getInt64(v interface{}) int64 {
+	if ival, ok := v.(int64); ok {
+		return ival
+	}
+	panic(NewTabletError(FAIL, "expecting int"))
+}
+
+func getFloat64(v interface{}) float64 {
+	if ival, ok := v.(int64); ok {
+		return float64(ival)
+	}
+	if fval, ok := v.(float64); ok {
+		return fval
+	}
+	panic(NewTabletError(FAIL, "expecting number"))
+}
+
+func getDuration(v interface{}) time.Duration {
+	return time.Duration(getFloat64(v) * 1e9)
 }
 
 func (qe *QueryEngine) qFetch(logStats *sqlQueryStats, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value) (result *mproto.QueryResult) {

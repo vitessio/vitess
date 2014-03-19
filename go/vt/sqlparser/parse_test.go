@@ -98,7 +98,7 @@ func tableGetter(name string) (*schema.Table, bool) {
 func TestExec(t *testing.T) {
 	initTables()
 	for tcase := range iterateJSONFile("exec_cases.txt") {
-		plan, err := ExecParse(tcase.input, tableGetter)
+		plan, err := ExecParse(tcase.input, tableGetter, true)
 		var out string
 		if err != nil {
 			out = err.Error()
@@ -113,6 +113,49 @@ func TestExec(t *testing.T) {
 			t.Error(fmt.Sprintf("Line:%v\n%s\n%s", tcase.lineno, tcase.output, out))
 		}
 		//fmt.Printf("%s\n%s\n\n", tcase.input, out)
+	}
+}
+
+func TestAnonymizer(t *testing.T) {
+	sql := "select 'abcd', 20, 30.0, eid from a where 1=eid and name='3'"
+	plan, err := ExecParse(sql, tableGetter, true)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+	want := "select ?, ?, ?, eid from a where ? = eid and name = ?"
+	if plan.DisplayQuery != want {
+		t.Errorf("got %q, want %q", plan.DisplayQuery, want)
+	}
+
+	plan, err = ExecParse(sql, tableGetter, false)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+	want = "select 'abcd', 20, 30.0, eid from a where 1=eid and name='3'"
+	if plan.DisplayQuery != want {
+		t.Errorf("got %q, want %q", plan.DisplayQuery, want)
+	}
+
+	splan, err := StreamExecParse(sql, true)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+	want = "select ?, ?, ?, eid from a where ? = eid and name = ?"
+	if splan.DisplayQuery != want {
+		t.Errorf("got %q, want %q", splan.DisplayQuery, want)
+	}
+
+	splan, err = StreamExecParse(sql, false)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+	want = "select 'abcd', 20, 30.0, eid from a where 1=eid and name='3'"
+	if splan.DisplayQuery != want {
+		t.Errorf("got %q, want %q", splan.DisplayQuery, want)
 	}
 }
 

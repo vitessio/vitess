@@ -18,7 +18,6 @@ import (
 )
 
 var (
-	port              = flag.Int("port", 6510, "tcp port to serve on")
 	overridesFile     = flag.String("schema-override", "", "schema overrides file")
 	enableRowcache    = flag.Bool("enable-rowcache", false, "enable rowcacche")
 	enableInvalidator = flag.Bool("enable-invalidator", false, "enable rowcache invalidator")
@@ -53,12 +52,12 @@ func main() {
 
 	ts.AllowQueries(&dbConfigs.App, schemaOverrides, ts.LoadCustomRules(), mysqld)
 
-	log.Infof("starting vtocc %v", *port)
+	log.Infof("starting vtocc %v", *servenv.Port)
 	servenv.OnClose(func() {
 		time.Sleep(5 * time.Millisecond)
 		ts.DisallowQueries()
 	})
-	servenv.Run(*port)
+	servenv.Run()
 }
 
 func unmarshalFile(name string, val interface{}) {

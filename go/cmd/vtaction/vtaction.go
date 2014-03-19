@@ -22,7 +22,6 @@ import (
 )
 
 var (
-	port       = flag.Int("port", 0, "port for debug http server")
 	action     = flag.String("action", "", "management action to perform")
 	actionNode = flag.String("action-node", "", "path to zk node representing the action")
 	actionGuid = flag.String("action-guid", "", "a label to help track processes")
@@ -65,7 +64,7 @@ func main() {
 
 	// we delegate out startup to the micromanagement server so these actions
 	// will occur after we have obtained our socket.
-	bindAddr := fmt.Sprintf(":%v", *port)
+	bindAddr := fmt.Sprintf(":%v", *servenv.Port)
 	httpServer := &http.Server{Addr: bindAddr}
 	go func() {
 		if err := httpServer.ListenAndServe(); err != nil {

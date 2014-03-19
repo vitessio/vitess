@@ -1,6 +1,7 @@
 package servenv
 
 import (
+	"flag"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -14,25 +15,20 @@ import (
 var (
 	onCloseHooks hooks
 
+	Port = flag.Int("port", 0, "port for the server")
+
 	// filled in when calling Run or RunSecure
 	ListeningURL url.URL
 )
 
-// Run starts listening for RPC and HTTP requests on the given port,
+// Run starts listening for RPC and HTTP requests,
 // and blocks until it the process gets a signal.
-func Run(port int) {
-	onRunHooks.Fire()
-	RunSecure(port, 0, "", "", "")
-}
-
-// RunSecure is like Run, but it additionally listens for RPC and HTTP
-// requests using TLS on securePort, using the passed certificate,
-// key, and CA certificate.
-func RunSecure(port int, securePort int, cert, key, caCert string) {
+// It may also listen on a secure port, or on a unix socket.
+func Run() {
 	onRunHooks.Fire()
 	ServeRPC()
 
-	l, err := proc.Listen(fmt.Sprintf("%v", port))
+	l, err := proc.Listen(fmt.Sprintf("%v", *Port))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -46,16 +42,14 @@ func RunSecure(port int, securePort int, cert, key, caCert string) {
 	}
 	ListeningURL = url.URL{
 		Scheme: "http",
-		Host:   fmt.Sprintf("%v:%v", host, port),
+		Host:   fmt.Sprintf("%v:%v", host, *Port),
 		Path:   "/",
 	}
 
 	go http.Serve(l, nil)
+	serveSecurePort()
+	serveSocketFile()
 
-	if securePort != 0 {
-		log.Infof("listening on secure port %v", securePort)
-		SecureServe(fmt.Sprintf(":%d", securePort), cert, key, caCert)
-	}
 	proc.Wait()
 	l.Close()
 	Close()

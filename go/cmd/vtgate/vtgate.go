@@ -15,16 +15,10 @@ import (
 )
 
 var (
-	port       = flag.Int("port", 8085, "serving port")
 	cell       = flag.String("cell", "test_nj", "cell to use")
 	retryDelay = flag.Duration("retry-delay", 200*time.Millisecond, "retry delay")
 	retryCount = flag.Int("retry-count", 10, "retry count")
 	timeout    = flag.Duration("timeout", 5*time.Second, "connection and call timeout")
-
-	securePort = flag.Int("secure-port", 0, "port for the secure server")
-	cert       = flag.String("cert", "", "cert file")
-	key        = flag.String("key", "", "key file")
-	caCert     = flag.String("ca-cert", "", "ca-cert file")
 )
 
 var topoReader *TopoReader
@@ -45,5 +39,5 @@ func main() {
 	topo.RegisterTopoReader(topoReader)
 
 	vtgate.Init(rts, *cell, *retryDelay, *retryCount, *timeout)
-	servenv.RunSecure(*port, *securePort, *cert, *key, *caCert)
+	servenv.Run()
 }

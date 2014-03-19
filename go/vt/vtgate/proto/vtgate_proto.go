@@ -33,7 +33,8 @@ type ShardSession struct {
 }
 
 // MarshalBson marshals Session into buf.
-func (session *Session) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (session *Session) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodeBool(buf, "InTransaction", session.InTransaction)
@@ -55,15 +56,15 @@ func encodeShardSessionsBson(shardSessions []*ShardSession, key string, buf *byt
 	bson.EncodePrefix(buf, bson.Array, key)
 	lenWriter := bson.NewLenWriter(buf)
 	for i, v := range shardSessions {
-		bson.EncodePrefix(buf, bson.Object, bson.Itoa(i))
-		v.MarshalBson(buf)
+		v.MarshalBson(buf, bson.Itoa(i))
 	}
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
 }
 
 // MarshalBson marshals ShardSession into buf.
-func (shardSession *ShardSession) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (shardSession *ShardSession) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodeString(buf, "Keyspace", shardSession.Keyspace)
@@ -76,10 +77,11 @@ func (shardSession *ShardSession) MarshalBson(buf *bytes2.ChunkedWriter) {
 }
 
 // UnmarshalBson unmarshals Session from buf.
-func (session *Session) UnmarshalBson(buf *bytes.Buffer) {
+func (session *Session) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		keyName := bson.ReadCString(buf)
 		switch keyName {
@@ -113,7 +115,7 @@ func decodeShardSessionsBson(buf *bytes.Buffer, kind byte) []*ShardSession {
 		}
 		bson.SkipIndex(buf)
 		shardSession := new(ShardSession)
-		shardSession.UnmarshalBson(buf)
+		shardSession.UnmarshalBson(buf, kind)
 		shardSessions = append(shardSessions, shardSession)
 		kind = bson.NextByte(buf)
 	}
@@ -121,10 +123,11 @@ func decodeShardSessionsBson(buf *bytes.Buffer, kind byte) []*ShardSession {
 }
 
 // UnmarshalBson unmarshals ShardSession from buf.
-func (shardSession *ShardSession) UnmarshalBson(buf *bytes.Buffer) {
+func (shardSession *ShardSession) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		keyName := bson.ReadCString(buf)
 		switch keyName {
@@ -155,7 +158,8 @@ type QueryShard struct {
 }
 
 // MarshalBson marshals QueryShard into buf.
-func (qrs *QueryShard) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (qrs *QueryShard) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodeString(buf, "Sql", qrs.Sql)
@@ -165,8 +169,7 @@ func (qrs *QueryShard) MarshalBson(buf *bytes2.ChunkedWriter) {
 	bson.EncodeString(buf, "TabletType", string(qrs.TabletType))
 
 	if qrs.Session != nil {
-		bson.EncodePrefix(buf, bson.Object, "Session")
-		qrs.Session.MarshalBson(buf)
+		qrs.Session.MarshalBson(buf, "Session")
 	}
 
 	buf.WriteByte(0)
@@ -174,10 +177,11 @@ func (qrs *QueryShard) MarshalBson(buf *bytes2.ChunkedWriter) {
 }
 
 // UnmarshalBson unmarshals QueryShard from buf.
-func (qrs *QueryShard) UnmarshalBson(buf *bytes.Buffer) {
+func (qrs *QueryShard) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		keyName := bson.ReadCString(buf)
 		switch keyName {
@@ -194,7 +198,7 @@ func (qrs *QueryShard) UnmarshalBson(buf *bytes.Buffer) {
 		case "Session":
 			if kind != bson.Null {
 				qrs.Session = new(Session)
-				qrs.Session.UnmarshalBson(buf)
+				qrs.Session.UnmarshalBson(buf, kind)
 			}
 		default:
 			bson.Skip(buf, kind)
@@ -341,7 +345,8 @@ func PopulateQueryResult(in *mproto.QueryResult, out *QueryResult) {
 }
 
 // MarshalBson marshals QueryResult into buf.
-func (qr *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (qr *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
 	mproto.EncodeFieldsBson(qr.Fields, "Fields", buf)
@@ -350,8 +355,7 @@ func (qr *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter) {
 	mproto.EncodeRowsBson(qr.Rows, "Rows", buf)
 
 	if qr.Session != nil {
-		bson.EncodePrefix(buf, bson.Object, "Session")
-		qr.Session.MarshalBson(buf)
+		qr.Session.MarshalBson(buf, "Session")
 	}
 
 	if qr.Error != "" {
@@ -363,10 +367,11 @@ func (qr *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter) {
 }
 
 // UnmarshalBson unmarshals QueryResult from buf.
-func (qr *QueryResult) UnmarshalBson(buf *bytes.Buffer) {
+func (qr *QueryResult) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		keyName := bson.ReadCString(buf)
 		switch keyName {
@@ -381,7 +386,7 @@ func (qr *QueryResult) UnmarshalBson(buf *bytes.Buffer) {
 		case "Session":
 			if kind != bson.Null {
 				qr.Session = new(Session)
-				qr.Session.UnmarshalBson(buf)
+				qr.Session.UnmarshalBson(buf, kind)
 			}
 		case "Error":
 			qr.Error = bson.DecodeString(buf, kind)
@@ -403,7 +408,8 @@ type BatchQueryShard struct {
 }
 
 // MarshalBson marshals BatchQueryShard into buf.
-func (bqs *BatchQueryShard) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (bqs *BatchQueryShard) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
 	tproto.EncodeQueriesBson(bqs.Queries, "Queries", buf)
@@ -412,8 +418,7 @@ func (bqs *BatchQueryShard) MarshalBson(buf *bytes2.ChunkedWriter) {
 	bson.EncodeString(buf, "TabletType", string(bqs.TabletType))
 
 	if bqs.Session != nil {
-		bson.EncodePrefix(buf, bson.Object, "Session")
-		bqs.Session.MarshalBson(buf)
+		bqs.Session.MarshalBson(buf, "Session")
 	}
 
 	buf.WriteByte(0)
@@ -421,10 +426,11 @@ func (bqs *BatchQueryShard) MarshalBson(buf *bytes2.ChunkedWriter) {
 }
 
 // UnmarshalBson unmarshals BatchQueryShard from buf.
-func (bqs *BatchQueryShard) UnmarshalBson(buf *bytes.Buffer) {
+func (bqs *BatchQueryShard) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		keyName := bson.ReadCString(buf)
 		switch keyName {
@@ -439,7 +445,7 @@ func (bqs *BatchQueryShard) UnmarshalBson(buf *bytes.Buffer) {
 		case "Session":
 			if kind != bson.Null {
 				bqs.Session = new(Session)
-				bqs.Session.UnmarshalBson(buf)
+				bqs.Session.UnmarshalBson(buf, kind)
 			}
 		default:
 			bson.Skip(buf, kind)
@@ -459,7 +465,8 @@ type KeyspaceIdBatchQuery struct {
 }
 
 // MarshalBson marshals KeyspaceIdBatchQuery into buf.
-func (bq *KeyspaceIdBatchQuery) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (bq *KeyspaceIdBatchQuery) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
 	tproto.EncodeQueriesBson(bq.Queries, "Queries", buf)
@@ -468,8 +475,7 @@ func (bq *KeyspaceIdBatchQuery) MarshalBson(buf *bytes2.ChunkedWriter) {
 	bson.EncodeString(buf, "TabletType", string(bq.TabletType))
 
 	if bq.Session != nil {
-		bson.EncodePrefix(buf, bson.Object, "Session")
-		bq.Session.MarshalBson(buf)
+		bq.Session.MarshalBson(buf, "Session")
 	}
 
 	buf.WriteByte(0)
@@ -477,10 +483,11 @@ func (bq *KeyspaceIdBatchQuery) MarshalBson(buf *bytes2.ChunkedWriter) {
 }
 
 // UnmarshalBson unmarshals KeyspaceIdBatchQuery from buf.
-func (bq *KeyspaceIdBatchQuery) UnmarshalBson(buf *bytes.Buffer) {
+func (bq *KeyspaceIdBatchQuery) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		keyName := bson.ReadCString(buf)
 		switch keyName {
@@ -495,7 +502,7 @@ func (bq *KeyspaceIdBatchQuery) UnmarshalBson(buf *bytes.Buffer) {
 		case "Session":
 			if kind != bson.Null {
 				bq.Session = new(Session)
-				bq.Session.UnmarshalBson(buf)
+				bq.Session.UnmarshalBson(buf, kind)
 			}
 		default:
 			bson.Skip(buf, kind)
@@ -512,14 +519,14 @@ type QueryResultList struct {
 }
 
 // MarshalBson marshals QueryResultList into buf.
-func (qrl *QueryResultList) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (qrl *QueryResultList) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
 	tproto.EncodeResultsBson(qrl.List, "List", buf)
 
 	if qrl.Session != nil {
-		bson.EncodePrefix(buf, bson.Object, "Session")
-		qrl.Session.MarshalBson(buf)
+		qrl.Session.MarshalBson(buf, "Session")
 	}
 
 	if qrl.Error != "" {
@@ -532,9 +539,10 @@ func (qrl *QueryResultList) MarshalBson(buf *bytes2.ChunkedWriter) {
 
 // UnmarshalBson unmarshals QueryResultList from buf.
 func (qrl *QueryResultList) UnmarshalBson(buf *bytes.Buffer) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		keyName := bson.ReadCString(buf)
 		switch keyName {
@@ -543,7 +551,7 @@ func (qrl *QueryResultList) UnmarshalBson(buf *bytes.Buffer) {
 		case "Session":
 			if kind != bson.Null {
 				qrl.Session = new(Session)
-				qrl.Session.UnmarshalBson(buf)
+				qrl.Session.UnmarshalBson(buf, kind)
 			}
 		case "Error":
 			qrl.Error = bson.DecodeString(buf, kind)

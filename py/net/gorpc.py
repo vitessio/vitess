@@ -81,16 +81,20 @@ class _GoRpcConn(object):
     self.socket_timeout = timeout / 10.0
     self.buf = []
 
-  def dial(self, uri, keyfile=None, certfile=None):
+  def dial(self, uri, keyfile=None, certfile=None, socket_file=None):
     parts = urlparse.urlparse(uri)
-    conhost, conport = parts.netloc.split(':')
-    try:
-      conip = socket.gethostbyname(conhost)
-    except NameError:
-      conip = socket.getaddrinfo(conhost, None)[0][4][0]
-    self.conn = socket.create_connection((conip, int(conport)), self.socket_timeout)
-    if parts.scheme == 'https':
-      self.conn = ssl.wrap_socket(self.conn, keyfile=keyfile, certfile=certfile)
+    if socket_file:
+      self.conn = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+      self.conn.connect(socket_file)
+    else:
+      conhost, conport = parts.netloc.split(':')
+      try:
+        conip = socket.gethostbyname(conhost)
+      except NameError:
+        conip = socket.getaddrinfo(conhost, None)[0][4][0]
+      self.conn = socket.create_connection((conip, int(conport)), self.socket_timeout)
+      if parts.scheme == 'https':
+        self.conn = ssl.wrap_socket(self.conn, keyfile=keyfile, certfile=certfile)
     self.conn.sendall('CONNECT %s HTTP/1.0\n\n' % parts.path)
     data = ''
     while True:
@@ -159,7 +163,7 @@ class _GoRpcConn(object):
 
 
 class GoRpcClient(object):
-  def __init__(self, uri, timeout, certfile=None, keyfile=None):
+  def __init__(self, uri, timeout, certfile=None, keyfile=None, socket_file=None):
     self.uri = uri
     self.timeout = timeout
     self.start_time = None
@@ -169,13 +173,14 @@ class GoRpcClient(object):
     self.data = None
     self.certfile = certfile
     self.keyfile = keyfile
+    self.socket_file = socket_file
 
   def dial(self):
     if self.conn:
       self.close()
     conn = _GoRpcConn(self.timeout)
     try:
-      conn.dial(self.uri, self.certfile, self.keyfile)
+      conn.dial(self.uri, self.certfile, self.keyfile, socket_file=self.socket_file)
     except socket.timeout as e:
       raise TimeoutError(e, self.timeout, 'dial', self.uri)
     except ssl.SSLError as e:

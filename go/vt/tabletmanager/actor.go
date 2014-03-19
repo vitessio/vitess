@@ -170,13 +170,13 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 		// Just an end-to-end verification that we got the message.
 		err = nil
 	case actionnode.TABLET_ACTION_PROMOTE_SLAVE:
-		err = ta.promoteSlave(ta.mysqlDaemon, actionNode)
+		err = ta.promoteSlave(actionNode)
 	case actionnode.TABLET_ACTION_SLAVE_WAS_PROMOTED:
-		err = SlaveWasPromoted(ta.ts, ta.mysqlDaemon, ta.tabletAlias)
+		err = SlaveWasPromoted(ta.ts, ta.tabletAlias)
 	case actionnode.TABLET_ACTION_RESTART_SLAVE:
 		err = ta.restartSlave(actionNode)
 	case actionnode.TABLET_ACTION_SLAVE_WAS_RESTARTED:
-		err = SlaveWasRestarted(ta.ts, ta.mysqlDaemon, ta.tabletAlias, actionNode.Args.(*actionnode.SlaveWasRestartedArgs))
+		err = SlaveWasRestarted(ta.ts, ta.tabletAlias, actionNode.Args.(*actionnode.SlaveWasRestartedArgs))
 	case actionnode.TABLET_ACTION_RESERVE_FOR_RESTORE:
 		err = ta.reserveForRestore(actionNode)
 	case actionnode.TABLET_ACTION_RESTORE:
@@ -290,7 +290,7 @@ func (ta *TabletActor) demoteMaster() error {
 	return topo.UpdateTablet(ta.ts, tablet)
 }
 
-func (ta *TabletActor) promoteSlave(mysqlDaemon mysqlctl.MysqlDaemon, actionNode *actionnode.ActionNode) error {
+func (ta *TabletActor) promoteSlave(actionNode *actionnode.ActionNode) error {
 	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
 	if err != nil {
 		return err
@@ -305,27 +305,19 @@ func (ta *TabletActor) promoteSlave(mysqlDaemon mysqlctl.MysqlDaemon, actionNode
 	log.Infof("PromoteSlave %v", rsd.String())
 	actionNode.Reply = rsd
 
-	return updateReplicationGraphForPromotedSlave(ta.ts, mysqlDaemon, tablet)
+	return updateReplicationGraphForPromotedSlave(ta.ts, tablet)
 }
 
-func SlaveWasPromoted(ts topo.Server, mysqlDaemon mysqlctl.MysqlDaemon, tabletAlias topo.TabletAlias) error {
-	// We first check we don't have a master any more.
-	// If we do, it probably means we're not *the* master, and something
-	// is really wrong.
-	masterAddr, err := mysqlDaemon.GetMasterAddr()
-	if err != mysqlctl.ErrNotSlave {
-		return fmt.Errorf("new master is a slave: %v %v", masterAddr, err)
-	}
-
+func SlaveWasPromoted(ts topo.Server, tabletAlias topo.TabletAlias) error {
 	tablet, err := ts.GetTablet(tabletAlias)
 	if err != nil {
 		return err
 	}
 
-	return updateReplicationGraphForPromotedSlave(ts, mysqlDaemon, tablet)
+	return updateReplicationGraphForPromotedSlave(ts, tablet)
 }
 
-func updateReplicationGraphForPromotedSlave(ts topo.Server, mysqlDaemon mysqlctl.MysqlDaemon, tablet *topo.TabletInfo) error {
+func updateReplicationGraphForPromotedSlave(ts topo.Server, tablet *topo.TabletInfo) error {
 	// Remove tablet from the replication graph if this is not already the master.
 	if tablet.Parent.Uid != topo.NO_TABLET {
 		if err := topo.DeleteTabletReplicationData(ts, tablet.Tablet); err != nil && err != topo.ErrNoNode {
@@ -444,28 +436,10 @@ func (ta *TabletActor) restartSlave(actionNode *actionnode.ActionNode) error {
 	return nil
 }
 
-func SlaveWasRestarted(ts topo.Server, mysqlDaemon mysqlctl.MysqlDaemon, tabletAlias topo.TabletAlias, swrd *actionnode.SlaveWasRestartedArgs) error {
+func SlaveWasRestarted(ts topo.Server, tabletAlias topo.TabletAlias, swrd *actionnode.SlaveWasRestartedArgs) error {
 	tablet, err := ts.GetTablet(tabletAlias)
 	if err != nil {
 		return err
-	}
-
-	// check the reparent actually worked
-	masterAddr, err := mysqlDaemon.GetMasterAddr()
-	if err != nil {
-		return err
-	}
-	if masterAddr != swrd.ExpectedMasterAddr && masterAddr != swrd.ExpectedMasterIpAddr {
-		log.Errorf("SlaveWasRestarted found unexpected master %v for %v (was expecting %v or %v)", masterAddr, tabletAlias, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
-		// Disabled for now
-		// if swrd.ContinueOnUnexpectedMaster {
-		//	log.Errorf("ContinueOnUnexpectedMaster is set, we keep going anyway")
-		// } else
-		if swrd.ScrapStragglers {
-			return Scrap(ts, tablet.Alias, false)
-		} else {
-			return fmt.Errorf("Unexpected master %v for %v (was expecting %v or %v)", masterAddr, tabletAlias, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
-		}
 	}
 
 	// Once this action completes, update authoritive tablet node first.
