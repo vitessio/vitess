@@ -81,6 +81,10 @@ func (node *Node) Len() int {
 	return len(node.Sub)
 }
 
+func (node *Node) LowerCase() {
+	node.Value = bytes.ToLower(node.Value)
+}
+
 func (node *Node) String() (out string) {
 	buf := NewTrackedBuffer(nil)
 	buf.Fprintf("%v", node)

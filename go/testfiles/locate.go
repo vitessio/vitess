@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 )
 
 func Locate(filename string) string {
@@ -16,4 +17,17 @@ func Locate(filename string) string {
 		panic(fmt.Errorf("VTROOT is not set"))
 	}
 	return path.Join(vtroot, "data", "test", filename)
+}
+
+func Glob(pattern string) []string {
+	vtroot := os.Getenv("VTROOT")
+	if vtroot == "" {
+		panic(fmt.Errorf("VTROOT is not set"))
+	}
+	resolved := path.Join(vtroot, "data", "test", pattern)
+	out, err := filepath.Glob(resolved)
+	if err != nil {
+		panic(err)
+	}
+	return out
 }

@@ -168,7 +168,7 @@ var actionToString = map[int]string{
 }
 
 func TestDDL(t *testing.T) {
-	for tcase := range iterateFile("ddl_cases.txt") {
+	for tcase := range iterateFiles("sqlparser_test/ddl_cases.txt") {
 		plan := DDLParse(tcase.input)
 		expected := make(map[string]interface{})
 		err := json.Unmarshal([]byte(tcase.output), &expected)
@@ -190,17 +190,17 @@ func matchString(t *testing.T, line int, expected interface{}, actual string) {
 }
 
 func TestParse(t *testing.T) {
-	for tcase := range iterateFile("parse_pass.sql") {
+	for tcase := range iterateFiles("sqlparser_test/*.sql") {
 		if tcase.output == "" {
 			tcase.output = tcase.input
 		}
 		tree, err := Parse(tcase.input)
 		if err != nil {
-			t.Error(fmt.Sprintf("Line:%v\n%s\n%s", tcase.lineno, tcase.input, err))
+			t.Error(fmt.Sprintf("File:%s Line:%v\n%s\n%s", tcase.file, tcase.lineno, tcase.input, err))
 		} else {
 			out := tree.String()
 			if out != tcase.output {
-				t.Error(fmt.Sprintf("Line:%v\n%s\n%s", tcase.lineno, tcase.output, out))
+				t.Error(fmt.Sprintf("File:%s Line:%v\n%s\n%s", tcase.file, tcase.lineno, tcase.output, out))
 			}
 		}
 	}
@@ -228,7 +228,7 @@ func TestRouting(t *testing.T) {
 	bindVariables["c"] = "c"
 	bindVariables["d"] = "d"
 	bindVariables["e"] = "e"
-	for tcase := range iterateFile("routing_cases.txt") {
+	for tcase := range iterateFiles("sqlparser_test/routing_cases.txt") {
 		if tcase.output == "" {
 			tcase.output = tcase.input
 		}
@@ -248,42 +248,45 @@ func TestRouting(t *testing.T) {
 }
 
 type testCase struct {
+	file   string
 	lineno int
 	input  string
 	output string
 }
 
-func iterateFile(name string) (testCaseIterator chan testCase) {
-	name = testfiles.Locate("sqlparser_test/" + name)
-	fd, err := os.OpenFile(name, os.O_RDONLY, 0)
-	if err != nil {
-		panic(fmt.Sprintf("Could not open file %s", name))
-	}
+func iterateFiles(pattern string) (testCaseIterator chan testCase) {
+	names := testfiles.Glob(pattern)
 	testCaseIterator = make(chan testCase)
 	go func() {
 		defer close(testCaseIterator)
-
-		r := bufio.NewReader(fd)
-		lineno := 0
-		for {
-			line, err := r.ReadString('\n')
-			lines := strings.Split(strings.TrimRight(line, "\n"), "#")
-			lineno++
+		for _, name := range names {
+			fd, err := os.OpenFile(name, os.O_RDONLY, 0)
 			if err != nil {
-				if err != io.EOF {
-					panic(fmt.Sprintf("Error reading file %s: %s", name, err.Error()))
+				panic(fmt.Sprintf("Could not open file %s", name))
+			}
+
+			r := bufio.NewReader(fd)
+			lineno := 0
+			for {
+				line, err := r.ReadString('\n')
+				lines := strings.Split(strings.TrimRight(line, "\n"), "#")
+				lineno++
+				if err != nil {
+					if err != io.EOF {
+						panic(fmt.Sprintf("Error reading file %s: %s", name, err.Error()))
+					}
+					break
 				}
-				break
+				input := lines[0]
+				output := ""
+				if len(lines) > 1 {
+					output = lines[1]
+				}
+				if input == "" {
+					continue
+				}
+				testCaseIterator <- testCase{name, lineno, input, output}
 			}
-			input := lines[0]
-			output := ""
-			if len(lines) > 1 {
-				output = lines[1]
-			}
-			if input == "" {
-				continue
-			}
-			testCaseIterator <- testCase{lineno, input, output}
 		}
 	}()
 	return testCaseIterator
@@ -336,7 +339,7 @@ func iterateJSONFile(name string) (testCaseIterator chan testCase) {
 					break
 				}
 			}
-			testCaseIterator <- testCase{lineno, input, string(output)}
+			testCaseIterator <- testCase{name, lineno, input, string(output)}
 		}
 	}()
 	return testCaseIterator
