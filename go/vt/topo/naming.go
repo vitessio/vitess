@@ -66,6 +66,18 @@ func EndPointEquality(left, right *EndPoint) bool {
 			return false
 		}
 	}
+	if len(left.Health) != len(right.Health) {
+		return false
+	}
+	for key, lvalue := range left.Health {
+		rvalue, ok := right.Health[key]
+		if !ok {
+			return false
+		}
+		if lvalue != rvalue {
+			return false
+		}
+	}
 	return true
 }
 
