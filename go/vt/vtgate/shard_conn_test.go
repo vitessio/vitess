@@ -107,7 +107,7 @@ func testShardConnGeneric(t *testing.T, f func() error) {
 	sbc := &sandboxConn{mustFailRetry: 4}
 	testConns[0] = sbc
 	err = f()
-	want = "retry: err, shard, host: .0., {Uid:0 Host:0 NamedPortMap:map[vt:1]}"
+	want = "retry: err, shard, host: .0., {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
@@ -159,7 +159,7 @@ func testShardConnGeneric(t *testing.T, f func() error) {
 	sbc = &sandboxConn{mustFailServer: 1}
 	testConns[0] = sbc
 	err = f()
-	want = "error: err, shard, host: .0., {Uid:0 Host:0 NamedPortMap:map[vt:1]}"
+	want = "error: err, shard, host: .0., {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
@@ -211,7 +211,7 @@ func testShardConnTransact(t *testing.T, f func() error) {
 	sbc := &sandboxConn{mustFailRetry: 3}
 	testConns[0] = sbc
 	err := f()
-	want := "retry: err, shard, host: .0., {Uid:0 Host:0 NamedPortMap:map[vt:1]}"
+	want := "retry: err, shard, host: .0., {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
@@ -225,7 +225,7 @@ func testShardConnTransact(t *testing.T, f func() error) {
 	sbc = &sandboxConn{mustFailConn: 3}
 	testConns[0] = sbc
 	err = f()
-	want = "error: conn, shard, host: .0., {Uid:0 Host:0 NamedPortMap:map[vt:1]}"
+	want = "error: conn, shard, host: .0., {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}

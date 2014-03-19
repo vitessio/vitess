@@ -12,6 +12,7 @@ import (
 	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -214,8 +215,38 @@ func (server *ResilientSrvTopoServer) GetEndPoints(cell, keyspace, shard string,
 		}
 	}
 
+	// filter the values to remove unhealthy servers
+	result = filterUnhealthyServers(result)
+
 	// save the value we got and the current time in the cache
 	entry.insertionTime = time.Now()
 	entry.value = result
 	return result, nil
+}
+
+// filterUnhealthyServers removes the unhealthy servers from the list,
+// unless all servers are unhealthy, then it keeps them all.
+func filterUnhealthyServers(endPoints *topo.EndPoints) *topo.EndPoints {
+	// no endpoints, return right away
+	if endPoints == nil || len(endPoints.Entries) == 0 {
+		return endPoints
+	}
+
+	healthyEndPoints := make([]topo.EndPoint, 0, len(endPoints.Entries))
+	for _, ep := range endPoints.Entries {
+		// if we are behind on replication, we're not 100% healthy
+		if ep.Health != nil && ep.Health[health.ReplicationLag] == health.ReplicationLagHigh {
+			continue
+		}
+
+		healthyEndPoints = append(healthyEndPoints, ep)
+	}
+
+	// we have healthy guys, we return them
+	if len(healthyEndPoints) > 0 {
+		return &topo.EndPoints{Entries: healthyEndPoints}
+	}
+
+	// we only have unhealthy guys, return them
+	return endPoints
 }
