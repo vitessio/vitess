@@ -467,7 +467,7 @@ class TestTabletManager(unittest.TestCase):
     for t in tablet_62344, tablet_62044:
       t.create_db('vt_test_keyspace')
 
-    tablet_62344.start_vttablet(wait_for_state=None)
+    tablet_62344.start_vttablet(wait_for_state=None, target_tablet_type='replica')
     tablet_62044.start_vttablet(wait_for_state=None, target_tablet_type='replica')
 
     tablet_62344.wait_for_vttablet_state('SERVING')
@@ -487,6 +487,10 @@ class TestTabletManager(unittest.TestCase):
         self.fail("State did not change from health check")
       logging.info("Sleeping for 1s waiting for health check to kick in")
       time.sleep(1.0)
+
+    # make sure the master is still master
+    ti = utils.run_vtctl_json(['GetTablet', tablet_62344.tablet_alias])
+    self.assertEqual(ti['Type'], 'master', "unexpected master type: %s" % ti['Type'])
 
     tablet.kill_tablets([tablet_62344, tablet_62044])
 
