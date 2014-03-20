@@ -107,7 +107,7 @@ func (wr *Wrangler) reparentShardLocked(keyspace, shard string, masterElectTable
 		return err
 	}
 
-	tabletMap, err := GetTabletMapForShard(wr.ts, keyspace, shard)
+	tabletMap, err := topo.GetTabletMapForShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -153,7 +153,7 @@ func (wr *Wrangler) ShardReplicationPositions(keyspace, shard string) ([]*topo.T
 
 func (wr *Wrangler) shardReplicationPositions(shardInfo *topo.ShardInfo) ([]*topo.TabletInfo, []*myproto.ReplicationPosition, error) {
 	// FIXME(msolomon) this assumes no hierarchical replication, which is currently the case.
-	tabletMap, err := GetTabletMapForShard(wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
+	tabletMap, err := topo.GetTabletMapForShard(wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
 	if err != nil {
 		return nil, nil, err
 	}

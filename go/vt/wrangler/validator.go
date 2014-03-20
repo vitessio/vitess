@@ -143,7 +143,7 @@ func (wr *Wrangler) validateShard(keyspace, shard string, pingTablets bool, wg *
 		results <- vresult{keyspace + "/" + shard, err}
 	}
 
-	tabletMap, _ := GetTabletMap(wr.ts, aliases)
+	tabletMap, _ := topo.GetTabletMap(wr.ts, aliases)
 
 	var masterAlias topo.TabletAlias
 	for _, alias := range aliases {

@@ -255,3 +255,30 @@ func FindAllTabletAliasesInShardByCell(ts Server, keyspace, shard string, cells 
 	}
 	return result, err
 }
+
+// GetTabletMapForShard returns the tablets for a shard. It can return
+// ErrPartialResult if it couldn't read all the cells, or all
+// the individual tablets, in which case the map is valid, but partial.
+func GetTabletMapForShard(ts Server, keyspace, shard string) (map[TabletAlias]*TabletInfo, error) {
+	return GetTabletMapForShardByCell(ts, keyspace, shard, nil)
+}
+
+// GetTabletMapForShardByCell returns the tablets for a shard. It can return
+// ErrPartialResult if it couldn't read all the cells, or all
+// the individual tablets, in which case the map is valid, but partial.
+func GetTabletMapForShardByCell(ts Server, keyspace, shard string, cells []string) (map[TabletAlias]*TabletInfo, error) {
+	// if we get a partial result, we keep going. It most likely means
+	// a cell is out of commission.
+	aliases, err := FindAllTabletAliasesInShardByCell(ts, keyspace, shard, cells)
+	if err != nil && err != ErrPartialResult {
+		return nil, err
+	}
+
+	// get the tablets for the cells we were able to reach, forward
+	// ErrPartialResult from FindAllTabletAliasesInShard
+	result, gerr := GetTabletMap(ts, aliases)
+	if gerr == nil && err != nil {
+		gerr = err
+	}
+	return result, gerr
+}

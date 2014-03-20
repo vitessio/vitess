@@ -536,7 +536,7 @@ func (mysqld *Mysqld) fetchSuperQuery(query string) (*mproto.QueryResult, error)
 		return nil, connErr
 	}
 	defer conn.Close()
-	log.Infof("fetch %v", query)
+	log.V(6).Infof("fetch %v", query)
 	qr, err := conn.ExecuteFetch(query, 10000, true)
 	if err != nil {
 		return nil, err

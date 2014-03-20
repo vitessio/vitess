@@ -19,30 +19,11 @@ import (
 // keyspace related methods for Wrangler
 
 func (wr *Wrangler) lockKeyspace(keyspace string, actionNode *actionnode.ActionNode) (lockPath string, err error) {
-	log.Infof("Locking keyspace %v for action %v", keyspace, actionNode.Action)
-	return wr.ts.LockKeyspaceForAction(keyspace, actionNode.ToJson(), wr.lockTimeout, interrupted)
+	return actionNode.LockKeyspace(wr.ts, keyspace, wr.lockTimeout, interrupted)
 }
 
 func (wr *Wrangler) unlockKeyspace(keyspace string, actionNode *actionnode.ActionNode, lockPath string, actionError error) error {
-	// first update the actionNode
-	if actionError != nil {
-		log.Infof("Unlocking keyspace %v for action %v with error %v", keyspace, actionNode.Action, actionError)
-		actionNode.Error = actionError.Error()
-		actionNode.State = actionnode.ACTION_STATE_FAILED
-	} else {
-		log.Infof("Unlocking keyspace %v for successful action %v", keyspace, actionNode.Action)
-		actionNode.Error = ""
-		actionNode.State = actionnode.ACTION_STATE_DONE
-	}
-	err := wr.ts.UnlockKeyspaceForAction(keyspace, lockPath, actionNode.ToJson())
-	if actionError != nil {
-		if err != nil {
-			// this will be masked
-			log.Warningf("UnlockKeyspaceForAction failed: %v", err)
-		}
-		return actionError
-	}
-	return err
+	return actionNode.UnlockKeyspace(wr.ts, keyspace, lockPath, actionError)
 }
 
 func (wr *Wrangler) SetKeyspaceShardingInfo(keyspace, shardingColumnName string, shardingColumnType key.KeyspaceIdType, force bool) error {
@@ -609,7 +590,7 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 // tablets of a given type in a shard. It would work for the master,
 // but it wouldn't be very efficient.
 func (wr *Wrangler) SetBlacklistedTablesByShard(keyspace, shard string, tabletType topo.TabletType, tables []string) error {
-	tabletMap, err := GetTabletMapForShard(wr.ts, keyspace, shard)
+	tabletMap, err := topo.GetTabletMapForShard(wr.ts, keyspace, shard)
 	switch err {
 	case nil:
 		// keep going

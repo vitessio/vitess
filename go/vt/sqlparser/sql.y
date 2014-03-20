@@ -136,6 +136,7 @@ const (
 %type <node> group_by_opt having_opt order_by_opt order_list order asc_desc_opt limit_opt for_update_opt on_dup_opt
 %type <node> column_list_opt column_list update_list update_expression
 %type <node> exists_opt not_exists_opt ignore_opt non_rename_operation to_opt constraint_opt using_opt
+%type <node> sql_id
 %type <node> force_eof
 
 %%
@@ -224,7 +225,7 @@ create_statement:
 	{
 		$$.Push($4)
 	}
-| CREATE constraint_opt INDEX ID using_opt ON ID force_eof
+| CREATE constraint_opt INDEX sql_id using_opt ON ID force_eof
 	{
 		// Change this to an alter statement
 		$$ = NewSimpleParseNode(ALTER, "alter")
@@ -254,7 +255,7 @@ drop_statement:
 	{
 		$$.Push($4)
 	}
-| DROP INDEX ID ON ID
+| DROP INDEX sql_id ON ID
 	{
 		// Change this to an alter statement
 		$$ = NewSimpleParseNode(ALTER, "alter")
@@ -316,7 +317,7 @@ select_expression:
 		$$ = NewSimpleParseNode(SELECT_STAR, "*")
 	}
 | expression
-| expression as_opt ID
+| expression as_opt sql_id
 	{
 		$$ = $2.PushTwo($1, $3)
 	}
@@ -631,17 +632,17 @@ value_expression:
       $$ = $1.Push($2)
     }
 	}
-| ID '(' ')'
+| sql_id '(' ')'
 	{
 		$1.Type = FUNCTION
 		$$ = $1.Push(NewSimpleParseNode(NODE_LIST, "node_list"))
 	}
-| ID '(' select_expression_list ')'
+| sql_id '(' select_expression_list ')'
 	{
 		$1.Type = FUNCTION
 		$$ = $1.Push($3)
 	}
-| ID '(' DISTINCT select_expression_list ')'
+| sql_id '(' DISTINCT select_expression_list ')'
 	{
 		$1.Type = FUNCTION
 		$$ = $1.Push($3)
@@ -702,8 +703,8 @@ when_expression:
   }
 
 column_name:
-	ID
-| ID '.' ID
+	sql_id
+| ID '.' sql_id
 	{
 		$$ = $2.PushTwo($1, $3)
 	}
@@ -797,12 +798,12 @@ column_list_opt:
 	}
 
 column_list:
-	ID
+	sql_id
 	{
 		$$ = NewSimpleParseNode(COLUMN_LIST, "")
 		$$.Push($1)
 	}
-| column_list ',' ID
+| column_list ',' sql_id
 	{
 		$$ = $1.Push($3)
 	}
@@ -828,7 +829,7 @@ update_list:
 	}
 
 update_expression:
-	ID '=' expression
+	sql_id '=' expression
 	{
 		$$ = $2.PushTwo($1, $3)
 	}
@@ -862,7 +863,13 @@ constraint_opt:
 
 using_opt:
 	{ $$ = nil }
-| USING ID
+| USING sql_id
+
+sql_id:
+  ID
+  {
+    $$.LowerCase()
+  }
 
 force_eof:
 {

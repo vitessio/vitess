@@ -271,7 +271,7 @@ func (wr *Wrangler) ChangeTypeNoRebuild(tabletAlias topo.TabletAlias, tabletType
 	}
 
 	if force {
-		if err := tabletmanager.ChangeType(wr.ts, tabletAlias, tabletType, false); err != nil {
+		if err := tabletmanager.ChangeType(wr.ts, tabletAlias, tabletType, nil, false); err != nil {
 			return false, "", "", "", err
 		}
 	} else {
@@ -336,7 +336,7 @@ func (wr *Wrangler) changeTypeInternal(tabletAlias topo.TabletAlias, dbType topo
 
 	// rebuild if necessary
 	if rebuildRequired {
-		err = wr.rebuildShard(ti.Keyspace, ti.Shard, rebuildShardOptions{
+		err = topo.RebuildShard(wr.ts, ti.Keyspace, ti.Shard, topo.RebuildShardOptions{
 			Cells:               []string{ti.Alias.Cell},
 			IgnorePartialResult: false,
 		})

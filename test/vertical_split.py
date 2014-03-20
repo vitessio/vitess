@@ -11,6 +11,7 @@ import time
 import unittest
 
 from zk import zkocc
+from vtdb import topology
 from vtdb import vtclient
 
 import environment
@@ -86,6 +87,9 @@ class TestVerticalSplit(unittest.TestCase):
       self.vtgate_addrs = {"_vt": ["localhost:%s"%(self.vtgate_port),]}
 
     self.insert_index = 0
+    # Lowering the keyspace refresh throttle so things are testable.
+    self.throttle_sleep_interval = 0.1
+    topology.set_keyspace_fetch_throttle(0.01)
 
   def tearDown(self):
     self.vtgate_client.close()
@@ -209,8 +213,20 @@ index by_msg (msg)
         # table is not blacklisted, should just work
         tablet.vquery("select count(1) from %s" % t, path='source_keyspace/0')
 
+
+  def _populate_topo_cache(self):
+    topology.read_topology(self.vtgate_client)
+
+  def refresh_keyspace(self, keyspace_name):
+    # This is so that keyspace can be refreshed.
+    time.sleep(self.throttle_sleep_interval)
+    topology.refresh_keyspace(self.vtgate_client, keyspace_name)
+
   def _check_client_conn_redirection(self, source_ks, destination_ks, db_types, servedfrom_db_types, moved_tables=None):
-    # check that the ServedFrom indirection worked correctly.
+    # In normal operations, it takes the first error for keyspce to be re-read.
+    # For testing purposes, refreshing the topology manually.
+    self.refresh_keyspace(destination_ks)
+
     for db_type in servedfrom_db_types:
       conn = self._vtdb_conn(db_type, keyspace=destination_ks)
       self.assertEqual(conn.db_params['keyspace'], source_ks)
@@ -259,6 +275,9 @@ index by_msg (msg)
     utils.run_vtctl(['ReparentShard', '-force', 'destination_keyspace/0',
                      destination_master.tablet_alias], auto_log=True)
 
+    # read all the keyspaces, this will populate the topology cache.
+    self._populate_topo_cache()
+
     # create the schema on the source keyspace, add some values
     self._create_source_schema()
     moving1_first = self._insert_values('moving1', 100)
@@ -287,6 +306,8 @@ index by_msg (msg)
                      '--tables', 'moving1,moving2',
                      'destination_keyspace/0', source_rdonly.tablet_alias],
                     auto_log=True)
+
+    topology.refresh_keyspace(self.vtgate_client, 'destination_keyspace')
 
     # check values are present
     self._check_values(destination_master, 'vt_destination_keyspace', 'moving1',
@@ -322,6 +343,7 @@ index by_msg (msg)
     # check we can't migrate the master just yet
     utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'master'],
                     expect_fail=True)
+
 
     # now serve rdonly from the destination shards
     utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'rdonly'],

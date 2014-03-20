@@ -18,6 +18,7 @@ import environment
 import tablet
 import utils
 from vtdb import dbexceptions
+from vtdb import topology
 from vtdb import update_stream_service
 from vtdb import vtclient
 from zk import zkocc
@@ -154,6 +155,7 @@ class TestUpdateStream(unittest.TestCase):
   def setUp(self):
     self.vtgate_client = zkocc.ZkOccConnection(vtgate_socket_file,
                                                "test_nj", 30.0)
+    topology.read_topology(self.vtgate_client)
 
   def tearDown(self):
     self.vtgate_client.close()

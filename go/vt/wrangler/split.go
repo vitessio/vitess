@@ -172,7 +172,7 @@ func (wr *Wrangler) shardMultiRestore(keyspace, shard string, sources []topo.Tab
 	}
 
 	// read the source tablets
-	sourceTablets, err := GetTabletMap(wr.TopoServer(), sources)
+	sourceTablets, err := topo.GetTabletMap(wr.TopoServer(), sources)
 	if err != nil {
 		return err
 	}
