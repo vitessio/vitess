@@ -446,21 +446,23 @@ func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType, lockT
 		return
 	}
 
-	// Rebuild the serving graph in our cell.
-	// TODO: timeout should be configurable
-	// TODO: interrupted may need to be a global one closed when we exit
-	interrupted := make(chan struct{})
-	actionNode := actionnode.RebuildShard()
-	lockPath, err := actionNode.LockShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, lockTimeout, interrupted)
-	if err != nil {
-		log.Warningf("Cannot lock shard for rebuild: %v", err)
-		return
-	}
-	err = topo.RebuildShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, topo.RebuildShardOptions{Cells: []string{tablet.Alias.Cell}, IgnorePartialResult: true})
-	err = actionNode.UnlockShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, lockPath, err)
-	if err != nil {
-		log.Warningf("UnlockShard returned an error: %v", err)
-		return
+	// Rebuild the serving graph in our cell, only if we're dealing with
+	// a serving type
+	if topo.IsInServingGraph(targetTabletType) {
+		// TODO: interrupted may need to be a global one closed when we exit
+		interrupted := make(chan struct{})
+		actionNode := actionnode.RebuildShard()
+		lockPath, err := actionNode.LockShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, lockTimeout, interrupted)
+		if err != nil {
+			log.Warningf("Cannot lock shard for rebuild: %v", err)
+			return
+		}
+		err = topo.RebuildShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, topo.RebuildShardOptions{Cells: []string{tablet.Alias.Cell}, IgnorePartialResult: true})
+		err = actionNode.UnlockShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, lockPath, err)
+		if err != nil {
+			log.Warningf("UnlockShard returned an error: %v", err)
+			return
+		}
 	}
 
 	// run the post action callbacks
