@@ -475,6 +475,8 @@ class TestTabletManager(unittest.TestCase):
 
     utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/0', tablet_62344.tablet_alias])
 
+    # make sure the 'spare' slave goes to 'replica'
+    # TODO(alainjobart, different CL): factor out the 'wait until' code.
     timeout = 10
     while True:
       ti = utils.run_vtctl_json(['GetTablet', tablet_62044.tablet_alias])
@@ -491,6 +493,30 @@ class TestTabletManager(unittest.TestCase):
     # make sure the master is still master
     ti = utils.run_vtctl_json(['GetTablet', tablet_62344.tablet_alias])
     self.assertEqual(ti['Type'], 'master', "unexpected master type: %s" % ti['Type'])
+
+    # stop replication on the slave, see it trigger the slave going
+    # slightly unhealthy
+    tablet_62044.mquery('', 'stop slave')
+    timeout = 10
+    while True:
+      ti = utils.run_vtctl_json(['GetTablet', tablet_62044.tablet_alias])
+      if 'Health' in ti and ti['Health']:
+        if 'replication_lag' in ti['Health']:
+          if ti['Health']['replication_lag'] == 'high':
+            logging.info("Slave tablet replication_lag went to high, good")
+            break
+      print ti
+      timeout -= 1
+      if timeout == 0:
+        self.fail("replication_lag did not change from health check")
+      logging.info("Sleeping for 1s waiting for replication_lag to kick in")
+      time.sleep(1.0)
+
+    # make sure the serving graph was updated
+    ep = utils.run_vtctl_json(['GetEndPoints', 'test_nj', 'test_keyspace/0', 'replica'])
+    if not ep['entries'][0]['health']:
+      self.fail('Replication lag parameter not propagated to serving graph: %s' % str(ep))
+    self.assertEqual(ep['entries'][0]['health']['replication_lag'], 'high', 'Replication lag parameter not propagated to serving graph: %s' % str(ep))
 
     tablet.kill_tablets([tablet_62344, tablet_62044])
 

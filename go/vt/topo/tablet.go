@@ -390,7 +390,7 @@ func (tablet *Tablet) EndPoint() (*EndPoint, error) {
 		entry.NamedPortMap["_vts"] = port
 	}
 
-	if len(entry.Health) > 0 {
+	if len(tablet.Health) > 0 {
 		entry.Health = make(map[string]string, len(tablet.Health))
 		for k, v := range tablet.Health {
 			entry.Health[k] = v
