@@ -49,3 +49,9 @@ integration_test:
 	cd test ; echo "initial_sharding test"; time ./initial_sharding.py $$VT_TEST_FLAGS
 	cd test ; echo "initial_sharding_bytes test"; time ./initial_sharding_bytes.py $$VT_TEST_FLAGS
 	cd test ; echo "keyspace_test test"; time ./keyspace_test.py $$VT_TEST_FLAGS
+
+# Build this target only if you want to regenerate the bson files
+bson:
+	bsongen -file ./go/mysql/proto/structs.go -type QueryResult -o ./go/mysql/proto/query_result_bson.go
+	bsongen -file ./go/mysql/proto/structs.go -type Field -o ./go/mysql/proto/field_bson.go
+	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type QueryResult -o ./go/vt/vtgate/proto/query_result_bson.go

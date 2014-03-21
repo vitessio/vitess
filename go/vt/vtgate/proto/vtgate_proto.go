@@ -216,58 +216,6 @@ func PopulateQueryResult(in *mproto.QueryResult, out *QueryResult) {
 	out.Rows = in.Rows
 }
 
-// MarshalBson marshals QueryResult into buf.
-func (qr *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
-	bson.EncodeOptionalPrefix(buf, bson.Object, key)
-	lenWriter := bson.NewLenWriter(buf)
-
-	mproto.EncodeFieldsBson(qr.Fields, "Fields", buf)
-	bson.EncodeUint64(buf, "RowsAffected", qr.RowsAffected)
-	bson.EncodeUint64(buf, "InsertId", qr.InsertId)
-	mproto.EncodeRowsBson(qr.Rows, "Rows", buf)
-
-	if qr.Session != nil {
-		qr.Session.MarshalBson(buf, "Session")
-	}
-
-	if qr.Error != "" {
-		bson.EncodeString(buf, "Error", qr.Error)
-	}
-
-	lenWriter.Close()
-}
-
-// UnmarshalBson unmarshals QueryResult from buf.
-func (qr *QueryResult) UnmarshalBson(buf *bytes.Buffer, kind byte) {
-	bson.VerifyObject(kind)
-	bson.Next(buf, 4)
-
-	kind = bson.NextByte(buf)
-	for kind != bson.EOO {
-		keyName := bson.ReadCString(buf)
-		switch keyName {
-		case "Fields":
-			qr.Fields = mproto.DecodeFieldsBson(buf, kind)
-		case "RowsAffected":
-			qr.RowsAffected = bson.DecodeUint64(buf, kind)
-		case "InsertId":
-			qr.InsertId = bson.DecodeUint64(buf, kind)
-		case "Rows":
-			qr.Rows = mproto.DecodeRowsBson(buf, kind)
-		case "Session":
-			if kind != bson.Null {
-				qr.Session = new(Session)
-				qr.Session.UnmarshalBson(buf, kind)
-			}
-		case "Error":
-			qr.Error = bson.DecodeString(buf, kind)
-		default:
-			bson.Skip(buf, kind)
-		}
-		kind = bson.NextByte(buf)
-	}
-}
-
 // BatchQueryShard represents a batch query request
 // for the specified shards.
 type BatchQueryShard struct {

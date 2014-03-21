@@ -50,7 +50,7 @@ func main() {
 		}
 		defer fout.Close()
 	}
-	fmt.Fprintf(fout, "%s\n", out)
+	fmt.Fprintf(fout, "%s", out)
 }
 
 var (

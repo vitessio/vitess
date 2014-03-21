@@ -150,9 +150,9 @@ class TabletConnection(object):
     results = []
     try:
       response = self.client.call('SqlQuery.Execute', req)
-      reply = response.reply
+      reply = _fix_reply(response.reply)
 
-      for field in (reply['Fields'] or []):
+      for field in reply['Fields']:
         fields.append((field['Name'], field['Type']))
         conversions.append(field_types.conversions.get(field['Type']))
 
@@ -187,8 +187,9 @@ class TabletConnection(object):
         conversions = []
         results = []
         rowcount = 0
+        reply = _fix_reply(reply)
 
-        for field in (reply['Fields'] or []):
+        for field in reply['Fields']:
           fields.append((field['Name'], field['Type']))
           conversions.append(field_types.conversions.get(field['Type']))
 
@@ -221,9 +222,9 @@ class TabletConnection(object):
     try:
       self.client.stream_call('SqlQuery.StreamExecute', req)
       first_response = self.client.stream_next()
-      reply = first_response.reply
+      reply = _fix_reply(first_response.reply)
 
-      for field in (reply['Fields'] or []):
+      for field in reply['Fields']:
         self._stream_fields.append((field['Name'], field['Type']))
         self._stream_conversions.append(field_types.conversions.get(field['Type']))
     except gorpc.GoRpcError as e:
@@ -251,6 +252,7 @@ class TabletConnection(object):
         logging.exception('gorpc low-level error')
         raise
 
+    self._stream_result.reply = _fix_reply(self._stream_result.reply)
     row = tuple(_make_row(self._stream_result.reply['Rows'][self._stream_result_index], self._stream_conversions))
 
     # If we are reading the last row, set us up to read more data.
@@ -261,6 +263,10 @@ class TabletConnection(object):
 
     return row
 
+def _fix_reply(reply):
+    reply['Fields'] = reply['Fields'] or []
+    reply['Rows'] = reply['Rows'] or []
+    return reply
 
 def _make_row(row, conversions):
   converted_row = []
