@@ -98,9 +98,9 @@ func ConfigureTabletHook(hk *hook.Hook, tabletAlias topo.TabletAlias) {
 // the serving graph.
 //
 // 'force' means we are not on the tablet being scrapped, so it is
-//   probably dead.
-// So if 'force' is true, we will also remove pending remote actions.
-// And if 'force' is false, we also run an optional hook.
+// probably dead. So if 'force' is true, we will also remove pending
+// remote actions.  And if 'force' is false, we also run an optional
+// hook.
 func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
 	tablet, err := ts.GetTablet(tabletAlias)
 	if err != nil {
