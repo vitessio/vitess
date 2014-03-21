@@ -31,9 +31,10 @@ func NewLenWriter(buf *bytes2.ChunkedWriter) LenWriter {
 	return LenWriter{buf, off, b}
 }
 
-// RecordLen records the number of bytes written in the
-// space reserved.
-func (lw LenWriter) RecordLen() {
+// Close closes the current object being encoded by
+// writing bson's EOO byte and recording the length.
+func (lw LenWriter) Close() {
+	lw.buf.WriteByte(EOO)
 	Pack.PutUint32(lw.b, uint32(lw.buf.Len()-lw.off))
 }
 
@@ -51,8 +52,11 @@ func canMarshal(val reflect.Value) Marshaler {
 	// Check the Marshaler interface on T.
 	if marshaler, ok := val.Interface().(Marshaler); ok {
 		// Don't call custom marshaler for nil values.
-		if val.IsNil() {
-			return nil
+		switch val.Kind() {
+		case reflect.Ptr, reflect.Interface, reflect.Map, reflect.Slice:
+			if val.IsNil() {
+				return nil
+			}
 		}
 		return marshaler
 	}
@@ -130,8 +134,7 @@ func MarshalToBuffer(buf *bytes2.ChunkedWriter, val interface{}) (err error) {
 func EncodeSimple(buf *bytes2.ChunkedWriter, val interface{}) {
 	lenWriter := NewLenWriter(buf)
 	EncodeField(buf, MAGICTAG, val)
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 // EncodeField encodes val using the supplied key as embedded tag.
@@ -184,11 +187,12 @@ func encodeField(buf *bytes2.ChunkedWriter, key string, val reflect.Value) {
 			encodeMap(buf, key, val)
 		}
 	case reflect.Slice:
-		if val.IsNil() {
+		switch {
+		case val.IsNil():
 			EncodePrefix(buf, Null, key)
-		} else if val.Type() == bytesType {
+		case val.Type() == bytesType:
 			EncodeBinary(buf, key, val.Interface().([]byte))
-		} else {
+		default:
 			encodeSlice(buf, key, val)
 		}
 	case reflect.Ptr, reflect.Interface:
@@ -312,8 +316,7 @@ func encodeStructContent(buf *bytes2.ChunkedWriter, val reflect.Value) {
 		}
 		encodeField(buf, key, val.Field(i))
 	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func encodeMap(buf *bytes2.ChunkedWriter, key string, val reflect.Value) {
@@ -340,8 +343,7 @@ func encodeMapContent(buf *bytes2.ChunkedWriter, val reflect.Value) {
 		key := k.String()
 		encodeField(buf, key, val.MapIndex(k))
 	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func encodeSlice(buf *bytes2.ChunkedWriter, key string, val reflect.Value) {
@@ -354,8 +356,7 @@ func encodeSliceContent(buf *bytes2.ChunkedWriter, val reflect.Value) {
 	for i := 0; i < val.Len(); i++ {
 		encodeField(buf, Itoa(i), val.Index(i))
 	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func putUint32(buf *bytes2.ChunkedWriter, val uint32) {

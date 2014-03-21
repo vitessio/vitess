@@ -19,8 +19,7 @@ func MarshalFieldBson(field Field, key string, buf *bytes2.ChunkedWriter) {
 	bson.EncodeString(buf, "Name", field.Name)
 	bson.EncodeInt64(buf, "Type", field.Type)
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func UnmarshalFieldBson(field *Field, buf *bytes.Buffer) {
@@ -50,8 +49,7 @@ func (qr *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	bson.EncodeUint64(buf, "InsertId", qr.InsertId)
 	EncodeRowsBson(qr.Rows, "Rows", buf)
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func EncodeFieldsBson(fields []Field, key string, buf *bytes2.ChunkedWriter) {
@@ -60,8 +58,7 @@ func EncodeFieldsBson(fields []Field, key string, buf *bytes2.ChunkedWriter) {
 	for i, v := range fields {
 		MarshalFieldBson(v, bson.Itoa(i), buf)
 	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func EncodeRowsBson(rows [][]sqltypes.Value, key string, buf *bytes2.ChunkedWriter) {
@@ -70,8 +67,7 @@ func EncodeRowsBson(rows [][]sqltypes.Value, key string, buf *bytes2.ChunkedWrit
 	for i, v := range rows {
 		EncodeRowBson(v, bson.Itoa(i), buf)
 	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func EncodeRowBson(row []sqltypes.Value, key string, buf *bytes2.ChunkedWriter) {
@@ -84,8 +80,7 @@ func EncodeRowBson(row []sqltypes.Value, key string, buf *bytes2.ChunkedWriter) 
 			bson.EncodeBinary(buf, bson.Itoa(i), v.Raw())
 		}
 	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func (qr *QueryResult) UnmarshalBson(buf *bytes.Buffer, kind byte) {

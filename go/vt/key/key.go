@@ -161,8 +161,7 @@ func (kr *KeyRange) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	bson.EncodeString(buf, "Start", string(kr.Start))
 	bson.EncodeString(buf, "End", string(kr.End))
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func (kr *KeyRange) UnmarshalBson(buf *bytes.Buffer, kind byte) {

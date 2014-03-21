@@ -22,10 +22,16 @@ import (
 var (
 	filename = flag.String("file", "", "input file name")
 	typename = flag.String("type", "", "type to generate code for")
+	outfile  = flag.String("o", "", "output file name, default stdout")
+	counter  = 0
 )
 
 func main() {
 	flag.Parse()
+	if *filename == "" || *typename == "" {
+		flag.PrintDefaults()
+		return
+	}
 	b, err := ioutil.ReadFile(*filename)
 	if err != nil {
 		log.Fatal(err)
@@ -35,7 +41,16 @@ func main() {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		return
 	}
-	fmt.Printf("%s\n", out)
+	fout := os.Stdout
+	if *outfile != "" {
+		fout, err = os.Create(*outfile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			return
+		}
+		defer fout.Close()
+	}
+	fmt.Fprintf(fout, "%s\n", out)
 }
 
 var (
@@ -71,6 +86,7 @@ var (
 
 type TypeInfo struct {
 	Package string
+	Imports []string
 	Name    string
 	Var     string
 	Fields  []*FieldInfo
@@ -129,13 +145,17 @@ func (f *FieldInfo) Type() string {
 	return typ
 }
 
-func FindType(file *ast.File, name string) (*TypeInfo, error) {
+func findType(file *ast.File, name string) (*TypeInfo, error) {
 	typeInfo := &TypeInfo{
 		Package: file.Name.Name,
 	}
 	for _, decl := range file.Decls {
 		genDecl, ok := decl.(*ast.GenDecl)
 		if !ok {
+			continue
+		}
+		if genDecl.Tok == token.IMPORT {
+			typeInfo.Imports = append(typeInfo.Imports, buildImports(genDecl.Specs)...)
 			continue
 		}
 		if genDecl.Tok != token.TYPE {
@@ -167,9 +187,28 @@ func FindType(file *ast.File, name string) (*TypeInfo, error) {
 	return nil, fmt.Errorf("%s not found", name)
 }
 
-func buildFields(structType *ast.StructType, varName string) ([]*FieldInfo, error) {
-	fields := make([]*FieldInfo, 0, 8)
+func buildImports(importSpecs []ast.Spec) (imports []string) {
+	for _, spec := range importSpecs {
+		importSpec, ok := spec.(*ast.ImportSpec)
+		if !ok {
+			continue
+		}
+		var str string
+		if importSpec.Name == nil {
+			str = importSpec.Path.Value
+		} else {
+			str = importSpec.Name.Name + " " + importSpec.Path.Value
+		}
+		imports = append(imports, str)
+	}
+	return imports
+}
+
+func buildFields(structType *ast.StructType, varName string) (fields []*FieldInfo, err error) {
 	for _, field := range structType.Fields.List {
+		if field.Names == nil {
+			return nil, fmt.Errorf("anonymous embeds not supported: %#v", field.Type)
+		}
 		for _, name := range field.Names {
 			fullName := varName + "." + name.Name
 			fieldInfo, err := buildField(field.Type, "\""+name.Name+"\"", fullName)
@@ -199,7 +238,7 @@ func buildField(fieldType ast.Expr, tag, name string) (*FieldInfo, error) {
 		if ok && innerIdent.Name == "byte" {
 			return &FieldInfo{Tag: tag, Name: name, typ: "[]byte"}, nil
 		}
-		subfield, err := buildField(ident.Elt, "Itoa(i)", "v")
+		subfield, err := buildField(ident.Elt, "bson.Itoa(_i)", newVarName())
 		if err != nil {
 			return nil, err
 		}
@@ -215,7 +254,7 @@ func buildField(fieldType ast.Expr, tag, name string) (*FieldInfo, error) {
 		if !ok || key.Name != "string" {
 			goto notSimple
 		}
-		subfield, err := buildField(ident.Value, "k", "v")
+		subfield, err := buildField(ident.Value, "_k", newVarName())
 		if err != nil {
 			return nil, err
 		}
@@ -229,6 +268,11 @@ func buildField(fieldType ast.Expr, tag, name string) (*FieldInfo, error) {
 	}
 notSimple:
 	return nil, fmt.Errorf("%#v is not a simple type", fieldType)
+}
+
+func newVarName() string {
+	counter++
+	return fmt.Sprintf("_v%d", counter)
 }
 
 func generateCode(in string, typename string) (out []byte, err error) {
@@ -246,7 +290,7 @@ func generateRawCode(in string, typename string) (out []byte, err error) {
 		return nil, err
 	}
 	//ast.Print(fset, f)
-	typeInfo, err := FindType(f, typename)
+	typeInfo, err := findType(f, typename)
 	if err != nil {
 		return nil, err
 	}
@@ -272,6 +316,7 @@ func formatCode(in []byte) (out []byte, err error) {
 	if err != nil {
 		return nil, err
 	}
+	defer cmd.Wait()
 	go func() {
 		bytes.NewBuffer(in).WriteTo(stdin)
 		stdin.Close()
@@ -280,7 +325,6 @@ func formatCode(in []byte) (out []byte, err error) {
 	if err != nil {
 		return nil, err
 	}
-	cmd.Wait()
 	return b, nil
 }
 
@@ -289,34 +333,35 @@ var generator = template.Must(template.New("Generator").Parse(`
 
 {{define "CustomEncoder"}}{{.Name}}.MarshalBson(buf, {{.Tag}}){{end}}
 
-{{define "StarEncoder"}}if {{.Name}} == nil {
+{{define "StarEncoder"}}// {{.Type}}
+if {{.Name}} == nil {
 	bson.EncodePrefix(buf, bson.Null, {{.Tag}})
 } else {
 	{{template "Encoder" .Subfield}}
 }{{end}}
 
-{{define "SliceEncoder"}}if {{.Name}} == nil {
+{{define "SliceEncoder"}}// {{.Type}}
+if {{.Name}} == nil {
 	bson.EncodePrefix(buf, bson.Null, {{.Tag}})
 } else {
 	bson.EncodePrefix(buf, bson.Array, {{.Tag}})
 	lenWriter := bson.NewLenWriter(buf)
-	for i, v := range {{.Name}} {
+	for _i, {{.Subfield.Name}} := range {{.Name}} {
 		{{template "Encoder" .Subfield}}
 	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }{{end}}
 
-{{define "MapEncoder"}}if {{.Name}} == nil {
+{{define "MapEncoder"}}// {{.Type}}
+if {{.Name}} == nil {
 	bson.EncodePrefix(buf, bson.Null, {{.Tag}})
 } else {
 	bson.EncodePrefix(buf, bson.Object, {{.Tag}})
 	lenWriter := bson.NewLenWriter(buf)
-	for k, v := range {{.Name}} {
+	for _k, {{.Subfield.Name}} := range {{.Name}} {
 		{{template "Encoder" .Subfield}}
 	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }{{end}}
 
 {{define "Encoder"}}{{if .IsPointer}}{{template "StarEncoder" .}}{{else if .IsSlice}}{{template "SliceEncoder" .}}{{else if .IsMap}}{{template "MapEncoder" .}}{{else if .IsCustom}}{{template "CustomEncoder" .}}{{else}}{{template "SimpleEncoder" .}}{{end}}{{end}}
@@ -325,43 +370,39 @@ var generator = template.Must(template.New("Generator").Parse(`
 
 {{define "CustomDecoder"}}{{.Name}}.UnmarshalBson(buf, kind){{end}}
 
-{{define "StarDecoder"}}if kind == bson.Null {
-	{{.Name}} = nil
-} else {
+{{define "StarDecoder"}}// {{.Type}}
+if kind != bson.Null {
 	{{.Name}} = new({{.NewType}})
 	{{template "Decoder" .Subfield}}
 }{{end}}
 
-{{define "SliceDecoder"}}if kind != bson.Array {
-	panic(bson.NewBsonError("Unexpected data type %v for {{.Name}}", kind))
-}
-if kind == bson.Null {
-	{{.Name}} = nil
-} else {
+{{define "SliceDecoder"}}// {{.Type}}
+if kind != bson.Null {
+	if kind != bson.Array {
+		panic(bson.NewBsonError("unexpected kind %v for {{.Name}}", kind))
+	}
 	bson.Next(buf, 4)
 	{{.Name}} = make({{.Type}}, 0, 8)
-	var v {{.Subfield.Type}}
 	for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 		bson.SkipIndex(buf)
+		var {{.Subfield.Name}} {{.Subfield.Type}}
 		{{template "Decoder" .Subfield}}
 		{{.Name}} = append({{.Name}}, {{.Subfield.Name}})
 	}
 }{{end}}
 
-{{define "MapDecoder"}}if kind != bson.Object {
-	panic(bson.NewBsonError("Unexpected data type %v for {{.Name}}", kind))
-}
-if kind == bson.Null {
-	{{.Name}} = nil
-} else {
+{{define "MapDecoder"}}// {{.Type}}
+if kind != bson.Null {
+	if kind != bson.Object {
+		panic(bson.NewBsonError("unexpected kind %v for {{.Name}}", kind))
+	}
 	bson.Next(buf, 4)
 	{{.Name}} = make({{.Type}})
-	var k string
-	var v {{.Subfield.Type}}
 	for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
-		k = bson.ReadCString(buf)
+		_k := bson.ReadCString(buf)
+		var {{.Subfield.Name}} {{.Subfield.Type}}
 		{{template "Decoder" .Subfield}}
-		{{.Name}}[k] = {{.Subfield.Name}}
+		{{.Name}}[_k] = {{.Subfield.Name}}
 	}
 }{{end}}
 
@@ -377,10 +418,8 @@ package {{.Package}}
 // FILE GENERATED BY BSONGEN.
 
 import (
-	"bytes"
-
-	"github.com/youtube/vitess/go/bson"
-	"github.com/youtube/vitess/go/bytes2"
+{{range .Imports}}	{{.}}
+{{end}}
 )
 
 // MarshalBson bson-encodes {{.Name}}.
@@ -390,24 +429,28 @@ func ({{.Var}} *{{.Name}}) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 
 {{range .Fields}}	{{template "Encoder" .}}
 {{end}}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 // UnmarshalBson bson-decodes into {{.Name}}.
 func ({{.Var}} *{{.Name}}) UnmarshalBson(buf *bytes.Buffer, kind byte) {
-	VerifyObject(kind)
+	switch kind {
+	case bson.EOO, bson.Object:
+		// valid
+	case bson.Null:
+		return
+	default:
+		panic(bson.NewBsonError("unexpected kind %v for {{.Name}}", kind))
+	}
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
-	for kind != bson.EOO {
+	for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 		switch bson.ReadCString(buf) {
 {{range .Fields}}		case {{.Tag}}:
 			{{template "Decoder" .}}
 {{end}}		default:
 			bson.Skip(buf, kind)
 		}
-		kind = bson.NextByte(buf)
 	}
 }
 {{end}}`))

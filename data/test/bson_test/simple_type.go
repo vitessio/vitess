@@ -4,7 +4,12 @@
 
 package mytype
 
-import "time"
+import (
+	"time"
+
+	_ "bar/pkg"
+	pkg "foo/pkg"
+)
 
 type MyType struct {
 	Float64   float64
@@ -17,11 +22,12 @@ type MyType struct {
 	Uint32    uint32
 	Uint      uint
 	Bytes     []byte
-	Ptr       *int64
-	Strings   *[]*string
-	Map       map[string]time.Time
-	Interface interface{}
 	Time      time.Time
+	Interface interface{}
+	Ptr       *int64
+	Strings   *[]*Custom
+	Strings2  *[][]string
+	Map       map[string]map[string]time.Time
 	Custom1   *CustomStruct
 	Custom2   *pkg.CustomStruct
 }

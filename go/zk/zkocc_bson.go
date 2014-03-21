@@ -20,8 +20,7 @@ func (zkPath *ZkPath) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 
 	bson.EncodeString(buf, "Path", zkPath.Path)
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func (zkPath *ZkPath) UnmarshalBson(buf *bytes.Buffer, kind byte) {
@@ -47,8 +46,7 @@ func (zkPathV *ZkPathV) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 
 	bson.EncodeStringArray(buf, "Paths", zkPathV.Paths)
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func (zkPathV *ZkPathV) UnmarshalBson(buf *bytes.Buffer, kind byte) {
@@ -84,8 +82,7 @@ func (zkStat *ZkStat) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	bson.EncodeInt32(buf, "NumChildren", int32(zkStat.numChildren))
 	bson.EncodeInt64(buf, "Pzxid", zkStat.pzxid)
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func (zkStat *ZkStat) UnmarshalBson(buf *bytes.Buffer, kind byte) {
@@ -136,8 +133,7 @@ func (zkNode *ZkNode) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	bson.EncodeBool(buf, "Cached", zkNode.Cached)
 	bson.EncodeBool(buf, "Stale", zkNode.Stale)
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func (zkNode *ZkNode) UnmarshalBson(buf *bytes.Buffer, kind byte) {
@@ -171,17 +167,12 @@ func (zkNode *ZkNode) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 }
 
 func marshalZkNodeArray(buf *bytes2.ChunkedWriter, name string, values []*ZkNode) {
-	if values == nil {
-		bson.EncodePrefix(buf, bson.Null, name)
-	} else {
-		bson.EncodePrefix(buf, bson.Array, name)
-		lenWriter := bson.NewLenWriter(buf)
-		for i, val := range values {
-			val.MarshalBson(buf, bson.Itoa(i))
-		}
-		buf.WriteByte(0)
-		lenWriter.RecordLen()
+	bson.EncodePrefix(buf, bson.Array, name)
+	lenWriter := bson.NewLenWriter(buf)
+	for i, val := range values {
+		val.MarshalBson(buf, bson.Itoa(i))
 	}
+	lenWriter.Close()
 }
 
 func unmarshalZkNodeArray(buf *bytes.Buffer, name string, kind byte) []*ZkNode {
@@ -216,8 +207,7 @@ func (zkNodeV *ZkNodeV) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 
 	marshalZkNodeArray(buf, "Nodes", zkNodeV.Nodes)
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func (zkNodeV *ZkNodeV) UnmarshalBson(buf *bytes.Buffer, kind byte) {

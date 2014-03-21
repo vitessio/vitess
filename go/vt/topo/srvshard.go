@@ -54,17 +54,16 @@ func NewSrvShard(version int64) *SrvShard {
 }
 
 func EncodeTabletTypeArray(buf *bytes2.ChunkedWriter, name string, values []TabletType) {
-	if len(values) == 0 {
+	if values == nil {
 		bson.EncodePrefix(buf, bson.Null, name)
-	} else {
-		bson.EncodePrefix(buf, bson.Array, name)
-		lenWriter := bson.NewLenWriter(buf)
-		for i, val := range values {
-			bson.EncodeString(buf, bson.Itoa(i), string(val))
-		}
-		buf.WriteByte(0)
-		lenWriter.RecordLen()
+		return
 	}
+	bson.EncodePrefix(buf, bson.Array, name)
+	lenWriter := bson.NewLenWriter(buf)
+	for i, val := range values {
+		bson.EncodeString(buf, bson.Itoa(i), string(val))
+	}
+	lenWriter.Close()
 }
 
 func DecodeTabletTypeArray(buf *bytes.Buffer, kind byte) []TabletType {
@@ -99,8 +98,7 @@ func (ss *SrvShard) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	EncodeTabletTypeArray(buf, "ServedTypes", ss.ServedTypes)
 	EncodeTabletTypeArray(buf, "TabletTypes", ss.TabletTypes)
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 
 }
 
@@ -140,17 +138,16 @@ type KeyspacePartition struct {
 }
 
 func EncodeSrvShardArray(buf *bytes2.ChunkedWriter, name string, values []SrvShard) {
-	if len(values) == 0 {
+	if values == nil {
 		bson.EncodePrefix(buf, bson.Null, name)
-	} else {
-		bson.EncodePrefix(buf, bson.Array, name)
-		lenWriter := bson.NewLenWriter(buf)
-		for i, val := range values {
-			val.MarshalBson(buf, bson.Itoa(i))
-		}
-		buf.WriteByte(0)
-		lenWriter.RecordLen()
+		return
 	}
+	bson.EncodePrefix(buf, bson.Array, name)
+	lenWriter := bson.NewLenWriter(buf)
+	for i, val := range values {
+		val.MarshalBson(buf, bson.Itoa(i))
+	}
+	lenWriter.Close()
 }
 
 func DecodeSrvShardArray(buf *bytes.Buffer, kind byte) []SrvShard {
@@ -185,8 +182,7 @@ func (kp *KeyspacePartition) MarshalBson(buf *bytes2.ChunkedWriter, key string) 
 
 	EncodeSrvShardArray(buf, "Shards", kp.Shards)
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func (kp *KeyspacePartition) UnmarshalBson(buf *bytes.Buffer, kind byte) {
@@ -238,17 +234,12 @@ func NewSrvKeyspace(version int64) *SrvKeyspace {
 }
 
 func EncodeKeyspacePartitionMap(buf *bytes2.ChunkedWriter, name string, values map[TabletType]*KeyspacePartition) {
-	if len(values) == 0 {
-		bson.EncodePrefix(buf, bson.Null, name)
-	} else {
-		bson.EncodePrefix(buf, bson.Object, name)
-		lenWriter := bson.NewLenWriter(buf)
-		for i, val := range values {
-			val.MarshalBson(buf, string(i))
-		}
-		buf.WriteByte(0)
-		lenWriter.RecordLen()
+	bson.EncodePrefix(buf, bson.Object, name)
+	lenWriter := bson.NewLenWriter(buf)
+	for i, val := range values {
+		val.MarshalBson(buf, string(i))
 	}
+	lenWriter.Close()
 }
 
 func DecodeKeyspacePartitionMap(buf *bytes.Buffer, kind byte) map[TabletType]*KeyspacePartition {
@@ -283,8 +274,7 @@ func EncodeServedFrom(buf *bytes2.ChunkedWriter, name string, servedFrom map[Tab
 	for k, v := range servedFrom {
 		bson.EncodeString(buf, string(k), v)
 	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func DecodeServedFrom(buf *bytes.Buffer, kind byte) map[TabletType]string {
@@ -322,8 +312,7 @@ func (sk *SrvKeyspace) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	bson.EncodeString(buf, "ShardingColumnType", string(sk.ShardingColumnType))
 	EncodeServedFrom(buf, "ServedFrom", sk.ServedFrom)
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func (sk *SrvKeyspace) UnmarshalBson(buf *bytes.Buffer, kind byte) {
