@@ -66,7 +66,7 @@ func (tm *TabletManager) GetPermissions(context *rpcproto.Context, args *rpc.Unu
 
 func (tm *TabletManager) ChangeType(context *rpcproto.Context, args *topo.TabletType, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_CHANGE_TYPE, args, reply, func() error {
-		return tabletmanager.ChangeType(tm.agent.TopoServer, tm.agent.TabletAlias, *args, nil, true /*runHooks*/)
+		return actionnode.ChangeType(tm.agent.TopoServer, tm.agent.TabletAlias, *args, nil, true /*runHooks*/)
 	})
 }
 

@@ -442,7 +442,7 @@ func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType) {
 	}
 
 	// Change the Type, update the health
-	if err := ChangeType(agent.TopoServer, tablet.Alias, newTabletType, health, true /*runHooks*/); err != nil {
+	if err := actionnode.ChangeType(agent.TopoServer, tablet.Alias, newTabletType, health, true /*runHooks*/); err != nil {
 		log.Infof("Error updating tablet record: %v", err)
 		return
 	}

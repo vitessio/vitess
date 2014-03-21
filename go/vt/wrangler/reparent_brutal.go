@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -63,7 +63,7 @@ func (wr *Wrangler) reparentShardBrutal(si *topo.ShardInfo, slaveTabletMap, mast
 			log.Infof("scrap dead master %v", failedMaster.Alias)
 			// The master is dead so execute the action locally instead of
 			// enqueing the scrap action for an arbitrary amount of time.
-			if scrapErr := tabletmanager.Scrap(wr.ts, failedMaster.Alias, false); scrapErr != nil {
+			if scrapErr := actionnode.Scrap(wr.ts, failedMaster.Alias, false); scrapErr != nil {
 				log.Warningf("scrapping failed master failed: %v", scrapErr)
 			}
 		}
