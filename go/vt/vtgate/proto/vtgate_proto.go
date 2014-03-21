@@ -40,8 +40,7 @@ func (session *Session) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	bson.EncodeBool(buf, "InTransaction", session.InTransaction)
 	encodeShardSessionsBson(session.ShardSessions, "ShardSessions", buf)
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func (session *Session) String() string {
@@ -54,8 +53,7 @@ func encodeShardSessionsBson(shardSessions []*ShardSession, key string, buf *byt
 	for i, v := range shardSessions {
 		v.MarshalBson(buf, bson.Itoa(i))
 	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 // MarshalBson marshals ShardSession into buf.
@@ -68,8 +66,7 @@ func (shardSession *ShardSession) MarshalBson(buf *bytes2.ChunkedWriter, key str
 	bson.EncodeString(buf, "TabletType", string(shardSession.TabletType))
 	bson.EncodeInt64(buf, "TransactionId", shardSession.TransactionId)
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 // UnmarshalBson unmarshals Session from buf.
@@ -168,8 +165,7 @@ func (qrs *QueryShard) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 		qrs.Session.MarshalBson(buf, "Session")
 	}
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 // UnmarshalBson unmarshals QueryShard from buf.
@@ -238,8 +234,7 @@ func (qr *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 		bson.EncodeString(buf, "Error", qr.Error)
 	}
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 // UnmarshalBson unmarshals QueryResult from buf.
@@ -297,8 +292,7 @@ func (bqs *BatchQueryShard) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 		bqs.Session.MarshalBson(buf, "Session")
 	}
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 // UnmarshalBson unmarshals BatchQueryShard from buf.
@@ -352,8 +346,7 @@ func (qrl *QueryResultList) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 		bson.EncodeString(buf, "Error", qrl.Error)
 	}
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 // UnmarshalBson unmarshals QueryResultList from buf.
@@ -404,8 +397,7 @@ func (sqs *StreamQueryKeyRange) MarshalBson(buf *bytes2.ChunkedWriter, key strin
 		sqs.Session.MarshalBson(buf, "Session")
 	}
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func (sqs *StreamQueryKeyRange) UnmarshalBson(buf *bytes.Buffer, kind byte) {

@@ -52,8 +52,7 @@ func EncodeInterface(buf *bytes2.ChunkedWriter, key string, val interface{}) {
 		for k, v := range val {
 			EncodeInterface(buf, k, v)
 		}
-		buf.WriteByte(0)
-		lenWriter.RecordLen()
+		lenWriter.Close()
 	case []interface{}:
 		if val == nil {
 			EncodePrefix(buf, Null, key)
@@ -64,8 +63,7 @@ func EncodeInterface(buf *bytes2.ChunkedWriter, key string, val interface{}) {
 		for i, v := range val {
 			EncodeInterface(buf, Itoa(i), v)
 		}
-		buf.WriteByte(0)
-		lenWriter.RecordLen()
+		lenWriter.Close()
 	case time.Time:
 		EncodeTime(buf, key, val)
 	default:
@@ -84,6 +82,5 @@ func EncodeStringArray(buf *bytes2.ChunkedWriter, name string, values []string) 
 	for i, val := range values {
 		EncodeString(buf, Itoa(i), val)
 	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }

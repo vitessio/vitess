@@ -43,8 +43,7 @@ func (ste *StreamEvent) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	bson.EncodeInt64(buf, "Timestamp", ste.Timestamp)
 	bson.EncodeInt64(buf, "GroupId", ste.GroupId)
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func MarshalPKValuesBson(buf *bytes2.ChunkedWriter, key string, pkValues [][]interface{}) {
@@ -53,8 +52,7 @@ func MarshalPKValuesBson(buf *bytes2.ChunkedWriter, key string, pkValues [][]int
 	for i, row := range pkValues {
 		MarshalPKRowBson(buf, bson.Itoa(i), row)
 	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func MarshalPKRowBson(buf *bytes2.ChunkedWriter, key string, pkRow []interface{}) {
@@ -63,8 +61,7 @@ func MarshalPKRowBson(buf *bytes2.ChunkedWriter, key string, pkRow []interface{}
 	for i, v := range pkRow {
 		bson.EncodeField(buf, bson.Itoa(i), v)
 	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func (ste *StreamEvent) UnmarshalBson(buf *bytes.Buffer, kind byte) {

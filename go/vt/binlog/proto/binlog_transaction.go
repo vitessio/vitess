@@ -40,8 +40,7 @@ func (blt *BinlogTransaction) MarshalBson(buf *bytes2.ChunkedWriter, key string)
 	lenWriter := bson.NewLenWriter(buf)
 	MarshalStatementsBson(buf, "Statements", blt.Statements)
 	bson.EncodeInt64(buf, "GroupId", blt.GroupId)
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func MarshalStatementsBson(buf *bytes2.ChunkedWriter, key string, statements []Statement) {
@@ -50,8 +49,7 @@ func MarshalStatementsBson(buf *bytes2.ChunkedWriter, key string, statements []S
 	for i, v := range statements {
 		v.MarshalBson(buf, bson.Itoa(i))
 	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func (blt *BinlogTransaction) UnmarshalBson(buf *bytes.Buffer, kind byte) {
@@ -104,8 +102,7 @@ func (stmt *Statement) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	lenWriter := bson.NewLenWriter(buf)
 	bson.EncodeInt(buf, "Category", stmt.Category)
 	bson.EncodeBinary(buf, "Sql", stmt.Sql)
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func (stmt *Statement) UnmarshalBson(buf *bytes.Buffer, kind byte) {

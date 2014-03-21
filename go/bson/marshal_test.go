@@ -7,7 +7,23 @@ package bson
 import (
 	"testing"
 	"time"
+
+	"github.com/youtube/vitess/go/bytes2"
 )
+
+type String1 string
+
+func (cs String1) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	// Hardcode value to verify that function is called
+	EncodeString(buf, key, "test")
+}
+
+type String2 string
+
+func (cs *String2) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	// Hardcode value to verify that function is called
+	EncodeString(buf, key, "test")
+}
 
 var marshaltest = []struct {
 	desc string
@@ -33,6 +49,10 @@ var marshaltest = []struct {
 	"embedded map encode",
 	struct{ Inner map[string]string }{map[string]string{"Val": "test"}},
 	"\x1f\x00\x00\x00\x03Inner\x00\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00\x00",
+}, {
+	"embedded map encode nil",
+	struct{ Inner map[string]string }{},
+	"\f\x00\x00\x00\nInner\x00\x00",
 }, {
 	"slice encode",
 	[]string{"test1", "test2"},
@@ -144,6 +164,30 @@ var marshaltest = []struct {
 	"embedded Ulong encode",
 	struct{ Val uint64 }{1},
 	"\x12\x00\x00\x00?Val\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00",
+}, {
+	"embedded non-pointer encode with custom marshaler",
+	struct{ Val String1 }{String1("foo")},
+	"\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00",
+}, {
+	"embedded pointer encode with custom marshaler",
+	struct{ Val *String1 }{func(cs String1) *String1 { return &cs }(String1("foo"))},
+	"\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00",
+}, {
+	"embedded nil pointer encode with custom marshaler",
+	struct{ Val *String1 }{},
+	"\n\x00\x00\x00\nVal\x00\x00",
+}, {
+	"embedded pointer encode with custom pointer marshaler",
+	struct{ Val *String2 }{func(cs String2) *String2 { return &cs }(String2("foo"))},
+	"\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00",
+}, {
+	"embedded addressable encode with custom pointer marshaler",
+	&struct{ Val String2 }{String2("foo")},
+	"\x13\x00\x00\x00\x05Val\x00\x04\x00\x00\x00\x00test\x00",
+}, {
+	"embedded non-addressable encode with custom pointer marshaler",
+	struct{ Val String2 }{String2("foo")},
+	"\x12\x00\x00\x00\x05Val\x00\x03\x00\x00\x00\x00foo\x00",
 }}
 
 func TestMarshal(t *testing.T) {
