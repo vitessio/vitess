@@ -136,7 +136,7 @@ class VtgateConnection(object):
       if 'Error' in response.reply:
         raise gorpc.AppError(response.reply['Error'], 'VTGate.ExecuteShard')
 
-      for field in reply['Fields']:
+      for field in (reply['Fields'] or []):
         fields.append((field['Name'], field['Type']))
         conversions.append(field_types.conversions.get(field['Type']))
 
@@ -180,7 +180,7 @@ class VtgateConnection(object):
         results = []
         rowcount = 0
 
-        for field in reply['Fields']:
+        for field in (reply['Fields'] or []):
           fields.append((field['Name'], field['Type']))
           conversions.append(field_types.conversions.get(field['Type']))
 
@@ -220,7 +220,7 @@ class VtgateConnection(object):
       first_response = self.client.stream_next()
       reply = first_response.reply
 
-      for field in reply['Fields']:
+      for field in (reply['Fields'] or []):
         self._stream_fields.append((field['Name'], field['Type']))
         self._stream_conversions.append(field_types.conversions.get(field['Type']))
     except gorpc.GoRpcError as e:

@@ -54,6 +54,10 @@ func NewSrvShard(version int64) *SrvShard {
 }
 
 func EncodeTabletTypeArray(buf *bytes2.ChunkedWriter, name string, values []TabletType) {
+	if values == nil {
+		bson.EncodePrefix(buf, bson.Null, name)
+		return
+	}
 	bson.EncodePrefix(buf, bson.Array, name)
 	lenWriter := bson.NewLenWriter(buf)
 	for i, val := range values {
@@ -134,6 +138,10 @@ type KeyspacePartition struct {
 }
 
 func EncodeSrvShardArray(buf *bytes2.ChunkedWriter, name string, values []SrvShard) {
+	if values == nil {
+		bson.EncodePrefix(buf, bson.Null, name)
+		return
+	}
 	bson.EncodePrefix(buf, bson.Array, name)
 	lenWriter := bson.NewLenWriter(buf)
 	for i, val := range values {
