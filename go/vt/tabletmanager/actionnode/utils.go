@@ -95,7 +95,8 @@ func ConfigureTabletHook(hk *hook.Hook, tabletAlias topo.TabletAlias) {
 }
 
 // Scrap will update the tablet type to 'Scrap', and remove it from
-//   the serving graph.
+// the serving graph.
+//
 // 'force' means we are not on the tablet being scrapped, so it is
 //   probably dead.
 // So if 'force' is true, we will also remove pending remote actions.
