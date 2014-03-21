@@ -193,8 +193,6 @@ index by_msg (msg)
 
   def _check_blacklisted_tables(self, tablet, expected):
     ti = utils.run_vtctl_json(['GetTablet', tablet.tablet_alias])
-    if ti['BlacklistedTables'] == []:
-        ti['BlacklistedTables'] = None
     logging.debug("Tablet %s has blacklisted tables: %s", tablet.tablet_alias,
                   ti['BlacklistedTables'])
     self.assertEqual(ti['BlacklistedTables'], expected,
