@@ -14,12 +14,14 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
 var (
 	healthCheckInterval = flag.Duration("health_check_interval", 20*time.Second, "Interval between health checks")
 	targetTabletType    = flag.String("target_tablet_type", "", "The tablet type we are thriving to be when healthy. When not healthy, we'll go to spare.")
+	lockTimeout         = flag.Duration("lock_timeout", actionnode.DefaultLockTimeout, "lock time for wrangler/topo operations")
 )
 
 func initHeathCheck(agent *tabletmanager.ActionAgent) {
@@ -32,7 +34,7 @@ func initHeathCheck(agent *tabletmanager.ActionAgent) {
 	go func() {
 		t := time.NewTicker(*healthCheckInterval)
 		for _ = range t.C {
-			agent.RunHealthCheck(topo.TabletType(*targetTabletType))
+			agent.RunHealthCheck(topo.TabletType(*targetTabletType), *lockTimeout)
 		}
 	}()
 }
