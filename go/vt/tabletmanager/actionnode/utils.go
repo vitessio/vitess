@@ -14,6 +14,12 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
+var (
+	// DefaultLockTimeout is a good value to use as a default for
+	// locking a shard / keyspace.
+	DefaultLockTimeout = 30 * time.Second
+)
+
 func (n *ActionNode) LockKeyspace(ts topo.Server, keyspace string, lockTimeout time.Duration, interrupted chan struct{}) (lockPath string, err error) {
 	log.Infof("Locking keyspace %v for action %v", keyspace, n.Action)
 	return ts.LockKeyspaceForAction(keyspace, n.ToJson(), lockTimeout, interrupted)

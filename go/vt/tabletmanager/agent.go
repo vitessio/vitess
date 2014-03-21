@@ -55,7 +55,10 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-var vtactionBinaryPath = flag.String("vtaction_binary_path", "", "Full path (including filename) to vtaction binary. If not set, tries VTROOT/bin/vtaction.")
+var (
+	vtactionBinaryPath = flag.String("vtaction_binary_path", "", "Full path (including filename) to vtaction binary. If not set, tries VTROOT/bin/vtaction.")
+	lockTimeout        = flag.Duration("lock_timeout", 30*time.Second, "lock time for wrangler/topo operations")
+)
 
 // Each TabletChangeCallback must be idempotent and "threadsafe".  The
 // agent will execute these in a new goroutine each time a change is
@@ -449,7 +452,7 @@ func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType) {
 	// TODO: interrupted may need to be a global one closed when we exit
 	interrupted := make(chan struct{})
 	actionNode := actionnode.RebuildShard()
-	lockPath, err := actionNode.LockShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, 5*time.Second, interrupted)
+	lockPath, err := actionNode.LockShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, *lockTimeout, interrupted)
 	if err != nil {
 		log.Warningf("Cannot lock shard for rebuild: %v", err)
 		return
