@@ -266,11 +266,7 @@ index by_msg (msg)
       value = self._check_lots(count, base=base)
       if value >= threshold:
         return
-      if timeout == 0:
-        self.fail("timeout waiting for %u%% of the data" % threshold)
-      logging.debug("sleeping until we get %u%%", threshold)
-      time.sleep(1)
-      timeout -= 1
+      timeout = utils.wait_step('enough data went through', timeout)
 
   # _check_lots_not_present makes sure no data is in the wrong shard
   def _check_lots_not_present(self, count, base=0):

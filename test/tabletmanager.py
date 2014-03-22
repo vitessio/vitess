@@ -476,19 +476,13 @@ class TestTabletManager(unittest.TestCase):
     utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/0', tablet_62344.tablet_alias])
 
     # make sure the 'spare' slave goes to 'replica'
-    # TODO(alainjobart, different CL): factor out the 'wait until' code.
     timeout = 10
     while True:
       ti = utils.run_vtctl_json(['GetTablet', tablet_62044.tablet_alias])
       if ti['Type'] == "replica":
         logging.info("Slave tablet went to replica, good")
         break
-      print ti
-      timeout -= 1
-      if timeout == 0:
-        self.fail("State did not change from health check")
-      logging.info("Sleeping for 1s waiting for health check to kick in")
-      time.sleep(1.0)
+      timeout = utils.wait_step('slave tablet going to replica', timeout)
 
     # make sure the master is still master
     ti = utils.run_vtctl_json(['GetTablet', tablet_62344.tablet_alias])
@@ -505,12 +499,7 @@ class TestTabletManager(unittest.TestCase):
           if ti['Health']['replication_lag'] == 'high':
             logging.info("Slave tablet replication_lag went to high, good")
             break
-      print ti
-      timeout -= 1
-      if timeout == 0:
-        self.fail("replication_lag did not change from health check")
-      logging.info("Sleeping for 1s waiting for replication_lag to kick in")
-      time.sleep(1.0)
+      timeout = utils.wait_step('slave has high replication lag', timeout)
 
     # make sure the serving graph was updated
     ep = utils.run_vtctl_json(['GetEndPoints', 'test_nj', 'test_keyspace/0', 'replica'])

@@ -356,12 +356,8 @@ class Tablet(object):
             logging.debug("  vttablet %s in state %s != %s", self.tablet_alias, s, expected)
           else:
             break
-
-      logging.debug("sleeping a bit while we wait")
-      time.sleep(0.1)
-      timeout -= 0.1
-      if timeout <= 0:
-        raise utils.TestError("timeout waiting for state %s" % expected)
+      timeout = utils.wait_step('waiting for state %s' % expected, timeout,
+                                sleep_time=0.1)
 
   def _get_db_configs_file(self, repl_extra_flags={}):
     config = dict(self.default_db_config)
@@ -395,12 +391,8 @@ class Tablet(object):
                           expected)
           else:
             break
-
-      logging.debug("sleeping a bit while we wait")
-      time.sleep(0.5)
-      timeout -= 0.5
-      if timeout <= 0:
-        raise utils.TestError("timeout waiting for binlog server state %s" % expected)
+      timeout = utils.wait_step('waiting for binlog server state %s' % expected,
+                                timeout, sleep_time=0.5)
     logging.debug("tablet %s binlog service is in state %s",
                   self.tablet_alias, expected)
 
@@ -419,12 +411,8 @@ class Tablet(object):
                           s, expected)
           else:
             break
-
-      logging.debug("sleeping a bit while we wait")
-      time.sleep(0.5)
-      timeout -= 0.5
-      if timeout <= 0:
-        raise utils.TestError("timeout waiting for binlog player count %d" % expected)
+      timeout = utils.wait_step('waiting for binlog player count %d' % expected,
+                                timeout, sleep_time=0.5)
     logging.debug("tablet %s binlog player has %d players",
                   self.tablet_alias, expected)
 
