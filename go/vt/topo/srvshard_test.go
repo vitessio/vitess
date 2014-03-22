@@ -62,10 +62,12 @@ func TestSrvKeySpace(t *testing.T) {
 				Shards: []SrvShard{
 					SrvShard{
 						ServedTypes: []TabletType{TYPE_MASTER},
+						TabletTypes: []TabletType{},
 					},
 				},
 			},
 		},
+		Shards:             []SrvShard{},
 		TabletTypes:        []TabletType{TYPE_MASTER},
 		ShardingColumnName: "video_id",
 		ShardingColumnType: key.KIT_UINT64,

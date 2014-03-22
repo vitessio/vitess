@@ -181,15 +181,9 @@ func encodeField(buf *bytes2.ChunkedWriter, key string, val reflect.Value) {
 			encodeStruct(buf, key, val)
 		}
 	case reflect.Map:
-		if val.IsNil() {
-			EncodePrefix(buf, Null, key)
-		} else {
-			encodeMap(buf, key, val)
-		}
+		encodeMap(buf, key, val)
 	case reflect.Slice:
 		switch {
-		case val.IsNil():
-			EncodePrefix(buf, Null, key)
 		case val.Type() == bytesType:
 			EncodeBinary(buf, key, val.Interface().([]byte))
 		default:
