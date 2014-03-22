@@ -45,6 +45,24 @@ func (kid *KeyspaceId) UnmarshalJSON(data []byte) (err error) {
 	return err
 }
 
+func (kid KeyspaceId) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	if key == "" {
+		lenWriter := bson.NewLenWriter(buf)
+		defer lenWriter.Close()
+		key = bson.MAGICTAG
+	}
+	bson.EncodeString(buf, key, string(kid))
+}
+
+func (kid *KeyspaceId) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	if kind == bson.EOO {
+		bson.Next(buf, 4)
+		kind = bson.NextByte(buf)
+		bson.ReadCString(buf)
+	}
+	*kid = KeyspaceId(bson.DecodeString(buf, kind))
+}
+
 //
 // Uint64Key definitions
 //
@@ -152,35 +170,6 @@ func ParseKeyRangeParts(start, end string) (KeyRange, error) {
 // Returns true if the KeyRange does not cover the entire space.
 func (kr KeyRange) IsPartial() bool {
 	return !(kr.Start == MinKey && kr.End == MaxKey)
-}
-
-func (kr *KeyRange) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
-	bson.EncodeOptionalPrefix(buf, bson.Object, key)
-	lenWriter := bson.NewLenWriter(buf)
-
-	bson.EncodeString(buf, "Start", string(kr.Start))
-	bson.EncodeString(buf, "End", string(kr.End))
-
-	lenWriter.Close()
-}
-
-func (kr *KeyRange) UnmarshalBson(buf *bytes.Buffer, kind byte) {
-	bson.VerifyObject(kind)
-	bson.Next(buf, 4)
-
-	kind = bson.NextByte(buf)
-	for kind != bson.EOO {
-		key := bson.ReadCString(buf)
-		switch key {
-		case "Start":
-			kr.Start = KeyspaceId(bson.DecodeString(buf, kind))
-		case "End":
-			kr.End = KeyspaceId(bson.DecodeString(buf, kind))
-		default:
-			bson.Skip(buf, kind)
-		}
-		kind = bson.NextByte(buf)
-	}
 }
 
 // KeyRangesIntersect returns true if some Keyspace values exist in both ranges.
