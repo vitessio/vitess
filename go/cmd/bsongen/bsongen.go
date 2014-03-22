@@ -341,9 +341,7 @@ if {{.Name}} == nil {
 }{{end}}
 
 {{define "SliceEncoder"}}// {{.Type}}
-if {{.Name}} == nil {
-	bson.EncodePrefix(buf, bson.Null, {{.Tag}})
-} else {
+{
 	bson.EncodePrefix(buf, bson.Array, {{.Tag}})
 	lenWriter := bson.NewLenWriter(buf)
 	for _i, {{.Subfield.Name}} := range {{.Name}} {
@@ -353,9 +351,7 @@ if {{.Name}} == nil {
 }{{end}}
 
 {{define "MapEncoder"}}// {{.Type}}
-if {{.Name}} == nil {
-	bson.EncodePrefix(buf, bson.Null, {{.Tag}})
-} else {
+{
 	bson.EncodePrefix(buf, bson.Object, {{.Tag}})
 	lenWriter := bson.NewLenWriter(buf)
 	for _k, {{.Subfield.Name}} := range {{.Name}} {

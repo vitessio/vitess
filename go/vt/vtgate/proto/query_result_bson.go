@@ -22,9 +22,7 @@ func (queryResult *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter, key strin
 	lenWriter := bson.NewLenWriter(buf)
 
 	// []mproto.Field
-	if queryResult.Fields == nil {
-		bson.EncodePrefix(buf, bson.Null, "Fields")
-	} else {
+	{
 		bson.EncodePrefix(buf, bson.Array, "Fields")
 		lenWriter := bson.NewLenWriter(buf)
 		for _i, _v1 := range queryResult.Fields {
@@ -35,16 +33,12 @@ func (queryResult *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter, key strin
 	bson.EncodeUint64(buf, "RowsAffected", queryResult.RowsAffected)
 	bson.EncodeUint64(buf, "InsertId", queryResult.InsertId)
 	// [][]sqltypes.Value
-	if queryResult.Rows == nil {
-		bson.EncodePrefix(buf, bson.Null, "Rows")
-	} else {
+	{
 		bson.EncodePrefix(buf, bson.Array, "Rows")
 		lenWriter := bson.NewLenWriter(buf)
 		for _i, _v2 := range queryResult.Rows {
 			// []sqltypes.Value
-			if _v2 == nil {
-				bson.EncodePrefix(buf, bson.Null, bson.Itoa(_i))
-			} else {
+			{
 				bson.EncodePrefix(buf, bson.Array, bson.Itoa(_i))
 				lenWriter := bson.NewLenWriter(buf)
 				for _i, _v3 := range _v2 {
