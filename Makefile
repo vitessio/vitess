@@ -4,7 +4,7 @@
 
 MAKEFLAGS = -s
 
-all: build unit_test queryservice_test integration_test
+all: build bson unit_test queryservice_test integration_test
 
 build:
 	go install ./go/...
@@ -50,7 +50,6 @@ integration_test:
 	cd test ; echo "initial_sharding_bytes test"; time ./initial_sharding_bytes.py $$VT_TEST_FLAGS
 	cd test ; echo "keyspace_test test"; time ./keyspace_test.py $$VT_TEST_FLAGS
 
-# Build this target only if you want to regenerate the bson files
 bson:
 	bsongen -file ./go/mysql/proto/structs.go -type QueryResult -o ./go/mysql/proto/query_result_bson.go
 	bsongen -file ./go/mysql/proto/structs.go -type Field -o ./go/mysql/proto/field_bson.go
@@ -64,3 +63,6 @@ bson:
 	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type QueryShard -o ./go/vt/vtgate/proto/query_shard_bson.go
 	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type BatchQueryShard -o ./go/vt/vtgate/proto/batch_query_shard_bson.go
 	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type StreamQueryKeyRange -o ./go/vt/vtgate/proto/stream_query_keyrange_bson.go
+	bsongen -file ./go/vt/topo/srvshard.go -type SrvShard -o ./go/vt/topo/srvshard_bson.go
+	bsongen -file ./go/vt/topo/srvshard.go -type SrvKeyspace -o ./go/vt/topo/srvkeyspace_bson.go
+	bsongen -file ./go/vt/topo/srvshard.go -type KeyspacePartition -o ./go/vt/topo/keyspace_partition_bson.go

@@ -120,6 +120,24 @@ var AllKeyspaceIdTypes = []KeyspaceIdType{
 	KIT_BYTES,
 }
 
+func (kit KeyspaceIdType) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	if key == "" {
+		lenWriter := bson.NewLenWriter(buf)
+		defer lenWriter.Close()
+		key = bson.MAGICTAG
+	}
+	bson.EncodeString(buf, key, string(kit))
+}
+
+func (kit *KeyspaceIdType) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	if kind == bson.EOO {
+		bson.Next(buf, 4)
+		kind = bson.NextByte(buf)
+		bson.ReadCString(buf)
+	}
+	*kit = KeyspaceIdType(bson.DecodeString(buf, kind))
+}
+
 // IsKeyspaceIdTypeInList returns true if the given type is in the list.
 // Use it with AllKeyspaceIdTypes for instance.
 func IsKeyspaceIdTypeInList(typ KeyspaceIdType, types []KeyspaceIdType) bool {

@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"strings"
 	"text/template"
+	"unicode"
 )
 
 var (
@@ -96,6 +97,7 @@ type FieldInfo struct {
 	Tag      string
 	Name     string
 	typ      string
+	KeyType  string
 	Subfield *FieldInfo
 }
 
@@ -108,7 +110,11 @@ func (f *FieldInfo) IsSlice() bool {
 }
 
 func (f *FieldInfo) IsMap() bool {
-	return f.typ == "map[string]"
+	return f.KeyType != ""
+}
+
+func (f *FieldInfo) IsSimpleMap() bool {
+	return f.KeyType == "string"
 }
 
 func (f *FieldInfo) IsCustom() bool {
@@ -210,6 +216,10 @@ func buildFields(structType *ast.StructType, varName string) (fields []*FieldInf
 			return nil, fmt.Errorf("anonymous embeds not supported: %#v", field.Type)
 		}
 		for _, name := range field.Names {
+			// Skip private fields.
+			if unicode.IsLower(rune(name.Name[0])) {
+				continue
+			}
 			fullName := varName + "." + name.Name
 			fieldInfo, err := buildField(field.Type, "\""+name.Name+"\"", fullName)
 			if err != nil {
@@ -250,15 +260,26 @@ func buildField(fieldType ast.Expr, tag, name string) (*FieldInfo, error) {
 		}
 		return &FieldInfo{Tag: tag, Name: name, typ: "*", Subfield: subfield}, nil
 	case *ast.MapType:
-		key, ok := ident.Key.(*ast.Ident)
-		if !ok || key.Name != "string" {
-			goto notSimple
+		var keytype string
+		switch kt := ident.Key.(type) {
+		case *ast.Ident:
+			keytype = kt.Name
+		case *ast.SelectorExpr:
+			pkg, ok := kt.X.(*ast.Ident)
+			if !ok {
+				goto notSimple
+			}
+			keytype = pkg.Name + "." + kt.Sel.Name
 		}
-		subfield, err := buildField(ident.Value, "_k", newVarName())
+		subtag := "_k"
+		if keytype != "string" {
+			subtag = "string(_k)"
+		}
+		subfield, err := buildField(ident.Value, subtag, newVarName())
 		if err != nil {
 			return nil, err
 		}
-		return &FieldInfo{Tag: tag, Name: name, typ: "map[string]", Subfield: subfield}, nil
+		return &FieldInfo{Tag: tag, Name: name, typ: fmt.Sprintf("map[%s]", keytype), KeyType: keytype, Subfield: subfield}, nil
 	case *ast.SelectorExpr:
 		pkg, ok := ident.X.(*ast.Ident)
 		if !ok {
@@ -395,7 +416,7 @@ if kind != bson.Null {
 	bson.Next(buf, 4)
 	{{.Name}} = make({{.Type}})
 	for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
-		_k := bson.ReadCString(buf)
+		_k := {{if .IsSimpleMap}}bson.ReadCString(buf){{else}}{{.KeyType}}(bson.ReadCString(buf)){{end}}
 		var {{.Subfield.Name}} {{.Subfield.Type}}
 		{{template "Decoder" .Subfield}}
 		{{.Name}}[_k] = {{.Subfield.Name}}

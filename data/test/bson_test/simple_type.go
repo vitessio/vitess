@@ -27,7 +27,7 @@ type MyType struct {
 	Ptr       *int64
 	Strings   *[]*Custom
 	Strings2  *[][]string
-	Map       map[string]map[string]time.Time
+	Map       map[abcd.efgh]map[string]time.Time
 	Custom1   *CustomStruct
 	Custom2   *pkg.CustomStruct
 }
