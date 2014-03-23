@@ -39,10 +39,10 @@ func TestStreamEvent(t *testing.T) {
 		PKColNames: []string{"str3", "str4"},
 		PKValues: [][]interface{}{
 			[]interface{}{
-				"str5", 1, uint64(0xffffffffffffffff),
+				[]byte("str5"), 1, uint64(0xffffffffffffffff),
 			},
 			[]interface{}{
-				"str6", 2, uint64(0xfffffffffffffffe),
+				[]byte("str6"), 2, uint64(0xfffffffffffffffe),
 			},
 		},
 		Sql:       "str7",
@@ -60,10 +60,10 @@ func TestStreamEvent(t *testing.T) {
 		PKColNames: []string{"str3", "str4"},
 		PKValues: [][]interface{}{
 			[]interface{}{
-				"str5", 1, uint64(0xffffffffffffffff),
+				[]byte("str5"), 1, uint64(0xffffffffffffffff),
 			},
 			[]interface{}{
-				"str6", 2, uint64(0xfffffffffffffffe),
+				[]byte("str6"), 2, uint64(0xfffffffffffffffe),
 			},
 		},
 		Sql:       "str7",
