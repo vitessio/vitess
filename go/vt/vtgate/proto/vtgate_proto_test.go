@@ -322,7 +322,7 @@ func TestBatchQueryShardBadType(t *testing.T) {
 	}
 	var unmarshalled BatchQueryShard
 	err = bson.Unmarshal(unexpected, &unmarshalled)
-	want := "Unexpected data type 5 for Queries"
+	want := "unexpected kind 5 for batchQueryShard.Queries"
 	if err == nil || want != err.Error() {
 		t.Errorf("want %v, got %v", want, err)
 	}

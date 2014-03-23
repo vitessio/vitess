@@ -150,55 +150,6 @@ type QueryShard struct {
 	Session       *Session
 }
 
-// MarshalBson marshals QueryShard into buf.
-func (qrs *QueryShard) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
-	bson.EncodeOptionalPrefix(buf, bson.Object, key)
-	lenWriter := bson.NewLenWriter(buf)
-
-	bson.EncodeString(buf, "Sql", qrs.Sql)
-	tproto.EncodeBindVariablesBson(buf, "BindVariables", qrs.BindVariables)
-	bson.EncodeString(buf, "Keyspace", qrs.Keyspace)
-	bson.EncodeStringArray(buf, "Shards", qrs.Shards)
-	bson.EncodeString(buf, "TabletType", string(qrs.TabletType))
-
-	if qrs.Session != nil {
-		qrs.Session.MarshalBson(buf, "Session")
-	}
-
-	lenWriter.Close()
-}
-
-// UnmarshalBson unmarshals QueryShard from buf.
-func (qrs *QueryShard) UnmarshalBson(buf *bytes.Buffer, kind byte) {
-	bson.VerifyObject(kind)
-	bson.Next(buf, 4)
-
-	kind = bson.NextByte(buf)
-	for kind != bson.EOO {
-		keyName := bson.ReadCString(buf)
-		switch keyName {
-		case "Sql":
-			qrs.Sql = bson.DecodeString(buf, kind)
-		case "BindVariables":
-			qrs.BindVariables = tproto.DecodeBindVariablesBson(buf, kind)
-		case "Keyspace":
-			qrs.Keyspace = bson.DecodeString(buf, kind)
-		case "TabletType":
-			qrs.TabletType = topo.TabletType(bson.DecodeString(buf, kind))
-		case "Shards":
-			qrs.Shards = bson.DecodeStringArray(buf, kind)
-		case "Session":
-			if kind != bson.Null {
-				qrs.Session = new(Session)
-				qrs.Session.UnmarshalBson(buf, kind)
-			}
-		default:
-			bson.Skip(buf, kind)
-		}
-		kind = bson.NextByte(buf)
-	}
-}
-
 // QueryResult is mproto.QueryResult+Session (for now).
 type QueryResult struct {
 	Fields       []mproto.Field
@@ -226,100 +177,11 @@ type BatchQueryShard struct {
 	Session    *Session
 }
 
-// MarshalBson marshals BatchQueryShard into buf.
-func (bqs *BatchQueryShard) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
-	bson.EncodeOptionalPrefix(buf, bson.Object, key)
-	lenWriter := bson.NewLenWriter(buf)
-
-	tproto.EncodeQueriesBson(bqs.Queries, "Queries", buf)
-	bson.EncodeString(buf, "Keyspace", bqs.Keyspace)
-	bson.EncodeStringArray(buf, "Shards", bqs.Shards)
-	bson.EncodeString(buf, "TabletType", string(bqs.TabletType))
-
-	if bqs.Session != nil {
-		bqs.Session.MarshalBson(buf, "Session")
-	}
-
-	lenWriter.Close()
-}
-
-// UnmarshalBson unmarshals BatchQueryShard from buf.
-func (bqs *BatchQueryShard) UnmarshalBson(buf *bytes.Buffer, kind byte) {
-	bson.VerifyObject(kind)
-	bson.Next(buf, 4)
-
-	kind = bson.NextByte(buf)
-	for kind != bson.EOO {
-		keyName := bson.ReadCString(buf)
-		switch keyName {
-		case "Queries":
-			bqs.Queries = tproto.DecodeQueriesBson(buf, kind)
-		case "Keyspace":
-			bqs.Keyspace = bson.DecodeString(buf, kind)
-		case "Shards":
-			bqs.Shards = bson.DecodeStringArray(buf, kind)
-		case "TabletType":
-			bqs.TabletType = topo.TabletType(bson.DecodeString(buf, kind))
-		case "Session":
-			if kind != bson.Null {
-				bqs.Session = new(Session)
-				bqs.Session.UnmarshalBson(buf, kind)
-			}
-		default:
-			bson.Skip(buf, kind)
-		}
-		kind = bson.NextByte(buf)
-	}
-}
-
 // QueryResultList is mproto.QueryResultList+Session
 type QueryResultList struct {
 	List    []mproto.QueryResult
 	Session *Session
 	Error   string
-}
-
-// MarshalBson marshals QueryResultList into buf.
-func (qrl *QueryResultList) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
-	bson.EncodeOptionalPrefix(buf, bson.Object, key)
-	lenWriter := bson.NewLenWriter(buf)
-
-	tproto.EncodeResultsBson(qrl.List, "List", buf)
-
-	if qrl.Session != nil {
-		qrl.Session.MarshalBson(buf, "Session")
-	}
-
-	if qrl.Error != "" {
-		bson.EncodeString(buf, "Error", qrl.Error)
-	}
-
-	lenWriter.Close()
-}
-
-// UnmarshalBson unmarshals QueryResultList from buf.
-func (qrl *QueryResultList) UnmarshalBson(buf *bytes.Buffer, kind byte) {
-	bson.VerifyObject(kind)
-	bson.Next(buf, 4)
-
-	kind = bson.NextByte(buf)
-	for kind != bson.EOO {
-		keyName := bson.ReadCString(buf)
-		switch keyName {
-		case "List":
-			qrl.List = tproto.DecodeResultsBson(buf, kind)
-		case "Session":
-			if kind != bson.Null {
-				qrl.Session = new(Session)
-				qrl.Session.UnmarshalBson(buf, kind)
-			}
-		case "Error":
-			qrl.Error = bson.DecodeString(buf, kind)
-		default:
-			bson.Skip(buf, kind)
-		}
-		kind = bson.NextByte(buf)
-	}
 }
 
 type StreamQueryKeyRange struct {
@@ -329,51 +191,4 @@ type StreamQueryKeyRange struct {
 	KeyRange      string
 	TabletType    topo.TabletType
 	Session       *Session
-}
-
-func (sqs *StreamQueryKeyRange) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
-	bson.EncodeOptionalPrefix(buf, bson.Object, key)
-	lenWriter := bson.NewLenWriter(buf)
-
-	bson.EncodeString(buf, "Sql", sqs.Sql)
-	tproto.EncodeBindVariablesBson(buf, "BindVariables", sqs.BindVariables)
-	bson.EncodeString(buf, "Keyspace", sqs.Keyspace)
-	bson.EncodeString(buf, "KeyRange", sqs.KeyRange)
-	bson.EncodeString(buf, "TabletType", string(sqs.TabletType))
-
-	if sqs.Session != nil {
-		sqs.Session.MarshalBson(buf, "Session")
-	}
-
-	lenWriter.Close()
-}
-
-func (sqs *StreamQueryKeyRange) UnmarshalBson(buf *bytes.Buffer, kind byte) {
-	bson.VerifyObject(kind)
-	bson.Next(buf, 4)
-
-	kind = bson.NextByte(buf)
-	for kind != bson.EOO {
-		keyName := bson.ReadCString(buf)
-		switch keyName {
-		case "Sql":
-			sqs.Sql = bson.DecodeString(buf, kind)
-		case "BindVariables":
-			sqs.BindVariables = tproto.DecodeBindVariablesBson(buf, kind)
-		case "Keyspace":
-			sqs.Keyspace = bson.DecodeString(buf, kind)
-		case "KeyRange":
-			sqs.KeyRange = bson.DecodeString(buf, kind)
-		case "TabletType":
-			sqs.TabletType = topo.TabletType(bson.DecodeString(buf, kind))
-		case "Session":
-			if kind != bson.Null {
-				sqs.Session = new(Session)
-				sqs.Session.UnmarshalBson(buf, kind)
-			}
-		default:
-			bson.Skip(buf, kind)
-		}
-		kind = bson.NextByte(buf)
-	}
 }

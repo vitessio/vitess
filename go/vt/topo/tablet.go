@@ -5,6 +5,7 @@
 package topo
 
 import (
+	"bytes"
 	"fmt"
 	"sort"
 	"strconv"
@@ -12,6 +13,8 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/bson"
+	"github.com/youtube/vitess/go/bytes2"
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/key"
 )
@@ -209,6 +212,24 @@ func IsTypeInList(tabletType TabletType, types []TabletType) bool {
 
 func (tt TabletType) IsSlaveType() bool {
 	return IsTypeInList(tt, SlaveTabletTypes)
+}
+
+func (tt TabletType) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	if key == "" {
+		lenWriter := bson.NewLenWriter(buf)
+		defer lenWriter.Close()
+		key = bson.MAGICTAG
+	}
+	bson.EncodeString(buf, key, string(tt))
+}
+
+func (tt *TabletType) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	if kind == bson.EOO {
+		bson.Next(buf, 4)
+		kind = bson.NextByte(buf)
+		bson.ReadCString(buf)
+	}
+	*tt = TabletType(bson.DecodeString(buf, kind))
 }
 
 // MakeStringTypeList returns a list of strings that match the input list.
