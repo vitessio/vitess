@@ -73,3 +73,6 @@ bson:
 	bsongen -file ./go/vt/binlog/proto/stream_event.go -type StreamEvent -o ./go/vt/binlog/proto/stream_event_bson.go
 	bsongen -file ./go/zk/zkocc_structs.go -type ZkPath -o ./go/zk/zkpath_bson.go
 	bsongen -file ./go/zk/zkocc_structs.go -type ZkPathV -o ./go/zk/zkpathv_bson.go
+	bsongen -file ./go/zk/zkocc_structs.go -type ZkStat -o ./go/zk/zkstat_bson.go
+	bsongen -file ./go/zk/zkocc_structs.go -type ZkNode -o ./go/zk/zknode_bson.go
+	bsongen -file ./go/zk/zkocc_structs.go -type ZkNodeV -o ./go/zk/zknodev_bson.go
