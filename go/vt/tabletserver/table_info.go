@@ -23,9 +23,6 @@ type TableInfo struct {
 }
 
 func NewTableInfo(conn PoolConnection, tableName string, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) (ti *TableInfo) {
-	if tableName == "dual" {
-		return &TableInfo{Table: schema.NewTable(tableName)}
-	}
 	ti = loadTableInfo(conn, tableName)
 	ti.initRowCache(conn, tableType, createTime, comment, cachePool)
 	return ti
