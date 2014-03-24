@@ -14,58 +14,6 @@ import (
 	"github.com/youtube/vitess/go/bytes2"
 )
 
-func (zkPath *ZkPath) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
-	bson.EncodeOptionalPrefix(buf, bson.Object, key)
-	lenWriter := bson.NewLenWriter(buf)
-
-	bson.EncodeString(buf, "Path", zkPath.Path)
-
-	lenWriter.Close()
-}
-
-func (zkPath *ZkPath) UnmarshalBson(buf *bytes.Buffer, kind byte) {
-	bson.VerifyObject(kind)
-	bson.Next(buf, 4)
-
-	kind = bson.NextByte(buf)
-	for kind != bson.EOO {
-		key := bson.ReadCString(buf)
-		switch key {
-		case "Path":
-			zkPath.Path = bson.DecodeString(buf, kind)
-		default:
-			bson.Skip(buf, kind)
-		}
-		kind = bson.NextByte(buf)
-	}
-}
-
-func (zkPathV *ZkPathV) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
-	bson.EncodeOptionalPrefix(buf, bson.Object, key)
-	lenWriter := bson.NewLenWriter(buf)
-
-	bson.EncodeStringArray(buf, "Paths", zkPathV.Paths)
-
-	lenWriter.Close()
-}
-
-func (zkPathV *ZkPathV) UnmarshalBson(buf *bytes.Buffer, kind byte) {
-	bson.VerifyObject(kind)
-	bson.Next(buf, 4)
-
-	kind = bson.NextByte(buf)
-	for kind != bson.EOO {
-		key := bson.ReadCString(buf)
-		switch key {
-		case "Paths":
-			zkPathV.Paths = bson.DecodeStringArray(buf, kind)
-		default:
-			bson.Skip(buf, kind)
-		}
-		kind = bson.NextByte(buf)
-	}
-}
-
 func (zkStat *ZkStat) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
