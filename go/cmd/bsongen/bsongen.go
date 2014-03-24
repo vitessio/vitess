@@ -15,6 +15,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"text/template"
 	"unicode"
@@ -210,18 +211,32 @@ func buildImports(importSpecs []ast.Spec) (imports []string) {
 	return imports
 }
 
+var (
+	tagRE = regexp.MustCompile(`bson:("[a-zA-Z0-9_]*")`)
+)
+
 func buildFields(structType *ast.StructType, varName string) (fields []*FieldInfo, err error) {
 	for _, field := range structType.Fields.List {
 		if field.Names == nil {
 			return nil, fmt.Errorf("anonymous embeds not supported: %#v", field.Type)
 		}
 		for _, name := range field.Names {
-			// Skip private fields.
-			if unicode.IsLower(rune(name.Name[0])) {
-				continue
+			var tag string
+			if field.Tag != nil {
+				values := tagRE.FindStringSubmatch(field.Tag.Value)
+				if len(values) >= 2 {
+					tag = values[1]
+				}
+			}
+			if tag == "" {
+				if unicode.IsLower(rune(name.Name[0])) {
+					continue
+				}
+				// Use var name as tag.
+				tag = "\"" + name.Name + "\""
 			}
 			fullName := varName + "." + name.Name
-			fieldInfo, err := buildField(field.Type, "\""+name.Name+"\"", fullName)
+			fieldInfo, err := buildField(field.Type, tag, fullName)
 			if err != nil {
 				return nil, err
 			}
