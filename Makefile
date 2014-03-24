@@ -4,7 +4,7 @@
 
 MAKEFLAGS = -s
 
-all: build bson unit_test queryservice_test integration_test
+all: build unit_test queryservice_test integration_test
 
 build:
 	go install ./go/...
