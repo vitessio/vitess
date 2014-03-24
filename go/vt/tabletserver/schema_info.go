@@ -138,6 +138,7 @@ func (si *SchemaInfo) Open(connFactory CreateConnectionFunc, schemaOverrides []S
 	}
 
 	si.tables = make(map[string]*TableInfo, len(tables.Rows))
+	// TODO(sougou): Fix this in the parser.
 	si.tables["dual"] = &TableInfo{Table: schema.NewTable("dual")}
 	si.tables["DUAL"] = &TableInfo{Table: schema.NewTable("DUAL")}
 	for _, row := range tables.Rows {
