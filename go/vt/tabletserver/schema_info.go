@@ -139,6 +139,7 @@ func (si *SchemaInfo) Open(connFactory CreateConnectionFunc, schemaOverrides []S
 
 	si.tables = make(map[string]*TableInfo, len(tables.Rows))
 	si.tables["dual"] = NewTableInfo(conn, "dual", "VIEW", sqltypes.NULL, "", si.cachePool)
+	si.tables["DUAL"] = NewTableInfo(conn, "DUAL", "VIEW", sqltypes.NULL, "", si.cachePool)
 	for _, row := range tables.Rows {
 		tableName := row[0].String()
 		si.updateLastChange(row[2])
