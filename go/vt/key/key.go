@@ -11,9 +11,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-
-	"github.com/youtube/vitess/go/bson"
-	"github.com/youtube/vitess/go/bytes2"
 )
 
 //
@@ -43,24 +40,6 @@ func (kid KeyspaceId) MarshalJSON() ([]byte, error) {
 func (kid *KeyspaceId) UnmarshalJSON(data []byte) (err error) {
 	*kid, err = HexKeyspaceId(data[1 : len(data)-1]).Unhex()
 	return err
-}
-
-func (kid KeyspaceId) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
-	if key == "" {
-		lenWriter := bson.NewLenWriter(buf)
-		defer lenWriter.Close()
-		key = bson.MAGICTAG
-	}
-	bson.EncodeString(buf, key, string(kid))
-}
-
-func (kid *KeyspaceId) UnmarshalBson(buf *bytes.Buffer, kind byte) {
-	if kind == bson.EOO {
-		bson.Next(buf, 4)
-		kind = bson.NextByte(buf)
-		bson.ReadCString(buf)
-	}
-	*kid = KeyspaceId(bson.DecodeString(buf, kind))
 }
 
 //
@@ -118,24 +97,6 @@ var AllKeyspaceIdTypes = []KeyspaceIdType{
 	KIT_UNSET,
 	KIT_UINT64,
 	KIT_BYTES,
-}
-
-func (kit KeyspaceIdType) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
-	if key == "" {
-		lenWriter := bson.NewLenWriter(buf)
-		defer lenWriter.Close()
-		key = bson.MAGICTAG
-	}
-	bson.EncodeString(buf, key, string(kit))
-}
-
-func (kit *KeyspaceIdType) UnmarshalBson(buf *bytes.Buffer, kind byte) {
-	if kind == bson.EOO {
-		bson.Next(buf, 4)
-		kind = bson.NextByte(buf)
-		bson.ReadCString(buf)
-	}
-	*kit = KeyspaceIdType(bson.DecodeString(buf, kind))
 }
 
 // IsKeyspaceIdTypeInList returns true if the given type is in the list.

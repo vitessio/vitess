@@ -4,6 +4,9 @@
 
 package mytype
 
+type MyType string
+
+/*
 import (
 	"time"
 
@@ -33,3 +36,4 @@ type MyType struct {
 	local     int `bson:"Local"`
 	Local2    int `bson:"Local1"`
 }
+*/

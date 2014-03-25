@@ -5,10 +5,11 @@
 package proto
 
 import (
-	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
 
 	"bytes"
+
+	"github.com/youtube/vitess/go/bson"
 )
 
 // DO NOT EDIT.
