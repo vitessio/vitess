@@ -1,13 +1,10 @@
 # Copyright 2012, Google Inc. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
+import itertools
 
 from vtdb import cursor
 from vtdb import dbexceptions
-
-# TODO(shrutip): 
-# 1. Add binlog hint based on keyspace_id
-# 2. add support for execute_aggregate
 
 
 write_sql_pattern = re.compile('\s*(insert|update|delete)', re.IGNORECASE)
@@ -38,7 +35,6 @@ class VTGateCursor(object):
     self._writable = writable
 
   def close(self):
-    self.connection = None
     self.results = None
 
   def is_writable(self):
@@ -88,8 +84,8 @@ class VTGateCursor(object):
                                                                                              bind_variables,
                                                                                              self.keyspace,
                                                                                              self.tablet_type,
-                                                                                             self.keyspace_ids,
-                                                                                             self.keyranges,
+                                                                                             keyspace_ids=self.keyspace_ids,
+                                                                                             keyranges=self.keyranges,
                                                                                              **kargs)
     self.index = 0
     return self.rowcount
@@ -136,6 +132,28 @@ class VTGateCursor(object):
       raise dbexceptions.ProgrammingError('fetch called before execute')
     return self.fetchmany(len(self.results)-self.index)
 
+  def fetch_aggregate_function(self, func):
+    return func(row[0] for row in self.fetchall())
+
+  def fetch_aggregate(self, order_by_columns, limit):
+    sort_columns = []
+    desc_columns = []
+    for order_clause in order_by_columns:
+      if type(order_clause) in (tuple, list):
+        sort_columns.append(order_clause[0])
+        if ascii_lower(order_clause[1]) == 'desc':
+          desc_columns.append(order_clause[0])
+      else:
+        sort_columns.append(order_clause)
+    # sort the rows and then trim off the prepended sort columns
+
+    if sort_columns:
+      sorted_rows = list(sort_row_list_by_columns(self.fetchall(), sort_columns, desc_columns))[:limit]
+    else:
+      sorted_rows = itertools.islice(self.fetchall(), limit)
+    neutered_rows = [row[len(order_by_columns):] for row in sorted_rows]
+    return neutered_rows
+
   def callproc(self):
     raise dbexceptions.NotSupportedError
 
@@ -166,9 +184,9 @@ class VTGateCursor(object):
 
 
 class BatchVTGateCursor(VTGateCursor):
-  def __init__(self, connection, keyspace, tablet_type, keyspace_ids=None, keyranges=None, writeable=False):
+  def __init__(self, connection, keyspace, tablet_type, keyspace_ids=None, writeable=False):
     self.exec_list = []
-    VTGateCursor.__init__(self, connection, keyspace, tablet_type, keyspace_ids=keyspace_ids, keyranges=keyranges, writeable=writeable)
+    VTGateCursor.__init__(self, connection, keyspace, tablet_type, keyspace_ids=keyspace_ids, writeable=writeable)
 
   def execute(self, sql, bind_variables=None, key=None, keys=None):
     self.exec_list.append(cursor.BatchQueryItem(sql, bind_variables, key, keys))
@@ -186,11 +204,8 @@ class StreamVTGateCursor(VTGateCursor):
   index = None
   fetchmany_done = False
 
-  def __init__(self, connection, keyspace, tablet_type, keyspace_ids=None, keyranges=None, writeable=False):
-    VTGateCursor.__init__(self, connection, keyspace, tablet_type, keyspace_ids=keyspace_ids, keyranges=keyranges, writeable=writeable)
-
-  def close(self):
-    self.connection = None
+  def __init__(self, connection, keyspace, tablet_type, keyspace_ids=None, keyranges=None):
+    VTGateCursor.__init__(self, connection, keyspace, tablet_type, keyspace_ids=keyspace_ids, keyranges=keyranges)
 
   # pass kargs here in case higher level APIs need to push more data through
   # for instance, a key value for shard mapping
@@ -203,7 +218,8 @@ class StreamVTGateCursor(VTGateCursor):
                                                                 bind_variables,
                                                                 self.keyspace,
                                                                 self.tablet_type,
-                                                                self.keyranges,
+                                                                keyspace_ids=self.keyspace_ids,
+                                                                keyranges=self.keyranges,
                                                                 **kargs)
     self.index = 0
     return 0

@@ -281,15 +281,19 @@ class VtgateConnection(object):
   # we return the fields for the response, and the column conversions
   # the conversions will need to be passed back to _stream_next
   # (that way we avoid using a member variable here for such a corner case)
-  def _stream_execute(self, sql, bind_variables, keyspace, tablet_type, keyranges):
+  def _stream_execute(self, sql, bind_variables, keyspace, tablet_type, keyspace_ids=None, keyranges=None):
     new_binds = field_types.convert_bind_vars(bind_variables)
-    req = {
-        'Sql': sql,
-        'BindVariables': new_binds,
-        'Keyspace': keyspace,
-        'TabletType': tablet_type,
-        'KeyRanges': keyranges,
-    }
+    exec_method = None
+    req = None
+    if keyspace_ids is not None:
+      req = self._create_req_with_keyspace_ids(sql, new_binds, keyspace, tablet_type, keyspace_ids)
+      exec_method = 'VTGate.StreamExecuteKeyspaceIds'
+    elif keyrange is not None:
+      req = self._create_req_with_keyranges(sql, new_binds, keyspace, tablet_type, keyranges)
+      exec_method = 'VTGate.StreamExecuteKeyRanges'
+    else:
+      raise dbexceptions.ProgrammingError('_execute called without specifying keyspace_ids or keyranges')
+
     self._add_session(req)
 
     self._stream_fields = []
@@ -297,7 +301,7 @@ class VtgateConnection(object):
     self._stream_result = None
     self._stream_result_index = 0
     try:
-      self.client.stream_call('VTGate.StreamExecuteKeyRanges', req)
+      self.client.stream_call(exec_method, req)
       first_response = self.client.stream_next()
       reply = first_response.reply
 
