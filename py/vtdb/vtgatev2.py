@@ -8,7 +8,6 @@ import re
 
 from net import bsonrpc
 from net import gorpc
-from vtdb import cursor
 from vtdb import dbexceptions
 from vtdb import field_types
 
@@ -76,10 +75,8 @@ def _create_req_with_keyranges(sql, new_binds, keyspace, tablet_type, keyranges)
 # A simple, direct connection to the vttablet query server.
 # This is shard-unaware and only handles the most basic communication.
 # If something goes wrong, this object should be thrown away and a new one instantiated.
-class VtgateConnection(object):
+class VTGateConnection(object):
   session = None
-  tablet_type = None
-  cursorclass = cursor.TabletCursor
   _stream_fields = None
   _stream_conversions = None
   _stream_result = None
@@ -91,7 +88,7 @@ class VtgateConnection(object):
     self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password, encrypted=encrypted, keyfile=keyfile, certfile=certfile)
 
   def __str__(self):
-    return '<VtgateConnection %s >' % self.addr
+    return '<VTGateConnection %s >' % self.addr
 
   def dial(self):
     try:
@@ -131,15 +128,6 @@ class VtgateConnection(object):
       self.client.call('VTGate.Rollback', session)
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
-
-  def cursor(self, cursorclass=None, **kargs):
-    if cursorclass is not None:
-      # cursorclass can only be overwritten by a compatible cursor
-      if cursorclass != cursor.StreamCursor:
-        raise DatabaseException('invalid cursor type for VtgateConnection',
-                                cursorclass)
-      return cursorclass(self, **kargs)
-    return self.cursorclass(self, **kargs)
 
   def _add_session(self, req):
     if self.session:
@@ -402,7 +390,7 @@ def connect(vtgate_addrs, timeout, encrypted=False, user=None, password=None):
     try:
       db_params = params.copy()
       host_addr = db_params['addr']
-      conn = VtgateConnection(**db_params)
+      conn = VTGateConnection(**db_params)
       conn.dial()
       return conn
     except Exception as e:

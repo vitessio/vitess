@@ -31,6 +31,11 @@ class VTGateCursor(object):
   connection = None
   description = None
   index = None
+  keyspace = None
+  tablet_type = None
+  keyspace_ids = None
+  keyranges = None
+  writeable = None
 
   def __init__(self, connection, keyspace, tablet_type, keyspace_ids=None, keyranges=None, writeable=False):
     self.connection = connection
@@ -75,7 +80,7 @@ class VTGateCursor(object):
       return
 
     write_query = bool(write_sql_pattern.match(sql))
-    # This check may also be done at high-layers but adding it here for completion. 
+    # NOTE: This check may also be done at high-layers but adding it here for completion. 
     if write_query:
       if not self.is_writable():
         raise dbexceptions.DatabaseError('DML on a non-writable cursor', sql)
@@ -88,7 +93,7 @@ class VTGateCursor(object):
         if keyrange is None or keyrange != keyrange_constants.NON_PARTIAL_KEYRANGE:
           raise dbexceptions.ProgrammingError('Keyrange not correct for non-sharded keyspace')
 
-      # FIXME(shrutip): this could potentially be done on vtgate server.
+      # FIXME(shrutip): migrate this to vtgate server. It is better done there.
       sql += self._binlog_hint(keyspace_ids[0])
 
     self.results, self.rowcount, self.lastrowid, self.description = self.connection._execute(sql,
@@ -96,8 +101,7 @@ class VTGateCursor(object):
                                                                                              self.keyspace,
                                                                                              self.tablet_type,
                                                                                              keyspace_ids=self.keyspace_ids,
-                                                                                             keyranges=self.keyranges,
-                                                                                             **kargs)
+                                                                                             keyranges=self.keyranges)
     self.index = 0
     return self.rowcount
 
@@ -106,6 +110,11 @@ class VTGateCursor(object):
     self.results = None
     self.description = None
     self.lastrowid = None
+
+    # This is by definition a scatter query, so raise exception.
+    write_query = bool(write_sql_pattern.match(sql))
+    if write_query:
+      raise dbexceptions.DatabaseError('execute_entity_ids is not allowed for write queries')
 
     self.results, self.rowcount, self.lastrowid, self.description = self.connection._execute_entity_ids(sql,
                                                                                              bind_variables,
@@ -230,8 +239,7 @@ class StreamVTGateCursor(VTGateCursor):
                                                                 self.keyspace,
                                                                 self.tablet_type,
                                                                 keyspace_ids=self.keyspace_ids,
-                                                                keyranges=self.keyranges,
-                                                                **kargs)
+                                                                keyranges=self.keyranges)
     self.index = 0
     return 0
 
