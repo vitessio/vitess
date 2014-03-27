@@ -47,7 +47,7 @@ func TestReporters(t *testing.T) {
 	}
 }
 
-func TestRecord(t *testing.T) {
+func TestRecordDeduplication(t *testing.T) {
 	now := time.Now()
 	later := now.Add(5 * time.Minute)
 	cases := []struct {
@@ -87,4 +87,34 @@ func TestRecord(t *testing.T) {
 		}
 	}
 
+}
+
+func TestRecordClass(t *testing.T) {
+	cases := []struct {
+		r     Record
+		state string
+	}{
+		{
+			r:     Record{},
+			state: "healthy",
+		},
+		{
+			r:     Record{Error: errors.New("foo")},
+			state: "unhealthy",
+		},
+		{
+			r:     Record{Result: map[string]string{"1": "1"}},
+			state: "unhappy",
+		},
+		{
+			r:     Record{Result: map[string]string{}},
+			state: "healthy",
+		},
+	}
+
+	for _, c := range cases {
+		if got := c.r.Class(); got != c.state {
+			t.Errorf("class of %v: got %v, want %v", c.r, got, c.state)
+		}
+	}
 }

@@ -82,7 +82,7 @@ func (r Record) Class() string {
 	switch {
 	case r.Error != nil:
 		return Unhealthy
-	case len(r.Result) == 0:
+	case len(r.Result) > 0:
 		return Unhappy
 	default:
 		return Healthy
