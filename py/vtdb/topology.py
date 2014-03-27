@@ -180,3 +180,9 @@ def get_host_port_by_name(topo_client, db_key, encrypted=False):
     return encrypted_host_port_list
   random.shuffle(host_port_list)
   return host_port_list
+
+
+def is_sharded_keyspace(keyspace_name, db_type):
+  ks = get_keyspace(keyspace_name)
+  shard_count = ks.get_shard_count(db_type)
+  return shard_count > 1

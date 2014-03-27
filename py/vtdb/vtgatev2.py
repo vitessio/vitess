@@ -12,10 +12,6 @@ from vtdb import cursor
 from vtdb import dbexceptions
 from vtdb import field_types
 
-# This is the shard name for when the keyrange covers the entire space
-# for unsharded database.
-SHARD_ZERO = "0"
-
 
 _errno_pattern = re.compile('\(errno (\d+)\)')
 # Map specific errors to specific classes.
@@ -23,7 +19,9 @@ _errno_map = {
     1062: dbexceptions.IntegrityError,
 }
 
+
 __error_counter_callback = None
+
 
 def register_error_counter_callback(func):
   global __error_counter_callback
@@ -164,7 +162,7 @@ class VtgateConnection(object):
     else:
       raise dbexceptions.ProgrammingError('_execute called without specifying keyspace_ids or keyranges')
 
- 
+
     self._add_session(req)
 
     fields = []

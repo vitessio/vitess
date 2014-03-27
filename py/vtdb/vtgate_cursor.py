@@ -1,17 +1,23 @@
 # Copyright 2012, Google Inc. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
+
 import itertools
 
 from vtdb import cursor
 from vtdb import dbexceptions
+from vtdb import keyrange_constants
+from vtdb import topology
 
 
 write_sql_pattern = re.compile('\s*(insert|update|delete)', re.IGNORECASE)
+
+
 class __EmptyBindVariables(frozenset):
   pass
-EmptyBindVariables = __EmptyBindVariables()
 
+
+EmptyBindVariables = __EmptyBindVariables()
 MAX_QUERY_SIZE = 32 * 1024
 EXCESSIVE_BIND_VAR_COUNT = 1000
 MAX_BIND_VAR_COUNT = 4000
@@ -73,12 +79,17 @@ class VTGateCursor(object):
     if write_query:
       if not self.is_writable():
         raise dbexceptions.DatabaseError('DML on a non-writable cursor', sql)
-      if keyspace_ids is None or len(keyspace_ids) != 1:
-        raise dbexceptions.ProgrammingError('DML on zero or multiple keyspace ids is not allowed')
+
+      # FIXME(shrutip): these checks maybe better on vtgate server.
+      if topology.is_sharded_keyspace(self.keyspace, self.tablet_type):
+        if keyspace_ids is None or len(keyspace_ids) != 1:
+          raise dbexceptions.ProgrammingError('DML on zero or multiple keyspace ids is not allowed')
       else:
-        # FIXME(shrutip): this could potentially be moved to vtgate server.
-        sql += self._binlog_hint(keyspace_ids[0])
-    
+        if keyrange is None or keyrange != keyrange_constants.NON_PARTIAL_KEYRANGE:
+          raise dbexceptions.ProgrammingError('Keyrange not correct for non-sharded keyspace')
+
+      # FIXME(shrutip): this could potentially be done on vtgate server.
+      sql += self._binlog_hint(keyspace_ids[0])
 
     self.results, self.rowcount, self.lastrowid, self.description = self.connection._execute(sql,
                                                                                              bind_variables,
