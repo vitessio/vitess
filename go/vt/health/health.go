@@ -2,6 +2,7 @@ package health
 
 import (
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
@@ -25,6 +26,13 @@ const (
 	ReplicationLagHigh = "high"
 
 	historyLength = 16
+)
+
+const (
+	Healthy   = "healthy"
+	Unhappy   = "unhappy"
+	Unhealthy = "unhealthy"
+	Unknown   = "unknown"
 )
 
 func init() {
@@ -68,6 +76,25 @@ type Record struct {
 	Error  error
 	Result map[string]string
 	Time   time.Time
+}
+
+func (r Record) Class() string {
+	switch {
+	case r.Error != nil:
+		return Unhealthy
+	case r.Result != nil:
+		return Unhappy
+	default:
+		return Healthy
+	}
+}
+
+func (r Record) IsDuplicate(other interface{}) bool {
+	rother, ok := other.(Record)
+	if !ok {
+		return false
+	}
+	return reflect.DeepEqual(r.Error, rother.Error) && reflect.DeepEqual(r.Result, rother.Result)
 }
 
 // Run runs aggregates health statuses from all the reporters. If any
