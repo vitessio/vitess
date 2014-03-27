@@ -4,11 +4,21 @@ import (
 	"sync"
 )
 
+// Deduplicable is an interface that records should implement if the
+// history should perform their deduplication. An example would be
+// deduplicating records whose only difference is their timestamp.
+type Deduplicable interface {
+	// IsDuplicate returns true if other is considered to be a
+	// duplicate of the calling instance.
+	IsDuplicate(interface{}) bool
+}
+
 // History is a data structure that allows you to keep some number of
 // records.
 type History struct {
 	mu      sync.Mutex
 	records []interface{}
+	last    interface{}
 	next    int
 	length  int
 }
@@ -18,12 +28,21 @@ func New(length int) *History {
 	return &History{records: make([]interface{}, length)}
 }
 
-// Add a new record in a treadsafe manner.
+// Add a new record in a treadsafe manner. If record implements
+// Equivalent, and IsEquivalent returns true when called on the last
+// previously added record, it will not be added.
 func (history *History) Add(record interface{}) {
 	history.mu.Lock()
 	defer history.mu.Unlock()
 
+	if equiv, ok := record.(Deduplicable); ok && history.length > 0 {
+		if equiv.IsDuplicate(history.last) {
+			return
+		}
+	}
+
 	history.records[history.next] = record
+	history.last = record
 
 	if history.length < len(history.records) {
 		history.length++

@@ -37,3 +37,18 @@ func TestHistory(t *testing.T) {
 		}
 	}
 }
+
+type duplic int
+
+func (d duplic) IsDuplicate(other interface{}) bool {
+	return d == other
+}
+
+func TestIsEquivalent(t *testing.T) {
+	q := New(4)
+	q.Add(duplic(0))
+	q.Add(duplic(0))
+	if got, want := len(q.Records()), 1; got != want {
+		t.Errorf("len(q.Records())=%v, want %v", got, want)
+	}
+}
