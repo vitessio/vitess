@@ -110,8 +110,7 @@ func (ag *Aggregator) Run(typ topo.TabletType) (map[string]string, error) {
 		Time:   time.Now(),
 		Result: make(map[string]string),
 	}
-
-	defer ag.History.Add(record)
+	defer func() { ag.History.Add(record) }()
 
 	results := make(chan map[string]string, len(ag.reporters))
 	ag.mu.Lock()
