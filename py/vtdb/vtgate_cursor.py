@@ -3,6 +3,7 @@
 # be found in the LICENSE file.
 
 import itertools
+import re
 
 from vtdb import cursor
 from vtdb import dbexceptions
@@ -80,7 +81,7 @@ class VTGateCursor(object):
       return
 
     write_query = bool(write_sql_pattern.match(sql))
-    # NOTE: This check may also be done at high-layers but adding it here for completion. 
+    # NOTE: This check may also be done at high-layers but adding it here for completion.
     if write_query:
       if not self.is_writable():
         raise dbexceptions.DatabaseError('DML on a non-writable cursor', sql)
@@ -314,7 +315,7 @@ def _binlog_hint(keyspace_id):
   return ' /* EMD %s */' % ' '.join(hint_data)
 
 
-def _validate_query_and_bind_vars(query, bind_vars=None, ignore_missing_bind=False, db_validate_bind_vars=False):
+def validate_query_and_bind_vars(query, bind_vars=None, ignore_missing_bind=False, db_validate_bind_vars=False):
   if len(query) > MAX_QUERY_SIZE:
     raise DatabaseException("query text too large", len(query), query[:4096])
   if bind_vars:
