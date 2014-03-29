@@ -761,7 +761,7 @@ func (node *Node) getInsertPKColumns(tableInfo *schema.Table) (pkColumnNumbers [
 		pkColumnNumbers[i] = -1
 	}
 	for i, column := range node.Sub {
-		index := pkIndex.FindColumn(string(column.Value))
+		index := pkIndex.FindColumn(string(column.execAnalyzeSelectExpression()))
 		if index == -1 {
 			continue
 		}

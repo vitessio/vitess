@@ -247,6 +247,18 @@ cases = [
          'commit']),
 
     MultiCase(
+        'insert with qualified column name',
+        ['begin',
+         Case(sql="insert /* qualified */ into vtocc_a(vtocc_a.eid, id, name, foo) values (4, 1, 'aaaa', 'cccc')",
+              rewritten="insert /* qualified */ into vtocc_a(vtocc_a.eid, id, name, foo) values (4, 1, 'aaaa', 'cccc') /* _stream vtocc_a (eid id ) (4 1 )"),
+         'commit',
+         Case(sql='select * from vtocc_a where eid = 4 and id = 1',
+              result=[(4L, 1L, 'aaaa', 'cccc')]),
+         'begin',
+         'delete from vtocc_a where eid>1',
+         'commit']),
+
+    MultiCase(
         'insert auto_increment',
         ['alter table vtocc_e auto_increment = 1',
          'begin',

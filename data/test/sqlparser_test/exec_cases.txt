@@ -1109,6 +1109,29 @@ insert into b.a (eid, id) values (1, :a)
   "SetValue": null
 }
 
+# insert with qualified column names
+insert into a (a.eid, id) values (1, 2)
+{
+  "PlanId": "INSERT_PK",
+  "Reason": "DEFAULT",
+  "TableName": "a",
+  "DisplayQuery": "insert into a(a.eid, id) values (?, ?)",
+  "FieldQuery": null,
+  "FullQuery": "insert into a(a.eid, id) values (1, 2)",
+  "OuterQuery": "insert into a(a.eid, id) values (1, 2)",
+  "Subquery": null,
+  "IndexUsed": "",
+  "ColumnNumbers": null,
+  "PKValues": [
+    1,
+    2
+  ],
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
 # insert with bind value
 insert into a (eid, id) values (1, :a)
 {

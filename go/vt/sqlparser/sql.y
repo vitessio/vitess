@@ -121,7 +121,7 @@ const (
 
 // Fake Tokens
 %token <node> NODE_LIST UPLUS UMINUS CASE_WHEN WHEN_LIST SELECT_STAR NO_DISTINCT FUNCTION NO_LOCK FOR_UPDATE LOCK_IN_SHARE_MODE
-%token <node> NOT_IN NOT_LIKE NOT_BETWEEN IS_NULL IS_NOT_NULL UNION_ALL COMMENT_LIST COLUMN_LIST TABLE_EXPR
+%token <node> NOT_IN NOT_LIKE NOT_BETWEEN IS_NULL IS_NOT_NULL UNION_ALL COMMENT_LIST COLUMN_LIST INDEX_LIST TABLE_EXPR
 
 %type <node> command
 %type <node> select_statement insert_statement update_statement delete_statement set_statement
@@ -134,7 +134,7 @@ const (
 %type <node> values parenthesised_lists parenthesised_list value_expression_list value_expression keyword_as_func
 %type <node> unary_operator case_expression when_expression_list when_expression column_name value
 %type <node> group_by_opt having_opt order_by_opt order_list order asc_desc_opt limit_opt lock_opt on_dup_opt
-%type <node> column_list_opt column_list update_list update_expression
+%type <node> column_list_opt column_list index_list update_list update_expression
 %type <node> exists_opt not_exists_opt ignore_opt non_rename_operation to_opt constraint_opt using_opt
 %type <node> sql_id
 %type <node> force_eof
@@ -432,11 +432,11 @@ index_hint_list:
   {
 		$$ = NewSimpleParseNode(USE, "use")
   }
-| USE INDEX '(' column_list ')'
+| USE INDEX '(' index_list ')'
   {
     $$.Push($4)
   }
-| FORCE INDEX '(' column_list ')'
+| FORCE INDEX '(' index_list ')'
   {
     $$.Push($4)
   }
@@ -802,12 +802,23 @@ column_list_opt:
 	}
 
 column_list:
-	sql_id
+	column_name
 	{
 		$$ = NewSimpleParseNode(COLUMN_LIST, "")
 		$$.Push($1)
 	}
-| column_list ',' sql_id
+| column_list ',' column_name
+	{
+		$$ = $1.Push($3)
+	}
+
+index_list:
+	sql_id
+	{
+		$$ = NewSimpleParseNode(INDEX_LIST, "")
+		$$.Push($1)
+	}
+| index_list ',' sql_id
 	{
 		$$ = $1.Push($3)
 	}

@@ -181,7 +181,7 @@ func FormatNode(buf *TrackedBuffer, node *Node) {
 				buf.Fprintf(", %v", node.At(1))
 			}
 		}
-	case COLUMN_LIST:
+	case COLUMN_LIST, INDEX_LIST:
 		if node.Len() > 0 {
 			buf.Fprintf("(%v", node.At(0))
 			for i := 1; i < node.Len(); i++ {
