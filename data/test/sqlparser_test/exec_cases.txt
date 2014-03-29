@@ -358,11 +358,31 @@ select (eid) from a
 select eid from a for update
 {
   "PlanId": "PASS_SELECT",
-  "Reason": "FOR_UPDATE",
+  "Reason": "LOCK",
   "TableName": "a",
   "DisplayQuery": "select eid from a for update",
   "FieldQuery": "select eid from a where 1 != 1",
   "FullQuery": "select eid from a limit :_vtMaxResultSize for update",
+  "OuterQuery": null,
+  "Subquery": null,
+  "IndexUsed": "",
+  "ColumnNumbers": null,
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
+# lock in share mode
+select eid from a lock in share mode
+{
+  "PlanId": "PASS_SELECT",
+  "Reason": "LOCK",
+  "TableName": "a",
+  "DisplayQuery": "select eid from a lock in share mode",
+  "FieldQuery": "select eid from a where 1 != 1",
+  "FullQuery": "select eid from a limit :_vtMaxResultSize lock in share mode",
   "OuterQuery": null,
   "Subquery": null,
   "IndexUsed": "",

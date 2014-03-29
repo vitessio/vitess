@@ -86,6 +86,9 @@ var keywords = map[string]int{
 	"key":       KEY,
 	"default":   DEFAULT,
 	"set":       SET,
+	"lock":      LOCK,
+	"share":     SHARE,
+	"mode":      MODE,
 
 	"create": CREATE,
 	"alter":  ALTER,

@@ -77,7 +77,7 @@ const (
 	REASON_TABLE
 	REASON_NOCACHE
 	REASON_SELECT_LIST
-	REASON_FOR_UPDATE
+	REASON_LOCK
 	REASON_WHERE
 	REASON_ORDER
 	REASON_PKINDEX
@@ -96,7 +96,7 @@ var reasonName = []string{
 	"TABLE",
 	"NOCACHE",
 	"SELECT_LIST",
-	"FOR_UPDATE",
+	"LOCK",
 	"WHERE",
 	"ORDER",
 	"PKINDEX",
@@ -206,8 +206,8 @@ func StreamExecParse(sql string, sensitiveMode bool) (plan *StreamExecPlan, err 
 
 	switch tree.Type {
 	case SELECT:
-		if tree.At(SELECT_FOR_UPDATE_OFFSET).Type == FOR_UPDATE {
-			return nil, NewParserError("Select for Update Disallowed with streaming")
+		if tree.At(SELECT_LOCK_OFFSET).Type != NO_LOCK {
+			return nil, NewParserError("select with lock disallowed with streaming")
 		}
 	case UNION, UNION_ALL, MINUS, EXCEPT, INTERSECT:
 	default:
@@ -294,9 +294,9 @@ func (node *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 	}
 	tableInfo := plan.setTableInfo(tableName, getTable)
 
-	// Don't improve the plan if the select is for update
-	if node.At(SELECT_FOR_UPDATE_OFFSET).Type == FOR_UPDATE {
-		plan.Reason = REASON_FOR_UPDATE
+	// Don't improve the plan if the select is locking the row
+	if node.At(SELECT_LOCK_OFFSET).Type != NO_LOCK {
+		plan.Reason = REASON_LOCK
 		return plan
 	}
 

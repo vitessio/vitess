@@ -131,6 +131,15 @@ cases = [
                       'select /* for update */ eid from vtocc_a where eid = 1 and id = 1 limit 10001 for update']),
                'commit']),
 
+    MultiCase('lock in share mode',
+              ['begin',
+               Case(sql='select /* for update */ eid from vtocc_a where eid = 1 and id = 1 lock in share mode',
+                    result=[(1L,)],
+                    rewritten=[
+                      'select eid from vtocc_a where 1 != 1',
+                      'select /* for update */ eid from vtocc_a where eid = 1 and id = 1 limit 10001 lock in share mode']),
+               'commit']),
+
     Case(doc='complex where',
          sql='select /* complex where */ id from vtocc_a where id+1 = 2',
          result=[(1L,)],

@@ -157,20 +157,21 @@ class TestNocache(framework.TestCase):
       self.env.conn.rollback()
       self.env.execute("set vt_strict_mode=1")
 
-  def test_for_update(self):
-    try:
-      self.env.execute("select * from vtocc_test where intval=2 for update")
-    except dbexceptions.DatabaseError as e:
-      self.assertContains(str(e), "error: Disallowed")
-    else:
-      self.fail("Did not receive exception")
+  def test_select_lock(self):
+    for lock_mode in ['for update', 'lock in share mode']:
+      try:
+        self.env.execute("select * from vtocc_test where intval=2 %s" % lock_mode)
+      except dbexceptions.DatabaseError as e:
+        self.assertContains(str(e), "error: Disallowed")
+      else:
+        self.fail("Did not receive exception")
 
-    # If these throw no exceptions, we're good
-    self.env.conn.begin()
-    self.env.execute("select * from vtocc_test where intval=2 for update")
-    self.env.conn.commit()
-    # Make sure the row is not locked for read
-    self.env.execute("select * from vtocc_test where intval=2")
+      # If these throw no exceptions, we're good
+      self.env.conn.begin()
+      self.env.execute("select * from vtocc_test where intval=2 %s" % lock_mode)
+      self.env.conn.commit()
+      # Make sure the row is not locked for read
+      self.env.execute("select * from vtocc_test where intval=2")
 
   def test_pool_size(self):
     vstart = self.env.debug_vars()
