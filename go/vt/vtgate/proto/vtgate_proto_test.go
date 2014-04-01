@@ -11,6 +11,7 @@ import (
 	"github.com/youtube/vitess/go/bson"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	kproto "github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -403,7 +404,7 @@ type reflectKeyspaceIdQuery struct {
 	Sql           string
 	BindVariables map[string]interface{}
 	Keyspace      string
-	KeyspaceIds   []string
+	KeyspaceIds   kproto.KeyspaceIdArray
 	TabletType    topo.TabletType
 	Session       *Session
 }
@@ -413,7 +414,7 @@ type extraKeyspaceIdQuery struct {
 	Sql           string
 	BindVariables map[string]interface{}
 	Keyspace      string
-	KeyspaceIds   []string
+	KeyspaceIds   kproto.KeyspaceIdArray
 	TabletType    topo.TabletType
 	Session       *Session
 }
@@ -423,7 +424,7 @@ func TestKeyspaceIdQuery(t *testing.T) {
 		Sql:           "query",
 		BindVariables: map[string]interface{}{"val": int64(1)},
 		Keyspace:      "keyspace",
-		KeyspaceIds:   []string{"10", "18"},
+		KeyspaceIds:   []kproto.KeyspaceId{kproto.KeyspaceId("10"), kproto.KeyspaceId("18")},
 		TabletType:    "replica",
 		Session:       &commonSession,
 	})
@@ -437,7 +438,7 @@ func TestKeyspaceIdQuery(t *testing.T) {
 		Sql:           "query",
 		BindVariables: map[string]interface{}{"val": int64(1)},
 		Keyspace:      "keyspace",
-		KeyspaceIds:   []string{"10", "18"},
+		KeyspaceIds:   []kproto.KeyspaceId{kproto.KeyspaceId("10"), kproto.KeyspaceId("18")},
 		TabletType:    "replica",
 		Session:       &commonSession,
 	}
@@ -473,7 +474,7 @@ type reflectKeyRangeQuery struct {
 	Sql           string
 	BindVariables map[string]interface{}
 	Keyspace      string
-	KeyRange      string
+	KeyRanges     kproto.KeyRangeArray
 	TabletType    topo.TabletType
 	Session       *Session
 }
@@ -483,7 +484,7 @@ type extraKeyRangeQuery struct {
 	Sql           string
 	BindVariables map[string]interface{}
 	Keyspace      string
-	KeyRange      string
+	KeyRanges     kproto.KeyRangeArray
 	TabletType    topo.TabletType
 	Session       *Session
 }
@@ -493,7 +494,7 @@ func TestKeyRangeQuery(t *testing.T) {
 		Sql:           "query",
 		BindVariables: map[string]interface{}{"val": int64(1)},
 		Keyspace:      "keyspace",
-		KeyRange:      "10-18",
+		KeyRanges:     []kproto.KeyRange{kproto.KeyRange{Start: "10", End: "18"}},
 		TabletType:    "replica",
 		Session:       &commonSession,
 	})
@@ -507,7 +508,7 @@ func TestKeyRangeQuery(t *testing.T) {
 		Sql:           "query",
 		BindVariables: map[string]interface{}{"val": int64(1)},
 		Keyspace:      "keyspace",
-		KeyRange:      "10-18",
+		KeyRanges:     []kproto.KeyRange{kproto.KeyRange{Start: "10", End: "18"}},
 		TabletType:    "replica",
 		Session:       &commonSession,
 	}
@@ -542,7 +543,7 @@ func TestKeyRangeQuery(t *testing.T) {
 type reflectKeyspaceIdBatchQuery struct {
 	Queries     []reflectBoundQuery
 	Keyspace    string
-	KeyspaceIds []string
+	KeyspaceIds kproto.KeyspaceIdArray
 	TabletType  topo.TabletType
 	Session     *Session
 }
@@ -551,7 +552,7 @@ type extraKeyspaceIdBatchQuery struct {
 	Extra       int
 	Queries     []reflectBoundQuery
 	Keyspace    string
-	KeyspaceIds []string
+	KeyspaceIds kproto.KeyspaceIdArray
 	TabletType  topo.TabletType
 	Session     *Session
 }
@@ -563,7 +564,7 @@ func TestKeyspaceIdBatchQuery(t *testing.T) {
 			BindVariables: map[string]interface{}{"val": int64(1)},
 		}},
 		Keyspace:    "keyspace",
-		KeyspaceIds: []string{"10", "20"},
+		KeyspaceIds: kproto.KeyspaceIdArray{kproto.KeyspaceId("10"), kproto.KeyspaceId("20")},
 		Session: &Session{InTransaction: true,
 			ShardSessions: []*ShardSession{{
 				Keyspace:      "a",
@@ -589,7 +590,7 @@ func TestKeyspaceIdBatchQuery(t *testing.T) {
 			BindVariables: map[string]interface{}{"val": int64(1)},
 		}},
 		Keyspace:    "keyspace",
-		KeyspaceIds: []string{"10", "20"},
+		KeyspaceIds: kproto.KeyspaceIdArray{kproto.KeyspaceId("10"), kproto.KeyspaceId("20")},
 		Session:     &commonSession,
 	}
 	encoded, err := bson.Marshal(&custom)

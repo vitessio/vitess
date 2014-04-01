@@ -12,8 +12,6 @@ import (
 
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
@@ -63,7 +61,12 @@ func (vtg *VTGate) ExecuteShard(context interface{}, query *proto.QueryShard, re
 }
 
 func (vtg *VTGate) ExecuteKeyspaceIds(context interface{}, query *proto.KeyspaceIdQuery, reply *proto.QueryResult) error {
-	shards, err := vtg.mapKeyspaceIdsToShards(query.Keyspace, query.TabletType, query.KeyspaceIds)
+	shards, err := mapKeyspaceIdsToShards(
+		vtg.scatterConn.toposerv,
+		vtg.scatterConn.cell,
+		query.Keyspace,
+		query.TabletType,
+		query.KeyspaceIds)
 	if err != nil {
 		return err
 	}
@@ -85,8 +88,13 @@ func (vtg *VTGate) ExecuteKeyspaceIds(context interface{}, query *proto.Keyspace
 	return nil
 }
 
-func (vtg *VTGate) ExecuteKeyRange(context interface{}, query *proto.KeyRangeQuery, reply *proto.QueryResult) error {
-	shards, err := vtg.mapKrToShards(query.Keyspace, query.TabletType, query.KeyRange)
+func (vtg *VTGate) ExecuteKeyRanges(context interface{}, query *proto.KeyRangeQuery, reply *proto.QueryResult) error {
+	shards, err := mapKeyRangesToShards(
+		vtg.scatterConn.toposerv,
+		vtg.scatterConn.cell,
+		query.Keyspace,
+		query.TabletType,
+		query.KeyRanges)
 	if err != nil {
 		return err
 	}
@@ -128,7 +136,12 @@ func (vtg *VTGate) ExecuteBatchShard(context interface{}, batchQuery *proto.Batc
 }
 
 func (vtg *VTGate) ExecuteBatchKeyspaceIds(context interface{}, query *proto.KeyspaceIdBatchQuery, reply *proto.QueryResultList) error {
-	shards, err := vtg.mapKeyspaceIdsToShards(query.Keyspace, query.TabletType, query.KeyspaceIds)
+	shards, err := mapKeyspaceIdsToShards(
+		vtg.scatterConn.toposerv,
+		vtg.scatterConn.cell,
+		query.Keyspace,
+		query.TabletType,
+		query.KeyspaceIds)
 	if err != nil {
 		return err
 	}
@@ -149,64 +162,42 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(context interface{}, query *proto.Key
 	return nil
 }
 
-func (vtg *VTGate) mapKeyspaceIdsToShards(keyspace string, tabletType topo.TabletType, keyspaceIds []string) ([]string, error) {
-	var shards = make(map[string]int)
-	for _, ksId := range keyspaceIds {
-		keyspaceId, err := key.HexKeyspaceId(ksId).Unhex()
-		if err != nil {
-			return nil, err
-		}
-		shard, err := getShardForKeyspaceId(
-			vtg.scatterConn.toposerv,
-			vtg.scatterConn.cell,
-			keyspace,
-			keyspaceId,
-			tabletType)
-		if err != nil {
-			return nil, err
-		}
-		shards[shard] = 0
+func (vtg *VTGate) StreamExecuteKeyspaceIds(context interface{}, query *proto.KeyspaceIdQuery, sendReply func(*proto.QueryResult) error) error {
+	shards, err := mapKeyspaceIdsToShards(
+		vtg.scatterConn.toposerv,
+		vtg.scatterConn.cell,
+		query.Keyspace,
+		query.TabletType,
+		query.KeyspaceIds)
+	if err != nil {
+		return err
 	}
-	var res = make([]string, 0, 1)
-	for s, _ := range shards {
-		res = append(res, s)
+	if len(shards) != 1 {
+		return fmt.Errorf("KeyspaceIds cannot map to more than one shard")
 	}
-	return res, nil
-}
-
-// This function implements the restriction of handling one keyrange
-// and one shard since streaming doesn't support merge sorting the results.
-// The input/output api is generic though.
-func (vtg *VTGate) mapKrToShards(keyspace string, tabletType topo.TabletType, keyRange string) ([]string, error) {
-	var krArray []key.KeyRange
-	var err error
-	if keyRange == "" {
-		krArray = []key.KeyRange{key.KeyRange{Start: "", End: ""}}
-	} else {
-		krArray, err = key.ParseShardingSpec(keyRange)
-		if err != nil {
-			return nil, err
-		}
+	err = vtg.scatterConn.StreamExecute(
+		context,
+		query.Sql,
+		query.BindVariables,
+		query.Keyspace,
+		shards,
+		query.TabletType,
+		NewSafeSession(query.Session),
+		func(mreply *mproto.QueryResult) error {
+			reply := new(proto.QueryResult)
+			proto.PopulateQueryResult(mreply, reply)
+			// Note we don't populate reply.Session here,
+			// as it may change incrementaly as responses are sent.
+			return sendReply(reply)
+		})
+	if err != nil {
+		log.Errorf("StreamExecuteKeyspaceIds: %v, query: %+v", err, query)
 	}
-	uniqueShards := make(map[string]int)
-	for _, kr := range krArray {
-		shards, err := resolveKeyRangeToShards(vtg.scatterConn.toposerv,
-			vtg.scatterConn.cell,
-			keyspace,
-			tabletType,
-			kr)
-		if err != nil {
-			return nil, err
-		}
-		for _, shard := range shards {
-			uniqueShards[shard] = 0
-		}
+	// now we can send the final Sessoin info.
+	if query.Session != nil {
+		sendReply(&proto.QueryResult{Session: query.Session})
 	}
-	var res = make([]string, 0, 1)
-	for s, _ := range uniqueShards {
-		res = append(res, s)
-	}
-	return res, nil
+	return err
 }
 
 // StreamExecuteKeyRange executes a streaming query on the specified KeyRange.
@@ -215,13 +206,18 @@ func (vtg *VTGate) mapKrToShards(keyspace string, tabletType topo.TabletType, ke
 // and one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing. The api supports supplying multiple keyranges
 // to make it future proof.
-func (vtg *VTGate) StreamExecuteKeyRange(context interface{}, query *proto.KeyRangeQuery, sendReply func(*proto.QueryResult) error) error {
-	shards, err := vtg.mapKrToShards(query.Keyspace, query.TabletType, query.KeyRange)
+func (vtg *VTGate) StreamExecuteKeyRanges(context interface{}, query *proto.KeyRangeQuery, sendReply func(*proto.QueryResult) error) error {
+	shards, err := mapKeyRangesToShards(
+		vtg.scatterConn.toposerv,
+		vtg.scatterConn.cell,
+		query.Keyspace,
+		query.TabletType,
+		query.KeyRanges)
 	if err != nil {
 		return err
 	}
 	if len(shards) != 1 {
-		return fmt.Errorf("KeyRange cannot map to more than one shard")
+		return fmt.Errorf("KeyRanges cannot map to more than one shard")
 	}
 
 	err = vtg.scatterConn.StreamExecute(
@@ -236,8 +232,7 @@ func (vtg *VTGate) StreamExecuteKeyRange(context interface{}, query *proto.KeyRa
 			reply := new(proto.QueryResult)
 			proto.PopulateQueryResult(mreply, reply)
 			// Note we don't populate reply.Session here,
-			// as it may change incrementaly as responses
-			// are sent.
+			// as it may change incrementaly as responses are sent.
 			return sendReply(reply)
 		})
 

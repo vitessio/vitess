@@ -11,6 +11,27 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
+func mapKeyspaceIdsToShards(topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType, keyspaceIds key.KeyspaceIdArray) ([]string, error) {
+	var shards = make(map[string]int)
+	for _, ksId := range keyspaceIds {
+		shard, err := getShardForKeyspaceId(
+			topoServ,
+			cell,
+			keyspace,
+			ksId,
+			tabletType)
+		if err != nil {
+			return nil, err
+		}
+		shards[shard] = 0
+	}
+	var res = make([]string, 0, 1)
+	for s, _ := range shards {
+		res = append(res, s)
+	}
+	return res, nil
+}
+
 func getShardForKeyspaceId(topoServ SrvTopoServer, cell, keyspace string, keyspaceId key.KeyspaceId, tabletType topo.TabletType) (string, error) {
 	srvKeyspace, err := topoServ.GetSrvKeyspace(cell, keyspace)
 	if err != nil {
@@ -47,6 +68,32 @@ func getKeyspaceAlias(topoServ SrvTopoServer, cell, keyspace string, tabletType 
 	}
 
 	return keyspace, nil
+}
+
+// This function implements the restriction of handling one keyrange
+// and one shard since streaming doesn't support merge sorting the results.
+// The input/output api is generic though.
+func mapKeyRangesToShards(topoServer SrvTopoServer, cell, keyspace string, tabletType topo.TabletType, krs key.KeyRangeArray) ([]string, error) {
+	uniqueShards := make(map[string]int)
+	for _, kr := range krs {
+		shards, err := resolveKeyRangeToShards(
+			topoServer,
+			cell,
+			keyspace,
+			tabletType,
+			kr)
+		if err != nil {
+			return nil, err
+		}
+		for _, shard := range shards {
+			uniqueShards[shard] = 0
+		}
+	}
+	var res = make([]string, 0, 1)
+	for s, _ := range uniqueShards {
+		res = append(res, s)
+	}
+	return res, nil
 }
 
 // This maps a list of keyranges to shard names.

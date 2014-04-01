@@ -45,6 +45,18 @@ func (kid *KeyspaceId) UnmarshalJSON(data []byte) (err error) {
 	return err
 }
 
+func (kid *KeyspaceId) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeString(buf, key, string(kid.Hex()))
+}
+
+func (kid *KeyspaceId) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	var err error
+	*kid, err = HexKeyspaceId(bson.DecodeString(buf, kind)).Unhex()
+	if err != nil {
+		panic("Cannot UnmarshalBson for KeyspaceId")
+	}
+}
+
 //
 // Uint64Key definitions
 //
@@ -158,8 +170,8 @@ func (kr *KeyRange) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
-	bson.EncodeString(buf, "Start", string(kr.Start))
-	bson.EncodeString(buf, "End", string(kr.End))
+	kr.Start.MarshalBson(buf, "Start")
+	kr.End.MarshalBson(buf, "End")
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
@@ -174,9 +186,9 @@ func (kr *KeyRange) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 		key := bson.ReadCString(buf)
 		switch key {
 		case "Start":
-			kr.Start = KeyspaceId(bson.DecodeString(buf, kind))
+			kr.Start.UnmarshalBson(buf, kind)
 		case "End":
-			kr.End = KeyspaceId(bson.DecodeString(buf, kind))
+			kr.End.UnmarshalBson(buf, kind)
 		default:
 			bson.Skip(buf, kind)
 		}
@@ -237,6 +249,39 @@ func (p KeyspaceIdArray) Swap(i, j int) {
 
 func (p KeyspaceIdArray) Sort() { sort.Sort(p) }
 
+func EncodeKeyspaceIdArrayBson(buf *bytes2.ChunkedWriter, key string, ksIds KeyspaceIdArray) {
+	bson.EncodePrefix(buf, bson.Array, key)
+	lenWriter := bson.NewLenWriter(buf)
+	for i, v := range ksIds {
+		v.MarshalBson(buf, bson.Itoa(i))
+	}
+	buf.WriteByte(0)
+	lenWriter.RecordLen()
+}
+
+func DecodeKeyspaceIdArrayBson(buf *bytes.Buffer, kind byte) (ksIds KeyspaceIdArray) {
+	switch kind {
+	case bson.Array:
+		// valid
+	case bson.Null:
+		return nil
+	default:
+		panic(bson.NewBsonError("Unexpected data type %v for KeyspaceIdArray", kind))
+	}
+
+	bson.Next(buf, 4)
+	ksIds = make([]KeyspaceId, 0, 8)
+	kind = bson.NextByte(buf)
+	var ksId KeyspaceId
+	for kind != bson.EOO {
+		bson.SkipIndex(buf)
+		ksId.UnmarshalBson(buf, kind)
+		ksIds = append(ksIds, ksId)
+		kind = bson.NextByte(buf)
+	}
+	return ksIds
+}
+
 //
 // KeyRangeArray definitions
 //
@@ -255,6 +300,39 @@ func (p KeyRangeArray) Swap(i, j int) {
 }
 
 func (p KeyRangeArray) Sort() { sort.Sort(p) }
+
+func EncodeKeyRangeArrayBson(buf *bytes2.ChunkedWriter, key string, krs KeyRangeArray) {
+	bson.EncodePrefix(buf, bson.Array, key)
+	lenWriter := bson.NewLenWriter(buf)
+	for i, v := range krs {
+		v.MarshalBson(buf, bson.Itoa(i))
+	}
+	buf.WriteByte(0)
+	lenWriter.RecordLen()
+}
+
+func DecodeKeyRangeArrayBson(buf *bytes.Buffer, kind byte) (krs KeyRangeArray) {
+	switch kind {
+	case bson.Array:
+		// valid
+	case bson.Null:
+		return nil
+	default:
+		panic(bson.NewBsonError("Unexpected data type %v for KeyspaceIdArray", kind))
+	}
+
+	bson.Next(buf, 4)
+	krs = make([]KeyRange, 0, 8)
+	kind = bson.NextByte(buf)
+	var kr KeyRange
+	for kind != bson.EOO {
+		bson.SkipIndex(buf)
+		kr.UnmarshalBson(buf, kind)
+		krs = append(krs, kr)
+		kind = bson.NextByte(buf)
+	}
+	return krs
+}
 
 // ParseShardingSpec parses a string that describes a sharding
 // specification. a-b-c-d will be parsed as a-b, b-c, c-d. The empty

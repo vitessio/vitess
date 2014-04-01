@@ -82,8 +82,9 @@ func testScatterConnGeneric(t *testing.T, name string, f func(shards []string) (
 	s.MapTestConn("1", sbc1)
 	_, err = f([]string{"0", "1"})
 	// Verify server errors are consolidated.
-	want = fmt.Sprintf("error: err, shard, host: %v.0., {Uid:0 Host:0 NamedPortMap:map[vt:1]}\nerror: err, shard, host: %v.1., {Uid:1 Host:1 NamedPortMap:map[vt:1]}", name, name)
-	if err == nil || err.Error() != want {
+	want1 := fmt.Sprintf("error: err, shard, host: %v.0., {Uid:0 Host:0 NamedPortMap:map[vt:1]}\nerror: err, shard, host: %v.1., {Uid:1 Host:1 NamedPortMap:map[vt:1]}", name, name)
+	want2 := fmt.Sprintf("error: err, shard, host: %v.1., {Uid:1 Host:1 NamedPortMap:map[vt:1]}\nerror: err, shard, host: %v.0., {Uid:0 Host:0 NamedPortMap:map[vt:1]}", name, name)
+	if err == nil || (err.Error() != want1 && err.Error() != want2) {
 		t.Errorf("\nwant\n%s\ngot\n%v", want, err)
 	}
 	// Ensure that we tried only once.

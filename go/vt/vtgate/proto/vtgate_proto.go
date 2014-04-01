@@ -12,6 +12,7 @@ import (
 	"github.com/youtube/vitess/go/bytes2"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	kproto "github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -213,24 +214,24 @@ type KeyspaceIdQuery struct {
 	Sql           string
 	BindVariables map[string]interface{}
 	Keyspace      string
-	KeyspaceIds   []string
+	KeyspaceIds   kproto.KeyspaceIdArray
 	TabletType    topo.TabletType
 	Session       *Session
 }
 
 // MarshalBson marshals KeyspaceIdQuery into buf.
-func (qr *KeyspaceIdQuery) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (qr *KeyspaceIdQuery) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodeString(buf, "Sql", qr.Sql)
 	tproto.EncodeBindVariablesBson(buf, "BindVariables", qr.BindVariables)
 	bson.EncodeString(buf, "Keyspace", qr.Keyspace)
-	bson.EncodeStringArray(buf, "KeyspaceIds", qr.KeyspaceIds)
+	kproto.EncodeKeyspaceIdArrayBson(buf, "KeyspaceIds", qr.KeyspaceIds)
 	bson.EncodeString(buf, "TabletType", string(qr.TabletType))
 
 	if qr.Session != nil {
-		bson.EncodePrefix(buf, bson.Object, "Session")
-		qr.Session.MarshalBson(buf)
+		qr.Session.MarshalBson(buf, "Session")
 	}
 
 	buf.WriteByte(0)
@@ -238,10 +239,11 @@ func (qr *KeyspaceIdQuery) MarshalBson(buf *bytes2.ChunkedWriter) {
 }
 
 // UnmarshalBson unmarshals KeyspaceIdQuery from buf.
-func (qr *KeyspaceIdQuery) UnmarshalBson(buf *bytes.Buffer) {
+func (qr *KeyspaceIdQuery) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		keyName := bson.ReadCString(buf)
 		switch keyName {
@@ -254,11 +256,11 @@ func (qr *KeyspaceIdQuery) UnmarshalBson(buf *bytes.Buffer) {
 		case "TabletType":
 			qr.TabletType = topo.TabletType(bson.DecodeString(buf, kind))
 		case "KeyspaceIds":
-			qr.KeyspaceIds = bson.DecodeStringArray(buf, kind)
+			qr.KeyspaceIds = kproto.DecodeKeyspaceIdArrayBson(buf, kind)
 		case "Session":
 			if kind != bson.Null {
 				qr.Session = new(Session)
-				qr.Session.UnmarshalBson(buf)
+				qr.Session.UnmarshalBson(buf, kind)
 			}
 		default:
 			bson.Skip(buf, kind)
@@ -273,24 +275,24 @@ type KeyRangeQuery struct {
 	Sql           string
 	BindVariables map[string]interface{}
 	Keyspace      string
-	KeyRange      string
+	KeyRanges     kproto.KeyRangeArray
 	TabletType    topo.TabletType
 	Session       *Session
 }
 
 // MarshalBson marshals KeyRangeQuery into buf.
-func (qr *KeyRangeQuery) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (qr *KeyRangeQuery) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodeString(buf, "Sql", qr.Sql)
 	tproto.EncodeBindVariablesBson(buf, "BindVariables", qr.BindVariables)
 	bson.EncodeString(buf, "Keyspace", qr.Keyspace)
-	bson.EncodeString(buf, "KeyRange", qr.KeyRange)
+	kproto.EncodeKeyRangeArrayBson(buf, "KeyRanges", qr.KeyRanges)
 	bson.EncodeString(buf, "TabletType", string(qr.TabletType))
 
 	if qr.Session != nil {
-		bson.EncodePrefix(buf, bson.Object, "Session")
-		qr.Session.MarshalBson(buf)
+		qr.Session.MarshalBson(buf, "Session")
 	}
 
 	buf.WriteByte(0)
@@ -298,10 +300,11 @@ func (qr *KeyRangeQuery) MarshalBson(buf *bytes2.ChunkedWriter) {
 }
 
 // UnmarshalBson unmarshals KeyRangeQuery from buf.
-func (qr *KeyRangeQuery) UnmarshalBson(buf *bytes.Buffer) {
+func (qr *KeyRangeQuery) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
-	kind := bson.NextByte(buf)
+	kind = bson.NextByte(buf)
 	for kind != bson.EOO {
 		keyName := bson.ReadCString(buf)
 		switch keyName {
@@ -313,18 +316,22 @@ func (qr *KeyRangeQuery) UnmarshalBson(buf *bytes.Buffer) {
 			qr.Keyspace = bson.DecodeString(buf, kind)
 		case "TabletType":
 			qr.TabletType = topo.TabletType(bson.DecodeString(buf, kind))
-		case "KeyRange":
-			qr.KeyRange = bson.DecodeString(buf, kind)
+		case "KeyRanges":
+			qr.KeyRanges = kproto.DecodeKeyRangeArrayBson(buf, kind)
 		case "Session":
 			if kind != bson.Null {
 				qr.Session = new(Session)
-				qr.Session.UnmarshalBson(buf)
+				qr.Session.UnmarshalBson(buf, kind)
 			}
 		default:
 			bson.Skip(buf, kind)
 		}
 		kind = bson.NextByte(buf)
 	}
+}
+
+// EntityIdsQuery represents a query request for the specified KeyspaceId map.
+type EntityIdsQuery struct {
 }
 
 // QueryResult is mproto.QueryResult+Session (for now).
@@ -459,7 +466,7 @@ func (bqs *BatchQueryShard) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 type KeyspaceIdBatchQuery struct {
 	Queries     []tproto.BoundQuery
 	Keyspace    string
-	KeyspaceIds []string
+	KeyspaceIds kproto.KeyspaceIdArray
 	TabletType  topo.TabletType
 	Session     *Session
 }
@@ -471,7 +478,7 @@ func (bq *KeyspaceIdBatchQuery) MarshalBson(buf *bytes2.ChunkedWriter, key strin
 
 	tproto.EncodeQueriesBson(bq.Queries, "Queries", buf)
 	bson.EncodeString(buf, "Keyspace", bq.Keyspace)
-	bson.EncodeStringArray(buf, "KeyspaceIds", bq.KeyspaceIds)
+	kproto.EncodeKeyspaceIdArrayBson(buf, "KeyspaceIds", bq.KeyspaceIds)
 	bson.EncodeString(buf, "TabletType", string(bq.TabletType))
 
 	if bq.Session != nil {
@@ -496,7 +503,7 @@ func (bq *KeyspaceIdBatchQuery) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 		case "Keyspace":
 			bq.Keyspace = bson.DecodeString(buf, kind)
 		case "KeyspaceIds":
-			bq.KeyspaceIds = bson.DecodeStringArray(buf, kind)
+			bq.KeyspaceIds = kproto.DecodeKeyspaceIdArrayBson(buf, kind)
 		case "TabletType":
 			bq.TabletType = topo.TabletType(bson.DecodeString(buf, kind))
 		case "Session":
@@ -538,7 +545,7 @@ func (qrl *QueryResultList) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 }
 
 // UnmarshalBson unmarshals QueryResultList from buf.
-func (qrl *QueryResultList) UnmarshalBson(buf *bytes.Buffer) {
+func (qrl *QueryResultList) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
 
