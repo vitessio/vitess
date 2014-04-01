@@ -13,10 +13,6 @@ from vtdb import field_types
 
 
 _errno_pattern = re.compile('\(errno (\d+)\)')
-# Map specific errors to specific classes.
-_errno_map = {
-    1062: dbexceptions.IntegrityError,
-}
 
 
 def convert_exception(exc, *args):
@@ -34,7 +30,10 @@ def convert_exception(exc, *args):
     match = _errno_pattern.search(msg)
     if match:
       mysql_errno = int(match.group(1))
-      return _errno_map.get(mysql_errno, dbexceptions.DatabaseError)(new_args)
+      if mysql_errno == 1062:
+        return dbexceptions.IntegrityError(new_args)
+      elif mysql_errno == 1290 and 'read-only' in msg:
+        return dbexceptions.OperationalError(new_args)
     return dbexceptions.DatabaseError(new_args)
   elif isinstance(exc, gorpc.ProgrammingError):
     return dbexceptions.ProgrammingError(new_args)

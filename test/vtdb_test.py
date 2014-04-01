@@ -455,6 +455,28 @@ class TestFailures(unittest.TestCase):
     master_conn._execute("delete from vt_insert_test", {})
     master_conn.commit()
 
+  def test_read_only(self):
+    master_conn = get_connection(db_type='master')
+    count = 10
+    master_conn.begin()
+    master_conn._execute("delete from vt_insert_test", {})
+    kid_list = shard_kid_map[master_conn.shard]
+    for x in xrange(count):
+      keyspace_id = kid_list[count%len(kid_list)]
+      master_conn._execute("insert into vt_insert_test (msg, keyspace_id) values (%(msg)s, %(keyspace_id)s)",
+                           {'msg': 'test %s' % x, 'keyspace_id': keyspace_id})
+    master_conn.commit()
+
+    self.master_tablet.mquery(self.master_tablet.dbname, "set global read_only=on")
+    master_conn.begin()
+    with self.assertRaises(dbexceptions.OperationalError):
+      master_conn._execute("delete from vt_insert_test", {})
+    master_conn.rollback()
+    self.master_tablet.mquery(self.master_tablet.dbname, "set global read_only=off")
+    master_conn.begin()
+    master_conn._execute("delete from vt_insert_test", {})
+    master_conn.commit()
+
 class TestAuthentication(unittest.TestCase):
 
   def setUp(self):
