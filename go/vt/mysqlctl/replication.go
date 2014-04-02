@@ -124,7 +124,7 @@ func (mysqld *Mysqld) WaitForSlaveStart(slaveStartDeadline int) (err error) {
 }
 
 func (mysqld *Mysqld) StartSlave(hookExtraEnv map[string]string) error {
-	if err := mysqld.executeSuperQuery("SLAVE START"); err != nil {
+	if err := mysqld.executeSuperQuery("START SLAVE"); err != nil {
 		return err
 	}
 
@@ -140,7 +140,7 @@ func (mysqld *Mysqld) StopSlave(hookExtraEnv map[string]string) error {
 		return err
 	}
 
-	return mysqld.executeSuperQuery("SLAVE STOP")
+	return mysqld.executeSuperQuery("STOP SLAVE")
 }
 
 func (mysqld *Mysqld) GetMasterAddr() (string, error) {
@@ -332,42 +332,8 @@ func (mysqld *Mysqld) SlaveStatus() (*proto.ReplicationPosition, error) {
 	return pos, nil
 }
 
-/*
- mysql> show master status\G
- **************************** 1. row ***************************
- File: vt-000001c6-bin.000003
- Position: 106
- Binlog_Do_DB:
- Binlog_Ignore_DB:
- Group_ID:
-*/
 func (mysqld *Mysqld) MasterStatus() (rp *proto.ReplicationPosition, err error) {
-	qr, err := mysqld.fetchSuperQuery("SHOW MASTER STATUS")
-	if err != nil {
-		return
-	}
-	if len(qr.Rows) != 1 {
-		return nil, ErrNotMaster
-	}
-	if len(qr.Rows[0]) < 5 {
-		return nil, fmt.Errorf("this db does not support group id")
-	}
-	rp = &proto.ReplicationPosition{}
-	rp.MasterLogFile = qr.Rows[0][0].String()
-	utemp, err := qr.Rows[0][1].ParseUint64()
-	if err != nil {
-		return nil, err
-	}
-	rp.MasterLogPosition = uint(utemp)
-	rp.MasterLogGroupId, err = qr.Rows[0][4].ParseInt64()
-	if err != nil {
-		return nil, err
-	}
-	// On the master, the SQL position and IO position are at
-	// necessarily the same point.
-	rp.MasterLogFileIo = rp.MasterLogFile
-	rp.MasterLogPositionIo = rp.MasterLogPosition
-	return
+	return mysqld.flavor.MasterStatus(mysqld)
 }
 
 /*

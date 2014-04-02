@@ -27,6 +27,9 @@ vtportstart = int(os.environ.get('VTPORTSTART', '6700'))
 # url in which binaries export their status.
 status_url = '/debug/status'
 
+# which flavor of mysql to use in tests
+mysql_flavor = os.environ.get('MYSQL_FLAVOR', 'GoogleMysql')
+
 def setup():
   global tmproot
   try:

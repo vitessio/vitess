@@ -4,7 +4,7 @@
 
 #include "vtmysql.h"
 
-// All functions must call my_thread_init before calling mysql. This is
+// All functions must call mysql_thread_init before calling mysql. This is
 // because the go runtime controls thread creation, and we don't control
 // which thread these functions will be called from.
 
@@ -36,7 +36,7 @@ int vt_connect(
 {
   MYSQL *c;
 
-  my_thread_init();
+  mysql_thread_init();
   conn->mysql = mysql_init(0);
   c = mysql_real_connect(conn->mysql, host, user, passwd, db, port, unix_socket, client_flag);
   if(!c) {
@@ -47,14 +47,14 @@ int vt_connect(
 
 void vt_close(VT_CONN *conn) {
   if(conn->mysql) {
-    my_thread_init();
+    mysql_thread_init();
     mysql_close(conn->mysql);
     conn->mysql = 0;
   }
 }
 
 int vt_execute(VT_CONN *conn, const char *stmt_str, unsigned long length, int stream) {
-  my_thread_init();
+  mysql_thread_init();
   clear_result(conn);
 
   if(mysql_real_query(conn->mysql, stmt_str, length) != 0) {
@@ -85,7 +85,7 @@ VT_ROW vt_fetch_next(VT_CONN *conn) {
     return row;
   }
 
-  my_thread_init();
+  mysql_thread_init();
   row.mysql_row = mysql_fetch_row(conn->result);
   if(!row.mysql_row) {
     if(mysql_errno(conn->mysql)) {
@@ -102,7 +102,7 @@ void vt_close_result(VT_CONN *conn) {
   MYSQL_RES *result;
 
   if(conn->result) {
-    my_thread_init();
+    mysql_thread_init();
     mysql_free_result(conn->result);
     clear_result(conn);
   }
@@ -127,16 +127,16 @@ void clear_result(VT_CONN *conn) {
 }
 
 unsigned long vt_thread_id(VT_CONN *conn) {
-  my_thread_init();
+  mysql_thread_init();
   return mysql_thread_id(conn->mysql);
 }
 
 unsigned int vt_errno(VT_CONN *conn) {
-  my_thread_init();
+  mysql_thread_init();
   return mysql_errno(conn->mysql);
 }
 
 const char *vt_error(VT_CONN *conn) {
-  my_thread_init();
+  mysql_thread_init();
   return mysql_error(conn->mysql);
 }
