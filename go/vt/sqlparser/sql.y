@@ -32,6 +32,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 %{
 package sqlparser
 
+import "bytes"
+
 func SetParseTree(yylex interface{}, root *Node) {
 	tn := yylex.(*Tokenizer)
 	tn.ParseTree = root
@@ -46,6 +48,11 @@ func ForceEOF(yylex interface{}) {
 	tn := yylex.(*Tokenizer)
 	tn.ForceEOF = true
 }
+
+var (
+  SHARE = []byte("share")
+  MODE =  []byte("mode")
+)
 
 // Offsets for select parse tree. These need to match the Push order in the select_statement rule.
 const (
@@ -93,7 +100,7 @@ const (
 }
 
 %token <node> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT COMMENT FOR
-%token <node> ALL DISTINCT AS EXISTS IN IS LIKE BETWEEN NULL ASC DESC VALUES INTO DUPLICATE KEY DEFAULT SET LOCK SHARE MODE
+%token <node> ALL DISTINCT AS EXISTS IN IS LIKE BETWEEN NULL ASC DESC VALUES INTO DUPLICATE KEY DEFAULT SET LOCK
 %token <node> ID STRING NUMBER VALUE_ARG
 %token <node> LE GE NE NULL_SAFE_EQUAL
 %token <node> LEX_ERROR
@@ -787,8 +794,16 @@ lock_opt:
 	{
 		$$ = NewSimpleParseNode(FOR_UPDATE, " for update")
 	}
-| LOCK IN SHARE MODE
+| LOCK IN sql_id sql_id
 	{
+    if !bytes.Equal($3.Value, SHARE) {
+      yylex.Error("expecting share")
+      return 1
+    }
+    if !bytes.Equal($4.Value, MODE) {
+      yylex.Error("expecting mode")
+      return 1
+    }
 		$$ = NewSimpleParseNode(LOCK_IN_SHARE_MODE, " lock in share mode")
 	}
 

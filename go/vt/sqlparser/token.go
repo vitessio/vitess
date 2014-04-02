@@ -87,8 +87,6 @@ var keywords = map[string]int{
 	"default":   DEFAULT,
 	"set":       SET,
 	"lock":      LOCK,
-	"share":     SHARE,
-	"mode":      MODE,
 
 	"create": CREATE,
 	"alter":  ALTER,
@@ -118,7 +116,7 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 
 func (tkn *Tokenizer) Error(err string) {
 	buf := bytes.NewBuffer(make([]byte, 0, 32))
-	fmt.Fprintf(buf, "Error at position %v: %s", tkn.position, string(tkn.lastToken.Value))
+	fmt.Fprintf(buf, "%s at position %v near %s", err, tkn.position, string(tkn.lastToken.Value))
 	tkn.LastError = buf.String()
 }
 
@@ -248,9 +246,6 @@ func (tkn *Tokenizer) scanBindVar(Type int) *Node {
 	}
 	if buffer.Len() == 1 {
 		return NewParseNode(LEX_ERROR, buffer.Bytes())
-	}
-	if keywordId, found := keywords[buffer.String()]; found {
-		return NewParseNode(keywordId, buffer.Bytes())
 	}
 	return NewParseNode(Type, buffer.Bytes())
 }
