@@ -373,7 +373,7 @@ func (wr *Wrangler) finishReparent(si *topo.ShardInfo, masterElect *topo.TabletI
 	// We rebuild all the cells, as we may have taken tablets in and
 	// out of the graph.
 	log.Infof("rebuilding shard serving graph data")
-	return wr.rebuildShard(masterElect.Keyspace, masterElect.Shard, rebuildShardOptions{IgnorePartialResult: false, Critical: true})
+	return topo.RebuildShard(wr.ts, masterElect.Keyspace, masterElect.Shard, topo.RebuildShardOptions{IgnorePartialResult: false})
 }
 
 func (wr *Wrangler) breakReplication(slaveMap map[topo.TabletAlias]*topo.TabletInfo, masterElect *topo.TabletInfo) error {

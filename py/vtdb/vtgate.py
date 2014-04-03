@@ -112,7 +112,7 @@ class VtgateConnection(object):
       req['Session'] = self.session
 
   def _update_session(self, response):
-    if 'Session' in response.reply:
+    if 'Session' in response.reply and response.reply['Session']:
       self.session = response.reply['Session']
 
   def _execute(self, sql, bind_variables):
@@ -133,7 +133,8 @@ class VtgateConnection(object):
       response = self.client.call('VTGate.ExecuteShard', req)
       self._update_session(response)
       reply = response.reply
-      if 'Error' in response.reply:
+      # TODO(sougou): Simplify this check after all servers are deployed
+      if 'Error' in response.reply and response.reply['Error']:
         raise gorpc.AppError(response.reply['Error'], 'VTGate.ExecuteShard')
 
       for field in reply['Fields']:
@@ -172,7 +173,7 @@ class VtgateConnection(object):
       self._add_session(req)
       response = self.client.call('VTGate.ExecuteBatchShard', req)
       self._update_session(response)
-      if 'Error' in response.reply:
+      if 'Error' in response.reply and response.reply['Error']:
         raise gorpc.AppError(response.reply['Error'], 'VTGate.ExecuteBatchShard')
       for reply in response.reply['List']:
         fields = []
@@ -243,7 +244,9 @@ class VtgateConnection(object):
           self._stream_result_index = None
           return None
         # A session message, if any comes separately with no rows
-        if 'Session' in self._stream_result.reply:
+        # TODO(sougou) get rid of this check. After all the server
+        # changes, there will always be a 'Session' in the reply.
+        if 'Session' in self._stream_result.reply and self._stream_result.reply['Session']:
           self.session = self._stream_result.reply['Session']
           self._stream_result = None
           continue
@@ -262,7 +265,6 @@ class VtgateConnection(object):
       self._stream_result_index = 0
 
     return row
-
 
 def _make_row(row, conversions):
   converted_row = []

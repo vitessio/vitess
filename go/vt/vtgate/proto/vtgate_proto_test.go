@@ -323,7 +323,7 @@ func TestBatchQueryShardBadType(t *testing.T) {
 	}
 	var unmarshalled BatchQueryShard
 	err = bson.Unmarshal(unexpected, &unmarshalled)
-	want := "Unexpected data type 5 for Queries"
+	want := "unexpected kind 5 for batchQueryShard.Queries"
 	if err == nil || want != err.Error() {
 		t.Errorf("want %v, got %v", want, err)
 	}
@@ -414,7 +414,7 @@ type extraKeyspaceIdQuery struct {
 	Sql           string
 	BindVariables map[string]interface{}
 	Keyspace      string
-	KeyspaceIds   kproto.KeyspaceIdArray
+	KeyspaceIds   []kproto.KeyspaceId
 	TabletType    topo.TabletType
 	Session       *Session
 }
@@ -484,7 +484,7 @@ type extraKeyRangeQuery struct {
 	Sql           string
 	BindVariables map[string]interface{}
 	Keyspace      string
-	KeyRanges     kproto.KeyRangeArray
+	KeyRanges     []kproto.KeyRange
 	TabletType    topo.TabletType
 	Session       *Session
 }
@@ -543,7 +543,7 @@ func TestKeyRangeQuery(t *testing.T) {
 type reflectKeyspaceIdBatchQuery struct {
 	Queries     []reflectBoundQuery
 	Keyspace    string
-	KeyspaceIds kproto.KeyspaceIdArray
+	KeyspaceIds []kproto.KeyspaceId
 	TabletType  topo.TabletType
 	Session     *Session
 }
@@ -552,7 +552,7 @@ type extraKeyspaceIdBatchQuery struct {
 	Extra       int
 	Queries     []reflectBoundQuery
 	Keyspace    string
-	KeyspaceIds kproto.KeyspaceIdArray
+	KeyspaceIds []kproto.KeyspaceId
 	TabletType  topo.TabletType
 	Session     *Session
 }
@@ -564,7 +564,7 @@ func TestKeyspaceIdBatchQuery(t *testing.T) {
 			BindVariables: map[string]interface{}{"val": int64(1)},
 		}},
 		Keyspace:    "keyspace",
-		KeyspaceIds: kproto.KeyspaceIdArray{kproto.KeyspaceId("10"), kproto.KeyspaceId("20")},
+		KeyspaceIds: []kproto.KeyspaceId{kproto.KeyspaceId("10"), kproto.KeyspaceId("20")},
 		Session: &Session{InTransaction: true,
 			ShardSessions: []*ShardSession{{
 				Keyspace:      "a",
@@ -590,7 +590,7 @@ func TestKeyspaceIdBatchQuery(t *testing.T) {
 			BindVariables: map[string]interface{}{"val": int64(1)},
 		}},
 		Keyspace:    "keyspace",
-		KeyspaceIds: kproto.KeyspaceIdArray{kproto.KeyspaceId("10"), kproto.KeyspaceId("20")},
+		KeyspaceIds: []kproto.KeyspaceId{kproto.KeyspaceId("10"), kproto.KeyspaceId("20")},
 		Session:     &commonSession,
 	}
 	encoded, err := bson.Marshal(&custom)
@@ -636,7 +636,7 @@ func TestKeyspaceIdsBatchQueryBadType(t *testing.T) {
 	}
 	var unmarshalled KeyspaceIdBatchQuery
 	err = bson.Unmarshal(unexpected, &unmarshalled)
-	want := "Unexpected data type 5 for Queries"
+	want := "unexpected kind 5 for keyspaceIdBatchQuery.Queries"
 	if err == nil || want != err.Error() {
 		t.Errorf("want %v, got %v", want, err)
 	}

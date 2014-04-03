@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
@@ -337,6 +338,11 @@ type Tablet struct {
 	// Tags contain freeform information about the tablet.
 	Tags map[string]string
 
+	// Health tracks how healthy the tablet is. Clients may decide
+	// to use this information to make educated decisions on which
+	// tablet to connect to.
+	Health map[string]string
+
 	// Information about the tablet inside a keyspace/shard
 	Keyspace string
 	Shard    string
@@ -366,6 +372,31 @@ func (tablet *Tablet) ValidatePortmap() error {
 		}
 	}
 	return nil
+}
+
+// EndPoint returns an EndPoint associated with the tablet record
+func (tablet *Tablet) EndPoint() (*EndPoint, error) {
+	entry := NewAddr(tablet.Alias.Uid, tablet.Hostname)
+	if err := tablet.ValidatePortmap(); err != nil {
+		return nil, err
+	}
+
+	// TODO(szopa): Rename _vtocc to vt.
+	entry.NamedPortMap = map[string]int{
+		"_vtocc": tablet.Portmap["vt"],
+		"_mysql": tablet.Portmap["mysql"],
+	}
+	if port, ok := tablet.Portmap["vts"]; ok {
+		entry.NamedPortMap["_vts"] = port
+	}
+
+	if len(tablet.Health) > 0 {
+		entry.Health = make(map[string]string, len(tablet.Health))
+		for k, v := range tablet.Health {
+			entry.Health[k] = v
+		}
+	}
+	return entry, nil
 }
 
 // Rename the next 3 methods when we retire the extra tablet fields
@@ -578,4 +609,37 @@ func CreateTabletReplicationData(ts Server, tablet *Tablet) error {
 // DeleteTabletReplicationData deletes replication data.
 func DeleteTabletReplicationData(ts Server, tablet *Tablet) error {
 	return RemoveShardReplicationRecord(ts, tablet.Keyspace, tablet.Shard, tablet.Alias)
+}
+
+// GetTabletMap tries to read all the tablets in the provided list,
+// and returns them all in a map.
+// If error is ErrPartialResult, the results in the dictionary are
+// incomplete, meaning some tablets couldn't be read.
+func GetTabletMap(ts Server, tabletAliases []TabletAlias) (map[TabletAlias]*TabletInfo, error) {
+	wg := sync.WaitGroup{}
+	mutex := sync.Mutex{}
+
+	tabletMap := make(map[TabletAlias]*TabletInfo)
+	var someError error
+
+	for _, tabletAlias := range tabletAliases {
+		wg.Add(1)
+		go func(tabletAlias TabletAlias) {
+			defer wg.Done()
+			tabletInfo, err := ts.GetTablet(tabletAlias)
+			mutex.Lock()
+			if err != nil {
+				log.Warningf("%v: %v", tabletAlias, err)
+				// There can be data races removing nodes - ignore them for now.
+				if err != ErrNoNode {
+					someError = ErrPartialResult
+				}
+			} else {
+				tabletMap[tabletAlias] = tabletInfo
+			}
+			mutex.Unlock()
+		}(tabletAlias)
+	}
+	wg.Wait()
+	return tabletMap, someError
 }

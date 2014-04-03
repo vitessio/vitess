@@ -10,14 +10,15 @@ import (
 	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/vt/janitor"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
 var (
 	sleepTime     = flag.Duration("sleep_time", 3*time.Minute, "how long to sleep between janitor runs")
-	lockTimeout   = flag.Duration("lock_timeout", 15*time.Second, "lock time for wrangler/chubby operations")
-	actionTimeout = flag.Duration("action_timeout", 60*time.Second, "time to wait for an action before resorting to force")
+	lockTimeout   = flag.Duration("lock_timeout", actionnode.DefaultLockTimeout, "lock time for wrangler/topo operations")
+	actionTimeout = flag.Duration("action_timeout", wrangler.DefaultActionTimeout, "time to wait for an action before resorting to force")
 	keyspace      = flag.String("keyspace", "", "keyspace to manage")
 	shard         = flag.String("shard", "", "shard to manage")
 	dryRunModules flagutil.StringListValue

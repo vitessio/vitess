@@ -33,9 +33,10 @@ const (
 )
 
 type EndPoint struct {
-	Uid          uint32         `json:"uid"` // Keep track of which tablet this corresponds to.
-	Host         string         `json:"host"`
-	NamedPortMap map[string]int `json:"named_port_map"`
+	Uid          uint32            `json:"uid"` // Keep track of which tablet this corresponds to.
+	Host         string            `json:"host"`
+	NamedPortMap map[string]int    `json:"named_port_map"`
+	Health       map[string]string `json:"health"`
 }
 
 type EndPoints struct {
@@ -58,6 +59,18 @@ func EndPointEquality(left, right *EndPoint) bool {
 	}
 	for key, lvalue := range left.NamedPortMap {
 		rvalue, ok := right.NamedPortMap[key]
+		if !ok {
+			return false
+		}
+		if lvalue != rvalue {
+			return false
+		}
+	}
+	if len(left.Health) != len(right.Health) {
+		return false
+	}
+	for key, lvalue := range left.Health {
+		rvalue, ok := right.Health[key]
 		if !ok {
 			return false
 		}

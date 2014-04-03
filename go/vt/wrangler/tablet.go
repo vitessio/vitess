@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -174,7 +173,7 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 	wasMaster := ti.Type == topo.TYPE_MASTER
 
 	if force {
-		err = tabletmanager.Scrap(wr.ts, ti.Alias, force)
+		err = actionnode.Scrap(wr.ts, ti.Alias, force)
 	} else {
 		actionPath, err = wr.ai.Scrap(ti.Alias)
 	}
@@ -271,7 +270,7 @@ func (wr *Wrangler) ChangeTypeNoRebuild(tabletAlias topo.TabletAlias, tabletType
 	}
 
 	if force {
-		if err := tabletmanager.ChangeType(wr.ts, tabletAlias, tabletType, false); err != nil {
+		if err := actionnode.ChangeType(wr.ts, tabletAlias, tabletType, nil, false); err != nil {
 			return false, "", "", "", err
 		}
 	} else {
@@ -336,7 +335,7 @@ func (wr *Wrangler) changeTypeInternal(tabletAlias topo.TabletAlias, dbType topo
 
 	// rebuild if necessary
 	if rebuildRequired {
-		err = wr.rebuildShard(ti.Keyspace, ti.Shard, rebuildShardOptions{
+		err = topo.RebuildShard(wr.ts, ti.Keyspace, ti.Shard, topo.RebuildShardOptions{
 			Cells:               []string{ti.Alias.Cell},
 			IgnorePartialResult: false,
 		})

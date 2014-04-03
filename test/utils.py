@@ -280,6 +280,21 @@ def zk_cat_json(path):
   data = zk_cat(path)
   return json.loads(data)
 
+# wait_step is a helper for looping until a condition is true.
+# use as follow:
+#    timeout = 10
+#    while True:
+#      if done:
+#        break
+#      timeout = utils.wait_step('condition', timeout)
+def wait_step(msg, timeout, sleep_time=1.0):
+  timeout -= sleep_time
+  if timeout <= 0:
+    raise TestError("timeout waiting for condition '%s'" % msg)
+  logging.info("Sleeping for %f seconds waiting for condition '%s'" %
+               (sleep_time, msg))
+  time.sleep(sleep_time)
+  return timeout
 
 # vars helpers
 def get_vars(port):
@@ -299,22 +314,15 @@ def get_vars(port):
     print data
     raise
 
+# wait_for_vars will wait until we can actually get the vars from a process,
+# and if var is specified, will wait until that var is in vars
 def wait_for_vars(name, port, var=None):
   timeout = 5.0
   while True:
     v = get_vars(port)
-    if v == None:
-      logging.debug("  %s not answering at /debug/vars, waiting..." % (name))
-    elif var != None and var not in v:
-      logging.debug("  %s not having %s at /debug/vars, waiting..." % (name, var))
-    else:
+    if v and (var is None or var in v):
       break
-
-    logging.debug("sleeping a bit while we wait")
-    time.sleep(0.1)
-    timeout -= 0.1
-    if timeout <= 0:
-      raise TestError("timeout waiting for %s" % (name))
+    timeout = wait_step('waiting for /debug/vars of %s' % name, timeout)
 
 # zkocc helpers
 def zkocc_start(cells=['test_nj'], extra_params=[]):

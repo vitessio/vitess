@@ -14,13 +14,11 @@ import (
 	"os/signal"
 	"path"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/tb"
-	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -270,7 +268,7 @@ func (ta *TabletActor) setReadOnly(rdonly bool) error {
 
 func (ta *TabletActor) changeType(actionNode *actionnode.ActionNode) error {
 	dbType := actionNode.Args.(*topo.TabletType)
-	return ChangeType(ta.ts, ta.tabletAlias, *dbType, true /*runHooks*/)
+	return actionnode.ChangeType(ta.ts, ta.tabletAlias, *dbType, nil, true /*runHooks*/)
 }
 
 func (ta *TabletActor) demoteMaster() error {
@@ -464,7 +462,7 @@ func SlaveWasRestarted(ts topo.Server, tabletAlias topo.TabletAlias, swrd *actio
 }
 
 func (ta *TabletActor) scrap() error {
-	return Scrap(ta.ts, ta.tabletAlias, false)
+	return actionnode.Scrap(ta.ts, ta.tabletAlias, false)
 }
 
 func (ta *TabletActor) preflightSchema(actionNode *actionnode.ActionNode) error {
@@ -503,18 +501,10 @@ func (ta *TabletActor) applySchema(actionNode *actionnode.ActionNode) error {
 	return nil
 }
 
-// add TABLET_ALIAS to environment
-func configureTabletHook(hk *hook.Hook, tabletAlias topo.TabletAlias) {
-	if hk.ExtraEnv == nil {
-		hk.ExtraEnv = make(map[string]string, 1)
-	}
-	hk.ExtraEnv["TABLET_ALIAS"] = tabletAlias.String()
-}
-
 func (ta *TabletActor) executeHook(actionNode *actionnode.ActionNode) (err error) {
-	// FIXME(msolomon) should't the reply get distilled into an error?
+	// FIXME(msolomon) shouldn't the reply get distilled into an error?
 	h := actionNode.Args.(*hook.Hook)
-	configureTabletHook(h, ta.tabletAlias)
+	actionnode.ConfigureTabletHook(h, ta.tabletAlias)
 	actionNode.Reply = h.Execute()
 	return nil
 }
@@ -598,7 +588,7 @@ func fetchAndParseJsonFile(addr, filename string, result interface{}) error {
 func (ta *TabletActor) changeTypeToRestore(tablet, sourceTablet *topo.TabletInfo, parentAlias topo.TabletAlias, keyRange key.KeyRange) error {
 	// run the optional preflight_assigned hook
 	hk := hook.NewSimpleHook("preflight_assigned")
-	configureTabletHook(hk, ta.tabletAlias)
+	actionnode.ConfigureTabletHook(hk, ta.tabletAlias)
 	if err := hk.ExecuteOptional(); err != nil {
 		return err
 	}
@@ -712,7 +702,7 @@ func (ta *TabletActor) restore(actionNode *actionnode.ActionNode) error {
 	// do the work
 	if err := ta.mysqld.RestoreFromSnapshot(sm, args.FetchConcurrency, args.FetchRetryCount, args.DontWaitForSlaveStart, ta.hookExtraEnv()); err != nil {
 		log.Errorf("RestoreFromSnapshot failed (%v), scrapping", err)
-		if err := Scrap(ta.ts, ta.tabletAlias, false); err != nil {
+		if err := actionnode.Scrap(ta.ts, ta.tabletAlias, false); err != nil {
 			log.Errorf("Failed to Scrap after failed RestoreFromSnapshot: %v", err)
 		}
 
@@ -720,7 +710,7 @@ func (ta *TabletActor) restore(actionNode *actionnode.ActionNode) error {
 	}
 
 	// change to TYPE_SPARE, we're done!
-	return ChangeType(ta.ts, ta.tabletAlias, topo.TYPE_SPARE, true)
+	return actionnode.ChangeType(ta.ts, ta.tabletAlias, topo.TYPE_SPARE, nil, true)
 }
 
 func (ta *TabletActor) multiSnapshot(actionNode *actionnode.ActionNode) error {
@@ -794,7 +784,7 @@ func (ta *TabletActor) multiRestore(actionNode *actionnode.ActionNode) (err erro
 
 	// run the action, scrap if it fails
 	if err := ta.mysqld.MultiRestore(tablet.DbName(), keyRanges, sourceAddrs, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, args.Strategy); err != nil {
-		if e := Scrap(ta.ts, ta.tabletAlias, false); e != nil {
+		if e := actionnode.Scrap(ta.ts, ta.tabletAlias, false); e != nil {
 			log.Errorf("Failed to Scrap after failed RestoreFromMultiSnapshot: %v", e)
 		}
 		return err
@@ -803,120 +793,6 @@ func (ta *TabletActor) multiRestore(actionNode *actionnode.ActionNode) (err erro
 	// restore type back
 	tablet.Type = originalType
 	return topo.UpdateTablet(ta.ts, tablet)
-}
-
-// Make this external, since in needs to be forced from time to time.
-func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
-	tablet, err := ts.GetTablet(tabletAlias)
-	if err != nil {
-		return err
-	}
-
-	// If you are already scrap, skip updating replication data. It won't
-	// be there anyway.
-	wasAssigned := tablet.IsAssigned()
-	tablet.Type = topo.TYPE_SCRAP
-	tablet.Parent = topo.TabletAlias{}
-	// Update the tablet first, since that is canonical.
-	err = topo.UpdateTablet(ts, tablet)
-	if err != nil {
-		return err
-	}
-
-	// Remove any pending actions. Presumably forcing a scrap means you don't
-	// want the agent doing anything and the machine requires manual attention.
-	if force {
-		err := ts.PurgeTabletActions(tabletAlias, actionnode.ActionNodeCanBePurged)
-		if err != nil {
-			log.Warningf("purge actions failed: %v", err)
-		}
-	}
-
-	if wasAssigned {
-		err = topo.DeleteTabletReplicationData(ts, tablet.Tablet)
-		if err != nil {
-			if err == topo.ErrNoNode {
-				log.V(6).Infof("no ShardReplication object for cell %v", tablet.Alias.Cell)
-				err = nil
-			}
-			if err != nil {
-				log.Warningf("remove replication data for %v failed: %v", tablet.Alias, err)
-			}
-		}
-	}
-
-	// run a hook for final cleanup, only in non-force mode.
-	// (force mode executes on the vtctl side, not on the vttablet side)
-	if !force {
-		hk := hook.NewSimpleHook("postflight_scrap")
-		configureTabletHook(hk, tablet.Alias)
-		if hookErr := hk.ExecuteOptional(); hookErr != nil {
-			// we don't want to return an error, the server
-			// is already in bad shape probably.
-			log.Warningf("Scrap: postflight_scrap failed: %v", hookErr)
-		}
-	}
-
-	return nil
-}
-
-// Make this external, since these transitions need to be forced from time to time.
-func ChangeType(ts topo.Server, tabletAlias topo.TabletAlias, newType topo.TabletType, runHooks bool) error {
-	tablet, err := ts.GetTablet(tabletAlias)
-	if err != nil {
-		return err
-	}
-
-	if !topo.IsTrivialTypeChange(tablet.Type, newType) || !topo.IsValidTypeChange(tablet.Type, newType) {
-		return fmt.Errorf("cannot change tablet type %v -> %v %v", tablet.Type, newType, tabletAlias)
-	}
-
-	if runHooks {
-		// Only run the preflight_serving_type hook when
-		// transitioning from non-serving to serving.
-		if !topo.IsInServingGraph(tablet.Type) && topo.IsInServingGraph(newType) {
-			if err := hook.NewSimpleHook("preflight_serving_type").ExecuteOptional(); err != nil {
-				return err
-			}
-		}
-	}
-
-	tablet.Type = newType
-	if newType == topo.TYPE_IDLE {
-		if tablet.Parent.IsZero() {
-			si, err := ts.GetShard(tablet.Keyspace, tablet.Shard)
-			if err != nil {
-				return err
-			}
-			rec := concurrency.AllErrorRecorder{}
-			wg := sync.WaitGroup{}
-			for _, cell := range si.Cells {
-				wg.Add(1)
-				go func(cell string) {
-					defer wg.Done()
-					sri, err := ts.GetShardReplication(cell, tablet.Keyspace, tablet.Shard)
-					if err != nil {
-						log.Warningf("Cannot check cell %v for extra replication paths, assuming it's good", cell)
-						return
-					}
-					for _, rl := range sri.ReplicationLinks {
-						if rl.Parent == tabletAlias {
-							rec.RecordError(fmt.Errorf("Still have a ReplicationLink in cell %v", cell))
-						}
-					}
-				}(cell)
-			}
-			wg.Wait()
-			if rec.HasErrors() {
-				return rec.Error()
-			}
-		}
-		tablet.Parent = topo.TabletAlias{}
-		tablet.Keyspace = ""
-		tablet.Shard = ""
-		tablet.KeyRange = key.KeyRange{}
-	}
-	return topo.UpdateTablet(ts, tablet)
 }
 
 // Make this external, since these transitions need to be forced from time to time.

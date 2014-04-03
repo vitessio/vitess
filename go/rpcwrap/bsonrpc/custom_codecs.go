@@ -23,8 +23,7 @@ func (req *RequestBson) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	bson.EncodeString(buf, "ServiceMethod", req.ServiceMethod)
 	bson.EncodeUint64(buf, "Seq", req.Seq)
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func (req *RequestBson) UnmarshalBson(buf *bytes.Buffer, kind byte) {
@@ -58,8 +57,7 @@ func (resp *ResponseBson) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	bson.EncodeUint64(buf, "Seq", resp.Seq)
 	bson.EncodeString(buf, "Error", resp.Error)
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func (resp *ResponseBson) UnmarshalBson(buf *bytes.Buffer, kind byte) {

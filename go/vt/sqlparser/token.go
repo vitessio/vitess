@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"unicode"
 
 	"github.com/youtube/vitess/go/sqltypes"
 )
@@ -87,6 +86,7 @@ var keywords = map[string]int{
 	"key":       KEY,
 	"default":   DEFAULT,
 	"set":       SET,
+	"lock":      LOCK,
 
 	"create": CREATE,
 	"alter":  ALTER,
@@ -116,7 +116,7 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 
 func (tkn *Tokenizer) Error(err string) {
 	buf := bytes.NewBuffer(make([]byte, 0, 32))
-	fmt.Fprintf(buf, "Error at position %v: %s", tkn.position, string(tkn.lastToken.Value))
+	fmt.Fprintf(buf, "%s at position %v near %s", err, tkn.position, string(tkn.lastToken.Value))
 	tkn.LastError = buf.String()
 }
 
@@ -227,27 +227,25 @@ func (tkn *Tokenizer) skipBlank() {
 
 func (tkn *Tokenizer) scanIdentifier(Type int) *Node {
 	buffer := bytes.NewBuffer(make([]byte, 0, 8))
-	buffer.WriteByte(byte(unicode.ToLower(rune(tkn.lastChar))))
+	buffer.WriteByte(byte(tkn.lastChar))
 	for tkn.Next(); isLetter(tkn.lastChar) || isDigit(tkn.lastChar); tkn.Next() {
-		buffer.WriteByte(byte(unicode.ToLower(rune(tkn.lastChar))))
+		buffer.WriteByte(byte(tkn.lastChar))
 	}
-	if keywordId, found := keywords[buffer.String()]; found {
-		return NewParseNode(keywordId, buffer.Bytes())
+	lowered := bytes.ToLower(buffer.Bytes())
+	if keywordId, found := keywords[string(lowered)]; found {
+		return NewParseNode(keywordId, lowered)
 	}
 	return NewParseNode(Type, buffer.Bytes())
 }
 
 func (tkn *Tokenizer) scanBindVar(Type int) *Node {
 	buffer := bytes.NewBuffer(make([]byte, 0, 8))
-	buffer.WriteByte(byte(unicode.ToLower(rune(tkn.lastChar))))
+	buffer.WriteByte(byte(tkn.lastChar))
 	for tkn.Next(); isLetter(tkn.lastChar) || isDigit(tkn.lastChar) || tkn.lastChar == '.'; tkn.Next() {
 		buffer.WriteByte(byte(tkn.lastChar))
 	}
 	if buffer.Len() == 1 {
 		return NewParseNode(LEX_ERROR, buffer.Bytes())
-	}
-	if keywordId, found := keywords[buffer.String()]; found {
-		return NewParseNode(keywordId, buffer.Bytes())
 	}
 	return NewParseNode(Type, buffer.Bytes())
 }

@@ -13,24 +13,24 @@ import (
 type reflectQuery struct {
 	Sql           string
 	BindVariables map[string]interface{}
-	TransactionId int64
 	SessionId     int64
+	TransactionId int64
 }
 
 type extraQuery struct {
 	Extra         int
 	Sql           string
 	BindVariables map[string]interface{}
-	TransactionId int64
 	SessionId     int64
+	TransactionId int64
 }
 
 func TestQuery(t *testing.T) {
 	reflected, err := bson.Marshal(&reflectQuery{
 		Sql:           "query",
 		BindVariables: map[string]interface{}{"val": int64(1)},
-		TransactionId: 1,
 		SessionId:     2,
+		TransactionId: 1,
 	})
 	if err != nil {
 		t.Error(err)
@@ -40,8 +40,8 @@ func TestQuery(t *testing.T) {
 	custom := Query{
 		Sql:           "query",
 		BindVariables: map[string]interface{}{"val": int64(1)},
-		TransactionId: 1,
 		SessionId:     2,
+		TransactionId: 1,
 	}
 	encoded, err := bson.Marshal(&custom)
 	if err != nil {
@@ -81,20 +81,20 @@ func TestQuery(t *testing.T) {
 }
 
 type reflectSession struct {
-	TransactionId int64
 	SessionId     int64
+	TransactionId int64
 }
 
 type extraSession struct {
 	Extra         int
-	TransactionId int64
 	SessionId     int64
+	TransactionId int64
 }
 
 func TestSession(t *testing.T) {
 	reflected, err := bson.Marshal(&reflectSession{
-		TransactionId: 1,
 		SessionId:     2,
+		TransactionId: 1,
 	})
 	if err != nil {
 		t.Error(err)
@@ -102,8 +102,8 @@ func TestSession(t *testing.T) {
 	want := string(reflected)
 
 	custom := Session{
-		TransactionId: 1,
 		SessionId:     2,
+		TransactionId: 1,
 	}
 	encoded, err := bson.Marshal(&custom)
 	if err != nil {
@@ -191,15 +191,15 @@ func TestBoundQuery(t *testing.T) {
 
 type reflectQueryList struct {
 	Queries       []BoundQuery
-	TransactionId int64
 	SessionId     int64
+	TransactionId int64
 }
 
 type extraQueryList struct {
 	Extra         int
 	Queries       []BoundQuery
-	TransactionId int64
 	SessionId     int64
+	TransactionId int64
 }
 
 func TestQueryList(t *testing.T) {
@@ -208,8 +208,8 @@ func TestQueryList(t *testing.T) {
 			Sql:           "query",
 			BindVariables: map[string]interface{}{"val": int64(1)},
 		}},
-		TransactionId: 1,
 		SessionId:     2,
+		TransactionId: 1,
 	})
 	if err != nil {
 		t.Error(err)
@@ -221,8 +221,8 @@ func TestQueryList(t *testing.T) {
 			Sql:           "query",
 			BindVariables: map[string]interface{}{"val": int64(1)},
 		}},
-		TransactionId: 1,
 		SessionId:     2,
+		TransactionId: 1,
 	}
 	encoded, err := bson.Marshal(&custom)
 	if err != nil {

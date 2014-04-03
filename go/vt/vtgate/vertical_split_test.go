@@ -63,7 +63,7 @@ func TestInTransactionKeyspaceAlias(t *testing.T) {
 		}},
 	})
 	_, err := stc.Execute(nil, "query", nil, TEST_UNSHARDED_SERVED_FROM, []string{"0"}, topo.TYPE_MASTER, session)
-	want := "retry: err, shard, host: TestUnshardedServedFrom.0.master, {Uid:0 Host:0 NamedPortMap:map[vt:1]}"
+	want := "retry: err, shard, host: TestUnshardedServedFrom.0.master, {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}"
 	if err == nil || err.Error() != want {
 		t.Errorf("want '%v', got '%v'", want, err)
 	}
@@ -106,7 +106,7 @@ func testVerticalSplitGeneric(t *testing.T, f func(shards []string) (*mproto.Que
 	sbc = &sandboxConn{mustFailServer: 3}
 	s.MapTestConn("0", sbc)
 	_, err = f([]string{"0"})
-	want := "error: err, shard, host: TestUnshardedServedFrom.0.rdonly, {Uid:0 Host:0 NamedPortMap:map[vt:1]}"
+	want := "error: err, shard, host: TestUnshardedServedFrom.0.rdonly, {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}"
 	if err == nil || err.Error() != want {
 		t.Errorf("want '%v', got '%v'", want, err)
 	}

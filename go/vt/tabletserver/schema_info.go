@@ -5,6 +5,7 @@
 package tabletserver
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -117,6 +118,7 @@ func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout tim
 	}
 	http.Handle("/debug/query_stats", si)
 	http.Handle("/debug/table_stats", si)
+	http.Handle("/debug/schema", si)
 	return si
 }
 
@@ -136,7 +138,9 @@ func (si *SchemaInfo) Open(connFactory CreateConnectionFunc, schemaOverrides []S
 	}
 
 	si.tables = make(map[string]*TableInfo, len(tables.Rows))
-	si.tables["dual"] = NewTableInfo(conn, "dual", "VIEW", sqltypes.NULL, "", si.cachePool)
+	// TODO(sougou): Fix this in the parser.
+	si.tables["dual"] = &TableInfo{Table: schema.NewTable("dual")}
+	si.tables["DUAL"] = &TableInfo{Table: schema.NewTable("DUAL")}
 	for _, row := range tables.Rows {
 		tableName := row[0].String()
 		si.updateLastChange(row[2])
@@ -376,6 +380,16 @@ func (si *SchemaInfo) GetTable(tableName string) *TableInfo {
 	return si.tables[tableName]
 }
 
+func (si *SchemaInfo) GetSchema() []*schema.Table {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+	tables := make([]*schema.Table, 0, len(si.tables))
+	for _, v := range si.tables {
+		tables = append(tables, v.Table)
+	}
+	return tables
+}
+
 func (si *SchemaInfo) getQuery(sql string) *ExecPlan {
 	if cacheResult, ok := si.queries.Get(sql); ok {
 		return cacheResult.(*ExecPlan)
@@ -550,6 +564,17 @@ func (si *SchemaInfo) ServeHTTP(response http.ResponseWriter, request *http.Requ
 		}
 		fmt.Fprintf(response, "\"Totals\": {\"Hits\": %v, \"Absent\": %v, \"Misses\": %v, \"Invalidations\": %v}\n", totals.hits, totals.absent, totals.misses, totals.invalidations)
 		response.Write([]byte("}\n"))
+	} else if request.URL.Path == "/debug/schema" {
+		response.Header().Set("Content-Type", "application/json; charset=utf-8")
+		tables := si.GetSchema()
+		b, err := json.MarshalIndent(tables, "", " ")
+		if err != nil {
+			response.Write([]byte(err.Error()))
+			return
+		}
+		buf := bytes.NewBuffer(nil)
+		json.HTMLEscape(buf, b)
+		response.Write(buf.Bytes())
 	} else {
 		response.WriteHeader(http.StatusNotFound)
 	}

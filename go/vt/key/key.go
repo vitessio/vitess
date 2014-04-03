@@ -11,9 +11,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-
-	"github.com/youtube/vitess/go/bson"
-	"github.com/youtube/vitess/go/bytes2"
 )
 
 //
@@ -43,18 +40,6 @@ func (kid KeyspaceId) MarshalJSON() ([]byte, error) {
 func (kid *KeyspaceId) UnmarshalJSON(data []byte) (err error) {
 	*kid, err = HexKeyspaceId(data[1 : len(data)-1]).Unhex()
 	return err
-}
-
-func (kid *KeyspaceId) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
-	bson.EncodeString(buf, key, string(kid.Hex()))
-}
-
-func (kid *KeyspaceId) UnmarshalBson(buf *bytes.Buffer, kind byte) {
-	var err error
-	*kid, err = HexKeyspaceId(bson.DecodeString(buf, kind)).Unhex()
-	if err != nil {
-		panic("Cannot UnmarshalBson for KeyspaceId")
-	}
 }
 
 //
@@ -166,36 +151,6 @@ func (kr KeyRange) IsPartial() bool {
 	return !(kr.Start == MinKey && kr.End == MaxKey)
 }
 
-func (kr *KeyRange) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
-	bson.EncodeOptionalPrefix(buf, bson.Object, key)
-	lenWriter := bson.NewLenWriter(buf)
-
-	kr.Start.MarshalBson(buf, "Start")
-	kr.End.MarshalBson(buf, "End")
-
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
-}
-
-func (kr *KeyRange) UnmarshalBson(buf *bytes.Buffer, kind byte) {
-	bson.VerifyObject(kind)
-	bson.Next(buf, 4)
-
-	kind = bson.NextByte(buf)
-	for kind != bson.EOO {
-		key := bson.ReadCString(buf)
-		switch key {
-		case "Start":
-			kr.Start.UnmarshalBson(buf, kind)
-		case "End":
-			kr.End.UnmarshalBson(buf, kind)
-		default:
-			bson.Skip(buf, kind)
-		}
-		kind = bson.NextByte(buf)
-	}
-}
-
 // KeyRangesIntersect returns true if some Keyspace values exist in both ranges.
 //
 // See: http://stackoverflow.com/questions/4879315/what-is-a-tidy-algorithm-to-find-overlapping-intervals
@@ -235,6 +190,7 @@ func KeyRangesOverlap(first, second KeyRange) (KeyRange, error) {
 //
 
 // KeyspaceIdArray is an array of KeyspaceId that can be sorted
+// We use it only if we need to sort []KeyspaceId
 type KeyspaceIdArray []KeyspaceId
 
 func (p KeyspaceIdArray) Len() int { return len(p) }
@@ -249,44 +205,12 @@ func (p KeyspaceIdArray) Swap(i, j int) {
 
 func (p KeyspaceIdArray) Sort() { sort.Sort(p) }
 
-func EncodeKeyspaceIdArrayBson(buf *bytes2.ChunkedWriter, key string, ksIds KeyspaceIdArray) {
-	bson.EncodePrefix(buf, bson.Array, key)
-	lenWriter := bson.NewLenWriter(buf)
-	for i, v := range ksIds {
-		v.MarshalBson(buf, bson.Itoa(i))
-	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
-}
-
-func DecodeKeyspaceIdArrayBson(buf *bytes.Buffer, kind byte) (ksIds KeyspaceIdArray) {
-	switch kind {
-	case bson.Array:
-		// valid
-	case bson.Null:
-		return nil
-	default:
-		panic(bson.NewBsonError("Unexpected data type %v for KeyspaceIdArray", kind))
-	}
-
-	bson.Next(buf, 4)
-	ksIds = make([]KeyspaceId, 0, 8)
-	kind = bson.NextByte(buf)
-	var ksId KeyspaceId
-	for kind != bson.EOO {
-		bson.SkipIndex(buf)
-		ksId.UnmarshalBson(buf, kind)
-		ksIds = append(ksIds, ksId)
-		kind = bson.NextByte(buf)
-	}
-	return ksIds
-}
-
 //
 // KeyRangeArray definitions
 //
 
 // KeyRangeArray is an array of KeyRange that can be sorted
+// We use it only if we need to sort []KeyRange
 type KeyRangeArray []KeyRange
 
 func (p KeyRangeArray) Len() int { return len(p) }
@@ -301,44 +225,11 @@ func (p KeyRangeArray) Swap(i, j int) {
 
 func (p KeyRangeArray) Sort() { sort.Sort(p) }
 
-func EncodeKeyRangeArrayBson(buf *bytes2.ChunkedWriter, key string, krs KeyRangeArray) {
-	bson.EncodePrefix(buf, bson.Array, key)
-	lenWriter := bson.NewLenWriter(buf)
-	for i, v := range krs {
-		v.MarshalBson(buf, bson.Itoa(i))
-	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
-}
-
-func DecodeKeyRangeArrayBson(buf *bytes.Buffer, kind byte) (krs KeyRangeArray) {
-	switch kind {
-	case bson.Array:
-		// valid
-	case bson.Null:
-		return nil
-	default:
-		panic(bson.NewBsonError("Unexpected data type %v for KeyspaceIdArray", kind))
-	}
-
-	bson.Next(buf, 4)
-	krs = make([]KeyRange, 0, 8)
-	kind = bson.NextByte(buf)
-	var kr KeyRange
-	for kind != bson.EOO {
-		bson.SkipIndex(buf)
-		kr.UnmarshalBson(buf, kind)
-		krs = append(krs, kr)
-		kind = bson.NextByte(buf)
-	}
-	return krs
-}
-
 // ParseShardingSpec parses a string that describes a sharding
 // specification. a-b-c-d will be parsed as a-b, b-c, c-d. The empty
 // string may serve both as the start and end of the keyspace: -a-b-
 // will be parsed as start-a, a-b, b-end.
-func ParseShardingSpec(spec string) (KeyRangeArray, error) {
+func ParseShardingSpec(spec string) ([]KeyRange, error) {
 	parts := strings.Split(spec, "-")
 	if len(parts) == 1 {
 		return nil, fmt.Errorf("malformed spec: doesn't define a range: %q", spec)

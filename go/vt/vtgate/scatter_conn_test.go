@@ -64,7 +64,7 @@ func testScatterConnGeneric(t *testing.T, name string, f func(shards []string) (
 	sbc := &sandboxConn{mustFailServer: 1}
 	s.MapTestConn("0", sbc)
 	qr, err = f([]string{"0"})
-	want := fmt.Sprintf("error: err, shard, host: %v.0., {Uid:0 Host:0 NamedPortMap:map[vt:1]}", name)
+	want := fmt.Sprintf("error: err, shard, host: %v.0., {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}", name)
 	// Verify server error string.
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
@@ -82,8 +82,8 @@ func testScatterConnGeneric(t *testing.T, name string, f func(shards []string) (
 	s.MapTestConn("1", sbc1)
 	_, err = f([]string{"0", "1"})
 	// Verify server errors are consolidated.
-	want1 := fmt.Sprintf("error: err, shard, host: %v.0., {Uid:0 Host:0 NamedPortMap:map[vt:1]}\nerror: err, shard, host: %v.1., {Uid:1 Host:1 NamedPortMap:map[vt:1]}", name, name)
-	want2 := fmt.Sprintf("error: err, shard, host: %v.1., {Uid:1 Host:1 NamedPortMap:map[vt:1]}\nerror: err, shard, host: %v.0., {Uid:0 Host:0 NamedPortMap:map[vt:1]}", name, name)
+	want1 := fmt.Sprintf("error: err, shard, host: %v.0., {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}\nerror: err, shard, host: %v.1., {Uid:1 Host:1 NamedPortMap:map[vt:1] Health:map[]}", name, name)
+	want2 := fmt.Sprintf("error: err, shard, host: %v.1., {Uid:1 Host:1 NamedPortMap:map[vt:1] Health:map[]}\nerror: err, shard, host: %v.0., {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}", name, name)
 	if err == nil || (err.Error() != want1 && err.Error() != want2) {
 		t.Errorf("\nwant\n%s\ngot\n%v", want, err)
 	}

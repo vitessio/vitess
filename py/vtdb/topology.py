@@ -11,36 +11,92 @@
 
 import logging
 import random
+import time
 
+from vtdb import dbexceptions
 from vtdb import keyspace
 from zk import zkocc
 
+
 # keeps a global version of the topology
+# This is a map of keyspace_name: (keyspace object, time when keyspace was last fetched)
+# eg - {'keyspace_name': (keyspace_object, time_of_last_fetch)}
+# keyspace object is defined at py/vtdb/keyspace.py:Keyspace
 __keyspace_map = {}
 
 
-def read_and_get_keyspace(zkocc_client, name):
-  ks = None
-  try:
-    ks = __keyspace_map[name]
-  except KeyError:
-    ks = keyspace.read_keyspace(zkocc_client, name)
-    if ks is not None:
-      __add_keyspace(ks)
-    else:
-      raise
-  return ks
+# Throttle to clear the keyspace cache and re-read it.
+__keyspace_fetch_throttle = 5
 
 
+# Callback function for logging/instrumenting the calls to topo server.
+__keyspace_fetch_logging = None
+
+
+def set_keyspace_fetch_throttle(throttle):
+  global __keyspace_fetch_throttle
+  __keyspace_fetch_throttle = throttle
+
+
+# Default function to log the calls to the topo server.
+def log_keyspace_fetch(keyspace_name, topo_rtt):
+  logging.info("Fetched keyspace %s from topo_client in %f secs", keyspace_name, topo_rtt)
+
+
+# Register the callback function for logging or instrumentation.
+def register_topo_fetch_log_callback(func):
+  global __keyspace_fetch_logging
+  if func is not None:
+    __keyspace_fetch_logging = func
+
+
+# This returns the keyspace object for the keyspace name
+# from the cached topology map or None if not found.
 def get_keyspace(name):
   try:
-    return __keyspace_map[name]
+    return __keyspace_map[name][0]
   except KeyError:
     return None
 
 
-def __add_keyspace(ks):
-  __keyspace_map[ks.name] = ks
+# This returns the time of last fetch for the keyspace name
+# from the cached topology map or None if not found.
+def get_time_last_fetch(name):
+  try:
+    return __keyspace_map[name][1]
+  except KeyError:
+    return None
+
+
+# This adds the keyspace object to the cached topology map.
+def __set_keyspace(ks):
+  __keyspace_map[ks.name] = (ks, time.time())
+
+
+# This function refreshes the keyspace in the cached topology
+# map throttled by __keyspace_fetch_throttle secs. If the topo
+# server is unavailable, it retains the old keyspace object.
+def refresh_keyspace(zkocc_client, name):
+  global __keyspace_fetch_throttle
+  global __keyspace_fetch_logging
+
+  time_last_fetch = get_time_last_fetch(name)
+  if time_last_fetch is None:
+    return
+
+  if (time_last_fetch + __keyspace_fetch_throttle) > time.time():
+    return
+
+  start_time = time.time()
+  ks = keyspace.read_keyspace(zkocc_client, name)
+  topo_rtt = time.time() - start_time
+  if ks is not None:
+    __set_keyspace(ks)
+
+  if __keyspace_fetch_logging is not None:
+    __keyspace_fetch_logging(name, topo_rtt)
+  else:
+    log_keyspace_fetch(name, topo_rtt)
 
 
 # read all the keyspaces, populates __keyspace_map, can call get_keyspace
@@ -66,7 +122,7 @@ def read_topology(zkocc_client, read_fqdb_keys=True):
   for keyspace_name in keyspace_list:
     try:
       ks = keyspace.read_keyspace(zkocc_client, keyspace_name)
-      __add_keyspace(ks)
+      __set_keyspace(ks)
       for shard_name in ks.shard_names:
         for db_type in ks.db_types:
           db_key_parts = [ks.name, shard_name, db_type]
@@ -125,3 +181,24 @@ def get_host_port_by_name(topo_client, db_key, encrypted=False):
     return encrypted_host_port_list
   random.shuffle(host_port_list)
   return host_port_list
+
+
+def is_sharded_keyspace(keyspace_name, db_type):
+  ks = get_keyspace(keyspace_name)
+  shard_count = ks.get_shard_count(db_type)
+  return shard_count > 1
+
+def get_keyrange_from_shard_name(keyspace, shard_name):
+  keyrange = None
+  # db_type is immaterial here.
+  if not is_sharded_keyspace(keyspace, 'replica'):
+    if shard_name == keyrange_constants.SHARD_ZERO:
+      keyrange = keyrange_constants.NON_PARTIAL_KEYRANGE
+    else:
+      raise dbexceptions.DatabaseError('Invalid shard_name %s for keyspace %s', shard_name, keyspace)
+  else:
+    kr_parts = shard_name.split('-')
+    if len(kr_parts) != 2:
+      raise dbexceptions.DatabaseError('Invalid shard_name %s for keyspace %s', shard_name, keyspace)
+    keyrange = {'Start': kr_parts[0], 'End': kr_parts[1]}
+  return keyrange

@@ -13,8 +13,9 @@ import (
 )
 
 const (
+	// DefaultActionTimeout is a good default for interactive
+	// remote actions.
 	DefaultActionTimeout = 30 * time.Second
-	DefaultLockTimeout   = 30 * time.Second
 )
 
 var tabletManagerProtocol = flag.String("tablet_manager_protocol", "bson", "the protocol to use to talk to vttablet")

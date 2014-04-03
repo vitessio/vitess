@@ -275,7 +275,7 @@ class Tablet(object):
   def flush(self):
     utils.run(['curl', '-s', '-N', 'http://localhost:%s/debug/flushlogs' % (self.port)], stderr=utils.devnull, stdout=utils.devnull)
 
-  def start_vttablet(self, port=None, auth=False, memcache=False, wait_for_state="SERVING", customrules=None, schema_override=None, cert=None, key=None, ca_cert=None, repl_extra_flags={}, sensitive_mode=False):
+  def start_vttablet(self, port=None, auth=False, memcache=False, wait_for_state="SERVING", customrules=None, schema_override=None, cert=None, key=None, ca_cert=None, repl_extra_flags={}, sensitive_mode=False, target_tablet_type=None):
     """
     Starts a vttablet process, and returns it.
     The process is also saved in self.proc, so it's easy to kill as well.
@@ -320,6 +320,10 @@ class Tablet(object):
         args.extend(['-ca_cert', ca_cert])
     if sensitive_mode:
       args.extend(['-queryserver-config-sensitive-mode'])
+    if target_tablet_type:
+      args.extend(['-target_tablet_type', target_tablet_type,
+                   '-health_check_interval', '2s',
+                   '-allowed_replication_lag', '30'])
 
     stderr_fd = open(os.path.join(self.tablet_dir, "vttablet.stderr"), "w")
     # increment count only the first time
@@ -352,12 +356,8 @@ class Tablet(object):
             logging.debug("  vttablet %s in state %s != %s", self.tablet_alias, s, expected)
           else:
             break
-
-      logging.debug("sleeping a bit while we wait")
-      time.sleep(0.1)
-      timeout -= 0.1
-      if timeout <= 0:
-        raise utils.TestError("timeout waiting for state %s" % expected)
+      timeout = utils.wait_step('waiting for state %s' % expected, timeout,
+                                sleep_time=0.1)
 
   def _get_db_configs_file(self, repl_extra_flags={}):
     config = dict(self.default_db_config)
@@ -391,12 +391,8 @@ class Tablet(object):
                           expected)
           else:
             break
-
-      logging.debug("sleeping a bit while we wait")
-      time.sleep(0.5)
-      timeout -= 0.5
-      if timeout <= 0:
-        raise utils.TestError("timeout waiting for binlog server state %s" % expected)
+      timeout = utils.wait_step('waiting for binlog server state %s' % expected,
+                                timeout, sleep_time=0.5)
     logging.debug("tablet %s binlog service is in state %s",
                   self.tablet_alias, expected)
 
@@ -415,12 +411,8 @@ class Tablet(object):
                           s, expected)
           else:
             break
-
-      logging.debug("sleeping a bit while we wait")
-      time.sleep(0.5)
-      timeout -= 0.5
-      if timeout <= 0:
-        raise utils.TestError("timeout waiting for binlog player count %d" % expected)
+      timeout = utils.wait_step('waiting for binlog player count %d' % expected,
+                                timeout, sleep_time=0.5)
     logging.debug("tablet %s binlog player has %d players",
                   self.tablet_alias, expected)
 

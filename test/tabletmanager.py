@@ -457,5 +457,57 @@ class TestTabletManager(unittest.TestCase):
                                         'test_keyspace/0'])
     self.assertEqual(1, len(after_scrap['ReplicationLinks']), 'wrong replication links after fix: %s' % str(after_fix))
 
+  def test_health_check(self):
+    utils.run_vtctl('CreateKeyspace test_keyspace')
+
+    # one master, one replica that starts in spare
+    tablet_62344.init_tablet('master', 'test_keyspace', '0')
+    tablet_62044.init_tablet('spare', 'test_keyspace', '0')
+
+    for t in tablet_62344, tablet_62044:
+      t.create_db('vt_test_keyspace')
+
+    tablet_62344.start_vttablet(wait_for_state=None, target_tablet_type='replica')
+    tablet_62044.start_vttablet(wait_for_state=None, target_tablet_type='replica')
+
+    tablet_62344.wait_for_vttablet_state('SERVING')
+    tablet_62044.wait_for_vttablet_state('NOT_SERVING')
+
+    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/0', tablet_62344.tablet_alias])
+
+    # make sure the 'spare' slave goes to 'replica'
+    timeout = 10
+    while True:
+      ti = utils.run_vtctl_json(['GetTablet', tablet_62044.tablet_alias])
+      if ti['Type'] == "replica":
+        logging.info("Slave tablet went to replica, good")
+        break
+      timeout = utils.wait_step('slave tablet going to replica', timeout)
+
+    # make sure the master is still master
+    ti = utils.run_vtctl_json(['GetTablet', tablet_62344.tablet_alias])
+    self.assertEqual(ti['Type'], 'master', "unexpected master type: %s" % ti['Type'])
+
+    # stop replication on the slave, see it trigger the slave going
+    # slightly unhealthy
+    tablet_62044.mquery('', 'stop slave')
+    timeout = 10
+    while True:
+      ti = utils.run_vtctl_json(['GetTablet', tablet_62044.tablet_alias])
+      if 'Health' in ti and ti['Health']:
+        if 'replication_lag' in ti['Health']:
+          if ti['Health']['replication_lag'] == 'high':
+            logging.info("Slave tablet replication_lag went to high, good")
+            break
+      timeout = utils.wait_step('slave has high replication lag', timeout)
+
+    # make sure the serving graph was updated
+    ep = utils.run_vtctl_json(['GetEndPoints', 'test_nj', 'test_keyspace/0', 'replica'])
+    if not ep['entries'][0]['health']:
+      self.fail('Replication lag parameter not propagated to serving graph: %s' % str(ep))
+    self.assertEqual(ep['entries'][0]['health']['replication_lag'], 'high', 'Replication lag parameter not propagated to serving graph: %s' % str(ep))
+
+    tablet.kill_tablets([tablet_62344, tablet_62044])
+
 if __name__ == '__main__':
   utils.main()

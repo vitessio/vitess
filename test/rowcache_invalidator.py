@@ -12,6 +12,7 @@ import unittest
 import urllib2
 
 from zk import zkocc
+from vtdb import topology
 from vtdb import vtclient
 
 import environment
@@ -93,6 +94,7 @@ class RowCacheInvalidator(unittest.TestCase):
   def setUp(self):
     self.vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
                                                "test_nj", 30.0)
+    topology.read_topology(self.vtgate_client)
     self.perform_insert(400)
 
   def tearDown(self):

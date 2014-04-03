@@ -81,6 +81,10 @@ func (node *Node) Len() int {
 	return len(node.Sub)
 }
 
+func (node *Node) LowerCase() {
+	node.Value = bytes.ToLower(node.Value)
+}
+
 func (node *Node) String() (out string) {
 	buf := NewTrackedBuffer(nil)
 	buf.Fprintf("%v", node)
@@ -119,7 +123,7 @@ func FormatNode(buf *TrackedBuffer, node *Node) {
 			node.At(SELECT_HAVING_OFFSET),
 			node.At(SELECT_ORDER_OFFSET),
 			node.At(SELECT_LIMIT_OFFSET),
-			node.At(SELECT_FOR_UPDATE_OFFSET),
+			node.At(SELECT_LOCK_OFFSET),
 		)
 	case INSERT:
 		buf.Fprintf("insert %vinto %v%v %v%v",
@@ -177,7 +181,7 @@ func FormatNode(buf *TrackedBuffer, node *Node) {
 				buf.Fprintf(", %v", node.At(1))
 			}
 		}
-	case COLUMN_LIST:
+	case COLUMN_LIST, INDEX_LIST:
 		if node.Len() > 0 {
 			buf.Fprintf("(%v", node.At(0))
 			for i := 1; i < node.Len(); i++ {
@@ -212,7 +216,7 @@ func FormatNode(buf *TrackedBuffer, node *Node) {
 		if node.Len() != 0 {
 			buf.Fprintf(" on duplicate key update %v", node.At(0))
 		}
-	case NUMBER, NULL, SELECT_STAR, NO_DISTINCT, COMMENT, FOR_UPDATE, NOT_FOR_UPDATE, TABLE:
+	case NUMBER, NULL, SELECT_STAR, NO_DISTINCT, COMMENT, NO_LOCK, FOR_UPDATE, LOCK_IN_SHARE_MODE, TABLE:
 		buf.Fprintf("%s", node.Value)
 	case ID:
 		if _, ok := keywords[string(node.Value)]; ok {

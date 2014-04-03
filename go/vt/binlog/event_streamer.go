@@ -213,7 +213,7 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer) (pkTuple *sqlparser.Node, err 
 func encodePKValues(pkValues []*sqlparser.Node, insertid int64) (rowPk []interface{}, newinsertid int64, err error) {
 	for _, pkVal := range pkValues {
 		if pkVal.Type == sqlparser.STRING {
-			rowPk = append(rowPk, string(pkVal.Value))
+			rowPk = append(rowPk, pkVal.Value)
 		} else if pkVal.Type == sqlparser.NUMBER {
 			// pkVal.Value is a byte array, convert this to string and use strconv to find
 			// the right numberic type.

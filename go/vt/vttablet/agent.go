@@ -172,5 +172,8 @@ func InitAgent(
 	// register the RPC services from the agent
 	agent.RegisterQueryService()
 
+	// start health check if needed
+	initHeathCheck(agent)
+
 	return agent, nil
 }

@@ -39,6 +39,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"reflect"
 	"sync"
 	"time"
 
@@ -46,6 +47,7 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/env"
+	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
@@ -53,7 +55,9 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-var vtactionBinaryPath = flag.String("vtaction_binary_path", "", "Full path (including filename) to vtaction binary. If not set, tries VTROOT/bin/vtaction.")
+var (
+	vtactionBinaryPath = flag.String("vtaction_binary_path", "", "Full path (including filename) to vtaction binary. If not set, tries VTROOT/bin/vtaction.")
+)
 
 // Each TabletChangeCallback must be idempotent and "threadsafe".  The
 // agent will execute these in a new goroutine each time a change is
@@ -284,28 +288,11 @@ func (agent *ActionAgent) verifyServingAddrs() error {
 	}
 
 	// Check to see our address is registered in the right place.
-	addr, err := EndPointForTablet(agent.Tablet().Tablet)
+	addr, err := agent.Tablet().Tablet.EndPoint()
 	if err != nil {
 		return err
 	}
 	return agent.TopoServer.UpdateTabletEndpoint(agent.Tablet().Tablet.Alias.Cell, agent.Tablet().Keyspace, agent.Tablet().Shard, agent.Tablet().Type, addr)
-}
-
-func EndPointForTablet(tablet *topo.Tablet) (*topo.EndPoint, error) {
-	entry := topo.NewAddr(tablet.Alias.Uid, tablet.Hostname)
-	if err := tablet.ValidatePortmap(); err != nil {
-		return nil, err
-	}
-
-	// TODO(szopa): Rename _vtocc to vt.
-	entry.NamedPortMap = map[string]int{
-		"_vtocc": tablet.Portmap["vt"],
-		"_mysql": tablet.Portmap["mysql"],
-	}
-	if port, ok := tablet.Portmap["vts"]; ok {
-		entry.NamedPortMap["_vts"] = port
-	}
-	return entry, nil
 }
 
 // bindAddr: the address for the query service advertised by this agent
@@ -398,4 +385,86 @@ func (agent *ActionAgent) actionEventLoop() {
 		return agent.dispatchAction(actionPath, data)
 	}
 	agent.TopoServer.ActionEventLoop(agent.TabletAlias, f, agent.done)
+}
+
+// RunHealthCheck takes the action mutex, runs the health check,
+// and if we need to change our state, do it.
+// If we are the master, we don't change our type, healthy or not.
+// If we are not the master, we change to spare if not healthy,
+// or to the passed in targetTabletType if healthy.
+//
+// Note we only update the topo record if we need to, that is if our type or
+// health details changed.
+func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType, lockTimeout time.Duration) {
+	agent.actionMutex.Lock()
+	defer agent.actionMutex.Unlock()
+
+	// read the current tablet record
+	agent.mutex.Lock()
+	tablet := agent._tablet
+	agent.mutex.Unlock()
+
+	// run the health check
+	typeForHealthCheck := targetTabletType
+	if tablet.Type == topo.TYPE_MASTER {
+		typeForHealthCheck = topo.TYPE_MASTER
+	}
+	health, err := health.Run(typeForHealthCheck)
+	if len(health) == 0 {
+		health = nil
+	}
+
+	// start with no change
+	newTabletType := tablet.Type
+	if err != nil {
+		if tablet.Type != targetTabletType {
+			log.Infof("Tablet not healthy and in state %v, not changing it: %v", tablet.Type, err)
+			return
+		}
+		log.Infof("Tablet not healthy, converting it from %v to spare: %v", targetTabletType, err)
+		newTabletType = topo.TYPE_SPARE
+	} else {
+		// We are healthy, maybe with health, see if we need
+		// to update the record. We only change from spare to
+		// our target type.
+		if tablet.Type == topo.TYPE_SPARE {
+			newTabletType = targetTabletType
+		}
+		if tablet.Type == newTabletType && reflect.DeepEqual(health, tablet.Health) {
+			// no change in health, not logging anything,
+			// and we're done
+			return
+		}
+
+		// we need to update our state
+		log.Infof("Updating tablet record as healthy type %v -> %v with health details %v -> %v", tablet.Type, newTabletType, tablet.Health, health)
+	}
+
+	// Change the Type, update the health
+	if err := actionnode.ChangeType(agent.TopoServer, tablet.Alias, newTabletType, health, true /*runHooks*/); err != nil {
+		log.Infof("Error updating tablet record: %v", err)
+		return
+	}
+
+	// Rebuild the serving graph in our cell, only if we're dealing with
+	// a serving type
+	if topo.IsInServingGraph(targetTabletType) {
+		// TODO: interrupted may need to be a global one closed when we exit
+		interrupted := make(chan struct{})
+		actionNode := actionnode.RebuildShard()
+		lockPath, err := actionNode.LockShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, lockTimeout, interrupted)
+		if err != nil {
+			log.Warningf("Cannot lock shard for rebuild: %v", err)
+			return
+		}
+		err = topo.RebuildShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, topo.RebuildShardOptions{Cells: []string{tablet.Alias.Cell}, IgnorePartialResult: true})
+		err = actionNode.UnlockShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, lockPath, err)
+		if err != nil {
+			log.Warningf("UnlockShard returned an error: %v", err)
+			return
+		}
+	}
+
+	// run the post action callbacks
+	agent.afterAction("healthcheck", false /* reloadSchema */)
 }

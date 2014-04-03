@@ -25,7 +25,6 @@ type alltypes struct {
 	Uint64  uint64
 	Uint32  uint32
 	Uint    uint
-	Map     map[string]int64
 	Strings []string
 	Nil     interface{}
 }
@@ -72,7 +71,6 @@ func (a *alltypes) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 		case "Uint":
 			verifyKind("Uint", Ulong, kind)
 			a.Uint = DecodeUint(buf, kind)
-		case "Map":
 		case "Strings":
 			verifyKind("Strings", Array, kind)
 			a.Strings = DecodeStringArray(buf, kind)
@@ -91,6 +89,7 @@ func verifyKind(tag string, want, got byte) {
 	}
 }
 
+// TODO(sougou): Revisit usefulness of this test
 func TestUnmarshalUtil(t *testing.T) {
 	a := alltypes{
 		Bytes:   []byte("bytes"),
@@ -184,8 +183,7 @@ func (ps *PrivateStruct) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 
 	EncodeUint64(buf, "Type", ps.veryPrivate)
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
+	lenWriter.Close()
 }
 
 func (ps *PrivateStruct) UnmarshalBson(buf *bytes.Buffer, kind byte) {

@@ -32,6 +32,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 %{
 package sqlparser
 
+import "bytes"
+
 func SetParseTree(yylex interface{}, root *Node) {
 	tn := yylex.(*Tokenizer)
 	tn.ParseTree = root
@@ -47,6 +49,11 @@ func ForceEOF(yylex interface{}) {
 	tn.ForceEOF = true
 }
 
+var (
+  SHARE = []byte("share")
+  MODE =  []byte("mode")
+)
+
 // Offsets for select parse tree. These need to match the Push order in the select_statement rule.
 const (
 	SELECT_COMMENT_OFFSET = iota
@@ -58,7 +65,7 @@ const (
 	SELECT_HAVING_OFFSET
 	SELECT_ORDER_OFFSET
 	SELECT_LIMIT_OFFSET
-	SELECT_FOR_UPDATE_OFFSET
+	SELECT_LOCK_OFFSET
 )
 
 const (
@@ -93,7 +100,7 @@ const (
 }
 
 %token <node> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT COMMENT FOR
-%token <node> ALL DISTINCT AS EXISTS IN IS LIKE BETWEEN NULL ASC DESC VALUES INTO DUPLICATE KEY DEFAULT SET
+%token <node> ALL DISTINCT AS EXISTS IN IS LIKE BETWEEN NULL ASC DESC VALUES INTO DUPLICATE KEY DEFAULT SET LOCK
 %token <node> ID STRING NUMBER VALUE_ARG
 %token <node> LE GE NE NULL_SAFE_EQUAL
 %token <node> LEX_ERROR
@@ -120,8 +127,8 @@ const (
 %start any_command
 
 // Fake Tokens
-%token <node> NODE_LIST UPLUS UMINUS CASE_WHEN WHEN_LIST SELECT_STAR NO_DISTINCT FUNCTION FOR_UPDATE NOT_FOR_UPDATE
-%token <node> NOT_IN NOT_LIKE NOT_BETWEEN IS_NULL IS_NOT_NULL UNION_ALL COMMENT_LIST COLUMN_LIST TABLE_EXPR
+%token <node> NODE_LIST UPLUS UMINUS CASE_WHEN WHEN_LIST SELECT_STAR NO_DISTINCT FUNCTION NO_LOCK FOR_UPDATE LOCK_IN_SHARE_MODE
+%token <node> NOT_IN NOT_LIKE NOT_BETWEEN IS_NULL IS_NOT_NULL UNION_ALL COMMENT_LIST COLUMN_LIST INDEX_LIST TABLE_EXPR
 
 %type <node> command
 %type <node> select_statement insert_statement update_statement delete_statement set_statement
@@ -133,9 +140,10 @@ const (
 %type <node> where_expression_opt boolean_expression condition compare
 %type <node> values parenthesised_lists parenthesised_list value_expression_list value_expression keyword_as_func
 %type <node> unary_operator case_expression when_expression_list when_expression column_name value
-%type <node> group_by_opt having_opt order_by_opt order_list order asc_desc_opt limit_opt for_update_opt on_dup_opt
-%type <node> column_list_opt column_list update_list update_expression
+%type <node> group_by_opt having_opt order_by_opt order_list order asc_desc_opt limit_opt lock_opt on_dup_opt
+%type <node> column_list_opt column_list index_list update_list update_expression
 %type <node> exists_opt not_exists_opt ignore_opt non_rename_operation to_opt constraint_opt using_opt
+%type <node> sql_id
 %type <node> force_eof
 
 %%
@@ -158,7 +166,7 @@ command:
 | drop_statement
 
 select_statement:
-	SELECT comment_opt distinct_opt select_expression_list FROM table_expression_list where_expression_opt group_by_opt having_opt order_by_opt limit_opt for_update_opt
+	SELECT comment_opt distinct_opt select_expression_list FROM table_expression_list where_expression_opt group_by_opt having_opt order_by_opt limit_opt lock_opt
 	{
 		$$ = $1
 		$$.Push($2) // 0: comment_opt
@@ -170,7 +178,7 @@ select_statement:
 		$$.Push($9) // 6: having_opt
 		$$.Push($10) // 7: order_by_opt
 		$$.Push($11) // 8: limit_opt
-		$$.Push($12) // 9: for_update_opt
+		$$.Push($12) // 9: lock_opt
 	}
 | select_statement union_op select_statement %prec UNION
 	{
@@ -182,7 +190,7 @@ insert_statement:
 	{
 		$$ = $1
 		$$.Push($2) // 0: comment_opt
-		$$.Push($4) // 1: table_name
+		$$.Push($4) // 1: dml_table_expression
 		$$.Push($5) // 2: column_list_opt
 		$$.Push($6) // 3: values
 		$$.Push($7) // 4: on_dup_opt
@@ -193,7 +201,7 @@ update_statement:
 	{
 		$$ = $1
 		$$.Push($2) // 0: comment_opt
-		$$.Push($3) // 1: table_name
+		$$.Push($3) // 1: dml_table_expression
 		$$.Push($5) // 2: update_list
 		$$.Push($6) // 3: where_expression_opt
 		$$.Push($7) // 4: order_by_opt
@@ -205,7 +213,7 @@ delete_statement:
 	{
 		$$ = $1
 		$$.Push($2) // 0: comment_opt
-		$$.Push($4) // 1: table_name
+		$$.Push($4) // 1: dml_table_expression
 		$$.Push($5) // 2: where_expression_opt
 		$$.Push($6) // 3: order_by_opt
 		$$.Push($7) // 4: limit_opt
@@ -224,7 +232,7 @@ create_statement:
 	{
 		$$.Push($4)
 	}
-| CREATE constraint_opt INDEX ID using_opt ON ID force_eof
+| CREATE constraint_opt INDEX sql_id using_opt ON ID force_eof
 	{
 		// Change this to an alter statement
 		$$ = NewSimpleParseNode(ALTER, "alter")
@@ -254,7 +262,7 @@ drop_statement:
 	{
 		$$.Push($4)
 	}
-| DROP INDEX ID ON ID
+| DROP INDEX sql_id ON ID
 	{
 		// Change this to an alter statement
 		$$ = NewSimpleParseNode(ALTER, "alter")
@@ -316,7 +324,7 @@ select_expression:
 		$$ = NewSimpleParseNode(SELECT_STAR, "*")
 	}
 | expression
-| expression as_opt ID
+| expression as_opt sql_id
 	{
 		$$ = $2.PushTwo($1, $3)
 	}
@@ -431,11 +439,11 @@ index_hint_list:
   {
 		$$ = NewSimpleParseNode(USE, "use")
   }
-| USE INDEX '(' column_list ')'
+| USE INDEX '(' index_list ')'
   {
     $$.Push($4)
   }
-| FORCE INDEX '(' column_list ')'
+| FORCE INDEX '(' index_list ')'
   {
     $$.Push($4)
   }
@@ -631,17 +639,17 @@ value_expression:
       $$ = $1.Push($2)
     }
 	}
-| ID '(' ')'
+| sql_id '(' ')'
 	{
 		$1.Type = FUNCTION
 		$$ = $1.Push(NewSimpleParseNode(NODE_LIST, "node_list"))
 	}
-| ID '(' select_expression_list ')'
+| sql_id '(' select_expression_list ')'
 	{
 		$1.Type = FUNCTION
 		$$ = $1.Push($3)
 	}
-| ID '(' DISTINCT select_expression_list ')'
+| sql_id '(' DISTINCT select_expression_list ')'
 	{
 		$1.Type = FUNCTION
 		$$ = $1.Push($3)
@@ -702,8 +710,8 @@ when_expression:
   }
 
 column_name:
-	ID
-| ID '.' ID
+	sql_id
+| ID '.' sql_id
 	{
 		$$ = $2.PushTwo($1, $3)
 	}
@@ -778,13 +786,25 @@ limit_opt:
 		$$ = $1.PushTwo($2, $4)
 	}
 
-for_update_opt:
+lock_opt:
 	{
-		$$ = NewSimpleParseNode(NOT_FOR_UPDATE, "")
+		$$ = NewSimpleParseNode(NO_LOCK, "")
 	}
 | FOR UPDATE
 	{
 		$$ = NewSimpleParseNode(FOR_UPDATE, " for update")
+	}
+| LOCK IN sql_id sql_id
+	{
+    if !bytes.Equal($3.Value, SHARE) {
+      yylex.Error("expecting share")
+      return 1
+    }
+    if !bytes.Equal($4.Value, MODE) {
+      yylex.Error("expecting mode")
+      return 1
+    }
+		$$ = NewSimpleParseNode(LOCK_IN_SHARE_MODE, " lock in share mode")
 	}
 
 column_list_opt:
@@ -797,12 +817,23 @@ column_list_opt:
 	}
 
 column_list:
-	ID
+	column_name
 	{
 		$$ = NewSimpleParseNode(COLUMN_LIST, "")
 		$$.Push($1)
 	}
-| column_list ',' ID
+| column_list ',' column_name
+	{
+		$$ = $1.Push($3)
+	}
+
+index_list:
+	sql_id
+	{
+		$$ = NewSimpleParseNode(INDEX_LIST, "")
+		$$.Push($1)
+	}
+| index_list ',' sql_id
 	{
 		$$ = $1.Push($3)
 	}
@@ -828,7 +859,7 @@ update_list:
 	}
 
 update_expression:
-	ID '=' expression
+	sql_id '=' expression
 	{
 		$$ = $2.PushTwo($1, $3)
 	}
@@ -862,7 +893,13 @@ constraint_opt:
 
 using_opt:
 	{ $$ = nil }
-| USING ID
+| USING sql_id
+
+sql_id:
+  ID
+  {
+    $$.LowerCase()
+  }
 
 force_eof:
 {
