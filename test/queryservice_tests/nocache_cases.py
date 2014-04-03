@@ -131,6 +131,15 @@ cases = [
                       'select /* for update */ eid from vtocc_a where eid = 1 and id = 1 limit 10001 for update']),
                'commit']),
 
+    MultiCase('lock in share mode',
+              ['begin',
+               Case(sql='select /* for update */ eid from vtocc_a where eid = 1 and id = 1 lock in share mode',
+                    result=[(1L,)],
+                    rewritten=[
+                      'select eid from vtocc_a where 1 != 1',
+                      'select /* for update */ eid from vtocc_a where eid = 1 and id = 1 limit 10001 lock in share mode']),
+               'commit']),
+
     Case(doc='complex where',
          sql='select /* complex where */ id from vtocc_a where id+1 = 2',
          result=[(1L,)],
@@ -233,6 +242,18 @@ cases = [
          'commit',
          Case(sql='select * from vtocc_a where eid = 3 and id = 1',
               result=[(3L, 1L, 'aaaa', 'cccc')]),
+         'begin',
+         'delete from vtocc_a where eid>1',
+         'commit']),
+
+    MultiCase(
+        'insert with qualified column name',
+        ['begin',
+         Case(sql="insert /* qualified */ into vtocc_a(vtocc_a.eid, id, name, foo) values (4, 1, 'aaaa', 'cccc')",
+              rewritten="insert /* qualified */ into vtocc_a(vtocc_a.eid, id, name, foo) values (4, 1, 'aaaa', 'cccc') /* _stream vtocc_a (eid id ) (4 1 )"),
+         'commit',
+         Case(sql='select * from vtocc_a where eid = 4 and id = 1',
+              result=[(4L, 1L, 'aaaa', 'cccc')]),
          'begin',
          'delete from vtocc_a where eid>1',
          'commit']),

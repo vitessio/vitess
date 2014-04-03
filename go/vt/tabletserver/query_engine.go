@@ -282,7 +282,7 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 	} else {
 		switch plan.PlanId {
 		case sqlparser.PLAN_PASS_SELECT:
-			if plan.Reason == sqlparser.REASON_FOR_UPDATE {
+			if plan.Reason == sqlparser.REASON_LOCK {
 				panic(NewTabletError(FAIL, "Disallowed outside transaction"))
 			}
 			reply = qe.execSelect(logStats, plan)

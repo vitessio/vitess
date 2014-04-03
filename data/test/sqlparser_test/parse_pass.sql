@@ -13,6 +13,7 @@ select /* except */ 1 from t except select 1 from t
 select /* intersect */ 1 from t intersect select 1 from t
 select /* distinct */ distinct 1 from t
 select /* for update */ 1 from t for update
+select /* lock in share mode */ 1 from t lock in share mode
 select /* select list */ 1, 2 from t
 select /* * */ * from t
 select /* column alias */ a b from t#select /* column alias */ a as b from t
@@ -115,6 +116,7 @@ insert /* multi-value */ into a values (1, 2)
 insert /* multi-value list */ into a values (1, 2), (3, 4)
 insert /* value expression list */ into a values (a+1, 2*3)
 insert /* column list */ into a(a, b) values (1, 2)
+insert /* qualified column list */ into a(a, a.b) values (1, 2)
 insert /* select */ into a select b, c from d
 insert /* on duplicate */ into a values (1, 2) on duplicate key update b = values(a), c = d
 update /* simple */ a set b = 3
