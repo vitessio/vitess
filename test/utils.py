@@ -548,3 +548,8 @@ def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
 
 def get_status(port):
   return urllib.urlopen('http://localhost:%u%s' % (port, environment.status_url)).read()
+
+def curl(url, background=False, **kwargs):
+  if background:
+    return run_bg([environment.curl_bin, '-s', '-N', '-L', url], **kwargs)
+  return run([environment.curl_bin, '-s', '-N', '-L', url], **kwargs)

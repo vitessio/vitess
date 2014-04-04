@@ -3,6 +3,8 @@ import json
 import re
 import urllib2
 
+import test_env
+
 def cases_iterator(cases):
   for case in cases:
     if isinstance(case, MultiCase):
@@ -85,17 +87,6 @@ class Log(object):
     if case.cache_invalidations is not None and int(self.cache_invalidations) != case.cache_invalidations:
       return self.fail("Bad Cache Invalidations", case.cache_invalidations, self.cache_invalidations)
 
-  ## NOTE(szopa): I am not checking bind variables because I have
-  ## trouble parsing them - and I don't want to use a full fledged
-  ## JSON encoding on the Go side.
-  # def check_bind_variables(self, case):
-  #   if self.bind_variables:
-  #     bind_variables = json.loads(self.bind_variables)
-  #   else:
-  #     bind_variables = {}
-  #   if bind_variables != case.bindings:
-  #     self.fail("Bad bind variables", case.bindings, bind_variables)
-
   def check_query_plan(self, case):
     if case.query_plan is not None and case.query_plan != self.plan_type:
       return self.fail("Bad query plan", case.query_plan, self.plan_type)
@@ -107,15 +98,13 @@ class Log(object):
     if rewritten != self.rewritten_sql:
       self.fail("Bad rewritten SQL", rewritten, self.rewritten_sql)
 
-  # def check_remote_address(self, case):
-  #   if not self.remote_address.startswith(case.remote_address):
-  #     return self.fail("Bad RemoteAddr", case.remote_address, self.remote_address)
-
   def check_number_of_queries(self, case):
     if case.rewritten is not None and int(self.number_of_queries) != len(case.rewritten):
       return self.fail("wrong number of queries", len(case.rewritten), int(self.number_of_queries))
 
+
 class Case(object):
+
   def __init__(self, sql, bindings=None, result=None, rewritten=None, doc='',
                cache_table=None, query_plan=None, cache_hits=None,
                cache_misses=None, cache_absent=None, cache_invalidations=None,
@@ -158,28 +147,26 @@ class Case(object):
                                              self.cache_absent,
                                              self.cache_invalidations])
 
-  def run(self, cursor, querylog=None):
+  def run(self, cursor, env):
     failures = []
-    check_rewritten = self.rewritten is not None and querylog
-    if check_rewritten:
-      querylog.reset()
-    if self.is_testing_cache:
-      tstart = self.table_stats()
-    if self.sql in ('begin', 'commit', 'rollback'):
-      getattr(cursor.connection, self.sql)()
-    else:
-      cursor.execute(self.sql, self.bindings)
-    if self.result is not None:
-      result = list(cursor)
-      if self.result != result:
-        failures.append("%r:\n%s !=\n%s" % (self.sql, self.result, result))
-    if check_rewritten:
-      rewritten = self.normalizelog(querylog.read())
-      if self.rewritten != rewritten:
-        failures.append("%r:\n%s !=\n%s" % (self.sql, self.rewritten, rewritten))
+    with test_env.Querylog(env) as querylog:
+      if self.is_testing_cache:
+        tstart = self.table_stats(env)
+      if self.sql in ('begin', 'commit', 'rollback'):
+        getattr(cursor.connection, self.sql)()
+      else:
+        cursor.execute(self.sql, self.bindings)
+      if self.result is not None:
+        result = list(cursor)
+        if self.result != result:
+          failures.append("%r:\n%s !=\n%s" % (self.sql, self.result, result))
+      if self.rewritten:
+        rewritten = self.normalizelog(querylog.tailer.read())
+        if self.rewritten != rewritten:
+          failures.append("%r:\n%s !=\n%s" % (self.sql, self.rewritten, rewritten))
 
     if self.is_testing_cache:
-      tdelta = self.table_stats_delta(tstart)
+      tdelta = self.table_stats_delta(tstart, env)
       if self.cache_hits is not None and tdelta['Hits'] != self.cache_hits:
         failures.append("Bad Cache Hits: %s != %s" % (self.cache_hits, tdelta['Hits']))
 
@@ -195,25 +182,27 @@ class Case(object):
 
     return failures
 
-  def table_stats_delta(self, old):
+  def table_stats_delta(self, old, env):
     result = {}
-    new = self.table_stats()
+    new = self.table_stats(env)
     for k, v in new.items():
       result[k] = new[k] - old[k]
     return result
 
-  def table_stats(self):
-    return json.load(urllib2.urlopen("http://localhost:9461/debug/table_stats"))[self.cache_table]
+  def table_stats(self, env):
+    return env.http_get('/debug/table_stats')[self.cache_table]
 
   def __str__(self):
     return "Case %r" % self.doc
 
+
 class MultiCase(object):
+
   def __init__(self, doc, sqls_and_cases):
     self.doc = doc
     self.sqls_and_cases = sqls_and_cases
 
-  def run(self, cursor, querylog=None):
+  def run(self, cursor, env):
     failures = []
     for case in self.sqls_and_cases:
       if isinstance(case, basestring):
@@ -222,7 +211,7 @@ class MultiCase(object):
         else:
           cursor.execute(case)
         continue
-      failures += case.run(cursor, querylog)
+      failures += case.run(cursor, env)
     return failures
 
   def __iter__(self):

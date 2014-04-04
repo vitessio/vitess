@@ -52,24 +52,47 @@ if [ -d $VTROOT/dist/mysql ];
 then
   echo "skipping MySQL build"
 else
-  git clone https://code.google.com/r/sougou-vitess-mysql/ third_party/mysql
-  pushd third_party/mysql
-  set -e
-  git apply ../mysql.patch
-  export VT_MYSQL_ROOT=$VTROOT/dist/mysql
-  source google/env.inc
-  source google/compile.inc
+  case "$MYSQL_FLAVOR" in
+    "MariaDB")
+      echo "Getting and compiling MariaDB"
+      # MariaDB may require cmake and libaio-dev to compile, I ran:
+      # sudo apt-get install cmake
+      # sudo apt-get install libaio-dev
+      echo "Downloading and compiling MariaDB"
+      pushd third_party
+      version="10.0.10"
+      wget https://downloads.mariadb.org/interstitial/mariadb-${version}/kvm-tarbake-jaunty-x86/mariadb-${version}.tar.gz
+      tar xzf mariadb-${version}.tar.gz
+      popd
 
-# Install
-  make -s install #DESTDIR=$VTROOT/dist/mysql
-  rm -rf $VTROOT/dist/mysql/mysql-test
-  rm -rf $VTROOT/dist/mysql/sql-bench
-  popd
-  rm -rf third_party/mysql
+      pushd third_party/mariadb-${version}
+      cmake . -DBUILD_CONFIG=mysql_release -DCMAKE_INSTALL_PREFIX=$VTROOT/dist/mysql
+      make -j 8 install
+      rm -rf $VTROOT/dist/mysql/mysql-test
+      rm -rf $VTROOT/dist/mysql/sql-bench
+      popd
+      rm -rf third_party/mariadb-${version}.tar.gz third_party/mariadb-${version}
+      ;;
+
+    *)
+      echo "Getting and compiling Google MySQL"
+      git clone https://code.google.com/r/sougou-vitess-mysql/ third_party/mysql
+      pushd third_party/mysql
+      set -e
+      git apply ../mysql.patch
+      export VT_MYSQL_ROOT=$VTROOT/dist/mysql
+      source google/env.inc
+      source google/compile.inc
+
+      # Install
+      make -s install #DESTDIR=$VTROOT/dist/mysql
+      rm -rf $VTROOT/dist/mysql/mysql-test
+      rm -rf $VTROOT/dist/mysql/sql-bench
+      popd
+      rm -rf third_party/mysql
+      ;;
+  esac
 fi
-
-
-
 
 # generate pkg-config, so go can use mysql C client
 if [ ! -x $VT_MYSQL_ROOT/bin/mysql_config ]; then

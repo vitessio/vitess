@@ -46,11 +46,7 @@ func (mysqld *Mysqld) PromoteSlave(setReadWrite bool, hookExtraEnv map[string]st
 		return
 	}
 
-	cmds := []string{
-		"RESET MASTER",
-		"RESET SLAVE",
-		"CHANGE MASTER TO MASTER_HOST = ''",
-	}
+	cmds := mysqld.flavor.PromoteSlaveCommands()
 	if err = mysqld.executeSuperQueryList(cmds); err != nil {
 		return
 	}

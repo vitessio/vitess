@@ -61,11 +61,17 @@ class Tablet(object):
     self.zk_tablet_path = '/zk/test_%s/vt/tablets/%010d' % (self.cell, self.tablet_uid)
     self.zk_pid = self.zk_tablet_path + '/pid'
 
-  def mysqlctl(self, cmd, quiet=False, extra_my_cnf=None, with_ports=False):
-    env = None
+  def mysqlctl(self, cmd, extra_my_cnf=None, with_ports=False):
+    all_extra_my_cnf = []
+    if environment.mysql_flavor == "GoogleMysql":
+      # we have to manually enable hierarchical replication to support groupid
+      all_extra_my_cnf.append(environment.vttop + "/config/mycnf/master_google.cnf")
     if extra_my_cnf:
+       all_extra_my_cnf.append(extra_my_cnf)
+    env = None
+    if all_extra_my_cnf:
       env = os.environ.copy()
-      env['EXTRA_MY_CNF'] = extra_my_cnf
+      env['EXTRA_MY_CNF'] = ":".join(all_extra_my_cnf)
     ports_params = []
     if with_ports:
       ports_params = ['-port', str(self.port),
@@ -77,17 +83,17 @@ class Tablet(object):
                         ports_params + cmd, env=env)
 
   def init_mysql(self, extra_my_cnf=None):
-    return self.mysqlctl(['init'], quiet=True, extra_my_cnf=extra_my_cnf,
+    return self.mysqlctl(['init'], extra_my_cnf=extra_my_cnf,
                          with_ports=True)
 
   def start_mysql(self):
-    return self.mysqlctl(['start'], quiet=True, with_ports=True)
+    return self.mysqlctl(['start'], with_ports=True)
 
   def shutdown_mysql(self):
-    return self.mysqlctl(['shutdown'], quiet=True, with_ports=True)
+    return self.mysqlctl(['shutdown'], with_ports=True)
 
   def teardown_mysql(self):
-    return self.mysqlctl(['teardown', '-force'], quiet=True)
+    return self.mysqlctl(['teardown', '-force'])
 
   def remove_tree(self):
     try:
@@ -141,12 +147,14 @@ class Tablet(object):
       raise utils.TestError("expected %u rows in %s" % (n, table), result)
 
   def reset_replication(self):
-    self.mquery('', [
+    commands = [
         'RESET MASTER',
         'STOP SLAVE',
         'RESET SLAVE',
-        'CHANGE MASTER TO MASTER_HOST = ""',
-        ])
+        ]
+    if environment.mysql_flavor == "GoogleMysql":
+      commands.append('CHANGE MASTER TO MASTER_HOST = ""')
+    self.mquery('', commands)
 
   def populate(self, dbname, create_sql, insert_sqls=[]):
       self.create_db(dbname)
@@ -273,7 +281,7 @@ class Tablet(object):
     return "%s/vt_%010d" % (environment.vtdataroot, self.tablet_uid)
 
   def flush(self):
-    utils.run(['curl', '-s', '-N', 'http://localhost:%s/debug/flushlogs' % (self.port)], stderr=utils.devnull, stdout=utils.devnull)
+    utils.curl('http://localhost:%s/debug/flushlogs' % (self.port), stderr=utils.devnull, stdout=utils.devnull)
 
   def start_vttablet(self, port=None, auth=False, memcache=False, wait_for_state="SERVING", customrules=None, schema_override=None, cert=None, key=None, ca_cert=None, repl_extra_flags={}, sensitive_mode=False, target_tablet_type=None):
     """
