@@ -33,6 +33,9 @@ mysql_flavor = os.environ.get('MYSQL_FLAVOR', 'GoogleMysql')
 # location of the curl binary, used for some tests.
 curl_bin = '/usr/bin/curl'
 
+# url to hit to force the logs to flush.
+flush_logs_url = '/debug/flushlogs'
+
 def setup():
   global tmproot
   try:
