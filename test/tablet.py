@@ -302,10 +302,7 @@ class Tablet(object):
         args.extend(["-db-config-"+key1+"-"+key2, dbconfigs[key1][key2]])
 
     if memcache:
-      if os.path.exists(environment.vtroot + "/bin/memcached"):
-        args.extend(["-rowcache-bin", environment.vtroot + "/bin/memcached"])
-      else:
-        args.extend(["-rowcache-bin", "memcached"])
+      args.extend(["-rowcache-bin", environment.memcached_bin()])
       memcache_socket = os.path.join(self.tablet_dir, "memcache.sock")
       args.extend(["-rowcache-socket", memcache_socket])
       args.extend(["-enable-rowcache"])
