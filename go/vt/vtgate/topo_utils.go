@@ -56,6 +56,29 @@ func getShardForKeyspaceId(topoServ SrvTopoServer, cell, keyspace string, keyspa
 	return "", fmt.Errorf("KeyspaceId didn't match any shards")
 }
 
+func mapEntityIdsToShards(topoServ SrvTopoServer, cell, keyspace string, entityIds map[string]key.KeyspaceId, tabletType topo.TabletType) (map[string][]key.KeyspaceId, error) {
+	var shards = make(map[string][]key.KeyspaceId)
+	for _, ksId := range entityIds {
+		shard, err := getShardForKeyspaceId(
+			topoServ,
+			cell,
+			keyspace,
+			ksId,
+			tabletType)
+		if err != nil {
+			return nil, err
+		}
+		if kids, ok := shards[shard]; ok {
+			shards[shard] = append(kids, ksId)
+		} else {
+			kids = make([]key.KeyspaceId, 0, 1)
+			kids = append(kids, ksId)
+			shards[shard] = kids
+		}
+	}
+	return shards, nil
+}
+
 func getKeyspaceAlias(topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType) (string, error) {
 	srvKeyspace, err := topoServ.GetSrvKeyspace(cell, keyspace)
 	if err != nil {

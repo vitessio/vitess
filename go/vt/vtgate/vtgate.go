@@ -60,6 +60,7 @@ func (vtg *VTGate) ExecuteShard(context interface{}, query *proto.QueryShard, re
 	return nil
 }
 
+// ExecuteKeyspaceIds executes a non-streaming query based on the specified keyspace ids.
 func (vtg *VTGate) ExecuteKeyspaceIds(context interface{}, query *proto.KeyspaceIdQuery, reply *proto.QueryResult) error {
 	shards, err := mapKeyspaceIdsToShards(
 		vtg.scatterConn.toposerv,
@@ -88,6 +89,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(context interface{}, query *proto.Keyspace
 	return nil
 }
 
+// ExecuteKeyRanges executes a non-streaming query based on the specified keyranges.
 func (vtg *VTGate) ExecuteKeyRanges(context interface{}, query *proto.KeyRangeQuery, reply *proto.QueryResult) error {
 	shards, err := mapKeyRangesToShards(
 		vtg.scatterConn.toposerv,
@@ -135,6 +137,7 @@ func (vtg *VTGate) ExecuteBatchShard(context interface{}, batchQuery *proto.Batc
 	return nil
 }
 
+// ExecuteBatchKeyspaceIds executes a group of queries based on the specified keyspace ids.
 func (vtg *VTGate) ExecuteBatchKeyspaceIds(context interface{}, query *proto.KeyspaceIdBatchQuery, reply *proto.QueryResultList) error {
 	shards, err := mapKeyspaceIdsToShards(
 		vtg.scatterConn.toposerv,
@@ -162,6 +165,12 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(context interface{}, query *proto.Key
 	return nil
 }
 
+// StreamExecuteKeyspaceIds executes a streaming query on the specified KeyspaceIds.
+// The KeyspaceIds are resolved to shards using the serving graph.
+// This function currently temporarily enforces the restriction of executing on
+// one shard since it cannot merge-sort the results to guarantee ordering of
+// response which is needed for checkpointing. The api supports supplying multiple KeyspaceIds
+// to make it future proof.
 func (vtg *VTGate) StreamExecuteKeyspaceIds(context interface{}, query *proto.KeyspaceIdQuery, sendReply func(*proto.QueryResult) error) error {
 	shards, err := mapKeyspaceIdsToShards(
 		vtg.scatterConn.toposerv,
@@ -200,10 +209,10 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(context interface{}, query *proto.Ke
 	return err
 }
 
-// StreamExecuteKeyRange executes a streaming query on the specified KeyRange.
-// The KeyRange is resolved to shards using the serving graph.
-// This function currently temporarily enforces the restriction of executing on one keyrange
-// and one shard since it cannot merge-sort the results to guarantee ordering of
+// StreamExecuteKeyRanges executes a streaming query on the specified KeyRanges.
+// The KeyRanges are resolved to shards using the serving graph.
+// This function currently temporarily enforces the restriction of executing on
+// one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing. The api supports supplying multiple keyranges
 // to make it future proof.
 func (vtg *VTGate) StreamExecuteKeyRanges(context interface{}, query *proto.KeyRangeQuery, sendReply func(*proto.QueryResult) error) error {
