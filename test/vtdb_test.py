@@ -469,7 +469,7 @@ class TestFailures(unittest.TestCase):
 
     self.master_tablet.mquery(self.master_tablet.dbname, "set global read_only=on")
     master_conn.begin()
-    with self.assertRaises(dbexceptions.OperationalError):
+    with self.assertRaises(dbexceptions.FatalError):
       master_conn._execute("delete from vt_insert_test", {})
     master_conn.rollback()
     self.master_tablet.mquery(self.master_tablet.dbname, "set global read_only=off")
