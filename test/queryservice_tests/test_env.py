@@ -347,7 +347,7 @@ class VtoccTestEnv(TestEnv):
 
     if self.sensitive_mode:
       occ_args.extend(['-queryserver-config-sensitive-mode'])
-    self.vtocc = subprocess.Popen(occ_args, stdout=self.vtstdout, stderr=self.vtstderr)
+    self.vtocc = subprocess.Popen(occ_args, stdout=utils.devnull, stderr=utils.devnull)
     for i in range(30):
       try:
         self.conn = self.connect()
