@@ -35,6 +35,7 @@ const (
 )
 
 type Mysqld struct {
+	flavor      MysqlFlavor
 	config      *Mycnf
 	dbaParams   *mysql.ConnectionParams
 	replParams  *mysql.ConnectionParams
@@ -47,7 +48,9 @@ func NewMysqld(config *Mycnf, dba, repl *mysql.ConnectionParams) *Mysqld {
 		dba.UnixSocket = config.SocketFile
 	}
 
-	return &Mysqld{config,
+	return &Mysqld{
+		mysqlFlavor(),
+		config,
 		dba,
 		repl,
 		TabletDir(config.ServerId),
