@@ -281,7 +281,7 @@ class Tablet(object):
     return "%s/vt_%010d" % (environment.vtdataroot, self.tablet_uid)
 
   def flush(self):
-    utils.run(['curl', '-s', '-N', 'http://localhost:%s/debug/flushlogs' % (self.port)], stderr=utils.devnull, stdout=utils.devnull)
+    utils.curl('http://localhost:%s/debug/flushlogs' % (self.port), stderr=utils.devnull, stdout=utils.devnull)
 
   def start_vttablet(self, port=None, auth=False, memcache=False, wait_for_state="SERVING", customrules=None, schema_override=None, cert=None, key=None, ca_cert=None, repl_extra_flags={}, sensitive_mode=False, target_tablet_type=None):
     """
