@@ -12,7 +12,7 @@ import (
 )
 
 func mapKeyspaceIdsToShards(topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType, keyspaceIds []key.KeyspaceId) ([]string, error) {
-	var shards = make(map[string]int)
+	var shards = make(map[string]bool)
 	for _, ksId := range keyspaceIds {
 		shard, err := getShardForKeyspaceId(
 			topoServ,
@@ -23,9 +23,9 @@ func mapKeyspaceIdsToShards(topoServ SrvTopoServer, cell, keyspace string, table
 		if err != nil {
 			return nil, err
 		}
-		shards[shard] = 0
+		shards[shard] = true
 	}
-	var res = make([]string, 0, 1)
+	var res = make([]string, 0, len(shards))
 	for s, _ := range shards {
 		res = append(res, s)
 	}
@@ -68,13 +68,7 @@ func mapEntityIdsToShards(topoServ SrvTopoServer, cell, keyspace string, entityI
 		if err != nil {
 			return nil, err
 		}
-		if kids, ok := shards[shard]; ok {
-			shards[shard] = append(kids, ksId)
-		} else {
-			kids = make([]key.KeyspaceId, 0, 1)
-			kids = append(kids, ksId)
-			shards[shard] = kids
-		}
+		shards[shard] = append(shards[shard], ksId)
 	}
 	return shards, nil
 }
@@ -97,7 +91,7 @@ func getKeyspaceAlias(topoServ SrvTopoServer, cell, keyspace string, tabletType 
 // and one shard since streaming doesn't support merge sorting the results.
 // The input/output api is generic though.
 func mapKeyRangesToShards(topoServer SrvTopoServer, cell, keyspace string, tabletType topo.TabletType, krs []key.KeyRange) ([]string, error) {
-	uniqueShards := make(map[string]int)
+	uniqueShards := make(map[string]bool)
 	for _, kr := range krs {
 		shards, err := resolveKeyRangeToShards(
 			topoServer,
@@ -109,10 +103,10 @@ func mapKeyRangesToShards(topoServer SrvTopoServer, cell, keyspace string, table
 			return nil, err
 		}
 		for _, shard := range shards {
-			uniqueShards[shard] = 0
+			uniqueShards[shard] = true
 		}
 	}
-	var res = make([]string, 0, 1)
+	var res = make([]string, 0, len(uniqueShards))
 	for s, _ := range uniqueShards {
 		res = append(res, s)
 	}
