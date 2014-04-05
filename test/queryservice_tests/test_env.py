@@ -263,26 +263,12 @@ class VtoccTestEnv(TestEnv):
   tabletuid = "9460"
   port = environment.reserve_ports(1)
   mysqlport = environment.reserve_ports(1)
-  vttop = os.getenv("VTTOP")
-  vtroot = os.getenv("VTROOT")
-  vtdataroot = os.getenv("VTDATAROOT") or "/vt"
-  mysqldir = os.path.join(vtdataroot, "vt_0000009460")
+  mysqldir = os.path.join(environment.vtdataroot, "vt_0000009460")
 
   def setUp(self):
-    if self.vttop is None:
-      raise EnvironmentError("VTTOP not defined")
-    if self.vtroot is None:
-      raise EnvironmentError("VTROOT not defined")
-    try:
-      os.makedirs(environment.tmproot)
-    except OSError:
-      pass
-
-    environment.setup()
-
     # start mysql
     res = subprocess.call([
-        self.vtroot+"/bin/mysqlctl",
+        environment.binary_path("mysqlctl"),
         "-tablet-uid",  self.tabletuid,
         "-port", str(self.port),
         "-mysql-port", str(self.mysqlport),
@@ -291,7 +277,7 @@ class VtoccTestEnv(TestEnv):
     if res != 0:
       raise EnvironmentError("Cannot start mysql")
     res = subprocess.call([
-        "mysql",
+        environment.mysql_binary_path('mysql'),
         "-S",  self.mysqldir+"/mysql.sock",
         "-u", "vt_dba",
         "-e", "create database vt_test_keyspace ; set global read_only = off"])
@@ -303,7 +289,7 @@ class VtoccTestEnv(TestEnv):
     self.clean_sqls = []
     self.init_sqls = []
     clean_mode = False
-    with open(os.path.join(self.vttop, "test", "test_data", "test_schema.sql")) as f:
+    with open(os.path.join(environment.vttop, "test", "test_data", "test_schema.sql")) as f:
       for line in f:
         line = line.rstrip()
         if line == "# clean":
@@ -326,7 +312,7 @@ class VtoccTestEnv(TestEnv):
     self.create_schema_override(schema_override)
 
     occ_args = [
-      self.vtroot+"/bin/vtocc",
+      environment.binary_path('vtocc'),
       "-port", str(self.port),
       "-customrules", customrules,
       "-log_dir", environment.vtlogroot,
@@ -341,7 +327,7 @@ class VtoccTestEnv(TestEnv):
     ]
     if self.memcache:
       memcache = self.mysqldir+"/memcache.sock"
-      occ_args.extend(["-rowcache-bin", "memcached"])
+      occ_args.extend(["-rowcache-bin", environment.memcached_bin()])
       occ_args.extend(["-rowcache-socket", memcache])
       occ_args.extend(["-enable-rowcache"])
 
@@ -355,11 +341,11 @@ class VtoccTestEnv(TestEnv):
         self.txlog = framework.Tailer(open(self.txlog_file, 'r'))
 
         def flush():
-          utils.curl(self.url('/debug/flushlogs'), trap_output=True)
+          utils.curl(self.url(environment.flush_logs_url), trap_output=True)
 
         self.log = framework.Tailer(open(os.path.join(environment.vtlogroot, 'vtocc.INFO')), flush=flush)
         return
-      except dbexceptions.OperationalError:
+      except (dbexceptions.OperationalError, dbexceptions.RetryError):
         if i == 29:
           raise
         time.sleep(1)
@@ -382,7 +368,7 @@ class VtoccTestEnv(TestEnv):
 
     # stop mysql, delete directory
     subprocess.call([
-        self.vtroot+"/bin/mysqlctl",
+        environment.binary_path('mysqlctl'),
         "-tablet-uid",  self.tabletuid,
         "teardown", "-force"
         ])
