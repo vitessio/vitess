@@ -213,6 +213,131 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 	}
 }
 
+func TestVTGateExecuteEntityIds(t *testing.T) {
+	s := createSandbox("TestVTGateExecuteEntityIds")
+	sbc1 := &sandboxConn{}
+	sbc2 := &sandboxConn{}
+	s.MapTestConn("-20", sbc1)
+	s.MapTestConn("20-40", sbc2)
+	kid10, err := key.HexKeyspaceId("10").Unhex()
+	if err != nil {
+		t.Errorf("want nil, got %+v", err)
+	}
+	q := proto.EntityIdsQuery{
+		Sql:                 "query",
+		Keyspace:            "TestVTGateExecuteEntityIds",
+		EntityColumnName:    "kid",
+		EntityKeyspaceIdMap: map[string]key.KeyspaceId{"id1": kid10},
+		TabletType:          topo.TYPE_MASTER,
+	}
+	// Test for successful execution
+	qr := new(proto.QueryResult)
+	err = RpcVTGate.ExecuteEntityIds(nil, &q, qr)
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
+	}
+	wantqr := new(proto.QueryResult)
+	proto.PopulateQueryResult(singleRowResult, wantqr)
+	if !reflect.DeepEqual(wantqr, qr) {
+		t.Errorf("want \n%+v, got \n%+v", singleRowResult, qr)
+	}
+	if qr.Session != nil {
+		t.Errorf("want nil, got %+v\n", qr.Session)
+	}
+	if sbc1.ExecCount != 1 {
+		t.Errorf("want 1, got %v\n", sbc1.ExecCount)
+	}
+	// Test for successful execution in transaction
+	q.Session = new(proto.Session)
+	RpcVTGate.Begin(nil, q.Session)
+	if !q.Session.InTransaction {
+		t.Errorf("want true, got false")
+	}
+	RpcVTGate.ExecuteEntityIds(nil, &q, qr)
+	wantSession := &proto.Session{
+		InTransaction: true,
+		ShardSessions: []*proto.ShardSession{{
+			Keyspace:      "TestVTGateExecuteEntityIds",
+			Shard:         "-20",
+			TransactionId: 1,
+			TabletType:    topo.TYPE_MASTER,
+		}},
+	}
+	if !reflect.DeepEqual(wantSession, q.Session) {
+		t.Errorf("want \n%+v, got \n%+v", wantSession, q.Session)
+	}
+	RpcVTGate.Commit(nil, q.Session)
+	if sbc1.CommitCount.Get() != 1 {
+		t.Errorf("want 1, got %d", sbc1.CommitCount.Get())
+	}
+	// Test for multiple shards
+	kid30, err := key.HexKeyspaceId("30").Unhex()
+	if err != nil {
+		t.Errorf("want nil, got %+v", err)
+	}
+	q.EntityKeyspaceIdMap["id2"] = kid30
+	RpcVTGate.ExecuteEntityIds(nil, &q, qr)
+	if qr.RowsAffected != 2 {
+		t.Errorf("want 2, got %v", qr.RowsAffected)
+	}
+}
+
+func TestVTGateInsertSqlClause(t *testing.T) {
+	clause := "col in (:col1, :col2)"
+	tests := [][]string{
+		[]string{
+			"select a from table",
+			"select a from table where " + clause},
+		[]string{
+			"select a from table where id = 1",
+			"select a from table where id = 1 and " + clause},
+		[]string{
+			"select a from table group by a",
+			"select a from table where " + clause + " group by a"},
+		[]string{
+			"select a from table where id = 1 order by a limit 10",
+			"select a from table where id = 1 and " + clause + " order by a limit 10"},
+		[]string{
+			"select a from table where id = 1 for update",
+			"select a from table where id = 1 and " + clause + " for update"},
+	}
+	for _, test := range tests {
+		got := insertSqlClause(test[0], clause)
+		if got != test[1] {
+			t.Errorf("want '%v', got '%v'", test[1], got)
+		}
+	}
+}
+
+func TestVTGateBuildEntityIds(t *testing.T) {
+	shardMap := make(map[string][]key.KeyspaceId)
+	shardMap["-20"] = []key.KeyspaceId{key.KeyspaceId("0"), key.KeyspaceId("1")}
+	shardMap["20-40"] = []key.KeyspaceId{key.KeyspaceId("30")}
+	sql := "select a from table where id=:id"
+	entityColName := "kid"
+	bindVar := make(map[string]interface{})
+	bindVar["id"] = 10
+	shards, sqls, bindVars := buildEntityIds(shardMap, sql, entityColName, bindVar)
+	wantShards := []string{"-20", "20-40"}
+	wantSqls := map[string]string{
+		"-20":   "select a from table where id=:id and kid in (:kid0, :kid1)",
+		"20-40": "select a from table where id=:id and kid in (:kid0)",
+	}
+	wantBindVars := map[string]map[string]interface{}{
+		"-20":   map[string]interface{}{"id": 10, "kid0": key.KeyspaceId("0"), "kid1": key.KeyspaceId("1")},
+		"20-40": map[string]interface{}{"id": 10, "kid0": key.KeyspaceId("30")},
+	}
+	if !reflect.DeepEqual(wantShards, shards) {
+		t.Errorf("want %+v, got %+v", wantShards, shards)
+	}
+	if !reflect.DeepEqual(wantSqls, sqls) {
+		t.Errorf("want %+v, got %+v", wantSqls, sqls)
+	}
+	if !reflect.DeepEqual(wantBindVars, bindVars) {
+		t.Errorf("want %+v, got %+v", wantBindVars, bindVars)
+	}
+}
+
 func TestVTGateExecuteBatchShard(t *testing.T) {
 	s := createSandbox("TestVTGateExecuteBatchShard")
 	s.MapTestConn("-20", &sandboxConn{})

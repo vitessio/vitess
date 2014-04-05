@@ -89,6 +89,46 @@ func (stc *ScatterConn) Execute(
 	return qr, nil
 }
 
+func (stc *ScatterConn) ExecuteEntityIds(
+	context interface{},
+	shards []string,
+	sqls map[string]string,
+	bindVars map[string]map[string]interface{},
+	keyspace string,
+	tabletType topo.TabletType,
+	session *SafeSession,
+) (*mproto.QueryResult, error) {
+	var lock sync.Mutex
+	results, allErrors := stc.multiGo(
+		context,
+		keyspace,
+		shards,
+		tabletType,
+		session,
+		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
+			shard := sdc.shard
+			lock.Lock()
+			sql := sqls[shard]
+			bindVar := bindVars[shard]
+			lock.Unlock()
+			innerqr, err := sdc.Execute(context, sql, bindVar, transactionId)
+			if err != nil {
+				return err
+			}
+			sResults <- innerqr
+			return nil
+		})
+	qr := new(mproto.QueryResult)
+	for innerqr := range results {
+		innerqr := innerqr.(*mproto.QueryResult)
+		appendResult(qr, innerqr)
+	}
+	if allErrors.HasErrors() {
+		return nil, allErrors.Error()
+	}
+	return qr, nil
+}
+
 // ExecuteBatch executes a batch of non-streaming queries on the specified shards.
 func (stc *ScatterConn) ExecuteBatch(
 	context interface{},
