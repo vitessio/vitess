@@ -419,6 +419,31 @@ select * from a where eid = 1 and id in (1, 2)
   "SetValue": null
 }
 
+# positional arguments
+select * from a where eid = ? and id in (?, ?)
+{
+  "PlanId": "PASS_SELECT",
+  "Reason": "COMPOSITE_PK",
+  "TableName": "a",
+  "DisplayQuery": "select * from a where eid = :v1 and id in (:v2, :v3)",
+  "FieldQuery": "select * from a where 1 != 1",
+  "FullQuery": "select * from a where eid = :v1 and id in (:v2, :v3) limit :_vtMaxResultSize",
+  "OuterQuery": null,
+  "Subquery": null,
+  "IndexUsed": "",
+  "ColumnNumbers": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
 # composite pk subquery
 select * from a where name = 'foo'
 {

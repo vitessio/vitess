@@ -22,6 +22,7 @@ type Tokenizer struct {
 	position      int
 	lastToken     *Node
 	LastError     string
+	posVarIndex   int
 	ParseTree     *Node
 }
 
@@ -150,6 +151,9 @@ func (tkn *Tokenizer) Scan() (parseNode *Node) {
 			return NewSimpleParseNode(0, "")
 		case '=', ',', ';', '(', ')', '+', '*', '%', '&', '|', '^', '~':
 			return NewSimpleParseNode(int(ch), string(ch))
+		case '?':
+			tkn.posVarIndex++
+			return NewSimpleParseNode(VALUE_ARG, fmt.Sprintf(":v%d", tkn.posVarIndex))
 		case '.':
 			if isDigit(tkn.lastChar) {
 				return tkn.scanNumber(true)
