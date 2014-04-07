@@ -32,8 +32,9 @@ def convert_exception(exc, *args):
       mysql_errno = int(match.group(1))
       if mysql_errno == 1062:
         return dbexceptions.IntegrityError(new_args)
+      # TODO(sougou/liguo): remove this case once servers are deployed
       elif mysql_errno == 1290 and 'read-only' in msg:
-        return dbexceptions.OperationalError(new_args)
+        return dbexceptions.RetryError(new_args)
     return dbexceptions.DatabaseError(new_args)
   elif isinstance(exc, gorpc.ProgrammingError):
     return dbexceptions.ProgrammingError(new_args)
@@ -82,7 +83,11 @@ class TabletConnection(object):
       raise convert_exception(e, str(self))
 
   def close(self):
-    self.transaction_id = 0
+    # rollback if possible, but ignore failures
+    try:
+      self.rollback()
+    except Exception:
+      pass
     self.session_id = 0
     self.client.close()
 

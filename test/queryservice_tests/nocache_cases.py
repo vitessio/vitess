@@ -309,6 +309,19 @@ cases = [
          'commit']),
 
     MultiCase(
+        'positional values',
+        ['begin',
+         Case(sql="insert /* positional values */ into vtocc_a(eid, id, name, foo) values (?, ?, ?, ?)",
+              bindings={"v1": 4, "v2": 1, "v3": "aaaa", "v4": "cccc"},
+              rewritten="insert /* positional values */ into vtocc_a(eid, id, name, foo) values (4, 1, 'aaaa', 'cccc') /* _stream vtocc_a (eid id ) (4 1 )"),
+         'commit',
+         Case(sql='select * from vtocc_a where eid = 4 and id = 1',
+              result=[(4L, 1L, 'aaaa', 'cccc')]),
+         'begin',
+         'delete from vtocc_a where eid>1',
+         'commit']),
+
+    MultiCase(
         'out of sequence columns',
         ['begin',
          Case(sql="insert into vtocc_a(id, eid, foo, name) values (-1, 5, 'aaa', 'bbb')",

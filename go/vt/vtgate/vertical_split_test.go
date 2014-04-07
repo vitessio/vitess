@@ -48,9 +48,9 @@ func TestStreamExecuteKeyspaceAlias(t *testing.T) {
 }
 
 func TestInTransactionKeyspaceAlias(t *testing.T) {
-	resetSandbox()
+	s := createSandbox(TEST_UNSHARDED_SERVED_FROM)
 	sbc := &sandboxConn{mustFailRetry: 3}
-	testConns[0] = sbc
+	s.MapTestConn("0", sbc)
 
 	stc := NewScatterConn(new(sandboxTopo), "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
 	session := NewSafeSession(&proto.Session{
@@ -76,9 +76,9 @@ func TestInTransactionKeyspaceAlias(t *testing.T) {
 
 func testVerticalSplitGeneric(t *testing.T, f func(shards []string) (*mproto.QueryResult, error)) {
 	// Retry Error, for keyspace that is redirected should succeed.
-	resetSandbox()
+	s := createSandbox(TEST_UNSHARDED_SERVED_FROM)
 	sbc := &sandboxConn{mustFailRetry: 3}
-	testConns[0] = sbc
+	s.MapTestConn("0", sbc)
 	_, err := f([]string{"0"})
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
@@ -89,9 +89,9 @@ func testVerticalSplitGeneric(t *testing.T, f func(shards []string) (*mproto.Que
 	}
 
 	// Fatal Error, for keyspace that is redirected should succeed.
-	resetSandbox()
+	s.Reset()
 	sbc = &sandboxConn{mustFailFatal: 3}
-	testConns[0] = sbc
+	s.MapTestConn("0", sbc)
 	_, err = f([]string{"0"})
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
@@ -102,9 +102,9 @@ func testVerticalSplitGeneric(t *testing.T, f func(shards []string) (*mproto.Que
 	}
 
 	//  Error, for keyspace that is redirected should succeed.
-	resetSandbox()
+	s.Reset()
 	sbc = &sandboxConn{mustFailServer: 3}
-	testConns[0] = sbc
+	s.MapTestConn("0", sbc)
 	_, err = f([]string{"0"})
 	want := "error: err, shard, host: TestUnshardedServedFrom.0.rdonly, {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}"
 	if err == nil || err.Error() != want {

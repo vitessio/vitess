@@ -99,7 +99,7 @@ func TestParseShardingSpec(t *testing.T) {
 		t.Errorf("Unexpected error: %v.", err)
 	}
 
-	goodTable := map[string]KeyRangeArray{
+	goodTable := map[string][]KeyRange{
 		"-": {{Start: MinKey, End: MaxKey}},
 		"-4000000000000000-8000000000000000-": {
 			{Start: MinKey, End: x40},

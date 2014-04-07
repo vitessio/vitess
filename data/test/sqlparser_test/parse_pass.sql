@@ -99,6 +99,8 @@ select /* non-escape */ '\x' from t#select /* non-escape */ 'x' from t
 select /* unescaped backslash */ '\n' from t
 select /* value argument */ :a from t
 select /* value argument with dot */ :a.b from t
+select /* positional argument */ ? from t#select /* positional argument */ :v1 from t
+select /* multiple positional arguments */ ?, ? from t#select /* multiple positional arguments */ :v1, :v2 from t
 select /* null */ null from t
 select /* octal */ 010 from t
 select /* hex */ 0xf0 from t

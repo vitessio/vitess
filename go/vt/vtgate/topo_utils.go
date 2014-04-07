@@ -11,6 +11,27 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
+func mapKeyspaceIdsToShards(topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType, keyspaceIds []key.KeyspaceId) ([]string, error) {
+	var shards = make(map[string]bool)
+	for _, ksId := range keyspaceIds {
+		shard, err := getShardForKeyspaceId(
+			topoServ,
+			cell,
+			keyspace,
+			ksId,
+			tabletType)
+		if err != nil {
+			return nil, err
+		}
+		shards[shard] = true
+	}
+	var res = make([]string, 0, len(shards))
+	for s, _ := range shards {
+		res = append(res, s)
+	}
+	return res, nil
+}
+
 func getShardForKeyspaceId(topoServ SrvTopoServer, cell, keyspace string, keyspaceId key.KeyspaceId, tabletType topo.TabletType) (string, error) {
 	srvKeyspace, err := topoServ.GetSrvKeyspace(cell, keyspace)
 	if err != nil {
@@ -35,6 +56,23 @@ func getShardForKeyspaceId(topoServ SrvTopoServer, cell, keyspace string, keyspa
 	return "", fmt.Errorf("KeyspaceId didn't match any shards")
 }
 
+func mapEntityIdsToShards(topoServ SrvTopoServer, cell, keyspace string, entityIds map[string]key.KeyspaceId, tabletType topo.TabletType) (map[string][]key.KeyspaceId, error) {
+	var shards = make(map[string][]key.KeyspaceId)
+	for _, ksId := range entityIds {
+		shard, err := getShardForKeyspaceId(
+			topoServ,
+			cell,
+			keyspace,
+			ksId,
+			tabletType)
+		if err != nil {
+			return nil, err
+		}
+		shards[shard] = append(shards[shard], ksId)
+	}
+	return shards, nil
+}
+
 func getKeyspaceAlias(topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType) (string, error) {
 	srvKeyspace, err := topoServ.GetSrvKeyspace(cell, keyspace)
 	if err != nil {
@@ -47,6 +85,32 @@ func getKeyspaceAlias(topoServ SrvTopoServer, cell, keyspace string, tabletType 
 	}
 
 	return keyspace, nil
+}
+
+// This function implements the restriction of handling one keyrange
+// and one shard since streaming doesn't support merge sorting the results.
+// The input/output api is generic though.
+func mapKeyRangesToShards(topoServer SrvTopoServer, cell, keyspace string, tabletType topo.TabletType, krs []key.KeyRange) ([]string, error) {
+	uniqueShards := make(map[string]bool)
+	for _, kr := range krs {
+		shards, err := resolveKeyRangeToShards(
+			topoServer,
+			cell,
+			keyspace,
+			tabletType,
+			kr)
+		if err != nil {
+			return nil, err
+		}
+		for _, shard := range shards {
+			uniqueShards[shard] = true
+		}
+	}
+	var res = make([]string, 0, len(uniqueShards))
+	for s, _ := range uniqueShards {
+		res = append(res, s)
+	}
+	return res, nil
 }
 
 // This maps a list of keyranges to shard names.

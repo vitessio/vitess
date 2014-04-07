@@ -190,6 +190,7 @@ func KeyRangesOverlap(first, second KeyRange) (KeyRange, error) {
 //
 
 // KeyspaceIdArray is an array of KeyspaceId that can be sorted
+// We use it only if we need to sort []KeyspaceId
 type KeyspaceIdArray []KeyspaceId
 
 func (p KeyspaceIdArray) Len() int { return len(p) }
@@ -209,6 +210,7 @@ func (p KeyspaceIdArray) Sort() { sort.Sort(p) }
 //
 
 // KeyRangeArray is an array of KeyRange that can be sorted
+// We use it only if we need to sort []KeyRange
 type KeyRangeArray []KeyRange
 
 func (p KeyRangeArray) Len() int { return len(p) }
@@ -227,7 +229,7 @@ func (p KeyRangeArray) Sort() { sort.Sort(p) }
 // specification. a-b-c-d will be parsed as a-b, b-c, c-d. The empty
 // string may serve both as the start and end of the keyspace: -a-b-
 // will be parsed as start-a, a-b, b-end.
-func ParseShardingSpec(spec string) (KeyRangeArray, error) {
+func ParseShardingSpec(spec string) ([]KeyRange, error) {
 	parts := strings.Split(spec, "-")
 	if len(parts) == 1 {
 		return nil, fmt.Errorf("malformed spec: doesn't define a range: %q", spec)

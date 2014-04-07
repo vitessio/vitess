@@ -6,6 +6,7 @@ package tabletserver
 
 import (
 	"fmt"
+	"strings"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
@@ -32,15 +33,28 @@ type hasNumber interface {
 }
 
 func NewTabletError(errorType int, format string, args ...interface{}) *TabletError {
-	return &TabletError{errorType, fmt.Sprintf(format, args...), 0}
+	return &TabletError{
+		ErrorType: errorType,
+		Message:   fmt.Sprintf(format, args...),
+	}
 }
 
 func NewTabletErrorSql(errorType int, err error) *TabletError {
-	te := NewTabletError(errorType, "%s", err)
+	var errnum int
+	errstr := err.Error()
 	if sqlErr, ok := err.(hasNumber); ok {
-		te.SqlError = sqlErr.Number()
+		errnum = sqlErr.Number()
+		// Override error type if MySQL is in read-only mode. It's probably because
+		// there was a remaster and there are old clients still connected.
+		if errnum == mysql.OPTION_PREVENTS_STATEMENT && strings.Contains(errstr, "read-only") {
+			errorType = RETRY
+		}
 	}
-	return te
+	return &TabletError{
+		ErrorType: errorType,
+		Message:   errstr,
+		SqlError:  errnum,
+	}
 }
 
 func (te *TabletError) Error() string {

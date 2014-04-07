@@ -281,7 +281,7 @@ class Tablet(object):
     return "%s/vt_%010d" % (environment.vtdataroot, self.tablet_uid)
 
   def flush(self):
-    utils.run(['curl', '-s', '-N', 'http://localhost:%s/debug/flushlogs' % (self.port)], stderr=utils.devnull, stdout=utils.devnull)
+    utils.curl('http://localhost:%s%s' % (self.port, environment.flush_logs_url), stderr=utils.devnull, stdout=utils.devnull)
 
   def start_vttablet(self, port=None, auth=False, memcache=False, wait_for_state="SERVING", customrules=None, schema_override=None, cert=None, key=None, ca_cert=None, repl_extra_flags={}, sensitive_mode=False, target_tablet_type=None):
     """
@@ -302,10 +302,7 @@ class Tablet(object):
         args.extend(["-db-config-"+key1+"-"+key2, dbconfigs[key1][key2]])
 
     if memcache:
-      if os.path.exists(environment.vtroot + "/bin/memcached"):
-        args.extend(["-rowcache-bin", environment.vtroot + "/bin/memcached"])
-      else:
-        args.extend(["-rowcache-bin", "memcached"])
+      args.extend(["-rowcache-bin", environment.memcached_bin()])
       memcache_socket = os.path.join(self.tablet_dir, "memcache.sock")
       args.extend(["-rowcache-socket", memcache_socket])
       args.extend(["-enable-rowcache"])
