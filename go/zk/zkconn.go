@@ -310,10 +310,13 @@ func (conn *ZkConn) Delete(path string, version int) (err error) {
 // return ErrConnectionClosed.
 func (conn *ZkConn) Close() error {
 	conn.mu.Lock()
+	defer conn.mu.Unlock()
+	if conn.conn == nil {
+		return nil
+	}
 	c := conn.conn
 	conn.conn = nil
 	go c.Close()
-	conn.mu.Unlock()
 	return nil
 }
 
