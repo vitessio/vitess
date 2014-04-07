@@ -186,7 +186,7 @@ class GoRpcClient(object):
     except ssl.SSLError as e:
       # another possible timeout condition with SSL wrapper
       if 'timed out' in str(e):
-        raise TimeoutError(e, self.timeout, 'dial', self.uri)
+        raise TimeoutError(e, self.timeout, 'ssl-dial', self.uri)
       raise GoRpcError(e)
     except socket.error as e:
       raise GoRpcError(e)
