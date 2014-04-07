@@ -33,6 +33,17 @@ mysql_flavor = os.environ.get('MYSQL_FLAVOR', 'GoogleMysql')
 # location of the curl binary, used for some tests.
 curl_bin = '/usr/bin/curl'
 
+mysql_client_bin = 'mysql'
+
+def memcached_bin():
+  in_vt = os.path.join(vtroot, 'bin', 'memcached')
+  if os.path.exists(in_vt):
+    return in_vt
+  return 'memcached'
+
+# url to hit to force the logs to flush.
+flush_logs_url = '/debug/flushlogs'
+
 def setup():
   global tmproot
   try:
@@ -75,6 +86,10 @@ def prog_compile(name):
 def binary_path(name):
   prog_compile(name)
   return os.path.join(vtroot, 'bin', name)
+
+# binary management for the MySQL distribution.
+def mysql_binary_path(name):
+  return name
 
 # topology server management: we use zookeeper in all the tests
 topo_server_implementation = 'zookeeper'
