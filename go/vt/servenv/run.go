@@ -1,7 +1,6 @@
 package servenv
 
 import (
-	"flag"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -15,9 +14,6 @@ import (
 
 var (
 	onCloseHooks hooks
-
-	Port           = flag.Int("port", 0, "port for the server")
-	LameduckPeriod = flag.Duration("lameduck-period", 50*time.Millisecond, "how long to keep the server running on SIGTERM before stopping")
 
 	// filled in when calling Run or RunSecure
 	ListeningURL url.URL
@@ -65,13 +61,6 @@ func Run() {
 func Close() {
 	onCloseHooks.Fire()
 	ListeningURL = url.URL{}
-}
-
-// OnTerm registers f to be run when the process receives a SIGTERM.
-// All hooks are run in parallel.
-// This allows the program to change its behavior during the lameduck period.
-func OnTerm(f func()) {
-	onTermHooks.Add(f)
 }
 
 // OnClose registers f to be run at the end of the app lifecycle.
