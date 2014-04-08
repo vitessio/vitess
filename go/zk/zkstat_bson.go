@@ -25,7 +25,7 @@ func (zkStat *ZkStat) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	bson.EncodeTime(buf, "MTime", zkStat.mTime)
 	bson.EncodeInt(buf, "Version", zkStat.version)
 	bson.EncodeInt(buf, "CVersion", zkStat.cVersion)
-	bson.EncodeInt(buf, "AVerion", zkStat.aVersion)
+	bson.EncodeInt(buf, "AVersion", zkStat.aVersion)
 	bson.EncodeInt64(buf, "EphemeralOwner", zkStat.ephemeralOwner)
 	bson.EncodeInt(buf, "DataLength", zkStat.dataLength)
 	bson.EncodeInt(buf, "NumChildren", zkStat.numChildren)
@@ -60,7 +60,7 @@ func (zkStat *ZkStat) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 			zkStat.version = bson.DecodeInt(buf, kind)
 		case "CVersion":
 			zkStat.cVersion = bson.DecodeInt(buf, kind)
-		case "AVerion":
+		case "AVersion":
 			zkStat.aVersion = bson.DecodeInt(buf, kind)
 		case "EphemeralOwner":
 			zkStat.ephemeralOwner = bson.DecodeInt64(buf, kind)

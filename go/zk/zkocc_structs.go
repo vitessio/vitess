@@ -17,7 +17,7 @@ type ZkStat struct {
 	mTime          time.Time `bson:"MTime"`
 	version        int       `bson:"Version"`
 	cVersion       int       `bson:"CVersion"`
-	aVersion       int       `bson:"AVerion"`
+	aVersion       int       `bson:"AVersion"`
 	ephemeralOwner int64     `bson:"EphemeralOwner"`
 	dataLength     int       `bson:"DataLength"`
 	numChildren    int       `bson:"NumChildren"`
