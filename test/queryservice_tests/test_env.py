@@ -220,6 +220,7 @@ class VttabletTestEnv(TestEnv):
     utils.run_vtctl('CreateKeyspace -force test_keyspace')
     self.tablet.init_tablet('master', 'test_keyspace', '0')
 
+    environment.setup()
     customrules = os.path.join(environment.tmproot, 'customrules.json')
     self.create_customrules(customrules)
     schema_override = os.path.join(environment.tmproot, 'schema_override.json')
@@ -306,6 +307,7 @@ class VtoccTestEnv(TestEnv):
     finally:
       mcu.close()
 
+    environment.setup()
     customrules = os.path.join(environment.tmproot, 'customrules.json')
     self.create_customrules(customrules)
     schema_override = os.path.join(environment.tmproot, 'schema_override.json')
@@ -323,7 +325,8 @@ class VtoccTestEnv(TestEnv):
       "-db-config-app-unixsocket", self.mysqldir+"/mysql.sock",
       "-db-config-app-uname", 'vt_dba',   # use vt_dba as some tests depend on 'drop'
       "-db-config-app-keyspace", "test_keyspace",
-      "-db-config-app-shard", "0"
+      "-db-config-app-shard", "0",
+      "-lameduck-period", "100ms",
     ]
     if self.memcache:
       memcache = self.mysqldir+"/memcache.sock"

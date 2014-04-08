@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/netutil"
@@ -15,7 +16,8 @@ import (
 var (
 	onCloseHooks hooks
 
-	Port = flag.Int("port", 0, "port for the server")
+	Port           = flag.Int("port", 0, "port for the server")
+	LameduckPeriod = flag.Duration("lameduck-period", 30*time.Second, "how long to keep the server running on SIGTERM before stopping")
 
 	// filled in when calling Run or RunSecure
 	ListeningURL url.URL
@@ -52,6 +54,10 @@ func Run() {
 
 	proc.Wait()
 	l.Close()
+	log.Info("Entering lameduck mode")
+	go onTermHooks.Fire()
+	time.Sleep(*LameduckPeriod)
+	log.Info("Shutting down")
 	Close()
 }
 
@@ -59,6 +65,10 @@ func Run() {
 func Close() {
 	onCloseHooks.Fire()
 	ListeningURL = url.URL{}
+}
+
+func OnTerm(f func()) {
+	onTermHooks.Add(f)
 }
 
 // OnClose registers f to be run at the end of the app lifecycle. All
