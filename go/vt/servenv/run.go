@@ -17,7 +17,7 @@ var (
 	onCloseHooks hooks
 
 	Port           = flag.Int("port", 0, "port for the server")
-	LameduckPeriod = flag.Duration("lameduck-period", 30*time.Second, "how long to keep the server running on SIGTERM before stopping")
+	LameduckPeriod = flag.Duration("lameduck-period", 50*time.Millisecond, "how long to keep the server running on SIGTERM before stopping")
 
 	// filled in when calling Run or RunSecure
 	ListeningURL url.URL

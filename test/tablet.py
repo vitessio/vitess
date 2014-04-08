@@ -292,8 +292,7 @@ class Tablet(object):
     args = [environment.binary_path('vttablet'),
             '-port', '%s' % (port or self.port),
             '-tablet-path', self.tablet_alias,
-            '-log_dir', environment.vtlogroot,
-            '-lameduck-period', '100ms']
+            '-log_dir', environment.vtlogroot]
     args.extend(environment.topo_server_flags())
     args.extend(utils.binlog_player_protocol_flags)
 
