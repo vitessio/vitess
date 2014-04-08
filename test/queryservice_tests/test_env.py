@@ -220,6 +220,7 @@ class VttabletTestEnv(TestEnv):
     utils.run_vtctl('CreateKeyspace -force test_keyspace')
     self.tablet.init_tablet('master', 'test_keyspace', '0')
 
+    environment.setup()
     customrules = os.path.join(environment.tmproot, 'customrules.json')
     self.create_customrules(customrules)
     schema_override = os.path.join(environment.tmproot, 'schema_override.json')
@@ -306,6 +307,7 @@ class VtoccTestEnv(TestEnv):
     finally:
       mcu.close()
 
+    environment.setup()
     customrules = os.path.join(environment.tmproot, 'customrules.json')
     self.create_customrules(customrules)
     schema_override = os.path.join(environment.tmproot, 'schema_override.json')
