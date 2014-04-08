@@ -123,6 +123,7 @@ insert /* select */ into a select b, c from d
 insert /* on duplicate */ into a values (1, 2) on duplicate key update b = values(a), c = d
 update /* simple */ a set b = 3
 update /* a.b */ a.b set b = 3
+update /* b.c */ a set b.c = 3
 update /* list */ a set b = 3, c = 4
 update /* expression */ a set b = 3+4
 update /* where */ a set b = 3 where a = b

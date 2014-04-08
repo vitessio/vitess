@@ -1516,6 +1516,29 @@ update b set eid=1
   "SetValue": null
 }
 
+# pk changed as qualified column name
+update b set a.eid=1
+{
+  "PlanId": "DML_SUBQUERY",
+  "Reason": "WHERE",
+  "TableName": "b",
+  "DisplayQuery": "update b set a.eid = ?",
+  "FieldQuery": null,
+  "FullQuery": "update b set a.eid = 1",
+  "OuterQuery": "update b set a.eid = 1 where eid = :0 and id = :1",
+  "Subquery": "select eid, id from b limit :_vtMaxResultSize for update",
+  "IndexUsed": "",
+  "ColumnNumbers": null,
+  "PKValues": null,
+  "SecondaryPKValues": [
+    1,
+    null
+  ],
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
 # complex pk change
 update b set eid=foo()
 {
@@ -1586,6 +1609,29 @@ update a set name='foo' where eid=1 and id=1
   "FieldQuery": null,
   "FullQuery": "update a set name = 'foo' where eid = 1 and id = 1",
   "OuterQuery": "update a set name = 'foo' where eid = 1 and id = 1",
+  "Subquery": "select eid, id from a where eid = 1 and id = 1 limit :_vtMaxResultSize for update",
+  "IndexUsed": "",
+  "ColumnNumbers": null,
+  "PKValues": [
+    1,
+    1
+  ],
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
+# update with qualified column name
+update a set a.name='foo' where eid=1 and id=1
+{
+  "PlanId": "DML_PK",
+  "Reason": "DEFAULT",
+  "TableName": "a",
+  "DisplayQuery": "update a set a.name = ? where eid = ? and id = ?",
+  "FieldQuery": null,
+  "FullQuery": "update a set a.name = 'foo' where eid = 1 and id = 1",
+  "OuterQuery": "update a set a.name = 'foo' where eid = 1 and id = 1",
   "Subquery": "select eid, id from a where eid = 1 and id = 1 limit :_vtMaxResultSize for update",
   "IndexUsed": "",
   "ColumnNumbers": null,

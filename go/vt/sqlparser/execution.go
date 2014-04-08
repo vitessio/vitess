@@ -730,7 +730,7 @@ func (node *Node) parseList() (values interface{}, isList bool) {
 
 func (node *Node) execAnalyzeUpdateExpressions(pkIndex *schema.Index) (pkValues []interface{}, ok bool) {
 	for i := 0; i < node.Len(); i++ {
-		columnName := string(node.At(i).At(0).Value)
+		columnName := string(node.At(i).At(0).execAnalyzeSelectExpression())
 		index := pkIndex.FindColumn(columnName)
 		if index == -1 {
 			continue
