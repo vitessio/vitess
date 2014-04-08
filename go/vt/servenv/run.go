@@ -67,12 +67,16 @@ func Close() {
 	ListeningURL = url.URL{}
 }
 
+// OnTerm registers f to be run when the process receives a SIGTERM.
+// All hooks are run in parallel.
+// This allows the program to change its behavior during the lameduck period.
 func OnTerm(f func()) {
 	onTermHooks.Add(f)
 }
 
-// OnClose registers f to be run at the end of the app lifecycle. All
-// hooks are run in parallel.
+// OnClose registers f to be run at the end of the app lifecycle.
+// This happens after the lameduck period just before the program exits.
+// All hooks are run in parallel.
 func OnClose(f func()) {
 	onCloseHooks.Add(f)
 }
