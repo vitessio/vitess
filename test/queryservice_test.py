@@ -48,23 +48,25 @@ if __name__ == "__main__":
 
     for m in modules:
       suite.addTests(unittest.TestLoader().loadTestsFromModule(m))
+  try:
+    for env_name in options.env.split(','):
+      try:
+        if env_name == 'vttablet':
+          env = test_env.VttabletTestEnv()
+        elif env_name == 'vtocc':
+          env = test_env.VtoccTestEnv()
+        else:
+          raise Exception("Valid options for -e: vtocc, vttablet")
 
-  for env_name in options.env.split(','):
-    try:
-      if env_name == 'vttablet':
-        env = test_env.VttabletTestEnv()
-      elif env_name == 'vtocc':
-        env = test_env.VtoccTestEnv()
-      else:
-        raise Exception("Valid options for -e: vtocc, vttablet")
-
-      env.memcache = options.memcache
-      env.setUp()
-      print "Starting queryservice_test.py: %s" % env_name
-      sys.stdout.flush()
-      framework.TestCase.setenv(env)
-      result = unittest.TextTestRunner(verbosity=options.verbose).run(suite)
-      if not result.wasSuccessful():
-        raise Exception("test failures")
-    finally:
-      env.tearDown()
+        env.memcache = options.memcache
+        env.setUp()
+        print "Starting queryservice_test.py: %s" % env_name
+        sys.stdout.flush()
+        framework.TestCase.setenv(env)
+        result = unittest.TextTestRunner(verbosity=options.verbose).run(suite)
+        if not result.wasSuccessful():
+          raise Exception("test failures")
+      finally:
+        env.tearDown()
+  finally:
+    utils.remove_tmp_files()

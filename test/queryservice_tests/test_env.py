@@ -253,8 +253,6 @@ class VttabletTestEnv(TestEnv):
       self.txlogger.terminate()
     environment.topo_server_teardown()
     utils.kill_sub_processes()
-    utils.remove_tmp_files()
-    # self.tablet.remove_tree()
 
   def mysql_connect(self, dbname=''):
     return self.tablet.connect()
