@@ -323,7 +323,8 @@ class VtoccTestEnv(TestEnv):
       "-db-config-app-unixsocket", self.mysqldir+"/mysql.sock",
       "-db-config-app-uname", 'vt_dba',   # use vt_dba as some tests depend on 'drop'
       "-db-config-app-keyspace", "test_keyspace",
-      "-db-config-app-shard", "0"
+      "-db-config-app-shard", "0",
+      "-lameduck-period", "100ms",
     ]
     if self.memcache:
       memcache = self.mysqldir+"/memcache.sock"

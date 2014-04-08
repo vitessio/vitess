@@ -39,6 +39,7 @@ var (
 	mu             sync.Mutex
 
 	onInitHooks hooks
+	onTermHooks hooks
 	onRunHooks  hooks
 	inited      bool
 )
