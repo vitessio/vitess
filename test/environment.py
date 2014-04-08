@@ -33,8 +33,6 @@ mysql_flavor = os.environ.get('MYSQL_FLAVOR', 'GoogleMysql')
 # location of the curl binary, used for some tests.
 curl_bin = '/usr/bin/curl'
 
-mysql_client_bin = 'mysql'
-
 def memcached_bin():
   in_vt = os.path.join(vtroot, 'bin', 'memcached')
   if os.path.exists(in_vt):
@@ -89,7 +87,7 @@ def binary_path(name):
 
 # binary management for the MySQL distribution.
 def mysql_binary_path(name):
-  return name
+  return os.path.join(vtroot, 'dist', 'mysql', 'bin', name)
 
 # topology server management: we use zookeeper in all the tests
 topo_server_implementation = 'zookeeper'
