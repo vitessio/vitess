@@ -44,8 +44,8 @@ type ResilientSrvTopoServer struct {
 	topoServer SrvTopoServer
 	counts     *stats.Counters
 
-	// mu protects the cache map itself, not the individual values
-	// in the cache.
+	// mutex protects the cache map itself, not the individual
+	// values in the cache.
 	mutex                 sync.Mutex
 	srvKeyspaceNamesCache map[string]*srvKeyspaceNamesEntry
 	srvKeyspaceCache      map[string]*srvKeyspaceEntry
@@ -73,7 +73,40 @@ type endPointsEntry struct {
 	mutex sync.Mutex
 
 	insertionTime time.Time
-	value         *topo.EndPoints
+
+	// Value is the end points that were returned to the client.
+	Value *topo.EndPoints
+	// OriginalValkue is the end points that were returned from
+	// the topology server.
+	OriginalValue *topo.EndPoints
+}
+
+// filterUnhealthyServers removes the unhealthy servers from the list,
+// unless all servers are unhealthy, then it keeps them all.
+func filterUnhealthyServers(endPoints *topo.EndPoints) *topo.EndPoints {
+
+	// no endpoints, return right away
+	if endPoints == nil || len(endPoints.Entries) == 0 {
+		return endPoints
+	}
+
+	healthyEndPoints := make([]topo.EndPoint, 0, len(endPoints.Entries))
+	for _, ep := range endPoints.Entries {
+		// if we are behind on replication, we're not 100% healthy
+		if ep.Health != nil && ep.Health[health.ReplicationLag] == health.ReplicationLagHigh {
+			continue
+		}
+
+		healthyEndPoints = append(healthyEndPoints, ep)
+	}
+
+	// we have healthy guys, we return them
+	if len(healthyEndPoints) > 0 {
+		return &topo.EndPoints{Entries: healthyEndPoints}
+	}
+
+	// we only have unhealthy guys, return them
+	return endPoints
 }
 
 // NewResilientSrvTopoServer creates a new ResilientSrvTopoServer
@@ -198,7 +231,7 @@ func (server *ResilientSrvTopoServer) GetEndPoints(cell, keyspace, shard string,
 
 	// If the entry is fresh enough, return it
 	if time.Now().Sub(entry.insertionTime) < *srvTopoCacheTTL {
-		return entry.value, nil
+		return entry.Value, nil
 	}
 
 	// not in cache or too old, get the real value
@@ -208,45 +241,15 @@ func (server *ResilientSrvTopoServer) GetEndPoints(cell, keyspace, shard string,
 			server.counts.Add(errorCategory, 1)
 			log.Errorf("GetEndPoints(%v, %v, %v, %v) failed: %v (no cached value, returning error)", cell, keyspace, shard, tabletType, err)
 			return nil, err
-		} else {
-			server.counts.Add(cachedCategory, 1)
-			log.Warningf("GetEndPoints(%v, %v, %v, %v) failed: %v (returning cached value)", cell, keyspace, shard, tabletType, err)
-			return entry.value, nil
 		}
+		server.counts.Add(cachedCategory, 1)
+		log.Warningf("GetEndPoints(%v, %v, %v, %v) failed: %v (returning cached value)", cell, keyspace, shard, tabletType, err)
+		return entry.Value, nil
 	}
-
-	// filter the values to remove unhealthy servers
-	result = filterUnhealthyServers(result)
 
 	// save the value we got and the current time in the cache
 	entry.insertionTime = time.Now()
-	entry.value = result
-	return result, nil
-}
+	entry.OriginalValue, entry.Value = result, filterUnhealthyServers(result)
 
-// filterUnhealthyServers removes the unhealthy servers from the list,
-// unless all servers are unhealthy, then it keeps them all.
-func filterUnhealthyServers(endPoints *topo.EndPoints) *topo.EndPoints {
-	// no endpoints, return right away
-	if endPoints == nil || len(endPoints.Entries) == 0 {
-		return endPoints
-	}
-
-	healthyEndPoints := make([]topo.EndPoint, 0, len(endPoints.Entries))
-	for _, ep := range endPoints.Entries {
-		// if we are behind on replication, we're not 100% healthy
-		if ep.Health != nil && ep.Health[health.ReplicationLag] == health.ReplicationLagHigh {
-			continue
-		}
-
-		healthyEndPoints = append(healthyEndPoints, ep)
-	}
-
-	// we have healthy guys, we return them
-	if len(healthyEndPoints) > 0 {
-		return &topo.EndPoints{Entries: healthyEndPoints}
-	}
-
-	// we only have unhealthy guys, return them
-	return endPoints
+	return entry.Value, nil
 }
