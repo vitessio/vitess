@@ -128,14 +128,15 @@ func queryzHandler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		Value := &queryzRow{
-			Query: plan.DisplayQuery,
+			Query: wrappable(plan.DisplayQuery),
 			Table: plan.TableName,
 			Plan:  plan.PlanId,
 		}
 		Value.Count, Value.tm, Value.Rows, Value.Errors = plan.Stats()
-		if Value.tm < 10*time.Millisecond {
+		timepq := time.Duration(int64(Value.tm) / Value.Count)
+		if timepq < 10*time.Millisecond {
 			Value.Color = "low"
-		} else if Value.tm < 100*time.Millisecond {
+		} else if timepq < 100*time.Millisecond {
 			Value.Color = "medium"
 		} else {
 			Value.Color = "high"

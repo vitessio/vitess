@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"flag"
 	"io/ioutil"
-	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -53,8 +52,7 @@ func main() {
 	ts.AllowQueries(&dbConfigs.App, schemaOverrides, ts.LoadCustomRules(), mysqld)
 
 	log.Infof("starting vtocc %v", *servenv.Port)
-	servenv.OnClose(func() {
-		time.Sleep(5 * time.Millisecond)
+	servenv.OnTerm(func() {
 		ts.DisallowQueries()
 	})
 	servenv.Run()

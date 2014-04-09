@@ -859,7 +859,7 @@ update_list:
 	}
 
 update_expression:
-	sql_id '=' expression
+	column_name '=' expression
 	{
 		$$ = $2.PushTwo($1, $3)
 	}

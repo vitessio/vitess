@@ -442,6 +442,18 @@ cases = [
        'commit']),
 
   MultiCase(
+      'pk change with qualifed column name',
+      ['begin',
+       Case(sql="update vtocc_a set vtocc_a.eid = 2 where eid = 1 and id = 1",
+            rewritten="update vtocc_a set vtocc_a.eid = 2 where eid = 1 and id = 1 /* _stream vtocc_a (eid id ) (1 1 ) (2 1 )"),
+       'commit',
+       Case(sql='select eid from vtocc_a where id = 1',
+            result=[(2L,)]),
+       'begin',
+       "update vtocc_a set eid=1 where id=1",
+       'commit']),
+
+  MultiCase(
       'partial pk',
       ['begin',
        Case(sql="update /* pk */ vtocc_a set foo='bar' where id = 1",

@@ -35,10 +35,13 @@ import (
 )
 
 var (
+	Port           = flag.Int("port", 0, "port for the server")
+	LameduckPeriod = flag.Duration("lameduck-period", 50*time.Millisecond, "how long to keep the server running on SIGTERM before stopping")
 	memProfileRate = flag.Int("mem-profile-rate", 512*1024, "profile every n bytes allocated")
 	mu             sync.Mutex
 
 	onInitHooks hooks
+	onTermHooks hooks
 	onRunHooks  hooks
 	inited      bool
 )
@@ -130,6 +133,13 @@ func exportBinaryVersion() error {
 // lifecycle. It should be called in an init() function.
 func onInit(f func()) {
 	onInitHooks.Add(f)
+}
+
+// OnTerm registers f to be run when the process receives a SIGTERM.
+// All hooks are run in parallel.
+// This allows the program to change its behavior during the lameduck period.
+func OnTerm(f func()) {
+	onTermHooks.Add(f)
 }
 
 // OnRun registers f to be run right at the beginning of Run. All

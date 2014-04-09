@@ -12,7 +12,6 @@ import shutil
 import subprocess
 import time
 import urllib2
-import uuid
 
 from vtdb import tablet as tablet_conn
 from vtdb import cursor
@@ -27,32 +26,6 @@ import utils
 
 class EnvironmentError(Exception):
   pass
-
-class Querylog(object):
-
-  def __init__(self, env):
-    self.env = env
-    self.id = str(uuid.uuid4())
-
-  @property
-  def path(self):
-    return os.path.join(environment.vtlogroot, 'querylog' + self.id)
-
-  @property
-  def path_full(self):
-    return os.path.join(environment.vtlogroot, 'querylog_full' + self.id)
-
-  def __enter__(self):
-    self.curl = utils.curl(self.env.url('/debug/querylog'), background=True, stdout=open(self.path, 'w'))
-    self.curl_full = utils.curl(self.env.url('/debug/querylog?full=true'), background=True, stdout=open(self.path_full, 'w'))
-    time.sleep(0.3)
-    self.tailer = framework.Tailer(open(self.path), sleep=0.1)
-    return self
-
-  def __exit__(self, *args, **kwargs):
-    self.curl.terminate()
-    self.curl_full.terminate()
-    return
 
 
 class TestEnv(object):
@@ -163,7 +136,7 @@ class TestEnv(object):
     curs = cursor.TabletCursor(self.conn)
     error_count = 0
 
-    with Querylog(self) as querylog:
+    with cases_framework.Querylog(self) as querylog:
       for case in cases:
         if isinstance(case, basestring):
           curs.execute(case)
@@ -253,8 +226,6 @@ class VttabletTestEnv(TestEnv):
       self.txlogger.terminate()
     environment.topo_server_teardown()
     utils.kill_sub_processes()
-    utils.remove_tmp_files()
-    # self.tablet.remove_tree()
 
   def mysql_connect(self, dbname=''):
     return self.tablet.connect()
@@ -323,7 +294,7 @@ class VtoccTestEnv(TestEnv):
       "-db-config-app-unixsocket", self.mysqldir+"/mysql.sock",
       "-db-config-app-uname", 'vt_dba',   # use vt_dba as some tests depend on 'drop'
       "-db-config-app-keyspace", "test_keyspace",
-      "-db-config-app-shard", "0"
+      "-db-config-app-shard", "0",
     ]
     if self.memcache:
       memcache = self.mysqldir+"/memcache.sock"

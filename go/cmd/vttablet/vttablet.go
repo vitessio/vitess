@@ -7,7 +7,6 @@ package main
 
 import (
 	"flag"
-	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/binlog"
@@ -65,8 +64,7 @@ func main() {
 	}
 
 	vttablet.HttpHandleSnapshots(mycnf, tabletAlias.Uid)
-	servenv.OnClose(func() {
-		time.Sleep(5 * time.Millisecond)
+	servenv.OnTerm(func() {
 		ts.DisallowQueries()
 		binlog.DisableUpdateStreamService()
 		topo.CloseServers()

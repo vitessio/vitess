@@ -1,11 +1,11 @@
 package servenv
 
 import (
-	"flag"
 	"fmt"
 	"net/http"
 	"net/url"
 	"os"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/netutil"
@@ -14,8 +14,6 @@ import (
 
 var (
 	onCloseHooks hooks
-
-	Port = flag.Int("port", 0, "port for the server")
 
 	// filled in when calling Run or RunSecure
 	ListeningURL url.URL
@@ -52,6 +50,10 @@ func Run() {
 
 	proc.Wait()
 	l.Close()
+	log.Info("Entering lameduck mode")
+	go onTermHooks.Fire()
+	time.Sleep(*LameduckPeriod)
+	log.Info("Shutting down")
 	Close()
 }
 
@@ -61,8 +63,9 @@ func Close() {
 	ListeningURL = url.URL{}
 }
 
-// OnClose registers f to be run at the end of the app lifecycle. All
-// hooks are run in parallel.
+// OnClose registers f to be run at the end of the app lifecycle.
+// This happens after the lameduck period just before the program exits.
+// All hooks are run in parallel.
 func OnClose(f func()) {
 	onCloseHooks.Add(f)
 }
