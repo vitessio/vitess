@@ -111,7 +111,7 @@ func querylogzHandler(w http.ResponseWriter, r *http.Request) {
 				MySQL:         strs[12],
 				Conn:          strs[13],
 				PlanType:      strs[6],
-				Sql:           strings.Trim(strs[7], "\""),
+				Sql:           wrappable(strings.Trim(strs[7], "\"")),
 				Queries:       strs[9],
 				Sources:       strs[11],
 				Rows:          strs[14],
