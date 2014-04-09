@@ -76,7 +76,7 @@ type endPointsEntry struct {
 
 	// Value is the end points that were returned to the client.
 	Value *topo.EndPoints
-	// OriginalValkue is the end points that were returned from
+	// OriginalValue is the end points that were returned from
 	// the topology server.
 	OriginalValue *topo.EndPoints
 }
