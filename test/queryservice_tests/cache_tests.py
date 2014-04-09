@@ -4,7 +4,7 @@ import framework
 import cache_cases1
 import cache_cases2
 
-import test_env
+import cases_framework
 
 class TestWillNotBeCached(framework.TestCase):
 
@@ -99,7 +99,7 @@ class TestCache(framework.TestCase):
 
   def test_overrides(self):
     tstart = self.env.table_stats()["vtocc_view"]
-    with test_env.Querylog(self.env) as querylog:
+    with cases_framework.Querylog(self.env) as querylog:
       cu = self.env.execute("select * from vtocc_view where key2 = 1")
       self.assertEqual(cu.fetchone(), (1L, 10L, 1L, 3L))
       tend = self.env.table_stats()["vtocc_view"]
@@ -117,14 +117,14 @@ class TestCache(framework.TestCase):
 
     tstart = self.env.table_stats()["vtocc_view"]
     self.env.conn.begin()
-    with test_env.Querylog(self.env) as querylog:
+    with cases_framework.Querylog(self.env) as querylog:
       self.env.execute("update vtocc_part1 set data1 = 2 where key2 = 1")
       log = querylog.tailer.read()
       self.env.conn.commit()
       self.assertContains(log, "update vtocc_part1 set data1 = 2 where key2 = 1 /* _stream vtocc_part1 (key2 ) (1 ); */")
 
 
-    with test_env.Querylog(self.env) as querylog:
+    with cases_framework.Querylog(self.env) as querylog:
       cu = self.env.execute("select * from vtocc_view where key2 = 1")
       self.assertEqual(cu.fetchone(), (1L, 10L, 2L, 3L))
       tend = self.env.table_stats()["vtocc_view"]
@@ -144,7 +144,7 @@ class TestCache(framework.TestCase):
     self.env.conn.commit()
 
 
-    with test_env.Querylog(self.env) as querylog:
+    with cases_framework.Querylog(self.env) as querylog:
       cu = self.env.execute("select * from vtocc_view where key2 = 1")
       self.assertEqual(cu.fetchone(), (1L, 10L, 2L, 2L))
       tend = self.env.table_stats()["vtocc_view"]

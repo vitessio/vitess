@@ -1,9 +1,15 @@
 import ast
 import json
+import os
 import re
+import time
 import urllib2
+import uuid
 
-import test_env
+import environment
+import framework
+import utils
+
 
 def cases_iterator(cases):
   for case in cases:
@@ -12,6 +18,7 @@ def cases_iterator(cases):
         yield c
     else:
       yield case
+
 
 class Log(object):
   def __init__(self, line):
@@ -103,6 +110,33 @@ class Log(object):
       return self.fail("wrong number of queries", len(case.rewritten), int(self.number_of_queries))
 
 
+class Querylog(object):
+
+  def __init__(self, env):
+    self.env = env
+    self.id = str(uuid.uuid4())
+
+  @property
+  def path(self):
+    return os.path.join(environment.vtlogroot, 'querylog' + self.id)
+
+  @property
+  def path_full(self):
+    return os.path.join(environment.vtlogroot, 'querylog_full' + self.id)
+
+  def __enter__(self):
+    self.curl = utils.curl(self.env.url('/debug/querylog'), background=True, stdout=open(self.path, 'w'))
+    self.curl_full = utils.curl(self.env.url('/debug/querylog?full=true'), background=True, stdout=open(self.path_full, 'w'))
+    time.sleep(0.3)
+    self.tailer = framework.Tailer(open(self.path), sleep=0.1)
+    return self
+
+  def __exit__(self, *args, **kwargs):
+    self.curl.terminate()
+    self.curl_full.terminate()
+    return
+
+
 class Case(object):
 
   def __init__(self, sql, bindings=None, result=None, rewritten=None, doc='',
@@ -149,7 +183,7 @@ class Case(object):
 
   def run(self, cursor, env):
     failures = []
-    with test_env.Querylog(env) as querylog:
+    with Querylog(env) as querylog:
       if self.is_testing_cache:
         tstart = self.table_stats(env)
       if self.sql in ('begin', 'commit', 'rollback'):
