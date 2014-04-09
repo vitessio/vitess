@@ -4,7 +4,10 @@
 
 package tabletserver
 
-import "net/http"
+import (
+	"bytes"
+	"net/http"
+)
 
 func startHTMLTable(w http.ResponseWriter) {
 	w.Write([]byte(`
@@ -51,4 +54,18 @@ func endHTMLTable(w http.ResponseWriter) {
 		</body>
 		</html>
 	`))
+}
+
+// wrappable inserts zero-width whitespaces to make
+// the string wrappable.
+func wrappable(in string) string {
+	buf := bytes.NewBuffer(nil)
+	for _, ch := range in {
+		buf.WriteRune(ch)
+		if ch == ',' || ch == ')' {
+			// zero-width whitespace
+			buf.WriteRune('\u200B')
+		}
+	}
+	return buf.String()
 }
