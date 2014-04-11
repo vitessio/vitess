@@ -26,6 +26,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/initiator"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topotools"
 )
 
 // The actor applies individual commands to execute an action read
@@ -268,7 +269,7 @@ func (ta *TabletActor) setReadOnly(rdonly bool) error {
 
 func (ta *TabletActor) changeType(actionNode *actionnode.ActionNode) error {
 	dbType := actionNode.Args.(*topo.TabletType)
-	return actionnode.ChangeType(ta.ts, ta.tabletAlias, *dbType, nil, true /*runHooks*/)
+	return topotools.ChangeType(ta.ts, ta.tabletAlias, *dbType, nil, true /*runHooks*/)
 }
 
 func (ta *TabletActor) demoteMaster() error {
@@ -462,7 +463,7 @@ func SlaveWasRestarted(ts topo.Server, tabletAlias topo.TabletAlias, swrd *actio
 }
 
 func (ta *TabletActor) scrap() error {
-	return actionnode.Scrap(ta.ts, ta.tabletAlias, false)
+	return topotools.Scrap(ta.ts, ta.tabletAlias, false)
 }
 
 func (ta *TabletActor) preflightSchema(actionNode *actionnode.ActionNode) error {
@@ -504,7 +505,7 @@ func (ta *TabletActor) applySchema(actionNode *actionnode.ActionNode) error {
 func (ta *TabletActor) executeHook(actionNode *actionnode.ActionNode) (err error) {
 	// FIXME(msolomon) shouldn't the reply get distilled into an error?
 	h := actionNode.Args.(*hook.Hook)
-	actionnode.ConfigureTabletHook(h, ta.tabletAlias)
+	topotools.ConfigureTabletHook(h, ta.tabletAlias)
 	actionNode.Reply = h.Execute()
 	return nil
 }
@@ -588,7 +589,7 @@ func fetchAndParseJsonFile(addr, filename string, result interface{}) error {
 func (ta *TabletActor) changeTypeToRestore(tablet, sourceTablet *topo.TabletInfo, parentAlias topo.TabletAlias, keyRange key.KeyRange) error {
 	// run the optional preflight_assigned hook
 	hk := hook.NewSimpleHook("preflight_assigned")
-	actionnode.ConfigureTabletHook(hk, ta.tabletAlias)
+	topotools.ConfigureTabletHook(hk, ta.tabletAlias)
 	if err := hk.ExecuteOptional(); err != nil {
 		return err
 	}
@@ -702,7 +703,7 @@ func (ta *TabletActor) restore(actionNode *actionnode.ActionNode) error {
 	// do the work
 	if err := ta.mysqld.RestoreFromSnapshot(sm, args.FetchConcurrency, args.FetchRetryCount, args.DontWaitForSlaveStart, ta.hookExtraEnv()); err != nil {
 		log.Errorf("RestoreFromSnapshot failed (%v), scrapping", err)
-		if err := actionnode.Scrap(ta.ts, ta.tabletAlias, false); err != nil {
+		if err := topotools.Scrap(ta.ts, ta.tabletAlias, false); err != nil {
 			log.Errorf("Failed to Scrap after failed RestoreFromSnapshot: %v", err)
 		}
 
@@ -710,7 +711,7 @@ func (ta *TabletActor) restore(actionNode *actionnode.ActionNode) error {
 	}
 
 	// change to TYPE_SPARE, we're done!
-	return actionnode.ChangeType(ta.ts, ta.tabletAlias, topo.TYPE_SPARE, nil, true)
+	return topotools.ChangeType(ta.ts, ta.tabletAlias, topo.TYPE_SPARE, nil, true)
 }
 
 func (ta *TabletActor) multiSnapshot(actionNode *actionnode.ActionNode) error {
@@ -784,7 +785,7 @@ func (ta *TabletActor) multiRestore(actionNode *actionnode.ActionNode) (err erro
 
 	// run the action, scrap if it fails
 	if err := ta.mysqld.MultiRestore(tablet.DbName(), keyRanges, sourceAddrs, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, args.Strategy); err != nil {
-		if e := actionnode.Scrap(ta.ts, ta.tabletAlias, false); e != nil {
+		if e := topotools.Scrap(ta.ts, ta.tabletAlias, false); e != nil {
 			log.Errorf("Failed to Scrap after failed RestoreFromMultiSnapshot: %v", e)
 		}
 		return err
