@@ -305,7 +305,11 @@ func handleExecError(query *proto.Query, err *error, logStats *sqlQueryStats) {
 		if terr.ErrorType == RETRY || terr.ErrorType == TX_POOL_FULL || terr.SqlError == mysql.DUP_ENTRY {
 			return
 		}
-		log.Errorf("%s: %v", terr.Message, query)
+		if terr.ErrorType == FATAL {
+			log.Errorf("%s: %v", terr.Message, query)
+		} else {
+			log.Warningf("%s: %v", terr.Message, query)
+		}
 	}
 }
 
