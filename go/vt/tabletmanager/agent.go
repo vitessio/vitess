@@ -458,7 +458,7 @@ func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType, lockT
 			log.Warningf("Cannot lock shard for rebuild: %v", err)
 			return
 		}
-		err = topo.RebuildShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, topo.RebuildShardOptions{Cells: []string{tablet.Alias.Cell}, IgnorePartialResult: true})
+		err = topotools.RebuildShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, topotools.RebuildShardOptions{Cells: []string{tablet.Alias.Cell}, IgnorePartialResult: true})
 		err = actionNode.UnlockShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, lockPath, err)
 		if err != nil {
 			log.Warningf("UnlockShard returned an error: %v", err)

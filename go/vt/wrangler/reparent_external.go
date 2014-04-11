@@ -11,6 +11,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topotools"
 )
 
 func (wr *Wrangler) ShardExternallyReparented(keyspace, shard string, masterElectTabletAlias topo.TabletAlias) error {
@@ -81,8 +82,8 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 	// and rebuild the shard serving graph (but do not change the
 	// master record, we already did it)
 	log.Infof("Rebuilding shard serving graph data")
-	return topo.RebuildShard(wr.ts, masterElectTablet.Keyspace, masterElectTablet.Shard,
-		topo.RebuildShardOptions{IgnorePartialResult: partialTopology})
+	return topotools.RebuildShard(wr.ts, masterElectTablet.Keyspace, masterElectTablet.Shard,
+		topotools.RebuildShardOptions{IgnorePartialResult: partialTopology})
 }
 
 func (wr *Wrangler) reparentShardExternal(slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo) error {

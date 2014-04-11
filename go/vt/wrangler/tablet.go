@@ -336,7 +336,7 @@ func (wr *Wrangler) changeTypeInternal(tabletAlias topo.TabletAlias, dbType topo
 
 	// rebuild if necessary
 	if rebuildRequired {
-		err = topo.RebuildShard(wr.ts, ti.Keyspace, ti.Shard, topo.RebuildShardOptions{
+		err = topotools.RebuildShard(wr.ts, ti.Keyspace, ti.Shard, topotools.RebuildShardOptions{
 			Cells:               []string{ti.Alias.Cell},
 			IgnorePartialResult: false,
 		})

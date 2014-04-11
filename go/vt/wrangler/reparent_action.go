@@ -12,6 +12,7 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topotools"
 )
 
 // helper struct to queue up results
@@ -373,7 +374,7 @@ func (wr *Wrangler) finishReparent(si *topo.ShardInfo, masterElect *topo.TabletI
 	// We rebuild all the cells, as we may have taken tablets in and
 	// out of the graph.
 	log.Infof("rebuilding shard serving graph data")
-	return topo.RebuildShard(wr.ts, masterElect.Keyspace, masterElect.Shard, topo.RebuildShardOptions{IgnorePartialResult: false})
+	return topotools.RebuildShard(wr.ts, masterElect.Keyspace, masterElect.Shard, topotools.RebuildShardOptions{IgnorePartialResult: false})
 }
 
 func (wr *Wrangler) breakReplication(slaveMap map[topo.TabletAlias]*topo.TabletInfo, masterElect *topo.TabletInfo) error {
