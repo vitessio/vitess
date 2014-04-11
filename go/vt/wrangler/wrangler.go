@@ -9,14 +9,16 @@ import (
 	"flag"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/initiator"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-const (
+var (
 	// DefaultActionTimeout is a good default for interactive
-	// remote actions.
-	DefaultActionTimeout = 30 * time.Second
+	// remote actions. We usually take a lock then do an action,
+	// so basing this to be greater than DefaultLockTimeout is good.
+	DefaultActionTimeout = actionnode.DefaultLockTimeout * 4
 )
 
 var tabletManagerProtocol = flag.String("tablet_manager_protocol", "bson", "the protocol to use to talk to vttablet")
