@@ -44,9 +44,13 @@ func (zkts *Server) GetSrvTabletTypesPerShard(cell, keyspace, shard string) ([]t
 		}
 		return nil, err
 	}
-	result := make([]topo.TabletType, len(children))
-	for i, tt := range children {
-		result[i] = topo.TabletType(tt)
+	result := make([]topo.TabletType, 0, len(children))
+	for _, tt := range children {
+		// these two are used for locking
+		if tt == "action" || tt == "actionlog" {
+			continue
+		}
+		result = append(result, topo.TabletType(tt))
 	}
 	return result, nil
 }
