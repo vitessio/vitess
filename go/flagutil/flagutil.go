@@ -4,6 +4,7 @@ package flagutil
 
 import (
 	_ "flag"
+	"sort"
 	"strings"
 )
 
@@ -82,5 +83,7 @@ func (value StringMapValue) String() string {
 	for k, v := range value {
 		parts = append(parts, k+":"+strings.Replace(v, ",", `\,`, -1))
 	}
+	// Generate the string deterministically.
+	sort.Strings(parts)
 	return strings.Join(parts, ",")
 }
