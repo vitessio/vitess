@@ -62,8 +62,8 @@ func TestStringMap(t *testing.T) {
 				continue
 			}
 		}
-		vs := v.String()
-		if vs != want.in {
+		
+		if vs := v.String(); vs != want.in {
 			t.Errorf("v.String(): want %#v, got %#v", want.in, vs)
 		}
 	}
