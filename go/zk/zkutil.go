@@ -29,6 +29,11 @@ var (
 	ErrTimeout = errors.New("zkutil: obtaining lock timed out")
 )
 
+const (
+	PERM_DIRECTORY = zookeeper.PERM_ADMIN | zookeeper.PERM_CREATE | zookeeper.PERM_DELETE | zookeeper.PERM_READ
+	PERM_FILE      = zookeeper.PERM_ADMIN | zookeeper.PERM_READ | zookeeper.PERM_WRITE
+)
+
 func init() {
 	rand.Seed(time.Now().UnixNano())
 }
@@ -37,13 +42,20 @@ func init() {
 // Intermediate znodes are always created empty.
 func CreateRecursive(zconn Conn, zkPath, value string, flags int, aclv []zookeeper.ACL) (pathCreated string, err error) {
 	parts := strings.Split(zkPath, "/")
-	if parts[1] != "zk" {
-		return "", fmt.Errorf("zkutil: non zk path: %v", zkPath)
+	if parts[1] != MagicPrefix {
+		return "", fmt.Errorf("zkutil: non /%v path: %v", MagicPrefix, zkPath)
 	}
 
 	pathCreated, err = zconn.Create(zkPath, value, flags, aclv)
 	if zookeeper.IsError(err, zookeeper.ZNONODE) {
-		_, err = CreateRecursive(zconn, path.Dir(zkPath), "", flags, aclv)
+		// Make sure that nodes are either "file" or "directory" to mirror file system
+		// semantics.
+		dirAclv := make([]zookeeper.ACL, len(aclv))
+		for i, acl := range aclv {
+			dirAclv[i] = acl
+			dirAclv[i].Perms = PERM_DIRECTORY
+		}
+		_, err = CreateRecursive(zconn, path.Dir(zkPath), "", flags, dirAclv)
 		if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 			return "", err
 		}

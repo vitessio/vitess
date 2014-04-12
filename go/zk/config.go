@@ -30,6 +30,8 @@ var (
 	connectTimeout = flag.Duration("zk.connect-timeout", 30*time.Second, "zk connect timeout")
 )
 
+var MagicPrefix = "zk"
+
 // Read the cell from -zk.local-cell, or the environment ZK_CLIENT_LOCAL_CELL
 // or guess the cell by the hostname. This is either the first two characters
 // or the character before a dash '-'.
@@ -61,8 +63,8 @@ func ZkCellFromZkPath(zkPath string) (string, error) {
 	if len(pathParts) < 3 {
 		return "", fmt.Errorf("no cell name in path: %v", zkPath)
 	}
-	if pathParts[0] != "" || pathParts[1] != "zk" {
-		return "", fmt.Errorf("path should start with /zk/: %v", zkPath)
+	if pathParts[0] != "" || pathParts[1] != MagicPrefix {
+		return "", fmt.Errorf("path should start with /%v: %v", MagicPrefix, zkPath)
 	}
 	cell := pathParts[2]
 	if strings.Contains(cell, "-") {
