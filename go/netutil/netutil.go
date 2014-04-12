@@ -138,3 +138,19 @@ func ResolveIpAddr(addr string) (string, error) {
 	}
 	return net.JoinHostPort(ipAddrs[0], port), nil
 }
+
+// ResolveIpAddr resolves the address:port part into an IP address:port pair
+func ResolveIPv4Addr(addr string) (string, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return "", err
+	}
+	ipAddrs, err := net.LookupIP(host)
+	for _, ipAddr := range ipAddrs {
+		ipv4 := ipAddr.To4()
+		if ipv4 != nil {
+			return net.JoinHostPort(ipv4.String(), port), nil
+		}
+	}
+	return "", fmt.Errorf("no IPv4addr for name %v", host)
+}

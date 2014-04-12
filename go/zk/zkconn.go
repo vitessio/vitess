@@ -150,7 +150,8 @@ func resolveZkAddr(zkAddr string) (string, error) {
 	parts := strings.Split(zkAddr, ",")
 	resolved := make([]string, 0, len(parts))
 	for _, part := range parts {
-		if r, err := netutil.ResolveIpAddr(part); err != nil {
+		// The zookeeper client cannot handle IPv6 addresses before version 3.4.x.
+		if r, err := netutil.ResolveIPv4Addr(part); err != nil {
 			log.Infof("cannot resolve %v, will not use it: %v", part, err)
 		} else {
 			resolved = append(resolved, r)
