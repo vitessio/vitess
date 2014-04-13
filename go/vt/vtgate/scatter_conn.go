@@ -254,7 +254,7 @@ func (stc *ScatterConn) aggregateErrors(errors []error) error {
 	allRetryableError := true
 	for _, e := range errors {
 		connError, ok := e.(*ShardConnError)
-		if !ok || connError.Code != tabletconn.ERR_RETRY || connError.Code != tabletconn.ERR_FATAL || connError.InTransaction {
+		if !ok || (connError.Code != tabletconn.ERR_RETRY && connError.Code != tabletconn.ERR_FATAL) || connError.InTransaction {
 			allRetryableError = false
 			break
 		}
@@ -348,14 +348,6 @@ func (stc *ScatterConn) execShardAction(
 		}
 		break
 	}
-}
-
-func (stc *ScatterConn) cleanupShardConn(keyspace, shard string, tabletType topo.TabletType) {
-	stc.mu.Lock()
-	defer stc.mu.Unlock()
-
-	key := fmt.Sprintf("%s.%s.%s", keyspace, shard, tabletType)
-	delete(stc.shardConns, key)
 }
 
 func (stc *ScatterConn) getConnection(keyspace, shard string, tabletType topo.TabletType) *ShardConn {
