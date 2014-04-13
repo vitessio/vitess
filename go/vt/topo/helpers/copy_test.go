@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package topotools
+package helpers
 
 import (
 	"os"
@@ -87,7 +87,7 @@ func createSetup(t *testing.T) (topo.Server, topo.Server) {
 		t.Fatalf("cannot create slave tablet: %v", err)
 	}
 
-	os.Setenv("ZK_CLIENT_CONFIG", testfiles.Locate("topotools_test_zk_client.json"))
+	os.Setenv("ZK_CLIENT_CONFIG", testfiles.Locate("topo_helpers_test_zk_client.json"))
 	cells, err := fromTS.GetKnownCells()
 	if err != nil {
 		t.Fatalf("fromTS.GetKnownCells: %v", err)

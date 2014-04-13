@@ -11,7 +11,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topotools"
+	"github.com/youtube/vitess/go/vt/topo/helpers"
 )
 
 var fromTopo = flag.String("from", "", "topology to copy data from")
@@ -46,15 +46,15 @@ func main() {
 	toTS := topo.GetServerByName(*toTopo)
 
 	if *doKeyspaces {
-		topotools.CopyKeyspaces(fromTS, toTS)
+		helpers.CopyKeyspaces(fromTS, toTS)
 	}
 	if *doShards {
-		topotools.CopyShards(fromTS, toTS, *deleteKeyspaceShards)
+		helpers.CopyShards(fromTS, toTS, *deleteKeyspaceShards)
 	}
 	if *doShardReplications {
-		topotools.CopyShardReplications(fromTS, toTS)
+		helpers.CopyShardReplications(fromTS, toTS)
 	}
 	if *doTablets {
-		topotools.CopyTablets(fromTS, toTS)
+		helpers.CopyTablets(fromTS, toTS)
 	}
 }

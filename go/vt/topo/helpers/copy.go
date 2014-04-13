@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// topotools package contains a few utility classes to handle topo.Server
-// objects, and transitions.
-package topotools
+// helpers package contains a few utility classes to handle topo.Server
+// objects, and transitions from one topo implementation to another.
+package helpers
 
 import (
 	"fmt"

@@ -13,6 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topotools"
 )
 
 // Rebuild the serving and replication rollup data data while locking
@@ -24,7 +25,7 @@ func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) er
 		return err
 	}
 
-	err = topo.RebuildShard(wr.ts, keyspace, shard, topo.RebuildShardOptions{Cells: cells, IgnorePartialResult: false})
+	err = topotools.RebuildShard(wr.ts, keyspace, shard, topotools.RebuildShardOptions{Cells: cells, IgnorePartialResult: false})
 	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 }
 

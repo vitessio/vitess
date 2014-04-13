@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package topo
+package topotools
 
 import (
 	"fmt"
@@ -10,6 +10,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 // RebuildShardOptions are options for rebuildShard
@@ -29,7 +30,7 @@ type RebuildShardOptions struct {
 // This function should only be used with an action lock on the shard
 // - otherwise the consistency of the serving graph data can't be
 // guaranteed.
-func RebuildShard(ts Server, keyspace, shard string, options RebuildShardOptions) error {
+func RebuildShard(ts topo.Server, keyspace, shard string, options RebuildShardOptions) error {
 	log.Infof("RebuildShard %v/%v", keyspace, shard)
 
 	// read the existing shard info. It has to exist.
@@ -38,16 +39,16 @@ func RebuildShard(ts Server, keyspace, shard string, options RebuildShardOptions
 		return err
 	}
 
-	tabletMap, err := GetTabletMapForShardByCell(ts, keyspace, shard, options.Cells)
+	tabletMap, err := topo.GetTabletMapForShardByCell(ts, keyspace, shard, options.Cells)
 	if err != nil {
-		if options.IgnorePartialResult && err == ErrPartialResult {
+		if options.IgnorePartialResult && err == topo.ErrPartialResult {
 			log.Warningf("rebuildShard: got ErrPartialResult from GetTabletMapForShard, but skipping error as it was expected")
 		} else {
 			return err
 		}
 	}
 
-	tablets := make([]*TabletInfo, 0, len(tabletMap))
+	tablets := make([]*topo.TabletInfo, 0, len(tabletMap))
 	for _, ti := range tabletMap {
 		if ti.Keyspace != shardInfo.Keyspace() || ti.Shard != shardInfo.ShardName() {
 			return fmt.Errorf("CRITICAL: tablet %v is in replication graph for shard %v/%v but belongs to shard %v:%v (maybe remove its replication path in shard %v/%v)", ti.Alias, keyspace, shard, ti.Keyspace, ti.Shard, keyspace, shard)
@@ -55,7 +56,7 @@ func RebuildShard(ts Server, keyspace, shard string, options RebuildShardOptions
 		if !ti.IsInReplicationGraph() {
 			// only valid case is a scrapped master in the
 			// catastrophic reparent case
-			if ti.Parent.Uid != NO_TABLET {
+			if ti.Parent.Uid != topo.NO_TABLET {
 				log.Warningf("Tablet %v should not be in the replication graph, please investigate (it will be ignored in the rebuild)", ti.Alias)
 			}
 		}
@@ -77,11 +78,11 @@ type cellKeyspaceShardType struct {
 	cell       string
 	keyspace   string
 	shard      string
-	tabletType TabletType
+	tabletType topo.TabletType
 }
 
 // Write serving graph data to the cells
-func rebuildShardSrvGraph(ts Server, shardInfo *ShardInfo, tablets []*TabletInfo, cells []string) error {
+func rebuildShardSrvGraph(ts topo.Server, shardInfo *topo.ShardInfo, tablets []*topo.TabletInfo, cells []string) error {
 	log.Infof("rebuildShardSrvGraph %v/%v", shardInfo.Keyspace(), shardInfo.ShardName())
 
 	// Get all existing db types so they can be removed if nothing
@@ -98,14 +99,14 @@ func rebuildShardSrvGraph(ts Server, shardInfo *ShardInfo, tablets []*TabletInfo
 	// locationAddrsMap is a map:
 	//   key: {cell,keyspace,shard,tabletType}
 	//   value: EndPoints (list of server records)
-	locationAddrsMap := make(map[cellKeyspaceShardType]*EndPoints)
+	locationAddrsMap := make(map[cellKeyspaceShardType]*topo.EndPoints)
 
 	// we keep track of the existingDbTypeLocations we've already looked at
 	knownShardLocations := make(map[cellKeyspaceShard]bool)
 
 	for _, tablet := range tablets {
 		// only look at tablets in the cells we want to rebuild
-		if !InCellList(tablet.Tablet.Alias.Cell, cells) {
+		if !topo.InCellList(tablet.Tablet.Alias.Cell, cells) {
 			continue
 		}
 
@@ -117,7 +118,7 @@ func rebuildShardSrvGraph(ts Server, shardInfo *ShardInfo, tablets []*TabletInfo
 			log.Infof("Getting tablet types on cell %v for %v/%v", tablet.Tablet.Alias.Cell, tablet.Tablet.Keyspace, tablet.Shard)
 			tabletTypes, err := ts.GetSrvTabletTypesPerShard(tablet.Tablet.Alias.Cell, tablet.Tablet.Keyspace, tablet.Shard)
 			if err != nil {
-				if err != ErrNoNode {
+				if err != topo.ErrNoNode {
 					return err
 				}
 			} else {
@@ -138,7 +139,7 @@ func rebuildShardSrvGraph(ts Server, shardInfo *ShardInfo, tablets []*TabletInfo
 		location := cellKeyspaceShardType{tablet.Tablet.Alias.Cell, tablet.Keyspace, tablet.Shard, tablet.Type}
 		addrs, ok := locationAddrsMap[location]
 		if !ok {
-			addrs = NewEndPoints()
+			addrs = topo.NewEndPoints()
 			locationAddrsMap[location] = addrs
 		}
 
@@ -158,7 +159,7 @@ func rebuildShardSrvGraph(ts Server, shardInfo *ShardInfo, tablets []*TabletInfo
 	// nodes everywhere we want them
 	for location, addrs := range locationAddrsMap {
 		wg.Add(1)
-		go func(location cellKeyspaceShardType, addrs *EndPoints) {
+		go func(location cellKeyspaceShardType, addrs *topo.EndPoints) {
 			log.Infof("saving serving graph for cell %v shard %v/%v tabletType %v", location.cell, location.keyspace, location.shard, location.tabletType)
 			if err := ts.UpdateEndPoints(location.cell, location.keyspace, location.shard, location.tabletType, addrs); err != nil {
 				rec.RecordError(fmt.Errorf("writing endpoints for cell %v shard %v/%v tabletType %v failed: %v", location.cell, location.keyspace, location.shard, location.tabletType, err))
@@ -172,7 +173,7 @@ func rebuildShardSrvGraph(ts Server, shardInfo *ShardInfo, tablets []*TabletInfo
 	for dbTypeLocation := range existingDbTypeLocations {
 		if _, ok := locationAddrsMap[dbTypeLocation]; !ok {
 			cell := dbTypeLocation.cell
-			if !InCellList(cell, cells) {
+			if !topo.InCellList(cell, cells) {
 				continue
 			}
 
@@ -201,16 +202,16 @@ func rebuildShardSrvGraph(ts Server, shardInfo *ShardInfo, tablets []*TabletInfo
 	//   key: {cell,keyspace,shard}
 	//   value: SrvShard
 	// this will create all the SrvShard objects
-	srvShardByPath := make(map[cellKeyspaceShard]*SrvShard)
+	srvShardByPath := make(map[cellKeyspaceShard]*topo.SrvShard)
 	for location := range locationAddrsMap {
 		// location will be {cell,keyspace,shard,type}
 		srvShardPath := cellKeyspaceShard{location.cell, location.keyspace, location.shard}
 		srvShard, ok := srvShardByPath[srvShardPath]
 		if !ok {
-			srvShard = &SrvShard{
+			srvShard = &topo.SrvShard{
 				KeyRange:    shardInfo.KeyRange,
 				ServedTypes: shardInfo.ServedTypes,
-				TabletTypes: make([]TabletType, 0, 2),
+				TabletTypes: make([]topo.TabletType, 0, 2),
 			}
 			srvShardByPath[srvShardPath] = srvShard
 		}
@@ -228,7 +229,7 @@ func rebuildShardSrvGraph(ts Server, shardInfo *ShardInfo, tablets []*TabletInfo
 	// Save the shard entries
 	for cks, srvShard := range srvShardByPath {
 		wg.Add(1)
-		go func(cks cellKeyspaceShard, srvShard *SrvShard) {
+		go func(cks cellKeyspaceShard, srvShard *topo.SrvShard) {
 			log.Infof("updating shard serving graph in cell %v for %v/%v", cks.cell, cks.keyspace, cks.shard)
 			if err := ts.UpdateSrvShard(cks.cell, cks.keyspace, cks.shard, srvShard); err != nil {
 				rec.RecordError(fmt.Errorf("writing serving data in cell %v for %v/%v failed: %v", cks.cell, cks.keyspace, cks.shard, err))

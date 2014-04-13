@@ -53,6 +53,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topotools"
 )
 
 var (
@@ -441,7 +442,7 @@ func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType, lockT
 	}
 
 	// Change the Type, update the health
-	if err := actionnode.ChangeType(agent.TopoServer, tablet.Alias, newTabletType, health, true /*runHooks*/); err != nil {
+	if err := topotools.ChangeType(agent.TopoServer, tablet.Alias, newTabletType, health, true /*runHooks*/); err != nil {
 		log.Infof("Error updating tablet record: %v", err)
 		return
 	}
@@ -457,7 +458,7 @@ func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType, lockT
 			log.Warningf("Cannot lock shard for rebuild: %v", err)
 			return
 		}
-		err = topo.RebuildShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, topo.RebuildShardOptions{Cells: []string{tablet.Alias.Cell}, IgnorePartialResult: true})
+		err = topotools.RebuildShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, topotools.RebuildShardOptions{Cells: []string{tablet.Alias.Cell}, IgnorePartialResult: true})
 		err = actionNode.UnlockShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, lockPath, err)
 		if err != nil {
 			log.Warningf("UnlockShard returned an error: %v", err)
