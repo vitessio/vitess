@@ -455,6 +455,7 @@ type ZLocker interface {
 	Lock() error
 	LockWithTimeout(wait time.Duration) error
 	Unlock() error
+	Interrupt()
 }
 
 // Experiment with a little bit of abstraction.
@@ -467,6 +468,7 @@ type zMutex struct {
 	contents    string
 	interrupted chan struct{}
 	name        string // The name of the specific lock node we created.
+	ephemeral   bool
 }
 
 // A mutex is released only by Unlock.
@@ -481,6 +483,14 @@ func CreateMutex(zconn Conn, zkPath string) ZLocker {
 	contents := fmt.Sprintf(`{"hostname": "%v", "pid": %v}`, hostname, pid)
 
 	return &zMutex{zconn: zconn, path: zkPath, contents: contents, interrupted: make(chan struct{})}
+}
+
+func (zm *zMutex) Interrupt() {
+	select {
+	case zm.interrupted <- struct{}{}:
+	default:
+		log.Warningf("zmutex interrupt blocked")
+	}
 }
 
 func (zm *zMutex) Lock() error {
@@ -507,9 +517,13 @@ func (zm *zMutex) LockWithTimeout(wait time.Duration) (err error) {
 	}
 
 	lockPrefix := path.Join(zm.path, "lock-")
+	zflags := zookeeper.SEQUENCE
+	if zm.ephemeral {
+		zflags = zflags | zookeeper.EPHEMERAL
+	}
 
 createlock:
-	lockCreated, err := zm.zconn.Create(lockPrefix, zm.contents, zookeeper.SEQUENCE, zookeeper.WorldACL(PERM_FILE))
+	lockCreated, err := zm.zconn.Create(lockPrefix, zm.contents, zflags, zookeeper.WorldACL(PERM_FILE))
 	if err != nil {
 		return err
 	}
@@ -577,7 +591,6 @@ trylock:
 }
 
 func (zm *zMutex) Unlock() error {
-	close(zm.interrupted)
 	return zm.deleteLock()
 }
 
@@ -591,4 +604,170 @@ func (zm *zMutex) deleteLock() error {
 		return err
 	}
 	return nil
+}
+
+type ZElector struct {
+	*zMutex
+	path   string
+	leader string
+}
+
+func (ze *ZElector) isLeader() bool {
+	return ze.leader == ze.name
+}
+
+type electionEvent struct {
+	Event int
+	Err   error
+}
+
+type backoffDelay struct {
+	min   time.Duration
+	max   time.Duration
+	delay time.Duration
+}
+
+func NewBackoffDelay(min, max time.Duration) *backoffDelay {
+	return &backoffDelay{min, max, min}
+}
+
+func (bd *backoffDelay) NextDelay() time.Duration {
+	delay := bd.delay
+	bd.delay = 2 * bd.delay
+	if bd.delay > bd.max {
+		bd.delay = bd.max
+	}
+	return delay
+}
+
+func (bd *backoffDelay) Reset() {
+	bd.delay = bd.min
+}
+
+// A task runs essentially forever or until something bad happens.
+// If a task must be stopped, it should be handled promptly - no
+// second notification will be sent.
+type ElectorTask interface {
+	Run() error
+	Stop()
+	// Return true if interrupted, false if it died of natural causes.
+	// An interrupted task indicates that the election should stop.
+	Interrupted() bool
+}
+
+// An election is really a cycle of events. You are flip-flopping between
+// leader and candidate. It's better to think of this as a stream of events
+// that one needs to react to.
+func CreateElection(zconn Conn, zkPath string) ZElector {
+	zm := CreateMutex(zconn, path.Join(zkPath, "candidates")).(*zMutex)
+	zm.ephemeral = true
+	return ZElector{zMutex: zm, path: zkPath}
+}
+
+func (ze *ZElector) RunTask(task ElectorTask) error {
+	delay := NewBackoffDelay(100*time.Millisecond, 1*time.Minute)
+	leaderPath := path.Join(ze.path, "leader")
+	for {
+		_, err := CreateRecursive(ze.zconn, leaderPath, "", 0, zookeeper.WorldACL(PERM_FILE))
+		if err == nil || zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+			break
+		}
+		log.Warningf("election leader create failed: %v", err)
+		time.Sleep(delay.NextDelay())
+	}
+
+	for {
+		err := ze.Lock()
+		if err != nil {
+			log.Warningf("election lock failed: %v", err)
+			if err == ErrInterrupted {
+				return ErrInterrupted
+			}
+			continue
+		}
+		// Confirm your win and deliver acceptance speech. This notifies
+		// listeners who will have been watching the leader node for
+		// changes.
+		_, err = ze.zconn.Set(leaderPath, ze.contents, -1)
+		if err != nil {
+			log.Warningf("election promotion failed: %v", err)
+			continue
+		}
+
+		log.Infof("election promote leader %v", leaderPath)
+		taskErrChan := make(chan error)
+		go func() {
+			taskErrChan <- task.Run()
+		}()
+
+	watchLeader:
+		// Watch the leader so we can get notified if something goes wrong.
+		data, _, watch, err := ze.zconn.GetW(leaderPath)
+		if err != nil {
+			log.Warningf("election unable to watch leader node %v %v", leaderPath, err)
+			// FIXME(msolo) Add delay
+			goto watchLeader
+		}
+
+		if data != ze.contents {
+			log.Warningf("election unable to promote leader")
+			task.Stop()
+			// We won the election, but we didn't become the leader. How is that possible?
+			// (see Bush v. Gore for some inspiration)
+			// It means:
+			//   1. Someone isn't playing by the election rules (a bad actor).
+			//      Hard to detect - let's assume we don't have this problem. :)
+			//   2. We lost our connection somehow and the ephemeral lock was cleared,
+			//      allowing someone else to win the election.
+			continue
+		}
+
+		// This is where we start our target process and watch for its failure.
+	waitForEvent:
+		select {
+		case <-ze.interrupted:
+			log.Infof("election interrupted - stop child process")
+			task.Stop()
+			// Once the process dies from the signal, this will all tear down.
+			goto waitForEvent
+		case taskErr := <-taskErrChan:
+			// If our code fails, unlock to trigger an election.
+			log.Infof("election child process ended: %v", taskErr)
+			ze.Unlock()
+			if task.Interrupted() {
+				log.Warningf("election child process interrupted - stepping down")
+				return ErrInterrupted
+			}
+			continue
+		case zevent := <-watch:
+			// We had a zookeeper connection hiccup.  We have a few choices,
+			// but it depends on the constraints and the events.
+			//
+			// If we get SESSION_EXPIRED our connection loss triggered an
+			// election that we won't have won and the thus the lock was
+			// automatically freed. We have no choice but to start over.
+			if zevent.State == zookeeper.STATE_EXPIRED_SESSION {
+				log.Warningf("election leader watch expired")
+				task.Stop()
+				continue
+			}
+
+			// Otherwise, we had an intermittent issue or something touched
+			// the node. Either we lost our position or someone broke
+			// protocol and touched the leader node.  We just reconnect and
+			// revalidate. In the meantime, assume we are still the leader
+			// until we determine otherwise.
+			//
+			// On a reconnect we will be able to see the leader
+			// information. If we still hold the position, great. If not, we
+			// kill the associated process.
+			//
+			// On a leader node change, we need to perform the same
+			// validation. It's possible an election completes without the
+			// old leader realizing he is out of touch.
+			log.Warningf("election leader watch event %v", zevent)
+			goto watchLeader
+		}
+	}
+	panic("unreachable")
 }
