@@ -38,6 +38,15 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
+func IsDirectory(aclv []zookeeper.ACL) bool {
+	for _, acl := range aclv {
+		if acl.Perms != PERM_DIRECTORY {
+			return false
+		}
+	}
+	return true
+}
+
 // Create a path and any pieces required, think mkdir -p.
 // Intermediate znodes are always created empty.
 func CreateRecursive(zconn Conn, zkPath, value string, flags int, aclv []zookeeper.ACL) (pathCreated string, err error) {

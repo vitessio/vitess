@@ -21,7 +21,7 @@ const (
 )
 
 var (
-	zkConfigPaths = []string{"/etc/zookeeper/zk_client.json"}
+	DefaultZkConfigPaths = []string{"/etc/zookeeper/zk_client.json"}
 
 	localCell      = flag.String("zk.local-cell", "", "closest zk cell used for /zk/local paths")
 	localAddrs     = flag.String("zk.local-addrs", "", "list of zookeeper servers (host:port, ...)")
@@ -78,7 +78,7 @@ func getConfigPaths() []string {
 	if zkConfigPath != "" {
 		return []string{zkConfigPath}
 	}
-	return zkConfigPaths
+	return DefaultZkConfigPaths
 }
 
 func getCellAddrMap() map[string]string {
