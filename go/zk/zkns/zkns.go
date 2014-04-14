@@ -18,7 +18,7 @@ type ZknsAddr struct {
 	// These fields came from a Python app originally that used a different
 	// naming convention.
 	Host         string         `json:"host"`
-	Port         int            `json:"port"` // DEPRECATED
+	Port         int            `json:"port,omitempty"` // DEPRECATED
 	NamedPortMap map[string]int `json:"named_port_map"`
 	IPv4         string         `json:"ipv4"`
 	version      int            // zk version to allow non-stomping writes
@@ -29,8 +29,9 @@ func NewAddr(host string, port int) *ZknsAddr {
 }
 
 // SRV records can have multiple endpoints, so this is always a list.
-// A record with one entry and a port number zero is interpreted as a CNAME.
-// A record with one entry, a port number zero and an IP address is interpreted as an A.
+// A record with one entry and a port number zero is interpreted as a
+// CNAME.  A record with one entry, a port number zero and an IP
+// address is interpreted as an A.
 type ZknsAddrs struct {
 	Entries []ZknsAddr
 	version int // zk version to allow non-stomping writes
@@ -38,6 +39,32 @@ type ZknsAddrs struct {
 
 func NewAddrs() *ZknsAddrs {
 	return &ZknsAddrs{Entries: make([]ZknsAddr, 0, 8), version: -1}
+}
+
+func (zaddrs *ZknsAddrs) IsValidA() bool {
+	if zaddrs == nil || len(zaddrs.Entries) != 1 || zaddrs.Entries[0].IPv4 == "" || zaddrs.Entries[0].Host != "" {
+		return false
+	}
+	return true
+}
+
+func (zaddrs *ZknsAddrs) IsValidCNAME() bool {
+	if zaddrs == nil || len(zaddrs.Entries) != 1 || zaddrs.Entries[0].IPv4 != "" || zaddrs.Entries[0].Host == "" {
+		return false
+	}
+	return true
+}
+
+func (zaddrs *ZknsAddrs) IsValidSRV() bool {
+	if zaddrs == nil {
+		return false
+	}
+	for _, zaddr := range zaddrs.Entries {
+		if zaddr.Host == "" || zaddr.IPv4 != "" || len(zaddr.NamedPortMap) == 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func toJson(x interface{}) string {
@@ -60,6 +87,10 @@ func ReadAddrs(zconn zk.Conn, zkPath string) (*ZknsAddrs, error) {
 	data, stat, err := zconn.Get(zkPath)
 	if err != nil {
 		return nil, err
+	}
+	// There are nodes that will have no data - for instance a subdomain node.
+	if len(data) == 0 {
+		return nil, nil
 	}
 	addrs := new(ZknsAddrs)
 	err = json.Unmarshal([]byte(data), addrs)
