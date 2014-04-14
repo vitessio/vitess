@@ -19,9 +19,9 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
-	"github.com/msolo/vitess/go/stats"
-	"github.com/msolo/vitess/go/zk"
-	"github.com/msolo/vitess/go/zk/zkns"
+	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/zk"
+	"github.com/youtube/vitess/go/zk/zkns"
 )
 
 var (
@@ -84,7 +84,12 @@ func (rz *zknsResolver) getResult(qtype, qname string) ([]*pdnsReply, error) {
 	case "CNAME":
 		return rz.getCNAME(qname)
 	case "A":
-		return rz.getA(qname)
+		reply, error := rz.getA(qname)
+		// An A query must also check for a CNAME, but not vice versa
+		if reply == nil && error == nil {
+			return rz.getCNAME(qname)
+		}
+		return reply, error
 	}
 	return nil, nil
 }

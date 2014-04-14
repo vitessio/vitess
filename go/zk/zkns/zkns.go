@@ -12,6 +12,7 @@ import (
 
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/zk"
+	"launchpad.net/gozk/zookeeper"
 )
 
 type ZknsAddr struct {
@@ -24,8 +25,8 @@ type ZknsAddr struct {
 	version      int            // zk version to allow non-stomping writes
 }
 
-func NewAddr(host string, port int) *ZknsAddr {
-	return &ZknsAddr{Host: host, Port: port, NamedPortMap: make(map[string]int)}
+func NewAddr(host string) *ZknsAddr {
+	return &ZknsAddr{Host: host, NamedPortMap: make(map[string]int)}
 }
 
 // SRV records can have multiple endpoints, so this is always a list.
@@ -42,12 +43,14 @@ func NewAddrs() *ZknsAddrs {
 }
 
 func (zaddrs *ZknsAddrs) IsValidA() bool {
-	if zaddrs == nil || len(zaddrs.Entries) != 1 || zaddrs.Entries[0].IPv4 == "" || zaddrs.Entries[0].Host != "" {
+	if zaddrs == nil || len(zaddrs.Entries) != 1 || zaddrs.Entries[0].IPv4 == "" || zaddrs.Entries[0].Host != "" || len(zaddrs.Entries[0].NamedPortMap) > 0 {
 		return false
 	}
 	return true
 }
 
+// This method is intentially loose - it allows a SRV record with a single entry
+// to be interpreted as a CNAME.
 func (zaddrs *ZknsAddrs) IsValidCNAME() bool {
 	if zaddrs == nil || len(zaddrs.Entries) != 1 || zaddrs.Entries[0].IPv4 != "" || zaddrs.Entries[0].Host == "" {
 		return false
@@ -62,6 +65,11 @@ func (zaddrs *ZknsAddrs) IsValidSRV() bool {
 	for _, zaddr := range zaddrs.Entries {
 		if zaddr.Host == "" || zaddr.IPv4 != "" || len(zaddr.NamedPortMap) == 0 {
 			return false
+		}
+		for portName, _ := range zaddr.NamedPortMap {
+			if portName != "" && portName[0] != '_' {
+				return false
+			}
 		}
 	}
 	return true
@@ -101,29 +109,47 @@ func ReadAddrs(zconn zk.Conn, zkPath string) (*ZknsAddrs, error) {
 	return addrs, nil
 }
 
-// zkPath is the path to a json file in zk. It can also reference a
+func WriteAddrs(zconn zk.Conn, zkPath string, addrs *ZknsAddrs) error {
+	if !(addrs.IsValidA() || addrs.IsValidCNAME() || addrs.IsValidSRV()) {
+		return fmt.Errorf("invalid addrs: %v", zkPath)
+	}
+	data := toJson(addrs)
+	_, err := zk.CreateOrUpdate(zconn, zkPath, data, 0, zookeeper.WorldACL(zk.PERM_FILE), true)
+	return err
+}
+
+// addrPath is the path to a json file in zk. It can also reference a
 // named port: /zk/cell/zkns/path:_named_port
-func LookupName(zconn zk.Conn, zkPath string) ([]*net.SRV, error) {
-	zkPathParts := strings.Split(zkPath, ":")
+func LookupName(zconn zk.Conn, addrPath string) ([]*net.SRV, error) {
+	zkPathParts := strings.Split(addrPath, ":")
+	zkPath := zkPathParts[0]
 	namedPort := ""
 	if len(zkPathParts) == 2 {
-		zkPath = zkPathParts[0]
 		namedPort = zkPathParts[1]
 	}
 
 	addrs, err := ReadAddrs(zconn, zkPath)
 	if err != nil {
-		return nil, fmt.Errorf("LookupName failed: %v %v", zkPath, err)
+		return nil, fmt.Errorf("LookupName failed: %v", err)
 	}
-
+	if namedPort == "" {
+		if !addrs.IsValidA() && !addrs.IsValidCNAME() {
+			return nil, fmt.Errorf("LookupName named port required: %v", addrPath)
+		}
+	} else if !addrs.IsValidSRV() {
+		return nil, fmt.Errorf("LookupName invalid record: %v", addrPath)
+	}
 	srvs := make([]*net.SRV, 0, len(addrs.Entries))
 	for _, addr := range addrs.Entries {
-		srv := &net.SRV{Target: addr.Host}
-		if namedPort == "" {
-			// FIXME(msolomon) remove this clause - allow only named ports.
-			srv.Port = uint16(addr.Port)
-		} else {
+		// Set the weight to 1, otherwise the sort method is deactivated.
+		srv := &net.SRV{Target: addr.Host, Weight: 1}
+		if namedPort != "" {
 			srv.Port = uint16(addr.NamedPortMap[namedPort])
+			if srv.Port == 0 {
+				// If the port was requested and not defined it's probably
+				// a bug, so fail hard.
+				return nil, fmt.Errorf("LookupName found no such named port: %v", addrPath)
+			}
 		}
 		srvs = append(srvs, srv)
 	}
