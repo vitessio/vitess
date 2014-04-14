@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"os"
 	"path"
 	"sort"
 	"strings"
@@ -384,18 +385,18 @@ trylock:
 	return fmt.Errorf("zkutil: empty queue node: %v", queueNode)
 }
 
-// Close done when you want to exit cleanly.
+// Close the release channel when you want to clean up nicely.
 func CreatePidNode(zconn Conn, zkPath string, contents string, done chan struct{}) error {
 	// On the first try, assume the cluster is up and running, that will
 	// help hunt down any config issues present at startup
-	if _, err := zconn.Create(zkPath, contents, zookeeper.EPHEMERAL, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
+	if _, err := zconn.Create(zkPath, contents, zookeeper.EPHEMERAL, zookeeper.WorldACL(PERM_FILE)); err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 			err = zconn.Delete(zkPath, -1)
 		}
 		if err != nil {
 			return fmt.Errorf("zkutil: failed deleting pid node: %v: %v", zkPath, err)
 		}
-		_, err = zconn.Create(zkPath, contents, zookeeper.EPHEMERAL, zookeeper.WorldACL(zookeeper.PERM_ALL))
+		_, err = zconn.Create(zkPath, contents, zookeeper.EPHEMERAL, zookeeper.WorldACL(PERM_FILE))
 		if err != nil {
 			return fmt.Errorf("zkutil: failed creating pid node: %v: %v", zkPath, err)
 		}
@@ -446,5 +447,148 @@ func CreatePidNode(zconn Conn, zkPath string, contents string, done chan struct{
 		}
 	}()
 
+	return nil
+}
+
+// Interface for a lock that can fail.
+type ZLocker interface {
+	Lock() error
+	LockWithTimeout(wait time.Duration) error
+	Unlock() error
+}
+
+// Experiment with a little bit of abstraction.
+// FIMXE(msolo) This object may need a mutex to ensure it can be shared
+// across goroutines.
+type zMutex struct {
+	mu          sync.Mutex
+	zconn       Conn
+	path        string // Path under which we try to create lock nodes.
+	contents    string
+	interrupted chan struct{}
+	name        string // The name of the specific lock node we created.
+}
+
+// A mutex is released only by Unlock.
+// You can clean up a mutex with delete, but you should be careful doing
+// so.
+func CreateMutex(zconn Conn, zkPath string) ZLocker {
+	hostname, err := os.Hostname()
+	if err != nil {
+		panic(err) // should never happen
+	}
+	pid := os.Getpid()
+	contents := fmt.Sprintf(`{"hostname": "%v", "pid": %v}`, hostname, pid)
+
+	return &zMutex{zconn: zconn, path: zkPath, contents: contents, interrupted: make(chan struct{})}
+}
+
+func (zm *zMutex) Lock() error {
+	return zm.LockWithTimeout(365 * 24 * time.Hour)
+}
+
+// A lock is held if the file exists and you are the creator.
+// Setting the wait to zero makes this a nonblocking lock check.
+// FIXME(msolo) Disallow non-super users from removing the lock?
+// Return nil if you got the lock.
+func (zm *zMutex) LockWithTimeout(wait time.Duration) (err error) {
+	timer := time.NewTimer(wait)
+	defer func() {
+		if panicErr := recover(); panicErr != nil || err != nil {
+			zm.deleteLock()
+		}
+	}()
+	// Ensure the rendezvous node is here.
+	// FIXME(msolo) Assuming locks are contended, it will be cheaper to assume this just
+	// exists.
+	_, err = CreateRecursive(zm.zconn, zm.path, "", 0, zookeeper.WorldACL(PERM_DIRECTORY))
+	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+		return err
+	}
+
+	lockPrefix := path.Join(zm.path, "lock-")
+
+createlock:
+	lockCreated, err := zm.zconn.Create(lockPrefix, zm.contents, zookeeper.SEQUENCE, zookeeper.WorldACL(PERM_FILE))
+	if err != nil {
+		return err
+	}
+	name := path.Base(lockCreated)
+	zm.mu.Lock()
+	zm.name = name
+	zm.mu.Unlock()
+
+trylock:
+	children, _, err := zm.zconn.Children(zm.path)
+	if err != nil {
+		return fmt.Errorf("zkutil: trylock failed %v", err)
+	}
+	sort.Strings(children)
+	if len(children) == 0 {
+		return fmt.Errorf("zkutil: empty lock: %v", zm.path)
+	}
+
+	if children[0] == name {
+		// We are the lock owner.
+		return nil
+	}
+
+	// This is the degenerate case of a nonblocking lock check. It's not optimal, but
+	// also probably not worth optimizing.
+	if wait == 0 {
+		return ErrTimeout
+	}
+	prevLock := ""
+	for i := 1; i < len(children); i++ {
+		if children[i] == name {
+			prevLock = children[i-1]
+			break
+		}
+	}
+	if prevLock == "" {
+		// This is an interesting case. The node disappeared
+		// underneath us, probably due to a session loss. We can
+		// recreate the lock node (with a new sequence number) and
+		// keep trying.
+		log.Warningf("zkutil: no lock node found: %v/%v", zm.path, zm.name)
+		goto createlock
+	}
+
+	zkPrevLock := path.Join(zm.path, prevLock)
+	stat, watch, err := zm.zconn.ExistsW(zkPrevLock)
+	if err != nil {
+		// FIXME(msolo) Should this be a retry?
+		return fmt.Errorf("zkutil: unable to watch previous lock node %v %v", zkPrevLock, err)
+	}
+	if stat == nil {
+		goto trylock
+	}
+	select {
+	case <-timer.C:
+		return ErrTimeout
+	case <-zm.interrupted:
+		return ErrInterrupted
+	case event := <-watch:
+		log.Infof("zkutil: lock event: %v", event)
+		// The precise event doesn't matter - try to read again regardless.
+		goto trylock
+	}
+	panic("unexpected")
+}
+
+func (zm *zMutex) Unlock() error {
+	close(zm.interrupted)
+	return zm.deleteLock()
+}
+
+func (zm *zMutex) deleteLock() error {
+	zm.mu.Lock()
+	zpath := path.Join(zm.path, zm.name)
+	zm.mu.Unlock()
+
+	err := zm.zconn.Delete(zpath, -1)
+	if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
+		return err
+	}
 	return nil
 }
