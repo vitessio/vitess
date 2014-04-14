@@ -38,20 +38,18 @@ func (s byPriorityWeight) Less(i, j int) bool {
 // described in RFC 2782.
 // NOTE(msolo) This is disabled when the weights are zero.
 func (addrs byPriorityWeight) shuffleByWeight() {
+	// NOTE(msolo) This performs badly when the sum of the weights is small.
+	// Apply weight-fudge-factor to make the results more uniform.
+	const wff = 1000
 	sum := 0
 	for _, addr := range addrs {
-		sum += int(addr.Weight)
+		sum += int(addr.Weight * wff)
 	}
 	for sum > 0 && len(addrs) > 1 {
 		s := 0
-		// NOTE(msolo) This performs badly when the sum of the weights is
-		// small.  I have changed what I believe is a fencepost error that
-		// was present in the system library ont he call to rand.Intn().
-		// Bug logged here:
-		//   https://code.google.com/p/go/issues/detail?id=7098
-		n := rand.Intn(sum)
+		n := rand.Intn(sum + 1)
 		for i := range addrs {
-			s += int(addrs[i].Weight)
+			s += int(addrs[i].Weight * wff)
 			if s >= n {
 				if i > 0 {
 					t := addrs[i]
@@ -61,7 +59,7 @@ func (addrs byPriorityWeight) shuffleByWeight() {
 				break
 			}
 		}
-		sum -= int(addrs[0].Weight)
+		sum -= int(addrs[0].Weight * wff)
 		addrs = addrs[1:]
 	}
 }

@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"path"
 	"strings"
 
@@ -199,7 +200,17 @@ func (rz *zknsResolver) getA(qname string) ([]*pdnsReply, error) {
 		return nil, nil
 	}
 
-	return []*pdnsReply{&pdnsReply{qname, "IN", "A", defaultTTL, defaultId, addrs.Entries[0].IPv4}}, nil
+	replies := make([]*pdnsReply, len(addrs.Entries))
+	for i, entry := range addrs.Entries {
+		replies[i] = &pdnsReply{qname, "IN", "A", defaultTTL, defaultId, entry.IPv4}
+	}
+	// Shuffle replies since that seems like the only reasonable strategy in a
+	// stateless distributed environment.
+	for i := range replies {
+		j := rand.Intn(i + 1)
+		replies[i], replies[j] = replies[j], replies[i]
+	}
+	return replies, nil
 }
 
 type pdns struct {

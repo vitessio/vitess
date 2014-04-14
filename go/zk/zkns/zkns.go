@@ -43,8 +43,13 @@ func NewAddrs() *ZknsAddrs {
 }
 
 func (zaddrs *ZknsAddrs) IsValidA() bool {
-	if zaddrs == nil || len(zaddrs.Entries) != 1 || zaddrs.Entries[0].IPv4 == "" || zaddrs.Entries[0].Host != "" || len(zaddrs.Entries[0].NamedPortMap) > 0 {
+	if zaddrs == nil || len(zaddrs.Entries) == 0 {
 		return false
+	}
+	for _, entry := range zaddrs.Entries {
+		if entry.IPv4 == "" || entry.Host != "" || len(entry.NamedPortMap) > 0 {
+			return false
+		}
 	}
 	return true
 }
@@ -139,9 +144,10 @@ func LookupName(zconn zk.Conn, addrPath string) ([]*net.SRV, error) {
 	} else if !addrs.IsValidSRV() {
 		return nil, fmt.Errorf("LookupName invalid record: %v", addrPath)
 	}
+	isValidA := addrs.IsValidA()
 	srvs := make([]*net.SRV, 0, len(addrs.Entries))
 	for _, addr := range addrs.Entries {
-		// Set the weight to 1, otherwise the sort method is deactivated.
+		// Set the weight to non-zero, otherwise the sort method is deactivated.
 		srv := &net.SRV{Target: addr.Host, Weight: 1}
 		if namedPort != "" {
 			srv.Port = uint16(addr.NamedPortMap[namedPort])
@@ -150,6 +156,8 @@ func LookupName(zconn zk.Conn, addrPath string) ([]*net.SRV, error) {
 				// a bug, so fail hard.
 				return nil, fmt.Errorf("LookupName found no such named port: %v", addrPath)
 			}
+		} else if isValidA {
+			srv.Target = addr.IPv4
 		}
 		srvs = append(srvs, srv)
 	}
