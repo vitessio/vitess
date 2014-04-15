@@ -16,9 +16,9 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-// useSrvShardLocks is a temporary flag. Once tested and rolled out,
+// UseSrvShardLocks is a temporary flag. Once tested and rolled out,
 // it will be defaulted to true, and removed.
-var useSrvShardLocks = flag.Bool("use_srv_shard_locks", false, "If true, takes the SrvShard lock for each shard being rebuilt")
+var UseSrvShardLocks = flag.Bool("use_srv_shard_locks", false, "If true, takes the SrvShard lock for each shard being rebuilt")
 
 // RebuildShardOptions are options for rebuildShard
 type RebuildShardOptions struct {
@@ -38,7 +38,7 @@ type RebuildShardOptions struct {
 // - otherwise the consistency of the serving graph data can't be
 // guaranteed.
 func RebuildShard(ts topo.Server, keyspace, shard string, options RebuildShardOptions, timeout time.Duration, interrupted chan struct{}) error {
-	if *useSrvShardLocks {
+	if *UseSrvShardLocks {
 		return rebuildShardSrvShardLocks(ts, keyspace, shard, options, timeout, interrupted)
 	}
 
