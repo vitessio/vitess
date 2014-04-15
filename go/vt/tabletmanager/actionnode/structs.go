@@ -225,3 +225,11 @@ func MigrateServedFrom(servedType topo.TabletType) *ActionNode {
 		},
 	}).SetGuid()
 }
+
+//methods to build the serving shard action nodes
+
+func RebuildSrvShard() *ActionNode {
+	return (&ActionNode{
+		Action: SRV_SHARD_ACTION_REBUILD,
+	}).SetGuid()
+}

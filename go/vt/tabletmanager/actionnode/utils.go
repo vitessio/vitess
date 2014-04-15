@@ -79,3 +79,33 @@ func (n *ActionNode) UnlockShard(ts topo.Server, keyspace, shard string, lockPat
 	}
 	return err
 }
+
+// LockSrvShard will lock the serving shard in the topology server.
+// UnlockSrvShard should be called if this returns no error.
+func (n *ActionNode) LockSrvShard(ts topo.Server, cell, keyspace, shard string, lockTimeout time.Duration, interrupted chan struct{}) (lockPath string, err error) {
+	log.Infof("Locking serving shard %v/%v/%v for action %v", cell, keyspace, shard, n.Action)
+	return ts.LockSrvShardForAction(cell, keyspace, shard, n.ToJson(), lockTimeout, interrupted)
+}
+
+// UnlockSrvShard unlocks a previously locked serving shard.
+func (n *ActionNode) UnlockSrvShard(ts topo.Server, cell, keyspace, shard string, lockPath string, actionError error) error {
+	// first update the actionNode
+	if actionError != nil {
+		log.Infof("Unlocking serving shard %v/%v/%v for action %v with error %v", cell, keyspace, shard, n.Action, actionError)
+		n.Error = actionError.Error()
+		n.State = ACTION_STATE_FAILED
+	} else {
+		log.Infof("Unlocking serving shard %v/%v/%v for successful action %v", cell, keyspace, shard, n.Action)
+		n.Error = ""
+		n.State = ACTION_STATE_DONE
+	}
+	err := ts.UnlockSrvShardForAction(cell, keyspace, shard, lockPath, n.ToJson())
+	if actionError != nil {
+		if err != nil {
+			// this will be masked
+			log.Warningf("UnlockSrvShardForAction failed: %v", err)
+		}
+		return actionError
+	}
+	return err
+}

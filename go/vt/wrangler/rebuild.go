@@ -25,7 +25,7 @@ func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) er
 		return err
 	}
 
-	err = topotools.RebuildShard(wr.ts, keyspace, shard, topotools.RebuildShardOptions{Cells: cells, IgnorePartialResult: false})
+	err = topotools.RebuildShard(wr.ts, keyspace, shard, topotools.RebuildShardOptions{Cells: cells, IgnorePartialResult: false}, wr.lockTimeout, interrupted)
 	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 }
 

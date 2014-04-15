@@ -121,6 +121,15 @@ const (
 	KEYSPACE_ACTION_SET_SHARDING_INFO   = "SetKeyspaceShardingInfo"
 	KEYSPACE_ACTION_MIGRATE_SERVED_FROM = "MigrateServedFrom"
 
+	//
+	// SrvShard actions - very local locking, for consistency.
+	// These are just descriptive and used for locking / logging.
+	//
+
+	SRV_SHARD_ACTION_REBUILD = "RebuildSrvShard"
+
+	// all the valid states for an action
+
 	ACTION_STATE_QUEUED  = ActionState("")        // All actions are queued initially
 	ACTION_STATE_RUNNING = ActionState("Running") // Running inside vtaction process
 	ACTION_STATE_FAILED  = ActionState("Failed")  // Ended with a failure
@@ -228,6 +237,8 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case KEYSPACE_ACTION_SET_SHARDING_INFO:
 	case KEYSPACE_ACTION_MIGRATE_SERVED_FROM:
 		node.Args = &MigrateServedFromArgs{}
+
+	case SRV_SHARD_ACTION_REBUILD:
 
 	case TABLET_ACTION_SET_BLACKLISTED_TABLES, TABLET_ACTION_GET_SCHEMA,
 		TABLET_ACTION_RELOAD_SCHEMA, TABLET_ACTION_GET_PERMISSIONS,
