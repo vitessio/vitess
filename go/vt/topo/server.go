@@ -194,6 +194,17 @@ type Server interface {
 	// Serving Graph management, per cell.
 	//
 
+	// LockSrvShardForAction locks the serving shard in order to
+	// perform the action described by contents. It will wait for
+	// the lock for at most duration. The wait can be interrupted
+	// if the interrupted channel is closed. It returns the lock
+	// path.
+	// Can return ErrTimeout or ErrInterrupted.
+	LockSrvShardForAction(cell, keyspace, shard, contents string, timeout time.Duration, interrupted chan struct{}) (string, error)
+
+	// UnlockSrvShardForAction unlocks a serving shard.
+	UnlockSrvShardForAction(cell, keyspace, shard, lockPath, results string) error
+
 	// GetSrvTabletTypesPerShard returns the existing serving types
 	// for a shard.
 	// Can return ErrNoNode.

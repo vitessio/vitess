@@ -41,6 +41,11 @@ func TestShardLock(t *testing.T) {
 	test.CheckShardLock(t, ts)
 }
 
+func TestSrvShardLock(t *testing.T) {
+	ts := NewTestServer(t, []string{"test"})
+	test.CheckSrvShardLock(t, ts)
+}
+
 func TestPid(t *testing.T) {
 	ts := NewTestServer(t, []string{"test"})
 	test.CheckPid(t, ts)

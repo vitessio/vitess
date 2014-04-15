@@ -105,3 +105,25 @@ func (zkts *Server) LockShardForAction(keyspace, shard, contents string, timeout
 func (zkts *Server) UnlockShardForAction(keyspace, shard, lockPath, results string) error {
 	return zkts.unlockForAction(lockPath, results)
 }
+
+func (zkts *Server) LockSrvShardForAction(cell, keyspace, shard, contents string, timeout time.Duration, interrupted chan struct{}) (string, error) {
+	// Action paths end in a trailing slash to that when we create
+	// sequential nodes, they are created as children, not siblings.
+	actionDir := path.Join(zkPathForVtShard(cell, keyspace, shard), "action")
+
+	// if we can't create the lock file because the directory doesn't exist,
+	// create it
+	path, err := zkts.lockForAction(actionDir+"/", contents, timeout, interrupted)
+	if err != nil && zookeeper.IsError(err, zookeeper.ZNONODE) {
+		_, err = zk.CreateRecursive(zkts.zconn, actionDir, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+		if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+			return "", err
+		}
+		path, err = zkts.lockForAction(actionDir+"/", contents, timeout, interrupted)
+	}
+	return path, err
+}
+
+func (zkts *Server) UnlockSrvShardForAction(cell, keyspace, shard, lockPath, results string) error {
+	return zkts.unlockForAction(lockPath, results)
+}
