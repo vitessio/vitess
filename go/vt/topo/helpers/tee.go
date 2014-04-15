@@ -40,6 +40,7 @@ type Tee struct {
 
 	keyspaceLockPaths map[string]string
 	shardLockPaths    map[string]string
+	srvShardLockPaths map[string]string
 }
 
 // when reading a version from 'readFrom', we also read another version
@@ -67,6 +68,7 @@ func NewTee(primary, secondary topo.Server, reverseLockOrder bool) *Tee {
 		tabletVersionMapping: make(map[topo.TabletAlias]tabletVersionMapping),
 		keyspaceLockPaths:    make(map[string]string),
 		shardLockPaths:       make(map[string]string),
+		srvShardLockPaths:    make(map[string]string),
 	}
 }
 
@@ -385,6 +387,53 @@ func (tee *Tee) DeleteShardReplication(cell, keyspace, shard string) error {
 //
 // Serving Graph management, per cell.
 //
+
+func (tee *Tee) LockSrvShardForAction(cell, keyspace, shard, contents string, timeout time.Duration, interrupted chan struct{}) (string, error) {
+	// lock lockFirst
+	pLockPath, err := tee.lockFirst.LockSrvShardForAction(cell, keyspace, shard, contents, timeout, interrupted)
+	if err != nil {
+		return "", err
+	}
+
+	// lock lockSecond
+	sLockPath, err := tee.lockSecond.LockSrvShardForAction(cell, keyspace, shard, contents, timeout, interrupted)
+	if err != nil {
+		if err := tee.lockFirst.UnlockSrvShardForAction(cell, keyspace, shard, pLockPath, "{}"); err != nil {
+			log.Warningf("Failed to unlock lockFirst shard after failed lockSecond lock for %v/%v/%v", cell, keyspace, shard)
+		}
+		return "", err
+	}
+
+	// remember both locks, keyed by lockFirst lock path
+	tee.mu.Lock()
+	tee.srvShardLockPaths[pLockPath] = sLockPath
+	tee.mu.Unlock()
+	return pLockPath, nil
+}
+
+func (tee *Tee) UnlockSrvShardForAction(cell, keyspace, shard, lockPath, results string) error {
+	// get from map
+	tee.mu.Lock() // not using defer for unlock, to minimize lock time
+	sLockPath, ok := tee.srvShardLockPaths[lockPath]
+	if !ok {
+		tee.mu.Unlock()
+		return fmt.Errorf("no lockPath %v in srvShardLockPaths", lockPath)
+	}
+	delete(tee.srvShardLockPaths, lockPath)
+	tee.mu.Unlock()
+
+	// unlock lockSecond, then lockFirst
+	serr := tee.lockSecond.UnlockSrvShardForAction(cell, keyspace, shard, sLockPath, results)
+	perr := tee.lockFirst.UnlockSrvShardForAction(cell, keyspace, shard, lockPath, results)
+
+	if serr != nil {
+		if perr != nil {
+			log.Warningf("Secondary UnlockSrvShardForAction(%v/%v/%v, %v) failed: %v", cell, keyspace, shard, sLockPath, serr)
+		}
+		return serr
+	}
+	return perr
+}
 
 func (tee *Tee) GetSrvTabletTypesPerShard(cell, keyspace, shard string) ([]topo.TabletType, error) {
 	return tee.readFrom.GetSrvTabletTypesPerShard(cell, keyspace, shard)
