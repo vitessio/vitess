@@ -237,7 +237,7 @@ class Tablet(object):
     args.append(self.tablet_alias)
     utils.run_vtctl(args, auto_log=True)
 
-  def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, start=False, dbname=None, parent=True, wait_for_start=True, **kwargs):
+  def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, start=False, dbname=None, parent=True, wait_for_start=True, use_srv_shard_locks=False, **kwargs):
     self.keyspace = keyspace
     self.shard = shard
 
@@ -247,6 +247,8 @@ class Tablet(object):
       self.dbname = dbname
 
     args = ['InitTablet']
+    if use_srv_shard_locks:
+      args = ['-use_srv_shard_locks'] + args
     if force:
       args.append('-force')
     if parent:
@@ -283,7 +285,7 @@ class Tablet(object):
   def flush(self):
     utils.curl('http://localhost:%s%s' % (self.port, environment.flush_logs_url), stderr=utils.devnull, stdout=utils.devnull)
 
-  def start_vttablet(self, port=None, auth=False, memcache=False, wait_for_state="SERVING", customrules=None, schema_override=None, cert=None, key=None, ca_cert=None, repl_extra_flags={}, sensitive_mode=False, target_tablet_type=None):
+  def start_vttablet(self, port=None, auth=False, memcache=False, wait_for_state="SERVING", customrules=None, schema_override=None, cert=None, key=None, ca_cert=None, repl_extra_flags={}, sensitive_mode=False, target_tablet_type=None, use_srv_shard_locks=False):
     """
     Starts a vttablet process, and returns it.
     The process is also saved in self.proc, so it's easy to kill as well.
@@ -329,6 +331,8 @@ class Tablet(object):
       args.extend(['-target_tablet_type', target_tablet_type,
                    '-health_check_interval', '2s',
                    '-allowed_replication_lag', '30'])
+    if use_srv_shard_locks:
+      args.append('use_srv_shard_locks')
 
     stderr_fd = open(os.path.join(self.tablet_dir, "vttablet.stderr"), "w")
     # increment count only the first time
