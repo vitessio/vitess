@@ -282,62 +282,6 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 	}
 }
 
-func TestVTGateInsertSqlClause(t *testing.T) {
-	clause := "col in (:col1, :col2)"
-	tests := [][]string{
-		[]string{
-			"select a from table",
-			"select a from table where " + clause},
-		[]string{
-			"select a from table where id = 1",
-			"select a from table where id = 1 and " + clause},
-		[]string{
-			"select a from table group by a",
-			"select a from table where " + clause + " group by a"},
-		[]string{
-			"select a from table where id = 1 order by a limit 10",
-			"select a from table where id = 1 and " + clause + " order by a limit 10"},
-		[]string{
-			"select a from table where id = 1 for update",
-			"select a from table where id = 1 and " + clause + " for update"},
-	}
-	for _, test := range tests {
-		got := insertSqlClause(test[0], clause)
-		if got != test[1] {
-			t.Errorf("want '%v', got '%v'", test[1], got)
-		}
-	}
-}
-
-func TestVTGateBuildEntityIds(t *testing.T) {
-	shardMap := make(map[string][]key.KeyspaceId)
-	shardMap["-20"] = []key.KeyspaceId{key.KeyspaceId("0"), key.KeyspaceId("1")}
-	shardMap["20-40"] = []key.KeyspaceId{key.KeyspaceId("30")}
-	sql := "select a from table where id=:id"
-	entityColName := "kid"
-	bindVar := make(map[string]interface{})
-	bindVar["id"] = 10
-	shards, sqls, bindVars := buildEntityIds(shardMap, sql, entityColName, bindVar)
-	wantShards := []string{"-20", "20-40"}
-	wantSqls := map[string]string{
-		"-20":   "select a from table where id=:id and kid in (:kid0, :kid1)",
-		"20-40": "select a from table where id=:id and kid in (:kid0)",
-	}
-	wantBindVars := map[string]map[string]interface{}{
-		"-20":   map[string]interface{}{"id": 10, "kid0": key.KeyspaceId("0"), "kid1": key.KeyspaceId("1")},
-		"20-40": map[string]interface{}{"id": 10, "kid0": key.KeyspaceId("30")},
-	}
-	if !reflect.DeepEqual(wantShards, shards) {
-		t.Errorf("want %+v, got %+v", wantShards, shards)
-	}
-	if !reflect.DeepEqual(wantSqls, sqls) {
-		t.Errorf("want %+v, got %+v", wantSqls, sqls)
-	}
-	if !reflect.DeepEqual(wantBindVars, bindVars) {
-		t.Errorf("want %+v, got %+v", wantBindVars, bindVars)
-	}
-}
-
 func TestVTGateExecuteBatchShard(t *testing.T) {
 	s := createSandbox("TestVTGateExecuteBatchShard")
 	s.MapTestConn("-20", &sandboxConn{})

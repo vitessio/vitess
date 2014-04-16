@@ -46,7 +46,8 @@ func TestKeyRangeToShardMap(t *testing.T) {
 			}
 			keyRange = krArray[0]
 		}
-		gotShards, err := resolveKeyRangeToShards(ts, "", testCase.keyspace, topo.TYPE_MASTER, keyRange)
+		allShards, err := getKeyspaceShards(ts, "", testCase.keyspace, topo.TYPE_MASTER)
+		gotShards, err := resolveKeyRangeToShards(allShards, keyRange)
 		if err != nil {
 			t.Errorf("want nil, got %v", err)
 		}

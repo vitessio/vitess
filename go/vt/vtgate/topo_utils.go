@@ -12,14 +12,13 @@ import (
 )
 
 func mapKeyspaceIdsToShards(topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType, keyspaceIds []key.KeyspaceId) ([]string, error) {
+	allShards, err := getKeyspaceShards(topoServ, cell, keyspace, tabletType)
+	if err != nil {
+		return nil, err
+	}
 	var shards = make(map[string]bool)
 	for _, ksId := range keyspaceIds {
-		shard, err := getShardForKeyspaceId(
-			topoServ,
-			cell,
-			keyspace,
-			ksId,
-			tabletType)
+		shard, err := getShardForKeyspaceId(allShards, ksId)
 		if err != nil {
 			return nil, err
 		}
@@ -32,18 +31,19 @@ func mapKeyspaceIdsToShards(topoServ SrvTopoServer, cell, keyspace string, table
 	return res, nil
 }
 
-func getShardForKeyspaceId(topoServ SrvTopoServer, cell, keyspace string, keyspaceId key.KeyspaceId, tabletType topo.TabletType) (string, error) {
+func getKeyspaceShards(topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType) ([]topo.SrvShard, error) {
 	srvKeyspace, err := topoServ.GetSrvKeyspace(cell, keyspace)
 	if err != nil {
-		return "", fmt.Errorf("keyspace fetch error: %v", err)
+		return nil, fmt.Errorf("keyspace %v fetch error: %v", keyspace, err)
 	}
-
 	partition, ok := srvKeyspace.Partitions[tabletType]
 	if !ok {
-		return "", fmt.Errorf("No partition found for this tabletType")
+		return nil, fmt.Errorf("No partition found for tabletType %v in keyspace %v", tabletType, keyspace)
 	}
+	return partition.Shards, nil
+}
 
-	allShards := partition.Shards
+func getShardForKeyspaceId(allShards []topo.SrvShard, keyspaceId key.KeyspaceId) (string, error) {
 	if len(allShards) == 0 {
 		return "", fmt.Errorf("No shards found for this tabletType")
 	}
@@ -57,14 +57,13 @@ func getShardForKeyspaceId(topoServ SrvTopoServer, cell, keyspace string, keyspa
 }
 
 func mapEntityIdsToShards(topoServ SrvTopoServer, cell, keyspace string, entityIds map[string]key.KeyspaceId, tabletType topo.TabletType) (map[string][]key.KeyspaceId, error) {
+	allShards, err := getKeyspaceShards(topoServ, cell, keyspace, tabletType)
+	if err != nil {
+		return nil, err
+	}
 	var shards = make(map[string][]key.KeyspaceId)
 	for _, ksId := range entityIds {
-		shard, err := getShardForKeyspaceId(
-			topoServ,
-			cell,
-			keyspace,
-			ksId,
-			tabletType)
+		shard, err := getShardForKeyspaceId(allShards, ksId)
 		if err != nil {
 			return nil, err
 		}
@@ -90,15 +89,14 @@ func getKeyspaceAlias(topoServ SrvTopoServer, cell, keyspace string, tabletType 
 // This function implements the restriction of handling one keyrange
 // and one shard since streaming doesn't support merge sorting the results.
 // The input/output api is generic though.
-func mapKeyRangesToShards(topoServer SrvTopoServer, cell, keyspace string, tabletType topo.TabletType, krs []key.KeyRange) ([]string, error) {
+func mapKeyRangesToShards(topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType, krs []key.KeyRange) ([]string, error) {
+	allShards, err := getKeyspaceShards(topoServ, cell, keyspace, tabletType)
+	if err != nil {
+		return nil, err
+	}
 	uniqueShards := make(map[string]bool)
 	for _, kr := range krs {
-		shards, err := resolveKeyRangeToShards(
-			topoServer,
-			cell,
-			keyspace,
-			tabletType,
-			kr)
+		shards, err := resolveKeyRangeToShards(allShards, kr)
 		if err != nil {
 			return nil, err
 		}
@@ -114,28 +112,18 @@ func mapKeyRangesToShards(topoServer SrvTopoServer, cell, keyspace string, table
 }
 
 // This maps a list of keyranges to shard names.
-func resolveKeyRangeToShards(topoServer SrvTopoServer, cell, keyspace string, tabletType topo.TabletType, kr key.KeyRange) ([]string, error) {
-	srvKeyspace, err := topoServer.GetSrvKeyspace(cell, keyspace)
-	if err != nil {
-		return nil, fmt.Errorf("Error in reading the keyspace %v", err)
-	}
-
-	tabletTypePartition, ok := srvKeyspace.Partitions[tabletType]
-	if !ok {
-		return nil, fmt.Errorf("No shards available for tablet type '%v' in keyspace '%v'", tabletType, keyspace)
-	}
-
-	topo.SrvShardArray(tabletTypePartition.Shards).Sort()
-
+func resolveKeyRangeToShards(allShards []topo.SrvShard, kr key.KeyRange) ([]string, error) {
 	shards := make([]string, 0, 1)
+	topo.SrvShardArray(allShards).Sort()
+
 	if !kr.IsPartial() {
-		for j := 0; j < len(tabletTypePartition.Shards); j++ {
-			shards = append(shards, tabletTypePartition.Shards[j].ShardName())
+		for j := 0; j < len(allShards); j++ {
+			shards = append(shards, allShards[j].ShardName())
 		}
 		return shards, nil
 	}
-	for j := 0; j < len(tabletTypePartition.Shards); j++ {
-		shard := tabletTypePartition.Shards[j]
+	for j := 0; j < len(allShards); j++ {
+		shard := allShards[j]
 		if key.KeyRangesIntersect(kr, shard.KeyRange) {
 			shards = append(shards, shard.ShardName())
 		}

@@ -43,7 +43,7 @@ var sandboxMap map[string]*sandbox
 func createSandbox(keyspace string) *sandbox {
 	sandboxMu.Lock()
 	defer sandboxMu.Unlock()
-	s := &sandbox{}
+	s := &sandbox{ShardSpec: DefaultShardSpec}
 	s.TestConns = make(map[uint32]tabletconn.TabletConn)
 	sandboxMap[keyspace] = s
 	return s
@@ -55,21 +55,43 @@ func getSandbox(keyspace string) *sandbox {
 	return sandboxMap[keyspace]
 }
 
+func addSandboxServedFrom(keyspace, servedFrom string) {
+	sandboxMu.Lock()
+	defer sandboxMu.Unlock()
+	sandboxMap[keyspace].KeyspaceServedFrom = servedFrom
+	sandboxMap[servedFrom] = sandboxMap[keyspace]
+}
+
 type sandbox struct {
 	// Use sandmu to access the variables below
 	sandmu sync.Mutex
 
-	// endPointCounter tracks how often GetEndPoints was called
+	// SrvKeyspaceCounter tracks how often GetSrvKeyspace was called
+	SrvKeyspaceCounter int
+
+	// SrvKeyspaceMustFail specifies how often GetSrvKeyspace must fail before succeeding
+	SrvKeyspaceMustFail int
+
+	// EndPointCounter tracks how often GetEndPoints was called
 	EndPointCounter int
 
-	// endPointMustFail specifies how often GetEndPoints must fail before succeeding
+	// EndPointMustFail specifies how often GetEndPoints must fail before succeeding
 	EndPointMustFail int
 
-	// dialerCoun tracks how often sandboxDialer was called
+	// DialerCoun tracks how often sandboxDialer was called
 	DialCounter int
 
-	// dialMustFail specifies how often sandboxDialer must fail before succeeding
+	// DialMustFail specifies how often sandboxDialer must fail before succeeding
 	DialMustFail int
+
+	// KeyspaceServedFrom specifies the served-from keyspace for vertical resharding
+	KeyspaceServedFrom string
+
+	// ShardSpec specifies the sharded keyranges
+	ShardSpec string
+
+	// SrvKeyspaceCallback specifies the callback function in GetSrvKeyspace
+	SrvKeyspaceCallback func()
 
 	TestConns map[uint32]tabletconn.TabletConn
 }
@@ -78,29 +100,30 @@ func (s *sandbox) Reset() {
 	s.sandmu.Lock()
 	defer s.sandmu.Unlock()
 	s.TestConns = make(map[uint32]tabletconn.TabletConn)
+	s.SrvKeyspaceCounter = 0
+	s.SrvKeyspaceMustFail = 0
 	s.EndPointCounter = 0
 	s.DialCounter = 0
 	s.DialMustFail = 0
+	s.KeyspaceServedFrom = ""
+	s.ShardSpec = DefaultShardSpec
+	s.SrvKeyspaceCallback = nil
 }
 
 func (s *sandbox) MapTestConn(shard string, conn tabletconn.TabletConn) {
 	s.sandmu.Lock()
 	defer s.sandmu.Unlock()
-	uid, err := getUidForShard(shard)
+	uid, err := getUidForShard(shard, s.ShardSpec)
 	if err != nil {
 		panic(err)
 	}
 	s.TestConns[uint32(uid)] = conn
 }
 
-var ShardSpec = "-20-40-60-80-a0-c0-e0-"
-var ShardedKrArray key.KeyRangeArray
+var DefaultShardSpec = "-20-40-60-80-a0-c0-e0-"
 
-func getAllShards() (key.KeyRangeArray, error) {
-	if ShardedKrArray != nil {
-		return ShardedKrArray, nil
-	}
-	shardedKrArray, err := key.ParseShardingSpec(ShardSpec)
+func getAllShards(shardSpec string) (key.KeyRangeArray, error) {
+	shardedKrArray, err := key.ParseShardingSpec(shardSpec)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +134,7 @@ func getKeyRangeName(kr key.KeyRange) string {
 	return fmt.Sprintf("%v-%v", string(kr.Start.Hex()), string(kr.End.Hex()))
 }
 
-func getUidForShard(shardName string) (int, error) {
+func getUidForShard(shardName string, shardSpec string) (int, error) {
 	// Try simple unsharded case first
 	if strings.Contains(shardName, "-") == false {
 		uid, err := strconv.Atoi(shardName)
@@ -119,7 +142,7 @@ func getUidForShard(shardName string) (int, error) {
 			return uid, nil
 		}
 	}
-	shards, err := getAllShards()
+	shards, err := getAllShards(shardSpec)
 	if err != nil {
 		return 0, fmt.Errorf("shard not found %v", shardName)
 	}
@@ -131,8 +154,8 @@ func getUidForShard(shardName string) (int, error) {
 	return 0, fmt.Errorf("shard not found %v", shardName)
 }
 
-func createShardedSrvKeyspace() (*topo.SrvKeyspace, error) {
-	shardKrArray, err := getAllShards()
+func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*topo.SrvKeyspace, error) {
+	shardKrArray, err := getAllShards(shardSpec)
 	if err != nil {
 		return nil, err
 	}
@@ -153,6 +176,12 @@ func createShardedSrvKeyspace() (*topo.SrvKeyspace, error) {
 			},
 		},
 		TabletTypes: allTabletTypes,
+	}
+	if servedFromKeyspace != "" {
+		shardedSrvKeyspace.ServedFrom = map[topo.TabletType]string{
+			topo.TYPE_RDONLY: servedFromKeyspace,
+			topo.TYPE_MASTER: servedFromKeyspace,
+		}
 	}
 	return shardedSrvKeyspace, nil
 }
@@ -197,6 +226,15 @@ func (sct *sandboxTopo) GetSrvKeyspaceNames(cell string) ([]string, error) {
 }
 
 func (sct *sandboxTopo) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, error) {
+	sand := getSandbox(keyspace)
+	if sand.SrvKeyspaceCallback != nil {
+		sand.SrvKeyspaceCallback()
+	}
+	sand.SrvKeyspaceCounter++
+	if sand.SrvKeyspaceMustFail > 0 {
+		sand.SrvKeyspaceMustFail--
+		return nil, fmt.Errorf("topo error GetSrvKeyspace")
+	}
 	switch keyspace {
 	case TEST_UNSHARDED_SERVED_FROM:
 		servedFromKeyspace, err := createUnshardedKeyspace()
@@ -211,7 +249,7 @@ func (sct *sandboxTopo) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace
 		return createUnshardedKeyspace()
 	}
 
-	return createShardedSrvKeyspace()
+	return createShardedSrvKeyspace(sand.ShardSpec, sand.KeyspaceServedFrom)
 }
 
 func (sct *sandboxTopo) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
@@ -221,7 +259,7 @@ func (sct *sandboxTopo) GetEndPoints(cell, keyspace, shard string, tabletType to
 		sand.EndPointMustFail--
 		return nil, fmt.Errorf("topo error")
 	}
-	uid, err := getUidForShard(shard)
+	uid, err := getUidForShard(shard, sand.ShardSpec)
 	if err != nil {
 		panic(err)
 	}

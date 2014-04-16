@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
@@ -84,7 +85,7 @@ func (stc *ScatterConn) Execute(
 		appendResult(qr, innerqr)
 	}
 	if allErrors.HasErrors() {
-		return nil, allErrors.Error()
+		return nil, allErrors.AggrError(stc.aggregateErrors)
 	}
 	return qr, nil
 }
@@ -124,7 +125,7 @@ func (stc *ScatterConn) ExecuteEntityIds(
 		appendResult(qr, innerqr)
 	}
 	if allErrors.HasErrors() {
-		return nil, allErrors.Error()
+		return nil, allErrors.AggrError(stc.aggregateErrors)
 	}
 	return qr, nil
 }
@@ -162,7 +163,7 @@ func (stc *ScatterConn) ExecuteBatch(
 		}
 	}
 	if allErrors.HasErrors() {
-		return nil, allErrors.Error()
+		return nil, allErrors.AggrError(stc.aggregateErrors)
 	}
 	return qrs, nil
 }
@@ -202,7 +203,7 @@ func (stc *ScatterConn) StreamExecute(
 	if replyErr != nil {
 		allErrors.RecordError(replyErr)
 	}
-	return allErrors.Error()
+	return allErrors.AggrError(stc.aggregateErrors)
 }
 
 // Commit commits the current transaction. There are no retries on this operation.
@@ -244,6 +245,34 @@ func (stc *ScatterConn) Close() error {
 	}
 	stc.shardConns = make(map[string]*ShardConn)
 	return nil
+}
+
+func (stc *ScatterConn) aggregateErrors(errors []error) error {
+	if len(errors) == 0 {
+		return nil
+	}
+	allRetryableError := true
+	for _, e := range errors {
+		connError, ok := e.(*ShardConnError)
+		if !ok || (connError.Code != tabletconn.ERR_RETRY && connError.Code != tabletconn.ERR_FATAL) || connError.InTransaction {
+			allRetryableError = false
+			break
+		}
+	}
+	var code int
+	if allRetryableError {
+		code = tabletconn.ERR_RETRY
+	} else {
+		code = tabletconn.ERR_NORMAL
+	}
+	errs := make([]string, 0, len(errors))
+	for _, e := range errors {
+		errs = append(errs, e.Error())
+	}
+	return &ShardConnError{
+		Code: code,
+		Err:  fmt.Sprintf("%v", strings.Join(errs, "\n")),
+	}
 }
 
 // multiGo performs the requested 'action' on the specified shards in parallel.
@@ -313,30 +342,12 @@ func (stc *ScatterConn) execShardAction(
 			return
 		}
 		err = action(sdc, transactionId, results)
-		// Determine whether keyspace can be re-resolved
-		if shouldResolveKeyspace(err, transactionId) {
-			newKeyspace, err := getKeyspaceAlias(stc.toposerv, stc.cell, keyspace, tabletType)
-			if err == nil && newKeyspace != keyspace {
-				sdc.Close()
-				stc.cleanupShardConn(keyspace, shard, tabletType)
-				keyspace = newKeyspace
-				continue
-			}
-		}
 		if err != nil {
 			allErrors.RecordError(err)
 			return
 		}
 		break
 	}
-}
-
-func (stc *ScatterConn) cleanupShardConn(keyspace, shard string, tabletType topo.TabletType) {
-	stc.mu.Lock()
-	defer stc.mu.Unlock()
-
-	key := fmt.Sprintf("%s.%s.%s", keyspace, shard, tabletType)
-	delete(stc.shardConns, key)
 }
 
 func (stc *ScatterConn) getConnection(keyspace, shard string, tabletType topo.TabletType) *ShardConn {
@@ -400,14 +411,4 @@ func unique(in []string) map[string]struct{} {
 		out[v] = struct{}{}
 	}
 	return out
-}
-
-func shouldResolveKeyspace(err error, transactionId int64) bool {
-	if err == nil || transactionId != 0 {
-		return false
-	}
-	if shardConnErr, ok := err.(*ShardConnError); ok {
-		return shardConnErr.topoReResolve
-	}
-	return false
 }

@@ -59,11 +59,14 @@ func NewShardConn(serv SrvTopoServer, cell, keyspace, shard string, tabletType t
 type ShardConnError struct {
 	Code            int
 	ShardIdentifier string
-	topoReResolve   bool
+	InTransaction   bool
 	Err             string
 }
 
 func (e *ShardConnError) Error() string {
+	if e.ShardIdentifier == "" {
+		return e.Err
+	}
 	return fmt.Sprintf("%v, shard, host: %s", e.Err, e.ShardIdentifier)
 }
 
@@ -235,19 +238,6 @@ func (sdc *ShardConn) canRetry(err error, transactionId int64, conn tabletconn.T
 	return !inTransaction
 }
 
-func shouldResolveTopo(err error, inTransaction bool) bool {
-	if err == nil {
-		return false
-	}
-	if serverError, ok := err.(*tabletconn.ServerError); ok {
-		switch serverError.Code {
-		case tabletconn.ERR_RETRY, tabletconn.ERR_FATAL:
-			return !inTransaction
-		}
-	}
-	return false
-}
-
 // markDown closes conn and temporarily marks the associated
 // end point as unusable.
 func (sdc *ShardConn) markDown(conn tabletconn.TabletConn) {
@@ -282,11 +272,10 @@ func (sdc *ShardConn) WrapError(in error, conn tabletconn.TabletConn, inTransact
 		code = serverError.Code
 	}
 
-	topoReResolve := shouldResolveTopo(in, inTransaction)
-
-	shardConnErr := &ShardConnError{Code: code,
+	shardConnErr := &ShardConnError{
+		Code:            code,
 		ShardIdentifier: shardIdentifier,
-		topoReResolve:   topoReResolve,
+		InTransaction:   inTransaction,
 		Err:             in.Error(),
 	}
 	return shardConnErr
