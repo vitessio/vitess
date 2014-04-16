@@ -304,7 +304,12 @@ func rebuildShardSrvShardLocks(ts topo.Server, keyspace, shard string, options R
 
 			// read all the Tablet records
 			tablets, err := topo.GetTabletMap(ts, aliases)
-			if err != nil && err != topo.ErrPartialResult {
+			switch err {
+			case nil:
+				// keep going, we're good
+			case topo.ErrPartialResult:
+				log.Warningf("Got ErrPartialResult from topo.GetTabletMap in cell %v, some tablets may not be added properly to serving graph", cell)
+			default:
 				rec.RecordError(fmt.Errorf("GetTabletMap in cell %v failed: %v", cell, err))
 				return
 			}
@@ -328,7 +333,7 @@ func rebuildShardSrvShardLocks(ts topo.Server, keyspace, shard string, options R
 	}
 	wg.Wait()
 
-	return nil
+	return rec.Error()
 }
 
 // rebuildCellSrvShard computes and writes the serving graph data to a
