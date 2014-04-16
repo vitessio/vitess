@@ -80,6 +80,11 @@ func TestShardLock(t *testing.T) {
 	test.CheckShardLock(t, ts)
 }
 
+func TestSrvShardLock(t *testing.T) {
+	ts := newFakeTeeServer(t)
+	test.CheckSrvShardLock(t, ts)
+}
+
 func TestPid(t *testing.T) {
 	ts := newFakeTeeServer(t)
 	test.CheckPid(t, ts)
