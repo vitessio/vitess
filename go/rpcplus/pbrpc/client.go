@@ -11,7 +11,7 @@ import (
 	rpc "github.com/youtube/vitess/go/rpcplus"
 )
 
-// NewClientCodec returns a new rpc.ClientCodec using JSON-RPC on conn.
+// NewClientCodec returns a new rpc.ClientCodec using Protobuf on conn.
 func NewClientCodec(conn io.ReadWriteCloser) rpc.ClientCodec {
 	return &pbClientCodec{rwc: conn}
 }
@@ -36,6 +36,7 @@ type pbClientCodec struct {
 	rwc io.ReadWriteCloser
 }
 
+// WriteRequest - implement rpc.ClientCodec interface.
 func (c *pbClientCodec) WriteRequest(r *rpc.Request, body interface{}) (err error) {
 	// Use a mutex to guarantee the header/body are written in the correct order.
 	c.mu.Lock()
@@ -62,12 +63,13 @@ func (c *pbClientCodec) WriteRequest(r *rpc.Request, body interface{}) (err erro
 		return
 	}
 
-	if flusher, ok := c.rwc.(Flusher); ok {
+	if flusher, ok := c.rwc.(flusher); ok {
 		err = flusher.Flush()
 	}
 	return
 }
 
+// ReadResponseHeader - implement rpc.ClientCodec interface.
 func (c *pbClientCodec) ReadResponseHeader(r *rpc.Response) error {
 	data, err := ReadNetString(c.rwc)
 	if err != nil {
@@ -84,6 +86,7 @@ func (c *pbClientCodec) ReadResponseHeader(r *rpc.Response) error {
 	return nil
 }
 
+// ReadResponseBody - implement rpc.ClientCodec interface.
 func (c *pbClientCodec) ReadResponseBody(body interface{}) error {
 	data, err := ReadNetString(c.rwc)
 	if err != nil {
@@ -95,6 +98,7 @@ func (c *pbClientCodec) ReadResponseBody(body interface{}) error {
 	return nil
 }
 
+// Close - implement rpc.ClientCodec interface.
 func (c *pbClientCodec) Close() error {
 	return c.rwc.Close()
 }

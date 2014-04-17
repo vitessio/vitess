@@ -13,14 +13,12 @@ type pbServerCodec struct {
 	rwc io.ReadWriteCloser
 }
 
+// NewServerCodec returns a new ServerCodec.
 func NewServerCodec(rwc io.ReadWriteCloser) rpc.ServerCodec {
 	return &pbServerCodec{rwc: rwc}
 }
 
-type Flusher interface {
-	Flush() error
-}
-
+// ReadRequestHeader reads a Request.
 func (c *pbServerCodec) ReadRequestHeader(r *rpc.Request) error {
 	data, err := ReadNetString(c.rwc)
 	if err != nil {
@@ -36,6 +34,7 @@ func (c *pbServerCodec) ReadRequestHeader(r *rpc.Request) error {
 	return nil
 }
 
+// ReadRequestBody reads a body structure from the codec.
 func (c *pbServerCodec) ReadRequestBody(body interface{}) error {
 	data, err := ReadNetString(c.rwc)
 	if err != nil {
@@ -47,6 +46,11 @@ func (c *pbServerCodec) ReadRequestBody(body interface{}) error {
 	return nil
 }
 
+type flusher interface {
+	Flush() error
+}
+
+// WriteResponse writes a response on the codec.
 func (c *pbServerCodec) WriteResponse(r *rpc.Response, body interface{}, last bool) (err error) {
 	// Use a mutex to guarantee the header/body are written in the correct order.
 	c.mu.Lock()
@@ -74,12 +78,13 @@ func (c *pbServerCodec) WriteResponse(r *rpc.Response, body interface{}, last bo
 		return
 	}
 
-	if flusher, ok := c.rwc.(Flusher); ok {
+	if flusher, ok := c.rwc.(flusher); ok {
 		err = flusher.Flush()
 	}
 	return
 }
 
+// Close the underlying connection.
 func (c *pbServerCodec) Close() error {
 	return c.rwc.Close()
 }
