@@ -32,7 +32,7 @@ var (
 
 const (
 	// PERM_DIRECTORY are default permissions for a node.
-	PERM_DIRECTORY = zookeeper.PERM_ADMIN | zookeeper.PERM_CREATE | zookeeper.PERM_DELETE | zookeeper.PERM_READ
+	PERM_DIRECTORY = zookeeper.PERM_ADMIN | zookeeper.PERM_CREATE | zookeeper.PERM_DELETE | zookeeper.PERM_READ | zookeeper.PERM_WRITE
 	// PERM_FILE allows a zk node to emulate file behavior by disallowing child nodes.
 	PERM_FILE = zookeeper.PERM_ADMIN | zookeeper.PERM_READ | zookeeper.PERM_WRITE
 )
