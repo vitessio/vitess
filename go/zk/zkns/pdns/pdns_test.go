@@ -52,7 +52,7 @@ var queries = []string{
 	"Q\ta.zkns.test.zk\tIN\tANY\t-1\t1.1.1.1\t1.1.1.2",
 	"Q\tcname.zkns.test.zk\tIN\tANY\t-1\t1.1.1.1\t1.1.1.2",
 	"Q\tempty.zkns.test.zk\tIN\tANY\t-1\t1.1.1.1\t1.1.1.2",
-	// Sadly this test case generate a log error that cannot be squelched easily.
+	// Sadly this test case generates a log error that cannot be squelched easily.
 	"Q\tbad.domain.test.ignore.console.log.errors\tIN\tANY\t-1\t1.1.1.1\t1.1.1.2",
 }
 

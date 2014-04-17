@@ -271,8 +271,9 @@ func parseReq(line []byte) (*pdnsReq, error) {
 // The DNS spec says you should not have conflicts between
 // CNAME/SRV records, so this really shouldn't be an issue.
 func (pd *pdns) handleQReq(req *pdnsReq) (lines []string, err error) {
-	// By default search for "ANY". We don't need to explicitly search
-	// for CNAME since that is implicitly handled in an A request.
+	// The default search is for "ANY", however we do not need to
+	// explicitly search for CNAME since that is implicitly handled in
+	// an A request.
 	qtypes := []string{"SOA", "SRV", "A"}
 	if req.qtype != "ANY" {
 		qtypes = []string{req.qtype}
