@@ -52,7 +52,8 @@ var queries = []string{
 	"Q\ta.zkns.test.zk\tIN\tANY\t-1\t1.1.1.1\t1.1.1.2",
 	"Q\tcname.zkns.test.zk\tIN\tANY\t-1\t1.1.1.1\t1.1.1.2",
 	"Q\tempty.zkns.test.zk\tIN\tANY\t-1\t1.1.1.1\t1.1.1.2",
-	"Q\tbad.domain\tIN\tANY\t-1\t1.1.1.1\t1.1.1.2",
+	// Sadly this test case generate a log error that cannot be squelched easily.
+	"Q\tbad.domain.test.ignore.console.log.errors\tIN\tANY\t-1\t1.1.1.1\t1.1.1.2",
 }
 
 var testSOA = "DATA\t.zkns.test.zk.\tIN\tSOA\t1\t1\t" + fqdn + ". hostmaster." + fqdn + ". 0 1800 600 3600 300\n"
@@ -102,7 +103,7 @@ func testQuery(t *testing.T, query, result string) {
 	}
 	qresult := string(data)
 	if qresult != result {
-		t.Fatalf("data mismatch found:\n%#v\nexpected:\n%#v", qresult, result)
+		t.Fatalf("data mismatch found for %#v:\n%#v\nexpected:\n%#v", query, qresult, result)
 	}
 }
 
