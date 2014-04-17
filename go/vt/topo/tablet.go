@@ -38,18 +38,23 @@ type TabletAlias struct {
 	Uid  uint32
 }
 
+// IsZero returns true iff cell and uid are empty
 func (ta TabletAlias) IsZero() bool {
 	return ta.Cell == "" && ta.Uid == 0
 }
 
+// String formats a TabletAlias
 func (ta TabletAlias) String() string {
 	return fmtAlias(ta.Cell, ta.Uid)
 }
 
+// TabletUidStr returns a string version of the uid
 func (ta TabletAlias) TabletUidStr() string {
 	return tabletUidStr(ta.Uid)
 }
 
+// ParseTabletAliasString returns a TabletAlias for the input string,
+// of the form <cell>-<uid>
 func ParseTabletAliasString(aliasStr string) (result TabletAlias, err error) {
 	nameParts := strings.Split(aliasStr, "-")
 	if len(nameParts) != 2 {
@@ -69,6 +74,7 @@ func tabletUidStr(uid uint32) string {
 	return fmt.Sprintf("%010d", uid)
 }
 
+// ParseUid parses just the uid (a number)
 func ParseUid(value string) (uint32, error) {
 	uid, err := strconv.ParseUint(value, 10, 32)
 	if err != nil {
@@ -84,10 +90,12 @@ func fmtAlias(cell string, uid uint32) string {
 // TabletAliasList is used mainly for sorting
 type TabletAliasList []TabletAlias
 
+// Len is part of sort.Interface
 func (tal TabletAliasList) Len() int {
 	return len(tal)
 }
 
+// Less is part of sort.Interface
 func (tal TabletAliasList) Less(i, j int) bool {
 	if tal[i].Cell < tal[j].Cell {
 		return true
@@ -97,6 +105,7 @@ func (tal TabletAliasList) Less(i, j int) bool {
 	return tal[i].Uid < tal[j].Uid
 }
 
+// Swap is part of sort.Interface
 func (tal TabletAliasList) Swap(i, j int) {
 	tal[i], tal[j] = tal[j], tal[i]
 }
@@ -207,6 +216,7 @@ func IsTypeInList(tabletType TabletType, types []TabletType) bool {
 	return false
 }
 
+// IsSlaveType returns true iff the type is a mysql replication slave.
 func (tt TabletType) IsSlaveType() bool {
 	return IsTypeInList(tt, SlaveTabletTypes)
 }
@@ -376,7 +386,7 @@ func (tablet *Tablet) ValidatePortmap() error {
 
 // EndPoint returns an EndPoint associated with the tablet record
 func (tablet *Tablet) EndPoint() (*EndPoint, error) {
-	entry := NewAddr(tablet.Alias.Uid, tablet.Hostname)
+	entry := NewEndPoint(tablet.Alias.Uid, tablet.Hostname)
 	if err := tablet.ValidatePortmap(); err != nil {
 		return nil, err
 	}
@@ -455,6 +465,7 @@ func (tablet *Tablet) Json() string {
 	return jscfg.ToJson(tablet)
 }
 
+// TabletInfo is the container for a Tablet, read from the topology server.
 type TabletInfo struct {
 	version int64 // node version - used to prevent stomping concurrent writes
 	*Tablet
@@ -508,6 +519,7 @@ func UpdateTablet(ts Server, tablet *TabletInfo) error {
 	return err
 }
 
+// Validate makes sure a tablet is represented correctly in the topology server.
 func Validate(ts Server, tabletAlias TabletAlias) error {
 	// read the tablet record, make sure it parses
 	tablet, err := ts.GetTablet(tabletAlias)

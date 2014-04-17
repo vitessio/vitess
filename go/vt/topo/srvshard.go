@@ -30,26 +30,32 @@ type SrvShard struct {
 	version int64
 }
 
+// SrvShardArray is used for sorting SrvShard arrays
 type SrvShardArray []SrvShard
 
+// Len implements sort.Interface
 func (sa SrvShardArray) Len() int { return len(sa) }
 
+// Len implements sort.Interface
 func (sa SrvShardArray) Less(i, j int) bool {
 	return sa[i].KeyRange.Start < sa[j].KeyRange.Start
 }
 
+// Len implements sort.Interface
 func (sa SrvShardArray) Swap(i, j int) {
 	sa[i], sa[j] = sa[j], sa[i]
 }
 
 func (sa SrvShardArray) Sort() { sort.Sort(sa) }
 
+// NewSrvShard returns an empty SrvShard with the given version.
 func NewSrvShard(version int64) *SrvShard {
 	return &SrvShard{
 		version: version,
 	}
 }
 
+// ShardName returns the name of a shard.
 func (ss *SrvShard) ShardName() string {
 	if !ss.KeyRange.IsPartial() {
 		return SHARD_ZERO
@@ -67,7 +73,7 @@ type KeyspacePartition struct {
 // A distilled serving copy of keyspace detail stored in the local
 // cell for fast access. Derived from the global keyspace, shards and
 // local details.
-// In zk, it is in /zk/local/vt/ns/<keyspace>
+// In zk, it is in /zk/<cell>/vt/ns/<keyspace>
 type SrvKeyspace struct {
 	// Shards to use per type, only contains complete partitions.
 	Partitions map[TabletType]*KeyspacePartition
@@ -89,6 +95,7 @@ type SrvKeyspace struct {
 	version int64
 }
 
+// NewSrvKeyspace returns an empty SrvKeyspace with the given version.
 func NewSrvKeyspace(version int64) *SrvKeyspace {
 	return &SrvKeyspace{
 		version: version,

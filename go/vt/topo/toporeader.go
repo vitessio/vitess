@@ -19,19 +19,23 @@ type TopoReader interface {
 	GetEndPoints(GetEndPointsArgs, *EndPoints) error
 }
 
+// GetSrvKeyspaceNamesArgs is the parameters for TopoReader.GetSrvKeyspaceNames
 type GetSrvKeyspaceNamesArgs struct {
 	Cell string
 }
 
+// GetSrvKeyspaceArgs is the parameters for TopoReader.GetSrvKeyspace
 type GetSrvKeyspaceArgs struct {
 	Cell     string
 	Keyspace string
 }
 
+// SrvKeyspaceNames is the response for TopoReader.GetSrvKeyspaceNames
 type SrvKeyspaceNames struct {
 	Entries []string
 }
 
+// GetSrvKeyspaceNamesArgs is the parameters for TopoReader.GetEndPoints
 type GetEndPointsArgs struct {
 	Cell       string
 	Keyspace   string
@@ -39,6 +43,7 @@ type GetEndPointsArgs struct {
 	TabletType TabletType
 }
 
+// RegisterTopoReader register the provided TopoReader for RPC
 func RegisterTopoReader(tr TopoReader) {
 	rpc.Register(tr)
 }

@@ -10,6 +10,8 @@ import (
 
 // This file contains keyspace utility functions
 
+// Keyspace is the data structure that has data about the Keyspaces in
+// the topology. Most fields are optional.
 type Keyspace struct {
 	// name of the column used for sharding
 	// empty if the keyspace is not sharded

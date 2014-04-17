@@ -8,7 +8,9 @@ import (
 	log "github.com/golang/glog"
 )
 
-// ReplicationLink describes a MySQL replication relationship
+// ReplicationLink describes a MySQL replication relationship.
+// For now, we only insert ReplicationLink for slave tablets.
+// We want to add records for master tablets as well, with a Parent.IsZero().
 type ReplicationLink struct {
 	TabletAlias TabletAlias
 	Parent      TabletAlias
@@ -22,6 +24,7 @@ type ShardReplication struct {
 	ReplicationLinks []ReplicationLink
 }
 
+// GetReplicationLink find a link for a given tablet.
 func (sr *ShardReplication) GetReplicationLink(tabletAlias TabletAlias) (ReplicationLink, error) {
 	for _, rl := range sr.ReplicationLinks {
 		if rl.TabletAlias == tabletAlias {
@@ -39,7 +42,8 @@ type ShardReplicationInfo struct {
 	shard    string
 }
 
-// For topo.Server implementations to create the structure
+// NewShardReplicationInfo is for topo.Server implementations to
+// create the structure
 func NewShardReplicationInfo(sr *ShardReplication, cell, keyspace, shard string) *ShardReplicationInfo {
 	return &ShardReplicationInfo{
 		ShardReplication: sr,
@@ -49,16 +53,17 @@ func NewShardReplicationInfo(sr *ShardReplication, cell, keyspace, shard string)
 	}
 }
 
-// Accessor methods
-
+// Cell returns the cell for a ShardReplicationInfo
 func (sri *ShardReplicationInfo) Cell() string {
 	return sri.cell
 }
 
+// Keyspace returns the keyspace for a ShardReplicationInfo
 func (sri *ShardReplicationInfo) Keyspace() string {
 	return sri.keyspace
 }
 
+// Shard returns the shard for a ShardReplicationInfo
 func (sri *ShardReplicationInfo) Shard() string {
 	return sri.shard
 }
