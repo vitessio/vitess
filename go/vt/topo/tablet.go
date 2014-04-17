@@ -521,14 +521,33 @@ func Validate(ts Server, tabletAlias TabletAlias) error {
 	}
 
 	// Some tablets have no information to generate valid replication paths.
-	// We have two cases to handle:
+	// We have three cases to handle:
+	// - we are a master, in which case we may have an entry or not
+	// (we are in the process of adding entries to the graph for masters)
 	// - we are a slave in the replication graph, and should have
-	// replication data (first case below)
+	// replication data (second case below)
 	// - we are a master, or in scrap mode but used to be assigned
-	// in the graph somewhere (second case below)
+	// in the graph somewhere (third case below)
 	// Idle tablets are just not in any graph at all, we don't even know
 	// their keyspace / shard to know where to check.
-	if tablet.IsInReplicationGraph() && tablet.Type != TYPE_MASTER {
+	if tablet.Type == TYPE_MASTER {
+		si, err := ts.GetShardReplication(tablet.Alias.Cell, tablet.Keyspace, tablet.Shard)
+		if err != nil {
+			log.Warningf("master tablet %v with no ShardReplication object, assuming it's because of transition", tabletAlias)
+			return nil
+		}
+
+		rl, err := si.GetReplicationLink(tabletAlias)
+		if err != nil {
+			log.Warningf("master tablet %v with no ReplicationLink entry, assuming it's because of transition", tabletAlias)
+			return nil
+		}
+
+		if rl.Parent != tablet.Parent {
+			return fmt.Errorf("tablet %v has parent %v but has %v in shard replication object", tabletAlias, tablet.Parent, rl.Parent)
+		}
+
+	} else if tablet.IsInReplicationGraph() {
 		if err = ts.ValidateShard(tablet.Keyspace, tablet.Shard); err != nil {
 			return err
 		}

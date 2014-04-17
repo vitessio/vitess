@@ -235,7 +235,7 @@ func FindAllTabletAliasesInShardByCell(ts Server, keyspace, shard string, cells 
 			mutex.Lock()
 			for _, rl := range sri.ReplicationLinks {
 				resultAsMap[rl.TabletAlias] = true
-				if InCellList(rl.Parent.Cell, cells) {
+				if !rl.Parent.IsZero() && InCellList(rl.Parent.Cell, cells) {
 					resultAsMap[rl.Parent] = true
 				}
 			}
