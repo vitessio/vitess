@@ -271,7 +271,10 @@ func parseReq(line []byte) (*pdnsReq, error) {
 // The DNS spec says you should not have conflicts between
 // CNAME/SRV records, so this really shouldn't be an issue.
 func (pd *pdns) handleQReq(req *pdnsReq) (lines []string, err error) {
-	qtypes := []string{"SOA", "SRV", "A", "CNAME"}
+	// The default search is for "ANY", however we do not need to
+	// explicitly search for CNAME since that is implicitly handled in
+	// an A request.
+	qtypes := []string{"SOA", "SRV", "A"}
 	if req.qtype != "ANY" {
 		qtypes = []string{req.qtype}
 	}
@@ -283,7 +286,7 @@ func (pd *pdns) handleQReq(req *pdnsReq) (lines []string, err error) {
 			if qtype == "SOA" {
 				return nil, err
 			}
-			log.Errorf("query failed %v %v: %v", qtype, req.qname, err)
+			log.Warningf("query failed %v %v: %v", qtype, req.qname, err)
 			continue
 		}
 		for _, reply := range replies {
@@ -362,6 +365,7 @@ func (pd *pdns) Serve(r io.Reader, w io.Writer) {
 			}
 		case KIND_AXFR:
 			// FIXME(mike) unimplemented
+			log.Errorf("failed query: axfr not implemented")
 		}
 		write(w, END_REPLY)
 	}

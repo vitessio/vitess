@@ -104,6 +104,8 @@ def main(mod=None):
   except KeyboardInterrupt:
     logging.warning("======== Tests interrupted, cleaning up ========")
     mod.tearDownModule()
+    # If you interrupt a test, you probably want to stop evaluating the rest.
+    sys.exit(1)
 
 def remove_tmp_files():
   try:

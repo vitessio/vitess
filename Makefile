@@ -27,28 +27,40 @@ queryservice_test:
 	fi
 	time test/sensitive_info_test.py
 
-# export VT_TEST_FLAGS=-v for instance
+#export VT_TEST_FLAGS=-v for instance
+integration_test_files = clone.py \
+	initial_sharding_bytes.py \
+	initial_sharding.py \
+	keyrange_test.py \
+	keyspace_test.py \
+	reparent.py \
+	resharding_bytes.py \
+	resharding.py \
+	rowcache_invalidator.py \
+	secure.py \
+	schema.py \
+	sharded.py \
+	tabletmanager.py \
+	update_stream.py \
+	vertical_split.py \
+	vertical_split_vtgate.py \
+	vtdb_test.py \
+	vtgate_test.py \
+	zkocc_test.py
 
+.ONESHELL:
+SHELL = /bin/bash
 integration_test:
-	cd test ; echo "schema test"; time ./schema.py $$VT_TEST_FLAGS
-	cd test ; echo "sharded test"; time ./sharded.py $$VT_TEST_FLAGS
-	cd test ; echo "tabletmanager test"; time ./tabletmanager.py $$VT_TEST_FLAGS
-	cd test ; echo "clone test"; time ./clone.py $$VT_TEST_FLAGS
-	cd test ; echo "reparent test"; time ./reparent.py $$VT_TEST_FLAGS
-	cd test ; echo "zkocc test"; time ./zkocc_test.py $$VT_TEST_FLAGS
-	cd test ; echo "updatestream test"; time ./update_stream.py
-	cd test ; echo "rowcache_invalidator test"; time ./rowcache_invalidator.py
-	cd test ; echo "secure test"; time ./secure.py $$VT_TEST_FLAGS
-	cd test ; echo "resharding test"; time ./resharding.py $$VT_TEST_FLAGS
-	cd test ; echo "resharding_bytes test"; time ./resharding_bytes.py $$VT_TEST_FLAGS
-	cd test ; echo "vtdb test"; time ./vtdb_test.py $$VT_TEST_FLAGS
-	cd test ; echo "vtgate test"; time ./vtgate_test.py $$VT_TEST_FLAGS
-	cd test ; echo "keyrange test"; time ./keyrange_test.py $$VT_TEST_FLAGS
-	cd test ; echo "vertical_split test"; time ./vertical_split.py $$VT_TEST_FLAGS
-	cd test ; echo "vertical_split_vtgate test"; time ./vertical_split_vtgate.py $$VT_TEST_FLAGS
-	cd test ; echo "initial_sharding test"; time ./initial_sharding.py $$VT_TEST_FLAGS
-	cd test ; echo "initial_sharding_bytes test"; time ./initial_sharding_bytes.py $$VT_TEST_FLAGS
-	cd test ; echo "keyspace_test test"; time ./keyspace_test.py $$VT_TEST_FLAGS
+	cd test ; \
+	for t in $(integration_test_files) ; do \
+		echo Running test/$$t... ; \
+		output=$$(time ./$$t $$VT_TEST_FLAGS 2>&1) ; \
+		if [[ $$? != 0 ]]; then \
+			echo $output >&2 ; \
+			exit 1 ; \
+		fi ; \
+		echo ; \
+	done
 
 bson:
 	bsongen -file ./go/mysql/proto/structs.go -type QueryResult -o ./go/mysql/proto/query_result_bson.go
