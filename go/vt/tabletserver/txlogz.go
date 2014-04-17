@@ -14,7 +14,8 @@ import (
 )
 
 var (
-	txlogzHeader = []byte(`
+	txlogzHeader = []byte(`<thead>
+
 		<tr>
 			<th>Transaction id</th>
 			<th>Start</th>
@@ -23,6 +24,7 @@ var (
 			<th>Decision</th>
 			<th>Statements</th>
 		</tr>
+</thead>
 	`)
 	txlogzTmpl = template.Must(template.New("example").Parse(`
 		<tr class="{{.Color}}">
@@ -36,8 +38,7 @@ var (
 					{{.}}<br>
 				{{ end}}
 			</td>
-		</tr>
-	`))
+		</tr>`))
 )
 
 type txlogzRow struct {

@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	queryzHeader = []byte(`
+	queryzHeader = []byte(`<thead>
 		<tr>
 			<th>Query</th>
 			<th>Table</th>
@@ -28,6 +28,7 @@ var (
 			<th>Rows per query</th>
 			<th>Errors per query</th>
 		</tr>
+        </thead>
 	`)
 	queryzTmpl = template.Must(template.New("example").Parse(`
 		<tr class="{{.Color}}">
@@ -115,7 +116,6 @@ func queryzHandler(w http.ResponseWriter, r *http.Request) {
 
 	si := SqlQueryRpcService.qe.schemaInfo
 	keys := si.queries.Keys()
-	// TODO(sougou): Provide more sorting options.
 	sorter := queryzSorter{
 		rows: make([]*queryzRow, 0, len(keys)),
 		less: func(row1, row2 *queryzRow) bool {
