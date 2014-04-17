@@ -59,17 +59,22 @@ def reserve_ports(count):
 
 # simple run command, cannot use utils.run to avoid circular dependencies
 def run(args, raise_on_error=True, **kargs):
-  proc = subprocess.Popen(args,
-                          stdout=subprocess.PIPE,
-                          stderr=subprocess.PIPE,
-                          **kargs)
-  stdout, stderr = proc.communicate()
+  try:
+    proc = subprocess.Popen(args,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            **kargs)
+    stdout, stderr = proc.communicate()
+  except Exception as e:
+    raise Exception('Command failed', e, args)
+    
   if proc.returncode:
     if raise_on_error:
       raise Exception('Command failed: ' + ' '.join(args) + ':\n' + stdout +
                       stderr)
     else:
       logging.error('Command failed: %s:\n%s%s', ' '.join(args), stdout, stderr)
+  return stdout, stderr
 
 # compile command line programs, only once
 compiled_progs = []
@@ -116,7 +121,7 @@ def topo_server_setup(add_bad_host=False):
                        'test_ca:_zkocc': 'localhost:%u'%(zkocc_port_base),
                        'global:_zkocc': 'localhost:%u'%(zkocc_port_base),}
     json.dump(zk_cell_mapping, f)
-  os.putenv('ZK_CLIENT_CONFIG', config)
+  os.environ['ZK_CLIENT_CONFIG'] = config
   run([binary_path('zk'), 'touch', '-p', '/zk/test_nj/vt'])
   run([binary_path('zk'), 'touch', '-p', '/zk/test_ny/vt'])
   run([binary_path('zk'), 'touch', '-p', '/zk/test_ca/vt'])
