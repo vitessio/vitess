@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"os"
 	"path"
 	"sort"
 	"strings"
@@ -29,21 +30,45 @@ var (
 	ErrTimeout = errors.New("zkutil: obtaining lock timed out")
 )
 
+const (
+	// PERM_DIRECTORY are default permissions for a node.
+	PERM_DIRECTORY = zookeeper.PERM_ADMIN | zookeeper.PERM_CREATE | zookeeper.PERM_DELETE | zookeeper.PERM_READ
+	// PERM_FILE allows a zk node to emulate file behavior by disallowing child nodes.
+	PERM_FILE = zookeeper.PERM_ADMIN | zookeeper.PERM_READ | zookeeper.PERM_WRITE
+)
+
 func init() {
 	rand.Seed(time.Now().UnixNano())
+}
+
+// IsDirectory returns if this node should be treated as a directory.
+func IsDirectory(aclv []zookeeper.ACL) bool {
+	for _, acl := range aclv {
+		if acl.Perms != PERM_DIRECTORY {
+			return false
+		}
+	}
+	return true
 }
 
 // Create a path and any pieces required, think mkdir -p.
 // Intermediate znodes are always created empty.
 func CreateRecursive(zconn Conn, zkPath, value string, flags int, aclv []zookeeper.ACL) (pathCreated string, err error) {
 	parts := strings.Split(zkPath, "/")
-	if parts[1] != "zk" {
-		return "", fmt.Errorf("zkutil: non zk path: %v", zkPath)
+	if parts[1] != MagicPrefix {
+		return "", fmt.Errorf("zkutil: non /%v path: %v", MagicPrefix, zkPath)
 	}
 
 	pathCreated, err = zconn.Create(zkPath, value, flags, aclv)
 	if zookeeper.IsError(err, zookeeper.ZNONODE) {
-		_, err = CreateRecursive(zconn, path.Dir(zkPath), "", flags, aclv)
+		// Make sure that nodes are either "file" or "directory" to mirror file system
+		// semantics.
+		dirAclv := make([]zookeeper.ACL, len(aclv))
+		for i, acl := range aclv {
+			dirAclv[i] = acl
+			dirAclv[i].Perms = PERM_DIRECTORY
+		}
+		_, err = CreateRecursive(zconn, path.Dir(zkPath), "", flags, dirAclv)
 		if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 			return "", err
 		}
@@ -363,18 +388,18 @@ trylock:
 	return fmt.Errorf("zkutil: empty queue node: %v", queueNode)
 }
 
-// Close done when you want to exit cleanly.
+// Close the release channel when you want to clean up nicely.
 func CreatePidNode(zconn Conn, zkPath string, contents string, done chan struct{}) error {
 	// On the first try, assume the cluster is up and running, that will
 	// help hunt down any config issues present at startup
-	if _, err := zconn.Create(zkPath, contents, zookeeper.EPHEMERAL, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
+	if _, err := zconn.Create(zkPath, contents, zookeeper.EPHEMERAL, zookeeper.WorldACL(PERM_FILE)); err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 			err = zconn.Delete(zkPath, -1)
 		}
 		if err != nil {
 			return fmt.Errorf("zkutil: failed deleting pid node: %v: %v", zkPath, err)
 		}
-		_, err = zconn.Create(zkPath, contents, zookeeper.EPHEMERAL, zookeeper.WorldACL(zookeeper.PERM_ALL))
+		_, err = zconn.Create(zkPath, contents, zookeeper.EPHEMERAL, zookeeper.WorldACL(PERM_FILE))
 		if err != nil {
 			return fmt.Errorf("zkutil: failed creating pid node: %v: %v", zkPath, err)
 		}
@@ -426,4 +451,336 @@ func CreatePidNode(zconn Conn, zkPath string, contents string, done chan struct{
 	}()
 
 	return nil
+}
+
+// ZLocker is an interface for a lock that can fail.
+type ZLocker interface {
+	Lock() error
+	LockWithTimeout(wait time.Duration) error
+	Unlock() error
+	Interrupt()
+}
+
+// Experiment with a little bit of abstraction.
+// FIMXE(msolo) This object may need a mutex to ensure it can be shared
+// across goroutines.
+type zMutex struct {
+	mu          sync.Mutex
+	zconn       Conn
+	path        string // Path under which we try to create lock nodes.
+	contents    string
+	interrupted chan struct{}
+	name        string // The name of the specific lock node we created.
+	ephemeral   bool
+}
+
+// CreateMutex initializes an unaquired mutex. A mutex is released only
+// by Unlock. You can clean up a mutex with delete, but you should be
+// careful doing so.
+func CreateMutex(zconn Conn, zkPath string) ZLocker {
+	hostname, err := os.Hostname()
+	if err != nil {
+		panic(err) // should never happen
+	}
+	pid := os.Getpid()
+	contents := fmt.Sprintf(`{"hostname": "%v", "pid": %v}`, hostname, pid)
+
+	return &zMutex{zconn: zconn, path: zkPath, contents: contents, interrupted: make(chan struct{})}
+}
+
+// Interrupt releases a lock that's held.
+func (zm *zMutex) Interrupt() {
+	select {
+	case zm.interrupted <- struct{}{}:
+	default:
+		log.Warningf("zmutex interrupt blocked")
+	}
+}
+
+// Lock returns nil when the lock is acquired.
+func (zm *zMutex) Lock() error {
+	return zm.LockWithTimeout(365 * 24 * time.Hour)
+}
+
+// LockWithTimeout returns nil when the lock is acquired. A lock is
+// held if the file exists and you are the creator. Setting the wait
+// to zero makes this a nonblocking lock check.
+//
+// FIXME(msolo) Disallow non-super users from removing the lock?
+func (zm *zMutex) LockWithTimeout(wait time.Duration) (err error) {
+	timer := time.NewTimer(wait)
+	defer func() {
+		if panicErr := recover(); panicErr != nil || err != nil {
+			zm.deleteLock()
+		}
+	}()
+	// Ensure the rendezvous node is here.
+	// FIXME(msolo) Assuming locks are contended, it will be cheaper to assume this just
+	// exists.
+	_, err = CreateRecursive(zm.zconn, zm.path, "", 0, zookeeper.WorldACL(PERM_DIRECTORY))
+	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+		return err
+	}
+
+	lockPrefix := path.Join(zm.path, "lock-")
+	zflags := zookeeper.SEQUENCE
+	if zm.ephemeral {
+		zflags = zflags | zookeeper.EPHEMERAL
+	}
+
+createlock:
+	lockCreated, err := zm.zconn.Create(lockPrefix, zm.contents, zflags, zookeeper.WorldACL(PERM_FILE))
+	if err != nil {
+		return err
+	}
+	name := path.Base(lockCreated)
+	zm.mu.Lock()
+	zm.name = name
+	zm.mu.Unlock()
+
+trylock:
+	children, _, err := zm.zconn.Children(zm.path)
+	if err != nil {
+		return fmt.Errorf("zkutil: trylock failed %v", err)
+	}
+	sort.Strings(children)
+	if len(children) == 0 {
+		return fmt.Errorf("zkutil: empty lock: %v", zm.path)
+	}
+
+	if children[0] == name {
+		// We are the lock owner.
+		return nil
+	}
+
+	// This is the degenerate case of a nonblocking lock check. It's not optimal, but
+	// also probably not worth optimizing.
+	if wait == 0 {
+		return ErrTimeout
+	}
+	prevLock := ""
+	for i := 1; i < len(children); i++ {
+		if children[i] == name {
+			prevLock = children[i-1]
+			break
+		}
+	}
+	if prevLock == "" {
+		// This is an interesting case. The node disappeared
+		// underneath us, probably due to a session loss. We can
+		// recreate the lock node (with a new sequence number) and
+		// keep trying.
+		log.Warningf("zkutil: no lock node found: %v/%v", zm.path, zm.name)
+		goto createlock
+	}
+
+	zkPrevLock := path.Join(zm.path, prevLock)
+	stat, watch, err := zm.zconn.ExistsW(zkPrevLock)
+	if err != nil {
+		// FIXME(msolo) Should this be a retry?
+		return fmt.Errorf("zkutil: unable to watch previous lock node %v %v", zkPrevLock, err)
+	}
+	if stat == nil {
+		goto trylock
+	}
+	select {
+	case <-timer.C:
+		return ErrTimeout
+	case <-zm.interrupted:
+		return ErrInterrupted
+	case event := <-watch:
+		log.Infof("zkutil: lock event: %v", event)
+		// The precise event doesn't matter - try to read again regardless.
+		goto trylock
+	}
+	panic("unexpected")
+}
+
+// Unlock returns nil if the lock was successfully
+// released. Otherwise, it is most likely a zookeeper related error.
+func (zm *zMutex) Unlock() error {
+	return zm.deleteLock()
+}
+
+func (zm *zMutex) deleteLock() error {
+	zm.mu.Lock()
+	zpath := path.Join(zm.path, zm.name)
+	zm.mu.Unlock()
+
+	err := zm.zconn.Delete(zpath, -1)
+	if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
+		return err
+	}
+	return nil
+}
+
+// ZElector stores basic state for running an election.
+type ZElector struct {
+	*zMutex
+	path   string
+	leader string
+}
+
+func (ze *ZElector) isLeader() bool {
+	return ze.leader == ze.name
+}
+
+type electionEvent struct {
+	Event int
+	Err   error
+}
+
+type backoffDelay struct {
+	min   time.Duration
+	max   time.Duration
+	delay time.Duration
+}
+
+func newBackoffDelay(min, max time.Duration) *backoffDelay {
+	return &backoffDelay{min, max, min}
+}
+
+func (bd *backoffDelay) NextDelay() time.Duration {
+	delay := bd.delay
+	bd.delay = 2 * bd.delay
+	if bd.delay > bd.max {
+		bd.delay = bd.max
+	}
+	return delay
+}
+
+func (bd *backoffDelay) Reset() {
+	bd.delay = bd.min
+}
+
+// ElectorTask is the interface for a task that runs essentially
+// forever or until something bad happens.  If a task must be stopped,
+// it should be handled promptly - no second notification will be
+// sent.
+type ElectorTask interface {
+	Run() error
+	Stop()
+	// Return true if interrupted, false if it died of natural causes.
+	// An interrupted task indicates that the election should stop.
+	Interrupted() bool
+}
+
+// CreateElection returns an initialized elector. An election is
+// really a cycle of events. You are flip-flopping between leader and
+// candidate. It's better to think of this as a stream of events that
+// one needs to react to.
+func CreateElection(zconn Conn, zkPath string) ZElector {
+	zm := CreateMutex(zconn, path.Join(zkPath, "candidates")).(*zMutex)
+	zm.ephemeral = true
+	return ZElector{zMutex: zm, path: zkPath}
+}
+
+// RunTask returns nil when the underlyingtask ends or the error it
+// generated.
+func (ze *ZElector) RunTask(task ElectorTask) error {
+	delay := newBackoffDelay(100*time.Millisecond, 1*time.Minute)
+	leaderPath := path.Join(ze.path, "leader")
+	for {
+		_, err := CreateRecursive(ze.zconn, leaderPath, "", 0, zookeeper.WorldACL(PERM_FILE))
+		if err == nil || zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+			break
+		}
+		log.Warningf("election leader create failed: %v", err)
+		time.Sleep(delay.NextDelay())
+	}
+
+	for {
+		err := ze.Lock()
+		if err != nil {
+			log.Warningf("election lock failed: %v", err)
+			if err == ErrInterrupted {
+				return ErrInterrupted
+			}
+			continue
+		}
+		// Confirm your win and deliver acceptance speech. This notifies
+		// listeners who will have been watching the leader node for
+		// changes.
+		_, err = ze.zconn.Set(leaderPath, ze.contents, -1)
+		if err != nil {
+			log.Warningf("election promotion failed: %v", err)
+			continue
+		}
+
+		log.Infof("election promote leader %v", leaderPath)
+		taskErrChan := make(chan error)
+		go func() {
+			taskErrChan <- task.Run()
+		}()
+
+	watchLeader:
+		// Watch the leader so we can get notified if something goes wrong.
+		data, _, watch, err := ze.zconn.GetW(leaderPath)
+		if err != nil {
+			log.Warningf("election unable to watch leader node %v %v", leaderPath, err)
+			// FIXME(msolo) Add delay
+			goto watchLeader
+		}
+
+		if data != ze.contents {
+			log.Warningf("election unable to promote leader")
+			task.Stop()
+			// We won the election, but we didn't become the leader. How is that possible?
+			// (see Bush v. Gore for some inspiration)
+			// It means:
+			//   1. Someone isn't playing by the election rules (a bad actor).
+			//      Hard to detect - let's assume we don't have this problem. :)
+			//   2. We lost our connection somehow and the ephemeral lock was cleared,
+			//      allowing someone else to win the election.
+			continue
+		}
+
+		// This is where we start our target process and watch for its failure.
+	waitForEvent:
+		select {
+		case <-ze.interrupted:
+			log.Infof("election interrupted - stop child process")
+			task.Stop()
+			// Once the process dies from the signal, this will all tear down.
+			goto waitForEvent
+		case taskErr := <-taskErrChan:
+			// If our code fails, unlock to trigger an election.
+			log.Infof("election child process ended: %v", taskErr)
+			ze.Unlock()
+			if task.Interrupted() {
+				log.Warningf("election child process interrupted - stepping down")
+				return ErrInterrupted
+			}
+			continue
+		case zevent := <-watch:
+			// We had a zookeeper connection hiccup.  We have a few choices,
+			// but it depends on the constraints and the events.
+			//
+			// If we get SESSION_EXPIRED our connection loss triggered an
+			// election that we won't have won and the thus the lock was
+			// automatically freed. We have no choice but to start over.
+			if zevent.State == zookeeper.STATE_EXPIRED_SESSION {
+				log.Warningf("election leader watch expired")
+				task.Stop()
+				continue
+			}
+
+			// Otherwise, we had an intermittent issue or something touched
+			// the node. Either we lost our position or someone broke
+			// protocol and touched the leader node.  We just reconnect and
+			// revalidate. In the meantime, assume we are still the leader
+			// until we determine otherwise.
+			//
+			// On a reconnect we will be able to see the leader
+			// information. If we still hold the position, great. If not, we
+			// kill the associated process.
+			//
+			// On a leader node change, we need to perform the same
+			// validation. It's possible an election completes without the
+			// old leader realizing he is out of touch.
+			log.Warningf("election leader watch event %v", zevent)
+			goto watchLeader
+		}
+	}
+	panic("unreachable")
 }
