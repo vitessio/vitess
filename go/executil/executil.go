@@ -65,7 +65,7 @@ func readProcGroup(pgrp int) ([]*procStat, error) {
 	return groupStats, nil
 }
 
-// Return a list of all pids in a given process group.
+// GetPgrpPids return a list of all pids in a given process group.
 // Not as cheap as you think, you have to scan all the pids on the system.
 func GetPgrpPids(pgrp int) ([]int, error) {
 	stats, err := readProcGroup(pgrp)

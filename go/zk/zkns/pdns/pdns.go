@@ -1,5 +1,3 @@
-package pdns
-
 // To be used with PowerDNS (pdns) as a "pipe backend" CoProcess.
 //
 // Protocol description:
@@ -8,6 +6,7 @@ package pdns
 // Mainly the resolver has to interpret zkns addresses in a way that
 // is helpful for DNS. This involves approximating CNAME/A records
 // when appropriate.
+package pdns
 
 import (
 	"bufio"
@@ -217,6 +216,7 @@ type pdns struct {
 	zr *zknsResolver
 }
 
+// NewPdnsResolver creates a new PdnsResolver.
 func NewPdnsResolver(zconn zk.Conn, fqdn, zknsDomain, zkRoot string) *pdns {
 	zr1 := newZknsResolver(zconn, fqdn, zknsDomain, zkRoot)
 	return &pdns{zr1}
@@ -310,6 +310,7 @@ var (
 	emptyCount   = stats.NewInt("PdnsEmptyCount")
 )
 
+// Serve runs the PDNS server protol on the given reader/writer.
 func (pd *pdns) Serve(r io.Reader, w io.Writer) {
 	log.Infof("starting zkns resolver")
 	bufr := bufio.NewReader(r)

@@ -15,6 +15,7 @@ import (
 	"launchpad.net/gozk/zookeeper"
 )
 
+// ZknsAddr represents a variety if different address types, primarily in JSON.
 type ZknsAddr struct {
 	// These fields came from a Python app originally that used a different
 	// naming convention.
@@ -25,23 +26,28 @@ type ZknsAddr struct {
 	version      int            // zk version to allow non-stomping writes
 }
 
+// NewAddr returns a new ZknsAddr.
 func NewAddr(host string) *ZknsAddr {
 	return &ZknsAddr{Host: host, NamedPortMap: make(map[string]int)}
 }
 
-// SRV records can have multiple endpoints, so this is always a list.
-// A record with one entry and a port number zero is interpreted as a
-// CNAME.  A record with one entry, a port number zero and an IP
-// address is interpreted as an A.
+// ZknsAddrs represents a list of individual entries. SRV records can
+// have multiple endpoints, so this is always a list.  A record with
+// one entry and a port number zero is interpreted as a CNAME.  A
+// record with one entry, a port number zero and an IP address is
+// interpreted as an A.
 type ZknsAddrs struct {
 	Entries []ZknsAddr
 	version int // zk version to allow non-stomping writes
 }
 
+// NewAddrs returns a new ZknsAddrs.
 func NewAddrs() *ZknsAddrs {
 	return &ZknsAddrs{Entries: make([]ZknsAddr, 0, 8), version: -1}
 }
 
+// IsValidA returns the answer to the eternal question - can this be
+// interpreted as an A record?
 func (zaddrs *ZknsAddrs) IsValidA() bool {
 	if zaddrs == nil || len(zaddrs.Entries) == 0 {
 		return false
@@ -54,8 +60,9 @@ func (zaddrs *ZknsAddrs) IsValidA() bool {
 	return true
 }
 
-// This method is intentially loose - it allows a SRV record with a single entry
-// to be interpreted as a CNAME.
+// IsValidCNAME returns true if this can be interpreted as a
+// CNAME. This method is intentially loose - it allows a SRV record
+// with a single entry to be interpreted as a CNAME.
 func (zaddrs *ZknsAddrs) IsValidCNAME() bool {
 	if zaddrs == nil || len(zaddrs.Entries) != 1 || zaddrs.Entries[0].IPv4 != "" || zaddrs.Entries[0].Host == "" {
 		return false
@@ -63,6 +70,7 @@ func (zaddrs *ZknsAddrs) IsValidCNAME() bool {
 	return true
 }
 
+// IsValidSRV returns true if this can be interpreted as a SRV record.
 func (zaddrs *ZknsAddrs) IsValidSRV() bool {
 	if zaddrs == nil {
 		return false
@@ -96,6 +104,7 @@ func addrFromJson(data string) *ZknsAddr {
 	return addr
 }
 
+// ReadAddrs returns a ZknsAddrs record from the given path in Zookeeper.
 func ReadAddrs(zconn zk.Conn, zkPath string) (*ZknsAddrs, error) {
 	data, stat, err := zconn.Get(zkPath)
 	if err != nil {
@@ -114,6 +123,7 @@ func ReadAddrs(zconn zk.Conn, zkPath string) (*ZknsAddrs, error) {
 	return addrs, nil
 }
 
+// WriteAddrs writes a ZknsAddres record to a path in Zookeeper.
 func WriteAddrs(zconn zk.Conn, zkPath string, addrs *ZknsAddrs) error {
 	if !(addrs.IsValidA() || addrs.IsValidCNAME() || addrs.IsValidSRV()) {
 		return fmt.Errorf("invalid addrs: %v", zkPath)
@@ -123,8 +133,9 @@ func WriteAddrs(zconn zk.Conn, zkPath string, addrs *ZknsAddrs) error {
 	return err
 }
 
-// addrPath is the path to a json file in zk. It can also reference a
-// named port: /zk/cell/zkns/path:_named_port
+// LookupName returns a list of SRV records. addrPath is the path to a
+// json file in zk. It can also reference a named port
+// (/zk/cell/zkns/path:_named_port)
 func LookupName(zconn zk.Conn, addrPath string) ([]*net.SRV, error) {
 	zkPathParts := strings.Split(addrPath, ":")
 	zkPath := zkPathParts[0]

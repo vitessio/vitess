@@ -31,14 +31,17 @@ var (
 )
 
 const (
+	// PERM_DIRECTORY are default permissions for a node.
 	PERM_DIRECTORY = zookeeper.PERM_ADMIN | zookeeper.PERM_CREATE | zookeeper.PERM_DELETE | zookeeper.PERM_READ
-	PERM_FILE      = zookeeper.PERM_ADMIN | zookeeper.PERM_READ | zookeeper.PERM_WRITE
+	// PERM_FILE allows a zk node to emulate file behavior by disallowing child nodes.
+	PERM_FILE = zookeeper.PERM_ADMIN | zookeeper.PERM_READ | zookeeper.PERM_WRITE
 )
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
+// IsDirectory returns if this node should be treated as a directory.
 func IsDirectory(aclv []zookeeper.ACL) bool {
 	for _, acl := range aclv {
 		if acl.Perms != PERM_DIRECTORY {
@@ -450,7 +453,7 @@ func CreatePidNode(zconn Conn, zkPath string, contents string, done chan struct{
 	return nil
 }
 
-// Interface for a lock that can fail.
+// ZLocker is an interface for a lock that can fail.
 type ZLocker interface {
 	Lock() error
 	LockWithTimeout(wait time.Duration) error
@@ -471,9 +474,9 @@ type zMutex struct {
 	ephemeral   bool
 }
 
-// A mutex is released only by Unlock.
-// You can clean up a mutex with delete, but you should be careful doing
-// so.
+// CreateMutex initializes an unaquired mutex. A mutex is released only
+// by Unlock. You can clean up a mutex with delete, but you should be
+// careful doing so.
 func CreateMutex(zconn Conn, zkPath string) ZLocker {
 	hostname, err := os.Hostname()
 	if err != nil {
@@ -485,6 +488,7 @@ func CreateMutex(zconn Conn, zkPath string) ZLocker {
 	return &zMutex{zconn: zconn, path: zkPath, contents: contents, interrupted: make(chan struct{})}
 }
 
+// Interrupt releases a lock that's held.
 func (zm *zMutex) Interrupt() {
 	select {
 	case zm.interrupted <- struct{}{}:
@@ -493,14 +497,16 @@ func (zm *zMutex) Interrupt() {
 	}
 }
 
+// Lock returns nil when the lock is acquired.
 func (zm *zMutex) Lock() error {
 	return zm.LockWithTimeout(365 * 24 * time.Hour)
 }
 
-// A lock is held if the file exists and you are the creator.
-// Setting the wait to zero makes this a nonblocking lock check.
+// LockWithTimeout returns nil when the lock is acquired. A lock is
+// held if the file exists and you are the creator. Setting the wait
+// to zero makes this a nonblocking lock check.
+//
 // FIXME(msolo) Disallow non-super users from removing the lock?
-// Return nil if you got the lock.
 func (zm *zMutex) LockWithTimeout(wait time.Duration) (err error) {
 	timer := time.NewTimer(wait)
 	defer func() {
@@ -590,6 +596,8 @@ trylock:
 	panic("unexpected")
 }
 
+// Unlock returns nil if the lock was successfully
+// released. Otherwise, it is most likely a zookeeper related error.
 func (zm *zMutex) Unlock() error {
 	return zm.deleteLock()
 }
@@ -606,6 +614,7 @@ func (zm *zMutex) deleteLock() error {
 	return nil
 }
 
+// ZElector stores basic state for running an election.
 type ZElector struct {
 	*zMutex
 	path   string
@@ -627,7 +636,7 @@ type backoffDelay struct {
 	delay time.Duration
 }
 
-func NewBackoffDelay(min, max time.Duration) *backoffDelay {
+func newBackoffDelay(min, max time.Duration) *backoffDelay {
 	return &backoffDelay{min, max, min}
 }
 
@@ -644,9 +653,10 @@ func (bd *backoffDelay) Reset() {
 	bd.delay = bd.min
 }
 
-// A task runs essentially forever or until something bad happens.
-// If a task must be stopped, it should be handled promptly - no
-// second notification will be sent.
+// ElectorTask is the interface for a task that runs essentially
+// forever or until something bad happens.  If a task must be stopped,
+// it should be handled promptly - no second notification will be
+// sent.
 type ElectorTask interface {
 	Run() error
 	Stop()
@@ -655,17 +665,20 @@ type ElectorTask interface {
 	Interrupted() bool
 }
 
-// An election is really a cycle of events. You are flip-flopping between
-// leader and candidate. It's better to think of this as a stream of events
-// that one needs to react to.
+// CreateElection returns an initialized elector. An election is
+// really a cycle of events. You are flip-flopping between leader and
+// candidate. It's better to think of this as a stream of events that
+// one needs to react to.
 func CreateElection(zconn Conn, zkPath string) ZElector {
 	zm := CreateMutex(zconn, path.Join(zkPath, "candidates")).(*zMutex)
 	zm.ephemeral = true
 	return ZElector{zMutex: zm, path: zkPath}
 }
 
+// RunTask returns nil when the underlyingtask ends or the error it
+// generated.
 func (ze *ZElector) RunTask(task ElectorTask) error {
-	delay := NewBackoffDelay(100*time.Millisecond, 1*time.Minute)
+	delay := newBackoffDelay(100*time.Millisecond, 1*time.Minute)
 	leaderPath := path.Join(ze.path, "leader")
 	for {
 		_, err := CreateRecursive(ze.zconn, leaderPath, "", 0, zookeeper.WorldACL(PERM_FILE))

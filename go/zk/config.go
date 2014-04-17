@@ -21,7 +21,10 @@ const (
 )
 
 var (
+	// DefaultZkConfigPaths is the default list of config files to check.
 	DefaultZkConfigPaths = []string{"/etc/zookeeper/zk_client.json"}
+	// MagicPrefix is the Default name for the root note in the zookeeper tree.
+	MagicPrefix = "zk"
 
 	localCell      = flag.String("zk.local-cell", "", "closest zk cell used for /zk/local paths")
 	localAddrs     = flag.String("zk.local-addrs", "", "list of zookeeper servers (host:port, ...)")
@@ -29,8 +32,6 @@ var (
 	baseTimeout    = flag.Duration("zk.base-timeout", DEFAULT_BASE_TIMEOUT, "zk or zkocc base timeout (see zkconn.go and zkoccconn.go)")
 	connectTimeout = flag.Duration("zk.connect-timeout", 30*time.Second, "zk connect timeout")
 )
-
-var MagicPrefix = "zk"
 
 // Read the cell from -zk.local-cell, or the environment ZK_CLIENT_LOCAL_CELL
 // or guess the cell by the hostname. This is either the first two characters
