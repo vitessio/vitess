@@ -66,11 +66,11 @@ func CheckServingGraph(t *testing.T, ts topo.Server) {
 		t.Errorf("GetEndPoints(2): %v %v", err, addrs)
 	}
 
-	if err := ts.DeleteSrvTabletType(cell, "test_keyspace", "-10", topo.TYPE_REPLICA); err != topo.ErrNoNode {
-		t.Errorf("DeleteSrvTabletType(unknown): %v", err)
+	if err := ts.DeleteEndPoints(cell, "test_keyspace", "-10", topo.TYPE_REPLICA); err != topo.ErrNoNode {
+		t.Errorf("DeleteEndPoints(unknown): %v", err)
 	}
-	if err := ts.DeleteSrvTabletType(cell, "test_keyspace", "-10", topo.TYPE_MASTER); err != nil {
-		t.Errorf("DeleteSrvTabletType(master): %v", err)
+	if err := ts.DeleteEndPoints(cell, "test_keyspace", "-10", topo.TYPE_MASTER); err != nil {
+		t.Errorf("DeleteEndPoints(master): %v", err)
 	}
 
 	// test cell/keyspace/shard entries (SrvShard)

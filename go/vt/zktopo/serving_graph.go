@@ -90,7 +90,7 @@ func (zkts *Server) GetEndPoints(cell, keyspace, shard string, tabletType topo.T
 	return result, nil
 }
 
-func (zkts *Server) DeleteSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType) error {
+func (zkts *Server) DeleteEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) error {
 	path := zkPathForVtName(cell, keyspace, shard, tabletType)
 	err := zkts.zconn.Delete(path, -1)
 	if err != nil {
