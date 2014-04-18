@@ -8,6 +8,7 @@ import (
 	"flag"
 	"time"
 
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate"
@@ -34,6 +35,9 @@ func main() {
 	defer topo.CloseServers()
 
 	rts := vtgate.NewResilientSrvTopoServer(ts)
+
+	stats.Publish("EndpointCount", stats.CountersFunc(rts.HealthyEndpointCount))
+	stats.Publish("DegradedEndpointCount", stats.CountersFunc(rts.DegradedEndpointCount))
 
 	topoReader = NewTopoReader(rts)
 	topo.RegisterTopoReader(topoReader)

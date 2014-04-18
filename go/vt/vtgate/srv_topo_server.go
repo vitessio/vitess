@@ -253,3 +253,27 @@ func (server *ResilientSrvTopoServer) GetEndPoints(cell, keyspace, shard string,
 
 	return entry.Value, nil
 }
+
+func (server *ResilientSrvTopoServer) HealthyEndpointCount() map[string]int64 {
+	result := make(map[string]int64)
+	server.mutex.Lock()
+	defer server.mutex.Unlock()
+	for k, entry := range server.endPointsCache {
+		entry.mutex.Lock()
+		result[k] = int64(len(entry.Value.Entries))
+		entry.mutex.Unlock()
+	}
+	return result
+}
+
+func (server *ResilientSrvTopoServer) DegradedEndpointCount() map[string]int64 {
+	result := make(map[string]int64)
+	server.mutex.Lock()
+	defer server.mutex.Unlock()
+	for k, entry := range server.endPointsCache {
+		entry.mutex.Lock()
+		result[k] = int64(len(entry.OriginalValue.Entries) - len(entry.Value.Entries))
+		entry.mutex.Unlock()
+	}
+	return result
+}
