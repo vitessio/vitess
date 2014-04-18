@@ -77,8 +77,8 @@ const (
 	SLAVE_STATUS_DEADLINE = 10e9
 )
 
-// Create the reparenting action and launch a goroutine to coordinate
-// the procedure.
+// ReparentShard createe the reparenting action and launch a goroutine
+// to coordinate the procedure.
 //
 //
 // leaveMasterReadOnly: leave the master in read-only mode, even
@@ -134,6 +134,8 @@ func (wr *Wrangler) reparentShardLocked(keyspace, shard string, masterElectTable
 	return err
 }
 
+// ShardReplicationPositions returns the ReplicationPositions for all
+// the tablets in a shard.
 func (wr *Wrangler) ShardReplicationPositions(keyspace, shard string) ([]*topo.TabletInfo, []*myproto.ReplicationPosition, error) {
 	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
@@ -162,8 +164,9 @@ func (wr *Wrangler) shardReplicationPositions(shardInfo *topo.ShardInfo) ([]*top
 	return tablets, positions, err
 }
 
-// Attempt to reparent this tablet to the current master, based on the current
-// replication position. If there is no match, it will fail.
+// ReparentTablet attempts to reparent this tablet to the current
+// master, based on the current replication position. If there is no
+// match, it will fail.
 func (wr *Wrangler) ReparentTablet(tabletAlias topo.TabletAlias) error {
 	// Get specified tablet.
 	// Get current shard master tablet.
