@@ -455,15 +455,15 @@ func (tee *Tee) GetEndPoints(cell, keyspace, shard string, tabletType topo.Table
 	return tee.readFrom.GetEndPoints(cell, keyspace, shard, tabletType)
 }
 
-func (tee *Tee) DeleteSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType) error {
-	err := tee.primary.DeleteSrvTabletType(cell, keyspace, shard, tabletType)
+func (tee *Tee) DeleteEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) error {
+	err := tee.primary.DeleteEndPoints(cell, keyspace, shard, tabletType)
 	if err != nil && err != topo.ErrNoNode {
 		return err
 	}
 
-	if err := tee.secondary.DeleteSrvTabletType(cell, keyspace, shard, tabletType); err != nil {
+	if err := tee.secondary.DeleteEndPoints(cell, keyspace, shard, tabletType); err != nil {
 		// not critical enough to fail
-		log.Warningf("secondary.DeleteSrvTabletType(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err)
+		log.Warningf("secondary.DeleteEndPoints(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err)
 	}
 	return err
 }

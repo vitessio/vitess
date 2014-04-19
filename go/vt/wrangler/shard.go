@@ -74,7 +74,7 @@ func (wr *Wrangler) DeleteShard(keyspace, shard string) error {
 				continue
 			}
 
-			if err := wr.ts.DeleteSrvTabletType(cell, keyspace, shard, t); err != nil && err != topo.ErrNoNode {
+			if err := wr.ts.DeleteEndPoints(cell, keyspace, shard, t); err != nil && err != topo.ErrNoNode {
 				log.Warningf("Cannot delete EndPoints in cell %v for %v/%v/%v: %v", cell, keyspace, shard, t, err)
 			}
 		}

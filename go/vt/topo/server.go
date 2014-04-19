@@ -219,10 +219,10 @@ type Server interface {
 	// Can return ErrNoNode.
 	GetEndPoints(cell, keyspace, shard string, tabletType TabletType) (*EndPoints, error)
 
-	// DeleteSrvTabletType deletes the serving records for a cell,
+	// DeleteEndPoints deletes the serving records for a cell,
 	// keyspace, shard, tabletType.
 	// Can return ErrNoNode.
-	DeleteSrvTabletType(cell, keyspace, shard string, tabletType TabletType) error
+	DeleteEndPoints(cell, keyspace, shard string, tabletType TabletType) error
 
 	// UpdateSrvShard updates the serving records for a cell,
 	// keyspace, shard.

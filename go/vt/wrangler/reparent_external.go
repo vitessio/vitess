@@ -14,6 +14,11 @@ import (
 	"github.com/youtube/vitess/go/vt/topotools"
 )
 
+// ShardExternallyReparented updates the topology after the master
+// tablet in a keyspace/shard has changed. We trust that whoever made
+// the change completed the change successfully. We lock the shard
+// while doing the update.  We will then rebuild the serving graph in
+// the cells that need it (the old master cell and the new master cell)
 func (wr *Wrangler) ShardExternallyReparented(keyspace, shard string, masterElectTabletAlias topo.TabletAlias) error {
 	// grab the shard lock
 	actionNode := actionnode.ShardExternallyReparented(masterElectTabletAlias)
@@ -72,6 +77,13 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 		return err
 	}
 
+	// Compute the list of Cells we need to rebuild: old master and
+	// new master cells.
+	cells := []string{shardInfo.MasterAlias.Cell}
+	if shardInfo.MasterAlias.Cell != masterElectTabletAlias.Cell {
+		cells = append(cells, masterElectTabletAlias.Cell)
+	}
+
 	// now update the master record in the shard object
 	log.Infof("Updating Shard's MasterAlias record")
 	shardInfo.MasterAlias = masterElectTabletAlias
@@ -79,11 +91,10 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 		return err
 	}
 
-	// and rebuild the shard serving graph (but do not change the
-	// master record, we already did it)
+	// and rebuild the shard serving graph
 	log.Infof("Rebuilding shard serving graph data")
 	return topotools.RebuildShard(wr.ts, masterElectTablet.Keyspace, masterElectTablet.Shard,
-		topotools.RebuildShardOptions{IgnorePartialResult: partialTopology}, wr.lockTimeout, interrupted)
+		topotools.RebuildShardOptions{Cells: cells, IgnorePartialResult: partialTopology}, wr.lockTimeout, interrupted)
 }
 
 func (wr *Wrangler) reparentShardExternal(slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo) error {

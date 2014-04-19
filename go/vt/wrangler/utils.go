@@ -13,7 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-// Search within a tablet map for tablets
+// FindTabletByIPAddrAndPort searches within a tablet map for tablets
 func FindTabletByIPAddrAndPort(tabletMap map[topo.TabletAlias]*topo.TabletInfo, addr, portName string, port int) (topo.TabletAlias, error) {
 	for alias, ti := range tabletMap {
 		if ti.IPAddr == addr && ti.Portmap[portName] == port {
@@ -23,7 +23,7 @@ func FindTabletByIPAddrAndPort(tabletMap map[topo.TabletAlias]*topo.TabletInfo, 
 	return topo.TabletAlias{}, topo.ErrNoNode
 }
 
-// Return a sorted list of tablets.
+// GetAllTablets returns a sorted list of tablets.
 func GetAllTablets(ts topo.Server, cell string) ([]*topo.TabletInfo, error) {
 	aliases, err := ts.GetTabletsByCell(cell)
 	if err != nil {
@@ -83,9 +83,9 @@ func GetAllTabletsAccrossCells(ts topo.Server) ([]*topo.TabletInfo, error) {
 	return allTablets, err
 }
 
-// Copy keys from from map m into a new slice with the type specified
-// by typeHint.  Reflection can't make a new slice type just based on
-// the key type AFAICT.
+// CopyMapKeys copies keys from from map m into a new slice with the
+// type specified by typeHint.  Reflection can't make a new slice type
+// just based on the key type AFAICT.
 func CopyMapKeys(m interface{}, typeHint interface{}) interface{} {
 	mapVal := reflect.ValueOf(m)
 	keys := reflect.MakeSlice(reflect.TypeOf(typeHint), 0, mapVal.Len())
@@ -95,6 +95,9 @@ func CopyMapKeys(m interface{}, typeHint interface{}) interface{} {
 	return keys.Interface()
 }
 
+// CopyMapKeys copies values from from map m into a new slice with the
+// type specified by typeHint.  Reflection can't make a new slice type
+// just based on the key type AFAICT.
 func CopyMapValues(m interface{}, typeHint interface{}) interface{} {
 	mapVal := reflect.ValueOf(m)
 	vals := reflect.MakeSlice(reflect.TypeOf(typeHint), 0, mapVal.Len())

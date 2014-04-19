@@ -191,7 +191,7 @@ func rebuildShardSrvGraph(ts topo.Server, shardInfo *topo.ShardInfo, tablets []*
 			wg.Add(1)
 			go func(dbTypeLocation cellKeyspaceShardType) {
 				log.Infof("removing stale db type from serving graph: %v", dbTypeLocation)
-				if err := ts.DeleteSrvTabletType(dbTypeLocation.cell, dbTypeLocation.keyspace, dbTypeLocation.shard, dbTypeLocation.tabletType); err != nil {
+				if err := ts.DeleteEndPoints(dbTypeLocation.cell, dbTypeLocation.keyspace, dbTypeLocation.shard, dbTypeLocation.tabletType); err != nil {
 					log.Warningf("unable to remove stale db type %v from serving graph: %v", dbTypeLocation, err)
 				}
 				wg.Done()
@@ -417,7 +417,7 @@ func rebuildCellSrvShard(ts topo.Server, shardInfo *topo.ShardInfo, cell string,
 			wg.Add(1)
 			go func(tabletType topo.TabletType) {
 				log.Infof("removing stale db type from serving graph: %v", tabletType)
-				if err := ts.DeleteSrvTabletType(cell, shardInfo.Keyspace(), shardInfo.ShardName(), tabletType); err != nil {
+				if err := ts.DeleteEndPoints(cell, shardInfo.Keyspace(), shardInfo.ShardName(), tabletType); err != nil {
 					log.Warningf("unable to remove stale db type %v from serving graph: %v", tabletType, err)
 				}
 				wg.Done()
