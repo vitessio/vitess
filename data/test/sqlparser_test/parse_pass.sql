@@ -155,6 +155,9 @@ create table if not exists a#create table a
 create index a on b#alter table b
 create unique index a on b#alter table b
 create unique index a using foo on b#alter table b
+create view a#create table a
+alter view a#alter table a
+drop view a#drop table a
 drop table a
 drop table if exists a#drop table a
 drop index b on a#alter table a
