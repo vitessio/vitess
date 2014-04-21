@@ -22,6 +22,71 @@ func (wr *Wrangler) unlockShard(keyspace, shard string, actionNode *actionnode.A
 	return actionNode.UnlockShard(wr.ts, keyspace, shard, lockPath, actionError)
 }
 
+// updateShardCellsAndMaster will update the 'Cells' and possibly
+// MasterAlias records for the shard, if needed.
+func (wr *Wrangler) updateShardCellsAndMaster(si *topo.ShardInfo, tabletAlias topo.TabletAlias, tabletType topo.TabletType, force bool) error {
+	// See if we need to update the Shard:
+	// - add the tablet's cell to the shard's Cells if needed
+	// - change the master if needed
+	shardUpdateRequired := false
+	if !si.HasCell(tabletAlias.Cell) {
+		shardUpdateRequired = true
+	}
+	if tabletType == topo.TYPE_MASTER && si.MasterAlias != tabletAlias {
+		shardUpdateRequired = true
+	}
+	if !shardUpdateRequired {
+		return nil
+	}
+
+	actionNode := actionnode.UpdateShard()
+	keyspace := si.Keyspace()
+	shard := si.ShardName()
+	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
+	if err != nil {
+		return err
+	}
+
+	// re-read the shard with the lock
+	si, err = wr.ts.GetShard(keyspace, shard)
+	if err != nil {
+		return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
+	}
+
+	// update it
+	wasUpdated := false
+	if !si.HasCell(tabletAlias.Cell) {
+		si.Cells = append(si.Cells, tabletAlias.Cell)
+		wasUpdated = true
+	}
+	if tabletType == topo.TYPE_MASTER && si.MasterAlias != tabletAlias {
+		if !si.MasterAlias.IsZero() && !force {
+			return wr.unlockShard(keyspace, shard, actionNode, lockPath, fmt.Errorf("creating this tablet would override old master %v in shard %v/%v", si.MasterAlias, keyspace, shard))
+		}
+		si.MasterAlias = tabletAlias
+		wasUpdated = true
+	}
+
+	if wasUpdated {
+		// write it back
+		if err := wr.ts.UpdateShard(si); err != nil {
+			return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
+		}
+	}
+
+	// and unlock
+	if err := wr.unlockShard(keyspace, shard, actionNode, lockPath, err); err != nil {
+		return err
+	}
+
+	// also create the cell's ShardReplication
+	if err := wr.ts.CreateShardReplication(tabletAlias.Cell, keyspace, shard, &topo.ShardReplication{}); err != nil && err != topo.ErrNodeExists {
+		return err
+	}
+
+	return nil
+}
+
 // SetShardServedTypes changes the ServedTypes parameter of a shard.
 // It does not rebuild any serving graph or do any consistency check (yet).
 func (wr *Wrangler) SetShardServedTypes(keyspace, shard string, servedTypes []topo.TabletType) error {

@@ -59,60 +59,9 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 			tablet.Parent = si.MasterAlias
 		}
 
-		// See if we need to update the Shard:
-		// - add the tablet's cell to the shard's Cells if needed
-		// - change the master if needed
-		shardUpdateRequired := false
-		if !si.HasCell(tablet.Alias.Cell) {
-			shardUpdateRequired = true
-		}
-		if tablet.Type == topo.TYPE_MASTER && si.MasterAlias != tablet.Alias {
-			shardUpdateRequired = true
-		}
-
-		if shardUpdateRequired {
-			actionNode := actionnode.UpdateShard()
-			lockPath, err := wr.lockShard(tablet.Keyspace, tablet.Shard, actionNode)
-			if err != nil {
-				return err
-			}
-
-			// re-read the shard with the lock
-			si, err = wr.ts.GetShard(tablet.Keyspace, tablet.Shard)
-			if err != nil {
-				return wr.unlockShard(tablet.Keyspace, tablet.Shard, actionNode, lockPath, err)
-			}
-
-			// update it
-			wasUpdated := false
-			if !si.HasCell(tablet.Alias.Cell) {
-				si.Cells = append(si.Cells, tablet.Alias.Cell)
-				wasUpdated = true
-			}
-			if tablet.Type == topo.TYPE_MASTER && si.MasterAlias != tablet.Alias {
-				if !si.MasterAlias.IsZero() && !force {
-					return wr.unlockShard(tablet.Keyspace, tablet.Shard, actionNode, lockPath, fmt.Errorf("creating this tablet would override old master %v in shard %v/%v", si.MasterAlias, tablet.Keyspace, tablet.Shard))
-				}
-				si.MasterAlias = tablet.Alias
-				wasUpdated = true
-			}
-
-			if wasUpdated {
-				// write it back
-				if err := wr.ts.UpdateShard(si); err != nil {
-					return wr.unlockShard(tablet.Keyspace, tablet.Shard, actionNode, lockPath, err)
-				}
-			}
-
-			// and unlock
-			if err := wr.unlockShard(tablet.Keyspace, tablet.Shard, actionNode, lockPath, err); err != nil {
-				return err
-			}
-
-			// also create the cell's ShardReplication
-			if err := wr.ts.CreateShardReplication(tablet.Alias.Cell, tablet.Keyspace, tablet.Shard, &topo.ShardReplication{}); err != nil && err != topo.ErrNodeExists {
-				return err
-			}
+		// update the shard record if needed
+		if err := wr.updateShardCellsAndMaster(si, tablet.Alias, tablet.Type, force); err != nil {
+			return err
 		}
 	}
 

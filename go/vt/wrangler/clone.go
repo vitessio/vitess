@@ -160,6 +160,19 @@ func (wr *Wrangler) Restore(srcTabletAlias topo.TabletAlias, srcFilePath string,
 		}
 	}
 
+	// update the shard record if we need to, to update Cells
+	srcTablet, err := wr.ts.GetTablet(srcTabletAlias)
+	if err != nil {
+		return err
+	}
+	si, err := wr.ts.GetShard(srcTablet.Keyspace, srcTablet.Shard)
+	if err != nil {
+		return fmt.Errorf("Cannot read shard: %v", err)
+	}
+	if err := wr.updateShardCellsAndMaster(si, tablet.Alias, topo.TYPE_SPARE, false); err != nil {
+		return err
+	}
+
 	// do the work
 	actionPath, err := wr.ai.Restore(dstTabletAlias, &actionnode.RestoreArgs{SrcTabletAlias: srcTabletAlias, SrcFilePath: srcFilePath, ParentAlias: parentAlias, FetchConcurrency: fetchConcurrency, FetchRetryCount: fetchRetryCount, WasReserved: wasReserved, DontWaitForSlaveStart: dontWaitForSlaveStart})
 	if err != nil {
@@ -170,8 +183,10 @@ func (wr *Wrangler) Restore(srcTabletAlias topo.TabletAlias, srcFilePath string,
 		return err
 	}
 
-	// Restore moves us into the replication graph as a spare. There are no
-	// consequences to the replication or serving graphs, so no rebuild required.
+	// Restore moves us into the replication graph as a
+	// spare. There are no consequences to the replication or
+	// serving graphs, so no rebuild required.
+
 	return nil
 }
 

@@ -17,7 +17,7 @@ import utils
 import tablet
 
 tablet_62344 = tablet.Tablet(62344)
-tablet_62044 = tablet.Tablet(62044)
+tablet_31981 = tablet.Tablet(31981)
 
 def setUpModule():
   try:
@@ -26,7 +26,7 @@ def setUpModule():
     # start mysql instance external to the test
     setup_procs = [
         tablet_62344.init_mysql(),
-        tablet_62044.init_mysql(),
+        tablet_31981.init_mysql(),
         ]
     utils.wait_procs(setup_procs)
   except:
@@ -39,7 +39,7 @@ def tearDownModule():
 
   teardown_procs = [
       tablet_62344.teardown_mysql(),
-      tablet_62044.teardown_mysql(),
+      tablet_31981.teardown_mysql(),
       ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
@@ -48,7 +48,7 @@ def tearDownModule():
   utils.remove_tmp_files()
 
   tablet_62344.remove_tree()
-  tablet_62044.remove_tree()
+  tablet_31981.remove_tree()
 
   path = os.path.join(environment.vtdataroot, 'snapshot')
   try:
@@ -60,7 +60,7 @@ class TestClone(unittest.TestCase):
   def tearDown(self):
     tablet.Tablet.check_vttablet_count()
     environment.topo_server_wipe()
-    for t in [tablet_62344, tablet_62044]:
+    for t in [tablet_62344, tablet_31981]:
       t.reset_replication()
       t.clean_dbs()
 
@@ -103,7 +103,7 @@ class TestClone(unittest.TestCase):
     utils.pause("%s finished" % str(snapshot_cmd))
 
     call(["touch", "/tmp/vtSimulateFetchFailures"])
-    err = tablet_62044.mysqlctl(['restore',
+    err = tablet_31981.mysqlctl(['restore',
                                  '-fetch-concurrency=2',
                                  '-fetch-retry-count=4'] +
                                 restore_flags +
@@ -112,7 +112,7 @@ class TestClone(unittest.TestCase):
     if err != 0:
       self.fail('mysqlctl restore failed')
 
-    tablet_62044.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
+    tablet_31981.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
 
     if server_mode:
       err = tablet_62344.mysqlctl(['snapshotsourceend',
@@ -152,7 +152,7 @@ class TestClone(unittest.TestCase):
     tablet_62344.populate('vt_snapshot_test', self._create_vt_insert_test,
                           self._populate_vt_insert_test)
 
-    tablet_62044.create_db('vt_snapshot_test')
+    tablet_31981.create_db('vt_snapshot_test')
 
     tablet_62344.start_vttablet()
 
@@ -180,7 +180,7 @@ class TestClone(unittest.TestCase):
           results['ReadOnly'] != 'true' or
           results['OriginalType'] != 'master'):
         self.fail("Bad values returned by Snapshot: %s" % err)
-    tablet_62044.init_tablet('idle', start=True)
+    tablet_31981.init_tablet('idle', start=True)
 
     # do not specify a MANIFEST, see if 'default' works
     call(["touch", "/tmp/vtSimulateFetchFailures"])
@@ -189,11 +189,12 @@ class TestClone(unittest.TestCase):
                      '-fetch-retry-count=4'] +
                     restore_flags +
                     [tablet_62344.tablet_alias, 'default',
-                     tablet_62044.tablet_alias, results['ParentAlias']],
+                     tablet_31981.tablet_alias, results['ParentAlias']],
                     auto_log=True)
+    self._check_shard()
     utils.pause("restore finished")
 
-    tablet_62044.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
+    tablet_31981.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
 
     utils.validate_topology()
 
@@ -204,7 +205,7 @@ class TestClone(unittest.TestCase):
       tablet_62344.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
       utils.validate_topology()
 
-    tablet.kill_tablets([tablet_62344, tablet_62044])
+    tablet.kill_tablets([tablet_62344, tablet_31981])
 
   # Subsumed by vtctl_clone* tests.
   def _test_vtctl_snapshot_restore(self):
@@ -231,8 +232,8 @@ class TestClone(unittest.TestCase):
                           self._populate_vt_insert_test)
     tablet_62344.start_vttablet()
 
-    tablet_62044.create_db('vt_snapshot_test')
-    tablet_62044.init_tablet('idle', start=True)
+    tablet_31981.create_db('vt_snapshot_test')
+    tablet_31981.init_tablet('idle', start=True)
 
     # small test to make sure the directory validation works
     snapshot_dir = os.path.join(environment.vtdataroot, 'snapshot')
@@ -241,27 +242,33 @@ class TestClone(unittest.TestCase):
     utils.run("chmod -w %s" % snapshot_dir)
     out, err = utils.run_vtctl(['Clone', '-force'] + clone_flags +
                                [tablet_62344.tablet_alias,
-                                tablet_62044.tablet_alias],
+                                tablet_31981.tablet_alias],
                                log_level='INFO', expect_fail=True)
     if "Cannot validate snapshot directory" not in err:
       self.fail("expected validation error: %s" % err)
-    if "Un-reserved test_nj-0000062044" not in err:
+    if "Un-reserved test_ny-0000031981" not in err:
       self.fail("expected Un-reserved: %s" % err)
     logging.debug("Failed Clone output: " + err)
     utils.run("chmod +w %s" % snapshot_dir)
 
     call(["touch", "/tmp/vtSimulateFetchFailures"])
     utils.run_vtctl(['Clone', '-force'] + clone_flags +
-                    [tablet_62344.tablet_alias, tablet_62044.tablet_alias],
+                    [tablet_62344.tablet_alias, tablet_31981.tablet_alias],
                     auto_log=True)
+    self._check_shard()
 
     utils.pause("look at logs!")
-    tablet_62044.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
+    tablet_31981.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
     tablet_62344.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
 
     utils.validate_topology()
 
-    tablet.kill_tablets([tablet_62344, tablet_62044])
+    tablet.kill_tablets([tablet_62344, tablet_31981])
+
+  # _check_shard makes sure the Cells list in the shard is up to date
+  def _check_shard(self):
+    shard = utils.run_vtctl_json(['GetShard', 'snapshot_test/0'])
+    self.assertEqual(shard['Cells'], ['test_nj', 'test_ny'], "Cells list is incomplete in tablet: %s" % str(shard))
 
   def test_vtctl_clone(self):
     self._test_vtctl_clone(server_mode=False)
