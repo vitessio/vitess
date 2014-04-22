@@ -99,6 +99,9 @@ You can then go to https://github.com/myfork/vitess to submit the branch as your
 If done correctly, only your changes will show up in the pull request.
 github will cancel out changes you merged from youtube master, unless you resolved merge conflicts.
 
+If necessary, you can work on multiple branches at the same time.
+When the time comes to submit, you just have to merge the branch onto `master` and push.
+
 ### More fancy github setups
 As you can see above, the only requirement from the Vitess team is that you send your code reviews through appspot,
 and then submit the same changes as a pull request.
