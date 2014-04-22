@@ -122,7 +122,7 @@ const (
 
 // DDL Tokens
 %token <node> CREATE ALTER DROP RENAME
-%token <node> TABLE INDEX TO IGNORE IF UNIQUE USING
+%token <node> TABLE INDEX VIEW TO IGNORE IF UNIQUE USING
 
 %start any_command
 
@@ -238,6 +238,10 @@ create_statement:
 		$$ = NewSimpleParseNode(ALTER, "alter")
 		$$.Push($7)
 	}
+| CREATE VIEW sql_id force_eof
+	{
+		$$.Push($3)
+	}
 
 alter_statement:
 	ALTER ignore_opt TABLE ID non_rename_operation force_eof
@@ -249,6 +253,10 @@ alter_statement:
 		// Change this to a rename statement
 		$$ = NewSimpleParseNode(RENAME, "rename")
 		$$.PushTwo($4, $7)
+	}
+| ALTER VIEW sql_id force_eof
+	{
+		$$.Push($3)
 	}
 
 rename_statement:
@@ -267,6 +275,10 @@ drop_statement:
 		// Change this to an alter statement
 		$$ = NewSimpleParseNode(ALTER, "alter")
 		$$.Push($5)
+	}
+| DROP VIEW sql_id force_eof
+	{
+		$$.Push($3)
 	}
 
 comment_opt:

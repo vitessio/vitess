@@ -95,6 +95,7 @@ var keywords = map[string]int{
 	"drop":   DROP,
 	"table":  TABLE,
 	"index":  INDEX,
+	"view":   VIEW,
 	"to":     TO,
 	"ignore": IGNORE,
 	"if":     IF,

@@ -21,3 +21,6 @@ select VALUES(B, C) from b#select values(b, c) from b
 select * from b use index (A)#select * from b use index (a)
 insert into A(A, B) values (1, 2)#insert into A(a, b) values (1, 2)
 CREATE TABLE A#create table A
+create view A#create table a
+alter view A#alter table a
+drop view A#drop table a
