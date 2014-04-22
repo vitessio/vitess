@@ -13,7 +13,7 @@ you'll need to follow a similar set of processes and rules that the Vitess team 
 
 ### Single contributor
 If you're going to be a sole contributor,
-it means that you can use your fork as push-only staging ground for submitting pull requests.
+it means that you can use your fork as a push-only staging ground for submitting pull requests.
 The assumption is that you'll never have to fetch from the fork.
 If this is the case, all you have to do is configure your local repository to pull from youtube,
 and push to myfork.
@@ -31,10 +31,10 @@ origin  git@github.com:myfork/vitess (push)
 The limitation of this configuration is that you can only pull from the youtube repository.
 The `hg pull` command will `fetch` from youtube/vitess and `merge` into your master branch.
 
-On the other hand `hg push` will push into myfork/vitess.
+On the other hand, `hg push` will push into your myfork/vitess remote.
 
 The advantage of this workflow is that you don't have to worry about specifying where you're
-pulling from or pushing to because the default setting *does the right thing*.
+pulling from or pushing to because the default settings *do the right thing*.
 
 ### Multiple contributors
 If more than one of you plan on contributing through a single fork,
@@ -58,12 +58,12 @@ For example, you'll need to `hg push myfork` to explicitly push your changes to 
 
 ### Changes and code reviews
 We recommend that you make your changes in a separate branch.
-Once your changes are ready for review and committed into your branch, say `newfeature`,
+Once they are ready for review and committed into your branch, say `newfeature`,
 you can run the createcl tool, for example:
 ```
 createcl -r alainjobart
 ```
-This command will automatically run a diff of `newfeature` against `master`
+This command will automatically run a diff of the current branch `newfeature` against `master`
 and create an appspot code review with `alainhobart` as reviewer.
 vitess-issues will be cc'd.
 If necessary, createcl allows you to specify the exact versions to diff.
@@ -86,6 +86,8 @@ git push
 ```
 The above commands will merge `newfeature` into `master` and push the changes to the myfork remote.
 You can then go to https://github.com/myfork/vitess to submit the branch as your pull request.
+If done correctly, only your changes will show up in the pull request.
+github will cancel out changes you merged from youtube master, unless you resolved merge conflicts.
 
 ### More fancy github setups
 As you can see above, the only requirement from the Vitess team is that you send your code reviews through appspot,
