@@ -74,7 +74,7 @@ you can run the createcl tool, for example:
 createcl -r alainjobart
 ```
 This command will automatically run a diff of the current branch `newfeature` against `master`
-and create an appspot code review with `alainhobart` as reviewer.
+and create an appspot code review with `alainjobart` as reviewer.
 vitess-issues will be cc'd.
 If necessary, createcl allows you to specify the exact versions to diff.
 But we recommend that you don't use those.
