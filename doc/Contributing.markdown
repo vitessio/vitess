@@ -61,9 +61,13 @@ We recommend that you make your changes in a separate branch.
 Once your changes are ready for review and committed into your branch, say `newfeature`,
 you can run the createcl tool, for example:
 ```
-createcl -r alainjobart,sougou
+createcl -r alainjobart
 ```
-This command will automatically run a diff of `newfeature` against `master` and create an appspot code review.
+This command will automatically run a diff of `newfeature` against `master`
+and create an appspot code review with `alainhobart` as reviewer.
+vitess-issues will be cc'd.
+If necessary, createcl allows you to specify the exact versions to diff.
+But we recommend that you don't use those.
 
 During your feature development, you can fetch and merge new changes from the main youtube repository.
 If you choose to do so, make sure you merge the changes to both the `master` and `newfeature` branches.
@@ -74,3 +78,11 @@ git pull
 git checkout newfeature
 git merge master
 ```
+Once your change is approved, you have to push and submit it as a pull request:
+```
+git checkout master
+git merge newfeature
+git push
+```
+The above commands will merge `newfeature` into `master` and push the changes to the myfork remote.
+You can then go to https://github.com/myfork/vitess to submit the branch as your pull request.
