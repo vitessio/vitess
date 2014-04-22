@@ -58,7 +58,17 @@ For example, you'll need to `hg push myfork` to explicitly push your changes to 
 
 ### Changes and code reviews
 We recommend that you make your changes in a separate branch.
-Once they are ready for review and committed into your branch, say `newfeature`,
+Make sure you're on the master branch when you create it.
+```
+~/...vitess> git status
+# On branch master
+# Your branch is up-to-date with 'origin/master'.
+#
+nothing to commit, working directory clean
+~/...vitess> git checkout -b newfeature
+Switched to a new branch 'newfeature'
+```
+Once your changes are ready for review and committed into your branch,
 you can run the createcl tool, for example:
 ```
 createcl -r alainjobart
