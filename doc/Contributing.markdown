@@ -1,3 +1,76 @@
 # Contributing to Vitess
-If you'd like to contribute to Vitess,
-we recommend that you fork the vitess repository and submit pull requests from your fork.
+If you'd like to make simple contributions to Vitess,
+we recommend that you fork the repository and submit pull requests.
+If you'd like to make larger or ongoing changes,
+you'll need to follow a similar set of processes and rules that the Vitess team follows.
+
+### Prerequisites
+- [Install vitess](https://github.com/youtube/vitess/blob/master/doc/GettingStarted.markdown)
+- The vitess team uses appspot for code reviews. You'll need to create an account at http://codereview.appspot.com.
+- Fork the vitess repository, say https://github.com/myfork/vitess.
+- Add .../vitess/misc/git to your path, or create a symlink from one of your paths to .../vitess/misc/git/createcl.
+- Subscribe to https://groups.google.com/forum/#!forum/vitess-issues.
+
+### Single contributor
+If you're going to be a sole contributor,
+it means that you can use your fork as push-only staging ground for submitting pull requests.
+The assumption is that you'll never have to fetch from the fork.
+If this is the case, all you have to do is configure your local repository to pull from youtube,
+and push to myfork.
+This can be achieved as follows:
+```
+~/...vitess> git remote -v
+origin  git@github.com:youtube/vitess.git (fetch)
+origin  git@github.com:youtube/vitess (push)
+~/...vitess> git remote set-url --push origin git@github.com:myfork/vitess
+~/...vitess> git remote -v
+origin  git@github.com:youtube/vitess.git (fetch)
+origin  git@github.com:myfork/vitess (push)
+```
+
+The limitation of this configuration is that you can only pull from the youtube repository.
+The `hg pull` command will `fetch` from youtube/vitess and `merge` into your master branch.
+
+On the other hand `hg push` will push into myfork/vitess.
+
+The advantage of this workflow is that you don't have to worry about specifying where you're
+pulling from or pushing to because the default setting *does the right thing*.
+
+### Multiple contributors
+If more than one of you plan on contributing through a single fork,
+then you'll need to follow a more elaborate scheme of setting up multiple remotes and manually managing merges:
+
+```
+~/...vitess> git remote -v
+origin  git@github.com:youtube/vitess.git (fetch)
+origin  git@github.com:youtube/vitess.git (push)
+~/...vitess> git remote add myfork git@github.com:myfork/vitess.git
+~/...vitess> git remote -v
+myfork  git@github.com:myfork/vitess.git (fetch)
+myfork  git@github.com:myfork/vitess.git (push)
+origin  git@github.com:youtube/vitess.git (fetch)
+origin  git@github.com:youtube/vitess.git (push)
+```
+
+With this setup, commands like `hg pull` and `hg push` with default settings are not recommended.
+You will be better off using `hg fetch` and `hg merge`, which let you micromanage your remote interactions.
+For example, you'll need to `hg push myfork` to explicitly push your changes to myfork.
+
+### Changes and code reviews
+We recommend that you make your changes in a separate branch.
+Once your changes are ready for review and committed into your branch, say `newfeature`,
+you can run the createcl tool, for example:
+```
+createcl -r alainjobart,sougou
+```
+This command will automatically run a diff of `newfeature` against `master` and create an appspot code review.
+
+During your feature development, you can fetch and merge new changes from the main youtube repository.
+If you choose to do so, make sure you merge the changes to both the `master` and `newfeature` branches.
+In the sole contributor case, your commands will look like this:
+```
+git checkout master
+git pull
+git checkout newfeature
+git merge master
+```
