@@ -86,3 +86,11 @@ git push
 ```
 The above commands will merge `newfeature` into `master` and push the changes to the myfork remote.
 You can then go to https://github.com/myfork/vitess to submit the branch as your pull request.
+
+### More fancy github setups
+As you can see above, the only requirement from the Vitess team is that you send your code reviews through appspot,
+and then submit the same changes as a pull request.
+
+Our workflow recommendation is mainly to simplify your life.
+If you prefer to use a different workflow,
+you can choose to do so as long as you can figure out a way to meet the necessary requirements.
