@@ -507,6 +507,19 @@ class TestTabletManager(unittest.TestCase):
       self.fail('Replication lag parameter not propagated to serving graph: %s' % str(ep))
     self.assertEqual(ep['entries'][0]['health']['replication_lag'], 'high', 'Replication lag parameter not propagated to serving graph: %s' % str(ep))
 
+    # then restart replication, make sure we go back to healthy
+    tablet_62044.mquery('', 'start slave')
+    timeout = 10
+    while True:
+      ti = utils.run_vtctl_json(['GetTablet', tablet_62044.tablet_alias])
+      if 'Health' in ti and ti['Health']:
+        if 'replication_lag' in ti['Health']:
+          if ti['Health']['replication_lag'] == 'high':
+            timeout = utils.wait_step('slave has no replication lag', timeout)
+            continue
+      logging.info("Slave tablet replication_lag is gone, good")
+      break
+
     tablet.kill_tablets([tablet_62344, tablet_62044])
 
 if __name__ == '__main__':
