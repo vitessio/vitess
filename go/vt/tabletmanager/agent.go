@@ -39,7 +39,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"reflect"
 	"sync"
 	"time"
 
@@ -411,9 +410,6 @@ func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType, lockT
 		typeForHealthCheck = topo.TYPE_MASTER
 	}
 	health, err := health.Run(typeForHealthCheck)
-	if len(health) == 0 {
-		health = nil
-	}
 
 	// start with no change
 	newTabletType := tablet.Type
@@ -431,7 +427,7 @@ func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType, lockT
 		if tablet.Type == topo.TYPE_SPARE {
 			newTabletType = targetTabletType
 		}
-		if tablet.Type == newTabletType && reflect.DeepEqual(health, tablet.Health) {
+		if tablet.Type == newTabletType && tablet.IsHealthEqual(health) {
 			// no change in health, not logging anything,
 			// and we're done
 			return
@@ -441,7 +437,8 @@ func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType, lockT
 		log.Infof("Updating tablet record as healthy type %v -> %v with health details %v -> %v", tablet.Type, newTabletType, tablet.Health, health)
 	}
 
-	// Change the Type, update the health
+	// Change the Type, update the health. Note we pass in a map
+	// that's not nil, meaning if it's empty, we will clear it.
 	if err := topotools.ChangeType(agent.TopoServer, tablet.Alias, newTabletType, health, true /*runHooks*/); err != nil {
 		log.Infof("Error updating tablet record: %v", err)
 		return

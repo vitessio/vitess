@@ -6,6 +6,7 @@ package topo
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -496,6 +497,16 @@ func (tablet *Tablet) Complete() error {
 	var err error
 	tablet.Shard, tablet.KeyRange, err = ValidateShardName(tablet.Shard)
 	return err
+}
+
+// IsHealthEqual compares the tablet's health with the passed one, and
+// returns true if they're equivalent.
+func (tablet *Tablet) IsHealthEqual(health map[string]string) bool {
+	if len(health) == 0 && len(tablet.Health) == 0 {
+		return true
+	}
+
+	return reflect.DeepEqual(health, tablet.Health)
 }
 
 // NewTabletInfo returns a TabletInfo basing on tablet with the
