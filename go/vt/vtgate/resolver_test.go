@@ -368,22 +368,22 @@ func TestResolverInsertSqlClause(t *testing.T) {
 }
 
 func TestResolverBuildEntityIds(t *testing.T) {
-	shardMap := make(map[string][]key.KeyspaceId)
-	shardMap["-20"] = []key.KeyspaceId{key.KeyspaceId("0"), key.KeyspaceId("1")}
-	shardMap["20-40"] = []key.KeyspaceId{key.KeyspaceId("30")}
+	shardMap := make(map[string][]string)
+	shardMap["-20"] = []string{"0", "1"}
+	shardMap["20-40"] = []string{"2"}
 	sql := "select a from table where id=:id"
-	entityColName := "kid"
+	entityColName := "uid"
 	bindVar := make(map[string]interface{})
 	bindVar["id"] = 10
 	shards, sqls, bindVars := buildEntityIds(shardMap, sql, entityColName, bindVar)
 	wantShards := []string{"-20", "20-40"}
 	wantSqls := map[string]string{
-		"-20":   "select a from table where id=:id and kid in (:kid0, :kid1)",
-		"20-40": "select a from table where id=:id and kid in (:kid0)",
+		"-20":   "select a from table where id=:id and uid in (:uid0, :uid1)",
+		"20-40": "select a from table where id=:id and uid in (:uid0)",
 	}
 	wantBindVars := map[string]map[string]interface{}{
-		"-20":   map[string]interface{}{"id": 10, "kid0": key.KeyspaceId("0"), "kid1": key.KeyspaceId("1")},
-		"20-40": map[string]interface{}{"id": 10, "kid0": key.KeyspaceId("30")},
+		"-20":   map[string]interface{}{"id": 10, "uid0": "0", "uid1": "1"},
+		"20-40": map[string]interface{}{"id": 10, "uid0": "2"},
 	}
 	if !reflect.DeepEqual(wantShards, shards) {
 		t.Errorf("want %+v, got %+v", wantShards, shards)
