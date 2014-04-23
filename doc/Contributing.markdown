@@ -8,7 +8,7 @@ you'll need to follow a similar set of processes and rules that the Vitess team 
 - [Install vitess](https://github.com/youtube/vitess/blob/master/doc/GettingStarted.markdown)
 - The vitess team uses appspot for code reviews. You'll need to create an account at http://codereview.appspot.com.
 - Fork the vitess repository, say https://github.com/myfork/vitess.
-- Add .../vitess/misc/git to your path, or create a symlink from one of your paths to .../vitess/misc/git/createcl.
+- Add `$VTTOP/misc/git` to your path, or create a symlink from one of your paths to `$VTTOP/misc/git/createcl`.
 - Subscribe to https://groups.google.com/forum/#!forum/vitess-issues.
 
 ### Single contributor
@@ -29,9 +29,9 @@ origin  git@github.com:myfork/vitess (push)
 ```
 
 The limitation of this configuration is that you can only pull from the youtube repository.
-The `hg pull` command will `fetch` from youtube/vitess and `merge` into your master branch.
+The `git pull` command will `fetch` from youtube/vitess and `merge` into your master branch.
 
-On the other hand, `hg push` will push into your myfork/vitess remote.
+On the other hand, `git push` will push into your myfork/vitess remote.
 
 The advantage of this workflow is that you don't have to worry about specifying where you're
 pulling from or pushing to because the default settings *do the right thing*.
@@ -52,9 +52,9 @@ origin  git@github.com:youtube/vitess.git (fetch)
 origin  git@github.com:youtube/vitess.git (push)
 ```
 
-With this setup, commands like `hg pull` and `hg push` with default settings are not recommended.
-You will be better off using `hg fetch` and `hg merge`, which let you micromanage your remote interactions.
-For example, you'll need to `hg push myfork` to explicitly push your changes to myfork.
+With this setup, commands like `git pull` and `git push` with default settings are not recommended.
+You will be better off using `git fetch` and `git merge`, which let you micromanage your remote interactions.
+For example, you'll need to `git push myfork` to explicitly push your changes to myfork.
 
 ### Changes and code reviews
 We recommend that you make your changes in a separate branch.
