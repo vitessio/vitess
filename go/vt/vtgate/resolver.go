@@ -14,7 +14,6 @@ import (
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -128,7 +127,7 @@ func (res *Resolver) ExecuteEntityIds(
 	context interface{},
 	query *proto.EntityIdsQuery,
 ) (*mproto.QueryResult, error) {
-	shardMap, err := mapEntityIdsToShards(
+	shardIdMap, err := mapEntityIdsToShards(
 		res.scatterConn.toposerv,
 		res.scatterConn.cell,
 		query.Keyspace,
@@ -137,7 +136,7 @@ func (res *Resolver) ExecuteEntityIds(
 	if err != nil {
 		return nil, err
 	}
-	shards, sqls, bindVars := buildEntityIds(shardMap, query.Sql, query.EntityColumnName, query.BindVariables)
+	shards, sqls, bindVars := buildEntityIds(shardIdMap, query.Sql, query.EntityColumnName, query.BindVariables)
 	for {
 		qr, err := res.scatterConn.ExecuteEntityIds(
 			context,
@@ -160,7 +159,7 @@ func (res *Resolver) ExecuteEntityIds(
 				resharding = true
 			}
 			// check shards change for horizontal resharding
-			newShardMap, err := mapEntityIdsToShards(
+			newShardIdMap, err := mapEntityIdsToShards(
 				res.scatterConn.toposerv,
 				res.scatterConn.cell,
 				query.Keyspace,
@@ -169,7 +168,7 @@ func (res *Resolver) ExecuteEntityIds(
 			if err != nil {
 				return nil, err
 			}
-			newShards, newSqls, newBindVars := buildEntityIds(newShardMap, query.Sql, query.EntityColumnName, query.BindVariables)
+			newShards, newSqls, newBindVars := buildEntityIds(newShardIdMap, query.Sql, query.EntityColumnName, query.BindVariables)
 			if !StrsEquals(newShards, shards) {
 				shards = newShards
 				sqls = newSqls
@@ -351,11 +350,11 @@ func StrsEquals(a, b []string) bool {
 	return true
 }
 
-func buildEntityIds(shardMap map[string][]key.KeyspaceId, qSql, entityColName string, qBindVars map[string]interface{}) ([]string, map[string]string, map[string]map[string]interface{}) {
+func buildEntityIds(shardIdMap map[string][]string, qSql, entityColName string, qBindVars map[string]interface{}) ([]string, map[string]string, map[string]map[string]interface{}) {
 	shards := make([]string, 0, 1)
 	sqls := make(map[string]string)
 	bindVars := make(map[string]map[string]interface{})
-	for shard, kids := range shardMap {
+	for shard, ids := range shardIdMap {
 		var b bytes.Buffer
 		b.Write([]byte(entityColName))
 		b.Write([]byte(" in ("))
@@ -363,9 +362,9 @@ func buildEntityIds(shardMap map[string][]key.KeyspaceId, qSql, entityColName st
 		for k, v := range qBindVars {
 			bindVar[k] = v
 		}
-		for i, kid := range kids {
+		for i, id := range ids {
 			bvName := fmt.Sprintf("%v%v", entityColName, i)
-			bindVar[bvName] = kid
+			bindVar[bvName] = id
 			if i > 0 {
 				b.Write([]byte(", "))
 			}

@@ -29,6 +29,10 @@ func (vtg *VTGate) ExecuteKeyRanges(context *rpcproto.Context, query *proto.KeyR
 	return vtg.server.ExecuteKeyRanges(context, query, reply)
 }
 
+func (vtg *VTGate) ExecuteEntityIds(context *rpcproto.Context, query *proto.EntityIdsQuery, reply *proto.QueryResult) error {
+	return vtg.server.ExecuteEntityIds(context, query, reply)
+}
+
 func (vtg *VTGate) ExecuteBatchShard(context *rpcproto.Context, batchQuery *proto.BatchQueryShard, reply *proto.QueryResultList) error {
 	return vtg.server.ExecuteBatchShard(context, batchQuery, reply)
 }
