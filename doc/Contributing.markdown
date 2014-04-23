@@ -8,6 +8,7 @@ you'll need to follow a similar set of processes and rules that the Vitess team 
 - [Install vitess](https://github.com/youtube/vitess/blob/master/doc/GettingStarted.markdown)
 - The vitess team uses appspot for code reviews. You'll need to create an account at http://codereview.appspot.com.
 - Fork the vitess repository, say https://github.com/myfork/vitess.
+- Download [upload.py](https://code.google.com/p/rietveld/wiki/UploadPyUsage) and put it in your path.
 - Add `$VTTOP/misc/git` to your path, or create a symlink from one of your paths to `$VTTOP/misc/git/createcl`.
 - Subscribe to https://groups.google.com/forum/#!forum/vitess-issues.
 
