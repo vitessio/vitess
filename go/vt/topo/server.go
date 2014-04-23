@@ -172,14 +172,11 @@ type Server interface {
 	// Replication graph management, per cell.
 	//
 
-	// CreateShardReplication creates the ShardReplication object,
-	// assuming it doesn't exist yet.
-	// Can return ErrNodeExists if it already exists.
-	CreateShardReplication(cell, keyspace, shard string, sr *ShardReplication) error
-
 	// UpdateShardReplicationFields updates the current
-	// ShardReplication record with new values
-	// Can return ErrNoNode if the object doesn't exist.
+	// ShardReplication record with new values. If the
+	// ShardReplication object does not exist, an empty one will
+	// be passed to the update function. All necessary directories
+	// need to be created by this method, if applicable.
 	UpdateShardReplicationFields(cell, keyspace, shard string, update func(*ShardReplication) error) error
 
 	// GetShardReplication returns the replication data.

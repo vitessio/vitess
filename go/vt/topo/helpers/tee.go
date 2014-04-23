@@ -341,20 +341,6 @@ func (tee *Tee) GetTabletsByCell(cell string) ([]topo.TabletAlias, error) {
 // Shard replication graph management, local.
 //
 
-func (tee *Tee) CreateShardReplication(cell, keyspace, shard string, sr *topo.ShardReplication) error {
-	err := tee.primary.CreateShardReplication(cell, keyspace, shard, sr)
-	if err != nil && err != topo.ErrNodeExists {
-		return err
-	}
-
-	serr := tee.secondary.CreateShardReplication(cell, keyspace, shard, sr)
-	if serr != nil && serr != topo.ErrNodeExists {
-		// not critical enough to fail
-		log.Warningf("secondary.CreateShardReplication(%v,%v,%v) failed: %v", cell, keyspace, shard, err)
-	}
-	return err
-}
-
 func (tee *Tee) UpdateShardReplicationFields(cell, keyspace, shard string, update func(*topo.ShardReplication) error) error {
 	if err := tee.primary.UpdateShardReplicationFields(cell, keyspace, shard, update); err != nil {
 		// failed on primary, not updating secondary

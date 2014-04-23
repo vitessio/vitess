@@ -75,16 +75,7 @@ func (wr *Wrangler) updateShardCellsAndMaster(si *topo.ShardInfo, tabletAlias to
 	}
 
 	// and unlock
-	if err := wr.unlockShard(keyspace, shard, actionNode, lockPath, err); err != nil {
-		return err
-	}
-
-	// also create the cell's ShardReplication
-	if err := wr.ts.CreateShardReplication(tabletAlias.Cell, keyspace, shard, &topo.ShardReplication{}); err != nil && err != topo.ErrNodeExists {
-		return err
-	}
-
-	return nil
+	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 }
 
 // SetShardServedTypes changes the ServedTypes parameter of a shard.
