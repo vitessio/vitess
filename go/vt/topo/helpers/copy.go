@@ -201,19 +201,11 @@ func CopyShardReplications(fromTS, toTS topo.Server) {
 							continue
 						}
 
-						err = toTS.CreateShardReplication(cell, keyspace, shard, sri.ShardReplication)
-						switch err {
-						case nil:
-							// good
-						case topo.ErrNodeExists:
-							if err := toTS.UpdateShardReplicationFields(cell, keyspace, shard, func(oldSR *topo.ShardReplication) error {
-								*oldSR = *sri.ShardReplication
-								return nil
-							}); err != nil {
-								rec.RecordError(fmt.Errorf("UpdateShardReplicationFields(%v, %v, %v): %v", cell, keyspace, shard, err))
-							}
-						default:
-							rec.RecordError(fmt.Errorf("CreateShardReplication(%v, %v, %v): %v", cell, keyspace, shard, err))
+						if err := toTS.UpdateShardReplicationFields(cell, keyspace, shard, func(oldSR *topo.ShardReplication) error {
+							*oldSR = *sri.ShardReplication
+							return nil
+						}); err != nil {
+							rec.RecordError(fmt.Errorf("UpdateShardReplicationFields(%v, %v, %v): %v", cell, keyspace, shard, err))
 						}
 					}
 				}(keyspace, shard)

@@ -23,20 +23,14 @@ func shardReplicationPath(cell, keyspace, shard string) string {
 	return path.Join("/zk", cell, "vt", "replication", keyspace, shard)
 }
 
-func (zkts *Server) CreateShardReplication(cell, keyspace, shard string, sr *topo.ShardReplication) error {
-	data := jscfg.ToJson(sr)
-	zkPath := shardReplicationPath(cell, keyspace, shard)
-	_, err := zk.CreateRecursive(zkts.zconn, zkPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
-			err = topo.ErrNodeExists
-		}
+func (zkts *Server) UpdateShardReplicationFields(cell, keyspace, shard string, update func(*topo.ShardReplication) error) error {
+	// create the parent directory to be sure it's here
+	zkDir := path.Join("/zk", cell, "vt", "replication", keyspace)
+	if _, err := zk.CreateRecursive(zkts.zconn, zkDir, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 		return err
 	}
-	return nil
-}
 
-func (zkts *Server) UpdateShardReplicationFields(cell, keyspace, shard string, update func(*topo.ShardReplication) error) error {
+	// now update the data
 	zkPath := shardReplicationPath(cell, keyspace, shard)
 	f := func(oldValue string, oldStat zk.Stat) (string, error) {
 		sr := &topo.ShardReplication{}
