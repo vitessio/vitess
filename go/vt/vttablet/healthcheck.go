@@ -38,11 +38,11 @@ func initHeathCheck(agent *tabletmanager.ActionAgent) {
 		// When we enter lameduck mode, we want to not call
 		// the health check any more. After this returns, we
 		// are guaranteed to not call it.
+		log.Info("Stopping periodic health check timer")
 		t.Stop()
 
-		// TODO(alainjobart) Now we can finish up and force
-		// ourselves to not healthy.
-		// agent.WeAreDoneWithServingMakeItSo(topo.TabletType(*targetTabletType), *lockTimeout)
+		// Now we can finish up and force ourselves to not healthy.
+		agent.TerminateHealthChecks(topo.TabletType(*targetTabletType), *lockTimeout)
 	})
 	t.Start(func() {
 		agent.RunHealthCheck(topo.TabletType(*targetTabletType), *lockTimeout)

@@ -395,6 +395,8 @@ func (agent *ActionAgent) actionEventLoop() {
 //
 // Note we only update the topo record if we need to, that is if our type or
 // health details changed.
+//
+// TODO(alainjobart) move the History out of health, and in here.
 func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType, lockTimeout time.Duration) {
 	agent.actionMutex.Lock()
 	defer agent.actionMutex.Unlock()
@@ -411,13 +413,22 @@ func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType, lockT
 	}
 	health, err := health.Run(typeForHealthCheck)
 
+	// TODO(alainjobart) get the state of the query service
+
 	// start with no change
 	newTabletType := tablet.Type
 	if err != nil {
+		// The tablet is not healthy, let's see what we need to do
 		if tablet.Type != targetTabletType {
 			log.Infof("Tablet not healthy and in state %v, not changing it: %v", tablet.Type, err)
 			return
 		}
+
+		// TODO(alainjobart) if the query service is running,
+		// we may need to stop it. Note the post-action
+		// callback will do it too, maybe it's enough if it's
+		// the order we want it to go down as.
+
 		log.Infof("Tablet not healthy, converting it from %v to spare: %v", targetTabletType, err)
 		newTabletType = topo.TYPE_SPARE
 	} else {
@@ -433,6 +444,10 @@ func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType, lockT
 			return
 		}
 
+		// TODO(alainjobart) if the query service is not
+		// running, try to start it. If it fails to start, we
+		// are then unhealthy.
+
 		// we need to update our state
 		log.Infof("Updating tablet record as healthy type %v -> %v with health details %v -> %v", tablet.Type, newTabletType, tablet.Health, health)
 	}
@@ -446,6 +461,54 @@ func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType, lockT
 
 	// Rebuild the serving graph in our cell, only if we're dealing with
 	// a serving type
+	if err := agent.rebuildShardIfNeeded(tablet, targetTabletType, lockTimeout); err != nil {
+		log.Warningf("rebuildShardIfNeeded failed, not running post action callbacks: %v", err)
+		return
+	}
+
+	// run the post action callbacks
+	agent.afterAction("healthcheck", false /* reloadSchema */)
+}
+
+// TerminateHealthChecks is called when we enter lame duck mode.
+// We will clean up our state, and shut down query service.
+// We only do something if we are in targetTabletType state, and then
+// we just go to spare.
+func (agent *ActionAgent) TerminateHealthChecks(targetTabletType topo.TabletType, lockTimeout time.Duration) {
+	agent.actionMutex.Lock()
+	defer agent.actionMutex.Unlock()
+	log.Info("agent.TerminateHealthChecks is starting")
+
+	// read the current tablet record
+	agent.mutex.Lock()
+	tablet := agent._tablet
+	agent.mutex.Unlock()
+
+	if tablet.Type != targetTabletType {
+		log.Infof("Tablet in state %v, not changing it", tablet.Type)
+		return
+	}
+
+	// Change the Type to spare, update the health. Note we pass in a map
+	// that's not nil, meaning we will clear it.
+	if err := topotools.ChangeType(agent.TopoServer, tablet.Alias, topo.TYPE_SPARE, make(map[string]string), true /*runHooks*/); err != nil {
+		log.Infof("Error updating tablet record: %v", err)
+		return
+	}
+
+	// Rebuild the serving graph in our cell, only if we're dealing with
+	// a serving type
+	if err := agent.rebuildShardIfNeeded(tablet, targetTabletType, lockTimeout); err != nil {
+		log.Warningf("rebuildShardIfNeeded failed, not running post action callbacks: %v", err)
+		return
+	}
+
+	// run the post action callbacks
+	agent.afterAction("terminatehealthcheck", false /* reloadSchema */)
+}
+
+// rebuildShardIfNeeded will rebuild the serving graph if we need to
+func (agent *ActionAgent) rebuildShardIfNeeded(tablet *topo.TabletInfo, targetTabletType topo.TabletType, lockTimeout time.Duration) error {
 	if topo.IsInServingGraph(targetTabletType) {
 		// TODO: interrupted may need to be a global one closed when we exit
 		interrupted := make(chan struct{})
@@ -453,25 +516,20 @@ func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType, lockT
 		if *topotools.UseSrvShardLocks {
 			// no need to take the shard lock in this case
 			if err := topotools.RebuildShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, topotools.RebuildShardOptions{Cells: []string{tablet.Alias.Cell}, IgnorePartialResult: true}, lockTimeout, interrupted); err != nil {
-				log.Warningf("topotools.RebuildShard returned an error: %v", err)
-				return
+				return fmt.Errorf("topotools.RebuildShard returned an error: %v", err)
 			}
 		} else {
 			actionNode := actionnode.RebuildShard()
 			lockPath, err := actionNode.LockShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, lockTimeout, interrupted)
 			if err != nil {
-				log.Warningf("Cannot lock shard for rebuild: %v", err)
-				return
+				return fmt.Errorf("cannot lock shard for rebuild: %v", err)
 			}
 			err = topotools.RebuildShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, topotools.RebuildShardOptions{Cells: []string{tablet.Alias.Cell}, IgnorePartialResult: true}, lockTimeout, interrupted)
 			err = actionNode.UnlockShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, lockPath, err)
 			if err != nil {
-				log.Warningf("UnlockShard returned an error: %v", err)
-				return
+				return fmt.Errorf("UnlockShard returned an error: %v", err)
 			}
 		}
 	}
-
-	// run the post action callbacks
-	agent.afterAction("healthcheck", false /* reloadSchema */)
+	return nil
 }
