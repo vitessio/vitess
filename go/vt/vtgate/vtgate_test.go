@@ -371,6 +371,8 @@ func TestVTGateStreamExecuteKeyspaceIds(t *testing.T) {
 	s := createSandbox("TestVTGateStreamExecuteKeyspaceIds")
 	sbc := &sandboxConn{}
 	s.MapTestConn("-20", sbc)
+	sbc1 := &sandboxConn{}
+	s.MapTestConn("20-40", sbc1)
 	kid10, err := key.HexKeyspaceId("10").Unhex()
 	if err != nil {
 		t.Errorf("want nil, got %+v", err)
@@ -447,7 +449,7 @@ func TestVTGateStreamExecuteKeyspaceIds(t *testing.T) {
 	if !reflect.DeepEqual(want, qrs) {
 		t.Errorf("want \n%+v, got \n%+v", want, qrs)
 	}
-	// Test for error condition - multiple shards
+	// Test for successful execution - multiple keyspaceids in multiple shards
 	kid30, err := key.HexKeyspaceId("30").Unhex()
 	if err != nil {
 		t.Errorf("want nil, got %+v", err)
@@ -457,8 +459,8 @@ func TestVTGateStreamExecuteKeyspaceIds(t *testing.T) {
 		qrs = append(qrs, r)
 		return nil
 	})
-	if err == nil {
-		t.Errorf("want not nil, got nil")
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
 	}
 }
 
@@ -466,6 +468,8 @@ func TestVTGateStreamExecuteKeyRanges(t *testing.T) {
 	s := createSandbox("TestVTGateStreamExecuteKeyRanges")
 	sbc := &sandboxConn{}
 	s.MapTestConn("-20", sbc)
+	sbc1 := &sandboxConn{}
+	s.MapTestConn("20-40", sbc1)
 	kr, err := key.ParseKeyRangeParts("", "20")
 	sq := proto.KeyRangeQuery{
 		Sql:        "query",
@@ -514,25 +518,15 @@ func TestVTGateStreamExecuteKeyRanges(t *testing.T) {
 		t.Errorf("want \n%+v, got \n%+v", want, qrs)
 	}
 
-	// Test for error condition - multiple shards
+	// Test for successful execution - multiple shards
 	kr, err = key.ParseKeyRangeParts("10", "40")
 	sq.KeyRanges = []key.KeyRange{kr}
 	err = RpcVTGate.StreamExecuteKeyRanges(nil, &sq, func(r *proto.QueryResult) error {
 		qrs = append(qrs, r)
 		return nil
 	})
-	if err == nil {
-		t.Errorf("want not nil, got %v", err)
-	}
-	// Test for error condition - multiple shards, non-partial keyspace
-	kr, err = key.ParseKeyRangeParts("", "")
-	sq.KeyRanges = []key.KeyRange{kr}
-	err = RpcVTGate.StreamExecuteKeyRanges(nil, &sq, func(r *proto.QueryResult) error {
-		qrs = append(qrs, r)
-		return nil
-	})
-	if err == nil {
-		t.Errorf("want not nil, got %v", err)
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
 	}
 }
 

@@ -129,19 +129,22 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 	query := &proto.KeyspaceIdQuery{
 		Sql:         "query",
 		Keyspace:    "TestResolverStreamExecuteKeyspaceIds",
-		KeyspaceIds: []key.KeyspaceId{kid10, kid15, kid25},
+		KeyspaceIds: []key.KeyspaceId{kid10, kid15},
 		TabletType:  topo.TYPE_MASTER,
 	}
 	createSandbox("TestResolverStreamExecuteKeyspaceIds")
-	res := NewResolver(new(sandboxTopo), "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
-	err = res.StreamExecuteKeyspaceIds(nil, query, func(r *mproto.QueryResult) error { return nil })
-	want := "Resolved to more than one shard"
-	if err == nil || err.Error() != want {
-		t.Errorf("want %s, got %v", want, err)
-	}
 	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyspaceIds", func() (*mproto.QueryResult, error) {
-		query.KeyspaceIds = []key.KeyspaceId{kid10, kid15}
-		res = NewResolver(new(sandboxTopo), "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
+		res := NewResolver(new(sandboxTopo), "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
+		qr := new(mproto.QueryResult)
+		err = res.StreamExecuteKeyspaceIds(nil, query, func(r *mproto.QueryResult) error {
+			appendResult(qr, r)
+			return nil
+		})
+		return qr, err
+	})
+	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyspaceIds", func() (*mproto.QueryResult, error) {
+		query.KeyspaceIds = []key.KeyspaceId{kid10, kid15, kid25}
+		res := NewResolver(new(sandboxTopo), "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
 		err = res.StreamExecuteKeyspaceIds(nil, query, func(r *mproto.QueryResult) error {
 			appendResult(qr, r)
@@ -167,18 +170,23 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 	query := &proto.KeyRangeQuery{
 		Sql:        "query",
 		Keyspace:   "TestResolverStreamExecuteKeyRanges",
-		KeyRanges:  []key.KeyRange{key.KeyRange{Start: kid10, End: kid25}},
+		KeyRanges:  []key.KeyRange{key.KeyRange{Start: kid10, End: kid15}},
 		TabletType: topo.TYPE_MASTER,
 	}
 	createSandbox("TestResolverStreamExecuteKeyRanges")
-	res := NewResolver(new(sandboxTopo), "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
-	err = res.StreamExecuteKeyRanges(nil, query, func(r *mproto.QueryResult) error { return nil })
-	want := "Resolved to more than one shard"
-	if err == nil || err.Error() != want {
-		t.Errorf("want %s, got %v", want, err)
-	}
+	// streaming a single shard
 	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyRanges", func() (*mproto.QueryResult, error) {
-		query.KeyRanges = []key.KeyRange{key.KeyRange{Start: kid10, End: kid15}}
+		res := NewResolver(new(sandboxTopo), "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
+		qr := new(mproto.QueryResult)
+		err = res.StreamExecuteKeyRanges(nil, query, func(r *mproto.QueryResult) error {
+			appendResult(qr, r)
+			return nil
+		})
+		return qr, err
+	})
+	// streaming multiple shards
+	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyRanges", func() (*mproto.QueryResult, error) {
+		query.KeyRanges = []key.KeyRange{key.KeyRange{Start: kid10, End: kid25}}
 		res := NewResolver(new(sandboxTopo), "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
 		err = res.StreamExecuteKeyRanges(nil, query, func(r *mproto.QueryResult) error {
@@ -313,6 +321,8 @@ func testResolverStreamGeneric(t *testing.T, name string, action func() (*mproto
 	s := createSandbox(name)
 	sbc0 := &sandboxConn{}
 	s.MapTestConn("-20", sbc0)
+	sbc1 := &sandboxConn{}
+	s.MapTestConn("20-40", sbc1)
 	_, err := action()
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
@@ -325,6 +335,8 @@ func testResolverStreamGeneric(t *testing.T, name string, action func() (*mproto
 	s.Reset()
 	sbc0 = &sandboxConn{mustFailRetry: 1}
 	s.MapTestConn("-20", sbc0)
+	sbc1 = &sandboxConn{}
+	s.MapTestConn("20-40", sbc1)
 	_, err = action()
 	want := fmt.Sprintf("retry: err, shard, host: %s.-20.master, {Uid:0 Host:-20 NamedPortMap:map[vt:1] Health:map[]}", name)
 	if err == nil || err.Error() != want {
