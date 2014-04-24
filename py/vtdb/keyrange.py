@@ -23,7 +23,7 @@ class KeyRange(codec.BSONCoding):
       else:
         kr = kr.split('-')
     if not isinstance(kr, tuple) and not isinstance(kr, list) or len(kr) != 2:
-      raise dbexceptions.ProgrammingError("keyrange must be a list or tuple or a '-' separated str %s" % keyrange)
+      raise dbexceptions.ProgrammingError("keyrange must be a list or tuple or a '-' separated str %s" % kr)
     self.Start = kr[0].strip()
     self.End = kr[1].strip()
 
