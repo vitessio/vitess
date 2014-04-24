@@ -28,6 +28,10 @@ var schemaOverrides []ts.SchemaOverride
 func main() {
 	dbconfigs.RegisterFlags()
 	flag.Parse()
+	if len(flag.Args()) > 0 {
+		flag.Usage()
+		log.Fatalf("vtocc doesn't take any positional arguments")
+	}
 	servenv.Init()
 
 	dbConfigs, err := dbconfigs.Init("")
