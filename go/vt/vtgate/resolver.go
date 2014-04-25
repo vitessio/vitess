@@ -310,9 +310,6 @@ func (res *Resolver) StreamExecute(
 	if err != nil {
 		return err
 	}
-	if len(shards) != 1 {
-		return fmt.Errorf("Resolved to more than one shard")
-	}
 	err = res.scatterConn.StreamExecute(
 		context,
 		sql,
