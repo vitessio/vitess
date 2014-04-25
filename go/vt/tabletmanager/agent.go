@@ -39,10 +39,12 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"reflect"
 	"sync"
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/history"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/env"
@@ -57,6 +59,8 @@ import (
 
 var (
 	vtactionBinaryPath = flag.String("vtaction_binary_path", "", "Full path (including filename) to vtaction binary. If not set, tries VTROOT/bin/vtaction.")
+
+	historyLength = 16
 )
 
 // Each TabletChangeCallback must be idempotent and "threadsafe".  The
@@ -71,6 +75,35 @@ type tabletChangeItem struct {
 	queuedTime time.Time
 }
 
+// HealthRecord records one run of the health checker
+type HealthRecord struct {
+	Error  error
+	Result map[string]string
+	Time   time.Time
+}
+
+// This returns a readable one word version of the health
+func (r *HealthRecord) Class() string {
+	switch {
+	case r.Error != nil:
+		return "unhealthy"
+	case len(r.Result) > 0:
+		return "unhappy"
+	default:
+		return "healthy"
+	}
+}
+
+// IsDuplicate implements history.Deduplicable
+func (r *HealthRecord) IsDuplicate(other interface{}) bool {
+	rother, ok := other.(HealthRecord)
+	if !ok {
+		return false
+	}
+	return reflect.DeepEqual(r.Error, rother.Error) && reflect.DeepEqual(r.Result, rother.Result)
+}
+
+// ActionAgent is the main class for the agent.
 type ActionAgent struct {
 	TopoServer      topo.Server
 	TabletAlias     topo.TabletAlias
@@ -79,6 +112,9 @@ type ActionAgent struct {
 	BinlogPlayerMap *BinlogPlayerMap // optional
 
 	done chan struct{} // closed when we are done.
+
+	// This is the History of the health checks
+	History *history.History
 
 	// actionMutex is there to run only one action at a time. If
 	// both agent.actionMutex and agent.mutex needs to be taken,
@@ -98,6 +134,7 @@ func NewActionAgent(topoServer topo.Server, tabletAlias topo.TabletAlias, mysqld
 		TabletAlias:     tabletAlias,
 		Mysqld:          mysqld,
 		done:            make(chan struct{}),
+		History:         history.New(historyLength),
 		changeCallbacks: make([]TabletChangeCallback, 0, 8),
 		changeItems:     make(chan tabletChangeItem, 100),
 	}, nil
@@ -412,8 +449,15 @@ func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType, lockT
 		typeForHealthCheck = topo.TYPE_MASTER
 	}
 	health, err := health.Run(typeForHealthCheck)
+	record := HealthRecord{
+		Error:  err,
+		Result: health,
+		Time:   time.Now(),
+	}
+	agent.History.Add(record)
 
 	// TODO(alainjobart) get the state of the query service
+	// and merge it into the health record
 
 	// start with no change
 	newTabletType := tablet.Type
