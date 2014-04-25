@@ -31,6 +31,10 @@ var (
 func main() {
 	dbconfigs.RegisterFlags()
 	flag.Parse()
+	if len(flag.Args()) > 0 {
+		flag.Usage()
+		log.Fatalf("vttablet doesn't take any positional arguments")
+	}
 
 	servenv.Init()
 
@@ -67,8 +71,12 @@ func main() {
 	servenv.OnTerm(func() {
 		ts.DisallowQueries()
 		binlog.DisableUpdateStreamService()
-		topo.CloseServers()
 		agent.Stop()
+	})
+	servenv.OnClose(func() {
+		// We will still use the topo server during lameduck period
+		// to update our state, so closing it in OnClose()
+		topo.CloseServers()
 	})
 	servenv.Run()
 }
