@@ -36,6 +36,9 @@ class VTGateCursor(object):
     self.keyranges = keyranges
     self._writable = writable
 
+  def connection_list(self):
+    return [self._conn]
+
   def close(self):
     self.results = None
 
