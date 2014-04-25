@@ -100,6 +100,8 @@ func (r Record) IsDuplicate(other interface{}) bool {
 // Run runs aggregates health statuses from all the reporters. If any
 // errors occur during the reporting, they will be logged, but only
 // the first error will be returned.
+// It may return an empty map if no health condition is detected. Note
+// it will not return nil, but an empty map.
 func (ag *Aggregator) Run(typ topo.TabletType) (map[string]string, error) {
 	var (
 		wg  sync.WaitGroup

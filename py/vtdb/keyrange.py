@@ -2,6 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
+from bson import codec
 from vtdb import dbexceptions
 from vtdb import keyrange_constants
 
@@ -9,7 +10,7 @@ from vtdb import keyrange_constants
 # bind_vars for distrubuting the workload of streaming queries.
 
 
-class KeyRange(object):
+class KeyRange(codec.BSONCoding):
   Start = None
   End = None
 
@@ -22,7 +23,7 @@ class KeyRange(object):
       else:
         kr = kr.split('-')
     if not isinstance(kr, tuple) and not isinstance(kr, list) or len(kr) != 2:
-      raise dbexceptions.ProgrammingError("keyrange must be a list or tuple or a '-' separated str %s" % keyrange)
+      raise dbexceptions.ProgrammingError("keyrange must be a list or tuple or a '-' separated str %s" % kr)
     self.Start = kr[0].strip()
     self.End = kr[1].strip()
 
@@ -31,6 +32,12 @@ class KeyRange(object):
       return keyrange_constants.NON_PARTIAL_KEYRANGE
     return '%s-%s' % (self.Start, self.End)
 
+  def bson_encode(self):
+    return {"Start": self.Start, "End": self.End}
+
+  def bson_init(self, raw_values):
+    self.Start = raw_values["Start"]
+    self.End = raw_values["End"]
 
 class StreamingTaskMap(object):
   keyrange_list = None

@@ -200,5 +200,5 @@ def get_keyrange_from_shard_name(keyspace, shard_name):
     kr_parts = shard_name.split('-')
     if len(kr_parts) != 2:
       raise dbexceptions.DatabaseError('Invalid shard_name %s for keyspace %s', shard_name, keyspace)
-    keyrange = {'Start': kr_parts[0], 'End': kr_parts[1]}
+    keyrange = shard_name
   return keyrange

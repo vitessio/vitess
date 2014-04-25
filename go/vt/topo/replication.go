@@ -71,7 +71,7 @@ func (sri *ShardReplicationInfo) Shard() string {
 // AddShardReplicationRecord is a low level function to add an
 // entry to the ShardReplication object.
 func AddShardReplicationRecord(ts Server, keyspace, shard string, tabletAlias, parent TabletAlias) error {
-	f := func(sr *ShardReplication) error {
+	return ts.UpdateShardReplicationFields(tabletAlias.Cell, keyspace, shard, func(sr *ShardReplication) error {
 		// not very efficient, but easy to read
 		links := make([]ReplicationLink, 0, len(sr.ReplicationLinks)+1)
 		found := false
@@ -96,17 +96,7 @@ func AddShardReplicationRecord(ts Server, keyspace, shard string, tabletAlias, p
 		}
 		sr.ReplicationLinks = links
 		return nil
-	}
-	err := ts.UpdateShardReplicationFields(tabletAlias.Cell, keyspace, shard, f)
-	if err == ErrNoNode {
-		// The ShardReplication object doesn't exist, for some reason,
-		// just create it now.
-		if err := ts.CreateShardReplication(tabletAlias.Cell, keyspace, shard, &ShardReplication{}); err != nil {
-			return err
-		}
-		err = ts.UpdateShardReplicationFields(tabletAlias.Cell, keyspace, shard, f)
-	}
-	return err
+	})
 }
 
 // RemoveShardReplicationRecord is a low level function to remove an

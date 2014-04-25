@@ -4,19 +4,18 @@
 
 from itertools import izip
 import logging
+import random
 import re
 
 from net import bsonrpc
 from net import gorpc
+from vtdb import dbapi
 from vtdb import dbexceptions
 from vtdb import field_types
+from vtdb import keyrange
 
 
 _errno_pattern = re.compile('\(errno (\d+)\)')
-# Map specific errors to specific classes.
-_errno_map = {
-    1062: dbexceptions.IntegrityError,
-}
 
 
 __error_counter_callback = None
@@ -41,7 +40,8 @@ def convert_exception(exc, *args):
     match = _errno_pattern.search(msg)
     if match:
       mysql_errno = int(match.group(1))
-      return _errno_map.get(mysql_errno, dbexceptions.DatabaseError)(new_args)
+      if mysql_errno == 1062:
+        return dbexceptions.IntegrityError(new_args)
     return dbexceptions.DatabaseError(new_args)
   elif isinstance(exc, gorpc.ProgrammingError):
     return dbexceptions.ProgrammingError(new_args)
@@ -51,23 +51,27 @@ def convert_exception(exc, *args):
 
 
 def _create_req_with_keyspace_ids(sql, new_binds, keyspace, tablet_type, keyspace_ids):
+  sql, new_binds = dbapi.prepare_query_bind_vars(sql, new_binds)
+  new_binds = field_types.convert_bind_vars(new_binds)
   req = {
         'Sql': sql,
         'BindVariables': new_binds,
-        'Keyspace': self.keyspace,
-        'TabletType': self.tablet_type,
-        'KeyspaceIds': keyspace_ids,
+        'Keyspace': keyspace,
+        'TabletType': tablet_type,
+        'KeyspaceIds': [str(kid) for kid in keyspace_ids],
         }
   return req
 
 
 def _create_req_with_keyranges(sql, new_binds, keyspace, tablet_type, keyranges):
+  sql, new_binds = dbapi.prepare_query_bind_vars(sql, new_binds)
+  new_binds = field_types.convert_bind_vars(new_binds)
   req = {
         'Sql': sql,
         'BindVariables': new_binds,
-        'Keyspace': self.keyspace,
-        'TabletType': self.tablet_type,
-        'KeyRanges': keyranges,
+        'Keyspace': keyspace,
+        'TabletType': tablet_type,
+        'KeyRanges': [keyrange.KeyRange(kr) for kr in keyranges],
         }
   return req
 
@@ -106,6 +110,11 @@ class VTGateConnection(object):
   def is_closed(self):
     return self.client.is_closed()
 
+  def cursor(self, cursorclass=None, *pargs, **kwargs):
+    if cursorclass is None:
+      cursorclass = VTGateCursor
+    return cursorclass(*pargs, **kwargs)
+
   def begin(self):
     try:
       response = self.client.call('VTGate.Begin', None)
@@ -134,22 +143,20 @@ class VTGateConnection(object):
       req['Session'] = self.session
 
   def _update_session(self, response):
-    if 'Session' in response.reply:
+    if 'Session' in response.reply and response.reply['Session']:
       self.session = response.reply['Session']
 
   def _execute(self, sql, bind_variables, keyspace, tablet_type, keyspace_ids=None, keyranges=None):
-    new_binds = field_types.convert_bind_vars(bind_variables)
     exec_method = None
     req = None
     if keyspace_ids is not None:
-      req = self._create_req_with_keyspace_ids(sql, new_binds, keyspace, tablet_type, keyspace_ids)
+      req = _create_req_with_keyspace_ids(sql, bind_variables, keyspace, tablet_type, keyspace_ids)
       exec_method = 'VTGate.ExecuteKeyspaceIds'
-    elif keyrange is not None:
-      req = self._create_req_with_keyranges(sql, new_binds, keyspace, tablet_type, keyranges)
+    elif keyranges is not None:
+      req = _create_req_with_keyranges(sql, bind_variables, keyspace, tablet_type, keyranges)
       exec_method = 'VTGate.ExecuteKeyRanges'
     else:
       raise dbexceptions.ProgrammingError('_execute called without specifying keyspace_ids or keyranges')
-
 
     self._add_session(req)
 
@@ -160,7 +167,7 @@ class VTGateConnection(object):
       response = self.client.call(exec_method, req)
       self._update_session(response)
       reply = response.reply
-      if 'Error' in response.reply:
+      if 'Error' in response.reply and response.reply['Error']:
         raise gorpc.AppError(response.reply['Error'], exec_method)
 
       for field in reply['Fields']:
@@ -180,13 +187,17 @@ class VTGateConnection(object):
     return results, rowcount, lastrowid, fields
 
   def _execute_entity_ids(self, sql, bind_variables, keyspace, tablet_type, entity_keyspace_id_map, entity_column_name):
-    new_binds = field_types.convert_bind_vars(bind_variables)
+    sql, new_binds = dbapi.prepare_query_bind_vars(sql, bind_variables)
+    new_binds = field_types.convert_bind_vars(new_binds)
+    new_entity_kid_map = dict()
+    for k in entity_keyspace_id_map:
+      new_entity_kid_map[str(k)] = str(entity_keyspace_id_map[k])
     req = {
         'Sql': sql,
         'BindVariables': new_binds,
-        'Keyspace': self.keyspace,
-        'TabletType': self.tablet_type,
-        'EntityKeyspaceIdMap': entity_keyspace_id_map,
+        'Keyspace': keyspace,
+        'TabletType': tablet_type,
+        'EntityKeyspaceIdMap': new_entity_kid_map,
         'EntityColumnName': entity_column_name,
         }
 
@@ -199,7 +210,7 @@ class VTGateConnection(object):
       response = self.client.call('VTGate.ExecuteEntityIds', req)
       self._update_session(response)
       reply = response.reply
-      if 'Error' in response.reply:
+      if 'Error' in response.reply and response.reply['Error']:
         raise gorpc.AppError(response.reply['Error'], 'VTGate.ExecuteEntityIds')
 
       for field in reply['Fields']:
@@ -222,6 +233,7 @@ class VTGateConnection(object):
   def _execute_batch(self, sql_list, bind_variables_list, keyspace, tablet_type, keyspace_ids):
     query_list = []
     for sql, bind_vars in zip(sql_list, bind_variables_list):
+      sql, bind_vars = dbapi.prepare_query_bind_vars(sql, bind_vars)
       query = {}
       query['Sql'] = sql
       query['BindVariables'] = field_types.convert_bind_vars(bind_vars)
@@ -239,7 +251,7 @@ class VTGateConnection(object):
       self._add_session(req)
       response = self.client.call('VTGate.ExecuteBatchKeyspaceIds', req)
       self._update_session(response)
-      if 'Error' in response.reply:
+      if 'Error' in response.reply and response.reply['Error']:
         raise gorpc.AppError(response.reply['Error'], 'VTGate.ExecuteBatchKeyspaceIds')
       for reply in response.reply['List']:
         fields = []
@@ -268,17 +280,16 @@ class VTGateConnection(object):
   # the conversions will need to be passed back to _stream_next
   # (that way we avoid using a member variable here for such a corner case)
   def _stream_execute(self, sql, bind_variables, keyspace, tablet_type, keyspace_ids=None, keyranges=None):
-    new_binds = field_types.convert_bind_vars(bind_variables)
     exec_method = None
     req = None
     if keyspace_ids is not None:
-      req = self._create_req_with_keyspace_ids(sql, new_binds, keyspace, tablet_type, keyspace_ids)
+      req = _create_req_with_keyspace_ids(sql, bind_variables, keyspace, tablet_type, keyspace_ids)
       exec_method = 'VTGate.StreamExecuteKeyspaceIds'
-    elif keyrange is not None:
-      req = self._create_req_with_keyranges(sql, new_binds, keyspace, tablet_type, keyranges)
+    elif keyranges is not None:
+      req = _create_req_with_keyranges(sql, bind_variables, keyspace, tablet_type, keyranges)
       exec_method = 'VTGate.StreamExecuteKeyRanges'
     else:
-      raise dbexceptions.ProgrammingError('_execute called without specifying keyspace_ids or keyranges')
+      raise dbexceptions.ProgrammingError('_stream_execute called without specifying keyspace_ids or keyranges')
 
     self._add_session(req)
 
@@ -314,8 +325,12 @@ class VTGateConnection(object):
           self._stream_result_index = None
           return None
         # A session message, if any comes separately with no rows
-        if 'Session' in self._stream_result.reply:
+        if 'Session' in self._stream_result.reply and self._stream_result.reply['Session']:
           self.session = self._stream_result.reply['Session']
+          self._stream_result = None
+          continue
+        # An extra fields message if it is scatter over streaming, ignore it
+        if not self._stream_result.reply['Rows']:
           self._stream_result = None
           continue
       except gorpc.GoRpcError as e:
@@ -377,9 +392,9 @@ def get_params_for_vtgate_conn(vtgate_addrs, timeout, encrypted=False, user=None
 
 
 def connect(vtgate_addrs, timeout, encrypted=False, user=None, password=None):
-  db_params = get_params_for_vtgate_conn(vtgate_addrs, timeout,
-                                         encrypted=encrypted, user=user,
-                                         password=password)
+  db_params_list = get_params_for_vtgate_conn(vtgate_addrs, timeout,
+                                              encrypted=encrypted, user=user,
+                                              password=password)
 
   if not db_params_list:
    raise dbexceptions.OperationalError("empty db params list - no db instance available for vtgate_addrs %s" % vtgate_addrs)
