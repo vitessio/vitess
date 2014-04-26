@@ -56,8 +56,6 @@ import (
 
 var (
 	vtactionBinaryPath = flag.String("vtaction_binary_path", "", "Full path (including filename) to vtaction binary. If not set, tries VTROOT/bin/vtaction.")
-
-	historyLength = 16
 )
 
 type tabletChangeItem struct {

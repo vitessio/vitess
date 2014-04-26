@@ -19,7 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	ts "github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -30,10 +30,13 @@ var (
 	statsShard         = stats.NewString("TabletShard")
 	statsKeyRangeStart = stats.NewString("TabletKeyRangeStart")
 	statsKeyRangeEnd   = stats.NewString("TabletKeyRangeEnd")
+
+	// constants for this module
+	historyLength = 16
 )
 
-func loadSchemaOverrides(overridesFile string) []ts.SchemaOverride {
-	var schemaOverrides []ts.SchemaOverride
+func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
+	var schemaOverrides []tabletserver.SchemaOverride
 	if overridesFile == "" {
 		return schemaOverrides
 	}
@@ -101,11 +104,11 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet) error {
 	}
 
 	// Compute the query rules that match the tablet record
-	qrs := ts.LoadCustomRules()
+	qrs := tabletserver.LoadCustomRules()
 	if tablet.KeyRange.IsPartial() {
-		qr := ts.NewQueryRule("enforce keyspace_id range", "keyspace_id_not_in_range", ts.QR_FAIL_QUERY)
+		qr := tabletserver.NewQueryRule("enforce keyspace_id range", "keyspace_id_not_in_range", tabletserver.QR_FAIL_QUERY)
 		qr.AddPlanCond(sqlparser.PLAN_INSERT_PK)
-		err := qr.AddBindVarCond("keyspace_id", true, true, ts.QR_NOTIN, tablet.KeyRange)
+		err := qr.AddBindVarCond("keyspace_id", true, true, tabletserver.QR_NOTIN, tablet.KeyRange)
 		if err != nil {
 			log.Warningf("Unable to add keyspace rule: %v", err)
 		} else {
@@ -114,7 +117,7 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet) error {
 	}
 	if len(tablet.BlacklistedTables) > 0 {
 		log.Infof("Blacklisting tables %v", strings.Join(tablet.BlacklistedTables, ", "))
-		qr := ts.NewQueryRule("enforce blacklisted tables", "blacklisted_table", ts.QR_FAIL_QUERY)
+		qr := tabletserver.NewQueryRule("enforce blacklisted tables", "blacklisted_table", tabletserver.QR_FAIL_QUERY)
 		for _, t := range tablet.BlacklistedTables {
 			qr.AddTableCond(t)
 		}
@@ -122,14 +125,14 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet) error {
 	}
 
 	// FIXME(alainjobart) get a synchronous return value here, and return it
-	ts.AllowQueries(&agent.DBConfigs.App, agent.SchemaOverrides, qrs, agent.Mysqld)
+	tabletserver.AllowQueries(&agent.DBConfigs.App, agent.SchemaOverrides, qrs, agent.Mysqld)
 
 	// For now we assume it's working and return nil
 	return nil
 }
 
 func (agent *ActionAgent) disallowQueries() {
-	ts.DisallowQueries()
+	tabletserver.DisallowQueries()
 }
 
 // changeCallback is run after every action that might
