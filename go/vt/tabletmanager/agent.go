@@ -39,7 +39,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"reflect"
 	"sync"
 	"time"
 
@@ -66,34 +65,6 @@ type tabletChangeItem struct {
 	newTablet  topo.Tablet
 	context    string
 	queuedTime time.Time
-}
-
-// HealthRecord records one run of the health checker
-type HealthRecord struct {
-	Error  error
-	Result map[string]string
-	Time   time.Time
-}
-
-// This returns a readable one word version of the health
-func (r *HealthRecord) Class() string {
-	switch {
-	case r.Error != nil:
-		return "unhealthy"
-	case len(r.Result) > 0:
-		return "unhappy"
-	default:
-		return "healthy"
-	}
-}
-
-// IsDuplicate implements history.Deduplicable
-func (r *HealthRecord) IsDuplicate(other interface{}) bool {
-	rother, ok := other.(HealthRecord)
-	if !ok {
-		return false
-	}
-	return reflect.DeepEqual(r.Error, rother.Error) && reflect.DeepEqual(r.Result, rother.Result)
 }
 
 // ActionAgent is the main class for the agent.

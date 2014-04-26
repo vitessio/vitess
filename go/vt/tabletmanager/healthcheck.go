@@ -11,6 +11,7 @@ package tabletmanager
 import (
 	"flag"
 	"fmt"
+	"reflect"
 	"time"
 
 	log "github.com/golang/glog"
@@ -28,6 +29,34 @@ var (
 	targetTabletType    = flag.String("target_tablet_type", "", "The tablet type we are thriving to be when healthy. When not healthy, we'll go to spare.")
 	lockTimeout         = flag.Duration("lock_timeout", actionnode.DefaultLockTimeout, "lock time for wrangler/topo operations")
 )
+
+// HealthRecord records one run of the health checker
+type HealthRecord struct {
+	Error  error
+	Result map[string]string
+	Time   time.Time
+}
+
+// This returns a readable one word version of the health
+func (r *HealthRecord) Class() string {
+	switch {
+	case r.Error != nil:
+		return "unhealthy"
+	case len(r.Result) > 0:
+		return "unhappy"
+	default:
+		return "healthy"
+	}
+}
+
+// IsDuplicate implements history.Deduplicable
+func (r *HealthRecord) IsDuplicate(other interface{}) bool {
+	rother, ok := other.(HealthRecord)
+	if !ok {
+		return false
+	}
+	return reflect.DeepEqual(r.Error, rother.Error) && reflect.DeepEqual(r.Result, rother.Result)
+}
 
 func (agent *ActionAgent) initHeathCheck() {
 	if *targetTabletType == "" {
