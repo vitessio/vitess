@@ -89,7 +89,6 @@ class VTGateConnection(object):
   def __init__(self, addr, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None):
     self.addr = addr
     self.timeout = timeout
-    self._connection_key = ''
     self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password, encrypted=encrypted, keyfile=keyfile, certfile=certfile)
 
   def __str__(self):
@@ -144,7 +143,7 @@ class VTGateConnection(object):
       req['Session'] = self.session
 
   def _update_session(self, response):
-    if 'Session' in response.reply:
+    if 'Session' in response.reply and response.reply['Session']:
       self.session = response.reply['Session']
 
   def _execute(self, sql, bind_variables, keyspace, tablet_type, keyspace_ids=None, keyranges=None):
@@ -158,7 +157,6 @@ class VTGateConnection(object):
       exec_method = 'VTGate.ExecuteKeyRanges'
     else:
       raise dbexceptions.ProgrammingError('_execute called without specifying keyspace_ids or keyranges')
-
 
     self._add_session(req)
 
@@ -282,18 +280,16 @@ class VTGateConnection(object):
   # the conversions will need to be passed back to _stream_next
   # (that way we avoid using a member variable here for such a corner case)
   def _stream_execute(self, sql, bind_variables, keyspace, tablet_type, keyspace_ids=None, keyranges=None):
-    sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
-    new_binds = field_types.convert_bind_vars(bind_variables)
     exec_method = None
     req = None
     if keyspace_ids is not None:
-      req = _create_req_with_keyspace_ids(sql, new_binds, keyspace, tablet_type, keyspace_ids)
+      req = _create_req_with_keyspace_ids(sql, bind_variables, keyspace, tablet_type, keyspace_ids)
       exec_method = 'VTGate.StreamExecuteKeyspaceIds'
-    elif keyrange is not None:
-      req = _create_req_with_keyranges(sql, new_binds, keyspace, tablet_type, keyranges)
+    elif keyranges is not None:
+      req = _create_req_with_keyranges(sql, bind_variables, keyspace, tablet_type, keyranges)
       exec_method = 'VTGate.StreamExecuteKeyRanges'
     else:
-      raise dbexceptions.ProgrammingError('_execute called without specifying keyspace_ids or keyranges')
+      raise dbexceptions.ProgrammingError('_stream_execute called without specifying keyspace_ids or keyranges')
 
     self._add_session(req)
 
@@ -329,8 +325,12 @@ class VTGateConnection(object):
           self._stream_result_index = None
           return None
         # A session message, if any comes separately with no rows
-        if 'Session' in self._stream_result.reply:
+        if 'Session' in self._stream_result.reply and self._stream_result.reply['Session']:
           self.session = self._stream_result.reply['Session']
+          self._stream_result = None
+          continue
+        # An extra fields message if it is scatter over streaming, ignore it
+        if not self._stream_result.reply['Rows']:
           self._stream_result = None
           continue
       except gorpc.GoRpcError as e:

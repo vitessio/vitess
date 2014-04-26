@@ -276,9 +276,9 @@ drop_statement:
 		$$ = NewSimpleParseNode(ALTER, "alter")
 		$$.Push($5)
 	}
-| DROP VIEW sql_id force_eof
+| DROP VIEW exists_opt sql_id force_eof
 	{
-		$$.Push($3)
+		$$.Push($4)
 	}
 
 comment_opt:

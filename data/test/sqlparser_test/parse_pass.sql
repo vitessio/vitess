@@ -160,4 +160,5 @@ alter view a#alter table a
 drop view a#drop table a
 drop table a
 drop table if exists a#drop table a
+drop view if exists a#drop table a
 drop index b on a#alter table a
