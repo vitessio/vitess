@@ -4,7 +4,6 @@ import os
 import re
 import time
 import urllib2
-import uuid
 
 import environment
 import framework
@@ -101,40 +100,17 @@ class Log(object):
   def check_rewritten_sql(self, case):
     if case.rewritten is None:
       return
-    rewritten = '; '.join(case.rewritten)
-    if rewritten != self.rewritten_sql:
-      self.fail("Bad rewritten SQL", rewritten, self.rewritten_sql)
+    queries = []
+    for q in ast.literal_eval(self.rewritten_sql).split(';'):
+      q = q.strip()
+      if q and q != '*/':
+        queries.append(q)
+    if case.rewritten != queries:
+      return self.fail("Bad rewritten SQL", case.rewritten, queries)
 
   def check_number_of_queries(self, case):
     if case.rewritten is not None and int(self.number_of_queries) != len(case.rewritten):
       return self.fail("wrong number of queries", len(case.rewritten), int(self.number_of_queries))
-
-
-class Querylog(object):
-
-  def __init__(self, env):
-    self.env = env
-    self.id = str(uuid.uuid4())
-
-  @property
-  def path(self):
-    return os.path.join(environment.vtlogroot, 'querylog' + self.id)
-
-  @property
-  def path_full(self):
-    return os.path.join(environment.vtlogroot, 'querylog_full' + self.id)
-
-  def __enter__(self):
-    self.curl = utils.curl(self.env.url('/debug/querylog'), background=True, stdout=open(self.path, 'w'))
-    self.curl_full = utils.curl(self.env.url('/debug/querylog?full=true'), background=True, stdout=open(self.path_full, 'w'))
-    time.sleep(0.3)
-    self.tailer = framework.Tailer(open(self.path), sleep=0.1)
-    return self
-
-  def __exit__(self, *args, **kwargs):
-    self.curl.terminate()
-    self.curl_full.terminate()
-    return
 
 
 class Case(object):
@@ -161,19 +137,6 @@ class Case(object):
     self.cache_invalidations = cache_invalidations
     self.remote_address = remote_address
 
-  def normalizelog(self, data):
-    if not data:
-      return []
-    queries = []
-    for line in data.split('\n'):
-      if not line:
-        continue
-      for q in ast.literal_eval(Log(line).rewritten_sql).split(';'):
-        q = q.strip()
-        if q and q != '*/':
-          queries.append(q)
-    return queries
-
   @property
   def is_testing_cache(self):
     return any(attr is not None for attr in [self.cache_hits,
@@ -183,21 +146,20 @@ class Case(object):
 
   def run(self, cursor, env):
     failures = []
-    with Querylog(env) as querylog:
-      if self.is_testing_cache:
-        tstart = self.table_stats(env)
-      if self.sql in ('begin', 'commit', 'rollback'):
-        getattr(cursor.connection, self.sql)()
-      else:
-        cursor.execute(self.sql, self.bindings)
-      if self.result is not None:
-        result = list(cursor)
-        if self.result != result:
-          failures.append("%r:\n%s !=\n%s" % (self.sql, self.result, result))
-      if self.rewritten:
-        rewritten = self.normalizelog(querylog.tailer.read())
-        if self.rewritten != rewritten:
-          failures.append("%r:\n%s !=\n%s" % (self.sql, self.rewritten, rewritten))
+    env.querylog.reset()
+    if self.is_testing_cache:
+      tstart = self.table_stats(env)
+    if self.sql in ('begin', 'commit', 'rollback'):
+      getattr(cursor.connection, self.sql)()
+    else:
+      cursor.execute(self.sql, self.bindings)
+    if self.result is not None:
+      result = list(cursor)
+      if self.result != result:
+        failures.append("%r:\n%s !=\n%s" % (self.sql, self.result, result))
+    case_failures = Log(env.querylog.tailer.read()).check(self)
+    if case_failures:
+      failures.extend(case_failures)
 
     if self.is_testing_cache:
       tdelta = self.table_stats_delta(tstart, env)
