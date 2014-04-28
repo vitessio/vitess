@@ -53,7 +53,10 @@ func main() {
 
 	ts.InitQueryService()
 
-	ts.AllowQueries(&dbConfigs.App, schemaOverrides, ts.LoadCustomRules(), mysqld)
+	err = ts.AllowQueries(&dbConfigs.App, schemaOverrides, ts.LoadCustomRules(), mysqld)
+	if err != nil {
+		return
+	}
 
 	log.Infof("starting vtocc %v", *servenv.Port)
 	servenv.OnTerm(func() {

@@ -23,15 +23,11 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
-// exclusive transitions can be executed without a lock
-// NOT_SERVING -> CONNECTING
-// CONNECTING -> ABORT -> NOT_SERVING
-// CONNECTING -> INITIALIZING -> SERVING/NOT_SERVING
+// Allowed state transitions:
+// NOT_SERVING -> INITIALIZING -> SERVING/NOT_SERVING,
 // SERVING -> SHUTTING_DOWN -> NOT_SERVING
 const (
 	NOT_SERVING = iota
-	CONNECTING
-	ABORT
 	INITIALIZING
 	SERVING
 	SHUTTING_DOWN
@@ -39,8 +35,6 @@ const (
 
 var stateName = map[int64]string{
 	NOT_SERVING:   "NOT_SERVING",
-	CONNECTING:    "CONNECTING",
-	ABORT:         "ABORT",
 	INITIALIZING:  "INITIALIZING",
 	SERVING:       "SERVING",
 	SHUTTING_DOWN: "SHUTTING_DOWN",
@@ -95,58 +89,19 @@ func (sq *SqlQuery) setState(state int64) {
 	sq.state.Set(state)
 }
 
-func (sq *SqlQuery) allowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules, mysqld *mysqlctl.Mysqld) {
+func (sq *SqlQuery) allowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules, mysqld *mysqlctl.Mysqld) (err error) {
 	sq.statemu.Lock()
 	defer sq.statemu.Unlock()
-
-	v := sq.state.Get()
-	switch v {
-	case CONNECTING, ABORT, SERVING:
-		log.Infof("Ignoring allowQueries request, current state: %v", v)
-		return
-	case INITIALIZING, SHUTTING_DOWN:
-		panic("unreachable")
-	}
-	// state is NOT_SERVING
-	sq.setState(CONNECTING)
-
-	// When this function exits, state can be CONNECTING or ABORT
-	func() {
-		sq.statemu.Unlock()
-		defer sq.statemu.Lock()
-
-		waitTime := time.Second
-		// disallowQueries can change the state to ABORT during this time.
-		for sq.state.Get() != ABORT {
-			params, err := dbconfigs.MysqlParams(&dbconfig.ConnectionParams)
-			if err == nil {
-				c, err := mysql.Connect(params)
-				if err == nil {
-					c.Close()
-					break
-				}
-				log.Errorf("mysql.Connect() error: %v", err)
-			} else {
-				log.Errorf("dbconfigs.MysqlParams error: %v", err)
-			}
-			time.Sleep(waitTime)
-			// Cap at 32 seconds
-			if waitTime < 30*time.Second {
-				waitTime = waitTime * 2
-			}
-		}
-	}()
-
-	if sq.state.Get() == ABORT {
-		sq.setState(NOT_SERVING)
-		log.Infof("allowQueries aborting")
-		return
+	if sq.state.Get() == SERVING {
+		log.Infof("Ignoring allowQueries request, already serving.")
+		return nil
 	}
 	sq.setState(INITIALIZING)
 
 	defer func() {
 		if x := recover(); x != nil {
-			log.Errorf("%s", x.(*TabletError).Message)
+			err = x.(*TabletError)
+			log.Errorf("Could not start query service: %v", err)
 			sq.qe.Close()
 			sq.rci.Close()
 			sq.setState(NOT_SERVING)
@@ -162,22 +117,15 @@ func (sq *SqlQuery) allowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides [
 	sq.dbconfig = dbconfig
 	sq.sessionId = Rand()
 	log.Infof("Session id: %d", sq.sessionId)
+	return nil
 }
 
 func (sq *SqlQuery) disallowQueries() {
 	sq.statemu.Lock()
 	defer sq.statemu.Unlock()
-
-	switch sq.state.Get() {
-	case CONNECTING:
-		sq.setState(ABORT)
+	if sq.state.Get() == NOT_SERVING {
 		return
-	case NOT_SERVING, ABORT:
-		return
-	case INITIALIZING, SHUTTING_DOWN:
-		panic("unreachable")
 	}
-	// state is SERVING
 	sq.setState(SHUTTING_DOWN)
 	defer func() {
 		sq.setState(NOT_SERVING)
@@ -199,10 +147,8 @@ func (sq *SqlQuery) disallowQueries() {
 // NOT_SERVING: RETRY for all.
 func (sq *SqlQuery) checkState(sessionId int64, allowShutdown bool) {
 	switch sq.state.Get() {
-	case NOT_SERVING:
+	case NOT_SERVING, INITIALIZING:
 		panic(NewTabletError(RETRY, "not serving"))
-	case CONNECTING, ABORT, INITIALIZING:
-		panic(NewTabletError(RETRY, "initalizing"))
 	case SHUTTING_DOWN:
 		if !allowShutdown {
 			panic(NewTabletError(RETRY, "unavailable"))
