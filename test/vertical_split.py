@@ -267,7 +267,7 @@ index by_msg (msg)
     for t in [source_master, source_replica, source_rdonly]:
       t.wait_for_vttablet_state('SERVING')
     for t in [destination_master, destination_replica, destination_rdonly]:
-      t.wait_for_vttablet_state('CONNECTING')
+      t.wait_for_vttablet_state('NOT_SERVING')
 
     # reparent to make the tablets work
     utils.run_vtctl(['ReparentShard', '-force', 'source_keyspace/0',
