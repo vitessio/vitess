@@ -46,11 +46,11 @@ cases = [
            'select eid, id from vtocc_a where 1 != 1',
            'select /* limit */ eid, id from vtocc_a limit 1']),
     Case(doc='multi-table',
-         sql='select /* multi-table */ a.eid, a.id, b.eid, b.id  from vtocc_a as a, vtocc_b as b',
-         result=[(1L, 1L, 1L, 1L), (1L, 2L, 1L, 1L), (1L, 1L, 1L, 2L), (1L, 2L, 1L, 2L)],
+         sql='select /* multi-table */ a.eid, a.id, b.eid, b.id  from vtocc_a as a, vtocc_b as b order by a.eid, a.id, b.eid, b.id',
+         result=[(1L, 1L, 1L, 1L), (1L, 1L, 1L, 2L), (1L, 2L, 1L, 1L), (1L, 2L, 1L, 2L)],
          rewritten=[
            'select a.eid, a.id, b.eid, b.id from vtocc_a as a, vtocc_b as b where 1 != 1',
-           'select /* multi-table */ a.eid, a.id, b.eid, b.id from vtocc_a as a, vtocc_b as b limit 10001']),
+           'select /* multi-table */ a.eid, a.id, b.eid, b.id from vtocc_a as a, vtocc_b as b order by a.eid asc, a.id asc, b.eid asc, b.id asc limit 10001']),
 
     Case(doc='join',
          sql='select /* join */ a.eid, a.id, b.eid, b.id from vtocc_a as a join vtocc_b as b on a.eid = b.eid and a.id = b.id',
@@ -343,7 +343,7 @@ cases = [
          'commit',
          Case(sql='select * from vtocc_a where eid in (10, 11)',
               result=[(10L, 1L, 'abcd', '20'), (11L, 1L, 'bcde', '30')]),
-         'alter table vtocc_e auto_increment = 1',
+         'alter table vtocc_e auto_increment = 20',
          'begin',
          Case(sql='insert into vtocc_e(id, name, foo) select eid, name, foo from vtocc_c',
            rewritten=[
@@ -352,7 +352,7 @@ cases = [
              ]),
          'commit',
          Case(sql='select eid, id, name, foo from vtocc_e',
-           result=[(1L, 10L, 'abcd', '20'), (2L, 11L, 'bcde', '30')]),
+           result=[(20L, 10L, 'abcd', '20'), (21L, 11L, 'bcde', '30')]),
          'begin',
          'delete from vtocc_a where eid>1',
          'delete from vtocc_c where eid<10',
