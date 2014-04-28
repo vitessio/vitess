@@ -150,9 +150,8 @@ func RegisterQueryService() {
 
 // AllowQueries can take an indefinite amount of time to return because
 // it keeps retrying until it obtains a valid connection to the database.
-func AllowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules, mysqld *mysqlctl.Mysqld) {
-	defer logError()
-	SqlQueryRpcService.allowQueries(dbconfig, schemaOverrides, qrs, mysqld)
+func AllowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules, mysqld *mysqlctl.Mysqld) error {
+	return SqlQueryRpcService.allowQueries(dbconfig, schemaOverrides, qrs, mysqld)
 }
 
 // DisallowQueries can take a long time to return (not indefinite) because

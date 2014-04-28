@@ -13,7 +13,7 @@ It has two execution models:
 
   All vtaction calls lock the actionMutex.
 
-  After executing vtaction, we always call the ChangeCallbacks.
+  After executing vtaction, we always call agent.changeCallback.
   Additionnally, for TABLET_ACTION_APPLY_SCHEMA, we will force a schema
   reload.
 
@@ -22,11 +22,11 @@ It has two execution models:
 
   Most RPC calls lock the actionMutex, except the easy read-donly ones.
 
-  We will not call the ChangeCallbacks for all actions, just for the ones
+  We will not call changeCallback for all actions, just for the ones
   that are relevant. Same for schema reload.
 
   See rpc_server.go for all cases, and which action takes the actionMutex,
-  runs the ChangeCallbacks, and reloads the schema.
+  runs changeCallback, and reloads the schema.
 
 */
 
@@ -43,26 +43,20 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/history"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/env"
-	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topotools"
 )
 
 var (
 	vtactionBinaryPath = flag.String("vtaction_binary_path", "", "Full path (including filename) to vtaction binary. If not set, tries VTROOT/bin/vtaction.")
 )
-
-// Each TabletChangeCallback must be idempotent and "threadsafe".  The
-// agent will execute these in a new goroutine each time a change is
-// triggered. We won't run two in parallel.
-type TabletChangeCallback func(oldTablet, newTablet topo.Tablet)
 
 type tabletChangeItem struct {
 	oldTablet  topo.Tablet
@@ -71,14 +65,25 @@ type tabletChangeItem struct {
 	queuedTime time.Time
 }
 
+// ActionAgent is the main class for the agent.
 type ActionAgent struct {
+	// The following fields are set during creation
 	TopoServer      topo.Server
 	TabletAlias     topo.TabletAlias
-	vtActionBinFile string // path to vtaction binary
 	Mysqld          *mysqlctl.Mysqld
-	BinlogPlayerMap *BinlogPlayerMap // optional
+	DBConfigs       *dbconfigs.DBConfigs
+	SchemaOverrides []tabletserver.SchemaOverride
 
-	done chan struct{} // closed when we are done.
+	// BinlogPlayerMap is optional
+	BinlogPlayerMap *BinlogPlayerMap
+
+	// Internal variables
+	vtActionBinFile string        // path to vtaction binary
+	done            chan struct{} // closed when we are done.
+
+	// This is the History of the health checks, public so status
+	// pages can display it
+	History *history.History
 
 	// actionMutex is there to run only one action at a time. If
 	// both agent.actionMutex and agent.mutex needs to be taken,
@@ -86,30 +91,12 @@ type ActionAgent struct {
 	actionMutex sync.Mutex // to run only one action at a time
 
 	// mutex is protecting the rest of the members
-	mutex           sync.Mutex
-	changeCallbacks []TabletChangeCallback
-	changeItems     chan tabletChangeItem
-	_tablet         *topo.TabletInfo
+	mutex       sync.Mutex
+	changeItems chan tabletChangeItem
+	_tablet     *topo.TabletInfo
 }
 
-func NewActionAgent(topoServer topo.Server, tabletAlias topo.TabletAlias, mysqld *mysqlctl.Mysqld) (*ActionAgent, error) {
-	return &ActionAgent{
-		TopoServer:      topoServer,
-		TabletAlias:     tabletAlias,
-		Mysqld:          mysqld,
-		done:            make(chan struct{}),
-		changeCallbacks: make([]TabletChangeCallback, 0, 8),
-		changeItems:     make(chan tabletChangeItem, 100),
-	}, nil
-}
-
-func (agent *ActionAgent) AddChangeCallback(f TabletChangeCallback) {
-	agent.mutex.Lock()
-	agent.changeCallbacks = append(agent.changeCallbacks, f)
-	agent.mutex.Unlock()
-}
-
-func (agent *ActionAgent) runChangeCallbacks(oldTablet *topo.Tablet, context string) {
+func (agent *ActionAgent) runChangeCallback(oldTablet *topo.Tablet, context string) {
 	agent.mutex.Lock()
 	// Access directly since we have the lock.
 	newTablet := agent._tablet.Tablet
@@ -122,16 +109,14 @@ func (agent *ActionAgent) executeCallbacksLoop() {
 	for {
 		select {
 		case changeItem := <-agent.changeItems:
-			var wg sync.WaitGroup
+			wg := sync.WaitGroup{}
 			agent.mutex.Lock()
-			for _, f := range agent.changeCallbacks {
-				log.Infof("Running tablet callback after %v: %v %v", time.Now().Sub(changeItem.queuedTime), changeItem.context, f)
-				wg.Add(1)
-				go func(f TabletChangeCallback, oldTablet, newTablet topo.Tablet) {
-					defer wg.Done()
-					f(oldTablet, newTablet)
-				}(f, changeItem.oldTablet, changeItem.newTablet)
-			}
+			log.Infof("Running tablet callback after %v: %v", time.Now().Sub(changeItem.queuedTime), changeItem.context)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				agent.changeCallback(changeItem.oldTablet, changeItem.newTablet)
+			}()
 			agent.mutex.Unlock()
 			wg.Wait()
 		case <-agent.done:
@@ -255,7 +240,7 @@ func (agent *ActionAgent) afterAction(context string, reloadSchema bool) {
 			agent.mutex.Unlock()
 		}
 
-		agent.runChangeCallbacks(oldTablet, context)
+		agent.runChangeCallback(oldTablet, context)
 	}
 
 	// Maybe invalidate the schema.
@@ -366,7 +351,7 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 	}
 
 	oldTablet := &topo.Tablet{}
-	agent.runChangeCallbacks(oldTablet, "Start")
+	agent.runChangeCallback(oldTablet, "Start")
 
 	go agent.actionEventLoop()
 	go agent.executeCallbacksLoop()
@@ -385,93 +370,4 @@ func (agent *ActionAgent) actionEventLoop() {
 		return agent.dispatchAction(actionPath, data)
 	}
 	agent.TopoServer.ActionEventLoop(agent.TabletAlias, f, agent.done)
-}
-
-// RunHealthCheck takes the action mutex, runs the health check,
-// and if we need to change our state, do it.
-// If we are the master, we don't change our type, healthy or not.
-// If we are not the master, we change to spare if not healthy,
-// or to the passed in targetTabletType if healthy.
-//
-// Note we only update the topo record if we need to, that is if our type or
-// health details changed.
-func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType, lockTimeout time.Duration) {
-	agent.actionMutex.Lock()
-	defer agent.actionMutex.Unlock()
-
-	// read the current tablet record
-	agent.mutex.Lock()
-	tablet := agent._tablet
-	agent.mutex.Unlock()
-
-	// run the health check
-	typeForHealthCheck := targetTabletType
-	if tablet.Type == topo.TYPE_MASTER {
-		typeForHealthCheck = topo.TYPE_MASTER
-	}
-	health, err := health.Run(typeForHealthCheck)
-
-	// start with no change
-	newTabletType := tablet.Type
-	if err != nil {
-		if tablet.Type != targetTabletType {
-			log.Infof("Tablet not healthy and in state %v, not changing it: %v", tablet.Type, err)
-			return
-		}
-		log.Infof("Tablet not healthy, converting it from %v to spare: %v", targetTabletType, err)
-		newTabletType = topo.TYPE_SPARE
-	} else {
-		// We are healthy, maybe with health, see if we need
-		// to update the record. We only change from spare to
-		// our target type.
-		if tablet.Type == topo.TYPE_SPARE {
-			newTabletType = targetTabletType
-		}
-		if tablet.Type == newTabletType && tablet.IsHealthEqual(health) {
-			// no change in health, not logging anything,
-			// and we're done
-			return
-		}
-
-		// we need to update our state
-		log.Infof("Updating tablet record as healthy type %v -> %v with health details %v -> %v", tablet.Type, newTabletType, tablet.Health, health)
-	}
-
-	// Change the Type, update the health. Note we pass in a map
-	// that's not nil, meaning if it's empty, we will clear it.
-	if err := topotools.ChangeType(agent.TopoServer, tablet.Alias, newTabletType, health, true /*runHooks*/); err != nil {
-		log.Infof("Error updating tablet record: %v", err)
-		return
-	}
-
-	// Rebuild the serving graph in our cell, only if we're dealing with
-	// a serving type
-	if topo.IsInServingGraph(targetTabletType) {
-		// TODO: interrupted may need to be a global one closed when we exit
-		interrupted := make(chan struct{})
-
-		if *topotools.UseSrvShardLocks {
-			// no need to take the shard lock in this case
-			if err := topotools.RebuildShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, topotools.RebuildShardOptions{Cells: []string{tablet.Alias.Cell}, IgnorePartialResult: true}, lockTimeout, interrupted); err != nil {
-				log.Warningf("topotools.RebuildShard returned an error: %v", err)
-				return
-			}
-		} else {
-			actionNode := actionnode.RebuildShard()
-			lockPath, err := actionNode.LockShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, lockTimeout, interrupted)
-			if err != nil {
-				log.Warningf("Cannot lock shard for rebuild: %v", err)
-				return
-			}
-			err = topotools.RebuildShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, topotools.RebuildShardOptions{Cells: []string{tablet.Alias.Cell}, IgnorePartialResult: true}, lockTimeout, interrupted)
-			err = actionNode.UnlockShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, lockPath, err)
-			if err != nil {
-				log.Warningf("UnlockShard returned an error: %v", err)
-				return
-			}
-		}
-	}
-
-	// run the post action callbacks
-	agent.afterAction("healthcheck", false /* reloadSchema */)
 }

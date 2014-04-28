@@ -28,6 +28,10 @@ var schemaOverrides []ts.SchemaOverride
 func main() {
 	dbconfigs.RegisterFlags()
 	flag.Parse()
+	if len(flag.Args()) > 0 {
+		flag.Usage()
+		log.Fatalf("vtocc doesn't take any positional arguments")
+	}
 	servenv.Init()
 
 	dbConfigs, err := dbconfigs.Init("")
@@ -49,7 +53,10 @@ func main() {
 
 	ts.InitQueryService()
 
-	ts.AllowQueries(&dbConfigs.App, schemaOverrides, ts.LoadCustomRules(), mysqld)
+	err = ts.AllowQueries(&dbConfigs.App, schemaOverrides, ts.LoadCustomRules(), mysqld)
+	if err != nil {
+		return
+	}
 
 	log.Infof("starting vtocc %v", *servenv.Port)
 	servenv.OnTerm(func() {

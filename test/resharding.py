@@ -413,12 +413,9 @@ primary key (name)
     for t in [shard_2_master, shard_2_replica1, shard_2_replica2,
               shard_3_master, shard_3_replica, shard_3_rdonly]:
       t.start_vttablet(wait_for_state=None)
-    shard_2_master.wait_for_vttablet_state('CONNECTING')
-    shard_2_replica1.wait_for_vttablet_state('NOT_SERVING')
-    shard_2_replica2.wait_for_vttablet_state('NOT_SERVING')
-    shard_3_master.wait_for_vttablet_state('CONNECTING')
-    shard_3_replica.wait_for_vttablet_state('NOT_SERVING')
-    shard_3_rdonly.wait_for_vttablet_state('CONNECTING')
+    for t in [shard_2_master, shard_2_replica1, shard_2_replica2,
+              shard_3_master, shard_3_replica, shard_3_rdonly]:
+      t.wait_for_vttablet_state('NOT_SERVING')
 
     utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/80-C0',
                      shard_2_master.tablet_alias], auto_log=True)

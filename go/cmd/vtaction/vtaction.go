@@ -17,7 +17,7 @@ import (
 	_ "github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actor"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -60,7 +60,7 @@ func main() {
 	topoServer := topo.GetServer()
 	defer topo.CloseServers()
 
-	actor := tabletmanager.NewTabletActor(mysqld, mysqld, topoServer, topo.TabletAlias{})
+	actor := actor.NewTabletActor(mysqld, mysqld, topoServer, topo.TabletAlias{})
 
 	// we delegate out startup to the micromanagement server so these actions
 	// will occur after we have obtained our socket.
