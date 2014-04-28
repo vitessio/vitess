@@ -2,7 +2,13 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tabletmanager
+/*
+Package actor contains the code for all the actions executed
+remotely on a tablet. These actions can be executed as:
+- RPCs: called directly from vttablet
+- ActionNodes: executed from within vtaction
+*/
+package actor
 
 import (
 	"encoding/json"
@@ -44,6 +50,7 @@ func (e TabletActorError) Error() string {
 	return string(e)
 }
 
+// TabletActor is the main object for this package.
 type TabletActor struct {
 	mysqld      *mysqlctl.Mysqld
 	mysqlDaemon mysqlctl.MysqlDaemon

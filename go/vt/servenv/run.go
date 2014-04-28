@@ -50,7 +50,7 @@ func Run() {
 
 	proc.Wait()
 	l.Close()
-	log.Info("Entering lameduck mode")
+	log.Infof("Entering lameduck mode for %v", *LameduckPeriod)
 	go onTermHooks.Fire()
 	time.Sleep(*LameduckPeriod)
 	log.Info("Shutting down")
