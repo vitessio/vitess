@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import time
 import urllib2
+import uuid
 
 from vtdb import tablet as tablet_conn
 from vtdb import cursor
@@ -32,8 +33,20 @@ class TestEnv(object):
   memcache = False
   sensitive_mode = False
   port = 0
+  querylog = None
 
   txlog_file = os.path.join(environment.vtlogroot, "txlog")
+
+
+  # call postSetup after the derived class setUp is done.
+  def postSetup(self):
+    self.querylog = Querylog(self)
+
+  # call preTeardown before the derived class tearDown does its cleanup.
+  def preTeardown(self):
+    if self.querylog:
+      self.querylog.close()
+    self.querylog = None
 
   @property
   def address(self):
@@ -75,17 +88,6 @@ class TestEnv(object):
 
   def health(self):
     return self.http_get("/debug/health", use_json=False)
-
-  def check_streamlog(self, cases, log):
-    error_count = 0
-
-    for case, line in zip(cases_framework.cases_iterator(cases), log):
-      log = cases_framework.Log(line)
-      failures = log.check(case)
-      error_count += len(failures)
-      for fail in failures:
-        print "FAIL:", case, fail
-    return error_count
 
   def check_full_streamlog(self, fi):
     # FIXME(szopa): better test?
@@ -136,21 +138,19 @@ class TestEnv(object):
     curs = cursor.TabletCursor(self.conn)
     error_count = 0
 
-    with cases_framework.Querylog(self) as querylog:
-      for case in cases:
-        if isinstance(case, basestring):
-          curs.execute(case)
-          continue
-        try:
-          failures = case.run(curs, self)
-        except Exception:
-          print "Exception in", case
-          raise
-        error_count += len(failures)
-        for fail in failures:
-          print "FAIL:", case, fail
-      error_count += self.check_streamlog(cases, open(querylog.path, 'r'))
-      error_count += self.check_full_streamlog(open(querylog.path_full, 'r'))
+    for case in cases:
+      if isinstance(case, basestring):
+        curs.execute(case)
+        continue
+      try:
+        failures = case.run(curs, self)
+      except Exception:
+        print "Exception in", case
+        raise
+      error_count += len(failures)
+      for fail in failures:
+        print "FAIL:", case, fail
+    error_count += self.check_full_streamlog(open(self.querylog.path_full, 'r'))
     return error_count
 
 
@@ -209,13 +209,15 @@ class VttabletTestEnv(TestEnv):
         self.txlogger = utils.curl(self.url('/debug/txlog'), background=True, stdout=open(self.txlog_file, 'w'))
         self.txlog = framework.Tailer(open(self.txlog_file), flush=self.tablet.flush)
         self.log = framework.Tailer(open(os.path.join(environment.vtlogroot, 'vttablet.INFO')), flush=self.tablet.flush)
-        return
+        break
       except dbexceptions.OperationalError:
         if i == 29:
           raise
         time.sleep(1)
+    self.postSetup()
 
   def tearDown(self):
+    self.preTeardown()
     self.tablet.kill_vttablet()
     try:
       utils.wait_procs([self.tablet.teardown_mysql()])
@@ -315,13 +317,15 @@ class VtoccTestEnv(TestEnv):
           utils.curl(self.url(environment.flush_logs_url), trap_output=True)
 
         self.log = framework.Tailer(open(os.path.join(environment.vtlogroot, 'vtocc.INFO')), flush=flush)
-        return
+        break
       except (dbexceptions.OperationalError, dbexceptions.RetryError):
         if i == 29:
           raise
         time.sleep(1)
+    self.postSetup()
 
   def tearDown(self):
+    self.preTeardown()
     try:
       mcu = self.mysql_conn.cursor()
       for line in self.clean_sqls:
@@ -361,3 +365,31 @@ class VtoccTestEnv(TestEnv):
       db='vt_test_keyspace',
       unix_socket=self.mysqldir+"/mysql.sock",
       charset='utf8')
+
+
+class Querylog(object):
+
+  def __init__(self, env):
+    self.env = env
+    self.id = str(uuid.uuid4())
+    self.curl = utils.curl(self.env.url('/debug/querylog'), background=True, stdout=open(self.path, 'w'))
+    self.curl_full = utils.curl(self.env.url('/debug/querylog?full=true'), background=True, stdout=open(self.path_full, 'w'))
+    time.sleep(0.3)
+    self.tailer = framework.Tailer(open(self.path), sleep=0.02)
+    self.tailer_full = framework.Tailer(open(self.path_full), sleep=0.02)
+
+  @property
+  def path(self):
+    return os.path.join(environment.vtlogroot, 'querylog' + self.id)
+
+  @property
+  def path_full(self):
+    return os.path.join(environment.vtlogroot, 'querylog_full' + self.id)
+
+  def reset(self):
+    self.tailer.reset()
+    self.tailer_full.reset()
+
+  def close(self, *args, **kwargs):
+    self.curl.terminate()
+    self.curl_full.terminate()
