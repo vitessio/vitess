@@ -212,7 +212,7 @@ func handleInvalidationError(request interface{}) {
 			internalErrors.Add("Panic", 1)
 			return
 		}
-		log.Errorf("%s: %v", terr.Message, request)
+		log.Errorf("%v: %v", terr, request)
 		internalErrors.Add("Invalidation", 1)
 	}
 }
@@ -252,9 +252,9 @@ func handleExecError(query *proto.Query, err *error, logStats *sqlQueryStats) {
 			return
 		}
 		if terr.ErrorType == FATAL {
-			log.Errorf("%s: %v", terr.Message, query)
+			log.Errorf("%v: %v", terr, query)
 		} else {
-			log.Warningf("%s: %v", terr.Message, query)
+			log.Warningf("%v: %v", terr, query)
 		}
 	}
 }

@@ -49,6 +49,7 @@ func (ap *ActivePool) Close() {
 }
 
 func (ap *ActivePool) QueryKiller() {
+	defer logError()
 	for _, v := range ap.pool.GetOutdated(time.Duration(ap.Timeout()), "for abort") {
 		ap.kill(v.(int64))
 	}

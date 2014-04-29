@@ -87,6 +87,7 @@ func (axp *ActiveTxPool) WaitForEmpty() {
 }
 
 func (axp *ActiveTxPool) TransactionKiller() {
+	defer logError()
 	for _, v := range axp.pool.GetOutdated(time.Duration(axp.Timeout()), "for rollback") {
 		conn := v.(*TxConnection)
 		log.Infof("killing transaction %d: %#v", conn.transactionId, conn.queries)
