@@ -53,7 +53,7 @@ func main() {
 
 	ts.InitQueryService()
 
-	err = ts.AllowQueries(&dbConfigs.App, schemaOverrides, ts.LoadCustomRules(), mysqld)
+	err = ts.AllowQueries(&dbConfigs.App, schemaOverrides, ts.LoadCustomRules(), mysqld, true)
 	if err != nil {
 		return
 	}

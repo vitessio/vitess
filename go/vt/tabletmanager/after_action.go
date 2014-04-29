@@ -125,7 +125,7 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet) error {
 	}
 
 	// FIXME(alainjobart) get a synchronous return value here, and return it
-	tabletserver.AllowQueries(&agent.DBConfigs.App, agent.SchemaOverrides, qrs, agent.Mysqld)
+	tabletserver.AllowQueries(&agent.DBConfigs.App, agent.SchemaOverrides, qrs, agent.Mysqld, false)
 
 	// For now we assume it's working and return nil
 	return nil

@@ -89,7 +89,7 @@ func (sq *SqlQuery) setState(state int64) {
 	sq.state.Set(state)
 }
 
-func (sq *SqlQuery) allowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules, mysqld *mysqlctl.Mysqld) (err error) {
+func (sq *SqlQuery) allowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules, mysqld *mysqlctl.Mysqld, waitForMysql bool) (err error) {
 	sq.statemu.Lock()
 	defer sq.statemu.Unlock()
 	if sq.state.Get() == SERVING {
@@ -97,6 +97,23 @@ func (sq *SqlQuery) allowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides [
 		return nil
 	}
 	sq.setState(INITIALIZING)
+
+	if waitForMysql {
+		waitTime := time.Second
+		for {
+			c, err := CreateGenericConnection(&dbconfig.ConnectionParams)
+			if err == nil {
+				c.Close()
+				break
+			}
+			log.Warningf("mysql.Connect() error, retrying in %v: %v", waitTime, err)
+			time.Sleep(waitTime)
+			// Cap at 32 seconds
+			if waitTime < 30*time.Second {
+				waitTime = waitTime * 2
+			}
+		}
+	}
 
 	defer func() {
 		if x := recover(); x != nil {
