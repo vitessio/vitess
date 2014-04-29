@@ -9,8 +9,8 @@ import (
 
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actor"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
@@ -78,7 +78,7 @@ func (fix *Fixture) startFakeTabletActionLoop(tablet *tabletPack) {
 				fix.Fatalf("ActionNodeFromJson failed: %v\n%v", err, data)
 			}
 
-			ta := tabletmanager.NewTabletActor(nil, tablet.mysql, fix.Topo, tablet.Alias)
+			ta := actor.NewTabletActor(nil, tablet.mysql, fix.Topo, tablet.Alias)
 			if err := ta.HandleAction(actionPath, actionNode.Action, actionNode.ActionGuid, false); err != nil {
 				// action may just fail for any good reason
 				fix.Logf("HandleAction failed for %v: %v", actionNode.Action, err)

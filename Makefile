@@ -56,7 +56,7 @@ integration_test:
 		echo Running test/$$t... ; \
 		output=$$(time ./$$t $$VT_TEST_FLAGS 2>&1) ; \
 		if [[ $$? != 0 ]]; then \
-			echo $output >&2 ; \
+			echo "$$output" >&2 ; \
 			exit 1 ; \
 		fi ; \
 		echo ; \

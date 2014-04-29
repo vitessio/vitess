@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actor"
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
@@ -61,7 +62,7 @@ func startFakeTabletActionLoop(t *testing.T, wr *Wrangler, tabletAlias topo.Tabl
 			if err != nil {
 				t.Fatalf("ActionNodeFromJson failed: %v\n%v", err, data)
 			}
-			ta := tabletmanager.NewTabletActor(nil, mysqlDaemon, wr.ts, tabletAlias)
+			ta := actor.NewTabletActor(nil, mysqlDaemon, wr.ts, tabletAlias)
 			if err := ta.HandleAction(actionPath, actionNode.Action, actionNode.ActionGuid, false); err != nil {
 				// action may just fail for any good reason
 				t.Logf("HandleAction failed for %v: %v", actionNode.Action, err)

@@ -36,6 +36,9 @@ class VTGateCursor(object):
     self.keyranges = keyranges
     self._writable = writable
 
+  def connection_list(self):
+    return [self._conn]
+
   def close(self):
     self.results = None
 
@@ -198,7 +201,7 @@ class VTGateCursor(object):
 
 
 class BatchVTGateCursor(VTGateCursor):
-  def __init__(self, connection, keyspace, tablet_type, keyspace_ids=None, writable=False):
+  def __init__(self, connection, keyspace, tablet_type, keyspace_ids=None, keyranges=None, writable=False):
     self.exec_list = []
     VTGateCursor.__init__(self, connection, keyspace, tablet_type, keyspace_ids=keyspace_ids, writable=writable)
 
@@ -218,7 +221,7 @@ class StreamVTGateCursor(VTGateCursor):
   index = None
   fetchmany_done = False
 
-  def __init__(self, connection, keyspace, tablet_type, keyspace_ids=None, keyranges=None):
+  def __init__(self, connection, keyspace, tablet_type, keyspace_ids=None, keyranges=None, writable=False):
     VTGateCursor.__init__(self, connection, keyspace, tablet_type, keyspace_ids=keyspace_ids, keyranges=keyranges)
 
   # pass kargs here in case higher level APIs need to push more data through

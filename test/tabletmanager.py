@@ -468,7 +468,7 @@ class TestTabletManager(unittest.TestCase):
       t.create_db('vt_test_keyspace')
 
     tablet_62344.start_vttablet(wait_for_state=None, target_tablet_type='replica', use_srv_shard_locks=True)
-    tablet_62044.start_vttablet(wait_for_state=None, target_tablet_type='replica', use_srv_shard_locks=True)
+    tablet_62044.start_vttablet(wait_for_state=None, target_tablet_type='replica', use_srv_shard_locks=True, lameduck_period='5s')
 
     tablet_62344.wait_for_vttablet_state('SERVING')
     tablet_62044.wait_for_vttablet_state('NOT_SERVING')
@@ -520,7 +520,13 @@ class TestTabletManager(unittest.TestCase):
       logging.info("Slave tablet replication_lag is gone, good")
       break
 
+    # kill the tablets
     tablet.kill_tablets([tablet_62344, tablet_62044])
+
+    # the replica was in lameduck for 5 seconds, should have been enough
+    # to reset its state to spare
+    ti = utils.run_vtctl_json(['GetTablet', tablet_62044.tablet_alias])
+    self.assertEqual(ti['Type'], 'spare', "tablet didn't go to spare while in lameduck mode: %s" % str(ti))
 
 if __name__ == '__main__':
   utils.main()

@@ -24,7 +24,7 @@ This file contains the lock management code for zktopo.Server
 // queue lock, displays a nice error message if it cant get it
 func (zkts *Server) lockForAction(actionDir, contents string, timeout time.Duration, interrupted chan struct{}) (string, error) {
 	// create the action path
-	actionPath, err := zkts.zconn.Create(actionDir, contents, zookeeper.SEQUENCE, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	actionPath, err := zkts.zconn.Create(actionDir, contents, zookeeper.SEQUENCE|zookeeper.EPHEMERAL, zookeeper.WorldACL(zk.PERM_FILE))
 	if err != nil {
 		return "", err
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actor"
 	"github.com/youtube/vitess/go/vt/tabletmanager/gorpcproto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
@@ -73,7 +74,7 @@ func (tm *TabletManager) ChangeType(context *rpcproto.Context, args *topo.Tablet
 
 func (tm *TabletManager) SetBlacklistedTables(context *rpcproto.Context, args *gorpcproto.SetBlacklistedTablesArgs, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SET_BLACKLISTED_TABLES, args, reply, func() error {
-		return tabletmanager.SetBlacklistedTables(tm.agent.TopoServer, tm.agent.TabletAlias, args.Tables)
+		return actor.SetBlacklistedTables(tm.agent.TopoServer, tm.agent.TabletAlias, args.Tables)
 	})
 }
 
@@ -208,13 +209,13 @@ func (tm *TabletManager) RunBlpUntil(context *rpcproto.Context, args *gorpcproto
 
 func (tm *TabletManager) SlaveWasPromoted(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SLAVE_WAS_PROMOTED, args, reply, func() error {
-		return tabletmanager.SlaveWasPromoted(tm.agent.TopoServer, tm.agent.TabletAlias)
+		return actor.SlaveWasPromoted(tm.agent.TopoServer, tm.agent.TabletAlias)
 	})
 }
 
 func (tm *TabletManager) SlaveWasRestarted(context *rpcproto.Context, args *actionnode.SlaveWasRestartedArgs, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SLAVE_WAS_RESTARTED, args, reply, func() error {
-		return tabletmanager.SlaveWasRestarted(tm.agent.TopoServer, tm.agent.TabletAlias, args)
+		return actor.SlaveWasRestarted(tm.agent.TopoServer, tm.agent.TabletAlias, args)
 	})
 }
 
