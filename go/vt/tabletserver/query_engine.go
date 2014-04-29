@@ -166,6 +166,7 @@ func (qe *QueryEngine) Close() {
 func (qe *QueryEngine) Begin(logStats *sqlQueryStats) (transactionId int64) {
 	qe.mu.RLock()
 	defer qe.mu.RUnlock()
+	defer queryStats.Record("BEGIN", time.Now())
 
 	var conn PoolConnection
 	if conn = qe.txPool.TryGet(); conn == nil {
@@ -182,6 +183,7 @@ func (qe *QueryEngine) Begin(logStats *sqlQueryStats) (transactionId int64) {
 func (qe *QueryEngine) Commit(logStats *sqlQueryStats, transactionId int64) {
 	qe.mu.RLock()
 	defer qe.mu.RUnlock()
+	defer queryStats.Record("COMMIT", time.Now())
 
 	dirtyTables, err := qe.activeTxPool.SafeCommit(transactionId)
 	qe.invalidateRows(logStats, dirtyTables)
@@ -209,6 +211,7 @@ func (qe *QueryEngine) invalidateRows(logStats *sqlQueryStats, dirtyTables map[s
 func (qe *QueryEngine) Rollback(logStats *sqlQueryStats, transactionId int64) {
 	qe.mu.RLock()
 	defer qe.mu.RUnlock()
+	defer queryStats.Record("ROLLBACK", time.Now())
 
 	qe.activeTxPool.Rollback(transactionId)
 }

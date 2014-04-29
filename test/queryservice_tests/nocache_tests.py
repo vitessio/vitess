@@ -61,8 +61,9 @@ class TestNocache(framework.TestCase):
     # We should have at least one connection
     self.assertEqual(vstart.mget("Transactions.TotalCount", 0)+2, vend.Transactions.TotalCount)
     self.assertEqual(vstart.mget("Transactions.Histograms.Completed.Count", 0)+2, vend.Transactions.Histograms.Completed.Count)
-    self.assertEqual(vstart.mget("TransactionCompletion.Histograms.Commit.Count", 0)+2, vend.TransactionCompletion.Histograms.Commit.Count)
-    self.assertEqual(vstart.mget("Queries.TotalCount", 0)+4, vend.Queries.TotalCount)
+    self.assertEqual(vstart.mget("Queries.TotalCount", 0)+8, vend.Queries.TotalCount)
+    self.assertEqual(vstart.mget("Queries.Histograms.BEGIN.Count", 0)+2, vend.Queries.Histograms.BEGIN.Count)
+    self.assertEqual(vstart.mget("Queries.Histograms.COMMIT.Count", 0)+2, vend.Queries.Histograms.COMMIT.Count)
     self.assertEqual(vstart.mget("Queries.Histograms.INSERT_PK.Count", 0)+1, vend.Queries.Histograms.INSERT_PK.Count)
     self.assertEqual(vstart.mget("Queries.Histograms.DML_PK.Count", 0)+1, vend.Queries.Histograms.DML_PK.Count)
     self.assertEqual(vstart.mget("Queries.Histograms.PASS_SELECT.Count", 0)+2, vend.Queries.Histograms.PASS_SELECT.Count)
@@ -97,7 +98,8 @@ class TestNocache(framework.TestCase):
     vend = self.env.debug_vars()
     self.assertEqual(vstart.mget("Transactions.TotalCount", 0)+1, vend.Transactions.TotalCount)
     self.assertEqual(vstart.mget("Transactions.Histograms.Aborted.Count", 0)+1, vend.Transactions.Histograms.Aborted.Count)
-    self.assertEqual(vstart.mget("TransactionCompletion.Histograms.Rollback.Count", 0)+1, vend.TransactionCompletion.Histograms.Rollback.Count)
+    self.assertEqual(vstart.mget("Queries.Histograms.BEGIN.Count", 0)+1, vend.Queries.Histograms.BEGIN.Count)
+    self.assertEqual(vstart.mget("Queries.Histograms.ROLLBACK.Count", 0)+1, vend.Queries.Histograms.ROLLBACK.Count)
 
   def test_nontx_dml(self):
     vstart = self.env.debug_vars()
