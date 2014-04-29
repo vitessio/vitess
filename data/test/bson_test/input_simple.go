@@ -4,15 +4,7 @@
 
 package mytype
 
-type MyType string
-
-/*
-import (
-	"time"
-
-	_ "bar/pkg"
-	pkg "foo/pkg"
-)
+import "time"
 
 type MyType struct {
 	Float64   float64
@@ -27,13 +19,4 @@ type MyType struct {
 	Bytes     []byte
 	Time      time.Time
 	Interface interface{}
-	Ptr       *int64
-	Strings   *[]*Custom
-	Strings2  *[][]string
-	Map       map[abcd.efgh]map[string]time.Time
-	Custom1   *CustomStruct
-	Custom2   *pkg.CustomStruct
-	local     int `bson:"Local"`
-	Local2    int `bson:"Local1"`
 }
-*/

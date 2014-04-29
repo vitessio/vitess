@@ -386,6 +386,7 @@ func generateCode(in string, typename string) (out []byte, err error) {
 
 // generateRawCode performs the initial unformatted generation of the code.
 func generateRawCode(in string, typename string) (out []byte, err error) {
+	counter = 0
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, "", in, 0)
 	if err != nil {
@@ -406,7 +407,7 @@ func generateRawCode(in string, typename string) (out []byte, err error) {
 	if err != nil {
 		return nil, err
 	}
-	return formatCode(buf.Bytes())
+	return buf.Bytes(), nil
 }
 
 // formatCode uses goimports to format the generated code.
@@ -442,7 +443,7 @@ func formatCode(in []byte) (out []byte, err error) {
 // Encoder calls one of: StarEncoder, SliceEncoder, MapEncoder, CustomEncoder, or SimpleEncoder,
 // depending on the type of the field.
 // An Encoder that's not simple, generates code for it type, which eventually calls back Encoder
-// on its Subfield. This goes recursively until a SimpleEncoder is encountered.
+// on its Subfield. This goes recursively until a SimpleEncoder or CustomEncoder is encountered.
 // Decoder code generation follows a similar flow.
 // If the TypeInfo is not a struct, then SimpleBody is used instead of StructBody.
 var generator = template.Must(template.New("Generator").Parse(`
