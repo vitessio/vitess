@@ -94,26 +94,35 @@ func (myType *MyType) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 		}
 		lenWriter.Close()
 	}
-	// map[Custom]string
-	{
-		bson.EncodePrefix(buf, bson.Object, "CustomMap")
-		lenWriter := bson.NewLenWriter(buf)
-		for _k, _v9 := range myType.CustomMap {
-			bson.EncodeString(buf, string(_k), _v9)
-		}
-		lenWriter.Close()
-	}
 	// map[string]*Custom
 	{
 		bson.EncodePrefix(buf, bson.Object, "MapCustomPtr")
 		lenWriter := bson.NewLenWriter(buf)
-		for _k, _v10 := range myType.MapCustomPtr {
+		for _k, _v9 := range myType.MapCustomPtr {
 			// *Custom
-			if _v10 == nil {
+			if _v9 == nil {
 				bson.EncodePrefix(buf, bson.Null, _k)
 			} else {
-				(*_v10).MarshalBson(buf, _k)
+				(*_v9).MarshalBson(buf, _k)
 			}
+		}
+		lenWriter.Close()
+	}
+	// map[Custom]string
+	{
+		bson.EncodePrefix(buf, bson.Object, "CustomMap")
+		lenWriter := bson.NewLenWriter(buf)
+		for _k, _v10 := range myType.CustomMap {
+			bson.EncodeString(buf, string(_k), _v10)
+		}
+		lenWriter.Close()
+	}
+	// map[pkg.Custom]string
+	{
+		bson.EncodePrefix(buf, bson.Object, "MapExternal")
+		lenWriter := bson.NewLenWriter(buf)
+		for _k, _v11 := range myType.MapExternal {
+			bson.EncodeString(buf, string(_k), _v11)
 		}
 		lenWriter.Close()
 	}
@@ -255,21 +264,6 @@ func (myType *MyType) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 					myType.MapCustom[_k] = _v8
 				}
 			}
-		case "CustomMap":
-			// map[Custom]string
-			if kind != bson.Null {
-				if kind != bson.Object {
-					panic(bson.NewBsonError("unexpected kind %v for myType.CustomMap", kind))
-				}
-				bson.Next(buf, 4)
-				myType.CustomMap = make(map[Custom]string)
-				for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
-					_k := Custom(bson.ReadCString(buf))
-					var _v9 string
-					_v9 = bson.DecodeString(buf, kind)
-					myType.CustomMap[_k] = _v9
-				}
-			}
 		case "MapCustomPtr":
 			// map[string]*Custom
 			if kind != bson.Null {
@@ -280,13 +274,43 @@ func (myType *MyType) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 				myType.MapCustomPtr = make(map[string]*Custom)
 				for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 					_k := bson.ReadCString(buf)
-					var _v10 *Custom
+					var _v9 *Custom
 					// *Custom
 					if kind != bson.Null {
-						_v10 = new(Custom)
-						(*_v10).UnmarshalBson(buf, kind)
+						_v9 = new(Custom)
+						(*_v9).UnmarshalBson(buf, kind)
 					}
-					myType.MapCustomPtr[_k] = _v10
+					myType.MapCustomPtr[_k] = _v9
+				}
+			}
+		case "CustomMap":
+			// map[Custom]string
+			if kind != bson.Null {
+				if kind != bson.Object {
+					panic(bson.NewBsonError("unexpected kind %v for myType.CustomMap", kind))
+				}
+				bson.Next(buf, 4)
+				myType.CustomMap = make(map[Custom]string)
+				for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
+					_k := Custom(bson.ReadCString(buf))
+					var _v10 string
+					_v10 = bson.DecodeString(buf, kind)
+					myType.CustomMap[_k] = _v10
+				}
+			}
+		case "MapExternal":
+			// map[pkg.Custom]string
+			if kind != bson.Null {
+				if kind != bson.Object {
+					panic(bson.NewBsonError("unexpected kind %v for myType.MapExternal", kind))
+				}
+				bson.Next(buf, 4)
+				myType.MapExternal = make(map[pkg.Custom]string)
+				for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
+					_k := pkg.Custom(bson.ReadCString(buf))
+					var _v11 string
+					_v11 = bson.DecodeString(buf, kind)
+					myType.MapExternal[_k] = _v11
 				}
 			}
 		default:

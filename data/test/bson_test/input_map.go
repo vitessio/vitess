@@ -11,6 +11,7 @@ type MyType struct {
 	MapSlice     map[string][]string
 	MapMap       map[string]map[string]int64
 	MapCustom    map[string]Custom
-	CustomMap    map[Custom]string
 	MapCustomPtr map[string]*Custom
+	CustomMap    map[Custom]string
+	MapExternal  map[pkg.Custom]string
 }

@@ -16,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/testfiles"
 )
 
-func TestSimple(t *testing.T) {
+func TestValidFiles(t *testing.T) {
 	inputs := testfiles.Glob("bson_test/input*.go")
 	for _, input := range inputs {
 		b, err := ioutil.ReadFile(input)
@@ -37,7 +37,7 @@ func TestSimple(t *testing.T) {
 		if len(d) != 0 {
 			t.Errorf("Unexpected output for %s:\n%s", input, string(d))
 			if testing.Verbose() {
-				t.Logf("%s: %s\n", input, out)
+				t.Logf("%s:\n%s", input, out)
 			}
 		}
 	}
@@ -82,5 +82,52 @@ func skip_imports(b []byte) []byte {
 			continue
 		}
 		return b[len(b)-buf.Len():]
+	}
+}
+
+var invalidInputs = []struct{ title, input, err string }{
+	{
+		"func type",
+		`package a; func MyType(){};`,
+		"MyType not found",
+	}, {
+		"non-struct non-simple top level type",
+		`package a; type MyType Custom;`,
+		"MyType is not a struct or a simple type",
+	}, {
+		// Maybe support this in the future?
+		"map type",
+		`package a; type MyType map[string]Custom;`,
+		"MyType is not a struct or a simple type",
+	}, {
+		// Maybe support this in the future?
+		"slice type",
+		`package a; type MyType []Custom;`,
+		"MyType is not a struct or a simple type",
+	}, {
+		"anonymous embed",
+		`package a; type MyType struct{Custom};`,
+		"anonymous embeds not supported: Custom",
+	}, {
+		"interface with methods",
+		`package a; type MyType struct{Val interface{Custom}};`,
+		"is not a simple type",
+	}, {
+		// Maybe support this in the future?
+		"array",
+		`package a; type MyType struct{Val [5]int};`,
+		"is not a simple type",
+	},
+}
+
+func TestInvalidInputs(t *testing.T) {
+	for _, tcase := range invalidInputs {
+		out, err := generateCode(tcase.input, "MyType")
+		if err == nil {
+			t.Errorf("Expecting error for %s:\n%s", tcase.title, string(out))
+		}
+		if !strings.Contains(err.Error(), tcase.err) {
+			t.Errorf("%s: got '%v', error should contain '%s'", tcase.title, err, tcase.err)
+		}
 	}
 }
