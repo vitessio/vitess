@@ -15,6 +15,9 @@ clean:
 unit_test:
 	go test ./go/...
 
+unit_test_cover:
+	go test -cover ./go/...
+
 unit_test_race:
 	go test -race ./go/...
 
