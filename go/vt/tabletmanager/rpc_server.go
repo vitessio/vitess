@@ -93,8 +93,8 @@ type RegisterQueryService func(*ActionAgent)
 
 var RegisterQueryServices []RegisterQueryService
 
-// RegisterQueryService will register all the instances
-func (agent *ActionAgent) RegisterQueryService() {
+// registerQueryService will register all the instances
+func (agent *ActionAgent) registerQueryService() {
 	for _, f := range RegisterQueryServices {
 		f(agent)
 	}

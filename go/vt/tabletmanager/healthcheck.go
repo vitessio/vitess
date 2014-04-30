@@ -74,14 +74,14 @@ func (agent *ActionAgent) initHeathCheck() {
 		t.Stop()
 
 		// Now we can finish up and force ourselves to not healthy.
-		agent.TerminateHealthChecks(topo.TabletType(*targetTabletType), *lockTimeout)
+		agent.terminateHealthChecks(topo.TabletType(*targetTabletType), *lockTimeout)
 	})
 	t.Start(func() {
-		agent.RunHealthCheck(topo.TabletType(*targetTabletType), *lockTimeout)
+		agent.runHealthCheck(topo.TabletType(*targetTabletType), *lockTimeout)
 	})
 }
 
-// RunHealthCheck takes the action mutex, runs the health check,
+// runHealthCheck takes the action mutex, runs the health check,
 // and if we need to change our state, do it.
 // If we are the master, we don't change our type, healthy or not.
 // If we are not the master, we change to spare if not healthy,
@@ -89,7 +89,7 @@ func (agent *ActionAgent) initHeathCheck() {
 //
 // Note we only update the topo record if we need to, that is if our type or
 // health details changed.
-func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType, lockTimeout time.Duration) {
+func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType, lockTimeout time.Duration) {
 	agent.actionMutex.Lock()
 	defer agent.actionMutex.Unlock()
 
@@ -172,14 +172,14 @@ func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType, lockT
 	agent.afterAction("healthcheck", false /* reloadSchema */)
 }
 
-// TerminateHealthChecks is called when we enter lame duck mode.
+// terminateHealthChecks is called when we enter lame duck mode.
 // We will clean up our state, and shut down query service.
 // We only do something if we are in targetTabletType state, and then
 // we just go to spare.
-func (agent *ActionAgent) TerminateHealthChecks(targetTabletType topo.TabletType, lockTimeout time.Duration) {
+func (agent *ActionAgent) terminateHealthChecks(targetTabletType topo.TabletType, lockTimeout time.Duration) {
 	agent.actionMutex.Lock()
 	defer agent.actionMutex.Unlock()
-	log.Info("agent.TerminateHealthChecks is starting")
+	log.Info("agent.terminateHealthChecks is starting")
 
 	// read the current tablet record
 	agent.mutex.Lock()

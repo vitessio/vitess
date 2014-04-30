@@ -15,7 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
-	ts "github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -76,18 +76,18 @@ func main() {
 	}
 	dbcfgs.App.EnableRowcache = *enableRowcache
 
-	ts.InitQueryService()
+	tabletserver.InitQueryService()
 	binlog.RegisterUpdateStreamService(mycnf)
 
 	// Depends on both query and updateStream.
-	agent, err = tabletmanager.InitAgent(tabletAlias, dbcfgs, mycnf, *servenv.Port, *servenv.SecurePort, *overridesFile)
+	agent, err = tabletmanager.NewActionAgent(tabletAlias, dbcfgs, mycnf, *servenv.Port, *servenv.SecurePort, *overridesFile)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	tabletmanager.HttpHandleSnapshots(mycnf, tabletAlias.Uid)
 	servenv.OnTerm(func() {
-		ts.DisallowQueries()
+		tabletserver.DisallowQueries()
 		binlog.DisableUpdateStreamService()
 		agent.Stop()
 	})

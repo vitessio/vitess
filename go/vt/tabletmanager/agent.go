@@ -33,6 +33,7 @@ It has two execution models:
 package tabletmanager
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"net"
@@ -44,6 +45,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/history"
+	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/env"
@@ -94,6 +96,62 @@ type ActionAgent struct {
 	mutex       sync.Mutex
 	changeItems chan tabletChangeItem
 	_tablet     *topo.TabletInfo
+}
+
+func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
+	var schemaOverrides []tabletserver.SchemaOverride
+	if overridesFile == "" {
+		return schemaOverrides
+	}
+	if err := jscfg.ReadJson(overridesFile, &schemaOverrides); err != nil {
+		log.Warningf("can't read overridesFile %v: %v", overridesFile, err)
+	} else {
+		data, _ := json.MarshalIndent(schemaOverrides, "", "  ")
+		log.Infof("schemaOverrides: %s\n", data)
+	}
+	return schemaOverrides
+}
+
+// NewActionAgent creates a new ActionAgent and registers all the
+// associated services
+func NewActionAgent(
+	tabletAlias topo.TabletAlias,
+	dbcfgs *dbconfigs.DBConfigs,
+	mycnf *mysqlctl.Mycnf,
+	port, securePort int,
+	overridesFile string,
+) (agent *ActionAgent, err error) {
+	schemaOverrides := loadSchemaOverrides(overridesFile)
+
+	topoServer := topo.GetServer()
+	mysqld := mysqlctl.NewMysqld(mycnf, &dbcfgs.Dba, &dbcfgs.Repl)
+
+	agent = &ActionAgent{
+		TopoServer:      topoServer,
+		TabletAlias:     tabletAlias,
+		Mysqld:          mysqld,
+		DBConfigs:       dbcfgs,
+		SchemaOverrides: schemaOverrides,
+		done:            make(chan struct{}),
+		History:         history.New(historyLength),
+		changeItems:     make(chan tabletChangeItem, 100),
+	}
+
+	// Start the binlog player services, not playing at start.
+	agent.BinlogPlayerMap = NewBinlogPlayerMap(topoServer, &dbcfgs.App.ConnectionParams, mysqld)
+	RegisterBinlogPlayerMap(agent.BinlogPlayerMap)
+
+	if err := agent.Start(mysqld.Port(), port, securePort); err != nil {
+		return nil, err
+	}
+
+	// register the RPC services from the agent
+	agent.registerQueryService()
+
+	// start health check if needed
+	agent.initHeathCheck()
+
+	return agent, nil
 }
 
 func (agent *ActionAgent) runChangeCallback(oldTablet *topo.Tablet, context string) {

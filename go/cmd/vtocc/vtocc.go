@@ -13,7 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
-	ts "github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/tabletserver"
 )
 
 var (
@@ -23,7 +23,7 @@ var (
 	binlogPath        = flag.String("binlog-path", "", "binlog path used by rowcache invalidator")
 )
 
-var schemaOverrides []ts.SchemaOverride
+var schemaOverrides []tabletserver.SchemaOverride
 
 func main() {
 	dbconfigs.RegisterFlags()
@@ -51,16 +51,16 @@ func main() {
 	data, _ := json.MarshalIndent(schemaOverrides, "", "  ")
 	log.Infof("schemaOverrides: %s\n", data)
 
-	ts.InitQueryService()
+	tabletserver.InitQueryService()
 
-	err = ts.AllowQueries(&dbConfigs.App, schemaOverrides, ts.LoadCustomRules(), mysqld, true)
+	err = tabletserver.AllowQueries(&dbConfigs.App, schemaOverrides, tabletserver.LoadCustomRules(), mysqld, true)
 	if err != nil {
 		return
 	}
 
 	log.Infof("starting vtocc %v", *servenv.Port)
 	servenv.OnTerm(func() {
-		ts.DisallowQueries()
+		tabletserver.DisallowQueries()
 	})
 	servenv.Run()
 }
