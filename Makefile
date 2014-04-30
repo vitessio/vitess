@@ -15,8 +15,11 @@ clean:
 unit_test:
 	go test ./go/...
 
+# Run the code coverage tools, compute aggregate.
+# If you want to improve in a directory, run:
+#   go test -coverprofile=coverage.out && go tool cover -html=coverage.out
 unit_test_cover:
-	go test -cover ./go/...
+	go test -cover ./go/... | misc/parse_cover.py
 
 unit_test_race:
 	go test -race ./go/...
