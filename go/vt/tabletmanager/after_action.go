@@ -124,11 +124,7 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet) error {
 		qrs.Add(qr)
 	}
 
-	// FIXME(alainjobart) get a synchronous return value here, and return it
-	tabletserver.AllowQueries(&agent.DBConfigs.App, agent.SchemaOverrides, qrs, agent.Mysqld, false)
-
-	// For now we assume it's working and return nil
-	return nil
+	return tabletserver.AllowQueries(&agent.DBConfigs.App, agent.SchemaOverrides, qrs, agent.Mysqld, false)
 }
 
 func (agent *ActionAgent) disallowQueries() {
@@ -183,7 +179,9 @@ func (agent *ActionAgent) changeCallback(oldTablet, newTablet topo.Tablet) {
 			!reflect.DeepEqual(newTablet.BlacklistedTables, oldTablet.BlacklistedTables) {
 			agent.disallowQueries()
 		}
-		agent.allowQueries(&newTablet)
+		if err := agent.allowQueries(&newTablet); err != nil {
+			log.Errorf("Cannot start query service: %v", err)
+		}
 
 		// Disable before enabling to force existing streams to stop.
 		binlog.DisableUpdateStreamService()
