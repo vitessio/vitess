@@ -5,7 +5,9 @@
 package cache
 
 import (
+	"encoding/json"
 	"testing"
+	"time"
 )
 
 type CacheValue struct {
@@ -37,6 +39,34 @@ func TestSetInsertsValue(t *testing.T) {
 	cache.Set(key, data)
 
 	v, ok := cache.Get(key)
+	if !ok || v.(*CacheValue) != data {
+		t.Errorf("Cache has incorrect value: %v != %v", data, v)
+	}
+
+	k := cache.Keys()
+	if len(k) != 1 || k[0] != key {
+		t.Errorf("Cache.Keys() returned incorrect values: %v", k)
+	}
+	values := cache.Items()
+	if len(values) != 1 || values[0].Key != key {
+		t.Errorf("Cache.Values() returned incorrect values: %v", values)
+	}
+}
+
+func TestSetIfAbsent(t *testing.T) {
+	cache := NewLRUCache(100)
+	data := &CacheValue{0}
+	key := "key"
+	cache.SetIfAbsent(key, data)
+
+	v, ok := cache.Get(key)
+	if !ok || v.(*CacheValue) != data {
+		t.Errorf("Cache has incorrect value: %v != %v", data, v)
+	}
+
+	cache.SetIfAbsent(key, &CacheValue{1})
+
+	v, ok = cache.Get(key)
 	if !ok || v.(*CacheValue) != data {
 		t.Errorf("Cache has incorrect value: %v != %v", data, v)
 	}
@@ -154,7 +184,8 @@ func TestClear(t *testing.T) {
 
 func TestCapacityIsObeyed(t *testing.T) {
 	size := int64(3)
-	cache := NewLRUCache(size)
+	cache := NewLRUCache(100)
+	cache.SetCapacity(size)
 	value := &CacheValue{1}
 
 	// Insert up to the cache's capacity.
@@ -169,6 +200,33 @@ func TestCapacityIsObeyed(t *testing.T) {
 	if _, sz, _, _ := cache.Stats(); sz != size {
 		t.Errorf("post-evict cache.Size() = %v, expected %v", sz, size)
 	}
+
+	// Check json stats
+	data := cache.StatsJSON()
+	m := make(map[string]interface{})
+	if err := json.Unmarshal([]byte(data), &m); err != nil {
+		t.Errorf("cache.StatsJSON() returned bad json data: %v %v", data, err)
+	}
+	if m["Size"].(float64) != float64(size) {
+		t.Errorf("cache.StatsJSON() returned bad size: %v", m)
+	}
+
+	// Check various other stats
+	if l := cache.Length(); l != size {
+		t.Errorf("cache.StatsJSON() returned bad length: %v", l)
+	}
+	if s := cache.Size(); s != size {
+		t.Errorf("cache.StatsJSON() returned bad size: %v", s)
+	}
+	if c := cache.Capacity(); c != size {
+		t.Errorf("cache.StatsJSON() returned bad length: %v", c)
+	}
+
+	// checks StatsJSON on nil
+	cache = nil
+	if s := cache.StatsJSON(); s != "{}" {
+		t.Errorf("cache.StatsJSON() on nil object returned %v", s)
+	}
 }
 
 func TestLRUIsEvicted(t *testing.T) {
@@ -182,7 +240,9 @@ func TestLRUIsEvicted(t *testing.T) {
 
 	// Look up the elements. This will rearrange the LRU ordering.
 	cache.Get("key3")
+	beforeKey2 := time.Now()
 	cache.Get("key2")
+	afterKey2 := time.Now()
 	cache.Get("key1")
 	// lru: [key1, key2, key3]
 
@@ -192,5 +252,10 @@ func TestLRUIsEvicted(t *testing.T) {
 	// The least recently used one should have been evicted.
 	if _, ok := cache.Get("key3"); ok {
 		t.Error("Least recently used element was not evicted.")
+	}
+
+	// Check oldest
+	if o := cache.Oldest(); o.Before(beforeKey2) || o.After(afterKey2) {
+		t.Error("cache.Oldest returned an unexpected value: got %v, expected a value between %v and %v", o, beforeKey2, afterKey2)
 	}
 }
