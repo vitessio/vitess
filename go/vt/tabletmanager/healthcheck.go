@@ -58,8 +58,12 @@ func (r *HealthRecord) IsDuplicate(other interface{}) bool {
 	return reflect.DeepEqual(r.Error, rother.Error) && reflect.DeepEqual(r.Result, rother.Result)
 }
 
+func (agent *ActionAgent) IsRunningHealthCheck() bool {
+	return *targetTabletType != ""
+}
+
 func (agent *ActionAgent) initHeathCheck() {
-	if *targetTabletType == "" {
+	if !agent.IsRunningHealthCheck() {
 		log.Infof("No target_tablet_type specified, disabling any health check")
 		return
 	}
