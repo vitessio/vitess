@@ -51,7 +51,7 @@ func (r *HealthRecord) Class() string {
 
 // IsDuplicate implements history.Deduplicable
 func (r *HealthRecord) IsDuplicate(other interface{}) bool {
-	rother, ok := other.(HealthRecord)
+	rother, ok := other.(*HealthRecord)
 	if !ok {
 		return false
 	}
@@ -119,7 +119,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType, lockT
 	}
 
 	// save the health record
-	record := HealthRecord{
+	record := &HealthRecord{
 		Error:  err,
 		Result: health,
 		Time:   time.Now(),
