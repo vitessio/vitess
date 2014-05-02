@@ -507,6 +507,9 @@ class TestTabletManager(unittest.TestCase):
       self.fail('Replication lag parameter not propagated to serving graph: %s' % str(ep))
     self.assertEqual(ep['entries'][0]['health']['replication_lag'], 'high', 'Replication lag parameter not propagated to serving graph: %s' % str(ep))
 
+    # make sure status web page is unhappy
+    self.assertIn('>unhappy</span></div>', tablet_62044.get_status())
+
     # then restart replication, make sure we go back to healthy
     tablet_62044.mquery('', 'start slave')
     timeout = 10
@@ -519,6 +522,9 @@ class TestTabletManager(unittest.TestCase):
             continue
       logging.info("Slave tablet replication_lag is gone, good")
       break
+
+    # make sure status web page is healthy
+    self.assertIn('>healthy</span></div>', tablet_62044.get_status())
 
     # kill the tablets
     tablet.kill_tablets([tablet_62344, tablet_62044])

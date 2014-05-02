@@ -384,6 +384,9 @@ class Tablet(object):
     config['repl'].update(repl_extra_flags)
     return config
 
+  def get_status(self):
+    return utils.get_status(self.port)
+
   def kill_vttablet(self):
     logging.debug("killing vttablet: %s", self.tablet_alias)
     if self.proc is not None:

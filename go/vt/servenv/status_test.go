@@ -13,10 +13,10 @@ import (
 func init() {
 	AddStatusFuncs(
 		template.FuncMap{
-			"to_upper": strings.ToUpper,
+			"github_com_youtube_vitess_to_upper": strings.ToUpper,
 		})
 
-	AddStatusPart("test_part", `{{ to_upper . }}`, func() interface{} {
+	AddStatusPart("test_part", `{{github_com_youtube_vitess_to_upper . }}`, func() interface{} {
 		return "this should be uppercase"
 	})
 	AddStatusSection("test_section", func() string {
@@ -28,7 +28,7 @@ func TestStatus(t *testing.T) {
 	server := httptest.NewServer(nil)
 	defer server.Close()
 
-	resp, err := http.Get(server.URL + "/debug/status")
+	resp, err := http.Get(server.URL + StatusURLPath())
 	if err != nil {
 		t.Fatalf("http.Get: %v", err)
 	}
