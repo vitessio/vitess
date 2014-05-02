@@ -2,6 +2,7 @@ package health
 
 import (
 	"fmt"
+	"html/template"
 	"strings"
 	"sync"
 
@@ -38,7 +39,7 @@ type Reporter interface {
 
 	// HTMLName returns a displayable name for the module.
 	// Can be used to be displayed in the status page.
-	HTMLName() string
+	HTMLName() template.HTML
 }
 
 // FunctionReporter is a function that may act as a Reporter.
@@ -50,8 +51,8 @@ func (fc FunctionReporter) Report(typ topo.TabletType) (status map[string]string
 }
 
 // HTMLName implements Reporter.HTMLName
-func (fc FunctionReporter) HTMLName() string {
-	return "FunctionReporter"
+func (fc FunctionReporter) HTMLName() template.HTML {
+	return template.HTML("FunctionReporter")
 }
 
 // Aggregator aggregates the results of many Reporters.
@@ -129,14 +130,14 @@ func (ag *Aggregator) Register(name string, rep Reporter) {
 }
 
 // HTMLName returns an aggregate name for all the reporters
-func (ag *Aggregator) HTMLName() string {
+func (ag *Aggregator) HTMLName() template.HTML {
 	ag.mu.Lock()
 	defer ag.mu.Unlock()
 	result := make([]string, 0, len(ag.reporters))
 	for _, rep := range ag.reporters {
-		result = append(result, rep.HTMLName())
+		result = append(result, string(rep.HTMLName()))
 	}
-	return strings.Join(result, "&nbsp; + &nbsp;")
+	return template.HTML(strings.Join(result, "&nbsp; + &nbsp;"))
 }
 
 // Run collects all the health statuses from the default health
@@ -153,6 +154,6 @@ func Register(name string, rep Reporter) {
 }
 
 // HTMLName returns an aggregate name for the default reporter
-func HTMLName() string {
+func HTMLName() template.HTML {
 	return defaultAggregator.HTMLName()
 }

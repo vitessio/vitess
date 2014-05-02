@@ -2,6 +2,7 @@ package mysqlctl
 
 import (
 	"fmt"
+	"html/template"
 
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -29,8 +30,8 @@ func (mrl *mysqlReplicationLag) Report(typ topo.TabletType) (status map[string]s
 	return nil, nil
 }
 
-func (mrl *mysqlReplicationLag) HTMLName() string {
-	return fmt.Sprintf("MySQLReplicationLag(allowedLag=%v)", mrl.allowedLagInSeconds)
+func (mrl *mysqlReplicationLag) HTMLName() template.HTML {
+	return template.HTML(fmt.Sprintf("MySQLReplicationLag(allowedLag=%v)", mrl.allowedLagInSeconds))
 }
 
 // MySQLReplication lag returns a reporter that reports the MySQL

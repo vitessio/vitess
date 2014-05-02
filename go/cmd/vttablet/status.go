@@ -78,7 +78,7 @@ func (hs *healthStatus) Current() string {
 	return "unknown"
 }
 
-func healthHTMLName() string {
+func healthHTMLName() template.HTML {
 	return health.HTMLName()
 }
 
