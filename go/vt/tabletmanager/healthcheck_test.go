@@ -10,32 +10,32 @@ func TestHealthRecordDeduplication(t *testing.T) {
 	now := time.Now()
 	later := now.Add(5 * time.Minute)
 	cases := []struct {
-		left, right HealthRecord
+		left, right *HealthRecord
 		duplicate   bool
 	}{
 		{
-			left:      HealthRecord{Time: now},
-			right:     HealthRecord{Time: later},
+			left:      &HealthRecord{Time: now},
+			right:     &HealthRecord{Time: later},
 			duplicate: true,
 		},
 		{
-			left:      HealthRecord{Time: now, Error: errors.New("foo")},
-			right:     HealthRecord{Time: now, Error: errors.New("foo")},
+			left:      &HealthRecord{Time: now, Error: errors.New("foo")},
+			right:     &HealthRecord{Time: now, Error: errors.New("foo")},
 			duplicate: true,
 		},
 		{
-			left:      HealthRecord{Time: now, Result: map[string]string{"a": "1"}},
-			right:     HealthRecord{Time: later, Result: map[string]string{"a": "1"}},
+			left:      &HealthRecord{Time: now, Result: map[string]string{"a": "1"}},
+			right:     &HealthRecord{Time: later, Result: map[string]string{"a": "1"}},
 			duplicate: true,
 		},
 		{
-			left:      HealthRecord{Time: now, Result: map[string]string{"a": "1"}},
-			right:     HealthRecord{Time: later, Result: map[string]string{"a": "2"}},
+			left:      &HealthRecord{Time: now, Result: map[string]string{"a": "1"}},
+			right:     &HealthRecord{Time: later, Result: map[string]string{"a": "2"}},
 			duplicate: false,
 		},
 		{
-			left:      HealthRecord{Time: now, Error: errors.New("foo"), Result: map[string]string{"a": "1"}},
-			right:     HealthRecord{Time: later, Result: map[string]string{"a": "1"}},
+			left:      &HealthRecord{Time: now, Error: errors.New("foo"), Result: map[string]string{"a": "1"}},
+			right:     &HealthRecord{Time: later, Result: map[string]string{"a": "1"}},
 			duplicate: false,
 		},
 	}
@@ -49,23 +49,23 @@ func TestHealthRecordDeduplication(t *testing.T) {
 
 func TestHealthRecordClass(t *testing.T) {
 	cases := []struct {
-		r     HealthRecord
+		r     *HealthRecord
 		state string
 	}{
 		{
-			r:     HealthRecord{},
+			r:     &HealthRecord{},
 			state: "healthy",
 		},
 		{
-			r:     HealthRecord{Error: errors.New("foo")},
+			r:     &HealthRecord{Error: errors.New("foo")},
 			state: "unhealthy",
 		},
 		{
-			r:     HealthRecord{Result: map[string]string{"1": "1"}},
+			r:     &HealthRecord{Result: map[string]string{"1": "1"}},
 			state: "unhappy",
 		},
 		{
-			r:     HealthRecord{Result: map[string]string{}},
+			r:     &HealthRecord{Result: map[string]string{}},
 			state: "healthy",
 		},
 	}
