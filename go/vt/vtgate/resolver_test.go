@@ -77,9 +77,15 @@ func TestResolverExecuteEntityIds(t *testing.T) {
 			Sql:              "query",
 			Keyspace:         "TestResolverExecuteEntityIds",
 			EntityColumnName: "col",
-			EntityKeyspaceIdMap: map[string]key.KeyspaceId{
-				"0": kid10,
-				"1": kid25,
+			EntityKeyspaceIds: []proto.EntityId{
+				proto.EntityId{
+					ExternalId: 0,
+					KeyspaceId: kid10,
+				},
+				proto.EntityId{
+					ExternalId: "1",
+					KeyspaceId: kid25,
+				},
 			},
 			TabletType: topo.TYPE_MASTER,
 		}
@@ -380,9 +386,9 @@ func TestResolverInsertSqlClause(t *testing.T) {
 }
 
 func TestResolverBuildEntityIds(t *testing.T) {
-	shardMap := make(map[string][]string)
-	shardMap["-20"] = []string{"0", "1"}
-	shardMap["20-40"] = []string{"2"}
+	shardMap := make(map[string][]interface{})
+	shardMap["-20"] = []interface{}{"0", 1}
+	shardMap["20-40"] = []interface{}{"2"}
 	sql := "select a from table where id=:id"
 	entityColName := "uid"
 	bindVar := make(map[string]interface{})
@@ -394,7 +400,7 @@ func TestResolverBuildEntityIds(t *testing.T) {
 		"20-40": "select a from table where id=:id and uid in (:uid0)",
 	}
 	wantBindVars := map[string]map[string]interface{}{
-		"-20":   map[string]interface{}{"id": 10, "uid0": "0", "uid1": "1"},
+		"-20":   map[string]interface{}{"id": 10, "uid0": "0", "uid1": 1},
 		"20-40": map[string]interface{}{"id": 10, "uid0": "2"},
 	}
 	if !reflect.DeepEqual(wantShards, shards) {

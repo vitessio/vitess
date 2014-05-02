@@ -83,6 +83,7 @@ bson:
 	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type BatchQueryShard -o ./go/vt/vtgate/proto/batch_query_shard_bson.go
 	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type KeyspaceIdQuery -o ./go/vt/vtgate/proto/keyspace_id_query_bson.go
 	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type KeyRangeQuery -o ./go/vt/vtgate/proto/key_range_query_bson.go
+	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type EntityId -o ./go/vt/vtgate/proto/entity_id_bson.go
 	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type EntityIdsQuery -o ./go/vt/vtgate/proto/entity_ids_query_bson.go
 	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type KeyspaceIdBatchQuery -o ./go/vt/vtgate/proto/keyspace_id_batch_query_bson.go
 	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type Session -o ./go/vt/vtgate/proto/session_bson.go
