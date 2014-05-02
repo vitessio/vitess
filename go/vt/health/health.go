@@ -2,6 +2,7 @@ package health
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	log "github.com/golang/glog"
@@ -34,13 +35,23 @@ type Reporter interface {
 	// error it implies that the tablet is in a bad shape and not
 	// able to handle queries.
 	Report(typ topo.TabletType) (status map[string]string, err error)
+
+	// HTMLName returns a displayable name for the module.
+	// Can be used to be displayed in the status page.
+	HTMLName() string
 }
 
 // FunctionReporter is a function that may act as a Reporter.
 type FunctionReporter func(typ topo.TabletType) (map[string]string, error)
 
+// Report implements Reporter.Report
 func (fc FunctionReporter) Report(typ topo.TabletType) (status map[string]string, err error) {
 	return fc(typ)
+}
+
+// HTMLName implements Reporter.HTMLName
+func (fc FunctionReporter) HTMLName() string {
+	return "FunctionReporter"
 }
 
 // Aggregator aggregates the results of many Reporters.
@@ -50,6 +61,7 @@ type Aggregator struct {
 	reporters map[string]Reporter
 }
 
+// NewAggregator returns a new empty Aggregator
 func NewAggregator() *Aggregator {
 	return &Aggregator{
 		reporters: make(map[string]Reporter),
@@ -116,6 +128,17 @@ func (ag *Aggregator) Register(name string, rep Reporter) {
 
 }
 
+// HTMLName returns an aggregate name for all the reporters
+func (ag *Aggregator) HTMLName() string {
+	ag.mu.Lock()
+	defer ag.mu.Unlock()
+	result := make([]string, 0, len(ag.reporters))
+	for _, rep := range ag.reporters {
+		result = append(result, rep.HTMLName())
+	}
+	return strings.Join(result, "&nbsp; + &nbsp;")
+}
+
 // Run collects all the health statuses from the default health
 // aggregator.
 func Run(typ topo.TabletType) (map[string]string, error) {
@@ -127,4 +150,9 @@ func Run(typ topo.TabletType) (map[string]string, error) {
 // this particular Reporter.
 func Register(name string, rep Reporter) {
 	defaultAggregator.Register(name, rep)
+}
+
+// HTMLName returns an aggregate name for the default reporter
+func HTMLName() string {
+	return defaultAggregator.HTMLName()
 }

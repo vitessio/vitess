@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -40,6 +41,9 @@ func AddStatusFuncs(fmap template.FuncMap) {
 	defer statusMu.Unlock()
 
 	for name, fun := range fmap {
+		if !strings.HasPrefix(name, "github_com_youtube_vitess_") {
+			panic("status func registered without proper prefix, need github_com_youtube_vitess_:" + name)
+		}
 		if _, ok := statusFuncMap[name]; ok {
 			panic("duplicate status func registered: " + name)
 		}
@@ -161,6 +165,11 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 	if err := statusTmpl.ExecuteTemplate(w, "status", data); err != nil {
 		log.Errorf("servenv: couldn't execute template: %v", err)
 	}
+}
+
+// StatusURLPath returns the path to the status page.
+func StatusURLPath() string {
+	return "/debug/status"
 }
 
 func init() {
