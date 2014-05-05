@@ -23,42 +23,60 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
-// Allowed state transitions:
-// NOT_SERVING -> INITIALIZING -> SERVING/NOT_SERVING,
-// SERVING -> SHUTTING_DOWN -> NOT_SERVING
 const (
+	// Allowed state transitions:
+	// NOT_SERVING -> INITIALIZING -> SERVING/NOT_SERVING,
+	// SERVING -> SHUTTING_TX
+	// SHUTTING_TX -> SHUTTING_QUERIES
+	// SHUTTING_QUERIES -> NOT_SERVING
+	//
+	// NOT_SERVING: The query service is not serving queries.
 	NOT_SERVING = iota
+	// INITIALIZING: The query service is tyring to get to the SERVING state.
+	// This is a transient state. It's only informational.
 	INITIALIZING
+	// SERVING: Query service is running. Everything is allowed.
 	SERVING
-	SHUTTING_DOWN
+	// SHUTTING_TX: Query service is shutting down and has disallowed
+	// new transactions. New queries are still allowed as long as they
+	// are part of an existing transaction. We remain in this state
+	// until all existing transactions are completed.
+	SHUTTING_TX
+	// SHUTTING_QUERIES: Query service is shutting down and has disallowed
+	// new queries. This state follows SHUTTING_TX. We enter this state
+	// after all existing transactions have completed. We remain in this
+	// state until all existing queries are completed. The next state
+	// after this is NOT_SERVING.
+	SHUTTING_QUERIES
 )
 
-var stateName = map[int64]string{
-	NOT_SERVING:   "NOT_SERVING",
-	INITIALIZING:  "INITIALIZING",
-	SERVING:       "SERVING",
-	SHUTTING_DOWN: "SHUTTING_DOWN",
+// stateName names every state. The number of elements must
+// match the number of states.
+var stateName = []string{
+	"NOT_SERVING",
+	"INITIALIZING",
+	"SERVING",
+	"SHUTTING_TX",
+	"SHUTTING_QUERIES",
 }
 
-//-----------------------------------------------
-// RPC API
+// Context is the context variable for SqlQuery RPC calls.
 type Context struct {
 	RemoteAddr string
 	Username   string
 }
 
+// SqlQuery implements the RPC interface for the query service.
 type SqlQuery struct {
-	// We use a hybrid locking scheme to control state transitions. This is
-	// optimal for frequent reads and infrequent state changes.
-	// You can use atomic lockless reads if you don't care about any state
-	// changes after you've read the variable. This is the common use case.
-	// You can use atomic lockless writes if you don't care about, or already
-	// know, the previous value of the object. This is true for exclusive
-	// transitions as documented above.
-	// You should use the statemu lock if you want to execute a transition
-	// where you don't want the state to change from the time you've read it.
-	statemu sync.Mutex
-	state   sync2.AtomicInt64
+	// mu is used to manage state transitions.
+	// Obtain a write lock to change state.
+	// Obtain a read lock to prevent state from changing.
+	// If you want to know the current value of state and
+	// don't care that it changes after you've read it,
+	// you can perform a lockless atomic read.
+	mu       sync.RWMutex
+	requests sync.WaitGroup
+	state    sync2.AtomicInt64
 
 	qe        *QueryEngine
 	rci       *RowcacheInvalidator
@@ -67,6 +85,8 @@ type SqlQuery struct {
 	dbconfig  *dbconfigs.DBConfig
 }
 
+// NewSqlQuery creates an instance of SqlQuery. Only one instance
+// of SqlQuery can be created per process.
 func NewSqlQuery(config Config) *SqlQuery {
 	sq := &SqlQuery{}
 	sq.qe = NewQueryEngine(config)
@@ -78,24 +98,35 @@ func NewSqlQuery(config Config) *SqlQuery {
 	return sq
 }
 
-// GetState returns the name of the current SqlQuery state (which is
-// read atomically).
+// GetState returns the name of the current SqlQuery state.
 func (sq *SqlQuery) GetState() string {
 	return stateName[sq.state.Get()]
 }
 
+// setState changes the state and logs the event.
+// It requires the caller to hold a lock on mu.
 func (sq *SqlQuery) setState(state int64) {
-	log.Infof("SqlQuery state: %v -> %v", stateName[sq.state.Get()], stateName[state])
+	log.Infof("SqlQuery state: %v -> %v", sq.GetState(), stateName[state])
 	sq.state.Set(state)
 }
 
+// allowQueries starts the query service.
+// If the state is anythong other than NOT_SERVING, it fails.
+// If allowQuery succeeds, the resulting state is SERVING.
+// Otherwise, it reverts back to NOT_SERVING.
+// While allowQuery is running, the state is set to INITIALIZING.
+// If waitForMysql is set to true, allowQueries will not return
+// until it's able to connect to mysql.
+// No other operations are allowed when allowQueries is running.
 func (sq *SqlQuery) allowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules, mysqld *mysqlctl.Mysqld, waitForMysql bool) (err error) {
-	sq.statemu.Lock()
-	defer sq.statemu.Unlock()
-	if sq.state.Get() == SERVING {
-		log.Infof("Ignoring allowQueries request, already serving.")
-		return nil
+	sq.mu.Lock()
+	defer sq.mu.Unlock()
+	if sq.state.Get() != NOT_SERVING {
+		terr := NewTabletError(FATAL, "cannot start query service, current state: %s", sq.GetState())
+		log.Errorf("%v", terr)
+		return terr
 	}
+	// state is NOT_SERVING
 	sq.setState(INITIALIZING)
 
 	if waitForMysql {
@@ -137,17 +168,40 @@ func (sq *SqlQuery) allowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides [
 	return nil
 }
 
+// disallowQueries shuts down the query service if it's SERVING.
+// It first transitions to SHUTTING_TX, then waits for existing
+// transactions to complete. During this state no new
+// transactions or queries are allowed. However, existing
+// transactions can still receive queries.
+// Then, it transitions to SHUTTING_QUERIES to wait for existing
+// queries to complete. In this state no new requests are allowed.
+// Once all queries are done, it shuts down the query engine
+// and marks the state as NOT_SERVING.
 func (sq *SqlQuery) disallowQueries() {
-	sq.statemu.Lock()
-	defer sq.statemu.Unlock()
-	if sq.state.Get() == NOT_SERVING {
+	// SERVING -> SHUTTING_TX
+	sq.mu.Lock()
+	if sq.state.Get() != SERVING {
+		sq.mu.Unlock()
 		return
 	}
-	sq.setState(SHUTTING_DOWN)
+	sq.setState(SHUTTING_TX)
+	sq.mu.Unlock()
+	// Don't hold lock while waiting.
+	sq.qe.WaitForTxEmpty()
+
+	// SHUTTING_TX -> SHUTTING_QUERIES
+	sq.mu.Lock()
+	sq.setState(SHUTTING_QUERIES)
+	sq.mu.Unlock()
+	// Don't hold lock while waiting.
+	sq.requests.Wait()
+
+	// SHUTTING_QUERIES -> NOT_SERVING
+	sq.mu.Lock()
 	defer func() {
 		sq.setState(NOT_SERVING)
+		sq.mu.Unlock()
 	}()
-
 	log.Infof("Stopping query service: %d", sq.sessionId)
 	sq.qe.Close()
 	sq.rci.Close()
@@ -155,32 +209,14 @@ func (sq *SqlQuery) disallowQueries() {
 	sq.dbconfig = &dbconfigs.DBConfig{}
 }
 
-// checkState checks if we can serve queries. If not, it causes an
-// error whose category is state dependent:
-// SERVING: Everything is allowed.
-// SHUTTING_DOWN:
-//   SELECT & BEGIN: RETRY errors
-//   DMLs & COMMITS: Allowed
-// NOT_SERVING: RETRY for all.
-func (sq *SqlQuery) checkState(sessionId int64, allowShutdown bool) {
-	switch sq.state.Get() {
-	case NOT_SERVING, INITIALIZING:
-		panic(NewTabletError(RETRY, "not serving"))
-	case SHUTTING_DOWN:
-		if !allowShutdown {
-			panic(NewTabletError(RETRY, "unavailable"))
-		}
-	}
-	// state is SERVING
-	if sessionId == 0 || sessionId != sq.sessionId {
-		panic(NewTabletError(RETRY, "Invalid session Id %v", sessionId))
-	}
-}
-
+// GetSessionId returns a sessionInfo response if the state is SERVING.
 func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
+	// We perform a lockless read of state because we don't care if it changes
+	// after we check its value.
 	if sq.state.Get() != SERVING {
-		return NewTabletError(RETRY, "Query server is in %s state", stateName[sq.state.Get()])
+		return NewTabletError(RETRY, "Query server is in %s state", sq.GetState())
 	}
+	// state was SERVING
 	if sessionParams.Keyspace != sq.dbconfig.Keyspace {
 		return NewTabletError(FATAL, "Keyspace mismatch, expecting %v, received %v", sq.dbconfig.Keyspace, sessionParams.Keyspace)
 	}
@@ -191,36 +227,84 @@ func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo
 	return nil
 }
 
+// Begin starts a new transaction. This is allowed only if the state is SERVING.
 func (sq *SqlQuery) Begin(context *Context, session *proto.Session, txInfo *proto.TransactionInfo) (err error) {
 	logStats := newSqlQueryStats("Begin", context, sq.config.SensitiveMode)
 	logStats.OriginalSql = "begin"
+	sq.mu.RLock()
+	defer sq.mu.RUnlock()
 	defer handleError(&err, logStats)
-	sq.checkState(session.SessionId, false)
+	if sq.state.Get() != SERVING {
+		return NewTabletError(RETRY, "cannot begin transaction in state %s", sq.GetState())
+	}
+	// state is SERVING
+	if session.SessionId == 0 || session.SessionId != sq.sessionId {
+		return NewTabletError(RETRY, "Invalid session Id %v", session.SessionId)
+	}
 
 	txInfo.TransactionId = sq.qe.Begin(logStats)
 	return nil
 }
 
+// startRequest validates the current state and sessionId and registers
+// the request (a waitgroup) as started. Every startRequest requires one
+// and only one corresponding endRequest. When the service shuts down,
+// disallowQueries will wait on this waitgroup to ensure that there are
+// no requests in flight.
+func (sq *SqlQuery) startRequest(sessionId int64, allowShutdown bool) (err error) {
+	sq.mu.RLock()
+	defer sq.mu.RUnlock()
+	st := sq.state.Get()
+	if st == SERVING {
+		goto verifySession
+	}
+	if allowShutdown && st == SHUTTING_TX {
+		goto verifySession
+	}
+	return NewTabletError(RETRY, "operation not allowed in state %s", sq.GetState())
+
+verifySession:
+	if sessionId == 0 || sessionId != sq.sessionId {
+		return NewTabletError(RETRY, "Invalid session Id %v", sessionId)
+	}
+	sq.requests.Add(1)
+	return nil
+}
+
+// endRequest unregisters the current request (a waitgroup) as done.
+func (sq *SqlQuery) endRequest() {
+	sq.requests.Done()
+}
+
+// Commit commits the specified transaction.
 func (sq *SqlQuery) Commit(context *Context, session *proto.Session) (err error) {
 	logStats := newSqlQueryStats("Commit", context, sq.config.SensitiveMode)
 	logStats.OriginalSql = "commit"
+	if err = sq.startRequest(session.SessionId, true); err != nil {
+		return err
+	}
+	defer sq.endRequest()
 	defer handleError(&err, logStats)
-	sq.checkState(session.SessionId, true)
 
 	sq.qe.Commit(logStats, session.TransactionId)
 	return nil
 }
 
+// Rollback rollsback the specified transaction.
 func (sq *SqlQuery) Rollback(context *Context, session *proto.Session) (err error) {
 	logStats := newSqlQueryStats("Rollback", context, sq.config.SensitiveMode)
 	logStats.OriginalSql = "rollback"
+	if err = sq.startRequest(session.SessionId, true); err != nil {
+		return err
+	}
+	defer sq.endRequest()
 	defer handleError(&err, logStats)
-	sq.checkState(session.SessionId, true)
 
 	sq.qe.Rollback(logStats, session.TransactionId)
 	return nil
 }
 
+// TODO(sougou): deprecate
 func handleInvalidationError(request interface{}) {
 	if x := recover(); x != nil {
 		terr, ok := x.(*TabletError)
@@ -234,6 +318,7 @@ func handleInvalidationError(request interface{}) {
 	}
 }
 
+// TODO(sougou): deprecate
 func (sq *SqlQuery) invalidateForDml(dml *proto.DmlType) {
 	if sq.state.Get() != SERVING {
 		return
@@ -242,6 +327,7 @@ func (sq *SqlQuery) invalidateForDml(dml *proto.DmlType) {
 	sq.qe.InvalidateForDml(dml)
 }
 
+// TODO(sougou): deprecate
 func (sq *SqlQuery) invalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
 	if sq.state.Get() != SERVING {
 		return
@@ -250,6 +336,8 @@ func (sq *SqlQuery) invalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
 	sq.qe.InvalidateForDDL(ddlInvalidate)
 }
 
+// handleExecError handles panics during query execution and sets
+// the supplied error return value.
 func handleExecError(query *proto.Query, err *error, logStats *sqlQueryStats) {
 	if logStats != nil {
 		logStats.Send()
@@ -276,41 +364,56 @@ func handleExecError(query *proto.Query, err *error, logStats *sqlQueryStats) {
 	}
 }
 
+// Execute executes the query and returns the result as response.
 func (sq *SqlQuery) Execute(context *Context, query *proto.Query, reply *mproto.QueryResult) (err error) {
 	logStats := newSqlQueryStats("Execute", context, sq.config.SensitiveMode)
-	defer handleExecError(query, &err, logStats)
-
-	// allow shutdown state if we're in a transaction
 	allowShutdown := (query.TransactionId != 0)
-	sq.checkState(query.SessionId, allowShutdown)
+	if err = sq.startRequest(query.SessionId, allowShutdown); err != nil {
+		return err
+	}
+	defer sq.endRequest()
+	defer handleExecError(query, &err, logStats)
 
 	*reply = *sq.qe.Execute(logStats, query)
 	return nil
 }
 
-// the first QueryResult will have Fields set (and Rows nil)
-// the subsequent QueryResult will have Rows set (and Fields nil)
+// StreamExecute executes the query and streams the result.
+// The first QueryResult will have Fields set (and Rows nil).
+// The subsequent QueryResult will have Rows set (and Fields nil).
 func (sq *SqlQuery) StreamExecute(context *Context, query *proto.Query, sendReply func(*mproto.QueryResult) error) (err error) {
-	logStats := newSqlQueryStats("StreamExecute", context, sq.config.SensitiveMode)
-	defer handleExecError(query, &err, logStats)
-
 	// check cases we don't handle yet
 	if query.TransactionId != 0 {
 		return NewTabletError(FAIL, "Transactions not supported with streaming")
 	}
 
-	sq.checkState(query.SessionId, false)
+	logStats := newSqlQueryStats("StreamExecute", context, sq.config.SensitiveMode)
+	if err = sq.startRequest(query.SessionId, false); err != nil {
+		return err
+	}
+	defer sq.endRequest()
+	defer handleExecError(query, &err, logStats)
+
 	sq.qe.StreamExecute(logStats, query, sendReply)
 	return nil
 }
 
+// ExecuteBatch executes a group of queries and returns their results as a list.
+// ExecuteBatch can be called for an existing transaction, or it can also begin
+// its own transaction, in which case it's expected to commit it also.
 func (sq *SqlQuery) ExecuteBatch(context *Context, queryList *proto.QueryList, reply *proto.QueryResultList) (err error) {
-	defer handleError(&err, nil)
 	if len(queryList.Queries) == 0 {
-		panic(NewTabletError(FAIL, "Empty query list"))
+		return NewTabletError(FAIL, "Empty query list")
 	}
-	sq.checkState(queryList.SessionId, false)
-	begin_called := false
+
+	allowShutdown := (queryList.TransactionId != 0)
+	if err = sq.startRequest(queryList.SessionId, allowShutdown); err != nil {
+		return err
+	}
+	defer sq.endRequest()
+	defer handleError(&err, nil)
+
+	beginCalled := false
 	session := proto.Session{
 		TransactionId: queryList.TransactionId,
 		SessionId:     queryList.SessionId,
@@ -328,17 +431,17 @@ func (sq *SqlQuery) ExecuteBatch(context *Context, queryList *proto.QueryList, r
 				return err
 			}
 			session.TransactionId = txInfo.TransactionId
-			begin_called = true
+			beginCalled = true
 			reply.List = append(reply.List, mproto.QueryResult{})
 		case "commit":
-			if !begin_called {
+			if !beginCalled {
 				panic(NewTabletError(FAIL, "Cannot commit without begin"))
 			}
 			if err = sq.Commit(context, &session); err != nil {
 				return err
 			}
 			session.TransactionId = 0
-			begin_called = false
+			beginCalled = false
 			reply.List = append(reply.List, mproto.QueryResult{})
 		default:
 			query := proto.Query{
@@ -349,7 +452,7 @@ func (sq *SqlQuery) ExecuteBatch(context *Context, queryList *proto.QueryList, r
 			}
 			var localReply mproto.QueryResult
 			if err = sq.Execute(context, &query, &localReply); err != nil {
-				if begin_called {
+				if beginCalled {
 					sq.Rollback(context, &session)
 				}
 				return err
@@ -357,13 +460,14 @@ func (sq *SqlQuery) ExecuteBatch(context *Context, queryList *proto.QueryList, r
 			reply.List = append(reply.List, localReply)
 		}
 	}
-	if begin_called {
+	if beginCalled {
 		sq.Rollback(context, &session)
 		panic(NewTabletError(FAIL, "begin called with no commit"))
 	}
 	return nil
 }
 
+// statsJSON is used to export SqlQuery status variables into expvar.
 func (sq *SqlQuery) statsJSON() string {
 	buf := bytes.NewBuffer(make([]byte, 0, 128))
 	fmt.Fprintf(buf, "{")
@@ -386,6 +490,7 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
+// Rand generates a pseudo-random int64 number.
 func Rand() int64 {
 	return rand.Int63()
 }

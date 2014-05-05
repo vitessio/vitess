@@ -75,6 +75,8 @@ func (axp *ActiveTxPool) Close() {
 	axp.ticks.Stop()
 	for _, v := range axp.pool.GetOutdated(time.Duration(0), "for closing") {
 		conn := v.(*TxConnection)
+		log.Warningf("killing transaction for shutdown: %s", conn.Format(nil))
+		internalErrors.Add("StrayTransactions", 1)
 		conn.Close()
 		conn.discard(TX_CLOSE)
 	}
@@ -88,7 +90,7 @@ func (axp *ActiveTxPool) TransactionKiller() {
 	defer logError()
 	for _, v := range axp.pool.GetOutdated(time.Duration(axp.Timeout()), "for rollback") {
 		conn := v.(*TxConnection)
-		log.Infof("killing transaction %d: %#v", conn.transactionId, conn.queries)
+		log.Warningf("killing transaction: %s", conn.Format(nil))
 		killStats.Add("Transactions", 1)
 		conn.Close()
 		conn.discard(TX_KILL)

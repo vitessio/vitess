@@ -5,7 +5,6 @@
 package tabletserver
 
 import (
-	"sync"
 	"time"
 
 	log "github.com/golang/glog"
@@ -31,10 +30,6 @@ const (
 
 //-----------------------------------------------
 type QueryEngine struct {
-	// Obtain read lock on mu to execute queries
-	// Obtain write lock to start/stop query service
-	mu sync.RWMutex
-
 	cachePool      *CachePool
 	schemaInfo     *SchemaInfo
 	connPool       *ConnectionPool
@@ -123,10 +118,6 @@ func NewQueryEngine(config Config) *QueryEngine {
 }
 
 func (qe *QueryEngine) Open(dbconfig *dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules) {
-	// Wait for Close, in case it's running
-	qe.mu.Lock()
-	defer qe.mu.Unlock()
-
 	connFactory := GenericConnectionCreator(&dbconfig.ConnectionParams)
 
 	if dbconfig.EnableRowcache {
@@ -148,12 +139,11 @@ func (qe *QueryEngine) Open(dbconfig *dbconfigs.DBConfig, schemaOverrides []Sche
 	qe.activePool.Open(connFactory)
 }
 
-func (qe *QueryEngine) Close() {
+func (qe *QueryEngine) WaitForTxEmpty() {
 	qe.activeTxPool.WaitForEmpty()
-	// Ensure all read locks are released (no more queries being served)
-	qe.mu.Lock()
-	defer qe.mu.Unlock()
+}
 
+func (qe *QueryEngine) Close() {
 	qe.activePool.Close()
 	qe.schemaInfo.Close()
 	qe.activeTxPool.Close()
@@ -164,8 +154,6 @@ func (qe *QueryEngine) Close() {
 }
 
 func (qe *QueryEngine) Begin(logStats *sqlQueryStats) (transactionId int64) {
-	qe.mu.RLock()
-	defer qe.mu.RUnlock()
 	defer queryStats.Record("BEGIN", time.Now())
 
 	var conn PoolConnection
@@ -181,8 +169,6 @@ func (qe *QueryEngine) Begin(logStats *sqlQueryStats) (transactionId int64) {
 }
 
 func (qe *QueryEngine) Commit(logStats *sqlQueryStats, transactionId int64) {
-	qe.mu.RLock()
-	defer qe.mu.RUnlock()
 	defer queryStats.Record("COMMIT", time.Now())
 
 	dirtyTables, err := qe.activeTxPool.SafeCommit(transactionId)
@@ -209,17 +195,12 @@ func (qe *QueryEngine) invalidateRows(logStats *sqlQueryStats, dirtyTables map[s
 }
 
 func (qe *QueryEngine) Rollback(logStats *sqlQueryStats, transactionId int64) {
-	qe.mu.RLock()
-	defer qe.mu.RUnlock()
 	defer queryStats.Record("ROLLBACK", time.Now())
 
 	qe.activeTxPool.Rollback(transactionId)
 }
 
 func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (reply *mproto.QueryResult) {
-	qe.mu.RLock()
-	defer qe.mu.RUnlock()
-
 	if query.BindVariables == nil { // will help us avoid repeated nil checks
 		query.BindVariables = make(map[string]interface{})
 	}
@@ -317,9 +298,6 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 // the first QueryResult will have Fields set (and Rows nil)
 // the subsequent QueryResult will have Rows set (and Fields nil)
 func (qe *QueryEngine) StreamExecute(logStats *sqlQueryStats, query *proto.Query, sendReply func(*mproto.QueryResult) error) {
-	qe.mu.RLock()
-	defer qe.mu.RUnlock()
-
 	if query.BindVariables == nil { // will help us avoid repeated nil checks
 		query.BindVariables = make(map[string]interface{})
 	}
@@ -346,9 +324,6 @@ func (qe *QueryEngine) InvalidateForDml(dml *proto.DmlType) {
 	if qe.cachePool.IsClosed() {
 		return
 	}
-	qe.mu.RLock()
-	defer qe.mu.RUnlock()
-
 	invalidations := int64(0)
 	tableInfo := qe.schemaInfo.GetTable(dml.Table)
 	if tableInfo == nil {
@@ -368,9 +343,6 @@ func (qe *QueryEngine) InvalidateForDml(dml *proto.DmlType) {
 }
 
 func (qe *QueryEngine) InvalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
-	qe.mu.RLock()
-	defer qe.mu.RUnlock()
-
 	ddlPlan := sqlparser.DDLParse(ddlInvalidate.DDL)
 	if ddlPlan.Action == 0 {
 		panic(NewTabletError(FAIL, "DDL is not understood"))
@@ -542,16 +514,11 @@ func (qe *QueryEngine) spotCheck(logStats *sqlQueryStats, plan *CompiledPlan, rc
 		dbrow = resultFromdb.Rows[0]
 	}
 	if dbrow == nil || !rowsAreEqual(rcresult.Row, dbrow) {
-		go qe.recheckLater(plan, rcresult, dbrow, pk)
+		qe.recheckLater(plan, rcresult, dbrow, pk)
 	}
 }
 
 func (qe *QueryEngine) recheckLater(plan *CompiledPlan, rcresult RCResult, dbrow []sqltypes.Value, pk []sqltypes.Value) {
-	// Read lock is needed because this runs as a separate goroutine.
-	// We also have to ensure that the server hasn't shut down by the time
-	// we got the lock.
-	qe.mu.RLock()
-	defer qe.mu.RUnlock()
 	if qe.cachePool.IsClosed() {
 		return
 	}
