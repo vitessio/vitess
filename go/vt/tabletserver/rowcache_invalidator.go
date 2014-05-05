@@ -21,6 +21,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
+// RowcacheInvalidator runs the service to invalidate
+// the rowcache based on binlog events.
 type RowcacheInvalidator struct {
 	qe  *QueryEngine
 	svm sync2.ServiceManager
@@ -103,7 +105,8 @@ func (rci *RowcacheInvalidator) run() {
 				return err
 			}
 			return rci.evs.Stream(rp.MasterLogFile, int64(rp.MasterLogPosition), func(reply *blproto.StreamEvent) error {
-				return rci.processEvent(reply)
+				rci.processEvent(reply)
+				return nil
 			})
 		}()
 		if err == nil {
@@ -116,10 +119,24 @@ func (rci *RowcacheInvalidator) run() {
 	log.Infof("Rowcache invalidator stopped")
 }
 
-func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) error {
+func handleInvalidationError(event *blproto.StreamEvent) {
+	if x := recover(); x != nil {
+		terr, ok := x.(*TabletError)
+		if !ok {
+			log.Errorf("Uncaught panic for %+v:\n%v\n%s", event, x, tb.Stack(4))
+			internalErrors.Add("Panic", 1)
+			return
+		}
+		log.Errorf("%v: %+v", terr, event)
+		internalErrors.Add("Invalidation", 1)
+	}
+}
+
+func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) {
+	defer handleInvalidationError(event)
 	switch event.Category {
 	case "DDL":
-		InvalidateForDDL(&proto.DDLInvalidate{DDL: event.Sql})
+		rci.qe.InvalidateForDDL(&proto.DDLInvalidate{DDL: event.Sql})
 	case "DML":
 		rci.handleDmlEvent(event)
 	case "ERR":
@@ -137,7 +154,6 @@ func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) error {
 		log.Errorf("unknown event: %#v", event)
 		internalErrors.Add("Invalidation", 1)
 	}
-	return nil
 }
 
 func (rci *RowcacheInvalidator) handleDmlEvent(event *blproto.StreamEvent) {
@@ -161,5 +177,5 @@ func (rci *RowcacheInvalidator) handleDmlEvent(event *blproto.StreamEvent) {
 			dml.Keys = append(dml.Keys, invalidateKey)
 		}
 	}
-	InvalidateForDml(dml)
+	rci.qe.InvalidateForDml(dml)
 }
