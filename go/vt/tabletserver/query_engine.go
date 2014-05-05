@@ -263,8 +263,11 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 
 	// Run it by the rules engine
 	action, desc := basePlan.Rules.getAction(logStats.RemoteAddr(), logStats.Username(), query.BindVariables)
-	if action == QR_FAIL_QUERY {
+	switch action {
+	case QR_FAIL:
 		panic(NewTabletError(FAIL, "Query disallowed due to rule: %s", desc))
+	case QR_FAIL_RETRY:
+		panic(NewTabletError(RETRY, "Query disallowed due to rule: %s", desc))
 	}
 
 	if basePlan.PlanId == sqlparser.PLAN_DDL {

@@ -46,7 +46,7 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet) error {
 	// Compute the query rules that match the tablet record
 	qrs := tabletserver.LoadCustomRules()
 	if tablet.KeyRange.IsPartial() {
-		qr := tabletserver.NewQueryRule("enforce keyspace_id range", "keyspace_id_not_in_range", tabletserver.QR_FAIL_QUERY)
+		qr := tabletserver.NewQueryRule("enforce keyspace_id range", "keyspace_id_not_in_range", tabletserver.QR_FAIL)
 		qr.AddPlanCond(sqlparser.PLAN_INSERT_PK)
 		err := qr.AddBindVarCond("keyspace_id", true, true, tabletserver.QR_NOTIN, tablet.KeyRange)
 		if err != nil {
@@ -57,7 +57,7 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet) error {
 	}
 	if len(tablet.BlacklistedTables) > 0 {
 		log.Infof("Blacklisting tables %v", strings.Join(tablet.BlacklistedTables, ", "))
-		qr := tabletserver.NewQueryRule("enforce blacklisted tables", "blacklisted_table", tabletserver.QR_FAIL_QUERY)
+		qr := tabletserver.NewQueryRule("enforce blacklisted tables", "blacklisted_table", tabletserver.QR_FAIL_RETRY)
 		for _, t := range tablet.BlacklistedTables {
 			qr.AddTableCond(t)
 		}
