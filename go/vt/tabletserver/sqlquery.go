@@ -110,7 +110,7 @@ func (sq *SqlQuery) setState(state int64) {
 }
 
 // allowQueries starts the query service.
-// If the state is anythong other than NOT_SERVING, it fails.
+// If the state is anything other than NOT_SERVING, it fails.
 // If allowQuery succeeds, the resulting state is SERVING.
 // Otherwise, it reverts back to NOT_SERVING.
 // While allowQuery is running, the state is set to INITIALIZING.
@@ -166,7 +166,7 @@ func (sq *SqlQuery) allowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides [
 
 // disallowQueries shuts down the query service if it's SERVING.
 // It first transitions to SHUTTING_TX, then waits for existing
-// transactions to complete. During this state no new
+// transactions to complete. During this state, no new
 // transactions or queries are allowed. However, existing
 // transactions can still receive queries.
 // Then, it transitions to SHUTTING_QUERIES to wait for existing
