@@ -19,8 +19,8 @@ func (entityId *EntityId) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
-	bson.EncodeInterface(buf, "ExternalId", entityId.ExternalId)
-	entityId.KeyspaceId.MarshalBson(buf, "KeyspaceId")
+	bson.EncodeInterface(buf, "ExternalID", entityId.ExternalID)
+	entityId.KeyspaceID.MarshalBson(buf, "KeyspaceID")
 
 	lenWriter.Close()
 }
@@ -39,10 +39,10 @@ func (entityId *EntityId) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 
 	for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 		switch bson.ReadCString(buf) {
-		case "ExternalId":
-			entityId.ExternalId = bson.DecodeInterface(buf, kind)
-		case "KeyspaceId":
-			entityId.KeyspaceId.UnmarshalBson(buf, kind)
+		case "ExternalID":
+			entityId.ExternalID = bson.DecodeInterface(buf, kind)
+		case "KeyspaceID":
+			entityId.KeyspaceID.UnmarshalBson(buf, kind)
 		default:
 			bson.Skip(buf, kind)
 		}

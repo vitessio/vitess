@@ -189,15 +189,14 @@ class VTGateConnection(object):
   def _execute_entity_ids(self, sql, bind_variables, keyspace, tablet_type, entity_keyspace_id_map, entity_column_name):
     sql, new_binds = dbapi.prepare_query_bind_vars(sql, bind_variables)
     new_binds = field_types.convert_bind_vars(new_binds)
-    new_entity_kid_map = dict()
-    for k in entity_keyspace_id_map:
-      new_entity_kid_map[str(k)] = str(entity_keyspace_id_map[k])
     req = {
         'Sql': sql,
         'BindVariables': new_binds,
         'Keyspace': keyspace,
         'TabletType': tablet_type,
-        'EntityKeyspaceIdMap': new_entity_kid_map,
+        'EntityKeyspaceIDs': [
+            {'ExternalID': xid, 'KeyspaceID': str(kid)}
+            for xid, kid in entity_keyspace_id_map.iteritems()],
         'EntityColumnName': entity_column_name,
         }
 

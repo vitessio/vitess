@@ -127,16 +127,16 @@ func (res *Resolver) ExecuteEntityIds(
 	context interface{},
 	query *proto.EntityIdsQuery,
 ) (*mproto.QueryResult, error) {
-	shardIdMap, err := mapEntityIdsToShards(
+	shardIDMap, err := mapEntityIdsToShards(
 		res.scatterConn.toposerv,
 		res.scatterConn.cell,
 		query.Keyspace,
-		query.EntityKeyspaceIds,
+		query.EntityKeyspaceIDs,
 		query.TabletType)
 	if err != nil {
 		return nil, err
 	}
-	shards, sqls, bindVars := buildEntityIds(shardIdMap, query.Sql, query.EntityColumnName, query.BindVariables)
+	shards, sqls, bindVars := buildEntityIds(shardIDMap, query.Sql, query.EntityColumnName, query.BindVariables)
 	for {
 		qr, err := res.scatterConn.ExecuteEntityIds(
 			context,
@@ -159,16 +159,16 @@ func (res *Resolver) ExecuteEntityIds(
 				resharding = true
 			}
 			// check shards change for horizontal resharding
-			newShardIdMap, err := mapEntityIdsToShards(
+			newShardIDMap, err := mapEntityIdsToShards(
 				res.scatterConn.toposerv,
 				res.scatterConn.cell,
 				query.Keyspace,
-				query.EntityKeyspaceIds,
+				query.EntityKeyspaceIDs,
 				query.TabletType)
 			if err != nil {
 				return nil, err
 			}
-			newShards, newSqls, newBindVars := buildEntityIds(newShardIdMap, query.Sql, query.EntityColumnName, query.BindVariables)
+			newShards, newSqls, newBindVars := buildEntityIds(newShardIDMap, query.Sql, query.EntityColumnName, query.BindVariables)
 			if !StrsEquals(newShards, shards) {
 				shards = newShards
 				sqls = newSqls
@@ -347,11 +347,11 @@ func StrsEquals(a, b []string) bool {
 	return true
 }
 
-func buildEntityIds(shardIdMap map[string][]interface{}, qSql, entityColName string, qBindVars map[string]interface{}) ([]string, map[string]string, map[string]map[string]interface{}) {
+func buildEntityIds(shardIDMap map[string][]interface{}, qSql, entityColName string, qBindVars map[string]interface{}) ([]string, map[string]string, map[string]map[string]interface{}) {
 	shards := make([]string, 0, 1)
 	sqls := make(map[string]string)
 	bindVars := make(map[string]map[string]interface{})
-	for shard, ids := range shardIdMap {
+	for shard, ids := range shardIDMap {
 		var b bytes.Buffer
 		b.Write([]byte(entityColName))
 		b.Write([]byte(" in ("))

@@ -64,11 +64,11 @@ func mapEntityIdsToShards(topoServ SrvTopoServer, cell, keyspace string, entityI
 	}
 	var shards = make(map[string][]interface{})
 	for _, eid := range entityIds {
-		shard, err := getShardForKeyspaceId(allShards, eid.KeyspaceId)
+		shard, err := getShardForKeyspaceId(allShards, eid.KeyspaceID)
 		if err != nil {
 			return nil, err
 		}
-		shards[shard] = append(shards[shard], eid.ExternalId)
+		shards[shard] = append(shards[shard], eid.ExternalID)
 	}
 	return shards, nil
 }

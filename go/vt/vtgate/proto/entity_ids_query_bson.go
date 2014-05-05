@@ -33,9 +33,9 @@ func (entityIdsQuery *EntityIdsQuery) MarshalBson(buf *bytes2.ChunkedWriter, key
 	bson.EncodeString(buf, "EntityColumnName", entityIdsQuery.EntityColumnName)
 	// []EntityId
 	{
-		bson.EncodePrefix(buf, bson.Array, "EntityKeyspaceIds")
+		bson.EncodePrefix(buf, bson.Array, "EntityKeyspaceIDs")
 		lenWriter := bson.NewLenWriter(buf)
-		for _i, _v2 := range entityIdsQuery.EntityKeyspaceIds {
+		for _i, _v2 := range entityIdsQuery.EntityKeyspaceIDs {
 			_v2.MarshalBson(buf, bson.Itoa(_i))
 		}
 		lenWriter.Close()
@@ -86,19 +86,19 @@ func (entityIdsQuery *EntityIdsQuery) UnmarshalBson(buf *bytes.Buffer, kind byte
 			entityIdsQuery.Keyspace = bson.DecodeString(buf, kind)
 		case "EntityColumnName":
 			entityIdsQuery.EntityColumnName = bson.DecodeString(buf, kind)
-		case "EntityKeyspaceIds":
+		case "EntityKeyspaceIDs":
 			// []EntityId
 			if kind != bson.Null {
 				if kind != bson.Array {
-					panic(bson.NewBsonError("unexpected kind %v for entityIdsQuery.EntityKeyspaceIds", kind))
+					panic(bson.NewBsonError("unexpected kind %v for entityIdsQuery.EntityKeyspaceIDs", kind))
 				}
 				bson.Next(buf, 4)
-				entityIdsQuery.EntityKeyspaceIds = make([]EntityId, 0, 8)
+				entityIdsQuery.EntityKeyspaceIDs = make([]EntityId, 0, 8)
 				for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 					bson.SkipIndex(buf)
 					var _v2 EntityId
 					_v2.UnmarshalBson(buf, kind)
-					entityIdsQuery.EntityKeyspaceIds = append(entityIdsQuery.EntityKeyspaceIds, _v2)
+					entityIdsQuery.EntityKeyspaceIDs = append(entityIdsQuery.EntityKeyspaceIDs, _v2)
 				}
 			}
 		case "TabletType":
