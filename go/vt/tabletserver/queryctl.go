@@ -176,14 +176,6 @@ func IsCachePoolAvailable() bool {
 	return !SqlQueryRpcService.qe.cachePool.IsClosed()
 }
 
-func InvalidateForDml(dml *proto.DmlType) {
-	SqlQueryRpcService.invalidateForDml(dml)
-}
-
-func InvalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
-	SqlQueryRpcService.invalidateForDDL(ddlInvalidate)
-}
-
 func SetQueryRules(qrs *QueryRules) {
 	SqlQueryRpcService.qe.schemaInfo.SetRules(qrs)
 }

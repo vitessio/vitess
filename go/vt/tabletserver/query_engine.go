@@ -5,7 +5,6 @@
 package tabletserver
 
 import (
-	"sync"
 	"time"
 
 	log "github.com/golang/glog"
@@ -15,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -29,29 +29,44 @@ const (
 	SPOT_CHECK_MULTIPLIER = 1e6
 )
 
-//-----------------------------------------------
+// QueryEngine implements the core functionality of tabletserver.
+// It assumes that no requests will be sent to it before Open is
+// called and succeeds.
+// Shutdown is done in the following order:
+//
+// WaitForTxEmpty: There should be no more new calls to Begin
+// once this function is called. This will return when there
+// are no more pending transactions.
+//
+// Close: There should be no more pending queries when this
+// function is called.
+//
+// Functions of QueryEngine do not return errors. They instead
+// panic with NewTabletError as the error type.
+// TODO(sougou): Switch to error return scheme.
 type QueryEngine struct {
-	// Obtain read lock on mu to execute queries
-	// Obtain write lock to start/stop query service
-	mu sync.RWMutex
+	schemaInfo *SchemaInfo
 
+	// Pools
 	cachePool      *CachePool
-	schemaInfo     *SchemaInfo
 	connPool       *ConnectionPool
 	streamConnPool *ConnectionPool
 	txPool         *ConnectionPool
-	activeTxPool   *ActiveTxPool
-	activePool     *ActivePool
-	consolidator   *Consolidator
 
-	spotCheckFreq sync2.AtomicInt64
-	strictMode    sync2.AtomicInt64
+	// Services
+	activeTxPool *ActiveTxPool
+	activePool   *ActivePool
+	consolidator *Consolidator
+	invalidator  *RowcacheInvalidator
 
+	// Vars
+	spotCheckFreq    sync2.AtomicInt64
+	strictMode       sync2.AtomicInt64
 	maxResultSize    sync2.AtomicInt64
 	streamBufferSize sync2.AtomicInt64
 }
 
-type CompiledPlan struct {
+type compiledPlan struct {
 	Query string
 	*ExecPlan
 	BindVars      map[string]interface{}
@@ -84,18 +99,21 @@ type CacheInvalidator interface {
 // You must call this only once.
 func NewQueryEngine(config Config) *QueryEngine {
 	qe := &QueryEngine{}
-
-	// services
-	qe.cachePool = NewCachePool("RowcachePool", config.RowCache, time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.schemaInfo = NewSchemaInfo(config.QueryCacheSize, time.Duration(config.SchemaReloadTime*1e9), time.Duration(config.IdleTimeout*1e9), config.SensitiveMode)
+
+	// Pools
+	qe.cachePool = NewCachePool("RowcachePool", config.RowCache, time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.connPool = NewConnectionPool("ConnPool", config.PoolSize, time.Duration(config.IdleTimeout*1e9))
 	qe.streamConnPool = NewConnectionPool("StreamConnPool", config.StreamPoolSize, time.Duration(config.IdleTimeout*1e9))
 	qe.txPool = NewConnectionPool("TransactionPool", config.TransactionCap, time.Duration(config.IdleTimeout*1e9)) // connections in pool has to be > transactionCap
+
+	// Services
 	qe.activeTxPool = NewActiveTxPool("ActiveTransactionPool", time.Duration(config.TransactionTimeout*1e9))
 	qe.activePool = NewActivePool("ActivePool", time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.consolidator = NewConsolidator()
+	qe.invalidator = NewRowcacheInvalidator(qe)
 
-	// vars
+	// Vars
 	qe.spotCheckFreq = sync2.AtomicInt64(config.SpotCheckRatio * SPOT_CHECK_MULTIPLIER)
 	if config.StrictMode {
 		qe.strictMode.Set(1)
@@ -103,7 +121,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 	qe.maxResultSize = sync2.AtomicInt64(config.MaxResultSize)
 	qe.streamBufferSize = sync2.AtomicInt64(config.StreamBufferSize)
 
-	// stats
+	// Stats
 	stats.Publish("MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
 	stats.Publish("StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
 	queryStats = stats.NewTimings("Queries")
@@ -122,23 +140,26 @@ func NewQueryEngine(config Config) *QueryEngine {
 	return qe
 }
 
-func (qe *QueryEngine) Open(dbconfig *dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules) {
-	// Wait for Close, in case it's running
-	qe.mu.Lock()
-	defer qe.mu.Unlock()
-
+// Open must be called before sending requests to QueryEngine.
+func (qe *QueryEngine) Open(dbconfig *dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules, mysqld *mysqlctl.Mysqld) {
 	connFactory := GenericConnectionCreator(&dbconfig.ConnectionParams)
 
 	if dbconfig.EnableRowcache {
 		qe.cachePool.Open()
+		log.Infof("rowcache is enabled")
+		if dbconfig.EnableInvalidator {
+			qe.invalidator.Open(dbconfig.DbName, mysqld)
+		}
 	} else {
-		log.Infof("rowcache not enabled")
+		log.Infof("rowcache is not enabled")
 	}
 	start := time.Now()
 	strictMode := false
 	if qe.strictMode.Get() != 0 {
 		strictMode = true
 	}
+	// schemaInfo depends on cachePool. Every table that has a rowcache
+	// points to the cachePool.
 	qe.schemaInfo.Open(connFactory, schemaOverrides, qe.cachePool, qrs, strictMode)
 	log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))
 	qe.connPool.Open(connFactory)
@@ -148,24 +169,30 @@ func (qe *QueryEngine) Open(dbconfig *dbconfigs.DBConfig, schemaOverrides []Sche
 	qe.activePool.Open(connFactory)
 }
 
-func (qe *QueryEngine) Close() {
+// WaitForTxEmpty must be called before calling Close.
+// Before calling WaitForTxEmpty, you must ensure that there
+// will be no more calls to Begin.
+func (qe *QueryEngine) WaitForTxEmpty() {
 	qe.activeTxPool.WaitForEmpty()
-	// Ensure all read locks are released (no more queries being served)
-	qe.mu.Lock()
-	defer qe.mu.Unlock()
+}
 
+// Close must be called to shut down QueryEngine.
+// You must ensure that no more queries will be sent
+// before calling Close.
+func (qe *QueryEngine) Close() {
+	// Close in reverse order of Open.
 	qe.activePool.Close()
-	qe.schemaInfo.Close()
 	qe.activeTxPool.Close()
 	qe.txPool.Close()
 	qe.streamConnPool.Close()
 	qe.connPool.Close()
+	qe.schemaInfo.Close()
+	qe.invalidator.Close()
 	qe.cachePool.Close()
 }
 
+// Begin begins a transaction.
 func (qe *QueryEngine) Begin(logStats *sqlQueryStats) (transactionId int64) {
-	qe.mu.RLock()
-	defer qe.mu.RUnlock()
 	defer queryStats.Record("BEGIN", time.Now())
 
 	var conn PoolConnection
@@ -180,11 +207,9 @@ func (qe *QueryEngine) Begin(logStats *sqlQueryStats) (transactionId int64) {
 	return transactionId
 }
 
+// Commit commits the specified transaction.
 func (qe *QueryEngine) Commit(logStats *sqlQueryStats, transactionId int64) {
-	qe.mu.RLock()
-	defer qe.mu.RUnlock()
 	defer queryStats.Record("COMMIT", time.Now())
-
 	dirtyTables, err := qe.activeTxPool.SafeCommit(transactionId)
 	qe.invalidateRows(logStats, dirtyTables)
 	if err != nil {
@@ -208,18 +233,14 @@ func (qe *QueryEngine) invalidateRows(logStats *sqlQueryStats, dirtyTables map[s
 	}
 }
 
+// Rollback rolls back the specified transaction.
 func (qe *QueryEngine) Rollback(logStats *sqlQueryStats, transactionId int64) {
-	qe.mu.RLock()
-	defer qe.mu.RUnlock()
 	defer queryStats.Record("ROLLBACK", time.Now())
-
 	qe.activeTxPool.Rollback(transactionId)
 }
 
+// Execute executes the specified query and returns its result.
 func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (reply *mproto.QueryResult) {
-	qe.mu.RLock()
-	defer qe.mu.RUnlock()
-
 	if query.BindVariables == nil { // will help us avoid repeated nil checks
 		query.BindVariables = make(map[string]interface{})
 	}
@@ -250,7 +271,7 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 		return qe.execDDL(logStats, query.Sql)
 	}
 
-	plan := &CompiledPlan{
+	plan := &compiledPlan{
 		Query:         query.Sql,
 		ExecPlan:      basePlan,
 		BindVars:      query.BindVariables,
@@ -314,12 +335,10 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 	return reply
 }
 
-// the first QueryResult will have Fields set (and Rows nil)
-// the subsequent QueryResult will have Rows set (and Fields nil)
+// StreamExecute executes the query and streams its result.
+// The first QueryResult will have Fields set (and Rows nil)
+// The subsequent QueryResult will have Rows set (and Fields nil)
 func (qe *QueryEngine) StreamExecute(logStats *sqlQueryStats, query *proto.Query, sendReply func(*mproto.QueryResult) error) {
-	qe.mu.RLock()
-	defer qe.mu.RUnlock()
-
 	if query.BindVariables == nil { // will help us avoid repeated nil checks
 		query.BindVariables = make(map[string]interface{})
 	}
@@ -342,13 +361,11 @@ func (qe *QueryEngine) StreamExecute(logStats *sqlQueryStats, query *proto.Query
 	qe.fullStreamFetch(logStats, conn, plan.FullQuery, query.BindVariables, nil, nil, sendReply)
 }
 
+// InvalidateForDml performs rowcache invalidations for the dml.
 func (qe *QueryEngine) InvalidateForDml(dml *proto.DmlType) {
 	if qe.cachePool.IsClosed() {
 		return
 	}
-	qe.mu.RLock()
-	defer qe.mu.RUnlock()
-
 	invalidations := int64(0)
 	tableInfo := qe.schemaInfo.GetTable(dml.Table)
 	if tableInfo == nil {
@@ -367,10 +384,8 @@ func (qe *QueryEngine) InvalidateForDml(dml *proto.DmlType) {
 	tableInfo.invalidations.Add(invalidations)
 }
 
+// InvalidateForDDL performs schema and rowcache changes for the ddl.
 func (qe *QueryEngine) InvalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
-	qe.mu.RLock()
-	defer qe.mu.RUnlock()
-
 	ddlPlan := sqlparser.DDLParse(ddlInvalidate.DDL)
 	if ddlPlan.Action == 0 {
 		panic(NewTabletError(FAIL, "DDL is not understood"))
@@ -418,7 +433,7 @@ func (qe *QueryEngine) execDDL(logStats *sqlQueryStats, ddl string) *mproto.Quer
 //-----------------------------------------------
 // Execution
 
-func (qe *QueryEngine) execPKEqual(logStats *sqlQueryStats, plan *CompiledPlan) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execPKEqual(logStats *sqlQueryStats, plan *compiledPlan) (result *mproto.QueryResult) {
 	pkRows := buildValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
 	if len(pkRows) != 1 || plan.Fields == nil {
 		panic("unexpected")
@@ -435,7 +450,7 @@ func (qe *QueryEngine) execPKEqual(logStats *sqlQueryStats, plan *CompiledPlan) 
 	return
 }
 
-func (qe *QueryEngine) fetchOne(logStats *sqlQueryStats, plan *CompiledPlan, pk []sqltypes.Value) (row []sqltypes.Value) {
+func (qe *QueryEngine) fetchOne(logStats *sqlQueryStats, plan *compiledPlan, pk []sqltypes.Value) (row []sqltypes.Value) {
 	logStats.QuerySources |= QUERY_SOURCE_ROWCACHE
 	tableInfo := plan.TableInfo
 	keys := make([]string, 1)
@@ -463,17 +478,17 @@ func (qe *QueryEngine) fetchOne(logStats *sqlQueryStats, plan *CompiledPlan, pk 
 	return row
 }
 
-func (qe *QueryEngine) execPKIN(logStats *sqlQueryStats, plan *CompiledPlan) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execPKIN(logStats *sqlQueryStats, plan *compiledPlan) (result *mproto.QueryResult) {
 	pkRows := buildINValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
 	return qe.fetchMulti(logStats, plan, pkRows)
 }
 
-func (qe *QueryEngine) execSubquery(logStats *sqlQueryStats, plan *CompiledPlan) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execSubquery(logStats *sqlQueryStats, plan *compiledPlan) (result *mproto.QueryResult) {
 	innerResult := qe.qFetch(logStats, plan.Subquery, plan.BindVars, nil)
 	return qe.fetchMulti(logStats, plan, innerResult.Rows)
 }
 
-func (qe *QueryEngine) fetchMulti(logStats *sqlQueryStats, plan *CompiledPlan, pkRows [][]sqltypes.Value) (result *mproto.QueryResult) {
+func (qe *QueryEngine) fetchMulti(logStats *sqlQueryStats, plan *compiledPlan, pkRows [][]sqltypes.Value) (result *mproto.QueryResult) {
 	result = &mproto.QueryResult{}
 	if len(pkRows) == 0 {
 		return
@@ -534,7 +549,7 @@ func (qe *QueryEngine) mustVerify() bool {
 	return (Rand() % SPOT_CHECK_MULTIPLIER) < qe.spotCheckFreq.Get()
 }
 
-func (qe *QueryEngine) spotCheck(logStats *sqlQueryStats, plan *CompiledPlan, rcresult RCResult, pk []sqltypes.Value) {
+func (qe *QueryEngine) spotCheck(logStats *sqlQueryStats, plan *compiledPlan, rcresult RCResult, pk []sqltypes.Value) {
 	spotCheckCount.Add(1)
 	resultFromdb := qe.qFetch(logStats, plan.OuterQuery, plan.BindVars, pk)
 	var dbrow []sqltypes.Value
@@ -542,16 +557,11 @@ func (qe *QueryEngine) spotCheck(logStats *sqlQueryStats, plan *CompiledPlan, rc
 		dbrow = resultFromdb.Rows[0]
 	}
 	if dbrow == nil || !rowsAreEqual(rcresult.Row, dbrow) {
-		go qe.recheckLater(plan, rcresult, dbrow, pk)
+		qe.recheckLater(plan, rcresult, dbrow, pk)
 	}
 }
 
-func (qe *QueryEngine) recheckLater(plan *CompiledPlan, rcresult RCResult, dbrow []sqltypes.Value, pk []sqltypes.Value) {
-	// Read lock is needed because this runs as a separate goroutine.
-	// We also have to ensure that the server hasn't shut down by the time
-	// we got the lock.
-	qe.mu.RLock()
-	defer qe.mu.RUnlock()
+func (qe *QueryEngine) recheckLater(plan *compiledPlan, rcresult RCResult, dbrow []sqltypes.Value, pk []sqltypes.Value) {
 	if qe.cachePool.IsClosed() {
 		return
 	}
@@ -570,7 +580,7 @@ func (qe *QueryEngine) recheckLater(plan *CompiledPlan, rcresult RCResult, dbrow
 }
 
 // execDirect always sends the query to mysql
-func (qe *QueryEngine) execDirect(logStats *sqlQueryStats, plan *CompiledPlan, conn PoolConnection) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execDirect(logStats *sqlQueryStats, plan *compiledPlan, conn PoolConnection) (result *mproto.QueryResult) {
 	if plan.Fields != nil {
 		result = qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
 		result.Fields = plan.Fields
@@ -582,7 +592,7 @@ func (qe *QueryEngine) execDirect(logStats *sqlQueryStats, plan *CompiledPlan, c
 
 // execSelect sends a query to mysql only if another identical query is not running. Otherwise, it waits and
 // reuses the result. If the plan is missng field info, it sends the query to mysql requesting full info.
-func (qe *QueryEngine) execSelect(logStats *sqlQueryStats, plan *CompiledPlan) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execSelect(logStats *sqlQueryStats, plan *compiledPlan) (result *mproto.QueryResult) {
 	if plan.Fields != nil {
 		result = qe.qFetch(logStats, plan.FullQuery, plan.BindVars, nil)
 		result.Fields = plan.Fields
@@ -596,12 +606,12 @@ func (qe *QueryEngine) execSelect(logStats *sqlQueryStats, plan *CompiledPlan) (
 	return
 }
 
-func (qe *QueryEngine) execInsertPK(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execInsertPK(logStats *sqlQueryStats, conn PoolConnection, plan *compiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
 	pkRows := buildValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
 	return qe.execInsertPKRows(logStats, conn, plan, pkRows, invalidator)
 }
 
-func (qe *QueryEngine) execInsertSubquery(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execInsertSubquery(logStats *sqlQueryStats, conn PoolConnection, plan *compiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
 	innerResult := qe.directFetch(logStats, conn, plan.Subquery, plan.BindVars, nil, nil)
 	innerRows := innerResult.Rows
 	if len(innerRows) == 0 {
@@ -620,14 +630,14 @@ func (qe *QueryEngine) execInsertSubquery(logStats *sqlQueryStats, conn PoolConn
 	return qe.execInsertPKRows(logStats, conn, plan, pkRows, invalidator)
 }
 
-func (qe *QueryEngine) execInsertPKRows(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan, pkRows [][]sqltypes.Value, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execInsertPKRows(logStats *sqlQueryStats, conn PoolConnection, plan *compiledPlan, pkRows [][]sqltypes.Value, invalidator CacheInvalidator) (result *mproto.QueryResult) {
 	secondaryList := buildSecondaryList(plan.TableInfo, pkRows, plan.SecondaryPKValues, plan.BindVars)
 	bsc := buildStreamComment(plan.TableInfo, pkRows, secondaryList)
 	result = qe.directFetch(logStats, conn, plan.OuterQuery, plan.BindVars, nil, bsc)
 	return result
 }
 
-func (qe *QueryEngine) execDMLPK(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execDMLPK(logStats *sqlQueryStats, conn PoolConnection, plan *compiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
 	pkRows := buildValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
 	secondaryList := buildSecondaryList(plan.TableInfo, pkRows, plan.SecondaryPKValues, plan.BindVars)
 	bsc := buildStreamComment(plan.TableInfo, pkRows, secondaryList)
@@ -641,13 +651,13 @@ func (qe *QueryEngine) execDMLPK(logStats *sqlQueryStats, conn PoolConnection, p
 	return result
 }
 
-func (qe *QueryEngine) execDMLSubquery(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execDMLSubquery(logStats *sqlQueryStats, conn PoolConnection, plan *compiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
 	innerResult := qe.directFetch(logStats, conn, plan.Subquery, plan.BindVars, nil, nil)
 	// no need to validate innerResult
 	return qe.execDMLPKRows(logStats, conn, plan, innerResult.Rows, invalidator)
 }
 
-func (qe *QueryEngine) execDMLPKRows(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan, pkRows [][]sqltypes.Value, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execDMLPKRows(logStats *sqlQueryStats, conn PoolConnection, plan *compiledPlan, pkRows [][]sqltypes.Value, invalidator CacheInvalidator) (result *mproto.QueryResult) {
 	if len(pkRows) == 0 {
 		return &mproto.QueryResult{RowsAffected: 0}
 	}
@@ -666,7 +676,7 @@ func (qe *QueryEngine) execDMLPKRows(logStats *sqlQueryStats, conn PoolConnectio
 	return &mproto.QueryResult{RowsAffected: rowsAffected}
 }
 
-func (qe *QueryEngine) execSet(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execSet(logStats *sqlQueryStats, conn PoolConnection, plan *compiledPlan) (result *mproto.QueryResult) {
 	switch plan.SetKey {
 	case "vt_pool_size":
 		qe.connPool.SetCapacity(int(getInt64(plan.SetValue)))
@@ -731,8 +741,8 @@ func getDuration(v interface{}) time.Duration {
 	return time.Duration(getFloat64(v) * 1e9)
 }
 
-func (qe *QueryEngine) qFetch(logStats *sqlQueryStats, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value) (result *mproto.QueryResult) {
-	sql := qe.generateFinalSql(parsed_query, bindVars, listVars, nil)
+func (qe *QueryEngine) qFetch(logStats *sqlQueryStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value) (result *mproto.QueryResult) {
+	sql := qe.generateFinalSql(parsedQuery, bindVars, listVars, nil)
 	q, ok := qe.consolidator.Create(string(sql))
 	if ok {
 		defer q.Broadcast()
@@ -755,8 +765,8 @@ func (qe *QueryEngine) qFetch(logStats *sqlQueryStats, parsed_query *sqlparser.P
 	return q.Result
 }
 
-func (qe *QueryEngine) directFetch(logStats *sqlQueryStats, conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) (result *mproto.QueryResult) {
-	sql := qe.generateFinalSql(parsed_query, bindVars, listVars, buildStreamComment)
+func (qe *QueryEngine) directFetch(logStats *sqlQueryStats, conn PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) (result *mproto.QueryResult) {
+	sql := qe.generateFinalSql(parsedQuery, bindVars, listVars, buildStreamComment)
 	result, err := qe.executeSql(logStats, conn, sql, false)
 	if err != nil {
 		panic(err)
@@ -765,8 +775,8 @@ func (qe *QueryEngine) directFetch(logStats *sqlQueryStats, conn PoolConnection,
 }
 
 // fullFetch also fetches field info
-func (qe *QueryEngine) fullFetch(logStats *sqlQueryStats, conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) (result *mproto.QueryResult) {
-	sql := qe.generateFinalSql(parsed_query, bindVars, listVars, buildStreamComment)
+func (qe *QueryEngine) fullFetch(logStats *sqlQueryStats, conn PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) (result *mproto.QueryResult) {
+	sql := qe.generateFinalSql(parsedQuery, bindVars, listVars, buildStreamComment)
 	result, err := qe.executeSql(logStats, conn, sql, true)
 	if err != nil {
 		panic(err)
@@ -774,14 +784,14 @@ func (qe *QueryEngine) fullFetch(logStats *sqlQueryStats, conn PoolConnection, p
 	return result
 }
 
-func (qe *QueryEngine) fullStreamFetch(logStats *sqlQueryStats, conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte, callback func(*mproto.QueryResult) error) {
-	sql := qe.generateFinalSql(parsed_query, bindVars, listVars, buildStreamComment)
+func (qe *QueryEngine) fullStreamFetch(logStats *sqlQueryStats, conn PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte, callback func(*mproto.QueryResult) error) {
+	sql := qe.generateFinalSql(parsedQuery, bindVars, listVars, buildStreamComment)
 	qe.executeStreamSql(logStats, conn, sql, callback)
 }
 
-func (qe *QueryEngine) generateFinalSql(parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) string {
+func (qe *QueryEngine) generateFinalSql(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) string {
 	bindVars[MAX_RESULT_NAME] = qe.maxResultSize.Get() + 1
-	sql, err := parsed_query.GenerateQuery(bindVars, listVars)
+	sql, err := parsedQuery.GenerateQuery(bindVars, listVars)
 	if err != nil {
 		panic(NewTabletError(FAIL, "%s", err))
 	}
