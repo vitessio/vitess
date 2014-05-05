@@ -84,6 +84,10 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 				actionErr := fmt.Errorf("Previous vtaction process died")
 				if err := StoreActionResponse(ta.ts, actionNode, actionPath, actionErr); err != nil {
 					log.Errorf("Dead process detector failed to update actionNode: %v", err)
+					return actionErr
+				}
+				if err := ta.ts.UnblockTabletAction(actionPath); err != nil {
+					log.Errorf("Dead process detector failed unblocking: %v", err)
 				}
 				return actionErr
 			}

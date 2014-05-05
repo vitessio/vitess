@@ -120,6 +120,9 @@ var commands = []commandGroup{
 			command{"ExecuteHook", commandExecuteHook,
 				"<tablet alias|zk tablet path> <hook name> [<param1=value1> <param2=value2> ...]",
 				"This runs the specified hook on the given tablet."},
+			command{"ReadTabletAction", commandReadTabletAction,
+				"<action path>)",
+				"Displays the action node as json."},
 		},
 	},
 	commandGroup{
@@ -965,6 +968,22 @@ func commandMultiSnapshot(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []
 	if err == nil {
 		log.Infof("manifest locations: %v", filenames)
 		log.Infof("ParentAlias: %v", parentAlias)
+	}
+	return "", err
+}
+
+func commandReadTabletAction(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	subFlags.Parse(args)
+	if subFlags.NArg() != 1 {
+		log.Fatalf("action ReadTabletAction requires <action path>")
+	}
+	actionPath := subFlags.Arg(0)
+	_, data, _, err := wr.TopoServer().ReadTabletActionPath(actionPath)
+	if err == nil {
+		actionNode, err := actionnode.ActionNodeFromJson(data, actionPath)
+		if err == nil {
+			fmt.Println(jscfg.ToJson(actionNode))
+		}
 	}
 	return "", err
 }

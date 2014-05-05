@@ -73,10 +73,10 @@ class TestTabletManager(unittest.TestCase):
 
   def _test_sanity(self):
     # Start up a master mysql and vttablet
-    utils.run_vtctl('CreateKeyspace -force test_keyspace')
-    utils.run_vtctl('createshard -force test_keyspace/0')
+    utils.run_vtctl(['CreateKeyspace', '-force', 'test_keyspace'])
+    utils.run_vtctl(['createshard', '-force', 'test_keyspace/0'])
     tablet_62344.init_tablet('master', 'test_keyspace', '0', parent=False)
-    utils.run_vtctl('RebuildKeyspaceGraph test_keyspace')
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'])
     utils.validate_topology()
 
     # if these statements don't run before the tablet it will wedge waiting for the
@@ -87,22 +87,22 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.start_vttablet()
 
     # make sure the query service is started right away
-    result, _ = utils.run_vtctl('Query test_nj test_keyspace "select * from vt_select_test"', trap_output=True)
+    result, _ = utils.run_vtctl(['Query', 'test_nj', 'test_keyspace', 'select * from vt_select_test'], trap_output=True)
     rows = result.splitlines()
     self.assertEqual(len(rows), 5, "expected 5 rows in vt_select_test: %s %s" % (str(rows), result))
 
     # check Pings
-    utils.run_vtctl('Ping ' + tablet_62344.tablet_alias)
-    utils.run_vtctl('RpcPing ' + tablet_62344.tablet_alias)
+    utils.run_vtctl(['Ping', tablet_62344.tablet_alias])
+    utils.run_vtctl(['RpcPing', tablet_62344.tablet_alias])
 
     # Quickly check basic actions.
-    utils.run_vtctl('SetReadOnly ' + tablet_62344.tablet_alias)
+    utils.run_vtctl(['SetReadOnly', tablet_62344.tablet_alias])
     utils.wait_db_read_only(62344)
 
-    utils.run_vtctl('SetReadWrite ' + tablet_62344.tablet_alias)
+    utils.run_vtctl(['SetReadWrite', tablet_62344.tablet_alias])
     utils.check_db_read_write(62344)
 
-    utils.run_vtctl('DemoteMaster ' + tablet_62344.tablet_alias)
+    utils.run_vtctl(['DemoteMaster', tablet_62344.tablet_alias])
     utils.wait_db_read_only(62344)
 
     utils.validate_topology()
@@ -118,8 +118,8 @@ class TestTabletManager(unittest.TestCase):
 
   def test_vtgate(self):
     # Start up a master mysql and vttablet
-    utils.run_vtctl('CreateKeyspace -force test_keyspace')
-    utils.run_vtctl('CreateShard -force test_keyspace/0')
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
+    utils.run_vtctl(['CreateShard', 'test_keyspace/0'])
     tablet_62344.init_tablet('master', 'test_keyspace', '0', parent=False)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'])
     utils.validate_topology()
@@ -214,11 +214,11 @@ class TestTabletManager(unittest.TestCase):
 
   def test_scrap(self):
     # Start up a master mysql and vttablet
-    utils.run_vtctl('CreateKeyspace test_keyspace')
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
     tablet_62344.init_tablet('master', 'test_keyspace', '0')
     tablet_62044.init_tablet('replica', 'test_keyspace', '0')
-    utils.run_vtctl('RebuildShardGraph test_keyspace/*')
+    utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/*'])
     utils.validate_topology()
 
     tablet_62044.scrap(force=True)
@@ -238,20 +238,21 @@ class TestTabletManager(unittest.TestCase):
 
   def test_restart_during_action(self):
     # Start up a master mysql and vttablet
-    utils.run_vtctl('CreateKeyspace test_keyspace')
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
     tablet_62344.init_tablet('master', 'test_keyspace', '0')
-    utils.run_vtctl('RebuildShardGraph test_keyspace/0')
+    utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/0'])
     utils.validate_topology()
     tablet_62344.create_db('vt_test_keyspace')
     tablet_62344.start_vttablet()
 
-    utils.run_vtctl('Ping ' + tablet_62344.tablet_alias)
+    utils.run_vtctl(['Ping', tablet_62344.tablet_alias])
 
     # schedule long action
-    utils.run_vtctl('-no-wait Sleep %s 15s' % tablet_62344.tablet_alias, stdout=utils.devnull)
+    utils.run_vtctl(['-no-wait', 'Sleep', tablet_62344.tablet_alias, '15s'], stdout=utils.devnull)
     # ping blocks until the sleep finishes unless we have a schedule race
-    action_path, _ = utils.run_vtctl('-no-wait Ping ' + tablet_62344.tablet_alias, trap_output=True)
+    action_path, _ = utils.run_vtctl(['-no-wait', 'Ping', tablet_62344.tablet_alias], trap_output=True)
+    action_path = action_path.strip()
 
     # kill agent leaving vtaction running
     tablet_62344.kill_vttablet()
@@ -261,14 +262,14 @@ class TestTabletManager(unittest.TestCase):
 
     # we expect this action with a short wait time to fail. this isn't the best
     # and has some potential for flakiness.
-    utils.run_vtctl('-wait-time 2s WaitForAction ' + action_path,
+    utils.run_vtctl(['-wait-time', '2s', 'WaitForAction', action_path],
                     expect_fail=True)
 
     # wait until the background sleep action is done, otherwise there will be
     # a leftover vtaction whose result may overwrite running actions
     # NOTE(alainjobart): Yes, I've seen it happen, it's a pain to debug:
     # the zombie Sleep clobbers the Clone command in the following tests
-    utils.run_vtctl('-wait-time 20s WaitForAction ' + action_path,
+    utils.run_vtctl(['-wait-time', '20s', 'WaitForAction', action_path],
                     auto_log=True)
 
     if environment.topo_server_implementation == 'zookeeper':
@@ -295,15 +296,15 @@ class TestTabletManager(unittest.TestCase):
 
 
   def test_vttablet_authenticated(self):
-    utils.run_vtctl('CreateKeyspace test_keyspace')
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
     tablet_62344.init_tablet('master', 'test_keyspace', '0')
-    utils.run_vtctl('RebuildShardGraph test_keyspace/0')
+    utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/0'])
     utils.validate_topology()
 
     tablet_62344.populate('vt_test_keyspace', self._create_vt_select_test,
                           self._populate_vt_select_test)
     tablet_62344.start_vttablet(auth=True)
-    utils.run_vtctl('SetReadWrite ' + tablet_62344.tablet_alias)
+    utils.run_vtctl(['SetReadWrite', tablet_62344.tablet_alias])
 
     out, err = tablet_62344.vquery('select * from vt_select_test',
                                    path='test_keyspace/0', verbose=True,
@@ -326,12 +327,12 @@ class TestTabletManager(unittest.TestCase):
     self.fail("ExecuteHook returned unexpected result, no string: '" + "', '".join(expected) + "'")
 
   def _run_hook(self, params, expectedStrings):
-    out, err = utils.run_vtctl('--alsologtostderr ExecuteHook %s %s' % (tablet_62344.tablet_alias, params), trap_output=True, raise_on_error=False)
+    out, err = utils.run_vtctl(['--alsologtostderr', 'ExecuteHook', tablet_62344.tablet_alias] + params, trap_output=True, raise_on_error=False)
     for expected in expectedStrings:
       self._check_string_in_hook_result(err, expected)
 
   def test_hook(self):
-    utils.run_vtctl('CreateKeyspace test_keyspace')
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
     # create the database so vttablets start, as it is serving
     tablet_62344.create_db('vt_test_keyspace')
@@ -339,7 +340,7 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True)
 
     # test a regular program works
-    self._run_hook("test.sh --flag1 --param1=hello", [
+    self._run_hook(['test.sh', '--flag1', '--param1=hello'], [
         '"ExitStatus": 0',
         ['"Stdout": "TABLET_ALIAS: test_nj-0000062344\\nPARAM: --flag1\\nPARAM: --param1=hello\\n"',
          '"Stdout": "TABLET_ALIAS: test_nj-0000062344\\nPARAM: --param1=hello\\nPARAM: --flag1\\n"',
@@ -348,64 +349,107 @@ class TestTabletManager(unittest.TestCase):
         ])
 
     # test stderr output
-    self._run_hook("test.sh --to-stderr", [
+    self._run_hook(['test.sh', '--to-stderr'], [
         '"ExitStatus": 0',
         '"Stdout": "TABLET_ALIAS: test_nj-0000062344\\nPARAM: --to-stderr\\n"',
         '"Stderr": "ERR: --to-stderr\\n"',
         ])
 
     # test commands that fail
-    self._run_hook("test.sh --exit-error", [
+    self._run_hook(['test.sh', '--exit-error'], [
         '"ExitStatus": 1',
         '"Stdout": "TABLET_ALIAS: test_nj-0000062344\\nPARAM: --exit-error\\n"',
         '"Stderr": "ERROR: exit status 1\\n"',
         ])
 
     # test hook that is not present
-    self._run_hook("not_here.sh", [
+    self._run_hook(['not_here.sh'], [
         '"ExitStatus": -1',
         '"Stdout": "Skipping missing hook: /', # cannot go further, local path
         '"Stderr": ""',
         ])
 
     # test hook with invalid name
-    self._run_hook("/bin/ls", [
+    self._run_hook(['/bin/ls'], [
         "action failed: ExecuteHook hook name cannot have a '/' in it",
         ])
 
     tablet_62344.kill_vttablet()
 
   def test_sigterm(self):
-    utils.run_vtctl('CreateKeyspace test_keyspace')
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
     # create the database so vttablets start, as it is serving
     tablet_62344.create_db('vt_test_keyspace')
 
     tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True)
 
-    # start a 'vtctl Sleep' command in the background
-    args = [environment.binary_path('vtctl'),
-            '-log_dir', environment.vtlogroot,
-            '--alsologtostderr']
-    args.extend(environment.topo_server_flags())
-    args.extend(environment.tablet_manager_protocol_flags())
-    args.extend(['Sleep', tablet_62344.tablet_alias, '60s'])
-    sp = utils.run_bg(args, stdout=PIPE, stderr=PIPE)
+    # start a 'vtctl Sleep' command, don't wait for it
+    action_path, _ = utils.run_vtctl(['-no-wait', 'Sleep', tablet_62344.tablet_alias, '60s'], trap_output=True)
+    action_path = action_path.strip()
 
-    # wait for it to start, and let's kill it
-    time.sleep(4.0)
-    utils.run(['pkill', 'vtaction'])
-    out, err = sp.communicate()
+    # wait for the action to be 'Running', capture its pid
+    timeout = 10
+    while True:
+      an = utils.run_vtctl_json(['ReadTabletAction', action_path])
+      if an.get('State', None) == 'Running':
+        pid = an['Pid']
+        logging.info("Action is running with pid %u, good", pid)
+        break
+      timeout = utils.wait_step('sleep action to run', timeout)
+
+    # let's kill the vtaction process with a regular SIGTERM
+    os.kill(pid, signal.SIGTERM)
 
     # check the vtctl command got the right remote error back
+    out, err = utils.run_vtctl(['WaitForAction', action_path], trap_output=True,
+                               raise_on_error=False)
     if "vtaction interrupted by signal" not in err:
       self.fail("cannot find expected output in error: " + err)
     logging.debug("vtaction was interrupted correctly:\n" + err)
 
     tablet_62344.kill_vttablet()
 
+  # test_vtaction_dies_hard makes sure that the recovery code works
+  # properly when action dies hard (with a crash for instance)
+  def test_vtaction_dies_hard(self):
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
+
+    # create the database so vttablets start, as it is serving
+    tablet_62344.create_db('vt_test_keyspace')
+
+    tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True)
+
+    # start a 'vtctl Sleep' command, don't wait for it
+    action_path, _ = utils.run_vtctl(['-no-wait', 'Sleep', tablet_62344.tablet_alias, '60s'], trap_output=True)
+    action_path = action_path.strip()
+
+    # wait for the action to be 'Running', capture its pid
+    timeout = 10
+    while True:
+      an = utils.run_vtctl_json(['ReadTabletAction', action_path])
+      if an.get('State', None) == 'Running':
+        pid = an['Pid']
+        logging.info("Action is running with pid %u, good", pid)
+        break
+      timeout = utils.wait_step('sleep action to run', timeout)
+
+    # let's kill it hard, wait until it's gone for good
+    os.kill(pid, signal.SIGKILL)
+    try:
+      os.waitpid(pid, 0)
+    except OSError:
+      # this means the process doesn't exist any more, we're good
+      pass
+
+    # Then let's make sure the next action cleans up properly and can execute.
+    # If that doesn't work, this will time out and the test will fail.
+    utils.run_vtctl(['Ping', tablet_62344.tablet_alias])
+
+    tablet_62344.kill_vttablet()
+
   def test_restart(self):
-    utils.run_vtctl('CreateKeyspace test_keyspace')
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
     # create the database so vttablets start, as it is serving
     tablet_62344.create_db('vt_test_keyspace')
@@ -424,7 +468,7 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.kill_vttablet()
 
   def test_scrap_and_reinit(self):
-    utils.run_vtctl('CreateKeyspace test_keyspace')
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
     tablet_62344.create_db('vt_test_keyspace')
     tablet_62044.create_db('vt_test_keyspace')
@@ -439,7 +483,7 @@ class TestTabletManager(unittest.TestCase):
     self.assertEqual(1, len(before_scrap['ReplicationLinks']), 'wrong replication links before: %s' % str(before_scrap))
 
     # scrap and re-init
-    utils.run_vtctl('ScrapTablet -force ' + tablet_62044.tablet_alias)
+    utils.run_vtctl(['ScrapTablet', '-force', tablet_62044.tablet_alias])
     tablet_62044.init_tablet('replica', 'test_keyspace', '0')
 
     after_scrap = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
@@ -448,17 +492,17 @@ class TestTabletManager(unittest.TestCase):
 
     # manually add a bogus entry to the replication graph, and check
     # it is removed by ShardReplicationFix
-    utils.run_vtctl('ShardReplicationAdd test_keyspace/0 test_nj-0000066666 test_nj-0000062344', auto_log=True)
+    utils.run_vtctl(['ShardReplicationAdd', 'test_keyspace/0', 'test_nj-0000066666', 'test_nj-0000062344'], auto_log=True)
     with_bogus = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
                                         'test_keyspace/0'])
     self.assertEqual(2, len(with_bogus['ReplicationLinks']), 'wrong replication links with bogus: %s' % str(with_bogus))
-    utils.run_vtctl('ShardReplicationFix test_nj test_keyspace/0', auto_log=True)
+    utils.run_vtctl(['ShardReplicationFix', 'test_nj', 'test_keyspace/0'], auto_log=True)
     after_fix = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
                                         'test_keyspace/0'])
     self.assertEqual(1, len(after_scrap['ReplicationLinks']), 'wrong replication links after fix: %s' % str(after_fix))
 
   def test_health_check(self):
-    utils.run_vtctl('CreateKeyspace test_keyspace')
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
     # one master, one replica that starts in spare
     tablet_62344.init_tablet('master', 'test_keyspace', '0', use_srv_shard_locks=True)
