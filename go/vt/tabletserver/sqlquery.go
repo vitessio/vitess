@@ -79,10 +79,10 @@ type SqlQuery struct {
 	state    sync2.AtomicInt64
 
 	qe        *QueryEngine
-	rci       *RowcacheInvalidator
 	sessionId int64
 	config    Config
 	dbconfig  *dbconfigs.DBConfig
+	mysqld    *mysqlctl.Mysqld
 }
 
 // NewSqlQuery creates an instance of SqlQuery. Only one instance
@@ -90,7 +90,6 @@ type SqlQuery struct {
 func NewSqlQuery(config Config) *SqlQuery {
 	sq := &SqlQuery{}
 	sq.qe = NewQueryEngine(config)
-	sq.rci = NewRowcacheInvalidator(sq.qe)
 	sq.config = config
 	stats.PublishJSONFunc("Voltron", sq.statsJSON)
 	stats.Publish("TabletState", stats.IntFunc(sq.state.Get))
@@ -151,18 +150,15 @@ func (sq *SqlQuery) allowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides [
 			err = x.(*TabletError)
 			log.Errorf("Could not start query service: %v", err)
 			sq.qe.Close()
-			sq.rci.Close()
 			sq.setState(NOT_SERVING)
 			return
 		}
 		sq.setState(SERVING)
 	}()
 
-	sq.qe.Open(dbconfig, schemaOverrides, qrs)
-	if dbconfig.EnableRowcache && dbconfig.EnableInvalidator {
-		sq.rci.Open(dbconfig.DbName, mysqld)
-	}
+	sq.qe.Open(dbconfig, schemaOverrides, qrs, mysqld)
 	sq.dbconfig = dbconfig
+	sq.mysqld = mysqld
 	sq.sessionId = Rand()
 	log.Infof("Session id: %d", sq.sessionId)
 	return nil
@@ -204,7 +200,6 @@ func (sq *SqlQuery) disallowQueries() {
 	}()
 	log.Infof("Stopping query service: %d", sq.sessionId)
 	sq.qe.Close()
-	sq.rci.Close()
 	sq.sessionId = 0
 	sq.dbconfig = &dbconfigs.DBConfig{}
 }
@@ -302,38 +297,6 @@ func (sq *SqlQuery) Rollback(context *Context, session *proto.Session) (err erro
 
 	sq.qe.Rollback(logStats, session.TransactionId)
 	return nil
-}
-
-// TODO(sougou): deprecate
-func handleInvalidationError(request interface{}) {
-	if x := recover(); x != nil {
-		terr, ok := x.(*TabletError)
-		if !ok {
-			log.Errorf("Uncaught panic for %v:\n%v\n%s", request, x, tb.Stack(4))
-			internalErrors.Add("Panic", 1)
-			return
-		}
-		log.Errorf("%v: %v", terr, request)
-		internalErrors.Add("Invalidation", 1)
-	}
-}
-
-// TODO(sougou): deprecate
-func (sq *SqlQuery) invalidateForDml(dml *proto.DmlType) {
-	if sq.state.Get() != SERVING {
-		return
-	}
-	defer handleInvalidationError(dml)
-	sq.qe.InvalidateForDml(dml)
-}
-
-// TODO(sougou): deprecate
-func (sq *SqlQuery) invalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
-	if sq.state.Get() != SERVING {
-		return
-	}
-	defer handleInvalidationError(ddlInvalidate)
-	sq.qe.InvalidateForDDL(ddlInvalidate)
 }
 
 // handleExecError handles panics during query execution and sets
