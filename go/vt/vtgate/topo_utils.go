@@ -9,6 +9,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
 func mapKeyspaceIdsToShards(topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType, keyspaceIds []key.KeyspaceId) ([]string, error) {
@@ -56,18 +57,18 @@ func getShardForKeyspaceId(allShards []topo.SrvShard, keyspaceId key.KeyspaceId)
 	return "", fmt.Errorf("KeyspaceId didn't match any shards")
 }
 
-func mapEntityIdsToShards(topoServ SrvTopoServer, cell, keyspace string, entityIds map[string]key.KeyspaceId, tabletType topo.TabletType) (map[string][]string, error) {
+func mapEntityIdsToShards(topoServ SrvTopoServer, cell, keyspace string, entityIds []proto.EntityId, tabletType topo.TabletType) (map[string][]interface{}, error) {
 	allShards, err := getKeyspaceShards(topoServ, cell, keyspace, tabletType)
 	if err != nil {
 		return nil, err
 	}
-	var shards = make(map[string][]string)
-	for id, ksId := range entityIds {
-		shard, err := getShardForKeyspaceId(allShards, ksId)
+	var shards = make(map[string][]interface{})
+	for _, eid := range entityIds {
+		shard, err := getShardForKeyspaceId(allShards, eid.KeyspaceId)
 		if err != nil {
 			return nil, err
 		}
-		shards[shard] = append(shards[shard], id)
+		shards[shard] = append(shards[shard], eid.ExternalId)
 	}
 	return shards, nil
 }

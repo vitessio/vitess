@@ -71,15 +71,21 @@ type KeyRangeQuery struct {
 	Session       *Session
 }
 
+// EntityId represents a tuple of external_id and keyspace_id
+type EntityId struct {
+	ExternalId interface{}
+	KeyspaceId kproto.KeyspaceId
+}
+
 // EntityIdsQuery represents a query request for the specified KeyspaceId map.
 type EntityIdsQuery struct {
-	Sql                 string
-	BindVariables       map[string]interface{}
-	Keyspace            string
-	EntityColumnName    string
-	EntityKeyspaceIdMap map[string]kproto.KeyspaceId
-	TabletType          topo.TabletType
-	Session             *Session
+	Sql               string
+	BindVariables     map[string]interface{}
+	Keyspace          string
+	EntityColumnName  string
+	EntityKeyspaceIds []EntityId
+	TabletType        topo.TabletType
+	Session           *Session
 }
 
 // QueryResult is mproto.QueryResult+Session (for now).

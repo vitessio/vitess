@@ -12,7 +12,6 @@ import (
 
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
-	kproto "github.com/youtube/vitess/go/vt/key"
 )
 
 // MarshalBson bson-encodes EntityIdsQuery.
@@ -32,12 +31,12 @@ func (entityIdsQuery *EntityIdsQuery) MarshalBson(buf *bytes2.ChunkedWriter, key
 	}
 	bson.EncodeString(buf, "Keyspace", entityIdsQuery.Keyspace)
 	bson.EncodeString(buf, "EntityColumnName", entityIdsQuery.EntityColumnName)
-	// map[string]kproto.KeyspaceId
+	// []EntityId
 	{
-		bson.EncodePrefix(buf, bson.Object, "EntityKeyspaceIdMap")
+		bson.EncodePrefix(buf, bson.Array, "EntityKeyspaceIds")
 		lenWriter := bson.NewLenWriter(buf)
-		for _k, _v2 := range entityIdsQuery.EntityKeyspaceIdMap {
-			_v2.MarshalBson(buf, _k)
+		for _i, _v2 := range entityIdsQuery.EntityKeyspaceIds {
+			_v2.MarshalBson(buf, bson.Itoa(_i))
 		}
 		lenWriter.Close()
 	}
@@ -87,19 +86,19 @@ func (entityIdsQuery *EntityIdsQuery) UnmarshalBson(buf *bytes.Buffer, kind byte
 			entityIdsQuery.Keyspace = bson.DecodeString(buf, kind)
 		case "EntityColumnName":
 			entityIdsQuery.EntityColumnName = bson.DecodeString(buf, kind)
-		case "EntityKeyspaceIdMap":
-			// map[string]kproto.KeyspaceId
+		case "EntityKeyspaceIds":
+			// []EntityId
 			if kind != bson.Null {
-				if kind != bson.Object {
-					panic(bson.NewBsonError("unexpected kind %v for entityIdsQuery.EntityKeyspaceIdMap", kind))
+				if kind != bson.Array {
+					panic(bson.NewBsonError("unexpected kind %v for entityIdsQuery.EntityKeyspaceIds", kind))
 				}
 				bson.Next(buf, 4)
-				entityIdsQuery.EntityKeyspaceIdMap = make(map[string]kproto.KeyspaceId)
+				entityIdsQuery.EntityKeyspaceIds = make([]EntityId, 0, 8)
 				for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
-					_k := bson.ReadCString(buf)
-					var _v2 kproto.KeyspaceId
+					bson.SkipIndex(buf)
+					var _v2 EntityId
 					_v2.UnmarshalBson(buf, kind)
-					entityIdsQuery.EntityKeyspaceIdMap[_k] = _v2
+					entityIdsQuery.EntityKeyspaceIds = append(entityIdsQuery.EntityKeyspaceIds, _v2)
 				}
 			}
 		case "TabletType":

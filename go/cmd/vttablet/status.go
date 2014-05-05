@@ -6,6 +6,7 @@ import (
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletserver"
 )
 
 var (
@@ -92,5 +93,6 @@ func init() {
 				return &healthStatus{Records: agent.History.Records()}
 			})
 		}
+		tabletserver.AddStatusPart()
 	})
 }

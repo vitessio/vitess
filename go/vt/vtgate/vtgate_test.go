@@ -224,11 +224,16 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 		t.Errorf("want nil, got %+v", err)
 	}
 	q := proto.EntityIdsQuery{
-		Sql:                 "query",
-		Keyspace:            "TestVTGateExecuteEntityIds",
-		EntityColumnName:    "kid",
-		EntityKeyspaceIdMap: map[string]key.KeyspaceId{"id1": kid10},
-		TabletType:          topo.TYPE_MASTER,
+		Sql:              "query",
+		Keyspace:         "TestVTGateExecuteEntityIds",
+		EntityColumnName: "kid",
+		EntityKeyspaceIds: []proto.EntityId{
+			proto.EntityId{
+				ExternalId: "id1",
+				KeyspaceId: kid10,
+			},
+		},
+		TabletType: topo.TYPE_MASTER,
 	}
 	// Test for successful execution
 	qr := new(proto.QueryResult)
@@ -275,7 +280,7 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 	if err != nil {
 		t.Errorf("want nil, got %+v", err)
 	}
-	q.EntityKeyspaceIdMap["id2"] = kid30
+	q.EntityKeyspaceIds = append(q.EntityKeyspaceIds, proto.EntityId{ExternalId: "id2", KeyspaceId: kid30})
 	RpcVTGate.ExecuteEntityIds(nil, &q, qr)
 	if qr.RowsAffected != 2 {
 		t.Errorf("want 2, got %v", qr.RowsAffected)

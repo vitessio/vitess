@@ -131,7 +131,7 @@ func (res *Resolver) ExecuteEntityIds(
 		res.scatterConn.toposerv,
 		res.scatterConn.cell,
 		query.Keyspace,
-		query.EntityKeyspaceIdMap,
+		query.EntityKeyspaceIds,
 		query.TabletType)
 	if err != nil {
 		return nil, err
@@ -163,7 +163,7 @@ func (res *Resolver) ExecuteEntityIds(
 				res.scatterConn.toposerv,
 				res.scatterConn.cell,
 				query.Keyspace,
-				query.EntityKeyspaceIdMap,
+				query.EntityKeyspaceIds,
 				query.TabletType)
 			if err != nil {
 				return nil, err
@@ -347,7 +347,7 @@ func StrsEquals(a, b []string) bool {
 	return true
 }
 
-func buildEntityIds(shardIdMap map[string][]string, qSql, entityColName string, qBindVars map[string]interface{}) ([]string, map[string]string, map[string]map[string]interface{}) {
+func buildEntityIds(shardIdMap map[string][]interface{}, qSql, entityColName string, qBindVars map[string]interface{}) ([]string, map[string]string, map[string]map[string]interface{}) {
 	shards := make([]string, 0, 1)
 	sqls := make(map[string]string)
 	bindVars := make(map[string]map[string]interface{})
