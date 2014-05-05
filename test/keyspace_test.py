@@ -206,6 +206,11 @@ class TestKeyspace(unittest.TestCase):
                                         "test_nj", 30.0)
     return keyspace.read_keyspace(vtgate_client, keyspace_name)
 
+  def test_get_keyspace(self):
+    ki = utils.run_vtctl_json(['GetKeyspace', UNSHARDED_KEYSPACE])
+    self.assertEqual('keyspace_id', ki['ShardingColumnName'])
+    self.assertEqual('uint64', ki['ShardingColumnType'])
+
   def test_shard_count(self):
     sharded_ks = self._read_keyspace(SHARDED_KEYSPACE)
     self.assertEqual(sharded_ks.shard_count, 2)

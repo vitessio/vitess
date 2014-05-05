@@ -176,6 +176,9 @@ var commands = []commandGroup{
 			command{"CreateKeyspace", commandCreateKeyspace,
 				"[-sharding_column_name=name] [-sharding_column_type=type] [-served-from=tablettype1:ks1,tablettype2,ks2,...] [-force] <keyspace name|zk keyspace path>",
 				"Creates the given keyspace"},
+			command{"GetKeyspace", commandGetKeyspace,
+				"<keyspace|zk keyspace path>",
+				"Outputs the json version of Keyspace to stdout."},
 			command{"SetKeyspaceShardingInfo", commandSetKeyspaceShardingInfo,
 				"[-force] <keyspace name|zk keyspace path> [<column name>] [<column type>]",
 				"Updates the sharding info for a keyspace"},
@@ -1262,6 +1265,20 @@ func commandCreateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 	if *force && err == topo.ErrNodeExists {
 		log.Infof("keyspace %v already exists (ignoring error with -force)", keyspace)
 		err = nil
+	}
+	return "", err
+}
+
+func commandGetKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	subFlags.Parse(args)
+	if subFlags.NArg() != 1 {
+		log.Fatalf("action GetKeyspace requires <keyspace|zk keyspace path>")
+	}
+
+	keyspace := keyspaceParamToKeyspace(subFlags.Arg(0))
+	keyspaceInfo, err := wr.TopoServer().GetKeyspace(keyspace)
+	if err == nil {
+		fmt.Println(jscfg.ToJson(keyspaceInfo))
 	}
 	return "", err
 }
