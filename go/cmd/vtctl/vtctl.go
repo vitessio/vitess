@@ -196,7 +196,7 @@ var commands = []commandGroup{
 	commandGroup{
 		"Generic", []command{
 			command{"WaitForAction", commandWaitForAction,
-				"<zk action path> (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>/action/<action id>)",
+				"<action path>",
 				"Watch an action node, printing updates, until the action is complete."},
 			command{"Resolve", commandResolve,
 				"<keyspace>.<shard>.<db type>:<port name>",
@@ -1348,7 +1348,7 @@ func commandMigrateServedFrom(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 func commandWaitForAction(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
-		log.Fatalf("action WaitForAction requires <zk action path>")
+		log.Fatalf("action WaitForAction requires <action path>")
 	}
 	return subFlags.Arg(0), nil
 }
