@@ -163,6 +163,26 @@ select * from a join b
   "SetValue": null
 }
 
+# multi-table (right join)
+select * from a right join b
+{
+  "PlanId": "PASS_SELECT",
+  "Reason": "TABLE",
+  "TableName": "",
+  "DisplayQuery": "select * from a right join b",
+  "FieldQuery": "select * from a right join b on 1 != 1 where 1 != 1",
+  "FullQuery": "select * from a right join b limit :_vtMaxResultSize",
+  "OuterQuery": null,
+  "Subquery": null,
+  "IndexUsed": "",
+  "ColumnNumbers": null,
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
 # table not cached
 select * from b
 {
@@ -272,6 +292,28 @@ select eid from a
   "DisplayQuery": "select eid from a",
   "FieldQuery": "select eid from a where 1 != 1",
   "FullQuery": "select eid from a limit :_vtMaxResultSize",
+  "OuterQuery": null,
+  "Subquery": null,
+  "IndexUsed": "",
+  "ColumnNumbers": [
+    0
+  ],
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
+# as
+select eid as foo from a
+{
+  "PlanId": "PASS_SELECT",
+  "Reason": "WHERE",
+  "TableName": "a",
+  "DisplayQuery": "select eid as foo from a",
+  "FieldQuery": "select eid as foo from a where 1 != 1",
+  "FullQuery": "select eid as foo from a limit :_vtMaxResultSize",
   "OuterQuery": null,
   "Subquery": null,
   "IndexUsed": "",
@@ -702,6 +744,31 @@ select * from d where name='foo' limit 1
   "SetValue": null
 }
 
+# reversed conditions with and clause
+select * from d where 'foo'=name and eid=1
+{
+  "PlanId": "PASS_SELECT",
+  "Reason": "WHERE",
+  "TableName": "d",
+  "DisplayQuery": "select * from d where ? = name and eid = ?",
+  "FieldQuery": "select * from d where 1 != 1",
+  "FullQuery": "select * from d where 'foo' = name and eid = 1 limit :_vtMaxResultSize",
+  "OuterQuery": null,
+  "Subquery": null,
+  "IndexUsed": "",
+  "ColumnNumbers": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
 # pk IN
 select * from d where name in ('foo', 'bar')
 {
@@ -1014,6 +1081,56 @@ select * from d where id between 1 and 2
   "SetValue": null
 }
 
+# non-column between
+select * from d where 1 between 1 and 2
+{
+  "PlanId": "PASS_SELECT",
+  "Reason": "WHERE",
+  "TableName": "d",
+  "DisplayQuery": "select * from d where ? between ? and ?",
+  "FieldQuery": "select * from d where 1 != 1",
+  "FullQuery": "select * from d where 1 between 1 and 2 limit :_vtMaxResultSize",
+  "OuterQuery": null,
+  "Subquery": null,
+  "IndexUsed": "",
+  "ColumnNumbers": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
+# complex predicate
+select * from d where name is not null
+{
+  "PlanId": "PASS_SELECT",
+  "Reason": "WHERE",
+  "TableName": "d",
+  "DisplayQuery": "select * from d where name is not null",
+  "FieldQuery": "select * from d where 1 != 1",
+  "FullQuery": "select * from d where name is not null limit :_vtMaxResultSize",
+  "OuterQuery": null,
+  "Subquery": null,
+  "IndexUsed": "",
+  "ColumnNumbers": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
 # order by
 select * from a where eid=1 and id=1 order by name
 {
@@ -1113,6 +1230,10 @@ select * from d force index(d_bar_never) where bar = 'foo'
   "SetKey": "",
   "SetValue": null
 }
+
+# column not found
+select missing from a
+"column missing not found in table a"
 
 # insert cross-db
 insert into b.a (eid, id) values (1, :a)
@@ -1227,7 +1348,7 @@ insert into d(id) values(1)
 
 # mismatch
 insert into a (eid, id) values (1)
-"Column count doesn't match value count"
+"column count doesn't match value count"
 
 # negative number
 insert into a (eid, id) values (-1, 2)
@@ -1444,6 +1565,32 @@ insert into b (eid, id) select * from a
   "SetValue": null
 }
 
+# subquery with no column list
+insert into b select * from a
+{
+  "PlanId": "INSERT_SUBQUERY",
+  "Reason": "DEFAULT",
+  "TableName": "b",
+  "DisplayQuery": "insert into b select * from a",
+  "FieldQuery": null,
+  "FullQuery": "insert into b select * from a",
+  "OuterQuery": "insert into b values :_rowValues",
+  "Subquery": "select * from a limit :_vtMaxResultSize",
+  "IndexUsed": "",
+  "ColumnNumbers": [
+    0,
+    1
+  ],
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": [
+    0,
+    1
+  ],
+  "SetKey": "",
+  "SetValue": null
+}
+
 # multi-row
 insert into b (eid, id) values (1, 2), (3, 4)
 {
@@ -1515,6 +1662,10 @@ update b set eid=1
   "SetKey": "",
   "SetValue": null
 }
+
+# type mismatch
+update b set eid=1.2
+"type mismatch: strconv.ParseUint: parsing "1.2": invalid syntax"
 
 # pk changed as qualified column name
 update b set a.eid=1
@@ -1888,6 +2039,26 @@ set  a=1
   "SetValue": 1
 }
 
+# float
+set  a=1.2
+{
+  "PlanId": "SET",
+  "Reason": "DEFAULT",
+  "TableName": "",
+  "DisplayQuery": "set a = ?",
+  "FieldQuery": null,
+  "FullQuery": "set a = 1.2",
+  "OuterQuery": null,
+  "Subquery": null,
+  "IndexUsed": "",
+  "ColumnNumbers": null,
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "a",
+  "SetValue": 1.2
+}
+
 # string
 set a='b'
 {
@@ -1927,3 +2098,111 @@ set a=1, b=2
   "SetKey": "",
   "SetValue": null
 }
+
+# create
+create table a(a int, b varchar(8))
+{
+  "PlanId":"DDL",
+  "Reason":"DEFAULT",
+  "TableName":"",
+  "DisplayQuery":"create table a",
+  "FieldQuery":null,
+  "FullQuery":null,
+  "OuterQuery":null,
+  "Subquery":null,
+  "IndexUsed":"",
+  "ColumnNumbers":null,
+  "PKValues":null,
+  "SecondaryPKValues":null,
+  "SubqueryPKColumns":null,
+  "SetKey":"",
+  "SetValue":null
+}
+
+# alter
+alter table a add column(a int)
+{
+  "PlanId":"DDL",
+  "Reason":"DEFAULT",
+  "TableName":"",
+  "DisplayQuery":"alter table a",
+  "FieldQuery":null,
+  "FullQuery":null,
+  "OuterQuery":null,
+  "Subquery":null,
+  "IndexUsed":"",
+  "ColumnNumbers":null,
+  "PKValues":null,
+  "SecondaryPKValues":null,
+  "SubqueryPKColumns":null,
+  "SetKey":"",
+  "SetValue":null
+}
+
+# alter rename
+alter table a rename b
+{
+  "PlanId":"DDL",
+  "Reason":"DEFAULT",
+  "TableName":"",
+  "DisplayQuery":"rename table a b",
+  "FieldQuery":null,
+  "FullQuery":null,
+  "OuterQuery":null,
+  "Subquery":null,
+  "IndexUsed":"",
+  "ColumnNumbers":null,
+  "PKValues":null,
+  "SecondaryPKValues":null,
+  "SubqueryPKColumns":null,
+  "SetKey":"",
+  "SetValue":null
+}
+
+# rename
+rename table a to b
+{
+  "PlanId":"DDL",
+  "Reason":"DEFAULT",
+  "TableName":"",
+  "DisplayQuery":"rename table a b",
+  "FieldQuery":null,
+  "FullQuery":null,
+  "OuterQuery":null,
+  "Subquery":null,
+  "IndexUsed":"",
+  "ColumnNumbers":null,
+  "PKValues":null,
+  "SecondaryPKValues":null,
+  "SubqueryPKColumns":null,
+  "SetKey":"",
+  "SetValue":null
+}
+
+# drop
+drop table a
+{
+  "PlanId":"DDL",
+  "Reason":"DEFAULT",
+  "TableName":"",
+  "DisplayQuery":"drop table a",
+  "FieldQuery":null,
+  "FullQuery":null,
+  "OuterQuery":null,
+  "Subquery":null,
+  "IndexUsed":"",
+  "ColumnNumbers":null,
+  "PKValues":null,
+  "SecondaryPKValues":null,
+  "SubqueryPKColumns":null,
+  "SetKey":"",
+  "SetValue":null
+}
+
+# table not found
+select * from aaaa
+"table aaaa not found in schema"
+
+# syntax error
+syntax error
+"syntax error at position 7 near syntax"

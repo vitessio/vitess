@@ -56,7 +56,7 @@ func initTables() {
 	b.AddColumn("id", "int", SQLZERO, "")
 	bcolumns := []string{"eid", "id"}
 	b.Indexes = append(a.Indexes, &schema.Index{Name: "PRIMARY", Columns: []string{"eid", "id"}, Cardinality: []uint64{1, 1}, DataColumns: bcolumns})
-	b.PKColumns = append(a.PKColumns, 0, 1)
+	b.PKColumns = append(b.PKColumns, 0, 1)
 	b.CacheType = schema.CACHE_NONE
 	schem["b"] = b
 
