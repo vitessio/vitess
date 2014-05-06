@@ -77,14 +77,14 @@ func TestResolverExecuteEntityIds(t *testing.T) {
 			Sql:              "query",
 			Keyspace:         "TestResolverExecuteEntityIds",
 			EntityColumnName: "col",
-			EntityKeyspaceIds: []proto.EntityId{
+			EntityKeyspaceIDs: []proto.EntityId{
 				proto.EntityId{
-					ExternalId: 0,
-					KeyspaceId: kid10,
+					ExternalID: 0,
+					KeyspaceID: kid10,
 				},
 				proto.EntityId{
-					ExternalId: "1",
-					KeyspaceId: kid25,
+					ExternalID: "1",
+					KeyspaceID: kid25,
 				},
 			},
 			TabletType: topo.TYPE_MASTER,

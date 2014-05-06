@@ -227,10 +227,10 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 		Sql:              "query",
 		Keyspace:         "TestVTGateExecuteEntityIds",
 		EntityColumnName: "kid",
-		EntityKeyspaceIds: []proto.EntityId{
+		EntityKeyspaceIDs: []proto.EntityId{
 			proto.EntityId{
-				ExternalId: "id1",
-				KeyspaceId: kid10,
+				ExternalID: "id1",
+				KeyspaceID: kid10,
 			},
 		},
 		TabletType: topo.TYPE_MASTER,
@@ -280,7 +280,7 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 	if err != nil {
 		t.Errorf("want nil, got %+v", err)
 	}
-	q.EntityKeyspaceIds = append(q.EntityKeyspaceIds, proto.EntityId{ExternalId: "id2", KeyspaceId: kid30})
+	q.EntityKeyspaceIDs = append(q.EntityKeyspaceIDs, proto.EntityId{ExternalID: "id2", KeyspaceID: kid30})
 	RpcVTGate.ExecuteEntityIds(nil, &q, qr)
 	if qr.RowsAffected != 2 {
 		t.Errorf("want 2, got %v", qr.RowsAffected)
