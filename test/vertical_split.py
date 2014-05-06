@@ -208,7 +208,7 @@ index by_msg (msg)
         # table is blacklisted, should get the error
         out, err = tablet.vquery("select count(1) from %s" % t,
                                  path='source_keyspace/0', raise_on_error=False)
-        self.assertTrue(err.find("Query disallowed due to rule: enforce blacklisted tables") != -1, "Cannot find the right error message in query for blacklisted table: out=\n%serr=\n%s" % (out, err))
+        self.assertTrue(err.find("retry: Query disallowed due to rule: enforce blacklisted tables") != -1, "Cannot find the right error message in query for blacklisted table: out=\n%serr=\n%s" % (out, err))
       else:
         # table is not blacklisted, should just work
         tablet.vquery("select count(1) from %s" % t, path='source_keyspace/0')

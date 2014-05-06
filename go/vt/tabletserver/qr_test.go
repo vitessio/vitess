@@ -15,8 +15,8 @@ import (
 
 func TestQueryRules(t *testing.T) {
 	qrs := NewQueryRules()
-	qr1 := NewQueryRule("rule 1", "r1", QR_FAIL_QUERY)
-	qr2 := NewQueryRule("rule 2", "r2", QR_FAIL_QUERY)
+	qr1 := NewQueryRule("rule 1", "r1", QR_FAIL)
+	qr2 := NewQueryRule("rule 2", "r2", QR_FAIL)
 	qrs.Add(qr1)
 	qrs.Add(qr2)
 
@@ -51,12 +51,12 @@ func TestQueryRules(t *testing.T) {
 // TestCopy tests for deep copy
 func TestCopy(t *testing.T) {
 	qrs := NewQueryRules()
-	qr1 := NewQueryRule("rule 1", "r1", QR_FAIL_QUERY)
+	qr1 := NewQueryRule("rule 1", "r1", QR_FAIL)
 	qr1.AddPlanCond(sqlparser.PLAN_PASS_SELECT)
 	qr1.AddTableCond("aa")
 	qr1.AddBindVarCond("a", true, false, QR_NOOP, nil)
 
-	qr2 := NewQueryRule("rule 2", "r2", QR_FAIL_QUERY)
+	qr2 := NewQueryRule("rule 2", "r2", QR_FAIL)
 	qrs.Add(qr1)
 	qrs.Add(qr2)
 
@@ -92,22 +92,22 @@ func TestCopy(t *testing.T) {
 func TestFilterByPlan(t *testing.T) {
 	qrs := NewQueryRules()
 
-	qr1 := NewQueryRule("rule 1", "r1", QR_FAIL_QUERY)
+	qr1 := NewQueryRule("rule 1", "r1", QR_FAIL)
 	qr1.SetIPCond("123")
 	qr1.SetQueryCond("select")
 	qr1.AddPlanCond(sqlparser.PLAN_PASS_SELECT)
 	qr1.AddBindVarCond("a", true, false, QR_NOOP, nil)
 
-	qr2 := NewQueryRule("rule 2", "r2", QR_FAIL_QUERY)
+	qr2 := NewQueryRule("rule 2", "r2", QR_FAIL)
 	qr2.AddPlanCond(sqlparser.PLAN_PASS_SELECT)
 	qr2.AddPlanCond(sqlparser.PLAN_PK_EQUAL)
 	qr2.AddBindVarCond("a", true, false, QR_NOOP, nil)
 
-	qr3 := NewQueryRule("rule 3", "r3", QR_FAIL_QUERY)
+	qr3 := NewQueryRule("rule 3", "r3", QR_FAIL)
 	qr3.SetQueryCond("sele.*")
 	qr3.AddBindVarCond("a", true, false, QR_NOOP, nil)
 
-	qr4 := NewQueryRule("rule 4", "r4", QR_FAIL_QUERY)
+	qr4 := NewQueryRule("rule 4", "r4", QR_FAIL)
 	qr4.AddTableCond("b")
 	qr4.AddTableCond("c")
 
@@ -167,7 +167,7 @@ func TestFilterByPlan(t *testing.T) {
 		t.Errorf("want r5, got %s", qrs1.rules[0].Name)
 	}
 
-	qr5 := NewQueryRule("rule 5", "r5", QR_FAIL_QUERY)
+	qr5 := NewQueryRule("rule 5", "r5", QR_FAIL)
 	qrs.Add(qr5)
 
 	qrs1 = qrs.filterByPlan("sel", sqlparser.PLAN_INSERT_PK, "a")
@@ -185,7 +185,7 @@ func TestFilterByPlan(t *testing.T) {
 }
 
 func TestQueryRule(t *testing.T) {
-	qr := NewQueryRule("rule 1", "r1", QR_FAIL_QUERY)
+	qr := NewQueryRule("rule 1", "r1", QR_FAIL)
 	err := qr.SetIPCond("123")
 	if err != nil {
 		t.Errorf("unexpected: %v", err)
@@ -221,7 +221,7 @@ func TestQueryRule(t *testing.T) {
 }
 
 func TestBindVarStruct(t *testing.T) {
-	qr := NewQueryRule("rule 1", "r1", QR_FAIL_QUERY)
+	qr := NewQueryRule("rule 1", "r1", QR_FAIL)
 
 	var err error
 	err = qr.AddBindVarCond("b", false, true, QR_NOOP, nil)
@@ -294,7 +294,7 @@ var creationCases = []BVCreation{
 }
 
 func TestBVCreation(t *testing.T) {
-	qr := NewQueryRule("rule 1", "r1", QR_FAIL_QUERY)
+	qr := NewQueryRule("rule 1", "r1", QR_FAIL)
 	for i, tcase := range creationCases {
 		err := qr.AddBindVarCond(tcase.name, tcase.onAbsent, tcase.onMismatch, tcase.op, tcase.value)
 		haserr := (err != nil)
@@ -473,13 +473,13 @@ func TestBVConditions(t *testing.T) {
 func TestAction(t *testing.T) {
 	qrs := NewQueryRules()
 
-	qr1 := NewQueryRule("rule 1", "r1", QR_FAIL_QUERY)
+	qr1 := NewQueryRule("rule 1", "r1", QR_FAIL)
 	qr1.SetIPCond("123")
 
-	qr2 := NewQueryRule("rule 2", "r2", QR_FAIL_QUERY)
+	qr2 := NewQueryRule("rule 2", "r2", QR_FAIL_RETRY)
 	qr2.SetUserCond("user")
 
-	qr3 := NewQueryRule("rule 3", "r3", QR_FAIL_QUERY)
+	qr3 := NewQueryRule("rule 3", "r3", QR_FAIL)
 	qr3.AddBindVarCond("a", true, true, QR_EQ, uint64(1))
 
 	qrs.Add(qr1)
@@ -489,15 +489,15 @@ func TestAction(t *testing.T) {
 	bv := make(map[string]interface{})
 	bv["a"] = uint64(0)
 	action, desc := qrs.getAction("123", "user1", bv)
-	if action != QR_FAIL_QUERY {
+	if action != QR_FAIL {
 		t.Errorf("want fail")
 	}
 	if desc != "rule 1" {
 		t.Errorf("want rule 1, got %s", desc)
 	}
 	action, desc = qrs.getAction("1234", "user", bv)
-	if action != QR_FAIL_QUERY {
-		t.Errorf("want fail")
+	if action != QR_FAIL_RETRY {
+		t.Errorf("want fail_retry")
 	}
 	if desc != "rule 2" {
 		t.Errorf("want rule 2, got %s", desc)
@@ -508,7 +508,7 @@ func TestAction(t *testing.T) {
 	}
 	bv["a"] = uint64(1)
 	action, desc = qrs.getAction("1234", "user1", bv)
-	if action != QR_FAIL_QUERY {
+	if action != QR_FAIL {
 		t.Errorf("want fail")
 	}
 	if desc != "rule 3" {
@@ -534,7 +534,8 @@ var jsondata = `[{
 		"OnMismatch": true,
 		"Operator": "UEQ",
 		"Value": "123"
-	}]
+	}],
+	"Action": "FAIL_RETRY"
 },{
 	"Description": "desc2",
 	"Name": "name2"
@@ -594,6 +595,9 @@ func TestImport(t *testing.T) {
 	if !bvc.onMismatch {
 		t.Errorf("want true")
 	}
+	if qrs.rules[0].act != QR_FAIL_RETRY {
+		t.Errorf("want FAIL_RETRY")
+	}
 	if bvc.op != QR_EQ {
 		t.Errorf("want %v, got %v", QR_EQ, bvc.op)
 	}
@@ -620,6 +624,9 @@ func TestImport(t *testing.T) {
 	}
 	if qrs.rules[1].bindVarConds != nil {
 		t.Errorf("want nil")
+	}
+	if qrs.rules[1].act != QR_FAIL {
+		t.Errorf("want FAIL")
 	}
 }
 
@@ -715,11 +722,11 @@ var invalidjsons = []InvalidJSONCase{
 	{`[{"Plans": 1 }]`, "want list for Plans"},
 	{`[{"TableNames": 1 }]`, "want list for TableNames"},
 	{`[{"BindVarConds": 1 }]`, "want list for BindVarConds"},
-	{`[{"RequestIP": "[" }]`, "Could not set IP condition: ["},
-	{`[{"User": "[" }]`, "Could not set User condition: ["},
-	{`[{"Query": "[" }]`, "Could not set Query condition: ["},
+	{`[{"RequestIP": "[" }]`, "could not set IP condition: ["},
+	{`[{"User": "[" }]`, "could not set User condition: ["},
+	{`[{"Query": "[" }]`, "could not set Query condition: ["},
 	{`[{"Plans": [1] }]`, "want string for Plans"},
-	{`[{"Plans": ["invalid"] }]`, "Invalid plan name: invalid"},
+	{`[{"Plans": ["invalid"] }]`, "invalid plan name: invalid"},
 	{`[{"TableNames": [1] }]`, "want string for TableNames"},
 	{`[{"BindVarConds": [1] }]`, "want json object for bind var conditions"},
 	{`[{"BindVarConds": [{}] }]`, "Name missing in BindVarConds"},
@@ -727,7 +734,7 @@ var invalidjsons = []InvalidJSONCase{
 	{`[{"BindVarConds": [{"Name": "a"}] }]`, "OnAbsent missing in BindVarConds"},
 	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": 1}] }]`, "want bool for OnAbsent"},
 	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true}]}]`, "Operator missing in BindVarConds"},
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "a"}]}]`, "Invalid Operator a"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "a"}]}]`, "invalid Operator a"},
 
 	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "UEQ"}]}]`, "Value missing in BindVarConds"},
 	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "UEQ", "Value": "a"}]}]`, "want uint64: a"},
@@ -761,16 +768,18 @@ var invalidjsons = []InvalidJSONCase{
 
 	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "ILE", "Value": "1"}]}]`, "OnMismatch missing in BindVarConds"},
 
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "OnMismatch": true, "Operator": "MATCH", "Value": "["}]}]`, "Processing [: error parsing regexp: missing closing ]: `[$`"},
-	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "OnMismatch": true, "Operator": "NOMATCH", "Value": "["}]}]`, "Processing [: error parsing regexp: missing closing ]: `[$`"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "OnMismatch": true, "Operator": "MATCH", "Value": "["}]}]`, "processing [: error parsing regexp: missing closing ]: `[$`"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "OnMismatch": true, "Operator": "NOMATCH", "Value": "["}]}]`, "processing [: error parsing regexp: missing closing ]: `[$`"},
+	{`[{"Action": 1 }]`, "want string for Action"},
+	{`[{"Action": "foo" }]`, "invalid Action foo"},
 }
 
 func TestInvalidJSON(t *testing.T) {
-	for i, tcase := range invalidjsons {
+	for _, tcase := range invalidjsons {
 		qrs := NewQueryRules()
 		err := qrs.UnmarshalJSON([]byte(tcase.input))
 		if err == nil {
-			t.Errorf("want error for case %d", i)
+			t.Errorf("want error for case %q", tcase.input)
 			continue
 		}
 		recvd := strings.Replace(err.Error(), "error: ", "", 1)
