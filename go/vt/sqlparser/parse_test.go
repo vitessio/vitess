@@ -34,7 +34,7 @@ var (
 
 var schem map[string]*schema.Table
 
-func initTables() {
+func init() {
 	schem = make(map[string]*schema.Table)
 
 	a := schema.NewTable("a")
@@ -56,7 +56,7 @@ func initTables() {
 	b.AddColumn("id", "int", SQLZERO, "")
 	bcolumns := []string{"eid", "id"}
 	b.Indexes = append(a.Indexes, &schema.Index{Name: "PRIMARY", Columns: []string{"eid", "id"}, Cardinality: []uint64{1, 1}, DataColumns: bcolumns})
-	b.PKColumns = append(a.PKColumns, 0, 1)
+	b.PKColumns = append(b.PKColumns, 0, 1)
 	b.CacheType = schema.CACHE_NONE
 	schem["b"] = b
 
@@ -96,7 +96,6 @@ func tableGetter(name string) (*schema.Table, bool) {
 }
 
 func TestExec(t *testing.T) {
-	initTables()
 	for tcase := range iterateJSONFile("exec_cases.txt") {
 		plan, err := ExecParse(tcase.input, tableGetter, true)
 		var out string
@@ -113,6 +112,115 @@ func TestExec(t *testing.T) {
 			t.Error(fmt.Sprintf("Line:%v\n%s\n%s", tcase.lineno, tcase.output, out))
 		}
 		//fmt.Printf("%s\n%s\n\n", tcase.input, out)
+	}
+}
+
+func TestStreamExec(t *testing.T) {
+	for tcase := range iterateJSONFile("stream_cases.txt") {
+		plan, err := StreamExecParse(tcase.input, true)
+		var out string
+		if err != nil {
+			out = err.Error()
+		} else {
+			bout, err := json.Marshal(plan)
+			if err != nil {
+				panic(fmt.Sprintf("Error marshalling %v: %v", plan, err))
+			}
+			out = string(bout)
+		}
+		if out != tcase.output {
+			t.Error(fmt.Sprintf("Line:%v\n%s\n%s", tcase.lineno, tcase.output, out))
+		}
+		//fmt.Printf("%s\n%s\n\n", tcase.input, out)
+	}
+}
+
+var actionToString = map[int]string{
+	CREATE: "CREATE",
+	ALTER:  "ALTER",
+	DROP:   "DROP",
+	RENAME: "RENAME",
+	0:      "NONE",
+}
+
+func TestDDL(t *testing.T) {
+	for tcase := range iterateFiles("sqlparser_test/ddl_cases.txt") {
+		plan := DDLParse(tcase.input)
+		expected := make(map[string]interface{})
+		err := json.Unmarshal([]byte(tcase.output), &expected)
+		if err != nil {
+			panic(fmt.Sprintf("Error marshalling %v", plan))
+		}
+		matchString(t, tcase.lineno, expected["Action"], actionToString[plan.Action])
+		matchString(t, tcase.lineno, expected["TableName"], plan.TableName)
+		matchString(t, tcase.lineno, expected["NewName"], plan.NewName)
+	}
+}
+
+func matchString(t *testing.T, line int, expected interface{}, actual string) {
+	if expected != nil {
+		if expected.(string) != actual {
+			t.Error(fmt.Sprintf("Line %d: expected: %v, received %s", line, expected, actual))
+		}
+	}
+}
+
+func TestParse(t *testing.T) {
+	for tcase := range iterateFiles("sqlparser_test/*.sql") {
+		if tcase.output == "" {
+			tcase.output = tcase.input
+		}
+		tree, err := Parse(tcase.input)
+		var out string
+		if err != nil {
+			out = err.Error()
+		} else {
+			out = tree.String()
+		}
+		if out != tcase.output {
+			t.Error(fmt.Sprintf("File:%s Line:%v\n%s\n%s", tcase.file, tcase.lineno, tcase.output, out))
+		}
+	}
+}
+
+func TestRouting(t *testing.T) {
+	tabletkeys := []key.KeyspaceId{
+		"\x00\x00\x00\x00\x00\x00\x00\x02",
+		"\x00\x00\x00\x00\x00\x00\x00\x04",
+		"\x00\x00\x00\x00\x00\x00\x00\x06",
+		"a",
+		"b",
+		"d",
+	}
+	bindVariables := make(map[string]interface{})
+	bindVariables["id0"] = 0
+	bindVariables["id2"] = 2
+	bindVariables["id3"] = 3
+	bindVariables["id4"] = 4
+	bindVariables["id6"] = 6
+	bindVariables["id8"] = 8
+	bindVariables["ids"] = []interface{}{1, 4}
+	bindVariables["a"] = "a"
+	bindVariables["b"] = "b"
+	bindVariables["c"] = "c"
+	bindVariables["d"] = "d"
+	bindVariables["e"] = "e"
+	for tcase := range iterateFiles("sqlparser_test/routing_cases.txt") {
+		if tcase.output == "" {
+			tcase.output = tcase.input
+		}
+		out, err := GetShardList(tcase.input, bindVariables, tabletkeys)
+		if err != nil {
+			if err.Error() != tcase.output {
+				t.Error(fmt.Sprintf("Line:%v\n%s\n%s", tcase.lineno, tcase.input, err))
+			}
+			continue
+		}
+		sort.Ints(out)
+		outstr := fmt.Sprintf("%v", out)
+		if outstr != tcase.output {
+			t.Error(fmt.Sprintf("Line:%v\n%s\n%s", tcase.lineno, tcase.output, outstr))
+		}
 	}
 }
 
@@ -156,94 +264,6 @@ func TestAnonymizer(t *testing.T) {
 	want = "select 'abcd', 20, 30.0, eid from a where 1=eid and name='3'"
 	if splan.DisplayQuery != want {
 		t.Errorf("got %q, want %q", splan.DisplayQuery, want)
-	}
-}
-
-var actionToString = map[int]string{
-	CREATE: "CREATE",
-	ALTER:  "ALTER",
-	DROP:   "DROP",
-	RENAME: "RENAME",
-	0:      "NONE",
-}
-
-func TestDDL(t *testing.T) {
-	for tcase := range iterateFiles("sqlparser_test/ddl_cases.txt") {
-		plan := DDLParse(tcase.input)
-		expected := make(map[string]interface{})
-		err := json.Unmarshal([]byte(tcase.output), &expected)
-		if err != nil {
-			panic(fmt.Sprintf("Error marshalling %v", plan))
-		}
-		matchString(t, tcase.lineno, expected["Action"], actionToString[plan.Action])
-		matchString(t, tcase.lineno, expected["TableName"], plan.TableName)
-		matchString(t, tcase.lineno, expected["NewName"], plan.NewName)
-	}
-}
-
-func matchString(t *testing.T, line int, expected interface{}, actual string) {
-	if expected != nil {
-		if expected.(string) != actual {
-			t.Error(fmt.Sprintf("Line %d: expected: %v, received %s", line, expected, actual))
-		}
-	}
-}
-
-func TestParse(t *testing.T) {
-	for tcase := range iterateFiles("sqlparser_test/*.sql") {
-		if tcase.output == "" {
-			tcase.output = tcase.input
-		}
-		tree, err := Parse(tcase.input)
-		if err != nil {
-			t.Error(fmt.Sprintf("File:%s Line:%v\n%s\n%s", tcase.file, tcase.lineno, tcase.input, err))
-		} else {
-			out := tree.String()
-			if out != tcase.output {
-				t.Error(fmt.Sprintf("File:%s Line:%v\n%s\n%s", tcase.file, tcase.lineno, tcase.output, out))
-			}
-		}
-	}
-}
-
-func TestRouting(t *testing.T) {
-	tabletkeys := []key.KeyspaceId{
-		"\x00\x00\x00\x00\x00\x00\x00\x02",
-		"\x00\x00\x00\x00\x00\x00\x00\x04",
-		"\x00\x00\x00\x00\x00\x00\x00\x06",
-		"a",
-		"b",
-		"d",
-	}
-	bindVariables := make(map[string]interface{})
-	bindVariables["id0"] = 0
-	bindVariables["id2"] = 2
-	bindVariables["id3"] = 3
-	bindVariables["id4"] = 4
-	bindVariables["id6"] = 6
-	bindVariables["id8"] = 8
-	bindVariables["ids"] = []interface{}{1, 4}
-	bindVariables["a"] = "a"
-	bindVariables["b"] = "b"
-	bindVariables["c"] = "c"
-	bindVariables["d"] = "d"
-	bindVariables["e"] = "e"
-	for tcase := range iterateFiles("sqlparser_test/routing_cases.txt") {
-		if tcase.output == "" {
-			tcase.output = tcase.input
-		}
-		out, err := GetShardList(tcase.input, bindVariables, tabletkeys)
-		if err != nil {
-			if err.Error() != tcase.output {
-				t.Error(fmt.Sprintf("Line:%v\n%s\n%s", tcase.lineno, tcase.input, err))
-			}
-			continue
-		}
-		sort.Ints(out)
-		outstr := fmt.Sprintf("%v", out)
-		if outstr != tcase.output {
-			t.Error(fmt.Sprintf("Line:%v\n%s\n%s", tcase.lineno, tcase.output, outstr))
-		}
 	}
 }
 

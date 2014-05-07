@@ -34,8 +34,5 @@ func extractDBName(node *Node) string {
 	if node.Type != '.' {
 		return ""
 	}
-	if node.At(0).Type != ID {
-		return ""
-	}
 	return string(node.At(0).Value)
 }

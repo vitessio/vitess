@@ -208,7 +208,7 @@ func (tkn *Tokenizer) Scan() (parseNode *Node) {
 				tkn.Next()
 				return NewSimpleParseNode(NE, "!=")
 			} else {
-				return NewSimpleParseNode(LEX_ERROR, "Unexpected character '!'")
+				return NewSimpleParseNode(LEX_ERROR, "unexpected character '!'")
 			}
 		case '\'', '"':
 			return tkn.scanString(ch)
@@ -217,7 +217,7 @@ func (tkn *Tokenizer) Scan() (parseNode *Node) {
 			tok.Type = ID
 			return tok
 		default:
-			return NewSimpleParseNode(LEX_ERROR, fmt.Sprintf("Unexpected character '%c'", ch))
+			return NewSimpleParseNode(LEX_ERROR, fmt.Sprintf("unexpected character '%c'", ch))
 		}
 	}
 }
@@ -264,6 +264,7 @@ func (tkn *Tokenizer) scanMantissa(base int, buffer *bytes.Buffer) {
 func (tkn *Tokenizer) scanNumber(seenDecimalPoint bool) *Node {
 	buffer := bytes.NewBuffer(make([]byte, 0, 8))
 	if seenDecimalPoint {
+		buffer.WriteByte('.')
 		tkn.scanMantissa(10, buffer)
 		goto exponent
 	}
@@ -380,7 +381,7 @@ func (tkn *Tokenizer) scanCommentType2() *Node {
 func (tkn *Tokenizer) ConsumeNext(buffer *bytes.Buffer) {
 	// Never consume an EOF
 	if tkn.lastChar == EOFCHAR {
-		panic(NewParserError("Unexpected EOF"))
+		panic(NewParserError("unexpected EOF"))
 	}
 	buffer.WriteByte(byte(tkn.lastChar))
 	tkn.Next()
