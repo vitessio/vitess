@@ -46,11 +46,6 @@ func (wr *Wrangler) RebuildKeyspaceGraph(keyspace string, cells []string) error 
 	return wr.unlockKeyspace(keyspace, actionNode, lockPath, err)
 }
 
-type cellKeyspace struct {
-	cell     string
-	keyspace string
-}
-
 // This function should only be used with an action lock on the keyspace
 // - otherwise the consistency of the serving graph data can't be
 // guaranteed.
@@ -92,42 +87,42 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
 		return er.Error()
 	}
 
-	// Scan the first shard to discover which cells need local serving data.
-	aliases, err := topo.FindAllTabletAliasesInShard(wr.ts, keyspace, shards[0])
-	if err != nil {
-		return err
-	}
-
+	// Build the list of cells to work on: we get the union
+	// of all the Cells of all the Shards, limited to the provided cells
+	//
 	// srvKeyspaceMap is a map:
-	//   key: local keyspace {cell,keyspace}
+	//   key: cell
 	//   value: topo.SrvKeyspace object being built
-	srvKeyspaceMap := make(map[cellKeyspace]*topo.SrvKeyspace)
-	for _, alias := range aliases {
-		keyspaceLocation := cellKeyspace{alias.Cell, keyspace}
-		if _, ok := srvKeyspaceMap[keyspaceLocation]; !ok {
-			// before adding keyspaceLocation to the map of
-			// of KeyspaceByPath, we check this is a
-			// serving tablet. No serving tablet in shard
-			// 0 means we're not rebuilding the serving
-			// graph in that cell.  This is somewhat
-			// expensive, but we only do it on all the
-			// non-serving tablets in a shard before we
-			// find a serving tablet.
-			ti, err := wr.ts.GetTablet(alias)
-			if err != nil {
-				return err
+	srvKeyspaceMap := make(map[string]*topo.SrvKeyspace)
+	mu := sync.Mutex{}
+	for _, shard := range shards {
+		wg.Add(1)
+		go func(shard string) {
+			if si, err := wr.ts.GetShard(keyspace, shard); err != nil {
+				er.RecordError(fmt.Errorf("GetShard(%v,%v) failed: %v", keyspace, shard, err))
+			} else {
+				mu.Lock()
+				for _, cell := range si.Cells {
+					if !topo.InCellList(cell, cells) {
+						continue
+					}
+					if _, ok := srvKeyspaceMap[cell]; !ok {
+						srvKeyspaceMap[cell] = &topo.SrvKeyspace{
+							Shards:             make([]topo.SrvShard, 0, 16),
+							ShardingColumnName: ki.ShardingColumnName,
+							ShardingColumnType: ki.ShardingColumnType,
+							ServedFrom:         ki.ServedFrom,
+						}
+					}
+				}
+				mu.Unlock()
 			}
-			if !ti.IsInServingGraph() {
-				continue
-			}
-
-			srvKeyspaceMap[keyspaceLocation] = &topo.SrvKeyspace{
-				Shards:             make([]topo.SrvShard, 0, 16),
-				ShardingColumnName: ki.ShardingColumnName,
-				ShardingColumnType: ki.ShardingColumnType,
-				ServedFrom:         ki.ServedFrom,
-			}
-		}
+			wg.Done()
+		}(shard)
+	}
+	wg.Wait()
+	if er.HasErrors() {
+		return er.Error()
 	}
 
 	// for each entry in the srvKeyspaceMap map, we do the following:
@@ -135,11 +130,11 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
 	// - compute the union of the db types (replica, master, ...)
 	// - sort the shards in the list by range
 	// - check the ranges are compatible (no hole, covers everything)
-	for ck, srvKeyspace := range srvKeyspaceMap {
+	for cell, srvKeyspace := range srvKeyspaceMap {
 		keyspaceDbTypes := make(map[topo.TabletType]bool)
 		srvKeyspace.Partitions = make(map[topo.TabletType]*topo.KeyspacePartition)
 		for _, shard := range shards {
-			srvShard, err := wr.ts.GetSrvShard(ck.cell, ck.keyspace, shard)
+			srvShard, err := wr.ts.GetSrvShard(cell, keyspace, shard)
 			if err != nil {
 				return err
 			}
@@ -190,8 +185,8 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
 	}
 
 	// and then finally save the keyspace objects
-	for ck, srvKeyspace := range srvKeyspaceMap {
-		if err := wr.ts.UpdateSrvKeyspace(ck.cell, ck.keyspace, srvKeyspace); err != nil {
+	for cell, srvKeyspace := range srvKeyspaceMap {
+		if err := wr.ts.UpdateSrvKeyspace(cell, keyspace, srvKeyspace); err != nil {
 			return fmt.Errorf("writing serving data failed: %v", err)
 		}
 	}
