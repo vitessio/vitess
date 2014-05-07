@@ -218,7 +218,7 @@ func BuildValue(goval interface{}) (v Value, err error) {
 	case Value:
 		v = bindVal
 	default:
-		return Value{}, fmt.Errorf("Unsupported bind variable type %T: %v", goval, goval)
+		return Value{}, fmt.Errorf("unsupported bind variable type %T: %v", goval, goval)
 	}
 	return v, nil
 }
