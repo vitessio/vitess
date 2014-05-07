@@ -1,5 +1,12 @@
 select 1 from t
+select .1 from t
+select 1.2e1 from t
+select 1.2e+1 from t
+select 1.2e-1 from t
+select 08.3 from t
 select -1 from t where b = -2
+select 1 from t // aa#select 1 from t
+select 1 from t -- aa#select 1 from t
 select /* simplest */ 1 from t
 select /* back-quote */ 1 from `t`#select /* back-quote */ 1 from t
 select /* back-quote keyword */ 1 from `from`#select /* back-quote keyword */ 1 from `from`
@@ -104,6 +111,7 @@ select /* multiple positional arguments */ ?, ? from t#select /* multiple positi
 select /* null */ null from t
 select /* octal */ 010 from t
 select /* hex */ 0xf0 from t
+select /* hex caps */ 0xF0 from t
 select /* float */ 0.1 from t
 select /* group by */ 1 from t group by a
 select /* having */ 1 from t having a = b

@@ -264,6 +264,7 @@ func (tkn *Tokenizer) scanMantissa(base int, buffer *bytes.Buffer) {
 func (tkn *Tokenizer) scanNumber(seenDecimalPoint bool) *Node {
 	buffer := bytes.NewBuffer(make([]byte, 0, 8))
 	if seenDecimalPoint {
+		buffer.WriteByte('.')
 		tkn.scanMantissa(10, buffer)
 		goto exponent
 	}
