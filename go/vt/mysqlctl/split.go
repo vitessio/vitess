@@ -161,6 +161,35 @@ func SanityCheckManifests(ssms []*SplitSnapshotManifest) error {
 	return nil
 }
 
+// getReplicationPositionForClones returns what position the clones
+// need to replicate from. Can be ours if we are a master, or our master's.
+func (mysqld *Mysqld) getReplicationPositionForClones(allowHierarchicalReplication bool) (replicationPosition *proto.ReplicationPosition, masterAddr string, err error) {
+	// If the source is a slave use the master replication position,
+	// unless we are allowing hierachical replicas.
+	replicationPosition, err = mysqld.SlaveStatus()
+	if err != nil {
+		if err != ErrNotSlave {
+			// this is a real error
+			return
+		}
+		// we are really a master, so we need that position
+		replicationPosition, err = mysqld.MasterStatus()
+		if err != nil {
+			return
+		}
+		masterAddr = mysqld.IpAddr()
+		return
+	}
+
+	// we are a slave, check our replication strategy
+	if allowHierarchicalReplication {
+		masterAddr = mysqld.IpAddr()
+	} else {
+		masterAddr, err = mysqld.GetMasterAddr()
+	}
+	return
+}
+
 func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool, hookExtraEnv map[string]string) (slaveStartRequired, readOnly bool, replicationPosition, myMasterPosition *proto.ReplicationPosition, masterAddr string, err error) {
 	// save initial state so we can restore on Start()
 	if slaveStatus, slaveErr := mysqld.slaveStatus(); slaveErr == nil {
@@ -182,30 +211,10 @@ func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool, hookE
 		return
 	}
 
-	// If the source is a slave use the master replication position,
-	// unless we are allowing hierachical replicas.
-	replicationPosition, err = mysqld.SlaveStatus()
+	// Get the replication position and master addr
+	replicationPosition, masterAddr, err = mysqld.getReplicationPositionForClones(allowHierarchicalReplication)
 	if err != nil {
-		if err != ErrNotSlave {
-			// this is a real error
-			return
-		}
-		// we are really a master, so we need that position
-		replicationPosition, err = mysqld.MasterStatus()
-		if err != nil {
-			return
-		}
-		masterAddr = mysqld.IpAddr()
-	} else {
-		// we are a slave, check our replication strategy
-		if allowHierarchicalReplication {
-			masterAddr = mysqld.IpAddr()
-		} else {
-			masterAddr, err = mysqld.GetMasterAddr()
-			if err != nil {
-				return
-			}
-		}
+		return
 	}
 
 	// get our master position, some targets may use it
@@ -565,6 +574,8 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 	}
 	sd.SortByReverseDataLength()
 
+	// prepareToSnapshot will get the tablet in the rigth state,
+	// and return the current mysql status.
 	slaveStartRequired, readOnly, replicationPosition, myMasterPosition, masterAddr, err := mysqld.prepareToSnapshot(allowHierarchicalReplication, hookExtraEnv)
 	if err != nil {
 		return
@@ -579,6 +590,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 		err = replaceError(err, mysqld.restoreAfterSnapshot(slaveStartRequired, readOnly, hookExtraEnv))
 	}()
 
+	// dump the files in parallel with a pre-defined concurrency
 	datafiles := make([]map[key.KeyRange][]SnapshotFile, len(sd.TableDefinitions))
 	dumpTableWorker := func(i int) (err error) {
 		table := sd.TableDefinitions[i]
@@ -607,6 +619,18 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 		log.Errorf("Cannot remove %v: %v", mainCloneSourcePath, e)
 	}
 
+	// Check the replication position after snapshot is done
+	// hasn't changed, to be sure we haven't inserted any data
+	var newReplicationPosition *proto.ReplicationPosition
+	newReplicationPosition, _, err = mysqld.getReplicationPositionForClones(allowHierarchicalReplication)
+	if err != nil {
+		return
+	}
+	if newReplicationPosition.MasterLogGroupId != replicationPosition.MasterLogGroupId {
+		return nil, fmt.Errorf("replicationPosition position changed during snapshot, from %u to %v", replicationPosition.MasterLogGroupId, newReplicationPosition.MasterLogGroupId)
+	}
+
+	// Write all the manifest files
 	ssmFiles := make([]string, len(keyRanges))
 	for i, kr := range keyRanges {
 		krDatafiles := make([]SnapshotFile, 0, len(datafiles))
@@ -625,6 +649,10 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 		}
 	}
 
+	// TODO(alainjobart) Call the hook to send the files somewhere else
+	// (if the hook exists), and add that as a return value for this method
+
+	// Return all the URLs for the MANIFESTs
 	snapshotURLPaths := make([]string, len(keyRanges))
 	for i := 0; i < len(keyRanges); i++ {
 		relative, err := filepath.Rel(mysqld.SnapshotDir, ssmFiles[i])
