@@ -15,6 +15,7 @@ import time
 
 from vtdb import dbexceptions
 from vtdb import keyspace
+from vtdb import vtdb_logger
 from zk import zkocc
 
 
@@ -29,25 +30,9 @@ __keyspace_map = {}
 __keyspace_fetch_throttle = 5
 
 
-# Callback function for logging/instrumenting the calls to topo server.
-__keyspace_fetch_logging = None
-
-
 def set_keyspace_fetch_throttle(throttle):
   global __keyspace_fetch_throttle
   __keyspace_fetch_throttle = throttle
-
-
-# Default function to log the calls to the topo server.
-def log_keyspace_fetch(keyspace_name, topo_rtt):
-  logging.info("Fetched keyspace %s from topo_client in %f secs", keyspace_name, topo_rtt)
-
-
-# Register the callback function for logging or instrumentation.
-def register_topo_fetch_log_callback(func):
-  global __keyspace_fetch_logging
-  if func is not None:
-    __keyspace_fetch_logging = func
 
 
 # This returns the keyspace object for the keyspace name
@@ -78,7 +63,6 @@ def __set_keyspace(ks):
 # server is unavailable, it retains the old keyspace object.
 def refresh_keyspace(zkocc_client, name):
   global __keyspace_fetch_throttle
-  global __keyspace_fetch_logging
 
   time_last_fetch = get_time_last_fetch(name)
   if time_last_fetch is None:
@@ -93,10 +77,7 @@ def refresh_keyspace(zkocc_client, name):
   if ks is not None:
     __set_keyspace(ks)
 
-  if __keyspace_fetch_logging is not None:
-    __keyspace_fetch_logging(name, topo_rtt)
-  else:
-    log_keyspace_fetch(name, topo_rtt)
+  vtdb_logger.get_logger().topo_keyspace_fetch(name, topo_rtt)
 
 
 # read all the keyspaces, populates __keyspace_map, can call get_keyspace
@@ -117,7 +98,7 @@ def read_topology(zkocc_client, read_fqdb_keys=True):
   keyspace_list = zkocc_client.get_srv_keyspace_names('local')
   # validate step
   if len(keyspace_list) == 0:
-    logging.exception('zkocc returned empty keyspace list')
+    vtdb_logger.get_logger().topo_empty_keyspace_list()
     raise Exception('zkocc returned empty keyspace list')
   for keyspace_name in keyspace_list:
     try:
@@ -134,8 +115,7 @@ def read_topology(zkocc_client, read_fqdb_keys=True):
             for db_i in xrange(db_instances):
               fqdb_keys.append('.'.join(db_key_parts + [str(db_i)]))
     except Exception:
-      logging.exception('error getting or parsing keyspace data for %s',
-                        keyspace_name)
+      vtdb_logger.get_logger().topo_bad_keyspace_data(keyspace_name)
   return db_keys, fqdb_keys
 
 
@@ -159,13 +139,13 @@ def get_host_port_by_name(topo_client, db_key, encrypted=False):
   try:
     data = topo_client.get_end_points('local', ks, shard, tablet_type)
   except zkocc.ZkOccError as e:
-    logging.warning('no data for %s: %s', db_key, e)
+    vtdb_logger.get_logger().topo_zkocc_error('do data', db_key, e)
     return []
   except Exception as e:
-    logging.warning('failed to get or parse topo data %s (%s): %s', db_key, e,
-                    data)
+    vtdb_logger.get_logger().topo_exception('failed to get or parse topo data', db_key, e)
     return []
   if 'Entries' not in data:
+    vtdb_logger.get_logger().topo_exception('topo server returned: ' + str(data), db_key, e)
     raise Exception('zkocc returned: %s' % str(data))
   for entry in data['Entries']:
     if service in entry['NamedPortMap']:

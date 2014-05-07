@@ -21,6 +21,7 @@ from vtdb import tablet as tablet3
 from vtdb import topology
 from vtdb import vtclient
 from vtdb import dbexceptions
+from vtdb import vtdb_logger
 from zk import zkocc
 
 # default the test to use vttablet connection
@@ -544,14 +545,17 @@ class TestAuthentication(unittest.TestCase):
     else:
       self.fail("Too many requests were allowed (%s)." % (i + 1))
 
-__topo_rtt = 0
-def count_topo_rtt(keyspace_name, fetch_time):
-  global __topo_rtt
-  __topo_rtt += 1
 
-def get_topo_rtt():
-  global __topo_rtt
-  return __topo_rtt
+class LocalLogger(vtdb_logger.VtdbLogger):
+
+  def __init__(self):
+    self._topo_rtt = 0
+
+  def topo_keyspace_fetch(self, keyspace_name, topo_rtt):
+    self._topo_rtt += 1
+
+  def get_topo_rtt(self):
+    return self._topo_rtt
 
 
 class TestTopoReResolve(unittest.TestCase):
@@ -560,15 +564,14 @@ class TestTopoReResolve(unittest.TestCase):
     self.shard_index = 0
     self.replica_tablet = shard_0_replica
     self.keyspace_fetch_throttle = 1
+    vtdb_logger.register_vtdb_logger(LocalLogger())
     # Lowering the keyspace refresh throttle so things are testable.
     topology.set_keyspace_fetch_throttle(0.1)
-    topology.register_topo_fetch_log_callback(count_topo_rtt)
     self.vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
                                                "test_nj", 30.0)
-    #keyspace_obj = keyspace.read_keyspace(self.vtgate_client, "test_keyspace")
 
   def test_topo_read_threshold(self):
-    before_topo_rtt = get_topo_rtt()
+    before_topo_rtt = vtdb_logger.get_logger().get_topo_rtt()
     # Check original state.
     keyspace_obj = topology.get_keyspace('test_keyspace')
     self.assertNotEqual(keyspace_obj, None, "test_keyspace should be not None")
@@ -584,18 +587,18 @@ class TestTopoReResolve(unittest.TestCase):
     time.sleep(self.keyspace_fetch_throttle)
     topology.refresh_keyspace(self.vtgate_client, 'test_keyspace')
     keyspace_obj = topology.get_keyspace('test_keyspace')
-    after_1st_clear = get_topo_rtt()
+    after_1st_clear = vtdb_logger.get_logger().get_topo_rtt()
     self.assertEqual(after_1st_clear - before_topo_rtt, 1, "One additional round-trips to topo server")
     self.assertEqual(keyspace_obj.sharding_col_type, keyrange_constants.KIT_BYTES, "ShardingColumnType be %s" % keyrange_constants.KIT_BYTES)
 
     # Refresh without sleeping for throttle time shouldn't cause additional rtt.
     topology.refresh_keyspace(self.vtgate_client, 'test_keyspace')
     keyspace_obj = topology.get_keyspace('test_keyspace')
-    after_2nd_clear = get_topo_rtt()
+    after_2nd_clear = vtdb_logger.get_logger().get_topo_rtt()
     self.assertEqual(after_2nd_clear - after_1st_clear, 0, "No additional round-trips to topo server")
 
   def test_keyspace_reresolve_on_execute(self):
-    before_topo_rtt = get_topo_rtt()
+    before_topo_rtt = vtdb_logger.get_logger().get_topo_rtt()
     try:
       replica_conn = get_connection(db_type='replica', shard_index=self.shard_index)
     except Exception, e:
@@ -609,12 +612,12 @@ class TestTopoReResolve(unittest.TestCase):
     except Exception, e:
       pass
 
-    after_tablet_error = get_topo_rtt()
+    after_tablet_error = vtdb_logger.get_logger().get_topo_rtt()
     self.assertEqual(after_tablet_error - before_topo_rtt, 1, "One additional round-trips to topo server")
     self.replica_tablet.start_vttablet()
 
   def test_keyspace_reresolve_on_conn_failure(self):
-    before_topo_rtt = get_topo_rtt()
+    before_topo_rtt = vtdb_logger.get_logger().get_topo_rtt()
     self.replica_tablet.kill_vttablet()
     time.sleep(self.keyspace_fetch_throttle)
     try:
@@ -622,7 +625,7 @@ class TestTopoReResolve(unittest.TestCase):
     except Exception, e:
       pass
 
-    after_tablet_conn_error = get_topo_rtt()
+    after_tablet_conn_error = vtdb_logger.get_logger().get_topo_rtt()
     self.assertEqual(after_tablet_conn_error - before_topo_rtt, 1, "One additional round-trips to topo server")
     self.replica_tablet.start_vttablet()
 
