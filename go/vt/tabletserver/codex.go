@@ -121,11 +121,11 @@ func validateValue(col *schema.TableColumn, value sqltypes.Value) {
 	switch col.Category {
 	case schema.CAT_NUMBER:
 		if !value.IsNumeric() {
-			panic(NewTabletError(FAIL, "Type mismatch, expecting numeric type for %v", value))
+			panic(NewTabletError(FAIL, "type mismatch, expecting numeric type for %v", value))
 		}
 	case schema.CAT_VARBINARY:
 		if !value.IsString() {
-			panic(NewTabletError(FAIL, "Type mismatch, expecting string type for %v", value))
+			panic(NewTabletError(FAIL, "type mismatch, expecting string type for %v", value))
 		}
 	}
 }

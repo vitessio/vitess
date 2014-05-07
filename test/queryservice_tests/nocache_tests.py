@@ -457,7 +457,7 @@ class TestNocache(framework.TestCase):
     self.assertTrue((tendTimesNs - tstartTimesNs) > 0)
 
   def _verify_mismatch(self, query, bindvars=None):
-    self._verify_error(query, bindvars, "error: Type mismatch")
+    self._verify_error(query, bindvars, "error: type mismatch")
 
   def _verify_error(self, query, bindvars, err):
     self.env.conn.begin()

@@ -9,4 +9,5 @@ alter table a rename to b#{"Action": "RENAME", "TableName": "a", "NewTable": "b"
 create view a asdasd#{"Action": "CREATE", "NewName": "a"}
 alter view c alter foo#{"Action": "ALTER", "TableName": "c", "NewTable": "c"}
 drop  view b#{"Action": "DROP", "TableName": "b"}
+select * from a#{"Action": "NONE"}
 syntax error#{"Action": "NONE"}

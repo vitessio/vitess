@@ -264,7 +264,7 @@ func (node *Node) execAnalyzeSql(getTable TableGetter) (plan *ExecPlan) {
 	case CREATE, ALTER, DROP, RENAME:
 		return &ExecPlan{PlanId: PLAN_DDL}
 	}
-	panic(NewParserError("Invalid SQL"))
+	panic(NewParserError("invalid SQL"))
 }
 
 func (node *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
@@ -542,7 +542,7 @@ func (node *Node) execAnalyzeSet() (plan *ExecPlan) {
 func (node *ExecPlan) setTableInfo(tableName string, getTable TableGetter) *schema.Table {
 	tableInfo, ok := getTable(tableName)
 	if !ok {
-		panic(NewParserError("Table %s not found in schema", tableName))
+		panic(NewParserError("table %s not found in schema", tableName))
 	}
 	node.TableName = tableInfo.Name
 	return tableInfo
@@ -582,7 +582,7 @@ func (node *Node) execAnalyzeSelectExpressions(table *schema.Table) (selects []i
 			} else if colIndex := table.FindColumn(name); colIndex != -1 {
 				selects = append(selects, colIndex)
 			} else {
-				panic(NewParserError("Column %s not found in table %s", name, table.Name))
+				panic(NewParserError("column %s not found in table %s", name, table.Name))
 			}
 		} else {
 			// Complex expression
@@ -780,7 +780,7 @@ func getInsertPKValues(pkColumnNumbers []int, rowList *Node, tableInfo *schema.T
 		values := make([]interface{}, rowList.Len())
 		for j := 0; j < rowList.Len(); j++ {
 			if columnNumber >= rowList.At(j).At(0).Len() { // NODE_LIST->'('->NODE_LIST
-				panic(NewParserError("Column count doesn't match value count"))
+				panic(NewParserError("column count doesn't match value count"))
 			}
 			node := rowList.At(j).At(0).At(columnNumber) // NODE_LIST->'('->NODE_LIST->Value
 			value := node.execAnalyzeValue()
@@ -988,23 +988,6 @@ func (node *Node) GenerateSelectLimitQuery() *ParsedQuery {
 	return buf.ParsedQuery()
 }
 
-func (node *Node) GenerateDefaultQuery(tableInfo *schema.Table) *ParsedQuery {
-	buf := NewTrackedBuffer(nil)
-	limit := node.At(SELECT_LIMIT_OFFSET)
-	if limit.Len() == 0 {
-		limit.PushLimit()
-		defer limit.Pop()
-	}
-	fmt.Fprintf(buf, "select ")
-	writeColumnList(buf, tableInfo.Columns)
-	buf.Fprintf(" from %v%v%v%v",
-		node.At(SELECT_FROM_OFFSET),
-		node.At(SELECT_WHERE_OFFSET),
-		node.At(SELECT_ORDER_OFFSET),
-		limit)
-	return buf.ParsedQuery()
-}
-
 func (node *Node) GenerateEqualOuterQuery(tableInfo *schema.Table) *ParsedQuery {
 	buf := NewTrackedBuffer(nil)
 	fmt.Fprintf(buf, "select ")
@@ -1142,9 +1125,9 @@ func asInterface(node *Node) interface{} {
 	case NUMBER:
 		n, err := sqltypes.BuildNumeric(string(node.Value))
 		if err != nil {
-			panic(NewParserError("Type mismatch: %s", err))
+			panic(NewParserError("type mismatch: %s", err))
 		}
 		return n
 	}
-	panic(NewParserError("Unexpected node %v", node))
+	panic(NewParserError("unexpected node %v", node))
 }

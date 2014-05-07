@@ -32,7 +32,7 @@ class TestCache(framework.TestCase):
     try:
       self.env.execute("select bid, eid from vtocc_cached2 where eid = 1 and bid = 1")
     except dbexceptions.DatabaseError as e:
-      self.assertContains(str(e), "error: Type")
+      self.assertContains(str(e), "error: type mismatch")
     else:
       self.fail("Did not receive exception")
 
@@ -209,7 +209,7 @@ class TestCache(framework.TestCase):
     try:
       self.env.execute(query, bindvars)
     except dbexceptions.DatabaseError as e:
-      self.assertContains(str(e), "error: Type mismatch")
+      self.assertContains(str(e), "error: type mismatch")
     else:
       self.fail("Did not receive exception")
 
