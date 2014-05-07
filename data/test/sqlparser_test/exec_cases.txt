@@ -692,6 +692,31 @@ select * from a where eid=1 and id=1
   "SetValue": null
 }
 
+# disjoint index match
+select * from d where bar='foo' and id=1
+{
+  "PlanId": "PASS_SELECT",
+  "Reason": "NOINDEX_MATCH",
+  "TableName": "d",
+  "DisplayQuery": "select * from d where bar = ? and id = ?",
+  "FieldQuery": "select * from d where 1 != 1",
+  "FullQuery": "select * from d where bar = 'foo' and id = 1 limit :_vtMaxResultSize",
+  "OuterQuery": null,
+  "Subquery": null,
+  "IndexUsed": "",
+  "ColumnNumbers": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
 # string pk match
 select * from d where name='foo'
 {

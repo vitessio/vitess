@@ -195,13 +195,14 @@ func TestParse(t *testing.T) {
 			tcase.output = tcase.input
 		}
 		tree, err := Parse(tcase.input)
+		var out string
 		if err != nil {
-			t.Error(fmt.Sprintf("File:%s Line:%v\n%s\n%s", tcase.file, tcase.lineno, tcase.input, err))
+			out = err.Error()
 		} else {
-			out := tree.String()
-			if out != tcase.output {
-				t.Error(fmt.Sprintf("File:%s Line:%v\n%s\n%s", tcase.file, tcase.lineno, tcase.output, out))
-			}
+			out = tree.String()
+		}
+		if out != tcase.output {
+			t.Error(fmt.Sprintf("File:%s Line:%v\n%s\n%s", tcase.file, tcase.lineno, tcase.output, out))
 		}
 	}
 }
