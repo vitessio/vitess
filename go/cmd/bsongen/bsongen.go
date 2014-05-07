@@ -2,6 +2,13 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+/*
+bsongen will generate bson encoders and decoders for
+a given go type. It uses goimports to fix the import
+statetments post-generation. It assumes goimports is
+in the path. If you specify a GOIMPORTS environment
+variable, it will use that instead.
+*/
 package main
 
 import (
@@ -412,7 +419,11 @@ func generateRawCode(in string, typename string) (out []byte, err error) {
 
 // formatCode uses goimports to format the generated code.
 func formatCode(in []byte) (out []byte, err error) {
-	cmd := exec.Command("goimports")
+	goimports := os.Getenv("GOIMPORTS")
+	if goimports == "" {
+		goimports = "goimports"
+	}
+	cmd := exec.Command(goimports)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err
