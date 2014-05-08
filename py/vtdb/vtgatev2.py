@@ -13,26 +13,15 @@ from vtdb import dbapi
 from vtdb import dbexceptions
 from vtdb import field_types
 from vtdb import keyrange
+from vtdb import vtdb_logger
 
 
 _errno_pattern = re.compile('\(errno (\d+)\)')
 
 
-__error_counter_callback = None
-
-
-def register_error_counter_callback(func):
-  global __error_counter_callback
-  __error_counter_callback = func
-
-
 def convert_exception(exc, *args):
   new_args = exc.args + args
-  # increment the error counter
-  global __error_counter_callback
-  if __error_counter_callback is not None:
-    __error_counter_callback()
-
+  vtdb_logger.get_logger().vtgatev2_exception(exc)
   if isinstance(exc, gorpc.TimeoutError):
     return dbexceptions.TimeoutError(new_args)
   elif isinstance(exc, gorpc.AppError):

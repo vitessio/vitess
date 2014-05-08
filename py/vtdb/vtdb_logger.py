@@ -15,6 +15,10 @@ import logging
 # - performance logging (calls to other services took that long)
 class VtdbLogger(object):
 
+  #
+  # topology callbacks
+  #
+
   # topo_keyspace_fetch is called when we successfully get a SrvKeyspace object.
   def topo_keyspace_fetch(self, keyspace_name, topo_rtt):
     logging.info("Fetched keyspace %s from topo_client in %f secs", keyspace_name, topo_rtt)
@@ -41,6 +45,13 @@ class VtdbLogger(object):
   def topo_exception(self, message, db_key, e):
     logging.warning('topo_exception: %s for %s: %s', message, db_key, e)
 
+  #
+  # vtgatev2 callbacks
+  #
+
+  # vtgatev2_exception is called when we get an exception talking to vtgate.
+  def vtgatev2_exception(self, e):
+    logging.warning('vtgatev2_exception: %s', e)
 
 # registration mechanism for VtdbLogger
 __vtdb_logger = VtdbLogger()
