@@ -42,6 +42,7 @@ type SrvTopoServer interface {
 // - return the last known value of the data if there is an error
 type ResilientSrvTopoServer struct {
 	topoServer SrvTopoServer
+	cacheTTL   time.Duration
 	counts     *stats.Counters
 
 	// mutex protects the cache map itself, not the individual
@@ -58,6 +59,7 @@ type srvKeyspaceNamesEntry struct {
 
 	insertionTime time.Time
 	value         []string
+	lastError     error
 }
 
 type srvKeyspaceEntry struct {
@@ -66,6 +68,7 @@ type srvKeyspaceEntry struct {
 
 	insertionTime time.Time
 	value         *topo.SrvKeyspace
+	lastError     error
 }
 
 type endPointsEntry struct {
@@ -79,6 +82,7 @@ type endPointsEntry struct {
 	// OriginalValue is the end points that were returned from
 	// the topology server.
 	OriginalValue *topo.EndPoints
+	lastError     error
 }
 
 // filterUnhealthyServers removes the unhealthy servers from the list,
@@ -111,10 +115,11 @@ func filterUnhealthyServers(endPoints *topo.EndPoints) *topo.EndPoints {
 
 // NewResilientSrvTopoServer creates a new ResilientSrvTopoServer
 // based on the provided SrvTopoServer.
-func NewResilientSrvTopoServer(base SrvTopoServer) *ResilientSrvTopoServer {
+func NewResilientSrvTopoServer(base SrvTopoServer, counterName string) *ResilientSrvTopoServer {
 	return &ResilientSrvTopoServer{
 		topoServer: base,
-		counts:     stats.NewCounters("ResilientSrvTopoServerCounts"),
+		cacheTTL:   *srvTopoCacheTTL,
+		counts:     stats.NewCounters(counterName),
 
 		srvKeyspaceNamesCache: make(map[string]*srvKeyspaceNamesEntry),
 		srvKeyspaceCache:      make(map[string]*srvKeyspaceEntry),
@@ -142,8 +147,8 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(cell string) ([]string
 	defer entry.mutex.Unlock()
 
 	// If the entry is fresh enough, return it
-	if time.Now().Sub(entry.insertionTime) < *srvTopoCacheTTL {
-		return entry.value, nil
+	if time.Now().Sub(entry.insertionTime) < server.cacheTTL {
+		return entry.value, entry.lastError
 	}
 
 	// not in cache or too old, get the real value
@@ -151,8 +156,7 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(cell string) ([]string
 	if err != nil {
 		if entry.insertionTime.IsZero() {
 			server.counts.Add(errorCategory, 1)
-			log.Errorf("GetSrvKeyspaceNames(%v) failed: %v (no cached value, returning error)", cell, err)
-			return nil, err
+			log.Errorf("GetSrvKeyspaceNames(%v) failed: %v (no cached value, caching and returning error)", cell, err)
 		} else {
 			server.counts.Add(cachedCategory, 1)
 			log.Warningf("GetSrvKeyspaceNames(%v) failed: %v (returning cached value)", cell, err)
@@ -163,7 +167,8 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(cell string) ([]string
 	// save the value we got and the current time in the cache
 	entry.insertionTime = time.Now()
 	entry.value = result
-	return result, nil
+	entry.lastError = err
+	return result, err
 }
 
 func (server *ResilientSrvTopoServer) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, error) {
@@ -186,8 +191,8 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(cell, keyspace string) (*to
 	defer entry.mutex.Unlock()
 
 	// If the entry is fresh enough, return it
-	if time.Now().Sub(entry.insertionTime) < *srvTopoCacheTTL {
-		return entry.value, nil
+	if time.Now().Sub(entry.insertionTime) < server.cacheTTL {
+		return entry.value, entry.lastError
 	}
 
 	// not in cache or too old, get the real value
@@ -195,8 +200,7 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(cell, keyspace string) (*to
 	if err != nil {
 		if entry.insertionTime.IsZero() {
 			server.counts.Add(errorCategory, 1)
-			log.Errorf("GetSrvKeyspace(%v, %v) failed: %v (no cached value, returning error)", cell, keyspace, err)
-			return nil, err
+			log.Errorf("GetSrvKeyspace(%v, %v) failed: %v (no cached value, caching and returning error)", cell, keyspace, err)
 		} else {
 			server.counts.Add(cachedCategory, 1)
 			log.Warningf("GetSrvKeyspace(%v, %v) failed: %v (returning cached value)", cell, keyspace, err)
@@ -207,7 +211,8 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(cell, keyspace string) (*to
 	// save the value we got and the current time in the cache
 	entry.insertionTime = time.Now()
 	entry.value = result
-	return result, nil
+	entry.lastError = err
+	return result, err
 }
 
 func (server *ResilientSrvTopoServer) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
@@ -230,8 +235,8 @@ func (server *ResilientSrvTopoServer) GetEndPoints(cell, keyspace, shard string,
 	defer entry.mutex.Unlock()
 
 	// If the entry is fresh enough, return it
-	if time.Now().Sub(entry.insertionTime) < *srvTopoCacheTTL {
-		return entry.Value, nil
+	if time.Now().Sub(entry.insertionTime) < server.cacheTTL {
+		return entry.Value, entry.lastError
 	}
 
 	// not in cache or too old, get the real value
@@ -239,8 +244,7 @@ func (server *ResilientSrvTopoServer) GetEndPoints(cell, keyspace, shard string,
 	if err != nil {
 		if entry.insertionTime.IsZero() {
 			server.counts.Add(errorCategory, 1)
-			log.Errorf("GetEndPoints(%v, %v, %v, %v) failed: %v (no cached value, returning error)", cell, keyspace, shard, tabletType, err)
-			return nil, err
+			log.Errorf("GetEndPoints(%v, %v, %v, %v) failed: %v (no cached value, caching and returning error)", cell, keyspace, shard, tabletType, err)
 		}
 		server.counts.Add(cachedCategory, 1)
 		log.Warningf("GetEndPoints(%v, %v, %v, %v) failed: %v (returning cached value)", cell, keyspace, shard, tabletType, err)
@@ -249,9 +253,11 @@ func (server *ResilientSrvTopoServer) GetEndPoints(cell, keyspace, shard string,
 
 	// save the value we got and the current time in the cache
 	entry.insertionTime = time.Now()
-	entry.OriginalValue, entry.Value = result, filterUnhealthyServers(result)
+	entry.OriginalValue = result
+	entry.Value = filterUnhealthyServers(result)
+	entry.lastError = err
 
-	return entry.Value, nil
+	return entry.Value, err
 }
 
 func (server *ResilientSrvTopoServer) HealthyEndpointCount() map[string]int64 {

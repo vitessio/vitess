@@ -34,7 +34,7 @@ func main() {
 	ts := topo.GetServer()
 	defer topo.CloseServers()
 
-	rts := vtgate.NewResilientSrvTopoServer(ts)
+	rts := vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServerCounts")
 
 	stats.Publish("EndpointCount", stats.CountersFunc(rts.HealthyEndpointCount))
 	stats.Publish("DegradedEndpointCount", stats.CountersFunc(rts.DegradedEndpointCount))
