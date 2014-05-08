@@ -10,6 +10,7 @@ from vtdb import dbapi
 from vtdb import dbexceptions
 from vtdb import topo_utils
 from vtdb import topology
+from vtdb import vtdb_logger
 
 RECONNECT_DELAY = 0.002 # 2 ms
 BEGIN_RECONNECT_DELAY = 0.2 # 200 ms
@@ -45,6 +46,7 @@ def reconnect(method):
 
         if attempt >= self.max_attempts or self.in_txn:
           self.close()
+          vtdb_logger.get_logger().vtclient_exception(e)
           raise dbexceptions.FatalError(*e.args)
         if method.__name__ == 'begin':
           time.sleep(BEGIN_RECONNECT_DELAY)

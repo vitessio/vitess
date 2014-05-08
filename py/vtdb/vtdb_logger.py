@@ -46,6 +46,17 @@ class VtdbLogger(object):
     logging.warning('topo_exception: %s for %s: %s', message, db_key, e)
 
   #
+  # vtclient callbacks
+  #
+
+  # vtclient_exception is called when a FatalError is raised by
+  # vtclient (that error is sent back to the application, the retries
+  # happen at a lower level). e can be one of
+  # dbexceptions.{RetryError, FatalError, TxPoolFull}
+  def vtclient_exception(self, e):
+    logging.warning('vtclient_exception: %s', e)
+
+  #
   # vtgatev2 callbacks
   #
 
