@@ -767,8 +767,8 @@ func (ta *TabletActor) multiRestore(actionNode *actionnode.ActionNode) (err erro
 	if err != nil {
 		return err
 	}
-	if tablet.Type != topo.TYPE_MASTER && tablet.Type != topo.TYPE_SPARE && tablet.Type != topo.TYPE_REPLICA && tablet.Type != topo.TYPE_RDONLY {
-		return fmt.Errorf("expected master, spare replica or rdonly type, not %v: %v", tablet.Type, ta.tabletAlias)
+	if tablet.Type != topo.TYPE_MASTER && !topo.IsSlaveType(tablet.Type) {
+		return fmt.Errorf("expected master, or slave type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
 	// get source tablets addresses
