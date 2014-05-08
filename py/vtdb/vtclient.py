@@ -46,7 +46,7 @@ def reconnect(method):
 
         if attempt >= self.max_attempts or self.in_txn:
           self.close()
-          vtdb_logger.get_logger().vtclient_exception(e)
+          vtdb_logger.get_logger().vtclient_exception(self.keyspace, self.shard, self.db_type, e)
           raise dbexceptions.FatalError(*e.args)
         if method.__name__ == 'begin':
           time.sleep(BEGIN_RECONNECT_DELAY)

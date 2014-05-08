@@ -53,8 +53,9 @@ class VtdbLogger(object):
   # vtclient (that error is sent back to the application, the retries
   # happen at a lower level). e can be one of
   # dbexceptions.{RetryError, FatalError, TxPoolFull}
-  def vtclient_exception(self, e):
-    logging.warning('vtclient_exception: %s', e)
+  def vtclient_exception(self, keyspace_name, shard_name, db_type, e):
+    logging.warning('vtclient_exception for %s.%s.%s: %s', keyspace_name,
+                    shard_name, db_type, e)
 
   #
   # vtgatev2 callbacks
