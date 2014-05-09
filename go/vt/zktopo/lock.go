@@ -113,15 +113,15 @@ func (zkts *Server) LockSrvShardForAction(cell, keyspace, shard, contents string
 
 	// if we can't create the lock file because the directory doesn't exist,
 	// create it
-	path, err := zkts.lockForAction(actionDir+"/", contents, timeout, interrupted)
+	p, err := zkts.lockForAction(actionDir+"/", contents, timeout, interrupted)
 	if err != nil && zookeeper.IsError(err, zookeeper.ZNONODE) {
 		_, err = zk.CreateRecursive(zkts.zconn, actionDir, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 		if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 			return "", err
 		}
-		path, err = zkts.lockForAction(actionDir+"/", contents, timeout, interrupted)
+		p, err = zkts.lockForAction(actionDir+"/", contents, timeout, interrupted)
 	}
-	return path, err
+	return p, err
 }
 
 func (zkts *Server) UnlockSrvShardForAction(cell, keyspace, shard, lockPath, results string) error {

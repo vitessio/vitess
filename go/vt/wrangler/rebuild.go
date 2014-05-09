@@ -19,19 +19,7 @@ import (
 // Rebuild the serving and replication rollup data data while locking
 // out other changes.
 func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) error {
-	if *topotools.UseSrvShardLocks {
-		// no need to take the shard lock in this case
-		return topotools.RebuildShard(wr.ts, keyspace, shard, topotools.RebuildShardOptions{Cells: cells, IgnorePartialResult: false}, wr.lockTimeout, interrupted)
-	}
-
-	actionNode := actionnode.RebuildShard()
-	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
-	if err != nil {
-		return err
-	}
-
-	err = topotools.RebuildShard(wr.ts, keyspace, shard, topotools.RebuildShardOptions{Cells: cells, IgnorePartialResult: false}, wr.lockTimeout, interrupted)
-	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
+	return topotools.RebuildShard(wr.ts, keyspace, shard, topotools.RebuildShardOptions{Cells: cells, IgnorePartialResult: false}, wr.lockTimeout, interrupted)
 }
 
 // Rebuild the serving graph data while locking out other changes.
