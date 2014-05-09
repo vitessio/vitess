@@ -105,6 +105,12 @@ import (
 const (
 	partialSnapshotManifestFile = "partial_snapshot_manifest.json"
 	SnapshotURLPath             = "/snapshot"
+
+	createBlpCheckpointSQL = `CREATE TABLE IF NOT EXISTS blp_checkpoint (
+  source_shard_uid INT(10) UNSIGNED NOT NULL,
+  group_id BIGINT DEFAULT NULL,
+  time_updated BIGINT UNSIGNED NOT NULL,
+  PRIMARY KEY (source_shard_uid)) ENGINE=InnoDB`
 )
 
 // replaceError replaces original with recent if recent is not nil,
@@ -991,14 +997,16 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.Key
 	// populate blp_checkpoint table if we want to
 	if strings.Index(strategy, "populateBlpCheckpoint") != -1 {
 		queries := make([]string, 0, 4)
-		queries = append(queries, "USE `_vt`")
 		if !writeBinLogs {
 			queries = append(queries, "SET sql_log_bin = OFF")
 			queries = append(queries, "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
 		}
+		queries = append(queries, "CREATE DATABASE IF NOT EXISTS _vt")
+		queries = append(queries, "USE _vt")
+		queries = append(queries, createBlpCheckpointSQL)
 		for manifestIndex, manifest := range manifests {
 			insertRecovery := fmt.Sprintf(
-				`insert into _vt.blp_checkpoint (source_shard_uid, group_id, time_updated) values (%v, %v, %v)`,
+				`INSERT INTO _vt.blp_checkpoint (source_shard_uid, group_id, time_updated) VALUES (%v, %v, %v)`,
 				manifestIndex,
 				manifest.Source.MasterState.ReplicationPosition.MasterLogGroupId,
 				time.Now().Unix())
