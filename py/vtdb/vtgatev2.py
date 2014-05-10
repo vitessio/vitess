@@ -40,6 +40,7 @@ def convert_exception(exc, *args):
 
 
 def _create_req_with_keyspace_ids(sql, new_binds, keyspace, tablet_type, keyspace_ids):
+  # keyspace_ids are Keyspace Ids packed to byte[]
   sql, new_binds = dbapi.prepare_query_bind_vars(sql, new_binds)
   new_binds = field_types.convert_bind_vars(new_binds)
   req = {
@@ -47,12 +48,13 @@ def _create_req_with_keyspace_ids(sql, new_binds, keyspace, tablet_type, keyspac
         'BindVariables': new_binds,
         'Keyspace': keyspace,
         'TabletType': tablet_type,
-        'KeyspaceIds': [str(kid) for kid in keyspace_ids],
+        'KeyspaceIds': keyspace_ids,
         }
   return req
 
 
 def _create_req_with_keyranges(sql, new_binds, keyspace, tablet_type, keyranges):
+  # keyranges are keyspace.KeyRange objects with start/end packed to byte[]
   sql, new_binds = dbapi.prepare_query_bind_vars(sql, new_binds)
   new_binds = field_types.convert_bind_vars(new_binds)
   req = {
@@ -60,7 +62,7 @@ def _create_req_with_keyranges(sql, new_binds, keyspace, tablet_type, keyranges)
         'BindVariables': new_binds,
         'Keyspace': keyspace,
         'TabletType': tablet_type,
-        'KeyRanges': [keyrange.KeyRange(kr) for kr in keyranges],
+        'KeyRanges': keyranges,
         }
   return req
 
@@ -184,7 +186,7 @@ class VTGateConnection(object):
         'Keyspace': keyspace,
         'TabletType': tablet_type,
         'EntityKeyspaceIDs': [
-            {'ExternalID': xid, 'KeyspaceID': str(kid)}
+            {'ExternalID': xid, 'KeyspaceID': kid}
             for xid, kid in entity_keyspace_id_map.iteritems()],
         'EntityColumnName': entity_column_name,
         }

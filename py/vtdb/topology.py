@@ -14,6 +14,8 @@ import random
 import time
 
 from vtdb import dbexceptions
+from vtdb import keyrange
+from vtdb import keyrange_constants
 from vtdb import keyspace
 from vtdb import vtdb_logger
 from zk import zkocc
@@ -169,16 +171,16 @@ def is_sharded_keyspace(keyspace_name, db_type):
   return shard_count > 1
 
 def get_keyrange_from_shard_name(keyspace, shard_name):
-  keyrange = None
+  kr = None
   # db_type is immaterial here.
   if not is_sharded_keyspace(keyspace, 'replica'):
     if shard_name == keyrange_constants.SHARD_ZERO:
-      keyrange = keyrange_constants.NON_PARTIAL_KEYRANGE
+      kr = keyrange_constants.NON_PARTIAL_KEYRANGE
     else:
       raise dbexceptions.DatabaseError('Invalid shard_name %s for keyspace %s', shard_name, keyspace)
   else:
     kr_parts = shard_name.split('-')
     if len(kr_parts) != 2:
       raise dbexceptions.DatabaseError('Invalid shard_name %s for keyspace %s', shard_name, keyspace)
-    keyrange = shard_name
-  return keyrange
+    kr = keyrange.KeyRange((kr_parts[0].decode('hex'), kr_parts[1].decode('hex')))
+  return kr

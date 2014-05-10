@@ -84,14 +84,8 @@ class VTGateCursor(object):
         if self.keyspace_ids is None or len(self.keyspace_ids) != 1:
           raise dbexceptions.ProgrammingError('DML on zero or multiple keyspace ids is not allowed')
       else:
-        if not self.keyranges or self.keyranges[0] != keyrange_constants.NON_PARTIAL_KEYRANGE:
+        if not self.keyranges or str(self.keyranges[0]) != keyrange_constants.NON_PARTIAL_KEYRANGE:
           raise dbexceptions.ProgrammingError('Keyrange not correct for non-sharded keyspace')
-
-      # FIXME(shrutip): migrate this to vtgate server. It is better done there.
-      if self.keyspace_ids:
-        sql += _binlog_hint(self.keyspace_ids[0])
-      #elif self.keyranges:
-      #  sql += _binlog_hint(self.keyranges[0])
 
     self.results, self.rowcount, self.lastrowid, self.description = self._conn._execute(sql,
                                                                                         bind_variables,
@@ -301,11 +295,3 @@ class StreamVTGateCursor(VTGateCursor):
     if val is None:
       raise StopIteration
     return val
-
-def _binlog_hint(keyspace_id):
-  hint_data = [
-      'keyspace_id:%u' % keyspace_id,
-      ]
-  # FIXME(shrutip): Change the hint tag to something generic SHARDING_HINT
-  # This needs to be fixed in filtered replication simultaneously.
-  return ' /* EMD %s */' % ' '.join(hint_data)
