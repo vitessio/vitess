@@ -143,6 +143,9 @@ func (zkts *Server) UpdateSrvKeyspace(cell, keyspace string, srvKeyspace *topo.S
 	path := zkPathForVtKeyspace(cell, keyspace)
 	data := jscfg.ToJson(srvKeyspace)
 	_, err := zkts.zconn.Set(path, data, -1)
+	if zookeeper.IsError(err, zookeeper.ZNONODE) {
+		_, err = zk.CreateRecursive(zkts.zconn, path, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	}
 	return err
 }
 
