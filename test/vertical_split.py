@@ -237,14 +237,23 @@ index by_msg (msg)
       self.assertEqual(dest_conn.db_params['keyspace'], destination_ks)
 
   def test_vertical_split(self):
-    utils.run_vtctl(['CreateKeyspace',
-                     'source_keyspace'])
+    utils.run_vtctl(['CreateKeyspace', 'source_keyspace'])
     utils.run_vtctl(['CreateKeyspace',
                      '--served-from', 'master:source_keyspace,replica:source_keyspace,rdonly:source_keyspace',
                      'destination_keyspace'])
     source_master.init_tablet('master', 'source_keyspace', '0')
     source_replica.init_tablet('replica', 'source_keyspace', '0')
     source_rdonly.init_tablet('rdonly', 'source_keyspace', '0')
+
+    # rebuild destination keyspace to make sure there is a serving
+    # graph entry, even though there is no tablet yet.
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'source_keyspace'], auto_log=True)
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'destination_keyspace'],
+                    auto_log=True)
+    self._check_srv_keyspace('ServedFrom(master): source_keyspace\n' +
+                             'ServedFrom(rdonly): source_keyspace\n' +
+                             'ServedFrom(replica): source_keyspace\n')
+
     destination_master.init_tablet('master', 'destination_keyspace', '0')
     destination_replica.init_tablet('replica', 'destination_keyspace', '0')
     destination_rdonly.init_tablet('rdonly', 'destination_keyspace', '0')
@@ -354,8 +363,6 @@ index by_msg (msg)
     self._check_blacklisted_tables(source_replica, None)
     self._check_blacklisted_tables(source_rdonly, ['moving1', 'moving2'])
     self._check_client_conn_redirection('source_keyspace', 'destination_keyspace', ['rdonly'], ['master', 'replica'], ['moving1', 'moving2'])
-
-    utils.pause("AAAAAAAAAAAAAAAA")
 
     # then serve replica from the destination shards
     utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'replica'],

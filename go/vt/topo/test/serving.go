@@ -117,19 +117,36 @@ func CheckServingGraph(t *testing.T, ts topo.Server) {
 	if _, err := ts.GetSrvKeyspace(cell, "test_keyspace666"); err != topo.ErrNoNode {
 		t.Errorf("GetSrvKeyspace(invalid): %v", err)
 	}
-	if s, err := ts.GetSrvKeyspace(cell, "test_keyspace"); err != nil ||
-		len(s.TabletTypes) != 1 ||
-		s.TabletTypes[0] != topo.TYPE_MASTER ||
-		len(s.Partitions) != 1 ||
-		len(s.Partitions[topo.TYPE_MASTER].Shards) != 1 ||
-		len(s.Partitions[topo.TYPE_MASTER].Shards[0].ServedTypes) != 1 ||
-		s.Partitions[topo.TYPE_MASTER].Shards[0].ServedTypes[0] != topo.TYPE_MASTER ||
-		s.ShardingColumnName != "video_id" ||
-		s.ShardingColumnType != key.KIT_UINT64 ||
-		s.ServedFrom[topo.TYPE_REPLICA] != "other_keyspace" {
-		t.Errorf("GetSrvKeyspace(valid): %v", err)
+	if k, err := ts.GetSrvKeyspace(cell, "test_keyspace"); err != nil ||
+		len(k.TabletTypes) != 1 ||
+		k.TabletTypes[0] != topo.TYPE_MASTER ||
+		len(k.Partitions) != 1 ||
+		len(k.Partitions[topo.TYPE_MASTER].Shards) != 1 ||
+		len(k.Partitions[topo.TYPE_MASTER].Shards[0].ServedTypes) != 1 ||
+		k.Partitions[topo.TYPE_MASTER].Shards[0].ServedTypes[0] != topo.TYPE_MASTER ||
+		k.ShardingColumnName != "video_id" ||
+		k.ShardingColumnType != key.KIT_UINT64 ||
+		k.ServedFrom[topo.TYPE_REPLICA] != "other_keyspace" {
+		t.Errorf("GetSrvKeyspace(valid): %v %v", err, k)
 	}
 	if k, err := ts.GetSrvKeyspaceNames(cell); err != nil || len(k) != 1 || k[0] != "test_keyspace" {
 		t.Errorf("GetSrvKeyspaceNames(): %v", err)
+	}
+
+	// check that updating a SrvKeyspace out of the blue works
+	if err := ts.UpdateSrvKeyspace(cell, "unknown_keyspace_so_far", &srvKeyspace); err != nil {
+		t.Errorf("UpdateSrvKeyspace(2): %v", err)
+	}
+	if k, err := ts.GetSrvKeyspace(cell, "unknown_keyspace_so_far"); err != nil ||
+		len(k.TabletTypes) != 1 ||
+		k.TabletTypes[0] != topo.TYPE_MASTER ||
+		len(k.Partitions) != 1 ||
+		len(k.Partitions[topo.TYPE_MASTER].Shards) != 1 ||
+		len(k.Partitions[topo.TYPE_MASTER].Shards[0].ServedTypes) != 1 ||
+		k.Partitions[topo.TYPE_MASTER].Shards[0].ServedTypes[0] != topo.TYPE_MASTER ||
+		k.ShardingColumnName != "video_id" ||
+		k.ShardingColumnType != key.KIT_UINT64 ||
+		k.ServedFrom[topo.TYPE_REPLICA] != "other_keyspace" {
+		t.Errorf("GetSrvKeyspace(out of the blue): %v %v", err, *k)
 	}
 }
