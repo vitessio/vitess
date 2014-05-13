@@ -5,10 +5,14 @@
 package tabletserver
 
 import (
+	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"text/template"
 	"time"
+
+	log "github.com/golang/glog"
 )
 
 var (
@@ -80,9 +84,12 @@ func querylogzHandler(w http.ResponseWriter, r *http.Request) {
 		case out := <-ch:
 			stats, ok := out.(*sqlQueryStats)
 			if !ok {
-				panic("TOOD!")
-				// querylogzTmpl.Execute(w, &querylogzRow{Method: fmt.Sprintf("Short: %d", len(strs))})
-				// continue
+				err := fmt.Errorf("Unexpected value in %s: %#v (expecting value of type %T)", TxLogger.Name, out, &sqlQueryStats{})
+				io.WriteString(w, `<tr class="error">`)
+				io.WriteString(w, err.Error())
+				io.WriteString(w, "</tr>")
+				log.Error(err)
+				continue
 			}
 			var level string
 			if stats.TotalTime().Seconds() < 0.01 {

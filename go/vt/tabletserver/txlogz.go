@@ -5,9 +5,13 @@
 package tabletserver
 
 import (
+	"fmt"
 	"html/template"
+	"io"
 	"net/http"
 	"time"
+
+	log "github.com/golang/glog"
 )
 
 var (
@@ -60,9 +64,12 @@ func txlogzHandler(w http.ResponseWriter, r *http.Request) {
 		case out := <-ch:
 			txc, ok := out.(*TxConnection)
 			if !ok {
-				panic("TODO")
-				// txlogzTmpl.Execute(w, &txlogzRow{Tid: fmt.Sprintf("Short: %d", len(strs))})
-				// continue
+				err := fmt.Errorf("Unexpected value in %s: %#v (expecting value of type %T)", TxLogger.Name, out, &TxConnection{})
+				io.WriteString(w, `<tr class="error">`)
+				io.WriteString(w, err.Error())
+				io.WriteString(w, "</tr>")
+				log.Error(err)
+				continue
 			}
 			duration := txc.EndTime.Sub(txc.StartTime).Seconds()
 			var level string
