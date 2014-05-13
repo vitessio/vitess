@@ -111,7 +111,7 @@ func (axp *ActiveTxPool) SafeCommit(transactionId int64) (invalidList map[string
 	defer handleError(&err, nil)
 	conn := axp.Get(transactionId)
 	defer conn.discard(TX_COMMIT)
-	axp.txStats.Add("Completed", time.Now().Sub(conn.startTime))
+	axp.txStats.Add("Completed", time.Now().Sub(conn.StartTime))
 	if _, err = conn.ExecuteFetch(COMMIT, 1, false); err != nil {
 		conn.Close()
 		return conn.dirtyTables, NewTabletErrorSql(FAIL, err)
@@ -122,7 +122,7 @@ func (axp *ActiveTxPool) SafeCommit(transactionId int64) (invalidList map[string
 func (axp *ActiveTxPool) Rollback(transactionId int64) {
 	conn := axp.Get(transactionId)
 	defer conn.discard(TX_ROLLBACK)
-	axp.txStats.Add("Aborted", time.Now().Sub(conn.startTime))
+	axp.txStats.Add("Aborted", time.Now().Sub(conn.StartTime))
 	if _, err := conn.ExecuteFetch(ROLLBACK, 1, false); err != nil {
 		conn.Close()
 		panic(NewTabletErrorSql(FAIL, err))
@@ -158,24 +158,24 @@ func (axp *ActiveTxPool) Stats() (size int64, timeout time.Duration) {
 
 type TxConnection struct {
 	PoolConnection
-	transactionId int64
+	TransactionID int64
 	pool          *ActiveTxPool
 	inUse         bool
-	startTime     time.Time
-	endTime       time.Time
+	StartTime     time.Time
+	EndTime       time.Time
 	dirtyTables   map[string]DirtyKeys
-	queries       []string
-	conclusion    string
+	Queries       []string
+	Conclusion    string
 }
 
 func newTxConnection(conn PoolConnection, transactionId int64, pool *ActiveTxPool) *TxConnection {
 	return &TxConnection{
 		PoolConnection: conn,
-		transactionId:  transactionId,
+		TransactionID:  transactionId,
 		pool:           pool,
-		startTime:      time.Now(),
+		StartTime:      time.Now(),
 		dirtyTables:    make(map[string]DirtyKeys),
-		queries:        make([]string, 0, 8),
+		Queries:        make([]string, 0, 8),
 	}
 }
 
@@ -192,18 +192,18 @@ func (txc *TxConnection) Recycle() {
 	if txc.IsClosed() {
 		txc.discard(TX_CLOSE)
 	} else {
-		txc.pool.pool.Put(txc.transactionId)
+		txc.pool.pool.Put(txc.TransactionID)
 	}
 }
 
 func (txc *TxConnection) RecordQuery(query string) {
-	txc.queries = append(txc.queries, query)
+	txc.Queries = append(txc.Queries, query)
 }
 
 func (txc *TxConnection) discard(conclusion string) {
-	txc.conclusion = conclusion
-	txc.endTime = time.Now()
-	txc.pool.pool.Unregister(txc.transactionId)
+	txc.Conclusion = conclusion
+	txc.EndTime = time.Now()
+	txc.pool.pool.Unregister(txc.TransactionID)
 	txc.PoolConnection.Recycle()
 	// Ensure PoolConnection won't be accessed after Recycle.
 	txc.PoolConnection = nil
@@ -213,12 +213,12 @@ func (txc *TxConnection) discard(conclusion string) {
 func (txc *TxConnection) Format(params url.Values) string {
 	return fmt.Sprintf(
 		"%v\t%v\t%v\t%.6f\t%v\t%v\t\n",
-		txc.transactionId,
-		txc.startTime.Format(time.StampMicro),
-		txc.endTime.Format(time.StampMicro),
-		txc.endTime.Sub(txc.startTime).Seconds(),
-		txc.conclusion,
-		strings.Join(txc.queries, ";"),
+		txc.TransactionID,
+		txc.StartTime.Format(time.StampMicro),
+		txc.EndTime.Format(time.StampMicro),
+		txc.EndTime.Sub(txc.StartTime).Seconds(),
+		txc.Conclusion,
+		strings.Join(txc.Queries, ";"),
 	)
 }
 
