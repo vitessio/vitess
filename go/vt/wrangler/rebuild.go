@@ -19,7 +19,7 @@ import (
 // Rebuild the serving and replication rollup data data while locking
 // out other changes.
 func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) error {
-	return topotools.RebuildShard(wr.ts, keyspace, shard, topotools.RebuildShardOptions{Cells: cells, IgnorePartialResult: false}, wr.lockTimeout, interrupted)
+	return topotools.RebuildShard(wr.ts, keyspace, shard, cells, wr.lockTimeout, interrupted)
 }
 
 // Rebuild the serving graph data while locking out other changes.
@@ -172,14 +172,14 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
 			// check the first Start is MinKey, the last End is MaxKey,
 			// and the values in between match: End[i] == Start[i+1]
 			if partition.Shards[0].KeyRange.Start != key.MinKey {
-				return fmt.Errorf("Keyspace partition for %v does not start with %v", tabletType, key.MinKey)
+				return fmt.Errorf("keyspace partition for %v does not start with %v", tabletType, key.MinKey)
 			}
 			if partition.Shards[len(partition.Shards)-1].KeyRange.End != key.MaxKey {
-				return fmt.Errorf("Keyspace partition for %v does not end with %v", tabletType, key.MaxKey)
+				return fmt.Errorf("keyspace partition for %v does not end with %v", tabletType, key.MaxKey)
 			}
 			for i := range partition.Shards[0 : len(partition.Shards)-1] {
 				if partition.Shards[i].KeyRange.End != partition.Shards[i+1].KeyRange.Start {
-					return fmt.Errorf("Non-contiguous KeyRange values for %v at shard %v to %v: %v != %v", tabletType, i, i+1, partition.Shards[i].KeyRange.End.Hex(), partition.Shards[i+1].KeyRange.Start.Hex())
+					return fmt.Errorf("non-contiguous KeyRange values for %v at shard %v to %v: %v != %v", tabletType, i, i+1, partition.Shards[i].KeyRange.End.Hex(), partition.Shards[i+1].KeyRange.Start.Hex())
 				}
 			}
 
@@ -193,6 +193,7 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
 
 	// and then finally save the keyspace objects
 	for cell, srvKeyspace := range srvKeyspaceMap {
+		log.Infof("updating keyspace serving graph in cell %v for %v", cell, keyspace)
 		if err := wr.ts.UpdateSrvKeyspace(cell, keyspace, srvKeyspace); err != nil {
 			return fmt.Errorf("writing serving data failed: %v", err)
 		}

@@ -20,15 +20,6 @@ import (
 // from all invocations of the tools.
 var UseSrvShardLocks = flag.Bool("use_srv_shard_locks", true, "DEPRECATED: If true, takes the SrvShard lock for each shard being rebuilt")
 
-// RebuildShardOptions are options for rebuildShard
-type RebuildShardOptions struct {
-	// Cells that should be rebuilt. If nil, rebuild in all cells.
-	Cells []string
-	// It is OK to ignore ErrPartialResult (which may mean
-	// that some cell is unavailable).
-	IgnorePartialResult bool
-}
-
 // Update shard file with new master, replicas, etc.
 //
 // Re-read from TopologyServer to make sure we are using the side
@@ -36,7 +27,7 @@ type RebuildShardOptions struct {
 //
 // This function locks individual SvrShard paths, so it doesn't need a lock
 // on the shard.
-func RebuildShard(ts topo.Server, keyspace, shard string, options RebuildShardOptions, timeout time.Duration, interrupted chan struct{}) error {
+func RebuildShard(ts topo.Server, keyspace, shard string, cells []string, timeout time.Duration, interrupted chan struct{}) error {
 	log.Infof("RebuildShard %v/%v", keyspace, shard)
 
 	// read the existing shard info. It has to exist.
@@ -50,7 +41,7 @@ func RebuildShard(ts topo.Server, keyspace, shard string, options RebuildShardOp
 	rec := concurrency.AllErrorRecorder{}
 	for _, cell := range shardInfo.Cells {
 		// skip this cell if we shouldn't rebuild it
-		if !topo.InCellList(cell, options.Cells) {
+		if !topo.InCellList(cell, cells) {
 			continue
 		}
 
