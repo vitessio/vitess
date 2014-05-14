@@ -135,10 +135,10 @@ func (client *Client) input() {
 			// error if there is one.
 			if !(call.Stream && response.Error == lastStreamResponseError) {
 				call.Error = ServerError(response.Error)
-			}
-			err = client.codec.ReadResponseBody(nil)
-			if err != nil {
-				err = errors.New("reading error payload: " + err.Error())
+				err = client.codec.ReadResponseBody(nil)
+				if err != nil {
+					err = errors.New("reading error payload: " + err.Error())
+				}
 			}
 			client.done(seq)
 		case call.Stream:
