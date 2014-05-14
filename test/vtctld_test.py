@@ -144,7 +144,8 @@ class TestVtctld(unittest.TestCase):
 
     # start a vtgate server too
     global vtgate_server, vtgate_port
-    vtgate_server, vtgate_port = utils.vtgate_start(cache_ttl='0s')
+    vtgate_server, vtgate_port = utils.vtgate_start(
+        cache_ttl='0s', extra_args=vtctld.process_args())
 
   def setUp(self):
     self.data = vtctld.dbtopo()
@@ -209,8 +210,9 @@ class TestVtctld(unittest.TestCase):
     vtgate_client.get_end_points("test_nj", "test_keyspace", "-80", "master")
     vtgate_client.close()
 
-    vtgate_status = utils.get_status(vtgate_port)
-    self.assertIn('</html>', vtgate_status)
+    status = utils.get_status(vtgate_port)
+    self.assertIn('</html>', status) # end of page
+    self.assertIn('/serving_graph/test_nj">test_nj', status) # vtctld link
 
     utils.pause("You can now run a browser and connect to http://localhost:%u%s to manually check vtgate status page" % (vtgate_port, environment.status_url))
 

@@ -26,8 +26,8 @@ var (
   </tr>
   {{range $i, $skn := .SrvKeyspaceNames}}
   <tr>
-    <td>{{$skn.Cell}}</td>
-    <td>{{if $skn.LastError}}<b>{{$skn.LastError}}</b>{{else}}{{range $j, $value := $skn.Value}}{{$value}}&nbsp;{{end}}{{end}}</td>
+    <td>{{github_com_youtube_vitess_vtctld_srv_cell $skn.Cell}}</td>
+    <td>{{if $skn.LastError}}<b>{{$skn.LastError}}</b>{{else}}{{range $j, $value := $skn.Value}}{{github_com_youtube_vitess_vtctld_srv_keyspace $skn.Cell $value}}&nbsp;{{end}}{{end}}</td>
   </tr>
   {{end}}
 </table>
@@ -41,11 +41,11 @@ var (
     <th>Keyspace</th>
     <th>SrvKeyspace</th>
   </tr>
-  {{range $i, $skn := .SrvKeyspaces}}
+  {{range $i, $sk := .SrvKeyspaces}}
   <tr>
-    <td>{{$skn.Cell}}</td>
-    <td>{{$skn.Keyspace}}</td>
-    <td>{{if $skn.LastError}}<b>{{$skn.LastError}}</b>{{else}}{{$skn.StatusAsHTML}}{{end}}</td>
+    <td>{{github_com_youtube_vitess_vtctld_srv_cell $sk.Cell}}</td>
+    <td>{{github_com_youtube_vitess_vtctld_srv_keyspace $sk.Cell $sk.Keyspace}}</td>
+    <td>{{if $sk.LastError}}<b>{{$sk.LastError}}</b>{{else}}{{$sk.StatusAsHTML}}{{end}}</td>
   </tr>
   {{end}}
 </table>
@@ -61,13 +61,13 @@ var (
     <th>TabletType</th>
     <th>EndPoints</th>
   </tr>
-  {{range $i, $skn := .EndPoints}}
+  {{range $i, $ep := .EndPoints}}
   <tr>
-    <td>{{$skn.Cell}}</td>
-    <td>{{$skn.Keyspace}}</td>
-    <td>{{$skn.Shard}}</td>
-    <td>{{$skn.TabletType}}</td>
-    <td>{{if $skn.LastError}}<b>{{$skn.LastError}}</b>{{else}}{{$skn.StatusAsHTML}}{{end}}</td>
+    <td>{{github_com_youtube_vitess_vtctld_srv_cell $ep.Cell}}</td>
+    <td>{{github_com_youtube_vitess_vtctld_srv_keyspace $ep.Cell $ep.Keyspace}}</td>
+    <td>{{github_com_youtube_vitess_vtctld_srv_shard $ep.Cell $ep.Keyspace $ep.Shard}}</td>
+    <td>{{github_com_youtube_vitess_vtctld_srv_type $ep.Cell $ep.Keyspace $ep.Shard $ep.TabletType}}</td>
+    <td>{{if $ep.LastError}}<b>{{$ep.LastError}}</b>{{else}}{{$ep.StatusAsHTML}}{{end}}</td>
   </tr>
   {{end}}
 </table>

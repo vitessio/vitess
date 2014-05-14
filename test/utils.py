@@ -344,7 +344,7 @@ def zkocc_kill(sp):
 def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1,
                  topo_impl=None, tablet_bson_encrypted=False, cache_ttl='1s',
                  auth=False, timeout="5s", cert=None, key=None, ca_cert=None,
-                 socket_file=None):
+                 socket_file=None, extra_args=None):
   port = vtport or environment.reserve_ports(1)
   secure_port = None
   args = [environment.binary_path('vtgate'),
@@ -373,6 +373,8 @@ def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1,
       args.extend(['-ca_cert', ca_cert])
   if socket_file:
     args.extend(['-socket_file', socket_file])
+  if extra_args:
+    args.extend(extra_args)
 
   sp = run_bg(args)
   if cert:

@@ -72,6 +72,12 @@ func VtctldShard(keyspace, shard string) template.HTML {
 	})
 }
 
+// VtctldSrvCell returns the cell name, possibly linked to the
+// serving graph page in vtctld for that page.
+func VtctldSrvCell(cell string) template.HTML {
+	return VtctldLink(cell, "/serving_graph/"+cell)
+}
+
 // VtctldSrvKeyspace returns the keyspace name, possibly linked to the
 // SrvKeyspace page in vtctld.
 func VtctldSrvKeyspace(cell, keyspace string) template.HTML {
@@ -135,6 +141,7 @@ func init() {
 	servenv.AddStatusFuncs(template.FuncMap{
 		"github_com_youtube_vitess_vtctld_keyspace":     VtctldKeyspace,
 		"github_com_youtube_vitess_vtctld_shard":        VtctldShard,
+		"github_com_youtube_vitess_vtctld_srv_cell":     VtctldSrvCell,
 		"github_com_youtube_vitess_vtctld_srv_keyspace": VtctldSrvKeyspace,
 		"github_com_youtube_vitess_vtctld_srv_shard":    VtctldSrvShard,
 		"github_com_youtube_vitess_vtctld_srv_type":     VtctldSrvType,

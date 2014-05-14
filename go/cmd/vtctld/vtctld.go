@@ -529,6 +529,7 @@ func main() {
 				return
 			}
 			target = explorer.GetKeyspacePath(keyspace)
+
 		case "shard":
 			keyspace, shard := r.FormValue("keyspace"), r.FormValue("shard")
 			if keyspace == "" || shard == "" {
@@ -536,31 +537,31 @@ func main() {
 				return
 			}
 			target = explorer.GetShardPath(keyspace, shard)
+
 		case "srv_keyspace":
-			keyspace := r.FormValue("keyspace")
-			if keyspace == "" {
-				http.Error(w, "keyspace is obligatory for this redirect", http.StatusBadRequest)
-				return
-			}
 			cell := r.FormValue("cell")
 			if cell == "" {
 				http.Error(w, "cell is obligatory for this redirect", http.StatusBadRequest)
+				return
+			}
+			keyspace := r.FormValue("keyspace")
+			if keyspace == "" {
+				http.Error(w, "keyspace is obligatory for this redirect", http.StatusBadRequest)
 				return
 			}
 			target = explorer.GetSrvKeyspacePath(cell, keyspace)
 
 		case "srv_shard":
-			keyspace := r.FormValue("keyspace")
-			if keyspace == "" {
-				http.Error(w, "keyspace is obligatory for this redirect", http.StatusBadRequest)
-				return
-			}
 			cell := r.FormValue("cell")
 			if cell == "" {
 				http.Error(w, "cell is obligatory for this redirect", http.StatusBadRequest)
 				return
 			}
-
+			keyspace := r.FormValue("keyspace")
+			if keyspace == "" {
+				http.Error(w, "keyspace is obligatory for this redirect", http.StatusBadRequest)
+				return
+			}
 			shard := r.FormValue("shard")
 			if shard == "" {
 				http.Error(w, "shard is obligatory for this redirect", http.StatusBadRequest)
@@ -569,23 +570,21 @@ func main() {
 			target = explorer.GetSrvShardPath(cell, keyspace, shard)
 
 		case "srv_type":
-			keyspace := r.FormValue("keyspace")
-			if keyspace == "" {
-				http.Error(w, "keyspace is obligatory for this redirect", http.StatusBadRequest)
-				return
-			}
 			cell := r.FormValue("cell")
 			if cell == "" {
 				http.Error(w, "cell is obligatory for this redirect", http.StatusBadRequest)
 				return
 			}
-
+			keyspace := r.FormValue("keyspace")
+			if keyspace == "" {
+				http.Error(w, "keyspace is obligatory for this redirect", http.StatusBadRequest)
+				return
+			}
 			shard := r.FormValue("shard")
 			if shard == "" {
 				http.Error(w, "shard is obligatory for this redirect", http.StatusBadRequest)
 				return
 			}
-
 			tabletType := r.FormValue("tablet_type")
 			if tabletType == "" {
 				http.Error(w, "tablet_type is obligatory for this redirect", http.StatusBadRequest)
@@ -605,24 +604,25 @@ func main() {
 				return
 			}
 			target = explorer.GetTabletPath(alias)
+
 		case "replication":
-			keyspace := r.FormValue("keyspace")
-			if keyspace == "" {
-				http.Error(w, "keyspace is obligatory for this redirect", http.StatusBadRequest)
-				return
-			}
 			cell := r.FormValue("cell")
 			if cell == "" {
 				http.Error(w, "cell is obligatory for this redirect", http.StatusBadRequest)
 				return
 			}
-
+			keyspace := r.FormValue("keyspace")
+			if keyspace == "" {
+				http.Error(w, "keyspace is obligatory for this redirect", http.StatusBadRequest)
+				return
+			}
 			shard := r.FormValue("shard")
 			if shard == "" {
 				http.Error(w, "shard is obligatory for this redirect", http.StatusBadRequest)
 				return
 			}
 			target = explorer.GetReplicationSlaves(cell, keyspace, shard)
+
 		default:
 			http.Error(w, "bad redirect type", http.StatusBadRequest)
 			return
