@@ -22,6 +22,7 @@ var (
 	timeout    = flag.Duration("timeout", 5*time.Second, "connection and call timeout")
 )
 
+var resilientSrvTopoServer *vtgate.ResilientSrvTopoServer
 var topoReader *TopoReader
 
 func main() {
@@ -34,14 +35,14 @@ func main() {
 	ts := topo.GetServer()
 	defer topo.CloseServers()
 
-	rts := vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServerCounts")
+	resilientSrvTopoServer = vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServerCounts")
 
-	stats.Publish("EndpointCount", stats.CountersFunc(rts.HealthyEndpointCount))
-	stats.Publish("DegradedEndpointCount", stats.CountersFunc(rts.DegradedEndpointCount))
+	stats.Publish("EndpointCount", stats.CountersFunc(resilientSrvTopoServer.HealthyEndpointCount))
+	stats.Publish("DegradedEndpointCount", stats.CountersFunc(resilientSrvTopoServer.DegradedEndpointCount))
 
-	topoReader = NewTopoReader(rts)
+	topoReader = NewTopoReader(resilientSrvTopoServer)
 	topo.RegisterTopoReader(topoReader)
 
-	vtgate.Init(rts, *cell, *retryDelay, *retryCount, *timeout)
+	vtgate.Init(resilientSrvTopoServer, *cell, *retryDelay, *retryCount, *timeout)
 	servenv.Run()
 }

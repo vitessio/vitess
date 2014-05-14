@@ -258,4 +258,14 @@ func TestCachedErrors(t *testing.T) {
 	if ft.callCount != 1 {
 		t.Fatalf("GetSrvKeyspace was called again: %u times", ft.callCount)
 	}
+
+	// ask again after expired cache, should get an error
+	rsts.cacheTTL = 0
+	_, err = rsts.GetSrvKeyspace("", "unknown_ks")
+	if err == nil {
+		t.Fatalf("Third GetSrvKeyspace didn't return an error")
+	}
+	if ft.callCount != 2 {
+		t.Fatalf("GetSrvKeyspace was not called again: %u times", ft.callCount)
+	}
 }

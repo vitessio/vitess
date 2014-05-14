@@ -8,6 +8,7 @@ import urllib2
 import environment
 import tablet
 import utils
+from zk import zkocc
 
 
 # range "" - 80
@@ -23,6 +24,9 @@ scrap = tablet.Tablet()
 # all tablets
 tablets = [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica,
            idle, scrap, shard_0_spare]
+# vtgate
+vtgate_server = None
+vtgate_port = None
 
 
 class VtctldError(Exception): pass
@@ -83,6 +87,8 @@ def tearDownModule():
   if utils.options.skip_teardown:
     return
 
+  utils.vtgate_kill(vtgate_server)
+
   teardown_procs = [t.teardown_mysql() for t in tablets]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
@@ -136,6 +142,10 @@ class TestVtctld(unittest.TestCase):
     # run checks now before we start the tablets
     utils.validate_topology()
 
+    # start a vtgate server too
+    global vtgate_server, vtgate_port
+    vtgate_server, vtgate_port = utils.vtgate_start(cache_ttl='0s')
+
   def setUp(self):
     self.data = vtctld.dbtopo()
     self.serving_data = vtctld.serving_graph()
@@ -188,6 +198,21 @@ class TestVtctld(unittest.TestCase):
     self.assertIn('Polling health information from MySQLReplicationLag(allowedLag=30)', shard_0_replica_status)
     self.assertIn('Alias: <a href="http://localhost:', shard_0_replica_status)
     self.assertIn('</html>', shard_0_replica_status)
+
+  def test_vtgate(self):
+    # do a few vtgate topology queries to prime the cache
+    vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
+                                          "test_nj", 30.0)
+    vtgate_client.dial()
+    vtgate_client.get_srv_keyspace_names("test_nj")
+    vtgate_client.get_srv_keyspace("test_nj", "test_keyspace")
+    vtgate_client.get_end_points("test_nj", "test_keyspace", "-80", "master")
+    vtgate_client.close()
+
+    vtgate_status = utils.get_status(vtgate_port)
+    self.assertIn('</html>', vtgate_status)
+
+    utils.pause("You can now run a browser and connect to http://localhost:%u%s to manually check vtgate status page" % (vtgate_port, environment.status_url))
 
 if __name__ == '__main__':
   utils.main()
