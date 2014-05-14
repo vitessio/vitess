@@ -5,11 +5,20 @@ import (
 
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/servenv"
+	_ "github.com/youtube/vitess/go/vt/status"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 )
 
 var (
+	tabletTemplate = `
+Alias: {{github_com_youtube_vitess_vtctld_tablet .Alias.String}}<br>
+Keyspace: {{github_com_youtube_vitess_vtctld_keyspace .Keyspace}} Shard: {{github_com_youtube_vitess_vtctld_shard .Keyspace .Shard}}<br>
+Serving graph: {{github_com_youtube_vitess_vtctld_srv_keyspace .Alias.Cell .Keyspace}} {{github_com_youtube_vitess_vtctld_srv_shard .Alias.Cell .Keyspace .Shard}} {{github_com_youtube_vitess_vtctld_srv_type .Alias.Cell .Keyspace .Shard .Type}}<br>
+Replication graph: {{github_com_youtube_vitess_vtctld_replication .Alias.Cell .Keyspace .Shard}}<br>
+State: {{.State}}<br>
+`
+
 	healthTemplate = `
 <style>
   table {
@@ -85,6 +94,9 @@ func healthHTMLName() template.HTML {
 
 func init() {
 	servenv.OnRun(func() {
+		servenv.AddStatusPart("Tablet", tabletTemplate, func() interface{} {
+			return agent.Tablet()
+		})
 		if agent.IsRunningHealthCheck() {
 			servenv.AddStatusFuncs(template.FuncMap{
 				"github_com_youtube_vitess_health_html_name": healthHTMLName,

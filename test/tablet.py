@@ -287,7 +287,8 @@ class Tablet(object):
                      wait_for_state="SERVING", customrules=None,
                      schema_override=None, cert=None, key=None, ca_cert=None,
                      repl_extra_flags={}, sensitive_mode=False,
-                     target_tablet_type=None, lameduck_period=None):
+                     target_tablet_type=None, lameduck_period=None,
+                     extra_args=None):
     """
     Starts a vttablet process, and returns it.
     The process is also saved in self.proc, so it's easy to kill as well.
@@ -335,6 +336,8 @@ class Tablet(object):
                    '-allowed_replication_lag', '30'])
     if lameduck_period:
       args.extend(['-lameduck-period', lameduck_period])
+    if extra_args:
+      args.extend(extra_args)
 
     stderr_fd = open(os.path.join(self.tablet_dir, "vttablet.stderr"), "w")
     # increment count only the first time
