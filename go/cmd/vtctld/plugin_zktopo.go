@@ -7,6 +7,8 @@ package main
 // Imports and register the Zookeeper TopologyServer
 
 import (
+	"encoding/json"
+	"fmt"
 	"html/template"
 	"path"
 	"sort"
@@ -99,6 +101,7 @@ func (ex ZkExplorer) HandlePath(actionRepo *ActionRepository, zkPath string) int
 		zkPathParts := strings.Split(result.Path, "/")
 		alias := zkPathParts[2] + "-" + zkPathParts[5]
 		actionRepo.PopulateTabletActions(result.Actions, alias)
+		ex.addTabletLinks(data, result)
 	}
 	result.Data = data
 	children, _, err := ex.zconn.Children(zkPath)
@@ -111,14 +114,35 @@ func (ex ZkExplorer) HandlePath(actionRepo *ActionRepository, zkPath string) int
 	return result
 }
 
+func (ex ZkExplorer) addTabletLinks(data string, result *ZkResult) {
+	t := &topo.Tablet{}
+	err := json.Unmarshal([]byte(data), t)
+	if err != nil {
+		return
+	}
+
+	if port, ok := t.Portmap["vt"]; ok {
+		result.Links["status"] = template.URL(fmt.Sprintf("http://%v:%v/debug/status", t.Hostname, port))
+	}
+
+	if !t.Parent.IsZero() {
+		result.Links["parent"] = template.URL(fmt.Sprintf("/zk/%v/vt/tablets/%v", t.Parent.Cell, t.Parent.TabletUidStr()))
+	}
+}
+
 type ZkResult struct {
 	Path     string
 	Data     string
+	Links    map[string]template.URL
 	Children []string
 	Actions  map[string]template.URL
 	Error    string
 }
 
 func NewZkResult(zkPath string) *ZkResult {
-	return &ZkResult{Actions: make(map[string]template.URL), Path: zkPath}
+	return &ZkResult{
+		Links:   make(map[string]template.URL),
+		Actions: make(map[string]template.URL),
+		Path:    zkPath,
+	}
 }
