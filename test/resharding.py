@@ -6,6 +6,7 @@
 
 import base64
 import logging
+import os
 import threading
 import struct
 import time
@@ -435,17 +436,29 @@ primary key (name)
     utils.run_vtctl(['MultiSnapshot', '--spec=80-C0-',
                      shard_1_slave1.tablet_alias], auto_log=True)
 
-    # wait for tablet's binlog server service to be enabled after snapshot,
-    # and check all the others while we're at it
+    # the snapshot_copy hook will copy the snapshot files to
+    # VTDATAROOT/tmp/... as a test. We want to use these for one half,
+    # but not for the other, so we test both scenarios.
+    os.unlink(os.path.join(environment.tmproot, "snapshot-from-%s-for-%s.tar" %
+                           (shard_1_slave1.tablet_alias, "80-C0")))
+
+    # wait for tablet's binlog server service to be enabled after snapshot
     shard_1_slave1.wait_for_binlog_server_state("Enabled")
 
-    # perform the restore.
+    # perform the restores: first one from source tablet. We removed the
+    # storage backup, so it's coming from the tablet itself.
     utils.run_vtctl(['ShardMultiRestore', '-strategy=populateBlpCheckpoint',
                      'test_keyspace/80-C0', shard_1_slave1.tablet_alias],
                     auto_log=True)
+
+    # second restore from storage: to be sure, we stop vttablet, and restart
+    # it afterwards
+    shard_1_slave1.kill_vttablet()
     utils.run_vtctl(['ShardMultiRestore', '-strategy=populateBlpCheckpoint',
                      'test_keyspace/C0-', shard_1_slave1.tablet_alias],
                     auto_log=True)
+    shard_1_slave1.start_vttablet(wait_for_state=None)
+    shard_1_slave1.wait_for_binlog_server_state("Enabled")
 
     # check the startup values are in the right place
     self._check_startup_values()

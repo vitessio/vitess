@@ -48,6 +48,8 @@ ln -snf $VTTOP/config $VTROOT/config
 ln -snf $VTTOP/data $VTROOT/data
 ln -snf $VTTOP/py $VTROOT/py-vtdb
 ln -snf $VTTOP/go/zk/zkctl/zksrv.sh $VTROOT/bin/zksrv.sh
+ln -snf $VTTOP/test/vthook-copy_snapshot_from_storage.sh $VTROOT/vthook/copy_snapshot_from_storage
+ln -snf $VTTOP/test/vthook-copy_snapshot_to_storage.sh $VTROOT/vthook/copy_snapshot_to_storage
 ln -snf $VTTOP/test/vthook-test.sh $VTROOT/vthook/test.sh
 
 # install mysql

@@ -350,18 +350,25 @@ func fetchSnapshotManifest(addr, dbName string, keyRange key.KeyRange) (*SplitSn
 	return ssm, nil
 }
 
+func readSnapshotManifest(location string) (*SplitSnapshotManifest, error) {
+	filename := path.Join(location, partialSnapshotManifestFile)
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, fmt.Errorf("io.ReadFile failed: %v", err)
+	}
+	ssm := new(SplitSnapshotManifest)
+	if err = json.Unmarshal(data, ssm); err != nil {
+		return nil, fmt.Errorf("json.Unmarshal failed: %v %v", filename, err)
+	}
+	return ssm, nil
+}
+
 // fetchFile fetches data from the web server.  It then sends it to a
 // tee, which on one side has an hash checksum reader, and on the other
 // a gunzip reader writing to a file.  It will compare the hash
 // checksum after the copy is done.
 func fetchFile(srcUrl, srcHash, dstFilename string) error {
 	log.Infof("fetchFile: starting to fetch %v from %v", dstFilename, srcUrl)
-
-	// create destination directory
-	dir, _ := path.Split(dstFilename)
-	if dirErr := os.MkdirAll(dir, 0775); dirErr != nil {
-		return dirErr
-	}
 
 	// open the URL
 	req, err := http.NewRequest("GET", srcUrl, nil)
@@ -397,8 +404,21 @@ func fetchFile(srcUrl, srcHash, dstFilename string) error {
 		}
 	}
 
-	// create a temporary file to uncompress to
+	return uncompressAndCheck(reader, srcHash, dstFilename, strings.HasSuffix(srcUrl, ".gz"))
+}
+
+// uncompressAndCheck uses the provided reader to read data, and then
+// sends it to a tee, which on one side has an hash checksum reader,
+// and on the other a gunzip reader writing to a file.  It will
+// compare the hash checksum after the copy is done.
+func uncompressAndCheck(reader io.Reader, srcHash, dstFilename string, needsUncompress bool) error {
+	// create destination directory
 	dir, filePrefix := path.Split(dstFilename)
+	if dirErr := os.MkdirAll(dir, 0775); dirErr != nil {
+		return dirErr
+	}
+
+	// create a temporary file to uncompress to
 	dstFile, err := ioutil.TempFile(dir, filePrefix)
 	if err != nil {
 		return err
@@ -423,7 +443,7 @@ func fetchFile(srcUrl, srcHash, dstFilename string) error {
 
 	// create the uncompresser
 	var decompressor io.Reader
-	if strings.HasSuffix(srcUrl, ".gz") {
+	if needsUncompress {
 		gz, err := cgzip.NewReader(tee)
 		if err != nil {
 			return err
@@ -454,7 +474,7 @@ func fetchFile(srcUrl, srcHash, dstFilename string) error {
 	}
 
 	// we're good
-	log.Infof("fetched snapshot file: %v", dstFilename)
+	log.Infof("processed snapshot file: %v", dstFilename)
 	dst.Flush()
 	dstFile.Close()
 
@@ -478,6 +498,23 @@ func fetchFileWithRetry(srcUrl, srcHash, dstFilename string, fetchRetryCount int
 
 	log.Errorf("fetching snapshot file %v failed too many times", dstFilename)
 	return err
+}
+
+// uncompressLocalFile reads a compressed file, and then sends it to a
+// tee, which on one side has an hash checksum reader, and on the other
+// a gunzip reader writing to a file.  It will compare the hash
+// checksum after the copy is done.
+func uncompressLocalFile(srcPath, srcHash, dstFilename string) error {
+	log.Infof("uncompressLocalFile: starting to uncompress %v from %v", dstFilename, srcPath)
+
+	// open the source file
+	reader, err := os.Open(srcPath)
+	if err != nil {
+		return fmt.Errorf("cannot open file %v: %v", srcPath, err)
+	}
+	defer reader.Close()
+
+	return uncompressAndCheck(reader, srcHash, dstFilename, true)
 }
 
 // FIXME(msolomon) Should we add deadlines? What really matters more

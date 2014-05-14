@@ -20,11 +20,13 @@ import (
 	"os/signal"
 	"path"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/tb"
+	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -762,7 +764,7 @@ func (ta *TabletActor) multiRestore(actionNode *actionnode.ActionNode) (err erro
 	args := actionNode.Args.(*actionnode.MultiRestoreArgs)
 
 	// read our current tablet, verify its state
-	// we only support restoring to the master or spare replicas
+	// we only support restoring to the master or active replicas
 	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
 	if err != nil {
 		return err
@@ -774,16 +776,21 @@ func (ta *TabletActor) multiRestore(actionNode *actionnode.ActionNode) (err erro
 	// get source tablets addresses
 	sourceAddrs := make([]*url.URL, len(args.SrcTabletAliases))
 	keyRanges := make([]key.KeyRange, len(args.SrcTabletAliases))
+	fromStoragePaths := make([]string, len(args.SrcTabletAliases))
 	for i, alias := range args.SrcTabletAliases {
 		t, e := ta.ts.GetTablet(alias)
 		if e != nil {
 			return e
 		}
-		sourceAddrs[i] = &url.URL{Host: t.GetAddr(), Path: "/" + t.DbName()}
+		sourceAddrs[i] = &url.URL{
+			Host: t.GetAddr(),
+			Path: "/" + t.DbName(),
+		}
 		keyRanges[i], e = key.KeyRangesOverlap(tablet.KeyRange, t.KeyRange)
 		if e != nil {
 			return e
 		}
+		fromStoragePaths[i] = path.Join(ta.mysqld.SnapshotDir, "from-storage", fmt.Sprintf("from-%v-%v", keyRanges[i].Start.Hex(), keyRanges[i].End.Hex()))
 	}
 
 	// change type to restore, no change to replication graph
@@ -794,8 +801,38 @@ func (ta *TabletActor) multiRestore(actionNode *actionnode.ActionNode) (err erro
 		return err
 	}
 
+	// first try to get the data from a remote storage
+	wg := sync.WaitGroup{}
+	rec := concurrency.AllErrorRecorder{}
+	for i, alias := range args.SrcTabletAliases {
+		wg.Add(1)
+		go func(i int, alias topo.TabletAlias) {
+			defer wg.Done()
+			h := hook.NewSimpleHook("copy_snapshot_from_storage")
+			h.ExtraEnv = make(map[string]string)
+			for k, v := range ta.hookExtraEnv() {
+				h.ExtraEnv[k] = v
+			}
+			h.ExtraEnv["KEYRANGE"] = fmt.Sprintf("%v-%v", keyRanges[i].Start.Hex(), keyRanges[i].End.Hex())
+			h.ExtraEnv["SNAPSHOT_PATH"] = fromStoragePaths[i]
+			h.ExtraEnv["SOURCE_TABLET_ALIAS"] = alias.String()
+			hr := h.Execute()
+			if hr.ExitStatus != hook.HOOK_SUCCESS {
+				rec.RecordError(fmt.Errorf("%v hook failed(%v): %v", h.Name, hr.ExitStatus, hr.Stderr))
+			}
+		}(i, alias)
+	}
+	wg.Wait()
+
 	// run the action, scrap if it fails
-	if err := ta.mysqld.MultiRestore(tablet.DbName(), keyRanges, sourceAddrs, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, args.Strategy); err != nil {
+	if rec.HasErrors() {
+		log.Infof("Got errors trying to get snapshots from storage, trying to get them from original tablets: %v", rec.Error())
+		err = ta.mysqld.MultiRestore(tablet.DbName(), keyRanges, sourceAddrs, nil, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, args.Strategy)
+	} else {
+		log.Infof("Got snapshots from storage, reading them from disk directly")
+		err = ta.mysqld.MultiRestore(tablet.DbName(), keyRanges, nil, fromStoragePaths, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, args.Strategy)
+	}
+	if err != nil {
 		if e := topotools.Scrap(ta.ts, ta.tabletAlias, false); e != nil {
 			log.Errorf("Failed to Scrap after failed RestoreFromMultiSnapshot: %v", e)
 		}

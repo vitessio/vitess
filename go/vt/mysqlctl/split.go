@@ -90,6 +90,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	log "github.com/golang/glog"
@@ -97,6 +98,7 @@ import (
 	"github.com/youtube/vitess/go/cgzip"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl/csvsplitter"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -655,15 +657,34 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 		}
 	}
 
-	// TODO(alainjobart) Call the hook to send the files somewhere else
-	// (if the hook exists), and add that as a return value for this method
+	// Call the (optional) hook to send the files somewhere else
+	wg := sync.WaitGroup{}
+	rec := concurrency.AllErrorRecorder{}
+	for _, kr := range keyRanges {
+		wg.Add(1)
+		go func(kr key.KeyRange) {
+			defer wg.Done()
+			h := hook.NewSimpleHook("copy_snapshot_to_storage")
+			h.ExtraEnv = make(map[string]string)
+			for k, v := range hookExtraEnv {
+				h.ExtraEnv[k] = v
+			}
+			h.ExtraEnv["KEYRANGE"] = fmt.Sprintf("%v-%v", kr.Start.Hex(), kr.End.Hex())
+			h.ExtraEnv["SNAPSHOT_PATH"] = cloneSourcePaths[kr]
+			rec.RecordError(h.ExecuteOptional())
+		}(kr)
+	}
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, err
+	}
 
 	// Return all the URLs for the MANIFESTs
 	snapshotURLPaths := make([]string, len(keyRanges))
 	for i := 0; i < len(keyRanges); i++ {
 		relative, err := filepath.Rel(mysqld.SnapshotDir, ssmFiles[i])
 		if err != nil {
-			return []string{}, err
+			return nil, err
 		}
 		snapshotURLPaths[i] = path.Join(SnapshotURLPath, relative)
 	}
@@ -765,37 +786,57 @@ func buildQueryList(destinationDbName, query string, writeBinLogs bool) []string
 }
 
 // MultiRestore is the main entry point for multi restore.
-// - If the strategy contains the string 'writeBinLogs' then we will
-//   also write to the binary logs.
-// - If the strategy contains the command 'populateBlpCheckpoint' then we
-//   will populate the blp_checkpoint table with master positions to start from
-func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.KeyRange, sourceAddrs []*url.URL, snapshotConcurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) (err error) {
+//
+// We will either:
+// - read from the network if sourceAddrs != nil
+// - read from a disk snapshot if fromStoragePaths != nil
+//
+// The strategy is used as follows:
+// - If it contains the string 'writeBinLogs' then we will also write
+//   to the binary logs.
+// - If it contains the command 'populateBlpCheckpoint' then we will
+//   populate the blp_checkpoint table with master positions to start from
+func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.KeyRange, sourceAddrs []*url.URL, fromStoragePaths []string, snapshotConcurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) (err error) {
 	writeBinLogs := strings.Contains(strategy, "writeBinLogs")
 
-	manifests := make([]*SplitSnapshotManifest, len(sourceAddrs))
-	rc := concurrency.NewResourceConstraint(fetchConcurrency)
-	for i, sourceAddr := range sourceAddrs {
-		rc.Add(1)
-		go func(sourceAddr *url.URL, i int) {
-			rc.Acquire()
-			defer rc.ReleaseAndDone()
-			if rc.HasErrors() {
-				return
-			}
+	var manifests []*SplitSnapshotManifest
+	if sourceAddrs != nil {
+		// get the manifests from the network
+		manifests = make([]*SplitSnapshotManifest, len(sourceAddrs))
+		rc := concurrency.NewResourceConstraint(fetchConcurrency)
+		for i, sourceAddr := range sourceAddrs {
+			rc.Add(1)
+			go func(sourceAddr *url.URL, i int) {
+				rc.Acquire()
+				defer rc.ReleaseAndDone()
+				if rc.HasErrors() {
+					return
+				}
 
-			var sourceDbName string
-			if len(sourceAddr.Path) < 2 { // "" or "/"
-				sourceDbName = destinationDbName
-			} else {
-				sourceDbName = sourceAddr.Path[1:]
+				var sourceDbName string
+				if len(sourceAddr.Path) < 2 { // "" or "/"
+					sourceDbName = destinationDbName
+				} else {
+					sourceDbName = sourceAddr.Path[1:]
+				}
+				ssm, e := fetchSnapshotManifestWithRetry("http://"+sourceAddr.Host, sourceDbName, keyRanges[i], fetchRetryCount)
+				manifests[i] = ssm
+				rc.RecordError(e)
+			}(sourceAddr, i)
+		}
+		if err = rc.Wait(); err != nil {
+			return
+		}
+	} else {
+		// get the manifests from the local snapshots
+		manifests = make([]*SplitSnapshotManifest, len(fromStoragePaths))
+		for i, fromStoragePath := range fromStoragePaths {
+			var err error
+			manifests[i], err = readSnapshotManifest(fromStoragePath)
+			if err != nil {
+				return err
 			}
-			ssm, e := fetchSnapshotManifestWithRetry("http://"+sourceAddr.Host, sourceDbName, keyRanges[i], fetchRetryCount)
-			manifests[i] = ssm
-			rc.RecordError(e)
-		}(sourceAddr, i)
-	}
-	if err = rc.Wait(); err != nil {
-		return
+		}
 	}
 
 	if e := SanityCheckManifests(manifests); e != nil {
@@ -821,11 +862,11 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.Key
 	}()
 
 	// Handle our concurrency:
-	// - fetchConcurrency tasks for network
+	// - fetchConcurrency tasks for network / decompress from disk
 	// - insertTableConcurrency for table inserts from a file
 	//   into an innodb table
 	// - snapshotConcurrency tasks for table inserts / modify tables
-	sems := make(map[string]*sync2.Semaphore, len(manifests[0].SchemaDefinition.TableDefinitions)+3)
+	sems := make(map[string]*sync2.Semaphore, len(manifests[0].SchemaDefinition.TableDefinitions)+2)
 	sems["net"] = sync2.NewSemaphore(fetchConcurrency, 0)
 	sems["db"] = sync2.NewSemaphore(snapshotConcurrency, 0)
 
@@ -936,7 +977,11 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.Key
 					mrc.Release("net")
 					return
 				}
-				e = fetchFileWithRetry(lsf.url(), lsf.file.Hash, lsf.filename(), fetchRetryCount)
+				if sourceAddrs == nil {
+					e = uncompressLocalFile(path.Join(fromStoragePaths[manifestIndex], path.Base(lsf.file.Path)), lsf.file.Hash, lsf.filename())
+				} else {
+					e = fetchFileWithRetry(lsf.url(), lsf.file.Hash, lsf.filename(), fetchRetryCount)
+				}
 				mrc.Release("net")
 				if e != nil {
 					mrc.RecordError(e)

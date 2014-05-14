@@ -112,7 +112,7 @@ func multiRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []str
 		}
 		sources[i] = dbUrl
 	}
-	if err := mysqld.MultiRestore(dbName, keyRanges, sources, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, *strategy); err != nil {
+	if err := mysqld.MultiRestore(dbName, keyRanges, sources, nil, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, *strategy); err != nil {
 		log.Fatalf("multirestore failed: %v", err)
 	}
 }
