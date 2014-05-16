@@ -16,7 +16,25 @@ import (
 // RegisterFlags needs to be called explicitely to set the flags up.
 
 var (
-	flagServerId  *int
+	// the individual command line parameters
+	flagServerId              *int
+	flagMysqlPort             *int
+	flagDataDir               *string
+	flagInnodbDataHomeDir     *string
+	flagInnodbLogGroupHomeDir *string
+	flagSocketFile            *string
+	flagErrorLogPath          *string
+	flagSlowLogPath           *string
+	flagRelayLogPath          *string
+	flagRelayLogIndexPath     *string
+	flagRelayLogInfoPath      *string
+	flagBinLogPath            *string
+	flagMasterInfoFile        *string
+	flagPidFile               *string
+	flagTmpDir                *string
+	flagSlaveLoadTmpDir       *string
+
+	// the file to use to specify them all
 	flagMycnfFile *string
 )
 
@@ -25,6 +43,22 @@ var (
 // to get the supported modes.
 func RegisterFlags() {
 	flagServerId = flag.Int("mycnf_server_id", 0, "mysql server id of the server (if specified, mycnf-file will be ignored)")
+	flagMysqlPort = flag.Int("mycnf_mysql_port", 0, "port mysql is listening on")
+	flagDataDir = flag.String("mycnf_data_dir", "", "data directory for mysql")
+	flagInnodbDataHomeDir = flag.String("mycnf_innodb_data_home_dir", "", "Innodb data home directory")
+	flagInnodbLogGroupHomeDir = flag.String("mycnf_innodb_log_group_home_dir", "", "Innodb log group home directory")
+	flagSocketFile = flag.String("mycnf_socket_file", "", "mysql socket file")
+	flagErrorLogPath = flag.String("mycnf_error_log_path", "", "mysql error log path")
+	flagSlowLogPath = flag.String("mycnf_slow_log_path", "", "mysql slow query log path")
+	flagRelayLogPath = flag.String("mycnf_relay_log_path", "", "mysql relay log path")
+	flagRelayLogIndexPath = flag.String("mycnf_relay_log_index_path", "", "mysql relay log index path")
+	flagRelayLogInfoPath = flag.String("mycnf_relay_log_info_path", "", "mysql relay log info path")
+	flagBinLogPath = flag.String("mycnf_bin_log_path", "", "mysql binlog path")
+	flagMasterInfoFile = flag.String("mycnf_master_info_file", "", "mysql master.info file")
+	flagPidFile = flag.String("mycnf_pid_file", "", "mysql pid file")
+	flagTmpDir = flag.String("mycnf_tmp_dir", "", "mysql tmp directory")
+	flagSlaveLoadTmpDir = flag.String("mycnf_slave_load_tmp_dir", "", "slave load tmp directory")
+
 	flagMycnfFile = flag.String("mycnf-file", "", "path to my.cnf, if reading all config params from there")
 }
 
@@ -46,7 +80,29 @@ func NewMycnfFromFlags(uid uint32) (mycnf *Mycnf, err error) {
 	if *flagServerId != 0 {
 		log.Info("mycnf_server_id is specified, using command line parameters for mysql config")
 		panic("NYI")
-		return &Mycnf{}, nil
+		return &Mycnf{
+			ServerId:              uint32(*flagServerId),
+			MysqlPort:             *flagMysqlPort,
+			DataDir:               *flagDataDir,
+			InnodbDataHomeDir:     *flagInnodbDataHomeDir,
+			InnodbLogGroupHomeDir: *flagInnodbLogGroupHomeDir,
+			SocketFile:            *flagSocketFile,
+			ErrorLogPath:          *flagErrorLogPath,
+			SlowLogPath:           *flagSlowLogPath,
+			RelayLogPath:          *flagRelayLogPath,
+			RelayLogIndexPath:     *flagRelayLogIndexPath,
+			RelayLogInfoPath:      *flagRelayLogInfoPath,
+			BinLogPath:            *flagBinLogPath,
+			MasterInfoFile:        *flagMasterInfoFile,
+			PidFile:               *flagPidFile,
+			TmpDir:                *flagTmpDir,
+			SlaveLoadTmpDir:       *flagSlaveLoadTmpDir,
+
+			// This is probably not going to be used by anybody,
+			// but fill in a default value. (Note it's used by
+			// mysqld.Start, in which case it is correct).
+			path: mycnfFile(uint32(*flagServerId)),
+		}, nil
 	} else {
 		if *flagMycnfFile == "" {
 			if uid == 0 {
@@ -71,6 +127,21 @@ func GetSubprocessFlags() []string {
 		// all from command line
 		return []string{
 			"-mycnf_server_id", fmt.Sprintf("%v", *flagServerId),
+			"-mycnf_mysql_port", fmt.Sprintf("%v", *flagMysqlPort),
+			"-mycnf_data_dir", *flagDataDir,
+			"-mycnf_innodb_data_home_dir", *flagInnodbDataHomeDir,
+			"-mycnf_innodb_log_group_home_dir", *flagInnodbLogGroupHomeDir,
+			"-mycnf_socket_file", *flagSocketFile,
+			"-mycnf_error_log_path", *flagErrorLogPath,
+			"-mycnf_slow_log_path", *flagSlowLogPath,
+			"-mycnf_relay_log_path", *flagRelayLogPath,
+			"-mycnf_relay_log_index_path", *flagRelayLogIndexPath,
+			"-mycnf_relay_log_info_path", *flagRelayLogInfoPath,
+			"-mycnf_bin_log_path", *flagBinLogPath,
+			"-mycnf_master_info_file", *flagMasterInfoFile,
+			"-mycnf_pid_file", *flagPidFile,
+			"-mycnf_tmp_dir", *flagTmpDir,
+			"-mycnf_slave_load_tmp_dir", *flagSlaveLoadTmpDir,
 		}
 	}
 

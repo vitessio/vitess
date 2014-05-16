@@ -403,11 +403,6 @@ func (mysqld *Mysqld) IpAddr() string {
 	return addr
 }
 
-// MycnfPath returns the path to my.cnf for this instance, if any.
-func (mysqld *Mysqld) MycnfPath() string {
-	return mysqld.config.path
-}
-
 // executes some SQL commands using a mysql command line interface process
 func (mysqld *Mysqld) ExecuteMysqlCommand(sql string) error {
 	dir, err := vtenv.VtMysqlRoot()
