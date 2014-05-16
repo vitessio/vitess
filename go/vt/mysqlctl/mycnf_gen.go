@@ -16,11 +16,6 @@ import (
 	"github.com/youtube/vitess/go/vt/env"
 )
 
-type VtReplParams struct {
-	StartKey string
-	EndKey   string
-}
-
 const (
 	dataDir          = "data"
 	innodbDir        = "innodb"
@@ -36,7 +31,7 @@ const (
 // uid is a unique id for a particular tablet - it must be unique within the
 // tabletservers deployed within a keyspace, lest there be collisions on disk.
 // mysqldPort needs to be unique per instance per machine.
-func NewMycnf(uid uint32, mysqlPort int, vtRepl VtReplParams) *Mycnf {
+func NewMycnf(uid uint32, mysqlPort int) *Mycnf {
 	cnf := new(Mycnf)
 	cnf.path = MycnfFile(uid)
 	tabletDir := TabletDir(uid)
@@ -46,8 +41,6 @@ func NewMycnf(uid uint32, mysqlPort int, vtRepl VtReplParams) *Mycnf {
 	cnf.InnodbDataHomeDir = path.Join(tabletDir, innodbDataSubdir)
 	cnf.InnodbLogGroupHomeDir = path.Join(tabletDir, innodbLogSubdir)
 	cnf.SocketFile = path.Join(tabletDir, "mysql.sock")
-	cnf.StartKey = vtRepl.StartKey
-	cnf.EndKey = vtRepl.EndKey
 	cnf.ErrorLogPath = path.Join(tabletDir, "error.log")
 	cnf.SlowLogPath = path.Join(tabletDir, "slow-query.log")
 	cnf.RelayLogPath = path.Join(tabletDir, relayLogDir,

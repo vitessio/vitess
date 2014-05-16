@@ -13,12 +13,12 @@ import (
 // leave mysqld processes behind.
 
 func TestStartShutdown(t *testing.T) {
-	mycnf0 := NewMycnf(0, 3700, VtReplParams{})
+	mycnf0 := NewMycnf(0, 3700)
 	dbaConfig0 := dbconfigs.DefaultDBConfigs.Dba
 	replConfig0 := dbconfigs.DefaultDBConfigs.Repl
 	tablet0 := NewMysqld(mycnf0, &dbaConfig0, &replConfig0)
 
-	mycnf1 := NewMycnf(1, 3701, VtReplParams{})
+	mycnf1 := NewMycnf(1, 3701)
 	dbaConfig1 := dbconfigs.DefaultDBConfigs.Dba
 	replConfig1 := dbconfigs.DefaultDBConfigs.Repl
 	tablet1 := NewMysqld(mycnf1, &dbaConfig1, &replConfig1)

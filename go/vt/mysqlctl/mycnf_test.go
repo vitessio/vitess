@@ -16,13 +16,9 @@ import (
 var MYCNF_PATH = "/tmp/my.cnf"
 
 func TestMycnf(t *testing.T) {
-	var vtRepl VtReplParams
-	vtRepl.StartKey = ""
-	vtRepl.EndKey = ""
-
 	dbaConfig := dbconfigs.DefaultDBConfigs.Dba
 	replConfig := dbconfigs.DefaultDBConfigs.Repl
-	tablet0 := NewMysqld(NewMycnf(0, 6802, vtRepl), &dbaConfig, &replConfig)
+	tablet0 := NewMysqld(NewMycnf(0, 6802), &dbaConfig, &replConfig)
 	root, err := env.VtRoot()
 	if err != nil {
 		t.Errorf("err: %v", err)

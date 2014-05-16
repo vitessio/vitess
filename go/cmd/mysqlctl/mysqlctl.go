@@ -262,7 +262,7 @@ func main() {
 	flag.Parse()
 
 	tabletAddr = fmt.Sprintf("%v:%v", "localhost", *port)
-	mycnf := mysqlctl.NewMycnf(uint32(*tabletUid), *mysqlPort, mysqlctl.VtReplParams{})
+	mycnf := mysqlctl.NewMycnf(uint32(*tabletUid), *mysqlPort)
 
 	if *mysqlSocket != "" {
 		mycnf.SocketFile = *mysqlSocket

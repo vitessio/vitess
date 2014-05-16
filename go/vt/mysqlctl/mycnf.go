@@ -25,8 +25,6 @@ type Mycnf struct {
 	InnodbDataHomeDir     string
 	InnodbLogGroupHomeDir string
 	SocketFile            string
-	StartKey              string
-	EndKey                string
 	ErrorLogPath          string
 	SlowLogPath           string
 	RelayLogPath          string
@@ -120,9 +118,6 @@ func ReadMycnf(cnfFile string) (mycnf *Mycnf, err error) {
 	mycnf.BinLogPath = mycnf.lookupAndCheck("log-bin")
 	mycnf.MasterInfoFile = mycnf.lookupAndCheck("master-info-file")
 	mycnf.PidFile = mycnf.lookupAndCheck("pid-file")
-	//These values are currently not being set, hence not checking them.
-	mycnf.StartKey = mycnf.mycnfMap["vt_shard_key_range_start"]
-	mycnf.EndKey = mycnf.mycnfMap["vt_shard_key_range_end"]
 
 	return mycnf, nil
 }
