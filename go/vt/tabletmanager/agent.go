@@ -141,7 +141,18 @@ func NewActionAgent(
 	agent.BinlogPlayerMap = NewBinlogPlayerMap(topoServer, &dbcfgs.App.ConnectionParams, mysqld)
 	RegisterBinlogPlayerMap(agent.BinlogPlayerMap)
 
-	if err := agent.Start(mysqld.Port(), port, securePort); err != nil {
+	// try to figure out the mysql port
+	mysqlPort := mycnf.MysqlPort
+	if mysqlPort == 0 {
+		// we don't know the port, try to get it from mysqld
+		var err error
+		mysqlPort, err = mysqld.GetMysqlPort()
+		if err != nil {
+			log.Warningf("Cannot get current mysql port, will use 0 for now: %v", err)
+		}
+	}
+
+	if err := agent.Start(mysqlPort, port, securePort); err != nil {
 		return nil, err
 	}
 
@@ -376,7 +387,11 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 		if tablet.Portmap == nil {
 			tablet.Portmap = make(map[string]int)
 		}
-		tablet.Portmap["mysql"] = mysqlPort
+		if mysqlPort != 0 {
+			// only overwrite mysql port if we know it, otherwise
+			// leave it as is.
+			tablet.Portmap["mysql"] = mysqlPort
+		}
 		tablet.Portmap["vt"] = vtPort
 		if vtsPort != 0 {
 			tablet.Portmap["vts"] = vtsPort
