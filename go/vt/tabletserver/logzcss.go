@@ -39,6 +39,9 @@ func startHTMLTable(w http.ResponseWriter) {
 		table.gridtable tr.high {
 			background-color: #ff3300;
 		}
+                table.gridtable tr.error {
+			background-color: #00ddff;
+                }
 		table.gridtable td {
 			border-width: 1px;
 			padding: 4px;
