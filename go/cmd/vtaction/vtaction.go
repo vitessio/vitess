@@ -26,8 +26,6 @@ var (
 	actionNode = flag.String("action-node", "", "path to zk node representing the action")
 	actionGuid = flag.String("action-guid", "", "a label to help track processes")
 	force      = flag.Bool("force", false, "force an action to rerun")
-
-	mycnfFile = flag.String("mycnf-file", "/etc/my.cnf", "path to my.cnf")
 )
 
 func init() {
@@ -36,6 +34,7 @@ func init() {
 
 func main() {
 	dbconfigs.RegisterFlags()
+	mysqlctl.RegisterFlags()
 	flag.Parse()
 	servenv.Init()
 	defer servenv.Close()
@@ -44,7 +43,7 @@ func main() {
 
 	servenv.ServeRPC()
 
-	mycnf, mycnfErr := mysqlctl.ReadMycnf(*mycnfFile)
+	mycnf, mycnfErr := mysqlctl.NewMycnfFromFlags(0)
 	if mycnfErr != nil {
 		log.Fatalf("mycnf read failed: %v", mycnfErr)
 	}

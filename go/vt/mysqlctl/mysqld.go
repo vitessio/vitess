@@ -34,6 +34,7 @@ const (
 	MysqlWaitTime = 120 * time.Second // default number of seconds to wait
 )
 
+// Mysqld is the object that represents a mysqld daemon running on this server.
 type Mysqld struct {
 	flavor      MysqlFlavor
 	config      *Mycnf
@@ -43,6 +44,8 @@ type Mysqld struct {
 	SnapshotDir string
 }
 
+// NewMysqld creates a Mysqld object based on the provided configuration
+// and connection parameters.
 func NewMysqld(config *Mycnf, dba, repl *mysql.ConnectionParams) *Mysqld {
 	if *dba == dbconfigs.DefaultDBConfigs.Dba {
 		dba.UnixSocket = config.SocketFile
@@ -58,6 +61,7 @@ func NewMysqld(config *Mycnf, dba, repl *mysql.ConnectionParams) *Mysqld {
 	}
 }
 
+// Cnf returns the mysql config for the daemon
 func (mt *Mysqld) Cnf() *Mycnf {
 	return mt.config
 }
@@ -70,7 +74,9 @@ func (mt *Mysqld) createDbaConnection() (*mysql.Connection, error) {
 	return mysql.Connect(params)
 }
 
-func Start(mt *Mysqld, mysqlWaitTime time.Duration) error {
+// Start will start the mysql daemon, either by running the 'mysqld_start'
+// hook, or by running mysqld_safe in the background.
+func (mt *Mysqld) Start(mysqlWaitTime time.Duration) error {
 	var name string
 
 	// try the mysqld start hook, if any
@@ -131,11 +137,12 @@ func Start(mt *Mysqld, mysqlWaitTime time.Duration) error {
 	return errors.New(name + ": deadline exceeded waiting for " + mt.config.SocketFile)
 }
 
-/* waitForMysqld: should the function block until mysqld has stopped?
-This can actually take a *long* time if the buffer cache needs to be fully
-flushed - on the order of 20-30 minutes.
-*/
-func Shutdown(mt *Mysqld, waitForMysqld bool, mysqlWaitTime time.Duration) error {
+// Shutdown will stop the mysqld daemon tha is running in the background.
+//
+// waitForMysqld: should the function block until mysqld has stopped?
+// This can actually take a *long* time if the buffer cache needs to be fully
+// flushed - on the order of 20-30 minutes.
+func (mt *Mysqld) Shutdown(waitForMysqld bool, mysqlWaitTime time.Duration) error {
 	log.Infof("mysqlctl.Shutdown")
 	// possibly mysql is already shutdown, check for a few files first
 	_, socketPathErr := os.Stat(mt.config.SocketFile)
@@ -204,7 +211,10 @@ func execCmd(name string, args, env []string, dir string) (cmd *exec.Cmd, err er
 	return cmd, err
 }
 
-func Init(mt *Mysqld, mysqlWaitTime time.Duration) error {
+// Init will create the default directory structure for the mysqld process,
+// generate / configure a my.cnf file, unpack a skeleton database,
+// and create some management tables.
+func (mt *Mysqld) Init(mysqlWaitTime time.Duration) error {
 	log.Infof("mysqlctl.Init")
 	err := mt.createDirs()
 	if err != nil {
@@ -221,7 +231,7 @@ func Init(mt *Mysqld, mysqlWaitTime time.Duration) error {
 
 	configData := ""
 	if hr.ExitStatus == hook.HOOK_DOES_NOT_EXIST {
-		log.Infof("make_mycnf hook doesn't exist")
+		log.Infof("make_mycnf hook doesn't exist, reading default template files")
 		cnfTemplatePaths := []string{
 			path.Join(root, "config/mycnf/default.cnf"),
 			path.Join(root, "config/mycnf/master.cnf"),
@@ -233,9 +243,9 @@ func Init(mt *Mysqld, mysqlWaitTime time.Duration) error {
 			cnfTemplatePaths = append(cnfTemplatePaths, parts...)
 		}
 
-		configData, err = MakeMycnf(mt.config, cnfTemplatePaths)
+		configData, err = mt.config.makeMycnf(cnfTemplatePaths)
 	} else if hr.ExitStatus == hook.HOOK_SUCCESS {
-		configData, err = fillMycnfTemplate(mt.config, hr.Stdout)
+		configData, err = mt.config.fillMycnfTemplate(hr.Stdout)
 	} else {
 		err = fmt.Errorf("make_mycnf hook failed(%v): %v", hr.ExitStatus, hr.Stderr)
 	}
@@ -256,7 +266,7 @@ func Init(mt *Mysqld, mysqlWaitTime time.Duration) error {
 		log.Errorf("failed unpacking %v: %v", dbTbzPath, tarErr)
 		return tarErr
 	}
-	if err = Start(mt, mysqlWaitTime); err != nil {
+	if err = mt.Start(mysqlWaitTime); err != nil {
 		log.Errorf("failed starting, check %v", mt.config.ErrorLogPath)
 		return err
 	}
@@ -289,7 +299,7 @@ func (mt *Mysqld) createDirs() error {
 			return err
 		}
 	}
-	for _, dir := range DirectoryList(mt.config) {
+	for _, dir := range mt.config.directoryList() {
 		log.Infof("creating directory %s", dir)
 		if err := os.MkdirAll(dir, 0775); err != nil {
 			return err
@@ -329,9 +339,10 @@ func (mt *Mysqld) createTopDir(dir string) error {
 	return os.Symlink(linkto, source)
 }
 
-func Teardown(mt *Mysqld, force bool) error {
+// Teardown will shutdown the running daemon, and delete the root directory.
+func (mt *Mysqld) Teardown(force bool) error {
 	log.Infof("mysqlctl.Teardown")
-	if err := Shutdown(mt, true, MysqlWaitTime); err != nil {
+	if err := mt.Shutdown(true, MysqlWaitTime); err != nil {
 		log.Warningf("failed mysqld shutdown: %v", err.Error())
 		if !force {
 			return err
@@ -372,15 +383,18 @@ func deleteTopDir(dir string) (removalErr error) {
 	return
 }
 
+// Port returns the configured mysql port
 func (mysqld *Mysqld) Port() int {
 	return mysqld.config.MysqlPort
 }
 
+// Addr returns the fully qualified host name + port for this instance.
 func (mysqld *Mysqld) Addr() string {
 	hostname := netutil.FullyQualifiedHostnameOrPanic()
 	return fmt.Sprintf("%v:%v", hostname, mysqld.config.MysqlPort)
 }
 
+// IpAddr returns the IP address for this instance
 func (mysqld *Mysqld) IpAddr() string {
 	addr, err := netutil.ResolveIpAddr(mysqld.Addr())
 	if err != nil {
@@ -389,6 +403,7 @@ func (mysqld *Mysqld) IpAddr() string {
 	return addr
 }
 
+// MycnfPath returns the path to my.cnf for this instance, if any.
 func (mysqld *Mysqld) MycnfPath() string {
 	return mysqld.config.path
 }

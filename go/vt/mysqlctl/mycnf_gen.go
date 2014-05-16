@@ -16,6 +16,19 @@ import (
 	"github.com/youtube/vitess/go/vt/env"
 )
 
+// This files handles the creation of Mycnf objects for the default 'vt'
+// file structure. These path are used by the mysqlctl commands.
+//
+// The default 'vt' file structure is as follows:
+// - the root is specified by the environment variable VTDATAROOT,
+//   and defaults to /vt
+// - each tablet with uid NNNNNNNNNN is located in <root>/vt_NNNNNNNNNN
+// - in that tablet directory, there is a my.cnf file for the mysql instance,
+//   and 'data', 'innodb', 'relay-logs', 'bin-logs' directories.
+// - these sub-directories might be symlinks to other places,
+//   see comment for createTopDir, to allow some data types to be on
+//   different disk partitions.
+
 const (
 	dataDir          = "data"
 	innodbDir        = "innodb"
@@ -33,7 +46,7 @@ const (
 // mysqldPort needs to be unique per instance per machine.
 func NewMycnf(uid uint32, mysqlPort int) *Mycnf {
 	cnf := new(Mycnf)
-	cnf.path = MycnfFile(uid)
+	cnf.path = mycnfFile(uid)
 	tabletDir := TabletDir(uid)
 	cnf.ServerId = uid
 	cnf.MysqlPort = mysqlPort
@@ -56,23 +69,30 @@ func NewMycnf(uid uint32, mysqlPort int) *Mycnf {
 	return cnf
 }
 
+// TabletDir returns the default directory for a tablet
 func TabletDir(uid uint32) string {
 	return fmt.Sprintf("%s/vt_%010d", env.VtDataRoot(), uid)
 }
 
+// SnapshotDir returns the default directory for a tablet's snapshots
 func SnapshotDir(uid uint32) string {
 	return fmt.Sprintf("%s/%s/vt_%010d", env.VtDataRoot(), snapshotDir, uid)
 }
 
-func MycnfFile(uid uint32) string {
+// mycnfFile returns the default location of the my.cnf file.
+func mycnfFile(uid uint32) string {
 	return path.Join(TabletDir(uid), "my.cnf")
 }
 
+// TopLevelDirs returns the list of directories in the toplevel tablet directory
+// that might be located in a different place.
 func TopLevelDirs() []string {
 	return []string{dataDir, innodbDir, relayLogDir, binLogDir}
 }
 
-func DirectoryList(cnf *Mycnf) []string {
+// directoryList returns the list of directories to create in an empty
+// mysql instance.
+func (cnf *Mycnf) directoryList() []string {
 	return []string{
 		cnf.DataDir,
 		cnf.InnodbDataHomeDir,
@@ -83,8 +103,8 @@ func DirectoryList(cnf *Mycnf) []string {
 	}
 }
 
-// Join cnf files cnfPaths and subsitute in the right values.
-func MakeMycnf(mycnf *Mycnf, cnfFiles []string) (string, error) {
+// makeMycnf will join cnf files cnfPaths and substitute in the right values.
+func (mycnf *Mycnf) makeMycnf(cnfFiles []string) (string, error) {
 	myTemplateSource := new(bytes.Buffer)
 	myTemplateSource.WriteString("[mysqld]\n")
 	for _, path := range cnfFiles {
@@ -95,10 +115,12 @@ func MakeMycnf(mycnf *Mycnf, cnfFiles []string) (string, error) {
 		myTemplateSource.WriteString("## " + path + "\n")
 		myTemplateSource.Write(data)
 	}
-	return fillMycnfTemplate(mycnf, myTemplateSource.String())
+	return mycnf.fillMycnfTemplate(myTemplateSource.String())
 }
 
-func fillMycnfTemplate(mycnf *Mycnf, tmplSrc string) (string, error) {
+// fillMycnfTemplate will fill in the passed in template with the values
+// from Mycnf
+func (mycnf *Mycnf) fillMycnfTemplate(tmplSrc string) (string, error) {
 	myTemplate, err := template.New("").Parse(tmplSrc)
 	if err != nil {
 		return "", err

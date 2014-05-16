@@ -28,7 +28,7 @@ func TestMycnf(t *testing.T) {
 		path.Join(root, "src/github.com/youtube/vitess/config/mycnf/replica.cnf"),
 		path.Join(root, "src/github.com/youtube/vitess/config/mycnf/master.cnf"),
 	}
-	data, err := MakeMycnf(tablet0.config, cnfTemplatePaths)
+	data, err := tablet0.config.makeMycnf(cnfTemplatePaths)
 	if err != nil {
 		t.Errorf("err: %v", err)
 	} else {

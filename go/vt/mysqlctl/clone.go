@@ -295,7 +295,7 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 		}
 	}
 
-	if err = Shutdown(mysqld, true, MysqlWaitTime); err != nil {
+	if err = mysqld.Shutdown(true, MysqlWaitTime); err != nil {
 		return
 	}
 
@@ -347,7 +347,7 @@ func (mysqld *Mysqld) SnapshotSourceEnd(slaveStartRequired, readOnly, deleteSnap
 	}
 
 	// Try to restart mysqld
-	if err := Start(mysqld, MysqlWaitTime); err != nil {
+	if err := mysqld.Start(MysqlWaitTime); err != nil {
 		return err
 	}
 
@@ -413,7 +413,7 @@ func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest, fe
 	}
 
 	log.V(6).Infof("Shutdown mysqld")
-	if err := Shutdown(mysqld, true, MysqlWaitTime); err != nil {
+	if err := mysqld.Shutdown(true, MysqlWaitTime); err != nil {
 		return err
 	}
 
@@ -423,7 +423,7 @@ func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest, fe
 	}
 
 	log.V(6).Infof("Restart mysqld")
-	if err := Start(mysqld, MysqlWaitTime); err != nil {
+	if err := mysqld.Start(MysqlWaitTime); err != nil {
 		return err
 	}
 

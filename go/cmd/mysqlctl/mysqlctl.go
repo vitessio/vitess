@@ -27,7 +27,7 @@ func initCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
 	waitTime := subFlags.Duration("wait-time", mysqlctl.MysqlWaitTime, "how long to wait for startup")
 	subFlags.Parse(args)
 
-	if err := mysqlctl.Init(mysqld, *waitTime); err != nil {
+	if err := mysqld.Init(*waitTime); err != nil {
 		log.Fatalf("failed init mysql: %v", err)
 	}
 }
@@ -139,7 +139,7 @@ func shutdownCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string)
 	waitTime := subFlags.Duration("wait-time", mysqlctl.MysqlWaitTime, "how long to wait for shutdown")
 	subFlags.Parse(args)
 
-	if mysqlErr := mysqlctl.Shutdown(mysqld, true, *waitTime); mysqlErr != nil {
+	if mysqlErr := mysqld.Shutdown(true, *waitTime); mysqlErr != nil {
 		log.Fatalf("failed shutdown mysql: %v", mysqlErr)
 	}
 }
@@ -191,7 +191,7 @@ func startCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
 	waitTime := subFlags.Duration("wait-time", mysqlctl.MysqlWaitTime, "how long to wait for startup")
 	subFlags.Parse(args)
 
-	if err := mysqlctl.Start(mysqld, *waitTime); err != nil {
+	if err := mysqld.Start(*waitTime); err != nil {
 		log.Fatalf("failed start mysql: %v", err)
 	}
 }
@@ -200,7 +200,7 @@ func teardownCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string)
 	force := subFlags.Bool("force", false, "will remove the root directory even if mysqld shutdown fails")
 	subFlags.Parse(args)
 
-	if err := mysqlctl.Teardown(mysqld, *force); err != nil {
+	if err := mysqld.Teardown(*force); err != nil {
 		log.Fatalf("failed teardown mysql (forced? %v): %v", *force, err)
 	}
 }

@@ -21,7 +21,6 @@ import (
 
 var (
 	tabletPath     = flag.String("tablet-path", "", "tablet alias or path to zk node representing the tablet")
-	mycnfFile      = flag.String("mycnf-file", "", "my.cnf file")
 	enableRowcache = flag.Bool("enable-rowcache", false, "enable rowcacche")
 	overridesFile  = flag.String("schema-override", "", "schema overrides file")
 
@@ -48,6 +47,7 @@ func tabletParamToTabletAlias(param string) topo.TabletAlias {
 
 func main() {
 	dbconfigs.RegisterFlags()
+	mysqlctl.RegisterFlags()
 	flag.Parse()
 	if len(flag.Args()) > 0 {
 		flag.Usage()
@@ -61,11 +61,7 @@ func main() {
 	}
 	tabletAlias := tabletParamToTabletAlias(*tabletPath)
 
-	if *mycnfFile == "" {
-		*mycnfFile = mysqlctl.MycnfFile(tabletAlias.Uid)
-	}
-
-	mycnf, err := mysqlctl.ReadMycnf(*mycnfFile)
+	mycnf, err := mysqlctl.NewMycnfFromFlags(tabletAlias.Uid)
 	if err != nil {
 		log.Fatalf("mycnf read failed: %v", err)
 	}

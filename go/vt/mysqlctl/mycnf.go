@@ -18,6 +18,11 @@ import (
 	"strconv"
 )
 
+// Mycnf is a memory structure that contains a bunch of interesting
+// parameters to start mysqld. It can be used to generate standard
+// my.cnf files from a server id and mysql port. It can also be
+// populated from an existing my.cnf, or by command line parameters.
+// command line parameters.
 type Mycnf struct {
 	ServerId              uint32
 	MysqlPort             int
@@ -54,6 +59,7 @@ func normKey(bkey []byte) string {
 	return string(bytes.Replace(bytes.TrimSpace(bkey), []byte("_"), []byte("-"), -1))
 }
 
+// ReadMycnf will read an existing my.cnf from disk, and create a Mycnf object.
 func ReadMycnf(cnfFile string) (mycnf *Mycnf, err error) {
 	defer func(err *error) {
 		if x := recover(); x != nil {

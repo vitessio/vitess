@@ -236,11 +236,11 @@ func (agent *ActionAgent) dispatchAction(actionPath, data string) error {
 		"-action", actionNode.Action,
 		"-action-node", actionPath,
 		"-action-guid", actionNode.ActionGuid,
-		"-mycnf-file", agent.Mysqld.MycnfPath(),
 	}
 	cmd = append(cmd, logutil.GetSubprocessFlags()...)
 	cmd = append(cmd, topo.GetSubprocessFlags()...)
 	cmd = append(cmd, dbconfigs.GetSubprocessFlags()...)
+	cmd = append(cmd, mysqlctl.GetSubprocessFlags()...)
 	log.Infof("action launch %v", cmd)
 	vtActionCmd := exec.Command(cmd[0], cmd[1:]...)
 
