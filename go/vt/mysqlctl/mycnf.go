@@ -24,24 +24,72 @@ import (
 // populated from an existing my.cnf, or by command line parameters.
 // command line parameters.
 type Mycnf struct {
-	ServerId              uint32
-	MysqlPort             int
-	DataDir               string
-	InnodbDataHomeDir     string
+	// ServerId is the unique id for this server.
+	// Used to create a bunch of named directories.
+	ServerId uint32
+
+	// MysqlPort is the port for the MySQL server running on this machine.
+	// It is mainly used to communicate with topology server.
+	MysqlPort int
+
+	// DataDir is where the table files are
+	// (used by vt software for Clone)
+	DataDir string
+
+	// InnodbDataHomeDir is the data directory for innodb.
+	// (used by vt software for Clone)
+	InnodbDataHomeDir string
+
+	// InnodbLogGroupHomeDir is the logs directory for innodb.
+	// (used by vt software for Clone)
 	InnodbLogGroupHomeDir string
-	SocketFile            string
-	ErrorLogPath          string
-	SlowLogPath           string
-	RelayLogPath          string
-	RelayLogIndexPath     string
-	RelayLogInfoPath      string
-	BinLogPath            string
-	MasterInfoFile        string
-	PidFile               string
-	TmpDir                string
-	SlaveLoadTmpDir       string
-	mycnfMap              map[string]string
-	path                  string // the actual path that represents this mycnf
+
+	// SocketFile is the path to the local mysql.sock file.
+	// (used by vt software to check server is running)
+	SocketFile string
+
+	// ErrorLogPath is the path to store error logs at.
+	// (unused by vt software for now)
+	ErrorLogPath string
+
+	// SlowLogPath is the slow query log path
+	// (unused by vt software for now)
+	SlowLogPath string
+
+	// RelayLogPath is the path of the relay logs
+	// (unused by vt software for now)
+	RelayLogPath string
+
+	// RelayLogIndexPath is the file name for the relay log index
+	// (unused by vt software for now)
+	RelayLogIndexPath string
+
+	// RelayLogInfoPath is the file name for the relay log info file
+	// (unused by vt software for now)
+	RelayLogInfoPath string
+
+	// BinLogPath is the base path for binlogs
+	// (used by vt software for binlog streaming and rowcache invalidation)
+	BinLogPath string
+
+	// MasterInfoFile is the master.info file location.
+	// (unused by vt software for now)
+	MasterInfoFile string
+
+	// PidFile is the mysql.pid file location
+	// (used by vt software to check server is running)
+	PidFile string
+
+	// TmpDir is where to create temporary tables
+	// (unused by vt software for now)
+	TmpDir string
+
+	// SlaveLoadTmpDir is where to create tmp files for replication
+	// (unused by vt software for now)
+	SlaveLoadTmpDir string
+
+	mycnfMap map[string]string
+	path     string // the actual path that represents this mycnf
 }
 
 func (cnf *Mycnf) lookupAndCheck(key string) string {
