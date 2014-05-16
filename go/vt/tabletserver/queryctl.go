@@ -6,12 +6,15 @@ package tabletserver
 
 import (
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -203,11 +206,25 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("ok"))
 }
 
+func buildFmter(logger *streamlog.StreamLogger) func(url.Values, interface{}) string {
+	type formatter interface {
+		Format(url.Values) string
+	}
+
+	return func(params url.Values, val interface{}) string {
+		fmter, ok := val.(formatter)
+		if !ok {
+			return fmt.Sprintf("Error: unexpected value of type %T in %s!", val, logger.Name)
+		}
+		return fmter.Format(params)
+	}
+}
+
 // InitQueryService registers the query service, after loading any
 // necessary config files. It also starts any relevant streaming logs.
 func InitQueryService() {
-	SqlQueryLogger.ServeLogs(*queryLogHandler)
-	TxLogger.ServeLogs(*txLogHandler)
+	SqlQueryLogger.ServeLogs(*queryLogHandler, buildFmter(SqlQueryLogger))
+	TxLogger.ServeLogs(*txLogHandler, buildFmter(TxLogger))
 	RegisterQueryService()
 }
 
