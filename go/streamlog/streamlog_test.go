@@ -32,7 +32,7 @@ func TestHTTP(t *testing.T) {
 	go http.Serve(l, nil)
 
 	logger := New("logger", 1)
-	logger.ServeLogs("/log")
+	logger.ServeLogs("/log", func(params url.Values, x interface{}) string { return x.(*logMessage).Format(params) })
 
 	// This should not block
 	logger.Send(&logMessage{"val1"})
@@ -92,10 +92,10 @@ func TestChannel(t *testing.T) {
 	lastValue := sync2.AtomicString{}
 	svm := sync2.ServiceManager{}
 	svm.Go(func(_ *sync2.ServiceManager) {
-		ch := logger.Subscribe(nil)
+		ch := logger.Subscribe()
 		defer logger.Unsubscribe(ch)
 		for svm.State() == sync2.SERVICE_RUNNING {
-			lastValue.Set(<-ch)
+			lastValue.Set((<-ch).(*logMessage).Format(nil))
 		}
 	})
 
