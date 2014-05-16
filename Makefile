@@ -4,10 +4,14 @@
 
 MAKEFLAGS = -s
 
-all: build unit_test queryservice_test integration_test
+.PHONY: all build test clean unit_test unit_test_cover unit_test_race queryservice_test integration_test bson
+
+all: build test
 
 build:
 	go install ./go/...
+
+test: unit_test queryservice_test integration_test
 
 clean:
 	go clean -i ./go/...
