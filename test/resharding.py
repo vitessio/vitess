@@ -377,11 +377,14 @@ primary key (name)
 
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
+    # we set full_mycnf_args to True as a test in the KIT_BYTES case
+    full_mycnf_args = keyspace_id_type == keyrange_constants.KIT_BYTES
+
     # create databases so vttablet can start behaving normally
     for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_slave1,
               shard_1_slave2, shard_1_rdonly]:
       t.create_db('vt_test_keyspace')
-      t.start_vttablet(wait_for_state=None)
+      t.start_vttablet(wait_for_state=None, full_mycnf_args=full_mycnf_args)
 
     # wait for the tablets
     shard_0_master.wait_for_vttablet_state('SERVING')

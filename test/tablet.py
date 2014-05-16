@@ -288,7 +288,7 @@ class Tablet(object):
                      schema_override=None, cert=None, key=None, ca_cert=None,
                      repl_extra_flags={}, sensitive_mode=False,
                      target_tablet_type=None, lameduck_period=None,
-                     extra_args=None):
+                     extra_args=None, full_mycnf_args=False):
     """
     Starts a vttablet process, and returns it.
     The process is also saved in self.proc, so it's easy to kill as well.
@@ -305,6 +305,37 @@ class Tablet(object):
     for key1 in dbconfigs:
       for key2 in dbconfigs[key1]:
         args.extend(["-db-config-"+key1+"-"+key2, dbconfigs[key1][key2]])
+
+    if full_mycnf_args:
+      # this flag is used to specify all the mycnf_ flags, to make
+      # sure that code works and can fork actions.
+      relay_log_path = os.path.join(self.tablet_dir, "relay-logs",
+                                    "vt-%010d-relay-bin" % self.tablet_uid)
+      args.extend([
+          "-mycnf_server_id", str(self.tablet_uid),
+          "-mycnf_mysql_port", str(self.mysql_port),
+          "-mycnf_data_dir", os.path.join(self.tablet_dir, "data"),
+          "-mycnf_innodb_data_home_dir", os.path.join(self.tablet_dir,
+                                                      "innodb", "data"),
+          "-mycnf_innodb_log_group_home_dir", os.path.join(self.tablet_dir,
+                                                           "innodb", "logs"),
+          "-mycnf_socket_file", os.path.join(self.tablet_dir, "mysql.sock"),
+          "-mycnf_error_log_path", os.path.join(self.tablet_dir, "error.log"),
+          "-mycnf_slow_log_path", os.path.join(self.tablet_dir,
+                                               "slow-query.log"),
+          "-mycnf_relay_log_path", relay_log_path,
+          "-mycnf_relay_log_index_path", relay_log_path + ".index",
+          "-mycnf_relay_log_info_path", os.path.join(self.tablet_dir,
+                                                     "relay-logs",
+                                                     "relay-log.info"),
+          "-mycnf_bin_log_path", os.path.join(self.tablet_dir, "bin-logs",
+                                              "vt-%010d-bin" % self.tablet_uid),
+          "-mycnf_master_info_file", os.path.join(self.tablet_dir,
+                                                  "master.info"),
+          "-mycnf_pid_file", os.path.join(self.tablet_dir, "mysql.pid"),
+          "-mycnf_tmp_dir", os.path.join(self.tablet_dir, "tmp"),
+          "-mycnf_slave_load_tmp_dir", os.path.join(self.tablet_dir, "tmp"),
+          ])
 
     if memcache:
       args.extend(["-rowcache-bin", environment.memcached_bin()])

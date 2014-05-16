@@ -79,7 +79,6 @@ func RegisterFlags() {
 func NewMycnfFromFlags(uid uint32) (mycnf *Mycnf, err error) {
 	if *flagServerId != 0 {
 		log.Info("mycnf_server_id is specified, using command line parameters for mysql config")
-		panic("NYI")
 		return &Mycnf{
 			ServerId:              uint32(*flagServerId),
 			MysqlPort:             *flagMysqlPort,
