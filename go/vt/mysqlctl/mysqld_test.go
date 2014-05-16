@@ -24,32 +24,32 @@ func TestStartShutdown(t *testing.T) {
 	tablet1 := NewMysqld(mycnf1, &dbaConfig1, &replConfig1)
 	var err error
 
-	err = Init(tablet0, MysqlWaitTime)
+	err = tablet0.Init(MysqlWaitTime)
 	if err != nil {
 		t.Errorf("Init(0) err: %v", err)
 	}
 
-	err = Init(tablet1, MysqlWaitTime)
+	err = tablet1.Init(MysqlWaitTime)
 
 	if err != nil {
 		t.Errorf("Init(1) err: %v", err)
 	}
 
-	err = Shutdown(tablet0, true, MysqlWaitTime)
+	err = tablet0.Shutdown(true, MysqlWaitTime)
 	if err != nil {
 		t.Errorf("Shutdown() err: %v", err)
 	}
 
-	err = Start(tablet0, MysqlWaitTime)
+	err = tablet0.Start(MysqlWaitTime)
 	if err != nil {
 		t.Errorf("Start() err: %v", err)
 	}
 
-	err = Teardown(tablet0, false)
+	err = tablet0.Teardown(false)
 	if err != nil {
 		t.Errorf("Teardown(0) err: %v", err)
 	}
-	err = Teardown(tablet1, false)
+	err = tablet1.Teardown(false)
 	if err != nil {
 		t.Errorf("Teardown(1) err: %v", err)
 	}
