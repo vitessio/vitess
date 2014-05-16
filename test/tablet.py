@@ -246,26 +246,22 @@ class Tablet(object):
     else:
       self.dbname = dbname
 
-    args = ['InitTablet']
+    args = ['InitTablet',
+            '-hostname', 'localhost',
+            '-port', str(self.port),
+            '-mysql_port', str(self.mysql_port),
+            ]
     if force:
       args.append('-force')
     if parent:
       args.append('-parent')
     if dbname:
-      args.append('-db-name-override='+dbname)
-    args.extend([self.tablet_alias,
-                 'localhost',
-                 str(self.mysql_port),
-                 str(self.port)])
+      args.extend(['-db-name-override', dbname])
     if keyspace:
-      args.append(keyspace)
-    else:
-      args.append('')
+      args.extend(['-keyspace', keyspace])
     if shard:
-      args.append(shard)
-    else:
-      args.append('')
-    args.append(tablet_type)
+      args.extend(['-shard', shard])
+    args.extend([self.tablet_alias, tablet_type])
     utils.run_vtctl(args)
     if start:
       if not wait_for_start:

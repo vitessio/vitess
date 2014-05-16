@@ -14,7 +14,6 @@ import (
 	"os"
 	"os/signal"
 	"sort"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -56,7 +55,7 @@ var commands = []commandGroup{
 	commandGroup{
 		"Tablets", []command{
 			command{"InitTablet", commandInitTablet,
-				"[-force] [-parent] [-update] [-db-name-override=<db name>] <tablet alias|zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> [<parent alias|zk parent alias>]",
+				"[-force] [-parent] [-update] [-db-name-override=<db name>] [-hostname=<hostname>] [-mysql_port=<port>] [-port=<port>] [-vts_port=<port>] [-keyspace=<keyspace>] [-shard=<shard>] [-parent_alias=<parent alias>] <tablet alias> <tablet type>]",
 				"Initializes a tablet in the topology.\n" +
 					"Valid <tablet type>:\n" +
 					"  " + strings.Join(topo.MakeStringTypeList(topo.AllTabletTypes), " ")},
@@ -607,60 +606,51 @@ func commandInitTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 		force          = subFlags.Bool("force", false, "will overwrite the node if it already exists")
 		parent         = subFlags.Bool("parent", false, "will create the parent shard and keyspace if they don't exist yet")
 		update         = subFlags.Bool("update", false, "perform update if a tablet with provided alias exists")
+		hostname       = subFlags.String("hostname", "", "server the tablet is running on")
+		mysqlPort      = subFlags.Int("mysql_port", 0, "mysql port for the mysql daemon")
+		port           = subFlags.Int("port", 0, "main port for the vttablet process")
+		vtsPort        = subFlags.Int("vts_port", 0, "encrypted port for the vttablet process")
+		keyspace       = subFlags.String("keyspace", "", "keyspace this tablet belongs to")
+		shard          = subFlags.String("shard", "", "shard this tablet belongs to")
+		parentAlias    = subFlags.String("parent_alias", "", "alias of the mysql parent tablet for this tablet")
 		tags           flagutil.StringMapValue
 	)
 	subFlags.Var(&tags, "tags", "comma separated list of key:value pairs used to tag the tablet")
 	subFlags.Parse(args)
 
-	if subFlags.NArg() != 7 && subFlags.NArg() != 8 {
-		log.Fatalf("action InitTablet requires <tablet alias|zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> [<parent alias|zk parent alias>]")
+	if subFlags.NArg() != 2 {
+		log.Fatalf("action InitTablet requires <tablet alias> <tablet type>")
 	}
+	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletType := parseTabletType(subFlags.Arg(1), topo.AllTabletTypes)
 
-	// FIXME(ryszard): This will go away once the commands accepts
-	// named parameters.
-	alias, hostname := subFlags.Arg(0), subFlags.Arg(1)
-	mysqlPortString, vtPortString := subFlags.Arg(2), subFlags.Arg(3)
-	keyspace, shard := subFlags.Arg(4), subFlags.Arg(5)
-	tabletType := subFlags.Arg(6)
-
-	tabletAlias := tabletParamToTabletAlias(alias)
-
-	// Validate provided port arguments.
-	//
-	// FIXME(ryszard): This wouldn't be necessarry if these were
-	// flags.
-
-	mysqlPort, err := strconv.Atoi(mysqlPortString)
-	if err != nil {
-		log.Fatalf("malformed MySQL port %q: %v", mysqlPort, err)
-	}
-	vtPort, err := strconv.Atoi(vtPortString)
-
-	if err != nil {
-		log.Fatalf("malformed VT port %q: %v", vtPort, err)
-	}
-
+	// create tablet record
 	tablet := &topo.Tablet{
-		Cell:      tabletAlias.Cell,
-		Uid:       tabletAlias.Uid,
-		Addr:      net.JoinHostPort(hostname, vtPortString),
-		MysqlAddr: net.JoinHostPort(hostname, mysqlPortString),
+		Cell: tabletAlias.Cell,
+		Uid:  tabletAlias.Uid,
 
-		Alias:    tabletAlias,
-		Hostname: hostname,
-		Portmap: map[string]int{
-			"vt":    vtPort,
-			"mysql": mysqlPort,
-		},
-
-		Keyspace:       keyspace,
-		Shard:          shard,
-		Type:           parseTabletType(tabletType, topo.AllTabletTypes),
+		Alias:          tabletAlias,
+		Hostname:       *hostname,
+		Portmap:        make(map[string]int),
+		Keyspace:       *keyspace,
+		Shard:          *shard,
+		Type:           tabletType,
 		DbNameOverride: *dbNameOverride,
 		Tags:           tags,
 	}
-	if subFlags.NArg() == 8 {
-		tablet.Parent = tabletRepParamToTabletAlias(subFlags.Arg(7))
+	if *port != 0 {
+		tablet.Addr = fmt.Sprintf("%v:%v", *hostname, *port)
+		tablet.Portmap["vt"] = *port
+	}
+	if *mysqlPort != 0 {
+		tablet.MysqlAddr = fmt.Sprintf("%v:%v", *hostname, *mysqlPort)
+		tablet.Portmap["mysql"] = *mysqlPort
+	}
+	if *vtsPort != 0 {
+		tablet.Portmap["vts"] = *vtsPort
+	}
+	if *parentAlias != "" {
+		tablet.Parent = tabletRepParamToTabletAlias(*parentAlias)
 	}
 
 	return "", wr.InitTablet(tablet, *force, *parent, *update)
