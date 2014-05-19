@@ -122,4 +122,19 @@ func CheckActions(t *testing.T, ts topo.Server) {
 	wg2.Wait()
 	close(done)
 	wg1.Wait()
+
+	// start an action, and try to purge all actions, to test
+	// PurgeTabletActions
+	actionPath, err = ts.WriteTabletAction(tabletAlias, "contents2")
+	if err != nil {
+		t.Fatalf("WriteTabletAction(contents2): %v", err)
+	}
+	if err := ts.PurgeTabletActions(tabletAlias, func(data string) bool {
+		return true
+	}); err != nil {
+		t.Fatalf("PurgeTabletActions(contents2) failed: %v", err)
+	}
+	if _, _, _, err := ts.ReadTabletActionPath(actionPath); err != topo.ErrNoNode {
+		t.Fatalf("ReadTabletActionPath(contents2) should have failed with ErrNoNode: %v", err)
+	}
 }
