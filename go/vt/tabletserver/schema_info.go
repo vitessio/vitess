@@ -306,7 +306,7 @@ func (si *SchemaInfo) DropTable(tableName string) {
 	log.Infof("Table %s forgotten", tableName)
 }
 
-func (si *SchemaInfo) GetPlan(logStats *sqlQueryStats, sql string) (plan *ExecPlan) {
+func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string) (plan *ExecPlan) {
 	si.mu.Lock()
 	defer si.mu.Unlock()
 	if plan := si.getQuery(sql); plan != nil {

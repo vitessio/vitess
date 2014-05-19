@@ -82,9 +82,9 @@ func querylogzHandler(w http.ResponseWriter, r *http.Request) {
 	for i := 0; i < 300; i++ {
 		select {
 		case out := <-ch:
-			stats, ok := out.(*sqlQueryStats)
+			stats, ok := out.(*SQLQueryStats)
 			if !ok {
-				err := fmt.Errorf("Unexpected value in %s: %#v (expecting value of type %T)", TxLogger.Name, out, &sqlQueryStats{})
+				err := fmt.Errorf("Unexpected value in %s: %#v (expecting value of type %T)", TxLogger.Name, out, &SQLQueryStats{})
 				io.WriteString(w, `<tr class="error">`)
 				io.WriteString(w, err.Error())
 				io.WriteString(w, "</tr>")
@@ -100,7 +100,7 @@ func querylogzHandler(w http.ResponseWriter, r *http.Request) {
 				level = "high"
 			}
 			tmplData := struct {
-				*sqlQueryStats
+				*SQLQueryStats
 				ColorLevel string
 			}{stats, level}
 			querylogzTmpl.Execute(w, tmplData)
