@@ -192,7 +192,7 @@ func (qe *QueryEngine) Close() {
 }
 
 // Begin begins a transaction.
-func (qe *QueryEngine) Begin(logStats *sqlQueryStats) (transactionId int64) {
+func (qe *QueryEngine) Begin(logStats *SQLQueryStats) (transactionId int64) {
 	defer queryStats.Record("BEGIN", time.Now())
 
 	var conn PoolConnection
@@ -208,7 +208,7 @@ func (qe *QueryEngine) Begin(logStats *sqlQueryStats) (transactionId int64) {
 }
 
 // Commit commits the specified transaction.
-func (qe *QueryEngine) Commit(logStats *sqlQueryStats, transactionId int64) {
+func (qe *QueryEngine) Commit(logStats *SQLQueryStats, transactionId int64) {
 	defer queryStats.Record("COMMIT", time.Now())
 	dirtyTables, err := qe.activeTxPool.SafeCommit(transactionId)
 	qe.invalidateRows(logStats, dirtyTables)
@@ -217,7 +217,7 @@ func (qe *QueryEngine) Commit(logStats *sqlQueryStats, transactionId int64) {
 	}
 }
 
-func (qe *QueryEngine) invalidateRows(logStats *sqlQueryStats, dirtyTables map[string]DirtyKeys) {
+func (qe *QueryEngine) invalidateRows(logStats *SQLQueryStats, dirtyTables map[string]DirtyKeys) {
 	for tableName, invalidList := range dirtyTables {
 		tableInfo := qe.schemaInfo.GetTable(tableName)
 		if tableInfo == nil {
@@ -234,13 +234,13 @@ func (qe *QueryEngine) invalidateRows(logStats *sqlQueryStats, dirtyTables map[s
 }
 
 // Rollback rolls back the specified transaction.
-func (qe *QueryEngine) Rollback(logStats *sqlQueryStats, transactionId int64) {
+func (qe *QueryEngine) Rollback(logStats *SQLQueryStats, transactionId int64) {
 	defer queryStats.Record("ROLLBACK", time.Now())
 	qe.activeTxPool.Rollback(transactionId)
 }
 
 // Execute executes the specified query and returns its result.
-func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (reply *mproto.QueryResult) {
+func (qe *QueryEngine) Execute(logStats *SQLQueryStats, query *proto.Query) (reply *mproto.QueryResult) {
 	if query.BindVariables == nil { // will help us avoid repeated nil checks
 		query.BindVariables = make(map[string]interface{})
 	}
@@ -341,7 +341,7 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 // StreamExecute executes the query and streams its result.
 // The first QueryResult will have Fields set (and Rows nil)
 // The subsequent QueryResult will have Rows set (and Fields nil)
-func (qe *QueryEngine) StreamExecute(logStats *sqlQueryStats, query *proto.Query, sendReply func(*mproto.QueryResult) error) {
+func (qe *QueryEngine) StreamExecute(logStats *SQLQueryStats, query *proto.Query, sendReply func(*mproto.QueryResult) error) {
 	if query.BindVariables == nil { // will help us avoid repeated nil checks
 		query.BindVariables = make(map[string]interface{})
 	}
@@ -402,7 +402,7 @@ func (qe *QueryEngine) InvalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
 //-----------------------------------------------
 // DDL
 
-func (qe *QueryEngine) execDDL(logStats *sqlQueryStats, ddl string) *mproto.QueryResult {
+func (qe *QueryEngine) execDDL(logStats *SQLQueryStats, ddl string) *mproto.QueryResult {
 	ddlPlan := sqlparser.DDLParse(ddl)
 	if ddlPlan.Action == 0 {
 		panic(NewTabletError(FAIL, "DDL is not understood"))
@@ -436,7 +436,7 @@ func (qe *QueryEngine) execDDL(logStats *sqlQueryStats, ddl string) *mproto.Quer
 //-----------------------------------------------
 // Execution
 
-func (qe *QueryEngine) execPKEqual(logStats *sqlQueryStats, plan *compiledPlan) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execPKEqual(logStats *SQLQueryStats, plan *compiledPlan) (result *mproto.QueryResult) {
 	pkRows := buildValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
 	if len(pkRows) != 1 || plan.Fields == nil {
 		panic("unexpected")
@@ -453,7 +453,7 @@ func (qe *QueryEngine) execPKEqual(logStats *sqlQueryStats, plan *compiledPlan) 
 	return
 }
 
-func (qe *QueryEngine) fetchOne(logStats *sqlQueryStats, plan *compiledPlan, pk []sqltypes.Value) (row []sqltypes.Value) {
+func (qe *QueryEngine) fetchOne(logStats *SQLQueryStats, plan *compiledPlan, pk []sqltypes.Value) (row []sqltypes.Value) {
 	logStats.QuerySources |= QUERY_SOURCE_ROWCACHE
 	tableInfo := plan.TableInfo
 	keys := make([]string, 1)
@@ -481,17 +481,17 @@ func (qe *QueryEngine) fetchOne(logStats *sqlQueryStats, plan *compiledPlan, pk 
 	return row
 }
 
-func (qe *QueryEngine) execPKIN(logStats *sqlQueryStats, plan *compiledPlan) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execPKIN(logStats *SQLQueryStats, plan *compiledPlan) (result *mproto.QueryResult) {
 	pkRows := buildINValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
 	return qe.fetchMulti(logStats, plan, pkRows)
 }
 
-func (qe *QueryEngine) execSubquery(logStats *sqlQueryStats, plan *compiledPlan) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execSubquery(logStats *SQLQueryStats, plan *compiledPlan) (result *mproto.QueryResult) {
 	innerResult := qe.qFetch(logStats, plan.Subquery, plan.BindVars, nil)
 	return qe.fetchMulti(logStats, plan, innerResult.Rows)
 }
 
-func (qe *QueryEngine) fetchMulti(logStats *sqlQueryStats, plan *compiledPlan, pkRows [][]sqltypes.Value) (result *mproto.QueryResult) {
+func (qe *QueryEngine) fetchMulti(logStats *SQLQueryStats, plan *compiledPlan, pkRows [][]sqltypes.Value) (result *mproto.QueryResult) {
 	result = &mproto.QueryResult{}
 	if len(pkRows) == 0 {
 		return
@@ -552,7 +552,7 @@ func (qe *QueryEngine) mustVerify() bool {
 	return (Rand() % SPOT_CHECK_MULTIPLIER) < qe.spotCheckFreq.Get()
 }
 
-func (qe *QueryEngine) spotCheck(logStats *sqlQueryStats, plan *compiledPlan, rcresult RCResult, pk []sqltypes.Value) {
+func (qe *QueryEngine) spotCheck(logStats *SQLQueryStats, plan *compiledPlan, rcresult RCResult, pk []sqltypes.Value) {
 	spotCheckCount.Add(1)
 	resultFromdb := qe.qFetch(logStats, plan.OuterQuery, plan.BindVars, pk)
 	var dbrow []sqltypes.Value
@@ -583,7 +583,7 @@ func (qe *QueryEngine) recheckLater(plan *compiledPlan, rcresult RCResult, dbrow
 }
 
 // execDirect always sends the query to mysql
-func (qe *QueryEngine) execDirect(logStats *sqlQueryStats, plan *compiledPlan, conn PoolConnection) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execDirect(logStats *SQLQueryStats, plan *compiledPlan, conn PoolConnection) (result *mproto.QueryResult) {
 	if plan.Fields != nil {
 		result = qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
 		result.Fields = plan.Fields
@@ -595,7 +595,7 @@ func (qe *QueryEngine) execDirect(logStats *sqlQueryStats, plan *compiledPlan, c
 
 // execSelect sends a query to mysql only if another identical query is not running. Otherwise, it waits and
 // reuses the result. If the plan is missng field info, it sends the query to mysql requesting full info.
-func (qe *QueryEngine) execSelect(logStats *sqlQueryStats, plan *compiledPlan) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execSelect(logStats *SQLQueryStats, plan *compiledPlan) (result *mproto.QueryResult) {
 	if plan.Fields != nil {
 		result = qe.qFetch(logStats, plan.FullQuery, plan.BindVars, nil)
 		result.Fields = plan.Fields
@@ -609,12 +609,12 @@ func (qe *QueryEngine) execSelect(logStats *sqlQueryStats, plan *compiledPlan) (
 	return
 }
 
-func (qe *QueryEngine) execInsertPK(logStats *sqlQueryStats, conn PoolConnection, plan *compiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execInsertPK(logStats *SQLQueryStats, conn PoolConnection, plan *compiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
 	pkRows := buildValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
 	return qe.execInsertPKRows(logStats, conn, plan, pkRows, invalidator)
 }
 
-func (qe *QueryEngine) execInsertSubquery(logStats *sqlQueryStats, conn PoolConnection, plan *compiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execInsertSubquery(logStats *SQLQueryStats, conn PoolConnection, plan *compiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
 	innerResult := qe.directFetch(logStats, conn, plan.Subquery, plan.BindVars, nil, nil)
 	innerRows := innerResult.Rows
 	if len(innerRows) == 0 {
@@ -633,14 +633,14 @@ func (qe *QueryEngine) execInsertSubquery(logStats *sqlQueryStats, conn PoolConn
 	return qe.execInsertPKRows(logStats, conn, plan, pkRows, invalidator)
 }
 
-func (qe *QueryEngine) execInsertPKRows(logStats *sqlQueryStats, conn PoolConnection, plan *compiledPlan, pkRows [][]sqltypes.Value, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execInsertPKRows(logStats *SQLQueryStats, conn PoolConnection, plan *compiledPlan, pkRows [][]sqltypes.Value, invalidator CacheInvalidator) (result *mproto.QueryResult) {
 	secondaryList := buildSecondaryList(plan.TableInfo, pkRows, plan.SecondaryPKValues, plan.BindVars)
 	bsc := buildStreamComment(plan.TableInfo, pkRows, secondaryList)
 	result = qe.directFetch(logStats, conn, plan.OuterQuery, plan.BindVars, nil, bsc)
 	return result
 }
 
-func (qe *QueryEngine) execDMLPK(logStats *sqlQueryStats, conn PoolConnection, plan *compiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execDMLPK(logStats *SQLQueryStats, conn PoolConnection, plan *compiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
 	pkRows := buildValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
 	secondaryList := buildSecondaryList(plan.TableInfo, pkRows, plan.SecondaryPKValues, plan.BindVars)
 	bsc := buildStreamComment(plan.TableInfo, pkRows, secondaryList)
@@ -654,13 +654,13 @@ func (qe *QueryEngine) execDMLPK(logStats *sqlQueryStats, conn PoolConnection, p
 	return result
 }
 
-func (qe *QueryEngine) execDMLSubquery(logStats *sqlQueryStats, conn PoolConnection, plan *compiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execDMLSubquery(logStats *SQLQueryStats, conn PoolConnection, plan *compiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
 	innerResult := qe.directFetch(logStats, conn, plan.Subquery, plan.BindVars, nil, nil)
 	// no need to validate innerResult
 	return qe.execDMLPKRows(logStats, conn, plan, innerResult.Rows, invalidator)
 }
 
-func (qe *QueryEngine) execDMLPKRows(logStats *sqlQueryStats, conn PoolConnection, plan *compiledPlan, pkRows [][]sqltypes.Value, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execDMLPKRows(logStats *SQLQueryStats, conn PoolConnection, plan *compiledPlan, pkRows [][]sqltypes.Value, invalidator CacheInvalidator) (result *mproto.QueryResult) {
 	if len(pkRows) == 0 {
 		return &mproto.QueryResult{RowsAffected: 0}
 	}
@@ -679,7 +679,7 @@ func (qe *QueryEngine) execDMLPKRows(logStats *sqlQueryStats, conn PoolConnectio
 	return &mproto.QueryResult{RowsAffected: rowsAffected}
 }
 
-func (qe *QueryEngine) execSet(logStats *sqlQueryStats, conn PoolConnection, plan *compiledPlan) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execSet(logStats *SQLQueryStats, conn PoolConnection, plan *compiledPlan) (result *mproto.QueryResult) {
 	switch plan.SetKey {
 	case "vt_pool_size":
 		qe.connPool.SetCapacity(int(getInt64(plan.SetValue)))
@@ -744,7 +744,7 @@ func getDuration(v interface{}) time.Duration {
 	return time.Duration(getFloat64(v) * 1e9)
 }
 
-func (qe *QueryEngine) qFetch(logStats *sqlQueryStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value) (result *mproto.QueryResult) {
+func (qe *QueryEngine) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value) (result *mproto.QueryResult) {
 	sql := qe.generateFinalSql(parsedQuery, bindVars, listVars, nil)
 	q, ok := qe.consolidator.Create(string(sql))
 	if ok {
@@ -768,7 +768,7 @@ func (qe *QueryEngine) qFetch(logStats *sqlQueryStats, parsedQuery *sqlparser.Pa
 	return q.Result
 }
 
-func (qe *QueryEngine) directFetch(logStats *sqlQueryStats, conn PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) (result *mproto.QueryResult) {
+func (qe *QueryEngine) directFetch(logStats *SQLQueryStats, conn PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) (result *mproto.QueryResult) {
 	sql := qe.generateFinalSql(parsedQuery, bindVars, listVars, buildStreamComment)
 	result, err := qe.executeSql(logStats, conn, sql, false)
 	if err != nil {
@@ -778,7 +778,7 @@ func (qe *QueryEngine) directFetch(logStats *sqlQueryStats, conn PoolConnection,
 }
 
 // fullFetch also fetches field info
-func (qe *QueryEngine) fullFetch(logStats *sqlQueryStats, conn PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) (result *mproto.QueryResult) {
+func (qe *QueryEngine) fullFetch(logStats *SQLQueryStats, conn PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) (result *mproto.QueryResult) {
 	sql := qe.generateFinalSql(parsedQuery, bindVars, listVars, buildStreamComment)
 	result, err := qe.executeSql(logStats, conn, sql, true)
 	if err != nil {
@@ -787,7 +787,7 @@ func (qe *QueryEngine) fullFetch(logStats *sqlQueryStats, conn PoolConnection, p
 	return result
 }
 
-func (qe *QueryEngine) fullStreamFetch(logStats *sqlQueryStats, conn PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte, callback func(*mproto.QueryResult) error) {
+func (qe *QueryEngine) fullStreamFetch(logStats *SQLQueryStats, conn PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte, callback func(*mproto.QueryResult) error) {
 	sql := qe.generateFinalSql(parsedQuery, bindVars, listVars, buildStreamComment)
 	qe.executeStreamSql(logStats, conn, sql, callback)
 }
@@ -806,7 +806,7 @@ func (qe *QueryEngine) generateFinalSql(parsedQuery *sqlparser.ParsedQuery, bind
 	return hack.String(sql)
 }
 
-func (qe *QueryEngine) executeSql(logStats *sqlQueryStats, conn PoolConnection, sql string, wantfields bool) (*mproto.QueryResult, error) {
+func (qe *QueryEngine) executeSql(logStats *SQLQueryStats, conn PoolConnection, sql string, wantfields bool) (*mproto.QueryResult, error) {
 	connid := conn.Id()
 	qe.activePool.Put(connid)
 	defer qe.activePool.Remove(connid)
@@ -828,7 +828,7 @@ func (qe *QueryEngine) executeSql(logStats *sqlQueryStats, conn PoolConnection, 
 	return result, nil
 }
 
-func (qe *QueryEngine) executeStreamSql(logStats *sqlQueryStats, conn PoolConnection, sql string, callback func(*mproto.QueryResult) error) {
+func (qe *QueryEngine) executeStreamSql(logStats *SQLQueryStats, conn PoolConnection, sql string, callback func(*mproto.QueryResult) error) {
 	logStats.QuerySources |= QUERY_SOURCE_MYSQL
 	logStats.NumberOfQueries += 1
 	logStats.AddRewrittenSql(sql)

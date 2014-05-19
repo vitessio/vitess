@@ -301,7 +301,7 @@ func (sq *SqlQuery) Rollback(context *Context, session *proto.Session) (err erro
 
 // handleExecError handles panics during query execution and sets
 // the supplied error return value.
-func handleExecError(query *proto.Query, err *error, logStats *sqlQueryStats) {
+func handleExecError(query *proto.Query, err *error, logStats *SQLQueryStats) {
 	if logStats != nil {
 		logStats.Send()
 	}
