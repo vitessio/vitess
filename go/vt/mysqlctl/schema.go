@@ -30,11 +30,21 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews boo
 	}
 	sd.DatabaseSchema = strings.Replace(qr.Rows[0][1].String(), "`"+dbName+"`", "`{{.DatabaseName}}`", 1)
 
+	// build a list of regexp to match table names against
+	var tableRegexps []*regexp.Regexp
+	if len(tables) > 0 {
+		tableRegexps = make([]*regexp.Regexp, len(tables))
+		for i, table := range tables {
+			var err error
+			tableRegexps[i], err = regexp.Compile(table)
+			if err != nil {
+				return nil, fmt.Errorf("cannot compile regexp %v for table: %v", table, err)
+			}
+		}
+	}
+
 	// get the list of tables we're interested in
 	sql := "SELECT table_name, table_type, data_length FROM information_schema.tables WHERE table_schema = '" + dbName + "'"
-	if len(tables) != 0 {
-		sql += " AND table_name IN ('" + strings.Join(tables, "','") + "')"
-	}
 	if !includeViews {
 		sql += " AND table_type = '" + proto.TABLE_BASE_TABLE + "'"
 	}
@@ -46,10 +56,26 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews boo
 		return sd, nil
 	}
 
-	sd.TableDefinitions = make([]proto.TableDefinition, len(qr.Rows))
-	for i, row := range qr.Rows {
+	sd.TableDefinitions = make([]proto.TableDefinition, 0, len(qr.Rows))
+	for _, row := range qr.Rows {
 		tableName := row[0].String()
 		tableType := row[1].String()
+
+		// check it's a table we want
+		if tableRegexps != nil {
+			foundMatch := false
+			for _, tableRegexp := range tableRegexps {
+				if tableRegexp.Match(row[0].Raw()) {
+					foundMatch = true
+					break
+				}
+			}
+			if !foundMatch {
+				continue
+			}
+		}
+
+		// compute dataLength
 		var dataLength uint64
 		if !row[2].IsNull() {
 			// dataLength is NULL for views, then we use 0
@@ -78,23 +104,39 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews boo
 			norm = strings.Replace(norm, "`"+dbName+"`", "`{{.DatabaseName}}`", -1)
 		}
 
-		sd.TableDefinitions[i].Name = tableName
-		sd.TableDefinitions[i].Schema = norm
+		td := proto.TableDefinition{}
+		td.Name = tableName
+		td.Schema = norm
 
-		sd.TableDefinitions[i].Columns, err = mysqld.GetColumns(dbName, tableName)
+		td.Columns, err = mysqld.GetColumns(dbName, tableName)
 		if err != nil {
 			return nil, err
 		}
-		sd.TableDefinitions[i].PrimaryKeyColumns, err = mysqld.GetPrimaryKeyColumns(dbName, tableName)
+		td.PrimaryKeyColumns, err = mysqld.GetPrimaryKeyColumns(dbName, tableName)
 		if err != nil {
 			return nil, err
 		}
-		sd.TableDefinitions[i].Type = tableType
-		sd.TableDefinitions[i].DataLength = dataLength
+		td.Type = tableType
+		td.DataLength = dataLength
+		sd.TableDefinitions = append(sd.TableDefinitions, td)
 	}
 
 	sd.GenerateSchemaVersion()
 	return sd, nil
+}
+
+// ResolveTables returns a list of actual tables+views matching a list
+// of regexps
+func (mysqld *Mysqld) ResolveTables(dbName string, tables []string) ([]string, error) {
+	sd, err := mysqld.GetSchema(dbName, tables, true)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]string, len(sd.TableDefinitions))
+	for i, td := range sd.TableDefinitions {
+		result[i] = td.Name
+	}
+	return result, nil
 }
 
 // GetColumns returns the columns of table.

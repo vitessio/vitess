@@ -56,12 +56,18 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet) error {
 		}
 	}
 	if len(tablet.BlacklistedTables) > 0 {
-		log.Infof("Blacklisting tables %v", strings.Join(tablet.BlacklistedTables, ", "))
-		qr := tabletserver.NewQueryRule("enforce blacklisted tables", "blacklisted_table", tabletserver.QR_FAIL_RETRY)
-		for _, t := range tablet.BlacklistedTables {
-			qr.AddTableCond(t)
+		// tables, first resolve wildcards
+		tables, err := agent.Mysqld.ResolveTables(tablet.DbName(), tablet.BlacklistedTables)
+		if err != nil {
+			log.Warningf("Unable to resolve blacklisted tables: %v", err)
+		} else {
+			log.Infof("Blacklisting tables %v", strings.Join(tables, ", "))
+			qr := tabletserver.NewQueryRule("enforce blacklisted tables", "blacklisted_table", tabletserver.QR_FAIL_RETRY)
+			for _, t := range tables {
+				qr.AddTableCond(t)
+			}
+			qrs.Add(qr)
 		}
-		qrs.Add(qr)
 	}
 
 	return tabletserver.AllowQueries(&agent.DBConfigs.App, agent.SchemaOverrides, qrs, agent.Mysqld, false)

@@ -1449,6 +1449,7 @@ func commandListTablets(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []st
 func commandGetSchema(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	tables := subFlags.String("tables", "", "comma separated tables to gather schema information for")
 	includeViews := subFlags.Bool("include-views", false, "include views in the output")
+	tableNamesOnly := subFlags.Bool("table_names_only", false, "only display the table names that match")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
 		log.Fatalf("action GetSchema requires <tablet alias|zk tablet path>")
@@ -1461,7 +1462,13 @@ func commandGetSchema(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []stri
 
 	sd, err := wr.GetSchema(tabletAlias, tableArray, *includeViews)
 	if err == nil {
-		log.Infof("%v", sd.String()) // they can contain %
+		if *tableNamesOnly {
+			for _, td := range sd.TableDefinitions {
+				log.Info(td.Name)
+			}
+		} else {
+			log.Info(sd.String())
+		}
 	}
 	return "", err
 }
