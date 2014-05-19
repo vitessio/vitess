@@ -383,11 +383,6 @@ func deleteTopDir(dir string) (removalErr error) {
 	return
 }
 
-// Port returns the configured mysql port
-func (mysqld *Mysqld) Port() int {
-	return mysqld.config.MysqlPort
-}
-
 // Addr returns the fully qualified host name + port for this instance.
 func (mysqld *Mysqld) Addr() string {
 	hostname := netutil.FullyQualifiedHostnameOrPanic()
