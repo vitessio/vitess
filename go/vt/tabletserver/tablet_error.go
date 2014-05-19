@@ -94,7 +94,7 @@ func (te *TabletError) RecordStats() {
 	}
 }
 
-func handleError(err *error, logStats *sqlQueryStats) {
+func handleError(err *error, logStats *SQLQueryStats) {
 	if logStats != nil {
 		logStats.Send()
 	}
