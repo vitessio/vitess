@@ -38,6 +38,7 @@ type BinlogPlayerController struct {
 	cell           string
 	keyspaceIdType key.KeyspaceIdType
 	keyRange       key.KeyRange
+	dbName         string
 
 	// Information about the source
 	sourceShard topo.SourceShard
@@ -52,7 +53,7 @@ type BinlogPlayerController struct {
 	stopAtGroupId int64
 }
 
-func NewBinlogPlayerController(ts topo.Server, dbConfig *mysql.ConnectionParams, mysqld *mysqlctl.Mysqld, cell string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, sourceShard topo.SourceShard) *BinlogPlayerController {
+func newBinlogPlayerController(ts topo.Server, dbConfig *mysql.ConnectionParams, mysqld *mysqlctl.Mysqld, cell string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, sourceShard topo.SourceShard, dbName string) *BinlogPlayerController {
 	blc := &BinlogPlayerController{
 		ts:             ts,
 		dbConfig:       dbConfig,
@@ -60,6 +61,7 @@ func NewBinlogPlayerController(ts topo.Server, dbConfig *mysql.ConnectionParams,
 		cell:           cell,
 		keyspaceIdType: keyspaceIdType,
 		keyRange:       keyRange,
+		dbName:         dbName,
 		sourceShard:    sourceShard,
 	}
 	return blc
@@ -192,8 +194,14 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 
 	// check which kind of replication we're doing, tables or keyrange
 	if len(bpc.sourceShard.Tables) > 0 {
+		// tables, first resolve wildcards
+		tables, err := bpc.mysqld.ResolveTables(bpc.dbName, bpc.sourceShard.Tables)
+		if err != nil {
+			return fmt.Errorf("failed to resolve table names: %v", err)
+		}
+
 		// tables, just get them
-		player := binlogplayer.NewBinlogPlayerTables(vtClient, addr, bpc.sourceShard.Tables, startPosition, bpc.stopAtGroupId)
+		player := binlogplayer.NewBinlogPlayerTables(vtClient, addr, tables, startPosition, bpc.stopAtGroupId)
 		return player.ApplyBinlogEvents(bpc.interrupted)
 	} else {
 		// the data we have to replicate is the intersection of the
@@ -253,14 +261,14 @@ func (blm *BinlogPlayerMap) size() int64 {
 }
 
 // addPlayer adds a new player to the map. It assumes we have the lock.
-func (blm *BinlogPlayerMap) addPlayer(cell string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, sourceShard topo.SourceShard) {
+func (blm *BinlogPlayerMap) addPlayer(cell string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, sourceShard topo.SourceShard, dbName string) {
 	bpc, ok := blm.players[sourceShard.Uid]
 	if ok {
 		log.Infof("Already playing logs for %v", sourceShard)
 		return
 	}
 
-	bpc = NewBinlogPlayerController(blm.ts, blm.dbConfig, blm.mysqld, cell, keyspaceIdType, keyRange, sourceShard)
+	bpc = newBinlogPlayerController(blm.ts, blm.dbConfig, blm.mysqld, cell, keyspaceIdType, keyRange, sourceShard, dbName)
 	blm.players[sourceShard.Uid] = bpc
 	if blm.state == BPM_STATE_RUNNING {
 		bpc.Start()
@@ -312,7 +320,7 @@ func (blm *BinlogPlayerMap) RefreshMap(tablet topo.Tablet, keyspaceInfo *topo.Ke
 
 	// for each source, add it if not there, and delete from toRemove
 	for _, sourceShard := range shardInfo.SourceShards {
-		blm.addPlayer(tablet.Alias.Cell, keyspaceInfo.ShardingColumnType, tablet.KeyRange, sourceShard)
+		blm.addPlayer(tablet.Alias.Cell, keyspaceInfo.ShardingColumnType, tablet.KeyRange, sourceShard, tablet.DbName())
 		delete(toRemove, sourceShard.Uid)
 	}
 	hasPlayers := len(shardInfo.SourceShards) > 0

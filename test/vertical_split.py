@@ -204,7 +204,7 @@ index by_msg (msg)
     # check we can or cannot access the tables
     utils.run_vtctl(['ReloadSchema', tablet.tablet_alias])
     for t in ["moving1", "moving2"]:
-      if expected and t in expected:
+      if expected and "moving.*" in expected:
         # table is blacklisted, should get the error
         out, err = tablet.vquery("select count(1) from %s" % t,
                                  path='source_keyspace/0', raise_on_error=False)
@@ -306,13 +306,13 @@ index by_msg (msg)
 
     # take the snapshot for the split
     utils.run_vtctl(['MultiSnapshot',
-                     '--tables', 'moving1,moving2,view1',
+                     '--tables', 'moving.*,view1',
                      source_rdonly.tablet_alias], auto_log=True)
 
     # perform the restore.
     utils.run_vtctl(['ShardMultiRestore',
                      '--strategy' ,'populateBlpCheckpoint',
-                     '--tables', 'moving1,moving2',
+                     '--tables', 'moving.*',
                      'destination_keyspace/0', source_rdonly.tablet_alias],
                     auto_log=True)
 
@@ -361,7 +361,7 @@ index by_msg (msg)
                              'ServedFrom(replica): source_keyspace\n')
     self._check_blacklisted_tables(source_master, None)
     self._check_blacklisted_tables(source_replica, None)
-    self._check_blacklisted_tables(source_rdonly, ['moving1', 'moving2'])
+    self._check_blacklisted_tables(source_rdonly, ['moving.*'])
     self._check_client_conn_redirection('source_keyspace', 'destination_keyspace', ['rdonly'], ['master', 'replica'], ['moving1', 'moving2'])
 
     # then serve replica from the destination shards
@@ -369,8 +369,8 @@ index by_msg (msg)
                     auto_log=True)
     self._check_srv_keyspace('ServedFrom(master): source_keyspace\n')
     self._check_blacklisted_tables(source_master, None)
-    self._check_blacklisted_tables(source_replica, ['moving1', 'moving2'])
-    self._check_blacklisted_tables(source_rdonly, ['moving1', 'moving2'])
+    self._check_blacklisted_tables(source_replica, ['moving.*'])
+    self._check_blacklisted_tables(source_rdonly, ['moving.*'])
     self._check_client_conn_redirection('source_keyspace', 'destination_keyspace', ['replica', 'rdonly'], ['master'], ['moving1', 'moving2'])
 
     # move replica back and forth
@@ -380,29 +380,28 @@ index by_msg (msg)
                              'ServedFrom(replica): source_keyspace\n')
     self._check_blacklisted_tables(source_master, None)
     self._check_blacklisted_tables(source_replica, None)
-    self._check_blacklisted_tables(source_rdonly, ['moving1', 'moving2'])
+    self._check_blacklisted_tables(source_rdonly, ['moving.*'])
     utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'replica'],
                     auto_log=True)
     self._check_srv_keyspace('ServedFrom(master): source_keyspace\n')
     self._check_blacklisted_tables(source_master, None)
-    self._check_blacklisted_tables(source_replica, ['moving1', 'moving2'])
-    self._check_blacklisted_tables(source_rdonly, ['moving1', 'moving2'])
+    self._check_blacklisted_tables(source_replica, ['moving.*'])
+    self._check_blacklisted_tables(source_rdonly, ['moving.*'])
     self._check_client_conn_redirection('source_keyspace', 'destination_keyspace', ['replica', 'rdonly'], ['master'], ['moving1', 'moving2'])
 
     # then serve master from the destination shards
     utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'master'],
                     auto_log=True)
     self._check_srv_keyspace('')
-    self._check_blacklisted_tables(source_master, ['moving1', 'moving2'])
-    self._check_blacklisted_tables(source_replica, ['moving1', 'moving2'])
-    self._check_blacklisted_tables(source_rdonly, ['moving1', 'moving2'])
+    self._check_blacklisted_tables(source_master, ['moving.*'])
+    self._check_blacklisted_tables(source_replica, ['moving.*'])
+    self._check_blacklisted_tables(source_rdonly, ['moving.*'])
     self._check_client_conn_redirection('source_keyspace', 'destination_keyspace', ['replica', 'rdonly', 'master'], [], ['moving1', 'moving2'])
 
     # check 'vtctl SetBlacklistedTables' command works as expected
     utils.run_vtctl(['SetBlacklistedTables', source_master.tablet_alias,
-                     'moving1,moving2,view1'], auto_log=True)
-    self._check_blacklisted_tables(source_master, ['moving1', 'moving2',
-                                                   'view1'])
+                     'moving.*,view1'], auto_log=True)
+    self._check_blacklisted_tables(source_master, ['moving.*', 'view1'])
     utils.run_vtctl(['SetBlacklistedTables', source_master.tablet_alias],
                     auto_log=True)
     self._check_blacklisted_tables(source_master, None)
