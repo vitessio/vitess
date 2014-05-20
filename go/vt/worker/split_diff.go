@@ -158,7 +158,7 @@ func (sdw *SplitDiffWorker) Run() {
 func (sdw *SplitDiffWorker) run() error {
 	// first state: read what we need to do
 	if err := sdw.init(); err != nil {
-		return err
+		return fmt.Errorf("init() failed: %v", err)
 	}
 	if sdw.CheckInterrupted() {
 		return topo.ErrInterrupted
@@ -166,7 +166,7 @@ func (sdw *SplitDiffWorker) run() error {
 
 	// second state: find targets
 	if err := sdw.findTargets(); err != nil {
-		return err
+		return fmt.Errorf("findTargets() failed: %v", err)
 	}
 	if sdw.CheckInterrupted() {
 		return topo.ErrInterrupted
@@ -174,7 +174,7 @@ func (sdw *SplitDiffWorker) run() error {
 
 	// third phase: synchronize replication
 	if err := sdw.synchronizeReplication(); err != nil {
-		return err
+		return fmt.Errorf("synchronizeReplication() failed: %v", err)
 	}
 	if sdw.CheckInterrupted() {
 		return topo.ErrInterrupted
@@ -182,7 +182,7 @@ func (sdw *SplitDiffWorker) run() error {
 
 	// fourth phase: diff
 	if err := sdw.diff(); err != nil {
-		return err
+		return fmt.Errorf("diff() failed: %v", err)
 	}
 
 	return nil
@@ -196,18 +196,18 @@ func (sdw *SplitDiffWorker) init() error {
 	var err error
 	sdw.keyspaceInfo, err = sdw.wr.TopoServer().GetKeyspace(sdw.keyspace)
 	if err != nil {
-		return fmt.Errorf("Cannot read keyspace %v: %v", sdw.keyspace, err)
+		return fmt.Errorf("cannot read keyspace %v: %v", sdw.keyspace, err)
 	}
 	sdw.shardInfo, err = sdw.wr.TopoServer().GetShard(sdw.keyspace, sdw.shard)
 	if err != nil {
-		return fmt.Errorf("Cannot read shard %v/%v: %v", sdw.keyspace, sdw.shard, err)
+		return fmt.Errorf("cannot read shard %v/%v: %v", sdw.keyspace, sdw.shard, err)
 	}
 
 	if len(sdw.shardInfo.SourceShards) == 0 {
-		return fmt.Errorf("Shard %v/%v has no source shard", sdw.keyspace, sdw.shard)
+		return fmt.Errorf("shard %v/%v has no source shard", sdw.keyspace, sdw.shard)
 	}
 	if sdw.shardInfo.MasterAlias.IsZero() {
-		return fmt.Errorf("Shard %v/%v has no master", sdw.keyspace, sdw.shard)
+		return fmt.Errorf("shard %v/%v has no master", sdw.keyspace, sdw.shard)
 	}
 
 	return nil
@@ -224,7 +224,7 @@ func (sdw *SplitDiffWorker) findTargets() error {
 	var err error
 	sdw.destinationAlias, err = findChecker(sdw.wr, sdw.cleaner, sdw.cell, sdw.keyspace, sdw.shard)
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot find checker for %v/%v/%v: %v", sdw.cell, sdw.keyspace, sdw.shard, err)
 	}
 
 	// find an appropriate endpoint in the source shards
@@ -232,7 +232,7 @@ func (sdw *SplitDiffWorker) findTargets() error {
 	for i, ss := range sdw.shardInfo.SourceShards {
 		sdw.sourceAliases[i], err = findChecker(sdw.wr, sdw.cleaner, sdw.cell, sdw.keyspace, ss.Shard)
 		if err != nil {
-			return err
+			return fmt.Errorf("cannot find checker for %v/%v/%v: %v", sdw.cell, sdw.keyspace, ss.Shard, err)
 		}
 	}
 
@@ -264,7 +264,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	log.Infof("Stopping master binlog replication on %v", sdw.shardInfo.MasterAlias)
 	blpPositionList, err := sdw.wr.ActionInitiator().StopBlp(sdw.shardInfo.MasterAlias, 30*time.Second)
 	if err != nil {
-		return err
+		return fmt.Errorf("StopBlp for %v failed: %v", sdw.shardInfo.MasterAlias, err)
 	}
 	wrangler.RecordStartBlpAction(sdw.cleaner, sdw.shardInfo.MasterAlias, 30*time.Second)
 
@@ -277,14 +277,14 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 		// find where we should be stopping
 		pos, err := blpPositionList.FindBlpPositionById(ss.Uid)
 		if err != nil {
-			return fmt.Errorf("No binlog position on the master for Uid %v", ss.Uid)
+			return fmt.Errorf("no binlog position on the master for Uid %v", ss.Uid)
 		}
 
 		// stop replication
 		log.Infof("Stopping slave[%v] %v at a minimum of %v", i, sdw.sourceAliases[i], pos.GroupId)
 		stoppedAt, err := sdw.wr.ActionInitiator().StopSlaveMinimum(sdw.sourceAliases[i], pos.GroupId, 30*time.Second)
 		if err != nil {
-			return fmt.Errorf("Cannot stop slave %v at right binlog position %v: %v", sdw.sourceAliases[i], pos.GroupId, err)
+			return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", sdw.sourceAliases[i], pos.GroupId, err)
 		}
 		stopPositionList.Entries[i].Uid = ss.Uid
 		stopPositionList.Entries[i].GroupId = stoppedAt.MasterLogGroupId
@@ -304,7 +304,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	log.Infof("Restarting master %v until it catches up to %v", sdw.shardInfo.MasterAlias, stopPositionList)
 	masterPos, err := sdw.wr.ActionInitiator().RunBlpUntil(sdw.shardInfo.MasterAlias, &stopPositionList, 30*time.Second)
 	if err != nil {
-		return err
+		return fmt.Errorf("RunBlpUntil for %v until %v failed: %v", sdw.shardInfo.MasterAlias, stopPositionList, err)
 	}
 
 	// 4 - wait until the destination checker is equal or passed
@@ -312,7 +312,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	log.Infof("Waiting for destination checker %v to catch up to %v", sdw.destinationAlias, masterPos.MasterLogGroupId)
 	_, err = sdw.wr.ActionInitiator().StopSlaveMinimum(sdw.destinationAlias, masterPos.MasterLogGroupId, 30*time.Second)
 	if err != nil {
-		return err
+		return fmt.Errorf("StopSlaveMinimum for %v at %v failed: %v", sdw.destinationAlias, masterPos.MasterLogGroupId, err)
 	}
 	wrangler.RecordStartSlaveAction(sdw.cleaner, sdw.destinationAlias, 30*time.Second)
 	action, err := wrangler.FindChangeSlaveTypeActionByTarget(sdw.cleaner, sdw.destinationAlias)
@@ -328,7 +328,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 		log.Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String(), err)
 	}
 	if err != nil {
-		return err
+		return fmt.Errorf("StartBlp failed for %v: %v", sdw.shardInfo.MasterAlias, err)
 	}
 
 	return nil
