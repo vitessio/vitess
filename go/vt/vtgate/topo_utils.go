@@ -33,15 +33,20 @@ func mapKeyspaceIdsToShards(topoServ SrvTopoServer, cell, keyspace string, table
 }
 
 func getKeyspaceShards(topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType) (string, []topo.SrvShard, error) {
-	// check keyspace redirection
-	keyspace, err := getKeyspaceAlias(topoServ, cell, keyspace, tabletType)
-	if err != nil {
-		return "", nil, err
-	}
 	srvKeyspace, err := topoServ.GetSrvKeyspace(cell, keyspace)
 	if err != nil {
 		return "", nil, fmt.Errorf("keyspace %v fetch error: %v", keyspace, err)
 	}
+
+	// check if the keyspace has been redirected for this tabletType.
+	if servedFrom, ok := srvKeyspace.ServedFrom[tabletType]; ok {
+		keyspace = servedFrom
+		srvKeyspace, err = topoServ.GetSrvKeyspace(cell, keyspace)
+		if err != nil {
+			return "", nil, fmt.Errorf("keyspace %v fetch error: %v", keyspace, err)
+		}
+	}
+
 	partition, ok := srvKeyspace.Partitions[tabletType]
 	if !ok {
 		return "", nil, fmt.Errorf("No partition found for tabletType %v in keyspace %v", tabletType, keyspace)
@@ -76,20 +81,6 @@ func mapEntityIdsToShards(topoServ SrvTopoServer, cell, keyspace string, entityI
 		shards[shard] = append(shards[shard], eid.ExternalID)
 	}
 	return keyspace, shards, nil
-}
-
-func getKeyspaceAlias(topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType) (string, error) {
-	srvKeyspace, err := topoServ.GetSrvKeyspace(cell, keyspace)
-	if err != nil {
-		return "", fmt.Errorf("keyspace fetch error: %v", err)
-	}
-
-	// check if the keyspace has been redirected for this tabletType.
-	if servedFrom, ok := srvKeyspace.ServedFrom[tabletType]; ok {
-		return servedFrom, nil
-	}
-
-	return keyspace, nil
 }
 
 // This function implements the restriction of handling one keyrange

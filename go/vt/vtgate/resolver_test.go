@@ -251,8 +251,8 @@ func testResolverGeneric(t *testing.T, name string, action func() (*mproto.Query
 		t.Errorf("want 1, got %v", sbc1.ExecCount)
 	}
 	// Ensure that we tried topo only once when mapping KeyspaceId/KeyRange to shards
-	if s.SrvKeyspaceCounter != 2 {
-		t.Errorf("want 2, got %v", s.SrvKeyspaceCounter)
+	if s.SrvKeyspaceCounter != 1 {
+		t.Errorf("want 1, got %v", s.SrvKeyspaceCounter)
 	}
 
 	// retryable failure, no sharding event
@@ -282,9 +282,9 @@ func testResolverGeneric(t *testing.T, name string, action func() (*mproto.Query
 	if sbc1.ExecCount != 1 {
 		t.Errorf("want 1, got %v", sbc1.ExecCount)
 	}
-	// Ensure that we tried topo only 3 times.
-	if s.SrvKeyspaceCounter != 4 {
-		t.Errorf("want 4, got %v", s.SrvKeyspaceCounter)
+	// Ensure that we tried topo only twice.
+	if s.SrvKeyspaceCounter != 2 {
+		t.Errorf("want 2, got %v", s.SrvKeyspaceCounter)
 	}
 
 	// no failure, initial vertical resharding
@@ -330,7 +330,7 @@ func testResolverGeneric(t *testing.T, name string, action func() (*mproto.Query
 	s.MapTestConn("20-40", sbc1)
 	i := 0
 	s.SrvKeyspaceCallback = func() {
-		if i == 2 {
+		if i == 1 {
 			addSandboxServedFrom(name, name+"ServedFrom")
 		}
 		i++
@@ -346,9 +346,9 @@ func testResolverGeneric(t *testing.T, name string, action func() (*mproto.Query
 	if sbc1.ExecCount != 2 {
 		t.Errorf("want 2, got %v", sbc1.ExecCount)
 	}
-	// Ensure that we tried topo only 3 times
-	if s.SrvKeyspaceCounter != 4 {
-		t.Errorf("want 4, got %v", s.SrvKeyspaceCounter)
+	// Ensure that we tried topo only 3 times.
+	if s.SrvKeyspaceCounter != 3 {
+		t.Errorf("want 3, got %v", s.SrvKeyspaceCounter)
 	}
 
 	// retryable failure, horizontal resharding
@@ -359,7 +359,7 @@ func testResolverGeneric(t *testing.T, name string, action func() (*mproto.Query
 	s.MapTestConn("20-40", sbc1)
 	i = 0
 	s.SrvKeyspaceCallback = func() {
-		if i == 2 {
+		if i == 1 {
 			s.ShardSpec = "-20-30-40-60-80-a0-c0-e0-"
 			s.MapTestConn("-20", sbc0)
 			s.MapTestConn("20-30", sbc1)
@@ -377,9 +377,9 @@ func testResolverGeneric(t *testing.T, name string, action func() (*mproto.Query
 	if sbc1.ExecCount != 2 {
 		t.Errorf("want 2, got %v", sbc1.ExecCount)
 	}
-	// Ensure that we tried topo only 3 times
-	if s.SrvKeyspaceCounter != 4 {
-		t.Errorf("want 4, got %v", s.SrvKeyspaceCounter)
+	// Ensure that we tried topo only twice.
+	if s.SrvKeyspaceCounter != 2 {
+		t.Errorf("want 2, got %v", s.SrvKeyspaceCounter)
 	}
 }
 
@@ -414,8 +414,8 @@ func testResolverStreamGeneric(t *testing.T, name string, action func() (*mproto
 		t.Errorf("want 1, got %v", sbc0.ExecCount)
 	}
 	// Ensure that we tried topo only once
-	if s.SrvKeyspaceCounter != 2 {
-		t.Errorf("want 2, got %v", s.SrvKeyspaceCounter)
+	if s.SrvKeyspaceCounter != 1 {
+		t.Errorf("want 1, got %v", s.SrvKeyspaceCounter)
 	}
 }
 
