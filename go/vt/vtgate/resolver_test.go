@@ -9,6 +9,8 @@ package vtgate
 import (
 	"fmt"
 	"reflect"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -228,9 +230,17 @@ func testResolverGeneric(t *testing.T, name string, action func() (*mproto.Query
 	sbc1 = &sandboxConn{mustFailRetry: 1}
 	s.MapTestConn("20-40", sbc1)
 	_, err = action()
-	want := fmt.Sprintf("error: err, shard, host: %s.-20.master, {Uid:0 Host:-20 NamedPortMap:map[vt:1] Health:map[]}\nretry: err, shard, host: %s.20-40.master, {Uid:1 Host:20-40 NamedPortMap:map[vt:1] Health:map[]}", name, name)
-	if err == nil || err.Error() != want {
-		t.Errorf("want\n%s\ngot\n%v", want, err)
+	want1 := fmt.Sprintf("error: err, shard, host: %s.-20.master, {Uid:0 Host:-20 NamedPortMap:map[vt:1] Health:map[]}", name)
+	want2 := fmt.Sprintf("retry: err, shard, host: %s.20-40.master, {Uid:1 Host:20-40 NamedPortMap:map[vt:1] Health:map[]}", name)
+	want := []string{want1, want2}
+	sort.Strings(want)
+	if err == nil {
+		t.Errorf("want\n%v\ngot\n%v", want, err)
+	}
+	got := strings.Split(err.Error(), "\n")
+	sort.Strings(got)
+	if !reflect.DeepEqual(want, got) {
+		t.Errorf("want\n%v\ngot\n%v", want, got)
 	}
 	// Ensure that we tried only once
 	if sbc0.ExecCount != 1 {
@@ -251,9 +261,17 @@ func testResolverGeneric(t *testing.T, name string, action func() (*mproto.Query
 	sbc1 = &sandboxConn{mustFailFatal: 1}
 	s.MapTestConn("20-40", sbc1)
 	_, err = action()
-	want = fmt.Sprintf("retry: err, shard, host: %s.-20.master, {Uid:0 Host:-20 NamedPortMap:map[vt:1] Health:map[]}\nfatal: err, shard, host: %s.20-40.master, {Uid:1 Host:20-40 NamedPortMap:map[vt:1] Health:map[]}", name, name)
-	if err == nil || err.Error() != want {
-		t.Errorf("want\n%s\ngot\n%v", want, err)
+	want1 = fmt.Sprintf("retry: err, shard, host: %s.-20.master, {Uid:0 Host:-20 NamedPortMap:map[vt:1] Health:map[]}", name)
+	want2 = fmt.Sprintf("fatal: err, shard, host: %s.20-40.master, {Uid:1 Host:20-40 NamedPortMap:map[vt:1] Health:map[]}", name)
+	want = []string{want1, want2}
+	sort.Strings(want)
+	if err == nil {
+		t.Errorf("want\n%v\ngot\n%v", want, err)
+	}
+	got = strings.Split(err.Error(), "\n")
+	sort.Strings(got)
+	if !reflect.DeepEqual(want, got) {
+		t.Errorf("want\n%v\ngot\n%v", want, got)
 	}
 	// Ensure that we tried only once.
 	if sbc0.ExecCount != 1 {

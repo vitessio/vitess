@@ -43,8 +43,8 @@ var sandboxMap map[string]*sandbox
 func createSandbox(keyspace string) *sandbox {
 	sandboxMu.Lock()
 	defer sandboxMu.Unlock()
-	s := &sandbox{ShardSpec: DefaultShardSpec}
-	s.TestConns = make(map[uint32]tabletconn.TabletConn)
+	s := &sandbox{}
+	s.Reset()
 	sandboxMap[keyspace] = s
 	return s
 }
@@ -103,6 +103,7 @@ func (s *sandbox) Reset() {
 	s.SrvKeyspaceCounter = 0
 	s.SrvKeyspaceMustFail = 0
 	s.EndPointCounter = 0
+	s.EndPointMustFail = 0
 	s.DialCounter = 0
 	s.DialMustFail = 0
 	s.KeyspaceServedFrom = ""
