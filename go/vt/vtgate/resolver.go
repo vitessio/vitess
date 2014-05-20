@@ -39,7 +39,7 @@ func NewResolver(serv SrvTopoServer, cell string, retryDelay time.Duration, retr
 // ExecuteKeyspaceIds executes a non-streaming query based on KeyspaceIds.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 func (res *Resolver) ExecuteKeyspaceIds(context interface{}, query *proto.KeyspaceIdQuery) (*mproto.QueryResult, error) {
-	mapToShards := func(keyspace string) ([]string, error) {
+	mapToShards := func(keyspace string) (string, []string, error) {
 		return mapKeyspaceIdsToShards(
 			res.scatterConn.toposerv,
 			res.scatterConn.cell,
@@ -53,7 +53,7 @@ func (res *Resolver) ExecuteKeyspaceIds(context interface{}, query *proto.Keyspa
 // ExecuteKeyRanges executes a non-streaming query based on KeyRanges.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 func (res *Resolver) ExecuteKeyRanges(context interface{}, query *proto.KeyRangeQuery) (*mproto.QueryResult, error) {
-	mapToShards := func(keyspace string) ([]string, error) {
+	mapToShards := func(keyspace string) (string, []string, error) {
 		return mapKeyRangesToShards(
 			res.scatterConn.toposerv,
 			res.scatterConn.cell,
@@ -73,18 +73,9 @@ func (res *Resolver) Execute(
 	keyspace string,
 	tabletType topo.TabletType,
 	session *proto.Session,
-	mapToShards func(string) ([]string, error),
+	mapToShards func(string) (string, []string, error),
 ) (*mproto.QueryResult, error) {
-	// check keyspace change for vertical resharding
-	keyspace, err := getKeyspaceAlias(
-		res.scatterConn.toposerv,
-		res.scatterConn.cell,
-		keyspace,
-		tabletType)
-	if err != nil {
-		return nil, err
-	}
-	shards, err := mapToShards(keyspace)
+	keyspace, shards, err := mapToShards(keyspace)
 	if err != nil {
 		return nil, err
 	}
@@ -99,21 +90,16 @@ func (res *Resolver) Execute(
 			NewSafeSession(session))
 		if connError, ok := err.(*ShardConnError); ok && connError.Code == tabletconn.ERR_RETRY {
 			resharding := false
+			newKeyspace, newShards, err := mapToShards(keyspace)
+			if err != nil {
+				return nil, err
+			}
 			// check keyspace change for vertical resharding
-			newKeyspace, err := getKeyspaceAlias(
-				res.scatterConn.toposerv,
-				res.scatterConn.cell,
-				keyspace,
-				tabletType)
-			if err == nil && newKeyspace != keyspace {
+			if newKeyspace != keyspace {
 				keyspace = newKeyspace
 				resharding = true
 			}
 			// check shards change for horizontal resharding
-			newShards, err := mapToShards(keyspace)
-			if err != nil {
-				return nil, err
-			}
 			if !StrsEquals(newShards, shards) {
 				shards = newShards
 				resharding = true
@@ -136,17 +122,7 @@ func (res *Resolver) ExecuteEntityIds(
 	context interface{},
 	query *proto.EntityIdsQuery,
 ) (*mproto.QueryResult, error) {
-	// check keyspace change for vertical resharding
-	newKeyspace, err := getKeyspaceAlias(
-		res.scatterConn.toposerv,
-		res.scatterConn.cell,
-		query.Keyspace,
-		query.TabletType)
-	if err != nil {
-		return nil, err
-	}
-	query.Keyspace = newKeyspace
-	shardIDMap, err := mapEntityIdsToShards(
+	newKeyspace, shardIDMap, err := mapEntityIdsToShards(
 		res.scatterConn.toposerv,
 		res.scatterConn.cell,
 		query.Keyspace,
@@ -155,6 +131,7 @@ func (res *Resolver) ExecuteEntityIds(
 	if err != nil {
 		return nil, err
 	}
+	query.Keyspace = newKeyspace
 	shards, sqls, bindVars := buildEntityIds(shardIDMap, query.Sql, query.EntityColumnName, query.BindVariables)
 	for {
 		qr, err := res.scatterConn.ExecuteEntityIds(
@@ -167,18 +144,7 @@ func (res *Resolver) ExecuteEntityIds(
 			NewSafeSession(query.Session))
 		if connError, ok := err.(*ShardConnError); ok && connError.Code == tabletconn.ERR_RETRY {
 			resharding := false
-			// check keyspace change for vertical resharding
-			newKeyspace, err := getKeyspaceAlias(
-				res.scatterConn.toposerv,
-				res.scatterConn.cell,
-				query.Keyspace,
-				query.TabletType)
-			if err == nil && newKeyspace != query.Keyspace {
-				query.Keyspace = newKeyspace
-				resharding = true
-			}
-			// check shards change for horizontal resharding
-			newShardIDMap, err := mapEntityIdsToShards(
+			newKeyspace, newShardIDMap, err := mapEntityIdsToShards(
 				res.scatterConn.toposerv,
 				res.scatterConn.cell,
 				query.Keyspace,
@@ -187,6 +153,12 @@ func (res *Resolver) ExecuteEntityIds(
 			if err != nil {
 				return nil, err
 			}
+			// check keyspace change for vertical resharding
+			if newKeyspace != query.Keyspace {
+				query.Keyspace = newKeyspace
+				resharding = true
+			}
+			// check shards change for horizontal resharding
 			newShards, newSqls, newBindVars := buildEntityIds(newShardIDMap, query.Sql, query.EntityColumnName, query.BindVariables)
 			if !StrsEquals(newShards, shards) {
 				shards = newShards
@@ -209,7 +181,7 @@ func (res *Resolver) ExecuteEntityIds(
 // ExecuteBatchKeyspaceIds executes a group of queries based on KeyspaceIds.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 func (res *Resolver) ExecuteBatchKeyspaceIds(context interface{}, query *proto.KeyspaceIdBatchQuery) (*tproto.QueryResultList, error) {
-	mapToShards := func(keyspace string) ([]string, error) {
+	mapToShards := func(keyspace string) (string, []string, error) {
 		return mapKeyspaceIdsToShards(
 			res.scatterConn.toposerv,
 			res.scatterConn.cell,
@@ -228,18 +200,9 @@ func (res *Resolver) ExecuteBatch(
 	keyspace string,
 	tabletType topo.TabletType,
 	session *proto.Session,
-	mapToShards func(string) ([]string, error),
+	mapToShards func(string) (string, []string, error),
 ) (*tproto.QueryResultList, error) {
-	// check keyspace change for vertical resharding
-	keyspace, err := getKeyspaceAlias(
-		res.scatterConn.toposerv,
-		res.scatterConn.cell,
-		keyspace,
-		tabletType)
-	if err != nil {
-		return nil, err
-	}
-	shards, err := mapToShards(keyspace)
+	keyspace, shards, err := mapToShards(keyspace)
 	if err != nil {
 		return nil, err
 	}
@@ -253,21 +216,16 @@ func (res *Resolver) ExecuteBatch(
 			NewSafeSession(session))
 		if connError, ok := err.(*ShardConnError); ok && connError.Code == tabletconn.ERR_RETRY {
 			resharding := false
+			newKeyspace, newShards, err := mapToShards(keyspace)
+			if err != nil {
+				return nil, err
+			}
 			// check keyspace change for vertical resharding
-			newKeyspace, err := getKeyspaceAlias(
-				res.scatterConn.toposerv,
-				res.scatterConn.cell,
-				keyspace,
-				tabletType)
-			if err == nil && newKeyspace != keyspace {
+			if newKeyspace != keyspace {
 				keyspace = newKeyspace
 				resharding = true
 			}
 			// check shards change for horizontal resharding
-			newShards, err := mapToShards(keyspace)
-			if err != nil {
-				return nil, err
-			}
 			if !StrsEquals(newShards, shards) {
 				shards = newShards
 				resharding = true
@@ -291,7 +249,7 @@ func (res *Resolver) ExecuteBatch(
 // response which is needed for checkpointing.
 // The api supports supplying multiple KeyspaceIds to make it future proof.
 func (res *Resolver) StreamExecuteKeyspaceIds(context interface{}, query *proto.KeyspaceIdQuery, sendReply func(*mproto.QueryResult) error) error {
-	mapToShards := func(keyspace string) ([]string, error) {
+	mapToShards := func(keyspace string) (string, []string, error) {
 		return mapKeyspaceIdsToShards(
 			res.scatterConn.toposerv,
 			res.scatterConn.cell,
@@ -309,7 +267,7 @@ func (res *Resolver) StreamExecuteKeyspaceIds(context interface{}, query *proto.
 // response which is needed for checkpointing.
 // The api supports supplying multiple keyranges to make it future proof.
 func (res *Resolver) StreamExecuteKeyRanges(context interface{}, query *proto.KeyRangeQuery, sendReply func(*mproto.QueryResult) error) error {
-	mapToShards := func(keyspace string) ([]string, error) {
+	mapToShards := func(keyspace string) (string, []string, error) {
 		return mapKeyRangesToShards(
 			res.scatterConn.toposerv,
 			res.scatterConn.cell,
@@ -331,19 +289,10 @@ func (res *Resolver) StreamExecute(
 	keyspace string,
 	tabletType topo.TabletType,
 	session *proto.Session,
-	mapToShards func(string) ([]string, error),
+	mapToShards func(string) (string, []string, error),
 	sendReply func(*mproto.QueryResult) error,
 ) error {
-	// check keyspace change for vertical resharding
-	keyspace, err := getKeyspaceAlias(
-		res.scatterConn.toposerv,
-		res.scatterConn.cell,
-		keyspace,
-		tabletType)
-	if err != nil {
-		return err
-	}
-	shards, err := mapToShards(keyspace)
+	keyspace, shards, err := mapToShards(keyspace)
 	if err != nil {
 		return err
 	}
