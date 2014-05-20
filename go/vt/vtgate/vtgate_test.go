@@ -427,7 +427,7 @@ func TestVTGateStreamExecuteKeyspaceIds(t *testing.T) {
 		},
 	}
 	if !reflect.DeepEqual(want, qrs) {
-		t.Errorf("want \n%+v, got \n%+v", want, qrs)
+		t.Errorf("want\n%#v\ngot\n%#v", want, qrs)
 	}
 	RpcVTGate.Commit(nil, sq.Session)
 	if sbc.CommitCount.Get() != 1 {
