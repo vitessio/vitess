@@ -242,9 +242,9 @@ class VtoccTestEnv(TestEnv):
     # start mysql
     res = subprocess.call([
         environment.binary_path("mysqlctl"),
-        "-tablet-uid",  self.tabletuid,
+        "-tablet_uid",  self.tabletuid,
         "-port", str(self.port),
-        "-mysql-port", str(self.mysqlport),
+        "-mysql_port", str(self.mysqlport),
         "init"
         ])
     if res != 0:
@@ -344,7 +344,7 @@ class VtoccTestEnv(TestEnv):
     # stop mysql, delete directory
     subprocess.call([
         environment.binary_path('mysqlctl'),
-        "-tablet-uid",  self.tabletuid,
+        "-tablet_uid",  self.tabletuid,
         "teardown", "-force"
         ])
     try:
