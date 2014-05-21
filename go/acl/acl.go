@@ -10,6 +10,7 @@ package acl
 
 import (
 	"flag"
+	"fmt"
 	"net/http"
 	"sync"
 
@@ -60,7 +61,8 @@ func savePolicy() {
 	}
 	currentPolicy = policies[*securityPolicy]
 	if currentPolicy == nil {
-		log.Fatalf("policy %s not found", *securityPolicy)
+		log.Warningf("policy %s not found, using fallback policy", *securityPolicy)
+		currentPolicy = FallbackPolicy{}
 	}
 }
 
@@ -83,4 +85,11 @@ func CheckAccessHTTP(req *http.Request, role string) error {
 		return currentPolicy.CheckAccessHTTP(req, role)
 	}
 	return nil
+}
+
+// SendError is a convenience function that sends an ACL
+// error as an HTTP response.
+func SendError(w http.ResponseWriter, err error) {
+	w.WriteHeader(http.StatusForbidden)
+	fmt.Fprintf(w, "Access denied: %v\n", err)
 }

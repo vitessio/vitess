@@ -12,6 +12,7 @@ from subprocess import PIPE
 import threading
 import time
 import unittest
+import urllib
 
 import environment
 import utils
@@ -577,6 +578,16 @@ class TestTabletManager(unittest.TestCase):
     # to reset its state to spare
     ti = utils.run_vtctl_json(['GetTablet', tablet_62044.tablet_alias])
     self.assertEqual(ti['Type'], 'spare', "tablet didn't go to spare while in lameduck mode: %s" % str(ti))
+
+  def test_fallback_policy(self):
+    tablet_62344.create_db('vt_test_keyspace')
+    tablet_62344.init_tablet('master', 'test_keyspace', '0')
+    proc1 = tablet_62344.start_vttablet(security_policy="bogus")
+    f = urllib.urlopen('http://localhost:%u/queryz' % int(tablet_62344.port))
+    response = f.read()
+    f.close()
+    self.assertIn('not allowed', response)
+    tablet_62344.kill_vttablet()
 
 if __name__ == '__main__':
   utils.main()

@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/cache"
 	"github.com/youtube/vitess/go/mysql/proto"
 )
@@ -54,6 +55,10 @@ func (co *Consolidator) Create(sql string) (r *Result, created bool) {
 }
 
 func (co *Consolidator) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
+		acl.SendError(response, err)
+		return
+	}
 	items := co.consolidations.Items()
 	response.Header().Set("Content-Type", "text/plain")
 	if items == nil {

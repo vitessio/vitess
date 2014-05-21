@@ -14,6 +14,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/acl"
 )
 
 var (
@@ -147,6 +148,10 @@ func AddStatusSection(banner string, f func() string) {
 }
 
 func statusHandler(w http.ResponseWriter, r *http.Request) {
+	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
+		acl.SendError(w, err)
+		return
+	}
 	statusMu.Lock()
 	defer statusMu.Unlock()
 

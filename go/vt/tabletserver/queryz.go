@@ -11,6 +11,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
@@ -110,6 +111,10 @@ func init() {
 
 // queryzHandler displays the query stats.
 func queryzHandler(w http.ResponseWriter, r *http.Request) {
+	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
+		acl.SendError(w, err)
+		return
+	}
 	startHTMLTable(w)
 	defer endHTMLTable(w)
 	w.Write(queryzHeader)

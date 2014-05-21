@@ -13,6 +13,7 @@ import (
 	"strconv"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/acl"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -199,6 +200,10 @@ func IsHealthy() error {
 }
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
+	if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
+		acl.SendError(w, err)
+		return
+	}
 	w.Header().Set("Content-Type", "text/plain")
 	if err := IsHealthy(); err != nil {
 		w.Write([]byte("notok"))

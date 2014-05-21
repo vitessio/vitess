@@ -12,6 +12,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/memcache"
 	"github.com/youtube/vitess/go/pools"
 	"github.com/youtube/vitess/go/stats"
@@ -251,6 +252,10 @@ func (cp *CachePool) IdleTimeout() time.Duration {
 }
 
 func (cp *CachePool) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+	if err := acl.CheckAccessHTTP(request, acl.MONITORING); err != nil {
+		acl.SendError(response, err)
+		return
+	}
 	defer func() {
 		if x := recover(); x != nil {
 			response.Write(([]byte)(x.(error).Error()))
