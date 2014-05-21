@@ -10,6 +10,7 @@ package tabletmanager
 import (
 	"fmt"
 	"math/rand" // not crypto-safe is OK here
+	"sort"
 	"sync"
 	"time"
 
@@ -51,18 +52,22 @@ type BinlogPlayerController struct {
 
 	// stopAtGroupId contains the stopping point for this player, if any
 	stopAtGroupId int64
+
+	// BinlogPlayerStats has the stats for the players we're going to use
+	binlogPlayerStats *binlogplayer.BinlogPlayerStats
 }
 
 func newBinlogPlayerController(ts topo.Server, dbConfig *mysql.ConnectionParams, mysqld *mysqlctl.Mysqld, cell string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, sourceShard topo.SourceShard, dbName string) *BinlogPlayerController {
 	blc := &BinlogPlayerController{
-		ts:             ts,
-		dbConfig:       dbConfig,
-		mysqld:         mysqld,
-		cell:           cell,
-		keyspaceIdType: keyspaceIdType,
-		keyRange:       keyRange,
-		dbName:         dbName,
-		sourceShard:    sourceShard,
+		ts:                ts,
+		dbConfig:          dbConfig,
+		mysqld:            mysqld,
+		cell:              cell,
+		keyspaceIdType:    keyspaceIdType,
+		keyRange:          keyRange,
+		dbName:            dbName,
+		sourceShard:       sourceShard,
+		binlogPlayerStats: binlogplayer.NewBinlogPlayerStats(),
 	}
 	return blc
 }
@@ -201,7 +206,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		}
 
 		// tables, just get them
-		player := binlogplayer.NewBinlogPlayerTables(vtClient, addr, tables, startPosition, bpc.stopAtGroupId)
+		player := binlogplayer.NewBinlogPlayerTables(vtClient, addr, tables, startPosition, bpc.stopAtGroupId, bpc.binlogPlayerStats)
 		return player.ApplyBinlogEvents(bpc.interrupted)
 	} else {
 		// the data we have to replicate is the intersection of the
@@ -211,7 +216,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 			return fmt.Errorf("Source shard %v doesn't overlap destination shard %v", bpc.sourceShard.KeyRange, bpc.keyRange)
 		}
 
-		player := binlogplayer.NewBinlogPlayerKeyRange(vtClient, addr, bpc.keyspaceIdType, overlap, startPosition, bpc.stopAtGroupId)
+		player := binlogplayer.NewBinlogPlayerKeyRange(vtClient, addr, bpc.keyspaceIdType, overlap, startPosition, bpc.stopAtGroupId, bpc.binlogPlayerStats)
 		return player.ApplyBinlogEvents(bpc.interrupted)
 	}
 }
@@ -446,4 +451,76 @@ func (blm *BinlogPlayerMap) RunUntil(blpPositionList *myproto.BlpPositionList, w
 	wg.Wait()
 
 	return rec.Error()
+}
+
+// The following structures are used for status display
+
+// BinlogPlayerControllerStatus is the status of an individual controller
+type BinlogPlayerControllerStatus struct {
+	// configuration values
+	Index         uint32
+	SourceShard   topo.SourceShard
+	StopAtGroupId int64
+
+	// stats and current values
+	LastGroupId int64
+	Counts      map[string]int64
+	Rates       map[string][]float64
+}
+
+// BinlogPlayerControllerStatusList is the list of statuses
+type BinlogPlayerControllerStatusList []*BinlogPlayerControllerStatus
+
+// Len is part of sort.Interface
+func (bpcsl BinlogPlayerControllerStatusList) Len() int {
+	return len(bpcsl)
+}
+
+// Less is part of sort.Interface
+func (bpcsl BinlogPlayerControllerStatusList) Less(i, j int) bool {
+	return bpcsl[i].Index < bpcsl[j].Index
+}
+
+// Swap is part of sort.Interface
+func (bpcsl BinlogPlayerControllerStatusList) Swap(i, j int) {
+	bpcsl[i], bpcsl[j] = bpcsl[j], bpcsl[i]
+}
+
+// BinlogPlayerMapStatus is the complete player status
+type BinlogPlayerMapStatus struct {
+	State       string
+	Controllers BinlogPlayerControllerStatusList
+}
+
+// Status returns the BinlogPlayerMapStatus for the BinlogPlayerMap
+func (blm *BinlogPlayerMap) Status() *BinlogPlayerMapStatus {
+	// Create the result, take care of the stopped state.
+	result := &BinlogPlayerMapStatus{}
+	blm.mu.Lock()
+	defer blm.mu.Unlock()
+
+	// fill in state
+	if blm.state == BPM_STATE_STOPPED {
+		result.State = "Stopped"
+	} else {
+		result.State = "Running"
+	}
+
+	// fill in controllers
+	result.Controllers = make([]*BinlogPlayerControllerStatus, 0, len(blm.players))
+
+	for i, bpc := range blm.players {
+		bpcs := &BinlogPlayerControllerStatus{
+			Index:         i,
+			SourceShard:   bpc.sourceShard,
+			StopAtGroupId: bpc.stopAtGroupId,
+			LastGroupId:   bpc.binlogPlayerStats.LastGroupId.Get(),
+			Counts:        bpc.binlogPlayerStats.Timings.Counts(),
+			Rates:         bpc.binlogPlayerStats.Rates.Get(),
+		}
+		result.Controllers = append(result.Controllers, bpcs)
+	}
+	sort.Sort(result.Controllers)
+
+	return result
 }

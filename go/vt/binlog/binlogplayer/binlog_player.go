@@ -5,7 +5,6 @@
 package binlogplayer
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -23,41 +23,28 @@ var (
 	SLOW_QUERY_THRESHOLD      = time.Duration(100 * time.Millisecond)
 	BLPL_STREAM_COMMENT_START = []byte("/* _stream ")
 	BLPL_SPACE                = []byte(" ")
+
+	BLPL_QUERY       = "Query"
+	BLPL_TRANSACTION = "Transaction"
 )
 
-// blplStats is the internal stats of this player
-type blplStats struct {
-	queryCount    *stats.Counters
-	txnCount      *stats.Counters
-	queriesPerSec *stats.Rates
-	txnsPerSec    *stats.Rates
-	txnTime       *stats.Timings
-	queryTime     *stats.Timings
+// BinlogPlayerStats is the internal stats of a player. It is a different
+// structure that is passed in so stats can be collected over the life
+// of multiple individual players.
+type BinlogPlayerStats struct {
+	// Stats about the player, keys used are BLPL_QUERY and BLPL_TRANSACTION
+	Timings *stats.Timings
+	Rates   *stats.Rates
+
+	// Last saved status
+	LastGroupId sync2.AtomicInt64
 }
 
-func NewBlplStats() *blplStats {
-	bs := &blplStats{}
-	bs.txnCount = stats.NewCounters("")
-	bs.queryCount = stats.NewCounters("")
-	bs.queriesPerSec = stats.NewRates("", bs.queryCount, 15, 60e9)
-	bs.txnsPerSec = stats.NewRates("", bs.txnCount, 15, 60e9)
-	bs.txnTime = stats.NewTimings("")
-	bs.queryTime = stats.NewTimings("")
-	return bs
-}
-
-// statsJSON returns a json encoded version of stats
-func (bs *blplStats) statsJSON() string {
-	buf := bytes.NewBuffer(make([]byte, 0, 128))
-	fmt.Fprintf(buf, "{")
-	fmt.Fprintf(buf, "\n \"TxnCount\": %v,", bs.txnCount)
-	fmt.Fprintf(buf, "\n \"QueryCount\": %v,", bs.queryCount)
-	fmt.Fprintf(buf, "\n \"QueriesPerSec\": %v,", bs.queriesPerSec)
-	fmt.Fprintf(buf, "\n \"TxnPerSec\": %v", bs.txnsPerSec)
-	fmt.Fprintf(buf, "\n \"TxnTime\": %v,", bs.txnTime)
-	fmt.Fprintf(buf, "\n \"QueryTime\": %v,", bs.queryTime)
-	fmt.Fprintf(buf, "\n}")
-	return buf.String()
+func NewBinlogPlayerStats() *BinlogPlayerStats {
+	bps := &BinlogPlayerStats{}
+	bps.Timings = stats.NewTimings("")
+	bps.Rates = stats.NewRates("", bps.Timings, 15, 60e9)
+	return bps
 }
 
 // BinlogPlayer is handling reading a stream of updates from BinlogServer
@@ -75,14 +62,14 @@ type BinlogPlayer struct {
 	// common to all
 	blpPos        myproto.BlpPosition
 	stopAtGroupId int64
-	blplStats     *blplStats
+	blplStats     *BinlogPlayerStats
 }
 
 // NewBinlogPlayerKeyRange returns a new BinlogPlayer pointing at the server
 // replicating the provided keyrange, starting at the startPosition.GroupId,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If stopAtGroupId != 0, it will stop when reaching that GroupId.
-func NewBinlogPlayerKeyRange(dbClient VtClient, addr string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, startPosition *myproto.BlpPosition, stopAtGroupId int64) *BinlogPlayer {
+func NewBinlogPlayerKeyRange(dbClient VtClient, addr string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, startPosition *myproto.BlpPosition, stopAtGroupId int64, blplStats *BinlogPlayerStats) *BinlogPlayer {
 	return &BinlogPlayer{
 		addr:           addr,
 		dbClient:       dbClient,
@@ -90,7 +77,7 @@ func NewBinlogPlayerKeyRange(dbClient VtClient, addr string, keyspaceIdType key.
 		keyRange:       keyRange,
 		blpPos:         *startPosition,
 		stopAtGroupId:  stopAtGroupId,
-		blplStats:      NewBlplStats(),
+		blplStats:      blplStats,
 	}
 }
 
@@ -98,19 +85,15 @@ func NewBinlogPlayerKeyRange(dbClient VtClient, addr string, keyspaceIdType key.
 // replicating the provided tables, starting at the startPosition.GroupId,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If stopAtGroupId != 0, it will stop when reaching that GroupId.
-func NewBinlogPlayerTables(dbClient VtClient, addr string, tables []string, startPosition *myproto.BlpPosition, stopAtGroupId int64) *BinlogPlayer {
+func NewBinlogPlayerTables(dbClient VtClient, addr string, tables []string, startPosition *myproto.BlpPosition, stopAtGroupId int64, blplStats *BinlogPlayerStats) *BinlogPlayer {
 	return &BinlogPlayer{
 		addr:          addr,
 		dbClient:      dbClient,
 		tables:        tables,
 		blpPos:        *startPosition,
 		stopAtGroupId: stopAtGroupId,
-		blplStats:     NewBlplStats(),
+		blplStats:     blplStats,
 	}
-}
-
-func (blp *BinlogPlayer) StatsJSON() string {
-	return blp.blplStats.statsJSON()
 }
 
 func (blp *BinlogPlayer) writeRecoveryPosition(groupId int64) error {
@@ -128,6 +111,7 @@ func (blp *BinlogPlayer) writeRecoveryPosition(groupId int64) error {
 	if qr.RowsAffected != 1 {
 		return fmt.Errorf("Cannot update blp_recovery table, affected %v rows", qr.RowsAffected)
 	}
+	blp.blplStats.LastGroupId.Set(groupId)
 	return nil
 }
 
@@ -177,16 +161,14 @@ func (blp *BinlogPlayer) processTransaction(tx *proto.BinlogTransaction) (ok boo
 	if err = blp.dbClient.Commit(); err != nil {
 		return false, fmt.Errorf("failed query COMMIT, err: %s", err)
 	}
-	blp.blplStats.txnCount.Add("TxnCount", 1)
-	blp.blplStats.txnTime.Record("TxnTime", txnStartTime)
+	blp.blplStats.Timings.Record(BLPL_TRANSACTION, txnStartTime)
 	return true, nil
 }
 
 func (blp *BinlogPlayer) exec(sql string) (*mproto.QueryResult, error) {
 	queryStartTime := time.Now()
 	qr, err := blp.dbClient.ExecuteFetch(sql, 0, false)
-	blp.blplStats.queryCount.Add("QueryCount", 1)
-	blp.blplStats.queryTime.Record("QueryTime", queryStartTime)
+	blp.blplStats.Timings.Record(BLPL_QUERY, queryStartTime)
 	if time.Now().Sub(queryStartTime) > SLOW_QUERY_THRESHOLD {
 		log.Infof("SLOW QUERY '%s'", sql)
 	}

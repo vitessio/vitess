@@ -75,8 +75,6 @@ type ActionAgent struct {
 	Mysqld          *mysqlctl.Mysqld
 	DBConfigs       *dbconfigs.DBConfigs
 	SchemaOverrides []tabletserver.SchemaOverride
-
-	// BinlogPlayerMap is optional
 	BinlogPlayerMap *BinlogPlayerMap
 
 	// Internal variables
@@ -433,9 +431,7 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 
 func (agent *ActionAgent) Stop() {
 	close(agent.done)
-	if agent.BinlogPlayerMap != nil {
-		agent.BinlogPlayerMap.StopAllPlayersAndReset()
-	}
+	agent.BinlogPlayerMap.StopAllPlayersAndReset()
 }
 
 func (agent *ActionAgent) actionEventLoop() {

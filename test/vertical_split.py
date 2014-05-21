@@ -349,10 +349,16 @@ index by_msg (msg)
 
     utils.pause("Good time to test vtworker for diffs")
 
+    # get status for destination master tablet, make sure we have it all
+    destination_master_status = destination_master.get_status()
+    self.assertIn('Binlog player state: Running', destination_master_status)
+    self.assertIn('moving.*', destination_master_status)
+    self.assertIn('<td><b>All</b>: 1000<br><b>Query</b>: 700<br><b>Transaction</b>: 300<br></td>', destination_master_status)
+    self.assertIn('</html>', destination_master_status)
+
     # check we can't migrate the master just yet
     utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'master'],
                     expect_fail=True)
-
 
     # now serve rdonly from the destination shards
     utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'rdonly'],

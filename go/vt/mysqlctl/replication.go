@@ -302,6 +302,7 @@ func (mysqld *Mysqld) WaitForMinimumReplicationPosition(groupId int64, waitTimeo
 		if pos.MasterLogGroupId >= groupId {
 			return nil
 		}
+		log.Infof("WaitForMinimumReplicationPosition got group_id %v, sleeping for 1s waiting for group_id %v", pos.MasterLogGroupId, groupId)
 		time.Sleep(time.Second)
 	}
 	return fmt.Errorf("Time out waiting for group_id %v", groupId)

@@ -499,6 +499,12 @@ primary key (name)
 
     utils.pause("Good time to test vtworker for diffs")
 
+    # get status for a destination master tablet, make sure we have it all
+    shard_2_master_status = shard_2_master.get_status()
+    self.assertIn('Binlog player state: Running', shard_2_master_status)
+    self.assertIn('<td><b>All</b>: 6000<br><b>Query</b>: 4000<br><b>Transaction</b>: 2000<br></td>', shard_2_master_status)
+    self.assertIn('</html>', shard_2_master_status)
+
     # start a thread to insert data into shard_1 in the background
     # with current time, and monitor the delay
     insert_thread_1 = InsertThread(shard_1_master, "insert_low", 10000,
@@ -607,6 +613,11 @@ primary key (name)
     # check the binlog players are gone now
     shard_2_master.wait_for_binlog_player_count(0)
     shard_3_master.wait_for_binlog_player_count(0)
+
+    # get status for a destination master tablet, make sure it's good
+    shard_2_master_status = shard_2_master.get_status()
+    self.assertIn('No binlog player is running', shard_2_master_status)
+    self.assertIn('</html>', shard_2_master_status)
 
     # scrap the original tablets in the original shard
     for t in [shard_1_master, shard_1_slave1, shard_1_slave2, shard_1_rdonly]:
