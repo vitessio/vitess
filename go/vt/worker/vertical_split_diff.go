@@ -157,7 +157,7 @@ func (vsdw *VerticalSplitDiffWorker) Run() {
 func (vsdw *VerticalSplitDiffWorker) run() error {
 	// first state: read what we need to do
 	if err := vsdw.init(); err != nil {
-		return err
+		return fmt.Errorf("init() failed: %v", err)
 	}
 	if vsdw.CheckInterrupted() {
 		return topo.ErrInterrupted
@@ -165,7 +165,7 @@ func (vsdw *VerticalSplitDiffWorker) run() error {
 
 	// second state: find targets
 	if err := vsdw.findTargets(); err != nil {
-		return err
+		return fmt.Errorf("findTargets() failed: %v", err)
 	}
 	if vsdw.CheckInterrupted() {
 		return topo.ErrInterrupted
@@ -173,7 +173,7 @@ func (vsdw *VerticalSplitDiffWorker) run() error {
 
 	// third phase: synchronize replication
 	if err := vsdw.synchronizeReplication(); err != nil {
-		return err
+		return fmt.Errorf("synchronizeReplication() failed: %v", err)
 	}
 	if vsdw.CheckInterrupted() {
 		return topo.ErrInterrupted
@@ -181,7 +181,7 @@ func (vsdw *VerticalSplitDiffWorker) run() error {
 
 	// fourth phase: diff
 	if err := vsdw.diff(); err != nil {
-		return err
+		return fmt.Errorf("diff() failed: %v", err)
 	}
 
 	return nil
@@ -197,22 +197,22 @@ func (vsdw *VerticalSplitDiffWorker) init() error {
 	// read the keyspace and validate it
 	vsdw.keyspaceInfo, err = vsdw.wr.TopoServer().GetKeyspace(vsdw.keyspace)
 	if err != nil {
-		return fmt.Errorf("Cannot read keyspace %v: %v", vsdw.keyspace, err)
+		return fmt.Errorf("cannot read keyspace %v: %v", vsdw.keyspace, err)
 	}
 	if len(vsdw.keyspaceInfo.ServedFrom) == 0 {
-		return fmt.Errorf("Keyspace %v has no ServedFrom", vsdw.keyspace)
+		return fmt.Errorf("keyspace %v has no ServedFrom", vsdw.keyspace)
 	}
 
 	// read the shardinfo and validate it
 	vsdw.shardInfo, err = vsdw.wr.TopoServer().GetShard(vsdw.keyspace, vsdw.shard)
 	if err != nil {
-		return fmt.Errorf("Cannot read shard %v/%v: %v", vsdw.keyspace, vsdw.shard, err)
+		return fmt.Errorf("cannot read shard %v/%v: %v", vsdw.keyspace, vsdw.shard, err)
 	}
 	if len(vsdw.shardInfo.SourceShards) != 1 {
-		return fmt.Errorf("Shard %v/%v has bad number of source shards", vsdw.keyspace, vsdw.shard)
+		return fmt.Errorf("shard %v/%v has bad number of source shards", vsdw.keyspace, vsdw.shard)
 	}
 	if vsdw.shardInfo.MasterAlias.IsZero() {
-		return fmt.Errorf("Shard %v/%v has no master", vsdw.keyspace, vsdw.shard)
+		return fmt.Errorf("shard %v/%v has no master", vsdw.keyspace, vsdw.shard)
 	}
 
 	return nil
@@ -229,13 +229,13 @@ func (vsdw *VerticalSplitDiffWorker) findTargets() error {
 	var err error
 	vsdw.destinationAlias, err = findChecker(vsdw.wr, vsdw.cleaner, vsdw.cell, vsdw.keyspace, vsdw.shard)
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot find checker for %v/%v/%v: %v", vsdw.cell, vsdw.keyspace, vsdw.shard, err)
 	}
 
 	// find an appropriate endpoint in the source shard
 	vsdw.sourceAlias, err = findChecker(vsdw.wr, vsdw.cleaner, vsdw.cell, vsdw.shardInfo.SourceShards[0].Keyspace, vsdw.shardInfo.SourceShards[0].Shard)
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot find checker for %v/%v/%v: %v", vsdw.cell, vsdw.shardInfo.SourceShards[0].Keyspace, vsdw.shardInfo.SourceShards[0].Shard, err)
 	}
 
 	return nil
@@ -266,7 +266,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 	log.Infof("Stopping master binlog replication on %v", vsdw.shardInfo.MasterAlias)
 	blpPositionList, err := vsdw.wr.ActionInitiator().StopBlp(vsdw.shardInfo.MasterAlias, 30*time.Second)
 	if err != nil {
-		return err
+		return fmt.Errorf("StopBlp on master %v failed: %v", vsdw.shardInfo.MasterAlias, err)
 	}
 	wrangler.RecordStartBlpAction(vsdw.cleaner, vsdw.shardInfo.MasterAlias, 30*time.Second)
 
@@ -279,14 +279,14 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 	// find where we should be stopping
 	pos, err := blpPositionList.FindBlpPositionById(ss.Uid)
 	if err != nil {
-		return fmt.Errorf("No binlog position on the master for Uid %v", ss.Uid)
+		return fmt.Errorf("no binlog position on the master for Uid %v", ss.Uid)
 	}
 
 	// stop replication
 	log.Infof("Stopping slave %v at a minimum of %v", vsdw.sourceAlias, pos.GroupId)
 	stoppedAt, err := vsdw.wr.ActionInitiator().StopSlaveMinimum(vsdw.sourceAlias, pos.GroupId, 30*time.Second)
 	if err != nil {
-		return fmt.Errorf("Cannot stop slave %v at right binlog position %v: %v", vsdw.sourceAlias, pos.GroupId, err)
+		return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", vsdw.sourceAlias, pos.GroupId, err)
 	}
 	stopPositionList.Entries[0].Uid = ss.Uid
 	stopPositionList.Entries[0].GroupId = stoppedAt.MasterLogGroupId
@@ -305,7 +305,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 	log.Infof("Restarting master %v until it catches up to %v", vsdw.shardInfo.MasterAlias, stopPositionList)
 	masterPos, err := vsdw.wr.ActionInitiator().RunBlpUntil(vsdw.shardInfo.MasterAlias, &stopPositionList, 30*time.Second)
 	if err != nil {
-		return err
+		return fmt.Errorf("RunBlpUntil on %v until %v failed: %v", vsdw.shardInfo.MasterAlias, stopPositionList, err)
 	}
 
 	// 4 - wait until the destination checker is equal or passed
@@ -313,7 +313,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 	log.Infof("Waiting for destination checker %v to catch up to %v", vsdw.destinationAlias, masterPos.MasterLogGroupId)
 	_, err = vsdw.wr.ActionInitiator().StopSlaveMinimum(vsdw.destinationAlias, masterPos.MasterLogGroupId, 30*time.Second)
 	if err != nil {
-		return err
+		return fmt.Errorf("StopSlaveMinimum on %v at %v failed: %v", vsdw.destinationAlias, masterPos.MasterLogGroupId, err)
 	}
 	wrangler.RecordStartSlaveAction(vsdw.cleaner, vsdw.destinationAlias, 30*time.Second)
 	action, err = wrangler.FindChangeSlaveTypeActionByTarget(vsdw.cleaner, vsdw.destinationAlias)
@@ -329,7 +329,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 		log.Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, vsdw.shardInfo.MasterAlias.String(), err)
 	}
 	if err != nil {
-		return err
+		return fmt.Errorf("StartBlp on %v failed: %v", vsdw.shardInfo.MasterAlias, err)
 	}
 
 	return nil

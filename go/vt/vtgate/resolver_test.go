@@ -9,6 +9,8 @@ package vtgate
 import (
 	"fmt"
 	"reflect"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -228,9 +230,18 @@ func testResolverGeneric(t *testing.T, name string, action func() (*mproto.Query
 	sbc1 = &sandboxConn{mustFailRetry: 1}
 	s.MapTestConn("20-40", sbc1)
 	_, err = action()
-	want := fmt.Sprintf("error: err, shard, host: %s.-20.master, {Uid:0 Host:-20 NamedPortMap:map[vt:1] Health:map[]}\nretry: err, shard, host: %s.20-40.master, {Uid:1 Host:20-40 NamedPortMap:map[vt:1] Health:map[]}", name, name)
-	if err == nil || err.Error() != want {
-		t.Errorf("want\n%s\ngot\n%v", want, err)
+	want1 := fmt.Sprintf("error: err, shard, host: %s.-20.master, {Uid:0 Host:-20 NamedPortMap:map[vt:1] Health:map[]}", name)
+	want2 := fmt.Sprintf("retry: err, shard, host: %s.20-40.master, {Uid:1 Host:20-40 NamedPortMap:map[vt:1] Health:map[]}", name)
+	want := []string{want1, want2}
+	sort.Strings(want)
+	if err == nil {
+		t.Errorf("want\n%v\ngot\n%v", want, err)
+	} else {
+		got := strings.Split(err.Error(), "\n")
+		sort.Strings(got)
+		if !reflect.DeepEqual(want, got) {
+			t.Errorf("want\n%v\ngot\n%v", want, got)
+		}
 	}
 	// Ensure that we tried only once
 	if sbc0.ExecCount != 1 {
@@ -251,9 +262,18 @@ func testResolverGeneric(t *testing.T, name string, action func() (*mproto.Query
 	sbc1 = &sandboxConn{mustFailFatal: 1}
 	s.MapTestConn("20-40", sbc1)
 	_, err = action()
-	want = fmt.Sprintf("retry: err, shard, host: %s.-20.master, {Uid:0 Host:-20 NamedPortMap:map[vt:1] Health:map[]}\nfatal: err, shard, host: %s.20-40.master, {Uid:1 Host:20-40 NamedPortMap:map[vt:1] Health:map[]}", name, name)
-	if err == nil || err.Error() != want {
-		t.Errorf("want\n%s\ngot\n%v", want, err)
+	want1 = fmt.Sprintf("retry: err, shard, host: %s.-20.master, {Uid:0 Host:-20 NamedPortMap:map[vt:1] Health:map[]}", name)
+	want2 = fmt.Sprintf("fatal: err, shard, host: %s.20-40.master, {Uid:1 Host:20-40 NamedPortMap:map[vt:1] Health:map[]}", name)
+	want = []string{want1, want2}
+	sort.Strings(want)
+	if err == nil {
+		t.Errorf("want\n%v\ngot\n%v", want, err)
+	} else {
+		got := strings.Split(err.Error(), "\n")
+		sort.Strings(got)
+		if !reflect.DeepEqual(want, got) {
+			t.Errorf("want\n%v\ngot\n%v", want, got)
+		}
 	}
 	// Ensure that we tried only once.
 	if sbc0.ExecCount != 1 {
@@ -262,18 +282,59 @@ func testResolverGeneric(t *testing.T, name string, action func() (*mproto.Query
 	if sbc1.ExecCount != 1 {
 		t.Errorf("want 1, got %v", sbc1.ExecCount)
 	}
-	// Ensure that we tried topo only 3 times
-	if s.SrvKeyspaceCounter != 3 {
-		t.Errorf("want 3, got %v", s.SrvKeyspaceCounter)
+	// Ensure that we tried topo only twice.
+	if s.SrvKeyspaceCounter != 2 {
+		t.Errorf("want 2, got %v", s.SrvKeyspaceCounter)
 	}
+
+	// no failure, initial vertical resharding
+	s.Reset()
+	addSandboxServedFrom(name, name+"ServedFrom0")
+	sbc0 = &sandboxConn{}
+	s.MapTestConn("-20", sbc0)
+	sbc1 = &sandboxConn{}
+	s.MapTestConn("20-40", sbc1)
+	s0 := createSandbox(name + "ServedFrom0") // make sure we have a fresh copy
+	s0.ShardSpec = "-80-"
+	sbc2 := &sandboxConn{}
+	s0.MapTestConn("-80", sbc2)
+	_, err = action()
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
+	}
+	// Ensure original keyspace is not used.
+	if sbc0.ExecCount != 0 {
+		t.Errorf("want 0, got %v", sbc0.ExecCount)
+	}
+	if sbc1.ExecCount != 0 {
+		t.Errorf("want 0, got %v", sbc1.ExecCount)
+	}
+	// Ensure redirected keyspace is accessed once.
+	if sbc2.ExecCount != 1 {
+		t.Errorf("want 1, got %v", sbc2.ExecCount)
+	}
+	// Ensure that we tried each keyspace only once.
+	if s.SrvKeyspaceCounter != 1 {
+		t.Errorf("want 1, got %v", s.SrvKeyspaceCounter)
+	}
+	if s0.SrvKeyspaceCounter != 1 {
+		t.Errorf("want 1, got %v", s0.SrvKeyspaceCounter)
+	}
+	s0.Reset()
 
 	// retryable failure, vertical resharding
 	s.Reset()
-	addSandboxServedFrom(name, name+"ServedFrom")
 	sbc0 = &sandboxConn{}
 	s.MapTestConn("-20", sbc0)
 	sbc1 = &sandboxConn{mustFailFatal: 1}
 	s.MapTestConn("20-40", sbc1)
+	i := 0
+	s.SrvKeyspaceCallback = func() {
+		if i == 1 {
+			addSandboxServedFrom(name, name+"ServedFrom")
+		}
+		i++
+	}
 	_, err = action()
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
@@ -285,7 +346,7 @@ func testResolverGeneric(t *testing.T, name string, action func() (*mproto.Query
 	if sbc1.ExecCount != 2 {
 		t.Errorf("want 2, got %v", sbc1.ExecCount)
 	}
-	// Ensure that we tried topo only 3 times
+	// Ensure that we tried topo only 3 times.
 	if s.SrvKeyspaceCounter != 3 {
 		t.Errorf("want 3, got %v", s.SrvKeyspaceCounter)
 	}
@@ -296,9 +357,9 @@ func testResolverGeneric(t *testing.T, name string, action func() (*mproto.Query
 	s.MapTestConn("-20", sbc0)
 	sbc1 = &sandboxConn{mustFailRetry: 1}
 	s.MapTestConn("20-40", sbc1)
-	i := 0
+	i = 0
 	s.SrvKeyspaceCallback = func() {
-		if i > 0 {
+		if i == 1 {
 			s.ShardSpec = "-20-30-40-60-80-a0-c0-e0-"
 			s.MapTestConn("-20", sbc0)
 			s.MapTestConn("20-30", sbc1)
@@ -316,9 +377,9 @@ func testResolverGeneric(t *testing.T, name string, action func() (*mproto.Query
 	if sbc1.ExecCount != 2 {
 		t.Errorf("want 2, got %v", sbc1.ExecCount)
 	}
-	// Ensure that we tried topo only 3 times
-	if s.SrvKeyspaceCounter != 3 {
-		t.Errorf("want 3, got %v", s.SrvKeyspaceCounter)
+	// Ensure that we tried topo only twice.
+	if s.SrvKeyspaceCounter != 2 {
+		t.Errorf("want 2, got %v", s.SrvKeyspaceCounter)
 	}
 }
 

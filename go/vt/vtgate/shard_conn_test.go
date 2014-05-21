@@ -63,9 +63,9 @@ func TestShardConnBegin(t *testing.T) {
 	})
 }
 
-func TestShardConnCommi(t *testing.T) {
-	testShardConnTransact(t, "TestShardConnCommi", func() error {
-		sdc := NewShardConn(new(sandboxTopo), "aa", "TestShardConnCommi", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
+func TestShardConnCommit(t *testing.T) {
+	testShardConnTransact(t, "TestShardConnCommit", func() error {
+		sdc := NewShardConn(new(sandboxTopo), "aa", "TestShardConnCommit", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
 		return sdc.Commit(nil, 1)
 	})
 }

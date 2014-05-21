@@ -12,16 +12,16 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
-func mapKeyspaceIdsToShards(topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType, keyspaceIds []key.KeyspaceId) ([]string, error) {
-	allShards, err := getKeyspaceShards(topoServ, cell, keyspace, tabletType)
+func mapKeyspaceIdsToShards(topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType, keyspaceIds []key.KeyspaceId) (string, []string, error) {
+	keyspace, allShards, err := getKeyspaceShards(topoServ, cell, keyspace, tabletType)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 	var shards = make(map[string]bool)
 	for _, ksId := range keyspaceIds {
 		shard, err := getShardForKeyspaceId(allShards, ksId)
 		if err != nil {
-			return nil, err
+			return "", nil, err
 		}
 		shards[shard] = true
 	}
@@ -29,19 +29,29 @@ func mapKeyspaceIdsToShards(topoServ SrvTopoServer, cell, keyspace string, table
 	for s, _ := range shards {
 		res = append(res, s)
 	}
-	return res, nil
+	return keyspace, res, nil
 }
 
-func getKeyspaceShards(topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType) ([]topo.SrvShard, error) {
+func getKeyspaceShards(topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType) (string, []topo.SrvShard, error) {
 	srvKeyspace, err := topoServ.GetSrvKeyspace(cell, keyspace)
 	if err != nil {
-		return nil, fmt.Errorf("keyspace %v fetch error: %v", keyspace, err)
+		return "", nil, fmt.Errorf("keyspace %v fetch error: %v", keyspace, err)
 	}
+
+	// check if the keyspace has been redirected for this tabletType.
+	if servedFrom, ok := srvKeyspace.ServedFrom[tabletType]; ok {
+		keyspace = servedFrom
+		srvKeyspace, err = topoServ.GetSrvKeyspace(cell, keyspace)
+		if err != nil {
+			return "", nil, fmt.Errorf("keyspace %v fetch error: %v", keyspace, err)
+		}
+	}
+
 	partition, ok := srvKeyspace.Partitions[tabletType]
 	if !ok {
-		return nil, fmt.Errorf("No partition found for tabletType %v in keyspace %v", tabletType, keyspace)
+		return "", nil, fmt.Errorf("No partition found for tabletType %v in keyspace %v", tabletType, keyspace)
 	}
-	return partition.Shards, nil
+	return keyspace, partition.Shards, nil
 }
 
 func getShardForKeyspaceId(allShards []topo.SrvShard, keyspaceId key.KeyspaceId) (string, error) {
@@ -57,49 +67,35 @@ func getShardForKeyspaceId(allShards []topo.SrvShard, keyspaceId key.KeyspaceId)
 	return "", fmt.Errorf("KeyspaceId didn't match any shards")
 }
 
-func mapEntityIdsToShards(topoServ SrvTopoServer, cell, keyspace string, entityIds []proto.EntityId, tabletType topo.TabletType) (map[string][]interface{}, error) {
-	allShards, err := getKeyspaceShards(topoServ, cell, keyspace, tabletType)
+func mapEntityIdsToShards(topoServ SrvTopoServer, cell, keyspace string, entityIds []proto.EntityId, tabletType topo.TabletType) (string, map[string][]interface{}, error) {
+	keyspace, allShards, err := getKeyspaceShards(topoServ, cell, keyspace, tabletType)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 	var shards = make(map[string][]interface{})
 	for _, eid := range entityIds {
 		shard, err := getShardForKeyspaceId(allShards, eid.KeyspaceID)
 		if err != nil {
-			return nil, err
+			return "", nil, err
 		}
 		shards[shard] = append(shards[shard], eid.ExternalID)
 	}
-	return shards, nil
-}
-
-func getKeyspaceAlias(topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType) (string, error) {
-	srvKeyspace, err := topoServ.GetSrvKeyspace(cell, keyspace)
-	if err != nil {
-		return "", fmt.Errorf("keyspace fetch error: %v", err)
-	}
-
-	// check if the keyspace has been redirected for this tabletType.
-	if servedFrom, ok := srvKeyspace.ServedFrom[tabletType]; ok {
-		return servedFrom, nil
-	}
-
-	return keyspace, nil
+	return keyspace, shards, nil
 }
 
 // This function implements the restriction of handling one keyrange
 // and one shard since streaming doesn't support merge sorting the results.
 // The input/output api is generic though.
-func mapKeyRangesToShards(topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType, krs []key.KeyRange) ([]string, error) {
-	allShards, err := getKeyspaceShards(topoServ, cell, keyspace, tabletType)
+func mapKeyRangesToShards(topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType, krs []key.KeyRange) (string, []string, error) {
+	keyspace, allShards, err := getKeyspaceShards(topoServ, cell, keyspace, tabletType)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 	uniqueShards := make(map[string]bool)
 	for _, kr := range krs {
 		shards, err := resolveKeyRangeToShards(allShards, kr)
 		if err != nil {
-			return nil, err
+			return "", nil, err
 		}
 		for _, shard := range shards {
 			uniqueShards[shard] = true
@@ -109,7 +105,7 @@ func mapKeyRangesToShards(topoServ SrvTopoServer, cell, keyspace string, tabletT
 	for s, _ := range uniqueShards {
 		res = append(res, s)
 	}
-	return res, nil
+	return keyspace, res, nil
 }
 
 // This maps a list of keyranges to shard names.
