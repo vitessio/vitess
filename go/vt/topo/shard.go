@@ -6,6 +6,7 @@ package topo
 
 import (
 	"fmt"
+	"html/template"
 	"strings"
 	"sync"
 
@@ -44,6 +45,19 @@ type SourceShard struct {
 
 func (source *SourceShard) String() string {
 	return fmt.Sprintf("SourceShard(%v,%v/%v)", source.Uid, source.Keyspace, source.Shard)
+}
+
+func (source *SourceShard) AsHTML() template.HTML {
+	result := fmt.Sprintf("<b>Uid</b>: %v</br>\n<b>Source</b>: %v/%v</br>\n", source.Uid, source.Keyspace, source.Shard)
+	if source.KeyRange.IsPartial() {
+		result += fmt.Sprintf("<b>KeyRange</b>: %v-%v</br>\n",
+			source.KeyRange.Start.Hex(), source.KeyRange.End.Hex())
+	}
+	if len(source.Tables) > 0 {
+		result += fmt.Sprintf("<b>Tables</b>: %v</br>\n",
+			strings.Join(source.Tables, " "))
+	}
+	return template.HTML(result)
 }
 
 // A pure data struct for information stored in topology server.  This
