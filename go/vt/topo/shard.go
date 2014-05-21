@@ -43,10 +43,12 @@ type SourceShard struct {
 	Tables []string
 }
 
+// String returns a printable view of a SourceShard.
 func (source *SourceShard) String() string {
 	return fmt.Sprintf("SourceShard(%v,%v/%v)", source.Uid, source.Keyspace, source.Shard)
 }
 
+// AsHTML returns a HTML version of the object.
 func (source *SourceShard) AsHTML() template.HTML {
 	result := fmt.Sprintf("<b>Uid</b>: %v</br>\n<b>Source</b>: %v/%v</br>\n", source.Uid, source.Keyspace, source.Shard)
 	if source.KeyRange.IsPartial() {
