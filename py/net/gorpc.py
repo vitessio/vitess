@@ -228,7 +228,9 @@ class GoRpcClient(object):
     if self.start_time is None:
       raise ProgrammingError('no request pending')
     if not self.conn:
-      raise GoRpcError('closed client')
+      raise GoRpcError(
+          '_read_response - closed client: %s' %
+          (time.time() - self.start_time))
 
     # get some data if we don't have any so we have somewhere to start
     if self.data is None:
@@ -264,7 +266,7 @@ class GoRpcClient(object):
   # Pass in a response object if you don't want a generic one created.
   def call(self, method, request, response=None):
     if not self.conn:
-      raise GoRpcError('closed client', method)
+      raise GoRpcError('call - closed client', method)
     try:
       h = make_header(method, self.next_sequence_id())
       req = GoRpcRequest(h, request)
@@ -303,7 +305,7 @@ class GoRpcClient(object):
   # This method doesn't fetch any result, use stream_next to get them
   def stream_call(self, method, request):
     if not self.conn:
-      raise GoRpcError('closed client', method)
+      raise GoRpcError('stream_call - closed client', method)
     try:
       h = make_header(method, self.next_sequence_id())
       req = GoRpcRequest(h, request)
