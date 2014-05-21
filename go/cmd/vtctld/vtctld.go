@@ -14,6 +14,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/acl"
 	_ "github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -393,14 +394,61 @@ func main() {
 		})
 
 	// tablet actions
-	actionRepo.RegisterTabletAction("RpcPing",
+	actionRepo.RegisterTabletAction("RpcPing", "",
 		func(wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
 			return "", wr.ActionInitiator().RpcPing(tabletAlias, 10*time.Second)
 		})
 
+	actionRepo.RegisterTabletAction("ScrapTablet", acl.ADMIN,
+		func(wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
+			// refuse to scrap tablets that are not spare
+			ti, err := wr.TopoServer().GetTablet(tabletAlias)
+			if err != nil {
+				return "", err
+			}
+			if ti.Type != topo.TYPE_SPARE {
+				return "", fmt.Errorf("Can only scrap spare tablets")
+			}
+			actionPath, err := wr.Scrap(tabletAlias, false, false)
+			if err != nil {
+				return "", err
+			}
+			return "", wr.WaitForCompletion(actionPath)
+		})
+
+	actionRepo.RegisterTabletAction("ScrapTabletForce", acl.ADMIN,
+		func(wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
+			// refuse to scrap tablets that are not spare
+			ti, err := wr.TopoServer().GetTablet(tabletAlias)
+			if err != nil {
+				return "", err
+			}
+			if ti.Type != topo.TYPE_SPARE {
+				return "", fmt.Errorf("Can only scrap spare tablets")
+			}
+			_, err = wr.Scrap(tabletAlias, true, false)
+			return "", err
+		})
+
+	actionRepo.RegisterTabletAction("DeleteTablet", acl.ADMIN,
+		func(wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
+			// refuse to delete tablets that are not scrapped
+			ti, err := wr.TopoServer().GetTablet(tabletAlias)
+			if err != nil {
+				return "", err
+			}
+			if ti.Type != topo.TYPE_SCRAP {
+				return "", fmt.Errorf("Can only delete scrapped tablets")
+			}
+			return "", wr.TopoServer().DeleteTablet(tabletAlias)
+		})
+
+	// toplevel index
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		templateLoader.ServeTemplate("index.html", indexContent, w, r)
 	})
+
+	// keyspace actions
 	http.HandleFunc("/keyspace_actions", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			httpError(w, "cannot parse form: %s", err)
@@ -421,6 +469,8 @@ func main() {
 
 		templateLoader.ServeTemplate("action.html", result, w, r)
 	})
+
+	// shard actions
 	http.HandleFunc("/shard_actions", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			httpError(w, "cannot parse form: %s", err)
@@ -446,6 +496,8 @@ func main() {
 
 		templateLoader.ServeTemplate("action.html", result, w, r)
 	})
+
+	// tablet actions
 	http.HandleFunc("/tablet_actions", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			httpError(w, "cannot parse form: %s", err)
@@ -471,6 +523,8 @@ func main() {
 
 		templateLoader.ServeTemplate("action.html", result, w, r)
 	})
+
+	// topology server
 	http.HandleFunc("/dbtopo", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			httpError(w, "cannot parse form: %s", err)
@@ -485,6 +539,8 @@ func main() {
 		}
 		templateLoader.ServeTemplate("dbtopo.html", result, w, r)
 	})
+
+	// serving graph
 	http.HandleFunc("/serving_graph/", func(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(r.URL.Path, "/")
 
@@ -509,6 +565,8 @@ func main() {
 		}
 		templateLoader.ServeTemplate("serving_graph.html", result, w, r)
 	})
+
+	// redirects for explorers
 	http.HandleFunc("/explorers/redirect", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			httpError(w, "cannot parse form: %s", err)

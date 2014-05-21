@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"net/http"
 	"path"
 	"sort"
 	"strings"
@@ -67,7 +68,7 @@ func (ex ZkExplorer) GetReplicationSlaves(cell, keyspace, shard string) string {
 	return path.Join("/zk", cell, "vt/replication", keyspace, shard)
 }
 
-func (ex ZkExplorer) HandlePath(actionRepo *ActionRepository, zkPath string) interface{} {
+func (ex ZkExplorer) HandlePath(actionRepo *ActionRepository, zkPath string, r *http.Request) interface{} {
 	result := NewZkResult(zkPath)
 
 	if zkPath == "/zk" {
@@ -100,7 +101,7 @@ func (ex ZkExplorer) HandlePath(actionRepo *ActionRepository, zkPath string) int
 	} else if m, _ := path.Match("/zk/*/vt/tablets/*", result.Path); m {
 		zkPathParts := strings.Split(result.Path, "/")
 		alias := zkPathParts[2] + "-" + zkPathParts[5]
-		actionRepo.PopulateTabletActions(result.Actions, alias)
+		actionRepo.PopulateTabletActions(result.Actions, alias, r)
 		ex.addTabletLinks(data, result)
 	}
 	result.Data = data

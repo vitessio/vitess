@@ -75,7 +75,7 @@
 	    <td>
 	      <ul class="tablet-list">
 		{{range index $shard.TabletNodes $processedType}}
-		{{template "tablet.html" .}}
+                  <li title="{{.Alias}}">{{tablet .Alias .ShortName}}</li>
 		{{end}}
 	      </ul>
 	    </td>

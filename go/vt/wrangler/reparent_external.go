@@ -174,7 +174,7 @@ func (wr *Wrangler) slaveWasPromoted(ti *topo.TabletInfo) error {
 		if err != nil {
 			return err
 		}
-		err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+		err = wr.WaitForCompletion(actionPath)
 		if err != nil {
 			return err
 		}
@@ -191,6 +191,6 @@ func (wr *Wrangler) slaveWasRestarted(ti *topo.TabletInfo, swrd *actionnode.Slav
 		if err != nil {
 			return err
 		}
-		return wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+		return wr.WaitForCompletion(actionPath)
 	}
 }

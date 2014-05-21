@@ -84,7 +84,7 @@ func (wr *Wrangler) MultiRestore(dstTabletAlias topo.TabletAlias, sources []topo
 		return err
 	}
 
-	return wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+	return wr.WaitForCompletion(actionPath)
 }
 
 func (wr *Wrangler) MultiSnapshot(keyRanges []key.KeyRange, tabletAlias topo.TabletAlias, concurrency int, tables []string, forceMasterSnapshot, skipSlaveRestart bool, maximumFilesize uint64) (manifests []string, parent topo.TabletAlias, err error) {
@@ -101,7 +101,7 @@ func (wr *Wrangler) MultiSnapshot(keyRanges []key.KeyRange, tabletAlias topo.Tab
 		return
 	}
 
-	results, err := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
+	results, err := wr.WaitForCompletionReply(actionPath)
 	if err != nil {
 		return
 	}

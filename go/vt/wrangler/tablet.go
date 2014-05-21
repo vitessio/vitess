@@ -142,7 +142,7 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 
 	// wait for the remote Scrap if necessary
 	if actionPath != "" {
-		err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+		err = wr.WaitForCompletion(actionPath)
 		if err != nil {
 			return "", err
 		}
@@ -238,7 +238,7 @@ func (wr *Wrangler) ChangeTypeNoRebuild(tabletAlias topo.TabletAlias, tabletType
 
 			// You don't have a choice - you must wait for
 			// completion before rebuilding.
-			if err := wr.ai.WaitForCompletion(actionPath, wr.actionTimeout()); err != nil {
+			if err := wr.WaitForCompletion(actionPath); err != nil {
 				return false, "", "", "", err
 			}
 		}
@@ -277,7 +277,7 @@ func (wr *Wrangler) changeTypeInternal(tabletAlias topo.TabletAlias, dbType topo
 		if err != nil {
 			return err
 		}
-		err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+		err = wr.WaitForCompletion(actionPath)
 		if err != nil {
 			return err
 		}

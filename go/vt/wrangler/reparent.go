@@ -211,7 +211,7 @@ func (wr *Wrangler) ReparentTablet(tabletAlias topo.TabletAlias) error {
 	if err != nil {
 		return err
 	}
-	result, err := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
+	result, err := wr.WaitForCompletionReply(actionPath)
 	if err != nil {
 		return err
 	}
@@ -225,5 +225,5 @@ func (wr *Wrangler) ReparentTablet(tabletAlias topo.TabletAlias) error {
 	if err != nil {
 		return err
 	}
-	return wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+	return wr.WaitForCompletion(actionPath)
 }

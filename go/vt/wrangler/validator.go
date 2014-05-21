@@ -256,7 +256,7 @@ func (wr *Wrangler) pingTablets(tabletMap map[topo.TabletAlias]*topo.TabletInfo,
 				return
 			}
 
-			err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+			err = wr.WaitForCompletion(actionPath)
 			if err != nil {
 				results <- vresult{tabletAlias.String(), fmt.Errorf("%v: %v %v", actionPath, err, tabletInfo.Hostname)}
 			}

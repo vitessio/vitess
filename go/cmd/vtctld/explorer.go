@@ -16,7 +16,7 @@ type Explorer interface {
 	// HandlePath returns a result (suitable to be passed to a
 	// template) appropriate for url, using actionRepo to populate
 	// the actions in result.
-	HandlePath(actionRepo *ActionRepository, url string) interface{}
+	HandlePath(actionRepo *ActionRepository, url string, r *http.Request) interface{}
 
 	// GetKeyspacePath returns an explorer path that will contain
 	// information about the named keyspace.
@@ -70,7 +70,7 @@ func HandleExplorer(name, url, templateName string, explorer Explorer) {
 		if strings.HasSuffix(topoPath, "/") {
 			topoPath = topoPath[:len(topoPath)-1]
 		}
-		result := explorer.HandlePath(actionRepo, topoPath)
+		result := explorer.HandlePath(actionRepo, topoPath, r)
 		templateLoader.ServeTemplate(templateName, result, w, r)
 	})
 }
