@@ -14,6 +14,7 @@ from vtdb import dbexceptions
 from vtdb import field_types
 from vtdb import keyrange
 from vtdb import vtdb_logger
+from vtdb import vtgate_cursor
 
 
 _errno_pattern = re.compile('\(errno (\d+)\)')
@@ -103,7 +104,7 @@ class VTGateConnection(object):
 
   def cursor(self, cursorclass=None, *pargs, **kwargs):
     if cursorclass is None:
-      cursorclass = VTGateCursor
+      cursorclass = vtgate_cursor.VTGateCursor
     return cursorclass(*pargs, **kwargs)
 
   def begin(self):

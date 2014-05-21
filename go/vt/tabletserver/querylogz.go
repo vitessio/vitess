@@ -13,6 +13,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/acl"
 )
 
 var (
@@ -72,6 +73,10 @@ func init() {
 // querylogzHandler serves a human readable snapshot of the
 // current query log.
 func querylogzHandler(w http.ResponseWriter, r *http.Request) {
+	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
+		acl.SendError(w, err)
+		return
+	}
 	ch := SqlQueryLogger.Subscribe()
 	defer SqlQueryLogger.Unsubscribe(ch)
 	startHTMLTable(w)

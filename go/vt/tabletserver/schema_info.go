@@ -14,6 +14,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/cache"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -507,6 +508,10 @@ type perQueryStats struct {
 }
 
 func (si *SchemaInfo) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
+		acl.SendError(response, err)
+		return
+	}
 	if request.URL.Path == "/debug/query_plans" {
 		keys := si.queries.Keys()
 		response.Header().Set("Content-Type", "text/plain")

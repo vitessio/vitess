@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 )
@@ -107,6 +108,10 @@ func (logger *StreamLogger) Name() string {
 // It is safe to register multiple URLs for the same StreamLogger.
 func (logger *StreamLogger) ServeLogs(url string, messageFmt func(url.Values, interface{}) string) {
 	http.HandleFunc(url, func(w http.ResponseWriter, r *http.Request) {
+		if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
+			acl.SendError(w, err)
+			return
+		}
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}

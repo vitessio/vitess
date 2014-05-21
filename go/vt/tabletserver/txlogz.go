@@ -12,6 +12,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/acl"
 )
 
 var (
@@ -52,6 +53,10 @@ func init() {
 // txlogzHandler serves a human readable snapshot of the
 // current transaction log.
 func txlogzHandler(w http.ResponseWriter, r *http.Request) {
+	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
+		acl.SendError(w, err)
+		return
+	}
 	ch := TxLogger.Subscribe()
 	defer TxLogger.Unsubscribe(ch)
 	startHTMLTable(w)

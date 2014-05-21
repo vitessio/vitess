@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"sort"
 
+	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/schema"
 )
 
@@ -54,6 +55,10 @@ func (sorter *schemazSorter) Less(i, j int) bool {
 
 // schemazHandler displays the schema read by the query service.
 func schemazHandler(w http.ResponseWriter, r *http.Request) {
+	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
+		acl.SendError(w, err)
+		return
+	}
 	startHTMLTable(w)
 	defer endHTMLTable(w)
 	w.Write(schemazHeader)

@@ -48,8 +48,8 @@ func (vtg *VTGate) ExecuteShard(context interface{}, query *proto.QueryShard, re
 		query.Keyspace,
 		query.TabletType,
 		query.Session,
-		func(keyspace string) ([]string, error) {
-			return query.Shards, nil
+		func(keyspace string) (string, []string, error) {
+			return query.Keyspace, query.Shards, nil
 		},
 	)
 	if err == nil {
@@ -109,8 +109,8 @@ func (vtg *VTGate) ExecuteBatchShard(context interface{}, batchQuery *proto.Batc
 		batchQuery.Keyspace,
 		batchQuery.TabletType,
 		batchQuery.Session,
-		func(keyspace string) ([]string, error) {
-			return batchQuery.Shards, nil
+		func(keyspace string) (string, []string, error) {
+			return batchQuery.Keyspace, batchQuery.Shards, nil
 		},
 	)
 	if err == nil {
@@ -202,8 +202,8 @@ func (vtg *VTGate) StreamExecuteShard(context interface{}, query *proto.QuerySha
 		query.Keyspace,
 		query.TabletType,
 		query.Session,
-		func(keyspace string) ([]string, error) {
-			return query.Shards, nil
+		func(keyspace string) (string, []string, error) {
+			return query.Keyspace, query.Shards, nil
 		},
 		func(mreply *mproto.QueryResult) error {
 			reply := new(proto.QueryResult)
