@@ -6,6 +6,7 @@ package worker
 
 import (
 	"fmt"
+	"html/template"
 	"strings"
 	"sync"
 	"time"
@@ -96,7 +97,7 @@ func (worker *SQLDiffWorker) recordError(err error) {
 	worker.err = err
 }
 
-func (worker *SQLDiffWorker) StatusAsHTML() string {
+func (worker *SQLDiffWorker) StatusAsHTML() template.HTML {
 	worker.mu.Lock()
 	defer worker.mu.Unlock()
 
@@ -113,7 +114,7 @@ func (worker *SQLDiffWorker) StatusAsHTML() string {
 		result += strings.Join(worker.diffLogs, "</br>\n")
 	}
 
-	return result
+	return template.HTML(result)
 }
 
 func (worker *SQLDiffWorker) StatusAsText() string {

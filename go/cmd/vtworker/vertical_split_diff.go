@@ -12,6 +12,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -126,7 +127,7 @@ func interactiveVerticalSplitDiff(wr *wrangler.Wrangler, w http.ResponseWriter, 
 			return
 		}
 
-		http.Redirect(w, r, "/status", http.StatusTemporaryRedirect)
+		http.Redirect(w, r, servenv.StatusURLPath(), http.StatusTemporaryRedirect)
 	}
 }
 
