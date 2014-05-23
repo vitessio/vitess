@@ -350,7 +350,7 @@ func fmtTabletAwkable(ti *topo.TabletInfo) string {
 	if shard == "" {
 		shard = "<null>"
 	}
-	return fmt.Sprintf("%v %v %v %v %v %v %v", ti.Alias, keyspace, shard, ti.Type, ti.Addr, ti.MysqlAddr, fmtMapAwkable(ti.Tags))
+	return fmt.Sprintf("%v %v %v %v %v %v %v", ti.Alias, keyspace, shard, ti.Type, ti.Addr(), ti.MysqlAddr(), fmtMapAwkable(ti.Tags))
 }
 
 func fmtAction(action *actionnode.ActionNode) string {
@@ -626,9 +626,6 @@ func commandInitTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 
 	// create tablet record
 	tablet := &topo.Tablet{
-		Cell: tabletAlias.Cell,
-		Uid:  tabletAlias.Uid,
-
 		Alias:          tabletAlias,
 		Hostname:       *hostname,
 		Portmap:        make(map[string]int),
@@ -639,11 +636,9 @@ func commandInitTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 		Tags:           tags,
 	}
 	if *port != 0 {
-		tablet.Addr = fmt.Sprintf("%v:%v", *hostname, *port)
 		tablet.Portmap["vt"] = *port
 	}
 	if *mysqlPort != 0 {
-		tablet.MysqlAddr = fmt.Sprintf("%v:%v", *hostname, *mysqlPort)
 		tablet.Portmap["mysql"] = *mysqlPort
 	}
 	if *vtsPort != 0 {
@@ -687,21 +682,6 @@ func commandUpdateTabletAddrs(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
 	return "", wr.TopoServer().UpdateTabletFields(tabletAlias, func(tablet *topo.Tablet) error {
-		// update old fields, need both a port and ip for each
-		if *hostname != "" && *vtPort != 0 {
-			tablet.Addr = fmt.Sprintf("%v:%v", *hostname, *vtPort)
-		}
-		if *hostname != "" && *vtsPort != 0 {
-			tablet.SecureAddr = fmt.Sprintf("%v:%v", *hostname, *vtsPort)
-		}
-		if *hostname != "" && *mysqlPort != 0 {
-			tablet.MysqlAddr = fmt.Sprintf("%v:%v", *hostname, *mysqlPort)
-		}
-		if *ipAddr != "" && *mysqlPort != 0 {
-			tablet.MysqlIpAddr = fmt.Sprintf("%v:%v", *ipAddr, *mysqlPort)
-		}
-
-		// update new fields
 		if *hostname != "" {
 			tablet.Hostname = *hostname
 		}

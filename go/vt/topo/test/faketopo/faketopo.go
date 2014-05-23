@@ -100,7 +100,7 @@ func (fix *Fixture) MakeMySQLMaster(uid int) {
 		if id == uid {
 			tablet.mysql.MasterAddr = ""
 		} else {
-			tablet.mysql.MasterAddr = newMaster.GetMysqlIpAddr()
+			tablet.mysql.MasterAddr = newMaster.MysqlIpAddr()
 		}
 	}
 }
@@ -130,7 +130,7 @@ func (fix *Fixture) AddTablet(uid int, cell string, tabletType topo.TabletType, 
 	}
 	mysqlDaemon := &mysqlctl.FakeMysqlDaemon{}
 	if master != nil {
-		mysqlDaemon.MasterAddr = master.GetMysqlIpAddr()
+		mysqlDaemon.MasterAddr = master.MysqlIpAddr()
 	}
 	mysqlDaemon.MysqlPort = 3334 + 10*uid
 
