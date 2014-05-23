@@ -147,8 +147,8 @@ class ZkOccConnection(object):
         return getattr(self.simple_conn, client_method)(*args, **kwargs)
       except Exception as e:
         attempt += 1
+        logging.warning('zkocc: %s command failed %u times: %s', client_method, attempt, e)
         if attempt >= self.max_attempts:
-          logging.warning('zkocc: %s command failed %u times: %s', client_method, attempt, e)
           raise ZkOccError('zkocc %s command failed %u times: %s' % (client_method, attempt, e))
 
         # try the next server if there is one, or retry our only server
