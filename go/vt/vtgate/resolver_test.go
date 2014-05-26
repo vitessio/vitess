@@ -464,6 +464,8 @@ func TestResolverBuildEntityIds(t *testing.T) {
 		"-20":   map[string]interface{}{"id": 10, "uid0": "0", "uid1": 1},
 		"20-40": map[string]interface{}{"id": 10, "uid0": "2"},
 	}
+	sort.Strings(wantShards)
+	sort.Strings(shards)
 	if !reflect.DeepEqual(wantShards, shards) {
 		t.Errorf("want %+v, got %+v", wantShards, shards)
 	}
