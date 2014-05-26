@@ -294,7 +294,7 @@ func (server *ResilientSrvTopoServer) HealthyEndpointCount() map[string]int64 {
 	defer server.mutex.Unlock()
 	for k, entry := range server.endPointsCache {
 		entry.mutex.Lock()
-		vl := 0
+		vl := int64(0)
 		if entry.value != nil {
 			vl = int64(len(entry.value.Entries))
 		}
