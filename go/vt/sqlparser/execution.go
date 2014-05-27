@@ -180,16 +180,16 @@ type TableGetter func(tableName string) (*schema.Table, bool)
 func ExecParse(sql string, getTable TableGetter, sensitiveMode bool) (plan *ExecPlan, err error) {
 	defer handleError(&err)
 
-	tree, err := Parse(sql)
+	statement, err := Parse(sql)
 	if err != nil {
 		return nil, err
 	}
-	plan = tree.execAnalyzeSql(getTable)
+	plan = execAnalyzeSql(statement, getTable)
 	if plan.PlanId == PLAN_PASS_DML {
 		log.Warningf("PASS_DML: %s", sql)
 	}
 	if sensitiveMode {
-		plan.DisplayQuery = tree.GenerateAnonymizedQuery()
+		plan.DisplayQuery = GenerateAnonymizedQuery(statement)
 	} else {
 		plan.DisplayQuery = sql
 	}
@@ -199,24 +199,25 @@ func ExecParse(sql string, getTable TableGetter, sensitiveMode bool) (plan *Exec
 func StreamExecParse(sql string, sensitiveMode bool) (plan *StreamExecPlan, err error) {
 	defer handleError(&err)
 
-	tree, err := Parse(sql)
+	statement, err := Parse(sql)
 	if err != nil {
 		return nil, err
 	}
 
-	switch tree.Type {
-	case SELECT:
-		if tree.At(SELECT_LOCK_OFFSET).Type != NO_LOCK {
+	switch stmt := statement.(type) {
+	case *Select:
+		if stmt.Lock.Type != NO_LOCK {
 			return nil, NewParserError("select with lock disallowed with streaming")
 		}
-	case UNION, UNION_ALL, MINUS, EXCEPT, INTERSECT:
+	case *Union:
+		// pass
 	default:
-		return nil, NewParserError("%s not allowed for streaming", string(tree.Value))
+		return nil, NewParserError("'%v' not allowed for streaming", String(stmt))
 	}
-	plan = &StreamExecPlan{FullQuery: tree.GenerateFullQuery()}
+	plan = &StreamExecPlan{FullQuery: GenerateFullQuery(statement)}
 
 	if sensitiveMode {
-		plan.DisplayQuery = tree.GenerateAnonymizedQuery()
+		plan.DisplayQuery = GenerateAnonymizedQuery(statement)
 	} else {
 		plan.DisplayQuery = sql
 	}
@@ -225,22 +226,22 @@ func StreamExecParse(sql string, sensitiveMode bool) (plan *StreamExecPlan, err 
 }
 
 func DDLParse(sql string) (plan *DDLPlan) {
-	rootNode, err := Parse(sql)
+	statement, err := Parse(sql)
 	if err != nil {
 		return &DDLPlan{Action: 0}
 	}
-	switch rootNode.Type {
-	case CREATE, ALTER, DROP:
+	switch stmt := statement.(type) {
+	case *DDLSimple:
 		return &DDLPlan{
-			Action:    rootNode.Type,
-			TableName: string(rootNode.At(0).Value),
-			NewName:   string(rootNode.At(0).Value),
+			Action:    stmt.Action,
+			TableName: string(stmt.Table.Value),
+			NewName:   string(stmt.Table.Value),
 		}
-	case RENAME:
+	case *Rename:
 		return &DDLPlan{
-			Action:    rootNode.Type,
-			TableName: string(rootNode.At(0).Value),
-			NewName:   string(rootNode.At(1).Value),
+			Action:    RENAME,
+			TableName: string(stmt.OldName.Value),
+			NewName:   string(stmt.NewName.Value),
 		}
 	}
 	return &DDLPlan{Action: 0}
@@ -249,30 +250,37 @@ func DDLParse(sql string) (plan *DDLPlan) {
 //-----------------------------------------------
 // Implementation
 
-func (node *Node) execAnalyzeSql(getTable TableGetter) (plan *ExecPlan) {
-	switch node.Type {
-	case SELECT, UNION, UNION_ALL, MINUS, EXCEPT, INTERSECT:
-		return node.execAnalyzeSelect(getTable)
-	case INSERT:
-		return node.execAnalyzeInsert(getTable)
-	case UPDATE:
-		return node.execAnalyzeUpdate(getTable)
-	case DELETE:
-		return node.execAnalyzeDelete(getTable)
-	case SET:
-		return node.execAnalyzeSet()
-	case CREATE, ALTER, DROP, RENAME:
+func execAnalyzeSql(statement Statement, getTable TableGetter) (plan *ExecPlan) {
+	switch stmt := statement.(type) {
+	case *Union:
+		return &ExecPlan{
+			PlanId:     PLAN_PASS_SELECT,
+			FieldQuery: GenerateFieldQuery(stmt),
+			FullQuery:  GenerateFullQuery(stmt),
+			Reason:     REASON_SELECT,
+		}
+	case *Select:
+		return execAnalyzeSelect(stmt, getTable)
+	case *Insert:
+		return execAnalyzeInsert(stmt, getTable)
+	case *Update:
+		return execAnalyzeUpdate(stmt, getTable)
+	case *Delete:
+		return execAnalyzeDelete(stmt, getTable)
+	case *Set:
+		return execAnalyzeSet(stmt)
+	case *DDLSimple, *Rename:
 		return &ExecPlan{PlanId: PLAN_DDL}
 	}
 	panic(NewParserError("invalid SQL"))
 }
 
-func (node *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
+func execAnalyzeSelect(sel *Select, getTable TableGetter) (plan *ExecPlan) {
 	// Default plan
 	plan = &ExecPlan{
 		PlanId:     PLAN_PASS_SELECT,
-		FieldQuery: node.GenerateFieldQuery(),
-		FullQuery:  node.GenerateSelectLimitQuery(),
+		FieldQuery: GenerateFieldQuery(sel),
+		FullQuery:  GenerateSelectLimitQuery(sel),
 	}
 
 	// There are bind variables in the SELECT list
@@ -281,13 +289,13 @@ func (node *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 		return plan
 	}
 
-	if !node.execAnalyzeSelectStructure() {
+	if !execAnalyzeSelectStructure(sel) {
 		plan.Reason = REASON_SELECT
 		return plan
 	}
 
 	// from
-	tableName, hasHints := node.At(SELECT_FROM_OFFSET).execAnalyzeFrom()
+	tableName, hasHints := sel.From.execAnalyzeFrom()
 	if tableName == "" {
 		plan.Reason = REASON_TABLE
 		return plan
@@ -295,7 +303,7 @@ func (node *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 	tableInfo := plan.setTableInfo(tableName, getTable)
 
 	// Don't improve the plan if the select is locking the row
-	if node.At(SELECT_LOCK_OFFSET).Type != NO_LOCK {
+	if sel.Lock.Type != NO_LOCK {
 		plan.Reason = REASON_LOCK
 		return plan
 	}
@@ -307,7 +315,7 @@ func (node *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 	}
 
 	// Select expressions
-	selects := node.At(SELECT_EXPR_OFFSET).execAnalyzeSelectExpressions(tableInfo)
+	selects := sel.Expr.execAnalyzeSelectExpressions(tableInfo)
 	if selects == nil {
 		plan.Reason = REASON_SELECT_LIST
 		return plan
@@ -315,14 +323,14 @@ func (node *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 	plan.ColumnNumbers = selects
 
 	// where
-	conditions := node.At(SELECT_WHERE_OFFSET).execAnalyzeWhere()
+	conditions := sel.Where.execAnalyzeWhere()
 	if conditions == nil {
 		plan.Reason = REASON_WHERE
 		return plan
 	}
 
 	// order
-	if node.At(SELECT_ORDER_OFFSET).Len() != 0 {
+	if sel.OrderBy.Len() != 0 {
 		plan.Reason = REASON_ORDER
 		return plan
 	}
@@ -333,17 +341,17 @@ func (node *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 	}
 
 	// Attempt PK match only if there's no limit clause
-	if node.At(SELECT_LIMIT_OFFSET).Len() == 0 {
+	if sel.Limit.Len() == 0 {
 		planId, pkValues := getSelectPKValues(conditions, tableInfo.Indexes[0])
 		switch planId {
 		case PLAN_PK_EQUAL:
 			plan.PlanId = PLAN_PK_EQUAL
-			plan.OuterQuery = node.GenerateEqualOuterQuery(tableInfo)
+			plan.OuterQuery = GenerateEqualOuterQuery(sel, tableInfo)
 			plan.PKValues = pkValues
 			return plan
 		case PLAN_PK_IN:
 			plan.PlanId = PLAN_PK_IN
-			plan.OuterQuery = node.GenerateInOuterQuery(tableInfo)
+			plan.OuterQuery = GenerateInOuterQuery(sel, tableInfo)
 			plan.PKValues = pkValues
 			return plan
 		}
@@ -371,17 +379,17 @@ func (node *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 	}
 	// TODO: We can further optimize. Change this to pass-through if select list matches all columns in index.
 	plan.PlanId = PLAN_SELECT_SUBQUERY
-	plan.OuterQuery = node.GenerateInOuterQuery(tableInfo)
-	plan.Subquery = node.GenerateSelectSubquery(tableInfo, plan.IndexUsed)
+	plan.OuterQuery = GenerateInOuterQuery(sel, tableInfo)
+	plan.Subquery = GenerateSelectSubquery(sel, tableInfo, plan.IndexUsed)
 	return plan
 }
 
-func (node *Node) execAnalyzeInsert(getTable TableGetter) (plan *ExecPlan) {
+func execAnalyzeInsert(ins *Insert, getTable TableGetter) (plan *ExecPlan) {
 	plan = &ExecPlan{
 		PlanId:    PLAN_PASS_DML,
-		FullQuery: node.GenerateFullQuery(),
+		FullQuery: GenerateFullQuery(ins),
 	}
-	tableName := node.At(INSERT_TABLE_OFFSET).collectTableName()
+	tableName := ins.Table.collectTableName()
 	if tableName == "" {
 		plan.Reason = REASON_TABLE
 		return plan
@@ -394,23 +402,22 @@ func (node *Node) execAnalyzeInsert(getTable TableGetter) (plan *ExecPlan) {
 		return plan
 	}
 
-	pkColumnNumbers := node.At(INSERT_COLUMN_LIST_OFFSET).getInsertPKColumns(tableInfo)
+	pkColumnNumbers := ins.ColumnList.getInsertPKColumns(tableInfo)
 
-	if node.At(INSERT_ON_DUP_OFFSET).Len() != 0 {
+	if ins.OnDup.Len() != 0 {
 		// Upserts are not safe for statement based replication:
 		// http://bugs.mysql.com/bug.php?id=58637
 		plan.Reason = REASON_UPSERT
 		return plan
 	}
 
-	rowValues := node.At(INSERT_VALUES_OFFSET) // VALUES/SELECT
-	if rowValues.Type == SELECT {
+	if ins.Values.Type == SELECT {
 		plan.PlanId = PLAN_INSERT_SUBQUERY
-		plan.OuterQuery = node.GenerateInsertOuterQuery()
-		plan.Subquery = rowValues.GenerateSelectLimitQuery()
+		plan.OuterQuery = GenerateInsertOuterQuery(ins)
+		plan.Subquery = GenerateSelectLimitQuery(newSelect(ins.Values))
 		// Column list syntax is a subset of select expressions
-		if node.At(INSERT_COLUMN_LIST_OFFSET).Len() != 0 {
-			plan.ColumnNumbers = node.At(INSERT_COLUMN_LIST_OFFSET).execAnalyzeSelectExpressions(tableInfo)
+		if ins.ColumnList.Len() != 0 {
+			plan.ColumnNumbers = ins.ColumnList.execAnalyzeSelectExpressions(tableInfo)
 		} else {
 			// SELECT_STAR node will expand into all columns
 			n := NewSimpleParseNode(NODE_LIST, "")
@@ -421,7 +428,7 @@ func (node *Node) execAnalyzeInsert(getTable TableGetter) (plan *ExecPlan) {
 		return plan
 	}
 
-	rowList := rowValues.At(0) // VALUES->NODE_LIST
+	rowList := ins.Values.At(0) // VALUES->NODE_LIST
 	if pkValues := getInsertPKValues(pkColumnNumbers, rowList, tableInfo); pkValues != nil {
 		plan.PlanId = PLAN_INSERT_PK
 		plan.OuterQuery = plan.FullQuery
@@ -430,14 +437,14 @@ func (node *Node) execAnalyzeInsert(getTable TableGetter) (plan *ExecPlan) {
 	return plan
 }
 
-func (node *Node) execAnalyzeUpdate(getTable TableGetter) (plan *ExecPlan) {
+func execAnalyzeUpdate(upd *Update, getTable TableGetter) (plan *ExecPlan) {
 	// Default plan
 	plan = &ExecPlan{
 		PlanId:    PLAN_PASS_DML,
-		FullQuery: node.GenerateFullQuery(),
+		FullQuery: GenerateFullQuery(upd),
 	}
 
-	tableName := node.At(UPDATE_TABLE_OFFSET).collectTableName()
+	tableName := upd.Table.collectTableName()
 	if tableName == "" {
 		plan.Reason = REASON_TABLE
 		return plan
@@ -451,16 +458,16 @@ func (node *Node) execAnalyzeUpdate(getTable TableGetter) (plan *ExecPlan) {
 	}
 
 	var ok bool
-	if plan.SecondaryPKValues, ok = node.At(UPDATE_LIST_OFFSET).execAnalyzeUpdateExpressions(tableInfo.Indexes[0]); !ok {
+	if plan.SecondaryPKValues, ok = upd.List.execAnalyzeUpdateExpressions(tableInfo.Indexes[0]); !ok {
 		plan.Reason = REASON_PK_CHANGE
 		return plan
 	}
 
 	plan.PlanId = PLAN_DML_SUBQUERY
-	plan.OuterQuery = node.GenerateUpdateOuterQuery(tableInfo.Indexes[0])
-	plan.Subquery = node.GenerateUpdateSubquery(tableInfo)
+	plan.OuterQuery = GenerateUpdateOuterQuery(upd, tableInfo.Indexes[0])
+	plan.Subquery = GenerateUpdateSubquery(upd, tableInfo)
 
-	conditions := node.At(UPDATE_WHERE_OFFSET).execAnalyzeWhere()
+	conditions := upd.Where.execAnalyzeWhere()
 	if conditions == nil {
 		plan.Reason = REASON_WHERE
 		return plan
@@ -476,14 +483,14 @@ func (node *Node) execAnalyzeUpdate(getTable TableGetter) (plan *ExecPlan) {
 	return plan
 }
 
-func (node *Node) execAnalyzeDelete(getTable TableGetter) (plan *ExecPlan) {
+func execAnalyzeDelete(del *Delete, getTable TableGetter) (plan *ExecPlan) {
 	// Default plan
 	plan = &ExecPlan{
 		PlanId:    PLAN_PASS_DML,
-		FullQuery: node.GenerateFullQuery(),
+		FullQuery: GenerateFullQuery(del),
 	}
 
-	tableName := node.At(DELETE_TABLE_OFFSET).collectTableName()
+	tableName := del.Table.collectTableName()
 	if tableName == "" {
 		plan.Reason = REASON_TABLE
 		return plan
@@ -497,10 +504,10 @@ func (node *Node) execAnalyzeDelete(getTable TableGetter) (plan *ExecPlan) {
 	}
 
 	plan.PlanId = PLAN_DML_SUBQUERY
-	plan.OuterQuery = node.GenerateDeleteOuterQuery(tableInfo.Indexes[0])
-	plan.Subquery = node.GenerateDeleteSubquery(tableInfo)
+	plan.OuterQuery = GenerateDeleteOuterQuery(del, tableInfo.Indexes[0])
+	plan.Subquery = GenerateDeleteSubquery(del, tableInfo)
 
-	conditions := node.At(DELETE_WHERE_OFFSET).execAnalyzeWhere()
+	conditions := del.Where.execAnalyzeWhere()
 	if conditions == nil {
 		plan.Reason = REASON_WHERE
 		return plan
@@ -516,12 +523,12 @@ func (node *Node) execAnalyzeDelete(getTable TableGetter) (plan *ExecPlan) {
 	return plan
 }
 
-func (node *Node) execAnalyzeSet() (plan *ExecPlan) {
+func execAnalyzeSet(set *Set) (plan *ExecPlan) {
 	plan = &ExecPlan{
 		PlanId:    PLAN_SET,
-		FullQuery: node.GenerateFullQuery(),
+		FullQuery: GenerateFullQuery(set),
 	}
-	update_list := node.At(1)  // NODE_LIST
+	update_list := set.UpdateList
 	if update_list.Len() > 1 { // Multiple set values
 		return
 	}
@@ -551,18 +558,14 @@ func (node *ExecPlan) setTableInfo(tableName string, getTable TableGetter) *sche
 //-----------------------------------------------
 // Select
 
-func (node *Node) execAnalyzeSelectStructure() bool {
-	switch node.Type {
-	case UNION, UNION_ALL, MINUS, EXCEPT, INTERSECT:
+func execAnalyzeSelectStructure(sel *Select) bool {
+	if sel.Distinct.Type == DISTINCT {
 		return false
 	}
-	if node.At(SELECT_DISTINCT_OFFSET).Type == DISTINCT {
+	if sel.GroupBy.Len() > 0 {
 		return false
 	}
-	if node.At(SELECT_GROUP_OFFSET).Len() > 0 {
-		return false
-	}
-	if node.At(SELECT_HAVING_OFFSET).Len() > 0 {
+	if sel.Having.Len() > 0 {
 		return false
 	}
 	return true
@@ -932,21 +935,21 @@ func getIndexMatch(conditions []*Node, indexes []*schema.Index) string {
 
 //-----------------------------------------------
 // Query Generation
-func (node *Node) GenerateFullQuery() *ParsedQuery {
+func GenerateFullQuery(statement Statement) *ParsedQuery {
 	buf := NewTrackedBuffer(nil)
-	buf.Fprintf("%v", node)
+	statement.Format(buf)
 	return buf.ParsedQuery()
 }
 
-func (node *Node) GenerateAnonymizedQuery() string {
-	buf := NewTrackedBuffer(AnonymizedFormatNode)
-	buf.Fprintf("%v", node)
+func GenerateAnonymizedQuery(statement Statement) string {
+	buf := NewTrackedBuffer(AnonymizedFormatter)
+	buf.Fprintf("%v", statement)
 	return buf.ParsedQuery().Query
 }
 
-func (node *Node) GenerateFieldQuery() *ParsedQuery {
+func GenerateFieldQuery(statement Statement) *ParsedQuery {
 	buf := NewTrackedBuffer(FormatImpossible)
-	FormatImpossible(buf, node)
+	buf.Fprintf("%v", statement)
 	if len(buf.bindLocations) != 0 {
 		return nil
 	}
@@ -957,79 +960,87 @@ func (node *Node) GenerateFieldQuery() *ParsedQuery {
 // to generate a modified version of the query where all selects
 // have impossible where clauses. It overrides a few node types
 // and passes the rest down to the default FormatNode.
-func FormatImpossible(buf *TrackedBuffer, node *Node) {
-	switch node.Type {
-	case SELECT:
-		buf.Fprintf("select %v from %v where 1 != 1",
-			node.At(SELECT_EXPR_OFFSET),
-			node.At(SELECT_FROM_OFFSET),
-		)
-	case JOIN, STRAIGHT_JOIN, CROSS, NATURAL:
-		// We skip ON clauses (if any)
-		buf.Fprintf("%v %s %v", node.At(0), node.Value, node.At(1))
-	case LEFT, RIGHT:
-		// ON clause is requried
-		buf.Fprintf("%v %s %v on 1 != 1", node.At(0), node.Value, node.At(1))
+func FormatImpossible(buf *TrackedBuffer, node sqlNode) {
+	switch node := node.(type) {
+	case *Select:
+		buf.Fprintf("select %v from %v where 1 != 1", node.Expr, node.From)
+	case *Node:
+		switch node.Type {
+		case SELECT:
+			// Still needed for subqueries that are still nodes.
+			buf.Fprintf("select %v from %v where 1 != 1",
+				node.At(SELECT_EXPR_OFFSET),
+				node.At(SELECT_FROM_OFFSET),
+			)
+		case JOIN, STRAIGHT_JOIN, CROSS, NATURAL:
+			// We skip ON clauses (if any)
+			buf.Fprintf("%v %s %v", node.At(0), node.Value, node.At(1))
+		case LEFT, RIGHT:
+			// ON clause is requried
+			buf.Fprintf("%v %s %v on 1 != 1", node.At(0), node.Value, node.At(1))
+		default:
+			node.Format(buf)
+		}
 	default:
-		FormatNode(buf, node)
+		node.Format(buf)
 	}
 }
 
-func (node *Node) GenerateSelectLimitQuery() *ParsedQuery {
+func GenerateSelectLimitQuery(selStmt SelectStatement) *ParsedQuery {
 	buf := NewTrackedBuffer(nil)
-	if node.Type == SELECT {
-		limit := node.At(SELECT_LIMIT_OFFSET)
+	sel, ok := selStmt.(*Select)
+	if ok {
+		limit := sel.Limit
 		if limit.Len() == 0 {
 			limit.PushLimit()
 			defer limit.Pop()
 		}
 	}
-	FormatNode(buf, node)
+	buf.Fprintf("%v", selStmt)
 	return buf.ParsedQuery()
 }
 
-func (node *Node) GenerateEqualOuterQuery(tableInfo *schema.Table) *ParsedQuery {
+func GenerateEqualOuterQuery(sel *Select, tableInfo *schema.Table) *ParsedQuery {
 	buf := NewTrackedBuffer(nil)
 	fmt.Fprintf(buf, "select ")
 	writeColumnList(buf, tableInfo.Columns)
-	buf.Fprintf(" from %v where ", node.At(SELECT_FROM_OFFSET))
+	buf.Fprintf(" from %v where ", sel.From)
 	generatePKWhere(buf, tableInfo.Indexes[0])
 	return buf.ParsedQuery()
 }
 
-func (node *Node) GenerateInOuterQuery(tableInfo *schema.Table) *ParsedQuery {
+func GenerateInOuterQuery(sel *Select, tableInfo *schema.Table) *ParsedQuery {
 	buf := NewTrackedBuffer(nil)
 	fmt.Fprintf(buf, "select ")
 	writeColumnList(buf, tableInfo.Columns)
 	// We assume there is one and only one PK column.
 	// A '*' argument name means all variables of the list.
-	buf.Fprintf(" from %v where %s in (%a)", node.At(SELECT_FROM_OFFSET), tableInfo.Indexes[0].Columns[0], "*")
+	buf.Fprintf(" from %v where %s in (%a)", sel.From, tableInfo.Indexes[0].Columns[0], "*")
 	return buf.ParsedQuery()
 }
 
-func (node *Node) GenerateInsertOuterQuery() *ParsedQuery {
+func GenerateInsertOuterQuery(ins *Insert) *ParsedQuery {
 	buf := NewTrackedBuffer(nil)
 	buf.Fprintf("insert %vinto %v%v values %a%v",
-		node.At(INSERT_COMMENT_OFFSET),
-		node.At(INSERT_TABLE_OFFSET),
-		node.At(INSERT_COLUMN_LIST_OFFSET),
+		ins.Comments,
+		ins.Table,
+		ins.ColumnList,
 		"_rowValues",
-		node.At(INSERT_ON_DUP_OFFSET),
+		ins.OnDup,
 	)
 	return buf.ParsedQuery()
 }
 
-func (node *Node) GenerateUpdateOuterQuery(pkIndex *schema.Index) *ParsedQuery {
+func GenerateUpdateOuterQuery(upd *Update, pkIndex *schema.Index) *ParsedQuery {
 	buf := NewTrackedBuffer(nil)
-	buf.Fprintf("update %v%v set %v where ",
-		node.At(UPDATE_COMMENT_OFFSET), node.At(UPDATE_TABLE_OFFSET), node.At(UPDATE_LIST_OFFSET))
+	buf.Fprintf("update %v%v set %v where ", upd.Comments, upd.Table, upd.List)
 	generatePKWhere(buf, pkIndex)
 	return buf.ParsedQuery()
 }
 
-func (node *Node) GenerateDeleteOuterQuery(pkIndex *schema.Index) *ParsedQuery {
+func GenerateDeleteOuterQuery(del *Delete, pkIndex *schema.Index) *ParsedQuery {
 	buf := NewTrackedBuffer(nil)
-	buf.Fprintf("delete %vfrom %v where ", node.At(DELETE_COMMENT_OFFSET), node.At(DELETE_TABLE_OFFSET))
+	buf.Fprintf("delete %vfrom %v where ", del.Comments, del.Table)
 	generatePKWhere(buf, pkIndex)
 	return buf.ParsedQuery()
 }
@@ -1043,11 +1054,11 @@ func generatePKWhere(buf *TrackedBuffer, pkIndex *schema.Index) {
 	}
 }
 
-func (node *Node) GenerateSelectSubquery(tableInfo *schema.Table, index string) *ParsedQuery {
+func GenerateSelectSubquery(sel *Select, tableInfo *schema.Table, index string) *ParsedQuery {
 	hint := NewSimpleParseNode(USE, "use")
 	hint.Push(NewSimpleParseNode(COLUMN_LIST, ""))
 	hint.At(0).Push(NewSimpleParseNode(ID, index))
-	table_expr := node.At(SELECT_FROM_OFFSET).At(0)
+	table_expr := sel.From.At(0)
 	savedHint := table_expr.Sub[2]
 	table_expr.Sub[2] = hint
 	defer func() {
@@ -1055,32 +1066,32 @@ func (node *Node) GenerateSelectSubquery(tableInfo *schema.Table, index string) 
 	}()
 	return GenerateSubquery(
 		tableInfo.Indexes[0].Columns,
-		node.At(SELECT_FROM_OFFSET),
-		node.At(SELECT_WHERE_OFFSET),
-		node.At(SELECT_ORDER_OFFSET),
-		node.At(SELECT_LIMIT_OFFSET),
+		sel.From,
+		sel.Where,
+		sel.OrderBy,
+		sel.Limit,
 		false,
 	)
 }
 
-func (node *Node) GenerateUpdateSubquery(tableInfo *schema.Table) *ParsedQuery {
+func GenerateUpdateSubquery(upd *Update, tableInfo *schema.Table) *ParsedQuery {
 	return GenerateSubquery(
 		tableInfo.Indexes[0].Columns,
-		node.At(UPDATE_TABLE_OFFSET),
-		node.At(UPDATE_WHERE_OFFSET),
-		node.At(UPDATE_ORDER_OFFSET),
-		node.At(UPDATE_LIMIT_OFFSET),
+		upd.Table,
+		upd.Where,
+		upd.OrderBy,
+		upd.Limit,
 		true,
 	)
 }
 
-func (node *Node) GenerateDeleteSubquery(tableInfo *schema.Table) *ParsedQuery {
+func GenerateDeleteSubquery(del *Delete, tableInfo *schema.Table) *ParsedQuery {
 	return GenerateSubquery(
 		tableInfo.Indexes[0].Columns,
-		node.At(DELETE_TABLE_OFFSET),
-		node.At(DELETE_WHERE_OFFSET),
-		node.At(DELETE_ORDER_OFFSET),
-		node.At(DELETE_LIMIT_OFFSET),
+		del.Table,
+		del.Where,
+		del.OrderBy,
+		del.Limit,
 		true,
 	)
 }

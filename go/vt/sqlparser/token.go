@@ -23,7 +23,7 @@ type Tokenizer struct {
 	lastToken     *Node
 	LastError     string
 	posVarIndex   int
-	ParseTree     *Node
+	ParseTree     Statement
 }
 
 func NewStringTokenizer(s string) *Tokenizer {
@@ -369,7 +369,6 @@ func (tkn *Tokenizer) scanCommentType2() *Node {
 			tkn.ConsumeNext(buffer)
 			if tkn.lastChar == '/' {
 				tkn.ConsumeNext(buffer)
-				buffer.WriteByte(' ')
 				break
 			}
 		}

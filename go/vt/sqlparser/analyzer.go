@@ -15,17 +15,17 @@ import "fmt"
 // It returns an error if parsing fails or if the statement
 // is not a DML.
 func GetDBName(sql string) (string, error) {
-	rootNode, err := Parse(sql)
+	statement, err := Parse(sql)
 	if err != nil {
 		return "", err
 	}
-	switch rootNode.Type {
-	case INSERT:
-		return extractDBName(rootNode.At(INSERT_TABLE_OFFSET)), nil
-	case UPDATE:
-		return extractDBName(rootNode.At(UPDATE_TABLE_OFFSET)), nil
-	case DELETE:
-		return extractDBName(rootNode.At(DELETE_TABLE_OFFSET)), nil
+	switch stmt := statement.(type) {
+	case *Insert:
+		return extractDBName(stmt.Table), nil
+	case *Update:
+		return extractDBName(stmt.Table), nil
+	case *Delete:
+		return extractDBName(stmt.Table), nil
 	}
 	return "", fmt.Errorf("statement '%s' is not a dml", sql)
 }

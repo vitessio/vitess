@@ -7,9 +7,9 @@ package sqlparser
 
 import "bytes"
 
-func SetParseTree(yylex interface{}, root *Node) {
+func SetParseTree(yylex interface{}, stmt Statement) {
 	tn := yylex.(*Tokenizer)
-	tn.ParseTree = root
+	tn.ParseTree = stmt
 }
 
 func SetAllowComments(yylex interface{}, allow bool) {
@@ -69,7 +69,8 @@ const (
 %}
 
 %union {
-	node *Node
+	node      *Node
+  statement Statement
 }
 
 %token <node> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT COMMENT FOR
@@ -103,9 +104,9 @@ const (
 %token <node> NODE_LIST UPLUS UMINUS CASE_WHEN WHEN_LIST SELECT_STAR NO_DISTINCT FUNCTION NO_LOCK FOR_UPDATE LOCK_IN_SHARE_MODE
 %token <node> NOT_IN NOT_LIKE NOT_BETWEEN IS_NULL IS_NOT_NULL UNION_ALL COMMENT_LIST COLUMN_LIST INDEX_LIST TABLE_EXPR
 
-%type <node> command
-%type <node> select_statement insert_statement update_statement delete_statement set_statement
-%type <node> create_statement alter_statement rename_statement drop_statement
+%type <statement> command
+%type <statement> select_statement insert_statement update_statement delete_statement set_statement
+%type <statement> create_statement alter_statement rename_statement drop_statement
 %type <node> comment_opt comment_list
 %type <node> union_op distinct_opt
 %type <node> select_expression_list select_expression expression as_opt
@@ -141,117 +142,86 @@ command:
 select_statement:
 	SELECT comment_opt distinct_opt select_expression_list FROM table_expression_list where_expression_opt group_by_opt having_opt order_by_opt limit_opt lock_opt
 	{
-		$$ = $1
-		$$.Push($2) // 0: comment_opt
-		$$.Push($3) // 1: distinct_opt
-		$$.Push($4) // 2: select_expression_list
-		$$.Push($6) // 3: table_expression_list
-		$$.Push($7) // 4: where_expression_opt
-		$$.Push($8) // 5: group_by_opt
-		$$.Push($9) // 6: having_opt
-		$$.Push($10) // 7: order_by_opt
-		$$.Push($11) // 8: limit_opt
-		$$.Push($12) // 9: lock_opt
+    $$ = &Select{Comments: $2, Distinct: $3, Expr: $4, From: $6, Where: $7, GroupBy: $8, Having: $9, OrderBy: $10, Limit: $11, Lock: $12}
 	}
 | select_statement union_op select_statement %prec UNION
 	{
-		$$ = $2.PushTwo($1, $3)
+    $$ = &Union{Type: $2.Value, Select1: $1.(*Select), Select2: $3.(*Select)}
 	}
 
 insert_statement:
 	INSERT comment_opt INTO dml_table_expression column_list_opt values on_dup_opt
 	{
-		$$ = $1
-		$$.Push($2) // 0: comment_opt
-		$$.Push($4) // 1: dml_table_expression
-		$$.Push($5) // 2: column_list_opt
-		$$.Push($6) // 3: values
-		$$.Push($7) // 4: on_dup_opt
+    $$ = &Insert{Comments: $2, Table: $4, ColumnList: $5, Values: $6, OnDup: $7}
 	}
 
 update_statement:
 	UPDATE comment_opt dml_table_expression SET update_list where_expression_opt order_by_opt limit_opt
 	{
-		$$ = $1
-		$$.Push($2) // 0: comment_opt
-		$$.Push($3) // 1: dml_table_expression
-		$$.Push($5) // 2: update_list
-		$$.Push($6) // 3: where_expression_opt
-		$$.Push($7) // 4: order_by_opt
-		$$.Push($8) // 5: limit_opt
+    $$ = &Update{Comments: $2, Table: $3, List: $5, Where: $6, OrderBy: $7, Limit: $8}
 	}
 
 delete_statement:
 	DELETE comment_opt FROM dml_table_expression where_expression_opt order_by_opt limit_opt
 	{
-		$$ = $1
-		$$.Push($2) // 0: comment_opt
-		$$.Push($4) // 1: dml_table_expression
-		$$.Push($5) // 2: where_expression_opt
-		$$.Push($6) // 3: order_by_opt
-		$$.Push($7) // 4: limit_opt
+    $$ = &Delete{Comments: $2, Table: $4, Where: $5, OrderBy: $6, Limit: $7}
 	}
 
 set_statement:
 	SET comment_opt update_list
 	{
-		$$ = $1
-		$$.Push($2)
-		$$.Push($3)
+    $$ = &Set{Comments: $2, UpdateList: $3}
 	}
 
 create_statement:
 	CREATE TABLE not_exists_opt ID force_eof
 	{
-		$$.Push($4)
+    $$ = &DDLSimple{Action: CREATE, Table: $4}
 	}
 | CREATE constraint_opt INDEX sql_id using_opt ON ID force_eof
 	{
 		// Change this to an alter statement
-		$$ = NewSimpleParseNode(ALTER, "alter")
-		$$.Push($7)
+    $$ = &DDLSimple{Action: ALTER, Table: $7}
 	}
 | CREATE VIEW sql_id force_eof
 	{
-		$$.Push($3)
+    $$ = &DDLSimple{Action: CREATE, Table: $3}
 	}
 
 alter_statement:
 	ALTER ignore_opt TABLE ID non_rename_operation force_eof
 	{
-		$$.Push($4)
+    $$ = &DDLSimple{Action: ALTER, Table: $4}
 	}
 | ALTER ignore_opt TABLE ID RENAME to_opt ID
 	{
 		// Change this to a rename statement
-		$$ = NewSimpleParseNode(RENAME, "rename")
-		$$.PushTwo($4, $7)
+    $$ = &Rename{OldName: $4, NewName: $7}
 	}
 | ALTER VIEW sql_id force_eof
 	{
-		$$.Push($3)
+    $$ = &DDLSimple{Action: ALTER, Table: $3}
 	}
 
 rename_statement:
 	RENAME TABLE ID TO ID
 	{
-		$$.PushTwo($3, $5)
+    $$ = &Rename{OldName: $3, NewName: $5}
 	}
 
 drop_statement:
 	DROP TABLE exists_opt ID
 	{
-		$$.Push($4)
+    $$ = &DDLSimple{Action: DROP, Table: $4}
 	}
 | DROP INDEX sql_id ON ID
 	{
 		// Change this to an alter statement
-		$$ = NewSimpleParseNode(ALTER, "alter")
-		$$.Push($5)
+    $$ = &DDLSimple{Action: ALTER, Table: $5}
 	}
 | DROP VIEW exists_opt sql_id force_eof
 	{
-		$$.Push($4)
+    $$ = &DDLSimple{Action: DROP, Table: $4}
 	}
 
 comment_opt:
@@ -410,7 +380,7 @@ ID
 	}
 | '(' select_statement ')'
 	{
-		$$ = $1.Push($2)
+		$$ = $1.Push(selectNode($2.(SelectStatement)))
 	}
 
 dml_table_expression:
@@ -506,7 +476,7 @@ condition:
 	}
 | EXISTS '(' select_statement ')'
 	{
-		$$ = $1.Push($3)
+		$$ = $1.Push(selectNode($3.(SelectStatement)))
 	}
 
 compare:
@@ -524,6 +494,9 @@ values:
 		$$ = $1.Push($2)
 	}
 | select_statement
+  {
+    $$ = selectNode($1.(SelectStatement))
+  }
 
 parenthesised_lists:
 	parenthesised_list
@@ -543,7 +516,7 @@ parenthesised_list:
 	}
 | '(' select_statement ')'
 	{
-		$$ = $1.Push($2)
+		$$ = $1.Push(selectNode($2.(SelectStatement)))
 	}
 
 value_expression_list:
@@ -562,7 +535,7 @@ value_expression:
 | column_name
 | '(' select_statement ')'
 	{
-		$$ = $1.Push($2)
+		$$ = $1.Push(selectNode($2.(SelectStatement)))
 	}
 | '(' value_expression_list ')'
 	{

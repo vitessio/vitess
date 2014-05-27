@@ -1,5 +1,5 @@
 # union
-select * from a union select * from b
+"select * from a union select * from b"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "SELECT",
@@ -19,7 +19,7 @@ select * from a union select * from b
 }
 
 # distinct
-select distinct * from a
+"select distinct * from a"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "SELECT",
@@ -38,8 +38,8 @@ select distinct * from a
   "SetValue": null
 }
 
-# group by
-select * from a group by b
+# grouy by
+"select * from a group by b"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "SELECT",
@@ -59,7 +59,7 @@ select * from a group by b
 }
 
 # having
-select * from a having b=1
+"select * from a having b=1"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "SELECT",
@@ -79,7 +79,7 @@ select * from a having b=1
 }
 
 # limit
-select * from a limit 5
+"select * from a limit 5"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
@@ -104,7 +104,7 @@ select * from a limit 5
 }
 
 # cross-db
-select * from a.b
+"select * from a.b"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "TABLE",
@@ -124,7 +124,7 @@ select * from a.b
 }
 
 # multi-table
-select * from a,b
+"select * from a,b"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "TABLE",
@@ -144,7 +144,7 @@ select * from a,b
 }
 
 # multi-table (join)
-select * from a join b
+"select * from a join b"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "TABLE",
@@ -164,7 +164,7 @@ select * from a join b
 }
 
 # multi-table (right join)
-select * from a right join b
+"select * from a right join b"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "TABLE",
@@ -184,7 +184,7 @@ select * from a right join b
 }
 
 # table not cached
-select * from b
+"select * from b"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "NOCACHE",
@@ -204,7 +204,7 @@ select * from b
 }
 
 # table not cached
-select * from e
+"select * from e"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "NOCACHE",
@@ -224,7 +224,7 @@ select * from e
 }
 
 # bind in select list
-select :bv from a
+"select :bv from a"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "SELECT_LIST",
@@ -244,7 +244,7 @@ select :bv from a
 }
 
 # complex select list
-select eid+1 from a
+"select eid+1 from a"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "SELECT_LIST",
@@ -264,7 +264,7 @@ select eid+1 from a
 }
 
 # case in select list
-select case when eid = 1 then 1 end from a
+"select case when eid = 1 then 1 end from a"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "SELECT_LIST",
@@ -284,7 +284,7 @@ select case when eid = 1 then 1 end from a
 }
 
 # simple
-select eid from a
+"select eid from a"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
@@ -306,7 +306,7 @@ select eid from a
 }
 
 # as
-select eid as foo from a
+"select eid as foo from a"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
@@ -328,7 +328,7 @@ select eid as foo from a
 }
 
 # *
-select * from a
+"select * from a"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
@@ -353,7 +353,7 @@ select * from a
 }
 
 # c.eid
-select c.eid from a as c
+"select c.eid from a as c"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
@@ -375,7 +375,7 @@ select c.eid from a as c
 }
 
 # (eid)
-select (eid) from a
+"select (eid) from a"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
@@ -397,7 +397,7 @@ select (eid) from a
 }
 
 # for update
-select eid from a for update
+"select eid from a for update"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "LOCK",
@@ -417,7 +417,7 @@ select eid from a for update
 }
 
 # lock in share mode
-select eid from a lock in share mode
+"select eid from a lock in share mode"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "LOCK",
@@ -437,7 +437,7 @@ select eid from a lock in share mode
 }
 
 # composite pk supplied values
-select * from a where eid = 1 and id in (1, 2)
+"select * from a where eid = 1 and id in (1, 2)"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "COMPOSITE_PK",
@@ -462,7 +462,7 @@ select * from a where eid = 1 and id in (1, 2)
 }
 
 # positional arguments
-select * from a where eid = ? and id in (?, ?)
+"select * from a where eid = ? and id in (?, ?)"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "COMPOSITE_PK",
@@ -487,7 +487,7 @@ select * from a where eid = ? and id in (?, ?)
 }
 
 # composite pk subquery
-select * from a where name = 'foo'
+"select * from a where name = 'foo'"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "COMPOSITE_PK",
@@ -512,7 +512,7 @@ select * from a where name = 'foo'
 }
 
 # subquery
-select * from d where id = 1
+"select * from d where id = 1"
 {
   "PlanId": "SELECT_SUBQUERY",
   "Reason": "DEFAULT",
@@ -537,7 +537,7 @@ select * from d where id = 1
 }
 
 # subquery with limit
-select * from d where id = 1 limit 1
+"select * from d where id = 1 limit 1"
 {
   "PlanId": "SELECT_SUBQUERY",
   "Reason": "DEFAULT",
@@ -562,7 +562,7 @@ select * from d where id = 1 limit 1
 }
 
 # complex where (expression)
-select * from a where eid+1 = 1
+"select * from a where eid+1 = 1"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
@@ -587,7 +587,7 @@ select * from a where eid+1 = 1
 }
 
 # complex where (non-value operand)
-select * from a where eid = id
+"select * from a where eid = id"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
@@ -612,7 +612,7 @@ select * from a where eid = id
 }
 
 # inequality on pk columns
-select * from d where name between 'foo' and 'bar'
+"select * from d where name between 'foo' and 'bar'"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "PKINDEX",
@@ -637,7 +637,7 @@ select * from d where name between 'foo' and 'bar'
 }
 
 # (condition)
-select * from a where (eid=1) and (id=2)
+"select * from a where (eid=1) and (id=2)"
 {
   "PlanId": "PK_EQUAL",
   "Reason": "DEFAULT",
@@ -665,7 +665,7 @@ select * from a where (eid=1) and (id=2)
 }
 
 # pk match
-select * from a where eid=1 and id=1
+"select * from a where eid=1 and id=1"
 {
   "PlanId": "PK_EQUAL",
   "Reason": "DEFAULT",
@@ -693,7 +693,7 @@ select * from a where eid=1 and id=1
 }
 
 # disjoint index match
-select * from d where bar='foo' and id=1
+"select * from d where bar='foo' and id=1"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "NOINDEX_MATCH",
@@ -718,7 +718,7 @@ select * from d where bar='foo' and id=1
 }
 
 # string pk match
-select * from d where name='foo'
+"select * from d where name='foo'"
 {
   "PlanId": "PK_EQUAL",
   "Reason": "DEFAULT",
@@ -745,7 +745,7 @@ select * from d where name='foo'
 }
 
 # string pk match with limit
-select * from d where name='foo' limit 1
+"select * from d where name='foo' limit 1"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "PKINDEX",
@@ -770,7 +770,7 @@ select * from d where name='foo' limit 1
 }
 
 # reversed conditions with and clause
-select * from d where 'foo'=name and eid=1
+"select * from d where 'foo'=name and eid=1"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
@@ -795,7 +795,7 @@ select * from d where 'foo'=name and eid=1
 }
 
 # pk IN
-select * from d where name in ('foo', 'bar')
+"select * from d where name in ('foo', 'bar')"
 {
   "PlanId": "PK_IN",
   "Reason": "DEFAULT",
@@ -823,7 +823,7 @@ select * from d where name in ('foo', 'bar')
 }
 
 # pk IN parameter list
-select * from d where name in (:a,:b)
+"select * from d where name in (:a,:b)"
 {
   "PlanId": "PK_IN",
   "Reason": "DEFAULT",
@@ -851,7 +851,7 @@ select * from d where name in (:a,:b)
 }
 
 # pk IN, single value list
-select * from d where name in ('foo')
+"select * from d where name in ('foo')"
 {
   "PlanId": "PK_IN",
   "Reason": "DEFAULT",
@@ -878,7 +878,7 @@ select * from d where name in ('foo')
 }
 
 # pk IN, single value parameter list
-select * from d where name in (:a)
+"select * from d where name in (:a)"
 {
   "PlanId": "PK_IN",
   "Reason": "DEFAULT",
@@ -905,7 +905,7 @@ select * from d where name in (:a)
 }
 
 # double pk IN
-select * from a where eid in (1) and id in (1, 2)
+"select * from a where eid in (1) and id in (1, 2)"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
@@ -930,7 +930,7 @@ select * from a where eid in (1) and id in (1, 2)
 }
 
 # double pk IN 2
-select * from a where eid in (1, 2) and id in (1, 2)
+"select * from a where eid in (1, 2) and id in (1, 2)"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
@@ -955,7 +955,7 @@ select * from a where eid in (1, 2) and id in (1, 2)
 }
 
 # pk as tuple
-select * from a where (eid, id) in ((1, 1), (2, 2))
+"select * from a where (eid, id) in ((1, 1), (2, 2))"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
@@ -980,7 +980,7 @@ select * from a where (eid, id) in ((1, 1), (2, 2))
 }
 
 # no index match
-select * from d where foo='bar'
+"select * from d where foo='bar'"
 {
   "PlanId":"PASS_SELECT",
   "Reason":"NOINDEX_MATCH",
@@ -1005,7 +1005,7 @@ select * from d where foo='bar'
 }
 
 # table alias
-select * from d as c where c.name='foo'
+"select * from d as c where c.name='foo'"
 {
   "PlanId": "PK_EQUAL",
   "Reason": "DEFAULT",
@@ -1032,7 +1032,7 @@ select * from d as c where c.name='foo'
 }
 
 # non-pk inequality match
-select * from d where id<0
+"select * from d where id<0"
 {
   "PlanId": "SELECT_SUBQUERY",
   "Reason": "DEFAULT",
@@ -1057,7 +1057,7 @@ select * from d where id<0
 }
 
 # non-pk IN non-value operand
-select * from d where name in ('foo', id)
+"select * from d where name in ('foo', id)"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
@@ -1082,7 +1082,7 @@ select * from d where name in ('foo', id)
 }
 
 # non-pk between
-select * from d where id between 1 and 2
+"select * from d where id between 1 and 2"
 {
   "PlanId": "SELECT_SUBQUERY",
   "Reason": "DEFAULT",
@@ -1107,7 +1107,7 @@ select * from d where id between 1 and 2
 }
 
 # non-column between
-select * from d where 1 between 1 and 2
+"select * from d where 1 between 1 and 2"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
@@ -1132,7 +1132,7 @@ select * from d where 1 between 1 and 2
 }
 
 # complex predicate
-select * from d where name is not null
+"select * from d where name is not null"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
@@ -1157,7 +1157,7 @@ select * from d where name is not null
 }
 
 # order by
-select * from a where eid=1 and id=1 order by name
+"select * from a where eid=1 and id=1 order by name"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "ORDER",
@@ -1182,7 +1182,7 @@ select * from a where eid=1 and id=1 order by name
 }
 
 # cardinality override
-select * from d where bar = 'foo'
+"select * from d where bar = 'foo'"
 { 
   "PlanId": "SELECT_SUBQUERY",
   "Reason": "DEFAULT",
@@ -1207,7 +1207,7 @@ select * from d where bar = 'foo'
 }
 
 # index override (use)
-select * from d use index(d_bar_never) where bar = 'foo'
+"select * from d use index(d_bar_never) where bar = 'foo'"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "HAS_HINTS",
@@ -1232,7 +1232,7 @@ select * from d use index(d_bar_never) where bar = 'foo'
 }
 
 # index override (force)
-select * from d force index(d_bar_never) where bar = 'foo'
+"select * from d force index(d_bar_never) where bar = 'foo'"
 {
   "PlanId": "PASS_SELECT",
   "Reason": "HAS_HINTS",
@@ -1257,11 +1257,11 @@ select * from d force index(d_bar_never) where bar = 'foo'
 }
 
 # column not found
-select missing from a
+"select missing from a"
 "column missing not found in table a"
 
 # insert cross-db
-insert into b.a (eid, id) values (1, :a)
+"insert into b.a (eid, id) values (1, :a)"
 {
   "PlanId": "PASS_DML",
   "Reason": "TABLE",
@@ -1281,7 +1281,7 @@ insert into b.a (eid, id) values (1, :a)
 }
 
 # insert with qualified column names
-insert into a (a.eid, id) values (1, 2)
+"insert into a (a.eid, id) values (1, 2)"
 {
   "PlanId": "INSERT_PK",
   "Reason": "DEFAULT",
@@ -1304,7 +1304,7 @@ insert into a (a.eid, id) values (1, 2)
 }
 
 # insert with bind value
-insert into a (eid, id) values (1, :a)
+"insert into a (eid, id) values (1, :a)"
 {
   "PlanId": "INSERT_PK",
   "Reason": "DEFAULT",
@@ -1327,7 +1327,7 @@ insert into a (eid, id) values (1, :a)
 }
 
 # default number
-insert into a (id) values (1)
+"insert into a (id) values (1)"
 {
   "PlanId": "INSERT_PK",
   "Reason": "DEFAULT",
@@ -1350,7 +1350,7 @@ insert into a (id) values (1)
 }
 
 # default string
-insert into d(id) values(1)
+"insert into d(id) values(1)"
 {
   "PlanId": "INSERT_PK",
   "Reason": "DEFAULT",
@@ -1372,11 +1372,11 @@ insert into d(id) values(1)
 }
 
 # mismatch
-insert into a (eid, id) values (1)
+"insert into a (eid, id) values (1)"
 "column count doesn't match value count"
 
 # negative number
-insert into a (eid, id) values (-1, 2)
+"insert into a (eid, id) values (-1, 2)"
 {
   "PlanId": "INSERT_PK",
   "Reason": "DEFAULT",
@@ -1399,7 +1399,7 @@ insert into a (eid, id) values (-1, 2)
 }
 
 # positive number
-insert into a (eid, id) values (+1, 2)
+"insert into a (eid, id) values (+1, 2)"
 {
   "PlanId": "INSERT_PK",
   "Reason": "DEFAULT",
@@ -1422,7 +1422,7 @@ insert into a (eid, id) values (+1, 2)
 }
 
 # non-trivial unary
-insert into a (eid, id) values (~1, 2)
+"insert into a (eid, id) values (~1, 2)"
 {
   "PlanId": "PASS_DML",
   "Reason": "DEFAULT",
@@ -1442,7 +1442,7 @@ insert into a (eid, id) values (~1, 2)
 }
 
 # complex
-insert into a (eid, id) values (1+1, 2)
+"insert into a (eid, id) values (1+1, 2)"
 {
   "PlanId": "PASS_DML",
   "Reason": "DEFAULT",
@@ -1462,7 +1462,7 @@ insert into a (eid, id) values (1+1, 2)
 }
 
 # no index
-insert into c (eid, id) values (1, 2)
+"insert into c (eid, id) values (1, 2)"
 {
   "PlanId": "PASS_DML",
   "Reason": "TABLE_NOINDEX",
@@ -1482,7 +1482,7 @@ insert into c (eid, id) values (1, 2)
 }
 
 # no column list
-insert into a values (1, 2)
+"insert into a values (1, 2)"
 {
   "PlanId": "INSERT_PK",
   "Reason": "DEFAULT",
@@ -1505,7 +1505,7 @@ insert into a values (1, 2)
 }
 
 # on dup
-insert into b (eid, id) values (1, 2) on duplicate key update name = values(a)
+"insert into b (eid, id) values (1, 2) on duplicate key update name = values(a)"
 {
   "PlanId": "PASS_DML",
   "Reason": "UPSERT",
@@ -1525,7 +1525,7 @@ insert into b (eid, id) values (1, 2) on duplicate key update name = values(a)
 }
 
 # on dup pk change
-insert into b (eid, id) values (1, 2) on duplicate key update eid = 2
+"insert into b (eid, id) values (1, 2) on duplicate key update eid = 2"
 {
   "PlanId": "PASS_DML",
   "Reason": "UPSERT",
@@ -1545,7 +1545,7 @@ insert into b (eid, id) values (1, 2) on duplicate key update eid = 2
 }
 
 # on dup complex pk change
-insert into b (id, eid) values (1, 2) on duplicate key update eid = values(a)
+"insert into b (id, eid) values (1, 2) on duplicate key update eid = values(a)"
 {
   "PlanId": "PASS_DML",
   "Reason": "UPSERT",
@@ -1565,7 +1565,7 @@ insert into b (id, eid) values (1, 2) on duplicate key update eid = values(a)
 }
 
 # subquery
-insert into b (eid, id) select * from a
+"insert into b (eid, id) select * from a"
 {
   "PlanId": "INSERT_SUBQUERY",
   "Reason": "DEFAULT",
@@ -1591,7 +1591,7 @@ insert into b (eid, id) select * from a
 }
 
 # subquery with no column list
-insert into b select * from a
+"insert into b select * from a"
 {
   "PlanId": "INSERT_SUBQUERY",
   "Reason": "DEFAULT",
@@ -1617,7 +1617,7 @@ insert into b select * from a
 }
 
 # multi-row
-insert into b (eid, id) values (1, 2), (3, 4)
+"insert into b (eid, id) values (1, 2), (3, 4)"
 {
   "PlanId": "INSERT_PK",
   "Reason": "DEFAULT",
@@ -1646,7 +1646,7 @@ insert into b (eid, id) values (1, 2), (3, 4)
 }
 
 # update cross-db
-update b.a set name='foo' where eid=1 and id=1
+"update b.a set name='foo' where eid=1 and id=1"
 {
   "PlanId": "PASS_DML",
   "Reason": "TABLE",
@@ -1666,7 +1666,7 @@ update b.a set name='foo' where eid=1 and id=1
 }
 
 # pk changed
-update b set eid=1
+"update b set eid=1"
 {
   "PlanId": "DML_SUBQUERY",
   "Reason": "WHERE",
@@ -1689,11 +1689,11 @@ update b set eid=1
 }
 
 # type mismatch
-update b set eid=1.2
+"update b set eid=1.2"
 "type mismatch: strconv.ParseUint: parsing "1.2": invalid syntax"
 
 # pk changed as qualified column name
-update b set a.eid=1
+"update b set a.eid=1"
 {
   "PlanId": "DML_SUBQUERY",
   "Reason": "WHERE",
@@ -1716,7 +1716,7 @@ update b set a.eid=1
 }
 
 # complex pk change
-update b set eid=foo()
+"update b set eid=foo()"
 {
   "PlanId": "PASS_DML",
   "Reason": "PK_CHANGE",
@@ -1736,7 +1736,7 @@ update b set eid=foo()
 }
 
 # update subquery
-update a set name='foo'
+"update a set name='foo'"
 {
   "PlanId": "DML_SUBQUERY",
   "Reason": "WHERE",
@@ -1756,7 +1756,7 @@ update a set name='foo'
 }
 
 # update complex where clause
-update a set name='foo' where eid+1=1
+"update a set name='foo' where eid+1=1"
 {
   "PlanId": "DML_SUBQUERY",
   "Reason": "WHERE",
@@ -1776,7 +1776,7 @@ update a set name='foo' where eid+1=1
 }
 
 # pk
-update a set name='foo' where eid=1 and id=1
+"update a set name='foo' where eid=1 and id=1"
 {
   "PlanId": "DML_PK",
   "Reason": "DEFAULT",
@@ -1799,7 +1799,7 @@ update a set name='foo' where eid=1 and id=1
 }
 
 # update with qualified column name
-update a set a.name='foo' where eid=1 and id=1
+"update a set a.name='foo' where eid=1 and id=1"
 {
   "PlanId": "DML_PK",
   "Reason": "DEFAULT",
@@ -1822,7 +1822,7 @@ update a set a.name='foo' where eid=1 and id=1
 }
 
 # partial pk
-update a set name='foo' where eid=1
+"update a set name='foo' where eid=1"
 {
   "PlanId": "DML_SUBQUERY",
   "Reason": "DEFAULT",
@@ -1842,7 +1842,7 @@ update a set name='foo' where eid=1
 }
 
 # partial pk with limit
-update a set name='foo' where eid=1 limit 10
+"update a set name='foo' where eid=1 limit 10"
 {
   "PlanId": "DML_SUBQUERY",
   "Reason": "DEFAULT",
@@ -1862,7 +1862,7 @@ update a set name='foo' where eid=1 limit 10
 }
 
 # non-pk
-update a set name='foo' where eid=1 and name='foo'
+"update a set name='foo' where eid=1 and name='foo'"
 {
   "PlanId": "DML_SUBQUERY",
   "Reason": "DEFAULT",
@@ -1882,7 +1882,7 @@ update a set name='foo' where eid=1 and name='foo'
 }
 
 # no index
-update c set eid=1
+"update c set eid=1"
 {
   "PlanId": "PASS_DML",
   "Reason": "TABLE_NOINDEX",
@@ -1902,7 +1902,7 @@ update c set eid=1
 }
 
 # delete cross-db
-delete from b.a where eid=1 and id=1
+"delete from b.a where eid=1 and id=1"
 {
   "PlanId": "PASS_DML",
   "Reason": "TABLE",
@@ -1922,7 +1922,7 @@ delete from b.a where eid=1 and id=1
 }
 
 # delete with no where clause
-delete from a
+"delete from a"
 {
   "PlanId": "DML_SUBQUERY",
   "Reason": "WHERE",
@@ -1942,7 +1942,7 @@ delete from a
 }
 
 # delete complex where clause
-delete from a where eid+1=1
+"delete from a where eid+1=1"
 {
   "PlanId": "DML_SUBQUERY",
   "Reason": "WHERE",
@@ -1962,7 +1962,7 @@ delete from a where eid+1=1
 }
 
 # pk
-delete from a where eid=1 and id=1
+"delete from a where eid=1 and id=1"
 {
   "PlanId": "DML_PK",
   "Reason": "DEFAULT",
@@ -1985,7 +1985,7 @@ delete from a where eid=1 and id=1
 }
 
 # partial pk
-delete from a where eid=1
+"delete from a where eid=1"
 {
   "PlanId": "DML_SUBQUERY",
   "Reason": "DEFAULT",
@@ -2005,7 +2005,7 @@ delete from a where eid=1
 }
 
 # non-pk
-delete from a where eid=1 and name='foo'
+"delete from a where eid=1 and name='foo'"
 {
   "PlanId": "DML_SUBQUERY",
   "Reason": "DEFAULT",
@@ -2025,7 +2025,7 @@ delete from a where eid=1 and name='foo'
 }
 
 # no index
-delete from c
+"delete from c"
 {
   "PlanId": "PASS_DML",
   "Reason": "TABLE_NOINDEX",
@@ -2045,7 +2045,7 @@ delete from c
 }
 
 # int
-set  a=1
+"set  a=1"
 {
   "PlanId": "SET",
   "Reason": "DEFAULT",
@@ -2065,7 +2065,7 @@ set  a=1
 }
 
 # float
-set  a=1.2
+"set  a=1.2"
 {
   "PlanId": "SET",
   "Reason": "DEFAULT",
@@ -2085,7 +2085,7 @@ set  a=1.2
 }
 
 # string
-set a='b'
+"set a='b'"
 {
   "PlanId": "SET",
   "Reason": "DEFAULT",
@@ -2105,7 +2105,7 @@ set a='b'
 }
 
 # multi
-set a=1, b=2
+"set a=1, b=2"
 {
   "PlanId": "SET",
   "Reason": "DEFAULT",
@@ -2125,7 +2125,7 @@ set a=1, b=2
 }
 
 # create
-create table a(a int, b varchar(8))
+"create table a(a int, b varchar(8))"
 {
   "PlanId":"DDL",
   "Reason":"DEFAULT",
@@ -2145,7 +2145,7 @@ create table a(a int, b varchar(8))
 }
 
 # alter
-alter table a add column(a int)
+"alter table a add column(a int)"
 {
   "PlanId":"DDL",
   "Reason":"DEFAULT",
@@ -2165,7 +2165,7 @@ alter table a add column(a int)
 }
 
 # alter rename
-alter table a rename b
+"alter table a rename b"
 {
   "PlanId":"DDL",
   "Reason":"DEFAULT",
@@ -2185,7 +2185,7 @@ alter table a rename b
 }
 
 # rename
-rename table a to b
+"rename table a to b"
 {
   "PlanId":"DDL",
   "Reason":"DEFAULT",
@@ -2205,7 +2205,7 @@ rename table a to b
 }
 
 # drop
-drop table a
+"drop table a"
 {
   "PlanId":"DDL",
   "Reason":"DEFAULT",
@@ -2225,9 +2225,9 @@ drop table a
 }
 
 # table not found
-select * from aaaa
+"select * from aaaa"
 "table aaaa not found in schema"
 
 # syntax error
-syntax error
+"syntax error"
 "syntax error at position 7 near syntax"

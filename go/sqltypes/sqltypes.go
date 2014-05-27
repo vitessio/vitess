@@ -178,8 +178,41 @@ func (v Value) IsString() (ok bool) {
 	return ok
 }
 
+// MarshalJSON should only be used for testing.
+// It's not a complete implementation.
 func (v Value) MarshalJSON() ([]byte, error) {
 	return json.Marshal(v.Inner)
+}
+
+// UnmarshalJSON should only be used for testing.
+// It's not a complete implementation.
+func (v *Value) UnmarshalJSON(b []byte) error {
+	if len(b) == 0 {
+		return fmt.Errorf("error unmarshaling empty bytes")
+	}
+	var val interface{}
+	var err error
+	switch b[0] {
+	case '-':
+		var ival int64
+		err = json.Unmarshal(b, &ival)
+		val = ival
+	case '"':
+		var bval []byte
+		err = json.Unmarshal(b, &bval)
+		val = bval
+	case 'n': // null
+		err = json.Unmarshal(b, &val)
+	default:
+		var uval uint64
+		err = json.Unmarshal(b, &uval)
+		val = uval
+	}
+	if err != nil {
+		return err
+	}
+	*v, err = BuildValue(val)
+	return err
 }
 
 // InnerValue defines methods that need to be supported by all non-null value types.
