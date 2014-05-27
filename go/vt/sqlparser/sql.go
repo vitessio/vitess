@@ -833,7 +833,7 @@ yydefault:
 	case 12:
 		//line sql.y:148
 		{
-			yyVAL.statement = &Union{Type: yyS[yypt-1].node.Value, Select1: yyS[yypt-2].statement.(*Select), Select2: yyS[yypt-0].statement.(*Select)}
+			yyVAL.statement = &Union{Type: yyS[yypt-1].node.Value, Select1: yyS[yypt-2].statement.(SelectStatement), Select2: yyS[yypt-0].statement.(SelectStatement)}
 		}
 	case 13:
 		//line sql.y:154

@@ -146,7 +146,7 @@ select_statement:
 	}
 | select_statement union_op select_statement %prec UNION
 	{
-    $$ = &Union{Type: $2.Value, Select1: $1.(*Select), Select2: $3.(*Select)}
+    $$ = &Union{Type: $2.Value, Select1: $1.(SelectStatement), Select2: $3.(SelectStatement)}
 	}
 
 insert_statement:
