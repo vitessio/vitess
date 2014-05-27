@@ -6,6 +6,7 @@ package worker
 
 import (
 	"fmt"
+	"html/template"
 	"strings"
 	"sync"
 	"time"
@@ -87,7 +88,7 @@ func (vsdw *VerticalSplitDiffWorker) recordError(err error) {
 	vsdw.mu.Unlock()
 }
 
-func (vsdw *VerticalSplitDiffWorker) StatusAsHTML() string {
+func (vsdw *VerticalSplitDiffWorker) StatusAsHTML() template.HTML {
 	vsdw.mu.Lock()
 	defer vsdw.mu.Unlock()
 	result := "<b>Working on:</b> " + vsdw.keyspace + "/" + vsdw.shard + "</br>\n"
@@ -103,7 +104,7 @@ func (vsdw *VerticalSplitDiffWorker) StatusAsHTML() string {
 		result += strings.Join(vsdw.diffLogs, "</br>\n")
 	}
 
-	return result
+	return template.HTML(result)
 }
 
 func (vsdw *VerticalSplitDiffWorker) StatusAsText() string {

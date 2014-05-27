@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -31,12 +32,17 @@ type actionShardMethod func(wr *wrangler.Wrangler, keyspace, shard string, r *ht
 
 type actionTabletMethod func(wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (output string, err error)
 
+type actionTabletRecord struct {
+	role   string
+	method actionTabletMethod
+}
+
 // ActionRepository is a repository of actions that can be performed
 // on a {Keyspace,Shard,Tablet}.
 type ActionRepository struct {
 	keyspaceActions map[string]actionKeyspaceMethod
 	shardActions    map[string]actionShardMethod
-	tabletActions   map[string]actionTabletMethod
+	tabletActions   map[string]actionTabletRecord
 	wr              *wrangler.Wrangler
 }
 
@@ -44,7 +50,7 @@ func NewActionRepository(wr *wrangler.Wrangler) *ActionRepository {
 	return &ActionRepository{
 		keyspaceActions: make(map[string]actionKeyspaceMethod),
 		shardActions:    make(map[string]actionShardMethod),
-		tabletActions:   make(map[string]actionTabletMethod),
+		tabletActions:   make(map[string]actionTabletRecord),
 		wr:              wr}
 
 }
@@ -57,8 +63,11 @@ func (ar *ActionRepository) RegisterShardAction(name string, method actionShardM
 	ar.shardActions[name] = method
 }
 
-func (ar *ActionRepository) RegisterTabletAction(name string, method actionTabletMethod) {
-	ar.tabletActions[name] = method
+func (ar *ActionRepository) RegisterTabletAction(name, role string, method actionTabletMethod) {
+	ar.tabletActions[name] = actionTabletRecord{
+		role:   role,
+		method: method,
+	}
 }
 
 func (ar *ActionRepository) ApplyKeyspaceAction(actionName, keyspace string, r *http.Request) *ActionResult {
@@ -105,8 +114,18 @@ func (ar *ActionRepository) ApplyTabletAction(actionName string, tabletAlias top
 		result.error("Unknown tablet action")
 		return result
 	}
+
+	// check the role
+	if action.role != "" {
+		if err := acl.CheckAccessHTTP(r, action.role); err != nil {
+			result.error("Access denied")
+			return result
+		}
+	}
+
+	// run the action
 	ar.wr.ResetActionTimeout(wrangler.DefaultActionTimeout)
-	output, err := action(ar.wr, tabletAlias, r)
+	output, err := action.method(ar.wr, tabletAlias, r)
 	if err != nil {
 		result.error(err.Error())
 		return result
@@ -136,11 +155,19 @@ func (ar ActionRepository) PopulateShardActions(actions map[string]template.URL,
 	}
 }
 
-func (ar ActionRepository) PopulateTabletActions(actions map[string]template.URL, alias string) {
-	for name := range ar.tabletActions {
+func (ar ActionRepository) PopulateTabletActions(actions map[string]template.URL, tabletAlias string, r *http.Request) {
+	for name, value := range ar.tabletActions {
+		// check we are authorized for the role we need
+		if value.role != "" {
+			if err := acl.CheckAccessHTTP(r, value.role); err != nil {
+				continue
+			}
+		}
+
+		// and populate the entry
 		values := url.Values{}
 		values.Set("action", name)
-		values.Set("alias", alias)
+		values.Set("alias", tabletAlias)
 		actions[name] = template.URL("/tablet_actions?" + values.Encode())
 	}
 }

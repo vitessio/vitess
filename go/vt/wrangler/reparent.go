@@ -205,19 +205,19 @@ func (wr *Wrangler) ReparentTablet(tabletAlias topo.TabletAlias) error {
 	if err != nil {
 		return err
 	}
-	log.Infof("slave tablet position: %v %v %v", tabletAlias, ti.GetMysqlAddr(), pos.MapKey())
+	log.Infof("slave tablet position: %v %v %v", tabletAlias, ti.MysqlAddr(), pos.MapKey())
 
 	actionPath, err := wr.ai.ReparentPosition(masterTi.Alias, pos)
 	if err != nil {
 		return err
 	}
-	result, err := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
+	result, err := wr.WaitForCompletionReply(actionPath)
 	if err != nil {
 		return err
 	}
 	rsd := result.(*actionnode.RestartSlaveData)
 
-	log.Infof("master tablet position: %v %v %v", shardInfo.MasterAlias, masterTi.GetMysqlAddr(), rsd.ReplicationState.ReplicationPosition.MapKey())
+	log.Infof("master tablet position: %v %v %v", shardInfo.MasterAlias, masterTi.MysqlAddr(), rsd.ReplicationState.ReplicationPosition.MapKey())
 	// An orphan is already in the replication graph but it is
 	// disconnected, hence we have to force this action.
 	rsd.Force = ti.Type == topo.TYPE_LAG_ORPHAN
@@ -225,5 +225,5 @@ func (wr *Wrangler) ReparentTablet(tabletAlias topo.TabletAlias) error {
 	if err != nil {
 		return err
 	}
-	return wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+	return wr.WaitForCompletion(actionPath)
 }

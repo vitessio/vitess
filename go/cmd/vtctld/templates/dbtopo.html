@@ -77,7 +77,7 @@
 	    <td>
 	      <ul class="tablet-list">
 		{{range index $shard.TabletNodes $processedType}}
-		{{template "tablet.html" .}}
+		  <li title="{{.Alias}}">{{tablet .Alias .ShortName}}</li>
 		{{end}}
 	      </ul>
 	    </td>
@@ -90,13 +90,15 @@
     <h1>Idle</h1>
     <ul>
       {{range .Idle}}
-        {{template "tablet.html" .}}
+        <li title="{{.Alias}}">{{tablet .Alias .ShortName}}</li>
       {{end}}
     </ul>
     <h1>Scrap</h1>
     <ul>
     {{range .Scrap}}
-      {{template "tablet.html" .}}
+      <li title="{{.Alias}}">
+        {{tablet .Alias .ShortName}} <a href="/tablet_actions?action=DeleteTablet&alias={{.Alias}}">(delete)</a>
+      </li>
     {{end}}
     </ul>
   {{end}}

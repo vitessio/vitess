@@ -204,7 +204,7 @@ func (wr *Wrangler) makeMastersReadOnly(shards []*topo.ShardInfo) error {
 				rec.RecordError(err)
 				return
 			}
-			rec.RecordError(wr.ai.WaitForCompletion(actionPath, wr.actionTimeout()))
+			rec.RecordError(wr.WaitForCompletion(actionPath))
 			log.Infof("Master %v is now read-only", si.MasterAlias)
 		}(si)
 	}
@@ -295,7 +295,7 @@ func (wr *Wrangler) makeMastersReadWrite(shards []*topo.ShardInfo) error {
 				return
 			}
 
-			if err := wr.ai.WaitForCompletion(actionPath, wr.actionTimeout()); err != nil {
+			if err := wr.WaitForCompletion(actionPath); err != nil {
 				rec.RecordError(err)
 			} else {
 				log.Infof("%v responded", si.MasterAlias)
@@ -521,7 +521,7 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 		if err != nil {
 			return err
 		}
-		if err := wr.ai.WaitForCompletion(actionPath, wr.actionTimeout()); err != nil {
+		if err := wr.WaitForCompletion(actionPath); err != nil {
 			return err
 		}
 

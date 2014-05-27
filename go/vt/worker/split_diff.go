@@ -6,6 +6,7 @@ package worker
 
 import (
 	"fmt"
+	"html/template"
 	"strings"
 	"sync"
 	"time"
@@ -88,7 +89,7 @@ func (sdw *SplitDiffWorker) recordError(err error) {
 	sdw.mu.Unlock()
 }
 
-func (sdw *SplitDiffWorker) StatusAsHTML() string {
+func (sdw *SplitDiffWorker) StatusAsHTML() template.HTML {
 	sdw.mu.Lock()
 	defer sdw.mu.Unlock()
 	result := "<b>Working on:</b> " + sdw.keyspace + "/" + sdw.shard + "</br>\n"
@@ -104,7 +105,7 @@ func (sdw *SplitDiffWorker) StatusAsHTML() string {
 		result += strings.Join(sdw.diffLogs, "</br>\n")
 	}
 
-	return result
+	return template.HTML(result)
 }
 
 func (sdw *SplitDiffWorker) StatusAsText() string {

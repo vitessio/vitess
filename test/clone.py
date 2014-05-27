@@ -78,7 +78,7 @@ class TestClone(unittest.TestCase):
   def _test_mysqlctl_clone(server_mode):
     if server_mode:
       snapshot_cmd = ['snapshotsourcestart', '-concurrency=8']
-      restore_flags = ['-dont-wait-for-slave-start']
+      restore_flags = ['-dont_wait_for_slave_start']
     else:
       snapshot_cmd = ['snapshot', '-concurrency=5']
       restore_flags = []
@@ -104,8 +104,8 @@ class TestClone(unittest.TestCase):
 
     call(["touch", "/tmp/vtSimulateFetchFailures"])
     err = tablet_31981.mysqlctl(['restore',
-                                 '-fetch-concurrency=2',
-                                 '-fetch-retry-count=4'] +
+                                 '-fetch_concurrency=2',
+                                 '-fetch_retry_count=4'] +
                                 restore_flags +
                                 [environment.vtdataroot + '/snapshot/vt_0000062344/snapshot_manifest.json'],
                                 with_ports=True).wait()
@@ -116,7 +116,7 @@ class TestClone(unittest.TestCase):
 
     if server_mode:
       err = tablet_62344.mysqlctl(['snapshotsourceend',
-                                   '-read-write',
+                                   '-read_write',
                                    'vt_snapshot_test'], with_ports=True).wait()
       if err != 0:
         self.fail('mysqlctl snapshotsourceend failed')

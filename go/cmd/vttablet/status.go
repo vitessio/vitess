@@ -35,11 +35,33 @@ var (
     background-color: Khaki;
   }
 </style>
-Alias: {{github_com_youtube_vitess_vtctld_tablet .Alias.String}}<br>
-Keyspace: {{github_com_youtube_vitess_vtctld_keyspace .Keyspace}} Shard: {{github_com_youtube_vitess_vtctld_shard .Keyspace .Shard}}<br>
-Serving graph: {{github_com_youtube_vitess_vtctld_srv_keyspace .Alias.Cell .Keyspace}} {{github_com_youtube_vitess_vtctld_srv_shard .Alias.Cell .Keyspace .Shard}} {{github_com_youtube_vitess_vtctld_srv_type .Alias.Cell .Keyspace .Shard .Type}}<br>
-Replication graph: {{github_com_youtube_vitess_vtctld_replication .Alias.Cell .Keyspace .Shard}}<br>
-State: {{.State}}<br>
+<table width="100%" border="" frame="">
+  <tr border="">
+    <td width="25%" border="">
+      Alias: {{github_com_youtube_vitess_vtctld_tablet .Alias.String}}<br>
+      Keyspace: {{github_com_youtube_vitess_vtctld_keyspace .Keyspace}} Shard: {{github_com_youtube_vitess_vtctld_shard .Keyspace .Shard}}<br>
+      Serving graph: {{github_com_youtube_vitess_vtctld_srv_keyspace .Alias.Cell .Keyspace}} {{github_com_youtube_vitess_vtctld_srv_shard .Alias.Cell .Keyspace .Shard}} {{github_com_youtube_vitess_vtctld_srv_type .Alias.Cell .Keyspace .Shard .Type}}<br>
+      Replication graph: {{github_com_youtube_vitess_vtctld_replication .Alias.Cell .Keyspace .Shard}}<br>
+      State: {{.State}}<br>
+    </td>
+    <td width="25%" border="">
+      <a href="/schemaz">Schema</a></br>
+      <a href="/debug/query_plans">Schema&nbsp;Query&nbsp;Plans</a></br>
+      <a href="/debug/query_stats">Schema&nbsp;Query&nbsp;Stats</a></br>
+      <a href="/debug/table_stats">Schema&nbsp;Table&nbsp;Stats</a></br>
+    </td>
+    <td width="25%" border="">
+      <a href="/queryz">Query&nbsp;Stats</a></br>
+      <a href="/debug/consolidations">Consolidations</a></br>
+      <a href="/querylogz">Current&nbsp;Query&nbsp;Log</a></br>
+      <a href="/txlogz">Current&nbsp;Transaction&nbsp;Log</a></br>
+    </td>
+    <td width="25%" border="">
+      <a href="/debug/health">Health Check</a></br>
+      <a href="/debug/memcache/">Memcache</a></br>
+    </td>
+  </tr>
+</table>
 `
 
 	// healthTemplate is just about the tablet health

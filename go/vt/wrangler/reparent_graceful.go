@@ -93,7 +93,7 @@ func (wr *Wrangler) reparentShardGraceful(si *topo.ShardInfo, slaveTabletMap, ma
 	log.Infof("scrap demoted master %v", masterTablet.Alias)
 	scrapActionPath, scrapErr := wr.ai.Scrap(masterTablet.Alias)
 	if scrapErr == nil {
-		scrapErr = wr.ai.WaitForCompletion(scrapActionPath, wr.actionTimeout())
+		scrapErr = wr.WaitForCompletion(scrapActionPath)
 	}
 	if scrapErr != nil {
 		// The sub action is non-critical, so just warn.

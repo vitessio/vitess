@@ -540,7 +540,7 @@ func (ta *TabletActor) snapshot(actionNode *actionnode.ActionNode) error {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
-	filename, slaveStartRequired, readOnly, err := ta.mysqld.CreateSnapshot(tablet.DbName(), tablet.GetAddr(), false, args.Concurrency, args.ServerMode, ta.hookExtraEnv())
+	filename, slaveStartRequired, readOnly, err := ta.mysqld.CreateSnapshot(tablet.DbName(), tablet.Addr(), false, args.Concurrency, args.ServerMode, ta.hookExtraEnv())
 	if err != nil {
 		return err
 	}
@@ -703,7 +703,7 @@ func (ta *TabletActor) restore(actionNode *actionnode.ActionNode) error {
 
 	// read & unpack the manifest
 	sm := new(mysqlctl.SnapshotManifest)
-	if err := fetchAndParseJsonFile(sourceTablet.GetAddr(), args.SrcFilePath, sm); err != nil {
+	if err := fetchAndParseJsonFile(sourceTablet.Addr(), args.SrcFilePath, sm); err != nil {
 		return err
 	}
 
@@ -743,7 +743,7 @@ func (ta *TabletActor) multiSnapshot(actionNode *actionnode.ActionNode) error {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
-	filenames, err := ta.mysqld.CreateMultiSnapshot(args.KeyRanges, tablet.DbName(), ki.ShardingColumnName, ki.ShardingColumnType, tablet.GetAddr(), false, args.Concurrency, args.Tables, args.SkipSlaveRestart, args.MaximumFilesize, ta.hookExtraEnv())
+	filenames, err := ta.mysqld.CreateMultiSnapshot(args.KeyRanges, tablet.DbName(), ki.ShardingColumnName, ki.ShardingColumnType, tablet.Addr(), false, args.Concurrency, args.Tables, args.SkipSlaveRestart, args.MaximumFilesize, ta.hookExtraEnv())
 	if err != nil {
 		return err
 	}
@@ -783,7 +783,7 @@ func (ta *TabletActor) multiRestore(actionNode *actionnode.ActionNode) (err erro
 			return e
 		}
 		sourceAddrs[i] = &url.URL{
-			Host: t.GetAddr(),
+			Host: t.Addr(),
 			Path: "/" + t.DbName(),
 		}
 		keyRanges[i], e = key.KeyRangesOverlap(tablet.KeyRange, t.KeyRange)

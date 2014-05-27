@@ -78,6 +78,18 @@ func (wr *Wrangler) ResetActionTimeout(actionTimeout time.Duration) {
 	wr.deadline = time.Now().Add(actionTimeout)
 }
 
+// WaitForCompletion will wait for the actionPath to complete, using the
+// wrangler default action timeout.
+func (wr *Wrangler) WaitForCompletion(actionPath string) error {
+	return wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+}
+
+// WaitForCompletionReply will wait for the actionPath to complete, using the
+// wrangler default action timeout, and return the result
+func (wr *Wrangler) WaitForCompletionReply(actionPath string) (interface{}, error) {
+	return wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
+}
+
 // signal handling
 var interrupted = make(chan struct{})
 

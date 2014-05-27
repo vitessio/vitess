@@ -49,7 +49,7 @@ func (wr *Wrangler) Snapshot(tabletAlias topo.TabletAlias, forceMasterSnapshot b
 	}
 
 	// wait for completion, and save the error
-	results, actionErr := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
+	results, actionErr := wr.WaitForCompletionReply(actionPath)
 	var reply *actionnode.SnapshotReply
 	newType := originalType
 	if actionErr != nil {
@@ -94,7 +94,7 @@ func (wr *Wrangler) SnapshotSourceEnd(tabletAlias topo.TabletAlias, slaveStartRe
 	}
 
 	// wait for completion, and save the error
-	err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+	err = wr.WaitForCompletion(actionPath)
 	if err != nil {
 		log.Errorf("SnapshotSourceEnd failed (%v), leaving tablet type alone", err)
 		return
@@ -127,7 +127,7 @@ func (wr *Wrangler) ReserveForRestore(srcTabletAlias, dstTabletAlias topo.Tablet
 		return
 	}
 
-	return wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+	return wr.WaitForCompletion(actionPath)
 }
 
 func (wr *Wrangler) UnreserveForRestore(dstTabletAlias topo.TabletAlias) (err error) {
@@ -179,7 +179,7 @@ func (wr *Wrangler) Restore(srcTabletAlias topo.TabletAlias, srcFilePath string,
 		return err
 	}
 
-	if err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout()); err != nil {
+	if err = wr.WaitForCompletion(actionPath); err != nil {
 		return err
 	}
 

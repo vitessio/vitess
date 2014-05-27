@@ -371,15 +371,6 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 
 	// Update bind addr for mysql and query service in the tablet node.
 	f := func(tablet *topo.Tablet) error {
-		// the first four values are for backward compatibility
-		tablet.Addr = fmt.Sprintf("%v:%v", hostname, vtPort)
-		if vtsPort != 0 {
-			tablet.SecureAddr = fmt.Sprintf("%v:%v", hostname, vtsPort)
-		}
-		tablet.MysqlAddr = fmt.Sprintf("%v:%v", hostname, mysqlPort)
-		tablet.MysqlIpAddr = fmt.Sprintf("%v:%v", ipAddr, mysqlPort)
-
-		// new values
 		tablet.Hostname = hostname
 		tablet.IPAddr = ipAddr
 		if tablet.Portmap == nil {

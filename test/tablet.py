@@ -75,11 +75,11 @@ class Tablet(object):
     ports_params = []
     if with_ports:
       ports_params = ['-port', str(self.port),
-                      '-mysql-port', str(self.mysql_port)]
+                      '-mysql_port', str(self.mysql_port)]
 
     return utils.run_bg([environment.binary_path('mysqlctl'),
                          '-log_dir', environment.vtlogroot,
-                         '-tablet-uid', str(self.tablet_uid)] +
+                         '-tablet_uid', str(self.tablet_uid)] +
                         ports_params + cmd, env=env)
 
   def init_mysql(self, extra_my_cnf=None):

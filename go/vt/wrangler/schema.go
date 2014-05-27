@@ -177,7 +177,7 @@ func (wr *Wrangler) PreflightSchema(tabletAlias topo.TabletAlias, change string)
 		return nil, err
 	}
 
-	result, err := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
+	result, err := wr.WaitForCompletionReply(actionPath)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +189,7 @@ func (wr *Wrangler) ApplySchema(tabletAlias topo.TabletAlias, sc *myproto.Schema
 
 	// the timeout is for the entire action, so it might be too big
 	// for an individual tablet
-	results, err := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
+	results, err := wr.WaitForCompletionReply(actionPath)
 	if err != nil {
 		return nil, err
 	}
