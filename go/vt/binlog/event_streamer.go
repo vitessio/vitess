@@ -15,9 +15,11 @@ import (
 )
 
 var (
-	BINLOG_SET_TIMESTAMP = []byte("SET TIMESTAMP=")
-	BINLOG_SET_INSERT    = []byte("SET INSERT_ID=")
-	STREAM_COMMENT_START = []byte("/* _stream ")
+	BINLOG_SET_TIMESTAMP     = []byte("SET TIMESTAMP=")
+	BINLOG_SET_TIMESTAMP_LEN = len(BINLOG_SET_TIMESTAMP)
+	BINLOG_SET_INSERT        = []byte("SET INSERT_ID=")
+	BINLOG_SET_INSERT_LEN    = len(BINLOG_SET_INSERT)
+	STREAM_COMMENT_START     = []byte("/* _stream ")
 )
 
 type sendEventFunc func(event *proto.StreamEvent) error
@@ -50,11 +52,11 @@ func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) err
 		switch stmt.Category {
 		case proto.BL_SET:
 			if bytes.HasPrefix(stmt.Sql, BINLOG_SET_TIMESTAMP) {
-				if timestamp, err = strconv.ParseInt(string(stmt.Sql[len(BINLOG_SET_TIMESTAMP):]), 10, 64); err != nil {
+				if timestamp, err = strconv.ParseInt(string(stmt.Sql[BINLOG_SET_TIMESTAMP_LEN:]), 10, 64); err != nil {
 					return fmt.Errorf("%v: %s", err, stmt.Sql)
 				}
 			} else if bytes.HasPrefix(stmt.Sql, BINLOG_SET_INSERT) {
-				if insertid, err = strconv.ParseInt(string(stmt.Sql[len(BINLOG_SET_INSERT):]), 10, 64); err != nil {
+				if insertid, err = strconv.ParseInt(string(stmt.Sql[BINLOG_SET_INSERT_LEN:]), 10, 64); err != nil {
 					return fmt.Errorf("%v: %s", err, stmt.Sql)
 				}
 			} else {

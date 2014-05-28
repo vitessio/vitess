@@ -28,6 +28,7 @@ func (binlogTransaction *BinlogTransaction) MarshalBson(buf *bytes2.ChunkedWrite
 		}
 		lenWriter.Close()
 	}
+	bson.EncodeInt64(buf, "Timestamp", binlogTransaction.Timestamp)
 	bson.EncodeInt64(buf, "GroupId", binlogTransaction.GroupId)
 
 	lenWriter.Close()
@@ -62,6 +63,8 @@ func (binlogTransaction *BinlogTransaction) UnmarshalBson(buf *bytes.Buffer, kin
 					binlogTransaction.Statements = append(binlogTransaction.Statements, _v1)
 				}
 			}
+		case "Timestamp":
+			binlogTransaction.Timestamp = bson.DecodeInt64(buf, kind)
 		case "GroupId":
 			binlogTransaction.GroupId = bson.DecodeInt64(buf, kind)
 		default:

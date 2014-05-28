@@ -157,6 +157,7 @@ func (bls *BinlogStreamer) parseEvents(sendTransaction sendTransactionFunc, read
 	bls.delim = DEFAULT_DELIM
 	bufReader := bufio.NewReader(reader)
 	var statements []proto.Statement
+	var timestamp int64
 	for {
 		sql, err := bls.nextStatement(bufReader)
 		if sql == nil {
@@ -167,12 +168,14 @@ func (bls *BinlogStreamer) parseEvents(sendTransaction sendTransactionFunc, read
 		// We trust that mysqlbinlog doesn't send proto.BL_DMLs withot a proto.BL_BEGIN
 		case proto.BL_BEGIN, proto.BL_ROLLBACK:
 			statements = nil
+			timestamp = 0
 		case proto.BL_DDL:
 			statements = append(statements, proto.Statement{Category: category, Sql: sql})
 			fallthrough
 		case proto.BL_COMMIT:
 			trans := &proto.BinlogTransaction{
 				Statements: statements,
+				Timestamp:  timestamp,
 				GroupId:    bls.blPos.GroupId,
 			}
 			if err = sendTransaction(trans); err != nil {
@@ -182,7 +185,14 @@ func (bls *BinlogStreamer) parseEvents(sendTransaction sendTransactionFunc, read
 				return fmt.Errorf("send reply error: %v", err)
 			}
 			statements = nil
-		// proto.BL_DML, proto.BL_SET or proto.BL_UNRECOGNIZED
+			timestamp = 0
+		case proto.BL_SET:
+			if statements == nil && bytes.HasPrefix(sql, BINLOG_SET_TIMESTAMP) {
+				// get the timestamp
+				timestamp, _ = strconv.ParseInt(string(sql[BINLOG_SET_TIMESTAMP_LEN:]), 10, 64)
+			}
+			statements = append(statements, proto.Statement{Category: category, Sql: sql})
+		// proto.BL_DML or proto.BL_UNRECOGNIZED
 		default:
 			statements = append(statements, proto.Statement{Category: category, Sql: sql})
 		}

@@ -16,9 +16,11 @@ const (
 )
 
 // BinlogTransaction represents one transaction as read from
-// the binlog.
+// the binlog. Timestamp is set if the first statement was
+// something like 'SET TIMESTAMP=...'
 type BinlogTransaction struct {
 	Statements []Statement
+	Timestamp  int64
 	GroupId    int64
 }
 

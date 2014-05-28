@@ -5,10 +5,8 @@
 package binlogplayer
 
 import (
-	"bytes"
 	"fmt"
 	"io"
-	"strconv"
 	"time"
 
 	log "github.com/golang/glog"
@@ -25,8 +23,6 @@ var (
 
 	BLPL_QUERY       = "Query"
 	BLPL_TRANSACTION = "Transaction"
-
-	BLPL_SET_TIMESTAMP = []byte("SET TIMESTAMP=")
 )
 
 // BinlogPlayerStats is the internal stats of a player. It is a different
@@ -109,21 +105,16 @@ func NewBinlogPlayerTables(dbClient VtClient, addr string, tables []string, star
 //   transaction_timestamp alone (keeping the old value), and we don't
 //   change SecondsBehindMaster
 func (blp *BinlogPlayer) writeRecoveryPosition(tx *proto.BinlogTransaction) error {
-	// try to find the timestamp for the transaction, if any
-	var timestamp int64
-	if len(tx.Statements) > 0 && bytes.HasPrefix(tx.Statements[0].Sql, BLPL_SET_TIMESTAMP) {
-		timestamp, _ = strconv.ParseInt(string(tx.Statements[0].Sql[len(BLPL_SET_TIMESTAMP):]), 10, 64)
-	}
 	now := time.Now().Unix()
 
 	blp.blpPos.GroupId = tx.GroupId
 	updateRecovery := ""
-	if timestamp != 0 {
+	if tx.Timestamp != 0 {
 		updateRecovery = fmt.Sprintf(
 			"UPDATE _vt.blp_checkpoint SET group_id=%v, time_updated=%v, transaction_timestamp=%v WHERE source_shard_uid=%v",
 			tx.GroupId,
 			now,
-			timestamp,
+			tx.Timestamp,
 			blp.blpPos.Uid)
 	} else {
 		updateRecovery = fmt.Sprintf(
@@ -141,8 +132,8 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *proto.BinlogTransaction) erro
 		return fmt.Errorf("Cannot update blp_recovery table, affected %v rows", qr.RowsAffected)
 	}
 	blp.blplStats.LastGroupId.Set(tx.GroupId)
-	if timestamp != 0 {
-		blp.blplStats.SecondsBehindMaster.Set(now - timestamp)
+	if tx.Timestamp != 0 {
+		blp.blplStats.SecondsBehindMaster.Set(now - tx.Timestamp)
 	}
 	return nil
 }
