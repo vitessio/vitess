@@ -28,11 +28,12 @@ type RowcacheInvalidator struct {
 	svm sync2.ServiceManager
 
 	// mu mainly protects access to evs by Open and Close.
-	mu      sync.Mutex
-	dbname  string
-	mysqld  *mysqlctl.Mysqld
-	evs     *binlog.EventStreamer
-	GroupId sync2.AtomicInt64
+	mu        sync.Mutex
+	dbname    string
+	mysqld    *mysqlctl.Mysqld
+	evs       *binlog.EventStreamer
+	Timestamp sync2.AtomicInt64
+	GroupId   sync2.AtomicInt64
 }
 
 // NewRowcacheInvalidator creates a new RowcacheInvalidator.
@@ -42,6 +43,7 @@ func NewRowcacheInvalidator(qe *QueryEngine) *RowcacheInvalidator {
 	rci := &RowcacheInvalidator{qe: qe}
 	stats.Publish("RowcacheInvalidatorState", stats.StringFunc(rci.svm.StateName))
 	stats.Publish("RowcacheInvalidatorPosition", stats.IntFunc(rci.GroupId.Get))
+	stats.Publish("RowcacheInvalidatorTimestamp", stats.IntFunc(rci.Timestamp.Get))
 	return rci
 }
 
@@ -137,8 +139,10 @@ func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) {
 	switch event.Category {
 	case "DDL":
 		rci.qe.InvalidateForDDL(&proto.DDLInvalidate{DDL: event.Sql})
+		rci.Timestamp.Set(event.Timestamp)
 	case "DML":
 		rci.handleDmlEvent(event)
+		rci.Timestamp.Set(event.Timestamp)
 	case "ERR":
 		dbname, err := sqlparser.GetDBName(event.Sql)
 		if err != nil || dbname == "" || dbname == rci.dbname {
@@ -148,6 +152,7 @@ func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) {
 			log.Warningf("Ignoring cross-db statement: %s", event.Sql)
 			infoErrors.Add("Invalidation", 1)
 		}
+		rci.Timestamp.Set(event.Timestamp)
 	case "POS":
 		rci.GroupId.Set(event.GroupId)
 	default:
