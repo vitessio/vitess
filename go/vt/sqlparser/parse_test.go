@@ -36,20 +36,13 @@ var (
 	SQLZERO = sqltypes.MakeString([]byte("0"))
 )
 
-var testSchema map[string]*schema.Table
-
-func init() {
-	testSchema = loadSchema("schema_test.json")
-}
-
-func tableGetter(name string) (*schema.Table, bool) {
-	r, ok := testSchema[name]
-	return r, ok
-}
-
 func TestExec(t *testing.T) {
+	testSchema := loadSchema("schema_test.json")
 	for tcase := range iterateExecFile("exec_cases.txt") {
-		plan, err := ExecParse(tcase.input, tableGetter, true)
+		plan, err := ExecParse(tcase.input, func(name string) (*schema.Table, bool) {
+			r, ok := testSchema[name]
+			return r, ok
+		}, true)
 		var out string
 		if err != nil {
 			out = err.Error()
@@ -219,8 +212,12 @@ func TestRouting(t *testing.T) {
 }
 
 func TestAnonymizer(t *testing.T) {
+	testSchema := loadSchema("schema_test.json")
 	sql := "select 'abcd', 20, 30.0, eid from a where 1=eid and name='3'"
-	plan, err := ExecParse(sql, tableGetter, true)
+	plan, err := ExecParse(sql, func(name string) (*schema.Table, bool) {
+		r, ok := testSchema[name]
+		return r, ok
+	}, true)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 		return
@@ -230,7 +227,10 @@ func TestAnonymizer(t *testing.T) {
 		t.Errorf("got %q, want %q", plan.DisplayQuery, want)
 	}
 
-	plan, err = ExecParse(sql, tableGetter, false)
+	plan, err = ExecParse(sql, func(name string) (*schema.Table, bool) {
+		r, ok := testSchema[name]
+		return r, ok
+	}, false)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 		return

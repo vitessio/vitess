@@ -13,12 +13,14 @@ import (
 
 type reflectBinlogTransaction struct {
 	Statements []reflectStatement
+	Timestamp  int64
 	GroupId    int64
 }
 
 type extraBinlogTransaction struct {
 	Extra      int
 	Statements []reflectStatement
+	Timestamp  int64
 	GroupId    int64
 }
 
@@ -35,7 +37,8 @@ func TestBinlogTransaction(t *testing.T) {
 				Sql:      []byte("sql"),
 			},
 		},
-		GroupId: 123,
+		Timestamp: 456,
+		GroupId:   123,
 	})
 	if err != nil {
 		t.Error(err)
@@ -49,7 +52,8 @@ func TestBinlogTransaction(t *testing.T) {
 				Sql:      []byte("sql"),
 			},
 		},
-		GroupId: 123,
+		Timestamp: 456,
+		GroupId:   123,
 	}
 	encoded, err := bson.Marshal(&custom)
 	if err != nil {
