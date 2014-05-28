@@ -10,7 +10,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"log"
 	"os"
+	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -32,71 +36,19 @@ var (
 	SQLZERO = sqltypes.MakeString([]byte("0"))
 )
 
-var schem map[string]*schema.Table
+var testSchema map[string]*schema.Table
 
 func init() {
-	schem = make(map[string]*schema.Table)
-
-	a := schema.NewTable("a")
-	a.AddColumn("eid", "int", SQLZERO, "")
-	a.AddColumn("id", "int", SQLZERO, "")
-	a.AddColumn("name", "varchar(10)", SQLZERO, "")
-	a.AddColumn("foo", "varchar(10)", SQLZERO, "")
-	acolumns := []string{"eid", "id", "name", "foo"}
-	a.Indexes = append(a.Indexes, &schema.Index{Name: "PRIMARY", Columns: []string{"eid", "id"}, Cardinality: []uint64{1, 1}, DataColumns: acolumns})
-	a.Indexes = append(a.Indexes, &schema.Index{Name: "a_name", Columns: []string{"eid", "name"}, Cardinality: []uint64{1, 1}, DataColumns: a.Indexes[0].Columns})
-	a.Indexes = append(a.Indexes, &schema.Index{Name: "b_name", Columns: []string{"name"}, Cardinality: []uint64{3}, DataColumns: a.Indexes[0].Columns})
-	a.Indexes = append(a.Indexes, &schema.Index{Name: "c_name", Columns: []string{"name"}, Cardinality: []uint64{2}, DataColumns: a.Indexes[0].Columns})
-	a.PKColumns = append(a.PKColumns, 0, 1)
-	a.CacheType = schema.CACHE_RW
-	schem["a"] = a
-
-	b := schema.NewTable("b")
-	b.AddColumn("eid", "int", SQLZERO, "")
-	b.AddColumn("id", "int", SQLZERO, "")
-	bcolumns := []string{"eid", "id"}
-	b.Indexes = append(a.Indexes, &schema.Index{Name: "PRIMARY", Columns: []string{"eid", "id"}, Cardinality: []uint64{1, 1}, DataColumns: bcolumns})
-	b.PKColumns = append(b.PKColumns, 0, 1)
-	b.CacheType = schema.CACHE_NONE
-	schem["b"] = b
-
-	c := schema.NewTable("c")
-	c.AddColumn("eid", "int", SQLZERO, "")
-	c.AddColumn("id", "int", SQLZERO, "")
-	c.CacheType = schema.CACHE_NONE
-	schem["c"] = c
-
-	d := schema.NewTable("d")
-	d.AddColumn("name", "varbinary(10)", SQLZERO, "")
-	d.AddColumn("id", "int", SQLZERO, "")
-	d.AddColumn("foo", "varchar(10)", SQLZERO, "")
-	d.AddColumn("bar", "varchar(10)", SQLZERO, "")
-	dcolumns := []string{"name"}
-	d.Indexes = append(d.Indexes, &schema.Index{Name: "PRIMARY", Columns: []string{"name"}, Cardinality: []uint64{1}, DataColumns: dcolumns})
-	d.Indexes = append(d.Indexes, &schema.Index{Name: "d_id", Columns: []string{"id"}, Cardinality: []uint64{1}, DataColumns: d.Indexes[0].Columns})
-	d.Indexes = append(d.Indexes, &schema.Index{Name: "d_bar_never", Columns: []string{"bar", "foo"}, Cardinality: []uint64{2, 1}, DataColumns: d.Indexes[0].Columns})
-	d.Indexes = append(d.Indexes, &schema.Index{Name: "d_bar", Columns: []string{"bar", "foo"}, Cardinality: []uint64{3, 1}, DataColumns: d.Indexes[0].Columns})
-	d.PKColumns = append(d.PKColumns, 0)
-	d.CacheType = schema.CACHE_RW
-	schem["d"] = d
-
-	e := schema.NewTable("e")
-	e.AddColumn("eid", "int", SQLZERO, "")
-	e.AddColumn("id", "int", SQLZERO, "")
-	ecolumns := []string{"eid", "id"}
-	e.Indexes = append(e.Indexes, &schema.Index{Name: "PRIMARY", Columns: []string{"eid", "id"}, Cardinality: []uint64{1, 1}, DataColumns: ecolumns})
-	e.PKColumns = append(a.PKColumns, 0, 1)
-	e.CacheType = schema.CACHE_W
-	schem["e"] = e
+	testSchema = loadSchema("schema_test.json")
 }
 
 func tableGetter(name string) (*schema.Table, bool) {
-	r, ok := schem[name]
+	r, ok := testSchema[name]
 	return r, ok
 }
 
 func TestExec(t *testing.T) {
-	for tcase := range iterateJSONFile("exec_cases.txt") {
+	for tcase := range iterateExecFile("exec_cases.txt") {
 		plan, err := ExecParse(tcase.input, tableGetter, true)
 		var out string
 		if err != nil {
@@ -115,8 +67,50 @@ func TestExec(t *testing.T) {
 	}
 }
 
+func TestCustomExec(t *testing.T) {
+	testSchemas := testfiles.Glob("sqlparser_test/*_schema.json")
+	if len(testSchemas) == 0 {
+		t.Log("No schemas to test")
+		return
+	}
+	for _, schemFile := range testSchemas {
+		schem := loadSchema(schemFile)
+		t.Logf("Testing schema %s", schemFile)
+		files, err := filepath.Glob(strings.Replace(schemFile, "schema.json", "*.txt", -1))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if len(files) == 0 {
+			t.Fatalf("No test files for %s", schemFile)
+		}
+		getter := func(name string) (*schema.Table, bool) {
+			r, ok := schem[name]
+			return r, ok
+		}
+		for _, file := range files {
+			t.Logf("Testing file %s", file)
+			for tcase := range iterateExecFile(file) {
+				plan, err := ExecParse(tcase.input, getter, false)
+				var out string
+				if err != nil {
+					out = err.Error()
+				} else {
+					bout, err := json.Marshal(plan)
+					if err != nil {
+						panic(fmt.Sprintf("Error marshalling %v: %v", plan, err))
+					}
+					out = string(bout)
+				}
+				if out != tcase.output {
+					t.Errorf("File: %s: Line:%v\n%s\n%s", file, tcase.lineno, tcase.output, out)
+				}
+			}
+		}
+	}
+}
+
 func TestStreamExec(t *testing.T) {
-	for tcase := range iterateJSONFile("stream_cases.txt") {
+	for tcase := range iterateExecFile("stream_cases.txt") {
 		plan, err := StreamExecParse(tcase.input, true)
 		var out string
 		if err != nil {
@@ -175,10 +169,10 @@ func TestParse(t *testing.T) {
 		if err != nil {
 			out = err.Error()
 		} else {
-			out = tree.String()
+			out = String(tree)
 		}
 		if out != tcase.output {
-			t.Error(fmt.Sprintf("File:%s Line:%v\n%s\n%s", tcase.file, tcase.lineno, tcase.output, out))
+			t.Error(fmt.Sprintf("File:%s Line:%v\n%q\n%q", tcase.file, tcase.lineno, tcase.output, out))
 		}
 	}
 }
@@ -267,6 +261,23 @@ func TestAnonymizer(t *testing.T) {
 	}
 }
 
+func loadSchema(name string) map[string]*schema.Table {
+	b, err := ioutil.ReadFile(locateFile(name))
+	if err != nil {
+		panic(err)
+	}
+	tables := make([]*schema.Table, 0, 8)
+	err = json.Unmarshal(b, &tables)
+	if err != nil {
+		panic(err)
+	}
+	s := make(map[string]*schema.Table)
+	for _, t := range tables {
+		s[t.Name] = t
+	}
+	return s
+}
+
 type testCase struct {
 	file   string
 	lineno int
@@ -312,8 +323,8 @@ func iterateFiles(pattern string) (testCaseIterator chan testCase) {
 	return testCaseIterator
 }
 
-func iterateJSONFile(name string) (testCaseIterator chan testCase) {
-	name = testfiles.Locate("sqlparser_test/" + name)
+func iterateExecFile(name string) (testCaseIterator chan testCase) {
+	name = locateFile(name)
 	fd, err := os.OpenFile(name, os.O_RDONLY, 0)
 	if err != nil {
 		panic(fmt.Sprintf("Could not open file %s", name))
@@ -325,25 +336,33 @@ func iterateJSONFile(name string) (testCaseIterator chan testCase) {
 		r := bufio.NewReader(fd)
 		lineno := 0
 		for {
-			binput, _, err := r.ReadLine()
-			input := string(binput)
-			lineno++
+			binput, err := r.ReadBytes('\n')
 			if err != nil {
 				if err != io.EOF {
-					panic(fmt.Sprintf("Error reading file %s: %s", name, err.Error()))
+					fmt.Printf("Line: %d\n", lineno)
+					panic(fmt.Errorf("Error reading file %s: %s", name, err.Error()))
 				}
 				break
 			}
-			if input == "" || input[0] == '#' {
+			lineno++
+			input := string(binput)
+			if input == "" || input == "\n" || input[0] == '#' || strings.HasPrefix(input, "Length:") {
 				//fmt.Printf("%s\n", input)
 				continue
 			}
+			err = json.Unmarshal(binput, &input)
+			if err != nil {
+				fmt.Printf("Line: %d, input: %s\n", lineno, binput)
+				panic(err)
+			}
+			input = strings.Trim(input, "\"")
 			var output []byte
 			for {
 				l, err := r.ReadBytes('\n')
 				lineno++
 				if err != nil {
-					panic(fmt.Sprintf("Error reading file %s: %s", name, err.Error()))
+					fmt.Printf("Line: %d\n", lineno)
+					panic(fmt.Errorf("Error reading file %s: %s", name, err.Error()))
 				}
 				output = append(output, l...)
 				if l[0] == '}' {
@@ -363,4 +382,11 @@ func iterateJSONFile(name string) (testCaseIterator chan testCase) {
 		}
 	}()
 	return testCaseIterator
+}
+
+func locateFile(name string) string {
+	if path.IsAbs(name) {
+		return name
+	}
+	return testfiles.Locate("sqlparser_test/" + name)
 }

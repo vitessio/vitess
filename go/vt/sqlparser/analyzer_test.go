@@ -48,6 +48,5 @@ func TestGetDBName(t *testing.T) {
 		if err == nil {
 			t.Errorf("want error, got nil")
 		}
-		t.Logf("expected error: %v", err)
 	}
 }

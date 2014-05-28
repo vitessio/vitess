@@ -35,11 +35,11 @@ func GetShardList(sql string, bindVariables map[string]interface{}, tabletKeys [
 }
 
 func buildPlan(sql string) (plan *RoutingPlan) {
-	tree, err := Parse(sql)
+	statement, err := Parse(sql)
 	if err != nil {
 		panic(err)
 	}
-	return tree.getRoutingPlan()
+	return getRoutingPlan(statement)
 }
 
 func shardListFromPlan(plan *RoutingPlan, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) (shardList []int) {
@@ -75,26 +75,27 @@ func shardListFromPlan(plan *RoutingPlan, bindVariables map[string]interface{}, 
 	return makeList(0, len(tabletKeys))
 }
 
-func (node *Node) getRoutingPlan() (plan *RoutingPlan) {
+func getRoutingPlan(statement Statement) (plan *RoutingPlan) {
 	plan = &RoutingPlan{}
-	if node.Type == INSERT {
-		if node.At(INSERT_VALUES_OFFSET).Type == VALUES {
+	if ins, ok := statement.(*Insert); ok {
+		if ins.Values.Type == VALUES {
 			plan.routingType = ROUTE_BY_VALUE
-			plan.criteria = node.At(INSERT_VALUES_OFFSET).At(0).routingAnalyzeValues()
+			plan.criteria = ins.Values.At(0).routingAnalyzeValues()
 			return plan
 		} else { // SELECT, let us recurse
-			return node.At(INSERT_VALUES_OFFSET).getRoutingPlan()
+			sel := newSelect(ins.Values)
+			return getRoutingPlan(sel)
 		}
 	}
 	var where *Node
 	plan.routingType = ROUTE_BY_CONDITION
-	switch node.Type {
-	case SELECT:
-		where = node.At(SELECT_WHERE_OFFSET)
-	case UPDATE:
-		where = node.At(UPDATE_WHERE_OFFSET)
-	case DELETE:
-		where = node.At(DELETE_WHERE_OFFSET)
+	switch stmt := statement.(type) {
+	case *Select:
+		where = stmt.Where
+	case *Update:
+		where = stmt.Where
+	case *Delete:
+		where = stmt.Where
 	}
 	if where != nil && where.Len() > 0 {
 		plan.criteria = where.At(0).routingAnalyzeBoolean()

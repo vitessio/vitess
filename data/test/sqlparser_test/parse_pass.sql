@@ -8,12 +8,14 @@ select -1 from t where b = -2
 select 1 from t // aa#select 1 from t
 select 1 from t -- aa#select 1 from t
 select /* simplest */ 1 from t
+select /* double */ /* comment */ 1 from t
 select /* back-quote */ 1 from `t`#select /* back-quote */ 1 from t
 select /* back-quote keyword */ 1 from `from`#select /* back-quote keyword */ 1 from `from`
 select /* @ */ @@a from b
 select /* \0 */ '\0' from a
 select 1 /* drop this comment */ from t#select 1 from t
 select /* union */ 1 from t union select 1 from t
+select /* double union */ 1 from t union select 1 from t union select 1 from t
 select /* union all */ 1 from t union all select 1 from t
 select /* minus */ 1 from t minus select 1 from t
 select /* except */ 1 from t except select 1 from t

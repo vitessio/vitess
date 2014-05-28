@@ -1,25 +1,25 @@
 # select
-select * from a
+"select * from a"
 {
   "DisplayQuery": "select * from a",
   "FullQuery": "select * from a"
 }
 
 # select for update
-select * from a for update
+"select * from a for update"
 "select with lock disallowed with streaming"
 
 # union
-select * from a union select * from b
+"select * from a union select * from b"
 {
   "DisplayQuery": "select * from a union select * from b",
   "FullQuery": "select * from a union select * from b"
 }
 
 # dml
-update a set b = 1
-"update not allowed for streaming"
+"update a set b = 1"
+"'update a set b = 1' not allowed for streaming"
 
 # syntax error
-syntax error
+"syntax error"
 "syntax error at position 7 near syntax"
