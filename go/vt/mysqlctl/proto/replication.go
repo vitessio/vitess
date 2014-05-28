@@ -74,23 +74,3 @@ func NewReplicationState(masterAddr string) (*ReplicationState, error) {
 	return &ReplicationState{MasterConnectRetry: 10,
 		MasterHost: addrPieces[0], MasterPort: port}, nil
 }
-
-// Binlog server / player replication structures
-
-type BlpPosition struct {
-	Uid     uint32
-	GroupId int64
-}
-
-type BlpPositionList struct {
-	Entries []BlpPosition
-}
-
-func (bpl *BlpPositionList) FindBlpPositionById(id uint32) (*BlpPosition, error) {
-	for _, pos := range bpl.Entries {
-		if pos.Uid == id {
-			return &pos, nil
-		}
-	}
-	return nil, fmt.Errorf("BlpPosition for id %v not found", id)
-}

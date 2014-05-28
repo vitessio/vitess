@@ -22,6 +22,7 @@ import (
 
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -620,7 +621,7 @@ func (mysqld *Mysqld) ValidateSnapshotPath() error {
 
 // The following types and methods are used to watch binlog_player replication
 
-func (mysqld *Mysqld) WaitBlpPos(bp *proto.BlpPosition, waitTimeout time.Duration) error {
+func (mysqld *Mysqld) WaitBlpPos(bp *blproto.BlpPosition, waitTimeout time.Duration) error {
 	timeOut := time.Now().Add(waitTimeout)
 	for {
 		if time.Now().After(timeOut) {

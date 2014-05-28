@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
+	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -253,7 +254,7 @@ func (wr *Wrangler) waitForFilteredReplication(sourcePositions map[*topo.ShardIn
 		go func(si *topo.ShardInfo) {
 			for _, sourceShard := range si.SourceShards {
 				// we're waiting on this guy
-				blpPosition := myproto.BlpPosition{
+				blpPosition := blproto.BlpPosition{
 					Uid: sourceShard.Uid,
 				}
 
@@ -536,7 +537,7 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 		}
 
 		// wait for it
-		if err := wr.ai.WaitBlpPosition(si.MasterAlias, myproto.BlpPosition{
+		if err := wr.ai.WaitBlpPosition(si.MasterAlias, blproto.BlpPosition{
 			Uid:     0,
 			GroupId: masterPosition.MasterLogGroupId,
 		}, wr.actionTimeout()); err != nil {

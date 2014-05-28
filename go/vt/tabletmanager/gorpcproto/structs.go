@@ -7,6 +7,7 @@ package gorpcproto
 import (
 	"time"
 
+	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
@@ -50,11 +51,11 @@ type GetSlavesReply struct {
 }
 
 type WaitBlpPositionArgs struct {
-	BlpPosition myproto.BlpPosition
+	BlpPosition blproto.BlpPosition
 	WaitTimeout time.Duration
 }
 
 type RunBlpUntilArgs struct {
-	BlpPositionList *myproto.BlpPositionList
+	BlpPositionList *blproto.BlpPositionList
 	WaitTimeout     time.Duration
 }

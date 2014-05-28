@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
+	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
@@ -163,7 +164,7 @@ func (client *GoRpcTabletManagerConn) GetSlaves(tablet *topo.TabletInfo, waitTim
 	return sl.Addrs, nil
 }
 
-func (client *GoRpcTabletManagerConn) WaitBlpPosition(tablet *topo.TabletInfo, blpPosition myproto.BlpPosition, waitTime time.Duration) error {
+func (client *GoRpcTabletManagerConn) WaitBlpPosition(tablet *topo.TabletInfo, blpPosition blproto.BlpPosition, waitTime time.Duration) error {
 	var noOutput rpc.UnusedResponse
 	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_WAIT_BLP_POSITION, &gorpcproto.WaitBlpPositionArgs{
 		BlpPosition: blpPosition,
@@ -171,8 +172,8 @@ func (client *GoRpcTabletManagerConn) WaitBlpPosition(tablet *topo.TabletInfo, b
 	}, &noOutput, waitTime)
 }
 
-func (client *GoRpcTabletManagerConn) StopBlp(tablet *topo.TabletInfo, waitTime time.Duration) (*myproto.BlpPositionList, error) {
-	var bpl myproto.BlpPositionList
+func (client *GoRpcTabletManagerConn) StopBlp(tablet *topo.TabletInfo, waitTime time.Duration) (*blproto.BlpPositionList, error) {
+	var bpl blproto.BlpPositionList
 	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_STOP_BLP, "", &bpl, waitTime); err != nil {
 		return nil, err
 	}
@@ -184,7 +185,7 @@ func (client *GoRpcTabletManagerConn) StartBlp(tablet *topo.TabletInfo, waitTime
 	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_START_BLP, "", &noOutput, waitTime)
 }
 
-func (client *GoRpcTabletManagerConn) RunBlpUntil(tablet *topo.TabletInfo, positions *myproto.BlpPositionList, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
+func (client *GoRpcTabletManagerConn) RunBlpUntil(tablet *topo.TabletInfo, positions *blproto.BlpPositionList, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
 	var pos myproto.ReplicationPosition
 	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_RUN_BLP_UNTIL, &gorpcproto.RunBlpUntilArgs{
 		BlpPositionList: positions,

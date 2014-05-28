@@ -18,7 +18,6 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 var (
@@ -64,7 +63,7 @@ type BinlogPlayer struct {
 	tables []string
 
 	// common to all
-	blpPos        myproto.BlpPosition
+	blpPos        proto.BlpPosition
 	stopAtGroupId int64
 	blplStats     *BinlogPlayerStats
 }
@@ -73,7 +72,7 @@ type BinlogPlayer struct {
 // replicating the provided keyrange, starting at the startPosition.GroupId,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If stopAtGroupId != 0, it will stop when reaching that GroupId.
-func NewBinlogPlayerKeyRange(dbClient VtClient, addr string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, startPosition *myproto.BlpPosition, stopAtGroupId int64, blplStats *BinlogPlayerStats) *BinlogPlayer {
+func NewBinlogPlayerKeyRange(dbClient VtClient, addr string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, startPosition *proto.BlpPosition, stopAtGroupId int64, blplStats *BinlogPlayerStats) *BinlogPlayer {
 	return &BinlogPlayer{
 		addr:           addr,
 		dbClient:       dbClient,
@@ -89,7 +88,7 @@ func NewBinlogPlayerKeyRange(dbClient VtClient, addr string, keyspaceIdType key.
 // replicating the provided tables, starting at the startPosition.GroupId,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If stopAtGroupId != 0, it will stop when reaching that GroupId.
-func NewBinlogPlayerTables(dbClient VtClient, addr string, tables []string, startPosition *myproto.BlpPosition, stopAtGroupId int64, blplStats *BinlogPlayerStats) *BinlogPlayer {
+func NewBinlogPlayerTables(dbClient VtClient, addr string, tables []string, startPosition *proto.BlpPosition, stopAtGroupId int64, blplStats *BinlogPlayerStats) *BinlogPlayer {
 	return &BinlogPlayer{
 		addr:          addr,
 		dbClient:      dbClient,
@@ -148,7 +147,7 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *proto.BinlogTransaction) erro
 	return nil
 }
 
-func ReadStartPosition(dbClient VtClient, uid uint32) (*myproto.BlpPosition, error) {
+func ReadStartPosition(dbClient VtClient, uid uint32) (*proto.BlpPosition, error) {
 	selectRecovery := fmt.Sprintf(
 		"SELECT group_id FROM _vt.blp_checkpoint WHERE source_shard_uid=%v",
 		uid)
@@ -163,7 +162,7 @@ func ReadStartPosition(dbClient VtClient, uid uint32) (*myproto.BlpPosition, err
 	if err != nil {
 		return nil, err
 	}
-	return &myproto.BlpPosition{
+	return &proto.BlpPosition{
 		Uid:     uid,
 		GroupId: temp,
 	}, nil

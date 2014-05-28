@@ -9,6 +9,7 @@ import (
 
 	"github.com/youtube/vitess/go/rpcwrap"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
+	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
@@ -162,7 +163,7 @@ func (tm *TabletManager) WaitBlpPosition(context *rpcproto.Context, args *gorpcp
 	})
 }
 
-func (tm *TabletManager) StopBlp(context *rpcproto.Context, args *rpc.UnusedRequest, reply *myproto.BlpPositionList) error {
+func (tm *TabletManager) StopBlp(context *rpcproto.Context, args *rpc.UnusedRequest, reply *blproto.BlpPositionList) error {
 	return tm.agent.RpcWrapLock(context.RemoteAddr, actionnode.TABLET_ACTION_STOP_BLP, args, reply, func() error {
 		if tm.agent.BinlogPlayerMap == nil {
 			return fmt.Errorf("No BinlogPlayerMap configured")
