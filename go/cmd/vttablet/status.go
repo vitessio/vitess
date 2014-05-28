@@ -110,6 +110,7 @@ Binlog player state: {{.State}}</br>
     <th>SourceShard</th>
     <th>StopAtGroupId</th>
     <th>LastGroupId</th>
+    <th>SecondsBehindMaster</th>
     <th>Counts</th>
     <th>Rates</th>
   </tr>
@@ -119,6 +120,7 @@ Binlog player state: {{.State}}</br>
       <td>{{.SourceShard.AsHTML}}</td>
       <td>{{if .StopAtGroupId}}{{.StopAtGroupId}}{{end}}</td>
       <td>{{.LastGroupId}}</td>
+      <td>{{.SecondsBehindMaster}}</td>
       <td>{{range $key, $value := .Counts}}<b>{{$key}}</b>: {{$value}}<br>{{end}}</td>
       <td>{{range $key, $values := .Rates}}<b>{{$key}}</b>: {{range $values}}{{.}} {{end}}<br>{{end}}</td>
     </tr>

@@ -463,9 +463,10 @@ type BinlogPlayerControllerStatus struct {
 	StopAtGroupId int64
 
 	// stats and current values
-	LastGroupId int64
-	Counts      map[string]int64
-	Rates       map[string][]float64
+	LastGroupId         int64
+	SecondsBehindMaster int64
+	Counts              map[string]int64
+	Rates               map[string][]float64
 }
 
 // BinlogPlayerControllerStatusList is the list of statuses
@@ -511,12 +512,13 @@ func (blm *BinlogPlayerMap) Status() *BinlogPlayerMapStatus {
 
 	for i, bpc := range blm.players {
 		bpcs := &BinlogPlayerControllerStatus{
-			Index:         i,
-			SourceShard:   bpc.sourceShard,
-			StopAtGroupId: bpc.stopAtGroupId,
-			LastGroupId:   bpc.binlogPlayerStats.LastGroupId.Get(),
-			Counts:        bpc.binlogPlayerStats.Timings.Counts(),
-			Rates:         bpc.binlogPlayerStats.Rates.Get(),
+			Index:               i,
+			SourceShard:         bpc.sourceShard,
+			StopAtGroupId:       bpc.stopAtGroupId,
+			LastGroupId:         bpc.binlogPlayerStats.LastGroupId.Get(),
+			SecondsBehindMaster: bpc.binlogPlayerStats.SecondsBehindMaster.Get(),
+			Counts:              bpc.binlogPlayerStats.Timings.Counts(),
+			Rates:               bpc.binlogPlayerStats.Rates.Get(),
 		}
 		result.Controllers = append(result.Controllers, bpcs)
 	}

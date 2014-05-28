@@ -5,8 +5,10 @@
 package binlogplayer
 
 import (
+	"bytes"
 	"fmt"
 	"io"
+	"strconv"
 	"time"
 
 	log "github.com/golang/glog"
@@ -20,12 +22,12 @@ import (
 )
 
 var (
-	SLOW_QUERY_THRESHOLD      = time.Duration(100 * time.Millisecond)
-	BLPL_STREAM_COMMENT_START = []byte("/* _stream ")
-	BLPL_SPACE                = []byte(" ")
+	SLOW_QUERY_THRESHOLD = time.Duration(100 * time.Millisecond)
 
 	BLPL_QUERY       = "Query"
 	BLPL_TRANSACTION = "Transaction"
+
+	BLPL_SET_TIMESTAMP = []byte("SET TIMESTAMP=")
 )
 
 // BinlogPlayerStats is the internal stats of a player. It is a different
@@ -37,9 +39,11 @@ type BinlogPlayerStats struct {
 	Rates   *stats.Rates
 
 	// Last saved status
-	LastGroupId sync2.AtomicInt64
+	LastGroupId         sync2.AtomicInt64
+	SecondsBehindMaster sync2.AtomicInt64
 }
 
+// NewBinlogPlayerStats creates a new BinlogPlayerStats structure
 func NewBinlogPlayerStats() *BinlogPlayerStats {
 	bps := &BinlogPlayerStats{}
 	bps.Timings = stats.NewTimings("")
@@ -96,13 +100,39 @@ func NewBinlogPlayerTables(dbClient VtClient, addr string, tables []string, star
 	}
 }
 
-func (blp *BinlogPlayer) writeRecoveryPosition(groupId int64) error {
-	blp.blpPos.GroupId = groupId
-	updateRecovery := fmt.Sprintf(
-		"update _vt.blp_checkpoint set group_id=%v, time_updated=%v where source_shard_uid=%v",
-		groupId,
-		time.Now().Unix(),
-		blp.blpPos.Uid)
+// writeRecoveryPosition will write the current groupId as the recovery position
+// for the next transaction.
+// We will also try to get the timestamp for the transaction. Two cases:
+// - we have statements, and they start with a SET TIMESTAMP that we
+//   can parse: then we update transaction_timestamp in blp_checkpoint
+//   with it, and set SecondsBehindMaster to now() - transaction_timestamp
+// - otherwise (the statements are probably filtered out), we leave
+//   transaction_timestamp alone (keeping the old value), and we don't
+//   change SecondsBehindMaster
+func (blp *BinlogPlayer) writeRecoveryPosition(tx *proto.BinlogTransaction) error {
+	// try to find the timestamp for the transaction, if any
+	var timestamp int64
+	if len(tx.Statements) > 0 && bytes.HasPrefix(tx.Statements[0].Sql, BLPL_SET_TIMESTAMP) {
+		timestamp, _ = strconv.ParseInt(string(tx.Statements[0].Sql[len(BLPL_SET_TIMESTAMP):]), 10, 64)
+	}
+	now := time.Now().Unix()
+
+	blp.blpPos.GroupId = tx.GroupId
+	updateRecovery := ""
+	if timestamp != 0 {
+		updateRecovery = fmt.Sprintf(
+			"UPDATE _vt.blp_checkpoint SET group_id=%v, time_updated=%v, transaction_timestamp=%v WHERE source_shard_uid=%v",
+			tx.GroupId,
+			now,
+			timestamp,
+			blp.blpPos.Uid)
+	} else {
+		updateRecovery = fmt.Sprintf(
+			"UPDATE _vt.blp_checkpoint SET group_id=%v, time_updated=%v WHERE source_shard_uid=%v",
+			tx.GroupId,
+			now,
+			blp.blpPos.Uid)
+	}
 
 	qr, err := blp.exec(updateRecovery)
 	if err != nil {
@@ -111,13 +141,16 @@ func (blp *BinlogPlayer) writeRecoveryPosition(groupId int64) error {
 	if qr.RowsAffected != 1 {
 		return fmt.Errorf("Cannot update blp_recovery table, affected %v rows", qr.RowsAffected)
 	}
-	blp.blplStats.LastGroupId.Set(groupId)
+	blp.blplStats.LastGroupId.Set(tx.GroupId)
+	if timestamp != 0 {
+		blp.blplStats.SecondsBehindMaster.Set(now - timestamp)
+	}
 	return nil
 }
 
 func ReadStartPosition(dbClient VtClient, uid uint32) (*myproto.BlpPosition, error) {
 	selectRecovery := fmt.Sprintf(
-		"select group_id from _vt.blp_checkpoint where source_shard_uid=%v",
+		"SELECT group_id FROM _vt.blp_checkpoint WHERE source_shard_uid=%v",
 		uid)
 	qr, err := dbClient.ExecuteFetch(selectRecovery, 1, true)
 	if err != nil {
@@ -141,7 +174,7 @@ func (blp *BinlogPlayer) processTransaction(tx *proto.BinlogTransaction) (ok boo
 	if err = blp.dbClient.Begin(); err != nil {
 		return false, fmt.Errorf("failed query BEGIN, err: %s", err)
 	}
-	if err = blp.writeRecoveryPosition(tx.GroupId); err != nil {
+	if err = blp.writeRecoveryPosition(tx); err != nil {
 		return false, err
 	}
 	for _, stmt := range tx.Statements {
@@ -268,4 +301,24 @@ processLoop:
 		return fmt.Errorf("Error received from ServeBinlog %v", resp.Error())
 	}
 	return io.EOF
+}
+
+// CreateBlpCheckpoint returns the statements required to create
+// the _vt.blp_checkpoint table
+func CreateBlpCheckpoint() []string {
+	return []string{
+		"CREATE DATABASE IF NOT EXISTS _vt",
+		"USE _vt",
+		`CREATE TABLE IF NOT EXISTS blp_checkpoint (
+  source_shard_uid INT(10) UNSIGNED NOT NULL,
+  group_id BIGINT DEFAULT NULL,
+  time_updated BIGINT UNSIGNED NOT NULL,
+  transaction_timestamp BIGINT UNSIGNED NOT NULL,
+  PRIMARY KEY (source_shard_uid)) ENGINE=InnoDB`}
+}
+
+// PopulateBlpCheckpoint returns a statement to populate the first value into
+// the _vt.blp_checkpoint table
+func PopulateBlpCheckpoint(index int, groupId, timeUpdated int64) string {
+	return fmt.Sprintf("INSERT INTO _vt.blp_checkpoint (source_shard_uid, group_id, time_updated, transaction_timestamp) VALUES (%v, %v, %v, 0)", index, groupId, timeUpdated)
 }

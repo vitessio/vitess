@@ -97,6 +97,7 @@ import (
 	"github.com/youtube/vitess/go/bufio2"
 	"github.com/youtube/vitess/go/cgzip"
 	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
@@ -107,12 +108,6 @@ import (
 const (
 	partialSnapshotManifestFile = "partial_snapshot_manifest.json"
 	SnapshotURLPath             = "/snapshot"
-
-	createBlpCheckpointSQL = `CREATE TABLE IF NOT EXISTS blp_checkpoint (
-  source_shard_uid INT(10) UNSIGNED NOT NULL,
-  group_id BIGINT DEFAULT NULL,
-  time_updated BIGINT UNSIGNED NOT NULL,
-  PRIMARY KEY (source_shard_uid)) ENGINE=InnoDB`
 )
 
 // replaceError replaces original with recent if recent is not nil,
@@ -1046,16 +1041,9 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.Key
 			queries = append(queries, "SET sql_log_bin = OFF")
 			queries = append(queries, "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
 		}
-		queries = append(queries, "CREATE DATABASE IF NOT EXISTS _vt")
-		queries = append(queries, "USE _vt")
-		queries = append(queries, createBlpCheckpointSQL)
+		queries = append(queries, binlogplayer.CreateBlpCheckpoint()...)
 		for manifestIndex, manifest := range manifests {
-			insertRecovery := fmt.Sprintf(
-				`INSERT INTO _vt.blp_checkpoint (source_shard_uid, group_id, time_updated) VALUES (%v, %v, %v)`,
-				manifestIndex,
-				manifest.Source.MasterState.ReplicationPosition.MasterLogGroupId,
-				time.Now().Unix())
-			queries = append(queries, insertRecovery)
+			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(manifestIndex, manifest.Source.MasterState.ReplicationPosition.MasterLogGroupId, time.Now().Unix()))
 		}
 		if err = mysqld.executeSuperQueryList(queries); err != nil {
 			return err
