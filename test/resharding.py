@@ -353,10 +353,21 @@ primary key (name)
                         'msg-range2-%u' % i, 0xE000000000000000 + base + i,
                         should_be_here=False)
 
-  def _check_binlog_server_vars(self, tablet, timeout=5.0):
+  def _check_binlog_server_vars(self, tablet):
     v = utils.get_vars(tablet.port)
     self.assertTrue("UpdateStreamKeyRangeStatements" in v)
     self.assertTrue("UpdateStreamKeyRangeTransactions" in v)
+
+  def _check_binlog_player_vars(self, tablet, seconds_behind_master_max = 0):
+    v = utils.get_vars(tablet.port)
+    self.assertTrue("BinlogPlayerMapSize" in v)
+    self.assertTrue("BinlogPlayerSecondsBehindMaster" in v)
+    if seconds_behind_master_max != 0:
+      self.assertTrue(v["BinlogPlayerSecondsBehindMaster"] <
+                      seconds_behind_master_max,
+                      "BinlogPlayerSecondsBehindMaster is too high: %u > %u" % (
+                          v["BinlogPlayerSecondsBehindMaster"],
+                          seconds_behind_master_max))
 
   def test_resharding(self):
     utils.run_vtctl(['CreateKeyspace',
@@ -469,9 +480,11 @@ primary key (name)
     # check the schema too
     utils.run_vtctl(['ValidateSchemaKeyspace', 'test_keyspace'], auto_log=True)
 
-    # check the binlog players are running
+    # check the binlog players are running and exporting vars
     shard_2_master.wait_for_binlog_player_count(1)
     shard_3_master.wait_for_binlog_player_count(1)
+    self._check_binlog_player_vars(shard_2_master)
+    self._check_binlog_player_vars(shard_3_master)
 
     # check that binlog server exported the stats vars
     self._check_binlog_server_vars(shard_1_slave1)
@@ -487,6 +500,8 @@ primary key (name)
     self._check_lots_timeout(1000, 100, 20)
     logging.debug("Checking no data was sent the wrong way")
     self._check_lots_not_present(1000)
+    self._check_binlog_player_vars(shard_2_master, seconds_behind_master_max=30)
+    self._check_binlog_player_vars(shard_3_master, seconds_behind_master_max=30)
 
     # use the vtworker checker to compare the data
     logging.debug("Running vtworker SplitDiff")

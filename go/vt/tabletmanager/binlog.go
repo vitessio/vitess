@@ -256,6 +256,18 @@ func NewBinlogPlayerMap(ts topo.Server, dbConfig *mysql.ConnectionParams, mysqld
 
 func RegisterBinlogPlayerMap(blm *BinlogPlayerMap) {
 	stats.Publish("BinlogPlayerMapSize", stats.IntFunc(blm.size))
+	stats.Publish("BinlogPlayerSecondsBehindMaster", stats.IntFunc(func() int64 {
+		sbm := int64(0)
+		blm.mu.Lock()
+		for _, bpc := range blm.players {
+			psbm := bpc.binlogPlayerStats.SecondsBehindMaster.Get()
+			if psbm > sbm {
+				sbm = psbm
+			}
+		}
+		blm.mu.Unlock()
+		return sbm
+	}))
 }
 
 func (blm *BinlogPlayerMap) size() int64 {
