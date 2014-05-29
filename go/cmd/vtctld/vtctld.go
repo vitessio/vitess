@@ -572,12 +572,26 @@ func main() {
 			httpError(w, "cannot parse form: %s", err)
 			return
 		}
-		explorerName := r.FormValue("explorer")
-		explorer, ok := explorers[explorerName]
-		if !ok {
-			http.Error(w, "bad explorer name", http.StatusBadRequest)
+
+		var explorer Explorer
+		switch len(explorers) {
+		case 0:
+			http.Error(w, "no explorer configured", http.StatusInternalServerError)
 			return
+		case 1:
+			for _, ex := range explorers {
+				explorer = ex
+			}
+		default:
+			explorerName := r.FormValue("explorer")
+			var ok bool
+			explorer, ok = explorers[explorerName]
+			if !ok {
+				http.Error(w, "bad explorer name", http.StatusBadRequest)
+				return
+			}
 		}
+
 		var target string
 		switch r.FormValue("type") {
 		case "keyspace":
