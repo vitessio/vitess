@@ -17,8 +17,8 @@ func TestCounters(t *testing.T) {
 	c.Add("c2", 1)
 	want1 := `{"c1": 1, "c2": 2}`
 	want2 := `{"c2": 2, "c1": 1}`
-	if c.String() != want1 && c.String() != want2 {
-		t.Errorf("want %s or %s, got %s", want1, want2, c.String())
+	if s := c.String(); s != want1 && s != want2 {
+		t.Errorf("want %s or %s, got %s", want1, want2, s)
 	}
 	counts := c.Counts()
 	if counts["c1"] != 1 {
@@ -33,8 +33,8 @@ func TestCounters(t *testing.T) {
 			"c2": 2,
 		}
 	})
-	if f.String() != want1 && f.String() != want2 {
-		t.Errorf("want %s or %s, got %s", want1, want2, f.String())
+	if s := f.String(); s != want1 && s != want2 {
+		t.Errorf("want %s or %s, got %s", want1, want2, s)
 	}
 }
 
