@@ -39,28 +39,37 @@ class TestKeyRange(unittest.TestCase):
   def test_incorrect_tasks(self):
     global_shard_count = 16
     with self.assertRaises(dbexceptions.ProgrammingError):
-      stm = keyrange.create_streaming_task_map(4, global_shard_count)
+      stm = keyrange.create_streaming_task_map(9, global_shard_count)
 
   def test_keyranges_for_tasks(self):
     for global_shard_count in (16,32,64):
       num_tasks = global_shard_count
       stm = keyrange.create_streaming_task_map(num_tasks, global_shard_count)
       self.assertEqual(len(stm.keyrange_list), num_tasks)
+      for i in xrange(num_tasks):
+        self.assertEqual(len(stm.keyrange_list[i]), 1)
       num_tasks = global_shard_count*2
       stm = keyrange.create_streaming_task_map(num_tasks, global_shard_count)
       self.assertEqual(len(stm.keyrange_list), num_tasks)
-      num_tasks = global_shard_count*2 + 3
-      stm = keyrange.create_streaming_task_map(num_tasks, global_shard_count)
-      self.assertEqual(len(stm.keyrange_list), num_tasks)
+      for i in xrange(num_tasks):
+        self.assertEqual(len(stm.keyrange_list[i]), 1)
       num_tasks = global_shard_count*8
       stm = keyrange.create_streaming_task_map(num_tasks, global_shard_count)
       self.assertEqual(len(stm.keyrange_list), num_tasks)
+      for i in xrange(num_tasks):
+        self.assertEqual(len(stm.keyrange_list[i]), 1)
+      num_tasks = global_shard_count/2
+      stm = keyrange.create_streaming_task_map(num_tasks, global_shard_count)
+      self.assertEqual(len(stm.keyrange_list), num_tasks)
+      for i in xrange(num_tasks):
+        self.assertEqual(len(stm.keyrange_list[i]), 2)
 
   # This tests that the where clause and bind_vars generated for each shard
-  # against a few sample values where keyspace_id is an int column.  
+  # against a few sample values where keyspace_id is an int column.
   def test_bind_values_for_int_keyspace(self):
     stm = keyrange.create_streaming_task_map(16, 16)
     for i, kr in enumerate(stm.keyrange_list):
+      kr = kr[0]
       kr_parts = kr.split('-')
       where_clause, bind_vars = keyrange.create_where_clause_for_keyrange(kr)
       if len(bind_vars.keys()) == 1:
@@ -85,13 +94,14 @@ class TestKeyRange(unittest.TestCase):
 
 
   # This tests that the where clause and bind_vars generated for each shard
-  # against a few sample values where keyspace_id is a str column. 
+  # against a few sample values where keyspace_id is a str column.
   # mysql will use the hex function on string keyspace column
   # and use byte comparison. Since the exact function is not available,
   # the test emulates that by using keyspace_id.encode('hex').
   def test_bind_values_for_str_keyspace(self):
     stm = keyrange.create_streaming_task_map(16, 16)
     for i, kr in enumerate(stm.keyrange_list):
+      kr = kr[0]
       kr_parts = kr.split('-')
       where_clause, bind_vars = keyrange.create_where_clause_for_keyrange(kr, keyspace_col_type=keyrange_constants.KIT_BYTES)
       if len(bind_vars.keys()) == 1:
@@ -117,7 +127,7 @@ class TestKeyRange(unittest.TestCase):
   def test_bind_values_for_unsharded_keyspace(self):
     stm = keyrange.create_streaming_task_map(1, 1)
     self.assertEqual(len(stm.keyrange_list), 1)
-    where_clause, bind_vars = keyrange.create_where_clause_for_keyrange(stm.keyrange_list[0])
+    where_clause, bind_vars = keyrange.create_where_clause_for_keyrange(stm.keyrange_list[0][0])
     self.assertEqual(where_clause, "")
     self.assertEqual(bind_vars, {})
 

@@ -40,37 +40,58 @@ class KeyRange(codec.BSONCoding):
     self.End = raw_values["End"]
 
 class StreamingTaskMap(object):
-  keyrange_list = None
 
-  def __init__(self, num_tasks):
+  def __init__(self, num_tasks, shard_count):
     self.num_tasks = num_tasks
+    self.shard_count = shard_count
+    self.keyrange_list = []
+    self.compute_kr_list()
 
   def compute_kr_list(self):
-    self.keyrange_list = []
     kr_chunks = []
+    # we only support 256 shards for now
     min_key_hex = int("00", base=16)
     max_key_hex = int("100", base=16)
     kr = min_key_hex
-    kr_chunks.append('')
-    span = (max_key_hex - min_key_hex)/self.num_tasks
-    for i in xrange(self.num_tasks):
-      kr += span
-      #kr_chunks.append(hex(kr).split('0x')[1])
-      kr_chunks.append('%x' % kr)
-    kr_chunks[-1] = ''
-    self.keyrange_list = [str(KeyRange((kr_chunks[i], kr_chunks[i+1],))) for i in xrange(len(kr_chunks) - 1)]
-
+    if self.num_tasks >= self.shard_count:
+      span = (max_key_hex - min_key_hex)/self.num_tasks
+      kr_chunks.append('')
+      for i in xrange(self.num_tasks):
+        kr += span
+        #kr_chunks.append(hex(kr).split('0x')[1])
+        kr_chunks.append('%x' % kr)
+      kr_chunks[-1] = ''
+      self.keyrange_list = [[str(KeyRange((kr_chunks[i], kr_chunks[i+1],)))] for i in xrange(len(kr_chunks) - 1)]
+    else:
+      span = (max_key_hex - min_key_hex)/self.shard_count
+      kr_chunks.append('')
+      for i in xrange(self.shard_count):
+        kr += span
+        kr_chunks.append('%x' % kr)
+      kr_chunks[-1] = ''
+      kr_list = [[str(KeyRange((kr_chunks[i], kr_chunks[i+1],)))] for i in xrange(len(kr_chunks) - 1)]
+      item_per_task = len(kr_list)/self.num_tasks
+      j = 0
+      item = []
+      for i in xrange(len(kr_list)):
+        if j < item_per_task:
+          item.extend(kr_list[i])
+          j = j+1
+        if j == item_per_task:
+          self.keyrange_list.append(item)
+          j = 0
+          item = []
+    return self.keyrange_list
 
 # Compute the task map for a streaming query.
-# global_shard_count is read from config, using it as a param for simplicity.
-def create_streaming_task_map(num_tasks, global_shard_count):
-  # global_shard_count is a configurable value controlled for resharding.
-  if num_tasks < global_shard_count:
-    raise dbexceptions.ProgrammingError("Tasks %d cannot be less than number of shards %d" % (num_tasks, global_shard_count))
-
-  stm = StreamingTaskMap(num_tasks)
-  stm.compute_kr_list()
-  return stm
+# shard_count is read from config, using it as a param for simplicity.
+def create_streaming_task_map(num_tasks, shard_count):
+  def _is_power2(num):
+    return num != 0 and ((num & (num - 1)) == 0)
+  if not _is_power2(num_tasks) or not _is_power2(shard_count):
+    raise dbexceptions.ProgrammingError('tasks %d and shard_count %d should be power of 2'
+                                        % (num_tasks, shard_count))
+  return StreamingTaskMap(num_tasks, shard_count)
 
 
 # We abbreviate the keyranges for ease of use.
