@@ -57,12 +57,12 @@ func NewCachePool(name string, rowCacheConfig RowCacheConfig, queryTimeout time.
 	cp := &CachePool{name: name, idleTimeout: idleTimeout}
 	if name != "" {
 		cp.memcacheStats = NewMemcacheStats(cp)
-		stats.Publish(name+"Capacity", stats.IntFunc(cp.Capacity))
-		stats.Publish(name+"Available", stats.IntFunc(cp.Available))
-		stats.Publish(name+"MaxCap", stats.IntFunc(cp.MaxCap))
-		stats.Publish(name+"WaitCount", stats.IntFunc(cp.WaitCount))
-		stats.Publish(name+"WaitTime", stats.DurationFunc(cp.WaitTime))
-		stats.Publish(name+"IdleTimeout", stats.DurationFunc(cp.IdleTimeout))
+		stats.Publish(name+"ConnPoolCapacity", stats.IntFunc(cp.Capacity))
+		stats.Publish(name+"ConnPoolAvailable", stats.IntFunc(cp.Available))
+		stats.Publish(name+"ConnPoolMaxCap", stats.IntFunc(cp.MaxCap))
+		stats.Publish(name+"ConnPoolWaitCount", stats.IntFunc(cp.WaitCount))
+		stats.Publish(name+"ConnPoolWaitTime", stats.DurationFunc(cp.WaitTime))
+		stats.Publish(name+"ConnPoolIdleTimeout", stats.DurationFunc(cp.IdleTimeout))
 	}
 	http.Handle(statsURL, cp)
 
