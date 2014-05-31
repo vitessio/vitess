@@ -1,112 +1,29 @@
 # Contributing to Vitess
-If you'd like to make simple contributions to Vitess,
-we recommend that you fork the repository and submit pull requests.
-If you'd like to make larger or ongoing changes,
-you'll need to follow a similar set of processes and rules that the Vitess team follows.
+> We expect you to know how to use Git and GitHub at least on the basic level. Check [GitHub tuturial](https://help.github.com/articles/set-up-git) for more information.
 
-### Prerequisites
-- [Install vitess](https://github.com/youtube/vitess/blob/master/doc/GettingStarted.markdown)
-- The vitess team uses appspot for code reviews. You'll need to create an account at http://codereview.appspot.com.
-- Fork the vitess repository, say https://github.com/myfork/vitess.
-- Download [upload.py](https://code.google.com/p/rietveld/wiki/UploadPyUsage) and put it in your path.
-- Add `$VTTOP/misc/git` to your path, or create a symlink from one of your paths to `$VTTOP/misc/git/createcl`.
+Fork our repo, make your change, request for a pull, and you've got your approval in no time. That's easy!
+
+Unless your change is large or complicated, then you'll need to follow same practicies that
+vitess team does. Your code would be reviewed on http://codereview.appspot.com
+
+Your contribution is welcome, and we highly appreciate your efforts on making vitess better.
+
+## Instructions
+### For Small Fixes
 - Subscribe to https://groups.google.com/forum/#!forum/vitess-issues.
+- [Install vitess](https://github.com/youtube/vitess/blob/master/doc/GettingStarted.markdown)
+- Make a pull request with your change in a normal github fashion, [fork our repo](https://help.github.com/articles/fork-a-repo).
+- Usually we respond in one business day or less, project is very active
 
-### Single contributor
-If you're going to be a sole contributor,
-it means that you can use your fork as a push-only staging ground for submitting pull requests.
-The assumption is that you'll never have to fetch from the fork.
-If this is the case, all you have to do is configure your local repository to pull from youtube,
-and push to myfork.
-This can be achieved as follows:
-```
-~/...vitess> git remote -v
-origin  git@github.com:youtube/vitess.git (fetch)
-origin  git@github.com:youtube/vitess (push)
-~/...vitess> git remote set-url --push origin git@github.com:myfork/vitess
-~/...vitess> git remote -v
-origin  git@github.com:youtube/vitess.git (fetch)
-origin  git@github.com:myfork/vitess (push)
-```
+### CodeReview for Bigger Contributions
+In case your change is big and non-trivial, we'll need to do a proper code review.
+(We try hard to have a nice and pretty code base)
+We use a separate tool for that, which is not related to github and only uploads you local
+git changes for review.
 
-The limitation of this configuration is that you can only pull from the youtube repository.
-The `git pull` command will `fetch` from youtube/vitess and `merge` into your master branch.
-
-On the other hand, `git push` will push into your myfork/vitess remote.
-
-The advantage of this workflow is that you don't have to worry about specifying where you're
-pulling from or pushing to because the default settings *do the right thing*.
-
-### Multiple contributors
-If more than one of you plan on contributing through a single fork,
-then you'll need to follow a more elaborate scheme of setting up multiple remotes and manually managing merges:
-
-```
-~/...vitess> git remote -v
-origin  git@github.com:youtube/vitess.git (fetch)
-origin  git@github.com:youtube/vitess.git (push)
-~/...vitess> git remote add myfork git@github.com:myfork/vitess.git
-~/...vitess> git remote -v
-myfork  git@github.com:myfork/vitess.git (fetch)
-myfork  git@github.com:myfork/vitess.git (push)
-origin  git@github.com:youtube/vitess.git (fetch)
-origin  git@github.com:youtube/vitess.git (push)
-```
-
-With this setup, commands like `git pull` and `git push` with default settings are not recommended.
-You will be better off using `git fetch` and `git merge`, which let you micromanage your remote interactions.
-For example, you'll need to `git push myfork` to explicitly push your changes to myfork.
-
-### Changes and code reviews
-We recommend that you make your changes in a separate branch.
-Make sure you're on the master branch when you create it.
-```
-~/...vitess> git status
-# On branch master
-# Your branch is up-to-date with 'origin/master'.
-#
-nothing to commit, working directory clean
-~/...vitess> git checkout -b newfeature
-Switched to a new branch 'newfeature'
-```
-Once your changes are ready for review and committed into your branch,
-you can run the createcl tool, for example:
-```
-createcl -r alainjobart
-```
-This command will automatically run a diff of the current branch `newfeature` against `master`
-and create an appspot code review with `alainjobart` as reviewer.
-vitess-issues will be cc'd.
-If necessary, createcl allows you to specify the exact versions to diff.
-But we recommend that you don't use those.
-
-During your feature development, you can fetch and merge new changes from the main youtube repository.
-If you choose to do so, make sure you merge the changes to both the `master` and `newfeature` branches.
-In the sole contributor case, your commands will look like this:
-```
-git checkout master
-git pull
-git checkout newfeature
-git merge master
-```
-Once your change is approved, you have to push and submit it as a pull request:
-```
-git checkout master
-git merge newfeature
-git push
-```
-The above commands will merge `newfeature` into `master` and push the changes to the myfork remote.
-You can then go to https://github.com/myfork/vitess to submit the branch as your pull request.
-If done correctly, only your changes will show up in the pull request.
-github will cancel out changes you merged from youtube master, unless you resolved merge conflicts.
-
-If necessary, you can work on multiple branches at the same time.
-When the time comes to submit, you just have to merge the branch onto `master` and push.
-
-### More fancy github setups
-As you can see above, the only requirement from the Vitess team is that you send your code reviews through appspot,
-and then submit the same changes as a pull request.
-
-Our workflow recommendation is mainly to simplify your life.
-If you prefer to use a different workflow,
-you can choose to do so as long as you can figure out a way to meet the necessary requirements.
+- Be sure to follow steps for small fixes first.
+- Create an account at http://codereview.appspot.com.
+- Download [upload.py](https://code.google.com/p/rietveld/wiki/UploadPyUsage) and put it in your path.
+- Use `$VTTOP/misc/git/createcl` script to submit local changes for review (it's convenient to put it on your `$PATH`)
+  - When running for the first time your Google account's *application-specific* password would be required. Link to the page where you can create new one is provided.
+  - It's a small script diffs beween current branch and `master` one, uploads it onto codereview server and asks for a code review. Vitess team is notified, so we'll be able to start working on it promptly.
