@@ -25,7 +25,7 @@ type SelectStatement interface {
 
 // Select represents a SELECT statement.
 type Select struct {
-	Comments *Node
+	Comments Comments
 	Distinct *Node
 	Expr     *Node
 	From     *Node
@@ -67,7 +67,7 @@ func selectNode(statement SelectStatement) *Node {
 	switch stmt := statement.(type) {
 	case *Select:
 		n := NewSimpleParseNode(SELECT, "select")
-		n.Push(stmt.Comments)
+		n.Push(stmt.Comments.Node())
 		n.Push(stmt.Distinct)
 		n.Push(stmt.Expr)
 		n.Push(stmt.From)
@@ -90,7 +90,7 @@ func newSelect(node *Node) SelectStatement {
 	switch node.Type {
 	case SELECT:
 		return &Select{
-			Comments: node.At(0),
+			Comments: newComments(node.At(0)),
 			Distinct: node.At(1),
 			Expr:     node.At(2),
 			From:     node.At(3),
@@ -113,7 +113,7 @@ func newSelect(node *Node) SelectStatement {
 
 // Insert represents an INSERT statement.
 type Insert struct {
-	Comments   *Node
+	Comments   Comments
 	Table      *Node
 	ColumnList *Node
 	Values     *Node
@@ -130,7 +130,7 @@ func (stmt *Insert) Format(buf *TrackedBuffer) {
 
 // Update represents an UPDATE statement.
 type Update struct {
-	Comments *Node
+	Comments Comments
 	Table    *Node
 	List     *Node
 	Where    *Node
@@ -148,7 +148,7 @@ func (stmt *Update) Format(buf *TrackedBuffer) {
 
 // Delete represents a DELETE statement.
 type Delete struct {
-	Comments *Node
+	Comments Comments
 	Table    *Node
 	Where    *Node
 	OrderBy  *Node
@@ -165,7 +165,7 @@ func (stmt *Delete) Format(buf *TrackedBuffer) {
 
 // Set represents a SET statement.
 type Set struct {
-	Comments   *Node
+	Comments   Comments
 	UpdateList *Node
 }
 
@@ -205,4 +205,39 @@ func (*Rename) statement() {}
 
 func (stmt *Rename) Format(buf *TrackedBuffer) {
 	buf.Fprintf("rename table %v %v", stmt.OldName, stmt.NewName)
+}
+
+// Comments represents a list of comments.
+type Comments []Comment
+
+func (comments Comments) Format(buf *TrackedBuffer) {
+	for _, c := range comments {
+		c.Format(buf)
+	}
+}
+
+func (comments Comments) Node() *Node {
+	node := NewSimpleParseNode(COMMENT_LIST, "")
+	for _, c := range comments {
+		node.Push(NewParseNode(COMMENT, []byte(c)))
+	}
+	return node
+}
+
+func newComments(node *Node) Comments {
+	if node.Type != COMMENT_LIST {
+		panic("unreachable: not a comment list")
+	}
+	var comments Comments
+	for i := 0; i < node.Len(); i++ {
+		comments = append(comments, Comment(node.At(i).Value))
+	}
+	return comments
+}
+
+// Comment represents one comment.
+type Comment []byte
+
+func (comment Comment) Format(buf *TrackedBuffer) {
+	buf.Fprintf("%s ", []byte(comment))
 }

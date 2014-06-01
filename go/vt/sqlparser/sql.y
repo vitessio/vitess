@@ -41,36 +41,12 @@ const (
 	SELECT_LOCK_OFFSET
 )
 
-const (
-	INSERT_COMMENT_OFFSET = iota
-	INSERT_TABLE_OFFSET
-	INSERT_COLUMN_LIST_OFFSET
-	INSERT_VALUES_OFFSET
-	INSERT_ON_DUP_OFFSET
-)
-
-const (
-	UPDATE_COMMENT_OFFSET = iota
-	UPDATE_TABLE_OFFSET
-	UPDATE_LIST_OFFSET
-	UPDATE_WHERE_OFFSET
-	UPDATE_ORDER_OFFSET
-	UPDATE_LIMIT_OFFSET
-)
-
-const (
-	DELETE_COMMENT_OFFSET = iota
-	DELETE_TABLE_OFFSET
-	DELETE_WHERE_OFFSET
-	DELETE_ORDER_OFFSET
-	DELETE_LIMIT_OFFSET
-)
-
 %}
 
 %union {
 	node      *Node
   statement Statement
+  comments  Comments
 }
 
 %token <node> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT COMMENT FOR
@@ -107,7 +83,7 @@ const (
 %type <statement> command
 %type <statement> select_statement insert_statement update_statement delete_statement set_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement
-%type <node> comment_opt comment_list
+%type <comments> comment_opt comment_list
 %type <node> union_op distinct_opt
 %type <node> select_expression_list select_expression expression as_opt
 %type <node> table_expression_list table_expression join_type simple_table_expression dml_table_expression index_hint_list
@@ -235,12 +211,12 @@ comment_opt:
 	}
 
 comment_list:
-	{
-		$$ = NewSimpleParseNode(COMMENT_LIST, "")
-	}
+  {
+    $$ = nil
+  }
 | comment_list COMMENT
 	{
-		$$ = $1.Push($2)
+		$$ = append($$, Comment($2.Value))
 	}
 
 union_op:
