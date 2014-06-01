@@ -42,12 +42,12 @@ const (
 
 //line sql.y:46
 type yySymType struct {
-	yys                int
-	node               *Node
-	statement          Statement
-	comments           Comments
-	distinct           Distinct
-	select_expressions SelectExpressions
+	yys          int
+	node         *Node
+	statement    Statement
+	comments     Comments
+	distinct     Distinct
+	select_exprs SelectExprs
 }
 
 const SELECT = 57346
@@ -806,7 +806,7 @@ yydefault:
 	case 11:
 		//line sql.y:124
 		{
-			yyVAL.statement = &Select{Comments: yyS[yypt-10].comments, Distinct: yyS[yypt-9].distinct, SelectExpressions: yyS[yypt-8].select_expressions, From: yyS[yypt-6].node, Where: yyS[yypt-5].node, GroupBy: yyS[yypt-4].node, Having: yyS[yypt-3].node, OrderBy: yyS[yypt-2].node, Limit: yyS[yypt-1].node, Lock: yyS[yypt-0].node}
+			yyVAL.statement = &Select{Comments: yyS[yypt-10].comments, Distinct: yyS[yypt-9].distinct, SelectExprs: yyS[yypt-8].select_exprs, From: yyS[yypt-6].node, Where: yyS[yypt-5].node, GroupBy: yyS[yypt-4].node, Having: yyS[yypt-3].node, OrderBy: yyS[yypt-2].node, Limit: yyS[yypt-1].node, Lock: yyS[yypt-0].node}
 		}
 	case 12:
 		//line sql.y:128
@@ -933,12 +933,12 @@ yydefault:
 	case 38:
 		//line sql.y:247
 		{
-			yyVAL.select_expressions = SelectExpressions{yyS[yypt-0].node}
+			yyVAL.select_exprs = SelectExprs{yyS[yypt-0].node}
 		}
 	case 39:
 		//line sql.y:251
 		{
-			yyVAL.select_expressions = append(yyVAL.select_expressions, yyS[yypt-0].node)
+			yyVAL.select_exprs = append(yyVAL.select_exprs, yyS[yypt-0].node)
 		}
 	case 40:
 		//line sql.y:257
@@ -1319,20 +1319,20 @@ yydefault:
 		//line sql.y:585
 		{
 			yyS[yypt-3].node.Type = FUNCTION
-			yyVAL.node = yyS[yypt-3].node.Push(yyS[yypt-1].select_expressions.Node())
+			yyVAL.node = yyS[yypt-3].node.Push(yyS[yypt-1].select_exprs.Node())
 		}
 	case 119:
 		//line sql.y:590
 		{
 			yyS[yypt-4].node.Type = FUNCTION
 			yyVAL.node = yyS[yypt-4].node.Push(yyS[yypt-2].node)
-			yyVAL.node = yyS[yypt-4].node.Push(yyS[yypt-1].select_expressions.Node())
+			yyVAL.node = yyS[yypt-4].node.Push(yyS[yypt-1].select_exprs.Node())
 		}
 	case 120:
 		//line sql.y:596
 		{
 			yyS[yypt-3].node.Type = FUNCTION
-			yyVAL.node = yyS[yypt-3].node.Push(yyS[yypt-1].select_expressions.Node())
+			yyVAL.node = yyS[yypt-3].node.Push(yyS[yypt-1].select_exprs.Node())
 		}
 	case 121:
 		yyVAL.node = yyS[yypt-0].node

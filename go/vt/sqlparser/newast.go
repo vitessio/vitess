@@ -25,16 +25,16 @@ type SelectStatement interface {
 
 // Select represents a SELECT statement.
 type Select struct {
-	Comments          Comments
-	Distinct          Distinct
-	SelectExpressions SelectExpressions
-	From              *Node
-	Where             *Node
-	GroupBy           *Node
-	Having            *Node
-	OrderBy           *Node
-	Limit             *Node
-	Lock              *Node
+	Comments    Comments
+	Distinct    Distinct
+	SelectExprs SelectExprs
+	From        *Node
+	Where       *Node
+	GroupBy     *Node
+	Having      *Node
+	OrderBy     *Node
+	Limit       *Node
+	Lock        *Node
 }
 
 func (*Select) statement() {}
@@ -43,7 +43,7 @@ func (*Select) selectStatement() {}
 
 func (stmt *Select) Format(buf *TrackedBuffer) {
 	buf.Fprintf("select %v%v%v from %v%v%v%v%v%v%v",
-		stmt.Comments, stmt.Distinct, stmt.SelectExpressions,
+		stmt.Comments, stmt.Distinct, stmt.SelectExprs,
 		stmt.From, stmt.Where,
 		stmt.GroupBy, stmt.Having, stmt.OrderBy,
 		stmt.Limit, stmt.Lock)
@@ -69,7 +69,7 @@ func selectNode(statement SelectStatement) *Node {
 		n := NewSimpleParseNode(SELECT, "select")
 		n.Push(stmt.Comments.Node())
 		n.Push(stmt.Distinct.Node())
-		n.Push(stmt.SelectExpressions.Node())
+		n.Push(stmt.SelectExprs.Node())
 		n.Push(stmt.From)
 		n.Push(stmt.Where)
 		n.Push(stmt.GroupBy)
@@ -90,16 +90,16 @@ func newSelect(node *Node) SelectStatement {
 	switch node.Type {
 	case SELECT:
 		return &Select{
-			Comments:          newComments(node.At(0)),
-			Distinct:          newDistinct(node.At(1)),
-			SelectExpressions: newSelectExpressionsNode(node.At(2)),
-			From:              node.At(3),
-			Where:             node.At(4),
-			GroupBy:           node.At(5),
-			Having:            node.At(6),
-			OrderBy:           node.At(7),
-			Limit:             node.At(8),
-			Lock:              node.At(9),
+			Comments:    newComments(node.At(0)),
+			Distinct:    newDistinct(node.At(1)),
+			SelectExprs: newSelectExprsNode(node.At(2)),
+			From:        node.At(3),
+			Where:       node.At(4),
+			GroupBy:     node.At(5),
+			Having:      node.At(6),
+			OrderBy:     node.At(7),
+			Limit:       node.At(8),
+			Lock:        node.At(9),
 		}
 	case UNION:
 		return &Union{
@@ -268,10 +268,10 @@ func newDistinct(node *Node) Distinct {
 	panic("not a distinct node")
 }
 
-// SelectExpressions represents SELECT expressions.
-type SelectExpressions []*Node
+// SelectExprs represents SELECT expressions.
+type SelectExprs []*Node
 
-func (exprs SelectExpressions) Format(buf *TrackedBuffer) {
+func (exprs SelectExprs) Format(buf *TrackedBuffer) {
 	for i, sel := range exprs {
 		if i == 0 {
 			buf.Fprintf("%v", sel)
@@ -281,7 +281,7 @@ func (exprs SelectExpressions) Format(buf *TrackedBuffer) {
 	}
 }
 
-func (exprs SelectExpressions) Node() *Node {
+func (exprs SelectExprs) Node() *Node {
 	node := NewSimpleParseNode(NODE_LIST, "")
 	for _, sel := range exprs {
 		node.Push(sel)
@@ -289,8 +289,8 @@ func (exprs SelectExpressions) Node() *Node {
 	return node
 }
 
-func newSelectExpressionsNode(node *Node) SelectExpressions {
-	var exprs SelectExpressions
+func newSelectExprsNode(node *Node) SelectExprs {
+	var exprs SelectExprs
 	for i := 0; i < node.Len(); i++ {
 		exprs = append(exprs, node.At(i))
 	}

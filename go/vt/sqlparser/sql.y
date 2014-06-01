@@ -44,11 +44,11 @@ const (
 %}
 
 %union {
-	node               *Node
-  statement          Statement
-  comments           Comments
-  distinct           Distinct
-  select_expressions SelectExpressions
+	node         *Node
+  statement    Statement
+  comments     Comments
+  distinct     Distinct
+  select_exprs SelectExprs
 }
 
 %token <node> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT COMMENT FOR
@@ -88,7 +88,7 @@ const (
 %type <comments> comment_opt comment_list
 %type <node> union_op
 %type <distinct> distinct_opt
-%type <select_expressions> select_expression_list
+%type <select_exprs> select_expression_list
 %type <node> select_expression expression as_opt
 %type <node> table_expression_list table_expression join_type simple_table_expression dml_table_expression index_hint_list
 %type <node> where_expression_opt boolean_expression condition compare
@@ -122,7 +122,7 @@ command:
 select_statement:
 	SELECT comment_opt distinct_opt select_expression_list FROM table_expression_list where_expression_opt group_by_opt having_opt order_by_opt limit_opt lock_opt
 	{
-    $$ = &Select{Comments: $2, Distinct: $3, SelectExpressions: $4, From: $6, Where: $7, GroupBy: $8, Having: $9, OrderBy: $10, Limit: $11, Lock: $12}
+    $$ = &Select{Comments: $2, Distinct: $3, SelectExprs: $4, From: $6, Where: $7, GroupBy: $8, Having: $9, OrderBy: $10, Limit: $11, Lock: $12}
 	}
 | select_statement union_op select_statement %prec UNION
 	{
@@ -245,7 +245,7 @@ distinct_opt:
 select_expression_list:
 	select_expression
 	{
-    $$ = SelectExpressions{$1}
+    $$ = SelectExprs{$1}
 	}
 | select_expression_list ',' select_expression
 	{

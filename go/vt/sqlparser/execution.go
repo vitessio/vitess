@@ -315,7 +315,7 @@ func execAnalyzeSelect(sel *Select, getTable TableGetter) (plan *ExecPlan) {
 	}
 
 	// Select expressions
-	selects := execAnalyzeSelectExpressions(sel.SelectExpressions, tableInfo)
+	selects := execAnalyzeSelectExprs(sel.SelectExprs, tableInfo)
 	if selects == nil {
 		plan.Reason = REASON_SELECT_LIST
 		return plan
@@ -417,11 +417,11 @@ func execAnalyzeInsert(ins *Insert, getTable TableGetter) (plan *ExecPlan) {
 		plan.Subquery = GenerateSelectLimitQuery(newSelect(ins.Values))
 		// Column list syntax is a subset of select expressions
 		if ins.Columns.Len() != 0 {
-			plan.ColumnNumbers = execAnalyzeSelectExpressions(newSelectExpressionsNode(ins.Columns), tableInfo)
+			plan.ColumnNumbers = execAnalyzeSelectExprs(newSelectExprsNode(ins.Columns), tableInfo)
 		} else {
 			// SELECT_STAR node will expand into all columns
-			n := SelectExpressions{NewSimpleParseNode(SELECT_STAR, "*")}
-			plan.ColumnNumbers = execAnalyzeSelectExpressions(n, tableInfo)
+			n := SelectExprs{NewSimpleParseNode(SELECT_STAR, "*")}
+			plan.ColumnNumbers = execAnalyzeSelectExprs(n, tableInfo)
 		}
 		plan.SubqueryPKColumns = pkColumnNumbers
 		return plan
@@ -572,7 +572,7 @@ func execAnalyzeSelectStructure(sel *Select) bool {
 //-----------------------------------------------
 // Select Expressions
 
-func execAnalyzeSelectExpressions(exprs SelectExpressions, table *schema.Table) (selects []int) {
+func execAnalyzeSelectExprs(exprs SelectExprs, table *schema.Table) (selects []int) {
 	selects = make([]int, 0, len(exprs))
 	for _, expr := range exprs {
 		if name := expr.execAnalyzeSelectExpression(); name != "" {
@@ -961,7 +961,7 @@ func GenerateFieldQuery(statement Statement) *ParsedQuery {
 func FormatImpossible(buf *TrackedBuffer, node sqlNode) {
 	switch node := node.(type) {
 	case *Select:
-		buf.Fprintf("select %v from %v where 1 != 1", node.SelectExpressions, node.From)
+		buf.Fprintf("select %v from %v where 1 != 1", node.SelectExprs, node.From)
 	case *Node:
 		switch node.Type {
 		case SELECT:
