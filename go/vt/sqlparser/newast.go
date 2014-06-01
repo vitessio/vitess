@@ -25,16 +25,16 @@ type SelectStatement interface {
 
 // Select represents a SELECT statement.
 type Select struct {
-	Comments Comments
-	Distinct Distinct
-	Expr     *Node
-	From     *Node
-	Where    *Node
-	GroupBy  *Node
-	Having   *Node
-	OrderBy  *Node
-	Limit    *Node
-	Lock     *Node
+	Comments          Comments
+	Distinct          Distinct
+	SelectExpressions SelectExpressions
+	From              *Node
+	Where             *Node
+	GroupBy           *Node
+	Having            *Node
+	OrderBy           *Node
+	Limit             *Node
+	Lock              *Node
 }
 
 func (*Select) statement() {}
@@ -43,7 +43,7 @@ func (*Select) selectStatement() {}
 
 func (stmt *Select) Format(buf *TrackedBuffer) {
 	buf.Fprintf("select %v%v%v from %v%v%v%v%v%v%v",
-		stmt.Comments, stmt.Distinct, stmt.Expr,
+		stmt.Comments, stmt.Distinct, stmt.SelectExpressions,
 		stmt.From, stmt.Where,
 		stmt.GroupBy, stmt.Having, stmt.OrderBy,
 		stmt.Limit, stmt.Lock)
@@ -69,7 +69,7 @@ func selectNode(statement SelectStatement) *Node {
 		n := NewSimpleParseNode(SELECT, "select")
 		n.Push(stmt.Comments.Node())
 		n.Push(stmt.Distinct.Node())
-		n.Push(stmt.Expr)
+		n.Push(stmt.SelectExpressions.Node())
 		n.Push(stmt.From)
 		n.Push(stmt.Where)
 		n.Push(stmt.GroupBy)
@@ -90,16 +90,16 @@ func newSelect(node *Node) SelectStatement {
 	switch node.Type {
 	case SELECT:
 		return &Select{
-			Comments: newComments(node.At(0)),
-			Distinct: newDistinct(node.At(1)),
-			Expr:     node.At(2),
-			From:     node.At(3),
-			Where:    node.At(4),
-			GroupBy:  node.At(5),
-			Having:   node.At(6),
-			OrderBy:  node.At(7),
-			Limit:    node.At(8),
-			Lock:     node.At(9),
+			Comments:          newComments(node.At(0)),
+			Distinct:          newDistinct(node.At(1)),
+			SelectExpressions: newSelectExpressionsNode(node.At(2)),
+			From:              node.At(3),
+			Where:             node.At(4),
+			GroupBy:           node.At(5),
+			Having:            node.At(6),
+			OrderBy:           node.At(7),
+			Limit:             node.At(8),
+			Lock:              node.At(9),
 		}
 	case UNION:
 		return &Union{
@@ -113,11 +113,11 @@ func newSelect(node *Node) SelectStatement {
 
 // Insert represents an INSERT statement.
 type Insert struct {
-	Comments   Comments
-	Table      *Node
-	ColumnList *Node
-	Values     *Node
-	OnDup      *Node
+	Comments Comments
+	Table    *Node
+	Columns  *Node
+	Values   *Node
+	OnDup    *Node
 }
 
 func (*Insert) statement() {}
@@ -125,7 +125,7 @@ func (*Insert) statement() {}
 func (stmt *Insert) Format(buf *TrackedBuffer) {
 	buf.Fprintf("insert %vinto %v%v %v%v",
 		stmt.Comments,
-		stmt.Table, stmt.ColumnList, stmt.Values, stmt.OnDup)
+		stmt.Table, stmt.Columns, stmt.Values, stmt.OnDup)
 }
 
 // Update represents an UPDATE statement.
@@ -165,14 +165,14 @@ func (stmt *Delete) Format(buf *TrackedBuffer) {
 
 // Set represents a SET statement.
 type Set struct {
-	Comments   Comments
-	UpdateList *Node
+	Comments Comments
+	Updates  *Node
 }
 
 func (*Set) statement() {}
 
 func (stmt *Set) Format(buf *TrackedBuffer) {
-	buf.Fprintf("set %v%v", stmt.Comments, stmt.UpdateList)
+	buf.Fprintf("set %v%v", stmt.Comments, stmt.Updates)
 }
 
 // DDLSimple represents a CREATE, ALTER or DROP statement.
@@ -266,4 +266,33 @@ func newDistinct(node *Node) Distinct {
 		return Distinct(false)
 	}
 	panic("not a distinct node")
+}
+
+// SelectExpressions represents SELECT expressions.
+type SelectExpressions []*Node
+
+func (exprs SelectExpressions) Format(buf *TrackedBuffer) {
+	for i, sel := range exprs {
+		if i == 0 {
+			buf.Fprintf("%v", sel)
+		} else {
+			buf.Fprintf(", %v", sel)
+		}
+	}
+}
+
+func (exprs SelectExpressions) Node() *Node {
+	node := NewSimpleParseNode(NODE_LIST, "")
+	for _, sel := range exprs {
+		node.Push(sel)
+	}
+	return node
+}
+
+func newSelectExpressionsNode(node *Node) SelectExpressions {
+	var exprs SelectExpressions
+	for i := 0; i < node.Len(); i++ {
+		exprs = append(exprs, node.At(i))
+	}
+	return exprs
 }

@@ -44,10 +44,11 @@ const (
 %}
 
 %union {
-	node      *Node
-  statement Statement
-  comments  Comments
-  distinct  Distinct
+	node               *Node
+  statement          Statement
+  comments           Comments
+  distinct           Distinct
+  select_expressions SelectExpressions
 }
 
 %token <node> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT COMMENT FOR
@@ -85,9 +86,10 @@ const (
 %type <statement> select_statement insert_statement update_statement delete_statement set_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement
 %type <comments> comment_opt comment_list
-%type <distinct> distinct_opt
 %type <node> union_op
-%type <node> select_expression_list select_expression expression as_opt
+%type <distinct> distinct_opt
+%type <select_expressions> select_expression_list
+%type <node> select_expression expression as_opt
 %type <node> table_expression_list table_expression join_type simple_table_expression dml_table_expression index_hint_list
 %type <node> where_expression_opt boolean_expression condition compare
 %type <node> values parenthesised_lists parenthesised_list value_expression_list value_expression keyword_as_func
@@ -120,7 +122,7 @@ command:
 select_statement:
 	SELECT comment_opt distinct_opt select_expression_list FROM table_expression_list where_expression_opt group_by_opt having_opt order_by_opt limit_opt lock_opt
 	{
-    $$ = &Select{Comments: $2, Distinct: $3, Expr: $4, From: $6, Where: $7, GroupBy: $8, Having: $9, OrderBy: $10, Limit: $11, Lock: $12}
+    $$ = &Select{Comments: $2, Distinct: $3, SelectExpressions: $4, From: $6, Where: $7, GroupBy: $8, Having: $9, OrderBy: $10, Limit: $11, Lock: $12}
 	}
 | select_statement union_op select_statement %prec UNION
 	{
@@ -130,7 +132,7 @@ select_statement:
 insert_statement:
 	INSERT comment_opt INTO dml_table_expression column_list_opt values on_dup_opt
 	{
-    $$ = &Insert{Comments: $2, Table: $4, ColumnList: $5, Values: $6, OnDup: $7}
+    $$ = &Insert{Comments: $2, Table: $4, Columns: $5, Values: $6, OnDup: $7}
 	}
 
 update_statement:
@@ -148,7 +150,7 @@ delete_statement:
 set_statement:
 	SET comment_opt update_list
 	{
-    $$ = &Set{Comments: $2, UpdateList: $3}
+    $$ = &Set{Comments: $2, Updates: $3}
 	}
 
 create_statement:
@@ -243,12 +245,11 @@ distinct_opt:
 select_expression_list:
 	select_expression
 	{
-		$$ = NewSimpleParseNode(NODE_LIST, "node_list")
-		$$.Push($1)
+    $$ = SelectExpressions{$1}
 	}
 | select_expression_list ',' select_expression
 	{
-		$$.Push($3)
+		$$ = append($$, $3)
 	}
 
 select_expression:
@@ -583,18 +584,18 @@ value_expression:
 | sql_id '(' select_expression_list ')'
 	{
 		$1.Type = FUNCTION
-		$$ = $1.Push($3)
+		$$ = $1.Push($3.Node())
 	}
 | sql_id '(' DISTINCT select_expression_list ')'
 	{
 		$1.Type = FUNCTION
 		$$ = $1.Push($3)
-		$$ = $1.Push($4)
+		$$ = $1.Push($4.Node())
 	}
 | keyword_as_func '(' select_expression_list ')'
 	{
 		$1.Type = FUNCTION
-		$$ = $1.Push($3)
+		$$ = $1.Push($3.Node())
 	}
 | case_expression
 

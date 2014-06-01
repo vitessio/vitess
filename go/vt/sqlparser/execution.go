@@ -315,7 +315,7 @@ func execAnalyzeSelect(sel *Select, getTable TableGetter) (plan *ExecPlan) {
 	}
 
 	// Select expressions
-	selects := sel.Expr.execAnalyzeSelectExpressions(tableInfo)
+	selects := execAnalyzeSelectExpressions(sel.SelectExpressions, tableInfo)
 	if selects == nil {
 		plan.Reason = REASON_SELECT_LIST
 		return plan
@@ -402,7 +402,7 @@ func execAnalyzeInsert(ins *Insert, getTable TableGetter) (plan *ExecPlan) {
 		return plan
 	}
 
-	pkColumnNumbers := ins.ColumnList.getInsertPKColumns(tableInfo)
+	pkColumnNumbers := ins.Columns.getInsertPKColumns(tableInfo)
 
 	if ins.OnDup.Len() != 0 {
 		// Upserts are not safe for statement based replication:
@@ -416,13 +416,12 @@ func execAnalyzeInsert(ins *Insert, getTable TableGetter) (plan *ExecPlan) {
 		plan.OuterQuery = GenerateInsertOuterQuery(ins)
 		plan.Subquery = GenerateSelectLimitQuery(newSelect(ins.Values))
 		// Column list syntax is a subset of select expressions
-		if ins.ColumnList.Len() != 0 {
-			plan.ColumnNumbers = ins.ColumnList.execAnalyzeSelectExpressions(tableInfo)
+		if ins.Columns.Len() != 0 {
+			plan.ColumnNumbers = execAnalyzeSelectExpressions(newSelectExpressionsNode(ins.Columns), tableInfo)
 		} else {
 			// SELECT_STAR node will expand into all columns
-			n := NewSimpleParseNode(NODE_LIST, "")
-			n.Push(NewSimpleParseNode(SELECT_STAR, "*"))
-			plan.ColumnNumbers = n.execAnalyzeSelectExpressions(tableInfo)
+			n := SelectExpressions{NewSimpleParseNode(SELECT_STAR, "*")}
+			plan.ColumnNumbers = execAnalyzeSelectExpressions(n, tableInfo)
 		}
 		plan.SubqueryPKColumns = pkColumnNumbers
 		return plan
@@ -528,11 +527,10 @@ func execAnalyzeSet(set *Set) (plan *ExecPlan) {
 		PlanId:    PLAN_SET,
 		FullQuery: GenerateFullQuery(set),
 	}
-	update_list := set.UpdateList
-	if update_list.Len() > 1 { // Multiple set values
+	if set.Updates.Len() > 1 { // Multiple set values
 		return
 	}
-	update_expression := update_list.At(0)              // '='
+	update_expression := set.Updates.At(0)              // '='
 	plan.SetKey = string(update_expression.At(0).Value) // ID
 	expression := update_expression.At(1)
 	valstr := string(expression.Value)
@@ -574,10 +572,10 @@ func execAnalyzeSelectStructure(sel *Select) bool {
 //-----------------------------------------------
 // Select Expressions
 
-func (node *Node) execAnalyzeSelectExpressions(table *schema.Table) (selects []int) {
-	selects = make([]int, 0, node.Len())
-	for i := 0; i < node.Len(); i++ {
-		if name := node.At(i).execAnalyzeSelectExpression(); name != "" {
+func execAnalyzeSelectExpressions(exprs SelectExpressions, table *schema.Table) (selects []int) {
+	selects = make([]int, 0, len(exprs))
+	for _, expr := range exprs {
+		if name := expr.execAnalyzeSelectExpression(); name != "" {
 			if name == "*" {
 				for colIndex := range table.Columns {
 					selects = append(selects, colIndex)
@@ -963,7 +961,7 @@ func GenerateFieldQuery(statement Statement) *ParsedQuery {
 func FormatImpossible(buf *TrackedBuffer, node sqlNode) {
 	switch node := node.(type) {
 	case *Select:
-		buf.Fprintf("select %v from %v where 1 != 1", node.Expr, node.From)
+		buf.Fprintf("select %v from %v where 1 != 1", node.SelectExpressions, node.From)
 	case *Node:
 		switch node.Type {
 		case SELECT:
@@ -1024,7 +1022,7 @@ func GenerateInsertOuterQuery(ins *Insert) *ParsedQuery {
 	buf.Fprintf("insert %vinto %v%v values %a%v",
 		ins.Comments,
 		ins.Table,
-		ins.ColumnList,
+		ins.Columns,
 		"_rowValues",
 		ins.OnDup,
 	)
