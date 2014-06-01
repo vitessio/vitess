@@ -47,6 +47,7 @@ const (
 	node      *Node
   statement Statement
   comments  Comments
+  distinct  Distinct
 }
 
 %token <node> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT COMMENT FOR
@@ -84,7 +85,8 @@ const (
 %type <statement> select_statement insert_statement update_statement delete_statement set_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement
 %type <comments> comment_opt comment_list
-%type <node> union_op distinct_opt
+%type <distinct> distinct_opt
+%type <node> union_op
 %type <node> select_expression_list select_expression expression as_opt
 %type <node> table_expression_list table_expression join_type simple_table_expression dml_table_expression index_hint_list
 %type <node> where_expression_opt boolean_expression condition compare
@@ -231,11 +233,11 @@ union_op:
 
 distinct_opt:
 	{
-		$$ = NewSimpleParseNode(NO_DISTINCT, "")
+		$$ = Distinct(false)
 	}
 | DISTINCT
 	{
-		$$ = NewSimpleParseNode(DISTINCT, "distinct")
+		$$ = Distinct(true)
 	}
 
 select_expression_list:

@@ -26,7 +26,7 @@ type SelectStatement interface {
 // Select represents a SELECT statement.
 type Select struct {
 	Comments Comments
-	Distinct *Node
+	Distinct Distinct
 	Expr     *Node
 	From     *Node
 	Where    *Node
@@ -68,7 +68,7 @@ func selectNode(statement SelectStatement) *Node {
 	case *Select:
 		n := NewSimpleParseNode(SELECT, "select")
 		n.Push(stmt.Comments.Node())
-		n.Push(stmt.Distinct)
+		n.Push(stmt.Distinct.Node())
 		n.Push(stmt.Expr)
 		n.Push(stmt.From)
 		n.Push(stmt.Where)
@@ -91,7 +91,7 @@ func newSelect(node *Node) SelectStatement {
 	case SELECT:
 		return &Select{
 			Comments: newComments(node.At(0)),
-			Distinct: node.At(1),
+			Distinct: newDistinct(node.At(1)),
 			Expr:     node.At(2),
 			From:     node.At(3),
 			Where:    node.At(4),
@@ -240,4 +240,30 @@ type Comment []byte
 
 func (comment Comment) Format(buf *TrackedBuffer) {
 	buf.Fprintf("%s ", []byte(comment))
+}
+
+// Distinct specifies if DISTINCT was used.
+type Distinct bool
+
+func (distinct Distinct) Format(buf *TrackedBuffer) {
+	if distinct {
+		buf.Fprintf("distinct ")
+	}
+}
+
+func (distinct Distinct) Node() *Node {
+	if distinct {
+		return NewSimpleParseNode(DISTINCT, "distinct")
+	}
+	return NewSimpleParseNode(NO_DISTINCT, "")
+}
+
+func newDistinct(node *Node) Distinct {
+	switch node.Type {
+	case DISTINCT:
+		return Distinct(true)
+	case NO_DISTINCT:
+		return Distinct(false)
+	}
+	panic("not a distinct node")
 }

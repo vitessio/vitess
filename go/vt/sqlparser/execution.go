@@ -559,7 +559,7 @@ func (node *ExecPlan) setTableInfo(tableName string, getTable TableGetter) *sche
 // Select
 
 func execAnalyzeSelectStructure(sel *Select) bool {
-	if sel.Distinct.Type == DISTINCT {
+	if sel.Distinct {
 		return false
 	}
 	if sel.GroupBy.Len() > 0 {
