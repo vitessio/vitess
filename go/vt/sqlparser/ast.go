@@ -29,17 +29,6 @@ func handleError(err *error) {
 	}
 }
 
-type sqlNode interface {
-	Format(buf *TrackedBuffer)
-}
-
-// String returns a string representation of an sqlNode.
-func String(node sqlNode) string {
-	buf := NewTrackedBuffer(nil)
-	buf.Fprintf("%v", node)
-	return buf.String()
-}
-
 type Node struct {
 	Type  int
 	Value []byte
@@ -245,7 +234,7 @@ func (node *Node) Format(buf *TrackedBuffer) {
 
 // AnonymizedFormatter is a formatter that
 // anonymizes all values in the SQL.
-func AnonymizedFormatter(buf *TrackedBuffer, node sqlNode) {
+func AnonymizedFormatter(buf *TrackedBuffer, node SQLNode) {
 	switch node := node.(type) {
 	case *Node:
 		switch node.Type {
@@ -269,10 +258,10 @@ func AnonymizedFormatter(buf *TrackedBuffer, node sqlNode) {
 type TrackedBuffer struct {
 	*bytes.Buffer
 	bindLocations []BindLocation
-	nodeFormatter func(buf *TrackedBuffer, node sqlNode)
+	nodeFormatter func(buf *TrackedBuffer, node SQLNode)
 }
 
-func NewTrackedBuffer(nodeFormatter func(buf *TrackedBuffer, node sqlNode)) *TrackedBuffer {
+func NewTrackedBuffer(nodeFormatter func(buf *TrackedBuffer, node SQLNode)) *TrackedBuffer {
 	buf := &TrackedBuffer{
 		Buffer:        bytes.NewBuffer(make([]byte, 0, 128)),
 		bindLocations: make([]BindLocation, 0, 4),
@@ -310,7 +299,7 @@ func (buf *TrackedBuffer) Fprintf(format string, values ...interface{}) {
 				panic(fmt.Sprintf("unexpected type %T", v))
 			}
 		case 'v':
-			node := values[fieldnum].(sqlNode)
+			node := values[fieldnum].(SQLNode)
 			if buf.nodeFormatter == nil {
 				node.Format(buf)
 			} else {

@@ -47,8 +47,9 @@ const (
 	node         *Node
   statement    Statement
   comments     Comments
+  unionOp      []byte
   distinct     Distinct
-  select_exprs SelectExprs
+  selectExprs SelectExprs
 }
 
 %token <node> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT COMMENT FOR
@@ -86,9 +87,9 @@ const (
 %type <statement> select_statement insert_statement update_statement delete_statement set_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement
 %type <comments> comment_opt comment_list
-%type <node> union_op
+%type <unionOp> union_op
 %type <distinct> distinct_opt
-%type <select_exprs> select_expression_list
+%type <selectExprs> select_expression_list
 %type <node> select_expression expression as_opt
 %type <node> table_expression_list table_expression join_type simple_table_expression dml_table_expression index_hint_list
 %type <node> where_expression_opt boolean_expression condition compare
@@ -126,7 +127,7 @@ select_statement:
 	}
 | select_statement union_op select_statement %prec UNION
 	{
-    $$ = &Union{Type: $2.Value, Select1: $1.(SelectStatement), Select2: $3.(SelectStatement)}
+    $$ = &Union{Type: $2, Select1: $1.(SelectStatement), Select2: $3.(SelectStatement)}
 	}
 
 insert_statement:
@@ -225,13 +226,25 @@ comment_list:
 
 union_op:
 	UNION
+  {
+    $$ = $1.Value
+  }
 | UNION ALL
 	{
-		$$ = NewSimpleParseNode(UNION_ALL, "union all")
+    $$ = []byte("union all")
 	}
 | MINUS
+  {
+    $$ = $1.Value
+  }
 | EXCEPT
+  {
+    $$ = $1.Value
+  }
 | INTERSECT
+  {
+    $$ = $1.Value
+  }
 
 distinct_opt:
 	{

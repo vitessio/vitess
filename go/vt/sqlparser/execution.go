@@ -958,7 +958,7 @@ func GenerateFieldQuery(statement Statement) *ParsedQuery {
 // to generate a modified version of the query where all selects
 // have impossible where clauses. It overrides a few node types
 // and passes the rest down to the default FormatNode.
-func FormatImpossible(buf *TrackedBuffer, node sqlNode) {
+func FormatImpossible(buf *TrackedBuffer, node SQLNode) {
 	switch node := node.(type) {
 	case *Select:
 		buf.Fprintf("select %v from %v where 1 != 1", node.SelectExprs, node.From)

@@ -42,12 +42,13 @@ const (
 
 //line sql.y:46
 type yySymType struct {
-	yys          int
-	node         *Node
-	statement    Statement
-	comments     Comments
-	distinct     Distinct
-	select_exprs SelectExprs
+	yys         int
+	node        *Node
+	statement   Statement
+	comments    Comments
+	unionOp     []byte
+	distinct    Distinct
+	selectExprs SelectExprs
 }
 
 const SELECT = 57346
@@ -781,7 +782,7 @@ yydefault:
 	switch yynt {
 
 	case 1:
-		//line sql.y:107
+		//line sql.y:108
 		{
 			SetParseTree(yylex, yyS[yypt-0].statement)
 		}
@@ -804,156 +805,168 @@ yydefault:
 	case 10:
 		yyVAL.statement = yyS[yypt-0].statement
 	case 11:
-		//line sql.y:124
+		//line sql.y:125
 		{
-			yyVAL.statement = &Select{Comments: yyS[yypt-10].comments, Distinct: yyS[yypt-9].distinct, SelectExprs: yyS[yypt-8].select_exprs, From: yyS[yypt-6].node, Where: yyS[yypt-5].node, GroupBy: yyS[yypt-4].node, Having: yyS[yypt-3].node, OrderBy: yyS[yypt-2].node, Limit: yyS[yypt-1].node, Lock: yyS[yypt-0].node}
+			yyVAL.statement = &Select{Comments: yyS[yypt-10].comments, Distinct: yyS[yypt-9].distinct, SelectExprs: yyS[yypt-8].selectExprs, From: yyS[yypt-6].node, Where: yyS[yypt-5].node, GroupBy: yyS[yypt-4].node, Having: yyS[yypt-3].node, OrderBy: yyS[yypt-2].node, Limit: yyS[yypt-1].node, Lock: yyS[yypt-0].node}
 		}
 	case 12:
-		//line sql.y:128
+		//line sql.y:129
 		{
-			yyVAL.statement = &Union{Type: yyS[yypt-1].node.Value, Select1: yyS[yypt-2].statement.(SelectStatement), Select2: yyS[yypt-0].statement.(SelectStatement)}
+			yyVAL.statement = &Union{Type: yyS[yypt-1].unionOp, Select1: yyS[yypt-2].statement.(SelectStatement), Select2: yyS[yypt-0].statement.(SelectStatement)}
 		}
 	case 13:
-		//line sql.y:134
+		//line sql.y:135
 		{
 			yyVAL.statement = &Insert{Comments: yyS[yypt-5].comments, Table: yyS[yypt-3].node, Columns: yyS[yypt-2].node, Values: yyS[yypt-1].node, OnDup: yyS[yypt-0].node}
 		}
 	case 14:
-		//line sql.y:140
+		//line sql.y:141
 		{
 			yyVAL.statement = &Update{Comments: yyS[yypt-6].comments, Table: yyS[yypt-5].node, List: yyS[yypt-3].node, Where: yyS[yypt-2].node, OrderBy: yyS[yypt-1].node, Limit: yyS[yypt-0].node}
 		}
 	case 15:
-		//line sql.y:146
+		//line sql.y:147
 		{
 			yyVAL.statement = &Delete{Comments: yyS[yypt-5].comments, Table: yyS[yypt-3].node, Where: yyS[yypt-2].node, OrderBy: yyS[yypt-1].node, Limit: yyS[yypt-0].node}
 		}
 	case 16:
-		//line sql.y:152
+		//line sql.y:153
 		{
 			yyVAL.statement = &Set{Comments: yyS[yypt-1].comments, Updates: yyS[yypt-0].node}
 		}
 	case 17:
-		//line sql.y:158
+		//line sql.y:159
 		{
 			yyVAL.statement = &DDLSimple{Action: CREATE, Table: yyS[yypt-1].node}
 		}
 	case 18:
-		//line sql.y:162
+		//line sql.y:163
 		{
 			// Change this to an alter statement
 			yyVAL.statement = &DDLSimple{Action: ALTER, Table: yyS[yypt-1].node}
 		}
 	case 19:
-		//line sql.y:167
+		//line sql.y:168
 		{
 			yyVAL.statement = &DDLSimple{Action: CREATE, Table: yyS[yypt-1].node}
 		}
 	case 20:
-		//line sql.y:173
+		//line sql.y:174
 		{
 			yyVAL.statement = &DDLSimple{Action: ALTER, Table: yyS[yypt-2].node}
 		}
 	case 21:
-		//line sql.y:177
+		//line sql.y:178
 		{
 			// Change this to a rename statement
 			yyVAL.statement = &Rename{OldName: yyS[yypt-3].node, NewName: yyS[yypt-0].node}
 		}
 	case 22:
-		//line sql.y:182
+		//line sql.y:183
 		{
 			yyVAL.statement = &DDLSimple{Action: ALTER, Table: yyS[yypt-1].node}
 		}
 	case 23:
-		//line sql.y:188
+		//line sql.y:189
 		{
 			yyVAL.statement = &Rename{OldName: yyS[yypt-2].node, NewName: yyS[yypt-0].node}
 		}
 	case 24:
-		//line sql.y:194
+		//line sql.y:195
 		{
 			yyVAL.statement = &DDLSimple{Action: DROP, Table: yyS[yypt-0].node}
 		}
 	case 25:
-		//line sql.y:198
+		//line sql.y:199
 		{
 			// Change this to an alter statement
 			yyVAL.statement = &DDLSimple{Action: ALTER, Table: yyS[yypt-0].node}
 		}
 	case 26:
-		//line sql.y:203
+		//line sql.y:204
 		{
 			yyVAL.statement = &DDLSimple{Action: DROP, Table: yyS[yypt-1].node}
 		}
 	case 27:
-		//line sql.y:208
+		//line sql.y:209
 		{
 			SetAllowComments(yylex, true)
 		}
 	case 28:
-		//line sql.y:212
+		//line sql.y:213
 		{
 			yyVAL.comments = yyS[yypt-0].comments
 			SetAllowComments(yylex, false)
 		}
 	case 29:
-		//line sql.y:218
+		//line sql.y:219
 		{
 			yyVAL.comments = nil
 		}
 	case 30:
-		//line sql.y:222
+		//line sql.y:223
 		{
 			yyVAL.comments = append(yyVAL.comments, Comment(yyS[yypt-0].node.Value))
 		}
 	case 31:
-		yyVAL.node = yyS[yypt-0].node
-	case 32:
 		//line sql.y:229
 		{
-			yyVAL.node = NewSimpleParseNode(UNION_ALL, "union all")
+			yyVAL.unionOp = yyS[yypt-0].node.Value
+		}
+	case 32:
+		//line sql.y:233
+		{
+			yyVAL.unionOp = []byte("union all")
 		}
 	case 33:
-		yyVAL.node = yyS[yypt-0].node
-	case 34:
-		yyVAL.node = yyS[yypt-0].node
-	case 35:
-		yyVAL.node = yyS[yypt-0].node
-	case 36:
 		//line sql.y:237
+		{
+			yyVAL.unionOp = yyS[yypt-0].node.Value
+		}
+	case 34:
+		//line sql.y:241
+		{
+			yyVAL.unionOp = yyS[yypt-0].node.Value
+		}
+	case 35:
+		//line sql.y:245
+		{
+			yyVAL.unionOp = yyS[yypt-0].node.Value
+		}
+	case 36:
+		//line sql.y:250
 		{
 			yyVAL.distinct = Distinct(false)
 		}
 	case 37:
-		//line sql.y:241
+		//line sql.y:254
 		{
 			yyVAL.distinct = Distinct(true)
 		}
 	case 38:
-		//line sql.y:247
+		//line sql.y:260
 		{
-			yyVAL.select_exprs = SelectExprs{yyS[yypt-0].node}
+			yyVAL.selectExprs = SelectExprs{yyS[yypt-0].node}
 		}
 	case 39:
-		//line sql.y:251
+		//line sql.y:264
 		{
-			yyVAL.select_exprs = append(yyVAL.select_exprs, yyS[yypt-0].node)
+			yyVAL.selectExprs = append(yyVAL.selectExprs, yyS[yypt-0].node)
 		}
 	case 40:
-		//line sql.y:257
+		//line sql.y:270
 		{
 			yyVAL.node = NewSimpleParseNode(SELECT_STAR, "*")
 		}
 	case 41:
 		yyVAL.node = yyS[yypt-0].node
 	case 42:
-		//line sql.y:262
+		//line sql.y:275
 		{
 			yyVAL.node = yyS[yypt-1].node.PushTwo(yyS[yypt-2].node, yyS[yypt-0].node)
 		}
 	case 43:
-		//line sql.y:266
+		//line sql.y:279
 		{
 			yyVAL.node = yyS[yypt-1].node.PushTwo(yyS[yypt-2].node, NewSimpleParseNode(SELECT_STAR, "*"))
 		}
@@ -962,30 +975,30 @@ yydefault:
 	case 45:
 		yyVAL.node = yyS[yypt-0].node
 	case 46:
-		//line sql.y:275
+		//line sql.y:288
 		{
 			yyVAL.node = NewSimpleParseNode(AS, "as")
 		}
 	case 47:
 		yyVAL.node = yyS[yypt-0].node
 	case 48:
-		//line sql.y:282
+		//line sql.y:295
 		{
 			yyVAL.node = NewSimpleParseNode(NODE_LIST, "node_list")
 			yyVAL.node.Push(yyS[yypt-0].node)
 		}
 	case 49:
-		//line sql.y:287
+		//line sql.y:300
 		{
 			yyVAL.node = yyS[yypt-2].node.Push(yyS[yypt-1].node)
 		}
 	case 50:
-		//line sql.y:291
+		//line sql.y:304
 		{
 			yyVAL.node.Push(yyS[yypt-0].node)
 		}
 	case 51:
-		//line sql.y:297
+		//line sql.y:310
 		{
 			yyVAL.node = NewSimpleParseNode(TABLE_EXPR, "")
 			yyVAL.node.Push(yyS[yypt-1].node)
@@ -993,7 +1006,7 @@ yydefault:
 			yyVAL.node.Push(yyS[yypt-0].node)
 		}
 	case 52:
-		//line sql.y:304
+		//line sql.y:317
 		{
 			yyVAL.node = NewSimpleParseNode(TABLE_EXPR, "")
 			yyVAL.node.Push(yyS[yypt-3].node)
@@ -1001,12 +1014,12 @@ yydefault:
 			yyVAL.node.Push(yyS[yypt-0].node)
 		}
 	case 53:
-		//line sql.y:311
+		//line sql.y:324
 		{
 			yyVAL.node = yyS[yypt-1].node.PushTwo(yyS[yypt-2].node, yyS[yypt-0].node)
 		}
 	case 54:
-		//line sql.y:315
+		//line sql.y:328
 		{
 			yyVAL.node = yyS[yypt-3].node
 			yyVAL.node.Push(yyS[yypt-4].node)
@@ -1018,133 +1031,133 @@ yydefault:
 	case 56:
 		yyVAL.node = yyS[yypt-0].node
 	case 57:
-		//line sql.y:326
+		//line sql.y:339
 		{
 			yyVAL.node = NewSimpleParseNode(LEFT, "left join")
 		}
 	case 58:
-		//line sql.y:330
+		//line sql.y:343
 		{
 			yyVAL.node = NewSimpleParseNode(LEFT, "left join")
 		}
 	case 59:
-		//line sql.y:334
+		//line sql.y:347
 		{
 			yyVAL.node = NewSimpleParseNode(RIGHT, "right join")
 		}
 	case 60:
-		//line sql.y:338
+		//line sql.y:351
 		{
 			yyVAL.node = NewSimpleParseNode(RIGHT, "right join")
 		}
 	case 61:
-		//line sql.y:342
+		//line sql.y:355
 		{
 			yyVAL.node = yyS[yypt-0].node
 		}
 	case 62:
-		//line sql.y:346
+		//line sql.y:359
 		{
 			yyVAL.node = NewSimpleParseNode(CROSS, "cross join")
 		}
 	case 63:
-		//line sql.y:350
+		//line sql.y:363
 		{
 			yyVAL.node = NewSimpleParseNode(NATURAL, "natural join")
 		}
 	case 64:
 		yyVAL.node = yyS[yypt-0].node
 	case 65:
-		//line sql.y:357
+		//line sql.y:370
 		{
 			yyVAL.node = yyS[yypt-1].node.PushTwo(yyS[yypt-2].node, yyS[yypt-0].node)
 		}
 	case 66:
-		//line sql.y:361
+		//line sql.y:374
 		{
 			yyVAL.node = yyS[yypt-2].node.Push(selectNode(yyS[yypt-1].statement.(SelectStatement)))
 		}
 	case 67:
 		yyVAL.node = yyS[yypt-0].node
 	case 68:
-		//line sql.y:368
+		//line sql.y:381
 		{
 			yyVAL.node = yyS[yypt-1].node.PushTwo(yyS[yypt-2].node, yyS[yypt-0].node)
 		}
 	case 69:
-		//line sql.y:373
+		//line sql.y:386
 		{
 			yyVAL.node = NewSimpleParseNode(USE, "use")
 		}
 	case 70:
-		//line sql.y:377
+		//line sql.y:390
 		{
 			yyVAL.node.Push(yyS[yypt-1].node)
 		}
 	case 71:
-		//line sql.y:381
+		//line sql.y:394
 		{
 			yyVAL.node.Push(yyS[yypt-1].node)
 		}
 	case 72:
-		//line sql.y:386
+		//line sql.y:399
 		{
 			yyVAL.node = NewSimpleParseNode(WHERE, "where")
 		}
 	case 73:
-		//line sql.y:390
+		//line sql.y:403
 		{
 			yyVAL.node = yyS[yypt-1].node.Push(yyS[yypt-0].node)
 		}
 	case 74:
 		yyVAL.node = yyS[yypt-0].node
 	case 75:
-		//line sql.y:397
+		//line sql.y:410
 		{
 			yyVAL.node = yyS[yypt-1].node.PushTwo(yyS[yypt-2].node, yyS[yypt-0].node)
 		}
 	case 76:
-		//line sql.y:401
+		//line sql.y:414
 		{
 			yyVAL.node = yyS[yypt-1].node.PushTwo(yyS[yypt-2].node, yyS[yypt-0].node)
 		}
 	case 77:
-		//line sql.y:405
+		//line sql.y:418
 		{
 			yyVAL.node = yyS[yypt-1].node.Push(yyS[yypt-0].node)
 		}
 	case 78:
-		//line sql.y:409
+		//line sql.y:422
 		{
 			yyVAL.node = yyS[yypt-2].node.Push(yyS[yypt-1].node)
 		}
 	case 79:
-		//line sql.y:415
+		//line sql.y:428
 		{
 			yyVAL.node = yyS[yypt-1].node.PushTwo(yyS[yypt-2].node, yyS[yypt-0].node)
 		}
 	case 80:
-		//line sql.y:419
+		//line sql.y:432
 		{
 			yyVAL.node = yyS[yypt-1].node.PushTwo(yyS[yypt-2].node, yyS[yypt-0].node)
 		}
 	case 81:
-		//line sql.y:423
+		//line sql.y:436
 		{
 			yyVAL.node = NewSimpleParseNode(NOT_IN, "not in").PushTwo(yyS[yypt-3].node, yyS[yypt-0].node)
 		}
 	case 82:
-		//line sql.y:427
+		//line sql.y:440
 		{
 			yyVAL.node = yyS[yypt-1].node.PushTwo(yyS[yypt-2].node, yyS[yypt-0].node)
 		}
 	case 83:
-		//line sql.y:431
+		//line sql.y:444
 		{
 			yyVAL.node = NewSimpleParseNode(NOT_LIKE, "not like").PushTwo(yyS[yypt-3].node, yyS[yypt-0].node)
 		}
 	case 84:
-		//line sql.y:435
+		//line sql.y:448
 		{
 			yyVAL.node = yyS[yypt-3].node
 			yyVAL.node.Push(yyS[yypt-4].node)
@@ -1152,7 +1165,7 @@ yydefault:
 			yyVAL.node.Push(yyS[yypt-0].node)
 		}
 	case 85:
-		//line sql.y:442
+		//line sql.y:455
 		{
 			yyVAL.node = NewSimpleParseNode(NOT_BETWEEN, "not between")
 			yyVAL.node.Push(yyS[yypt-5].node)
@@ -1160,17 +1173,17 @@ yydefault:
 			yyVAL.node.Push(yyS[yypt-0].node)
 		}
 	case 86:
-		//line sql.y:449
+		//line sql.y:462
 		{
 			yyVAL.node = NewSimpleParseNode(IS_NULL, "is null").Push(yyS[yypt-2].node)
 		}
 	case 87:
-		//line sql.y:453
+		//line sql.y:466
 		{
 			yyVAL.node = NewSimpleParseNode(IS_NOT_NULL, "is not null").Push(yyS[yypt-3].node)
 		}
 	case 88:
-		//line sql.y:457
+		//line sql.y:470
 		{
 			yyVAL.node = yyS[yypt-3].node.Push(selectNode(yyS[yypt-1].statement.(SelectStatement)))
 		}
@@ -1189,44 +1202,44 @@ yydefault:
 	case 95:
 		yyVAL.node = yyS[yypt-0].node
 	case 96:
-		//line sql.y:472
+		//line sql.y:485
 		{
 			yyVAL.node = yyS[yypt-1].node.Push(yyS[yypt-0].node)
 		}
 	case 97:
-		//line sql.y:476
+		//line sql.y:489
 		{
 			yyVAL.node = selectNode(yyS[yypt-0].statement.(SelectStatement))
 		}
 	case 98:
-		//line sql.y:482
+		//line sql.y:495
 		{
 			yyVAL.node = NewSimpleParseNode(NODE_LIST, "node_list")
 			yyVAL.node.Push(yyS[yypt-0].node)
 		}
 	case 99:
-		//line sql.y:487
+		//line sql.y:500
 		{
 			yyVAL.node.Push(yyS[yypt-0].node)
 		}
 	case 100:
-		//line sql.y:493
+		//line sql.y:506
 		{
 			yyVAL.node = yyS[yypt-2].node.Push(yyS[yypt-1].node)
 		}
 	case 101:
-		//line sql.y:497
+		//line sql.y:510
 		{
 			yyVAL.node = yyS[yypt-2].node.Push(selectNode(yyS[yypt-1].statement.(SelectStatement)))
 		}
 	case 102:
-		//line sql.y:503
+		//line sql.y:516
 		{
 			yyVAL.node = NewSimpleParseNode(NODE_LIST, "node_list")
 			yyVAL.node.Push(yyS[yypt-0].node)
 		}
 	case 103:
-		//line sql.y:508
+		//line sql.y:521
 		{
 			yyVAL.node.Push(yyS[yypt-0].node)
 		}
@@ -1235,12 +1248,12 @@ yydefault:
 	case 105:
 		yyVAL.node = yyS[yypt-0].node
 	case 106:
-		//line sql.y:516
+		//line sql.y:529
 		{
 			yyVAL.node = yyS[yypt-2].node.Push(selectNode(yyS[yypt-1].statement.(SelectStatement)))
 		}
 	case 107:
-		//line sql.y:520
+		//line sql.y:533
 		{
 			if yyS[yypt-1].node.Len() == 1 {
 				yyS[yypt-1].node = yyS[yypt-1].node.At(0)
@@ -1253,47 +1266,47 @@ yydefault:
 			}
 		}
 	case 108:
-		//line sql.y:532
+		//line sql.y:545
 		{
 			yyVAL.node = yyS[yypt-1].node.PushTwo(yyS[yypt-2].node, yyS[yypt-0].node)
 		}
 	case 109:
-		//line sql.y:536
+		//line sql.y:549
 		{
 			yyVAL.node = yyS[yypt-1].node.PushTwo(yyS[yypt-2].node, yyS[yypt-0].node)
 		}
 	case 110:
-		//line sql.y:540
+		//line sql.y:553
 		{
 			yyVAL.node = yyS[yypt-1].node.PushTwo(yyS[yypt-2].node, yyS[yypt-0].node)
 		}
 	case 111:
-		//line sql.y:544
+		//line sql.y:557
 		{
 			yyVAL.node = yyS[yypt-1].node.PushTwo(yyS[yypt-2].node, yyS[yypt-0].node)
 		}
 	case 112:
-		//line sql.y:548
+		//line sql.y:561
 		{
 			yyVAL.node = yyS[yypt-1].node.PushTwo(yyS[yypt-2].node, yyS[yypt-0].node)
 		}
 	case 113:
-		//line sql.y:552
+		//line sql.y:565
 		{
 			yyVAL.node = yyS[yypt-1].node.PushTwo(yyS[yypt-2].node, yyS[yypt-0].node)
 		}
 	case 114:
-		//line sql.y:556
+		//line sql.y:569
 		{
 			yyVAL.node = yyS[yypt-1].node.PushTwo(yyS[yypt-2].node, yyS[yypt-0].node)
 		}
 	case 115:
-		//line sql.y:560
+		//line sql.y:573
 		{
 			yyVAL.node = yyS[yypt-1].node.PushTwo(yyS[yypt-2].node, yyS[yypt-0].node)
 		}
 	case 116:
-		//line sql.y:564
+		//line sql.y:577
 		{
 			if yyS[yypt-0].node.Type == NUMBER { // Simplify trivial unary expressions
 				switch yyS[yypt-1].node.Type {
@@ -1310,29 +1323,29 @@ yydefault:
 			}
 		}
 	case 117:
-		//line sql.y:580
+		//line sql.y:593
 		{
 			yyS[yypt-2].node.Type = FUNCTION
 			yyVAL.node = yyS[yypt-2].node.Push(NewSimpleParseNode(NODE_LIST, "node_list"))
 		}
 	case 118:
-		//line sql.y:585
+		//line sql.y:598
 		{
 			yyS[yypt-3].node.Type = FUNCTION
-			yyVAL.node = yyS[yypt-3].node.Push(yyS[yypt-1].select_exprs.Node())
+			yyVAL.node = yyS[yypt-3].node.Push(yyS[yypt-1].selectExprs.Node())
 		}
 	case 119:
-		//line sql.y:590
+		//line sql.y:603
 		{
 			yyS[yypt-4].node.Type = FUNCTION
 			yyVAL.node = yyS[yypt-4].node.Push(yyS[yypt-2].node)
-			yyVAL.node = yyS[yypt-4].node.Push(yyS[yypt-1].select_exprs.Node())
+			yyVAL.node = yyS[yypt-4].node.Push(yyS[yypt-1].selectExprs.Node())
 		}
 	case 120:
-		//line sql.y:596
+		//line sql.y:609
 		{
 			yyS[yypt-3].node.Type = FUNCTION
-			yyVAL.node = yyS[yypt-3].node.Push(yyS[yypt-1].select_exprs.Node())
+			yyVAL.node = yyS[yypt-3].node.Push(yyS[yypt-1].selectExprs.Node())
 		}
 	case 121:
 		yyVAL.node = yyS[yypt-0].node
@@ -1341,53 +1354,53 @@ yydefault:
 	case 123:
 		yyVAL.node = yyS[yypt-0].node
 	case 124:
-		//line sql.y:608
+		//line sql.y:621
 		{
 			yyVAL.node = NewSimpleParseNode(UPLUS, "+")
 		}
 	case 125:
-		//line sql.y:612
+		//line sql.y:625
 		{
 			yyVAL.node = NewSimpleParseNode(UMINUS, "-")
 		}
 	case 126:
 		yyVAL.node = yyS[yypt-0].node
 	case 127:
-		//line sql.y:619
+		//line sql.y:632
 		{
 			yyVAL.node = NewSimpleParseNode(CASE_WHEN, "case")
 			yyVAL.node.Push(yyS[yypt-1].node)
 		}
 	case 128:
-		//line sql.y:624
+		//line sql.y:637
 		{
 			yyVAL.node.PushTwo(yyS[yypt-2].node, yyS[yypt-1].node)
 		}
 	case 129:
-		//line sql.y:630
+		//line sql.y:643
 		{
 			yyVAL.node = NewSimpleParseNode(WHEN_LIST, "when_list")
 			yyVAL.node.Push(yyS[yypt-0].node)
 		}
 	case 130:
-		//line sql.y:635
+		//line sql.y:648
 		{
 			yyVAL.node.Push(yyS[yypt-0].node)
 		}
 	case 131:
-		//line sql.y:641
+		//line sql.y:654
 		{
 			yyVAL.node.PushTwo(yyS[yypt-2].node, yyS[yypt-0].node)
 		}
 	case 132:
-		//line sql.y:645
+		//line sql.y:658
 		{
 			yyVAL.node.Push(yyS[yypt-0].node)
 		}
 	case 133:
 		yyVAL.node = yyS[yypt-0].node
 	case 134:
-		//line sql.y:652
+		//line sql.y:665
 		{
 			yyVAL.node = yyS[yypt-1].node.PushTwo(yyS[yypt-2].node, yyS[yypt-0].node)
 		}
@@ -1400,53 +1413,53 @@ yydefault:
 	case 138:
 		yyVAL.node = yyS[yypt-0].node
 	case 139:
-		//line sql.y:663
+		//line sql.y:676
 		{
 			yyVAL.node = NewSimpleParseNode(GROUP, "group")
 		}
 	case 140:
-		//line sql.y:667
+		//line sql.y:680
 		{
 			yyVAL.node = yyS[yypt-2].node.Push(yyS[yypt-0].node)
 		}
 	case 141:
-		//line sql.y:672
+		//line sql.y:685
 		{
 			yyVAL.node = NewSimpleParseNode(HAVING, "having")
 		}
 	case 142:
-		//line sql.y:676
+		//line sql.y:689
 		{
 			yyVAL.node = yyS[yypt-1].node.Push(yyS[yypt-0].node)
 		}
 	case 143:
-		//line sql.y:681
+		//line sql.y:694
 		{
 			yyVAL.node = NewSimpleParseNode(ORDER, "order")
 		}
 	case 144:
-		//line sql.y:685
+		//line sql.y:698
 		{
 			yyVAL.node = yyS[yypt-2].node.Push(yyS[yypt-0].node)
 		}
 	case 145:
-		//line sql.y:691
+		//line sql.y:704
 		{
 			yyVAL.node = NewSimpleParseNode(NODE_LIST, "node_list")
 			yyVAL.node.Push(yyS[yypt-0].node)
 		}
 	case 146:
-		//line sql.y:696
+		//line sql.y:709
 		{
 			yyVAL.node = yyS[yypt-2].node.Push(yyS[yypt-0].node)
 		}
 	case 147:
-		//line sql.y:702
+		//line sql.y:715
 		{
 			yyVAL.node = yyS[yypt-0].node.Push(yyS[yypt-1].node)
 		}
 	case 148:
-		//line sql.y:707
+		//line sql.y:720
 		{
 			yyVAL.node = NewSimpleParseNode(ASC, "asc")
 		}
@@ -1455,32 +1468,32 @@ yydefault:
 	case 150:
 		yyVAL.node = yyS[yypt-0].node
 	case 151:
-		//line sql.y:714
+		//line sql.y:727
 		{
 			yyVAL.node = NewSimpleParseNode(LIMIT, "limit")
 		}
 	case 152:
-		//line sql.y:718
+		//line sql.y:731
 		{
 			yyVAL.node = yyS[yypt-1].node.Push(yyS[yypt-0].node)
 		}
 	case 153:
-		//line sql.y:722
+		//line sql.y:735
 		{
 			yyVAL.node = yyS[yypt-3].node.PushTwo(yyS[yypt-2].node, yyS[yypt-0].node)
 		}
 	case 154:
-		//line sql.y:727
+		//line sql.y:740
 		{
 			yyVAL.node = NewSimpleParseNode(NO_LOCK, "")
 		}
 	case 155:
-		//line sql.y:731
+		//line sql.y:744
 		{
 			yyVAL.node = NewSimpleParseNode(FOR_UPDATE, " for update")
 		}
 	case 156:
-		//line sql.y:735
+		//line sql.y:748
 		{
 			if !bytes.Equal(yyS[yypt-1].node.Value, SHARE) {
 				yylex.Error("expecting share")
@@ -1493,79 +1506,79 @@ yydefault:
 			yyVAL.node = NewSimpleParseNode(LOCK_IN_SHARE_MODE, " lock in share mode")
 		}
 	case 157:
-		//line sql.y:748
+		//line sql.y:761
 		{
 			yyVAL.node = NewSimpleParseNode(COLUMN_LIST, "")
 		}
 	case 158:
-		//line sql.y:752
+		//line sql.y:765
 		{
 			yyVAL.node = yyS[yypt-1].node
 		}
 	case 159:
-		//line sql.y:758
+		//line sql.y:771
 		{
 			yyVAL.node = NewSimpleParseNode(COLUMN_LIST, "")
 			yyVAL.node.Push(yyS[yypt-0].node)
 		}
 	case 160:
-		//line sql.y:763
+		//line sql.y:776
 		{
 			yyVAL.node = yyS[yypt-2].node.Push(yyS[yypt-0].node)
 		}
 	case 161:
-		//line sql.y:769
+		//line sql.y:782
 		{
 			yyVAL.node = NewSimpleParseNode(INDEX_LIST, "")
 			yyVAL.node.Push(yyS[yypt-0].node)
 		}
 	case 162:
-		//line sql.y:774
+		//line sql.y:787
 		{
 			yyVAL.node = yyS[yypt-2].node.Push(yyS[yypt-0].node)
 		}
 	case 163:
-		//line sql.y:779
+		//line sql.y:792
 		{
 			yyVAL.node = NewSimpleParseNode(DUPLICATE, "duplicate")
 		}
 	case 164:
-		//line sql.y:783
+		//line sql.y:796
 		{
 			yyVAL.node = yyS[yypt-3].node.Push(yyS[yypt-0].node)
 		}
 	case 165:
-		//line sql.y:789
+		//line sql.y:802
 		{
 			yyVAL.node = NewSimpleParseNode(NODE_LIST, "node_list")
 			yyVAL.node.Push(yyS[yypt-0].node)
 		}
 	case 166:
-		//line sql.y:794
+		//line sql.y:807
 		{
 			yyVAL.node = yyS[yypt-2].node.Push(yyS[yypt-0].node)
 		}
 	case 167:
-		//line sql.y:800
+		//line sql.y:813
 		{
 			yyVAL.node = yyS[yypt-1].node.PushTwo(yyS[yypt-2].node, yyS[yypt-0].node)
 		}
 	case 168:
-		//line sql.y:805
+		//line sql.y:818
 		{
 			yyVAL.node = nil
 		}
 	case 169:
 		yyVAL.node = yyS[yypt-0].node
 	case 170:
-		//line sql.y:809
+		//line sql.y:822
 		{
 			yyVAL.node = nil
 		}
 	case 171:
 		yyVAL.node = yyS[yypt-0].node
 	case 172:
-		//line sql.y:813
+		//line sql.y:826
 		{
 			yyVAL.node = nil
 		}
@@ -1582,33 +1595,33 @@ yydefault:
 	case 178:
 		yyVAL.node = yyS[yypt-0].node
 	case 179:
-		//line sql.y:824
+		//line sql.y:837
 		{
 			yyVAL.node = nil
 		}
 	case 180:
 		yyVAL.node = yyS[yypt-0].node
 	case 181:
-		//line sql.y:828
+		//line sql.y:841
 		{
 			yyVAL.node = nil
 		}
 	case 182:
 		yyVAL.node = yyS[yypt-0].node
 	case 183:
-		//line sql.y:832
+		//line sql.y:845
 		{
 			yyVAL.node = nil
 		}
 	case 184:
 		yyVAL.node = yyS[yypt-0].node
 	case 185:
-		//line sql.y:837
+		//line sql.y:850
 		{
 			yyVAL.node.LowerCase()
 		}
 	case 186:
-		//line sql.y:842
+		//line sql.y:855
 		{
 			ForceEOF(yylex)
 		}
