@@ -41,7 +41,7 @@ var eventErrorCases = []eventErrorCase{
 	}, {
 		Category: proto.BL_DML,
 		Sql:      "query /* _stream vtocc_e (10 id name ) (null 1 'bmFtZQ==' ); */",
-		want:     `expecting column name: 10: query /* _stream vtocc_e (10 id name ) (null 1 'bmFtZQ==' ); */`,
+		want:     `unexpected token: '10': query /* _stream vtocc_e (10 id name ) (null 1 'bmFtZQ==' ); */`,
 	}, {
 		Category: proto.BL_DML,
 		Sql:      "query /* _stream vtocc_e (eid id name  (null 1 'bmFtZQ==' ); */",
@@ -82,7 +82,7 @@ func TestEventErrors(t *testing.T) {
 		}
 		err := evs.transactionToEvent(trans)
 		if ecase.want != err.Error() {
-			t.Errorf("want %s, got %v", ecase.want, err)
+			t.Errorf("want \n%q, got \n%q", ecase.want, err.Error())
 		}
 	}
 }
@@ -113,7 +113,7 @@ func TestDMLEvent(t *testing.T) {
 				want := `&{DML vtocc_e [eid id name] [[10 -1 [110 97 109 101]] [11 18446744073709551615 [110 97 109 101]]]  1 0}`
 				got := fmt.Sprintf("%v", event)
 				if want != got {
-					t.Errorf("want %s, got %s", want, got)
+					t.Errorf("want \n%s, got \n%s", want, got)
 				}
 			case "ERR":
 				want := `&{ERR  [] [] query 1 0}`

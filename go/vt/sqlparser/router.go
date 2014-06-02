@@ -54,19 +54,19 @@ func shardListFromPlan(plan *RoutingPlan, bindVariables map[string]interface{}, 
 
 	switch plan.criteria.Type {
 	case '=', NULL_SAFE_EQUAL:
-		index := plan.criteria.At(1).findShard(bindVariables, tabletKeys)
+		index := plan.criteria.NodeAt(1).findShard(bindVariables, tabletKeys)
 		return []int{index}
 	case '<', LE:
-		index := plan.criteria.At(1).findShard(bindVariables, tabletKeys)
+		index := plan.criteria.NodeAt(1).findShard(bindVariables, tabletKeys)
 		return makeList(0, index+1)
 	case '>', GE:
-		index := plan.criteria.At(1).findShard(bindVariables, tabletKeys)
+		index := plan.criteria.NodeAt(1).findShard(bindVariables, tabletKeys)
 		return makeList(index, len(tabletKeys))
 	case IN:
-		return plan.criteria.At(1).findShardList(bindVariables, tabletKeys)
+		return plan.criteria.NodeAt(1).findShardList(bindVariables, tabletKeys)
 	case BETWEEN:
-		start := plan.criteria.At(1).findShard(bindVariables, tabletKeys)
-		last := plan.criteria.At(2).findShard(bindVariables, tabletKeys)
+		start := plan.criteria.NodeAt(1).findShard(bindVariables, tabletKeys)
+		last := plan.criteria.NodeAt(2).findShard(bindVariables, tabletKeys)
 		if last < start {
 			start, last = last, start
 		}
@@ -78,14 +78,12 @@ func shardListFromPlan(plan *RoutingPlan, bindVariables map[string]interface{}, 
 func getRoutingPlan(statement Statement) (plan *RoutingPlan) {
 	plan = &RoutingPlan{}
 	if ins, ok := statement.(*Insert); ok {
-		if ins.Values.Type == VALUES {
-			plan.routingType = ROUTE_BY_VALUE
-			plan.criteria = ins.Values.At(0).routingAnalyzeValues()
-			return plan
-		} else { // SELECT, let us recurse
-			sel := newSelect(ins.Values)
+		if sel, ok := ins.Values.(SelectStatement); ok {
 			return getRoutingPlan(sel)
 		}
+		plan.routingType = ROUTE_BY_VALUE
+		plan.criteria = ins.Values.(*Node).NodeAt(0).routingAnalyzeValues()
+		return plan
 	}
 	var where *Node
 	plan.routingType = ROUTE_BY_CONDITION
@@ -98,7 +96,7 @@ func getRoutingPlan(statement Statement) (plan *RoutingPlan) {
 		where = stmt.Where
 	}
 	if where != nil && where.Len() > 0 {
-		plan.criteria = where.At(0).routingAnalyzeBoolean()
+		plan.criteria = where.NodeAt(0).routingAnalyzeBoolean()
 	}
 	return plan
 }
@@ -106,8 +104,12 @@ func getRoutingPlan(statement Statement) (plan *RoutingPlan) {
 func (node *Node) routingAnalyzeValues() *Node {
 	// Analyze first value of every item in the list
 	for i := 0; i < node.Len(); i++ {
-		value_expression_list := node.At(i).At(0)
-		result := value_expression_list.At(0).routingAnalyzeValue()
+		value_expression_list := node.NodeAt(i)
+		inner_list, ok := value_expression_list.At(0).(*Node)
+		if !ok {
+			panic(NewParserError("insert is too complex"))
+		}
+		result := inner_list.NodeAt(0).routingAnalyzeValue()
 		if result != VALUE_NODE {
 			panic(NewParserError("insert is too complex"))
 		}
@@ -118,8 +120,8 @@ func (node *Node) routingAnalyzeValues() *Node {
 func (node *Node) routingAnalyzeBoolean() *Node {
 	switch node.Type {
 	case AND:
-		left := node.At(0).routingAnalyzeBoolean()
-		right := node.At(1).routingAnalyzeBoolean()
+		left := node.NodeAt(0).routingAnalyzeBoolean()
+		right := node.NodeAt(1).routingAnalyzeBoolean()
 		if left != nil && right != nil {
 			return nil
 		} else if left != nil {
@@ -128,23 +130,27 @@ func (node *Node) routingAnalyzeBoolean() *Node {
 			return right
 		}
 	case '(':
-		return node.At(0).routingAnalyzeBoolean()
+		sub, ok := node.At(0).(*Node)
+		if !ok {
+			return nil
+		}
+		return sub.routingAnalyzeBoolean()
 	case '=', '<', '>', LE, GE, NULL_SAFE_EQUAL:
-		left := node.At(0).routingAnalyzeValue()
-		right := node.At(1).routingAnalyzeValue()
+		left := node.NodeAt(0).routingAnalyzeValue()
+		right := node.NodeAt(1).routingAnalyzeValue()
 		if (left == EID_NODE && right == VALUE_NODE) || (left == VALUE_NODE && right == EID_NODE) {
 			return node
 		}
 	case IN:
-		left := node.At(0).routingAnalyzeValue()
-		right := node.At(1).routingAnalyzeValue()
+		left := node.NodeAt(0).routingAnalyzeValue()
+		right := node.NodeAt(1).routingAnalyzeValue()
 		if left == EID_NODE && right == LIST_NODE {
 			return node
 		}
 	case BETWEEN:
-		left := node.At(0).routingAnalyzeValue()
-		right1 := node.At(1).routingAnalyzeValue()
-		right2 := node.At(2).routingAnalyzeValue()
+		left := node.NodeAt(0).routingAnalyzeValue()
+		right1 := node.NodeAt(1).routingAnalyzeValue()
+		right2 := node.NodeAt(2).routingAnalyzeValue()
 		if left == EID_NODE && right1 == VALUE_NODE && right2 == VALUE_NODE {
 			return node
 		}
@@ -159,12 +165,16 @@ func (node *Node) routingAnalyzeValue() int {
 			return EID_NODE
 		}
 	case '.':
-		return node.At(1).routingAnalyzeValue()
+		return node.NodeAt(1).routingAnalyzeValue()
 	case '(':
-		return node.At(0).routingAnalyzeValue()
+		sub, ok := node.At(0).(*Node)
+		if !ok {
+			return OTHER_NODE
+		}
+		return sub.routingAnalyzeValue()
 	case NODE_LIST:
 		for i := 0; i < node.Len(); i++ {
-			if node.At(i).routingAnalyzeValue() != VALUE_NODE {
+			if node.NodeAt(i).routingAnalyzeValue() != VALUE_NODE {
 				return OTHER_NODE
 			}
 		}
@@ -179,10 +189,10 @@ func (node *Node) findShardList(bindVariables map[string]interface{}, tabletKeys
 	shardset := make(map[int]bool)
 	switch node.Type {
 	case '(':
-		return node.At(0).findShardList(bindVariables, tabletKeys)
+		return node.NodeAt(0).findShardList(bindVariables, tabletKeys)
 	case NODE_LIST:
 		for i := 0; i < node.Len(); i++ {
-			index := node.At(i).findShard(bindVariables, tabletKeys)
+			index := node.NodeAt(i).findShard(bindVariables, tabletKeys)
 			shardset[index] = true
 		}
 	}
@@ -198,7 +208,7 @@ func (node *Node) findShardList(bindVariables map[string]interface{}, tabletKeys
 func (node *Node) findInsertShard(bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) int {
 	index := -1
 	for i := 0; i < node.Len(); i++ {
-		first_value_expression := node.At(i).At(0).At(0) // '('->value_expression_list->first_value
+		first_value_expression := node.NodeAt(i).NodeAt(0).NodeAt(0) // '('->value_expression_list->first_value
 		newIndex := first_value_expression.findShard(bindVariables, tabletKeys)
 		if index == -1 {
 			index = newIndex
@@ -217,7 +227,7 @@ func (node *Node) findShard(bindVariables map[string]interface{}, tabletKeys []k
 func (node *Node) getBoundValue(bindVariables map[string]interface{}) string {
 	switch node.Type {
 	case '(':
-		return node.At(0).getBoundValue(bindVariables)
+		return node.NodeAt(0).getBoundValue(bindVariables)
 	case STRING:
 		return string(node.Value)
 	case NUMBER:

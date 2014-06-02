@@ -76,60 +76,12 @@ func (node *Union) Format(buf *TrackedBuffer) {
 	buf.Fprintf("%v %s %v", node.Select1, node.Type, node.Select2)
 }
 
-func selectNode(statement SelectStatement) *Node {
-	switch node := statement.(type) {
-	case *Select:
-		n := NewSimpleParseNode(SELECT, "select")
-		n.Push(node.Comments.Node())
-		n.Push(node.Distinct.Node())
-		n.Push(node.SelectExprs.Node())
-		n.Push(node.From)
-		n.Push(node.Where)
-		n.Push(node.GroupBy)
-		n.Push(node.Having)
-		n.Push(node.OrderBy)
-		n.Push(node.Limit)
-		n.Push(node.Lock)
-		return n
-	case *Union:
-		n := NewParseNode(UNION, node.Type)
-		n.PushTwo(selectNode(node.Select1), selectNode(node.Select2))
-		return n
-	}
-	panic("unreachable")
-}
-
-func newSelect(nd *Node) SelectStatement {
-	switch nd.Type {
-	case SELECT:
-		return &Select{
-			Comments:    newComments(nd.At(0)),
-			Distinct:    newDistinct(nd.At(1)),
-			SelectExprs: newSelectExprsNode(nd.At(2)),
-			From:        nd.At(3),
-			Where:       nd.At(4),
-			GroupBy:     nd.At(5),
-			Having:      nd.At(6),
-			OrderBy:     nd.At(7),
-			Limit:       nd.At(8),
-			Lock:        nd.At(9),
-		}
-	case UNION:
-		return &Union{
-			Type:    nd.Value,
-			Select1: newSelect(nd.At(0)),
-			Select2: newSelect(nd.At(1)),
-		}
-	}
-	panic("unreachable")
-}
-
 // Insert represents an INSERT statement.
 type Insert struct {
 	Comments Comments
 	Table    *Node
-	Columns  *Node
-	Values   *Node
+	Columns  Columns
+	Values   SQLNode
 	OnDup    *Node
 }
 
@@ -229,25 +181,6 @@ func (node Comments) Format(buf *TrackedBuffer) {
 	}
 }
 
-func (node Comments) Node() *Node {
-	nd := NewSimpleParseNode(COMMENT_LIST, "")
-	for _, c := range node {
-		nd.Push(NewParseNode(COMMENT, []byte(c)))
-	}
-	return nd
-}
-
-func newComments(nd *Node) Comments {
-	if nd.Type != COMMENT_LIST {
-		panic("unreachable: not a comment list")
-	}
-	var node Comments
-	for i := 0; i < nd.Len(); i++ {
-		node = append(node, Comment(nd.At(i).Value))
-	}
-	return node
-}
-
 // Comment represents one comment.
 type Comment []byte
 
@@ -264,23 +197,6 @@ func (node Distinct) Format(buf *TrackedBuffer) {
 	}
 }
 
-func (node Distinct) Node() *Node {
-	if node {
-		return NewSimpleParseNode(DISTINCT, "distinct")
-	}
-	return NewSimpleParseNode(NO_DISTINCT, "")
-}
-
-func newDistinct(nd *Node) Distinct {
-	switch nd.Type {
-	case DISTINCT:
-		return Distinct(true)
-	case NO_DISTINCT:
-		return Distinct(false)
-	}
-	panic("not a distinct nd")
-}
-
 // SelectExprs represents SELECT expressions.
 type SelectExprs []*Node
 
@@ -294,18 +210,19 @@ func (node SelectExprs) Format(buf *TrackedBuffer) {
 	}
 }
 
-func (node SelectExprs) Node() *Node {
-	nd := NewSimpleParseNode(NODE_LIST, "")
-	for _, sel := range node {
-		nd.Push(sel)
-	}
-	return nd
-}
+// Columns represents an insert column list.
+type Columns []*Node
 
-func newSelectExprsNode(nd *Node) SelectExprs {
-	var node SelectExprs
-	for i := 0; i < nd.Len(); i++ {
-		node = append(node, nd.At(i))
+func (node Columns) Format(buf *TrackedBuffer) {
+	if len(node) == 0 {
+		return
 	}
-	return node
+	for i, sel := range node {
+		if i == 0 {
+			buf.Fprintf("(%v", sel)
+		} else {
+			buf.Fprintf(", %v", sel)
+		}
+	}
+	buf.Fprintf(")")
 }

@@ -402,7 +402,7 @@ func execAnalyzeInsert(ins *Insert, getTable TableGetter) (plan *ExecPlan) {
 		return plan
 	}
 
-	pkColumnNumbers := ins.Columns.getInsertPKColumns(tableInfo)
+	pkColumnNumbers := getInsertPKColumns(ins.Columns, tableInfo)
 
 	if ins.OnDup.Len() != 0 {
 		// Upserts are not safe for statement based replication:
@@ -411,13 +411,13 @@ func execAnalyzeInsert(ins *Insert, getTable TableGetter) (plan *ExecPlan) {
 		return plan
 	}
 
-	if ins.Values.Type == SELECT {
+	if sel, ok := ins.Values.(SelectStatement); ok {
 		plan.PlanId = PLAN_INSERT_SUBQUERY
 		plan.OuterQuery = GenerateInsertOuterQuery(ins)
-		plan.Subquery = GenerateSelectLimitQuery(newSelect(ins.Values))
+		plan.Subquery = GenerateSelectLimitQuery(sel)
 		// Column list syntax is a subset of select expressions
-		if ins.Columns.Len() != 0 {
-			plan.ColumnNumbers = execAnalyzeSelectExprs(newSelectExprsNode(ins.Columns), tableInfo)
+		if len(ins.Columns) != 0 {
+			plan.ColumnNumbers = execAnalyzeSelectExprs(SelectExprs(ins.Columns), tableInfo)
 		} else {
 			// SELECT_STAR node will expand into all columns
 			n := SelectExprs{NewSimpleParseNode(SELECT_STAR, "*")}
@@ -427,7 +427,8 @@ func execAnalyzeInsert(ins *Insert, getTable TableGetter) (plan *ExecPlan) {
 		return plan
 	}
 
-	rowList := ins.Values.At(0) // VALUES->NODE_LIST
+	// If it's not a SelectStatement, it's a Node.
+	rowList := ins.Values.(*Node).NodeAt(0) // VALUES->NODE_LIST
 	if pkValues := getInsertPKValues(pkColumnNumbers, rowList, tableInfo); pkValues != nil {
 		plan.PlanId = PLAN_INSERT_PK
 		plan.OuterQuery = plan.FullQuery
@@ -530,9 +531,9 @@ func execAnalyzeSet(set *Set) (plan *ExecPlan) {
 	if set.Updates.Len() > 1 { // Multiple set values
 		return
 	}
-	update_expression := set.Updates.At(0)              // '='
-	plan.SetKey = string(update_expression.At(0).Value) // ID
-	expression := update_expression.At(1)
+	update_expression := set.Updates.NodeAt(0)              // '='
+	plan.SetKey = string(update_expression.NodeAt(0).Value) // ID
+	expression := update_expression.NodeAt(1)
 	valstr := string(expression.Value)
 	if expression.Type == NUMBER {
 		if ival, err := strconv.ParseInt(valstr, 0, 64); err == nil {
@@ -598,9 +599,9 @@ func (node *Node) execAnalyzeSelectExpression() (name string) {
 	case ID, SELECT_STAR:
 		return string(node.Value)
 	case '.':
-		return node.At(1).execAnalyzeSelectExpression()
+		return node.NodeAt(1).execAnalyzeSelectExpression()
 	case AS:
-		return node.At(0).execAnalyzeSelectExpression()
+		return node.NodeAt(0).execAnalyzeSelectExpression()
 	}
 	return ""
 }
@@ -612,11 +613,11 @@ func (node *Node) execAnalyzeFrom() (tablename string, hasHints bool) {
 	if node.Len() > 1 {
 		return "", false
 	}
-	if node.At(0).Type != TABLE_EXPR {
+	if node.NodeAt(0).Type != TABLE_EXPR {
 		return "", false
 	}
-	hasHints = (node.At(0).At(2).Len() > 0)
-	return node.At(0).At(0).collectTableName(), hasHints
+	hasHints = (node.NodeAt(0).NodeAt(2).Len() > 0)
+	return node.NodeAt(0).NodeAt(0).collectTableName(), hasHints
 }
 
 func (node *Node) collectTableName() string {
@@ -634,14 +635,14 @@ func (node *Node) execAnalyzeWhere() (conditions []*Node) {
 	if node.Len() == 0 {
 		return nil
 	}
-	return node.At(0).execAnalyzeBoolean()
+	return node.NodeAt(0).execAnalyzeBoolean()
 }
 
 func (node *Node) execAnalyzeBoolean() (conditions []*Node) {
 	switch node.Type {
 	case AND:
-		left := node.At(0).execAnalyzeBoolean()
-		right := node.At(1).execAnalyzeBoolean()
+		left := node.NodeAt(0).execAnalyzeBoolean()
+		right := node.NodeAt(1).execAnalyzeBoolean()
 		if left == nil || right == nil {
 			return nil
 		}
@@ -650,10 +651,14 @@ func (node *Node) execAnalyzeBoolean() (conditions []*Node) {
 		}
 		return append(left, right...)
 	case '(':
-		return node.At(0).execAnalyzeBoolean()
+		node, ok := node.At(0).(*Node)
+		if !ok {
+			return nil
+		}
+		return node.execAnalyzeBoolean()
 	case '=', '<', '>', LE, GE, NULL_SAFE_EQUAL, LIKE:
-		left := node.At(0).execAnalyzeID()
-		right := node.At(1).execAnalyzeValue()
+		left := node.NodeAt(0).execAnalyzeID()
+		right := node.NodeAt(1).execAnalyzeValue()
 		if left == nil || right == nil {
 			return nil
 		}
@@ -661,8 +666,8 @@ func (node *Node) execAnalyzeBoolean() (conditions []*Node) {
 		n.PushTwo(left, right)
 		return []*Node{n}
 	case IN:
-		left := node.At(0).execAnalyzeID()
-		right := node.At(1).execAnalyzeSimpleINList()
+		left := node.NodeAt(0).execAnalyzeID()
+		right := node.NodeAt(1).execAnalyzeSimpleINList()
 		if left == nil || right == nil {
 			return nil
 		}
@@ -670,9 +675,9 @@ func (node *Node) execAnalyzeBoolean() (conditions []*Node) {
 		n.PushTwo(left, right)
 		return []*Node{n}
 	case BETWEEN:
-		left := node.At(0).execAnalyzeID()
-		right1 := node.At(1).execAnalyzeValue()
-		right2 := node.At(2).execAnalyzeValue()
+		left := node.NodeAt(0).execAnalyzeID()
+		right1 := node.NodeAt(1).execAnalyzeValue()
+		right2 := node.NodeAt(2).execAnalyzeValue()
 		if left == nil || right1 == nil || right2 == nil {
 			return nil
 		}
@@ -682,9 +687,13 @@ func (node *Node) execAnalyzeBoolean() (conditions []*Node) {
 }
 
 func (node *Node) execAnalyzeSimpleINList() *Node {
-	list := node.At(0) // '('->NODE_LIST
+	list, ok := node.At(0).(*Node) // '('->NODE_LIST
+	if !ok {
+		// It's a subquery.
+		return nil
+	}
 	for i := 0; i < list.Len(); i++ {
-		if n := list.At(i).execAnalyzeValue(); n == nil {
+		if n := list.NodeAt(i).execAnalyzeValue(); n == nil {
 			return nil
 		}
 	}
@@ -696,7 +705,7 @@ func (node *Node) execAnalyzeID() *Node {
 	case ID:
 		return node
 	case '.':
-		return node.At(1).execAnalyzeID()
+		return node.NodeAt(1).execAnalyzeID()
 	}
 	return nil
 }
@@ -718,27 +727,19 @@ func hasINClause(conditions []*Node) bool {
 	return false
 }
 
-func (node *Node) parseList() (values interface{}, isList bool) {
-	vals := make([]interface{}, node.Len())
-	for i := 0; i < node.Len(); i++ {
-		vals[i] = asInterface(node.At(i))
-	}
-	return vals, true
-}
-
 //-----------------------------------------------
 // Update expressions
 
 func (node *Node) execAnalyzeUpdateExpressions(pkIndex *schema.Index) (pkValues []interface{}, ok bool) {
 	for i := 0; i < node.Len(); i++ {
-		columnName := string(node.At(i).At(0).execAnalyzeSelectExpression())
+		columnName := string(node.NodeAt(i).NodeAt(0).execAnalyzeSelectExpression())
 		index := pkIndex.FindColumn(columnName)
 		if index == -1 {
 			continue
 		}
-		value := node.At(i).At(1).execAnalyzeValue()
+		value := node.NodeAt(i).NodeAt(1).execAnalyzeValue()
 		if value == nil {
-			log.Warningf("expression is too complex %v", node.At(i).At(0))
+			log.Warningf("expression is too complex %v", node.NodeAt(i).At(0))
 			return nil, false
 		}
 		if pkValues == nil {
@@ -752,8 +753,8 @@ func (node *Node) execAnalyzeUpdateExpressions(pkIndex *schema.Index) (pkValues 
 //-----------------------------------------------
 // Insert
 
-func (node *Node) getInsertPKColumns(tableInfo *schema.Table) (pkColumnNumbers []int) {
-	if node.Len() == 0 {
+func getInsertPKColumns(columns Columns, tableInfo *schema.Table) (pkColumnNumbers []int) {
+	if len(columns) == 0 {
 		return tableInfo.PKColumns
 	}
 	pkIndex := tableInfo.Indexes[0]
@@ -761,7 +762,7 @@ func (node *Node) getInsertPKColumns(tableInfo *schema.Table) (pkColumnNumbers [
 	for i := range pkColumnNumbers {
 		pkColumnNumbers[i] = -1
 	}
-	for i, column := range node.Sub {
+	for i, column := range columns {
 		index := pkIndex.FindColumn(string(column.execAnalyzeSelectExpression()))
 		if index == -1 {
 			continue
@@ -780,10 +781,10 @@ func getInsertPKValues(pkColumnNumbers []int, rowList *Node, tableInfo *schema.T
 		}
 		values := make([]interface{}, rowList.Len())
 		for j := 0; j < rowList.Len(); j++ {
-			if columnNumber >= rowList.At(j).At(0).Len() { // NODE_LIST->'('->NODE_LIST
+			if columnNumber >= rowList.NodeAt(j).NodeAt(0).Len() { // NODE_LIST->'('->NODE_LIST
 				panic(NewParserError("column count doesn't match value count"))
 			}
-			node := rowList.At(j).At(0).At(columnNumber) // NODE_LIST->'('->NODE_LIST->Value
+			node := rowList.NodeAt(j).NodeAt(0).NodeAt(columnNumber) // NODE_LIST->'('->NODE_LIST->Value
 			value := node.execAnalyzeValue()
 			if value == nil {
 				log.Warningf("insert is too complex %v", node)
@@ -884,15 +885,15 @@ func getPKValues(conditions []*Node, pkIndex *schema.Index) (pkValues []interfac
 		if condition.Type != '=' && condition.Type != IN {
 			return nil
 		}
-		index := pkIndexScore.FindMatch(string(condition.At(0).Value))
+		index := pkIndexScore.FindMatch(string(condition.NodeAt(0).Value))
 		if index == -1 {
 			return nil
 		}
 		switch condition.Type {
 		case '=':
-			pkValues[index] = asInterface(condition.At(1))
+			pkValues[index] = asInterface(condition.NodeAt(1))
 		case IN:
-			pkValues[index], _ = condition.At(1).At(0).parseList()
+			pkValues[index] = condition.NodeAt(1).NodeAt(0).parseList()
 		}
 	}
 	if pkIndexScore.GetScore() == PERFECT_SCORE {
@@ -901,11 +902,19 @@ func getPKValues(conditions []*Node, pkIndex *schema.Index) (pkValues []interfac
 	return nil
 }
 
+func (node *Node) parseList() (values interface{}) {
+	vals := make([]interface{}, node.Len())
+	for i := 0; i < node.Len(); i++ {
+		vals[i] = asInterface(node.NodeAt(i))
+	}
+	return vals
+}
+
 func getIndexMatch(conditions []*Node, indexes []*schema.Index) string {
 	indexScores := NewIndexScoreList(indexes)
 	for _, condition := range conditions {
 		for _, index := range indexScores {
-			index.FindMatch(string(condition.At(0).Value))
+			index.FindMatch(string(condition.NodeAt(0).Value))
 		}
 	}
 	highScore := NO_MATCH
@@ -964,12 +973,6 @@ func FormatImpossible(buf *TrackedBuffer, node SQLNode) {
 		buf.Fprintf("select %v from %v where 1 != 1", node.SelectExprs, node.From)
 	case *Node:
 		switch node.Type {
-		case SELECT:
-			// Still needed for subqueries that are still nodes.
-			buf.Fprintf("select %v from %v where 1 != 1",
-				node.At(SELECT_EXPR_OFFSET),
-				node.At(SELECT_FROM_OFFSET),
-			)
 		case JOIN, STRAIGHT_JOIN, CROSS, NATURAL:
 			// We skip ON clauses (if any)
 			buf.Fprintf("%v %s %v", node.At(0), node.Value, node.At(1))
@@ -1054,10 +1057,10 @@ func generatePKWhere(buf *TrackedBuffer, pkIndex *schema.Index) {
 
 func GenerateSelectSubquery(sel *Select, tableInfo *schema.Table, index string) *ParsedQuery {
 	hint := NewSimpleParseNode(USE, "use")
-	hint.Push(NewSimpleParseNode(COLUMN_LIST, ""))
-	hint.At(0).Push(NewSimpleParseNode(ID, index))
-	table_expr := sel.From.At(0)
-	savedHint := table_expr.Sub[2]
+	hint.Push(NewSimpleParseNode(INDEX_LIST, ""))
+	hint.NodeAt(0).Push(NewSimpleParseNode(ID, index))
+	table_expr := sel.From.NodeAt(0)
+	savedHint := table_expr.NodeAt(2)
 	table_expr.Sub[2] = hint
 	defer func() {
 		table_expr.Sub[2] = savedHint
