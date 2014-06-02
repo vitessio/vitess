@@ -5,20 +5,88 @@ It's currently used as a fundamental component of YouTube's MySQL infrastructure
 
 [sougou](https://github.com/sougou) presented Vitess at Fosdem '14 in the go devroom. [Here are the slides](https://github.com/youtube/vitess/blob/master/doc/Vitess2014.pdf?raw=true), and here is the [video](http://youtu.be/qATTTSg6zXk).
 
-Vitess is currently not ready for unsupervised use yet.
-There's good deal of documentation missing.
-Also, some functionality is under development and some APIs are still changing.
-But if you feel adventurous, you're welcome to try it.
+## Curent State of the Project
+- Makes MySQL scalable for real.
+- YouTube's production-hardened codebase.
+- Functionality and APIs are under active development.
+- There is not much of a documentation except the source code itself.
+- Not yet ready for unsupervised usage.
+
+But if you feel adventurous, you're welcome to try it. (And by the way, it's awesome!)
 If you run into issues, please subscribe and post to [our mailing list](https://groups.google.com/forum/#!forum/vitess).
 We'll do our best to help you.
+
+## How can I Try It out?
+If you run into issues or have questions, you can use our mailing list: vitess@googlegroups.com
+
+> We assume that you use Ubuntu. If not then you're smart enough to figure it out yourself.
+
+- Install dependencies first ():
+  - [Go language](http://golang.org/): 
+    `sudo apt-get install golang`
+  - Build dependencies:
+    `sudo apt-get install automake libtool bison memcached  python-mysqldb`
+    - We expect that these dependencies are already installed: 
+      `sudo apt-get git mercurial g++ libssl-dev pkg-config python-dev`
+- Now it's time to check out code and build it!
+  - Choose the directory where your vitess files would live and `cd` there
+  - Download vitess source code: `git clone https://github.com/youtube/vitess.git src/github.com/youtube/vitess`
+  - Go into vitess source folder: `cd src/github.com/youtube/vitess`
+  - Time to build it! `./bootstrap.sh`
+    - Btw, Ubuntu Trusty is known to brake MySQL build, use this workaround: 
+      `export MYSQL_FLAVOR=MariaDB`
+    - This process takes its time, it builds MySQL and ZooKeeper from source.
+    - This should completely configure your environment to use vitess.
+  - You'll need to have your environment variables for development: `. ./dev.env`
+    - `$VTTOP` points to vitess source code.
+    - `$VTROOT` points to root directory where all the files are installed.
+- You can run tests now: `make`
+- *TODO: Add information on how to start test instance and play with it*
+
+## List of External Dependencies
+
+* [Go](http://golang.org): Needed for building vitess.
+* [Google MySQL](https://code.google.com/r/sougou-vitess-mysql/):
+  * We plan to support [MariaDB](https://mariadb.org/) in the future.
+  * We currently depend on
+  [Google MySQL's group_id](https://code.google.com/p/google-mysql-tools/wiki/GlobalTransactionIds)
+  capabilities for some of the maintenance operations like
+  reparenting, etc.
+* [ZooKeeper](http://zookeeper.apache.org/): By default, Vitess
+  uses Zookeeper as the lock service. It is possible to plug in
+  something else as long as the new service supports the
+  necessary API functions.
+* [Memcached](http://memcached.org): Used for the rowcache.
+* [Python](http://python.org): For the client and testing.
+
+<!-- 
+
+Optionally:
+
+``` sh
+VTDATAROOT=... #  $VTROOT/vt if not set
+VTPORTSTART=15000
+```
+
+## Setting up a cluster
+TODO: Expand on all sections
+### Setup zookeeper
+### Start a MySql instance
+### Start vttablet
+### Start vtgate
+### Write a client
+### Test
+-->
+
+## More Documentation to Read
 
 * [Vision](https://github.com/youtube/vitess/blob/master/doc/Vision.markdown)
 * Concepts 
  * [General Concepts](https://github.com/youtube/vitess/blob/master/doc/Concepts.markdown)
  * [Replication Graph](https://github.com/youtube/vitess/blob/master/doc/ReplicationGraph.markdown)
  * [Serving graph](https://github.com/youtube/vitess/blob/master/doc/ServingGraph.markdown)
+ * [What is VtTablet?](https://github.com/youtube/vitess/blob/master/doc/VtTablet.markdown)
 * [Tools](https://github.com/youtube/vitess/blob/master/doc/Tools.markdown)
-* [Getting Started](https://github.com/youtube/vitess/blob/master/doc/GettingStarted.markdown)
 * Operations
  * [Preparing for production](https://github.com/youtube/vitess/blob/master/doc/Production.markdown)
  * [Reparenting](https://github.com/youtube/vitess/blob/master/doc/Reparenting.markdown)
@@ -26,36 +94,7 @@ We'll do our best to help you.
  * [Schema management](https://github.com/youtube/vitess/blob/master/doc/SchemaManagement.markdown)
  * [Zookeeper data](https://github.com/youtube/vitess/blob/master/doc/ZookeeperData.markdown)
 
-### vttablet
-TODO: Move this content to its own markdown.
-
-Smart middleware sitting in front of MySQL and serving clients
-requests.
-
-* Connection pooling.
-* SQL parser: Although very close, the vtocc SQL parser is not SQL-92
-  compliant. It has left out constructs that are deemed uncommon or
-  OLTP-unfriendly. It should, however, allow most queries used by a
-  well-behaved web application.
-* Query rewrite and sanitation (adding limits, avoiding non-deterministic updates).
-* Query consolidation: reuse the results of an in-flight query to any
-  subsequent requests that were received while the query was still
-  executing.
-* Rowcache: the mysql buffer cache is optimized for range scans over
-  indices and tables. Unfortunately, it’s not good for random access
-  by primary key. The rowcache will instead maintain a row based cache
-  (using [memcached](http://memcached.org/) as its backend) and keep it
-  consistent by fielding all DMLs that could potentially affect them.
-* Update stream: A server that streams the list of rows that are changing
-  in the database, which can be used as a mechanism to continuously export
-  the data to another data store.
-* Integrated query killer for queries that take too long to return
-  data.
-* Discard idle backend connections to avoid offline db errors.
-* Transaction management: Ability to limit the number of concurrent
-  transactions and manage deadlines.
-
-## License
+# License
 
 Unless otherwise noted, the vitess source files are distributed
 under the BSD-style license found in the LICENSE file.
