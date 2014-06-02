@@ -53,43 +53,20 @@ class StreamingTaskMap(object):
     min_key_hex = int("00", base=16)
     max_key_hex = int("100", base=16)
     kr = min_key_hex
-    if self.num_tasks >= self.shard_count:
-      span = (max_key_hex - min_key_hex)/self.num_tasks
-      kr_chunks.append('')
-      for i in xrange(self.num_tasks):
-        kr += span
-        #kr_chunks.append(hex(kr).split('0x')[1])
-        kr_chunks.append('%x' % kr)
-      kr_chunks[-1] = ''
-      self.keyrange_list = [[str(KeyRange((kr_chunks[i], kr_chunks[i+1],)))] for i in xrange(len(kr_chunks) - 1)]
-    else:
-      span = (max_key_hex - min_key_hex)/self.shard_count
-      kr_chunks.append('')
-      for i in xrange(self.shard_count):
-        kr += span
-        kr_chunks.append('%x' % kr)
-      kr_chunks[-1] = ''
-      kr_list = [[str(KeyRange((kr_chunks[i], kr_chunks[i+1],)))] for i in xrange(len(kr_chunks) - 1)]
-      item_per_task = len(kr_list)/self.num_tasks
-      j = 0
-      item = []
-      for i in xrange(len(kr_list)):
-        if j < item_per_task:
-          item.extend(kr_list[i])
-          j = j+1
-        if j == item_per_task:
-          self.keyrange_list.append(item)
-          j = 0
-          item = []
-    return self.keyrange_list
+    span = (max_key_hex - min_key_hex)/self.num_tasks
+    kr_chunks.append('')
+    for i in xrange(self.num_tasks):
+      kr += span
+      #kr_chunks.append(hex(kr).split('0x')[1])
+      kr_chunks.append('%x' % kr)
+    kr_chunks[-1] = ''
+    self.keyrange_list = [str(KeyRange((kr_chunks[i], kr_chunks[i+1],))) for i in xrange(len(kr_chunks) - 1)]
 
 # Compute the task map for a streaming query.
 # shard_count is read from config, using it as a param for simplicity.
 def create_streaming_task_map(num_tasks, shard_count):
-  def _is_power2(num):
-    return num != 0 and ((num & (num - 1)) == 0)
-  if not _is_power2(num_tasks) or not _is_power2(shard_count):
-    raise dbexceptions.ProgrammingError('tasks %d and shard_count %d should be power of 2'
+  if num_tasks % shard_count != 0:
+    raise dbexceptions.ProgrammingError('tasks %d should be multiple of shard_count %d'
                                         % (num_tasks, shard_count))
   return StreamingTaskMap(num_tasks, shard_count)
 
