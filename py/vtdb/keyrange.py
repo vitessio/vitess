@@ -41,9 +41,8 @@ class KeyRange(codec.BSONCoding):
 
 class StreamingTaskMap(object):
 
-  def __init__(self, num_tasks, shard_count):
+  def __init__(self, num_tasks):
     self.num_tasks = num_tasks
-    self.shard_count = shard_count
     self.keyrange_list = []
     self.compute_kr_list()
 
@@ -68,7 +67,7 @@ def create_streaming_task_map(num_tasks, shard_count):
   if num_tasks % shard_count != 0:
     raise dbexceptions.ProgrammingError('tasks %d should be multiple of shard_count %d'
                                         % (num_tasks, shard_count))
-  return StreamingTaskMap(num_tasks, shard_count)
+  return StreamingTaskMap(num_tasks)
 
 
 # We abbreviate the keyranges for ease of use.
