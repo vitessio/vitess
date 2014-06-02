@@ -40,12 +40,10 @@ func restoreTrailing(sql []byte, bindVars map[string]interface{}) []byte {
 // it returns -1. Otherwise, it returns the position where the query ends
 // before the trailing comments begin.
 func (tracker *matchtracker) matchComments() (pos int) {
-	// FIXME: use pos instead of lastpos after compiler bug fix
-	lastpos := -1
+	pos = -1
 	defer func() {
 		if x := recover(); x != nil {
 			_ = x.(nomatch)
-			pos = lastpos
 		}
 	}()
 
@@ -64,7 +62,7 @@ func (tracker *matchtracker) matchComments() (pos int) {
 			}
 		}
 		tracker.skipBlanks()
-		lastpos = tracker.index
+		pos = tracker.index
 	}
 }
 
