@@ -104,14 +104,18 @@ func VtctldSrvShard(cell, keyspace, shard string) template.HTML {
 // VtctldSrvType returns the tablet type, possibly linked to the
 // EndPoints page in vtctld.
 func VtctldSrvType(cell, keyspace, shard string, tabletType topo.TabletType) template.HTML {
-	return MakeVtctldRedirect(string(tabletType), map[string]string{
-		"type":        "srv_type",
-		"explorer":    *vtctldTopoExplorer,
-		"cell":        cell,
-		"keyspace":    keyspace,
-		"shard":       shard,
-		"tablet_type": string(tabletType),
-	})
+	if topo.IsInServingGraph(tabletType) {
+		return MakeVtctldRedirect(string(tabletType), map[string]string{
+			"type":        "srv_type",
+			"explorer":    *vtctldTopoExplorer,
+			"cell":        cell,
+			"keyspace":    keyspace,
+			"shard":       shard,
+			"tablet_type": string(tabletType),
+		})
+	} else {
+		return template.HTML(tabletType)
+	}
 }
 
 // VtctldReplication returns 'cell/keyspace/shard', possibly linked to the
