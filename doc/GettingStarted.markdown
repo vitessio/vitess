@@ -30,13 +30,6 @@ cd src/github.com/youtube/vitess
 . ./dev.env
 ```
 
-Optionally:
-
-``` sh
-VTDATAROOT=... #  $VTROOT/vt if not set
-VTPORTSTART=15000
-```
-
 To run the tests:
 
 ``` sh
