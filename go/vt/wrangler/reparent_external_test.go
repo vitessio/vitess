@@ -43,22 +43,22 @@ func TestShardExternallyReparented(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTabletMapForShardByCell should have worked but got: %v", err)
 	}
-	master, err := FindTabletByIPAddrAndPort(tabletMap, "100.0.0.1", "vt", 8100)
+	master, err := FindTabletByIPAddrAndPort(tabletMap, oldMaster.Tablet.IPAddr, "vt", oldMaster.Tablet.Portmap["vt"])
 	if err != nil || master != oldMaster.Tablet.Alias {
 		t.Fatalf("FindTabletByIPAddrAndPort(master) failed: %v %v", err, master)
 	}
-	slave1, err := FindTabletByIPAddrAndPort(tabletMap, "102.0.0.1", "vt", 8102)
+	slave1, err := FindTabletByIPAddrAndPort(tabletMap, goodSlave1.Tablet.IPAddr, "vt", goodSlave1.Tablet.Portmap["vt"])
 	if err != nil || slave1 != goodSlave1.Tablet.Alias {
 		t.Fatalf("FindTabletByIPAddrAndPort(slave1) failed: %v %v", err, master)
 	}
-	slave2, err := FindTabletByIPAddrAndPort(tabletMap, "103.0.0.1", "vt", 8103)
+	slave2, err := FindTabletByIPAddrAndPort(tabletMap, goodSlave2.Tablet.IPAddr, "vt", goodSlave2.Tablet.Portmap["vt"])
 	if err != topo.ErrNoNode {
 		t.Fatalf("FindTabletByIPAddrAndPort(slave2) worked: %v %v", err, slave2)
 	}
 
 	// Make sure the master is not exported in other cells
 	tabletMap, err = topo.GetTabletMapForShardByCell(ts, "test_keyspace", "0", []string{"cell2"})
-	master, err = FindTabletByIPAddrAndPort(tabletMap, "100.0.0.1", "vt", 8100)
+	master, err = FindTabletByIPAddrAndPort(tabletMap, oldMaster.Tablet.IPAddr, "vt", oldMaster.Tablet.Portmap["vt"])
 	if err != topo.ErrNoNode {
 		t.Fatalf("FindTabletByIPAddrAndPort(master) worked in cell2: %v %v", err, master)
 	}
@@ -67,7 +67,7 @@ func TestShardExternallyReparented(t *testing.T) {
 	if err != topo.ErrPartialResult {
 		t.Fatalf("GetTabletMapForShard should have returned ErrPartialResult but got: %v", err)
 	}
-	master, err = FindTabletByIPAddrAndPort(tabletMap, "100.0.0.1", "vt", 8100)
+	master, err = FindTabletByIPAddrAndPort(tabletMap, oldMaster.Tablet.IPAddr, "vt", oldMaster.Tablet.Portmap["vt"])
 	if err != nil || master != oldMaster.Tablet.Alias {
 		t.Fatalf("FindTabletByIPAddrAndPort(master) failed: %v %v", err, master)
 	}
@@ -93,17 +93,17 @@ func TestShardExternallyReparented(t *testing.T) {
 
 	// On the old master, we will only respond to
 	// TABLET_ACTION_SLAVE_WAS_RESTARTED.
-	oldMaster.FakeMysqlDaemon.MasterAddr = "101.0.0.1:3301"
+	oldMaster.FakeMysqlDaemon.MasterAddr = newMaster.Tablet.MysqlIpAddr()
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
 
 	// On the good slaves, we will respond to
 	// TABLET_ACTION_SLAVE_WAS_RESTARTED.
-	goodSlave1.FakeMysqlDaemon.MasterAddr = "101.0.0.1:3301"
+	goodSlave1.FakeMysqlDaemon.MasterAddr = newMaster.Tablet.MysqlIpAddr()
 	goodSlave1.StartActionLoop(t, wr)
 	defer goodSlave1.StopActionLoop(t)
 
-	goodSlave2.FakeMysqlDaemon.MasterAddr = "101.0.0.1:3301"
+	goodSlave2.FakeMysqlDaemon.MasterAddr = newMaster.Tablet.MysqlIpAddr()
 	goodSlave2.StartActionLoop(t, wr)
 	defer goodSlave2.StopActionLoop(t)
 
