@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package wrangler
+package testlib
 
 import (
 	"strings"
@@ -12,7 +12,6 @@ import (
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"github.com/youtube/vitess/go/vt/wrangler/testlib"
 	"github.com/youtube/vitess/go/vt/zktopo"
 )
 
@@ -22,11 +21,11 @@ func TestShardExternallyReparented(t *testing.T) {
 	wr.UseRPCs = false
 
 	// Create an old master, a new master, two good slaves, one bad slave
-	oldMaster := testlib.NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})
-	newMaster := testlib.NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
-	goodSlave1 := testlib.NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
-	goodSlave2 := testlib.NewFakeTablet(t, wr, "cell2", 3, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
-	badSlave := testlib.NewFakeTablet(t, wr, "cell1", 4, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})
+	newMaster := NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
+	goodSlave1 := NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
+	goodSlave2 := NewFakeTablet(t, wr, "cell2", 3, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
+	badSlave := NewFakeTablet(t, wr, "cell1", 4, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
 
 	// Add a new Cell to the Shard, that doesn't map to any read topo cell,
 	// to simulate a data center being unreachable.
@@ -147,9 +146,9 @@ func TestShardExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	wr.UseRPCs = false
 
 	// Create an old master, a new master, two good slaves, one bad slave
-	oldMaster := testlib.NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})
-	newMaster := testlib.NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
-	goodSlave := testlib.NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})
+	newMaster := NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
+	goodSlave := NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
 
 	// Now we're restarting mysql on a different port, 3301->3303
 	// but without updating the Tablet record in topology.
@@ -189,9 +188,9 @@ func TestShardExternallyReparentedContinueOnUnexpectedMaster(t *testing.T) {
 	wr.UseRPCs = false
 
 	// Create an old master, a new master, two good slaves, one bad slave
-	oldMaster := testlib.NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})
-	newMaster := testlib.NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
-	goodSlave := testlib.NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})
+	newMaster := NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
+	goodSlave := NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
 
 	// On the elected master, we will respond to
 	// TABLET_ACTION_SLAVE_WAS_PROMOTED, so we need a MysqlDaemon
