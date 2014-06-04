@@ -72,15 +72,16 @@ class Tablet(object):
     if all_extra_my_cnf:
       env = os.environ.copy()
       env['EXTRA_MY_CNF'] = ":".join(all_extra_my_cnf)
-    ports_params = []
+    args = [environment.binary_path('mysqlctl'),
+            '-log_dir', environment.vtlogroot,
+            '-tablet_uid', str(self.tablet_uid)]
     if with_ports:
-      ports_params = ['-port', str(self.port),
-                      '-mysql_port', str(self.mysql_port)]
-
-    return utils.run_bg([environment.binary_path('mysqlctl'),
-                         '-log_dir', environment.vtlogroot,
-                         '-tablet_uid', str(self.tablet_uid)] +
-                        ports_params + cmd, env=env)
+      args.extend(['-port', str(self.port),
+                   '-mysql_port', str(self.mysql_port)])
+    if utils.options.verbose == 2:
+      args.append('-alsologtostderr')
+    args.extend(cmd)
+    return utils.run_bg(args, env=env)
 
   def init_mysql(self, extra_my_cnf=None):
     return self.mysqlctl(['init'], extra_my_cnf=extra_my_cnf,
