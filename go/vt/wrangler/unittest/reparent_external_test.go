@@ -11,20 +11,22 @@ import (
 
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/wrangler"
+	"github.com/youtube/vitess/go/vt/wrangler/testlib"
 	"github.com/youtube/vitess/go/vt/zktopo"
 )
 
 func TestShardExternallyReparented(t *testing.T) {
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := New(ts, time.Minute, time.Second)
+	wr := wrangler.New(ts, time.Minute, time.Second)
 	wr.UseRPCs = false
 
 	// Create an old master, a new master, two good slaves, one bad slave
-	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})
-	newMaster := NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
-	goodSlave1 := NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
-	goodSlave2 := NewFakeTablet(t, wr, "cell2", 3, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
-	badSlave := NewFakeTablet(t, wr, "cell1", 4, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
+	oldMaster := testlib.NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})
+	newMaster := testlib.NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
+	goodSlave1 := testlib.NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
+	goodSlave2 := testlib.NewFakeTablet(t, wr, "cell2", 3, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
+	badSlave := testlib.NewFakeTablet(t, wr, "cell1", 4, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
 
 	// Add a new Cell to the Shard, that doesn't map to any read topo cell,
 	// to simulate a data center being unreachable.
@@ -43,22 +45,22 @@ func TestShardExternallyReparented(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTabletMapForShardByCell should have worked but got: %v", err)
 	}
-	master, err := FindTabletByIPAddrAndPort(tabletMap, oldMaster.Tablet.IPAddr, "vt", oldMaster.Tablet.Portmap["vt"])
+	master, err := wrangler.FindTabletByIPAddrAndPort(tabletMap, oldMaster.Tablet.IPAddr, "vt", oldMaster.Tablet.Portmap["vt"])
 	if err != nil || master != oldMaster.Tablet.Alias {
 		t.Fatalf("FindTabletByIPAddrAndPort(master) failed: %v %v", err, master)
 	}
-	slave1, err := FindTabletByIPAddrAndPort(tabletMap, goodSlave1.Tablet.IPAddr, "vt", goodSlave1.Tablet.Portmap["vt"])
+	slave1, err := wrangler.FindTabletByIPAddrAndPort(tabletMap, goodSlave1.Tablet.IPAddr, "vt", goodSlave1.Tablet.Portmap["vt"])
 	if err != nil || slave1 != goodSlave1.Tablet.Alias {
 		t.Fatalf("FindTabletByIPAddrAndPort(slave1) failed: %v %v", err, master)
 	}
-	slave2, err := FindTabletByIPAddrAndPort(tabletMap, goodSlave2.Tablet.IPAddr, "vt", goodSlave2.Tablet.Portmap["vt"])
+	slave2, err := wrangler.FindTabletByIPAddrAndPort(tabletMap, goodSlave2.Tablet.IPAddr, "vt", goodSlave2.Tablet.Portmap["vt"])
 	if err != topo.ErrNoNode {
 		t.Fatalf("FindTabletByIPAddrAndPort(slave2) worked: %v %v", err, slave2)
 	}
 
 	// Make sure the master is not exported in other cells
 	tabletMap, err = topo.GetTabletMapForShardByCell(ts, "test_keyspace", "0", []string{"cell2"})
-	master, err = FindTabletByIPAddrAndPort(tabletMap, oldMaster.Tablet.IPAddr, "vt", oldMaster.Tablet.Portmap["vt"])
+	master, err = wrangler.FindTabletByIPAddrAndPort(tabletMap, oldMaster.Tablet.IPAddr, "vt", oldMaster.Tablet.Portmap["vt"])
 	if err != topo.ErrNoNode {
 		t.Fatalf("FindTabletByIPAddrAndPort(master) worked in cell2: %v %v", err, master)
 	}
@@ -67,7 +69,7 @@ func TestShardExternallyReparented(t *testing.T) {
 	if err != topo.ErrPartialResult {
 		t.Fatalf("GetTabletMapForShard should have returned ErrPartialResult but got: %v", err)
 	}
-	master, err = FindTabletByIPAddrAndPort(tabletMap, oldMaster.Tablet.IPAddr, "vt", oldMaster.Tablet.Portmap["vt"])
+	master, err = wrangler.FindTabletByIPAddrAndPort(tabletMap, oldMaster.Tablet.IPAddr, "vt", oldMaster.Tablet.Portmap["vt"])
 	if err != nil || master != oldMaster.Tablet.Alias {
 		t.Fatalf("FindTabletByIPAddrAndPort(master) failed: %v %v", err, master)
 	}
@@ -141,13 +143,13 @@ func TestShardExternallyReparented(t *testing.T) {
 // port, we pick it up correctly.
 func TestShardExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	ts := zktopo.NewTestServer(t, []string{"cell1"})
-	wr := New(ts, time.Minute, time.Second)
+	wr := wrangler.New(ts, time.Minute, time.Second)
 	wr.UseRPCs = false
 
 	// Create an old master, a new master, two good slaves, one bad slave
-	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})
-	newMaster := NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
-	goodSlave := NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
+	oldMaster := testlib.NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})
+	newMaster := testlib.NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
+	goodSlave := testlib.NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
 
 	// Now we're restarting mysql on a different port, 3301->3303
 	// but without updating the Tablet record in topology.
@@ -183,13 +185,13 @@ func TestShardExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 // that we ignore mysql's master if the flag is set
 func TestShardExternallyReparentedContinueOnUnexpectedMaster(t *testing.T) {
 	ts := zktopo.NewTestServer(t, []string{"cell1"})
-	wr := New(ts, time.Minute, time.Second)
+	wr := wrangler.New(ts, time.Minute, time.Second)
 	wr.UseRPCs = false
 
 	// Create an old master, a new master, two good slaves, one bad slave
-	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})
-	newMaster := NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
-	goodSlave := NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
+	oldMaster := testlib.NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})
+	newMaster := testlib.NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
+	goodSlave := testlib.NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
 
 	// On the elected master, we will respond to
 	// TABLET_ACTION_SLAVE_WAS_PROMOTED, so we need a MysqlDaemon

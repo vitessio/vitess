@@ -2,7 +2,11 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package wrangler
+/*
+Package testlib contains utility methods to include in unit tests to
+deal with topology common tasks, liek fake tablets and action loops.
+*/
+package testlib
 
 import (
 	"fmt"
@@ -14,6 +18,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actor"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
 // This file contains utility methods for unit tests.
@@ -37,7 +42,7 @@ type FakeTablet struct {
 // CreateTestTablet creates the test tablet in the topology.  'uid'
 // has to be between 0 and 99. All the tablet info will be derived
 // from that. Look at the implementation if you need values.
-func NewFakeTablet(t *testing.T, wr *Wrangler, cell string, uid uint32, tabletType topo.TabletType, parent topo.TabletAlias) *FakeTablet {
+func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32, tabletType topo.TabletType, parent topo.TabletAlias) *FakeTablet {
 	if uid < 0 || uid > 99 {
 		t.Fatalf("uid has to be between 0 and 99: %v", uid)
 	}
@@ -81,29 +86,29 @@ func NewFakeTablet(t *testing.T, wr *Wrangler, cell string, uid uint32, tabletTy
 
 // StartActionLoop will start the action loop for a fake tablet,
 // using ft.FakeMysqlDaemon as the backing mysqld.
-func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
+func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 	if ft.Done != nil {
 		t.Fatalf("ActionLoop for %v is already running", ft.Tablet.Alias)
 	}
 	ft.Done = make(chan struct{}, 1)
 	go func() {
-		wr.ts.ActionEventLoop(ft.Tablet.Alias, func(actionPath, data string) error {
+		wr.TopoServer().ActionEventLoop(ft.Tablet.Alias, func(actionPath, data string) error {
 			actionNode, err := actionnode.ActionNodeFromJson(data, actionPath)
 			if err != nil {
 				t.Fatalf("ActionNodeFromJson failed: %v\n%v", err, data)
 			}
-			ta := actor.NewTabletActor(nil, ft.FakeMysqlDaemon, wr.ts, ft.Tablet.Alias)
+			ta := actor.NewTabletActor(nil, ft.FakeMysqlDaemon, wr.TopoServer(), ft.Tablet.Alias)
 			if err := ta.HandleAction(actionPath, actionNode.Action, actionNode.ActionGuid, false); err != nil {
 				// action may just fail for any good reason
 				t.Logf("HandleAction failed for %v: %v", actionNode.Action, err)
 			}
 
 			// this part would also be done by the agent
-			tablet, err := wr.ts.GetTablet(ft.Tablet.Alias)
+			tablet, err := wr.TopoServer().GetTablet(ft.Tablet.Alias)
 			if err != nil {
 				t.Logf("Cannot get tablet: %v", err)
 			} else {
-				updatedTablet := tabletmanager.CheckTabletMysqlPort(wr.ts, ft.FakeMysqlDaemon, tablet)
+				updatedTablet := tabletmanager.CheckTabletMysqlPort(wr.TopoServer(), ft.FakeMysqlDaemon, tablet)
 				if updatedTablet != nil {
 					t.Logf("Updated tablet record")
 				}
