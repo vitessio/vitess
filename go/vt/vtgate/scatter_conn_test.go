@@ -11,6 +11,7 @@ import (
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
@@ -252,4 +253,53 @@ func TestScatterConnClose(t *testing.T) {
 			t.Errorf("want 1, got %d", sbc.CloseCount)
 		}
 	*/
+}
+
+func TestAppendResult(t *testing.T) {
+	qr := new(mproto.QueryResult)
+	innerqr1 := &mproto.QueryResult{
+		Fields: []mproto.Field{},
+		Rows:   [][]sqltypes.Value{},
+	}
+	innerqr2 := &mproto.QueryResult{
+		Fields: []mproto.Field{
+			{Name: "foo", Type: 1},
+		},
+		RowsAffected: 1,
+		InsertId:     1,
+		Rows: [][]sqltypes.Value{
+			{sqltypes.MakeString([]byte("abcd"))},
+		},
+	}
+	// test one empty result
+	appendResult(qr, innerqr1)
+	appendResult(qr, innerqr2)
+	if len(qr.Fields) != 1 {
+		t.Errorf("want 1, got %v", len(qr.Fields))
+	}
+	if qr.RowsAffected != 1 {
+		t.Errorf("want 1, got %v", qr.RowsAffected)
+	}
+	if qr.InsertId != 1 {
+		t.Errorf("want 1, got %v", qr.InsertId)
+	}
+	if len(qr.Rows) != 1 {
+		t.Errorf("want 1, got %v", len(qr.Rows))
+	}
+	// test two valid results
+	qr = new(mproto.QueryResult)
+	appendResult(qr, innerqr2)
+	appendResult(qr, innerqr2)
+	if len(qr.Fields) != 1 {
+		t.Errorf("want 1, got %v", len(qr.Fields))
+	}
+	if qr.RowsAffected != 2 {
+		t.Errorf("want 2, got %v", qr.RowsAffected)
+	}
+	if qr.InsertId != 1 {
+		t.Errorf("want 1, got %v", qr.InsertId)
+	}
+	if len(qr.Rows) != 2 {
+		t.Errorf("want 2, got %v", len(qr.Rows))
+	}
 }
