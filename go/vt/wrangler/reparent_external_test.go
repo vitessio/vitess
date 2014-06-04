@@ -5,84 +5,14 @@
 package wrangler
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/tabletmanager"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actor"
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 )
-
-// createTestTablet creates the test tablet in the topology.
-// 'uid' has to be between 0 and 99. All the ports will be derived from that.
-func createTestTablet(t *testing.T, wr *Wrangler, cell string, uid uint32, tabletType topo.TabletType, parent topo.TabletAlias) topo.TabletAlias {
-	if uid < 0 || uid > 99 {
-		t.Fatalf("uid has to be between 0 and 99: %v", uid)
-	}
-	state := topo.STATE_READ_ONLY
-	if tabletType == topo.TYPE_MASTER {
-		state = topo.STATE_READ_WRITE
-	}
-	tablet := &topo.Tablet{
-		Parent:   parent,
-		Alias:    topo.TabletAlias{Cell: cell, Uid: uid},
-		Hostname: fmt.Sprintf("%vhost", cell),
-		Portmap: map[string]int{
-			"vt":    8100 + int(uid),
-			"mysql": 3300 + int(uid),
-			"vts":   8200 + int(uid),
-		},
-		IPAddr:         fmt.Sprintf("%v.0.0.1", 100+uid),
-		Keyspace:       "test_keyspace",
-		Shard:          "0",
-		Type:           tabletType,
-		State:          state,
-		DbNameOverride: "",
-		KeyRange:       key.KeyRange{},
-	}
-	if err := wr.InitTablet(tablet, false, true, false); err != nil {
-		t.Fatalf("cannot create tablet %v: %v", uid, err)
-	}
-	return tablet.Alias
-}
-
-// startFakeTabletActionLoop will start the action loop for a fake tablet,
-// using mysqlDaemon as the backing mysqld.
-func startFakeTabletActionLoop(t *testing.T, wr *Wrangler, tabletAlias topo.TabletAlias, mysqlDaemon mysqlctl.MysqlDaemon, done chan struct{}) {
-	go func() {
-		f := func(actionPath, data string) error {
-			actionNode, err := actionnode.ActionNodeFromJson(data, actionPath)
-			if err != nil {
-				t.Fatalf("ActionNodeFromJson failed: %v\n%v", err, data)
-			}
-			ta := actor.NewTabletActor(nil, mysqlDaemon, wr.ts, tabletAlias)
-			if err := ta.HandleAction(actionPath, actionNode.Action, actionNode.ActionGuid, false); err != nil {
-				// action may just fail for any good reason
-				t.Logf("HandleAction failed for %v: %v", actionNode.Action, err)
-			}
-
-			// this part would also be done by the agent
-			tablet, err := wr.ts.GetTablet(tabletAlias)
-			if err != nil {
-				t.Logf("Cannot get tablet: %v", err)
-			} else {
-				updatedTablet := tabletmanager.CheckTabletMysqlPort(wr.ts, mysqlDaemon, tablet)
-				if updatedTablet != nil {
-					t.Logf("Updated tablet record")
-				}
-			}
-			return nil
-		}
-		wr.ts.ActionEventLoop(tabletAlias, f, done)
-	}()
-}
 
 func TestShardExternallyReparented(t *testing.T) {
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
@@ -90,11 +20,11 @@ func TestShardExternallyReparented(t *testing.T) {
 	wr.UseRPCs = false
 
 	// Create an old master, a new master, two good slaves, one bad slave
-	oldMasterAlias := createTestTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})
-	newMasterAlias := createTestTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA, oldMasterAlias)
-	goodSlaveAlias1 := createTestTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA, oldMasterAlias)
-	goodSlaveAlias2 := createTestTablet(t, wr, "cell2", 3, topo.TYPE_REPLICA, oldMasterAlias)
-	badSlaveAlias := createTestTablet(t, wr, "cell1", 4, topo.TYPE_REPLICA, oldMasterAlias)
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})
+	newMaster := NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
+	goodSlave1 := NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
+	goodSlave2 := NewFakeTablet(t, wr, "cell2", 3, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
+	badSlave := NewFakeTablet(t, wr, "cell1", 4, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
 
 	// Add a new Cell to the Shard, that doesn't map to any read topo cell,
 	// to simulate a data center being unreachable.
@@ -114,11 +44,11 @@ func TestShardExternallyReparented(t *testing.T) {
 		t.Fatalf("GetTabletMapForShardByCell should have worked but got: %v", err)
 	}
 	master, err := FindTabletByIPAddrAndPort(tabletMap, "100.0.0.1", "vt", 8100)
-	if err != nil || master != oldMasterAlias {
+	if err != nil || master != oldMaster.Tablet.Alias {
 		t.Fatalf("FindTabletByIPAddrAndPort(master) failed: %v %v", err, master)
 	}
 	slave1, err := FindTabletByIPAddrAndPort(tabletMap, "102.0.0.1", "vt", 8102)
-	if err != nil || slave1 != goodSlaveAlias1 {
+	if err != nil || slave1 != goodSlave1.Tablet.Alias {
 		t.Fatalf("FindTabletByIPAddrAndPort(slave1) failed: %v %v", err, master)
 	}
 	slave2, err := FindTabletByIPAddrAndPort(tabletMap, "103.0.0.1", "vt", 8103)
@@ -138,13 +68,13 @@ func TestShardExternallyReparented(t *testing.T) {
 		t.Fatalf("GetTabletMapForShard should have returned ErrPartialResult but got: %v", err)
 	}
 	master, err = FindTabletByIPAddrAndPort(tabletMap, "100.0.0.1", "vt", 8100)
-	if err != nil || master != oldMasterAlias {
+	if err != nil || master != oldMaster.Tablet.Alias {
 		t.Fatalf("FindTabletByIPAddrAndPort(master) failed: %v %v", err, master)
 	}
 
 	// First test: reparent to the same master, make sure it works
 	// as expected.
-	if err := wr.ShardExternallyReparented("test_keyspace", "0", oldMasterAlias); err == nil {
+	if err := wr.ShardExternallyReparented("test_keyspace", "0", oldMaster.Tablet.Alias); err == nil {
 		t.Fatalf("ShardExternallyReparented(same master) should have failed")
 	} else {
 		if !strings.Contains(err.Error(), "already master") {
@@ -154,57 +84,46 @@ func TestShardExternallyReparented(t *testing.T) {
 
 	// Second test: reparent to the replica, and pretend the old
 	// master is still good to go.
-	done := make(chan struct{}, 1)
 
 	// On the elected master, we will respond to
 	// TABLET_ACTION_SLAVE_WAS_PROMOTED
-	newMasterMysqlDaemon := &mysqlctl.FakeMysqlDaemon{
-		MasterAddr: "",
-		MysqlPort:  3301,
-	}
-	startFakeTabletActionLoop(t, wr, newMasterAlias, newMasterMysqlDaemon, done)
+	newMaster.FakeMysqlDaemon.MasterAddr = ""
+	newMaster.StartActionLoop(t, wr)
+	defer newMaster.StopActionLoop(t)
 
 	// On the old master, we will only respond to
 	// TABLET_ACTION_SLAVE_WAS_RESTARTED.
-	oldMasterMysqlDaemon := &mysqlctl.FakeMysqlDaemon{
-		MasterAddr: "101.0.0.1:3301",
-		MysqlPort:  3300,
-	}
-	startFakeTabletActionLoop(t, wr, oldMasterAlias, oldMasterMysqlDaemon, done)
+	oldMaster.FakeMysqlDaemon.MasterAddr = "101.0.0.1:3301"
+	oldMaster.StartActionLoop(t, wr)
+	defer oldMaster.StopActionLoop(t)
 
 	// On the good slaves, we will respond to
 	// TABLET_ACTION_SLAVE_WAS_RESTARTED.
-	goodSlaveMysqlDaemon1 := &mysqlctl.FakeMysqlDaemon{
-		MasterAddr: "101.0.0.1:3301",
-		MysqlPort:  3302,
-	}
-	startFakeTabletActionLoop(t, wr, goodSlaveAlias1, goodSlaveMysqlDaemon1, done)
-	goodSlaveMysqlDaemon2 := &mysqlctl.FakeMysqlDaemon{
-		MasterAddr: "101.0.0.1:3301",
-		MysqlPort:  3303,
-	}
-	startFakeTabletActionLoop(t, wr, goodSlaveAlias2, goodSlaveMysqlDaemon2, done)
+	goodSlave1.FakeMysqlDaemon.MasterAddr = "101.0.0.1:3301"
+	goodSlave1.StartActionLoop(t, wr)
+	defer goodSlave1.StopActionLoop(t)
+
+	goodSlave2.FakeMysqlDaemon.MasterAddr = "101.0.0.1:3301"
+	goodSlave2.StartActionLoop(t, wr)
+	defer goodSlave2.StopActionLoop(t)
 
 	// On the bad slave, we will respond to
-	// TABLET_ACTION_SLAVE_WAS_RESTARTED.
-	badSlaveMysqlDaemon := &mysqlctl.FakeMysqlDaemon{
-		MasterAddr: "234.0.0.1:3301",
-		MysqlPort:  3304,
-	}
-	startFakeTabletActionLoop(t, wr, badSlaveAlias, badSlaveMysqlDaemon, done)
+	// TABLET_ACTION_SLAVE_WAS_RESTARTED with bad data.
+	badSlave.FakeMysqlDaemon.MasterAddr = "234.0.0.1:3301"
+	badSlave.StartActionLoop(t, wr)
+	defer badSlave.StopActionLoop(t)
 
 	// This tests a bad case; the new designated master is a slave,
 	// but we should do what we're told anyway
-	if err := wr.ShardExternallyReparented("test_keyspace", "0", goodSlaveAlias1); err != nil {
+	if err := wr.ShardExternallyReparented("test_keyspace", "0", goodSlave1.Tablet.Alias); err != nil {
 		t.Fatalf("ShardExternallyReparented(slave) error: %v", err)
 	}
 
 	// This tests the good case, where everything works as planned
 	t.Logf("ShardExternallyReparented(new master) expecting success")
-	if err := wr.ShardExternallyReparented("test_keyspace", "0", newMasterAlias); err != nil {
+	if err := wr.ShardExternallyReparented("test_keyspace", "0", newMaster.Tablet.Alias); err != nil {
 		t.Fatalf("ShardExternallyReparented(replica) failed: %v", err)
 	}
-	close(done)
 
 	// Now double-check the serving graph is good.
 	// Should only have one good replica left.
@@ -226,45 +145,38 @@ func TestShardExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	wr.UseRPCs = false
 
 	// Create an old master, a new master, two good slaves, one bad slave
-	oldMasterAlias := createTestTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})
-	newMasterAlias := createTestTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA, oldMasterAlias)
-	goodSlaveAlias := createTestTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA, oldMasterAlias)
-	done := make(chan struct{}, 1)
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})
+	newMaster := NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
+	goodSlave := NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
 
-	// Now we're restarting mysql on a different port, 3301->3302
+	// Now we're restarting mysql on a different port, 3301->3303
 	// but without updating the Tablet record in topology.
 
 	// On the elected master, we will respond to
 	// TABLET_ACTION_SLAVE_WAS_PROMOTED, so we need a MysqlDaemon
 	// that returns no master, and the new port (as returned by mysql)
-	newMasterMysqlDaemon := &mysqlctl.FakeMysqlDaemon{
-		MasterAddr: "",
-		MysqlPort:  3302,
-	}
-	startFakeTabletActionLoop(t, wr, newMasterAlias, newMasterMysqlDaemon, done)
+	newMaster.FakeMysqlDaemon.MasterAddr = ""
+	newMaster.FakeMysqlDaemon.MysqlPort = 3303
+	newMaster.StartActionLoop(t, wr)
+	defer newMaster.StopActionLoop(t)
 
 	// On the old master, we will only respond to
 	// TABLET_ACTION_SLAVE_WAS_RESTARTED and point to the new mysql port
-	oldMasterMysqlDaemon := &mysqlctl.FakeMysqlDaemon{
-		MasterAddr: "101.0.0.1:3302",
-		MysqlPort:  3300,
-	}
-	startFakeTabletActionLoop(t, wr, oldMasterAlias, oldMasterMysqlDaemon, done)
+	oldMaster.FakeMysqlDaemon.MasterAddr = "101.0.0.1:3303"
+	oldMaster.StartActionLoop(t, wr)
+	defer oldMaster.StopActionLoop(t)
 
 	// On the good slaves, we will respond to
 	// TABLET_ACTION_SLAVE_WAS_RESTARTED and point to the new mysql port
-	goodSlaveMysqlDaemon := &mysqlctl.FakeMysqlDaemon{
-		MasterAddr: "101.0.0.1:3302",
-		MysqlPort:  3302,
-	}
-	startFakeTabletActionLoop(t, wr, goodSlaveAlias, goodSlaveMysqlDaemon, done)
+	goodSlave.FakeMysqlDaemon.MasterAddr = "101.0.0.1:3303"
+	goodSlave.StartActionLoop(t, wr)
+	defer goodSlave.StopActionLoop(t)
 
 	// This tests the good case, where everything works as planned
 	t.Logf("ShardExternallyReparented(new master) expecting success")
-	if err := wr.ShardExternallyReparented("test_keyspace", "0", newMasterAlias); err != nil {
+	if err := wr.ShardExternallyReparented("test_keyspace", "0", newMaster.Tablet.Alias); err != nil {
 		t.Fatalf("ShardExternallyReparented(replica) failed: %v", err)
 	}
-	close(done)
 }
 
 // TestShardExternallyReparentedContinueOnUnexpectedMaster makes sure
@@ -275,41 +187,33 @@ func TestShardExternallyReparentedContinueOnUnexpectedMaster(t *testing.T) {
 	wr.UseRPCs = false
 
 	// Create an old master, a new master, two good slaves, one bad slave
-	oldMasterAlias := createTestTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})
-	newMasterAlias := createTestTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA, oldMasterAlias)
-	goodSlaveAlias := createTestTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA, oldMasterAlias)
-	done := make(chan struct{}, 1)
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})
+	newMaster := NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
+	goodSlave := NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA, oldMaster.Tablet.Alias)
 
 	// On the elected master, we will respond to
 	// TABLET_ACTION_SLAVE_WAS_PROMOTED, so we need a MysqlDaemon
 	// that returns no master, and the new port (as returned by mysql)
-	newMasterMysqlDaemon := &mysqlctl.FakeMysqlDaemon{
-		MasterAddr: "",
-		MysqlPort:  3301,
-	}
-	startFakeTabletActionLoop(t, wr, newMasterAlias, newMasterMysqlDaemon, done)
+	newMaster.FakeMysqlDaemon.MasterAddr = ""
+	newMaster.StartActionLoop(t, wr)
+	defer newMaster.StopActionLoop(t)
 
 	// On the old master, we will only respond to
 	// TABLET_ACTION_SLAVE_WAS_RESTARTED and point to a bad host
-	oldMasterMysqlDaemon := &mysqlctl.FakeMysqlDaemon{
-		MasterAddr: "1.2.3.4:6666",
-		MysqlPort:  3300,
-	}
-	startFakeTabletActionLoop(t, wr, oldMasterAlias, oldMasterMysqlDaemon, done)
+	oldMaster.FakeMysqlDaemon.MasterAddr = "1.2.3.4:6666"
+	oldMaster.StartActionLoop(t, wr)
+	defer oldMaster.StopActionLoop(t)
 
-	// On the good slaves, we will respond to
+	// On the good slave, we will respond to
 	// TABLET_ACTION_SLAVE_WAS_RESTARTED and point to a bad host
-	goodSlaveMysqlDaemon := &mysqlctl.FakeMysqlDaemon{
-		MasterAddr: "1.2.3.4:6666",
-		MysqlPort:  3302,
-	}
-	startFakeTabletActionLoop(t, wr, goodSlaveAlias, goodSlaveMysqlDaemon, done)
+	goodSlave.FakeMysqlDaemon.MasterAddr = "1.2.3.4:6666"
+	goodSlave.StartActionLoop(t, wr)
+	defer goodSlave.StopActionLoop(t)
 
 	// This tests the good case, where everything works as planned
 	t.Logf("ShardExternallyReparented(new master) expecting success")
 	// temporary failure still:
-	if err := wr.ShardExternallyReparented("test_keyspace", "0", newMasterAlias); err != nil {
+	if err := wr.ShardExternallyReparented("test_keyspace", "0", newMaster.Tablet.Alias); err != nil {
 		t.Fatalf("ShardExternallyReparented(replica) failed: %v", err)
 	}
-	close(done)
 }
