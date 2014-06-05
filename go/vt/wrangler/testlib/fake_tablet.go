@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actor"
@@ -38,10 +37,35 @@ type FakeTablet struct {
 	Done chan struct{}
 }
 
+// TabletOption is an interface for changing tablet parameters.
+// It's a way to pass multiple parameters to NewFakeTablet without
+// making it too cumbersome.
+type TabletOption func(tablet *topo.Tablet)
+
+// TabletParent is the tablet option to set the parent alias
+func TabletParent(parent topo.TabletAlias) TabletOption {
+	return func(tablet *topo.Tablet) {
+		tablet.Parent = parent
+	}
+}
+
+// TabletKeyspaceShard is the option to set the tablet keyspace and shard
+func TabletKeyspaceShard(t *testing.T, keyspace, shard string) TabletOption {
+	return func(tablet *topo.Tablet) {
+		tablet.Keyspace = keyspace
+		var err error
+		tablet.Shard, tablet.KeyRange, err = topo.ValidateShardName(shard)
+		if err != nil {
+			t.Fatalf("cannot ValidateShardName value %v", shard)
+		}
+	}
+}
+
 // CreateTestTablet creates the test tablet in the topology.  'uid'
 // has to be between 0 and 99. All the tablet info will be derived
 // from that. Look at the implementation if you need values.
-func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32, tabletType topo.TabletType, parent topo.TabletAlias) *FakeTablet {
+// Use TabletOption implementations if you need to change values at creation.
+func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32, tabletType topo.TabletType, options ...TabletOption) *FakeTablet {
 	if uid < 0 || uid > 99 {
 		t.Fatalf("uid has to be between 0 and 99: %v", uid)
 	}
@@ -50,7 +74,6 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 		state = topo.STATE_READ_WRITE
 	}
 	tablet := &topo.Tablet{
-		Parent:   parent,
 		Alias:    topo.TabletAlias{Cell: cell, Uid: uid},
 		Hostname: fmt.Sprintf("%vhost", cell),
 		Portmap: map[string]int{
@@ -58,13 +81,14 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 			"mysql": 3300 + int(uid),
 			"vts":   8200 + int(uid),
 		},
-		IPAddr:         fmt.Sprintf("%v.0.0.1", 100+uid),
-		Keyspace:       "test_keyspace",
-		Shard:          "0",
-		Type:           tabletType,
-		State:          state,
-		DbNameOverride: "",
-		KeyRange:       key.KeyRange{},
+		IPAddr:   fmt.Sprintf("%v.0.0.1", 100+uid),
+		Keyspace: "test_keyspace",
+		Shard:    "0",
+		Type:     tabletType,
+		State:    state,
+	}
+	for _, option := range options {
+		option(tablet)
 	}
 	if err := wr.InitTablet(tablet, false, true, false); err != nil {
 		t.Fatalf("cannot create tablet %v: %v", uid, err)
@@ -72,8 +96,8 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 
 	// create a FakeMysqlDaemon with the right information by default
 	fakeMysqlDaemon := &mysqlctl.FakeMysqlDaemon{}
-	if !parent.IsZero() {
-		fakeMysqlDaemon.MasterAddr = fmt.Sprintf("%v.0.0.1:%v", 100+parent.Uid, 3300+int(parent.Uid))
+	if !tablet.Parent.IsZero() {
+		fakeMysqlDaemon.MasterAddr = fmt.Sprintf("%v.0.0.1:%v", 100+tablet.Parent.Uid, 3300+int(tablet.Parent.Uid))
 	}
 	fakeMysqlDaemon.MysqlPort = 3300 + int(uid)
 
