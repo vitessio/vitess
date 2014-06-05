@@ -1,6 +1,7 @@
 package event
 
 import (
+	"reflect"
 	"testing"
 	"time"
 )
@@ -21,6 +22,14 @@ type testEvent2 struct {
 }
 
 func (testEvent1) TestFunc1() {}
+
+func clearListeners() {
+	listenersMutex.Lock()
+	defer listenersMutex.Unlock()
+
+	listeners = make(map[reflect.Type][]interface{})
+	interfaces = make([]reflect.Type, 0)
+}
 
 func TestStaticListener(t *testing.T) {
 	clearListeners()

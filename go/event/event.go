@@ -62,10 +62,10 @@ import (
 )
 
 var (
-	listeners  = make(map[reflect.Type][]interface{})
-	interfaces = make([]reflect.Type, 0)
+	listenersMutex sync.RWMutex // protects listeners and interfaces
+	listeners      = make(map[reflect.Type][]interface{})
+	interfaces     = make([]reflect.Type, 0)
 )
-var listenersMutex sync.RWMutex
 
 // BadListenerError is raised via panic() when AddListener is called with an
 // invalid listener funcion.
@@ -130,12 +130,4 @@ func callListeners(t reflect.Type, vals []reflect.Value) {
 	for _, fn := range listeners[t] {
 		reflect.ValueOf(fn).Call(vals)
 	}
-}
-
-func clearListeners() {
-	listenersMutex.Lock()
-	defer listenersMutex.Unlock()
-
-	listeners = make(map[reflect.Type][]interface{})
-	interfaces = make([]reflect.Type, 0)
 }
