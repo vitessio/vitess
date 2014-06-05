@@ -14,7 +14,6 @@ import (
 
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actor"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -108,7 +107,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 			if err != nil {
 				t.Logf("Cannot get tablet: %v", err)
 			} else {
-				updatedTablet := tabletmanager.CheckTabletMysqlPort(wr.TopoServer(), ft.FakeMysqlDaemon, tablet)
+				updatedTablet := actor.CheckTabletMysqlPort(wr.TopoServer(), ft.FakeMysqlDaemon, tablet)
 				if updatedTablet != nil {
 					t.Logf("Updated tablet record")
 				}
