@@ -155,7 +155,6 @@ func (v Value) IsNull() bool {
 }
 
 func (v Value) IsNumeric() (ok bool) {
-	_ = Numeric(nil) // compiler bug work-around
 	if v.Inner != nil {
 		_, ok = v.Inner.(Numeric)
 	}
@@ -163,7 +162,6 @@ func (v Value) IsNumeric() (ok bool) {
 }
 
 func (v Value) IsFractional() (ok bool) {
-	_ = Fractional(nil) // compiler bug work-around
 	if v.Inner != nil {
 		_, ok = v.Inner.(Fractional)
 	}
@@ -171,7 +169,6 @@ func (v Value) IsFractional() (ok bool) {
 }
 
 func (v Value) IsString() (ok bool) {
-	_ = String(nil) // compiler bug work-around
 	if v.Inner != nil {
 		_, ok = v.Inner.(String)
 	}
