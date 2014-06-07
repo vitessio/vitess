@@ -52,6 +52,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actor"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -265,29 +266,6 @@ func (agent *ActionAgent) dispatchAction(actionPath, data string) error {
 	return nil
 }
 
-// ChecktabletMysqlPort will check the mysql port for the tablet is good,
-// and if not will try to update it
-func CheckTabletMysqlPort(ts topo.Server, mysqlDaemon mysqlctl.MysqlDaemon, tablet *topo.TabletInfo) *topo.TabletInfo {
-	mport, err := mysqlDaemon.GetMysqlPort()
-	if err != nil {
-		log.Warningf("Cannot get current mysql port, not checking it: %v", err)
-		return nil
-	}
-
-	if mport == tablet.Portmap["mysql"] {
-		return nil
-	}
-
-	log.Warningf("MySQL port has changed from %v to %v, updating it in tablet record", tablet.Portmap["mysql"], mport)
-	tablet.Portmap["mysql"] = mport
-	if err := topo.UpdateTablet(ts, tablet); err != nil {
-		log.Warningf("Failed to update tablet record, may use old mysql port")
-		return nil
-	}
-
-	return tablet
-}
-
 // afterAction needs to be run after an action may have changed the current
 // state of the tablet.
 func (agent *ActionAgent) afterAction(context string, reloadSchema bool) {
@@ -301,7 +279,7 @@ func (agent *ActionAgent) afterAction(context string, reloadSchema bool) {
 	if err := agent.readTablet(); err != nil {
 		log.Warningf("Failed rereading tablet after %v - services may be inconsistent: %v", context, err)
 	} else {
-		if updatedTablet := CheckTabletMysqlPort(agent.TopoServer, agent.Mysqld, agent.Tablet()); updatedTablet != nil {
+		if updatedTablet := actor.CheckTabletMysqlPort(agent.TopoServer, agent.Mysqld, agent.Tablet()); updatedTablet != nil {
 			agent.mutex.Lock()
 			agent._tablet = updatedTablet
 			agent.mutex.Unlock()

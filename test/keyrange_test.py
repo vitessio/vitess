@@ -49,15 +49,12 @@ class TestKeyRange(unittest.TestCase):
       num_tasks = global_shard_count*2
       stm = keyrange.create_streaming_task_map(num_tasks, global_shard_count)
       self.assertEqual(len(stm.keyrange_list), num_tasks)
-      num_tasks = global_shard_count*2 + 3
-      stm = keyrange.create_streaming_task_map(num_tasks, global_shard_count)
-      self.assertEqual(len(stm.keyrange_list), num_tasks)
       num_tasks = global_shard_count*8
       stm = keyrange.create_streaming_task_map(num_tasks, global_shard_count)
       self.assertEqual(len(stm.keyrange_list), num_tasks)
 
   # This tests that the where clause and bind_vars generated for each shard
-  # against a few sample values where keyspace_id is an int column.  
+  # against a few sample values where keyspace_id is an int column.
   def test_bind_values_for_int_keyspace(self):
     stm = keyrange.create_streaming_task_map(16, 16)
     for i, kr in enumerate(stm.keyrange_list):
@@ -85,7 +82,7 @@ class TestKeyRange(unittest.TestCase):
 
 
   # This tests that the where clause and bind_vars generated for each shard
-  # against a few sample values where keyspace_id is a str column. 
+  # against a few sample values where keyspace_id is a str column.
   # mysql will use the hex function on string keyspace column
   # and use byte comparison. Since the exact function is not available,
   # the test emulates that by using keyspace_id.encode('hex').

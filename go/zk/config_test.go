@@ -15,9 +15,6 @@ import (
 
 func TestZkConfig(t *testing.T) {
 	configPath := fmt.Sprintf("%v/.zk-test-conf-%v", os.TempDir(), time.Now().UnixNano())
-	defer func() {
-		os.Remove(configPath)
-	}()
 
 	if err := os.Setenv("ZK_CLIENT_CONFIG", configPath); err != nil {
 		t.Errorf("setenv ZK_CLIENT_CONFIG failed: %v", err)
@@ -25,27 +22,31 @@ func TestZkConfig(t *testing.T) {
 	if err := os.Setenv("ZK_CLIENT_LOCAL_CELL", ""); err != nil {
 		t.Errorf("setenv ZK_CLIENT_LOCAL_CELL failed: %v", err)
 	}
+	fakeCell := GuessLocalCell()
+	t.Logf("fakeCell: %v", fakeCell)
 
-	hostname, err := os.Hostname()
-	if err != nil {
-		t.Errorf("hostname failed: %v", err)
-	}
-
-	fakeCell := hostname[:2]
 	fakeAddr := "localhost:2181"
+	t.Logf("fakeAddr: %v", fakeAddr)
+
 	configMap := map[string]string{
 		fakeCell:              fakeAddr,
 		fakeCell + "z:_zkocc": "localhost:2182",
 		fakeCell + "-global":  "localhost:2183",
 	}
+	t.Logf("configMap: %+v", configMap)
 
 	file, err := os.Create(configPath)
 	if err != nil {
 		t.Errorf("create failed: %v", err)
 	}
+
+	defer func() {
+		os.Remove(configPath)
+	}()
+
 	err = json.NewEncoder(file).Encode(configMap)
 	if err != nil {
-		t.Errorf("encode failed: %v", err)
+		t.Fatalf("encode failed: %v", err)
 	}
 	file.Close()
 
@@ -53,7 +54,7 @@ func TestZkConfig(t *testing.T) {
 	for _, path := range []string{"/zk/" + fakeCell, "/zk/" + fakeCell + "/", "/zk/local", "/zk/local/"} {
 		zkAddr, err := ZkPathToZkAddr(path, false)
 		if err != nil {
-			t.Errorf("got error: %v", err.Error())
+			t.Errorf("ZkPathToZkAddr(%v, false): %v", path, err.Error())
 		}
 		if zkAddr != fakeAddr {
 			t.Errorf("addr mismatch for path %v %v != %v", path, zkAddr, fakeAddr)

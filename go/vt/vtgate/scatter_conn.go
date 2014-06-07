@@ -395,6 +395,9 @@ func (stc *ScatterConn) updateSession(
 }
 
 func appendResult(qr, innerqr *mproto.QueryResult) {
+	if innerqr.RowsAffected == 0 && len(innerqr.Fields) == 0 {
+		return
+	}
 	if qr.Fields == nil {
 		qr.Fields = innerqr.Fields
 	}

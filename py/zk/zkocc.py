@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import random
+import threading
 
 from net import bsonrpc
 from net import gorpc
@@ -99,6 +100,7 @@ class ZkOccConnection(object):
     self.password = password
 
     self.simple_conn = None
+    self.lock = threading.Lock()
 
   def _resolve_path(self, zk_path):
     # Maps a 'meta-path' to a cell specific path.
@@ -138,21 +140,22 @@ class ZkOccConnection(object):
       self.simple_conn = None
 
   def _call(self, client_method, *args, **kwargs):
-    if not self.simple_conn:
-      self.dial()
-
-    attempt = 0
-    while True:
-      try:
-        return getattr(self.simple_conn, client_method)(*args, **kwargs)
-      except Exception as e:
-        attempt += 1
-        logging.warning('zkocc: %s command failed %u times: %s', client_method, attempt, e)
-        if attempt >= self.max_attempts:
-          raise ZkOccError('zkocc %s command failed %u times: %s' % (client_method, attempt, e))
-
-        # try the next server if there is one, or retry our only server
+    with self.lock:
+      if not self.simple_conn:
         self.dial()
+
+      attempt = 0
+      while True:
+        try:
+          return getattr(self.simple_conn, client_method)(*args, **kwargs)
+        except Exception as e:
+          attempt += 1
+          logging.warning('zkocc: %s command failed %u times: %s', client_method, attempt, e)
+          if attempt >= self.max_attempts:
+            raise ZkOccError('zkocc %s command failed %u times: %s' % (client_method, attempt, e))
+
+          # try the next server if there is one, or retry our only server
+          self.dial()
 
   # New API.
 
