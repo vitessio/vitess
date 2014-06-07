@@ -132,10 +132,10 @@ func NewQueryEngine(config Config) *QueryEngine {
 	errorStats = stats.NewCounters("Errors")
 	internalErrors = stats.NewCounters("InternalErrors")
 	resultStats = stats.NewHistogram("Results", resultBuckets)
-	stats.Publish("SpotCheckRatio", stats.FloatFunc(func() float64 {
+	stats.Publish("RowcacheSpotCheckRatio", stats.FloatFunc(func() float64 {
 		return float64(qe.spotCheckFreq.Get()) / SPOT_CHECK_MULTIPLIER
 	}))
-	spotCheckCount = stats.NewInt("SpotCheckCount")
+	spotCheckCount = stats.NewInt("RowcacheSpotCheckCount")
 
 	return qe
 }
