@@ -34,7 +34,7 @@ func Init(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount 
 		log.Fatalf("VTGate already initialized")
 	}
 	RpcVTGate = &VTGate{
-		resolver: NewResolver(serv, cell, retryDelay, retryCount, timeout),
+		resolver: NewResolver(serv, "VttabletCall", cell, retryDelay, retryCount, timeout),
 		timings:  stats.NewMapTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
 	}
 	for _, f := range RegisterVTGates {

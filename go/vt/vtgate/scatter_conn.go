@@ -45,14 +45,14 @@ type shardActionFunc func(conn *ShardConn, transactionId int64, sResults chan<- 
 
 // NewScatterConn creates a new ScatterConn. All input parameters are passed through
 // for creating the appropriate ShardConn.
-func NewScatterConn(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount int, timeout time.Duration) *ScatterConn {
+func NewScatterConn(serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, timeout time.Duration) *ScatterConn {
 	return &ScatterConn{
 		toposerv:   serv,
 		cell:       cell,
 		retryDelay: retryDelay,
 		retryCount: retryCount,
 		timeout:    timeout,
-		timings:    stats.NewMapTimings("VttabletCall", []string{"Operation", "Keyspace", "Shard", "DbType"}),
+		timings:    stats.NewMapTimings(statsName, []string{"Operation", "Keyspace", "Shard", "DbType"}),
 		shardConns: make(map[string]*ShardConn),
 	}
 }
