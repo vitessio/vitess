@@ -7,6 +7,7 @@ package stats
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 )
@@ -113,4 +114,37 @@ func init() {
 		bucketLabels[i] = fmt.Sprintf("%.4f", float64(v)/1e9)
 	}
 	bucketLabels[len(bucketLabels)-1] = "Max"
+}
+
+// MapTimings is meant to tracks timing data
+// by categories as well as histograms. The names of the categories
+// are compound names made with joining multiple strings with '.'.
+type MapTimings struct {
+	Timings
+	Labels []string
+}
+
+func NewMapTimings(name string, labels []string) *MapTimings {
+	t := &MapTimings{
+		Timings: Timings{histograms: make(map[string]*Histogram)},
+		Labels:  labels,
+	}
+	if name != "" {
+		Publish(name, t)
+	}
+	return t
+}
+
+func (mt *MapTimings) Add(names []string, elapsed time.Duration) {
+	if len(names) != len(mt.Labels) {
+		panic("MapTimings: wrong number of values in Add")
+	}
+	mt.Timings.Add(strings.Join(names, "."), elapsed)
+}
+
+func (mt *MapTimings) Record(names []string, startTime time.Time) {
+	if len(names) != len(mt.Labels) {
+		panic("MapTimings: wrong number of values in Record")
+	}
+	mt.Timings.Record(strings.Join(names, "."), startTime)
 }

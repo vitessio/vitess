@@ -22,6 +22,18 @@ func TestTimings(t *testing.T) {
 	}
 }
 
+func TestMapTimings(t *testing.T) {
+	clear()
+	mtm := NewMapTimings("maptimings1", []string{"dim1", "dim2"})
+	mtm.Add([]string{"tag1a", "tag1b"}, 500*time.Microsecond)
+	mtm.Add([]string{"tag1a", "tag1b"}, 1*time.Millisecond)
+	mtm.Add([]string{"tag2a", "tag2b"}, 1*time.Millisecond)
+	want := `{"TotalCount":3,"TotalTime":2500000,"Histograms":{"tag1a.tag1b":{"0.0005":1,"0.0010":1,"0.0050":0,"0.0100":0,"0.0500":0,"0.1000":0,"0.5000":0,"1.0000":0,"5.0000":0,"10.0000":0,"Max":0,"Count":2,"Time":1500000},"tag2a.tag2b":{"0.0005":0,"0.0010":1,"0.0050":0,"0.0100":0,"0.0500":0,"0.1000":0,"0.5000":0,"1.0000":0,"5.0000":0,"10.0000":0,"Max":0,"Count":1,"Time":1000000}}}`
+	if mtm.String() != want {
+		t.Errorf("want %s, got %s", want, mtm.String())
+	}
+}
+
 func TestTimingsHook(t *testing.T) {
 	var gotname string
 	var gotv *Timings
