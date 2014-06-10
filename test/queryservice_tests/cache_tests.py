@@ -224,10 +224,4 @@ class TestCache(framework.TestCase):
       self.fail("test_cache2_sqls errors: %d" % error_count)
 
   def _get_vars_table_stats(self, table_stats, table, stats):
-    for item in table_stats:
-      if item["Table"] != table:
-        continue
-      if item["Stats"] != stats:
-        continue
-      return item["Value"]
-    raise KeyError
+    return table_stats[table + "." + stats]

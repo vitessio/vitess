@@ -107,12 +107,12 @@ func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout tim
 	stats.Publish("SchemaReloadTime", stats.DurationFunc(func() time.Duration {
 		return si.reloadTime
 	}))
-	stats.Publish("TableStats", stats.NewMatrixFunc("Table", "Stats", si.getTableStats))
+	_ = stats.NewMapCountersFunc("TableStats", []string{"Table", "Stats"}, si.getTableStats)
 	stats.Publish("TableInvalidations", stats.CountersFunc(si.getTableInvalidations))
-	stats.Publish("QueryCounts", stats.NewMatrixFunc("Table", "Plan", si.getQueryCount))
-	stats.Publish("QueryTimesNs", stats.NewMatrixFunc("Table", "Plan", si.getQueryTime))
-	stats.Publish("QueryRowCounts", stats.NewMatrixFunc("Table", "Plan", si.getQueryRowCount))
-	stats.Publish("QueryErrorCounts", stats.NewMatrixFunc("Table", "Plan", si.getQueryErrorCount))
+	_ = stats.NewMapCountersFunc("QueryCounts", []string{"Table", "Plan"}, si.getQueryCount)
+	_ = stats.NewMapCountersFunc("QueryTimesNs", []string{"Table", "Plan"}, si.getQueryTime)
+	_ = stats.NewMapCountersFunc("QueryRowCounts", []string{"Table", "Plan"}, si.getQueryRowCount)
+	_ = stats.NewMapCountersFunc("QueryErrorCounts", []string{"Table", "Plan"}, si.getQueryErrorCount)
 	// query_plans cannot be shown in sensitive mode
 	if !si.sensitiveMode {
 		http.Handle("/debug/query_plans", si)
@@ -411,18 +411,16 @@ func (si *SchemaInfo) SetReloadTime(reloadTime time.Duration) {
 	si.ticks.SetInterval(reloadTime)
 }
 
-func (si *SchemaInfo) getTableStats() map[string]map[string]int64 {
+func (si *SchemaInfo) getTableStats() map[string]int64 {
 	si.mu.Lock()
 	defer si.mu.Unlock()
-	tstats := make(map[string]map[string]int64)
+	tstats := make(map[string]int64)
 	for k, v := range si.tables {
 		if v.CacheType != schema.CACHE_NONE {
 			hits, absent, misses, _ := v.Stats()
-			tblstats := make(map[string]int64)
-			tblstats["Hits"] = hits
-			tblstats["Absent"] = absent
-			tblstats["Misses"] = misses
-			tstats[k] = tblstats
+			tstats[k+".Hits"] = hits
+			tstats[k+".Absent"] = absent
+			tstats[k+".Misses"] = misses
 		}
 	}
 	return tstats
@@ -441,7 +439,7 @@ func (si *SchemaInfo) getTableInvalidations() map[string]int64 {
 	return tstats
 }
 
-func (si *SchemaInfo) getQueryCount() map[string]map[string]int64 {
+func (si *SchemaInfo) getQueryCount() map[string]int64 {
 	f := func(plan *ExecPlan) int64 {
 		queryCount, _, _, _ := plan.Stats()
 		return queryCount
@@ -449,7 +447,7 @@ func (si *SchemaInfo) getQueryCount() map[string]map[string]int64 {
 	return si.getQueryStats(f)
 }
 
-func (si *SchemaInfo) getQueryTime() map[string]map[string]int64 {
+func (si *SchemaInfo) getQueryTime() map[string]int64 {
 	f := func(plan *ExecPlan) int64 {
 		_, time, _, _ := plan.Stats()
 		return int64(time)
@@ -457,7 +455,7 @@ func (si *SchemaInfo) getQueryTime() map[string]map[string]int64 {
 	return si.getQueryStats(f)
 }
 
-func (si *SchemaInfo) getQueryRowCount() map[string]map[string]int64 {
+func (si *SchemaInfo) getQueryRowCount() map[string]int64 {
 	f := func(plan *ExecPlan) int64 {
 		_, _, rowCount, _ := plan.Stats()
 		return rowCount
@@ -465,7 +463,7 @@ func (si *SchemaInfo) getQueryRowCount() map[string]map[string]int64 {
 	return si.getQueryStats(f)
 }
 
-func (si *SchemaInfo) getQueryErrorCount() map[string]map[string]int64 {
+func (si *SchemaInfo) getQueryErrorCount() map[string]int64 {
 	f := func(plan *ExecPlan) int64 {
 		_, _, _, errorCount := plan.Stats()
 		return errorCount
@@ -475,9 +473,9 @@ func (si *SchemaInfo) getQueryErrorCount() map[string]map[string]int64 {
 
 type queryStatsFunc func(*ExecPlan) int64
 
-func (si *SchemaInfo) getQueryStats(f queryStatsFunc) map[string]map[string]int64 {
+func (si *SchemaInfo) getQueryStats(f queryStatsFunc) map[string]int64 {
 	keys := si.queries.Keys()
-	qstats := make(map[string]map[string]int64)
+	qstats := make(map[string]int64)
 	for _, v := range keys {
 		if plan := si.getQuery(v); plan != nil {
 			table := plan.TableName
@@ -486,12 +484,7 @@ func (si *SchemaInfo) getQueryStats(f queryStatsFunc) map[string]map[string]int6
 			}
 			planType := plan.PlanId.String()
 			data := f(plan)
-			queryStats, ok := qstats[table]
-			if !ok {
-				queryStats = make(map[string]int64)
-				qstats[table] = queryStats
-			}
-			queryStats[planType] += data
+			qstats[table+"."+planType] += data
 		}
 	}
 	return qstats
