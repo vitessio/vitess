@@ -21,6 +21,7 @@ type Timings struct {
 	histograms map[string]*Histogram
 }
 
+// NewTimings creates a new Timings object, and publishes it if name is set.
 func NewTimings(name string) *Timings {
 	t := &Timings{histograms: make(map[string]*Histogram)}
 	if name != "" {
@@ -29,6 +30,7 @@ func NewTimings(name string) *Timings {
 	return t
 }
 
+// Add will add a new value to the named histogram.
 func (t *Timings) Add(name string, elapsed time.Duration) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -50,6 +52,7 @@ func (t *Timings) Record(name string, startTime time.Time) {
 	t.Add(name, time.Now().Sub(startTime))
 }
 
+// String is for expvar.
 func (t *Timings) String() string {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -70,6 +73,7 @@ func (t *Timings) String() string {
 	return string(data)
 }
 
+// Histograms returns a map pointing at the histograms.
 func (t *Timings) Histograms() (h map[string]*Histogram) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -80,18 +84,21 @@ func (t *Timings) Histograms() (h map[string]*Histogram) {
 	return
 }
 
+// Count returns the total count for all values.
 func (t *Timings) Count() int64 {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.totalCount
 }
 
+// Time returns the total time elapsed for all values.
 func (t *Timings) Time() int64 {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.totalTime
 }
 
+// Counts returns the total count for each value.
 func (t *Timings) Counts() map[string]int64 {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -124,6 +131,7 @@ type MapTimings struct {
 	Labels []string
 }
 
+// NewMapTimings creates a new MapTimings object.
 func NewMapTimings(name string, labels []string) *MapTimings {
 	t := &MapTimings{
 		Timings: Timings{histograms: make(map[string]*Histogram)},
@@ -135,6 +143,7 @@ func NewMapTimings(name string, labels []string) *MapTimings {
 	return t
 }
 
+// Add will add a new value to the named histogram.
 func (mt *MapTimings) Add(names []string, elapsed time.Duration) {
 	if len(names) != len(mt.Labels) {
 		panic("MapTimings: wrong number of values in Add")
@@ -142,6 +151,8 @@ func (mt *MapTimings) Add(names []string, elapsed time.Duration) {
 	mt.Timings.Add(strings.Join(names, "."), elapsed)
 }
 
+// Record is a convenience function that records completion
+// timing data based on the provided start time of an event.
 func (mt *MapTimings) Record(names []string, startTime time.Time) {
 	if len(names) != len(mt.Labels) {
 		panic("MapTimings: wrong number of values in Record")

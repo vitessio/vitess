@@ -19,6 +19,7 @@ type Counters struct {
 	counts map[string]int64
 }
 
+// NewCounters create a new Counters instance. If name is set, all publishes it.
 func NewCounters(name string) *Counters {
 	c := &Counters{counts: make(map[string]int64)}
 	if name != "" {
@@ -27,24 +28,28 @@ func NewCounters(name string) *Counters {
 	return c
 }
 
+// String is used by expvar.
 func (c *Counters) String() string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return counterToString(c.counts)
 }
 
+// Add adds a value to a named counter.
 func (c *Counters) Add(name string, value int64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.counts[name] += value
 }
 
+// Set sets the value of a named counter.
 func (c *Counters) Set(name string, value int64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.counts[name] = value
 }
 
+// Counts returns a copy of the Counters' map.
 func (c *Counters) Counts() map[string]int64 {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -60,10 +65,12 @@ func (c *Counters) Counts() map[string]int64 {
 // a map of int64 as an expvar.
 type CountersFunc func() map[string]int64
 
+// Counts returns a copy of the Counters' map.
 func (f CountersFunc) Counts() map[string]int64 {
 	return f()
 }
 
+// String is used by expvar.
 func (f CountersFunc) String() string {
 	m := f()
 	if m == nil {
@@ -95,6 +102,8 @@ type MapCounters struct {
 	Labels []string
 }
 
+// NewMapCounters creates a new MapCounters instance, and publishes it
+// if name is set.
 func NewMapCounters(name string, labels []string) *MapCounters {
 	t := &MapCounters{
 		Counters: Counters{counts: make(map[string]int64)},
@@ -106,6 +115,8 @@ func NewMapCounters(name string, labels []string) *MapCounters {
 	return t
 }
 
+// Add adds a value to a named counter. len(names) must be equal to
+// len(Labels)
 func (mc *MapCounters) Add(names []string, value int64) {
 	if len(names) != len(mc.Labels) {
 		panic("MapCounters: wrong number of values in Add")
@@ -113,6 +124,8 @@ func (mc *MapCounters) Add(names []string, value int64) {
 	mc.Counters.Add(strings.Join(names, "."), value)
 }
 
+// Set sets the value of a named counter. len(names) must be equal to
+// len(Labels)
 func (mc *MapCounters) Set(names []string, value int64) {
 	if len(names) != len(mc.Labels) {
 		panic("MapCounters: wrong number of values in Set")
