@@ -61,7 +61,7 @@ class Tablet(object):
     self.zk_tablet_path = '/zk/test_%s/vt/tablets/%010d' % (self.cell, self.tablet_uid)
     self.zk_pid = self.zk_tablet_path + '/pid'
 
-  def mysqlctl(self, cmd, extra_my_cnf=None, with_ports=False):
+  def mysqlctl(self, cmd, extra_my_cnf=None, with_ports=False, verbose=False):
     all_extra_my_cnf = []
     if environment.mysql_flavor == "GoogleMysql":
       # we have to manually enable hierarchical replication to support groupid
@@ -78,7 +78,7 @@ class Tablet(object):
     if with_ports:
       args.extend(['-port', str(self.port),
                    '-mysql_port', str(self.mysql_port)])
-    if utils.options.verbose == 2:
+    if verbose:
       args.append('-alsologtostderr')
     args.extend(cmd)
     return utils.run_bg(args, env=env)
