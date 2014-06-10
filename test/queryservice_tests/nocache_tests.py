@@ -471,13 +471,7 @@ class TestNocache(framework.TestCase):
       self.env.conn.rollback()
 
   def _get_vars_query_stats(self, query_stats, table, plan):
-    for stat in query_stats:
-      if stat["Table"] != table:
-        continue
-      if stat["Plan"] != plan:
-        continue
-      return stat["Value"]
-    raise KeyError
+    return query_stats[table + "." + plan]
 
   def _verify_query_stats(self, query_stats, query, table, plan, count, rows, errors):
     for stat in query_stats:

@@ -236,6 +236,9 @@ index by_msg (msg)
       dest_conn = self._vtdb_conn(db_type, keyspace=destination_ks)
       self.assertEqual(dest_conn.db_params['keyspace'], destination_ks)
 
+  def _check_stats(self):
+    pass
+
   def test_vertical_split(self):
     utils.run_vtctl(['CreateKeyspace', 'source_keyspace'])
     utils.run_vtctl(['CreateKeyspace',
@@ -414,6 +417,9 @@ index by_msg (msg)
 
     # check the binlog player is gone now
     destination_master.wait_for_binlog_player_count(0)
+
+    # optional method to check the stats are correct
+    self._check_stats()
 
     # kill everything
     tablet.kill_tablets([source_master, source_replica, source_rdonly,

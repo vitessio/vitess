@@ -193,7 +193,7 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(cell, keyspace string) (*to
 	server.counts.Add(queryCategory, 1)
 
 	// find the entry in the cache, add it if not there
-	key := cell + ":" + keyspace
+	key := cell + "." + keyspace
 	server.mutex.Lock()
 	entry, ok := server.srvKeyspaceCache[key]
 	if !ok {
@@ -240,7 +240,7 @@ func (server *ResilientSrvTopoServer) GetEndPoints(cell, keyspace, shard string,
 	server.counts.Add(queryCategory, 1)
 
 	// find the entry in the cache, add it if not there
-	key := cell + ":" + keyspace + ":" + shard + ":" + string(tabletType)
+	key := cell + "." + keyspace + "." + shard + "." + string(tabletType)
 	server.mutex.Lock()
 	entry, ok := server.endPointsCache[key]
 	if !ok {
@@ -411,8 +411,8 @@ func (skcsl SrvKeyspaceCacheStatusList) Len() int {
 
 // Less is part of sort.Interface
 func (skcsl SrvKeyspaceCacheStatusList) Less(i, j int) bool {
-	return skcsl[i].Cell+":"+skcsl[i].Keyspace <
-		skcsl[j].Cell+":"+skcsl[j].Keyspace
+	return skcsl[i].Cell+"."+skcsl[i].Keyspace <
+		skcsl[j].Cell+"."+skcsl[j].Keyspace
 }
 
 // Swap is part of sort.Interface
@@ -464,8 +464,8 @@ func (epcsl EndPointsCacheStatusList) Len() int {
 
 // Less is part of sort.Interface
 func (epcsl EndPointsCacheStatusList) Less(i, j int) bool {
-	return epcsl[i].Cell+":"+epcsl[i].Keyspace+":"+epcsl[i].Shard+":"+string(epcsl[i].TabletType) <
-		epcsl[j].Cell+":"+epcsl[j].Keyspace+":"+epcsl[j].Shard+":"+string(epcsl[j].TabletType)
+	return epcsl[i].Cell+"."+epcsl[i].Keyspace+"."+epcsl[i].Shard+"."+string(epcsl[i].TabletType) <
+		epcsl[j].Cell+"."+epcsl[j].Keyspace+"."+epcsl[j].Shard+"."+string(epcsl[j].TabletType)
 }
 
 // Swap is part of sort.Interface

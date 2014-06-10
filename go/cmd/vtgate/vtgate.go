@@ -37,8 +37,9 @@ func main() {
 
 	resilientSrvTopoServer = vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServerCounts")
 
-	stats.Publish("EndpointCount", stats.CountersFunc(resilientSrvTopoServer.HealthyEndpointCount))
-	stats.Publish("DegradedEndpointCount", stats.CountersFunc(resilientSrvTopoServer.DegradedEndpointCount))
+	labels := []string{"Cell", "Keyspace", "Shard", "DbType"}
+	_ = stats.NewMapCountersFunc("EndpointCount", labels, resilientSrvTopoServer.HealthyEndpointCount)
+	_ = stats.NewMapCountersFunc("DegradedEndpointCount", labels, resilientSrvTopoServer.DegradedEndpointCount)
 
 	topoReader = NewTopoReader(resilientSrvTopoServer)
 	topo.RegisterTopoReader(topoReader)
