@@ -7,6 +7,7 @@ package stats
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"sync"
 )
 
@@ -85,4 +86,59 @@ func counterToString(m map[string]int64) string {
 	}
 	fmt.Fprintf(b, "}")
 	return b.String()
+}
+
+// MapCounters is a Counters implementation where names of categories
+// are compound names made with joining multiple strings with '.'.
+type MapCounters struct {
+	Counters
+	Labels []string
+}
+
+func NewMapCounters(name string, labels []string) *MapCounters {
+	t := &MapCounters{
+		Counters: Counters{counts: make(map[string]int64)},
+		Labels:   labels,
+	}
+	if name != "" {
+		Publish(name, t)
+	}
+	return t
+}
+
+func (mc *MapCounters) Add(names []string, value int64) {
+	if len(names) != len(mc.Labels) {
+		panic("MapCounters: wrong number of values in Add")
+	}
+	mc.Counters.Add(strings.Join(names, "."), value)
+}
+
+func (mc *MapCounters) Set(names []string, value int64) {
+	if len(names) != len(mc.Labels) {
+		panic("MapCounters: wrong number of values in Set")
+	}
+	mc.Counters.Set(strings.Join(names, "."), value)
+}
+
+// MapCountersFunc is a CountersFunc implementation where names of categories
+// are compound names made with joining multiple strings with '.'.
+// Since the map is returned by the function, we assume it's in the rigth
+// format (meaning each key is of the form 'aaa.bbb.ccc' with as many elements
+// as there are in Labels).
+type MapCountersFunc struct {
+	CountersFunc
+	Labels []string
+}
+
+// NewMapCountersFunc creates a new MapCountersFunc mapping to the provided
+// function.
+func NewMapCountersFunc(name string, labels []string, f CountersFunc) *MapCountersFunc {
+	t := &MapCountersFunc{
+		CountersFunc: f,
+		Labels:       labels,
+	}
+	if name != "" {
+		Publish(name, t)
+	}
+	return t
 }
