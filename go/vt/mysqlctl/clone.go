@@ -431,7 +431,7 @@ func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest, fe
 	if err != nil {
 		return err
 	}
-	if err := mysqld.executeSuperQueryList(cmdList); err != nil {
+	if err := mysqld.ExecuteSuperQueryList(cmdList); err != nil {
 		return err
 	}
 

@@ -125,7 +125,7 @@ func (mysqld *Mysqld) WaitForSlaveStart(slaveStartDeadline int) (err error) {
 }
 
 func (mysqld *Mysqld) StartSlave(hookExtraEnv map[string]string) error {
-	if err := mysqld.executeSuperQuery("START SLAVE"); err != nil {
+	if err := mysqld.ExecuteSuperQuery("START SLAVE"); err != nil {
 		return err
 	}
 
@@ -141,7 +141,7 @@ func (mysqld *Mysqld) StopSlave(hookExtraEnv map[string]string) error {
 		return err
 	}
 
-	return mysqld.executeSuperQuery("STOP SLAVE")
+	return mysqld.ExecuteSuperQuery("STOP SLAVE")
 }
 
 func (mysqld *Mysqld) GetMasterAddr() (string, error) {
@@ -189,7 +189,7 @@ func (mysqld *Mysqld) SetReadOnly(on bool) error {
 	} else {
 		query += "OFF"
 	}
-	return mysqld.executeSuperQuery(query)
+	return mysqld.ExecuteSuperQuery(query)
 }
 
 var (
@@ -492,8 +492,8 @@ var showSlaveStatusColumnNames = []string{
 	"Connect_Using_Group_ID",
 }
 
-func (mysqld *Mysqld) executeSuperQuery(query string) error {
-	return mysqld.executeSuperQueryList([]string{query})
+func (mysqld *Mysqld) ExecuteSuperQuery(query string) error {
+	return mysqld.ExecuteSuperQueryList([]string{query})
 }
 
 // FIXME(msolomon) should there be a query lock so we only
@@ -524,7 +524,7 @@ func redactMasterPassword(input string) string {
 	return input[:i+len(masterPasswordStart)] + strings.Repeat("*", j) + input[i+len(masterPasswordStart)+j:]
 }
 
-func (mysqld *Mysqld) executeSuperQueryList(queryList []string) error {
+func (mysqld *Mysqld) ExecuteSuperQueryList(queryList []string) error {
 	conn, connErr := mysqld.createDbaConnection()
 	if connErr != nil {
 		return connErr
@@ -558,7 +558,7 @@ func (mysqld *Mysqld) BreakSlaves() error {
 		"SET sql_log_bin = 1",
 		insertSql}
 
-	return mysqld.executeSuperQueryList(cmds)
+	return mysqld.ExecuteSuperQueryList(cmds)
 }
 
 // +------+---------+---------------------+------+-------------+------+----------------------------------------------------------------+------------------+
