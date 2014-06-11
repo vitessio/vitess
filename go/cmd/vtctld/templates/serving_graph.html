@@ -46,45 +46,48 @@
   </style>
 </head>
 <body>
-  {{with .Error}}
-    <h1>{{.}}</h1>
-  {{end}}
-  {{with .ServingGraph}}
-    <h1>Serving Graph for {{.Cell}}</h1>
+  {{with .Errors}}
+    <h1>Errors</h1>
     <ul>
-    {{range $keyspace, $shards := .Keyspaces}}
-      <li><a href="#keyspace_{{$keyspace}}">{{$keyspace}}</a></li>
+    {{ range $i, $error := . }}
+      <li>{{$error}}</li>
     {{end}}
     </ul>
-    {{ $cell := .Cell}}
-    {{range $keyspace, $shards := .Keyspaces}}
-      <h2><a name="keyspace_{{$keyspace}}"></a>{{srv_keyspace $cell $keyspace}}</h2>
-      <table class="keyspace">
-	<thead>
-	  {{ range $i, $shard := $shards.ShardNodes }}
-	  {{if intequal $i 0}}<td class="legend">type</td>{{end}}
-	  <td>{{srv_shard $cell $keyspace $shard.Name}}</td>
-	  {{end}}
-	</thead>
-	<tbody>
-	  {{range $processedType := $shards.TabletTypes}}
+  {{end}}
+  <h1>Serving Graph for {{.Cell}}</h1>
+  <ul>
+  {{range $keyspace, $shards := .Keyspaces}}
+    <li><a href="#keyspace_{{$keyspace}}">{{$keyspace}}</a></li>
+  {{end}}
+  </ul>
+  {{ $cell := .Cell}}
+  {{range $keyspace, $shards := .Keyspaces}}
+    <h2><a name="keyspace_{{$keyspace}}"></a>{{srv_keyspace $cell $keyspace}}</h2>
+    <table class="keyspace">
+      <thead>
+        {{ range $i, $shard := $shards.ShardNodes }}
+	{{if intequal $i 0}}<td class="legend">type</td>{{end}}
+	<td>{{srv_shard $cell $keyspace $shard.Name}}</td>
+	{{end}}
+      </thead>
+      <tbody>
+	{{range $processedType := $shards.TabletTypes}}
 
-	  <tr>
-	    {{range $i, $shard := $shards.ShardNodes}}
-	    {{if intequal $i 0}}<td class="legend">{{$processedType}}</td>{{end}}
-	    <td>
-	      <ul class="tablet-list">
-		{{range index $shard.TabletNodes $processedType}}
-                  <li title="{{.Alias}}">{{tablet .Alias .ShortName}}</li>
-		{{end}}
-	      </ul>
-	    </td>
-	    {{end}}
-	  </tr>
+	<tr>
+	  {{range $i, $shard := $shards.ShardNodes}}
+	  {{if intequal $i 0}}<td class="legend">{{$processedType}}</td>{{end}}
+	  <td>
+	    <ul class="tablet-list">
+	      {{range index $shard.TabletNodes $processedType}}
+              <li title="{{.Alias}}">{{tablet .Alias .ShortName}}</li>
+	      {{end}}
+	    </ul>
+	  </td>
 	  {{end}}
-	</tbody>
-      </table>
-    {{end}}
+	</tr>
+	{{end}}
+      </tbody>
+    </table>
   {{end}}
 
 </body>

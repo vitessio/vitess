@@ -318,11 +318,6 @@ type DbTopologyResult struct {
 	Error    string
 }
 
-type ServingGraphResult struct {
-	ServingGraph *wrangler.ServingGraph
-	Error        string
-}
-
 type IndexContent struct {
 	// maps a name to a linked URL
 	ToplevelLinks map[string]string
@@ -556,14 +551,8 @@ func main() {
 			return
 		}
 
-		result := ServingGraphResult{}
-		servingGraph, err := wr.ServingGraph(cell)
-		if err != nil {
-			result.Error = err.Error()
-		} else {
-			result.ServingGraph = servingGraph
-		}
-		templateLoader.ServeTemplate("serving_graph.html", result, w, r)
+		servingGraph := wr.ServingGraph(cell)
+		templateLoader.ServeTemplate("serving_graph.html", servingGraph, w, r)
 	})
 
 	// redirects for explorers
