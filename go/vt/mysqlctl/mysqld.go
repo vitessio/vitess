@@ -310,7 +310,7 @@ func (mt *Mysqld) Init(mysqlWaitTime time.Duration) error {
 		sqlCmds = append(sqlCmds, cmd)
 	}
 
-	return mt.executeSuperQueryList(sqlCmds)
+	return mt.ExecuteSuperQueryList(sqlCmds)
 }
 
 func (mt *Mysqld) createDirs() error {

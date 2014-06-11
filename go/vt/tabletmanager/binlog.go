@@ -153,7 +153,7 @@ func (bpc *BinlogPlayerController) Loop() {
 }
 
 func (bpc *BinlogPlayerController) DisableSuperToSetTimestamp() {
-	if err := bpc.mysqld.ExecuteMysqlCommand("set @@global.super_to_set_timestamp = 0"); err != nil {
+	if err := bpc.mysqld.ExecuteSuperQuery("SET @@global.super_to_set_timestamp = 0"); err != nil {
 		log.Warningf("Cannot set super_to_set_timestamp=0: %v", err)
 	} else {
 		log.Info("Successfully set super_to_set_timestamp=0")
@@ -358,7 +358,7 @@ func (blm *BinlogPlayerMap) RefreshMap(tablet topo.Tablet, keyspaceInfo *topo.Ke
 // After this is called, the clients will need super privileges
 // to set timestamp
 func (blm *BinlogPlayerMap) enableSuperToSetTimestamp() {
-	if err := blm.mysqld.ExecuteMysqlCommand("set @@global.super_to_set_timestamp = 1"); err != nil {
+	if err := blm.mysqld.ExecuteSuperQuery("SET @@global.super_to_set_timestamp = 1"); err != nil {
 		log.Warningf("Cannot set super_to_set_timestamp=1: %v", err)
 	} else {
 		log.Info("Successfully set super_to_set_timestamp=1")

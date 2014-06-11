@@ -228,7 +228,7 @@ func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool, hookE
 	}
 
 	log.Infof("Flush tables")
-	if err = mysqld.executeSuperQuery("FLUSH TABLES WITH READ LOCK"); err != nil {
+	if err = mysqld.ExecuteSuperQuery("FLUSH TABLES WITH READ LOCK"); err != nil {
 		return
 	}
 	return
@@ -236,7 +236,7 @@ func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool, hookE
 
 func (mysqld *Mysqld) restoreAfterSnapshot(slaveStartRequired, readOnly bool, hookExtraEnv map[string]string) (err error) {
 	// Try to fix mysqld regardless of snapshot success..
-	if err = mysqld.executeSuperQuery("UNLOCK TABLES"); err != nil {
+	if err = mysqld.ExecuteSuperQuery("UNLOCK TABLES"); err != nil {
 		return
 	}
 
@@ -409,7 +409,7 @@ func (mysqld *Mysqld) dumpTableSplit(td proto.TableDefinition, dbName, keyName s
 	if err != nil {
 		return nil, err
 	}
-	if err := mysqld.executeSuperQuery(sio); err != nil {
+	if err := mysqld.ExecuteSuperQuery(sio); err != nil {
 		return nil, err
 	}
 
@@ -480,7 +480,7 @@ func (mysqld *Mysqld) dumpTableFull(td proto.TableDefinition, dbName, mainCloneS
 	if err != nil {
 		return nil, err
 	}
-	if err := mysqld.executeSuperQuery(sio); err != nil {
+	if err := mysqld.ExecuteSuperQuery(sio); err != nil {
 		return nil, err
 	}
 
@@ -917,7 +917,7 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.Key
 		}
 	}
 	createDbCmds = append(createDbCmds, createViewCmds...)
-	if err = mysqld.executeSuperQueryList(createDbCmds); err != nil {
+	if err = mysqld.ExecuteSuperQueryList(createDbCmds); err != nil {
 		return
 	}
 
@@ -1009,7 +1009,7 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.Key
 
 				// load the data in
 				queries := buildQueryList(destinationDbName, loadStatement, writeBinLogs)
-				e = mysqld.executeSuperQueryList(queries)
+				e = mysqld.ExecuteSuperQueryList(queries)
 				if e != nil {
 					mrc.RecordError(e)
 					return
@@ -1020,7 +1020,7 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.Key
 				remainingInserts := jobCount[lsf.tableName()].Add(-1)
 				if remainingInserts == 0 && postSql[lsf.tableName()] != "" {
 					queries = buildQueryList(destinationDbName, postSql[lsf.tableName()], writeBinLogs)
-					e = mysqld.executeSuperQueryList(queries)
+					e = mysqld.ExecuteSuperQueryList(queries)
 					if e != nil {
 						mrc.RecordError(e)
 						return
@@ -1045,7 +1045,7 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.Key
 		for manifestIndex, manifest := range manifests {
 			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(manifestIndex, manifest.Source.MasterState.ReplicationPosition.MasterLogGroupId, time.Now().Unix()))
 		}
-		if err = mysqld.executeSuperQueryList(queries); err != nil {
+		if err = mysqld.ExecuteSuperQueryList(queries); err != nil {
 			return err
 		}
 	}
