@@ -1,45 +1,38 @@
 #!/bin/bash
 
-# Copyright 2013, Google Inc. All rights reserved.
+# Copyright 2014, Google Inc. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-if [ ! -f bootstrap.sh ]; then
-  echo "[ERROR] bootstrap.sh must be run from its current directory" 1>&2
-  exit 1
-fi
-
-dir=${PWD}
-
-cd ..
-. ./dev.env
-
 # Check for prerequisites:
-echo [ INFO ] Checking for prerequisites...
-[[ $(sbt --version) != sbt* ]] && echo [ERROR] Install sbt 1>&2 && exit 1
-[[ $(mvn --version) != *Maven* ]] && echo [ERROR] Install maven 1>&2 && exit 1
-[[ $(git --version) != git* ]] && echo [ERROR] Install git 1>&2 && exit 1
+echo "[INFO] Checking for prerequisites..."
+[ -z "$VTTOP" ] && echo "[ERROR] source dev.env first, VTTOP is empty" 1>&2 && exit 1
+[ -z "$VTROOT" ] && echo "[ERROR] source dev.env first, VTROOT is empty" 1>&2 && exit 1
+[ -z "$VTDATAROOT" ] && echo "[ERROR] source dev.env first, VTDATAROOT is empty" 1>&2 && exit 1
+! sbt --version && echo "[ERROR] Install sbt" 1>&2 && exit 1
+! mvn --version && echo "[ERROR] Install maven" 1>&2 && exit 1
+! git --version && echo "[ERROR] Install git" 1>&2 && exit 1
 
-acolyte_dist=$VTROOT/dist/acolyte-core
-acolyte=$VTTOP/third_party/acolyte
-vtocc_jars="$(find ~/.m2/repository/com/github/youtube/vitess/vtocc-jdbc-driver | grep jar)"
-if [ ! -z "$vtocc_jars" ]; then
-  echo "[INFO] Skipping vtocc-jdbc-driver build, jars found: $vtocc_jars"
+ACOLYTE_DIST="$VTROOT/dist/java/org/eu/acolyte/acolyte-core/1.0.13-PATCHED"
+ACOLYTE="$VTTOP/third_party/acolyte"
+VTOCC_JARS="$(find ~/.m2/repository/com/github/youtube/vitess/vtocc-jdbc-driver | grep .jar)"
+if [ ! -z "$VTOCC_JARS" ]; then
+  echo "[INFO] Skipping vtocc-jdbc-driver build, jars found: $VTOCC_JARS"
 else
   set -e
   echo "[INFO] Getting and compiling acolyte-core"
-  rm -rf $acolyte
-  git clone https://github.com/cchantep/acolyte.git $acolyte
-  cd $acolyte
+  rm -rf "$ACOLYTE"
+  git clone https://github.com/cchantep/acolyte.git "$ACOLYTE"
+  cd "$ACOLYTE"
   git checkout tags/1.0.13
   git apply ../acolyte.patch --ignore-whitespace
   sbt publish
-  mkdir -p $acolyte_dist
-  mv $acolyte/core/target/*.jar $acolyte_dist
+  mkdir -p "$ACOLYTE_DIST"
+  mv "$ACOLYTE"/core/target/acolyte-core-* "$ACOLYTE_DIST"
   echo "[INFO] acolyte-core is successfully installed"
   echo "[INFO] Rebuilding and installing vtocc-jdbc-driver"
-  cd $dir/vtocc-jdbc-driver
-  mvn dependency:copy-dependencies install
+  cd "$VTTOP/java"
+  mvn install
   echo "[INFO] vtocc-jdbc-driver is successfully installed"
   set +e
 fi
