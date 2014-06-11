@@ -144,24 +144,35 @@ func NewQueryEngine(config Config) *QueryEngine {
 func (qe *QueryEngine) Open(dbconfig *dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules, mysqld *mysqlctl.Mysqld) {
 	connFactory := GenericConnectionCreator(&dbconfig.ConnectionParams)
 
-	if dbconfig.EnableRowcache {
-		qe.cachePool.Open()
-		log.Infof("rowcache is enabled")
-		if dbconfig.EnableInvalidator {
-			qe.invalidator.Open(dbconfig.DbName, mysqld)
-		}
-	} else {
-		log.Infof("rowcache is not enabled")
-	}
-	start := time.Now()
 	strictMode := false
 	if qe.strictMode.Get() != 0 {
 		strictMode = true
 	}
+	if !strictMode && dbconfig.EnableRowcache {
+		panic(NewTabletError(FATAL, "Rowcache cannot be enabled when queryserver-config-strict-mode is false"))
+	}
+	if dbconfig.EnableRowcache {
+		qe.cachePool.Open()
+		log.Infof("rowcache is enabled")
+	} else {
+		// Invalidator should not be enabled if rowcache is not enabled.
+		dbconfig.EnableInvalidator = false
+		log.Infof("rowcache is not enabled")
+	}
+
+	start := time.Now()
 	// schemaInfo depends on cachePool. Every table that has a rowcache
 	// points to the cachePool.
 	qe.schemaInfo.Open(connFactory, schemaOverrides, qe.cachePool, qrs, strictMode)
 	log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))
+
+	// Start the invalidator only after schema is loaded.
+	// This will allow qe to find the table info
+	// for the invalidation events that will start coming
+	// immediately.
+	if dbconfig.EnableInvalidator {
+		qe.invalidator.Open(dbconfig.DbName, mysqld)
+	}
 	qe.connPool.Open(connFactory)
 	qe.streamConnPool.Open(connFactory)
 	qe.txPool.Open(connFactory)
