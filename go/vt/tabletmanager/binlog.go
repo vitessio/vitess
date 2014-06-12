@@ -118,10 +118,10 @@ func (bpc *BinlogPlayerController) StartUntil(groupId int64) error {
 // reset will clear the internal data structures
 func (bpc *BinlogPlayerController) reset() {
 	bpc.playerMutex.Lock()
+	defer bpc.playerMutex.Unlock()
 	bpc.interrupted = nil
 	bpc.done = nil
 	bpc.sourceTablet = topo.TabletAlias{}
-	bpc.playerMutex.Unlock()
 }
 
 // WaitForStop will wait until the player is stopped. Use this after StartUntil.
