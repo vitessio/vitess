@@ -49,7 +49,7 @@
   {{with .Errors}}
     <h1>Errors</h1>
     <ul>
-    {{ range $i, $error := . }}
+    {{range $i, $error := . }}
       <li>{{$error}}</li>
     {{end}}
     </ul>
@@ -63,16 +63,25 @@
   {{ $cell := .Cell}}
   {{range $keyspace, $shards := .Keyspaces}}
     <h2><a name="keyspace_{{$keyspace}}"></a>{{srv_keyspace $cell $keyspace}}</h2>
+    <ul>
+    {{range $servedType, $servedFrom := $shards.ServedFrom}}
+      <li><i>Serving {{$servedType}} from <a href="#keyspace_{{$servedFrom}}">{{$servedFrom}}</a></i></li>
+    {{end}}
+    </ul>
     <table class="keyspace">
       <thead>
-        {{ range $i, $shard := $shards.ShardNodes }}
-	{{if intequal $i 0}}<td class="legend">type</td>{{end}}
-	<td>{{srv_shard $cell $keyspace $shard.Name}}</td>
+        {{range $i, $shard := $shards.ShardNodes}}
+  	  {{if intequal $i 0}}<td class="legend">type</td>{{end}}
+	  <td>
+            {{srv_shard $cell $keyspace $shard.Name}}<br/>
+            {{range $j, $servedType := $shard.ServedTypes}}
+              <i>{{$servedType}}</i><br/>
+            {{end}}
+          </td>
 	{{end}}
       </thead>
       <tbody>
 	{{range $processedType := $shards.TabletTypes}}
-
 	<tr>
 	  {{range $i, $shard := $shards.ShardNodes}}
 	  {{if intequal $i 0}}<td class="legend">{{$processedType}}</td>{{end}}

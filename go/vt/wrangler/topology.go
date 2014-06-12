@@ -5,8 +5,10 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -55,6 +57,7 @@ type TabletNodesByType map[topo.TabletType][]*TabletNode
 type ShardNodes struct {
 	Name        string
 	TabletNodes TabletNodesByType
+	ServedTypes []topo.TabletType
 }
 
 type numericShardNodesList []*ShardNodes
@@ -106,11 +109,12 @@ func (rsnl rangeShardNodesList) Swap(i, j int) {
 // KeyspaceNodes represents all tablet nodes in a keyspace.
 type KeyspaceNodes struct {
 	ShardNodes []*ShardNodes // sorted by shard name
+	ServedFrom map[topo.TabletType]string
 }
 
 func newKeyspaceNodes() *KeyspaceNodes {
 	return &KeyspaceNodes{
-		ShardNodes: make([]*ShardNodes, 0),
+		ServedFrom: make(map[topo.TabletType]string),
 	}
 }
 
@@ -225,42 +229,76 @@ func (wr *Wrangler) ServingGraph(cell string) (servingGraph *ServingGraph) {
 		Cell:      cell,
 		Keyspaces: make(map[string]*KeyspaceNodes),
 	}
+	rec := concurrency.AllErrorRecorder{}
 
 	keyspaces, err := wr.ts.GetSrvKeyspaceNames(cell)
 	if err != nil {
-		servingGraph.Errors = append(servingGraph.Errors, fmt.Sprintf("GetSrvKeyspaceNames returned: %v", err))
+		servingGraph.Errors = append(servingGraph.Errors, fmt.Sprintf("GetSrvKeyspaceNames failed: %v", err))
 		return
 	}
+	wg := sync.WaitGroup{}
+	servingTypes := []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY}
 	for _, keyspace := range keyspaces {
-		servingGraph.Keyspaces[keyspace] = newKeyspaceNodes()
-		shards, err := wr.ts.GetShardNames(keyspace)
-		if err != nil {
-			servingGraph.Errors = append(servingGraph.Errors, fmt.Sprintf("GetShardNames(%v) returned: %v", keyspace, err))
-			continue
-		}
-		for _, shard := range shards {
-			sn := &ShardNodes{
-				Name:        shard,
-				TabletNodes: make(TabletNodesByType),
-			}
-			servingGraph.Keyspaces[keyspace].ShardNodes = append(servingGraph.Keyspaces[keyspace].ShardNodes, sn)
-			tabletTypes, err := wr.ts.GetSrvTabletTypesPerShard(cell, keyspace, shard)
+		kn := newKeyspaceNodes()
+		servingGraph.Keyspaces[keyspace] = kn
+		wg.Add(1)
+		go func(keyspace string, kn *KeyspaceNodes) {
+			defer wg.Done()
+
+			ks, err := wr.ts.GetSrvKeyspace(cell, keyspace)
 			if err != nil {
-				servingGraph.Errors = append(servingGraph.Errors, fmt.Sprintf("GetSrvTabletTypesPerShard(%v, %v, %v) returned: %v", cell, keyspace, shard, err))
-				continue
+				rec.RecordError(fmt.Errorf("GetSrvKeyspace(%v, %v) failed: %v", cell, keyspace, err))
+				return
 			}
-			for _, tabletType := range tabletTypes {
-				endPoints, err := wr.ts.GetEndPoints(cell, keyspace, shard, tabletType)
-				if err != nil {
-					servingGraph.Errors = append(servingGraph.Errors, fmt.Sprintf("GetEndPoints(%v, %v, %v, %v) returned: %v", cell, keyspace, shard, tabletType, err))
+			kn.ServedFrom = ks.ServedFrom
+
+			displayedShards := make(map[string]bool)
+			for _, partitionTabletType := range servingTypes {
+				kp, ok := ks.Partitions[partitionTabletType]
+				if !ok {
 					continue
 				}
-				for _, endPoint := range endPoints.Entries {
-					sn.TabletNodes[tabletType] = append(sn.TabletNodes[tabletType], newTabletNodeFromEndPoint(endPoint, cell))
+				for _, srvShard := range kp.Shards {
+					shard := srvShard.ShardName()
+					if displayedShards[shard] {
+						continue
+					}
+					displayedShards[shard] = true
+
+					sn := &ShardNodes{
+						Name:        shard,
+						TabletNodes: make(TabletNodesByType),
+					}
+					for _, st := range servingTypes {
+						if _, ok := ks.Partitions[st]; ok {
+							sn.ServedTypes = append(sn.ServedTypes, st)
+						}
+					}
+					kn.ShardNodes = append(kn.ShardNodes, sn)
+					wg.Add(1)
+					go func(shard string, sn *ShardNodes) {
+						defer wg.Done()
+						tabletTypes, err := wr.ts.GetSrvTabletTypesPerShard(cell, keyspace, shard)
+						if err != nil {
+							rec.RecordError(fmt.Errorf("GetSrvTabletTypesPerShard(%v, %v, %v) failed: %v", cell, keyspace, shard, err))
+							return
+						}
+						for _, tabletType := range tabletTypes {
+							endPoints, err := wr.ts.GetEndPoints(cell, keyspace, shard, tabletType)
+							if err != nil {
+								rec.RecordError(fmt.Errorf("GetEndPoints(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err))
+								continue
+							}
+							for _, endPoint := range endPoints.Entries {
+								sn.TabletNodes[tabletType] = append(sn.TabletNodes[tabletType], newTabletNodeFromEndPoint(endPoint, cell))
+							}
+						}
+					}(shard, sn)
 				}
 			}
-		}
-
+		}(keyspace, kn)
 	}
+	wg.Wait()
+	servingGraph.Errors = rec.ErrorStrings()
 	return
 }
