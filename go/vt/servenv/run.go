@@ -4,25 +4,21 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/proc"
 )
 
 var (
 	onCloseHooks hooks
-
-	// filled in when calling Run or RunSecure
-	ListeningURL url.URL
 )
 
 // Run starts listening for RPC and HTTP requests,
 // and blocks until it the process gets a signal.
 // It may also listen on a secure port, or on a unix socket.
 func Run() {
+	populateListeningURL()
 	onRunHooks.Fire()
 	ServeRPC()
 
@@ -30,23 +26,7 @@ func Run() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	host, err := netutil.FullyQualifiedHostname()
-	if err != nil {
-		host, err = os.Hostname()
-		if err != nil {
-			log.Fatalf("os.Hostname() failed: %v", err)
-		}
-	}
-	ListeningURL = url.URL{
-		Scheme: "http",
-		Host:   fmt.Sprintf("%v:%v", host, *Port),
-		Path:   "/",
-	}
-
 	go http.Serve(l, nil)
-	serveSecurePort()
-	serveSocketFile()
 
 	proc.Wait()
 	l.Close()

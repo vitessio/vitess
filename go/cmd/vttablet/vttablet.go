@@ -27,6 +27,10 @@ var (
 	agent *tabletmanager.ActionAgent
 )
 
+func init() {
+	servenv.RegisterDefaultSecureFlags()
+}
+
 // tabletParamToTabletAlias takes either an old style ZK tablet path or a
 // new style tablet alias as a string, and returns a TabletAlias.
 func tabletParamToTabletAlias(param string) topo.TabletAlias {
