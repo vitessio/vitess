@@ -328,7 +328,13 @@ func (f *fileInfo) Rotate(name string, pos int64) (err error) {
 	f.pos, f.lastPos = pos, 0
 	f.handle, err = os.Open(name)
 	if err != nil {
-		return fmt.Errorf("open error: %v", err)
+		// Sometimes, the new file is not ready yet.
+		// Retry once after a delay.
+		time.Sleep(1 * time.Second)
+		f.handle, err = os.Open(name)
+		if err != nil {
+			return fmt.Errorf("open error: %v", err)
+		}
 	}
 	return nil
 }
