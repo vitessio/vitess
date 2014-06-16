@@ -100,29 +100,6 @@ func TestExitFail(t *testing.T) {
 	}
 }
 
-func TestWarning(t *testing.T) {
-	env := setup("echo WARNING $* 1>&2", 1)
-	defer cleanup(env)
-
-	mbl := &MysqlBinlog{}
-	out, err := mbl.Launch("db", "name", 10)
-	if err != nil {
-		panic(err)
-	}
-	ioutil.ReadAll(out)
-	mbl.Wait()
-	logutil.Flush()
-	warnbytes, err := ioutil.ReadFile(path.Join(os.TempDir(), "binlog.test.WARNING"))
-	if err != nil {
-		t.Error(err)
-	}
-	got := string(warnbytes)
-	want := "WARNING --database=db --start-position=10 name"
-	if !strings.Contains(got, want) {
-		t.Errorf("want '%s' in '%s'", want, got)
-	}
-}
-
 func TestError(t *testing.T) {
 	env := setup("echo ERROR expected error $* 1>&2", 1)
 	defer cleanup(env)
@@ -135,7 +112,7 @@ func TestError(t *testing.T) {
 	ioutil.ReadAll(out)
 	mbl.Wait()
 	logutil.Flush()
-	warnbytes, err := ioutil.ReadFile(path.Join(os.TempDir(), "binlog.test.ERROR"))
+	warnbytes, err := ioutil.ReadFile(path.Join(os.TempDir(), "binlog.test.INFO"))
 	if err != nil {
 		t.Error(err)
 	}

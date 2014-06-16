@@ -1,0 +1,53 @@
+<?xml version="1.0"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0   http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.github.youtube.vitess</groupId>
+    <artifactId>vitess-parent</artifactId>
+    <packaging>pom</packaging>
+    <version>1.0-SNAPSHOT</version>
+    <url>https://github.com/youtube/vitess/</url>
+    <description>Umbrella project for all Java activities for Vitess</description>
+    <inceptionYear>2014</inceptionYear>
+
+    <modules>
+        <module>vtocc-client</module>
+        <module>vtocc-jdbc-driver</module>
+    </modules>
+
+    <organization>
+        <name>YouTube</name>
+        <url>https://www.youtube.com</url>
+    </organization>
+    <developers>
+        <developer>
+            <id>timofeyb</id>
+            <name>Timothy Basanov</name>
+        </developer>
+    </developers>
+
+    <licenses>
+        <license>
+            <name>BSD-style license</name>
+            <url>https://github.com/youtube/vitess/blob/master/LICENSE</url>
+            <distribution>manual</distribution>
+        </license>
+    </licenses>
+    <scm>
+        <connection>scm:git:git@github.com:youtube/vitess.git</connection>
+        <developerConnection>
+            scm:git:git@github.com:youtube/vitess.git
+        </developerConnection>
+        <url>git@github.com:youtube/vitess.git</url>
+    </scm>
+    <issueManagement>
+        <system>GitHub</system>
+        <url>https://github.com/youtube/vitess/issues</url>
+    </issueManagement>
+    <mailingLists>
+        <mailingList>
+            <archive>https://groups.google.com/forum/#!forum/vitess</archive>
+        </mailingList>
+    </mailingLists>
+</project>

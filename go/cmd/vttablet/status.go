@@ -15,7 +15,7 @@ var (
 	tabletTemplate = `
 <style>
   table {
-    width: 70%;
+    width: 100%;
     border-collapse: collapse;
   }
   td, th {
@@ -108,6 +108,7 @@ Binlog player state: {{.State}}</br>
   <tr>
     <th>Index</th>
     <th>SourceShard</th>
+    <th>State</th>
     <th>StopAtGroupId</th>
     <th>LastGroupId</th>
     <th>SecondsBehindMaster</th>
@@ -118,6 +119,14 @@ Binlog player state: {{.State}}</br>
     <tr>
       <td>{{.Index}}</td>
       <td>{{.SourceShard.AsHTML}}</td>
+      <td>{{.State}}
+        {{if eq .State "Running"}}
+          {{if .SourceTablet.IsZero}}
+            (picking source tablet)
+          {{else}}
+            (from {{github_com_youtube_vitess_vtctld_tablet .SourceTablet.String}})
+          {{end}}
+        {{end}}</td>
       <td>{{if .StopAtGroupId}}{{.StopAtGroupId}}{{end}}</td>
       <td>{{.LastGroupId}}</td>
       <td>{{.SecondsBehindMaster}}</td>

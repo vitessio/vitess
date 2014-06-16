@@ -70,6 +70,17 @@ type KeyspacePartition struct {
 	Shards []SrvShard
 }
 
+// HasShard returns true if this KeyspacePartition has the shard with
+// the given name in it.
+func (kp *KeyspacePartition) HasShard(name string) bool {
+	for _, srvShard := range kp.Shards {
+		if srvShard.ShardName() == name {
+			return true
+		}
+	}
+	return false
+}
+
 // A distilled serving copy of keyspace detail stored in the local
 // cell for fast access. Derived from the global keyspace, shards and
 // local details.

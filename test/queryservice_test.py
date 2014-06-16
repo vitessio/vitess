@@ -2,6 +2,7 @@
 
 import logging
 import optparse
+import traceback
 import unittest
 import sys
 
@@ -67,6 +68,9 @@ if __name__ == "__main__":
         if not result.wasSuccessful():
           raise Exception("test failures")
       finally:
-        env.tearDown()
+        try:
+          env.tearDown()
+        except:
+          traceback.print_exc()
   finally:
     utils.remove_tmp_files()

@@ -26,8 +26,8 @@ func TablesFilterFunc(tables []string, sendReply sendTransactionFunc) sendTransa
 			case proto.BL_SET:
 				filtered = append(filtered, statement)
 			case proto.BL_DDL:
-				filtered = append(filtered, statement)
-				matched = true
+				log.Warningf("Not forwarding DDL: %s", string(statement.Sql))
+				continue
 			case proto.BL_DML:
 				tableIndex := bytes.LastIndex(statement.Sql, STREAM_COMMENT)
 				if tableIndex == -1 {
