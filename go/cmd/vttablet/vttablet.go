@@ -28,6 +28,7 @@ var (
 )
 
 func init() {
+	servenv.RegisterDefaultFlags()
 	servenv.RegisterDefaultSecureFlags()
 }
 
@@ -96,5 +97,5 @@ func main() {
 		// to update our state, so closing it in OnClose()
 		topo.CloseServers()
 	})
-	servenv.Run()
+	servenv.RunDefault()
 }

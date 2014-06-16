@@ -16,13 +16,12 @@ var (
 
 // Run starts listening for RPC and HTTP requests,
 // and blocks until it the process gets a signal.
-// It may also listen on a secure port, or on a unix socket.
-func Run() {
+func Run(port int) {
 	populateListeningURL()
 	onRunHooks.Fire()
 	ServeRPC()
 
-	l, err := proc.Listen(fmt.Sprintf("%v", *Port))
+	l, err := proc.Listen(fmt.Sprintf("%v", port))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -30,9 +29,9 @@ func Run() {
 
 	proc.Wait()
 	l.Close()
-	log.Infof("Entering lameduck mode for %v", *LameduckPeriod)
+	log.Infof("Entering lameduck mode for %v", *lameduckPeriod)
 	go onTermHooks.Fire()
-	time.Sleep(*LameduckPeriod)
+	time.Sleep(*lameduckPeriod)
 	log.Info("Shutting down")
 	Close()
 }

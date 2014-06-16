@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	// The flags used when calling RegisterDefaultSocketFileFlags.
+	// The flags used when calling RegisterDefaultSecureFlags.
 	SecurePort *int
 	CertFile   *string
 	KeyFile    *string

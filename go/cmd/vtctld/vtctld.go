@@ -26,6 +26,10 @@ var (
 	debug       = flag.Bool("debug", false, "recompile templates for every request")
 )
 
+func init() {
+	servenv.RegisterDefaultFlags()
+}
+
 // FHtmlize writes data to w as debug HTML (using definition lists).
 func FHtmlize(w io.Writer, data interface{}) {
 	v := reflect.Indirect(reflect.ValueOf(data))
@@ -690,5 +694,5 @@ func main() {
 		}
 		http.Redirect(w, r, target, http.StatusFound)
 	})
-	servenv.Run()
+	servenv.RunDefault()
 }

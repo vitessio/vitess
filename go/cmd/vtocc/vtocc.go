@@ -25,6 +25,10 @@ var (
 
 var schemaOverrides []tabletserver.SchemaOverride
 
+func init() {
+	servenv.RegisterDefaultFlags()
+}
+
 func main() {
 	dbconfigs.RegisterFlags()
 	flag.Parse()
@@ -62,7 +66,7 @@ func main() {
 	servenv.OnTerm(func() {
 		tabletserver.DisallowQueries()
 	})
-	servenv.Run()
+	servenv.RunDefault()
 }
 
 func unmarshalFile(name string, val interface{}) {

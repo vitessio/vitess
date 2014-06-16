@@ -38,10 +38,15 @@ import (
 )
 
 var (
-	Port           = flag.Int("port", 0, "port for the server")
-	LameduckPeriod = flag.Duration("lameduck-period", 50*time.Millisecond, "how long to keep the server running on SIGTERM before stopping")
+	// The flags used when calling RegisterDefaultFlags.
+	Port *int
+
+	// Flags to alter the behavior of the library.
+	lameduckPeriod = flag.Duration("lameduck-period", 50*time.Millisecond, "how long to keep the server running on SIGTERM before stopping")
 	memProfileRate = flag.Int("mem-profile-rate", 512*1024, "profile every n bytes allocated")
-	mu             sync.Mutex
+
+	// mutex used to protect the Init function
+	mu sync.Mutex
 
 	onInitHooks hooks
 	onTermHooks hooks
@@ -167,4 +172,16 @@ func OnTerm(f func()) {
 // hooks are run in parallel.
 func OnRun(f func()) {
 	onRunHooks.Add(f)
+}
+
+// RegisterDefaultFlags registers the default flags for
+// listening to a given port for standard connections.
+// If calling this, then call RunDefault()
+func RegisterDefaultFlags() {
+	Port = flag.Int("port", 0, "port for the server")
+}
+
+// RunDefault calls Run() with the parameters from the flags.
+func RunDefault() {
+	Run(*Port)
 }

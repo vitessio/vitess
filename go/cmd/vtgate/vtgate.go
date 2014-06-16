@@ -26,6 +26,7 @@ var resilientSrvTopoServer *vtgate.ResilientSrvTopoServer
 var topoReader *TopoReader
 
 func init() {
+	servenv.RegisterDefaultFlags()
 	servenv.RegisterDefaultSecureFlags()
 	servenv.RegisterDefaultSocketFileFlags()
 }
@@ -50,5 +51,5 @@ func main() {
 	topo.RegisterTopoReader(topoReader)
 
 	vtgate.Init(resilientSrvTopoServer, *cell, *retryDelay, *retryCount, *timeout)
-	servenv.Run()
+	servenv.RunDefault()
 }
