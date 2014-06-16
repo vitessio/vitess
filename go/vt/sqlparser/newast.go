@@ -198,7 +198,7 @@ func (node Distinct) Format(buf *TrackedBuffer) {
 }
 
 // SelectExprs represents SELECT expressions.
-type SelectExprs []*Node
+type SelectExprs []SelectExpr
 
 func (node SelectExprs) Format(buf *TrackedBuffer) {
 	for i, sel := range node {
@@ -210,8 +210,48 @@ func (node SelectExprs) Format(buf *TrackedBuffer) {
 	}
 }
 
+// SelectExpr defines the interface for a
+// SELECT expression. selectExpr is the dummy
+// function.
+type SelectExpr interface {
+	selectExpr()
+	SQLNode
+}
+
+// StarExpr defines a '*' or 'table.*' expression.
+type StarExpr struct {
+	TableName []byte
+}
+
+func (*StarExpr) selectExpr() {}
+
+func (node *StarExpr) Format(buf *TrackedBuffer) {
+	if len(node.TableName) != 0 {
+		buf.Fprintf("%s.", node.TableName)
+	}
+	buf.Fprintf("*")
+}
+
+// NonStarExpr defines a non-'*' select expr.
+type NonStarExpr struct {
+	Expr *Node
+	As   []byte
+}
+
+func (*NonStarExpr) selectExpr() {}
+
+func (node *NonStarExpr) Format(buf *TrackedBuffer) {
+	buf.Fprintf("%v", node.Expr)
+	if len(node.As) != 0 {
+		buf.Fprintf(" as %s", node.As)
+	}
+}
+
 // Columns represents an insert column list.
-type Columns []*Node
+// The syntax for Columns is a subset of SelectExprs.
+// So, it's castable to a SelectExprs and can be analyzed
+// as such.
+type Columns []SelectExpr
 
 func (node Columns) Format(buf *TrackedBuffer) {
 	if len(node) == 0 {

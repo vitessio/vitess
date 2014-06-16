@@ -36,6 +36,7 @@ var (
   unionOp     []byte
   distinct    Distinct
   selectExprs SelectExprs
+  selectExpr  SelectExpr
   columns     Columns
   sqlNode     SQLNode
 }
@@ -78,7 +79,8 @@ var (
 %type <unionOp> union_op
 %type <distinct> distinct_opt
 %type <selectExprs> select_expression_list
-%type <node> select_expression expression as_opt
+%type <selectExpr> select_expression
+%type <node> expression as_opt
 %type <node> table_expression_list table_expression join_type simple_table_expression dml_table_expression index_hint_list
 %type <node> where_expression_opt boolean_expression condition compare
 %type <sqlNode> values
@@ -258,16 +260,19 @@ select_expression_list:
 select_expression:
   '*'
   {
-    $$ = NewSimpleParseNode(SELECT_STAR, "*")
+    $$ = &StarExpr{}
   }
 | expression
+  {
+    $$ = &NonStarExpr{Expr: $1}
+  }
 | expression as_opt sql_id
   {
-    $$ = $2.PushTwo($1, $3)
+    $$ = &NonStarExpr{Expr: $1, As: $3.Value}
   }
 | ID '.' '*'
   {
-    $$ = $2.PushTwo($1, NewSimpleParseNode(SELECT_STAR, "*"))
+    $$ = &StarExpr{TableName: $1.Value}
   }
 
 expression:
@@ -759,11 +764,11 @@ column_list_opt:
 column_list:
   column_name
   {
-    $$ = Columns{$1}
+    $$ = Columns{&NonStarExpr{Expr: $1}}
   }
 | column_list ',' column_name
   {
-    $$ = append($$, $3)
+    $$ = append($$, &NonStarExpr{Expr: $3})
   }
 
 index_list:
