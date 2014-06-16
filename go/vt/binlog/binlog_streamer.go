@@ -166,7 +166,11 @@ func (bls *BinlogStreamer) parseEvents(sendTransaction sendTransactionFunc, read
 		prefix := string(bytes.ToLower(bytes.SplitN(sql, SPACE, 2)[0]))
 		switch category := statementPrefixes[prefix]; category {
 		// We trust that mysqlbinlog doesn't send proto.BL_DMLs withot a proto.BL_BEGIN
-		case proto.BL_BEGIN, proto.BL_ROLLBACK:
+		case proto.BL_BEGIN:
+			statements = nil
+			timestamp = 0
+		case proto.BL_ROLLBACK:
+			bls.file.Save()
 			statements = nil
 			timestamp = 0
 		case proto.BL_DDL:
@@ -184,6 +188,7 @@ func (bls *BinlogStreamer) parseEvents(sendTransaction sendTransactionFunc, read
 				}
 				return fmt.Errorf("send reply error: %v", err)
 			}
+			bls.file.Save()
 			statements = nil
 			timestamp = 0
 		case proto.BL_SET:
@@ -277,9 +282,17 @@ func (bls *BinlogStreamer) readEvent(bufReader *bufio.Reader) (event []byte, err
 
 // fileInfo is used to track the current binlog file and position.
 type fileInfo struct {
-	name   string
-	pos    int64
-	handle *os.File
+	name string
+	// pos is the position to be used if mysqlbinlog should be restarted.
+	pos int64
+	// lastPos is the last position seen by mysqlbinlog. This is different
+	// from pos because the corresponding event may not get successfully read.
+	// If we restart mysqlbinlog without successfully reading a full transaction,
+	// we have to start from the beginning, which will be pos. lastPos is saved
+	// into pos when we see a commit or rollback. In case of a rotate, pos is
+	// set to the new value and lastPos is reset.
+	lastPos int64
+	handle  *os.File
 }
 
 func (f *fileInfo) Init(name string, pos int64) error {
@@ -312,16 +325,28 @@ func (f *fileInfo) Rotate(name string, pos int64) (err error) {
 		f.handle.Close()
 	}
 	f.name = name
-	f.pos = pos
+	f.pos, f.lastPos = pos, 0
 	f.handle, err = os.Open(name)
 	if err != nil {
-		return fmt.Errorf("open error: %v", err)
+		// Sometimes, the new file is not ready yet.
+		// Retry once after a delay.
+		time.Sleep(1 * time.Second)
+		f.handle, err = os.Open(name)
+		if err != nil {
+			return fmt.Errorf("open error: %v", err)
+		}
 	}
 	return nil
 }
 
 func (f *fileInfo) Set(pos int64) {
-	f.pos = pos
+	f.lastPos = pos
+}
+
+func (f *fileInfo) Save() {
+	if f.lastPos != 0 {
+		f.pos, f.lastPos = f.lastPos, 0
+	}
 }
 
 func (f *fileInfo) WaitForChange(svm *sync2.ServiceManager) error {
@@ -335,7 +360,7 @@ func (f *fileInfo) WaitForChange(svm *sync2.ServiceManager) error {
 		if err != nil {
 			return fmt.Errorf("stat error: %v", err)
 		}
-		if fi.Size() != f.pos {
+		if fi.Size() != f.lastPos {
 			return nil
 		}
 	}
@@ -347,7 +372,10 @@ func (f *fileInfo) Close() (err error) {
 	}
 	err = f.handle.Close()
 	f.handle = nil
-	return fmt.Errorf("close error: %v", err)
+	if err != nil {
+		return fmt.Errorf("close error: %v", err)
+	}
+	return nil
 }
 
 func nextFileName(name string) string {
