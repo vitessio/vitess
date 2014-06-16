@@ -21,7 +21,9 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"flag"
+	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"runtime"
 	"sync"
@@ -29,6 +31,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/stats"
 	_ "github.com/youtube/vitess/go/vt/logutil"
 	_ "net/http/pprof"
@@ -44,6 +47,9 @@ var (
 	onTermHooks hooks
 	onRunHooks  hooks
 	inited      bool
+
+	// filled in when calling Run
+	ListeningURL url.URL
 )
 
 type hooks struct {
@@ -127,6 +133,21 @@ func exportBinaryVersion() error {
 	version := mtime + " " + md5sum
 	stats.NewString("BinaryVersion").Set(version)
 	return nil
+}
+
+func populateListeningURL() {
+	host, err := netutil.FullyQualifiedHostname()
+	if err != nil {
+		host, err = os.Hostname()
+		if err != nil {
+			log.Fatalf("os.Hostname() failed: %v", err)
+		}
+	}
+	ListeningURL = url.URL{
+		Scheme: "http",
+		Host:   fmt.Sprintf("%v:%v", host, *Port),
+		Path:   "/",
+	}
 }
 
 // onInit registers f to be run at the beginning of the app
