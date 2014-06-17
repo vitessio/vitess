@@ -295,7 +295,7 @@ func execAnalyzeSelect(sel *Select, getTable TableGetter) (plan *ExecPlan) {
 	}
 
 	// from
-	tableName, hasHints := sel.From.execAnalyzeFrom()
+	tableName, hasHints := execAnalyzeFrom(sel.From)
 	if tableName == "" {
 		plan.Reason = REASON_TABLE
 		return plan
@@ -618,11 +618,11 @@ func execGetColumnName(node *Node) string {
 //-----------------------------------------------
 // From
 
-func (node *Node) execAnalyzeFrom() (tablename string, hasHints bool) {
-	if node.Len() > 1 {
+func execAnalyzeFrom(tableExprs TableExprs) (tablename string, hasHints bool) {
+	if len(tableExprs) > 1 {
 		return "", false
 	}
-	node = node.NodeAt(0)
+	node := tableExprs[0]
 	for node.Type == '(' {
 		node = node.NodeAt(0)
 	}
@@ -1072,7 +1072,7 @@ func GenerateSelectSubquery(sel *Select, tableInfo *schema.Table, index string) 
 	hint := NewSimpleParseNode(USE, "use")
 	hint.Push(NewSimpleParseNode(INDEX_LIST, ""))
 	hint.NodeAt(0).Push(NewSimpleParseNode(ID, index))
-	table_expr := sel.From.NodeAt(0)
+	table_expr := sel.From[0]
 	savedHint := table_expr.NodeAt(2)
 	table_expr.Sub[2] = hint
 	defer func() {
@@ -1080,7 +1080,7 @@ func GenerateSelectSubquery(sel *Select, tableInfo *schema.Table, index string) 
 	}()
 	return GenerateSubquery(
 		tableInfo.Indexes[0].Columns,
-		sel.From,
+		sel.From[0],
 		sel.Where,
 		sel.OrderBy,
 		sel.Limit,

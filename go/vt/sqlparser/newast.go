@@ -41,7 +41,7 @@ type Select struct {
 	Comments    Comments
 	Distinct    Distinct
 	SelectExprs SelectExprs
-	From        *Node
+	From        TableExprs
 	Where       *Node
 	GroupBy     *Node
 	Having      *Node
@@ -201,12 +201,10 @@ func (node Distinct) Format(buf *TrackedBuffer) {
 type SelectExprs []SelectExpr
 
 func (node SelectExprs) Format(buf *TrackedBuffer) {
-	for i, n := range node {
-		if i == 0 {
-			buf.Fprintf("%v", n)
-		} else {
-			buf.Fprintf(", %v", n)
-		}
+	var prefix string
+	for _, n := range node {
+		buf.Fprintf("%s%v", prefix, n)
+		prefix = ", "
 	}
 }
 
@@ -264,11 +262,9 @@ func (node Columns) Format(buf *TrackedBuffer) {
 type TableExprs []*Node
 
 func (node TableExprs) Format(buf *TrackedBuffer) {
-	for i, n := range node {
-		if i == 0 {
-			buf.Fprintf("%v", n)
-		} else {
-			buf.Fprintf(", %v", n)
-		}
+	var prefix string
+	for _, n := range node {
+		buf.Fprintf("%s%v", prefix, n)
+		prefix = ", "
 	}
 }

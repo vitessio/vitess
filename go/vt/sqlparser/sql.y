@@ -38,6 +38,7 @@ var (
   selectExprs SelectExprs
   selectExpr  SelectExpr
   columns     Columns
+  tableExprs  TableExprs
   sqlNode     SQLNode
 }
 
@@ -81,7 +82,8 @@ var (
 %type <selectExprs> select_expression_list
 %type <selectExpr> select_expression
 %type <node> expression as_opt
-%type <node> table_expression_list table_expression join_type simple_table_expression dml_table_expression index_hint_list
+%type <tableExprs> table_expression_list
+%type <node> table_expression join_type simple_table_expression dml_table_expression index_hint_list
 %type <node> where_expression_opt boolean_expression condition compare
 %type <sqlNode> values
 %type <node> parenthesised_lists parenthesised_list value_expression_list value_expression keyword_as_func
@@ -288,12 +290,11 @@ as_opt:
 table_expression_list:
   table_expression
   {
-    $$ = NewSimpleParseNode(NODE_LIST, "node_list")
-    $$.Push($1)
+    $$ = TableExprs{$1}
   }
 | table_expression_list ',' table_expression
   {
-    $$.Push($3)
+    $$ = append($$, $3)
   }
 
 table_expression:
