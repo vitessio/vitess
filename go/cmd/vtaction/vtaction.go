@@ -29,6 +29,7 @@ var (
 )
 
 func init() {
+	servenv.RegisterDefaultFlags()
 	stats.NewString("BinaryName").Set("vtaction")
 }
 

@@ -89,7 +89,7 @@ func TestKeyRangeFilterDDL(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `statement: <6, "set1"> statement: <5, "ddl"> position: "1" `
+	want := `position: "1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}

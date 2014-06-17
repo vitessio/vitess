@@ -12,6 +12,7 @@ the mysql protocol.
 package mysqlctl
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -78,6 +79,7 @@ func (mt *Mysqld) createDbaConnection() (*mysql.Connection, error) {
 // hook, or by running mysqld_safe in the background.
 func (mt *Mysqld) Start(mysqlWaitTime time.Duration) error {
 	var name string
+	ts := fmt.Sprintf("Mysqld.Start(%v)", time.Now().Unix())
 
 	// try the mysqld start hook, if any
 	h := hook.NewSimpleHook("mysqld_start")
@@ -88,7 +90,7 @@ func (mt *Mysqld) Start(mysqlWaitTime time.Duration) error {
 		name = "mysqld_start hook"
 	case hook.HOOK_DOES_NOT_EXIST:
 		// hook doesn't exist, run mysqld_safe ourselves
-		log.Infof("No mysqld_start hook, running mysqld_safe directly")
+		log.Infof("%v: No mysqld_start hook, running mysqld_safe directly", ts)
 		dir, err := vtenv.VtMysqlRoot()
 		if err != nil {
 			return err
@@ -101,18 +103,37 @@ func (mt *Mysqld) Start(mysqlWaitTime time.Duration) error {
 		cmd := exec.Command(name, arg...)
 		cmd.Dir = dir
 		cmd.Env = env
-		log.Infof("mysqlctl.Start mysqlWaitTime:%v %#v", mysqlWaitTime, cmd)
-		_, err = cmd.StderrPipe()
+		log.Infof("%v mysqlWaitTime:%v %#v", ts, mysqlWaitTime, cmd)
+		stderr, err := cmd.StderrPipe()
 		if err != nil {
 			return nil
 		}
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			return nil
+		}
+		go func() {
+			scanner := bufio.NewScanner(stderr)
+			for scanner.Scan() {
+				log.Infof("%v stderr: %v", ts, scanner.Text())
+			}
+		}()
+		go func() {
+			scanner := bufio.NewScanner(stdout)
+			for scanner.Scan() {
+				log.Infof("%v stdout: %v", ts, scanner.Text())
+			}
+		}()
 		err = cmd.Start()
 		if err != nil {
 			return nil
 		}
 
 		// wait so we don't get a bunch of defunct processes
-		go cmd.Wait()
+		go func() {
+			err := cmd.Wait()
+			log.Infof("%v exit: %v", ts, err)
+		}()
 	default:
 		// hook failed, we report error
 		return fmt.Errorf("mysqld_start hook failed: %v", hr.String())
@@ -132,12 +153,13 @@ func (mt *Mysqld) Start(mysqlWaitTime time.Duration) error {
 		} else if !os.IsNotExist(statErr) {
 			return statErr
 		}
+		log.Infof("%v: sleeping for 1s waiting for socket file %v", ts, mt.config.SocketFile)
 		time.Sleep(time.Second)
 	}
 	return errors.New(name + ": deadline exceeded waiting for " + mt.config.SocketFile)
 }
 
-// Shutdown will stop the mysqld daemon tha is running in the background.
+// Shutdown will stop the mysqld daemon that is running in the background.
 //
 // waitForMysqld: should the function block until mysqld has stopped?
 // This can actually take a *long* time if the buffer cache needs to be fully
@@ -189,6 +211,7 @@ func (mt *Mysqld) Shutdown(waitForMysqld bool, mysqlWaitTime time.Duration) erro
 			if statErr != nil && os.IsNotExist(statErr) {
 				return nil
 			}
+			log.Infof("Mysqld.Shutdown: sleeping for 1s waiting for socket file %v", mt.config.SocketFile)
 			time.Sleep(time.Second)
 		}
 		return errors.New("gave up waiting for mysqld to stop")
@@ -208,6 +231,7 @@ func execCmd(name string, args, env []string, dir string) (cmd *exec.Cmd, err er
 	if err != nil {
 		err = errors.New(name + ": " + string(output))
 	}
+	log.Infof("execCmd: command returned: %v", string(output))
 	return cmd, err
 }
 
@@ -286,7 +310,7 @@ func (mt *Mysqld) Init(mysqlWaitTime time.Duration) error {
 		sqlCmds = append(sqlCmds, cmd)
 	}
 
-	return mt.executeSuperQueryList(sqlCmds)
+	return mt.ExecuteSuperQueryList(sqlCmds)
 }
 
 func (mt *Mysqld) createDirs() error {

@@ -26,6 +26,7 @@ var (
 )
 
 func init() {
+	servenv.RegisterDefaultFlags()
 	flag.Var(&dryRunModules, "dry_run_modules", "modules to run in dry run mode")
 	flag.Var(&activeModules, "active_modules", "modules to run in active mode")
 
@@ -60,5 +61,5 @@ func main() {
 	scheduler.Enable(activeModules)
 	scheduler.EnableDryRun(dryRunModules)
 	go scheduler.Run()
-	servenv.Run()
+	servenv.RunDefault()
 }

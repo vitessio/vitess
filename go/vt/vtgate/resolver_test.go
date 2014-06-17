@@ -39,7 +39,7 @@ func TestResolverExecuteKeyspaceIds(t *testing.T) {
 			KeyspaceIds: []key.KeyspaceId{kid10, kid25},
 			TabletType:  topo.TYPE_MASTER,
 		}
-		res := NewResolver(new(sandboxTopo), "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
+		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
 		return res.ExecuteKeyspaceIds(nil, query)
 	})
 }
@@ -60,7 +60,7 @@ func TestResolverExecuteKeyRanges(t *testing.T) {
 			KeyRanges:  []key.KeyRange{key.KeyRange{Start: kid10, End: kid25}},
 			TabletType: topo.TYPE_MASTER,
 		}
-		res := NewResolver(new(sandboxTopo), "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
+		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
 		return res.ExecuteKeyRanges(nil, query)
 	})
 }
@@ -91,7 +91,7 @@ func TestResolverExecuteEntityIds(t *testing.T) {
 			},
 			TabletType: topo.TYPE_MASTER,
 		}
-		res := NewResolver(new(sandboxTopo), "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
+		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
 		return res.ExecuteEntityIds(nil, query)
 	})
 }
@@ -112,7 +112,7 @@ func TestResolverExecuteBatchKeyspaceIds(t *testing.T) {
 			KeyspaceIds: []key.KeyspaceId{kid10, kid25},
 			TabletType:  topo.TYPE_MASTER,
 		}
-		res := NewResolver(new(sandboxTopo), "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
+		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
 		qrs, err := res.ExecuteBatchKeyspaceIds(nil, query)
 		if err != nil {
 			return nil, err
@@ -142,7 +142,7 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 	}
 	createSandbox("TestResolverStreamExecuteKeyspaceIds")
 	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyspaceIds", func() (*mproto.QueryResult, error) {
-		res := NewResolver(new(sandboxTopo), "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
+		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
 		err = res.StreamExecuteKeyspaceIds(nil, query, func(r *mproto.QueryResult) error {
 			appendResult(qr, r)
@@ -152,7 +152,7 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 	})
 	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyspaceIds", func() (*mproto.QueryResult, error) {
 		query.KeyspaceIds = []key.KeyspaceId{kid10, kid15, kid25}
-		res := NewResolver(new(sandboxTopo), "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
+		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
 		err = res.StreamExecuteKeyspaceIds(nil, query, func(r *mproto.QueryResult) error {
 			appendResult(qr, r)
@@ -184,7 +184,7 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 	createSandbox("TestResolverStreamExecuteKeyRanges")
 	// streaming a single shard
 	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyRanges", func() (*mproto.QueryResult, error) {
-		res := NewResolver(new(sandboxTopo), "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
+		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
 		err = res.StreamExecuteKeyRanges(nil, query, func(r *mproto.QueryResult) error {
 			appendResult(qr, r)
@@ -195,7 +195,7 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 	// streaming multiple shards
 	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyRanges", func() (*mproto.QueryResult, error) {
 		query.KeyRanges = []key.KeyRange{key.KeyRange{Start: kid10, End: kid25}}
-		res := NewResolver(new(sandboxTopo), "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
+		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
 		err = res.StreamExecuteKeyRanges(nil, query, func(r *mproto.QueryResult) error {
 			appendResult(qr, r)

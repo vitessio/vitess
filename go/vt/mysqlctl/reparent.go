@@ -21,7 +21,7 @@ func (mysqld *Mysqld) DemoteMaster() (*proto.ReplicationPosition, error) {
 		"FLUSH TABLES WITH READ LOCK",
 		"UNLOCK TABLES",
 	}
-	if err := mysqld.executeSuperQueryList(cmds); err != nil {
+	if err := mysqld.ExecuteSuperQueryList(cmds); err != nil {
 		return nil, err
 	}
 	return mysqld.MasterStatus()
@@ -47,7 +47,7 @@ func (mysqld *Mysqld) PromoteSlave(setReadWrite bool, hookExtraEnv map[string]st
 	}
 
 	cmds := mysqld.flavor.PromoteSlaveCommands()
-	if err = mysqld.executeSuperQueryList(cmds); err != nil {
+	if err = mysqld.ExecuteSuperQueryList(cmds); err != nil {
 		return
 	}
 	replicationPosition, err := mysqld.MasterStatus()
@@ -68,7 +68,7 @@ func (mysqld *Mysqld) PromoteSlave(setReadWrite bool, hookExtraEnv map[string]st
 	cmds = []string{
 		fmt.Sprintf("INSERT INTO _vt.replication_log (time_created_ns, note) VALUES (%v, 'reparent check')", timePromoted),
 	}
-	if err = mysqld.executeSuperQueryList(cmds); err != nil {
+	if err = mysqld.ExecuteSuperQueryList(cmds); err != nil {
 		return
 	}
 	// this is the wait-point for checking replication
@@ -87,7 +87,7 @@ func (mysqld *Mysqld) PromoteSlave(setReadWrite bool, hookExtraEnv map[string]st
 	cmds = []string{
 		fmt.Sprintf("INSERT INTO _vt.reparent_log (time_created_ns, last_position, new_addr, new_position, wait_position) VALUES (%v, '%v', '%v', '%v', '%v')", timePromoted, lastPos, newAddr, newPos, waitPosition.MapKey()),
 	}
-	if err = mysqld.executeSuperQueryList(cmds); err != nil {
+	if err = mysqld.ExecuteSuperQueryList(cmds); err != nil {
 		return
 	}
 
@@ -103,7 +103,7 @@ func (mysqld *Mysqld) RestartSlave(replicationState *proto.ReplicationState, wai
 	if err != nil {
 		return err
 	}
-	if err := mysqld.executeSuperQueryList(cmds); err != nil {
+	if err := mysqld.ExecuteSuperQueryList(cmds); err != nil {
 		return err
 	}
 

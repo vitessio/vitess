@@ -29,21 +29,10 @@ func handleError(err *error) {
 	}
 }
 
-type sqlNode interface {
-	Format(buf *TrackedBuffer)
-}
-
-// String returns a string representation of an sqlNode.
-func String(node sqlNode) string {
-	buf := NewTrackedBuffer(nil)
-	buf.Fprintf("%v", node)
-	return buf.String()
-}
-
 type Node struct {
 	Type  int
 	Value []byte
-	Sub   []*Node
+	Sub   []SQLNode
 }
 
 func Parse(sql string) (Statement, error) {
@@ -62,15 +51,12 @@ func NewParseNode(Type int, value []byte) *Node {
 	return &Node{Type: Type, Value: value}
 }
 
-func (node *Node) PushTwo(left *Node, right *Node) *Node {
+func (node *Node) PushTwo(left SQLNode, right SQLNode) *Node {
 	node.Push(left)
 	return node.Push(right)
 }
 
-func (node *Node) Push(value *Node) *Node {
-	if node.Sub == nil {
-		node.Sub = make([]*Node, 0, 2)
-	}
+func (node *Node) Push(value SQLNode) *Node {
 	node.Sub = append(node.Sub, value)
 	return node
 }
@@ -80,12 +66,12 @@ func (node *Node) Pop() *Node {
 	return node
 }
 
-func (node *Node) At(index int) *Node {
+func (node *Node) At(index int) SQLNode {
 	return node.Sub[index]
 }
 
-func (node *Node) Set(index int, val *Node) {
-	node.Sub[index] = val
+func (node *Node) NodeAt(index int) *Node {
+	return node.At(index).(*Node)
 }
 
 func (node *Node) Len() int {
@@ -102,43 +88,13 @@ func (node *Node) String() (out string) {
 	return buf.String()
 }
 
-func (node *Node) TreeString() string {
-	buf := bytes.NewBuffer(make([]byte, 0, 8))
-	node.NodeString(0, buf)
-	return buf.String()
-}
-
-func (node *Node) NodeString(level int, buf *bytes.Buffer) {
-	for i := 0; i < level; i++ {
-		buf.WriteString("|-")
-	}
-	buf.Write(node.Value)
-	buf.WriteByte('\n')
-	for i := 0; i < node.Len(); i++ {
-		node.At(i).NodeString(level+1, buf)
-	}
-}
-
 // Format generates the SQL for the current node.
 func (node *Node) Format(buf *TrackedBuffer) {
 	switch node.Type {
-	case SELECT:
-		buf.Fprintf("select %v%v%v from %v%v%v%v%v%v%v",
-			node.At(SELECT_COMMENT_OFFSET),
-			node.At(SELECT_DISTINCT_OFFSET),
-			node.At(SELECT_EXPR_OFFSET),
-			node.At(SELECT_FROM_OFFSET),
-			node.At(SELECT_WHERE_OFFSET),
-			node.At(SELECT_GROUP_OFFSET),
-			node.At(SELECT_HAVING_OFFSET),
-			node.At(SELECT_ORDER_OFFSET),
-			node.At(SELECT_LIMIT_OFFSET),
-			node.At(SELECT_LOCK_OFFSET),
-		)
 	case TABLE_EXPR:
 		buf.Fprintf("%v", node.At(0))
-		if node.At(1).Len() == 1 {
-			buf.Fprintf(" as %v", node.At(1).At(0))
+		if node.NodeAt(1).Len() == 1 {
+			buf.Fprintf(" as %v", node.NodeAt(1).At(0))
 		}
 		buf.Fprintf("%v", node.At(2))
 	case USE, FORCE:
@@ -160,7 +116,7 @@ func (node *Node) Format(buf *TrackedBuffer) {
 				buf.Fprintf(", %v", node.At(1))
 			}
 		}
-	case COLUMN_LIST, INDEX_LIST:
+	case INDEX_LIST:
 		if node.Len() > 0 {
 			buf.Fprintf("(%v", node.At(0))
 			for i := 1; i < node.Len(); i++ {
@@ -174,10 +130,6 @@ func (node *Node) Format(buf *TrackedBuffer) {
 			for i := 1; i < node.Len(); i++ {
 				buf.Fprintf(", %v", node.At(i))
 			}
-		}
-	case COMMENT_LIST:
-		for i := 0; i < node.Len(); i++ {
-			buf.Fprintf("%v ", node.At(i))
 		}
 	case WHEN_LIST:
 		buf.Fprintf("%v", node.At(0))
@@ -193,7 +145,7 @@ func (node *Node) Format(buf *TrackedBuffer) {
 		if node.Len() != 0 {
 			buf.Fprintf(" on duplicate key update %v", node.At(0))
 		}
-	case NUMBER, NULL, SELECT_STAR, NO_DISTINCT, COMMENT, NO_LOCK, TABLE, FOR_UPDATE, LOCK_IN_SHARE_MODE:
+	case NUMBER, NULL, NO_LOCK, TABLE, FOR_UPDATE, LOCK_IN_SHARE_MODE:
 		buf.Fprintf("%s", node.Value)
 	case ID:
 		if _, ok := keywords[string(node.Value)]; ok {
@@ -245,7 +197,7 @@ func (node *Node) Format(buf *TrackedBuffer) {
 
 // AnonymizedFormatter is a formatter that
 // anonymizes all values in the SQL.
-func AnonymizedFormatter(buf *TrackedBuffer, node sqlNode) {
+func AnonymizedFormatter(buf *TrackedBuffer, node SQLNode) {
 	switch node := node.(type) {
 	case *Node:
 		switch node.Type {
@@ -269,10 +221,10 @@ func AnonymizedFormatter(buf *TrackedBuffer, node sqlNode) {
 type TrackedBuffer struct {
 	*bytes.Buffer
 	bindLocations []BindLocation
-	nodeFormatter func(buf *TrackedBuffer, node sqlNode)
+	nodeFormatter func(buf *TrackedBuffer, node SQLNode)
 }
 
-func NewTrackedBuffer(nodeFormatter func(buf *TrackedBuffer, node sqlNode)) *TrackedBuffer {
+func NewTrackedBuffer(nodeFormatter func(buf *TrackedBuffer, node SQLNode)) *TrackedBuffer {
 	buf := &TrackedBuffer{
 		Buffer:        bytes.NewBuffer(make([]byte, 0, 128)),
 		bindLocations: make([]BindLocation, 0, 4),
@@ -310,7 +262,7 @@ func (buf *TrackedBuffer) Fprintf(format string, values ...interface{}) {
 				panic(fmt.Sprintf("unexpected type %T", v))
 			}
 		case 'v':
-			node := values[fieldnum].(sqlNode)
+			node := values[fieldnum].(SQLNode)
 			if buf.nodeFormatter == nil {
 				node.Format(buf)
 			} else {

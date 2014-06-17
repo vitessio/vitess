@@ -8,6 +8,8 @@ import (
 	"github.com/youtube/vitess/go/testfiles"
 )
 
+// specialReader is a test class that will return bytes it reads from a file,
+// returning EOF and data in the last chunk.
 type specialReader struct {
 	t        *testing.T
 	contents []byte
@@ -23,6 +25,7 @@ func newSpecialReader(t *testing.T, filename string) *specialReader {
 	return &specialReader{t, b, 0}
 }
 
+// Read is the implementation of Reader
 func (sr *specialReader) Read(p []byte) (int, error) {
 	if len(p) > len(sr.contents)-sr.sent {
 		toCopy := len(sr.contents) - sr.sent
@@ -36,6 +39,11 @@ func (sr *specialReader) Read(p []byte) (int, error) {
 	return toCopy, nil
 }
 
+// TestEofAndData is the main test here: if we return data and EOF,
+// it needs to be fully processed.
+// The file is a 55k file, that uncompresses into a 10 MB file.
+// So it will be read as 32k + 22k, and decompressed into 2MB + 2MB + 1M and
+// then 2MB + 2MB + 1M again. So it's a great test for corner cases.
 func TestEofAndData(t *testing.T) {
 	r := newSpecialReader(t, "cgzip_eof.gz")
 	gz, err := NewReader(r)
@@ -54,6 +62,12 @@ func TestEofAndData(t *testing.T) {
 		case io.EOF:
 			if n != 10485760 {
 				t.Fatalf("Read wrong number of bytes: got %v expected 10485760", n)
+			}
+
+			// test we also get 0 / EOF if we read again
+			nRead, err = gz.Read(dst)
+			if nRead != 0 || err != io.EOF {
+				t.Fatalf("After-EOF read got %v %v", nRead, err)
 			}
 			return
 		default:

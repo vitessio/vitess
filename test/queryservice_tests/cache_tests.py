@@ -188,22 +188,22 @@ class TestCache(framework.TestCase):
 
   def test_spot_check(self):
     vstart = self.env.debug_vars()
-    self.assertEqual(vstart["SpotCheckRatio"], 0)
+    self.assertEqual(vstart["RowcacheSpotCheckRatio"], 0)
     self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'")
-    self.assertEqual(vstart["SpotCheckCount"], self.env.debug_vars()["SpotCheckCount"])
+    self.assertEqual(vstart["RowcacheSpotCheckCount"], self.env.debug_vars()["RowcacheSpotCheckCount"])
     self.env.execute("set vt_spot_check_ratio=1")
-    self.assertEqual(self.env.debug_vars()["SpotCheckRatio"], 1)
+    self.assertEqual(self.env.debug_vars()["RowcacheSpotCheckRatio"], 1)
     self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'")
-    self.assertEqual(vstart["SpotCheckCount"]+1, self.env.debug_vars()["SpotCheckCount"])
+    self.assertEqual(vstart["RowcacheSpotCheckCount"]+1, self.env.debug_vars()["RowcacheSpotCheckCount"])
 
     vstart = self.env.debug_vars()
     self.env.execute("select * from vtocc_cached1 where eid in (9)")
-    self.assertEqual(vstart["SpotCheckCount"], self.env.debug_vars()["SpotCheckCount"])
+    self.assertEqual(vstart["RowcacheSpotCheckCount"], self.env.debug_vars()["RowcacheSpotCheckCount"])
     self.env.execute("select * from vtocc_cached1 where eid in (9)")
-    self.assertEqual(vstart["SpotCheckCount"]+1, self.env.debug_vars()["SpotCheckCount"])
+    self.assertEqual(vstart["RowcacheSpotCheckCount"]+1, self.env.debug_vars()["RowcacheSpotCheckCount"])
 
     self.env.execute("set vt_spot_check_ratio=0")
-    self.assertEqual(self.env.debug_vars()["SpotCheckRatio"], 0)
+    self.assertEqual(self.env.debug_vars()["RowcacheSpotCheckRatio"], 0)
 
   def _verify_mismatch(self, query, bindvars=None):
     try:
@@ -224,10 +224,4 @@ class TestCache(framework.TestCase):
       self.fail("test_cache2_sqls errors: %d" % error_count)
 
   def _get_vars_table_stats(self, table_stats, table, stats):
-    for item in table_stats:
-      if item["Table"] != table:
-        continue
-      if item["Stats"] != stats:
-        continue
-      return item["Value"]
-    raise KeyError
+    return table_stats[table + "." + stats]

@@ -11,6 +11,7 @@ import (
 
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
@@ -20,6 +21,8 @@ var RpcVTGate *VTGate
 // can be created.
 type VTGate struct {
 	resolver *Resolver
+	timings  *stats.MapTimings
+	errors   *stats.MapCounters
 }
 
 // registration mechanism
@@ -32,7 +35,9 @@ func Init(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount 
 		log.Fatalf("VTGate already initialized")
 	}
 	RpcVTGate = &VTGate{
-		resolver: NewResolver(serv, cell, retryDelay, retryCount, timeout),
+		resolver: NewResolver(serv, "VttabletCall", cell, retryDelay, retryCount, timeout),
+		timings:  stats.NewMapTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
+		errors:   stats.NewMapCounters("VtgateApiErrorCounts", []string{"Operation", "Keyspace", "DbType"}),
 	}
 	for _, f := range RegisterVTGates {
 		f(RpcVTGate)
@@ -41,6 +46,10 @@ func Init(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount 
 
 // ExecuteShard executes a non-streaming query on the specified shards.
 func (vtg *VTGate) ExecuteShard(context interface{}, query *proto.QueryShard, reply *proto.QueryResult) error {
+	startTime := time.Now()
+	statsKey := []string{"ExecuteShard", query.Keyspace, string(query.TabletType)}
+	defer vtg.timings.Record(statsKey, startTime)
+
 	qr, err := vtg.resolver.Execute(
 		context,
 		query.Sql,
@@ -56,6 +65,8 @@ func (vtg *VTGate) ExecuteShard(context interface{}, query *proto.QueryShard, re
 		proto.PopulateQueryResult(qr, reply)
 	} else {
 		reply.Error = err.Error()
+		vtg.errors.Add(statsKey, 1)
+		// FIXME(alainjobart): throttle this log entry
 		log.Errorf("ExecuteShard: %v, query: %+v", err, query)
 	}
 	reply.Session = query.Session
@@ -64,11 +75,17 @@ func (vtg *VTGate) ExecuteShard(context interface{}, query *proto.QueryShard, re
 
 // ExecuteKeyspaceIds executes a non-streaming query based on the specified keyspace ids.
 func (vtg *VTGate) ExecuteKeyspaceIds(context interface{}, query *proto.KeyspaceIdQuery, reply *proto.QueryResult) error {
+	startTime := time.Now()
+	statsKey := []string{"ExecuteKeyspaceIds", query.Keyspace, string(query.TabletType)}
+	defer vtg.timings.Record(statsKey, startTime)
+
 	qr, err := vtg.resolver.ExecuteKeyspaceIds(context, query)
 	if err == nil {
 		proto.PopulateQueryResult(qr, reply)
 	} else {
 		reply.Error = err.Error()
+		vtg.errors.Add(statsKey, 1)
+		// FIXME(alainjobart): throttle this log entry
 		log.Errorf("ExecuteKeyspaceIds: %v, query: %+v", err, query)
 	}
 	reply.Session = query.Session
@@ -77,11 +94,17 @@ func (vtg *VTGate) ExecuteKeyspaceIds(context interface{}, query *proto.Keyspace
 
 // ExecuteKeyRanges executes a non-streaming query based on the specified keyranges.
 func (vtg *VTGate) ExecuteKeyRanges(context interface{}, query *proto.KeyRangeQuery, reply *proto.QueryResult) error {
+	startTime := time.Now()
+	statsKey := []string{"ExecuteKeyRanges", query.Keyspace, string(query.TabletType)}
+	defer vtg.timings.Record(statsKey, startTime)
+
 	qr, err := vtg.resolver.ExecuteKeyRanges(context, query)
 	if err == nil {
 		proto.PopulateQueryResult(qr, reply)
 	} else {
 		reply.Error = err.Error()
+		vtg.errors.Add(statsKey, 1)
+		// FIXME(alainjobart): throttle this log entry
 		log.Errorf("ExecuteKeyRange: %v, query: %+v", err, query)
 	}
 	reply.Session = query.Session
@@ -90,11 +113,17 @@ func (vtg *VTGate) ExecuteKeyRanges(context interface{}, query *proto.KeyRangeQu
 
 // ExecuteEntityIds excutes a non-streaming query based on given KeyspaceId map.
 func (vtg *VTGate) ExecuteEntityIds(context interface{}, query *proto.EntityIdsQuery, reply *proto.QueryResult) error {
+	startTime := time.Now()
+	statsKey := []string{"ExecuteEntityIds", query.Keyspace, string(query.TabletType)}
+	defer vtg.timings.Record(statsKey, startTime)
+
 	qr, err := vtg.resolver.ExecuteEntityIds(context, query)
 	if err == nil {
 		proto.PopulateQueryResult(qr, reply)
 	} else {
 		reply.Error = err.Error()
+		vtg.errors.Add(statsKey, 1)
+		// FIXME(alainjobart): throttle this log entry
 		log.Errorf("ExecuteEntityIds: %v, query: %+v", err, query)
 	}
 	reply.Session = query.Session
@@ -103,6 +132,10 @@ func (vtg *VTGate) ExecuteEntityIds(context interface{}, query *proto.EntityIdsQ
 
 // ExecuteBatchShard executes a group of queries on the specified shards.
 func (vtg *VTGate) ExecuteBatchShard(context interface{}, batchQuery *proto.BatchQueryShard, reply *proto.QueryResultList) error {
+	startTime := time.Now()
+	statsKey := []string{"ExecuteBatchShard", batchQuery.Keyspace, string(batchQuery.TabletType)}
+	defer vtg.timings.Record(statsKey, startTime)
+
 	qrs, err := vtg.resolver.ExecuteBatch(
 		context,
 		batchQuery.Queries,
@@ -117,6 +150,8 @@ func (vtg *VTGate) ExecuteBatchShard(context interface{}, batchQuery *proto.Batc
 		reply.List = qrs.List
 	} else {
 		reply.Error = err.Error()
+		vtg.errors.Add(statsKey, 1)
+		// FIXME(alainjobart): throttle this log entry
 		log.Errorf("ExecuteBatchShard: %v, queries: %+v", err, batchQuery)
 	}
 	reply.Session = batchQuery.Session
@@ -125,6 +160,10 @@ func (vtg *VTGate) ExecuteBatchShard(context interface{}, batchQuery *proto.Batc
 
 // ExecuteBatchKeyspaceIds executes a group of queries based on the specified keyspace ids.
 func (vtg *VTGate) ExecuteBatchKeyspaceIds(context interface{}, query *proto.KeyspaceIdBatchQuery, reply *proto.QueryResultList) error {
+	startTime := time.Now()
+	statsKey := []string{"ExecuteBatchKeyspaceIds", query.Keyspace, string(query.TabletType)}
+	defer vtg.timings.Record(statsKey, startTime)
+
 	qrs, err := vtg.resolver.ExecuteBatchKeyspaceIds(
 		context,
 		query)
@@ -132,6 +171,8 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(context interface{}, query *proto.Key
 		reply.List = qrs.List
 	} else {
 		reply.Error = err.Error()
+		vtg.errors.Add(statsKey, 1)
+		// FIXME(alainjobart): throttle this log entry
 		log.Errorf("ExecuteBatchKeyspaceIds: %v, query: %+v", err, query)
 	}
 	reply.Session = query.Session
@@ -145,6 +186,10 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(context interface{}, query *proto.Key
 // response which is needed for checkpointing.
 // The api supports supplying multiple KeyspaceIds to make it future proof.
 func (vtg *VTGate) StreamExecuteKeyspaceIds(context interface{}, query *proto.KeyspaceIdQuery, sendReply func(*proto.QueryResult) error) error {
+	startTime := time.Now()
+	statsKey := []string{"StreamExecuteKeyspaceIds", query.Keyspace, string(query.TabletType)}
+	defer vtg.timings.Record(statsKey, startTime)
+
 	err := vtg.resolver.StreamExecuteKeyspaceIds(
 		context,
 		query,
@@ -156,6 +201,8 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(context interface{}, query *proto.Ke
 			return sendReply(reply)
 		})
 	if err != nil {
+		vtg.errors.Add(statsKey, 1)
+		// FIXME(alainjobart): throttle this log entry
 		log.Errorf("StreamExecuteKeyspaceIds: %v, query: %+v", err, query)
 	}
 	// now we can send the final Sessoin info.
@@ -172,6 +219,10 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(context interface{}, query *proto.Ke
 // response which is needed for checkpointing.
 // The api supports supplying multiple keyranges to make it future proof.
 func (vtg *VTGate) StreamExecuteKeyRanges(context interface{}, query *proto.KeyRangeQuery, sendReply func(*proto.QueryResult) error) error {
+	startTime := time.Now()
+	statsKey := []string{"StreamExecuteKeyRanges", query.Keyspace, string(query.TabletType)}
+	defer vtg.timings.Record(statsKey, startTime)
+
 	err := vtg.resolver.StreamExecuteKeyRanges(
 		context,
 		query,
@@ -184,6 +235,8 @@ func (vtg *VTGate) StreamExecuteKeyRanges(context interface{}, query *proto.KeyR
 		})
 
 	if err != nil {
+		vtg.errors.Add(statsKey, 1)
+		// FIXME(alainjobart): throttle this log entry
 		log.Errorf("StreamExecuteKeyRange: %v, query: %+v", err, query)
 	}
 	// now we can send the final Session info.
@@ -195,6 +248,10 @@ func (vtg *VTGate) StreamExecuteKeyRanges(context interface{}, query *proto.KeyR
 
 // StreamExecuteShard executes a streaming query on the specified shards.
 func (vtg *VTGate) StreamExecuteShard(context interface{}, query *proto.QueryShard, sendReply func(*proto.QueryResult) error) error {
+	startTime := time.Now()
+	statsKey := []string{"StreamExecuteShard", query.Keyspace, string(query.TabletType)}
+	defer vtg.timings.Record(statsKey, startTime)
+
 	err := vtg.resolver.StreamExecute(
 		context,
 		query.Sql,
@@ -215,6 +272,8 @@ func (vtg *VTGate) StreamExecuteShard(context interface{}, query *proto.QuerySha
 		})
 
 	if err != nil {
+		vtg.errors.Add(statsKey, 1)
+		// FIXME(alainjobart): throttle this log entry
 		log.Errorf("StreamExecuteShard: %v, query: %+v", err, query)
 	}
 	// now we can send the final Session info.

@@ -132,10 +132,10 @@ func NewQueryEngine(config Config) *QueryEngine {
 	errorStats = stats.NewCounters("Errors")
 	internalErrors = stats.NewCounters("InternalErrors")
 	resultStats = stats.NewHistogram("Results", resultBuckets)
-	stats.Publish("SpotCheckRatio", stats.FloatFunc(func() float64 {
+	stats.Publish("RowcacheSpotCheckRatio", stats.FloatFunc(func() float64 {
 		return float64(qe.spotCheckFreq.Get()) / SPOT_CHECK_MULTIPLIER
 	}))
-	spotCheckCount = stats.NewInt("SpotCheckCount")
+	spotCheckCount = stats.NewInt("RowcacheSpotCheckCount")
 
 	return qe
 }
@@ -144,24 +144,35 @@ func NewQueryEngine(config Config) *QueryEngine {
 func (qe *QueryEngine) Open(dbconfig *dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules, mysqld *mysqlctl.Mysqld) {
 	connFactory := GenericConnectionCreator(&dbconfig.ConnectionParams)
 
-	if dbconfig.EnableRowcache {
-		qe.cachePool.Open()
-		log.Infof("rowcache is enabled")
-		if dbconfig.EnableInvalidator {
-			qe.invalidator.Open(dbconfig.DbName, mysqld)
-		}
-	} else {
-		log.Infof("rowcache is not enabled")
-	}
-	start := time.Now()
 	strictMode := false
 	if qe.strictMode.Get() != 0 {
 		strictMode = true
 	}
+	if !strictMode && dbconfig.EnableRowcache {
+		panic(NewTabletError(FATAL, "Rowcache cannot be enabled when queryserver-config-strict-mode is false"))
+	}
+	if dbconfig.EnableRowcache {
+		qe.cachePool.Open()
+		log.Infof("rowcache is enabled")
+	} else {
+		// Invalidator should not be enabled if rowcache is not enabled.
+		dbconfig.EnableInvalidator = false
+		log.Infof("rowcache is not enabled")
+	}
+
+	start := time.Now()
 	// schemaInfo depends on cachePool. Every table that has a rowcache
 	// points to the cachePool.
 	qe.schemaInfo.Open(connFactory, schemaOverrides, qe.cachePool, qrs, strictMode)
 	log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))
+
+	// Start the invalidator only after schema is loaded.
+	// This will allow qe to find the table info
+	// for the invalidation events that will start coming
+	// immediately.
+	if dbconfig.EnableInvalidator {
+		qe.invalidator.Open(dbconfig.DbName, mysqld)
+	}
 	qe.connPool.Open(connFactory)
 	qe.streamConnPool.Open(connFactory)
 	qe.txPool.Open(connFactory)
@@ -186,8 +197,8 @@ func (qe *QueryEngine) Close() {
 	qe.txPool.Close()
 	qe.streamConnPool.Close()
 	qe.connPool.Close()
-	qe.schemaInfo.Close()
 	qe.invalidator.Close()
+	qe.schemaInfo.Close()
 	qe.cachePool.Close()
 }
 

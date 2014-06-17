@@ -92,7 +92,7 @@ func TestFileInfo(t *testing.T) {
 			if err != nil {
 				ch <- []byte(err.Error())
 			}
-			file.Set(file.pos + int64(n))
+			file.Set(file.lastPos + int64(n))
 			ch <- b[:n]
 		}
 	})

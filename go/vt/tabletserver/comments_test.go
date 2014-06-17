@@ -11,19 +11,77 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
+var testCases = []struct {
+	input          string
+	outSql, outVar string
+}{{
+	"/",
+	"/", "",
+}, {
+	"*/",
+	"*/", "",
+}, {
+	"/*/",
+	"/*/", "",
+}, {
+	"a*/",
+	"a*/", "",
+}, {
+	"*a*/",
+	"*a*/", "",
+}, {
+	"**a*/",
+	"**a*/", "",
+}, {
+	"/*b**a*/",
+	"", "/*b**a*/",
+}, {
+	"/*a*/",
+	"", "/*a*/",
+}, {
+	"/**/",
+	"", "/**/",
+}, {
+	"/*b*/ /*a*/",
+	"", "/*b*/ /*a*/",
+}, {
+	"foo /* bar */",
+	"foo", " /* bar */",
+}, {
+	"foo /** bar */",
+	"foo", " /** bar */",
+}, {
+	"foo /*** bar */",
+	"foo", " /*** bar */",
+}, {
+	"foo /** bar **/",
+	"foo", " /** bar **/",
+}, {
+	"foo /*** bar ***/",
+	"foo", " /*** bar ***/",
+}, {
+	"*** bar ***/",
+	"*** bar ***/", "",
+}}
+
 func TestComments(t *testing.T) {
-	query := proto.Query{
-		Sql:           "foo /*** bar */",
-		BindVariables: make(map[string]interface{}),
-	}
-	stripTrailing(&query)
-	want := proto.Query{
-		Sql: "foo",
-		BindVariables: map[string]interface{}{
-			"_trailingComment": " /*** bar */",
-		},
-	}
-	if !reflect.DeepEqual(query, want) {
-		t.Errorf("got\n%+v, want\n%+v", query, want)
+	for _, testCase := range testCases {
+		query := proto.Query{
+			Sql:           testCase.input,
+			BindVariables: make(map[string]interface{}),
+		}
+
+		stripTrailing(&query)
+
+		want := proto.Query{
+			Sql: testCase.outSql,
+		}
+		want.BindVariables = make(map[string]interface{})
+		if testCase.outVar != "" {
+			want.BindVariables[TRAILING_COMMENT] = testCase.outVar
+		}
+		if !reflect.DeepEqual(query, want) {
+			t.Errorf("test input: '%s', got\n%+v, want\n%+v", testCase.input, query, want)
+		}
 	}
 }

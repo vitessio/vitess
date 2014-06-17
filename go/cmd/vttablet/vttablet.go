@@ -27,6 +27,11 @@ var (
 	agent *tabletmanager.ActionAgent
 )
 
+func init() {
+	servenv.RegisterDefaultFlags()
+	servenv.RegisterDefaultSecureFlags()
+}
+
 // tabletParamToTabletAlias takes either an old style ZK tablet path or a
 // new style tablet alias as a string, and returns a TabletAlias.
 func tabletParamToTabletAlias(param string) topo.TabletAlias {
@@ -92,5 +97,5 @@ func main() {
 		// to update our state, so closing it in OnClose()
 		topo.CloseServers()
 	})
-	servenv.Run()
+	servenv.RunDefault()
 }

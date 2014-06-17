@@ -11,6 +11,7 @@ import (
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -29,6 +30,7 @@ type ScatterConn struct {
 	retryDelay time.Duration
 	retryCount int
 	timeout    time.Duration
+	timings    *stats.MapTimings
 
 	mu         sync.Mutex
 	shardConns map[string]*ShardConn
@@ -43,13 +45,14 @@ type shardActionFunc func(conn *ShardConn, transactionId int64, sResults chan<- 
 
 // NewScatterConn creates a new ScatterConn. All input parameters are passed through
 // for creating the appropriate ShardConn.
-func NewScatterConn(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount int, timeout time.Duration) *ScatterConn {
+func NewScatterConn(serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, timeout time.Duration) *ScatterConn {
 	return &ScatterConn{
 		toposerv:   serv,
 		cell:       cell,
 		retryDelay: retryDelay,
 		retryCount: retryCount,
 		timeout:    timeout,
+		timings:    stats.NewMapTimings(statsName, []string{"Operation", "Keyspace", "Shard", "DbType"}),
 		shardConns: make(map[string]*ShardConn),
 	}
 }
@@ -66,6 +69,7 @@ func (stc *ScatterConn) Execute(
 ) (*mproto.QueryResult, error) {
 	results, allErrors := stc.multiGo(
 		context,
+		"Execute",
 		keyspace,
 		shards,
 		tabletType,
@@ -101,6 +105,7 @@ func (stc *ScatterConn) ExecuteEntityIds(
 ) (*mproto.QueryResult, error) {
 	results, allErrors := stc.multiGo(
 		context,
+		"ExecuteEntityIds",
 		keyspace,
 		shards,
 		tabletType,
@@ -138,6 +143,7 @@ func (stc *ScatterConn) ExecuteBatch(
 ) (qrs *tproto.QueryResultList, err error) {
 	results, allErrors := stc.multiGo(
 		context,
+		"ExecuteBatch",
 		keyspace,
 		shards,
 		tabletType,
@@ -178,6 +184,7 @@ func (stc *ScatterConn) StreamExecute(
 ) error {
 	results, allErrors := stc.multiGo(
 		context,
+		"StreamExecute",
 		keyspace,
 		shards,
 		tabletType,
@@ -282,6 +289,7 @@ func (stc *ScatterConn) aggregateErrors(errors []error) error {
 // The action function must match the shardActionFunc signature.
 func (stc *ScatterConn) multiGo(
 	context interface{},
+	name string,
 	keyspace string,
 	shards []string,
 	tabletType topo.TabletType,
@@ -296,6 +304,9 @@ func (stc *ScatterConn) multiGo(
 		wg.Add(1)
 		go func(shard string) {
 			defer wg.Done()
+			startTime := time.Now()
+			defer stc.timings.Record([]string{name, keyspace, shard, string(tabletType)}, startTime)
+
 			stc.execShardAction(context, keyspace, shard, tabletType, session, action, allErrors, results)
 		}(shard)
 	}

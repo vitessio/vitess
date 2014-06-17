@@ -8,18 +8,18 @@ package sqlparser
 import "bytes"
 
 func SetParseTree(yylex interface{}, stmt Statement) {
-	tn := yylex.(*Tokenizer)
-	tn.ParseTree = stmt
+  tn := yylex.(*Tokenizer)
+  tn.ParseTree = stmt
 }
 
 func SetAllowComments(yylex interface{}, allow bool) {
-	tn := yylex.(*Tokenizer)
-	tn.AllowComments = allow
+  tn := yylex.(*Tokenizer)
+  tn.AllowComments = allow
 }
 
 func ForceEOF(yylex interface{}) {
-	tn := yylex.(*Tokenizer)
-	tn.ForceEOF = true
+  tn := yylex.(*Tokenizer)
+  tn.ForceEOF = true
 }
 
 var (
@@ -27,50 +27,19 @@ var (
   MODE =  []byte("mode")
 )
 
-// Offsets for select parse tree. These need to match the Push order in the select_statement rule.
-const (
-	SELECT_COMMENT_OFFSET = iota
-	SELECT_DISTINCT_OFFSET
-	SELECT_EXPR_OFFSET
-	SELECT_FROM_OFFSET
-	SELECT_WHERE_OFFSET
-	SELECT_GROUP_OFFSET
-	SELECT_HAVING_OFFSET
-	SELECT_ORDER_OFFSET
-	SELECT_LIMIT_OFFSET
-	SELECT_LOCK_OFFSET
-)
-
-const (
-	INSERT_COMMENT_OFFSET = iota
-	INSERT_TABLE_OFFSET
-	INSERT_COLUMN_LIST_OFFSET
-	INSERT_VALUES_OFFSET
-	INSERT_ON_DUP_OFFSET
-)
-
-const (
-	UPDATE_COMMENT_OFFSET = iota
-	UPDATE_TABLE_OFFSET
-	UPDATE_LIST_OFFSET
-	UPDATE_WHERE_OFFSET
-	UPDATE_ORDER_OFFSET
-	UPDATE_LIMIT_OFFSET
-)
-
-const (
-	DELETE_COMMENT_OFFSET = iota
-	DELETE_TABLE_OFFSET
-	DELETE_WHERE_OFFSET
-	DELETE_ORDER_OFFSET
-	DELETE_LIMIT_OFFSET
-)
-
 %}
 
 %union {
-	node      *Node
-  statement Statement
+  node        *Node
+  statement   Statement
+  comments    Comments
+  unionOp     []byte
+  distinct    Distinct
+  selectExprs SelectExprs
+  selectExpr  SelectExpr
+  columns     Columns
+  tableExprs  TableExprs
+  sqlNode     SQLNode
 }
 
 %token <node> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT COMMENT FOR
@@ -101,21 +70,27 @@ const (
 %start any_command
 
 // Fake Tokens
-%token <node> NODE_LIST UPLUS UMINUS CASE_WHEN WHEN_LIST SELECT_STAR NO_DISTINCT FUNCTION NO_LOCK FOR_UPDATE LOCK_IN_SHARE_MODE
-%token <node> NOT_IN NOT_LIKE NOT_BETWEEN IS_NULL IS_NOT_NULL UNION_ALL COMMENT_LIST COLUMN_LIST INDEX_LIST TABLE_EXPR
+%token <node> NODE_LIST UPLUS UMINUS CASE_WHEN WHEN_LIST FUNCTION NO_LOCK FOR_UPDATE LOCK_IN_SHARE_MODE
+%token <node> NOT_IN NOT_LIKE NOT_BETWEEN IS_NULL IS_NOT_NULL UNION_ALL INDEX_LIST TABLE_EXPR
 
 %type <statement> command
 %type <statement> select_statement insert_statement update_statement delete_statement set_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement
-%type <node> comment_opt comment_list
-%type <node> union_op distinct_opt
-%type <node> select_expression_list select_expression expression as_opt
-%type <node> table_expression_list table_expression join_type simple_table_expression dml_table_expression index_hint_list
+%type <comments> comment_opt comment_list
+%type <unionOp> union_op
+%type <distinct> distinct_opt
+%type <selectExprs> select_expression_list
+%type <selectExpr> select_expression
+%type <node> expression as_opt
+%type <tableExprs> table_expression_list
+%type <node> table_expression join_type simple_table_expression dml_table_expression index_hint_list
 %type <node> where_expression_opt boolean_expression condition compare
-%type <node> values parenthesised_lists parenthesised_list value_expression_list value_expression keyword_as_func
+%type <sqlNode> values
+%type <node> parenthesised_lists parenthesised_list value_expression_list value_expression keyword_as_func
 %type <node> unary_operator case_expression when_expression_list when_expression column_name value
 %type <node> group_by_opt having_opt order_by_opt order_list order asc_desc_opt limit_opt lock_opt on_dup_opt
-%type <node> column_list_opt column_list index_list update_list update_expression
+%type <columns> column_list_opt column_list
+%type <node> index_list update_list update_expression
 %type <node> exists_opt not_exists_opt ignore_opt non_rename_operation to_opt constraint_opt using_opt
 %type <node> sql_id
 %type <node> force_eof
@@ -123,13 +98,13 @@ const (
 %%
 
 any_command:
-	command
-	{
-		SetParseTree(yylex, $1)
-	}
+  command
+  {
+    SetParseTree(yylex, $1)
+  }
 
 command:
-	select_statement
+  select_statement
 | insert_statement
 | update_statement
 | delete_statement
@@ -140,181 +115,190 @@ command:
 | drop_statement
 
 select_statement:
-	SELECT comment_opt distinct_opt select_expression_list FROM table_expression_list where_expression_opt group_by_opt having_opt order_by_opt limit_opt lock_opt
-	{
-    $$ = &Select{Comments: $2, Distinct: $3, Expr: $4, From: $6, Where: $7, GroupBy: $8, Having: $9, OrderBy: $10, Limit: $11, Lock: $12}
-	}
+  SELECT comment_opt distinct_opt select_expression_list FROM table_expression_list where_expression_opt group_by_opt having_opt order_by_opt limit_opt lock_opt
+  {
+    $$ = &Select{Comments: $2, Distinct: $3, SelectExprs: $4, From: $6, Where: $7, GroupBy: $8, Having: $9, OrderBy: $10, Limit: $11, Lock: $12}
+  }
 | select_statement union_op select_statement %prec UNION
-	{
-    $$ = &Union{Type: $2.Value, Select1: $1.(SelectStatement), Select2: $3.(SelectStatement)}
-	}
+  {
+    $$ = &Union{Type: $2, Select1: $1.(SelectStatement), Select2: $3.(SelectStatement)}
+  }
 
 insert_statement:
-	INSERT comment_opt INTO dml_table_expression column_list_opt values on_dup_opt
-	{
-    $$ = &Insert{Comments: $2, Table: $4, ColumnList: $5, Values: $6, OnDup: $7}
-	}
+  INSERT comment_opt INTO dml_table_expression column_list_opt values on_dup_opt
+  {
+    $$ = &Insert{Comments: $2, Table: $4, Columns: $5, Values: $6, OnDup: $7}
+  }
 
 update_statement:
-	UPDATE comment_opt dml_table_expression SET update_list where_expression_opt order_by_opt limit_opt
-	{
+  UPDATE comment_opt dml_table_expression SET update_list where_expression_opt order_by_opt limit_opt
+  {
     $$ = &Update{Comments: $2, Table: $3, List: $5, Where: $6, OrderBy: $7, Limit: $8}
-	}
+  }
 
 delete_statement:
-	DELETE comment_opt FROM dml_table_expression where_expression_opt order_by_opt limit_opt
-	{
+  DELETE comment_opt FROM dml_table_expression where_expression_opt order_by_opt limit_opt
+  {
     $$ = &Delete{Comments: $2, Table: $4, Where: $5, OrderBy: $6, Limit: $7}
-	}
+  }
 
 set_statement:
-	SET comment_opt update_list
-	{
-    $$ = &Set{Comments: $2, UpdateList: $3}
-	}
+  SET comment_opt update_list
+  {
+    $$ = &Set{Comments: $2, Updates: $3}
+  }
 
 create_statement:
-	CREATE TABLE not_exists_opt ID force_eof
-	{
+  CREATE TABLE not_exists_opt ID force_eof
+  {
     $$ = &DDLSimple{Action: CREATE, Table: $4}
-	}
+  }
 | CREATE constraint_opt INDEX sql_id using_opt ON ID force_eof
-	{
-		// Change this to an alter statement
+  {
+    // Change this to an alter statement
     $$ = &DDLSimple{Action: ALTER, Table: $7}
-	}
+  }
 | CREATE VIEW sql_id force_eof
-	{
+  {
     $$ = &DDLSimple{Action: CREATE, Table: $3}
-	}
+  }
 
 alter_statement:
-	ALTER ignore_opt TABLE ID non_rename_operation force_eof
-	{
+  ALTER ignore_opt TABLE ID non_rename_operation force_eof
+  {
     $$ = &DDLSimple{Action: ALTER, Table: $4}
-	}
+  }
 | ALTER ignore_opt TABLE ID RENAME to_opt ID
-	{
-		// Change this to a rename statement
+  {
+    // Change this to a rename statement
     $$ = &Rename{OldName: $4, NewName: $7}
-	}
+  }
 | ALTER VIEW sql_id force_eof
-	{
+  {
     $$ = &DDLSimple{Action: ALTER, Table: $3}
-	}
+  }
 
 rename_statement:
-	RENAME TABLE ID TO ID
-	{
+  RENAME TABLE ID TO ID
+  {
     $$ = &Rename{OldName: $3, NewName: $5}
-	}
+  }
 
 drop_statement:
-	DROP TABLE exists_opt ID
-	{
+  DROP TABLE exists_opt ID
+  {
     $$ = &DDLSimple{Action: DROP, Table: $4}
-	}
+  }
 | DROP INDEX sql_id ON ID
-	{
-		// Change this to an alter statement
+  {
+    // Change this to an alter statement
     $$ = &DDLSimple{Action: ALTER, Table: $5}
-	}
+  }
 | DROP VIEW exists_opt sql_id force_eof
-	{
+  {
     $$ = &DDLSimple{Action: DROP, Table: $4}
-	}
+  }
 
 comment_opt:
-	{
-		SetAllowComments(yylex, true)
-	}
-	comment_list
-	{
-		$$ = $2
-		SetAllowComments(yylex, false)
-	}
+  {
+    SetAllowComments(yylex, true)
+  }
+  comment_list
+  {
+    $$ = $2
+    SetAllowComments(yylex, false)
+  }
 
 comment_list:
-	{
-		$$ = NewSimpleParseNode(COMMENT_LIST, "")
-	}
+  {
+    $$ = nil
+  }
 | comment_list COMMENT
-	{
-		$$ = $1.Push($2)
-	}
+  {
+    $$ = append($$, Comment($2.Value))
+  }
 
 union_op:
-	UNION
+  UNION
+  {
+    $$ = $1.Value
+  }
 | UNION ALL
-	{
-		$$ = NewSimpleParseNode(UNION_ALL, "union all")
-	}
+  {
+    $$ = []byte("union all")
+  }
 | MINUS
+  {
+    $$ = $1.Value
+  }
 | EXCEPT
+  {
+    $$ = $1.Value
+  }
 | INTERSECT
+  {
+    $$ = $1.Value
+  }
 
 distinct_opt:
-	{
-		$$ = NewSimpleParseNode(NO_DISTINCT, "")
-	}
+  {
+    $$ = Distinct(false)
+  }
 | DISTINCT
-	{
-		$$ = NewSimpleParseNode(DISTINCT, "distinct")
-	}
+  {
+    $$ = Distinct(true)
+  }
 
 select_expression_list:
-	select_expression
-	{
-		$$ = NewSimpleParseNode(NODE_LIST, "node_list")
-		$$.Push($1)
-	}
+  select_expression
+  {
+    $$ = SelectExprs{$1}
+  }
 | select_expression_list ',' select_expression
-	{
-		$$.Push($3)
-	}
+  {
+    $$ = append($$, $3)
+  }
 
 select_expression:
-	'*'
-	{
-		$$ = NewSimpleParseNode(SELECT_STAR, "*")
-	}
+  '*'
+  {
+    $$ = &StarExpr{}
+  }
 | expression
+  {
+    $$ = &NonStarExpr{Expr: $1}
+  }
 | expression as_opt sql_id
-	{
-		$$ = $2.PushTwo($1, $3)
-	}
+  {
+    $$ = &NonStarExpr{Expr: $1, As: $3.Value}
+  }
 | ID '.' '*'
-	{
-		$$ = $2.PushTwo($1, NewSimpleParseNode(SELECT_STAR, "*"))
-	}
+  {
+    $$ = &StarExpr{TableName: $1.Value}
+  }
 
 expression:
-	boolean_expression
+  boolean_expression
 | value_expression
 
 as_opt:
-	{
-		$$ = NewSimpleParseNode(AS, "as")
-	}
+  {
+    $$ = NewSimpleParseNode(AS, "as")
+  }
 | AS
 
 table_expression_list:
-	table_expression
-	{
-		$$ = NewSimpleParseNode(NODE_LIST, "node_list")
-		$$.Push($1)
-	}
-| '(' table_expression ')'
-	{
-		$$ = $1.Push($2)
-	}
+  table_expression
+  {
+    $$ = TableExprs{$1}
+  }
 | table_expression_list ',' table_expression
-	{
-		$$.Push($3)
-	}
+  {
+    $$ = append($$, $3)
+  }
 
 table_expression:
-	simple_table_expression index_hint_list
+  simple_table_expression index_hint_list
   {
     $$ = NewSimpleParseNode(TABLE_EXPR, "")
     $$.Push($1)
@@ -322,77 +306,81 @@ table_expression:
     $$.Push($2)
   }
 | simple_table_expression as_opt ID index_hint_list
-	{
+  {
     $$ = NewSimpleParseNode(TABLE_EXPR, "")
     $$.Push($1)
     $$.Push(NewSimpleParseNode(NODE_LIST, "node_list").Push($3))
     $$.Push($4)
-	}
+  }
+| '(' table_expression ')'
+  {
+    $$ = $1.Push($2)
+  }
 | table_expression join_type table_expression %prec JOIN
-	{
-		$$ = $2.PushTwo($1, $3)
-	}
+  {
+    $$ = $2.PushTwo($1, $3)
+  }
 | table_expression join_type table_expression ON boolean_expression %prec JOIN
-	{
-		$$ = $2
-		$$.Push($1)
-		$$.Push($3)
-		$$.Push($5)
-	}
+  {
+    $$ = $2
+    $$.Push($1)
+    $$.Push($3)
+    $$.Push($5)
+  }
 
 join_type:
-	JOIN
+  JOIN
 | STRAIGHT_JOIN
 | LEFT JOIN
-	{
-		$$ = NewSimpleParseNode(LEFT, "left join")
-	}
+  {
+    $$ = NewSimpleParseNode(LEFT, "left join")
+  }
 | LEFT OUTER JOIN
-	{
-		$$ = NewSimpleParseNode(LEFT, "left join")
-	}
+  {
+    $$ = NewSimpleParseNode(LEFT, "left join")
+  }
 | RIGHT JOIN
-	{
-		$$ = NewSimpleParseNode(RIGHT, "right join")
-	}
+  {
+    $$ = NewSimpleParseNode(RIGHT, "right join")
+  }
 | RIGHT OUTER JOIN
-	{
-		$$ = NewSimpleParseNode(RIGHT, "right join")
-	}
+  {
+    $$ = NewSimpleParseNode(RIGHT, "right join")
+  }
 | INNER JOIN
-	{
-		$$ = $2
-	}
+  {
+    $$ = $2
+  }
 | CROSS JOIN
-	{
-		$$ = NewSimpleParseNode(CROSS, "cross join")
-	}
+  {
+    $$ = NewSimpleParseNode(CROSS, "cross join")
+  }
 | NATURAL JOIN
-	{
-		$$ = NewSimpleParseNode(NATURAL, "natural join")
-	}
+  {
+    $$ = NewSimpleParseNode(NATURAL, "natural join")
+  }
 
 simple_table_expression:
 ID
 | ID '.' ID
-	{
-		$$ = $2.PushTwo($1, $3)
-	}
+  {
+    $$ = $2.PushTwo($1, $3)
+  }
 | '(' select_statement ')'
-	{
-		$$ = $1.Push(selectNode($2.(SelectStatement)))
-	}
+  {
+    $$ = $1.Push($2)
+  }
 
 dml_table_expression:
 ID
 | ID '.' ID
-	{
-		$$ = $2.PushTwo($1, $3)
-	}
+  {
+    $$ = $2.PushTwo($1, $3)
+  }
 
 index_hint_list:
   {
-		$$ = NewSimpleParseNode(USE, "use")
+    $$ = NewSimpleParseNode(USE, "use")
   }
 | USE INDEX '(' index_list ')'
   {
@@ -404,83 +392,83 @@ index_hint_list:
   }
 
 where_expression_opt:
-	{
-		$$ = NewSimpleParseNode(WHERE, "where")
-	}
+  {
+    $$ = NewSimpleParseNode(WHERE, "where")
+  }
 | WHERE boolean_expression
-	{
-		$$ = $1.Push($2)
-	}
+  {
+    $$ = $1.Push($2)
+  }
 
 boolean_expression:
-	condition
+  condition
 | boolean_expression AND boolean_expression
-	{
-		$$ = $2.PushTwo($1, $3)
-	}
+  {
+    $$ = $2.PushTwo($1, $3)
+  }
 | boolean_expression OR boolean_expression
-	{
-		$$ = $2.PushTwo($1, $3)
-	}
+  {
+    $$ = $2.PushTwo($1, $3)
+  }
 | NOT boolean_expression
-	{
-		$$ = $1.Push($2)
-	}
+  {
+    $$ = $1.Push($2)
+  }
 | '(' boolean_expression ')'
-	{
-		$$ = $1.Push($2)
-	}
+  {
+    $$ = $1.Push($2)
+  }
 
 condition:
-	value_expression compare value_expression
-	{
-		$$ = $2.PushTwo($1, $3)
-	}
+  value_expression compare value_expression
+  {
+    $$ = $2.PushTwo($1, $3)
+  }
 | value_expression IN parenthesised_list
-	{
-		$$ = $2.PushTwo($1, $3)
-	}
+  {
+    $$ = $2.PushTwo($1, $3)
+  }
 | value_expression NOT IN parenthesised_list
-	{
-		$$ = NewSimpleParseNode(NOT_IN, "not in").PushTwo($1, $4)
-	}
+  {
+    $$ = NewSimpleParseNode(NOT_IN, "not in").PushTwo($1, $4)
+  }
 | value_expression LIKE value_expression
-	{
-		$$ = $2.PushTwo($1, $3)
-	}
+  {
+    $$ = $2.PushTwo($1, $3)
+  }
 | value_expression NOT LIKE value_expression
-	{
-		$$ = NewSimpleParseNode(NOT_LIKE, "not like").PushTwo($1, $4)
-	}
+  {
+    $$ = NewSimpleParseNode(NOT_LIKE, "not like").PushTwo($1, $4)
+  }
 | value_expression BETWEEN value_expression AND value_expression
-	{
-		$$ = $2
-		$$.Push($1)
-		$$.Push($3)
-		$$.Push($5)
-	}
+  {
+    $$ = $2
+    $$.Push($1)
+    $$.Push($3)
+    $$.Push($5)
+  }
 | value_expression NOT BETWEEN value_expression AND value_expression
-	{
-		$$ = NewSimpleParseNode(NOT_BETWEEN, "not between")
-		$$.Push($1)
-		$$.Push($4)
-		$$.Push($6)
-	}
+  {
+    $$ = NewSimpleParseNode(NOT_BETWEEN, "not between")
+    $$.Push($1)
+    $$.Push($4)
+    $$.Push($6)
+  }
 | value_expression IS NULL
-	{
-		$$ = NewSimpleParseNode(IS_NULL, "is null").Push($1)
-	}
+  {
+    $$ = NewSimpleParseNode(IS_NULL, "is null").Push($1)
+  }
 | value_expression IS NOT NULL
-	{
-		$$ = NewSimpleParseNode(IS_NOT_NULL, "is not null").Push($1)
-	}
+  {
+    $$ = NewSimpleParseNode(IS_NOT_NULL, "is not null").Push($1)
+  }
 | EXISTS '(' select_statement ')'
-	{
-		$$ = $1.Push(selectNode($3.(SelectStatement)))
-	}
+  {
+    $$ = $1.Push($3)
+  }
 
 compare:
-	'='
+  '='
 | '<'
 | '>'
 | LE
@@ -489,58 +477,58 @@ compare:
 | NULL_SAFE_EQUAL
 
 values:
-	VALUES parenthesised_lists
-	{
-		$$ = $1.Push($2)
-	}
+  VALUES parenthesised_lists
+  {
+    $$ = $1.Push($2)
+  }
 | select_statement
   {
-    $$ = selectNode($1.(SelectStatement))
+    $$ = $1
   }
 
 parenthesised_lists:
-	parenthesised_list
-	{
-		$$ = NewSimpleParseNode(NODE_LIST, "node_list")
-		$$.Push($1)
-	}
+  parenthesised_list
+  {
+    $$ = NewSimpleParseNode(NODE_LIST, "node_list")
+    $$.Push($1)
+  }
 | parenthesised_lists ',' parenthesised_list
-	{
-		$$.Push($3)
-	}
+  {
+    $$.Push($3)
+  }
 
 parenthesised_list:
-	'(' value_expression_list ')'
-	{
-		$$ = $1.Push($2)
-	}
+  '(' value_expression_list ')'
+  {
+    $$ = $1.Push($2)
+  }
 | '(' select_statement ')'
-	{
-		$$ = $1.Push(selectNode($2.(SelectStatement)))
-	}
+  {
+    $$ = $1.Push($2)
+  }
 
 value_expression_list:
-	value_expression
-	{
-		$$ = NewSimpleParseNode(NODE_LIST, "node_list")
-		$$.Push($1)
-	}
+  value_expression
+  {
+    $$ = NewSimpleParseNode(NODE_LIST, "node_list")
+    $$.Push($1)
+  }
 | value_expression_list ',' value_expression
-	{
-		$$.Push($3)
-	}
+  {
+    $$.Push($3)
+  }
 
 value_expression:
-	value
+  value
 | column_name
 | '(' select_statement ')'
-	{
-		$$ = $1.Push(selectNode($2.(SelectStatement)))
-	}
+  {
+    $$ = $1.Push($2)
+  }
 | '(' value_expression_list ')'
-	{
+  {
     if $2.Len() == 1 {
-      $2 = $2.At(0)
+      $2 = $2.NodeAt(0)
     }
     switch $2.Type {
     case NUMBER, STRING, ID, VALUE_ARG, '(', '.':
@@ -548,41 +536,41 @@ value_expression:
     default:
       $$ = $1.Push($2)
     }
-	}
+  }
 | value_expression '&' value_expression
-	{
-		$$ = $2.PushTwo($1, $3)
-	}
+  {
+    $$ = $2.PushTwo($1, $3)
+  }
 | value_expression '|' value_expression
-	{
-		$$ = $2.PushTwo($1, $3)
-	}
+  {
+    $$ = $2.PushTwo($1, $3)
+  }
 | value_expression '^' value_expression
-	{
-		$$ = $2.PushTwo($1, $3)
-	}
+  {
+    $$ = $2.PushTwo($1, $3)
+  }
 | value_expression '+' value_expression
-	{
-		$$ = $2.PushTwo($1, $3)
-	}
+  {
+    $$ = $2.PushTwo($1, $3)
+  }
 | value_expression '-' value_expression
-	{
-		$$ = $2.PushTwo($1, $3)
-	}
+  {
+    $$ = $2.PushTwo($1, $3)
+  }
 | value_expression '*' value_expression
-	{
-		$$ = $2.PushTwo($1, $3)
-	}
+  {
+    $$ = $2.PushTwo($1, $3)
+  }
 | value_expression '/' value_expression
-	{
-		$$ = $2.PushTwo($1, $3)
-	}
+  {
+    $$ = $2.PushTwo($1, $3)
+  }
 | value_expression '%' value_expression
-	{
-		$$ = $2.PushTwo($1, $3)
-	}
+  {
+    $$ = $2.PushTwo($1, $3)
+  }
 | unary_operator value_expression %prec UNARY
-	{
+  {
     if $2.Type == NUMBER { // Simplify trivial unary expressions
       switch $1.Type {
       case UMINUS:
@@ -596,43 +584,43 @@ value_expression:
     } else {
       $$ = $1.Push($2)
     }
-	}
+  }
 | sql_id '(' ')'
-	{
-		$1.Type = FUNCTION
-		$$ = $1.Push(NewSimpleParseNode(NODE_LIST, "node_list"))
-	}
+  {
+    $1.Type = FUNCTION
+    $$ = $1.Push(NewSimpleParseNode(NODE_LIST, "node_list"))
+  }
 | sql_id '(' select_expression_list ')'
-	{
-		$1.Type = FUNCTION
-		$$ = $1.Push($3)
-	}
+  {
+    $1.Type = FUNCTION
+    $$ = $1.Push($3)
+  }
 | sql_id '(' DISTINCT select_expression_list ')'
-	{
-		$1.Type = FUNCTION
-		$$ = $1.Push($3)
-		$$ = $1.Push($4)
-	}
+  {
+    $1.Type = FUNCTION
+    $$ = $1.Push($3)
+    $$ = $1.Push($4)
+  }
 | keyword_as_func '(' select_expression_list ')'
-	{
-		$1.Type = FUNCTION
-		$$ = $1.Push($3)
-	}
+  {
+    $1.Type = FUNCTION
+    $$ = $1.Push($3)
+  }
 | case_expression
 
 keyword_as_func:
-	IF
+  IF
 | VALUES
 
 unary_operator:
-	'+'
-	{
-		$$ = NewSimpleParseNode(UPLUS, "+")
-	}
+  '+'
+  {
+    $$ = NewSimpleParseNode(UPLUS, "+")
+  }
 | '-'
-	{
-		$$ = NewSimpleParseNode(UMINUS, "-")
-	}
+  {
+    $$ = NewSimpleParseNode(UMINUS, "-")
+  }
 | '~'
 
 case_expression:
@@ -668,92 +656,92 @@ when_expression:
   }
 
 column_name:
-	sql_id
+  sql_id
 | ID '.' sql_id
-	{
-		$$ = $2.PushTwo($1, $3)
-	}
+  {
+    $$ = $2.PushTwo($1, $3)
+  }
 
 value:
-	STRING
+  STRING
 | NUMBER
 | VALUE_ARG
 | NULL
 
 group_by_opt:
-	{
-		$$ = NewSimpleParseNode(GROUP, "group")
-	}
+  {
+    $$ = NewSimpleParseNode(GROUP, "group")
+  }
 | GROUP BY value_expression_list
-	{
-		$$ = $1.Push($3)
-	}
+  {
+    $$ = $1.Push($3)
+  }
 
 having_opt:
-	{
-		$$ = NewSimpleParseNode(HAVING, "having")
-	}
+  {
+    $$ = NewSimpleParseNode(HAVING, "having")
+  }
 | HAVING boolean_expression
-	{
-		$$ = $1.Push($2)
-	}
+  {
+    $$ = $1.Push($2)
+  }
 
 order_by_opt:
-	{
-		$$ = NewSimpleParseNode(ORDER, "order")
-	}
+  {
+    $$ = NewSimpleParseNode(ORDER, "order")
+  }
 | ORDER BY order_list
-	{
-		$$ = $1.Push($3)
-	}
+  {
+    $$ = $1.Push($3)
+  }
 
 order_list:
-	order
-	{
-		$$ = NewSimpleParseNode(NODE_LIST, "node_list")
-		$$.Push($1)
-	}
+  order
+  {
+    $$ = NewSimpleParseNode(NODE_LIST, "node_list")
+    $$.Push($1)
+  }
 | order_list ',' order
-	{
-		$$ = $1.Push($3)
-	}
+  {
+    $$ = $1.Push($3)
+  }
 
 order:
-	value_expression asc_desc_opt
-	{
-		$$ = $2.Push($1)
-	}
+  value_expression asc_desc_opt
+  {
+    $$ = $2.Push($1)
+  }
 
 asc_desc_opt:
-	{
-		$$ = NewSimpleParseNode(ASC, "asc")
-	}
+  {
+    $$ = NewSimpleParseNode(ASC, "asc")
+  }
 | ASC
 | DESC
 
 limit_opt:
-	{
-		$$ = NewSimpleParseNode(LIMIT, "limit")
-	}
+  {
+    $$ = NewSimpleParseNode(LIMIT, "limit")
+  }
 | LIMIT value_expression
-	{
-		$$ = $1.Push($2)
-	}
+  {
+    $$ = $1.Push($2)
+  }
 | LIMIT value_expression ',' value_expression
-	{
-		$$ = $1.PushTwo($2, $4)
-	}
+  {
+    $$ = $1.PushTwo($2, $4)
+  }
 
 lock_opt:
-	{
-		$$ = NewSimpleParseNode(NO_LOCK, "")
-	}
+  {
+    $$ = NewSimpleParseNode(NO_LOCK, "")
+  }
 | FOR UPDATE
-	{
-		$$ = NewSimpleParseNode(FOR_UPDATE, " for update")
-	}
+  {
+    $$ = NewSimpleParseNode(FOR_UPDATE, " for update")
+  }
 | LOCK IN sql_id sql_id
-	{
+  {
     if !bytes.Equal($3.Value, SHARE) {
       yylex.Error("expecting share")
       return 1
@@ -762,95 +750,94 @@ lock_opt:
       yylex.Error("expecting mode")
       return 1
     }
-		$$ = NewSimpleParseNode(LOCK_IN_SHARE_MODE, " lock in share mode")
-	}
+    $$ = NewSimpleParseNode(LOCK_IN_SHARE_MODE, " lock in share mode")
+  }
 
 column_list_opt:
-	{
-		$$ = NewSimpleParseNode(COLUMN_LIST, "")
-	}
+  {
+    $$ = nil
+  }
 | '(' column_list ')'
-	{
-		$$ = $2
-	}
+  {
+    $$ = $2
+  }
 
 column_list:
-	column_name
-	{
-		$$ = NewSimpleParseNode(COLUMN_LIST, "")
-		$$.Push($1)
-	}
+  column_name
+  {
+    $$ = Columns{&NonStarExpr{Expr: $1}}
+  }
 | column_list ',' column_name
-	{
-		$$ = $1.Push($3)
-	}
+  {
+    $$ = append($$, &NonStarExpr{Expr: $3})
+  }
 
 index_list:
-	sql_id
-	{
-		$$ = NewSimpleParseNode(INDEX_LIST, "")
-		$$.Push($1)
-	}
+  sql_id
+  {
+    $$ = NewSimpleParseNode(INDEX_LIST, "")
+    $$.Push($1)
+  }
 | index_list ',' sql_id
-	{
-		$$ = $1.Push($3)
-	}
+  {
+    $$ = $1.Push($3)
+  }
 
 on_dup_opt:
-	{
-		$$ = NewSimpleParseNode(DUPLICATE, "duplicate")
-	}
+  {
+    $$ = NewSimpleParseNode(DUPLICATE, "duplicate")
+  }
 | ON DUPLICATE KEY UPDATE update_list
-	{
-		$$ = $2.Push($5)
-	}
+  {
+    $$ = $2.Push($5)
+  }
 
 update_list:
-	update_expression
-	{
-		$$ = NewSimpleParseNode(NODE_LIST, "node_list")
-		$$.Push($1)
-	}
+  update_expression
+  {
+    $$ = NewSimpleParseNode(NODE_LIST, "node_list")
+    $$.Push($1)
+  }
 | update_list ',' update_expression
-	{
-		$$ = $1.Push($3)
-	}
+  {
+    $$ = $1.Push($3)
+  }
 
 update_expression:
-	column_name '=' expression
-	{
-		$$ = $2.PushTwo($1, $3)
-	}
+  column_name '=' expression
+  {
+    $$ = $2.PushTwo($1, $3)
+  }
 
 exists_opt:
-	{ $$ = nil }
+  { $$ = nil }
 | IF EXISTS
 
 not_exists_opt:
-	{ $$ = nil }
+  { $$ = nil }
 | IF NOT EXISTS
 
 ignore_opt:
-	{ $$ = nil }
+  { $$ = nil }
 | IGNORE
 
 non_rename_operation:
-	ALTER
+  ALTER
 | DEFAULT
 | DROP
 | ORDER
 | ID
 
 to_opt:
-	{ $$ = nil }
+  { $$ = nil }
 | TO
 
 constraint_opt:
-	{ $$ = nil }
+  { $$ = nil }
 | UNIQUE
 
 using_opt:
-	{ $$ = nil }
+  { $$ = nil }
 | USING sql_id
 
 sql_id:
@@ -861,5 +848,5 @@ sql_id:
 
 force_eof:
 {
-	ForceEOF(yylex)
+  ForceEOF(yylex)
 }

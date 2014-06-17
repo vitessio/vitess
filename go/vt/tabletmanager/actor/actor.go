@@ -854,3 +854,26 @@ func SetBlacklistedTables(ts topo.Server, tabletAlias topo.TabletAlias, tables [
 	tablet.BlacklistedTables = tables
 	return topo.UpdateTablet(ts, tablet)
 }
+
+// ChecktabletMysqlPort will check the mysql port for the tablet is good,
+// and if not will try to update it
+func CheckTabletMysqlPort(ts topo.Server, mysqlDaemon mysqlctl.MysqlDaemon, tablet *topo.TabletInfo) *topo.TabletInfo {
+	mport, err := mysqlDaemon.GetMysqlPort()
+	if err != nil {
+		log.Warningf("Cannot get current mysql port, not checking it: %v", err)
+		return nil
+	}
+
+	if mport == tablet.Portmap["mysql"] {
+		return nil
+	}
+
+	log.Warningf("MySQL port has changed from %v to %v, updating it in tablet record", tablet.Portmap["mysql"], mport)
+	tablet.Portmap["mysql"] = mport
+	if err := topo.UpdateTablet(ts, tablet); err != nil {
+		log.Warningf("Failed to update tablet record, may use old mysql port")
+		return nil
+	}
+
+	return tablet
+}

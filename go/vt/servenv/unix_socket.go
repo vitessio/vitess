@@ -13,19 +13,32 @@ import (
 )
 
 var (
-	socketFile = flag.String("socket_file", "", "Local unix socket file to listen on")
+	// The flags used when calling RegisterDefaultSocketFileFlags.
+	SocketFile *string
 )
 
-func serveSocketFile() {
-	if *socketFile == "" {
+// ServeSocketFile listen to the named socket and serves RPCs on it.
+func ServeSocketFile(name string) {
+	if name == "" {
 		log.Infof("Not listening on socket file")
 		return
 	}
 
-	l, err := net.Listen("unix", *socketFile)
+	l, err := net.Listen("unix", name)
 	if err != nil {
-		log.Fatalf("Error listening on socket file %v: %v", *socketFile, err)
+		log.Fatalf("Error listening on socket file %v: %v", name, err)
 	}
-	log.Infof("Listening on socket file %v", *socketFile)
+	log.Infof("Listening on socket file %v", name)
 	go http.Serve(l, nil)
+}
+
+// RegisterDefaultSocketFileFlags registers the default flags for listening
+// to a socket. It also registers an OnRun callback to enable the listening
+// socket.
+// This needs to be called before flags are parsed.
+func RegisterDefaultSocketFileFlags() {
+	SocketFile = flag.String("socket_file", "", "Local unix socket file to listen on")
+	OnRun(func() {
+		ServeSocketFile(*SocketFile)
+	})
 }

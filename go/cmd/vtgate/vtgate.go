@@ -25,24 +25,31 @@ var (
 var resilientSrvTopoServer *vtgate.ResilientSrvTopoServer
 var topoReader *TopoReader
 
+func init() {
+	servenv.RegisterDefaultFlags()
+	servenv.RegisterDefaultSecureFlags()
+	servenv.RegisterDefaultSocketFileFlags()
+}
+
 func main() {
 	flag.Parse()
 	servenv.Init()
 
-	// For the initial phase vtgate is exposing
-	// topoReader api. This will be subsumed by
-	// vtgate once vtgate's client functions become active.
 	ts := topo.GetServer()
 	defer topo.CloseServers()
 
 	resilientSrvTopoServer = vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServerCounts")
 
-	stats.Publish("EndpointCount", stats.CountersFunc(resilientSrvTopoServer.HealthyEndpointCount))
-	stats.Publish("DegradedEndpointCount", stats.CountersFunc(resilientSrvTopoServer.DegradedEndpointCount))
+	labels := []string{"Cell", "Keyspace", "Shard", "DbType"}
+	_ = stats.NewMapCountersFunc("EndpointCount", labels, resilientSrvTopoServer.HealthyEndpointCount)
+	_ = stats.NewMapCountersFunc("DegradedEndpointCount", labels, resilientSrvTopoServer.DegradedEndpointCount)
 
+	// For the initial phase vtgate is exposing
+	// topoReader api. This will be subsumed by
+	// vtgate once vtgate's client functions become active.
 	topoReader = NewTopoReader(resilientSrvTopoServer)
 	topo.RegisterTopoReader(topoReader)
 
 	vtgate.Init(resilientSrvTopoServer, *cell, *retryDelay, *retryCount, *timeout)
-	servenv.Run()
+	servenv.RunDefault()
 }

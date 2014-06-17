@@ -31,18 +31,27 @@ func init() {
 
 // BinlogPlayerController controls one player
 type BinlogPlayerController struct {
+	// Configuration parameters (set at construction, immutable)
 	ts       topo.Server
 	dbConfig *mysql.ConnectionParams
 	mysqld   *mysqlctl.Mysqld
 
-	// Information about us
+	// Information about us (set at construction, immutable)
 	cell           string
 	keyspaceIdType key.KeyspaceIdType
 	keyRange       key.KeyRange
 	dbName         string
 
-	// Information about the source
+	// Information about the source (set at construction, immutable)
 	sourceShard topo.SourceShard
+
+	// BinlogPlayerStats has the stats for the players we're going to use
+	// (pointer is set at construction, immutable, values are thread-safe)
+	binlogPlayerStats *binlogplayer.BinlogPlayerStats
+
+	// playerMutex is used to protect the next fields in this structure.
+	// They will change depending on our state.
+	playerMutex sync.Mutex
 
 	// interrupted is the channel to close to stop the playback
 	interrupted chan struct{}
@@ -53,8 +62,8 @@ type BinlogPlayerController struct {
 	// stopAtGroupId contains the stopping point for this player, if any
 	stopAtGroupId int64
 
-	// BinlogPlayerStats has the stats for the players we're going to use
-	binlogPlayerStats *binlogplayer.BinlogPlayerStats
+	// information about the individual tablet we're replicating from
+	sourceTablet topo.TabletAlias
 }
 
 func newBinlogPlayerController(ts topo.Server, dbConfig *mysql.ConnectionParams, mysqld *mysqlctl.Mysqld, cell string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, sourceShard topo.SourceShard, dbName string) *BinlogPlayerController {
@@ -78,6 +87,8 @@ func (bpc *BinlogPlayerController) String() string {
 
 // Start will start the player in the background and run forever
 func (bpc *BinlogPlayerController) Start() {
+	bpc.playerMutex.Lock()
+	defer bpc.playerMutex.Unlock()
 	if bpc.interrupted != nil {
 		log.Warningf("%v: already started", bpc)
 		return
@@ -91,6 +102,8 @@ func (bpc *BinlogPlayerController) Start() {
 
 // StartUntil will start the Player until we reach the given groupId
 func (bpc *BinlogPlayerController) StartUntil(groupId int64) error {
+	bpc.playerMutex.Lock()
+	defer bpc.playerMutex.Unlock()
 	if bpc.interrupted != nil {
 		return fmt.Errorf("%v: already started", bpc)
 	}
@@ -102,17 +115,32 @@ func (bpc *BinlogPlayerController) StartUntil(groupId int64) error {
 	return nil
 }
 
+// reset will clear the internal data structures
+func (bpc *BinlogPlayerController) reset() {
+	bpc.playerMutex.Lock()
+	defer bpc.playerMutex.Unlock()
+	bpc.interrupted = nil
+	bpc.done = nil
+	bpc.sourceTablet = topo.TabletAlias{}
+}
+
 // WaitForStop will wait until the player is stopped. Use this after StartUntil.
 func (bpc *BinlogPlayerController) WaitForStop(waitTimeout time.Duration) error {
+	// take the lock, check the data, get what we need, release the lock
+	bpc.playerMutex.Lock()
 	if bpc.interrupted == nil {
+		bpc.playerMutex.Unlock()
 		log.Warningf("%v: not started", bpc)
 		return fmt.Errorf("WaitForStop called but player not started")
 	}
+	done := bpc.done
+	bpc.playerMutex.Unlock()
+
+	// start waiting
 	timer := time.After(waitTimeout)
 	select {
-	case <-bpc.done:
-		bpc.interrupted = nil
-		bpc.done = nil
+	case <-done:
+		bpc.reset()
 		return nil
 	case <-timer:
 		bpc.Stop()
@@ -121,16 +149,20 @@ func (bpc *BinlogPlayerController) WaitForStop(waitTimeout time.Duration) error 
 }
 
 func (bpc *BinlogPlayerController) Stop() {
+	bpc.playerMutex.Lock()
 	if bpc.interrupted == nil {
+		bpc.playerMutex.Unlock()
 		log.Warningf("%v: not started", bpc)
 		return
 	}
 	log.Infof("%v: stopping binlog player", bpc)
 	close(bpc.interrupted)
+	done := bpc.done
+	bpc.playerMutex.Unlock()
+
 	select {
-	case <-bpc.done:
-		bpc.interrupted = nil
-		bpc.done = nil
+	case <-done:
+		bpc.reset()
 		return
 	}
 }
@@ -144,6 +176,11 @@ func (bpc *BinlogPlayerController) Loop() {
 		}
 		log.Warningf("%v: %v", bpc, err)
 
+		// clear the source
+		bpc.playerMutex.Lock()
+		bpc.sourceTablet = topo.TabletAlias{}
+		bpc.playerMutex.Unlock()
+
 		// sleep for a bit before retrying to connect
 		time.Sleep(5 * time.Second)
 	}
@@ -153,7 +190,7 @@ func (bpc *BinlogPlayerController) Loop() {
 }
 
 func (bpc *BinlogPlayerController) DisableSuperToSetTimestamp() {
-	if err := bpc.mysqld.ExecuteMysqlCommand("set @@global.super_to_set_timestamp = 0"); err != nil {
+	if err := bpc.mysqld.ExecuteSuperQuery("SET @@global.super_to_set_timestamp = 0"); err != nil {
 		log.Warningf("Cannot set super_to_set_timestamp=0: %v", err)
 	} else {
 		log.Info("Successfully set super_to_set_timestamp=0")
@@ -196,6 +233,14 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	}
 	newServerIndex := rand.Intn(len(addrs.Entries))
 	addr := fmt.Sprintf("%v:%v", addrs.Entries[newServerIndex].Host, addrs.Entries[newServerIndex].NamedPortMap["_vtocc"])
+
+	// save our current server
+	bpc.playerMutex.Lock()
+	bpc.sourceTablet = topo.TabletAlias{
+		Cell: bpc.cell,
+		Uid:  addrs.Entries[newServerIndex].Uid,
+	}
+	bpc.playerMutex.Unlock()
 
 	// check which kind of replication we're doing, tables or keyrange
 	if len(bpc.sourceShard.Tables) > 0 {
@@ -358,7 +403,7 @@ func (blm *BinlogPlayerMap) RefreshMap(tablet topo.Tablet, keyspaceInfo *topo.Ke
 // After this is called, the clients will need super privileges
 // to set timestamp
 func (blm *BinlogPlayerMap) enableSuperToSetTimestamp() {
-	if err := blm.mysqld.ExecuteMysqlCommand("set @@global.super_to_set_timestamp = 1"); err != nil {
+	if err := blm.mysqld.ExecuteSuperQuery("SET @@global.super_to_set_timestamp = 1"); err != nil {
 		log.Warningf("Cannot set super_to_set_timestamp=1: %v", err)
 	} else {
 		log.Info("Successfully set super_to_set_timestamp=1")
@@ -479,6 +524,8 @@ type BinlogPlayerControllerStatus struct {
 	SecondsBehindMaster int64
 	Counts              map[string]int64
 	Rates               map[string][]float64
+	State               string
+	SourceTablet        topo.TabletAlias
 }
 
 // BinlogPlayerControllerStatusList is the list of statuses
@@ -532,6 +579,14 @@ func (blm *BinlogPlayerMap) Status() *BinlogPlayerMapStatus {
 			Counts:              bpc.binlogPlayerStats.Timings.Counts(),
 			Rates:               bpc.binlogPlayerStats.Rates.Get(),
 		}
+		bpc.playerMutex.Lock()
+		if bpc.interrupted == nil {
+			bpcs.State = "Stopped"
+		} else {
+			bpcs.State = "Running"
+		}
+		bpcs.SourceTablet = bpc.sourceTablet
+		bpc.playerMutex.Unlock()
 		result.Controllers = append(result.Controllers, bpcs)
 	}
 	sort.Sort(result.Controllers)

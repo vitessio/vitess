@@ -35,8 +35,8 @@ func KeyRangeFilterFunc(kit key.KeyspaceIdType, keyrange key.KeyRange, sendReply
 			case proto.BL_SET:
 				filtered = append(filtered, statement)
 			case proto.BL_DDL:
-				filtered = append(filtered, statement)
-				matched = true
+				log.Warningf("Not forwarding DDL: %s", string(statement.Sql))
+				continue
 			case proto.BL_DML:
 				keyspaceIndex := bytes.LastIndex(statement.Sql, KEYSPACE_ID_COMMENT)
 				if keyspaceIndex == -1 {

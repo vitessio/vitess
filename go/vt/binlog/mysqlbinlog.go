@@ -5,7 +5,6 @@
 package binlog
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"os/exec"
@@ -61,10 +60,6 @@ type logWrapper struct {
 }
 
 func (lwp *logWrapper) Write(p []byte) (n int, err error) {
-	if bytes.HasPrefix(p, []byte("WARNING")) {
-		log.Warningf("%s", p)
-	} else {
-		log.Errorf("%s", p)
-	}
+	log.Infof("%s", p)
 	return len(p), nil
 }
