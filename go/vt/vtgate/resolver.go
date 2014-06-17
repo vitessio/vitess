@@ -20,6 +20,11 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
+var (
+	separator        = []byte(", ")
+	sqlVarIdentifier = []byte(":")
+)
+
 // Resolver is the layer to resolve KeyspaceIds and KeyRanges
 // to shards. It will try to re-resolve shards if ScatterConn
 // returns retryable error, which may imply horizontal or vertical
@@ -350,9 +355,9 @@ func buildEntityIds(shardIDMap map[string][]interface{}, qSql, entityColName str
 			bvName := fmt.Sprintf("%v%v", entityColName, i)
 			bindVar[bvName] = id
 			if i > 0 {
-				b.Write([]byte(", "))
+				b.Write(separator)
 			}
-			b.Write([]byte(":"))
+			b.Write(sqlVarIdentifier)
 			b.Write([]byte(bvName))
 		}
 		b.Write([]byte(")"))
