@@ -334,7 +334,8 @@ func StrsEquals(a, b []string) bool {
 }
 
 func buildEntityIds(shardIDMap map[string][]interface{}, qSql, entityColName string, qBindVars map[string]interface{}) ([]string, map[string]string, map[string]map[string]interface{}) {
-	shards := make([]string, 0, 1)
+	shards := make([]string, len(shardIDMap))
+	shardsIdx := 0
 	sqls := make(map[string]string)
 	bindVars := make(map[string]map[string]interface{})
 	for shard, ids := range shardIDMap {
@@ -351,12 +352,14 @@ func buildEntityIds(shardIDMap map[string][]interface{}, qSql, entityColName str
 			if i > 0 {
 				b.Write([]byte(", "))
 			}
-			b.Write([]byte(fmt.Sprintf(":%v", bvName)))
+			b.Write([]byte(":"))
+			b.Write([]byte(bvName))
 		}
 		b.Write([]byte(")"))
-		shards = append(shards, shard)
 		sqls[shard] = insertSqlClause(qSql, b.String())
 		bindVars[shard] = bindVar
+		shards[shardsIdx] = shard
+		shardsIdx++
 	}
 	return shards, sqls, bindVars
 }
