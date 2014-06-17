@@ -1,4 +1,4 @@
-package com.github.youtube.vitess.jdbc;
+package com.github.youtube.vitess.jdbc.vtocc;
 
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.times;
@@ -6,14 +6,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import com.google.inject.Provider;
 import com.google.protobuf.RpcController;
 import com.google.protobuf.ServiceException;
 
-import com.github.youtube.vitess.jdbc.QueryService.Session;
-import com.github.youtube.vitess.jdbc.QueryService.SessionInfo;
-import com.github.youtube.vitess.jdbc.QueryService.SessionParams;
-import com.github.youtube.vitess.jdbc.QueryService.SqlQuery;
-import com.github.youtube.vitess.jdbc.QueryService.TransactionInfo;
+import com.github.youtube.vitess.jdbc.vtocc.QueryService.Session;
+import com.github.youtube.vitess.jdbc.vtocc.QueryService.SessionInfo;
+import com.github.youtube.vitess.jdbc.vtocc.QueryService.SessionParams;
+import com.github.youtube.vitess.jdbc.vtocc.QueryService.SqlQuery;
+import com.github.youtube.vitess.jdbc.vtocc.QueryService.TransactionInfo;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -33,13 +34,17 @@ public class VtoccTransactionHandlerTest {
   @Mock
   SqlQuery.BlockingInterface sqlQueryStubMock;
 
+  @Mock
+  Provider<RpcController> rpcControllerProvider;
+
   VtoccTransactionHandler vtoccTransactionHandler;
   SessionInfo sessionInfo = SessionInfo.newBuilder().setSessionId(42).build();
 
   @Before
   public void setUp() throws Exception {
     MockitoAnnotations.initMocks(this);
-    vtoccTransactionHandler = new VtoccTransactionHandler(sqlQueryStubMock, "");
+    vtoccTransactionHandler = new VtoccTransactionHandler(sqlQueryStubMock, "",
+        rpcControllerProvider);
     when(sqlQueryStubMock.getSessionId(any(RpcController.class), any(SessionParams.class)))
         .thenReturn(sessionInfo).thenThrow(new IllegalStateException("Don't get session twice"));
     when(sqlQueryStubMock.begin(any(RpcController.class), any(Session.class)))
@@ -71,25 +76,6 @@ public class VtoccTransactionHandlerTest {
     verifyNoMoreInteractions(sqlQueryStubMock);
   }
 
-  @Test(expected = IllegalStateException.class)
-  public void testCommitWithoutBegin() throws Exception {
-    vtoccTransactionHandler.commit();
-  }
-
-  @Test(expected = IllegalStateException.class)
-  public void testDoubleCommit() throws Exception {
-    vtoccTransactionHandler.begin();
-    vtoccTransactionHandler.commit();
-    vtoccTransactionHandler.commit();
-  }
-
-  @Test(expected = IllegalStateException.class)
-  public void testCommitRollback() throws Exception {
-    vtoccTransactionHandler.begin();
-    vtoccTransactionHandler.commit();
-    vtoccTransactionHandler.rollback();
-  }
-
   @Test(expected = SQLException.class)
   public void testBeginException() throws Exception {
     when(sqlQueryStubMock.begin(any(RpcController.class), any(Session.class)))
@@ -103,6 +89,7 @@ public class VtoccTransactionHandlerTest {
       verifyNoMoreInteractions(sqlQueryStubMock);
     }
   }
+
   @Test(expected = SQLException.class)
   public void testCommitException() throws Exception {
     when(sqlQueryStubMock.commit(any(RpcController.class), any(Session.class)))

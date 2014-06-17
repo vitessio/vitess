@@ -1,12 +1,13 @@
-package com.github.youtube.vitess.jdbc;
+package com.github.youtube.vitess.jdbc.vtocc;
 
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.verify;
 
-import com.github.youtube.vitess.jdbc.VtoccModule.VtoccConnectionCreationScope;
 import com.google.inject.Key;
 import com.google.inject.util.Providers;
+
+import com.github.youtube.vitess.jdbc.vtocc.VtoccModule.VtoccConnectionCreationScope;
 
 import org.junit.Assert;
 import org.junit.Before;

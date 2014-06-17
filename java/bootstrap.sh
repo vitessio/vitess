@@ -9,9 +9,10 @@ echo "[INFO] Checking for prerequisites..."
 [ -z "$VTTOP" ] && echo "[ERROR] source dev.env first, VTTOP is empty" 1>&2 && exit 1
 [ -z "$VTROOT" ] && echo "[ERROR] source dev.env first, VTROOT is empty" 1>&2 && exit 1
 [ -z "$VTDATAROOT" ] && echo "[ERROR] source dev.env first, VTDATAROOT is empty" 1>&2 && exit 1
-! sbt --version && echo "[ERROR] Install sbt" 1>&2 && exit 1
-! mvn --version && echo "[ERROR] Install maven" 1>&2 && exit 1
-! git --version && echo "[ERROR] Install git" 1>&2 && exit 1
+type sbt >/dev/null 2>&1 || { echo >&2 "[ERROR] Install sbt from http://www.scala-sbt.org/release/tutorial/Installing-sbt-on-Linux.html. Aborting."; exit 1; }
+type protoc >/dev/null 2>&1 || { echo >&2 "[ERROR] Install protoc with sudo apt-get install protobuf-compiler. Aborting."; exit 1; }
+type mvn >/dev/null 2>&1 || { echo >&2 "[ERROR] Install maven with sudo apt-get install maven. Aborting."; exit 1; }
+type git >/dev/null 2>&1 || { echo >&2 "[ERROR] Install git with sudo apt-get install git. Aborting."; exit 1; }
 
 ACOLYTE_DIST="$VTROOT/dist/java/org/eu/acolyte/acolyte-core/1.0.13-PATCHED"
 ACOLYTE="$VTTOP/third_party/acolyte"

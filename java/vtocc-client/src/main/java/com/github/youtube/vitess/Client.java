@@ -4,7 +4,7 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.Maps;
 
-import com.github.youtube.vitess.jdbc.Driver;
+import com.github.youtube.vitess.jdbc.bson.Driver;
 
 import org.apache.commons.cli.BasicParser;
 import org.apache.commons.cli.CommandLine;
@@ -30,58 +30,6 @@ import java.util.concurrent.TimeUnit;
 public class Client {
 
   private static final Logger logger = LoggerFactory.getLogger(Client.class);
-
-  /**
-   * Parses command line parameters into a convenient class.
-   */
-  public static final class CommandLineOptions {
-
-    public final int count;
-    public final Map<String, String> bindvars;
-    public final String server;
-    public final boolean verbose;
-    public final String sql;
-
-    public CommandLineOptions(int count, Map<String, String> bindvars, String server,
-        boolean verbose, String sql) {
-      this.count = count;
-      this.bindvars = bindvars;
-      this.server = server;
-      this.verbose = verbose;
-      this.sql = sql;
-    }
-
-    @SuppressWarnings("AccessStaticViaInstance")
-    private static final Options options = new Options()
-        .addOption(OptionBuilder.withLongOpt("count").hasArg()
-            .withDescription("how many times to run the query").create())
-        .addOption(OptionBuilder.withLongOpt("bindvars").withValueSeparator().hasArg()
-            .withDescription("bind vars as a json dictionary").create())
-        .addOption(OptionBuilder.withLongOpt("server").hasArg()
-            .withDescription(
-                "vtocc server as hostname:port/keyspace")
-            .create())
-        .addOption(OptionBuilder.withLongOpt("driver").hasArg()
-            .withDescription(
-                "which driver to use (one of vttable, vttablet-streaming, vtdb, vtdb-streaming)")
-            .create())
-        .addOption(
-            OptionBuilder.withLongOpt("verbose").hasArg().withDescription("show results").create());
-
-    public static CommandLineOptions parseCommandLine(String[] args) throws ParseException {
-      CommandLine line = new BasicParser().parse(options, args);
-      int count = Integer.parseInt(line.getOptionValue("count", "1"));
-      Map<String, String> bindvars = Maps.fromProperties(line.getOptionProperties("bindvars"));
-      String server = line.getOptionValue("server", "localhost:6603/test_keyspace");
-      boolean verbose = Boolean.parseBoolean(line.getOptionValue("verbose", "false"));
-      String sql = Joiner.on(' ').join(line.getArgList());
-      return new CommandLineOptions(count, bindvars, server, verbose, sql);
-    }
-
-    public static void printHelp() {
-      new HelpFormatter().printHelp("java -jar vtocc-client.jar", options);
-    }
-  }
 
   @SuppressWarnings("AccessStaticViaInstance")
   public static void main(String[] args) {
@@ -151,5 +99,56 @@ public class Client {
     logger.info("Total time: {}ms / Row count: {}",
         (float) queryStopwatch.elapsed(TimeUnit.NANOSECONDS) / TimeUnit.MILLISECONDS.toNanos(1),
         rowIndex);
+  }
+
+  /**
+   * Parses command line parameters into a convenient class.
+   */
+  public static final class CommandLineOptions {
+
+    @SuppressWarnings("AccessStaticViaInstance")
+    private static final Options options = new Options()
+        .addOption(OptionBuilder.withLongOpt("count").hasArg()
+            .withDescription("how many times to run the query").create())
+        .addOption(OptionBuilder.withLongOpt("bindvars").withValueSeparator().hasArg()
+            .withDescription("bind vars as a json dictionary").create())
+        .addOption(OptionBuilder.withLongOpt("server").hasArg()
+            .withDescription(
+                "vtocc server as hostname:port/keyspace")
+            .create())
+        .addOption(OptionBuilder.withLongOpt("driver").hasArg()
+            .withDescription(
+                "which driver to use (one of vttable, vttablet-streaming, vtdb, vtdb-streaming)")
+            .create())
+        .addOption(
+            OptionBuilder.withLongOpt("verbose").hasArg().withDescription("show results").create());
+    public final int count;
+    public final Map<String, String> bindvars;
+    public final String server;
+    public final boolean verbose;
+    public final String sql;
+
+    public CommandLineOptions(int count, Map<String, String> bindvars, String server,
+        boolean verbose, String sql) {
+      this.count = count;
+      this.bindvars = bindvars;
+      this.server = server;
+      this.verbose = verbose;
+      this.sql = sql;
+    }
+
+    public static CommandLineOptions parseCommandLine(String[] args) throws ParseException {
+      CommandLine line = new BasicParser().parse(options, args);
+      int count = Integer.parseInt(line.getOptionValue("count", "1"));
+      Map<String, String> bindvars = Maps.fromProperties(line.getOptionProperties("bindvars"));
+      String server = line.getOptionValue("server", "localhost:6603/test_keyspace");
+      boolean verbose = Boolean.parseBoolean(line.getOptionValue("verbose", "false"));
+      String sql = Joiner.on(' ').join(line.getArgList());
+      return new CommandLineOptions(count, bindvars, server, verbose, sql);
+    }
+
+    public static void printHelp() {
+      new HelpFormatter().printHelp("java -jar vtocc-client.jar", options);
+    }
   }
 }

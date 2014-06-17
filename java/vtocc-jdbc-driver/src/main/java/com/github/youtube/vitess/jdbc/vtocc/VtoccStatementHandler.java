@@ -1,14 +1,15 @@
-package com.github.youtube.vitess.jdbc;
+package com.github.youtube.vitess.jdbc.vtocc;
 
-import com.github.youtube.vitess.jdbc.AcolyteRowList.Factory;
 import com.google.common.annotations.VisibleForTesting;
-import com.github.youtube.vitess.jdbc.QueryService.Query;
-import com.github.youtube.vitess.jdbc.QueryService.SqlQuery;
-
+import com.google.protobuf.RpcController;
 import com.google.protobuf.ServiceException;
-import acolyte.QueryResult;
-import acolyte.StatementHandler;
-import acolyte.UpdateResult;
+
+import com.github.youtube.vitess.jdbc.vtocc.AcolyteRowList.Factory;
+import com.github.youtube.vitess.jdbc.vtocc.QueryService.Query;
+import com.github.youtube.vitess.jdbc.vtocc.QueryService.SqlQuery;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -17,33 +18,40 @@ import java.util.regex.Pattern;
 
 import javax.inject.Inject;
 
+import acolyte.QueryResult;
+import acolyte.StatementHandler;
+import acolyte.UpdateResult;
+
 /**
  * Implementation of {@link StatementHandler} that glues Acolyte to {@link SqlQuery} calls.
  *
  * Instances are only called from within {@link acolyte.Driver}, contract is not well defined
- * therefore there are no unit tests. This code is tested as a part of integration tests
- * running SQL queries through JDBC.
+ * therefore there are no unit tests. This code is tested as a part of integration tests running SQL
+ * queries through JDBC.
  */
 public class VtoccStatementHandler implements StatementHandler {
-
-  // TODO(timofeyb): uncomment
-  //private static final FormattingLogger logger = Loggers.getContextFormattingLogger();
 
   private static final Pattern selectQueryPattern =
       Pattern.compile("^\\s*SELECT.*", Pattern.CASE_INSENSITIVE);
   private static final Pattern updateWhenNonSelectQueryPattern = Pattern.compile("^\\s*\\w.*");
-
+  private final Logger LOGGER = LoggerFactory.getLogger(VtoccStatementHandler.class);
   private final VtoccQueryFactory vtoccQueryFactory;
   private final Factory acolyteRowListFactory;
   private final SqlQuery.BlockingInterface sqlQueryBlockingInterface;
 
+
+  private final com.google.inject.Provider<RpcController> rpcControllerProvider;
+
+
   @Inject
   @VisibleForTesting
   VtoccStatementHandler(VtoccQueryFactory vtoccQueryFactory,
-      AcolyteRowList.Factory acolyteRowListFactory, SqlQuery.BlockingInterface sqlQueryBlockingInterface) {
+      Factory acolyteRowListFactory, SqlQuery.BlockingInterface sqlQueryBlockingInterface,
+      com.google.inject.Provider<RpcController> rpcControllerProvider) {
     this.vtoccQueryFactory = vtoccQueryFactory;
     this.acolyteRowListFactory = acolyteRowListFactory;
     this.sqlQueryBlockingInterface = sqlQueryBlockingInterface;
+    this.rpcControllerProvider = rpcControllerProvider;
   }
 
   /**
@@ -54,9 +62,11 @@ public class VtoccStatementHandler implements StatementHandler {
     try {
       Query query = vtoccQueryFactory.create(sql, parameters);
       // TODO(timofeyb): provide rpc controller
-      QueryService.QueryResult response = sqlQueryBlockingInterface.execute(null, query);
+      QueryService.QueryResult response = sqlQueryBlockingInterface
+          .execute(rpcControllerProvider.get(), query);
       return acolyteRowListFactory.create(response).asResult();
     } catch (ServiceException e) {
+      LOGGER.debug("SqlQuery failed: ", e);
       throw VtoccSqlExceptionFactory.getSqlException(e);
     }
   }
@@ -68,20 +78,23 @@ public class VtoccStatementHandler implements StatementHandler {
   public UpdateResult whenSQLUpdate(String sql, List<Parameter> parameters) throws SQLException {
     try {
       Query query = vtoccQueryFactory.create(sql, parameters);
+
       // TODO(timofeyb): provide rpc controller
-      QueryService.QueryResult response = sqlQueryBlockingInterface.execute(null, query);
+      QueryService.QueryResult response = sqlQueryBlockingInterface
+          .execute(rpcControllerProvider.get(), query);
       return new UpdateResult((int) response.getRowsAffected());
     } catch (ServiceException e) {
+      LOGGER.debug("SqlUpdate failed: ", e);
       throw VtoccSqlExceptionFactory.getSqlException(e);
     }
   }
 
   /**
-   * Due to internal structure of current implementation of Acolyte we're required to know
-   * in advance if any specific query is a query or a DML operation.
+   * Due to internal structure of current implementation of Acolyte we're required to know in
+   * advance if any specific query is a query or a DML operation.
    *
-   * Return true for queries, false for DMLs and throws {@link IllegalArgumentException}
-   * in all cases when we're not completely sure.
+   * Return true for queries, false for DMLs and throws {@link IllegalArgumentException} in all
+   * cases when we're not completely sure.
    */
   @Override
   public boolean isQuery(String sql) {
