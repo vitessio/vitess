@@ -36,7 +36,9 @@ var (
   unionOp     []byte
   distinct    Distinct
   selectExprs SelectExprs
+  selectExpr  SelectExpr
   columns     Columns
+  tableExprs  TableExprs
   sqlNode     SQLNode
 }
 
@@ -68,7 +70,7 @@ var (
 %start any_command
 
 // Fake Tokens
-%token <node> NODE_LIST UPLUS UMINUS CASE_WHEN WHEN_LIST SELECT_STAR NO_DISTINCT FUNCTION NO_LOCK FOR_UPDATE LOCK_IN_SHARE_MODE
+%token <node> NODE_LIST UPLUS UMINUS CASE_WHEN WHEN_LIST FUNCTION NO_LOCK FOR_UPDATE LOCK_IN_SHARE_MODE
 %token <node> NOT_IN NOT_LIKE NOT_BETWEEN IS_NULL IS_NOT_NULL UNION_ALL INDEX_LIST TABLE_EXPR
 
 %type <statement> command
@@ -78,8 +80,10 @@ var (
 %type <unionOp> union_op
 %type <distinct> distinct_opt
 %type <selectExprs> select_expression_list
-%type <node> select_expression expression as_opt
-%type <node> table_expression_list table_expression join_type simple_table_expression dml_table_expression index_hint_list
+%type <selectExpr> select_expression
+%type <node> expression as_opt
+%type <tableExprs> table_expression_list
+%type <node> table_expression join_type simple_table_expression dml_table_expression index_hint_list
 %type <node> where_expression_opt boolean_expression condition compare
 %type <sqlNode> values
 %type <node> parenthesised_lists parenthesised_list value_expression_list value_expression keyword_as_func
@@ -258,16 +262,19 @@ select_expression_list:
 select_expression:
   '*'
   {
-    $$ = NewSimpleParseNode(SELECT_STAR, "*")
+    $$ = &StarExpr{}
   }
 | expression
+  {
+    $$ = &NonStarExpr{Expr: $1}
+  }
 | expression as_opt sql_id
   {
-    $$ = $2.PushTwo($1, $3)
+    $$ = &NonStarExpr{Expr: $1, As: $3.Value}
   }
 | ID '.' '*'
   {
-    $$ = $2.PushTwo($1, NewSimpleParseNode(SELECT_STAR, "*"))
+    $$ = &StarExpr{TableName: $1.Value}
   }
 
 expression:
@@ -283,16 +290,11 @@ as_opt:
 table_expression_list:
   table_expression
   {
-    $$ = NewSimpleParseNode(NODE_LIST, "node_list")
-    $$.Push($1)
-  }
-| '(' table_expression ')'
-  {
-    $$ = $1.Push($2)
+    $$ = TableExprs{$1}
   }
 | table_expression_list ',' table_expression
   {
-    $$.Push($3)
+    $$ = append($$, $3)
   }
 
 table_expression:
@@ -309,6 +311,10 @@ table_expression:
     $$.Push($1)
     $$.Push(NewSimpleParseNode(NODE_LIST, "node_list").Push($3))
     $$.Push($4)
+  }
+| '(' table_expression ')'
+  {
+    $$ = $1.Push($2)
   }
 | table_expression join_type table_expression %prec JOIN
   {
@@ -759,11 +765,11 @@ column_list_opt:
 column_list:
   column_name
   {
-    $$ = Columns{$1}
+    $$ = Columns{&NonStarExpr{Expr: $1}}
   }
 | column_list ',' column_name
   {
-    $$ = append($$, $3)
+    $$ = append($$, &NonStarExpr{Expr: $3})
   }
 
 index_list:

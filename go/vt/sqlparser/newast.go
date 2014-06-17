@@ -41,7 +41,7 @@ type Select struct {
 	Comments    Comments
 	Distinct    Distinct
 	SelectExprs SelectExprs
-	From        *Node
+	From        TableExprs
 	Where       *Node
 	GroupBy     *Node
 	Having      *Node
@@ -198,31 +198,73 @@ func (node Distinct) Format(buf *TrackedBuffer) {
 }
 
 // SelectExprs represents SELECT expressions.
-type SelectExprs []*Node
+type SelectExprs []SelectExpr
 
 func (node SelectExprs) Format(buf *TrackedBuffer) {
-	for i, sel := range node {
-		if i == 0 {
-			buf.Fprintf("%v", sel)
-		} else {
-			buf.Fprintf(", %v", sel)
-		}
+	var prefix string
+	for _, n := range node {
+		buf.Fprintf("%s%v", prefix, n)
+		prefix = ", "
+	}
+}
+
+// SelectExpr defines the interface for a
+// SELECT expression. selectExpr is the dummy
+// function.
+type SelectExpr interface {
+	selectExpr()
+	SQLNode
+}
+
+// StarExpr defines a '*' or 'table.*' expression.
+type StarExpr struct {
+	TableName []byte
+}
+
+func (*StarExpr) selectExpr() {}
+
+func (node *StarExpr) Format(buf *TrackedBuffer) {
+	if len(node.TableName) != 0 {
+		buf.Fprintf("%s.", node.TableName)
+	}
+	buf.Fprintf("*")
+}
+
+// NonStarExpr defines a non-'*' select expr.
+type NonStarExpr struct {
+	Expr *Node
+	As   []byte
+}
+
+func (*NonStarExpr) selectExpr() {}
+
+func (node *NonStarExpr) Format(buf *TrackedBuffer) {
+	buf.Fprintf("%v", node.Expr)
+	if len(node.As) != 0 {
+		buf.Fprintf(" as %s", node.As)
 	}
 }
 
 // Columns represents an insert column list.
-type Columns []*Node
+// The syntax for Columns is a subset of SelectExprs.
+// So, it's castable to a SelectExprs and can be analyzed
+// as such.
+type Columns []SelectExpr
 
 func (node Columns) Format(buf *TrackedBuffer) {
 	if len(node) == 0 {
 		return
 	}
-	for i, sel := range node {
-		if i == 0 {
-			buf.Fprintf("(%v", sel)
-		} else {
-			buf.Fprintf(", %v", sel)
-		}
+	buf.Fprintf("(%v)", SelectExprs(node))
+}
+
+// TableExprs represents a list of table expressions.
+type TableExprs []*Node
+
+func (node TableExprs) Format(buf *TrackedBuffer) {
+	var prefix string
+	for _, n := range node {
+		buf.Fprintf("%s%v", prefix, n)
+		prefix = ", "
 	}
-	buf.Fprintf(")")
 }

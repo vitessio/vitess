@@ -295,7 +295,7 @@ func execAnalyzeSelect(sel *Select, getTable TableGetter) (plan *ExecPlan) {
 	}
 
 	// from
-	tableName, hasHints := sel.From.execAnalyzeFrom()
+	tableName, hasHints := execAnalyzeFrom(sel.From)
 	if tableName == "" {
 		plan.Reason = REASON_TABLE
 		return plan
@@ -415,12 +415,11 @@ func execAnalyzeInsert(ins *Insert, getTable TableGetter) (plan *ExecPlan) {
 		plan.PlanId = PLAN_INSERT_SUBQUERY
 		plan.OuterQuery = GenerateInsertOuterQuery(ins)
 		plan.Subquery = GenerateSelectLimitQuery(sel)
-		// Column list syntax is a subset of select expressions
 		if len(ins.Columns) != 0 {
 			plan.ColumnNumbers = execAnalyzeSelectExprs(SelectExprs(ins.Columns), tableInfo)
 		} else {
-			// SELECT_STAR node will expand into all columns
-			n := SelectExprs{NewSimpleParseNode(SELECT_STAR, "*")}
+			// StarExpr node will expand into all columns
+			n := SelectExprs{&StarExpr{}}
 			plan.ColumnNumbers = execAnalyzeSelectExprs(n, tableInfo)
 		}
 		plan.SubqueryPKColumns = pkColumnNumbers
@@ -576,7 +575,7 @@ func execAnalyzeSelectStructure(sel *Select) bool {
 func execAnalyzeSelectExprs(exprs SelectExprs, table *schema.Table) (selects []int) {
 	selects = make([]int, 0, len(exprs))
 	for _, expr := range exprs {
-		if name := expr.execAnalyzeSelectExpression(); name != "" {
+		if name := execAnalyzeSelectExpr(expr); name != "" {
 			if name == "*" {
 				for colIndex := range table.Columns {
 					selects = append(selects, colIndex)
@@ -594,14 +593,24 @@ func execAnalyzeSelectExprs(exprs SelectExprs, table *schema.Table) (selects []i
 	return selects
 }
 
-func (node *Node) execAnalyzeSelectExpression() (name string) {
+func execAnalyzeSelectExpr(expr SelectExpr) string {
+	switch expr := expr.(type) {
+	case *StarExpr:
+		return "*"
+	case *NonStarExpr:
+		return execGetColumnName(expr.Expr)
+	}
+	panic("unreachable")
+}
+
+func execGetColumnName(node *Node) string {
 	switch node.Type {
-	case ID, SELECT_STAR:
+	case ID:
 		return string(node.Value)
 	case '.':
-		return node.NodeAt(1).execAnalyzeSelectExpression()
-	case AS:
-		return node.NodeAt(0).execAnalyzeSelectExpression()
+		if node.NodeAt(1).Type == ID {
+			return string(node.NodeAt(1).Value)
+		}
 	}
 	return ""
 }
@@ -609,15 +618,19 @@ func (node *Node) execAnalyzeSelectExpression() (name string) {
 //-----------------------------------------------
 // From
 
-func (node *Node) execAnalyzeFrom() (tablename string, hasHints bool) {
-	if node.Len() > 1 {
+func execAnalyzeFrom(tableExprs TableExprs) (tablename string, hasHints bool) {
+	if len(tableExprs) > 1 {
 		return "", false
 	}
-	if node.NodeAt(0).Type != TABLE_EXPR {
+	node := tableExprs[0]
+	for node.Type == '(' {
+		node = node.NodeAt(0)
+	}
+	if node.Type != TABLE_EXPR {
 		return "", false
 	}
-	hasHints = (node.NodeAt(0).NodeAt(2).Len() > 0)
-	return node.NodeAt(0).NodeAt(0).collectTableName(), hasHints
+	hasHints = (node.NodeAt(2).Len() > 0)
+	return node.NodeAt(0).collectTableName(), hasHints
 }
 
 func (node *Node) collectTableName() string {
@@ -732,7 +745,7 @@ func hasINClause(conditions []*Node) bool {
 
 func (node *Node) execAnalyzeUpdateExpressions(pkIndex *schema.Index) (pkValues []interface{}, ok bool) {
 	for i := 0; i < node.Len(); i++ {
-		columnName := string(node.NodeAt(i).NodeAt(0).execAnalyzeSelectExpression())
+		columnName := string(execGetColumnName(node.NodeAt(i).NodeAt(0)))
 		index := pkIndex.FindColumn(columnName)
 		if index == -1 {
 			continue
@@ -763,7 +776,7 @@ func getInsertPKColumns(columns Columns, tableInfo *schema.Table) (pkColumnNumbe
 		pkColumnNumbers[i] = -1
 	}
 	for i, column := range columns {
-		index := pkIndex.FindColumn(string(column.execAnalyzeSelectExpression()))
+		index := pkIndex.FindColumn(string(execGetColumnName(column.(*NonStarExpr).Expr)))
 		if index == -1 {
 			continue
 		}
@@ -1059,7 +1072,7 @@ func GenerateSelectSubquery(sel *Select, tableInfo *schema.Table, index string) 
 	hint := NewSimpleParseNode(USE, "use")
 	hint.Push(NewSimpleParseNode(INDEX_LIST, ""))
 	hint.NodeAt(0).Push(NewSimpleParseNode(ID, index))
-	table_expr := sel.From.NodeAt(0)
+	table_expr := sel.From[0]
 	savedHint := table_expr.NodeAt(2)
 	table_expr.Sub[2] = hint
 	defer func() {
@@ -1067,7 +1080,7 @@ func GenerateSelectSubquery(sel *Select, tableInfo *schema.Table, index string) 
 	}()
 	return GenerateSubquery(
 		tableInfo.Indexes[0].Columns,
-		sel.From,
+		sel.From[0],
 		sel.Where,
 		sel.OrderBy,
 		sel.Limit,
