@@ -23,6 +23,10 @@ import (
 var (
 	separator        = []byte(", ")
 	sqlVarIdentifier = []byte(":")
+	openBracket      = []byte(" in (")
+	closeBracket     = []byte(")")
+	kwAnd            = []byte(" and ")
+	kwWhere          = []byte(" where ")
 )
 
 // Resolver is the layer to resolve KeyspaceIds and KeyRanges
@@ -346,7 +350,7 @@ func buildEntityIds(shardIDMap map[string][]interface{}, qSql, entityColName str
 	for shard, ids := range shardIDMap {
 		var b bytes.Buffer
 		b.Write([]byte(entityColName))
-		b.Write([]byte(" in ("))
+		b.Write(openBracket)
 		bindVar := make(map[string]interface{})
 		for k, v := range qBindVars {
 			bindVar[k] = v
@@ -360,7 +364,7 @@ func buildEntityIds(shardIDMap map[string][]interface{}, qSql, entityColName str
 			b.Write(sqlVarIdentifier)
 			b.Write([]byte(bvName))
 		}
-		b.Write([]byte(")"))
+		b.Write(closeBracket)
 		sqls[shard] = insertSqlClause(qSql, b.String())
 		bindVars[shard] = bindVar
 		shards[shardsIdx] = shard
@@ -389,9 +393,9 @@ func insertSqlClause(querySql, clause string) string {
 	var b bytes.Buffer
 	b.Write([]byte(querySql[:idxExtra]))
 	if strings.Contains(sql, "where") {
-		b.Write([]byte(" and "))
+		b.Write(kwAnd)
 	} else {
-		b.Write([]byte(" where "))
+		b.Write(kwWhere)
 	}
 	b.Write([]byte(clause))
 	if idxExtra < len(sql) {
