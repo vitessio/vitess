@@ -622,11 +622,15 @@ func (node *Node) execAnalyzeFrom() (tablename string, hasHints bool) {
 	if node.Len() > 1 {
 		return "", false
 	}
-	if node.NodeAt(0).Type != TABLE_EXPR {
+	node = node.NodeAt(0)
+	for node.Type == '(' {
+		node = node.NodeAt(0)
+	}
+	if node.Type != TABLE_EXPR {
 		return "", false
 	}
-	hasHints = (node.NodeAt(0).NodeAt(2).Len() > 0)
-	return node.NodeAt(0).NodeAt(0).collectTableName(), hasHints
+	hasHints = (node.NodeAt(2).Len() > 0)
+	return node.NodeAt(0).collectTableName(), hasHints
 }
 
 func (node *Node) collectTableName() string {

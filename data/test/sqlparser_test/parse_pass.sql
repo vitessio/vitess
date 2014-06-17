@@ -35,6 +35,8 @@ select /* case_when_when_else */ case when a = b then c when b = d then d else d
 select /* case */ case aa when a = b then c end from t
 select /* parenthesis */ 1 from (t)
 select /* table list */ 1 from t1, t2
+select /* parenthessis in table list 1 */ 1 from (t1), t2
+select /* parenthessis in table list 2 */ 1 from t1, (t2)
 select /* use */ 1 from t1 use index (a) where b = 1
 select /* use */ 1 from t1 as t2 use index (a), t3 use index (b) where b = 1
 select /* force */ 1 from t1 as t2 force index (a), t3 force index (b) where b = 1

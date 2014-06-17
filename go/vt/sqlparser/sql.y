@@ -291,10 +291,6 @@ table_expression_list:
     $$ = NewSimpleParseNode(NODE_LIST, "node_list")
     $$.Push($1)
   }
-| '(' table_expression ')'
-  {
-    $$ = $1.Push($2)
-  }
 | table_expression_list ',' table_expression
   {
     $$.Push($3)
@@ -314,6 +310,10 @@ table_expression:
     $$.Push($1)
     $$.Push(NewSimpleParseNode(NODE_LIST, "node_list").Push($3))
     $$.Push($4)
+  }
+| '(' table_expression ')'
+  {
+    $$ = $1.Push($2)
   }
 | table_expression join_type table_expression %prec JOIN
   {

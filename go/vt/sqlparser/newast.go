@@ -201,11 +201,11 @@ func (node Distinct) Format(buf *TrackedBuffer) {
 type SelectExprs []SelectExpr
 
 func (node SelectExprs) Format(buf *TrackedBuffer) {
-	for i, sel := range node {
+	for i, n := range node {
 		if i == 0 {
-			buf.Fprintf("%v", sel)
+			buf.Fprintf("%v", n)
 		} else {
-			buf.Fprintf(", %v", sel)
+			buf.Fprintf(", %v", n)
 		}
 	}
 }
@@ -257,12 +257,18 @@ func (node Columns) Format(buf *TrackedBuffer) {
 	if len(node) == 0 {
 		return
 	}
-	for i, sel := range node {
+	buf.Fprintf("(%v)", SelectExprs(node))
+}
+
+// TableExprs represents a list of table expressions.
+type TableExprs []*Node
+
+func (node TableExprs) Format(buf *TrackedBuffer) {
+	for i, n := range node {
 		if i == 0 {
-			buf.Fprintf("(%v", sel)
+			buf.Fprintf("%v", n)
 		} else {
-			buf.Fprintf(", %v", sel)
+			buf.Fprintf(", %v", n)
 		}
 	}
-	buf.Fprintf(")")
 }
