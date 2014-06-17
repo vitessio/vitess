@@ -103,7 +103,6 @@ func (stc *ScatterConn) ExecuteEntityIds(
 	tabletType topo.TabletType,
 	session *SafeSession,
 ) (*mproto.QueryResult, error) {
-	var lock sync.Mutex
 	results, allErrors := stc.multiGo(
 		context,
 		"ExecuteEntityIds",
@@ -113,10 +112,8 @@ func (stc *ScatterConn) ExecuteEntityIds(
 		session,
 		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
 			shard := sdc.shard
-			lock.Lock()
 			sql := sqls[shard]
 			bindVar := bindVars[shard]
-			lock.Unlock()
 			innerqr, err := sdc.Execute(context, sql, bindVar, transactionId)
 			if err != nil {
 				return err

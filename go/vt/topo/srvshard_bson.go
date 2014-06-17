@@ -19,6 +19,7 @@ func (srvShard *SrvShard) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
+	bson.EncodeString(buf, "Name", srvShard.Name)
 	srvShard.KeyRange.MarshalBson(buf, "KeyRange")
 	// []TabletType
 	{
@@ -56,6 +57,8 @@ func (srvShard *SrvShard) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 
 	for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 		switch bson.ReadCString(buf) {
+		case "Name":
+			srvShard.Name = bson.DecodeString(buf, kind)
 		case "KeyRange":
 			srvShard.KeyRange.UnmarshalBson(buf, kind)
 		case "ServedTypes":
