@@ -18,7 +18,8 @@ const SHARD_ZERO = "0"
 // SrvShard contains a roll-up of the shard in the local namespace.
 // In zk, it is under /zk/<cell>/vt/ns/<keyspace>/<shard>
 type SrvShard struct {
-	// Copied from Shard
+	// Copied / infered from Shard
+	Name        string
 	KeyRange    key.KeyRange
 	ServedTypes []TabletType
 
@@ -57,6 +58,9 @@ func NewSrvShard(version int64) *SrvShard {
 
 // ShardName returns the name of a shard.
 func (ss *SrvShard) ShardName() string {
+	if ss.Name != "" {
+		return ss.Name
+	}
 	if !ss.KeyRange.IsPartial() {
 		return SHARD_ZERO
 	}

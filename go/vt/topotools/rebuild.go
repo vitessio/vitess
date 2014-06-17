@@ -204,6 +204,7 @@ func rebuildCellSrvShard(ts topo.Server, shardInfo *topo.ShardInfo, cell string,
 	go func() {
 		log.Infof("updating shard serving graph in cell %v for %v/%v", cell, shardInfo.Keyspace(), shardInfo.ShardName())
 		srvShard := &topo.SrvShard{
+			Name:        shardInfo.ShardName(),
 			KeyRange:    shardInfo.KeyRange,
 			ServedTypes: shardInfo.ServedTypes,
 			TabletTypes: make([]topo.TabletType, 0, len(locationAddrsMap)),
