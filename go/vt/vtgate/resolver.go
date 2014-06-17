@@ -20,6 +20,15 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
+var (
+	separator        = []byte(", ")
+	sqlVarIdentifier = []byte(":")
+	openBracket      = []byte(" in (")
+	closeBracket     = []byte(")")
+	kwAnd            = []byte(" and ")
+	kwWhere          = []byte(" where ")
+)
+
 // Resolver is the layer to resolve KeyspaceIds and KeyRanges
 // to shards. It will try to re-resolve shards if ScatterConn
 // returns retryable error, which may imply horizontal or vertical
@@ -334,13 +343,14 @@ func StrsEquals(a, b []string) bool {
 }
 
 func buildEntityIds(shardIDMap map[string][]interface{}, qSql, entityColName string, qBindVars map[string]interface{}) ([]string, map[string]string, map[string]map[string]interface{}) {
-	shards := make([]string, 0, 1)
+	shards := make([]string, len(shardIDMap))
+	shardsIdx := 0
 	sqls := make(map[string]string)
 	bindVars := make(map[string]map[string]interface{})
 	for shard, ids := range shardIDMap {
 		var b bytes.Buffer
 		b.Write([]byte(entityColName))
-		b.Write([]byte(" in ("))
+		b.Write(openBracket)
 		bindVar := make(map[string]interface{})
 		for k, v := range qBindVars {
 			bindVar[k] = v
@@ -349,14 +359,16 @@ func buildEntityIds(shardIDMap map[string][]interface{}, qSql, entityColName str
 			bvName := fmt.Sprintf("%v%v", entityColName, i)
 			bindVar[bvName] = id
 			if i > 0 {
-				b.Write([]byte(", "))
+				b.Write(separator)
 			}
-			b.Write([]byte(fmt.Sprintf(":%v", bvName)))
+			b.Write(sqlVarIdentifier)
+			b.Write([]byte(bvName))
 		}
-		b.Write([]byte(")"))
-		shards = append(shards, shard)
+		b.Write(closeBracket)
 		sqls[shard] = insertSqlClause(qSql, b.String())
 		bindVars[shard] = bindVar
+		shards[shardsIdx] = shard
+		shardsIdx++
 	}
 	return shards, sqls, bindVars
 }
@@ -381,9 +393,9 @@ func insertSqlClause(querySql, clause string) string {
 	var b bytes.Buffer
 	b.Write([]byte(querySql[:idxExtra]))
 	if strings.Contains(sql, "where") {
-		b.Write([]byte(" and "))
+		b.Write(kwAnd)
 	} else {
-		b.Write([]byte(" where "))
+		b.Write(kwWhere)
 	}
 	b.Write([]byte(clause))
 	if idxExtra < len(sql) {
