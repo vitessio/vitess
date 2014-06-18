@@ -19,9 +19,11 @@ which severity it should have (see package "log/syslog" for details).
 		"log/syslog"
 		"syslogger"
 	)
+
 	type MyEvent struct {
 		field1, field2 string
 	}
+
 	func (ev *MyEvent) Syslog(w *syslog.Writer) {
 		msg := fmt.Sprintf("event: %v, %v", ev.field1, ev.field2)
 		w.Warning(msg)
@@ -47,17 +49,25 @@ type Syslogger interface {
 	Syslog(w *syslog.Writer)
 }
 
+// writer holds a persistent connection to the syslog daemon
+var writer *syslog.Writer
+
 func listener(ev Syslogger) {
-	w, err := syslog.New(syslog.LOG_INFO|syslog.LOG_USER, os.Args[0])
-
-	if err != nil {
-		log.Errorf("can't connect to syslog to send event: %v", ev)
+	if writer == nil {
+		log.Errorf("no connection, dropping syslog event: %#v", ev)
+		return
 	}
-	defer w.Close()
 
-	ev.Syslog(w)
+	ev.Syslog(writer)
 }
 
 func init() {
+	var err error
+	writer, err = syslog.New(syslog.LOG_INFO|syslog.LOG_USER, os.Args[0])
+	if err != nil {
+		log.Errorf("can't connect to syslog")
+		writer = nil
+	}
+
 	event.AddListener(listener)
 }
