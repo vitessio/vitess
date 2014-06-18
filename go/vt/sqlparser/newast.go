@@ -224,7 +224,7 @@ type StarExpr struct {
 func (*StarExpr) selectExpr() {}
 
 func (node *StarExpr) Format(buf *TrackedBuffer) {
-	if len(node.TableName) != 0 {
+	if node.TableName != nil {
 		buf.Fprintf("%s.", node.TableName)
 	}
 	buf.Fprintf("*")
@@ -240,7 +240,7 @@ func (*NonStarExpr) selectExpr() {}
 
 func (node *NonStarExpr) Format(buf *TrackedBuffer) {
 	buf.Fprintf("%v", node.Expr)
-	if len(node.As) != 0 {
+	if node.As != nil {
 		buf.Fprintf(" as %s", node.As)
 	}
 }
@@ -252,19 +252,76 @@ func (node *NonStarExpr) Format(buf *TrackedBuffer) {
 type Columns []SelectExpr
 
 func (node Columns) Format(buf *TrackedBuffer) {
-	if len(node) == 0 {
+	if node == nil {
 		return
 	}
 	buf.Fprintf("(%v)", SelectExprs(node))
 }
 
 // TableExprs represents a list of table expressions.
-type TableExprs []*Node
+type TableExprs []TableExpr
 
 func (node TableExprs) Format(buf *TrackedBuffer) {
 	var prefix string
 	for _, n := range node {
 		buf.Fprintf("%s%v", prefix, n)
 		prefix = ", "
+	}
+}
+
+// TableExpr represents a table expression.
+// tableExpr s the dummy function.
+type TableExpr interface {
+	tableExpr()
+	SQLNode
+}
+
+// AliasedTableExpr represents a table expression
+// coupled with an optional alias or index hint.
+type AliasedTableExpr struct {
+	Expr *Node
+	As   []byte
+	Hint *Node
+}
+
+func (*AliasedTableExpr) tableExpr() {}
+
+func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
+	buf.Fprintf("%v", node.Expr)
+	if node.As != nil {
+		buf.Fprintf(" as %s", node.As)
+	}
+	if node.Hint != nil {
+		// Hint node provides the space padding.
+		buf.Fprintf("%v", node.Hint)
+	}
+}
+
+// ParenTableExpr represents a parenthesized TableExpr.
+type ParenTableExpr struct {
+	Inner TableExpr
+}
+
+func (*ParenTableExpr) tableExpr() {}
+
+func (node *ParenTableExpr) Format(buf *TrackedBuffer) {
+	buf.Fprintf("(%v)", node.Inner)
+}
+
+// JoinTableExpr represents a TableExpr that's a JOIN
+// operation.
+type JoinTableExpr struct {
+	LeftExpr  TableExpr
+	Join      []byte
+	RightExpr TableExpr
+	On        *Node
+}
+
+func (*JoinTableExpr) tableExpr() {}
+
+func (node *JoinTableExpr) Format(buf *TrackedBuffer) {
+	buf.Fprintf("%v %s %v", node.LeftExpr, node.Join, node.RightExpr)
+	if node.On != nil {
+		buf.Fprintf(" on %v", node.On)
 	}
 }

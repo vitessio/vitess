@@ -5,6 +5,7 @@
 package sqlparser
 
 import (
+	"bytes"
 	"fmt"
 	"strconv"
 
@@ -622,15 +623,11 @@ func execAnalyzeFrom(tableExprs TableExprs) (tablename string, hasHints bool) {
 	if len(tableExprs) > 1 {
 		return "", false
 	}
-	node := tableExprs[0]
-	for node.Type == '(' {
-		node = node.NodeAt(0)
-	}
-	if node.Type != TABLE_EXPR {
+	node, ok := tableExprs[0].(*AliasedTableExpr)
+	if !ok {
 		return "", false
 	}
-	hasHints = (node.NodeAt(2).Len() > 0)
-	return node.NodeAt(0).collectTableName(), hasHints
+	return node.Expr.collectTableName(), node.Hint != nil
 }
 
 func (node *Node) collectTableName() string {
@@ -987,16 +984,12 @@ func FormatImpossible(buf *TrackedBuffer, node SQLNode) {
 	switch node := node.(type) {
 	case *Select:
 		buf.Fprintf("select %v from %v where 1 != 1", node.SelectExprs, node.From)
-	case *Node:
-		switch node.Type {
-		case JOIN, STRAIGHT_JOIN, CROSS, NATURAL:
-			// We skip ON clauses (if any)
-			buf.Fprintf("%v %s %v", node.At(0), node.Value, node.At(1))
-		case LEFT, RIGHT:
+	case *JoinTableExpr:
+		if bytes.Equal(node.Join, LJOIN) || bytes.Equal(node.Join, RJOIN) {
 			// ON clause is requried
-			buf.Fprintf("%v %s %v on 1 != 1", node.At(0), node.Value, node.At(1))
-		default:
-			node.Format(buf)
+			buf.Fprintf("%v %s %v on 1 != 1", node.LeftExpr, node.Join, node.RightExpr)
+		} else {
+			buf.Fprintf("%v %s %v", node.LeftExpr, node.Join, node.RightExpr)
 		}
 	default:
 		node.Format(buf)
@@ -1075,15 +1068,15 @@ func GenerateSelectSubquery(sel *Select, tableInfo *schema.Table, index string) 
 	hint := NewSimpleParseNode(USE, "use")
 	hint.Push(NewSimpleParseNode(INDEX_LIST, ""))
 	hint.NodeAt(0).Push(NewSimpleParseNode(ID, index))
-	table_expr := sel.From[0]
-	savedHint := table_expr.NodeAt(2)
-	table_expr.Sub[2] = hint
+	table_expr := sel.From[0].(*AliasedTableExpr)
+	savedHint := table_expr.Hint
+	table_expr.Hint = hint
 	defer func() {
-		table_expr.Sub[2] = savedHint
+		table_expr.Hint = savedHint
 	}()
 	return GenerateSubquery(
 		tableInfo.Indexes[0].Columns,
-		sel.From[0],
+		table_expr,
 		sel.Where,
 		sel.OrderBy,
 		sel.Limit,
@@ -1094,7 +1087,7 @@ func GenerateSelectSubquery(sel *Select, tableInfo *schema.Table, index string) 
 func GenerateUpdateSubquery(upd *Update, tableInfo *schema.Table) *ParsedQuery {
 	return GenerateSubquery(
 		tableInfo.Indexes[0].Columns,
-		upd.Table,
+		&AliasedTableExpr{Expr: upd.Table},
 		upd.Where,
 		upd.OrderBy,
 		upd.Limit,
@@ -1105,7 +1098,7 @@ func GenerateUpdateSubquery(upd *Update, tableInfo *schema.Table) *ParsedQuery {
 func GenerateDeleteSubquery(del *Delete, tableInfo *schema.Table) *ParsedQuery {
 	return GenerateSubquery(
 		tableInfo.Indexes[0].Columns,
-		del.Table,
+		&AliasedTableExpr{Expr: del.Table},
 		del.Where,
 		del.OrderBy,
 		del.Limit,
@@ -1117,7 +1110,7 @@ func (node *Node) PushLimit() {
 	node.Push(NewSimpleParseNode(VALUE_ARG, ":_vtMaxResultSize"))
 }
 
-func GenerateSubquery(columns []string, table *Node, where *Node, order *Node, limit *Node, for_update bool) *ParsedQuery {
+func GenerateSubquery(columns []string, table *AliasedTableExpr, where *Node, order *Node, limit *Node, for_update bool) *ParsedQuery {
 	buf := NewTrackedBuffer(nil)
 	if limit.Len() == 0 {
 		limit.PushLimit()

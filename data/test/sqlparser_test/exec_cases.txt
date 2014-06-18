@@ -207,31 +207,11 @@
 "select * from (b)"
 {
   "PlanId": "PASS_SELECT",
-  "Reason": "NOCACHE",
-  "TableName": "b",
+  "Reason": "TABLE",
+  "TableName": "",
   "DisplayQuery": "select * from (b)",
   "FieldQuery": "select * from (b) where 1 != 1",
   "FullQuery": "select * from (b) limit :_vtMaxResultSize",
-  "OuterQuery": null,
-  "Subquery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
-}
-
-# Multi-parenthesized table
-"select * from ((b))"
-{
-  "PlanId": "PASS_SELECT",
-  "Reason": "NOCACHE",
-  "TableName": "b",
-  "DisplayQuery": "select * from ((b))",
-  "FieldQuery": "select * from ((b)) where 1 != 1",
-  "FullQuery": "select * from ((b)) limit :_vtMaxResultSize",
   "OuterQuery": null,
   "Subquery": null,
   "IndexUsed": "",
