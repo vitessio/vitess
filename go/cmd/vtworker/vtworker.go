@@ -33,6 +33,10 @@ var (
 	cell = flag.String("cell", "", "cell to pick servers from")
 )
 
+func init() {
+	servenv.RegisterDefaultFlags()
+}
+
 // signal handling, centralized here
 func installSignalHandlers() {
 	sigChan := make(chan os.Signal, 1)
@@ -97,5 +101,5 @@ func main() {
 	}
 	initStatusHandling()
 
-	servenv.Run()
+	servenv.RunDefault()
 }

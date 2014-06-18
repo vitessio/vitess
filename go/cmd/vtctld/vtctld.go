@@ -26,6 +26,10 @@ var (
 	debug       = flag.Bool("debug", false, "recompile templates for every request")
 )
 
+func init() {
+	servenv.RegisterDefaultFlags()
+}
+
 // FHtmlize writes data to w as debug HTML (using definition lists).
 func FHtmlize(w io.Writer, data interface{}) {
 	v := reflect.Indirect(reflect.ValueOf(data))
@@ -318,11 +322,6 @@ type DbTopologyResult struct {
 	Error    string
 }
 
-type ServingGraphResult struct {
-	ServingGraph *wrangler.ServingGraph
-	Error        string
-}
-
 type IndexContent struct {
 	// maps a name to a linked URL
 	ToplevelLinks map[string]string
@@ -556,14 +555,8 @@ func main() {
 			return
 		}
 
-		result := ServingGraphResult{}
-		servingGraph, err := wr.ServingGraph(cell)
-		if err != nil {
-			result.Error = err.Error()
-		} else {
-			result.ServingGraph = servingGraph
-		}
-		templateLoader.ServeTemplate("serving_graph.html", result, w, r)
+		servingGraph := wr.ServingGraph(cell)
+		templateLoader.ServeTemplate("serving_graph.html", servingGraph, w, r)
 	})
 
 	// redirects for explorers
@@ -701,5 +694,5 @@ func main() {
 		}
 		http.Redirect(w, r, target, http.StatusFound)
 	})
-	servenv.Run()
+	servenv.RunDefault()
 }

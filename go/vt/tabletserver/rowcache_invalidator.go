@@ -82,13 +82,18 @@ func (rci *RowcacheInvalidator) Open(dbname string, mysqld *mysqlctl.Mysqld) {
 // loop has terminated.
 func (rci *RowcacheInvalidator) Close() {
 	rci.mu.Lock()
-	defer rci.mu.Unlock()
 	if rci.evs == nil {
 		log.Infof("Rowcache is not running")
+		rci.mu.Unlock()
 		return
 	}
+	// This will cause the event streamer to exit, but run
+	// may still be running.
 	rci.evs.Stop()
-	rci.evs = nil
+	rci.mu.Unlock()
+	// Stop will wait for run and rci to shutdown, which will set
+	// evs to nil. So, we need to release the lock before this.
+	rci.svm.Stop()
 }
 
 func (rci *RowcacheInvalidator) run() {

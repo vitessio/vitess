@@ -22,6 +22,12 @@ var (
 	STREAM_COMMENT_START     = []byte("/* _stream ")
 )
 
+type EventNode struct {
+	Table   string
+	Columns []string
+	Tuples  [][]*sqlparser.Node
+}
+
 type sendEventFunc func(event *proto.StreamEvent) error
 
 type EventStreamer struct {
@@ -105,35 +111,23 @@ func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (dmlEvent *p
 		return &proto.StreamEvent{Category: "ERR", Sql: string(sql)}, insertid, nil
 	}
 	streamComment := string(sql[commentIndex+len(STREAM_COMMENT_START):])
-	eventTree, err := parseStreamComment(streamComment)
+	eventNode, err := parseStreamComment(streamComment)
 	if err != nil {
 		return nil, insertid, err
 	}
 
-	tableName := string(eventTree.At(0).Value)
-	pkColNamesNode := eventTree.At(1)
-	pkColNames := make([]string, 0, pkColNamesNode.Len())
-	for _, pkCol := range pkColNamesNode.Sub {
-		if pkCol.Type != sqlparser.ID {
-			return nil, insertid, fmt.Errorf("expecting column name: %v", string(pkCol.Value))
-		}
-		pkColNames = append(pkColNames, string(pkCol.Value))
-	}
-	pkColLen := pkColNamesNode.Len()
-
 	dmlEvent = new(proto.StreamEvent)
 	dmlEvent.Category = "DML"
-	dmlEvent.TableName = tableName
-	dmlEvent.PKColNames = pkColNames
-	dmlEvent.PKValues = make([][]interface{}, 0, len(eventTree.Sub[2:]))
+	dmlEvent.TableName = eventNode.Table
+	dmlEvent.PKColNames = eventNode.Columns
+	dmlEvent.PKValues = make([][]interface{}, 0, len(eventNode.Tuples))
 
-	rowPk := make([]interface{}, pkColLen)
-	for _, node := range eventTree.Sub[2:] {
-		rowPk = rowPk[:0]
-		if node.Len() != pkColLen {
+	for _, tuple := range eventNode.Tuples {
+		if len(tuple) != len(eventNode.Columns) {
 			return nil, insertid, fmt.Errorf("length mismatch in values")
 		}
-		rowPk, insertid, err = encodePKValues(node.Sub, insertid)
+		var rowPk []interface{}
+		rowPk, insertid, err = encodePKValues(tuple, insertid)
 		if err != nil {
 			return nil, insertid, err
 		}
@@ -151,15 +145,19 @@ EventNode.Sub[2:] Pk Value lists
 */
 // Example query: insert into vtocc_e(foo) values ('foo') /* _stream vtocc_e (eid id name ) (null 1 'bmFtZQ==' ); */
 // the "null" value is used for auto-increment columns.
-func parseStreamComment(dmlComment string) (EventNode *sqlparser.Node, err error) {
-	EventNode = sqlparser.NewSimpleParseNode(sqlparser.NODE_LIST, "")
+func parseStreamComment(dmlComment string) (eventNode EventNode, err error) {
 	tokenizer := sqlparser.NewStringTokenizer(dmlComment)
 
 	node := tokenizer.Scan()
 	if node.Type != sqlparser.ID {
-		return nil, fmt.Errorf("expecting table name in stream comment")
+		return eventNode, fmt.Errorf("expecting table name in stream comment")
 	}
-	EventNode.Push(node)
+	eventNode.Table = string(node.Value)
+
+	eventNode.Columns, err = parsePkNames(tokenizer)
+	if err != nil {
+		return eventNode, err
+	}
 
 	for node = tokenizer.Scan(); node.Type != ';'; node = tokenizer.Scan() {
 		switch node.Type {
@@ -167,21 +165,35 @@ func parseStreamComment(dmlComment string) (EventNode *sqlparser.Node, err error
 			// pkTuple is a list of pk value Nodes
 			pkTuple, err := parsePkTuple(tokenizer)
 			if err != nil {
-				return nil, err
+				return eventNode, err
 			}
-			EventNode.Push(pkTuple)
+			eventNode.Tuples = append(eventNode.Tuples, pkTuple)
 		default:
-			return nil, fmt.Errorf("expecting '('")
+			return eventNode, fmt.Errorf("expecting '('")
 		}
 	}
 
-	return EventNode, nil
+	return eventNode, nil
+}
+
+func parsePkNames(tokenizer *sqlparser.Tokenizer) (columns []string, err error) {
+	tempNode := tokenizer.Scan()
+	if tempNode.Type != '(' {
+		return nil, fmt.Errorf("expecting '('")
+	}
+	for tempNode := tokenizer.Scan(); tempNode.Type != ')'; tempNode = tokenizer.Scan() {
+		switch tempNode.Type {
+		case sqlparser.ID:
+			columns = append(columns, string(tempNode.Value))
+		default:
+			return nil, fmt.Errorf("unexpected token: '%v'", string(tempNode.Value))
+		}
+	}
+	return columns, nil
 }
 
 // parsePkTuple parese one pk tuple.
-func parsePkTuple(tokenizer *sqlparser.Tokenizer) (pkTuple *sqlparser.Node, err error) {
-	// pkTuple is a list of pk value Nodes
-	pkTuple = sqlparser.NewSimpleParseNode(sqlparser.NODE_LIST, "")
+func parsePkTuple(tokenizer *sqlparser.Tokenizer) (tuple []*sqlparser.Node, err error) {
 	// start scanning the list
 	for tempNode := tokenizer.Scan(); tempNode.Type != ')'; tempNode = tokenizer.Scan() {
 		switch tempNode.Type {
@@ -192,9 +204,9 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer) (pkTuple *sqlparser.Node, err 
 				return nil, fmt.Errorf("expecing number after '-'")
 			}
 			t2.Value = append(tempNode.Value, t2.Value...)
-			pkTuple.Push(t2)
-		case sqlparser.ID, sqlparser.NUMBER, sqlparser.NULL:
-			pkTuple.Push(tempNode)
+			tuple = append(tuple, t2)
+		case sqlparser.NUMBER, sqlparser.NULL:
+			tuple = append(tuple, tempNode)
 		case sqlparser.STRING:
 			b := tempNode.Value
 			decoded := make([]byte, base64.StdEncoding.DecodedLen(len(b)))
@@ -203,17 +215,17 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer) (pkTuple *sqlparser.Node, err 
 				return nil, err
 			}
 			tempNode.Value = decoded[:numDecoded]
-			pkTuple.Push(tempNode)
+			tuple = append(tuple, tempNode)
 		default:
 			return nil, fmt.Errorf("unexpected token: '%v'", string(tempNode.Value))
 		}
 	}
-	return pkTuple, nil
+	return tuple, nil
 }
 
 // Interprets the parsed node and correctly encodes the primary key values.
-func encodePKValues(pkValues []*sqlparser.Node, insertid int64) (rowPk []interface{}, newinsertid int64, err error) {
-	for _, pkVal := range pkValues {
+func encodePKValues(tuple []*sqlparser.Node, insertid int64) (rowPk []interface{}, newinsertid int64, err error) {
+	for _, pkVal := range tuple {
 		if pkVal.Type == sqlparser.STRING {
 			rowPk = append(rowPk, pkVal.Value)
 		} else if pkVal.Type == sqlparser.NUMBER {

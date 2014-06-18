@@ -39,6 +39,7 @@ func TestSrvKeySpace(t *testing.T) {
 			string(TYPE_MASTER): &KeyspacePartition{
 				Shards: []SrvShard{
 					SrvShard{
+						Name:        "test_shard",
 						ServedTypes: []TabletType{TYPE_MASTER},
 					},
 				},
@@ -61,6 +62,7 @@ func TestSrvKeySpace(t *testing.T) {
 			TYPE_MASTER: &KeyspacePartition{
 				Shards: []SrvShard{
 					SrvShard{
+						Name:        "test_shard",
 						ServedTypes: []TabletType{TYPE_MASTER},
 						TabletTypes: []TabletType{},
 					},

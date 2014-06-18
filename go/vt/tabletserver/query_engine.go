@@ -197,8 +197,8 @@ func (qe *QueryEngine) Close() {
 	qe.txPool.Close()
 	qe.streamConnPool.Close()
 	qe.connPool.Close()
-	qe.schemaInfo.Close()
 	qe.invalidator.Close()
+	qe.schemaInfo.Close()
 	qe.cachePool.Close()
 }
 

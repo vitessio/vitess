@@ -26,6 +26,7 @@ var (
 )
 
 func init() {
+	servenv.RegisterDefaultFlags()
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
 		flag.PrintDefaults()
@@ -42,5 +43,5 @@ func main() {
 	zk.RegisterZkReader(zkr)
 
 	topo.RegisterTopoReader(&TopoReader{zkr: zkr})
-	servenv.Run()
+	servenv.RunDefault()
 }

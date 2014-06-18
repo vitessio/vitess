@@ -46,9 +46,9 @@ class Vtctld(object):
 
   def serving_graph(self):
     data = json.load(urllib2.urlopen('http://localhost:%u/serving_graph/test_nj?format=json' % self.port))
-    if data["Error"]:
-      raise VtctldError(data)
-    return data["ServingGraph"]["Keyspaces"]
+    if data['Errors']:
+      raise VtctldError(data['Errors'])
+    return data["Keyspaces"]
 
   def start(self):
     args = [environment.binary_path('vtctld'),
@@ -104,17 +104,22 @@ class TestVtctld(unittest.TestCase):
 
   @classmethod
   def setUpClass(klass):
-    utils.run_vtctl('CreateKeyspace test_keyspace')
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
+    utils.run_vtctl(['CreateKeyspace',
+                     '--served-from', 'master:test_keyspace,replica:test_keyspace,rdonly:test_keyspace',
+                     'redirected_keyspace'])
 
     shard_0_master.init_tablet( 'master',  'test_keyspace', '-80')
-    shard_0_replica.init_tablet('spare', 'test_keyspace', '-80')
-    shard_0_spare.init_tablet('spare', 'test_keyspace', '-80')
+    shard_0_replica.init_tablet('spare',   'test_keyspace', '-80')
+    shard_0_spare.init_tablet(  'spare',   'test_keyspace', '-80')
     shard_1_master.init_tablet( 'master',  'test_keyspace', '80-')
     shard_1_replica.init_tablet('replica', 'test_keyspace', '80-')
     idle.init_tablet('idle')
     scrap.init_tablet('idle')
 
-    utils.run_vtctl('RebuildKeyspaceGraph test_keyspace', auto_log=True)
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'redirected_keyspace'],
+                    auto_log=True)
 
     for t in [shard_0_master, shard_1_master, shard_1_replica]:
       t.create_db('vt_test_keyspace')
@@ -133,10 +138,10 @@ class TestVtctld(unittest.TestCase):
     for t in [shard_0_master, shard_0_replica, shard_0_spare,
               shard_1_master, shard_1_replica, idle, scrap]:
       t.reset_replication()
-    utils.run_vtctl('ReparentShard -force test_keyspace/-80 ' +
-                    shard_0_master.tablet_alias, auto_log=True)
-    utils.run_vtctl('ReparentShard -force test_keyspace/80- ' +
-                    shard_1_master.tablet_alias, auto_log=True)
+    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/-80',
+                     shard_0_master.tablet_alias], auto_log=True)
+    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/80-',
+                     shard_1_master.tablet_alias], auto_log=True)
     shard_0_replica.wait_for_vttablet_state('SERVING')
 
     # run checks now before we start the tablets
@@ -154,8 +159,10 @@ class TestVtctld(unittest.TestCase):
   def test_assigned(self):
     logging.debug("test_assigned: %s", str(self.data))
     self.assertItemsEqual(self.data["Assigned"].keys(), ["test_keyspace"])
-    self.assertItemsEqual(self.data["Assigned"]["test_keyspace"].keys(),
-                          ["-80", "80-"])
+    s0 = self.data["Assigned"]["test_keyspace"]['ShardNodes'][0]
+    self.assertItemsEqual(s0['Name'], "-80")
+    s1 = self.data["Assigned"]["test_keyspace"]['ShardNodes'][1]
+    self.assertItemsEqual(s1['Name'], "80-")
 
   def test_not_assigned(self):
     self.assertEqual(len(self.data["Idle"]), 1)
@@ -185,13 +192,18 @@ class TestVtctld(unittest.TestCase):
                      base + '/zk/test_nj/vt/replication/test_keyspace/-80')
 
   def test_serving_graph(self):
-    self.assertItemsEqual(self.serving_data.keys(), ["test_keyspace"])
-    self.assertItemsEqual(self.serving_data["test_keyspace"].keys(),
-                          ["-80", "80-"])
-    self.assertItemsEqual(self.serving_data["test_keyspace"]["-80"].keys(),
+    self.assertItemsEqual(sorted(self.serving_data.keys()),
+                          ["redirected_keyspace", "test_keyspace"])
+    s0 = self.serving_data["test_keyspace"]['ShardNodes'][0]
+    self.assertItemsEqual(s0['Name'], "-80")
+    self.assertItemsEqual(s0['ServedTypes'], ['master', 'replica', 'rdonly'])
+    s1 = self.serving_data["test_keyspace"]['ShardNodes'][1]
+    self.assertItemsEqual(s1['Name'], "80-")
+    self.assertItemsEqual(sorted(s0['TabletNodes'].keys()),
                           ["master", "replica"])
-    self.assertEqual(len(self.serving_data["test_keyspace"]["-80"]["master"]),
-                     1)
+    self.assertEqual(len(s0['TabletNodes']['master']), 1)
+    self.assertEqual(self.serving_data["redirected_keyspace"]['ServedFrom']['master'],
+                     'test_keyspace')
 
   def test_tablet_status(self):
     # the vttablet that has a health check has a bit more, so using it
