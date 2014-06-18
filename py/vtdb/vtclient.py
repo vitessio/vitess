@@ -96,6 +96,13 @@ class VtOCCConnection(object):
       self.conn.close()
 
   def connect(self):
+    try:
+      return self._connect()
+    except dbexceptions.OperationalError as e:
+      vtdb_logger.get_logger().vtclient_exception(self.keyspace, self.shard, self.db_type, e)
+      raise
+
+  def _connect(self):
     db_key = "%s.%s.%s" % (self.keyspace, self.shard, self.db_type)
     db_params_list = get_vt_connection_params_list(self.zkocc_client, self.keyspace, self.shard, self.db_type, self.timeout, self.encrypted, self.user, self.password, self.vtgate_protocol, self.vtgate_addrs)
     if not db_params_list:
