@@ -1,4 +1,4 @@
-package com.github.youtube.vitess.jdbc;
+package com.github.youtube.vitess.jdbc.vtocc;
 
 import com.google.protobuf.ServiceException;
 
@@ -20,7 +20,7 @@ public class VtoccSqlExceptionFactoryTest {
 
   @Test(expected = SQLNonTransientException.class)
   public void testUnknownApplicationError() throws Exception {
-    throw VtoccSqlExceptionFactory.getSqlException(new ServiceException(""));
+    throw VtoccSqlExceptionFactory.getSqlException(new ServiceException((String) null));
   }
 
   @Test(expected = SQLTransientException.class)

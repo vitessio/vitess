@@ -1,37 +1,44 @@
-package com.github.youtube.vitess.jdbc;
+package com.github.youtube.vitess.jdbc.vtocc;
 
+import com.google.inject.Provider;
+import com.google.protobuf.RpcController;
 import com.google.protobuf.ServiceException;
 
-import com.github.youtube.vitess.jdbc.QueryService.Session;
-import com.github.youtube.vitess.jdbc.QueryService.SessionInfo;
-import com.github.youtube.vitess.jdbc.QueryService.SessionParams;
-import com.github.youtube.vitess.jdbc.QueryService.SessionParams.Builder;
-import com.github.youtube.vitess.jdbc.QueryService.SqlQuery;
-import com.github.youtube.vitess.jdbc.QueryService.SqlQuery.BlockingInterface;
-import com.github.youtube.vitess.jdbc.QueryService.TransactionInfo;
-import com.github.youtube.vitess.jdbc.VtoccModule.VtoccKeyspace;
+import com.github.youtube.vitess.jdbc.vtocc.QueryService.Session;
+import com.github.youtube.vitess.jdbc.vtocc.QueryService.SessionInfo;
+import com.github.youtube.vitess.jdbc.vtocc.QueryService.SessionParams;
+import com.github.youtube.vitess.jdbc.vtocc.QueryService.SessionParams.Builder;
+import com.github.youtube.vitess.jdbc.vtocc.QueryService.SqlQuery.BlockingInterface;
+import com.github.youtube.vitess.jdbc.vtocc.QueryService.TransactionInfo;
+import com.github.youtube.vitess.jdbc.vtocc.VtoccModule.VtoccKeyspaceShard;
 
 import java.sql.SQLException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.inject.Inject;
 
 /**
- * {@link com.github.youtube.vitess.jdbc.QueryService.SqlQuery} methods for transaction management.
+ * {@link QueryService.SqlQuery} methods for transaction management.
  *
  * Represents a connection with at most one transaction at a time.
  */
 public class VtoccTransactionHandler {
 
   private final BlockingInterface sqlQueryBlockingInterface;
-  private final String vtoccKeyspace;
+  private final String vtoccKeyspaceShard;
+  private final Provider<RpcController> rpcControllerProvider;
   private SessionInfo sessionInfo = null;
   private TransactionInfo transactionInfo = TransactionInfo.getDefaultInstance();
   private boolean inTransaction = false;
 
   @Inject
-  VtoccTransactionHandler(SqlQuery.BlockingInterface sqlQueryBlockingInterface, @VtoccKeyspace String vtoccKeyspace) {
+  VtoccTransactionHandler(BlockingInterface sqlQueryBlockingInterface,
+      @VtoccKeyspaceShard String vtoccKeyspaceShard,
+      Provider<RpcController> rpcControllerProvider) {
     this.sqlQueryBlockingInterface = sqlQueryBlockingInterface;
-    this.vtoccKeyspace = vtoccKeyspace;
+    this.vtoccKeyspaceShard = vtoccKeyspaceShard;
+    this.rpcControllerProvider = rpcControllerProvider;
   }
 
   /**
@@ -42,9 +49,17 @@ public class VtoccTransactionHandler {
       // lazy session creation to allow creation of VtoccTransactionHandler via Provider
       if (sessionInfo == null) {
         Builder sessionParams = SessionParams.newBuilder();
-        sessionParams.setKeyspace(vtoccKeyspace);
-        // TODO(timofeyb): provide rpc controller
-        sessionInfo = sqlQueryBlockingInterface.getSessionId(null, sessionParams.build());
+        Matcher matcher = Pattern.compile("([^/]*)(?:/(\\d+))?").matcher(vtoccKeyspaceShard);
+        if (!matcher.matches()) {
+          throw new IllegalArgumentException("Invalid keyspace/shard " + vtoccKeyspaceShard);
+        }
+        sessionParams.setKeyspace(matcher.group(1));
+        if (matcher.group(2) != null) {
+          sessionParams.setShard(matcher.group(2));
+        }
+
+        sessionInfo = sqlQueryBlockingInterface
+            .getSessionId(rpcControllerProvider.get(), sessionParams.build());
       }
     } catch (ServiceException e) {
       throw VtoccSqlExceptionFactory.getSqlException(e);
@@ -52,8 +67,8 @@ public class VtoccTransactionHandler {
   }
 
   /**
-   * Returns current session with Vtocc. Establish one if necessary. Enters transaction
-   * if necessary.
+   * Returns current session with Vtocc. Establish one if necessary. Enters transaction if
+   * necessary.
    */
   public Session getSession() throws SQLException {
     init();
@@ -78,8 +93,7 @@ public class VtoccTransactionHandler {
     try {
       inTransaction = true;
       // send previous transaction id to make it easier to cache these rpc queries
-      // TODO(timofeyb): provide rpc controller
-      transactionInfo = sqlQueryBlockingInterface.begin(null, getSession());
+      transactionInfo = sqlQueryBlockingInterface.begin(rpcControllerProvider.get(), getSession());
     } catch (ServiceException e) {
       throw VtoccSqlExceptionFactory.getSqlException(e);
     }
@@ -90,12 +104,11 @@ public class VtoccTransactionHandler {
    */
   public void commit() throws SQLException {
     if (!inTransaction) {
-      throw new IllegalStateException("Transaction should begin() first");
+      begin();
     }
     init();
     try {
-      // TODO(timofeyb): provide rpc controller
-      sqlQueryBlockingInterface.commit(null, getSession());
+      sqlQueryBlockingInterface.commit(rpcControllerProvider.get(), getSession());
       inTransaction = false;
     } catch (ServiceException e) {
       throw VtoccSqlExceptionFactory.getSqlException(e);
@@ -107,12 +120,11 @@ public class VtoccTransactionHandler {
    */
   public void rollback() throws SQLException {
     if (!inTransaction) {
-      throw new IllegalStateException("Transaction should begin() first");
+      begin();
     }
     init();
     try {
-      // TODO(timofeyb): provide rpc controller
-      sqlQueryBlockingInterface.rollback(null, getSession());
+      sqlQueryBlockingInterface.rollback(rpcControllerProvider.get(), getSession());
       inTransaction = false;
     } catch (ServiceException e) {
       throw VtoccSqlExceptionFactory.getSqlException(e);

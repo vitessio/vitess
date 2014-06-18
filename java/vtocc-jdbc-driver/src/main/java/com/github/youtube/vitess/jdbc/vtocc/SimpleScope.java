@@ -1,12 +1,14 @@
 // Copied from https://code.google.com/p/google-guice/wiki/CustomScopes
-package com.github.youtube.vitess.jdbc;
+package com.github.youtube.vitess.jdbc.vtocc;
 
 import static com.google.common.base.Preconditions.checkState;
+
 import com.google.common.collect.Maps;
 import com.google.inject.Key;
 import com.google.inject.OutOfScopeException;
 import com.google.inject.Provider;
 import com.google.inject.Scope;
+
 import java.util.Map;
 
 /**
@@ -23,13 +25,12 @@ import java.util.Map;
  *   }
  * </code></pre>
  *
- * The scope can be initialized with one or more seed values by calling
- * <code>seed(key, value)</code> before the injector will be called upon to
- * provide for this key. A typical use is for a servlet filter to enter/exit the
- * scope, representing a Request Scope, and seed HttpServletRequest and
- * HttpServletResponse.  For each key inserted with seed(), you must include a
- * corresponding binding:
- *  <pre><code>
+ * The scope can be initialized with one or more seed values by calling <code>seed(key,
+ * value)</code> before the injector will be called upon to provide for this key. A typical use is
+ * for a servlet filter to enter/exit the scope, representing a Request Scope, and seed
+ * HttpServletRequest and HttpServletResponse.  For each key inserted with seed(), you must include
+ * a corresponding binding:
+ * <pre><code>
  *   bind(key)
  *       .toProvider(SimpleScope.&lt;KeyClass&gt;seededKeyProvider())
  *       .in(ScopeAnnotation.class);
@@ -50,7 +51,18 @@ public class SimpleScope implements Scope {
         }
       };
   private final ThreadLocal<Map<Key<?>, Object>> values
-      = new ThreadLocal<Map<Key<?>, Object>>();
+      = new ThreadLocal<>();
+
+  /**
+   * Returns a provider that always throws exception complaining that the object in question must be
+   * seeded before it can be injected.
+   *
+   * @return typed provider
+   */
+  @SuppressWarnings({"unchecked"})
+  public static <T> Provider<T> seededKeyProvider() {
+    return (Provider<T>) SEEDED_KEY_PROVIDER;
+  }
 
   public void enter() {
     checkState(values.get() == null, "A scoping block is already in progress");
@@ -97,16 +109,5 @@ public class SimpleScope implements Scope {
           + " outside of a scoping block");
     }
     return scopedObjects;
-  }
-
-  /**
-   * Returns a provider that always throws exception complaining that the object
-   * in question must be seeded before it can be injected.
-   *
-   * @return typed provider
-   */
-  @SuppressWarnings({"unchecked"})
-  public static <T> Provider<T> seededKeyProvider() {
-    return (Provider<T>) SEEDED_KEY_PROVIDER;
   }
 }

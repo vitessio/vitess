@@ -1,19 +1,20 @@
-package com.github.youtube.vitess.jdbc;
+package com.github.youtube.vitess.jdbc.vtocc;
+
 option java_generic_services = true;
 
 message SessionInfo {
     optional int64 session_id = 1;
-    }
+}
 
 message Session {
     optional int64 session_id = 1;
     optional int64 transaction_id = 2;
-    }
+}
 
 message SessionParams {
     optional string keyspace = 1;
     optional string shard = 2;
-    }
+}
 
 message BindVariable {
     optional string name = 1;
@@ -24,30 +25,30 @@ message BindVariable {
         INT = 2;
         UINT = 3;
         FLOAT = 4;
-        }
+    }
 
     optional Type type = 2;
     optional bytes value_bytes = 3;
     optional int64 value_int = 4;
     optional uint64 value_uint = 5;
     optional double value_float = 6;
-    }
+}
 
 message Query {
     optional bytes sql = 1;
     repeated BindVariable bind_variables = 2;
     optional Session session = 3;
-    }
+}
 
 message BoundQuery {
     optional bytes sql = 1;
     repeated BindVariable bind_variables = 2;
-    }
+}
 
 message QueryList {
     repeated BoundQuery queries = 1;
     optional Session session = 2;
-    }
+}
 
 message Field {
     optional string name = 1;
@@ -80,49 +81,51 @@ message Field {
         VAR_STRING = 253;
         STRING = 254;
         GEOMETRY = 255;
-        }
+    }
 
     optional Type type = 2;
-    }
+}
 
 message Cell {
     optional bytes value = 1;
-    }
+}
 
 message Row {
     repeated Cell values = 1;
-    }
+}
 
 message QueryResult {
     repeated Field fields = 1;
     optional uint64 rows_affected = 2;
     optional uint64 insert_id = 3;
     repeated Row rows = 4;
-    }
+}
 
 message QueryResultList {
     repeated QueryResult list = 1;
-    }
+}
 
 message TransactionInfo {
     optional int64 transaction_id = 1;
-    }
+}
 
-message CommitResponse { }
+message CommitResponse {
+}
 
-message RollbackResponse { }
+message RollbackResponse {
+}
 
 service SqlQuery {
 
-// GetSessionId returns a valid session id to be used for
-// subsequent calls.
+    // GetSessionId returns a valid session id to be used for
+    // subsequent calls.
     rpc GetSessionId (SessionParams) returns (SessionInfo);
 
     // Execute executes the specified SQL query (might be in a transaction context).
     rpc Execute (Query) returns (QueryResult);
 
     // ExecuteBatch executes a list of queries
-    rpc ExecuteBatch(QueryList) returns (QueryResultList);
+    rpc ExecuteBatch (QueryList) returns (QueryResultList);
 
     // Begin a transaction.
     rpc Begin (Session) returns (TransactionInfo);
@@ -132,4 +135,4 @@ service SqlQuery {
 
     // Rollback a transaction.
     rpc Rollback (Session) returns (RollbackResponse);
-    }
+}

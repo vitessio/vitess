@@ -1,4 +1,4 @@
-package com.github.youtube.vitess.jdbc;
+package com.github.youtube.vitess.jdbc.vtocc;
 
 
 import com.google.common.base.Function;
@@ -6,10 +6,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
 
-import com.github.youtube.vitess.jdbc.QueryService.QueryResult;
-
-import acolyte.Row;
-import acolyte.RowList;
+import com.github.youtube.vitess.jdbc.vtocc.QueryService.QueryResult;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -22,8 +19,11 @@ import java.util.Map;
 
 import javax.annotation.Nullable;
 
+import acolyte.Row;
+import acolyte.RowList;
+
 /**
- * Provides {@link acolyte.RowList} instances that wrap vtocc's {@link QueryResult}.
+ * Provides {@link acolyte.RowList} instances that wrap vtocc's {@link com.github.youtube.vitess.jdbc.vtocc.QueryService.QueryResult}.
  *
  * Instances returned are read-only.
  *
@@ -36,18 +36,6 @@ import javax.annotation.Nullable;
  * running SQL queries through JDBC.
  */
 public class AcolyteRowList extends RowList {
-
-  /**
-   * Factory for {@link AcolyteRowList}.
-   *
-   * Factory is required as {@link QueryResult} can not be injected.
-   */
-  public static class Factory {
-
-    public RowList create(QueryResult queryResult) {
-      return new AcolyteRowList(queryResult);
-    }
-  }
 
   private final QueryResult queryResult;
 
@@ -137,69 +125,69 @@ public class AcolyteRowList extends RowList {
    * Provides meta-information about our data. Is used to determine type of the object to to convert
    * to from a string in protobuf at {@link #getRows()}.
    *
-   * Is a reimplementation of {@code //third_party/golang/vitess/py/vtdb/field_types.py}.
-   * Java classes mapping uses
-   * <a href=https://dev.mysql.com/doc/connector-j/en/connector-j-reference-type-conversions.html>
-   *   MySQL documentation</a> for reference.
+   * Is a reimplementation of {@code //third_party/golang/vitess/py/vtdb/field_types.py}. Java
+   * classes mapping uses <a href=https://dev.mysql.com/doc/connector-j/en/connector-j-reference-type-conversions.html>
+   * MySQL documentation</a> for reference.
    */
   @Override
   public List<Class<?>> getColumnClasses() {
-    return Lists.transform(queryResult.getFieldsList(), new Function<QueryService.Field, Class<?>>() {
-      @Nullable
-      @Override
-      public Class<?> apply(QueryService.Field field) {
-        switch (field.getType()) {
-          case DECIMAL:
-            return BigDecimal.class;
-          case TINY:
-          case SHORT:
-            return Integer.class;
-          case LONG:
-            return Long.class;
-          case FLOAT:
-            return Float.class;
-          case DOUBLE:
-            return Double.class;
-          case NULL:
-            return Object.class;
-          case TIMESTAMP:
-            return Timestamp.class;
-          case LONGLONG:
-            return BigInteger.class;
-          case INT24:
-            return Integer.class;
-          case DATE:
-            return Date.class;
-          case TIME:
-            return Time.class;
-          case DATETIME:
-            return Timestamp.class;
-          case YEAR:
-            return Date.class;
-          case NEWDATE:
-            return Timestamp.class;
-          case VARCHAR:
-            return String.class;
-          case BIT:
-            return String.class;
-          case NEWDECIMAL:
-            return BigDecimal.class;
-          // case ENUM: not supported
-          // case SET: not supported
-          case TINY_BLOB:
-          case MEDIUM_BLOB:
-          case LONG_BLOB:
-          case BLOB:
-            return byte[].class;
-          case VAR_STRING:
-          case STRING:
-            return String.class;
-          default:
-            throw new IllegalArgumentException(
-                "Unsupported field type: " + field.getType());
-        }
-      }
-    });
+    return Lists
+        .transform(queryResult.getFieldsList(), new Function<QueryService.Field, Class<?>>() {
+          @Nullable
+          @Override
+          public Class<?> apply(QueryService.Field field) {
+            switch (field.getType()) {
+              case DECIMAL:
+                return BigDecimal.class;
+              case TINY:
+              case SHORT:
+                return Integer.class;
+              case LONG:
+                return Long.class;
+              case FLOAT:
+                return Float.class;
+              case DOUBLE:
+                return Double.class;
+              case NULL:
+                return Object.class;
+              case TIMESTAMP:
+                return Timestamp.class;
+              case LONGLONG:
+                return BigInteger.class;
+              case INT24:
+                return Integer.class;
+              case DATE:
+                return Date.class;
+              case TIME:
+                return Time.class;
+              case DATETIME:
+                return Timestamp.class;
+              case YEAR:
+                return Date.class;
+              case NEWDATE:
+                return Timestamp.class;
+              case VARCHAR:
+                return String.class;
+              case BIT:
+                return String.class;
+              case NEWDECIMAL:
+                return BigDecimal.class;
+              // case ENUM: not supported
+              // case SET: not supported
+              case TINY_BLOB:
+              case MEDIUM_BLOB:
+              case LONG_BLOB:
+              case BLOB:
+                return byte[].class;
+              case VAR_STRING:
+              case STRING:
+                return String.class;
+              default:
+                throw new IllegalArgumentException(
+                    "Unsupported field type: " + field.getType());
+            }
+          }
+        });
   }
 
   /**
@@ -229,5 +217,18 @@ public class AcolyteRowList extends RowList {
       column++;
     }
     return Collections.unmodifiableMap(columnLabels);
+  }
+
+  /**
+   * Factory for {@link AcolyteRowList}.
+   *
+   * Factory is required as {@link com.github.youtube.vitess.jdbc.vtocc.QueryService.QueryResult}
+   * can not be injected.
+   */
+  public static class Factory {
+
+    public RowList create(QueryResult queryResult) {
+      return new AcolyteRowList(queryResult);
+    }
   }
 }

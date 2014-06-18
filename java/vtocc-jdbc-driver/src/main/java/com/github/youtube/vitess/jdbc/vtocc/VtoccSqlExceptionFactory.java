@@ -1,4 +1,4 @@
-package com.github.youtube.vitess.jdbc;
+package com.github.youtube.vitess.jdbc.vtocc;
 
 import com.google.protobuf.ServiceException;
 
@@ -10,8 +10,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Factory to convert exceptions generated on RPC layer as a Vtocc call result to normal
- * {@link java.sql.SQLException}.
+ * Factory to convert exceptions generated on RPC layer as a Vtocc call result to normal {@link
+ * java.sql.SQLException}.
  */
 public class VtoccSqlExceptionFactory {
 

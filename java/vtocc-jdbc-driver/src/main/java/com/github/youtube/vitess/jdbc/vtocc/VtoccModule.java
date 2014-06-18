@@ -1,10 +1,13 @@
-package com.github.youtube.vitess.jdbc;
+package com.github.youtube.vitess.jdbc.vtocc;
 
 import com.google.inject.AbstractModule;
 import com.google.inject.BindingAnnotation;
 import com.google.inject.Provides;
 import com.google.inject.ScopeAnnotation;
-import com.google.inject.Scopes;
+import com.google.protobuf.BlockingRpcChannel;
+import com.google.protobuf.RpcController;
+
+import com.github.youtube.vitess.jdbc.vtocc.QueryService.SqlQuery.BlockingInterface;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -23,28 +26,26 @@ public class VtoccModule extends AbstractModule {
     bind(VtoccConnectionCreationScope.class).toInstance(vtoccConnectionCreationScope);
     bindScope(VtoccConnectionCreationScoped.class, vtoccConnectionCreationScope);
 
-    // Provide vtoccServerSpec only within this scope
-    bind(String.class).annotatedWith(VtoccServerSpec.class).toProvider(
-        SimpleScope.<String>seededKeyProvider())
+    bind(BlockingRpcChannel.class).toProvider(
+        SimpleScope.<BlockingRpcChannel>seededKeyProvider())
         .in(VtoccConnectionCreationScoped.class);
-    bind(String.class).annotatedWith(VtoccKeyspace.class).toProvider(
+
+    bind(String.class).annotatedWith(VtoccKeyspaceShard.class).toProvider(
         SimpleScope.<String>seededKeyProvider())
         .in(VtoccConnectionCreationScoped.class);
     // make sure that we would not have two transactions created as the same time
     bind(VtoccTransactionHandler.class).in(VtoccConnectionCreationScoped.class);
   }
 
-  /**
-   * Empty class just to satisfy Guice injection rules.
-   */
-  public static class VtoccConnectionCreationScope extends SimpleScope {
+  @Provides
+  @VtoccConnectionCreationScoped
+  BlockingInterface getSqlQueryStub(BlockingRpcChannel channel) {
+    return QueryService.SqlQuery.newBlockingStub(channel);
   }
 
   @Provides
-  @VtoccConnectionCreationScoped
-  QueryService.SqlQuery getSqlQueryStub(@VtoccServerSpec String vtoccServerSpec) {
-    // TODO(timofeyb): implement actual transport to vtocc using bson
-    return null;
+  RpcController getRpcControllerProvider() {
+    return new BasicRpcController();
   }
 
   @Provides
@@ -54,27 +55,29 @@ public class VtoccModule extends AbstractModule {
   }
 
   /**
-   * Annotates {@link String} with Vtocc server specification.
-   */
-  @Retention(RetentionPolicy.RUNTIME)
-  @Target({ElementType.METHOD, ElementType.FIELD, ElementType.PARAMETER})
-  @BindingAnnotation
-  public @interface VtoccServerSpec {}
-
-  /**
    * Annotates {@link String} with Vtocc key space.
    */
   @Retention(RetentionPolicy.RUNTIME)
   @Target({ElementType.METHOD, ElementType.FIELD, ElementType.PARAMETER})
   @BindingAnnotation
-  public @interface VtoccKeyspace {}
+  public @interface VtoccKeyspaceShard {
+
+  }
 
   /**
-   * Active during connection creation to Vtocc, notably {@link VtoccServerSpec} lives in this
-   * scope. Implemented by {@link SimpleScope}.
+   * Active during connection creation to Vtocc, Implemented by {@link SimpleScope}.
    */
   @Retention(RetentionPolicy.RUNTIME)
   @Target({ElementType.METHOD, ElementType.FIELD, ElementType.PARAMETER})
   @ScopeAnnotation
-  public @interface VtoccConnectionCreationScoped {}
+  public @interface VtoccConnectionCreationScoped {
+
+  }
+
+  /**
+   * Empty class just to satisfy Guice injection rules.
+   */
+  public static class VtoccConnectionCreationScope extends SimpleScope {
+
+  }
 }

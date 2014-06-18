@@ -1,4 +1,4 @@
-package com.github.youtube.vitess.jdbc;
+package com.github.youtube.vitess.jdbc.vtocc;
 
 import junit.framework.Assert;
 

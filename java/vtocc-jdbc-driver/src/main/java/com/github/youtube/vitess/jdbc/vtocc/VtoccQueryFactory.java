@@ -1,13 +1,12 @@
-package com.github.youtube.vitess.jdbc;
+package com.github.youtube.vitess.jdbc.vtocc;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.protobuf.ByteString;
-import com.github.youtube.vitess.jdbc.QueryService.BindVariable;
-import com.github.youtube.vitess.jdbc.QueryService.BindVariable.Type;
-import com.github.youtube.vitess.jdbc.QueryService.Query;
 
-import acolyte.StatementHandler.Parameter;
+import com.github.youtube.vitess.jdbc.vtocc.QueryService.BindVariable;
+import com.github.youtube.vitess.jdbc.vtocc.QueryService.BindVariable.Type;
+import com.github.youtube.vitess.jdbc.vtocc.QueryService.Query;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -16,14 +15,16 @@ import java.util.List;
 
 import javax.inject.Inject;
 
+import acolyte.StatementHandler.Parameter;
+
 /**
  * Builds {@link Query} from SQL and Acolyte-provided {@link Parameter}s.
  *
  * Serializes Java types into MySQL/Vtocc supported strings.
  *
  * Instances are only called from within {@link acolyte.Driver}, contract is not well defined
- * therefore there are no unit tests. This code is tested as a part of integration tests
- * running SQL queries through JDBC.
+ * therefore there are no unit tests. This code is tested as a part of integration tests running SQL
+ * queries through JDBC.
  */
 public class VtoccQueryFactory {
 
@@ -33,6 +34,13 @@ public class VtoccQueryFactory {
   @VisibleForTesting
   VtoccQueryFactory(VtoccTransactionHandler vtoccTransactionHandler) {
     this.vtoccTransactionHandler = vtoccTransactionHandler;
+  }
+
+  /**
+   * Returns magical parameter name supported by Vtocc.
+   */
+  private static String getParamName(int i) {
+    return "v" + Integer.toString(i);
   }
 
   public Query create(String sql, List<Parameter> parameters) throws SQLException {
@@ -51,8 +59,8 @@ public class VtoccQueryFactory {
             .build());
       } else if (byte[].class.getName().equals(parameter.getLeft().className)) {
         Preconditions.checkArgument(value instanceof byte[],
-              "Parameter type and value do not match: "
-                  + parameter.getLeft() + " / " + value.getClass().getName());
+            "Parameter type and value do not match: "
+                + parameter.getLeft() + " / " + value.getClass().getName());
         builder.addBindVariables(BindVariable.newBuilder()
             .setName(getParamName(i))
             .setType(Type.BYTES)
@@ -154,12 +162,5 @@ public class VtoccQueryFactory {
       i++;
     }
     return builder.build();
-  }
-
-  /**
-   * Returns magical parameter name supported by Vtocc.
-   */
-  private static String getParamName(int i) {
-    return "v" + Integer.toString(i);
   }
 }

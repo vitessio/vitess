@@ -1,13 +1,13 @@
-package com.github.youtube.vitess.jdbc;
+package com.github.youtube.vitess.jdbc.vtocc;
 
 import java.sql.SQLException;
 
 import javax.inject.Inject;
 
 /**
- * Implements connection which handles non-transaction SQL logic in addition to
- * {@link acolyte.Connection} internal logic. Transaction logic itself
- * is handled in a separate class {@link VtoccTransactionHandler}.
+ * Implements connection which handles non-transaction SQL logic in addition to {@link
+ * acolyte.Connection} internal logic. Transaction logic itself is handled in a separate class
+ * {@link VtoccTransactionHandler}.
  */
 public class AcolyteTransactingConnection extends acolyte.Connection {
 
@@ -21,8 +21,7 @@ public class AcolyteTransactingConnection extends acolyte.Connection {
   }
 
   /**
-   * Initializes new connection by starting a transaction.
-   * Optional to call.
+   * Initializes new connection by starting a transaction. Optional to call.
    */
   void init() throws SQLException {
     vtoccTransactionHandler.init();
