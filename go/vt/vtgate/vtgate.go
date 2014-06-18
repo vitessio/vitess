@@ -12,6 +12,7 @@ import (
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
@@ -23,6 +24,17 @@ type VTGate struct {
 	resolver *Resolver
 	timings  *stats.MapTimings
 	errors   *stats.MapCounters
+
+	// the throttled loggers for all errors, one per API entry
+	logExecuteShard             *logutil.ThrottledLogger
+	logExecuteKeyspaceIds       *logutil.ThrottledLogger
+	logExecuteKeyRanges         *logutil.ThrottledLogger
+	logExecuteEntityIds         *logutil.ThrottledLogger
+	logExecuteBatchShard        *logutil.ThrottledLogger
+	logExecuteBatchKeyspaceIds  *logutil.ThrottledLogger
+	logStreamExecuteKeyspaceIds *logutil.ThrottledLogger
+	logStreamExecuteKeyRanges   *logutil.ThrottledLogger
+	logStreamExecuteShard       *logutil.ThrottledLogger
 }
 
 // registration mechanism
@@ -38,6 +50,16 @@ func Init(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount 
 		resolver: NewResolver(serv, "VttabletCall", cell, retryDelay, retryCount, timeout),
 		timings:  stats.NewMapTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
 		errors:   stats.NewMapCounters("VtgateApiErrorCounts", []string{"Operation", "Keyspace", "DbType"}),
+
+		logExecuteShard:             logutil.NewThrottledLogger("ExecuteShard", 5*time.Second),
+		logExecuteKeyspaceIds:       logutil.NewThrottledLogger("ExecuteKeyspaceIds", 5*time.Second),
+		logExecuteKeyRanges:         logutil.NewThrottledLogger("ExecuteKeyRanges", 5*time.Second),
+		logExecuteEntityIds:         logutil.NewThrottledLogger("ExecuteEntityIds", 5*time.Second),
+		logExecuteBatchShard:        logutil.NewThrottledLogger("ExecuteBatchShard", 5*time.Second),
+		logExecuteBatchKeyspaceIds:  logutil.NewThrottledLogger("ExecuteBatchKeyspaceIds", 5*time.Second),
+		logStreamExecuteKeyspaceIds: logutil.NewThrottledLogger("StreamExecuteKeyspaceIds", 5*time.Second),
+		logStreamExecuteKeyRanges:   logutil.NewThrottledLogger("StreamExecuteKeyRanges", 5*time.Second),
+		logStreamExecuteShard:       logutil.NewThrottledLogger("StreamExecuteShard", 5*time.Second),
 	}
 	for _, f := range RegisterVTGates {
 		f(RpcVTGate)
@@ -66,8 +88,7 @@ func (vtg *VTGate) ExecuteShard(context interface{}, query *proto.QueryShard, re
 	} else {
 		reply.Error = err.Error()
 		vtg.errors.Add(statsKey, 1)
-		// FIXME(alainjobart): throttle this log entry
-		log.Errorf("ExecuteShard: %v, query: %+v", err, query)
+		vtg.logExecuteShard.Errorf("%v, query: %+v", err, query)
 	}
 	reply.Session = query.Session
 	return nil
@@ -85,8 +106,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(context interface{}, query *proto.Keyspace
 	} else {
 		reply.Error = err.Error()
 		vtg.errors.Add(statsKey, 1)
-		// FIXME(alainjobart): throttle this log entry
-		log.Errorf("ExecuteKeyspaceIds: %v, query: %+v", err, query)
+		vtg.logExecuteKeyspaceIds.Errorf("%v, query: %+v", err, query)
 	}
 	reply.Session = query.Session
 	return nil
@@ -104,8 +124,7 @@ func (vtg *VTGate) ExecuteKeyRanges(context interface{}, query *proto.KeyRangeQu
 	} else {
 		reply.Error = err.Error()
 		vtg.errors.Add(statsKey, 1)
-		// FIXME(alainjobart): throttle this log entry
-		log.Errorf("ExecuteKeyRange: %v, query: %+v", err, query)
+		vtg.logExecuteKeyRanges.Errorf("%v, query: %+v", err, query)
 	}
 	reply.Session = query.Session
 	return nil
@@ -123,8 +142,7 @@ func (vtg *VTGate) ExecuteEntityIds(context interface{}, query *proto.EntityIdsQ
 	} else {
 		reply.Error = err.Error()
 		vtg.errors.Add(statsKey, 1)
-		// FIXME(alainjobart): throttle this log entry
-		log.Errorf("ExecuteEntityIds: %v, query: %+v", err, query)
+		vtg.logExecuteEntityIds.Errorf("%v, query: %+v", err, query)
 	}
 	reply.Session = query.Session
 	return nil
@@ -151,8 +169,7 @@ func (vtg *VTGate) ExecuteBatchShard(context interface{}, batchQuery *proto.Batc
 	} else {
 		reply.Error = err.Error()
 		vtg.errors.Add(statsKey, 1)
-		// FIXME(alainjobart): throttle this log entry
-		log.Errorf("ExecuteBatchShard: %v, queries: %+v", err, batchQuery)
+		vtg.logExecuteBatchShard.Errorf("%v, queries: %+v", err, batchQuery)
 	}
 	reply.Session = batchQuery.Session
 	return nil
@@ -172,8 +189,7 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(context interface{}, query *proto.Key
 	} else {
 		reply.Error = err.Error()
 		vtg.errors.Add(statsKey, 1)
-		// FIXME(alainjobart): throttle this log entry
-		log.Errorf("ExecuteBatchKeyspaceIds: %v, query: %+v", err, query)
+		vtg.logExecuteBatchKeyspaceIds.Errorf("%v, query: %+v", err, query)
 	}
 	reply.Session = query.Session
 	return nil
@@ -202,8 +218,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(context interface{}, query *proto.Ke
 		})
 	if err != nil {
 		vtg.errors.Add(statsKey, 1)
-		// FIXME(alainjobart): throttle this log entry
-		log.Errorf("StreamExecuteKeyspaceIds: %v, query: %+v", err, query)
+		vtg.logStreamExecuteKeyspaceIds.Errorf("%v, query: %+v", err, query)
 	}
 	// now we can send the final Sessoin info.
 	if query.Session != nil {
@@ -236,8 +251,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges(context interface{}, query *proto.KeyR
 
 	if err != nil {
 		vtg.errors.Add(statsKey, 1)
-		// FIXME(alainjobart): throttle this log entry
-		log.Errorf("StreamExecuteKeyRange: %v, query: %+v", err, query)
+		vtg.logStreamExecuteKeyRanges.Errorf("%v, query: %+v", err, query)
 	}
 	// now we can send the final Session info.
 	if query.Session != nil {
@@ -273,8 +287,7 @@ func (vtg *VTGate) StreamExecuteShard(context interface{}, query *proto.QuerySha
 
 	if err != nil {
 		vtg.errors.Add(statsKey, 1)
-		// FIXME(alainjobart): throttle this log entry
-		log.Errorf("StreamExecuteShard: %v, query: %+v", err, query)
+		vtg.logStreamExecuteShard.Errorf("%v, query: %+v", err, query)
 	}
 	// now we can send the final Session info.
 	if query.Session != nil {
