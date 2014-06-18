@@ -448,7 +448,10 @@ func (qe *QueryEngine) execDDL(logStats *SQLQueryStats, ddl string) *mproto.Quer
 // Execution
 
 func (qe *QueryEngine) execPKEqual(logStats *SQLQueryStats, plan *compiledPlan) (result *mproto.QueryResult) {
-	pkRows := buildValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
+	pkRows, err := buildValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
+	if err != nil {
+		panic(err)
+	}
 	if len(pkRows) != 1 || plan.Fields == nil {
 		panic("unexpected")
 	}
@@ -493,7 +496,10 @@ func (qe *QueryEngine) fetchOne(logStats *SQLQueryStats, plan *compiledPlan, pk 
 }
 
 func (qe *QueryEngine) execPKIN(logStats *SQLQueryStats, plan *compiledPlan) (result *mproto.QueryResult) {
-	pkRows := buildINValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
+	pkRows, err := buildINValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
+	if err != nil {
+		panic(err)
+	}
 	return qe.fetchMulti(logStats, plan, pkRows)
 }
 
@@ -621,7 +627,10 @@ func (qe *QueryEngine) execSelect(logStats *SQLQueryStats, plan *compiledPlan) (
 }
 
 func (qe *QueryEngine) execInsertPK(logStats *SQLQueryStats, conn PoolConnection, plan *compiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
-	pkRows := buildValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
+	pkRows, err := buildValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
+	if err != nil {
+		panic(err)
+	}
 	return qe.execInsertPKRows(logStats, conn, plan, pkRows, invalidator)
 }
 
@@ -639,21 +648,34 @@ func (qe *QueryEngine) execInsertSubquery(logStats *SQLQueryStats, conn PoolConn
 		pkRows[i] = applyFilterWithPKDefaults(plan.TableInfo, plan.SubqueryPKColumns, innerRow)
 	}
 	// Validating first row is sufficient
-	validateRow(plan.TableInfo, plan.TableInfo.PKColumns, pkRows[0])
+	if err := validateRow(plan.TableInfo, plan.TableInfo.PKColumns, pkRows[0]); err != nil {
+		panic(err)
+	}
+
 	plan.BindVars["_rowValues"] = innerRows
 	return qe.execInsertPKRows(logStats, conn, plan, pkRows, invalidator)
 }
 
 func (qe *QueryEngine) execInsertPKRows(logStats *SQLQueryStats, conn PoolConnection, plan *compiledPlan, pkRows [][]sqltypes.Value, invalidator CacheInvalidator) (result *mproto.QueryResult) {
-	secondaryList := buildSecondaryList(plan.TableInfo, pkRows, plan.SecondaryPKValues, plan.BindVars)
+	secondaryList, err := buildSecondaryList(plan.TableInfo, pkRows, plan.SecondaryPKValues, plan.BindVars)
+	if err != nil {
+		panic(err)
+	}
 	bsc := buildStreamComment(plan.TableInfo, pkRows, secondaryList)
 	result = qe.directFetch(logStats, conn, plan.OuterQuery, plan.BindVars, nil, bsc)
 	return result
 }
 
 func (qe *QueryEngine) execDMLPK(logStats *SQLQueryStats, conn PoolConnection, plan *compiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
-	pkRows := buildValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
-	secondaryList := buildSecondaryList(plan.TableInfo, pkRows, plan.SecondaryPKValues, plan.BindVars)
+	pkRows, err := buildValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
+	if err != nil {
+		panic(err)
+	}
+	secondaryList, err := buildSecondaryList(plan.TableInfo, pkRows, plan.SecondaryPKValues, plan.BindVars)
+	if err != nil {
+		panic(err)
+	}
+
 	bsc := buildStreamComment(plan.TableInfo, pkRows, secondaryList)
 	result = qe.directFetch(logStats, conn, plan.OuterQuery, plan.BindVars, nil, bsc)
 	if invalidator != nil {
@@ -679,7 +701,11 @@ func (qe *QueryEngine) execDMLPKRows(logStats *SQLQueryStats, conn PoolConnectio
 	singleRow := make([][]sqltypes.Value, 1)
 	for _, pkRow := range pkRows {
 		singleRow[0] = pkRow
-		secondaryList := buildSecondaryList(plan.TableInfo, singleRow, plan.SecondaryPKValues, plan.BindVars)
+		secondaryList, err := buildSecondaryList(plan.TableInfo, singleRow, plan.SecondaryPKValues, plan.BindVars)
+		if err != nil {
+			panic(err)
+		}
+
 		bsc := buildStreamComment(plan.TableInfo, singleRow, secondaryList)
 		rowsAffected += qe.directFetch(logStats, conn, plan.OuterQuery, plan.BindVars, pkRow, bsc).RowsAffected
 		if invalidator != nil {
