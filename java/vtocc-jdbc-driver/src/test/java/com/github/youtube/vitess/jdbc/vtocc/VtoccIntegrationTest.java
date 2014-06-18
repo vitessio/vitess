@@ -45,7 +45,7 @@ public class VtoccIntegrationTest {
 
   public static final String VTOCC_PORT = System.getProperty("vtocc.port");
   public static final String VTROOT = Files.simplifyPath(System.getProperty("VTROOT"));
-  public static final String VTDATAROOT = Files.simplifyPath(System.getProperty("VTDATAROOT"));
+  public static final String VTDATAROOT = Files.simplifyPath(System.getProperty("VTDATA"));
 
   private static final String TARGET_TESTS_OUTPUT_DIRECTORY =
       VtoccIntegrationTest.class.getResource("/").getPath();

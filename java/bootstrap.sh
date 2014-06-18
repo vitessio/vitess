@@ -33,7 +33,7 @@ else
   echo "[INFO] acolyte-core is successfully installed"
   echo "[INFO] Rebuilding and installing vtocc-jdbc-driver"
   cd "$VTTOP/java"
-  mvn install
+  mvn install -DVTTOP=$VTTOP -DVTROOT=$VTROOT -DVTDATAROOT=$VTDATAROOT
   echo "[INFO] vtocc-jdbc-driver is successfully installed"
   set +e
 fi
