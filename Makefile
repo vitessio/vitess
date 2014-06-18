@@ -15,6 +15,7 @@ test: unit_test queryservice_test integration_test
 
 clean:
 	go clean -i ./go/...
+	rm -rf java/vtocc-client/target java/vtocc-jdbc-driver/target third_party/acolyte
 
 unit_test:
 	go test ./go/...
@@ -71,6 +72,10 @@ integration_test:
 		fi ; \
 		echo ; \
 	done
+
+# this rule only works if bootstrap.sh was successfully ran in ./java
+java_test:
+	cd java && mvn verify
 
 bson:
 	bsongen -file ./go/mysql/proto/structs.go -type QueryResult -o ./go/mysql/proto/query_result_bson.go

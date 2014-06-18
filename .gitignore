@@ -16,3 +16,8 @@ tags
 
 # mysql build dirs
 third_party/mysql
+
+# java target files
+java/vtocc-client/target
+java/vtocc-jdbc-driver/target
+third_party/acolyte
