@@ -303,7 +303,7 @@
                 <configuration>
                     <systemProperties>
                         <vtocc.port>${vtocc.port}</vtocc.port>
-                        <VTDATAROOT>${VTDATAROOT}/vt_0000000000</VTDATAROOT>
+                        <VTDATA>${VTDATAROOT}/vt_0000000000</VTDATA>
                         <VTROOT>${VTROOT}</VTROOT>
                         <org.slf4j.simpleLogger.defaultLogLevel>
                             debug
