@@ -1323,6 +1323,10 @@
   "SetValue": null
 }
 
+# insert sub-select
+"insert into a (a.eid, id) values (select * from b)"
+"row subquery not supported for inserts"
+
 # insert with bind value
 "insert into a (eid, id) values (1, :a)"
 {

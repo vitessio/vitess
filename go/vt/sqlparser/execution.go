@@ -794,6 +794,9 @@ func getInsertPKValues(pkColumnNumbers []int, rowList *Node, tableInfo *schema.T
 		}
 		values := make([]interface{}, rowList.Len())
 		for j := 0; j < rowList.Len(); j++ {
+			if _, ok := rowList.NodeAt(j).At(0).(*Select); ok {
+				panic(NewParserError("row subquery not supported for inserts"))
+			}
 			if columnNumber >= rowList.NodeAt(j).NodeAt(0).Len() { // NODE_LIST->'('->NODE_LIST
 				panic(NewParserError("column count doesn't match value count"))
 			}
