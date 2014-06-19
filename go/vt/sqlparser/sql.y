@@ -23,6 +23,10 @@ func ForceEOF(yylex interface{}) {
 }
 
 var (
+  LJOIN = []byte("left join")
+  RJOIN = []byte("right join")
+  CJOIN = []byte("cross join")
+  NJOIN = []byte("natural join")
   SHARE = []byte("share")
   MODE =  []byte("mode")
 )
@@ -33,12 +37,13 @@ var (
   node        *Node
   statement   Statement
   comments    Comments
-  unionOp     []byte
+  str         []byte
   distinct    Distinct
   selectExprs SelectExprs
   selectExpr  SelectExpr
   columns     Columns
   tableExprs  TableExprs
+  tableExpr   TableExpr
   sqlNode     SQLNode
 }
 
@@ -77,13 +82,16 @@ var (
 %type <statement> select_statement insert_statement update_statement delete_statement set_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement
 %type <comments> comment_opt comment_list
-%type <unionOp> union_op
+%type <str> union_op
 %type <distinct> distinct_opt
 %type <selectExprs> select_expression_list
 %type <selectExpr> select_expression
-%type <node> expression as_opt
+%type <str> as_lower_opt as_opt
+%type <node> expression
 %type <tableExprs> table_expression_list
-%type <node> table_expression join_type simple_table_expression dml_table_expression index_hint_list
+%type <tableExpr> table_expression
+%type <str> join_type
+%type <node> simple_table_expression dml_table_expression index_hint_list
 %type <node> where_expression_opt boolean_expression condition compare
 %type <sqlNode> values
 %type <node> parenthesised_lists parenthesised_list value_expression_list value_expression keyword_as_func
@@ -264,13 +272,9 @@ select_expression:
   {
     $$ = &StarExpr{}
   }
-| expression
+| expression as_lower_opt
   {
-    $$ = &NonStarExpr{Expr: $1}
-  }
-| expression as_opt sql_id
-  {
-    $$ = &NonStarExpr{Expr: $1, As: $3.Value}
+    $$ = &NonStarExpr{Expr: $1, As: $2}
   }
 | ID '.' '*'
   {
@@ -281,11 +285,18 @@ expression:
   boolean_expression
 | value_expression
 
-as_opt:
+as_lower_opt:
   {
-    $$ = NewSimpleParseNode(AS, "as")
+    $$ = nil
   }
-| AS
+| sql_id
+  {
+    $$ = $1.Value
+  }
+| AS sql_id
+  {
+    $$ = $2.Value
+  }
 
 table_expression_list:
   table_expression
@@ -298,66 +309,81 @@ table_expression_list:
   }
 
 table_expression:
-  simple_table_expression index_hint_list
+  simple_table_expression as_opt index_hint_list
   {
-    $$ = NewSimpleParseNode(TABLE_EXPR, "")
-    $$.Push($1)
-    $$.Push(NewSimpleParseNode(NODE_LIST, "node_list"))
-    $$.Push($2)
-  }
-| simple_table_expression as_opt ID index_hint_list
-  {
-    $$ = NewSimpleParseNode(TABLE_EXPR, "")
-    $$.Push($1)
-    $$.Push(NewSimpleParseNode(NODE_LIST, "node_list").Push($3))
-    $$.Push($4)
+    $$ = &AliasedTableExpr{Expr:$1, As: $2, Hint: $3}
   }
 | '(' table_expression ')'
   {
-    $$ = $1.Push($2)
+    $$ = &ParenTableExpr{Inner: $2}
   }
 | table_expression join_type table_expression %prec JOIN
   {
-    $$ = $2.PushTwo($1, $3)
+    $$ = &JoinTableExpr{
+      LeftExpr:  $1,
+      Join:      $2,
+      RightExpr: $3,
+    }
   }
 | table_expression join_type table_expression ON boolean_expression %prec JOIN
   {
-    $$ = $2
-    $$.Push($1)
-    $$.Push($3)
-    $$.Push($5)
+    $$ = &JoinTableExpr{
+      LeftExpr:  $1,
+      Join:      $2,
+      RightExpr: $3,
+      On:        $5,
+    }
+  }
+
+as_opt:
+  {
+    $$ = nil
+  }
+| ID
+  {
+    $$ = $1.Value
+  }
+| AS ID
+  {
+    $$ = $2.Value
   }
 
 join_type:
   JOIN
+  {
+    $$ = $1.Value
+  }
 | STRAIGHT_JOIN
+  {
+    $$ = $1.Value
+  }
 | LEFT JOIN
   {
-    $$ = NewSimpleParseNode(LEFT, "left join")
+    $$ = LJOIN
   }
 | LEFT OUTER JOIN
   {
-    $$ = NewSimpleParseNode(LEFT, "left join")
+    $$ = LJOIN
   }
 | RIGHT JOIN
   {
-    $$ = NewSimpleParseNode(RIGHT, "right join")
+    $$ = RJOIN
   }
 | RIGHT OUTER JOIN
   {
-    $$ = NewSimpleParseNode(RIGHT, "right join")
+    $$ = RJOIN
   }
 | INNER JOIN
   {
-    $$ = $2
+    $$ = $2.Value
   }
 | CROSS JOIN
   {
-    $$ = NewSimpleParseNode(CROSS, "cross join")
+    $$ = CJOIN
   }
 | NATURAL JOIN
   {
-    $$ = NewSimpleParseNode(NATURAL, "natural join")
+    $$ = NJOIN
   }
 
 simple_table_expression:
@@ -380,7 +406,7 @@ ID
 
 index_hint_list:
   {
-    $$ = NewSimpleParseNode(USE, "use")
+    $$ = nil
   }
 | USE INDEX '(' index_list ')'
   {

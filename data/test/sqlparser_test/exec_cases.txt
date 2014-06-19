@@ -207,31 +207,11 @@
 "select * from (b)"
 {
   "PlanId": "PASS_SELECT",
-  "Reason": "NOCACHE",
-  "TableName": "b",
+  "Reason": "TABLE",
+  "TableName": "",
   "DisplayQuery": "select * from (b)",
   "FieldQuery": "select * from (b) where 1 != 1",
   "FullQuery": "select * from (b) limit :_vtMaxResultSize",
-  "OuterQuery": null,
-  "Subquery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": null,
-  "PKValues": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
-}
-
-# Multi-parenthesized table
-"select * from ((b))"
-{
-  "PlanId": "PASS_SELECT",
-  "Reason": "NOCACHE",
-  "TableName": "b",
-  "DisplayQuery": "select * from ((b))",
-  "FieldQuery": "select * from ((b)) where 1 != 1",
-  "FullQuery": "select * from ((b)) limit :_vtMaxResultSize",
   "OuterQuery": null,
   "Subquery": null,
   "IndexUsed": "",
@@ -1322,6 +1302,10 @@
   "SetKey": "",
   "SetValue": null
 }
+
+# insert sub-select
+"insert into a (a.eid, id) values (select * from b)"
+"row subquery not supported for inserts"
 
 # insert with bind value
 "insert into a (eid, id) values (1, :a)"
