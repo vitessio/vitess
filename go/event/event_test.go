@@ -102,11 +102,18 @@ func TestBadListenerWrongInputs(t *testing.T) {
 		err := recover()
 
 		if err == nil {
-			t.Errorf("bad listener func failed to trigger panic")
+			t.Errorf("bad listener func (wrong # of inputs) failed to trigger panic")
+			return
 		}
 
-		if _, ok := err.(BadListenerError); !ok {
+		blErr, ok := err.(BadListenerError)
+		if !ok {
 			panic(err) // this is not the error we were looking for; re-panic
+		}
+
+		want := "bad listener func: listener must take exactly one input argument"
+		if got := blErr.Error(); got != want {
+			t.Errorf(`BadListenerError.Error() = "%s", want "%s"`, got, want)
 		}
 	}()
 
@@ -121,11 +128,17 @@ func TestBadListenerWrongType(t *testing.T) {
 		err := recover()
 
 		if err == nil {
-			t.Errorf("bad listener func failed to trigger panic")
+			t.Errorf("bad listener type (not a func) failed to trigger panic")
 		}
 
-		if _, ok := err.(BadListenerError); !ok {
+		blErr, ok := err.(BadListenerError)
+		if !ok {
 			panic(err) // this is not the error we were looking for; re-panic
+		}
+
+		want := "bad listener func: listener must be a function"
+		if got := blErr.Error(); got != want {
+			t.Errorf(`BadListenerError.Error() = "%s", want "%s"`, got, want)
 		}
 	}()
 
