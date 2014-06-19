@@ -29,43 +29,44 @@ func NewThrottledLogger(name string, maxInterval time.Duration) *ThrottledLogger
 	}
 }
 
-func (tl *ThrottledLogger) shouldLog() bool {
+type logFunc func(string, ...interface{})
+
+func (tl *ThrottledLogger) log(logF logFunc, format string, v ...interface{}) {
 	now := time.Now()
 
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
-	if now.Sub(tl.lastlogTime) < tl.maxInterval {
-		tl.skippedCount++
-		return false
+	logWaitTime := tl.maxInterval - (now.Sub(tl.lastlogTime))
+	if logWaitTime < 0 {
+		tl.lastlogTime = now
+		logF(tl.name+":"+format, v...)
+		return
 	}
-	tl.lastlogTime = now
-	if tl.skippedCount > 0 {
-		log.Warningf("%v: skipped %v log messages", tl.name, tl.skippedCount)
-		tl.skippedCount = 0
+	// If this is the first message to be skipped, start a goroutine
+	// to log and reset skippedCount
+	if tl.skippedCount == 0 {
+		go func(d time.Duration) {
+			time.Sleep(d)
+			tl.mu.Lock()
+			defer tl.mu.Unlock()
+			logF("%v: skipped %v log messages", tl.name, tl.skippedCount)
+			tl.skippedCount = 0
+		}(logWaitTime)
 	}
-	return true
+	tl.skippedCount++
 }
 
 // Infof logs an info if not throttled.
 func (tl *ThrottledLogger) Infof(format string, v ...interface{}) {
-	if !tl.shouldLog() {
-		return
-	}
-	log.Infof(tl.name+": "+format, v...)
+	tl.log(log.Infof, format, v...)
 }
 
 // Warningf logs a warning if not throttled.
 func (tl *ThrottledLogger) Warningf(format string, v ...interface{}) {
-	if !tl.shouldLog() {
-		return
-	}
-	log.Warningf(tl.name+": "+format, v...)
+	tl.log(log.Warningf, format, v...)
 }
 
 // Errorf logs an error if not throttled.
 func (tl *ThrottledLogger) Errorf(format string, v ...interface{}) {
-	if !tl.shouldLog() {
-		return
-	}
-	log.Errorf(tl.name+": "+format, v...)
+	tl.log(log.Errorf, format, v...)
 }

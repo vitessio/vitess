@@ -13,10 +13,12 @@ func TestThrottledLogger(t *testing.T) {
 	if tl.skippedCount != 1 {
 		t.Fatalf("skippedCount is %v but was expecting 1", tl.skippedCount)
 	}
-
 	time.Sleep(100 * time.Millisecond)
+	if tl.skippedCount != 0 {
+		t.Fatalf("skippedCount is %v but was expecting 0 after sleeping", tl.skippedCount)
+	}
 	tl.Infof("test %v", 3)
 	if tl.skippedCount != 0 {
-		t.Fatalf("skippedCount is %v but was expecting 0 after reset", tl.skippedCount)
+		t.Fatalf("skippedCount is %v but was expecting 0", tl.skippedCount)
 	}
 }
