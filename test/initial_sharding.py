@@ -465,6 +465,8 @@ index by_msg (msg)
     for t in [shard_master, shard_replica, shard_rdonly]:
       utils.run_vtctl(['ScrapTablet', t.tablet_alias], auto_log=True)
     tablet.kill_tablets([shard_master, shard_replica, shard_rdonly])
+    for t in [shard_master, shard_replica, shard_rdonly]:
+      utils.run_vtctl(['DeleteTablet', t.tablet_alias], auto_log=True)
 
     # rebuild the serving graph, all mentions of the old shards shoud be gone
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)

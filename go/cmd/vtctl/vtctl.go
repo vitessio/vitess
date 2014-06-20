@@ -68,6 +68,9 @@ var commands = []commandGroup{
 			command{"ScrapTablet", commandScrapTablet,
 				"[-force] [-skip-rebuild] <tablet alias|zk tablet path>",
 				"Scraps a tablet."},
+			command{"DeleteTablet", commandDeleteTablet,
+				"<tablet alias|zk tablet path> ...",
+				"Deletes scrapped tablet(s) from the topology."},
 			command{"SetReadOnly", commandSetReadOnly,
 				"[<tablet alias|zk tablet path>]",
 				"Sets the tablet as ReadOnly."},
@@ -555,6 +558,16 @@ func tabletParamToTabletAlias(param string) topo.TabletAlias {
 	return result
 }
 
+// tabletParamsToTabletAliases takes multiple params and converts them
+// to tablet aliases.
+func tabletParamsToTabletAliases(params []string) []topo.TabletAlias {
+	result := make([]topo.TabletAlias, len(params))
+	for i, param := range params {
+		result[i] = tabletParamToTabletAlias(param)
+	}
+	return result
+}
+
 // tabletRepParamToTabletAlias takes either an old style ZK tablet replication
 // path or a new style tablet alias as a string, and returns a
 // TabletAlias.
@@ -716,6 +729,21 @@ func commandScrapTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []st
 
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
 	return wr.Scrap(tabletAlias, *force, *skipRebuild)
+}
+
+func commandDeleteTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	subFlags.Parse(args)
+	if subFlags.NArg() == 0 {
+		log.Fatalf("action DeleteTablet requires at least one <tablet alias|zk tablet path> ...")
+	}
+
+	tabletAliases := tabletParamsToTabletAliases(subFlags.Args())
+	for _, tabletAlias := range tabletAliases {
+		if err := wr.DeleteTablet(tabletAlias); err != nil {
+			return "", err
+		}
+	}
+	return "", nil
 }
 
 func commandSetReadOnly(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

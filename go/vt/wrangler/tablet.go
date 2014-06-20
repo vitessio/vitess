@@ -292,3 +292,17 @@ func (wr *Wrangler) changeTypeInternal(tabletAlias topo.TabletAlias, dbType topo
 	}
 	return nil
 }
+
+// DeleteTablet will get the tablet record, and if it's scrapped, will
+// delete the record from the topology.
+func (wr *Wrangler) DeleteTablet(tabletAlias topo.TabletAlias) error {
+	ti, err := wr.ts.GetTablet(tabletAlias)
+	if err != nil {
+		return err
+	}
+	// refuse to delete tablets that are not scrapped
+	if ti.Type != topo.TYPE_SCRAP {
+		return fmt.Errorf("Can only delete scrapped tablets")
+	}
+	return wr.TopoServer().DeleteTablet(tabletAlias)
+}

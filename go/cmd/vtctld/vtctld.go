@@ -431,15 +431,7 @@ func main() {
 
 	actionRepo.RegisterTabletAction("DeleteTablet", acl.ADMIN,
 		func(wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
-			// refuse to delete tablets that are not scrapped
-			ti, err := wr.TopoServer().GetTablet(tabletAlias)
-			if err != nil {
-				return "", err
-			}
-			if ti.Type != topo.TYPE_SCRAP {
-				return "", fmt.Errorf("Can only delete scrapped tablets")
-			}
-			return "", wr.TopoServer().DeleteTablet(tabletAlias)
+			return "", wr.DeleteTablet(tabletAlias)
 		})
 
 	// toplevel index
