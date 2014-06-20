@@ -17,30 +17,30 @@ import (
 // This file uses the sandbox_test framework.
 
 func TestExecuteKeyspaceAlias(t *testing.T) {
-	testVerticalSplitGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
+	testVerticalSplitGeneric(t, func(shards []string) (interface{}, error) {
 		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
 		return stc.Execute(nil, "query", nil, TEST_UNSHARDED_SERVED_FROM, shards, topo.TYPE_RDONLY, nil)
 	})
 }
 
 func TestBatchExecuteKeyspaceAlias(t *testing.T) {
-	testVerticalSplitGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
+	testVerticalSplitGeneric(t, func(shards []string) (interface{}, error) {
 		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
 		queries := []tproto.BoundQuery{{"query", nil}}
 		qrs, err := stc.ExecuteBatch(nil, queries, TEST_UNSHARDED_SERVED_FROM, shards, topo.TYPE_RDONLY, nil)
 		if err != nil {
 			return nil, err
 		}
-		return &qrs.List[0], err
+		return &qrs.(*tproto.QueryResultList).List[0], err
 	})
 }
 
 func TestStreamExecuteKeyspaceAlias(t *testing.T) {
-	testVerticalSplitGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
+	testVerticalSplitGeneric(t, func(shards []string) (interface{}, error) {
 		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
-		err := stc.StreamExecute(nil, "query", nil, TEST_UNSHARDED_SERVED_FROM, shards, topo.TYPE_RDONLY, nil, func(r *mproto.QueryResult) error {
-			appendResult(qr, r)
+		err := stc.StreamExecute(nil, "query", nil, TEST_UNSHARDED_SERVED_FROM, shards, topo.TYPE_RDONLY, nil, func(r interface{}) error {
+			appendResult(ProtocolBson, qr, r)
 			return nil
 		})
 		return qr, err
@@ -74,7 +74,7 @@ func TestInTransactionKeyspaceAlias(t *testing.T) {
 	}
 }
 
-func testVerticalSplitGeneric(t *testing.T, f func(shards []string) (*mproto.QueryResult, error)) {
+func testVerticalSplitGeneric(t *testing.T, f func(shards []string) (interface{}, error)) {
 	// Retry Error, for keyspace that is redirected should succeed.
 	s := createSandbox(TEST_UNSHARDED_SERVED_FROM)
 	sbc := &sandboxConn{mustFailRetry: 3}

@@ -24,7 +24,7 @@ import (
 // This file uses the sandbox_test framework.
 
 func TestResolverExecuteKeyspaceIds(t *testing.T) {
-	testResolverGeneric(t, "TestResolverExecuteKeyspaceIds", func() (*mproto.QueryResult, error) {
+	testResolverGeneric(t, "TestResolverExecuteKeyspaceIds", func() (interface{}, error) {
 		kid10, err := key.HexKeyspaceId("10").Unhex()
 		if err != nil {
 			return nil, err
@@ -45,7 +45,7 @@ func TestResolverExecuteKeyspaceIds(t *testing.T) {
 }
 
 func TestResolverExecuteKeyRanges(t *testing.T) {
-	testResolverGeneric(t, "TestResolverExecuteKeyRanges", func() (*mproto.QueryResult, error) {
+	testResolverGeneric(t, "TestResolverExecuteKeyRanges", func() (interface{}, error) {
 		kid10, err := key.HexKeyspaceId("10").Unhex()
 		if err != nil {
 			return nil, err
@@ -66,7 +66,7 @@ func TestResolverExecuteKeyRanges(t *testing.T) {
 }
 
 func TestResolverExecuteEntityIds(t *testing.T) {
-	testResolverGeneric(t, "TestResolverExecuteEntityIds", func() (*mproto.QueryResult, error) {
+	testResolverGeneric(t, "TestResolverExecuteEntityIds", func() (interface{}, error) {
 		kid10, err := key.HexKeyspaceId("10").Unhex()
 		if err != nil {
 			return nil, err
@@ -97,7 +97,7 @@ func TestResolverExecuteEntityIds(t *testing.T) {
 }
 
 func TestResolverExecuteBatchKeyspaceIds(t *testing.T) {
-	testResolverGeneric(t, "TestResolverExecuteBatchKeyspaceIds", func() (*mproto.QueryResult, error) {
+	testResolverGeneric(t, "TestResolverExecuteBatchKeyspaceIds", func() (interface{}, error) {
 		kid10, err := key.HexKeyspaceId("10").Unhex()
 		if err != nil {
 			return nil, err
@@ -117,7 +117,7 @@ func TestResolverExecuteBatchKeyspaceIds(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		return &qrs.List[0], err
+		return &qrs.(*tproto.QueryResultList).List[0], err
 	})
 }
 
@@ -144,8 +144,8 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyspaceIds", func() (*mproto.QueryResult, error) {
 		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
-		err = res.StreamExecuteKeyspaceIds(nil, query, func(r *mproto.QueryResult) error {
-			appendResult(qr, r)
+		err = res.StreamExecuteKeyspaceIds(nil, query, func(r interface{}) error {
+			appendResult(ProtocolBson, qr, r)
 			return nil
 		})
 		return qr, err
@@ -154,8 +154,8 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 		query.KeyspaceIds = []key.KeyspaceId{kid10, kid15, kid25}
 		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
-		err = res.StreamExecuteKeyspaceIds(nil, query, func(r *mproto.QueryResult) error {
-			appendResult(qr, r)
+		err = res.StreamExecuteKeyspaceIds(nil, query, func(r interface{}) error {
+			appendResult(ProtocolBson, qr, r)
 			return nil
 		})
 		return qr, err
@@ -186,8 +186,8 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyRanges", func() (*mproto.QueryResult, error) {
 		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
-		err = res.StreamExecuteKeyRanges(nil, query, func(r *mproto.QueryResult) error {
-			appendResult(qr, r)
+		err = res.StreamExecuteKeyRanges(nil, query, func(r interface{}) error {
+			appendResult(ProtocolBson, qr, r)
 			return nil
 		})
 		return qr, err
@@ -197,15 +197,15 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 		query.KeyRanges = []key.KeyRange{key.KeyRange{Start: kid10, End: kid25}}
 		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
-		err = res.StreamExecuteKeyRanges(nil, query, func(r *mproto.QueryResult) error {
-			appendResult(qr, r)
+		err = res.StreamExecuteKeyRanges(nil, query, func(r interface{}) error {
+			appendResult(ProtocolBson, qr, r)
 			return nil
 		})
 		return qr, err
 	})
 }
 
-func testResolverGeneric(t *testing.T, name string, action func() (*mproto.QueryResult, error)) {
+func testResolverGeneric(t *testing.T, name string, action func() (interface{}, error)) {
 	// successful execute
 	s := createSandbox(name)
 	sbc0 := &sandboxConn{}

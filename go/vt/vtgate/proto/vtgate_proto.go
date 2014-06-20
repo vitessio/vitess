@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/sqltypes"
 	kproto "github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -90,20 +89,9 @@ type EntityIdsQuery struct {
 
 // QueryResult is mproto.QueryResult+Session (for now).
 type QueryResult struct {
-	Fields       []mproto.Field
-	RowsAffected uint64
-	InsertId     uint64
-	Rows         [][]sqltypes.Value
-	Session      *Session
-	Error        string
-}
-
-// PopulateQueryResult populates a QueryResult from a mysql/proto.QueryResult
-func PopulateQueryResult(in *mproto.QueryResult, out *QueryResult) {
-	out.Fields = in.Fields
-	out.RowsAffected = in.RowsAffected
-	out.InsertId = in.InsertId
-	out.Rows = in.Rows
+	Result  *mproto.QueryResult
+	Session *Session
+	Error   string
 }
 
 // BatchQueryShard represents a batch query request

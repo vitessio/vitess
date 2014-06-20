@@ -36,7 +36,7 @@ func TestVTGateExecuteShard(t *testing.T) {
 		t.Errorf("want nil, got %v", err)
 	}
 	wantqr := new(proto.QueryResult)
-	proto.PopulateQueryResult(singleRowResult, wantqr)
+	wantqr.Result = singleRowResult
 	if !reflect.DeepEqual(wantqr, qr) {
 		t.Errorf("want \n%+v, got \n%+v", singleRowResult, qr)
 	}
@@ -103,7 +103,7 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 		t.Errorf("want nil, got %v", err)
 	}
 	wantqr := new(proto.QueryResult)
-	proto.PopulateQueryResult(singleRowResult, wantqr)
+	wantqr.Result = singleRowResult
 	if !reflect.DeepEqual(wantqr, qr) {
 		t.Errorf("want \n%+v, got \n%+v", singleRowResult, qr)
 	}
@@ -143,8 +143,8 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 	}
 	q.KeyspaceIds = []key.KeyspaceId{kid10, kid30}
 	RpcVTGate.ExecuteKeyspaceIds(nil, &q, qr)
-	if qr.RowsAffected != 2 {
-		t.Errorf("want 2, got %v", qr.RowsAffected)
+	if qr.Result.RowsAffected != 2 {
+		t.Errorf("want 2, got %v", qr.Result.RowsAffected)
 	}
 }
 
@@ -168,7 +168,7 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 		t.Errorf("want nil, got %v", err)
 	}
 	wantqr := new(proto.QueryResult)
-	proto.PopulateQueryResult(singleRowResult, wantqr)
+	wantqr.Result = singleRowResult
 	if !reflect.DeepEqual(wantqr, qr) {
 		t.Errorf("want \n%+v, got \n%+v", singleRowResult, qr)
 	}
@@ -208,8 +208,8 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 	kr, err = key.ParseKeyRangeParts("10", "30")
 	q.KeyRanges = []key.KeyRange{kr}
 	RpcVTGate.ExecuteKeyRanges(nil, &q, qr)
-	if qr.RowsAffected != 2 {
-		t.Errorf("want 2, got %v", qr.RowsAffected)
+	if qr.Result.RowsAffected != 2 {
+		t.Errorf("want 2, got %v", qr.Result.RowsAffected)
 	}
 }
 
@@ -242,7 +242,7 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 		t.Errorf("want nil, got %v", err)
 	}
 	wantqr := new(proto.QueryResult)
-	proto.PopulateQueryResult(singleRowResult, wantqr)
+	wantqr.Result = singleRowResult
 	if !reflect.DeepEqual(wantqr, qr) {
 		t.Errorf("want \n%+v, got \n%+v", singleRowResult, qr)
 	}
@@ -282,8 +282,8 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 	}
 	q.EntityKeyspaceIDs = append(q.EntityKeyspaceIDs, proto.EntityId{ExternalID: "id2", KeyspaceID: kid30})
 	RpcVTGate.ExecuteEntityIds(nil, &q, qr)
-	if qr.RowsAffected != 2 {
-		t.Errorf("want 2, got %v", qr.RowsAffected)
+	if qr.Result.RowsAffected != 2 {
+		t.Errorf("want 2, got %v", qr.Result.RowsAffected)
 	}
 }
 
@@ -398,7 +398,7 @@ func TestVTGateStreamExecuteKeyspaceIds(t *testing.T) {
 		t.Errorf("want nil, got %v", err)
 	}
 	row := new(proto.QueryResult)
-	proto.PopulateQueryResult(singleRowResult, row)
+	row.Result = singleRowResult
 	want := []*proto.QueryResult{row}
 	if !reflect.DeepEqual(want, qrs) {
 		t.Errorf("want \n%+v, got \n%+v", want, qrs)
@@ -449,7 +449,7 @@ func TestVTGateStreamExecuteKeyspaceIds(t *testing.T) {
 		t.Errorf("want nil, got %v", err)
 	}
 	row = new(proto.QueryResult)
-	proto.PopulateQueryResult(singleRowResult, row)
+	row.Result = singleRowResult
 	want = []*proto.QueryResult{row}
 	if !reflect.DeepEqual(want, qrs) {
 		t.Errorf("want \n%+v, got \n%+v", want, qrs)
@@ -492,7 +492,7 @@ func TestVTGateStreamExecuteKeyRanges(t *testing.T) {
 		t.Errorf("want nil, got %v", err)
 	}
 	row := new(proto.QueryResult)
-	proto.PopulateQueryResult(singleRowResult, row)
+	row.Result = singleRowResult
 	want := []*proto.QueryResult{row}
 	if !reflect.DeepEqual(want, qrs) {
 		t.Errorf("want \n%+v, got \n%+v", want, qrs)
@@ -555,7 +555,7 @@ func TestVTGateStreamExecuteShard(t *testing.T) {
 		t.Errorf("want nil, got %v", err)
 	}
 	row := new(proto.QueryResult)
-	proto.PopulateQueryResult(singleRowResult, row)
+	row.Result = singleRowResult
 	want := []*proto.QueryResult{row}
 	if !reflect.DeepEqual(want, qrs) {
 		t.Errorf("want \n%+v, got \n%+v", want, qrs)

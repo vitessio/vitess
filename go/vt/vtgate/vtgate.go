@@ -13,6 +13,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/logutil"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
@@ -84,7 +85,7 @@ func (vtg *VTGate) ExecuteShard(context interface{}, query *proto.QueryShard, re
 		},
 	)
 	if err == nil {
-		proto.PopulateQueryResult(qr, reply)
+		reply.Result = qr.(*mproto.QueryResult)
 	} else {
 		reply.Error = err.Error()
 		vtg.errors.Add(statsKey, 1)
@@ -102,7 +103,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(context interface{}, query *proto.Keyspace
 
 	qr, err := vtg.resolver.ExecuteKeyspaceIds(context, query)
 	if err == nil {
-		proto.PopulateQueryResult(qr, reply)
+		reply.Result = qr.(*mproto.QueryResult)
 	} else {
 		reply.Error = err.Error()
 		vtg.errors.Add(statsKey, 1)
@@ -120,7 +121,7 @@ func (vtg *VTGate) ExecuteKeyRanges(context interface{}, query *proto.KeyRangeQu
 
 	qr, err := vtg.resolver.ExecuteKeyRanges(context, query)
 	if err == nil {
-		proto.PopulateQueryResult(qr, reply)
+		reply.Result = qr.(*mproto.QueryResult)
 	} else {
 		reply.Error = err.Error()
 		vtg.errors.Add(statsKey, 1)
@@ -138,7 +139,7 @@ func (vtg *VTGate) ExecuteEntityIds(context interface{}, query *proto.EntityIdsQ
 
 	qr, err := vtg.resolver.ExecuteEntityIds(context, query)
 	if err == nil {
-		proto.PopulateQueryResult(qr, reply)
+		reply.Result = qr.(*mproto.QueryResult)
 	} else {
 		reply.Error = err.Error()
 		vtg.errors.Add(statsKey, 1)
@@ -165,7 +166,7 @@ func (vtg *VTGate) ExecuteBatchShard(context interface{}, batchQuery *proto.Batc
 		},
 	)
 	if err == nil {
-		reply.List = qrs.List
+		reply.List = qrs.(*tproto.QueryResultList).List
 	} else {
 		reply.Error = err.Error()
 		vtg.errors.Add(statsKey, 1)
@@ -185,7 +186,7 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(context interface{}, query *proto.Key
 		context,
 		query)
 	if err == nil {
-		reply.List = qrs.List
+		reply.List = qrs.(*tproto.QueryResultList).List
 	} else {
 		reply.Error = err.Error()
 		vtg.errors.Add(statsKey, 1)
@@ -209,9 +210,9 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(context interface{}, query *proto.Ke
 	err := vtg.resolver.StreamExecuteKeyspaceIds(
 		context,
 		query,
-		func(mreply *mproto.QueryResult) error {
+		func(mreply interface{}) error {
 			reply := new(proto.QueryResult)
-			proto.PopulateQueryResult(mreply, reply)
+			reply.Result = mreply.(*mproto.QueryResult)
 			// Note we don't populate reply.Session here,
 			// as it may change incrementaly as responses are sent.
 			return sendReply(reply)
@@ -241,9 +242,9 @@ func (vtg *VTGate) StreamExecuteKeyRanges(context interface{}, query *proto.KeyR
 	err := vtg.resolver.StreamExecuteKeyRanges(
 		context,
 		query,
-		func(mreply *mproto.QueryResult) error {
+		func(mreply interface{}) error {
 			reply := new(proto.QueryResult)
-			proto.PopulateQueryResult(mreply, reply)
+			reply.Result = mreply.(*mproto.QueryResult)
 			// Note we don't populate reply.Session here,
 			// as it may change incrementaly as responses are sent.
 			return sendReply(reply)
@@ -276,9 +277,9 @@ func (vtg *VTGate) StreamExecuteShard(context interface{}, query *proto.QuerySha
 		func(keyspace string) (string, []string, error) {
 			return query.Keyspace, query.Shards, nil
 		},
-		func(mreply *mproto.QueryResult) error {
+		func(mreply interface{}) error {
 			reply := new(proto.QueryResult)
-			proto.PopulateQueryResult(mreply, reply)
+			reply.Result = mreply.(*mproto.QueryResult)
 			// Note we don't populate reply.Session here,
 			// as it may change incrementaly as responses
 			// are sent.
