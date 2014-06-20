@@ -3,7 +3,9 @@
 Vitess is a set of servers and tools meant to facilitate scaling of MySQL
 databases for the web. It's been developed since 2011, and is currently used as
 a fundamental component of YouTube's MySQL infrastructure, serving thousands of
-QPS (per server).
+QPS (per server). If you want to find out whether Vitess is a good fit for your
+project, please read our [helicopter
+overview](https://github.com/youtube/vitess/blob/master/doc/Helicopter.markdown)
 
 ## Overview
 
