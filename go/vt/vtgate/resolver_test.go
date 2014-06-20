@@ -145,7 +145,7 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
 		err = res.StreamExecuteKeyspaceIds(nil, query, func(r interface{}) error {
-			appendResult(ProtocolBson, qr, r)
+			appendResult(qr, r)
 			return nil
 		})
 		return qr, err
@@ -155,7 +155,7 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
 		err = res.StreamExecuteKeyspaceIds(nil, query, func(r interface{}) error {
-			appendResult(ProtocolBson, qr, r)
+			appendResult(qr, r)
 			return nil
 		})
 		return qr, err
@@ -187,7 +187,7 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
 		err = res.StreamExecuteKeyRanges(nil, query, func(r interface{}) error {
-			appendResult(ProtocolBson, qr, r)
+			appendResult(qr, r)
 			return nil
 		})
 		return qr, err
@@ -198,7 +198,7 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
 		err = res.StreamExecuteKeyRanges(nil, query, func(r interface{}) error {
-			appendResult(ProtocolBson, qr, r)
+			appendResult(qr, r)
 			return nil
 		})
 		return qr, err

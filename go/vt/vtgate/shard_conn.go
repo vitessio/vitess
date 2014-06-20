@@ -73,7 +73,7 @@ func (e *ShardConnError) Error() string {
 // Execute executes a non-streaming query on vttablet. If there are connection errors,
 // it retries retryCount times before failing. It does not retry if the connection is in
 // the middle of a transaction.
-func (sdc *ShardConn) Execute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (qr *mproto.QueryResult, err error) {
+func (sdc *ShardConn) Execute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (qr interface{}, err error) {
 	err = sdc.withRetry(context, func(conn tabletconn.TabletConn) error {
 		var innerErr error
 		qr, innerErr = conn.Execute(context, query, bindVars, transactionId)
@@ -83,7 +83,7 @@ func (sdc *ShardConn) Execute(context interface{}, query string, bindVars map[st
 }
 
 // ExecuteBatch executes a group of queries. The retry rules are the same as Execute.
-func (sdc *ShardConn) ExecuteBatch(context interface{}, queries []tproto.BoundQuery, transactionId int64) (qrs *tproto.QueryResultList, err error) {
+func (sdc *ShardConn) ExecuteBatch(context interface{}, queries []tproto.BoundQuery, transactionId int64) (qrs interface{}, err error) {
 	err = sdc.withRetry(context, func(conn tabletconn.TabletConn) error {
 		var innerErr error
 		qrs, innerErr = conn.ExecuteBatch(context, queries, transactionId)

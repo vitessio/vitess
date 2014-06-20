@@ -98,3 +98,8 @@ func RegisterDialer(name string, dialer TabletDialer) {
 func GetDialer() TabletDialer {
 	return dialers[*tabletProtocol]
 }
+
+// GetTabletProtocol returns the registered tablet conn client protocol.
+func GetTabletProtocol() string {
+	return *tabletProtocol
+}

@@ -35,6 +35,10 @@ func init() {
 	createSandbox(TEST_UNSHARDED)
 	tabletconn.RegisterDialer("sandbox", sandboxDialer)
 	flag.Set("tablet_protocol", "sandbox")
+	tabletConnProtocol = "sandbox"
+	appendResultFuncMap["sandbox"] = appendResultBson
+	mergeResultsFuncMap["sandbox"] = mergeResultsBson
+	mergeBatchResultsFuncMap["sandbox"] = mergeBatchResultsBson
 }
 
 var sandboxMu sync.Mutex

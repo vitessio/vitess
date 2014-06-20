@@ -42,7 +42,7 @@ func TestScatterConnStreamExecute(t *testing.T) {
 		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
 		err := stc.StreamExecute(nil, "query", nil, "TestScatterConnStreamExecute", shards, "", nil, func(r interface{}) error {
-			appendResult(ProtocolBson, qr, r)
+			appendResult(qr, r)
 			return nil
 		})
 		return qr, err
@@ -274,8 +274,8 @@ func TestAppendResult(t *testing.T) {
 		},
 	}
 	// test one empty result
-	appendResult(ProtocolBson, qr, innerqr1)
-	appendResult(ProtocolBson, qr, innerqr2)
+	appendResult(qr, innerqr1)
+	appendResult(qr, innerqr2)
 	if len(qr.Fields) != 1 {
 		t.Errorf("want 1, got %v", len(qr.Fields))
 	}
@@ -290,8 +290,8 @@ func TestAppendResult(t *testing.T) {
 	}
 	// test two valid results
 	qr = new(mproto.QueryResult)
-	appendResult(ProtocolBson, qr, innerqr2)
-	appendResult(ProtocolBson, qr, innerqr2)
+	appendResult(qr, innerqr2)
+	appendResult(qr, innerqr2)
 	if len(qr.Fields) != 1 {
 		t.Errorf("want 1, got %v", len(qr.Fields))
 	}

@@ -4,24 +4,33 @@
 
 package vtgate
 
+import (
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
+)
+
 type AppendResultFunc func(qr, innerqr interface{})
 type MergeResultsFunc func(<-chan interface{}) interface{}
 type MergeBatchResultsFunc func(int, <-chan interface{}) interface{}
 
 var (
+	tabletConnProtocol       = ""
 	appendResultFuncMap      = make(map[string]AppendResultFunc)
 	mergeResultsFuncMap      = make(map[string]MergeResultsFunc)
 	mergeBatchResultsFuncMap = make(map[string]MergeBatchResultsFunc)
 )
 
-func appendResult(protocol string, qr, innerqr interface{}) {
-	appendResultFuncMap[protocol](qr, innerqr)
+func init() {
+	tabletConnProtocol = tabletconn.GetTabletProtocol()
 }
 
-func mergeResults(protocol string, results <-chan interface{}) interface{} {
-	return mergeResultsFuncMap[protocol](results)
+func appendResult(qr, innerqr interface{}) {
+	appendResultFuncMap[tabletConnProtocol](qr, innerqr)
 }
 
-func mergeBatchResults(protocol string, batchSize int, results <-chan interface{}) interface{} {
-	return mergeBatchResultsFuncMap[protocol](batchSize, results)
+func mergeResults(results <-chan interface{}) interface{} {
+	return mergeResultsFuncMap[tabletConnProtocol](results)
+}
+
+func mergeBatchResults(batchSize int, results <-chan interface{}) interface{} {
+	return mergeBatchResultsFuncMap[tabletConnProtocol](batchSize, results)
 }

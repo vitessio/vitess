@@ -9,7 +9,9 @@ import (
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
-const ProtocolBson = "bson"
+// ProtocolBson is the type used for tablet connection.
+// It should match the name in gorpctabletconn/conn.go.
+const ProtocolBson = "gorpc"
 
 func init() {
 	appendResultFuncMap[ProtocolBson] = appendResultBson

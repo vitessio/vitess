@@ -40,7 +40,7 @@ func TestStreamExecuteKeyspaceAlias(t *testing.T) {
 		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
 		err := stc.StreamExecute(nil, "query", nil, TEST_UNSHARDED_SERVED_FROM, shards, topo.TYPE_RDONLY, nil, func(r interface{}) error {
-			appendResult(ProtocolBson, qr, r)
+			appendResult(qr, r)
 			return nil
 		})
 		return qr, err
