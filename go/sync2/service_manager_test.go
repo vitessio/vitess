@@ -5,7 +5,6 @@
 package sync2
 
 import (
-	"runtime"
 	"testing"
 	"time"
 )
@@ -34,7 +33,7 @@ func TestServiceManager(t *testing.T) {
 	if sm.StateName() != "Running" {
 		t.Errorf("want Running, got %s", sm.StateName())
 	}
-	runtime.Gosched()
+	time.Sleep(5 * time.Millisecond)
 	if val := activated.Get(); val != 1 {
 		t.Errorf("want 1, got %d", val)
 	}
