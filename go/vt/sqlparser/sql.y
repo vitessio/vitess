@@ -315,7 +315,7 @@ table_expression:
   }
 | '(' table_expression ')'
   {
-    $$ = &ParenTableExpr{Inner: $2}
+    $$ = &ParenTableExpr{Expr: $2}
   }
 | table_expression join_type table_expression %prec JOIN
   {

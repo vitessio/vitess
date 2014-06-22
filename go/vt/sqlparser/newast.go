@@ -299,13 +299,13 @@ func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
 
 // ParenTableExpr represents a parenthesized TableExpr.
 type ParenTableExpr struct {
-	Inner TableExpr
+	Expr TableExpr
 }
 
 func (*ParenTableExpr) tableExpr() {}
 
 func (node *ParenTableExpr) Format(buf *TrackedBuffer) {
-	buf.Fprintf("(%v)", node.Inner)
+	buf.Fprintf("(%v)", node.Expr)
 }
 
 // JoinTableExpr represents a TableExpr that's a JOIN
@@ -324,4 +324,160 @@ func (node *JoinTableExpr) Format(buf *TrackedBuffer) {
 	if node.On != nil {
 		buf.Fprintf(" on %v", node.On)
 	}
+}
+
+// Expr represents an expression.
+type Expr interface {
+	expr()
+}
+
+// BoolExpr represents a boolean expression.
+type BoolExpr interface {
+	expr()
+	boolExpr()
+}
+
+// AndExpr represents an AND expression.
+type AndExpr struct {
+	Left, Right BoolExpr
+}
+
+func (*AndExpr) expr()     {}
+func (*AndExpr) boolExpr() {}
+
+func (node *AndExpr) Format(buf *TrackedBuffer) {
+	buf.Fprintf("%v and %v", node.Left, node.Right)
+}
+
+// OrExpr represents an OR expression.
+type OrExpr struct {
+	Left, Right BoolExpr
+}
+
+func (*OrExpr) expr()     {}
+func (*OrExpr) boolExpr() {}
+
+func (node *OrExpr) Format(buf *TrackedBuffer) {
+	buf.Fprintf("%v or %v", node.Left, node.Right)
+}
+
+// NotExpr represents a NOT expression.
+type NotExpr struct {
+	Expr BoolExpr
+}
+
+func (*NotExpr) expr()     {}
+func (*NotExpr) boolExpr() {}
+
+func (node *NotExpr) Format(buf *TrackedBuffer) {
+	buf.Fprintf("not %v", node.Expr)
+}
+
+// ParenBoolExpr represents a parenthesized boolean expression.
+type ParenBoolExpr struct {
+	Expr BoolExpr
+}
+
+func (*ParenBoolExpr) expr()     {}
+func (*ParenBoolExpr) boolExpr() {}
+
+func (node *ParenBoolExpr) Format(buf *TrackedBuffer) {
+	buf.Fprintf("(%v)", node.Expr)
+}
+
+// ComparisonExpr represents a two-value comparison expression.
+type ComparisonExpr struct {
+	Operator    []byte
+	Left, Right ValExpr
+}
+
+func (*ComparisonExpr) expr()     {}
+func (*ComparisonExpr) boolExpr() {}
+
+func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
+	buf.Fprintf("%v %s %v", node.Left, node.Operator, node.Right)
+}
+
+// InExpr represents an IN or NOT IN expression.
+type InExpr struct {
+	Negated bool
+	Left    ValExpr
+	Right   *Node
+}
+
+func (*InExpr) expr()     {}
+func (*InExpr) boolExpr() {}
+
+func (node *InExpr) Format(buf *TrackedBuffer) {
+	op := "in"
+	if node.Negated {
+		op = "not in"
+	}
+	buf.Fprintf("%v %s %v", node.Left, op, node.Right)
+}
+
+// BetweenExpr represents a BETWEEN expression.
+type BetweenExpr struct {
+	Negated  bool
+	Left     ValExpr
+	From, To ValExpr
+}
+
+func (*BetweenExpr) expr()     {}
+func (*BetweenExpr) boolExpr() {}
+
+func (node *BetweenExpr) Format(buf *TrackedBuffer) {
+	op := "between"
+	if node.Negated {
+		op = "not between"
+	}
+	buf.Fprintf("%v %s %v and %v", node.Left, op, node.From, node.To)
+}
+
+// IsNullExpr represents an IS NULL or an IS NOT NULL expression.
+type IsNullExpr struct {
+	Negated bool
+	Expr    ValExpr
+}
+
+func (*IsNullExpr) expr()     {}
+func (*IsNullExpr) boolExpr() {}
+
+func (node *IsNullExpr) Format(buf *TrackedBuffer) {
+	op := "is null"
+	if node.Negated {
+		op = "is not null"
+	}
+	buf.Fprintf("%v %s", node.Expr, op)
+}
+
+// ExistsExpr represents an EXISTS expression.
+type ExistsExpr struct {
+	Expr *Node
+}
+
+func (*ExistsExpr) expr()     {}
+func (*ExistsExpr) boolExpr() {}
+
+func (node *ExistsExpr) Format(buf *TrackedBuffer) {
+	buf.Fprintf("exists %v", node.Expr)
+}
+
+// ValExpr represents a value expression.
+type ValExpr interface {
+	expr()
+	valExpr()
+}
+
+// ValNode implements all value expressions.
+// It's a standin till individual expressions are implemented.
+type ValNode struct {
+	Expr *Node
+}
+
+func (*ValNode) expr()    {}
+func (*ValNode) valExpr() {}
+
+func (node *ValNode) Format(buf *TrackedBuffer) {
+	buf.Fprintf("%v", node.Expr)
 }

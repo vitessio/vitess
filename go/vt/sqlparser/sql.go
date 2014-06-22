@@ -986,7 +986,7 @@ yydefault:
 	case 51:
 		//line sql.y:317
 		{
-			yyVAL.tableExpr = &ParenTableExpr{Inner: yyS[yypt-1].tableExpr}
+			yyVAL.tableExpr = &ParenTableExpr{Expr: yyS[yypt-1].tableExpr}
 		}
 	case 52:
 		//line sql.y:321
