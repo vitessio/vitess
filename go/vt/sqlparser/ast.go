@@ -91,12 +91,6 @@ func (node *Node) String() (out string) {
 // Format generates the SQL for the current node.
 func (node *Node) Format(buf *TrackedBuffer) {
 	switch node.Type {
-	case TABLE_EXPR:
-		buf.Fprintf("%v", node.At(0))
-		if node.NodeAt(1).Len() == 1 {
-			buf.Fprintf(" as %v", node.NodeAt(1).At(0))
-		}
-		buf.Fprintf("%v", node.At(2))
 	case USE, FORCE:
 		if node.Len() != 0 {
 			buf.Fprintf(" %s index %v", node.Value, node.At(0))
@@ -136,16 +130,11 @@ func (node *Node) Format(buf *TrackedBuffer) {
 		for i := 1; i < node.Len(); i++ {
 			buf.Fprintf(" %v", node.At(i))
 		}
-	case JOIN, STRAIGHT_JOIN, LEFT, RIGHT, CROSS, NATURAL:
-		buf.Fprintf("%v %s %v", node.At(0), node.Value, node.At(1))
-		if node.Len() > 2 {
-			buf.Fprintf(" on %v", node.At(2))
-		}
 	case DUPLICATE:
 		if node.Len() != 0 {
 			buf.Fprintf(" on duplicate key update %v", node.At(0))
 		}
-	case NUMBER, NULL, NO_LOCK, TABLE, FOR_UPDATE, LOCK_IN_SHARE_MODE:
+	case NUMBER, NULL, NO_LOCK, FOR_UPDATE, LOCK_IN_SHARE_MODE:
 		buf.Fprintf("%s", node.Value)
 	case ID:
 		if _, ok := keywords[string(node.Value)]; ok {

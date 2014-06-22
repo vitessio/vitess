@@ -76,7 +76,7 @@ var (
 
 // Fake Tokens
 %token <node> NODE_LIST UPLUS UMINUS CASE_WHEN WHEN_LIST FUNCTION NO_LOCK FOR_UPDATE LOCK_IN_SHARE_MODE
-%token <node> NOT_IN NOT_LIKE NOT_BETWEEN IS_NULL IS_NOT_NULL UNION_ALL INDEX_LIST TABLE_EXPR
+%token <node> NOT_IN NOT_LIKE NOT_BETWEEN IS_NULL IS_NOT_NULL UNION_ALL INDEX_LIST
 
 %type <statement> command
 %type <statement> select_statement insert_statement update_statement delete_statement set_statement
@@ -319,20 +319,11 @@ table_expression:
   }
 | table_expression join_type table_expression %prec JOIN
   {
-    $$ = &JoinTableExpr{
-      LeftExpr:  $1,
-      Join:      $2,
-      RightExpr: $3,
-    }
+    $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3}
   }
 | table_expression join_type table_expression ON boolean_expression %prec JOIN
   {
-    $$ = &JoinTableExpr{
-      LeftExpr:  $1,
-      Join:      $2,
-      RightExpr: $3,
-      On:        $5,
-    }
+    $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, On: $5}
   }
 
 as_opt:
