@@ -23,10 +23,6 @@ func ForceEOF(yylex interface{}) {
 }
 
 var (
-  LJOIN = []byte("left join")
-  RJOIN = []byte("right join")
-  CJOIN = []byte("cross join")
-  NJOIN = []byte("natural join")
   SHARE = []byte("share")
   MODE =  []byte("mode")
 )
@@ -37,7 +33,8 @@ var (
   node        *Node
   statement   Statement
   comments    Comments
-  str         []byte
+  bytes       []byte
+  str         string
   distinct    Distinct
   selectExprs SelectExprs
   selectExpr  SelectExpr
@@ -86,7 +83,7 @@ var (
 %type <distinct> distinct_opt
 %type <selectExprs> select_expression_list
 %type <selectExpr> select_expression
-%type <str> as_lower_opt as_opt
+%type <bytes> as_lower_opt as_opt
 %type <node> expression
 %type <tableExprs> table_expression_list
 %type <tableExpr> table_expression
@@ -229,23 +226,23 @@ comment_list:
 union_op:
   UNION
   {
-    $$ = $1.Value
+    $$ = "union"
   }
 | UNION ALL
   {
-    $$ = []byte("union all")
+    $$ = "union all"
   }
 | MINUS
   {
-    $$ = $1.Value
+    $$ = "minus"
   }
 | EXCEPT
   {
-    $$ = $1.Value
+    $$ = "except"
   }
 | INTERSECT
   {
-    $$ = $1.Value
+    $$ = "intersect"
   }
 
 distinct_opt:
@@ -342,39 +339,39 @@ as_opt:
 join_type:
   JOIN
   {
-    $$ = $1.Value
+    $$ = "join"
   }
 | STRAIGHT_JOIN
   {
-    $$ = $1.Value
+    $$ = "straight_join"
   }
 | LEFT JOIN
   {
-    $$ = LJOIN
+    $$ = "left join"
   }
 | LEFT OUTER JOIN
   {
-    $$ = LJOIN
+    $$ = "left join"
   }
 | RIGHT JOIN
   {
-    $$ = RJOIN
+    $$ = "right join"
   }
 | RIGHT OUTER JOIN
   {
-    $$ = RJOIN
+    $$ = "right join"
   }
 | INNER JOIN
   {
-    $$ = $2.Value
+    $$ = "join"
   }
 | CROSS JOIN
   {
-    $$ = CJOIN
+    $$ = "cross join"
   }
 | NATURAL JOIN
   {
-    $$ = NJOIN
+    $$ = "natural join"
   }
 
 simple_table_expression:

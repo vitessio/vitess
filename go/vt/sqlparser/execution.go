@@ -5,7 +5,6 @@
 package sqlparser
 
 import (
-	"bytes"
 	"fmt"
 	"strconv"
 
@@ -985,7 +984,7 @@ func FormatImpossible(buf *TrackedBuffer, node SQLNode) {
 	case *Select:
 		buf.Fprintf("select %v from %v where 1 != 1", node.SelectExprs, node.From)
 	case *JoinTableExpr:
-		if bytes.Equal(node.Join, LJOIN) || bytes.Equal(node.Join, RJOIN) {
+		if node.Join == "left join" || node.Join == "right join" {
 			// ON clause is requried
 			buf.Fprintf("%v %s %v on 1 != 1", node.LeftExpr, node.Join, node.RightExpr)
 		} else {

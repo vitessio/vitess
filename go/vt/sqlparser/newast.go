@@ -64,7 +64,7 @@ func (node *Select) Format(buf *TrackedBuffer) {
 
 // Union represents a UNION statement.
 type Union struct {
-	Type             []byte
+	Type             string
 	Select1, Select2 SelectStatement
 }
 
@@ -312,7 +312,7 @@ func (node *ParenTableExpr) Format(buf *TrackedBuffer) {
 // operation.
 type JoinTableExpr struct {
 	LeftExpr  TableExpr
-	Join      []byte
+	Join      string
 	RightExpr TableExpr
 	On        *Node
 }
@@ -387,7 +387,7 @@ func (node *ParenBoolExpr) Format(buf *TrackedBuffer) {
 
 // ComparisonExpr represents a two-value comparison expression.
 type ComparisonExpr struct {
-	Operator    []byte
+	Operator    string
 	Left, Right ValExpr
 }
 
