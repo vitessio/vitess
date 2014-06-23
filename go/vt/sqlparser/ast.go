@@ -157,7 +157,7 @@ func (node *Node) Format(buf *TrackedBuffer) {
 		buf.Fprintf("when %v then %v", node.At(0), node.At(1))
 	case ELSE:
 		buf.Fprintf("else %v", node.At(0))
-	case '=', '>', '<', GE, LE, NE, NULL_SAFE_EQUAL, AS, AND, OR, UNION, UNION_ALL, MINUS, EXCEPT, INTERSECT, LIKE, NOT_LIKE, IN, NOT_IN:
+	case '=':
 		buf.Fprintf("%v %s %v", node.At(0), node.Value, node.At(1))
 	case '(':
 		buf.Fprintf("(%v)", node.At(0))
@@ -173,10 +173,8 @@ func (node *Node) Format(buf *TrackedBuffer) {
 		buf.Fprintf("%s%v", node.Value, node.At(0))
 	case NOT, VALUES:
 		buf.Fprintf("%s %v", node.Value, node.At(0))
-	case ASC, DESC, IS_NULL, IS_NOT_NULL:
+	case ASC, DESC:
 		buf.Fprintf("%v %s", node.At(0), node.Value)
-	case BETWEEN, NOT_BETWEEN:
-		buf.Fprintf("%v %s %v and %v", node.At(0), node.Value, node.At(1), node.At(2))
 	case DISTINCT:
 		buf.Fprintf("%s ", node.Value)
 	default:
