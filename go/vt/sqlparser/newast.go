@@ -17,19 +17,14 @@ func String(node SQLNode) string {
 	return buf.String()
 }
 
-// Statement is the interface that needs to be
-// satisfied by SQL statement nodes. statement()
-// is a dummy function used for verifying that a
-// node is a Statement.
+// Statement represents a statement. It can be Select,
+// Union, Insert, Update, Delete, Set, DDLSimple, Rename.
 type Statement interface {
 	statement()
 	SQLNode
 }
 
-// SelectStatement is the interface that needs to be
-// satisfied by all select statements, including
-// unions. They need to implement the dummy
-// selectStatement function.
+// SelectStatement any SELECT stateent. It can be Select, Union.
 type SelectStatement interface {
 	selectStatement()
 	statement()
@@ -42,7 +37,7 @@ type Select struct {
 	Distinct    Distinct
 	SelectExprs SelectExprs
 	From        TableExprs
-	Where       *Node
+	Where       *Where
 	GroupBy     *Node
 	Having      *Node
 	OrderBy     *Node
@@ -63,6 +58,8 @@ func (node *Select) Format(buf *TrackedBuffer) {
 }
 
 // Union represents a UNION statement.
+// Type can be "union", "union all", "minus", "except",
+// "intersect".
 type Union struct {
 	Type             string
 	Select1, Select2 SelectStatement
@@ -98,7 +95,7 @@ type Update struct {
 	Comments Comments
 	Table    *Node
 	List     *Node
-	Where    *Node
+	Where    *Where
 	OrderBy  *Node
 	Limit    *Node
 }
@@ -115,7 +112,7 @@ func (node *Update) Format(buf *TrackedBuffer) {
 type Delete struct {
 	Comments Comments
 	Table    *Node
-	Where    *Node
+	Where    *Where
 	OrderBy  *Node
 	Limit    *Node
 }
@@ -208,9 +205,8 @@ func (node SelectExprs) Format(buf *TrackedBuffer) {
 	}
 }
 
-// SelectExpr defines the interface for a
-// SELECT expression. selectExpr is the dummy
-// function.
+// SelectExpr represents a SELECT expression.
+// It can be StarExpr, NonStarExpr.
 type SelectExpr interface {
 	selectExpr()
 	SQLNode
@@ -232,7 +228,7 @@ func (node *StarExpr) Format(buf *TrackedBuffer) {
 
 // NonStarExpr defines a non-'*' select expr.
 type NonStarExpr struct {
-	Expr *Node
+	Expr Expr
 	As   []byte
 }
 
@@ -270,7 +266,7 @@ func (node TableExprs) Format(buf *TrackedBuffer) {
 }
 
 // TableExpr represents a table expression.
-// tableExpr s the dummy function.
+// It can be AliasedTableExpr, ParenTableExpr, JoinTableExpr.
 type TableExpr interface {
 	tableExpr()
 	SQLNode
@@ -309,12 +305,13 @@ func (node *ParenTableExpr) Format(buf *TrackedBuffer) {
 }
 
 // JoinTableExpr represents a TableExpr that's a JOIN
-// operation.
+// operation. Join can be "join", "straight_join", "left join",
+// "right join", "cross join", natural join".
 type JoinTableExpr struct {
 	LeftExpr  TableExpr
 	Join      string
 	RightExpr TableExpr
-	On        *Node
+	On        BoolExpr
 }
 
 func (*JoinTableExpr) tableExpr() {}
@@ -326,15 +323,33 @@ func (node *JoinTableExpr) Format(buf *TrackedBuffer) {
 	}
 }
 
-// Expr represents an expression.
+// Where represents a WHERE expression.
+type Where struct {
+	Expr BoolExpr
+}
+
+func (node *Where) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	buf.Fprintf(" where %v", node.Expr)
+}
+
+// Expr represents an expression. For now, it
+// can be BoolExpr, *Node.
+// TODO(sougou): Add an expr method once ValExpr
+// replaces *Node.
 type Expr interface {
-	expr()
+	SQLNode
 }
 
 // BoolExpr represents a boolean expression.
+// It can be AndExpr, OrExpr, NotExpr, ParenBoolExpr,
+// ComparisonExpr, RangeCond, NullCheck, ExistsExpr
 type BoolExpr interface {
-	expr()
 	boolExpr()
+	expr()
+	SQLNode
 }
 
 // AndExpr represents an AND expression.
@@ -386,9 +401,11 @@ func (node *ParenBoolExpr) Format(buf *TrackedBuffer) {
 }
 
 // ComparisonExpr represents a two-value comparison expression.
+// Operator can be "=", ",", ">", "<=", ">=", "<>", "!=", "<=>",
+// "in", "not in", "like", "not like".
 type ComparisonExpr struct {
 	Operator    string
-	Left, Right ValExpr
+	Left, Right *Node
 }
 
 func (*ComparisonExpr) expr()     {}
@@ -398,57 +415,33 @@ func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
 	buf.Fprintf("%v %s %v", node.Left, node.Operator, node.Right)
 }
 
-// InExpr represents an IN or NOT IN expression.
-type InExpr struct {
-	Negated bool
-	Left    ValExpr
-	Right   *Node
+// RangeCond represents a BETWEEN or a NOT BETWEEN expression.
+// Operator can be "between", "not between".
+type RangeCond struct {
+	Operator string
+	Left     *Node
+	From, To *Node
 }
 
-func (*InExpr) expr()     {}
-func (*InExpr) boolExpr() {}
+func (*RangeCond) expr()     {}
+func (*RangeCond) boolExpr() {}
 
-func (node *InExpr) Format(buf *TrackedBuffer) {
-	op := "in"
-	if node.Negated {
-		op = "not in"
-	}
-	buf.Fprintf("%v %s %v", node.Left, op, node.Right)
+func (node *RangeCond) Format(buf *TrackedBuffer) {
+	buf.Fprintf("%v %s %v and %v", node.Left, node.Operator, node.From, node.To)
 }
 
-// BetweenExpr represents a BETWEEN expression.
-type BetweenExpr struct {
-	Negated  bool
-	Left     ValExpr
-	From, To ValExpr
+// NullCheck represents an IS NULL or an IS NOT NULL expression.
+// Operator can be "is null", "is not null".
+type NullCheck struct {
+	Operator string
+	Expr     *Node
 }
 
-func (*BetweenExpr) expr()     {}
-func (*BetweenExpr) boolExpr() {}
+func (*NullCheck) expr()     {}
+func (*NullCheck) boolExpr() {}
 
-func (node *BetweenExpr) Format(buf *TrackedBuffer) {
-	op := "between"
-	if node.Negated {
-		op = "not between"
-	}
-	buf.Fprintf("%v %s %v and %v", node.Left, op, node.From, node.To)
-}
-
-// IsNullExpr represents an IS NULL or an IS NOT NULL expression.
-type IsNullExpr struct {
-	Negated bool
-	Expr    ValExpr
-}
-
-func (*IsNullExpr) expr()     {}
-func (*IsNullExpr) boolExpr() {}
-
-func (node *IsNullExpr) Format(buf *TrackedBuffer) {
-	op := "is null"
-	if node.Negated {
-		op = "is not null"
-	}
-	buf.Fprintf("%v %s", node.Expr, op)
+func (node *NullCheck) Format(buf *TrackedBuffer) {
+	buf.Fprintf("%v %s", node.Expr, node.Operator)
 }
 
 // ExistsExpr represents an EXISTS expression.
@@ -461,23 +454,4 @@ func (*ExistsExpr) boolExpr() {}
 
 func (node *ExistsExpr) Format(buf *TrackedBuffer) {
 	buf.Fprintf("exists %v", node.Expr)
-}
-
-// ValExpr represents a value expression.
-type ValExpr interface {
-	expr()
-	valExpr()
-}
-
-// ValNode implements all value expressions.
-// It's a standin till individual expressions are implemented.
-type ValNode struct {
-	Expr *Node
-}
-
-func (*ValNode) expr()    {}
-func (*ValNode) valExpr() {}
-
-func (node *ValNode) Format(buf *TrackedBuffer) {
-	buf.Fprintf("%v", node.Expr)
 }

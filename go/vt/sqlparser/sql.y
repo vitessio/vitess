@@ -41,6 +41,9 @@ var (
   columns     Columns
   tableExprs  TableExprs
   tableExpr   TableExpr
+  where       *Where
+  expr        Expr
+  boolExpr    BoolExpr
   sqlNode     SQLNode
 }
 
@@ -84,14 +87,17 @@ var (
 %type <selectExprs> select_expression_list
 %type <selectExpr> select_expression
 %type <bytes> as_lower_opt as_opt
-%type <node> expression
+%type <expr> expression
 %type <tableExprs> table_expression_list
 %type <tableExpr> table_expression
 %type <str> join_type
 %type <node> simple_table_expression dml_table_expression index_hint_list
-%type <node> where_expression_opt boolean_expression condition compare
+%type <where> where_expression_opt
+%type <boolExpr> boolean_expression condition
+%type <str> compare
 %type <sqlNode> values
-%type <node> parenthesised_lists parenthesised_list value_expression_list value_expression keyword_as_func
+%type <node> parenthesised_lists parenthesised_list value_expression_list keyword_as_func
+%type <node> value_expression
 %type <node> unary_operator case_expression when_expression_list when_expression column_name value
 %type <node> group_by_opt having_opt order_by_opt order_list order asc_desc_opt limit_opt lock_opt on_dup_opt
 %type <columns> column_list_opt column_list
@@ -280,7 +286,13 @@ select_expression:
 
 expression:
   boolean_expression
+  {
+    $$ = $1
+  }
 | value_expression
+  {
+    $$ = $1
+  }
 
 as_lower_opt:
   {
@@ -407,88 +419,103 @@ index_hint_list:
 
 where_expression_opt:
   {
-    $$ = NewSimpleParseNode(WHERE, "where")
+    $$ = nil
   }
 | WHERE boolean_expression
   {
-    $$ = $1.Push($2)
+    $$ = &Where{Expr: $2}
   }
 
 boolean_expression:
   condition
 | boolean_expression AND boolean_expression
   {
-    $$ = $2.PushTwo($1, $3)
+    $$ = &AndExpr{Left: $1, Right: $3}
   }
 | boolean_expression OR boolean_expression
   {
-    $$ = $2.PushTwo($1, $3)
+    $$ = &OrExpr{Left: $1, Right: $3}
   }
 | NOT boolean_expression
   {
-    $$ = $1.Push($2)
+    $$ = &NotExpr{Expr: $2}
   }
 | '(' boolean_expression ')'
   {
-    $$ = $1.Push($2)
+    $$ = &ParenBoolExpr{Expr: $2}
   }
 
 condition:
   value_expression compare value_expression
   {
-    $$ = $2.PushTwo($1, $3)
+    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
   }
 | value_expression IN parenthesised_list
   {
-    $$ = $2.PushTwo($1, $3)
+    $$ = &ComparisonExpr{Left: $1, Operator: "in", Right: $3}
   }
 | value_expression NOT IN parenthesised_list
   {
-    $$ = NewSimpleParseNode(NOT_IN, "not in").PushTwo($1, $4)
+    $$ = &ComparisonExpr{Left: $1, Operator: "not in", Right: $4}
   }
 | value_expression LIKE value_expression
   {
-    $$ = $2.PushTwo($1, $3)
+    $$ = &ComparisonExpr{Left: $1, Operator: "like", Right: $3}
   }
 | value_expression NOT LIKE value_expression
   {
-    $$ = NewSimpleParseNode(NOT_LIKE, "not like").PushTwo($1, $4)
+    $$ = &ComparisonExpr{Left: $1, Operator: "not like", Right: $4}
   }
 | value_expression BETWEEN value_expression AND value_expression
   {
-    $$ = $2
-    $$.Push($1)
-    $$.Push($3)
-    $$.Push($5)
+    $$ = &RangeCond{Left: $1, Operator: "between", From: $3, To: $5}
   }
 | value_expression NOT BETWEEN value_expression AND value_expression
   {
-    $$ = NewSimpleParseNode(NOT_BETWEEN, "not between")
-    $$.Push($1)
-    $$.Push($4)
-    $$.Push($6)
+    $$ = &RangeCond{Left: $1, Operator: "not between", From: $4, To: $6}
   }
 | value_expression IS NULL
   {
-    $$ = NewSimpleParseNode(IS_NULL, "is null").Push($1)
+    $$ = &NullCheck{Operator: "is null", Expr: $1}
   }
 | value_expression IS NOT NULL
   {
-    $$ = NewSimpleParseNode(IS_NOT_NULL, "is not null").Push($1)
+    $$ = &NullCheck{Operator: "is not null", Expr: $1}
   }
 | EXISTS '(' select_statement ')'
   {
-    $$ = $1.Push($3)
+    $$ = &ExistsExpr{Expr: $2.Push($3)}
   }
 
 compare:
   '='
+  {
+    $$ = "="
+  }
 | '<'
+  {
+    $$ = "<"
+  }
 | '>'
+  {
+    $$ = ">"
+  }
 | LE
+  {
+    $$ = "<="
+  }
 | GE
+  {
+    $$ = ">="
+  }
 | NE
+  {
+    $$ = string($1.Value)
+  }
 | NULL_SAFE_EQUAL
+  {
+    $$ = "<=>"
+  }
 
 values:
   VALUES parenthesised_lists
@@ -612,7 +639,7 @@ value_expression:
 | sql_id '(' DISTINCT select_expression_list ')'
   {
     $1.Type = FUNCTION
-    $$ = $1.Push($3)
+    $1.Push($3)
     $$ = $1.Push($4)
   }
 | keyword_as_func '(' select_expression_list ')'

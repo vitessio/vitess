@@ -323,7 +323,7 @@ func execAnalyzeSelect(sel *Select, getTable TableGetter) (plan *ExecPlan) {
 	plan.ColumnNumbers = selects
 
 	// where
-	conditions := sel.Where.execAnalyzeWhere()
+	conditions := execAnalyzeWhere(sel.Where)
 	if conditions == nil {
 		plan.Reason = REASON_WHERE
 		return plan
@@ -466,7 +466,7 @@ func execAnalyzeUpdate(upd *Update, getTable TableGetter) (plan *ExecPlan) {
 	plan.OuterQuery = GenerateUpdateOuterQuery(upd, tableInfo.Indexes[0])
 	plan.Subquery = GenerateUpdateSubquery(upd, tableInfo)
 
-	conditions := upd.Where.execAnalyzeWhere()
+	conditions := execAnalyzeWhere(upd.Where)
 	if conditions == nil {
 		plan.Reason = REASON_WHERE
 		return plan
@@ -506,7 +506,7 @@ func execAnalyzeDelete(del *Delete, getTable TableGetter) (plan *ExecPlan) {
 	plan.OuterQuery = GenerateDeleteOuterQuery(del, tableInfo.Indexes[0])
 	plan.Subquery = GenerateDeleteSubquery(del, tableInfo)
 
-	conditions := del.Where.execAnalyzeWhere()
+	conditions := execAnalyzeWhere(del.Where)
 	if conditions == nil {
 		plan.Reason = REASON_WHERE
 		return plan
@@ -598,7 +598,12 @@ func execAnalyzeSelectExpr(expr SelectExpr) string {
 	case *StarExpr:
 		return "*"
 	case *NonStarExpr:
-		return execGetColumnName(expr.Expr)
+		switch node := expr.Expr.(type) {
+		case BoolExpr:
+			return ""
+		case *Node:
+			return execGetColumnName(node)
+		}
 	}
 	panic("unreachable")
 }
@@ -640,18 +645,18 @@ func (node *Node) collectTableName() string {
 //-----------------------------------------------
 // Where
 
-func (node *Node) execAnalyzeWhere() (conditions []*Node) {
-	if node.Len() == 0 {
+func execAnalyzeWhere(node *Where) (conditions []BoolExpr) {
+	if node == nil {
 		return nil
 	}
-	return node.NodeAt(0).execAnalyzeBoolean()
+	return execAnalyzeBoolean(node.Expr)
 }
 
-func (node *Node) execAnalyzeBoolean() (conditions []*Node) {
-	switch node.Type {
-	case AND:
-		left := node.NodeAt(0).execAnalyzeBoolean()
-		right := node.NodeAt(1).execAnalyzeBoolean()
+func execAnalyzeBoolean(node BoolExpr) (conditions []BoolExpr) {
+	switch node := node.(type) {
+	case *AndExpr:
+		left := execAnalyzeBoolean(node.Left)
+		right := execAnalyzeBoolean(node.Right)
 		if left == nil || right == nil {
 			return nil
 		}
@@ -659,67 +664,78 @@ func (node *Node) execAnalyzeBoolean() (conditions []*Node) {
 			return nil
 		}
 		return append(left, right...)
-	case '(':
-		node, ok := node.At(0).(*Node)
-		if !ok {
+	case *ParenBoolExpr:
+		return execAnalyzeBoolean(node.Expr)
+	case *ComparisonExpr:
+		switch {
+		case stringIn(node.Operator, "=", "<", ">", "<=", ">=", "<=>", "like"):
+			left := execAnalyzeID(node.Left)
+			right := execAnalyzeValue(node.Right)
+			if left == nil || right == nil {
+				return nil
+			}
+			return []BoolExpr{&ComparisonExpr{Left: left, Operator: node.Operator, Right: right}}
+		case node.Operator == "in":
+			left := execAnalyzeID(node.Left)
+			right := execAnalyzeSimpleINList(node.Right)
+			if left == nil || right == nil {
+				return nil
+			}
+			return []BoolExpr{&ComparisonExpr{Left: left, Operator: node.Operator, Right: right}}
+		default:
 			return nil
 		}
-		return node.execAnalyzeBoolean()
-	case '=', '<', '>', LE, GE, NULL_SAFE_EQUAL, LIKE:
-		left := node.NodeAt(0).execAnalyzeID()
-		right := node.NodeAt(1).execAnalyzeValue()
-		if left == nil || right == nil {
+	case *RangeCond:
+		if node.Operator != "between" {
 			return nil
 		}
-		n := NewParseNode(node.Type, node.Value)
-		n.PushTwo(left, right)
-		return []*Node{n}
-	case IN:
-		left := node.NodeAt(0).execAnalyzeID()
-		right := node.NodeAt(1).execAnalyzeSimpleINList()
-		if left == nil || right == nil {
+		left := execAnalyzeID(node.Left)
+		from := execAnalyzeValue(node.From)
+		to := execAnalyzeValue(node.To)
+		if left == nil || from == nil || to == nil {
 			return nil
 		}
-		n := NewParseNode(node.Type, node.Value)
-		n.PushTwo(left, right)
-		return []*Node{n}
-	case BETWEEN:
-		left := node.NodeAt(0).execAnalyzeID()
-		right1 := node.NodeAt(1).execAnalyzeValue()
-		right2 := node.NodeAt(2).execAnalyzeValue()
-		if left == nil || right1 == nil || right2 == nil {
-			return nil
-		}
-		return []*Node{node}
+		return []BoolExpr{&RangeCond{Left: left, Operator: "between", From: from, To: to}}
 	}
 	return nil
 }
 
-func (node *Node) execAnalyzeSimpleINList() *Node {
+// stringIn is a convenience function that returns
+// true if str matches any of the values.
+func stringIn(str string, values ...string) bool {
+	for _, val := range values {
+		if str == val {
+			return true
+		}
+	}
+	return false
+}
+
+func execAnalyzeSimpleINList(node *Node) *Node {
 	list, ok := node.At(0).(*Node) // '('->NODE_LIST
 	if !ok {
 		// It's a subquery.
 		return nil
 	}
 	for i := 0; i < list.Len(); i++ {
-		if n := list.NodeAt(i).execAnalyzeValue(); n == nil {
+		if n := execAnalyzeValue(list.NodeAt(i)); n == nil {
 			return nil
 		}
 	}
 	return node
 }
 
-func (node *Node) execAnalyzeID() *Node {
+func execAnalyzeID(node *Node) *Node {
 	switch node.Type {
 	case ID:
 		return node
 	case '.':
-		return node.NodeAt(1).execAnalyzeID()
+		return execAnalyzeID(node.NodeAt(1))
 	}
 	return nil
 }
 
-func (node *Node) execAnalyzeValue() *Node {
+func execAnalyzeValue(node *Node) *Node {
 	switch node.Type {
 	case STRING, NUMBER, VALUE_ARG:
 		return node
@@ -727,9 +743,9 @@ func (node *Node) execAnalyzeValue() *Node {
 	return nil
 }
 
-func hasINClause(conditions []*Node) bool {
+func hasINClause(conditions []BoolExpr) bool {
 	for _, node := range conditions {
-		if node.Type == IN {
+		if c, ok := node.(*ComparisonExpr); ok && c.Operator == "in" {
 			return true
 		}
 	}
@@ -746,7 +762,7 @@ func (node *Node) execAnalyzeUpdateExpressions(pkIndex *schema.Index) (pkValues 
 		if index == -1 {
 			continue
 		}
-		value := node.NodeAt(i).NodeAt(1).execAnalyzeValue()
+		value := execAnalyzeValue(node.NodeAt(i).NodeAt(1))
 		if value == nil {
 			log.Warningf("expression is too complex %v", node.NodeAt(i).At(0))
 			return nil, false
@@ -772,7 +788,7 @@ func getInsertPKColumns(columns Columns, tableInfo *schema.Table) (pkColumnNumbe
 		pkColumnNumbers[i] = -1
 	}
 	for i, column := range columns {
-		index := pkIndex.FindColumn(string(execGetColumnName(column.(*NonStarExpr).Expr)))
+		index := pkIndex.FindColumn(string(execGetColumnName(column.(*NonStarExpr).Expr.(*Node))))
 		if index == -1 {
 			continue
 		}
@@ -797,7 +813,7 @@ func getInsertPKValues(pkColumnNumbers []int, rowList *Node, tableInfo *schema.T
 				panic(NewParserError("column count doesn't match value count"))
 			}
 			node := rowList.NodeAt(j).NodeAt(0).NodeAt(columnNumber) // NODE_LIST->'('->NODE_LIST->Value
-			value := node.execAnalyzeValue()
+			value := execAnalyzeValue(node)
 			if value == nil {
 				log.Warningf("insert is too complex %v", node)
 				return nil
@@ -872,7 +888,7 @@ func NewIndexScoreList(indexes []*schema.Index) []*IndexScore {
 	return scoreList
 }
 
-func getSelectPKValues(conditions []*Node, pkIndex *schema.Index) (planId PlanType, pkValues []interface{}) {
+func getSelectPKValues(conditions []BoolExpr, pkIndex *schema.Index) (planId PlanType, pkValues []interface{}) {
 	pkValues = getPKValues(conditions, pkIndex)
 	if pkValues == nil {
 		return PLAN_PASS_SELECT, nil
@@ -890,22 +906,28 @@ func getSelectPKValues(conditions []*Node, pkIndex *schema.Index) (planId PlanTy
 	return PLAN_PK_EQUAL, pkValues
 }
 
-func getPKValues(conditions []*Node, pkIndex *schema.Index) (pkValues []interface{}) {
+func getPKValues(conditions []BoolExpr, pkIndex *schema.Index) (pkValues []interface{}) {
 	pkIndexScore := NewIndexScore(pkIndex)
 	pkValues = make([]interface{}, len(pkIndexScore.ColumnMatch))
 	for _, condition := range conditions {
-		if condition.Type != '=' && condition.Type != IN {
+		condition, ok := condition.(*ComparisonExpr)
+		if !ok {
 			return nil
 		}
-		index := pkIndexScore.FindMatch(string(condition.NodeAt(0).Value))
+		if !stringIn(condition.Operator, "=", "in") {
+			return nil
+		}
+		index := pkIndexScore.FindMatch(string(condition.Left.Value))
 		if index == -1 {
 			return nil
 		}
-		switch condition.Type {
-		case '=':
-			pkValues[index] = asInterface(condition.NodeAt(1))
-		case IN:
-			pkValues[index] = condition.NodeAt(1).NodeAt(0).parseList()
+		switch condition.Operator {
+		case "=":
+			pkValues[index] = asInterface(condition.Right)
+		case "in":
+			pkValues[index] = condition.Right.NodeAt(0).parseList()
+		default:
+			panic("unreachable")
 		}
 	}
 	if pkIndexScore.GetScore() == PERFECT_SCORE {
@@ -922,11 +944,20 @@ func (node *Node) parseList() (values interface{}) {
 	return vals
 }
 
-func getIndexMatch(conditions []*Node, indexes []*schema.Index) string {
+func getIndexMatch(conditions []BoolExpr, indexes []*schema.Index) string {
 	indexScores := NewIndexScoreList(indexes)
 	for _, condition := range conditions {
+		var col string
+		switch condition := condition.(type) {
+		case *ComparisonExpr:
+			col = string(condition.Left.Value)
+		case *RangeCond:
+			col = string(condition.Left.Value)
+		default:
+			panic("unreachaable")
+		}
 		for _, index := range indexScores {
-			index.FindMatch(string(condition.NodeAt(0).Value))
+			index.FindMatch(col)
 		}
 	}
 	highScore := NO_MATCH
@@ -1109,7 +1140,7 @@ func (node *Node) PushLimit() {
 	node.Push(NewSimpleParseNode(VALUE_ARG, ":_vtMaxResultSize"))
 }
 
-func GenerateSubquery(columns []string, table *AliasedTableExpr, where *Node, order *Node, limit *Node, for_update bool) *ParsedQuery {
+func GenerateSubquery(columns []string, table *AliasedTableExpr, where *Where, order *Node, limit *Node, for_update bool) *ParsedQuery {
 	buf := NewTrackedBuffer(nil)
 	if limit.Len() == 0 {
 		limit.PushLimit()
