@@ -23,10 +23,6 @@ func ForceEOF(yylex interface{}) {
 }
 
 var (
-  LJOIN = []byte("left join")
-  RJOIN = []byte("right join")
-  CJOIN = []byte("cross join")
-  NJOIN = []byte("natural join")
   SHARE = []byte("share")
   MODE =  []byte("mode")
 )
@@ -37,13 +33,17 @@ var (
   node        *Node
   statement   Statement
   comments    Comments
-  str         []byte
+  bytes       []byte
+  str         string
   distinct    Distinct
   selectExprs SelectExprs
   selectExpr  SelectExpr
   columns     Columns
   tableExprs  TableExprs
   tableExpr   TableExpr
+  where       *Where
+  expr        Expr
+  boolExpr    BoolExpr
   sqlNode     SQLNode
 }
 
@@ -76,7 +76,7 @@ var (
 
 // Fake Tokens
 %token <node> NODE_LIST UPLUS UMINUS CASE_WHEN WHEN_LIST FUNCTION NO_LOCK FOR_UPDATE LOCK_IN_SHARE_MODE
-%token <node> NOT_IN NOT_LIKE NOT_BETWEEN IS_NULL IS_NOT_NULL UNION_ALL INDEX_LIST TABLE_EXPR
+%token <node> INDEX_LIST
 
 %type <statement> command
 %type <statement> select_statement insert_statement update_statement delete_statement set_statement
@@ -86,15 +86,18 @@ var (
 %type <distinct> distinct_opt
 %type <selectExprs> select_expression_list
 %type <selectExpr> select_expression
-%type <str> as_lower_opt as_opt
-%type <node> expression
+%type <bytes> as_lower_opt as_opt
+%type <expr> expression
 %type <tableExprs> table_expression_list
 %type <tableExpr> table_expression
 %type <str> join_type
 %type <node> simple_table_expression dml_table_expression index_hint_list
-%type <node> where_expression_opt boolean_expression condition compare
+%type <where> where_expression_opt
+%type <boolExpr> boolean_expression condition
+%type <str> compare
 %type <sqlNode> values
-%type <node> parenthesised_lists parenthesised_list value_expression_list value_expression keyword_as_func
+%type <node> parenthesised_lists parenthesised_list value_expression_list keyword_as_func
+%type <node> value_expression
 %type <node> unary_operator case_expression when_expression_list when_expression column_name value
 %type <node> group_by_opt having_opt order_by_opt order_list order asc_desc_opt limit_opt lock_opt on_dup_opt
 %type <columns> column_list_opt column_list
@@ -229,23 +232,23 @@ comment_list:
 union_op:
   UNION
   {
-    $$ = $1.Value
+    $$ = "union"
   }
 | UNION ALL
   {
-    $$ = []byte("union all")
+    $$ = "union all"
   }
 | MINUS
   {
-    $$ = $1.Value
+    $$ = "minus"
   }
 | EXCEPT
   {
-    $$ = $1.Value
+    $$ = "except"
   }
 | INTERSECT
   {
-    $$ = $1.Value
+    $$ = "intersect"
   }
 
 distinct_opt:
@@ -283,7 +286,13 @@ select_expression:
 
 expression:
   boolean_expression
+  {
+    $$ = $1
+  }
 | value_expression
+  {
+    $$ = $1
+  }
 
 as_lower_opt:
   {
@@ -315,24 +324,15 @@ table_expression:
   }
 | '(' table_expression ')'
   {
-    $$ = &ParenTableExpr{Inner: $2}
+    $$ = &ParenTableExpr{Expr: $2}
   }
 | table_expression join_type table_expression %prec JOIN
   {
-    $$ = &JoinTableExpr{
-      LeftExpr:  $1,
-      Join:      $2,
-      RightExpr: $3,
-    }
+    $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3}
   }
 | table_expression join_type table_expression ON boolean_expression %prec JOIN
   {
-    $$ = &JoinTableExpr{
-      LeftExpr:  $1,
-      Join:      $2,
-      RightExpr: $3,
-      On:        $5,
-    }
+    $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, On: $5}
   }
 
 as_opt:
@@ -351,39 +351,39 @@ as_opt:
 join_type:
   JOIN
   {
-    $$ = $1.Value
+    $$ = "join"
   }
 | STRAIGHT_JOIN
   {
-    $$ = $1.Value
+    $$ = "straight_join"
   }
 | LEFT JOIN
   {
-    $$ = LJOIN
+    $$ = "left join"
   }
 | LEFT OUTER JOIN
   {
-    $$ = LJOIN
+    $$ = "left join"
   }
 | RIGHT JOIN
   {
-    $$ = RJOIN
+    $$ = "right join"
   }
 | RIGHT OUTER JOIN
   {
-    $$ = RJOIN
+    $$ = "right join"
   }
 | INNER JOIN
   {
-    $$ = $2.Value
+    $$ = "join"
   }
 | CROSS JOIN
   {
-    $$ = CJOIN
+    $$ = "cross join"
   }
 | NATURAL JOIN
   {
-    $$ = NJOIN
+    $$ = "natural join"
   }
 
 simple_table_expression:
@@ -419,88 +419,103 @@ index_hint_list:
 
 where_expression_opt:
   {
-    $$ = NewSimpleParseNode(WHERE, "where")
+    $$ = nil
   }
 | WHERE boolean_expression
   {
-    $$ = $1.Push($2)
+    $$ = &Where{Expr: $2}
   }
 
 boolean_expression:
   condition
 | boolean_expression AND boolean_expression
   {
-    $$ = $2.PushTwo($1, $3)
+    $$ = &AndExpr{Left: $1, Right: $3}
   }
 | boolean_expression OR boolean_expression
   {
-    $$ = $2.PushTwo($1, $3)
+    $$ = &OrExpr{Left: $1, Right: $3}
   }
 | NOT boolean_expression
   {
-    $$ = $1.Push($2)
+    $$ = &NotExpr{Expr: $2}
   }
 | '(' boolean_expression ')'
   {
-    $$ = $1.Push($2)
+    $$ = &ParenBoolExpr{Expr: $2}
   }
 
 condition:
   value_expression compare value_expression
   {
-    $$ = $2.PushTwo($1, $3)
+    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
   }
 | value_expression IN parenthesised_list
   {
-    $$ = $2.PushTwo($1, $3)
+    $$ = &ComparisonExpr{Left: $1, Operator: "in", Right: $3}
   }
 | value_expression NOT IN parenthesised_list
   {
-    $$ = NewSimpleParseNode(NOT_IN, "not in").PushTwo($1, $4)
+    $$ = &ComparisonExpr{Left: $1, Operator: "not in", Right: $4}
   }
 | value_expression LIKE value_expression
   {
-    $$ = $2.PushTwo($1, $3)
+    $$ = &ComparisonExpr{Left: $1, Operator: "like", Right: $3}
   }
 | value_expression NOT LIKE value_expression
   {
-    $$ = NewSimpleParseNode(NOT_LIKE, "not like").PushTwo($1, $4)
+    $$ = &ComparisonExpr{Left: $1, Operator: "not like", Right: $4}
   }
 | value_expression BETWEEN value_expression AND value_expression
   {
-    $$ = $2
-    $$.Push($1)
-    $$.Push($3)
-    $$.Push($5)
+    $$ = &RangeCond{Left: $1, Operator: "between", From: $3, To: $5}
   }
 | value_expression NOT BETWEEN value_expression AND value_expression
   {
-    $$ = NewSimpleParseNode(NOT_BETWEEN, "not between")
-    $$.Push($1)
-    $$.Push($4)
-    $$.Push($6)
+    $$ = &RangeCond{Left: $1, Operator: "not between", From: $4, To: $6}
   }
 | value_expression IS NULL
   {
-    $$ = NewSimpleParseNode(IS_NULL, "is null").Push($1)
+    $$ = &NullCheck{Operator: "is null", Expr: $1}
   }
 | value_expression IS NOT NULL
   {
-    $$ = NewSimpleParseNode(IS_NOT_NULL, "is not null").Push($1)
+    $$ = &NullCheck{Operator: "is not null", Expr: $1}
   }
 | EXISTS '(' select_statement ')'
   {
-    $$ = $1.Push($3)
+    $$ = &ExistsExpr{Expr: $2.Push($3)}
   }
 
 compare:
   '='
+  {
+    $$ = "="
+  }
 | '<'
+  {
+    $$ = "<"
+  }
 | '>'
+  {
+    $$ = ">"
+  }
 | LE
+  {
+    $$ = "<="
+  }
 | GE
+  {
+    $$ = ">="
+  }
 | NE
+  {
+    $$ = string($1.Value)
+  }
 | NULL_SAFE_EQUAL
+  {
+    $$ = "<=>"
+  }
 
 values:
   VALUES parenthesised_lists
@@ -624,7 +639,7 @@ value_expression:
 | sql_id '(' DISTINCT select_expression_list ')'
   {
     $1.Type = FUNCTION
-    $$ = $1.Push($3)
+    $1.Push($3)
     $$ = $1.Push($4)
   }
 | keyword_as_func '(' select_expression_list ')'
