@@ -17,13 +17,13 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-func (wr *Wrangler) GetSchema(tabletAlias topo.TabletAlias, tables []string, includeViews bool) (*myproto.SchemaDefinition, error) {
+func (wr *Wrangler) GetSchema(tabletAlias topo.TabletAlias, tables, excludeTables []string, includeViews bool) (*myproto.SchemaDefinition, error) {
 	ti, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return nil, err
 	}
 
-	return wr.ai.GetSchema(ti, tables, includeViews, wr.actionTimeout())
+	return wr.ai.GetSchema(ti, tables, excludeTables, includeViews, wr.actionTimeout())
 }
 
 func (wr *Wrangler) ReloadSchema(tabletAlias topo.TabletAlias) error {
@@ -36,10 +36,10 @@ func (wr *Wrangler) ReloadSchema(tabletAlias topo.TabletAlias) error {
 }
 
 // helper method to asynchronously diff a schema
-func (wr *Wrangler) diffSchema(masterSchema *myproto.SchemaDefinition, masterTabletAlias, alias topo.TabletAlias, includeViews bool, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+func (wr *Wrangler) diffSchema(masterSchema *myproto.SchemaDefinition, masterTabletAlias, alias topo.TabletAlias, excludeTables []string, includeViews bool, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
 	log.Infof("Gathering schema for %v", alias)
-	slaveSchema, err := wr.GetSchema(alias, nil, includeViews)
+	slaveSchema, err := wr.GetSchema(alias, nil, excludeTables, includeViews)
 	if err != nil {
 		er.RecordError(err)
 		return
@@ -49,7 +49,7 @@ func (wr *Wrangler) diffSchema(masterSchema *myproto.SchemaDefinition, masterTab
 	myproto.DiffSchema(masterTabletAlias.String(), masterSchema, alias.String(), slaveSchema, er)
 }
 
-func (wr *Wrangler) ValidateSchemaShard(keyspace, shard string, includeViews bool) error {
+func (wr *Wrangler) ValidateSchemaShard(keyspace, shard string, excludeTables []string, includeViews bool) error {
 	si, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
@@ -60,7 +60,7 @@ func (wr *Wrangler) ValidateSchemaShard(keyspace, shard string, includeViews boo
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shard)
 	}
 	log.Infof("Gathering schema for master %v", si.MasterAlias)
-	masterSchema, err := wr.GetSchema(si.MasterAlias, nil, includeViews)
+	masterSchema, err := wr.GetSchema(si.MasterAlias, nil, excludeTables, includeViews)
 	if err != nil {
 		return err
 	}
@@ -81,7 +81,7 @@ func (wr *Wrangler) ValidateSchemaShard(keyspace, shard string, includeViews boo
 		}
 
 		wg.Add(1)
-		go wr.diffSchema(masterSchema, si.MasterAlias, alias, includeViews, &wg, &er)
+		go wr.diffSchema(masterSchema, si.MasterAlias, alias, excludeTables, includeViews, &wg, &er)
 	}
 	wg.Wait()
 	if er.HasErrors() {
@@ -90,7 +90,7 @@ func (wr *Wrangler) ValidateSchemaShard(keyspace, shard string, includeViews boo
 	return nil
 }
 
-func (wr *Wrangler) ValidateSchemaKeyspace(keyspace string, includeViews bool) error {
+func (wr *Wrangler) ValidateSchemaKeyspace(keyspace string, excludeTables []string, includeViews bool) error {
 	// find all the shards
 	shards, err := wr.ts.GetShardNames(keyspace)
 	if err != nil {
@@ -103,7 +103,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(keyspace string, includeViews bool) e
 	}
 	sort.Strings(shards)
 	if len(shards) == 1 {
-		return wr.ValidateSchemaShard(keyspace, shards[0], includeViews)
+		return wr.ValidateSchemaShard(keyspace, shards[0], excludeTables, includeViews)
 	}
 
 	// find the reference schema using the first shard's master
@@ -116,7 +116,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(keyspace string, includeViews bool) e
 	}
 	referenceAlias := si.MasterAlias
 	log.Infof("Gathering schema for reference master %v", referenceAlias)
-	referenceSchema, err := wr.GetSchema(referenceAlias, nil, includeViews)
+	referenceSchema, err := wr.GetSchema(referenceAlias, nil, excludeTables, includeViews)
 	if err != nil {
 		return err
 	}
@@ -137,7 +137,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(keyspace string, includeViews bool) e
 		}
 
 		wg.Add(1)
-		go wr.diffSchema(referenceSchema, referenceAlias, alias, includeViews, &wg, &er)
+		go wr.diffSchema(referenceSchema, referenceAlias, alias, excludeTables, includeViews, &wg, &er)
 	}
 
 	// then diffs all tablets in the other shards
@@ -161,7 +161,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(keyspace string, includeViews bool) e
 
 		for _, alias := range aliases {
 			wg.Add(1)
-			go wr.diffSchema(referenceSchema, referenceAlias, alias, includeViews, &wg, &er)
+			go wr.diffSchema(referenceSchema, referenceAlias, alias, excludeTables, includeViews, &wg, &er)
 		}
 	}
 	wg.Wait()
@@ -285,7 +285,7 @@ func (wr *Wrangler) applySchemaShard(shardInfo *topo.ShardInfo, preflight *mypro
 	for _, status := range statusArray {
 		wg.Add(1)
 		go func(status *TabletStatus) {
-			status.beforeSchema, status.lastError = wr.ai.GetSchema(status.ti, nil, false, wr.actionTimeout())
+			status.beforeSchema, status.lastError = wr.ai.GetSchema(status.ti, nil, nil, false, wr.actionTimeout())
 			wg.Done()
 		}(status)
 	}
@@ -465,7 +465,7 @@ func (wr *Wrangler) applySchemaKeyspace(keyspace string, change string, simple, 
 				return
 			}
 
-			beforeSchemas[i], err = wr.GetSchema(shardInfos[i].MasterAlias, nil, false)
+			beforeSchemas[i], err = wr.GetSchema(shardInfos[i].MasterAlias, nil, nil, false)
 		}(i, shard)
 	}
 	wg.Wait()

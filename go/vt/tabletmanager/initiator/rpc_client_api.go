@@ -24,7 +24,7 @@ type TabletManagerConn interface {
 	Ping(tablet *topo.TabletInfo, waitTime time.Duration) error
 
 	// GetSchema asks the remote tablet for its database schema
-	GetSchema(tablet *topo.TabletInfo, tables []string, includeViews bool, waitTime time.Duration) (*myproto.SchemaDefinition, error)
+	GetSchema(tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool, waitTime time.Duration) (*myproto.SchemaDefinition, error)
 
 	// GetPermissions asks the remote tablet for its permissions list
 	GetPermissions(tablet *topo.TabletInfo, waitTime time.Duration) (*myproto.Permissions, error)

@@ -87,7 +87,7 @@ func (wr *Wrangler) MultiRestore(dstTabletAlias topo.TabletAlias, sources []topo
 	return wr.WaitForCompletion(actionPath)
 }
 
-func (wr *Wrangler) MultiSnapshot(keyRanges []key.KeyRange, tabletAlias topo.TabletAlias, concurrency int, tables []string, forceMasterSnapshot, skipSlaveRestart bool, maximumFilesize uint64) (manifests []string, parent topo.TabletAlias, err error) {
+func (wr *Wrangler) MultiSnapshot(keyRanges []key.KeyRange, tabletAlias topo.TabletAlias, concurrency int, tables, excludeTables []string, forceMasterSnapshot, skipSlaveRestart bool, maximumFilesize uint64) (manifests []string, parent topo.TabletAlias, err error) {
 	restoreAfterSnapshot, err := wr.prepareToSnapshot(tabletAlias, forceMasterSnapshot)
 	if err != nil {
 		return
@@ -96,7 +96,7 @@ func (wr *Wrangler) MultiSnapshot(keyRanges []key.KeyRange, tabletAlias topo.Tab
 		err = replaceError(err, restoreAfterSnapshot())
 	}()
 
-	actionPath, err := wr.ai.MultiSnapshot(tabletAlias, &actionnode.MultiSnapshotArgs{KeyRanges: keyRanges, Concurrency: concurrency, Tables: tables, SkipSlaveRestart: skipSlaveRestart, MaximumFilesize: maximumFilesize})
+	actionPath, err := wr.ai.MultiSnapshot(tabletAlias, &actionnode.MultiSnapshotArgs{KeyRanges: keyRanges, Concurrency: concurrency, Tables: tables, ExcludeTables: excludeTables, SkipSlaveRestart: skipSlaveRestart, MaximumFilesize: maximumFilesize})
 	if err != nil {
 		return
 	}

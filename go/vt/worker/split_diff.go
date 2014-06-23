@@ -358,7 +358,7 @@ func (sdw *SplitDiffWorker) diff() error {
 	wg.Add(1)
 	go func() {
 		var err error
-		sdw.destinationSchemaDefinition, err = sdw.wr.GetSchema(sdw.destinationAlias, nil, false)
+		sdw.destinationSchemaDefinition, err = sdw.wr.GetSchema(sdw.destinationAlias, nil, nil, false)
 		rec.RecordError(err)
 		sdw.diffLog(fmt.Sprintf("Got schema from destination %v", sdw.destinationAlias))
 		wg.Done()
@@ -367,7 +367,7 @@ func (sdw *SplitDiffWorker) diff() error {
 		wg.Add(1)
 		go func(i int, sourceAlias topo.TabletAlias) {
 			var err error
-			sdw.sourceSchemaDefinitions[i], err = sdw.wr.GetSchema(sourceAlias, nil, false)
+			sdw.sourceSchemaDefinitions[i], err = sdw.wr.GetSchema(sourceAlias, nil, nil, false)
 			rec.RecordError(err)
 			sdw.diffLog(fmt.Sprintf("Got schema from source[%v] %v", i, sourceAlias))
 			wg.Done()

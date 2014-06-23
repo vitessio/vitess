@@ -358,7 +358,7 @@ func main() {
 
 	actionRepo.RegisterKeyspaceAction("ValidateSchemaKeyspace",
 		func(wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
-			return "", wr.ValidateSchemaKeyspace(keyspace, false)
+			return "", wr.ValidateSchemaKeyspace(keyspace, nil, false)
 		})
 
 	actionRepo.RegisterKeyspaceAction("ValidateVersionKeyspace",
@@ -379,7 +379,7 @@ func main() {
 
 	actionRepo.RegisterShardAction("ValidateSchemaShard",
 		func(wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (string, error) {
-			return "", wr.ValidateSchemaShard(keyspace, shard, false)
+			return "", wr.ValidateSchemaShard(keyspace, shard, nil, false)
 		})
 
 	actionRepo.RegisterShardAction("ValidateVersionShard",

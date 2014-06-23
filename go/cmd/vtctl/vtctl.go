@@ -114,7 +114,7 @@ var commands = []commandGroup{
 				"[-force] [-concurrency=4] [-fetch-concurrency=3] [-fetch-retry-count=3] [-server-mode] <src tablet alias|zk src tablet path> <dst tablet alias|zk dst tablet path> ...",
 				"This performs Snapshot and then Restore on all the targets in parallel. The advantage of having separate actions is that one snapshot can be used for many restores, and it's then easier to spread them over time."},
 			command{"MultiSnapshot", commandMultiSnapshot,
-				"[-force] [-concurrency=8] [-skip-slave-restart] [-maximum-file-size=134217728] -spec='-' -tables='' <tablet alias|zk tablet path>",
+				"[-force] [-concurrency=8] [-skip-slave-restart] [-maximum-file-size=134217728] -spec='-' [-tables=''] [-excludeTables=''] <tablet alias|zk tablet path>",
 				"Locks mysqld and copy compressed data aside."},
 			command{"MultiRestore", commandMultiRestore,
 				"[-force] [-concurrency=4] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-strategy=] <dst tablet alias|destination zk path> <source zk path>...",
@@ -223,7 +223,7 @@ var commands = []commandGroup{
 	commandGroup{
 		"Schema, Version, Permissions", []command{
 			command{"GetSchema", commandGetSchema,
-				"[-tables=<table1>,<table2>,...] [-include-views] <tablet alias|zk tablet path>",
+				"[-tables=<table1>,<table2>,...] [-excludeTables=<table1>,<table2>,...] [-include-views] <tablet alias|zk tablet path>",
 				"Display the full schema for a tablet, or just the schema for the provided tables."},
 			command{"ReloadSchema", commandReloadSchema,
 				"<tablet alias|zk tablet path>",
@@ -946,7 +946,8 @@ func commandMultiSnapshot(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []
 	force := subFlags.Bool("force", false, "will force the snapshot for a master, and turn it into a backup")
 	concurrency := subFlags.Int("concurrency", 8, "how many compression jobs to run simultaneously")
 	spec := subFlags.String("spec", "-", "shard specification")
-	tablesString := subFlags.String("tables", "", "dump only this comma separated list of tables")
+	tablesString := subFlags.String("tables", "", "dump only this comma separated list of table regexp")
+	excludeTablesString := subFlags.String("exclude_tables", "", "comma separated list of regexps for tables to exclude")
 	skipSlaveRestart := subFlags.Bool("skip-slave-restart", false, "after the snapshot is done, do not restart slave replication")
 	maximumFilesize := subFlags.Uint64("maximum-file-size", 128*1024*1024, "the maximum size for an uncompressed data file")
 	subFlags.Parse(args)
@@ -962,9 +963,13 @@ func commandMultiSnapshot(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []
 	if *tablesString != "" {
 		tables = strings.Split(*tablesString, ",")
 	}
+	var excludeTables []string
+	if *excludeTablesString != "" {
+		excludeTables = strings.Split(*excludeTablesString, ",")
+	}
 
 	source := tabletParamToTabletAlias(subFlags.Arg(0))
-	filenames, parentAlias, err := wr.MultiSnapshot(shards, source, *concurrency, tables, *force, *skipSlaveRestart, *maximumFilesize)
+	filenames, parentAlias, err := wr.MultiSnapshot(shards, source, *concurrency, tables, excludeTables, *force, *skipSlaveRestart, *maximumFilesize)
 
 	if err == nil {
 		log.Infof("manifest locations: %v", filenames)
@@ -1455,7 +1460,8 @@ func commandListTablets(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []st
 }
 
 func commandGetSchema(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
-	tables := subFlags.String("tables", "", "comma separated tables to gather schema information for")
+	tables := subFlags.String("tables", "", "comma separated list of regexps for tables to gather schema information for")
+	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of regexps for tables to exclude")
 	includeViews := subFlags.Bool("include-views", false, "include views in the output")
 	tableNamesOnly := subFlags.Bool("table_names_only", false, "only display the table names that match")
 	subFlags.Parse(args)
@@ -1467,8 +1473,12 @@ func commandGetSchema(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []stri
 	if *tables != "" {
 		tableArray = strings.Split(*tables, ",")
 	}
+	var excludeTableArray []string
+	if *excludeTables != "" {
+		excludeTableArray = strings.Split(*excludeTables, ",")
+	}
 
-	sd, err := wr.GetSchema(tabletAlias, tableArray, *includeViews)
+	sd, err := wr.GetSchema(tabletAlias, tableArray, excludeTableArray, *includeViews)
 	if err == nil {
 		if *tableNamesOnly {
 			for _, td := range sd.TableDefinitions {
@@ -1491,6 +1501,7 @@ func commandReloadSchema(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 }
 
 func commandValidateSchemaShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of regexps for tables to exclude")
 	includeViews := subFlags.Bool("include-views", false, "include views in the validation")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
@@ -1498,10 +1509,15 @@ func commandValidateSchemaShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, a
 	}
 
 	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
-	return "", wr.ValidateSchemaShard(keyspace, shard, *includeViews)
+	var excludeTableArray []string
+	if *excludeTables != "" {
+		excludeTableArray = strings.Split(*excludeTables, ",")
+	}
+	return "", wr.ValidateSchemaShard(keyspace, shard, excludeTableArray, *includeViews)
 }
 
 func commandValidateSchemaKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of regexps for tables to exclude")
 	includeViews := subFlags.Bool("include-views", false, "include views in the validation")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
@@ -1509,7 +1525,11 @@ func commandValidateSchemaKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet
 	}
 
 	keyspace := keyspaceParamToKeyspace(subFlags.Arg(0))
-	return "", wr.ValidateSchemaKeyspace(keyspace, *includeViews)
+	var excludeTableArray []string
+	if *excludeTables != "" {
+		excludeTableArray = strings.Split(*excludeTables, ",")
+	}
+	return "", wr.ValidateSchemaKeyspace(keyspace, excludeTableArray, *includeViews)
 }
 
 func commandPreflightSchema(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

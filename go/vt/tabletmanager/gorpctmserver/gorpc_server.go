@@ -45,7 +45,7 @@ func (tm *TabletManager) GetSchema(context *rpcproto.Context, args *gorpcproto.G
 		}
 
 		// and get the schema
-		sd, err := tm.agent.Mysqld.GetSchema(tablet.DbName(), args.Tables, args.IncludeViews)
+		sd, err := tm.agent.Mysqld.GetSchema(tablet.DbName(), args.Tables, args.ExcludeTables, args.IncludeViews)
 		if err == nil {
 			*reply = *sd
 		}

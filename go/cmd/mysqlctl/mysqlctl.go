@@ -35,7 +35,8 @@ func initCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
 func multisnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
 	concurrency := subFlags.Int("concurrency", 8, "how many compression jobs to run simultaneously")
 	spec := subFlags.String("spec", "-", "shard specification")
-	tablesString := subFlags.String("tables", "", "dump only this comma separated list of tables")
+	tablesString := subFlags.String("tables", "", "dump only this comma separated list of regexp for tables")
+	excludeTablesString := subFlags.String("exclude_tables", "", "do not dump this comma separated list of regexp for tables")
 	skipSlaveRestart := subFlags.Bool("skip_slave_restart", false, "after the snapshot is done, do not restart slave replication")
 	maximumFilesize := subFlags.Uint64("maximum_file_size", 128*1024*1024, "the maximum size for an uncompressed data file")
 	keyType := subFlags.String("key_type", "uint64", "type of the key column")
@@ -52,13 +53,17 @@ func multisnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []st
 	if *tablesString != "" {
 		tables = strings.Split(*tablesString, ",")
 	}
+	var excludedTables []string
+	if *excludeTablesString != "" {
+		excludedTables = strings.Split(*excludeTablesString, ",")
+	}
 
 	kit := key.KeyspaceIdType(*keyType)
 	if !key.IsKeyspaceIdTypeInList(kit, key.AllKeyspaceIdTypes) {
 		log.Fatalf("invalid key_type")
 	}
 
-	filenames, err := mysqld.CreateMultiSnapshot(shards, subFlags.Arg(0), subFlags.Arg(1), kit, tabletAddr, false, *concurrency, tables, *skipSlaveRestart, *maximumFilesize, nil)
+	filenames, err := mysqld.CreateMultiSnapshot(shards, subFlags.Arg(0), subFlags.Arg(1), kit, tabletAddr, false, *concurrency, tables, excludedTables, *skipSlaveRestart, *maximumFilesize, nil)
 	if err != nil {
 		log.Fatalf("multisnapshot failed: %v", err)
 	} else {

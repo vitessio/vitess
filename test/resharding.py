@@ -190,10 +190,14 @@ primary key (id),
 index by_msg (msg)
 ) Engine=InnoDB'''
     create_view_template = '''create view %s(id, msg, keyspace_id) as select id, msg, keyspace_id from %s'''
-    create_timestamp_tablet = '''create table timestamps(
+    create_timestamp_table = '''create table timestamps(
 name varchar(64),
 time_milli bigint(20) unsigned not null,
 keyspace_id ''' + t + ''' not null,
+primary key (name)
+) Engine=InnoDB'''
+    create_unrelated_table = '''create table unrelated(
+name varchar(64),
 primary key (name)
 ) Engine=InnoDB'''
 
@@ -214,7 +218,12 @@ primary key (name)
                     auto_log=True)
     utils.run_vtctl(['ApplySchemaKeyspace',
                      '-simple',
-                     '-sql=' + create_timestamp_tablet,
+                     '-sql=' + create_timestamp_table,
+                     'test_keyspace'],
+                    auto_log=True)
+    utils.run_vtctl(['ApplySchemaKeyspace',
+                     '-simple',
+                     '-sql=' + create_unrelated_table,
                      'test_keyspace'],
                     auto_log=True)
 
@@ -448,6 +457,7 @@ primary key (name)
 
     # take the snapshot for the split
     utils.run_vtctl(['MultiSnapshot', '--spec=80-C0-',
+                     '--exclude_tables=unrelated',
                      shard_1_slave1.tablet_alias], auto_log=True)
 
     # the snapshot_copy hook will copy the snapshot files to
@@ -478,7 +488,8 @@ primary key (name)
     self._check_startup_values()
 
     # check the schema too
-    utils.run_vtctl(['ValidateSchemaKeyspace', 'test_keyspace'], auto_log=True)
+    utils.run_vtctl(['ValidateSchemaKeyspace', '--exclude_tables=unrelated',
+                     'test_keyspace'], auto_log=True)
 
     # check the binlog players are running and exporting vars
     shard_2_master.wait_for_binlog_player_count(1)

@@ -28,8 +28,9 @@ gorpc_server.go to only use the '2' structures. Everything worked the same.
 */
 
 type GetSchemaArgs struct {
-	Tables       []string
-	IncludeViews bool
+	Tables        []string
+	ExcludeTables []string
+	IncludeViews  bool
 }
 
 type SetBlacklistedTablesArgs struct {

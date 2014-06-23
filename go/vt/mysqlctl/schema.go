@@ -17,7 +17,7 @@ var autoIncr = regexp.MustCompile(" AUTO_INCREMENT=\\d+")
 
 // GetSchema returns the schema for database for tables listed in
 // tables. If tables is empty, return the schema for all tables.
-func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews bool) (*proto.SchemaDefinition, error) {
+func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*proto.SchemaDefinition, error) {
 	sd := &proto.SchemaDefinition{}
 
 	// get the database creation command
@@ -39,6 +39,17 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews boo
 			tableRegexps[i], err = regexp.Compile(table)
 			if err != nil {
 				return nil, fmt.Errorf("cannot compile regexp %v for table: %v", table, err)
+			}
+		}
+	}
+	var excludeTableRegexps []*regexp.Regexp
+	if len(excludeTables) > 0 {
+		excludeTableRegexps = make([]*regexp.Regexp, len(excludeTables))
+		for i, table := range excludeTables {
+			var err error
+			excludeTableRegexps[i], err = regexp.Compile(table)
+			if err != nil {
+				return nil, fmt.Errorf("cannot compile regexp %v for excludeTable: %v", table, err)
 			}
 		}
 	}
@@ -73,6 +84,16 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews boo
 			if !foundMatch {
 				continue
 			}
+		}
+		foundMatch := false
+		for _, tableRegexp := range excludeTableRegexps {
+			if tableRegexp.Match(row[0].Raw()) {
+				foundMatch = true
+				break
+			}
+		}
+		if foundMatch {
+			continue
 		}
 
 		// compute dataLength
@@ -128,7 +149,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews boo
 // ResolveTables returns a list of actual tables+views matching a list
 // of regexps
 func (mysqld *Mysqld) ResolveTables(dbName string, tables []string) ([]string, error) {
-	sd, err := mysqld.GetSchema(dbName, tables, true)
+	sd, err := mysqld.GetSchema(dbName, tables, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +232,7 @@ func (mysqld *Mysqld) GetPrimaryKeyColumns(dbName, table string) ([]string, erro
 
 func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*proto.SchemaChangeResult, error) {
 	// gather current schema on real database
-	beforeSchema, err := mysqld.GetSchema(dbName, nil, true)
+	beforeSchema, err := mysqld.GetSchema(dbName, nil, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +260,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*prot
 	}
 
 	// get the result
-	afterSchema, err := mysqld.GetSchema("_vt_preflight", nil, true)
+	afterSchema, err := mysqld.GetSchema("_vt_preflight", nil, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +277,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*prot
 
 func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *proto.SchemaChange) (*proto.SchemaChangeResult, error) {
 	// check current schema matches
-	beforeSchema, err := mysqld.GetSchema(dbName, nil, false)
+	beforeSchema, err := mysqld.GetSchema(dbName, nil, nil, false)
 	if err != nil {
 		return nil, err
 	}
@@ -301,7 +322,7 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *proto.SchemaChang
 	}
 
 	// get AfterSchema
-	afterSchema, err := mysqld.GetSchema(dbName, nil, false)
+	afterSchema, err := mysqld.GetSchema(dbName, nil, nil, false)
 	if err != nil {
 		return nil, err
 	}

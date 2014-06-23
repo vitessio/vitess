@@ -68,6 +68,7 @@ type SnapshotSourceEndArgs struct {
 type MultiSnapshotArgs struct {
 	KeyRanges        []key.KeyRange
 	Tables           []string
+	ExcludeTables    []string
 	Concurrency      int
 	SkipSlaveRestart bool
 	MaximumFilesize  uint64

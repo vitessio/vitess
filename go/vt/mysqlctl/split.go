@@ -528,7 +528,7 @@ func (mysqld *Mysqld) dumpTableFull(td proto.TableDefinition, dbName, mainCloneS
 //   keyName+keyType are empty. It will create a single snapshot of
 //   the contents of the tables.
 // Note combinations of table subset and keyranges are not supported.
-func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyName string, keyType key.KeyspaceIdType, sourceAddr string, allowHierarchicalReplication bool, snapshotConcurrency int, tables []string, skipSlaveRestart bool, maximumFilesize uint64, hookExtraEnv map[string]string) (snapshotManifestFilenames []string, err error) {
+func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyName string, keyType key.KeyspaceIdType, sourceAddr string, allowHierarchicalReplication bool, snapshotConcurrency int, tables, excludeTables []string, skipSlaveRestart bool, maximumFilesize uint64, hookExtraEnv map[string]string) (snapshotManifestFilenames []string, err error) {
 	if dbName == "" {
 		err = fmt.Errorf("no database name provided")
 		return
@@ -568,7 +568,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 	}
 
 	// get the schema for each table
-	sd, fetchErr := mysqld.GetSchema(dbName, tables, true)
+	sd, fetchErr := mysqld.GetSchema(dbName, tables, excludeTables, true)
 	if fetchErr != nil {
 		return []string{}, fetchErr
 	}
