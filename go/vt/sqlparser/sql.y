@@ -96,7 +96,7 @@ var (
 %type <boolExpr> boolean_expression condition
 %type <str> compare
 %type <sqlNode> values
-%type <node> parenthesised_lists parenthesised_list value_expression_list keyword_as_func
+%type <node> tuple_list tuple value_expression_list keyword_as_func
 %type <node> value_expression
 %type <node> unary_operator case_expression when_expression_list when_expression column_name value
 %type <node> group_by_opt having_opt order_by_opt order_list order asc_desc_opt limit_opt lock_opt on_dup_opt
@@ -450,11 +450,11 @@ condition:
   {
     $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
   }
-| value_expression IN parenthesised_list
+| value_expression IN tuple
   {
     $$ = &ComparisonExpr{Left: $1, Operator: "in", Right: $3}
   }
-| value_expression NOT IN parenthesised_list
+| value_expression NOT IN tuple
   {
     $$ = &ComparisonExpr{Left: $1, Operator: "not in", Right: $4}
   }
@@ -518,7 +518,7 @@ compare:
   }
 
 values:
-  VALUES parenthesised_lists
+  VALUES tuple_list
   {
     $$ = $1.Push($2)
   }
@@ -527,18 +527,18 @@ values:
     $$ = $1
   }
 
-parenthesised_lists:
-  parenthesised_list
+tuple_list:
+  tuple
   {
     $$ = NewSimpleParseNode(NODE_LIST, "node_list")
     $$.Push($1)
   }
-| parenthesised_lists ',' parenthesised_list
+| tuple_list ',' tuple
   {
     $$.Push($3)
   }
 
-parenthesised_list:
+tuple:
   '(' value_expression_list ')'
   {
     $$ = $1.Push($2)
@@ -562,22 +562,7 @@ value_expression_list:
 value_expression:
   value
 | column_name
-| '(' select_statement ')'
-  {
-    $$ = $1.Push($2)
-  }
-| '(' value_expression_list ')'
-  {
-    if $2.Len() == 1 {
-      $2 = $2.NodeAt(0)
-    }
-    switch $2.Type {
-    case NUMBER, STRING, ID, VALUE_ARG, '(', '.':
-      $$ = $2
-    default:
-      $$ = $1.Push($2)
-    }
-  }
+| tuple
 | value_expression '&' value_expression
   {
     $$ = $2.PushTwo($1, $3)
