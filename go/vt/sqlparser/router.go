@@ -24,7 +24,7 @@ const (
 
 type RoutingPlan struct {
 	routingType int
-	criteria    *Node
+	criteria    Expr
 }
 
 func GetShardList(sql string, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) (shardlist []int, err error) {
@@ -44,7 +44,7 @@ func buildPlan(sql string) (plan *RoutingPlan) {
 
 func shardListFromPlan(plan *RoutingPlan, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) (shardList []int) {
 	if plan.routingType == ROUTE_BY_VALUE {
-		index := plan.criteria.findInsertShard(bindVariables, tabletKeys)
+		index := plan.criteria.(*Node).findInsertShard(bindVariables, tabletKeys)
 		return []int{index}
 	}
 
@@ -52,25 +52,30 @@ func shardListFromPlan(plan *RoutingPlan, bindVariables map[string]interface{}, 
 		return makeList(0, len(tabletKeys))
 	}
 
-	switch plan.criteria.Type {
-	case '=', NULL_SAFE_EQUAL:
-		index := plan.criteria.NodeAt(1).findShard(bindVariables, tabletKeys)
-		return []int{index}
-	case '<', LE:
-		index := plan.criteria.NodeAt(1).findShard(bindVariables, tabletKeys)
-		return makeList(0, index+1)
-	case '>', GE:
-		index := plan.criteria.NodeAt(1).findShard(bindVariables, tabletKeys)
-		return makeList(index, len(tabletKeys))
-	case IN:
-		return plan.criteria.NodeAt(1).findShardList(bindVariables, tabletKeys)
-	case BETWEEN:
-		start := plan.criteria.NodeAt(1).findShard(bindVariables, tabletKeys)
-		last := plan.criteria.NodeAt(2).findShard(bindVariables, tabletKeys)
-		if last < start {
-			start, last = last, start
+	switch criteria := plan.criteria.(type) {
+	case *ComparisonExpr:
+		switch criteria.Operator {
+		case "=", "<=>":
+			index := criteria.Right.findShard(bindVariables, tabletKeys)
+			return []int{index}
+		case "<", "<=":
+			index := criteria.Right.findShard(bindVariables, tabletKeys)
+			return makeList(0, index+1)
+		case ">", ">=":
+			index := criteria.Right.findShard(bindVariables, tabletKeys)
+			return makeList(index, len(tabletKeys))
+		case "in":
+			return criteria.Right.findShardList(bindVariables, tabletKeys)
 		}
-		return makeList(start, last+1)
+	case *RangeCond:
+		if criteria.Operator == "between" {
+			start := criteria.From.findShard(bindVariables, tabletKeys)
+			last := criteria.To.findShard(bindVariables, tabletKeys)
+			if last < start {
+				start, last = last, start
+			}
+			return makeList(start, last+1)
+		}
 	}
 	return makeList(0, len(tabletKeys))
 }
@@ -85,7 +90,7 @@ func getRoutingPlan(statement Statement) (plan *RoutingPlan) {
 		plan.criteria = ins.Values.(*Node).NodeAt(0).routingAnalyzeValues()
 		return plan
 	}
-	var where *Node
+	var where *Where
 	plan.routingType = ROUTE_BY_CONDITION
 	switch stmt := statement.(type) {
 	case *Select:
@@ -95,8 +100,8 @@ func getRoutingPlan(statement Statement) (plan *RoutingPlan) {
 	case *Delete:
 		where = stmt.Where
 	}
-	if where != nil && where.Len() > 0 {
-		plan.criteria = where.NodeAt(0).routingAnalyzeBoolean()
+	if where != nil {
+		plan.criteria = routingAnalyzeBoolean(where.Expr)
 	}
 	return plan
 }
@@ -117,11 +122,11 @@ func (node *Node) routingAnalyzeValues() *Node {
 	return node
 }
 
-func (node *Node) routingAnalyzeBoolean() *Node {
-	switch node.Type {
-	case AND:
-		left := node.NodeAt(0).routingAnalyzeBoolean()
-		right := node.NodeAt(1).routingAnalyzeBoolean()
+func routingAnalyzeBoolean(node BoolExpr) BoolExpr {
+	switch node := node.(type) {
+	case *AndExpr:
+		left := routingAnalyzeBoolean(node.Left)
+		right := routingAnalyzeBoolean(node.Right)
 		if left != nil && right != nil {
 			return nil
 		} else if left != nil {
@@ -129,29 +134,31 @@ func (node *Node) routingAnalyzeBoolean() *Node {
 		} else {
 			return right
 		}
-	case '(':
-		sub, ok := node.At(0).(*Node)
-		if !ok {
+	case *ParenBoolExpr:
+		return routingAnalyzeBoolean(node.Expr)
+	case *ComparisonExpr:
+		switch {
+		case stringIn(node.Operator, "=", "<", ">", "<=", ">=", "<=>"):
+			left := node.Left.routingAnalyzeValue()
+			right := node.Right.routingAnalyzeValue()
+			if (left == EID_NODE && right == VALUE_NODE) || (left == VALUE_NODE && right == EID_NODE) {
+				return node
+			}
+		case node.Operator == "in":
+			left := node.Left.routingAnalyzeValue()
+			right := node.Right.routingAnalyzeValue()
+			if left == EID_NODE && right == LIST_NODE {
+				return node
+			}
+		}
+	case *RangeCond:
+		if node.Operator != "between" {
 			return nil
 		}
-		return sub.routingAnalyzeBoolean()
-	case '=', '<', '>', LE, GE, NULL_SAFE_EQUAL:
-		left := node.NodeAt(0).routingAnalyzeValue()
-		right := node.NodeAt(1).routingAnalyzeValue()
-		if (left == EID_NODE && right == VALUE_NODE) || (left == VALUE_NODE && right == EID_NODE) {
-			return node
-		}
-	case IN:
-		left := node.NodeAt(0).routingAnalyzeValue()
-		right := node.NodeAt(1).routingAnalyzeValue()
-		if left == EID_NODE && right == LIST_NODE {
-			return node
-		}
-	case BETWEEN:
-		left := node.NodeAt(0).routingAnalyzeValue()
-		right1 := node.NodeAt(1).routingAnalyzeValue()
-		right2 := node.NodeAt(2).routingAnalyzeValue()
-		if left == EID_NODE && right1 == VALUE_NODE && right2 == VALUE_NODE {
+		left := node.Left.routingAnalyzeValue()
+		from := node.From.routingAnalyzeValue()
+		to := node.To.routingAnalyzeValue()
+		if left == EID_NODE && from == VALUE_NODE && to == VALUE_NODE {
 			return node
 		}
 	}
