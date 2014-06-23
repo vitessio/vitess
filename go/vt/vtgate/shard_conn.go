@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -93,7 +92,7 @@ func (sdc *ShardConn) ExecuteBatch(context interface{}, queries []tproto.BoundQu
 }
 
 // StreamExecute executes a streaming query on vttablet. The retry rules are the same as Execute.
-func (sdc *ShardConn) StreamExecute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (results <-chan *mproto.QueryResult, errFunc tabletconn.ErrFunc) {
+func (sdc *ShardConn) StreamExecute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (results <-chan interface{}, errFunc tabletconn.ErrFunc) {
 	var usedConn tabletconn.TabletConn
 	var erFunc tabletconn.ErrFunc
 	err := sdc.withRetry(context, func(conn tabletconn.TabletConn) error {

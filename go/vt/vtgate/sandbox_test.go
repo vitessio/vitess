@@ -341,7 +341,7 @@ func (sbc *sandboxConn) getError() error {
 	return nil
 }
 
-func (sbc *sandboxConn) Execute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (*mproto.QueryResult, error) {
+func (sbc *sandboxConn) Execute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (interface{}, error) {
 	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
@@ -352,7 +352,7 @@ func (sbc *sandboxConn) Execute(context interface{}, query string, bindVars map[
 	return singleRowResult, nil
 }
 
-func (sbc *sandboxConn) ExecuteBatch(context interface{}, queries []tproto.BoundQuery, transactionId int64) (*tproto.QueryResultList, error) {
+func (sbc *sandboxConn) ExecuteBatch(context interface{}, queries []tproto.BoundQuery, transactionId int64) (interface{}, error) {
 	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
@@ -368,12 +368,12 @@ func (sbc *sandboxConn) ExecuteBatch(context interface{}, queries []tproto.Bound
 	return qrl, nil
 }
 
-func (sbc *sandboxConn) StreamExecute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc) {
+func (sbc *sandboxConn) StreamExecute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (<-chan interface{}, tabletconn.ErrFunc) {
 	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
-	ch := make(chan *mproto.QueryResult, 1)
+	ch := make(chan interface{}, 1)
 	ch <- singleRowResult
 	close(ch)
 	err := sbc.getError()
