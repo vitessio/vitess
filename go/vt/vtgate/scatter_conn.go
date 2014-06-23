@@ -81,7 +81,7 @@ func (stc *ScatterConn) Execute(
 			sResults <- innerqr
 			return nil
 		})
-	qr := mergeResults(results)
+	qr := tabletconn.MergeResults(results)
 	if allErrors.HasErrors() {
 		return nil, allErrors.AggrError(stc.aggregateErrors)
 	}
@@ -115,7 +115,7 @@ func (stc *ScatterConn) ExecuteEntityIds(
 			sResults <- innerqr
 			return nil
 		})
-	qr := mergeResults(results)
+	qr := tabletconn.MergeResults(results)
 	if allErrors.HasErrors() {
 		return nil, allErrors.AggrError(stc.aggregateErrors)
 	}
@@ -146,7 +146,7 @@ func (stc *ScatterConn) ExecuteBatch(
 			sResults <- innerqrs
 			return nil
 		})
-	qrs = mergeBatchResults(len(queries), results)
+	qrs = tabletconn.MergeBatchResults(len(queries), results)
 	if allErrors.HasErrors() {
 		return nil, allErrors.AggrError(stc.aggregateErrors)
 	}

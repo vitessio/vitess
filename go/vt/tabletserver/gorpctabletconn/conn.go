@@ -27,8 +27,10 @@ var (
 	tabletBsonEncrypted = flag.Bool("tablet-bson-encrypted", false, "use encryption to talk to vttablet")
 )
 
+const ProtocolBson = "gorpc"
+
 func init() {
-	tabletconn.RegisterDialer("gorpc", DialTablet)
+	tabletconn.RegisterDialer(ProtocolBson, DialTablet)
 }
 
 // TabletBson implements a bson rpcplus implementation for TabletConn

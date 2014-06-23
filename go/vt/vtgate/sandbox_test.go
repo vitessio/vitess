@@ -16,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/tabletserver/gorpctabletconn"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -35,10 +36,9 @@ func init() {
 	createSandbox(TEST_UNSHARDED)
 	tabletconn.RegisterDialer("sandbox", sandboxDialer)
 	flag.Set("tablet_protocol", "sandbox")
-	tabletConnProtocol = "sandbox"
-	appendResultFuncMap["sandbox"] = appendResultBson
-	mergeResultsFuncMap["sandbox"] = mergeResultsBson
-	mergeBatchResultsFuncMap["sandbox"] = mergeBatchResultsBson
+	tabletconn.AppendResultFuncMap["sandbox"] = gorpctabletconn.AppendResultBson
+	tabletconn.MergeResultsFuncMap["sandbox"] = gorpctabletconn.MergeResultsBson
+	tabletconn.MergeBatchResultsFuncMap["sandbox"] = gorpctabletconn.MergeBatchResultsBson
 }
 
 var sandboxMu sync.Mutex

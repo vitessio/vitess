@@ -10,6 +10,7 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
@@ -40,7 +41,7 @@ func TestStreamExecuteKeyspaceAlias(t *testing.T) {
 		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
 		err := stc.StreamExecute(nil, "query", nil, TEST_UNSHARDED_SERVED_FROM, shards, topo.TYPE_RDONLY, nil, func(r interface{}) error {
-			appendResult(qr, r)
+			tabletconn.AppendResult(qr, r)
 			return nil
 		})
 		return qr, err

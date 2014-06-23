@@ -17,6 +17,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
@@ -145,7 +146,7 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
 		err = res.StreamExecuteKeyspaceIds(nil, query, func(r interface{}) error {
-			appendResult(qr, r)
+			tabletconn.AppendResult(qr, r)
 			return nil
 		})
 		return qr, err
@@ -155,7 +156,7 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
 		err = res.StreamExecuteKeyspaceIds(nil, query, func(r interface{}) error {
-			appendResult(qr, r)
+			tabletconn.AppendResult(qr, r)
 			return nil
 		})
 		return qr, err
@@ -187,7 +188,7 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
 		err = res.StreamExecuteKeyRanges(nil, query, func(r interface{}) error {
-			appendResult(qr, r)
+			tabletconn.AppendResult(qr, r)
 			return nil
 		})
 		return qr, err
@@ -198,7 +199,7 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
 		err = res.StreamExecuteKeyRanges(nil, query, func(r interface{}) error {
-			appendResult(qr, r)
+			tabletconn.AppendResult(qr, r)
 			return nil
 		})
 		return qr, err
