@@ -23,6 +23,8 @@ type testEvent2 struct {
 
 func (testEvent1) TestFunc1() {}
 
+func (*testEvent2) TestFunc2() {}
+
 func clearListeners() {
 	listenersMutex.Lock()
 	defer listenersMutex.Unlock()
@@ -158,4 +160,53 @@ func TestAsynchronousDispatch(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Errorf("asynchronous dispatch failed to trigger listener")
 	}
+}
+
+func TestDispatchPointerToValueInterfaceListener(t *testing.T) {
+	clearListeners()
+
+	triggered := false
+	AddListener(func(ev testInterface1) {
+		triggered = true
+	})
+	Dispatch(&testEvent1{})
+
+	if !triggered {
+		t.Errorf("Dispatch by pointer failed to trigger interface listener")
+	}
+}
+
+func TestDispatchValueToValueInterfaceListener(t *testing.T) {
+	clearListeners()
+
+	triggered := false
+	AddListener(func(ev testInterface1) {
+		triggered = true
+	})
+	Dispatch(testEvent1{})
+
+	if !triggered {
+		t.Errorf("Dispatch by value failed to trigger interface listener")
+	}
+}
+
+func TestDispatchPointerToPointerInterfaceListener(t *testing.T) {
+	clearListeners()
+
+	triggered := false
+	AddListener(func(testInterface2) { triggered = true })
+	Dispatch(&testEvent2{})
+
+	if !triggered {
+		t.Errorf("interface listener failed to trigger for pointer")
+	}
+}
+
+func TestDispatchValueToPointerInterfaceListener(t *testing.T) {
+	clearListeners()
+
+	AddListener(func(testInterface2) {
+		t.Errorf("interface listener triggered for value dispatch")
+	})
+	Dispatch(testEvent2{})
 }
