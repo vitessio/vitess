@@ -41,7 +41,7 @@ func main() {
 	resilientSrvTopoServer = vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServerCounts")
 
 	labels := []string{"Cell", "Keyspace", "Shard", "DbType"}
-	_ = stats.NewMapCountersFunc("EndpointCount", labels, resilientSrvTopoServer.HealthyEndpointCount)
+	_ = stats.NewMapCountersFunc("EndpointCount", labels, resilientSrvTopoServer.EndpointCount)
 	_ = stats.NewMapCountersFunc("DegradedEndpointCount", labels, resilientSrvTopoServer.DegradedEndpointCount)
 
 	// For the initial phase vtgate is exposing

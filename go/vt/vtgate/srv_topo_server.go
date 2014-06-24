@@ -287,16 +287,16 @@ func (server *ResilientSrvTopoServer) GetEndPoints(cell, keyspace, shard string,
 	return entry.value, err
 }
 
-// HealthyEndpointCount returns how many valid endpoints we have in the cache
-func (server *ResilientSrvTopoServer) HealthyEndpointCount() map[string]int64 {
+// EndpointCount returns how many endpoints we have per keyspace/shard/dbtype.
+func (server *ResilientSrvTopoServer) EndpointCount() map[string]int64 {
 	result := make(map[string]int64)
 	server.mutex.Lock()
 	defer server.mutex.Unlock()
 	for k, entry := range server.endPointsCache {
 		entry.mutex.Lock()
 		vl := int64(0)
-		if entry.value != nil {
-			vl = int64(len(entry.value.Entries))
+		if entry.originalValue != nil {
+			vl = int64(len(entry.originalValue.Entries))
 		}
 		entry.mutex.Unlock()
 		result[k] = vl
@@ -313,17 +313,17 @@ func (server *ResilientSrvTopoServer) DegradedEndpointCount() map[string]int64 {
 	defer server.mutex.Unlock()
 	for k, entry := range server.endPointsCache {
 		entry.mutex.Lock()
-		// originalValue and value can be nil in case of error
-		ovl := 0
+		// originalValue can be nil in case of error
+		ovl := int64(0)
 		if entry.originalValue != nil {
-			ovl = len(entry.originalValue.Entries)
-		}
-		vl := 0
-		if entry.value != nil {
-			vl = len(entry.value.Entries)
+			for _, ep := range entry.originalValue.Entries {
+				if len(ep.Health) > 0 {
+					ovl++
+				}
+			}
 		}
 		entry.mutex.Unlock()
-		result[k] = int64(ovl - vl)
+		result[k] = ovl
 	}
 	return result
 }
@@ -444,14 +444,14 @@ func (st *EndPointsCacheStatus) StatusAsHTML() template.HTML {
 	}
 	if ovl == vl {
 		if vl == 0 {
-			return template.HTML("<b>No entries</b>")
+			return template.HTML("<b>No endpoints</b>")
 		}
 		if len(st.OriginalValue.Entries[0].Health) > 0 {
-			return template.HTML(fmt.Sprintf("<b>All %v values are unhappy</b>", vl))
+			return template.HTML(fmt.Sprintf("<b>Serving from %v degraded endpoints</b>", vl))
 		}
-		return template.HTML(fmt.Sprintf("%v values are happy", vl))
+		return template.HTML(fmt.Sprintf("All %v endpoints are healthy", vl))
 	}
-	return template.HTML(fmt.Sprintf("%v out of %v values are happy", vl, ovl))
+	return template.HTML(fmt.Sprintf("Serving from %v healthy endpoints out of %v", vl, ovl))
 }
 
 // EndPointsCacheStatusList is used for sorting
