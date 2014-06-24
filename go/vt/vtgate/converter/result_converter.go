@@ -27,11 +27,13 @@ func MakeConverterID(from, to string) string {
 }
 
 // RegisterQueryResultConverter registers the converter function for QueryResult.
+// The id should be the one generated from MakeConverterID().
 func RegisterQueryResultConverter(id string, converter ResultConverter) {
 	queryResultConverterMap[id] = converter
 }
 
 // RegisterQueryResultListConverter registers the converter function for QueryResultList.
+// The id should be the one generated from MakeConverterID().
 func RegisterQueryResultListConverter(id string, converter ResultConverter) {
 	queryResultListConverterMap[id] = converter
 }
