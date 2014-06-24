@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -47,7 +46,7 @@ func NewResolver(serv SrvTopoServer, statsName, cell string, retryDelay time.Dur
 
 // ExecuteKeyspaceIds executes a non-streaming query based on KeyspaceIds.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
-func (res *Resolver) ExecuteKeyspaceIds(context interface{}, query *proto.KeyspaceIdQuery) (*mproto.QueryResult, error) {
+func (res *Resolver) ExecuteKeyspaceIds(context interface{}, query *proto.KeyspaceIdQuery) (interface{}, error) {
 	mapToShards := func(keyspace string) (string, []string, error) {
 		return mapKeyspaceIdsToShards(
 			res.scatterConn.toposerv,
@@ -61,7 +60,7 @@ func (res *Resolver) ExecuteKeyspaceIds(context interface{}, query *proto.Keyspa
 
 // ExecuteKeyRanges executes a non-streaming query based on KeyRanges.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
-func (res *Resolver) ExecuteKeyRanges(context interface{}, query *proto.KeyRangeQuery) (*mproto.QueryResult, error) {
+func (res *Resolver) ExecuteKeyRanges(context interface{}, query *proto.KeyRangeQuery) (interface{}, error) {
 	mapToShards := func(keyspace string) (string, []string, error) {
 		return mapKeyRangesToShards(
 			res.scatterConn.toposerv,
@@ -83,7 +82,7 @@ func (res *Resolver) Execute(
 	tabletType topo.TabletType,
 	session *proto.Session,
 	mapToShards func(string) (string, []string, error),
-) (*mproto.QueryResult, error) {
+) (interface{}, error) {
 	keyspace, shards, err := mapToShards(keyspace)
 	if err != nil {
 		return nil, err
@@ -130,7 +129,7 @@ func (res *Resolver) Execute(
 func (res *Resolver) ExecuteEntityIds(
 	context interface{},
 	query *proto.EntityIdsQuery,
-) (*mproto.QueryResult, error) {
+) (interface{}, error) {
 	newKeyspace, shardIDMap, err := mapEntityIdsToShards(
 		res.scatterConn.toposerv,
 		res.scatterConn.cell,
@@ -189,7 +188,7 @@ func (res *Resolver) ExecuteEntityIds(
 
 // ExecuteBatchKeyspaceIds executes a group of queries based on KeyspaceIds.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
-func (res *Resolver) ExecuteBatchKeyspaceIds(context interface{}, query *proto.KeyspaceIdBatchQuery) (*tproto.QueryResultList, error) {
+func (res *Resolver) ExecuteBatchKeyspaceIds(context interface{}, query *proto.KeyspaceIdBatchQuery) (interface{}, error) {
 	mapToShards := func(keyspace string) (string, []string, error) {
 		return mapKeyspaceIdsToShards(
 			res.scatterConn.toposerv,
@@ -210,7 +209,7 @@ func (res *Resolver) ExecuteBatch(
 	tabletType topo.TabletType,
 	session *proto.Session,
 	mapToShards func(string) (string, []string, error),
-) (*tproto.QueryResultList, error) {
+) (interface{}, error) {
 	keyspace, shards, err := mapToShards(keyspace)
 	if err != nil {
 		return nil, err
@@ -257,7 +256,7 @@ func (res *Resolver) ExecuteBatch(
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // The api supports supplying multiple KeyspaceIds to make it future proof.
-func (res *Resolver) StreamExecuteKeyspaceIds(context interface{}, query *proto.KeyspaceIdQuery, sendReply func(*mproto.QueryResult) error) error {
+func (res *Resolver) StreamExecuteKeyspaceIds(context interface{}, query *proto.KeyspaceIdQuery, sendReply func(interface{}) error) error {
 	mapToShards := func(keyspace string) (string, []string, error) {
 		return mapKeyspaceIdsToShards(
 			res.scatterConn.toposerv,
@@ -275,7 +274,7 @@ func (res *Resolver) StreamExecuteKeyspaceIds(context interface{}, query *proto.
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // The api supports supplying multiple keyranges to make it future proof.
-func (res *Resolver) StreamExecuteKeyRanges(context interface{}, query *proto.KeyRangeQuery, sendReply func(*mproto.QueryResult) error) error {
+func (res *Resolver) StreamExecuteKeyRanges(context interface{}, query *proto.KeyRangeQuery, sendReply func(interface{}) error) error {
 	mapToShards := func(keyspace string) (string, []string, error) {
 		return mapKeyRangesToShards(
 			res.scatterConn.toposerv,
@@ -299,7 +298,7 @@ func (res *Resolver) StreamExecute(
 	tabletType topo.TabletType,
 	session *proto.Session,
 	mapToShards func(string) (string, []string, error),
-	sendReply func(*mproto.QueryResult) error,
+	sendReply func(interface{}) error,
 ) error {
 	keyspace, shards, err := mapToShards(keyspace)
 	if err != nil {

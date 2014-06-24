@@ -27,8 +27,10 @@ var (
 	tabletBsonEncrypted = flag.Bool("tablet-bson-encrypted", false, "use encryption to talk to vttablet")
 )
 
+const ProtocolBson = "gorpc"
+
 func init() {
-	tabletconn.RegisterDialer("gorpc", DialTablet)
+	tabletconn.RegisterDialer(ProtocolBson, DialTablet)
 }
 
 // TabletBson implements a bson rpcplus implementation for TabletConn
@@ -70,7 +72,7 @@ func DialTablet(context interface{}, endPoint topo.EndPoint, keyspace, shard str
 	return conn, nil
 }
 
-func (conn *TabletBson) Execute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (*mproto.QueryResult, error) {
+func (conn *TabletBson) Execute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (interface{}, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
@@ -90,7 +92,7 @@ func (conn *TabletBson) Execute(context interface{}, query string, bindVars map[
 	return qr, nil
 }
 
-func (conn *TabletBson) ExecuteBatch(context interface{}, queries []tproto.BoundQuery, transactionId int64) (*tproto.QueryResultList, error) {
+func (conn *TabletBson) ExecuteBatch(context interface{}, queries []tproto.BoundQuery, transactionId int64) (interface{}, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
@@ -109,11 +111,11 @@ func (conn *TabletBson) ExecuteBatch(context interface{}, queries []tproto.Bound
 	return qrs, nil
 }
 
-func (conn *TabletBson) StreamExecute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc) {
+func (conn *TabletBson) StreamExecute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (<-chan interface{}, tabletconn.ErrFunc) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
-		sr := make(chan *mproto.QueryResult, 1)
+		sr := make(chan interface{}, 1)
 		close(sr)
 		return sr, func() error { return tabletconn.CONN_CLOSED }
 	}
@@ -124,7 +126,7 @@ func (conn *TabletBson) StreamExecute(context interface{}, query string, bindVar
 		TransactionId: transactionId,
 		SessionId:     conn.sessionId,
 	}
-	sr := make(chan *mproto.QueryResult, 10)
+	sr := make(chan interface{}, 10)
 	c := conn.rpcClient.StreamGo("SqlQuery.StreamExecute", req, sr)
 	return sr, func() error { return tabletError(c.Error) }
 }

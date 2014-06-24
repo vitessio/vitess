@@ -13,7 +13,6 @@ import (
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/sqltypes"
 )
 
 // MarshalBson bson-encodes QueryResult.
@@ -21,33 +20,11 @@ func (queryResult *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter, key strin
 	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
-	// []mproto.Field
-	{
-		bson.EncodePrefix(buf, bson.Array, "Fields")
-		lenWriter := bson.NewLenWriter(buf)
-		for _i, _v1 := range queryResult.Fields {
-			_v1.MarshalBson(buf, bson.Itoa(_i))
-		}
-		lenWriter.Close()
-	}
-	bson.EncodeUint64(buf, "RowsAffected", queryResult.RowsAffected)
-	bson.EncodeUint64(buf, "InsertId", queryResult.InsertId)
-	// [][]sqltypes.Value
-	{
-		bson.EncodePrefix(buf, bson.Array, "Rows")
-		lenWriter := bson.NewLenWriter(buf)
-		for _i, _v2 := range queryResult.Rows {
-			// []sqltypes.Value
-			{
-				bson.EncodePrefix(buf, bson.Array, bson.Itoa(_i))
-				lenWriter := bson.NewLenWriter(buf)
-				for _i, _v3 := range _v2 {
-					_v3.MarshalBson(buf, bson.Itoa(_i))
-				}
-				lenWriter.Close()
-			}
-		}
-		lenWriter.Close()
+	// *mproto.QueryResult
+	if queryResult.Result == nil {
+		bson.EncodePrefix(buf, bson.Null, "Result")
+	} else {
+		(*queryResult.Result).MarshalBson(buf, "Result")
 	}
 	// *Session
 	if queryResult.Session == nil {
@@ -74,52 +51,11 @@ func (queryResult *QueryResult) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 
 	for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 		switch bson.ReadCString(buf) {
-		case "Fields":
-			// []mproto.Field
+		case "Result":
+			// *mproto.QueryResult
 			if kind != bson.Null {
-				if kind != bson.Array {
-					panic(bson.NewBsonError("unexpected kind %v for queryResult.Fields", kind))
-				}
-				bson.Next(buf, 4)
-				queryResult.Fields = make([]mproto.Field, 0, 8)
-				for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
-					bson.SkipIndex(buf)
-					var _v1 mproto.Field
-					_v1.UnmarshalBson(buf, kind)
-					queryResult.Fields = append(queryResult.Fields, _v1)
-				}
-			}
-		case "RowsAffected":
-			queryResult.RowsAffected = bson.DecodeUint64(buf, kind)
-		case "InsertId":
-			queryResult.InsertId = bson.DecodeUint64(buf, kind)
-		case "Rows":
-			// [][]sqltypes.Value
-			if kind != bson.Null {
-				if kind != bson.Array {
-					panic(bson.NewBsonError("unexpected kind %v for queryResult.Rows", kind))
-				}
-				bson.Next(buf, 4)
-				queryResult.Rows = make([][]sqltypes.Value, 0, 8)
-				for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
-					bson.SkipIndex(buf)
-					var _v2 []sqltypes.Value
-					// []sqltypes.Value
-					if kind != bson.Null {
-						if kind != bson.Array {
-							panic(bson.NewBsonError("unexpected kind %v for _v2", kind))
-						}
-						bson.Next(buf, 4)
-						_v2 = make([]sqltypes.Value, 0, 8)
-						for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
-							bson.SkipIndex(buf)
-							var _v3 sqltypes.Value
-							_v3.UnmarshalBson(buf, kind)
-							_v2 = append(_v2, _v3)
-						}
-					}
-					queryResult.Rows = append(queryResult.Rows, _v2)
-				}
+				queryResult.Result = new(mproto.QueryResult)
+				(*queryResult.Result).UnmarshalBson(buf, kind)
 			}
 		case "Session":
 			// *Session

@@ -57,7 +57,7 @@ type Tx struct {
 
 type StreamResult struct {
 	errFunc tabletconn.ErrFunc
-	sr      <-chan *mproto.QueryResult
+	sr      <-chan interface{}
 	columns *mproto.QueryResult
 	// current result and index on it
 	qr    *mproto.QueryResult
@@ -141,14 +141,14 @@ func (conn *Conn) Exec(query string, bindVars map[string]interface{}) (db.Result
 		if !ok {
 			return nil, conn.fmtErr(errFunc())
 		}
-		return &StreamResult{errFunc, sr, cols, nil, 0, nil}, nil
+		return &StreamResult{errFunc, sr, cols.(*mproto.QueryResult), nil, 0, nil}, nil
 	}
 
 	qr, err := conn.tabletConn.Execute(nil, query, bindVars, conn.TransactionId)
 	if err != nil {
 		return nil, conn.fmtErr(err)
 	}
-	return &Result{qr, 0, nil}, nil
+	return &Result{qr.(*mproto.QueryResult), 0, nil}, nil
 }
 
 func (conn *Conn) Begin() (db.Tx, error) {
@@ -302,7 +302,7 @@ func (sr *StreamResult) Next() (row []interface{}) {
 			}
 			return nil
 		}
-		sr.qr = qr
+		sr.qr = qr.(*mproto.QueryResult)
 		sr.index = 0
 	}
 
