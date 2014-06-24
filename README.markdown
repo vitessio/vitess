@@ -62,6 +62,7 @@ doc](https://github.com/youtube/vitess/blob/master/doc/GettingStarted.markdown).
 
 ## Documentation
 
+ * [Frequently Asked Questions](https://github.com/youtube/vitess/blob/master/doc/FAQ.markdown)
  * [Vision](https://github.com/youtube/vitess/blob/master/doc/Vision.markdown)
  * [General Concepts](https://github.com/youtube/vitess/blob/master/doc/Concepts.markdown)
  * [Replication Graph](https://github.com/youtube/vitess/blob/master/doc/ReplicationGraph.markdown)
