@@ -358,7 +358,13 @@ func (sq *SqlQuery) StreamExecute(context *Context, query *proto.Query, sendRepl
 	defer sq.endRequest()
 	defer handleExecError(query, &err, logStats)
 
-	sq.qe.StreamExecute(logStats, query, sendReply)
+	// Wrap callback function to return an error on shutdown to stop streaming
+	sq.qe.StreamExecute(logStats, query, func(reply *mproto.QueryResult) error {
+		if sq.state.Get() != SERVING {
+			return NewTabletError(FAIL, "query server is shutting down")
+		}
+		return sendReply(reply)
+	})
 	return nil
 }
 
