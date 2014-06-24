@@ -10,9 +10,21 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/wrangler/events"
 )
 
-func (wr *Wrangler) reparentShardGraceful(si *topo.ShardInfo, slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo, leaveMasterReadOnly bool) error {
+// reparentShardGraceful executes a graceful reparent.
+// The ev parameter is an event struct prefilled with information that the
+// caller has on hand, which would be expensive for us to re-query.
+func (wr *Wrangler) reparentShardGraceful(ev *events.Reparent, si *topo.ShardInfo, slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo, leaveMasterReadOnly bool) (err error) {
+	ev.UpdateStatus("starting graceful")
+
+	defer func() {
+		if err != nil {
+			ev.UpdateStatus("failed: " + err.Error())
+		}
+	}()
+
 	// Validate a bunch of assumptions we make about the replication graph.
 	if len(masterTabletMap) != 1 {
 		aliases := make([]string, 0, len(masterTabletMap))
@@ -47,17 +59,20 @@ func (wr *Wrangler) reparentShardGraceful(si *topo.ShardInfo, slaveTabletMap, ma
 	}
 
 	// Make sure all tablets have the right parent and reasonable positions.
-	err := wr.checkSlaveReplication(slaveTabletMap, masterTablet.Alias.Uid)
+	ev.UpdateStatus("checking slave replication positions")
+	err = wr.checkSlaveReplication(slaveTabletMap, masterTablet.Alias.Uid)
 	if err != nil {
 		return err
 	}
 
 	// Check the master-elect is fit for duty - call out for hardware checks.
+	ev.UpdateStatus("checking that new master is ready to serve")
 	err = wr.checkMasterElect(masterElectTablet)
 	if err != nil {
 		return err
 	}
 
+	ev.UpdateStatus("demoting old master")
 	masterPosition, err := wr.demoteMaster(masterTablet)
 	if err != nil {
 		// FIXME(msolomon) This suggests that the master is dead and we
@@ -66,6 +81,7 @@ func (wr *Wrangler) reparentShardGraceful(si *topo.ShardInfo, slaveTabletMap, ma
 		return fmt.Errorf("demote master failed: %v, if the master is dead, run: vtctl -force ScrapTablet %v", err, masterTablet.Alias)
 	}
 
+	ev.UpdateStatus("checking slave consistency")
 	log.Infof("check slaves %v/%v", masterTablet.Keyspace, masterTablet.Shard)
 	restartableSlaveTabletMap := restartableTabletMap(slaveTabletMap)
 	err = wr.checkSlaveConsistency(restartableSlaveTabletMap, masterPosition)
@@ -73,6 +89,7 @@ func (wr *Wrangler) reparentShardGraceful(si *topo.ShardInfo, slaveTabletMap, ma
 		return fmt.Errorf("check slave consistency failed %v, demoted master is still read only, run: vtctl SetReadWrite %v", err, masterTablet.Alias)
 	}
 
+	ev.UpdateStatus("promoting new master")
 	rsd, err := wr.promoteSlave(masterElectTablet)
 	if err != nil {
 		// FIXME(msolomon) This suggests that the master-elect is dead.
@@ -83,6 +100,7 @@ func (wr *Wrangler) reparentShardGraceful(si *topo.ShardInfo, slaveTabletMap, ma
 	// Once the slave is promoted, remove it from our map
 	delete(slaveTabletMap, masterElectTablet.Alias)
 
+	ev.UpdateStatus("restarting slaves")
 	majorityRestart, restartSlaveErr := wr.restartSlaves(slaveTabletMap, rsd)
 
 	// For now, scrap the old master regardless of how many
@@ -90,6 +108,7 @@ func (wr *Wrangler) reparentShardGraceful(si *topo.ShardInfo, slaveTabletMap, ma
 	//
 	// FIXME(msolomon) We could reintroduce it and reparent it and use
 	// it as new replica.
+	ev.UpdateStatus("scrapping old master")
 	log.Infof("scrap demoted master %v", masterTablet.Alias)
 	scrapActionPath, scrapErr := wr.ai.Scrap(masterTablet.Alias)
 	if scrapErr == nil {
@@ -100,10 +119,13 @@ func (wr *Wrangler) reparentShardGraceful(si *topo.ShardInfo, slaveTabletMap, ma
 		log.Warningf("scrap demoted master failed: %v", scrapErr)
 	}
 
+	ev.UpdateStatus("rebuilding shard serving graph")
 	err = wr.finishReparent(si, masterElectTablet, majorityRestart, leaveMasterReadOnly)
 	if err != nil {
 		return err
 	}
+
+	ev.UpdateStatus("finished")
 
 	if restartSlaveErr != nil {
 		// This is more of a warning at this point.

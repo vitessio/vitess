@@ -15,6 +15,7 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/wrangler/events"
 )
 
 func (wr *Wrangler) GetSchema(tabletAlias topo.TabletAlias, tables []string, includeViews bool) (*myproto.SchemaDefinition, error) {
@@ -392,7 +393,18 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 			return nil, err
 		}
 
-		err = wr.reparentShardGraceful(shardInfo, slaveTabletMap, masterTabletMap, newMasterTablet /*leaveMasterReadOnly*/, false)
+		// Create reusable Reparent event with available info
+		ev := &events.Reparent{
+			Keyspace:  shardInfo.Keyspace(),
+			Shard:     shardInfo.ShardName(),
+			NewMaster: *newMasterTablet.Tablet,
+		}
+
+		if oldMasterTablet, ok := tabletMap[shardInfo.MasterAlias]; ok {
+			ev.OldMaster = *oldMasterTablet.Tablet
+		}
+
+		err = wr.reparentShardGraceful(ev, shardInfo, slaveTabletMap, masterTabletMap, newMasterTablet /*leaveMasterReadOnly*/, false)
 		if err != nil {
 			return nil, err
 		}
