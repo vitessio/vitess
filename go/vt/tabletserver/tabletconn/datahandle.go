@@ -4,8 +4,13 @@
 
 package tabletconn
 
+// AppendResultFunc defines the fucntion type appending result to another.
 type AppendResultFunc func(qr, innerqr interface{})
+
+// MergeResultsFunc defines the function type merging results to one.
 type MergeResultsFunc func(<-chan interface{}) interface{}
+
+// MergeBatchResultFunc defines the function type merging batch results to one.
 type MergeBatchResultsFunc func(int, <-chan interface{}) interface{}
 
 var (
@@ -14,14 +19,17 @@ var (
 	MergeBatchResultsFuncMap = make(map[string]MergeBatchResultsFunc)
 )
 
+// AppendResult calls actual implemention based on tablet conn protocol.
 func AppendResult(qr, innerqr interface{}) {
 	AppendResultFuncMap[*tabletProtocol](qr, innerqr)
 }
 
+// MergeResults calls actual implementation based on tablet conn protocol.
 func MergeResults(results <-chan interface{}) interface{} {
 	return MergeResultsFuncMap[*tabletProtocol](results)
 }
 
+// MergeBatchResults calls actual implementation based on tablet conn protocol.
 func MergeBatchResults(batchSize int, results <-chan interface{}) interface{} {
 	return MergeBatchResultsFuncMap[*tabletProtocol](batchSize, results)
 }

@@ -16,6 +16,7 @@ func init() {
 	tabletconn.MergeBatchResultsFuncMap[ProtocolBson] = MergeBatchResultsBson
 }
 
+// AppendResultBson appends a bson QueryResult to another.
 func AppendResultBson(qr, innerqr interface{}) {
 	to := qr.(*mproto.QueryResult)
 	from := innerqr.(*mproto.QueryResult)
@@ -32,6 +33,7 @@ func AppendResultBson(qr, innerqr interface{}) {
 	to.Rows = append(to.Rows, from.Rows...)
 }
 
+// MergeResultsBson merges bson QueryResults to one.
 func MergeResultsBson(results <-chan interface{}) interface{} {
 	res := new(mproto.QueryResult)
 	for result := range results {
@@ -40,6 +42,7 @@ func MergeResultsBson(results <-chan interface{}) interface{} {
 	return res
 }
 
+// MergeBatchResultsBson merges bson QueryResultLists to one.
 func MergeBatchResultsBson(batchSize int, results <-chan interface{}) interface{} {
 	qrs := new(tproto.QueryResultList)
 	qrs.List = make([]mproto.QueryResult, batchSize)
