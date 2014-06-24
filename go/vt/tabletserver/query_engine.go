@@ -400,8 +400,15 @@ func (qe *QueryEngine) StreamExecute(logStats *SQLQueryStats, query *proto.Query
 	qd := NewQueryDetail(query, logStats.context, conn.Id())
 	qe.streamQList.Add(qd)
 	defer qe.streamQList.Remove(qd)
-	// then let's stream!
-	qe.fullStreamFetch(logStats, conn, plan.FullQuery, query.BindVariables, nil, nil, sendReply)
+
+	// then let's stream! Wrap callback function to return an
+	// error on query termination to stop further streaming
+	qe.fullStreamFetch(logStats, conn, plan.FullQuery, query.BindVariables, nil, nil, func(reply *mproto.QueryResult) error {
+		if qd.state.Get() != QD_RUNNING {
+			return NewTabletError(FAIL, "query terminated")
+		}
+		return sendReply(reply)
+	})
 }
 
 // InvalidateForDml performs rowcache invalidations for the dml.
