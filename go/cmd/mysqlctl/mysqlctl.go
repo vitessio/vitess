@@ -242,7 +242,7 @@ var commands = []command{
 	command{"multirestore", multiRestoreCmd,
 		"[-force] [-concurrency=3] [-fetch_concurrency=4] [-insert_table_concurrency=4] [-fetch_retry_count=3] [-starts=start1,start2,...] [-ends=end1,end2,...] [-strategy=] <destination_dbname> <source_host>[/<source_dbname>]...",
 		"Restores a snapshot form multiple hosts"},
-	command{"multisnapshot", multisnapshotCmd, "[-concurrency=8] [-spec='-'] [-tables=''] [-skip_slave_restart] [-maximum_file_size=134217728] <db name> <key name>",
+	command{"multisnapshot", multisnapshotCmd, "[-concurrency=8] [-spec='-'] [-tables=''] [-exclude_tables=''] [-skip_slave_restart] [-maximum_file_size=134217728] <db name> <key name>",
 		"Makes a complete snapshot using 'select * into' commands."},
 }
 
