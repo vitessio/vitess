@@ -14,7 +14,6 @@ import (
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/vtgate"
-	"github.com/youtube/vitess/go/vt/vtgate/converter"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
@@ -27,7 +26,7 @@ func NewVTGate(server *vtgate.VTGate) *VTGate {
 	vtg := &VTGate{server: server}
 	tabletProtocol := tabletconn.GetTabletConnProtocol()
 	if tabletProtocol != gorpctabletconn.ProtocolBson {
-		vtg.converterID = converter.MakeConverterID(
+		vtg.converterID = tabletconn.MakeConverterID(
 			tabletProtocol,
 			gorpctabletconn.ProtocolBson)
 	}
@@ -38,7 +37,7 @@ func (vtg *VTGate) convertQueryResult(result interface{}) *mproto.QueryResult {
 	var res *mproto.QueryResult
 	if vtg.converterID != "" {
 		res = new(mproto.QueryResult)
-		converter.ConvertQueryResult(vtg.converterID, result, res)
+		tabletconn.ConvertQueryResult(vtg.converterID, result, res)
 	} else {
 		res = result.(*mproto.QueryResult)
 	}
@@ -49,7 +48,7 @@ func (vtg *VTGate) convertQueryResultList(result interface{}) *tproto.QueryResul
 	var res *tproto.QueryResultList
 	if vtg.converterID != "" {
 		res = new(tproto.QueryResultList)
-		converter.ConvertQueryResultList(vtg.converterID, result, res)
+		tabletconn.ConvertQueryResultList(vtg.converterID, result, res)
 	} else {
 		res = result.(*tproto.QueryResultList)
 	}

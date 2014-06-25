@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 // Package converter manages the coversion of query result.
-package converter
+package tabletconn
 
 import (
 	"fmt"

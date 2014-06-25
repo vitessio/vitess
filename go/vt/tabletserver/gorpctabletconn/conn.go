@@ -126,9 +126,16 @@ func (conn *TabletBson) StreamExecute(context interface{}, query string, bindVar
 		TransactionId: transactionId,
 		SessionId:     conn.sessionId,
 	}
-	sr := make(chan interface{}, 10)
+	sr := make(chan *mproto.QueryResult, 10)
+	results := make(chan interface{}, 10)
+	go func() {
+		for res := range sr {
+			results <- res
+		}
+		close(results)
+	}()
 	c := conn.rpcClient.StreamGo("SqlQuery.StreamExecute", req, sr)
-	return sr, func() error { return tabletError(c.Error) }
+	return results, func() error { return tabletError(c.Error) }
 }
 
 func (conn *TabletBson) Begin(context interface{}) (transactionId int64, err error) {

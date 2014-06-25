@@ -160,7 +160,7 @@ func (vtg *VTGate) ExecuteBatchShard(context interface{}, batchQuery *proto.Batc
 	} else {
 		vtg.errors.Add(statsKey, 1)
 		vtg.logExecuteBatchShard.Errorf("%v, queries: %+v", err, batchQuery)
-		return nil, batchQuery.Session, nil
+		return nil, batchQuery.Session, err
 	}
 }
 
