@@ -71,13 +71,14 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/wrangler/events"
 )
 
 const (
 	SLAVE_STATUS_DEADLINE = 10e9
 )
 
-// ReparentShard createe the reparenting action and launch a goroutine
+// ReparentShard creates the reparenting action and launches a goroutine
 // to coordinate the procedure.
 //
 //
@@ -122,11 +123,23 @@ func (wr *Wrangler) reparentShardLocked(keyspace, shard string, masterElectTable
 		return fmt.Errorf("master-elect tablet %v not found in replication graph %v/%v %v", masterElectTabletAlias, keyspace, shard, mapKeys(tabletMap))
 	}
 
-	if !shardInfo.MasterAlias.IsZero() && !forceReparentToCurrentMaster {
-		err = wr.reparentShardGraceful(shardInfo, slaveTabletMap, masterTabletMap, masterElectTablet, leaveMasterReadOnly)
-	} else {
-		err = wr.reparentShardBrutal(shardInfo, slaveTabletMap, masterTabletMap, masterElectTablet, leaveMasterReadOnly, forceReparentToCurrentMaster)
+	// Create reusable Reparent event with available info
+	ev := &events.Reparent{
+		Keyspace:  shardInfo.Keyspace(),
+		Shard:     shardInfo.ShardName(),
+		NewMaster: *masterElectTablet.Tablet,
 	}
+
+	if oldMasterTablet, ok := tabletMap[shardInfo.MasterAlias]; ok {
+		ev.OldMaster = *oldMasterTablet.Tablet
+	}
+
+	if !shardInfo.MasterAlias.IsZero() && !forceReparentToCurrentMaster {
+		err = wr.reparentShardGraceful(ev, shardInfo, slaveTabletMap, masterTabletMap, masterElectTablet, leaveMasterReadOnly)
+	} else {
+		err = wr.reparentShardBrutal(ev, shardInfo, slaveTabletMap, masterTabletMap, masterElectTablet, leaveMasterReadOnly, forceReparentToCurrentMaster)
+	}
+
 	if err == nil {
 		// only log if it works, if it fails we'll show the error
 		log.Infof("reparentShard finished")

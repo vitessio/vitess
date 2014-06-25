@@ -10,6 +10,7 @@ listener functions, which are usually registered by plugin packages during init(
 For example, any package can define an event type:
 
 	package mypackage
+
 	type MyEvent struct {
 		field1, field2 string
 	}
@@ -17,13 +18,16 @@ For example, any package can define an event type:
 Then, any other package (e.g. a plugin) can listen for those events:
 
 	package myplugin
+
 	import (
 		"event"
 		"mypackage"
 	)
+
 	func onMyEvent(ev mypackage.MyEvent) {
 		// do something with ev
 	}
+
 	func init() {
 		event.AddListener(onMyEvent)
 	}
@@ -32,15 +36,18 @@ Any registered listeners that accept a single argument of type MyEvent will
 be called when a value of type MyEvent is dispatched:
 
 	package myotherpackage
+
 	import (
 		"event"
 		"mypackage"
 	)
+
 	func InMediasRes() {
 		ev := mypackage.MyEvent{
 			field1: "foo",
 			field2: "bar",
 		}
+
 		// synchronous
 		event.Dispatch(ev)
 		// or asynchronous

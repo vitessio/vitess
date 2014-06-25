@@ -12,6 +12,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
+	"github.com/youtube/vitess/go/vt/wrangler/events"
 )
 
 // ShardExternallyReparented updates the topology after the master
@@ -34,7 +35,7 @@ func (wr *Wrangler) ShardExternallyReparented(keyspace, shard string, masterElec
 	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 }
 
-func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, masterElectTabletAlias topo.TabletAlias) error {
+func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, masterElectTabletAlias topo.TabletAlias) (err error) {
 	// read the shard, make sure the master is not already good.
 	// critical read, we want up to date info (and the shard is locked).
 	shardInfo, err := wr.ts.GetShardCritical(keyspace, shard)
@@ -67,9 +68,26 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 		return fmt.Errorf("master-elect tablet %v not found in replication graph %v/%v %v", masterElectTabletAlias, keyspace, shard, mapKeys(tabletMap))
 	}
 
+	// Create reusable Reparent event with available info
+	ev := &events.Reparent{
+		Keyspace:  shardInfo.Keyspace(),
+		Shard:     shardInfo.ShardName(),
+		NewMaster: *masterElectTablet.Tablet,
+	}
+
+	if oldMasterTablet, ok := tabletMap[shardInfo.MasterAlias]; ok {
+		ev.OldMaster = *oldMasterTablet.Tablet
+	}
+
+	defer func() {
+		if err != nil {
+			ev.UpdateStatus("failed: " + err.Error())
+		}
+	}()
+
 	// sort the tablets, and handle them
 	slaveTabletMap, masterTabletMap := sortedTabletMap(tabletMap)
-	err = wr.reparentShardExternal(slaveTabletMap, masterTabletMap, masterElectTablet)
+	err = wr.reparentShardExternal(ev, slaveTabletMap, masterTabletMap, masterElectTablet)
 	if err != nil {
 		log.Infof("Skipping shard rebuild with failed reparent")
 		return err
@@ -83,6 +101,7 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 	}
 
 	// now update the master record in the shard object
+	ev.UpdateStatus("updating shard record")
 	log.Infof("Updating Shard's MasterAlias record")
 	shardInfo.MasterAlias = masterElectTabletAlias
 	if err = wr.ts.UpdateShard(shardInfo); err != nil {
@@ -90,12 +109,25 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 	}
 
 	// and rebuild the shard serving graph
+	ev.UpdateStatus("rebuilding shard serving graph")
 	log.Infof("Rebuilding shard serving graph data")
-	return topotools.RebuildShard(wr.ts, masterElectTablet.Keyspace, masterElectTablet.Shard, cells, wr.lockTimeout, interrupted)
+	if err = topotools.RebuildShard(wr.ts, masterElectTablet.Keyspace, masterElectTablet.Shard, cells, wr.lockTimeout, interrupted); err != nil {
+		return err
+	}
+
+	ev.UpdateStatus("finished")
+	return nil
 }
 
-func (wr *Wrangler) reparentShardExternal(slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo) error {
+// reparentShardExternal handles an external reparent.
+//
+// The ev parameter is an event struct prefilled with information that the
+// caller has on hand, which would be expensive for us to re-query.
+func (wr *Wrangler) reparentShardExternal(ev *events.Reparent, slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo) error {
+	ev.UpdateStatus("starting external")
+
 	// we fix the new master in the replication graph
+	ev.UpdateStatus("checking if new master was promoted")
 	err := wr.slaveWasPromoted(masterElectTablet)
 	if err != nil {
 		// This suggests that the master-elect is dead. This is bad.
@@ -106,14 +138,15 @@ func (wr *Wrangler) reparentShardExternal(slaveTabletMap, masterTabletMap map[to
 	delete(slaveTabletMap, masterElectTablet.Alias)
 	delete(masterTabletMap, masterElectTablet.Alias)
 
-	// Re-read the master elect tablet as its mysql port
-	// may have been updated
+	// Re-read the master elect tablet, as its mysql port may have been updated
+	ev.UpdateStatus("re-reading new master record")
 	masterElectTablet, err = wr.TopoServer().GetTablet(masterElectTablet.Alias)
 	if err != nil {
 		return fmt.Errorf("cannot re-read the master record, something is seriously wrong: %v", err)
 	}
 
 	// then fix all the slaves, including the old master
+	ev.UpdateStatus("restarting slaves")
 	wr.restartSlavesExternal(slaveTabletMap, masterTabletMap, masterElectTablet)
 	return nil
 }

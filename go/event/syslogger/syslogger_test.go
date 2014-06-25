@@ -30,7 +30,7 @@ func TestSyslog(t *testing.T) {
 // TestBadWriter checks that we don't panic or pass a nil Writer to the client
 // when the connection fails.
 func TestBadWriter(t *testing.T) {
-	real_writer := writer
+	realWriter := writer
 	writer = nil
 
 	ev := new(TestEvent)
@@ -40,5 +40,5 @@ func TestBadWriter(t *testing.T) {
 		t.Errorf("passed nil writer to client")
 	}
 
-	writer = real_writer
+	writer = realWriter
 }
