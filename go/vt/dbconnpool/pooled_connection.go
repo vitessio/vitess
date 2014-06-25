@@ -35,12 +35,11 @@ func (pc *PooledDBConnection) Recycle() {
 // conn, err := pool.Get()
 // ...
 func DBConnectionCreator(info *mysql.ConnectionParams, mysqlStats *stats.Timings) CreateConnectionFunc {
-        return func(pool *ConnectionPool) (PoolConnection, error) {
-                c, err := NewDBConnection(info, mysqlStats)
+	return func(pool *ConnectionPool) (PoolConnection, error) {
+		c, err := NewDBConnection(info, mysqlStats)
 		if err != nil {
 			return nil, err
 		}
 		return &PooledDBConnection{c, pool}, nil
-        }
+	}
 }
-

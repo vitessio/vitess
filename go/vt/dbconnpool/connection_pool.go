@@ -25,12 +25,12 @@ var (
 
 // PoolConnection is the interface implemented by users of this specialized pool.
 type PoolConnection interface {
-        ExecuteFetch(query string, maxrows int, wantfields bool) (*proto.QueryResult, error)
-        ExecuteStreamFetch(query string, callback func(*proto.QueryResult) error, streamBufferSize int) error
-        Id() int64
-        Close()
-        IsClosed() bool
-        Recycle()
+	ExecuteFetch(query string, maxrows int, wantfields bool) (*proto.QueryResult, error)
+	ExecuteStreamFetch(query string, callback func(*proto.QueryResult) error, streamBufferSize int) error
+	Id() int64
+	Close()
+	IsClosed() bool
+	Recycle()
 }
 
 // CreateConnectionFunc is the factory method to create new connections
