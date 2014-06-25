@@ -70,8 +70,7 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 
 	// Create reusable Reparent event with available info
 	ev := &events.Reparent{
-		Keyspace:  shardInfo.Keyspace(),
-		Shard:     shardInfo.ShardName(),
+		ShardInfo: *shardInfo,
 		NewMaster: *masterElectTablet.Tablet,
 	}
 

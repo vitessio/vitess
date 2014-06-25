@@ -9,7 +9,7 @@ import (
 
 // Reparent is an event that describes a single step in the reparent process.
 type Reparent struct {
-	Keyspace, Shard string
+	ShardInfo topo.ShardInfo
 
 	OldMaster, NewMaster topo.Tablet
 

@@ -395,8 +395,7 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 
 		// Create reusable Reparent event with available info
 		ev := &events.Reparent{
-			Keyspace:  shardInfo.Keyspace(),
-			Shard:     shardInfo.ShardName(),
+			ShardInfo: *shardInfo,
 			NewMaster: *newMasterTablet.Tablet,
 		}
 
