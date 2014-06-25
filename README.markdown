@@ -44,7 +44,7 @@ Writing a client for your language should not be difficult, as it's a matter of
 implementing only a few API calls (please send us a pull request if you do!).
 
 To learn more, please click on the documentation links below.
-[sougou](https://github.com/sougou) presented Vitess at Fosdem '14 in the go
+You can also watch an [9 minute introduction](https://www.youtube.com/watch?v=midJ6b1LkA0) to Vitess [sougou](https://github.com/sougou) prepared for Google I/O 2014. There's also a longer presentation from the Fosdem '14 go
 devroom
 ([slides](https://github.com/youtube/vitess/blob/master/doc/Vitess2014.pdf?raw=true),
 [video](http://youtu.be/qATTTSg6zXk)).
