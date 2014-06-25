@@ -14,7 +14,7 @@ import (
 	log "github.com/golang/glog"
 	//	"github.com/youtube/vitess/go/sync2"
 	//	"github.com/youtube/vitess/go/vt/concurrency"
-	//	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -25,11 +25,10 @@ const (
 	stateVSCDone      = "done"
 	stateVSCError     = "error"
 
-	stateVSCInit = "initializing"
-	//	stateVSCFindTargets            = "finding target instances"
-	//	stateVSCSynchronizeReplication = "synchronizing replication"
-	stateVSCCopy    = "copying the data"
-	stateVSCCleanUp = "cleaning up"
+	stateVSCInit        = "initializing"
+	stateVSCFindTargets = "finding target instances"
+	stateVSCCopy        = "copying the data"
+	stateVSCCleanUp     = "cleaning up"
 )
 
 // VerticalSplitCloneWorker will clone the data from a source keyspace/shard
@@ -52,15 +51,15 @@ type VerticalSplitCloneWorker struct {
 
 	// populated during stateVSCInit, read-only after that
 	destinationKeyspaceInfo *topo.KeyspaceInfo
+	sourceKeyspace          string
 
 	// populated during stateVSCFindTargets, read-only after that
-	//	sourceAlias      topo.TabletAlias
-	//	destinationAlias topo.TabletAlias
+	sourceAlias        topo.TabletAlias
+	destinationAliases []topo.TabletAlias
 
 	// populated during stateVSCCopy
-	copyLogs []string
-	//	sourceSchemaDefinition      *myproto.SchemaDefinition
-	//	destinationSchemaDefinition *myproto.SchemaDefinition
+	copyLogs               []string
+	sourceSchemaDefinition *myproto.SchemaDefinition
 }
 
 // NewVerticalSplitCloneWorker returns a new VerticalSplitCloneWorker object.
@@ -169,6 +168,22 @@ func (vscw *VerticalSplitCloneWorker) run() error {
 		return topo.ErrInterrupted
 	}
 
+	// second state: find targets
+	if err := vscw.findTargets(); err != nil {
+		return fmt.Errorf("findTargets() failed: %v", err)
+	}
+	if vscw.CheckInterrupted() {
+		return topo.ErrInterrupted
+	}
+
+	// third state: copy data
+	if err := vscw.copy(); err != nil {
+		return fmt.Errorf("copy() failed: %v", err)
+	}
+	if vscw.CheckInterrupted() {
+		return topo.ErrInterrupted
+	}
+
 	return nil
 }
 
@@ -188,7 +203,7 @@ func (vscw *VerticalSplitCloneWorker) init() error {
 		return fmt.Errorf("destination keyspace %v has no ServedFrom", vscw.destinationKeyspace)
 	}
 
-	// validate all serving types
+	// validate all serving types, find sourceKeyspace
 	servingTypes := []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY}
 	servedFrom := ""
 	for _, st := range servingTypes {
@@ -204,6 +219,53 @@ func (vscw *VerticalSplitCloneWorker) init() error {
 			}
 		}
 	}
+	vscw.sourceKeyspace = servedFrom
+
+	return nil
+}
+
+// findTargets phase:
+// - find one rdonly in the source shard
+// - mark it as 'checker' pointing back to us
+// - get the aliases of all the targets
+func (vscw *VerticalSplitCloneWorker) findTargets() error {
+	vscw.setState(stateVSCFindTargets)
+
+	// find an appropriate endpoint in the source shard
+	var err error
+	vscw.sourceAlias, err = findChecker(vscw.wr, vscw.cleaner, vscw.cell, vscw.sourceKeyspace, "0")
+	if err != nil {
+		return fmt.Errorf("cannot find checker for %v/%v/0: %v", vscw.cell, vscw.sourceKeyspace, err)
+	}
+	log.Infof("Using tablet %v as the source", vscw.sourceAlias)
+
+	// find all the targets in the destination keyspace / shard
+	vscw.destinationAliases, err = topo.FindAllTabletAliasesInShard(vscw.wr.TopoServer(), vscw.destinationKeyspace, vscw.destinationShard)
+	if err != nil {
+		return fmt.Errorf("cannot find all target tablets in %v/%v: %v", vscw.destinationKeyspace, vscw.destinationShard, err)
+	}
+	log.Infof("Found %v target aliases", len(vscw.destinationAliases))
+
+	return nil
+}
+
+// copy phase:
+// - get schema on the source, filter tables
+// - create tables on all destinations
+// - copy the data
+func (vscw *VerticalSplitCloneWorker) copy() error {
+	vscw.setState(stateVSCCopy)
+
+	// get source schema
+	var err error
+	vscw.sourceSchemaDefinition, err = vscw.wr.GetSchema(vscw.sourceAlias, vscw.tables, nil, true)
+	if err != nil {
+		return fmt.Errorf("cannot get schema from source %v: %v", vscw.sourceAlias, err)
+	}
+	if len(vscw.sourceSchemaDefinition.TableDefinitions) == 0 {
+		return fmt.Errorf("no tables matching the table filter")
+	}
+	log.Infof("Source tablet has %v tables to copy", len(vscw.sourceSchemaDefinition.TableDefinitions))
 
 	return nil
 }
