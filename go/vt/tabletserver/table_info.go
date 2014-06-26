@@ -12,6 +12,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/schema"
 )
 
@@ -22,13 +23,13 @@ type TableInfo struct {
 	hits, absent, misses, invalidations sync2.AtomicInt64
 }
 
-func NewTableInfo(conn PoolConnection, tableName string, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) (ti *TableInfo) {
+func NewTableInfo(conn dbconnpool.PoolConnection, tableName string, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) (ti *TableInfo) {
 	ti = loadTableInfo(conn, tableName)
 	ti.initRowCache(conn, tableType, createTime, comment, cachePool)
 	return ti
 }
 
-func loadTableInfo(conn PoolConnection, tableName string) (ti *TableInfo) {
+func loadTableInfo(conn dbconnpool.PoolConnection, tableName string) (ti *TableInfo) {
 	ti = &TableInfo{Table: schema.NewTable(tableName)}
 	if !ti.fetchColumns(conn) {
 		return nil
@@ -39,7 +40,7 @@ func loadTableInfo(conn PoolConnection, tableName string) (ti *TableInfo) {
 	return ti
 }
 
-func (ti *TableInfo) fetchColumns(conn PoolConnection) bool {
+func (ti *TableInfo) fetchColumns(conn dbconnpool.PoolConnection) bool {
 	columns, err := conn.ExecuteFetch(fmt.Sprintf("describe %s", ti.Name), 10000, false)
 	if err != nil {
 		log.Warningf("%s", err.Error())
@@ -75,7 +76,7 @@ func (ti *TableInfo) SetPK(colnames []string) error {
 	return nil
 }
 
-func (ti *TableInfo) fetchIndexes(conn PoolConnection) bool {
+func (ti *TableInfo) fetchIndexes(conn dbconnpool.PoolConnection) bool {
 	indexes, err := conn.ExecuteFetch(fmt.Sprintf("show index from %s", ti.Name), 10000, false)
 	if err != nil {
 		log.Warningf("%s", err.Error())
@@ -120,7 +121,7 @@ func (ti *TableInfo) fetchIndexes(conn PoolConnection) bool {
 	return true
 }
 
-func (ti *TableInfo) initRowCache(conn PoolConnection, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) {
+func (ti *TableInfo) initRowCache(conn dbconnpool.PoolConnection, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) {
 	if cachePool.IsClosed() {
 		return
 	}

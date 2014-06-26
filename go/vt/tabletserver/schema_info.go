@@ -20,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/timer"
+	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
@@ -80,7 +81,7 @@ type SchemaInfo struct {
 	queryCacheSize int
 	queries        *cache.LRUCache
 	rules          *QueryRules
-	connPool       *ConnectionPool
+	connPool       *dbconnpool.ConnectionPool
 	cachePool      *CachePool
 	reloadTime     time.Duration
 	lastChange     time.Time
@@ -93,7 +94,7 @@ func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout tim
 		queryCacheSize: queryCacheSize,
 		queries:        cache.NewLRUCache(int64(queryCacheSize)),
 		rules:          NewQueryRules(),
-		connPool:       NewConnectionPool("", 2, idleTimeout),
+		connPool:       dbconnpool.NewConnectionPool("", 2, idleTimeout),
 		reloadTime:     reloadTime,
 		ticks:          timer.NewTimer(reloadTime),
 		sensitiveMode:  sensitiveMode,
@@ -123,12 +124,12 @@ func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout tim
 	return si
 }
 
-func (si *SchemaInfo) Open(connFactory CreateConnectionFunc, schemaOverrides []SchemaOverride, cachePool *CachePool, qrs *QueryRules, strictMode bool) {
+func (si *SchemaInfo) Open(connFactory dbconnpool.CreateConnectionFunc, schemaOverrides []SchemaOverride, cachePool *CachePool, qrs *QueryRules, strictMode bool) {
 	si.connPool.Open(connFactory)
-	conn := si.connPool.Get()
+	conn := getOrPanic(si.connPool)
 	defer conn.Recycle()
 
-	if strictMode && !conn.VerifyStrict() {
+	if strictMode && !conn.(*dbconnpool.PooledDBConnection).VerifyStrict() {
 		panic(NewTabletError(FATAL, "Could not verify strict mode"))
 	}
 
@@ -233,7 +234,7 @@ func (si *SchemaInfo) Close() {
 
 func (si *SchemaInfo) Reload() {
 	defer logError()
-	conn := si.connPool.Get()
+	conn := getOrPanic(si.connPool)
 	defer conn.Recycle()
 	tables, err := conn.ExecuteFetch(fmt.Sprintf("%s and unix_timestamp(create_time) > %v", base_show_tables, si.lastChange.Unix()), maxTableCount, false)
 	if err != nil {
@@ -262,12 +263,12 @@ func (si *SchemaInfo) triggerReload() {
 }
 
 func (si *SchemaInfo) CreateTable(tableName string) {
-	conn := si.connPool.Get()
+	conn := getOrPanic(si.connPool)
 	defer conn.Recycle()
 	si.createTable(conn, tableName)
 }
 
-func (si *SchemaInfo) createTable(conn PoolConnection, tableName string) {
+func (si *SchemaInfo) createTable(conn dbconnpool.PoolConnection, tableName string) {
 	tables, err := conn.ExecuteFetch(fmt.Sprintf("%s and table_name = '%s'", base_show_tables, tableName), 1, false)
 	if err != nil {
 		panic(NewTabletError(FAIL, "Error fetching table %s: %v", tableName, err))
@@ -332,7 +333,7 @@ func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string) (plan *ExecPl
 		if plan.FieldQuery == nil {
 			log.Warningf("Cannot cache field info: %s", sql)
 		} else {
-			conn := si.connPool.Get()
+			conn := getOrPanic(si.connPool)
 			defer conn.Recycle()
 			sql := plan.FieldQuery.Query
 			r, err := conn.ExecuteFetch(sql, 1, true)

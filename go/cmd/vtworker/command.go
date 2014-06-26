@@ -36,6 +36,11 @@ var commands = []commandGroup{
 		"Workers comparing and validating data",
 		[]command{},
 	},
+	commandGroup{
+		"Clones",
+		"Workers copying data for backups and clones",
+		[]command{},
+	},
 }
 
 func init() {

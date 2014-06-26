@@ -18,6 +18,7 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler/events"
 )
 
+// GetSchema uses an RPC to get the schema from a remote tablet
 func (wr *Wrangler) GetSchema(tabletAlias topo.TabletAlias, tables, excludeTables []string, includeViews bool) (*myproto.SchemaDefinition, error) {
 	ti, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
@@ -27,6 +28,7 @@ func (wr *Wrangler) GetSchema(tabletAlias topo.TabletAlias, tables, excludeTable
 	return wr.ai.GetSchema(ti, tables, excludeTables, includeViews, wr.actionTimeout())
 }
 
+// ReloadSchema forces the remote tablet to reload its schema.
 func (wr *Wrangler) ReloadSchema(tabletAlias topo.TabletAlias) error {
 	ti, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
@@ -50,6 +52,7 @@ func (wr *Wrangler) diffSchema(masterSchema *myproto.SchemaDefinition, masterTab
 	myproto.DiffSchema(masterTabletAlias.String(), masterSchema, alias.String(), slaveSchema, er)
 }
 
+// ValidateSchemaShard will diff the schema from all the tablets in the shard.
 func (wr *Wrangler) ValidateSchemaShard(keyspace, shard string, excludeTables []string, includeViews bool) error {
 	si, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
@@ -91,6 +94,8 @@ func (wr *Wrangler) ValidateSchemaShard(keyspace, shard string, excludeTables []
 	return nil
 }
 
+// ValidateSchemaShard will diff the schema from all the tablets in
+// the keyspace.
 func (wr *Wrangler) ValidateSchemaKeyspace(keyspace string, excludeTables []string, includeViews bool) error {
 	// find all the shards
 	shards, err := wr.ts.GetShardNames(keyspace)
@@ -172,6 +177,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(keyspace string, excludeTables []stri
 	return nil
 }
 
+// PreflightSchema will try a schema change on the remote tablet.
 func (wr *Wrangler) PreflightSchema(tabletAlias topo.TabletAlias, change string) (*myproto.SchemaChangeResult, error) {
 	actionPath, err := wr.ai.PreflightSchema(tabletAlias, change)
 	if err != nil {
@@ -185,6 +191,7 @@ func (wr *Wrangler) PreflightSchema(tabletAlias topo.TabletAlias, change string)
 	return result.(*myproto.SchemaChangeResult), nil
 }
 
+// ApplySchema will apply a schema change on the remote tablet.
 func (wr *Wrangler) ApplySchema(tabletAlias topo.TabletAlias, sc *myproto.SchemaChange) (*myproto.SchemaChangeResult, error) {
 	actionPath, err := wr.ai.ApplySchema(tabletAlias, sc)
 

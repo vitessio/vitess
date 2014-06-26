@@ -35,7 +35,7 @@ const verticalSplitDiffHTML = `
 </body>
 `
 
-var verticalSplitDiffTemplate = loadTemplate("verticalSplitdiff", verticalSplitDiffHTML)
+var verticalSplitDiffTemplate = loadTemplate("verticalSplitDiff", verticalSplitDiffHTML)
 
 func commandVerticalSplitDiff(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) worker.Worker {
 	subFlags.Parse(args)
@@ -119,16 +119,17 @@ func interactiveVerticalSplitDiff(wr *wrangler.Wrangler, w http.ResponseWriter, 
 		}
 
 		executeTemplate(w, verticalSplitDiffTemplate, result)
-	} else {
-		// start the diff job
-		wrk := worker.NewVerticalSplitDiffWorker(wr, *cell, keyspace, shard)
-		if _, err := setAndStartWorker(wrk); err != nil {
-			httpError(w, "cannot set worker: %s", err)
-			return
-		}
-
-		http.Redirect(w, r, servenv.StatusURLPath(), http.StatusTemporaryRedirect)
+		return
 	}
+
+	// start the diff job
+	wrk := worker.NewVerticalSplitDiffWorker(wr, *cell, keyspace, shard)
+	if _, err := setAndStartWorker(wrk); err != nil {
+		httpError(w, "cannot set worker: %s", err)
+		return
+	}
+
+	http.Redirect(w, r, servenv.StatusURLPath(), http.StatusTemporaryRedirect)
 }
 
 func init() {
