@@ -186,13 +186,8 @@ func (node *Node) Format(buf *TrackedBuffer) {
 // anonymizes all values in the SQL.
 func AnonymizedFormatter(buf *TrackedBuffer, node SQLNode) {
 	switch node := node.(type) {
-	case *Node:
-		switch node.Type {
-		case STRING, NUMBER:
-			buf.Fprintf("?")
-		default:
-			node.Format(buf)
-		}
+	case StringValue, NumValue:
+		buf.Fprintf("?")
 	default:
 		node.Format(buf)
 	}
@@ -239,6 +234,15 @@ func (buf *TrackedBuffer) Fprintf(format string, values ...interface{}) {
 		}
 		i++ // '%'
 		switch format[i] {
+		case 'c':
+			switch v := values[fieldnum].(type) {
+			case byte:
+				buf.WriteByte(v)
+			case rune:
+				buf.WriteRune(v)
+			default:
+				panic(fmt.Sprintf("unexpected type %T", v))
+			}
 		case 's':
 			switch v := values[fieldnum].(type) {
 			case []byte:

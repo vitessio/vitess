@@ -389,7 +389,7 @@ func execAnalyzeInsert(ins *Insert, getTable TableGetter) (plan *ExecPlan) {
 		PlanId:    PLAN_PASS_DML,
 		FullQuery: GenerateFullQuery(ins),
 	}
-	tableName := ins.Table.collectTableName()
+	tableName := collectTableName(ins.Table)
 	if tableName == "" {
 		plan.Reason = REASON_TABLE
 		return plan
@@ -443,7 +443,7 @@ func execAnalyzeUpdate(upd *Update, getTable TableGetter) (plan *ExecPlan) {
 		FullQuery: GenerateFullQuery(upd),
 	}
 
-	tableName := upd.Table.collectTableName()
+	tableName := collectTableName(upd.Table)
 	if tableName == "" {
 		plan.Reason = REASON_TABLE
 		return plan
@@ -489,7 +489,7 @@ func execAnalyzeDelete(del *Delete, getTable TableGetter) (plan *ExecPlan) {
 		FullQuery: GenerateFullQuery(del),
 	}
 
-	tableName := del.Table.collectTableName()
+	tableName := collectTableName(del.Table)
 	if tableName == "" {
 		plan.Reason = REASON_TABLE
 		return plan
@@ -528,18 +528,19 @@ func execAnalyzeSet(set *Set) (plan *ExecPlan) {
 		FullQuery: GenerateFullQuery(set),
 	}
 	if set.Updates.Len() > 1 { // Multiple set values
-		return
+		return plan
 	}
-	update_expression := set.Updates.NodeAt(0)              // '='
-	plan.SetKey = string(update_expression.NodeAt(0).Value) // ID
-	expression := update_expression.NodeAt(1)
-	valstr := string(expression.Value)
-	if expression.Type == NUMBER {
-		if ival, err := strconv.ParseInt(valstr, 0, 64); err == nil {
-			plan.SetValue = ival
-		} else if fval, err := strconv.ParseFloat(valstr, 64); err == nil {
-			plan.SetValue = fval
-		}
+	update_expression := set.Updates.NodeAt(0) // '='
+	plan.SetKey = string(update_expression.At(0).(*ColName).Name)
+	numExpr, ok := update_expression.At(1).(NumValue)
+	if !ok {
+		return plan
+	}
+	val := string(numExpr)
+	if ival, err := strconv.ParseInt(val, 0, 64); err == nil {
+		plan.SetValue = ival
+	} else if fval, err := strconv.ParseFloat(val, 64); err == nil {
+		plan.SetValue = fval
 	}
 	return plan
 }
@@ -601,21 +602,16 @@ func execAnalyzeSelectExpr(expr SelectExpr) string {
 		switch node := expr.Expr.(type) {
 		case BoolExpr:
 			return ""
-		case *Node:
+		case ValExpr:
 			return execGetColumnName(node)
 		}
 	}
 	panic("unreachable")
 }
 
-func execGetColumnName(node *Node) string {
-	switch node.Type {
-	case ID:
-		return string(node.Value)
-	case '.':
-		if node.NodeAt(1).Type == ID {
-			return string(node.NodeAt(1).Value)
-		}
+func execGetColumnName(node Expr) string {
+	if n, ok := node.(*ColName); ok {
+		return string(n.Name)
 	}
 	return ""
 }
@@ -631,12 +627,12 @@ func execAnalyzeFrom(tableExprs TableExprs) (tablename string, hasHints bool) {
 	if !ok {
 		return "", false
 	}
-	return node.Expr.collectTableName(), node.Hint != nil
+	return collectTableName(node.Expr), node.Hint != nil
 }
 
-func (node *Node) collectTableName() string {
-	if node.Type == ID {
-		return string(node.Value)
+func collectTableName(node SQLNode) string {
+	if n, ok := node.(*TableName); ok && n.Qualifier == nil {
+		return string(n.Name)
 	}
 	// sub-select or '.' expression
 	return ""
@@ -711,34 +707,31 @@ func stringIn(str string, values ...string) bool {
 	return false
 }
 
-func execAnalyzeSimpleINList(node *Node) *Node {
-	list, ok := node.At(0).(*Node) // '('->NODE_LIST
+func execAnalyzeSimpleINList(expr ValExpr) ValExpr {
+	list, ok := expr.(ValueTuple)
 	if !ok {
 		// It's a subquery.
 		return nil
 	}
-	for i := 0; i < list.Len(); i++ {
-		if n := execAnalyzeValue(list.NodeAt(i)); n == nil {
+	for _, n := range list {
+		if execAnalyzeValue(n) == nil {
 			return nil
 		}
 	}
-	return node
+	return expr
 }
 
-func execAnalyzeID(node *Node) *Node {
-	switch node.Type {
-	case ID:
-		return node
-	case '.':
-		return execAnalyzeID(node.NodeAt(1))
+func execAnalyzeID(expr ValExpr) ValExpr {
+	if _, ok := expr.(*ColName); ok {
+		return expr
 	}
 	return nil
 }
 
-func execAnalyzeValue(node *Node) *Node {
-	switch node.Type {
-	case STRING, NUMBER, VALUE_ARG:
-		return node
+func execAnalyzeValue(expr ValExpr) ValExpr {
+	switch expr.(type) {
+	case StringValue, NumValue, ValueArg:
+		return expr
 	}
 	return nil
 }
@@ -757,12 +750,12 @@ func hasINClause(conditions []BoolExpr) bool {
 
 func (node *Node) execAnalyzeUpdateExpressions(pkIndex *schema.Index) (pkValues []interface{}, ok bool) {
 	for i := 0; i < node.Len(); i++ {
-		columnName := string(execGetColumnName(node.NodeAt(i).NodeAt(0)))
+		columnName := string(execGetColumnName(node.NodeAt(i).At(0).(*ColName)))
 		index := pkIndex.FindColumn(columnName)
 		if index == -1 {
 			continue
 		}
-		value := execAnalyzeValue(node.NodeAt(i).NodeAt(1))
+		value := execAnalyzeValue(node.NodeAt(i).At(1).(ValExpr))
 		if value == nil {
 			log.Warningf("expression is too complex %v", node.NodeAt(i).At(0))
 			return nil, false
@@ -788,7 +781,7 @@ func getInsertPKColumns(columns Columns, tableInfo *schema.Table) (pkColumnNumbe
 		pkColumnNumbers[i] = -1
 	}
 	for i, column := range columns {
-		index := pkIndex.FindColumn(string(execGetColumnName(column.(*NonStarExpr).Expr.(*Node))))
+		index := pkIndex.FindColumn(string(execGetColumnName(column.(*NonStarExpr).Expr)))
 		if index == -1 {
 			continue
 		}
@@ -806,13 +799,14 @@ func getInsertPKValues(pkColumnNumbers []int, rowList *Node, tableInfo *schema.T
 		}
 		values := make([]interface{}, rowList.Len())
 		for j := 0; j < rowList.Len(); j++ {
-			if _, ok := rowList.NodeAt(j).At(0).(*Select); ok {
+			if _, ok := rowList.At(j).(*Subquery); ok {
 				panic(NewParserError("row subquery not supported for inserts"))
 			}
-			if columnNumber >= rowList.NodeAt(j).NodeAt(0).Len() { // NODE_LIST->'('->NODE_LIST
+			row := rowList.At(j).(ValueTuple)
+			if columnNumber >= len(row) {
 				panic(NewParserError("column count doesn't match value count"))
 			}
-			node := rowList.NodeAt(j).NodeAt(0).NodeAt(columnNumber) // NODE_LIST->'('->NODE_LIST->Value
+			node := row[columnNumber]
 			value := execAnalyzeValue(node)
 			if value == nil {
 				log.Warningf("insert is too complex %v", node)
@@ -917,7 +911,7 @@ func getPKValues(conditions []BoolExpr, pkIndex *schema.Index) (pkValues []inter
 		if !stringIn(condition.Operator, "=", "in") {
 			return nil
 		}
-		index := pkIndexScore.FindMatch(string(condition.Left.Value))
+		index := pkIndexScore.FindMatch(string(condition.Left.(*ColName).Name))
 		if index == -1 {
 			return nil
 		}
@@ -925,7 +919,7 @@ func getPKValues(conditions []BoolExpr, pkIndex *schema.Index) (pkValues []inter
 		case "=":
 			pkValues[index] = asInterface(condition.Right)
 		case "in":
-			pkValues[index] = condition.Right.NodeAt(0).parseList()
+			pkValues[index] = parseList(condition.Right.(ValueTuple))
 		default:
 			panic("unreachable")
 		}
@@ -936,10 +930,10 @@ func getPKValues(conditions []BoolExpr, pkIndex *schema.Index) (pkValues []inter
 	return nil
 }
 
-func (node *Node) parseList() (values interface{}) {
-	vals := make([]interface{}, node.Len())
-	for i := 0; i < node.Len(); i++ {
-		vals[i] = asInterface(node.NodeAt(i))
+func parseList(values ValueTuple) interface{} {
+	vals := make([]interface{}, 0, len(values))
+	for _, val := range values {
+		vals = append(vals, asInterface(val))
 	}
 	return vals
 }
@@ -950,9 +944,9 @@ func getIndexMatch(conditions []BoolExpr, indexes []*schema.Index) string {
 		var col string
 		switch condition := condition.(type) {
 		case *ComparisonExpr:
-			col = string(condition.Left.Value)
+			col = string(condition.Left.(*ColName).Name)
 		case *RangeCond:
-			col = string(condition.Left.Value)
+			col = string(condition.Left.(*ColName).Name)
 		default:
 			panic("unreachaable")
 		}
@@ -1167,18 +1161,18 @@ func writeColumnList(buf *TrackedBuffer, columns []schema.TableColumn) {
 	fmt.Fprintf(buf, "%s", columns[i].Name)
 }
 
-func asInterface(node *Node) interface{} {
-	switch node.Type {
-	case VALUE_ARG:
-		return string(node.Value)
-	case STRING:
-		return sqltypes.MakeString(node.Value)
-	case NUMBER:
-		n, err := sqltypes.BuildNumeric(string(node.Value))
+func asInterface(expr ValExpr) interface{} {
+	switch node := expr.(type) {
+	case ValueArg:
+		return string(node)
+	case StringValue:
+		return sqltypes.MakeString(node)
+	case NumValue:
+		n, err := sqltypes.BuildNumeric(string(node))
 		if err != nil {
 			panic(NewParserError("type mismatch: %s", err))
 		}
 		return n
 	}
-	panic(NewParserError("unexpected node %v", node))
+	panic(NewParserError("unexpected node %v", expr))
 }

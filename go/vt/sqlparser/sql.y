@@ -33,17 +33,23 @@ var (
   node        *Node
   statement   Statement
   comments    Comments
+  byt         byte
   bytes       []byte
   str         string
   distinct    Distinct
   selectExprs SelectExprs
   selectExpr  SelectExpr
   columns     Columns
+  colName     *ColName
   tableExprs  TableExprs
   tableExpr   TableExpr
+  tableName   *TableName
   where       *Where
   expr        Expr
   boolExpr    BoolExpr
+  valExpr     ValExpr
+  valExprs    ValExprs
+  subquery    *Subquery
   sqlNode     SQLNode
 }
 
@@ -91,14 +97,20 @@ var (
 %type <tableExprs> table_expression_list
 %type <tableExpr> table_expression
 %type <str> join_type
-%type <node> simple_table_expression dml_table_expression index_hint_list
+%type <sqlNode> simple_table_expression
+%type <tableName> dml_table_expression
+%type <node> index_hint_list
 %type <where> where_expression_opt
 %type <boolExpr> boolean_expression condition
 %type <str> compare
 %type <sqlNode> values
-%type <node> tuple_list tuple value_expression_list keyword_as_func
-%type <node> value_expression
-%type <node> unary_operator case_expression when_expression_list when_expression column_name value
+%type <valExpr> value tuple value_expression
+%type <valExprs> value_expression_list
+%type <node> tuple_list keyword_as_func
+%type <subquery> subquery
+%type <byt> unary_operator
+%type <colName> column_name
+%type <node> case_expression when_expression_list when_expression
 %type <node> group_by_opt having_opt order_by_opt order_list order asc_desc_opt limit_opt lock_opt on_dup_opt
 %type <columns> column_list_opt column_list
 %type <node> index_list update_list update_expression
@@ -388,20 +400,26 @@ join_type:
 
 simple_table_expression:
 ID
+  {
+    $$ = &TableName{Name: $1.Value}
+  }
 | ID '.' ID
   {
-    $$ = $2.PushTwo($1, $3)
+    $$ = &TableName{Qualifier: $1.Value, Name: $3.Value}
   }
-| '(' select_statement ')'
+| subquery
   {
-    $$ = $1.Push($2)
+    $$ = $1
   }
 
 dml_table_expression:
 ID
+  {
+    $$ = &TableName{Name: $1.Value}
+  }
 | ID '.' ID
   {
-    $$ = $2.PushTwo($1, $3)
+    $$ = &TableName{Qualifier: $1.Value, Name: $3.Value}
   }
 
 index_hint_list:
@@ -482,9 +500,9 @@ condition:
   {
     $$ = &NullCheck{Operator: "is not null", Expr: $1}
   }
-| EXISTS '(' select_statement ')'
+| EXISTS subquery
   {
-    $$ = &ExistsExpr{Expr: $2.Push($3)}
+    $$ = &ExistsExpr{Subquery: $2}
   }
 
 compare:
@@ -541,98 +559,110 @@ tuple_list:
 tuple:
   '(' value_expression_list ')'
   {
-    $$ = $1.Push($2)
+    $$ = ValueTuple($2)
   }
-| '(' select_statement ')'
+| subquery
   {
-    $$ = $1.Push($2)
+    $$ = $1
+  }
+
+subquery:
+  '(' select_statement ')'
+  {
+    $$ = &Subquery{$2.(SelectStatement)}
   }
 
 value_expression_list:
   value_expression
   {
-    $$ = NewSimpleParseNode(NODE_LIST, "node_list")
-    $$.Push($1)
+    $$ = ValExprs{$1}
   }
 | value_expression_list ',' value_expression
   {
-    $$.Push($3)
+    $$ = append($1, $3)
   }
 
 value_expression:
   value
+  {
+    $$ = $1
+  }
 | column_name
+  {
+    $$ = $1
+  }
 | tuple
+  {
+    $$ = $1
+  }
 | value_expression '&' value_expression
   {
-    $$ = $2.PushTwo($1, $3)
+    $$ = &BinaryExpr{Left: $1, Operator: '&', Right: $3}
   }
 | value_expression '|' value_expression
   {
-    $$ = $2.PushTwo($1, $3)
+    $$ = &BinaryExpr{Left: $1, Operator: '|', Right: $3}
   }
 | value_expression '^' value_expression
   {
-    $$ = $2.PushTwo($1, $3)
+    $$ = &BinaryExpr{Left: $1, Operator: '^', Right: $3}
   }
 | value_expression '+' value_expression
   {
-    $$ = $2.PushTwo($1, $3)
+    $$ = &BinaryExpr{Left: $1, Operator: '+', Right: $3}
   }
 | value_expression '-' value_expression
   {
-    $$ = $2.PushTwo($1, $3)
+    $$ = &BinaryExpr{Left: $1, Operator: '-', Right: $3}
   }
 | value_expression '*' value_expression
   {
-    $$ = $2.PushTwo($1, $3)
+    $$ = &BinaryExpr{Left: $1, Operator: '*', Right: $3}
   }
 | value_expression '/' value_expression
   {
-    $$ = $2.PushTwo($1, $3)
+    $$ = &BinaryExpr{Left: $1, Operator: '/', Right: $3}
   }
 | value_expression '%' value_expression
   {
-    $$ = $2.PushTwo($1, $3)
+    $$ = &BinaryExpr{Left: $1, Operator: '%', Right: $3}
   }
 | unary_operator value_expression %prec UNARY
   {
-    if $2.Type == NUMBER { // Simplify trivial unary expressions
-      switch $1.Type {
-      case UMINUS:
-        $2.Value = append($1.Value, $2.Value...)
-        $$ = $2
-      case UPLUS:
-        $$ = $2
+    if num, ok := $2.(NumValue); ok {
+      switch $1 {
+      case '-':
+        $$ = append(NumValue("-"), num...)
+      case '+':
+        $$ = num
       default:
-        $$ = $1.Push($2)
+        $$ = &UnaryExpr{Operator: $1, Expr: $2}
       }
     } else {
-      $$ = $1.Push($2)
+      $$ = &UnaryExpr{Operator: $1, Expr: $2}
     }
   }
 | sql_id '(' ')'
   {
-    $1.Type = FUNCTION
-    $$ = $1.Push(NewSimpleParseNode(NODE_LIST, "node_list"))
+    $$ = &FuncExpr{Name: $1.Value}
   }
 | sql_id '(' select_expression_list ')'
   {
-    $1.Type = FUNCTION
-    $$ = $1.Push($3)
+    $$ = &FuncExpr{Name: $1.Value, Exprs: $3}
   }
 | sql_id '(' DISTINCT select_expression_list ')'
   {
-    $1.Type = FUNCTION
-    $1.Push($3)
-    $$ = $1.Push($4)
+    $$ = &FuncExpr{Name: $1.Value, Distinct: true, Exprs: $4}
   }
 | keyword_as_func '(' select_expression_list ')'
   {
-    $1.Type = FUNCTION
-    $$ = $1.Push($3)
+    $$ = &FuncExpr{Name: $1.Value, Exprs: $3}
   }
 | case_expression
+  {
+    c := CaseExpr(*$1)
+    $$ = &c
+  }
 
 keyword_as_func:
   IF
@@ -641,13 +671,16 @@ keyword_as_func:
 unary_operator:
   '+'
   {
-    $$ = NewSimpleParseNode(UPLUS, "+")
+    $$ = '+'
   }
 | '-'
   {
-    $$ = NewSimpleParseNode(UMINUS, "-")
+    $$ = '-'
   }
 | '~'
+  {
+    $$ = '~'
+  }
 
 case_expression:
   CASE when_expression_list END
@@ -683,16 +716,31 @@ when_expression:
 
 column_name:
   sql_id
+  {
+    $$ = &ColName{Name: $1.Value}
+  }
 | ID '.' sql_id
   {
-    $$ = $2.PushTwo($1, $3)
+    $$ = &ColName{Qualifier: $1.Value, Name: $3.Value}
   }
 
 value:
   STRING
+  {
+    $$ = StringValue($1.Value)
+  }
 | NUMBER
+  {
+    $$ = NumValue($1.Value)
+  }
 | VALUE_ARG
+  {
+    $$ = ValueArg($1.Value)
+  }
 | NULL
+  {
+    $$ = &NullValue{}
+  }
 
 group_by_opt:
   {
@@ -830,7 +878,7 @@ update_list:
   }
 
 update_expression:
-  column_name '=' expression
+  column_name '=' value_expression
   {
     $$ = $2.PushTwo($1, $3)
   }

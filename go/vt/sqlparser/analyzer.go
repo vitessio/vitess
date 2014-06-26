@@ -21,18 +21,11 @@ func GetDBName(sql string) (string, error) {
 	}
 	switch stmt := statement.(type) {
 	case *Insert:
-		return extractDBName(stmt.Table), nil
+		return string(stmt.Table.Qualifier), nil
 	case *Update:
-		return extractDBName(stmt.Table), nil
+		return string(stmt.Table.Qualifier), nil
 	case *Delete:
-		return extractDBName(stmt.Table), nil
+		return string(stmt.Table.Qualifier), nil
 	}
 	return "", fmt.Errorf("statement '%s' is not a dml", sql)
-}
-
-func extractDBName(node *Node) string {
-	if node.Type != '.' {
-		return ""
-	}
-	return string(node.NodeAt(0).Value)
 }
