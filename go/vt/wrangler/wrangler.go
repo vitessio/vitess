@@ -49,7 +49,7 @@ type Wrangler struct {
 //
 // lockTimeout: how long should we wait for the initial lock to start
 // a complex action?  This is distinct from actionTimeout because most
-// of the time, we want to immediately know that out action will
+// of the time, we want to immediately know that our action will
 // fail. However, automated action will need some time to arbitrate
 // the locks.
 func New(ts topo.Server, actionTimeout, lockTimeout time.Duration) *Wrangler {

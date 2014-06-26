@@ -163,7 +163,8 @@ func TestQueryShard(t *testing.T) {
 func TestQueryResult(t *testing.T) {
 	// We can't do the reflection test because bson
 	// doesn't do it correctly for embedded fields.
-	want := "o\x01\x00\x00" +
+	want := "|\x01\x00\x00" +
+		"\x03Result\x00\x85\x00\x00\x00" +
 		"\x04Fields\x00*\x00\x00\x00" +
 		"\x030\x00\"\x00\x00\x00" +
 		"\x05Name\x00\x04\x00\x00\x00\x00name" +
@@ -174,7 +175,7 @@ func TestQueryResult(t *testing.T) {
 		"\x040\x00\x18\x00\x00\x00" +
 		"\x050\x00\x01\x00\x00\x00" +
 		"\x001\x051\x00\x02\x00\x00\x00\x00aa" +
-		"\x00\x00" +
+		"\x00\x00\x00" +
 		"\x03Session\x00\xd0\x00\x00\x00" +
 		"\bInTransaction\x00\x01" +
 		"\x04ShardSessions\x00\xac\x00\x00\x00" +
@@ -194,11 +195,13 @@ func TestQueryResult(t *testing.T) {
 		"\x00"
 
 	custom := QueryResult{
-		Fields:       []mproto.Field{{"name", 1}},
-		RowsAffected: 2,
-		InsertId:     3,
-		Rows: [][]sqltypes.Value{
-			{{sqltypes.String("1")}, {sqltypes.String("aa")}},
+		Result: &mproto.QueryResult{
+			Fields:       []mproto.Field{{"name", 1}},
+			RowsAffected: 2,
+			InsertId:     3,
+			Rows: [][]sqltypes.Value{
+				{{sqltypes.String("1")}, {sqltypes.String("aa")}},
+			},
 		},
 		Session: &commonSession,
 		Error:   "error",

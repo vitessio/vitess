@@ -15,6 +15,7 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/wrangler/events"
 )
 
 // GetSchema uses an RPC to get the schema from a remote tablet
@@ -399,7 +400,17 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 			return nil, err
 		}
 
-		err = wr.reparentShardGraceful(shardInfo, slaveTabletMap, masterTabletMap, newMasterTablet /*leaveMasterReadOnly*/, false)
+		// Create reusable Reparent event with available info
+		ev := &events.Reparent{
+			ShardInfo: *shardInfo,
+			NewMaster: *newMasterTablet.Tablet,
+		}
+
+		if oldMasterTablet, ok := tabletMap[shardInfo.MasterAlias]; ok {
+			ev.OldMaster = *oldMasterTablet.Tablet
+		}
+
+		err = wr.reparentShardGraceful(ev, shardInfo, slaveTabletMap, masterTabletMap, newMasterTablet /*leaveMasterReadOnly*/, false)
 		if err != nil {
 			return nil, err
 		}

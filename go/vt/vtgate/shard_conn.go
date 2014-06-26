@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -73,63 +72,64 @@ func (e *ShardConnError) Error() string {
 // Execute executes a non-streaming query on vttablet. If there are connection errors,
 // it retries retryCount times before failing. It does not retry if the connection is in
 // the middle of a transaction.
-func (sdc *ShardConn) Execute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (qr *mproto.QueryResult, err error) {
+func (sdc *ShardConn) Execute(context interface{}, query string, bindVars map[string]interface{}, transactionID int64) (qr interface{}, err error) {
 	err = sdc.withRetry(context, func(conn tabletconn.TabletConn) error {
 		var innerErr error
-		qr, innerErr = conn.Execute(context, query, bindVars, transactionId)
+		qr, innerErr = conn.Execute(context, query, bindVars, transactionID)
 		return innerErr
-	}, transactionId, false)
+	}, transactionID, false)
 	return qr, err
 }
 
 // ExecuteBatch executes a group of queries. The retry rules are the same as Execute.
-func (sdc *ShardConn) ExecuteBatch(context interface{}, queries []tproto.BoundQuery, transactionId int64) (qrs *tproto.QueryResultList, err error) {
+func (sdc *ShardConn) ExecuteBatch(context interface{}, queries []tproto.BoundQuery, transactionID int64) (qrs interface{}, err error) {
 	err = sdc.withRetry(context, func(conn tabletconn.TabletConn) error {
 		var innerErr error
-		qrs, innerErr = conn.ExecuteBatch(context, queries, transactionId)
+		qrs, innerErr = conn.ExecuteBatch(context, queries, transactionID)
 		return innerErr
-	}, transactionId, false)
+	}, transactionID, false)
 	return qrs, err
 }
 
 // StreamExecute executes a streaming query on vttablet. The retry rules are the same as Execute.
-func (sdc *ShardConn) StreamExecute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (results <-chan *mproto.QueryResult, errFunc tabletconn.ErrFunc) {
+func (sdc *ShardConn) StreamExecute(context interface{}, query string, bindVars map[string]interface{}, transactionID int64) (<-chan interface{}, tabletconn.ErrFunc) {
 	var usedConn tabletconn.TabletConn
 	var erFunc tabletconn.ErrFunc
+	var results <-chan interface{}
 	err := sdc.withRetry(context, func(conn tabletconn.TabletConn) error {
-		results, erFunc = conn.StreamExecute(context, query, bindVars, transactionId)
+		results, erFunc = conn.StreamExecute(context, query, bindVars, transactionID)
 		usedConn = conn
 		return erFunc()
-	}, transactionId, true)
+	}, transactionID, true)
 	if err != nil {
 		return results, func() error { return err }
 	}
-	inTransaction := (transactionId != 0)
+	inTransaction := (transactionID != 0)
 	return results, func() error { return sdc.WrapError(erFunc(), usedConn, inTransaction) }
 }
 
 // Begin begins a transaction. The retry rules are the same as Execute.
-func (sdc *ShardConn) Begin(context interface{}) (transactionId int64, err error) {
+func (sdc *ShardConn) Begin(context interface{}) (transactionID int64, err error) {
 	err = sdc.withRetry(context, func(conn tabletconn.TabletConn) error {
 		var innerErr error
-		transactionId, innerErr = conn.Begin(context)
+		transactionID, innerErr = conn.Begin(context)
 		return innerErr
 	}, 0, false)
-	return transactionId, err
+	return transactionID, err
 }
 
 // Commit commits the current transaction. The retry rules are the same as Execute.
-func (sdc *ShardConn) Commit(context interface{}, transactionId int64) (err error) {
+func (sdc *ShardConn) Commit(context interface{}, transactionID int64) (err error) {
 	return sdc.withRetry(context, func(conn tabletconn.TabletConn) error {
-		return conn.Commit(context, transactionId)
-	}, transactionId, false)
+		return conn.Commit(context, transactionID)
+	}, transactionID, false)
 }
 
 // Rollback rolls back the current transaction. The retry rules are the same as Execute.
-func (sdc *ShardConn) Rollback(context interface{}, transactionId int64) (err error) {
+func (sdc *ShardConn) Rollback(context interface{}, transactionID int64) (err error) {
 	return sdc.withRetry(context, func(conn tabletconn.TabletConn) error {
-		return conn.Rollback(context, transactionId)
-	}, transactionId, false)
+		return conn.Rollback(context, transactionID)
+	}, transactionID, false)
 }
 
 // Close closes the underlying TabletConn. ShardConn can be
@@ -149,11 +149,11 @@ func (sdc *ShardConn) Close() {
 // the middle of a transaction. While returning the error check if it maybe a result of
 // a resharding event, and set the re-resolve bit and let the upper layers
 // re-resolve and retry.
-func (sdc *ShardConn) withRetry(context interface{}, action func(conn tabletconn.TabletConn) error, transactionId int64, isStreaming bool) error {
+func (sdc *ShardConn) withRetry(context interface{}, action func(conn tabletconn.TabletConn) error, transactionID int64, isStreaming bool) error {
 	var conn tabletconn.TabletConn
 	var err error
 	var retry bool
-	inTransaction := (transactionId != 0)
+	inTransaction := (transactionID != 0)
 	// execute the action at least once even without retrying
 	for i := 0; i < sdc.retryCount+1; i++ {
 		conn, err, retry = sdc.getConn(context)
@@ -181,7 +181,7 @@ func (sdc *ShardConn) withRetry(context interface{}, action func(conn tabletconn
 				err = errAction
 			}
 		}
-		if sdc.canRetry(err, transactionId, conn) {
+		if sdc.canRetry(err, transactionID, conn) {
 			continue
 		}
 		return sdc.WrapError(err, conn, inTransaction)
@@ -215,7 +215,7 @@ func (sdc *ShardConn) getConn(context interface{}) (conn tabletconn.TabletConn, 
 // canRetry determines whether a query can be retried or not.
 // OperationalErrors like retry/fatal cause a reconnect and retry if query is not in a txn.
 // TxPoolFull causes a retry and all other errors are non-retry.
-func (sdc *ShardConn) canRetry(err error, transactionId int64, conn tabletconn.TabletConn) bool {
+func (sdc *ShardConn) canRetry(err error, transactionID int64, conn tabletconn.TabletConn) bool {
 	if err == nil {
 		return false
 	}
@@ -233,7 +233,7 @@ func (sdc *ShardConn) canRetry(err error, transactionId int64, conn tabletconn.T
 		}
 	}
 	// Non-server errors or fatal/retry errors. Retry if we're not in a transaction.
-	inTransaction := (transactionId != 0)
+	inTransaction := (transactionID != 0)
 	sdc.markDown(conn)
 	return !inTransaction
 }

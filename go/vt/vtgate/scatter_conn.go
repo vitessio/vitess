@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
@@ -66,7 +65,7 @@ func (stc *ScatterConn) Execute(
 	shards []string,
 	tabletType topo.TabletType,
 	session *SafeSession,
-) (*mproto.QueryResult, error) {
+) (interface{}, error) {
 	results, allErrors := stc.multiGo(
 		context,
 		"Execute",
@@ -82,12 +81,7 @@ func (stc *ScatterConn) Execute(
 			sResults <- innerqr
 			return nil
 		})
-
-	qr := new(mproto.QueryResult)
-	for innerqr := range results {
-		innerqr := innerqr.(*mproto.QueryResult)
-		appendResult(qr, innerqr)
-	}
+	qr := tabletconn.MergeResults(results)
 	if allErrors.HasErrors() {
 		return nil, allErrors.AggrError(stc.aggregateErrors)
 	}
@@ -102,7 +96,7 @@ func (stc *ScatterConn) ExecuteEntityIds(
 	keyspace string,
 	tabletType topo.TabletType,
 	session *SafeSession,
-) (*mproto.QueryResult, error) {
+) (interface{}, error) {
 	results, allErrors := stc.multiGo(
 		context,
 		"ExecuteEntityIds",
@@ -121,11 +115,7 @@ func (stc *ScatterConn) ExecuteEntityIds(
 			sResults <- innerqr
 			return nil
 		})
-	qr := new(mproto.QueryResult)
-	for innerqr := range results {
-		innerqr := innerqr.(*mproto.QueryResult)
-		appendResult(qr, innerqr)
-	}
+	qr := tabletconn.MergeResults(results)
 	if allErrors.HasErrors() {
 		return nil, allErrors.AggrError(stc.aggregateErrors)
 	}
@@ -140,7 +130,7 @@ func (stc *ScatterConn) ExecuteBatch(
 	shards []string,
 	tabletType topo.TabletType,
 	session *SafeSession,
-) (qrs *tproto.QueryResultList, err error) {
+) (qrs interface{}, err error) {
 	results, allErrors := stc.multiGo(
 		context,
 		"ExecuteBatch",
@@ -156,15 +146,7 @@ func (stc *ScatterConn) ExecuteBatch(
 			sResults <- innerqrs
 			return nil
 		})
-
-	qrs = &tproto.QueryResultList{}
-	qrs.List = make([]mproto.QueryResult, len(queries))
-	for innerqr := range results {
-		innerqr := innerqr.(*tproto.QueryResultList)
-		for i := range qrs.List {
-			appendResult(&qrs.List[i], &innerqr.List[i])
-		}
-	}
+	qrs = tabletconn.MergeBatchResults(len(queries), results)
 	if allErrors.HasErrors() {
 		return nil, allErrors.AggrError(stc.aggregateErrors)
 	}
@@ -180,7 +162,7 @@ func (stc *ScatterConn) StreamExecute(
 	shards []string,
 	tabletType topo.TabletType,
 	session *SafeSession,
-	sendReply func(reply *mproto.QueryResult) error,
+	sendReply func(reply interface{}) error,
 ) error {
 	results, allErrors := stc.multiGo(
 		context,
@@ -191,8 +173,10 @@ func (stc *ScatterConn) StreamExecute(
 		session,
 		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
 			sr, errFunc := sdc.StreamExecute(context, query, bindVars, transactionId)
-			for qr := range sr {
-				sResults <- qr
+			if sr != nil {
+				for qr := range sr {
+					sResults <- qr
+				}
 			}
 			return errFunc()
 		})
@@ -202,7 +186,7 @@ func (stc *ScatterConn) StreamExecute(
 		if replyErr != nil {
 			continue
 		}
-		replyErr = sendReply(innerqr.(*mproto.QueryResult))
+		replyErr = sendReply(innerqr)
 	}
 	if replyErr != nil {
 		allErrors.RecordError(replyErr)
@@ -400,20 +384,6 @@ func (stc *ScatterConn) updateSession(
 		TransactionId: transactionId,
 	})
 	return transactionId, nil
-}
-
-func appendResult(qr, innerqr *mproto.QueryResult) {
-	if innerqr.RowsAffected == 0 && len(innerqr.Fields) == 0 {
-		return
-	}
-	if qr.Fields == nil {
-		qr.Fields = innerqr.Fields
-	}
-	qr.RowsAffected += innerqr.RowsAffected
-	if innerqr.InsertId != 0 {
-		qr.InsertId = innerqr.InsertId
-	}
-	qr.Rows = append(qr.Rows, innerqr.Rows...)
 }
 
 func unique(in []string) map[string]struct{} {

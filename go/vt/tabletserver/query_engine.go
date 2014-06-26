@@ -59,6 +59,7 @@ type QueryEngine struct {
 	activePool   *ActivePool
 	consolidator *Consolidator
 	invalidator  *RowcacheInvalidator
+	streamQList  *QueryList
 
 	// Vars
 	spotCheckFreq    sync2.AtomicInt64
@@ -138,6 +139,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 	}
 	qe.maxResultSize = sync2.AtomicInt64(config.MaxResultSize)
 	qe.streamBufferSize = sync2.AtomicInt64(config.StreamBufferSize)
+	qe.streamQList = NewQueryList()
 
 	// Stats
 	stats.Publish("MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
@@ -395,6 +397,9 @@ func (qe *QueryEngine) StreamExecute(logStats *SQLQueryStats, query *proto.Query
 	logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 	defer conn.Recycle()
 
+	qd := NewQueryDetail(query, logStats.context, conn.Id())
+	qe.streamQList.Add(qd)
+	defer qe.streamQList.Remove(qd)
 	// then let's stream!
 	qe.fullStreamFetch(logStats, conn, plan.FullQuery, query.BindVariables, nil, nil, sendReply)
 }

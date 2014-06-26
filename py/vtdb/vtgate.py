@@ -129,6 +129,8 @@ class VtgateConnection(object):
     fields = []
     conversions = []
     results = []
+    rowcount = 0
+    lastrowid = 0
     try:
       response = self.client.call('VTGate.ExecuteShard', req)
       self._update_session(response)
@@ -137,15 +139,17 @@ class VtgateConnection(object):
       if 'Error' in response.reply and response.reply['Error']:
         raise gorpc.AppError(response.reply['Error'], 'VTGate.ExecuteShard')
 
-      for field in reply['Fields']:
-        fields.append((field['Name'], field['Type']))
-        conversions.append(field_types.conversions.get(field['Type']))
+      if 'Result' in reply:
+        res = reply['Result']
+        for field in res['Fields']:
+          fields.append((field['Name'], field['Type']))
+          conversions.append(field_types.conversions.get(field['Type']))
 
-      for row in reply['Rows']:
-        results.append(tuple(_make_row(row, conversions)))
+        for row in res['Rows']:
+          results.append(tuple(_make_row(row, conversions)))
 
-      rowcount = reply['RowsAffected']
-      lastrowid = reply['InsertId']
+        rowcount = res['RowsAffected']
+        lastrowid = res['InsertId']
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self), sql, bind_variables)
     except:
@@ -219,7 +223,7 @@ class VtgateConnection(object):
     try:
       self.client.stream_call('VTGate.StreamExecuteShard', req)
       first_response = self.client.stream_next()
-      reply = first_response.reply
+      reply = first_response.reply['Result']
 
       for field in reply['Fields']:
         self._stream_fields.append((field['Name'], field['Type']))
@@ -256,11 +260,11 @@ class VtgateConnection(object):
         logging.exception('gorpc low-level error')
         raise
 
-    row = tuple(_make_row(self._stream_result.reply['Rows'][self._stream_result_index], self._stream_conversions))
+    row = tuple(_make_row(self._stream_result.reply['Result']['Rows'][self._stream_result_index], self._stream_conversions))
 
     # If we are reading the last row, set us up to read more data.
     self._stream_result_index += 1
-    if self._stream_result_index == len(self._stream_result.reply['Rows']):
+    if self._stream_result_index == len(self._stream_result.reply['Result']['Rows']):
       self._stream_result = None
       self._stream_result_index = 0
 

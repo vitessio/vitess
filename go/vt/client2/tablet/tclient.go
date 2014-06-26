@@ -49,6 +49,7 @@ type Conn struct {
 	tabletConn    tabletconn.TabletConn
 	TransactionId int64
 	timeout       time.Duration
+	converterID   string
 }
 
 type Tx struct {
@@ -57,12 +58,13 @@ type Tx struct {
 
 type StreamResult struct {
 	errFunc tabletconn.ErrFunc
-	sr      <-chan *mproto.QueryResult
+	sr      <-chan interface{}
 	columns *mproto.QueryResult
 	// current result and index on it
-	qr    *mproto.QueryResult
-	index int
-	err   error
+	qr          *mproto.QueryResult
+	index       int
+	err         error
+	converterID string
 }
 
 func (conn *Conn) keyspace() string {
@@ -104,6 +106,10 @@ func (conn *Conn) fmtErr(err error) error {
 }
 
 func (conn *Conn) dial() (err error) {
+	tabletProtocol := tabletconn.GetTabletConnProtocol()
+	if tabletProtocol != "gorpc" {
+		conn.converterID = tabletconn.MakeConverterID(tabletProtocol, "gorpc")
+	}
 	// build the endpoint in the right format
 	host, port, err := netutil.SplitHostPort(conn.dbi.Host)
 	if err != nil {
@@ -130,6 +136,17 @@ func (conn *Conn) Close() error {
 	return nil
 }
 
+func convertQueryResult(converterID string, result interface{}) *mproto.QueryResult {
+	var res *mproto.QueryResult
+	if converterID != "" {
+		res = new(mproto.QueryResult)
+		tabletconn.ConvertQueryResult(converterID, result, res)
+	} else {
+		res = result.(*mproto.QueryResult)
+	}
+	return res
+}
+
 func (conn *Conn) Exec(query string, bindVars map[string]interface{}) (db.Result, error) {
 	if conn.stream {
 		sr, errFunc := conn.tabletConn.StreamExecute(nil, query, bindVars, conn.TransactionId)
@@ -141,14 +158,14 @@ func (conn *Conn) Exec(query string, bindVars map[string]interface{}) (db.Result
 		if !ok {
 			return nil, conn.fmtErr(errFunc())
 		}
-		return &StreamResult{errFunc, sr, cols, nil, 0, nil}, nil
+		return &StreamResult{errFunc, sr, convertQueryResult(conn.converterID, cols), nil, 0, nil, conn.converterID}, nil
 	}
 
 	qr, err := conn.tabletConn.Execute(nil, query, bindVars, conn.TransactionId)
 	if err != nil {
 		return nil, conn.fmtErr(err)
 	}
-	return &Result{qr, 0, nil}, nil
+	return &Result{convertQueryResult(conn.converterID, qr), 0, nil}, nil
 }
 
 func (conn *Conn) Begin() (db.Tx, error) {
@@ -302,7 +319,7 @@ func (sr *StreamResult) Next() (row []interface{}) {
 			}
 			return nil
 		}
-		sr.qr = qr
+		sr.qr = convertQueryResult(sr.converterID, qr)
 		sr.index = 0
 	}
 
