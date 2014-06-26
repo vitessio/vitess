@@ -92,9 +92,10 @@ func (sdc *ShardConn) ExecuteBatch(context interface{}, queries []tproto.BoundQu
 }
 
 // StreamExecute executes a streaming query on vttablet. The retry rules are the same as Execute.
-func (sdc *ShardConn) StreamExecute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (results <-chan interface{}, errFunc tabletconn.ErrFunc) {
+func (sdc *ShardConn) StreamExecute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (<-chan interface{}, tabletconn.ErrFunc) {
 	var usedConn tabletconn.TabletConn
 	var erFunc tabletconn.ErrFunc
+	var results <-chan interface{}
 	err := sdc.withRetry(context, func(conn tabletconn.TabletConn) error {
 		results, erFunc = conn.StreamExecute(context, query, bindVars, transactionId)
 		usedConn = conn

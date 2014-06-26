@@ -173,8 +173,10 @@ func (stc *ScatterConn) StreamExecute(
 		session,
 		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
 			sr, errFunc := sdc.StreamExecute(context, query, bindVars, transactionId)
-			for qr := range sr {
-				sResults <- qr
+			if sr != nil {
+				for qr := range sr {
+					sResults <- qr
+				}
 			}
 			return errFunc()
 		})
