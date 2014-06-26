@@ -341,7 +341,7 @@ func (sbc *sandboxConn) getError() error {
 	return nil
 }
 
-func (sbc *sandboxConn) Execute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (interface{}, error) {
+func (sbc *sandboxConn) Execute(context interface{}, query string, bindVars map[string]interface{}, transactionID int64) (interface{}, error) {
 	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
@@ -352,7 +352,7 @@ func (sbc *sandboxConn) Execute(context interface{}, query string, bindVars map[
 	return singleRowResult, nil
 }
 
-func (sbc *sandboxConn) ExecuteBatch(context interface{}, queries []tproto.BoundQuery, transactionId int64) (interface{}, error) {
+func (sbc *sandboxConn) ExecuteBatch(context interface{}, queries []tproto.BoundQuery, transactionID int64) (interface{}, error) {
 	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
@@ -368,7 +368,7 @@ func (sbc *sandboxConn) ExecuteBatch(context interface{}, queries []tproto.Bound
 	return qrl, nil
 }
 
-func (sbc *sandboxConn) StreamExecute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (<-chan interface{}, tabletconn.ErrFunc) {
+func (sbc *sandboxConn) StreamExecute(context interface{}, query string, bindVars map[string]interface{}, transactionID int64) (<-chan interface{}, tabletconn.ErrFunc) {
 	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
@@ -393,7 +393,7 @@ func (sbc *sandboxConn) Begin(context interface{}) (int64, error) {
 	return sbc.TransactionId.Add(1), nil
 }
 
-func (sbc *sandboxConn) Commit(context interface{}, transactionId int64) error {
+func (sbc *sandboxConn) Commit(context interface{}, transactionID int64) error {
 	sbc.ExecCount.Add(1)
 	sbc.CommitCount.Add(1)
 	if sbc.mustDelay != 0 {
@@ -402,7 +402,7 @@ func (sbc *sandboxConn) Commit(context interface{}, transactionId int64) error {
 	return sbc.getError()
 }
 
-func (sbc *sandboxConn) Rollback(context interface{}, transactionId int64) error {
+func (sbc *sandboxConn) Rollback(context interface{}, transactionID int64) error {
 	sbc.ExecCount.Add(1)
 	sbc.RollbackCount.Add(1)
 	if sbc.mustDelay != 0 {

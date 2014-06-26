@@ -22,6 +22,7 @@ type VTGate struct {
 	converterID string
 }
 
+// NewVTGate creates VTGate and determines if result conversion is needed.
 func NewVTGate(server *vtgate.VTGate) *VTGate {
 	vtg := &VTGate{server: server}
 	tabletProtocol := tabletconn.GetTabletConnProtocol()

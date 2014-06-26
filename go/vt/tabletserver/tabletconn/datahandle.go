@@ -10,12 +10,15 @@ type AppendResultFunc func(qr, innerqr interface{})
 // MergeResultsFunc defines the function type merging results to one.
 type MergeResultsFunc func(<-chan interface{}) interface{}
 
-// MergeBatchResultFunc defines the function type merging batch results to one.
+// MergeBatchResultsFunc defines the function type merging batch results to one.
 type MergeBatchResultsFunc func(int, <-chan interface{}) interface{}
 
 var (
-	AppendResultFuncMap      = make(map[string]AppendResultFunc)
-	MergeResultsFuncMap      = make(map[string]MergeResultsFunc)
+	// AppendResultFuncMap maps protocol to the func appending result.
+	AppendResultFuncMap = make(map[string]AppendResultFunc)
+	// MergeResultsFuncMap maps protocol to the func merging results.
+	MergeResultsFuncMap = make(map[string]MergeResultsFunc)
+	// MergeBatchResultsFuncMap maps protocol to the func merging batch results.
 	MergeBatchResultsFuncMap = make(map[string]MergeBatchResultsFunc)
 )
 

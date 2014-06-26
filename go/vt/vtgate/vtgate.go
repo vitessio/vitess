@@ -84,11 +84,10 @@ func (vtg *VTGate) ExecuteShard(context interface{}, query *proto.QueryShard) (i
 	)
 	if err == nil {
 		return qr, query.Session, nil
-	} else {
-		vtg.errors.Add(statsKey, 1)
-		vtg.logExecuteShard.Errorf("%v, query: %+v", err, query)
-		return nil, query.Session, err
 	}
+	vtg.errors.Add(statsKey, 1)
+	vtg.logExecuteShard.Errorf("%v, query: %+v", err, query)
+	return nil, query.Session, err
 }
 
 // ExecuteKeyspaceIds executes a non-streaming query based on the specified keyspace ids.
@@ -100,11 +99,10 @@ func (vtg *VTGate) ExecuteKeyspaceIds(context interface{}, query *proto.Keyspace
 	qr, err := vtg.resolver.ExecuteKeyspaceIds(context, query)
 	if err == nil {
 		return qr, query.Session, nil
-	} else {
-		vtg.errors.Add(statsKey, 1)
-		vtg.logExecuteKeyspaceIds.Errorf("%v, query: %+v", err, query)
-		return nil, query.Session, err
 	}
+	vtg.errors.Add(statsKey, 1)
+	vtg.logExecuteKeyspaceIds.Errorf("%v, query: %+v", err, query)
+	return nil, query.Session, err
 }
 
 // ExecuteKeyRanges executes a non-streaming query based on the specified keyranges.
@@ -116,11 +114,10 @@ func (vtg *VTGate) ExecuteKeyRanges(context interface{}, query *proto.KeyRangeQu
 	qr, err := vtg.resolver.ExecuteKeyRanges(context, query)
 	if err == nil {
 		return qr, query.Session, nil
-	} else {
-		vtg.errors.Add(statsKey, 1)
-		vtg.logExecuteKeyRanges.Errorf("%v, query: %+v", err, query)
-		return nil, query.Session, err
 	}
+	vtg.errors.Add(statsKey, 1)
+	vtg.logExecuteKeyRanges.Errorf("%v, query: %+v", err, query)
+	return nil, query.Session, err
 }
 
 // ExecuteEntityIds excutes a non-streaming query based on given KeyspaceId map.
@@ -132,11 +129,10 @@ func (vtg *VTGate) ExecuteEntityIds(context interface{}, query *proto.EntityIdsQ
 	qr, err := vtg.resolver.ExecuteEntityIds(context, query)
 	if err == nil {
 		return qr, query.Session, nil
-	} else {
-		vtg.errors.Add(statsKey, 1)
-		vtg.logExecuteEntityIds.Errorf("%v, query: %+v", err, query)
-		return nil, query.Session, err
 	}
+	vtg.errors.Add(statsKey, 1)
+	vtg.logExecuteEntityIds.Errorf("%v, query: %+v", err, query)
+	return nil, query.Session, err
 }
 
 // ExecuteBatchShard executes a group of queries on the specified shards.
@@ -157,11 +153,10 @@ func (vtg *VTGate) ExecuteBatchShard(context interface{}, batchQuery *proto.Batc
 	)
 	if err == nil {
 		return qrs, batchQuery.Session, nil
-	} else {
-		vtg.errors.Add(statsKey, 1)
-		vtg.logExecuteBatchShard.Errorf("%v, queries: %+v", err, batchQuery)
-		return nil, batchQuery.Session, err
 	}
+	vtg.errors.Add(statsKey, 1)
+	vtg.logExecuteBatchShard.Errorf("%v, queries: %+v", err, batchQuery)
+	return nil, batchQuery.Session, err
 }
 
 // ExecuteBatchKeyspaceIds executes a group of queries based on the specified keyspace ids.
@@ -175,11 +170,10 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(context interface{}, query *proto.Key
 		query)
 	if err == nil {
 		return qrs, query.Session, nil
-	} else {
-		vtg.errors.Add(statsKey, 1)
-		vtg.logExecuteBatchKeyspaceIds.Errorf("%v, query: %+v", err, query)
-		return nil, query.Session, err
 	}
+	vtg.errors.Add(statsKey, 1)
+	vtg.logExecuteBatchKeyspaceIds.Errorf("%v, query: %+v", err, query)
+	return nil, query.Session, err
 }
 
 // StreamExecuteKeyspaceIds executes a streaming query on the specified KeyspaceIds.
