@@ -77,9 +77,9 @@ select /* <=> */ 1 from t where a <=> b
 select /* != */ 1 from t where a != b
 select /* single value expre list */ 1 from t where a in (b)
 select /* select as a value expression */ 1 from t where a = (select a from t)
-select /* parenthesised value */ 1 from t where a = (b)#select /* parenthesised value */ 1 from t where a = b
-select /* over-parenthesize */ ((1)) from t where ((a)) in (((1))) and ((a, b)) in ((((1,1))), ((2,2)))#select /* over-parenthesize */ 1 from t where a in (1) and (a, b) in ((1, 1), (2, 2))
-select /* dot-parenthesize */ (a.b) from t where (b.c) = 2#select /* dot-parenthesize */ a.b from t where b.c = 2
+select /* parenthesised value */ 1 from t where a = (b)
+select /* over-parenthesize */ ((1)) from t where ((a)) in (((1))) and ((a, b)) in ((((1, 1))), ((2, 2)))
+select /* dot-parenthesize */ (a.b) from t where (b.c) = 2
 select /* & */ 1 from t where a = b&c
 select /* | */ 1 from t where a = b|c
 select /* ^ */ 1 from t where a = b^c
