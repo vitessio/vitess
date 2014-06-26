@@ -115,7 +115,7 @@ func (cp *ConnectionPool) TryGet() (PoolConnection, error) {
 		return nil, CONN_POOL_CLOSED_ERR
 	}
 	r, err := p.TryGet()
-	if err != nil {
+	if err != nil || r == nil {
 		return nil, err
 	}
 	return r.(PoolConnection), nil

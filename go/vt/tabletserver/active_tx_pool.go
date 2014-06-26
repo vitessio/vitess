@@ -16,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/timer"
+	"github.com/youtube/vitess/go/vt/dbconnpool"
 )
 
 /* Function naming convention:
@@ -97,7 +98,7 @@ func (axp *ActiveTxPool) TransactionKiller() {
 	}
 }
 
-func (axp *ActiveTxPool) SafeBegin(conn PoolConnection) (transactionId int64, err error) {
+func (axp *ActiveTxPool) SafeBegin(conn dbconnpool.PoolConnection) (transactionId int64, err error) {
 	defer handleError(&err, nil)
 	if _, err := conn.ExecuteFetch(BEGIN, 1, false); err != nil {
 		panic(NewTabletErrorSql(FAIL, err))
@@ -157,7 +158,7 @@ func (axp *ActiveTxPool) Stats() (size int64, timeout time.Duration) {
 }
 
 type TxConnection struct {
-	PoolConnection
+	dbconnpool.PoolConnection
 	TransactionID int64
 	pool          *ActiveTxPool
 	inUse         bool
@@ -168,7 +169,7 @@ type TxConnection struct {
 	Conclusion    string
 }
 
-func newTxConnection(conn PoolConnection, transactionId int64, pool *ActiveTxPool) *TxConnection {
+func newTxConnection(conn dbconnpool.PoolConnection, transactionId int64, pool *ActiveTxPool) *TxConnection {
 	return &TxConnection{
 		PoolConnection: conn,
 		TransactionID:  transactionId,
