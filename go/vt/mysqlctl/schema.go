@@ -162,11 +162,11 @@ func (mysqld *Mysqld) ResolveTables(dbName string, tables []string) ([]string, e
 
 // GetColumns returns the columns of table.
 func (mysqld *Mysqld) GetColumns(dbName, table string) ([]string, error) {
-	conn, err := mysqld.createDbaConnection()
+	conn, err := mysqld.dbaPool.Get()
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	defer conn.Recycle()
 	qr, err := conn.ExecuteFetch(fmt.Sprintf("select * from %v.%v where 1=0", dbName, table), 0, true)
 	if err != nil {
 		return nil, err
@@ -181,11 +181,11 @@ func (mysqld *Mysqld) GetColumns(dbName, table string) ([]string, error) {
 
 // GetPrimaryKeyColumns returns the primary key columns of table.
 func (mysqld *Mysqld) GetPrimaryKeyColumns(dbName, table string) ([]string, error) {
-	conn, err := mysqld.createDbaConnection()
+	conn, err := mysqld.dbaPool.Get()
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	defer conn.Recycle()
 	qr, err := conn.ExecuteFetch(fmt.Sprintf("show index from %v.%v", dbName, table), 100, true)
 	if err != nil {
 		return nil, err
@@ -230,6 +230,9 @@ func (mysqld *Mysqld) GetPrimaryKeyColumns(dbName, table string) ([]string, erro
 	return columns, err
 }
 
+// PreflightSchemaChange will apply the schema change to a fake
+// database that has the same schema as the target database, see if it
+// works.
 func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*proto.SchemaChangeResult, error) {
 	// gather current schema on real database
 	beforeSchema, err := mysqld.GetSchema(dbName, nil, nil, true)
@@ -275,6 +278,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*prot
 	return &proto.SchemaChangeResult{beforeSchema, afterSchema}, nil
 }
 
+// ApplySchemaChange will apply the schema change to the given database.
 func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *proto.SchemaChange) (*proto.SchemaChangeResult, error) {
 	// check current schema matches
 	beforeSchema, err := mysqld.GetSchema(dbName, nil, nil, false)

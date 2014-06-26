@@ -16,12 +16,14 @@ func TestStartShutdown(t *testing.T) {
 	mycnf0 := NewMycnf(0, 3700)
 	dbaConfig0 := dbconfigs.DefaultDBConfigs.Dba
 	replConfig0 := dbconfigs.DefaultDBConfigs.Repl
-	tablet0 := NewMysqld(mycnf0, &dbaConfig0, &replConfig0)
+	tablet0 := NewMysqld("Dba1", mycnf0, &dbaConfig0, &replConfig0)
+	defer tablet0.Close()
 
 	mycnf1 := NewMycnf(1, 3701)
 	dbaConfig1 := dbconfigs.DefaultDBConfigs.Dba
 	replConfig1 := dbconfigs.DefaultDBConfigs.Repl
-	tablet1 := NewMysqld(mycnf1, &dbaConfig1, &replConfig1)
+	tablet1 := NewMysqld("Dba2", mycnf1, &dbaConfig1, &replConfig1)
+	defer tablet1.Close()
 	var err error
 
 	err = tablet0.Init(MysqlWaitTime)

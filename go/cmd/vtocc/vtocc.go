@@ -49,7 +49,7 @@ func main() {
 		}
 	}
 	mycnf := &mysqlctl.Mycnf{BinLogPath: *binlogPath}
-	mysqld := mysqlctl.NewMysqld(mycnf, &dbConfigs.Dba, &dbConfigs.Repl)
+	mysqld := mysqlctl.NewMysqld("Dba", mycnf, &dbConfigs.Dba, &dbConfigs.Repl)
 
 	unmarshalFile(*overridesFile, &schemaOverrides)
 	data, _ := json.MarshalIndent(schemaOverrides, "", "  ")
@@ -65,6 +65,7 @@ func main() {
 	log.Infof("starting vtocc %v", *servenv.Port)
 	servenv.OnTerm(func() {
 		tabletserver.DisallowQueries()
+		mysqld.Close()
 	})
 	servenv.RunDefault()
 }

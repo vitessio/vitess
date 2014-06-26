@@ -131,7 +131,7 @@ func (agent *ActionAgent) changeCallback(oldTablet, newTablet topo.Tablet) {
 
 		// Disable before enabling to force existing streams to stop.
 		binlog.DisableUpdateStreamService()
-		binlog.EnableUpdateStreamService(agent.DBConfigs)
+		binlog.EnableUpdateStreamService(agent.DBConfigs.App.DbName, agent.Mysqld)
 	} else {
 		agent.disallowQueries()
 		binlog.DisableUpdateStreamService()

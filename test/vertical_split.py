@@ -307,6 +307,8 @@ index by_msg (msg)
     self._check_values(source_master, 'vt_source_keyspace', 'view1',
                        moving1_first, 100)
 
+    utils.pause("Before multisnapshot")
+
     # take the snapshot for the split
     utils.run_vtctl(['MultiSnapshot',
                      '--tables', 'moving.*,view1',
