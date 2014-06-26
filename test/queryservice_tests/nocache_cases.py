@@ -119,8 +119,8 @@ cases = [
          sql='select /* parenthesised col */ (eid) from vtocc_a where eid = 1 and id = 1',
          result=[(1L,)],
          rewritten=[
-           'select eid from vtocc_a where 1 != 1',
-           'select /* parenthesised col */ eid from vtocc_a where eid = 1 and id = 1 limit 10001']),
+           'select (eid) from vtocc_a where 1 != 1',
+           'select /* parenthesised col */ (eid) from vtocc_a where eid = 1 and id = 1 limit 10001']),
 
     MultiCase('for update',
               ['begin',

@@ -378,17 +378,15 @@
 "select (eid) from a"
 {
   "PlanId": "PASS_SELECT",
-  "Reason": "WHERE",
+  "Reason": "SELECT_LIST",
   "TableName": "a",
-  "DisplayQuery": "select eid from a",
-  "FieldQuery": "select eid from a where 1 != 1",
-  "FullQuery": "select eid from a limit :_vtMaxResultSize",
+  "DisplayQuery": "select (eid) from a",
+  "FieldQuery": "select (eid) from a where 1 != 1",
+  "FullQuery": "select (eid) from a limit :_vtMaxResultSize",
   "OuterQuery": null,
   "Subquery": null,
   "IndexUsed": "",
-  "ColumnNumbers": [
-    0
-  ],
+  "ColumnNumbers": null,
   "PKValues": null,
   "SecondaryPKValues": null,
   "SubqueryPKColumns": null,

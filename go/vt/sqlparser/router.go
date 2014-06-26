@@ -24,7 +24,7 @@ const (
 
 type RoutingPlan struct {
 	routingType int
-	criteria    Expr
+	criteria    SQLNode
 }
 
 func GetShardList(sql string, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) (shardlist []int, err error) {
@@ -44,7 +44,7 @@ func buildPlan(sql string) (plan *RoutingPlan) {
 
 func shardListFromPlan(plan *RoutingPlan, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) (shardList []int) {
 	if plan.routingType == ROUTE_BY_VALUE {
-		index := plan.criteria.(*Node).findInsertShard(bindVariables, tabletKeys)
+		index := findInsertShard(plan.criteria.(*Node), bindVariables, tabletKeys)
 		return []int{index}
 	}
 
@@ -56,21 +56,21 @@ func shardListFromPlan(plan *RoutingPlan, bindVariables map[string]interface{}, 
 	case *ComparisonExpr:
 		switch criteria.Operator {
 		case "=", "<=>":
-			index := criteria.Right.findShard(bindVariables, tabletKeys)
+			index := findShard(criteria.Right, bindVariables, tabletKeys)
 			return []int{index}
 		case "<", "<=":
-			index := criteria.Right.findShard(bindVariables, tabletKeys)
+			index := findShard(criteria.Right, bindVariables, tabletKeys)
 			return makeList(0, index+1)
 		case ">", ">=":
-			index := criteria.Right.findShard(bindVariables, tabletKeys)
+			index := findShard(criteria.Right, bindVariables, tabletKeys)
 			return makeList(index, len(tabletKeys))
 		case "in":
-			return criteria.Right.findShardList(bindVariables, tabletKeys)
+			return findShardList(criteria.Right, bindVariables, tabletKeys)
 		}
 	case *RangeCond:
 		if criteria.Operator == "between" {
-			start := criteria.From.findShard(bindVariables, tabletKeys)
-			last := criteria.To.findShard(bindVariables, tabletKeys)
+			start := findShard(criteria.From, bindVariables, tabletKeys)
+			last := findShard(criteria.To, bindVariables, tabletKeys)
 			if last < start {
 				start, last = last, start
 			}
@@ -87,7 +87,7 @@ func getRoutingPlan(statement Statement) (plan *RoutingPlan) {
 			return getRoutingPlan(sel)
 		}
 		plan.routingType = ROUTE_BY_VALUE
-		plan.criteria = ins.Values.(*Node).NodeAt(0).routingAnalyzeValues()
+		plan.criteria = routingAnalyzeValues(ins.Values.(*Node).NodeAt(0))
 		return plan
 	}
 	var where *Where
@@ -106,16 +106,16 @@ func getRoutingPlan(statement Statement) (plan *RoutingPlan) {
 	return plan
 }
 
-func (node *Node) routingAnalyzeValues() *Node {
+func routingAnalyzeValues(node *Node) *Node {
 	// Analyze first value of every item in the list
 	for i := 0; i < node.Len(); i++ {
-		value_expression_list := node.NodeAt(i)
-		inner_list, ok := value_expression_list.At(0).(*Node)
-		if !ok {
-			panic(NewParserError("insert is too complex"))
-		}
-		result := inner_list.NodeAt(0).routingAnalyzeValue()
-		if result != VALUE_NODE {
+		switch tuple := node.At(i).(type) {
+		case ValueTuple:
+			result := routingAnalyzeValue(tuple[0])
+			if result != VALUE_NODE {
+				panic(NewParserError("insert is too complex"))
+			}
+		default:
 			panic(NewParserError("insert is too complex"))
 		}
 	}
@@ -139,14 +139,14 @@ func routingAnalyzeBoolean(node BoolExpr) BoolExpr {
 	case *ComparisonExpr:
 		switch {
 		case stringIn(node.Operator, "=", "<", ">", "<=", ">=", "<=>"):
-			left := node.Left.routingAnalyzeValue()
-			right := node.Right.routingAnalyzeValue()
+			left := routingAnalyzeValue(node.Left)
+			right := routingAnalyzeValue(node.Right)
 			if (left == EID_NODE && right == VALUE_NODE) || (left == VALUE_NODE && right == EID_NODE) {
 				return node
 			}
 		case node.Operator == "in":
-			left := node.Left.routingAnalyzeValue()
-			right := node.Right.routingAnalyzeValue()
+			left := routingAnalyzeValue(node.Left)
+			right := routingAnalyzeValue(node.Right)
 			if left == EID_NODE && right == LIST_NODE {
 				return node
 			}
@@ -155,9 +155,9 @@ func routingAnalyzeBoolean(node BoolExpr) BoolExpr {
 		if node.Operator != "between" {
 			return nil
 		}
-		left := node.Left.routingAnalyzeValue()
-		from := node.From.routingAnalyzeValue()
-		to := node.To.routingAnalyzeValue()
+		left := routingAnalyzeValue(node.Left)
+		from := routingAnalyzeValue(node.From)
+		to := routingAnalyzeValue(node.To)
 		if left == EID_NODE && from == VALUE_NODE && to == VALUE_NODE {
 			return node
 		}
@@ -165,41 +165,31 @@ func routingAnalyzeBoolean(node BoolExpr) BoolExpr {
 	return nil
 }
 
-func (node *Node) routingAnalyzeValue() int {
-	switch node.Type {
-	case ID:
-		if string(node.Value) == "entity_id" {
+func routingAnalyzeValue(valExpr ValExpr) int {
+	switch node := valExpr.(type) {
+	case *ColName:
+		if string(node.Name) == "entity_id" {
 			return EID_NODE
 		}
-	case '.':
-		return node.NodeAt(1).routingAnalyzeValue()
-	case '(':
-		sub, ok := node.At(0).(*Node)
-		if !ok {
-			return OTHER_NODE
-		}
-		return sub.routingAnalyzeValue()
-	case NODE_LIST:
-		for i := 0; i < node.Len(); i++ {
-			if node.NodeAt(i).routingAnalyzeValue() != VALUE_NODE {
+	case ValueTuple:
+		for _, n := range node {
+			if routingAnalyzeValue(n) != VALUE_NODE {
 				return OTHER_NODE
 			}
 		}
 		return LIST_NODE
-	case STRING, NUMBER, VALUE_ARG:
+	case StringValue, NumValue, ValueArg:
 		return VALUE_NODE
 	}
 	return OTHER_NODE
 }
 
-func (node *Node) findShardList(bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) []int {
+func findShardList(valExpr ValExpr, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) []int {
 	shardset := make(map[int]bool)
-	switch node.Type {
-	case '(':
-		return node.NodeAt(0).findShardList(bindVariables, tabletKeys)
-	case NODE_LIST:
-		for i := 0; i < node.Len(); i++ {
-			index := node.NodeAt(i).findShard(bindVariables, tabletKeys)
+	switch node := valExpr.(type) {
+	case ValueTuple:
+		for _, n := range node {
+			index := findShard(n, bindVariables, tabletKeys)
 			shardset[index] = true
 		}
 	}
@@ -212,11 +202,11 @@ func (node *Node) findShardList(bindVariables map[string]interface{}, tabletKeys
 	return shardlist
 }
 
-func (node *Node) findInsertShard(bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) int {
+func findInsertShard(node *Node, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) int {
 	index := -1
 	for i := 0; i < node.Len(); i++ {
-		first_value_expression := node.NodeAt(i).NodeAt(0).NodeAt(0) // '('->value_expression_list->first_value
-		newIndex := first_value_expression.findShard(bindVariables, tabletKeys)
+		first_value_expression := node.At(i).(ValueTuple)[0]
+		newIndex := findShard(first_value_expression, bindVariables, tabletKeys)
 		if index == -1 {
 			index = newIndex
 		} else if index != newIndex {
@@ -226,37 +216,41 @@ func (node *Node) findInsertShard(bindVariables map[string]interface{}, tabletKe
 	return index
 }
 
-func (node *Node) findShard(bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) int {
-	value := node.getBoundValue(bindVariables)
+func findShard(valExpr ValExpr, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) int {
+	value := getBoundValue(valExpr, bindVariables)
 	return key.FindShardForValue(value, tabletKeys)
 }
 
-func (node *Node) getBoundValue(bindVariables map[string]interface{}) string {
-	switch node.Type {
-	case '(':
-		return node.NodeAt(0).getBoundValue(bindVariables)
-	case STRING:
-		return string(node.Value)
-	case NUMBER:
-		val, err := strconv.ParseInt(string(node.Value), 10, 64)
+func getBoundValue(valExpr ValExpr, bindVariables map[string]interface{}) string {
+	switch node := valExpr.(type) {
+	case ValueTuple:
+		if len(node) != 1 {
+			panic(NewParserError("tuples not allowed as insert values"))
+		}
+		// TODO: Change parser to create single value tuples into non-tuples.
+		return getBoundValue(node[0], bindVariables)
+	case StringValue:
+		return string(node)
+	case NumValue:
+		val, err := strconv.ParseInt(string(node), 10, 64)
 		if err != nil {
 			panic(NewParserError("%s", err.Error()))
 		}
 		return key.Uint64Key(val).String()
-	case VALUE_ARG:
-		value := node.findBindValue(bindVariables)
+	case ValueArg:
+		value := findBindValue(node, bindVariables)
 		return key.EncodeValue(value)
 	}
 	panic("Unexpected token")
 }
 
-func (node *Node) findBindValue(bindVariables map[string]interface{}) interface{} {
+func findBindValue(valArg ValueArg, bindVariables map[string]interface{}) interface{} {
 	if bindVariables == nil {
-		panic(NewParserError("No bind variable for " + string(node.Value)))
+		panic(NewParserError("No bind variable for " + string(valArg)))
 	}
-	value, ok := bindVariables[string(node.Value[1:])]
+	value, ok := bindVariables[string(valArg[1:])]
 	if !ok {
-		panic(NewParserError("No bind variable for " + string(node.Value)))
+		panic(NewParserError("No bind variable for " + string(valArg)))
 	}
 	return value
 }
