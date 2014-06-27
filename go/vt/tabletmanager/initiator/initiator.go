@@ -18,6 +18,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/hook"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -252,6 +253,10 @@ func (ai *ActionInitiator) ApplySchema(tabletAlias topo.TabletAlias, sc *myproto
 
 func (ai *ActionInitiator) ReloadSchema(tablet *topo.TabletInfo, waitTime time.Duration) error {
 	return ai.rpc.ReloadSchema(tablet, waitTime)
+}
+
+func (ai *ActionInitiator) ExecuteFetch(tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs bool, waitTime time.Duration) (*mproto.QueryResult, error) {
+	return ai.rpc.ExecuteFetch(tablet, query, maxRows, wantFields, disableBinlogs, waitTime)
 }
 
 func (ai *ActionInitiator) GetPermissions(tabletAlias topo.TabletAlias, waitTime time.Duration) (*myproto.Permissions, error) {

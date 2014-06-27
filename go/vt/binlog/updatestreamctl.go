@@ -12,7 +12,6 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 )
 
@@ -119,9 +118,9 @@ func logError() {
 	}
 }
 
-func EnableUpdateStreamService(dbcfgs *dbconfigs.DBConfigs) {
+func EnableUpdateStreamService(dbname string, mysqld *mysqlctl.Mysqld) {
 	defer logError()
-	UpdateStreamRpcService.enable(dbcfgs)
+	UpdateStreamRpcService.enable(dbname, mysqld)
 }
 
 func DisableUpdateStreamService() {
@@ -141,19 +140,14 @@ func GetReplicationPosition() (int64, error) {
 	return UpdateStreamRpcService.getReplicationPosition()
 }
 
-func (updateStream *UpdateStream) enable(dbcfgs *dbconfigs.DBConfigs) {
+func (updateStream *UpdateStream) enable(dbname string, mysqld *mysqlctl.Mysqld) {
 	updateStream.actionLock.Lock()
 	defer updateStream.actionLock.Unlock()
 	if updateStream.isEnabled() {
 		return
 	}
 
-	if dbcfgs.Dba.UnixSocket == "" {
-		log.Errorf("Missing dba socket connection, cannot enable update stream service")
-		return
-	}
-
-	if dbcfgs.App.DbName == "" {
+	if dbname == "" {
 		log.Errorf("Missing db name, cannot enable update stream service")
 		return
 	}
@@ -164,8 +158,8 @@ func (updateStream *UpdateStream) enable(dbcfgs *dbconfigs.DBConfigs) {
 	}
 
 	updateStream.state.Set(ENABLED)
-	updateStream.mysqld = mysqlctl.NewMysqld(updateStream.mycnf, &dbcfgs.Dba, &dbcfgs.Repl)
-	updateStream.dbname = dbcfgs.App.DbName
+	updateStream.mysqld = mysqld
+	updateStream.dbname = dbname
 	updateStream.streams.Init()
 	log.Infof("Enabling update stream, dbname: %s, binlogpath: %s", updateStream.dbname, updateStream.mycnf.BinLogPath)
 }

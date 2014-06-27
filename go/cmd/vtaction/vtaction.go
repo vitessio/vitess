@@ -55,7 +55,8 @@ func main() {
 	if cfErr != nil {
 		log.Fatalf("%s", cfErr)
 	}
-	mysqld := mysqlctl.NewMysqld(mycnf, &dbcfgs.Dba, &dbcfgs.Repl)
+	mysqld := mysqlctl.NewMysqld("Dba", mycnf, &dbcfgs.Dba, &dbcfgs.Repl)
+	defer mysqld.Close()
 
 	topoServer := topo.GetServer()
 	defer topo.CloseServers()

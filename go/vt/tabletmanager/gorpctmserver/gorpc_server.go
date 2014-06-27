@@ -7,6 +7,7 @@ package gorpctmserver
 import (
 	"fmt"
 
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcwrap"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
@@ -83,6 +84,16 @@ func (tm *TabletManager) ReloadSchema(context *rpcproto.Context, args *rpc.Unuse
 	return tm.agent.RpcWrapLockActionSchema(context.RemoteAddr, actionnode.TABLET_ACTION_RELOAD_SCHEMA, args, reply, func() error {
 		// no-op, the framework will force the schema reload
 		return nil
+	})
+}
+
+func (tm *TabletManager) ExecuteFetch(context *rpcproto.Context, args *gorpcproto.ExecuteFetchArgs, reply *mproto.QueryResult) error {
+	return tm.agent.RpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_EXECUTE_FETCH, args, reply, func() error {
+		qr, err := tm.agent.ExecuteFetch(args.Query, args.MaxRows, args.WantFields, args.DisableBinlogs)
+		if err == nil {
+			*reply = *qr
+		}
+		return err
 	})
 }
 

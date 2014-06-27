@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
@@ -305,4 +306,13 @@ func (wr *Wrangler) DeleteTablet(tabletAlias topo.TabletAlias) error {
 		return fmt.Errorf("Can only delete scrapped tablets")
 	}
 	return wr.TopoServer().DeleteTablet(tabletAlias)
+}
+
+// ExecuteFetch will get data from a remote tablet
+func (wr *Wrangler) ExecuteFetch(tabletAlias topo.TabletAlias, query string, maxRows int, wantFields, disableBinlogs bool) (*mproto.QueryResult, error) {
+	ti, err := wr.ts.GetTablet(tabletAlias)
+	if err != nil {
+		return nil, err
+	}
+	return wr.ai.ExecuteFetch(ti, query, maxRows, wantFields, disableBinlogs, wr.actionTimeout())
 }

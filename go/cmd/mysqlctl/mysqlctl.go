@@ -277,7 +277,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
-	mysqld := mysqlctl.NewMysqld(mycnf, &dbcfgs.Dba, &dbcfgs.Repl)
+	mysqld := mysqlctl.NewMysqld("Dba", mycnf, &dbcfgs.Dba, &dbcfgs.Repl)
+	defer mysqld.Close()
 
 	action := flag.Arg(0)
 	for _, cmd := range commands {

@@ -499,11 +499,11 @@ func (mysqld *Mysqld) ExecuteSuperQuery(query string) error {
 // FIXME(msolomon) should there be a query lock so we only
 // run one admin action at a time?
 func (mysqld *Mysqld) fetchSuperQuery(query string) (*mproto.QueryResult, error) {
-	conn, connErr := mysqld.createDbaConnection()
+	conn, connErr := mysqld.dbaPool.Get()
 	if connErr != nil {
 		return nil, connErr
 	}
-	defer conn.Close()
+	defer conn.Recycle()
 	log.V(6).Infof("fetch %v", query)
 	qr, err := conn.ExecuteFetch(query, 10000, true)
 	if err != nil {
@@ -524,12 +524,13 @@ func redactMasterPassword(input string) string {
 	return input[:i+len(masterPasswordStart)] + strings.Repeat("*", j) + input[i+len(masterPasswordStart)+j:]
 }
 
+// ExecuteSuperQueryList alows the user to execute queries at a super user.
 func (mysqld *Mysqld) ExecuteSuperQueryList(queryList []string) error {
-	conn, connErr := mysqld.createDbaConnection()
+	conn, connErr := mysqld.dbaPool.Get()
 	if connErr != nil {
 		return connErr
 	}
-	defer conn.Close()
+	defer conn.Recycle()
 	for _, query := range queryList {
 		log.Infof("exec %v", redactMasterPassword(query))
 		if _, err := conn.ExecuteFetch(query, 10000, false); err != nil {

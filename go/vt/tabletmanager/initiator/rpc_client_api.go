@@ -8,6 +8,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
@@ -42,6 +43,9 @@ type TabletManagerConn interface {
 
 	// ReloadSchema asks the remote tablet to reload its schema
 	ReloadSchema(tablet *topo.TabletInfo, waitTime time.Duration) error
+
+	// ExecuteFetch executes a query remotely using the DBA pool
+	ExecuteFetch(tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs bool, waitTime time.Duration) (*mproto.QueryResult, error)
 
 	//
 	// Replication related methods

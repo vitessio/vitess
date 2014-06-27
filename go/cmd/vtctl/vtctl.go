@@ -125,6 +125,9 @@ var commands = []commandGroup{
 			command{"ReadTabletAction", commandReadTabletAction,
 				"<action path>)",
 				"Displays the action node as json."},
+			command{"ExecuteFetch", commandExecuteFetch,
+				"[--max_rows=10000] [--want_fields] [--disable_binlogs] <tablet alias|zk tablet path> <sql command>",
+				"Runs the given sql command as a DBA on the remote tablet"},
 		},
 	},
 	commandGroup{
@@ -990,6 +993,24 @@ func commandReadTabletAction(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args
 		if err == nil {
 			fmt.Println(jscfg.ToJson(actionNode))
 		}
+	}
+	return "", err
+}
+
+func commandExecuteFetch(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	maxRows := subFlags.Int("max_rows", 10000, "maximum number of rows to allow in reset")
+	wantFields := subFlags.Bool("want_fields", false, "also get the field names")
+	disableBinlogs := subFlags.Bool("disable_binlogs", false, "disable writing to binlogs during the query")
+	subFlags.Parse(args)
+	if subFlags.NArg() != 2 {
+		log.Fatalf("action ReadTabletAction requires <tablet alias|zk tablet path> <sql command>")
+	}
+
+	alias := tabletParamToTabletAlias(subFlags.Arg(0))
+	query := subFlags.Arg(1)
+	qr, err := wr.ExecuteFetch(alias, query, *maxRows, *wantFields, *disableBinlogs)
+	if err == nil {
+		fmt.Println(jscfg.ToJson(qr))
 	}
 	return "", err
 }

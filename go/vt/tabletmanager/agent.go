@@ -123,7 +123,7 @@ func NewActionAgent(
 	schemaOverrides := loadSchemaOverrides(overridesFile)
 
 	topoServer := topo.GetServer()
-	mysqld := mysqlctl.NewMysqld(mycnf, &dbcfgs.Dba, &dbcfgs.Repl)
+	mysqld := mysqlctl.NewMysqld("Dba", mycnf, &dbcfgs.Dba, &dbcfgs.Repl)
 
 	agent = &ActionAgent{
 		TopoServer:      topoServer,
@@ -401,6 +401,7 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 func (agent *ActionAgent) Stop() {
 	close(agent.done)
 	agent.BinlogPlayerMap.StopAllPlayersAndReset()
+	agent.Mysqld.Close()
 }
 
 func (agent *ActionAgent) actionEventLoop() {

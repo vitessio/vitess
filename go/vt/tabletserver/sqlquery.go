@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
@@ -131,7 +132,7 @@ func (sq *SqlQuery) allowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides [
 	if waitForMysql {
 		waitTime := time.Second
 		for {
-			c, err := CreateGenericConnection(&dbconfig.ConnectionParams)
+			c, err := dbconnpool.NewDBConnection(&dbconfig.ConnectionParams, mysqlStats)
 			if err == nil {
 				c.Close()
 				break
@@ -357,7 +358,13 @@ func (sq *SqlQuery) StreamExecute(context *Context, query *proto.Query, sendRepl
 	defer sq.endRequest()
 	defer handleExecError(query, &err, logStats)
 
-	sq.qe.StreamExecute(logStats, query, sendReply)
+	// Wrap callback function to return an error on shutdown to stop streaming
+	sq.qe.StreamExecute(logStats, query, func(reply *mproto.QueryResult) error {
+		if sq.state.Get() != SERVING {
+			return NewTabletError(FAIL, "query server is shutting down")
+		}
+		return sendReply(reply)
+	})
 	return nil
 }
 

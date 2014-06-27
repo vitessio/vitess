@@ -18,7 +18,8 @@ var MYCNF_PATH = "/tmp/my.cnf"
 func TestMycnf(t *testing.T) {
 	dbaConfig := dbconfigs.DefaultDBConfigs.Dba
 	replConfig := dbconfigs.DefaultDBConfigs.Repl
-	tablet0 := NewMysqld(NewMycnf(0, 6802), &dbaConfig, &replConfig)
+	tablet0 := NewMysqld("Dba", NewMycnf(0, 6802), &dbaConfig, &replConfig)
+	defer tablet0.Close()
 	root, err := env.VtRoot()
 	if err != nil {
 		t.Errorf("err: %v", err)

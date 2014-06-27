@@ -14,6 +14,7 @@ package mysqlctl
 import (
 	"bufio"
 	"errors"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -26,7 +27,9 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/netutil"
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/dbconnpool"
 	vtenv "github.com/youtube/vitess/go/vt/env"
 	"github.com/youtube/vitess/go/vt/hook"
 )
@@ -35,11 +38,16 @@ const (
 	MysqlWaitTime = 120 * time.Second // default number of seconds to wait
 )
 
+var (
+	dbaPoolSize    = flag.Int("dba_pool_size", 50, "Size of the connection pool for dba connections")
+	dbaIdleTimeout = flag.Duration("dba_idle_timeout", time.Minute, "Idle timeout for dba connections")
+)
+
 // Mysqld is the object that represents a mysqld daemon running on this server.
 type Mysqld struct {
 	flavor      MysqlFlavor
 	config      *Mycnf
-	dbaParams   *mysql.ConnectionParams
+	dbaPool     *dbconnpool.ConnectionPool
 	replParams  *mysql.ConnectionParams
 	TabletDir   string
 	SnapshotDir string
@@ -47,15 +55,21 @@ type Mysqld struct {
 
 // NewMysqld creates a Mysqld object based on the provided configuration
 // and connection parameters.
-func NewMysqld(config *Mycnf, dba, repl *mysql.ConnectionParams) *Mysqld {
+// name is the base for stats exports, use 'Dba', except in tests
+func NewMysqld(name string, config *Mycnf, dba, repl *mysql.ConnectionParams) *Mysqld {
 	if *dba == dbconfigs.DefaultDBConfigs.Dba {
 		dba.UnixSocket = config.SocketFile
 	}
 
+	// create and open the connection pool for dba access
+	mysqlStats := stats.NewTimings("Mysql" + name)
+	dbaPool := dbconnpool.NewConnectionPool(name+"ConnPool", *dbaPoolSize, *dbaIdleTimeout)
+	dbaPool.Open(dbconnpool.DBConnectionCreator(dba, mysqlStats))
+
 	return &Mysqld{
 		mysqlFlavor(),
 		config,
-		dba,
+		dbaPool,
 		repl,
 		TabletDir(config.ServerId),
 		SnapshotDir(config.ServerId),
@@ -65,14 +79,6 @@ func NewMysqld(config *Mycnf, dba, repl *mysql.ConnectionParams) *Mysqld {
 // Cnf returns the mysql config for the daemon
 func (mt *Mysqld) Cnf() *Mycnf {
 	return mt.config
-}
-
-func (mt *Mysqld) createDbaConnection() (*mysql.Connection, error) {
-	params, err := dbconfigs.MysqlParams(mt.dbaParams)
-	if err != nil {
-		return nil, err
-	}
-	return mysql.Connect(params)
 }
 
 // Start will start the mysql daemon, either by running the 'mysqld_start'
@@ -145,9 +151,9 @@ func (mt *Mysqld) Start(mysqlWaitTime time.Duration) error {
 		_, statErr := os.Stat(mt.config.SocketFile)
 		if statErr == nil {
 			// Make sure the socket file isn't stale.
-			conn, connErr := mt.createDbaConnection()
+			conn, connErr := mt.dbaPool.Get()
 			if connErr == nil {
-				conn.Close()
+				conn.Recycle()
 				return nil
 			}
 		} else if !os.IsNotExist(statErr) {
@@ -440,4 +446,16 @@ func (mysqld *Mysqld) ExecuteMysqlCommand(sql string) error {
 		return err
 	}
 	return nil
+}
+
+// GetDbaConnection returns a connection from the dba pool.
+// Recycle needs to be called on the result.
+func (mysqld *Mysqld) GetDbaConnection() (dbconnpool.PoolConnection, error) {
+	return mysqld.dbaPool.Get()
+}
+
+// Close will close this instance of Mysqld. It will wait for all dba
+// queries to be finished.
+func (mysqld *Mysqld) Close() {
+	mysqld.dbaPool.Close()
 }

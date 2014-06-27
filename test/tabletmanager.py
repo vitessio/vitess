@@ -92,6 +92,11 @@ class TestTabletManager(unittest.TestCase):
     rows = result.splitlines()
     self.assertEqual(len(rows), 5, "expected 5 rows in vt_select_test: %s %s" % (str(rows), result))
 
+    # make sure direct dba queries work
+    query_result = utils.run_vtctl_json(['ExecuteFetch', '-want_fields', tablet_62344.tablet_alias, 'select * from vt_test_keyspace.vt_select_test'])
+    self.assertEqual(len(query_result['Rows']), 4, "expected 4 rows in vt_select_test: %s" % str(query_result))
+    self.assertEqual(len(query_result['Fields']), 2, "expected 2 fields in vt_select_test: %s" % str(query_result))
+
     # check Pings
     utils.run_vtctl(['Ping', tablet_62344.tablet_alias])
     utils.run_vtctl(['RpcPing', tablet_62344.tablet_alias])
