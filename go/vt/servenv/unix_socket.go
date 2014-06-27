@@ -8,6 +8,7 @@ import (
 	"flag"
 	"net"
 	"net/http"
+	"os"
 
 	log "github.com/golang/glog"
 )
@@ -22,6 +23,14 @@ func ServeSocketFile(name string) {
 	if name == "" {
 		log.Infof("Not listening on socket file")
 		return
+	}
+
+	// try to delete if file exists
+	if _, err := os.Stat(name); err == nil {
+		err = os.Remove(name)
+		if err != nil {
+			log.Fatalf("Cannot remove socket file %v: %v", name, err)
+		}
 	}
 
 	l, err := net.Listen("unix", name)
