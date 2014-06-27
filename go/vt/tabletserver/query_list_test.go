@@ -30,3 +30,14 @@ func TestQueryList(t *testing.T) {
 		t.Errorf("failed to remove from QueryList")
 	}
 }
+
+func TestQueryDetail(t *testing.T) {
+	qd := NewQueryDetail(&proto.Query{}, &Context{}, 1)
+	if qd.GetState() != qdStateNames[QD_RUNNING] {
+		t.Errorf("default state should be QD_RUNNING")
+	}
+	qd.Terminate()
+	if qd.GetState() != qdStateNames[QD_TERMINATING] {
+		t.Errorf("Terminate() did not update state to QD_TERMINATING")
+	}
+}
