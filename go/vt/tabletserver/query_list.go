@@ -1,25 +1,13 @@
 package tabletserver
 
 import (
+	"fmt"
 	"sort"
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
-
-const (
-	// QD_RUNNING indicates running state of a query
-	QD_RUNNING = iota
-	// QD_TERMINATING indicates query is getting terminated
-	QD_TERMINATING
-)
-
-var qdStateNames = []string{
-	"Running",
-	"Terminating",
-}
 
 // QueryDetail is a simple wrapper for Query, Context and PoolConnection
 type QueryDetail struct {
@@ -27,7 +15,6 @@ type QueryDetail struct {
 	context Context
 	connID  int64
 	start   time.Time
-	state   sync2.AtomicInt64
 }
 
 // NewQueryDetail creates a new QueryDetail
@@ -35,25 +22,16 @@ func NewQueryDetail(query *proto.Query, context Context, connID int64) *QueryDet
 	return &QueryDetail{query: query, context: context, connID: connID, start: time.Now()}
 }
 
-// Terminate signals termination by updating the status to QD_TERMINATING
-func (qd *QueryDetail) Terminate() bool {
-	return qd.state.CompareAndSwap(QD_RUNNING, QD_TERMINATING)
-}
-
-// GetState returns the current state of query
-func (qd *QueryDetail) GetState() string {
-	return qdStateNames[qd.state.Get()]
-}
-
 // QueryList holds a thread safe list of QueryDetails
 type QueryList struct {
 	mu           sync.Mutex
 	queryDetails map[int64]*QueryDetail
+	connKiller   *ConnectionKiller
 }
 
 // NewQueryList creates a new QueryList
-func NewQueryList() *QueryList {
-	return &QueryList{queryDetails: make(map[int64]*QueryDetail)}
+func NewQueryList(connKiller *ConnectionKiller) *QueryList {
+	return &QueryList{queryDetails: make(map[int64]*QueryDetail), connKiller: connKiller}
 }
 
 // Add adds a QueryDetail to QueryList
@@ -70,11 +48,27 @@ func (ql *QueryList) Remove(qd *QueryDetail) {
 	delete(ql.queryDetails, qd.connID)
 }
 
-// Get gets a QueryList associated with a connection ID
-func (ql *QueryList) Get(connID int64) *QueryDetail {
+// Terminate updates the query status and kills the connection
+func (ql *QueryList) Terminate(connID int64) error {
 	ql.mu.Lock()
 	defer ql.mu.Unlock()
-	return ql.queryDetails[connID]
+	qd := ql.queryDetails[connID]
+	if qd == nil {
+		return fmt.Errorf("query %v not found", connID)
+	}
+	if err := ql.connKiller.Kill(connID); err != nil {
+		return err
+	}
+	return nil
+}
+
+// TerminateAll terminates all queries and kills the MySQL connections
+func (ql *QueryList) TerminateAll() {
+	ql.mu.Lock()
+	defer ql.mu.Unlock()
+	for _, qd := range ql.queryDetails {
+		ql.connKiller.Kill(qd.connID)
+	}
 }
 
 // QueryDetailzRow is used for rendering QueryDetail in a template
@@ -103,16 +97,14 @@ func (ql *QueryList) GetQueryzRows() []QueryDetailzRow {
 	rows := []QueryDetailzRow{}
 	for _, qd := range ql.queryDetails {
 		row := QueryDetailzRow{
-			Query:             qd.query.Sql,
-			RemoteAddr:        qd.context.GetRemoteAddr(),
-			Username:          qd.context.GetUsername(),
-			Start:             qd.start,
-			Duration:          time.Now().Sub(qd.start),
-			SessionID:         qd.query.SessionId,
-			TransactionID:     qd.query.TransactionId,
-			ConnID:            qd.connID,
-			State:             qd.GetState(),
-			ShowTerminateLink: qd.state.Get() == QD_RUNNING,
+			Query:         qd.query.Sql,
+			RemoteAddr:    qd.context.GetRemoteAddr(),
+			Username:      qd.context.GetUsername(),
+			Start:         qd.start,
+			Duration:      time.Now().Sub(qd.start),
+			SessionID:     qd.query.SessionId,
+			TransactionID: qd.query.TransactionId,
+			ConnID:        qd.connID,
 		}
 		rows = append(rows, row)
 	}

@@ -7,7 +7,7 @@ import (
 )
 
 func TestQueryList(t *testing.T) {
-	ql := NewQueryList()
+	ql := NewQueryList(nil)
 	connID := int64(1)
 	qd := NewQueryDetail(&proto.Query{}, &DummyContext{}, connID)
 	ql.Add(qd)
@@ -28,16 +28,5 @@ func TestQueryList(t *testing.T) {
 	ql.Remove(qd)
 	if _, ok := ql.queryDetails[connID]; ok {
 		t.Errorf("failed to remove from QueryList")
-	}
-}
-
-func TestQueryDetail(t *testing.T) {
-	qd := NewQueryDetail(&proto.Query{}, &DummyContext{}, 1)
-	if qd.GetState() != qdStateNames[QD_RUNNING] {
-		t.Errorf("default state should be QD_RUNNING")
-	}
-	qd.Terminate()
-	if qd.GetState() != qdStateNames[QD_TERMINATING] {
-		t.Errorf("Terminate() did not update state to QD_TERMINATING")
 	}
 }
