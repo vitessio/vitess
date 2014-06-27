@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -24,6 +25,7 @@ func init() {
 	})
 }
 
+// GoRpcTabletManagerConn implements initiator.TabletManagerConn
 type GoRpcTabletManagerConn struct {
 	ts topo.Server
 }
@@ -102,6 +104,14 @@ func (client *GoRpcTabletManagerConn) SetBlacklistedTables(tablet *topo.TabletIn
 func (client *GoRpcTabletManagerConn) ReloadSchema(tablet *topo.TabletInfo, waitTime time.Duration) error {
 	var noOutput rpc.UnusedResponse
 	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_RELOAD_SCHEMA, "", &noOutput, waitTime)
+}
+
+func (client *GoRpcTabletManagerConn) ExecuteFetch(tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs bool, waitTime time.Duration) (*mproto.QueryResult, error) {
+	var qr mproto.QueryResult
+	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_EXECUTE_FETCH, &gorpcproto.ExecuteFetchArgs{Query: query, MaxRows: maxRows, WantFields: wantFields, DisableBinlogs: disableBinlogs}, &qr, waitTime); err != nil {
+		return nil, err
+	}
+	return &qr, nil
 }
 
 //

@@ -21,7 +21,7 @@ Replies are composed of the name of the call + Reply.
 If a struct is used as both Arguments and Replies, use name of the call + Data.
 
 NOTE(alainjobart) It is OK to rename a structure, as the type is not
-passed in through the RPC. i tested that by creating another set of
+passed in through the RPC. I tested that by creating another set of
 structures here, adding a '2' to the end of the types, and changing
 gorpc_server.go to only use the '2' structures. Everything worked the same.
 
@@ -59,4 +59,11 @@ type WaitBlpPositionArgs struct {
 type RunBlpUntilArgs struct {
 	BlpPositionList *blproto.BlpPositionList
 	WaitTimeout     time.Duration
+}
+
+type ExecuteFetchArgs struct {
+	Query          string
+	MaxRows        int
+	WantFields     bool
+	DisableBinlogs bool
 }

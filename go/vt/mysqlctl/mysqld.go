@@ -448,6 +448,12 @@ func (mysqld *Mysqld) ExecuteMysqlCommand(sql string) error {
 	return nil
 }
 
+// GetDbaConnection returns a connection from the dba pool.
+// Recycle needs to be called on the result.
+func (mysqld *Mysqld) GetDbaConnection() (dbconnpool.PoolConnection, error) {
+	return mysqld.dbaPool.Get()
+}
+
 // Close will close this instance of Mysqld. It will wait for all dba
 // queries to be finished.
 func (mysqld *Mysqld) Close() {

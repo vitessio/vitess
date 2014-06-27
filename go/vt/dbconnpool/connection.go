@@ -44,8 +44,7 @@ func (dbc *DBConnection) ExecuteFetch(query string, maxrows int, wantfields bool
 		return nil, err
 	}
 	dbc.mysqlStats.Record("Exec", start)
-	qr := proto.QueryResult(*mqr)
-	return &qr, nil
+	return mqr, nil
 }
 
 // ExecuteStreamFetch is part of PoolConnection interface.
