@@ -704,7 +704,7 @@ func (lsf localSnapshotFile) tableName() string {
 	return lsf.file.TableName
 }
 
-// makeCreateTableSql returns a table creation statement
+// MakeSplitCreateTableSql returns a table creation statement
 // that is modified to be faster, and the associated optional
 // 'alter table' to modify the table at the end.
 // - If the strategy contains the string 'skipAutoIncrement(NNN)' then
@@ -715,7 +715,7 @@ func (lsf localSnapshotFile) tableName() string {
 // the data into a myisam table and we then convert to innodb
 // - If the strategy contains the string 'delayPrimaryKey',
 // then the primary key index will be added afterwards (use with useMyIsam)
-func makeCreateTableSql(schema, tableName string, strategy string) (string, string, error) {
+func MakeSplitCreateTableSql(schema, databaseName, tableName string, strategy string) (string, string, error) {
 	alters := make([]string, 0, 5)
 	lines := strings.Split(schema, "\n")
 	delayPrimaryKey := strings.Contains(strategy, "delayPrimaryKey")
@@ -723,6 +723,11 @@ func makeCreateTableSql(schema, tableName string, strategy string) (string, stri
 	useMyIsam := strings.Contains(strategy, "useMyIsam")
 
 	for i, line := range lines {
+		if strings.HasPrefix(line, "CREATE TABLE `") {
+			lines[i] = strings.Replace(line, "CREATE TABLE `", "CREATE TABLE `"+databaseName+"`.`", 1)
+			continue
+		}
+
 		if strings.Contains(line, " AUTO_INCREMENT") {
 			// only add to the final ALTER TABLE if we're not
 			// dropping the AUTO_INCREMENT on the table
@@ -762,7 +767,7 @@ func makeCreateTableSql(schema, tableName string, strategy string) (string, stri
 
 	alter := ""
 	if len(alters) > 0 {
-		alter = "ALTER TABLE `" + tableName + "` " + strings.Join(alters, ", ")
+		alter = "ALTER TABLE `" + databaseName + "`.`" + tableName + "` " + strings.Join(alters, ", ")
 	}
 	return strings.Join(lines, "\n"), alter, nil
 }
@@ -894,7 +899,7 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.Key
 	createViewCmds := make([]string, 0, 16)
 	for _, td := range manifest.SchemaDefinition.TableDefinitions {
 		if td.Type == proto.TABLE_BASE_TABLE {
-			createDbCmd, alterTable, err := makeCreateTableSql(td.Schema, td.Name, strategy)
+			createDbCmd, alterTable, err := MakeSplitCreateTableSql(td.Schema, destinationDbName, td.Name, strategy)
 			if err != nil {
 				return err
 			}

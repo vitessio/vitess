@@ -5,15 +5,20 @@
 package worker
 
 import (
+	"bytes"
 	"fmt"
 	"html/template"
 	"strings"
 	"sync"
-	//	"time"
+	ttemplate "text/template"
+	"time"
 
 	log "github.com/golang/glog"
 	//	"github.com/youtube/vitess/go/sync2"
 	//	"github.com/youtube/vitess/go/vt/concurrency"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -56,6 +61,7 @@ type VerticalSplitCloneWorker struct {
 	// populated during stateVSCFindTargets, read-only after that
 	sourceAlias        topo.TabletAlias
 	destinationAliases []topo.TabletAlias
+	destinationTablets map[topo.TabletAlias]*topo.TabletInfo
 
 	// populated during stateVSCCopy
 	copyLogs               []string
@@ -246,6 +252,12 @@ func (vscw *VerticalSplitCloneWorker) findTargets() error {
 	}
 	log.Infof("Found %v target aliases", len(vscw.destinationAliases))
 
+	// get the TabletInfo for all targets
+	vscw.destinationTablets, err = topo.GetTabletMap(vscw.wr.TopoServer(), vscw.destinationAliases)
+	if err != nil {
+		return fmt.Errorf("cannot read all target tablets in %v/%v: %v", vscw.destinationKeyspace, vscw.destinationShard, err)
+	}
+
 	return nil
 }
 
@@ -267,5 +279,228 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	}
 	log.Infof("Source tablet has %v tables to copy", len(vscw.sourceSchemaDefinition.TableDefinitions))
 
+	// Create all the commands to create the destination schema:
+	// - createDbCmds will create the database and the tables
+	// - createViewCmds will create the views
+	// - alterTablesCmds will modify the tables at the end if needed
+	// (all need template substitution for {{.DatabaseName}})
+	createDbCmds := make([]string, 0, len(vscw.sourceSchemaDefinition.TableDefinitions)+1)
+	createDbCmds = append(createDbCmds, vscw.sourceSchemaDefinition.DatabaseSchema)
+	createViewCmds := make([]string, 0, 16)
+	alterTablesCmds := make([]string, 0, 16)
+	for _, td := range vscw.sourceSchemaDefinition.TableDefinitions {
+		if td.Type == myproto.TABLE_BASE_TABLE {
+			create, alter, err := mysqlctl.MakeSplitCreateTableSql(td.Schema, "{{.DatabaseName}}", td.Name, vscw.strategy)
+			if err != nil {
+				return fmt.Errorf("MakeSplitCreateTableSql(%v) returned: %v", td.Name, err)
+			}
+			createDbCmds = append(createDbCmds, create)
+			if alter != "" {
+				alterTablesCmds = append(alterTablesCmds, alter)
+			}
+		} else {
+			createViewCmds = append(createViewCmds, td.Schema)
+		}
+	}
+
+	// For each destination tablet (in parallel):
+	// - create the schema
+	// - setup the channels to send SQL data chunks
+	//
+	// mu protects the abort channel for closing, and firstError
+	mu := sync.Mutex{}
+	abort := make(chan struct{})
+	var firstError error
+
+	processError := func(format string, args ...interface{}) {
+		log.Errorf(format, args...)
+		mu.Lock()
+		if abort != nil {
+			close(abort)
+			abort = nil
+			firstError = fmt.Errorf(format, args...)
+		}
+		mu.Unlock()
+	}
+
+	insertChannels := make([]chan string, len(vscw.destinationAliases))
+	destinationWaitGroup := sync.WaitGroup{}
+	for i, tabletAlias := range vscw.destinationAliases {
+		insertChannels[i] = make(chan string, 20)
+
+		destinationWaitGroup.Add(1)
+		go func(ti *topo.TabletInfo, insertChannel chan string) {
+			defer destinationWaitGroup.Done()
+			log.Infof("Creating tables on tablet %v", ti.Alias)
+			if err := vscw.runSqlCommands(ti, createDbCmds, abort); err != nil {
+				processError("createDbCmds failed: %v", err)
+				return
+			}
+			if len(createViewCmds) > 0 {
+				log.Infof("Creating views on tablet %v", ti.Alias)
+				if err := vscw.runSqlCommands(ti, createViewCmds, abort); err != nil {
+					processError("createViewCmds failed: %v", err)
+					return
+				}
+			}
+			for j := 0; j < 20; j++ {
+				destinationWaitGroup.Add(1)
+				go func() {
+					defer destinationWaitGroup.Done()
+					for {
+						select {
+						case cmd, ok := <-insertChannel:
+							if !ok {
+								return
+							}
+							cmd = "INSERT INTO `" + ti.DbName() + "`." + cmd
+							_, err := vscw.wr.ActionInitiator().ExecuteFetch(ti, cmd, 0, false, true, 30*time.Second)
+							if err != nil {
+								processError("ExecuteFetch failed: %v", err)
+								return
+							}
+						case <-abort:
+							return
+						}
+					}
+				}()
+			}
+		}(vscw.destinationTablets[tabletAlias], insertChannels[i])
+	}
+
+	// Now for each table, read data chunks and send them to all
+	// insertChannels
+	sourceWaitGroup := sync.WaitGroup{}
+	for _, td := range vscw.sourceSchemaDefinition.TableDefinitions {
+		sourceWaitGroup.Add(1)
+		go func(td myproto.TableDefinition) {
+			defer sourceWaitGroup.Done()
+
+			// build the query, and start the streaming
+			log.Infof("Starting to stream data from table %v", td.Name)
+			selectSQL := "SELECT " + strings.Join(td.Columns, ", ") + " FROM " + td.Name
+			if len(td.PrimaryKeyColumns) > 0 {
+				selectSQL += " ORDER BY " + strings.Join(td.PrimaryKeyColumns, ", ")
+			}
+			qrr, err := NewQueryResultReaderForTablet(vscw.wr.TopoServer(), vscw.sourceAlias, selectSQL)
+			if err != nil {
+				processError("NewQueryResultReaderForTablet failed: %v", err)
+				return
+			}
+
+			// process the data
+			baseCmd := td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
+		loop:
+			for {
+				select {
+				case r, ok := <-qrr.Output:
+					if !ok {
+						if err := qrr.Error(); err != nil {
+							// error case
+							processError("QueryResultReader failed: %v", err)
+							return
+						}
+
+						// we're done with the data
+						break loop
+					}
+
+					// send the rows to be inserted
+					cmd := baseCmd + makeValueString(qrr.Fields, r)
+					for _, c := range insertChannels {
+						c <- cmd
+					}
+				case <-abort:
+					return
+				}
+			}
+		}(td)
+	}
+	sourceWaitGroup.Wait()
+
+	for _, c := range insertChannels {
+		close(c)
+	}
+	destinationWaitGroup.Wait()
+	if firstError != nil {
+		return firstError
+	}
+
+	// do the post-copy alters if any
+	if len(alterTablesCmds) == 0 {
+		return nil
+	}
+	for _, tabletAlias := range vscw.destinationAliases {
+		destinationWaitGroup.Add(1)
+		go func(ti *topo.TabletInfo) {
+			defer destinationWaitGroup.Done()
+			log.Infof("Altering tables on tablet %v", ti.Alias)
+			if err := vscw.runSqlCommands(ti, alterTablesCmds, abort); err != nil {
+				processError("alterTablesCmds failed on tablet %v: %v", ti.Alias, err)
+			}
+		}(vscw.destinationTablets[tabletAlias])
+	}
+	destinationWaitGroup.Wait()
+	return firstError
+}
+
+func (vscw *VerticalSplitCloneWorker) runSqlCommands(ti *topo.TabletInfo, commands []string, abort chan struct{}) error {
+	for _, command := range commands {
+		command, err := fillStringTemplate(command, map[string]string{"DatabaseName": ti.DbName()})
+		if err != nil {
+			return fmt.Errorf("fillStringTemplate failed: %v", err)
+		}
+
+		_, err = vscw.wr.ActionInitiator().ExecuteFetch(ti, command, 0, false, true, 30*time.Second)
+		if err != nil {
+			return err
+		}
+
+		// check on abort
+		select {
+		case <-abort:
+			return nil
+		default:
+			break
+		}
+	}
+
 	return nil
+}
+
+func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
+	myTemplate := ttemplate.Must(ttemplate.New("").Parse(tmpl))
+	data := new(bytes.Buffer)
+	if err := myTemplate.Execute(data, vars); err != nil {
+		return "", err
+	}
+	return data.String(), nil
+}
+
+func makeValueString(fields []mproto.Field, qr *mproto.QueryResult) string {
+	buf := bytes.Buffer{}
+	for i, row := range qr.Rows {
+		if i > 0 {
+			buf.Write([]byte(",("))
+		} else {
+			buf.WriteByte('(')
+		}
+		for j, value := range row {
+			if j > 0 {
+				buf.WriteByte(',')
+			}
+			// convert value back to its original type
+			if !value.IsNull() {
+				switch fields[j].Type {
+				case mproto.VT_TINY, mproto.VT_SHORT, mproto.VT_LONG, mproto.VT_LONGLONG, mproto.VT_INT24:
+					value = sqltypes.MakeNumeric(value.Raw())
+				case mproto.VT_FLOAT, mproto.VT_DOUBLE:
+					value = sqltypes.MakeFractional(value.Raw())
+				}
+			}
+			value.EncodeSql(&buf)
+		}
+		buf.WriteByte(')')
+	}
+	return buf.String()
 }
