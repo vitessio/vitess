@@ -17,6 +17,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/terminal"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/zk"
 
 	"launchpad.net/gozk/zookeeper"
@@ -119,7 +120,7 @@ var (
 )
 
 func main() {
-	defer log.Flush()
+	defer logutil.Flush()
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of %v:\n", os.Args[0])
 		flag.PrintDefaults()
