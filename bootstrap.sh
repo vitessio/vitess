@@ -37,9 +37,6 @@ fi
 ln -nfs $VTTOP/third_party/go/launchpad.net $VTROOT/src
 go install launchpad.net/gozk/zookeeper
 
-# FIXME(szopa): Get rid of this dependency.
-# install opts-go
-go get code.google.com/p/opts-go
 go get code.google.com/p/goprotobuf/proto
 go get code.google.com/p/go.tools/cmd/goimports
 go get github.com/golang/glog
