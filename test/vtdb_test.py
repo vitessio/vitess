@@ -362,11 +362,11 @@ class TestTabletFunctions(unittest.TestCase):
       thd.start()
 
       # Get the connID from status page 
+      tablet_addr = "http://localhost:" + str(self.master_tablet.port)
+      streamqueryz_url = tablet_addr +  "/streamqueryz?format=json" 
       retries = 3
       streaming_queries = []
       while len(streaming_queries) == 0:
-        tablet_addr = master_conn.conn_db_params['addr']
-        streamqueryz_url = "http://" + master_conn.conn_db_params['addr'] + "/streamqueryz?format=json" 
         content = urllib.urlopen(streamqueryz_url).read()
         streaming_queries = json.loads(content)
         retries -= 1
@@ -377,7 +377,7 @@ class TestTabletFunctions(unittest.TestCase):
       connId = streaming_queries[0]['ConnID']
 
       # Terminate the query
-      terminate_url = "http://" + tablet_addr + "/streamqueryz/terminate?format=json&connID=" + str(connId)
+      terminate_url = tablet_addr + "/streamqueryz/terminate?format=json&connID=" + str(connId)
       content = urllib.urlopen(terminate_url).read()
       # Assert state got updated
       streaming_queries = json.loads(content)
@@ -386,7 +386,7 @@ class TestTabletFunctions(unittest.TestCase):
       # Assert error is raised
       thd.join()
       with self.assertRaises(dbexceptions.DatabaseError):
-          stream_cursor.fetchone()
+        stream_cursor.fetchone()
       stream_cursor.close()
     except Exception, e:
       self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))
