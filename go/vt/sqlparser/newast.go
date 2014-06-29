@@ -40,7 +40,7 @@ type Select struct {
 	SelectExprs SelectExprs
 	From        TableExprs
 	Where       *Where
-	GroupBy     *Node
+	GroupBy     GroupBy
 	Having      *Node
 	OrderBy     *Node
 	Limit       *Node
@@ -662,6 +662,17 @@ type Values []Tuple
 
 func (node Values) Format(buf *TrackedBuffer) {
 	prefix := "values "
+	for _, n := range node {
+		buf.Fprintf("%s%v", prefix, n)
+		prefix = ", "
+	}
+}
+
+// GroupBy represents a GROUP BY clause.
+type GroupBy []ValExpr
+
+func (node GroupBy) Format(buf *TrackedBuffer) {
+	prefix := " group by "
 	for _, n := range node {
 		buf.Fprintf("%s%v", prefix, n)
 		prefix = ", "

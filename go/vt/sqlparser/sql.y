@@ -53,6 +53,7 @@ var (
   valExprs    ValExprs
   values      Values
   subquery    *Subquery
+  groupBy     GroupBy
   sqlNode     SQLNode
 }
 
@@ -115,7 +116,8 @@ var (
 %type <byt> unary_operator
 %type <colName> column_name
 %type <node> case_expression when_expression_list when_expression
-%type <node> group_by_opt having_opt order_by_opt order_list order asc_desc_opt limit_opt lock_opt on_dup_opt
+%type <groupBy> group_by_opt
+%type <node> having_opt order_by_opt order_list order asc_desc_opt limit_opt lock_opt on_dup_opt
 %type <columns> column_list_opt column_list
 %type <node> update_list update_expression
 %type <node> exists_opt not_exists_opt ignore_opt non_rename_operation to_opt constraint_opt using_opt
@@ -761,11 +763,11 @@ value:
 
 group_by_opt:
   {
-    $$ = NewSimpleParseNode(GROUP, "group")
+    $$ = nil
   }
 | GROUP BY value_expression_list
   {
-    $$ = $1.Push($3)
+    $$ = GroupBy($3)
   }
 
 having_opt:
