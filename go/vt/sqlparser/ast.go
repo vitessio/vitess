@@ -105,14 +105,6 @@ func (node *Node) Format(buf *TrackedBuffer) {
 		if node.Len() != 0 {
 			buf.Fprintf(" on duplicate key update %v", node.At(0))
 		}
-	case NO_LOCK, FOR_UPDATE, LOCK_IN_SHARE_MODE:
-		buf.Fprintf("%s", node.Value)
-	case ID:
-		if _, ok := keywords[string(node.Value)]; ok {
-			buf.Fprintf("`%s`", node.Value)
-		} else {
-			buf.Fprintf("%s", node.Value)
-		}
 	case CASE_WHEN:
 		buf.Fprintf("case %v end", node.At(0))
 	case CASE:
@@ -123,8 +115,6 @@ func (node *Node) Format(buf *TrackedBuffer) {
 		buf.Fprintf("else %v", node.At(0))
 	case '=':
 		buf.Fprintf("%v %s %v", node.At(0), node.Value, node.At(1))
-	case ASC, DESC:
-		buf.Fprintf("%v %s", node.At(0), node.Value)
 	default:
 		buf.Fprintf("Unknown: %s", node.Value)
 	}

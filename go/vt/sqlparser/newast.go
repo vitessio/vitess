@@ -34,6 +34,7 @@ type SelectStatement interface {
 }
 
 // Select represents a SELECT statement.
+// Lock can be "", " for update", " lock in share mode".
 type Select struct {
 	Comments    Comments
 	Distinct    Distinct
@@ -44,7 +45,7 @@ type Select struct {
 	Having      *Where
 	OrderBy     OrderBy
 	Limit       *Limit
-	Lock        *Node
+	Lock        string
 }
 
 func (*Select) statement() {}
@@ -52,7 +53,7 @@ func (*Select) statement() {}
 func (*Select) selectStatement() {}
 
 func (node *Select) Format(buf *TrackedBuffer) {
-	buf.Fprintf("select %v%v%v from %v%v%v%v%v%v%v",
+	buf.Fprintf("select %v%v%v from %v%v%v%v%v%v%s",
 		node.Comments, node.Distinct, node.SelectExprs,
 		node.From, node.Where,
 		node.GroupBy, node.Having, node.OrderBy,
@@ -143,7 +144,7 @@ func (node *Set) Format(buf *TrackedBuffer) {
 // DDLSimple represents a CREATE, ALTER or DROP statement.
 type DDLSimple struct {
 	Action int
-	Table  *Node
+	Table  []byte
 }
 
 func (*DDLSimple) statement() {}
@@ -151,11 +152,11 @@ func (*DDLSimple) statement() {}
 func (node *DDLSimple) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case CREATE:
-		buf.Fprintf("create table %v", node.Table)
+		buf.Fprintf("create table %s", node.Table)
 	case ALTER:
-		buf.Fprintf("alter table %v", node.Table)
+		buf.Fprintf("alter table %s", node.Table)
 	case DROP:
-		buf.Fprintf("drop table %v", node.Table)
+		buf.Fprintf("drop table %s", node.Table)
 	default:
 		panic("unreachable")
 	}
@@ -163,13 +164,13 @@ func (node *DDLSimple) Format(buf *TrackedBuffer) {
 
 // Rename represents a RENAME statement.
 type Rename struct {
-	OldName, NewName *Node
+	OldName, NewName []byte
 }
 
 func (*Rename) statement() {}
 
 func (node *Rename) Format(buf *TrackedBuffer) {
-	buf.Fprintf("rename table %v %v", node.OldName, node.NewName)
+	buf.Fprintf("rename table %s %s", node.OldName, node.NewName)
 }
 
 // Comments represents a list of comments.

@@ -24,12 +24,13 @@ func ForceEOF(yylex interface{}) {
 
 var (
   SHARE = []byte("share")
-  MODE =  []byte("mode")
+  MODE  = []byte("mode")
 )
 
 %}
 
 %union {
+  empty       struct{}
   node        *Node
   statement   Statement
   comments    Comments
@@ -88,7 +89,7 @@ var (
 %start any_command
 
 // Fake Tokens
-%token <node> NODE_LIST CASE_WHEN WHEN_LIST NO_LOCK FOR_UPDATE LOCK_IN_SHARE_MODE
+%token <node> NODE_LIST CASE_WHEN WHEN_LIST
 
 %type <statement> command
 %type <statement> select_statement insert_statement update_statement delete_statement set_statement
@@ -114,7 +115,7 @@ var (
 %type <valExpr> value tuple value_expression
 %type <valExprs> value_expression_list
 %type <values> tuple_list
-%type <node> keyword_as_func
+%type <bytes> keyword_as_func
 %type <subquery> subquery
 %type <byt> unary_operator
 %type <colName> column_name
@@ -125,10 +126,11 @@ var (
 %type <order> order
 %type <str> asc_desc_opt
 %type <limit> limit_opt
-%type <node> lock_opt on_dup_opt
+%type <str> lock_opt
+%type <node> on_dup_opt
 %type <columns> column_list_opt column_list
 %type <node> update_list update_expression
-%type <node> exists_opt not_exists_opt ignore_opt non_rename_operation to_opt constraint_opt using_opt
+%type <empty> exists_opt not_exists_opt ignore_opt non_rename_operation to_opt constraint_opt using_opt
 %type <node> sql_id
 %type <node> force_eof
 
@@ -188,52 +190,52 @@ set_statement:
 create_statement:
   CREATE TABLE not_exists_opt ID force_eof
   {
-    $$ = &DDLSimple{Action: CREATE, Table: $4}
+    $$ = &DDLSimple{Action: CREATE, Table: $4.Value}
   }
 | CREATE constraint_opt INDEX sql_id using_opt ON ID force_eof
   {
     // Change this to an alter statement
-    $$ = &DDLSimple{Action: ALTER, Table: $7}
+    $$ = &DDLSimple{Action: ALTER, Table: $7.Value}
   }
 | CREATE VIEW sql_id force_eof
   {
-    $$ = &DDLSimple{Action: CREATE, Table: $3}
+    $$ = &DDLSimple{Action: CREATE, Table: $3.Value}
   }
 
 alter_statement:
   ALTER ignore_opt TABLE ID non_rename_operation force_eof
   {
-    $$ = &DDLSimple{Action: ALTER, Table: $4}
+    $$ = &DDLSimple{Action: ALTER, Table: $4.Value}
   }
 | ALTER ignore_opt TABLE ID RENAME to_opt ID
   {
     // Change this to a rename statement
-    $$ = &Rename{OldName: $4, NewName: $7}
+    $$ = &Rename{OldName: $4.Value, NewName: $7.Value}
   }
 | ALTER VIEW sql_id force_eof
   {
-    $$ = &DDLSimple{Action: ALTER, Table: $3}
+    $$ = &DDLSimple{Action: ALTER, Table: $3.Value}
   }
 
 rename_statement:
   RENAME TABLE ID TO ID
   {
-    $$ = &Rename{OldName: $3, NewName: $5}
+    $$ = &Rename{OldName: $3.Value, NewName: $5.Value}
   }
 
 drop_statement:
   DROP TABLE exists_opt ID
   {
-    $$ = &DDLSimple{Action: DROP, Table: $4}
+    $$ = &DDLSimple{Action: DROP, Table: $4.Value}
   }
 | DROP INDEX sql_id ON ID
   {
     // Change this to an alter statement
-    $$ = &DDLSimple{Action: ALTER, Table: $5}
+    $$ = &DDLSimple{Action: ALTER, Table: $5.Value}
   }
 | DROP VIEW exists_opt sql_id force_eof
   {
-    $$ = &DDLSimple{Action: DROP, Table: $4}
+    $$ = &DDLSimple{Action: DROP, Table: $4.Value}
   }
 
 comment_opt:
@@ -683,7 +685,7 @@ value_expression:
   }
 | keyword_as_func '(' select_expression_list ')'
   {
-    $$ = &FuncExpr{Name: $1.Value, Exprs: $3}
+    $$ = &FuncExpr{Name: $1, Exprs: $3}
   }
 | case_expression
   {
@@ -693,7 +695,13 @@ value_expression:
 
 keyword_as_func:
   IF
+  {
+    $$ = $1.Value
+  }
 | VALUES
+  {
+    $$ = $1.Value
+  }
 
 unary_operator:
   '+'
@@ -840,11 +848,11 @@ limit_opt:
 
 lock_opt:
   {
-    $$ = NewSimpleParseNode(NO_LOCK, "")
+    $$ = ""
   }
 | FOR UPDATE
   {
-    $$ = NewSimpleParseNode(FOR_UPDATE, " for update")
+    $$ = " for update"
   }
 | LOCK IN sql_id sql_id
   {
@@ -856,7 +864,7 @@ lock_opt:
       yylex.Error("expecting mode")
       return 1
     }
-    $$ = NewSimpleParseNode(LOCK_IN_SHARE_MODE, " lock in share mode")
+    $$ = " lock in share mode"
   }
 
 column_list_opt:
@@ -905,35 +913,46 @@ update_expression:
   }
 
 exists_opt:
-  { $$ = nil }
+  { $$ = struct{}{} }
 | IF EXISTS
+  { $$ = struct{}{} }
 
 not_exists_opt:
-  { $$ = nil }
+  { $$ = struct{}{} }
 | IF NOT EXISTS
+  { $$ = struct{}{} }
 
 ignore_opt:
-  { $$ = nil }
+  { $$ = struct{}{} }
 | IGNORE
+  { $$ = struct{}{} }
 
 non_rename_operation:
   ALTER
+  { $$ = struct{}{} }
 | DEFAULT
+  { $$ = struct{}{} }
 | DROP
+  { $$ = struct{}{} }
 | ORDER
+  { $$ = struct{}{} }
 | ID
+  { $$ = struct{}{} }
 
 to_opt:
-  { $$ = nil }
+  { $$ = struct{}{} }
 | TO
+  { $$ = struct{}{} }
 
 constraint_opt:
-  { $$ = nil }
+  { $$ = struct{}{} }
 | UNIQUE
+  { $$ = struct{}{} }
 
 using_opt:
-  { $$ = nil }
+  { $$ = struct{}{} }
 | USING sql_id
+  { $$ = struct{}{} }
 
 sql_id:
   ID

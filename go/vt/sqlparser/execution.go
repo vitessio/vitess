@@ -208,7 +208,7 @@ func StreamExecParse(sql string, sensitiveMode bool) (plan *StreamExecPlan, err 
 
 	switch stmt := statement.(type) {
 	case *Select:
-		if stmt.Lock.Type != NO_LOCK {
+		if stmt.Lock != "" {
 			return nil, NewParserError("select with lock disallowed with streaming")
 		}
 	case *Union:
@@ -236,14 +236,14 @@ func DDLParse(sql string) (plan *DDLPlan) {
 	case *DDLSimple:
 		return &DDLPlan{
 			Action:    stmt.Action,
-			TableName: string(stmt.Table.Value),
-			NewName:   string(stmt.Table.Value),
+			TableName: string(stmt.Table),
+			NewName:   string(stmt.Table),
 		}
 	case *Rename:
 		return &DDLPlan{
 			Action:    RENAME,
-			TableName: string(stmt.OldName.Value),
-			NewName:   string(stmt.NewName.Value),
+			TableName: string(stmt.OldName),
+			NewName:   string(stmt.NewName),
 		}
 	}
 	return &DDLPlan{Action: 0}
@@ -305,7 +305,7 @@ func execAnalyzeSelect(sel *Select, getTable TableGetter) (plan *ExecPlan) {
 	tableInfo := plan.setTableInfo(tableName, getTable)
 
 	// Don't improve the plan if the select is locking the row
-	if sel.Lock.Type != NO_LOCK {
+	if sel.Lock != "" {
 		plan.Reason = REASON_LOCK
 		return plan
 	}
