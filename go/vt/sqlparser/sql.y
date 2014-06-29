@@ -44,6 +44,8 @@ var (
   tableExprs  TableExprs
   tableExpr   TableExpr
   tableName   *TableName
+  indexHints  *IndexHints
+  names       [][]byte
   where       *Where
   expr        Expr
   boolExpr    BoolExpr
@@ -99,7 +101,8 @@ var (
 %type <str> join_type
 %type <sqlNode> simple_table_expression
 %type <tableName> dml_table_expression
-%type <node> index_hint_list
+%type <indexHints> index_hint_list
+%type <names> index_list
 %type <where> where_expression_opt
 %type <boolExpr> boolean_expression condition
 %type <str> compare
@@ -113,7 +116,7 @@ var (
 %type <node> case_expression when_expression_list when_expression
 %type <node> group_by_opt having_opt order_by_opt order_list order asc_desc_opt limit_opt lock_opt on_dup_opt
 %type <columns> column_list_opt column_list
-%type <node> index_list update_list update_expression
+%type <node> update_list update_expression
 %type <node> exists_opt not_exists_opt ignore_opt non_rename_operation to_opt constraint_opt using_opt
 %type <node> sql_id
 %type <node> force_eof
@@ -332,7 +335,7 @@ table_expression_list:
 table_expression:
   simple_table_expression as_opt index_hint_list
   {
-    $$ = &AliasedTableExpr{Expr:$1, As: $2, Hint: $3}
+    $$ = &AliasedTableExpr{Expr:$1, As: $2, Hints: $3}
   }
 | '(' table_expression ')'
   {
@@ -428,11 +431,25 @@ index_hint_list:
   }
 | USE INDEX '(' index_list ')'
   {
-    $$.Push($4)
+    $$ = &IndexHints{Type: "use", Indexes: $4}
+  }
+| IGNORE INDEX '(' index_list ')'
+  {
+    $$ = &IndexHints{Type: "ignore", Indexes: $4}
   }
 | FORCE INDEX '(' index_list ')'
   {
-    $$.Push($4)
+    $$ = &IndexHints{Type: "force", Indexes: $4}
+  }
+
+index_list:
+  sql_id
+  {
+    $$ = [][]byte{$1.Value}
+  }
+| index_list ',' sql_id
+  {
+    $$ = append($1, $3.Value)
   }
 
 where_expression_opt:
@@ -844,17 +861,6 @@ column_list:
 | column_list ',' column_name
   {
     $$ = append($$, &NonStarExpr{Expr: $3})
-  }
-
-index_list:
-  sql_id
-  {
-    $$ = NewSimpleParseNode(INDEX_LIST, "")
-    $$.Push($1)
-  }
-| index_list ',' sql_id
-  {
-    $$ = $1.Push($3)
   }
 
 on_dup_opt:

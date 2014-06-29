@@ -277,9 +277,9 @@ type TableExpr interface {
 // AliasedTableExpr represents a table expression
 // coupled with an optional alias or index hint.
 type AliasedTableExpr struct {
-	Expr SQLNode
-	As   []byte
-	Hint *Node
+	Expr  SQLNode
+	As    []byte
+	Hints *IndexHints
 }
 
 func (*AliasedTableExpr) tableExpr() {}
@@ -289,9 +289,9 @@ func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
 	if node.As != nil {
 		buf.Fprintf(" as %s", node.As)
 	}
-	if node.Hint != nil {
+	if node.Hints != nil {
 		// Hint node provides the space padding.
-		buf.Fprintf("%v", node.Hint)
+		buf.Fprintf("%v", node.Hints)
 	}
 }
 
@@ -337,6 +337,24 @@ func (node *JoinTableExpr) Format(buf *TrackedBuffer) {
 	if node.On != nil {
 		buf.Fprintf(" on %v", node.On)
 	}
+}
+
+// IndexHints represents a list of index hints.
+// Type can be "use", "ignore" or "force".
+// TODO(sougou): See if Indexes can reuse Columns.
+type IndexHints struct {
+	Type    string
+	Indexes [][]byte
+}
+
+func (node *IndexHints) Format(buf *TrackedBuffer) {
+	buf.Fprintf(" %s index ", node.Type)
+	prefix := "("
+	for _, n := range node.Indexes {
+		buf.Fprintf("%s%s", prefix, n)
+		prefix = ", "
+	}
+	buf.Fprintf(")")
 }
 
 // Where represents a WHERE expression.

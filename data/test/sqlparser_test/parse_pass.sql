@@ -38,6 +38,7 @@ select /* table list */ 1 from t1, t2
 select /* parenthessis in table list 1 */ 1 from (t1), t2
 select /* parenthessis in table list 2 */ 1 from t1, (t2)
 select /* use */ 1 from t1 use index (a) where b = 1
+select /* ignore */ 1 from t1 as t2 ignore index (a), t3 use index (b) where b = 1
 select /* use */ 1 from t1 as t2 use index (a), t3 use index (b) where b = 1
 select /* force */ 1 from t1 as t2 force index (a), t3 force index (b) where b = 1
 select /* table alias */ 1 from t t1#select /* table alias */ 1 from t as t1

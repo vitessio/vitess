@@ -627,7 +627,7 @@ func execAnalyzeFrom(tableExprs TableExprs) (tablename string, hasHints bool) {
 	if !ok {
 		return "", false
 	}
-	return collectTableName(node.Expr), node.Hint != nil
+	return collectTableName(node.Expr), node.Hints != nil
 }
 
 func collectTableName(node SQLNode) string {
@@ -1089,14 +1089,12 @@ func generatePKWhere(buf *TrackedBuffer, pkIndex *schema.Index) {
 }
 
 func GenerateSelectSubquery(sel *Select, tableInfo *schema.Table, index string) *ParsedQuery {
-	hint := NewSimpleParseNode(USE, "use")
-	hint.Push(NewSimpleParseNode(INDEX_LIST, ""))
-	hint.NodeAt(0).Push(NewSimpleParseNode(ID, index))
+	hint := &IndexHints{Type: "use", Indexes: [][]byte{[]byte(index)}}
 	table_expr := sel.From[0].(*AliasedTableExpr)
-	savedHint := table_expr.Hint
-	table_expr.Hint = hint
+	savedHint := table_expr.Hints
+	table_expr.Hints = hint
 	defer func() {
-		table_expr.Hint = savedHint
+		table_expr.Hints = savedHint
 	}()
 	return GenerateSubquery(
 		tableInfo.Indexes[0].Columns,
