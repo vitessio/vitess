@@ -330,7 +330,7 @@ func execAnalyzeSelect(sel *Select, getTable TableGetter) (plan *ExecPlan) {
 	}
 
 	// order
-	if sel.OrderBy.Len() != 0 {
+	if sel.OrderBy != nil {
 		plan.Reason = REASON_ORDER
 		return plan
 	}
@@ -1132,7 +1132,7 @@ func (node *Node) PushLimit() {
 	node.Push(ValueArg(":_vtMaxResultSize"))
 }
 
-func GenerateSubquery(columns []string, table *AliasedTableExpr, where *Where, order *Node, limit *Node, for_update bool) *ParsedQuery {
+func GenerateSubquery(columns []string, table *AliasedTableExpr, where *Where, order OrderBy, limit *Node, for_update bool) *ParsedQuery {
 	buf := NewTrackedBuffer(nil)
 	if limit.Len() == 0 {
 		limit.PushLimit()

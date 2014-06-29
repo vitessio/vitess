@@ -54,6 +54,8 @@ var (
   values      Values
   subquery    *Subquery
   groupBy     GroupBy
+  orderBy     OrderBy
+  order       *Order
   sqlNode     SQLNode
 }
 
@@ -118,7 +120,10 @@ var (
 %type <node> case_expression when_expression_list when_expression
 %type <groupBy> group_by_opt
 %type <where> having_opt
-%type <node> order_by_opt order_list order asc_desc_opt limit_opt lock_opt on_dup_opt
+%type <orderBy> order_by_opt order_list
+%type <order> order
+%type <str> asc_desc_opt
+%type <node> limit_opt lock_opt on_dup_opt
 %type <columns> column_list_opt column_list
 %type <node> update_list update_expression
 %type <node> exists_opt not_exists_opt ignore_opt non_rename_operation to_opt constraint_opt using_opt
@@ -782,36 +787,41 @@ having_opt:
 
 order_by_opt:
   {
-    $$ = NewSimpleParseNode(ORDER, "order")
+    $$ = nil
   }
 | ORDER BY order_list
   {
-    $$ = $1.Push($3)
+    $$ = $3
   }
 
 order_list:
   order
   {
-    $$ = NewSimpleParseNode(NODE_LIST, "node_list")
-    $$.Push($1)
+    $$ = OrderBy{$1}
   }
 | order_list ',' order
   {
-    $$ = $1.Push($3)
+    $$ = append($1, $3)
   }
 
 order:
   value_expression asc_desc_opt
   {
-    $$ = $2.Push($1)
+    $$ = &Order{Expr: $1, Direction: $2}
   }
 
 asc_desc_opt:
   {
-    $$ = NewSimpleParseNode(ASC, "asc")
+    $$ = "asc"
   }
 | ASC
+  {
+    $$ = "asc"
+  }
 | DESC
+  {
+    $$ = "desc"
+  }
 
 limit_opt:
   {

@@ -42,7 +42,7 @@ type Select struct {
 	Where       *Where
 	GroupBy     GroupBy
 	Having      *Where
-	OrderBy     *Node
+	OrderBy     OrderBy
 	Limit       *Node
 	Lock        *Node
 }
@@ -99,7 +99,7 @@ type Update struct {
 	Table    *TableName
 	List     *Node
 	Where    *Where
-	OrderBy  *Node
+	OrderBy  OrderBy
 	Limit    *Node
 }
 
@@ -116,7 +116,7 @@ type Delete struct {
 	Comments Comments
 	Table    *TableName
 	Where    *Where
-	OrderBy  *Node
+	OrderBy  OrderBy
 	Limit    *Node
 }
 
@@ -679,4 +679,26 @@ func (node GroupBy) Format(buf *TrackedBuffer) {
 		buf.Fprintf("%s%v", prefix, n)
 		prefix = ", "
 	}
+}
+
+// OrderBy represents an ORDER By clause.
+type OrderBy []*Order
+
+func (node OrderBy) Format(buf *TrackedBuffer) {
+	prefix := " order by "
+	for _, n := range node {
+		buf.Fprintf("%s%v", prefix, n)
+		prefix = ", "
+	}
+}
+
+// Order represents an ordering expression.
+// Direction can be "asc", "desc".
+type Order struct {
+	Expr      ValExpr
+	Direction string
+}
+
+func (node *Order) Format(buf *TrackedBuffer) {
+	buf.Fprintf("%v %s", node.Expr, node.Direction)
 }
