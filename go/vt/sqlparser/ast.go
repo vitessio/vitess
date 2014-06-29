@@ -89,13 +89,6 @@ func (node *Node) String() (out string) {
 // Format generates the SQL for the current node.
 func (node *Node) Format(buf *TrackedBuffer) {
 	switch node.Type {
-	case LIMIT:
-		if node.Len() > 0 {
-			buf.Fprintf(" %s %v", node.Value, node.At(0))
-			if node.Len() > 1 {
-				buf.Fprintf(", %v", node.At(1))
-			}
-		}
 	case NODE_LIST:
 		if node.Len() > 0 {
 			buf.Fprintf("%v", node.At(0))

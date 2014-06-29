@@ -56,6 +56,7 @@ var (
   groupBy     GroupBy
   orderBy     OrderBy
   order       *Order
+  limit       *Limit
   sqlNode     SQLNode
 }
 
@@ -123,7 +124,8 @@ var (
 %type <orderBy> order_by_opt order_list
 %type <order> order
 %type <str> asc_desc_opt
-%type <node> limit_opt lock_opt on_dup_opt
+%type <limit> limit_opt
+%type <node> lock_opt on_dup_opt
 %type <columns> column_list_opt column_list
 %type <node> update_list update_expression
 %type <node> exists_opt not_exists_opt ignore_opt non_rename_operation to_opt constraint_opt using_opt
@@ -825,15 +827,15 @@ asc_desc_opt:
 
 limit_opt:
   {
-    $$ = NewSimpleParseNode(LIMIT, "limit")
+    $$ = nil
   }
 | LIMIT value_expression
   {
-    $$ = $1.Push($2)
+    $$ = &Limit{Rowcount: $2}
   }
 | LIMIT value_expression ',' value_expression
   {
-    $$ = $1.PushTwo($2, $4)
+    $$ = &Limit{Offset: $2, Rowcount: $4}
   }
 
 lock_opt:

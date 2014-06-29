@@ -43,7 +43,7 @@ type Select struct {
 	GroupBy     GroupBy
 	Having      *Where
 	OrderBy     OrderBy
-	Limit       *Node
+	Limit       *Limit
 	Lock        *Node
 }
 
@@ -100,7 +100,7 @@ type Update struct {
 	List     *Node
 	Where    *Where
 	OrderBy  OrderBy
-	Limit    *Node
+	Limit    *Limit
 }
 
 func (*Update) statement() {}
@@ -117,7 +117,7 @@ type Delete struct {
 	Table    *TableName
 	Where    *Where
 	OrderBy  OrderBy
-	Limit    *Node
+	Limit    *Limit
 }
 
 func (*Delete) statement() {}
@@ -701,4 +701,20 @@ type Order struct {
 
 func (node *Order) Format(buf *TrackedBuffer) {
 	buf.Fprintf("%v %s", node.Expr, node.Direction)
+}
+
+// Limit represents a LIMIT clause.
+type Limit struct {
+	Offset, Rowcount ValExpr
+}
+
+func (node *Limit) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	buf.Fprintf(" limit ")
+	if node.Offset != nil {
+		buf.Fprintf("%v, ", node.Offset)
+	}
+	buf.Fprintf("%v", node.Rowcount)
 }

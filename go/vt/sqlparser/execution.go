@@ -13,6 +13,8 @@ import (
 	"github.com/youtube/vitess/go/vt/schema"
 )
 
+var execLimit = &Limit{Rowcount: ValueArg(":_vtMaxResultSize")}
+
 type PlanType int
 
 const (
@@ -341,7 +343,7 @@ func execAnalyzeSelect(sel *Select, getTable TableGetter) (plan *ExecPlan) {
 	}
 
 	// Attempt PK match only if there's no limit clause
-	if sel.Limit.Len() == 0 {
+	if sel.Limit == nil {
 		planId, pkValues := getSelectPKValues(conditions, tableInfo.Indexes[0])
 		switch planId {
 		case PLAN_PK_EQUAL:
@@ -1025,9 +1027,11 @@ func GenerateSelectLimitQuery(selStmt SelectStatement) *ParsedQuery {
 	sel, ok := selStmt.(*Select)
 	if ok {
 		limit := sel.Limit
-		if limit.Len() == 0 {
-			limit.PushLimit()
-			defer limit.Pop()
+		if limit == nil {
+			sel.Limit = execLimit
+			defer func() {
+				sel.Limit = nil
+			}()
 		}
 	}
 	buf.Fprintf("%v", selStmt)
@@ -1128,15 +1132,10 @@ func GenerateDeleteSubquery(del *Delete, tableInfo *schema.Table) *ParsedQuery {
 	)
 }
 
-func (node *Node) PushLimit() {
-	node.Push(ValueArg(":_vtMaxResultSize"))
-}
-
-func GenerateSubquery(columns []string, table *AliasedTableExpr, where *Where, order OrderBy, limit *Node, for_update bool) *ParsedQuery {
+func GenerateSubquery(columns []string, table *AliasedTableExpr, where *Where, order OrderBy, limit *Limit, for_update bool) *ParsedQuery {
 	buf := NewTrackedBuffer(nil)
-	if limit.Len() == 0 {
-		limit.PushLimit()
-		defer limit.Pop()
+	if limit == nil {
+		limit = execLimit
 	}
 	fmt.Fprintf(buf, "select ")
 	i := 0
