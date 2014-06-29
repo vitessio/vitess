@@ -7,8 +7,6 @@ package sqlparser
 import (
 	"bytes"
 	"fmt"
-
-	"github.com/youtube/vitess/go/sqltypes"
 )
 
 type ParserError struct {
@@ -110,14 +108,6 @@ func (node *Node) Format(buf *TrackedBuffer) {
 				buf.Fprintf(", %v", node.At(1))
 			}
 		}
-	case INDEX_LIST:
-		if node.Len() > 0 {
-			buf.Fprintf("(%v", node.At(0))
-			for i := 1; i < node.Len(); i++ {
-				buf.Fprintf(", %v", node.At(i))
-			}
-			buf.WriteByte(')')
-		}
 	case NODE_LIST:
 		if node.Len() > 0 {
 			buf.Fprintf("%v", node.At(0))
@@ -134,7 +124,7 @@ func (node *Node) Format(buf *TrackedBuffer) {
 		if node.Len() != 0 {
 			buf.Fprintf(" on duplicate key update %v", node.At(0))
 		}
-	case NUMBER, NULL, NO_LOCK, FOR_UPDATE, LOCK_IN_SHARE_MODE:
+	case NO_LOCK, FOR_UPDATE, LOCK_IN_SHARE_MODE:
 		buf.Fprintf("%s", node.Value)
 	case ID:
 		if _, ok := keywords[string(node.Value)]; ok {
@@ -142,13 +132,6 @@ func (node *Node) Format(buf *TrackedBuffer) {
 		} else {
 			buf.Fprintf("%s", node.Value)
 		}
-	case VALUE_ARG:
-		buf.WriteArg(string(node.Value[1:]))
-	case STRING:
-		s := sqltypes.MakeString(node.Value)
-		s.EncodeSql(buf)
-	case '+', '-', '*', '/', '%', '&', '|', '^', '.':
-		buf.Fprintf("%v%s%v", node.At(0), node.Value, node.At(1))
 	case CASE_WHEN:
 		buf.Fprintf("case %v end", node.At(0))
 	case CASE:
@@ -159,24 +142,10 @@ func (node *Node) Format(buf *TrackedBuffer) {
 		buf.Fprintf("else %v", node.At(0))
 	case '=':
 		buf.Fprintf("%v %s %v", node.At(0), node.Value, node.At(1))
-	case '(':
-		buf.Fprintf("(%v)", node.At(0))
-	case EXISTS:
-		buf.Fprintf("%s (%v)", node.Value, node.At(0))
-	case FUNCTION:
-		if node.Len() == 2 { // DISTINCT
-			buf.Fprintf("%s(%v%v)", node.Value, node.At(0), node.At(1))
-		} else {
-			buf.Fprintf("%s(%v)", node.Value, node.At(0))
-		}
-	case UPLUS, UMINUS, '~':
-		buf.Fprintf("%s%v", node.Value, node.At(0))
-	case NOT, VALUES:
+	case VALUES:
 		buf.Fprintf("%s %v", node.Value, node.At(0))
 	case ASC, DESC:
 		buf.Fprintf("%v %s", node.At(0), node.Value)
-	case DISTINCT:
-		buf.Fprintf("%s ", node.Value)
 	default:
 		buf.Fprintf("Unknown: %s", node.Value)
 	}

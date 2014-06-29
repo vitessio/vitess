@@ -83,8 +83,7 @@ var (
 %start any_command
 
 // Fake Tokens
-%token <node> NODE_LIST UPLUS UMINUS CASE_WHEN WHEN_LIST FUNCTION NO_LOCK FOR_UPDATE LOCK_IN_SHARE_MODE
-%token <node> INDEX_LIST
+%token <node> NODE_LIST CASE_WHEN WHEN_LIST NO_LOCK FOR_UPDATE LOCK_IN_SHARE_MODE
 
 %type <statement> command
 %type <statement> select_statement insert_statement update_statement delete_statement set_statement

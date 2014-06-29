@@ -1129,7 +1129,7 @@ func GenerateDeleteSubquery(del *Delete, tableInfo *schema.Table) *ParsedQuery {
 }
 
 func (node *Node) PushLimit() {
-	node.Push(NewSimpleParseNode(VALUE_ARG, ":_vtMaxResultSize"))
+	node.Push(ValueArg(":_vtMaxResultSize"))
 }
 
 func GenerateSubquery(columns []string, table *AliasedTableExpr, where *Where, order *Node, limit *Node, for_update bool) *ParsedQuery {
