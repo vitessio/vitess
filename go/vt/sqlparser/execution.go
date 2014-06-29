@@ -411,7 +411,7 @@ func execAnalyzeInsert(ins *Insert, getTable TableGetter) (plan *ExecPlan) {
 		return plan
 	}
 
-	if sel, ok := ins.Values.(SelectStatement); ok {
+	if sel, ok := ins.Rows.(SelectStatement); ok {
 		plan.PlanId = PLAN_INSERT_SUBQUERY
 		plan.OuterQuery = GenerateInsertOuterQuery(ins)
 		plan.Subquery = GenerateSelectLimitQuery(sel)
@@ -427,7 +427,7 @@ func execAnalyzeInsert(ins *Insert, getTable TableGetter) (plan *ExecPlan) {
 	}
 
 	// If it's not a SelectStatement, it's a Node.
-	rowList := ins.Values.(*Node).NodeAt(0) // VALUES->NODE_LIST
+	rowList := ins.Rows.(Values)
 	if pkValues := getInsertPKValues(pkColumnNumbers, rowList, tableInfo); pkValues != nil {
 		plan.PlanId = PLAN_INSERT_PK
 		plan.OuterQuery = plan.FullQuery
@@ -790,19 +790,19 @@ func getInsertPKColumns(columns Columns, tableInfo *schema.Table) (pkColumnNumbe
 	return pkColumnNumbers
 }
 
-func getInsertPKValues(pkColumnNumbers []int, rowList *Node, tableInfo *schema.Table) (pkValues []interface{}) {
+func getInsertPKValues(pkColumnNumbers []int, rowList Values, tableInfo *schema.Table) (pkValues []interface{}) {
 	pkValues = make([]interface{}, len(pkColumnNumbers))
 	for index, columnNumber := range pkColumnNumbers {
 		if columnNumber == -1 {
 			pkValues[index] = tableInfo.GetPKColumn(index).Default
 			continue
 		}
-		values := make([]interface{}, rowList.Len())
-		for j := 0; j < rowList.Len(); j++ {
-			if _, ok := rowList.At(j).(*Subquery); ok {
+		values := make([]interface{}, len(rowList))
+		for j := 0; j < len(rowList); j++ {
+			if _, ok := rowList[j].(*Subquery); ok {
 				panic(NewParserError("row subquery not supported for inserts"))
 			}
-			row := rowList.At(j).(ValueTuple)
+			row := rowList[j].(ValueTuple)
 			if columnNumber >= len(row) {
 				panic(NewParserError("column count doesn't match value count"))
 			}

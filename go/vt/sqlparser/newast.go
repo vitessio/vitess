@@ -76,11 +76,12 @@ func (node *Union) Format(buf *TrackedBuffer) {
 }
 
 // Insert represents an INSERT statement.
+// Rows can be *Subselect, Values.
 type Insert struct {
 	Comments Comments
 	Table    *TableName
 	Columns  Columns
-	Values   SQLNode
+	Rows     SQLNode
 	OnDup    *Node
 }
 
@@ -89,7 +90,7 @@ func (*Insert) statement() {}
 func (node *Insert) Format(buf *TrackedBuffer) {
 	buf.Fprintf("insert %vinto %v%v %v%v",
 		node.Comments,
-		node.Table, node.Columns, node.Values, node.OnDup)
+		node.Table, node.Columns, node.Rows, node.OnDup)
 }
 
 // Update represents an UPDATE statement.
@@ -654,4 +655,15 @@ func (*CaseExpr) valExpr() {}
 
 func (node *CaseExpr) Format(buf *TrackedBuffer) {
 	buf.Fprintf("%v", (*Node)(node))
+}
+
+// Values represents a VALUES clause.
+type Values []Tuple
+
+func (node Values) Format(buf *TrackedBuffer) {
+	prefix := "values "
+	for _, n := range node {
+		buf.Fprintf("%s%v", prefix, n)
+		prefix = ", "
+	}
 }

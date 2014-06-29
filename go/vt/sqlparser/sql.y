@@ -51,6 +51,7 @@ var (
   boolExpr    BoolExpr
   valExpr     ValExpr
   valExprs    ValExprs
+  values      Values
   subquery    *Subquery
   sqlNode     SQLNode
 }
@@ -108,7 +109,8 @@ var (
 %type <sqlNode> values
 %type <valExpr> value tuple value_expression
 %type <valExprs> value_expression_list
-%type <node> tuple_list keyword_as_func
+%type <values> tuple_list
+%type <node> keyword_as_func
 %type <subquery> subquery
 %type <byt> unary_operator
 %type <colName> column_name
@@ -152,7 +154,7 @@ select_statement:
 insert_statement:
   INSERT comment_opt INTO dml_table_expression column_list_opt values on_dup_opt
   {
-    $$ = &Insert{Comments: $2, Table: $4, Columns: $5, Values: $6, OnDup: $7}
+    $$ = &Insert{Comments: $2, Table: $4, Columns: $5, Rows: $6, OnDup: $7}
   }
 
 update_statement:
@@ -554,7 +556,7 @@ compare:
 values:
   VALUES tuple_list
   {
-    $$ = $1.Push($2)
+    $$ = $2
   }
 | select_statement
   {
@@ -564,12 +566,11 @@ values:
 tuple_list:
   tuple
   {
-    $$ = NewSimpleParseNode(NODE_LIST, "node_list")
-    $$.Push($1)
+    $$ = Values{$1.(Tuple)}
   }
 | tuple_list ',' tuple
   {
-    $$.Push($3)
+    $$ = append($1, $3.(Tuple))
   }
 
 tuple:
