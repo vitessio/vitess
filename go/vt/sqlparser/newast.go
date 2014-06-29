@@ -41,7 +41,7 @@ type Select struct {
 	From        TableExprs
 	Where       *Where
 	GroupBy     GroupBy
-	Having      *Node
+	Having      *Where
 	OrderBy     *Node
 	Limit       *Node
 	Lock        *Node
@@ -358,8 +358,10 @@ func (node *IndexHints) Format(buf *TrackedBuffer) {
 	buf.Fprintf(")")
 }
 
-// Where represents a WHERE expression.
+// Where represents a WHERE or HAVING clause.
+// Type can be "where", "having"
 type Where struct {
+	Type string
 	Expr BoolExpr
 }
 
@@ -367,7 +369,7 @@ func (node *Where) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-	buf.Fprintf(" where %v", node.Expr)
+	buf.Fprintf(" %s %v", node.Type, node.Expr)
 }
 
 // Expr represents an expression. It can be BoolExpr, ValExpr.

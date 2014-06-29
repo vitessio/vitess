@@ -117,7 +117,8 @@ var (
 %type <colName> column_name
 %type <node> case_expression when_expression_list when_expression
 %type <groupBy> group_by_opt
-%type <node> having_opt order_by_opt order_list order asc_desc_opt limit_opt lock_opt on_dup_opt
+%type <where> having_opt
+%type <node> order_by_opt order_list order asc_desc_opt limit_opt lock_opt on_dup_opt
 %type <columns> column_list_opt column_list
 %type <node> update_list update_expression
 %type <node> exists_opt not_exists_opt ignore_opt non_rename_operation to_opt constraint_opt using_opt
@@ -461,7 +462,7 @@ where_expression_opt:
   }
 | WHERE boolean_expression
   {
-    $$ = &Where{Expr: $2}
+    $$ = &Where{Type: "where", Expr: $2}
   }
 
 boolean_expression:
@@ -772,11 +773,11 @@ group_by_opt:
 
 having_opt:
   {
-    $$ = NewSimpleParseNode(HAVING, "having")
+    $$ = nil
   }
 | HAVING boolean_expression
   {
-    $$ = $1.Push($2)
+    $$ = &Where{Type: "having", Expr: $2}
   }
 
 order_by_opt:

@@ -564,7 +564,7 @@ func execAnalyzeSelectStructure(sel *Select) bool {
 	if sel.GroupBy != nil {
 		return false
 	}
-	if sel.Having.Len() > 0 {
+	if sel.Having != nil {
 		return false
 	}
 	return true

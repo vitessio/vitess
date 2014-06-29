@@ -89,15 +89,7 @@ func (node *Node) String() (out string) {
 // Format generates the SQL for the current node.
 func (node *Node) Format(buf *TrackedBuffer) {
 	switch node.Type {
-	case USE, FORCE:
-		if node.Len() != 0 {
-			buf.Fprintf(" %s index %v", node.Value, node.At(0))
-		}
-	case WHERE, HAVING:
-		if node.Len() > 0 {
-			buf.Fprintf(" %s %v", node.Value, node.At(0))
-		}
-	case ORDER, GROUP:
+	case ORDER:
 		if node.Len() > 0 {
 			buf.Fprintf(" %s by %v", node.Value, node.At(0))
 		}
@@ -142,8 +134,6 @@ func (node *Node) Format(buf *TrackedBuffer) {
 		buf.Fprintf("else %v", node.At(0))
 	case '=':
 		buf.Fprintf("%v %s %v", node.At(0), node.Value, node.At(1))
-	case VALUES:
-		buf.Fprintf("%s %v", node.Value, node.At(0))
 	case ASC, DESC:
 		buf.Fprintf("%v %s", node.At(0), node.Value)
 	default:
