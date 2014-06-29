@@ -83,22 +83,25 @@ type Insert struct {
 	Table    *TableName
 	Columns  Columns
 	Rows     SQLNode
-	OnDup    *Node
+	OnDup    UpdateExprs
 }
 
 func (*Insert) statement() {}
 
 func (node *Insert) Format(buf *TrackedBuffer) {
-	buf.Fprintf("insert %vinto %v%v %v%v",
+	buf.Fprintf("insert %vinto %v%v %v",
 		node.Comments,
 		node.Table, node.Columns, node.Rows, node.OnDup)
+	if node.OnDup != nil {
+		buf.Fprintf(" on duplicate key update %v", node.OnDup)
+	}
 }
 
 // Update represents an UPDATE statement.
 type Update struct {
 	Comments Comments
 	Table    *TableName
-	List     *Node
+	List     UpdateExprs
 	Where    *Where
 	OrderBy  OrderBy
 	Limit    *Limit
@@ -132,7 +135,7 @@ func (node *Delete) Format(buf *TrackedBuffer) {
 // Set represents a SET statement.
 type Set struct {
 	Comments Comments
-	Updates  *Node
+	Updates  UpdateExprs
 }
 
 func (*Set) statement() {}
@@ -718,4 +721,25 @@ func (node *Limit) Format(buf *TrackedBuffer) {
 		buf.Fprintf("%v, ", node.Offset)
 	}
 	buf.Fprintf("%v", node.Rowcount)
+}
+
+// UpdateExprs represents a list of update expressions.
+type UpdateExprs []*UpdateExpr
+
+func (node UpdateExprs) Format(buf *TrackedBuffer) {
+	var prefix string
+	for _, n := range node {
+		buf.Fprintf("%s%v", prefix, n)
+		prefix = ", "
+	}
+}
+
+// UpdateExpr represents an update expression.
+type UpdateExpr struct {
+	Name *ColName
+	Expr ValExpr
+}
+
+func (node *UpdateExpr) Format(buf *TrackedBuffer) {
+	buf.Fprintf("%v = %v", node.Name, node.Expr)
 }

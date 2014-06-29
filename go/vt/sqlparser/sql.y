@@ -58,6 +58,8 @@ var (
   orderBy     OrderBy
   order       *Order
   limit       *Limit
+  updateExprs UpdateExprs
+  updateExpr  *UpdateExpr
   sqlNode     SQLNode
 }
 
@@ -127,9 +129,10 @@ var (
 %type <str> asc_desc_opt
 %type <limit> limit_opt
 %type <str> lock_opt
-%type <node> on_dup_opt
 %type <columns> column_list_opt column_list
-%type <node> update_list update_expression
+%type <updateExprs> on_dup_opt
+%type <updateExprs> update_list
+%type <updateExpr> update_expression
 %type <empty> exists_opt not_exists_opt ignore_opt non_rename_operation to_opt constraint_opt using_opt
 %type <node> sql_id
 %type <node> force_eof
@@ -888,28 +891,27 @@ column_list:
 
 on_dup_opt:
   {
-    $$ = NewSimpleParseNode(DUPLICATE, "duplicate")
+    $$ = nil
   }
 | ON DUPLICATE KEY UPDATE update_list
   {
-    $$ = $2.Push($5)
+    $$ = $5
   }
 
 update_list:
   update_expression
   {
-    $$ = NewSimpleParseNode(NODE_LIST, "node_list")
-    $$.Push($1)
+    $$ = UpdateExprs{$1}
   }
 | update_list ',' update_expression
   {
-    $$ = $1.Push($3)
+    $$ = append($1, $3)
   }
 
 update_expression:
   column_name '=' value_expression
   {
-    $$ = $2.PushTwo($1, $3)
+    $$ = &UpdateExpr{Name: $1, Expr: $3} 
   }
 
 exists_opt:

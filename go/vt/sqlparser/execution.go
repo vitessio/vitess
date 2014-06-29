@@ -406,7 +406,7 @@ func execAnalyzeInsert(ins *Insert, getTable TableGetter) (plan *ExecPlan) {
 
 	pkColumnNumbers := getInsertPKColumns(ins.Columns, tableInfo)
 
-	if ins.OnDup.Len() != 0 {
+	if ins.OnDup != nil {
 		// Upserts are not safe for statement based replication:
 		// http://bugs.mysql.com/bug.php?id=58637
 		plan.Reason = REASON_UPSERT
@@ -459,7 +459,7 @@ func execAnalyzeUpdate(upd *Update, getTable TableGetter) (plan *ExecPlan) {
 	}
 
 	var ok bool
-	if plan.SecondaryPKValues, ok = upd.List.execAnalyzeUpdateExpressions(tableInfo.Indexes[0]); !ok {
+	if plan.SecondaryPKValues, ok = execAnalyzeUpdateExpressions(upd.List, tableInfo.Indexes[0]); !ok {
 		plan.Reason = REASON_PK_CHANGE
 		return plan
 	}
@@ -529,12 +529,12 @@ func execAnalyzeSet(set *Set) (plan *ExecPlan) {
 		PlanId:    PLAN_SET,
 		FullQuery: GenerateFullQuery(set),
 	}
-	if set.Updates.Len() > 1 { // Multiple set values
+	if len(set.Updates) > 1 { // Multiple set values
 		return plan
 	}
-	update_expression := set.Updates.NodeAt(0) // '='
-	plan.SetKey = string(update_expression.At(0).(*ColName).Name)
-	numExpr, ok := update_expression.At(1).(NumValue)
+	update_expression := set.Updates[0]
+	plan.SetKey = string(update_expression.Name.Name)
+	numExpr, ok := update_expression.Expr.(NumValue)
 	if !ok {
 		return plan
 	}
@@ -750,16 +750,16 @@ func hasINClause(conditions []BoolExpr) bool {
 //-----------------------------------------------
 // Update expressions
 
-func (node *Node) execAnalyzeUpdateExpressions(pkIndex *schema.Index) (pkValues []interface{}, ok bool) {
-	for i := 0; i < node.Len(); i++ {
-		columnName := string(execGetColumnName(node.NodeAt(i).At(0).(*ColName)))
+func execAnalyzeUpdateExpressions(exprs UpdateExprs, pkIndex *schema.Index) (pkValues []interface{}, ok bool) {
+	for _, expr := range exprs {
+		columnName := string(execGetColumnName(expr.Name))
 		index := pkIndex.FindColumn(columnName)
 		if index == -1 {
 			continue
 		}
-		value := execAnalyzeValue(node.NodeAt(i).At(1).(ValExpr))
+		value := execAnalyzeValue(expr.Expr)
 		if value == nil {
-			log.Warningf("expression is too complex %v", node.NodeAt(i).At(0))
+			log.Warningf("expression is too complex %v", expr)
 			return nil, false
 		}
 		if pkValues == nil {
@@ -1059,13 +1059,15 @@ func GenerateInOuterQuery(sel *Select, tableInfo *schema.Table) *ParsedQuery {
 
 func GenerateInsertOuterQuery(ins *Insert) *ParsedQuery {
 	buf := NewTrackedBuffer(nil)
-	buf.Fprintf("insert %vinto %v%v values %a%v",
+	buf.Fprintf("insert %vinto %v%v values %a",
 		ins.Comments,
 		ins.Table,
 		ins.Columns,
 		"_rowValues",
-		ins.OnDup,
 	)
+	if ins.OnDup != nil {
+		buf.Fprintf(" on duplicate key update %v", ins.OnDup)
+	}
 	return buf.ParsedQuery()
 }
 
