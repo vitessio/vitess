@@ -88,36 +88,7 @@ func (node *Node) String() (out string) {
 
 // Format generates the SQL for the current node.
 func (node *Node) Format(buf *TrackedBuffer) {
-	switch node.Type {
-	case NODE_LIST:
-		if node.Len() > 0 {
-			buf.Fprintf("%v", node.At(0))
-			for i := 1; i < node.Len(); i++ {
-				buf.Fprintf(", %v", node.At(i))
-			}
-		}
-	case WHEN_LIST:
-		buf.Fprintf("%v", node.At(0))
-		for i := 1; i < node.Len(); i++ {
-			buf.Fprintf(" %v", node.At(i))
-		}
-	case DUPLICATE:
-		if node.Len() != 0 {
-			buf.Fprintf(" on duplicate key update %v", node.At(0))
-		}
-	case CASE_WHEN:
-		buf.Fprintf("case %v end", node.At(0))
-	case CASE:
-		buf.Fprintf("case %v %v end", node.At(0), node.At(1))
-	case WHEN:
-		buf.Fprintf("when %v then %v", node.At(0), node.At(1))
-	case ELSE:
-		buf.Fprintf("else %v", node.At(0))
-	case '=':
-		buf.Fprintf("%v %s %v", node.At(0), node.Value, node.At(1))
-	default:
-		buf.Fprintf("Unknown: %s", node.Value)
-	}
+	buf.Fprintf("Unknown: %s", node.Value)
 }
 
 // AnonymizedFormatter is a formatter that

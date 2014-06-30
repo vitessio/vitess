@@ -54,6 +54,9 @@ var (
   valExprs    ValExprs
   values      Values
   subquery    *Subquery
+  caseExpr    *CaseExpr
+  whens       []*When
+  when        *When
   groupBy     GroupBy
   orderBy     OrderBy
   order       *Order
@@ -90,9 +93,6 @@ var (
 
 %start any_command
 
-// Fake Tokens
-%token <node> NODE_LIST CASE_WHEN WHEN_LIST
-
 %type <statement> command
 %type <statement> select_statement insert_statement update_statement delete_statement set_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement
@@ -121,7 +121,10 @@ var (
 %type <subquery> subquery
 %type <byt> unary_operator
 %type <colName> column_name
-%type <node> case_expression when_expression_list when_expression
+%type <caseExpr> case_expression
+%type <whens> when_expression_list
+%type <when> when_expression
+%type <valExpr> value_expression_opt else_expression_opt
 %type <groupBy> group_by_opt
 %type <where> having_opt
 %type <orderBy> order_by_opt order_list
@@ -692,8 +695,7 @@ value_expression:
   }
 | case_expression
   {
-    c := CaseExpr(*$1)
-    $$ = &c
+    $$ = $1
   }
 
 keyword_as_func:
@@ -721,35 +723,43 @@ unary_operator:
   }
 
 case_expression:
-  CASE when_expression_list END
+  CASE value_expression_opt when_expression_list else_expression_opt END
   {
-    $$ = NewSimpleParseNode(CASE_WHEN, "case")
-    $$.Push($2)
+    $$ = &CaseExpr{Expr: $2, Whens: $3, Else: $4}
   }
-| CASE expression when_expression_list END
+
+value_expression_opt:
   {
-    $$.PushTwo($2, $3)
+    $$ = nil
+  }
+| value_expression
+  {
+    $$ = $1
   }
 
 when_expression_list:
   when_expression
   {
-    $$ = NewSimpleParseNode(WHEN_LIST, "when_list")
-    $$.Push($1)
+    $$ = []*When{$1}
   }
 | when_expression_list when_expression
   {
-    $$.Push($2)
+    $$ = append($1, $2)
   }
 
 when_expression:
-  WHEN expression THEN expression
+  WHEN boolean_expression THEN value_expression
   {
-    $$.PushTwo($2, $4)
+    $$ = &When{Cond: $2, Val: $4}
   }
-| ELSE expression
+
+else_expression_opt:
   {
-    $$.Push($2)
+    $$ = nil
+  }
+| ELSE value_expression
+  {
+    $$ = $2
   }
 
 column_name:

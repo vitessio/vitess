@@ -654,13 +654,37 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 }
 
 // CaseExpr represents a CASE expression.
-type CaseExpr Node
+type CaseExpr struct {
+	Expr  ValExpr
+	Whens []*When
+	Else  ValExpr
+}
 
 func (*CaseExpr) expr()    {}
 func (*CaseExpr) valExpr() {}
 
 func (node *CaseExpr) Format(buf *TrackedBuffer) {
-	buf.Fprintf("%v", (*Node)(node))
+	buf.Fprintf("case ")
+	if node.Expr != nil {
+		buf.Fprintf("%v ", node.Expr)
+	}
+	for _, when := range node.Whens {
+		buf.Fprintf("%v ", when)
+	}
+	if node.Else != nil {
+		buf.Fprintf("else %v ", node.Else)
+	}
+	buf.Fprintf("end")
+}
+
+// When represents a WHEN sub-expression.
+type When struct {
+	Cond BoolExpr
+	Val  ValExpr
+}
+
+func (node *When) Format(buf *TrackedBuffer) {
+	buf.Fprintf("when %v then %v", node.Cond, node.Val)
 }
 
 // Values represents a VALUES clause.
