@@ -298,8 +298,7 @@ processLoop:
 func CreateBlpCheckpoint() []string {
 	return []string{
 		"CREATE DATABASE IF NOT EXISTS _vt",
-		"USE _vt",
-		`CREATE TABLE IF NOT EXISTS blp_checkpoint (
+		`CREATE TABLE IF NOT EXISTS _vt.blp_checkpoint (
   source_shard_uid INT(10) UNSIGNED NOT NULL,
   group_id BIGINT DEFAULT NULL,
   time_updated BIGINT UNSIGNED NOT NULL,

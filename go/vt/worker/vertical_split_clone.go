@@ -18,6 +18,7 @@ import (
 	//	"github.com/youtube/vitess/go/vt/concurrency"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -59,9 +60,10 @@ type VerticalSplitCloneWorker struct {
 	sourceKeyspace          string
 
 	// populated during stateVSCFindTargets, read-only after that
-	sourceAlias        topo.TabletAlias
-	destinationAliases []topo.TabletAlias
-	destinationTablets map[topo.TabletAlias]*topo.TabletInfo
+	sourceAlias            topo.TabletAlias
+	destinationAliases     []topo.TabletAlias
+	destinationTablets     map[topo.TabletAlias]*topo.TabletInfo
+	destinationMasterAlias topo.TabletAlias
 
 	// populated during stateVSCCopy
 	copyLogs               []string
@@ -258,6 +260,20 @@ func (vscw *VerticalSplitCloneWorker) findTargets() error {
 		return fmt.Errorf("cannot read all target tablets in %v/%v: %v", vscw.destinationKeyspace, vscw.destinationShard, err)
 	}
 
+	// find and validate the master
+	for tabletAlias, ti := range vscw.destinationTablets {
+		if ti.Type == topo.TYPE_MASTER {
+			if vscw.destinationMasterAlias.IsZero() {
+				vscw.destinationMasterAlias = tabletAlias
+			} else {
+				return fmt.Errorf("multiple masters in destination shard: %v and %v at least", vscw.destinationMasterAlias, tabletAlias)
+			}
+		}
+	}
+	if vscw.destinationMasterAlias.IsZero() {
+		return fmt.Errorf("no master in destination shard")
+	}
+
 	return nil
 }
 
@@ -372,6 +388,10 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	// insertChannels
 	sourceWaitGroup := sync.WaitGroup{}
 	for _, td := range vscw.sourceSchemaDefinition.TableDefinitions {
+		if td.Type == myproto.TABLE_VIEW {
+			continue
+		}
+
 		sourceWaitGroup.Add(1)
 		go func(td myproto.TableDefinition) {
 			defer sourceWaitGroup.Done()
@@ -427,16 +447,71 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	}
 
 	// do the post-copy alters if any
-	if len(alterTablesCmds) == 0 {
-		return nil
+	if len(alterTablesCmds) > 0 {
+		for _, tabletAlias := range vscw.destinationAliases {
+			destinationWaitGroup.Add(1)
+			go func(ti *topo.TabletInfo) {
+				defer destinationWaitGroup.Done()
+				log.Infof("Altering tables on tablet %v", ti.Alias)
+				if err := vscw.runSqlCommands(ti, alterTablesCmds, abort); err != nil {
+					processError("alterTablesCmds failed on tablet %v: %v", ti.Alias, err)
+				}
+			}(vscw.destinationTablets[tabletAlias])
+		}
+		destinationWaitGroup.Wait()
+		if firstError != nil {
+			return firstError
+		}
 	}
+
+	// then create and populate the blp_checkpoint table
+	if strings.Index(vscw.strategy, "populateBlpCheckpoint") != -1 {
+		// get the current position from the source
+		ti, err := vscw.wr.TopoServer().GetTablet(vscw.sourceAlias)
+		if err != nil {
+			return err
+		}
+
+		pos, err := vscw.wr.ActionInitiator().SlavePosition(ti, 30*time.Second)
+		if err != nil {
+			return err
+		}
+
+		queries := make([]string, 0, 4)
+		queries = append(queries, binlogplayer.CreateBlpCheckpoint()...)
+		queries = append(queries, binlogplayer.PopulateBlpCheckpoint(0, pos.MasterLogGroupId, time.Now().Unix()))
+		for _, tabletAlias := range vscw.destinationAliases {
+			destinationWaitGroup.Add(1)
+			go func(ti *topo.TabletInfo) {
+				defer destinationWaitGroup.Done()
+				log.Infof("Making and populating blp_checkpoint table on tablet %v", ti.Alias)
+				if err := vscw.runSqlCommands(ti, queries, abort); err != nil {
+					processError("blp_checkpoint queries failed on tablet %v: %v", ti.Alias, err)
+				}
+			}(vscw.destinationTablets[tabletAlias])
+		}
+		destinationWaitGroup.Wait()
+		if firstError != nil {
+			return firstError
+		}
+	}
+
+	// Now we're done with data copy, update the shard's source info.
+	log.Infof("Setting SourceShard on shard %v/%v", vscw.destinationKeyspace, vscw.destinationShard)
+	if err := vscw.wr.SetSourceShards(vscw.destinationKeyspace, vscw.destinationShard, []topo.TabletAlias{vscw.sourceAlias}, vscw.tables); err != nil {
+		return fmt.Errorf("Failed to set source shards: %v", err)
+	}
+
+	// And force a schema reload on all destination tablets.
+	// The master tablet will end up starting filtered replication
+	// at this point.
 	for _, tabletAlias := range vscw.destinationAliases {
 		destinationWaitGroup.Add(1)
 		go func(ti *topo.TabletInfo) {
 			defer destinationWaitGroup.Done()
-			log.Infof("Altering tables on tablet %v", ti.Alias)
-			if err := vscw.runSqlCommands(ti, alterTablesCmds, abort); err != nil {
-				processError("alterTablesCmds failed on tablet %v: %v", ti.Alias, err)
+			log.Infof("Reloading schema on tablet %v", ti.Alias)
+			if err := vscw.wr.ActionInitiator().ReloadSchema(ti, 30*time.Second); err != nil {
+				processError("ReloadSchema failed on tablet %v: %v", ti.Alias, err)
 			}
 		}(vscw.destinationTablets[tabletAlias])
 	}
