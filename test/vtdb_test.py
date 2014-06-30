@@ -349,51 +349,6 @@ class TestTabletFunctions(unittest.TestCase):
     except Exception, e:
       self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))
 
-  def test_streaming_terminate(self):
-    try:
-      count = 1
-      do_write(count)
-      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
-      stream_cursor = cursor.StreamCursor(master_conn)
-
-      # Initiate a slow stream query
-      query = "select sleep(5) from vt_insert_test limit 1"
-      thd = threading.Thread(target=self._stream_exec, args=(stream_cursor, query))
-      thd.start()
-
-      # Get the connID from status page 
-      tablet_addr = "http://localhost:" + str(self.master_tablet.port)
-      streamqueryz_url = tablet_addr +  "/streamqueryz?format=json" 
-      retries = 3
-      streaming_queries = []
-      while len(streaming_queries) == 0:
-        content = urllib.urlopen(streamqueryz_url).read()
-        streaming_queries = json.loads(content)
-        retries -= 1
-        if retries == 0:
-            self.fail("unable to fetch streaming queries from %s" % streamqueryz_url)
-        else:
-            time.sleep(1) 
-      connId = streaming_queries[0]['ConnID']
-
-      # Terminate the query
-      terminate_url = tablet_addr + "/streamqueryz/terminate?format=json&connID=" + str(connId)
-      content = urllib.urlopen(terminate_url).read()
-      # Assert state got updated
-      streaming_queries = json.loads(content)
-      state = streaming_queries[0]['State']
-      self.assertEqual(state, 'Terminating', 'status should be Terminating')
-      # Assert error is raised
-      thd.join()
-      with self.assertRaises(dbexceptions.DatabaseError):
-        stream_cursor.fetchone()
-      stream_cursor.close()
-    except Exception, e:
-      self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))
-
-  def _stream_exec(self, stream_cursor, query):
-      stream_cursor.execute(query, {})
-
 class TestFailures(unittest.TestCase):
   def setUp(self):
     self.shard_index = 0

@@ -24,12 +24,13 @@ func ForceEOF(yylex interface{}) {
 
 var (
   SHARE = []byte("share")
-  MODE =  []byte("mode")
+  MODE  = []byte("mode")
 )
 
 %}
 
 %union {
+  empty       struct{}
   node        *Node
   statement   Statement
   comments    Comments
@@ -44,12 +45,24 @@ var (
   tableExprs  TableExprs
   tableExpr   TableExpr
   tableName   *TableName
+  indexHints  *IndexHints
+  names       [][]byte
   where       *Where
   expr        Expr
   boolExpr    BoolExpr
   valExpr     ValExpr
   valExprs    ValExprs
+  values      Values
   subquery    *Subquery
+  caseExpr    *CaseExpr
+  whens       []*When
+  when        *When
+  groupBy     GroupBy
+  orderBy     OrderBy
+  order       *Order
+  limit       *Limit
+  updateExprs UpdateExprs
+  updateExpr  *UpdateExpr
   sqlNode     SQLNode
 }
 
@@ -80,10 +93,6 @@ var (
 
 %start any_command
 
-// Fake Tokens
-%token <node> NODE_LIST UPLUS UMINUS CASE_WHEN WHEN_LIST FUNCTION NO_LOCK FOR_UPDATE LOCK_IN_SHARE_MODE
-%token <node> INDEX_LIST
-
 %type <statement> command
 %type <statement> select_statement insert_statement update_statement delete_statement set_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement
@@ -99,22 +108,35 @@ var (
 %type <str> join_type
 %type <sqlNode> simple_table_expression
 %type <tableName> dml_table_expression
-%type <node> index_hint_list
+%type <indexHints> index_hint_list
+%type <names> index_list
 %type <where> where_expression_opt
 %type <boolExpr> boolean_expression condition
 %type <str> compare
 %type <sqlNode> values
 %type <valExpr> value tuple value_expression
 %type <valExprs> value_expression_list
-%type <node> tuple_list keyword_as_func
+%type <values> tuple_list
+%type <bytes> keyword_as_func
 %type <subquery> subquery
 %type <byt> unary_operator
 %type <colName> column_name
-%type <node> case_expression when_expression_list when_expression
-%type <node> group_by_opt having_opt order_by_opt order_list order asc_desc_opt limit_opt lock_opt on_dup_opt
+%type <caseExpr> case_expression
+%type <whens> when_expression_list
+%type <when> when_expression
+%type <valExpr> value_expression_opt else_expression_opt
+%type <groupBy> group_by_opt
+%type <where> having_opt
+%type <orderBy> order_by_opt order_list
+%type <order> order
+%type <str> asc_desc_opt
+%type <limit> limit_opt
+%type <str> lock_opt
 %type <columns> column_list_opt column_list
-%type <node> index_list update_list update_expression
-%type <node> exists_opt not_exists_opt ignore_opt non_rename_operation to_opt constraint_opt using_opt
+%type <updateExprs> on_dup_opt
+%type <updateExprs> update_list
+%type <updateExpr> update_expression
+%type <empty> exists_opt not_exists_opt ignore_opt non_rename_operation to_opt constraint_opt using_opt
 %type <node> sql_id
 %type <node> force_eof
 
@@ -150,7 +172,7 @@ select_statement:
 insert_statement:
   INSERT comment_opt INTO dml_table_expression column_list_opt values on_dup_opt
   {
-    $$ = &Insert{Comments: $2, Table: $4, Columns: $5, Values: $6, OnDup: $7}
+    $$ = &Insert{Comments: $2, Table: $4, Columns: $5, Rows: $6, OnDup: $7}
   }
 
 update_statement:
@@ -174,52 +196,52 @@ set_statement:
 create_statement:
   CREATE TABLE not_exists_opt ID force_eof
   {
-    $$ = &DDLSimple{Action: CREATE, Table: $4}
+    $$ = &DDLSimple{Action: CREATE, Table: $4.Value}
   }
 | CREATE constraint_opt INDEX sql_id using_opt ON ID force_eof
   {
     // Change this to an alter statement
-    $$ = &DDLSimple{Action: ALTER, Table: $7}
+    $$ = &DDLSimple{Action: ALTER, Table: $7.Value}
   }
 | CREATE VIEW sql_id force_eof
   {
-    $$ = &DDLSimple{Action: CREATE, Table: $3}
+    $$ = &DDLSimple{Action: CREATE, Table: $3.Value}
   }
 
 alter_statement:
   ALTER ignore_opt TABLE ID non_rename_operation force_eof
   {
-    $$ = &DDLSimple{Action: ALTER, Table: $4}
+    $$ = &DDLSimple{Action: ALTER, Table: $4.Value}
   }
 | ALTER ignore_opt TABLE ID RENAME to_opt ID
   {
     // Change this to a rename statement
-    $$ = &Rename{OldName: $4, NewName: $7}
+    $$ = &Rename{OldName: $4.Value, NewName: $7.Value}
   }
 | ALTER VIEW sql_id force_eof
   {
-    $$ = &DDLSimple{Action: ALTER, Table: $3}
+    $$ = &DDLSimple{Action: ALTER, Table: $3.Value}
   }
 
 rename_statement:
   RENAME TABLE ID TO ID
   {
-    $$ = &Rename{OldName: $3, NewName: $5}
+    $$ = &Rename{OldName: $3.Value, NewName: $5.Value}
   }
 
 drop_statement:
   DROP TABLE exists_opt ID
   {
-    $$ = &DDLSimple{Action: DROP, Table: $4}
+    $$ = &DDLSimple{Action: DROP, Table: $4.Value}
   }
 | DROP INDEX sql_id ON ID
   {
     // Change this to an alter statement
-    $$ = &DDLSimple{Action: ALTER, Table: $5}
+    $$ = &DDLSimple{Action: ALTER, Table: $5.Value}
   }
 | DROP VIEW exists_opt sql_id force_eof
   {
-    $$ = &DDLSimple{Action: DROP, Table: $4}
+    $$ = &DDLSimple{Action: DROP, Table: $4.Value}
   }
 
 comment_opt:
@@ -332,7 +354,7 @@ table_expression_list:
 table_expression:
   simple_table_expression as_opt index_hint_list
   {
-    $$ = &AliasedTableExpr{Expr:$1, As: $2, Hint: $3}
+    $$ = &AliasedTableExpr{Expr:$1, As: $2, Hints: $3}
   }
 | '(' table_expression ')'
   {
@@ -428,11 +450,25 @@ index_hint_list:
   }
 | USE INDEX '(' index_list ')'
   {
-    $$.Push($4)
+    $$ = &IndexHints{Type: "use", Indexes: $4}
+  }
+| IGNORE INDEX '(' index_list ')'
+  {
+    $$ = &IndexHints{Type: "ignore", Indexes: $4}
   }
 | FORCE INDEX '(' index_list ')'
   {
-    $$.Push($4)
+    $$ = &IndexHints{Type: "force", Indexes: $4}
+  }
+
+index_list:
+  sql_id
+  {
+    $$ = [][]byte{$1.Value}
+  }
+| index_list ',' sql_id
+  {
+    $$ = append($1, $3.Value)
   }
 
 where_expression_opt:
@@ -441,7 +477,7 @@ where_expression_opt:
   }
 | WHERE boolean_expression
   {
-    $$ = &Where{Expr: $2}
+    $$ = &Where{Type: "where", Expr: $2}
   }
 
 boolean_expression:
@@ -538,7 +574,7 @@ compare:
 values:
   VALUES tuple_list
   {
-    $$ = $1.Push($2)
+    $$ = $2
   }
 | select_statement
   {
@@ -548,12 +584,11 @@ values:
 tuple_list:
   tuple
   {
-    $$ = NewSimpleParseNode(NODE_LIST, "node_list")
-    $$.Push($1)
+    $$ = Values{$1.(Tuple)}
   }
 | tuple_list ',' tuple
   {
-    $$.Push($3)
+    $$ = append($1, $3.(Tuple))
   }
 
 tuple:
@@ -656,17 +691,22 @@ value_expression:
   }
 | keyword_as_func '(' select_expression_list ')'
   {
-    $$ = &FuncExpr{Name: $1.Value, Exprs: $3}
+    $$ = &FuncExpr{Name: $1, Exprs: $3}
   }
 | case_expression
   {
-    c := CaseExpr(*$1)
-    $$ = &c
+    $$ = $1
   }
 
 keyword_as_func:
   IF
+  {
+    $$ = $1.Value
+  }
 | VALUES
+  {
+    $$ = $1.Value
+  }
 
 unary_operator:
   '+'
@@ -683,35 +723,43 @@ unary_operator:
   }
 
 case_expression:
-  CASE when_expression_list END
+  CASE value_expression_opt when_expression_list else_expression_opt END
   {
-    $$ = NewSimpleParseNode(CASE_WHEN, "case")
-    $$.Push($2)
+    $$ = &CaseExpr{Expr: $2, Whens: $3, Else: $4}
   }
-| CASE expression when_expression_list END
+
+value_expression_opt:
   {
-    $$.PushTwo($2, $3)
+    $$ = nil
+  }
+| value_expression
+  {
+    $$ = $1
   }
 
 when_expression_list:
   when_expression
   {
-    $$ = NewSimpleParseNode(WHEN_LIST, "when_list")
-    $$.Push($1)
+    $$ = []*When{$1}
   }
 | when_expression_list when_expression
   {
-    $$.Push($2)
+    $$ = append($1, $2)
   }
 
 when_expression:
-  WHEN expression THEN expression
+  WHEN boolean_expression THEN value_expression
   {
-    $$.PushTwo($2, $4)
+    $$ = &When{Cond: $2, Val: $4}
   }
-| ELSE expression
+
+else_expression_opt:
   {
-    $$.Push($2)
+    $$ = nil
+  }
+| ELSE value_expression
+  {
+    $$ = $2
   }
 
 column_name:
@@ -744,75 +792,80 @@ value:
 
 group_by_opt:
   {
-    $$ = NewSimpleParseNode(GROUP, "group")
+    $$ = nil
   }
 | GROUP BY value_expression_list
   {
-    $$ = $1.Push($3)
+    $$ = GroupBy($3)
   }
 
 having_opt:
   {
-    $$ = NewSimpleParseNode(HAVING, "having")
+    $$ = nil
   }
 | HAVING boolean_expression
   {
-    $$ = $1.Push($2)
+    $$ = &Where{Type: "having", Expr: $2}
   }
 
 order_by_opt:
   {
-    $$ = NewSimpleParseNode(ORDER, "order")
+    $$ = nil
   }
 | ORDER BY order_list
   {
-    $$ = $1.Push($3)
+    $$ = $3
   }
 
 order_list:
   order
   {
-    $$ = NewSimpleParseNode(NODE_LIST, "node_list")
-    $$.Push($1)
+    $$ = OrderBy{$1}
   }
 | order_list ',' order
   {
-    $$ = $1.Push($3)
+    $$ = append($1, $3)
   }
 
 order:
   value_expression asc_desc_opt
   {
-    $$ = $2.Push($1)
+    $$ = &Order{Expr: $1, Direction: $2}
   }
 
 asc_desc_opt:
   {
-    $$ = NewSimpleParseNode(ASC, "asc")
+    $$ = "asc"
   }
 | ASC
+  {
+    $$ = "asc"
+  }
 | DESC
+  {
+    $$ = "desc"
+  }
 
 limit_opt:
   {
-    $$ = NewSimpleParseNode(LIMIT, "limit")
+    $$ = nil
   }
 | LIMIT value_expression
   {
-    $$ = $1.Push($2)
+    $$ = &Limit{Rowcount: $2}
   }
 | LIMIT value_expression ',' value_expression
   {
-    $$ = $1.PushTwo($2, $4)
+    $$ = &Limit{Offset: $2, Rowcount: $4}
   }
 
 lock_opt:
   {
-    $$ = NewSimpleParseNode(NO_LOCK, "")
+    $$ = ""
   }
 | FOR UPDATE
   {
-    $$ = NewSimpleParseNode(FOR_UPDATE, " for update")
+    $$ = " for update"
   }
 | LOCK IN sql_id sql_id
   {
@@ -824,7 +877,7 @@ lock_opt:
       yylex.Error("expecting mode")
       return 1
     }
-    $$ = NewSimpleParseNode(LOCK_IN_SHARE_MODE, " lock in share mode")
+    $$ = " lock in share mode"
   }
 
 column_list_opt:
@@ -846,73 +899,72 @@ column_list:
     $$ = append($$, &NonStarExpr{Expr: $3})
   }
 
-index_list:
-  sql_id
-  {
-    $$ = NewSimpleParseNode(INDEX_LIST, "")
-    $$.Push($1)
-  }
-| index_list ',' sql_id
-  {
-    $$ = $1.Push($3)
-  }
-
 on_dup_opt:
   {
-    $$ = NewSimpleParseNode(DUPLICATE, "duplicate")
+    $$ = nil
   }
 | ON DUPLICATE KEY UPDATE update_list
   {
-    $$ = $2.Push($5)
+    $$ = $5
   }
 
 update_list:
   update_expression
   {
-    $$ = NewSimpleParseNode(NODE_LIST, "node_list")
-    $$.Push($1)
+    $$ = UpdateExprs{$1}
   }
 | update_list ',' update_expression
   {
-    $$ = $1.Push($3)
+    $$ = append($1, $3)
   }
 
 update_expression:
   column_name '=' value_expression
   {
-    $$ = $2.PushTwo($1, $3)
+    $$ = &UpdateExpr{Name: $1, Expr: $3} 
   }
 
 exists_opt:
-  { $$ = nil }
+  { $$ = struct{}{} }
 | IF EXISTS
+  { $$ = struct{}{} }
 
 not_exists_opt:
-  { $$ = nil }
+  { $$ = struct{}{} }
 | IF NOT EXISTS
+  { $$ = struct{}{} }
 
 ignore_opt:
-  { $$ = nil }
+  { $$ = struct{}{} }
 | IGNORE
+  { $$ = struct{}{} }
 
 non_rename_operation:
   ALTER
+  { $$ = struct{}{} }
 | DEFAULT
+  { $$ = struct{}{} }
 | DROP
+  { $$ = struct{}{} }
 | ORDER
+  { $$ = struct{}{} }
 | ID
+  { $$ = struct{}{} }
 
 to_opt:
-  { $$ = nil }
+  { $$ = struct{}{} }
 | TO
+  { $$ = struct{}{} }
 
 constraint_opt:
-  { $$ = nil }
+  { $$ = struct{}{} }
 | UNIQUE
+  { $$ = struct{}{} }
 
 using_opt:
-  { $$ = nil }
+  { $$ = struct{}{} }
 | USING sql_id
+  { $$ = struct{}{} }
 
 sql_id:
   ID

@@ -13,6 +13,8 @@ import (
 	"github.com/youtube/vitess/go/vt/schema"
 )
 
+var execLimit = &Limit{Rowcount: ValueArg(":_vtMaxResultSize")}
+
 type PlanType int
 
 const (
@@ -206,7 +208,7 @@ func StreamExecParse(sql string, sensitiveMode bool) (plan *StreamExecPlan, err 
 
 	switch stmt := statement.(type) {
 	case *Select:
-		if stmt.Lock.Type != NO_LOCK {
+		if stmt.Lock != "" {
 			return nil, NewParserError("select with lock disallowed with streaming")
 		}
 	case *Union:
@@ -234,14 +236,14 @@ func DDLParse(sql string) (plan *DDLPlan) {
 	case *DDLSimple:
 		return &DDLPlan{
 			Action:    stmt.Action,
-			TableName: string(stmt.Table.Value),
-			NewName:   string(stmt.Table.Value),
+			TableName: string(stmt.Table),
+			NewName:   string(stmt.Table),
 		}
 	case *Rename:
 		return &DDLPlan{
 			Action:    RENAME,
-			TableName: string(stmt.OldName.Value),
-			NewName:   string(stmt.NewName.Value),
+			TableName: string(stmt.OldName),
+			NewName:   string(stmt.NewName),
 		}
 	}
 	return &DDLPlan{Action: 0}
@@ -303,7 +305,7 @@ func execAnalyzeSelect(sel *Select, getTable TableGetter) (plan *ExecPlan) {
 	tableInfo := plan.setTableInfo(tableName, getTable)
 
 	// Don't improve the plan if the select is locking the row
-	if sel.Lock.Type != NO_LOCK {
+	if sel.Lock != "" {
 		plan.Reason = REASON_LOCK
 		return plan
 	}
@@ -330,7 +332,7 @@ func execAnalyzeSelect(sel *Select, getTable TableGetter) (plan *ExecPlan) {
 	}
 
 	// order
-	if sel.OrderBy.Len() != 0 {
+	if sel.OrderBy != nil {
 		plan.Reason = REASON_ORDER
 		return plan
 	}
@@ -341,7 +343,7 @@ func execAnalyzeSelect(sel *Select, getTable TableGetter) (plan *ExecPlan) {
 	}
 
 	// Attempt PK match only if there's no limit clause
-	if sel.Limit.Len() == 0 {
+	if sel.Limit == nil {
 		planId, pkValues := getSelectPKValues(conditions, tableInfo.Indexes[0])
 		switch planId {
 		case PLAN_PK_EQUAL:
@@ -404,14 +406,14 @@ func execAnalyzeInsert(ins *Insert, getTable TableGetter) (plan *ExecPlan) {
 
 	pkColumnNumbers := getInsertPKColumns(ins.Columns, tableInfo)
 
-	if ins.OnDup.Len() != 0 {
+	if ins.OnDup != nil {
 		// Upserts are not safe for statement based replication:
 		// http://bugs.mysql.com/bug.php?id=58637
 		plan.Reason = REASON_UPSERT
 		return plan
 	}
 
-	if sel, ok := ins.Values.(SelectStatement); ok {
+	if sel, ok := ins.Rows.(SelectStatement); ok {
 		plan.PlanId = PLAN_INSERT_SUBQUERY
 		plan.OuterQuery = GenerateInsertOuterQuery(ins)
 		plan.Subquery = GenerateSelectLimitQuery(sel)
@@ -427,7 +429,7 @@ func execAnalyzeInsert(ins *Insert, getTable TableGetter) (plan *ExecPlan) {
 	}
 
 	// If it's not a SelectStatement, it's a Node.
-	rowList := ins.Values.(*Node).NodeAt(0) // VALUES->NODE_LIST
+	rowList := ins.Rows.(Values)
 	if pkValues := getInsertPKValues(pkColumnNumbers, rowList, tableInfo); pkValues != nil {
 		plan.PlanId = PLAN_INSERT_PK
 		plan.OuterQuery = plan.FullQuery
@@ -457,7 +459,7 @@ func execAnalyzeUpdate(upd *Update, getTable TableGetter) (plan *ExecPlan) {
 	}
 
 	var ok bool
-	if plan.SecondaryPKValues, ok = upd.List.execAnalyzeUpdateExpressions(tableInfo.Indexes[0]); !ok {
+	if plan.SecondaryPKValues, ok = execAnalyzeUpdateExpressions(upd.List, tableInfo.Indexes[0]); !ok {
 		plan.Reason = REASON_PK_CHANGE
 		return plan
 	}
@@ -527,12 +529,12 @@ func execAnalyzeSet(set *Set) (plan *ExecPlan) {
 		PlanId:    PLAN_SET,
 		FullQuery: GenerateFullQuery(set),
 	}
-	if set.Updates.Len() > 1 { // Multiple set values
+	if len(set.Updates) > 1 { // Multiple set values
 		return plan
 	}
-	update_expression := set.Updates.NodeAt(0) // '='
-	plan.SetKey = string(update_expression.At(0).(*ColName).Name)
-	numExpr, ok := update_expression.At(1).(NumValue)
+	update_expression := set.Updates[0]
+	plan.SetKey = string(update_expression.Name.Name)
+	numExpr, ok := update_expression.Expr.(NumValue)
 	if !ok {
 		return plan
 	}
@@ -561,10 +563,10 @@ func execAnalyzeSelectStructure(sel *Select) bool {
 	if sel.Distinct {
 		return false
 	}
-	if sel.GroupBy.Len() > 0 {
+	if sel.GroupBy != nil {
 		return false
 	}
-	if sel.Having.Len() > 0 {
+	if sel.Having != nil {
 		return false
 	}
 	return true
@@ -627,7 +629,7 @@ func execAnalyzeFrom(tableExprs TableExprs) (tablename string, hasHints bool) {
 	if !ok {
 		return "", false
 	}
-	return collectTableName(node.Expr), node.Hint != nil
+	return collectTableName(node.Expr), node.Hints != nil
 }
 
 func collectTableName(node SQLNode) string {
@@ -748,16 +750,16 @@ func hasINClause(conditions []BoolExpr) bool {
 //-----------------------------------------------
 // Update expressions
 
-func (node *Node) execAnalyzeUpdateExpressions(pkIndex *schema.Index) (pkValues []interface{}, ok bool) {
-	for i := 0; i < node.Len(); i++ {
-		columnName := string(execGetColumnName(node.NodeAt(i).At(0).(*ColName)))
+func execAnalyzeUpdateExpressions(exprs UpdateExprs, pkIndex *schema.Index) (pkValues []interface{}, ok bool) {
+	for _, expr := range exprs {
+		columnName := string(execGetColumnName(expr.Name))
 		index := pkIndex.FindColumn(columnName)
 		if index == -1 {
 			continue
 		}
-		value := execAnalyzeValue(node.NodeAt(i).At(1).(ValExpr))
+		value := execAnalyzeValue(expr.Expr)
 		if value == nil {
-			log.Warningf("expression is too complex %v", node.NodeAt(i).At(0))
+			log.Warningf("expression is too complex %v", expr)
 			return nil, false
 		}
 		if pkValues == nil {
@@ -790,19 +792,19 @@ func getInsertPKColumns(columns Columns, tableInfo *schema.Table) (pkColumnNumbe
 	return pkColumnNumbers
 }
 
-func getInsertPKValues(pkColumnNumbers []int, rowList *Node, tableInfo *schema.Table) (pkValues []interface{}) {
+func getInsertPKValues(pkColumnNumbers []int, rowList Values, tableInfo *schema.Table) (pkValues []interface{}) {
 	pkValues = make([]interface{}, len(pkColumnNumbers))
 	for index, columnNumber := range pkColumnNumbers {
 		if columnNumber == -1 {
 			pkValues[index] = tableInfo.GetPKColumn(index).Default
 			continue
 		}
-		values := make([]interface{}, rowList.Len())
-		for j := 0; j < rowList.Len(); j++ {
-			if _, ok := rowList.At(j).(*Subquery); ok {
+		values := make([]interface{}, len(rowList))
+		for j := 0; j < len(rowList); j++ {
+			if _, ok := rowList[j].(*Subquery); ok {
 				panic(NewParserError("row subquery not supported for inserts"))
 			}
-			row := rowList.At(j).(ValueTuple)
+			row := rowList[j].(ValueTuple)
 			if columnNumber >= len(row) {
 				panic(NewParserError("column count doesn't match value count"))
 			}
@@ -1025,9 +1027,11 @@ func GenerateSelectLimitQuery(selStmt SelectStatement) *ParsedQuery {
 	sel, ok := selStmt.(*Select)
 	if ok {
 		limit := sel.Limit
-		if limit.Len() == 0 {
-			limit.PushLimit()
-			defer limit.Pop()
+		if limit == nil {
+			sel.Limit = execLimit
+			defer func() {
+				sel.Limit = nil
+			}()
 		}
 	}
 	buf.Fprintf("%v", selStmt)
@@ -1055,13 +1059,15 @@ func GenerateInOuterQuery(sel *Select, tableInfo *schema.Table) *ParsedQuery {
 
 func GenerateInsertOuterQuery(ins *Insert) *ParsedQuery {
 	buf := NewTrackedBuffer(nil)
-	buf.Fprintf("insert %vinto %v%v values %a%v",
+	buf.Fprintf("insert %vinto %v%v values %a",
 		ins.Comments,
 		ins.Table,
 		ins.Columns,
 		"_rowValues",
-		ins.OnDup,
 	)
+	if ins.OnDup != nil {
+		buf.Fprintf(" on duplicate key update %v", ins.OnDup)
+	}
 	return buf.ParsedQuery()
 }
 
@@ -1089,14 +1095,12 @@ func generatePKWhere(buf *TrackedBuffer, pkIndex *schema.Index) {
 }
 
 func GenerateSelectSubquery(sel *Select, tableInfo *schema.Table, index string) *ParsedQuery {
-	hint := NewSimpleParseNode(USE, "use")
-	hint.Push(NewSimpleParseNode(INDEX_LIST, ""))
-	hint.NodeAt(0).Push(NewSimpleParseNode(ID, index))
+	hint := &IndexHints{Type: "use", Indexes: [][]byte{[]byte(index)}}
 	table_expr := sel.From[0].(*AliasedTableExpr)
-	savedHint := table_expr.Hint
-	table_expr.Hint = hint
+	savedHint := table_expr.Hints
+	table_expr.Hints = hint
 	defer func() {
-		table_expr.Hint = savedHint
+		table_expr.Hints = savedHint
 	}()
 	return GenerateSubquery(
 		tableInfo.Indexes[0].Columns,
@@ -1130,15 +1134,10 @@ func GenerateDeleteSubquery(del *Delete, tableInfo *schema.Table) *ParsedQuery {
 	)
 }
 
-func (node *Node) PushLimit() {
-	node.Push(NewSimpleParseNode(VALUE_ARG, ":_vtMaxResultSize"))
-}
-
-func GenerateSubquery(columns []string, table *AliasedTableExpr, where *Where, order *Node, limit *Node, for_update bool) *ParsedQuery {
+func GenerateSubquery(columns []string, table *AliasedTableExpr, where *Where, order OrderBy, limit *Limit, for_update bool) *ParsedQuery {
 	buf := NewTrackedBuffer(nil)
-	if limit.Len() == 0 {
-		limit.PushLimit()
-		defer limit.Pop()
+	if limit == nil {
+		limit = execLimit
 	}
 	fmt.Fprintf(buf, "select ")
 	i := 0

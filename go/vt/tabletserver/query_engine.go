@@ -72,7 +72,7 @@ type compiledPlan struct {
 	Query string
 	*ExecPlan
 	BindVars      map[string]interface{}
-	TransactionId int64
+	TransactionID int64
 }
 
 // stats are globals to allow anybody to set them
@@ -236,18 +236,18 @@ func (qe *QueryEngine) Begin(logStats *SQLQueryStats) int64 {
 	if conn == nil {
 		panic(NewTabletError(TX_POOL_FULL, "Transaction pool connection limit exceeded"))
 	}
-	transactionId, err := qe.activeTxPool.SafeBegin(conn)
+	transactionID, err := qe.activeTxPool.SafeBegin(conn)
 	if err != nil {
 		conn.Recycle()
 		panic(err)
 	}
-	return transactionId
+	return transactionID
 }
 
 // Commit commits the specified transaction.
-func (qe *QueryEngine) Commit(logStats *SQLQueryStats, transactionId int64) {
+func (qe *QueryEngine) Commit(logStats *SQLQueryStats, transactionID int64) {
 	defer queryStats.Record("COMMIT", time.Now())
-	dirtyTables, err := qe.activeTxPool.SafeCommit(transactionId)
+	dirtyTables, err := qe.activeTxPool.SafeCommit(transactionID)
 	qe.invalidateRows(logStats, dirtyTables)
 	if err != nil {
 		panic(err)
@@ -271,9 +271,9 @@ func (qe *QueryEngine) invalidateRows(logStats *SQLQueryStats, dirtyTables map[s
 }
 
 // Rollback rolls back the specified transaction.
-func (qe *QueryEngine) Rollback(logStats *SQLQueryStats, transactionId int64) {
+func (qe *QueryEngine) Rollback(logStats *SQLQueryStats, transactionID int64) {
 	defer queryStats.Record("ROLLBACK", time.Now())
-	qe.activeTxPool.Rollback(transactionId)
+	qe.activeTxPool.Rollback(transactionID)
 }
 
 // Execute executes the specified query and returns its result.
@@ -315,7 +315,7 @@ func (qe *QueryEngine) Execute(logStats *SQLQueryStats, query *proto.Query) (rep
 		Query:         query.Sql,
 		ExecPlan:      basePlan,
 		BindVars:      query.BindVariables,
-		TransactionId: query.TransactionId,
+		TransactionID: query.TransactionId,
 	}
 	if query.TransactionId != 0 {
 		// Need upfront connection for DMLs and transactions
@@ -885,7 +885,7 @@ func (qe *QueryEngine) executeSql(logStats *SQLQueryStats, conn dbconnpool.PoolC
 	defer qe.activePool.Remove(connid)
 
 	logStats.QuerySources |= QUERY_SOURCE_MYSQL
-	logStats.NumberOfQueries += 1
+	logStats.NumberOfQueries++
 	logStats.AddRewrittenSql(sql)
 
 	// NOTE(szopa): I am not doing this measurement inside
@@ -903,7 +903,7 @@ func (qe *QueryEngine) executeSql(logStats *SQLQueryStats, conn dbconnpool.PoolC
 
 func (qe *QueryEngine) executeStreamSql(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, sql string, callback func(*mproto.QueryResult) error) {
 	logStats.QuerySources |= QUERY_SOURCE_MYSQL
-	logStats.NumberOfQueries += 1
+	logStats.NumberOfQueries++
 	logStats.AddRewrittenSql(sql)
 	fetchStart := time.Now()
 	err := conn.ExecuteStreamFetch(sql, callback, int(qe.streamBufferSize.Get()))

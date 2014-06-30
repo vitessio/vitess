@@ -34,17 +34,18 @@ type SelectStatement interface {
 }
 
 // Select represents a SELECT statement.
+// Lock can be "", " for update", " lock in share mode".
 type Select struct {
 	Comments    Comments
 	Distinct    Distinct
 	SelectExprs SelectExprs
 	From        TableExprs
 	Where       *Where
-	GroupBy     *Node
-	Having      *Node
-	OrderBy     *Node
-	Limit       *Node
-	Lock        *Node
+	GroupBy     GroupBy
+	Having      *Where
+	OrderBy     OrderBy
+	Limit       *Limit
+	Lock        string
 }
 
 func (*Select) statement() {}
@@ -52,7 +53,7 @@ func (*Select) statement() {}
 func (*Select) selectStatement() {}
 
 func (node *Select) Format(buf *TrackedBuffer) {
-	buf.Fprintf("select %v%v%v from %v%v%v%v%v%v%v",
+	buf.Fprintf("select %v%v%v from %v%v%v%v%v%v%s",
 		node.Comments, node.Distinct, node.SelectExprs,
 		node.From, node.Where,
 		node.GroupBy, node.Having, node.OrderBy,
@@ -76,30 +77,34 @@ func (node *Union) Format(buf *TrackedBuffer) {
 }
 
 // Insert represents an INSERT statement.
+// Rows can be *Subselect, Values.
 type Insert struct {
 	Comments Comments
 	Table    *TableName
 	Columns  Columns
-	Values   SQLNode
-	OnDup    *Node
+	Rows     SQLNode
+	OnDup    UpdateExprs
 }
 
 func (*Insert) statement() {}
 
 func (node *Insert) Format(buf *TrackedBuffer) {
-	buf.Fprintf("insert %vinto %v%v %v%v",
+	buf.Fprintf("insert %vinto %v%v %v",
 		node.Comments,
-		node.Table, node.Columns, node.Values, node.OnDup)
+		node.Table, node.Columns, node.Rows, node.OnDup)
+	if node.OnDup != nil {
+		buf.Fprintf(" on duplicate key update %v", node.OnDup)
+	}
 }
 
 // Update represents an UPDATE statement.
 type Update struct {
 	Comments Comments
 	Table    *TableName
-	List     *Node
+	List     UpdateExprs
 	Where    *Where
-	OrderBy  *Node
-	Limit    *Node
+	OrderBy  OrderBy
+	Limit    *Limit
 }
 
 func (*Update) statement() {}
@@ -115,8 +120,8 @@ type Delete struct {
 	Comments Comments
 	Table    *TableName
 	Where    *Where
-	OrderBy  *Node
-	Limit    *Node
+	OrderBy  OrderBy
+	Limit    *Limit
 }
 
 func (*Delete) statement() {}
@@ -130,7 +135,7 @@ func (node *Delete) Format(buf *TrackedBuffer) {
 // Set represents a SET statement.
 type Set struct {
 	Comments Comments
-	Updates  *Node
+	Updates  UpdateExprs
 }
 
 func (*Set) statement() {}
@@ -142,7 +147,7 @@ func (node *Set) Format(buf *TrackedBuffer) {
 // DDLSimple represents a CREATE, ALTER or DROP statement.
 type DDLSimple struct {
 	Action int
-	Table  *Node
+	Table  []byte
 }
 
 func (*DDLSimple) statement() {}
@@ -150,11 +155,11 @@ func (*DDLSimple) statement() {}
 func (node *DDLSimple) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case CREATE:
-		buf.Fprintf("create table %v", node.Table)
+		buf.Fprintf("create table %s", node.Table)
 	case ALTER:
-		buf.Fprintf("alter table %v", node.Table)
+		buf.Fprintf("alter table %s", node.Table)
 	case DROP:
-		buf.Fprintf("drop table %v", node.Table)
+		buf.Fprintf("drop table %s", node.Table)
 	default:
 		panic("unreachable")
 	}
@@ -162,13 +167,13 @@ func (node *DDLSimple) Format(buf *TrackedBuffer) {
 
 // Rename represents a RENAME statement.
 type Rename struct {
-	OldName, NewName *Node
+	OldName, NewName []byte
 }
 
 func (*Rename) statement() {}
 
 func (node *Rename) Format(buf *TrackedBuffer) {
-	buf.Fprintf("rename table %v %v", node.OldName, node.NewName)
+	buf.Fprintf("rename table %s %s", node.OldName, node.NewName)
 }
 
 // Comments represents a list of comments.
@@ -277,9 +282,9 @@ type TableExpr interface {
 // AliasedTableExpr represents a table expression
 // coupled with an optional alias or index hint.
 type AliasedTableExpr struct {
-	Expr SQLNode
-	As   []byte
-	Hint *Node
+	Expr  SQLNode
+	As    []byte
+	Hints *IndexHints
 }
 
 func (*AliasedTableExpr) tableExpr() {}
@@ -289,9 +294,9 @@ func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
 	if node.As != nil {
 		buf.Fprintf(" as %s", node.As)
 	}
-	if node.Hint != nil {
+	if node.Hints != nil {
 		// Hint node provides the space padding.
-		buf.Fprintf("%v", node.Hint)
+		buf.Fprintf("%v", node.Hints)
 	}
 }
 
@@ -339,8 +344,28 @@ func (node *JoinTableExpr) Format(buf *TrackedBuffer) {
 	}
 }
 
-// Where represents a WHERE expression.
+// IndexHints represents a list of index hints.
+// Type can be "use", "ignore" or "force".
+// TODO(sougou): See if Indexes can reuse Columns.
+type IndexHints struct {
+	Type    string
+	Indexes [][]byte
+}
+
+func (node *IndexHints) Format(buf *TrackedBuffer) {
+	buf.Fprintf(" %s index ", node.Type)
+	prefix := "("
+	for _, n := range node.Indexes {
+		buf.Fprintf("%s%s", prefix, n)
+		prefix = ", "
+	}
+	buf.Fprintf(")")
+}
+
+// Where represents a WHERE or HAVING clause.
+// Type can be "where", "having"
 type Where struct {
+	Type string
 	Expr BoolExpr
 }
 
@@ -348,7 +373,7 @@ func (node *Where) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-	buf.Fprintf(" where %v", node.Expr)
+	buf.Fprintf(" %s %v", node.Type, node.Expr)
 }
 
 // Expr represents an expression. It can be BoolExpr, ValExpr.
@@ -629,11 +654,116 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 }
 
 // CaseExpr represents a CASE expression.
-type CaseExpr Node
+type CaseExpr struct {
+	Expr  ValExpr
+	Whens []*When
+	Else  ValExpr
+}
 
 func (*CaseExpr) expr()    {}
 func (*CaseExpr) valExpr() {}
 
 func (node *CaseExpr) Format(buf *TrackedBuffer) {
-	buf.Fprintf("%v", (*Node)(node))
+	buf.Fprintf("case ")
+	if node.Expr != nil {
+		buf.Fprintf("%v ", node.Expr)
+	}
+	for _, when := range node.Whens {
+		buf.Fprintf("%v ", when)
+	}
+	if node.Else != nil {
+		buf.Fprintf("else %v ", node.Else)
+	}
+	buf.Fprintf("end")
+}
+
+// When represents a WHEN sub-expression.
+type When struct {
+	Cond BoolExpr
+	Val  ValExpr
+}
+
+func (node *When) Format(buf *TrackedBuffer) {
+	buf.Fprintf("when %v then %v", node.Cond, node.Val)
+}
+
+// Values represents a VALUES clause.
+type Values []Tuple
+
+func (node Values) Format(buf *TrackedBuffer) {
+	prefix := "values "
+	for _, n := range node {
+		buf.Fprintf("%s%v", prefix, n)
+		prefix = ", "
+	}
+}
+
+// GroupBy represents a GROUP BY clause.
+type GroupBy []ValExpr
+
+func (node GroupBy) Format(buf *TrackedBuffer) {
+	prefix := " group by "
+	for _, n := range node {
+		buf.Fprintf("%s%v", prefix, n)
+		prefix = ", "
+	}
+}
+
+// OrderBy represents an ORDER By clause.
+type OrderBy []*Order
+
+func (node OrderBy) Format(buf *TrackedBuffer) {
+	prefix := " order by "
+	for _, n := range node {
+		buf.Fprintf("%s%v", prefix, n)
+		prefix = ", "
+	}
+}
+
+// Order represents an ordering expression.
+// Direction can be "asc", "desc".
+type Order struct {
+	Expr      ValExpr
+	Direction string
+}
+
+func (node *Order) Format(buf *TrackedBuffer) {
+	buf.Fprintf("%v %s", node.Expr, node.Direction)
+}
+
+// Limit represents a LIMIT clause.
+type Limit struct {
+	Offset, Rowcount ValExpr
+}
+
+func (node *Limit) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	buf.Fprintf(" limit ")
+	if node.Offset != nil {
+		buf.Fprintf("%v, ", node.Offset)
+	}
+	buf.Fprintf("%v", node.Rowcount)
+}
+
+// UpdateExprs represents a list of update expressions.
+type UpdateExprs []*UpdateExpr
+
+func (node UpdateExprs) Format(buf *TrackedBuffer) {
+	var prefix string
+	for _, n := range node {
+		buf.Fprintf("%s%v", prefix, n)
+		prefix = ", "
+	}
+}
+
+// UpdateExpr represents an update expression.
+type UpdateExpr struct {
+	Name *ColName
+	Expr ValExpr
+}
+
+func (node *UpdateExpr) Format(buf *TrackedBuffer) {
+	buf.Fprintf("%v = %v", node.Name, node.Expr)
 }

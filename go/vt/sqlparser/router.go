@@ -44,7 +44,7 @@ func buildPlan(sql string) (plan *RoutingPlan) {
 
 func shardListFromPlan(plan *RoutingPlan, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) (shardList []int) {
 	if plan.routingType == ROUTE_BY_VALUE {
-		index := findInsertShard(plan.criteria.(*Node), bindVariables, tabletKeys)
+		index := findInsertShard(plan.criteria.(Values), bindVariables, tabletKeys)
 		return []int{index}
 	}
 
@@ -83,11 +83,11 @@ func shardListFromPlan(plan *RoutingPlan, bindVariables map[string]interface{}, 
 func getRoutingPlan(statement Statement) (plan *RoutingPlan) {
 	plan = &RoutingPlan{}
 	if ins, ok := statement.(*Insert); ok {
-		if sel, ok := ins.Values.(SelectStatement); ok {
+		if sel, ok := ins.Rows.(SelectStatement); ok {
 			return getRoutingPlan(sel)
 		}
 		plan.routingType = ROUTE_BY_VALUE
-		plan.criteria = routingAnalyzeValues(ins.Values.(*Node).NodeAt(0))
+		plan.criteria = routingAnalyzeValues(ins.Rows.(Values))
 		return plan
 	}
 	var where *Where
@@ -106,10 +106,10 @@ func getRoutingPlan(statement Statement) (plan *RoutingPlan) {
 	return plan
 }
 
-func routingAnalyzeValues(node *Node) *Node {
+func routingAnalyzeValues(vals Values) Values {
 	// Analyze first value of every item in the list
-	for i := 0; i < node.Len(); i++ {
-		switch tuple := node.At(i).(type) {
+	for i := 0; i < len(vals); i++ {
+		switch tuple := vals[i].(type) {
 		case ValueTuple:
 			result := routingAnalyzeValue(tuple[0])
 			if result != VALUE_NODE {
@@ -119,7 +119,7 @@ func routingAnalyzeValues(node *Node) *Node {
 			panic(NewParserError("insert is too complex"))
 		}
 	}
-	return node
+	return vals
 }
 
 func routingAnalyzeBoolean(node BoolExpr) BoolExpr {
@@ -202,10 +202,10 @@ func findShardList(valExpr ValExpr, bindVariables map[string]interface{}, tablet
 	return shardlist
 }
 
-func findInsertShard(node *Node, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) int {
+func findInsertShard(vals Values, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) int {
 	index := -1
-	for i := 0; i < node.Len(); i++ {
-		first_value_expression := node.At(i).(ValueTuple)[0]
+	for i := 0; i < len(vals); i++ {
+		first_value_expression := vals[i].(ValueTuple)[0]
 		newIndex := findShard(first_value_expression, bindVariables, tabletKeys)
 		if index == -1 {
 			index = newIndex
