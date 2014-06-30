@@ -1,3 +1,9 @@
+import json
+import threading
+import time
+import traceback
+import urllib
+
 from vtdb import cursor
 from vtdb import dbexceptions
 
@@ -78,3 +84,48 @@ class TestStream(framework.TestCase):
     row[20] = None
     row[25] = None
     self.assertEqual(row, [10L, 'AAAAAAAAAAAAAAAAAA 10', 'BBBBBBBBBBBBBBBBBB 10', 'C', 'DDDDDDDDDDDDDDDDDD 10', 'EEEEEEEEEEEEEEEEEE 10', None, 'FF 10', 'GGGGGGGGGGGGGGGGGG 10', 10L, 10L, None, 10L, 10, 0L, 'AAAAAAAAAAAAAAAAAA 0', 'BBBBBBBBBBBBBBBBBB 0', 'C', 'DDDDDDDDDDDDDDDDDD 0', 'EEEEEEEEEEEEEEEEEE 0', None, 'FF 0', 'GGGGGGGGGGGGGGGGGG 0', 0L, 0L, None, 0L, 0])
+  
+  def test_streaming_terminate(self):
+    try:
+      query = 'select sleep(5) from dual limit 1'
+      cu = cursor.StreamCursor(self.env.conn)
+      thd = threading.Thread(target=self._stream_exec, args=(cu,query))
+      thd.start()
+      tablet_addr = "http://" + self.env.conn.addr
+      connId = self._get_conn_id(tablet_addr)
+      self._terminate_query(tablet_addr, connId)
+      thd.join()
+      with self.assertRaises(dbexceptions.DatabaseError) as cm:
+          cu.fetchone()
+      cu.close()
+    except Exception, e:
+      self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))
+
+  # Initiate a slow stream query
+  def _stream_exec(self, cu, query):
+      cu.execute(query, {})
+
+  # Get the connection id from status page 
+  def _get_conn_id(self, tablet_addr):
+      streamqueryz_url = tablet_addr +  "/streamqueryz?format=json" 
+      retries = 3
+      streaming_queries = []
+      while len(streaming_queries) == 0:
+        content = urllib.urlopen(streamqueryz_url).read()
+        streaming_queries = json.loads(content)
+        retries -= 1
+        if retries == 0:
+            self.fail("unable to fetch streaming queries from %s" % streamqueryz_url)
+        else:
+            time.sleep(1) 
+      connId = streaming_queries[0]['ConnID']
+      return connId
+
+  # Terminate the query via streamqueryz admin page
+  def _terminate_query(self, tablet_addr, connId):
+      terminate_url = tablet_addr + "/streamqueryz/terminate?format=json&connID=" + str(connId)
+      content = urllib.urlopen(terminate_url).read()
+      # Assert state got updated
+      streaming_queries = json.loads(content)
+      state = streaming_queries[0]['State']
+      self.assertEqual(state, 'Terminating', 'status should be Terminating')
