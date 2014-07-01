@@ -24,14 +24,14 @@ var qdStateNames = []string{
 // QueryDetail is a simple wrapper for Query, Context and PoolConnection
 type QueryDetail struct {
 	query   *proto.Query
-	context *Context
+	context Context
 	connID  int64
 	start   time.Time
 	state   sync2.AtomicInt64
 }
 
 // NewQueryDetail creates a new QueryDetail
-func NewQueryDetail(query *proto.Query, context *Context, connID int64) *QueryDetail {
+func NewQueryDetail(query *proto.Query, context Context, connID int64) *QueryDetail {
 	return &QueryDetail{query: query, context: context, connID: connID, start: time.Now()}
 }
 
@@ -104,8 +104,8 @@ func (ql *QueryList) GetQueryzRows() []QueryDetailzRow {
 	for _, qd := range ql.queryDetails {
 		row := QueryDetailzRow{
 			Query:             qd.query.Sql,
-			RemoteAddr:        qd.context.RemoteAddr,
-			Username:          qd.context.Username,
+			RemoteAddr:        qd.context.GetRemoteAddr(),
+			Username:          qd.context.GetUsername(),
 			Start:             qd.start,
 			Duration:          time.Now().Sub(qd.start),
 			SessionID:         qd.query.SessionId,

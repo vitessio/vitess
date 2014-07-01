@@ -9,6 +9,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -57,16 +58,16 @@ type TabletDialer func(context interface{}, endPoint topo.EndPoint, keyspace, sh
 // not be concurrently used across goroutines.
 type TabletConn interface {
 	// Execute executes a non-streaming query on vttablet.
-	Execute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (interface{}, error)
+	Execute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (*mproto.QueryResult, error)
 
 	// ExecuteBatch executes a group of queries.
-	ExecuteBatch(context interface{}, queries []tproto.BoundQuery, transactionId int64) (interface{}, error)
+	ExecuteBatch(context interface{}, queries []tproto.BoundQuery, transactionId int64) (*tproto.QueryResultList, error)
 
 	// StreamExecute executes a streaming query on vttablet. It returns a channel that will stream results.
 	// It also returns an ErrFunc that can be called to check if there were any errors. ErrFunc can be called
 	// immediately after StreamExecute returns to check if there were errors sending the call. It should also
 	// be called after finishing the iteration over the channel to see if there were other errors.
-	StreamExecute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (<-chan interface{}, ErrFunc)
+	StreamExecute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, ErrFunc)
 
 	// Transaction support
 	Begin(context interface{}) (transactionId int64, err error)
@@ -96,9 +97,4 @@ func RegisterDialer(name string, dialer TabletDialer) {
 // GetDialer returns the dialer to use, described by the command line flag
 func GetDialer() TabletDialer {
 	return dialers[*tabletProtocol]
-}
-
-// GetTabletConnProtocol returns the registered tablet conn client protocol.
-func GetTabletConnProtocol() string {
-	return *tabletProtocol
 }

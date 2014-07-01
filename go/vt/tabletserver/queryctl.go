@@ -193,7 +193,7 @@ func GetQueryRules() (qrs *QueryRules) {
 // the unhealthiness otherwise.
 func IsHealthy() error {
 	return SqlQueryRpcService.Execute(
-		new(Context),
+		&DummyContext{},
 		&proto.Query{Sql: "select 1 from dual", SessionId: SqlQueryRpcService.sessionId},
 		new(mproto.QueryResult),
 	)

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -72,7 +73,7 @@ func (e *ShardConnError) Error() string {
 // Execute executes a non-streaming query on vttablet. If there are connection errors,
 // it retries retryCount times before failing. It does not retry if the connection is in
 // the middle of a transaction.
-func (sdc *ShardConn) Execute(context interface{}, query string, bindVars map[string]interface{}, transactionID int64) (qr interface{}, err error) {
+func (sdc *ShardConn) Execute(context interface{}, query string, bindVars map[string]interface{}, transactionID int64) (qr *mproto.QueryResult, err error) {
 	err = sdc.withRetry(context, func(conn tabletconn.TabletConn) error {
 		var innerErr error
 		qr, innerErr = conn.Execute(context, query, bindVars, transactionID)
@@ -82,7 +83,7 @@ func (sdc *ShardConn) Execute(context interface{}, query string, bindVars map[st
 }
 
 // ExecuteBatch executes a group of queries. The retry rules are the same as Execute.
-func (sdc *ShardConn) ExecuteBatch(context interface{}, queries []tproto.BoundQuery, transactionID int64) (qrs interface{}, err error) {
+func (sdc *ShardConn) ExecuteBatch(context interface{}, queries []tproto.BoundQuery, transactionID int64) (qrs *tproto.QueryResultList, err error) {
 	err = sdc.withRetry(context, func(conn tabletconn.TabletConn) error {
 		var innerErr error
 		qrs, innerErr = conn.ExecuteBatch(context, queries, transactionID)
@@ -92,10 +93,10 @@ func (sdc *ShardConn) ExecuteBatch(context interface{}, queries []tproto.BoundQu
 }
 
 // StreamExecute executes a streaming query on vttablet. The retry rules are the same as Execute.
-func (sdc *ShardConn) StreamExecute(context interface{}, query string, bindVars map[string]interface{}, transactionID int64) (<-chan interface{}, tabletconn.ErrFunc) {
+func (sdc *ShardConn) StreamExecute(context interface{}, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc) {
 	var usedConn tabletconn.TabletConn
 	var erFunc tabletconn.ErrFunc
-	var results <-chan interface{}
+	var results <-chan *mproto.QueryResult
 	err := sdc.withRetry(context, func(conn tabletconn.TabletConn) error {
 		results, erFunc = conn.StreamExecute(context, query, bindVars, transactionID)
 		usedConn = conn

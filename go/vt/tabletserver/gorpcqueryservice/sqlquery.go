@@ -21,47 +21,29 @@ func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo
 }
 
 func (sq *SqlQuery) Begin(context *rpcproto.Context, session *proto.Session, txInfo *proto.TransactionInfo) error {
-	return sq.server.Begin(&tabletserver.Context{
-		RemoteAddr: context.RemoteAddr,
-		Username:   context.Username,
-	}, session, txInfo)
+	return sq.server.Begin(NewGoRPCContext(context), session, txInfo)
 }
 
 func (sq *SqlQuery) Commit(context *rpcproto.Context, session *proto.Session, noOutput *string) error {
-	return sq.server.Commit(&tabletserver.Context{
-		RemoteAddr: context.RemoteAddr,
-		Username:   context.Username,
-	}, session)
+	return sq.server.Commit(NewGoRPCContext(context), session)
 }
 
 func (sq *SqlQuery) Rollback(context *rpcproto.Context, session *proto.Session, noOutput *string) error {
-	return sq.server.Rollback(&tabletserver.Context{
-		RemoteAddr: context.RemoteAddr,
-		Username:   context.Username,
-	}, session)
+	return sq.server.Rollback(NewGoRPCContext(context), session)
 }
 
 func (sq *SqlQuery) Execute(context *rpcproto.Context, query *proto.Query, reply *mproto.QueryResult) error {
-	return sq.server.Execute(&tabletserver.Context{
-		RemoteAddr: context.RemoteAddr,
-		Username:   context.Username,
-	}, query, reply)
+	return sq.server.Execute(NewGoRPCContext(context), query, reply)
 }
 
 func (sq *SqlQuery) StreamExecute(context *rpcproto.Context, query *proto.Query, sendReply func(reply interface{}) error) error {
-	return sq.server.StreamExecute(&tabletserver.Context{
-		RemoteAddr: context.RemoteAddr,
-		Username:   context.Username,
-	}, query, func(reply *mproto.QueryResult) error {
+	return sq.server.StreamExecute(NewGoRPCContext(context), query, func(reply *mproto.QueryResult) error {
 		return sendReply(reply)
 	})
 }
 
 func (sq *SqlQuery) ExecuteBatch(context *rpcproto.Context, queryList *proto.QueryList, reply *proto.QueryResultList) error {
-	return sq.server.ExecuteBatch(&tabletserver.Context{
-		RemoteAddr: context.RemoteAddr,
-		Username:   context.Username,
-	}, queryList, reply)
+	return sq.server.ExecuteBatch(NewGoRPCContext(context), queryList, reply)
 }
 
 func init() {
