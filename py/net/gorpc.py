@@ -340,10 +340,11 @@ class GoRpcClient(object):
   # FIXME(alainjobart) The timeout needs to be passed in, not inferred,
   # otherwise it's going to be hard to debug... Anyway, the value
   # for the timeout will most likely be 300s here, as timeout is usually 30s.
-  def stream_next(self):
+  def stream_next(self, stream_deadline=None):
+    stream_deadline = stream_deadline or self.deadline * 10
     try:
       response = GoRpcResponse()
-      self._read_response(response, self.deadline)
+      self._read_response(response, stream_deadline)
     except socket.timeout as e:
       # tear down - can't guarantee a clean conversation
       self.close()
@@ -351,7 +352,7 @@ class GoRpcClient(object):
     except DeadlineExceededError as e:
       # tear down
       self.close()
-      raise DeadlineExceededError(e, self.deadline)
+      raise DeadlineExceededError(e, stream_deadline)
     except socket.error as e:
       # tear down - better chance of recovery by reconnecting
       self.close()
