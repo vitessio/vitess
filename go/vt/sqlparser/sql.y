@@ -113,7 +113,7 @@ var (
 %type <where> where_expression_opt
 %type <boolExpr> boolean_expression condition
 %type <str> compare
-%type <sqlNode> values
+%type <sqlNode> row_list
 %type <valExpr> value tuple value_expression
 %type <valExprs> value_expression_list
 %type <values> tuple_list
@@ -170,9 +170,9 @@ select_statement:
   }
 
 insert_statement:
-  INSERT comment_opt INTO dml_table_expression column_list_opt values on_dup_opt
+  INSERT comment_opt INTO dml_table_expression column_list_opt row_list on_dup_opt
   {
-    $$ = &Insert{Comments: $2, Table: $4, Columns: $5, Rows: $6, OnDup: $7}
+    $$ = &Insert{Comments: $2, Table: $4, Columns: $5, Rows: $6, OnDup: OnDup($7)}
   }
 
 update_statement:
@@ -571,7 +571,7 @@ compare:
     $$ = "<=>"
   }
 
-values:
+row_list:
   VALUES tuple_list
   {
     $$ = $2

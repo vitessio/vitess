@@ -1059,15 +1059,13 @@ func GenerateInOuterQuery(sel *Select, tableInfo *schema.Table) *ParsedQuery {
 
 func GenerateInsertOuterQuery(ins *Insert) *ParsedQuery {
 	buf := NewTrackedBuffer(nil)
-	buf.Fprintf("insert %vinto %v%v values %a",
+	buf.Fprintf("insert %vinto %v%v values %a%v",
 		ins.Comments,
 		ins.Table,
 		ins.Columns,
 		"_rowValues",
+		ins.OnDup,
 	)
-	if ins.OnDup != nil {
-		buf.Fprintf(" on duplicate key update %v", ins.OnDup)
-	}
 	return buf.ParsedQuery()
 }
 

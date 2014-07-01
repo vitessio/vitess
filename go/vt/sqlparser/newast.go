@@ -83,18 +83,15 @@ type Insert struct {
 	Table    *TableName
 	Columns  Columns
 	Rows     SQLNode
-	OnDup    UpdateExprs
+	OnDup    OnDup
 }
 
 func (*Insert) statement() {}
 
 func (node *Insert) Format(buf *TrackedBuffer) {
-	buf.Fprintf("insert %vinto %v%v %v",
+	buf.Fprintf("insert %vinto %v%v %v%v",
 		node.Comments,
 		node.Table, node.Columns, node.Rows, node.OnDup)
-	if node.OnDup != nil {
-		buf.Fprintf(" on duplicate key update %v", node.OnDup)
-	}
 }
 
 // Update represents an UPDATE statement.
@@ -301,7 +298,6 @@ func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
 }
 
 // TableName represents a table  name.
-// TODO(sougou): This is currently identical to ColName. Resolve.
 type TableName struct {
 	Name, Qualifier []byte
 }
@@ -346,7 +342,6 @@ func (node *JoinTableExpr) Format(buf *TrackedBuffer) {
 
 // IndexHints represents a list of index hints.
 // Type can be "use", "ignore" or "force".
-// TODO(sougou): See if Indexes can reuse Columns.
 type IndexHints struct {
 	Type    string
 	Indexes [][]byte
@@ -766,4 +761,14 @@ type UpdateExpr struct {
 
 func (node *UpdateExpr) Format(buf *TrackedBuffer) {
 	buf.Fprintf("%v = %v", node.Name, node.Expr)
+}
+
+// OnDup represents an ON DUPLICATE KEY clause.
+type OnDup UpdateExprs
+
+func (node OnDup) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	buf.Fprintf(" on duplicate key update %v", UpdateExprs(node))
 }
