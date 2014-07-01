@@ -62,19 +62,28 @@ doc](https://github.com/youtube/vitess/blob/master/doc/GettingStarted.markdown).
 
 ## Documentation
 
- * [Frequently Asked Questions](https://github.com/youtube/vitess/blob/master/doc/FAQ.markdown)
- * [Vision](https://github.com/youtube/vitess/blob/master/doc/Vision.markdown)
+### Intro
+ * [Helicopter
+ overview](https://github.com/youtube/vitess/blob/master/doc/HelicopterOverview.markdown): high level overview of Vitess that should tell you whether Vitess is for you.
+ * [Frequently Asked Questions](https://github.com/youtube/vitess/blob/master/doc/FAQ.markdown).
+ * [Vision](https://github.com/youtube/vitess/blob/master/doc/Vision.markdown): principles guiding the design of Vitess.
+
+### Using Vitess
+
+ * [Getting Started](https://github.com/youtube/vitess/blob/master/doc/GettingStarted.markdown): how to set your environment to work with Vitess.
+ * [Tools](https://github.com/youtube/vitess/blob/master/doc/Tools.markdown): all Vitess tools and servers.
+ * [Vttablet](https://github.com/youtube/vitess/blob/master/doc/Vttablet.markdown): information about the most important Vitess server.
+ * [Reparenting](https://github.com/youtube/vitess/blob/master/doc/Reparenting.markdown): performing master failover.
+ * [Resharding](https://github.com/youtube/vitess/blob/master/doc/Resharding.markdown): adding more shards to your cluster.
+ * [Preparing for production](https://github.com/youtube/vitess/blob/master/doc/Production.markdown) (wip).
+ * [Schema management](https://github.com/youtube/vitess/blob/master/doc/SchemaManagement.markdown): managing your database schema using Vitess.
+
+### Reference
+
  * [General Concepts](https://github.com/youtube/vitess/blob/master/doc/Concepts.markdown)
- * [Replication Graph](https://github.com/youtube/vitess/blob/master/doc/ReplicationGraph.markdown)
- * [Vttablet](https://github.com/youtube/vitess/blob/master/doc/Vttablet.markdown)
- * [Serving graph](https://github.com/youtube/vitess/blob/master/doc/ServingGraph.markdown)
- * [Tools](https://github.com/youtube/vitess/blob/master/doc/Tools.markdown)
- * [Getting Started](https://github.com/youtube/vitess/blob/master/doc/GettingStarted.markdown)
- * [Preparing for production](https://github.com/youtube/vitess/blob/master/doc/Production.markdown)
- * [Reparenting](https://github.com/youtube/vitess/blob/master/doc/Reparenting.markdown)
- * [Resharding](https://github.com/youtube/vitess/blob/master/doc/Resharding.markdown)
- * [Schema management](https://github.com/youtube/vitess/blob/master/doc/SchemaManagement.markdown)
  * [Zookeeper data](https://github.com/youtube/vitess/blob/master/doc/ZookeeperData.markdown)
+ * [Serving graph](https://github.com/youtube/vitess/blob/master/doc/ServingGraph.markdown)
+ * [Replication Graph](https://github.com/youtube/vitess/blob/master/doc/ReplicationGraph.markdown)
 
 ## License
 
