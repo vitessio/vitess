@@ -16,7 +16,6 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/tabletserver/gorpctabletconn"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -36,9 +35,6 @@ func init() {
 	createSandbox(TEST_UNSHARDED)
 	tabletconn.RegisterDialer("sandbox", sandboxDialer)
 	flag.Set("tablet_protocol", "sandbox")
-	tabletconn.AppendResultFuncMap["sandbox"] = gorpctabletconn.AppendResultBson
-	tabletconn.MergeResultsFuncMap["sandbox"] = gorpctabletconn.MergeResultsBson
-	tabletconn.MergeBatchResultsFuncMap["sandbox"] = gorpctabletconn.MergeBatchResultsBson
 }
 
 var sandboxMu sync.Mutex
@@ -341,7 +337,7 @@ func (sbc *sandboxConn) getError() error {
 	return nil
 }
 
-func (sbc *sandboxConn) Execute(context interface{}, query string, bindVars map[string]interface{}, transactionID int64) (interface{}, error) {
+func (sbc *sandboxConn) Execute(context interface{}, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
 	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
@@ -352,7 +348,7 @@ func (sbc *sandboxConn) Execute(context interface{}, query string, bindVars map[
 	return singleRowResult, nil
 }
 
-func (sbc *sandboxConn) ExecuteBatch(context interface{}, queries []tproto.BoundQuery, transactionID int64) (interface{}, error) {
+func (sbc *sandboxConn) ExecuteBatch(context interface{}, queries []tproto.BoundQuery, transactionID int64) (*tproto.QueryResultList, error) {
 	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
@@ -368,12 +364,12 @@ func (sbc *sandboxConn) ExecuteBatch(context interface{}, queries []tproto.Bound
 	return qrl, nil
 }
 
-func (sbc *sandboxConn) StreamExecute(context interface{}, query string, bindVars map[string]interface{}, transactionID int64) (<-chan interface{}, tabletconn.ErrFunc) {
+func (sbc *sandboxConn) StreamExecute(context interface{}, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc) {
 	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
-	ch := make(chan interface{}, 1)
+	ch := make(chan *mproto.QueryResult, 1)
 	ch <- singleRowResult
 	close(ch)
 	err := sbc.getError()
