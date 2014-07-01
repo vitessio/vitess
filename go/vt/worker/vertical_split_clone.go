@@ -8,16 +8,17 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
+	"strconv"
 	"strings"
 	"sync"
 	ttemplate "text/template"
 	"time"
 
 	log "github.com/golang/glog"
-	//	"github.com/youtube/vitess/go/sync2"
 	//	"github.com/youtube/vitess/go/vt/concurrency"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -40,13 +41,16 @@ const (
 // VerticalSplitCloneWorker will clone the data from a source keyspace/shard
 // to a destination keyspace/shard.
 type VerticalSplitCloneWorker struct {
-	wr                  *wrangler.Wrangler
-	cell                string
-	destinationKeyspace string
-	destinationShard    string
-	tables              []string
-	strategy            string
-	cleaner             *wrangler.Cleaner
+	wr                     *wrangler.Wrangler
+	cell                   string
+	destinationKeyspace    string
+	destinationShard       string
+	tables                 []string
+	strategy               string
+	sourceReaderCount      int
+	minTableSizeForSplit   uint64
+	destinationWriterCount int
+	cleaner                *wrangler.Cleaner
 
 	// all subsequent fields are protected by the mutex
 	mu    sync.Mutex
@@ -61,6 +65,7 @@ type VerticalSplitCloneWorker struct {
 
 	// populated during stateVSCFindTargets, read-only after that
 	sourceAlias            topo.TabletAlias
+	sourceTablet           *topo.TabletInfo
 	destinationAliases     []topo.TabletAlias
 	destinationTablets     map[topo.TabletAlias]*topo.TabletInfo
 	destinationMasterAlias topo.TabletAlias
@@ -71,15 +76,18 @@ type VerticalSplitCloneWorker struct {
 }
 
 // NewVerticalSplitCloneWorker returns a new VerticalSplitCloneWorker object.
-func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspace, destinationShard string, tables []string, strategy string) Worker {
+func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspace, destinationShard string, tables []string, strategy string, sourceReaderCount int, minTableSizeForSplit uint64, destinationWriterCount int) Worker {
 	return &VerticalSplitCloneWorker{
-		wr:                  wr,
-		cell:                cell,
-		destinationKeyspace: destinationKeyspace,
-		destinationShard:    destinationShard,
-		tables:              tables,
-		strategy:            strategy,
-		cleaner:             &wrangler.Cleaner{},
+		wr:                     wr,
+		cell:                   cell,
+		destinationKeyspace:    destinationKeyspace,
+		destinationShard:       destinationShard,
+		tables:                 tables,
+		strategy:               strategy,
+		sourceReaderCount:      sourceReaderCount,
+		minTableSizeForSplit:   minTableSizeForSplit,
+		destinationWriterCount: destinationWriterCount,
+		cleaner:                &wrangler.Cleaner{},
 
 		state: stateVSCNotSarted,
 	}
@@ -247,6 +255,12 @@ func (vscw *VerticalSplitCloneWorker) findTargets() error {
 	}
 	log.Infof("Using tablet %v as the source", vscw.sourceAlias)
 
+	// get the tablet info for it
+	vscw.sourceTablet, err = vscw.wr.TopoServer().GetTablet(vscw.sourceAlias)
+	if err != nil {
+		return fmt.Errorf("cannot read tablet %v: %v", vscw.sourceTablet, err)
+	}
+
 	// find all the targets in the destination keyspace / shard
 	vscw.destinationAliases, err = topo.FindAllTabletAliasesInShard(vscw.wr.TopoServer(), vscw.destinationKeyspace, vscw.destinationShard)
 	if err != nil {
@@ -342,7 +356,12 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	insertChannels := make([]chan string, len(vscw.destinationAliases))
 	destinationWaitGroup := sync.WaitGroup{}
 	for i, tabletAlias := range vscw.destinationAliases {
-		insertChannels[i] = make(chan string, 20)
+		// we create one channel per destination tablet.  It
+		// is sized to have a buffer of a maximum of
+		// destinationWriterCount * 2 items, to hopefully
+		// always have data. We then have
+		// destinationWriterCount go routines reading from it.
+		insertChannels[i] = make(chan string, vscw.destinationWriterCount*2)
 
 		destinationWaitGroup.Add(1)
 		go func(ti *topo.TabletInfo, insertChannel chan string) {
@@ -359,7 +378,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 					return
 				}
 			}
-			for j := 0; j < 20; j++ {
+			for j := 0; j < vscw.destinationWriterCount; j++ {
 				destinationWaitGroup.Add(1)
 				go func() {
 					defer destinationWaitGroup.Done()
@@ -387,54 +406,77 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	// Now for each table, read data chunks and send them to all
 	// insertChannels
 	sourceWaitGroup := sync.WaitGroup{}
+	sema := sync2.NewSemaphore(vscw.sourceReaderCount, 0)
 	for _, td := range vscw.sourceSchemaDefinition.TableDefinitions {
 		if td.Type == myproto.TABLE_VIEW {
 			continue
 		}
 
-		sourceWaitGroup.Add(1)
-		go func(td myproto.TableDefinition) {
-			defer sourceWaitGroup.Done()
+		chunks, err := vscw.findChunks(vscw.sourceTablet, td)
+		if err != nil {
+			return err
+		}
 
-			// build the query, and start the streaming
-			log.Infof("Starting to stream data from table %v", td.Name)
-			selectSQL := "SELECT " + strings.Join(td.Columns, ", ") + " FROM " + td.Name
-			if len(td.PrimaryKeyColumns) > 0 {
-				selectSQL += " ORDER BY " + strings.Join(td.PrimaryKeyColumns, ", ")
-			}
-			qrr, err := NewQueryResultReaderForTablet(vscw.wr.TopoServer(), vscw.sourceAlias, selectSQL)
-			if err != nil {
-				processError("NewQueryResultReaderForTablet failed: %v", err)
-				return
-			}
+		for i := 0; i < len(chunks)-1; i++ {
+			sourceWaitGroup.Add(1)
+			go func(td myproto.TableDefinition, i int) {
+				defer sourceWaitGroup.Done()
 
-			// process the data
-			baseCmd := td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
-		loop:
-			for {
-				select {
-				case r, ok := <-qrr.Output:
-					if !ok {
-						if err := qrr.Error(); err != nil {
-							// error case
-							processError("QueryResultReader failed: %v", err)
-							return
-						}
+				sema.Acquire()
+				defer sema.Release()
 
-						// we're done with the data
-						break loop
+				// build the query, and start the streaming
+				selectSQL := "SELECT " + strings.Join(td.Columns, ", ") + " FROM " + td.Name
+				if chunks[i] != "" || chunks[i+1] != "" {
+					log.Infof("Starting to stream all data from table %v between '%v' and '%v'", td.Name, chunks[i], chunks[i+1])
+					clauses := make([]string, 0, 2)
+					if chunks[i] != "" {
+						clauses = append(clauses, td.PrimaryKeyColumns[0]+">="+chunks[i])
 					}
-
-					// send the rows to be inserted
-					cmd := baseCmd + makeValueString(qrr.Fields, r)
-					for _, c := range insertChannels {
-						c <- cmd
+					if chunks[i+1] != "" {
+						clauses = append(clauses, td.PrimaryKeyColumns[0]+"<"+chunks[i+1])
 					}
-				case <-abort:
+					selectSQL += " WHERE " + strings.Join(clauses, " AND ")
+				} else {
+					log.Infof("Starting to stream all data from table %v", td.Name)
+				}
+				if len(td.PrimaryKeyColumns) > 0 {
+					selectSQL += " ORDER BY " + strings.Join(td.PrimaryKeyColumns, ", ")
+				}
+				qrr, err := NewQueryResultReaderForTablet(vscw.wr.TopoServer(), vscw.sourceAlias, selectSQL)
+				if err != nil {
+					processError("NewQueryResultReaderForTablet failed: %v", err)
 					return
 				}
-			}
-		}(td)
+
+				// process the data
+				baseCmd := td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
+			loop:
+				for {
+					select {
+					case r, ok := <-qrr.Output:
+						if !ok {
+							if err := qrr.Error(); err != nil {
+								// error case
+								processError("QueryResultReader failed: %v", err)
+								return
+							}
+
+							// we're done with the data
+							break loop
+						}
+
+						// send the rows to be inserted
+						cmd := baseCmd + makeValueString(qrr.Fields, r)
+						for _, c := range insertChannels {
+							c <- cmd
+						}
+					case <-abort:
+						return
+					}
+				}
+			}(td, i)
+		}
 	}
 	sourceWaitGroup.Wait()
 
@@ -467,12 +509,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	// then create and populate the blp_checkpoint table
 	if strings.Index(vscw.strategy, "populateBlpCheckpoint") != -1 {
 		// get the current position from the source
-		ti, err := vscw.wr.TopoServer().GetTablet(vscw.sourceAlias)
-		if err != nil {
-			return err
-		}
-
-		pos, err := vscw.wr.ActionInitiator().SlavePosition(ti, 30*time.Second)
+		pos, err := vscw.wr.ActionInitiator().SlavePosition(vscw.sourceTablet, 30*time.Second)
 		if err != nil {
 			return err
 		}
@@ -541,6 +578,127 @@ func (vscw *VerticalSplitCloneWorker) runSqlCommands(ti *topo.TabletInfo, comman
 	}
 
 	return nil
+}
+
+// findChunks returns an array of chunks to use for splitting up a table
+// into multiple data chunks. It only works for tables with a primary key
+// (and the primary key first column is an integer type).
+// The array will always look like:
+// "", "value1", "value2", ""
+// A non-split tablet will just return:
+// "", ""
+func (vscw *VerticalSplitCloneWorker) findChunks(ti *topo.TabletInfo, td myproto.TableDefinition) ([]string, error) {
+	result := []string{"", ""}
+
+	// eliminate a few cases we don't split tables for
+	if len(td.PrimaryKeyColumns) == 0 {
+		// no primary key, what can we do?
+		return result, nil
+	}
+	if td.DataLength < vscw.minTableSizeForSplit {
+		// table is too small to split up
+		return result, nil
+	}
+
+	// get the min and max of the leading column of the primary key
+	query := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v.%v", td.PrimaryKeyColumns[0], td.PrimaryKeyColumns[0], ti.DbName(), td.Name)
+	qr, err := vscw.wr.ActionInitiator().ExecuteFetch(ti, query, 1, true, false, 30*time.Second)
+	if err != nil {
+		log.Infof("Not splitting table %v into multiple chunks: %v", td.Name, err)
+		return result, nil
+	}
+	if len(qr.Rows) != 1 {
+		log.Infof("Not splitting table %v into multiple chunks, cannot get min and max", td.Name)
+		return result, nil
+	}
+	if qr.Rows[0][0].IsNull() || qr.Rows[0][1].IsNull() {
+		log.Infof("Not splitting table %v into multiple chunks, min or max is NULL: %v %v", td.Name, qr.Rows[0][0], qr.Rows[0][1])
+		return result, nil
+	}
+	switch qr.Fields[0].Type {
+	case mproto.VT_TINY, mproto.VT_SHORT, mproto.VT_LONG, mproto.VT_LONGLONG, mproto.VT_INT24:
+		minNumeric := sqltypes.MakeNumeric(qr.Rows[0][0].Raw())
+		maxNumeric := sqltypes.MakeNumeric(qr.Rows[0][1].Raw())
+		if qr.Rows[0][0].Raw()[0] == '-' {
+			// signed values, use int64
+			min, err := minNumeric.ParseInt64()
+			if err != nil {
+				log.Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, minNumeric, err)
+				return result, nil
+			}
+			max, err := maxNumeric.ParseInt64()
+			if err != nil {
+				log.Infof("Not splitting table %v into multiple chunks, cannot convert max: %v %v", td.Name, maxNumeric, err)
+				return result, nil
+			}
+			interval := (max - min) / int64(vscw.sourceReaderCount)
+			if interval == 0 {
+				log.Infof("Not splitting table %v into multiple chunks, interval=0: %v %v", max, min)
+				return result, nil
+			}
+
+			result = make([]string, vscw.sourceReaderCount+1)
+			result[0] = ""
+			result[vscw.sourceReaderCount] = ""
+			for i := int64(1); i < int64(vscw.sourceReaderCount); i++ {
+				result[i] = fmt.Sprintf("%v", min+interval*i)
+			}
+			return result, nil
+		}
+
+		// unsigned values, use uint64
+		min, err := minNumeric.ParseUint64()
+		if err != nil {
+			log.Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, minNumeric, err)
+			return result, nil
+		}
+		max, err := maxNumeric.ParseUint64()
+		if err != nil {
+			log.Infof("Not splitting table %v into multiple chunks, cannot convert max: %v %v", td.Name, maxNumeric, err)
+			return result, nil
+		}
+		interval := (max - min) / uint64(vscw.sourceReaderCount)
+		if interval == 0 {
+			log.Infof("Not splitting table %v into multiple chunks, interval=0: %v %v", max, min)
+			return result, nil
+		}
+
+		result = make([]string, vscw.sourceReaderCount+1)
+		result[0] = ""
+		result[vscw.sourceReaderCount] = ""
+		for i := uint64(1); i < uint64(vscw.sourceReaderCount); i++ {
+			result[i] = fmt.Sprintf("%v", min+interval*i)
+		}
+		return result, nil
+
+	case mproto.VT_FLOAT, mproto.VT_DOUBLE:
+		min, err := strconv.ParseFloat(qr.Rows[0][0].String(), 64)
+		if err != nil {
+			log.Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, qr.Rows[0][0], err)
+			return result, nil
+		}
+		max, err := strconv.ParseFloat(qr.Rows[0][1].String(), 64)
+		if err != nil {
+			log.Infof("Not splitting table %v into multiple chunks, cannot convert max: %v %v", td.Name, qr.Rows[0][1].String(), err)
+			return result, nil
+		}
+		interval := (max - min) / float64(vscw.sourceReaderCount)
+		if interval == 0 {
+			log.Infof("Not splitting table %v into multiple chunks, interval=0: %v %v", max, min)
+			return result, nil
+		}
+
+		result = make([]string, vscw.sourceReaderCount+1)
+		result[0] = ""
+		result[vscw.sourceReaderCount] = ""
+		for i := 1; i < vscw.sourceReaderCount; i++ {
+			result[i] = fmt.Sprintf("%v", min+interval*float64(i))
+		}
+		return result, nil
+	}
+
+	log.Infof("Not splitting table %v into multiple chunks, primary key not numeric", td.Name)
+	return result, nil
 }
 
 func fillStringTemplate(tmpl string, vars interface{}) (string, error) {

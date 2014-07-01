@@ -60,7 +60,7 @@ func NewQueryResultReaderForTablet(ts topo.Server, tabletAlias topo.TabletAlias,
 	// read the columns, or grab the error
 	cols, ok := <-sr
 	if !ok {
-		return nil, fmt.Errorf("Cannot read Fields for query: %v", sql)
+		return nil, fmt.Errorf("Cannot read Fields for query '%v': %v", sql, call.Error)
 	}
 
 	return &QueryResultReader{

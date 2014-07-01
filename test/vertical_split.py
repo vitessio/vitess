@@ -309,10 +309,15 @@ index by_msg (msg)
                        moving1_first, 100)
 
     if use_clone_worker:
-      # the worker will do everything
+      # the worker will do everything. We test with source_reader_count=10
+      # (down from default=20) as connection pool is not big enough for 20.
+      # min_table_size_for_split is set to 1 as to force a split even on the
+      # small table we have.
       utils.run_vtworker(['-cell', 'test_nj', 'VerticalSplitClone',
                           '--tables', 'moving.*,view1',
                           '--strategy', 'populateBlpCheckpoint',
+                          '--source_reader_count', '10',
+                          '--min_table_size_for_split', '1',
                           'destination_keyspace/0'],
                          auto_log=True)
 
