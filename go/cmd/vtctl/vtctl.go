@@ -1503,10 +1503,10 @@ func commandGetSchema(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []stri
 	if err == nil {
 		if *tableNamesOnly {
 			for _, td := range sd.TableDefinitions {
-				log.Info(td.Name)
+				fmt.Println(td.Name)
 			}
 		} else {
-			log.Info(sd.String())
+			fmt.Println(jscfg.ToJson(sd))
 		}
 	}
 	return "", err

@@ -55,7 +55,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 	}
 
 	// get the list of tables we're interested in
-	sql := "SELECT table_name, table_type, data_length FROM information_schema.tables WHERE table_schema = '" + dbName + "'"
+	sql := "SELECT table_name, table_type, data_length, table_rows FROM information_schema.tables WHERE table_schema = '" + dbName + "'"
 	if !includeViews {
 		sql += " AND table_type = '" + proto.TABLE_BASE_TABLE + "'"
 	}
@@ -106,6 +106,15 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 			}
 		}
 
+		// get row count
+		var rowCount uint64
+		if !row[3].IsNull() {
+			rowCount, err = row[3].ParseUint64()
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		qr, fetchErr := mysqld.fetchSuperQuery("SHOW CREATE TABLE " + dbName + "." + tableName)
 		if fetchErr != nil {
 			return nil, fetchErr
@@ -139,6 +148,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 		}
 		td.Type = tableType
 		td.DataLength = dataLength
+		td.RowCount = rowCount
 		sd.TableDefinitions = append(sd.TableDefinitions, td)
 	}
 

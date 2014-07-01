@@ -80,7 +80,7 @@ class TestSchema(unittest.TestCase):
 
   def test_complex_schema(self):
 
-    utils.run_vtctl('CreateKeyspace test_keyspace')
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
     shard_0_master.init_tablet(  'master',  'test_keyspace', '0')
     shard_0_replica1.init_tablet('replica', 'test_keyspace', '0')
@@ -90,7 +90,7 @@ class TestSchema(unittest.TestCase):
     shard_1_master.init_tablet(  'master',  'test_keyspace', '1')
     shard_1_replica1.init_tablet('replica', 'test_keyspace', '1')
 
-    utils.run_vtctl('RebuildKeyspaceGraph test_keyspace', auto_log=True)
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     # run checks now before we start the tablets
     utils.validate_topology()
@@ -114,9 +114,9 @@ class TestSchema(unittest.TestCase):
     for t in [shard_0_master, shard_0_replica1, shard_0_replica2,
               shard_0_rdonly, shard_0_backup, shard_1_master, shard_1_replica1]:
       t.reset_replication()
-    utils.run_vtctl('ReparentShard -force test_keyspace/0 ' + shard_0_master.tablet_alias, auto_log=True)
-    utils.run_vtctl('ReparentShard -force test_keyspace/1 ' + shard_1_master.tablet_alias, auto_log=True)
-    utils.run_vtctl('ValidateKeyspace -ping-tablets test_keyspace')
+    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/0', shard_0_master.tablet_alias], auto_log=True)
+    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/1', shard_1_master.tablet_alias], auto_log=True)
+    utils.run_vtctl(['ValidateKeyspace', '-ping-tablets', 'test_keyspace'])
 
     # check after all tablets are here and replication is fixed
     utils.validate_topology(ping_tablets=True)
@@ -160,12 +160,10 @@ class TestSchema(unittest.TestCase):
     self._check_tables(shard_0_backup, 2)
 
     # verify GetSchema --tables works
-    out, err = utils.run_vtctl('GetSchema --tables=vt_select_test0 ' +
-                               shard_0_replica1.tablet_alias,
-                               log_level='INFO',
-                               trap_output=True)
-    if not "vt_select_test0" in err or "vt_select_test1" in err:
-      self.fail('Unexpected GetSchema --tables=vt_select_test0 output: %s' % err)
+    s = utils.run_vtctl_json(['GetSchema', '--tables=vt_select_test0',
+                               shard_0_replica1.tablet_alias])
+    self.assertEqual(len(s['TableDefinitions']), 1)
+    self.assertEqual(s['TableDefinitions'][0]['Name'], 'vt_select_test0')
 
     # keyspace: try to apply a keyspace-wide schema change, should fail
     # as the preflight would be different in both shards
@@ -179,7 +177,7 @@ class TestSchema(unittest.TestCase):
       self.fail('Unexpected ApplySchemaKeyspace output: %s' % err)
 
     if environment.topo_server_implementation == 'zookeeper':
-      utils.run_vtctl('PurgeActions /zk/global/vt/keyspaces/test_keyspace/action')
+      utils.run_vtctl(['PurgeActions', '/zk/global/vt/keyspaces/test_keyspace/action'])
 
     # shard 1: catch it up with simple updates
     utils.run_vtctl(['ApplySchemaShard',
@@ -236,7 +234,7 @@ class TestSchema(unittest.TestCase):
       if oldCount <= 5:
         self.fail('Not enough actionlog before: %u' % oldCount)
 
-      utils.run_vtctl('PruneActionLogs -keep-count=5 /zk/*/vt/tablets/*/actionlog', auto_log=True)
+      utils.run_vtctl(['PruneActionLogs', '-keep-count=5', '/zk/*/vt/tablets/*/actionlog'], auto_log=True)
 
       newLines = utils.zk_ls(shard_0_replica1.zk_tablet_path+'/actionlog')
       newCount = len(newLines)

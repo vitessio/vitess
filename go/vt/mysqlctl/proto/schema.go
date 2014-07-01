@@ -26,6 +26,8 @@ type TableDefinition struct {
 	PrimaryKeyColumns []string // the columns used by the primary key, in order
 	Type              string   // TABLE_BASE_TABLE or TABLE_VIEW
 	DataLength        uint64   // how much space the data file takes.
+	RowCount          uint64   // how many rows in the table (may
+	// be approximate count)
 }
 
 // helper methods for sorting
