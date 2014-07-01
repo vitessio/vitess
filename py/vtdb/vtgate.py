@@ -28,6 +28,8 @@ def convert_exception(exc, *args):
   new_args = exc.args + args
   if isinstance(exc, gorpc.TimeoutError):
     return dbexceptions.TimeoutError(new_args)
+  elif isinstance(exc, gorpc.DeadlineExceededError):
+    return dbexceptions.DeadlineExceededError(new_args)
   elif isinstance(exc, gorpc.AppError):
     msg = str(exc[0]).lower()
     match = _errno_pattern.search(msg)
@@ -54,13 +56,14 @@ class VtgateConnection(object):
   _stream_result = None
   _stream_result_index = None
 
-  def __init__(self, addr, tablet_type, keyspace, shard, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None):
+  def __init__(self, addr, tablet_type, keyspace, shard, deadline, socket_timeout=1, user=None, password=None, encrypted=False, keyfile=None, certfile=None):
     self.addr = addr
     self.tablet_type = tablet_type
     self.keyspace = keyspace
     self.shard = shard
-    self.timeout = timeout
-    self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password, encrypted=encrypted, keyfile=keyfile, certfile=certfile)
+    self.deadline = deadline
+    self.socket_timeout = socket_timeout
+    self.client = bsonrpc.BsonRpcClient(addr, deadline, socket_timeout, user, password, encrypted=encrypted, keyfile=keyfile, certfile=certfile)
 
   def __str__(self):
     return '<VtgateConnection %s %s %s/%s>' % (self.addr, self.tablet_type, self.keyspace, self.shard)

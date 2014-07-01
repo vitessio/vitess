@@ -78,10 +78,11 @@ class VTGateConnection(object):
   _stream_result = None
   _stream_result_index = None
 
-  def __init__(self, addr, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None):
+  def __init__(self, addr, deadline, socket_timeout=1, user=None, password=None, encrypted=False, keyfile=None, certfile=None):
     self.addr = addr
-    self.timeout = timeout
-    self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password, encrypted=encrypted, keyfile=keyfile, certfile=certfile)
+    self.deadline = deadline
+    self.socket_timeout = socket_timeout
+    self.client = bsonrpc.BsonRpcClient(addr, deadline, socket_timeout, user, password, encrypted=encrypted, keyfile=keyfile, certfile=certfile)
 
   def __str__(self):
     return '<VTGateConnection %s >' % self.addr
@@ -360,7 +361,7 @@ def _make_row(row, conversions):
   return converted_row
 
 
-def get_params_for_vtgate_conn(vtgate_addrs, timeout, encrypted=False, user=None, password=None):
+def get_params_for_vtgate_conn(vtgate_addrs, deadline, socket_timeout=1, encrypted=False, user=None, password=None):
   db_params_list = []
   addrs = []
   if isinstance(vtgate_addrs, dict):
@@ -380,7 +381,8 @@ def get_params_for_vtgate_conn(vtgate_addrs, timeout, encrypted=False, user=None
   for addr in vtgate_addrs:
     vt_params = dict()
     vt_params['addr'] = addr
-    vt_params['timeout'] = timeout
+    vt_params['deadline'] = deadline
+    vt_params['socket_timeout'] = socket_timeout
     vt_params['encrypted'] = encrypted
     vt_params['user'] = user
     vt_params['password'] = password
@@ -388,8 +390,8 @@ def get_params_for_vtgate_conn(vtgate_addrs, timeout, encrypted=False, user=None
   return db_params_list
 
 
-def connect(vtgate_addrs, timeout, encrypted=False, user=None, password=None):
-  db_params_list = get_params_for_vtgate_conn(vtgate_addrs, timeout,
+def connect(vtgate_addrs, deadline, socket_timeout=1, encrypted=False, user=None, password=None):
+  db_params_list = get_params_for_vtgate_conn(vtgate_addrs, deadline, socket_timeout,
                                               encrypted=encrypted, user=user,
                                               password=password)
 

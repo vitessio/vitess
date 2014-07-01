@@ -421,14 +421,14 @@ class TestFailures(unittest.TestCase):
       replica_conn = get_connection(db_type='replica', shard_index=self.shard_index)
     except Exception, e:
       self.fail("Connection to shard0 replica failed with error %s" % str(e))
-    with self.assertRaises(dbexceptions.TimeoutError):
+    with self.assertRaises(dbexceptions.DeadlineExceededError):
       replica_conn._execute("select sleep(12) from dual", {})
 
     try:
       master_conn = get_connection(db_type='master')
     except Exception, e:
       self.fail("Connection to shard0 master failed with error %s" % str(e))
-    with self.assertRaises(dbexceptions.TimeoutError):
+    with self.assertRaises(dbexceptions.DeadlineExceededError):
       master_conn._execute("select sleep(12) from dual", {})
 
   def test_restart_mysql_failure(self):

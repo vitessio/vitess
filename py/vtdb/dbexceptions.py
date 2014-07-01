@@ -47,6 +47,8 @@ class RetryError(OperationalError):
 class FatalError(OperationalError):
   pass
 
+class DeadlineExceededError(OperationalError):
+  pass
 
 # This failure is operational in the sense that we must teardown the connection to
 # ensure future RPCs are handled correctly.

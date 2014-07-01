@@ -41,8 +41,8 @@ class EventData(object):
       self.PkRows.append(pk_row)
 
 class UpdateStreamConnection(object):
-  def __init__(self, addr, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None):
-    self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password, encrypted, keyfile, certfile)
+  def __init__(self, addr, deadline, socket_timeout=1, user=None, password=None, encrypted=False, keyfile=None, certfile=None):
+    self.client = bsonrpc.BsonRpcClient(addr, deadline, socket_timeout, user, password, encrypted, keyfile, certfile)
 
   def dial(self):
     self.client.dial()

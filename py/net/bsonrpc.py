@@ -26,7 +26,7 @@ unpack_length = len_struct.unpack_from
 len_struct_size = len_struct.size
 
 class BsonRpcClient(gorpc.GoRpcClient):
-  def __init__(self, addr, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None):
+  def __init__(self, addr, deadline, socket_timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None):
     if bool(user) != bool(password):
       raise ValueError("You must provide either both or none of user and password.")
     if addr.startswith('/'):
@@ -45,7 +45,7 @@ class BsonRpcClient(gorpc.GoRpcClient):
       uri = '%s://%s/_bson_rpc_/auth' % (protocol, self.addr)
     else:
       uri = '%s://%s/_bson_rpc_' % (protocol, self.addr)
-    gorpc.GoRpcClient.__init__(self, uri, timeout, keyfile=keyfile, certfile=certfile, socket_file=socket_file)
+    gorpc.GoRpcClient.__init__(self, uri, deadline, socket_timeout, keyfile=keyfile, certfile=certfile, socket_file=socket_file)
 
   def dial(self):
     gorpc.GoRpcClient.dial(self)

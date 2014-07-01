@@ -19,9 +19,13 @@ _lastStreamResponseError = 'EOS'
 class GoRpcError(Exception):
   pass
 
+# Connection timed out in the socket or SSL layers.
 class TimeoutError(GoRpcError):
   pass
 
+# RPC did not succeed in the given deadline.
+class DeadlineExceededError(GoRpcError):
+  pass
 
 # The programmer has misused an API, but the underlying
 # connection is still salvagable.
@@ -73,18 +77,16 @@ default_read_buffer_size = 8192
 # A single socket wrapper to handle request/response conversation for this
 # protocol. Internal, use GoRpcClient instead.
 class _GoRpcConn(object):
-  def __init__(self, timeout):
+  def __init__(self, socket_timeout=1):
     self.conn = None
-    # NOTE(msolomon) since the deadlines are approximate in the code, set
-    # timeout to oversample to minimize waiting in the extreme failure mode.
-    # FIXME(msolomon) reimplement using deadlines
-    self.socket_timeout = timeout / 10.0
+    self.socket_timeout=socket_timeout
     self.buf = []
 
   def dial(self, uri, keyfile=None, certfile=None, socket_file=None):
     parts = urlparse.urlparse(uri)
     if socket_file:
       self.conn = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+      self.conn.settimeout(self.socket_timeout)
       self.conn.connect(socket_file)
     else:
       conhost, conport = parts.netloc.split(':')
@@ -163,9 +165,11 @@ class _GoRpcConn(object):
 
 
 class GoRpcClient(object):
-  def __init__(self, uri, timeout, certfile=None, keyfile=None, socket_file=None):
+  def __init__(self, uri, deadline, socket_timeout=1,
+               certfile=None, keyfile=None, socket_file=None):
     self.uri = uri
-    self.timeout = timeout
+    self.deadline = deadline
+    self.socket_timeout = socket_timeout
     self.start_time = None
     # FIXME(msolomon) make this random initialized?
     self.seq = 0
@@ -178,15 +182,15 @@ class GoRpcClient(object):
   def dial(self):
     if self.conn:
       self.close()
-    conn = _GoRpcConn(self.timeout)
+    conn = _GoRpcConn(self.socket_timeout)
     try:
       conn.dial(self.uri, self.certfile, self.keyfile, socket_file=self.socket_file)
     except socket.timeout as e:
-      raise TimeoutError(e, self.timeout, 'dial', self.uri)
+      raise TimeoutError(e, self.socket_timeout, 'dial', self.uri)
     except ssl.SSLError as e:
       # another possible timeout condition with SSL wrapper
       if 'timed out' in str(e):
-        raise TimeoutError(e, self.timeout, 'ssl-dial', self.uri)
+        raise TimeoutError(e, self.socket_timeout, 'ssl-dial', self.uri)
       raise GoRpcError(e)
     except socket.error as e:
       raise GoRpcError(e)
@@ -219,12 +223,12 @@ class GoRpcClient(object):
   def decode_response(self, response, data):
     raise NotImplementedError
 
-  def _check_deadline_exceeded(self, timeout):
-    if (time.time() - self.start_time) > timeout:
-      raise socket.timeout('deadline exceeded')
+  def _check_deadline_exceeded(self, deadline):
+    if (time.time() - self.start_time) > deadline:
+      raise DeadlineExceededError('deadline exceeded (%s)' % deadline)
 
   # logic to read the next response off the wire
-  def _read_response(self, response, timeout):
+  def _read_response(self, response, deadline):
     if self.start_time is None:
       raise ProgrammingError('no request pending')
     if not self.conn:
@@ -238,7 +242,7 @@ class GoRpcClient(object):
         self.data = self.conn.read_some()
         if self.data:
           break
-        self._check_deadline_exceeded(timeout)
+        self._check_deadline_exceeded(deadline)
 
     # now try to decode, and read more if we need to
     while True:
@@ -259,7 +263,7 @@ class GoRpcClient(object):
           more_data = self.conn.read_some(extra_needed)
           if more_data:
             break
-          self._check_deadline_exceeded(timeout)
+          self._check_deadline_exceeded(deadline)
         self.data += more_data
 
   # Perform an rpc, raising a GoRpcError, on errant situations.
@@ -274,12 +278,16 @@ class GoRpcClient(object):
       self.conn.write_request(self.encode_request(req))
       if response is None:
         response = GoRpcResponse()
-      self._read_response(response, self.timeout)
+      self._read_response(response, self.deadline)
       self.start_time = None
     except socket.timeout as e:
       # tear down - can't guarantee a clean conversation
       self.close()
       raise TimeoutError(e, self.timeout, method)
+    except DeadlineExceededError as e:
+      # tear down
+      self.close()
+      raise DeadlineExceededError(e, self.deadline, method)
     except socket.error as e:
       # tear down - better chance of recovery by reconnecting
       self.close()
@@ -335,11 +343,15 @@ class GoRpcClient(object):
   def stream_next(self):
     try:
       response = GoRpcResponse()
-      self._read_response(response, self.timeout * 10)
+      self._read_response(response, self.deadline)
     except socket.timeout as e:
       # tear down - can't guarantee a clean conversation
       self.close()
       raise TimeoutError(e, self.timeout)
+    except DeadlineExceededError as e:
+      # tear down
+      self.close()
+      raise DeadlineExceededError(e, self.deadline)
     except socket.error as e:
       # tear down - better chance of recovery by reconnecting
       self.close()
