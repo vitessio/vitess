@@ -34,10 +34,11 @@ type SelectStatement interface {
 }
 
 // Select represents a SELECT statement.
+// Distinct can be "", "distinct "
 // Lock can be "", " for update", " lock in share mode".
 type Select struct {
 	Comments    Comments
-	Distinct    Distinct
+	Distinct    string
 	SelectExprs SelectExprs
 	From        TableExprs
 	Where       *Where
@@ -53,7 +54,7 @@ func (*Select) statement() {}
 func (*Select) selectStatement() {}
 
 func (node *Select) Format(buf *TrackedBuffer) {
-	buf.Fprintf("select %v%v%v from %v%v%v%v%v%v%s",
+	buf.Fprintf("select %v%s%v from %v%v%v%v%v%v%s",
 		node.Comments, node.Distinct, node.SelectExprs,
 		node.From, node.Where,
 		node.GroupBy, node.Having, node.OrderBy,
@@ -187,15 +188,6 @@ type Comment []byte
 
 func (comment Comment) Format(buf *TrackedBuffer) {
 	buf.Fprintf("%s ", []byte(comment))
-}
-
-// Distinct specifies if DISTINCT was used.
-type Distinct bool
-
-func (node Distinct) Format(buf *TrackedBuffer) {
-	if node {
-		buf.Fprintf("distinct ")
-	}
 }
 
 // SelectExprs represents SELECT expressions.
@@ -362,6 +354,15 @@ func (node *IndexHints) Format(buf *TrackedBuffer) {
 type Where struct {
 	Type string
 	Expr BoolExpr
+}
+
+// NewWhere creates a WHERE or HAVING clause out
+// of a BoolExpr. If the expression is nil, it returns nil.
+func NewWhere(typ string, expr BoolExpr) *Where {
+	if expr == nil {
+		return nil
+	}
+	return &Where{Type: typ, Expr: expr}
 }
 
 func (node *Where) Format(buf *TrackedBuffer) {

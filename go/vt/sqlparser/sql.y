@@ -37,7 +37,6 @@ var (
   byt         byte
   bytes       []byte
   str         string
-  distinct    Distinct
   selectExprs SelectExprs
   selectExpr  SelectExpr
   columns     Columns
@@ -47,7 +46,6 @@ var (
   tableName   *TableName
   indexHints  *IndexHints
   names       [][]byte
-  where       *Where
   expr        Expr
   boolExpr    BoolExpr
   valExpr     ValExpr
@@ -57,7 +55,6 @@ var (
   caseExpr    *CaseExpr
   whens       []*When
   when        *When
-  groupBy     GroupBy
   orderBy     OrderBy
   order       *Order
   limit       *Limit
@@ -98,7 +95,7 @@ var (
 %type <statement> create_statement alter_statement rename_statement drop_statement
 %type <comments> comment_opt comment_list
 %type <str> union_op
-%type <distinct> distinct_opt
+%type <str> distinct_opt
 %type <selectExprs> select_expression_list
 %type <selectExpr> select_expression
 %type <bytes> as_lower_opt as_opt
@@ -110,7 +107,7 @@ var (
 %type <tableName> dml_table_expression
 %type <indexHints> index_hint_list
 %type <names> index_list
-%type <where> where_expression_opt
+%type <boolExpr> where_expression_opt
 %type <boolExpr> boolean_expression condition
 %type <str> compare
 %type <sqlNode> row_list
@@ -125,8 +122,8 @@ var (
 %type <whens> when_expression_list
 %type <when> when_expression
 %type <valExpr> value_expression_opt else_expression_opt
-%type <groupBy> group_by_opt
-%type <where> having_opt
+%type <valExprs> group_by_opt
+%type <boolExpr> having_opt
 %type <orderBy> order_by_opt order_list
 %type <order> order
 %type <str> asc_desc_opt
@@ -162,7 +159,7 @@ command:
 select_statement:
   SELECT comment_opt distinct_opt select_expression_list FROM table_expression_list where_expression_opt group_by_opt having_opt order_by_opt limit_opt lock_opt
   {
-    $$ = &Select{Comments: $2, Distinct: $3, SelectExprs: $4, From: $6, Where: $7, GroupBy: $8, Having: $9, OrderBy: $10, Limit: $11, Lock: $12}
+    $$ = &Select{Comments: $2, Distinct: $3, SelectExprs: $4, From: $6, Where: NewWhere("where", $7), GroupBy: GroupBy($8), Having: NewWhere("having", $9), OrderBy: $10, Limit: $11, Lock: $12}
   }
 | select_statement union_op select_statement %prec UNION
   {
@@ -178,13 +175,13 @@ insert_statement:
 update_statement:
   UPDATE comment_opt dml_table_expression SET update_list where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Update{Comments: $2, Table: $3, List: $5, Where: $6, OrderBy: $7, Limit: $8}
+    $$ = &Update{Comments: $2, Table: $3, List: $5, Where: NewWhere("where", $6), OrderBy: $7, Limit: $8}
   }
 
 delete_statement:
   DELETE comment_opt FROM dml_table_expression where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{Comments: $2, Table: $4, Where: $5, OrderBy: $6, Limit: $7}
+    $$ = &Delete{Comments: $2, Table: $4, Where: NewWhere("where", $5), OrderBy: $6, Limit: $7}
   }
 
 set_statement:
@@ -287,11 +284,11 @@ union_op:
 
 distinct_opt:
   {
-    $$ = Distinct(false)
+    $$ = ""
   }
 | DISTINCT
   {
-    $$ = Distinct(true)
+    $$ = "distinct "
   }
 
 select_expression_list:
@@ -477,7 +474,7 @@ where_expression_opt:
   }
 | WHERE boolean_expression
   {
-    $$ = &Where{Type: "where", Expr: $2}
+    $$ = $2
   }
 
 boolean_expression:
@@ -796,7 +793,7 @@ group_by_opt:
   }
 | GROUP BY value_expression_list
   {
-    $$ = GroupBy($3)
+    $$ = $3
   }
 
 having_opt:
@@ -805,7 +802,7 @@ having_opt:
   }
 | HAVING boolean_expression
   {
-    $$ = &Where{Type: "having", Expr: $2}
+    $$ = $2
   }
 
 order_by_opt:
