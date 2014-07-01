@@ -122,6 +122,9 @@ func runCommand(wr *wrangler.Wrangler, args []string) {
 			case <-done:
 				log.Infof("Command is done:")
 				log.Info(wrk.StatusAsText())
+				if wrk.Error() != nil {
+					os.Exit(1)
+				}
 				os.Exit(0)
 			case <-timer:
 				log.Info(wrk.StatusAsText())

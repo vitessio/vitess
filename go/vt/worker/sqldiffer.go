@@ -166,6 +166,10 @@ func (worker *SQLDiffWorker) Run() {
 	worker.setState(SQLDiffDone)
 }
 
+func (worker *SQLDiffWorker) Error() error {
+	return worker.err
+}
+
 func (worker *SQLDiffWorker) run() error {
 	// first state: find targets
 	if err := worker.findTargets(); err != nil {

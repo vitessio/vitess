@@ -213,6 +213,10 @@ func (vscw *VerticalSplitCloneWorker) Run() {
 	vscw.setState(stateVSCDone)
 }
 
+func (vscw *VerticalSplitCloneWorker) Error() error {
+	return vscw.err
+}
+
 func (vscw *VerticalSplitCloneWorker) run() error {
 	// first state: read what we need to do
 	if err := vscw.init(); err != nil {

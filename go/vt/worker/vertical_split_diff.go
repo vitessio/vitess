@@ -156,6 +156,10 @@ func (vsdw *VerticalSplitDiffWorker) Run() {
 	vsdw.setState(stateVSDDone)
 }
 
+func (vsdw *VerticalSplitDiffWorker) Error() error {
+	return vsdw.err
+}
+
 func (vsdw *VerticalSplitDiffWorker) run() error {
 	// first state: read what we need to do
 	if err := vsdw.init(); err != nil {

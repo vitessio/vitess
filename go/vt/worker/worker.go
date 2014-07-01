@@ -25,6 +25,10 @@ type Worker interface {
 	// When the SignalInterrupt() is called, Run should exit as soon as
 	// possible.
 	Run()
+
+	// Error() returns the error status of the job, if any.
+	// It will only be called after Run() has completed.
+	Error() error
 }
 
 // signal handling

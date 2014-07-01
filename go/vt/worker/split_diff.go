@@ -157,6 +157,10 @@ func (sdw *SplitDiffWorker) Run() {
 	sdw.setState(stateSDDone)
 }
 
+func (sdw *SplitDiffWorker) Error() error {
+	return sdw.err
+}
+
 func (sdw *SplitDiffWorker) run() error {
 	// first state: read what we need to do
 	if err := sdw.init(); err != nil {

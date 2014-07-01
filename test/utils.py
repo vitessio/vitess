@@ -428,6 +428,7 @@ def run_vtworker(clargs, log_level='', auto_log=False, expect_fail=False, **kwar
   args = [environment.binary_path('vtworker'),
           '-log_dir', environment.vtlogroot,
           '-port', str(environment.reserve_ports(1))]
+  args.extend(environment.topo_server_flags())
   args.extend(environment.tablet_manager_protocol_flags())
 
   if auto_log:
