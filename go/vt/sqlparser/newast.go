@@ -175,19 +175,12 @@ func (node *Rename) Format(buf *TrackedBuffer) {
 }
 
 // Comments represents a list of comments.
-type Comments []Comment
+type Comments [][]byte
 
 func (node Comments) Format(buf *TrackedBuffer) {
 	for _, c := range node {
-		c.Format(buf)
+		buf.Fprintf("%s ", c)
 	}
-}
-
-// Comment represents one comment.
-type Comment []byte
-
-func (comment Comment) Format(buf *TrackedBuffer) {
-	buf.Fprintf("%s ", []byte(comment))
 }
 
 // SelectExprs represents SELECT expressions.

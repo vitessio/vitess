@@ -33,9 +33,9 @@ var (
   empty       struct{}
   node        *Node
   statement   Statement
-  comments    Comments
   byt         byte
   bytes       []byte
+  bytes2      [][]byte
   str         string
   selectExprs SelectExprs
   selectExpr  SelectExpr
@@ -45,7 +45,6 @@ var (
   tableExpr   TableExpr
   tableName   *TableName
   indexHints  *IndexHints
-  names       [][]byte
   expr        Expr
   boolExpr    BoolExpr
   valExpr     ValExpr
@@ -93,7 +92,7 @@ var (
 %type <statement> command
 %type <statement> select_statement insert_statement update_statement delete_statement set_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement
-%type <comments> comment_opt comment_list
+%type <bytes2> comment_opt comment_list
 %type <str> union_op
 %type <str> distinct_opt
 %type <selectExprs> select_expression_list
@@ -106,7 +105,7 @@ var (
 %type <sqlNode> simple_table_expression
 %type <tableName> dml_table_expression
 %type <indexHints> index_hint_list
-%type <names> index_list
+%type <bytes2> index_list
 %type <boolExpr> where_expression_opt
 %type <boolExpr> boolean_expression condition
 %type <str> compare
@@ -159,7 +158,7 @@ command:
 select_statement:
   SELECT comment_opt distinct_opt select_expression_list FROM table_expression_list where_expression_opt group_by_opt having_opt order_by_opt limit_opt lock_opt
   {
-    $$ = &Select{Comments: $2, Distinct: $3, SelectExprs: $4, From: $6, Where: NewWhere("where", $7), GroupBy: GroupBy($8), Having: NewWhere("having", $9), OrderBy: $10, Limit: $11, Lock: $12}
+    $$ = &Select{Comments: Comments($2), Distinct: $3, SelectExprs: $4, From: $6, Where: NewWhere("where", $7), GroupBy: GroupBy($8), Having: NewWhere("having", $9), OrderBy: $10, Limit: $11, Lock: $12}
   }
 | select_statement union_op select_statement %prec UNION
   {
@@ -169,25 +168,25 @@ select_statement:
 insert_statement:
   INSERT comment_opt INTO dml_table_expression column_list_opt row_list on_dup_opt
   {
-    $$ = &Insert{Comments: $2, Table: $4, Columns: $5, Rows: $6, OnDup: OnDup($7)}
+    $$ = &Insert{Comments: Comments($2), Table: $4, Columns: $5, Rows: $6, OnDup: OnDup($7)}
   }
 
 update_statement:
   UPDATE comment_opt dml_table_expression SET update_list where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Update{Comments: $2, Table: $3, List: $5, Where: NewWhere("where", $6), OrderBy: $7, Limit: $8}
+    $$ = &Update{Comments: Comments($2), Table: $3, List: $5, Where: NewWhere("where", $6), OrderBy: $7, Limit: $8}
   }
 
 delete_statement:
   DELETE comment_opt FROM dml_table_expression where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{Comments: $2, Table: $4, Where: NewWhere("where", $5), OrderBy: $6, Limit: $7}
+    $$ = &Delete{Comments: Comments($2), Table: $4, Where: NewWhere("where", $5), OrderBy: $6, Limit: $7}
   }
 
 set_statement:
   SET comment_opt update_list
   {
-    $$ = &Set{Comments: $2, Updates: $3}
+    $$ = &Set{Comments: Comments($2), Updates: $3}
   }
 
 create_statement:
@@ -257,7 +256,7 @@ comment_list:
   }
 | comment_list COMMENT
   {
-    $$ = append($$, Comment($2.Value))
+    $$ = append($1, $2.Value)
   }
 
 union_op:
