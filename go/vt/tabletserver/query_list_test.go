@@ -9,7 +9,7 @@ import (
 func TestQueryList(t *testing.T) {
 	ql := NewQueryList()
 	connID := int64(1)
-	qd := NewQueryDetail(&proto.Query{}, &Context{}, connID)
+	qd := NewQueryDetail(&proto.Query{}, &DummyContext{}, connID)
 	ql.Add(qd)
 
 	if qd1, ok := ql.queryDetails[connID]; !ok || qd1.connID != connID {
@@ -17,7 +17,7 @@ func TestQueryList(t *testing.T) {
 	}
 
 	conn2ID := int64(2)
-	qd2 := NewQueryDetail(&proto.Query{}, &Context{}, conn2ID)
+	qd2 := NewQueryDetail(&proto.Query{}, &DummyContext{}, conn2ID)
 	ql.Add(qd2)
 
 	rows := ql.GetQueryzRows()
@@ -32,7 +32,7 @@ func TestQueryList(t *testing.T) {
 }
 
 func TestQueryDetail(t *testing.T) {
-	qd := NewQueryDetail(&proto.Query{}, &Context{}, 1)
+	qd := NewQueryDetail(&proto.Query{}, &DummyContext{}, 1)
 	if qd.GetState() != qdStateNames[QD_RUNNING] {
 		t.Errorf("default state should be QD_RUNNING")
 	}

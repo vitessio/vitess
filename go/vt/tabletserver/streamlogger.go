@@ -42,11 +42,11 @@ type SQLQueryStats struct {
 	CacheInvalidations   int64
 	QuerySources         byte
 	Rows                 [][]sqltypes.Value
-	context              *Context
+	context              Context
 	sensitiveMode        bool
 }
 
-func newSqlQueryStats(methodName string, context *Context, sensitiveMode bool) *SQLQueryStats {
+func newSqlQueryStats(methodName string, context Context, sensitiveMode bool) *SQLQueryStats {
 	return &SQLQueryStats{
 		Method:        methodName,
 		StartTime:     time.Now(),
@@ -154,11 +154,11 @@ func (stats *SQLQueryStats) FmtQuerySources() string {
 }
 
 func (log *SQLQueryStats) RemoteAddr() string {
-	return log.context.RemoteAddr
+	return log.context.GetRemoteAddr()
 }
 
 func (log *SQLQueryStats) Username() string {
-	return log.context.Username
+	return log.context.GetUsername()
 }
 
 // String returns a tab separated list of logged fields.
