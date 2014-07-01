@@ -61,12 +61,6 @@ var stateName = []string{
 	"SHUTTING_QUERIES",
 }
 
-// Context is the context variable for SqlQuery RPC calls.
-type Context struct {
-	RemoteAddr string
-	Username   string
-}
-
 // SqlQuery implements the RPC interface for the query service.
 type SqlQuery struct {
 	// mu is used to manage state transitions.
@@ -224,7 +218,7 @@ func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo
 }
 
 // Begin starts a new transaction. This is allowed only if the state is SERVING.
-func (sq *SqlQuery) Begin(context *Context, session *proto.Session, txInfo *proto.TransactionInfo) (err error) {
+func (sq *SqlQuery) Begin(context Context, session *proto.Session, txInfo *proto.TransactionInfo) (err error) {
 	logStats := newSqlQueryStats("Begin", context, sq.config.SensitiveMode)
 	logStats.OriginalSql = "begin"
 	sq.mu.RLock()
@@ -273,7 +267,7 @@ func (sq *SqlQuery) endRequest() {
 }
 
 // Commit commits the specified transaction.
-func (sq *SqlQuery) Commit(context *Context, session *proto.Session) (err error) {
+func (sq *SqlQuery) Commit(context Context, session *proto.Session) (err error) {
 	logStats := newSqlQueryStats("Commit", context, sq.config.SensitiveMode)
 	logStats.OriginalSql = "commit"
 	if err = sq.startRequest(session.SessionId, true); err != nil {
@@ -287,7 +281,7 @@ func (sq *SqlQuery) Commit(context *Context, session *proto.Session) (err error)
 }
 
 // Rollback rollsback the specified transaction.
-func (sq *SqlQuery) Rollback(context *Context, session *proto.Session) (err error) {
+func (sq *SqlQuery) Rollback(context Context, session *proto.Session) (err error) {
 	logStats := newSqlQueryStats("Rollback", context, sq.config.SensitiveMode)
 	logStats.OriginalSql = "rollback"
 	if err = sq.startRequest(session.SessionId, true); err != nil {
@@ -329,7 +323,7 @@ func handleExecError(query *proto.Query, err *error, logStats *SQLQueryStats) {
 }
 
 // Execute executes the query and returns the result as response.
-func (sq *SqlQuery) Execute(context *Context, query *proto.Query, reply *mproto.QueryResult) (err error) {
+func (sq *SqlQuery) Execute(context Context, query *proto.Query, reply *mproto.QueryResult) (err error) {
 	logStats := newSqlQueryStats("Execute", context, sq.config.SensitiveMode)
 	allowShutdown := (query.TransactionId != 0)
 	if err = sq.startRequest(query.SessionId, allowShutdown); err != nil {
@@ -345,7 +339,7 @@ func (sq *SqlQuery) Execute(context *Context, query *proto.Query, reply *mproto.
 // StreamExecute executes the query and streams the result.
 // The first QueryResult will have Fields set (and Rows nil).
 // The subsequent QueryResult will have Rows set (and Fields nil).
-func (sq *SqlQuery) StreamExecute(context *Context, query *proto.Query, sendReply func(*mproto.QueryResult) error) (err error) {
+func (sq *SqlQuery) StreamExecute(context Context, query *proto.Query, sendReply func(*mproto.QueryResult) error) (err error) {
 	// check cases we don't handle yet
 	if query.TransactionId != 0 {
 		return NewTabletError(FAIL, "Transactions not supported with streaming")
@@ -371,7 +365,7 @@ func (sq *SqlQuery) StreamExecute(context *Context, query *proto.Query, sendRepl
 // ExecuteBatch executes a group of queries and returns their results as a list.
 // ExecuteBatch can be called for an existing transaction, or it can also begin
 // its own transaction, in which case it's expected to commit it also.
-func (sq *SqlQuery) ExecuteBatch(context *Context, queryList *proto.QueryList, reply *proto.QueryResultList) (err error) {
+func (sq *SqlQuery) ExecuteBatch(context Context, queryList *proto.QueryList, reply *proto.QueryResultList) (err error) {
 	if len(queryList.Queries) == 0 {
 		return NewTabletError(FAIL, "Empty query list")
 	}

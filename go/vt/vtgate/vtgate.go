@@ -10,6 +10,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
@@ -66,7 +67,7 @@ func Init(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount 
 }
 
 // ExecuteShard executes a non-streaming query on the specified shards.
-func (vtg *VTGate) ExecuteShard(context interface{}, query *proto.QueryShard) (interface{}, *proto.Session, error) {
+func (vtg *VTGate) ExecuteShard(context interface{}, query *proto.QueryShard, reply *proto.QueryResult) error {
 	startTime := time.Now()
 	statsKey := []string{"ExecuteShard", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -83,60 +84,72 @@ func (vtg *VTGate) ExecuteShard(context interface{}, query *proto.QueryShard) (i
 		},
 	)
 	if err == nil {
-		return qr, query.Session, nil
+		reply.Result = qr
+	} else {
+		reply.Error = err.Error()
+		vtg.errors.Add(statsKey, 1)
+		vtg.logExecuteShard.Errorf("%v, query: %+v", err, query)
 	}
-	vtg.errors.Add(statsKey, 1)
-	vtg.logExecuteShard.Errorf("%v, query: %+v", err, query)
-	return nil, query.Session, err
+	reply.Session = query.Session
+	return nil
 }
 
 // ExecuteKeyspaceIds executes a non-streaming query based on the specified keyspace ids.
-func (vtg *VTGate) ExecuteKeyspaceIds(context interface{}, query *proto.KeyspaceIdQuery) (interface{}, *proto.Session, error) {
+func (vtg *VTGate) ExecuteKeyspaceIds(context interface{}, query *proto.KeyspaceIdQuery, reply *proto.QueryResult) error {
 	startTime := time.Now()
 	statsKey := []string{"ExecuteKeyspaceIds", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
 
 	qr, err := vtg.resolver.ExecuteKeyspaceIds(context, query)
 	if err == nil {
-		return qr, query.Session, nil
+		reply.Result = qr
+	} else {
+		reply.Error = err.Error()
+		vtg.errors.Add(statsKey, 1)
+		vtg.logExecuteKeyspaceIds.Errorf("%v, query: %+v", err, query)
 	}
-	vtg.errors.Add(statsKey, 1)
-	vtg.logExecuteKeyspaceIds.Errorf("%v, query: %+v", err, query)
-	return nil, query.Session, err
+	reply.Session = query.Session
+	return nil
 }
 
 // ExecuteKeyRanges executes a non-streaming query based on the specified keyranges.
-func (vtg *VTGate) ExecuteKeyRanges(context interface{}, query *proto.KeyRangeQuery) (interface{}, *proto.Session, error) {
+func (vtg *VTGate) ExecuteKeyRanges(context interface{}, query *proto.KeyRangeQuery, reply *proto.QueryResult) error {
 	startTime := time.Now()
 	statsKey := []string{"ExecuteKeyRanges", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
 
 	qr, err := vtg.resolver.ExecuteKeyRanges(context, query)
 	if err == nil {
-		return qr, query.Session, nil
+		reply.Result = qr
+	} else {
+		reply.Error = err.Error()
+		vtg.errors.Add(statsKey, 1)
+		vtg.logExecuteKeyRanges.Errorf("%v, query: %+v", err, query)
 	}
-	vtg.errors.Add(statsKey, 1)
-	vtg.logExecuteKeyRanges.Errorf("%v, query: %+v", err, query)
-	return nil, query.Session, err
+	reply.Session = query.Session
+	return nil
 }
 
 // ExecuteEntityIds excutes a non-streaming query based on given KeyspaceId map.
-func (vtg *VTGate) ExecuteEntityIds(context interface{}, query *proto.EntityIdsQuery) (interface{}, *proto.Session, error) {
+func (vtg *VTGate) ExecuteEntityIds(context interface{}, query *proto.EntityIdsQuery, reply *proto.QueryResult) error {
 	startTime := time.Now()
 	statsKey := []string{"ExecuteEntityIds", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
 
 	qr, err := vtg.resolver.ExecuteEntityIds(context, query)
 	if err == nil {
-		return qr, query.Session, nil
+		reply.Result = qr
+	} else {
+		reply.Error = err.Error()
+		vtg.errors.Add(statsKey, 1)
+		vtg.logExecuteEntityIds.Errorf("%v, query: %+v", err, query)
 	}
-	vtg.errors.Add(statsKey, 1)
-	vtg.logExecuteEntityIds.Errorf("%v, query: %+v", err, query)
-	return nil, query.Session, err
+	reply.Session = query.Session
+	return nil
 }
 
 // ExecuteBatchShard executes a group of queries on the specified shards.
-func (vtg *VTGate) ExecuteBatchShard(context interface{}, batchQuery *proto.BatchQueryShard) (interface{}, *proto.Session, error) {
+func (vtg *VTGate) ExecuteBatchShard(context interface{}, batchQuery *proto.BatchQueryShard, reply *proto.QueryResultList) error {
 	startTime := time.Now()
 	statsKey := []string{"ExecuteBatchShard", batchQuery.Keyspace, string(batchQuery.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -152,15 +165,18 @@ func (vtg *VTGate) ExecuteBatchShard(context interface{}, batchQuery *proto.Batc
 		},
 	)
 	if err == nil {
-		return qrs, batchQuery.Session, nil
+		reply.List = qrs.List
+	} else {
+		reply.Error = err.Error()
+		vtg.errors.Add(statsKey, 1)
+		vtg.logExecuteBatchShard.Errorf("%v, queries: %+v", err, batchQuery)
 	}
-	vtg.errors.Add(statsKey, 1)
-	vtg.logExecuteBatchShard.Errorf("%v, queries: %+v", err, batchQuery)
-	return nil, batchQuery.Session, err
+	reply.Session = batchQuery.Session
+	return nil
 }
 
 // ExecuteBatchKeyspaceIds executes a group of queries based on the specified keyspace ids.
-func (vtg *VTGate) ExecuteBatchKeyspaceIds(context interface{}, query *proto.KeyspaceIdBatchQuery) (interface{}, *proto.Session, error) {
+func (vtg *VTGate) ExecuteBatchKeyspaceIds(context interface{}, query *proto.KeyspaceIdBatchQuery, reply *proto.QueryResultList) error {
 	startTime := time.Now()
 	statsKey := []string{"ExecuteBatchKeyspaceIds", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -169,11 +185,14 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(context interface{}, query *proto.Key
 		context,
 		query)
 	if err == nil {
-		return qrs, query.Session, nil
+		reply.List = qrs.List
+	} else {
+		reply.Error = err.Error()
+		vtg.errors.Add(statsKey, 1)
+		vtg.logExecuteBatchKeyspaceIds.Errorf("%v, query: %+v", err, query)
 	}
-	vtg.errors.Add(statsKey, 1)
-	vtg.logExecuteBatchKeyspaceIds.Errorf("%v, query: %+v", err, query)
-	return nil, query.Session, err
+	reply.Session = query.Session
+	return nil
 }
 
 // StreamExecuteKeyspaceIds executes a streaming query on the specified KeyspaceIds.
@@ -182,7 +201,7 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(context interface{}, query *proto.Key
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // The api supports supplying multiple KeyspaceIds to make it future proof.
-func (vtg *VTGate) StreamExecuteKeyspaceIds(context interface{}, query *proto.KeyspaceIdQuery, sendReply func(interface{}, *proto.Session) error) error {
+func (vtg *VTGate) StreamExecuteKeyspaceIds(context interface{}, query *proto.KeyspaceIdQuery, sendReply func(*proto.QueryResult) error) error {
 	startTime := time.Now()
 	statsKey := []string{"StreamExecuteKeyspaceIds", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -190,18 +209,20 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(context interface{}, query *proto.Ke
 	err := vtg.resolver.StreamExecuteKeyspaceIds(
 		context,
 		query,
-		func(reply interface{}) error {
-			return sendReply(reply, nil)
+		func(mreply *mproto.QueryResult) error {
+			reply := new(proto.QueryResult)
+			reply.Result = mreply
+			// Note we don't populate reply.Session here,
+			// as it may change incrementaly as responses are sent.
+			return sendReply(reply)
 		})
 	if err != nil {
 		vtg.errors.Add(statsKey, 1)
 		vtg.logStreamExecuteKeyspaceIds.Errorf("%v, query: %+v", err, query)
 	}
-	// Note we don't populate session above,
-	// as it may change incrementaly as responses are sent.
 	// Now we can send the final Sessoin info.
 	if query.Session != nil {
-		sendReply(nil, query.Session)
+		sendReply(&proto.QueryResult{Session: query.Session})
 	}
 	return err
 }
@@ -212,7 +233,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(context interface{}, query *proto.Ke
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // The api supports supplying multiple keyranges to make it future proof.
-func (vtg *VTGate) StreamExecuteKeyRanges(context interface{}, query *proto.KeyRangeQuery, sendReply func(interface{}, *proto.Session) error) error {
+func (vtg *VTGate) StreamExecuteKeyRanges(context interface{}, query *proto.KeyRangeQuery, sendReply func(*proto.QueryResult) error) error {
 	startTime := time.Now()
 	statsKey := []string{"StreamExecuteKeyRanges", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -220,25 +241,27 @@ func (vtg *VTGate) StreamExecuteKeyRanges(context interface{}, query *proto.KeyR
 	err := vtg.resolver.StreamExecuteKeyRanges(
 		context,
 		query,
-		func(reply interface{}) error {
-			return sendReply(reply, nil)
+		func(mreply *mproto.QueryResult) error {
+			reply := new(proto.QueryResult)
+			reply.Result = mreply
+			// Note we don't populate reply.Session here,
+			// as it may change incrementaly as responses are sent.
+			return sendReply(reply)
 		})
 
 	if err != nil {
 		vtg.errors.Add(statsKey, 1)
 		vtg.logStreamExecuteKeyRanges.Errorf("%v, query: %+v", err, query)
 	}
-	// Note we don't populate session above,
-	// as it may change incrementaly as responses are sent.
 	// Now we can send the final Sessoin info.
 	if query.Session != nil {
-		sendReply(nil, query.Session)
+		sendReply(&proto.QueryResult{Session: query.Session})
 	}
 	return err
 }
 
 // StreamExecuteShard executes a streaming query on the specified shards.
-func (vtg *VTGate) StreamExecuteShard(context interface{}, query *proto.QueryShard, sendReply func(interface{}, *proto.Session) error) error {
+func (vtg *VTGate) StreamExecuteShard(context interface{}, query *proto.QueryShard, sendReply func(*proto.QueryResult) error) error {
 	startTime := time.Now()
 	statsKey := []string{"StreamExecuteShard", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -253,19 +276,21 @@ func (vtg *VTGate) StreamExecuteShard(context interface{}, query *proto.QuerySha
 		func(keyspace string) (string, []string, error) {
 			return query.Keyspace, query.Shards, nil
 		},
-		func(reply interface{}) error {
-			return sendReply(reply, nil)
+		func(mreply *mproto.QueryResult) error {
+			reply := new(proto.QueryResult)
+			reply.Result = mreply
+			// Note we don't populate reply.Session here,
+			// as it may change incrementaly as responses are sent.
+			return sendReply(reply)
 		})
 
 	if err != nil {
 		vtg.errors.Add(statsKey, 1)
 		vtg.logStreamExecuteShard.Errorf("%v, query: %+v", err, query)
 	}
-	// Note we don't populate session above,
-	// as it may change incrementaly as responses are sent.
 	// Now we can send the final Sessoin info.
 	if query.Session != nil {
-		sendReply(nil, query.Session)
+		sendReply(&proto.QueryResult{Session: query.Session})
 	}
 	return err
 }
