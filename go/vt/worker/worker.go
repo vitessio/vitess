@@ -26,7 +26,7 @@ type Worker interface {
 	// possible.
 	Run()
 
-	// Error() returns the error status of the job, if any.
+	// Error returns the error status of the job, if any.
 	// It will only be called after Run() has completed.
 	Error() error
 }

@@ -313,7 +313,9 @@ index by_msg (msg)
       # (down from default=20) as connection pool is not big enough for 20.
       # min_table_size_for_split is set to 1 as to force a split even on the
       # small table we have.
-      utils.run_vtworker(['-cell', 'test_nj', 'VerticalSplitClone',
+      utils.run_vtworker(['--cell', 'test_nj',
+                          '--command_display_interval', '10ms',
+                          'VerticalSplitClone',
                           '--tables', 'moving.*,view1',
                           '--strategy', 'populateBlpCheckpoint',
                           '--source_reader_count', '10',
