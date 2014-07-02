@@ -2,6 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// Package binlogplayer contains the code that plays a filtered replication
+// stream on a client database. It usually runs inside the destination master
+// vttablet process.
 package binlogplayer
 
 import (
@@ -139,9 +142,7 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *proto.BinlogTransaction) erro
 }
 
 func ReadStartPosition(dbClient VtClient, uid uint32) (*proto.BlpPosition, error) {
-	selectRecovery := fmt.Sprintf(
-		"SELECT group_id FROM _vt.blp_checkpoint WHERE source_shard_uid=%v",
-		uid)
+	selectRecovery := QueryBlpCheckpoint(uid)
 	qr, err := dbClient.ExecuteFetch(selectRecovery, 1, true)
 	if err != nil {
 		return nil, fmt.Errorf("error %v in selecting from recovery table %v", err, selectRecovery)
@@ -308,6 +309,12 @@ func CreateBlpCheckpoint() []string {
 
 // PopulateBlpCheckpoint returns a statement to populate the first value into
 // the _vt.blp_checkpoint table
-func PopulateBlpCheckpoint(index int, groupId, timeUpdated int64) string {
+func PopulateBlpCheckpoint(index uint32, groupId, timeUpdated int64) string {
 	return fmt.Sprintf("INSERT INTO _vt.blp_checkpoint (source_shard_uid, group_id, time_updated, transaction_timestamp) VALUES (%v, %v, %v, 0)", index, groupId, timeUpdated)
+}
+
+// QueryBlpCheckpoint returns a statement to query the group_id for a
+// given shard from the _vt.blp_checkpoint table
+func QueryBlpCheckpoint(index uint32) string {
+	return fmt.Sprintf("SELECT group_id FROM _vt.blp_checkpoint WHERE source_shard_uid=%v", index)
 }

@@ -22,6 +22,7 @@ import (
 
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/hook"
@@ -620,8 +621,8 @@ func (mysqld *Mysqld) ValidateSnapshotPath() error {
 	return nil
 }
 
-// The following types and methods are used to watch binlog_player replication
-
+// WaitBlpPos will wait for the filtered replication to reach at least
+// the provided position.
 func (mysqld *Mysqld) WaitBlpPos(bp *blproto.BlpPosition, waitTimeout time.Duration) error {
 	timeOut := time.Now().Add(waitTimeout)
 	for {
@@ -629,7 +630,7 @@ func (mysqld *Mysqld) WaitBlpPos(bp *blproto.BlpPosition, waitTimeout time.Durat
 			break
 		}
 
-		cmd := fmt.Sprintf("SELECT group_id FROM _vt.blp_checkpoint WHERE source_shard_uid=%v", bp.Uid)
+		cmd := binlogplayer.QueryBlpCheckpoint(bp.Uid)
 		qr, err := mysqld.fetchSuperQuery(cmd)
 		if err != nil {
 			return err

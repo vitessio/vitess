@@ -1048,7 +1048,7 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.Key
 		}
 		queries = append(queries, binlogplayer.CreateBlpCheckpoint()...)
 		for manifestIndex, manifest := range manifests {
-			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(manifestIndex, manifest.Source.MasterState.ReplicationPosition.MasterLogGroupId, time.Now().Unix()))
+			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(uint32(manifestIndex), manifest.Source.MasterState.ReplicationPosition.MasterLogGroupId, time.Now().Unix()))
 		}
 		if err = mysqld.ExecuteSuperQueryList(queries); err != nil {
 			return err
