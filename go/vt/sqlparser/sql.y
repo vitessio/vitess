@@ -33,6 +33,7 @@ var (
   empty       struct{}
   node        *Node
   statement   Statement
+  selStmt     SelectStatement
   byt         byte
   bytes       []byte
   bytes2      [][]byte
@@ -48,6 +49,7 @@ var (
   expr        Expr
   boolExpr    BoolExpr
   valExpr     ValExpr
+  tuple       Tuple
   valExprs    ValExprs
   values      Values
   subquery    *Subquery
@@ -90,7 +92,8 @@ var (
 %start any_command
 
 %type <statement> command
-%type <statement> select_statement insert_statement update_statement delete_statement set_statement
+%type <selStmt> select_statement
+%type <statement> insert_statement update_statement delete_statement set_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement
 %type <bytes2> comment_opt comment_list
 %type <str> union_op
@@ -110,7 +113,8 @@ var (
 %type <boolExpr> boolean_expression condition
 %type <str> compare
 %type <sqlNode> row_list
-%type <valExpr> value tuple value_expression
+%type <valExpr> value value_expression
+%type <tuple> tuple
 %type <valExprs> value_expression_list
 %type <values> tuple_list
 %type <bytes> keyword_as_func
@@ -146,6 +150,9 @@ any_command:
 
 command:
   select_statement
+  {
+    $$ = $1
+  }
 | insert_statement
 | update_statement
 | delete_statement
@@ -162,7 +169,7 @@ select_statement:
   }
 | select_statement union_op select_statement %prec UNION
   {
-    $$ = &Union{Type: $2, Select1: $1.(SelectStatement), Select2: $3.(SelectStatement)}
+    $$ = &Union{Type: $2, Select1: $1, Select2: $3}
   }
 
 insert_statement:
@@ -580,11 +587,11 @@ row_list:
 tuple_list:
   tuple
   {
-    $$ = Values{$1.(Tuple)}
+    $$ = Values{$1}
   }
 | tuple_list ',' tuple
   {
-    $$ = append($1, $3.(Tuple))
+    $$ = append($1, $3)
   }
 
 tuple:
@@ -600,7 +607,7 @@ tuple:
 subquery:
   '(' select_statement ')'
   {
-    $$ = &Subquery{$2.(SelectStatement)}
+    $$ = &Subquery{$2}
   }
 
 value_expression_list:
