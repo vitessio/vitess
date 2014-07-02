@@ -60,6 +60,7 @@ type QueryEngine struct {
 	consolidator *Consolidator
 	invalidator  *RowcacheInvalidator
 	streamQList  *QueryList
+	connKiller   *ConnectionKiller
 
 	// Vars
 	spotCheckFreq    sync2.AtomicInt64
@@ -128,9 +129,11 @@ func NewQueryEngine(config Config) *QueryEngine {
 
 	// Services
 	qe.activeTxPool = NewActiveTxPool("ActiveTransactionPool", time.Duration(config.TransactionTimeout*1e9))
-	qe.activePool = NewActivePool("ActivePool", time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
+	qe.connKiller = NewConnectionKiller(1, time.Duration(config.IdleTimeout*1e9))
+	qe.activePool = NewActivePool("ActivePool", time.Duration(config.QueryTimeout*1e9), qe.connKiller)
 	qe.consolidator = NewConsolidator()
 	qe.invalidator = NewRowcacheInvalidator(qe)
+	qe.streamQList = NewQueryList(qe.connKiller)
 
 	// Vars
 	qe.spotCheckFreq = sync2.AtomicInt64(config.SpotCheckRatio * SPOT_CHECK_MULTIPLIER)
@@ -139,7 +142,6 @@ func NewQueryEngine(config Config) *QueryEngine {
 	}
 	qe.maxResultSize = sync2.AtomicInt64(config.MaxResultSize)
 	qe.streamBufferSize = sync2.AtomicInt64(config.StreamBufferSize)
-	qe.streamQList = NewQueryList()
 
 	// Stats
 	stats.Publish("MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
@@ -197,7 +199,8 @@ func (qe *QueryEngine) Open(dbconfig *dbconfigs.DBConfig, schemaOverrides []Sche
 	qe.streamConnPool.Open(connFactory)
 	qe.txPool.Open(connFactory)
 	qe.activeTxPool.Open()
-	qe.activePool.Open(connFactory)
+	qe.connKiller.Open(connFactory)
+	qe.activePool.Open()
 }
 
 // WaitForTxEmpty must be called before calling Close.
@@ -213,6 +216,7 @@ func (qe *QueryEngine) WaitForTxEmpty() {
 func (qe *QueryEngine) Close() {
 	// Close in reverse order of Open.
 	qe.activePool.Close()
+	qe.connKiller.Close()
 	qe.activeTxPool.Close()
 	qe.txPool.Close()
 	qe.streamConnPool.Close()
@@ -403,12 +407,7 @@ func (qe *QueryEngine) StreamExecute(logStats *SQLQueryStats, query *proto.Query
 
 	// then let's stream! Wrap callback function to return an
 	// error on query termination to stop further streaming
-	qe.fullStreamFetch(logStats, conn, plan.FullQuery, query.BindVariables, nil, nil, func(reply *mproto.QueryResult) error {
-		if qd.state.Get() != QD_RUNNING {
-			return NewTabletError(FAIL, "query terminated")
-		}
-		return sendReply(reply)
-	})
+	qe.fullStreamFetch(logStats, conn, plan.FullQuery, query.BindVariables, nil, nil, sendReply)
 }
 
 // InvalidateForDml performs rowcache invalidations for the dml.
@@ -785,7 +784,7 @@ func (qe *QueryEngine) execSet(logStats *SQLQueryStats, conn dbconnpool.PoolConn
 		qe.connPool.SetIdleTimeout(t)
 		qe.streamConnPool.SetIdleTimeout(t)
 		qe.txPool.SetIdleTimeout(t)
-		qe.activePool.SetIdleTimeout(t)
+		qe.connKiller.SetIdleTimeout(t)
 	case "vt_spot_check_ratio":
 		qe.spotCheckFreq.Set(int64(getFloat64(plan.SetValue) * SPOT_CHECK_MULTIPLIER))
 	case "vt_strict_mode":

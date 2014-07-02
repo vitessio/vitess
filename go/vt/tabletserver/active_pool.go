@@ -8,27 +8,25 @@ import (
 	"fmt"
 	"time"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/pools"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/timer"
-	"github.com/youtube/vitess/go/vt/dbconnpool"
 )
 
 type ActivePool struct {
-	pool     *pools.Numbered
-	timeout  sync2.AtomicDuration
-	connPool *dbconnpool.ConnectionPool
-	ticks    *timer.Timer
+	pool       *pools.Numbered
+	timeout    sync2.AtomicDuration
+	ticks      *timer.Timer
+	connKiller *ConnectionKiller
 }
 
-func NewActivePool(name string, queryTimeout, idleTimeout time.Duration) *ActivePool {
+func NewActivePool(name string, queryTimeout time.Duration, connKiller *ConnectionKiller) *ActivePool {
 	ap := &ActivePool{
-		pool:     pools.NewNumbered(),
-		timeout:  sync2.AtomicDuration(queryTimeout),
-		connPool: dbconnpool.NewConnectionPool("", 1, idleTimeout),
-		ticks:    timer.NewTimer(queryTimeout / 10),
+		pool:       pools.NewNumbered(),
+		timeout:    sync2.AtomicDuration(queryTimeout),
+		ticks:      timer.NewTimer(queryTimeout / 10),
+		connKiller: connKiller,
 	}
 	stats.Publish(name+"Size", stats.IntFunc(ap.pool.Size))
 	stats.Publish(
@@ -38,33 +36,19 @@ func NewActivePool(name string, queryTimeout, idleTimeout time.Duration) *Active
 	return ap
 }
 
-func (ap *ActivePool) Open(ConnFactory dbconnpool.CreateConnectionFunc) {
-	ap.connPool.Open(ConnFactory)
-	ap.ticks.Start(func() { ap.QueryKiller() })
+func (ap *ActivePool) Open() {
+	ap.ticks.Start(func() { ap.killOutdatedQueries() })
 }
 
 func (ap *ActivePool) Close() {
 	ap.ticks.Stop()
-	ap.connPool.Close()
 	ap.pool = pools.NewNumbered()
 }
 
-func (ap *ActivePool) QueryKiller() {
+func (ap *ActivePool) killOutdatedQueries() {
 	defer logError()
 	for _, v := range ap.pool.GetOutdated(time.Duration(ap.Timeout()), "for abort") {
-		ap.kill(v.(int64))
-	}
-}
-
-func (ap *ActivePool) kill(connid int64) {
-	ap.Remove(connid)
-	killStats.Add("Queries", 1)
-	log.Infof("killing query %d", connid)
-	killConn := getOrPanic(ap.connPool)
-	defer killConn.Recycle()
-	sql := fmt.Sprintf("kill %d", connid)
-	if _, err := killConn.ExecuteFetch(sql, 10000, false); err != nil {
-		log.Errorf("Could not kill query %d: %v", connid, err)
+		ap.connKiller.Kill(v.(int64))
 	}
 }
 
@@ -83,10 +67,6 @@ func (ap *ActivePool) Timeout() time.Duration {
 func (ap *ActivePool) SetTimeout(timeout time.Duration) {
 	ap.timeout.Set(timeout)
 	ap.ticks.SetInterval(timeout / 10)
-}
-
-func (ap *ActivePool) SetIdleTimeout(idleTimeout time.Duration) {
-	ap.connPool.SetIdleTimeout(idleTimeout)
 }
 
 func (ap *ActivePool) StatsJSON() string {

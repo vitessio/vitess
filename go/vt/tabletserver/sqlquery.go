@@ -184,6 +184,8 @@ func (sq *SqlQuery) disallowQueries() {
 	sq.mu.Lock()
 	sq.setState(SHUTTING_QUERIES)
 	sq.mu.Unlock()
+	// Terminate all streaming queries
+	sq.qe.streamQList.TerminateAll()
 	// Don't hold lock while waiting.
 	sq.requests.Wait()
 
@@ -351,14 +353,7 @@ func (sq *SqlQuery) StreamExecute(context Context, query *proto.Query, sendReply
 	}
 	defer sq.endRequest()
 	defer handleExecError(query, &err, logStats)
-
-	// Wrap callback function to return an error on shutdown to stop streaming
-	sq.qe.StreamExecute(logStats, query, func(reply *mproto.QueryResult) error {
-		if sq.state.Get() != SERVING {
-			return NewTabletError(FAIL, "query server is shutting down")
-		}
-		return sendReply(reply)
-	})
+	sq.qe.StreamExecute(logStats, query, sendReply)
 	return nil
 }
 
