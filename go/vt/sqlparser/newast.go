@@ -30,14 +30,16 @@ type Statement interface {
 type SelectStatement interface {
 	selectStatement()
 	statement()
+	insertRows()
 	SQLNode
 }
 
 // Select represents a SELECT statement.
+// Distinct can be "", "distinct "
 // Lock can be "", " for update", " lock in share mode".
 type Select struct {
 	Comments    Comments
-	Distinct    Distinct
+	Distinct    string
 	SelectExprs SelectExprs
 	From        TableExprs
 	Where       *Where
@@ -48,12 +50,12 @@ type Select struct {
 	Lock        string
 }
 
-func (*Select) statement() {}
-
+func (*Select) statement()       {}
 func (*Select) selectStatement() {}
+func (*Select) insertRows()      {}
 
 func (node *Select) Format(buf *TrackedBuffer) {
-	buf.Fprintf("select %v%v%v from %v%v%v%v%v%v%s",
+	buf.Fprintf("select %v%s%v from %v%v%v%v%v%v%s",
 		node.Comments, node.Distinct, node.SelectExprs,
 		node.From, node.Where,
 		node.GroupBy, node.Having, node.OrderBy,
@@ -68,33 +70,36 @@ type Union struct {
 	Select1, Select2 SelectStatement
 }
 
-func (*Union) statement() {}
-
+func (*Union) statement()       {}
 func (*Union) selectStatement() {}
+func (*Union) insertRows()      {}
 
 func (node *Union) Format(buf *TrackedBuffer) {
 	buf.Fprintf("%v %s %v", node.Select1, node.Type, node.Select2)
 }
 
 // Insert represents an INSERT statement.
-// Rows can be *Subselect, Values.
 type Insert struct {
 	Comments Comments
 	Table    *TableName
 	Columns  Columns
-	Rows     SQLNode
-	OnDup    UpdateExprs
+	Rows     InsertRows
+	OnDup    OnDup
 }
 
 func (*Insert) statement() {}
 
 func (node *Insert) Format(buf *TrackedBuffer) {
-	buf.Fprintf("insert %vinto %v%v %v",
+	buf.Fprintf("insert %vinto %v%v %v%v",
 		node.Comments,
 		node.Table, node.Columns, node.Rows, node.OnDup)
-	if node.OnDup != nil {
-		buf.Fprintf(" on duplicate key update %v", node.OnDup)
-	}
+}
+
+// InsertRows represents the rows for an INSERT statement.
+// It can be Values, SelectStatement.
+type InsertRows interface {
+	insertRows()
+	SQLNode
 }
 
 // Update represents an UPDATE statement.
@@ -177,27 +182,11 @@ func (node *Rename) Format(buf *TrackedBuffer) {
 }
 
 // Comments represents a list of comments.
-type Comments []Comment
+type Comments [][]byte
 
 func (node Comments) Format(buf *TrackedBuffer) {
 	for _, c := range node {
-		c.Format(buf)
-	}
-}
-
-// Comment represents one comment.
-type Comment []byte
-
-func (comment Comment) Format(buf *TrackedBuffer) {
-	buf.Fprintf("%s ", []byte(comment))
-}
-
-// Distinct specifies if DISTINCT was used.
-type Distinct bool
-
-func (node Distinct) Format(buf *TrackedBuffer) {
-	if node {
-		buf.Fprintf("distinct ")
+		buf.Fprintf("%s ", c)
 	}
 }
 
@@ -282,7 +271,7 @@ type TableExpr interface {
 // AliasedTableExpr represents a table expression
 // coupled with an optional alias or index hint.
 type AliasedTableExpr struct {
-	Expr  SQLNode
+	Expr  SimpleTableExpr
 	As    []byte
 	Hints *IndexHints
 }
@@ -300,11 +289,19 @@ func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
 	}
 }
 
+// SimpleTableExpr represents a simple table expression.
+// It can be *TableName, *Subquery.
+type SimpleTableExpr interface {
+	simpleTableExpr()
+	SQLNode
+}
+
 // TableName represents a table  name.
-// TODO(sougou): This is currently identical to ColName. Resolve.
 type TableName struct {
 	Name, Qualifier []byte
 }
+
+func (*TableName) simpleTableExpr() {}
 
 func (node *TableName) Format(buf *TrackedBuffer) {
 	if node.Qualifier != nil {
@@ -346,7 +343,6 @@ func (node *JoinTableExpr) Format(buf *TrackedBuffer) {
 
 // IndexHints represents a list of index hints.
 // Type can be "use", "ignore" or "force".
-// TODO(sougou): See if Indexes can reuse Columns.
 type IndexHints struct {
 	Type    string
 	Indexes [][]byte
@@ -367,6 +363,15 @@ func (node *IndexHints) Format(buf *TrackedBuffer) {
 type Where struct {
 	Type string
 	Expr BoolExpr
+}
+
+// NewWhere creates a WHERE or HAVING clause out
+// of a BoolExpr. If the expression is nil, it returns nil.
+func NewWhere(typ string, expr BoolExpr) *Where {
+	if expr == nil {
+		return nil
+	}
+	return &Where{Type: typ, Expr: expr}
 }
 
 func (node *Where) Format(buf *TrackedBuffer) {
@@ -599,9 +604,10 @@ type Subquery struct {
 	Select SelectStatement
 }
 
-func (*Subquery) tuple()   {}
-func (*Subquery) expr()    {}
-func (*Subquery) valExpr() {}
+func (*Subquery) tuple()           {}
+func (*Subquery) expr()            {}
+func (*Subquery) valExpr()         {}
+func (*Subquery) simpleTableExpr() {}
 
 func (node *Subquery) Format(buf *TrackedBuffer) {
 	buf.Fprintf("(%v)", node.Select)
@@ -690,6 +696,8 @@ func (node *When) Format(buf *TrackedBuffer) {
 // Values represents a VALUES clause.
 type Values []Tuple
 
+func (Values) insertRows() {}
+
 func (node Values) Format(buf *TrackedBuffer) {
 	prefix := "values "
 	for _, n := range node {
@@ -766,4 +774,14 @@ type UpdateExpr struct {
 
 func (node *UpdateExpr) Format(buf *TrackedBuffer) {
 	buf.Fprintf("%v = %v", node.Name, node.Expr)
+}
+
+// OnDup represents an ON DUPLICATE KEY clause.
+type OnDup UpdateExprs
+
+func (node OnDup) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	buf.Fprintf(" on duplicate key update %v", UpdateExprs(node))
 }
