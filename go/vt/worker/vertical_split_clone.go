@@ -95,6 +95,7 @@ type VerticalSplitCloneWorker struct {
 
 	// populated during stateVSCCopy
 	tableStatus []tableStatus
+	startTime   time.Time
 }
 
 // NewVerticalSplitCloneWorker returns a new VerticalSplitCloneWorker object.
@@ -128,18 +129,27 @@ func (vscw *VerticalSplitCloneWorker) recordError(err error) {
 	vscw.mu.Unlock()
 }
 
-func (vscw *VerticalSplitCloneWorker) tableStatuses() []string {
+func (vscw *VerticalSplitCloneWorker) tableStatuses() ([]string, time.Time) {
+	copiedRows := uint64(0)
+	rowCount := uint64(0)
 	result := make([]string, len(vscw.tableStatus))
 	for i, ts := range vscw.tableStatus {
 		ts.mu.Lock()
 		if ts.rowCount > 0 {
 			result[i] = fmt.Sprintf("%v: %v (%v/%v)", ts.name, ts.state, ts.copiedRows, ts.rowCount)
+			copiedRows += ts.copiedRows
+			rowCount += ts.rowCount
 		} else {
 			result[i] = fmt.Sprintf("%v: %v", ts.name, ts.state)
 		}
 		ts.mu.Unlock()
 	}
-	return result
+	now := time.Now()
+	if rowCount == 0 || copiedRows == 0 {
+		return result, now
+	}
+	eta := now.Add(time.Duration(float64(now.Sub(vscw.startTime)) * float64(copiedRows) / float64(rowCount)))
+	return result, eta
 }
 
 // StatusAsHTML implements the Worker interface
@@ -154,10 +164,13 @@ func (vscw *VerticalSplitCloneWorker) StatusAsHTML() template.HTML {
 	case stateVSCCopy:
 		result += "<b>Running</b>:</br>\n"
 		result += "<b>Copying from</b>: " + vscw.sourceAlias.String() + "</br>\n"
-		result += strings.Join(vscw.tableStatuses(), "</br>\n")
+		statuses, eta := vscw.tableStatuses()
+		result += "<b>ETA</b>: " + eta.String() + "</br>\n"
+		result += strings.Join(statuses, "</br>\n")
 	case stateVSCDone:
 		result += "<b>Success</b>:</br>\n"
-		result += strings.Join(vscw.tableStatuses(), "</br>\n")
+		statuses, _ := vscw.tableStatuses()
+		result += strings.Join(statuses, "</br>\n")
 	}
 
 	return template.HTML(result)
@@ -175,10 +188,13 @@ func (vscw *VerticalSplitCloneWorker) StatusAsText() string {
 	case stateVSCCopy:
 		result += "Running:\n"
 		result += "Copying from: " + vscw.sourceAlias.String() + "\n"
-		result += strings.Join(vscw.tableStatuses(), "\n")
+		statuses, eta := vscw.tableStatuses()
+		result += "ETA: " + eta.String() + "\n"
+		result += strings.Join(statuses, "\n")
 	case stateVSCDone:
 		result += "Success:\n"
-		result += strings.Join(vscw.tableStatuses(), "\n")
+		statuses, _ := vscw.tableStatuses()
+		result += strings.Join(statuses, "\n")
 	}
 	return result
 }
@@ -353,6 +369,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 		vscw.tableStatus[i].name = td.Name
 		vscw.tableStatus[i].rowCount = td.RowCount
 	}
+	vscw.startTime = time.Now()
 	vscw.mu.Unlock()
 
 	// Create all the commands to create the destination schema:
