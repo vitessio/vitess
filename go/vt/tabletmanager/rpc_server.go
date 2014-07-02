@@ -28,7 +28,7 @@ const rpcTimeout = time.Second * 30
 //
 
 // rpcWrapper handles all the logic for rpc calls.
-func (agent *ActionAgent) rpcWrapper(from, name string, args, reply interface{}, f func() error, lock, runAfterAction, reloadSchema bool) (err error) {
+func (agent *ActionAgent) rpcWrapper(from, name string, args, reply interface{}, verbose bool, f func() error, lock, runAfterAction, reloadSchema bool) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			log.Errorf("TabletManager.%v(%v) panic: %v", name, args, x)
@@ -49,7 +49,9 @@ func (agent *ActionAgent) rpcWrapper(from, name string, args, reply interface{},
 		log.Warningf("TabletManager.%v(%v)(from %v) error: %v", name, args, from, err.Error())
 		return fmt.Errorf("TabletManager.%v on %v error: %v", name, agent.TabletAlias, err)
 	}
-	log.Infof("TabletManager.%v(%v)(from %v): %v", name, args, from, reply)
+	if verbose {
+		log.Infof("TabletManager.%v(%v)(from %v): %v", name, args, from, reply)
+	}
 	if runAfterAction {
 		agent.afterAction("RPC("+name+")", reloadSchema)
 	}
@@ -66,22 +68,22 @@ func (agent *ActionAgent) rpcWrapper(from, name string, args, reply interface{},
 //     reload the tablet state, and reload the schema afterwards.
 
 func (agent *ActionAgent) RpcWrap(from, name string, args, reply interface{}, f func() error) error {
-	return agent.rpcWrapper(from, name, args, reply, f,
+	return agent.rpcWrapper(from, name, args, reply, false /*verbose*/, f,
 		false /*lock*/, false /*runAfterAction*/, false /*reloadSchema*/)
 }
 
 func (agent *ActionAgent) RpcWrapLock(from, name string, args, reply interface{}, f func() error) error {
-	return agent.rpcWrapper(from, name, args, reply, f,
+	return agent.rpcWrapper(from, name, args, reply, true /*verbose*/, f,
 		true /*lock*/, false /*runAfterAction*/, false /*reloadSchema*/)
 }
 
 func (agent *ActionAgent) RpcWrapLockAction(from, name string, args, reply interface{}, f func() error) error {
-	return agent.rpcWrapper(from, name, args, reply, f,
+	return agent.rpcWrapper(from, name, args, reply, true /*verbose*/, f,
 		true /*lock*/, true /*runAfterAction*/, false /*reloadSchema*/)
 }
 
 func (agent *ActionAgent) RpcWrapLockActionSchema(from, name string, args, reply interface{}, f func() error) error {
-	return agent.rpcWrapper(from, name, args, reply, f,
+	return agent.rpcWrapper(from, name, args, reply, true /*verbose*/, f,
 		true /*lock*/, true /*runAfterAction*/, true /*reloadSchema*/)
 }
 
