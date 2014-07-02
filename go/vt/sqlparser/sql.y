@@ -33,37 +33,36 @@ var (
   empty       struct{}
   node        *Node
   statement   Statement
-  comments    Comments
+  selStmt     SelectStatement
   byt         byte
   bytes       []byte
+  bytes2      [][]byte
   str         string
-  distinct    Distinct
   selectExprs SelectExprs
   selectExpr  SelectExpr
   columns     Columns
   colName     *ColName
   tableExprs  TableExprs
   tableExpr   TableExpr
+  smTableExpr SimpleTableExpr
   tableName   *TableName
   indexHints  *IndexHints
-  names       [][]byte
-  where       *Where
   expr        Expr
   boolExpr    BoolExpr
   valExpr     ValExpr
+  tuple       Tuple
   valExprs    ValExprs
   values      Values
   subquery    *Subquery
   caseExpr    *CaseExpr
   whens       []*When
   when        *When
-  groupBy     GroupBy
   orderBy     OrderBy
   order       *Order
   limit       *Limit
+  insRows     InsertRows
   updateExprs UpdateExprs
   updateExpr  *UpdateExpr
-  sqlNode     SQLNode
 }
 
 %token <node> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT COMMENT FOR
@@ -94,11 +93,12 @@ var (
 %start any_command
 
 %type <statement> command
-%type <statement> select_statement insert_statement update_statement delete_statement set_statement
+%type <selStmt> select_statement
+%type <statement> insert_statement update_statement delete_statement set_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement
-%type <comments> comment_opt comment_list
+%type <bytes2> comment_opt comment_list
 %type <str> union_op
-%type <distinct> distinct_opt
+%type <str> distinct_opt
 %type <selectExprs> select_expression_list
 %type <selectExpr> select_expression
 %type <bytes> as_lower_opt as_opt
@@ -106,15 +106,16 @@ var (
 %type <tableExprs> table_expression_list
 %type <tableExpr> table_expression
 %type <str> join_type
-%type <sqlNode> simple_table_expression
+%type <smTableExpr> simple_table_expression
 %type <tableName> dml_table_expression
 %type <indexHints> index_hint_list
-%type <names> index_list
-%type <where> where_expression_opt
+%type <bytes2> index_list
+%type <boolExpr> where_expression_opt
 %type <boolExpr> boolean_expression condition
 %type <str> compare
-%type <sqlNode> values
-%type <valExpr> value tuple value_expression
+%type <insRows> row_list
+%type <valExpr> value value_expression
+%type <tuple> tuple
 %type <valExprs> value_expression_list
 %type <values> tuple_list
 %type <bytes> keyword_as_func
@@ -125,8 +126,8 @@ var (
 %type <whens> when_expression_list
 %type <when> when_expression
 %type <valExpr> value_expression_opt else_expression_opt
-%type <groupBy> group_by_opt
-%type <where> having_opt
+%type <valExprs> group_by_opt
+%type <boolExpr> having_opt
 %type <orderBy> order_by_opt order_list
 %type <order> order
 %type <str> asc_desc_opt
@@ -150,6 +151,9 @@ any_command:
 
 command:
   select_statement
+  {
+    $$ = $1
+  }
 | insert_statement
 | update_statement
 | delete_statement
@@ -162,35 +166,35 @@ command:
 select_statement:
   SELECT comment_opt distinct_opt select_expression_list FROM table_expression_list where_expression_opt group_by_opt having_opt order_by_opt limit_opt lock_opt
   {
-    $$ = &Select{Comments: $2, Distinct: $3, SelectExprs: $4, From: $6, Where: $7, GroupBy: $8, Having: $9, OrderBy: $10, Limit: $11, Lock: $12}
+    $$ = &Select{Comments: Comments($2), Distinct: $3, SelectExprs: $4, From: $6, Where: NewWhere("where", $7), GroupBy: GroupBy($8), Having: NewWhere("having", $9), OrderBy: $10, Limit: $11, Lock: $12}
   }
 | select_statement union_op select_statement %prec UNION
   {
-    $$ = &Union{Type: $2, Select1: $1.(SelectStatement), Select2: $3.(SelectStatement)}
+    $$ = &Union{Type: $2, Select1: $1, Select2: $3}
   }
 
 insert_statement:
-  INSERT comment_opt INTO dml_table_expression column_list_opt values on_dup_opt
+  INSERT comment_opt INTO dml_table_expression column_list_opt row_list on_dup_opt
   {
-    $$ = &Insert{Comments: $2, Table: $4, Columns: $5, Rows: $6, OnDup: $7}
+    $$ = &Insert{Comments: Comments($2), Table: $4, Columns: $5, Rows: $6, OnDup: OnDup($7)}
   }
 
 update_statement:
   UPDATE comment_opt dml_table_expression SET update_list where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Update{Comments: $2, Table: $3, List: $5, Where: $6, OrderBy: $7, Limit: $8}
+    $$ = &Update{Comments: Comments($2), Table: $3, List: $5, Where: NewWhere("where", $6), OrderBy: $7, Limit: $8}
   }
 
 delete_statement:
   DELETE comment_opt FROM dml_table_expression where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{Comments: $2, Table: $4, Where: $5, OrderBy: $6, Limit: $7}
+    $$ = &Delete{Comments: Comments($2), Table: $4, Where: NewWhere("where", $5), OrderBy: $6, Limit: $7}
   }
 
 set_statement:
   SET comment_opt update_list
   {
-    $$ = &Set{Comments: $2, Updates: $3}
+    $$ = &Set{Comments: Comments($2), Updates: $3}
   }
 
 create_statement:
@@ -260,7 +264,7 @@ comment_list:
   }
 | comment_list COMMENT
   {
-    $$ = append($$, Comment($2.Value))
+    $$ = append($1, $2.Value)
   }
 
 union_op:
@@ -287,11 +291,11 @@ union_op:
 
 distinct_opt:
   {
-    $$ = Distinct(false)
+    $$ = ""
   }
 | DISTINCT
   {
-    $$ = Distinct(true)
+    $$ = "distinct "
   }
 
 select_expression_list:
@@ -477,7 +481,7 @@ where_expression_opt:
   }
 | WHERE boolean_expression
   {
-    $$ = &Where{Type: "where", Expr: $2}
+    $$ = $2
   }
 
 boolean_expression:
@@ -571,7 +575,7 @@ compare:
     $$ = "<=>"
   }
 
-values:
+row_list:
   VALUES tuple_list
   {
     $$ = $2
@@ -584,11 +588,11 @@ values:
 tuple_list:
   tuple
   {
-    $$ = Values{$1.(Tuple)}
+    $$ = Values{$1}
   }
 | tuple_list ',' tuple
   {
-    $$ = append($1, $3.(Tuple))
+    $$ = append($1, $3)
   }
 
 tuple:
@@ -604,7 +608,7 @@ tuple:
 subquery:
   '(' select_statement ')'
   {
-    $$ = &Subquery{$2.(SelectStatement)}
+    $$ = &Subquery{$2}
   }
 
 value_expression_list:
@@ -796,7 +800,7 @@ group_by_opt:
   }
 | GROUP BY value_expression_list
   {
-    $$ = GroupBy($3)
+    $$ = $3
   }
 
 having_opt:
@@ -805,7 +809,7 @@ having_opt:
   }
 | HAVING boolean_expression
   {
-    $$ = &Where{Type: "having", Expr: $2}
+    $$ = $2
   }
 
 order_by_opt:
