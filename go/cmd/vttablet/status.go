@@ -115,6 +115,7 @@ Binlog player state: {{.State}}</br>
     <th>SecondsBehindMaster</th>
     <th>Counts</th>
     <th>Rates</th>
+    <th>Last Error</th>
   </tr>
   {{range .Controllers}}
     <tr>
@@ -133,6 +134,7 @@ Binlog player state: {{.State}}</br>
       <td>{{.SecondsBehindMaster}}</td>
       <td>{{range $key, $value := .Counts}}<b>{{$key}}</b>: {{$value}}<br>{{end}}</td>
       <td>{{range $key, $values := .Rates}}<b>{{$key}}</b>: {{range $values}}{{.}} {{end}}<br>{{end}}</td>
+      <td>{{.LastError}}</td>
     </tr>
   {{end}}
 </table>

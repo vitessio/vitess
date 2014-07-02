@@ -64,6 +64,9 @@ type BinlogPlayerController struct {
 
 	// information about the individual tablet we're replicating from
 	sourceTablet topo.TabletAlias
+
+	// last error we've seen by the player
+	lastError error
 }
 
 func newBinlogPlayerController(ts topo.Server, dbConfig *mysql.ConnectionParams, mysqld *mysqlctl.Mysqld, cell string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, sourceShard topo.SourceShard, dbName string) *BinlogPlayerController {
@@ -122,6 +125,7 @@ func (bpc *BinlogPlayerController) reset() {
 	bpc.interrupted = nil
 	bpc.done = nil
 	bpc.sourceTablet = topo.TabletAlias{}
+	bpc.lastError = nil
 }
 
 // WaitForStop will wait until the player is stopped. Use this after StartUntil.
@@ -148,6 +152,7 @@ func (bpc *BinlogPlayerController) WaitForStop(waitTimeout time.Duration) error 
 	}
 }
 
+// Stop will ask the controller to stop playing, and wait until it is stopped.
 func (bpc *BinlogPlayerController) Stop() {
 	bpc.playerMutex.Lock()
 	if bpc.interrupted == nil {
@@ -163,10 +168,11 @@ func (bpc *BinlogPlayerController) Stop() {
 	select {
 	case <-done:
 		bpc.reset()
-		return
 	}
 }
 
+// Loop runs the main player loop: try to play, and in case of error,
+// sleep for 5 seconds and try again.
 func (bpc *BinlogPlayerController) Loop() {
 	for {
 		err := bpc.Iteration()
@@ -176,9 +182,10 @@ func (bpc *BinlogPlayerController) Loop() {
 		}
 		log.Warningf("%v: %v", bpc, err)
 
-		// clear the source
+		// clear the source, remember the error
 		bpc.playerMutex.Lock()
 		bpc.sourceTablet = topo.TabletAlias{}
+		bpc.lastError = err
 		bpc.playerMutex.Unlock()
 
 		// sleep for a bit before retrying to connect
@@ -189,6 +196,7 @@ func (bpc *BinlogPlayerController) Loop() {
 	close(bpc.done)
 }
 
+// DisableSuperToSetTimestamp disables the super_to_set_timestamp mysql flag.
 func (bpc *BinlogPlayerController) DisableSuperToSetTimestamp() {
 	if err := bpc.mysqld.ExecuteSuperQuery("SET @@global.super_to_set_timestamp = 0"); err != nil {
 		log.Warningf("Cannot set super_to_set_timestamp=0: %v", err)
@@ -197,6 +205,8 @@ func (bpc *BinlogPlayerController) DisableSuperToSetTimestamp() {
 	}
 }
 
+// Iteration is a single iteration for the player: get the current status,
+// try to play, and plays until interrupted, or until an error occurs.
 func (bpc *BinlogPlayerController) Iteration() (err error) {
 	defer func() {
 		if x := recover(); x != nil {
@@ -266,6 +276,8 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	}
 }
 
+// BlpPosition returns the current position for a controller, as read from
+// the database.
 func (bpc *BinlogPlayerController) BlpPosition(vtClient *binlogplayer.DBClient) (*blproto.BlpPosition, error) {
 	return binlogplayer.ReadStartPosition(vtClient, bpc.sourceShard.Uid)
 }
@@ -289,6 +301,7 @@ const (
 	BPM_STATE_STOPPED
 )
 
+// NewBinlogPlayerMap creates a new map of players
 func NewBinlogPlayerMap(ts topo.Server, dbConfig *mysql.ConnectionParams, mysqld *mysqlctl.Mysqld) *BinlogPlayerMap {
 	return &BinlogPlayerMap{
 		ts:       ts,
@@ -299,6 +312,7 @@ func NewBinlogPlayerMap(ts topo.Server, dbConfig *mysql.ConnectionParams, mysqld
 	}
 }
 
+// RegisterBinlogPlayerMap registers the varz for the players
 func RegisterBinlogPlayerMap(blm *BinlogPlayerMap) {
 	stats.Publish("BinlogPlayerMapSize", stats.IntFunc(blm.size))
 	stats.Publish("BinlogPlayerSecondsBehindMaster", stats.IntFunc(func() int64 {
@@ -312,6 +326,26 @@ func RegisterBinlogPlayerMap(blm *BinlogPlayerMap) {
 		}
 		blm.mu.Unlock()
 		return sbm
+	}))
+	stats.Publish("BinlogPlayerSecondsBehindMasterMap", stats.CountersFunc(func() map[string]int64 {
+		blm.mu.Lock()
+		result := make(map[string]int64, len(blm.players))
+		for i, bpc := range blm.players {
+			sbm := bpc.binlogPlayerStats.SecondsBehindMaster.Get()
+			result[fmt.Sprintf("%v", i)] = sbm
+		}
+		blm.mu.Unlock()
+		return result
+	}))
+	stats.Publish("BinlogPlayerGroupIdMap", stats.CountersFunc(func() map[string]int64 {
+		blm.mu.Lock()
+		result := make(map[string]int64, len(blm.players))
+		for i, bpc := range blm.players {
+			lgi := bpc.binlogPlayerStats.LastGroupId.Get()
+			result[fmt.Sprintf("%v", i)] = lgi
+		}
+		blm.mu.Unlock()
+		return result
 	}))
 }
 
@@ -526,6 +560,7 @@ type BinlogPlayerControllerStatus struct {
 	Rates               map[string][]float64
 	State               string
 	SourceTablet        topo.TabletAlias
+	LastError           string
 }
 
 // BinlogPlayerControllerStatusList is the list of statuses
@@ -586,6 +621,9 @@ func (blm *BinlogPlayerMap) Status() *BinlogPlayerMapStatus {
 			bpcs.State = "Running"
 		}
 		bpcs.SourceTablet = bpc.sourceTablet
+		if bpc.lastError != nil {
+			bpcs.LastError = bpc.lastError.Error()
+		}
 		bpc.playerMutex.Unlock()
 		result.Controllers = append(result.Controllers, bpcs)
 	}

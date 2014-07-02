@@ -364,18 +364,26 @@ primary key (name)
 
   def _check_binlog_server_vars(self, tablet):
     v = utils.get_vars(tablet.port)
-    self.assertTrue("UpdateStreamKeyRangeStatements" in v)
-    self.assertTrue("UpdateStreamKeyRangeTransactions" in v)
+    self.assertTrue('UpdateStreamKeyRangeStatements' in v)
+    self.assertTrue('UpdateStreamKeyRangeTransactions' in v)
 
   def _check_binlog_player_vars(self, tablet, seconds_behind_master_max = 0):
     v = utils.get_vars(tablet.port)
-    self.assertTrue("BinlogPlayerMapSize" in v)
-    self.assertTrue("BinlogPlayerSecondsBehindMaster" in v)
+    self.assertTrue('BinlogPlayerMapSize' in v)
+    self.assertTrue('BinlogPlayerSecondsBehindMaster' in v)
+    self.assertTrue('BinlogPlayerSecondsBehindMasterMap' in v)
+    self.assertTrue('BinlogPlayerGroupIdMap' in v)
+    self.assertTrue('0' in v['BinlogPlayerGroupIdMap'])
     if seconds_behind_master_max != 0:
-      self.assertTrue(v["BinlogPlayerSecondsBehindMaster"] <
+      self.assertTrue(v['BinlogPlayerSecondsBehindMaster'] <
                       seconds_behind_master_max,
-                      "BinlogPlayerSecondsBehindMaster is too high: %u > %u" % (
-                          v["BinlogPlayerSecondsBehindMaster"],
+                      'BinlogPlayerSecondsBehindMaster is too high: %u > %u' % (
+                          v['BinlogPlayerSecondsBehindMaster'],
+                          seconds_behind_master_max))
+      self.assertTrue(v['BinlogPlayerSecondsBehindMasterMap']['0'] <
+                      seconds_behind_master_max,
+                      'BinlogPlayerSecondsBehindMasterMap is too high: %u > %u' % (
+                          v['BinlogPlayerSecondsBehindMasterMap']['0'],
                           seconds_behind_master_max))
 
   def test_resharding(self):
