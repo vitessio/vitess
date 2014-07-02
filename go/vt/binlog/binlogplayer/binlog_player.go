@@ -22,10 +22,16 @@ import (
 )
 
 var (
+	// we will log anything that's higher than that
 	SLOW_QUERY_THRESHOLD = time.Duration(100 * time.Millisecond)
 
+	// keys for the stats map
 	BLPL_QUERY       = "Query"
 	BLPL_TRANSACTION = "Transaction"
+
+	// flags for the blp_checkpoint table. The database entry is just
+	// a join(",") of these flags.
+	BLP_FLAG_DONT_START = "DontStart"
 )
 
 // BinlogPlayerStats is the internal stats of a player. It is a different
@@ -141,23 +147,25 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *proto.BinlogTransaction) erro
 	return nil
 }
 
-func ReadStartPosition(dbClient VtClient, uid uint32) (*proto.BlpPosition, error) {
+// ReadStartPosition will return the current start position and the flags for
+// the provided binlog player.
+func ReadStartPosition(dbClient VtClient, uid uint32) (*proto.BlpPosition, string, error) {
 	selectRecovery := QueryBlpCheckpoint(uid)
 	qr, err := dbClient.ExecuteFetch(selectRecovery, 1, true)
 	if err != nil {
-		return nil, fmt.Errorf("error %v in selecting from recovery table %v", err, selectRecovery)
+		return nil, "", fmt.Errorf("error %v in selecting from recovery table %v", err, selectRecovery)
 	}
 	if qr.RowsAffected != 1 {
-		return nil, fmt.Errorf("checkpoint information not available in db for %v", uid)
+		return nil, "", fmt.Errorf("checkpoint information not available in db for %v", uid)
 	}
 	temp, err := qr.Rows[0][0].ParseInt64()
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	return &proto.BlpPosition{
 		Uid:     uid,
 		GroupId: temp,
-	}, nil
+	}, string(qr.Rows[0][1].Raw()), nil
 }
 
 func (blp *BinlogPlayer) processTransaction(tx *proto.BinlogTransaction) (ok bool, err error) {
@@ -304,17 +312,18 @@ func CreateBlpCheckpoint() []string {
   group_id BIGINT DEFAULT NULL,
   time_updated BIGINT UNSIGNED NOT NULL,
   transaction_timestamp BIGINT UNSIGNED NOT NULL,
+  flags VARCHAR(250) DEFAULT NULL,
   PRIMARY KEY (source_shard_uid)) ENGINE=InnoDB`}
 }
 
 // PopulateBlpCheckpoint returns a statement to populate the first value into
 // the _vt.blp_checkpoint table
-func PopulateBlpCheckpoint(index uint32, groupId, timeUpdated int64) string {
-	return fmt.Sprintf("INSERT INTO _vt.blp_checkpoint (source_shard_uid, group_id, time_updated, transaction_timestamp) VALUES (%v, %v, %v, 0)", index, groupId, timeUpdated)
+func PopulateBlpCheckpoint(index uint32, groupId, timeUpdated int64, flags string) string {
+	return fmt.Sprintf("INSERT INTO _vt.blp_checkpoint (source_shard_uid, group_id, time_updated, transaction_timestamp, flags) VALUES (%v, %v, %v, 0, '%v')", index, groupId, timeUpdated, flags)
 }
 
-// QueryBlpCheckpoint returns a statement to query the group_id for a
+// QueryBlpCheckpoint returns a statement to query the group_id and flags for a
 // given shard from the _vt.blp_checkpoint table
 func QueryBlpCheckpoint(index uint32) string {
-	return fmt.Sprintf("SELECT group_id FROM _vt.blp_checkpoint WHERE source_shard_uid=%v", index)
+	return fmt.Sprintf("SELECT group_id, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=%v", index)
 }

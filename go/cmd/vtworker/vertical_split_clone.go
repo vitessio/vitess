@@ -68,6 +68,21 @@ const verticalSplitCloneHTML2 = `
       <INPUT type="hidden" name="keyspace" value="{{.Keyspace}}"/>
       <INPUT type="submit" value="Clone"/>
     </form>
+
+  <h1>Help</h1>
+    <p>Strategy can have the following values, comma separated:</p>
+    <ul>
+      <li><b>populateBlpCheckpoint</b>: creates (if necessary) and populates the blp_checkpoint table in the destination. Required for filtered replication to start.</li>
+      <li><b>dontStartBinlogPlayer</b>: (requires populateBlpCheckpoint) will setup, but not start binlog replication on the destination. The flag has to be manually cleared from the _vt.blp_checkpoint table.</li>
+      <li><b>skipAutoIncrement(TTT)</b>: we won't add the AUTO_INCREMENT back to that table.</li>
+    </ul>
+    <p>The following flags are also supported, but their use is very strongly discouraged:</p>
+    <ul>
+      <li><b>delayPrimaryKey</b>: we won't add the primary key until after the table is populated.</li>
+      <li><b>delaySecondaryIndexes</b>: we won't add the secondary indexes until after the table is populated.</li>
+      <li><b>useMyIsam</b>: create the table as MyISAM, then convert it to InnoDB after population.</li>
+      <li><b>writeBinLogs</b>: write all operations to the binlogs.</li>
+    </ul>
   </body>
 `
 

@@ -479,9 +479,32 @@ primary key (name)
 
     # perform the restores: first one from source tablet. We removed the
     # storage backup, so it's coming from the tablet itself.
-    utils.run_vtctl(['ShardMultiRestore', '-strategy=populateBlpCheckpoint',
+    # we also delay starting the binlog player, then enable it.
+    utils.run_vtctl(['ShardMultiRestore',
+                     '-strategy=populateBlpCheckpoint,dontStartBinlogPlayer',
                      'test_keyspace/80-C0', shard_1_slave1.tablet_alias],
                     auto_log=True)
+
+    timeout = 10
+    while True:
+      shard_2_master_status = shard_2_master.get_status()
+      if not "not starting because flag &#39;DontStart&#39; is set" in shard_2_master_status:
+        timeout = utils.wait_step('shard 2 master has not failed starting yet', timeout)
+        continue
+      logging.info("shard 2 master is waiting on flag removal, good")
+      break
+
+    qr = utils.run_vtctl_json(['ExecuteFetch', shard_2_master.tablet_alias, 'update _vt.blp_checkpoint set flags="" where source_shard_uid=0'])
+    self.assertEqual(qr['RowsAffected'], 1)
+
+    timeout = 10
+    while True:
+      shard_2_master_status = shard_2_master.get_status()
+      if "not starting because flag &#39;DontStart&#39; is set" in shard_2_master_status:
+        timeout = utils.wait_step('shard 2 master has not started replication yet', timeout)
+        continue
+      logging.info("shard 2 master has started replication, good")
+      break
 
     # second restore from storage: to be sure, we stop vttablet, and restart
     # it afterwards

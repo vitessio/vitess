@@ -796,6 +796,8 @@ func buildQueryList(destinationDbName, query string, writeBinLogs bool) []string
 //   to the binary logs.
 // - If it contains the command 'populateBlpCheckpoint' then we will
 //   populate the blp_checkpoint table with master positions to start from
+//   - If is also contains the command 'dontStartBinlogPlayer' we won't
+//   start binlog replication on the destination (but it will be configured)
 func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.KeyRange, sourceAddrs []*url.URL, fromStoragePaths []string, snapshotConcurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) (err error) {
 	writeBinLogs := strings.Contains(strategy, "writeBinLogs")
 
@@ -1047,8 +1049,12 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.Key
 			queries = append(queries, "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
 		}
 		queries = append(queries, binlogplayer.CreateBlpCheckpoint()...)
+		flags := ""
+		if strings.Index(strategy, "dontStartBinlogPlayer") != -1 {
+			flags = binlogplayer.BLP_FLAG_DONT_START
+		}
 		for manifestIndex, manifest := range manifests {
-			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(uint32(manifestIndex), manifest.Source.MasterState.ReplicationPosition.MasterLogGroupId, time.Now().Unix()))
+			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(uint32(manifestIndex), manifest.Source.MasterState.ReplicationPosition.MasterLogGroupId, time.Now().Unix(), flags))
 		}
 		if err = mysqld.ExecuteSuperQueryList(queries); err != nil {
 			return err

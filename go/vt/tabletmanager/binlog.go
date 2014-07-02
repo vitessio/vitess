@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"math/rand" // not crypto-safe is OK here
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -228,9 +229,14 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	defer vtClient.Close()
 
 	// Read the start position
-	startPosition, err := binlogplayer.ReadStartPosition(vtClient, bpc.sourceShard.Uid)
+	startPosition, flags, err := binlogplayer.ReadStartPosition(vtClient, bpc.sourceShard.Uid)
 	if err != nil {
 		return fmt.Errorf("can't read startPosition: %v", err)
+	}
+
+	// if we shouldn't start, we just error out and try again later
+	if strings.Index(flags, binlogplayer.BLP_FLAG_DONT_START) != -1 {
+		return fmt.Errorf("not starting because flag '%v' is set", binlogplayer.BLP_FLAG_DONT_START)
 	}
 
 	// Find the server list for the source shard in our cell
@@ -250,6 +256,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		Cell: bpc.cell,
 		Uid:  addrs.Entries[newServerIndex].Uid,
 	}
+	bpc.lastError = nil
 	bpc.playerMutex.Unlock()
 
 	// check which kind of replication we're doing, tables or keyrange
@@ -278,7 +285,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 
 // BlpPosition returns the current position for a controller, as read from
 // the database.
-func (bpc *BinlogPlayerController) BlpPosition(vtClient *binlogplayer.DBClient) (*blproto.BlpPosition, error) {
+func (bpc *BinlogPlayerController) BlpPosition(vtClient *binlogplayer.DBClient) (*blproto.BlpPosition, string, error) {
 	return binlogplayer.ReadStartPosition(vtClient, bpc.sourceShard.Uid)
 }
 
@@ -488,7 +495,7 @@ func (blm *BinlogPlayerMap) BlpPositionList() (*blproto.BlpPositionList, error) 
 	blm.mu.Lock()
 	defer blm.mu.Unlock()
 	for _, bpc := range blm.players {
-		blp, err := bpc.BlpPosition(vtClient)
+		blp, _, err := bpc.BlpPosition(vtClient)
 		if err != nil {
 			return nil, fmt.Errorf("can't read current position for %v: %v", bpc, err)
 		}
