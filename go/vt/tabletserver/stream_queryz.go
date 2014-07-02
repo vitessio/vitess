@@ -21,7 +21,6 @@ var (
 			<th>SessionID</th>
 			<th>TransactionID</th>
 			<th>ConnectionID</th>
-			<th>Current State</th>
 			<th>Terminate</th>
 		</tr>
         </thead>
@@ -36,8 +35,7 @@ var (
 			<td>{{.SessionID}}</td>
 			<td>{{.TransactionID}}</td>
 			<td>{{.ConnID}}</td>
-			<td>{{.State}}</td>
-			<td>{{if .ShowTerminateLink }}<a href='/streamqueryz/terminate?connID={{.ConnID}}'>Terminate</a>{{end}}</td>
+			<td><a href='/streamqueryz/terminate?connID={{.ConnID}}'>Terminate</a></td>
 		</tr>
 	`))
 )
@@ -91,13 +89,8 @@ func streamqueryzTerminateHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid connID", http.StatusInternalServerError)
 		return
 	}
-	qd := SqlQueryRpcService.qe.streamQList.Get(int64(c))
-	if qd == nil {
-		http.Error(w, fmt.Sprintf("connID %v not found in query list", connID), http.StatusInternalServerError)
-		return
-	}
-	if !qd.Terminate() {
-		http.Error(w, fmt.Sprintf("connID %v is not in running state", connID), http.StatusInternalServerError)
+	if err = SqlQueryRpcService.qe.streamQList.Terminate(int64(c)); err != nil {
+		http.Error(w, fmt.Sprintf("error: %v", err), http.StatusInternalServerError)
 		return
 	}
 	streamqueryzHandler(w, r)

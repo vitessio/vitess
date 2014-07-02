@@ -10,6 +10,11 @@ from vtdb import dbexceptions
 import framework
 
 class TestStream(framework.TestCase):
+  def tearDown(self):
+    self.env.conn.begin()
+    self.env.execute("delete from vtocc_big")
+    self.env.conn.commit()
+
   # UNION queries like this used to crash vtocc, only straight SELECT
   # would go through. This is a unit test to show it is fixed.
   # The fix went in revision bad7511746ca.
@@ -25,26 +30,7 @@ class TestStream(framework.TestCase):
     self.assertEqual(count, 1)
 
   def test_basic_stream(self):
-    # insert 100 rows in a table
-    self.env.conn.begin()
-    for i in xrange(100):
-      self.env.execute("insert into vtocc_big values " +
-                       "(" + str(i) + ", " +
-                       "'AAAAAAAAAAAAAAAAAA " + str(i) + "', " +
-                       "'BBBBBBBBBBBBBBBBBB " + str(i) + "', " +
-                       "'C', " +
-                       "'DDDDDDDDDDDDDDDDDD " + str(i) + "', " +
-                       "'EEEEEEEEEEEEEEEEEE " + str(i) + "', " +
-                       "now()," +
-                       "'FF " + str(i) + "', " +
-                       "'GGGGGGGGGGGGGGGGGG " + str(i) + "', " +
-                       str(i) + ", " +
-                       str(i) + ", " +
-                       "now()," +
-                       str(i) + ", " +
-                       str(i%100) + ")")
-    self.env.conn.commit()
-
+    self._populate_vtocc_big_table(100)
     loop_count = 1
 
     # select lots of data using a non-streaming query
@@ -87,7 +73,8 @@ class TestStream(framework.TestCase):
   
   def test_streaming_terminate(self):
     try:
-      query = 'select sleep(5) from dual limit 1'
+      self._populate_vtocc_big_table(100)
+      query = 'select * from vtocc_big b1, vtocc_big b2, vtocc_big b3'
       cu = cursor.StreamCursor(self.env.conn)
       thd = threading.Thread(target=self._stream_exec, args=(cu,query))
       thd.start()
@@ -96,10 +83,32 @@ class TestStream(framework.TestCase):
       self._terminate_query(tablet_addr, connId)
       thd.join()
       with self.assertRaises(dbexceptions.DatabaseError) as cm:
-          cu.fetchone()
+        cu.fetchall()
+      errMsg = "Lost connection to MySQL server during query (errno 2013)"
+      self.assertTrue(errMsg in str(cm.exception), "did not raise connection lost error")
       cu.close()
     except Exception, e:
       self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))
+
+  def _populate_vtocc_big_table(self, num_rows):
+      self.env.conn.begin()
+      for i in xrange(num_rows):
+        self.env.execute("insert into vtocc_big values " +
+                       "(" + str(i) + ", " +
+                       "'AAAAAAAAAAAAAAAAAA " + str(i) + "', " +
+                       "'BBBBBBBBBBBBBBBBBB " + str(i) + "', " +
+                       "'C', " +
+                       "'DDDDDDDDDDDDDDDDDD " + str(i) + "', " +
+                       "'EEEEEEEEEEEEEEEEEE " + str(i) + "', " +
+                       "now()," +
+                       "'FF " + str(i) + "', " +
+                       "'GGGGGGGGGGGGGGGGGG " + str(i) + "', " +
+                       str(i) + ", " +
+                       str(i) + ", " +
+                       "now()," +
+                       str(i) + ", " +
+                       str(i%100) + ")")
+      self.env.conn.commit()
 
   # Initiate a slow stream query
   def _stream_exec(self, cu, query):
@@ -124,8 +133,4 @@ class TestStream(framework.TestCase):
   # Terminate the query via streamqueryz admin page
   def _terminate_query(self, tablet_addr, connId):
       terminate_url = tablet_addr + "/streamqueryz/terminate?format=json&connID=" + str(connId)
-      content = urllib.urlopen(terminate_url).read()
-      # Assert state got updated
-      streaming_queries = json.loads(content)
-      state = streaming_queries[0]['State']
-      self.assertEqual(state, 'Terminating', 'status should be Terminating')
+      urllib.urlopen(terminate_url).read()
