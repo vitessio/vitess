@@ -30,6 +30,7 @@ type Statement interface {
 type SelectStatement interface {
 	selectStatement()
 	statement()
+	insertRows()
 	SQLNode
 }
 
@@ -49,9 +50,9 @@ type Select struct {
 	Lock        string
 }
 
-func (*Select) statement() {}
-
+func (*Select) statement()       {}
 func (*Select) selectStatement() {}
+func (*Select) insertRows()      {}
 
 func (node *Select) Format(buf *TrackedBuffer) {
 	buf.Fprintf("select %v%s%v from %v%v%v%v%v%v%s",
@@ -69,21 +70,20 @@ type Union struct {
 	Select1, Select2 SelectStatement
 }
 
-func (*Union) statement() {}
-
+func (*Union) statement()       {}
 func (*Union) selectStatement() {}
+func (*Union) insertRows()      {}
 
 func (node *Union) Format(buf *TrackedBuffer) {
 	buf.Fprintf("%v %s %v", node.Select1, node.Type, node.Select2)
 }
 
 // Insert represents an INSERT statement.
-// Rows can be *Subselect, Values.
 type Insert struct {
 	Comments Comments
 	Table    *TableName
 	Columns  Columns
-	Rows     SQLNode
+	Rows     InsertRows
 	OnDup    OnDup
 }
 
@@ -93,6 +93,13 @@ func (node *Insert) Format(buf *TrackedBuffer) {
 	buf.Fprintf("insert %vinto %v%v %v%v",
 		node.Comments,
 		node.Table, node.Columns, node.Rows, node.OnDup)
+}
+
+// InsertRows represents the rows for an INSERT statement.
+// It can be Values, SelectStatement.
+type InsertRows interface {
+	insertRows()
+	SQLNode
 }
 
 // Update represents an UPDATE statement.
@@ -264,7 +271,7 @@ type TableExpr interface {
 // AliasedTableExpr represents a table expression
 // coupled with an optional alias or index hint.
 type AliasedTableExpr struct {
-	Expr  SQLNode
+	Expr  SimpleTableExpr
 	As    []byte
 	Hints *IndexHints
 }
@@ -282,10 +289,19 @@ func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
 	}
 }
 
+// SimpleTableExpr represents a simple table expression.
+// It can be *TableName, *Subquery.
+type SimpleTableExpr interface {
+	simpleTableExpr()
+	SQLNode
+}
+
 // TableName represents a table  name.
 type TableName struct {
 	Name, Qualifier []byte
 }
+
+func (*TableName) simpleTableExpr() {}
 
 func (node *TableName) Format(buf *TrackedBuffer) {
 	if node.Qualifier != nil {
@@ -588,9 +604,10 @@ type Subquery struct {
 	Select SelectStatement
 }
 
-func (*Subquery) tuple()   {}
-func (*Subquery) expr()    {}
-func (*Subquery) valExpr() {}
+func (*Subquery) tuple()           {}
+func (*Subquery) expr()            {}
+func (*Subquery) valExpr()         {}
+func (*Subquery) simpleTableExpr() {}
 
 func (node *Subquery) Format(buf *TrackedBuffer) {
 	buf.Fprintf("(%v)", node.Select)
@@ -678,6 +695,8 @@ func (node *When) Format(buf *TrackedBuffer) {
 
 // Values represents a VALUES clause.
 type Values []Tuple
+
+func (Values) insertRows() {}
 
 func (node Values) Format(buf *TrackedBuffer) {
 	prefix := "values "

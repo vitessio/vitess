@@ -44,6 +44,7 @@ var (
   colName     *ColName
   tableExprs  TableExprs
   tableExpr   TableExpr
+  smTableExpr SimpleTableExpr
   tableName   *TableName
   indexHints  *IndexHints
   expr        Expr
@@ -59,9 +60,9 @@ var (
   orderBy     OrderBy
   order       *Order
   limit       *Limit
+  insRows     InsertRows
   updateExprs UpdateExprs
   updateExpr  *UpdateExpr
-  sqlNode     SQLNode
 }
 
 %token <node> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT COMMENT FOR
@@ -105,14 +106,14 @@ var (
 %type <tableExprs> table_expression_list
 %type <tableExpr> table_expression
 %type <str> join_type
-%type <sqlNode> simple_table_expression
+%type <smTableExpr> simple_table_expression
 %type <tableName> dml_table_expression
 %type <indexHints> index_hint_list
 %type <bytes2> index_list
 %type <boolExpr> where_expression_opt
 %type <boolExpr> boolean_expression condition
 %type <str> compare
-%type <sqlNode> row_list
+%type <insRows> row_list
 %type <valExpr> value value_expression
 %type <tuple> tuple
 %type <valExprs> value_expression_list
