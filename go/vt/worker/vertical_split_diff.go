@@ -7,6 +7,7 @@ package worker
 import (
 	"fmt"
 	"html/template"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -217,6 +218,9 @@ func (vsdw *VerticalSplitDiffWorker) init() error {
 	if len(vsdw.shardInfo.SourceShards) != 1 {
 		return fmt.Errorf("shard %v/%v has bad number of source shards", vsdw.keyspace, vsdw.shard)
 	}
+	if len(vsdw.shardInfo.SourceShards[0].Tables) == 0 {
+		return fmt.Errorf("shard %v/%v has no tables in source shard[0]", vsdw.keyspace, vsdw.shard)
+	}
 	if vsdw.shardInfo.MasterAlias.IsZero() {
 		return fmt.Errorf("shard %v/%v has no master", vsdw.keyspace, vsdw.shard)
 	}
@@ -380,12 +384,22 @@ func (vsdw *VerticalSplitDiffWorker) diff() error {
 		return rec.Error()
 	}
 
+	// Build a list of regexp to exclude tables from source schema
+	tableRegexps := make([]*regexp.Regexp, len(vsdw.shardInfo.SourceShards[0].Tables))
+	for i, table := range vsdw.shardInfo.SourceShards[0].Tables {
+		var err error
+		tableRegexps[i], err = regexp.Compile(table)
+		if err != nil {
+			return fmt.Errorf("cannot compile regexp %v for table: %v", table, err)
+		}
+	}
+
 	// Remove the tables we don't need from the source schema
 	newSourceTableDefinitions := make([]myproto.TableDefinition, 0, len(vsdw.destinationSchemaDefinition.TableDefinitions))
 	for _, tableDefinition := range vsdw.sourceSchemaDefinition.TableDefinitions {
 		found := false
-		for _, t := range vsdw.shardInfo.SourceShards[0].Tables {
-			if t == tableDefinition.Name {
+		for _, tableRegexp := range tableRegexps {
+			if tableRegexp.MatchString(tableDefinition.Name) {
 				found = true
 				break
 			}
