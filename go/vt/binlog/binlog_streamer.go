@@ -30,6 +30,9 @@ var (
 	// delimRE is for extracting the delimeter.
 	delimRE = regexp.MustCompile(`^DELIMITER[ \t]+(.*;)`)
 
+	// eolfPrefix is for detecting the end of log file marker.
+	eolfPrefix = []byte(`# End of log file`)
+
 	// ignorePrefixes defines the prefixes that can be ignored.
 	ignorePrefixes = [][]byte{
 		[]byte("#"),
@@ -141,14 +144,9 @@ func (bls *BinlogStreamer) run(sendTransaction sendTransactionFunc) (err error) 
 	}
 	defer reader.Close()
 	err = bls.parseEvents(sendTransaction, reader)
-	if err != nil {
-		mbl.Kill()
-	} else {
-		err = mbl.Wait()
-		if err != nil {
-			err = fmt.Errorf("wait error: %v", err)
-		}
-	}
+	// Always kill because we don't read from reader all the way to EOF.
+	// If we wait, we may deadlock.
+	mbl.Kill()
 	return err
 }
 
@@ -235,7 +233,10 @@ eventLoop:
 			if err != nil {
 				return nil, err
 			}
-			continue
+			return nil, nil
+		}
+		if bytes.HasPrefix(event, eolfPrefix) {
+			return nil, nil
 		}
 		values = delimRE.FindSubmatch(event)
 		if values != nil {
