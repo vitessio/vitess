@@ -459,7 +459,7 @@ func execAnalyzeUpdate(upd *Update, getTable TableGetter) (plan *ExecPlan) {
 	}
 
 	var ok bool
-	if plan.SecondaryPKValues, ok = execAnalyzeUpdateExpressions(upd.List, tableInfo.Indexes[0]); !ok {
+	if plan.SecondaryPKValues, ok = execAnalyzeUpdateExpressions(upd.Exprs, tableInfo.Indexes[0]); !ok {
 		plan.Reason = REASON_PK_CHANGE
 		return plan
 	}
@@ -529,10 +529,10 @@ func execAnalyzeSet(set *Set) (plan *ExecPlan) {
 		PlanId:    PLAN_SET,
 		FullQuery: GenerateFullQuery(set),
 	}
-	if len(set.Updates) > 1 { // Multiple set values
+	if len(set.Exprs) > 1 { // Multiple set values
 		return plan
 	}
-	update_expression := set.Updates[0]
+	update_expression := set.Exprs[0]
 	plan.SetKey = string(update_expression.Name.Name)
 	numExpr, ok := update_expression.Expr.(NumVal)
 	if !ok {
@@ -1071,7 +1071,7 @@ func GenerateInsertOuterQuery(ins *Insert) *ParsedQuery {
 
 func GenerateUpdateOuterQuery(upd *Update, pkIndex *schema.Index) *ParsedQuery {
 	buf := NewTrackedBuffer(nil)
-	buf.Fprintf("update %v%v set %v where ", upd.Comments, upd.Table, upd.List)
+	buf.Fprintf("update %v%v set %v where ", upd.Comments, upd.Table, upd.Exprs)
 	generatePKWhere(buf, pkIndex)
 	return buf.ParsedQuery()
 }

@@ -170,7 +170,7 @@ select_statement:
   }
 | select_statement union_op select_statement %prec UNION
   {
-    $$ = &Union{Type: $2, Select1: $1, Select2: $3}
+    $$ = &Union{Type: $2, Left: $1, Right: $3}
   }
 
 insert_statement:
@@ -182,7 +182,7 @@ insert_statement:
 update_statement:
   UPDATE comment_opt dml_table_expression SET update_list where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Update{Comments: Comments($2), Table: $3, List: $5, Where: NewWhere("where", $6), OrderBy: $7, Limit: $8}
+    $$ = &Update{Comments: Comments($2), Table: $3, Exprs: $5, Where: NewWhere("where", $6), OrderBy: $7, Limit: $8}
   }
 
 delete_statement:
@@ -194,7 +194,7 @@ delete_statement:
 set_statement:
   SET comment_opt update_list
   {
-    $$ = &Set{Comments: Comments($2), Updates: $3}
+    $$ = &Set{Comments: Comments($2), Exprs: $3}
   }
 
 create_statement:

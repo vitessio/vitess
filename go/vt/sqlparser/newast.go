@@ -66,8 +66,8 @@ func (node *Select) Format(buf *TrackedBuffer) {
 // Type can be "union", "union all", "minus", "except",
 // "intersect".
 type Union struct {
-	Type             string
-	Select1, Select2 SelectStatement
+	Type        string
+	Left, Right SelectStatement
 }
 
 func (*Union) statement()       {}
@@ -75,7 +75,7 @@ func (*Union) selectStatement() {}
 func (*Union) insertRows()      {}
 
 func (node *Union) Format(buf *TrackedBuffer) {
-	buf.Fprintf("%v %s %v", node.Select1, node.Type, node.Select2)
+	buf.Fprintf("%v %s %v", node.Left, node.Type, node.Right)
 }
 
 // Insert represents an INSERT statement.
@@ -106,7 +106,7 @@ type InsertRows interface {
 type Update struct {
 	Comments Comments
 	Table    *TableName
-	List     UpdateExprs
+	Exprs    UpdateExprs
 	Where    *Where
 	OrderBy  OrderBy
 	Limit    *Limit
@@ -117,7 +117,7 @@ func (*Update) statement() {}
 func (node *Update) Format(buf *TrackedBuffer) {
 	buf.Fprintf("update %v%v set %v%v%v%v",
 		node.Comments, node.Table,
-		node.List, node.Where, node.OrderBy, node.Limit)
+		node.Exprs, node.Where, node.OrderBy, node.Limit)
 }
 
 // Delete represents a DELETE statement.
@@ -140,13 +140,13 @@ func (node *Delete) Format(buf *TrackedBuffer) {
 // Set represents a SET statement.
 type Set struct {
 	Comments Comments
-	Updates  UpdateExprs
+	Exprs    UpdateExprs
 }
 
 func (*Set) statement() {}
 
 func (node *Set) Format(buf *TrackedBuffer) {
-	buf.Fprintf("set %v%v", node.Comments, node.Updates)
+	buf.Fprintf("set %v%v", node.Comments, node.Exprs)
 }
 
 // DDLSimple represents a CREATE, ALTER or DROP statement.

@@ -774,7 +774,7 @@ yydefault:
 	case 12:
 		//line sql.y:172
 		{
-			yyVAL.selStmt = &Union{Type: yyS[yypt-1].str, Select1: yyS[yypt-2].selStmt, Select2: yyS[yypt-0].selStmt}
+			yyVAL.selStmt = &Union{Type: yyS[yypt-1].str, Left: yyS[yypt-2].selStmt, Right: yyS[yypt-0].selStmt}
 		}
 	case 13:
 		//line sql.y:178
@@ -784,7 +784,7 @@ yydefault:
 	case 14:
 		//line sql.y:184
 		{
-			yyVAL.statement = &Update{Comments: Comments(yyS[yypt-6].bytes2), Table: yyS[yypt-5].tableName, List: yyS[yypt-3].updateExprs, Where: NewWhere("where", yyS[yypt-2].boolExpr), OrderBy: yyS[yypt-1].orderBy, Limit: yyS[yypt-0].limit}
+			yyVAL.statement = &Update{Comments: Comments(yyS[yypt-6].bytes2), Table: yyS[yypt-5].tableName, Exprs: yyS[yypt-3].updateExprs, Where: NewWhere("where", yyS[yypt-2].boolExpr), OrderBy: yyS[yypt-1].orderBy, Limit: yyS[yypt-0].limit}
 		}
 	case 15:
 		//line sql.y:190
@@ -794,7 +794,7 @@ yydefault:
 	case 16:
 		//line sql.y:196
 		{
-			yyVAL.statement = &Set{Comments: Comments(yyS[yypt-1].bytes2), Updates: yyS[yypt-0].updateExprs}
+			yyVAL.statement = &Set{Comments: Comments(yyS[yypt-1].bytes2), Exprs: yyS[yypt-0].updateExprs}
 		}
 	case 17:
 		//line sql.y:202
