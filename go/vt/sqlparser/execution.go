@@ -13,7 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/schema"
 )
 
-var execLimit = &Limit{Rowcount: ValueArg(":_vtMaxResultSize")}
+var execLimit = &Limit{Rowcount: ValArg(":_vtMaxResultSize")}
 
 type PlanType int
 
@@ -534,7 +534,7 @@ func execAnalyzeSet(set *Set) (plan *ExecPlan) {
 	}
 	update_expression := set.Updates[0]
 	plan.SetKey = string(update_expression.Name.Name)
-	numExpr, ok := update_expression.Expr.(NumValue)
+	numExpr, ok := update_expression.Expr.(NumVal)
 	if !ok {
 		return plan
 	}
@@ -710,7 +710,7 @@ func stringIn(str string, values ...string) bool {
 }
 
 func execAnalyzeSimpleINList(expr ValExpr) ValExpr {
-	list, ok := expr.(ValueTuple)
+	list, ok := expr.(ValTuple)
 	if !ok {
 		// It's a subquery.
 		return nil
@@ -732,7 +732,7 @@ func execAnalyzeID(expr ValExpr) ValExpr {
 
 func execAnalyzeValue(expr ValExpr) ValExpr {
 	switch expr.(type) {
-	case StringValue, NumValue, ValueArg:
+	case StrVal, NumVal, ValArg:
 		return expr
 	}
 	return nil
@@ -804,7 +804,7 @@ func getInsertPKValues(pkColumnNumbers []int, rowList Values, tableInfo *schema.
 			if _, ok := rowList[j].(*Subquery); ok {
 				panic(NewParserError("row subquery not supported for inserts"))
 			}
-			row := rowList[j].(ValueTuple)
+			row := rowList[j].(ValTuple)
 			if columnNumber >= len(row) {
 				panic(NewParserError("column count doesn't match value count"))
 			}
@@ -921,7 +921,7 @@ func getPKValues(conditions []BoolExpr, pkIndex *schema.Index) (pkValues []inter
 		case "=":
 			pkValues[index] = asInterface(condition.Right)
 		case "in":
-			pkValues[index] = parseList(condition.Right.(ValueTuple))
+			pkValues[index] = parseList(condition.Right.(ValTuple))
 		default:
 			panic("unreachable")
 		}
@@ -932,7 +932,7 @@ func getPKValues(conditions []BoolExpr, pkIndex *schema.Index) (pkValues []inter
 	return nil
 }
 
-func parseList(values ValueTuple) interface{} {
+func parseList(values ValTuple) interface{} {
 	vals := make([]interface{}, 0, len(values))
 	for _, val := range values {
 		vals = append(vals, asInterface(val))
@@ -1160,11 +1160,11 @@ func writeColumnList(buf *TrackedBuffer, columns []schema.TableColumn) {
 
 func asInterface(expr ValExpr) interface{} {
 	switch node := expr.(type) {
-	case ValueArg:
+	case ValArg:
 		return string(node)
-	case StringValue:
+	case StrVal:
 		return sqltypes.MakeString(node)
-	case NumValue:
+	case NumVal:
 		n, err := sqltypes.BuildNumeric(string(node))
 		if err != nil {
 			panic(NewParserError("type mismatch: %s", err))

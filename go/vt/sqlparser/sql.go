@@ -1240,7 +1240,7 @@ yydefault:
 	case 105:
 		//line sql.y:600
 		{
-			yyVAL.tuple = ValueTuple(yyS[yypt-1].valExprs)
+			yyVAL.tuple = ValTuple(yyS[yypt-1].valExprs)
 		}
 	case 106:
 		//line sql.y:604
@@ -1320,10 +1320,10 @@ yydefault:
 	case 121:
 		//line sql.y:670
 		{
-			if num, ok := yyS[yypt-0].valExpr.(NumValue); ok {
+			if num, ok := yyS[yypt-0].valExpr.(NumVal); ok {
 				switch yyS[yypt-1].byt {
 				case '-':
-					yyVAL.valExpr = append(NumValue("-"), num...)
+					yyVAL.valExpr = append(NumVal("-"), num...)
 				case '+':
 					yyVAL.valExpr = num
 				default:
@@ -1436,22 +1436,22 @@ yydefault:
 	case 142:
 		//line sql.y:781
 		{
-			yyVAL.valExpr = StringValue(yyS[yypt-0].node.Value)
+			yyVAL.valExpr = StrVal(yyS[yypt-0].node.Value)
 		}
 	case 143:
 		//line sql.y:785
 		{
-			yyVAL.valExpr = NumValue(yyS[yypt-0].node.Value)
+			yyVAL.valExpr = NumVal(yyS[yypt-0].node.Value)
 		}
 	case 144:
 		//line sql.y:789
 		{
-			yyVAL.valExpr = ValueArg(yyS[yypt-0].node.Value)
+			yyVAL.valExpr = ValArg(yyS[yypt-0].node.Value)
 		}
 	case 145:
 		//line sql.y:793
 		{
-			yyVAL.valExpr = &NullValue{}
+			yyVAL.valExpr = &NullVal{}
 		}
 	case 146:
 		//line sql.y:798

@@ -95,7 +95,7 @@ func (node *Node) Format(buf *TrackedBuffer) {
 // anonymizes all values in the SQL.
 func AnonymizedFormatter(buf *TrackedBuffer, node SQLNode) {
 	switch node := node.(type) {
-	case StringValue, NumValue:
+	case StrVal, NumVal:
 		buf.Fprintf("?")
 	default:
 		node.Format(buf)

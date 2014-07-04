@@ -598,7 +598,7 @@ tuple_list:
 tuple:
   '(' value_expression_list ')'
   {
-    $$ = ValueTuple($2)
+    $$ = ValTuple($2)
   }
 | subquery
   {
@@ -668,10 +668,10 @@ value_expression:
   }
 | unary_operator value_expression %prec UNARY
   {
-    if num, ok := $2.(NumValue); ok {
+    if num, ok := $2.(NumVal); ok {
       switch $1 {
       case '-':
-        $$ = append(NumValue("-"), num...)
+        $$ = append(NumVal("-"), num...)
       case '+':
         $$ = num
       default:
@@ -779,19 +779,19 @@ column_name:
 value:
   STRING
   {
-    $$ = StringValue($1.Value)
+    $$ = StrVal($1.Value)
   }
 | NUMBER
   {
-    $$ = NumValue($1.Value)
+    $$ = NumVal($1.Value)
   }
 | VALUE_ARG
   {
-    $$ = ValueArg($1.Value)
+    $$ = ValArg($1.Value)
   }
 | NULL
   {
-    $$ = &NullValue{}
+    $$ = &NullVal{}
   }
 
 group_by_opt:

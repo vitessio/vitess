@@ -505,44 +505,44 @@ type ValExpr interface {
 	Expr
 }
 
-// StringValue represents a string value.
-type StringValue []byte
+// StrVal represents a string value.
+type StrVal []byte
 
-func (StringValue) expr()    {}
-func (StringValue) valExpr() {}
+func (StrVal) expr()    {}
+func (StrVal) valExpr() {}
 
-func (node StringValue) Format(buf *TrackedBuffer) {
+func (node StrVal) Format(buf *TrackedBuffer) {
 	s := sqltypes.MakeString([]byte(node))
 	s.EncodeSql(buf)
 }
 
-// NumValue represents a number.
-type NumValue []byte
+// NumVal represents a number.
+type NumVal []byte
 
-func (NumValue) expr()    {}
-func (NumValue) valExpr() {}
+func (NumVal) expr()    {}
+func (NumVal) valExpr() {}
 
-func (node NumValue) Format(buf *TrackedBuffer) {
+func (node NumVal) Format(buf *TrackedBuffer) {
 	buf.Fprintf("%s", []byte(node))
 }
 
-// ValueArg represents a named bind var argument.
-type ValueArg []byte
+// ValArg represents a named bind var argument.
+type ValArg []byte
 
-func (ValueArg) expr()    {}
-func (ValueArg) valExpr() {}
+func (ValArg) expr()    {}
+func (ValArg) valExpr() {}
 
-func (node ValueArg) Format(buf *TrackedBuffer) {
+func (node ValArg) Format(buf *TrackedBuffer) {
 	buf.WriteArg(string(node[1:]))
 }
 
-// NullValue represents a NULL value.
-type NullValue struct{}
+// NullVal represents a NULL value.
+type NullVal struct{}
 
-func (*NullValue) expr()    {}
-func (*NullValue) valExpr() {}
+func (*NullVal) expr()    {}
+func (*NullVal) valExpr() {}
 
-func (node *NullValue) Format(buf *TrackedBuffer) {
+func (node *NullVal) Format(buf *TrackedBuffer) {
 	buf.Fprintf("null")
 }
 
@@ -570,20 +570,20 @@ func escape(buf *TrackedBuffer, name []byte) {
 	}
 }
 
-// Tuple represents a tuple. It can be ValueTuple, Subquery.
+// Tuple represents a tuple. It can be ValTuple, Subquery.
 type Tuple interface {
 	tuple()
 	ValExpr
 }
 
-// ValueTuple represents a tuple of actual values.
-type ValueTuple ValExprs
+// ValTuple represents a tuple of actual values.
+type ValTuple ValExprs
 
-func (ValueTuple) tuple()   {}
-func (ValueTuple) expr()    {}
-func (ValueTuple) valExpr() {}
+func (ValTuple) tuple()   {}
+func (ValTuple) expr()    {}
+func (ValTuple) valExpr() {}
 
-func (node ValueTuple) Format(buf *TrackedBuffer) {
+func (node ValTuple) Format(buf *TrackedBuffer) {
 	buf.Fprintf("(%v)", ValExprs(node))
 }
 

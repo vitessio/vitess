@@ -110,7 +110,7 @@ func routingAnalyzeValues(vals Values) Values {
 	// Analyze first value of every item in the list
 	for i := 0; i < len(vals); i++ {
 		switch tuple := vals[i].(type) {
-		case ValueTuple:
+		case ValTuple:
 			result := routingAnalyzeValue(tuple[0])
 			if result != VALUE_NODE {
 				panic(NewParserError("insert is too complex"))
@@ -171,14 +171,14 @@ func routingAnalyzeValue(valExpr ValExpr) int {
 		if string(node.Name) == "entity_id" {
 			return EID_NODE
 		}
-	case ValueTuple:
+	case ValTuple:
 		for _, n := range node {
 			if routingAnalyzeValue(n) != VALUE_NODE {
 				return OTHER_NODE
 			}
 		}
 		return LIST_NODE
-	case StringValue, NumValue, ValueArg:
+	case StrVal, NumVal, ValArg:
 		return VALUE_NODE
 	}
 	return OTHER_NODE
@@ -187,7 +187,7 @@ func routingAnalyzeValue(valExpr ValExpr) int {
 func findShardList(valExpr ValExpr, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) []int {
 	shardset := make(map[int]bool)
 	switch node := valExpr.(type) {
-	case ValueTuple:
+	case ValTuple:
 		for _, n := range node {
 			index := findShard(n, bindVariables, tabletKeys)
 			shardset[index] = true
@@ -205,7 +205,7 @@ func findShardList(valExpr ValExpr, bindVariables map[string]interface{}, tablet
 func findInsertShard(vals Values, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) int {
 	index := -1
 	for i := 0; i < len(vals); i++ {
-		first_value_expression := vals[i].(ValueTuple)[0]
+		first_value_expression := vals[i].(ValTuple)[0]
 		newIndex := findShard(first_value_expression, bindVariables, tabletKeys)
 		if index == -1 {
 			index = newIndex
@@ -223,28 +223,28 @@ func findShard(valExpr ValExpr, bindVariables map[string]interface{}, tabletKeys
 
 func getBoundValue(valExpr ValExpr, bindVariables map[string]interface{}) string {
 	switch node := valExpr.(type) {
-	case ValueTuple:
+	case ValTuple:
 		if len(node) != 1 {
 			panic(NewParserError("tuples not allowed as insert values"))
 		}
 		// TODO: Change parser to create single value tuples into non-tuples.
 		return getBoundValue(node[0], bindVariables)
-	case StringValue:
+	case StrVal:
 		return string(node)
-	case NumValue:
+	case NumVal:
 		val, err := strconv.ParseInt(string(node), 10, 64)
 		if err != nil {
 			panic(NewParserError("%s", err.Error()))
 		}
 		return key.Uint64Key(val).String()
-	case ValueArg:
+	case ValArg:
 		value := findBindValue(node, bindVariables)
 		return key.EncodeValue(value)
 	}
 	panic("Unexpected token")
 }
 
-func findBindValue(valArg ValueArg, bindVariables map[string]interface{}) interface{} {
+func findBindValue(valArg ValArg, bindVariables map[string]interface{}) interface{} {
 	if bindVariables == nil {
 		panic(NewParserError("No bind variable for " + string(valArg)))
 	}
