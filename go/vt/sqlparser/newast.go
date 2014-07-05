@@ -101,7 +101,7 @@ type Union struct {
 const (
 	AST_UNION     = "union"
 	AST_UNION_ALL = "union all"
-	AST_MINUS     = "minus"
+	AST_SET_MINUS = "minus"
 	AST_EXCEPT    = "except"
 	AST_INTERSECT = "intersect"
 )
@@ -496,35 +496,58 @@ func (node *ParenBoolExpr) Format(buf *TrackedBuffer) {
 }
 
 // ComparisonExpr represents a two-value comparison expression.
-// Operator can be "=", ",", ">", "<=", ">=", "<>", "!=", "<=>",
-// "in", "not in", "like", "not like".
 type ComparisonExpr struct {
 	Operator    string
 	Left, Right ValExpr
 }
+
+// ComparisonExpr.Operator
+const (
+	AST_EQ       = "="
+	AST_LT       = "<"
+	AST_GT       = ">"
+	AST_LE       = "<="
+	AST_GE       = ">="
+	AST_NE       = "!="
+	AST_NSE      = "<=>"
+	AST_IN       = "in"
+	AST_NOT_IN   = "not in"
+	AST_LIKE     = "like"
+	AST_NOT_LIKE = "not like"
+)
 
 func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
 	buf.Fprintf("%v %s %v", node.Left, node.Operator, node.Right)
 }
 
 // RangeCond represents a BETWEEN or a NOT BETWEEN expression.
-// Operator can be "between", "not between".
 type RangeCond struct {
 	Operator string
 	Left     ValExpr
 	From, To ValExpr
 }
 
+// RangeCond.Operator
+const (
+	AST_BETWEEN     = "between"
+	AST_NOT_BETWEEN = "not between"
+)
+
 func (node *RangeCond) Format(buf *TrackedBuffer) {
 	buf.Fprintf("%v %s %v and %v", node.Left, node.Operator, node.From, node.To)
 }
 
 // NullCheck represents an IS NULL or an IS NOT NULL expression.
-// Operator can be "is null", "is not null".
 type NullCheck struct {
 	Operator string
 	Expr     ValExpr
 }
+
+// NullCheck.Operator
+const (
+	AST_IS_NULL     = "is null"
+	AST_IS_NOT_NULL = "is not null"
+)
 
 func (node *NullCheck) Format(buf *TrackedBuffer) {
 	buf.Fprintf("%v %s", node.Expr, node.Operator)
@@ -645,22 +668,39 @@ func (node *Subquery) Format(buf *TrackedBuffer) {
 }
 
 // BinaryExpr represents a binary value expression.
-// Operator can be &, |, ^, +, -, *, /, %.
 type BinaryExpr struct {
 	Operator    byte
 	Left, Right Expr
 }
+
+// BinaryExpr.Operator
+const (
+	AST_BITAND = '&'
+	AST_BITOR  = '|'
+	AST_BITXOR = '^'
+	AST_PLUS   = '+'
+	AST_MINUS  = '-'
+	AST_MULT   = '*'
+	AST_DIV    = '/'
+	AST_MOD    = '%'
+)
 
 func (node *BinaryExpr) Format(buf *TrackedBuffer) {
 	buf.Fprintf("%v%c%v", node.Left, node.Operator, node.Right)
 }
 
 // UnaryExpr represents a unary value expression.
-// Operator can be +, -, ~.
 type UnaryExpr struct {
 	Operator byte
 	Expr     Expr
 }
+
+// UnaryExpr.Operator
+const (
+	AST_UPLUS  = '+'
+	AST_UMINUS = '-'
+	AST_TILDA  = '~'
+)
 
 func (node *UnaryExpr) Format(buf *TrackedBuffer) {
 	buf.Fprintf("%c%v", node.Operator, node.Expr)
@@ -751,6 +791,12 @@ type Order struct {
 	Expr      ValExpr
 	Direction string
 }
+
+// Order.Direction
+const (
+	AST_ASC  = "asc"
+	AST_DESC = "desc"
+)
 
 func (node *Order) Format(buf *TrackedBuffer) {
 	buf.Fprintf("%v %s", node.Expr, node.Direction)

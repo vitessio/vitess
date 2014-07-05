@@ -660,14 +660,14 @@ func execAnalyzeBoolean(node BoolExpr) (conditions []BoolExpr) {
 		return execAnalyzeBoolean(node.Expr)
 	case *ComparisonExpr:
 		switch {
-		case stringIn(node.Operator, "=", "<", ">", "<=", ">=", "<=>", "like"):
+		case stringIn(node.Operator, AST_EQ, AST_LT, AST_GT, AST_LE, AST_GE, AST_NSE, AST_LIKE):
 			left := execAnalyzeID(node.Left)
 			right := execAnalyzeValue(node.Right)
 			if left == nil || right == nil {
 				return nil
 			}
 			return []BoolExpr{&ComparisonExpr{Left: left, Operator: node.Operator, Right: right}}
-		case node.Operator == "in":
+		case node.Operator == AST_IN:
 			left := execAnalyzeID(node.Left)
 			right := execAnalyzeSimpleINList(node.Right)
 			if left == nil || right == nil {
@@ -678,7 +678,7 @@ func execAnalyzeBoolean(node BoolExpr) (conditions []BoolExpr) {
 			return nil
 		}
 	case *RangeCond:
-		if node.Operator != "between" {
+		if node.Operator != AST_BETWEEN {
 			return nil
 		}
 		left := execAnalyzeID(node.Left)
@@ -687,7 +687,7 @@ func execAnalyzeBoolean(node BoolExpr) (conditions []BoolExpr) {
 		if left == nil || from == nil || to == nil {
 			return nil
 		}
-		return []BoolExpr{&RangeCond{Left: left, Operator: "between", From: from, To: to}}
+		return []BoolExpr{&RangeCond{Left: left, Operator: AST_BETWEEN, From: from, To: to}}
 	}
 	return nil
 }
@@ -734,7 +734,7 @@ func execAnalyzeValue(expr ValExpr) ValExpr {
 
 func hasINClause(conditions []BoolExpr) bool {
 	for _, node := range conditions {
-		if c, ok := node.(*ComparisonExpr); ok && c.Operator == "in" {
+		if c, ok := node.(*ComparisonExpr); ok && c.Operator == AST_IN {
 			return true
 		}
 	}
@@ -904,7 +904,7 @@ func getPKValues(conditions []BoolExpr, pkIndex *schema.Index) (pkValues []inter
 		if !ok {
 			return nil
 		}
-		if !stringIn(condition.Operator, "=", "in") {
+		if !stringIn(condition.Operator, AST_EQ, AST_IN) {
 			return nil
 		}
 		index := pkIndexScore.FindMatch(string(condition.Left.(*ColName).Name))
@@ -912,9 +912,9 @@ func getPKValues(conditions []BoolExpr, pkIndex *schema.Index) (pkValues []inter
 			return nil
 		}
 		switch condition.Operator {
-		case "=":
+		case AST_EQ:
 			pkValues[index] = asInterface(condition.Right)
-		case "in":
+		case AST_IN:
 			pkValues[index] = parseList(condition.Right.(ValTuple))
 		default:
 			panic("unreachable")
@@ -1087,7 +1087,7 @@ func generatePKWhere(buf *TrackedBuffer, pkIndex *schema.Index) {
 }
 
 func GenerateSelectSubquery(sel *Select, tableInfo *schema.Table, index string) *ParsedQuery {
-	hint := &IndexHints{Type: "use", Indexes: [][]byte{[]byte(index)}}
+	hint := &IndexHints{Type: AST_USE, Indexes: [][]byte{[]byte(index)}}
 	table_expr := sel.From[0].(*AliasedTableExpr)
 	savedHint := table_expr.Hints
 	table_expr.Hints = hint
@@ -1139,7 +1139,7 @@ func GenerateSubquery(columns []string, table *AliasedTableExpr, where *Where, o
 	fmt.Fprintf(buf, "%s", columns[i])
 	buf.Fprintf(" from %v%v%v%v", table, where, order, limit)
 	if for_update {
-		buf.Fprintf(" for update")
+		buf.Fprintf(AST_FOR_UPDATE)
 	}
 	return buf.ParsedQuery()
 }

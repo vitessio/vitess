@@ -278,7 +278,7 @@ union_op:
   }
 | MINUS
   {
-    $$ = AST_MINUS
+    $$ = AST_SET_MINUS
   }
 | EXCEPT
   {
@@ -510,35 +510,35 @@ condition:
   }
 | value_expression IN tuple
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: "in", Right: $3}
+    $$ = &ComparisonExpr{Left: $1, Operator: AST_IN, Right: $3}
   }
 | value_expression NOT IN tuple
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: "not in", Right: $4}
+    $$ = &ComparisonExpr{Left: $1, Operator: AST_NOT_IN, Right: $4}
   }
 | value_expression LIKE value_expression
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: "like", Right: $3}
+    $$ = &ComparisonExpr{Left: $1, Operator: AST_LIKE, Right: $3}
   }
 | value_expression NOT LIKE value_expression
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: "not like", Right: $4}
+    $$ = &ComparisonExpr{Left: $1, Operator: AST_NOT_LIKE, Right: $4}
   }
 | value_expression BETWEEN value_expression AND value_expression
   {
-    $$ = &RangeCond{Left: $1, Operator: "between", From: $3, To: $5}
+    $$ = &RangeCond{Left: $1, Operator: AST_BETWEEN, From: $3, To: $5}
   }
 | value_expression NOT BETWEEN value_expression AND value_expression
   {
-    $$ = &RangeCond{Left: $1, Operator: "not between", From: $4, To: $6}
+    $$ = &RangeCond{Left: $1, Operator: AST_NOT_BETWEEN, From: $4, To: $6}
   }
 | value_expression IS NULL
   {
-    $$ = &NullCheck{Operator: "is null", Expr: $1}
+    $$ = &NullCheck{Operator: AST_IS_NULL, Expr: $1}
   }
 | value_expression IS NOT NULL
   {
-    $$ = &NullCheck{Operator: "is not null", Expr: $1}
+    $$ = &NullCheck{Operator: AST_IS_NOT_NULL, Expr: $1}
   }
 | EXISTS subquery
   {
@@ -548,31 +548,31 @@ condition:
 compare:
   '='
   {
-    $$ = "="
+    $$ = AST_EQ
   }
 | '<'
   {
-    $$ = "<"
+    $$ = AST_LT
   }
 | '>'
   {
-    $$ = ">"
+    $$ = AST_GT
   }
 | LE
   {
-    $$ = "<="
+    $$ = AST_LE
   }
 | GE
   {
-    $$ = ">="
+    $$ = AST_GE
   }
 | NE
   {
-    $$ = string($1.Value)
+    $$ = AST_NE
   }
 | NULL_SAFE_EQUAL
   {
-    $$ = "<=>"
+    $$ = AST_NSE
   }
 
 row_list:
@@ -636,35 +636,35 @@ value_expression:
   }
 | value_expression '&' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: '&', Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: AST_BITAND, Right: $3}
   }
 | value_expression '|' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: '|', Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: AST_BITOR, Right: $3}
   }
 | value_expression '^' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: '^', Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: AST_BITXOR, Right: $3}
   }
 | value_expression '+' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: '+', Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: AST_PLUS, Right: $3}
   }
 | value_expression '-' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: '-', Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: AST_MINUS, Right: $3}
   }
 | value_expression '*' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: '*', Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: AST_MULT, Right: $3}
   }
 | value_expression '/' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: '/', Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: AST_DIV, Right: $3}
   }
 | value_expression '%' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: '%', Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: AST_MOD, Right: $3}
   }
 | unary_operator value_expression %prec UNARY
   {
@@ -715,15 +715,15 @@ keyword_as_func:
 unary_operator:
   '+'
   {
-    $$ = '+'
+    $$ = AST_UPLUS
   }
 | '-'
   {
-    $$ = '-'
+    $$ = AST_UMINUS
   }
 | '~'
   {
-    $$ = '~'
+    $$ = AST_TILDA
   }
 
 case_expression:
@@ -839,15 +839,15 @@ order:
 
 asc_desc_opt:
   {
-    $$ = "asc"
+    $$ = AST_ASC
   }
 | ASC
   {
-    $$ = "asc"
+    $$ = AST_ASC
   }
 | DESC
   {
-    $$ = "desc"
+    $$ = AST_DESC
   }
 
 limit_opt:

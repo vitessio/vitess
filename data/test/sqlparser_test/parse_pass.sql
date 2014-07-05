@@ -73,7 +73,7 @@ select /* is not null */ 1 from t where a is not null
 select /* < */ 1 from t where a < b
 select /* <= */ 1 from t where a <= b
 select /* >= */ 1 from t where a >= b
-select /* <> */ 1 from t where a <> b
+select /* <> */ 1 from t where a != b
 select /* <=> */ 1 from t where a <=> b
 select /* != */ 1 from t where a != b
 select /* single value expre list */ 1 from t where a in (b)

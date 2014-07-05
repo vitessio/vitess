@@ -883,7 +883,7 @@ yydefault:
 	case 33:
 		//line sql.y:280
 		{
-			yyVAL.str = AST_MINUS
+			yyVAL.str = AST_SET_MINUS
 		}
 	case 34:
 		//line sql.y:284
@@ -1140,42 +1140,42 @@ yydefault:
 	case 85:
 		//line sql.y:512
 		{
-			yyVAL.boolExpr = &ComparisonExpr{Left: yyS[yypt-2].valExpr, Operator: "in", Right: yyS[yypt-0].tuple}
+			yyVAL.boolExpr = &ComparisonExpr{Left: yyS[yypt-2].valExpr, Operator: AST_IN, Right: yyS[yypt-0].tuple}
 		}
 	case 86:
 		//line sql.y:516
 		{
-			yyVAL.boolExpr = &ComparisonExpr{Left: yyS[yypt-3].valExpr, Operator: "not in", Right: yyS[yypt-0].tuple}
+			yyVAL.boolExpr = &ComparisonExpr{Left: yyS[yypt-3].valExpr, Operator: AST_NOT_IN, Right: yyS[yypt-0].tuple}
 		}
 	case 87:
 		//line sql.y:520
 		{
-			yyVAL.boolExpr = &ComparisonExpr{Left: yyS[yypt-2].valExpr, Operator: "like", Right: yyS[yypt-0].valExpr}
+			yyVAL.boolExpr = &ComparisonExpr{Left: yyS[yypt-2].valExpr, Operator: AST_LIKE, Right: yyS[yypt-0].valExpr}
 		}
 	case 88:
 		//line sql.y:524
 		{
-			yyVAL.boolExpr = &ComparisonExpr{Left: yyS[yypt-3].valExpr, Operator: "not like", Right: yyS[yypt-0].valExpr}
+			yyVAL.boolExpr = &ComparisonExpr{Left: yyS[yypt-3].valExpr, Operator: AST_NOT_LIKE, Right: yyS[yypt-0].valExpr}
 		}
 	case 89:
 		//line sql.y:528
 		{
-			yyVAL.boolExpr = &RangeCond{Left: yyS[yypt-4].valExpr, Operator: "between", From: yyS[yypt-2].valExpr, To: yyS[yypt-0].valExpr}
+			yyVAL.boolExpr = &RangeCond{Left: yyS[yypt-4].valExpr, Operator: AST_BETWEEN, From: yyS[yypt-2].valExpr, To: yyS[yypt-0].valExpr}
 		}
 	case 90:
 		//line sql.y:532
 		{
-			yyVAL.boolExpr = &RangeCond{Left: yyS[yypt-5].valExpr, Operator: "not between", From: yyS[yypt-2].valExpr, To: yyS[yypt-0].valExpr}
+			yyVAL.boolExpr = &RangeCond{Left: yyS[yypt-5].valExpr, Operator: AST_NOT_BETWEEN, From: yyS[yypt-2].valExpr, To: yyS[yypt-0].valExpr}
 		}
 	case 91:
 		//line sql.y:536
 		{
-			yyVAL.boolExpr = &NullCheck{Operator: "is null", Expr: yyS[yypt-2].valExpr}
+			yyVAL.boolExpr = &NullCheck{Operator: AST_IS_NULL, Expr: yyS[yypt-2].valExpr}
 		}
 	case 92:
 		//line sql.y:540
 		{
-			yyVAL.boolExpr = &NullCheck{Operator: "is not null", Expr: yyS[yypt-3].valExpr}
+			yyVAL.boolExpr = &NullCheck{Operator: AST_IS_NOT_NULL, Expr: yyS[yypt-3].valExpr}
 		}
 	case 93:
 		//line sql.y:544
@@ -1185,37 +1185,37 @@ yydefault:
 	case 94:
 		//line sql.y:550
 		{
-			yyVAL.str = "="
+			yyVAL.str = AST_EQ
 		}
 	case 95:
 		//line sql.y:554
 		{
-			yyVAL.str = "<"
+			yyVAL.str = AST_LT
 		}
 	case 96:
 		//line sql.y:558
 		{
-			yyVAL.str = ">"
+			yyVAL.str = AST_GT
 		}
 	case 97:
 		//line sql.y:562
 		{
-			yyVAL.str = "<="
+			yyVAL.str = AST_LE
 		}
 	case 98:
 		//line sql.y:566
 		{
-			yyVAL.str = ">="
+			yyVAL.str = AST_GE
 		}
 	case 99:
 		//line sql.y:570
 		{
-			yyVAL.str = string(yyS[yypt-0].node.Value)
+			yyVAL.str = AST_NE
 		}
 	case 100:
 		//line sql.y:574
 		{
-			yyVAL.str = "<=>"
+			yyVAL.str = AST_NSE
 		}
 	case 101:
 		//line sql.y:580
@@ -1280,42 +1280,42 @@ yydefault:
 	case 113:
 		//line sql.y:638
 		{
-			yyVAL.valExpr = &BinaryExpr{Left: yyS[yypt-2].valExpr, Operator: '&', Right: yyS[yypt-0].valExpr}
+			yyVAL.valExpr = &BinaryExpr{Left: yyS[yypt-2].valExpr, Operator: AST_BITAND, Right: yyS[yypt-0].valExpr}
 		}
 	case 114:
 		//line sql.y:642
 		{
-			yyVAL.valExpr = &BinaryExpr{Left: yyS[yypt-2].valExpr, Operator: '|', Right: yyS[yypt-0].valExpr}
+			yyVAL.valExpr = &BinaryExpr{Left: yyS[yypt-2].valExpr, Operator: AST_BITOR, Right: yyS[yypt-0].valExpr}
 		}
 	case 115:
 		//line sql.y:646
 		{
-			yyVAL.valExpr = &BinaryExpr{Left: yyS[yypt-2].valExpr, Operator: '^', Right: yyS[yypt-0].valExpr}
+			yyVAL.valExpr = &BinaryExpr{Left: yyS[yypt-2].valExpr, Operator: AST_BITXOR, Right: yyS[yypt-0].valExpr}
 		}
 	case 116:
 		//line sql.y:650
 		{
-			yyVAL.valExpr = &BinaryExpr{Left: yyS[yypt-2].valExpr, Operator: '+', Right: yyS[yypt-0].valExpr}
+			yyVAL.valExpr = &BinaryExpr{Left: yyS[yypt-2].valExpr, Operator: AST_PLUS, Right: yyS[yypt-0].valExpr}
 		}
 	case 117:
 		//line sql.y:654
 		{
-			yyVAL.valExpr = &BinaryExpr{Left: yyS[yypt-2].valExpr, Operator: '-', Right: yyS[yypt-0].valExpr}
+			yyVAL.valExpr = &BinaryExpr{Left: yyS[yypt-2].valExpr, Operator: AST_MINUS, Right: yyS[yypt-0].valExpr}
 		}
 	case 118:
 		//line sql.y:658
 		{
-			yyVAL.valExpr = &BinaryExpr{Left: yyS[yypt-2].valExpr, Operator: '*', Right: yyS[yypt-0].valExpr}
+			yyVAL.valExpr = &BinaryExpr{Left: yyS[yypt-2].valExpr, Operator: AST_MULT, Right: yyS[yypt-0].valExpr}
 		}
 	case 119:
 		//line sql.y:662
 		{
-			yyVAL.valExpr = &BinaryExpr{Left: yyS[yypt-2].valExpr, Operator: '/', Right: yyS[yypt-0].valExpr}
+			yyVAL.valExpr = &BinaryExpr{Left: yyS[yypt-2].valExpr, Operator: AST_DIV, Right: yyS[yypt-0].valExpr}
 		}
 	case 120:
 		//line sql.y:666
 		{
-			yyVAL.valExpr = &BinaryExpr{Left: yyS[yypt-2].valExpr, Operator: '%', Right: yyS[yypt-0].valExpr}
+			yyVAL.valExpr = &BinaryExpr{Left: yyS[yypt-2].valExpr, Operator: AST_MOD, Right: yyS[yypt-0].valExpr}
 		}
 	case 121:
 		//line sql.y:670
@@ -1371,17 +1371,17 @@ yydefault:
 	case 129:
 		//line sql.y:717
 		{
-			yyVAL.byt = '+'
+			yyVAL.byt = AST_UPLUS
 		}
 	case 130:
 		//line sql.y:721
 		{
-			yyVAL.byt = '-'
+			yyVAL.byt = AST_UMINUS
 		}
 	case 131:
 		//line sql.y:725
 		{
-			yyVAL.byt = '~'
+			yyVAL.byt = AST_TILDA
 		}
 	case 132:
 		//line sql.y:731
@@ -1501,17 +1501,17 @@ yydefault:
 	case 155:
 		//line sql.y:841
 		{
-			yyVAL.str = "asc"
+			yyVAL.str = AST_ASC
 		}
 	case 156:
 		//line sql.y:845
 		{
-			yyVAL.str = "asc"
+			yyVAL.str = AST_ASC
 		}
 	case 157:
 		//line sql.y:849
 		{
-			yyVAL.str = "desc"
+			yyVAL.str = AST_DESC
 		}
 	case 158:
 		//line sql.y:854
