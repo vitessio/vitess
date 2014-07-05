@@ -166,7 +166,7 @@ command:
 select_statement:
   SELECT comment_opt distinct_opt select_expression_list FROM table_expression_list where_expression_opt group_by_opt having_opt order_by_opt limit_opt lock_opt
   {
-    $$ = &Select{Comments: Comments($2), Distinct: $3, SelectExprs: $4, From: $6, Where: NewWhere("where", $7), GroupBy: GroupBy($8), Having: NewWhere("having", $9), OrderBy: $10, Limit: $11, Lock: $12}
+    $$ = &Select{Comments: Comments($2), Distinct: $3, SelectExprs: $4, From: $6, Where: NewWhere(AST_WHERE, $7), GroupBy: GroupBy($8), Having: NewWhere(AST_HAVING, $9), OrderBy: $10, Limit: $11, Lock: $12}
   }
 | select_statement union_op select_statement %prec UNION
   {
@@ -182,13 +182,13 @@ insert_statement:
 update_statement:
   UPDATE comment_opt dml_table_expression SET update_list where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Update{Comments: Comments($2), Table: $3, Exprs: $5, Where: NewWhere("where", $6), OrderBy: $7, Limit: $8}
+    $$ = &Update{Comments: Comments($2), Table: $3, Exprs: $5, Where: NewWhere(AST_WHERE, $6), OrderBy: $7, Limit: $8}
   }
 
 delete_statement:
   DELETE comment_opt FROM dml_table_expression where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{Comments: Comments($2), Table: $4, Where: NewWhere("where", $5), OrderBy: $6, Limit: $7}
+    $$ = &Delete{Comments: Comments($2), Table: $4, Where: NewWhere(AST_WHERE, $5), OrderBy: $6, Limit: $7}
   }
 
 set_statement:
@@ -270,23 +270,23 @@ comment_list:
 union_op:
   UNION
   {
-    $$ = "union"
+    $$ = AST_UNION
   }
 | UNION ALL
   {
-    $$ = "union all"
+    $$ = AST_UNION_ALL
   }
 | MINUS
   {
-    $$ = "minus"
+    $$ = AST_MINUS
   }
 | EXCEPT
   {
-    $$ = "except"
+    $$ = AST_EXCEPT
   }
 | INTERSECT
   {
-    $$ = "intersect"
+    $$ = AST_INTERSECT
   }
 
 distinct_opt:
@@ -295,7 +295,7 @@ distinct_opt:
   }
 | DISTINCT
   {
-    $$ = "distinct "
+    $$ = AST_DISTINCT
   }
 
 select_expression_list:
@@ -389,39 +389,39 @@ as_opt:
 join_type:
   JOIN
   {
-    $$ = "join"
+    $$ = AST_JOIN
   }
 | STRAIGHT_JOIN
   {
-    $$ = "straight_join"
+    $$ = AST_STRAIGHT_JOIN
   }
 | LEFT JOIN
   {
-    $$ = "left join"
+    $$ = AST_LEFT_JOIN
   }
 | LEFT OUTER JOIN
   {
-    $$ = "left join"
+    $$ = AST_LEFT_JOIN
   }
 | RIGHT JOIN
   {
-    $$ = "right join"
+    $$ = AST_RIGHT_JOIN
   }
 | RIGHT OUTER JOIN
   {
-    $$ = "right join"
+    $$ = AST_RIGHT_JOIN
   }
 | INNER JOIN
   {
-    $$ = "join"
+    $$ = AST_JOIN
   }
 | CROSS JOIN
   {
-    $$ = "cross join"
+    $$ = AST_CROSS_JOIN
   }
 | NATURAL JOIN
   {
-    $$ = "natural join"
+    $$ = AST_NATURAL_JOIN
   }
 
 simple_table_expression:
@@ -454,15 +454,15 @@ index_hint_list:
   }
 | USE INDEX '(' index_list ')'
   {
-    $$ = &IndexHints{Type: "use", Indexes: $4}
+    $$ = &IndexHints{Type: AST_USE, Indexes: $4}
   }
 | IGNORE INDEX '(' index_list ')'
   {
-    $$ = &IndexHints{Type: "ignore", Indexes: $4}
+    $$ = &IndexHints{Type: AST_IGNORE, Indexes: $4}
   }
 | FORCE INDEX '(' index_list ')'
   {
-    $$ = &IndexHints{Type: "force", Indexes: $4}
+    $$ = &IndexHints{Type: AST_FORCE, Indexes: $4}
   }
 
 index_list:
@@ -869,7 +869,7 @@ lock_opt:
   }
 | FOR UPDATE
   {
-    $$ = " for update"
+    $$ = AST_FOR_UPDATE
   }
 | LOCK IN sql_id sql_id
   {
@@ -881,7 +881,7 @@ lock_opt:
       yylex.Error("expecting mode")
       return 1
     }
-    $$ = " lock in share mode"
+    $$ = AST_SHARE_MODE
   }
 
 column_list_opt:

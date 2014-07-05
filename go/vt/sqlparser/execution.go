@@ -1011,7 +1011,7 @@ func FormatImpossible(buf *TrackedBuffer, node SQLNode) {
 	case *Select:
 		buf.Fprintf("select %v from %v where 1 != 1", node.SelectExprs, node.From)
 	case *JoinTableExpr:
-		if node.Join == "left join" || node.Join == "right join" {
+		if node.Join == AST_LEFT_JOIN || node.Join == AST_RIGHT_JOIN {
 			// ON clause is requried
 			buf.Fprintf("%v %s %v on 1 != 1", node.LeftExpr, node.Join, node.RightExpr)
 		} else {

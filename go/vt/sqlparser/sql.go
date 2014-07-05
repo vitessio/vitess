@@ -769,7 +769,7 @@ yydefault:
 	case 11:
 		//line sql.y:168
 		{
-			yyVAL.selStmt = &Select{Comments: Comments(yyS[yypt-10].bytes2), Distinct: yyS[yypt-9].str, SelectExprs: yyS[yypt-8].selectExprs, From: yyS[yypt-6].tableExprs, Where: NewWhere("where", yyS[yypt-5].boolExpr), GroupBy: GroupBy(yyS[yypt-4].valExprs), Having: NewWhere("having", yyS[yypt-3].boolExpr), OrderBy: yyS[yypt-2].orderBy, Limit: yyS[yypt-1].limit, Lock: yyS[yypt-0].str}
+			yyVAL.selStmt = &Select{Comments: Comments(yyS[yypt-10].bytes2), Distinct: yyS[yypt-9].str, SelectExprs: yyS[yypt-8].selectExprs, From: yyS[yypt-6].tableExprs, Where: NewWhere(AST_WHERE, yyS[yypt-5].boolExpr), GroupBy: GroupBy(yyS[yypt-4].valExprs), Having: NewWhere(AST_HAVING, yyS[yypt-3].boolExpr), OrderBy: yyS[yypt-2].orderBy, Limit: yyS[yypt-1].limit, Lock: yyS[yypt-0].str}
 		}
 	case 12:
 		//line sql.y:172
@@ -784,12 +784,12 @@ yydefault:
 	case 14:
 		//line sql.y:184
 		{
-			yyVAL.statement = &Update{Comments: Comments(yyS[yypt-6].bytes2), Table: yyS[yypt-5].tableName, Exprs: yyS[yypt-3].updateExprs, Where: NewWhere("where", yyS[yypt-2].boolExpr), OrderBy: yyS[yypt-1].orderBy, Limit: yyS[yypt-0].limit}
+			yyVAL.statement = &Update{Comments: Comments(yyS[yypt-6].bytes2), Table: yyS[yypt-5].tableName, Exprs: yyS[yypt-3].updateExprs, Where: NewWhere(AST_WHERE, yyS[yypt-2].boolExpr), OrderBy: yyS[yypt-1].orderBy, Limit: yyS[yypt-0].limit}
 		}
 	case 15:
 		//line sql.y:190
 		{
-			yyVAL.statement = &Delete{Comments: Comments(yyS[yypt-5].bytes2), Table: yyS[yypt-3].tableName, Where: NewWhere("where", yyS[yypt-2].boolExpr), OrderBy: yyS[yypt-1].orderBy, Limit: yyS[yypt-0].limit}
+			yyVAL.statement = &Delete{Comments: Comments(yyS[yypt-5].bytes2), Table: yyS[yypt-3].tableName, Where: NewWhere(AST_WHERE, yyS[yypt-2].boolExpr), OrderBy: yyS[yypt-1].orderBy, Limit: yyS[yypt-0].limit}
 		}
 	case 16:
 		//line sql.y:196
@@ -873,27 +873,27 @@ yydefault:
 	case 31:
 		//line sql.y:272
 		{
-			yyVAL.str = "union"
+			yyVAL.str = AST_UNION
 		}
 	case 32:
 		//line sql.y:276
 		{
-			yyVAL.str = "union all"
+			yyVAL.str = AST_UNION_ALL
 		}
 	case 33:
 		//line sql.y:280
 		{
-			yyVAL.str = "minus"
+			yyVAL.str = AST_MINUS
 		}
 	case 34:
 		//line sql.y:284
 		{
-			yyVAL.str = "except"
+			yyVAL.str = AST_EXCEPT
 		}
 	case 35:
 		//line sql.y:288
 		{
-			yyVAL.str = "intersect"
+			yyVAL.str = AST_INTERSECT
 		}
 	case 36:
 		//line sql.y:293
@@ -903,7 +903,7 @@ yydefault:
 	case 37:
 		//line sql.y:297
 		{
-			yyVAL.str = "distinct "
+			yyVAL.str = AST_DISTINCT
 		}
 	case 38:
 		//line sql.y:303
@@ -1003,47 +1003,47 @@ yydefault:
 	case 57:
 		//line sql.y:391
 		{
-			yyVAL.str = "join"
+			yyVAL.str = AST_JOIN
 		}
 	case 58:
 		//line sql.y:395
 		{
-			yyVAL.str = "straight_join"
+			yyVAL.str = AST_STRAIGHT_JOIN
 		}
 	case 59:
 		//line sql.y:399
 		{
-			yyVAL.str = "left join"
+			yyVAL.str = AST_LEFT_JOIN
 		}
 	case 60:
 		//line sql.y:403
 		{
-			yyVAL.str = "left join"
+			yyVAL.str = AST_LEFT_JOIN
 		}
 	case 61:
 		//line sql.y:407
 		{
-			yyVAL.str = "right join"
+			yyVAL.str = AST_RIGHT_JOIN
 		}
 	case 62:
 		//line sql.y:411
 		{
-			yyVAL.str = "right join"
+			yyVAL.str = AST_RIGHT_JOIN
 		}
 	case 63:
 		//line sql.y:415
 		{
-			yyVAL.str = "join"
+			yyVAL.str = AST_JOIN
 		}
 	case 64:
 		//line sql.y:419
 		{
-			yyVAL.str = "cross join"
+			yyVAL.str = AST_CROSS_JOIN
 		}
 	case 65:
 		//line sql.y:423
 		{
-			yyVAL.str = "natural join"
+			yyVAL.str = AST_NATURAL_JOIN
 		}
 	case 66:
 		//line sql.y:429
@@ -1078,17 +1078,17 @@ yydefault:
 	case 72:
 		//line sql.y:456
 		{
-			yyVAL.indexHints = &IndexHints{Type: "use", Indexes: yyS[yypt-1].bytes2}
+			yyVAL.indexHints = &IndexHints{Type: AST_USE, Indexes: yyS[yypt-1].bytes2}
 		}
 	case 73:
 		//line sql.y:460
 		{
-			yyVAL.indexHints = &IndexHints{Type: "ignore", Indexes: yyS[yypt-1].bytes2}
+			yyVAL.indexHints = &IndexHints{Type: AST_IGNORE, Indexes: yyS[yypt-1].bytes2}
 		}
 	case 74:
 		//line sql.y:464
 		{
-			yyVAL.indexHints = &IndexHints{Type: "force", Indexes: yyS[yypt-1].bytes2}
+			yyVAL.indexHints = &IndexHints{Type: AST_FORCE, Indexes: yyS[yypt-1].bytes2}
 		}
 	case 75:
 		//line sql.y:470
@@ -1536,7 +1536,7 @@ yydefault:
 	case 162:
 		//line sql.y:871
 		{
-			yyVAL.str = " for update"
+			yyVAL.str = AST_FOR_UPDATE
 		}
 	case 163:
 		//line sql.y:875
@@ -1549,7 +1549,7 @@ yydefault:
 				yylex.Error("expecting mode")
 				return 1
 			}
-			yyVAL.str = " lock in share mode"
+			yyVAL.str = AST_SHARE_MODE
 		}
 	case 164:
 		//line sql.y:888
