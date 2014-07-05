@@ -200,52 +200,52 @@ set_statement:
 create_statement:
   CREATE TABLE not_exists_opt ID force_eof
   {
-    $$ = &DDLSimple{Action: CREATE, Table: $4.Value}
+    $$ = &DDL{Action: AST_CREATE, NewName: $4.Value}
   }
 | CREATE constraint_opt INDEX sql_id using_opt ON ID force_eof
   {
     // Change this to an alter statement
-    $$ = &DDLSimple{Action: ALTER, Table: $7.Value}
+    $$ = &DDL{Action: AST_ALTER, Table: $7.Value, NewName: $7.Value}
   }
 | CREATE VIEW sql_id force_eof
   {
-    $$ = &DDLSimple{Action: CREATE, Table: $3.Value}
+    $$ = &DDL{Action: AST_CREATE, NewName: $3.Value}
   }
 
 alter_statement:
   ALTER ignore_opt TABLE ID non_rename_operation force_eof
   {
-    $$ = &DDLSimple{Action: ALTER, Table: $4.Value}
+    $$ = &DDL{Action: AST_ALTER, Table: $4.Value, NewName: $4.Value}
   }
 | ALTER ignore_opt TABLE ID RENAME to_opt ID
   {
     // Change this to a rename statement
-    $$ = &Rename{OldName: $4.Value, NewName: $7.Value}
+    $$ = &DDL{Action: AST_RENAME, Table: $4.Value, NewName: $7.Value}
   }
 | ALTER VIEW sql_id force_eof
   {
-    $$ = &DDLSimple{Action: ALTER, Table: $3.Value}
+    $$ = &DDL{Action: AST_ALTER, Table: $3.Value, NewName: $3.Value}
   }
 
 rename_statement:
   RENAME TABLE ID TO ID
   {
-    $$ = &Rename{OldName: $3.Value, NewName: $5.Value}
+    $$ = &DDL{Action: AST_RENAME, Table: $3.Value, NewName: $5.Value}
   }
 
 drop_statement:
   DROP TABLE exists_opt ID
   {
-    $$ = &DDLSimple{Action: DROP, Table: $4.Value}
+    $$ = &DDL{Action: AST_DROP, Table: $4.Value}
   }
 | DROP INDEX sql_id ON ID
   {
     // Change this to an alter statement
-    $$ = &DDLSimple{Action: ALTER, Table: $5.Value}
+    $$ = &DDL{Action: AST_ALTER, Table: $5.Value, NewName: $5.Value}
   }
 | DROP VIEW exists_opt sql_id force_eof
   {
-    $$ = &DDLSimple{Action: DROP, Table: $4.Value}
+    $$ = &DDL{Action: AST_DROP, Table: $4.Value}
   }
 
 comment_opt:

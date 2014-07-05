@@ -167,7 +167,7 @@ type ExecPlan struct {
 }
 
 type DDLPlan struct {
-	Action    int
+	Action    string
 	TableName string
 	NewName   string
 }
@@ -230,23 +230,17 @@ func StreamExecParse(sql string, sensitiveMode bool) (plan *StreamExecPlan, err 
 func DDLParse(sql string) (plan *DDLPlan) {
 	statement, err := Parse(sql)
 	if err != nil {
-		return &DDLPlan{Action: 0}
+		return &DDLPlan{Action: ""}
 	}
-	switch stmt := statement.(type) {
-	case *DDLSimple:
-		return &DDLPlan{
-			Action:    stmt.Action,
-			TableName: string(stmt.Table),
-			NewName:   string(stmt.Table),
-		}
-	case *Rename:
-		return &DDLPlan{
-			Action:    RENAME,
-			TableName: string(stmt.OldName),
-			NewName:   string(stmt.NewName),
-		}
+	stmt, ok := statement.(*DDL)
+	if !ok {
+		return &DDLPlan{Action: ""}
 	}
-	return &DDLPlan{Action: 0}
+	return &DDLPlan{
+		Action:    stmt.Action,
+		TableName: string(stmt.Table),
+		NewName:   string(stmt.NewName),
+	}
 }
 
 //-----------------------------------------------
@@ -271,7 +265,7 @@ func execAnalyzeSql(statement Statement, getTable TableGetter) (plan *ExecPlan) 
 		return execAnalyzeDelete(stmt, getTable)
 	case *Set:
 		return execAnalyzeSet(stmt)
-	case *DDLSimple, *Rename:
+	case *DDL:
 		return &ExecPlan{PlanId: PLAN_DDL}
 	}
 	panic(NewParserError("invalid SQL"))

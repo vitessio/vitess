@@ -799,55 +799,55 @@ yydefault:
 	case 17:
 		//line sql.y:202
 		{
-			yyVAL.statement = &DDLSimple{Action: CREATE, Table: yyS[yypt-1].node.Value}
+			yyVAL.statement = &DDL{Action: AST_CREATE, NewName: yyS[yypt-1].node.Value}
 		}
 	case 18:
 		//line sql.y:206
 		{
 			// Change this to an alter statement
-			yyVAL.statement = &DDLSimple{Action: ALTER, Table: yyS[yypt-1].node.Value}
+			yyVAL.statement = &DDL{Action: AST_ALTER, Table: yyS[yypt-1].node.Value, NewName: yyS[yypt-1].node.Value}
 		}
 	case 19:
 		//line sql.y:211
 		{
-			yyVAL.statement = &DDLSimple{Action: CREATE, Table: yyS[yypt-1].node.Value}
+			yyVAL.statement = &DDL{Action: AST_CREATE, NewName: yyS[yypt-1].node.Value}
 		}
 	case 20:
 		//line sql.y:217
 		{
-			yyVAL.statement = &DDLSimple{Action: ALTER, Table: yyS[yypt-2].node.Value}
+			yyVAL.statement = &DDL{Action: AST_ALTER, Table: yyS[yypt-2].node.Value, NewName: yyS[yypt-2].node.Value}
 		}
 	case 21:
 		//line sql.y:221
 		{
 			// Change this to a rename statement
-			yyVAL.statement = &Rename{OldName: yyS[yypt-3].node.Value, NewName: yyS[yypt-0].node.Value}
+			yyVAL.statement = &DDL{Action: AST_RENAME, Table: yyS[yypt-3].node.Value, NewName: yyS[yypt-0].node.Value}
 		}
 	case 22:
 		//line sql.y:226
 		{
-			yyVAL.statement = &DDLSimple{Action: ALTER, Table: yyS[yypt-1].node.Value}
+			yyVAL.statement = &DDL{Action: AST_ALTER, Table: yyS[yypt-1].node.Value, NewName: yyS[yypt-1].node.Value}
 		}
 	case 23:
 		//line sql.y:232
 		{
-			yyVAL.statement = &Rename{OldName: yyS[yypt-2].node.Value, NewName: yyS[yypt-0].node.Value}
+			yyVAL.statement = &DDL{Action: AST_RENAME, Table: yyS[yypt-2].node.Value, NewName: yyS[yypt-0].node.Value}
 		}
 	case 24:
 		//line sql.y:238
 		{
-			yyVAL.statement = &DDLSimple{Action: DROP, Table: yyS[yypt-0].node.Value}
+			yyVAL.statement = &DDL{Action: AST_DROP, Table: yyS[yypt-0].node.Value}
 		}
 	case 25:
 		//line sql.y:242
 		{
 			// Change this to an alter statement
-			yyVAL.statement = &DDLSimple{Action: ALTER, Table: yyS[yypt-0].node.Value}
+			yyVAL.statement = &DDL{Action: AST_ALTER, Table: yyS[yypt-0].node.Value, NewName: yyS[yypt-0].node.Value}
 		}
 	case 26:
 		//line sql.y:247
 		{
-			yyVAL.statement = &DDLSimple{Action: DROP, Table: yyS[yypt-1].node.Value}
+			yyVAL.statement = &DDL{Action: AST_DROP, Table: yyS[yypt-1].node.Value}
 		}
 	case 27:
 		//line sql.y:252

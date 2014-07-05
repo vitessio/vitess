@@ -122,14 +122,6 @@ func TestStreamExec(t *testing.T) {
 	}
 }
 
-var actionToString = map[int]string{
-	CREATE: "CREATE",
-	ALTER:  "ALTER",
-	DROP:   "DROP",
-	RENAME: "RENAME",
-	0:      "NONE",
-}
-
 func TestDDL(t *testing.T) {
 	for tcase := range iterateFiles("sqlparser_test/ddl_cases.txt") {
 		plan := DDLParse(tcase.input)
@@ -138,7 +130,7 @@ func TestDDL(t *testing.T) {
 		if err != nil {
 			panic(fmt.Sprintf("Error marshalling %v", plan))
 		}
-		matchString(t, tcase.lineno, expected["Action"], actionToString[plan.Action])
+		matchString(t, tcase.lineno, expected["Action"], plan.Action)
 		matchString(t, tcase.lineno, expected["TableName"], plan.TableName)
 		matchString(t, tcase.lineno, expected["NewName"], plan.NewName)
 	}

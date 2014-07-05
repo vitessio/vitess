@@ -37,14 +37,13 @@ type Statement interface {
 	SQLNode
 }
 
-func (*Union) IStatement()     {}
-func (*Select) IStatement()    {}
-func (*Insert) IStatement()    {}
-func (*Update) IStatement()    {}
-func (*Delete) IStatement()    {}
-func (*Set) IStatement()       {}
-func (*DDLSimple) IStatement() {}
-func (*Rename) IStatement()    {}
+func (*Union) IStatement()  {}
+func (*Select) IStatement() {}
+func (*Insert) IStatement() {}
+func (*Update) IStatement() {}
+func (*Delete) IStatement() {}
+func (*Set) IStatement()    {}
+func (*DDL) IStatement()    {}
 
 // SelectStatement any SELECT statement.
 type SelectStatement interface {
@@ -177,32 +176,32 @@ func (node *Set) Format(buf *TrackedBuffer) {
 	buf.Fprintf("set %v%v", node.Comments, node.Exprs)
 }
 
-// DDLSimple represents a CREATE, ALTER or DROP statement.
-type DDLSimple struct {
-	Action int
+// DDL represents a CREATE, ALTER, DROP or RENAME statement.
+// Table is set for AST_ALTER, AST_DROP, AST_RENAME.
+// NewName is set for AST_ALTER, AST_CREATE, AST_RENAME.
+type DDL struct {
+	Action string
 	Table  []byte
+	// Only for RENAME
+	NewName []byte
 }
 
-func (node *DDLSimple) Format(buf *TrackedBuffer) {
+const (
+	AST_CREATE = "create"
+	AST_ALTER  = "alter"
+	AST_DROP   = "drop"
+	AST_RENAME = "rename"
+)
+
+func (node *DDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
-	case CREATE:
-		buf.Fprintf("create table %s", node.Table)
-	case ALTER:
-		buf.Fprintf("alter table %s", node.Table)
-	case DROP:
-		buf.Fprintf("drop table %s", node.Table)
+	case AST_CREATE:
+		buf.Fprintf("%s table %s", node.Action, node.NewName)
+	case AST_RENAME:
+		buf.Fprintf("%s table %s %s", node.Action, node.Table, node.NewName)
 	default:
-		panic("unreachable")
+		buf.Fprintf("%s table %s", node.Action, node.Table)
 	}
-}
-
-// Rename represents a RENAME statement.
-type Rename struct {
-	OldName, NewName []byte
-}
-
-func (node *Rename) Format(buf *TrackedBuffer) {
-	buf.Fprintf("rename table %s %s", node.OldName, node.NewName)
 }
 
 // Comments represents a list of comments.

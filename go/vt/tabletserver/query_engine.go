@@ -436,11 +436,11 @@ func (qe *QueryEngine) InvalidateForDml(dml *proto.DmlType) {
 // InvalidateForDDL performs schema and rowcache changes for the ddl.
 func (qe *QueryEngine) InvalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
 	ddlPlan := sqlparser.DDLParse(ddlInvalidate.DDL)
-	if ddlPlan.Action == 0 {
+	if ddlPlan.Action == "" {
 		panic(NewTabletError(FAIL, "DDL is not understood"))
 	}
 	qe.schemaInfo.DropTable(ddlPlan.TableName)
-	if ddlPlan.Action != sqlparser.DROP { // CREATE, ALTER, RENAME
+	if ddlPlan.Action != sqlparser.AST_DROP { // CREATE, ALTER, RENAME
 		qe.schemaInfo.CreateTable(ddlPlan.NewName)
 	}
 }
@@ -450,7 +450,7 @@ func (qe *QueryEngine) InvalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
 
 func (qe *QueryEngine) execDDL(logStats *SQLQueryStats, ddl string) *mproto.QueryResult {
 	ddlPlan := sqlparser.DDLParse(ddl)
-	if ddlPlan.Action == 0 {
+	if ddlPlan.Action == "" {
 		panic(NewTabletError(FAIL, "DDL is not understood"))
 	}
 
@@ -473,7 +473,7 @@ func (qe *QueryEngine) execDDL(logStats *SQLQueryStats, ddl string) *mproto.Quer
 	}
 
 	qe.schemaInfo.DropTable(ddlPlan.TableName)
-	if ddlPlan.Action != sqlparser.DROP { // CREATE, ALTER, RENAME
+	if ddlPlan.Action != sqlparser.AST_DROP { // CREATE, ALTER, RENAME
 		qe.schemaInfo.CreateTable(ddlPlan.NewName)
 	}
 	return result
