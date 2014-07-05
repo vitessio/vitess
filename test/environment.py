@@ -86,9 +86,27 @@ def prog_compile(name):
   run(['go', 'install'], cwd=os.path.join(vttop, 'go', 'cmd', name))
 
 # binary management: returns the full path for a binary
+# this should typically not be used outside this file, unless you want to bypass
+# global flag injection (see binary_args)
 def binary_path(name):
   prog_compile(name)
   return os.path.join(vtroot, 'bin', name)
+
+# returns flags specific to a given binary
+# use this to globally inject flags any time a given command runs
+# e.g. - if name == 'vtctl': return ['-extra_arg', 'value']
+def binary_flags(name):
+  return []
+
+# returns binary_path + binary_flags as a list
+# this should be used instead of binary_path whenever possible
+def binary_args(name):
+  return [binary_path(name)] + binary_flags(name)
+
+# returns binary_path + binary_flags as a string
+# this should be used instead of binary_path whenever possible
+def binary_argstr(name):
+      return ' '.join(binary_args(name))
 
 # binary management for the MySQL distribution.
 def mysql_binary_path(name):
@@ -103,7 +121,7 @@ def topo_server_setup(add_bad_host=False):
   global zk_port_base
   global zkocc_port_base
   zk_ports = ":".join([str(zk_port_base), str(zk_port_base+1), str(zk_port_base+2)])
-  run([binary_path('zkctl'),
+  run(binary_args('zkctl') + [
        '-log_dir', vtlogroot,
        '-zk.cfg', '1@%s:%s' % (hostname, zk_ports),
        'init'])
@@ -122,27 +140,27 @@ def topo_server_setup(add_bad_host=False):
                        'global:_zkocc': 'localhost:%u'%(zkocc_port_base),}
     json.dump(zk_cell_mapping, f)
   os.environ['ZK_CLIENT_CONFIG'] = config
-  run([binary_path('zk'), 'touch', '-p', '/zk/test_nj/vt'])
-  run([binary_path('zk'), 'touch', '-p', '/zk/test_ny/vt'])
-  run([binary_path('zk'), 'touch', '-p', '/zk/test_ca/vt'])
+  run(binary_args('zk') + ['touch', '-p', '/zk/test_nj/vt'])
+  run(binary_args('zk') + ['touch', '-p', '/zk/test_ny/vt'])
+  run(binary_args('zk') + ['touch', '-p', '/zk/test_ca/vt'])
 
 def topo_server_teardown():
   global zk_port_base
   zk_ports = ":".join([str(zk_port_base), str(zk_port_base+1), str(zk_port_base+2)])
-  run([binary_path('zkctl'),
+  run(binary_args('zkctl') + [
        '-log_dir', vtlogroot,
        '-zk.cfg', '1@%s:%s' % (hostname, zk_ports),
        'teardown'], raise_on_error=False)
 
 def topo_server_wipe():
   # Work around safety check on recursive delete.
-  run([binary_path('zk'), 'rm', '-rf', '/zk/test_nj/vt/*'])
-  run([binary_path('zk'), 'rm', '-rf', '/zk/test_ny/vt/*'])
-  run([binary_path('zk'), 'rm', '-rf', '/zk/global/vt/*'])
+  run(binary_args('zk') + ['rm', '-rf', '/zk/test_nj/vt/*'])
+  run(binary_args('zk') + ['rm', '-rf', '/zk/test_ny/vt/*'])
+  run(binary_args('zk') + ['rm', '-rf', '/zk/global/vt/*'])
 
-  run([binary_path('zk'), 'rm', '-f', '/zk/test_nj/vt'])
-  run([binary_path('zk'), 'rm', '-f', '/zk/test_ny/vt'])
-  run([binary_path('zk'), 'rm', '-f', '/zk/global/vt'])
+  run(binary_args('zk') + ['rm', '-f', '/zk/test_nj/vt'])
+  run(binary_args('zk') + ['rm', '-f', '/zk/test_ny/vt'])
+  run(binary_args('zk') + ['rm', '-f', '/zk/global/vt'])
 
 def topo_server_flags():
   return ['-topo_implementation', 'zookeeper']

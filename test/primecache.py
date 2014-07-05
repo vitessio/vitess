@@ -149,7 +149,7 @@ primary key (id)
     use_primecache = True # easy to test without
     if use_primecache:
       # starting vtprimecache, sleeping for a couple seconds
-      args = [environment.binary_path('vtprimecache'),
+      args = environment.binary_args('vtprimecache') + [
               '-db-config-dba-uname', 'vt_dba',
               '-db-config-dba-charset', 'utf8',
               '-db-config-dba-dbname', 'vt_test_keyspace',

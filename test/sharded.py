@@ -223,7 +223,7 @@ class TestSharded(unittest.TestCase):
     if environment.topo_server_implementation == 'zookeeper':
       # and create zkns on this complex keyspace, make sure a few files are created
       utils.run_vtctl('ExportZknsForKeyspace test_keyspace')
-      out, err = utils.run(environment.binary_path('zk')+' ls -R /zk/test_nj/zk?s/vt/test_keysp*', trap_output=True)
+      out, err = utils.run(environment.binary_argstr('zk')+' ls -R /zk/test_nj/zk?s/vt/test_keysp*', trap_output=True)
       lines = out.splitlines()
       for base in ['-80', '80-']:
         for db_type in ['master', 'replica']:

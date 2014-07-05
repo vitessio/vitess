@@ -229,7 +229,7 @@ zk_port_base = environment.reserve_ports(3)
 def zk_setup(add_bad_host=False):
   global zk_port_base
   zk_ports = ":".join([str(zk_port_base), str(zk_port_base+1), str(zk_port_base+2)])
-  run('%s -log_dir %s -zk.cfg 1@%s:%s init' % (environment.binary_path('zkctl'), environment.vtlogroot, hostname, zk_ports))
+  run('%s -log_dir %s -zk.cfg 1@%s:%s init' % (environment.binary_argstr('zkctl'), environment.vtlogroot, hostname, zk_ports))
   config = environment.tmproot+'/test-zk-client-conf.json'
   with open(config, 'w') as f:
     ca_server = 'localhost:%u' % (zk_port_base+2)
@@ -245,24 +245,24 @@ def zk_setup(add_bad_host=False):
                        'global:_zkocc': 'localhost:%u'%(environment.zkocc_port_base),}
     json.dump(zk_cell_mapping, f)
   os.putenv('ZK_CLIENT_CONFIG', config)
-  run(environment.binary_path('zk')+' touch -p /zk/test_nj/vt')
-  run(environment.binary_path('zk')+' touch -p /zk/test_ny/vt')
-  run(environment.binary_path('zk')+' touch -p /zk/test_ca/vt')
+  run(environment.binary_argstr('zk')+' touch -p /zk/test_nj/vt')
+  run(environment.binary_argstr('zk')+' touch -p /zk/test_ny/vt')
+  run(environment.binary_argstr('zk')+' touch -p /zk/test_ca/vt')
 
 def zk_teardown():
   global zk_port_base
   zk_ports = ":".join([str(zk_port_base), str(zk_port_base+1), str(zk_port_base+2)])
-  run('%s -log_dir %s -zk.cfg 1@%s:%s teardown' % (environment.binary_path('zkctl'), environment.vtlogroot, hostname, zk_ports), raise_on_error=False)
+  run('%s -log_dir %s -zk.cfg 1@%s:%s teardown' % (environment.binary_argstr('zkctl'), environment.vtlogroot, hostname, zk_ports), raise_on_error=False)
 
 def zk_wipe():
   # Work around safety check on recursive delete.
-  run(environment.binary_path('zk')+' rm -rf /zk/test_nj/vt/*')
-  run(environment.binary_path('zk')+' rm -rf /zk/test_ny/vt/*')
-  run(environment.binary_path('zk')+' rm -rf /zk/global/vt/*')
+  run(environment.binary_argstr('zk')+' rm -rf /zk/test_nj/vt/*')
+  run(environment.binary_argstr('zk')+' rm -rf /zk/test_ny/vt/*')
+  run(environment.binary_argstr('zk')+' rm -rf /zk/global/vt/*')
 
-  run(environment.binary_path('zk')+' rm -f /zk/test_nj/vt')
-  run(environment.binary_path('zk')+' rm -f /zk/test_ny/vt')
-  run(environment.binary_path('zk')+' rm -f /zk/global/vt')
+  run(environment.binary_argstr('zk')+' rm -f /zk/test_nj/vt')
+  run(environment.binary_argstr('zk')+' rm -f /zk/test_ny/vt')
+  run(environment.binary_argstr('zk')+' rm -f /zk/global/vt')
 
 def validate_topology(ping_tablets=False):
   if ping_tablets:
@@ -271,11 +271,11 @@ def validate_topology(ping_tablets=False):
     run_vtctl('Validate')
 
 def zk_ls(path):
-  out, err = run(environment.binary_path('zk')+' ls '+path, trap_output=True)
+  out, err = run(environment.binary_argstr('zk')+' ls '+path, trap_output=True)
   return sorted(out.splitlines())
 
 def zk_cat(path):
-  out, err = run(environment.binary_path('zk')+' cat '+path, trap_output=True)
+  out, err = run(environment.binary_argstr('zk')+' cat '+path, trap_output=True)
   return out
 
 def zk_cat_json(path):
@@ -328,7 +328,7 @@ def wait_for_vars(name, port, var=None):
 
 # zkocc helpers
 def zkocc_start(cells=['test_nj'], extra_params=[]):
-  args = [environment.binary_path('zkocc'),
+  args = environment.binary_args('zkocc') + [
           '-port', str(environment.zkocc_port_base),
           '-stderrthreshold=ERROR',
           ] + extra_params + cells
@@ -347,7 +347,7 @@ def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1,
                  socket_file=None, extra_args=None):
   port = vtport or environment.reserve_ports(1)
   secure_port = None
-  args = [environment.binary_path('vtgate'),
+  args = environment.binary_args('vtgate') + [
           '-port', str(port),
           '-cell', cell,
           '-retry-delay', '%ss' % (str(retry_delay)),
@@ -392,7 +392,7 @@ def vtgate_kill(sp):
 
 # vtctl helpers
 def run_vtctl(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs):
-  args = [environment.binary_path('vtctl'), '-log_dir', environment.vtlogroot]
+  args = environment.binary_args('vtctl') + ['-log_dir', environment.vtlogroot]
   args.extend(environment.topo_server_flags())
   args.extend(environment.tablet_manager_protocol_flags())
   args.extend(environment.tabletconn_protocol_flags())
@@ -425,7 +425,7 @@ def run_vtctl_json(clargs):
 
 # vtworker helpers
 def run_vtworker(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs):
-  args = [environment.binary_path('vtworker'),
+  args = environment.binary_args('vtworker') + [
           '-log_dir', environment.vtlogroot,
           '-port', str(environment.reserve_ports(1))]
   args.extend(environment.topo_server_flags())
@@ -463,7 +463,7 @@ def vtclient2(uid, path, query, bindvars=None, user=None, password=None, driver=
     path = path[1:]
   server = "localhost:%u/%s" % (uid, path)
 
-  cmdline = [environment.binary_path('vtclient2'), '-server', server]
+  cmdline = environment.binary_args('vtclient2') + ['-server', server]
   cmdline += environment.topo_server_flags()
   cmdline += environment.tabletconn_protocol_flags()
   if user is not None:

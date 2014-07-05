@@ -239,8 +239,7 @@ class VtoccTestEnv(TestEnv):
 
   def setUp(self):
     # start mysql
-    res = subprocess.call([
-        environment.binary_path("mysqlctl"),
+    res = subprocess.call(environment.binary_args("mysqlctl") + [
         "-tablet_uid",  self.tabletuid,
         "-port", str(self.port),
         "-mysql_port", str(self.mysqlport),
@@ -283,8 +282,7 @@ class VtoccTestEnv(TestEnv):
     schema_override = os.path.join(environment.tmproot, 'schema_override.json')
     self.create_schema_override(schema_override)
 
-    occ_args = [
-      environment.binary_path('vtocc'),
+    occ_args = environment.binary_args('vtocc') + [
       "-port", str(self.port),
       "-customrules", customrules,
       "-log_dir", environment.vtlogroot,
@@ -339,8 +337,7 @@ class VtoccTestEnv(TestEnv):
       self.vtocc.terminate()
 
     # stop mysql, delete directory
-    subprocess.call([
-        environment.binary_path('mysqlctl'),
+    subprocess.call(environment.binary_args('mysqlctl') + [
         "-tablet_uid",  self.tabletuid,
         "teardown", "-force"
         ])

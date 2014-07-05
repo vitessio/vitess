@@ -72,7 +72,7 @@ class Tablet(object):
     if all_extra_my_cnf:
       env = os.environ.copy()
       env['EXTRA_MY_CNF'] = ":".join(all_extra_my_cnf)
-    args = [environment.binary_path('mysqlctl'),
+    args = environment.binary_args('mysqlctl') + [
             '-log_dir', environment.vtlogroot,
             '-tablet_uid', str(self.tablet_uid)]
     if with_ports:
@@ -292,7 +292,7 @@ class Tablet(object):
     The process is also saved in self.proc, so it's easy to kill as well.
     """
     environment.prog_compile('vtaction')
-    args = [environment.binary_path('vttablet'),
+    args = environment.binary_args('vttablet') + [
             '-port', '%s' % (port or self.port),
             '-tablet-path', self.tablet_alias,
             '-log_dir', environment.vtlogroot]
@@ -377,7 +377,7 @@ class Tablet(object):
 
     # wait for zookeeper PID just to be sure we have it
     if environment.topo_server_implementation == 'zookeeper':
-      utils.run(environment.binary_path('zk')+' wait -e ' + self.zk_pid, stdout=utils.devnull)
+      utils.run(environment.binary_argstr('zk')+' wait -e ' + self.zk_pid, stdout=utils.devnull)
 
     # wait for query service to be in the right state
     if wait_for_state:

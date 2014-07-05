@@ -141,7 +141,7 @@ class TestReparent(unittest.TestCase):
       self.fail("didn't find the right error strings in failed ScrapTablet: " + stderr)
 
     # Should interrupt and fail
-    args = [environment.binary_path('vtctl'),
+    args = environment.binary_args('vtctl') + [
             '-log_dir', environment.vtlogroot,
             '-wait-time', '10s']
     args.extend(environment.topo_server_flags())
@@ -366,7 +366,7 @@ class TestReparent(unittest.TestCase):
       tablet_62344.scrap(force=True)
       # we have some automated tools that do this too, so it's good to simulate
       if environment.topo_server_implementation == 'zookeeper':
-        utils.run(environment.binary_path('zk')+' rm -rf ' + tablet_62344.zk_tablet_path)
+        utils.run(environment.binary_argstr('zk')+' rm -rf ' + tablet_62344.zk_tablet_path)
 
     # update zk with the new graph
     utils.run_vtctl('ShardExternallyReparented test_keyspace/0 %s' % tablet_62044.tablet_alias, auto_log=True)

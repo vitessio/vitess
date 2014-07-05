@@ -51,7 +51,7 @@ class Vtctld(object):
     return data["Keyspaces"]
 
   def start(self):
-    args = [environment.binary_path('vtctld'),
+    args = environment.binary_args('vtctld') + [
             '-debug',
             '-templates', environment.vttop + '/go/cmd/vtctld/templates',
             '-log_dir', environment.vtlogroot,
