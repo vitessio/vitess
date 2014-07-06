@@ -7,7 +7,7 @@ package sqlparser
 import (
 	"bytes"
 	"fmt"
-	"io"
+	"strings"
 
 	"github.com/youtube/vitess/go/sqltypes"
 )
@@ -15,19 +15,19 @@ import (
 const EOFCHAR = 0x100
 
 type Tokenizer struct {
-	InStream      io.ByteReader
+	InStream      *strings.Reader
 	AllowComments bool
 	ForceEOF      bool
 	lastChar      uint16
 	position      int
-	lastToken     *Node
+	errorToken    []byte
 	LastError     string
 	posVarIndex   int
 	ParseTree     Statement
 }
 
 func NewStringTokenizer(s string) *Tokenizer {
-	b := bytes.NewBufferString(s)
+	b := strings.NewReader(s)
 	return &Tokenizer{InStream: b}
 }
 
@@ -105,37 +105,34 @@ var keywords = map[string]int{
 
 func (tkn *Tokenizer) Lex(lval *yySymType) int {
 	parseNode := tkn.Scan()
+	tkn.errorToken = parseNode.Value
 	for parseNode.Type == COMMENT {
 		if tkn.AllowComments {
 			break
 		}
 		parseNode = tkn.Scan()
 	}
-	tkn.lastToken = parseNode
 	lval.node = parseNode
 	return parseNode.Type
 }
 
 func (tkn *Tokenizer) Error(err string) {
 	buf := bytes.NewBuffer(make([]byte, 0, 32))
-	fmt.Fprintf(buf, "%s at position %v near %s", err, tkn.position, string(tkn.lastToken.Value))
+	if tkn.errorToken != nil {
+		fmt.Fprintf(buf, "%s at position %v near %s", err, tkn.position, tkn.errorToken)
+	} else {
+		fmt.Fprintf(buf, "%s at position %v", err, tkn.position)
+	}
 	tkn.LastError = buf.String()
 }
 
 func (tkn *Tokenizer) Scan() (parseNode *Node) {
-	defer func() {
-		if x := recover(); x != nil {
-			err := x.(ParserError)
-			parseNode = NewSimpleParseNode(LEX_ERROR, err.Error())
-		}
-	}()
-
 	if tkn.ForceEOF {
 		return NewSimpleParseNode(0, "")
 	}
 
 	if tkn.lastChar == 0 {
-		tkn.Next()
+		tkn.next()
 	}
 	tkn.skipBlank()
 	switch ch := tkn.lastChar; {
@@ -146,7 +143,7 @@ func (tkn *Tokenizer) Scan() (parseNode *Node) {
 	case ch == ':':
 		return tkn.scanBindVar(VALUE_ARG)
 	default:
-		tkn.Next()
+		tkn.next()
 		switch ch {
 		case EOFCHAR:
 			return NewSimpleParseNode(0, "")
@@ -164,17 +161,17 @@ func (tkn *Tokenizer) Scan() (parseNode *Node) {
 		case '/':
 			switch tkn.lastChar {
 			case '/':
-				tkn.Next()
+				tkn.next()
 				return tkn.scanCommentType1("//")
 			case '*':
-				tkn.Next()
+				tkn.next()
 				return tkn.scanCommentType2()
 			default:
 				return NewSimpleParseNode(int(ch), string(ch))
 			}
 		case '-':
 			if tkn.lastChar == '-' {
-				tkn.Next()
+				tkn.next()
 				return tkn.scanCommentType1("--")
 			} else {
 				return NewSimpleParseNode(int(ch), string(ch))
@@ -182,13 +179,13 @@ func (tkn *Tokenizer) Scan() (parseNode *Node) {
 		case '<':
 			switch tkn.lastChar {
 			case '>':
-				tkn.Next()
+				tkn.next()
 				return NewSimpleParseNode(NE, "<>")
 			case '=':
-				tkn.Next()
+				tkn.next()
 				switch tkn.lastChar {
 				case '>':
-					tkn.Next()
+					tkn.next()
 					return NewSimpleParseNode(NULL_SAFE_EQUAL, "<=>")
 				default:
 					return NewSimpleParseNode(LE, "<=")
@@ -198,17 +195,17 @@ func (tkn *Tokenizer) Scan() (parseNode *Node) {
 			}
 		case '>':
 			if tkn.lastChar == '=' {
-				tkn.Next()
+				tkn.next()
 				return NewSimpleParseNode(GE, ">=")
 			} else {
 				return NewSimpleParseNode(int(ch), string(ch))
 			}
 		case '!':
 			if tkn.lastChar == '=' {
-				tkn.Next()
+				tkn.next()
 				return NewSimpleParseNode(NE, "!=")
 			} else {
-				return NewSimpleParseNode(LEX_ERROR, "unexpected character '!'")
+				return NewSimpleParseNode(LEX_ERROR, "!")
 			}
 		case '\'', '"':
 			return tkn.scanString(ch)
@@ -217,7 +214,7 @@ func (tkn *Tokenizer) Scan() (parseNode *Node) {
 			tok.Type = ID
 			return tok
 		default:
-			return NewSimpleParseNode(LEX_ERROR, fmt.Sprintf("unexpected character '%c'", ch))
+			return NewSimpleParseNode(LEX_ERROR, fmt.Sprintf("%c", ch))
 		}
 	}
 }
@@ -225,7 +222,7 @@ func (tkn *Tokenizer) Scan() (parseNode *Node) {
 func (tkn *Tokenizer) skipBlank() {
 	ch := tkn.lastChar
 	for ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' {
-		tkn.Next()
+		tkn.next()
 		ch = tkn.lastChar
 	}
 }
@@ -233,7 +230,7 @@ func (tkn *Tokenizer) skipBlank() {
 func (tkn *Tokenizer) scanIdentifier(Type int) *Node {
 	buffer := bytes.NewBuffer(make([]byte, 0, 8))
 	buffer.WriteByte(byte(tkn.lastChar))
-	for tkn.Next(); isLetter(tkn.lastChar) || isDigit(tkn.lastChar); tkn.Next() {
+	for tkn.next(); isLetter(tkn.lastChar) || isDigit(tkn.lastChar); tkn.next() {
 		buffer.WriteByte(byte(tkn.lastChar))
 	}
 	lowered := bytes.ToLower(buffer.Bytes())
@@ -246,7 +243,7 @@ func (tkn *Tokenizer) scanIdentifier(Type int) *Node {
 func (tkn *Tokenizer) scanBindVar(Type int) *Node {
 	buffer := bytes.NewBuffer(make([]byte, 0, 8))
 	buffer.WriteByte(byte(tkn.lastChar))
-	for tkn.Next(); isLetter(tkn.lastChar) || isDigit(tkn.lastChar) || tkn.lastChar == '.'; tkn.Next() {
+	for tkn.next(); isLetter(tkn.lastChar) || isDigit(tkn.lastChar) || tkn.lastChar == '.'; tkn.next() {
 		buffer.WriteByte(byte(tkn.lastChar))
 	}
 	if buffer.Len() == 1 {
@@ -322,10 +319,10 @@ func (tkn *Tokenizer) scanString(delim uint16) *Node {
 	buffer := bytes.NewBuffer(make([]byte, 0, 8))
 	for {
 		ch := tkn.lastChar
-		tkn.Next()
+		tkn.next()
 		if ch == delim {
 			if tkn.lastChar == delim {
-				tkn.Next()
+				tkn.next()
 			} else {
 				break
 			}
@@ -338,7 +335,7 @@ func (tkn *Tokenizer) scanString(delim uint16) *Node {
 			} else {
 				ch = uint16(decodedChar)
 			}
-			tkn.Next()
+			tkn.next()
 		}
 		if ch == EOFCHAR {
 			return NewParseNode(LEX_ERROR, buffer.Bytes())
@@ -371,6 +368,10 @@ func (tkn *Tokenizer) scanCommentType2() *Node {
 				tkn.ConsumeNext(buffer)
 				break
 			}
+			continue
+		}
+		if tkn.lastChar == EOFCHAR {
+			return NewParseNode(LEX_ERROR, buffer.Bytes())
 		}
 		tkn.ConsumeNext(buffer)
 	}
@@ -378,21 +379,18 @@ func (tkn *Tokenizer) scanCommentType2() *Node {
 }
 
 func (tkn *Tokenizer) ConsumeNext(buffer *bytes.Buffer) {
-	// Never consume an EOF
 	if tkn.lastChar == EOFCHAR {
-		panic(NewParserError("unexpected EOF"))
+		// This should never happen.
+		panic("unexpected EOF")
 	}
 	buffer.WriteByte(byte(tkn.lastChar))
-	tkn.Next()
+	tkn.next()
 }
 
-func (tkn *Tokenizer) Next() {
+func (tkn *Tokenizer) next() {
 	if ch, err := tkn.InStream.ReadByte(); err != nil {
-		if err != io.EOF {
-			panic(NewParserError("%s", err.Error()))
-		} else {
-			tkn.lastChar = EOFCHAR
-		}
+		// Only EOF is possible.
+		tkn.lastChar = EOFCHAR
 	} else {
 		tkn.lastChar = uint16(ch)
 	}
