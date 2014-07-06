@@ -42,7 +42,7 @@ func TestExec(t *testing.T) {
 		plan, err := ExecParse(tcase.input, func(name string) (*schema.Table, bool) {
 			r, ok := testSchema[name]
 			return r, ok
-		}, true)
+		})
 		var out string
 		if err != nil {
 			out = err.Error()
@@ -83,7 +83,7 @@ func TestCustomExec(t *testing.T) {
 		for _, file := range files {
 			t.Logf("Testing file %s", file)
 			for tcase := range iterateExecFile(file) {
-				plan, err := ExecParse(tcase.input, getter, false)
+				plan, err := ExecParse(tcase.input, getter)
 				var out string
 				if err != nil {
 					out = err.Error()
@@ -104,7 +104,7 @@ func TestCustomExec(t *testing.T) {
 
 func TestStreamExec(t *testing.T) {
 	for tcase := range iterateExecFile("stream_cases.txt") {
-		plan, err := StreamExecParse(tcase.input, true)
+		plan, err := StreamExecParse(tcase.input)
 		var out string
 		if err != nil {
 			out = err.Error()
@@ -200,56 +200,6 @@ func TestRouting(t *testing.T) {
 		if outstr != tcase.output {
 			t.Error(fmt.Sprintf("Line:%v\n%s\n%s", tcase.lineno, tcase.output, outstr))
 		}
-	}
-}
-
-func TestAnonymizer(t *testing.T) {
-	testSchema := loadSchema("schema_test.json")
-	sql := "select 'abcd', 20, 30.0, eid from a where 1=eid and name='3'"
-	plan, err := ExecParse(sql, func(name string) (*schema.Table, bool) {
-		r, ok := testSchema[name]
-		return r, ok
-	}, true)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-	want := "select ?, ?, ?, eid from a where ? = eid and name = ?"
-	if plan.DisplayQuery != want {
-		t.Errorf("got %q, want %q", plan.DisplayQuery, want)
-	}
-
-	plan, err = ExecParse(sql, func(name string) (*schema.Table, bool) {
-		r, ok := testSchema[name]
-		return r, ok
-	}, false)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-	want = "select 'abcd', 20, 30.0, eid from a where 1=eid and name='3'"
-	if plan.DisplayQuery != want {
-		t.Errorf("got %q, want %q", plan.DisplayQuery, want)
-	}
-
-	splan, err := StreamExecParse(sql, true)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-	want = "select ?, ?, ?, eid from a where ? = eid and name = ?"
-	if splan.DisplayQuery != want {
-		t.Errorf("got %q, want %q", splan.DisplayQuery, want)
-	}
-
-	splan, err = StreamExecParse(sql, false)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-	want = "select 'abcd', 20, 30.0, eid from a where 1=eid and name='3'"
-	if splan.DisplayQuery != want {
-		t.Errorf("got %q, want %q", splan.DisplayQuery, want)
 	}
 }
 

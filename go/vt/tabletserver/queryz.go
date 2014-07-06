@@ -133,7 +133,7 @@ func queryzHandler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		Value := &queryzRow{
-			Query: wrappable(plan.DisplayQuery),
+			Query: wrappable(v),
 			Table: plan.TableName,
 			Plan:  plan.PlanId,
 		}

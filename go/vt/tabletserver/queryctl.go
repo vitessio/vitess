@@ -39,7 +39,6 @@ func init() {
 	flag.Float64Var(&qsConfig.QueryTimeout, "queryserver-config-query-timeout", DefaultQsConfig.QueryTimeout, "query server query timeout")
 	flag.Float64Var(&qsConfig.IdleTimeout, "queryserver-config-idle-timeout", DefaultQsConfig.IdleTimeout, "query server idle timeout")
 	flag.Float64Var(&qsConfig.SpotCheckRatio, "queryserver-config-spot-check-ratio", DefaultQsConfig.SpotCheckRatio, "query server rowcache spot check frequency")
-	flag.BoolVar(&qsConfig.SensitiveMode, "queryserver-config-sensitive-mode", DefaultQsConfig.SensitiveMode, "enabling sensitive mode anonymizes queries when displaying diagnostics")
 	flag.BoolVar(&qsConfig.StrictMode, "queryserver-config-strict-mode", DefaultQsConfig.StrictMode, "allow only predictable DMLs and enforces MySQL's STRICT_TRANS_TABLES")
 	flag.StringVar(&qsConfig.RowCache.Binary, "rowcache-bin", DefaultQsConfig.RowCache.Binary, "rowcache binary file")
 	flag.IntVar(&qsConfig.RowCache.Memory, "rowcache-memory", DefaultQsConfig.RowCache.Memory, "rowcache max memory usage in MB")
@@ -101,7 +100,6 @@ type Config struct {
 	IdleTimeout        float64
 	RowCache           RowCacheConfig
 	SpotCheckRatio     float64
-	SensitiveMode      bool
 	StrictMode         bool
 }
 
@@ -126,7 +124,6 @@ var DefaultQsConfig = Config{
 	StreamBufferSize:   32 * 1024,
 	RowCache:           RowCacheConfig{Memory: -1, TcpPort: -1, Connections: -1, Threads: -1},
 	SpotCheckRatio:     0,
-	SensitiveMode:      false,
 	StrictMode:         true,
 }
 

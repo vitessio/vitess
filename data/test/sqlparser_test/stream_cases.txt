@@ -1,7 +1,6 @@
 # select
 "select * from a"
 {
-  "DisplayQuery": "select * from a",
   "FullQuery": "select * from a"
 }
 
@@ -12,7 +11,6 @@
 # union
 "select * from a union select * from b"
 {
-  "DisplayQuery": "select * from a union select * from b",
   "FullQuery": "select * from a union select * from b"
 }
 
