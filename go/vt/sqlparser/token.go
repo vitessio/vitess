@@ -14,6 +14,8 @@ import (
 
 const EOFCHAR = 0x100
 
+// Tokenizer is the struct used to generate SQL
+// tokens for the parser.
 type Tokenizer struct {
 	InStream      *strings.Reader
 	AllowComments bool
@@ -26,9 +28,10 @@ type Tokenizer struct {
 	ParseTree     Statement
 }
 
-func NewStringTokenizer(s string) *Tokenizer {
-	b := strings.NewReader(s)
-	return &Tokenizer{InStream: b}
+// NewStringTokenizer creates a new Tokenizer for the
+// sql string.
+func NewStringTokenizer(sql string) *Tokenizer {
+	return &Tokenizer{InStream: strings.NewReader(sql)}
 }
 
 var keywords = map[string]int{
@@ -103,6 +106,8 @@ var keywords = map[string]int{
 	"using":  USING,
 }
 
+// Lex returns the next token form the Tokenizer.
+// This function is used by go yacc.
 func (tkn *Tokenizer) Lex(lval *yySymType) int {
 	typ, val := tkn.Scan()
 	for typ == COMMENT {
@@ -112,13 +117,14 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 		typ, val = tkn.Scan()
 	}
 	switch typ {
-	case ID, STRING, NUMBER, VALUE_ARG, COMMENT, LEX_ERROR:
+	case ID, STRING, NUMBER, VALUE_ARG, COMMENT:
 		lval.bytes = val
 	}
 	tkn.errorToken = val
 	return typ
 }
 
+// Error is called by go yacc if there's a parsing error.
 func (tkn *Tokenizer) Error(err string) {
 	buf := bytes.NewBuffer(make([]byte, 0, 32))
 	if tkn.errorToken != nil {
@@ -129,6 +135,8 @@ func (tkn *Tokenizer) Error(err string) {
 	tkn.LastError = buf.String()
 }
 
+// Scan scans the tokenizer for the next token and returns
+// the token type and an optional value.
 func (tkn *Tokenizer) Scan() (int, []byte) {
 	if tkn.ForceEOF {
 		return 0, nil

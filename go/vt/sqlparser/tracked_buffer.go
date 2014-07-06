@@ -9,6 +9,8 @@ import (
 	"fmt"
 )
 
+// ParserError: To be deprecated.
+// TODO(sougou): deprecate.
 type ParserError struct {
 	Message string
 }
@@ -24,25 +26,6 @@ func (err ParserError) Error() string {
 func handleError(err *error) {
 	if x := recover(); x != nil {
 		*err = x.(ParserError)
-	}
-}
-
-func Parse(sql string) (Statement, error) {
-	tokenizer := NewStringTokenizer(sql)
-	if yyParse(tokenizer) != 0 {
-		return nil, NewParserError("%s", tokenizer.LastError)
-	}
-	return tokenizer.ParseTree, nil
-}
-
-// AnonymizedFormatter is a formatter that
-// anonymizes all values in the SQL.
-func AnonymizedFormatter(buf *TrackedBuffer, node SQLNode) {
-	switch node := node.(type) {
-	case StrVal, NumVal:
-		buf.Fprintf("?")
-	default:
-		node.Format(buf)
 	}
 }
 
@@ -132,4 +115,15 @@ func (buf *TrackedBuffer) WriteArg(arg string) {
 
 func (buf *TrackedBuffer) ParsedQuery() *ParsedQuery {
 	return &ParsedQuery{buf.String(), buf.bindLocations}
+}
+
+// AnonymizedFormatter is a formatter that
+// anonymizes all values in the SQL.
+func AnonymizedFormatter(buf *TrackedBuffer, node SQLNode) {
+	switch node := node.(type) {
+	case StrVal, NumVal:
+		buf.Fprintf("?")
+	default:
+		node.Format(buf)
+	}
 }

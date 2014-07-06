@@ -626,7 +626,7 @@ func execAnalyzeFrom(tableExprs TableExprs) (tablename string, hasHints bool) {
 	return collectTableName(node.Expr), node.Hints != nil
 }
 
-func collectTableName(node SQLNode) string {
+func collectTableName(node SimpleTableExpr) string {
 	if n, ok := node.(*TableName); ok && n.Qualifier == nil {
 		return string(n.Name)
 	}

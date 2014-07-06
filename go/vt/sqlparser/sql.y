@@ -8,18 +8,15 @@ package sqlparser
 import "bytes"
 
 func SetParseTree(yylex interface{}, stmt Statement) {
-  tn := yylex.(*Tokenizer)
-  tn.ParseTree = stmt
+  yylex.(*Tokenizer).ParseTree = stmt
 }
 
 func SetAllowComments(yylex interface{}, allow bool) {
-  tn := yylex.(*Tokenizer)
-  tn.AllowComments = allow
+  yylex.(*Tokenizer).AllowComments = allow
 }
 
 func ForceEOF(yylex interface{}) {
-  tn := yylex.(*Tokenizer)
-  tn.ForceEOF = true
+  yylex.(*Tokenizer).ForceEOF = true
 }
 
 var (
@@ -66,9 +63,10 @@ var (
   updateExpr  *UpdateExpr
 }
 
+%token LEX_ERROR
 %token <empty> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT FOR
 %token <empty> ALL DISTINCT AS EXISTS IN IS LIKE BETWEEN NULL ASC DESC VALUES INTO DUPLICATE KEY DEFAULT SET LOCK
-%token <bytes> ID STRING NUMBER VALUE_ARG COMMENT LEX_ERROR
+%token <bytes> ID STRING NUMBER VALUE_ARG COMMENT
 %token <empty> LE GE NE NULL_SAFE_EQUAL
 %token <empty> '(' '=' '<' '>' '~'
 

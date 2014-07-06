@@ -11,11 +11,6 @@ import (
 )
 
 const (
-	ROUTE_BY_CONDITION = iota
-	ROUTE_BY_VALUE
-)
-
-const (
 	EID_NODE = iota
 	VALUE_NODE
 	LIST_NODE
@@ -23,8 +18,7 @@ const (
 )
 
 type RoutingPlan struct {
-	routingType int
-	criteria    SQLNode
+	criteria SQLNode
 }
 
 func GetShardList(sql string, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) (shardlist []int, err error) {
@@ -43,16 +37,14 @@ func buildPlan(sql string) (plan *RoutingPlan) {
 }
 
 func shardListFromPlan(plan *RoutingPlan, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) (shardList []int) {
-	if plan.routingType == ROUTE_BY_VALUE {
-		index := findInsertShard(plan.criteria.(Values), bindVariables, tabletKeys)
-		return []int{index}
-	}
-
 	if plan.criteria == nil {
 		return makeList(0, len(tabletKeys))
 	}
 
 	switch criteria := plan.criteria.(type) {
+	case Values:
+		index := findInsertShard(criteria, bindVariables, tabletKeys)
+		return []int{index}
 	case *ComparisonExpr:
 		switch criteria.Operator {
 		case "=", "<=>":
@@ -86,12 +78,10 @@ func getRoutingPlan(statement Statement) (plan *RoutingPlan) {
 		if sel, ok := ins.Rows.(SelectStatement); ok {
 			return getRoutingPlan(sel)
 		}
-		plan.routingType = ROUTE_BY_VALUE
 		plan.criteria = routingAnalyzeValues(ins.Rows.(Values))
 		return plan
 	}
 	var where *Where
-	plan.routingType = ROUTE_BY_CONDITION
 	switch stmt := statement.(type) {
 	case *Select:
 		where = stmt.Where
