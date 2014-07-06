@@ -27,68 +27,12 @@ func handleError(err *error) {
 	}
 }
 
-type Node struct {
-	Type  int
-	Value []byte
-	Sub   []SQLNode
-}
-
 func Parse(sql string) (Statement, error) {
 	tokenizer := NewStringTokenizer(sql)
 	if yyParse(tokenizer) != 0 {
 		return nil, NewParserError("%s", tokenizer.LastError)
 	}
 	return tokenizer.ParseTree, nil
-}
-
-func NewSimpleParseNode(Type int, value string) *Node {
-	return &Node{Type: Type, Value: []byte(value)}
-}
-
-func NewParseNode(Type int, value []byte) *Node {
-	return &Node{Type: Type, Value: value}
-}
-
-func (node *Node) PushTwo(left SQLNode, right SQLNode) *Node {
-	node.Push(left)
-	return node.Push(right)
-}
-
-func (node *Node) Push(value SQLNode) *Node {
-	node.Sub = append(node.Sub, value)
-	return node
-}
-
-func (node *Node) Pop() *Node {
-	node.Sub = node.Sub[:len(node.Sub)-1]
-	return node
-}
-
-func (node *Node) At(index int) SQLNode {
-	return node.Sub[index]
-}
-
-func (node *Node) NodeAt(index int) *Node {
-	return node.At(index).(*Node)
-}
-
-func (node *Node) Len() int {
-	return len(node.Sub)
-}
-
-func (node *Node) LowerCase() {
-	node.Value = bytes.ToLower(node.Value)
-}
-
-func (node *Node) String() (out string) {
-	buf := NewTrackedBuffer(nil)
-	buf.Fprintf("%v", node)
-	return buf.String()
-}
-
-// Format generates the SQL for the current node.
-func (node *Node) Format(buf *TrackedBuffer) {
-	buf.Fprintf("Unknown: %s", node.Value)
 }
 
 // AnonymizedFormatter is a formatter that
