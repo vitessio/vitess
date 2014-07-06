@@ -23,15 +23,16 @@ func ForceEOF(yylex interface{}) {
 }
 
 var (
-  SHARE = []byte("share")
-  MODE  = []byte("mode")
+  SHARE =        []byte("share")
+  MODE  =        []byte("mode")
+  IF_BYTES =     []byte("if")
+  VALUES_BYTES = []byte("values")
 )
 
 %}
 
 %union {
   empty       struct{}
-  node        *Node
   statement   Statement
   selStmt     SelectStatement
   byt         byte
@@ -65,30 +66,29 @@ var (
   updateExpr  *UpdateExpr
 }
 
-%token <node> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT COMMENT FOR
-%token <node> ALL DISTINCT AS EXISTS IN IS LIKE BETWEEN NULL ASC DESC VALUES INTO DUPLICATE KEY DEFAULT SET LOCK
-%token <node> ID STRING NUMBER VALUE_ARG
-%token <node> LE GE NE NULL_SAFE_EQUAL
-%token <node> LEX_ERROR
-%token <node> '(' '=' '<' '>' '~'
+%token <empty> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT FOR
+%token <empty> ALL DISTINCT AS EXISTS IN IS LIKE BETWEEN NULL ASC DESC VALUES INTO DUPLICATE KEY DEFAULT SET LOCK
+%token <bytes> ID STRING NUMBER VALUE_ARG COMMENT LEX_ERROR
+%token <empty> LE GE NE NULL_SAFE_EQUAL
+%token <empty> '(' '=' '<' '>' '~'
 
-%left <node> UNION MINUS EXCEPT INTERSECT
-%left <node> ','
-%left <node> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
-%left <node> ON
-%left <node> AND OR
-%right <node> NOT
-%left <node> '&' '|' '^'
-%left <node> '+' '-'
-%left <node> '*' '/' '%'
-%nonassoc <node> '.'
-%left <node> UNARY
-%right <node> CASE, WHEN, THEN, ELSE
-%left <node> END
+%left <empty> UNION MINUS EXCEPT INTERSECT
+%left <empty> ','
+%left <empty> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
+%left <empty> ON
+%left <empty> AND OR
+%right <empty> NOT
+%left <empty> '&' '|' '^'
+%left <empty> '+' '-'
+%left <empty> '*' '/' '%'
+%nonassoc <empty> '.'
+%left <empty> UNARY
+%right <empty> CASE, WHEN, THEN, ELSE
+%left <empty> END
 
 // DDL Tokens
-%token <node> CREATE ALTER DROP RENAME
-%token <node> TABLE INDEX VIEW TO IGNORE IF UNIQUE USING
+%token <empty> CREATE ALTER DROP RENAME
+%token <empty> TABLE INDEX VIEW TO IGNORE IF UNIQUE USING
 
 %start any_command
 
@@ -138,8 +138,8 @@ var (
 %type <updateExprs> update_list
 %type <updateExpr> update_expression
 %type <empty> exists_opt not_exists_opt ignore_opt non_rename_operation to_opt constraint_opt using_opt
-%type <node> sql_id
-%type <node> force_eof
+%type <bytes> sql_id
+%type <empty> force_eof
 
 %%
 
@@ -200,52 +200,52 @@ set_statement:
 create_statement:
   CREATE TABLE not_exists_opt ID force_eof
   {
-    $$ = &DDL{Action: AST_CREATE, NewName: $4.Value}
+    $$ = &DDL{Action: AST_CREATE, NewName: $4}
   }
 | CREATE constraint_opt INDEX sql_id using_opt ON ID force_eof
   {
     // Change this to an alter statement
-    $$ = &DDL{Action: AST_ALTER, Table: $7.Value, NewName: $7.Value}
+    $$ = &DDL{Action: AST_ALTER, Table: $7, NewName: $7}
   }
 | CREATE VIEW sql_id force_eof
   {
-    $$ = &DDL{Action: AST_CREATE, NewName: $3.Value}
+    $$ = &DDL{Action: AST_CREATE, NewName: $3}
   }
 
 alter_statement:
   ALTER ignore_opt TABLE ID non_rename_operation force_eof
   {
-    $$ = &DDL{Action: AST_ALTER, Table: $4.Value, NewName: $4.Value}
+    $$ = &DDL{Action: AST_ALTER, Table: $4, NewName: $4}
   }
 | ALTER ignore_opt TABLE ID RENAME to_opt ID
   {
     // Change this to a rename statement
-    $$ = &DDL{Action: AST_RENAME, Table: $4.Value, NewName: $7.Value}
+    $$ = &DDL{Action: AST_RENAME, Table: $4, NewName: $7}
   }
 | ALTER VIEW sql_id force_eof
   {
-    $$ = &DDL{Action: AST_ALTER, Table: $3.Value, NewName: $3.Value}
+    $$ = &DDL{Action: AST_ALTER, Table: $3, NewName: $3}
   }
 
 rename_statement:
   RENAME TABLE ID TO ID
   {
-    $$ = &DDL{Action: AST_RENAME, Table: $3.Value, NewName: $5.Value}
+    $$ = &DDL{Action: AST_RENAME, Table: $3, NewName: $5}
   }
 
 drop_statement:
   DROP TABLE exists_opt ID
   {
-    $$ = &DDL{Action: AST_DROP, Table: $4.Value}
+    $$ = &DDL{Action: AST_DROP, Table: $4}
   }
 | DROP INDEX sql_id ON ID
   {
     // Change this to an alter statement
-    $$ = &DDL{Action: AST_ALTER, Table: $5.Value, NewName: $5.Value}
+    $$ = &DDL{Action: AST_ALTER, Table: $5, NewName: $5}
   }
 | DROP VIEW exists_opt sql_id force_eof
   {
-    $$ = &DDL{Action: AST_DROP, Table: $4.Value}
+    $$ = &DDL{Action: AST_DROP, Table: $4}
   }
 
 comment_opt:
@@ -264,7 +264,7 @@ comment_list:
   }
 | comment_list COMMENT
   {
-    $$ = append($1, $2.Value)
+    $$ = append($1, $2)
   }
 
 union_op:
@@ -319,7 +319,7 @@ select_expression:
   }
 | ID '.' '*'
   {
-    $$ = &StarExpr{TableName: $1.Value}
+    $$ = &StarExpr{TableName: $1}
   }
 
 expression:
@@ -338,11 +338,11 @@ as_lower_opt:
   }
 | sql_id
   {
-    $$ = $1.Value
+    $$ = $1
   }
 | AS sql_id
   {
-    $$ = $2.Value
+    $$ = $2
   }
 
 table_expression_list:
@@ -379,11 +379,11 @@ as_opt:
   }
 | ID
   {
-    $$ = $1.Value
+    $$ = $1
   }
 | AS ID
   {
-    $$ = $2.Value
+    $$ = $2
   }
 
 join_type:
@@ -427,11 +427,11 @@ join_type:
 simple_table_expression:
 ID
   {
-    $$ = &TableName{Name: $1.Value}
+    $$ = &TableName{Name: $1}
   }
 | ID '.' ID
   {
-    $$ = &TableName{Qualifier: $1.Value, Name: $3.Value}
+    $$ = &TableName{Qualifier: $1, Name: $3}
   }
 | subquery
   {
@@ -441,11 +441,11 @@ ID
 dml_table_expression:
 ID
   {
-    $$ = &TableName{Name: $1.Value}
+    $$ = &TableName{Name: $1}
   }
 | ID '.' ID
   {
-    $$ = &TableName{Qualifier: $1.Value, Name: $3.Value}
+    $$ = &TableName{Qualifier: $1, Name: $3}
   }
 
 index_hint_list:
@@ -468,11 +468,11 @@ index_hint_list:
 index_list:
   sql_id
   {
-    $$ = [][]byte{$1.Value}
+    $$ = [][]byte{$1}
   }
 | index_list ',' sql_id
   {
-    $$ = append($1, $3.Value)
+    $$ = append($1, $3)
   }
 
 where_expression_opt:
@@ -683,15 +683,15 @@ value_expression:
   }
 | sql_id '(' ')'
   {
-    $$ = &FuncExpr{Name: $1.Value}
+    $$ = &FuncExpr{Name: $1}
   }
 | sql_id '(' select_expression_list ')'
   {
-    $$ = &FuncExpr{Name: $1.Value, Exprs: $3}
+    $$ = &FuncExpr{Name: $1, Exprs: $3}
   }
 | sql_id '(' DISTINCT select_expression_list ')'
   {
-    $$ = &FuncExpr{Name: $1.Value, Distinct: true, Exprs: $4}
+    $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4}
   }
 | keyword_as_func '(' select_expression_list ')'
   {
@@ -705,11 +705,11 @@ value_expression:
 keyword_as_func:
   IF
   {
-    $$ = $1.Value
+    $$ = IF_BYTES
   }
 | VALUES
   {
-    $$ = $1.Value
+    $$ = VALUES_BYTES
   }
 
 unary_operator:
@@ -769,25 +769,25 @@ else_expression_opt:
 column_name:
   sql_id
   {
-    $$ = &ColName{Name: $1.Value}
+    $$ = &ColName{Name: $1}
   }
 | ID '.' sql_id
   {
-    $$ = &ColName{Qualifier: $1.Value, Name: $3.Value}
+    $$ = &ColName{Qualifier: $1, Name: $3}
   }
 
 value:
   STRING
   {
-    $$ = StrVal($1.Value)
+    $$ = StrVal($1)
   }
 | NUMBER
   {
-    $$ = NumVal($1.Value)
+    $$ = NumVal($1)
   }
 | VALUE_ARG
   {
-    $$ = ValArg($1.Value)
+    $$ = ValArg($1)
   }
 | NULL
   {
@@ -873,11 +873,11 @@ lock_opt:
   }
 | LOCK IN sql_id sql_id
   {
-    if !bytes.Equal($3.Value, SHARE) {
+    if !bytes.Equal($3, SHARE) {
       yylex.Error("expecting share")
       return 1
     }
-    if !bytes.Equal($4.Value, MODE) {
+    if !bytes.Equal($4, MODE) {
       yylex.Error("expecting mode")
       return 1
     }
@@ -973,7 +973,7 @@ using_opt:
 sql_id:
   ID
   {
-    $$.LowerCase()
+    $$ = bytes.ToLower($1)
   }
 
 force_eof:

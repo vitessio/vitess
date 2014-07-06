@@ -25,7 +25,7 @@ var (
 type EventNode struct {
 	Table   string
 	Columns []string
-	Tuples  [][]*sqlparser.Node
+	Tuples  []sqlparser.ValTuple
 }
 
 type sendEventFunc func(event *proto.StreamEvent) error
@@ -138,29 +138,26 @@ func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (dmlEvent *p
 
 /*
 parseStreamComment parses the tuples of the full stream comment.
-The _stream comment is extracted into a tree node with the following structure.
-EventNode.Sub[0] table name
-EventNode.Sub[1] Pk column names
-EventNode.Sub[2:] Pk Value lists
+The _stream comment is extracted into an EventNode tree.
 */
 // Example query: insert into vtocc_e(foo) values ('foo') /* _stream vtocc_e (eid id name ) (null 1 'bmFtZQ==' ); */
 // the "null" value is used for auto-increment columns.
 func parseStreamComment(dmlComment string) (eventNode EventNode, err error) {
 	tokenizer := sqlparser.NewStringTokenizer(dmlComment)
 
-	node := tokenizer.Scan()
-	if node.Type != sqlparser.ID {
+	typ, val := tokenizer.Scan()
+	if typ != sqlparser.ID {
 		return eventNode, fmt.Errorf("expecting table name in stream comment")
 	}
-	eventNode.Table = string(node.Value)
+	eventNode.Table = string(val)
 
 	eventNode.Columns, err = parsePkNames(tokenizer)
 	if err != nil {
 		return eventNode, err
 	}
 
-	for node = tokenizer.Scan(); node.Type != ';'; node = tokenizer.Scan() {
-		switch node.Type {
+	for typ, val = tokenizer.Scan(); typ != ';'; typ, val = tokenizer.Scan() {
+		switch typ {
 		case '(':
 			// pkTuple is a list of pk value Nodes
 			pkTuple, err := parsePkTuple(tokenizer)
@@ -177,61 +174,59 @@ func parseStreamComment(dmlComment string) (eventNode EventNode, err error) {
 }
 
 func parsePkNames(tokenizer *sqlparser.Tokenizer) (columns []string, err error) {
-	tempNode := tokenizer.Scan()
-	if tempNode.Type != '(' {
+	if typ, _ := tokenizer.Scan(); typ != '(' {
 		return nil, fmt.Errorf("expecting '('")
 	}
-	for tempNode := tokenizer.Scan(); tempNode.Type != ')'; tempNode = tokenizer.Scan() {
-		switch tempNode.Type {
+	for typ, val := tokenizer.Scan(); typ != ')'; typ, val = tokenizer.Scan() {
+		switch typ {
 		case sqlparser.ID:
-			columns = append(columns, string(tempNode.Value))
+			columns = append(columns, string(val))
 		default:
-			return nil, fmt.Errorf("unexpected token: '%v'", string(tempNode.Value))
+			return nil, fmt.Errorf("syntax error at position: %d", tokenizer.Position)
 		}
 	}
 	return columns, nil
 }
 
 // parsePkTuple parese one pk tuple.
-func parsePkTuple(tokenizer *sqlparser.Tokenizer) (tuple []*sqlparser.Node, err error) {
+func parsePkTuple(tokenizer *sqlparser.Tokenizer) (tuple sqlparser.ValTuple, err error) {
 	// start scanning the list
-	for tempNode := tokenizer.Scan(); tempNode.Type != ')'; tempNode = tokenizer.Scan() {
-		switch tempNode.Type {
+	for typ, val := tokenizer.Scan(); typ != ')'; typ, val = tokenizer.Scan() {
+		switch typ {
 		case '-':
 			// handle negative numbers
-			t2 := tokenizer.Scan()
-			if t2.Type != sqlparser.NUMBER {
+			typ2, val2 := tokenizer.Scan()
+			if typ2 != sqlparser.NUMBER {
 				return nil, fmt.Errorf("expecing number after '-'")
 			}
-			t2.Value = append(tempNode.Value, t2.Value...)
-			tuple = append(tuple, t2)
-		case sqlparser.NUMBER, sqlparser.NULL:
-			tuple = append(tuple, tempNode)
+			num := append(sqlparser.NumVal("-"), val2...)
+			tuple = append(tuple, num)
+		case sqlparser.NUMBER:
+			tuple = append(tuple, sqlparser.NumVal(val))
+		case sqlparser.NULL:
+			tuple = append(tuple, new(sqlparser.NullVal))
 		case sqlparser.STRING:
-			b := tempNode.Value
-			decoded := make([]byte, base64.StdEncoding.DecodedLen(len(b)))
-			numDecoded, err := base64.StdEncoding.Decode(decoded, b)
+			decoded := make([]byte, base64.StdEncoding.DecodedLen(len(val)))
+			numDecoded, err := base64.StdEncoding.Decode(decoded, val)
 			if err != nil {
 				return nil, err
 			}
-			tempNode.Value = decoded[:numDecoded]
-			tuple = append(tuple, tempNode)
+			tuple = append(tuple, sqlparser.StrVal(decoded[:numDecoded]))
 		default:
-			return nil, fmt.Errorf("unexpected token: '%v'", string(tempNode.Value))
+			return nil, fmt.Errorf("syntax error at position: %d", tokenizer.Position)
 		}
 	}
 	return tuple, nil
 }
 
 // Interprets the parsed node and correctly encodes the primary key values.
-func encodePKValues(tuple []*sqlparser.Node, insertid int64) (rowPk []interface{}, newinsertid int64, err error) {
+func encodePKValues(tuple sqlparser.ValTuple, insertid int64) (rowPk []interface{}, newinsertid int64, err error) {
 	for _, pkVal := range tuple {
-		if pkVal.Type == sqlparser.STRING {
-			rowPk = append(rowPk, pkVal.Value)
-		} else if pkVal.Type == sqlparser.NUMBER {
-			// pkVal.Value is a byte array, convert this to string and use strconv to find
-			// the right numberic type.
-			valstr := string(pkVal.Value)
+		switch pkVal := pkVal.(type) {
+		case sqlparser.StrVal:
+			rowPk = append(rowPk, []byte(pkVal))
+		case sqlparser.NumVal:
+			valstr := string(pkVal)
 			if ival, err := strconv.ParseInt(valstr, 0, 64); err == nil {
 				rowPk = append(rowPk, ival)
 			} else if uval, err := strconv.ParseUint(valstr, 0, 64); err == nil {
@@ -239,11 +234,11 @@ func encodePKValues(tuple []*sqlparser.Node, insertid int64) (rowPk []interface{
 			} else {
 				return nil, insertid, err
 			}
-		} else if pkVal.Type == sqlparser.NULL {
+		case *sqlparser.NullVal:
 			rowPk = append(rowPk, insertid)
 			insertid++
-		} else {
-			return nil, insertid, fmt.Errorf("unexpected token: '%v'", string(pkVal.Value))
+		default:
+			return nil, insertid, fmt.Errorf("unexpected token: '%v'", sqlparser.String(pkVal))
 		}
 	}
 	return rowPk, insertid, nil

@@ -19,7 +19,7 @@ type Tokenizer struct {
 	AllowComments bool
 	ForceEOF      bool
 	lastChar      uint16
-	position      int
+	Position      int
 	errorToken    []byte
 	LastError     string
 	posVarIndex   int
@@ -104,31 +104,34 @@ var keywords = map[string]int{
 }
 
 func (tkn *Tokenizer) Lex(lval *yySymType) int {
-	parseNode := tkn.Scan()
-	tkn.errorToken = parseNode.Value
-	for parseNode.Type == COMMENT {
+	typ, val := tkn.Scan()
+	for typ == COMMENT {
 		if tkn.AllowComments {
 			break
 		}
-		parseNode = tkn.Scan()
+		typ, val = tkn.Scan()
 	}
-	lval.node = parseNode
-	return parseNode.Type
+	switch typ {
+	case ID, STRING, NUMBER, VALUE_ARG, COMMENT, LEX_ERROR:
+		lval.bytes = val
+	}
+	tkn.errorToken = val
+	return typ
 }
 
 func (tkn *Tokenizer) Error(err string) {
 	buf := bytes.NewBuffer(make([]byte, 0, 32))
 	if tkn.errorToken != nil {
-		fmt.Fprintf(buf, "%s at position %v near %s", err, tkn.position, tkn.errorToken)
+		fmt.Fprintf(buf, "%s at position %v near %s", err, tkn.Position, tkn.errorToken)
 	} else {
-		fmt.Fprintf(buf, "%s at position %v", err, tkn.position)
+		fmt.Fprintf(buf, "%s at position %v", err, tkn.Position)
 	}
 	tkn.LastError = buf.String()
 }
 
-func (tkn *Tokenizer) Scan() (parseNode *Node) {
+func (tkn *Tokenizer) Scan() (int, []byte) {
 	if tkn.ForceEOF {
-		return NewSimpleParseNode(0, "")
+		return 0, nil
 	}
 
 	if tkn.lastChar == 0 {
@@ -137,26 +140,28 @@ func (tkn *Tokenizer) Scan() (parseNode *Node) {
 	tkn.skipBlank()
 	switch ch := tkn.lastChar; {
 	case isLetter(ch):
-		return tkn.scanIdentifier(ID)
+		return tkn.scanIdentifier()
 	case isDigit(ch):
 		return tkn.scanNumber(false)
 	case ch == ':':
-		return tkn.scanBindVar(VALUE_ARG)
+		return tkn.scanBindVar()
 	default:
 		tkn.next()
 		switch ch {
 		case EOFCHAR:
-			return NewSimpleParseNode(0, "")
+			return 0, nil
 		case '=', ',', ';', '(', ')', '+', '*', '%', '&', '|', '^', '~':
-			return NewSimpleParseNode(int(ch), string(ch))
+			return int(ch), nil
 		case '?':
 			tkn.posVarIndex++
-			return NewSimpleParseNode(VALUE_ARG, fmt.Sprintf(":v%d", tkn.posVarIndex))
+			buf := new(bytes.Buffer)
+			fmt.Fprintf(buf, ":v%d", tkn.posVarIndex)
+			return VALUE_ARG, buf.Bytes()
 		case '.':
 			if isDigit(tkn.lastChar) {
 				return tkn.scanNumber(true)
 			} else {
-				return NewSimpleParseNode(int(ch), string(ch))
+				return int(ch), nil
 			}
 		case '/':
 			switch tkn.lastChar {
@@ -167,54 +172,52 @@ func (tkn *Tokenizer) Scan() (parseNode *Node) {
 				tkn.next()
 				return tkn.scanCommentType2()
 			default:
-				return NewSimpleParseNode(int(ch), string(ch))
+				return int(ch), nil
 			}
 		case '-':
 			if tkn.lastChar == '-' {
 				tkn.next()
 				return tkn.scanCommentType1("--")
 			} else {
-				return NewSimpleParseNode(int(ch), string(ch))
+				return int(ch), nil
 			}
 		case '<':
 			switch tkn.lastChar {
 			case '>':
 				tkn.next()
-				return NewSimpleParseNode(NE, "<>")
+				return NE, nil
 			case '=':
 				tkn.next()
 				switch tkn.lastChar {
 				case '>':
 					tkn.next()
-					return NewSimpleParseNode(NULL_SAFE_EQUAL, "<=>")
+					return NULL_SAFE_EQUAL, nil
 				default:
-					return NewSimpleParseNode(LE, "<=")
+					return LE, nil
 				}
 			default:
-				return NewSimpleParseNode(int(ch), string(ch))
+				return int(ch), nil
 			}
 		case '>':
 			if tkn.lastChar == '=' {
 				tkn.next()
-				return NewSimpleParseNode(GE, ">=")
+				return GE, nil
 			} else {
-				return NewSimpleParseNode(int(ch), string(ch))
+				return int(ch), nil
 			}
 		case '!':
 			if tkn.lastChar == '=' {
 				tkn.next()
-				return NewSimpleParseNode(NE, "!=")
+				return NE, nil
 			} else {
-				return NewSimpleParseNode(LEX_ERROR, "!")
+				return LEX_ERROR, []byte("!")
 			}
 		case '\'', '"':
-			return tkn.scanString(ch)
+			return tkn.scanString(ch, STRING)
 		case '`':
-			tok := tkn.scanString(ch)
-			tok.Type = ID
-			return tok
+			return tkn.scanString(ch, ID)
 		default:
-			return NewSimpleParseNode(LEX_ERROR, fmt.Sprintf("%c", ch))
+			return LEX_ERROR, []byte{byte(ch)}
 		}
 	}
 }
@@ -227,7 +230,7 @@ func (tkn *Tokenizer) skipBlank() {
 	}
 }
 
-func (tkn *Tokenizer) scanIdentifier(Type int) *Node {
+func (tkn *Tokenizer) scanIdentifier() (int, []byte) {
 	buffer := bytes.NewBuffer(make([]byte, 0, 8))
 	buffer.WriteByte(byte(tkn.lastChar))
 	for tkn.next(); isLetter(tkn.lastChar) || isDigit(tkn.lastChar); tkn.next() {
@@ -235,21 +238,21 @@ func (tkn *Tokenizer) scanIdentifier(Type int) *Node {
 	}
 	lowered := bytes.ToLower(buffer.Bytes())
 	if keywordId, found := keywords[string(lowered)]; found {
-		return NewParseNode(keywordId, lowered)
+		return keywordId, lowered
 	}
-	return NewParseNode(Type, buffer.Bytes())
+	return ID, buffer.Bytes()
 }
 
-func (tkn *Tokenizer) scanBindVar(Type int) *Node {
+func (tkn *Tokenizer) scanBindVar() (int, []byte) {
 	buffer := bytes.NewBuffer(make([]byte, 0, 8))
 	buffer.WriteByte(byte(tkn.lastChar))
 	for tkn.next(); isLetter(tkn.lastChar) || isDigit(tkn.lastChar) || tkn.lastChar == '.'; tkn.next() {
 		buffer.WriteByte(byte(tkn.lastChar))
 	}
 	if buffer.Len() == 1 {
-		return NewParseNode(LEX_ERROR, buffer.Bytes())
+		return LEX_ERROR, buffer.Bytes()
 	}
-	return NewParseNode(Type, buffer.Bytes())
+	return VALUE_ARG, buffer.Bytes()
 }
 
 func (tkn *Tokenizer) scanMantissa(base int, buffer *bytes.Buffer) {
@@ -258,7 +261,7 @@ func (tkn *Tokenizer) scanMantissa(base int, buffer *bytes.Buffer) {
 	}
 }
 
-func (tkn *Tokenizer) scanNumber(seenDecimalPoint bool) *Node {
+func (tkn *Tokenizer) scanNumber(seenDecimalPoint bool) (int, []byte) {
 	buffer := bytes.NewBuffer(make([]byte, 0, 8))
 	if seenDecimalPoint {
 		buffer.WriteByte('.')
@@ -287,7 +290,7 @@ func (tkn *Tokenizer) scanNumber(seenDecimalPoint bool) *Node {
 			}
 			// octal int
 			if seenDecimalDigit {
-				return NewParseNode(LEX_ERROR, buffer.Bytes())
+				return LEX_ERROR, buffer.Bytes()
 			}
 		}
 		goto exit
@@ -312,10 +315,10 @@ exponent:
 	}
 
 exit:
-	return NewParseNode(NUMBER, buffer.Bytes())
+	return NUMBER, buffer.Bytes()
 }
 
-func (tkn *Tokenizer) scanString(delim uint16) *Node {
+func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 	buffer := bytes.NewBuffer(make([]byte, 0, 8))
 	for {
 		ch := tkn.lastChar
@@ -328,7 +331,7 @@ func (tkn *Tokenizer) scanString(delim uint16) *Node {
 			}
 		} else if ch == '\\' {
 			if tkn.lastChar == EOFCHAR {
-				return NewParseNode(LEX_ERROR, buffer.Bytes())
+				return LEX_ERROR, buffer.Bytes()
 			}
 			if decodedChar := sqltypes.SqlDecodeMap[byte(tkn.lastChar)]; decodedChar == sqltypes.DONTESCAPE {
 				ch = tkn.lastChar
@@ -338,14 +341,14 @@ func (tkn *Tokenizer) scanString(delim uint16) *Node {
 			tkn.next()
 		}
 		if ch == EOFCHAR {
-			return NewParseNode(LEX_ERROR, buffer.Bytes())
+			return LEX_ERROR, buffer.Bytes()
 		}
 		buffer.WriteByte(byte(ch))
 	}
-	return NewParseNode(STRING, buffer.Bytes())
+	return typ, buffer.Bytes()
 }
 
-func (tkn *Tokenizer) scanCommentType1(prefix string) *Node {
+func (tkn *Tokenizer) scanCommentType1(prefix string) (int, []byte) {
 	buffer := bytes.NewBuffer(make([]byte, 0, 8))
 	buffer.WriteString(prefix)
 	for tkn.lastChar != EOFCHAR {
@@ -355,10 +358,10 @@ func (tkn *Tokenizer) scanCommentType1(prefix string) *Node {
 		}
 		tkn.ConsumeNext(buffer)
 	}
-	return NewParseNode(COMMENT, buffer.Bytes())
+	return COMMENT, buffer.Bytes()
 }
 
-func (tkn *Tokenizer) scanCommentType2() *Node {
+func (tkn *Tokenizer) scanCommentType2() (int, []byte) {
 	buffer := bytes.NewBuffer(make([]byte, 0, 8))
 	buffer.WriteString("/*")
 	for {
@@ -371,11 +374,11 @@ func (tkn *Tokenizer) scanCommentType2() *Node {
 			continue
 		}
 		if tkn.lastChar == EOFCHAR {
-			return NewParseNode(LEX_ERROR, buffer.Bytes())
+			return LEX_ERROR, buffer.Bytes()
 		}
 		tkn.ConsumeNext(buffer)
 	}
-	return NewParseNode(COMMENT, buffer.Bytes())
+	return COMMENT, buffer.Bytes()
 }
 
 func (tkn *Tokenizer) ConsumeNext(buffer *bytes.Buffer) {
@@ -394,7 +397,7 @@ func (tkn *Tokenizer) next() {
 	} else {
 		tkn.lastChar = uint16(ch)
 	}
-	tkn.position++
+	tkn.Position++
 }
 
 func isLetter(ch uint16) bool {
