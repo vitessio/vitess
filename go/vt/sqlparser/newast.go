@@ -90,8 +90,6 @@ func (node *Select) Format(buf *TrackedBuffer) {
 }
 
 // Union represents a UNION statement.
-// Type can be "union", "union all", "minus", "except",
-// "intersect".
 type Union struct {
 	Type        string
 	Left, Right SelectStatement
@@ -180,9 +178,8 @@ func (node *Set) Format(buf *TrackedBuffer) {
 // Table is set for AST_ALTER, AST_DROP, AST_RENAME.
 // NewName is set for AST_ALTER, AST_CREATE, AST_RENAME.
 type DDL struct {
-	Action string
-	Table  []byte
-	// Only for RENAME
+	Action  string
+	Table   []byte
 	NewName []byte
 }
 
@@ -342,8 +339,7 @@ func (node *ParenTableExpr) Format(buf *TrackedBuffer) {
 	buf.Fprintf("(%v)", node.Expr)
 }
 
-// JoinTableExpr represents a TableExpr that's a JOIN
-// operation.
+// JoinTableExpr represents a TableExpr that's a JOIN operation.
 type JoinTableExpr struct {
 	LeftExpr  TableExpr
 	Join      string
@@ -786,7 +782,6 @@ func (node OrderBy) Format(buf *TrackedBuffer) {
 }
 
 // Order represents an ordering expression.
-// Direction can be "asc", "desc".
 type Order struct {
 	Expr      ValExpr
 	Direction string
