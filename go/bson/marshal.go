@@ -70,7 +70,7 @@ func canMarshal(val reflect.Value) Marshaler {
 }
 
 // DefaultBufferSize is the default allocation size for ChunkedWriter.
-const DefaultBufferSize = 1024 * 16
+const DefaultBufferSize = 1024
 
 // MarshalToStream marshals val into writer.
 func MarshalToStream(writer io.Writer, val interface{}) (err error) {
