@@ -52,7 +52,7 @@ func NewScatterConn(serv SrvTopoServer, statsName, cell string, retryDelay time.
 		retryDelay: retryDelay,
 		retryCount: retryCount,
 		timeout:    timeout,
-		timings:    stats.NewMapTimings(statsName, []string{"Operation", "Keyspace", "Shard", "DbType"}),
+		timings:    stats.NewMapTimings(statsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
 		shardConns: make(map[string]*ShardConn),
 	}
 }
