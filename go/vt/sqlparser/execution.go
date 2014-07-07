@@ -13,7 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/schema"
 )
 
-var execLimit = &Limit{Rowcount: ValueArg(":_vtMaxResultSize")}
+var execLimit = &Limit{Rowcount: ValArg(":_vtMaxResultSize")}
 
 type PlanType int
 
@@ -128,11 +128,6 @@ type ExecPlan struct {
 	Reason    ReasonType
 	TableName string
 
-	// DisplayQuery is the displayable version of the
-	// original query. Depending on the mode, it may be
-	// the original query, or an anonymized version.
-	DisplayQuery string
-
 	// FieldQuery is used to fetch field info
 	FieldQuery *ParsedQuery
 
@@ -167,19 +162,18 @@ type ExecPlan struct {
 }
 
 type DDLPlan struct {
-	Action    int
+	Action    string
 	TableName string
 	NewName   string
 }
 
 type StreamExecPlan struct {
-	DisplayQuery string
-	FullQuery    *ParsedQuery
+	FullQuery *ParsedQuery
 }
 
 type TableGetter func(tableName string) (*schema.Table, bool)
 
-func ExecParse(sql string, getTable TableGetter, sensitiveMode bool) (plan *ExecPlan, err error) {
+func ExecParse(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
 	defer handleError(&err)
 
 	statement, err := Parse(sql)
@@ -190,15 +184,10 @@ func ExecParse(sql string, getTable TableGetter, sensitiveMode bool) (plan *Exec
 	if plan.PlanId == PLAN_PASS_DML {
 		log.Warningf("PASS_DML: %s", sql)
 	}
-	if sensitiveMode {
-		plan.DisplayQuery = GenerateAnonymizedQuery(statement)
-	} else {
-		plan.DisplayQuery = sql
-	}
 	return plan, nil
 }
 
-func StreamExecParse(sql string, sensitiveMode bool) (plan *StreamExecPlan, err error) {
+func StreamExecParse(sql string) (plan *StreamExecPlan, err error) {
 	defer handleError(&err)
 
 	statement, err := Parse(sql)
@@ -218,35 +207,23 @@ func StreamExecParse(sql string, sensitiveMode bool) (plan *StreamExecPlan, err 
 	}
 	plan = &StreamExecPlan{FullQuery: GenerateFullQuery(statement)}
 
-	if sensitiveMode {
-		plan.DisplayQuery = GenerateAnonymizedQuery(statement)
-	} else {
-		plan.DisplayQuery = sql
-	}
-
 	return plan, nil
 }
 
 func DDLParse(sql string) (plan *DDLPlan) {
 	statement, err := Parse(sql)
 	if err != nil {
-		return &DDLPlan{Action: 0}
+		return &DDLPlan{Action: ""}
 	}
-	switch stmt := statement.(type) {
-	case *DDLSimple:
-		return &DDLPlan{
-			Action:    stmt.Action,
-			TableName: string(stmt.Table),
-			NewName:   string(stmt.Table),
-		}
-	case *Rename:
-		return &DDLPlan{
-			Action:    RENAME,
-			TableName: string(stmt.OldName),
-			NewName:   string(stmt.NewName),
-		}
+	stmt, ok := statement.(*DDL)
+	if !ok {
+		return &DDLPlan{Action: ""}
 	}
-	return &DDLPlan{Action: 0}
+	return &DDLPlan{
+		Action:    stmt.Action,
+		TableName: string(stmt.Table),
+		NewName:   string(stmt.NewName),
+	}
 }
 
 //-----------------------------------------------
@@ -271,7 +248,7 @@ func execAnalyzeSql(statement Statement, getTable TableGetter) (plan *ExecPlan) 
 		return execAnalyzeDelete(stmt, getTable)
 	case *Set:
 		return execAnalyzeSet(stmt)
-	case *DDLSimple, *Rename:
+	case *DDL:
 		return &ExecPlan{PlanId: PLAN_DDL}
 	}
 	panic(NewParserError("invalid SQL"))
@@ -459,7 +436,7 @@ func execAnalyzeUpdate(upd *Update, getTable TableGetter) (plan *ExecPlan) {
 	}
 
 	var ok bool
-	if plan.SecondaryPKValues, ok = execAnalyzeUpdateExpressions(upd.List, tableInfo.Indexes[0]); !ok {
+	if plan.SecondaryPKValues, ok = execAnalyzeUpdateExpressions(upd.Exprs, tableInfo.Indexes[0]); !ok {
 		plan.Reason = REASON_PK_CHANGE
 		return plan
 	}
@@ -529,12 +506,12 @@ func execAnalyzeSet(set *Set) (plan *ExecPlan) {
 		PlanId:    PLAN_SET,
 		FullQuery: GenerateFullQuery(set),
 	}
-	if len(set.Updates) > 1 { // Multiple set values
+	if len(set.Exprs) > 1 { // Multiple set values
 		return plan
 	}
-	update_expression := set.Updates[0]
+	update_expression := set.Exprs[0]
 	plan.SetKey = string(update_expression.Name.Name)
-	numExpr, ok := update_expression.Expr.(NumValue)
+	numExpr, ok := update_expression.Expr.(NumVal)
 	if !ok {
 		return plan
 	}
@@ -632,7 +609,7 @@ func execAnalyzeFrom(tableExprs TableExprs) (tablename string, hasHints bool) {
 	return collectTableName(node.Expr), node.Hints != nil
 }
 
-func collectTableName(node SQLNode) string {
+func collectTableName(node SimpleTableExpr) string {
 	if n, ok := node.(*TableName); ok && n.Qualifier == nil {
 		return string(n.Name)
 	}
@@ -666,14 +643,14 @@ func execAnalyzeBoolean(node BoolExpr) (conditions []BoolExpr) {
 		return execAnalyzeBoolean(node.Expr)
 	case *ComparisonExpr:
 		switch {
-		case stringIn(node.Operator, "=", "<", ">", "<=", ">=", "<=>", "like"):
+		case stringIn(node.Operator, AST_EQ, AST_LT, AST_GT, AST_LE, AST_GE, AST_NSE, AST_LIKE):
 			left := execAnalyzeID(node.Left)
 			right := execAnalyzeValue(node.Right)
 			if left == nil || right == nil {
 				return nil
 			}
 			return []BoolExpr{&ComparisonExpr{Left: left, Operator: node.Operator, Right: right}}
-		case node.Operator == "in":
+		case node.Operator == AST_IN:
 			left := execAnalyzeID(node.Left)
 			right := execAnalyzeSimpleINList(node.Right)
 			if left == nil || right == nil {
@@ -684,7 +661,7 @@ func execAnalyzeBoolean(node BoolExpr) (conditions []BoolExpr) {
 			return nil
 		}
 	case *RangeCond:
-		if node.Operator != "between" {
+		if node.Operator != AST_BETWEEN {
 			return nil
 		}
 		left := execAnalyzeID(node.Left)
@@ -693,7 +670,7 @@ func execAnalyzeBoolean(node BoolExpr) (conditions []BoolExpr) {
 		if left == nil || from == nil || to == nil {
 			return nil
 		}
-		return []BoolExpr{&RangeCond{Left: left, Operator: "between", From: from, To: to}}
+		return []BoolExpr{&RangeCond{Left: left, Operator: AST_BETWEEN, From: from, To: to}}
 	}
 	return nil
 }
@@ -710,7 +687,7 @@ func stringIn(str string, values ...string) bool {
 }
 
 func execAnalyzeSimpleINList(expr ValExpr) ValExpr {
-	list, ok := expr.(ValueTuple)
+	list, ok := expr.(ValTuple)
 	if !ok {
 		// It's a subquery.
 		return nil
@@ -732,7 +709,7 @@ func execAnalyzeID(expr ValExpr) ValExpr {
 
 func execAnalyzeValue(expr ValExpr) ValExpr {
 	switch expr.(type) {
-	case StringValue, NumValue, ValueArg:
+	case StrVal, NumVal, ValArg:
 		return expr
 	}
 	return nil
@@ -740,7 +717,7 @@ func execAnalyzeValue(expr ValExpr) ValExpr {
 
 func hasINClause(conditions []BoolExpr) bool {
 	for _, node := range conditions {
-		if c, ok := node.(*ComparisonExpr); ok && c.Operator == "in" {
+		if c, ok := node.(*ComparisonExpr); ok && c.Operator == AST_IN {
 			return true
 		}
 	}
@@ -804,7 +781,7 @@ func getInsertPKValues(pkColumnNumbers []int, rowList Values, tableInfo *schema.
 			if _, ok := rowList[j].(*Subquery); ok {
 				panic(NewParserError("row subquery not supported for inserts"))
 			}
-			row := rowList[j].(ValueTuple)
+			row := rowList[j].(ValTuple)
 			if columnNumber >= len(row) {
 				panic(NewParserError("column count doesn't match value count"))
 			}
@@ -910,7 +887,7 @@ func getPKValues(conditions []BoolExpr, pkIndex *schema.Index) (pkValues []inter
 		if !ok {
 			return nil
 		}
-		if !stringIn(condition.Operator, "=", "in") {
+		if !stringIn(condition.Operator, AST_EQ, AST_IN) {
 			return nil
 		}
 		index := pkIndexScore.FindMatch(string(condition.Left.(*ColName).Name))
@@ -918,10 +895,10 @@ func getPKValues(conditions []BoolExpr, pkIndex *schema.Index) (pkValues []inter
 			return nil
 		}
 		switch condition.Operator {
-		case "=":
+		case AST_EQ:
 			pkValues[index] = asInterface(condition.Right)
-		case "in":
-			pkValues[index] = parseList(condition.Right.(ValueTuple))
+		case AST_IN:
+			pkValues[index] = parseList(condition.Right.(ValTuple))
 		default:
 			panic("unreachable")
 		}
@@ -932,7 +909,7 @@ func getPKValues(conditions []BoolExpr, pkIndex *schema.Index) (pkValues []inter
 	return nil
 }
 
-func parseList(values ValueTuple) interface{} {
+func parseList(values ValTuple) interface{} {
 	vals := make([]interface{}, 0, len(values))
 	for _, val := range values {
 		vals = append(vals, asInterface(val))
@@ -987,12 +964,6 @@ func GenerateFullQuery(statement Statement) *ParsedQuery {
 	return buf.ParsedQuery()
 }
 
-func GenerateAnonymizedQuery(statement Statement) string {
-	buf := NewTrackedBuffer(AnonymizedFormatter)
-	buf.Fprintf("%v", statement)
-	return buf.ParsedQuery().Query
-}
-
 func GenerateFieldQuery(statement Statement) *ParsedQuery {
 	buf := NewTrackedBuffer(FormatImpossible)
 	buf.Fprintf("%v", statement)
@@ -1011,7 +982,7 @@ func FormatImpossible(buf *TrackedBuffer, node SQLNode) {
 	case *Select:
 		buf.Fprintf("select %v from %v where 1 != 1", node.SelectExprs, node.From)
 	case *JoinTableExpr:
-		if node.Join == "left join" || node.Join == "right join" {
+		if node.Join == AST_LEFT_JOIN || node.Join == AST_RIGHT_JOIN {
 			// ON clause is requried
 			buf.Fprintf("%v %s %v on 1 != 1", node.LeftExpr, node.Join, node.RightExpr)
 		} else {
@@ -1071,7 +1042,7 @@ func GenerateInsertOuterQuery(ins *Insert) *ParsedQuery {
 
 func GenerateUpdateOuterQuery(upd *Update, pkIndex *schema.Index) *ParsedQuery {
 	buf := NewTrackedBuffer(nil)
-	buf.Fprintf("update %v%v set %v where ", upd.Comments, upd.Table, upd.List)
+	buf.Fprintf("update %v%v set %v where ", upd.Comments, upd.Table, upd.Exprs)
 	generatePKWhere(buf, pkIndex)
 	return buf.ParsedQuery()
 }
@@ -1093,7 +1064,7 @@ func generatePKWhere(buf *TrackedBuffer, pkIndex *schema.Index) {
 }
 
 func GenerateSelectSubquery(sel *Select, tableInfo *schema.Table, index string) *ParsedQuery {
-	hint := &IndexHints{Type: "use", Indexes: [][]byte{[]byte(index)}}
+	hint := &IndexHints{Type: AST_USE, Indexes: [][]byte{[]byte(index)}}
 	table_expr := sel.From[0].(*AliasedTableExpr)
 	savedHint := table_expr.Hints
 	table_expr.Hints = hint
@@ -1145,7 +1116,7 @@ func GenerateSubquery(columns []string, table *AliasedTableExpr, where *Where, o
 	fmt.Fprintf(buf, "%s", columns[i])
 	buf.Fprintf(" from %v%v%v%v", table, where, order, limit)
 	if for_update {
-		buf.Fprintf(" for update")
+		buf.Fprintf(AST_FOR_UPDATE)
 	}
 	return buf.ParsedQuery()
 }
@@ -1160,11 +1131,11 @@ func writeColumnList(buf *TrackedBuffer, columns []schema.TableColumn) {
 
 func asInterface(expr ValExpr) interface{} {
 	switch node := expr.(type) {
-	case ValueArg:
+	case ValArg:
 		return string(node)
-	case StringValue:
+	case StrVal:
 		return sqltypes.MakeString(node)
-	case NumValue:
+	case NumVal:
 		n, err := sqltypes.BuildNumeric(string(node))
 		if err != nil {
 			panic(NewParserError("type mismatch: %s", err))

@@ -117,7 +117,7 @@ func getOrPanic(pool *dbconnpool.ConnectionPool) dbconnpool.PoolConnection {
 // You must call this only once.
 func NewQueryEngine(config Config) *QueryEngine {
 	qe := &QueryEngine{}
-	qe.schemaInfo = NewSchemaInfo(config.QueryCacheSize, time.Duration(config.SchemaReloadTime*1e9), time.Duration(config.IdleTimeout*1e9), config.SensitiveMode)
+	qe.schemaInfo = NewSchemaInfo(config.QueryCacheSize, time.Duration(config.SchemaReloadTime*1e9), time.Duration(config.IdleTimeout*1e9))
 
 	mysqlStats = stats.NewTimings("Mysql")
 
@@ -291,7 +291,7 @@ func (qe *QueryEngine) Execute(logStats *SQLQueryStats, query *proto.Query) (rep
 	basePlan := qe.schemaInfo.GetPlan(logStats, query.Sql)
 	planName := basePlan.PlanId.String()
 	logStats.PlanType = planName
-	logStats.OriginalSql = basePlan.DisplayQuery
+	logStats.OriginalSql = query.Sql
 	defer func(start time.Time) {
 		duration := time.Now().Sub(start)
 		queryStats.Add(planName, duration)
@@ -325,7 +325,7 @@ func (qe *QueryEngine) Execute(logStats *SQLQueryStats, query *proto.Query) (rep
 		// Need upfront connection for DMLs and transactions
 		conn := qe.activeTxPool.Get(query.TransactionId)
 		defer conn.Recycle()
-		conn.RecordQuery(plan.DisplayQuery)
+		conn.RecordQuery(plan.Query)
 		var invalidator CacheInvalidator
 		if plan.TableInfo != nil && plan.TableInfo.CacheType != schema.CACHE_NONE {
 			invalidator = conn.DirtyKeys(plan.TableName)
@@ -392,7 +392,7 @@ func (qe *QueryEngine) StreamExecute(logStats *SQLQueryStats, query *proto.Query
 
 	plan := qe.schemaInfo.GetStreamPlan(query.Sql)
 	logStats.PlanType = "SELECT_STREAM"
-	logStats.OriginalSql = plan.DisplayQuery
+	logStats.OriginalSql = query.Sql
 	defer queryStats.Record("SELECT_STREAM", time.Now())
 
 	// does the real work: first get a connection
@@ -436,11 +436,11 @@ func (qe *QueryEngine) InvalidateForDml(dml *proto.DmlType) {
 // InvalidateForDDL performs schema and rowcache changes for the ddl.
 func (qe *QueryEngine) InvalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
 	ddlPlan := sqlparser.DDLParse(ddlInvalidate.DDL)
-	if ddlPlan.Action == 0 {
+	if ddlPlan.Action == "" {
 		panic(NewTabletError(FAIL, "DDL is not understood"))
 	}
 	qe.schemaInfo.DropTable(ddlPlan.TableName)
-	if ddlPlan.Action != sqlparser.DROP { // CREATE, ALTER, RENAME
+	if ddlPlan.Action != sqlparser.AST_DROP { // CREATE, ALTER, RENAME
 		qe.schemaInfo.CreateTable(ddlPlan.NewName)
 	}
 }
@@ -450,7 +450,7 @@ func (qe *QueryEngine) InvalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
 
 func (qe *QueryEngine) execDDL(logStats *SQLQueryStats, ddl string) *mproto.QueryResult {
 	ddlPlan := sqlparser.DDLParse(ddl)
-	if ddlPlan.Action == 0 {
+	if ddlPlan.Action == "" {
 		panic(NewTabletError(FAIL, "DDL is not understood"))
 	}
 
@@ -473,7 +473,7 @@ func (qe *QueryEngine) execDDL(logStats *SQLQueryStats, ddl string) *mproto.Quer
 	}
 
 	qe.schemaInfo.DropTable(ddlPlan.TableName)
-	if ddlPlan.Action != sqlparser.DROP { // CREATE, ALTER, RENAME
+	if ddlPlan.Action != sqlparser.AST_DROP { // CREATE, ALTER, RENAME
 		qe.schemaInfo.CreateTable(ddlPlan.NewName)
 	}
 	return result

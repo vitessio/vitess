@@ -41,11 +41,11 @@ var eventErrorCases = []eventErrorCase{
 	}, {
 		Category: proto.BL_DML,
 		Sql:      "query /* _stream vtocc_e (10 id name ) (null 1 'bmFtZQ==' ); */",
-		want:     `unexpected token: '10': query /* _stream vtocc_e (10 id name ) (null 1 'bmFtZQ==' ); */`,
+		want:     `syntax error at position: 12: query /* _stream vtocc_e (10 id name ) (null 1 'bmFtZQ==' ); */`,
 	}, {
 		Category: proto.BL_DML,
 		Sql:      "query /* _stream vtocc_e (eid id name  (null 1 'bmFtZQ==' ); */",
-		want:     `unexpected token: '(': query /* _stream vtocc_e (eid id name  (null 1 'bmFtZQ==' ); */`,
+		want:     `syntax error at position: 24: query /* _stream vtocc_e (eid id name  (null 1 'bmFtZQ==' ); */`,
 	}, {
 		Category: proto.BL_DML,
 		Sql:      "query /* _stream vtocc_e (eid id name)  (null 'aaa' 'bmFtZQ==' ); */",
@@ -61,7 +61,7 @@ var eventErrorCases = []eventErrorCase{
 	}, {
 		Category: proto.BL_DML,
 		Sql:      "query /* _stream vtocc_e (eid id name)  (null a 'bmFtZQ==' ); */",
-		want:     `unexpected token: 'a': query /* _stream vtocc_e (eid id name)  (null a 'bmFtZQ==' ); */`,
+		want:     `syntax error at position: 31: query /* _stream vtocc_e (eid id name)  (null a 'bmFtZQ==' ); */`,
 	},
 }
 

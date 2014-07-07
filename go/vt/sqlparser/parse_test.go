@@ -42,7 +42,7 @@ func TestExec(t *testing.T) {
 		plan, err := ExecParse(tcase.input, func(name string) (*schema.Table, bool) {
 			r, ok := testSchema[name]
 			return r, ok
-		}, true)
+		})
 		var out string
 		if err != nil {
 			out = err.Error()
@@ -83,7 +83,7 @@ func TestCustomExec(t *testing.T) {
 		for _, file := range files {
 			t.Logf("Testing file %s", file)
 			for tcase := range iterateExecFile(file) {
-				plan, err := ExecParse(tcase.input, getter, false)
+				plan, err := ExecParse(tcase.input, getter)
 				var out string
 				if err != nil {
 					out = err.Error()
@@ -104,7 +104,7 @@ func TestCustomExec(t *testing.T) {
 
 func TestStreamExec(t *testing.T) {
 	for tcase := range iterateExecFile("stream_cases.txt") {
-		plan, err := StreamExecParse(tcase.input, true)
+		plan, err := StreamExecParse(tcase.input)
 		var out string
 		if err != nil {
 			out = err.Error()
@@ -122,14 +122,6 @@ func TestStreamExec(t *testing.T) {
 	}
 }
 
-var actionToString = map[int]string{
-	CREATE: "CREATE",
-	ALTER:  "ALTER",
-	DROP:   "DROP",
-	RENAME: "RENAME",
-	0:      "NONE",
-}
-
 func TestDDL(t *testing.T) {
 	for tcase := range iterateFiles("sqlparser_test/ddl_cases.txt") {
 		plan := DDLParse(tcase.input)
@@ -138,7 +130,7 @@ func TestDDL(t *testing.T) {
 		if err != nil {
 			panic(fmt.Sprintf("Error marshalling %v", plan))
 		}
-		matchString(t, tcase.lineno, expected["Action"], actionToString[plan.Action])
+		matchString(t, tcase.lineno, expected["Action"], plan.Action)
 		matchString(t, tcase.lineno, expected["TableName"], plan.TableName)
 		matchString(t, tcase.lineno, expected["NewName"], plan.NewName)
 	}
@@ -211,53 +203,23 @@ func TestRouting(t *testing.T) {
 	}
 }
 
-func TestAnonymizer(t *testing.T) {
-	testSchema := loadSchema("schema_test.json")
+func BenchmarkParse1(b *testing.B) {
 	sql := "select 'abcd', 20, 30.0, eid from a where 1=eid and name='3'"
-	plan, err := ExecParse(sql, func(name string) (*schema.Table, bool) {
-		r, ok := testSchema[name]
-		return r, ok
-	}, true)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
+	for i := 0; i < b.N; i++ {
+		_, err := Parse(sql)
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
-	want := "select ?, ?, ?, eid from a where ? = eid and name = ?"
-	if plan.DisplayQuery != want {
-		t.Errorf("got %q, want %q", plan.DisplayQuery, want)
-	}
+}
 
-	plan, err = ExecParse(sql, func(name string) (*schema.Table, bool) {
-		r, ok := testSchema[name]
-		return r, ok
-	}, false)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-	want = "select 'abcd', 20, 30.0, eid from a where 1=eid and name='3'"
-	if plan.DisplayQuery != want {
-		t.Errorf("got %q, want %q", plan.DisplayQuery, want)
-	}
-
-	splan, err := StreamExecParse(sql, true)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-	want = "select ?, ?, ?, eid from a where ? = eid and name = ?"
-	if splan.DisplayQuery != want {
-		t.Errorf("got %q, want %q", splan.DisplayQuery, want)
-	}
-
-	splan, err = StreamExecParse(sql, false)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-	want = "select 'abcd', 20, 30.0, eid from a where 1=eid and name='3'"
-	if splan.DisplayQuery != want {
-		t.Errorf("got %q, want %q", splan.DisplayQuery, want)
+func BenchmarkParse2(b *testing.B) {
+	sql := "select aaaa, bbb, ccc, ddd, eeee, ffff, gggg, hhhh, iiii from tttt, ttt1, ttt3 where aaaa = bbbb and bbbb = cccc and dddd+1 = eeee group by fff, gggg having hhhh = iiii and iiii = jjjj order by kkkk, llll limit 3, 4"
+	for i := 0; i < b.N; i++ {
+		_, err := Parse(sql)
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 

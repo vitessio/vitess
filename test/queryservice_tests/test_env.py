@@ -31,7 +31,6 @@ class EnvironmentError(Exception):
 
 class TestEnv(object):
   memcache = False
-  sensitive_mode = False
   port = 0
   querylog = None
 
@@ -197,7 +196,7 @@ class VttabletTestEnv(TestEnv):
     self.create_customrules(customrules)
     schema_override = os.path.join(environment.tmproot, 'schema_override.json')
     self.create_schema_override(schema_override)
-    self.tablet.start_vttablet(memcache=self.memcache, customrules=customrules, schema_override=schema_override, sensitive_mode=self.sensitive_mode)
+    self.tablet.start_vttablet(memcache=self.memcache, customrules=customrules, schema_override=schema_override)
 
     # FIXME(szopa): This is necessary here only because of a bug that
     # makes the qs reload its config only after an action.
@@ -304,8 +303,6 @@ class VtoccTestEnv(TestEnv):
       occ_args.extend(["-rowcache-socket", memcache])
       occ_args.extend(["-enable-rowcache"])
 
-    if self.sensitive_mode:
-      occ_args.extend(['-queryserver-config-sensitive-mode'])
     self.vtocc = subprocess.Popen(occ_args, stdout=utils.devnull, stderr=utils.devnull)
     for i in range(30):
       try:

@@ -75,7 +75,6 @@ type SqlQuery struct {
 
 	qe        *QueryEngine
 	sessionId int64
-	config    Config
 	dbconfig  *dbconfigs.DBConfig
 	mysqld    *mysqlctl.Mysqld
 }
@@ -85,7 +84,6 @@ type SqlQuery struct {
 func NewSqlQuery(config Config) *SqlQuery {
 	sq := &SqlQuery{}
 	sq.qe = NewQueryEngine(config)
-	sq.config = config
 	stats.PublishJSONFunc("Voltron", sq.statsJSON)
 	stats.Publish("TabletState", stats.IntFunc(sq.state.Get))
 	stats.Publish("TabletStateName", stats.StringFunc(sq.GetState))
@@ -221,7 +219,7 @@ func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo
 
 // Begin starts a new transaction. This is allowed only if the state is SERVING.
 func (sq *SqlQuery) Begin(context Context, session *proto.Session, txInfo *proto.TransactionInfo) (err error) {
-	logStats := newSqlQueryStats("Begin", context, sq.config.SensitiveMode)
+	logStats := newSqlQueryStats("Begin", context)
 	logStats.OriginalSql = "begin"
 	sq.mu.RLock()
 	defer sq.mu.RUnlock()
@@ -270,7 +268,7 @@ func (sq *SqlQuery) endRequest() {
 
 // Commit commits the specified transaction.
 func (sq *SqlQuery) Commit(context Context, session *proto.Session) (err error) {
-	logStats := newSqlQueryStats("Commit", context, sq.config.SensitiveMode)
+	logStats := newSqlQueryStats("Commit", context)
 	logStats.OriginalSql = "commit"
 	if err = sq.startRequest(session.SessionId, true); err != nil {
 		return err
@@ -284,7 +282,7 @@ func (sq *SqlQuery) Commit(context Context, session *proto.Session) (err error) 
 
 // Rollback rollsback the specified transaction.
 func (sq *SqlQuery) Rollback(context Context, session *proto.Session) (err error) {
-	logStats := newSqlQueryStats("Rollback", context, sq.config.SensitiveMode)
+	logStats := newSqlQueryStats("Rollback", context)
 	logStats.OriginalSql = "rollback"
 	if err = sq.startRequest(session.SessionId, true); err != nil {
 		return err
@@ -326,7 +324,7 @@ func handleExecError(query *proto.Query, err *error, logStats *SQLQueryStats) {
 
 // Execute executes the query and returns the result as response.
 func (sq *SqlQuery) Execute(context Context, query *proto.Query, reply *mproto.QueryResult) (err error) {
-	logStats := newSqlQueryStats("Execute", context, sq.config.SensitiveMode)
+	logStats := newSqlQueryStats("Execute", context)
 	allowShutdown := (query.TransactionId != 0)
 	if err = sq.startRequest(query.SessionId, allowShutdown); err != nil {
 		return err
@@ -347,7 +345,7 @@ func (sq *SqlQuery) StreamExecute(context Context, query *proto.Query, sendReply
 		return NewTabletError(FAIL, "Transactions not supported with streaming")
 	}
 
-	logStats := newSqlQueryStats("StreamExecute", context, sq.config.SensitiveMode)
+	logStats := newSqlQueryStats("StreamExecute", context)
 	if err = sq.startRequest(query.SessionId, false); err != nil {
 		return err
 	}

@@ -283,7 +283,7 @@ class Tablet(object):
   def start_vttablet(self, port=None, auth=False, memcache=False,
                      wait_for_state="SERVING", customrules=None,
                      schema_override=None, cert=None, key=None, ca_cert=None,
-                     repl_extra_flags={}, sensitive_mode=False,
+                     repl_extra_flags={},
                      target_tablet_type=None, lameduck_period=None,
                      extra_args=None, full_mycnf_args=False,
                      security_policy=None):
@@ -357,8 +357,6 @@ class Tablet(object):
                    '-key', key])
       if ca_cert:
         args.extend(['-ca_cert', ca_cert])
-    if sensitive_mode:
-      args.extend(['-queryserver-config-sensitive-mode'])
     if target_tablet_type:
       args.extend(['-target_tablet_type', target_tablet_type,
                    '-health_check_interval', '2s',

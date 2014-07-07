@@ -8,6 +8,7 @@ select -1 from t where b = -2
 select 1 from t // aa#select 1 from t
 select 1 from t -- aa#select 1 from t
 select /* simplest */ 1 from t
+select /* double star **/ 1 from t
 select /* double */ /* comment */ 1 from t
 select /* back-quote */ 1 from `t`#select /* back-quote */ 1 from t
 select /* back-quote keyword */ 1 from `from`#select /* back-quote keyword */ 1 from `from`
@@ -73,7 +74,7 @@ select /* is not null */ 1 from t where a is not null
 select /* < */ 1 from t where a < b
 select /* <= */ 1 from t where a <= b
 select /* >= */ 1 from t where a >= b
-select /* <> */ 1 from t where a <> b
+select /* <> */ 1 from t where a != b
 select /* <=> */ 1 from t where a <=> b
 select /* != */ 1 from t where a != b
 select /* single value expre list */ 1 from t where a in (b)

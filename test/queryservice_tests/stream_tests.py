@@ -84,8 +84,9 @@ class TestStream(framework.TestCase):
       thd.join()
       with self.assertRaises(dbexceptions.DatabaseError) as cm:
         cu.fetchall()
-      errMsg = "Lost connection to MySQL server during query (errno 2013)"
-      self.assertTrue(errMsg in str(cm.exception), "did not raise connection lost error")
+      errMsg1 = "error: Lost connection to MySQL server during query (errno 2013)"
+      errMsg2 = "error: Query execution was interrupted (errno 1317)"
+      self.assertTrue(cm.exception not in (errMsg1, errMsg2), "did not raise interruption error: %s" % str(cm.exception))
       cu.close()
     except Exception, e:
       self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))

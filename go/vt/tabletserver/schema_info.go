@@ -86,10 +86,9 @@ type SchemaInfo struct {
 	reloadTime     time.Duration
 	lastChange     time.Time
 	ticks          *timer.Timer
-	sensitiveMode  bool
 }
 
-func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration, sensitiveMode bool) *SchemaInfo {
+func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration) *SchemaInfo {
 	si := &SchemaInfo{
 		queryCacheSize: queryCacheSize,
 		queries:        cache.NewLRUCache(int64(queryCacheSize)),
@@ -97,7 +96,6 @@ func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout tim
 		connPool:       dbconnpool.NewConnectionPool("", 2, idleTimeout),
 		reloadTime:     reloadTime,
 		ticks:          timer.NewTimer(reloadTime),
-		sensitiveMode:  sensitiveMode,
 	}
 	stats.Publish("QueryCacheLength", stats.IntFunc(si.queries.Length))
 	stats.Publish("QueryCacheSize", stats.IntFunc(si.queries.Size))
@@ -114,10 +112,7 @@ func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout tim
 	_ = stats.NewMapCountersFunc("QueryTimesNs", []string{"Table", "Plan"}, si.getQueryTime)
 	_ = stats.NewMapCountersFunc("QueryRowCounts", []string{"Table", "Plan"}, si.getQueryRowCount)
 	_ = stats.NewMapCountersFunc("QueryErrorCounts", []string{"Table", "Plan"}, si.getQueryErrorCount)
-	// query_plans cannot be shown in sensitive mode
-	if !si.sensitiveMode {
-		http.Handle("/debug/query_plans", si)
-	}
+	http.Handle("/debug/query_plans", si)
 	http.Handle("/debug/query_stats", si)
 	http.Handle("/debug/table_stats", si)
 	http.Handle("/debug/schema", si)
@@ -323,7 +318,7 @@ func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string) (plan *ExecPl
 		}
 		return tableInfo.Table, true
 	}
-	splan, err := sqlparser.ExecParse(sql, GetTable, si.sensitiveMode)
+	splan, err := sqlparser.ExecParse(sql, GetTable)
 	if err != nil {
 		panic(NewTabletError(FAIL, "%s", err))
 	}
@@ -355,7 +350,7 @@ func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string) (plan *ExecPl
 // GetStreamPlan is similar to GetPlan, but doesn't use the cache
 // and doesn't enforce a limit. It also just returns the parsed query.
 func (si *SchemaInfo) GetStreamPlan(sql string) *sqlparser.StreamExecPlan {
-	plan, err := sqlparser.StreamExecParse(sql, si.sensitiveMode)
+	plan, err := sqlparser.StreamExecParse(sql)
 	if err != nil {
 		panic(NewTabletError(FAIL, "%s", err))
 	}
@@ -528,7 +523,7 @@ func (si *SchemaInfo) ServeHTTP(response http.ResponseWriter, request *http.Requ
 		for _, v := range keys {
 			if plan := si.getQuery(v); plan != nil {
 				var pqstats perQueryStats
-				pqstats.Query = unicoded(plan.DisplayQuery)
+				pqstats.Query = unicoded(v)
 				pqstats.Table = plan.TableName
 				pqstats.Plan = plan.PlanId
 				pqstats.QueryCount, pqstats.Time, pqstats.RowCount, pqstats.ErrorCount = plan.Stats()

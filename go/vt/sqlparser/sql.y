@@ -8,30 +8,28 @@ package sqlparser
 import "bytes"
 
 func SetParseTree(yylex interface{}, stmt Statement) {
-  tn := yylex.(*Tokenizer)
-  tn.ParseTree = stmt
+  yylex.(*Tokenizer).ParseTree = stmt
 }
 
 func SetAllowComments(yylex interface{}, allow bool) {
-  tn := yylex.(*Tokenizer)
-  tn.AllowComments = allow
+  yylex.(*Tokenizer).AllowComments = allow
 }
 
 func ForceEOF(yylex interface{}) {
-  tn := yylex.(*Tokenizer)
-  tn.ForceEOF = true
+  yylex.(*Tokenizer).ForceEOF = true
 }
 
 var (
-  SHARE = []byte("share")
-  MODE  = []byte("mode")
+  SHARE =        []byte("share")
+  MODE  =        []byte("mode")
+  IF_BYTES =     []byte("if")
+  VALUES_BYTES = []byte("values")
 )
 
 %}
 
 %union {
   empty       struct{}
-  node        *Node
   statement   Statement
   selStmt     SelectStatement
   byt         byte
@@ -65,30 +63,30 @@ var (
   updateExpr  *UpdateExpr
 }
 
-%token <node> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT COMMENT FOR
-%token <node> ALL DISTINCT AS EXISTS IN IS LIKE BETWEEN NULL ASC DESC VALUES INTO DUPLICATE KEY DEFAULT SET LOCK
-%token <node> ID STRING NUMBER VALUE_ARG
-%token <node> LE GE NE NULL_SAFE_EQUAL
-%token <node> LEX_ERROR
-%token <node> '(' '=' '<' '>' '~'
+%token LEX_ERROR
+%token <empty> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT FOR
+%token <empty> ALL DISTINCT AS EXISTS IN IS LIKE BETWEEN NULL ASC DESC VALUES INTO DUPLICATE KEY DEFAULT SET LOCK
+%token <bytes> ID STRING NUMBER VALUE_ARG COMMENT
+%token <empty> LE GE NE NULL_SAFE_EQUAL
+%token <empty> '(' '=' '<' '>' '~'
 
-%left <node> UNION MINUS EXCEPT INTERSECT
-%left <node> ','
-%left <node> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
-%left <node> ON
-%left <node> AND OR
-%right <node> NOT
-%left <node> '&' '|' '^'
-%left <node> '+' '-'
-%left <node> '*' '/' '%'
-%nonassoc <node> '.'
-%left <node> UNARY
-%right <node> CASE, WHEN, THEN, ELSE
-%left <node> END
+%left <empty> UNION MINUS EXCEPT INTERSECT
+%left <empty> ','
+%left <empty> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
+%left <empty> ON
+%left <empty> AND OR
+%right <empty> NOT
+%left <empty> '&' '|' '^'
+%left <empty> '+' '-'
+%left <empty> '*' '/' '%'
+%nonassoc <empty> '.'
+%left <empty> UNARY
+%right <empty> CASE, WHEN, THEN, ELSE
+%left <empty> END
 
 // DDL Tokens
-%token <node> CREATE ALTER DROP RENAME
-%token <node> TABLE INDEX VIEW TO IGNORE IF UNIQUE USING
+%token <empty> CREATE ALTER DROP RENAME
+%token <empty> TABLE INDEX VIEW TO IGNORE IF UNIQUE USING
 
 %start any_command
 
@@ -138,8 +136,8 @@ var (
 %type <updateExprs> update_list
 %type <updateExpr> update_expression
 %type <empty> exists_opt not_exists_opt ignore_opt non_rename_operation to_opt constraint_opt using_opt
-%type <node> sql_id
-%type <node> force_eof
+%type <bytes> sql_id
+%type <empty> force_eof
 
 %%
 
@@ -166,11 +164,11 @@ command:
 select_statement:
   SELECT comment_opt distinct_opt select_expression_list FROM table_expression_list where_expression_opt group_by_opt having_opt order_by_opt limit_opt lock_opt
   {
-    $$ = &Select{Comments: Comments($2), Distinct: $3, SelectExprs: $4, From: $6, Where: NewWhere("where", $7), GroupBy: GroupBy($8), Having: NewWhere("having", $9), OrderBy: $10, Limit: $11, Lock: $12}
+    $$ = &Select{Comments: Comments($2), Distinct: $3, SelectExprs: $4, From: $6, Where: NewWhere(AST_WHERE, $7), GroupBy: GroupBy($8), Having: NewWhere(AST_HAVING, $9), OrderBy: $10, Limit: $11, Lock: $12}
   }
 | select_statement union_op select_statement %prec UNION
   {
-    $$ = &Union{Type: $2, Select1: $1, Select2: $3}
+    $$ = &Union{Type: $2, Left: $1, Right: $3}
   }
 
 insert_statement:
@@ -182,70 +180,70 @@ insert_statement:
 update_statement:
   UPDATE comment_opt dml_table_expression SET update_list where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Update{Comments: Comments($2), Table: $3, List: $5, Where: NewWhere("where", $6), OrderBy: $7, Limit: $8}
+    $$ = &Update{Comments: Comments($2), Table: $3, Exprs: $5, Where: NewWhere(AST_WHERE, $6), OrderBy: $7, Limit: $8}
   }
 
 delete_statement:
   DELETE comment_opt FROM dml_table_expression where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{Comments: Comments($2), Table: $4, Where: NewWhere("where", $5), OrderBy: $6, Limit: $7}
+    $$ = &Delete{Comments: Comments($2), Table: $4, Where: NewWhere(AST_WHERE, $5), OrderBy: $6, Limit: $7}
   }
 
 set_statement:
   SET comment_opt update_list
   {
-    $$ = &Set{Comments: Comments($2), Updates: $3}
+    $$ = &Set{Comments: Comments($2), Exprs: $3}
   }
 
 create_statement:
   CREATE TABLE not_exists_opt ID force_eof
   {
-    $$ = &DDLSimple{Action: CREATE, Table: $4.Value}
+    $$ = &DDL{Action: AST_CREATE, NewName: $4}
   }
 | CREATE constraint_opt INDEX sql_id using_opt ON ID force_eof
   {
     // Change this to an alter statement
-    $$ = &DDLSimple{Action: ALTER, Table: $7.Value}
+    $$ = &DDL{Action: AST_ALTER, Table: $7, NewName: $7}
   }
 | CREATE VIEW sql_id force_eof
   {
-    $$ = &DDLSimple{Action: CREATE, Table: $3.Value}
+    $$ = &DDL{Action: AST_CREATE, NewName: $3}
   }
 
 alter_statement:
   ALTER ignore_opt TABLE ID non_rename_operation force_eof
   {
-    $$ = &DDLSimple{Action: ALTER, Table: $4.Value}
+    $$ = &DDL{Action: AST_ALTER, Table: $4, NewName: $4}
   }
 | ALTER ignore_opt TABLE ID RENAME to_opt ID
   {
     // Change this to a rename statement
-    $$ = &Rename{OldName: $4.Value, NewName: $7.Value}
+    $$ = &DDL{Action: AST_RENAME, Table: $4, NewName: $7}
   }
 | ALTER VIEW sql_id force_eof
   {
-    $$ = &DDLSimple{Action: ALTER, Table: $3.Value}
+    $$ = &DDL{Action: AST_ALTER, Table: $3, NewName: $3}
   }
 
 rename_statement:
   RENAME TABLE ID TO ID
   {
-    $$ = &Rename{OldName: $3.Value, NewName: $5.Value}
+    $$ = &DDL{Action: AST_RENAME, Table: $3, NewName: $5}
   }
 
 drop_statement:
   DROP TABLE exists_opt ID
   {
-    $$ = &DDLSimple{Action: DROP, Table: $4.Value}
+    $$ = &DDL{Action: AST_DROP, Table: $4}
   }
 | DROP INDEX sql_id ON ID
   {
     // Change this to an alter statement
-    $$ = &DDLSimple{Action: ALTER, Table: $5.Value}
+    $$ = &DDL{Action: AST_ALTER, Table: $5, NewName: $5}
   }
 | DROP VIEW exists_opt sql_id force_eof
   {
-    $$ = &DDLSimple{Action: DROP, Table: $4.Value}
+    $$ = &DDL{Action: AST_DROP, Table: $4}
   }
 
 comment_opt:
@@ -264,29 +262,29 @@ comment_list:
   }
 | comment_list COMMENT
   {
-    $$ = append($1, $2.Value)
+    $$ = append($1, $2)
   }
 
 union_op:
   UNION
   {
-    $$ = "union"
+    $$ = AST_UNION
   }
 | UNION ALL
   {
-    $$ = "union all"
+    $$ = AST_UNION_ALL
   }
 | MINUS
   {
-    $$ = "minus"
+    $$ = AST_SET_MINUS
   }
 | EXCEPT
   {
-    $$ = "except"
+    $$ = AST_EXCEPT
   }
 | INTERSECT
   {
-    $$ = "intersect"
+    $$ = AST_INTERSECT
   }
 
 distinct_opt:
@@ -295,7 +293,7 @@ distinct_opt:
   }
 | DISTINCT
   {
-    $$ = "distinct "
+    $$ = AST_DISTINCT
   }
 
 select_expression_list:
@@ -319,7 +317,7 @@ select_expression:
   }
 | ID '.' '*'
   {
-    $$ = &StarExpr{TableName: $1.Value}
+    $$ = &StarExpr{TableName: $1}
   }
 
 expression:
@@ -338,11 +336,11 @@ as_lower_opt:
   }
 | sql_id
   {
-    $$ = $1.Value
+    $$ = $1
   }
 | AS sql_id
   {
-    $$ = $2.Value
+    $$ = $2
   }
 
 table_expression_list:
@@ -379,59 +377,59 @@ as_opt:
   }
 | ID
   {
-    $$ = $1.Value
+    $$ = $1
   }
 | AS ID
   {
-    $$ = $2.Value
+    $$ = $2
   }
 
 join_type:
   JOIN
   {
-    $$ = "join"
+    $$ = AST_JOIN
   }
 | STRAIGHT_JOIN
   {
-    $$ = "straight_join"
+    $$ = AST_STRAIGHT_JOIN
   }
 | LEFT JOIN
   {
-    $$ = "left join"
+    $$ = AST_LEFT_JOIN
   }
 | LEFT OUTER JOIN
   {
-    $$ = "left join"
+    $$ = AST_LEFT_JOIN
   }
 | RIGHT JOIN
   {
-    $$ = "right join"
+    $$ = AST_RIGHT_JOIN
   }
 | RIGHT OUTER JOIN
   {
-    $$ = "right join"
+    $$ = AST_RIGHT_JOIN
   }
 | INNER JOIN
   {
-    $$ = "join"
+    $$ = AST_JOIN
   }
 | CROSS JOIN
   {
-    $$ = "cross join"
+    $$ = AST_CROSS_JOIN
   }
 | NATURAL JOIN
   {
-    $$ = "natural join"
+    $$ = AST_NATURAL_JOIN
   }
 
 simple_table_expression:
 ID
   {
-    $$ = &TableName{Name: $1.Value}
+    $$ = &TableName{Name: $1}
   }
 | ID '.' ID
   {
-    $$ = &TableName{Qualifier: $1.Value, Name: $3.Value}
+    $$ = &TableName{Qualifier: $1, Name: $3}
   }
 | subquery
   {
@@ -441,11 +439,11 @@ ID
 dml_table_expression:
 ID
   {
-    $$ = &TableName{Name: $1.Value}
+    $$ = &TableName{Name: $1}
   }
 | ID '.' ID
   {
-    $$ = &TableName{Qualifier: $1.Value, Name: $3.Value}
+    $$ = &TableName{Qualifier: $1, Name: $3}
   }
 
 index_hint_list:
@@ -454,25 +452,25 @@ index_hint_list:
   }
 | USE INDEX '(' index_list ')'
   {
-    $$ = &IndexHints{Type: "use", Indexes: $4}
+    $$ = &IndexHints{Type: AST_USE, Indexes: $4}
   }
 | IGNORE INDEX '(' index_list ')'
   {
-    $$ = &IndexHints{Type: "ignore", Indexes: $4}
+    $$ = &IndexHints{Type: AST_IGNORE, Indexes: $4}
   }
 | FORCE INDEX '(' index_list ')'
   {
-    $$ = &IndexHints{Type: "force", Indexes: $4}
+    $$ = &IndexHints{Type: AST_FORCE, Indexes: $4}
   }
 
 index_list:
   sql_id
   {
-    $$ = [][]byte{$1.Value}
+    $$ = [][]byte{$1}
   }
 | index_list ',' sql_id
   {
-    $$ = append($1, $3.Value)
+    $$ = append($1, $3)
   }
 
 where_expression_opt:
@@ -510,35 +508,35 @@ condition:
   }
 | value_expression IN tuple
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: "in", Right: $3}
+    $$ = &ComparisonExpr{Left: $1, Operator: AST_IN, Right: $3}
   }
 | value_expression NOT IN tuple
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: "not in", Right: $4}
+    $$ = &ComparisonExpr{Left: $1, Operator: AST_NOT_IN, Right: $4}
   }
 | value_expression LIKE value_expression
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: "like", Right: $3}
+    $$ = &ComparisonExpr{Left: $1, Operator: AST_LIKE, Right: $3}
   }
 | value_expression NOT LIKE value_expression
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: "not like", Right: $4}
+    $$ = &ComparisonExpr{Left: $1, Operator: AST_NOT_LIKE, Right: $4}
   }
 | value_expression BETWEEN value_expression AND value_expression
   {
-    $$ = &RangeCond{Left: $1, Operator: "between", From: $3, To: $5}
+    $$ = &RangeCond{Left: $1, Operator: AST_BETWEEN, From: $3, To: $5}
   }
 | value_expression NOT BETWEEN value_expression AND value_expression
   {
-    $$ = &RangeCond{Left: $1, Operator: "not between", From: $4, To: $6}
+    $$ = &RangeCond{Left: $1, Operator: AST_NOT_BETWEEN, From: $4, To: $6}
   }
 | value_expression IS NULL
   {
-    $$ = &NullCheck{Operator: "is null", Expr: $1}
+    $$ = &NullCheck{Operator: AST_IS_NULL, Expr: $1}
   }
 | value_expression IS NOT NULL
   {
-    $$ = &NullCheck{Operator: "is not null", Expr: $1}
+    $$ = &NullCheck{Operator: AST_IS_NOT_NULL, Expr: $1}
   }
 | EXISTS subquery
   {
@@ -548,31 +546,31 @@ condition:
 compare:
   '='
   {
-    $$ = "="
+    $$ = AST_EQ
   }
 | '<'
   {
-    $$ = "<"
+    $$ = AST_LT
   }
 | '>'
   {
-    $$ = ">"
+    $$ = AST_GT
   }
 | LE
   {
-    $$ = "<="
+    $$ = AST_LE
   }
 | GE
   {
-    $$ = ">="
+    $$ = AST_GE
   }
 | NE
   {
-    $$ = string($1.Value)
+    $$ = AST_NE
   }
 | NULL_SAFE_EQUAL
   {
-    $$ = "<=>"
+    $$ = AST_NSE
   }
 
 row_list:
@@ -598,7 +596,7 @@ tuple_list:
 tuple:
   '(' value_expression_list ')'
   {
-    $$ = ValueTuple($2)
+    $$ = ValTuple($2)
   }
 | subquery
   {
@@ -636,42 +634,42 @@ value_expression:
   }
 | value_expression '&' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: '&', Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: AST_BITAND, Right: $3}
   }
 | value_expression '|' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: '|', Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: AST_BITOR, Right: $3}
   }
 | value_expression '^' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: '^', Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: AST_BITXOR, Right: $3}
   }
 | value_expression '+' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: '+', Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: AST_PLUS, Right: $3}
   }
 | value_expression '-' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: '-', Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: AST_MINUS, Right: $3}
   }
 | value_expression '*' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: '*', Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: AST_MULT, Right: $3}
   }
 | value_expression '/' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: '/', Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: AST_DIV, Right: $3}
   }
 | value_expression '%' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: '%', Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: AST_MOD, Right: $3}
   }
 | unary_operator value_expression %prec UNARY
   {
-    if num, ok := $2.(NumValue); ok {
+    if num, ok := $2.(NumVal); ok {
       switch $1 {
       case '-':
-        $$ = append(NumValue("-"), num...)
+        $$ = append(NumVal("-"), num...)
       case '+':
         $$ = num
       default:
@@ -683,15 +681,15 @@ value_expression:
   }
 | sql_id '(' ')'
   {
-    $$ = &FuncExpr{Name: $1.Value}
+    $$ = &FuncExpr{Name: $1}
   }
 | sql_id '(' select_expression_list ')'
   {
-    $$ = &FuncExpr{Name: $1.Value, Exprs: $3}
+    $$ = &FuncExpr{Name: $1, Exprs: $3}
   }
 | sql_id '(' DISTINCT select_expression_list ')'
   {
-    $$ = &FuncExpr{Name: $1.Value, Distinct: true, Exprs: $4}
+    $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4}
   }
 | keyword_as_func '(' select_expression_list ')'
   {
@@ -705,25 +703,25 @@ value_expression:
 keyword_as_func:
   IF
   {
-    $$ = $1.Value
+    $$ = IF_BYTES
   }
 | VALUES
   {
-    $$ = $1.Value
+    $$ = VALUES_BYTES
   }
 
 unary_operator:
   '+'
   {
-    $$ = '+'
+    $$ = AST_UPLUS
   }
 | '-'
   {
-    $$ = '-'
+    $$ = AST_UMINUS
   }
 | '~'
   {
-    $$ = '~'
+    $$ = AST_TILDA
   }
 
 case_expression:
@@ -769,29 +767,29 @@ else_expression_opt:
 column_name:
   sql_id
   {
-    $$ = &ColName{Name: $1.Value}
+    $$ = &ColName{Name: $1}
   }
 | ID '.' sql_id
   {
-    $$ = &ColName{Qualifier: $1.Value, Name: $3.Value}
+    $$ = &ColName{Qualifier: $1, Name: $3}
   }
 
 value:
   STRING
   {
-    $$ = StringValue($1.Value)
+    $$ = StrVal($1)
   }
 | NUMBER
   {
-    $$ = NumValue($1.Value)
+    $$ = NumVal($1)
   }
 | VALUE_ARG
   {
-    $$ = ValueArg($1.Value)
+    $$ = ValArg($1)
   }
 | NULL
   {
-    $$ = &NullValue{}
+    $$ = &NullVal{}
   }
 
 group_by_opt:
@@ -839,15 +837,15 @@ order:
 
 asc_desc_opt:
   {
-    $$ = "asc"
+    $$ = AST_ASC
   }
 | ASC
   {
-    $$ = "asc"
+    $$ = AST_ASC
   }
 | DESC
   {
-    $$ = "desc"
+    $$ = AST_DESC
   }
 
 limit_opt:
@@ -869,19 +867,19 @@ lock_opt:
   }
 | FOR UPDATE
   {
-    $$ = " for update"
+    $$ = AST_FOR_UPDATE
   }
 | LOCK IN sql_id sql_id
   {
-    if !bytes.Equal($3.Value, SHARE) {
+    if !bytes.Equal($3, SHARE) {
       yylex.Error("expecting share")
       return 1
     }
-    if !bytes.Equal($4.Value, MODE) {
+    if !bytes.Equal($4, MODE) {
       yylex.Error("expecting mode")
       return 1
     }
-    $$ = " lock in share mode"
+    $$ = AST_SHARE_MODE
   }
 
 column_list_opt:
@@ -973,7 +971,7 @@ using_opt:
 sql_id:
   ID
   {
-    $$.LowerCase()
+    $$ = bytes.ToLower($1)
   }
 
 force_eof:
