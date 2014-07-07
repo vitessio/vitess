@@ -128,11 +128,6 @@ type ExecPlan struct {
 	Reason    ReasonType
 	TableName string
 
-	// DisplayQuery is the displayable version of the
-	// original query. Depending on the mode, it may be
-	// the original query, or an anonymized version.
-	DisplayQuery string
-
 	// FieldQuery is used to fetch field info
 	FieldQuery *ParsedQuery
 
@@ -173,13 +168,12 @@ type DDLPlan struct {
 }
 
 type StreamExecPlan struct {
-	DisplayQuery string
-	FullQuery    *ParsedQuery
+	FullQuery *ParsedQuery
 }
 
 type TableGetter func(tableName string) (*schema.Table, bool)
 
-func ExecParse(sql string, getTable TableGetter, sensitiveMode bool) (plan *ExecPlan, err error) {
+func ExecParse(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
 	defer handleError(&err)
 
 	statement, err := Parse(sql)
@@ -190,15 +184,10 @@ func ExecParse(sql string, getTable TableGetter, sensitiveMode bool) (plan *Exec
 	if plan.PlanId == PLAN_PASS_DML {
 		log.Warningf("PASS_DML: %s", sql)
 	}
-	if sensitiveMode {
-		plan.DisplayQuery = GenerateAnonymizedQuery(statement)
-	} else {
-		plan.DisplayQuery = sql
-	}
 	return plan, nil
 }
 
-func StreamExecParse(sql string, sensitiveMode bool) (plan *StreamExecPlan, err error) {
+func StreamExecParse(sql string) (plan *StreamExecPlan, err error) {
 	defer handleError(&err)
 
 	statement, err := Parse(sql)
@@ -217,12 +206,6 @@ func StreamExecParse(sql string, sensitiveMode bool) (plan *StreamExecPlan, err 
 		return nil, NewParserError("'%v' not allowed for streaming", String(stmt))
 	}
 	plan = &StreamExecPlan{FullQuery: GenerateFullQuery(statement)}
-
-	if sensitiveMode {
-		plan.DisplayQuery = GenerateAnonymizedQuery(statement)
-	} else {
-		plan.DisplayQuery = sql
-	}
 
 	return plan, nil
 }
@@ -979,12 +962,6 @@ func GenerateFullQuery(statement Statement) *ParsedQuery {
 	buf := NewTrackedBuffer(nil)
 	statement.Format(buf)
 	return buf.ParsedQuery()
-}
-
-func GenerateAnonymizedQuery(statement Statement) string {
-	buf := NewTrackedBuffer(AnonymizedFormatter)
-	buf.Fprintf("%v", statement)
-	return buf.ParsedQuery().Query
 }
 
 func GenerateFieldQuery(statement Statement) *ParsedQuery {

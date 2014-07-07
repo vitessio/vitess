@@ -116,14 +116,3 @@ func (buf *TrackedBuffer) WriteArg(arg string) {
 func (buf *TrackedBuffer) ParsedQuery() *ParsedQuery {
 	return &ParsedQuery{buf.String(), buf.bindLocations}
 }
-
-// AnonymizedFormatter is a formatter that
-// anonymizes all values in the SQL.
-func AnonymizedFormatter(buf *TrackedBuffer, node SQLNode) {
-	switch node := node.(type) {
-	case StrVal, NumVal:
-		buf.Fprintf("?")
-	default:
-		node.Format(buf)
-	}
-}

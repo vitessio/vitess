@@ -36,7 +36,6 @@ queryservice_test:
 	else \
 		time test/queryservice_test.py ; \
 	fi
-	time test/sensitive_info_test.py
 
 #export VT_TEST_FLAGS=-v for instance
 integration_test_files = clone.py \
