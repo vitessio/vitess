@@ -2,6 +2,7 @@ package tabletserver
 
 import (
 	"fmt"
+	"html/template"
 	"sort"
 	"sync"
 	"time"
@@ -74,8 +75,7 @@ func (ql *QueryList) TerminateAll() {
 // QueryDetailzRow is used for rendering QueryDetail in a template
 type QueryDetailzRow struct {
 	Query             string
-	RemoteAddr        string
-	Username          string
+	ContextHTML       template.HTML
 	Start             time.Time
 	Duration          time.Duration
 	SessionID         int64
@@ -98,8 +98,7 @@ func (ql *QueryList) GetQueryzRows() []QueryDetailzRow {
 	for _, qd := range ql.queryDetails {
 		row := QueryDetailzRow{
 			Query:         qd.query.Sql,
-			RemoteAddr:    qd.context.GetRemoteAddr(),
-			Username:      qd.context.GetUsername(),
+			ContextHTML:   qd.context.HTML(),
 			Start:         qd.start,
 			Duration:      time.Now().Sub(qd.start),
 			SessionID:     qd.query.SessionId,

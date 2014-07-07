@@ -7,6 +7,7 @@ package tabletserver
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"net/url"
 	"strings"
 	"time"
@@ -149,6 +150,10 @@ func (log *SQLQueryStats) RemoteAddr() string {
 
 func (log *SQLQueryStats) Username() string {
 	return log.context.GetUsername()
+}
+
+func (log *SQLQueryStats) ContextHTML() template.HTML {
+	return log.context.HTML()
 }
 
 // String returns a tab separated list of logged fields.

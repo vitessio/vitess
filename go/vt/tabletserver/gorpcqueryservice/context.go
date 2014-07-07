@@ -2,6 +2,7 @@ package gorpcqueryservice
 
 import (
 	"fmt"
+	"html/template"
 
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
 )
@@ -22,6 +23,13 @@ func (grc *GoRPCContext) GetRemoteAddr() string {
 // GetUsername implements Context.GetUsername
 func (grc *GoRPCContext) GetUsername() string {
 	return grc.Username
+}
+
+// HTML implements Context.HTML
+func (grc *GoRPCContext) HTML() template.HTML {
+	result := "<b>RemoteAddr:</b> " + grc.RemoteAddr + "</br>\n"
+	result += "<b>Username:</b> " + grc.Username + "</br>\n"
+	return template.HTML(result)
 }
 
 // String implements Context.String
