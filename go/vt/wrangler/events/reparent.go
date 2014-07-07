@@ -20,7 +20,7 @@ type Reparent struct {
 func (r *Reparent) UpdateStatus(status string) {
 	r.Status = status
 
-	// make a copy since we're calling Dispatch asynchronously
-	ev := *r
-	go event.Dispatch(&ev)
+	// Dispatch must be synchronous here to avoid dropping events that are
+	// queued up just before main() returns.
+	event.Dispatch(r)
 }
