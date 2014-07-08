@@ -9,7 +9,6 @@ import (
 	"strconv"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/schema"
 )
 
@@ -268,7 +267,7 @@ func execAnalyzeSelect(sel *Select, getTable TableGetter) (plan *ExecPlan) {
 		return plan
 	}
 
-	if !execAnalyzeSelectStructure(sel) {
+	if sel.Distinct != "" || sel.GroupBy != nil || sel.Having != nil {
 		plan.Reason = REASON_SELECT
 		return plan
 	}
@@ -534,58 +533,33 @@ func (node *ExecPlan) setTableInfo(tableName string, getTable TableGetter) *sche
 }
 
 //-----------------------------------------------
-// Select
-
-func execAnalyzeSelectStructure(sel *Select) bool {
-	if sel.Distinct != "" {
-		return false
-	}
-	if sel.GroupBy != nil {
-		return false
-	}
-	if sel.Having != nil {
-		return false
-	}
-	return true
-}
-
-//-----------------------------------------------
 // Select Expressions
 
 func execAnalyzeSelectExprs(exprs SelectExprs, table *schema.Table) (selects []int) {
 	selects = make([]int, 0, len(exprs))
 	for _, expr := range exprs {
-		if name := execAnalyzeSelectExpr(expr); name != "" {
-			if name == "*" {
-				for colIndex := range table.Columns {
-					selects = append(selects, colIndex)
-				}
-			} else if colIndex := table.FindColumn(name); colIndex != -1 {
+		switch expr := expr.(type) {
+		case *StarExpr:
+			// Append all columns.
+			for colIndex := range table.Columns {
 				selects = append(selects, colIndex)
-			} else {
+			}
+		case *NonStarExpr:
+			name := GetColName(expr.Expr)
+			if name == "" {
+				// Not a simple column name.
+				return nil
+			}
+			colIndex := table.FindColumn(name)
+			if colIndex == -1 {
 				panic(NewParserError("column %s not found in table %s", name, table.Name))
 			}
-		} else {
-			// Complex expression
-			return nil
+			selects = append(selects, colIndex)
+		default:
+			panic("unreachable")
 		}
 	}
 	return selects
-}
-
-func execAnalyzeSelectExpr(expr SelectExpr) string {
-	switch expr := expr.(type) {
-	case *StarExpr:
-		return "*"
-	case *NonStarExpr:
-		switch node := expr.Expr.(type) {
-		case BoolExpr:
-			return ""
-		case ValExpr:
-			return GetColName(node)
-		}
-	}
-	panic("unreachable")
 }
 
 //-----------------------------------------------
@@ -653,8 +627,7 @@ func execAnalyzeBoolean(node BoolExpr) (conditions []BoolExpr) {
 
 func execAnalyzeUpdateExpressions(exprs UpdateExprs, pkIndex *schema.Index) (pkValues []interface{}, ok bool) {
 	for _, expr := range exprs {
-		columnName := string(GetColName(expr.Name))
-		index := pkIndex.FindColumn(columnName)
+		index := pkIndex.FindColumn(GetColName(expr.Name))
 		if index == -1 {
 			continue
 		}
@@ -665,7 +638,11 @@ func execAnalyzeUpdateExpressions(exprs UpdateExprs, pkIndex *schema.Index) (pkV
 		if pkValues == nil {
 			pkValues = make([]interface{}, len(pkIndex.Columns))
 		}
-		pkValues[index] = asInterface(expr.Expr)
+		var err error
+		pkValues[index], err = AsInterface(expr.Expr)
+		if err != nil {
+			panic(NewParserError("%v", err))
+		}
 	}
 	return pkValues, true
 }
@@ -683,7 +660,7 @@ func getInsertPKColumns(columns Columns, tableInfo *schema.Table) (pkColumnNumbe
 		pkColumnNumbers[i] = -1
 	}
 	for i, column := range columns {
-		index := pkIndex.FindColumn(string(GetColName(column.(*NonStarExpr).Expr)))
+		index := pkIndex.FindColumn(GetColName(column.(*NonStarExpr).Expr))
 		if index == -1 {
 			continue
 		}
@@ -713,7 +690,11 @@ func getInsertPKValues(pkColumnNumbers []int, rowList Values, tableInfo *schema.
 				log.Warningf("insert is too complex %v", node)
 				return nil
 			}
-			values[j] = asInterface(node)
+			var err error
+			values[j], err = AsInterface(node)
+			if err != nil {
+				panic(NewParserError("%v", err))
+			}
 		}
 		if len(values) == 1 {
 			pkValues[index] = values[0]
@@ -817,10 +798,12 @@ func getPKValues(conditions []BoolExpr, pkIndex *schema.Index) (pkValues []inter
 			return nil
 		}
 		switch condition.Operator {
-		case AST_EQ:
-			pkValues[index] = asInterface(condition.Right)
-		case AST_IN:
-			pkValues[index] = parseList(condition.Right.(ValTuple))
+		case AST_EQ, AST_IN:
+			var err error
+			pkValues[index], err = AsInterface(condition.Right)
+			if err != nil {
+				panic(NewParserError("%v", err))
+			}
 		default:
 			panic("unreachable")
 		}
@@ -829,14 +812,6 @@ func getPKValues(conditions []BoolExpr, pkIndex *schema.Index) (pkValues []inter
 		return pkValues
 	}
 	return nil
-}
-
-func parseList(values ValTuple) interface{} {
-	vals := make([]interface{}, 0, len(values))
-	for _, val := range values {
-		vals = append(vals, asInterface(val))
-	}
-	return vals
 }
 
 func getIndexMatch(conditions []BoolExpr, indexes []*schema.Index) string {
@@ -1049,20 +1024,4 @@ func writeColumnList(buf *TrackedBuffer, columns []schema.TableColumn) {
 		fmt.Fprintf(buf, "%s, ", columns[i].Name)
 	}
 	fmt.Fprintf(buf, "%s", columns[i].Name)
-}
-
-func asInterface(expr ValExpr) interface{} {
-	switch node := expr.(type) {
-	case ValArg:
-		return string(node)
-	case StrVal:
-		return sqltypes.MakeString(node)
-	case NumVal:
-		n, err := sqltypes.BuildNumeric(string(node))
-		if err != nil {
-			panic(NewParserError("type mismatch: %s", err))
-		}
-		return n
-	}
-	panic(NewParserError("unexpected node %v", expr))
 }

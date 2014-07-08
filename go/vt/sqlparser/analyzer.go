@@ -5,10 +5,12 @@
 package sqlparser
 
 // analyzer.go contains utility analysis functions.
-// TODO(sougou): Move some generic functions out of execution.go
-// and router.go into this file.
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/youtube/vitess/go/sqltypes"
+)
 
 // GetDBName parses the specified DML and returns the
 // db name if it was used to qualify the table name.
@@ -30,15 +32,6 @@ func GetDBName(sql string) (string, error) {
 	return "", fmt.Errorf("statement '%s' is not a dml", sql)
 }
 
-// GetColName returns the column name, only if
-// it's a simple expression. Otherwise, it returns "".
-func GetColName(node Expr) string {
-	if n, ok := node.(*ColName); ok {
-		return string(n.Name)
-	}
-	return ""
-}
-
 // GetTableName returns the table name from the SimpleTableExpr
 // only if it's a simple expression. Otherwise, it returns "".
 func GetTableName(node SimpleTableExpr) string {
@@ -46,6 +39,15 @@ func GetTableName(node SimpleTableExpr) string {
 		return string(n.Name)
 	}
 	// sub-select or '.' expression
+	return ""
+}
+
+// GetColName returns the column name, only if
+// it's a simple expression. Otherwise, it returns "".
+func GetColName(node Expr) string {
+	if n, ok := node.(*ColName); ok {
+		return string(n.Name)
+	}
 	return ""
 }
 
@@ -89,6 +91,35 @@ func IsSimpleTuple(node ValExpr) bool {
 		}
 	}
 	return true
+}
+
+// AsInterface converts the ValExpr to an interface. It converts
+// ValTuple to []interface{}, ValArg to string, StrVal to sqltypes.String,
+// NumVal to sqltypes.Numeric. Otherwise, it returns an error.
+func AsInterface(node ValExpr) (interface{}, error) {
+	switch node := node.(type) {
+	case ValTuple:
+		vals := make([]interface{}, 0, len(node))
+		for _, val := range node {
+			v, err := AsInterface(val)
+			if err != nil {
+				return nil, err
+			}
+			vals = append(vals, v)
+		}
+		return vals, nil
+	case ValArg:
+		return string(node), nil
+	case StrVal:
+		return sqltypes.MakeString(node), nil
+	case NumVal:
+		n, err := sqltypes.BuildNumeric(string(node))
+		if err != nil {
+			return nil, fmt.Errorf("type mismatch: %s", err)
+		}
+		return n, nil
+	}
+	return nil, fmt.Errorf("unexpected node %v", node)
 }
 
 // StringIn is a convenience function that returns
