@@ -1,17 +1,17 @@
-package gorpcqueryservice
+package context
 
 import (
 	"fmt"
 	"html/template"
 
-	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
+	"github.com/youtube/vitess/go/rpcwrap/proto"
 )
 
 // GoRPCContext is a Go RPC implementation of Context
-type GoRPCContext rpcproto.Context
+type GoRPCContext proto.Context
 
 // NewGoRPCContext creates a new GoRPCContext
-func NewGoRPCContext(context *rpcproto.Context) *GoRPCContext {
+func NewGoRPCContext(context *proto.Context) *GoRPCContext {
 	return (*GoRPCContext)(context)
 }
 

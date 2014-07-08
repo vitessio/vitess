@@ -7,19 +7,20 @@ import (
 	"sync"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
 // QueryDetail is a simple wrapper for Query, Context and PoolConnection
 type QueryDetail struct {
 	query   *proto.Query
-	context Context
+	context context.Context
 	connID  int64
 	start   time.Time
 }
 
 // NewQueryDetail creates a new QueryDetail
-func NewQueryDetail(query *proto.Query, context Context, connID int64) *QueryDetail {
+func NewQueryDetail(query *proto.Query, context context.Context, connID int64) *QueryDetail {
 	return &QueryDetail{query: query, context: context, connID: connID, start: time.Now()}
 }
 

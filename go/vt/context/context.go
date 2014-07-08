@@ -1,4 +1,4 @@
-package tabletserver
+package context
 
 import "html/template"
 

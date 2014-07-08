@@ -15,6 +15,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/streamlog"
+	"github.com/youtube/vitess/go/vt/context"
 )
 
 var SqlQueryLogger = streamlog.New("SqlQuery", 50)
@@ -43,11 +44,11 @@ type SQLQueryStats struct {
 	CacheInvalidations   int64
 	QuerySources         byte
 	Rows                 [][]sqltypes.Value
-	context              Context
 	TransactionID        int64
+	context              context.Context
 }
 
-func newSqlQueryStats(methodName string, context Context) *SQLQueryStats {
+func newSqlQueryStats(methodName string, context context.Context) *SQLQueryStats {
 	return &SQLQueryStats{
 		Method:    methodName,
 		StartTime: time.Now(),

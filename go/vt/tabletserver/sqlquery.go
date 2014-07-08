@@ -18,6 +18,7 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
+	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -217,7 +218,7 @@ func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo
 }
 
 // Begin starts a new transaction. This is allowed only if the state is SERVING.
-func (sq *SqlQuery) Begin(context Context, session *proto.Session, txInfo *proto.TransactionInfo) (err error) {
+func (sq *SqlQuery) Begin(context context.Context, session *proto.Session, txInfo *proto.TransactionInfo) (err error) {
 	logStats := newSqlQueryStats("Begin", context)
 	logStats.OriginalSql = "begin"
 	sq.mu.RLock()
@@ -267,7 +268,7 @@ func (sq *SqlQuery) endRequest() {
 }
 
 // Commit commits the specified transaction.
-func (sq *SqlQuery) Commit(context Context, session *proto.Session) (err error) {
+func (sq *SqlQuery) Commit(context context.Context, session *proto.Session) (err error) {
 	logStats := newSqlQueryStats("Commit", context)
 	logStats.OriginalSql = "commit"
 	logStats.TransactionID = session.TransactionId
@@ -282,7 +283,7 @@ func (sq *SqlQuery) Commit(context Context, session *proto.Session) (err error) 
 }
 
 // Rollback rollsback the specified transaction.
-func (sq *SqlQuery) Rollback(context Context, session *proto.Session) (err error) {
+func (sq *SqlQuery) Rollback(context context.Context, session *proto.Session) (err error) {
 	logStats := newSqlQueryStats("Rollback", context)
 	logStats.OriginalSql = "rollback"
 	logStats.TransactionID = session.TransactionId
@@ -325,7 +326,7 @@ func handleExecError(query *proto.Query, err *error, logStats *SQLQueryStats) {
 }
 
 // Execute executes the query and returns the result as response.
-func (sq *SqlQuery) Execute(context Context, query *proto.Query, reply *mproto.QueryResult) (err error) {
+func (sq *SqlQuery) Execute(context context.Context, query *proto.Query, reply *mproto.QueryResult) (err error) {
 	logStats := newSqlQueryStats("Execute", context)
 	logStats.TransactionID = query.TransactionId
 	allowShutdown := (query.TransactionId != 0)
@@ -342,7 +343,7 @@ func (sq *SqlQuery) Execute(context Context, query *proto.Query, reply *mproto.Q
 // StreamExecute executes the query and streams the result.
 // The first QueryResult will have Fields set (and Rows nil).
 // The subsequent QueryResult will have Rows set (and Fields nil).
-func (sq *SqlQuery) StreamExecute(context Context, query *proto.Query, sendReply func(*mproto.QueryResult) error) (err error) {
+func (sq *SqlQuery) StreamExecute(context context.Context, query *proto.Query, sendReply func(*mproto.QueryResult) error) (err error) {
 	// check cases we don't handle yet
 	if query.TransactionId != 0 {
 		return NewTabletError(FAIL, "Transactions not supported with streaming")
@@ -361,7 +362,7 @@ func (sq *SqlQuery) StreamExecute(context Context, query *proto.Query, sendReply
 // ExecuteBatch executes a group of queries and returns their results as a list.
 // ExecuteBatch can be called for an existing transaction, or it can also begin
 // its own transaction, in which case it's expected to commit it also.
-func (sq *SqlQuery) ExecuteBatch(context Context, queryList *proto.QueryList, reply *proto.QueryResultList) (err error) {
+func (sq *SqlQuery) ExecuteBatch(context context.Context, queryList *proto.QueryList, reply *proto.QueryResultList) (err error) {
 	if len(queryList.Queries) == 0 {
 		return NewTabletError(FAIL, "Empty query list")
 	}
