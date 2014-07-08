@@ -3,6 +3,8 @@
 package events
 
 import (
+	"time"
+
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -14,11 +16,20 @@ type Reparent struct {
 	OldMaster, NewMaster topo.Tablet
 
 	Status string
+
+	// eventID is used to group the steps of a single reparent in progress.
+	// It is set internally the first time UpdateStatus() is called.
+	eventID int64
 }
 
 // UpdateStatus sets a new status and then dispatches the event.
 func (r *Reparent) UpdateStatus(status string) {
 	r.Status = status
+
+	// initialize event ID
+	if r.eventID == 0 {
+		r.eventID = time.Now().UnixNano()
+	}
 
 	// make a copy since we're calling Dispatch asynchronously
 	ev := *r
