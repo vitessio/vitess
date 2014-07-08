@@ -368,7 +368,7 @@ func execAnalyzeInsert(ins *Insert, getTable TableGetter) (plan *ExecPlan) {
 		PlanId:    PLAN_PASS_DML,
 		FullQuery: GenerateFullQuery(ins),
 	}
-	tableName := collectTableName(ins.Table)
+	tableName := GetTableName(ins.Table)
 	if tableName == "" {
 		plan.Reason = REASON_TABLE
 		return plan
@@ -422,7 +422,7 @@ func execAnalyzeUpdate(upd *Update, getTable TableGetter) (plan *ExecPlan) {
 		FullQuery: GenerateFullQuery(upd),
 	}
 
-	tableName := collectTableName(upd.Table)
+	tableName := GetTableName(upd.Table)
 	if tableName == "" {
 		plan.Reason = REASON_TABLE
 		return plan
@@ -468,7 +468,7 @@ func execAnalyzeDelete(del *Delete, getTable TableGetter) (plan *ExecPlan) {
 		FullQuery: GenerateFullQuery(del),
 	}
 
-	tableName := collectTableName(del.Table)
+	tableName := GetTableName(del.Table)
 	if tableName == "" {
 		plan.Reason = REASON_TABLE
 		return plan
@@ -582,17 +582,10 @@ func execAnalyzeSelectExpr(expr SelectExpr) string {
 		case BoolExpr:
 			return ""
 		case ValExpr:
-			return execGetColumnName(node)
+			return GetColName(node)
 		}
 	}
 	panic("unreachable")
-}
-
-func execGetColumnName(node Expr) string {
-	if n, ok := node.(*ColName); ok {
-		return string(n.Name)
-	}
-	return ""
 }
 
 //-----------------------------------------------
@@ -606,15 +599,7 @@ func execAnalyzeFrom(tableExprs TableExprs) (tablename string, hasHints bool) {
 	if !ok {
 		return "", false
 	}
-	return collectTableName(node.Expr), node.Hints != nil
-}
-
-func collectTableName(node SimpleTableExpr) string {
-	if n, ok := node.(*TableName); ok && n.Qualifier == nil {
-		return string(n.Name)
-	}
-	// sub-select or '.' expression
-	return ""
+	return GetTableName(node.Expr), node.Hints != nil
 }
 
 //-----------------------------------------------
@@ -635,7 +620,7 @@ func execAnalyzeBoolean(node BoolExpr) (conditions []BoolExpr) {
 		if left == nil || right == nil {
 			return nil
 		}
-		if hasINClause(left) && hasINClause(right) {
+		if HasINClause(left) && HasINClause(right) {
 			return nil
 		}
 		return append(left, right...)
@@ -643,85 +628,24 @@ func execAnalyzeBoolean(node BoolExpr) (conditions []BoolExpr) {
 		return execAnalyzeBoolean(node.Expr)
 	case *ComparisonExpr:
 		switch {
-		case stringIn(node.Operator, AST_EQ, AST_LT, AST_GT, AST_LE, AST_GE, AST_NSE, AST_LIKE):
-			left := execAnalyzeID(node.Left)
-			right := execAnalyzeValue(node.Right)
-			if left == nil || right == nil {
-				return nil
+		case StringIn(node.Operator, AST_EQ, AST_LT, AST_GT, AST_LE, AST_GE, AST_NSE, AST_LIKE):
+			if IsColName(node.Left) && IsValue(node.Right) {
+				return []BoolExpr{node}
 			}
-			return []BoolExpr{&ComparisonExpr{Left: left, Operator: node.Operator, Right: right}}
 		case node.Operator == AST_IN:
-			left := execAnalyzeID(node.Left)
-			right := execAnalyzeSimpleINList(node.Right)
-			if left == nil || right == nil {
-				return nil
+			if IsColName(node.Left) && IsSimpleTuple(node.Right) {
+				return []BoolExpr{node}
 			}
-			return []BoolExpr{&ComparisonExpr{Left: left, Operator: node.Operator, Right: right}}
-		default:
-			return nil
 		}
 	case *RangeCond:
 		if node.Operator != AST_BETWEEN {
 			return nil
 		}
-		left := execAnalyzeID(node.Left)
-		from := execAnalyzeValue(node.From)
-		to := execAnalyzeValue(node.To)
-		if left == nil || from == nil || to == nil {
-			return nil
+		if IsColName(node.Left) && IsValue(node.From) && IsValue(node.To) {
+			return []BoolExpr{node}
 		}
-		return []BoolExpr{&RangeCond{Left: left, Operator: AST_BETWEEN, From: from, To: to}}
 	}
 	return nil
-}
-
-// stringIn is a convenience function that returns
-// true if str matches any of the values.
-func stringIn(str string, values ...string) bool {
-	for _, val := range values {
-		if str == val {
-			return true
-		}
-	}
-	return false
-}
-
-func execAnalyzeSimpleINList(expr ValExpr) ValExpr {
-	list, ok := expr.(ValTuple)
-	if !ok {
-		// It's a subquery.
-		return nil
-	}
-	for _, n := range list {
-		if execAnalyzeValue(n) == nil {
-			return nil
-		}
-	}
-	return expr
-}
-
-func execAnalyzeID(expr ValExpr) ValExpr {
-	if _, ok := expr.(*ColName); ok {
-		return expr
-	}
-	return nil
-}
-
-func execAnalyzeValue(expr ValExpr) ValExpr {
-	switch expr.(type) {
-	case StrVal, NumVal, ValArg:
-		return expr
-	}
-	return nil
-}
-
-func hasINClause(conditions []BoolExpr) bool {
-	for _, node := range conditions {
-		if c, ok := node.(*ComparisonExpr); ok && c.Operator == AST_IN {
-			return true
-		}
-	}
-	return false
 }
 
 //-----------------------------------------------
@@ -729,20 +653,19 @@ func hasINClause(conditions []BoolExpr) bool {
 
 func execAnalyzeUpdateExpressions(exprs UpdateExprs, pkIndex *schema.Index) (pkValues []interface{}, ok bool) {
 	for _, expr := range exprs {
-		columnName := string(execGetColumnName(expr.Name))
+		columnName := string(GetColName(expr.Name))
 		index := pkIndex.FindColumn(columnName)
 		if index == -1 {
 			continue
 		}
-		value := execAnalyzeValue(expr.Expr)
-		if value == nil {
+		if !IsValue(expr.Expr) {
 			log.Warningf("expression is too complex %v", expr)
 			return nil, false
 		}
 		if pkValues == nil {
 			pkValues = make([]interface{}, len(pkIndex.Columns))
 		}
-		pkValues[index] = asInterface(value)
+		pkValues[index] = asInterface(expr.Expr)
 	}
 	return pkValues, true
 }
@@ -760,7 +683,7 @@ func getInsertPKColumns(columns Columns, tableInfo *schema.Table) (pkColumnNumbe
 		pkColumnNumbers[i] = -1
 	}
 	for i, column := range columns {
-		index := pkIndex.FindColumn(string(execGetColumnName(column.(*NonStarExpr).Expr)))
+		index := pkIndex.FindColumn(string(GetColName(column.(*NonStarExpr).Expr)))
 		if index == -1 {
 			continue
 		}
@@ -786,12 +709,11 @@ func getInsertPKValues(pkColumnNumbers []int, rowList Values, tableInfo *schema.
 				panic(NewParserError("column count doesn't match value count"))
 			}
 			node := row[columnNumber]
-			value := execAnalyzeValue(node)
-			if value == nil {
+			if !IsValue(node) {
 				log.Warningf("insert is too complex %v", node)
 				return nil
 			}
-			values[j] = asInterface(value)
+			values[j] = asInterface(node)
 		}
 		if len(values) == 1 {
 			pkValues[index] = values[0]
@@ -887,7 +809,7 @@ func getPKValues(conditions []BoolExpr, pkIndex *schema.Index) (pkValues []inter
 		if !ok {
 			return nil
 		}
-		if !stringIn(condition.Operator, AST_EQ, AST_IN) {
+		if !StringIn(condition.Operator, AST_EQ, AST_IN) {
 			return nil
 		}
 		index := pkIndexScore.FindMatch(string(condition.Left.(*ColName).Name))
