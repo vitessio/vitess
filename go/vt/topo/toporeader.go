@@ -9,11 +9,11 @@ import (
 type TopoReader interface {
 	// GetSrvKeyspaces returns the names of all the keyspaces in
 	// the topology for the cell.
-	GetSrvKeyspaceNames(GetSrvKeyspaceNamesArgs, *SrvKeyspaceNames) error
+	GetSrvKeyspaceNames(*proto.Context, GetSrvKeyspaceNamesArgs, *SrvKeyspaceNames) error
 
 	// GetSrvKeyspace returns information about a keyspace in a
 	// particular cell (as specified by the GetSrvKeyspaceArgs).
-	GetSrvKeyspace(GetSrvKeyspaceArgs, *SrvKeyspace) error
+	GetSrvKeyspace(*proto.Context, GetSrvKeyspaceArgs, *SrvKeyspace) error
 
 	// GetEndPoints returns addresses for a tablet type in a shard
 	// in a keyspace (as specified in GetEndPointsArgs).

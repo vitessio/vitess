@@ -7,6 +7,7 @@ package vtgate
 import (
 	"fmt"
 
+	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
@@ -33,7 +34,7 @@ func mapKeyspaceIdsToShards(topoServ SrvTopoServer, cell, keyspace string, table
 }
 
 func getKeyspaceShards(topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType) (string, []topo.SrvShard, error) {
-	srvKeyspace, err := topoServ.GetSrvKeyspace(cell, keyspace)
+	srvKeyspace, err := topoServ.GetSrvKeyspace(&context.DummyContext{}, cell, keyspace)
 	if err != nil {
 		return "", nil, fmt.Errorf("keyspace %v fetch error: %v", keyspace, err)
 	}
@@ -41,7 +42,7 @@ func getKeyspaceShards(topoServ SrvTopoServer, cell, keyspace string, tabletType
 	// check if the keyspace has been redirected for this tabletType.
 	if servedFrom, ok := srvKeyspace.ServedFrom[tabletType]; ok {
 		keyspace = servedFrom
-		srvKeyspace, err = topoServ.GetSrvKeyspace(cell, keyspace)
+		srvKeyspace, err = topoServ.GetSrvKeyspace(&context.DummyContext{}, cell, keyspace)
 		if err != nil {
 			return "", nil, fmt.Errorf("keyspace %v fetch error: %v", keyspace, err)
 		}

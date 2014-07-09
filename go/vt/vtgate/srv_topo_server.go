@@ -33,9 +33,9 @@ const (
 // SrvTopoServer is a subset of topo.Server that only contains the serving
 // graph read-only calls used by clients to resolve serving addresses.
 type SrvTopoServer interface {
-	GetSrvKeyspaceNames(cell string) ([]string, error)
+	GetSrvKeyspaceNames(context context.Context, cell string) ([]string, error)
 
-	GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, error)
+	GetSrvKeyspace(context context.Context, cell, keyspace string) (*topo.SrvKeyspace, error)
 
 	GetEndPoints(context context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error)
 }
@@ -64,9 +64,10 @@ type srvKeyspaceNamesEntry struct {
 	// the mutex protects any access to this structure (read or write)
 	mutex sync.Mutex
 
-	insertionTime time.Time
-	value         []string
-	lastError     error
+	insertionTime    time.Time
+	value            []string
+	lastError        error
+	lastErrorContext context.Context
 }
 
 type srvKeyspaceEntry struct {
@@ -77,9 +78,10 @@ type srvKeyspaceEntry struct {
 	// the mutex protects any access to this structure (read or write)
 	mutex sync.Mutex
 
-	insertionTime time.Time
-	value         *topo.SrvKeyspace
-	lastError     error
+	insertionTime    time.Time
+	value            *topo.SrvKeyspace
+	lastError        error
+	lastErrorContext context.Context
 }
 
 type endPointsEntry struct {
@@ -145,7 +147,7 @@ func NewResilientSrvTopoServer(base topo.Server, counterName string) *ResilientS
 	}
 }
 
-func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(cell string) ([]string, error) {
+func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(context context.Context, cell string) ([]string, error) {
 	server.counts.Add(queryCategory, 1)
 
 	// find the entry in the cache, add it if not there
@@ -176,10 +178,10 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(cell string) ([]string
 	if err != nil {
 		if entry.insertionTime.IsZero() {
 			server.counts.Add(errorCategory, 1)
-			log.Errorf("GetSrvKeyspaceNames(%v) failed: %v (no cached value, caching and returning error)", cell, err)
+			log.Errorf("GetSrvKeyspaceNames(%v, %v) failed: %v (no cached value, caching and returning error)", context, cell, err)
 		} else {
 			server.counts.Add(cachedCategory, 1)
-			log.Warningf("GetSrvKeyspaceNames(%v) failed: %v (returning cached value: %v %v)", cell, err, entry.value, entry.lastError)
+			log.Warningf("GetSrvKeyspaceNames(%v, %v) failed: %v (returning cached value: %v %v)", context, cell, err, entry.value, entry.lastError)
 			return entry.value, entry.lastError
 		}
 	}
@@ -188,10 +190,11 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(cell string) ([]string
 	entry.insertionTime = time.Now()
 	entry.value = result
 	entry.lastError = err
+	entry.lastErrorContext = context
 	return result, err
 }
 
-func (server *ResilientSrvTopoServer) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, error) {
+func (server *ResilientSrvTopoServer) GetSrvKeyspace(context context.Context, cell, keyspace string) (*topo.SrvKeyspace, error) {
 	server.counts.Add(queryCategory, 1)
 
 	// find the entry in the cache, add it if not there
@@ -223,10 +226,10 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(cell, keyspace string) (*to
 	if err != nil {
 		if entry.insertionTime.IsZero() {
 			server.counts.Add(errorCategory, 1)
-			log.Errorf("GetSrvKeyspace(%v, %v) failed: %v (no cached value, caching and returning error)", cell, keyspace, err)
+			log.Errorf("GetSrvKeyspace(%v, %v, %v) failed: %v (no cached value, caching and returning error)", context, cell, keyspace, err)
 		} else {
 			server.counts.Add(cachedCategory, 1)
-			log.Warningf("GetSrvKeyspace(%v, %v) failed: %v (returning cached value: %v %v)", cell, keyspace, err, entry.value, entry.lastError)
+			log.Warningf("GetSrvKeyspace(%v, %v, %v) failed: %v (returning cached value: %v %v)", context, cell, keyspace, err, entry.value, entry.lastError)
 			return entry.value, entry.lastError
 		}
 	}
@@ -235,6 +238,7 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(cell, keyspace string) (*to
 	entry.insertionTime = time.Now()
 	entry.value = result
 	entry.lastError = err
+	entry.lastErrorContext = context
 	return result, err
 }
 
@@ -285,9 +289,7 @@ func (server *ResilientSrvTopoServer) GetEndPoints(context context.Context, cell
 	entry.originalValue = result
 	entry.value = filterUnhealthyServers(result)
 	entry.lastError = err
-	if entry.lastError != nil {
-		entry.lastErrorContext = context
-	}
+	entry.lastErrorContext = context
 	return entry.value, err
 }
 
@@ -337,9 +339,10 @@ func (server *ResilientSrvTopoServer) DegradedEndpointCount() map[string]int64 {
 
 // SrvKeyspaceNamesCacheStatus is the current value for SrvKeyspaceNames
 type SrvKeyspaceNamesCacheStatus struct {
-	Cell      string
-	Value     []string
-	LastError error
+	Cell             string
+	Value            []string
+	LastError        error
+	LastErrorContext context.Context
 }
 
 // SrvKeyspaceNamesCacheStatusList is used for sorting
@@ -362,10 +365,11 @@ func (skncsl SrvKeyspaceNamesCacheStatusList) Swap(i, j int) {
 
 // SrvKeyspaceCacheStatus is the current value for a SrvKeyspace object
 type SrvKeyspaceCacheStatus struct {
-	Cell      string
-	Keyspace  string
-	Value     *topo.SrvKeyspace
-	LastError error
+	Cell             string
+	Keyspace         string
+	Value            *topo.SrvKeyspace
+	LastError        error
+	LastErrorContext context.Context
 }
 
 // StatusAsHTML returns an HTML version of our status.
@@ -493,9 +497,10 @@ func (server *ResilientSrvTopoServer) CacheStatus() *ResilientSrvTopoServerCache
 	for _, entry := range server.srvKeyspaceNamesCache {
 		entry.mutex.Lock()
 		result.SrvKeyspaceNames = append(result.SrvKeyspaceNames, &SrvKeyspaceNamesCacheStatus{
-			Cell:      entry.cell,
-			Value:     entry.value,
-			LastError: entry.lastError,
+			Cell:             entry.cell,
+			Value:            entry.value,
+			LastError:        entry.lastError,
+			LastErrorContext: entry.lastErrorContext,
 		})
 		entry.mutex.Unlock()
 	}
@@ -503,10 +508,11 @@ func (server *ResilientSrvTopoServer) CacheStatus() *ResilientSrvTopoServerCache
 	for _, entry := range server.srvKeyspaceCache {
 		entry.mutex.Lock()
 		result.SrvKeyspaces = append(result.SrvKeyspaces, &SrvKeyspaceCacheStatus{
-			Cell:      entry.cell,
-			Keyspace:  entry.keyspace,
-			Value:     entry.value,
-			LastError: entry.lastError,
+			Cell:             entry.cell,
+			Keyspace:         entry.keyspace,
+			Value:            entry.value,
+			LastError:        entry.lastError,
+			LastErrorContext: entry.lastErrorContext,
 		})
 		entry.mutex.Unlock()
 	}

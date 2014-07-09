@@ -27,7 +27,7 @@ var (
   {{range $i, $skn := .SrvKeyspaceNames}}
   <tr>
     <td>{{github_com_youtube_vitess_vtctld_srv_cell $skn.Cell}}</td>
-    <td>{{if $skn.LastError}}<b>{{$skn.LastError}}</b>{{else}}{{range $j, $value := $skn.Value}}{{github_com_youtube_vitess_vtctld_srv_keyspace $skn.Cell $value}}&nbsp;{{end}}{{end}}</td>
+    <td>{{if $skn.LastError}}<b>{{$skn.LastError}}</b><br/>Client: {{$skn.LastErrorContext.HTML}}{{else}}{{range $j, $value := $skn.Value}}{{github_com_youtube_vitess_vtctld_srv_keyspace $skn.Cell $value}}&nbsp;{{end}}{{end}}</td>
   </tr>
   {{end}}
 </table>
@@ -45,7 +45,7 @@ var (
   <tr>
     <td>{{github_com_youtube_vitess_vtctld_srv_cell $sk.Cell}}</td>
     <td>{{github_com_youtube_vitess_vtctld_srv_keyspace $sk.Cell $sk.Keyspace}}</td>
-    <td>{{if $sk.LastError}}<b>{{$sk.LastError}}</b>{{else}}{{$sk.StatusAsHTML}}{{end}}</td>
+    <td>{{if $sk.LastError}}<b>{{$sk.LastError}}</b><br/>Client: {{$sk.LastErrorContext.HTML}}{{else}}{{$sk.StatusAsHTML}}{{end}}</td>
   </tr>
   {{end}}
 </table>
@@ -67,7 +67,7 @@ var (
     <td>{{github_com_youtube_vitess_vtctld_srv_keyspace $ep.Cell $ep.Keyspace}}</td>
     <td>{{github_com_youtube_vitess_vtctld_srv_shard $ep.Cell $ep.Keyspace $ep.Shard}}</td>
     <td>{{github_com_youtube_vitess_vtctld_srv_type $ep.Cell $ep.Keyspace $ep.Shard $ep.TabletType}}</td>
-    <td>{{if $ep.LastError}}<b>{{$ep.LastError}}</b><br/>{{$ep.LastErrorContext.HTML}}{{else}}{{$ep.StatusAsHTML}}{{end}}</td>
+    <td>{{if $ep.LastError}}<b>{{$ep.LastError}}</b><br/>Client: {{$ep.LastErrorContext.HTML}}{{else}}{{$ep.StatusAsHTML}}{{end}}</td>
   </tr>
   {{end}}
 </table>

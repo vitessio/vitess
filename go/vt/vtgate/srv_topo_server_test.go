@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -307,7 +308,7 @@ func TestCacheWithErrors(t *testing.T) {
 	rsts := NewResilientSrvTopoServer(ft, "TestCacheWithErrors")
 
 	// ask for the known keyspace, that populates the cache
-	_, err := rsts.GetSrvKeyspace("", "test_ks")
+	_, err := rsts.GetSrvKeyspace(&context.DummyContext{}, "", "test_ks")
 	if err != nil {
 		t.Fatalf("GetSrvKeyspace got unexpected error: %v", err)
 	}
@@ -315,14 +316,14 @@ func TestCacheWithErrors(t *testing.T) {
 	// now make the topo server fail, and ask again, should get cached
 	// value, not even ask underlying guy
 	ft.keyspace = "another_test_ks"
-	_, err = rsts.GetSrvKeyspace("", "test_ks")
+	_, err = rsts.GetSrvKeyspace(&context.DummyContext{}, "", "test_ks")
 	if err != nil {
 		t.Fatalf("GetSrvKeyspace got unexpected error: %v", err)
 	}
 
 	// now reduce TTL to nothing, so we won't use cache, and ask again
 	rsts.cacheTTL = 0
-	_, err = rsts.GetSrvKeyspace("", "test_ks")
+	_, err = rsts.GetSrvKeyspace(&context.DummyContext{}, "", "test_ks")
 	if err != nil {
 		t.Fatalf("GetSrvKeyspace got unexpected error: %v", err)
 	}
@@ -334,7 +335,7 @@ func TestCachedErrors(t *testing.T) {
 	rsts := NewResilientSrvTopoServer(ft, "TestCachedErrors")
 
 	// ask for an unknown keyspace, should get an error
-	_, err := rsts.GetSrvKeyspace("", "unknown_ks")
+	_, err := rsts.GetSrvKeyspace(&context.DummyContext{}, "", "unknown_ks")
 	if err == nil {
 		t.Fatalf("First GetSrvKeyspace didn't return an error")
 	}
@@ -343,7 +344,7 @@ func TestCachedErrors(t *testing.T) {
 	}
 
 	// ask again, should get an error and use cache
-	_, err = rsts.GetSrvKeyspace("", "unknown_ks")
+	_, err = rsts.GetSrvKeyspace(&context.DummyContext{}, "", "unknown_ks")
 	if err == nil {
 		t.Fatalf("Second GetSrvKeyspace didn't return an error")
 	}
@@ -353,7 +354,7 @@ func TestCachedErrors(t *testing.T) {
 
 	// ask again after expired cache, should get an error
 	rsts.cacheTTL = 0
-	_, err = rsts.GetSrvKeyspace("", "unknown_ks")
+	_, err = rsts.GetSrvKeyspace(&context.DummyContext{}, "", "unknown_ks")
 	if err == nil {
 		t.Fatalf("Third GetSrvKeyspace didn't return an error")
 	}

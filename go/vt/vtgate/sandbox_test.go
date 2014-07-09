@@ -217,7 +217,7 @@ func createUnshardedKeyspace() (*topo.SrvKeyspace, error) {
 type sandboxTopo struct {
 }
 
-func (sct *sandboxTopo) GetSrvKeyspaceNames(cell string) ([]string, error) {
+func (sct *sandboxTopo) GetSrvKeyspaceNames(context context.Context, cell string) ([]string, error) {
 	sandboxMu.Lock()
 	defer sandboxMu.Unlock()
 	keyspaces := make([]string, 0, 1)
@@ -227,7 +227,7 @@ func (sct *sandboxTopo) GetSrvKeyspaceNames(cell string) ([]string, error) {
 	return keyspaces, nil
 }
 
-func (sct *sandboxTopo) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, error) {
+func (sct *sandboxTopo) GetSrvKeyspace(context context.Context, cell, keyspace string) (*topo.SrvKeyspace, error) {
 	sand := getSandbox(keyspace)
 	if sand.SrvKeyspaceCallback != nil {
 		sand.SrvKeyspaceCallback()
