@@ -354,6 +354,27 @@ func RegisterBinlogPlayerMap(blm *BinlogPlayerMap) {
 		blm.mu.Unlock()
 		return result
 	}))
+	stats.Publish("BinlogPlayerSourceShardNameMap", stats.StringMapFunc(func() map[string]string {
+		blm.mu.Lock()
+		result := make(map[string]string, len(blm.players))
+		for i, bpc := range blm.players {
+			name := bpc.sourceShard.Keyspace + "/" + bpc.sourceShard.Shard
+			result[fmt.Sprintf("%v", i)] = name
+		}
+		blm.mu.Unlock()
+		return result
+	}))
+	stats.Publish("BinlogPlayerSourceTabletAliasMap", stats.StringMapFunc(func() map[string]string {
+		blm.mu.Lock()
+		result := make(map[string]string, len(blm.players))
+		for i, bpc := range blm.players {
+			bpc.playerMutex.Lock()
+			result[fmt.Sprintf("%v", i)] = bpc.sourceTablet.String()
+			bpc.playerMutex.Unlock()
+		}
+		blm.mu.Unlock()
+		return result
+	}))
 }
 
 func (blm *BinlogPlayerMap) size() int64 {

@@ -374,6 +374,11 @@ primary key (name)
     self.assertTrue('BinlogPlayerSecondsBehindMasterMap' in v)
     self.assertTrue('BinlogPlayerGroupIdMap' in v)
     self.assertTrue('0' in v['BinlogPlayerGroupIdMap'])
+    self.assertTrue('BinlogPlayerSourceShardNameMap' in v)
+    self.assertTrue('0' in v['BinlogPlayerSourceShardNameMap'])
+    self.assertEquals(v['BinlogPlayerSourceShardNameMap']['0'], 'test_keyspace/80-')
+    self.assertTrue('BinlogPlayerSourceTabletAliasMap' in v)
+    self.assertTrue('0' in v['BinlogPlayerSourceTabletAliasMap'])
     if seconds_behind_master_max != 0:
       self.assertTrue(v['BinlogPlayerSecondsBehindMaster'] <
                       seconds_behind_master_max,
