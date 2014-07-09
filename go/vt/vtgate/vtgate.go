@@ -12,6 +12,7 @@ import (
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
@@ -67,7 +68,7 @@ func Init(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount 
 }
 
 // ExecuteShard executes a non-streaming query on the specified shards.
-func (vtg *VTGate) ExecuteShard(context interface{}, query *proto.QueryShard, reply *proto.QueryResult) error {
+func (vtg *VTGate) ExecuteShard(context context.Context, query *proto.QueryShard, reply *proto.QueryResult) error {
 	startTime := time.Now()
 	statsKey := []string{"ExecuteShard", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -95,7 +96,7 @@ func (vtg *VTGate) ExecuteShard(context interface{}, query *proto.QueryShard, re
 }
 
 // ExecuteKeyspaceIds executes a non-streaming query based on the specified keyspace ids.
-func (vtg *VTGate) ExecuteKeyspaceIds(context interface{}, query *proto.KeyspaceIdQuery, reply *proto.QueryResult) error {
+func (vtg *VTGate) ExecuteKeyspaceIds(context context.Context, query *proto.KeyspaceIdQuery, reply *proto.QueryResult) error {
 	startTime := time.Now()
 	statsKey := []string{"ExecuteKeyspaceIds", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -113,7 +114,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(context interface{}, query *proto.Keyspace
 }
 
 // ExecuteKeyRanges executes a non-streaming query based on the specified keyranges.
-func (vtg *VTGate) ExecuteKeyRanges(context interface{}, query *proto.KeyRangeQuery, reply *proto.QueryResult) error {
+func (vtg *VTGate) ExecuteKeyRanges(context context.Context, query *proto.KeyRangeQuery, reply *proto.QueryResult) error {
 	startTime := time.Now()
 	statsKey := []string{"ExecuteKeyRanges", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -131,7 +132,7 @@ func (vtg *VTGate) ExecuteKeyRanges(context interface{}, query *proto.KeyRangeQu
 }
 
 // ExecuteEntityIds excutes a non-streaming query based on given KeyspaceId map.
-func (vtg *VTGate) ExecuteEntityIds(context interface{}, query *proto.EntityIdsQuery, reply *proto.QueryResult) error {
+func (vtg *VTGate) ExecuteEntityIds(context context.Context, query *proto.EntityIdsQuery, reply *proto.QueryResult) error {
 	startTime := time.Now()
 	statsKey := []string{"ExecuteEntityIds", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -149,7 +150,7 @@ func (vtg *VTGate) ExecuteEntityIds(context interface{}, query *proto.EntityIdsQ
 }
 
 // ExecuteBatchShard executes a group of queries on the specified shards.
-func (vtg *VTGate) ExecuteBatchShard(context interface{}, batchQuery *proto.BatchQueryShard, reply *proto.QueryResultList) error {
+func (vtg *VTGate) ExecuteBatchShard(context context.Context, batchQuery *proto.BatchQueryShard, reply *proto.QueryResultList) error {
 	startTime := time.Now()
 	statsKey := []string{"ExecuteBatchShard", batchQuery.Keyspace, string(batchQuery.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -176,7 +177,7 @@ func (vtg *VTGate) ExecuteBatchShard(context interface{}, batchQuery *proto.Batc
 }
 
 // ExecuteBatchKeyspaceIds executes a group of queries based on the specified keyspace ids.
-func (vtg *VTGate) ExecuteBatchKeyspaceIds(context interface{}, query *proto.KeyspaceIdBatchQuery, reply *proto.QueryResultList) error {
+func (vtg *VTGate) ExecuteBatchKeyspaceIds(context context.Context, query *proto.KeyspaceIdBatchQuery, reply *proto.QueryResultList) error {
 	startTime := time.Now()
 	statsKey := []string{"ExecuteBatchKeyspaceIds", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -201,7 +202,7 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(context interface{}, query *proto.Key
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // The api supports supplying multiple KeyspaceIds to make it future proof.
-func (vtg *VTGate) StreamExecuteKeyspaceIds(context interface{}, query *proto.KeyspaceIdQuery, sendReply func(*proto.QueryResult) error) error {
+func (vtg *VTGate) StreamExecuteKeyspaceIds(context context.Context, query *proto.KeyspaceIdQuery, sendReply func(*proto.QueryResult) error) error {
 	startTime := time.Now()
 	statsKey := []string{"StreamExecuteKeyspaceIds", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -233,7 +234,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(context interface{}, query *proto.Ke
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // The api supports supplying multiple keyranges to make it future proof.
-func (vtg *VTGate) StreamExecuteKeyRanges(context interface{}, query *proto.KeyRangeQuery, sendReply func(*proto.QueryResult) error) error {
+func (vtg *VTGate) StreamExecuteKeyRanges(context context.Context, query *proto.KeyRangeQuery, sendReply func(*proto.QueryResult) error) error {
 	startTime := time.Now()
 	statsKey := []string{"StreamExecuteKeyRanges", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -261,7 +262,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges(context interface{}, query *proto.KeyR
 }
 
 // StreamExecuteShard executes a streaming query on the specified shards.
-func (vtg *VTGate) StreamExecuteShard(context interface{}, query *proto.QueryShard, sendReply func(*proto.QueryResult) error) error {
+func (vtg *VTGate) StreamExecuteShard(context context.Context, query *proto.QueryShard, sendReply func(*proto.QueryResult) error) error {
 	startTime := time.Now()
 	statsKey := []string{"StreamExecuteShard", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -296,17 +297,17 @@ func (vtg *VTGate) StreamExecuteShard(context interface{}, query *proto.QuerySha
 }
 
 // Begin begins a transaction. It has to be concluded by a Commit or Rollback.
-func (vtg *VTGate) Begin(context interface{}, outSession *proto.Session) error {
+func (vtg *VTGate) Begin(context context.Context, outSession *proto.Session) error {
 	outSession.InTransaction = true
 	return nil
 }
 
 // Commit commits a transaction.
-func (vtg *VTGate) Commit(context interface{}, inSession *proto.Session) error {
+func (vtg *VTGate) Commit(context context.Context, inSession *proto.Session) error {
 	return vtg.resolver.Commit(context, inSession)
 }
 
 // Rollback rolls back a transaction.
-func (vtg *VTGate) Rollback(context interface{}, inSession *proto.Session) error {
+func (vtg *VTGate) Rollback(context context.Context, inSession *proto.Session) error {
 	return vtg.resolver.Rollback(context, inSession)
 }

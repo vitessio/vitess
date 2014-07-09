@@ -15,6 +15,7 @@ import (
 	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -36,15 +37,15 @@ type SrvTopoServer interface {
 
 	GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, error)
 
-	GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error)
+	GetEndPoints(context context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error)
 }
 
 // ResilientSrvTopoServer is an implementation of SrvTopoServer based
-// on another SrvTopoServer that uses a cache for two purposes:
-// - limit the QPS to the underlying SrvTopoServer
+// on a topo.Server that uses a cache for two purposes:
+// - limit the QPS to the underlying topo.Server
 // - return the last known value of the data if there is an error
 type ResilientSrvTopoServer struct {
-	topoServer SrvTopoServer
+	topoServer topo.Server
 	cacheTTL   time.Duration
 	counts     *stats.Counters
 
@@ -97,8 +98,9 @@ type endPointsEntry struct {
 	value *topo.EndPoints
 	// originalValue is the end points that were returned from
 	// the topology server.
-	originalValue *topo.EndPoints
-	lastError     error
+	originalValue    *topo.EndPoints
+	lastError        error
+	lastErrorContext context.Context
 }
 
 // filterUnhealthyServers removes the unhealthy servers from the list,
@@ -131,7 +133,7 @@ func filterUnhealthyServers(endPoints *topo.EndPoints) *topo.EndPoints {
 
 // NewResilientSrvTopoServer creates a new ResilientSrvTopoServer
 // based on the provided SrvTopoServer.
-func NewResilientSrvTopoServer(base SrvTopoServer, counterName string) *ResilientSrvTopoServer {
+func NewResilientSrvTopoServer(base topo.Server, counterName string) *ResilientSrvTopoServer {
 	return &ResilientSrvTopoServer{
 		topoServer: base,
 		cacheTTL:   *srvTopoCacheTTL,
@@ -236,7 +238,7 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(cell, keyspace string) (*to
 	return result, err
 }
 
-func (server *ResilientSrvTopoServer) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
+func (server *ResilientSrvTopoServer) GetEndPoints(context context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
 	server.counts.Add(queryCategory, 1)
 
 	// find the entry in the cache, add it if not there
@@ -270,10 +272,10 @@ func (server *ResilientSrvTopoServer) GetEndPoints(cell, keyspace, shard string,
 	if err != nil {
 		if entry.insertionTime.IsZero() {
 			server.counts.Add(errorCategory, 1)
-			log.Errorf("GetEndPoints(%v, %v, %v, %v) failed: %v (no cached value, caching and returning error)", cell, keyspace, shard, tabletType, err)
+			log.Errorf("GetEndPoints(%v, %v, %v, %v, %v) failed: %v (no cached value, caching and returning error)", context, cell, keyspace, shard, tabletType, err)
 		} else {
 			server.counts.Add(cachedCategory, 1)
-			log.Warningf("GetEndPoints(%v, %v, %v, %v) failed: %v (returning cached value: %v %v)", cell, keyspace, shard, tabletType, err, entry.value, entry.lastError)
+			log.Warningf("GetEndPoints(%v, %v, %v, %v, %v) failed: %v (returning cached value: %v %v)", context, cell, keyspace, shard, tabletType, err, entry.value, entry.lastError)
 			return entry.value, entry.lastError
 		}
 	}
@@ -283,7 +285,9 @@ func (server *ResilientSrvTopoServer) GetEndPoints(cell, keyspace, shard string,
 	entry.originalValue = result
 	entry.value = filterUnhealthyServers(result)
 	entry.lastError = err
-
+	if entry.lastError != nil {
+		entry.lastErrorContext = context
+	}
 	return entry.value, err
 }
 
@@ -422,13 +426,14 @@ func (skcsl SrvKeyspaceCacheStatusList) Swap(i, j int) {
 
 // EndPointsCacheStatus is the current value for an EndPoints object
 type EndPointsCacheStatus struct {
-	Cell          string
-	Keyspace      string
-	Shard         string
-	TabletType    topo.TabletType
-	Value         *topo.EndPoints
-	OriginalValue *topo.EndPoints
-	LastError     error
+	Cell             string
+	Keyspace         string
+	Shard            string
+	TabletType       topo.TabletType
+	Value            *topo.EndPoints
+	OriginalValue    *topo.EndPoints
+	LastError        error
+	LastErrorContext context.Context
 }
 
 // StatusAsHTML returns an HTML version of our status.
@@ -509,13 +514,14 @@ func (server *ResilientSrvTopoServer) CacheStatus() *ResilientSrvTopoServerCache
 	for _, entry := range server.endPointsCache {
 		entry.mutex.Lock()
 		result.EndPoints = append(result.EndPoints, &EndPointsCacheStatus{
-			Cell:          entry.cell,
-			Keyspace:      entry.keyspace,
-			Shard:         entry.shard,
-			TabletType:    entry.tabletType,
-			Value:         entry.value,
-			OriginalValue: entry.originalValue,
-			LastError:     entry.lastError,
+			Cell:             entry.cell,
+			Keyspace:         entry.keyspace,
+			Shard:            entry.shard,
+			TabletType:       entry.tabletType,
+			Value:            entry.value,
+			OriginalValue:    entry.originalValue,
+			LastError:        entry.lastError,
+			LastErrorContext: entry.lastErrorContext,
 		})
 		entry.mutex.Unlock()
 	}

@@ -2,6 +2,7 @@ package topo
 
 import (
 	rpc "github.com/youtube/vitess/go/rpcplus"
+	"github.com/youtube/vitess/go/rpcwrap/proto"
 )
 
 // TopoReader returns read only information about the topology.
@@ -16,7 +17,7 @@ type TopoReader interface {
 
 	// GetEndPoints returns addresses for a tablet type in a shard
 	// in a keyspace (as specified in GetEndPointsArgs).
-	GetEndPoints(GetEndPointsArgs, *EndPoints) error
+	GetEndPoints(*proto.Context, GetEndPointsArgs, *EndPoints) error
 }
 
 // GetSrvKeyspaceNamesArgs is the parameters for TopoReader.GetSrvKeyspaceNames

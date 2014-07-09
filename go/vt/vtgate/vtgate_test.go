@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -31,7 +32,7 @@ func TestVTGateExecuteShard(t *testing.T) {
 		Shards:   []string{"0"},
 	}
 	qr := new(proto.QueryResult)
-	err := RpcVTGate.ExecuteShard(nil, &q, qr)
+	err := RpcVTGate.ExecuteShard(&context.DummyContext{}, &q, qr)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -45,11 +46,11 @@ func TestVTGateExecuteShard(t *testing.T) {
 	}
 
 	q.Session = new(proto.Session)
-	RpcVTGate.Begin(nil, q.Session)
+	RpcVTGate.Begin(&context.DummyContext{}, q.Session)
 	if !q.Session.InTransaction {
 		t.Errorf("want true, got false")
 	}
-	RpcVTGate.ExecuteShard(nil, &q, qr)
+	RpcVTGate.ExecuteShard(&context.DummyContext{}, &q, qr)
 	wantSession := &proto.Session{
 		InTransaction: true,
 		ShardSessions: []*proto.ShardSession{{
@@ -62,15 +63,15 @@ func TestVTGateExecuteShard(t *testing.T) {
 		t.Errorf("want \n%+v, got \n%+v", wantSession, q.Session)
 	}
 
-	RpcVTGate.Commit(nil, q.Session)
+	RpcVTGate.Commit(&context.DummyContext{}, q.Session)
 	if sbc.CommitCount != 1 {
 		t.Errorf("want 1, got %d", sbc.CommitCount)
 	}
 
 	q.Session = new(proto.Session)
-	RpcVTGate.Begin(nil, q.Session)
-	RpcVTGate.ExecuteShard(nil, &q, qr)
-	RpcVTGate.Rollback(nil, q.Session)
+	RpcVTGate.Begin(&context.DummyContext{}, q.Session)
+	RpcVTGate.ExecuteShard(&context.DummyContext{}, &q, qr)
+	RpcVTGate.Rollback(&context.DummyContext{}, q.Session)
 	/*
 		// Flaky: This test should be run manually.
 		runtime.Gosched()
@@ -98,7 +99,7 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 	}
 	// Test for successful execution
 	qr := new(proto.QueryResult)
-	err = RpcVTGate.ExecuteKeyspaceIds(nil, &q, qr)
+	err = RpcVTGate.ExecuteKeyspaceIds(&context.DummyContext{}, &q, qr)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -115,11 +116,11 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 	}
 	// Test for successful execution in transaction
 	q.Session = new(proto.Session)
-	RpcVTGate.Begin(nil, q.Session)
+	RpcVTGate.Begin(&context.DummyContext{}, q.Session)
 	if !q.Session.InTransaction {
 		t.Errorf("want true, got false")
 	}
-	RpcVTGate.ExecuteKeyspaceIds(nil, &q, qr)
+	RpcVTGate.ExecuteKeyspaceIds(&context.DummyContext{}, &q, qr)
 	wantSession := &proto.Session{
 		InTransaction: true,
 		ShardSessions: []*proto.ShardSession{{
@@ -132,7 +133,7 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 	if !reflect.DeepEqual(wantSession, q.Session) {
 		t.Errorf("want \n%+v, got \n%+v", wantSession, q.Session)
 	}
-	RpcVTGate.Commit(nil, q.Session)
+	RpcVTGate.Commit(&context.DummyContext{}, q.Session)
 	if sbc1.CommitCount.Get() != 1 {
 		t.Errorf("want 1, got %d", sbc1.CommitCount.Get())
 	}
@@ -142,7 +143,7 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 		t.Errorf("want nil, got %+v", err)
 	}
 	q.KeyspaceIds = []key.KeyspaceId{kid10, kid30}
-	RpcVTGate.ExecuteKeyspaceIds(nil, &q, qr)
+	RpcVTGate.ExecuteKeyspaceIds(&context.DummyContext{}, &q, qr)
 	if qr.Result.RowsAffected != 2 {
 		t.Errorf("want 2, got %v", qr.Result.RowsAffected)
 	}
@@ -163,7 +164,7 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 	}
 	// Test for successful execution
 	qr := new(proto.QueryResult)
-	err = RpcVTGate.ExecuteKeyRanges(nil, &q, qr)
+	err = RpcVTGate.ExecuteKeyRanges(&context.DummyContext{}, &q, qr)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -180,11 +181,11 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 	}
 	// Test for successful execution in transaction
 	q.Session = new(proto.Session)
-	RpcVTGate.Begin(nil, q.Session)
+	RpcVTGate.Begin(&context.DummyContext{}, q.Session)
 	if !q.Session.InTransaction {
 		t.Errorf("want true, got false")
 	}
-	err = RpcVTGate.ExecuteKeyRanges(nil, &q, qr)
+	err = RpcVTGate.ExecuteKeyRanges(&context.DummyContext{}, &q, qr)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -200,14 +201,14 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 	if !reflect.DeepEqual(wantSession, q.Session) {
 		t.Errorf("want \n%+v, got \n%+v", wantSession, q.Session)
 	}
-	RpcVTGate.Commit(nil, q.Session)
+	RpcVTGate.Commit(&context.DummyContext{}, q.Session)
 	if sbc1.CommitCount.Get() != 1 {
 		t.Errorf("want 1, got %v", sbc1.CommitCount.Get())
 	}
 	// Test for multiple shards
 	kr, err = key.ParseKeyRangeParts("10", "30")
 	q.KeyRanges = []key.KeyRange{kr}
-	RpcVTGate.ExecuteKeyRanges(nil, &q, qr)
+	RpcVTGate.ExecuteKeyRanges(&context.DummyContext{}, &q, qr)
 	if qr.Result.RowsAffected != 2 {
 		t.Errorf("want 2, got %v", qr.Result.RowsAffected)
 	}
@@ -237,7 +238,7 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 	}
 	// Test for successful execution
 	qr := new(proto.QueryResult)
-	err = RpcVTGate.ExecuteEntityIds(nil, &q, qr)
+	err = RpcVTGate.ExecuteEntityIds(&context.DummyContext{}, &q, qr)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -254,11 +255,11 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 	}
 	// Test for successful execution in transaction
 	q.Session = new(proto.Session)
-	RpcVTGate.Begin(nil, q.Session)
+	RpcVTGate.Begin(&context.DummyContext{}, q.Session)
 	if !q.Session.InTransaction {
 		t.Errorf("want true, got false")
 	}
-	RpcVTGate.ExecuteEntityIds(nil, &q, qr)
+	RpcVTGate.ExecuteEntityIds(&context.DummyContext{}, &q, qr)
 	wantSession := &proto.Session{
 		InTransaction: true,
 		ShardSessions: []*proto.ShardSession{{
@@ -271,7 +272,7 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 	if !reflect.DeepEqual(wantSession, q.Session) {
 		t.Errorf("want \n%+v, got \n%+v", wantSession, q.Session)
 	}
-	RpcVTGate.Commit(nil, q.Session)
+	RpcVTGate.Commit(&context.DummyContext{}, q.Session)
 	if sbc1.CommitCount.Get() != 1 {
 		t.Errorf("want 1, got %d", sbc1.CommitCount.Get())
 	}
@@ -281,7 +282,7 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 		t.Errorf("want nil, got %+v", err)
 	}
 	q.EntityKeyspaceIDs = append(q.EntityKeyspaceIDs, proto.EntityId{ExternalID: "id2", KeyspaceID: kid30})
-	RpcVTGate.ExecuteEntityIds(nil, &q, qr)
+	RpcVTGate.ExecuteEntityIds(&context.DummyContext{}, &q, qr)
 	if qr.Result.RowsAffected != 2 {
 		t.Errorf("want 2, got %v", qr.Result.RowsAffected)
 	}
@@ -303,7 +304,7 @@ func TestVTGateExecuteBatchShard(t *testing.T) {
 		Shards:   []string{"-20", "20-40"},
 	}
 	qrl := new(proto.QueryResultList)
-	err := RpcVTGate.ExecuteBatchShard(nil, &q, qrl)
+	err := RpcVTGate.ExecuteBatchShard(&context.DummyContext{}, &q, qrl)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -318,8 +319,8 @@ func TestVTGateExecuteBatchShard(t *testing.T) {
 	}
 
 	q.Session = new(proto.Session)
-	RpcVTGate.Begin(nil, q.Session)
-	RpcVTGate.ExecuteBatchShard(nil, &q, qrl)
+	RpcVTGate.Begin(&context.DummyContext{}, q.Session)
+	RpcVTGate.ExecuteBatchShard(&context.DummyContext{}, &q, qrl)
 	if len(q.Session.ShardSessions) != 2 {
 		t.Errorf("want 2, got %d", len(q.Session.ShardSessions))
 	}
@@ -350,7 +351,7 @@ func TestVTGateExecuteBatchKeyspaceIds(t *testing.T) {
 		TabletType:  topo.TYPE_MASTER,
 	}
 	qrl := new(proto.QueryResultList)
-	err = RpcVTGate.ExecuteBatchKeyspaceIds(nil, &q, qrl)
+	err = RpcVTGate.ExecuteBatchKeyspaceIds(&context.DummyContext{}, &q, qrl)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -365,8 +366,8 @@ func TestVTGateExecuteBatchKeyspaceIds(t *testing.T) {
 	}
 
 	q.Session = new(proto.Session)
-	RpcVTGate.Begin(nil, q.Session)
-	RpcVTGate.ExecuteBatchKeyspaceIds(nil, &q, qrl)
+	RpcVTGate.Begin(&context.DummyContext{}, q.Session)
+	RpcVTGate.ExecuteBatchKeyspaceIds(&context.DummyContext{}, &q, qrl)
 	if len(q.Session.ShardSessions) != 2 {
 		t.Errorf("want 2, got %d", len(q.Session.ShardSessions))
 	}
@@ -390,7 +391,7 @@ func TestVTGateStreamExecuteKeyspaceIds(t *testing.T) {
 	}
 	// Test for successful execution
 	var qrs []*proto.QueryResult
-	err = RpcVTGate.StreamExecuteKeyspaceIds(nil, &sq, func(r *proto.QueryResult) error {
+	err = RpcVTGate.StreamExecuteKeyspaceIds(&context.DummyContext{}, &sq, func(r *proto.QueryResult) error {
 		qrs = append(qrs, r)
 		return nil
 	})
@@ -407,8 +408,8 @@ func TestVTGateStreamExecuteKeyspaceIds(t *testing.T) {
 	// Test for successful execution in transaction
 	sq.Session = new(proto.Session)
 	qrs = nil
-	RpcVTGate.Begin(nil, sq.Session)
-	err = RpcVTGate.StreamExecuteKeyspaceIds(nil, &sq, func(r *proto.QueryResult) error {
+	RpcVTGate.Begin(&context.DummyContext{}, sq.Session)
+	err = RpcVTGate.StreamExecuteKeyspaceIds(&context.DummyContext{}, &sq, func(r *proto.QueryResult) error {
 		qrs = append(qrs, r)
 		return nil
 	})
@@ -429,7 +430,7 @@ func TestVTGateStreamExecuteKeyspaceIds(t *testing.T) {
 	if !reflect.DeepEqual(want, qrs) {
 		t.Errorf("want\n%#v\ngot\n%#v", want, qrs)
 	}
-	RpcVTGate.Commit(nil, sq.Session)
+	RpcVTGate.Commit(&context.DummyContext{}, sq.Session)
 	if sbc.CommitCount.Get() != 1 {
 		t.Errorf("want 1, got %d", sbc.CommitCount.Get())
 	}
@@ -441,7 +442,7 @@ func TestVTGateStreamExecuteKeyspaceIds(t *testing.T) {
 		t.Errorf("want nil, got %+v", err)
 	}
 	sq.KeyspaceIds = []key.KeyspaceId{kid10, kid15}
-	err = RpcVTGate.StreamExecuteKeyspaceIds(nil, &sq, func(r *proto.QueryResult) error {
+	err = RpcVTGate.StreamExecuteKeyspaceIds(&context.DummyContext{}, &sq, func(r *proto.QueryResult) error {
 		qrs = append(qrs, r)
 		return nil
 	})
@@ -460,7 +461,7 @@ func TestVTGateStreamExecuteKeyspaceIds(t *testing.T) {
 		t.Errorf("want nil, got %+v", err)
 	}
 	sq.KeyspaceIds = []key.KeyspaceId{kid10, kid30}
-	err = RpcVTGate.StreamExecuteKeyspaceIds(nil, &sq, func(r *proto.QueryResult) error {
+	err = RpcVTGate.StreamExecuteKeyspaceIds(&context.DummyContext{}, &sq, func(r *proto.QueryResult) error {
 		qrs = append(qrs, r)
 		return nil
 	})
@@ -484,7 +485,7 @@ func TestVTGateStreamExecuteKeyRanges(t *testing.T) {
 	}
 	// Test for successful execution
 	var qrs []*proto.QueryResult
-	err = RpcVTGate.StreamExecuteKeyRanges(nil, &sq, func(r *proto.QueryResult) error {
+	err = RpcVTGate.StreamExecuteKeyRanges(&context.DummyContext{}, &sq, func(r *proto.QueryResult) error {
 		qrs = append(qrs, r)
 		return nil
 	})
@@ -500,8 +501,8 @@ func TestVTGateStreamExecuteKeyRanges(t *testing.T) {
 
 	sq.Session = new(proto.Session)
 	qrs = nil
-	RpcVTGate.Begin(nil, sq.Session)
-	err = RpcVTGate.StreamExecuteKeyRanges(nil, &sq, func(r *proto.QueryResult) error {
+	RpcVTGate.Begin(&context.DummyContext{}, sq.Session)
+	err = RpcVTGate.StreamExecuteKeyRanges(&context.DummyContext{}, &sq, func(r *proto.QueryResult) error {
 		qrs = append(qrs, r)
 		return nil
 	})
@@ -526,7 +527,7 @@ func TestVTGateStreamExecuteKeyRanges(t *testing.T) {
 	// Test for successful execution - multiple shards
 	kr, err = key.ParseKeyRangeParts("10", "40")
 	sq.KeyRanges = []key.KeyRange{kr}
-	err = RpcVTGate.StreamExecuteKeyRanges(nil, &sq, func(r *proto.QueryResult) error {
+	err = RpcVTGate.StreamExecuteKeyRanges(&context.DummyContext{}, &sq, func(r *proto.QueryResult) error {
 		qrs = append(qrs, r)
 		return nil
 	})
@@ -547,7 +548,7 @@ func TestVTGateStreamExecuteShard(t *testing.T) {
 	}
 	// Test for successful execution
 	var qrs []*proto.QueryResult
-	err := RpcVTGate.StreamExecuteShard(nil, &q, func(r *proto.QueryResult) error {
+	err := RpcVTGate.StreamExecuteShard(&context.DummyContext{}, &q, func(r *proto.QueryResult) error {
 		qrs = append(qrs, r)
 		return nil
 	})
@@ -563,8 +564,8 @@ func TestVTGateStreamExecuteShard(t *testing.T) {
 
 	q.Session = new(proto.Session)
 	qrs = nil
-	RpcVTGate.Begin(nil, q.Session)
-	err = RpcVTGate.StreamExecuteShard(nil, &q, func(r *proto.QueryResult) error {
+	RpcVTGate.Begin(&context.DummyContext{}, q.Session)
+	err = RpcVTGate.StreamExecuteShard(&context.DummyContext{}, &q, func(r *proto.QueryResult) error {
 		qrs = append(qrs, r)
 		return nil
 	})

@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/context"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -59,7 +60,7 @@ func NewScatterConn(serv SrvTopoServer, statsName, cell string, retryDelay time.
 
 // Execute executes a non-streaming query on the specified shards.
 func (stc *ScatterConn) Execute(
-	context interface{},
+	context context.Context,
 	query string,
 	bindVars map[string]interface{},
 	keyspace string,
@@ -95,7 +96,7 @@ func (stc *ScatterConn) Execute(
 }
 
 func (stc *ScatterConn) ExecuteEntityIds(
-	context interface{},
+	context context.Context,
 	shards []string,
 	sqls map[string]string,
 	bindVars map[string]map[string]interface{},
@@ -135,7 +136,7 @@ func (stc *ScatterConn) ExecuteEntityIds(
 
 // ExecuteBatch executes a batch of non-streaming queries on the specified shards.
 func (stc *ScatterConn) ExecuteBatch(
-	context interface{},
+	context context.Context,
 	queries []tproto.BoundQuery,
 	keyspace string,
 	shards []string,
@@ -174,7 +175,7 @@ func (stc *ScatterConn) ExecuteBatch(
 
 // StreamExecute executes a streaming query on vttablet. The retry rules are the same.
 func (stc *ScatterConn) StreamExecute(
-	context interface{},
+	context context.Context,
 	query string,
 	bindVars map[string]interface{},
 	keyspace string,
@@ -214,13 +215,13 @@ func (stc *ScatterConn) StreamExecute(
 }
 
 // Commit commits the current transaction. There are no retries on this operation.
-func (stc *ScatterConn) Commit(context interface{}, session *SafeSession) (err error) {
+func (stc *ScatterConn) Commit(context context.Context, session *SafeSession) (err error) {
 	if !session.InTransaction() {
 		return fmt.Errorf("cannot commit: not in transaction")
 	}
 	committing := true
 	for _, shardSession := range session.ShardSessions {
-		sdc := stc.getConnection(shardSession.Keyspace, shardSession.Shard, shardSession.TabletType)
+		sdc := stc.getConnection(context, shardSession.Keyspace, shardSession.Shard, shardSession.TabletType)
 		if !committing {
 			go sdc.Rollback(context, shardSession.TransactionId)
 			continue
@@ -234,9 +235,9 @@ func (stc *ScatterConn) Commit(context interface{}, session *SafeSession) (err e
 }
 
 // Rollback rolls back the current transaction. There are no retries on this operation.
-func (stc *ScatterConn) Rollback(context interface{}, session *SafeSession) (err error) {
+func (stc *ScatterConn) Rollback(context context.Context, session *SafeSession) (err error) {
 	for _, shardSession := range session.ShardSessions {
-		sdc := stc.getConnection(shardSession.Keyspace, shardSession.Shard, shardSession.TabletType)
+		sdc := stc.getConnection(context, shardSession.Keyspace, shardSession.Shard, shardSession.TabletType)
 		go sdc.Rollback(context, shardSession.TransactionId)
 	}
 	session.Reset()
@@ -291,7 +292,7 @@ func (stc *ScatterConn) aggregateErrors(errors []error) error {
 // rolls back the transaction for all shards.
 // The action function must match the shardActionFunc signature.
 func (stc *ScatterConn) multiGo(
-	context interface{},
+	context context.Context,
 	name string,
 	keyspace string,
 	shards []string,
@@ -336,7 +337,7 @@ func (stc *ScatterConn) multiGo(
 // have moved, re-resolves the topology and tries again, if it is
 // not executing a transaction.
 func (stc *ScatterConn) execShardAction(
-	context interface{},
+	context context.Context,
 	keyspace string,
 	shard string,
 	tabletType topo.TabletType,
@@ -346,7 +347,7 @@ func (stc *ScatterConn) execShardAction(
 	results chan interface{},
 ) {
 	for {
-		sdc := stc.getConnection(keyspace, shard, tabletType)
+		sdc := stc.getConnection(context, keyspace, shard, tabletType)
 		transactionId, err := stc.updateSession(context, sdc, keyspace, shard, tabletType, session)
 		if err != nil {
 			allErrors.RecordError(err)
@@ -361,21 +362,21 @@ func (stc *ScatterConn) execShardAction(
 	}
 }
 
-func (stc *ScatterConn) getConnection(keyspace, shard string, tabletType topo.TabletType) *ShardConn {
+func (stc *ScatterConn) getConnection(context context.Context, keyspace, shard string, tabletType topo.TabletType) *ShardConn {
 	stc.mu.Lock()
 	defer stc.mu.Unlock()
 
 	key := fmt.Sprintf("%s.%s.%s", keyspace, shard, tabletType)
 	sdc, ok := stc.shardConns[key]
 	if !ok {
-		sdc = NewShardConn(stc.toposerv, stc.cell, keyspace, shard, tabletType, stc.retryDelay, stc.retryCount, stc.timeout)
+		sdc = NewShardConn(context, stc.toposerv, stc.cell, keyspace, shard, tabletType, stc.retryDelay, stc.retryCount, stc.timeout)
 		stc.shardConns[key] = sdc
 	}
 	return sdc
 }
 
 func (stc *ScatterConn) updateSession(
-	context interface{},
+	context context.Context,
 	sdc *ShardConn,
 	keyspace, shard string,
 	tabletType topo.TabletType,

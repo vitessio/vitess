@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 
+	"github.com/youtube/vitess/go/rpcwrap/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
 )
@@ -57,7 +58,7 @@ func (tr *TopoReader) GetSrvKeyspace(req topo.GetSrvKeyspaceArgs, reply *topo.Sr
 	return
 }
 
-func (tr *TopoReader) GetEndPoints(req topo.GetEndPointsArgs, reply *topo.EndPoints) (err error) {
+func (tr *TopoReader) GetEndPoints(context *proto.Context, req topo.GetEndPointsArgs, reply *topo.EndPoints) (err error) {
 	tabletTypePath := zkPathForVtType(req.Cell, req.Keyspace, req.Shard, req.TabletType)
 	zkrReply := &zk.ZkNode{}
 	if err := tr.zkr.Get(&zk.ZkPath{Path: tabletTypePath}, zkrReply); err != nil {

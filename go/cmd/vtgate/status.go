@@ -67,7 +67,7 @@ var (
     <td>{{github_com_youtube_vitess_vtctld_srv_keyspace $ep.Cell $ep.Keyspace}}</td>
     <td>{{github_com_youtube_vitess_vtctld_srv_shard $ep.Cell $ep.Keyspace $ep.Shard}}</td>
     <td>{{github_com_youtube_vitess_vtctld_srv_type $ep.Cell $ep.Keyspace $ep.Shard $ep.TabletType}}</td>
-    <td>{{if $ep.LastError}}<b>{{$ep.LastError}}</b>{{else}}{{$ep.StatusAsHTML}}{{end}}</td>
+    <td>{{if $ep.LastError}}<b>{{$ep.LastError}}</b><br/>{{$ep.LastErrorContext.HTML}}{{else}}{{$ep.StatusAsHTML}}{{end}}</td>
   </tr>
   {{end}}
 </table>

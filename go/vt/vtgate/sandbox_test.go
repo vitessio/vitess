@@ -15,6 +15,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
@@ -253,7 +254,7 @@ func (sct *sandboxTopo) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace
 	return createShardedSrvKeyspace(sand.ShardSpec, sand.KeyspaceServedFrom)
 }
 
-func (sct *sandboxTopo) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
+func (sct *sandboxTopo) GetEndPoints(context context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
 	sand := getSandbox(keyspace)
 	sand.EndPointCounter++
 	if sand.EndPointMustFail > 0 {
@@ -269,7 +270,7 @@ func (sct *sandboxTopo) GetEndPoints(cell, keyspace, shard string, tabletType to
 	}}, nil
 }
 
-func sandboxDialer(context interface{}, endPoint topo.EndPoint, keyspace, shard string, timeout time.Duration) (tabletconn.TabletConn, error) {
+func sandboxDialer(context context.Context, endPoint topo.EndPoint, keyspace, shard string, timeout time.Duration) (tabletconn.TabletConn, error) {
 	sand := getSandbox(keyspace)
 	sand.sandmu.Lock()
 	defer sand.sandmu.Unlock()
@@ -337,7 +338,7 @@ func (sbc *sandboxConn) getError() error {
 	return nil
 }
 
-func (sbc *sandboxConn) Execute(context interface{}, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
+func (sbc *sandboxConn) Execute(context context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
 	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
@@ -348,7 +349,7 @@ func (sbc *sandboxConn) Execute(context interface{}, query string, bindVars map[
 	return singleRowResult, nil
 }
 
-func (sbc *sandboxConn) ExecuteBatch(context interface{}, queries []tproto.BoundQuery, transactionID int64) (*tproto.QueryResultList, error) {
+func (sbc *sandboxConn) ExecuteBatch(context context.Context, queries []tproto.BoundQuery, transactionID int64) (*tproto.QueryResultList, error) {
 	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
@@ -364,7 +365,7 @@ func (sbc *sandboxConn) ExecuteBatch(context interface{}, queries []tproto.Bound
 	return qrl, nil
 }
 
-func (sbc *sandboxConn) StreamExecute(context interface{}, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc) {
+func (sbc *sandboxConn) StreamExecute(context context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc) {
 	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
@@ -376,7 +377,7 @@ func (sbc *sandboxConn) StreamExecute(context interface{}, query string, bindVar
 	return ch, func() error { return err }
 }
 
-func (sbc *sandboxConn) Begin(context interface{}) (int64, error) {
+func (sbc *sandboxConn) Begin(context context.Context) (int64, error) {
 	sbc.ExecCount.Add(1)
 	sbc.BeginCount.Add(1)
 	if sbc.mustDelay != 0 {
@@ -389,7 +390,7 @@ func (sbc *sandboxConn) Begin(context interface{}) (int64, error) {
 	return sbc.TransactionId.Add(1), nil
 }
 
-func (sbc *sandboxConn) Commit(context interface{}, transactionID int64) error {
+func (sbc *sandboxConn) Commit(context context.Context, transactionID int64) error {
 	sbc.ExecCount.Add(1)
 	sbc.CommitCount.Add(1)
 	if sbc.mustDelay != 0 {
@@ -398,7 +399,7 @@ func (sbc *sandboxConn) Commit(context interface{}, transactionID int64) error {
 	return sbc.getError()
 }
 
-func (sbc *sandboxConn) Rollback(context interface{}, transactionID int64) error {
+func (sbc *sandboxConn) Rollback(context context.Context, transactionID int64) error {
 	sbc.ExecCount.Add(1)
 	sbc.RollbackCount.Add(1)
 	if sbc.mustDelay != 0 {
