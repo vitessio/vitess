@@ -8,6 +8,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcwrap"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
+	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
@@ -20,30 +21,30 @@ func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo
 	return sq.server.GetSessionId(sessionParams, sessionInfo)
 }
 
-func (sq *SqlQuery) Begin(context *rpcproto.Context, session *proto.Session, txInfo *proto.TransactionInfo) error {
-	return sq.server.Begin(NewGoRPCContext(context), session, txInfo)
+func (sq *SqlQuery) Begin(ctx *rpcproto.Context, session *proto.Session, txInfo *proto.TransactionInfo) error {
+	return sq.server.Begin(context.NewGoRPCContext(ctx), session, txInfo)
 }
 
-func (sq *SqlQuery) Commit(context *rpcproto.Context, session *proto.Session, noOutput *string) error {
-	return sq.server.Commit(NewGoRPCContext(context), session)
+func (sq *SqlQuery) Commit(ctx *rpcproto.Context, session *proto.Session, noOutput *string) error {
+	return sq.server.Commit(context.NewGoRPCContext(ctx), session)
 }
 
-func (sq *SqlQuery) Rollback(context *rpcproto.Context, session *proto.Session, noOutput *string) error {
-	return sq.server.Rollback(NewGoRPCContext(context), session)
+func (sq *SqlQuery) Rollback(ctx *rpcproto.Context, session *proto.Session, noOutput *string) error {
+	return sq.server.Rollback(context.NewGoRPCContext(ctx), session)
 }
 
-func (sq *SqlQuery) Execute(context *rpcproto.Context, query *proto.Query, reply *mproto.QueryResult) error {
-	return sq.server.Execute(NewGoRPCContext(context), query, reply)
+func (sq *SqlQuery) Execute(ctx *rpcproto.Context, query *proto.Query, reply *mproto.QueryResult) error {
+	return sq.server.Execute(context.NewGoRPCContext(ctx), query, reply)
 }
 
-func (sq *SqlQuery) StreamExecute(context *rpcproto.Context, query *proto.Query, sendReply func(reply interface{}) error) error {
-	return sq.server.StreamExecute(NewGoRPCContext(context), query, func(reply *mproto.QueryResult) error {
+func (sq *SqlQuery) StreamExecute(ctx *rpcproto.Context, query *proto.Query, sendReply func(reply interface{}) error) error {
+	return sq.server.StreamExecute(context.NewGoRPCContext(ctx), query, func(reply *mproto.QueryResult) error {
 		return sendReply(reply)
 	})
 }
 
-func (sq *SqlQuery) ExecuteBatch(context *rpcproto.Context, queryList *proto.QueryList, reply *proto.QueryResultList) error {
-	return sq.server.ExecuteBatch(NewGoRPCContext(context), queryList, reply)
+func (sq *SqlQuery) ExecuteBatch(ctx *rpcproto.Context, queryList *proto.QueryList, reply *proto.QueryResultList) error {
+	return sq.server.ExecuteBatch(context.NewGoRPCContext(ctx), queryList, reply)
 }
 
 func init() {

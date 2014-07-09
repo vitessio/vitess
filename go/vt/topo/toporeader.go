@@ -2,21 +2,22 @@ package topo
 
 import (
 	rpc "github.com/youtube/vitess/go/rpcplus"
+	"github.com/youtube/vitess/go/rpcwrap/proto"
 )
 
 // TopoReader returns read only information about the topology.
 type TopoReader interface {
 	// GetSrvKeyspaces returns the names of all the keyspaces in
 	// the topology for the cell.
-	GetSrvKeyspaceNames(GetSrvKeyspaceNamesArgs, *SrvKeyspaceNames) error
+	GetSrvKeyspaceNames(*proto.Context, GetSrvKeyspaceNamesArgs, *SrvKeyspaceNames) error
 
 	// GetSrvKeyspace returns information about a keyspace in a
 	// particular cell (as specified by the GetSrvKeyspaceArgs).
-	GetSrvKeyspace(GetSrvKeyspaceArgs, *SrvKeyspace) error
+	GetSrvKeyspace(*proto.Context, GetSrvKeyspaceArgs, *SrvKeyspace) error
 
 	// GetEndPoints returns addresses for a tablet type in a shard
 	// in a keyspace (as specified in GetEndPointsArgs).
-	GetEndPoints(GetEndPointsArgs, *EndPoints) error
+	GetEndPoints(*proto.Context, GetEndPointsArgs, *EndPoints) error
 }
 
 // GetSrvKeyspaceNamesArgs is the parameters for TopoReader.GetSrvKeyspaceNames

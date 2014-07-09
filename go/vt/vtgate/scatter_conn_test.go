@@ -12,6 +12,7 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/context"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
@@ -21,7 +22,7 @@ import (
 func TestScatterConnExecute(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnExecute", func(shards []string) (*mproto.QueryResult, error) {
 		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
-		return stc.Execute(nil, "query", nil, "TestScatterConnExecute", shards, "", nil)
+		return stc.Execute(&context.DummyContext{}, "query", nil, "TestScatterConnExecute", shards, "", nil)
 	})
 }
 
@@ -29,7 +30,7 @@ func TestScatterConnExecuteBatch(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnExecuteBatch", func(shards []string) (*mproto.QueryResult, error) {
 		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
 		queries := []tproto.BoundQuery{{"query", nil}}
-		qrs, err := stc.ExecuteBatch(nil, queries, "TestScatterConnExecuteBatch", shards, "", nil)
+		qrs, err := stc.ExecuteBatch(&context.DummyContext{}, queries, "TestScatterConnExecuteBatch", shards, "", nil)
 		if err != nil {
 			return nil, err
 		}
@@ -41,7 +42,7 @@ func TestScatterConnStreamExecute(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnStreamExecute", func(shards []string) (*mproto.QueryResult, error) {
 		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
-		err := stc.StreamExecute(nil, "query", nil, "TestScatterConnStreamExecute", shards, "", nil, func(r *mproto.QueryResult) error {
+		err := stc.StreamExecute(&context.DummyContext{}, "query", nil, "TestScatterConnStreamExecute", shards, "", nil, func(r *mproto.QueryResult) error {
 			appendResult(qr, r)
 			return nil
 		})
@@ -135,7 +136,7 @@ func TestScatterConnStreamExecuteSendError(t *testing.T) {
 	sbc := &sandboxConn{}
 	s.MapTestConn("0", sbc)
 	stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
-	err := stc.StreamExecute(nil, "query", nil, "TestScatterConnStreamExecuteSendError", []string{"0"}, "", nil, func(*mproto.QueryResult) error {
+	err := stc.StreamExecute(&context.DummyContext{}, "query", nil, "TestScatterConnStreamExecuteSendError", []string{"0"}, "", nil, func(*mproto.QueryResult) error {
 		return fmt.Errorf("send error")
 	})
 	want := "send error"
@@ -155,7 +156,7 @@ func TestScatterConnCommitSuccess(t *testing.T) {
 
 	// Sequence the executes to ensure commit order
 	session := NewSafeSession(&proto.Session{InTransaction: true})
-	stc.Execute(nil, "query1", nil, "TestScatterConnCommitSuccess", []string{"0"}, "", session)
+	stc.Execute(&context.DummyContext{}, "query1", nil, "TestScatterConnCommitSuccess", []string{"0"}, "", session)
 	wantSession := proto.Session{
 		InTransaction: true,
 		ShardSessions: []*proto.ShardSession{{
@@ -168,7 +169,7 @@ func TestScatterConnCommitSuccess(t *testing.T) {
 	if !reflect.DeepEqual(wantSession, *session.Session) {
 		t.Errorf("want\n%+v, got\n%+v", wantSession, *session.Session)
 	}
-	stc.Execute(nil, "query1", nil, "TestScatterConnCommitSuccess", []string{"0", "1"}, "", session)
+	stc.Execute(&context.DummyContext{}, "query1", nil, "TestScatterConnCommitSuccess", []string{"0", "1"}, "", session)
 	wantSession = proto.Session{
 		InTransaction: true,
 		ShardSessions: []*proto.ShardSession{{
@@ -187,7 +188,7 @@ func TestScatterConnCommitSuccess(t *testing.T) {
 		t.Errorf("want\n%+v, got\n%+v", wantSession, *session.Session)
 	}
 	sbc0.mustFailServer = 1
-	err := stc.Commit(nil, session)
+	err := stc.Commit(&context.DummyContext{}, session)
 	if err == nil {
 		t.Errorf("want error, got nil")
 	}
@@ -217,9 +218,9 @@ func TestScatterConnRollback(t *testing.T) {
 
 	// Sequence the executes to ensure commit order
 	session := NewSafeSession(&proto.Session{InTransaction: true})
-	stc.Execute(nil, "query1", nil, "TestScatterConnRollback", []string{"0"}, "", session)
-	stc.Execute(nil, "query1", nil, "TestScatterConnRollback", []string{"0", "1"}, "", session)
-	err := stc.Rollback(nil, session)
+	stc.Execute(&context.DummyContext{}, "query1", nil, "TestScatterConnRollback", []string{"0"}, "", session)
+	stc.Execute(&context.DummyContext{}, "query1", nil, "TestScatterConnRollback", []string{"0", "1"}, "", session)
+	err := stc.Rollback(&context.DummyContext{}, session)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -244,7 +245,7 @@ func TestScatterConnClose(t *testing.T) {
 	sbc := &sandboxConn{}
 	s.MapTestConn("0", sbc)
 	stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
-	stc.Execute(nil, "query1", nil, "TestScatterConnClose", []string{"0"}, "", nil)
+	stc.Execute(&context.DummyContext{}, "query1", nil, "TestScatterConnClose", []string{"0"}, "", nil)
 	stc.Close()
 	/*
 		// Flaky: This test should be run manually.

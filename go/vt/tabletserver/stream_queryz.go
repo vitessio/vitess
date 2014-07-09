@@ -14,8 +14,7 @@ var (
 	streamqueryzHeader = []byte(`<thead>
 		<tr>
 			<th>Query</th>
-			<th>RemoteAddr</th>
-			<th>Username</th>
+			<th>Context</th>
 			<th>Duration</th>
 			<th>Start</th>
 			<th>SessionID</th>
@@ -28,8 +27,7 @@ var (
 	streamqueryzTmpl = template.Must(template.New("example").Parse(`
 		<tr> 
 			<td>{{.Query}}</td>
-			<td>{{.RemoteAddr}}</td>
-			<td>{{.Username}}</td>
+			<td>{{.ContextHTML}}</td>
 			<td>{{.Duration}}</td>
 			<td>{{.Start}}</td>
 			<td>{{.SessionID}}</td>

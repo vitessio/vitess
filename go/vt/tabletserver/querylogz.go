@@ -20,8 +20,7 @@ var (
 	querylogzHeader = []byte(`
 		<tr>
 			<th>Method</th>
-			<th>Client</th>
-			<th>User</th>
+			<th>Context</th>
 			<th>Start</th>
 			<th>End</th>
 			<th>Duration</th>
@@ -36,6 +35,7 @@ var (
 			<th>Cache Misses</th>
 			<th>Cache Absent</th>
 			<th>Cache Invalidations</th>
+			<th>Transaction ID</th>
 		</tr>
 	`)
 	querylogzFuncMap = template.FuncMap{
@@ -46,8 +46,7 @@ var (
 	querylogzTmpl = template.Must(template.New("example").Funcs(querylogzFuncMap).Parse(`
 		<tr class=".ColorLevel">
 			<td>{{.Method}}</td>
-			<td>{{.RemoteAddr}}</td>
-			<td>{{.Username}}</td>
+			<td>{{.ContextHTML}}</td>
 			<td>{{.StartTime | stampMicro}}</td>
 			<td>{{.EndTime | stampMicro}}</td>
 			<td>{{.TotalTime.Seconds}}</td>
@@ -62,6 +61,7 @@ var (
 			<td>{{.CacheMisses}}</td>
 			<td>{{.CacheAbsent}}</td>
 			<td>{{.CacheInvalidations}}</td>
+                        <td>{{.TransactionID}}</td>
 		</tr>
 	`))
 )

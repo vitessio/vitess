@@ -14,6 +14,7 @@ import (
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/vt/context"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -47,7 +48,7 @@ func NewResolver(serv SrvTopoServer, statsName, cell string, retryDelay time.Dur
 
 // ExecuteKeyspaceIds executes a non-streaming query based on KeyspaceIds.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
-func (res *Resolver) ExecuteKeyspaceIds(context interface{}, query *proto.KeyspaceIdQuery) (*mproto.QueryResult, error) {
+func (res *Resolver) ExecuteKeyspaceIds(context context.Context, query *proto.KeyspaceIdQuery) (*mproto.QueryResult, error) {
 	mapToShards := func(keyspace string) (string, []string, error) {
 		return mapKeyspaceIdsToShards(
 			res.scatterConn.toposerv,
@@ -61,7 +62,7 @@ func (res *Resolver) ExecuteKeyspaceIds(context interface{}, query *proto.Keyspa
 
 // ExecuteKeyRanges executes a non-streaming query based on KeyRanges.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
-func (res *Resolver) ExecuteKeyRanges(context interface{}, query *proto.KeyRangeQuery) (*mproto.QueryResult, error) {
+func (res *Resolver) ExecuteKeyRanges(context context.Context, query *proto.KeyRangeQuery) (*mproto.QueryResult, error) {
 	mapToShards := func(keyspace string) (string, []string, error) {
 		return mapKeyRangesToShards(
 			res.scatterConn.toposerv,
@@ -76,7 +77,7 @@ func (res *Resolver) ExecuteKeyRanges(context interface{}, query *proto.KeyRange
 // Execute executes a non-streaming query based on shards resolved by given func.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 func (res *Resolver) Execute(
-	context interface{},
+	context context.Context,
 	sql string,
 	bindVars map[string]interface{},
 	keyspace string,
@@ -128,7 +129,7 @@ func (res *Resolver) Execute(
 // ExecuteEntityIds executes a non-streaming query based on given KeyspaceId map.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 func (res *Resolver) ExecuteEntityIds(
-	context interface{},
+	context context.Context,
 	query *proto.EntityIdsQuery,
 ) (*mproto.QueryResult, error) {
 	newKeyspace, shardIDMap, err := mapEntityIdsToShards(
@@ -189,7 +190,7 @@ func (res *Resolver) ExecuteEntityIds(
 
 // ExecuteBatchKeyspaceIds executes a group of queries based on KeyspaceIds.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
-func (res *Resolver) ExecuteBatchKeyspaceIds(context interface{}, query *proto.KeyspaceIdBatchQuery) (*tproto.QueryResultList, error) {
+func (res *Resolver) ExecuteBatchKeyspaceIds(context context.Context, query *proto.KeyspaceIdBatchQuery) (*tproto.QueryResultList, error) {
 	mapToShards := func(keyspace string) (string, []string, error) {
 		return mapKeyspaceIdsToShards(
 			res.scatterConn.toposerv,
@@ -204,7 +205,7 @@ func (res *Resolver) ExecuteBatchKeyspaceIds(context interface{}, query *proto.K
 // ExecuteBatch executes a group of queries based on shards resolved by given func.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 func (res *Resolver) ExecuteBatch(
-	context interface{},
+	context context.Context,
 	queries []tproto.BoundQuery,
 	keyspace string,
 	tabletType topo.TabletType,
@@ -257,7 +258,7 @@ func (res *Resolver) ExecuteBatch(
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // The api supports supplying multiple KeyspaceIds to make it future proof.
-func (res *Resolver) StreamExecuteKeyspaceIds(context interface{}, query *proto.KeyspaceIdQuery, sendReply func(*mproto.QueryResult) error) error {
+func (res *Resolver) StreamExecuteKeyspaceIds(context context.Context, query *proto.KeyspaceIdQuery, sendReply func(*mproto.QueryResult) error) error {
 	mapToShards := func(keyspace string) (string, []string, error) {
 		return mapKeyspaceIdsToShards(
 			res.scatterConn.toposerv,
@@ -275,7 +276,7 @@ func (res *Resolver) StreamExecuteKeyspaceIds(context interface{}, query *proto.
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // The api supports supplying multiple keyranges to make it future proof.
-func (res *Resolver) StreamExecuteKeyRanges(context interface{}, query *proto.KeyRangeQuery, sendReply func(*mproto.QueryResult) error) error {
+func (res *Resolver) StreamExecuteKeyRanges(context context.Context, query *proto.KeyRangeQuery, sendReply func(*mproto.QueryResult) error) error {
 	mapToShards := func(keyspace string) (string, []string, error) {
 		return mapKeyRangesToShards(
 			res.scatterConn.toposerv,
@@ -292,7 +293,7 @@ func (res *Resolver) StreamExecuteKeyRanges(context interface{}, query *proto.Ke
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 func (res *Resolver) StreamExecute(
-	context interface{},
+	context context.Context,
 	sql string,
 	bindVars map[string]interface{},
 	keyspace string,
@@ -318,12 +319,12 @@ func (res *Resolver) StreamExecute(
 }
 
 // Commit commits a transaction.
-func (res *Resolver) Commit(context interface{}, inSession *proto.Session) error {
+func (res *Resolver) Commit(context context.Context, inSession *proto.Session) error {
 	return res.scatterConn.Commit(context, NewSafeSession(inSession))
 }
 
 // Rollback rolls back a transaction.
-func (res *Resolver) Rollback(context interface{}, inSession *proto.Session) error {
+func (res *Resolver) Rollback(context context.Context, inSession *proto.Session) error {
 	return res.scatterConn.Rollback(context, NewSafeSession(inSession))
 }
 

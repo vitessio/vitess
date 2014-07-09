@@ -2,23 +2,25 @@ package tabletserver
 
 import (
 	"fmt"
+	"html/template"
 	"sort"
 	"sync"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
 // QueryDetail is a simple wrapper for Query, Context and PoolConnection
 type QueryDetail struct {
 	query   *proto.Query
-	context Context
+	context context.Context
 	connID  int64
 	start   time.Time
 }
 
 // NewQueryDetail creates a new QueryDetail
-func NewQueryDetail(query *proto.Query, context Context, connID int64) *QueryDetail {
+func NewQueryDetail(query *proto.Query, context context.Context, connID int64) *QueryDetail {
 	return &QueryDetail{query: query, context: context, connID: connID, start: time.Now()}
 }
 
@@ -74,8 +76,7 @@ func (ql *QueryList) TerminateAll() {
 // QueryDetailzRow is used for rendering QueryDetail in a template
 type QueryDetailzRow struct {
 	Query             string
-	RemoteAddr        string
-	Username          string
+	ContextHTML       template.HTML
 	Start             time.Time
 	Duration          time.Duration
 	SessionID         int64
@@ -98,8 +99,7 @@ func (ql *QueryList) GetQueryzRows() []QueryDetailzRow {
 	for _, qd := range ql.queryDetails {
 		row := QueryDetailzRow{
 			Query:         qd.query.Sql,
-			RemoteAddr:    qd.context.GetRemoteAddr(),
-			Username:      qd.context.GetUsername(),
+			ContextHTML:   qd.context.HTML(),
 			Start:         qd.start,
 			Duration:      time.Now().Sub(qd.start),
 			SessionID:     qd.query.SessionId,
