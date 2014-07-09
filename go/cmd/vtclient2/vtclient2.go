@@ -16,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/db"
 	"github.com/youtube/vitess/go/vt/client2"
 	_ "github.com/youtube/vitess/go/vt/client2/tablet"
+	"github.com/youtube/vitess/go/vt/logutil"
 )
 
 var usage = `
@@ -92,6 +93,8 @@ func isDml(sql string) bool {
 }
 
 func main() {
+	defer logutil.Flush()
+
 	flag.Parse()
 	args := flag.Args()
 

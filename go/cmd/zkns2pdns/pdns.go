@@ -24,6 +24,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/zk"
 	"github.com/youtube/vitess/go/zk/zkns"
 )
@@ -333,6 +334,8 @@ func (pd *pdns) Serve(r io.Reader, w io.Writer) {
 }
 
 func main() {
+	defer logutil.Flush()
+
 	zknsDomain := flag.String("zkns-domain", "", "The naming hierarchy portion to serve")
 	zknsRoot := flag.String("zkns-root", "", "The root path from which to resolve")
 	bindAddr := flag.String("bind-addr", ":31981", "Bind the debug http server")

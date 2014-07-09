@@ -7,11 +7,12 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/proc"
 )
 
 var (
-	onCloseHooks hooks
+	onCloseHooks event.Hooks
 )
 
 // Run starts listening for RPC and HTTP requests,
