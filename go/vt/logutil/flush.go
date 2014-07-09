@@ -5,10 +5,25 @@
 package logutil
 
 import (
-	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/event"
 )
 
-// Flush flushes all open log files
+var (
+	onFlushHooks event.Hooks
+)
+
+// OnFlush registers a function to be called when Flush() is invoked.
+func OnFlush(fn func()) {
+	onFlushHooks.Add(fn)
+}
+
+// Flush calls the functions registered through OnFlush() and waits for them.
+//
+// Programs that use servenv.Run*() will invoke Flush() automatically at
+// shutdown. Other programs should defer logutil.Flush() at the beginning of
+// main().
+//
+// Concurrent calls to Flush are serialized.
 func Flush() {
-	log.Flush()
+	onFlushHooks.Fire()
 }

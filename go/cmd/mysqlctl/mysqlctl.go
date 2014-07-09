@@ -14,6 +14,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 )
 
@@ -247,6 +248,8 @@ var commands = []command{
 }
 
 func main() {
+	defer logutil.Flush()
+
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [global parameters] command [command parameters]\n", os.Args[0])
 

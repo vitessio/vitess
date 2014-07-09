@@ -31,6 +31,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/stats"
 	_ "github.com/youtube/vitess/go/vt/logutil"
@@ -48,38 +49,14 @@ var (
 	// mutex used to protect the Init function
 	mu sync.Mutex
 
-	onInitHooks hooks
-	onTermHooks hooks
-	onRunHooks  hooks
+	onInitHooks event.Hooks
+	onTermHooks event.Hooks
+	onRunHooks  event.Hooks
 	inited      bool
 
 	// filled in when calling Run
 	ListeningURL url.URL
 )
-
-type hooks struct {
-	funcs []func()
-	mu    sync.Mutex
-}
-
-func (h *hooks) Add(f func()) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.funcs = append(h.funcs, f)
-}
-
-func (h *hooks) Fire() {
-	wg := sync.WaitGroup{}
-
-	for _, f := range h.funcs {
-		wg.Add(1)
-		go func(f func()) {
-			f()
-			wg.Done()
-		}(f)
-	}
-	wg.Wait()
-}
 
 func Init() {
 	mu.Lock()

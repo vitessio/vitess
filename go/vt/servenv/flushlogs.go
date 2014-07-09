@@ -4,16 +4,14 @@ import (
 	"fmt"
 	"net/http"
 
-	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/vt/logutil"
 )
 
 func init() {
 	onInit(func() {
 		http.HandleFunc("/debug/flushlogs", func(w http.ResponseWriter, r *http.Request) {
-			log.Flush()
+			logutil.Flush()
 			fmt.Fprint(w, "flushed")
 		})
-
 	})
-	OnClose(log.Flush)
 }

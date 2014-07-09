@@ -19,13 +19,13 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/client2"
 	hk "github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
-	_ "github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/initiator"
@@ -1780,17 +1780,14 @@ func installSignalHandlers() {
 }
 
 func main() {
-	defer func() {
-		if panicErr := recover(); panicErr != nil {
-			log.Fatalf("panic: %v", tb.Errorf("%v", panicErr))
-		}
-	}()
+	defer exit.RecoverAll()
+	defer logutil.Flush()
 
 	flag.Parse()
 	args := flag.Args()
 	if len(args) == 0 {
 		flag.Usage()
-		os.Exit(1)
+		exit.Return(1)
 	}
 	action := args[0]
 	installSignalHandlers()
@@ -1829,13 +1826,12 @@ func main() {
 	if !found {
 		fmt.Fprintf(os.Stderr, "Unknown command %#v\n\n", action)
 		flag.Usage()
-		os.Exit(1)
+		exit.Return(1)
 	}
 
 	if err != nil {
 		log.Errorf("action failed: %v %v", action, err)
-		//log.Flush()
-		os.Exit(255)
+		exit.Return(255)
 	}
 	if actionPath != "" {
 		if *noWaitForAction {
@@ -1844,8 +1840,7 @@ func main() {
 			err := wr.ActionInitiator().WaitForCompletion(actionPath, *waitTime)
 			if err != nil {
 				log.Error(err.Error())
-				//log.Flush()
-				os.Exit(255)
+				exit.Return(255)
 			} else {
 				log.Infof("action completed: %v", actionPath)
 			}

@@ -7,6 +7,11 @@ Package event provides a reflect-based framework for low-frequency global
 dispatching of events, which are values of any arbitrary type, to a set of
 listener functions, which are usually registered by plugin packages during init().
 
+Listeners should do work in a separate goroutine if it might block. Dispatch
+should be called synchronously to make sure work enters the listener's work
+queue before moving on. After Dispatch returns, the listener is responsible for
+arranging to flush its work queue before program termination if desired.
+
 For example, any package can define an event type:
 
 	package mypackage
@@ -48,10 +53,7 @@ be called when a value of type MyEvent is dispatched:
 			field2: "bar",
 		}
 
-		// synchronous
 		event.Dispatch(ev)
-		// or asynchronous
-		go event.Dispatch(ev)
 	}
 
 In addition, listener functions that accept an interface type will be called
