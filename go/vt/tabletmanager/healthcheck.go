@@ -127,7 +127,12 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType, lockT
 	if err != nil {
 		// The tablet is not healthy, let's see what we need to do
 		if tablet.Type != targetTabletType {
-			log.Infof("Tablet not healthy and in state %v, not changing it: %v", tablet.Type, err)
+			if tablet.Type != topo.TYPE_SPARE {
+				// we onyl log if we're not in spare,
+				// as the spare state is normal for a
+				// failed health check.
+				log.Infof("Tablet not healthy and in state %v, not changing it: %v", tablet.Type, err)
+			}
 			return
 		}
 
@@ -152,6 +157,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType, lockT
 
 		// we need to update our state
 		log.Infof("Updating tablet record as healthy type %v -> %v with health details %v -> %v", tablet.Type, newTabletType, tablet.Health, health)
+		agent.lastHealthMapCount.Set(int64(len(health)))
 	}
 
 	// Change the Type, update the health. Note we pass in a map

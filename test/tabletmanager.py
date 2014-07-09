@@ -560,6 +560,10 @@ class TestTabletManager(unittest.TestCase):
     # make sure status web page is unhappy
     self.assertIn('>unhappy</span></div>', tablet_62044.get_status())
 
+    # make sure the vars is updated
+    v = utils.get_vars(tablet_62044.port)
+    self.assertEqual(v['LastHealthMapCount'], 1)
+
     # then restart replication, make sure we go back to healthy
     tablet_62044.mquery('', 'start slave')
     timeout = 10
@@ -575,6 +579,10 @@ class TestTabletManager(unittest.TestCase):
 
     # make sure status web page is healthy
     self.assertIn('>healthy</span></div>', tablet_62044.get_status())
+
+    # make sure the vars is updated
+    v = utils.get_vars(tablet_62044.port)
+    self.assertEqual(v['LastHealthMapCount'], 0)
 
     # kill the tablets
     tablet.kill_tablets([tablet_62344, tablet_62044])

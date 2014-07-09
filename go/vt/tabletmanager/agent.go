@@ -47,6 +47,7 @@ import (
 	"github.com/youtube/vitess/go/history"
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/netutil"
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/env"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -84,7 +85,8 @@ type ActionAgent struct {
 
 	// This is the History of the health checks, public so status
 	// pages can display it
-	History *history.History
+	History            *history.History
+	lastHealthMapCount *stats.Int
 
 	// actionMutex is there to run only one action at a time. If
 	// both agent.actionMutex and agent.mutex needs to be taken,
@@ -126,14 +128,15 @@ func NewActionAgent(
 	mysqld := mysqlctl.NewMysqld("Dba", mycnf, &dbcfgs.Dba, &dbcfgs.Repl)
 
 	agent = &ActionAgent{
-		TopoServer:      topoServer,
-		TabletAlias:     tabletAlias,
-		Mysqld:          mysqld,
-		DBConfigs:       dbcfgs,
-		SchemaOverrides: schemaOverrides,
-		done:            make(chan struct{}),
-		History:         history.New(historyLength),
-		changeItems:     make(chan tabletChangeItem, 100),
+		TopoServer:         topoServer,
+		TabletAlias:        tabletAlias,
+		Mysqld:             mysqld,
+		DBConfigs:          dbcfgs,
+		SchemaOverrides:    schemaOverrides,
+		done:               make(chan struct{}),
+		History:            history.New(historyLength),
+		lastHealthMapCount: stats.NewInt("LastHealthMapCount"),
+		changeItems:        make(chan tabletChangeItem, 100),
 	}
 
 	// Start the binlog player services, not playing at start.
