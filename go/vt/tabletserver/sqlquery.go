@@ -232,6 +232,7 @@ func (sq *SqlQuery) Begin(context Context, session *proto.Session, txInfo *proto
 	}
 
 	txInfo.TransactionId = sq.qe.Begin(logStats)
+	logStats.TransactionID = txInfo.TransactionId
 	return nil
 }
 
@@ -269,6 +270,7 @@ func (sq *SqlQuery) endRequest() {
 func (sq *SqlQuery) Commit(context Context, session *proto.Session) (err error) {
 	logStats := newSqlQueryStats("Commit", context)
 	logStats.OriginalSql = "commit"
+	logStats.TransactionID = session.TransactionId
 	if err = sq.startRequest(session.SessionId, true); err != nil {
 		return err
 	}
@@ -283,6 +285,7 @@ func (sq *SqlQuery) Commit(context Context, session *proto.Session) (err error) 
 func (sq *SqlQuery) Rollback(context Context, session *proto.Session) (err error) {
 	logStats := newSqlQueryStats("Rollback", context)
 	logStats.OriginalSql = "rollback"
+	logStats.TransactionID = session.TransactionId
 	if err = sq.startRequest(session.SessionId, true); err != nil {
 		return err
 	}
@@ -324,6 +327,7 @@ func handleExecError(query *proto.Query, err *error, logStats *SQLQueryStats) {
 // Execute executes the query and returns the result as response.
 func (sq *SqlQuery) Execute(context Context, query *proto.Query, reply *mproto.QueryResult) (err error) {
 	logStats := newSqlQueryStats("Execute", context)
+	logStats.TransactionID = query.TransactionId
 	allowShutdown := (query.TransactionId != 0)
 	if err = sq.startRequest(query.SessionId, allowShutdown); err != nil {
 		return err
