@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
 )
@@ -204,6 +205,8 @@ func qps2(cell string, keyspaces []string) {
 }
 
 func main() {
+	defer logutil.Flush()
+
 	flag.Parse()
 	args := flag.Args()
 	if len(args) == 0 {

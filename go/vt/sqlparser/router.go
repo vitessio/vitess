@@ -128,7 +128,7 @@ func routingAnalyzeBoolean(node BoolExpr) BoolExpr {
 		return routingAnalyzeBoolean(node.Expr)
 	case *ComparisonExpr:
 		switch {
-		case stringIn(node.Operator, "=", "<", ">", "<=", ">=", "<=>"):
+		case StringIn(node.Operator, "=", "<", ">", "<=", ">=", "<=>"):
 			left := routingAnalyzeValue(node.Left)
 			right := routingAnalyzeValue(node.Right)
 			if (left == EID_NODE && right == VALUE_NODE) || (left == VALUE_NODE && right == EID_NODE) {

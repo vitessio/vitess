@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/zk/zkctl"
 )
 
@@ -48,6 +49,8 @@ func confirm(prompt string) bool {
 }
 
 func main() {
+	defer logutil.Flush()
+
 	flag.Parse()
 	args := flag.Args()
 

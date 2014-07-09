@@ -11,6 +11,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/primecache"
 )
 
@@ -22,6 +23,8 @@ var (
 )
 
 func main() {
+	defer logutil.Flush()
+
 	dbconfigs.RegisterFlags()
 	flag.Parse()
 
