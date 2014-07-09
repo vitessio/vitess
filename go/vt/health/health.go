@@ -6,7 +6,6 @@ import (
 	"strings"
 	"sync"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -83,19 +82,16 @@ func (ag *Aggregator) Run(typ topo.TabletType) (map[string]string, error) {
 	results := make(chan map[string]string, len(ag.reporters))
 	ag.mu.Lock()
 	for name, rep := range ag.reporters {
-		name, rep := name, rep
 		wg.Add(1)
-
-		go func() {
+		go func(name string, rep Reporter) {
 			defer wg.Done()
 			status, err := rep.Report(typ)
 			if err != nil {
-				log.Errorf("reporter %v: %v", name, err)
-				rec.RecordError(err)
+				rec.RecordError(fmt.Errorf("%v: %v", name, err))
 				return
 			}
 			results <- status
-		}()
+		}(name, rep)
 	}
 	ag.mu.Unlock()
 	wg.Wait()

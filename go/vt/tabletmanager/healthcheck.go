@@ -19,7 +19,6 @@ import (
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
-	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 )
@@ -109,12 +108,9 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType, lockT
 	}
 	health, err := health.Run(typeForHealthCheck)
 
-	// get the state of the query service
-	isQueryServiceRunning := tabletserver.SqlQueryRpcService.GetState() == "SERVING"
-
 	// Figure out if we should be running QueryService. If we should,
 	// and we aren't, and we're otherwise healthy, try to start it
-	if err == nil && topo.IsRunningQueryService(targetTabletType) && !isQueryServiceRunning {
+	if err == nil && topo.IsRunningQueryService(targetTabletType) {
 		err = agent.allowQueries(tablet.Tablet)
 	}
 

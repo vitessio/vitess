@@ -31,6 +31,11 @@ var (
 )
 
 func (agent *ActionAgent) allowQueries(tablet *topo.Tablet) error {
+	// if the query service is already running, we're not starting it again
+	if tabletserver.SqlQueryRpcService.GetState() == "SERVING" {
+		return nil
+	}
+
 	// Update our DB config to match the info we have in the tablet
 	if agent.DBConfigs.App.DbName == "" {
 		agent.DBConfigs.App.DbName = tablet.DbName()

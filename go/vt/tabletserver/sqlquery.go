@@ -115,7 +115,6 @@ func (sq *SqlQuery) allowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides [
 	defer sq.mu.Unlock()
 	if sq.state.Get() != NOT_SERVING {
 		terr := NewTabletError(FATAL, "cannot start query service, current state: %s", sq.GetState())
-		log.Errorf("%v", terr)
 		return terr
 	}
 	// state is NOT_SERVING
