@@ -43,6 +43,7 @@ type SQLQueryStats struct {
 	QuerySources         byte
 	Rows                 [][]sqltypes.Value
 	context              Context
+	TransactionID        int64
 }
 
 func newSqlQueryStats(methodName string, context Context) *SQLQueryStats {
