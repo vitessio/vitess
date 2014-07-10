@@ -31,7 +31,7 @@ type ScatterConn struct {
 	retryDelay time.Duration
 	retryCount int
 	timeout    time.Duration
-	timings    *stats.MapTimings
+	timings    *stats.MultiTimings
 
 	mu         sync.Mutex
 	shardConns map[string]*ShardConn
@@ -53,7 +53,7 @@ func NewScatterConn(serv SrvTopoServer, statsName, cell string, retryDelay time.
 		retryDelay: retryDelay,
 		retryCount: retryCount,
 		timeout:    timeout,
-		timings:    stats.NewMapTimings(statsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
+		timings:    stats.NewMultiTimings(statsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
 		shardConns: make(map[string]*ShardConn),
 	}
 }

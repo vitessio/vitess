@@ -106,12 +106,12 @@ func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout tim
 	stats.Publish("SchemaReloadTime", stats.DurationFunc(func() time.Duration {
 		return si.reloadTime
 	}))
-	_ = stats.NewMapCountersFunc("TableStats", []string{"Table", "Stats"}, si.getTableStats)
+	_ = stats.NewMultiCountersFunc("TableStats", []string{"Table", "Stats"}, si.getTableStats)
 	stats.Publish("TableInvalidations", stats.CountersFunc(si.getTableInvalidations))
-	_ = stats.NewMapCountersFunc("QueryCounts", []string{"Table", "Plan"}, si.getQueryCount)
-	_ = stats.NewMapCountersFunc("QueryTimesNs", []string{"Table", "Plan"}, si.getQueryTime)
-	_ = stats.NewMapCountersFunc("QueryRowCounts", []string{"Table", "Plan"}, si.getQueryRowCount)
-	_ = stats.NewMapCountersFunc("QueryErrorCounts", []string{"Table", "Plan"}, si.getQueryErrorCount)
+	_ = stats.NewMultiCountersFunc("QueryCounts", []string{"Table", "Plan"}, si.getQueryCount)
+	_ = stats.NewMultiCountersFunc("QueryTimesNs", []string{"Table", "Plan"}, si.getQueryTime)
+	_ = stats.NewMultiCountersFunc("QueryRowCounts", []string{"Table", "Plan"}, si.getQueryRowCount)
+	_ = stats.NewMultiCountersFunc("QueryErrorCounts", []string{"Table", "Plan"}, si.getQueryErrorCount)
 	http.Handle("/debug/query_plans", si)
 	http.Handle("/debug/query_stats", si)
 	http.Handle("/debug/table_stats", si)

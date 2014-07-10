@@ -22,9 +22,9 @@ func TestTimings(t *testing.T) {
 	}
 }
 
-func TestMapTimings(t *testing.T) {
+func TestMultiTimings(t *testing.T) {
 	clear()
-	mtm := NewMapTimings("maptimings1", []string{"dim1", "dim2"})
+	mtm := NewMultiTimings("maptimings1", []string{"dim1", "dim2"})
 	mtm.Add([]string{"tag1a", "tag1b"}, 500*time.Microsecond)
 	mtm.Add([]string{"tag1a", "tag1b"}, 1*time.Millisecond)
 	mtm.Add([]string{"tag2a", "tag2b"}, 1*time.Millisecond)

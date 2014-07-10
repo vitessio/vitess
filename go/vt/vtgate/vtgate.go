@@ -33,8 +33,8 @@ var (
 // can be created.
 type VTGate struct {
 	resolver *Resolver
-	timings  *stats.MapTimings
-	errors   *stats.MapCounters
+	timings  *stats.MultiTimings
+	errors   *stats.MultiCounters
 
 	// the throttled loggers for all errors, one per API entry
 	logExecuteShard             *logutil.ThrottledLogger
@@ -59,8 +59,8 @@ func Init(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount 
 	}
 	RpcVTGate = &VTGate{
 		resolver: NewResolver(serv, "VttabletCall", cell, retryDelay, retryCount, timeout),
-		timings:  stats.NewMapTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
-		errors:   stats.NewMapCounters("VtgateApiErrorCounts", []string{"Operation", "Keyspace", "DbType"}),
+		timings:  stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
+		errors:   stats.NewMultiCounters("VtgateApiErrorCounts", []string{"Operation", "Keyspace", "DbType"}),
 
 		logExecuteShard:             logutil.NewThrottledLogger("ExecuteShard", 5*time.Second),
 		logExecuteKeyspaceIds:       logutil.NewThrottledLogger("ExecuteKeyspaceIds", 5*time.Second),

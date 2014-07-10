@@ -123,17 +123,17 @@ func init() {
 	bucketLabels[len(bucketLabels)-1] = "Max"
 }
 
-// MapTimings is meant to tracks timing data
-// by categories as well as histograms. The names of the categories
-// are compound names made with joining multiple strings with '.'.
-type MapTimings struct {
+// MultiTimings is meant to tracks timing data by categories as well
+// as histograms. The names of the categories are compound names made
+// with joining multiple strings with '.'.
+type MultiTimings struct {
 	Timings
 	labels []string
 }
 
-// NewMapTimings creates a new MapTimings object.
-func NewMapTimings(name string, labels []string) *MapTimings {
-	t := &MapTimings{
+// NewMultiTimings creates a new MultiTimings object.
+func NewMultiTimings(name string, labels []string) *MultiTimings {
+	t := &MultiTimings{
 		Timings: Timings{histograms: make(map[string]*Histogram)},
 		labels:  labels,
 	}
@@ -143,23 +143,23 @@ func NewMapTimings(name string, labels []string) *MapTimings {
 	return t
 }
 
-func (mt *MapTimings) Labels() []string {
+func (mt *MultiTimings) Labels() []string {
 	return mt.labels
 }
 
 // Add will add a new value to the named histogram.
-func (mt *MapTimings) Add(names []string, elapsed time.Duration) {
+func (mt *MultiTimings) Add(names []string, elapsed time.Duration) {
 	if len(names) != len(mt.labels) {
-		panic("MapTimings: wrong number of values in Add")
+		panic("MultiTimings: wrong number of values in Add")
 	}
 	mt.Timings.Add(strings.Join(names, "."), elapsed)
 }
 
 // Record is a convenience function that records completion
 // timing data based on the provided start time of an event.
-func (mt *MapTimings) Record(names []string, startTime time.Time) {
+func (mt *MultiTimings) Record(names []string, startTime time.Time) {
 	if len(names) != len(mt.labels) {
-		panic("MapTimings: wrong number of values in Record")
+		panic("MultiTimings: wrong number of values in Record")
 	}
 	mt.Timings.Record(strings.Join(names, "."), startTime)
 }

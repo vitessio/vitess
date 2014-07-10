@@ -38,9 +38,9 @@ func TestCounters(t *testing.T) {
 	}
 }
 
-func TestMapCounters(t *testing.T) {
+func TestMultiCounters(t *testing.T) {
 	clear()
-	c := NewMapCounters("mapCounter1", []string{"aaa", "bbb"})
+	c := NewMultiCounters("mapCounter1", []string{"aaa", "bbb"})
 	c.Add([]string{"c1a", "c1b"}, 1)
 	c.Add([]string{"c2a", "c2b"}, 1)
 	c.Add([]string{"c2a", "c2b"}, 1)
@@ -56,7 +56,7 @@ func TestMapCounters(t *testing.T) {
 	if counts["c2a.c2b"] != 2 {
 		t.Errorf("want 2, got %d", counts["c2a.c2b"])
 	}
-	f := NewMapCountersFunc("", []string{"aaa", "bbb"}, func() map[string]int64 {
+	f := NewMultiCountersFunc("", []string{"aaa", "bbb"}, func() map[string]int64 {
 		return map[string]int64{
 			"c1a.c1b": 1,
 			"c2a.c2b": 2,
