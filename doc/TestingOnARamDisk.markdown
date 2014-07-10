@@ -4,9 +4,9 @@ The ``integration_test`` testsuite contains tests that may time-out if run again
 
 # Setup
 
-First, set up a normal vitess development environment by running `bootstrab.sh` and sourcing `dev.env`. Then overwrite the testing temporary directories and make a 2GiB ramdisk at the location of your choice (this example uses `/tmp/vt`):
+First, set up a normal vitess development environment by running `bootstrab.sh` and sourcing `dev.env` (see [GettingStarted](GettingStarted.markdown). Then overwrite the testing temporary directories and make a 2GiB ramdisk at the location of your choice (this example uses `/tmp/vt`):
 
-```
+```sh
 export TEST_TMPDIR=/tmp/vt
 
 mkdir ${TEST_TMPDIR}
@@ -22,7 +22,7 @@ You can now run tests (either individually or as part of `make test`) normally.
 
 When you are done testing, you can remove the ramdisk by unmounting it and then removing the directory:
 
-```
+```sh
 sudo umount ${TEST_TMPDIR}
 rmdir ${TEST_TMPDIR}
 ```
