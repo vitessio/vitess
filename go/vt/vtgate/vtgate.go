@@ -17,7 +17,17 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
-var RpcVTGate *VTGate
+var (
+	RpcVTGate *VTGate
+
+	QPSByOperation *stats.Rates
+	QPSByKeyspace  *stats.Rates
+	QPSByDbType    *stats.Rates
+
+	ErrorsByOperation *stats.Rates
+	ErrorsByKeyspace  *stats.Rates
+	ErrorsByDbType    *stats.Rates
+)
 
 // VTGate is the rpc interface to vtgate. Only one instance
 // can be created.
@@ -62,6 +72,14 @@ func Init(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount 
 		logStreamExecuteKeyRanges:   logutil.NewThrottledLogger("StreamExecuteKeyRanges", 5*time.Second),
 		logStreamExecuteShard:       logutil.NewThrottledLogger("StreamExecuteShard", 5*time.Second),
 	}
+	QPSByOperation = stats.NewRates("QPSByOperation", stats.CounterForDimension(RpcVTGate.timings, "Operation"), 15, 1*time.Minute)
+	QPSByKeyspace = stats.NewRates("QPSByKeyspace", stats.CounterForDimension(RpcVTGate.timings, "Keyspace"), 15, 1*time.Minute)
+	QPSByDbType = stats.NewRates("QPSByDbType", stats.CounterForDimension(RpcVTGate.timings, "DbType"), 15, 1*time.Minute)
+
+	ErrorsByOperation = stats.NewRates("ErrorsByOperation", stats.CounterForDimension(RpcVTGate.errors, "Operation"), 15, 1*time.Minute)
+	ErrorsByKeyspace = stats.NewRates("ErrorsByKeyspace", stats.CounterForDimension(RpcVTGate.errors, "Keyspace"), 15, 1*time.Minute)
+	ErrorsByDbType = stats.NewRates("ErrorsByDbType", stats.CounterForDimension(RpcVTGate.errors, "DbType"), 15, 1*time.Minute)
+
 	for _, f := range RegisterVTGates {
 		f(RpcVTGate)
 	}

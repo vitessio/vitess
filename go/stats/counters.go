@@ -99,7 +99,7 @@ func counterToString(m map[string]int64) string {
 // are compound names made with joining multiple strings with '.'.
 type MapCounters struct {
 	Counters
-	Labels []string
+	labels []string
 }
 
 // NewMapCounters creates a new MapCounters instance, and publishes it
@@ -107,18 +107,21 @@ type MapCounters struct {
 func NewMapCounters(name string, labels []string) *MapCounters {
 	t := &MapCounters{
 		Counters: Counters{counts: make(map[string]int64)},
-		Labels:   labels,
+		labels:   labels,
 	}
 	if name != "" {
 		Publish(name, t)
 	}
 	return t
 }
+func (mc *MapCounters) Labels() []string {
+	return mc.labels
+}
 
 // Add adds a value to a named counter. len(names) must be equal to
 // len(Labels)
 func (mc *MapCounters) Add(names []string, value int64) {
-	if len(names) != len(mc.Labels) {
+	if len(names) != len(mc.labels) {
 		panic("MapCounters: wrong number of values in Add")
 	}
 	mc.Counters.Add(strings.Join(names, "."), value)
@@ -127,7 +130,7 @@ func (mc *MapCounters) Add(names []string, value int64) {
 // Set sets the value of a named counter. len(names) must be equal to
 // len(Labels)
 func (mc *MapCounters) Set(names []string, value int64) {
-	if len(names) != len(mc.Labels) {
+	if len(names) != len(mc.labels) {
 		panic("MapCounters: wrong number of values in Set")
 	}
 	mc.Counters.Set(strings.Join(names, "."), value)
@@ -140,7 +143,11 @@ func (mc *MapCounters) Set(names []string, value int64) {
 // as there are in Labels).
 type MapCountersFunc struct {
 	CountersFunc
-	Labels []string
+	labels []string
+}
+
+func (mcf *MapCountersFunc) Labels() []string {
+	return mcf.labels
 }
 
 // NewMapCountersFunc creates a new MapCountersFunc mapping to the provided
@@ -148,7 +155,7 @@ type MapCountersFunc struct {
 func NewMapCountersFunc(name string, labels []string, f CountersFunc) *MapCountersFunc {
 	t := &MapCountersFunc{
 		CountersFunc: f,
-		Labels:       labels,
+		labels:       labels,
 	}
 	if name != "" {
 		Publish(name, t)
