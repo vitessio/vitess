@@ -4,7 +4,7 @@ The `integration_test` testsuite contains tests that may time-out if run against
 
 # Setup
 
-First, set up a normal vitess development environment by running `bootstrab.sh` and sourcing `dev.env` (see [GettingStarted](GettingStarted.markdown). Then overwrite the testing temporary directories and make a 2GiB ramdisk at the location of your choice (this example uses `/tmp/vt`):
+First, set up a normal vitess development environment by running `bootstrap.sh` and sourcing `dev.env` (see [GettingStarted](GettingStarted.markdown). Then overwrite the testing temporary directories and make a 2GiB ramdisk at the location of your choice (this example uses `/tmp/vt`):
 
 ```sh
 export TEST_TMPDIR=/tmp/vt
