@@ -159,6 +159,9 @@ func healthHTMLName() template.HTML {
 	return health.HTMLName()
 }
 
+// For use by plugins which wish to avoid racing when registering status page parts.
+var onStatusRegistered func()
+
 func init() {
 	servenv.OnRun(func() {
 		servenv.AddStatusPart("Tablet", tabletTemplate, func() interface{} {
@@ -176,5 +179,8 @@ func init() {
 		servenv.AddStatusPart("Binlog Player", binlogTemplate, func() interface{} {
 			return agent.BinlogPlayerMap.Status()
 		})
+		if onStatusRegistered != nil {
+			onStatusRegistered()
+		}
 	})
 }
