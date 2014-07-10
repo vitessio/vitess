@@ -36,6 +36,8 @@ To run the tests:
 make  # run the tests
 ```
 
+Note: If you see failing tests, it may be that your disk is too slow for the testsuite, leading to timeouts. You might try [testing against a ramdisk](TestingOnARamDisk.markdown).
+
 ## Setting up a cluster
 TODO: Expand on all sections
 ### Setup zookeeper
