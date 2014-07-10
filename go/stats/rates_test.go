@@ -41,6 +41,42 @@ func TestRates(t *testing.T) {
 	}
 }
 
+func TestRatesConsistency(t *testing.T) {
+	// This tests the following invariant: in the time window
+	// covered by rates, the sum of the rates reported must be
+	// equal to the count reported by the counter.
+	const (
+		interval = 1 * time.Second
+		epsilon  = 50 * time.Millisecond
+	)
+
+	clear()
+	c := NewCounters("rcounter4")
+	r := NewRates("rates4", c, 100, interval)
+
+	time.Sleep(epsilon)
+	c.Add("a", 1000)
+	time.Sleep(interval)
+	c.Add("a", 1)
+	time.Sleep(interval)
+
+	result := r.Get()
+	counts := c.Counts()
+	t.Logf("r.Get(): %v", result)
+	t.Logf("c.Counts(): %v", counts)
+
+	rate, count := result["a"], counts["a"]
+
+	var sum float64
+	for _, v := range rate {
+		sum += v
+	}
+	if sum != float64(counts["a"]) {
+		t.Errorf("rate inconsistent with count: sum of %v != %v", rate, count)
+	}
+
+}
+
 func TestRatesHook(t *testing.T) {
 	clear()
 	c := NewCounters("rcounter2")
