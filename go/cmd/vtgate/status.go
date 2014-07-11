@@ -73,12 +73,111 @@ var (
 </table>
 <small>This is just a cache, so some data may not be visible here yet.</small>
 `
+
+	statsTemplate = `
+<div id="qps_by_db_type"></div>
+<div id="qps_by_keyspace"></div>
+<div id="qps_by_operation"></div>
+<div id="errors_by_db_type"></div>
+<div id="errors_by_keyspace"></div>
+<div id="errors_by_operation"></div>
+<script type="text/javascript" src="https://www.google.com/jsapi"></script>
+
+<script type="text/javascript">
+google.load("jquery", "1.4.0");
+google.load("visualization", "1", {packages:["corechart"]});
+
+// minutesAgo returns the a time object representing i minutes before
+// d.
+function minutesAgo(d, i) {
+  var copy = new Date(d);
+  copy.setMinutes(copy.getMinutes() - i);
+  return copy
+}
+
+// massageData takes rates from input and returns data that's suitable
+// to present in a chart.
+function massageData(input, now) {
+  delete input['All'];
+  var planTypes = Object.keys(input);
+  if (planTypes.length === 0) {
+    planTypes = ["All"];
+    input["All"] = [];
+  }
+
+  var data = [["Time"].concat(planTypes)];
+
+  for (var i = 0; i < 15; i++) {
+    var datum = [minutesAgo(now, i)];
+    for (var j = 0; j < planTypes.length; j++) {
+      if (i < input[planTypes[0]].length) {
+        datum.push(+input[planTypes[j]][i].toFixed(2));
+      } else {
+        datum.push(0);
+      }
+    }
+    data.push(datum)
+  }
+  return data
+}
+
+var updateCallbacks = [];
+
+function drawQPSChart(elId, key, title) {
+  var div = $(elId).height(500).width(900).unwrap()[0]
+  var chart = new google.visualization.AreaChart(div);
+
+  var options = {
+    title: title,
+    focusTarget: 'category',
+isStacked: true,
+    vAxis: {
+      viewWindow: {min: 0},
+    }
+  };
+
+  var redrawing = function(input_data, now) {
+    chart.draw(google.visualization.arrayToDataTable(massageData(input_data[key], now)), options);
+  }
+
+  updateCallbacks.push(redrawing)
+}
+
+function update() {
+  var varzData;
+  var up = function() {
+  $.getJSON('/debug/vars', function(d) {
+    for (var i = 0; i < updateCallbacks.length; i++) {
+      updateCallbacks[i](d, new Date());
+    }
+  });
+  }
+  up()
+  window.setInterval(up, 30000)
+}
+
+google.setOnLoadCallback(function() {
+  drawQPSChart('#qps_by_db_type', 'QPSByDbType', 'QPS by DB type');
+  drawQPSChart('#qps_by_keyspace', 'QPSByKeyspace', 'QPS by keyspace');
+  drawQPSChart('#qps_by_operation', 'QPSByOperation', 'QPS by operation');
+
+  drawQPSChart('#errors_by_db_type', 'ErrorsByDbType', 'Errors by DB type');
+  drawQPSChart('#errors_by_keyspace', 'ErrorsByKeyspace', 'Errors by keyspace');
+  drawQPSChart('#errors_by_operation', 'ErrorsByOperation', 'Errors by operation');
+  update();
+});
+
+</script>
+`
 )
 
 func init() {
 	servenv.OnRun(func() {
 		servenv.AddStatusPart("Topology Cache", topoTemplate, func() interface{} {
 			return resilientSrvTopoServer.CacheStatus()
+		})
+		servenv.AddStatusPart("Stats", statsTemplate, func() interface{} {
+			return nil
 		})
 	})
 }
