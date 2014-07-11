@@ -2,6 +2,7 @@
 import datetime
 import json
 import logging
+import os
 import re
 import tempfile
 import time
@@ -344,8 +345,7 @@ class TestZkocc(unittest.TestCase):
     zkocc_14850 = utils.zkocc_start()
 
     qpser = utils.run_bg(environment.binary_argstr('zkclient2')+' -server localhost:%u -mode qps /zk/test_nj/vt/zkocc1/data1 /zk/test_nj/vt/zkocc1/data2' % environment.zkocc_port_base)
-    time.sleep(10)
-    utils.kill_sub_process(qpser)
+    qpser.wait()
 
     # get the zkocc vars, make sure we have what we need
     v = utils.get_vars(environment.zkocc_port_base)
@@ -376,10 +376,15 @@ class TestZkocc(unittest.TestCase):
     utils.run_vtctl('RebuildKeyspaceGraph test_keyspace', auto_log=True)
 
     # start vtgate and the qps-er
-    vtgate_proc, vtgate_port = utils.vtgate_start()
-    qpser = utils.run_bg(environment.binary_argstr('zkclient2')+' -server localhost:%u -mode qps2 test_nj test_keyspace' % vtgate_port)
-    time.sleep(10)
-    utils.kill_sub_process(qpser)
+    vtgate_proc, vtgate_port = utils.vtgate_start(
+        extra_args=['-cpu_profile', os.path.join(environment.tmproot,
+                                                 'vtgate.pprof')])
+    qpser = utils.run_bg(environment.binary_args('zkclient2') + [
+        '-server', 'localhost:%u' % vtgate_port,
+        '-mode', 'qps2',
+        '-cpu_profile', os.path.join(environment.tmproot, 'zkclient2.pprof'),
+        'test_nj', 'test_keyspace'])
+    qpser.wait()
 
     # get the vtgate vars, make sure we have what we need
     v = utils.get_vars(vtgate_port)

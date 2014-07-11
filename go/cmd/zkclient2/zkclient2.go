@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime/pprof"
 	"sort"
 	"time"
 
@@ -20,13 +21,16 @@ import (
 	"github.com/youtube/vitess/go/zk"
 )
 
-var usage = `
+var (
+	usage = `
 Queries the zkocc zookeeper cache, for test purposes. In get mode, if more
 than one value is asked for, will use getv.
 `
-var mode = flag.String("mode", "get", "which operation to run on the node (get, children, qps, qps2)")
-var server = flag.String("server", "localhost:3801", "zkocc server to dial")
-var timeout = flag.Duration("timeout", 5*time.Second, "connection timeout")
+	mode       = flag.String("mode", "get", "which operation to run on the node (get, children, qps, qps2)")
+	server     = flag.String("server", "localhost:3801", "zkocc server to dial")
+	timeout    = flag.Duration("timeout", 5*time.Second, "connection timeout")
+	cpuProfile = flag.String("cpu_profile", "", "write cpu profile to file")
+)
 
 func init() {
 	flag.Usage = func() {
@@ -173,10 +177,15 @@ func qps(paths []string) {
 	}
 
 	ticker := time.NewTicker(time.Second)
+	i := 0
 	for _ = range ticker.C {
 		c := count.Get()
 		count.Set(0)
 		println(fmt.Sprintf("QPS = %v", c))
+		i++
+		if i == 10 {
+			break
+		}
 	}
 }
 
@@ -197,10 +206,15 @@ func qps2(cell string, keyspaces []string) {
 	}
 
 	ticker := time.NewTicker(time.Second)
+	i := 0
 	for _ = range ticker.C {
 		c := count.Get()
 		count.Set(0)
 		println(fmt.Sprintf("QPS = %v", c))
+		i++
+		if i == 10 {
+			break
+		}
 	}
 }
 
@@ -212,6 +226,15 @@ func main() {
 	if len(args) == 0 {
 		flag.Usage()
 		os.Exit(1)
+	}
+
+	if *cpuProfile != "" {
+		f, err := os.Create(*cpuProfile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
 	}
 
 	if *mode == "get" {

@@ -143,11 +143,14 @@ def kill_sub_processes():
       except OSError as e:
         logging.debug("kill_sub_processes: %s", str(e))
 
-def kill_sub_process(proc):
+def kill_sub_process(proc, soft=False):
   if proc is None:
     return
   pid = proc.pid
-  proc.kill()
+  if soft:
+    proc.terminate()
+  else:
+    proc.kill()
   if pid and pid in pid_map:
     del pid_map[pid]
     already_killed.append(pid)
@@ -387,7 +390,7 @@ def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1,
 def vtgate_kill(sp):
   if sp is None:
     return
-  kill_sub_process(sp)
+  kill_sub_process(sp, soft=True)
   sp.wait()
 
 # vtctl helpers
