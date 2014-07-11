@@ -17,16 +17,31 @@ var execLimit = &Limit{Rowcount: ValArg(":_vtMaxResultSize")}
 type PlanType int
 
 const (
+	// PLAN_PASS_SELECT is pass through select statements. This is the
+	// default plan for select statements.
 	PLAN_PASS_SELECT PlanType = iota
+	// PLAN_PASS_DML is pass through update & delete statements. This is
+	// the default plan for update and delete statements.
 	PLAN_PASS_DML
+	// PLAN_PK_EQUAL is select statement which has where clause(s) on
+	// primary key(s)
 	PLAN_PK_EQUAL
+	// PLAN_PK_IN is select statement with a single IN clause on primary key
 	PLAN_PK_IN
+	// PLAN_SELECT_SUBQUERY is select statement with a subselect statement
 	PLAN_SELECT_SUBQUERY
+	// PLAN_DML_PK is an update or delete with an equality where clause(s)
+	// on primary key(s)
 	PLAN_DML_PK
+	// PLAN_DML_SUBQUERY is an update or delete with a subselect statement
 	PLAN_DML_SUBQUERY
+	// PLAN_INSERT_PK is insert statement where the PK value is known
 	PLAN_INSERT_PK
+	// PLAN_INSERT_SUBQUERY is same as PLAN_DML_SUBQUERY but for inserts
 	PLAN_INSERT_SUBQUERY
+	// PLAN_SET is for SET statements
 	PLAN_SET
+	// PLAN_DDL is for DDL statements
 	PLAN_DDL
 	NumPlans
 )
