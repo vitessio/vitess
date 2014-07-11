@@ -367,6 +367,13 @@ class TestZkocc(unittest.TestCase):
     self.assertEqual(v['ZkReader']['UnknownCellErrors'], 0, 'unexpected UnknownCellErrors')
     utils.zkocc_kill(zkocc_14850)
 
+  # test_vtgate_qps can be run to profile vtgate:
+  # Just run:
+  #   ./zkocc_test.py -v TestZkocc.test_vtgate_qps --skip-teardown
+  # Then run:
+  #   go tool pprof $VTROOT/bin/vtgate $VTDATAROOT/tmp/vtgate.pprof
+  # (or with zkclient2 for the client side)
+  # and for instance type 'web' in the prompt.
   def test_vtgate_qps(self):
     # create the topology
     utils.run_vtctl('CreateKeyspace test_keyspace')
