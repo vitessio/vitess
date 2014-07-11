@@ -101,6 +101,10 @@ bson:
 	bsongen -file ./go/vt/topo/srvshard.go -type SrvKeyspace -o ./go/vt/topo/srvkeyspace_bson.go
 	bsongen -file ./go/vt/topo/srvshard.go -type KeyspacePartition -o ./go/vt/topo/keyspace_partition_bson.go
 	bsongen -file ./go/vt/topo/tablet.go -type TabletType -o ./go/vt/topo/tablet_type_bson.go
+	bsongen -file ./go/vt/topo/toporeader.go -type GetSrvKeyspaceNamesArgs -o ./go/vt/topo/get_srv_keyspace_names_args_bson.go
+	bsongen -file ./go/vt/topo/toporeader.go -type GetSrvKeyspaceArgs -o ./go/vt/topo/get_srv_keyspace_args_bson.go
+	bsongen -file ./go/vt/topo/toporeader.go -type SrvKeyspaceNames -o ./go/vt/topo/srv_keyspace_names_bson.go
+	bsongen -file ./go/vt/topo/toporeader.go -type GetEndPointsArgs -o ./go/vt/topo/get_end_points_args_bson.go
 	bsongen -file ./go/vt/binlog/proto/binlog_player.go -type BlpPosition -o ./go/vt/binlog/proto/blp_position_bson.go
 	bsongen -file ./go/vt/binlog/proto/binlog_player.go -type BlpPositionList -o ./go/vt/binlog/proto/blp_position_list_bson.go
 	bsongen -file ./go/vt/binlog/proto/binlog_transaction.go -type BinlogTransaction -o ./go/vt/binlog/proto/binlog_transaction_bson.go

@@ -161,7 +161,7 @@ func getEndPoints(rpcClient *rpcplus.Client, cell, keyspace, shard, tabletType s
 func qps(paths []string) {
 	var count sync2.AtomicInt32
 	for _, path := range paths {
-		for i := 0; i < 100; i++ {
+		for i := 0; i < 10; i++ {
 			go func() {
 				rpcClient := connect()
 				for true {
@@ -185,7 +185,7 @@ func qps(paths []string) {
 func qps2(cell string, keyspaces []string) {
 	var count sync2.AtomicInt32
 	for _, keyspace := range keyspaces {
-		for i := 0; i < 100; i++ {
+		for i := 0; i < 10; i++ {
 			go func() {
 				rpcClient := connect()
 				for true {

@@ -26,7 +26,7 @@ func NewTopoReader(ts vtgate.SrvTopoServer) *TopoReader {
 	}
 }
 
-func (tr *TopoReader) GetSrvKeyspaceNames(ctx *proto.Context, req topo.GetSrvKeyspaceNamesArgs, reply *topo.SrvKeyspaceNames) error {
+func (tr *TopoReader) GetSrvKeyspaceNames(ctx *proto.Context, req *topo.GetSrvKeyspaceNamesArgs, reply *topo.SrvKeyspaceNames) error {
 	tr.queryCount.Add(req.Cell, 1)
 	var err error
 	reply.Entries, err = tr.ts.GetSrvKeyspaceNames(context.NewGoRPCContext(ctx), req.Cell)
@@ -38,7 +38,7 @@ func (tr *TopoReader) GetSrvKeyspaceNames(ctx *proto.Context, req topo.GetSrvKey
 	return nil
 }
 
-func (tr *TopoReader) GetSrvKeyspace(ctx *proto.Context, req topo.GetSrvKeyspaceArgs, reply *topo.SrvKeyspace) (err error) {
+func (tr *TopoReader) GetSrvKeyspace(ctx *proto.Context, req *topo.GetSrvKeyspaceArgs, reply *topo.SrvKeyspace) (err error) {
 	tr.queryCount.Add(req.Cell, 1)
 	keyspace, err := tr.ts.GetSrvKeyspace(context.NewGoRPCContext(ctx), req.Cell, req.Keyspace)
 	if err != nil {
@@ -50,7 +50,7 @@ func (tr *TopoReader) GetSrvKeyspace(ctx *proto.Context, req topo.GetSrvKeyspace
 	return nil
 }
 
-func (tr *TopoReader) GetEndPoints(ctx *proto.Context, req topo.GetEndPointsArgs, reply *topo.EndPoints) (err error) {
+func (tr *TopoReader) GetEndPoints(ctx *proto.Context, req *topo.GetEndPointsArgs, reply *topo.EndPoints) (err error) {
 	tr.queryCount.Add(req.Cell, 1)
 	addrs, err := tr.ts.GetEndPoints(context.NewGoRPCContext(ctx), req.Cell, req.Keyspace, req.Shard, req.TabletType)
 	if err != nil {
