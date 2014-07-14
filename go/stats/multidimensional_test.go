@@ -6,9 +6,9 @@ import (
 	"time"
 )
 
-func TestMapTimingsCounterFor(t *testing.T) {
+func TestMultiTimingsCounterFor(t *testing.T) {
 	clear()
-	mtm := NewMapTimings("maptimings3", []string{"dim1", "dim2"})
+	mtm := NewMultiTimings("multitimings3", []string{"dim1", "dim2"})
 
 	mtm.Add([]string{"tag1a", "tag1b"}, 500*time.Microsecond)
 	mtm.Add([]string{"tag1a", "tag2b"}, 500*time.Millisecond)
