@@ -43,7 +43,7 @@ var (
 	ErrPartialResult = errors.New("partial result")
 )
 
-// topo.Server is the interface used to talk to a persistent
+// Server is the interface used to talk to a persistent
 // backend storage server and locking service.
 //
 // Zookeeper is a good example of this, and zktopo contains the
