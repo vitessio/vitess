@@ -75,12 +75,27 @@ var (
 `
 
 	statsTemplate = `
-<div id="qps_by_db_type"></div>
-<div id="qps_by_keyspace"></div>
-<div id="qps_by_operation"></div>
-<div id="errors_by_db_type"></div>
-<div id="errors_by_keyspace"></div>
-<div id="errors_by_operation"></div>
+<style>
+  #stats-charts div {
+    display: inline-block;
+  }
+</style>
+
+<table id="stats-charts">
+  <tr>
+    <td><div id="qps_by_db_type"></div></td>
+    <td><div id="errors_by_db_type"></div></td>
+  </tr>
+  <tr>
+    <td><div id="qps_by_keyspace"></div></td>
+    <td><div id="errors_by_keyspace"></div></td>
+  </tr>
+  <tr>
+    <td><div id="qps_by_operation"></div></td>
+    <td><div id="errors_by_operation"></div></td>
+  </tr>
+</table>
+
 <script type="text/javascript" src="https://www.google.com/jsapi"></script>
 
 <script type="text/javascript">
@@ -124,7 +139,7 @@ function massageData(input, now) {
 var updateCallbacks = [];
 
 function drawQPSChart(elId, key, title) {
-  var div = $(elId).height(500).width(900).unwrap()[0]
+  var div = $(elId).height(400).width(600).unwrap()[0]
   var chart = new google.visualization.AreaChart(div);
 
   var options = {
