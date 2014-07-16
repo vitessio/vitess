@@ -153,8 +153,6 @@ func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) {
 		if err != nil || dbname == "" || dbname == rci.dbname {
 			log.Errorf("Unrecognized: %s", event.Sql)
 			internalErrors.Add("Invalidation", 1)
-		} else {
-			infoErrors.Add("Invalidation", 1)
 		}
 		rci.Timestamp.Set(event.Timestamp)
 	case "POS":
