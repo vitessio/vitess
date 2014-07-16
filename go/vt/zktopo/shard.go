@@ -24,7 +24,6 @@ This file contains the shard management code for zktopo.Server
 
 func (zkts *Server) CreateShard(keyspace, shard string, value *topo.Shard) error {
 	shardPath := path.Join(globalKeyspacesPath, keyspace, "shards", shard)
-	data := jscfg.ToJson(value)
 	pathList := []string{
 		shardPath,
 		path.Join(shardPath, "action"),
@@ -35,7 +34,7 @@ func (zkts *Server) CreateShard(keyspace, shard string, value *topo.Shard) error
 	for i, zkPath := range pathList {
 		c := ""
 		if i == 0 {
-			c = data
+			c = jscfg.ToJson(value)
 		}
 		_, err := zk.CreateRecursive(zkts.zconn, zkPath, c, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 		if err != nil {
@@ -51,18 +50,15 @@ func (zkts *Server) CreateShard(keyspace, shard string, value *topo.Shard) error
 	}
 
 	event.Dispatch(&events.ShardChange{
-		Keyspace: keyspace,
-		Shard:    shard,
-		Status:   "created",
-		Data:     data,
+		ShardInfo: *topo.NewShardInfo(keyspace, shard, value),
+		Status:    "created",
 	})
 	return nil
 }
 
 func (zkts *Server) UpdateShard(si *topo.ShardInfo) error {
 	shardPath := path.Join(globalKeyspacesPath, si.Keyspace(), "shards", si.ShardName())
-	data := jscfg.ToJson(si.Shard)
-	_, err := zkts.zconn.Set(shardPath, data, -1)
+	_, err := zkts.zconn.Set(shardPath, jscfg.ToJson(si.Shard), -1)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			err = topo.ErrNoNode
@@ -71,10 +67,8 @@ func (zkts *Server) UpdateShard(si *topo.ShardInfo) error {
 	}
 
 	event.Dispatch(&events.ShardChange{
-		Keyspace: si.Keyspace(),
-		Shard:    si.ShardName(),
-		Status:   "updated",
-		Data:     data,
+		ShardInfo: *si,
+		Status:    "updated",
 	})
 	return nil
 }
@@ -141,9 +135,8 @@ func (zkts *Server) DeleteShard(keyspace, shard string) error {
 	}
 
 	event.Dispatch(&events.ShardChange{
-		Keyspace: keyspace,
-		Shard:    shard,
-		Status:   "deleted",
+		ShardInfo: *topo.NewShardInfo(keyspace, shard, nil),
+		Status:    "deleted",
 	})
 	return nil
 }

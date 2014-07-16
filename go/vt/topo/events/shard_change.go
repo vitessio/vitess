@@ -1,10 +1,11 @@
 package events
 
+import (
+	"github.com/youtube/vitess/go/vt/topo"
+)
+
 // ShardChange is an event that describes changes to a shard.
 type ShardChange struct {
-	Keyspace string
-	Shard    string
-	Status   string
-	// Data optionally contains the updated lockserver file data for the shard.
-	Data string
+	ShardInfo topo.ShardInfo
+	Status    string
 }

@@ -34,13 +34,12 @@ func (zkts *Server) CreateKeyspace(keyspace string, value *topo.Keyspace) error 
 		path.Join(keyspacePath, "actionlog"),
 		path.Join(keyspacePath, "shards"),
 	}
-	data := jscfg.ToJson(value)
 
 	alreadyExists := false
 	for i, zkPath := range pathList {
 		c := ""
 		if i == 0 {
-			c = data
+			c = jscfg.ToJson(value)
 		}
 		_, err := zk.CreateRecursive(zkts.zconn, zkPath, c, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 		if err != nil {
@@ -56,9 +55,8 @@ func (zkts *Server) CreateKeyspace(keyspace string, value *topo.Keyspace) error 
 	}
 
 	event.Dispatch(&events.KeyspaceChange{
-		Keyspace: keyspace,
-		Status:   "created",
-		Data:     data,
+		KeyspaceInfo: *topo.NewKeyspaceInfo(keyspace, value),
+		Status:       "created",
 	})
 	return nil
 }
@@ -83,9 +81,8 @@ func (zkts *Server) UpdateKeyspace(ki *topo.KeyspaceInfo) error {
 			}
 
 			event.Dispatch(&events.KeyspaceChange{
-				Keyspace: ki.KeyspaceName(),
-				Status:   "updated (had to create Keyspace object)",
-				Data:     data,
+				KeyspaceInfo: *ki,
+				Status:       "updated (had to create Keyspace object)",
 			})
 			return nil
 		}
@@ -93,9 +90,8 @@ func (zkts *Server) UpdateKeyspace(ki *topo.KeyspaceInfo) error {
 	}
 
 	event.Dispatch(&events.KeyspaceChange{
-		Keyspace: ki.KeyspaceName(),
-		Status:   "updated",
-		Data:     data,
+		KeyspaceInfo: *ki,
+		Status:       "updated",
 	})
 	return nil
 }
@@ -138,8 +134,8 @@ func (zkts *Server) DeleteKeyspaceShards(keyspace string) error {
 	}
 
 	event.Dispatch(&events.KeyspaceChange{
-		Keyspace: keyspace,
-		Status:   "deleted all shards",
+		KeyspaceInfo: *topo.NewKeyspaceInfo(keyspace, nil),
+		Status:       "deleted all shards",
 	})
 	return nil
 }
