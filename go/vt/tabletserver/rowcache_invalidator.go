@@ -154,7 +154,6 @@ func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) {
 			log.Errorf("Unrecognized: %s", event.Sql)
 			internalErrors.Add("Invalidation", 1)
 		} else {
-			log.Warningf("Ignoring cross-db statement: %s", event.Sql)
 			infoErrors.Add("Invalidation", 1)
 		}
 		rci.Timestamp.Set(event.Timestamp)
