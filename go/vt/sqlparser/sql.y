@@ -176,6 +176,16 @@ insert_statement:
   {
     $$ = &Insert{Comments: Comments($2), Table: $4, Columns: $5, Rows: $6, OnDup: OnDup($7)}
   }
+| INSERT comment_opt INTO dml_table_expression SET update_list on_dup_opt
+  {
+    cols := make(Columns, 0, len($6))
+    vals := make(ValTuple, 0, len($6))
+    for _, col := range $6 {
+      cols = append(cols, &NonStarExpr{Expr: col.Name})
+      vals = append(vals, col.Expr)
+    }
+    $$ = &Insert{Comments: Comments($2), Table: $4, Columns: cols, Rows: Values{vals}, OnDup: OnDup($7)}
+  }
 
 update_statement:
   UPDATE comment_opt dml_table_expression SET update_list where_expression_opt order_by_opt limit_opt
