@@ -23,8 +23,8 @@ const (
 	// PLAN_PASS_DML is pass through update & delete statements. This is
 	// the default plan for update and delete statements.
 	PLAN_PASS_DML
-	// PLAN_PK_EQUAL is select statement which has where clause(s) on
-	// primary key(s)
+	// PLAN_PK_EQUAL is select statement which has an equality where clause
+	// on primary key
 	PLAN_PK_EQUAL
 	// PLAN_PK_IN is select statement with a single IN clause on primary key
 	PLAN_PK_IN
@@ -35,7 +35,8 @@ const (
 	PLAN_DML_PK
 	// PLAN_DML_SUBQUERY is an update or delete with a subselect statement
 	PLAN_DML_SUBQUERY
-	// PLAN_INSERT_PK is insert statement where the PK value is known
+	// PLAN_INSERT_PK is insert statement where the PK value is
+	// supplied with the query
 	PLAN_INSERT_PK
 	// PLAN_INSERT_SUBQUERY is same as PLAN_DML_SUBQUERY but for inserts
 	PLAN_INSERT_SUBQUERY
