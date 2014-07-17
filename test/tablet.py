@@ -283,7 +283,7 @@ class Tablet(object):
   def start_vttablet(self, port=None, auth=False, memcache=False,
                      wait_for_state="SERVING", customrules=None,
                      schema_override=None, cert=None, key=None, ca_cert=None,
-                     repl_extra_flags={},
+                     repl_extra_flags={},table_acl_config=None,
                      target_tablet_type=None, lameduck_period=None,
                      extra_args=None, full_mycnf_args=False,
                      security_policy=None):
@@ -349,6 +349,10 @@ class Tablet(object):
 
     if schema_override:
       args.extend(['-schema-override', schema_override])
+
+    if table_acl_config:
+        args.extend(['-table-acl-config', table_acl_config])
+        args.extend(['-queryserver-config-strict-table-acl'])
 
     if cert:
       self.secure_port = environment.reserve_ports(1)

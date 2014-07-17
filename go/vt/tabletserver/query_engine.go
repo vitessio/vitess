@@ -5,6 +5,7 @@
 package tabletserver
 
 import (
+	"fmt"
 	"time"
 
 	log "github.com/golang/glog"
@@ -15,9 +16,11 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
@@ -67,6 +70,10 @@ type QueryEngine struct {
 	strictMode       sync2.AtomicInt64
 	maxResultSize    sync2.AtomicInt64
 	streamBufferSize sync2.AtomicInt64
+	strictTableAcl   bool
+
+	// loggers
+	accessCheckerLogger *logutil.ThrottledLogger
 }
 
 type compiledPlan struct {
@@ -140,8 +147,12 @@ func NewQueryEngine(config Config) *QueryEngine {
 	if config.StrictMode {
 		qe.strictMode.Set(1)
 	}
+	qe.strictTableAcl = config.StrictTableAcl
 	qe.maxResultSize = sync2.AtomicInt64(config.MaxResultSize)
 	qe.streamBufferSize = sync2.AtomicInt64(config.StreamBufferSize)
+
+	// loggers
+	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
 
 	// Stats
 	stats.Publish("MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
@@ -309,6 +320,15 @@ func (qe *QueryEngine) Execute(logStats *SQLQueryStats, query *proto.Query) (rep
 		panic(NewTabletError(FAIL, "Query disallowed due to rule: %s", desc))
 	case QR_FAIL_RETRY:
 		panic(NewTabletError(RETRY, "Query disallowed due to rule: %s", desc))
+	}
+
+	// Perform necessary access checks
+	if !tableacl.Check(logStats.context.GetUsername(), basePlan.Authorized) {
+		err := fmt.Sprintf("table acl error: %v cannot run %v on table %v", logStats.context.GetUsername(), basePlan.PlanId, basePlan.TableName)
+		if qe.strictTableAcl {
+			panic(NewTabletError(FAIL, err))
+		}
+		qe.accessCheckerLogger.Errorf(err)
 	}
 
 	if basePlan.PlanId == sqlparser.PLAN_DDL {

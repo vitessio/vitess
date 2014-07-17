@@ -23,6 +23,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tableacl"
 )
 
 const base_show_tables = "select table_name, table_type, unix_timestamp(create_time), table_comment from information_schema.tables where table_schema = database()"
@@ -31,9 +32,10 @@ const maxTableCount = 10000
 
 type ExecPlan struct {
 	*sqlparser.ExecPlan
-	TableInfo *TableInfo
-	Fields    []mproto.Field
-	Rules     *QueryRules
+	TableInfo  *TableInfo
+	Fields     []mproto.Field
+	Rules      *QueryRules
+	Authorized map[string]bool
 
 	mu         sync.Mutex
 	QueryCount int64
@@ -324,6 +326,7 @@ func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string) (plan *ExecPl
 	}
 	plan = &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
 	plan.Rules = si.rules.filterByPlan(sql, plan.PlanId, plan.TableName)
+	plan.Authorized = tableacl.Authorized(plan.TableName, plan.PlanId.MinRole())
 	if plan.PlanId.IsSelect() {
 		if plan.FieldQuery == nil {
 			log.Warningf("Cannot cache field info: %s", sql)

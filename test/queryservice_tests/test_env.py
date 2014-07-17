@@ -133,6 +133,16 @@ class TestEnv(object):
         }
       }]""")
 
+  def create_table_acl_config(self, filename):
+    with open(filename, "w") as f:
+      f.write("""{
+      "vtocc_acl_no_access": {},
+      "vtocc_acl_read_only": {"Reader": ",u1"},
+      "vtocc_acl_read_write": {"Writer": ",u1"},
+      "vtocc_acl_admin": {"Admin": ",u1"},
+      "vtocc_acl_all_user_read_only": {"READER":"*"}
+      }""")
+
   def run_cases(self, cases):
     curs = cursor.TabletCursor(self.conn)
     error_count = 0
@@ -196,7 +206,14 @@ class VttabletTestEnv(TestEnv):
     self.create_customrules(customrules)
     schema_override = os.path.join(environment.tmproot, 'schema_override.json')
     self.create_schema_override(schema_override)
-    self.tablet.start_vttablet(memcache=self.memcache, customrules=customrules, schema_override=schema_override)
+    table_acl_config = os.path.join(environment.tmproot, 'table_acl_config.json')
+    self.create_table_acl_config(table_acl_config)
+    self.tablet.start_vttablet(
+            memcache=self.memcache,
+            customrules=customrules,
+            schema_override=schema_override,
+            table_acl_config=table_acl_config,
+    )
 
     # FIXME(szopa): This is necessary here only because of a bug that
     # makes the qs reload its config only after an action.
@@ -281,12 +298,16 @@ class VtoccTestEnv(TestEnv):
     self.create_customrules(customrules)
     schema_override = os.path.join(environment.tmproot, 'schema_override.json')
     self.create_schema_override(schema_override)
+    table_acl_config = os.path.join(environment.tmproot, 'table_acl_config.json')
+    self.create_table_acl_config(table_acl_config)
 
     occ_args = environment.binary_args('vtocc') + [
       "-port", str(self.port),
       "-customrules", customrules,
       "-log_dir", environment.vtlogroot,
       "-schema-override", schema_override,
+      "-table-acl-config", table_acl_config,
+      "-queryserver-config-strict-table-acl",
       "-db-config-app-charset", "utf8",
       "-db-config-app-dbname", "vt_test_keyspace",
       "-db-config-app-host", "localhost",

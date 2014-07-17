@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -23,6 +24,7 @@ var (
 	tabletPath     = flag.String("tablet-path", "", "tablet alias or path to zk node representing the tablet")
 	enableRowcache = flag.Bool("enable-rowcache", false, "enable rowcacche")
 	overridesFile  = flag.String("schema-override", "", "schema overrides file")
+	tableAclConfig = flag.String("table-acl-config", "", "path to table access checker config file")
 
 	agent *tabletmanager.ActionAgent
 )
@@ -77,6 +79,9 @@ func main() {
 	}
 	dbcfgs.App.EnableRowcache = *enableRowcache
 
+	if *tableAclConfig != "" {
+		tableacl.Init(*tableAclConfig)
+	}
 	tabletserver.InitQueryService()
 	binlog.RegisterUpdateStreamService(mycnf)
 

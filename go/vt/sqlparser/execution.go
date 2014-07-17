@@ -10,6 +10,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/schema"
+	"github.com/youtube/vitess/go/vt/tableacl"
 )
 
 var execLimit = &Limit{Rowcount: ValArg(":_vtMaxResultSize")}
@@ -84,6 +85,25 @@ func (pt PlanType) IsSelect() bool {
 
 func (pt PlanType) MarshalJSON() ([]byte, error) {
 	return ([]byte)(fmt.Sprintf("\"%s\"", pt.String())), nil
+}
+
+// MinRole is the minimum Role required to execute this PlanType
+func (pt PlanType) MinRole() tableacl.Role {
+	return tableAclRoles[pt]
+}
+
+var tableAclRoles = map[PlanType]tableacl.Role{
+	PLAN_PASS_SELECT:     tableacl.READER,
+	PLAN_PK_EQUAL:        tableacl.READER,
+	PLAN_PK_IN:           tableacl.READER,
+	PLAN_SELECT_SUBQUERY: tableacl.READER,
+	PLAN_SET:             tableacl.READER,
+	PLAN_PASS_DML:        tableacl.WRITER,
+	PLAN_DML_PK:          tableacl.WRITER,
+	PLAN_DML_SUBQUERY:    tableacl.WRITER,
+	PLAN_INSERT_PK:       tableacl.WRITER,
+	PLAN_INSERT_SUBQUERY: tableacl.WRITER,
+	PLAN_DDL:             tableacl.ADMIN,
 }
 
 type ReasonType int

@@ -490,3 +490,53 @@ class TestNocache(framework.TestCase):
     error_count = self.env.run_cases(nocache_cases.cases)
     if error_count != 0:
       self.fail("test_execution errors: %d"%(error_count))
+
+  def test_table_acl_no_access(self):
+    self.env.conn.begin()
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, '.*table acl error.*'):
+      self.env.execute("select * from vtocc_acl_no_access where key1=1")
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, '.*table acl error.*'):
+      self.env.execute("delete from vtocc_acl_no_access where key1=1")
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, '.*table acl error.*'):
+      self.env.execute("alter table vtocc_acl_no_access comment 'comment'")
+    self.env.conn.commit()
+
+  def test_table_acl_read_only(self):
+    self.env.conn.begin()
+    self.env.execute("select * from vtocc_acl_read_only where key1=1")
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, '.*table acl error.*'):
+      self.env.execute("delete from vtocc_acl_read_only where key1=1")
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, '.*table acl error.*'):
+      self.env.execute("alter table vtocc_acl_read_only comment 'comment'")
+    self.env.conn.commit()
+
+  def test_table_acl_read_write(self):
+    self.env.conn.begin()
+    self.env.execute("select * from vtocc_acl_read_write where key1=1")
+    self.env.execute("delete from vtocc_acl_read_write where key1=1")
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, '.*table acl error.*'):
+      self.env.execute("alter table vtocc_acl_read_write comment 'comment'")
+    self.env.conn.commit()
+
+  def test_table_acl_admin(self):
+    self.env.conn.begin()
+    self.env.execute("select * from vtocc_acl_admin where key1=1")
+    self.env.execute("delete from vtocc_acl_admin where key1=1")
+    self.env.execute("alter table vtocc_acl_admin comment 'comment'")
+    self.env.conn.commit()
+
+  def test_table_acl_unmatched(self):
+    self.env.conn.begin()
+    self.env.execute("select * from vtocc_acl_unmatched where key1=1")
+    self.env.execute("delete from vtocc_acl_unmatched where key1=1")
+    self.env.execute("alter table vtocc_acl_unmatched comment 'comment'")
+    self.env.conn.commit()
+
+  def test_table_acl_all_user_read_only(self):
+    self.env.conn.begin()
+    self.env.execute("select * from vtocc_acl_all_user_read_only where key1=1")
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, '.*table acl error.*'):
+      self.env.execute("delete from vtocc_acl_all_user_read_only where key1=1")
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, '.*table acl error.*'):
+      self.env.execute("alter table vtocc_acl_all_user_read_only comment 'comment'")
+    self.env.conn.commit()
