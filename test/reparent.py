@@ -507,7 +507,6 @@ class TestReparent(unittest.TestCase):
     utils.run_vtctl('ReparentShard -force test_keyspace/%s %s' % (shard_id, tablet_62344.tablet_alias))
     utils.validate_topology(ping_tablets=True)
 
-    tablet_62344.create_db('vt_test_keyspace')
     tablet_62344.mquery('vt_test_keyspace', self._create_vt_insert_test)
 
     tablet_41983.mquery('', 'stop slave')
