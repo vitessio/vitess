@@ -15,13 +15,13 @@ class MysqlFlavor(object):
         "CHANGE MASTER TO MASTER_HOST = ''",
     ]
 
-    def reset_replication_commands(self):
-      return [
-          "RESET MASTER",
-          "STOP SLAVE",
-          "RESET SLAVE",
-          'CHANGE MASTER TO MASTER_HOST = ""',
-      ]
+  def reset_replication_commands(self):
+    return [
+        "RESET MASTER",
+        "STOP SLAVE",
+        "RESET SLAVE",
+        'CHANGE MASTER TO MASTER_HOST = ""',
+    ]
 
 
 class GoogleMysql(MysqlFlavor):
