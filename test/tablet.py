@@ -13,6 +13,7 @@ import MySQLdb
 
 import environment
 import utils
+from mysql_flavor import mysql_flavor
 
 tablet_cell_map = {
     62344: 'nj',
@@ -148,14 +149,7 @@ class Tablet(object):
       raise utils.TestError("expected %u rows in %s" % (n, table), result)
 
   def reset_replication(self):
-    commands = [
-        'RESET MASTER',
-        'STOP SLAVE',
-        'RESET SLAVE',
-        ]
-    if environment.mysql_flavor == "GoogleMysql":
-      commands.append('CHANGE MASTER TO MASTER_HOST = ""')
-    self.mquery('', commands)
+    self.mquery('', mysql_flavor.reset_replication_commands())
 
   def populate(self, dbname, create_sql, insert_sqls=[]):
       self.create_db(dbname)
