@@ -5,8 +5,9 @@
 package mysqlctl
 
 import (
-	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"testing"
+
+	"github.com/youtube/vitess/go/vt/dbconfigs"
 )
 
 // FIXME: This test is rather klunky - if something goes wrong it may

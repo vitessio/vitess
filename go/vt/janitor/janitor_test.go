@@ -2,10 +2,11 @@ package janitor
 
 import (
 	"errors"
-	"github.com/youtube/vitess/go/vt/wrangler"
 	"math"
 	"testing"
 	"time"
+
+	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
 //var testCells = []string{"oe", "wj"}
