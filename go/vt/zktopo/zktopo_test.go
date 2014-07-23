@@ -43,12 +43,20 @@ func TestKeyspaceLock(t *testing.T) {
 }
 
 func TestShardLock(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping wait-based test in short mode.")
+	}
+
 	ts := NewTestServer(t, []string{"test"})
 	defer ts.Close()
 	test.CheckShardLock(t, ts)
 }
 
 func TestSrvShardLock(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping wait-based test in short mode.")
+	}
+
 	ts := NewTestServer(t, []string{"test"})
 	defer ts.Close()
 	test.CheckSrvShardLock(t, ts)

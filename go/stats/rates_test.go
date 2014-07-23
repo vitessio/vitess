@@ -11,6 +11,10 @@ import (
 )
 
 func TestRates(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping wait-based test in short mode.")
+	}
+
 	clear()
 	c := NewCounters("rcounter1")
 	r := NewRates("rates1", c, 3, 1*time.Second)
@@ -42,6 +46,10 @@ func TestRates(t *testing.T) {
 }
 
 func TestRatesConsistency(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping wait-based test in short mode.")
+	}
+
 	// This tests the following invariant: in the time window
 	// covered by rates, the sum of the rates reported must be
 	// equal to the count reported by the counter.
