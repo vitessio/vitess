@@ -15,7 +15,7 @@ func TestHistogram(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		h.Add(int64(i))
 	}
-	want := `{"1": 2, "5": 4, "Max": 4, "Count": 10, "Total": 45}`
+	want := `{"1": 2, "5": 6, "inf": 10, "Count": 10, "Total": 45}`
 	if h.String() != want {
 		t.Errorf("want %s, got %s", want, h.String())
 	}
@@ -23,11 +23,11 @@ func TestHistogram(t *testing.T) {
 	if counts["1"] != 2 {
 		t.Errorf("want 2, got %d", counts["1"])
 	}
-	if counts["5"] != 4 {
-		t.Errorf("want 4, got %d", counts["2"])
+	if counts["5"] != 6 {
+		t.Errorf("want 6, got %d", counts["5"])
 	}
-	if counts["Max"] != 4 {
-		t.Errorf("want 4, got %d", counts["Max"])
+	if counts["inf"] != 10 {
+		t.Errorf("want 10, got %d", counts["inf"])
 	}
 	if h.Count() != 10 {
 		t.Errorf("want 10, got %d", h.Count())
