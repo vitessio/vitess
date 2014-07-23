@@ -6,6 +6,7 @@ package mysqlctl
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
@@ -59,6 +60,43 @@ func (*googleMysql51) PromoteSlaveCommands() []string {
 		"RESET MASTER",
 		"RESET SLAVE",
 		"CHANGE MASTER TO MASTER_HOST = ''",
+	}
+}
+
+// ParseGTID implements MysqlFlavor.ParseGTID().
+func (*googleMysql51) ParseGTID(s string) (GTID, error) {
+	id, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid Google MySQL group_id (%v): %v", s, err)
+	}
+
+	return googleGTID{groupID: id}, nil
+}
+
+type googleGTID struct {
+	groupID uint64
+}
+
+// String implements GTID.String().
+func (gtid googleGTID) String() string {
+	return fmt.Sprintf("%d", gtid.groupID)
+}
+
+// TryCompare implements GTID.TryCompare().
+func (gtid googleGTID) TryCompare(cmp GTID) (int, error) {
+	other, ok := cmp.(googleGTID)
+	if !ok {
+		return 0, fmt.Errorf("can't compare GTID, wrong type: %#v.TryCompare(%#v)",
+			gtid, cmp)
+	}
+
+	switch true {
+	case gtid.groupID < other.groupID:
+		return -1, nil
+	case gtid.groupID > other.groupID:
+		return 1, nil
+	default:
+		return 0, nil
 	}
 }
 
