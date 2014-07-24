@@ -23,6 +23,7 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -60,8 +61,8 @@ type BinlogPlayerController struct {
 	// done is the channel to wait for to be sure the player is done
 	done chan struct{}
 
-	// stopAtGroupId contains the stopping point for this player, if any
-	stopAtGroupId int64
+	// stopAtGTID contains the stopping point for this player, if any
+	stopAtGTID myproto.GTID
 
 	// information about the individual tablet we're replicating from
 	sourceTablet topo.TabletAlias
@@ -100,21 +101,21 @@ func (bpc *BinlogPlayerController) Start() {
 	log.Infof("%v: starting binlog player", bpc)
 	bpc.interrupted = make(chan struct{}, 1)
 	bpc.done = make(chan struct{}, 1)
-	bpc.stopAtGroupId = 0 // run forever
+	bpc.stopAtGTID = nil // run forever
 	go bpc.Loop()
 }
 
-// StartUntil will start the Player until we reach the given groupId
-func (bpc *BinlogPlayerController) StartUntil(groupId int64) error {
+// StartUntil will start the Player until we reach the given GTID.
+func (bpc *BinlogPlayerController) StartUntil(gtid myproto.GTID) error {
 	bpc.playerMutex.Lock()
 	defer bpc.playerMutex.Unlock()
 	if bpc.interrupted != nil {
 		return fmt.Errorf("%v: already started", bpc)
 	}
-	log.Infof("%v: starting binlog player until %v", bpc, groupId)
+	log.Infof("%v: starting binlog player until %v", bpc, gtid)
 	bpc.interrupted = make(chan struct{}, 1)
 	bpc.done = make(chan struct{}, 1)
-	bpc.stopAtGroupId = groupId
+	bpc.stopAtGTID = gtid
 	go bpc.Loop()
 	return nil
 }
@@ -268,7 +269,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		}
 
 		// tables, just get them
-		player := binlogplayer.NewBinlogPlayerTables(vtClient, addr, tables, startPosition, bpc.stopAtGroupId, bpc.binlogPlayerStats)
+		player := binlogplayer.NewBinlogPlayerTables(vtClient, addr, tables, startPosition, bpc.stopAtGTID, bpc.binlogPlayerStats)
 		return player.ApplyBinlogEvents(bpc.interrupted)
 	} else {
 		// the data we have to replicate is the intersection of the
@@ -278,7 +279,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 			return fmt.Errorf("Source shard %v doesn't overlap destination shard %v", bpc.sourceShard.KeyRange, bpc.keyRange)
 		}
 
-		player := binlogplayer.NewBinlogPlayerKeyRange(vtClient, addr, bpc.keyspaceIdType, overlap, startPosition, bpc.stopAtGroupId, bpc.binlogPlayerStats)
+		player := binlogplayer.NewBinlogPlayerKeyRange(vtClient, addr, bpc.keyspaceIdType, overlap, startPosition, bpc.stopAtGTID, bpc.binlogPlayerStats)
 		return player.ApplyBinlogEvents(bpc.interrupted)
 	}
 }
@@ -344,12 +345,12 @@ func RegisterBinlogPlayerMap(blm *BinlogPlayerMap) {
 		blm.mu.Unlock()
 		return result
 	}))
-	stats.Publish("BinlogPlayerGroupIdMap", stats.CountersFunc(func() map[string]int64 {
+	stats.Publish("BinlogPlayerGTIDMap", stats.StringMapFunc(func() map[string]string {
 		blm.mu.Lock()
-		result := make(map[string]int64, len(blm.players))
+		result := make(map[string]string, len(blm.players))
 		for i, bpc := range blm.players {
-			lgi := bpc.binlogPlayerStats.LastGroupId.Get()
-			result[fmt.Sprintf("%v", i)] = lgi
+			lgtid := bpc.binlogPlayerStats.GetLastGTID()
+			result[fmt.Sprintf("%v", i)] = lgtid.String()
 		}
 		blm.mu.Unlock()
 		return result
@@ -539,18 +540,18 @@ func (blm *BinlogPlayerMap) RunUntil(blpPositionList *blproto.BlpPositionList, w
 
 	// find the exact stop position for all players, to be sure
 	// we're not doing anything wrong
-	groupIds := make(map[uint32]int64)
+	gtids := make(map[uint32]myproto.GTID)
 	for _, bpc := range blm.players {
 		pos, err := blpPositionList.FindBlpPositionById(bpc.sourceShard.Uid)
 		if err != nil {
 			return fmt.Errorf("No binlog position passed in for player Uid %v", bpc.sourceShard.Uid)
 		}
-		groupIds[bpc.sourceShard.Uid] = pos.GroupId
+		gtids[bpc.sourceShard.Uid] = pos.GTID
 	}
 
 	// start all the players giving them where to stop
 	for _, bpc := range blm.players {
-		if err := bpc.StartUntil(groupIds[bpc.sourceShard.Uid]); err != nil {
+		if err := bpc.StartUntil(gtids[bpc.sourceShard.Uid]); err != nil {
 			return err
 		}
 	}
@@ -577,12 +578,12 @@ func (blm *BinlogPlayerMap) RunUntil(blpPositionList *blproto.BlpPositionList, w
 // BinlogPlayerControllerStatus is the status of an individual controller
 type BinlogPlayerControllerStatus struct {
 	// configuration values
-	Index         uint32
-	SourceShard   topo.SourceShard
-	StopAtGroupId int64
+	Index       uint32
+	SourceShard topo.SourceShard
+	StopAtGTID  myproto.GTID
 
 	// stats and current values
-	LastGroupId         int64
+	LastGTID            myproto.GTID
 	SecondsBehindMaster int64
 	Counts              map[string]int64
 	Rates               map[string][]float64
@@ -636,8 +637,8 @@ func (blm *BinlogPlayerMap) Status() *BinlogPlayerMapStatus {
 		bpcs := &BinlogPlayerControllerStatus{
 			Index:               i,
 			SourceShard:         bpc.sourceShard,
-			StopAtGroupId:       bpc.stopAtGroupId,
-			LastGroupId:         bpc.binlogPlayerStats.LastGroupId.Get(),
+			StopAtGTID:          bpc.stopAtGTID,
+			LastGTID:            bpc.binlogPlayerStats.GetLastGTID(),
 			SecondsBehindMaster: bpc.binlogPlayerStats.SecondsBehindMaster.Get(),
 			Counts:              bpc.binlogPlayerStats.Timings.Counts(),
 			Rates:               bpc.binlogPlayerStats.Rates.Get(),
