@@ -9,7 +9,6 @@ package topo
 
 import (
 	"bytes"
-
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
 )
@@ -30,6 +29,7 @@ func (srvShard *SrvShard) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 		}
 		lenWriter.Close()
 	}
+	bson.EncodeString(buf, "MasterCell", srvShard.MasterCell)
 	// []TabletType
 	{
 		bson.EncodePrefix(buf, bson.Array, "TabletTypes")
@@ -76,6 +76,8 @@ func (srvShard *SrvShard) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 					srvShard.ServedTypes = append(srvShard.ServedTypes, _v1)
 				}
 			}
+		case "MasterCell":
+			srvShard.MasterCell = bson.DecodeString(buf, kind)
 		case "TabletTypes":
 			// []TabletType
 			if kind != bson.Null {

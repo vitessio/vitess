@@ -70,8 +70,8 @@ class TestReparent(unittest.TestCase):
       t.clean_dbs()
     super(TestReparent, self).tearDown()
 
-  def _check_db_addr(self, shard, db_type, expected_port):
-    ep = utils.run_vtctl_json(['GetEndPoints', 'test_nj', 'test_keyspace/'+shard, db_type])
+  def _check_db_addr(self, shard, db_type, expected_port, cell='test_nj'):
+    ep = utils.run_vtctl_json(['GetEndPoints', cell, 'test_keyspace/'+shard, db_type])
     self.assertEqual(len(ep['entries']), 1 , 'Wrong number of entries: %s' % str(ep))
     port = ep['entries'][0]['named_port_map']['_vtocc']
     self.assertEqual(port, expected_port, 'Unexpected port: %u != %u from %s' % (port, expected_port, str(ep)))
@@ -184,6 +184,66 @@ class TestReparent(unittest.TestCase):
     # so the other tests don't have any surprise
     tablet_62344.start_mysql().wait()
 
+  def test_reparent_cross_cell(self, shard_id='0'):
+    utils.run_vtctl('CreateKeyspace test_keyspace')
+
+    # create the database so vttablets start, as they are serving
+    tablet_62344.create_db('vt_test_keyspace')
+    tablet_62044.create_db('vt_test_keyspace')
+    tablet_41983.create_db('vt_test_keyspace')
+    tablet_31981.create_db('vt_test_keyspace')
+
+    # Start up a master mysql and vttablet
+    tablet_62344.init_tablet('master', 'test_keyspace', shard_id, start=True)
+    if environment.topo_server_implementation == 'zookeeper':
+      shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/'+shard_id])
+      self.assertEqual(shard['Cells'], ['test_nj'], 'wrong list of cell in Shard: %s' % str(shard['Cells']))
+
+    # Create a few slaves for testing reparenting.
+    tablet_62044.init_tablet('replica', 'test_keyspace', shard_id, start=True, wait_for_start=False)
+    tablet_41983.init_tablet('replica', 'test_keyspace', shard_id, start=True, wait_for_start=False)
+    tablet_31981.init_tablet('replica', 'test_keyspace', shard_id, start=True, wait_for_start=False)
+    for t in [tablet_62044, tablet_41983, tablet_31981]:
+      t.wait_for_vttablet_state("SERVING")
+    if environment.topo_server_implementation == 'zookeeper':
+      shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/'+shard_id])
+      self.assertEqual(shard['Cells'], ['test_nj', 'test_ny'], 'wrong list of cell in Shard: %s' % str(shard['Cells']))
+
+    # Recompute the shard layout node - until you do that, it might not be valid.
+    utils.run_vtctl('RebuildShardGraph test_keyspace/' + shard_id)
+    utils.validate_topology()
+
+    # Force the slaves to reparent assuming that all the datasets are identical.
+    for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
+      t.reset_replication()
+    utils.pause("force ReparentShard?")
+    utils.run_vtctl('ReparentShard -force test_keyspace/%s %s' % (shard_id, tablet_62344.tablet_alias))
+    utils.validate_topology(ping_tablets=True)
+
+    self._check_db_addr(shard_id, 'master', tablet_62344.port)
+
+    # Verify MasterCell is properly set
+    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj', 'test_keyspace/%s' % (shard_id)])
+    self.assertEqual(srvShard['MasterCell'], 'test_nj')
+    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_ny', 'test_keyspace/%s' % (shard_id)])
+    self.assertEqual(srvShard['MasterCell'], 'test_nj')
+
+    # Perform a graceful reparent operation to another cell.
+    utils.pause("graceful ReparentShard?")
+    utils.run_vtctl('ReparentShard test_keyspace/%s %s' % (shard_id, tablet_31981.tablet_alias), auto_log=True)
+    utils.validate_topology()
+
+    self._check_db_addr(shard_id, 'master', tablet_31981.port, cell='test_ny')
+
+    # Verify MasterCell is set to new cell.
+    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj', 'test_keyspace/%s' % (shard_id)])
+    self.assertEqual(srvShard['MasterCell'], 'test_ny')
+    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_ny', 'test_keyspace/%s' % (shard_id)])
+    self.assertEqual(srvShard['MasterCell'], 'test_ny')
+
+    tablet.kill_tablets([tablet_62344, tablet_62044, tablet_41983, tablet_31981])
+
+
   def test_reparent_graceful_range_based(self):
     shard_id = '0000000000000000-FFFFFFFFFFFFFFFF'
     self._test_reparent_graceful(shard_id)
@@ -230,6 +290,12 @@ class TestReparent(unittest.TestCase):
 
     self._check_db_addr(shard_id, 'master', tablet_62344.port)
 
+    # Verify MasterCell is set to new cell.
+    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj', 'test_keyspace/%s' % (shard_id)])
+    self.assertEqual(srvShard['MasterCell'], 'test_nj')
+    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_ny', 'test_keyspace/%s' % (shard_id)])
+    self.assertEqual(srvShard['MasterCell'], 'test_nj')
+
     # Convert two replica to spare. That should leave only one node serving traffic,
     # but still needs to appear in the replication graph.
     utils.run_vtctl(['ChangeSlaveType', tablet_41983.tablet_alias, 'spare'])
@@ -246,6 +312,12 @@ class TestReparent(unittest.TestCase):
     utils.validate_topology()
 
     self._check_db_addr(shard_id, 'master', tablet_62044.port)
+
+    # Verify MasterCell is set to new cell.
+    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj', 'test_keyspace/%s' % (shard_id)])
+    self.assertEqual(srvShard['MasterCell'], 'test_nj')
+    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_ny', 'test_keyspace/%s' % (shard_id)])
+    self.assertEqual(srvShard['MasterCell'], 'test_nj')
 
     tablet.kill_tablets([tablet_62344, tablet_62044, tablet_41983, tablet_31981])
 

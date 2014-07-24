@@ -23,6 +23,9 @@ type SrvShard struct {
 	KeyRange    key.KeyRange
 	ServedTypes []TabletType
 
+	// MasterCell indicates the cell that master tablet resides
+	MasterCell string
+
 	// TabletTypes represents the list of types we have serving tablets
 	// for, in this cell only.
 	TabletTypes []TabletType
