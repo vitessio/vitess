@@ -39,7 +39,7 @@ func (flavor *mariaDB10) MasterStatus(mysqld *Mysqld) (rp *proto.ReplicationPosi
 	}
 	rp.MasterLogPosition = uint(utemp)
 
-	// grab the corresponding groupId
+	// grab the corresponding GTID
 	qr, err = mysqld.fetchSuperQuery(fmt.Sprintf("SELECT BINLOG_GTID_POS('%v', %v)", rp.MasterLogFile, rp.MasterLogPosition))
 	if err != nil {
 		return

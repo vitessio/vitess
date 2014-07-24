@@ -353,8 +353,8 @@ func (mysqld *Mysqld) MasterStatus() (rp *proto.ReplicationPosition, err error) 
 	Pos: 1194
 	Server_ID: 41983
 */
-func (mysqld *Mysqld) BinlogInfo(groupId int64) (rp *proto.ReplicationPosition, err error) {
-	qr, err := mysqld.fetchSuperQuery(fmt.Sprintf("SHOW BINLOG INFO FOR %v", groupId))
+func (mysqld *Mysqld) BinlogInfo(gtid proto.GTID) (rp *proto.ReplicationPosition, err error) {
+	qr, err := mysqld.fetchSuperQuery(fmt.Sprintf("SHOW BINLOG INFO FOR %v", gtid))
 	if err != nil {
 		return nil, err
 	}
