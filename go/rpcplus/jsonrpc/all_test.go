@@ -8,10 +8,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/youtube/vitess/go/rpcplus"
 	"io"
 	"net"
 	"testing"
+
+	"github.com/youtube/vitess/go/rpcplus"
 )
 
 type Args struct {

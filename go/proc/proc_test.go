@@ -19,6 +19,10 @@ import (
 )
 
 func TestRestart(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode.")
+	}
+
 	switch os.Getenv("SERVER_NUM") {
 	case "":
 		testLaunch(t)

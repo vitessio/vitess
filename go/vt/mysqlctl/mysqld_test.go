@@ -5,14 +5,19 @@
 package mysqlctl
 
 import (
-	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"testing"
+
+	"github.com/youtube/vitess/go/vt/dbconfigs"
 )
 
 // FIXME: This test is rather klunky - if something goes wrong it may
 // leave mysqld processes behind.
 
 func TestStartShutdown(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode.")
+	}
+
 	mycnf0 := NewMycnf(0, 3700)
 	dbaConfig0 := dbconfigs.DefaultDBConfigs.Dba
 	replConfig0 := dbconfigs.DefaultDBConfigs.Repl

@@ -10,8 +10,10 @@ import (
 	"path"
 	"sort"
 
+	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/events"
 	"github.com/youtube/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -51,28 +53,47 @@ func (zkts *Server) CreateKeyspace(keyspace string, value *topo.Keyspace) error 
 	if alreadyExists {
 		return topo.ErrNodeExists
 	}
+
+	event.Dispatch(&events.KeyspaceChange{
+		KeyspaceInfo: *topo.NewKeyspaceInfo(keyspace, value),
+		Status:       "created",
+	})
 	return nil
 }
 
 func (zkts *Server) UpdateKeyspace(ki *topo.KeyspaceInfo) error {
 	keyspacePath := path.Join(globalKeyspacesPath, ki.KeyspaceName())
-	_, err := zkts.zconn.Set(keyspacePath, jscfg.ToJson(ki.Keyspace), -1)
+	data := jscfg.ToJson(ki.Keyspace)
+	_, err := zkts.zconn.Set(keyspacePath, data, -1)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			// The code should be:
 			//   err = topo.ErrNoNode
 			// Temporary code until we have Keyspace object
 			// everywhere:
-			_, err = zkts.zconn.Create(keyspacePath, jscfg.ToJson(ki.Keyspace), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+			_, err = zkts.zconn.Create(keyspacePath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 			if err != nil {
 				if zookeeper.IsError(err, zookeeper.ZNONODE) {
 					// the directory doesn't even exist
 					err = topo.ErrNoNode
 				}
+				return err
 			}
+
+			event.Dispatch(&events.KeyspaceChange{
+				KeyspaceInfo: *ki,
+				Status:       "updated (had to create Keyspace object)",
+			})
+			return nil
 		}
+		return err
 	}
-	return err
+
+	event.Dispatch(&events.KeyspaceChange{
+		KeyspaceInfo: *ki,
+		Status:       "updated",
+	})
+	return nil
 }
 
 func (zkts *Server) GetKeyspace(keyspace string) (*topo.KeyspaceInfo, error) {
@@ -111,5 +132,10 @@ func (zkts *Server) DeleteKeyspaceShards(keyspace string) error {
 	if err := zk.DeleteRecursive(zkts.zconn, shardsPath, -1); err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
 		return err
 	}
+
+	event.Dispatch(&events.KeyspaceChange{
+		KeyspaceInfo: *topo.NewKeyspaceInfo(keyspace, nil),
+		Status:       "deleted all shards",
+	})
 	return nil
 }

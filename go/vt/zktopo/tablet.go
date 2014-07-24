@@ -10,8 +10,10 @@ import (
 	"path"
 	"sort"
 
+	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/events"
 	"github.com/youtube/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -75,6 +77,10 @@ func (zkts *Server) CreateTablet(tablet *topo.Tablet) error {
 		return err
 	}
 
+	event.Dispatch(&events.TabletChange{
+		Tablet: *tablet,
+		Status: "created",
+	})
 	return nil
 }
 
@@ -90,10 +96,18 @@ func (zkts *Server) UpdateTablet(tablet *topo.TabletInfo, existingVersion int64)
 
 		return 0, err
 	}
+
+	event.Dispatch(&events.TabletChange{
+		Tablet: *tablet.Tablet,
+		Status: "updated",
+	})
 	return int64(stat.Version()), nil
 }
 
 func (zkts *Server) UpdateTabletFields(tabletAlias topo.TabletAlias, update func(*topo.Tablet) error) error {
+	// Store the last tablet value so we can log it if the change succeeds.
+	var lastTablet *topo.Tablet
+
 	zkTabletPath := TabletPathForAlias(tabletAlias)
 	f := func(oldValue string, oldStat zk.Stat) (string, error) {
 		if oldValue == "" {
@@ -107,6 +121,7 @@ func (zkts *Server) UpdateTabletFields(tabletAlias topo.TabletAlias, update func
 		if err := update(tablet); err != nil {
 			return "", err
 		}
+		lastTablet = tablet
 		return jscfg.ToJson(tablet), nil
 	}
 	err := zkts.zconn.RetryChange(zkTabletPath, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
@@ -116,18 +131,44 @@ func (zkts *Server) UpdateTabletFields(tabletAlias topo.TabletAlias, update func
 		}
 		return err
 	}
+
+	if lastTablet != nil {
+		event.Dispatch(&events.TabletChange{
+			Tablet: *lastTablet,
+			Status: "updated",
+		})
+	}
 	return nil
 }
 
 func (zkts *Server) DeleteTablet(alias topo.TabletAlias) error {
+	// We need to find out the keyspace and shard names because those are required
+	// in the TabletChange event.
+	ti, tiErr := zkts.GetTablet(alias)
+
 	zkTabletPath := TabletPathForAlias(alias)
 	err := zk.DeleteRecursive(zkts.zconn, zkTabletPath, -1)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			err = topo.ErrNoNode
 		}
+		return err
 	}
-	return err
+
+	// Only try to log if we have the required information.
+	if tiErr == nil {
+		// We only want to copy the identity info for the tablet (alias, etc.).
+		// The rest has just been deleted, so it should be blank.
+		event.Dispatch(&events.TabletChange{
+			Tablet: topo.Tablet{
+				Alias:    ti.Tablet.Alias,
+				Keyspace: ti.Tablet.Keyspace,
+				Shard:    ti.Tablet.Shard,
+			},
+			Status: "deleted",
+		})
+	}
+	return nil
 }
 
 func (zkts *Server) ValidateTablet(alias topo.TabletAlias) error {

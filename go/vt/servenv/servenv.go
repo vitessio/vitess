@@ -30,12 +30,13 @@ import (
 	"syscall"
 	"time"
 
+	_ "net/http/pprof"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/stats"
 	_ "github.com/youtube/vitess/go/vt/logutil"
-	_ "net/http/pprof"
 )
 
 var (

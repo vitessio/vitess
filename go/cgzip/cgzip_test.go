@@ -293,9 +293,17 @@ func runCompare(t *testing.T, testSize int, level int) {
 
 // use 'go test -v' and bigger sizes to show meaningful rates
 func TestCompare(t *testing.T) {
-	runCompare(t, 1*1024*1024, 1)
+	testSize := 1 * 1024 * 1024
+	if testing.Short() {
+		testSize /= 10
+	}
+	runCompare(t, testSize, 1)
 }
 
 func TestCompareBest(t *testing.T) {
-	runCompare(t, 1*1024*1024, 9)
+	testSize := 1 * 1024 * 1024
+	if testing.Short() {
+		testSize /= 10
+	}
+	runCompare(t, testSize, 9)
 }

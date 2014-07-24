@@ -10,8 +10,10 @@ import (
 	"path"
 	"sort"
 
+	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/events"
 	"github.com/youtube/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -46,6 +48,11 @@ func (zkts *Server) CreateShard(keyspace, shard string, value *topo.Shard) error
 	if alreadyExists {
 		return topo.ErrNodeExists
 	}
+
+	event.Dispatch(&events.ShardChange{
+		ShardInfo: *topo.NewShardInfo(keyspace, shard, value),
+		Status:    "created",
+	})
 	return nil
 }
 
@@ -56,8 +63,14 @@ func (zkts *Server) UpdateShard(si *topo.ShardInfo) error {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			err = topo.ErrNoNode
 		}
+		return err
 	}
-	return err
+
+	event.Dispatch(&events.ShardChange{
+		ShardInfo: *si,
+		Status:    "updated",
+	})
+	return nil
 }
 
 func (zkts *Server) ValidateShard(keyspace, shard string) error {
@@ -118,6 +131,12 @@ func (zkts *Server) DeleteShard(keyspace, shard string) error {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			err = topo.ErrNoNode
 		}
+		return err
 	}
-	return err
+
+	event.Dispatch(&events.ShardChange{
+		ShardInfo: *topo.NewShardInfo(keyspace, shard, nil),
+		Status:    "deleted",
+	})
+	return nil
 }

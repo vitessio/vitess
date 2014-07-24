@@ -54,6 +54,8 @@ if [ -d $VTROOT/dist/mysql ];
 then
   echo "skipping MySQL build"
 else
+  export VT_MYSQL_ROOT=$VTROOT/dist/mysql
+
   case "$MYSQL_FLAVOR" in
     "MariaDB")
       echo "Getting and compiling MariaDB"
@@ -82,7 +84,6 @@ else
       pushd third_party/mysql
       set -e
       git apply ../mysql.patch
-      export VT_MYSQL_ROOT=$VTROOT/dist/mysql
       source google/env.inc
       source google/compile.inc
 

@@ -12,6 +12,10 @@ import (
 )
 
 func TestMemcache(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode.")
+	}
+
 	cmd := exec.Command("memcached", "-s", "/tmp/vtocc_cache.sock")
 	if err := cmd.Start(); err != nil {
 		if strings.Contains(err.Error(), "executable file not found in $PATH") {

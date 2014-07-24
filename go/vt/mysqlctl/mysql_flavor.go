@@ -25,6 +25,10 @@ type MysqlFlavor interface {
 	// PromoteSlaveCommands returns the commands to run to change
 	// a slave into a master
 	PromoteSlaveCommands() []string
+
+	// ParseGTID converts a string containing a GTID in the canonical format of
+	// this MySQL flavor into a GTID interface value.
+	ParseGTID(string) (GTID, error)
 }
 
 var mysqlFlavors map[string]MysqlFlavor = make(map[string]MysqlFlavor)
