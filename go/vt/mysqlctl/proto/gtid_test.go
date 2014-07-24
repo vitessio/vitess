@@ -5,6 +5,7 @@
 package proto
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -65,6 +66,28 @@ func TestDecodeGTID(t *testing.T) {
 	}
 }
 
+func TestEncodeNilGTID(t *testing.T) {
+	input := GTID(nil)
+	want := ""
+
+	if got := EncodeGTID(input); got != want {
+		t.Errorf("EncodeGTID(%#v) = %#v, want %#v", input, got, want)
+	}
+}
+
+func TestDecodeNilGTID(t *testing.T) {
+	input := ""
+	want := GTID(nil)
+
+	got, err := DecodeGTID(input)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got != want {
+		t.Errorf("DecodeGTID(%#v) = %#v, want %#v", input, got, want)
+	}
+}
+
 func TestDecodeNoFlavor(t *testing.T) {
 	GTIDParsers[""] = func(s string) (GTID, error) {
 		return fakeGTID{value: s}, nil
@@ -94,6 +117,22 @@ func TestDecodeGTIDWithSeparator(t *testing.T) {
 	}
 	if got != want {
 		t.Errorf("DecodeGTID(%#v) = %#v, want %#v", input, got, want)
+	}
+}
+
+func TestGTIDFieldString(t *testing.T) {
+	input := GTIDField{fakeGTID{flavor: "gahgah", value: "googoo"}}
+	want := "googoo"
+	if got := input.String(); got != want {
+		t.Errorf("%#v.String() = %#v, want %#v", input, got, want)
+	}
+}
+
+func TestGTIDFieldStringNil(t *testing.T) {
+	input := GTIDField{nil}
+	want := "<nil>"
+	if got := input.String(); got != want {
+		t.Errorf("%#v.String() = %#v, want %#v", input, got, want)
 	}
 }
 
@@ -206,6 +245,116 @@ func TestBsonMarshalUnmarshalNilGTID(t *testing.T) {
 
 	if got := gotField.GTID; got != want {
 		t.Errorf("marshal->unmarshal mismatch, got %#v, want %#v", got, want)
+	}
+}
+
+func TestJsonMarshalGTIDField(t *testing.T) {
+	input := GTIDField{fakeGTID{flavor: "golf", value: "par"}}
+	want := `"golf/par"`
+
+	buf, err := json.Marshal(input)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if got := string(buf); got != want {
+		t.Errorf("json.Marshal(%#v) = %#v, want %#v", input, got, want)
+	}
+}
+
+func TestJsonMarshalGTIDFieldPointer(t *testing.T) {
+	input := GTIDField{fakeGTID{flavor: "golf", value: "par"}}
+	want := `"golf/par"`
+
+	buf, err := json.Marshal(&input)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if got := string(buf); got != want {
+		t.Errorf("json.Marshal(%#v) = %#v, want %#v", input, got, want)
+	}
+}
+
+func TestJsonUnmarshalGTIDField(t *testing.T) {
+	GTIDParsers["golf"] = func(s string) (GTID, error) {
+		return fakeGTID{flavor: "golf", value: s}, nil
+	}
+	input := `"golf/par"`
+	want := GTIDField{fakeGTID{flavor: "golf", value: "par"}}
+
+	var got GTIDField
+	err := json.Unmarshal([]byte(input), &got)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got != want {
+		t.Errorf("json.Unmarshal(%#v) = %#v, want %#v", input, got, want)
+	}
+}
+
+func TestJsonMarshalGTIDFieldInStruct(t *testing.T) {
+	input := GTIDField{fakeGTID{flavor: "golf", value: "par"}}
+	want := `{"GTID":"golf/par"}`
+
+	type mystruct struct {
+		GTID GTIDField
+	}
+
+	buf, err := json.Marshal(&mystruct{input})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if got := string(buf); got != want {
+		t.Errorf("json.Marshal(%#v) = %#v, want %#v", input, got, want)
+	}
+}
+
+func TestJsonUnmarshalGTIDFieldInStruct(t *testing.T) {
+	GTIDParsers["golf"] = func(s string) (GTID, error) {
+		return fakeGTID{flavor: "golf", value: s}, nil
+	}
+	input := `{"GTID":"golf/par"}`
+	want := GTIDField{fakeGTID{flavor: "golf", value: "par"}}
+
+	var gotStruct struct {
+		GTID GTIDField
+	}
+	err := json.Unmarshal([]byte(input), &gotStruct)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got := gotStruct.GTID; got != want {
+		t.Errorf("json.Unmarshal(%#v) = %#v, want %#v", input, got, want)
+	}
+}
+
+func TestJsonMarshalNilGTID(t *testing.T) {
+	input := GTIDField{nil}
+	want := `""`
+
+	buf, err := json.Marshal(input)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if got := string(buf); got != want {
+		t.Errorf("json.Marshal(%#v) = %#v, want %#v", input, got, want)
+	}
+}
+
+func TestJsonUnmarshalNilGTID(t *testing.T) {
+	input := `""`
+	want := GTIDField{nil}
+
+	var got GTIDField
+	err := json.Unmarshal([]byte(input), &got)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got != want {
+		t.Errorf("json.Unmarshal(%#v) = %#v, want %#v", input, got, want)
 	}
 }
 

@@ -6,6 +6,7 @@ package proto
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -57,12 +58,20 @@ func ParseGTID(flavor, value string) (GTID, error) {
 // GTID, so that the correct parser can be selected when that string is passed
 // to DecodeGTID.
 func EncodeGTID(gtid GTID) string {
+	if gtid == nil {
+		return ""
+	}
+
 	return fmt.Sprintf("%s/%s", gtid.Flavor(), gtid.String())
 }
 
 // DecodeGTID converts a string in the format returned by EncodeGTID back into
 // a GTID interface value with the correct underlying flavor.
 func DecodeGTID(s string) (GTID, error) {
+	if s == "" {
+		return nil, nil
+	}
+
 	parts := strings.SplitN(s, "/", 2)
 	if len(parts) != 2 {
 		// There is no flavor. Try looking for a default parser.
@@ -77,6 +86,14 @@ func DecodeGTID(s string) (GTID, error) {
 // instantiate upon unmarshaling.
 type GTIDField struct {
 	GTID
+}
+
+// String returns a string representation of the underlying GTID.
+func (gf GTIDField) String() string {
+	if gf.GTID == nil {
+		return "<nil>" // in the style of Sprintf("%v", nil)
+	}
+	return gf.GTID.String()
 }
 
 // MarshalBson bson-encodes GTIDField.
@@ -127,4 +144,24 @@ func (gf *GTIDField) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 		panic(bson.NewBsonError("invalid value %v for GTIDField: %v", value, err))
 	}
 	gf.GTID = gtid
+}
+
+// MarshalJSON implements encoding/json.Marshaler.
+func (gf GTIDField) MarshalJSON() ([]byte, error) {
+	return json.Marshal(EncodeGTID(gf.GTID))
+}
+
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+func (gf *GTIDField) UnmarshalJSON(buf []byte) error {
+	var s string
+	err := json.Unmarshal(buf, &s)
+	if err != nil {
+		return err
+	}
+
+	gf.GTID, err = DecodeGTID(s)
+	if err != nil {
+		return err
+	}
+	return nil
 }
