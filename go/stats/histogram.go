@@ -28,13 +28,13 @@ type Histogram struct {
 // NewHistogram creates a histogram with auto-generated labels
 // based on the cutoffs. The buckets are categorized using the
 // following criterion: cutoff[i-1] < value <= cutoff[i]. Anything
-// higher than the highest cutoff is labeled as "Max".
+// higher than the highest cutoff is labeled as "inf".
 func NewHistogram(name string, cutoffs []int64) *Histogram {
 	labels := make([]string, len(cutoffs)+1)
 	for i, v := range cutoffs {
 		labels[i] = fmt.Sprintf("%d", v)
 	}
-	labels[len(labels)-1] = "Max"
+	labels[len(labels)-1] = "inf"
 	return NewGenericHistogram(name, cutoffs, labels, "Count", "Total")
 }
 
@@ -85,8 +85,8 @@ func (h *Histogram) MarshalJSON() ([]byte, error) {
 	fmt.Fprintf(b, "{")
 	totalCount := int64(0)
 	for i, label := range h.labels {
-		fmt.Fprintf(b, "\"%v\": %v, ", label, h.buckets[i])
 		totalCount += h.buckets[i]
+		fmt.Fprintf(b, "\"%v\": %v, ", label, totalCount)
 	}
 	fmt.Fprintf(b, "\"%s\": %v, ", h.countLabel, totalCount)
 	fmt.Fprintf(b, "\"%s\": %v", h.totalLabel, h.total)
@@ -127,4 +127,14 @@ func (h *Histogram) Total() (total int64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.total
+}
+
+func (h *Histogram) Labels() []string {
+	return h.labels
+}
+
+func (h *Histogram) Buckets() []int64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.buckets
 }
