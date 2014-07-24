@@ -34,7 +34,7 @@ func NewHistogram(name string, cutoffs []int64) *Histogram {
 	for i, v := range cutoffs {
 		labels[i] = fmt.Sprintf("%d", v)
 	}
-	labels[len(labels)-1] = "inf"
+	labels[len(labels)-1] = "Max"
 	return NewGenericHistogram(name, cutoffs, labels, "Count", "Total")
 }
 
@@ -61,16 +61,13 @@ func NewGenericHistogram(name string, cutoffs []int64, labels []string, countLab
 }
 
 func (h *Histogram) Add(value int64) {
-	found := false
 	for i := range h.labels {
-		if found || i == len(h.labels)-1 || value <= h.cutoffs[i] {
+		if i == len(h.labels)-1 || value <= h.cutoffs[i] {
 			h.mu.Lock()
 			h.buckets[i] += 1
-			if !found {
-				h.total += value
-			}
+			h.total += value
 			h.mu.Unlock()
-			found = true
+			return
 		}
 	}
 }
@@ -89,8 +86,8 @@ func (h *Histogram) MarshalJSON() ([]byte, error) {
 	totalCount := int64(0)
 	for i, label := range h.labels {
 		fmt.Fprintf(b, "\"%v\": %v, ", label, h.buckets[i])
+		totalCount += h.buckets[i]
 	}
-	totalCount = h.buckets[len(h.buckets)-1]
 	fmt.Fprintf(b, "\"%s\": %v, ", h.countLabel, totalCount)
 	fmt.Fprintf(b, "\"%s\": %v", h.totalLabel, h.total)
 	fmt.Fprintf(b, "}")
@@ -116,7 +113,9 @@ func (h *Histogram) Count() (count int64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-        count = h.buckets[len(h.buckets)-1]
+	for _, v := range h.buckets {
+		count += v
+	}
 	return
 }
 
