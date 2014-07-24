@@ -118,9 +118,9 @@ var bucketLabels []string
 func init() {
 	bucketLabels = make([]string, len(bucketCutoffs)+1)
 	for i, v := range bucketCutoffs {
-		bucketLabels[i] = fmt.Sprintf("%d", v)
+		bucketLabels[i] = fmt.Sprintf("%.4f", float64(v)/1e9)
 	}
-	bucketLabels[len(bucketLabels)-1] = "inf"
+	bucketLabels[len(bucketLabels)-1] = "Max"
 }
 
 // MultiTimings is meant to tracks timing data by categories as well
