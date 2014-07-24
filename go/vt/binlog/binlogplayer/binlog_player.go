@@ -10,6 +10,7 @@ package binlogplayer
 import (
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	log "github.com/golang/glog"
@@ -19,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 var (
@@ -43,8 +45,15 @@ type BinlogPlayerStats struct {
 	Rates   *stats.Rates
 
 	// Last saved status
-	LastGroupId         sync2.AtomicInt64
+	LastGTID            myproto.GTID
+	LastGTIDMutex       sync.Mutex
 	SecondsBehindMaster sync2.AtomicInt64
+}
+
+func (bps *BinlogPlayerStats) SetLastGTID(gtid myproto.GTID) {
+	bps.LastGTIDMutex.Lock()
+	defer bps.LastGTIDMutex.Unlock()
+	bps.LastGTID = gtid
 }
 
 // NewBinlogPlayerStats creates a new BinlogPlayerStats structure
@@ -68,43 +77,43 @@ type BinlogPlayer struct {
 	tables []string
 
 	// common to all
-	blpPos        proto.BlpPosition
-	stopAtGroupId int64
-	blplStats     *BinlogPlayerStats
+	blpPos     proto.BlpPosition
+	stopAtGTID myproto.GTID
+	blplStats  *BinlogPlayerStats
 }
 
 // NewBinlogPlayerKeyRange returns a new BinlogPlayer pointing at the server
-// replicating the provided keyrange, starting at the startPosition.GroupId,
+// replicating the provided keyrange, starting at the startPosition.GTID,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
-// If stopAtGroupId != 0, it will stop when reaching that GroupId.
-func NewBinlogPlayerKeyRange(dbClient VtClient, addr string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, startPosition *proto.BlpPosition, stopAtGroupId int64, blplStats *BinlogPlayerStats) *BinlogPlayer {
+// If stopAtGTID != nil, it will stop when reaching that GTID.
+func NewBinlogPlayerKeyRange(dbClient VtClient, addr string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, startPosition *proto.BlpPosition, stopAtGTID myproto.GTID, blplStats *BinlogPlayerStats) *BinlogPlayer {
 	return &BinlogPlayer{
 		addr:           addr,
 		dbClient:       dbClient,
 		keyspaceIdType: keyspaceIdType,
 		keyRange:       keyRange,
 		blpPos:         *startPosition,
-		stopAtGroupId:  stopAtGroupId,
+		stopAtGTID:     stopAtGTID,
 		blplStats:      blplStats,
 	}
 }
 
 // NewBinlogPlayerTables returns a new BinlogPlayer pointing at the server
-// replicating the provided tables, starting at the startPosition.GroupId,
+// replicating the provided tables, starting at the startPosition.GTID,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
-// If stopAtGroupId != 0, it will stop when reaching that GroupId.
-func NewBinlogPlayerTables(dbClient VtClient, addr string, tables []string, startPosition *proto.BlpPosition, stopAtGroupId int64, blplStats *BinlogPlayerStats) *BinlogPlayer {
+// If stopAtGTID != nil, it will stop when reaching that GTID.
+func NewBinlogPlayerTables(dbClient VtClient, addr string, tables []string, startPosition *proto.BlpPosition, stopAtGTID myproto.GTID, blplStats *BinlogPlayerStats) *BinlogPlayer {
 	return &BinlogPlayer{
-		addr:          addr,
-		dbClient:      dbClient,
-		tables:        tables,
-		blpPos:        *startPosition,
-		stopAtGroupId: stopAtGroupId,
-		blplStats:     blplStats,
+		addr:       addr,
+		dbClient:   dbClient,
+		tables:     tables,
+		blpPos:     *startPosition,
+		stopAtGTID: stopAtGTID,
+		blplStats:  blplStats,
 	}
 }
 
-// writeRecoveryPosition will write the current groupId as the recovery position
+// writeRecoveryPosition will write the current GTID as the recovery position
 // for the next transaction.
 // We will also try to get the timestamp for the transaction. Two cases:
 // - we have statements, and they start with a SET TIMESTAMP that we
@@ -116,19 +125,19 @@ func NewBinlogPlayerTables(dbClient VtClient, addr string, tables []string, star
 func (blp *BinlogPlayer) writeRecoveryPosition(tx *proto.BinlogTransaction) error {
 	now := time.Now().Unix()
 
-	blp.blpPos.GroupId = tx.GroupId
+	blp.blpPos.GTID = tx.GTID
 	updateRecovery := ""
 	if tx.Timestamp != 0 {
 		updateRecovery = fmt.Sprintf(
-			"UPDATE _vt.blp_checkpoint SET group_id=%v, time_updated=%v, transaction_timestamp=%v WHERE source_shard_uid=%v",
-			tx.GroupId,
+			"UPDATE _vt.blp_checkpoint SET gtid='%v', time_updated=%v, transaction_timestamp=%v WHERE source_shard_uid=%v",
+			tx.GTID,
 			now,
 			tx.Timestamp,
 			blp.blpPos.Uid)
 	} else {
 		updateRecovery = fmt.Sprintf(
-			"UPDATE _vt.blp_checkpoint SET group_id=%v, time_updated=%v WHERE source_shard_uid=%v",
-			tx.GroupId,
+			"UPDATE _vt.blp_checkpoint SET gtid='%v', time_updated=%v WHERE source_shard_uid=%v",
+			tx.GTID,
 			now,
 			blp.blpPos.Uid)
 	}
@@ -140,7 +149,7 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *proto.BinlogTransaction) erro
 	if qr.RowsAffected != 1 {
 		return fmt.Errorf("Cannot update blp_recovery table, affected %v rows", qr.RowsAffected)
 	}
-	blp.blplStats.LastGroupId.Set(tx.GroupId)
+	blp.blplStats.SetLastGTID(tx.GTID)
 	if tx.Timestamp != 0 {
 		blp.blplStats.SecondsBehindMaster.Set(now - tx.Timestamp)
 	}
@@ -158,13 +167,13 @@ func ReadStartPosition(dbClient VtClient, uid uint32) (*proto.BlpPosition, strin
 	if qr.RowsAffected != 1 {
 		return nil, "", fmt.Errorf("checkpoint information not available in db for %v", uid)
 	}
-	temp, err := qr.Rows[0][0].ParseInt64()
+	gtid, err := myproto.DecodeGTID(qr.Rows[0][0].String())
 	if err != nil {
 		return nil, "", err
 	}
 	return &proto.BlpPosition{
-		Uid:     uid,
-		GroupId: temp,
+		Uid:  uid,
+		GTID: myproto.GTIDField{gtid},
 	}, string(qr.Rows[0][1].Raw()), nil
 }
 
@@ -217,7 +226,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 		log.Infof("BinlogPlayer client %v for tables %v starting @ '%v', server: %v",
 			blp.blpPos.Uid,
 			blp.tables,
-			blp.blpPos.GroupId,
+			blp.blpPos.GTID,
 			blp.addr,
 		)
 	} else {
@@ -225,20 +234,26 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 			blp.blpPos.Uid,
 			blp.keyRange.Start.Hex(),
 			blp.keyRange.End.Hex(),
-			blp.blpPos.GroupId,
+			blp.blpPos.GTID,
 			blp.addr,
 		)
 	}
-	if blp.stopAtGroupId > 0 {
-		// we need to stop at some point
-		// sanity check the point
-		if blp.blpPos.GroupId > blp.stopAtGroupId {
-			return fmt.Errorf("starting point %v greater than stopping point %v", blp.blpPos.GroupId, blp.stopAtGroupId)
-		} else if blp.blpPos.GroupId == blp.stopAtGroupId {
-			log.Infof("Not starting BinlogPlayer, we're already at the desired position %v", blp.stopAtGroupId)
+	if blp.stopAtGTID != nil {
+		// We need to stop at some point. Sanity check the point.
+		//
+		// TODO(enisoc): Stop trying to compare GTIDs, since we can't do that
+		// reliably for some MySQL flavors.
+		cmp, err := blp.blpPos.GTID.TryCompare(blp.stopAtGTID)
+		if err != nil {
+			return err
+		}
+		if cmp > 0 { // blp.blpPos.GTID > blp.stopAtGTID
+			return fmt.Errorf("starting point %v greater than stopping point %v", blp.blpPos.GTID, blp.stopAtGTID)
+		} else if cmp == 0 { // blp.blpPos.GTID == blp.stopAtGTID
+			log.Infof("Not starting BinlogPlayer, we're already at the desired position %v", blp.stopAtGTID)
 			return nil
 		}
-		log.Infof("Will stop player when reaching %v", blp.stopAtGroupId)
+		log.Infof("Will stop player when reaching %v", blp.stopAtGTID)
 	}
 
 	binlogPlayerClientFactory, ok := binlogPlayerClientFactories[*binlogPlayerProtocol]
@@ -257,15 +272,15 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 	var resp BinlogPlayerResponse
 	if len(blp.tables) > 0 {
 		req := &proto.TablesRequest{
-			Tables:  blp.tables,
-			GroupId: blp.blpPos.GroupId,
+			Tables: blp.tables,
+			GTID:   blp.blpPos.GTID,
 		}
 		resp = blplClient.StreamTables(req, responseChan)
 	} else {
 		req := &proto.KeyRangeRequest{
 			KeyspaceIdType: blp.keyspaceIdType,
 			KeyRange:       blp.keyRange,
-			GroupId:        blp.blpPos.GroupId,
+			GTID:           blp.blpPos.GTID,
 		}
 		resp = blplClient.StreamKeyRange(req, responseChan)
 	}
@@ -283,9 +298,16 @@ processLoop:
 					return fmt.Errorf("Error in processing binlog event %v", err)
 				}
 				if ok {
-					if blp.stopAtGroupId > 0 && blp.blpPos.GroupId >= blp.stopAtGroupId {
-						log.Infof("Reached stopping position, done playing logs")
-						return nil
+					if blp.stopAtGTID != nil {
+						// TODO(enisoc): Stop trying to compare GTIDs.
+						cmp, err := blp.blpPos.GTID.TryCompare(blp.stopAtGTID)
+						if err != nil {
+							return err
+						}
+						if cmp >= 0 { // blp.blpPos.GTID >= blp.stopAtGTID
+							log.Infof("Reached stopping position, done playing logs")
+							return nil
+						}
 					}
 					break
 				}
@@ -309,7 +331,7 @@ func CreateBlpCheckpoint() []string {
 		"CREATE DATABASE IF NOT EXISTS _vt",
 		`CREATE TABLE IF NOT EXISTS _vt.blp_checkpoint (
   source_shard_uid INT(10) UNSIGNED NOT NULL,
-  group_id BIGINT DEFAULT NULL,
+  gtid VARCHAR(250) DEFAULT NULL,
   time_updated BIGINT UNSIGNED NOT NULL,
   transaction_timestamp BIGINT UNSIGNED NOT NULL,
   flags VARCHAR(250) DEFAULT NULL,
@@ -318,12 +340,12 @@ func CreateBlpCheckpoint() []string {
 
 // PopulateBlpCheckpoint returns a statement to populate the first value into
 // the _vt.blp_checkpoint table
-func PopulateBlpCheckpoint(index uint32, groupId, timeUpdated int64, flags string) string {
-	return fmt.Sprintf("INSERT INTO _vt.blp_checkpoint (source_shard_uid, group_id, time_updated, transaction_timestamp, flags) VALUES (%v, %v, %v, 0, '%v')", index, groupId, timeUpdated, flags)
+func PopulateBlpCheckpoint(index uint32, gtid myproto.GTID, timeUpdated int64, flags string) string {
+	return fmt.Sprintf("INSERT INTO _vt.blp_checkpoint (source_shard_uid, gtid, time_updated, transaction_timestamp, flags) VALUES (%v, '%v', %v, 0, '%v')", index, gtid, timeUpdated, flags)
 }
 
-// QueryBlpCheckpoint returns a statement to query the group_id and flags for a
+// QueryBlpCheckpoint returns a statement to query the gtid and flags for a
 // given shard from the _vt.blp_checkpoint table
 func QueryBlpCheckpoint(index uint32) string {
-	return fmt.Sprintf("SELECT group_id, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=%v", index)
+	return fmt.Sprintf("SELECT gtid, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=%v", index)
 }

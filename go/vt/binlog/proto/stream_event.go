@@ -4,6 +4,10 @@
 
 package proto
 
+import (
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+)
+
 // StreamEvent represents one event for the update stream.
 type StreamEvent struct {
 	// Category can be "DML", "DDL", "ERR" or "POS"
@@ -21,5 +25,5 @@ type StreamEvent struct {
 	Timestamp int64
 
 	// POS
-	GroupId int64
+	GTID myproto.GTIDField
 }
