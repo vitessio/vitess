@@ -293,13 +293,13 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 	}
 
 	// stop replication
-	log.Infof("Stopping slave %v at a minimum of %v", vsdw.sourceAlias, pos.GroupId)
-	stoppedAt, err := vsdw.wr.ActionInitiator().StopSlaveMinimum(vsdw.sourceAlias, pos.GroupId, 30*time.Second)
+	log.Infof("Stopping slave %v at a minimum of %v", vsdw.sourceAlias, pos.GTID)
+	stoppedAt, err := vsdw.wr.ActionInitiator().StopSlaveMinimum(vsdw.sourceAlias, pos.GTID, 30*time.Second)
 	if err != nil {
-		return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", vsdw.sourceAlias, pos.GroupId, err)
+		return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", vsdw.sourceAlias, pos.GTID, err)
 	}
 	stopPositionList.Entries[0].Uid = ss.Uid
-	stopPositionList.Entries[0].GroupId = stoppedAt.MasterLogGroupId
+	stopPositionList.Entries[0].GTID = stoppedAt.MasterLogGTID
 
 	// change the cleaner actions from ChangeSlaveType(rdonly)
 	// to StartSlave() + ChangeSlaveType(spare)
@@ -320,10 +320,10 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 
 	// 4 - wait until the destination checker is equal or passed
 	//     that master binlog position, and stop its replication.
-	log.Infof("Waiting for destination checker %v to catch up to %v", vsdw.destinationAlias, masterPos.MasterLogGroupId)
-	_, err = vsdw.wr.ActionInitiator().StopSlaveMinimum(vsdw.destinationAlias, masterPos.MasterLogGroupId, 30*time.Second)
+	log.Infof("Waiting for destination checker %v to catch up to %v", vsdw.destinationAlias, masterPos.MasterLogGTID)
+	_, err = vsdw.wr.ActionInitiator().StopSlaveMinimum(vsdw.destinationAlias, masterPos.MasterLogGTID, 30*time.Second)
 	if err != nil {
-		return fmt.Errorf("StopSlaveMinimum on %v at %v failed: %v", vsdw.destinationAlias, masterPos.MasterLogGroupId, err)
+		return fmt.Errorf("StopSlaveMinimum on %v at %v failed: %v", vsdw.destinationAlias, masterPos.MasterLogGTID, err)
 	}
 	wrangler.RecordStartSlaveAction(vsdw.cleaner, vsdw.destinationAlias, 30*time.Second)
 	action, err = wrangler.FindChangeSlaveTypeActionByTarget(vsdw.cleaner, vsdw.destinationAlias)

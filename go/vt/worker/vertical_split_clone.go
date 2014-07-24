@@ -594,7 +594,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 		if strings.Index(vscw.strategy, "dontStartBinlogPlayer") != -1 {
 			flags = binlogplayer.BLP_FLAG_DONT_START
 		}
-		queries = append(queries, binlogplayer.PopulateBlpCheckpoint(0, pos.MasterLogGroupId, time.Now().Unix(), flags))
+		queries = append(queries, binlogplayer.PopulateBlpCheckpoint(0, pos.MasterLogGTID, time.Now().Unix(), flags))
 		for _, tabletAlias := range vscw.destinationAliases {
 			destinationWaitGroup.Add(1)
 			go func(ti *topo.TabletInfo) {

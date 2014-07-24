@@ -287,13 +287,13 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 		}
 
 		// stop replication
-		log.Infof("Stopping slave[%v] %v at a minimum of %v", i, sdw.sourceAliases[i], pos.GroupId)
-		stoppedAt, err := sdw.wr.ActionInitiator().StopSlaveMinimum(sdw.sourceAliases[i], pos.GroupId, 30*time.Second)
+		log.Infof("Stopping slave[%v] %v at a minimum of %v", i, sdw.sourceAliases[i], pos.GTID)
+		stoppedAt, err := sdw.wr.ActionInitiator().StopSlaveMinimum(sdw.sourceAliases[i], pos.GTID, 30*time.Second)
 		if err != nil {
-			return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", sdw.sourceAliases[i], pos.GroupId, err)
+			return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", sdw.sourceAliases[i], pos.GTID, err)
 		}
 		stopPositionList.Entries[i].Uid = ss.Uid
-		stopPositionList.Entries[i].GroupId = stoppedAt.MasterLogGroupId
+		stopPositionList.Entries[i].GTID = stoppedAt.MasterLogGTID
 
 		// change the cleaner actions from ChangeSlaveType(rdonly)
 		// to StartSlave() + ChangeSlaveType(spare)
@@ -315,10 +315,10 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 
 	// 4 - wait until the destination checker is equal or passed
 	//     that master binlog position, and stop its replication.
-	log.Infof("Waiting for destination checker %v to catch up to %v", sdw.destinationAlias, masterPos.MasterLogGroupId)
-	_, err = sdw.wr.ActionInitiator().StopSlaveMinimum(sdw.destinationAlias, masterPos.MasterLogGroupId, 30*time.Second)
+	log.Infof("Waiting for destination checker %v to catch up to %v", sdw.destinationAlias, masterPos.MasterLogGTID)
+	_, err = sdw.wr.ActionInitiator().StopSlaveMinimum(sdw.destinationAlias, masterPos.MasterLogGTID, 30*time.Second)
 	if err != nil {
-		return fmt.Errorf("StopSlaveMinimum for %v at %v failed: %v", sdw.destinationAlias, masterPos.MasterLogGroupId, err)
+		return fmt.Errorf("StopSlaveMinimum for %v at %v failed: %v", sdw.destinationAlias, masterPos.MasterLogGTID, err)
 	}
 	wrangler.RecordStartSlaveAction(sdw.cleaner, sdw.destinationAlias, 30*time.Second)
 	action, err := wrangler.FindChangeSlaveTypeActionByTarget(sdw.cleaner, sdw.destinationAlias)
