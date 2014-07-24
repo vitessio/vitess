@@ -7,6 +7,8 @@ package mysqlctl
 import (
 	"strings"
 	"testing"
+
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 func TestParseGoogleGTID(t *testing.T) {
@@ -42,6 +44,16 @@ func TestGoogleGTIDString(t *testing.T) {
 	got := input.String()
 	if got != want {
 		t.Errorf("%#v.String() = '%v', want '%v'", input, got, want)
+	}
+}
+
+func TestGoogleGTIDFlavor(t *testing.T) {
+	input := googleGTID{groupID: 123}
+	want := "GoogleMysql"
+
+	got := input.Flavor()
+	if got != want {
+		t.Errorf("%#v.Flavor() = '%v', want '%v'", input, got, want)
 	}
 }
 
@@ -98,9 +110,23 @@ func TestGoogleGTIDCompareWrongType(t *testing.T) {
 	}
 }
 
+func TestGoogleGTIDCompareNil(t *testing.T) {
+	input1 := googleGTID{groupID: 123}
+	input2 := proto.GTID(nil)
+	want := "can't compare GTID"
+
+	_, err := input1.TryCompare(input2)
+	if err == nil {
+		t.Errorf("expected error for %#v.TryCompare(%#v)", input1, input2)
+	}
+	if !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("wrong error message for %#v.TryCompare(%#v), got %v, want %v", input1, input2, err, want)
+	}
+}
+
 func TestGoogleGTIDEqual(t *testing.T) {
-	input1 := GTID(googleGTID{groupID: 41234})
-	input2 := GTID(googleGTID{groupID: 41234})
+	input1 := proto.GTID(googleGTID{groupID: 41234})
+	input2 := proto.GTID(googleGTID{groupID: 41234})
 	want := true
 
 	cmp := input1 == input2
@@ -110,8 +136,8 @@ func TestGoogleGTIDEqual(t *testing.T) {
 }
 
 func TestGoogleGTIDNotEqual(t *testing.T) {
-	input1 := GTID(googleGTID{groupID: 41234})
-	input2 := GTID(googleGTID{groupID: 51234})
+	input1 := proto.GTID(googleGTID{groupID: 41234})
+	input2 := proto.GTID(googleGTID{groupID: 51234})
 	want := false
 
 	cmp := input1 == input2

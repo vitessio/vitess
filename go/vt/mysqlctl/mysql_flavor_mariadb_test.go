@@ -7,6 +7,8 @@ package mysqlctl
 import (
 	"strings"
 	"testing"
+
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 func TestParseMariaGTID(t *testing.T) {
@@ -84,6 +86,16 @@ func TestMariaGTIDString(t *testing.T) {
 	}
 }
 
+func TestMariaGTIDFlavor(t *testing.T) {
+	input := mariaGTID{domain: 1, server: 2, sequence: 123}
+	want := "MariaDB"
+
+	got := input.Flavor()
+	if got != want {
+		t.Errorf("%#v.Flavor() = '%v', want '%v'", input, got, want)
+	}
+}
+
 func TestMariaGTIDCompareLess(t *testing.T) {
 	input1 := mariaGTID{domain: 5, server: 4727, sequence: 300}
 	input2 := mariaGTID{domain: 5, server: 4727, sequence: 700}
@@ -120,6 +132,20 @@ func TestMariaGTIDCompareEqual(t *testing.T) {
 	}
 	if cmp != 0 {
 		t.Errorf("%#v.TryCompare(%#v) = %v, want 0", input1, input2, cmp)
+	}
+}
+
+func TestMariaGTIDCompareNil(t *testing.T) {
+	input1 := mariaGTID{domain: 1, server: 2, sequence: 123}
+	input2 := proto.GTID(nil)
+	want := "can't compare GTID"
+
+	_, err := input1.TryCompare(input2)
+	if err == nil {
+		t.Errorf("expected error for %#v.TryCompare(%#v)", input1, input2)
+	}
+	if !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("wrong error message for %#v.TryCompare(%#v), got %v, want %v", input1, input2, err, want)
 	}
 }
 
@@ -166,8 +192,8 @@ func TestMariaGTIDCompareWrongServer(t *testing.T) {
 }
 
 func TestMariaGTIDEqual(t *testing.T) {
-	input1 := GTID(mariaGTID{domain: 3, server: 5555, sequence: 1234})
-	input2 := GTID(mariaGTID{domain: 3, server: 5555, sequence: 1234})
+	input1 := proto.GTID(mariaGTID{domain: 3, server: 5555, sequence: 1234})
+	input2 := proto.GTID(mariaGTID{domain: 3, server: 5555, sequence: 1234})
 	want := true
 
 	cmp := input1 == input2
@@ -177,8 +203,8 @@ func TestMariaGTIDEqual(t *testing.T) {
 }
 
 func TestMariaGTIDNotEqual(t *testing.T) {
-	input1 := GTID(mariaGTID{domain: 3, server: 5555, sequence: 1234})
-	input2 := GTID(mariaGTID{domain: 3, server: 4555, sequence: 1234})
+	input1 := proto.GTID(mariaGTID{domain: 3, server: 5555, sequence: 1234})
+	input2 := proto.GTID(mariaGTID{domain: 3, server: 4555, sequence: 1234})
 	want := false
 
 	cmp := input1 == input2

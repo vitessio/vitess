@@ -629,8 +629,8 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 	if err != nil {
 		return
 	}
-	if newReplicationPosition.MasterLogGroupId != replicationPosition.MasterLogGroupId {
-		return nil, fmt.Errorf("replicationPosition position changed during snapshot, from %u to %v", replicationPosition.MasterLogGroupId, newReplicationPosition.MasterLogGroupId)
+	if newReplicationPosition.MasterLogGTID != replicationPosition.MasterLogGTID {
+		return nil, fmt.Errorf("replicationPosition position changed during snapshot, from %v to %v", replicationPosition.MasterLogGTID, newReplicationPosition.MasterLogGTID)
 	}
 
 	// Write all the manifest files
@@ -1054,7 +1054,7 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.Key
 			flags = binlogplayer.BLP_FLAG_DONT_START
 		}
 		for manifestIndex, manifest := range manifests {
-			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(uint32(manifestIndex), manifest.Source.MasterState.ReplicationPosition.MasterLogGroupId, time.Now().Unix(), flags))
+			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(uint32(manifestIndex), manifest.Source.MasterState.ReplicationPosition.MasterLogGTID, time.Now().Unix(), flags))
 		}
 		if err = mysqld.ExecuteSuperQueryList(queries); err != nil {
 			return err

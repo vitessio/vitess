@@ -16,8 +16,10 @@ import (
 type mariaDB10 struct {
 }
 
+const mariadbFlavorID = "MariaDB"
+
 // MasterStatus implements MysqlFlavor.MasterStatus
-func (*mariaDB10) MasterStatus(mysqld *Mysqld) (rp *proto.ReplicationPosition, err error) {
+func (flavor *mariaDB10) MasterStatus(mysqld *Mysqld) (rp *proto.ReplicationPosition, err error) {
 	// grab what we need from SHOW MASTER STATUS
 	qr, err := mysqld.fetchSuperQuery("SHOW MASTER STATUS")
 	if err != nil {
@@ -48,12 +50,7 @@ func (*mariaDB10) MasterStatus(mysqld *Mysqld) (rp *proto.ReplicationPosition, e
 	if len(qr.Rows[0]) < 1 {
 		return nil, fmt.Errorf("BINLOG_GTID_POS returned no result")
 	}
-	gtid := qr.Rows[0][0].String()
-	sgtid := strings.Split(gtid, "-")
-	if len(sgtid) != 3 {
-		return nil, fmt.Errorf("failed to split gtid in 3: '%v' '%v'", gtid, qr)
-	}
-	rp.MasterLogGroupId, err = strconv.ParseInt(sgtid[2], 10, 64)
+	rp.MasterLogGTID.GTID, err = flavor.ParseGTID(qr.Rows[0][0].String())
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +70,7 @@ func (*mariaDB10) PromoteSlaveCommands() []string {
 }
 
 // ParseGTID implements MysqlFlavor.ParseGTID().
-func (*mariaDB10) ParseGTID(s string) (GTID, error) {
+func (*mariaDB10) ParseGTID(s string) (proto.GTID, error) {
 	// Split into parts.
 	parts := strings.Split(s, "-")
 	if len(parts) != 3 {
@@ -116,8 +113,13 @@ func (gtid mariaGTID) String() string {
 	return fmt.Sprintf("%d-%d-%d", gtid.domain, gtid.server, gtid.sequence)
 }
 
+// Flavor implements GTID.Flavor().
+func (gtid mariaGTID) Flavor() string {
+	return mariadbFlavorID
+}
+
 // TryCompare implements GTID.TryCompare().
-func (gtid mariaGTID) TryCompare(cmp GTID) (int, error) {
+func (gtid mariaGTID) TryCompare(cmp proto.GTID) (int, error) {
 	other, ok := cmp.(mariaGTID)
 	if !ok {
 		return 0, fmt.Errorf("can't compare GTID, wrong type: %#v.TryCompare(%#v)",
@@ -142,5 +144,7 @@ func (gtid mariaGTID) TryCompare(cmp GTID) (int, error) {
 }
 
 func init() {
-	mysqlFlavors["MariaDB"] = &mariaDB10{}
+	flavor := &mariaDB10{}
+	mysqlFlavors[mariadbFlavorID] = flavor
+	proto.GTIDParsers[mariadbFlavorID] = flavor.ParseGTID
 }
