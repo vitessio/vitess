@@ -261,7 +261,7 @@ func (wr *Wrangler) waitForFilteredReplication(sourcePositions map[*topo.ShardIn
 				// find the position it should be at
 				for s, rp := range sourcePositions {
 					if s.Keyspace() == sourceShard.Keyspace && s.ShardName() == sourceShard.Shard {
-						blpPosition.GroupId = rp.MasterLogGroupId
+						blpPosition.GTID = rp.MasterLogGTID
 					}
 				}
 
@@ -538,8 +538,8 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 
 		// wait for it
 		if err := wr.ai.WaitBlpPosition(si.MasterAlias, blproto.BlpPosition{
-			Uid:     0,
-			GroupId: masterPosition.MasterLogGroupId,
+			Uid:  0,
+			GTID: masterPosition.MasterLogGTID,
 		}, wr.actionTimeout()); err != nil {
 			return err
 		}
