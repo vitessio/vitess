@@ -264,7 +264,7 @@ func execAnalyzeSql(statement Statement, getTable TableGetter) (plan *ExecPlan) 
 	case *Set:
 		return execAnalyzeSet(stmt)
 	case *DDL:
-		return &ExecPlan{PlanId: PLAN_DDL}
+		return execAnalyzeDDL(stmt, getTable)
 	}
 	panic(NewParserError("invalid SQL"))
 }
@@ -535,6 +535,16 @@ func execAnalyzeSet(set *Set) (plan *ExecPlan) {
 		plan.SetValue = ival
 	} else if fval, err := strconv.ParseFloat(val, 64); err == nil {
 		plan.SetValue = fval
+	}
+	return plan
+}
+
+func execAnalyzeDDL(ddl *DDL, getTable TableGetter) *ExecPlan {
+	plan := &ExecPlan{PlanId: PLAN_DDL}
+	tableName := string(ddl.Table)
+	// Skip setting tableInfo for Create statements which have empty tableNames
+	if tableName != "" {
+		plan.setTableInfo(tableName, getTable)
 	}
 	return plan
 }
