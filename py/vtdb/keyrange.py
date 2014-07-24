@@ -32,6 +32,9 @@ class KeyRange(codec.BSONCoding):
       return keyrange_constants.NON_PARTIAL_KEYRANGE
     return '%s-%s' % (self.Start, self.End)
 
+  def __repr__(self):
+    return 'KeyRange(%r-%r)' % (self.Start, self.End)
+
   def bson_encode(self):
     return {"Start": self.Start, "End": self.End}
 
