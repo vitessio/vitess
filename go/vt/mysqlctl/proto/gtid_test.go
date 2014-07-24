@@ -187,6 +187,28 @@ func TestBsonMarshalUnmarshalGTIDFieldInStruct(t *testing.T) {
 	}
 }
 
+func TestBsonMarshalUnmarshalNilGTID(t *testing.T) {
+	GTIDParsers["golf"] = func(s string) (GTID, error) {
+		return fakeGTID{flavor: "golf", value: s}, nil
+	}
+	input := GTID(nil)
+	want := GTID(nil)
+
+	buf, err := bson.Marshal(GTIDField{input})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	var gotField GTIDField
+	if err = bson.Unmarshal(buf, &gotField); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if got := gotField.GTID; got != want {
+		t.Errorf("marshal->unmarshal mismatch, got %#v, want %#v", got, want)
+	}
+}
+
 type fakeGTID struct {
 	flavor, value string
 }

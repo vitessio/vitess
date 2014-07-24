@@ -82,10 +82,13 @@ type GTIDField struct {
 // MarshalBson bson-encodes GTIDField.
 func (gf GTIDField) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	bson.EncodeOptionalPrefix(buf, bson.Object, key)
+
 	lenWriter := bson.NewLenWriter(buf)
 
-	// The name of the bson field is the MySQL flavor.
-	bson.EncodeString(buf, gf.GTID.Flavor(), gf.GTID.String())
+	if gf.GTID != nil {
+		// The name of the bson field is the MySQL flavor.
+		bson.EncodeString(buf, gf.GTID.Flavor(), gf.GTID.String())
+	}
 
 	lenWriter.Close()
 }
@@ -102,9 +105,14 @@ func (gf *GTIDField) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 	}
 	bson.Next(buf, 4)
 
-	// We expect exactly one field in this bson object.
-	// The field name is the MySQL flavor.
+	// We expect exactly zero or one fields in this bson object.
 	kind = bson.NextByte(buf)
+	if kind == bson.EOO {
+		// The GTID was nil, nothing to do.
+		return
+	}
+
+	// The field name is the MySQL flavor.
 	flavor := bson.ReadCString(buf)
 	value := bson.DecodeString(buf, kind)
 
