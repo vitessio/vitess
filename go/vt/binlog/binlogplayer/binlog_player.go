@@ -46,7 +46,7 @@ type BinlogPlayerStats struct {
 
 	// Last saved status
 	LastGTID            myproto.GTID
-	LastGTIDMutex       sync.Mutex
+	LastGTIDMutex       sync.RWMutex
 	SecondsBehindMaster sync2.AtomicInt64
 }
 
@@ -54,6 +54,12 @@ func (bps *BinlogPlayerStats) SetLastGTID(gtid myproto.GTID) {
 	bps.LastGTIDMutex.Lock()
 	defer bps.LastGTIDMutex.Unlock()
 	bps.LastGTID = gtid
+}
+
+func (bps *BinlogPlayerStats) GetLastGTID() myproto.GTID {
+	bps.LastGTIDMutex.RLock()
+	defer bps.LastGTIDMutex.RUnlock()
+	return bps.LastGTID
 }
 
 // NewBinlogPlayerStats creates a new BinlogPlayerStats structure
