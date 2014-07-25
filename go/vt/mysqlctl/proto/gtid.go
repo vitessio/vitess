@@ -54,6 +54,15 @@ func ParseGTID(flavor, value string) (GTID, error) {
 	return parser(value)
 }
 
+// MustParseGTID calls ParseGTID and panics on error.
+func MustParseGTID(flavor, value string) GTID {
+	gtid, err := ParseGTID(flavor, value)
+	if err != nil {
+		panic(err)
+	}
+	return gtid
+}
+
 // EncodeGTID returns a string that contains both the flavor and value of the
 // GTID, so that the correct parser can be selected when that string is passed
 // to DecodeGTID.

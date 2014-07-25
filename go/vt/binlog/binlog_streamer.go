@@ -67,6 +67,10 @@ var (
 	DEFAULT_DELIM = []byte(";")
 )
 
+// BinlogStreamer only supports Google MySQL. Support for other flavors will
+// come with the switch to a connection-based streamer.
+const blsMysqlFlavor = "GoogleMysql"
+
 type binlogPosition struct {
 	GTID     myproto.GTID
 	ServerId int64
@@ -226,7 +230,7 @@ eventLoop:
 		if values != nil {
 			bls.blPos.ServerId = mustParseInt64(values[1])
 			bls.file.Set(mustParseInt64(values[2]))
-			bls.blPos.GTID = mustParseGTID(values[3])
+			bls.blPos.GTID = myproto.MustParseGTID(blsMysqlFlavor, string(values[3]))
 			continue
 		}
 		values = rotateRE.FindSubmatch(event)
@@ -399,15 +403,4 @@ func mustParseInt64(b []byte) int64 {
 		panic(err)
 	}
 	return val
-}
-
-// mustParseGTID can be used if you don't expect to fail.
-func mustParseGTID(b []byte) myproto.GTID {
-	// BinlogStreamer only supports Google MySQL. Support for other flavors will
-	// come with the switch to a connection-based streamer.
-	gtid, err := myproto.ParseGTID("GoogleMysql", string(b))
-	if err != nil {
-		panic(err)
-	}
-	return gtid
 }

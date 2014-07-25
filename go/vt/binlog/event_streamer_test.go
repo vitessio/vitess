@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/binlog/proto"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 type eventErrorCase struct {
@@ -104,6 +105,7 @@ func TestDMLEvent(t *testing.T) {
 				Sql:      []byte("query"),
 			},
 		},
+		GTID: myproto.GTIDField{myproto.MustParseGTID(blsMysqlFlavor, "20")},
 	}
 	evs := &EventStreamer{
 		sendEvent: func(event *proto.StreamEvent) error {
@@ -121,7 +123,7 @@ func TestDMLEvent(t *testing.T) {
 					t.Errorf("want %s, got %s", want, got)
 				}
 			case "POS":
-				want := `&{POS  [] []  0 <nil>}`
+				want := `&{POS  [] []  0 20}`
 				got := fmt.Sprintf("%v", event)
 				if want != got {
 					t.Errorf("want %s, got %s", want, got)
@@ -149,6 +151,7 @@ func TestDDLEvent(t *testing.T) {
 				Sql:      []byte("DDL"),
 			},
 		},
+		GTID: myproto.GTIDField{myproto.MustParseGTID(blsMysqlFlavor, "20")},
 	}
 	evs := &EventStreamer{
 		sendEvent: func(event *proto.StreamEvent) error {
@@ -160,7 +163,7 @@ func TestDDLEvent(t *testing.T) {
 					t.Errorf("want %s, got %s", want, got)
 				}
 			case "POS":
-				want := `&{POS  [] []  0 <nil>}`
+				want := `&{POS  [] []  0 20}`
 				got := fmt.Sprintf("%v", event)
 				if want != got {
 					t.Errorf("want %s, got %s", want, got)

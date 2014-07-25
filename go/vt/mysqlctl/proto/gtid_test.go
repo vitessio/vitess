@@ -29,6 +29,36 @@ func TestParseGTID(t *testing.T) {
 	}
 }
 
+func TestMustParseGTID(t *testing.T) {
+	flavor := "fake flavor"
+	GTIDParsers[flavor] = func(s string) (GTID, error) {
+		return fakeGTID{value: s}, nil
+	}
+	input := "12345"
+	want := fakeGTID{value: "12345"}
+
+	got := MustParseGTID(flavor, input)
+	if got != want {
+		t.Errorf("ParseGTID(%#v, %#v) = %#v, want %#v", flavor, input, got, want)
+	}
+}
+
+func TestMustParseGTIDError(t *testing.T) {
+	defer func() {
+		want := "ParseGTID: unknown flavor"
+		err := recover()
+		if err == nil {
+			t.Errorf("wrong error, got %#v, want %#v", err, want)
+		}
+		got, ok := err.(error)
+		if !ok || !strings.HasPrefix(got.Error(), want) {
+			t.Errorf("wrong error, got %#v, want %#v", got, want)
+		}
+	}()
+
+	MustParseGTID("unknown flavor !@$!@", "yowzah")
+}
+
 func TestParseUnknownFlavor(t *testing.T) {
 	want := "ParseGTID: unknown flavor 'foobar8675309'"
 
