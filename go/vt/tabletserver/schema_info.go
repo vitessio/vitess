@@ -35,7 +35,7 @@ type ExecPlan struct {
 	TableInfo  *TableInfo
 	Fields     []mproto.Field
 	Rules      *QueryRules
-	Authorized map[string]bool
+	Authorized tableacl.ACL
 
 	mu         sync.Mutex
 	QueryCount int64

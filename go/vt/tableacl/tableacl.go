@@ -9,12 +9,13 @@ import (
 	"strings"
 )
 
-const (
-	// ALL represents all users
-	ALL = "*"
-)
+// ACL is an interface for Access Control List
+type ACL interface {
+	// IsMember checks the membership of a principal in this ACL
+	IsMember(principal string) bool
+}
 
-var acl map[*regexp.Regexp]map[Role][]string
+var tableAcl map[*regexp.Regexp]map[Role]ACL
 
 // Init initiates table ACLs
 func Init(configFile string) {
@@ -22,7 +23,7 @@ func Init(configFile string) {
 	if err != nil {
 		log.Fatalf("unable to read tableACL config file: %v", err)
 	}
-	acl, err = load(config)
+	tableAcl, err = load(config)
 	if err != nil {
 		log.Fatalf("tableACL initialization error: %v", err)
 	}
@@ -35,59 +36,59 @@ func Init(configFile string) {
 //	<tableRegexPattern1>: {"READER": "*", "WRITER": "<u2>,<u4>...","ADMIN": "<u5>"},
 //	<tableRegexPattern2>: {"ADMIN": "<u5>"}
 //}`)
-func load(config []byte) (map[*regexp.Regexp]map[Role][]string, error) {
+func load(config []byte) (map[*regexp.Regexp]map[Role]ACL, error) {
 	var contents map[string]map[string]string
 	err := json.Unmarshal(config, &contents)
 	if err != nil {
 		return nil, err
 	}
-	acl := make(map[*regexp.Regexp]map[Role][]string)
+	tableAcl := make(map[*regexp.Regexp]map[Role]ACL)
 	for tblPattern, accessMap := range contents {
 		re, err := regexp.Compile(tblPattern)
 		if err != nil {
 			return nil, fmt.Errorf("regexp compile error %v: %v", tblPattern, err)
 		}
-		if _, ok := acl[re]; !ok {
-			acl[re] = make(map[Role][]string)
+		tableAcl[re] = make(map[Role]ACL)
+
+		entriesByRole := make(map[Role][]string)
+		for i := READER; i < NumRoles; i++ {
+			entriesByRole[i] = []string{}
 		}
-		for role, listStr := range accessMap {
+		for role, entries := range accessMap {
 			r, ok := RoleByName(role)
 			if !ok {
 				return nil, fmt.Errorf("parse error, invalid role %v", role)
 			}
-			acl[re][r] = strings.Split(listStr, ",")
+			// Entries must be assigned to all roles up to r
+			for i := READER; i <= r; i++ {
+				entriesByRole[i] = append(entriesByRole[i], strings.Split(entries, ",")...)
+			}
 		}
+		for r, entries := range entriesByRole {
+			a, err := NewACL(entries)
+			if err != nil {
+				return nil, err
+			}
+			tableAcl[re][r] = a
+		}
+
 	}
-	return acl, nil
+	return tableAcl, nil
 }
 
 // Authorized returns the list of entities who have at least the
 // minimum specified Role on a table
-func Authorized(table string, minRole Role) map[string]bool {
-	all := map[string]bool{ALL: true}
-	if acl == nil {
-		// No ACLs, allow all
-		return all
+func Authorized(table string, minRole Role) ACL {
+	if tableAcl == nil {
+		// No ACLs, allow all access
+		return all()
 	}
-	authorized := map[string]bool{}
-	for re, accessMap := range acl {
+	for re, accessMap := range tableAcl {
 		if !re.MatchString(table) {
 			continue
 		}
-		for r := minRole; r < NumRoles; r++ {
-			entries, ok := accessMap[r]
-			if !ok {
-				continue
-			}
-			for _, e := range entries {
-				if e == ALL {
-					return all
-				}
-				authorized[e] = true
-			}
-		}
-		return authorized
+		return accessMap[minRole]
 	}
-	// No matching patterns for table, allow all
-	return all
+	// No matching patterns for table, allow all access
+	return all()
 }

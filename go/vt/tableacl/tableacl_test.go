@@ -33,10 +33,10 @@ func TestValidConfigs(t *testing.T) {
 	checkLoad([]byte(`{"table1":{"READER":"u1"}}`), true, t)
 	checkLoad([]byte(`{"table1":{"READER":"u1,u2", "WRITER":"u3"}}`), true, t)
 	checkLoad([]byte(`{"table[0-9]+":{"Reader":"u1,u2", "WRITER":"u3"}}`), true, t)
-	checkLoad([]byte(`{"table[0-9]+":{"Reader":"u1,*", "WRITER":"u3"}}`), true, t)
+	checkLoad([]byte(`{"table[0-9]+":{"Reader":"u1,`+ALL+`", "WRITER":"u3"}}`), true, t)
 	checkLoad([]byte(`{
-		"table[0-9]+":{"Reader":"u1,*", "WRITER":"u3"},
-		"tbl[0-9]+":{"Reader":"u1,*", "WRITER":"u3", "ADMIN":"u4"}
+		"table[0-9]+":{"Reader":"u1,`+ALL+`", "WRITER":"u3"},
+		"tbl[0-9]+":{"Reader":"u1,`+ALL+`", "WRITER":"u3", "ADMIN":"u4"}
 	}`), true, t)
 
 }
@@ -62,17 +62,18 @@ func TestAllowUnmatchedTable(t *testing.T) {
 }
 
 func TestAllUserReadAcess(t *testing.T) {
-	configData := []byte(`{"table[0-9]+":{"Reader":"*", "WRITER":"u3"}}`)
+	configData := []byte(`{"table[0-9]+":{"Reader":"` + ALL + `", "WRITER":"u3"}}`)
 	checkAccess(configData, "table1", READER, t, true)
 }
 
 func TestAllUserWriteAccess(t *testing.T) {
-	configData := []byte(`{"table[0-9]+":{"Reader":"` + currentUser() + `", "WRITER":"*"}}`)
+	configData := []byte(`{"table[0-9]+":{"Reader":"` + currentUser() + `", "WRITER":"` + ALL + `"}}`)
 	checkAccess(configData, "table1", WRITER, t, true)
 }
 
 func checkLoad(configData []byte, valid bool, t *testing.T) {
-	_, err := load(configData)
+	var err error
+	tableAcl, err = load(configData)
 	if !valid && err == nil {
 		t.Errorf("expecting parse error none returned")
 	}
@@ -83,12 +84,8 @@ func checkLoad(configData []byte, valid bool, t *testing.T) {
 }
 
 func checkAccess(configData []byte, tableName string, role Role, t *testing.T, want bool) {
-	var err error
-	acl, err = load(configData)
-	if err != nil {
-		t.Errorf("load error: %v", err)
-	}
-	got := Check(currentUser(), Authorized(tableName, role))
+	checkLoad(configData, true, t)
+	got := Authorized(tableName, role).IsMember(currentUser())
 	if want != got {
 		t.Errorf("got %v, want %v", got, want)
 	}
