@@ -223,10 +223,6 @@ type DDLPlan struct {
 	NewName   string
 }
 
-type StreamExecPlan struct {
-	FullQuery *sqlparser.ParsedQuery
-}
-
 type TableGetter func(tableName string) (*schema.Table, bool)
 
 func ExecParse(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
@@ -243,7 +239,7 @@ func ExecParse(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
 	return plan, nil
 }
 
-func StreamExecParse(sql string) (plan *StreamExecPlan, err error) {
+func StreamExecParse(sql string) (plan *ExecPlan, err error) {
 	defer handleError(&err)
 
 	statement, err := sqlparser.Parse(sql)
@@ -261,7 +257,7 @@ func StreamExecParse(sql string) (plan *StreamExecPlan, err error) {
 	default:
 		return nil, NewParserError("'%v' not allowed for streaming", sqlparser.String(stmt))
 	}
-	plan = &StreamExecPlan{FullQuery: GenerateFullQuery(statement)}
+	plan = &ExecPlan{FullQuery: GenerateFullQuery(statement)}
 
 	return plan, nil
 }
