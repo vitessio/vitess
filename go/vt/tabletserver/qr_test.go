@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 )
 
 func TestQueryRules(t *testing.T) {
@@ -52,7 +52,7 @@ func TestQueryRules(t *testing.T) {
 func TestCopy(t *testing.T) {
 	qrs := NewQueryRules()
 	qr1 := NewQueryRule("rule 1", "r1", QR_FAIL)
-	qr1.AddPlanCond(sqlparser.PLAN_PASS_SELECT)
+	qr1.AddPlanCond(planbuilder.PLAN_PASS_SELECT)
 	qr1.AddTableCond("aa")
 	qr1.AddBindVarCond("a", true, false, QR_NOOP, nil)
 
@@ -70,7 +70,7 @@ func TestCopy(t *testing.T) {
 		t.Errorf("want false, got true")
 	}
 
-	qr1.plans[0] = sqlparser.PLAN_INSERT_PK
+	qr1.plans[0] = planbuilder.PLAN_INSERT_PK
 	if qr1.plans[0] == qrf1.plans[0] {
 		t.Errorf("want false, got true")
 	}
@@ -95,12 +95,12 @@ func TestFilterByPlan(t *testing.T) {
 	qr1 := NewQueryRule("rule 1", "r1", QR_FAIL)
 	qr1.SetIPCond("123")
 	qr1.SetQueryCond("select")
-	qr1.AddPlanCond(sqlparser.PLAN_PASS_SELECT)
+	qr1.AddPlanCond(planbuilder.PLAN_PASS_SELECT)
 	qr1.AddBindVarCond("a", true, false, QR_NOOP, nil)
 
 	qr2 := NewQueryRule("rule 2", "r2", QR_FAIL)
-	qr2.AddPlanCond(sqlparser.PLAN_PASS_SELECT)
-	qr2.AddPlanCond(sqlparser.PLAN_PK_EQUAL)
+	qr2.AddPlanCond(planbuilder.PLAN_PASS_SELECT)
+	qr2.AddPlanCond(planbuilder.PLAN_PK_EQUAL)
 	qr2.AddBindVarCond("a", true, false, QR_NOOP, nil)
 
 	qr3 := NewQueryRule("rule 3", "r3", QR_FAIL)
@@ -116,7 +116,7 @@ func TestFilterByPlan(t *testing.T) {
 	qrs.Add(qr3)
 	qrs.Add(qr4)
 
-	qrs1 := qrs.filterByPlan("select", sqlparser.PLAN_PASS_SELECT, "a")
+	qrs1 := qrs.filterByPlan("select", planbuilder.PLAN_PASS_SELECT, "a")
 	if l := len(qrs1.rules); l != 3 {
 		t.Errorf("want 3, got %d", l)
 	}
@@ -130,7 +130,7 @@ func TestFilterByPlan(t *testing.T) {
 		t.Errorf("want nil, got non-nil")
 	}
 
-	qrs1 = qrs.filterByPlan("insert", sqlparser.PLAN_PASS_SELECT, "a")
+	qrs1 = qrs.filterByPlan("insert", planbuilder.PLAN_PASS_SELECT, "a")
 	if l := len(qrs1.rules); l != 1 {
 		t.Errorf("want 1, got %d", l)
 	}
@@ -138,7 +138,7 @@ func TestFilterByPlan(t *testing.T) {
 		t.Errorf("want r2, got %s", qrs1.rules[0].Name)
 	}
 
-	qrs1 = qrs.filterByPlan("insert", sqlparser.PLAN_PK_EQUAL, "a")
+	qrs1 = qrs.filterByPlan("insert", planbuilder.PLAN_PK_EQUAL, "a")
 	if l := len(qrs1.rules); l != 1 {
 		t.Errorf("want 1, got %d", l)
 	}
@@ -146,7 +146,7 @@ func TestFilterByPlan(t *testing.T) {
 		t.Errorf("want r2, got %s", qrs1.rules[0].Name)
 	}
 
-	qrs1 = qrs.filterByPlan("select", sqlparser.PLAN_INSERT_PK, "a")
+	qrs1 = qrs.filterByPlan("select", planbuilder.PLAN_INSERT_PK, "a")
 	if l := len(qrs1.rules); l != 1 {
 		t.Errorf("want 1, got %d", l)
 	}
@@ -154,12 +154,12 @@ func TestFilterByPlan(t *testing.T) {
 		t.Errorf("want r3, got %s", qrs1.rules[0].Name)
 	}
 
-	qrs1 = qrs.filterByPlan("sel", sqlparser.PLAN_INSERT_PK, "a")
+	qrs1 = qrs.filterByPlan("sel", planbuilder.PLAN_INSERT_PK, "a")
 	if qrs1.rules != nil {
 		t.Errorf("want nil, got non-nil")
 	}
 
-	qrs1 = qrs.filterByPlan("table", sqlparser.PLAN_PASS_DML, "b")
+	qrs1 = qrs.filterByPlan("table", planbuilder.PLAN_PASS_DML, "b")
 	if l := len(qrs1.rules); l != 1 {
 		t.Errorf("want 1, got %#v, %#v", qrs1.rules[0], qrs1.rules[1])
 	}
@@ -170,7 +170,7 @@ func TestFilterByPlan(t *testing.T) {
 	qr5 := NewQueryRule("rule 5", "r5", QR_FAIL)
 	qrs.Add(qr5)
 
-	qrs1 = qrs.filterByPlan("sel", sqlparser.PLAN_INSERT_PK, "a")
+	qrs1 = qrs.filterByPlan("sel", planbuilder.PLAN_INSERT_PK, "a")
 	if l := len(qrs1.rules); l != 1 {
 		t.Errorf("want 1, got %d", l)
 	}
@@ -179,7 +179,7 @@ func TestFilterByPlan(t *testing.T) {
 	}
 
 	qrsnil1 := NewQueryRules()
-	if qrsnil2 := qrsnil1.filterByPlan("", sqlparser.PLAN_PASS_SELECT, "a"); qrsnil2.rules != nil {
+	if qrsnil2 := qrsnil1.filterByPlan("", planbuilder.PLAN_PASS_SELECT, "a"); qrsnil2.rules != nil {
 		t.Errorf("want nil, got non-nil")
 	}
 }
@@ -204,13 +204,13 @@ func TestQueryRule(t *testing.T) {
 		t.Errorf("want error")
 	}
 
-	qr.AddPlanCond(sqlparser.PLAN_PASS_SELECT)
-	qr.AddPlanCond(sqlparser.PLAN_INSERT_PK)
+	qr.AddPlanCond(planbuilder.PLAN_PASS_SELECT)
+	qr.AddPlanCond(planbuilder.PLAN_INSERT_PK)
 
-	if qr.plans[0] != sqlparser.PLAN_PASS_SELECT {
+	if qr.plans[0] != planbuilder.PLAN_PASS_SELECT {
 		t.Errorf("want PASS_SELECT, got %s", qr.plans[0].String())
 	}
-	if qr.plans[1] != sqlparser.PLAN_INSERT_PK {
+	if qr.plans[1] != planbuilder.PLAN_INSERT_PK {
 		t.Errorf("want INSERT_PK, got %s", qr.plans[1].String())
 	}
 
@@ -563,10 +563,10 @@ func TestImport(t *testing.T) {
 	if qrs.rules[0].query == nil {
 		t.Errorf("want non-nil")
 	}
-	if qrs.rules[0].plans[0] != sqlparser.PLAN_PASS_SELECT {
+	if qrs.rules[0].plans[0] != planbuilder.PLAN_PASS_SELECT {
 		t.Errorf("want PASS_SELECT, got %s", qrs.rules[0].plans[0].String())
 	}
-	if qrs.rules[0].plans[1] != sqlparser.PLAN_INSERT_PK {
+	if qrs.rules[0].plans[1] != planbuilder.PLAN_INSERT_PK {
 		t.Errorf("want PASS_INSERT_PK, got %s", qrs.rules[0].plans[0].String())
 	}
 	if qrs.rules[0].tableNames[0] != "a" {

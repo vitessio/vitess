@@ -116,3 +116,7 @@ func (buf *TrackedBuffer) WriteArg(arg string) {
 func (buf *TrackedBuffer) ParsedQuery() *ParsedQuery {
 	return &ParsedQuery{buf.String(), buf.bindLocations}
 }
+
+func (buf *TrackedBuffer) HasBindVars() bool {
+	return len(buf.bindLocations) != 0
+}

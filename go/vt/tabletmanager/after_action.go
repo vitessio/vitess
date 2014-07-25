@@ -13,8 +13,8 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/binlog"
-	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -52,7 +52,7 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet) error {
 	qrs := tabletserver.LoadCustomRules()
 	if tablet.KeyRange.IsPartial() {
 		qr := tabletserver.NewQueryRule("enforce keyspace_id range", "keyspace_id_not_in_range", tabletserver.QR_FAIL)
-		qr.AddPlanCond(sqlparser.PLAN_INSERT_PK)
+		qr.AddPlanCond(planbuilder.PLAN_INSERT_PK)
 		err := qr.AddBindVarCond("keyspace_id", true, true, tabletserver.QR_NOTIN, tablet.KeyRange)
 		if err != nil {
 			log.Warningf("Unable to add keyspace rule: %v", err)
