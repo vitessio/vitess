@@ -89,8 +89,12 @@ func TestCustom(t *testing.T) {
 }
 
 func TestStreamPlan(t *testing.T) {
+	testSchema := loadSchema("schema_test.json")
 	for tcase := range iterateExecFile("stream_cases.txt") {
-		plan, err := StreamExecParse(tcase.input)
+		plan, err := StreamExecParse(tcase.input, func(name string) (*schema.Table, bool) {
+			r, ok := testSchema[name]
+			return r, ok
+		})
 		var out string
 		if err != nil {
 			out = err.Error()

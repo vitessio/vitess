@@ -353,7 +353,14 @@ func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string) (plan *ExecPl
 // GetStreamPlan is similar to GetPlan, but doesn't use the cache
 // and doesn't enforce a limit. It also just returns the parsed query.
 func (si *SchemaInfo) GetStreamPlan(sql string) *planbuilder.ExecPlan {
-	plan, err := planbuilder.StreamExecParse(sql)
+	GetTable := func(tableName string) (*schema.Table, bool) {
+		tableInfo, ok := si.tables[tableName]
+		if !ok {
+			return nil, false
+		}
+		return tableInfo.Table, true
+	}
+	plan, err := planbuilder.StreamExecParse(sql, GetTable)
 	if err != nil {
 		panic(NewTabletError(FAIL, "%s", err))
 	}

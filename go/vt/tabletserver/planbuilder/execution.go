@@ -239,7 +239,7 @@ func ExecParse(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
 	return plan, nil
 }
 
-func StreamExecParse(sql string) (plan *ExecPlan, err error) {
+func StreamExecParse(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
 	defer handleError(&err)
 
 	statement, err := sqlparser.Parse(sql)
@@ -247,17 +247,26 @@ func StreamExecParse(sql string) (plan *ExecPlan, err error) {
 		return nil, err
 	}
 
+	plan = &ExecPlan{
+		PlanId:    PLAN_PASS_SELECT,
+		FullQuery: GenerateFullQuery(statement),
+	}
+
 	switch stmt := statement.(type) {
 	case *sqlparser.Select:
 		if stmt.Lock != "" {
 			return nil, NewParserError("select with lock disallowed with streaming")
 		}
+		tableName, _ := execAnalyzeFrom(stmt.From)
+		if tableName != "" {
+			plan.setTableInfo(tableName, getTable)
+		}
+
 	case *sqlparser.Union:
 		// pass
 	default:
 		return nil, NewParserError("'%v' not allowed for streaming", sqlparser.String(stmt))
 	}
-	plan = &ExecPlan{FullQuery: GenerateFullQuery(statement)}
 
 	return plan, nil
 }
