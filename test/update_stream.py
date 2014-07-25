@@ -53,8 +53,27 @@ foo varbinary(128),
 primary key(eid, name)
 ) Engine=InnoDB'''
 
+# Return a GTID in the format expected for interacting with the Go service
+# over bsonrpc. The key name is the MySQL flavor, and the value is the GTID.
+def _make_default_gtid(value):
+  # Flavor defaults to GoogleMysql for now since that's all we support.
+  return {'GoogleMysql': str(value)}
+
+
+# Compare two GTIDs (if possible) and return an integer that is:
+#    < 0  if a < b
+#   == 0  if a == b
+#    > 0  if a > b
+def _gtidcmp(a, b):
+  if 'GoogleMysql' not in a or 'GoogleMysql' not in b:
+    raise RuntimeError("only the GoogleMysql flavor of GTID can be compared")
+  
+  return int(a['GoogleMysql']) - int(b['GoogleMysql'])
+
 def _get_master_current_position():
-  return utils.mysql_query(master_tablet.tablet_uid, 'vt_test_keyspace', 'show master status')[0][4]
+  return _make_default_gtid(utils.mysql_query(master_tablet.tablet_uid,
+                                           'vt_test_keyspace',
+                                           'show master status')[0][4])
 
 
 def _get_repl_current_position():
@@ -64,7 +83,7 @@ def _get_repl_current_position():
   cursor = MySQLdb.cursors.DictCursor(conn)
   cursor.execute('show master status')
   res = cursor.fetchall()
-  return res[0]['Group_ID']
+  return _make_default_gtid(res[0]['Group_ID'])
 
 
 def setUpModule():
@@ -347,7 +366,7 @@ class TestUpdateStream(unittest.TestCase):
       data = master_conn.stream_next()
       if data['Category'] == 'POS':
         master_txn_count +=1
-        if start_position < data['GroupId']:
+        if _gtidcmp(start_position, data['GTID']) < 0:
           logs_correct = True
           logging.debug("Log rotation correctly interpreted")
           break
