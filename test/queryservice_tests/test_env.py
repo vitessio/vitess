@@ -52,7 +52,7 @@ class TestEnv(object):
     return "localhost:%s" % self.port
 
   def connect(self):
-    c = tablet_conn.connect(self.address, '', 'test_keyspace', '0', 2)
+    c = tablet_conn.connect(self.address, '', 'test_keyspace', '0', 2, user='youtube-dev-dedicated', password='vtpass')
     c.max_attempts = 1
     return c
 
@@ -133,16 +133,6 @@ class TestEnv(object):
         }
       }]""")
 
-  def create_table_acl_config(self, filename):
-    with open(filename, "w") as f:
-      f.write("""{
-      "vtocc_acl_no_access": {},
-      "vtocc_acl_read_only": {"Reader": ",u1"},
-      "vtocc_acl_read_write": {"Writer": ",u1"},
-      "vtocc_acl_admin": {"Admin": ",u1"},
-      "vtocc_acl_all_user_read_only": {"READER":"*"}
-      }""")
-
   def run_cases(self, cases):
     curs = cursor.TabletCursor(self.conn)
     error_count = 0
@@ -206,13 +196,13 @@ class VttabletTestEnv(TestEnv):
     self.create_customrules(customrules)
     schema_override = os.path.join(environment.tmproot, 'schema_override.json')
     self.create_schema_override(schema_override)
-    table_acl_config = os.path.join(environment.tmproot, 'table_acl_config.json')
-    self.create_table_acl_config(table_acl_config)
+    table_acl_config = os.path.join(environment.vttop, 'test', 'test_data', 'table_acl_config.json')
     self.tablet.start_vttablet(
             memcache=self.memcache,
             customrules=customrules,
             schema_override=schema_override,
             table_acl_config=table_acl_config,
+            auth=True,
     )
 
     # FIXME(szopa): This is necessary here only because of a bug that
@@ -298,8 +288,7 @@ class VtoccTestEnv(TestEnv):
     self.create_customrules(customrules)
     schema_override = os.path.join(environment.tmproot, 'schema_override.json')
     self.create_schema_override(schema_override)
-    table_acl_config = os.path.join(environment.tmproot, 'table_acl_config.json')
-    self.create_table_acl_config(table_acl_config)
+    table_acl_config = os.path.join(environment.vttop, 'test', 'test_data', 'table_acl_config.json')
 
     occ_args = environment.binary_args('vtocc') + [
       "-port", str(self.port),
@@ -315,7 +304,9 @@ class VtoccTestEnv(TestEnv):
       "-db-config-app-uname", 'vt_dba',   # use vt_dba as some tests depend on 'drop'
       "-db-config-app-keyspace", "test_keyspace",
       "-db-config-app-shard", "0",
+      "-auth-credentials", os.path.join(environment.vttop, 'test', 'test_data', 'authcredentials_test.json'),
     ]
+
     if self.memcache:
       memcache = self.mysqldir+"/memcache.sock"
       occ_args.extend(["-rowcache-bin", environment.memcached_bin()])
@@ -366,11 +357,6 @@ class VtoccTestEnv(TestEnv):
       shutil.rmtree(self.mysqldir)
     except:
       pass
-
-  def connect(self):
-    c = tablet_conn.connect("localhost:%s" % self.port, '', 'test_keyspace', '0', 2)
-    c.max_attempts = 1
-    return c
 
   def mysql_connect(self):
     return mysql.connect(
