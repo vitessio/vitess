@@ -14,7 +14,7 @@ import (
 
 func TestParseGTID(t *testing.T) {
 	flavor := "fake flavor"
-	GTIDParsers[flavor] = func(s string) (GTID, error) {
+	gtidParsers[flavor] = func(s string) (GTID, error) {
 		return fakeGTID{value: s}, nil
 	}
 	input := "12345"
@@ -31,7 +31,7 @@ func TestParseGTID(t *testing.T) {
 
 func TestMustParseGTID(t *testing.T) {
 	flavor := "fake flavor"
-	GTIDParsers[flavor] = func(s string) (GTID, error) {
+	gtidParsers[flavor] = func(s string) (GTID, error) {
 		return fakeGTID{value: s}, nil
 	}
 	input := "12345"
@@ -81,7 +81,7 @@ func TestEncodeGTID(t *testing.T) {
 }
 
 func TestDecodeGTID(t *testing.T) {
-	GTIDParsers["flavorflav"] = func(s string) (GTID, error) {
+	gtidParsers["flavorflav"] = func(s string) (GTID, error) {
 		return fakeGTID{value: s}, nil
 	}
 	input := "flavorflav/123-456:789"
@@ -119,7 +119,7 @@ func TestDecodeNilGTID(t *testing.T) {
 }
 
 func TestDecodeNoFlavor(t *testing.T) {
-	GTIDParsers[""] = func(s string) (GTID, error) {
+	gtidParsers[""] = func(s string) (GTID, error) {
 		return fakeGTID{value: s}, nil
 	}
 	input := "12345"
@@ -135,7 +135,7 @@ func TestDecodeNoFlavor(t *testing.T) {
 }
 
 func TestDecodeGTIDWithSeparator(t *testing.T) {
-	GTIDParsers["moobar"] = func(s string) (GTID, error) {
+	gtidParsers["moobar"] = func(s string) (GTID, error) {
 		return fakeGTID{value: s}, nil
 	}
 	input := "moobar/GTID containing / a slash"
@@ -187,7 +187,7 @@ func TestGTIDFieldNotEqual(t *testing.T) {
 }
 
 func TestBsonMarshalUnmarshalGTIDField(t *testing.T) {
-	GTIDParsers["golf"] = func(s string) (GTID, error) {
+	gtidParsers["golf"] = func(s string) (GTID, error) {
 		return fakeGTID{flavor: "golf", value: s}, nil
 	}
 	input := fakeGTID{flavor: "golf", value: "par"}
@@ -209,7 +209,7 @@ func TestBsonMarshalUnmarshalGTIDField(t *testing.T) {
 }
 
 func TestBsonMarshalUnmarshalGTIDFieldPointer(t *testing.T) {
-	GTIDParsers["golf"] = func(s string) (GTID, error) {
+	gtidParsers["golf"] = func(s string) (GTID, error) {
 		return fakeGTID{flavor: "golf", value: s}, nil
 	}
 	input := fakeGTID{flavor: "golf", value: "par"}
@@ -231,7 +231,7 @@ func TestBsonMarshalUnmarshalGTIDFieldPointer(t *testing.T) {
 }
 
 func TestBsonMarshalUnmarshalGTIDFieldInStruct(t *testing.T) {
-	GTIDParsers["golf"] = func(s string) (GTID, error) {
+	gtidParsers["golf"] = func(s string) (GTID, error) {
 		return fakeGTID{flavor: "golf", value: s}, nil
 	}
 	input := fakeGTID{flavor: "golf", value: "par"}
@@ -257,7 +257,7 @@ func TestBsonMarshalUnmarshalGTIDFieldInStruct(t *testing.T) {
 }
 
 func TestBsonMarshalUnmarshalNilGTID(t *testing.T) {
-	GTIDParsers["golf"] = func(s string) (GTID, error) {
+	gtidParsers["golf"] = func(s string) (GTID, error) {
 		return fakeGTID{flavor: "golf", value: s}, nil
 	}
 	input := GTID(nil)
@@ -307,7 +307,7 @@ func TestJsonMarshalGTIDFieldPointer(t *testing.T) {
 }
 
 func TestJsonUnmarshalGTIDField(t *testing.T) {
-	GTIDParsers["golf"] = func(s string) (GTID, error) {
+	gtidParsers["golf"] = func(s string) (GTID, error) {
 		return fakeGTID{flavor: "golf", value: s}, nil
 	}
 	input := `"golf/par"`
@@ -342,7 +342,7 @@ func TestJsonMarshalGTIDFieldInStruct(t *testing.T) {
 }
 
 func TestJsonUnmarshalGTIDFieldInStruct(t *testing.T) {
-	GTIDParsers["golf"] = func(s string) (GTID, error) {
+	gtidParsers["golf"] = func(s string) (GTID, error) {
 		return fakeGTID{flavor: "golf", value: s}, nil
 	}
 	input := `{"GTID":"golf/par"}`

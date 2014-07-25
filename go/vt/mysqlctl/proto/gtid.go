@@ -42,12 +42,12 @@ type GTID interface {
 	TryCompare(GTID) (int, error)
 }
 
-// GTIDParsers maps flavor names to parser functions.
-var GTIDParsers = make(map[string]func(string) (GTID, error))
+// gtidParsers maps flavor names to parser functions.
+var gtidParsers = make(map[string]func(string) (GTID, error))
 
 // ParseGTID calls the GTID parser for the specified flavor.
 func ParseGTID(flavor, value string) (GTID, error) {
-	parser := GTIDParsers[flavor]
+	parser := gtidParsers[flavor]
 	if parser == nil {
 		return nil, fmt.Errorf("ParseGTID: unknown flavor '%v'", flavor)
 	}
