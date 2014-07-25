@@ -20,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
@@ -322,14 +323,7 @@ func (qe *QueryEngine) Execute(logStats *SQLQueryStats, query *proto.Query) (rep
 		panic(NewTabletError(RETRY, "Query disallowed due to rule: %s", desc))
 	}
 
-	// Check table permissions
-	if !basePlan.Authorized.IsMember(logStats.context.GetUsername()) {
-		err := fmt.Sprintf("table acl error: %v cannot run %v on table %v", logStats.context.GetUsername(), basePlan.PlanId, basePlan.TableName)
-		if qe.strictTableAcl {
-			panic(NewTabletError(FAIL, err))
-		}
-		qe.accessCheckerLogger.Errorf(err)
-	}
+	qe.checkTableAcl(basePlan.TableName, basePlan.PlanId, basePlan.Authorized, logStats.context.GetUsername())
 
 	if basePlan.PlanId == planbuilder.PLAN_DDL {
 		return qe.execDDL(logStats, query.Sql)
@@ -415,6 +409,9 @@ func (qe *QueryEngine) StreamExecute(logStats *SQLQueryStats, query *proto.Query
 	logStats.OriginalSql = query.Sql
 	defer queryStats.Record("SELECT_STREAM", time.Now())
 
+	authorized := tableacl.Authorized(plan.TableName, plan.PlanId.MinRole())
+	qe.checkTableAcl(plan.TableName, plan.PlanId, authorized, logStats.context.GetUsername())
+
 	// does the real work: first get a connection
 	waitingForConnectionStart := time.Now()
 	conn := getOrPanic(qe.streamConnPool)
@@ -428,6 +425,16 @@ func (qe *QueryEngine) StreamExecute(logStats *SQLQueryStats, query *proto.Query
 	// then let's stream! Wrap callback function to return an
 	// error on query termination to stop further streaming
 	qe.fullStreamFetch(logStats, conn, plan.FullQuery, query.BindVariables, nil, nil, sendReply)
+}
+
+func (qe *QueryEngine) checkTableAcl(table string, planId planbuilder.PlanType, authorized tableacl.ACL, user string) {
+	if !authorized.IsMember(user) {
+		err := fmt.Sprintf("table acl error: %v cannot run %v on table %v", user, planId, table)
+		if qe.strictTableAcl {
+			panic(NewTabletError(FAIL, err))
+		}
+		qe.accessCheckerLogger.Errorf(err)
+	}
 }
 
 // InvalidateForDml performs rowcache invalidations for the dml.
