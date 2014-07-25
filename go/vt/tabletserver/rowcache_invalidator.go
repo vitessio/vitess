@@ -34,14 +34,14 @@ type RowcacheInvalidator struct {
 	mysqld    *mysqlctl.Mysqld
 	evs       *binlog.EventStreamer
 	Timestamp sync2.AtomicInt64
-	GTID      myproto.GTID
-	GTIDMutex sync.RWMutex
+	gtid      myproto.GTID
+	gtidMutex sync.RWMutex
 }
 
 func (rci *RowcacheInvalidator) GetGTID() myproto.GTID {
-	rci.GTIDMutex.RLock()
-	defer rci.GTIDMutex.RUnlock()
-	return rci.GTID
+	rci.gtidMutex.RLock()
+	defer rci.gtidMutex.RUnlock()
+	return rci.gtid
 }
 
 func (rci *RowcacheInvalidator) GetGTIDString() string {
@@ -53,9 +53,9 @@ func (rci *RowcacheInvalidator) GetGTIDString() string {
 }
 
 func (rci *RowcacheInvalidator) SetGTID(gtid myproto.GTID) {
-	rci.GTIDMutex.Lock()
-	defer rci.GTIDMutex.Unlock()
-	rci.GTID = gtid
+	rci.gtidMutex.Lock()
+	defer rci.gtidMutex.Unlock()
+	rci.gtid = gtid
 }
 
 // NewRowcacheInvalidator creates a new RowcacheInvalidator.
