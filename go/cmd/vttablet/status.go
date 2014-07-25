@@ -110,8 +110,8 @@ Binlog player state: {{.State}}</br>
     <th>Index</th>
     <th>SourceShard</th>
     <th>State</th>
-    <th>StopAtGroupId</th>
-    <th>LastGroupId</th>
+    <th>StopAtGTID</th>
+    <th>LastGTID</th>
     <th>SecondsBehindMaster</th>
     <th>Counts</th>
     <th>Rates</th>
@@ -129,8 +129,8 @@ Binlog player state: {{.State}}</br>
             (from {{github_com_youtube_vitess_vtctld_tablet .SourceTablet.String}})
           {{end}}
         {{end}}</td>
-      <td>{{if .StopAtGroupId}}{{.StopAtGroupId}}{{end}}</td>
-      <td>{{.LastGroupId}}</td>
+      <td>{{if .StopAtGTID}}{{.StopAtGTID}}{{end}}</td>
+      <td>{{.LastGTID}}</td>
       <td>{{.SecondsBehindMaster}}</td>
       <td>{{range $key, $value := .Counts}}<b>{{$key}}</b>: {{$value}}<br>{{end}}</td>
       <td>{{range $key, $values := .Rates}}<b>{{$key}}</b>: {{range $values}}{{.}} {{end}}<br>{{end}}</td>
