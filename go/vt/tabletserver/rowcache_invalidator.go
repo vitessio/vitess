@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
@@ -33,7 +34,28 @@ type RowcacheInvalidator struct {
 	mysqld    *mysqlctl.Mysqld
 	evs       *binlog.EventStreamer
 	Timestamp sync2.AtomicInt64
-	GroupId   sync2.AtomicInt64
+	GTID      myproto.GTID
+	GTIDMutex sync.RWMutex
+}
+
+func (rci *RowcacheInvalidator) GetGTID() myproto.GTID {
+	rci.GTIDMutex.RLock()
+	defer rci.GTIDMutex.RUnlock()
+	return rci.GTID
+}
+
+func (rci *RowcacheInvalidator) GetGTIDString() string {
+	gtid := rci.GetGTID()
+	if gtid == nil {
+		return "<nil>"
+	}
+	return gtid.String()
+}
+
+func (rci *RowcacheInvalidator) SetGTID(gtid myproto.GTID) {
+	rci.GTIDMutex.Lock()
+	defer rci.GTIDMutex.Unlock()
+	rci.GTID = gtid
 }
 
 // NewRowcacheInvalidator creates a new RowcacheInvalidator.
@@ -42,7 +64,7 @@ type RowcacheInvalidator struct {
 func NewRowcacheInvalidator(qe *QueryEngine) *RowcacheInvalidator {
 	rci := &RowcacheInvalidator{qe: qe}
 	stats.Publish("RowcacheInvalidatorState", stats.StringFunc(rci.svm.StateName))
-	stats.Publish("RowcacheInvalidatorPosition", stats.IntFunc(rci.GroupId.Get))
+	stats.Publish("RowcacheInvalidatorPosition", stats.StringFunc(rci.GetGTIDString))
 	stats.Publish("RowcacheInvalidatorTimestamp", stats.IntFunc(rci.Timestamp.Get))
 	return rci
 }
@@ -62,7 +84,7 @@ func (rci *RowcacheInvalidator) Open(dbname string, mysqld *mysqlctl.Mysqld) {
 		rci.dbname = dbname
 		rci.mysqld = mysqld
 		rci.evs = binlog.NewEventStreamer(dbname, mysqld.Cnf().BinLogPath)
-		rci.GroupId.Set(rp.MasterLogGroupId)
+		rci.SetGTID(rp.MasterLogGTID)
 		rci.mu.Unlock()
 
 		rci.run()
@@ -107,7 +129,7 @@ func (rci *RowcacheInvalidator) run() {
 					inner = fmt.Errorf("%v: uncaught panic:\n%s", x, tb.Stack(4))
 				}
 			}()
-			rp, err := rci.mysqld.BinlogInfo(rci.GroupId.Get())
+			rp, err := rci.mysqld.BinlogInfo(rci.GetGTID())
 			if err != nil {
 				return err
 			}
@@ -156,7 +178,7 @@ func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) {
 		}
 		rci.Timestamp.Set(event.Timestamp)
 	case "POS":
-		rci.GroupId.Set(event.GroupId)
+		rci.SetGTID(event.GTID)
 	default:
 		log.Errorf("unknown event: %#v", event)
 		internalErrors.Add("Invalidation", 1)
