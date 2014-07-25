@@ -132,21 +132,7 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *proto.BinlogTransaction) erro
 	now := time.Now().Unix()
 
 	blp.blpPos.GTID = tx.GTID
-	updateRecovery := ""
-	if tx.Timestamp != 0 {
-		updateRecovery = fmt.Sprintf(
-			"UPDATE _vt.blp_checkpoint SET gtid='%v', time_updated=%v, transaction_timestamp=%v WHERE source_shard_uid=%v",
-			tx.GTID,
-			now,
-			tx.Timestamp,
-			blp.blpPos.Uid)
-	} else {
-		updateRecovery = fmt.Sprintf(
-			"UPDATE _vt.blp_checkpoint SET gtid='%v', time_updated=%v WHERE source_shard_uid=%v",
-			tx.GTID,
-			now,
-			blp.blpPos.Uid)
-	}
+	updateRecovery := UpdateBlpCheckpoint(blp.blpPos.Uid, tx.GTID, now, tx.Timestamp)
 
 	qr, err := blp.exec(updateRecovery)
 	if err != nil {
@@ -345,13 +331,34 @@ func CreateBlpCheckpoint() []string {
 }
 
 // PopulateBlpCheckpoint returns a statement to populate the first value into
-// the _vt.blp_checkpoint table
+// the _vt.blp_checkpoint table.
 func PopulateBlpCheckpoint(index uint32, gtid myproto.GTID, timeUpdated int64, flags string) string {
-	return fmt.Sprintf("INSERT INTO _vt.blp_checkpoint (source_shard_uid, gtid, time_updated, transaction_timestamp, flags) VALUES (%v, '%v', %v, 0, '%v')", index, gtid, timeUpdated, flags)
+	return fmt.Sprintf("INSERT INTO _vt.blp_checkpoint "+
+		"(source_shard_uid, gtid, time_updated, transaction_timestamp, flags) "+
+		"VALUES (%v, '%v', %v, 0, '%v')",
+		index, myproto.EncodeGTID(gtid), timeUpdated, flags)
+}
+
+// UpdateBlpCheckpoint returns a statement to update a value in the
+// _vt.blp_checkpoint table.
+func UpdateBlpCheckpoint(uid uint32, gtid myproto.GTID, timeUpdated int64, txTimestamp int64) string {
+	if txTimestamp != 0 {
+		return fmt.Sprintf(
+			"UPDATE _vt.blp_checkpoint "+
+				"SET gtid='%v', time_updated=%v, transaction_timestamp=%v "+
+				"WHERE source_shard_uid=%v",
+			myproto.EncodeGTID(gtid), timeUpdated, txTimestamp, uid)
+	} else {
+		return fmt.Sprintf(
+			"UPDATE _vt.blp_checkpoint "+
+				"SET gtid='%v', time_updated=%v "+
+				"WHERE source_shard_uid=%v",
+			myproto.EncodeGTID(gtid), timeUpdated, uid)
+	}
 }
 
 // QueryBlpCheckpoint returns a statement to query the gtid and flags for a
-// given shard from the _vt.blp_checkpoint table
+// given shard from the _vt.blp_checkpoint table.
 func QueryBlpCheckpoint(index uint32) string {
 	return fmt.Sprintf("SELECT gtid, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=%v", index)
 }
