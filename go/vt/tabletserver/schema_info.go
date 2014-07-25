@@ -22,8 +22,8 @@ import (
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/schema"
-	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tableacl"
+	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 )
 
 const base_show_tables = "select table_name, table_type, unix_timestamp(create_time), table_comment from information_schema.tables where table_schema = database()"
@@ -31,7 +31,7 @@ const base_show_tables = "select table_name, table_type, unix_timestamp(create_t
 const maxTableCount = 10000
 
 type ExecPlan struct {
-	*sqlparser.ExecPlan
+	*planbuilder.ExecPlan
 	TableInfo  *TableInfo
 	Fields     []mproto.Field
 	Rules      *QueryRules
@@ -320,7 +320,7 @@ func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string) (plan *ExecPl
 		}
 		return tableInfo.Table, true
 	}
-	splan, err := sqlparser.ExecParse(sql, GetTable)
+	splan, err := planbuilder.ExecParse(sql, GetTable)
 	if err != nil {
 		panic(NewTabletError(FAIL, "%s", err))
 	}
@@ -343,7 +343,7 @@ func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string) (plan *ExecPl
 			}
 			plan.Fields = r.Fields
 		}
-	} else if plan.PlanId == sqlparser.PLAN_DDL || plan.PlanId == sqlparser.PLAN_SET {
+	} else if plan.PlanId == planbuilder.PLAN_DDL || plan.PlanId == planbuilder.PLAN_SET {
 		return plan
 	}
 	si.queries.Set(sql, plan)
@@ -352,8 +352,8 @@ func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string) (plan *ExecPl
 
 // GetStreamPlan is similar to GetPlan, but doesn't use the cache
 // and doesn't enforce a limit. It also just returns the parsed query.
-func (si *SchemaInfo) GetStreamPlan(sql string) *sqlparser.StreamExecPlan {
-	plan, err := sqlparser.StreamExecParse(sql)
+func (si *SchemaInfo) GetStreamPlan(sql string) *planbuilder.StreamExecPlan {
+	plan, err := planbuilder.StreamExecParse(sql)
 	if err != nil {
 		panic(NewTabletError(FAIL, "%s", err))
 	}
@@ -492,7 +492,7 @@ func (si *SchemaInfo) getQueryStats(f queryStatsFunc) map[string]int64 {
 type perQueryStats struct {
 	Query      string
 	Table      string
-	Plan       sqlparser.PlanType
+	Plan       planbuilder.PlanType
 	QueryCount int64
 	Time       time.Duration
 	RowCount   int64

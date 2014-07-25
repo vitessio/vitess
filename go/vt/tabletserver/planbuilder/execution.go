@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package sqlparser
+package planbuilder
 
 import (
 	"fmt"
@@ -10,10 +10,31 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/schema"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tableacl"
 )
 
-var execLimit = &Limit{Rowcount: ValArg(":_vtMaxResultSize")}
+// ParserError: To be deprecated.
+// TODO(sougou): deprecate.
+type ParserError struct {
+	Message string
+}
+
+func NewParserError(format string, args ...interface{}) ParserError {
+	return ParserError{fmt.Sprintf(format, args...)}
+}
+
+func (err ParserError) Error() string {
+	return err.Message
+}
+
+func handleError(err *error) {
+	if x := recover(); x != nil {
+		*err = x.(ParserError)
+	}
+}
+
+var execLimit = &sqlparser.Limit{Rowcount: sqlparser.ValArg(":_vtMaxResultSize")}
 
 type PlanType int
 
@@ -164,16 +185,16 @@ type ExecPlan struct {
 	TableName string
 
 	// FieldQuery is used to fetch field info
-	FieldQuery *ParsedQuery
+	FieldQuery *sqlparser.ParsedQuery
 
 	// FullQuery will be set for all plans.
-	FullQuery *ParsedQuery
+	FullQuery *sqlparser.ParsedQuery
 
 	// For PK plans, only OuterQuery is set.
 	// For SUBQUERY plans, Subquery is also set.
 	// IndexUsed is set only for PLAN_SELECT_SUBQUERY
-	OuterQuery *ParsedQuery
-	Subquery   *ParsedQuery
+	OuterQuery *sqlparser.ParsedQuery
+	Subquery   *sqlparser.ParsedQuery
 	IndexUsed  string
 
 	// For selects, columns to be returned
@@ -203,7 +224,7 @@ type DDLPlan struct {
 }
 
 type StreamExecPlan struct {
-	FullQuery *ParsedQuery
+	FullQuery *sqlparser.ParsedQuery
 }
 
 type TableGetter func(tableName string) (*schema.Table, bool)
@@ -211,7 +232,7 @@ type TableGetter func(tableName string) (*schema.Table, bool)
 func ExecParse(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
 	defer handleError(&err)
 
-	statement, err := Parse(sql)
+	statement, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
 	}
@@ -225,20 +246,20 @@ func ExecParse(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
 func StreamExecParse(sql string) (plan *StreamExecPlan, err error) {
 	defer handleError(&err)
 
-	statement, err := Parse(sql)
+	statement, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
 	}
 
 	switch stmt := statement.(type) {
-	case *Select:
+	case *sqlparser.Select:
 		if stmt.Lock != "" {
 			return nil, NewParserError("select with lock disallowed with streaming")
 		}
-	case *Union:
+	case *sqlparser.Union:
 		// pass
 	default:
-		return nil, NewParserError("'%v' not allowed for streaming", String(stmt))
+		return nil, NewParserError("'%v' not allowed for streaming", sqlparser.String(stmt))
 	}
 	plan = &StreamExecPlan{FullQuery: GenerateFullQuery(statement)}
 
@@ -246,11 +267,11 @@ func StreamExecParse(sql string) (plan *StreamExecPlan, err error) {
 }
 
 func DDLParse(sql string) (plan *DDLPlan) {
-	statement, err := Parse(sql)
+	statement, err := sqlparser.Parse(sql)
 	if err != nil {
 		return &DDLPlan{Action: ""}
 	}
-	stmt, ok := statement.(*DDL)
+	stmt, ok := statement.(*sqlparser.DDL)
 	if !ok {
 		return &DDLPlan{Action: ""}
 	}
@@ -264,32 +285,32 @@ func DDLParse(sql string) (plan *DDLPlan) {
 //-----------------------------------------------
 // Implementation
 
-func execAnalyzeSql(statement Statement, getTable TableGetter) (plan *ExecPlan) {
+func execAnalyzeSql(statement sqlparser.Statement, getTable TableGetter) (plan *ExecPlan) {
 	switch stmt := statement.(type) {
-	case *Union:
+	case *sqlparser.Union:
 		return &ExecPlan{
 			PlanId:     PLAN_PASS_SELECT,
 			FieldQuery: GenerateFieldQuery(stmt),
 			FullQuery:  GenerateFullQuery(stmt),
 			Reason:     REASON_SELECT,
 		}
-	case *Select:
+	case *sqlparser.Select:
 		return execAnalyzeSelect(stmt, getTable)
-	case *Insert:
+	case *sqlparser.Insert:
 		return execAnalyzeInsert(stmt, getTable)
-	case *Update:
+	case *sqlparser.Update:
 		return execAnalyzeUpdate(stmt, getTable)
-	case *Delete:
+	case *sqlparser.Delete:
 		return execAnalyzeDelete(stmt, getTable)
-	case *Set:
+	case *sqlparser.Set:
 		return execAnalyzeSet(stmt)
-	case *DDL:
+	case *sqlparser.DDL:
 		return execAnalyzeDDL(stmt, getTable)
 	}
 	panic(NewParserError("invalid SQL"))
 }
 
-func execAnalyzeSelect(sel *Select, getTable TableGetter) (plan *ExecPlan) {
+func execAnalyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan) {
 	// Default plan
 	plan = &ExecPlan{
 		PlanId:     PLAN_PASS_SELECT,
@@ -398,12 +419,12 @@ func execAnalyzeSelect(sel *Select, getTable TableGetter) (plan *ExecPlan) {
 	return plan
 }
 
-func execAnalyzeInsert(ins *Insert, getTable TableGetter) (plan *ExecPlan) {
+func execAnalyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan) {
 	plan = &ExecPlan{
 		PlanId:    PLAN_PASS_DML,
 		FullQuery: GenerateFullQuery(ins),
 	}
-	tableName := GetTableName(ins.Table)
+	tableName := sqlparser.GetTableName(ins.Table)
 	if tableName == "" {
 		plan.Reason = REASON_TABLE
 		return plan
@@ -425,23 +446,23 @@ func execAnalyzeInsert(ins *Insert, getTable TableGetter) (plan *ExecPlan) {
 		return plan
 	}
 
-	if sel, ok := ins.Rows.(SelectStatement); ok {
+	if sel, ok := ins.Rows.(sqlparser.SelectStatement); ok {
 		plan.PlanId = PLAN_INSERT_SUBQUERY
 		plan.OuterQuery = GenerateInsertOuterQuery(ins)
 		plan.Subquery = GenerateSelectLimitQuery(sel)
 		if len(ins.Columns) != 0 {
-			plan.ColumnNumbers = execAnalyzeSelectExprs(SelectExprs(ins.Columns), tableInfo)
+			plan.ColumnNumbers = execAnalyzeSelectExprs(sqlparser.SelectExprs(ins.Columns), tableInfo)
 		} else {
 			// StarExpr node will expand into all columns
-			n := SelectExprs{&StarExpr{}}
+			n := sqlparser.SelectExprs{&sqlparser.StarExpr{}}
 			plan.ColumnNumbers = execAnalyzeSelectExprs(n, tableInfo)
 		}
 		plan.SubqueryPKColumns = pkColumnNumbers
 		return plan
 	}
 
-	// If it's not a SelectStatement, it's a Node.
-	rowList := ins.Rows.(Values)
+	// If it's not a sqlparser.SelectStatement, it's Values.
+	rowList := ins.Rows.(sqlparser.Values)
 	if pkValues := getInsertPKValues(pkColumnNumbers, rowList, tableInfo); pkValues != nil {
 		plan.PlanId = PLAN_INSERT_PK
 		plan.OuterQuery = plan.FullQuery
@@ -450,14 +471,14 @@ func execAnalyzeInsert(ins *Insert, getTable TableGetter) (plan *ExecPlan) {
 	return plan
 }
 
-func execAnalyzeUpdate(upd *Update, getTable TableGetter) (plan *ExecPlan) {
+func execAnalyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecPlan) {
 	// Default plan
 	plan = &ExecPlan{
 		PlanId:    PLAN_PASS_DML,
 		FullQuery: GenerateFullQuery(upd),
 	}
 
-	tableName := GetTableName(upd.Table)
+	tableName := sqlparser.GetTableName(upd.Table)
 	if tableName == "" {
 		plan.Reason = REASON_TABLE
 		return plan
@@ -496,14 +517,14 @@ func execAnalyzeUpdate(upd *Update, getTable TableGetter) (plan *ExecPlan) {
 	return plan
 }
 
-func execAnalyzeDelete(del *Delete, getTable TableGetter) (plan *ExecPlan) {
+func execAnalyzeDelete(del *sqlparser.Delete, getTable TableGetter) (plan *ExecPlan) {
 	// Default plan
 	plan = &ExecPlan{
 		PlanId:    PLAN_PASS_DML,
 		FullQuery: GenerateFullQuery(del),
 	}
 
-	tableName := GetTableName(del.Table)
+	tableName := sqlparser.GetTableName(del.Table)
 	if tableName == "" {
 		plan.Reason = REASON_TABLE
 		return plan
@@ -536,7 +557,7 @@ func execAnalyzeDelete(del *Delete, getTable TableGetter) (plan *ExecPlan) {
 	return plan
 }
 
-func execAnalyzeSet(set *Set) (plan *ExecPlan) {
+func execAnalyzeSet(set *sqlparser.Set) (plan *ExecPlan) {
 	plan = &ExecPlan{
 		PlanId:    PLAN_SET,
 		FullQuery: GenerateFullQuery(set),
@@ -546,7 +567,7 @@ func execAnalyzeSet(set *Set) (plan *ExecPlan) {
 	}
 	update_expression := set.Exprs[0]
 	plan.SetKey = string(update_expression.Name.Name)
-	numExpr, ok := update_expression.Expr.(NumVal)
+	numExpr, ok := update_expression.Expr.(sqlparser.NumVal)
 	if !ok {
 		return plan
 	}
@@ -559,7 +580,7 @@ func execAnalyzeSet(set *Set) (plan *ExecPlan) {
 	return plan
 }
 
-func execAnalyzeDDL(ddl *DDL, getTable TableGetter) *ExecPlan {
+func execAnalyzeDDL(ddl *sqlparser.DDL, getTable TableGetter) *ExecPlan {
 	plan := &ExecPlan{PlanId: PLAN_DDL}
 	tableName := string(ddl.Table)
 	// Skip TableName if table is empty (create statements) or not found in schema
@@ -584,17 +605,17 @@ func (node *ExecPlan) setTableInfo(tableName string, getTable TableGetter) *sche
 //-----------------------------------------------
 // Select Expressions
 
-func execAnalyzeSelectExprs(exprs SelectExprs, table *schema.Table) (selects []int) {
+func execAnalyzeSelectExprs(exprs sqlparser.SelectExprs, table *schema.Table) (selects []int) {
 	selects = make([]int, 0, len(exprs))
 	for _, expr := range exprs {
 		switch expr := expr.(type) {
-		case *StarExpr:
+		case *sqlparser.StarExpr:
 			// Append all columns.
 			for colIndex := range table.Columns {
 				selects = append(selects, colIndex)
 			}
-		case *NonStarExpr:
-			name := GetColName(expr.Expr)
+		case *sqlparser.NonStarExpr:
+			name := sqlparser.GetColName(expr.Expr)
 			if name == "" {
 				// Not a simple column name.
 				return nil
@@ -614,58 +635,66 @@ func execAnalyzeSelectExprs(exprs SelectExprs, table *schema.Table) (selects []i
 //-----------------------------------------------
 // From
 
-func execAnalyzeFrom(tableExprs TableExprs) (tablename string, hasHints bool) {
+func execAnalyzeFrom(tableExprs sqlparser.TableExprs) (tablename string, hasHints bool) {
 	if len(tableExprs) > 1 {
 		return "", false
 	}
-	node, ok := tableExprs[0].(*AliasedTableExpr)
+	node, ok := tableExprs[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
 		return "", false
 	}
-	return GetTableName(node.Expr), node.Hints != nil
+	return sqlparser.GetTableName(node.Expr), node.Hints != nil
 }
 
 //-----------------------------------------------
 // Where
 
-func execAnalyzeWhere(node *Where) (conditions []BoolExpr) {
+func execAnalyzeWhere(node *sqlparser.Where) (conditions []sqlparser.BoolExpr) {
 	if node == nil {
 		return nil
 	}
 	return execAnalyzeBoolean(node.Expr)
 }
 
-func execAnalyzeBoolean(node BoolExpr) (conditions []BoolExpr) {
+func execAnalyzeBoolean(node sqlparser.BoolExpr) (conditions []sqlparser.BoolExpr) {
 	switch node := node.(type) {
-	case *AndExpr:
+	case *sqlparser.AndExpr:
 		left := execAnalyzeBoolean(node.Left)
 		right := execAnalyzeBoolean(node.Right)
 		if left == nil || right == nil {
 			return nil
 		}
-		if HasINClause(left) && HasINClause(right) {
+		if sqlparser.HasINClause(left) && sqlparser.HasINClause(right) {
 			return nil
 		}
 		return append(left, right...)
-	case *ParenBoolExpr:
+	case *sqlparser.ParenBoolExpr:
 		return execAnalyzeBoolean(node.Expr)
-	case *ComparisonExpr:
+	case *sqlparser.ComparisonExpr:
 		switch {
-		case StringIn(node.Operator, AST_EQ, AST_LT, AST_GT, AST_LE, AST_GE, AST_NSE, AST_LIKE):
-			if IsColName(node.Left) && IsValue(node.Right) {
-				return []BoolExpr{node}
+		case sqlparser.StringIn(
+			node.Operator,
+			sqlparser.AST_EQ,
+			sqlparser.AST_LT,
+			sqlparser.AST_GT,
+			sqlparser.AST_LE,
+			sqlparser.AST_GE,
+			sqlparser.AST_NSE,
+			sqlparser.AST_LIKE):
+			if sqlparser.IsColName(node.Left) && sqlparser.IsValue(node.Right) {
+				return []sqlparser.BoolExpr{node}
 			}
-		case node.Operator == AST_IN:
-			if IsColName(node.Left) && IsSimpleTuple(node.Right) {
-				return []BoolExpr{node}
+		case node.Operator == sqlparser.AST_IN:
+			if sqlparser.IsColName(node.Left) && sqlparser.IsSimpleTuple(node.Right) {
+				return []sqlparser.BoolExpr{node}
 			}
 		}
-	case *RangeCond:
-		if node.Operator != AST_BETWEEN {
+	case *sqlparser.RangeCond:
+		if node.Operator != sqlparser.AST_BETWEEN {
 			return nil
 		}
-		if IsColName(node.Left) && IsValue(node.From) && IsValue(node.To) {
-			return []BoolExpr{node}
+		if sqlparser.IsColName(node.Left) && sqlparser.IsValue(node.From) && sqlparser.IsValue(node.To) {
+			return []sqlparser.BoolExpr{node}
 		}
 	}
 	return nil
@@ -674,13 +703,13 @@ func execAnalyzeBoolean(node BoolExpr) (conditions []BoolExpr) {
 //-----------------------------------------------
 // Update expressions
 
-func execAnalyzeUpdateExpressions(exprs UpdateExprs, pkIndex *schema.Index) (pkValues []interface{}, ok bool) {
+func execAnalyzeUpdateExpressions(exprs sqlparser.UpdateExprs, pkIndex *schema.Index) (pkValues []interface{}, ok bool) {
 	for _, expr := range exprs {
-		index := pkIndex.FindColumn(GetColName(expr.Name))
+		index := pkIndex.FindColumn(sqlparser.GetColName(expr.Name))
 		if index == -1 {
 			continue
 		}
-		if !IsValue(expr.Expr) {
+		if !sqlparser.IsValue(expr.Expr) {
 			log.Warningf("expression is too complex %v", expr)
 			return nil, false
 		}
@@ -688,7 +717,7 @@ func execAnalyzeUpdateExpressions(exprs UpdateExprs, pkIndex *schema.Index) (pkV
 			pkValues = make([]interface{}, len(pkIndex.Columns))
 		}
 		var err error
-		pkValues[index], err = AsInterface(expr.Expr)
+		pkValues[index], err = sqlparser.AsInterface(expr.Expr)
 		if err != nil {
 			panic(NewParserError("%v", err))
 		}
@@ -699,7 +728,7 @@ func execAnalyzeUpdateExpressions(exprs UpdateExprs, pkIndex *schema.Index) (pkV
 //-----------------------------------------------
 // Insert
 
-func getInsertPKColumns(columns Columns, tableInfo *schema.Table) (pkColumnNumbers []int) {
+func getInsertPKColumns(columns sqlparser.Columns, tableInfo *schema.Table) (pkColumnNumbers []int) {
 	if len(columns) == 0 {
 		return tableInfo.PKColumns
 	}
@@ -709,7 +738,7 @@ func getInsertPKColumns(columns Columns, tableInfo *schema.Table) (pkColumnNumbe
 		pkColumnNumbers[i] = -1
 	}
 	for i, column := range columns {
-		index := pkIndex.FindColumn(GetColName(column.(*NonStarExpr).Expr))
+		index := pkIndex.FindColumn(sqlparser.GetColName(column.(*sqlparser.NonStarExpr).Expr))
 		if index == -1 {
 			continue
 		}
@@ -718,7 +747,7 @@ func getInsertPKColumns(columns Columns, tableInfo *schema.Table) (pkColumnNumbe
 	return pkColumnNumbers
 }
 
-func getInsertPKValues(pkColumnNumbers []int, rowList Values, tableInfo *schema.Table) (pkValues []interface{}) {
+func getInsertPKValues(pkColumnNumbers []int, rowList sqlparser.Values, tableInfo *schema.Table) (pkValues []interface{}) {
 	pkValues = make([]interface{}, len(pkColumnNumbers))
 	for index, columnNumber := range pkColumnNumbers {
 		if columnNumber == -1 {
@@ -727,20 +756,20 @@ func getInsertPKValues(pkColumnNumbers []int, rowList Values, tableInfo *schema.
 		}
 		values := make([]interface{}, len(rowList))
 		for j := 0; j < len(rowList); j++ {
-			if _, ok := rowList[j].(*Subquery); ok {
+			if _, ok := rowList[j].(*sqlparser.Subquery); ok {
 				panic(NewParserError("row subquery not supported for inserts"))
 			}
-			row := rowList[j].(ValTuple)
+			row := rowList[j].(sqlparser.ValTuple)
 			if columnNumber >= len(row) {
 				panic(NewParserError("column count doesn't match value count"))
 			}
 			node := row[columnNumber]
-			if !IsValue(node) {
+			if !sqlparser.IsValue(node) {
 				log.Warningf("insert is too complex %v", node)
 				return nil
 			}
 			var err error
-			values[j], err = AsInterface(node)
+			values[j], err = sqlparser.AsInterface(node)
 			if err != nil {
 				panic(NewParserError("%v", err))
 			}
@@ -813,7 +842,7 @@ func NewIndexScoreList(indexes []*schema.Index) []*IndexScore {
 	return scoreList
 }
 
-func getSelectPKValues(conditions []BoolExpr, pkIndex *schema.Index) (planId PlanType, pkValues []interface{}) {
+func getSelectPKValues(conditions []sqlparser.BoolExpr, pkIndex *schema.Index) (planId PlanType, pkValues []interface{}) {
 	pkValues = getPKValues(conditions, pkIndex)
 	if pkValues == nil {
 		return PLAN_PASS_SELECT, nil
@@ -831,25 +860,25 @@ func getSelectPKValues(conditions []BoolExpr, pkIndex *schema.Index) (planId Pla
 	return PLAN_PK_EQUAL, pkValues
 }
 
-func getPKValues(conditions []BoolExpr, pkIndex *schema.Index) (pkValues []interface{}) {
+func getPKValues(conditions []sqlparser.BoolExpr, pkIndex *schema.Index) (pkValues []interface{}) {
 	pkIndexScore := NewIndexScore(pkIndex)
 	pkValues = make([]interface{}, len(pkIndexScore.ColumnMatch))
 	for _, condition := range conditions {
-		condition, ok := condition.(*ComparisonExpr)
+		condition, ok := condition.(*sqlparser.ComparisonExpr)
 		if !ok {
 			return nil
 		}
-		if !StringIn(condition.Operator, AST_EQ, AST_IN) {
+		if !sqlparser.StringIn(condition.Operator, sqlparser.AST_EQ, sqlparser.AST_IN) {
 			return nil
 		}
-		index := pkIndexScore.FindMatch(string(condition.Left.(*ColName).Name))
+		index := pkIndexScore.FindMatch(string(condition.Left.(*sqlparser.ColName).Name))
 		if index == -1 {
 			return nil
 		}
 		switch condition.Operator {
-		case AST_EQ, AST_IN:
+		case sqlparser.AST_EQ, sqlparser.AST_IN:
 			var err error
-			pkValues[index], err = AsInterface(condition.Right)
+			pkValues[index], err = sqlparser.AsInterface(condition.Right)
 			if err != nil {
 				panic(NewParserError("%v", err))
 			}
@@ -863,15 +892,15 @@ func getPKValues(conditions []BoolExpr, pkIndex *schema.Index) (pkValues []inter
 	return nil
 }
 
-func getIndexMatch(conditions []BoolExpr, indexes []*schema.Index) string {
+func getIndexMatch(conditions []sqlparser.BoolExpr, indexes []*schema.Index) string {
 	indexScores := NewIndexScoreList(indexes)
 	for _, condition := range conditions {
 		var col string
 		switch condition := condition.(type) {
-		case *ComparisonExpr:
-			col = string(condition.Left.(*ColName).Name)
-		case *RangeCond:
-			col = string(condition.Left.(*ColName).Name)
+		case *sqlparser.ComparisonExpr:
+			col = string(condition.Left.(*sqlparser.ColName).Name)
+		case *sqlparser.RangeCond:
+			col = string(condition.Left.(*sqlparser.ColName).Name)
 		default:
 			panic("unreachaable")
 		}
@@ -904,16 +933,16 @@ func getIndexMatch(conditions []BoolExpr, indexes []*schema.Index) string {
 
 //-----------------------------------------------
 // Query Generation
-func GenerateFullQuery(statement Statement) *ParsedQuery {
-	buf := NewTrackedBuffer(nil)
+func GenerateFullQuery(statement sqlparser.Statement) *sqlparser.ParsedQuery {
+	buf := sqlparser.NewTrackedBuffer(nil)
 	statement.Format(buf)
 	return buf.ParsedQuery()
 }
 
-func GenerateFieldQuery(statement Statement) *ParsedQuery {
-	buf := NewTrackedBuffer(FormatImpossible)
+func GenerateFieldQuery(statement sqlparser.Statement) *sqlparser.ParsedQuery {
+	buf := sqlparser.NewTrackedBuffer(FormatImpossible)
 	buf.Fprintf("%v", statement)
-	if len(buf.bindLocations) != 0 {
+	if buf.HasBindVars() {
 		return nil
 	}
 	return buf.ParsedQuery()
@@ -923,12 +952,12 @@ func GenerateFieldQuery(statement Statement) *ParsedQuery {
 // to generate a modified version of the query where all selects
 // have impossible where clauses. It overrides a few node types
 // and passes the rest down to the default FormatNode.
-func FormatImpossible(buf *TrackedBuffer, node SQLNode) {
+func FormatImpossible(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 	switch node := node.(type) {
-	case *Select:
+	case *sqlparser.Select:
 		buf.Fprintf("select %v from %v where 1 != 1", node.SelectExprs, node.From)
-	case *JoinTableExpr:
-		if node.Join == AST_LEFT_JOIN || node.Join == AST_RIGHT_JOIN {
+	case *sqlparser.JoinTableExpr:
+		if node.Join == sqlparser.AST_LEFT_JOIN || node.Join == sqlparser.AST_RIGHT_JOIN {
 			// ON clause is requried
 			buf.Fprintf("%v %s %v on 1 != 1", node.LeftExpr, node.Join, node.RightExpr)
 		} else {
@@ -939,9 +968,9 @@ func FormatImpossible(buf *TrackedBuffer, node SQLNode) {
 	}
 }
 
-func GenerateSelectLimitQuery(selStmt SelectStatement) *ParsedQuery {
-	buf := NewTrackedBuffer(nil)
-	sel, ok := selStmt.(*Select)
+func GenerateSelectLimitQuery(selStmt sqlparser.SelectStatement) *sqlparser.ParsedQuery {
+	buf := sqlparser.NewTrackedBuffer(nil)
+	sel, ok := selStmt.(*sqlparser.Select)
 	if ok {
 		limit := sel.Limit
 		if limit == nil {
@@ -955,8 +984,8 @@ func GenerateSelectLimitQuery(selStmt SelectStatement) *ParsedQuery {
 	return buf.ParsedQuery()
 }
 
-func GenerateEqualOuterQuery(sel *Select, tableInfo *schema.Table) *ParsedQuery {
-	buf := NewTrackedBuffer(nil)
+func GenerateEqualOuterQuery(sel *sqlparser.Select, tableInfo *schema.Table) *sqlparser.ParsedQuery {
+	buf := sqlparser.NewTrackedBuffer(nil)
 	fmt.Fprintf(buf, "select ")
 	writeColumnList(buf, tableInfo.Columns)
 	buf.Fprintf(" from %v where ", sel.From)
@@ -964,8 +993,8 @@ func GenerateEqualOuterQuery(sel *Select, tableInfo *schema.Table) *ParsedQuery 
 	return buf.ParsedQuery()
 }
 
-func GenerateInOuterQuery(sel *Select, tableInfo *schema.Table) *ParsedQuery {
-	buf := NewTrackedBuffer(nil)
+func GenerateInOuterQuery(sel *sqlparser.Select, tableInfo *schema.Table) *sqlparser.ParsedQuery {
+	buf := sqlparser.NewTrackedBuffer(nil)
 	fmt.Fprintf(buf, "select ")
 	writeColumnList(buf, tableInfo.Columns)
 	// We assume there is one and only one PK column.
@@ -974,8 +1003,8 @@ func GenerateInOuterQuery(sel *Select, tableInfo *schema.Table) *ParsedQuery {
 	return buf.ParsedQuery()
 }
 
-func GenerateInsertOuterQuery(ins *Insert) *ParsedQuery {
-	buf := NewTrackedBuffer(nil)
+func GenerateInsertOuterQuery(ins *sqlparser.Insert) *sqlparser.ParsedQuery {
+	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Fprintf("insert %vinto %v%v values %a%v",
 		ins.Comments,
 		ins.Table,
@@ -986,21 +1015,21 @@ func GenerateInsertOuterQuery(ins *Insert) *ParsedQuery {
 	return buf.ParsedQuery()
 }
 
-func GenerateUpdateOuterQuery(upd *Update, pkIndex *schema.Index) *ParsedQuery {
-	buf := NewTrackedBuffer(nil)
+func GenerateUpdateOuterQuery(upd *sqlparser.Update, pkIndex *schema.Index) *sqlparser.ParsedQuery {
+	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Fprintf("update %v%v set %v where ", upd.Comments, upd.Table, upd.Exprs)
 	generatePKWhere(buf, pkIndex)
 	return buf.ParsedQuery()
 }
 
-func GenerateDeleteOuterQuery(del *Delete, pkIndex *schema.Index) *ParsedQuery {
-	buf := NewTrackedBuffer(nil)
+func GenerateDeleteOuterQuery(del *sqlparser.Delete, pkIndex *schema.Index) *sqlparser.ParsedQuery {
+	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Fprintf("delete %vfrom %v where ", del.Comments, del.Table)
 	generatePKWhere(buf, pkIndex)
 	return buf.ParsedQuery()
 }
 
-func generatePKWhere(buf *TrackedBuffer, pkIndex *schema.Index) {
+func generatePKWhere(buf *sqlparser.TrackedBuffer, pkIndex *schema.Index) {
 	for i := 0; i < len(pkIndex.Columns); i++ {
 		if i != 0 {
 			buf.WriteString(" and ")
@@ -1009,9 +1038,9 @@ func generatePKWhere(buf *TrackedBuffer, pkIndex *schema.Index) {
 	}
 }
 
-func GenerateSelectSubquery(sel *Select, tableInfo *schema.Table, index string) *ParsedQuery {
-	hint := &IndexHints{Type: AST_USE, Indexes: [][]byte{[]byte(index)}}
-	table_expr := sel.From[0].(*AliasedTableExpr)
+func GenerateSelectSubquery(sel *sqlparser.Select, tableInfo *schema.Table, index string) *sqlparser.ParsedQuery {
+	hint := &sqlparser.IndexHints{Type: sqlparser.AST_USE, Indexes: [][]byte{[]byte(index)}}
+	table_expr := sel.From[0].(*sqlparser.AliasedTableExpr)
 	savedHint := table_expr.Hints
 	table_expr.Hints = hint
 	defer func() {
@@ -1027,10 +1056,10 @@ func GenerateSelectSubquery(sel *Select, tableInfo *schema.Table, index string) 
 	)
 }
 
-func GenerateUpdateSubquery(upd *Update, tableInfo *schema.Table) *ParsedQuery {
+func GenerateUpdateSubquery(upd *sqlparser.Update, tableInfo *schema.Table) *sqlparser.ParsedQuery {
 	return GenerateSubquery(
 		tableInfo.Indexes[0].Columns,
-		&AliasedTableExpr{Expr: upd.Table},
+		&sqlparser.AliasedTableExpr{Expr: upd.Table},
 		upd.Where,
 		upd.OrderBy,
 		upd.Limit,
@@ -1038,10 +1067,10 @@ func GenerateUpdateSubquery(upd *Update, tableInfo *schema.Table) *ParsedQuery {
 	)
 }
 
-func GenerateDeleteSubquery(del *Delete, tableInfo *schema.Table) *ParsedQuery {
+func GenerateDeleteSubquery(del *sqlparser.Delete, tableInfo *schema.Table) *sqlparser.ParsedQuery {
 	return GenerateSubquery(
 		tableInfo.Indexes[0].Columns,
-		&AliasedTableExpr{Expr: del.Table},
+		&sqlparser.AliasedTableExpr{Expr: del.Table},
 		del.Where,
 		del.OrderBy,
 		del.Limit,
@@ -1049,8 +1078,8 @@ func GenerateDeleteSubquery(del *Delete, tableInfo *schema.Table) *ParsedQuery {
 	)
 }
 
-func GenerateSubquery(columns []string, table *AliasedTableExpr, where *Where, order OrderBy, limit *Limit, for_update bool) *ParsedQuery {
-	buf := NewTrackedBuffer(nil)
+func GenerateSubquery(columns []string, table *sqlparser.AliasedTableExpr, where *sqlparser.Where, order sqlparser.OrderBy, limit *sqlparser.Limit, for_update bool) *sqlparser.ParsedQuery {
+	buf := sqlparser.NewTrackedBuffer(nil)
 	if limit == nil {
 		limit = execLimit
 	}
@@ -1062,12 +1091,12 @@ func GenerateSubquery(columns []string, table *AliasedTableExpr, where *Where, o
 	fmt.Fprintf(buf, "%s", columns[i])
 	buf.Fprintf(" from %v%v%v%v", table, where, order, limit)
 	if for_update {
-		buf.Fprintf(AST_FOR_UPDATE)
+		buf.Fprintf(sqlparser.AST_FOR_UPDATE)
 	}
 	return buf.ParsedQuery()
 }
 
-func writeColumnList(buf *TrackedBuffer, columns []schema.TableColumn) {
+func writeColumnList(buf *sqlparser.TrackedBuffer, columns []schema.TableColumn) {
 	i := 0
 	for i = 0; i < len(columns)-1; i++ {
 		fmt.Fprintf(buf, "%s, ", columns[i].Name)
