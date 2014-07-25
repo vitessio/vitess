@@ -562,9 +562,12 @@ func execAnalyzeSet(set *Set) (plan *ExecPlan) {
 func execAnalyzeDDL(ddl *DDL, getTable TableGetter) *ExecPlan {
 	plan := &ExecPlan{PlanId: PLAN_DDL}
 	tableName := string(ddl.Table)
-	// Skip setting tableInfo for Create statements which have empty tableNames
+	// Skip TableName if table is empty (create statements) or not found in schema
 	if tableName != "" {
-		plan.setTableInfo(tableName, getTable)
+		tableInfo, ok := getTable(tableName)
+		if ok {
+			plan.TableName = tableInfo.Name
+		}
 	}
 	return plan
 }
