@@ -209,12 +209,12 @@ type DDLPlan struct {
 
 type TableGetter func(tableName string) (*schema.Table, bool)
 
-func ExecParse(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
+func GetExecPlan(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
 	statement, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
 	}
-	plan, err = execAnalyzeSql(statement, getTable)
+	plan, err = analizeSQL(statement, getTable)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +224,7 @@ func ExecParse(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
 	return plan, nil
 }
 
-func StreamExecParse(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
+func GetStreamExecPlan(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
 	statement, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
@@ -240,7 +240,7 @@ func StreamExecParse(sql string, getTable TableGetter) (plan *ExecPlan, err erro
 		if stmt.Lock != "" {
 			return nil, errors.New("select with lock disallowed with streaming")
 		}
-		tableName, _ := execAnalyzeFrom(stmt.From)
+		tableName, _ := analyzeFrom(stmt.From)
 		if tableName != "" {
 			plan.setTableInfo(tableName, getTable)
 		}
@@ -273,7 +273,7 @@ func DDLParse(sql string) (plan *DDLPlan) {
 //-----------------------------------------------
 // Implementation
 
-func execAnalyzeSql(statement sqlparser.Statement, getTable TableGetter) (plan *ExecPlan, err error) {
+func analizeSQL(statement sqlparser.Statement, getTable TableGetter) (plan *ExecPlan, err error) {
 	switch stmt := statement.(type) {
 	case *sqlparser.Union:
 		return &ExecPlan{
@@ -283,22 +283,22 @@ func execAnalyzeSql(statement sqlparser.Statement, getTable TableGetter) (plan *
 			Reason:     REASON_SELECT,
 		}, nil
 	case *sqlparser.Select:
-		return execAnalyzeSelect(stmt, getTable)
+		return analyzeSelect(stmt, getTable)
 	case *sqlparser.Insert:
-		return execAnalyzeInsert(stmt, getTable)
+		return analyzeInsert(stmt, getTable)
 	case *sqlparser.Update:
-		return execAnalyzeUpdate(stmt, getTable)
+		return analyzeUpdate(stmt, getTable)
 	case *sqlparser.Delete:
-		return execAnalyzeDelete(stmt, getTable)
+		return analyzeDelete(stmt, getTable)
 	case *sqlparser.Set:
-		return execAnalyzeSet(stmt), nil
+		return analyzeSet(stmt), nil
 	case *sqlparser.DDL:
-		return execAnalyzeDDL(stmt, getTable), nil
+		return analyzeDDL(stmt, getTable), nil
 	}
 	return nil, errors.New("invalid SQL")
 }
 
-func execAnalyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan, err error) {
+func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan, err error) {
 	// Default plan
 	plan = &ExecPlan{
 		PlanId:     PLAN_PASS_SELECT,
@@ -318,7 +318,7 @@ func execAnalyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecP
 	}
 
 	// from
-	tableName, hasHints := execAnalyzeFrom(sel.From)
+	tableName, hasHints := analyzeFrom(sel.From)
 	if tableName == "" {
 		plan.Reason = REASON_TABLE
 		return plan, nil
@@ -341,7 +341,7 @@ func execAnalyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecP
 	}
 
 	// Select expressions
-	selects, err := execAnalyzeSelectExprs(sel.SelectExprs, tableInfo)
+	selects, err := analyzeSelectExprs(sel.SelectExprs, tableInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -352,7 +352,7 @@ func execAnalyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecP
 	plan.ColumnNumbers = selects
 
 	// where
-	conditions := execAnalyzeWhere(sel.Where)
+	conditions := analyzeWhere(sel.Where)
 	if conditions == nil {
 		plan.Reason = REASON_WHERE
 		return plan, nil
@@ -416,7 +416,7 @@ func execAnalyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecP
 	return plan, nil
 }
 
-func execAnalyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan, err error) {
+func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan, err error) {
 	plan = &ExecPlan{
 		PlanId:    PLAN_PASS_DML,
 		FullQuery: GenerateFullQuery(ins),
@@ -451,14 +451,14 @@ func execAnalyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecP
 		plan.OuterQuery = GenerateInsertOuterQuery(ins)
 		plan.Subquery = GenerateSelectLimitQuery(sel)
 		if len(ins.Columns) != 0 {
-			plan.ColumnNumbers, err = execAnalyzeSelectExprs(sqlparser.SelectExprs(ins.Columns), tableInfo)
+			plan.ColumnNumbers, err = analyzeSelectExprs(sqlparser.SelectExprs(ins.Columns), tableInfo)
 			if err != nil {
 				return nil, err
 			}
 		} else {
 			// StarExpr node will expand into all columns
 			n := sqlparser.SelectExprs{&sqlparser.StarExpr{}}
-			plan.ColumnNumbers, err = execAnalyzeSelectExprs(n, tableInfo)
+			plan.ColumnNumbers, err = analyzeSelectExprs(n, tableInfo)
 			if err != nil {
 				return nil, err
 			}
@@ -481,7 +481,7 @@ func execAnalyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecP
 	return plan, nil
 }
 
-func execAnalyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecPlan, err error) {
+func analyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecPlan, err error) {
 	// Default plan
 	plan = &ExecPlan{
 		PlanId:    PLAN_PASS_DML,
@@ -504,7 +504,7 @@ func execAnalyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecP
 		return plan, nil
 	}
 
-	plan.SecondaryPKValues, err = execAnalyzeUpdateExpressions(upd.Exprs, tableInfo.Indexes[0])
+	plan.SecondaryPKValues, err = analyzeUpdateExpressions(upd.Exprs, tableInfo.Indexes[0])
 	if err != nil {
 		if err == TooComplex {
 			plan.Reason = REASON_PK_CHANGE
@@ -517,7 +517,7 @@ func execAnalyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecP
 	plan.OuterQuery = GenerateUpdateOuterQuery(upd, tableInfo.Indexes[0])
 	plan.Subquery = GenerateUpdateSubquery(upd, tableInfo)
 
-	conditions := execAnalyzeWhere(upd.Where)
+	conditions := analyzeWhere(upd.Where)
 	if conditions == nil {
 		plan.Reason = REASON_WHERE
 		return plan, nil
@@ -537,7 +537,7 @@ func execAnalyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecP
 	return plan, nil
 }
 
-func execAnalyzeDelete(del *sqlparser.Delete, getTable TableGetter) (plan *ExecPlan, err error) {
+func analyzeDelete(del *sqlparser.Delete, getTable TableGetter) (plan *ExecPlan, err error) {
 	// Default plan
 	plan = &ExecPlan{
 		PlanId:    PLAN_PASS_DML,
@@ -564,7 +564,7 @@ func execAnalyzeDelete(del *sqlparser.Delete, getTable TableGetter) (plan *ExecP
 	plan.OuterQuery = GenerateDeleteOuterQuery(del, tableInfo.Indexes[0])
 	plan.Subquery = GenerateDeleteSubquery(del, tableInfo)
 
-	conditions := execAnalyzeWhere(del.Where)
+	conditions := analyzeWhere(del.Where)
 	if conditions == nil {
 		plan.Reason = REASON_WHERE
 		return plan, nil
@@ -584,7 +584,7 @@ func execAnalyzeDelete(del *sqlparser.Delete, getTable TableGetter) (plan *ExecP
 	return plan, nil
 }
 
-func execAnalyzeSet(set *sqlparser.Set) (plan *ExecPlan) {
+func analyzeSet(set *sqlparser.Set) (plan *ExecPlan) {
 	plan = &ExecPlan{
 		PlanId:    PLAN_SET,
 		FullQuery: GenerateFullQuery(set),
@@ -607,7 +607,7 @@ func execAnalyzeSet(set *sqlparser.Set) (plan *ExecPlan) {
 	return plan
 }
 
-func execAnalyzeDDL(ddl *sqlparser.DDL, getTable TableGetter) *ExecPlan {
+func analyzeDDL(ddl *sqlparser.DDL, getTable TableGetter) *ExecPlan {
 	plan := &ExecPlan{PlanId: PLAN_DDL}
 	tableName := string(ddl.Table)
 	// Skip TableName if table is empty (create statements) or not found in schema
@@ -632,7 +632,7 @@ func (node *ExecPlan) setTableInfo(tableName string, getTable TableGetter) (*sch
 //-----------------------------------------------
 // Select Expressions
 
-func execAnalyzeSelectExprs(exprs sqlparser.SelectExprs, table *schema.Table) (selects []int, err error) {
+func analyzeSelectExprs(exprs sqlparser.SelectExprs, table *schema.Table) (selects []int, err error) {
 	selects = make([]int, 0, len(exprs))
 	for _, expr := range exprs {
 		switch expr := expr.(type) {
@@ -662,7 +662,7 @@ func execAnalyzeSelectExprs(exprs sqlparser.SelectExprs, table *schema.Table) (s
 //-----------------------------------------------
 // From
 
-func execAnalyzeFrom(tableExprs sqlparser.TableExprs) (tablename string, hasHints bool) {
+func analyzeFrom(tableExprs sqlparser.TableExprs) (tablename string, hasHints bool) {
 	if len(tableExprs) > 1 {
 		return "", false
 	}
@@ -676,18 +676,18 @@ func execAnalyzeFrom(tableExprs sqlparser.TableExprs) (tablename string, hasHint
 //-----------------------------------------------
 // Where
 
-func execAnalyzeWhere(node *sqlparser.Where) (conditions []sqlparser.BoolExpr) {
+func analyzeWhere(node *sqlparser.Where) (conditions []sqlparser.BoolExpr) {
 	if node == nil {
 		return nil
 	}
-	return execAnalyzeBoolean(node.Expr)
+	return analyzeBoolean(node.Expr)
 }
 
-func execAnalyzeBoolean(node sqlparser.BoolExpr) (conditions []sqlparser.BoolExpr) {
+func analyzeBoolean(node sqlparser.BoolExpr) (conditions []sqlparser.BoolExpr) {
 	switch node := node.(type) {
 	case *sqlparser.AndExpr:
-		left := execAnalyzeBoolean(node.Left)
-		right := execAnalyzeBoolean(node.Right)
+		left := analyzeBoolean(node.Left)
+		right := analyzeBoolean(node.Right)
 		if left == nil || right == nil {
 			return nil
 		}
@@ -696,7 +696,7 @@ func execAnalyzeBoolean(node sqlparser.BoolExpr) (conditions []sqlparser.BoolExp
 		}
 		return append(left, right...)
 	case *sqlparser.ParenBoolExpr:
-		return execAnalyzeBoolean(node.Expr)
+		return analyzeBoolean(node.Expr)
 	case *sqlparser.ComparisonExpr:
 		switch {
 		case sqlparser.StringIn(
@@ -730,7 +730,7 @@ func execAnalyzeBoolean(node sqlparser.BoolExpr) (conditions []sqlparser.BoolExp
 //-----------------------------------------------
 // Update expressions
 
-func execAnalyzeUpdateExpressions(exprs sqlparser.UpdateExprs, pkIndex *schema.Index) (pkValues []interface{}, err error) {
+func analyzeUpdateExpressions(exprs sqlparser.UpdateExprs, pkIndex *schema.Index) (pkValues []interface{}, err error) {
 	for _, expr := range exprs {
 		index := pkIndex.FindColumn(sqlparser.GetColName(expr.Name))
 		if index == -1 {

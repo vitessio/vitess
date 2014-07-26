@@ -320,7 +320,7 @@ func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string) (plan *ExecPl
 		}
 		return tableInfo.Table, true
 	}
-	splan, err := planbuilder.ExecParse(sql, GetTable)
+	splan, err := planbuilder.GetExecPlan(sql, GetTable)
 	if err != nil {
 		panic(NewTabletError(FAIL, "%s", err))
 	}
@@ -360,7 +360,7 @@ func (si *SchemaInfo) GetStreamPlan(sql string) *planbuilder.ExecPlan {
 		}
 		return tableInfo.Table, true
 	}
-	plan, err := planbuilder.StreamExecParse(sql, GetTable)
+	plan, err := planbuilder.GetStreamExecPlan(sql, GetTable)
 	if err != nil {
 		panic(NewTabletError(FAIL, "%s", err))
 	}

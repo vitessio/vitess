@@ -25,7 +25,7 @@ import (
 func TestPlan(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
 	for tcase := range iterateExecFile("exec_cases.txt") {
-		plan, err := ExecParse(tcase.input, func(name string) (*schema.Table, bool) {
+		plan, err := GetExecPlan(tcase.input, func(name string) (*schema.Table, bool) {
 			r, ok := testSchema[name]
 			return r, ok
 		})
@@ -69,7 +69,7 @@ func TestCustom(t *testing.T) {
 		for _, file := range files {
 			t.Logf("Testing file %s", file)
 			for tcase := range iterateExecFile(file) {
-				plan, err := ExecParse(tcase.input, getter)
+				plan, err := GetExecPlan(tcase.input, getter)
 				var out string
 				if err != nil {
 					out = err.Error()
@@ -91,7 +91,7 @@ func TestCustom(t *testing.T) {
 func TestStreamPlan(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
 	for tcase := range iterateExecFile("stream_cases.txt") {
-		plan, err := StreamExecParse(tcase.input, func(name string) (*schema.Table, bool) {
+		plan, err := GetStreamExecPlan(tcase.input, func(name string) (*schema.Table, bool) {
 			r, ok := testSchema[name]
 			return r, ok
 		})
