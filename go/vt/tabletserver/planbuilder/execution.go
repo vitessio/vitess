@@ -5,6 +5,7 @@
 package planbuilder
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -14,27 +15,10 @@ import (
 	"github.com/youtube/vitess/go/vt/tableacl"
 )
 
-// ParserError: To be deprecated.
-// TODO(sougou): deprecate.
-type ParserError struct {
-	Message string
-}
-
-func NewParserError(format string, args ...interface{}) ParserError {
-	return ParserError{fmt.Sprintf(format, args...)}
-}
-
-func (err ParserError) Error() string {
-	return err.Message
-}
-
-func handleError(err *error) {
-	if x := recover(); x != nil {
-		*err = x.(ParserError)
-	}
-}
-
-var execLimit = &sqlparser.Limit{Rowcount: sqlparser.ValArg(":_vtMaxResultSize")}
+var (
+	TooComplex = errors.New("Complex")
+	execLimit  = &sqlparser.Limit{Rowcount: sqlparser.ValArg(":_vtMaxResultSize")}
+)
 
 type PlanType int
 
@@ -226,13 +210,14 @@ type DDLPlan struct {
 type TableGetter func(tableName string) (*schema.Table, bool)
 
 func ExecParse(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
-	defer handleError(&err)
-
 	statement, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
 	}
-	plan = execAnalyzeSql(statement, getTable)
+	plan, err = execAnalyzeSql(statement, getTable)
+	if err != nil {
+		return nil, err
+	}
 	if plan.PlanId == PLAN_PASS_DML {
 		log.Warningf("PASS_DML: %s", sql)
 	}
@@ -240,8 +225,6 @@ func ExecParse(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
 }
 
 func StreamExecParse(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
-	defer handleError(&err)
-
 	statement, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
@@ -255,7 +238,7 @@ func StreamExecParse(sql string, getTable TableGetter) (plan *ExecPlan, err erro
 	switch stmt := statement.(type) {
 	case *sqlparser.Select:
 		if stmt.Lock != "" {
-			return nil, NewParserError("select with lock disallowed with streaming")
+			return nil, errors.New("select with lock disallowed with streaming")
 		}
 		tableName, _ := execAnalyzeFrom(stmt.From)
 		if tableName != "" {
@@ -265,7 +248,7 @@ func StreamExecParse(sql string, getTable TableGetter) (plan *ExecPlan, err erro
 	case *sqlparser.Union:
 		// pass
 	default:
-		return nil, NewParserError("'%v' not allowed for streaming", sqlparser.String(stmt))
+		return nil, fmt.Errorf("'%v' not allowed for streaming", sqlparser.String(stmt))
 	}
 
 	return plan, nil
@@ -290,7 +273,7 @@ func DDLParse(sql string) (plan *DDLPlan) {
 //-----------------------------------------------
 // Implementation
 
-func execAnalyzeSql(statement sqlparser.Statement, getTable TableGetter) (plan *ExecPlan) {
+func execAnalyzeSql(statement sqlparser.Statement, getTable TableGetter) (plan *ExecPlan, err error) {
 	switch stmt := statement.(type) {
 	case *sqlparser.Union:
 		return &ExecPlan{
@@ -298,7 +281,7 @@ func execAnalyzeSql(statement sqlparser.Statement, getTable TableGetter) (plan *
 			FieldQuery: GenerateFieldQuery(stmt),
 			FullQuery:  GenerateFullQuery(stmt),
 			Reason:     REASON_SELECT,
-		}
+		}, nil
 	case *sqlparser.Select:
 		return execAnalyzeSelect(stmt, getTable)
 	case *sqlparser.Insert:
@@ -308,14 +291,14 @@ func execAnalyzeSql(statement sqlparser.Statement, getTable TableGetter) (plan *
 	case *sqlparser.Delete:
 		return execAnalyzeDelete(stmt, getTable)
 	case *sqlparser.Set:
-		return execAnalyzeSet(stmt)
+		return execAnalyzeSet(stmt), nil
 	case *sqlparser.DDL:
-		return execAnalyzeDDL(stmt, getTable)
+		return execAnalyzeDDL(stmt, getTable), nil
 	}
-	panic(NewParserError("invalid SQL"))
+	return nil, errors.New("invalid SQL")
 }
 
-func execAnalyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan) {
+func execAnalyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan, err error) {
 	// Default plan
 	plan = &ExecPlan{
 		PlanId:     PLAN_PASS_SELECT,
@@ -326,39 +309,45 @@ func execAnalyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecP
 	// There are bind variables in the SELECT list
 	if plan.FieldQuery == nil {
 		plan.Reason = REASON_SELECT_LIST
-		return plan
+		return plan, nil
 	}
 
 	if sel.Distinct != "" || sel.GroupBy != nil || sel.Having != nil {
 		plan.Reason = REASON_SELECT
-		return plan
+		return plan, nil
 	}
 
 	// from
 	tableName, hasHints := execAnalyzeFrom(sel.From)
 	if tableName == "" {
 		plan.Reason = REASON_TABLE
-		return plan
+		return plan, nil
 	}
-	tableInfo := plan.setTableInfo(tableName, getTable)
+	tableInfo, err := plan.setTableInfo(tableName, getTable)
+	if err != nil {
+		return nil, err
+	}
 
 	// Don't improve the plan if the select is locking the row
 	if sel.Lock != "" {
 		plan.Reason = REASON_LOCK
-		return plan
+		return plan, nil
 	}
 
 	// Further improvements possible only if table is row-cached
 	if tableInfo.CacheType == schema.CACHE_NONE || tableInfo.CacheType == schema.CACHE_W {
 		plan.Reason = REASON_NOCACHE
-		return plan
+		return plan, nil
 	}
 
 	// Select expressions
-	selects := execAnalyzeSelectExprs(sel.SelectExprs, tableInfo)
+	selects, err := execAnalyzeSelectExprs(sel.SelectExprs, tableInfo)
+	if err != nil {
+		return nil, err
+	}
 	if selects == nil {
 		plan.Reason = REASON_SELECT_LIST
-		return plan
+		return plan, nil
 	}
 	plan.ColumnNumbers = selects
 
@@ -366,13 +355,13 @@ func execAnalyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecP
 	conditions := execAnalyzeWhere(sel.Where)
 	if conditions == nil {
 		plan.Reason = REASON_WHERE
-		return plan
+		return plan, nil
 	}
 
 	// order
 	if sel.OrderBy != nil {
 		plan.Reason = REASON_ORDER
-		return plan
+		return plan, nil
 	}
 
 	// This check should never fail because we only cache tables with primary keys.
@@ -382,49 +371,52 @@ func execAnalyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecP
 
 	// Attempt PK match only if there's no limit clause
 	if sel.Limit == nil {
-		planId, pkValues := getSelectPKValues(conditions, tableInfo.Indexes[0])
+		planId, pkValues, err := getSelectPKValues(conditions, tableInfo.Indexes[0])
+		if err != nil {
+			return nil, err
+		}
 		switch planId {
 		case PLAN_PK_EQUAL:
 			plan.PlanId = PLAN_PK_EQUAL
 			plan.OuterQuery = GenerateEqualOuterQuery(sel, tableInfo)
 			plan.PKValues = pkValues
-			return plan
+			return plan, nil
 		case PLAN_PK_IN:
 			plan.PlanId = PLAN_PK_IN
 			plan.OuterQuery = GenerateInOuterQuery(sel, tableInfo)
 			plan.PKValues = pkValues
-			return plan
+			return plan, nil
 		}
 	}
 
 	if len(tableInfo.Indexes[0].Columns) != 1 {
 		plan.Reason = REASON_COMPOSITE_PK
-		return plan
+		return plan, nil
 	}
 
 	// TODO: Analyze hints to improve plan.
 	if hasHints {
 		plan.Reason = REASON_HAS_HINTS
-		return plan
+		return plan, nil
 	}
 
 	plan.IndexUsed = getIndexMatch(conditions, tableInfo.Indexes)
 	if plan.IndexUsed == "" {
 		plan.Reason = REASON_NOINDEX_MATCH
-		return plan
+		return plan, nil
 	}
 	if plan.IndexUsed == "PRIMARY" {
 		plan.Reason = REASON_PKINDEX
-		return plan
+		return plan, nil
 	}
 	// TODO: We can further optimize. Change this to pass-through if select list matches all columns in index.
 	plan.PlanId = PLAN_SELECT_SUBQUERY
 	plan.OuterQuery = GenerateInOuterQuery(sel, tableInfo)
 	plan.Subquery = GenerateSelectSubquery(sel, tableInfo, plan.IndexUsed)
-	return plan
+	return plan, nil
 }
 
-func execAnalyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan) {
+func execAnalyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan, err error) {
 	plan = &ExecPlan{
 		PlanId:    PLAN_PASS_DML,
 		FullQuery: GenerateFullQuery(ins),
@@ -432,14 +424,17 @@ func execAnalyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecP
 	tableName := sqlparser.GetTableName(ins.Table)
 	if tableName == "" {
 		plan.Reason = REASON_TABLE
-		return plan
+		return plan, nil
 	}
-	tableInfo := plan.setTableInfo(tableName, getTable)
+	tableInfo, err := plan.setTableInfo(tableName, getTable)
+	if err != nil {
+		return nil, err
+	}
 
 	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name != "PRIMARY" {
 		log.Warningf("no primary key for table %s", tableName)
 		plan.Reason = REASON_TABLE_NOINDEX
-		return plan
+		return plan, nil
 	}
 
 	pkColumnNumbers := getInsertPKColumns(ins.Columns, tableInfo)
@@ -448,7 +443,7 @@ func execAnalyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecP
 		// Upserts are not safe for statement based replication:
 		// http://bugs.mysql.com/bug.php?id=58637
 		plan.Reason = REASON_UPSERT
-		return plan
+		return plan, nil
 	}
 
 	if sel, ok := ins.Rows.(sqlparser.SelectStatement); ok {
@@ -456,27 +451,37 @@ func execAnalyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecP
 		plan.OuterQuery = GenerateInsertOuterQuery(ins)
 		plan.Subquery = GenerateSelectLimitQuery(sel)
 		if len(ins.Columns) != 0 {
-			plan.ColumnNumbers = execAnalyzeSelectExprs(sqlparser.SelectExprs(ins.Columns), tableInfo)
+			plan.ColumnNumbers, err = execAnalyzeSelectExprs(sqlparser.SelectExprs(ins.Columns), tableInfo)
+			if err != nil {
+				return nil, err
+			}
 		} else {
 			// StarExpr node will expand into all columns
 			n := sqlparser.SelectExprs{&sqlparser.StarExpr{}}
-			plan.ColumnNumbers = execAnalyzeSelectExprs(n, tableInfo)
+			plan.ColumnNumbers, err = execAnalyzeSelectExprs(n, tableInfo)
+			if err != nil {
+				return nil, err
+			}
 		}
 		plan.SubqueryPKColumns = pkColumnNumbers
-		return plan
+		return plan, nil
 	}
 
 	// If it's not a sqlparser.SelectStatement, it's Values.
 	rowList := ins.Rows.(sqlparser.Values)
-	if pkValues := getInsertPKValues(pkColumnNumbers, rowList, tableInfo); pkValues != nil {
+	pkValues, err := getInsertPKValues(pkColumnNumbers, rowList, tableInfo)
+	if err != nil {
+		return nil, err
+	}
+	if pkValues != nil {
 		plan.PlanId = PLAN_INSERT_PK
 		plan.OuterQuery = plan.FullQuery
 		plan.PKValues = pkValues
 	}
-	return plan
+	return plan, nil
 }
 
-func execAnalyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecPlan) {
+func execAnalyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecPlan, err error) {
 	// Default plan
 	plan = &ExecPlan{
 		PlanId:    PLAN_PASS_DML,
@@ -486,20 +491,26 @@ func execAnalyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecP
 	tableName := sqlparser.GetTableName(upd.Table)
 	if tableName == "" {
 		plan.Reason = REASON_TABLE
-		return plan
+		return plan, nil
 	}
-	tableInfo := plan.setTableInfo(tableName, getTable)
+	tableInfo, err := plan.setTableInfo(tableName, getTable)
+	if err != nil {
+		return nil, err
+	}
 
 	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name != "PRIMARY" {
 		log.Warningf("no primary key for table %s", tableName)
 		plan.Reason = REASON_TABLE_NOINDEX
-		return plan
+		return plan, nil
 	}
 
-	var ok bool
-	if plan.SecondaryPKValues, ok = execAnalyzeUpdateExpressions(upd.Exprs, tableInfo.Indexes[0]); !ok {
-		plan.Reason = REASON_PK_CHANGE
-		return plan
+	plan.SecondaryPKValues, err = execAnalyzeUpdateExpressions(upd.Exprs, tableInfo.Indexes[0])
+	if err != nil {
+		if err == TooComplex {
+			plan.Reason = REASON_PK_CHANGE
+			return plan, nil
+		}
+		return nil, err
 	}
 
 	plan.PlanId = PLAN_DML_SUBQUERY
@@ -509,20 +520,24 @@ func execAnalyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecP
 	conditions := execAnalyzeWhere(upd.Where)
 	if conditions == nil {
 		plan.Reason = REASON_WHERE
-		return plan
+		return plan, nil
 	}
 
-	if pkValues := getPKValues(conditions, tableInfo.Indexes[0]); pkValues != nil {
+	pkValues, err := getPKValues(conditions, tableInfo.Indexes[0])
+	if err != nil {
+		return nil, err
+	}
+	if pkValues != nil {
 		plan.PlanId = PLAN_DML_PK
 		plan.OuterQuery = plan.FullQuery
 		plan.PKValues = pkValues
-		return plan
+		return plan, nil
 	}
 
-	return plan
+	return plan, nil
 }
 
-func execAnalyzeDelete(del *sqlparser.Delete, getTable TableGetter) (plan *ExecPlan) {
+func execAnalyzeDelete(del *sqlparser.Delete, getTable TableGetter) (plan *ExecPlan, err error) {
 	// Default plan
 	plan = &ExecPlan{
 		PlanId:    PLAN_PASS_DML,
@@ -532,14 +547,17 @@ func execAnalyzeDelete(del *sqlparser.Delete, getTable TableGetter) (plan *ExecP
 	tableName := sqlparser.GetTableName(del.Table)
 	if tableName == "" {
 		plan.Reason = REASON_TABLE
-		return plan
+		return plan, nil
 	}
-	tableInfo := plan.setTableInfo(tableName, getTable)
+	tableInfo, err := plan.setTableInfo(tableName, getTable)
+	if err != nil {
+		return nil, err
+	}
 
 	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name != "PRIMARY" {
 		log.Warningf("no primary key for table %s", tableName)
 		plan.Reason = REASON_TABLE_NOINDEX
-		return plan
+		return plan, nil
 	}
 
 	plan.PlanId = PLAN_DML_SUBQUERY
@@ -549,17 +567,21 @@ func execAnalyzeDelete(del *sqlparser.Delete, getTable TableGetter) (plan *ExecP
 	conditions := execAnalyzeWhere(del.Where)
 	if conditions == nil {
 		plan.Reason = REASON_WHERE
-		return plan
+		return plan, nil
 	}
 
-	if pkValues := getPKValues(conditions, tableInfo.Indexes[0]); pkValues != nil {
+	pkValues, err := getPKValues(conditions, tableInfo.Indexes[0])
+	if err != nil {
+		return nil, err
+	}
+	if pkValues != nil {
 		plan.PlanId = PLAN_DML_PK
 		plan.OuterQuery = plan.FullQuery
 		plan.PKValues = pkValues
-		return plan
+		return plan, nil
 	}
 
-	return plan
+	return plan, nil
 }
 
 func execAnalyzeSet(set *sqlparser.Set) (plan *ExecPlan) {
@@ -598,19 +620,19 @@ func execAnalyzeDDL(ddl *sqlparser.DDL, getTable TableGetter) *ExecPlan {
 	return plan
 }
 
-func (node *ExecPlan) setTableInfo(tableName string, getTable TableGetter) *schema.Table {
+func (node *ExecPlan) setTableInfo(tableName string, getTable TableGetter) (*schema.Table, error) {
 	tableInfo, ok := getTable(tableName)
 	if !ok {
-		panic(NewParserError("table %s not found in schema", tableName))
+		return nil, fmt.Errorf("table %s not found in schema", tableName)
 	}
 	node.TableName = tableInfo.Name
-	return tableInfo
+	return tableInfo, nil
 }
 
 //-----------------------------------------------
 // Select Expressions
 
-func execAnalyzeSelectExprs(exprs sqlparser.SelectExprs, table *schema.Table) (selects []int) {
+func execAnalyzeSelectExprs(exprs sqlparser.SelectExprs, table *schema.Table) (selects []int, err error) {
 	selects = make([]int, 0, len(exprs))
 	for _, expr := range exprs {
 		switch expr := expr.(type) {
@@ -623,18 +645,18 @@ func execAnalyzeSelectExprs(exprs sqlparser.SelectExprs, table *schema.Table) (s
 			name := sqlparser.GetColName(expr.Expr)
 			if name == "" {
 				// Not a simple column name.
-				return nil
+				return nil, nil
 			}
 			colIndex := table.FindColumn(name)
 			if colIndex == -1 {
-				panic(NewParserError("column %s not found in table %s", name, table.Name))
+				return nil, fmt.Errorf("column %s not found in table %s", name, table.Name)
 			}
 			selects = append(selects, colIndex)
 		default:
 			panic("unreachable")
 		}
 	}
-	return selects
+	return selects, nil
 }
 
 //-----------------------------------------------
@@ -708,7 +730,7 @@ func execAnalyzeBoolean(node sqlparser.BoolExpr) (conditions []sqlparser.BoolExp
 //-----------------------------------------------
 // Update expressions
 
-func execAnalyzeUpdateExpressions(exprs sqlparser.UpdateExprs, pkIndex *schema.Index) (pkValues []interface{}, ok bool) {
+func execAnalyzeUpdateExpressions(exprs sqlparser.UpdateExprs, pkIndex *schema.Index) (pkValues []interface{}, err error) {
 	for _, expr := range exprs {
 		index := pkIndex.FindColumn(sqlparser.GetColName(expr.Name))
 		if index == -1 {
@@ -716,7 +738,7 @@ func execAnalyzeUpdateExpressions(exprs sqlparser.UpdateExprs, pkIndex *schema.I
 		}
 		if !sqlparser.IsValue(expr.Expr) {
 			log.Warningf("expression is too complex %v", expr)
-			return nil, false
+			return nil, TooComplex
 		}
 		if pkValues == nil {
 			pkValues = make([]interface{}, len(pkIndex.Columns))
@@ -724,10 +746,10 @@ func execAnalyzeUpdateExpressions(exprs sqlparser.UpdateExprs, pkIndex *schema.I
 		var err error
 		pkValues[index], err = sqlparser.AsInterface(expr.Expr)
 		if err != nil {
-			panic(NewParserError("%v", err))
+			return nil, err
 		}
 	}
-	return pkValues, true
+	return pkValues, nil
 }
 
 //-----------------------------------------------
@@ -752,7 +774,7 @@ func getInsertPKColumns(columns sqlparser.Columns, tableInfo *schema.Table) (pkC
 	return pkColumnNumbers
 }
 
-func getInsertPKValues(pkColumnNumbers []int, rowList sqlparser.Values, tableInfo *schema.Table) (pkValues []interface{}) {
+func getInsertPKValues(pkColumnNumbers []int, rowList sqlparser.Values, tableInfo *schema.Table) (pkValues []interface{}, err error) {
 	pkValues = make([]interface{}, len(pkColumnNumbers))
 	for index, columnNumber := range pkColumnNumbers {
 		if columnNumber == -1 {
@@ -762,21 +784,21 @@ func getInsertPKValues(pkColumnNumbers []int, rowList sqlparser.Values, tableInf
 		values := make([]interface{}, len(rowList))
 		for j := 0; j < len(rowList); j++ {
 			if _, ok := rowList[j].(*sqlparser.Subquery); ok {
-				panic(NewParserError("row subquery not supported for inserts"))
+				return nil, errors.New("row subquery not supported for inserts")
 			}
 			row := rowList[j].(sqlparser.ValTuple)
 			if columnNumber >= len(row) {
-				panic(NewParserError("column count doesn't match value count"))
+				return nil, errors.New("column count doesn't match value count")
 			}
 			node := row[columnNumber]
 			if !sqlparser.IsValue(node) {
 				log.Warningf("insert is too complex %v", node)
-				return nil
+				return nil, nil
 			}
 			var err error
 			values[j], err = sqlparser.AsInterface(node)
 			if err != nil {
-				panic(NewParserError("%v", err))
+				return nil, err
 			}
 		}
 		if len(values) == 1 {
@@ -785,7 +807,7 @@ func getInsertPKValues(pkColumnNumbers []int, rowList sqlparser.Values, tableInf
 			pkValues[index] = values
 		}
 	}
-	return pkValues
+	return pkValues, nil
 }
 
 //-----------------------------------------------
@@ -847,10 +869,13 @@ func NewIndexScoreList(indexes []*schema.Index) []*IndexScore {
 	return scoreList
 }
 
-func getSelectPKValues(conditions []sqlparser.BoolExpr, pkIndex *schema.Index) (planId PlanType, pkValues []interface{}) {
-	pkValues = getPKValues(conditions, pkIndex)
+func getSelectPKValues(conditions []sqlparser.BoolExpr, pkIndex *schema.Index) (planId PlanType, pkValues []interface{}, err error) {
+	pkValues, err = getPKValues(conditions, pkIndex)
+	if err != nil {
+		return 0, nil, err
+	}
 	if pkValues == nil {
-		return PLAN_PASS_SELECT, nil
+		return PLAN_PASS_SELECT, nil, nil
 	}
 	for _, pkValue := range pkValues {
 		inList, ok := pkValue.([]interface{})
@@ -858,43 +883,43 @@ func getSelectPKValues(conditions []sqlparser.BoolExpr, pkIndex *schema.Index) (
 			continue
 		}
 		if len(pkValues) == 1 {
-			return PLAN_PK_IN, inList
+			return PLAN_PK_IN, inList, nil
 		}
-		return PLAN_PASS_SELECT, nil
+		return PLAN_PASS_SELECT, nil, nil
 	}
-	return PLAN_PK_EQUAL, pkValues
+	return PLAN_PK_EQUAL, pkValues, nil
 }
 
-func getPKValues(conditions []sqlparser.BoolExpr, pkIndex *schema.Index) (pkValues []interface{}) {
+func getPKValues(conditions []sqlparser.BoolExpr, pkIndex *schema.Index) (pkValues []interface{}, err error) {
 	pkIndexScore := NewIndexScore(pkIndex)
 	pkValues = make([]interface{}, len(pkIndexScore.ColumnMatch))
 	for _, condition := range conditions {
 		condition, ok := condition.(*sqlparser.ComparisonExpr)
 		if !ok {
-			return nil
+			return nil, nil
 		}
 		if !sqlparser.StringIn(condition.Operator, sqlparser.AST_EQ, sqlparser.AST_IN) {
-			return nil
+			return nil, nil
 		}
 		index := pkIndexScore.FindMatch(string(condition.Left.(*sqlparser.ColName).Name))
 		if index == -1 {
-			return nil
+			return nil, nil
 		}
 		switch condition.Operator {
 		case sqlparser.AST_EQ, sqlparser.AST_IN:
 			var err error
 			pkValues[index], err = sqlparser.AsInterface(condition.Right)
 			if err != nil {
-				panic(NewParserError("%v", err))
+				return nil, err
 			}
 		default:
 			panic("unreachable")
 		}
 	}
 	if pkIndexScore.GetScore() == PERFECT_SCORE {
-		return pkValues
+		return pkValues, nil
 	}
-	return nil
+	return nil, nil
 }
 
 func getIndexMatch(conditions []sqlparser.BoolExpr, indexes []*schema.Index) string {
