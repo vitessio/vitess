@@ -5,6 +5,7 @@
 package sqlparser
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/youtube/vitess/go/vt/key"
@@ -22,64 +23,86 @@ type RoutingPlan struct {
 }
 
 func GetShardList(sql string, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) (shardlist []int, err error) {
-	defer handleError(&err)
-
-	plan := buildPlan(sql)
-	return shardListFromPlan(plan, bindVariables, tabletKeys), nil
+	plan, err := buildPlan(sql)
+	if err != nil {
+		return nil, err
+	}
+	return shardListFromPlan(plan, bindVariables, tabletKeys)
 }
 
-func buildPlan(sql string) (plan *RoutingPlan) {
+func buildPlan(sql string) (plan *RoutingPlan, err error) {
 	statement, err := Parse(sql)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	return getRoutingPlan(statement)
 }
 
-func shardListFromPlan(plan *RoutingPlan, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) (shardList []int) {
+func shardListFromPlan(plan *RoutingPlan, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) (shardList []int, err error) {
 	if plan.criteria == nil {
-		return makeList(0, len(tabletKeys))
+		return makeList(0, len(tabletKeys)), nil
 	}
 
 	switch criteria := plan.criteria.(type) {
 	case Values:
-		index := findInsertShard(criteria, bindVariables, tabletKeys)
-		return []int{index}
+		index, err := findInsertShard(criteria, bindVariables, tabletKeys)
+		if err != nil {
+			return nil, err
+		}
+		return []int{index}, nil
 	case *ComparisonExpr:
 		switch criteria.Operator {
 		case "=", "<=>":
-			index := findShard(criteria.Right, bindVariables, tabletKeys)
-			return []int{index}
+			index, err := findShard(criteria.Right, bindVariables, tabletKeys)
+			if err != nil {
+				return nil, err
+			}
+			return []int{index}, nil
 		case "<", "<=":
-			index := findShard(criteria.Right, bindVariables, tabletKeys)
-			return makeList(0, index+1)
+			index, err := findShard(criteria.Right, bindVariables, tabletKeys)
+			if err != nil {
+				return nil, err
+			}
+			return makeList(0, index+1), nil
 		case ">", ">=":
-			index := findShard(criteria.Right, bindVariables, tabletKeys)
-			return makeList(index, len(tabletKeys))
+			index, err := findShard(criteria.Right, bindVariables, tabletKeys)
+			if err != nil {
+				return nil, err
+			}
+			return makeList(index, len(tabletKeys)), nil
 		case "in":
 			return findShardList(criteria.Right, bindVariables, tabletKeys)
 		}
 	case *RangeCond:
 		if criteria.Operator == "between" {
-			start := findShard(criteria.From, bindVariables, tabletKeys)
-			last := findShard(criteria.To, bindVariables, tabletKeys)
+			start, err := findShard(criteria.From, bindVariables, tabletKeys)
+			if err != nil {
+				return nil, err
+			}
+			last, err := findShard(criteria.To, bindVariables, tabletKeys)
+			if err != nil {
+				return nil, err
+			}
 			if last < start {
 				start, last = last, start
 			}
-			return makeList(start, last+1)
+			return makeList(start, last+1), nil
 		}
 	}
-	return makeList(0, len(tabletKeys))
+	return makeList(0, len(tabletKeys)), nil
 }
 
-func getRoutingPlan(statement Statement) (plan *RoutingPlan) {
+func getRoutingPlan(statement Statement) (plan *RoutingPlan, err error) {
 	plan = &RoutingPlan{}
 	if ins, ok := statement.(*Insert); ok {
 		if sel, ok := ins.Rows.(SelectStatement); ok {
 			return getRoutingPlan(sel)
 		}
-		plan.criteria = routingAnalyzeValues(ins.Rows.(Values))
-		return plan
+		plan.criteria, err = routingAnalyzeValues(ins.Rows.(Values))
+		if err != nil {
+			return nil, err
+		}
+		return plan, nil
 	}
 	var where *Where
 	switch stmt := statement.(type) {
@@ -93,23 +116,23 @@ func getRoutingPlan(statement Statement) (plan *RoutingPlan) {
 	if where != nil {
 		plan.criteria = routingAnalyzeBoolean(where.Expr)
 	}
-	return plan
+	return plan, nil
 }
 
-func routingAnalyzeValues(vals Values) Values {
+func routingAnalyzeValues(vals Values) (Values, error) {
 	// Analyze first value of every item in the list
 	for i := 0; i < len(vals); i++ {
 		switch tuple := vals[i].(type) {
 		case ValTuple:
 			result := routingAnalyzeValue(tuple[0])
 			if result != VALUE_NODE {
-				panic(NewParserError("insert is too complex"))
+				return nil, fmt.Errorf("insert is too complex")
 			}
 		default:
-			panic(NewParserError("insert is too complex"))
+			return nil, fmt.Errorf("insert is too complex")
 		}
 	}
-	return vals
+	return vals, nil
 }
 
 func routingAnalyzeBoolean(node BoolExpr) BoolExpr {
@@ -174,12 +197,15 @@ func routingAnalyzeValue(valExpr ValExpr) int {
 	return OTHER_NODE
 }
 
-func findShardList(valExpr ValExpr, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) []int {
+func findShardList(valExpr ValExpr, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) ([]int, error) {
 	shardset := make(map[int]bool)
 	switch node := valExpr.(type) {
 	case ValTuple:
 		for _, n := range node {
-			index := findShard(n, bindVariables, tabletKeys)
+			index, err := findShard(n, bindVariables, tabletKeys)
+			if err != nil {
+				return nil, err
+			}
 			shardset[index] = true
 		}
 	}
@@ -189,60 +215,69 @@ func findShardList(valExpr ValExpr, bindVariables map[string]interface{}, tablet
 		shardlist[index] = k
 		index++
 	}
-	return shardlist
+	return shardlist, nil
 }
 
-func findInsertShard(vals Values, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) int {
+func findInsertShard(vals Values, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) (int, error) {
 	index := -1
 	for i := 0; i < len(vals); i++ {
 		first_value_expression := vals[i].(ValTuple)[0]
-		newIndex := findShard(first_value_expression, bindVariables, tabletKeys)
+		newIndex, err := findShard(first_value_expression, bindVariables, tabletKeys)
+		if err != nil {
+			return -1, err
+		}
 		if index == -1 {
 			index = newIndex
 		} else if index != newIndex {
-			panic(NewParserError("insert has multiple shard targets"))
+			return -1, fmt.Errorf("insert has multiple shard targets")
 		}
 	}
-	return index
+	return index, nil
 }
 
-func findShard(valExpr ValExpr, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) int {
-	value := getBoundValue(valExpr, bindVariables)
-	return key.FindShardForValue(value, tabletKeys)
+func findShard(valExpr ValExpr, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) (int, error) {
+	value, err := getBoundValue(valExpr, bindVariables)
+	if err != nil {
+		return -1, err
+	}
+	return key.FindShardForValue(value, tabletKeys), nil
 }
 
-func getBoundValue(valExpr ValExpr, bindVariables map[string]interface{}) string {
+func getBoundValue(valExpr ValExpr, bindVariables map[string]interface{}) (string, error) {
 	switch node := valExpr.(type) {
 	case ValTuple:
 		if len(node) != 1 {
-			panic(NewParserError("tuples not allowed as insert values"))
+			return "", fmt.Errorf("tuples not allowed as insert values")
 		}
 		// TODO: Change parser to create single value tuples into non-tuples.
 		return getBoundValue(node[0], bindVariables)
 	case StrVal:
-		return string(node)
+		return string(node), nil
 	case NumVal:
 		val, err := strconv.ParseInt(string(node), 10, 64)
 		if err != nil {
-			panic(NewParserError("%s", err.Error()))
+			return "", err
 		}
-		return key.Uint64Key(val).String()
+		return key.Uint64Key(val).String(), nil
 	case ValArg:
-		value := findBindValue(node, bindVariables)
-		return key.EncodeValue(value)
+		value, err := findBindValue(node, bindVariables)
+		if err != nil {
+			return "", err
+		}
+		return key.EncodeValue(value), nil
 	}
 	panic("Unexpected token")
 }
 
-func findBindValue(valArg ValArg, bindVariables map[string]interface{}) interface{} {
+func findBindValue(valArg ValArg, bindVariables map[string]interface{}) (interface{}, error) {
 	if bindVariables == nil {
-		panic(NewParserError("No bind variable for " + string(valArg)))
+		return nil, fmt.Errorf("No bind variable for " + string(valArg))
 	}
 	value, ok := bindVariables[string(valArg[1:])]
 	if !ok {
-		panic(NewParserError("No bind variable for " + string(valArg)))
+		return nil, fmt.Errorf("No bind variable for " + string(valArg))
 	}
-	return value
+	return value, nil
 }
 
 func makeList(start, end int) []int {

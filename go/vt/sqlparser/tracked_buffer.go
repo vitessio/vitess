@@ -9,26 +9,6 @@ import (
 	"fmt"
 )
 
-// ParserError: To be deprecated.
-// TODO(sougou): deprecate.
-type ParserError struct {
-	Message string
-}
-
-func NewParserError(format string, args ...interface{}) ParserError {
-	return ParserError{fmt.Sprintf(format, args...)}
-}
-
-func (err ParserError) Error() string {
-	return err.Message
-}
-
-func handleError(err *error) {
-	if x := recover(); x != nil {
-		*err = x.(ParserError)
-	}
-}
-
 // TrackedBuffer is used to rebuild a query from the ast.
 // bindLocations keeps track of locations in the buffer that
 // use bind variables for efficient future substitutions.
