@@ -77,7 +77,7 @@ func GetExecPlan(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
 	if err != nil {
 		return nil, err
 	}
-	plan, err = analizeSQL(statement, getTable)
+	plan, err = analyzeSQL(statement, getTable)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +117,7 @@ func GetStreamExecPlan(sql string, getTable TableGetter) (plan *ExecPlan, err er
 	return plan, nil
 }
 
-func analizeSQL(statement sqlparser.Statement, getTable TableGetter) (plan *ExecPlan, err error) {
+func analyzeSQL(statement sqlparser.Statement, getTable TableGetter) (plan *ExecPlan, err error) {
 	switch stmt := statement.(type) {
 	case *sqlparser.Union:
 		return &ExecPlan{
