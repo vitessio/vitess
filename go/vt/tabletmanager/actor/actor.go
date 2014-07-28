@@ -342,6 +342,7 @@ func updateReplicationGraphForPromotedSlave(ts topo.Server, tablet *topo.TabletI
 	tablet.Type = topo.TYPE_MASTER
 	tablet.Parent.Cell = ""
 	tablet.Parent.Uid = topo.NO_TABLET
+	tablet.Health = nil
 	err := topo.UpdateTablet(ts, tablet)
 	if err != nil {
 		return err
