@@ -96,6 +96,35 @@ func TestDecodeGTID(t *testing.T) {
 	}
 }
 
+func TestMustDecodeGTID(t *testing.T) {
+	gtidParsers["flavorflav"] = func(s string) (GTID, error) {
+		return fakeGTID{value: s}, nil
+	}
+	input := "flavorflav/123-456:789"
+	want := fakeGTID{value: "123-456:789"}
+
+	got := MustDecodeGTID(input)
+	if got != want {
+		t.Errorf("DecodeGTID(%#v) = %#v, want %#v", input, got, want)
+	}
+}
+
+func TestMustDecodeGTIDError(t *testing.T) {
+	defer func() {
+		want := "ParseGTID: unknown flavor"
+		err := recover()
+		if err == nil {
+			t.Errorf("wrong error, got %#v, want %#v", err, want)
+		}
+		got, ok := err.(error)
+		if !ok || !strings.HasPrefix(got.Error(), want) {
+			t.Errorf("wrong error, got %#v, want %#v", got, want)
+		}
+	}()
+
+	MustDecodeGTID("unknown flavor !@$!@/yowzah")
+}
+
 func TestEncodeNilGTID(t *testing.T) {
 	input := GTID(nil)
 	want := ""

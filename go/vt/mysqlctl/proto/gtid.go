@@ -89,6 +89,15 @@ func DecodeGTID(s string) (GTID, error) {
 	return ParseGTID(parts[0], parts[1])
 }
 
+// MustDecodeGTID calls DecodeGTID and panics on error.
+func MustDecodeGTID(s string) GTID {
+	gtid, err := DecodeGTID(s)
+	if err != nil {
+		panic(err)
+	}
+	return gtid
+}
+
 // GTIDField is a concrete struct that contains a GTID interface value. This can
 // be used as a field inside marshalable structs, which cannot contain interface
 // values because there would be no way to know which concrete type to
