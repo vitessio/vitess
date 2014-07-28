@@ -2,13 +2,14 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package sqlparser
+package vtgate
 
 import (
 	"fmt"
 	"strconv"
 
 	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
 const (
@@ -19,7 +20,7 @@ const (
 )
 
 type RoutingPlan struct {
-	criteria SQLNode
+	criteria sqlparser.SQLNode
 }
 
 func GetShardList(sql string, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) (shardlist []int, err error) {
@@ -31,7 +32,7 @@ func GetShardList(sql string, bindVariables map[string]interface{}, tabletKeys [
 }
 
 func buildPlan(sql string) (plan *RoutingPlan, err error) {
-	statement, err := Parse(sql)
+	statement, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
 	}
@@ -44,13 +45,13 @@ func shardListFromPlan(plan *RoutingPlan, bindVariables map[string]interface{}, 
 	}
 
 	switch criteria := plan.criteria.(type) {
-	case Values:
+	case sqlparser.Values:
 		index, err := findInsertShard(criteria, bindVariables, tabletKeys)
 		if err != nil {
 			return nil, err
 		}
 		return []int{index}, nil
-	case *ComparisonExpr:
+	case *sqlparser.ComparisonExpr:
 		switch criteria.Operator {
 		case "=", "<=>":
 			index, err := findShard(criteria.Right, bindVariables, tabletKeys)
@@ -73,7 +74,7 @@ func shardListFromPlan(plan *RoutingPlan, bindVariables map[string]interface{}, 
 		case "in":
 			return findShardList(criteria.Right, bindVariables, tabletKeys)
 		}
-	case *RangeCond:
+	case *sqlparser.RangeCond:
 		if criteria.Operator == "between" {
 			start, err := findShard(criteria.From, bindVariables, tabletKeys)
 			if err != nil {
@@ -92,25 +93,25 @@ func shardListFromPlan(plan *RoutingPlan, bindVariables map[string]interface{}, 
 	return makeList(0, len(tabletKeys)), nil
 }
 
-func getRoutingPlan(statement Statement) (plan *RoutingPlan, err error) {
+func getRoutingPlan(statement sqlparser.Statement) (plan *RoutingPlan, err error) {
 	plan = &RoutingPlan{}
-	if ins, ok := statement.(*Insert); ok {
-		if sel, ok := ins.Rows.(SelectStatement); ok {
+	if ins, ok := statement.(*sqlparser.Insert); ok {
+		if sel, ok := ins.Rows.(sqlparser.SelectStatement); ok {
 			return getRoutingPlan(sel)
 		}
-		plan.criteria, err = routingAnalyzeValues(ins.Rows.(Values))
+		plan.criteria, err = routingAnalyzeValues(ins.Rows.(sqlparser.Values))
 		if err != nil {
 			return nil, err
 		}
 		return plan, nil
 	}
-	var where *Where
+	var where *sqlparser.Where
 	switch stmt := statement.(type) {
-	case *Select:
+	case *sqlparser.Select:
 		where = stmt.Where
-	case *Update:
+	case *sqlparser.Update:
 		where = stmt.Where
-	case *Delete:
+	case *sqlparser.Delete:
 		where = stmt.Where
 	}
 	if where != nil {
@@ -119,11 +120,11 @@ func getRoutingPlan(statement Statement) (plan *RoutingPlan, err error) {
 	return plan, nil
 }
 
-func routingAnalyzeValues(vals Values) (Values, error) {
+func routingAnalyzeValues(vals sqlparser.Values) (sqlparser.Values, error) {
 	// Analyze first value of every item in the list
 	for i := 0; i < len(vals); i++ {
 		switch tuple := vals[i].(type) {
-		case ValTuple:
+		case sqlparser.ValTuple:
 			result := routingAnalyzeValue(tuple[0])
 			if result != VALUE_NODE {
 				return nil, fmt.Errorf("insert is too complex")
@@ -135,9 +136,9 @@ func routingAnalyzeValues(vals Values) (Values, error) {
 	return vals, nil
 }
 
-func routingAnalyzeBoolean(node BoolExpr) BoolExpr {
+func routingAnalyzeBoolean(node sqlparser.BoolExpr) sqlparser.BoolExpr {
 	switch node := node.(type) {
-	case *AndExpr:
+	case *sqlparser.AndExpr:
 		left := routingAnalyzeBoolean(node.Left)
 		right := routingAnalyzeBoolean(node.Right)
 		if left != nil && right != nil {
@@ -147,11 +148,11 @@ func routingAnalyzeBoolean(node BoolExpr) BoolExpr {
 		} else {
 			return right
 		}
-	case *ParenBoolExpr:
+	case *sqlparser.ParenBoolExpr:
 		return routingAnalyzeBoolean(node.Expr)
-	case *ComparisonExpr:
+	case *sqlparser.ComparisonExpr:
 		switch {
-		case StringIn(node.Operator, "=", "<", ">", "<=", ">=", "<=>"):
+		case sqlparser.StringIn(node.Operator, "=", "<", ">", "<=", ">=", "<=>"):
 			left := routingAnalyzeValue(node.Left)
 			right := routingAnalyzeValue(node.Right)
 			if (left == EID_NODE && right == VALUE_NODE) || (left == VALUE_NODE && right == EID_NODE) {
@@ -164,7 +165,7 @@ func routingAnalyzeBoolean(node BoolExpr) BoolExpr {
 				return node
 			}
 		}
-	case *RangeCond:
+	case *sqlparser.RangeCond:
 		if node.Operator != "between" {
 			return nil
 		}
@@ -178,29 +179,29 @@ func routingAnalyzeBoolean(node BoolExpr) BoolExpr {
 	return nil
 }
 
-func routingAnalyzeValue(valExpr ValExpr) int {
+func routingAnalyzeValue(valExpr sqlparser.ValExpr) int {
 	switch node := valExpr.(type) {
-	case *ColName:
+	case *sqlparser.ColName:
 		if string(node.Name) == "entity_id" {
 			return EID_NODE
 		}
-	case ValTuple:
+	case sqlparser.ValTuple:
 		for _, n := range node {
 			if routingAnalyzeValue(n) != VALUE_NODE {
 				return OTHER_NODE
 			}
 		}
 		return LIST_NODE
-	case StrVal, NumVal, ValArg:
+	case sqlparser.StrVal, sqlparser.NumVal, sqlparser.ValArg:
 		return VALUE_NODE
 	}
 	return OTHER_NODE
 }
 
-func findShardList(valExpr ValExpr, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) ([]int, error) {
+func findShardList(valExpr sqlparser.ValExpr, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) ([]int, error) {
 	shardset := make(map[int]bool)
 	switch node := valExpr.(type) {
-	case ValTuple:
+	case sqlparser.ValTuple:
 		for _, n := range node {
 			index, err := findShard(n, bindVariables, tabletKeys)
 			if err != nil {
@@ -218,10 +219,10 @@ func findShardList(valExpr ValExpr, bindVariables map[string]interface{}, tablet
 	return shardlist, nil
 }
 
-func findInsertShard(vals Values, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) (int, error) {
+func findInsertShard(vals sqlparser.Values, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) (int, error) {
 	index := -1
 	for i := 0; i < len(vals); i++ {
-		first_value_expression := vals[i].(ValTuple)[0]
+		first_value_expression := vals[i].(sqlparser.ValTuple)[0]
 		newIndex, err := findShard(first_value_expression, bindVariables, tabletKeys)
 		if err != nil {
 			return -1, err
@@ -235,7 +236,7 @@ func findInsertShard(vals Values, bindVariables map[string]interface{}, tabletKe
 	return index, nil
 }
 
-func findShard(valExpr ValExpr, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) (int, error) {
+func findShard(valExpr sqlparser.ValExpr, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) (int, error) {
 	value, err := getBoundValue(valExpr, bindVariables)
 	if err != nil {
 		return -1, err
@@ -243,23 +244,23 @@ func findShard(valExpr ValExpr, bindVariables map[string]interface{}, tabletKeys
 	return key.FindShardForValue(value, tabletKeys), nil
 }
 
-func getBoundValue(valExpr ValExpr, bindVariables map[string]interface{}) (string, error) {
+func getBoundValue(valExpr sqlparser.ValExpr, bindVariables map[string]interface{}) (string, error) {
 	switch node := valExpr.(type) {
-	case ValTuple:
+	case sqlparser.ValTuple:
 		if len(node) != 1 {
 			return "", fmt.Errorf("tuples not allowed as insert values")
 		}
 		// TODO: Change parser to create single value tuples into non-tuples.
 		return getBoundValue(node[0], bindVariables)
-	case StrVal:
+	case sqlparser.StrVal:
 		return string(node), nil
-	case NumVal:
+	case sqlparser.NumVal:
 		val, err := strconv.ParseInt(string(node), 10, 64)
 		if err != nil {
 			return "", err
 		}
 		return key.Uint64Key(val).String(), nil
-	case ValArg:
+	case sqlparser.ValArg:
 		value, err := findBindValue(node, bindVariables)
 		if err != nil {
 			return "", err
@@ -269,7 +270,7 @@ func getBoundValue(valExpr ValExpr, bindVariables map[string]interface{}) (strin
 	panic("Unexpected token")
 }
 
-func findBindValue(valArg ValArg, bindVariables map[string]interface{}) (interface{}, error) {
+func findBindValue(valArg sqlparser.ValArg, bindVariables map[string]interface{}) (interface{}, error) {
 	if bindVariables == nil {
 		return nil, fmt.Errorf("No bind variable for " + string(valArg))
 	}
