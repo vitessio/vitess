@@ -303,15 +303,15 @@ func (mysqld *Mysqld) WaitForMinimumReplicationPosition(targetGTID proto.GTID, w
 			return err
 		}
 
-		cmp, err := pos.MasterLogGTID.TryCompare(targetGTID)
+		cmp, err := pos.MasterLogGTIDField.Value.TryCompare(targetGTID)
 		if err != nil {
 			return err
 		}
-		if cmp >= 0 { // pos.MasterLogGTID >= targetGTID
+		if cmp >= 0 { // pos.MasterLogGTIDField.Value >= targetGTID
 			return nil
 		}
 
-		log.Infof("WaitForMinimumReplicationPosition got GTID %v, sleeping for 1s waiting for GTID %v", pos.MasterLogGTID, targetGTID)
+		log.Infof("WaitForMinimumReplicationPosition got GTID %v, sleeping for 1s waiting for GTID %v", pos.MasterLogGTIDField, targetGTID)
 		time.Sleep(time.Second)
 	}
 	return fmt.Errorf("timed out waiting for GTID %v", targetGTID)
@@ -330,7 +330,7 @@ func (mysqld *Mysqld) SlaveStatus() (*proto.ReplicationPosition, error) {
 	pos.MasterLogPosition = uint(temp)
 	temp, _ = strconv.ParseUint(fields["Read_Master_Log_Pos"], 10, 0)
 	pos.MasterLogPositionIo = uint(temp)
-	pos.MasterLogGTID.GTID, _ = mysqld.flavor.ParseGTID(fields["Exec_Master_Group_ID"])
+	pos.MasterLogGTIDField.Value, _ = mysqld.flavor.ParseGTID(fields["Exec_Master_Group_ID"])
 
 	if fields["Slave_IO_Running"] == "Yes" && fields["Slave_SQL_Running"] == "Yes" {
 		temp, _ = strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
@@ -368,7 +368,7 @@ func (mysqld *Mysqld) BinlogInfo(gtid proto.GTID) (rp *proto.ReplicationPosition
 		return nil, err
 	}
 	rp.MasterLogPosition = uint(temp)
-	rp.MasterLogGTID.GTID, err = mysqld.flavor.ParseGTID(qr.Rows[0][1].String())
+	rp.MasterLogGTIDField.Value, err = mysqld.flavor.ParseGTID(qr.Rows[0][1].String())
 	if err != nil {
 		return nil, err
 	}
@@ -653,11 +653,11 @@ func (mysqld *Mysqld) WaitBlpPos(bp *blproto.BlpPosition, waitTimeout time.Durat
 				return err
 			}
 		}
-		if gtid == bp.GTID {
+		if gtid == bp.GTIDField.Value {
 			return nil
 		}
 
-		log.Infof("Sleeping 1 second waiting for binlog replication(%v) to catch up: %v != %v", bp.Uid, gtid, bp.GTID)
+		log.Infof("Sleeping 1 second waiting for binlog replication(%v) to catch up: %v != %v", bp.Uid, gtid, bp.GTIDField)
 		time.Sleep(1 * time.Second)
 	}
 

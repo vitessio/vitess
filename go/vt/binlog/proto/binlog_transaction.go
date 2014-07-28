@@ -25,7 +25,7 @@ const (
 type BinlogTransaction struct {
 	Statements []Statement
 	Timestamp  int64
-	GTID       myproto.GTIDField
+	GTIDField  myproto.GTIDField
 }
 
 // Statement represents one statement as read from the binlog.

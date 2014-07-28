@@ -44,7 +44,7 @@ func (flavor *googleMysql51) MasterStatus(mysqld *Mysqld) (rp *proto.Replication
 		return nil, err
 	}
 	rp.MasterLogPosition = uint(utemp)
-	rp.MasterLogGTID.GTID, err = flavor.ParseGTID(qr.Rows[0][4].String())
+	rp.MasterLogGTIDField.Value, err = flavor.ParseGTID(qr.Rows[0][4].String())
 	if err != nil {
 		return nil, err
 	}

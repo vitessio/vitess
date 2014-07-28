@@ -84,7 +84,7 @@ func (rci *RowcacheInvalidator) Open(dbname string, mysqld *mysqlctl.Mysqld) {
 		rci.dbname = dbname
 		rci.mysqld = mysqld
 		rci.evs = binlog.NewEventStreamer(dbname, mysqld.Cnf().BinLogPath)
-		rci.SetGTID(rp.MasterLogGTID)
+		rci.SetGTID(rp.MasterLogGTIDField.Value)
 		rci.mu.Unlock()
 
 		rci.run()
@@ -178,7 +178,7 @@ func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) {
 		}
 		rci.Timestamp.Set(event.Timestamp)
 	case "POS":
-		rci.SetGTID(event.GTID)
+		rci.SetGTID(event.GTIDField.Value)
 	default:
 		log.Errorf("unknown event: %#v", event)
 		internalErrors.Add("Invalidation", 1)

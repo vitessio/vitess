@@ -93,16 +93,25 @@ func DecodeGTID(s string) (GTID, error) {
 // be used as a field inside marshalable structs, which cannot contain interface
 // values because there would be no way to know which concrete type to
 // instantiate upon unmarshaling.
+//
+// Note: GTIDField should not implement GTID, because it would tend to create
+// subtle bugs. For example, the compiler would allow something like this:
+//
+//   GTIDField{googleGTID{1234}} == googleGTID{1234}
+//
+// But it would evaluate to false (because the underlying types don't match),
+// which is probably not what was expected.
 type GTIDField struct {
-	GTID
+	Value GTID
 }
 
-// String returns a string representation of the underlying GTID.
+// String returns a string representation of the underlying GTID. If the
+// GTID value is nil, it returns "<nil>" in the style of Sprintf("%v", nil).
 func (gf GTIDField) String() string {
-	if gf.GTID == nil {
-		return "<nil>" // in the style of Sprintf("%v", nil)
+	if gf.Value == nil {
+		return "<nil>"
 	}
-	return gf.GTID.String()
+	return gf.Value.String()
 }
 
 // MarshalBson bson-encodes GTIDField.
@@ -111,9 +120,9 @@ func (gf GTIDField) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 
 	lenWriter := bson.NewLenWriter(buf)
 
-	if gf.GTID != nil {
+	if gf.Value != nil {
 		// The name of the bson field is the MySQL flavor.
-		bson.EncodeString(buf, gf.GTID.Flavor(), gf.GTID.String())
+		bson.EncodeString(buf, gf.Value.Flavor(), gf.Value.String())
 	}
 
 	lenWriter.Close()
@@ -152,12 +161,12 @@ func (gf *GTIDField) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 	if err != nil {
 		panic(bson.NewBsonError("invalid value %v for GTIDField: %v", value, err))
 	}
-	gf.GTID = gtid
+	gf.Value = gtid
 }
 
 // MarshalJSON implements encoding/json.Marshaler.
 func (gf GTIDField) MarshalJSON() ([]byte, error) {
-	return json.Marshal(EncodeGTID(gf.GTID))
+	return json.Marshal(EncodeGTID(gf.Value))
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
@@ -168,7 +177,7 @@ func (gf *GTIDField) UnmarshalJSON(buf []byte) error {
 		return err
 	}
 
-	gf.GTID, err = DecodeGTID(s)
+	gf.Value, err = DecodeGTID(s)
 	if err != nil {
 		return err
 	}

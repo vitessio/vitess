@@ -25,5 +25,5 @@ type StreamEvent struct {
 	Timestamp int64
 
 	// POS
-	GTID myproto.GTIDField
+	GTIDField myproto.GTIDField
 }

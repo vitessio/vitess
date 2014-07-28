@@ -546,7 +546,7 @@ func (blm *BinlogPlayerMap) RunUntil(blpPositionList *blproto.BlpPositionList, w
 		if err != nil {
 			return fmt.Errorf("No binlog position passed in for player Uid %v", bpc.sourceShard.Uid)
 		}
-		gtids[bpc.sourceShard.Uid] = pos.GTID
+		gtids[bpc.sourceShard.Uid] = pos.GTIDField.Value
 	}
 
 	// start all the players giving them where to stop

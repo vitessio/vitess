@@ -199,7 +199,7 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamReque
 	updateStream.actionLock.Unlock()
 	defer updateStream.stateWaitGroup.Done()
 
-	rp, err := updateStream.mysqld.BinlogInfo(req.GTID)
+	rp, err := updateStream.mysqld.BinlogInfo(req.GTIDField.Value)
 	if err != nil {
 		log.Errorf("Unable to serve client request: error computing start position: %v", err)
 		return fmt.Errorf("error computing start position: %v", err)
@@ -240,7 +240,7 @@ func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sen
 	updateStream.actionLock.Unlock()
 	defer updateStream.stateWaitGroup.Done()
 
-	rp, err := updateStream.mysqld.BinlogInfo(req.GTID)
+	rp, err := updateStream.mysqld.BinlogInfo(req.GTIDField.Value)
 	if err != nil {
 		log.Errorf("Unable to serve client request: error computing start position: %v", err)
 		return fmt.Errorf("error computing start position: %v", err)
@@ -279,7 +279,7 @@ func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendRep
 	updateStream.actionLock.Unlock()
 	defer updateStream.stateWaitGroup.Done()
 
-	rp, err := updateStream.mysqld.BinlogInfo(req.GTID)
+	rp, err := updateStream.mysqld.BinlogInfo(req.GTIDField.Value)
 	if err != nil {
 		log.Errorf("Unable to serve client request: error computing start position: %v", err)
 		return fmt.Errorf("error computing start position: %v", err)
@@ -312,5 +312,5 @@ func (updateStream *UpdateStream) getReplicationPosition() (myproto.GTID, error)
 	if err != nil {
 		return nil, err
 	}
-	return rp.MasterLogGTID, nil
+	return rp.MasterLogGTIDField.Value, nil
 }

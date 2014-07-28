@@ -131,8 +131,8 @@ func NewBinlogPlayerTables(dbClient VtClient, addr string, tables []string, star
 func (blp *BinlogPlayer) writeRecoveryPosition(tx *proto.BinlogTransaction) error {
 	now := time.Now().Unix()
 
-	blp.blpPos.GTID = tx.GTID
-	updateRecovery := UpdateBlpCheckpoint(blp.blpPos.Uid, tx.GTID, now, tx.Timestamp)
+	blp.blpPos.GTIDField = tx.GTIDField
+	updateRecovery := UpdateBlpCheckpoint(blp.blpPos.Uid, tx.GTIDField.Value, now, tx.Timestamp)
 
 	qr, err := blp.exec(updateRecovery)
 	if err != nil {
@@ -141,7 +141,7 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *proto.BinlogTransaction) erro
 	if qr.RowsAffected != 1 {
 		return fmt.Errorf("Cannot update blp_recovery table, affected %v rows", qr.RowsAffected)
 	}
-	blp.blplStats.SetLastGTID(tx.GTID)
+	blp.blplStats.SetLastGTID(tx.GTIDField.Value)
 	if tx.Timestamp != 0 {
 		blp.blplStats.SecondsBehindMaster.Set(now - tx.Timestamp)
 	}
@@ -164,8 +164,8 @@ func ReadStartPosition(dbClient VtClient, uid uint32) (*proto.BlpPosition, strin
 		return nil, "", err
 	}
 	return &proto.BlpPosition{
-		Uid:  uid,
-		GTID: myproto.GTIDField{gtid},
+		Uid:       uid,
+		GTIDField: myproto.GTIDField{gtid},
 	}, string(qr.Rows[0][1].Raw()), nil
 }
 
@@ -218,7 +218,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 		log.Infof("BinlogPlayer client %v for tables %v starting @ '%v', server: %v",
 			blp.blpPos.Uid,
 			blp.tables,
-			blp.blpPos.GTID,
+			blp.blpPos.GTIDField,
 			blp.addr,
 		)
 	} else {
@@ -226,7 +226,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 			blp.blpPos.Uid,
 			blp.keyRange.Start.Hex(),
 			blp.keyRange.End.Hex(),
-			blp.blpPos.GTID,
+			blp.blpPos.GTIDField,
 			blp.addr,
 		)
 	}
@@ -235,13 +235,13 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 		//
 		// TODO(enisoc): Stop trying to compare GTIDs, since we can't do that
 		// reliably for some MySQL flavors.
-		cmp, err := blp.blpPos.GTID.TryCompare(blp.stopAtGTID)
+		cmp, err := blp.blpPos.GTIDField.Value.TryCompare(blp.stopAtGTID)
 		if err != nil {
 			return err
 		}
-		if cmp > 0 { // blp.blpPos.GTID > blp.stopAtGTID
-			return fmt.Errorf("starting point %v greater than stopping point %v", blp.blpPos.GTID, blp.stopAtGTID)
-		} else if cmp == 0 { // blp.blpPos.GTID == blp.stopAtGTID
+		if cmp > 0 { // blp.blpPos.GTIDField.Value > blp.stopAtGTID
+			return fmt.Errorf("starting point %v greater than stopping point %v", blp.blpPos.GTIDField, blp.stopAtGTID)
+		} else if cmp == 0 { // blp.blpPos.GTIDField.Value == blp.stopAtGTID
 			log.Infof("Not starting BinlogPlayer, we're already at the desired position %v", blp.stopAtGTID)
 			return nil
 		}
@@ -264,15 +264,15 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 	var resp BinlogPlayerResponse
 	if len(blp.tables) > 0 {
 		req := &proto.TablesRequest{
-			Tables: blp.tables,
-			GTID:   blp.blpPos.GTID,
+			Tables:    blp.tables,
+			GTIDField: blp.blpPos.GTIDField,
 		}
 		resp = blplClient.StreamTables(req, responseChan)
 	} else {
 		req := &proto.KeyRangeRequest{
 			KeyspaceIdType: blp.keyspaceIdType,
 			KeyRange:       blp.keyRange,
-			GTID:           blp.blpPos.GTID,
+			GTIDField:      blp.blpPos.GTIDField,
 		}
 		resp = blplClient.StreamKeyRange(req, responseChan)
 	}
@@ -292,11 +292,11 @@ processLoop:
 				if ok {
 					if blp.stopAtGTID != nil {
 						// TODO(enisoc): Stop trying to compare GTIDs.
-						cmp, err := blp.blpPos.GTID.TryCompare(blp.stopAtGTID)
+						cmp, err := blp.blpPos.GTIDField.Value.TryCompare(blp.stopAtGTID)
 						if err != nil {
 							return err
 						}
-						if cmp >= 0 { // blp.blpPos.GTID >= blp.stopAtGTID
+						if cmp >= 0 { // blp.blpPos.GTIDField.Value >= blp.stopAtGTID
 							log.Infof("Reached stopping position, done playing logs")
 							return nil
 						}

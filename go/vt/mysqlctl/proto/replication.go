@@ -26,9 +26,9 @@ type ReplicationPosition struct {
 	//   'show master status'.
 	// - on the slave, it's Relay_Master_Log_File, Exec_Master_Log_Pos
 	//   and Exec_Master_Group_ID from 'show slave status'.
-	MasterLogFile     string
-	MasterLogPosition uint
-	MasterLogGTID     GTIDField
+	MasterLogFile      string
+	MasterLogPosition  uint
+	MasterLogGTIDField GTIDField
 
 	// MasterLogFileIo and MasterLogPositionIo are the position on the logs
 	// that have been downloaded from the master (IO position),

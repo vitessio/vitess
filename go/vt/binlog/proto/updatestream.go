@@ -11,18 +11,18 @@ import (
 
 // UpdateStreamRequest is used to make a request for ServeUpdateStream.
 type UpdateStreamRequest struct {
-	GTID myproto.GTIDField
+	GTIDField myproto.GTIDField
 }
 
 // KeyRangeRequest is used to make a request for StreamKeyRange.
 type KeyRangeRequest struct {
-	GTID           myproto.GTIDField
+	GTIDField      myproto.GTIDField
 	KeyspaceIdType key.KeyspaceIdType
 	KeyRange       key.KeyRange
 }
 
 // TablesRequest is used to make a request for StreamTables.
 type TablesRequest struct {
-	GTID   myproto.GTIDField
-	Tables []string
+	GTIDField myproto.GTIDField
+	Tables    []string
 }

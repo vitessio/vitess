@@ -286,7 +286,7 @@ type transaction struct {
 		Category int
 		Sql      string
 	}
-	GTID myproto.GTIDField
+	GTIDField myproto.GTIDField
 }
 
 func TestStream(t *testing.T) {
@@ -315,8 +315,8 @@ func TestStream(t *testing.T) {
 				t.Errorf("want %d, got %d", transactions[curTransaction].Statements[i].Category, stmt.Category)
 			}
 		}
-		if transactions[curTransaction].GTID != tx.GTID {
-			t.Errorf("want %#v, got %#v", transactions[curTransaction].GTID, tx.GTID)
+		if transactions[curTransaction].GTIDField != tx.GTIDField {
+			t.Errorf("want %#v, got %#v", transactions[curTransaction].GTIDField, tx.GTIDField)
 		}
 		curTransaction++
 		if curTransaction == len(transactions) {

@@ -143,7 +143,7 @@ func (tm *TabletManager) StopSlave(context *rpcproto.Context, args *rpc.UnusedRe
 
 func (tm *TabletManager) StopSlaveMinimum(context *rpcproto.Context, args *gorpcproto.StopSlaveMinimumArgs, reply *myproto.ReplicationPosition) error {
 	return tm.agent.RpcWrapLock(context.RemoteAddr, actionnode.TABLET_ACTION_STOP_SLAVE_MINIMUM, args, reply, func() error {
-		if err := tm.agent.Mysqld.WaitForMinimumReplicationPosition(args.GTID, args.WaitTime); err != nil {
+		if err := tm.agent.Mysqld.WaitForMinimumReplicationPosition(args.GTIDField.Value, args.WaitTime); err != nil {
 			return err
 		}
 		position, err := tm.agent.Mysqld.SlaveStatus()

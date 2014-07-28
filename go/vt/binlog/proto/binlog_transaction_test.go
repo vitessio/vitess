@@ -15,14 +15,14 @@ import (
 type reflectBinlogTransaction struct {
 	Statements []reflectStatement
 	Timestamp  int64
-	GTID       myproto.GTIDField
+	GTIDField  myproto.GTIDField
 }
 
 type extraBinlogTransaction struct {
 	Extra      int
 	Statements []reflectStatement
 	Timestamp  int64
-	GTID       myproto.GTIDField
+	GTIDField  myproto.GTIDField
 }
 
 type reflectStatement struct {

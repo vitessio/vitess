@@ -43,8 +43,8 @@ type WaitSlavePositionArgs struct {
 }
 
 type StopSlaveMinimumArgs struct {
-	GTID     myproto.GTIDField
-	WaitTime time.Duration
+	GTIDField myproto.GTIDField
+	WaitTime  time.Duration
 }
 
 type GetSlavesReply struct {

@@ -203,7 +203,7 @@ func TestBsonMarshalUnmarshalGTIDField(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	if got := gotField.GTID; got != want {
+	if got := gotField.Value; got != want {
 		t.Errorf("marshal->unmarshal mismatch, got %#v, want %#v", got, want)
 	}
 }
@@ -225,7 +225,7 @@ func TestBsonMarshalUnmarshalGTIDFieldPointer(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	if got := gotField.GTID; got != want {
+	if got := gotField.Value; got != want {
 		t.Errorf("marshal->unmarshal mismatch, got %#v, want %#v", got, want)
 	}
 }
@@ -251,7 +251,7 @@ func TestBsonMarshalUnmarshalGTIDFieldInStruct(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	if got := gotStruct.GTIDField.GTID; got != want {
+	if got := gotStruct.GTIDField.Value; got != want {
 		t.Errorf("marshal->unmarshal mismatch, got %#v, want %#v", got, want)
 	}
 }
@@ -273,7 +273,7 @@ func TestBsonMarshalUnmarshalNilGTID(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	if got := gotField.GTID; got != want {
+	if got := gotField.Value; got != want {
 		t.Errorf("marshal->unmarshal mismatch, got %#v, want %#v", got, want)
 	}
 }
@@ -325,10 +325,10 @@ func TestJsonUnmarshalGTIDField(t *testing.T) {
 
 func TestJsonMarshalGTIDFieldInStruct(t *testing.T) {
 	input := GTIDField{fakeGTID{flavor: "golf", value: "par"}}
-	want := `{"GTID":"golf/par"}`
+	want := `{"GTIDField":"golf/par"}`
 
 	type mystruct struct {
-		GTID GTIDField
+		GTIDField GTIDField
 	}
 
 	buf, err := json.Marshal(&mystruct{input})
@@ -345,17 +345,17 @@ func TestJsonUnmarshalGTIDFieldInStruct(t *testing.T) {
 	gtidParsers["golf"] = func(s string) (GTID, error) {
 		return fakeGTID{flavor: "golf", value: s}, nil
 	}
-	input := `{"GTID":"golf/par"}`
+	input := `{"GTIDField":"golf/par"}`
 	want := GTIDField{fakeGTID{flavor: "golf", value: "par"}}
 
 	var gotStruct struct {
-		GTID GTIDField
+		GTIDField GTIDField
 	}
 	err := json.Unmarshal([]byte(input), &gotStruct)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if got := gotStruct.GTID; got != want {
+	if got := gotStruct.GTIDField; got != want {
 		t.Errorf("json.Unmarshal(%#v) = %#v, want %#v", input, got, want)
 	}
 }

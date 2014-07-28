@@ -19,7 +19,7 @@ type reflectStreamEvent struct {
 	PKValues   [][]interface{}
 	Sql        string
 	Timestamp  int64
-	GTID       myproto.GTIDField
+	GTIDField  myproto.GTIDField
 }
 
 type extraStreamEvent struct {
@@ -30,7 +30,7 @@ type extraStreamEvent struct {
 	PKValues   [][]interface{}
 	Sql        string
 	Timestamp  int64
-	GTID       myproto.GTIDField
+	GTIDField  myproto.GTIDField
 }
 
 func TestStreamEvent(t *testing.T) {

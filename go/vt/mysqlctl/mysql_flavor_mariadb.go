@@ -48,7 +48,7 @@ func (flavor *mariaDB10) MasterStatus(mysqld *Mysqld) (rp *proto.ReplicationPosi
 	if len(qr.Rows[0]) < 1 {
 		return nil, fmt.Errorf("BINLOG_GTID_POS returned no result")
 	}
-	rp.MasterLogGTID.GTID, err = flavor.ParseGTID(qr.Rows[0][0].String())
+	rp.MasterLogGTIDField.Value, err = flavor.ParseGTID(qr.Rows[0][0].String())
 	if err != nil {
 		return nil, err
 	}
