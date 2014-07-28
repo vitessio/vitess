@@ -21,7 +21,8 @@ import (
 )
 
 var (
-	srvTopoCacheTTL = flag.Duration("srv_topo_cache_ttl", 1*time.Second, "how long to use cached entries for topology")
+	srvTopoCacheTTL    = flag.Duration("srv_topo_cache_ttl", 1*time.Second, "how long to use cached entries for topology")
+	enableRemoteMaster = flag.Bool("enable_remote_master", false, "enable remote master access")
 )
 
 const (
@@ -45,9 +46,10 @@ type SrvTopoServer interface {
 // - limit the QPS to the underlying topo.Server
 // - return the last known value of the data if there is an error
 type ResilientSrvTopoServer struct {
-	topoServer topo.Server
-	cacheTTL   time.Duration
-	counts     *stats.Counters
+	topoServer         topo.Server
+	cacheTTL           time.Duration
+	enableRemoteMaster bool
+	counts             *stats.Counters
 
 	// mutex protects the cache map itself, not the individual
 	// values in the cache.
@@ -137,9 +139,10 @@ func filterUnhealthyServers(endPoints *topo.EndPoints) *topo.EndPoints {
 // based on the provided SrvTopoServer.
 func NewResilientSrvTopoServer(base topo.Server, counterName string) *ResilientSrvTopoServer {
 	return &ResilientSrvTopoServer{
-		topoServer: base,
-		cacheTTL:   *srvTopoCacheTTL,
-		counts:     stats.NewCounters(counterName),
+		topoServer:         base,
+		cacheTTL:           *srvTopoCacheTTL,
+		enableRemoteMaster: *enableRemoteMaster,
+		counts:             stats.NewCounters(counterName),
 
 		srvKeyspaceNamesCache: make(map[string]*srvKeyspaceNamesEntry),
 		srvKeyspaceCache:      make(map[string]*srvKeyspaceEntry),
@@ -274,6 +277,32 @@ func (server *ResilientSrvTopoServer) GetEndPoints(context context.Context, cell
 	// not in cache or too old, get the real value
 	result, err := server.topoServer.GetEndPoints(cell, keyspace, shard, tabletType)
 	if err != nil {
+		// get remote endpoints for master if enabled
+		if server.enableRemoteMaster && tabletType == topo.TYPE_MASTER {
+			ks, err := server.GetSrvKeyspace(context, cell, keyspace)
+			if err != nil {
+				log.Errorf("GetEndPoints(%v, %v, %v, %v, %v) failed to get SrvKeyspace for remote master: %v",
+					context, cell, keyspace, shard, tabletType, err)
+			} else {
+				ksr, ok := ks.Partitions[tabletType]
+				if !ok {
+					log.Errorf("GetEndPoints(%v, %v, %v, %v, %v) failed to get SrvShard for remote master: %v",
+						context, cell, keyspace, shard, tabletType, err)
+				} else {
+					masterCell := ""
+					for _, ss := range ksr.Shards {
+						if ss.Name == shard {
+							masterCell = ss.MasterCell
+							break
+						}
+					}
+					if masterCell != "" && masterCell != cell {
+						return server.GetEndPoints(context, masterCell, keyspace, shard, tabletType)
+					}
+				}
+			}
+		}
+		// handle error
 		if entry.insertionTime.IsZero() {
 			server.counts.Add(errorCategory, 1)
 			log.Errorf("GetEndPoints(%v, %v, %v, %v, %v) failed: %v (no cached value, caching and returning error)", context, cell, keyspace, shard, tabletType, err)
