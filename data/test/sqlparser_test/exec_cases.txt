@@ -2057,7 +2057,7 @@
 {
   "PlanId":"DDL",
   "Reason":"DEFAULT",
-  "TableName":"",
+  "TableName":"a",
   "FieldQuery":null,
   "FullQuery":null,
   "OuterQuery":null,
@@ -2076,7 +2076,7 @@
 {
   "PlanId":"DDL",
   "Reason":"DEFAULT",
-  "TableName":"",
+  "TableName":"a",
   "FieldQuery":null,
   "FullQuery":null,
   "OuterQuery":null,
@@ -2095,7 +2095,7 @@
 {
   "PlanId":"DDL",
   "Reason":"DEFAULT",
-  "TableName":"",
+  "TableName":"a",
   "FieldQuery":null,
   "FullQuery":null,
   "OuterQuery":null,
@@ -2114,7 +2114,7 @@
 {
   "PlanId":"DDL",
   "Reason":"DEFAULT",
-  "TableName":"",
+  "TableName":"a",
   "FieldQuery":null,
   "FullQuery":null,
   "OuterQuery":null,

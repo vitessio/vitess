@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/acl"
-	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 )
 
 var (
@@ -52,7 +52,7 @@ var (
 type queryzRow struct {
 	Query  string
 	Table  string
-	Plan   sqlparser.PlanType
+	Plan   planbuilder.PlanType
 	Count  int64
 	tm     time.Duration
 	Rows   int64

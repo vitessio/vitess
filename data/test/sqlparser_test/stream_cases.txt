@@ -1,7 +1,39 @@
 # select
 "select * from a"
 {
-  "FullQuery": "select * from a"
+  "PlanId":"PASS_SELECT",
+  "Reason":"DEFAULT",
+  "TableName":"a",
+  "FieldQuery":null,
+  "FullQuery":"select * from a",
+  "OuterQuery":null,
+  "Subquery":null,
+  "IndexUsed":"",
+  "ColumnNumbers":null,
+  "PKValues":null,
+  "SecondaryPKValues":null,
+  "SubqueryPKColumns":null,
+  "SetKey":"",
+  "SetValue":null
+}
+
+# select join
+"select * from a join b"
+{
+  "PlanId":"PASS_SELECT",
+  "Reason":"DEFAULT",
+  "TableName":"",
+  "FieldQuery":null,
+  "FullQuery":"select * from a join b",
+  "OuterQuery":null,
+  "Subquery":null,
+  "IndexUsed":"",
+  "ColumnNumbers":null,
+  "PKValues":null,
+  "SecondaryPKValues":null,
+  "SubqueryPKColumns":null,
+  "SetKey":"",
+  "SetValue":null
 }
 
 # select for update
@@ -11,7 +43,20 @@
 # union
 "select * from a union select * from b"
 {
-  "FullQuery": "select * from a union select * from b"
+  "PlanId":"PASS_SELECT",
+  "Reason":"DEFAULT",
+  "TableName":"",
+  "FieldQuery":null,
+  "FullQuery": "select * from a union select * from b",
+  "OuterQuery":null,
+  "Subquery":null,
+  "IndexUsed":"",
+  "ColumnNumbers":null,
+  "PKValues":null,
+  "SecondaryPKValues":null,
+  "SubqueryPKColumns":null,
+  "SetKey":"",
+  "SetValue":null
 }
 
 # dml

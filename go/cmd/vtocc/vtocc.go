@@ -13,6 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 )
 
@@ -21,6 +22,7 @@ var (
 	enableRowcache    = flag.Bool("enable-rowcache", false, "enable rowcacche")
 	enableInvalidator = flag.Bool("enable-invalidator", false, "enable rowcache invalidator")
 	binlogPath        = flag.String("binlog-path", "", "binlog path used by rowcache invalidator")
+	tableAclConfig    = flag.String("table-acl-config", "", "path to table access checker config file")
 )
 
 var schemaOverrides []tabletserver.SchemaOverride
@@ -55,6 +57,9 @@ func main() {
 	data, _ := json.MarshalIndent(schemaOverrides, "", "  ")
 	log.Infof("schemaOverrides: %s\n", data)
 
+	if *tableAclConfig != "" {
+		tableacl.Init(*tableAclConfig)
+	}
 	tabletserver.InitQueryService()
 
 	err = tabletserver.AllowQueries(&dbConfigs.App, schemaOverrides, tabletserver.LoadCustomRules(), mysqld, true)

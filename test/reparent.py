@@ -16,6 +16,7 @@ import unittest
 import environment
 import utils
 import tablet
+from mysql_flavor import mysql_flavor
 
 tablet_62344 = tablet.Tablet(62344)
 tablet_62044 = tablet.Tablet(62044)
@@ -409,12 +410,7 @@ class TestReparent(unittest.TestCase):
     # now manually reparent 1 out of 2 tablets
     # 62044 will be the new master
     # 31981 won't be re-parented, so it will be busted
-    tablet_62044.mquery('', [
-        "RESET MASTER",
-        "STOP SLAVE",
-        "RESET SLAVE",
-        "CHANGE MASTER TO MASTER_HOST = ''",
-        ])
+    tablet_62044.mquery('', mysql_flavor.promote_slave_commands())
     new_pos = tablet_62044.mquery('', 'show master status')
     logging.debug("New master position: %s" % str(new_pos))
 
@@ -511,7 +507,6 @@ class TestReparent(unittest.TestCase):
     utils.run_vtctl('ReparentShard -force test_keyspace/%s %s' % (shard_id, tablet_62344.tablet_alias))
     utils.validate_topology(ping_tablets=True)
 
-    tablet_62344.create_db('vt_test_keyspace')
     tablet_62344.mquery('vt_test_keyspace', self._create_vt_insert_test)
 
     tablet_41983.mquery('', 'stop slave')

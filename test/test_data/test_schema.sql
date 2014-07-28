@@ -62,6 +62,13 @@ insert into vtocc_part2 values(1, 3)
 insert into vtocc_part2 values(2, 4)
 commit
 
+create table vtocc_acl_no_access(key1 bigint, key2 bigint, primary key(key1))
+create table vtocc_acl_read_only(key1 bigint, key2 bigint, primary key(key1))
+create table vtocc_acl_read_write(key1 bigint, key2 bigint, primary key(key1))
+create table vtocc_acl_admin(key1 bigint, key2 bigint, primary key(key1))
+create table vtocc_acl_unmatched(key1 bigint, key2 bigint, primary key(key1))
+create table vtocc_acl_all_user_read_only(key1 bigint, key2 bigint, primary key(key1))
+
 # clean
 drop table if exists vtocc_test
 drop table if exists vtocc_a
@@ -82,3 +89,9 @@ drop table if exists vtocc_misc
 drop view if exists vtocc_view
 drop table if exists vtocc_part1
 drop table if exists vtocc_part2
+drop table if exists vtocc_acl_no_access
+drop table if exists vtocc_acl_read_only
+drop table if exists vtocc_acl_read_write
+drop table if exists vtocc_acl_admin
+drop table if exists vtocc_acl_unmatched
+drop table if exists vtocc_acl_all_user_read_only

@@ -11,7 +11,7 @@ import (
 	"strconv"
 
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 )
 
 //-----------------------------------------------
@@ -90,7 +90,7 @@ func (qrs *QueryRules) UnmarshalJSON(data []byte) (err error) {
 // filterByPlan creates a new QueryRules by prefiltering on the query and planId. This allows
 // us to create query plan specific QueryRules out of the original QueryRules. In the new rules,
 // query, plans and tableNames predicates are empty.
-func (qrs *QueryRules) filterByPlan(query string, planid sqlparser.PlanType, tableName string) (newqrs *QueryRules) {
+func (qrs *QueryRules) filterByPlan(query string, planid planbuilder.PlanType, tableName string) (newqrs *QueryRules) {
 	var newrules []*QueryRule
 	for _, qr := range qrs.rules {
 		if newrule := qr.filterByPlan(query, planid, tableName); newrule != nil {
@@ -129,7 +129,7 @@ type QueryRule struct {
 	requestIP, user, query *regexp.Regexp
 
 	// Any matched plan will make this condition true (OR)
-	plans []sqlparser.PlanType
+	plans []planbuilder.PlanType
 
 	// Any matched tableNames will make this condition true (OR)
 	tableNames []string
@@ -158,7 +158,7 @@ func (qr *QueryRule) Copy() (newqr *QueryRule) {
 		act:         qr.act,
 	}
 	if qr.plans != nil {
-		newqr.plans = make([]sqlparser.PlanType, len(qr.plans))
+		newqr.plans = make([]planbuilder.PlanType, len(qr.plans))
 		copy(newqr.plans, qr.plans)
 	}
 	if qr.tableNames != nil {
@@ -189,7 +189,7 @@ func (qr *QueryRule) SetUserCond(pattern string) (err error) {
 // AddPlanCond adds to the list of plans that can be matched for
 // the rule to fire.
 // This function acts as an OR: Any plan id match is considered a match.
-func (qr *QueryRule) AddPlanCond(planType sqlparser.PlanType) {
+func (qr *QueryRule) AddPlanCond(planType planbuilder.PlanType) {
 	qr.plans = append(qr.plans, planType)
 }
 
@@ -279,7 +279,7 @@ Error:
 // The new QueryRule will contain all the original constraints other
 // than the plan and query. If the plan and query don't match the QueryRule,
 // then it returns nil.
-func (qr *QueryRule) filterByPlan(query string, planid sqlparser.PlanType, tableName string) (newqr *QueryRule) {
+func (qr *QueryRule) filterByPlan(query string, planid planbuilder.PlanType, tableName string) (newqr *QueryRule) {
 	if !reMatch(qr.query, query) {
 		return nil
 	}
@@ -315,7 +315,7 @@ func reMatch(re *regexp.Regexp, val string) bool {
 	return re == nil || re.MatchString(val)
 }
 
-func planMatch(plans []sqlparser.PlanType, plan sqlparser.PlanType) bool {
+func planMatch(plans []planbuilder.PlanType, plan planbuilder.PlanType) bool {
 	if plans == nil {
 		return true
 	}
@@ -728,7 +728,7 @@ func buildQueryRule(ruleInfo map[string]interface{}) (qr *QueryRule, err error) 
 				if !ok {
 					return nil, NewTabletError(FAIL, "want string for Plans")
 				}
-				pt, ok := sqlparser.PlanByName(pv)
+				pt, ok := planbuilder.PlanByName(pv)
 				if !ok {
 					return nil, NewTabletError(FAIL, "invalid plan name: %s", pv)
 				}
