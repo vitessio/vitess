@@ -366,7 +366,7 @@ class TestUpdateStream(unittest.TestCase):
       data = master_conn.stream_next()
       if data['Category'] == 'POS':
         master_txn_count +=1
-        if _gtidcmp(start_position, data['GTID']) < 0:
+        if _gtidcmp(start_position, data['GTIDField']) < 0:
           logs_correct = True
           logging.debug("Log rotation correctly interpreted")
           break
