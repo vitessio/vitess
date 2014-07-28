@@ -350,7 +350,7 @@ func RegisterBinlogPlayerMap(blm *BinlogPlayerMap) {
 		result := make(map[string]string, len(blm.players))
 		for i, bpc := range blm.players {
 			lgtid := bpc.binlogPlayerStats.GetLastGTID()
-			result[fmt.Sprintf("%v", i)] = lgtid.String()
+			result[fmt.Sprintf("%v", i)] = myproto.EncodeGTID(lgtid)
 		}
 		blm.mu.Unlock()
 		return result

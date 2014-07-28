@@ -648,7 +648,7 @@ func (mysqld *Mysqld) WaitBlpPos(bp *blproto.BlpPosition, waitTimeout time.Durat
 		}
 		var gtid proto.GTID
 		if !qr.Rows[0][0].IsNull() {
-			gtid, err = mysqld.flavor.ParseGTID(qr.Rows[0][0].String())
+			gtid, err = proto.DecodeGTID(qr.Rows[0][0].String())
 			if err != nil {
 				return err
 			}
