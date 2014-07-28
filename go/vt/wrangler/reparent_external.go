@@ -93,10 +93,10 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 	}
 
 	// Compute the list of Cells we need to rebuild: old master and
-	// new master cells.
+	// all other cells if reparenting to another cell.
 	cells := []string{shardInfo.MasterAlias.Cell}
 	if shardInfo.MasterAlias.Cell != masterElectTabletAlias.Cell {
-		cells = append(cells, masterElectTabletAlias.Cell)
+		cells = nil
 	}
 
 	// now update the master record in the shard object

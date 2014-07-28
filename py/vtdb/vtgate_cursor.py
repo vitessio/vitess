@@ -82,17 +82,20 @@ class VTGateCursor(object):
       # FIXME(shrutip): these checks maybe better on vtgate server.
       if topology.is_sharded_keyspace(self.keyspace, self.tablet_type):
         if self.keyspace_ids is None or len(self.keyspace_ids) != 1:
-          raise dbexceptions.ProgrammingError('DML on zero or multiple keyspace ids is not allowed')
+          raise dbexceptions.ProgrammingError('DML on zero or multiple keyspace ids is not allowed: %r'
+                                              % self.keyspace_ids)
       else:
         if not self.keyranges or str(self.keyranges[0]) != keyrange_constants.NON_PARTIAL_KEYRANGE:
-          raise dbexceptions.ProgrammingError('Keyrange not correct for non-sharded keyspace')
+          raise dbexceptions.ProgrammingError('Keyrange not correct for non-sharded keyspace: %r'
+                                              % self.keyranges)
 
-    self.results, self.rowcount, self.lastrowid, self.description = self._conn._execute(sql,
-                                                                                        bind_variables,
-                                                                                        self.keyspace,
-                                                                                        self.tablet_type,
-                                                                                        keyspace_ids=self.keyspace_ids,
-                                                                                        keyranges=self.keyranges)
+    self.results, self.rowcount, self.lastrowid, self.description = self._conn._execute(
+        sql,
+        bind_variables,
+        self.keyspace,
+        self.tablet_type,
+        keyspace_ids=self.keyspace_ids,
+        keyranges=self.keyranges)
     self.index = 0
     return self.rowcount
 
@@ -107,12 +110,13 @@ class VTGateCursor(object):
     if write_query:
       raise dbexceptions.DatabaseError('execute_entity_ids is not allowed for write queries')
 
-    self.results, self.rowcount, self.lastrowid, self.description = self._conn._execute_entity_ids(sql,
-                                                                                                   bind_variables,
-                                                                                                   self.keyspace,
-                                                                                                   self.tablet_type,
-                                                                                                   entity_keyspace_id_map,
-                                                                                                   entity_column_name)
+    self.results, self.rowcount, self.lastrowid, self.description = self._conn._execute_entity_ids(
+        sql,
+        bind_variables,
+        self.keyspace,
+        self.tablet_type,
+        entity_keyspace_id_map,
+        entity_column_name)
     self.index = 0
     return self.rowcount
 
@@ -225,12 +229,13 @@ class StreamVTGateCursor(VTGateCursor):
       raise dbexceptions.ProgrammingError('Streaming query cannot be writable')
 
     self.description = None
-    x, y, z, self.description = self._conn._stream_execute(sql,
-                                                           bind_variables,
-                                                           self.keyspace,
-                                                           self.tablet_type,
-                                                           keyspace_ids=self.keyspace_ids,
-                                                           keyranges=self.keyranges)
+    x, y, z, self.description = self._conn._stream_execute(
+        sql,
+        bind_variables,
+        self.keyspace,
+        self.tablet_type,
+        keyspace_ids=self.keyspace_ids,
+        keyranges=self.keyranges)
     self.index = 0
     return 0
 
@@ -241,9 +246,9 @@ class StreamVTGateCursor(VTGateCursor):
     self.index += 1
     return self._conn._stream_next()
 
-   # fetchmany can be called until it returns no rows. Returning less rows
-   # than what we asked for is also an indication we ran out, but the cursor
-   # API in PEP249 is silent about that.
+  # fetchmany can be called until it returns no rows. Returning less rows
+  # than what we asked for is also an indication we ran out, but the cursor
+  # API in PEP249 is silent about that.
   def fetchmany(self, size=None):
     if size is None:
       size = self.arraysize

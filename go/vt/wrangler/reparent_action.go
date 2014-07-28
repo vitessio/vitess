@@ -51,6 +51,15 @@ func (wr *Wrangler) checkSlaveReplication(tabletMap map[topo.TabletAlias]*topo.T
 		go func(tablet *topo.TabletInfo) {
 			defer wg.Done()
 
+			var err error
+			defer func() {
+				if err != nil {
+					mutex.Lock()
+					lastError = err
+					mutex.Unlock()
+				}
+			}()
+
 			if tablet.Type == topo.TYPE_LAG {
 				log.Infof("  skipping slave position check for %v tablet %v", tablet.Type, tablet.Alias)
 				return
@@ -58,9 +67,6 @@ func (wr *Wrangler) checkSlaveReplication(tabletMap map[topo.TabletAlias]*topo.T
 
 			replPos, err := wr.ai.SlavePosition(tablet, wr.actionTimeout())
 			if err != nil {
-				mutex.Lock()
-				lastError = err
-				mutex.Unlock()
 				if tablet.Type == topo.TYPE_BACKUP {
 					log.Warningf("  failed to get slave position from backup tablet %v, either wait for backup to finish or scrap tablet (%v)", tablet.Alias, err)
 				} else {
@@ -70,13 +76,18 @@ func (wr *Wrangler) checkSlaveReplication(tabletMap map[topo.TabletAlias]*topo.T
 			}
 
 			if !masterIsDead {
+				// This case used to be handled by the timeout check below, but checking
+				// it explicitly provides a more informative error message.
+				if replPos.SecondsBehindMaster == myproto.InvalidLagSeconds {
+					err = fmt.Errorf("slave %v is not replicating (Slave_IO or Slave_SQL not running), can't complete reparent in time", tablet.Alias)
+					log.Errorf("  %v", err)
+					return
+				}
+
 				var dur time.Duration = time.Duration(uint(time.Second) * replPos.SecondsBehindMaster)
 				if dur > wr.actionTimeout() {
 					err = fmt.Errorf("slave is too far behind to complete reparent in time (%v>%v), either increase timeout using 'vtctl -wait-time XXX ReparentShard ...' or scrap tablet %v", dur, wr.actionTimeout(), tablet.Alias)
 					log.Errorf("  %v", err)
-					mutex.Lock()
-					lastError = err
-					mutex.Unlock()
 					return
 				}
 

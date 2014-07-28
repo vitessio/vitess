@@ -15,8 +15,8 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/client2/tablet"
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
 )
@@ -233,7 +233,7 @@ func (sc *ShardedConn) Exec(query string, bindVars map[string]interface{}) (db.R
 	if sc.srvKeyspace == nil {
 		return nil, ErrNotConnected
 	}
-	shards, err := sqlparser.GetShardList(query, bindVars, sc.shardMaxKeys)
+	shards, err := vtgate.GetShardList(query, bindVars, sc.shardMaxKeys)
 	if err != nil {
 		return nil, err
 	}

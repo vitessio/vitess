@@ -52,7 +52,7 @@ class TestEnv(object):
     return "localhost:%s" % self.port
 
   def connect(self):
-    c = tablet_conn.connect(self.address, '', 'test_keyspace', '0', 2)
+    c = tablet_conn.connect(self.address, '', 'test_keyspace', '0', 2, user='youtube-dev-dedicated', password='vtpass')
     c.max_attempts = 1
     return c
 
@@ -196,7 +196,14 @@ class VttabletTestEnv(TestEnv):
     self.create_customrules(customrules)
     schema_override = os.path.join(environment.tmproot, 'schema_override.json')
     self.create_schema_override(schema_override)
-    self.tablet.start_vttablet(memcache=self.memcache, customrules=customrules, schema_override=schema_override)
+    table_acl_config = os.path.join(environment.vttop, 'test', 'test_data', 'table_acl_config.json')
+    self.tablet.start_vttablet(
+            memcache=self.memcache,
+            customrules=customrules,
+            schema_override=schema_override,
+            table_acl_config=table_acl_config,
+            auth=True,
+    )
 
     # FIXME(szopa): This is necessary here only because of a bug that
     # makes the qs reload its config only after an action.
@@ -281,12 +288,15 @@ class VtoccTestEnv(TestEnv):
     self.create_customrules(customrules)
     schema_override = os.path.join(environment.tmproot, 'schema_override.json')
     self.create_schema_override(schema_override)
+    table_acl_config = os.path.join(environment.vttop, 'test', 'test_data', 'table_acl_config.json')
 
     occ_args = environment.binary_args('vtocc') + [
       "-port", str(self.port),
       "-customrules", customrules,
       "-log_dir", environment.vtlogroot,
       "-schema-override", schema_override,
+      "-table-acl-config", table_acl_config,
+      "-queryserver-config-strict-table-acl",
       "-db-config-app-charset", "utf8",
       "-db-config-app-dbname", "vt_test_keyspace",
       "-db-config-app-host", "localhost",
@@ -294,7 +304,9 @@ class VtoccTestEnv(TestEnv):
       "-db-config-app-uname", 'vt_dba',   # use vt_dba as some tests depend on 'drop'
       "-db-config-app-keyspace", "test_keyspace",
       "-db-config-app-shard", "0",
+      "-auth-credentials", os.path.join(environment.vttop, 'test', 'test_data', 'authcredentials_test.json'),
     ]
+
     if self.memcache:
       memcache = self.mysqldir+"/memcache.sock"
       occ_args.extend(["-rowcache-bin", environment.memcached_bin()])
@@ -345,11 +357,6 @@ class VtoccTestEnv(TestEnv):
       shutil.rmtree(self.mysqldir)
     except:
       pass
-
-  def connect(self):
-    c = tablet_conn.connect("localhost:%s" % self.port, '', 'test_keyspace', '0', 2)
-    c.max_attempts = 1
-    return c
 
   def mysql_connect(self):
     return mysql.connect(

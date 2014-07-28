@@ -5,6 +5,7 @@
 package tabletserver
 
 import (
+	"fmt"
 	"time"
 
 	log "github.com/golang/glog"
@@ -15,9 +16,12 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tableacl"
+	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
@@ -67,6 +71,10 @@ type QueryEngine struct {
 	strictMode       sync2.AtomicInt64
 	maxResultSize    sync2.AtomicInt64
 	streamBufferSize sync2.AtomicInt64
+	strictTableAcl   bool
+
+	// loggers
+	accessCheckerLogger *logutil.ThrottledLogger
 }
 
 type compiledPlan struct {
@@ -140,8 +148,12 @@ func NewQueryEngine(config Config) *QueryEngine {
 	if config.StrictMode {
 		qe.strictMode.Set(1)
 	}
+	qe.strictTableAcl = config.StrictTableAcl
 	qe.maxResultSize = sync2.AtomicInt64(config.MaxResultSize)
 	qe.streamBufferSize = sync2.AtomicInt64(config.StreamBufferSize)
+
+	// loggers
+	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
 
 	// Stats
 	stats.Publish("MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
@@ -311,7 +323,9 @@ func (qe *QueryEngine) Execute(logStats *SQLQueryStats, query *proto.Query) (rep
 		panic(NewTabletError(RETRY, "Query disallowed due to rule: %s", desc))
 	}
 
-	if basePlan.PlanId == sqlparser.PLAN_DDL {
+	qe.checkTableAcl(basePlan.TableName, basePlan.PlanId, basePlan.Authorized, logStats.context.GetUsername())
+
+	if basePlan.PlanId == planbuilder.PLAN_DDL {
 		return qe.execDDL(logStats, query.Sql)
 	}
 
@@ -331,36 +345,36 @@ func (qe *QueryEngine) Execute(logStats *SQLQueryStats, query *proto.Query) (rep
 			invalidator = conn.DirtyKeys(plan.TableName)
 		}
 		switch plan.PlanId {
-		case sqlparser.PLAN_PASS_DML:
+		case planbuilder.PLAN_PASS_DML:
 			if qe.strictMode.Get() != 0 {
 				panic(NewTabletError(FAIL, "DML too complex"))
 			}
 			reply = qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
-		case sqlparser.PLAN_INSERT_PK:
+		case planbuilder.PLAN_INSERT_PK:
 			reply = qe.execInsertPK(logStats, conn, plan, invalidator)
-		case sqlparser.PLAN_INSERT_SUBQUERY:
+		case planbuilder.PLAN_INSERT_SUBQUERY:
 			reply = qe.execInsertSubquery(logStats, conn, plan, invalidator)
-		case sqlparser.PLAN_DML_PK:
+		case planbuilder.PLAN_DML_PK:
 			reply = qe.execDMLPK(logStats, conn, plan, invalidator)
-		case sqlparser.PLAN_DML_SUBQUERY:
+		case planbuilder.PLAN_DML_SUBQUERY:
 			reply = qe.execDMLSubquery(logStats, conn, plan, invalidator)
 		default: // select or set in a transaction, just count as select
 			reply = qe.execDirect(logStats, plan, conn)
 		}
 	} else {
 		switch plan.PlanId {
-		case sqlparser.PLAN_PASS_SELECT:
-			if plan.Reason == sqlparser.REASON_LOCK {
+		case planbuilder.PLAN_PASS_SELECT:
+			if plan.Reason == planbuilder.REASON_LOCK {
 				panic(NewTabletError(FAIL, "Disallowed outside transaction"))
 			}
 			reply = qe.execSelect(logStats, plan)
-		case sqlparser.PLAN_PK_EQUAL:
+		case planbuilder.PLAN_PK_EQUAL:
 			reply = qe.execPKEqual(logStats, plan)
-		case sqlparser.PLAN_PK_IN:
+		case planbuilder.PLAN_PK_IN:
 			reply = qe.execPKIN(logStats, plan)
-		case sqlparser.PLAN_SELECT_SUBQUERY:
+		case planbuilder.PLAN_SELECT_SUBQUERY:
 			reply = qe.execSubquery(logStats, plan)
-		case sqlparser.PLAN_SET:
+		case planbuilder.PLAN_SET:
 			waitingForConnectionStart := time.Now()
 			conn := getOrPanic(qe.connPool)
 			logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
@@ -395,6 +409,9 @@ func (qe *QueryEngine) StreamExecute(logStats *SQLQueryStats, query *proto.Query
 	logStats.OriginalSql = query.Sql
 	defer queryStats.Record("SELECT_STREAM", time.Now())
 
+	authorized := tableacl.Authorized(plan.TableName, plan.PlanId.MinRole())
+	qe.checkTableAcl(plan.TableName, plan.PlanId, authorized, logStats.context.GetUsername())
+
 	// does the real work: first get a connection
 	waitingForConnectionStart := time.Now()
 	conn := getOrPanic(qe.streamConnPool)
@@ -408,6 +425,16 @@ func (qe *QueryEngine) StreamExecute(logStats *SQLQueryStats, query *proto.Query
 	// then let's stream! Wrap callback function to return an
 	// error on query termination to stop further streaming
 	qe.fullStreamFetch(logStats, conn, plan.FullQuery, query.BindVariables, nil, nil, sendReply)
+}
+
+func (qe *QueryEngine) checkTableAcl(table string, planId planbuilder.PlanType, authorized tableacl.ACL, user string) {
+	if !authorized.IsMember(user) {
+		err := fmt.Sprintf("table acl error: %v cannot run %v on table %v", user, planId, table)
+		if qe.strictTableAcl {
+			panic(NewTabletError(FAIL, err))
+		}
+		qe.accessCheckerLogger.Errorf(err)
+	}
 }
 
 // InvalidateForDml performs rowcache invalidations for the dml.
@@ -435,7 +462,7 @@ func (qe *QueryEngine) InvalidateForDml(dml *proto.DmlType) {
 
 // InvalidateForDDL performs schema and rowcache changes for the ddl.
 func (qe *QueryEngine) InvalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
-	ddlPlan := sqlparser.DDLParse(ddlInvalidate.DDL)
+	ddlPlan := planbuilder.DDLParse(ddlInvalidate.DDL)
 	if ddlPlan.Action == "" {
 		panic(NewTabletError(FAIL, "DDL is not understood"))
 	}
@@ -449,7 +476,7 @@ func (qe *QueryEngine) InvalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
 // DDL
 
 func (qe *QueryEngine) execDDL(logStats *SQLQueryStats, ddl string) *mproto.QueryResult {
-	ddlPlan := sqlparser.DDLParse(ddl)
+	ddlPlan := planbuilder.DDLParse(ddl)
 	if ddlPlan.Action == "" {
 		panic(NewTabletError(FAIL, "DDL is not understood"))
 	}
