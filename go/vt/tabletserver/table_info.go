@@ -23,33 +23,35 @@ type TableInfo struct {
 	hits, absent, misses, invalidations sync2.AtomicInt64
 }
 
-func NewTableInfo(conn dbconnpool.PoolConnection, tableName string, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) (ti *TableInfo) {
-	ti = loadTableInfo(conn, tableName)
+func NewTableInfo(conn dbconnpool.PoolConnection, tableName string, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) (ti *TableInfo, err error) {
+	ti, err = loadTableInfo(conn, tableName)
+	if err != nil {
+		return nil, err
+	}
 	ti.initRowCache(conn, tableType, createTime, comment, cachePool)
-	return ti
+	return ti, nil
 }
 
-func loadTableInfo(conn dbconnpool.PoolConnection, tableName string) (ti *TableInfo) {
+func loadTableInfo(conn dbconnpool.PoolConnection, tableName string) (ti *TableInfo, err error) {
 	ti = &TableInfo{Table: schema.NewTable(tableName)}
-	if !ti.fetchColumns(conn) {
-		return nil
+	if err = ti.fetchColumns(conn); err != nil {
+		return nil, err
 	}
-	if !ti.fetchIndexes(conn) {
-		return nil
+	if err = ti.fetchIndexes(conn); err != nil {
+		return nil, err
 	}
-	return ti
+	return ti, nil
 }
 
-func (ti *TableInfo) fetchColumns(conn dbconnpool.PoolConnection) bool {
+func (ti *TableInfo) fetchColumns(conn dbconnpool.PoolConnection) error {
 	columns, err := conn.ExecuteFetch(fmt.Sprintf("describe %s", ti.Name), 10000, false)
 	if err != nil {
-		log.Warningf("%s", err.Error())
-		return false
+		return err
 	}
 	for _, row := range columns.Rows {
 		ti.AddColumn(row[0].String(), row[1].String(), row[4], row[5].String())
 	}
-	return true
+	return nil
 }
 
 func (ti *TableInfo) SetPK(colnames []string) error {
@@ -76,11 +78,10 @@ func (ti *TableInfo) SetPK(colnames []string) error {
 	return nil
 }
 
-func (ti *TableInfo) fetchIndexes(conn dbconnpool.PoolConnection) bool {
+func (ti *TableInfo) fetchIndexes(conn dbconnpool.PoolConnection) error {
 	indexes, err := conn.ExecuteFetch(fmt.Sprintf("show index from %s", ti.Name), 10000, false)
 	if err != nil {
-		log.Warningf("%s", err.Error())
-		return false
+		return err
 	}
 	var currentIndex *schema.Index
 	currentName := ""
@@ -100,11 +101,11 @@ func (ti *TableInfo) fetchIndexes(conn dbconnpool.PoolConnection) bool {
 		currentIndex.AddColumn(row[4].String(), cardinality)
 	}
 	if len(ti.Indexes) == 0 {
-		return true
+		return nil
 	}
 	pkIndex := ti.Indexes[0]
 	if pkIndex.Name != "PRIMARY" {
-		return true
+		return nil
 	}
 	ti.PKColumns = make([]int, len(pkIndex.Columns))
 	for i, pkCol := range pkIndex.Columns {
@@ -118,7 +119,7 @@ func (ti *TableInfo) fetchIndexes(conn dbconnpool.PoolConnection) bool {
 	for i := 1; i < len(ti.Indexes); i++ {
 		ti.Indexes[i].DataColumns = pkIndex.Columns
 	}
-	return true
+	return nil
 }
 
 func (ti *TableInfo) initRowCache(conn dbconnpool.PoolConnection, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) {
