@@ -26,9 +26,11 @@ var (
 )
 
 const (
-	queryCategory  = "query"
-	cachedCategory = "cached"
-	errorCategory  = "error"
+	queryCategory       = "query"
+	cachedCategory      = "cached"
+	errorCategory       = "error"
+	remoteQueryCategory = "remote-query"
+	remoteErrorCategory = "remote-error"
 )
 
 // SrvTopoServer is a subset of topo.Server that only contains the serving
@@ -279,13 +281,16 @@ func (server *ResilientSrvTopoServer) GetEndPoints(context context.Context, cell
 	if err != nil {
 		// get remote endpoints for master if enabled
 		if server.enableRemoteMaster && tabletType == topo.TYPE_MASTER {
+			server.counts.Add(remoteQueryCategory, 1)
 			ks, err := server.GetSrvKeyspace(context, cell, keyspace)
 			if err != nil {
+				server.counts.Add(remoteErrorCategory, 1)
 				log.Errorf("GetEndPoints(%v, %v, %v, %v, %v) failed to get SrvKeyspace for remote master: %v",
 					context, cell, keyspace, shard, tabletType, err)
 			} else {
 				ksr, ok := ks.Partitions[tabletType]
 				if !ok {
+					server.counts.Add(remoteErrorCategory, 1)
 					log.Errorf("GetEndPoints(%v, %v, %v, %v, %v) failed to get SrvShard for remote master: %v",
 						context, cell, keyspace, shard, tabletType, err)
 				} else {

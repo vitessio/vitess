@@ -356,7 +356,7 @@ func (ft *fakeTopoRemoteMaster) GetEndPoints(cell, keyspace, shard string, table
 	}
 }
 
-//
+// TestRemoteMaster will test getting endpoints for remote master.
 func TestRemoteMaster(t *testing.T) {
 	ft := &fakeTopoRemoteMaster{cell: "cell1", remoteCell: "cell2"}
 	rsts := NewResilientSrvTopoServer(ft, "TestRemoteMaster")
@@ -370,6 +370,10 @@ func TestRemoteMaster(t *testing.T) {
 	if ep.Entries[0].Uid != 1 {
 		t.Fatalf("GetEndPoints got %v want 1", ep.Entries[0].Uid)
 	}
+	remoteQueryCount := rsts.counts.Counts()[remoteQueryCategory]
+	if remoteQueryCount != 1 {
+		t.Fatalf("Get remoteQueryCategory count got %v want 1", remoteQueryCount, 1)
+	}
 
 	// no remote cell for non-master
 	ep, err = rsts.GetEndPoints(&context.DummyContext{}, "cell3", "test_ks", "0", topo.TYPE_REPLICA)
@@ -377,7 +381,7 @@ func TestRemoteMaster(t *testing.T) {
 		t.Fatalf("GetEndPoints did not return an error")
 	}
 
-	// remote cell for master
+	// no remote cell for master
 	rsts.enableRemoteMaster = false
 	ep, err = rsts.GetEndPoints(&context.DummyContext{}, "cell3", "test_ks", "1", topo.TYPE_MASTER)
 	if err == nil {
