@@ -1,6 +1,33 @@
 package proto
 
+import (
+	"fmt"
+	"html/template"
+)
+
 type Context struct {
 	RemoteAddr string
 	Username   string
+}
+
+// GetRemoteAddr implements Context.GetRemoteAddr
+func (ctx *Context) GetRemoteAddr() string {
+	return ctx.RemoteAddr
+}
+
+// GetUsername implements Context.GetUsername
+func (ctx *Context) GetUsername() string {
+	return ctx.Username
+}
+
+// HTML implements Context.HTML
+func (ctx *Context) HTML() template.HTML {
+	result := "<b>RemoteAddr:</b> " + ctx.RemoteAddr + "</br>\n"
+	result += "<b>Username:</b> " + ctx.Username + "</br>\n"
+	return template.HTML(result)
+}
+
+// String implements Context.String
+func (ctx *Context) String() string {
+	return fmt.Sprintf("GoRPCContext %#v", ctx)
 }
