@@ -152,6 +152,7 @@ func NewResilientSrvTopoServer(base topo.Server, counterName string) *ResilientS
 	}
 }
 
+// GetSrvKeyspaceNames returns all keyspace names for the given cell.
 func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(context context.Context, cell string) ([]string, error) {
 	server.counts.Add(queryCategory, 1)
 
@@ -199,6 +200,7 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(context context.Contex
 	return result, err
 }
 
+// GetSrvKeyspace returns SrvKeyspace object for the given cell and keyspace.
 func (server *ResilientSrvTopoServer) GetSrvKeyspace(context context.Context, cell, keyspace string) (*topo.SrvKeyspace, error) {
 	server.counts.Add(queryCategory, 1)
 
@@ -247,6 +249,7 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(context context.Context, ce
 	return result, err
 }
 
+// GetEndPoints return all endpoints for the given cell, keyspace, shard, and tablet type.
 func (server *ResilientSrvTopoServer) GetEndPoints(context context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
 	server.counts.Add(queryCategory, 1)
 

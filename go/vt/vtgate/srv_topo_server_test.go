@@ -344,16 +344,15 @@ func (ft *fakeTopoRemoteMaster) GetEndPoints(cell, keyspace, shard string, table
 				},
 			},
 		}, nil
-	} else {
-		return &topo.EndPoints{
-			Entries: []topo.EndPoint{
-				topo.EndPoint{
-					Uid:    1,
-					Health: nil,
-				},
-			},
-		}, nil
 	}
+	return &topo.EndPoints{
+		Entries: []topo.EndPoint{
+			topo.EndPoint{
+				Uid:    1,
+				Health: nil,
+			},
+		},
+	}, nil
 }
 
 // TestRemoteMaster will test getting endpoints for remote master.
@@ -431,7 +430,7 @@ func TestCachedErrors(t *testing.T) {
 		t.Fatalf("First GetSrvKeyspace didn't return an error")
 	}
 	if ft.callCount != 1 {
-		t.Fatalf("GetSrvKeyspace didn't get called 1 but %u times", ft.callCount)
+		t.Fatalf("GetSrvKeyspace didn't get called 1 but %v times", ft.callCount)
 	}
 
 	// ask again, should get an error and use cache
@@ -440,7 +439,7 @@ func TestCachedErrors(t *testing.T) {
 		t.Fatalf("Second GetSrvKeyspace didn't return an error")
 	}
 	if ft.callCount != 1 {
-		t.Fatalf("GetSrvKeyspace was called again: %u times", ft.callCount)
+		t.Fatalf("GetSrvKeyspace was called again: %v times", ft.callCount)
 	}
 
 	// ask again after expired cache, should get an error
@@ -450,6 +449,6 @@ func TestCachedErrors(t *testing.T) {
 		t.Fatalf("Third GetSrvKeyspace didn't return an error")
 	}
 	if ft.callCount != 2 {
-		t.Fatalf("GetSrvKeyspace was not called again: %u times", ft.callCount)
+		t.Fatalf("GetSrvKeyspace was not called again: %v times", ft.callCount)
 	}
 }
