@@ -372,7 +372,7 @@ func TestRemoteMaster(t *testing.T) {
 	}
 	remoteQueryCount := rsts.counts.Counts()[remoteQueryCategory]
 	if remoteQueryCount != 1 {
-		t.Fatalf("Get remoteQueryCategory count got %v want 1", remoteQueryCount, 1)
+		t.Fatalf("Get remoteQueryCategory count got %v want 1", remoteQueryCount)
 	}
 
 	// no remote cell for non-master
