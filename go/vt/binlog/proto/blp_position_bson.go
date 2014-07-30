@@ -20,7 +20,7 @@ func (blpPosition *BlpPosition) MarshalBson(buf *bytes2.ChunkedWriter, key strin
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodeUint32(buf, "Uid", blpPosition.Uid)
-	bson.EncodeInt64(buf, "GroupId", blpPosition.GroupId)
+	blpPosition.GTIDField.MarshalBson(buf, "GTIDField")
 
 	lenWriter.Close()
 }
@@ -41,8 +41,8 @@ func (blpPosition *BlpPosition) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 		switch bson.ReadCString(buf) {
 		case "Uid":
 			blpPosition.Uid = bson.DecodeUint32(buf, kind)
-		case "GroupId":
-			blpPosition.GroupId = bson.DecodeInt64(buf, kind)
+		case "GTIDField":
+			blpPosition.GTIDField.UnmarshalBson(buf, kind)
 		default:
 			bson.Skip(buf, kind)
 		}

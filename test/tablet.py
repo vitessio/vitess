@@ -65,7 +65,7 @@ class Tablet(object):
   def mysqlctl(self, cmd, extra_my_cnf=None, with_ports=False, verbose=False):
     all_extra_my_cnf = []
     if environment.mysql_flavor == "GoogleMysql":
-      # we have to manually enable hierarchical replication to support groupid
+      # we have to manually enable hierarchical replication to support group_id
       all_extra_my_cnf.append(environment.vttop + "/config/mycnf/master_google.cnf")
     if extra_my_cnf:
        all_extra_my_cnf.append(extra_my_cnf)

@@ -295,19 +295,26 @@ func (mysqld *Mysqld) WaitMasterPos(rp *proto.ReplicationPosition, waitTimeout t
 	return nil
 }
 
-func (mysqld *Mysqld) WaitForMinimumReplicationPosition(groupId int64, waitTimeout time.Duration) (err error) {
+func (mysqld *Mysqld) WaitForMinimumReplicationPosition(targetGTID proto.GTID, waitTimeout time.Duration) (err error) {
+	// TODO(enisoc): Use MySQL "wait for gtid" commands instead of comparing GTIDs.
 	for remaining := waitTimeout; remaining > 0; remaining -= time.Second {
 		pos, err := mysqld.SlaveStatus()
 		if err != nil {
 			return err
 		}
-		if pos.MasterLogGroupId >= groupId {
+
+		cmp, err := pos.MasterLogGTIDField.Value.TryCompare(targetGTID)
+		if err != nil {
+			return err
+		}
+		if cmp >= 0 { // pos.MasterLogGTIDField.Value >= targetGTID
 			return nil
 		}
-		log.Infof("WaitForMinimumReplicationPosition got group_id %v, sleeping for 1s waiting for group_id %v", pos.MasterLogGroupId, groupId)
+
+		log.Infof("WaitForMinimumReplicationPosition got GTID %v, sleeping for 1s waiting for GTID %v", pos.MasterLogGTIDField, targetGTID)
 		time.Sleep(time.Second)
 	}
-	return fmt.Errorf("Time out waiting for group_id %v", groupId)
+	return fmt.Errorf("timed out waiting for GTID %v", targetGTID)
 }
 
 func (mysqld *Mysqld) SlaveStatus() (*proto.ReplicationPosition, error) {
@@ -323,7 +330,7 @@ func (mysqld *Mysqld) SlaveStatus() (*proto.ReplicationPosition, error) {
 	pos.MasterLogPosition = uint(temp)
 	temp, _ = strconv.ParseUint(fields["Read_Master_Log_Pos"], 10, 0)
 	pos.MasterLogPositionIo = uint(temp)
-	pos.MasterLogGroupId, _ = strconv.ParseInt(fields["Exec_Master_Group_ID"], 10, 0)
+	pos.MasterLogGTIDField.Value, _ = mysqld.flavor.ParseGTID(fields["Exec_Master_Group_ID"])
 
 	if fields["Slave_IO_Running"] == "Yes" && fields["Slave_SQL_Running"] == "Yes" {
 		temp, _ = strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
@@ -346,8 +353,8 @@ func (mysqld *Mysqld) MasterStatus() (rp *proto.ReplicationPosition, err error) 
 	Pos: 1194
 	Server_ID: 41983
 */
-func (mysqld *Mysqld) BinlogInfo(groupId int64) (rp *proto.ReplicationPosition, err error) {
-	qr, err := mysqld.fetchSuperQuery(fmt.Sprintf("SHOW BINLOG INFO FOR %v", groupId))
+func (mysqld *Mysqld) BinlogInfo(gtid proto.GTID) (rp *proto.ReplicationPosition, err error) {
+	qr, err := mysqld.fetchSuperQuery(fmt.Sprintf("SHOW BINLOG INFO FOR %v", gtid))
 	if err != nil {
 		return nil, err
 	}
@@ -361,10 +368,11 @@ func (mysqld *Mysqld) BinlogInfo(groupId int64) (rp *proto.ReplicationPosition, 
 		return nil, err
 	}
 	rp.MasterLogPosition = uint(temp)
-	rp.MasterLogGroupId, err = qr.Rows[0][1].ParseInt64()
+	rp.MasterLogGTIDField.Value, err = mysqld.flavor.ParseGTID(qr.Rows[0][1].String())
 	if err != nil {
 		return nil, err
 	}
+
 	// On the master, the SQL position and IO position are at
 	// necessarily the same point.
 	rp.MasterLogFileIo = rp.MasterLogFile
@@ -638,18 +646,18 @@ func (mysqld *Mysqld) WaitBlpPos(bp *blproto.BlpPosition, waitTimeout time.Durat
 		if len(qr.Rows) != 1 {
 			return fmt.Errorf("WaitBlpPos(%v) returned unexpected row count: %v", bp.Uid, len(qr.Rows))
 		}
-		var groupId int64
+		var gtid proto.GTID
 		if !qr.Rows[0][0].IsNull() {
-			groupId, err = qr.Rows[0][0].ParseInt64()
+			gtid, err = proto.DecodeGTID(qr.Rows[0][0].String())
 			if err != nil {
 				return err
 			}
 		}
-		if groupId == bp.GroupId {
+		if gtid == bp.GTIDField.Value {
 			return nil
 		}
 
-		log.Infof("Sleeping 1 second waiting for binlog replication(%v) to catch up: %v != %v", bp.Uid, groupId, bp.GroupId)
+		log.Infof("Sleeping 1 second waiting for binlog replication(%v) to catch up: %v != %v", bp.Uid, gtid, bp.GTIDField)
 		time.Sleep(1 * time.Second)
 	}
 

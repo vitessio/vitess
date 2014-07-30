@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/bson"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 type reflectStreamEvent struct {
@@ -18,7 +19,7 @@ type reflectStreamEvent struct {
 	PKValues   [][]interface{}
 	Sql        string
 	Timestamp  int64
-	GroupId    int64
+	GTIDField  myproto.GTIDField
 }
 
 type extraStreamEvent struct {
@@ -29,7 +30,7 @@ type extraStreamEvent struct {
 	PKValues   [][]interface{}
 	Sql        string
 	Timestamp  int64
-	GroupId    int64
+	GTIDField  myproto.GTIDField
 }
 
 func TestStreamEvent(t *testing.T) {
@@ -47,7 +48,6 @@ func TestStreamEvent(t *testing.T) {
 		},
 		Sql:       "str7",
 		Timestamp: 3,
-		GroupId:   8,
 	})
 	if err != nil {
 		t.Error(err)
@@ -68,7 +68,6 @@ func TestStreamEvent(t *testing.T) {
 		},
 		Sql:       "str7",
 		Timestamp: 3,
-		GroupId:   8,
 	}
 	encoded, err := bson.Marshal(&custom)
 	if err != nil {

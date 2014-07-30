@@ -308,7 +308,9 @@ def get_vars(port):
   if we can't get them.
   """
   try:
-    f = urllib.urlopen('http://localhost:%u/debug/vars' % int(port))
+    url = 'http://localhost:%u/debug/vars' % int(port)
+    logging.debug('get_vars: loading ' + url)
+    f = urllib.urlopen(url)
     data = f.read()
     f.close()
   except:

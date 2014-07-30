@@ -6,7 +6,6 @@ package mysqlctl
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
@@ -14,6 +13,8 @@ import (
 // googleMysql51 is the implementation of MysqlFlavor for google mysql 51
 type googleMysql51 struct {
 }
+
+const googleMysqlFlavorID = "GoogleMysql"
 
 // MasterStatus implements MysqlFlavor.MasterStatus
 //
@@ -25,7 +26,7 @@ type googleMysql51 struct {
 // Binlog_Do_DB:
 // Binlog_Ignore_DB:
 // Group_ID:
-func (*googleMysql51) MasterStatus(mysqld *Mysqld) (rp *proto.ReplicationPosition, err error) {
+func (flavor *googleMysql51) MasterStatus(mysqld *Mysqld) (rp *proto.ReplicationPosition, err error) {
 	qr, err := mysqld.fetchSuperQuery("SHOW MASTER STATUS")
 	if err != nil {
 		return
@@ -43,10 +44,11 @@ func (*googleMysql51) MasterStatus(mysqld *Mysqld) (rp *proto.ReplicationPositio
 		return nil, err
 	}
 	rp.MasterLogPosition = uint(utemp)
-	rp.MasterLogGroupId, err = qr.Rows[0][4].ParseInt64()
+	rp.MasterLogGTIDField.Value, err = flavor.ParseGTID(qr.Rows[0][4].String())
 	if err != nil {
 		return nil, err
 	}
+
 	// On the master, the SQL position and IO position are at
 	// necessarily the same point.
 	rp.MasterLogFileIo = rp.MasterLogFile
@@ -64,42 +66,10 @@ func (*googleMysql51) PromoteSlaveCommands() []string {
 }
 
 // ParseGTID implements MysqlFlavor.ParseGTID().
-func (*googleMysql51) ParseGTID(s string) (GTID, error) {
-	id, err := strconv.ParseUint(s, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid Google MySQL group_id (%v): %v", s, err)
-	}
-
-	return googleGTID{groupID: id}, nil
-}
-
-type googleGTID struct {
-	groupID uint64
-}
-
-// String implements GTID.String().
-func (gtid googleGTID) String() string {
-	return fmt.Sprintf("%d", gtid.groupID)
-}
-
-// TryCompare implements GTID.TryCompare().
-func (gtid googleGTID) TryCompare(cmp GTID) (int, error) {
-	other, ok := cmp.(googleGTID)
-	if !ok {
-		return 0, fmt.Errorf("can't compare GTID, wrong type: %#v.TryCompare(%#v)",
-			gtid, cmp)
-	}
-
-	switch true {
-	case gtid.groupID < other.groupID:
-		return -1, nil
-	case gtid.groupID > other.groupID:
-		return 1, nil
-	default:
-		return 0, nil
-	}
+func (*googleMysql51) ParseGTID(s string) (proto.GTID, error) {
+	return proto.ParseGTID(googleMysqlFlavorID, s)
 }
 
 func init() {
-	mysqlFlavors["GoogleMysql"] = &googleMysql51{}
+	mysqlFlavors[googleMysqlFlavorID] = &googleMysql51{}
 }

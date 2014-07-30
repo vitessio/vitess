@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/testfiles"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 func TestPosParse(t *testing.T) {
@@ -285,7 +286,7 @@ type transaction struct {
 		Category int
 		Sql      string
 	}
-	GroupId int64
+	GTIDField myproto.GTIDField
 }
 
 func TestStream(t *testing.T) {
@@ -314,8 +315,8 @@ func TestStream(t *testing.T) {
 				t.Errorf("want %d, got %d", transactions[curTransaction].Statements[i].Category, stmt.Category)
 			}
 		}
-		if transactions[curTransaction].GroupId != tx.GroupId {
-			t.Errorf("want %#v, got %#v", transactions[curTransaction].GroupId, tx.GroupId)
+		if transactions[curTransaction].GTIDField != tx.GTIDField {
+			t.Errorf("want %#v, got %#v", transactions[curTransaction].GTIDField, tx.GTIDField)
 		}
 		curTransaction++
 		if curTransaction == len(transactions) {
@@ -335,7 +336,7 @@ func TestStream(t *testing.T) {
 				}
 			}
 			fmt.Printf("],\n")
-			fmt.Printf("\"GroupId\": \"%s\"\n},\n", tx.GroupId)
+			fmt.Printf("\"GTID\": \"%s\"\n},\n", tx.GTID)
 		*/
 		return nil
 	})

@@ -4,6 +4,10 @@
 
 package proto
 
+import (
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+)
+
 // Valid statement types in the binlogs.
 const (
 	BL_UNRECOGNIZED = iota
@@ -21,7 +25,7 @@ const (
 type BinlogTransaction struct {
 	Statements []Statement
 	Timestamp  int64
-	GroupId    int64
+	GTIDField  myproto.GTIDField
 }
 
 // Statement represents one statement as read from the binlog.
