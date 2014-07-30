@@ -285,28 +285,14 @@ func (server *ResilientSrvTopoServer) GetEndPoints(context context.Context, cell
 		// get remote endpoints for master if enabled
 		if server.enableRemoteMaster && tabletType == topo.TYPE_MASTER {
 			server.counts.Add(remoteQueryCategory, 1)
-			ks, err := server.GetSrvKeyspace(context, cell, keyspace)
+			ss, err := server.topoServer.GetSrvShard(cell, keyspace, shard)
 			if err != nil {
 				server.counts.Add(remoteErrorCategory, 1)
-				log.Errorf("GetEndPoints(%v, %v, %v, %v, %v) failed to get SrvKeyspace for remote master: %v",
+				log.Errorf("GetEndPoints(%v, %v, %v, %v, %v) failed to get SrvShard for remote master: %v",
 					context, cell, keyspace, shard, tabletType, err)
 			} else {
-				ksr, ok := ks.Partitions[tabletType]
-				if !ok {
-					server.counts.Add(remoteErrorCategory, 1)
-					log.Errorf("GetEndPoints(%v, %v, %v, %v, %v) failed to get SrvShard for remote master: %v",
-						context, cell, keyspace, shard, tabletType, err)
-				} else {
-					masterCell := ""
-					for _, ss := range ksr.Shards {
-						if ss.Name == shard {
-							masterCell = ss.MasterCell
-							break
-						}
-					}
-					if masterCell != "" && masterCell != cell {
-						return server.GetEndPoints(context, masterCell, keyspace, shard, tabletType)
-					}
+				if ss.MasterCell != "" && ss.MasterCell != cell {
+					return server.GetEndPoints(context, ss.MasterCell, keyspace, shard, tabletType)
 				}
 			}
 		}

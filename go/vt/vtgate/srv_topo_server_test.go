@@ -308,27 +308,11 @@ type fakeTopoRemoteMaster struct {
 	remoteCell string
 }
 
-func (ft *fakeTopoRemoteMaster) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, error) {
-	ft.callCount++
-	sk := &topo.SrvKeyspace{}
-	sk.Partitions = make(map[topo.TabletType]*topo.KeyspacePartition)
-	sk.Partitions[topo.TYPE_MASTER] = &topo.KeyspacePartition{Shards: []topo.SrvShard{
-		topo.SrvShard{
-			Name:       "0",
-			MasterCell: ft.remoteCell,
-		},
-		topo.SrvShard{
-			Name:       "1",
-			MasterCell: ft.remoteCell,
-		},
-	}}
-	sk.Partitions[topo.TYPE_REPLICA] = &topo.KeyspacePartition{Shards: []topo.SrvShard{
-		topo.SrvShard{
-			Name:       "0",
-			MasterCell: ft.remoteCell,
-		},
-	}}
-	return sk, nil
+func (ft *fakeTopoRemoteMaster) GetSrvShard(cell, keyspace, shard string) (*topo.SrvShard, error) {
+	return &topo.SrvShard{
+		Name:       shard,
+		MasterCell: ft.remoteCell,
+	}, nil
 }
 
 func (ft *fakeTopoRemoteMaster) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
