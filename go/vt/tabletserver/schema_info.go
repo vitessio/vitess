@@ -143,7 +143,7 @@ func (si *SchemaInfo) Open(connFactory dbconnpool.CreateConnectionFunc, schemaOv
 	for _, row := range tables.Rows {
 		tableName := row[0].String()
 		si.updateLastChange(row[2])
-		tableInfo := NewTableInfo(
+		tableInfo, err := NewTableInfo(
 			conn,
 			tableName,
 			row[1].String(), // table_type
@@ -151,8 +151,8 @@ func (si *SchemaInfo) Open(connFactory dbconnpool.CreateConnectionFunc, schemaOv
 			row[3].String(), // table_comment
 			si.cachePool,
 		)
-		if tableInfo == nil {
-			continue
+		if err != nil {
+			panic(NewTabletError(FATAL, "Could not get load table %s: %v", tableName, err))
 		}
 		si.tables[tableName] = tableInfo
 	}
@@ -273,7 +273,7 @@ func (si *SchemaInfo) createTable(conn dbconnpool.PoolConnection, tableName stri
 	if len(tables.Rows) != 1 {
 		panic(NewTabletError(FAIL, "rows for %s !=1: %v", tableName, len(tables.Rows)))
 	}
-	tableInfo := NewTableInfo(
+	tableInfo, err := NewTableInfo(
 		conn,
 		tableName,
 		tables.Rows[0][1].String(), // table_type
@@ -281,8 +281,8 @@ func (si *SchemaInfo) createTable(conn dbconnpool.PoolConnection, tableName stri
 		tables.Rows[0][3].String(), // table_comment
 		si.cachePool,
 	)
-	if tableInfo == nil {
-		panic(NewTabletError(FATAL, "Could not read table info: %s", tableName))
+	if err != nil {
+		panic(NewTabletError(FATAL, "Could not get load table %s: %v", tableName, err))
 	}
 	if tableInfo.CacheType == schema.CACHE_NONE {
 		log.Infof("Initialized table: %s", tableName)

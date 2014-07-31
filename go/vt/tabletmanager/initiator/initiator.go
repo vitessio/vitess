@@ -173,13 +173,13 @@ func (ai *ActionInitiator) StopSlave(tablet *topo.TabletInfo, waitTime time.Dura
 	return ai.rpc.StopSlave(tablet, waitTime)
 }
 
-func (ai *ActionInitiator) StopSlaveMinimum(tabletAlias topo.TabletAlias, groupId int64, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
+func (ai *ActionInitiator) StopSlaveMinimum(tabletAlias topo.TabletAlias, gtid myproto.GTID, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
 	tablet, err := ai.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return nil, err
 	}
 
-	return ai.rpc.StopSlaveMinimum(tablet, groupId, waitTime)
+	return ai.rpc.StopSlaveMinimum(tablet, gtid, waitTime)
 }
 
 func (ai *ActionInitiator) StartSlave(tabletAlias topo.TabletAlias, waitTime time.Duration) error {

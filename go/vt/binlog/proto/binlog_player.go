@@ -8,12 +8,14 @@ package proto
 
 import (
 	"fmt"
+
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 // BlpPosition describes a binlog player position to start from.
 type BlpPosition struct {
-	Uid     uint32
-	GroupId int64
+	Uid       uint32
+	GTIDField myproto.GTIDField
 }
 
 // BlpPositionList is a list of BlpPosition, not sorted.

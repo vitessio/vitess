@@ -13,6 +13,7 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 /* API and config for UpdateStream Service */
@@ -136,7 +137,7 @@ func IsUpdateStreamEnabled() bool {
 	return UpdateStreamRpcService.isEnabled()
 }
 
-func GetReplicationPosition() (int64, error) {
+func GetReplicationPosition() (myproto.GTID, error) {
 	return UpdateStreamRpcService.getReplicationPosition()
 }
 
@@ -198,7 +199,7 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamReque
 	updateStream.actionLock.Unlock()
 	defer updateStream.stateWaitGroup.Done()
 
-	rp, err := updateStream.mysqld.BinlogInfo(req.GroupId)
+	rp, err := updateStream.mysqld.BinlogInfo(req.GTIDField.Value)
 	if err != nil {
 		log.Errorf("Unable to serve client request: error computing start position: %v", err)
 		return fmt.Errorf("error computing start position: %v", err)
@@ -239,7 +240,7 @@ func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sen
 	updateStream.actionLock.Unlock()
 	defer updateStream.stateWaitGroup.Done()
 
-	rp, err := updateStream.mysqld.BinlogInfo(req.GroupId)
+	rp, err := updateStream.mysqld.BinlogInfo(req.GTIDField.Value)
 	if err != nil {
 		log.Errorf("Unable to serve client request: error computing start position: %v", err)
 		return fmt.Errorf("error computing start position: %v", err)
@@ -278,7 +279,7 @@ func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendRep
 	updateStream.actionLock.Unlock()
 	defer updateStream.stateWaitGroup.Done()
 
-	rp, err := updateStream.mysqld.BinlogInfo(req.GroupId)
+	rp, err := updateStream.mysqld.BinlogInfo(req.GTIDField.Value)
 	if err != nil {
 		log.Errorf("Unable to serve client request: error computing start position: %v", err)
 		return fmt.Errorf("error computing start position: %v", err)
@@ -300,16 +301,16 @@ func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendRep
 	return bls.Stream(rp.MasterLogFile, int64(rp.MasterLogPosition), f)
 }
 
-func (updateStream *UpdateStream) getReplicationPosition() (int64, error) {
+func (updateStream *UpdateStream) getReplicationPosition() (myproto.GTID, error) {
 	updateStream.actionLock.Lock()
 	defer updateStream.actionLock.Unlock()
 	if !updateStream.isEnabled() {
-		return 0, fmt.Errorf("update stream service is not enabled")
+		return nil, fmt.Errorf("update stream service is not enabled")
 	}
 
 	rp, err := updateStream.mysqld.MasterStatus()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return rp.MasterLogGroupId, nil
+	return rp.MasterLogGTIDField.Value, nil
 }

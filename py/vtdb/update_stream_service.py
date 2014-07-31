@@ -8,11 +8,11 @@ from net import bsonrpc
 from vtdb import dbexceptions
 
 class Coord(object):
-  GroupId = None
+  GTIDField = None
   ServerId = None
 
-  def __init__(self, group_id, server_id = None):
-    self.GroupId = group_id
+  def __init__(self, gtid, server_id = None):
+    self.GTIDField = gtid
     self.ServerId = server_id
 
 
@@ -23,7 +23,7 @@ class EventData(object):
   PKValues = None
   Sql = None
   Timestamp = None
-  GroupId = None
+  GTIDField = None
 
   def __init__(self, raw_response):
     for key, val in raw_response.iteritems():
@@ -50,9 +50,9 @@ class UpdateStreamConnection(object):
   def close(self):
     self.client.close()
 
-  def stream_start(self, group_id):
+  def stream_start(self, gtid):
     try:
-      self.client.stream_call('UpdateStream.ServeUpdateStream', {"GroupId": group_id})
+      self.client.stream_call('UpdateStream.ServeUpdateStream', {"GTIDField": gtid})
       response = self.client.stream_next()
       if response is None:
         return None

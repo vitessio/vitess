@@ -368,6 +368,7 @@ index by_msg (msg)
     utils.run_vtctl(['ValidateSchemaKeyspace', 'test_keyspace'], auto_log=True)
 
     # check the binlog players are running
+    logging.debug("Waiting for binlog players to start on new masters...")
     shard_0_master.wait_for_binlog_player_count(1)
     shard_1_master.wait_for_binlog_player_count(1)
 

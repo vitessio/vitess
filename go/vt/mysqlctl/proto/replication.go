@@ -19,16 +19,16 @@ const (
 // ReplicationPosition tracks the replication position on both a master
 // and a slave.
 type ReplicationPosition struct {
-	// MasterLogFile, MasterLogPosition and MasterLogGroupId are
+	// MasterLogFile, MasterLogPosition and MasterLogGTID are
 	// the position on the logs for transactions that have been
 	// applied (SQL position):
 	// - on the master, it's File, Position and Group_ID from
 	//   'show master status'.
 	// - on the slave, it's Relay_Master_Log_File, Exec_Master_Log_Pos
 	//   and Exec_Master_Group_ID from 'show slave status'.
-	MasterLogFile     string
-	MasterLogPosition uint
-	MasterLogGroupId  int64
+	MasterLogFile      string
+	MasterLogPosition  uint
+	MasterLogGTIDField GTIDField
 
 	// MasterLogFileIo and MasterLogPositionIo are the position on the logs
 	// that have been downloaded from the master (IO position),

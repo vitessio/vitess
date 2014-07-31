@@ -9,19 +9,20 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/bson"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 type reflectBinlogTransaction struct {
 	Statements []reflectStatement
 	Timestamp  int64
-	GroupId    int64
+	GTIDField  myproto.GTIDField
 }
 
 type extraBinlogTransaction struct {
 	Extra      int
 	Statements []reflectStatement
 	Timestamp  int64
-	GroupId    int64
+	GTIDField  myproto.GTIDField
 }
 
 type reflectStatement struct {
@@ -38,7 +39,6 @@ func TestBinlogTransaction(t *testing.T) {
 			},
 		},
 		Timestamp: 456,
-		GroupId:   123,
 	})
 	if err != nil {
 		t.Error(err)
@@ -53,7 +53,6 @@ func TestBinlogTransaction(t *testing.T) {
 			},
 		},
 		Timestamp: 456,
-		GroupId:   123,
 	}
 	encoded, err := bson.Marshal(&custom)
 	if err != nil {
