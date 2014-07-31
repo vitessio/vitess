@@ -7,6 +7,7 @@
 package vtgate
 
 import (
+	"strings"
 	"time"
 
 	log "github.com/golang/glog"
@@ -16,6 +17,8 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
+
+const errDupKey = "errno 1062"
 
 var (
 	RpcVTGate *VTGate
@@ -32,9 +35,10 @@ var (
 // VTGate is the rpc interface to vtgate. Only one instance
 // can be created.
 type VTGate struct {
-	resolver *Resolver
-	timings  *stats.MultiTimings
-	errors   *stats.MultiCounters
+	resolver   *Resolver
+	timings    *stats.MultiTimings
+	errors     *stats.MultiCounters
+	infoErrors *stats.Counters
 
 	// the throttled loggers for all errors, one per API entry
 	logExecuteShard             *logutil.ThrottledLogger
@@ -58,9 +62,10 @@ func Init(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount 
 		log.Fatalf("VTGate already initialized")
 	}
 	RpcVTGate = &VTGate{
-		resolver: NewResolver(serv, "VttabletCall", cell, retryDelay, retryCount, timeout),
-		timings:  stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
-		errors:   stats.NewMultiCounters("VtgateApiErrorCounts", []string{"Operation", "Keyspace", "DbType"}),
+		resolver:   NewResolver(serv, "VttabletCall", cell, retryDelay, retryCount, timeout),
+		timings:    stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
+		errors:     stats.NewMultiCounters("VtgateApiErrorCounts", []string{"Operation", "Keyspace", "DbType"}),
+		infoErrors: stats.NewCounters("VtgateInfoErrorCounts"),
 
 		logExecuteShard:             logutil.NewThrottledLogger("ExecuteShard", 5*time.Second),
 		logExecuteKeyspaceIds:       logutil.NewThrottledLogger("ExecuteKeyspaceIds", 5*time.Second),
@@ -106,8 +111,12 @@ func (vtg *VTGate) ExecuteShard(context context.Context, query *proto.QueryShard
 		reply.Result = qr
 	} else {
 		reply.Error = err.Error()
-		vtg.errors.Add(statsKey, 1)
-		vtg.logExecuteShard.Errorf("%v, query: %+v", err, query)
+		if strings.Contains(reply.Error, errDupKey) {
+			vtg.infoErrors.Add("DupKey", 1)
+		} else {
+			vtg.errors.Add(statsKey, 1)
+			vtg.logExecuteShard.Errorf("%v, query: %+v", err, query)
+		}
 	}
 	reply.Session = query.Session
 	return nil
@@ -124,8 +133,12 @@ func (vtg *VTGate) ExecuteKeyspaceIds(context context.Context, query *proto.Keys
 		reply.Result = qr
 	} else {
 		reply.Error = err.Error()
-		vtg.errors.Add(statsKey, 1)
-		vtg.logExecuteKeyspaceIds.Errorf("%v, query: %+v", err, query)
+		if strings.Contains(reply.Error, errDupKey) {
+			vtg.infoErrors.Add("DupKey", 1)
+		} else {
+			vtg.errors.Add(statsKey, 1)
+			vtg.logExecuteKeyspaceIds.Errorf("%v, query: %+v", err, query)
+		}
 	}
 	reply.Session = query.Session
 	return nil
@@ -142,8 +155,12 @@ func (vtg *VTGate) ExecuteKeyRanges(context context.Context, query *proto.KeyRan
 		reply.Result = qr
 	} else {
 		reply.Error = err.Error()
-		vtg.errors.Add(statsKey, 1)
-		vtg.logExecuteKeyRanges.Errorf("%v, query: %+v", err, query)
+		if strings.Contains(reply.Error, errDupKey) {
+			vtg.infoErrors.Add("DupKey", 1)
+		} else {
+			vtg.errors.Add(statsKey, 1)
+			vtg.logExecuteKeyRanges.Errorf("%v, query: %+v", err, query)
+		}
 	}
 	reply.Session = query.Session
 	return nil
@@ -160,8 +177,12 @@ func (vtg *VTGate) ExecuteEntityIds(context context.Context, query *proto.Entity
 		reply.Result = qr
 	} else {
 		reply.Error = err.Error()
-		vtg.errors.Add(statsKey, 1)
-		vtg.logExecuteEntityIds.Errorf("%v, query: %+v", err, query)
+		if strings.Contains(reply.Error, errDupKey) {
+			vtg.infoErrors.Add("DupKey", 1)
+		} else {
+			vtg.errors.Add(statsKey, 1)
+			vtg.logExecuteEntityIds.Errorf("%v, query: %+v", err, query)
+		}
 	}
 	reply.Session = query.Session
 	return nil
@@ -187,8 +208,12 @@ func (vtg *VTGate) ExecuteBatchShard(context context.Context, batchQuery *proto.
 		reply.List = qrs.List
 	} else {
 		reply.Error = err.Error()
-		vtg.errors.Add(statsKey, 1)
-		vtg.logExecuteBatchShard.Errorf("%v, queries: %+v", err, batchQuery)
+		if strings.Contains(reply.Error, errDupKey) {
+			vtg.infoErrors.Add("DupKey", 1)
+		} else {
+			vtg.errors.Add(statsKey, 1)
+			vtg.logExecuteBatchShard.Errorf("%v, queries: %+v", err, batchQuery)
+		}
 	}
 	reply.Session = batchQuery.Session
 	return nil
@@ -207,8 +232,12 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(context context.Context, query *proto
 		reply.List = qrs.List
 	} else {
 		reply.Error = err.Error()
-		vtg.errors.Add(statsKey, 1)
-		vtg.logExecuteBatchKeyspaceIds.Errorf("%v, query: %+v", err, query)
+		if strings.Contains(reply.Error, errDupKey) {
+			vtg.infoErrors.Add("DupKey", 1)
+		} else {
+			vtg.errors.Add(statsKey, 1)
+			vtg.logExecuteBatchKeyspaceIds.Errorf("%v, query: %+v", err, query)
+		}
 	}
 	reply.Session = query.Session
 	return nil
