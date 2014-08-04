@@ -155,7 +155,8 @@ func (wr *Wrangler) MigrateServedTypes(keyspace, shard string, servedType topo.T
 	rec := concurrency.AllErrorRecorder{}
 
 	// execute the migration
-	rec.RecordError(wr.migrateServedTypes(sourceShards, destinationShards, servedType, reverse))
+	shardCache := make(map[string]*topo.ShardInfo)
+	rec.RecordError(wr.migrateServedTypes(sourceShards, destinationShards, servedType, reverse, shardCache))
 
 	// unlock the shards, we're done
 	for i := len(destinationShards) - 1; i >= 0; i-- {
@@ -167,7 +168,7 @@ func (wr *Wrangler) MigrateServedTypes(keyspace, shard string, servedType topo.T
 
 	// rebuild the keyspace serving graph if there was no error
 	if rec.Error() == nil {
-		rec.RecordError(wr.RebuildKeyspaceGraph(keyspace, nil))
+		rec.RecordError(wr.RebuildKeyspaceGraph(keyspace, nil, shardCache))
 	}
 
 	return rec.Error()
@@ -309,7 +310,7 @@ func (wr *Wrangler) makeMastersReadWrite(shards []*topo.ShardInfo) error {
 }
 
 // migrateServedTypes operates with all concerned shards locked.
-func (wr *Wrangler) migrateServedTypes(sourceShards, destinationShards []*topo.ShardInfo, servedType topo.TabletType, reverse bool) error {
+func (wr *Wrangler) migrateServedTypes(sourceShards, destinationShards []*topo.ShardInfo, servedType topo.TabletType, reverse bool, shardCache map[string]*topo.ShardInfo) error {
 
 	// re-read all the shards so we are up to date
 	var err error
@@ -317,11 +318,13 @@ func (wr *Wrangler) migrateServedTypes(sourceShards, destinationShards []*topo.S
 		if sourceShards[i], err = wr.ts.GetShard(si.Keyspace(), si.ShardName()); err != nil {
 			return err
 		}
+		shardCache[si.ShardName()] = sourceShards[i]
 	}
 	for i, si := range destinationShards {
 		if destinationShards[i], err = wr.ts.GetShard(si.Keyspace(), si.ShardName()); err != nil {
 			return err
 		}
+		shardCache[si.ShardName()] = destinationShards[i]
 	}
 
 	// check and update all shard records, in memory only
@@ -386,11 +389,13 @@ func (wr *Wrangler) migrateServedTypes(sourceShards, destinationShards []*topo.S
 		if err := wr.ts.UpdateShard(si); err != nil {
 			return err
 		}
+		shardCache[si.ShardName()] = si
 	}
 	for _, si := range destinationShards {
 		if err := wr.ts.UpdateShard(si); err != nil {
 			return err
 		}
+		shardCache[si.ShardName()] = si
 	}
 
 	// And tell the new shards masters they can now be read-write.
@@ -468,7 +473,7 @@ func (wr *Wrangler) MigrateServedFrom(keyspace, shard string, servedType topo.Ta
 
 	// rebuild the keyspace serving graph if there was no error
 	if rec.Error() == nil {
-		rec.RecordError(wr.RebuildKeyspaceGraph(keyspace, nil))
+		rec.RecordError(wr.RebuildKeyspaceGraph(keyspace, nil, nil))
 	}
 
 	return rec.Error()

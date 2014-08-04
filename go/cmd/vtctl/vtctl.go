@@ -1344,7 +1344,7 @@ func commandRebuildKeyspaceGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, 
 
 	keyspaces := keyspaceParamsToKeyspaces(wr, subFlags.Args())
 	for _, keyspace := range keyspaces {
-		if err := wr.RebuildKeyspaceGraph(keyspace, cellArray); err != nil {
+		if err := wr.RebuildKeyspaceGraph(keyspace, cellArray, nil); err != nil {
 			return "", err
 		}
 	}

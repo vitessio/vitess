@@ -23,14 +23,16 @@ func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) er
 }
 
 // Rebuild the serving graph data while locking out other changes.
-func (wr *Wrangler) RebuildKeyspaceGraph(keyspace string, cells []string) error {
+// If some shards were recently read / updated, pass them in the cache so
+// we don't read them again (and possible get stale replicated data)
+func (wr *Wrangler) RebuildKeyspaceGraph(keyspace string, cells []string, shardCache map[string]*topo.ShardInfo) error {
 	actionNode := actionnode.RebuildKeyspace()
 	lockPath, err := wr.lockKeyspace(keyspace, actionNode)
 	if err != nil {
 		return err
 	}
 
-	err = wr.rebuildKeyspace(keyspace, cells)
+	err = wr.rebuildKeyspace(keyspace, cells, shardCache)
 	return wr.unlockKeyspace(keyspace, actionNode, lockPath, err)
 }
 
@@ -75,7 +77,7 @@ func (wr *Wrangler) findCellsForRebuild(ki *topo.KeyspaceInfo, keyspace string, 
 //
 // Take data from the global keyspace and rebuild the local serving
 // copies in each cell.
-func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
+func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, shardCache map[string]*topo.ShardInfo) error {
 	log.Infof("rebuildKeyspace %v", keyspace)
 
 	ki, err := wr.ts.GetKeyspace(keyspace)
@@ -133,16 +135,39 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
 	}
 
 	// for each entry in the srvKeyspaceMap map, we do the following:
-	// - read the ShardInfo structures for each shard
+	// - read the SrvShard structures for each shard / cell
+	// - if not present, build an empty one from global Shard
 	// - compute the union of the db types (replica, master, ...)
 	// - sort the shards in the list by range
 	// - check the ranges are compatible (no hole, covers everything)
+	if shardCache == nil {
+		shardCache = make(map[string]*topo.ShardInfo)
+	}
 	for cell, srvKeyspace := range srvKeyspaceMap {
 		keyspaceDbTypes := make(map[topo.TabletType]bool)
 		srvKeyspace.Partitions = make(map[topo.TabletType]*topo.KeyspacePartition)
 		for _, shard := range shards {
 			srvShard, err := wr.ts.GetSrvShard(cell, keyspace, shard)
-			if err != nil {
+			switch err {
+			case nil:
+				// we keep going
+			case topo.ErrNoNode:
+				log.Infof("Cell %v for %v/%v has no SvrShard, using Shard data with no TabletTypes instead", cell, keyspace, shard)
+				si, ok := shardCache[shard]
+				if !ok {
+					si, err = wr.ts.GetShard(keyspace, shard)
+					if err != nil {
+						return fmt.Errorf("GetShard(%v, %v) (backup for GetSrvShard in cell %v) failed: %v", keyspace, shard, cell, err)
+					}
+					shardCache[shard] = si
+				}
+				srvShard = &topo.SrvShard{
+					Name:        si.ShardName(),
+					KeyRange:    si.KeyRange,
+					ServedTypes: si.ServedTypes,
+					MasterCell:  si.MasterAlias.Cell,
+				}
+			default:
 				return err
 			}
 			for _, tabletType := range srvShard.TabletTypes {
@@ -172,14 +197,14 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
 			// check the first Start is MinKey, the last End is MaxKey,
 			// and the values in between match: End[i] == Start[i+1]
 			if partition.Shards[0].KeyRange.Start != key.MinKey {
-				return fmt.Errorf("keyspace partition for %v does not start with %v", tabletType, key.MinKey)
+				return fmt.Errorf("keyspace partition for %v in cell %v does not start with %v", tabletType, cell, key.MinKey)
 			}
 			if partition.Shards[len(partition.Shards)-1].KeyRange.End != key.MaxKey {
-				return fmt.Errorf("keyspace partition for %v does not end with %v", tabletType, key.MaxKey)
+				return fmt.Errorf("keyspace partition for %v in cell %v does not end with %v", tabletType, cell, key.MaxKey)
 			}
 			for i := range partition.Shards[0 : len(partition.Shards)-1] {
 				if partition.Shards[i].KeyRange.End != partition.Shards[i+1].KeyRange.Start {
-					return fmt.Errorf("non-contiguous KeyRange values for %v at shard %v to %v: %v != %v", tabletType, i, i+1, partition.Shards[i].KeyRange.End.Hex(), partition.Shards[i+1].KeyRange.Start.Hex())
+					return fmt.Errorf("non-contiguous KeyRange values for %v in cell %v at shard %v to %v: %v != %v", tabletType, cell, i, i+1, partition.Shards[i].KeyRange.End.Hex(), partition.Shards[i+1].KeyRange.Start.Hex())
 				}
 			}
 
@@ -272,7 +297,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 		wg.Add(1)
 		go func(keyspace string) {
 			defer wg.Done()
-			if err := wr.RebuildKeyspaceGraph(keyspace, nil); err != nil {
+			if err := wr.RebuildKeyspaceGraph(keyspace, nil, nil); err != nil {
 				mu.Lock()
 				hasErr = true
 				mu.Unlock()
