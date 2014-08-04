@@ -8,6 +8,8 @@
 // because the go runtime controls thread creation, and we don't control
 // which thread these functions will be called from.
 
+#define NULL ((void*)0) // This is required to use the simple_command macro.
+
 void clear_result(VT_CONN *conn);
 
 // this macro produces a compilation-time check for a condition
@@ -139,4 +141,20 @@ unsigned int vt_errno(VT_CONN *conn) {
 const char *vt_error(VT_CONN *conn) {
   mysql_thread_init();
   return mysql_error(conn->mysql);
+}
+
+my_bool vt_simple_command(
+    VT_CONN *conn,
+    enum enum_server_command command,
+    const unsigned char *arg,
+    unsigned long arg_length,
+    my_bool skip_check)
+{
+  mysql_thread_init();
+  return simple_command(conn->mysql, command, arg, arg_length, skip_check);
+}
+
+unsigned long vt_cli_safe_read(VT_CONN *conn) {
+  mysql_thread_init();
+  return cli_safe_read(conn->mysql);
 }

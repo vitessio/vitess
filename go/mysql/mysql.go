@@ -259,6 +259,29 @@ func (conn *Connection) lastError(query string) error {
 	return &SqlError{0, "Dummy", string(query)}
 }
 
+// ReadPacket reads a raw packet from the MySQL connection.
+//
+// A MySQL packet is "a single SQL statement sent to the MySQL server, a
+// single row that is sent to the client, or a binary log event sent from a
+// master replication server to a slave." -MySQL 5.1 Reference Manual
+func (conn *Connection) ReadPacket() ([]byte, error) {
+	length := C.vt_cli_safe_read(&conn.c)
+	if length == 0 {
+		return nil, fmt.Errorf("error reading packet from MySQL with cli_safe_read(): %v", conn.lastError(""))
+	}
+
+	return C.GoBytes(unsafe.Pointer(conn.c.mysql.net.read_pos), C.int(length)), nil
+}
+
+// SendCommand sends a raw command to the MySQL server.
+func (conn *Connection) SendCommand(command uint32, data []byte) error {
+	ret := C.vt_simple_command(&conn.c, command, (*C.uchar)(unsafe.Pointer(&data[0])), C.ulong(len(data)), 1)
+	if ret != 0 {
+		return fmt.Errorf("error sending raw MySQL command: %v", conn.lastError(""))
+	}
+	return nil
+}
+
 func BuildValue(bytes []byte, fieldType uint32) sqltypes.Value {
 	if bytes == nil {
 		return sqltypes.NULL

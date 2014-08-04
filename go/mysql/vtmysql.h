@@ -50,3 +50,15 @@ extern void vt_close_result(VT_CONN *conn);
 extern unsigned long vt_thread_id(VT_CONN *conn);
 extern unsigned int vt_errno(VT_CONN *conn);
 extern const char *vt_error(VT_CONN *conn);
+
+// vt_simple_command: Calls MySQL simple_command macro to send raw commands.
+my_bool vt_simple_command(
+    VT_CONN *conn,
+    enum enum_server_command command,
+    const unsigned char *arg,
+    unsigned long arg_length,
+    my_bool skip_check);
+
+// vt_cli_safe_read: Calls cli_safe_read which returns the number of bytes read,
+// or 0 if there was an error.
+unsigned long vt_cli_safe_read(VT_CONN *conn);
