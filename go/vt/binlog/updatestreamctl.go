@@ -199,21 +199,16 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamReque
 	updateStream.actionLock.Unlock()
 	defer updateStream.stateWaitGroup.Done()
 
-	rp, err := updateStream.mysqld.BinlogInfo(req.GTIDField.Value)
-	if err != nil {
-		log.Errorf("Unable to serve client request: error computing start position: %v", err)
-		return fmt.Errorf("error computing start position: %v", err)
-	}
 	streamCount.Add("Updates", 1)
 	defer streamCount.Add("Updates", -1)
-	log.Infof("ServeUpdateStream starting @ %v", rp)
+	log.Infof("ServeUpdateStream starting @ %#v", req.GTIDField.Value)
 
-	evs := NewEventStreamer(updateStream.dbname, updateStream.mycnf.BinLogPath)
+	evs := NewEventStreamer(updateStream.dbname, updateStream.mysqld)
 	updateStream.streams.Add(evs)
 	defer updateStream.streams.Delete(evs)
 
 	// Calls cascade like this: BinlogStreamer->func(*proto.StreamEvent)->sendReply
-	return evs.Stream(rp.MasterLogFile, int64(rp.MasterLogPosition), func(reply *proto.StreamEvent) error {
+	return evs.Stream(req.GTIDField.Value, func(reply *proto.StreamEvent) error {
 		if reply.Category == "ERR" {
 			updateStreamErrors.Add("UpdateStream", 1)
 		} else {
@@ -240,16 +235,11 @@ func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sen
 	updateStream.actionLock.Unlock()
 	defer updateStream.stateWaitGroup.Done()
 
-	rp, err := updateStream.mysqld.BinlogInfo(req.GTIDField.Value)
-	if err != nil {
-		log.Errorf("Unable to serve client request: error computing start position: %v", err)
-		return fmt.Errorf("error computing start position: %v", err)
-	}
 	streamCount.Add("KeyRange", 1)
 	defer streamCount.Add("KeyRange", -1)
-	log.Infof("ServeUpdateStream starting @ %v", rp)
+	log.Infof("ServeUpdateStream starting @ %#v", req.GTIDField.Value)
 
-	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mycnf.BinLogPath)
+	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld)
 	updateStream.streams.Add(bls)
 	defer updateStream.streams.Delete(bls)
 
@@ -259,7 +249,7 @@ func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sen
 		keyrangeTransactions.Add(1)
 		return sendReply(reply)
 	})
-	return bls.Stream(rp.MasterLogFile, int64(rp.MasterLogPosition), f)
+	return bls.Stream(req.GTIDField.Value, f)
 }
 
 func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendReply func(reply *proto.BinlogTransaction) error) (err error) {
@@ -279,16 +269,11 @@ func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendRep
 	updateStream.actionLock.Unlock()
 	defer updateStream.stateWaitGroup.Done()
 
-	rp, err := updateStream.mysqld.BinlogInfo(req.GTIDField.Value)
-	if err != nil {
-		log.Errorf("Unable to serve client request: error computing start position: %v", err)
-		return fmt.Errorf("error computing start position: %v", err)
-	}
 	streamCount.Add("Tables", 1)
 	defer streamCount.Add("Tables", -1)
-	log.Infof("ServeUpdateStream starting @ %v", rp)
+	log.Infof("ServeUpdateStream starting @ %#v", req.GTIDField.Value)
 
-	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mycnf.BinLogPath)
+	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld)
 	updateStream.streams.Add(bls)
 	defer updateStream.streams.Delete(bls)
 
@@ -298,7 +283,7 @@ func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendRep
 		keyrangeTransactions.Add(1)
 		return sendReply(reply)
 	})
-	return bls.Stream(rp.MasterLogFile, int64(rp.MasterLogPosition), f)
+	return bls.Stream(req.GTIDField.Value, f)
 }
 
 func (updateStream *UpdateStream) getReplicationPosition() (myproto.GTID, error) {

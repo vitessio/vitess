@@ -83,7 +83,7 @@ func (rci *RowcacheInvalidator) Open(dbname string, mysqld *mysqlctl.Mysqld) {
 		rci.mu.Lock()
 		rci.dbname = dbname
 		rci.mysqld = mysqld
-		rci.evs = binlog.NewEventStreamer(dbname, mysqld.Cnf().BinLogPath)
+		rci.evs = binlog.NewEventStreamer(dbname, mysqld)
 		rci.SetGTID(rp.MasterLogGTIDField.Value)
 		rci.mu.Unlock()
 
@@ -129,11 +129,7 @@ func (rci *RowcacheInvalidator) run() {
 					inner = fmt.Errorf("%v: uncaught panic:\n%s", x, tb.Stack(4))
 				}
 			}()
-			rp, err := rci.mysqld.BinlogInfo(rci.GetGTID())
-			if err != nil {
-				return err
-			}
-			return rci.evs.Stream(rp.MasterLogFile, int64(rp.MasterLogPosition), func(reply *blproto.StreamEvent) error {
+			return rci.evs.Stream(rci.GetGTID(), func(reply *blproto.StreamEvent) error {
 				rci.processEvent(reply)
 				return nil
 			})

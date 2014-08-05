@@ -11,6 +11,8 @@ import (
 	"strconv"
 
 	"github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
@@ -31,19 +33,19 @@ type EventNode struct {
 type sendEventFunc func(event *proto.StreamEvent) error
 
 type EventStreamer struct {
-	bls       *BinlogStreamer
+	bls       BinlogStreamer
 	sendEvent sendEventFunc
 }
 
-func NewEventStreamer(dbname, binlogPrefix string) *EventStreamer {
+func NewEventStreamer(dbname string, mysqld *mysqlctl.Mysqld) *EventStreamer {
 	return &EventStreamer{
-		bls: NewBinlogStreamer(dbname, binlogPrefix),
+		bls: NewBinlogStreamer(dbname, mysqld),
 	}
 }
 
-func (evs *EventStreamer) Stream(file string, pos int64, sendEvent sendEventFunc) error {
+func (evs *EventStreamer) Stream(gtid myproto.GTID, sendEvent sendEventFunc) error {
 	evs.sendEvent = sendEvent
-	return evs.bls.Stream(file, pos, evs.transactionToEvent)
+	return evs.bls.Stream(gtid, evs.transactionToEvent)
 }
 
 func (evs *EventStreamer) Stop() {
