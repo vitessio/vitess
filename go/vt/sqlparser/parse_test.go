@@ -7,11 +7,12 @@ package sqlparser
 import (
 	"bufio"
 	"fmt"
-	"github.com/youtube/vitess/go/testfiles"
 	"io"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/youtube/vitess/go/testfiles"
 )
 
 func TestGen(t *testing.T) {

@@ -9,6 +9,7 @@ package topo
 
 import (
 	"bytes"
+
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
 )
