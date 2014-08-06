@@ -11,13 +11,13 @@ import (
 
 func TestParseGoogleGTID(t *testing.T) {
 	input := "1758283"
-	want := googleGTID{groupID: 1758283}
+	want := GoogleGTID{GroupID: 1758283}
 
 	got, err := parseGoogleGTID(input)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
-	if got.(googleGTID) != want {
+	if got.(GoogleGTID) != want {
 		t.Errorf("ParseGTID(%v) = %v, want %v", input, got, want)
 	}
 }
@@ -36,7 +36,7 @@ func TestParseInvalidGoogleGTID(t *testing.T) {
 }
 
 func TestGoogleGTIDString(t *testing.T) {
-	input := googleGTID{groupID: 1857273}
+	input := GoogleGTID{GroupID: 1857273}
 	want := "1857273"
 
 	got := input.String()
@@ -46,7 +46,7 @@ func TestGoogleGTIDString(t *testing.T) {
 }
 
 func TestGoogleGTIDFlavor(t *testing.T) {
-	input := googleGTID{groupID: 123}
+	input := GoogleGTID{GroupID: 123}
 	want := "GoogleMysql"
 
 	got := input.Flavor()
@@ -56,8 +56,8 @@ func TestGoogleGTIDFlavor(t *testing.T) {
 }
 
 func TestGoogleGTIDCompareLess(t *testing.T) {
-	input1 := googleGTID{groupID: 12345}
-	input2 := googleGTID{groupID: 54321}
+	input1 := GoogleGTID{GroupID: 12345}
+	input2 := GoogleGTID{GroupID: 54321}
 
 	cmp, err := input1.TryCompare(input2)
 	if err != nil {
@@ -69,8 +69,8 @@ func TestGoogleGTIDCompareLess(t *testing.T) {
 }
 
 func TestGoogleGTIDCompareGreater(t *testing.T) {
-	input1 := googleGTID{groupID: 98765}
-	input2 := googleGTID{groupID: 56789}
+	input1 := GoogleGTID{GroupID: 98765}
+	input2 := GoogleGTID{GroupID: 56789}
 
 	cmp, err := input1.TryCompare(input2)
 	if err != nil {
@@ -82,8 +82,8 @@ func TestGoogleGTIDCompareGreater(t *testing.T) {
 }
 
 func TestGoogleGTIDCompareEqual(t *testing.T) {
-	input1 := googleGTID{groupID: 41234}
-	input2 := googleGTID{groupID: 41234}
+	input1 := GoogleGTID{GroupID: 41234}
+	input2 := GoogleGTID{GroupID: 41234}
 
 	cmp, err := input1.TryCompare(input2)
 	if err != nil {
@@ -95,7 +95,7 @@ func TestGoogleGTIDCompareEqual(t *testing.T) {
 }
 
 func TestGoogleGTIDCompareWrongType(t *testing.T) {
-	input1 := googleGTID{groupID: 123}
+	input1 := GoogleGTID{GroupID: 123}
 	input2 := fakeGTID{}
 	want := "can't compare GTID, wrong type"
 
@@ -109,7 +109,7 @@ func TestGoogleGTIDCompareWrongType(t *testing.T) {
 }
 
 func TestGoogleGTIDCompareNil(t *testing.T) {
-	input1 := googleGTID{groupID: 123}
+	input1 := GoogleGTID{GroupID: 123}
 	input2 := GTID(nil)
 	want := "can't compare GTID"
 
@@ -123,8 +123,8 @@ func TestGoogleGTIDCompareNil(t *testing.T) {
 }
 
 func TestGoogleGTIDEqual(t *testing.T) {
-	input1 := GTID(googleGTID{groupID: 41234})
-	input2 := GTID(googleGTID{groupID: 41234})
+	input1 := GTID(GoogleGTID{GroupID: 41234})
+	input2 := GTID(GoogleGTID{GroupID: 41234})
 	want := true
 
 	cmp := input1 == input2
@@ -134,8 +134,8 @@ func TestGoogleGTIDEqual(t *testing.T) {
 }
 
 func TestGoogleGTIDNotEqual(t *testing.T) {
-	input1 := GTID(googleGTID{groupID: 41234})
-	input2 := GTID(googleGTID{groupID: 51234})
+	input1 := GTID(GoogleGTID{GroupID: 41234})
+	input2 := GTID(GoogleGTID{GroupID: 51234})
 	want := false
 
 	cmp := input1 == input2

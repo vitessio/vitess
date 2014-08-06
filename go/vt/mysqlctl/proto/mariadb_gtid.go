@@ -17,69 +17,69 @@ func parseMariadbGTID(s string) (GTID, error) {
 	// Split into parts.
 	parts := strings.Split(s, "-")
 	if len(parts) != 3 {
-		return nil, fmt.Errorf("invalid MariaDB GTID (%v): expecting domain-server-sequence", s)
+		return nil, fmt.Errorf("invalid MariaDB GTID (%v): expecting Domain-Server-Sequence", s)
 	}
 
-	// Parse domain ID.
-	domain, err := strconv.ParseUint(parts[0], 10, 32)
+	// Parse Domain ID.
+	Domain, err := strconv.ParseUint(parts[0], 10, 32)
 	if err != nil {
-		return nil, fmt.Errorf("invalid MariaDB GTID domain ID (%v): %v", parts[0], err)
+		return nil, fmt.Errorf("invalid MariaDB GTID Domain ID (%v): %v", parts[0], err)
 	}
 
-	// Parse server ID.
-	server, err := strconv.ParseUint(parts[1], 10, 32)
+	// Parse Server ID.
+	Server, err := strconv.ParseUint(parts[1], 10, 32)
 	if err != nil {
-		return nil, fmt.Errorf("invalid MariaDB GTID server ID (%v): %v", parts[1], err)
+		return nil, fmt.Errorf("invalid MariaDB GTID Server ID (%v): %v", parts[1], err)
 	}
 
-	// Parse sequence number.
-	sequence, err := strconv.ParseUint(parts[2], 10, 64)
+	// Parse Sequence number.
+	Sequence, err := strconv.ParseUint(parts[2], 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("invalid MariaDB GTID sequence number (%v): %v", parts[2], err)
+		return nil, fmt.Errorf("invalid MariaDB GTID Sequence number (%v): %v", parts[2], err)
 	}
 
-	return mariadbGTID{
-		domain:   uint32(domain),
-		server:   uint32(server),
-		sequence: sequence,
+	return MariadbGTID{
+		Domain:   uint32(Domain),
+		Server:   uint32(Server),
+		Sequence: Sequence,
 	}, nil
 }
 
-type mariadbGTID struct {
-	domain   uint32
-	server   uint32
-	sequence uint64
+type MariadbGTID struct {
+	Domain   uint32
+	Server   uint32
+	Sequence uint64
 }
 
 // String implements GTID.String().
-func (gtid mariadbGTID) String() string {
-	return fmt.Sprintf("%d-%d-%d", gtid.domain, gtid.server, gtid.sequence)
+func (gtid MariadbGTID) String() string {
+	return fmt.Sprintf("%d-%d-%d", gtid.Domain, gtid.Server, gtid.Sequence)
 }
 
 // Flavor implements GTID.Flavor().
-func (gtid mariadbGTID) Flavor() string {
+func (gtid MariadbGTID) Flavor() string {
 	return mariadbFlavorID
 }
 
 // TryCompare implements GTID.TryCompare().
-func (gtid mariadbGTID) TryCompare(cmp GTID) (int, error) {
-	other, ok := cmp.(mariadbGTID)
+func (gtid MariadbGTID) TryCompare(cmp GTID) (int, error) {
+	other, ok := cmp.(MariadbGTID)
 	if !ok {
 		return 0, fmt.Errorf("can't compare GTID, wrong type: %#v.TryCompare(%#v)",
 			gtid, cmp)
 	}
 
-	if gtid.domain != other.domain {
-		return 0, fmt.Errorf("can't compare GTID, MariaDB domain doesn't match: %v != %v", gtid.domain, other.domain)
+	if gtid.Domain != other.Domain {
+		return 0, fmt.Errorf("can't compare GTID, MariaDB Domain doesn't match: %v != %v", gtid.Domain, other.Domain)
 	}
-	if gtid.server != other.server {
-		return 0, fmt.Errorf("can't compare GTID, MariaDB server doesn't match: %v != %v", gtid.server, other.server)
+	if gtid.Server != other.Server {
+		return 0, fmt.Errorf("can't compare GTID, MariaDB Server doesn't match: %v != %v", gtid.Server, other.Server)
 	}
 
 	switch true {
-	case gtid.sequence < other.sequence:
+	case gtid.Sequence < other.Sequence:
 		return -1, nil
-	case gtid.sequence > other.sequence:
+	case gtid.Sequence > other.Sequence:
 		return 1, nil
 	default:
 		return 0, nil
