@@ -153,7 +153,7 @@ func (client *GoRpcTabletManagerConn) StopSlave(tablet *topo.TabletInfo, waitTim
 func (client *GoRpcTabletManagerConn) StopSlaveMinimum(tablet *topo.TabletInfo, gtid myproto.GTID, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
 	var pos myproto.ReplicationPosition
 	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_STOP_SLAVE_MINIMUM, &gorpcproto.StopSlaveMinimumArgs{
-		GTIDField: myproto.GTIDField{gtid},
+		GTIDField: myproto.GTIDField{Value: gtid},
 		WaitTime:  waitTime,
 	}, &pos, waitTime); err != nil {
 		return nil, err

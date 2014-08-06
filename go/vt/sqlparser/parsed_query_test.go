@@ -116,7 +116,7 @@ func TestParsedQuery(t *testing.T) {
 			continue
 		}
 		buf := NewTrackedBuffer(nil)
-		buf.Fprintf("%v", tree)
+		buf.Myprintf("%v", tree)
 		pq := buf.ParsedQuery()
 		bytes, err := pq.GenerateQuery(tcase.bindVars, tcase.listVars)
 		var got string
@@ -133,7 +133,7 @@ func TestParsedQuery(t *testing.T) {
 
 func TestStarParam(t *testing.T) {
 	buf := NewTrackedBuffer(nil)
-	buf.Fprintf("select * from a where id in (%a)", "*")
+	buf.Myprintf("select * from a where id in (%a)", "*")
 	pq := buf.ParsedQuery()
 	listvars := []sqltypes.Value{
 		sqltypes.MakeNumeric([]byte("1")),
