@@ -3,7 +3,7 @@
 # Use of this source code is governed by a BSD-style
 # license that can be found in the LICENSE file.
 
-# git gofmt pre-commit hook
+# git goimports pre-commit hook
 #
 # To use, store as .git/hooks/pre-commit inside your repository and make sure
 # it has execute permissions.
@@ -12,13 +12,14 @@
 gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '.go$')
 
 [ -z "$gofiles" ] && exit 0
-unformatted=$(gofmt -l=true $gofiles 2>&1 | awk -F: '{print $1}')
+unformatted=$(goimports -l=true $gofiles 2>&1 | awk -F: '{print $1}')
 [ -z "$unformatted" ] && exit 0
 
-# Some files are not gofmt'd. Print message and fail.
+# Some files are not goimports'd. Print message and fail.
 
-echo >&2 "Go files must be formatted with gofmt. Please run:"
-echo -n >&2 "  gofmt -w"
+echo >&2 "Go files must be formatted with goimports. Please run:"
+echo >&2
+echo -n >&2 "  goimports -w"
 for fn in $unformatted; do
     echo -n >&2 " $PWD/$fn"
 done
