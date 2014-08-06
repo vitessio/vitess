@@ -5,6 +5,7 @@
 package mysql
 
 /*
+#cgo CFLAGS: -Werror=implicit
 #cgo pkg-config: gomysql
 #include <stdlib.h>
 #include <mysqld_error.h>
