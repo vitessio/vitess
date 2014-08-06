@@ -178,7 +178,7 @@ func (wr *Wrangler) SetSourceShards(keyspace, shard string, sources []topo.Table
 	// If the shard already has sources, maybe it's already been restored,
 	// so let's be safe and abort right here.
 	if len(shardInfo.SourceShards) > 0 {
-		return fmt.Errorf("Shard %v/%v already has SourceShards, not performing the MultiRestore")
+		return fmt.Errorf("Shard %v/%v already has SourceShards, not overwriting them", keyspace, shard)
 	}
 
 	// read the source tablets
