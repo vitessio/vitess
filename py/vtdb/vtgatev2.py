@@ -377,7 +377,7 @@ def get_params_for_vtgate_conn(vtgate_addrs, timeout, encrypted=False, user=None
   else:
     raise dbexceptions.Error("Wrong type for vtgate addrs %s" % vtgate_addrs)
 
-  for addr in vtgate_addrs:
+  for addr in addrs:
     vt_params = dict()
     vt_params['addr'] = addr
     vt_params['timeout'] = timeout
