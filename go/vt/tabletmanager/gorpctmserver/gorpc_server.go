@@ -146,6 +146,9 @@ func (tm *TabletManager) StopSlaveMinimum(context *rpcproto.Context, args *gorpc
 		if err := tm.agent.Mysqld.WaitForMinimumReplicationPosition(args.GTIDField.Value, args.WaitTime); err != nil {
 			return err
 		}
+		if err := tm.agent.Mysqld.StopSlave(map[string]string{"TABLET_ALIAS": tm.agent.TabletAlias.String()}); err != nil {
+			return err
+		}
 		position, err := tm.agent.Mysqld.SlaveStatus()
 		if err == nil {
 			*reply = *position
