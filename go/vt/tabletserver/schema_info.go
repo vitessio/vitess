@@ -109,7 +109,7 @@ func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout tim
 		return si.reloadTime
 	}))
 	_ = stats.NewMultiCountersFunc("TableStats", []string{"Table", "Stats"}, si.getTableStats)
-	stats.Publish("TableInvalidations", stats.CountersFunc(si.getTableInvalidations))
+	_ = stats.NewMultiCountersFunc("TableInvalidations", []string{"Table"}, si.getTableInvalidations)
 	_ = stats.NewMultiCountersFunc("QueryCounts", []string{"Table", "Plan"}, si.getQueryCount)
 	_ = stats.NewMultiCountersFunc("QueryTimesNs", []string{"Table", "Plan"}, si.getQueryTime)
 	_ = stats.NewMultiCountersFunc("QueryRowCounts", []string{"Table", "Plan"}, si.getQueryRowCount)
