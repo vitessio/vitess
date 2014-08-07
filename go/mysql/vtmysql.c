@@ -3,12 +3,13 @@
 // license that can be found in the LICENSE file.
 
 #include "vtmysql.h"
+#include <my_global.h>
+#include <m_ctype.h>
+#include <sql_common.h>
 
 // All functions must call mysql_thread_init before calling mysql. This is
 // because the go runtime controls thread creation, and we don't control
 // which thread these functions will be called from.
-
-#define NULL ((void*)0) // This is required to use the simple_command macro.
 
 void clear_result(VT_CONN *conn);
 

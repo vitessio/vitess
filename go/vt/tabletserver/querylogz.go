@@ -89,7 +89,7 @@ func querylogzHandler(w http.ResponseWriter, r *http.Request) {
 		case out := <-ch:
 			stats, ok := out.(*SQLQueryStats)
 			if !ok {
-				err := fmt.Errorf("Unexpected value in %s: %#v (expecting value of type %T)", TxLogger.Name, out, &SQLQueryStats{})
+				err := fmt.Errorf("Unexpected value in %s: %#v (expecting value of type %T)", TxLogger.Name(), out, &SQLQueryStats{})
 				io.WriteString(w, `<tr class="error">`)
 				io.WriteString(w, err.Error())
 				io.WriteString(w, "</tr>")

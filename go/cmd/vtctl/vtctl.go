@@ -528,7 +528,7 @@ func shardParamsToKeyspaceShards(wr *wrangler.Wrangler, params []string) []topo.
 			}
 			for _, zkPath := range zkPaths {
 				keyspace, shard := shardParamToKeyspaceShard(zkPath)
-				result = append(result, topo.KeyspaceShard{keyspace, shard})
+				result = append(result, topo.KeyspaceShard{Keyspace: keyspace, Shard: shard})
 			}
 		} else {
 			// this is not a path, so assume a keyspace

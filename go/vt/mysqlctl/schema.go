@@ -285,7 +285,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*prot
 		return nil, err
 	}
 
-	return &proto.SchemaChangeResult{beforeSchema, afterSchema}, nil
+	return &proto.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: afterSchema}, nil
 }
 
 // ApplySchemaChange will apply the schema change to the given database.
@@ -309,7 +309,7 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *proto.SchemaChang
 					// no diff between the schema we expect
 					// after the change and the current
 					// schema, we already applied it
-					return &proto.SchemaChangeResult{beforeSchema, beforeSchema}, nil
+					return &proto.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: beforeSchema}, nil
 				}
 			}
 
@@ -356,5 +356,5 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *proto.SchemaChang
 		}
 	}
 
-	return &proto.SchemaChangeResult{beforeSchema, afterSchema}, nil
+	return &proto.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: afterSchema}, nil
 }

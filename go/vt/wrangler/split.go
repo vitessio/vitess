@@ -134,6 +134,10 @@ func (wr *Wrangler) ShardMultiRestore(keyspace, shard string, sources []topo.Tab
 	mrErr := wr.SetSourceShards(keyspace, shard, sources, tables)
 	err = wr.unlockShard(keyspace, shard, actionNode, lockPath, mrErr)
 	if err != nil {
+		if mrErr != nil {
+			log.Errorf("unlockShard got error back: %v", err)
+			return mrErr
+		}
 		return err
 	}
 	if mrErr != nil {
@@ -169,6 +173,12 @@ func (wr *Wrangler) SetSourceShards(keyspace, shard string, sources []topo.Table
 	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
+	}
+
+	// If the shard already has sources, maybe it's already been restored,
+	// so let's be safe and abort right here.
+	if len(shardInfo.SourceShards) > 0 {
+		return fmt.Errorf("Shard %v/%v already has SourceShards, not overwriting them", keyspace, shard)
 	}
 
 	// read the source tablets

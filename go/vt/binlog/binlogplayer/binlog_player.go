@@ -165,7 +165,7 @@ func ReadStartPosition(dbClient VtClient, uid uint32) (*proto.BlpPosition, strin
 	}
 	return &proto.BlpPosition{
 		Uid:       uid,
-		GTIDField: myproto.GTIDField{gtid},
+		GTIDField: myproto.GTIDField{Value: gtid},
 	}, string(qr.Rows[0][1].Raw()), nil
 }
 

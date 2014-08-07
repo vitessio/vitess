@@ -220,7 +220,7 @@ func buildFmter(logger *streamlog.StreamLogger) func(url.Values, interface{}) st
 	return func(params url.Values, val interface{}) string {
 		fmter, ok := val.(formatter)
 		if !ok {
-			return fmt.Sprintf("Error: unexpected value of type %T in %s!", val, logger.Name)
+			return fmt.Sprintf("Error: unexpected value of type %T in %s!", val, logger.Name())
 		}
 		return fmter.Format(params)
 	}
