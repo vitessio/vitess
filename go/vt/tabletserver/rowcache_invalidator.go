@@ -161,17 +161,14 @@ func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) {
 	defer handleInvalidationError(event)
 	switch event.Category {
 	case "DDL":
+		log.Infof("DDL invalidation: %s", event.Sql)
 		rci.qe.InvalidateForDDL(&proto.DDLInvalidate{DDL: event.Sql})
 		rci.Timestamp.Set(event.Timestamp)
 	case "DML":
 		rci.handleDmlEvent(event)
 		rci.Timestamp.Set(event.Timestamp)
 	case "ERR":
-		dbname, err := sqlparser.GetDBName(event.Sql)
-		if err != nil || dbname == "" || dbname == rci.dbname {
-			log.Errorf("Unrecognized: %s", event.Sql)
-			internalErrors.Add("Invalidation", 1)
-		}
+		rci.handleErrEvent(event)
 		rci.Timestamp.Set(event.Timestamp)
 	case "POS":
 		rci.SetGTID(event.GTIDField.Value)
@@ -203,4 +200,33 @@ func (rci *RowcacheInvalidator) handleDmlEvent(event *blproto.StreamEvent) {
 		}
 	}
 	rci.qe.InvalidateForDml(dml)
+}
+
+func (rci *RowcacheInvalidator) handleErrEvent(event *blproto.StreamEvent) {
+	statement, err := sqlparser.Parse(event.Sql)
+	if err != nil {
+		log.Errorf("Error parsing: %s: %v", event.Sql, err)
+		internalErrors.Add("Invalidation", 1)
+		return
+	}
+	var table *sqlparser.TableName
+	switch stmt := statement.(type) {
+	case *sqlparser.Insert:
+		// Inserts don't affect rowcache
+		return
+	case *sqlparser.Update:
+		table = stmt.Table
+	case *sqlparser.Delete:
+		table = stmt.Table
+	default:
+		log.Errorf("Unrecognized: %s", event.Sql)
+		internalErrors.Add("Invalidation", 1)
+		return
+	}
+	// If it's not a cross-db statement, try treating the statement as a DDL.
+	// It will conservatively invalidate all rows of the table.
+	if table.Qualifier == nil || string(table.Qualifier) == rci.dbname {
+		log.Warningf("Treating %s as DDL for table %s", event.Sql, table.Name)
+		rci.qe.InvalidateForDDL(&proto.DDLInvalidate{DDL: fmt.Sprintf("alter table %s alter", table.Name)})
+	}
 }
