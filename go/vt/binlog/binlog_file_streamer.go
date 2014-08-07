@@ -338,16 +338,14 @@ func (f *fileInfo) Rotate(name string, pos int64) (err error) {
 	f.name = name
 	f.pos, f.lastPos = pos, 0
 	f.handle, err = os.Open(name)
-	if err != nil {
-		// Sometimes, the new file is not ready yet.
-		// Retry once after a delay.
+	// If file doesn't exist, wait indefinitely for it to be created.
+	for os.IsNotExist(err) {
+		// Log the event so we know it's happening.
+		log.Infof("Waiting for file %s to be created, retrying in 1 second.", name)
 		time.Sleep(1 * time.Second)
 		f.handle, err = os.Open(name)
-		if err != nil {
-			return fmt.Errorf("open error: %v", err)
-		}
 	}
-	return nil
+	return err
 }
 
 func (f *fileInfo) Set(pos int64) {
