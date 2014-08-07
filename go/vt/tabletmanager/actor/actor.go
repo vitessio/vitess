@@ -825,6 +825,13 @@ func (ta *TabletActor) multiRestore(actionNode *actionnode.ActionNode) (err erro
 	}
 	wg.Wait()
 
+	// stop replication for slaves, so it doesn't interfere
+	if topo.IsSlaveType(originalType) {
+		if err := ta.mysqld.StopSlave(map[string]string{"TABLET_ALIAS": tablet.Alias.String()}); err != nil {
+			return err
+		}
+	}
+
 	// run the action, scrap if it fails
 	if rec.HasErrors() {
 		log.Infof("Got errors trying to get snapshots from storage, trying to get them from original tablets: %v", rec.Error())
@@ -838,6 +845,13 @@ func (ta *TabletActor) multiRestore(actionNode *actionnode.ActionNode) (err erro
 			log.Errorf("Failed to Scrap after failed RestoreFromMultiSnapshot: %v", e)
 		}
 		return err
+	}
+
+	// restart replication
+	if topo.IsSlaveType(originalType) {
+		if err := ta.mysqld.StartSlave(map[string]string{"TABLET_ALIAS": tablet.Alias.String()}); err != nil {
+			return err
+		}
 	}
 
 	// restore type back
