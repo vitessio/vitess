@@ -20,7 +20,7 @@ func GenerateFullQuery(statement sqlparser.Statement) *sqlparser.ParsedQuery {
 
 func GenerateFieldQuery(statement sqlparser.Statement) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(FormatImpossible)
-	buf.Fprintf("%v", statement)
+	buf.Myprintf("%v", statement)
 	if buf.HasBindVars() {
 		return nil
 	}
@@ -34,13 +34,13 @@ func GenerateFieldQuery(statement sqlparser.Statement) *sqlparser.ParsedQuery {
 func FormatImpossible(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 	switch node := node.(type) {
 	case *sqlparser.Select:
-		buf.Fprintf("select %v from %v where 1 != 1", node.SelectExprs, node.From)
+		buf.Myprintf("select %v from %v where 1 != 1", node.SelectExprs, node.From)
 	case *sqlparser.JoinTableExpr:
 		if node.Join == sqlparser.AST_LEFT_JOIN || node.Join == sqlparser.AST_RIGHT_JOIN {
 			// ON clause is requried
-			buf.Fprintf("%v %s %v on 1 != 1", node.LeftExpr, node.Join, node.RightExpr)
+			buf.Myprintf("%v %s %v on 1 != 1", node.LeftExpr, node.Join, node.RightExpr)
 		} else {
-			buf.Fprintf("%v %s %v", node.LeftExpr, node.Join, node.RightExpr)
+			buf.Myprintf("%v %s %v", node.LeftExpr, node.Join, node.RightExpr)
 		}
 	default:
 		node.Format(buf)
@@ -59,7 +59,7 @@ func GenerateSelectLimitQuery(selStmt sqlparser.SelectStatement) *sqlparser.Pars
 			}()
 		}
 	}
-	buf.Fprintf("%v", selStmt)
+	buf.Myprintf("%v", selStmt)
 	return buf.ParsedQuery()
 }
 
@@ -67,7 +67,7 @@ func GenerateEqualOuterQuery(sel *sqlparser.Select, tableInfo *schema.Table) *sq
 	buf := sqlparser.NewTrackedBuffer(nil)
 	fmt.Fprintf(buf, "select ")
 	writeColumnList(buf, tableInfo.Columns)
-	buf.Fprintf(" from %v where ", sel.From)
+	buf.Myprintf(" from %v where ", sel.From)
 	generatePKWhere(buf, tableInfo.Indexes[0])
 	return buf.ParsedQuery()
 }
@@ -78,13 +78,13 @@ func GenerateInOuterQuery(sel *sqlparser.Select, tableInfo *schema.Table) *sqlpa
 	writeColumnList(buf, tableInfo.Columns)
 	// We assume there is one and only one PK column.
 	// A '*' argument name means all variables of the list.
-	buf.Fprintf(" from %v where %s in (%a)", sel.From, tableInfo.Indexes[0].Columns[0], "*")
+	buf.Myprintf(" from %v where %s in (%a)", sel.From, tableInfo.Indexes[0].Columns[0], "*")
 	return buf.ParsedQuery()
 }
 
 func GenerateInsertOuterQuery(ins *sqlparser.Insert) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Fprintf("insert %vinto %v%v values %a%v",
+	buf.Myprintf("insert %vinto %v%v values %a%v",
 		ins.Comments,
 		ins.Table,
 		ins.Columns,
@@ -96,14 +96,14 @@ func GenerateInsertOuterQuery(ins *sqlparser.Insert) *sqlparser.ParsedQuery {
 
 func GenerateUpdateOuterQuery(upd *sqlparser.Update, pkIndex *schema.Index) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Fprintf("update %v%v set %v where ", upd.Comments, upd.Table, upd.Exprs)
+	buf.Myprintf("update %v%v set %v where ", upd.Comments, upd.Table, upd.Exprs)
 	generatePKWhere(buf, pkIndex)
 	return buf.ParsedQuery()
 }
 
 func GenerateDeleteOuterQuery(del *sqlparser.Delete, pkIndex *schema.Index) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Fprintf("delete %vfrom %v where ", del.Comments, del.Table)
+	buf.Myprintf("delete %vfrom %v where ", del.Comments, del.Table)
 	generatePKWhere(buf, pkIndex)
 	return buf.ParsedQuery()
 }
@@ -113,7 +113,7 @@ func generatePKWhere(buf *sqlparser.TrackedBuffer, pkIndex *schema.Index) {
 		if i != 0 {
 			buf.WriteString(" and ")
 		}
-		buf.Fprintf("%s = %a", pkIndex.Columns[i], strconv.FormatInt(int64(i), 10))
+		buf.Myprintf("%s = %a", pkIndex.Columns[i], strconv.FormatInt(int64(i), 10))
 	}
 }
 
@@ -168,9 +168,9 @@ func GenerateSubquery(columns []string, table *sqlparser.AliasedTableExpr, where
 		fmt.Fprintf(buf, "%s, ", columns[i])
 	}
 	fmt.Fprintf(buf, "%s", columns[i])
-	buf.Fprintf(" from %v%v%v%v", table, where, order, limit)
+	buf.Myprintf(" from %v%v%v%v", table, where, order, limit)
 	if for_update {
-		buf.Fprintf(sqlparser.AST_FOR_UPDATE)
+		buf.Myprintf(sqlparser.AST_FOR_UPDATE)
 	}
 	return buf.ParsedQuery()
 }

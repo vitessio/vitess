@@ -593,7 +593,6 @@ trylock:
 		// The precise event doesn't matter - try to read again regardless.
 		goto trylock
 	}
-	panic("unexpected")
 }
 
 // Unlock returns nil if the lock was successfully
@@ -782,5 +781,4 @@ func (ze *ZElector) RunTask(task ElectorTask) error {
 			goto watchLeader
 		}
 	}
-	panic("unreachable")
 }

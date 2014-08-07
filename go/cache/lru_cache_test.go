@@ -256,6 +256,6 @@ func TestLRUIsEvicted(t *testing.T) {
 
 	// Check oldest
 	if o := cache.Oldest(); o.Before(beforeKey2) || o.After(afterKey2) {
-		t.Error("cache.Oldest returned an unexpected value: got %v, expected a value between %v and %v", o, beforeKey2, afterKey2)
+		t.Errorf("cache.Oldest returned an unexpected value: got %v, expected a value between %v and %v", o, beforeKey2, afterKey2)
 	}
 }

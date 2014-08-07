@@ -188,7 +188,7 @@ func (bls *binlogFileStreamer) parseEvents(sendTransaction sendTransactionFunc, 
 			trans := &proto.BinlogTransaction{
 				Statements: statements,
 				Timestamp:  timestamp,
-				GTIDField:  myproto.GTIDField{bls.blPos.GTID},
+				GTIDField:  myproto.GTIDField{Value: bls.blPos.GTID},
 			}
 			if err = sendTransaction(trans); err != nil {
 				if err == io.EOF {

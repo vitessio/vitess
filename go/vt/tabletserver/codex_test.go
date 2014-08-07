@@ -153,7 +153,7 @@ func TestBuildStreamComment(t *testing.T) {
 func createTableInfo(name string, cols map[string]string, pKeys []string) TableInfo {
 	table := schema.NewTable(name)
 	for colName, colType := range cols {
-		table.AddColumn(colName, colType, sqltypes.Value{nil}, "")
+		table.AddColumn(colName, colType, sqltypes.Value{}, "")
 	}
 	tableInfo := TableInfo{Table: table}
 	tableInfo.SetPK(pKeys)
