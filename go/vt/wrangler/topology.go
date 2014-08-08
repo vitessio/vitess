@@ -268,11 +268,7 @@ func (wr *Wrangler) ServingGraph(cell string) (servingGraph *ServingGraph) {
 					sn := &ShardNodes{
 						Name:        shard,
 						TabletNodes: make(TabletNodesByType),
-					}
-					for _, st := range servingTypes {
-						if _, ok := ks.Partitions[st]; ok {
-							sn.ServedTypes = append(sn.ServedTypes, st)
-						}
+						ServedTypes: srvShard.ServedTypes,
 					}
 					kn.ShardNodes = append(kn.ShardNodes, sn)
 					wg.Add(1)
