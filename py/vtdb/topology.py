@@ -170,9 +170,8 @@ def is_sharded_keyspace(keyspace_name, db_type):
   shard_count = ks.get_shard_count(db_type)
   return shard_count > 1
 
-def get_keyrange_from_shard_name(keyspace, shard_name, db_type='replica'):
+def get_keyrange_from_shard_name(keyspace, shard_name, db_type):
   kr = None
-  # db_type is immaterial here.
   if not is_sharded_keyspace(keyspace, db_type):
     if shard_name == keyrange_constants.SHARD_ZERO:
       kr = keyrange_constants.NON_PARTIAL_KEYRANGE

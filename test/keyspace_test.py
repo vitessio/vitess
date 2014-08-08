@@ -23,7 +23,7 @@ from zk import zkocc
 SHARDED_KEYSPACE = "TEST_KEYSPACE_SHARDED"
 UNSHARDED_KEYSPACE = "TEST_KEYSPACE_UNSHARDED"
 
-# shards for SHARDED_KEYSPACE 
+# shards for SHARDED_KEYSPACE
 # range "" - 80
 shard_0_master = tablet.Tablet()
 shard_0_replica = tablet.Tablet()
@@ -249,14 +249,6 @@ class TestKeyspace(unittest.TestCase):
     self.assertEqual(set(sharded_ks.db_types), set(ALL_DB_TYPES))
     unsharded_ks = self._read_keyspace(UNSHARDED_KEYSPACE)
     self.assertEqual(set(unsharded_ks.db_types), set(ALL_DB_TYPES))
-
-
-  def test_keyspace_id_to_shard_index(self):
-    sharded_ks = self._read_keyspace(SHARDED_KEYSPACE)
-    for i, sn in enumerate(shard_names):
-      for keyspace_id in shard_kid_map[sn]:
-        self.assertEqual(sharded_ks.keyspace_id_to_shard_index(keyspace_id), i)
-        self.assertEqual(sharded_ks.keyspace_id_to_shard_index_for_db_type(keyspace_id, 'master'), i)
 
   def test_keyspace_id_to_shard_name(self):
     sharded_ks = self._read_keyspace(SHARDED_KEYSPACE)
