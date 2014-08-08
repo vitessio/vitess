@@ -194,10 +194,10 @@ var commands = []commandGroup{
 				"[-ping-tablets] <keyspace name|zk keyspace path>",
 				"Validate all nodes reachable from this keyspace are consistent."},
 			command{"MigrateServedTypes", commandMigrateServedTypes,
-				"[-reverse] <source keyspace/shard|zk source shard path> <served type>",
+				"[-reverse] [-skip-rebuild] <source keyspace/shard|zk source shard path> <served type>",
 				"Migrates a serving type from the source shard to the shards it replicates to. Will also rebuild the serving graph."},
 			command{"MigrateServedFrom", commandMigrateServedFrom,
-				"[-reverse] <destination keyspace/shard|zk destination shard path> <served type>",
+				"[-reverse] [-skip-rebuild] <destination keyspace/shard|zk destination shard path> <served type>",
 				"Makes the destination keyspace/shard serve the given type. Will also rebuild the serving graph."},
 		},
 	},
@@ -1364,6 +1364,7 @@ func commandValidateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args
 
 func commandMigrateServedTypes(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	reverse := subFlags.Bool("reverse", false, "move the served type back instead of forward, use in case of trouble")
+	skipRebuild := subFlags.Bool("skip-rebuild", false, "do not rebuild the shard and keyspace graph after the migration (replica and rdonly only)")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 2 {
 		log.Fatalf("action MigrateServedTypes requires <source keyspace/shard|zk source shard path> <served type>")
@@ -1371,11 +1372,15 @@ func commandMigrateServedTypes(wr *wrangler.Wrangler, subFlags *flag.FlagSet, ar
 
 	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
 	servedType := parseTabletType(subFlags.Arg(1), []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY})
-	return "", wr.MigrateServedTypes(keyspace, shard, servedType, *reverse)
+	if servedType == topo.TYPE_MASTER && *skipRebuild {
+		log.Fatalf("can only specify skip-rebuild for non-master migrations")
+	}
+	return "", wr.MigrateServedTypes(keyspace, shard, servedType, *reverse, *skipRebuild)
 }
 
 func commandMigrateServedFrom(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	reverse := subFlags.Bool("reverse", false, "move the served from back instead of forward, use in case of trouble")
+	skipRebuild := subFlags.Bool("skip-rebuild", false, "do not rebuild the shard and keyspace graph after the migration (replica and rdonly only)")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 2 {
 		log.Fatalf("action MigrateServedFrom requires <destination keyspace/shard|zk source shard path> <served type>")
@@ -1383,7 +1388,10 @@ func commandMigrateServedFrom(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 
 	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
 	servedType := parseTabletType(subFlags.Arg(1), []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY})
-	return "", wr.MigrateServedFrom(keyspace, shard, servedType, *reverse)
+	if servedType == topo.TYPE_MASTER && *skipRebuild {
+		log.Fatalf("can only specify skip-rebuild for non-master migrations")
+	}
+	return "", wr.MigrateServedFrom(keyspace, shard, servedType, *reverse, *skipRebuild)
 }
 
 func commandWaitForAction(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

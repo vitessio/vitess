@@ -71,11 +71,17 @@ func (wr *Wrangler) setKeyspaceShardingInfo(keyspace, shardingColumnName string,
 	return wr.ts.UpdateKeyspace(ki)
 }
 
-func (wr *Wrangler) MigrateServedTypes(keyspace, shard string, servedType topo.TabletType, reverse bool) error {
-	// we cannot migrate a master back, since when master migration
-	// is done, the source shards are dead
-	if reverse && servedType == topo.TYPE_MASTER {
-		return fmt.Errorf("Cannot migrate master back to %v/%v", keyspace, shard)
+func (wr *Wrangler) MigrateServedTypes(keyspace, shard string, servedType topo.TabletType, reverse, skipRebuild bool) error {
+	if servedType == topo.TYPE_MASTER {
+		// we cannot migrate a master back, since when master migration
+		// is done, the source shards are dead
+		if reverse {
+			return fmt.Errorf("Cannot migrate master back to %v/%v", keyspace, shard)
+		}
+		// we cannot skip rebuild for a master
+		if skipRebuild {
+			return fmt.Errorf("Cannot skip rebuild for master migration on %v/%v", keyspace, shard)
+		}
 	}
 
 	// first figure out the destination shards
@@ -168,7 +174,11 @@ func (wr *Wrangler) MigrateServedTypes(keyspace, shard string, servedType topo.T
 
 	// rebuild the keyspace serving graph if there was no error
 	if rec.Error() == nil {
-		rec.RecordError(wr.RebuildKeyspaceGraph(keyspace, nil, shardCache))
+		if skipRebuild {
+			log.Infof("Skipping keyspace rebuild, please run it at earliest convenience")
+		} else {
+			rec.RecordError(wr.RebuildKeyspaceGraph(keyspace, nil, shardCache))
+		}
 	}
 
 	return rec.Error()
@@ -410,10 +420,16 @@ func (wr *Wrangler) migrateServedTypes(sourceShards, destinationShards []*topo.S
 	return nil
 }
 
-func (wr *Wrangler) MigrateServedFrom(keyspace, shard string, servedType topo.TabletType, reverse bool) error {
-	// we cannot migrate a master back
-	if reverse && servedType == topo.TYPE_MASTER {
-		return fmt.Errorf("Cannot migrate master back to %v/%v", keyspace, shard)
+func (wr *Wrangler) MigrateServedFrom(keyspace, shard string, servedType topo.TabletType, reverse, skipRebuild bool) error {
+	if servedType == topo.TYPE_MASTER {
+		// we cannot migrate a master back
+		if reverse {
+			return fmt.Errorf("Cannot migrate master back to %v/%v", keyspace, shard)
+		}
+		// we cannot skip rebuild for a master
+		if skipRebuild {
+			return fmt.Errorf("Cannot skip rebuild for master migration on %v/%v", keyspace, shard)
+		}
 	}
 
 	// read the destination keyspace, check it
@@ -473,7 +489,11 @@ func (wr *Wrangler) MigrateServedFrom(keyspace, shard string, servedType topo.Ta
 
 	// rebuild the keyspace serving graph if there was no error
 	if rec.Error() == nil {
-		rec.RecordError(wr.RebuildKeyspaceGraph(keyspace, nil, nil))
+		if skipRebuild {
+			log.Infof("Skipping keyspace rebuild, please run it at earliest convenience")
+		} else {
+			rec.RecordError(wr.RebuildKeyspaceGraph(keyspace, nil, nil))
+		}
 	}
 
 	return rec.Error()
