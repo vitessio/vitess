@@ -277,9 +277,9 @@ func (pc *PrimeCache) OneRun() {
 		return
 	}
 	if slavestat.secondsBehindMaster < 2 {
-		log.Infof("Slave lag is negligible - %v seconds", slavestat.secondsBehindMaster)
 		return
 	}
+	log.Infof("Replication lag is high (%v seconds), activating", slavestat.secondsBehindMaster)
 
 	// setup the connections to the db to apply the statements
 	if err := pc.setupPrimerConnections(); err != nil {
