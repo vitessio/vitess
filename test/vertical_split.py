@@ -273,7 +273,9 @@ index by_msg (msg)
     for t in [source_master, source_replica, source_rdonly]:
       t.create_db('vt_source_keyspace')
       t.start_vttablet(wait_for_state=None)
-    for t in [destination_master, destination_replica, destination_rdonly]:
+    destination_master.start_vttablet(wait_for_state=None,
+                                      target_tablet_type='replica')
+    for t in [destination_replica, destination_rdonly]:
       t.start_vttablet(wait_for_state=None)
 
     # wait for the tablets
@@ -375,6 +377,11 @@ index by_msg (msg)
     self.assertIn('moving.*', destination_master_status)
     self.assertIn('<td><b>All</b>: 1000<br><b>Query</b>: 700<br><b>Transaction</b>: 300<br></td>', destination_master_status)
     self.assertIn('</html>', destination_master_status)
+
+    # check query service is off on destination master, as filtered
+    # replication is enabled. Even health check should not interfere.
+    destination_master_vars = utils.get_vars(destination_master.port)
+    self.assertEqual(destination_master_vars['TabletStateName'], 'NOT_SERVING')
 
     # check we can't migrate the master just yet
     utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'master'],

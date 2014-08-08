@@ -450,17 +450,19 @@ primary key (name)
     self._insert_startup_values()
 
     # create the split shards
-    shard_2_master.init_tablet( 'master',  'test_keyspace', '80-C0')
-    shard_2_replica1.init_tablet('spare', 'test_keyspace', '80-C0')
-    shard_2_replica2.init_tablet('spare', 'test_keyspace', '80-C0')
-    shard_3_master.init_tablet( 'master',  'test_keyspace', 'C0-')
-    shard_3_replica.init_tablet('spare', 'test_keyspace', 'C0-')
-    shard_3_rdonly.init_tablet('rdonly', 'test_keyspace', 'C0-')
+    shard_2_master.init_tablet(  'master', 'test_keyspace', '80-C0')
+    shard_2_replica1.init_tablet('spare',  'test_keyspace', '80-C0')
+    shard_2_replica2.init_tablet('spare',  'test_keyspace', '80-C0')
+    shard_3_master.init_tablet(  'master', 'test_keyspace', 'C0-')
+    shard_3_replica.init_tablet( 'spare',  'test_keyspace', 'C0-')
+    shard_3_rdonly.init_tablet(  'rdonly', 'test_keyspace', 'C0-')
 
     # start vttablet on the split shards (no db created,
     # so they're all not serving)
+    shard_3_master.start_vttablet(wait_for_state=None,
+                                  target_tablet_type='replica')
     for t in [shard_2_master, shard_2_replica1, shard_2_replica2,
-              shard_3_master, shard_3_replica, shard_3_rdonly]:
+              shard_3_replica, shard_3_rdonly]:
       t.start_vttablet(wait_for_state=None)
     for t in [shard_2_master, shard_2_replica1, shard_2_replica2,
               shard_3_master, shard_3_replica, shard_3_rdonly]:
@@ -603,6 +605,14 @@ primary key (name)
     # check we can't migrate the master just yet
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'master'],
                     expect_fail=True)
+
+    # check query service is off on master 2 and master 3, as filtered
+    # replication is enabled. Even health check that is enabled on
+    # master 3 should not interfere.
+    shard_2_master_vars = utils.get_vars(shard_2_master.port)
+    self.assertEqual(shard_2_master_vars['TabletStateName'], 'NOT_SERVING')
+    shard_3_master_vars = utils.get_vars(shard_3_master.port)
+    self.assertEqual(shard_3_master_vars['TabletStateName'], 'NOT_SERVING')
 
     # now serve rdonly from the split shards
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'rdonly'],

@@ -109,8 +109,8 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType, lockT
 	health, err := health.Run(typeForHealthCheck)
 
 	// Figure out if we should be running QueryService. If we should,
-	// and we aren't, and we're otherwise healthy, try to start it
-	if err == nil && topo.IsRunningQueryService(targetTabletType) {
+	// and we aren't, and we're otherwise healthy, try to start it.
+	if err == nil && topo.IsRunningQueryService(targetTabletType) && agent.BinlogPlayerMap.size() == 0 {
 		err = agent.allowQueries(tablet.Tablet)
 	}
 
