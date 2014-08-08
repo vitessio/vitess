@@ -93,7 +93,7 @@ type ActionAgent struct {
 	// take actionMutex first.
 	actionMutex sync.Mutex // to run only one action at a time
 
-	// mutex is protecting the rest of the members
+	// mutex protects _tablet and serializes writes to changeItems.
 	mutex       sync.Mutex
 	changeItems chan tabletChangeItem
 	_tablet     *topo.TabletInfo
@@ -180,16 +180,8 @@ func (agent *ActionAgent) executeCallbacksLoop() {
 	for {
 		select {
 		case changeItem := <-agent.changeItems:
-			wg := sync.WaitGroup{}
-			agent.mutex.Lock()
 			log.Infof("Running tablet callback after %v: %v", time.Now().Sub(changeItem.queuedTime), changeItem.context)
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				agent.changeCallback(changeItem.oldTablet, changeItem.newTablet)
-			}()
-			agent.mutex.Unlock()
-			wg.Wait()
+			agent.changeCallback(changeItem.oldTablet, changeItem.newTablet)
 		case <-agent.done:
 			return
 		}
