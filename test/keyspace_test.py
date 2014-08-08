@@ -213,34 +213,27 @@ class TestKeyspace(unittest.TestCase):
 
   def test_shard_count(self):
     sharded_ks = self._read_keyspace(SHARDED_KEYSPACE)
-    self.assertEqual(sharded_ks.shard_count, 2)
     for db_type in ALL_DB_TYPES:
       self.assertEqual(sharded_ks.get_shard_count(db_type), 2)
     unsharded_ks = self._read_keyspace(UNSHARDED_KEYSPACE)
-    self.assertEqual(unsharded_ks.shard_count, 1)
     for db_type in ALL_DB_TYPES:
       self.assertEqual(unsharded_ks.get_shard_count(db_type), 1)
 
   def test_shard_names(self):
     sharded_ks = self._read_keyspace(SHARDED_KEYSPACE)
-    self.assertEqual(sharded_ks.shard_names, ['-80', '80-'])
     for db_type in ALL_DB_TYPES:
       self.assertEqual(sharded_ks.get_shard_names(db_type), ['-80', '80-'])
     unsharded_ks = self._read_keyspace(UNSHARDED_KEYSPACE)
-    self.assertEqual(unsharded_ks.shard_names, ['0'])
     for db_type in ALL_DB_TYPES:
       self.assertEqual(unsharded_ks.get_shard_names(db_type), ['0'])
 
   def test_shard_max_keys(self):
     sharded_ks = self._read_keyspace(SHARDED_KEYSPACE)
     want = ['80', '']
-    for i, smk in enumerate(sharded_ks.shard_max_keys):
-      self.assertEqual(smk.encode('hex').upper(), want[i])
     for db_type in ALL_DB_TYPES:
       for i, smk in enumerate(sharded_ks.get_shard_max_keys(db_type)):
         self.assertEqual(smk.encode('hex').upper(), want[i])
     unsharded_ks = self._read_keyspace(UNSHARDED_KEYSPACE)
-    self.assertEqual(unsharded_ks.shard_max_keys, None)
     for db_type in ALL_DB_TYPES:
       self.assertEqual(unsharded_ks.get_shard_max_keys(db_type), [''])
 
