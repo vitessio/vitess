@@ -12,26 +12,6 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
-// GetDBName parses the specified DML and returns the
-// db name if it was used to qualify the table name.
-// It returns an error if parsing fails or if the statement
-// is not a DML.
-func GetDBName(sql string) (string, error) {
-	statement, err := Parse(sql)
-	if err != nil {
-		return "", err
-	}
-	switch stmt := statement.(type) {
-	case *Insert:
-		return string(stmt.Table.Qualifier), nil
-	case *Update:
-		return string(stmt.Table.Qualifier), nil
-	case *Delete:
-		return string(stmt.Table.Qualifier), nil
-	}
-	return "", fmt.Errorf("statement '%s' is not a dml", sql)
-}
-
 // GetTableName returns the table name from the SimpleTableExpr
 // only if it's a simple expression. Otherwise, it returns "".
 func GetTableName(node SimpleTableExpr) string {
