@@ -263,21 +263,21 @@ func (pc *PrimeCache) OneRun() {
 	// get the slave status
 	slavestat, err := pc.getSlaveStatus()
 	if err != nil {
-		log.Errorf("getSlaveStatus failed: %v", err)
+		log.Warningf("getSlaveStatus failed: %v", err)
 		return
 	}
 
 	// if we're not replicating, we're done
 	if !slavestat.slaveSQLRunning {
-		log.Errorf("Slave is not replicating (SQL)")
+		log.Warningf("Slave is not replicating (SQL)")
 		return
 	}
 	if !slavestat.slaveIORunning {
-		log.Errorf("Slave is not replicating (IO)")
+		log.Warningf("Slave is not replicating (IO)")
 		return
 	}
 	if slavestat.secondsBehindMaster < 2 {
-		log.Errorf("Slave lag is negligible - %v seconds", slavestat.secondsBehindMaster)
+		log.Infof("Slave lag is negligible - %v seconds", slavestat.secondsBehindMaster)
 		return
 	}
 
