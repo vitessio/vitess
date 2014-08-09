@@ -106,8 +106,8 @@ def read_topology(zkocc_client, read_fqdb_keys=True):
     try:
       ks = keyspace.read_keyspace(zkocc_client, keyspace_name)
       __set_keyspace(ks)
-      for shard_name in ks.shard_names:
-        for db_type in ks.db_types:
+      for db_type in ks.db_types:
+        for shard_name in ks.get_shard_names(db_type):
           db_key_parts = [ks.name, shard_name, db_type]
           db_key = '.'.join(db_key_parts)
           db_keys.append(db_key)
