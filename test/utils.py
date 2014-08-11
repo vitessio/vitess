@@ -197,6 +197,10 @@ def run_fail(cmd, **kargs):
 def run_bg(cmd, **kargs):
   if options.verbose == 2:
     logging.debug("run: %s %s", cmd, ', '.join('%s=%s' % x for x in kargs.iteritems()))
+  if 'extra_env' in kargs and kargs['extra_env']:
+    kargs['env'] = os.environ.copy()
+    kargs['env'].update(kargs['extra_env'])
+    del(kargs['extra_env'])
   if isinstance(cmd, str):
     args = shlex.split(cmd)
   else:

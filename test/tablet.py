@@ -69,10 +69,11 @@ class Tablet(object):
       all_extra_my_cnf.append(environment.vttop + "/config/mycnf/master_google.cnf")
     if extra_my_cnf:
        all_extra_my_cnf.append(extra_my_cnf)
-    env = None
+    extra_env = None
     if all_extra_my_cnf:
-      env = os.environ.copy()
-      env['EXTRA_MY_CNF'] = ":".join(all_extra_my_cnf)
+      extra_env = {
+          'EXTRA_MY_CNF': ":".join(all_extra_my_cnf),
+          }
     args = environment.binary_args('mysqlctl') + [
             '-log_dir', environment.vtlogroot,
             '-tablet_uid', str(self.tablet_uid)]
@@ -82,7 +83,7 @@ class Tablet(object):
     if verbose:
       args.append('-alsologtostderr')
     args.extend(cmd)
-    return utils.run_bg(args, env=env)
+    return utils.run_bg(args, extra_env=extra_env)
 
   def init_mysql(self, extra_my_cnf=None):
     return self.mysqlctl(['init'], extra_my_cnf=extra_my_cnf,
