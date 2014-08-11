@@ -281,21 +281,22 @@ func (server *ResilientSrvTopoServer) GetEndPoints(context context.Context, cell
 
 	// not in cache or too old, get the real value
 	result, err := server.topoServer.GetEndPoints(cell, keyspace, shard, tabletType)
-	if err != nil {
-		// get remote endpoints for master if enabled
-		if server.enableRemoteMaster && tabletType == topo.TYPE_MASTER {
-			server.counts.Add(remoteQueryCategory, 1)
-			ss, err := server.topoServer.GetSrvShard(cell, keyspace, shard)
-			if err != nil {
-				server.counts.Add(remoteErrorCategory, 1)
-				log.Errorf("GetEndPoints(%v, %v, %v, %v, %v) failed to get SrvShard for remote master: %v",
-					context, cell, keyspace, shard, tabletType, err)
-			} else {
-				if ss.MasterCell != "" && ss.MasterCell != cell {
-					return server.GetEndPoints(context, ss.MasterCell, keyspace, shard, tabletType)
-				}
+	// get remote endpoints for master if enabled
+	if err != nil && server.enableRemoteMaster && tabletType == topo.TYPE_MASTER {
+		server.counts.Add(remoteQueryCategory, 1)
+		var ss *topo.SrvShard
+		ss, err = server.topoServer.GetSrvShard(cell, keyspace, shard)
+		if err != nil {
+			server.counts.Add(remoteErrorCategory, 1)
+			log.Errorf("GetEndPoints(%v, %v, %v, %v, %v) failed to get SrvShard for remote master: %v",
+				context, cell, keyspace, shard, tabletType, err)
+		} else {
+			if ss.MasterCell != "" && ss.MasterCell != cell {
+				result, err = server.topoServer.GetEndPoints(ss.MasterCell, keyspace, shard, tabletType)
 			}
 		}
+	}
+	if err != nil {
 		// handle error
 		if entry.insertionTime.IsZero() {
 			server.counts.Add(errorCategory, 1)
