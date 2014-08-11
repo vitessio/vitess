@@ -366,9 +366,14 @@ func TestRemoteMaster(t *testing.T) {
 
 	// no remote cell for master
 	rsts.enableRemoteMaster = false
-	ep, err = rsts.GetEndPoints(&context.DummyContext{}, "cell3", "test_ks", "1", topo.TYPE_MASTER)
+	ep, err = rsts.GetEndPoints(&context.DummyContext{}, "cell3", "test_ks", "2", topo.TYPE_MASTER)
 	if err == nil {
 		t.Fatalf("GetEndPoints did not return an error")
+	}
+	// use cached value from above
+	ep, err = rsts.GetEndPoints(&context.DummyContext{}, "cell3", "test_ks", "1", topo.TYPE_MASTER)
+	if err != nil {
+		t.Fatalf("GetEndPoints got unexpected error: %v", err)
 	}
 	ep, err = rsts.GetEndPoints(&context.DummyContext{}, "cell1", "test_ks", "1", topo.TYPE_MASTER)
 	if ep.Entries[0].Uid != 0 {
