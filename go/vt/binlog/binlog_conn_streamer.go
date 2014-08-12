@@ -203,6 +203,11 @@ func (bls *binlogConnStreamer) parseEvents(events <-chan proto.BinlogEvent, send
 			case proto.BL_BEGIN:
 				statements = nil
 			case proto.BL_ROLLBACK:
+				// TODO(enisoc): When we used to read binlog events through mysqlbinlog,
+				// it would generate fake ROLLBACK statements when it reached the end of
+				// a file in the middle of a transaction. We don't expect to see
+				// ROLLBACK here in the real replication stream, so log it if we do.
+				log.Warningf("ROLLBACK encountered in real binlog stream; transaction: %#v, rollback: %#v", statements, string(sql))
 				statements = nil
 				bls.startPos = bls.pos
 			case proto.BL_DDL:
