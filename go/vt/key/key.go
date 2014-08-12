@@ -31,6 +31,10 @@ func (kid KeyspaceId) Hex() HexKeyspaceId {
 	return HexKeyspaceId(strings.ToUpper(hex.EncodeToString([]byte(kid))))
 }
 
+func (kid KeyspaceId) String() string {
+	return string(kid.Hex())
+}
+
 // MarshalJSON turns a KeyspaceId into json (using hex encoding).
 func (kid KeyspaceId) MarshalJSON() ([]byte, error) {
 	return []byte("\"" + string(kid.Hex()) + "\""), nil
