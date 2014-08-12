@@ -15,6 +15,8 @@ import environment
 import utils
 from mysql_flavor import mysql_flavor
 
+from vtdb import tablet
+
 tablet_cell_map = {
     62344: 'nj',
     62044: 'nj',
@@ -234,6 +236,7 @@ class Tablet(object):
     utils.run_vtctl(args, auto_log=True)
 
   def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, start=False, dbname=None, parent=True, wait_for_start=True, **kwargs):
+    self.tablet_type = tablet_type
     self.keyspace = keyspace
     self.shard = shard
 
@@ -267,6 +270,11 @@ class Tablet(object):
       else:
         expected_state = "NOT_SERVING"
       self.start_vttablet(wait_for_state=expected_state, **kwargs)
+
+  def conn(self):
+    conn = tablet.TabletConnection("localhost:%d" % self.port, self.tablet_type, self.keyspace, self.shard, 30)
+    conn.dial()
+    return conn
 
   @property
   def tablet_dir(self):

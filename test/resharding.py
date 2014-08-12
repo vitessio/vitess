@@ -12,6 +12,7 @@ import struct
 import time
 import unittest
 
+from vtdb import dbexceptions
 from vtdb import keyrange_constants
 
 import environment
@@ -296,6 +297,16 @@ primary key (name)
     self._insert_value(shard_1_master, 'resharding1', 3, 'msg3',
                        0xD000000000000000)
 
+  def _exec_dml(self, tablet, sql, bindvars):
+    conn = tablet.conn()
+    conn.begin()
+    try:
+      results = conn._execute(sql, bindvars)
+      conn.commit()
+      return results(0)
+    finally:
+      conn.close()
+
   def _check_startup_values(self):
     # check first value is in the right shard
     self._check_value(shard_2_master, 'resharding1', 2, 'msg2',
@@ -399,6 +410,26 @@ primary key (name)
                           v['BinlogPlayerSecondsBehindMasterMap']['0'],
                           seconds_behind_master_max))
 
+  def _test_keyrange_constraints(self):
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, '.*enforce keyspace_id range.*'):
+      self._exec_dml(
+        shard_0_master,
+        "insert into resharding1(id, msg, keyspace_id) values(1, 'msg', :keyspace_id)",
+        {"keyspace_id": 0x9000000000000000},
+      )
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, '.*enforce keyspace_id range.*'):
+      self._exec_dml(
+        shard_0_master,
+        "update resharding1 set msg = 'msg' where id = 1",
+        {"keyspace_id": 0x9000000000000000},
+      )
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, '.*enforce keyspace_id range.*'):
+      self._exec_dml(
+        shard_0_master,
+        "delete from resharding1 where id = 1",
+        {"keyspace_id": 0x9000000000000000},
+      )
+
   def test_resharding(self):
     utils.run_vtctl(['CreateKeyspace',
                      '--sharding_column_name', 'bad_column',
@@ -448,6 +479,7 @@ primary key (name)
     # create the tables
     self._create_schema()
     self._insert_startup_values()
+    self._test_keyrange_constraints()
 
     # create the split shards
     shard_2_master.init_tablet(  'master', 'test_keyspace', '80-C0')
