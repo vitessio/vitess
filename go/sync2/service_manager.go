@@ -21,12 +21,14 @@ var stateNames = []string{
 	"ShuttingDown",
 }
 
-// ServiceManager manages the state of a service
-// through its lifecycle.
+// ServiceManager manages the state of a service through its lifecycle.
 type ServiceManager struct {
 	mu    sync.Mutex
 	wg    sync.WaitGroup
 	state AtomicInt64
+	// shutdown is created when the service starts and is closed when the service
+	// enters the SERVICE_SHUTTING_DOWN state.
+	shutdown chan struct{}
 }
 
 // Go tries to change the state from SERVICE_STOPPED to SERVICE_RUNNING.
@@ -43,6 +45,7 @@ func (svm *ServiceManager) Go(service func(svm *ServiceManager)) bool {
 		return false
 	}
 	svm.wg.Add(1)
+	svm.shutdown = make(chan struct{})
 	go func() {
 		service(svm)
 		svm.state.Set(SERVICE_STOPPED)
@@ -61,8 +64,23 @@ func (svm *ServiceManager) Stop() bool {
 	if !svm.state.CompareAndSwap(SERVICE_RUNNING, SERVICE_SHUTTING_DOWN) {
 		return false
 	}
+	// Signal the service that we've transitioned to SERVICE_SHUTTING_DOWN.
+	close(svm.shutdown)
 	svm.wg.Wait()
+	svm.shutdown = nil
 	return true
+}
+
+// ShuttingDown returns a channel that the service can select on to be notified
+// when it should shut down. The channel is closed when the state transitions
+// from SERVICE_RUNNING to SERVICE_SHUTTING_DOWN.
+func (svm *ServiceManager) ShuttingDown() chan struct{} {
+	return svm.shutdown
+}
+
+// IsRunning returns true if the state is SERVICE_RUNNING.
+func (svm *ServiceManager) IsRunning() bool {
+	return svm.state.Get() == SERVICE_RUNNING
 }
 
 // Wait waits for the service to terminate if it's currently running.

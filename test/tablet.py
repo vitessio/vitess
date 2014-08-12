@@ -15,6 +15,8 @@ import environment
 import utils
 from mysql_flavor import mysql_flavor
 
+from vtdb import tablet
+
 tablet_cell_map = {
     62344: 'nj',
     62044: 'nj',
@@ -69,10 +71,11 @@ class Tablet(object):
       all_extra_my_cnf.append(environment.vttop + "/config/mycnf/master_google.cnf")
     if extra_my_cnf:
        all_extra_my_cnf.append(extra_my_cnf)
-    env = None
+    extra_env = None
     if all_extra_my_cnf:
-      env = os.environ.copy()
-      env['EXTRA_MY_CNF'] = ":".join(all_extra_my_cnf)
+      extra_env = {
+          'EXTRA_MY_CNF': ":".join(all_extra_my_cnf),
+          }
     args = environment.binary_args('mysqlctl') + [
             '-log_dir', environment.vtlogroot,
             '-tablet_uid', str(self.tablet_uid)]
@@ -82,7 +85,7 @@ class Tablet(object):
     if verbose:
       args.append('-alsologtostderr')
     args.extend(cmd)
-    return utils.run_bg(args, env=env)
+    return utils.run_bg(args, extra_env=extra_env)
 
   def init_mysql(self, extra_my_cnf=None):
     return self.mysqlctl(['init'], extra_my_cnf=extra_my_cnf,
@@ -233,6 +236,7 @@ class Tablet(object):
     utils.run_vtctl(args, auto_log=True)
 
   def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, start=False, dbname=None, parent=True, wait_for_start=True, **kwargs):
+    self.tablet_type = tablet_type
     self.keyspace = keyspace
     self.shard = shard
 
@@ -266,6 +270,11 @@ class Tablet(object):
       else:
         expected_state = "NOT_SERVING"
       self.start_vttablet(wait_for_state=expected_state, **kwargs)
+
+  def conn(self):
+    conn = tablet.TabletConnection("localhost:%d" % self.port, self.tablet_type, self.keyspace, self.shard, 30)
+    conn.dial()
+    return conn
 
   @property
   def tablet_dir(self):

@@ -246,6 +246,7 @@ func (conn *Connection) CloseResult() {
 	C.vt_close_result(&conn.c)
 }
 
+// Id returns the MySQL thread_id of the connection.
 func (conn *Connection) Id() int64 {
 	if conn.c.mysql == nil {
 		return 0
@@ -276,11 +277,25 @@ func (conn *Connection) ReadPacket() ([]byte, error) {
 
 // SendCommand sends a raw command to the MySQL server.
 func (conn *Connection) SendCommand(command uint32, data []byte) error {
-	ret := C.vt_simple_command(&conn.c, command, (*C.uchar)(unsafe.Pointer(&data[0])), C.ulong(len(data)), 1)
+	var ret C.my_bool
+	if data == nil {
+		ret = C.vt_simple_command(&conn.c, command, nil, 0, 1)
+	} else {
+		ret = C.vt_simple_command(&conn.c, command, (*C.uchar)(unsafe.Pointer(&data[0])), C.ulong(len(data)), 1)
+	}
 	if ret != 0 {
 		return fmt.Errorf("error sending raw MySQL command: %v", conn.lastError(""))
 	}
 	return nil
+}
+
+// ForceClose closes a MySQL connection forcibly at the socket level, instead of
+// gracefully through mysql_close(). This is necessary when a thread is blocked
+// in a call to ReadPacket(), and another thread wants to cancel the read. We
+// can't use mysql_close() because it isn't safe to use while another thread is
+// blocked in an I/O call on that MySQL connection.
+func (conn *Connection) ForceClose() {
+	C.vt_force_close(&conn.c)
 }
 
 func BuildValue(bytes []byte, fieldType uint32) sqltypes.Value {

@@ -3,3 +3,6 @@
 // license that can be found in the LICENSE file.
 
 package mysqlctl
+
+// TODO(enisoc): Grab MariaDB binlog event data to make unit tests for binary
+// parser when MariaDB starts working.

@@ -8,6 +8,7 @@ import (
 	"os"
 	"testing"
 
+	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
@@ -18,6 +19,12 @@ func (fakeMysqlFlavor) MasterStatus(mysqld *Mysqld) (*proto.ReplicationPosition,
 }
 func (fakeMysqlFlavor) PromoteSlaveCommands() []string       { return nil }
 func (fakeMysqlFlavor) ParseGTID(string) (proto.GTID, error) { return nil, nil }
+func (fakeMysqlFlavor) SendBinlogDumpCommand(mysqld *Mysqld, conn *SlaveConnection, startPos proto.GTID) error {
+	return nil
+}
+func (fakeMysqlFlavor) MakeBinlogEvent(buf []byte) blproto.BinlogEvent {
+	return nil
+}
 
 func TestDefaultMysqlFlavor(t *testing.T) {
 	os.Setenv("MYSQL_FLAVOR", "")
