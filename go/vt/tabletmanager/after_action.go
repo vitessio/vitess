@@ -7,6 +7,7 @@ package tabletmanager
 // This file handles the agent initialization.
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 
@@ -48,34 +49,61 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet) error {
 		agent.DBConfigs.App.EnableInvalidator = false
 	}
 
-	// Compute the query rules that match the tablet record
-	qrs := tabletserver.LoadCustomRules()
-	if tablet.KeyRange.IsPartial() {
-		qr := tabletserver.NewQueryRule("enforce keyspace_id range", "keyspace_id_not_in_range", tabletserver.QR_FAIL)
-		qr.AddPlanCond(planbuilder.PLAN_INSERT_PK)
-		err := qr.AddBindVarCond("keyspace_id", true, true, tabletserver.QR_NOTIN, tablet.KeyRange)
-		if err != nil {
-			log.Warningf("Unable to add keyspace rule: %v", err)
-		} else {
-			qrs.Add(qr)
-		}
+	qrs, err := agent.createQueryRules(tablet)
+	if err != nil {
+		return err
 	}
-	if len(tablet.BlacklistedTables) > 0 {
-		// tables, first resolve wildcards
-		tables, err := agent.Mysqld.ResolveTables(tablet.DbName(), tablet.BlacklistedTables)
-		if err != nil {
-			log.Warningf("Unable to resolve blacklisted tables: %v", err)
-		} else {
-			log.Infof("Blacklisting tables %v", strings.Join(tables, ", "))
-			qr := tabletserver.NewQueryRule("enforce blacklisted tables", "blacklisted_table", tabletserver.QR_FAIL_RETRY)
-			for _, t := range tables {
-				qr.AddTableCond(t)
+
+	return tabletserver.AllowQueries(&agent.DBConfigs.App, agent.SchemaOverrides, qrs, agent.Mysqld, false)
+}
+
+// createQueryRules computes the query rules that match the tablet record
+func (agent *ActionAgent) createQueryRules(tablet *topo.Tablet) (qrs *tabletserver.QueryRules, err error) {
+	qrs = tabletserver.LoadCustomRules()
+
+	// Keyrange rules
+	if tablet.KeyRange.IsPartial() {
+		log.Infof("Restricting to keyrange: %v", tablet.KeyRange)
+		dml_plans := []struct {
+			planID   planbuilder.PlanType
+			onAbsent bool
+		}{
+			{planbuilder.PLAN_INSERT_PK, true},
+			{planbuilder.PLAN_INSERT_SUBQUERY, true},
+			{planbuilder.PLAN_PASS_DML, false},
+			{planbuilder.PLAN_DML_PK, false},
+			{planbuilder.PLAN_DML_SUBQUERY, false},
+		}
+		for _, plan := range dml_plans {
+			qr := tabletserver.NewQueryRule(
+				fmt.Sprintf("enforce keyspace_id range for %v", plan.planID),
+				fmt.Sprintf("keyspace_id_not_in_range_%v", plan.planID),
+				tabletserver.QR_FAIL,
+			)
+			qr.AddPlanCond(plan.planID)
+			err := qr.AddBindVarCond("keyspace_id", plan.onAbsent, true, tabletserver.QR_NOTIN, tablet.KeyRange)
+			if err != nil {
+				return nil, fmt.Errorf("Unable to add keyspace rule: %v", err)
 			}
 			qrs.Add(qr)
 		}
 	}
 
-	return tabletserver.AllowQueries(&agent.DBConfigs.App, agent.SchemaOverrides, qrs, agent.Mysqld, false)
+	// Blacklisted tables
+	if len(tablet.BlacklistedTables) > 0 {
+		// tables, first resolve wildcards
+		tables, err := agent.Mysqld.ResolveTables(tablet.DbName(), tablet.BlacklistedTables)
+		if err != nil {
+			return nil, err
+		}
+		log.Infof("Blacklisting tables %v", strings.Join(tables, ", "))
+		qr := tabletserver.NewQueryRule("enforce blacklisted tables", "blacklisted_table", tabletserver.QR_FAIL_RETRY)
+		for _, t := range tables {
+			qr.AddTableCond(t)
+		}
+		qrs.Add(qr)
+	}
+	return qrs, nil
 }
 
 func (agent *ActionAgent) disallowQueries() {
