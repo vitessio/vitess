@@ -47,6 +47,7 @@ var (
 type Mysqld struct {
 	flavor      MysqlFlavor
 	config      *Mycnf
+	dba         *mysql.ConnectionParams
 	dbaPool     *dbconnpool.ConnectionPool
 	replParams  *mysql.ConnectionParams
 	TabletDir   string
@@ -67,12 +68,13 @@ func NewMysqld(name string, config *Mycnf, dba, repl *mysql.ConnectionParams) *M
 	dbaPool.Open(dbconnpool.DBConnectionCreator(dba, mysqlStats))
 
 	return &Mysqld{
-		mysqlFlavor(),
-		config,
-		dbaPool,
-		repl,
-		TabletDir(config.ServerId),
-		SnapshotDir(config.ServerId),
+		flavor:      mysqlFlavor(),
+		config:      config,
+		dba:         dba,
+		dbaPool:     dbaPool,
+		replParams:  repl,
+		TabletDir:   TabletDir(config.ServerId),
+		SnapshotDir: SnapshotDir(config.ServerId),
 	}
 }
 
