@@ -83,7 +83,7 @@ func testShardConnGeneric(t *testing.T, name string, f func() error) {
 	s := createSandbox(name)
 	s.EndPointMustFail = 1
 	err := f()
-	want := fmt.Sprintf("endpoints fetch error: topo error, shard, host: %v.0.", name)
+	want := fmt.Sprintf("endpoints fetch error: topo error, shard, host: %v.0., {Uid:0 Host: NamedPortMap:map[] Health:map[]}", name)
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
@@ -95,7 +95,7 @@ func testShardConnGeneric(t *testing.T, name string, f func() error) {
 	s.Reset()
 	s.DialMustFail = 4
 	err = f()
-	want = fmt.Sprintf("conn error, shard, host: %v.0.", name)
+	want = fmt.Sprintf("conn error, shard, host: %v.0., {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}", name)
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}

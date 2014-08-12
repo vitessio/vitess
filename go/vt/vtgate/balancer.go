@@ -88,11 +88,11 @@ outer:
 
 // MarkDown marks the specified address down. Such addresses
 // will not be used by Balancer for the duration of retryDelay.
-func (blc *Balancer) MarkDown(uid uint32) {
+func (blc *Balancer) MarkDown(uid uint32, reason string) {
 	blc.mu.Lock()
 	defer blc.mu.Unlock()
 	if index := findAddrNode(blc.addressNodes, uid); index != -1 {
-		log.Infof("Marking down %v at %+v", uid, blc.addressNodes[index].endPoint)
+		log.Infof("Marking down %v at %+v (%v)", uid, blc.addressNodes[index].endPoint, reason)
 		blc.addressNodes[index].timeRetry = time.Now().Add(blc.retryDelay)
 	}
 }
