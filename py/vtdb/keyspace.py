@@ -47,7 +47,7 @@ class Keyspace(object):
     if not db_type:
       raise ValueError('db_type is not set')
     shards = self.get_shards(db_type)
-    return [_get_shard_name(shard) for shard in shards]
+    return [shard['Name'] for shard in shards]
 
   def keyspace_id_to_shard_name_for_db_type(self, keyspace_id, db_type):
     if not keyspace_id:
@@ -61,17 +61,9 @@ class Keyspace(object):
       if _shard_contain_kid(pkid,
                             shard['KeyRange']['Start'],
                             shard['KeyRange']['End']):
-        return _get_shard_name(shard)
+        return shard['Name']
     raise ValueError('cannot find shard for keyspace_id %s in %s' % (keyspace_id, shards))
 
-def _get_shard_name(shard):
-  start = shard['KeyRange']['Start']
-  end = shard['KeyRange']['End']
-  if start == keyrange_constants.MIN_KEY and end == keyrange_constants.MAX_KEY:
-    return keyrange_constants.SHARD_ZERO
-  else:
-    return '%s-%s' % (start.encode('hex').upper(),
-                      end.encode('hex').upper())
 
 def _shard_contain_kid(pkid, start, end):
     return start <= pkid and (end == keyrange_constants.MAX_KEY or pkid < end)
