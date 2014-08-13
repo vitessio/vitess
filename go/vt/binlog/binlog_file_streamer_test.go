@@ -85,9 +85,9 @@ func TestFileInfo(t *testing.T) {
 	}
 	ch := make(chan []byte, 10)
 	var svm = sync2.ServiceManager{}
-	svm.Go(func(_ *sync2.ServiceManager) {
+	svm.Go(func(svc *sync2.ServiceContext) {
 		for svm.State() == sync2.SERVICE_RUNNING {
-			file.WaitForChange(&svm)
+			file.WaitForChange(svc)
 			b := make([]byte, 128)
 			n, err := file.handle.Read(b)
 			if err != nil {

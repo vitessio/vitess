@@ -68,8 +68,8 @@ func TestBinlogConnStreamerParseEventsXID(t *testing.T) {
 	}
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svm *sync2.ServiceManager) {
-		err := bls.parseEvents(events, sendTransaction)
+	bls.svm.Go(func(svc *sync2.ServiceContext) {
+		err := bls.parseEvents(svc, events, sendTransaction)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -111,8 +111,8 @@ func TestBinlogConnStreamerParseEventsCommit(t *testing.T) {
 	}
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svm *sync2.ServiceManager) {
-		err := bls.parseEvents(events, sendTransaction)
+	bls.svm.Go(func(svc *sync2.ServiceContext) {
+		err := bls.parseEvents(svc, events, sendTransaction)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -133,8 +133,8 @@ func TestBinlogConnStreamerStop(t *testing.T) {
 	}
 
 	// Start parseEvents(), but don't send it anything, so it just waits.
-	bls.svm.Go(func(svm *sync2.ServiceManager) {
-		err := bls.parseEvents(events, sendTransaction)
+	bls.svm.Go(func(svc *sync2.ServiceContext) {
+		err := bls.parseEvents(svc, events, sendTransaction)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -171,8 +171,8 @@ func TestBinlogConnStreamerParseEventsSendEOF(t *testing.T) {
 	}
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svm *sync2.ServiceManager) {
-		err := bls.parseEvents(events, sendTransaction)
+	bls.svm.Go(func(svc *sync2.ServiceContext) {
+		err := bls.parseEvents(svc, events, sendTransaction)
 		if err == nil {
 			t.Errorf("expected error, got none")
 			return
@@ -202,8 +202,8 @@ func TestBinlogConnStreamerParseEventsSendErrorXID(t *testing.T) {
 	}
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svm *sync2.ServiceManager) {
-		err := bls.parseEvents(events, sendTransaction)
+	bls.svm.Go(func(svc *sync2.ServiceContext) {
+		err := bls.parseEvents(svc, events, sendTransaction)
 		if err == nil {
 			t.Errorf("expected error, got none")
 			return
@@ -233,8 +233,8 @@ func TestBinlogConnStreamerParseEventsSendErrorCommit(t *testing.T) {
 	}
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svm *sync2.ServiceManager) {
-		err := bls.parseEvents(events, sendTransaction)
+	bls.svm.Go(func(svc *sync2.ServiceContext) {
+		err := bls.parseEvents(svc, events, sendTransaction)
 		if err == nil {
 			t.Errorf("expected error, got none")
 			return
@@ -266,8 +266,8 @@ func TestBinlogConnStreamerParseEventsInvalid(t *testing.T) {
 	}
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svm *sync2.ServiceManager) {
-		err := bls.parseEvents(events, sendTransaction)
+	bls.svm.Go(func(svc *sync2.ServiceContext) {
+		err := bls.parseEvents(svc, events, sendTransaction)
 		if err == nil {
 			t.Errorf("expected error, got none")
 			return
@@ -301,8 +301,8 @@ func TestBinlogConnStreamerParseEventsInvalidFormat(t *testing.T) {
 	}
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svm *sync2.ServiceManager) {
-		err := bls.parseEvents(events, sendTransaction)
+	bls.svm.Go(func(svc *sync2.ServiceContext) {
+		err := bls.parseEvents(svc, events, sendTransaction)
 		if err == nil {
 			t.Errorf("expected error, got none")
 			return
@@ -332,8 +332,8 @@ func TestBinlogConnStreamerParseEventsNoFormat(t *testing.T) {
 	}
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svm *sync2.ServiceManager) {
-		err := bls.parseEvents(events, sendTransaction)
+	bls.svm.Go(func(svc *sync2.ServiceContext) {
+		err := bls.parseEvents(svc, events, sendTransaction)
 		if err == nil {
 			t.Errorf("expected error, got none")
 			return
@@ -367,8 +367,8 @@ func TestBinlogConnStreamerParseEventsInvalidQuery(t *testing.T) {
 	}
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svm *sync2.ServiceManager) {
-		err := bls.parseEvents(events, sendTransaction)
+	bls.svm.Go(func(svc *sync2.ServiceContext) {
+		err := bls.parseEvents(svc, events, sendTransaction)
 		if err == nil {
 			t.Errorf("expected error, got none")
 			return
@@ -414,8 +414,8 @@ func TestBinlogConnStreamerParseEventsRollback(t *testing.T) {
 	}
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svm *sync2.ServiceManager) {
-		err := bls.parseEvents(events, sendTransaction)
+	bls.svm.Go(func(svc *sync2.ServiceContext) {
+		err := bls.parseEvents(svc, events, sendTransaction)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -467,8 +467,8 @@ func TestBinlogConnStreamerParseEventsCreate(t *testing.T) {
 	}
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svm *sync2.ServiceManager) {
-		err := bls.parseEvents(events, sendTransaction)
+	bls.svm.Go(func(svc *sync2.ServiceContext) {
+		err := bls.parseEvents(svc, events, sendTransaction)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -512,8 +512,8 @@ func TestBinlogConnStreamerParseEventsSetInsertID(t *testing.T) {
 	}
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svm *sync2.ServiceManager) {
-		err := bls.parseEvents(events, sendTransaction)
+	bls.svm.Go(func(svc *sync2.ServiceContext) {
+		err := bls.parseEvents(svc, events, sendTransaction)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -548,8 +548,8 @@ func TestBinlogConnStreamerParseEventsInvalidIntVar(t *testing.T) {
 	}
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svm *sync2.ServiceManager) {
-		err := bls.parseEvents(events, sendTransaction)
+	bls.svm.Go(func(svc *sync2.ServiceContext) {
+		err := bls.parseEvents(svc, events, sendTransaction)
 		if err == nil {
 			t.Errorf("expected error, got none")
 			return

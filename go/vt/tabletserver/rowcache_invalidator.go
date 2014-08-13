@@ -79,7 +79,7 @@ func (rci *RowcacheInvalidator) Open(dbname string, mysqld *mysqlctl.Mysqld) {
 		panic(NewTabletError(FATAL, "Rowcache invalidator aborting: binlog path not specified"))
 	}
 
-	ok := rci.svm.Go(func(_ *sync2.ServiceManager) {
+	ok := rci.svm.Go(func(_ *sync2.ServiceContext) {
 		rci.mu.Lock()
 		rci.dbname = dbname
 		rci.mysqld = mysqld

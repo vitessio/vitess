@@ -47,11 +47,11 @@ func (bls *binlogConnStreamer) Stream(gtid myproto.GTID, sendTransaction sendTra
 	bls.startPos = gtid
 
 	// Launch using service manager so we can stop this as needed.
-	bls.svm.Go(func(svm *sync2.ServiceManager) {
+	bls.svm.Go(func(svc *sync2.ServiceContext) {
 		var events <-chan proto.BinlogEvent
 
 		// Keep reconnecting and restarting stream unless we've been told to stop.
-		for svm.IsRunning() {
+		for svc.IsRunning() {
 			if bls.conn, err = mysqlctl.NewSlaveConnection(bls.mysqld); err != nil {
 				return
 			}
@@ -60,7 +60,9 @@ func (bls *binlogConnStreamer) Stream(gtid myproto.GTID, sendTransaction sendTra
 				bls.conn.Close()
 				return
 			}
-			if err = bls.parseEvents(events, sendTransaction); err != nil {
+			// parseEvents will loop until the events channel is closed, the
+			// service enters the SHUTTING_DOWN state, or an error occurs.
+			if err = bls.parseEvents(svc, events, sendTransaction); err != nil {
 				bls.conn.Close()
 				return
 			}
@@ -87,8 +89,9 @@ func (bls *binlogConnStreamer) Stop() {
 }
 
 // parseEvents processes the raw binlog dump stream from the server, one event
-// at a time, and groups them into transactions.
-func (bls *binlogConnStreamer) parseEvents(events <-chan proto.BinlogEvent, sendTransaction sendTransactionFunc) (err error) {
+// at a time, and groups them into transactions. It is called from within the
+// service function launched by Stream().
+func (bls *binlogConnStreamer) parseEvents(svc *sync2.ServiceContext, events <-chan proto.BinlogEvent, sendTransaction sendTransactionFunc) (err error) {
 	var statements []proto.Statement
 	var timestamp int64
 	var format proto.BinlogFormat
@@ -112,7 +115,7 @@ func (bls *binlogConnStreamer) parseEvents(events <-chan proto.BinlogEvent, send
 	}
 
 	// Parse events.
-	for bls.svm.IsRunning() {
+	for svc.IsRunning() {
 		var ev proto.BinlogEvent
 		var ok bool
 
@@ -122,7 +125,7 @@ func (bls *binlogConnStreamer) parseEvents(events <-chan proto.BinlogEvent, send
 				log.Infof("reached end of binlog event stream")
 				return nil
 			}
-		case <-bls.svm.ShuttingDown():
+		case <-svc.ShuttingDown:
 			log.Infof("stopping early due to BinlogStreamer service shutdown")
 			return nil
 		}

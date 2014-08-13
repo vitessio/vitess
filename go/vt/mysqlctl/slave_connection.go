@@ -74,10 +74,10 @@ func (sc *SlaveConnection) StartBinlogDump(startPos proto.GTID) (<-chan blproto.
 	eventChan := make(chan blproto.BinlogEvent)
 
 	// Start reading events.
-	sc.svm.Go(func(svm *sync2.ServiceManager) {
+	sc.svm.Go(func(svc *sync2.ServiceContext) {
 		defer close(eventChan)
 
-		for svm.IsRunning() {
+		for svc.IsRunning() {
 			buf, err := sc.Connection.ReadPacket()
 			if err != nil || len(buf) == 0 {
 				// This is not necessarily an error. It could just be that we closed
@@ -95,7 +95,7 @@ func (sc *SlaveConnection) StartBinlogDump(startPos proto.GTID) (<-chan blproto.
 			select {
 			// Skip the first byte because it's only used for signaling EOF.
 			case eventChan <- sc.mysqld.flavor.MakeBinlogEvent(buf[1:]):
-			case <-svm.ShuttingDown():
+			case <-svc.ShuttingDown:
 				return
 			}
 		}

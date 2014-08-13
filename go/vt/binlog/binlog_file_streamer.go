@@ -95,12 +95,12 @@ func (bls *binlogFileStreamer) streamFilePos(file string, pos int64, sendTransac
 	defer bls.file.Close()
 
 	// Launch using service manager so we can stop this as needed.
-	bls.svm.Go(func(_ *sync2.ServiceManager) {
+	bls.svm.Go(func(svc *sync2.ServiceContext) {
 		for {
-			if err = bls.run(sendTransaction); err != nil {
+			if err = bls.run(svc, sendTransaction); err != nil {
 				return
 			}
-			if err = bls.file.WaitForChange(&bls.svm); err != nil {
+			if err = bls.file.WaitForChange(svc); err != nil {
 				return
 			}
 		}
@@ -134,14 +134,14 @@ func (bls *binlogFileStreamer) Stop() {
 
 // run launches mysqlbinlog and starts the stream. It takes care of
 // cleaning up the process when streaming returns.
-func (bls *binlogFileStreamer) run(sendTransaction sendTransactionFunc) (err error) {
+func (bls *binlogFileStreamer) run(svc *sync2.ServiceContext, sendTransaction sendTransactionFunc) (err error) {
 	mbl := &MysqlBinlog{}
 	reader, err := mbl.Launch(bls.dbname, bls.file.name, bls.file.pos)
 	if err != nil {
 		return fmt.Errorf("launch error: %v", err)
 	}
 	defer reader.Close()
-	err = bls.parseEvents(sendTransaction, reader)
+	err = bls.parseEvents(svc, sendTransaction, reader)
 	// Always kill because we don't read from reader all the way to EOF.
 	// If we wait, we may deadlock.
 	mbl.Kill()
@@ -149,13 +149,13 @@ func (bls *binlogFileStreamer) run(sendTransaction sendTransactionFunc) (err err
 }
 
 // parseEvents parses events and transmits them as transactions for the current mysqlbinlog stream.
-func (bls *binlogFileStreamer) parseEvents(sendTransaction sendTransactionFunc, reader io.Reader) (err error) {
+func (bls *binlogFileStreamer) parseEvents(svc *sync2.ServiceContext, sendTransaction sendTransactionFunc, reader io.Reader) (err error) {
 	bls.delim = DEFAULT_DELIM
 	bufReader := bufio.NewReader(reader)
 	var statements []proto.Statement
 	var timestamp int64
 	for {
-		sql, err := bls.nextStatement(bufReader)
+		sql, err := bls.nextStatement(svc, bufReader)
 		if sql == nil {
 			return err
 		}
@@ -203,11 +203,11 @@ func (bls *binlogFileStreamer) parseEvents(sendTransaction sendTransactionFunc, 
 // positional comments, it updates the binlogFileStreamer state. It also ignores events that
 // are not material. If it returns nil, it's the end of stream. If err is also nil, then
 // it was due to a normal termination.
-func (bls *binlogFileStreamer) nextStatement(bufReader *bufio.Reader) (stmt []byte, err error) {
+func (bls *binlogFileStreamer) nextStatement(svc *sync2.ServiceContext, bufReader *bufio.Reader) (stmt []byte, err error) {
 eventLoop:
 	for {
 		// Stop processing if we're shutting down
-		if bls.svm.State() != sync2.SERVICE_RUNNING {
+		if !svc.IsRunning() {
 			return nil, io.EOF
 		}
 		event, err := bls.readEvent(bufReader)
@@ -345,10 +345,10 @@ func (f *fileInfo) Save() {
 	}
 }
 
-func (f *fileInfo) WaitForChange(svm *sync2.ServiceManager) error {
+func (f *fileInfo) WaitForChange(svc *sync2.ServiceContext) error {
 	for {
 		// Stop waiting if we're shutting down
-		if svm.State() != sync2.SERVICE_RUNNING {
+		if !svc.IsRunning() {
 			return io.EOF
 		}
 		time.Sleep(100 * time.Millisecond)

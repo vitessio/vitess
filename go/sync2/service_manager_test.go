@@ -14,11 +14,11 @@ type testService struct {
 	t         *testing.T
 }
 
-func (ts *testService) service(svm *ServiceManager) {
+func (ts *testService) service(svc *ServiceContext) {
 	if !ts.activated.CompareAndSwap(0, 1) {
 		ts.t.Fatalf("service called more than once")
 	}
-	for svm.IsRunning() {
+	for svc.IsRunning() {
 		time.Sleep(10 * time.Millisecond)
 
 	}
@@ -27,16 +27,16 @@ func (ts *testService) service(svm *ServiceManager) {
 	}
 }
 
-func (ts *testService) selectService(svm *ServiceManager) {
+func (ts *testService) selectService(svc *ServiceContext) {
 	if !ts.activated.CompareAndSwap(0, 1) {
 		ts.t.Fatalf("service called more than once")
 	}
 serviceLoop:
-	for svm.IsRunning() {
+	for svc.IsRunning() {
 		select {
 		case <-time.After(1 * time.Second):
 			ts.t.Errorf("service didn't stop when shutdown channel was closed")
-		case <-svm.ShuttingDown():
+		case <-svc.ShuttingDown:
 			break serviceLoop
 		}
 	}
