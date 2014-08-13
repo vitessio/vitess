@@ -43,30 +43,11 @@ class Keyspace(object):
     shards = self.get_shards(db_type)
     return len(shards)
 
-  def get_shard_max_keys(self, db_type):
-    if not db_type:
-      raise ValueError('db_type is not set')
-    shards = self.get_shards(db_type)
-    shard_max_keys = [shard['KeyRange']['End']
-                      for shard in shards]
-    return shard_max_keys
-
   def get_shard_names(self, db_type):
     if not db_type:
       raise ValueError('db_type is not set')
-    names = []
     shards = self.get_shards(db_type)
-    shard_max_keys = self.get_shard_max_keys(db_type)
-    if len(shard_max_keys) == 1 and shard_max_keys[0] == keyrange_constants.MAX_KEY:
-      return [keyrange_constants.SHARD_ZERO,]
-    for i, max_key in enumerate(shard_max_keys):
-      min_key = keyrange_constants.MIN_KEY
-      if i > 0:
-        min_key = shard_max_keys[i-1]
-      shard_name = '%s-%s' % (min_key.encode('hex').upper(),
-                              max_key.encode('hex').upper())
-      names.append(shard_name)
-    return names
+    return [_get_shard_name(shard) for shard in shards]
 
   def keyspace_id_to_shard_name_for_db_type(self, keyspace_id, db_type):
     if not keyspace_id:
@@ -75,14 +56,25 @@ class Keyspace(object):
       raise ValueError('db_type is not set')
     # Pack this into big-endian and do a byte-wise comparison.
     pkid = pack_keyspace_id(keyspace_id)
-    shard_max_keys = self.get_shard_max_keys(db_type)
-    shard_names = self.get_shard_names(db_type)
-    if not shard_max_keys:
-      raise ValueError('Keyspace is not range sharded', self.name)
-    for shard_index, shard_max in enumerate(shard_max_keys):
-      if pkid < shard_max:
-        break
-    return shard_names[shard_index]
+    shards = self.get_shards(db_type)
+    for shard in shards:
+      if _shard_contain_kid(pkid,
+                            shard['KeyRange']['Start'],
+                            shard['KeyRange']['End']):
+        return _get_shard_name(shard)
+    raise ValueError('cannot find shard for keyspace_id %s in %s' % (keyspace_id, shards))
+
+def _get_shard_name(shard):
+  start = shard['KeyRange']['Start']
+  end = shard['KeyRange']['End']
+  if start == keyrange_constants.MIN_KEY and end == keyrange_constants.MAX_KEY:
+    return keyrange_constants.SHARD_ZERO
+  else:
+    return '%s-%s' % (start.encode('hex').upper(),
+                      end.encode('hex').upper())
+
+def _shard_contain_kid(pkid, start, end):
+    return start <= pkid and (end == keyrange_constants.MAX_KEY or pkid < end)
 
 
 def read_keyspace(topo_client, keyspace_name):

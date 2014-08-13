@@ -227,16 +227,6 @@ class TestKeyspace(unittest.TestCase):
     for db_type in ALL_DB_TYPES:
       self.assertEqual(unsharded_ks.get_shard_names(db_type), ['0'])
 
-  def test_shard_max_keys(self):
-    sharded_ks = self._read_keyspace(SHARDED_KEYSPACE)
-    want = ['80', '']
-    for db_type in ALL_DB_TYPES:
-      for i, smk in enumerate(sharded_ks.get_shard_max_keys(db_type)):
-        self.assertEqual(smk.encode('hex').upper(), want[i])
-    unsharded_ks = self._read_keyspace(UNSHARDED_KEYSPACE)
-    for db_type in ALL_DB_TYPES:
-      self.assertEqual(unsharded_ks.get_shard_max_keys(db_type), [''])
-
   def test_db_types(self):
     sharded_ks = self._read_keyspace(SHARDED_KEYSPACE)
     self.assertEqual(set(sharded_ks.db_types), set(ALL_DB_TYPES))
