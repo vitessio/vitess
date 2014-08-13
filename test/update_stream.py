@@ -345,6 +345,21 @@ class TestUpdateStream(unittest.TestCase):
     self.assertEqual(data['Sql'], _create_vt_insert_test,
                      "DDL didn't match original")
 
+  def test_set_insert_id(self):
+    start_position = _get_master_current_position()
+    self._exec_vt_txn(['SET INSERT_ID=1000000'] + self._populate_vt_insert_test)
+    logging.debug("test_set_insert_id: starting @ %s" % start_position)
+    master_conn = self._get_master_stream_conn()
+    master_conn.dial()
+    data = master_conn.stream_start(start_position)
+    expected_id = 1000000
+    while data:
+      if data['Category'] == 'POS':
+        break
+      self.assertEqual(data['PkRows'][0][0][1], expected_id)
+      expected_id += 1
+      data = master_conn.stream_next()
+
   #This tests the service switch from disable -> enable -> disable
   def test_service_switch(self):
     self._test_service_disabled()
