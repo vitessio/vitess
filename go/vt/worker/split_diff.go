@@ -7,11 +7,9 @@ package worker
 import (
 	"fmt"
 	"html/template"
-	"strings"
 	"sync"
 	"time"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sync2"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/concurrency"
@@ -59,7 +57,6 @@ type SplitDiffWorker struct {
 	destinationAlias topo.TabletAlias
 
 	// populated during stateSDDiff
-	diffLogs                    []string
 	sourceSchemaDefinitions     []*myproto.SchemaDefinition
 	destinationSchemaDefinition *myproto.SchemaDefinition
 }
@@ -99,11 +96,9 @@ func (sdw *SplitDiffWorker) StatusAsHTML() template.HTML {
 	case stateSDError:
 		result += "<b>Error</b>: " + sdw.err.Error() + "</br>\n"
 	case stateSDDiff:
-		result += "<b>Running</b>:</br>\n"
-		result += strings.Join(sdw.diffLogs, "</br>\n")
+		result += "<b>Running...</b></br>\n"
 	case stateSDDone:
-		result += "<b>Success</b>:</br>\n"
-		result += strings.Join(sdw.diffLogs, "</br>\n")
+		result += "<b>Success.</b></br>\n"
 	}
 
 	return template.HTML(result)
@@ -118,11 +113,9 @@ func (sdw *SplitDiffWorker) StatusAsText() string {
 	case stateSDError:
 		result += "Error: " + sdw.err.Error() + "\n"
 	case stateSDDiff:
-		result += "Running:\n"
-		result += strings.Join(sdw.diffLogs, "\n")
+		result += "Running...\n"
 	case stateSDDone:
-		result += "Success:\n"
-		result += strings.Join(sdw.diffLogs, "\n")
+		result += "Success.\n"
 	}
 	return result
 }
@@ -145,7 +138,7 @@ func (sdw *SplitDiffWorker) Run() {
 	cerr := sdw.cleaner.CleanUp(sdw.wr)
 	if cerr != nil {
 		if err != nil {
-			log.Errorf("CleanUp failed in addition to job error: %v", cerr)
+			sdw.wr.Logger().Errorf("CleanUp failed in addition to job error: %v", cerr)
 		} else {
 			err = cerr
 		}
@@ -267,7 +260,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	sdw.setState(stateSDSynchronizeReplication)
 
 	// 1 - stop the master binlog replication, get its current position
-	log.Infof("Stopping master binlog replication on %v", sdw.shardInfo.MasterAlias)
+	sdw.wr.Logger().Infof("Stopping master binlog replication on %v", sdw.shardInfo.MasterAlias)
 	blpPositionList, err := sdw.wr.ActionInitiator().StopBlp(sdw.shardInfo.MasterAlias, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("StopBlp for %v failed: %v", sdw.shardInfo.MasterAlias, err)
@@ -287,7 +280,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 		}
 
 		// stop replication
-		log.Infof("Stopping slave[%v] %v at a minimum of %v", i, sdw.sourceAliases[i], pos.GTIDField)
+		sdw.wr.Logger().Infof("Stopping slave[%v] %v at a minimum of %v", i, sdw.sourceAliases[i], pos.GTIDField)
 		stoppedAt, err := sdw.wr.ActionInitiator().StopSlaveMinimum(sdw.sourceAliases[i], pos.GTIDField.Value, 30*time.Second)
 		if err != nil {
 			return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", sdw.sourceAliases[i], pos.GTIDField, err)
@@ -307,7 +300,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 
 	// 3 - ask the master of the destination shard to resume filtered
 	//     replication up to the new list of positions
-	log.Infof("Restarting master %v until it catches up to %v", sdw.shardInfo.MasterAlias, stopPositionList)
+	sdw.wr.Logger().Infof("Restarting master %v until it catches up to %v", sdw.shardInfo.MasterAlias, stopPositionList)
 	masterPos, err := sdw.wr.ActionInitiator().RunBlpUntil(sdw.shardInfo.MasterAlias, &stopPositionList, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("RunBlpUntil for %v until %v failed: %v", sdw.shardInfo.MasterAlias, stopPositionList, err)
@@ -315,7 +308,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 
 	// 4 - wait until the destination checker is equal or passed
 	//     that master binlog position, and stop its replication.
-	log.Infof("Waiting for destination checker %v to catch up to %v", sdw.destinationAlias, masterPos.MasterLogGTIDField)
+	sdw.wr.Logger().Infof("Waiting for destination checker %v to catch up to %v", sdw.destinationAlias, masterPos.MasterLogGTIDField)
 	_, err = sdw.wr.ActionInitiator().StopSlaveMinimum(sdw.destinationAlias, masterPos.MasterLogGTIDField.Value, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("StopSlaveMinimum for %v at %v failed: %v", sdw.destinationAlias, masterPos.MasterLogGTIDField, err)
@@ -328,10 +321,10 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	action.TabletType = topo.TYPE_SPARE
 
 	// 5 - restart filtered replication on destination master
-	log.Infof("Restarting filtered replication on master %v", sdw.shardInfo.MasterAlias)
+	sdw.wr.Logger().Infof("Restarting filtered replication on master %v", sdw.shardInfo.MasterAlias)
 	err = sdw.wr.ActionInitiator().StartBlp(sdw.shardInfo.MasterAlias, 30*time.Second)
 	if err := sdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String()); err != nil {
-		log.Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String(), err)
+		sdw.wr.Logger().Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String(), err)
 	}
 	if err != nil {
 		return fmt.Errorf("StartBlp failed for %v: %v", sdw.shardInfo.MasterAlias, err)
@@ -340,22 +333,15 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	return nil
 }
 
-// diff phase: will create a list of messages regarding the diff.
+// diff phase: will log messages regarding the diff.
 // - get the schema on all checkers
 // - if some table schema mismatches, record them (use existing schema diff tools).
 // - for each table in destination, run a diff pipeline.
 
-func (sdw *SplitDiffWorker) diffLog(msg string) {
-	sdw.mu.Lock()
-	sdw.diffLogs = append(sdw.diffLogs, msg)
-	sdw.mu.Unlock()
-	log.Infof("diffLog: %v", msg)
-}
-
 func (sdw *SplitDiffWorker) diff() error {
 	sdw.setState(stateSDDiff)
 
-	sdw.diffLog("Gathering schema information...")
+	sdw.wr.Logger().Infof("Gathering schema information...")
 	sdw.sourceSchemaDefinitions = make([]*myproto.SchemaDefinition, len(sdw.sourceAliases))
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
@@ -364,7 +350,7 @@ func (sdw *SplitDiffWorker) diff() error {
 		var err error
 		sdw.destinationSchemaDefinition, err = sdw.wr.GetSchema(sdw.destinationAlias, nil, nil, false)
 		rec.RecordError(err)
-		sdw.diffLog(fmt.Sprintf("Got schema from destination %v", sdw.destinationAlias))
+		sdw.wr.Logger().Infof("Got schema from destination %v", sdw.destinationAlias)
 		wg.Done()
 	}()
 	for i, sourceAlias := range sdw.sourceAliases {
@@ -373,7 +359,7 @@ func (sdw *SplitDiffWorker) diff() error {
 			var err error
 			sdw.sourceSchemaDefinitions[i], err = sdw.wr.GetSchema(sourceAlias, nil, nil, false)
 			rec.RecordError(err)
-			sdw.diffLog(fmt.Sprintf("Got schema from source[%v] %v", i, sourceAlias))
+			sdw.wr.Logger().Infof("Got schema from source[%v] %v", i, sourceAlias)
 			wg.Done()
 		}(i, sourceAlias)
 	}
@@ -384,20 +370,20 @@ func (sdw *SplitDiffWorker) diff() error {
 
 	// TODO(alainjobart) Checking against each source may be
 	// overkill, if all sources have the same schema?
-	sdw.diffLog("Diffing the schema...")
+	sdw.wr.Logger().Infof("Diffing the schema...")
 	rec = concurrency.AllErrorRecorder{}
 	for i, sourceSchemaDefinition := range sdw.sourceSchemaDefinitions {
 		sourceName := fmt.Sprintf("source[%v]", i)
 		myproto.DiffSchema("destination", sdw.destinationSchemaDefinition, sourceName, sourceSchemaDefinition, &rec)
 	}
 	if rec.HasErrors() {
-		sdw.diffLog("Different schemas: " + rec.Error().Error())
+		sdw.wr.Logger().Warningf("Different schemas: %v", rec.Error().Error())
 	} else {
-		sdw.diffLog("Schema match, good.")
+		sdw.wr.Logger().Infof("Schema match, good.")
 	}
 
 	// run the diffs, 8 at a time
-	sdw.diffLog("Running the diffs...")
+	sdw.wr.Logger().Infof("Running the diffs...")
 	sem := sync2.NewSemaphore(8, 0)
 	for _, tableDefinition := range sdw.destinationSchemaDefinition.TableDefinitions {
 		wg.Add(1)
@@ -406,45 +392,45 @@ func (sdw *SplitDiffWorker) diff() error {
 			sem.Acquire()
 			defer sem.Release()
 
-			log.Infof("Starting the diff on table %v", tableDefinition.Name)
+			sdw.wr.Logger().Infof("Starting the diff on table %v", tableDefinition.Name)
 			if len(sdw.sourceAliases) != 1 {
-				sdw.diffLog("Don't support more than one source for table yet: " + tableDefinition.Name)
+				sdw.wr.Logger().Errorf("Don't support more than one source for table yet: %v", tableDefinition.Name)
 				return
 			}
 
 			overlap, err := key.KeyRangesOverlap(sdw.shardInfo.KeyRange, sdw.shardInfo.SourceShards[0].KeyRange)
 			if err != nil {
-				sdw.diffLog("Source shard doesn't overlap with destination????: " + err.Error())
+				sdw.wr.Logger().Errorf("Source shard doesn't overlap with destination????: %v", err)
 				return
 			}
-			sourceQueryResultReader, err := TableScanByKeyRange(sdw.wr.TopoServer(), sdw.sourceAliases[0], &tableDefinition, overlap, sdw.keyspaceInfo.ShardingColumnType)
+			sourceQueryResultReader, err := TableScanByKeyRange(sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.sourceAliases[0], &tableDefinition, overlap, sdw.keyspaceInfo.ShardingColumnType)
 			if err != nil {
-				sdw.diffLog("TableScanByKeyRange(source) failed: " + err.Error())
+				sdw.wr.Logger().Errorf("TableScanByKeyRange(source) failed: %v", err)
 				return
 			}
 			defer sourceQueryResultReader.Close()
 
-			destinationQueryResultReader, err := TableScanByKeyRange(sdw.wr.TopoServer(), sdw.destinationAlias, &tableDefinition, key.KeyRange{}, sdw.keyspaceInfo.ShardingColumnType)
+			destinationQueryResultReader, err := TableScanByKeyRange(sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.destinationAlias, &tableDefinition, key.KeyRange{}, sdw.keyspaceInfo.ShardingColumnType)
 			if err != nil {
-				sdw.diffLog("TableScanByKeyRange(destination) failed: " + err.Error())
+				sdw.wr.Logger().Errorf("TableScanByKeyRange(destination) failed: %v", err)
 				return
 			}
 			defer destinationQueryResultReader.Close()
 
 			differ, err := NewRowDiffer(sourceQueryResultReader, destinationQueryResultReader, &tableDefinition)
 			if err != nil {
-				sdw.diffLog("NewRowDiffer() failed: " + err.Error())
+				sdw.wr.Logger().Errorf("NewRowDiffer() failed: %v", err)
 				return
 			}
 
-			report, err := differ.Go()
+			report, err := differ.Go(sdw.wr.Logger())
 			if err != nil {
-				sdw.diffLog("Differ.Go failed: " + err.Error())
+				sdw.wr.Logger().Errorf("Differ.Go failed: %v", err.Error())
 			} else {
 				if report.HasDifferences() {
-					sdw.diffLog(fmt.Sprintf("Table %v has differences: %v", tableDefinition.Name, report.String()))
+					sdw.wr.Logger().Warningf("Table %v has differences: %v", tableDefinition.Name, report.String())
 				} else {
-					sdw.diffLog(fmt.Sprintf("Table %v checks out (%v rows processed, %v qps)", tableDefinition.Name, report.processedRows, report.processingQPS))
+					sdw.wr.Logger().Infof("Table %v checks out (%v rows processed, %v qps)", tableDefinition.Name, report.processedRows, report.processingQPS)
 				}
 			}
 		}(tableDefinition)

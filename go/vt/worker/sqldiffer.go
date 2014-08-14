@@ -7,11 +7,9 @@ package worker
 import (
 	"fmt"
 	"html/template"
-	"strings"
 	"sync"
 	"time"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -66,9 +64,6 @@ type SQLDiffWorker struct {
 
 	// populated if state == SQLDiffError
 	err error
-
-	// populated during SQLDiffRunning
-	diffLogs []string
 }
 
 // NewSQLDiffWorker returns a new SQLDiffWorker object.
@@ -107,11 +102,9 @@ func (worker *SQLDiffWorker) StatusAsHTML() template.HTML {
 	case SQLDiffError:
 		result += "<b>Error</b>: " + worker.err.Error() + "</br>\n"
 	case SQLDiffRunning:
-		result += "<b>Running</b>:</br>\n"
-		result += strings.Join(worker.diffLogs, "</br>\n")
+		result += "<b>Running...</b></br>\n"
 	case SQLDiffDone:
-		result += "<b>Success</b>:</br>\n"
-		result += strings.Join(worker.diffLogs, "</br>\n")
+		result += "<b>Success.</b></br>\n"
 	}
 
 	return template.HTML(result)
@@ -127,11 +120,9 @@ func (worker *SQLDiffWorker) StatusAsText() string {
 	case SQLDiffError:
 		result += "Error: " + worker.err.Error() + "\n"
 	case SQLDiffRunning:
-		result += "Running:\n"
-		result += strings.Join(worker.diffLogs, "\n")
+		result += "Running...\n"
 	case SQLDiffDone:
-		result += "Success:\n"
-		result += strings.Join(worker.diffLogs, "\n")
+		result += "Success.\n"
 	}
 	return result
 }
@@ -154,7 +145,7 @@ func (worker *SQLDiffWorker) Run() {
 	cerr := worker.cleaner.CleanUp(worker.wr)
 	if cerr != nil {
 		if err != nil {
-			log.Errorf("CleanUp failed in addition to job error: %v", cerr)
+			worker.wr.Logger().Errorf("CleanUp failed in addition to job error: %v", cerr)
 		} else {
 			err = cerr
 		}
@@ -227,7 +218,7 @@ func (worker *SQLDiffWorker) synchronizeReplication() error {
 	worker.setState(SQLDiffSynchronizeReplication)
 
 	// stop replication on subset slave
-	log.Infof("Stopping replication on subset slave %v", worker.subset.alias)
+	worker.wr.Logger().Infof("Stopping replication on subset slave %v", worker.subset.alias)
 	subsetTablet, err := worker.wr.TopoServer().GetTablet(worker.subset.alias)
 	if err != nil {
 		return err
@@ -255,7 +246,7 @@ func (worker *SQLDiffWorker) synchronizeReplication() error {
 	}
 
 	// stop replication on superset slave
-	log.Infof("Stopping replication on superset slave %v", worker.superset.alias)
+	worker.wr.Logger().Infof("Stopping replication on superset slave %v", worker.superset.alias)
 	supersetTablet, err := worker.wr.TopoServer().GetTablet(worker.superset.alias)
 	if err != nil {
 		return err
@@ -281,47 +272,40 @@ func (worker *SQLDiffWorker) synchronizeReplication() error {
 // - if some table schema mismatches, record them (use existing schema diff tools).
 // - for each table in destination, run a diff pipeline.
 
-func (worker *SQLDiffWorker) diffLog(msg string) {
-	worker.mu.Lock()
-	worker.diffLogs = append(worker.diffLogs, msg)
-	worker.mu.Unlock()
-	log.Infof("diffLog: %v", msg)
-}
-
 func (worker *SQLDiffWorker) diff() error {
 	worker.setState(SQLDiffRunning)
 
 	// run the diff
-	worker.diffLog("Running the diffs...")
+	worker.wr.Logger().Infof("Running the diffs...")
 
 	supersetQueryResultReader, err := NewQueryResultReaderForTablet(worker.wr.TopoServer(), worker.superset.alias, worker.superset.SQL)
 	if err != nil {
-		worker.diffLog("NewQueryResultReaderForTablet(superset) failed: " + err.Error())
+		worker.wr.Logger().Errorf("NewQueryResultReaderForTablet(superset) failed: %v", err)
 		return err
 	}
 	defer supersetQueryResultReader.Close()
 
 	subsetQueryResultReader, err := NewQueryResultReaderForTablet(worker.wr.TopoServer(), worker.subset.alias, worker.subset.SQL)
 	if err != nil {
-		worker.diffLog("NewQueryResultReaderForTablet(subset) failed: " + err.Error())
+		worker.wr.Logger().Errorf("NewQueryResultReaderForTablet(subset) failed: %v", err)
 		return err
 	}
 	defer subsetQueryResultReader.Close()
 
 	differ, err := NewRowSubsetDiffer(supersetQueryResultReader, subsetQueryResultReader, 1)
 	if err != nil {
-		worker.diffLog("NewRowSubsetDiffer() failed: " + err.Error())
+		worker.wr.Logger().Errorf("NewRowSubsetDiffer() failed: %v", err)
 		return err
 	}
 
-	report, err := differ.Go()
+	report, err := differ.Go(worker.wr.Logger())
 	switch {
 	case err != nil:
-		worker.diffLog("Differ.Go failed: " + err.Error())
+		worker.wr.Logger().Errorf("Differ.Go failed: %v", err)
 	case report.HasDifferences():
-		worker.diffLog(fmt.Sprintf("Found differences: %v", report.String()))
+		worker.wr.Logger().Infof("Found differences: %v", report.String())
 	default:
-		worker.diffLog(fmt.Sprintf("No difference found (%v rows processed, %v qps)", report.processedRows, report.processingQPS))
+		worker.wr.Logger().Infof("No difference found (%v rows processed, %v qps)", report.processedRows, report.processingQPS)
 	}
 
 	return nil

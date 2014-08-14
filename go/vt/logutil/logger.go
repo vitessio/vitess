@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -116,8 +117,10 @@ func (cl ChannelLogger) Errorf(format string, v ...interface{}) {
 	}
 }
 
-// MemoryLogger keeps the logging events in memory
+// MemoryLogger keeps the logging events in memory.
+// All protected by a mutex.
 type MemoryLogger struct {
+	mu     sync.Mutex
 	Events []LoggerEvent
 }
 
@@ -129,6 +132,8 @@ func NewMemoryLogger() *MemoryLogger {
 // Infof is part of the Logger interface
 func (ml *MemoryLogger) Infof(format string, v ...interface{}) {
 	file, line := fileAndLine(2)
+	ml.mu.Lock()
+	defer ml.mu.Unlock()
 	ml.Events = append(ml.Events, LoggerEvent{
 		Time:  time.Now(),
 		Level: LOGGER_INFO,
@@ -141,6 +146,8 @@ func (ml *MemoryLogger) Infof(format string, v ...interface{}) {
 // Warningf is part of the Logger interface
 func (ml *MemoryLogger) Warningf(format string, v ...interface{}) {
 	file, line := fileAndLine(2)
+	ml.mu.Lock()
+	defer ml.mu.Unlock()
 	ml.Events = append(ml.Events, LoggerEvent{
 		Time:  time.Now(),
 		Level: LOGGER_WARNING,
@@ -153,6 +160,8 @@ func (ml *MemoryLogger) Warningf(format string, v ...interface{}) {
 // Errorf is part of the Logger interface
 func (ml *MemoryLogger) Errorf(format string, v ...interface{}) {
 	file, line := fileAndLine(2)
+	ml.mu.Lock()
+	defer ml.mu.Unlock()
 	ml.Events = append(ml.Events, LoggerEvent{
 		Time:  time.Now(),
 		Level: LOGGER_ERROR,
@@ -165,6 +174,8 @@ func (ml *MemoryLogger) Errorf(format string, v ...interface{}) {
 // String returns all the lines in one String
 func (ml *MemoryLogger) String() string {
 	buf := new(bytes.Buffer)
+	ml.mu.Lock()
+	defer ml.mu.Unlock()
 	for _, event := range ml.Events {
 		event.ToBuffer(buf)
 	}

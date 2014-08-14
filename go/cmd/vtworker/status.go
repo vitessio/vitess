@@ -5,7 +5,9 @@
 package main
 
 import (
+	"html/template"
 	"net/http"
+	"strings"
 
 	"github.com/youtube/vitess/go/vt/servenv"
 )
@@ -32,6 +34,10 @@ const workerStatusHTML = `
   <blockquote>
     {{.Status}}
   </blockquote>
+  <h2>Worker logs:</h2>
+  <blockquote>
+    {{.Logs}}
+  </blockquote>
   {{if .Done}}
   <p><a href="/reset">Reset Job</a></p>
   {{end}}
@@ -47,6 +53,7 @@ func initStatusHandling() {
 	http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		currentWorkerMutex.Lock()
 		wrk := currentWorker
+		logger := currentMemoryLogger
 		done := currentDone
 		currentWorkerMutex.Unlock()
 
@@ -57,6 +64,11 @@ func initStatusHandling() {
 			case <-done:
 				data["Done"] = true
 			default:
+			}
+			if logger != nil {
+				data["Logs"] = template.HTML(strings.Replace(logger.String(), "\n", "</br>\n", -1))
+			} else {
+				data["Logs"] = template.HTML("See console for logs</br>\n")
 			}
 		}
 		executeTemplate(w, workerTemplate, data)
@@ -85,6 +97,7 @@ func initStatusHandling() {
 		case <-done:
 			currentWorkerMutex.Lock()
 			currentWorker = nil
+			currentMemoryLogger = nil
 			currentDone = nil
 			currentWorkerMutex.Unlock()
 			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)

@@ -72,6 +72,17 @@ func (wr *Wrangler) ActionInitiator() *initiator.ActionInitiator {
 	return wr.ai
 }
 
+// SetLogger can be used to change the current logger. Not synchronized,
+// no calls to this wrangler should be in progress.
+func (wr *Wrangler) SetLogger(logger logutil.Logger) {
+	wr.logger = logger
+}
+
+// Logger returns the logger associated with this wrangler.
+func (wr *Wrangler) Logger() logutil.Logger {
+	return wr.logger
+}
+
 // ResetActionTimeout should be used before every action on a wrangler
 // object that is going to be re-used:
 // - vtctl will not call this, as it does one action
