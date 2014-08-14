@@ -59,6 +59,10 @@ my_bool vt_simple_command(
     unsigned long arg_length,
     my_bool skip_check);
 
-// vt_cli_safe_read: Calls cli_safe_read which returns the number of bytes read,
+// vt_cli_safe_read: Calls cli_safe_read and returns the number of bytes read,
 // or 0 if there was an error.
 unsigned long vt_cli_safe_read(VT_CONN *conn);
+
+// vt_force_close: Kill a MySQL connection at the socket level, to unblock
+// a thread that is waiting on a read call.
+void vt_force_close(VT_CONN *conn);

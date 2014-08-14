@@ -107,7 +107,7 @@ func (sdc *ShardConn) StreamExecute(ctx context.Context, query string, bindVars 
 		return results, func() error { return err }
 	}
 	inTransaction := (transactionID != 0)
-	return results, func() error { return sdc.WrapError(erFunc(), usedConn, inTransaction) }
+	return results, func() error { return sdc.WrapError(erFunc(), usedConn.EndPoint(), inTransaction) }
 }
 
 // Begin begins a transaction. The retry rules are the same as Execute.
@@ -153,17 +153,18 @@ func (sdc *ShardConn) Close() {
 // re-resolve and retry.
 func (sdc *ShardConn) withRetry(ctx context.Context, action func(conn tabletconn.TabletConn) error, transactionID int64, isStreaming bool) error {
 	var conn tabletconn.TabletConn
+	var endPoint topo.EndPoint
 	var err error
 	var retry bool
 	inTransaction := (transactionID != 0)
 	// execute the action at least once even without retrying
 	for i := 0; i < sdc.retryCount+1; i++ {
-		conn, err, retry = sdc.getConn(ctx)
+		conn, endPoint, err, retry = sdc.getConn(ctx)
 		if err != nil {
 			if retry {
 				continue
 			}
-			return sdc.WrapError(err, conn, inTransaction)
+			return sdc.WrapError(err, endPoint, inTransaction)
 		}
 		// no timeout for streaming query
 		if isStreaming {
@@ -186,32 +187,32 @@ func (sdc *ShardConn) withRetry(ctx context.Context, action func(conn tabletconn
 		if sdc.canRetry(err, transactionID, conn) {
 			continue
 		}
-		return sdc.WrapError(err, conn, inTransaction)
+		return sdc.WrapError(err, endPoint, inTransaction)
 	}
-	return sdc.WrapError(err, conn, inTransaction)
+	return sdc.WrapError(err, endPoint, inTransaction)
 }
 
 // getConn reuses an existing connection if possible. Otherwise
 // it returns a connection which it will save for future reuse.
 // If it returns an error,  retry will tell you if getConn can be retried.
-func (sdc *ShardConn) getConn(ctx context.Context) (conn tabletconn.TabletConn, err error, retry bool) {
+func (sdc *ShardConn) getConn(ctx context.Context) (conn tabletconn.TabletConn, endPoint topo.EndPoint, err error, retry bool) {
 	sdc.mu.Lock()
 	defer sdc.mu.Unlock()
 	if sdc.conn != nil {
-		return sdc.conn, nil, false
+		return sdc.conn, sdc.conn.EndPoint(), nil, false
 	}
 
-	endPoint, err := sdc.balancer.Get()
+	endPoint, err = sdc.balancer.Get()
 	if err != nil {
-		return nil, err, false
+		return nil, topo.EndPoint{}, err, false
 	}
 	conn, err = tabletconn.GetDialer()(ctx, endPoint, sdc.keyspace, sdc.shard, sdc.timeout)
 	if err != nil {
-		sdc.balancer.MarkDown(endPoint.Uid)
-		return nil, err, true
+		sdc.balancer.MarkDown(endPoint.Uid, err.Error())
+		return nil, endPoint, err, true
 	}
 	sdc.conn = conn
-	return sdc.conn, nil, false
+	return sdc.conn, endPoint, nil, false
 }
 
 // canRetry determines whether a query can be retried or not.
@@ -236,19 +237,19 @@ func (sdc *ShardConn) canRetry(err error, transactionID int64, conn tabletconn.T
 	}
 	// Non-server errors or fatal/retry errors. Retry if we're not in a transaction.
 	inTransaction := (transactionID != 0)
-	sdc.markDown(conn)
+	sdc.markDown(conn, err.Error())
 	return !inTransaction
 }
 
 // markDown closes conn and temporarily marks the associated
 // end point as unusable.
-func (sdc *ShardConn) markDown(conn tabletconn.TabletConn) {
+func (sdc *ShardConn) markDown(conn tabletconn.TabletConn, reason string) {
 	sdc.mu.Lock()
 	defer sdc.mu.Unlock()
 	if conn != sdc.conn {
 		return
 	}
-	sdc.balancer.MarkDown(conn.EndPoint().Uid)
+	sdc.balancer.MarkDown(conn.EndPoint().Uid, reason)
 
 	// Launch as goroutine so we don't block
 	go sdc.conn.Close()
@@ -259,15 +260,11 @@ func (sdc *ShardConn) markDown(conn tabletconn.TabletConn) {
 // adds the connection context
 // and adds a bit to determine whether the keyspace/shard needs to be
 // re-resolved for a potential sharding event.
-func (sdc *ShardConn) WrapError(in error, conn tabletconn.TabletConn, inTransaction bool) (wrapped error) {
+func (sdc *ShardConn) WrapError(in error, endPoint topo.EndPoint, inTransaction bool) (wrapped error) {
 	if in == nil {
 		return nil
 	}
-	shardIdentifier := fmt.Sprintf("%s.%s.%s", sdc.keyspace, sdc.shard, sdc.tabletType)
-	if conn != nil {
-		shardIdentifier += fmt.Sprintf(", %+v", conn.EndPoint())
-	}
-
+	shardIdentifier := fmt.Sprintf("%s.%s.%s, %+v", sdc.keyspace, sdc.shard, sdc.tabletType, endPoint)
 	code := tabletconn.ERR_NORMAL
 	serverError, ok := in.(*tabletconn.ServerError)
 	if ok {

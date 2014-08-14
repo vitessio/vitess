@@ -8,6 +8,7 @@ import (
 	"os"
 
 	log "github.com/golang/glog"
+	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
@@ -29,6 +30,15 @@ type MysqlFlavor interface {
 	// ParseGTID converts a string containing a GTID in the canonical format of
 	// this MySQL flavor into a proto.GTID interface value.
 	ParseGTID(string) (proto.GTID, error)
+
+	// SendBinlogDumpCommand sends the flavor-specific version of the
+	// COM_BINLOG_DUMP command to start dumping raw binlog events over a slave
+	// connection, starting at a given GTID.
+	SendBinlogDumpCommand(mysqld *Mysqld, conn *SlaveConnection, startPos proto.GTID) error
+
+	// MakeBinlogEvent takes a raw packet from the MySQL binlog stream connection
+	// and returns a BinlogEvent through which the packet can be examined.
+	MakeBinlogEvent(buf []byte) blproto.BinlogEvent
 }
 
 var mysqlFlavors map[string]MysqlFlavor = make(map[string]MysqlFlavor)

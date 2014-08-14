@@ -242,10 +242,9 @@ func (agent *ActionAgent) dispatchAction(actionPath, data string) error {
 		"-action-node", actionPath,
 		"-action-guid", actionNode.ActionGuid,
 	}
-	cmd = append(cmd, logutil.GetSubprocessFlags()...)
-	cmd = append(cmd, topo.GetSubprocessFlags()...)
-	cmd = append(cmd, dbconfigs.GetSubprocessFlags()...)
-	cmd = append(cmd, mysqlctl.GetSubprocessFlags()...)
+	for _, getSubprocessFlags := range getSubprocessFlagsFuncs {
+		cmd = append(cmd, getSubprocessFlags()...)
+	}
 	log.Infof("action launch %v", cmd)
 	vtActionCmd := exec.Command(cmd[0], cmd[1:]...)
 
@@ -404,4 +403,13 @@ func (agent *ActionAgent) actionEventLoop() {
 		return agent.dispatchAction(actionPath, data)
 	}
 	agent.TopoServer.ActionEventLoop(agent.TabletAlias, f, agent.done)
+}
+
+var getSubprocessFlagsFuncs []func() []string
+
+func init() {
+	getSubprocessFlagsFuncs = append(getSubprocessFlagsFuncs, logutil.GetSubprocessFlags)
+	getSubprocessFlagsFuncs = append(getSubprocessFlagsFuncs, topo.GetSubprocessFlags)
+	getSubprocessFlagsFuncs = append(getSubprocessFlagsFuncs, dbconfigs.GetSubprocessFlags)
+	getSubprocessFlagsFuncs = append(getSubprocessFlagsFuncs, mysqlctl.GetSubprocessFlags)
 }

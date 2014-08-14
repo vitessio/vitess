@@ -143,9 +143,9 @@ func TestMarkDown(t *testing.T) {
 	start := counter
 	b := NewBalancer(endPoints3, 10*time.Millisecond)
 	addr, _ := b.Get()
-	b.MarkDown(addr.Uid)
+	b.MarkDown(addr.Uid, "")
 	addr, _ = b.Get()
-	b.MarkDown(addr.Uid)
+	b.MarkDown(addr.Uid, "")
 	addr1, _ := b.Get()
 	addr2, _ := b.Get()
 	// Two addresses are marked down. Only one address is avaiilable.
@@ -153,7 +153,7 @@ func TestMarkDown(t *testing.T) {
 		t.Errorf("ids are not equal: %v, %v", addr1, addr2)
 	}
 	addr, _ = b.Get()
-	b.MarkDown(addr.Uid)
+	b.MarkDown(addr.Uid, "")
 	startTime := time.Now()
 	addr, _ = b.Get()
 	// All were marked down. Get should return only after the retry delay.
@@ -213,7 +213,7 @@ func TestRefresh(t *testing.T) {
 	if port_start != 11 {
 		t.Errorf("want 11, got %v", port_start)
 	}
-	b.MarkDown(1)
+	b.MarkDown(1, "")
 	b.refresh()
 	// "11" should not be found. It should be "12" now.
 	index = findAddrNode(b.addressNodes, 11)

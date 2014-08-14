@@ -45,22 +45,6 @@ var (
 		[]byte("BINLOG"),
 	}
 
-	// statementPrefixes are normal sql statement prefixes.
-	statementPrefixes = map[string]int{
-		"begin":    proto.BL_BEGIN,
-		"commit":   proto.BL_COMMIT,
-		"rollback": proto.BL_ROLLBACK,
-		"insert":   proto.BL_DML,
-		"update":   proto.BL_DML,
-		"delete":   proto.BL_DML,
-		"create":   proto.BL_DDL,
-		"alter":    proto.BL_DDL,
-		"drop":     proto.BL_DDL,
-		"truncate": proto.BL_DDL,
-		"rename":   proto.BL_DDL,
-		"set":      proto.BL_SET,
-	}
-
 	// Misc vars.
 	HASH_COMMENT  = []byte("#")
 	SLASH_COMMENT = []byte("/*")
@@ -71,6 +55,11 @@ var (
 // binlogFileStreamer only supports Google MySQL. Support for other flavors will
 // come with the switch to a connection-based streamer.
 const blsMysqlFlavor = "GoogleMysql"
+
+type binlogPosition struct {
+	GTID     myproto.GTID
+	ServerId int64
+}
 
 // binlogFileStreamer streams binlog events from a set of local files.
 type binlogFileStreamer struct {
@@ -87,9 +76,9 @@ type binlogFileStreamer struct {
 	delim []byte
 }
 
-// newBinlogFileStreamer creates a BinlogStreamer. dbname specifes
-// the db to stream events for, and binlogPrefix is as defined
-// by the mycnf variable.
+// newBinlogFileStreamer creates a BinlogStreamer.
+//
+// dbname specifes the db to stream events for.
 func newBinlogFileStreamer(dbname string, mysqld *mysqlctl.Mysqld) BinlogStreamer {
 	return &binlogFileStreamer{
 		dbname: dbname,
@@ -105,8 +94,7 @@ func (bls *binlogFileStreamer) streamFilePos(file string, pos int64, sendTransac
 	}
 	defer bls.file.Close()
 
-	// Launch using service manager so we can stop this
-	// as needed.
+	// Launch using service manager so we can stop this as needed.
 	bls.svm.Go(func(_ *sync2.ServiceManager) {
 		for {
 			if err = bls.run(sendTransaction); err != nil {
@@ -171,9 +159,8 @@ func (bls *binlogFileStreamer) parseEvents(sendTransaction sendTransactionFunc, 
 		if sql == nil {
 			return err
 		}
-		prefix := string(bytes.ToLower(bytes.SplitN(sql, SPACE, 2)[0]))
-		switch category := statementPrefixes[prefix]; category {
-		// We trust that mysqlbinlog doesn't send proto.BL_DMLs withot a proto.BL_BEGIN
+		switch category := getStatementCategory(sql); category {
+		// We trust that mysqlbinlog doesn't send proto.BL_DMLs without a proto.BL_BEGIN.
 		case proto.BL_BEGIN:
 			statements = nil
 			timestamp = 0

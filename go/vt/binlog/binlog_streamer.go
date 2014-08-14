@@ -5,6 +5,7 @@
 package binlog
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 
@@ -20,10 +21,11 @@ var (
 	// connection-based implementation is stable.
 	binlogStreamers = map[string]newBinlogStreamerFunc{
 		"file": newBinlogFileStreamer,
+		"conn": newBinlogConnStreamer,
 	}
 
-	binlogStreamer = flag.String("binlog_streamer", "file",
-		"Which binlog streamer implementation to use. Available: file")
+	binlogStreamer = flag.String("binlog_streamer", "conn",
+		"Which binlog streamer implementation to use. Available: conn, file")
 )
 
 // BinlogStreamer is an interface for requesting a stream of binlog events from
@@ -56,7 +58,28 @@ type newBinlogStreamerFunc func(string, *mysqlctl.Mysqld) BinlogStreamer
 // reply is of type proto.BinlogTransaction.
 type sendTransactionFunc func(trans *proto.BinlogTransaction) error
 
-type binlogPosition struct {
-	GTID     myproto.GTID
-	ServerId int64
+var (
+	// statementPrefixes are normal sql statement prefixes.
+	statementPrefixes = map[string]int{
+		"begin":    proto.BL_BEGIN,
+		"commit":   proto.BL_COMMIT,
+		"rollback": proto.BL_ROLLBACK,
+		"insert":   proto.BL_DML,
+		"update":   proto.BL_DML,
+		"delete":   proto.BL_DML,
+		"create":   proto.BL_DDL,
+		"alter":    proto.BL_DDL,
+		"drop":     proto.BL_DDL,
+		"truncate": proto.BL_DDL,
+		"rename":   proto.BL_DDL,
+		"set":      proto.BL_SET,
+	}
+)
+
+// getStatementCategory returns the proto.BL_* category for a SQL statement.
+func getStatementCategory(sql []byte) int {
+	if i := bytes.IndexByte(sql, byte(' ')); i >= 0 {
+		sql = sql[:i]
+	}
+	return statementPrefixes[string(bytes.ToLower(sql))]
 }
