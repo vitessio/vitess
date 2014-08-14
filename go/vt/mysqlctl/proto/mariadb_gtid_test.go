@@ -11,13 +11,13 @@ import (
 
 func TestParseMariaGTID(t *testing.T) {
 	input := "12-345-6789"
-	want := mariadbGTID{domain: 12, server: 345, sequence: 6789}
+	want := MariadbGTID{Domain: 12, Server: 345, Sequence: 6789}
 
 	got, err := parseMariadbGTID(input)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
-	if got.(mariadbGTID) != want {
+	if got.(MariadbGTID) != want {
 		t.Errorf("ParseGTID(%v) = %v, want %v", input, got, want)
 	}
 }
@@ -37,7 +37,7 @@ func TestParseInvalidMariaGTID(t *testing.T) {
 
 func TestParseMariaGTIDInvalidDomain(t *testing.T) {
 	input := "1x-33-142"
-	want := "invalid MariaDB GTID domain ID"
+	want := "invalid MariaDB GTID Domain ID"
 
 	_, err := parseMariadbGTID(input)
 	if err == nil {
@@ -50,7 +50,7 @@ func TestParseMariaGTIDInvalidDomain(t *testing.T) {
 
 func TestParseMariaGTIDInvalidServer(t *testing.T) {
 	input := "1-2c3-142"
-	want := "invalid MariaDB GTID server ID"
+	want := "invalid MariaDB GTID Server ID"
 
 	_, err := parseMariadbGTID(input)
 	if err == nil {
@@ -63,7 +63,7 @@ func TestParseMariaGTIDInvalidServer(t *testing.T) {
 
 func TestParseMariaGTIDInvalidSequence(t *testing.T) {
 	input := "1-33-a142"
-	want := "invalid MariaDB GTID sequence number"
+	want := "invalid MariaDB GTID Sequence number"
 
 	_, err := parseMariadbGTID(input)
 	if err == nil {
@@ -75,7 +75,7 @@ func TestParseMariaGTIDInvalidSequence(t *testing.T) {
 }
 
 func TestMariaGTIDString(t *testing.T) {
-	input := mariadbGTID{domain: 5, server: 4727, sequence: 1737373}
+	input := MariadbGTID{Domain: 5, Server: 4727, Sequence: 1737373}
 	want := "5-4727-1737373"
 
 	got := input.String()
@@ -85,7 +85,7 @@ func TestMariaGTIDString(t *testing.T) {
 }
 
 func TestMariaGTIDFlavor(t *testing.T) {
-	input := mariadbGTID{domain: 1, server: 2, sequence: 123}
+	input := MariadbGTID{Domain: 1, Server: 2, Sequence: 123}
 	want := "MariaDB"
 
 	got := input.Flavor()
@@ -95,8 +95,8 @@ func TestMariaGTIDFlavor(t *testing.T) {
 }
 
 func TestMariaGTIDCompareLess(t *testing.T) {
-	input1 := mariadbGTID{domain: 5, server: 4727, sequence: 300}
-	input2 := mariadbGTID{domain: 5, server: 4727, sequence: 700}
+	input1 := MariadbGTID{Domain: 5, Server: 4727, Sequence: 300}
+	input2 := MariadbGTID{Domain: 5, Server: 4727, Sequence: 700}
 
 	cmp, err := input1.TryCompare(input2)
 	if err != nil {
@@ -108,8 +108,8 @@ func TestMariaGTIDCompareLess(t *testing.T) {
 }
 
 func TestMariaGTIDCompareGreater(t *testing.T) {
-	input1 := mariadbGTID{domain: 5, server: 4727, sequence: 9000}
-	input2 := mariadbGTID{domain: 5, server: 4727, sequence: 100}
+	input1 := MariadbGTID{Domain: 5, Server: 4727, Sequence: 9000}
+	input2 := MariadbGTID{Domain: 5, Server: 4727, Sequence: 100}
 
 	cmp, err := input1.TryCompare(input2)
 	if err != nil {
@@ -121,8 +121,8 @@ func TestMariaGTIDCompareGreater(t *testing.T) {
 }
 
 func TestMariaGTIDCompareEqual(t *testing.T) {
-	input1 := mariadbGTID{domain: 5, server: 4727, sequence: 1234}
-	input2 := mariadbGTID{domain: 5, server: 4727, sequence: 1234}
+	input1 := MariadbGTID{Domain: 5, Server: 4727, Sequence: 1234}
+	input2 := MariadbGTID{Domain: 5, Server: 4727, Sequence: 1234}
 
 	cmp, err := input1.TryCompare(input2)
 	if err != nil {
@@ -134,7 +134,7 @@ func TestMariaGTIDCompareEqual(t *testing.T) {
 }
 
 func TestMariaGTIDCompareNil(t *testing.T) {
-	input1 := mariadbGTID{domain: 1, server: 2, sequence: 123}
+	input1 := MariadbGTID{Domain: 1, Server: 2, Sequence: 123}
 	input2 := GTID(nil)
 	want := "can't compare GTID"
 
@@ -148,7 +148,7 @@ func TestMariaGTIDCompareNil(t *testing.T) {
 }
 
 func TestMariaGTIDCompareWrongType(t *testing.T) {
-	input1 := mariadbGTID{domain: 5, server: 4727, sequence: 1234}
+	input1 := MariadbGTID{Domain: 5, Server: 4727, Sequence: 1234}
 	input2 := fakeGTID{}
 	want := "can't compare GTID, wrong type"
 
@@ -162,9 +162,9 @@ func TestMariaGTIDCompareWrongType(t *testing.T) {
 }
 
 func TestMariaGTIDCompareWrongDomain(t *testing.T) {
-	input1 := mariadbGTID{domain: 3, server: 4727, sequence: 1234}
-	input2 := mariadbGTID{domain: 5, server: 4727, sequence: 1234}
-	want := "can't compare GTID, MariaDB domain doesn't match"
+	input1 := MariadbGTID{Domain: 3, Server: 4727, Sequence: 1234}
+	input2 := MariadbGTID{Domain: 5, Server: 4727, Sequence: 1234}
+	want := "can't compare GTID, MariaDB Domain doesn't match"
 
 	_, err := input1.TryCompare(input2)
 	if err == nil {
@@ -176,9 +176,9 @@ func TestMariaGTIDCompareWrongDomain(t *testing.T) {
 }
 
 func TestMariaGTIDCompareWrongServer(t *testing.T) {
-	input1 := mariadbGTID{domain: 3, server: 4727, sequence: 1234}
-	input2 := mariadbGTID{domain: 3, server: 5555, sequence: 1234}
-	want := "can't compare GTID, MariaDB server doesn't match"
+	input1 := MariadbGTID{Domain: 3, Server: 4727, Sequence: 1234}
+	input2 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}
+	want := "can't compare GTID, MariaDB Server doesn't match"
 
 	_, err := input1.TryCompare(input2)
 	if err == nil {
@@ -190,8 +190,8 @@ func TestMariaGTIDCompareWrongServer(t *testing.T) {
 }
 
 func TestMariaGTIDEqual(t *testing.T) {
-	input1 := GTID(mariadbGTID{domain: 3, server: 5555, sequence: 1234})
-	input2 := GTID(mariadbGTID{domain: 3, server: 5555, sequence: 1234})
+	input1 := GTID(MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234})
+	input2 := GTID(MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234})
 	want := true
 
 	cmp := input1 == input2
@@ -201,8 +201,8 @@ func TestMariaGTIDEqual(t *testing.T) {
 }
 
 func TestMariaGTIDNotEqual(t *testing.T) {
-	input1 := GTID(mariadbGTID{domain: 3, server: 5555, sequence: 1234})
-	input2 := GTID(mariadbGTID{domain: 3, server: 4555, sequence: 1234})
+	input1 := GTID(MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234})
+	input2 := GTID(MariadbGTID{Domain: 3, Server: 4555, Sequence: 1234})
 	want := false
 
 	cmp := input1 == input2

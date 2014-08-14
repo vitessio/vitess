@@ -65,7 +65,7 @@ func getShardForKeyspaceId(allShards []topo.SrvShard, keyspaceId key.KeyspaceId)
 			return srvShard.ShardName(), nil
 		}
 	}
-	return "", fmt.Errorf("KeyspaceId didn't match any shards")
+	return "", fmt.Errorf("KeyspaceId %v didn't match any shards %+v", keyspaceId, allShards)
 }
 
 func mapEntityIdsToShards(topoServ SrvTopoServer, cell, keyspace string, entityIds []proto.EntityId, tabletType topo.TabletType) (string, map[string][]interface{}, error) {

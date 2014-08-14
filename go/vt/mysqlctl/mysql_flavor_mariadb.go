@@ -5,8 +5,10 @@
 package mysqlctl
 
 import (
+	"encoding/binary"
 	"fmt"
 
+	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
@@ -70,6 +72,66 @@ func (*mariaDB10) PromoteSlaveCommands() []string {
 // ParseGTID implements MysqlFlavor.ParseGTID().
 func (*mariaDB10) ParseGTID(s string) (proto.GTID, error) {
 	return proto.ParseGTID(mariadbFlavorID, s)
+}
+
+// SendBinlogDumpCommand implements MysqlFlavor.SendBinlogDumpCommand().
+func (*mariaDB10) SendBinlogDumpCommand(mysqld *Mysqld, conn *SlaveConnection, startPos proto.GTID) error {
+	const COM_BINLOG_DUMP = 0x12
+
+	// MariaDB expects the slave to set the @slave_connect_state variable before
+	// issuing COM_BINLOG_DUMP if it wants to use GTID mode.
+	query := fmt.Sprintf("SET @slave_connect_state='%s'", startPos)
+	_, err := conn.ExecuteFetch(query, 0, false)
+	if err != nil {
+		return fmt.Errorf("mariaDB10.SendBinlogDumpCommand: failed to set @slave_connect_state='%s': %v", startPos, err)
+	}
+
+	// Since we use @slave_connect_state, the file and position here are ignored.
+	buf := makeBinlogDumpCommand(0, 0, conn.slaveID, "")
+	return conn.SendCommand(COM_BINLOG_DUMP, buf)
+}
+
+// MakeBinlogEvent implements MysqlFlavor.MakeBinlogEvent().
+func (*mariaDB10) MakeBinlogEvent(buf []byte) blproto.BinlogEvent {
+	return NewMariadbBinlogEvent(buf)
+}
+
+// mariadbBinlogEvent wraps a raw packet buffer and provides methods to examine
+// it by implementing blproto.BinlogEvent. Some methods are pulled in from
+// binlogEvent.
+type mariadbBinlogEvent struct {
+	binlogEvent
+}
+
+func NewMariadbBinlogEvent(buf []byte) blproto.BinlogEvent {
+	return mariadbBinlogEvent{binlogEvent: binlogEvent(buf)}
+}
+
+// HasGTID implements BinlogEvent.HasGTID().
+func (ev mariadbBinlogEvent) HasGTID(f blproto.BinlogFormat) bool {
+	// MariaDB provides GTIDs in a separate event type GTID_EVENT.
+	return ev.IsGTID()
+}
+
+// IsGTID implements BinlogEvent.IsGTID().
+func (ev mariadbBinlogEvent) IsGTID() bool {
+	return ev.Type() == 162
+}
+
+// GTID implements BinlogEvent.GTID().
+//
+// Expected format (L = total length of event data):
+//   # bytes   field
+//   8         sequence number
+//   4         domain ID
+func (ev mariadbBinlogEvent) GTID(f blproto.BinlogFormat) (proto.GTID, error) {
+	data := ev.Bytes()[f.HeaderLength:]
+
+	return proto.MariadbGTID{
+		Sequence: binary.LittleEndian.Uint64(data[:8]),
+		Domain:   binary.LittleEndian.Uint32(data[8 : 8+4]),
+		Server:   ev.ServerID(),
+	}, nil
 }
 
 func init() {

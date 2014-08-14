@@ -156,6 +156,21 @@ my_bool vt_simple_command(
 }
 
 unsigned long vt_cli_safe_read(VT_CONN *conn) {
+  unsigned long len;
+
   mysql_thread_init();
-  return cli_safe_read(conn->mysql);
+  len = cli_safe_read(conn->mysql);
+  return len == packet_error ? 0 : len;
+}
+
+// This function is defined in libmysqlclient for internal use, but is not
+// declared in the client headers.
+extern int vio_close(Vio*);
+
+void vt_force_close(VT_CONN *conn) {
+  mysql_thread_init();
+
+  // Close the underlying socket of a MYSQL connection object.
+  if (conn->mysql->net.vio)
+    vio_close(conn->mysql->net.vio);
 }
