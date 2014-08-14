@@ -6,8 +6,6 @@ import (
 	"runtime"
 	"strings"
 	"time"
-
-	log "github.com/golang/glog"
 )
 
 // Logger defines the interface to use for our logging interface.
@@ -17,29 +15,6 @@ type Logger interface {
 	Infof(format string, v ...interface{})
 	Warningf(format string, v ...interface{})
 	Errorf(format string, v ...interface{})
-}
-
-// ConsoleLogger is a Logger that uses glog directly to log
-type ConsoleLogger struct{}
-
-// NewConsoleLogger returns a simple ConsoleLogger
-func NewConsoleLogger() ConsoleLogger {
-	return ConsoleLogger{}
-}
-
-// Infof is part of the Logger interface
-func (cl ConsoleLogger) Infof(format string, v ...interface{}) {
-	log.Infof(format, v...)
-}
-
-// Warningf is part of the Logger interface
-func (cl ConsoleLogger) Warningf(format string, v ...interface{}) {
-	log.Warningf(format, v...)
-}
-
-// Errorf is part of the Logger interface
-func (cl ConsoleLogger) Errorf(format string, v ...interface{}) {
-	log.Errorf(format, v...)
 }
 
 // The logger levels are used to store individual logging events
@@ -107,7 +82,7 @@ func NewChannelLogger(size int) ChannelLogger {
 
 // Infof is part of the Logger interface
 func (cl ChannelLogger) Infof(format string, v ...interface{}) {
-	file, line := fileAndLine()
+	file, line := fileAndLine(2)
 	(chan LoggerEvent)(cl) <- LoggerEvent{
 		Time:  time.Now(),
 		Level: LOGGER_INFO,
@@ -119,7 +94,7 @@ func (cl ChannelLogger) Infof(format string, v ...interface{}) {
 
 // Warningf is part of the Logger interface
 func (cl ChannelLogger) Warningf(format string, v ...interface{}) {
-	file, line := fileAndLine()
+	file, line := fileAndLine(2)
 	(chan LoggerEvent)(cl) <- LoggerEvent{
 		Time:  time.Now(),
 		Level: LOGGER_WARNING,
@@ -131,7 +106,7 @@ func (cl ChannelLogger) Warningf(format string, v ...interface{}) {
 
 // Errorf is part of the Logger interface
 func (cl ChannelLogger) Errorf(format string, v ...interface{}) {
-	file, line := fileAndLine()
+	file, line := fileAndLine(2)
 	(chan LoggerEvent)(cl) <- LoggerEvent{
 		Time:  time.Now(),
 		Level: LOGGER_ERROR,
@@ -153,7 +128,7 @@ func NewMemoryLogger() *MemoryLogger {
 
 // Infof is part of the Logger interface
 func (ml *MemoryLogger) Infof(format string, v ...interface{}) {
-	file, line := fileAndLine()
+	file, line := fileAndLine(2)
 	ml.Events = append(ml.Events, LoggerEvent{
 		Time:  time.Now(),
 		Level: LOGGER_INFO,
@@ -165,7 +140,7 @@ func (ml *MemoryLogger) Infof(format string, v ...interface{}) {
 
 // Warningf is part of the Logger interface
 func (ml *MemoryLogger) Warningf(format string, v ...interface{}) {
-	file, line := fileAndLine()
+	file, line := fileAndLine(2)
 	ml.Events = append(ml.Events, LoggerEvent{
 		Time:  time.Now(),
 		Level: LOGGER_WARNING,
@@ -177,7 +152,7 @@ func (ml *MemoryLogger) Warningf(format string, v ...interface{}) {
 
 // Errorf is part of the Logger interface
 func (ml *MemoryLogger) Errorf(format string, v ...interface{}) {
-	file, line := fileAndLine()
+	file, line := fileAndLine(2)
 	ml.Events = append(ml.Events, LoggerEvent{
 		Time:  time.Now(),
 		Level: LOGGER_ERROR,
@@ -237,8 +212,8 @@ func someDigits(buf *bytes.Buffer, d int) {
 }
 
 // fileAndLine returns the caller's file and line 2 levels above
-func fileAndLine() (string, int) {
-	_, file, line, ok := runtime.Caller(2)
+func fileAndLine(depth int) (string, int) {
+	_, file, line, ok := runtime.Caller(depth)
 	if !ok {
 		return "???", 1
 	}
