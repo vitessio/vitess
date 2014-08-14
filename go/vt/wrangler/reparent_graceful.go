@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"strings"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler/events"
 )
@@ -82,8 +81,8 @@ func (wr *Wrangler) reparentShardGraceful(ev *events.Reparent, si *topo.ShardInf
 	}
 
 	ev.UpdateStatus("checking slave consistency")
-	log.Infof("check slaves %v/%v", masterTablet.Keyspace, masterTablet.Shard)
-	restartableSlaveTabletMap := restartableTabletMap(slaveTabletMap)
+	wr.logger.Infof("check slaves %v/%v", masterTablet.Keyspace, masterTablet.Shard)
+	restartableSlaveTabletMap := wr.restartableTabletMap(slaveTabletMap)
 	err = wr.checkSlaveConsistency(restartableSlaveTabletMap, masterPosition)
 	if err != nil {
 		return fmt.Errorf("check slave consistency failed %v, demoted master is still read only, run: vtctl SetReadWrite %v", err, masterTablet.Alias)
@@ -109,14 +108,14 @@ func (wr *Wrangler) reparentShardGraceful(ev *events.Reparent, si *topo.ShardInf
 	// FIXME(msolomon) We could reintroduce it and reparent it and use
 	// it as new replica.
 	ev.UpdateStatus("scrapping old master")
-	log.Infof("scrap demoted master %v", masterTablet.Alias)
+	wr.logger.Infof("scrap demoted master %v", masterTablet.Alias)
 	scrapActionPath, scrapErr := wr.ai.Scrap(masterTablet.Alias)
 	if scrapErr == nil {
 		scrapErr = wr.WaitForCompletion(scrapActionPath)
 	}
 	if scrapErr != nil {
 		// The sub action is non-critical, so just warn.
-		log.Warningf("scrap demoted master failed: %v", scrapErr)
+		wr.logger.Warningf("scrap demoted master failed: %v", scrapErr)
 	}
 
 	ev.UpdateStatus("rebuilding shard serving graph")

@@ -3,7 +3,6 @@ package wrangler
 import (
 	"fmt"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler/events"
@@ -26,7 +25,7 @@ func (wr *Wrangler) reparentShardBrutal(ev *events.Reparent, si *topo.ShardInfo,
 		}
 	}()
 
-	log.Infof("Skipping ValidateShard - not a graceful situation")
+	wr.logger.Infof("Skipping ValidateShard - not a graceful situation")
 
 	if _, ok := slaveTabletMap[masterElectTablet.Alias]; !ok && !force {
 		return fmt.Errorf("master elect tablet not in replication graph %v %v/%v %v", masterElectTablet.Alias, si.Keyspace(), si.ShardName(), mapKeys(slaveTabletMap))
@@ -48,15 +47,15 @@ func (wr *Wrangler) reparentShardBrutal(ev *events.Reparent, si *topo.ShardInfo,
 		}
 
 		ev.UpdateStatus("checking slave consistency")
-		log.Infof("check slaves %v/%v", masterElectTablet.Keyspace, masterElectTablet.Shard)
-		restartableSlaveTabletMap := restartableTabletMap(slaveTabletMap)
+		wr.logger.Infof("check slaves %v/%v", masterElectTablet.Keyspace, masterElectTablet.Shard)
+		restartableSlaveTabletMap := wr.restartableTabletMap(slaveTabletMap)
 		err = wr.checkSlaveConsistency(restartableSlaveTabletMap, nil)
 		if err != nil {
 			return err
 		}
 	} else {
 		ev.UpdateStatus("stopping slave replication")
-		log.Infof("forcing reparent to same master %v", masterElectTablet.Alias)
+		wr.logger.Infof("forcing reparent to same master %v", masterElectTablet.Alias)
 		err := wr.breakReplication(slaveTabletMap, masterElectTablet)
 		if err != nil {
 			return err
@@ -81,11 +80,11 @@ func (wr *Wrangler) reparentShardBrutal(ev *events.Reparent, si *topo.ShardInfo,
 	if !force {
 		for _, failedMaster := range masterTabletMap {
 			ev.UpdateStatus("scrapping old master")
-			log.Infof("scrap dead master %v", failedMaster.Alias)
+			wr.logger.Infof("scrap dead master %v", failedMaster.Alias)
 			// The master is dead so execute the action locally instead of
 			// enqueing the scrap action for an arbitrary amount of time.
 			if scrapErr := topotools.Scrap(wr.ts, failedMaster.Alias, false); scrapErr != nil {
-				log.Warningf("scrapping failed master failed: %v", scrapErr)
+				wr.logger.Warningf("scrapping failed master failed: %v", scrapErr)
 			}
 		}
 	}

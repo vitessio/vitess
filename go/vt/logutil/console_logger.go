@@ -4,7 +4,9 @@ import (
 	log "github.com/golang/glog"
 )
 
-// ConsoleLogger is a Logger that uses glog directly to log
+// ConsoleLogger is a Logger that uses glog directly to log.
+// We can't specify the depth of the stack trace,
+// So we just find it and add it to the message.
 type ConsoleLogger struct{}
 
 // NewConsoleLogger returns a simple ConsoleLogger

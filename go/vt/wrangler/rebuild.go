@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"sync"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
@@ -78,7 +77,7 @@ func (wr *Wrangler) findCellsForRebuild(ki *topo.KeyspaceInfo, keyspace string, 
 // Take data from the global keyspace and rebuild the local serving
 // copies in each cell.
 func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, shardCache map[string]*topo.ShardInfo) error {
-	log.Infof("rebuildKeyspace %v", keyspace)
+	wr.logger.Infof("rebuildKeyspace %v", keyspace)
 
 	ki, err := wr.ts.GetKeyspace(keyspace)
 	if err != nil {
@@ -152,7 +151,7 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, shardCache 
 			case nil:
 				// we keep going
 			case topo.ErrNoNode:
-				log.Infof("Cell %v for %v/%v has no SvrShard, using Shard data with no TabletTypes instead", cell, keyspace, shard)
+				wr.logger.Infof("Cell %v for %v/%v has no SvrShard, using Shard data with no TabletTypes instead", cell, keyspace, shard)
 				si, ok := shardCache[shard]
 				if !ok {
 					si, err = wr.ts.GetShard(keyspace, shard)
@@ -218,7 +217,7 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, shardCache 
 
 	// and then finally save the keyspace objects
 	for cell, srvKeyspace := range srvKeyspaceMap {
-		log.Infof("updating keyspace serving graph in cell %v for %v", cell, keyspace)
+		wr.logger.Infof("updating keyspace serving graph in cell %v for %v", cell, keyspace)
 		if err := wr.ts.UpdateSrvKeyspace(cell, keyspace, srvKeyspace); err != nil {
 			return fmt.Errorf("writing serving data failed: %v", err)
 		}
@@ -249,7 +248,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 	}
 
 	for _, keyspace := range keyspaces {
-		log.V(6).Infof("delete keyspace shards: %v", keyspace)
+		wr.logger.Infof("delete keyspace shards: %v", keyspace)
 		if err := wr.ts.DeleteKeyspaceShards(keyspace); err != nil {
 			return err
 		}
@@ -275,7 +274,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 			shardPath := ti.Keyspace + "/" + ti.Shard
 			if !shardsCreated[shardPath] {
 				if err := topo.CreateShard(wr.ts, ti.Keyspace, ti.Shard); err != nil && err != topo.ErrNodeExists {
-					log.Warningf("failed re-creating shard %v: %v", shardPath, err)
+					wr.logger.Warningf("failed re-creating shard %v: %v", shardPath, err)
 					hasErr = true
 				} else {
 					shardsCreated[shardPath] = true
@@ -287,7 +286,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 				mu.Lock()
 				hasErr = true
 				mu.Unlock()
-				log.Warningf("failed creating replication path: %v", err)
+				wr.logger.Warningf("failed creating replication path: %v", err)
 			}
 		}(ti)
 	}
@@ -301,7 +300,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 				mu.Lock()
 				hasErr = true
 				mu.Unlock()
-				log.Warningf("RebuildKeyspaceGraph(%v) failed: %v", keyspace, err)
+				wr.logger.Warningf("RebuildKeyspaceGraph(%v) failed: %v", keyspace, err)
 				return
 			}
 		}(keyspace)
