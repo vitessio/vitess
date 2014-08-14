@@ -110,7 +110,7 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 	// and rebuild the shard serving graph
 	ev.UpdateStatus("rebuilding shard serving graph")
 	log.Infof("Rebuilding shard serving graph data")
-	if err = topotools.RebuildShard(wr.ts, masterElectTablet.Keyspace, masterElectTablet.Shard, cells, wr.lockTimeout, interrupted); err != nil {
+	if err = topotools.RebuildShard(wr.logger, wr.ts, masterElectTablet.Keyspace, masterElectTablet.Shard, cells, wr.lockTimeout, interrupted); err != nil {
 		return err
 	}
 

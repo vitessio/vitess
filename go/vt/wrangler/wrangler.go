@@ -9,6 +9,7 @@ import (
 	"flag"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/initiator"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -26,6 +27,7 @@ var tabletManagerProtocol = flag.String("tablet_manager_protocol", "bson", "the 
 // Wrangler manages complex actions on the topology, like reparents,
 // snapshots, restores, ...
 type Wrangler struct {
+	logger      logutil.Logger
 	ts          topo.Server
 	ai          *initiator.ActionInitiator
 	deadline    time.Time
@@ -52,8 +54,8 @@ type Wrangler struct {
 // of the time, we want to immediately know that our action will
 // fail. However, automated action will need some time to arbitrate
 // the locks.
-func New(ts topo.Server, actionTimeout, lockTimeout time.Duration) *Wrangler {
-	return &Wrangler{ts, initiator.NewActionInitiator(ts, *tabletManagerProtocol), time.Now().Add(actionTimeout), lockTimeout, true}
+func New(logger logutil.Logger, ts topo.Server, actionTimeout, lockTimeout time.Duration) *Wrangler {
+	return &Wrangler{logger, ts, initiator.NewActionInitiator(ts, *tabletManagerProtocol), time.Now().Add(actionTimeout), lockTimeout, true}
 }
 
 func (wr *Wrangler) actionTimeout() time.Duration {

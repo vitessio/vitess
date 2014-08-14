@@ -19,7 +19,7 @@ import (
 // Rebuild the serving and replication rollup data data while locking
 // out other changes.
 func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) error {
-	return topotools.RebuildShard(wr.ts, keyspace, shard, cells, wr.lockTimeout, interrupted)
+	return topotools.RebuildShard(wr.logger, wr.ts, keyspace, shard, cells, wr.lockTimeout, interrupted)
 }
 
 // Rebuild the serving graph data while locking out other changes.

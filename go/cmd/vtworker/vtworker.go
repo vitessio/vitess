@@ -22,6 +22,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager/initiator"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -92,11 +93,12 @@ func main() {
 	ts := topo.GetServer()
 	defer topo.CloseServers()
 
-	wr := wrangler.New(ts, 30*time.Second, 30*time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, 30*time.Second, 30*time.Second)
 	if len(args) == 0 {
 		// interactive mode, initialize the web UI to chose a command
 		initInteractiveMode(wr)
 	} else {
+		// single command mode, just runs it
 		runCommand(wr, args)
 	}
 	initStatusHandling()

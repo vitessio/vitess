@@ -1811,7 +1811,7 @@ func main() {
 	topoServer := topo.GetServer()
 	defer topo.CloseServers()
 
-	wr := wrangler.New(topoServer, *waitTime, *lockWaitTimeout)
+	wr := wrangler.New(logutil.NewConsoleLogger(), topoServer, *waitTime, *lockWaitTimeout)
 	var actionPath string
 	var err error
 

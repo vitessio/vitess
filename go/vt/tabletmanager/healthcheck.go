@@ -17,6 +17,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/health"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -222,7 +223,7 @@ func (agent *ActionAgent) rebuildShardIfNeeded(tablet *topo.TabletInfo, targetTa
 		interrupted := make(chan struct{})
 
 		// no need to take the shard lock in this case
-		if err := topotools.RebuildShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, []string{tablet.Alias.Cell}, lockTimeout, interrupted); err != nil {
+		if err := topotools.RebuildShard(logutil.NewConsoleLogger(), agent.TopoServer, tablet.Keyspace, tablet.Shard, []string{tablet.Alias.Cell}, lockTimeout, interrupted); err != nil {
 			return fmt.Errorf("topotools.RebuildShard returned an error: %v", err)
 		}
 	}

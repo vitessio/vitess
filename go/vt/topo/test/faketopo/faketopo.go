@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actor"
@@ -51,7 +52,7 @@ type Fixture struct {
 func New(t *testing.T, cells []string) *Fixture {
 	ts := zktopo.NewTestServer(t, cells)
 
-	wr := wrangler.New(ts, 1*time.Second, 1*time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, 1*time.Second, 1*time.Second)
 	wr.UseRPCs = false
 
 	return &Fixture{
