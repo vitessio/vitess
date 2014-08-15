@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/logutil"
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -17,7 +18,7 @@ import (
 
 func TestShardExternallyReparented(t *testing.T) {
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(ts, time.Minute, time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Minute, time.Second)
 	wr.UseRPCs = false
 
 	// Create an old master, a new master, two good slaves, one bad slave
@@ -146,7 +147,7 @@ func TestShardExternallyReparented(t *testing.T) {
 // port, we pick it up correctly.
 func TestShardExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	ts := zktopo.NewTestServer(t, []string{"cell1"})
-	wr := wrangler.New(ts, time.Minute, time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Minute, time.Second)
 	wr.UseRPCs = false
 
 	// Create an old master, a new master, two good slaves, one bad slave
@@ -190,7 +191,7 @@ func TestShardExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 // that we ignore mysql's master if the flag is set
 func TestShardExternallyReparentedContinueOnUnexpectedMaster(t *testing.T) {
 	ts := zktopo.NewTestServer(t, []string{"cell1"})
-	wr := wrangler.New(ts, time.Minute, time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Minute, time.Second)
 	wr.UseRPCs = false
 
 	// Create an old master, a new master, two good slaves, one bad slave
