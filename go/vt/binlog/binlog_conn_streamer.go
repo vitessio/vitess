@@ -15,6 +15,9 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
+var ClientEOF = fmt.Errorf("binlog stream consumer ended the reply stream")
+var ServerEOF = fmt.Errorf("binlog stream connection was closed by mysqld")
+
 // binlogConnStreamer streams binlog events from MySQL by connecting as a slave.
 type binlogConnStreamer struct {
 	// dbname and mysqld are set at creation.
@@ -24,11 +27,7 @@ type binlogConnStreamer struct {
 	svm  sync2.ServiceManager
 	conn *mysqlctl.SlaveConnection
 
-	// startPos is the position at which to start the stream. This is only updated
-	// when a transaction is committed or rolled back, to avoid restarting in the
-	// middle of a transaction.
-	startPos myproto.GTID
-	// pos is the most recent event we've seen, even if it's inside a transaction.
+	// pos is the GTID of the most recent event we've seen.
 	pos myproto.GTID
 }
 
@@ -43,33 +42,28 @@ func newBinlogConnStreamer(dbname string, mysqld *mysqlctl.Mysqld) BinlogStreame
 }
 
 // Stream implements BinlogStreamer.Stream().
-func (bls *binlogConnStreamer) Stream(gtid myproto.GTID, sendTransaction sendTransactionFunc) error {
-	bls.startPos = gtid
-
+func (bls *binlogConnStreamer) Stream(startPos myproto.GTID, sendTransaction sendTransactionFunc) error {
 	// Launch using service manager so we can stop this as needed.
 	bls.svm.Go(func(svc *sync2.ServiceContext) error {
 		var events <-chan proto.BinlogEvent
 		var err error
 
-		// Keep reconnecting and restarting stream unless we've been told to stop.
-		for svc.IsRunning() {
-			if bls.conn, err = mysqlctl.NewSlaveConnection(bls.mysqld); err != nil {
-				return err
-			}
-			events, err = bls.conn.StartBinlogDump(bls.startPos)
-			if err != nil {
-				bls.conn.Close()
-				return err
-			}
-			// parseEvents will loop until the events channel is closed, the
-			// service enters the SHUTTING_DOWN state, or an error occurs.
-			if err = bls.parseEvents(svc, events, sendTransaction); err != nil {
-				bls.conn.Close()
-				return err
-			}
-			bls.conn.Close()
+		if bls.conn, err = mysqlctl.NewSlaveConnection(bls.mysqld); err != nil {
+			return err
 		}
-		return nil
+		defer bls.conn.Close()
+
+		events, err = bls.conn.StartBinlogDump(startPos)
+		if err != nil {
+			return err
+		}
+		// parseEvents will loop until the events channel is closed, the
+		// service enters the SHUTTING_DOWN state, or an error occurs.
+		err = bls.parseEvents(svc, events, sendTransaction)
+		if err == ClientEOF {
+			return nil
+		}
+		return err
 	})
 
 	// Wait for service to exit, and handle errors if any.
@@ -93,6 +87,9 @@ func (bls *binlogConnStreamer) Stop() {
 // parseEvents processes the raw binlog dump stream from the server, one event
 // at a time, and groups them into transactions. It is called from within the
 // service function launched by Stream().
+//
+// If the sendTransaction func returns io.EOF, parseEvents returns ClientEOF.
+// If the events channel is closed, parseEvents returns ServerEOF.
 func (bls *binlogConnStreamer) parseEvents(svc *sync2.ServiceContext, events <-chan proto.BinlogEvent, sendTransaction sendTransactionFunc) (err error) {
 	var statements []proto.Statement
 	var timestamp int64
@@ -107,12 +104,11 @@ func (bls *binlogConnStreamer) parseEvents(svc *sync2.ServiceContext, events <-c
 		}
 		if err = sendTransaction(trans); err != nil {
 			if err == io.EOF {
-				return err
+				return ClientEOF
 			}
 			return fmt.Errorf("send reply error: %v", err)
 		}
 		statements = nil
-		bls.startPos = bls.pos
 		return nil
 	}
 
@@ -124,8 +120,9 @@ func (bls *binlogConnStreamer) parseEvents(svc *sync2.ServiceContext, events <-c
 		select {
 		case ev, ok = <-events:
 			if !ok {
+				// events channel has been closed, which means the connection died.
 				log.Infof("reached end of binlog event stream")
-				return nil
+				return ServerEOF
 			}
 		case <-svc.ShuttingDown:
 			log.Infof("stopping early due to BinlogStreamer service shutdown")
@@ -218,7 +215,6 @@ func (bls *binlogConnStreamer) parseEvents(svc *sync2.ServiceContext, events <-c
 				// ROLLBACK here in the real replication stream, so log it if we do.
 				log.Warningf("ROLLBACK encountered in real binlog stream; transaction: %#v, rollback: %#v", statements, string(sql))
 				statements = nil
-				bls.startPos = bls.pos
 			case proto.BL_DDL:
 				statements = append(statements, proto.Statement{
 					Category: proto.BL_SET,
