@@ -155,20 +155,22 @@ func (ev binlogEvent) Format() (f blproto.BinlogFormat, err error) {
 //   Y         status vars block
 //   X+1       db_name + NULL terminator
 //   L-X-1-Y   SQL statement (no NULL terminator)
-func (ev binlogEvent) Query(f blproto.BinlogFormat) ([]byte, error) {
+func (ev binlogEvent) Query(f blproto.BinlogFormat) (string, []byte, error) {
 	data := ev.Bytes()[f.HeaderLength:]
 
 	// length of database name
-	dbNameLen := data[4+4] + 1 // +1 to account for NULL terminator
+	dbNameLen := int(data[4+4])
 	// length of status variables block
-	varsLen := binary.LittleEndian.Uint16(data[4+4+1+2 : 4+4+1+2+2])
+	varsLen := int(binary.LittleEndian.Uint16(data[4+4+1+2 : 4+4+1+2+2]))
 
+	// position of database name
+	dbPos := 4 + 4 + 1 + 2 + 2 + varsLen
 	// position of SQL query
-	pos := 4 + 4 + 1 + 2 + 2 + int(dbNameLen) + int(varsLen)
-	if pos > len(data) {
-		return nil, fmt.Errorf("SQL query position = %v, which is outside buffer", pos)
+	sqlPos := dbPos + dbNameLen + 1 // +1 for NULL terminator
+	if sqlPos > len(data) {
+		return "", nil, fmt.Errorf("SQL query position = %v, which is outside buffer", sqlPos)
 	}
-	return data[pos:], nil
+	return string(data[dbPos : dbPos+dbNameLen]), data[sqlPos:], nil
 }
 
 // IntVar implements BinlogEvent.IntVar().

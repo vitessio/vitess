@@ -57,9 +57,10 @@ type BinlogEvent interface {
 	// GTID returns the GTID from the event.
 	// This is only valid if HasGTID() returns true.
 	GTID(BinlogFormat) (myproto.GTID, error)
-	// Query returns the SQL statement for a QUERY_EVENT.
+	// Query returns the database name (or "" if none) and SQL statement for a
+	// QUERY_EVENT.
 	// This is only valid if IsQuery() returns true.
-	Query(BinlogFormat) ([]byte, error)
+	Query(BinlogFormat) (db string, query []byte, err error)
 	// IntVar returns the name and value of the variable for an INTVAR_EVENT.
 	// This is only valid if IsIntVar() returns true.
 	IntVar(BinlogFormat) (string, uint64, error)

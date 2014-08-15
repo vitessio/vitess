@@ -109,7 +109,9 @@ def setUpModule():
     utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/0'])
     utils.validate_topology()
     master_tablet.create_db('vt_test_keyspace')
+    master_tablet.create_db('other_database')
     replica_tablet.create_db('vt_test_keyspace')
+    replica_tablet.create_db('other_database')
 
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'])
 
@@ -358,6 +360,20 @@ class TestUpdateStream(unittest.TestCase):
         break
       self.assertEqual(data['PkRows'][0][0][1], expected_id)
       expected_id += 1
+      data = master_conn.stream_next()
+
+  def test_database_filter(self):
+    start_position = _get_master_current_position()
+    master_tablet.mquery('other_database', _create_vt_insert_test)
+    self._exec_vt_txn(self._populate_vt_insert_test)
+    logging.debug("test_database_filter: starting @ %s" % start_position)
+    master_conn = self._get_master_stream_conn()
+    master_conn.dial()
+    data = master_conn.stream_start(start_position)
+    while data:
+      if data['Category'] == 'POS':
+        break
+      self.assertNotEqual(data['Category'], 'DDL', "query using other_database wasn't filted out")
       data = master_conn.stream_next()
 
   #This tests the service switch from disable -> enable -> disable
