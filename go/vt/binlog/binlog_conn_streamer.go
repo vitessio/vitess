@@ -195,9 +195,13 @@ func (bls *binlogConnStreamer) parseEvents(events <-chan proto.BinlogEvent, send
 				timestamp = int64(ev.Timestamp())
 			}
 			// Extract the query string and group into transactions.
-			sql, err := ev.Query(format)
+			db, sql, err := ev.Query(format)
 			if err != nil {
 				return fmt.Errorf("can't get query from binlog event: %v, event data: %#v", err, ev)
+			}
+			if db != "" && db != bls.dbname {
+				// Skip queries that aren't on the database we're looking for.
+				continue
 			}
 			switch cat := getStatementCategory(sql); cat {
 			case proto.BL_BEGIN:
