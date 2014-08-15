@@ -88,26 +88,26 @@ func newBinlogFileStreamer(dbname string, mysqld *mysqlctl.Mysqld) BinlogStreame
 }
 
 // streamFilePos starts streaming events from a given file and position.
-func (bls *binlogFileStreamer) streamFilePos(file string, pos int64, sendTransaction sendTransactionFunc) (err error) {
-	if err = bls.file.Init(path.Join(bls.dir, file), pos); err != nil {
+func (bls *binlogFileStreamer) streamFilePos(file string, pos int64, sendTransaction sendTransactionFunc) error {
+	if err := bls.file.Init(path.Join(bls.dir, file), pos); err != nil {
 		return err
 	}
 	defer bls.file.Close()
 
 	// Launch using service manager so we can stop this as needed.
-	bls.svm.Go(func(svc *sync2.ServiceContext) {
+	bls.svm.Go(func(svc *sync2.ServiceContext) error {
 		for {
-			if err = bls.run(svc, sendTransaction); err != nil {
-				return
+			if err := bls.run(svc, sendTransaction); err != nil {
+				return err
 			}
-			if err = bls.file.WaitForChange(svc); err != nil {
-				return
+			if err := bls.file.WaitForChange(svc); err != nil {
+				return err
 			}
 		}
 	})
 
 	// Wait for service to exit, and handle errors if any.
-	bls.svm.Wait()
+	err := bls.svm.Join()
 	if err == io.EOF {
 		log.Infof("Stream ended @ %#v", bls.file)
 		return nil

@@ -25,6 +25,7 @@ var stateNames = []string{
 type ServiceManager struct {
 	mu    sync.Mutex
 	wg    sync.WaitGroup
+	err   error // err is the error returned from the service function.
 	state AtomicInt64
 	// shutdown is created when the service starts and is closed when the service
 	// enters the SERVICE_SHUTTING_DOWN state.
@@ -42,16 +43,17 @@ type ServiceManager struct {
 // the svc.ShuttingDown channel to be closed.
 //
 // When the service func returns, the state is reverted to SERVICE_STOPPED.
-func (svm *ServiceManager) Go(service func(svc *ServiceContext)) bool {
+func (svm *ServiceManager) Go(service func(svc *ServiceContext) error) bool {
 	svm.mu.Lock()
 	defer svm.mu.Unlock()
 	if !svm.state.CompareAndSwap(SERVICE_STOPPED, SERVICE_RUNNING) {
 		return false
 	}
 	svm.wg.Add(1)
+	svm.err = nil
 	svm.shutdown = make(chan struct{})
 	go func() {
-		service(&ServiceContext{ShuttingDown: svm.shutdown})
+		svm.err = service(&ServiceContext{ShuttingDown: svm.shutdown})
 		svm.state.Set(SERVICE_STOPPED)
 		svm.wg.Done()
 	}()
@@ -78,6 +80,13 @@ func (svm *ServiceManager) Stop() bool {
 // Wait waits for the service to terminate if it's currently running.
 func (svm *ServiceManager) Wait() {
 	svm.wg.Wait()
+}
+
+// Join waits for the service to terminate and returns the value returned by the
+// service function.
+func (svm *ServiceManager) Join() error {
+	svm.wg.Wait()
+	return svm.err
 }
 
 // State returns the current state of the service.

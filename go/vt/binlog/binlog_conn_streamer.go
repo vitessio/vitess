@@ -43,35 +43,37 @@ func newBinlogConnStreamer(dbname string, mysqld *mysqlctl.Mysqld) BinlogStreame
 }
 
 // Stream implements BinlogStreamer.Stream().
-func (bls *binlogConnStreamer) Stream(gtid myproto.GTID, sendTransaction sendTransactionFunc) (err error) {
+func (bls *binlogConnStreamer) Stream(gtid myproto.GTID, sendTransaction sendTransactionFunc) error {
 	bls.startPos = gtid
 
 	// Launch using service manager so we can stop this as needed.
-	bls.svm.Go(func(svc *sync2.ServiceContext) {
+	bls.svm.Go(func(svc *sync2.ServiceContext) error {
 		var events <-chan proto.BinlogEvent
+		var err error
 
 		// Keep reconnecting and restarting stream unless we've been told to stop.
 		for svc.IsRunning() {
 			if bls.conn, err = mysqlctl.NewSlaveConnection(bls.mysqld); err != nil {
-				return
+				return err
 			}
 			events, err = bls.conn.StartBinlogDump(bls.startPos)
 			if err != nil {
 				bls.conn.Close()
-				return
+				return err
 			}
 			// parseEvents will loop until the events channel is closed, the
 			// service enters the SHUTTING_DOWN state, or an error occurs.
 			if err = bls.parseEvents(svc, events, sendTransaction); err != nil {
 				bls.conn.Close()
-				return
+				return err
 			}
 			bls.conn.Close()
 		}
+		return nil
 	})
 
 	// Wait for service to exit, and handle errors if any.
-	bls.svm.Wait()
+	err := bls.svm.Join()
 
 	if err != nil {
 		err = fmt.Errorf("stream error @ %#v, error: %v", bls.pos, err)
