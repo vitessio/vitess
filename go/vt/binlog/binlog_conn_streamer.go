@@ -208,6 +208,10 @@ func (bls *binlogConnStreamer) parseEvents(svc *sync2.ServiceContext, events <-c
 			switch cat := getStatementCategory(sql); cat {
 			case proto.BL_BEGIN:
 				statements = nil
+			case proto.BL_COMMIT:
+				if err = commit(); err != nil {
+					return err
+				}
 			case proto.BL_ROLLBACK:
 				// TODO(enisoc): When we used to read binlog events through mysqlbinlog,
 				// it would generate fake ROLLBACK statements when it reached the end of
@@ -215,23 +219,17 @@ func (bls *binlogConnStreamer) parseEvents(svc *sync2.ServiceContext, events <-c
 				// ROLLBACK here in the real replication stream, so log it if we do.
 				log.Warningf("ROLLBACK encountered in real binlog stream; transaction: %#v, rollback: %#v", statements, string(sql))
 				statements = nil
-			case proto.BL_DDL:
+			default: // BL_DDL, BL_DML, BL_SET, BL_UNRECOGNIZED
 				statements = append(statements, proto.Statement{
 					Category: proto.BL_SET,
 					Sql:      []byte(fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp())),
 				})
 				statements = append(statements, proto.Statement{Category: cat, Sql: sql})
-				fallthrough
-			case proto.BL_COMMIT:
-				if err = commit(); err != nil {
-					return err
+				if cat == proto.BL_DDL {
+					if err = commit(); err != nil {
+						return err
+					}
 				}
-			default: // proto.BL_SET, proto.BL_DML, or proto.BL_UNRECOGNIZED
-				statements = append(statements, proto.Statement{
-					Category: proto.BL_SET,
-					Sql:      []byte(fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp())),
-				})
-				statements = append(statements, proto.Statement{Category: cat, Sql: sql})
 			}
 		}
 	}
