@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -27,7 +27,7 @@ var UseSrvShardLocks = flag.Bool("use_srv_shard_locks", true, "DEPRECATED: If tr
 //
 // This function locks individual SvrShard paths, so it doesn't need a lock
 // on the shard.
-func RebuildShard(ts topo.Server, keyspace, shard string, cells []string, timeout time.Duration, interrupted chan struct{}) error {
+func RebuildShard(log logutil.Logger, ts topo.Server, keyspace, shard string, cells []string, timeout time.Duration, interrupted chan struct{}) error {
 	log.Infof("RebuildShard %v/%v", keyspace, shard)
 
 	// read the existing shard info. It has to exist.
@@ -97,7 +97,7 @@ func RebuildShard(ts topo.Server, keyspace, shard string, cells []string, timeou
 			}
 
 			// write the data we need to
-			rebuildErr := rebuildCellSrvShard(ts, shardInfo, cell, tablets)
+			rebuildErr := rebuildCellSrvShard(log, ts, shardInfo, cell, tablets)
 
 			// and unlock
 			if err := actionNode.UnlockSrvShard(ts, cell, keyspace, shard, lockPath, rebuildErr); err != nil {
@@ -112,7 +112,7 @@ func RebuildShard(ts topo.Server, keyspace, shard string, cells []string, timeou
 
 // rebuildCellSrvShard computes and writes the serving graph data to a
 // single cell
-func rebuildCellSrvShard(ts topo.Server, shardInfo *topo.ShardInfo, cell string, tablets map[topo.TabletAlias]*topo.TabletInfo) error {
+func rebuildCellSrvShard(log logutil.Logger, ts topo.Server, shardInfo *topo.ShardInfo, cell string, tablets map[topo.TabletAlias]*topo.TabletInfo) error {
 	log.Infof("rebuildCellSrvShard %v/%v in cell %v", shardInfo.Keyspace(), shardInfo.ShardName(), cell)
 
 	// Get all existing db types so they can be removed if nothing

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"time"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -34,7 +33,7 @@ func findChecker(wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, cell, keyspac
 	// We add the tag before calling ChangeSlaveType, so the destination
 	// vttablet reloads the worker URL when it reloads the tablet.
 	ourURL := servenv.ListeningURL.String()
-	log.Infof("Adding tag[worker]=%v to tablet %v", ourURL, tabletAlias)
+	wr.Logger().Infof("Adding tag[worker]=%v to tablet %v", ourURL, tabletAlias)
 	if err := wr.TopoServer().UpdateTabletFields(tabletAlias, func(tablet *topo.Tablet) error {
 		if tablet.Tags == nil {
 			tablet.Tags = make(map[string]string)
@@ -49,7 +48,7 @@ func findChecker(wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, cell, keyspac
 	// type change in the cleaner.
 	defer wrangler.RecordTabletTagAction(cleaner, tabletAlias, "worker", "")
 
-	log.Infof("Changing tablet %v to 'checker'", tabletAlias)
+	wr.Logger().Infof("Changing tablet %v to 'checker'", tabletAlias)
 	wr.ResetActionTimeout(30 * time.Second)
 	if err := wr.ChangeType(tabletAlias, topo.TYPE_CHECKER, false /*force*/); err != nil {
 		return topo.TabletAlias{}, err

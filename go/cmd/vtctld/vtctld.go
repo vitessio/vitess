@@ -15,7 +15,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
-	_ "github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -346,7 +346,7 @@ func main() {
 	ts := topo.GetServer()
 	defer topo.CloseServers()
 
-	wr := wrangler.New(ts, 30*time.Second, 30*time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, 30*time.Second, 30*time.Second)
 
 	actionRepo = NewActionRepository(wr)
 

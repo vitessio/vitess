@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"sync"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
@@ -59,7 +58,7 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 	case nil:
 		// keep going
 	case topo.ErrPartialResult:
-		log.Warningf("Got topo.ErrPartialResult from GetTabletMapForShard, may need to re-init some tablets")
+		wr.logger.Warningf("Got topo.ErrPartialResult from GetTabletMapForShard, may need to re-init some tablets")
 	default:
 		return err
 	}
@@ -88,7 +87,7 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 	slaveTabletMap, masterTabletMap := sortedTabletMap(tabletMap)
 	err = wr.reparentShardExternal(ev, slaveTabletMap, masterTabletMap, masterElectTablet)
 	if err != nil {
-		log.Infof("Skipping shard rebuild with failed reparent")
+		wr.logger.Infof("Skipping shard rebuild with failed reparent")
 		return err
 	}
 
@@ -101,7 +100,7 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 
 	// now update the master record in the shard object
 	ev.UpdateStatus("updating shard record")
-	log.Infof("Updating Shard's MasterAlias record")
+	wr.logger.Infof("Updating Shard's MasterAlias record")
 	shardInfo.MasterAlias = masterElectTabletAlias
 	if err = wr.ts.UpdateShard(shardInfo); err != nil {
 		return err
@@ -109,8 +108,8 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 
 	// and rebuild the shard serving graph
 	ev.UpdateStatus("rebuilding shard serving graph")
-	log.Infof("Rebuilding shard serving graph data")
-	if err = topotools.RebuildShard(wr.ts, masterElectTablet.Keyspace, masterElectTablet.Shard, cells, wr.lockTimeout, interrupted); err != nil {
+	wr.logger.Infof("Rebuilding shard serving graph data")
+	if err = topotools.RebuildShard(wr.logger, wr.ts, masterElectTablet.Keyspace, masterElectTablet.Shard, cells, wr.lockTimeout, interrupted); err != nil {
 		return err
 	}
 
@@ -163,14 +162,14 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[to
 	// we get to wr.actionTimeout(). After this, no other action
 	// with a timeout is executed, so even if we got to the
 	// timeout, we're still good.
-	log.Infof("Updating individual tablets with the right master...")
+	wr.logger.Infof("Updating individual tablets with the right master...")
 
 	// do all the slaves
 	for _, ti := range slaveTabletMap {
 		wg.Add(1)
 		go func(ti *topo.TabletInfo) {
 			if err := wr.slaveWasRestarted(ti, &swrd); err != nil {
-				log.Warningf("Slave %v had an error: %v", ti.Alias, err)
+				wr.logger.Warningf("Slave %v had an error: %v", ti.Alias, err)
 			}
 			wg.Done()
 		}(ti)
@@ -186,9 +185,9 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[to
 				// around in the replication graph, so if we
 				// can't restart it, we just scrap it.
 				// We don't rebuild the Shard just yet though.
-				log.Warningf("Old master %v is not restarting, scrapping it: %v", ti.Alias, err)
+				wr.logger.Warningf("Old master %v is not restarting, scrapping it: %v", ti.Alias, err)
 				if _, err := wr.Scrap(ti.Alias, true /*force*/, true /*skipRebuild*/); err != nil {
-					log.Warningf("Failed to scrap old master %v: %v", ti.Alias, err)
+					wr.logger.Warningf("Failed to scrap old master %v: %v", ti.Alias, err)
 				}
 			}
 			wg.Done()
@@ -198,7 +197,7 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[to
 }
 
 func (wr *Wrangler) slaveWasPromoted(ti *topo.TabletInfo) error {
-	log.Infof("slaveWasPromoted(%v)", ti.Alias)
+	wr.logger.Infof("slaveWasPromoted(%v)", ti.Alias)
 	if wr.UseRPCs {
 		return wr.ai.RpcSlaveWasPromoted(ti, wr.actionTimeout())
 	} else {
@@ -215,7 +214,7 @@ func (wr *Wrangler) slaveWasPromoted(ti *topo.TabletInfo) error {
 }
 
 func (wr *Wrangler) slaveWasRestarted(ti *topo.TabletInfo, swrd *actionnode.SlaveWasRestartedArgs) (err error) {
-	log.Infof("slaveWasRestarted(%v)", ti.Alias)
+	wr.logger.Infof("slaveWasRestarted(%v)", ti.Alias)
 	if wr.UseRPCs {
 		return wr.ai.RpcSlaveWasRestarted(ti, swrd, wr.actionTimeout())
 	} else {

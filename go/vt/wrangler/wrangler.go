@@ -9,6 +9,7 @@ import (
 	"flag"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/initiator"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -26,6 +27,7 @@ var tabletManagerProtocol = flag.String("tablet_manager_protocol", "bson", "the 
 // Wrangler manages complex actions on the topology, like reparents,
 // snapshots, restores, ...
 type Wrangler struct {
+	logger      logutil.Logger
 	ts          topo.Server
 	ai          *initiator.ActionInitiator
 	deadline    time.Time
@@ -52,8 +54,8 @@ type Wrangler struct {
 // of the time, we want to immediately know that our action will
 // fail. However, automated action will need some time to arbitrate
 // the locks.
-func New(ts topo.Server, actionTimeout, lockTimeout time.Duration) *Wrangler {
-	return &Wrangler{ts, initiator.NewActionInitiator(ts, *tabletManagerProtocol), time.Now().Add(actionTimeout), lockTimeout, true}
+func New(logger logutil.Logger, ts topo.Server, actionTimeout, lockTimeout time.Duration) *Wrangler {
+	return &Wrangler{logger, ts, initiator.NewActionInitiator(ts, *tabletManagerProtocol), time.Now().Add(actionTimeout), lockTimeout, true}
 }
 
 func (wr *Wrangler) actionTimeout() time.Duration {
@@ -68,6 +70,17 @@ func (wr *Wrangler) TopoServer() topo.Server {
 // ActionInitiator returns the initiator.ActionInitiator this wrangler is using.
 func (wr *Wrangler) ActionInitiator() *initiator.ActionInitiator {
 	return wr.ai
+}
+
+// SetLogger can be used to change the current logger. Not synchronized,
+// no calls to this wrangler should be in progress.
+func (wr *Wrangler) SetLogger(logger logutil.Logger) {
+	wr.logger = logger
+}
+
+// Logger returns the logger associated with this wrangler.
+func (wr *Wrangler) Logger() logutil.Logger {
+	return wr.logger
 }
 
 // ResetActionTimeout should be used before every action on a wrangler

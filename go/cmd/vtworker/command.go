@@ -12,6 +12,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -111,9 +112,9 @@ func commandWorker(wr *wrangler.Wrangler, args []string) worker.Worker {
 	return nil
 }
 
-func runCommand(wr *wrangler.Wrangler, args []string) {
+func runCommand(args []string) {
 	wrk := commandWorker(wr, args)
-	done, err := setAndStartWorker(wrk)
+	done, err := setAndStartWorker(wrk, logutil.NewConsoleLogger())
 	if err != nil {
 		log.Fatalf("Cannot set worker: %v", err)
 	}

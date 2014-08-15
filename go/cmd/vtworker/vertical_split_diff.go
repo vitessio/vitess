@@ -124,7 +124,7 @@ func interactiveVerticalSplitDiff(wr *wrangler.Wrangler, w http.ResponseWriter, 
 
 	// start the diff job
 	wrk := worker.NewVerticalSplitDiffWorker(wr, *cell, keyspace, shard)
-	if _, err := setAndStartWorker(wrk); err != nil {
+	if _, err := setAndStartWorker(wrk, nil); err != nil {
 		httpError(w, "cannot set worker: %s", err)
 		return
 	}

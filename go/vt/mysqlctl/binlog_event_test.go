@@ -231,19 +231,20 @@ func TestBinlogEventQuery(t *testing.T) {
 	}
 
 	input := binlogEvent(googleQueryEvent)
-	want := `create table if not exists vt_a (
+	wantDB := "vt_test_keyspace"
+	wantSQL := `create table if not exists vt_a (
 eid bigint,
 id int,
 primary key(eid, id)
 ) Engine=InnoDB`
-	gotbytes, err := input.Query(f)
-	got := string(gotbytes)
+	gotDB, gotbytes, err := input.Query(f)
+	gotSQL := string(gotbytes)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 		return
 	}
-	if got != want {
-		t.Errorf("%#v.Query() = %#v, want %#v", input, got, want)
+	if gotDB != wantDB || gotSQL != wantSQL {
+		t.Errorf("%#v.Query() = (%#v, %#v), want (%#v, %#v)", input, gotDB, gotSQL, wantDB, wantSQL)
 	}
 }
 
@@ -260,7 +261,7 @@ func TestBinlogEventQueryBadLength(t *testing.T) {
 
 	input := binlogEvent(buf)
 	want := "SQL query position = 240, which is outside buffer"
-	_, err = input.Query(f)
+	_, _, err = input.Query(f)
 	if err == nil {
 		t.Errorf("expected error, got none")
 		return
