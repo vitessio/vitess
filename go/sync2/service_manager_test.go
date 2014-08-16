@@ -124,21 +124,21 @@ func TestServiceManagerSelect(t *testing.T) {
 	}
 }
 
-func TestServiceManagerWaitNotRunning(t *testing.T) {
+func TestServiceManagerJoinNotRunning(t *testing.T) {
 	done := make(chan struct{})
 	var sm ServiceManager
 	go func() {
-		sm.Wait()
+		sm.Join()
 		close(done)
 	}()
 	select {
 	case <-done:
 	case <-time.After(1 * time.Second):
-		t.Errorf("Wait() blocked even though service wasn't running.")
+		t.Errorf("Join() blocked even though service wasn't running.")
 	}
 }
 
-func TestServiceManagerWait(t *testing.T) {
+func TestServiceManagerJoinBlocks(t *testing.T) {
 	done := make(chan struct{})
 	stop := make(chan struct{})
 	var sm ServiceManager
@@ -147,24 +147,24 @@ func TestServiceManagerWait(t *testing.T) {
 		return nil
 	})
 	go func() {
-		sm.Wait()
+		sm.Join()
 		close(done)
 	}()
 	time.Sleep(100 * time.Millisecond)
 	select {
 	case <-done:
-		t.Errorf("Wait() didn't block while service was still running.")
+		t.Errorf("Join() didn't block while service was still running.")
 	default:
 	}
 	close(stop)
 	select {
 	case <-done:
 	case <-time.After(100 * time.Millisecond):
-		t.Errorf("Wait() didn't unblock when service stopped.")
+		t.Errorf("Join() didn't unblock when service stopped.")
 	}
 }
 
-func TestServiceManagerJoin(t *testing.T) {
+func TestServiceManagerJoinReturn(t *testing.T) {
 	want := "error 123"
 	var sm ServiceManager
 	sm.Go(func(*ServiceContext) error {

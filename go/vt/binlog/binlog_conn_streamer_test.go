@@ -69,13 +69,11 @@ func TestBinlogConnStreamerParseEventsXID(t *testing.T) {
 
 	go sendTestEvents(events, input)
 	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		err := bls.parseEvents(svc, events, sendTransaction)
-		if err != ServerEOF {
-			t.Errorf("unexpected error: %v", err)
-		}
-		return nil
+		return bls.parseEvents(svc, events, sendTransaction)
 	})
-	bls.svm.Wait()
+	if err := bls.svm.Join(); err != ServerEOF {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("binlogConnStreamer.parseEvents(): got %#v, want %#v", got, want)
@@ -113,13 +111,11 @@ func TestBinlogConnStreamerParseEventsCommit(t *testing.T) {
 
 	go sendTestEvents(events, input)
 	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		err := bls.parseEvents(svc, events, sendTransaction)
-		if err != ServerEOF {
-			t.Errorf("unexpected error: %v", err)
-		}
-		return nil
+		return bls.parseEvents(svc, events, sendTransaction)
 	})
-	bls.svm.Wait()
+	if err := bls.svm.Join(); err != ServerEOF {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("binlogConnStreamer.parseEvents(): got %#v, want %#v", got, want)
@@ -175,17 +171,15 @@ func TestBinlogConnStreamerParseEventsClientEOF(t *testing.T) {
 
 	go sendTestEvents(events, input)
 	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		err := bls.parseEvents(svc, events, sendTransaction)
-		if err == nil {
-			t.Errorf("expected error, got none")
-			return err
-		}
-		if err != want {
-			t.Errorf("wrong error, got %#v, want %#v", err, want)
-		}
-		return nil
+		return bls.parseEvents(svc, events, sendTransaction)
 	})
-	bls.svm.Wait()
+	err := bls.svm.Join()
+	if err == nil {
+		t.Errorf("expected error, got none")
+	}
+	if err != want {
+		t.Errorf("wrong error, got %#v, want %#v", err, want)
+	}
 }
 
 func TestBinlogConnStreamerParseEventsServerEOF(t *testing.T) {
@@ -200,17 +194,15 @@ func TestBinlogConnStreamerParseEventsServerEOF(t *testing.T) {
 	}
 
 	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		err := bls.parseEvents(svc, events, sendTransaction)
-		if err == nil {
-			t.Errorf("expected error, got none")
-			return err
-		}
-		if err != want {
-			t.Errorf("wrong error, got %#v, want %#v", err, want)
-		}
-		return nil
+		return bls.parseEvents(svc, events, sendTransaction)
 	})
-	bls.svm.Wait()
+	err := bls.svm.Join()
+	if err == nil {
+		t.Errorf("expected error, got none")
+	}
+	if err != want {
+		t.Errorf("wrong error, got %#v, want %#v", err, want)
+	}
 }
 
 func TestBinlogConnStreamerParseEventsSendErrorXID(t *testing.T) {
@@ -232,17 +224,16 @@ func TestBinlogConnStreamerParseEventsSendErrorXID(t *testing.T) {
 
 	go sendTestEvents(events, input)
 	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		err := bls.parseEvents(svc, events, sendTransaction)
-		if err == nil {
-			t.Errorf("expected error, got none")
-			return err
-		}
-		if got := err.Error(); got != want {
-			t.Errorf("wrong error, got %#v, want %#v", got, want)
-		}
-		return nil
+		return bls.parseEvents(svc, events, sendTransaction)
 	})
-	bls.svm.Wait()
+	err := bls.svm.Join()
+	if err == nil {
+		t.Errorf("expected error, got none")
+		return
+	}
+	if got := err.Error(); got != want {
+		t.Errorf("wrong error, got %#v, want %#v", got, want)
+	}
 }
 
 func TestBinlogConnStreamerParseEventsSendErrorCommit(t *testing.T) {
@@ -264,17 +255,16 @@ func TestBinlogConnStreamerParseEventsSendErrorCommit(t *testing.T) {
 
 	go sendTestEvents(events, input)
 	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		err := bls.parseEvents(svc, events, sendTransaction)
-		if err == nil {
-			t.Errorf("expected error, got none")
-			return err
-		}
-		if got := err.Error(); got != want {
-			t.Errorf("wrong error, got %#v, want %#v", got, want)
-		}
-		return nil
+		return bls.parseEvents(svc, events, sendTransaction)
 	})
-	bls.svm.Wait()
+	err := bls.svm.Join()
+	if err == nil {
+		t.Errorf("expected error, got none")
+		return
+	}
+	if got := err.Error(); got != want {
+		t.Errorf("wrong error, got %#v, want %#v", got, want)
+	}
 }
 
 func TestBinlogConnStreamerParseEventsInvalid(t *testing.T) {
@@ -298,17 +288,16 @@ func TestBinlogConnStreamerParseEventsInvalid(t *testing.T) {
 
 	go sendTestEvents(events, input)
 	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		err := bls.parseEvents(svc, events, sendTransaction)
-		if err == nil {
-			t.Errorf("expected error, got none")
-			return err
-		}
-		if got := err.Error(); got != want {
-			t.Errorf("wrong error, got %#v, want %#v", got, want)
-		}
-		return nil
+		return bls.parseEvents(svc, events, sendTransaction)
 	})
-	bls.svm.Wait()
+	err := bls.svm.Join()
+	if err == nil {
+		t.Errorf("expected error, got none")
+		return
+	}
+	if got := err.Error(); got != want {
+		t.Errorf("wrong error, got %#v, want %#v", got, want)
+	}
 }
 
 func TestBinlogConnStreamerParseEventsInvalidFormat(t *testing.T) {
@@ -334,17 +323,16 @@ func TestBinlogConnStreamerParseEventsInvalidFormat(t *testing.T) {
 
 	go sendTestEvents(events, input)
 	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		err := bls.parseEvents(svc, events, sendTransaction)
-		if err == nil {
-			t.Errorf("expected error, got none")
-			return err
-		}
-		if got := err.Error(); got != want {
-			t.Errorf("wrong error, got %#v, want %#v", got, want)
-		}
-		return nil
+		return bls.parseEvents(svc, events, sendTransaction)
 	})
-	bls.svm.Wait()
+	err := bls.svm.Join()
+	if err == nil {
+		t.Errorf("expected error, got none")
+		return
+	}
+	if got := err.Error(); got != want {
+		t.Errorf("wrong error, got %#v, want %#v", got, want)
+	}
 }
 
 func TestBinlogConnStreamerParseEventsNoFormat(t *testing.T) {
@@ -366,17 +354,16 @@ func TestBinlogConnStreamerParseEventsNoFormat(t *testing.T) {
 
 	go sendTestEvents(events, input)
 	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		err := bls.parseEvents(svc, events, sendTransaction)
-		if err == nil {
-			t.Errorf("expected error, got none")
-			return err
-		}
-		if got := err.Error(); got != want {
-			t.Errorf("wrong error, got %#v, want %#v", got, want)
-		}
-		return nil
+		return bls.parseEvents(svc, events, sendTransaction)
 	})
-	bls.svm.Wait()
+	err := bls.svm.Join()
+	if err == nil {
+		t.Errorf("expected error, got none")
+		return
+	}
+	if got := err.Error(); got != want {
+		t.Errorf("wrong error, got %#v, want %#v", got, want)
+	}
 }
 
 func TestBinlogConnStreamerParseEventsInvalidQuery(t *testing.T) {
@@ -402,17 +389,16 @@ func TestBinlogConnStreamerParseEventsInvalidQuery(t *testing.T) {
 
 	go sendTestEvents(events, input)
 	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		err := bls.parseEvents(svc, events, sendTransaction)
-		if err == nil {
-			t.Errorf("expected error, got none")
-			return err
-		}
-		if got := err.Error(); got != want {
-			t.Errorf("wrong error, got %#v, want %#v", got, want)
-		}
-		return nil
+		return bls.parseEvents(svc, events, sendTransaction)
 	})
-	bls.svm.Wait()
+	err := bls.svm.Join()
+	if err == nil {
+		t.Errorf("expected error, got none")
+		return
+	}
+	if got := err.Error(); got != want {
+		t.Errorf("wrong error, got %#v, want %#v", got, want)
+	}
 }
 
 func TestBinlogConnStreamerParseEventsRollback(t *testing.T) {
@@ -450,13 +436,11 @@ func TestBinlogConnStreamerParseEventsRollback(t *testing.T) {
 
 	go sendTestEvents(events, input)
 	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		err := bls.parseEvents(svc, events, sendTransaction)
-		if err != ServerEOF {
-			t.Errorf("unexpected error: %v", err)
-		}
-		return nil
+		return bls.parseEvents(svc, events, sendTransaction)
 	})
-	bls.svm.Wait()
+	if err := bls.svm.Join(); err != ServerEOF {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("binlogConnStreamer.parseEvents(): got %#v, want %#v", got, want)
@@ -504,13 +488,11 @@ func TestBinlogConnStreamerParseEventsCreate(t *testing.T) {
 
 	go sendTestEvents(events, input)
 	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		err := bls.parseEvents(svc, events, sendTransaction)
-		if err != ServerEOF {
-			t.Errorf("unexpected error: %v", err)
-		}
-		return nil
+		return bls.parseEvents(svc, events, sendTransaction)
 	})
-	bls.svm.Wait()
+	if err := bls.svm.Join(); err != ServerEOF {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("binlogConnStreamer.parseEvents(): got %#v, want %#v", got, want)
@@ -550,13 +532,11 @@ func TestBinlogConnStreamerParseEventsSetInsertID(t *testing.T) {
 
 	go sendTestEvents(events, input)
 	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		err := bls.parseEvents(svc, events, sendTransaction)
-		if err != ServerEOF {
-			t.Errorf("unexpected error: %v", err)
-		}
-		return nil
+		return bls.parseEvents(svc, events, sendTransaction)
 	})
-	bls.svm.Wait()
+	if err := bls.svm.Join(); err != ServerEOF {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("binlogConnStreamer.parseEvents(): got %#v, want %#v", got, want)
@@ -587,17 +567,16 @@ func TestBinlogConnStreamerParseEventsInvalidIntVar(t *testing.T) {
 
 	go sendTestEvents(events, input)
 	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		err := bls.parseEvents(svc, events, sendTransaction)
-		if err == nil {
-			t.Errorf("expected error, got none")
-			return err
-		}
-		if got := err.Error(); got != want {
-			t.Errorf("wrong error, got %#v, want %#v", got, want)
-		}
-		return nil
+		return bls.parseEvents(svc, events, sendTransaction)
 	})
-	bls.svm.Wait()
+	err := bls.svm.Join()
+	if err == nil {
+		t.Errorf("expected error, got none")
+		return
+	}
+	if got := err.Error(); got != want {
+		t.Errorf("wrong error, got %#v, want %#v", got, want)
+	}
 }
 
 func TestBinlogConnStreamerParseEventsOtherDB(t *testing.T) {
@@ -632,13 +611,11 @@ func TestBinlogConnStreamerParseEventsOtherDB(t *testing.T) {
 
 	go sendTestEvents(events, input)
 	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		err := bls.parseEvents(svc, events, sendTransaction)
-		if err != ServerEOF {
-			t.Errorf("unexpected error: %v", err)
-		}
-		return nil
+		return bls.parseEvents(svc, events, sendTransaction)
 	})
-	bls.svm.Wait()
+	if err := bls.svm.Join(); err != ServerEOF {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("binlogConnStreamer.parseEvents(): got %#v, want %#v", got, want)

@@ -77,11 +77,6 @@ func (svm *ServiceManager) Stop() bool {
 	return true
 }
 
-// Wait waits for the service to terminate if it's currently running.
-func (svm *ServiceManager) Wait() {
-	svm.wg.Wait()
-}
-
 // Join waits for the service to terminate and returns the value returned by the
 // service function.
 func (svm *ServiceManager) Join() error {
