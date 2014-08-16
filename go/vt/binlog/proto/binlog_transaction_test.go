@@ -81,3 +81,21 @@ func TestBinlogTransaction(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestStatementString(t *testing.T) {
+	table := map[string]Statement{
+		`{BL_UNRECOGNIZED: "SQL"}`: Statement{Category: BL_UNRECOGNIZED, Sql: []byte("SQL")},
+		`{BL_BEGIN: "SQL"}`:        Statement{Category: BL_BEGIN, Sql: []byte("SQL")},
+		`{BL_COMMIT: "SQL"}`:       Statement{Category: BL_COMMIT, Sql: []byte("SQL")},
+		`{BL_ROLLBACK: "SQL"}`:     Statement{Category: BL_ROLLBACK, Sql: []byte("SQL")},
+		`{BL_DML: "SQL"}`:          Statement{Category: BL_DML, Sql: []byte("SQL")},
+		`{BL_DDL: "SQL"}`:          Statement{Category: BL_DDL, Sql: []byte("SQL")},
+		`{BL_SET: "SQL"}`:          Statement{Category: BL_SET, Sql: []byte("SQL")},
+		`{7: "SQL"}`:               Statement{Category: 7, Sql: []byte("SQL")},
+	}
+	for want, input := range table {
+		if got := input.String(); got != want {
+			t.Errorf("%#v.String() = %#v, want %#v", input, got, want)
+		}
+	}
+}

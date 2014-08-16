@@ -70,6 +70,7 @@ func (bls *binlogConnStreamer) Stream(startPos myproto.GTID, sendTransaction sen
 	err := bls.svm.Join()
 
 	if err != nil {
+		binlogStreamerErrors.Add("Stream", 1)
 		err = fmt.Errorf("stream error @ %#v, error: %v", bls.pos, err)
 		log.Error(err.Error())
 		return err
@@ -97,6 +98,10 @@ func (bls *binlogConnStreamer) parseEvents(svc *sync2.ServiceContext, events <-c
 
 	// A commit can be triggered either by a COMMIT query, or by an XID_EVENT.
 	commit := func() error {
+		if statements == nil {
+			log.Errorf("COMMIT in binlog stream without matching BEGIN; sending empty transaction")
+			binlogStreamerErrors.Add("ParseEvents", 1)
+		}
 		trans := &proto.BinlogTransaction{
 			Statements: statements,
 			Timestamp:  timestamp,
@@ -192,22 +197,20 @@ func (bls *binlogConnStreamer) parseEvents(svc *sync2.ServiceContext, events <-c
 				Sql:      []byte(fmt.Sprintf("SET @@RAND_SEED1=%d, @@RAND_SEED2=%d", seed1, seed2)),
 			})
 		case ev.IsQuery(): // QUERY_EVENT
-			// Remember the timestamp at the beginning of a transaction.
-			if statements == nil {
-				timestamp = int64(ev.Timestamp())
-			}
 			// Extract the query string and group into transactions.
 			db, sql, err := ev.Query(format)
 			if err != nil {
 				return fmt.Errorf("can't get query from binlog event: %v, event data: %#v", err, ev)
 			}
-			if db != "" && db != bls.dbname {
-				// Skip queries that aren't on the database we're looking for.
-				continue
-			}
 			switch cat := getStatementCategory(sql); cat {
 			case proto.BL_BEGIN:
-				statements = nil
+				if statements != nil {
+					log.Errorf("BEGIN in binlog stream while still in another transaction; dropping %d statements: %v", len(statements), statements)
+					binlogStreamerErrors.Add("ParseEvents", 1)
+				}
+				statements = make([]proto.Statement, 0, 10)
+				// Remember the timestamp at the beginning of a transaction.
+				timestamp = int64(ev.Timestamp())
 			case proto.BL_COMMIT:
 				if err = commit(); err != nil {
 					return err
@@ -218,14 +221,28 @@ func (bls *binlogConnStreamer) parseEvents(svc *sync2.ServiceContext, events <-c
 				// a file in the middle of a transaction. We don't expect to see
 				// ROLLBACK here in the real replication stream, so log it if we do.
 				log.Warningf("ROLLBACK encountered in real binlog stream; transaction: %#v, rollback: %#v", statements, string(sql))
+				binlogStreamerErrors.Add("Rollbacks", 1)
 				statements = nil
 			default: // BL_DDL, BL_DML, BL_SET, BL_UNRECOGNIZED
+				if cat == proto.BL_DML && statements == nil {
+					log.Errorf("got DML in binlog stream without a BEGIN")
+					binlogStreamerErrors.Add("ParseEvents", 1)
+				}
+				if db != "" && db != bls.dbname {
+					// Skip non-transaction-related queries with a default database other
+					// than the one we're looking for. This is the behavior we were used to
+					// seeing from mysqlbinlog --database=<dbname>.
+					continue
+				}
+				inTransaction := statements != nil
 				statements = append(statements, proto.Statement{
 					Category: proto.BL_SET,
 					Sql:      []byte(fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp())),
 				})
 				statements = append(statements, proto.Statement{Category: cat, Sql: sql})
-				if cat == proto.BL_DDL {
+				if cat == proto.BL_DDL && !inTransaction {
+					// Pretend we saw a BEGIN/COMMIT for DDLs if there wasn't a real BEGIN.
+					timestamp = int64(ev.Timestamp())
 					if err = commit(); err != nil {
 						return err
 					}
