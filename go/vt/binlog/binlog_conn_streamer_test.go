@@ -420,6 +420,12 @@ func TestBinlogConnStreamerParseEventsRollback(t *testing.T) {
 
 	want := []proto.BinlogTransaction{
 		proto.BinlogTransaction{
+			Statements: nil,
+			Timestamp:  1407805592,
+			GTIDField: myproto.GTIDField{
+				Value: myproto.GoogleGTID{GroupID: 0x0d}},
+		},
+		proto.BinlogTransaction{
 			Statements: []proto.Statement{
 				proto.Statement{Category: proto.BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
 				proto.Statement{Category: proto.BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
@@ -448,12 +454,10 @@ func TestBinlogConnStreamerParseEventsRollback(t *testing.T) {
 	}
 }
 
-func TestBinlogConnStreamerParseEventsCreate(t *testing.T) {
+func TestBinlogConnStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 	input := [][]byte{
 		rotateEvent,
 		formatEvent,
-		createEvent,
-		beginEvent,
 		insertEvent,
 		xidEvent,
 	}
@@ -462,15 +466,6 @@ func TestBinlogConnStreamerParseEventsCreate(t *testing.T) {
 	events := make(chan proto.BinlogEvent)
 
 	want := []proto.BinlogTransaction{
-		proto.BinlogTransaction{
-			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
-				proto.Statement{Category: proto.BL_DDL, Sql: []byte("create table if not exists vt_insert_test (\nid bigint auto_increment,\nmsg varchar(64),\nprimary key (id)\n) Engine=InnoDB")},
-			},
-			Timestamp: 1407805592,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.GoogleGTID{GroupID: 0x0a}},
-		},
 		proto.BinlogTransaction{
 			Statements: []proto.Statement{
 				proto.Statement{Category: proto.BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
@@ -666,39 +661,12 @@ func TestBinlogConnStreamerParseEventsOtherDBBegin(t *testing.T) {
 	}
 }
 
-func TestBinlogConnStreamerParseEventsCommitWithoutBegin(t *testing.T) {
-	input := [][]byte{
-		rotateEvent,
-		formatEvent,
-		xidEvent,
-	}
-
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil).(*binlogConnStreamer)
-	events := make(chan proto.BinlogEvent)
-
-	sendTransaction := func(trans *proto.BinlogTransaction) error {
-		return nil
-	}
-	before := binlogStreamerErrors.Counts()["ParseEvents"]
-
-	go sendTestEvents(events, input)
-	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		return bls.parseEvents(svc, events, sendTransaction)
-	})
-	if err := bls.svm.Join(); err != ServerEOF {
-		t.Errorf("unexpected error: %v", err)
-	}
-	after := binlogStreamerErrors.Counts()["ParseEvents"]
-	if got := after - before; got != 1 {
-		t.Errorf("error count change = %v, want 1", got)
-	}
-}
-
 func TestBinlogConnStreamerParseEventsBeginAgain(t *testing.T) {
 	input := [][]byte{
 		rotateEvent,
 		formatEvent,
 		beginEvent,
+		insertEvent,
 		beginEvent,
 	}
 
@@ -723,11 +691,12 @@ func TestBinlogConnStreamerParseEventsBeginAgain(t *testing.T) {
 	}
 }
 
-func TestBinlogConnStreamerParseEventsDMLWithoutBegin(t *testing.T) {
+func TestBinlogConnStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 	input := [][]byte{
 		rotateEvent,
 		formatEvent,
 		insertEvent,
+		beginEvent,
 	}
 
 	bls := newBinlogConnStreamer("vt_test_keyspace", nil).(*binlogConnStreamer)
