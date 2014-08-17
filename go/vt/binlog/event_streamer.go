@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strconv"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -61,20 +62,24 @@ func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) err
 		case proto.BL_SET:
 			if bytes.HasPrefix(stmt.Sql, BINLOG_SET_TIMESTAMP) {
 				if timestamp, err = strconv.ParseInt(string(stmt.Sql[BINLOG_SET_TIMESTAMP_LEN:]), 10, 64); err != nil {
-					return fmt.Errorf("%v: %s", err, stmt.Sql)
+					binlogStreamerErrors.Add("EventStreamer", 1)
+					log.Errorf("%v: %s", err, stmt.Sql)
 				}
 			} else if bytes.HasPrefix(stmt.Sql, BINLOG_SET_INSERT) {
 				if insertid, err = strconv.ParseInt(string(stmt.Sql[BINLOG_SET_INSERT_LEN:]), 10, 64); err != nil {
-					return fmt.Errorf("%v: %s", err, stmt.Sql)
+					binlogStreamerErrors.Add("EventStreamer", 1)
+					log.Errorf("%v: %s", err, stmt.Sql)
 				}
 			} else {
-				return fmt.Errorf("unrecognized: %s", stmt.Sql)
+				binlogStreamerErrors.Add("EventStreamer", 1)
+				log.Errorf("unrecognized: %s", stmt.Sql)
 			}
 		case proto.BL_DML:
 			var dmlEvent *proto.StreamEvent
 			dmlEvent, insertid, err = evs.buildDMLEvent(stmt.Sql, insertid)
 			if err != nil {
-				return fmt.Errorf("%v: %s", err, stmt.Sql)
+				log.Warningf("%v: %s", err, stmt.Sql)
+				dmlEvent = &proto.StreamEvent{Category: "ERR", Sql: string(stmt.Sql)}
 			}
 			dmlEvent.Timestamp = timestamp
 			if err = evs.sendEvent(dmlEvent); err != nil {
@@ -110,7 +115,7 @@ func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) err
 func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (dmlEvent *proto.StreamEvent, newinsertid int64, err error) {
 	commentIndex := bytes.LastIndex(sql, STREAM_COMMENT_START)
 	if commentIndex == -1 {
-		return &proto.StreamEvent{Category: "ERR", Sql: string(sql)}, insertid, nil
+		return nil, insertid, fmt.Errorf("missing stream comment")
 	}
 	streamComment := string(sql[commentIndex+len(STREAM_COMMENT_START):])
 	eventNode, err := parseStreamComment(streamComment)

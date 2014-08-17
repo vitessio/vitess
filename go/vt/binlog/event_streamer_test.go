@@ -6,84 +6,89 @@ package binlog
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
-type eventErrorCase struct {
-	Category int
-	Sql      string
-	want     string
-}
-
-var eventErrorCases = []eventErrorCase{
-	{
-		Category: proto.BL_SET,
-		Sql:      "abcd",
-		want:     `unrecognized: abcd`,
-	}, {
-		Category: proto.BL_SET,
-		Sql:      "SET TIMESTAMP=abcd",
-		want:     `strconv.ParseInt: parsing "abcd": invalid syntax: SET TIMESTAMP=abcd`,
-	}, {
-		Category: proto.BL_SET,
-		Sql:      "SET INSERT_ID=abcd",
-		want:     `strconv.ParseInt: parsing "abcd": invalid syntax: SET INSERT_ID=abcd`,
-	}, {
-		Category: proto.BL_DML,
-		Sql:      "query /* _stream 10 (eid id name ) (null 1 'bmFtZQ==' ); */",
-		want:     `expecting table name in stream comment: query /* _stream 10 (eid id name ) (null 1 'bmFtZQ==' ); */`,
-	}, {
-		Category: proto.BL_DML,
-		Sql:      "query /* _stream vtocc_e eid id name ) (null 1 'bmFtZQ==' ); */",
-		want:     `expecting '(': query /* _stream vtocc_e eid id name ) (null 1 'bmFtZQ==' ); */`,
-	}, {
-		Category: proto.BL_DML,
-		Sql:      "query /* _stream vtocc_e (10 id name ) (null 1 'bmFtZQ==' ); */",
-		want:     `syntax error at position: 12: query /* _stream vtocc_e (10 id name ) (null 1 'bmFtZQ==' ); */`,
-	}, {
-		Category: proto.BL_DML,
-		Sql:      "query /* _stream vtocc_e (eid id name  (null 1 'bmFtZQ==' ); */",
-		want:     `syntax error at position: 24: query /* _stream vtocc_e (eid id name  (null 1 'bmFtZQ==' ); */`,
-	}, {
-		Category: proto.BL_DML,
-		Sql:      "query /* _stream vtocc_e (eid id name)  (null 'aaa' 'bmFtZQ==' ); */",
-		want:     `illegal base64 data at input byte 0: query /* _stream vtocc_e (eid id name)  (null 'aaa' 'bmFtZQ==' ); */`,
-	}, {
-		Category: proto.BL_DML,
-		Sql:      "query /* _stream vtocc_e (eid id name)  (null 'bmFtZQ==' ); */",
-		want:     `length mismatch in values: query /* _stream vtocc_e (eid id name)  (null 'bmFtZQ==' ); */`,
-	}, {
-		Category: proto.BL_DML,
-		Sql:      "query /* _stream vtocc_e (eid id name)  (null 1.1 'bmFtZQ==' ); */",
-		want:     `strconv.ParseUint: parsing "1.1": invalid syntax: query /* _stream vtocc_e (eid id name)  (null 1.1 'bmFtZQ==' ); */`,
-	}, {
-		Category: proto.BL_DML,
-		Sql:      "query /* _stream vtocc_e (eid id name)  (null a 'bmFtZQ==' ); */",
-		want:     `syntax error at position: 31: query /* _stream vtocc_e (eid id name)  (null a 'bmFtZQ==' ); */`,
-	},
+var dmlErrorCases = []string{
+	"query",
+	"query /* _stream 10 (eid id name ) (null 1 'bmFtZQ==' ); */",
+	"query /* _stream vtocc_e eid id name ) (null 1 'bmFtZQ==' ); */",
+	"query /* _stream vtocc_e (10 id name ) (null 1 'bmFtZQ==' ); */",
+	"query /* _stream vtocc_e (eid id name  (null 1 'bmFtZQ==' ); */",
+	"query /* _stream vtocc_e (eid id name)  (null 'aaa' 'bmFtZQ==' ); */",
+	"query /* _stream vtocc_e (eid id name)  (null 'bmFtZQ==' ); */",
+	"query /* _stream vtocc_e (eid id name)  (null 1.1 'bmFtZQ==' ); */",
+	"query /* _stream vtocc_e (eid id name)  (null a 'bmFtZQ==' ); */",
 }
 
 func TestEventErrors(t *testing.T) {
+	var got *proto.StreamEvent
+	evs := &EventStreamer{
+		sendEvent: func(event *proto.StreamEvent) error {
+			if event.Category != "POS" {
+				got = event
+			}
+			return nil
+		},
+	}
+	for _, sql := range dmlErrorCases {
+		trans := &proto.BinlogTransaction{
+			Statements: []proto.Statement{
+				{
+					Category: proto.BL_DML,
+					Sql:      []byte(sql),
+				},
+			},
+		}
+		err := evs.transactionToEvent(trans)
+		if err != nil {
+			t.Errorf("%s: %v", sql, err)
+			continue
+		}
+		want := &proto.StreamEvent{
+			Category: "ERR",
+			Sql:      sql,
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("got: %+v, want: %+v", got, want)
+		}
+	}
+}
+
+var setErrorCases = []string{
+	"abcd",
+	"SET TIMESTAMP=abcd",
+	"SET INSERT_ID=abcd",
+}
+
+func TestSetErrors(t *testing.T) {
 	evs := &EventStreamer{
 		sendEvent: func(event *proto.StreamEvent) error {
 			return nil
 		},
 	}
-	for _, ecase := range eventErrorCases {
+	for _, sql := range setErrorCases {
 		trans := &proto.BinlogTransaction{
 			Statements: []proto.Statement{
 				{
-					Category: ecase.Category,
-					Sql:      []byte(ecase.Sql),
+					Category: proto.BL_SET,
+					Sql:      []byte(sql),
 				},
 			},
 		}
+		before := binlogStreamerErrors.Counts()["EventStreamer"]
 		err := evs.transactionToEvent(trans)
-		if ecase.want != err.Error() {
-			t.Errorf("want \n%q, got \n%q", ecase.want, err.Error())
+		if err != nil {
+			t.Errorf("%s: %v", sql, err)
+			continue
+		}
+		got := binlogStreamerErrors.Counts()["EventStreamer"]
+		if got != before+1 {
+			t.Errorf("got: %v, want: %+v", got, before+1)
 		}
 	}
 }
@@ -113,20 +118,20 @@ func TestDMLEvent(t *testing.T) {
 			case "DML":
 				want := `&{DML vtocc_e [eid id name] [[10 -1 [110 97 109 101]] [11 18446744073709551615 [110 97 109 101]]]  1 <nil>}`
 				got := fmt.Sprintf("%v", event)
-				if want != got {
-					t.Errorf("want \n%s, got \n%s", want, got)
+				if got != want {
+					t.Errorf("got \n%s, want \n%s", got, want)
 				}
 			case "ERR":
 				want := `&{ERR  [] [] query 1 <nil>}`
 				got := fmt.Sprintf("%v", event)
-				if want != got {
-					t.Errorf("want %s, got %s", want, got)
+				if got != want {
+					t.Errorf("got %s, want %s", got, want)
 				}
 			case "POS":
 				want := `&{POS  [] []  0 20}`
 				got := fmt.Sprintf("%v", event)
-				if want != got {
-					t.Errorf("want %s, got %s", want, got)
+				if got != want {
+					t.Errorf("got %s, want %s", got, want)
 				}
 			default:
 				t.Errorf("unexppected: %#v", event)
@@ -159,14 +164,14 @@ func TestDDLEvent(t *testing.T) {
 			case "DDL":
 				want := `&{DDL  [] [] DDL 1 <nil>}`
 				got := fmt.Sprintf("%v", event)
-				if want != got {
-					t.Errorf("want %s, got %s", want, got)
+				if got != want {
+					t.Errorf("got %s, want %s", got, want)
 				}
 			case "POS":
 				want := `&{POS  [] []  0 20}`
 				got := fmt.Sprintf("%v", event)
-				if want != got {
-					t.Errorf("want %s, got %s", want, got)
+				if got != want {
+					t.Errorf("got %s, want %s", got, want)
 				}
 			default:
 				t.Errorf("unexppected: %#v", event)
