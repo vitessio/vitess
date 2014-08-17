@@ -18,8 +18,6 @@ import (
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
-	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
 // RowcacheInvalidator runs the service to invalidate
@@ -163,13 +161,13 @@ func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) {
 	switch event.Category {
 	case "DDL":
 		log.Infof("DDL invalidation: %s", event.Sql)
-		rci.qe.InvalidateForDDL(&proto.DDLInvalidate{DDL: event.Sql})
+		rci.qe.InvalidateForDDL(event.Sql)
 		rci.Timestamp.Set(event.Timestamp)
 	case "DML":
 		rci.handleDmlEvent(event)
 		rci.Timestamp.Set(event.Timestamp)
 	case "ERR":
-		rci.handleErrEvent(event)
+		rci.qe.InvalidateForUnrecognized(event.Sql)
 		rci.Timestamp.Set(event.Timestamp)
 	case "POS":
 		rci.SetGTID(event.GTIDField.Value)
@@ -180,9 +178,8 @@ func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) {
 }
 
 func (rci *RowcacheInvalidator) handleDmlEvent(event *blproto.StreamEvent) {
-	dml := new(proto.DmlType)
-	dml.Table = event.TableName
-	dml.Keys = make([]string, 0, len(event.PKValues))
+	table := event.TableName
+	keys := make([]string, 0, len(event.PKValues))
 	sqlTypeKeys := make([]sqltypes.Value, 0, len(event.PKColNames))
 	for _, pkTuple := range event.PKValues {
 		sqlTypeKeys = sqlTypeKeys[:0]
@@ -197,37 +194,8 @@ func (rci *RowcacheInvalidator) handleDmlEvent(event *blproto.StreamEvent) {
 		}
 		invalidateKey := buildKey(sqlTypeKeys)
 		if invalidateKey != "" {
-			dml.Keys = append(dml.Keys, invalidateKey)
+			keys = append(keys, invalidateKey)
 		}
 	}
-	rci.qe.InvalidateForDml(dml)
-}
-
-func (rci *RowcacheInvalidator) handleErrEvent(event *blproto.StreamEvent) {
-	statement, err := sqlparser.Parse(event.Sql)
-	if err != nil {
-		log.Errorf("Error parsing: %s: %v", event.Sql, err)
-		internalErrors.Add("Invalidation", 1)
-		return
-	}
-	var table *sqlparser.TableName
-	switch stmt := statement.(type) {
-	case *sqlparser.Insert:
-		// Inserts don't affect rowcache
-		return
-	case *sqlparser.Update:
-		table = stmt.Table
-	case *sqlparser.Delete:
-		table = stmt.Table
-	default:
-		log.Errorf("Unrecognized: %s", event.Sql)
-		internalErrors.Add("Invalidation", 1)
-		return
-	}
-	// If it's not a cross-db statement, try treating the statement as a DDL.
-	// It will conservatively invalidate all rows of the table.
-	if table.Qualifier == nil || string(table.Qualifier) == rci.dbname {
-		log.Warningf("Treating %s as DDL for table %s", event.Sql, table.Name)
-		rci.qe.InvalidateForDDL(&proto.DDLInvalidate{DDL: fmt.Sprintf("alter table %s alter", table.Name)})
-	}
+	rci.qe.InvalidateForDml(table, keys)
 }
