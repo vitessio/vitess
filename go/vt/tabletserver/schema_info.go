@@ -227,6 +227,7 @@ func (si *SchemaInfo) Close() {
 	si.ticks.Stop()
 	si.connPool.Close()
 	si.tables = nil
+	si.overrides = nil
 	si.queries.Clear()
 	si.rules = NewQueryRules()
 }
