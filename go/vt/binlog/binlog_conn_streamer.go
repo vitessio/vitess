@@ -94,6 +94,7 @@ func (bls *binlogConnStreamer) Stop() {
 func (bls *binlogConnStreamer) parseEvents(svc *sync2.ServiceContext, events <-chan proto.BinlogEvent, sendTransaction sendTransactionFunc) (err error) {
 	var statements []proto.Statement
 	var format proto.BinlogFormat
+	var autocommit = true
 
 	// A commit can be triggered either by a COMMIT query, or by an XID_EVENT.
 	commit := func(timestamp int64) error {
@@ -109,6 +110,7 @@ func (bls *binlogConnStreamer) parseEvents(svc *sync2.ServiceContext, events <-c
 			return fmt.Errorf("send reply error: %v", err)
 		}
 		statements = nil
+		autocommit = true
 		return nil
 	}
 
@@ -205,6 +207,7 @@ func (bls *binlogConnStreamer) parseEvents(svc *sync2.ServiceContext, events <-c
 					binlogStreamerErrors.Add("ParseEvents", 1)
 				}
 				statements = make([]proto.Statement, 0, 10)
+				autocommit = false
 			case proto.BL_ROLLBACK:
 				// Rollbacks are possible under some circumstances. So, let's honor them
 				// by sending an empty transaction, which will contain the new binlog position.
@@ -218,11 +221,6 @@ func (bls *binlogConnStreamer) parseEvents(svc *sync2.ServiceContext, events <-c
 				if db != "" && db != bls.dbname {
 					// Skip cross-db statements.
 					continue
-				}
-				autocommit := false
-				if statements == nil {
-					// We didn't see a BEGIN. Assume autocommit.
-					autocommit = true
 				}
 				statements = append(statements, proto.Statement{
 					Category: proto.BL_SET,
