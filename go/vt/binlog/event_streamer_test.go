@@ -59,37 +59,28 @@ func TestEventErrors(t *testing.T) {
 	}
 }
 
-var setErrorCases = []string{
-	"abcd",
-	"SET TIMESTAMP=abcd",
-	"SET INSERT_ID=abcd",
-}
-
 func TestSetErrors(t *testing.T) {
 	evs := &EventStreamer{
 		sendEvent: func(event *proto.StreamEvent) error {
 			return nil
 		},
 	}
-	for _, sql := range setErrorCases {
-		trans := &proto.BinlogTransaction{
-			Statements: []proto.Statement{
-				{
-					Category: proto.BL_SET,
-					Sql:      []byte(sql),
-				},
+	trans := &proto.BinlogTransaction{
+		Statements: []proto.Statement{
+			{
+				Category: proto.BL_SET,
+				Sql:      []byte("SET INSERT_ID=abcd"),
 			},
-		}
-		before := binlogStreamerErrors.Counts()["EventStreamer"]
-		err := evs.transactionToEvent(trans)
-		if err != nil {
-			t.Errorf("%s: %v", sql, err)
-			continue
-		}
-		got := binlogStreamerErrors.Counts()["EventStreamer"]
-		if got != before+1 {
-			t.Errorf("got: %v, want: %+v", got, before+1)
-		}
+		},
+	}
+	before := binlogStreamerErrors.Counts()["EventStreamer"]
+	err := evs.transactionToEvent(trans)
+	if err != nil {
+		t.Error(err)
+	}
+	got := binlogStreamerErrors.Counts()["EventStreamer"]
+	if got != before+1 {
+		t.Errorf("got: %v, want: %+v", got, before+1)
 	}
 }
 
@@ -98,7 +89,7 @@ func TestDMLEvent(t *testing.T) {
 		Statements: []proto.Statement{
 			{
 				Category: proto.BL_SET,
-				Sql:      []byte("SET TIMESTAMP=1"),
+				Sql:      []byte("SET TIMESTAMP=2"),
 			}, {
 				Category: proto.BL_SET,
 				Sql:      []byte("SET INSERT_ID=10"),
@@ -110,6 +101,7 @@ func TestDMLEvent(t *testing.T) {
 				Sql:      []byte("query"),
 			},
 		},
+		Timestamp: 1,
 		GTIDField: myproto.GTIDField{Value: myproto.MustParseGTID(blsMysqlFlavor, "20")},
 	}
 	evs := &EventStreamer{
@@ -128,7 +120,7 @@ func TestDMLEvent(t *testing.T) {
 					t.Errorf("got %s, want %s", got, want)
 				}
 			case "POS":
-				want := `&{POS  [] []  0 20}`
+				want := `&{POS  [] []  1 20}`
 				got := fmt.Sprintf("%v", event)
 				if got != want {
 					t.Errorf("got %s, want %s", got, want)
@@ -150,12 +142,13 @@ func TestDDLEvent(t *testing.T) {
 		Statements: []proto.Statement{
 			{
 				Category: proto.BL_SET,
-				Sql:      []byte("SET TIMESTAMP=1"),
+				Sql:      []byte("SET TIMESTAMP=2"),
 			}, {
 				Category: proto.BL_DDL,
 				Sql:      []byte("DDL"),
 			},
 		},
+		Timestamp: 1,
 		GTIDField: myproto.GTIDField{Value: myproto.MustParseGTID(blsMysqlFlavor, "20")},
 	}
 	evs := &EventStreamer{
@@ -168,7 +161,7 @@ func TestDDLEvent(t *testing.T) {
 					t.Errorf("got %s, want %s", got, want)
 				}
 			case "POS":
-				want := `&{POS  [] []  0 20}`
+				want := `&{POS  [] []  1 20}`
 				got := fmt.Sprintf("%v", event)
 				if got != want {
 					t.Errorf("got %s, want %s", got, want)

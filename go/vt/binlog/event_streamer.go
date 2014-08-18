@@ -55,33 +55,28 @@ func (evs *EventStreamer) Stop() {
 
 func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) error {
 	var err error
-	var timestamp int64
 	var insertid int64
 	for _, stmt := range trans.Statements {
 		switch stmt.Category {
 		case proto.BL_SET:
-			if bytes.HasPrefix(stmt.Sql, BINLOG_SET_TIMESTAMP) {
-				if timestamp, err = strconv.ParseInt(string(stmt.Sql[BINLOG_SET_TIMESTAMP_LEN:]), 10, 64); err != nil {
+			if bytes.HasPrefix(stmt.Sql, BINLOG_SET_INSERT) {
+				insertid, err = strconv.ParseInt(string(stmt.Sql[BINLOG_SET_INSERT_LEN:]), 10, 64)
+				if err != nil {
 					binlogStreamerErrors.Add("EventStreamer", 1)
 					log.Errorf("%v: %s", err, stmt.Sql)
 				}
-			} else if bytes.HasPrefix(stmt.Sql, BINLOG_SET_INSERT) {
-				if insertid, err = strconv.ParseInt(string(stmt.Sql[BINLOG_SET_INSERT_LEN:]), 10, 64); err != nil {
-					binlogStreamerErrors.Add("EventStreamer", 1)
-					log.Errorf("%v: %s", err, stmt.Sql)
-				}
-			} else {
-				binlogStreamerErrors.Add("EventStreamer", 1)
-				log.Errorf("unrecognized: %s", stmt.Sql)
 			}
 		case proto.BL_DML:
 			var dmlEvent *proto.StreamEvent
 			dmlEvent, insertid, err = evs.buildDMLEvent(stmt.Sql, insertid)
 			if err != nil {
 				log.Warningf("%v: %s", err, stmt.Sql)
-				dmlEvent = &proto.StreamEvent{Category: "ERR", Sql: string(stmt.Sql)}
+				dmlEvent = &proto.StreamEvent{
+					Category: "ERR",
+					Sql:      string(stmt.Sql),
+				}
 			}
-			dmlEvent.Timestamp = timestamp
+			dmlEvent.Timestamp = trans.Timestamp
 			if err = evs.sendEvent(dmlEvent); err != nil {
 				return err
 			}
@@ -89,7 +84,7 @@ func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) err
 			ddlEvent := &proto.StreamEvent{
 				Category:  "DDL",
 				Sql:       string(stmt.Sql),
-				Timestamp: timestamp,
+				Timestamp: trans.Timestamp,
 			}
 			if err = evs.sendEvent(ddlEvent); err != nil {
 				return err
@@ -98,14 +93,21 @@ func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) err
 			unrecognized := &proto.StreamEvent{
 				Category:  "ERR",
 				Sql:       string(stmt.Sql),
-				Timestamp: timestamp,
+				Timestamp: trans.Timestamp,
 			}
 			if err = evs.sendEvent(unrecognized); err != nil {
 				return err
 			}
+		default:
+			binlogStreamerErrors.Add("EventStreamer", 1)
+			log.Errorf("Unrecognized event: %v: %s", stmt.Category, stmt.Sql)
 		}
 	}
-	posEvent := &proto.StreamEvent{Category: "POS", GTIDField: trans.GTIDField}
+	posEvent := &proto.StreamEvent{
+		Category:  "POS",
+		GTIDField: trans.GTIDField,
+		Timestamp: trans.Timestamp,
+	}
 	if err = evs.sendEvent(posEvent); err != nil {
 		return err
 	}
@@ -123,11 +125,12 @@ func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (dmlEvent *p
 		return nil, insertid, err
 	}
 
-	dmlEvent = new(proto.StreamEvent)
-	dmlEvent.Category = "DML"
-	dmlEvent.TableName = eventNode.Table
-	dmlEvent.PKColNames = eventNode.Columns
-	dmlEvent.PKValues = make([][]interface{}, 0, len(eventNode.Tuples))
+	dmlEvent = &proto.StreamEvent{
+		Category:   "DML",
+		TableName:  eventNode.Table,
+		PKColNames: eventNode.Columns,
+		PKValues:   make([][]interface{}, 0, len(eventNode.Tuples)),
+	}
 
 	for _, tuple := range eventNode.Tuples {
 		if len(tuple) != len(eventNode.Columns) {
