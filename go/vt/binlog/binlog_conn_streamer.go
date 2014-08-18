@@ -204,10 +204,10 @@ func (bls *binlogConnStreamer) parseEvents(svc *sync2.ServiceContext, events <-c
 					log.Errorf("BEGIN in binlog stream while still in another transaction; dropping %d statements: %v", len(statements), statements)
 					binlogStreamerErrors.Add("ParseEvents", 1)
 				}
-				statements = nil
+				statements = make([]proto.Statement, 0, 10)
 			case proto.BL_ROLLBACK:
 				// Rollbacks are possible under some circumstances. So, let's honor them
-				// by sending an empty transaction.
+				// by sending an empty transaction, which will contain the new binlog position.
 				statements = nil
 				fallthrough
 			case proto.BL_COMMIT:
@@ -219,11 +219,21 @@ func (bls *binlogConnStreamer) parseEvents(svc *sync2.ServiceContext, events <-c
 					// Skip cross-db statements.
 					continue
 				}
+				autocommit := false
+				if statements == nil {
+					// We didn't see a BEGIN. Assume autocommit.
+					autocommit = true
+				}
 				statements = append(statements, proto.Statement{
 					Category: proto.BL_SET,
 					Sql:      []byte(fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp())),
 				})
 				statements = append(statements, proto.Statement{Category: cat, Sql: sql})
+				if autocommit {
+					if err = commit(int64(ev.Timestamp())); err != nil {
+						return err
+					}
+				}
 			}
 		}
 	}
