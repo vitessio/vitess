@@ -27,13 +27,13 @@ type RowcacheInvalidator struct {
 	svm sync2.ServiceManager
 
 	// mu mainly protects access to evs by Open and Close.
-	mu        sync.Mutex
-	dbname    string
-	mysqld    *mysqlctl.Mysqld
-	evs       *binlog.EventStreamer
-	Timestamp sync2.AtomicInt64
-	gtid      myproto.GTID
-	gtidMutex sync.RWMutex
+	mu         sync.Mutex
+	dbname     string
+	mysqld     *mysqlctl.Mysqld
+	evs        *binlog.EventStreamer
+	lagSeconds sync2.AtomicInt64
+	gtid       myproto.GTID
+	gtidMutex  sync.RWMutex
 }
 
 func (rci *RowcacheInvalidator) GetGTID() myproto.GTID {
@@ -63,7 +63,7 @@ func NewRowcacheInvalidator(qe *QueryEngine) *RowcacheInvalidator {
 	rci := &RowcacheInvalidator{qe: qe}
 	stats.Publish("RowcacheInvalidatorState", stats.StringFunc(rci.svm.StateName))
 	stats.Publish("RowcacheInvalidatorPosition", stats.StringFunc(rci.GetGTIDString))
-	stats.Publish("RowcacheInvalidatorTimestamp", stats.IntFunc(rci.Timestamp.Get))
+	stats.Publish("RowcacheInvalidatorLagSeconds", stats.IntFunc(rci.lagSeconds.Get))
 	return rci
 }
 
@@ -162,19 +162,18 @@ func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) {
 	case "DDL":
 		log.Infof("DDL invalidation: %s", event.Sql)
 		rci.qe.InvalidateForDDL(event.Sql)
-		rci.Timestamp.Set(event.Timestamp)
 	case "DML":
 		rci.handleDmlEvent(event)
-		rci.Timestamp.Set(event.Timestamp)
 	case "ERR":
 		rci.qe.InvalidateForUnrecognized(event.Sql)
-		rci.Timestamp.Set(event.Timestamp)
 	case "POS":
 		rci.SetGTID(event.GTIDField.Value)
 	default:
 		log.Errorf("unknown event: %#v", event)
 		internalErrors.Add("Invalidation", 1)
+		return
 	}
+	rci.lagSeconds.Set(time.Now().Unix() - event.Timestamp)
 }
 
 func (rci *RowcacheInvalidator) handleDmlEvent(event *blproto.StreamEvent) {
