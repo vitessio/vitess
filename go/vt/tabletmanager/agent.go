@@ -140,7 +140,7 @@ func NewActionAgent(
 	}
 
 	// Start the binlog player services, not playing at start.
-	agent.BinlogPlayerMap = NewBinlogPlayerMap(topoServer, &dbcfgs.App.ConnectionParams, mysqld)
+	agent.BinlogPlayerMap = NewBinlogPlayerMap(topoServer, &dbcfgs.Filtered, mysqld)
 	RegisterBinlogPlayerMap(agent.BinlogPlayerMap)
 
 	// try to figure out the mysql port

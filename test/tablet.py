@@ -37,6 +37,10 @@ class Tablet(object):
       "uname": "vt_dba",
       "charset": "utf8"
       },
+    "filtered": {
+      "uname": "vt_filtered",
+      "charset": "utf8"
+      },
     "repl": {
       "uname": "vt_repl",
       "charset": "utf8"
@@ -414,6 +418,7 @@ class Tablet(object):
     if self.keyspace:
       config['app']['dbname'] = self.dbname
       config['dba']['dbname'] = self.dbname
+      config['filtered']['dbname'] = self.dbname
       config['repl']['dbname'] = self.dbname
     config['repl'].update(repl_extra_flags)
     return config
