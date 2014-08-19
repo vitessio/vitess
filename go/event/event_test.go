@@ -210,3 +210,31 @@ func TestDispatchValueToPointerInterfaceListener(t *testing.T) {
 	})
 	Dispatch(testEvent2{})
 }
+
+type testUpdateEvent struct {
+	update interface{}
+}
+
+func (ev *testUpdateEvent) Update(update interface{}) {
+	ev.update = update
+}
+
+func TestDispatchUpdate(t *testing.T) {
+	clearListeners()
+
+	triggered := false
+	AddListener(func(*testUpdateEvent) {
+		triggered = true
+	})
+
+	ev := &testUpdateEvent{}
+	DispatchUpdate(ev, "hello")
+
+	if !triggered {
+		t.Errorf("listener failed to trigger on DispatchUpdate()")
+	}
+	want := "hello"
+	if got := ev.update.(string); got != want {
+		t.Errorf("ev.update = %#v, want %#v", got, want)
+	}
+}
