@@ -74,31 +74,32 @@ func (sc *SlaveConnection) StartBinlogDump(startPos proto.GTID) (<-chan blproto.
 	eventChan := make(chan blproto.BinlogEvent)
 
 	// Start reading events.
-	sc.svm.Go(func(svm *sync2.ServiceManager) {
+	sc.svm.Go(func(svc *sync2.ServiceContext) error {
 		defer close(eventChan)
 
-		for svm.IsRunning() {
+		for svc.IsRunning() {
 			buf, err := sc.Connection.ReadPacket()
 			if err != nil || len(buf) == 0 {
 				// This is not necessarily an error. It could just be that we closed
 				// the connection from outside.
 				log.Infof("read error while streaming binlog events")
-				return
+				return nil
 			}
 
 			if buf[0] == 254 {
 				// The master is telling us to stop.
 				log.Infof("received EOF packet in binlog dump: %#v", buf)
-				return
+				return nil
 			}
 
 			select {
 			// Skip the first byte because it's only used for signaling EOF.
 			case eventChan <- sc.mysqld.flavor.MakeBinlogEvent(buf[1:]):
-			case <-svm.ShuttingDown():
-				return
+			case <-svc.ShuttingDown:
+				return nil
 			}
 		}
+		return nil
 	})
 
 	return eventChan, nil

@@ -5,6 +5,7 @@
 package sync2
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -14,35 +15,37 @@ type testService struct {
 	t         *testing.T
 }
 
-func (ts *testService) service(svm *ServiceManager) {
+func (ts *testService) service(svc *ServiceContext) error {
 	if !ts.activated.CompareAndSwap(0, 1) {
 		ts.t.Fatalf("service called more than once")
 	}
-	for svm.IsRunning() {
+	for svc.IsRunning() {
 		time.Sleep(10 * time.Millisecond)
 
 	}
 	if !ts.activated.CompareAndSwap(1, 0) {
 		ts.t.Fatalf("service ended more than once")
 	}
+	return nil
 }
 
-func (ts *testService) selectService(svm *ServiceManager) {
+func (ts *testService) selectService(svc *ServiceContext) error {
 	if !ts.activated.CompareAndSwap(0, 1) {
 		ts.t.Fatalf("service called more than once")
 	}
 serviceLoop:
-	for svm.IsRunning() {
+	for svc.IsRunning() {
 		select {
 		case <-time.After(1 * time.Second):
 			ts.t.Errorf("service didn't stop when shutdown channel was closed")
-		case <-svm.ShuttingDown():
+		case <-svc.ShuttingDown:
 			break serviceLoop
 		}
 	}
 	if !ts.activated.CompareAndSwap(1, 0) {
 		ts.t.Fatalf("service ended more than once")
 	}
+	return nil
 }
 
 func TestServiceManager(t *testing.T) {
@@ -118,5 +121,56 @@ func TestServiceManagerSelect(t *testing.T) {
 	sm.state.Set(SERVICE_SHUTTING_DOWN)
 	if sm.StateName() != "ShuttingDown" {
 		t.Errorf("want ShuttingDown, got %s", sm.StateName())
+	}
+}
+
+func TestServiceManagerJoinNotRunning(t *testing.T) {
+	done := make(chan struct{})
+	var sm ServiceManager
+	go func() {
+		sm.Join()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(1 * time.Second):
+		t.Errorf("Join() blocked even though service wasn't running.")
+	}
+}
+
+func TestServiceManagerJoinBlocks(t *testing.T) {
+	done := make(chan struct{})
+	stop := make(chan struct{})
+	var sm ServiceManager
+	sm.Go(func(*ServiceContext) error {
+		<-stop
+		return nil
+	})
+	go func() {
+		sm.Join()
+		close(done)
+	}()
+	time.Sleep(100 * time.Millisecond)
+	select {
+	case <-done:
+		t.Errorf("Join() didn't block while service was still running.")
+	default:
+	}
+	close(stop)
+	select {
+	case <-done:
+	case <-time.After(100 * time.Millisecond):
+		t.Errorf("Join() didn't unblock when service stopped.")
+	}
+}
+
+func TestServiceManagerJoinReturn(t *testing.T) {
+	want := "error 123"
+	var sm ServiceManager
+	sm.Go(func(*ServiceContext) error {
+		return fmt.Errorf("error 123")
+	})
+	if got := sm.Join().Error(); got != want {
+		t.Errorf("Join().Error() = %#v, want %#v", got, want)
 	}
 }

@@ -77,12 +77,3 @@ type Session struct {
 type TransactionInfo struct {
 	TransactionId int64
 }
-
-type DmlType struct {
-	Table string
-	Keys  []string
-}
-
-type DDLInvalidate struct {
-	DDL string
-}

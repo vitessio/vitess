@@ -39,20 +39,21 @@ func TestHTTP(t *testing.T) {
 
 	lastValue := sync2.AtomicString{}
 	svm := sync2.ServiceManager{}
-	svm.Go(func(_ *sync2.ServiceManager) {
+	svm.Go(func(svc *sync2.ServiceContext) error {
 		resp, err := http.Get(fmt.Sprintf("http://%s/log", addr))
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer resp.Body.Close()
 		buf := make([]byte, 100)
-		for svm.State() == sync2.SERVICE_RUNNING {
+		for svc.IsRunning() {
 			n, err := resp.Body.Read(buf)
 			if err != nil {
 				t.Fatal(err)
 			}
 			lastValue.Set(string(buf[:n]))
 		}
+		return nil
 	})
 
 	time.Sleep(100 * time.Millisecond)
@@ -91,12 +92,13 @@ func TestChannel(t *testing.T) {
 
 	lastValue := sync2.AtomicString{}
 	svm := sync2.ServiceManager{}
-	svm.Go(func(_ *sync2.ServiceManager) {
+	svm.Go(func(svc *sync2.ServiceContext) error {
 		ch := logger.Subscribe()
 		defer logger.Unsubscribe(ch)
-		for svm.State() == sync2.SERVICE_RUNNING {
+		for svc.IsRunning() {
 			lastValue.Set((<-ch).(*logMessage).Format(nil))
 		}
+		return nil
 	})
 
 	time.Sleep(10 * time.Millisecond)

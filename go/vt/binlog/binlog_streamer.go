@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -26,6 +27,8 @@ var (
 
 	binlogStreamer = flag.String("binlog_streamer", "conn",
 		"Which binlog streamer implementation to use. Available: conn, file")
+
+	binlogStreamerErrors = stats.NewCounters("BinlogStreamerErrors")
 )
 
 // BinlogStreamer is an interface for requesting a stream of binlog events from

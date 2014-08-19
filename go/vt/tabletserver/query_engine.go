@@ -51,6 +51,7 @@ const (
 // TODO(sougou): Switch to error return scheme.
 type QueryEngine struct {
 	schemaInfo *SchemaInfo
+	dbconfig   *dbconfigs.DBConfig
 
 	// Pools
 	cachePool      *CachePool
@@ -176,6 +177,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 
 // Open must be called before sending requests to QueryEngine.
 func (qe *QueryEngine) Open(dbconfig *dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules, mysqld *mysqlctl.Mysqld) {
+	qe.dbconfig = dbconfig
 	connFactory := dbconnpool.DBConnectionCreator(&dbconfig.ConnectionParams, mysqlStats)
 
 	strictMode := false
@@ -236,6 +238,7 @@ func (qe *QueryEngine) Close() {
 	qe.invalidator.Close()
 	qe.schemaInfo.Close()
 	qe.cachePool.Close()
+	qe.dbconfig = nil
 }
 
 // Begin begins a transaction.
@@ -438,19 +441,19 @@ func (qe *QueryEngine) checkTableAcl(table string, planId planbuilder.PlanType, 
 }
 
 // InvalidateForDml performs rowcache invalidations for the dml.
-func (qe *QueryEngine) InvalidateForDml(dml *proto.DmlType) {
+func (qe *QueryEngine) InvalidateForDml(table string, keys []string) {
 	if qe.cachePool.IsClosed() {
 		return
 	}
 	invalidations := int64(0)
-	tableInfo := qe.schemaInfo.GetTable(dml.Table)
+	tableInfo := qe.schemaInfo.GetTable(table)
 	if tableInfo == nil {
-		panic(NewTabletError(FAIL, "Table %s not found", dml.Table))
+		panic(NewTabletError(FAIL, "Table %s not found", table))
 	}
 	if tableInfo.CacheType == schema.CACHE_NONE {
 		return
 	}
-	for _, val := range dml.Keys {
+	for _, val := range keys {
 		newKey := validateKey(tableInfo, val)
 		if newKey != "" {
 			tableInfo.Cache.Delete(newKey)
@@ -461,8 +464,8 @@ func (qe *QueryEngine) InvalidateForDml(dml *proto.DmlType) {
 }
 
 // InvalidateForDDL performs schema and rowcache changes for the ddl.
-func (qe *QueryEngine) InvalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
-	ddlPlan := planbuilder.DDLParse(ddlInvalidate.DDL)
+func (qe *QueryEngine) InvalidateForDDL(ddl string) {
+	ddlPlan := planbuilder.DDLParse(ddl)
 	if ddlPlan.Action == "" {
 		panic(NewTabletError(FAIL, "DDL is not understood"))
 	}
@@ -470,6 +473,54 @@ func (qe *QueryEngine) InvalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
 	if ddlPlan.Action != sqlparser.AST_DROP { // CREATE, ALTER, RENAME
 		qe.schemaInfo.CreateTable(ddlPlan.NewName)
 	}
+}
+
+// InvalidateForUnrecognized performs best effort rowcache invalidation
+// for unrecognized statements.
+func (qe *QueryEngine) InvalidateForUnrecognized(sql string) {
+	statement, err := sqlparser.Parse(sql)
+	if err != nil {
+		log.Errorf("Error: %v: %s", err, sql)
+		internalErrors.Add("Invalidation", 1)
+		return
+	}
+	var table *sqlparser.TableName
+	switch stmt := statement.(type) {
+	case *sqlparser.Insert:
+		// Inserts don't affect rowcache.
+		return
+	case *sqlparser.Update:
+		table = stmt.Table
+	case *sqlparser.Delete:
+		table = stmt.Table
+	default:
+		log.Errorf("Unrecognized: %s", sql)
+		internalErrors.Add("Invalidation", 1)
+		return
+	}
+
+	// Ignore cross-db statements.
+	if table.Qualifier != nil && string(table.Qualifier) != qe.dbconfig.DbName {
+		return
+	}
+
+	// Ignore if it's an uncached table.
+	tableName := string(table.Name)
+	tableInfo := qe.schemaInfo.GetTable(tableName)
+	if tableInfo == nil {
+		log.Errorf("Table %s not found: %s", tableName, sql)
+		internalErrors.Add("Invalidation", 1)
+		return
+	}
+	if tableInfo.CacheType == schema.CACHE_NONE {
+		return
+	}
+
+	// Treat the statement as a DDL.
+	// It will conservatively invalidate all rows of the table.
+	log.Warningf("Treating '%s' as DDL for table %s", sql, tableName)
+	qe.schemaInfo.DropTable(tableName)
+	qe.schemaInfo.CreateTable(tableName)
 }
 
 //-----------------------------------------------

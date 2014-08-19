@@ -80,6 +80,7 @@ type SchemaOverride struct {
 type SchemaInfo struct {
 	mu             sync.Mutex
 	tables         map[string]*TableInfo
+	overrides      []SchemaOverride
 	queryCacheSize int
 	queries        *cache.LRUCache
 	rules          *QueryRules
@@ -157,7 +158,8 @@ func (si *SchemaInfo) Open(connFactory dbconnpool.CreateConnectionFunc, schemaOv
 		si.tables[tableName] = tableInfo
 	}
 	if schemaOverrides != nil {
-		si.override(schemaOverrides)
+		si.overrides = schemaOverrides
+		si.override()
 	}
 	// Clear is not really needed. Doing it for good measure.
 	si.queries.Clear()
@@ -179,8 +181,8 @@ func (si *SchemaInfo) updateLastChange(createTime sqltypes.Value) {
 	}
 }
 
-func (si *SchemaInfo) override(schemaOverrides []SchemaOverride) {
-	for _, override := range schemaOverrides {
+func (si *SchemaInfo) override() {
+	for _, override := range si.overrides {
 		table, ok := si.tables[override.Name]
 		if !ok {
 			log.Warningf("Table not found for override: %v", override)
@@ -225,6 +227,7 @@ func (si *SchemaInfo) Close() {
 	si.ticks.Stop()
 	si.connPool.Close()
 	si.tables = nil
+	si.overrides = nil
 	si.queries.Clear()
 	si.rules = NewQueryRules()
 }
@@ -295,6 +298,14 @@ func (si *SchemaInfo) createTable(conn dbconnpool.PoolConnection, tableName stri
 		panic(NewTabletError(FAIL, "Table %s already exists", tableName))
 	}
 	si.tables[tableName] = tableInfo
+
+	// If the table has an override, re-apply all overrides.
+	for _, o := range si.overrides {
+		if o.Name == tableName {
+			si.override()
+			return
+		}
+	}
 }
 
 func (si *SchemaInfo) DropTable(tableName string) {

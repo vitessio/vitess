@@ -112,7 +112,6 @@ func mapKeyRangesToShards(topoServ SrvTopoServer, cell, keyspace string, tabletT
 // This maps a list of keyranges to shard names.
 func resolveKeyRangeToShards(allShards []topo.SrvShard, kr key.KeyRange) ([]string, error) {
 	shards := make([]string, 0, 1)
-	topo.SrvShardArray(allShards).Sort()
 
 	if !kr.IsPartial() {
 		for j := 0; j < len(allShards); j++ {
@@ -124,9 +123,6 @@ func resolveKeyRangeToShards(allShards []topo.SrvShard, kr key.KeyRange) ([]stri
 		shard := allShards[j]
 		if key.KeyRangesIntersect(kr, shard.KeyRange) {
 			shards = append(shards, shard.ShardName())
-		}
-		if kr.End != key.MaxKey && kr.End < shard.KeyRange.Start {
-			break
 		}
 	}
 	return shards, nil

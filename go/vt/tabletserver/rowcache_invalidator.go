@@ -18,8 +18,6 @@ import (
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
-	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
 // RowcacheInvalidator runs the service to invalidate
@@ -29,13 +27,13 @@ type RowcacheInvalidator struct {
 	svm sync2.ServiceManager
 
 	// mu mainly protects access to evs by Open and Close.
-	mu        sync.Mutex
-	dbname    string
-	mysqld    *mysqlctl.Mysqld
-	evs       *binlog.EventStreamer
-	Timestamp sync2.AtomicInt64
-	gtid      myproto.GTID
-	gtidMutex sync.RWMutex
+	mu         sync.Mutex
+	dbname     string
+	mysqld     *mysqlctl.Mysqld
+	evs        *binlog.EventStreamer
+	lagSeconds sync2.AtomicInt64
+	gtid       myproto.GTID
+	gtidMutex  sync.RWMutex
 }
 
 func (rci *RowcacheInvalidator) GetGTID() myproto.GTID {
@@ -65,7 +63,7 @@ func NewRowcacheInvalidator(qe *QueryEngine) *RowcacheInvalidator {
 	rci := &RowcacheInvalidator{qe: qe}
 	stats.Publish("RowcacheInvalidatorState", stats.StringFunc(rci.svm.StateName))
 	stats.Publish("RowcacheInvalidatorPosition", stats.StringFunc(rci.GetGTIDString))
-	stats.Publish("RowcacheInvalidatorTimestamp", stats.IntFunc(rci.Timestamp.Get))
+	stats.Publish("RowcacheInvalidatorLagSeconds", stats.IntFunc(rci.lagSeconds.Get))
 	return rci
 }
 
@@ -79,7 +77,7 @@ func (rci *RowcacheInvalidator) Open(dbname string, mysqld *mysqlctl.Mysqld) {
 		panic(NewTabletError(FATAL, "Rowcache invalidator aborting: binlog path not specified"))
 	}
 
-	ok := rci.svm.Go(func(_ *sync2.ServiceManager) {
+	ok := rci.svm.Go(func(_ *sync2.ServiceContext) error {
 		rci.mu.Lock()
 		rci.dbname = dbname
 		rci.mysqld = mysqld
@@ -92,6 +90,7 @@ func (rci *RowcacheInvalidator) Open(dbname string, mysqld *mysqlctl.Mysqld) {
 		rci.mu.Lock()
 		rci.evs = nil
 		rci.mu.Unlock()
+		return nil
 	})
 	if ok {
 		log.Infof("Rowcache invalidator starting, dbname: %s, path: %s, logfile: %s, position: %d", dbname, mysqld.Cnf().BinLogPath, rp.MasterLogFile, rp.MasterLogPosition)
@@ -162,26 +161,24 @@ func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) {
 	switch event.Category {
 	case "DDL":
 		log.Infof("DDL invalidation: %s", event.Sql)
-		rci.qe.InvalidateForDDL(&proto.DDLInvalidate{DDL: event.Sql})
-		rci.Timestamp.Set(event.Timestamp)
+		rci.qe.InvalidateForDDL(event.Sql)
 	case "DML":
 		rci.handleDmlEvent(event)
-		rci.Timestamp.Set(event.Timestamp)
 	case "ERR":
-		rci.handleErrEvent(event)
-		rci.Timestamp.Set(event.Timestamp)
+		rci.qe.InvalidateForUnrecognized(event.Sql)
 	case "POS":
 		rci.SetGTID(event.GTIDField.Value)
 	default:
 		log.Errorf("unknown event: %#v", event)
 		internalErrors.Add("Invalidation", 1)
+		return
 	}
+	rci.lagSeconds.Set(time.Now().Unix() - event.Timestamp)
 }
 
 func (rci *RowcacheInvalidator) handleDmlEvent(event *blproto.StreamEvent) {
-	dml := new(proto.DmlType)
-	dml.Table = event.TableName
-	dml.Keys = make([]string, 0, len(event.PKValues))
+	table := event.TableName
+	keys := make([]string, 0, len(event.PKValues))
 	sqlTypeKeys := make([]sqltypes.Value, 0, len(event.PKColNames))
 	for _, pkTuple := range event.PKValues {
 		sqlTypeKeys = sqlTypeKeys[:0]
@@ -196,37 +193,8 @@ func (rci *RowcacheInvalidator) handleDmlEvent(event *blproto.StreamEvent) {
 		}
 		invalidateKey := buildKey(sqlTypeKeys)
 		if invalidateKey != "" {
-			dml.Keys = append(dml.Keys, invalidateKey)
+			keys = append(keys, invalidateKey)
 		}
 	}
-	rci.qe.InvalidateForDml(dml)
-}
-
-func (rci *RowcacheInvalidator) handleErrEvent(event *blproto.StreamEvent) {
-	statement, err := sqlparser.Parse(event.Sql)
-	if err != nil {
-		log.Errorf("Error parsing: %s: %v", event.Sql, err)
-		internalErrors.Add("Invalidation", 1)
-		return
-	}
-	var table *sqlparser.TableName
-	switch stmt := statement.(type) {
-	case *sqlparser.Insert:
-		// Inserts don't affect rowcache
-		return
-	case *sqlparser.Update:
-		table = stmt.Table
-	case *sqlparser.Delete:
-		table = stmt.Table
-	default:
-		log.Errorf("Unrecognized: %s", event.Sql)
-		internalErrors.Add("Invalidation", 1)
-		return
-	}
-	// If it's not a cross-db statement, try treating the statement as a DDL.
-	// It will conservatively invalidate all rows of the table.
-	if table.Qualifier == nil || string(table.Qualifier) == rci.dbname {
-		log.Warningf("Treating %s as DDL for table %s", event.Sql, table.Name)
-		rci.qe.InvalidateForDDL(&proto.DDLInvalidate{DDL: fmt.Sprintf("alter table %s alter", table.Name)})
-	}
+	rci.qe.InvalidateForDml(table, keys)
 }

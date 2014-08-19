@@ -5,6 +5,8 @@
 package proto
 
 import (
+	"fmt"
+
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
@@ -19,6 +21,16 @@ const (
 	BL_SET
 )
 
+var BL_CATEGORY_NAMES = map[int]string{
+	BL_UNRECOGNIZED: "BL_UNRECOGNIZED",
+	BL_BEGIN:        "BL_BEGIN",
+	BL_COMMIT:       "BL_COMMIT",
+	BL_ROLLBACK:     "BL_ROLLBACK",
+	BL_DML:          "BL_DML",
+	BL_DDL:          "BL_DDL",
+	BL_SET:          "BL_SET",
+}
+
 // BinlogTransaction represents one transaction as read from
 // the binlog. Timestamp is set if the first statement was
 // something like 'SET TIMESTAMP=...'
@@ -32,4 +44,12 @@ type BinlogTransaction struct {
 type Statement struct {
 	Category int
 	Sql      []byte
+}
+
+// String pretty-prints a statement.
+func (s Statement) String() string {
+	if cat, ok := BL_CATEGORY_NAMES[s.Category]; ok {
+		return fmt.Sprintf("{%v: %#v}", cat, string(s.Sql))
+	}
+	return fmt.Sprintf("{%v: %#v}", s.Category, string(s.Sql))
 }

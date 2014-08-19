@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler/events"
 )
@@ -16,11 +17,11 @@ import (
 // The ev parameter is an event struct prefilled with information that the
 // caller has on hand, which would be expensive for us to re-query.
 func (wr *Wrangler) reparentShardGraceful(ev *events.Reparent, si *topo.ShardInfo, slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo, leaveMasterReadOnly bool) (err error) {
-	ev.UpdateStatus("starting graceful")
+	event.DispatchUpdate(ev, "starting graceful")
 
 	defer func() {
 		if err != nil {
-			ev.UpdateStatus("failed: " + err.Error())
+			event.DispatchUpdate(ev, "failed: "+err.Error())
 		}
 	}()
 
@@ -58,20 +59,20 @@ func (wr *Wrangler) reparentShardGraceful(ev *events.Reparent, si *topo.ShardInf
 	}
 
 	// Make sure all tablets have the right parent and reasonable positions.
-	ev.UpdateStatus("checking slave replication positions")
+	event.DispatchUpdate(ev, "checking slave replication positions")
 	err = wr.checkSlaveReplication(slaveTabletMap, masterTablet.Alias.Uid)
 	if err != nil {
 		return err
 	}
 
 	// Check the master-elect is fit for duty - call out for hardware checks.
-	ev.UpdateStatus("checking that new master is ready to serve")
+	event.DispatchUpdate(ev, "checking that new master is ready to serve")
 	err = wr.checkMasterElect(masterElectTablet)
 	if err != nil {
 		return err
 	}
 
-	ev.UpdateStatus("demoting old master")
+	event.DispatchUpdate(ev, "demoting old master")
 	masterPosition, err := wr.demoteMaster(masterTablet)
 	if err != nil {
 		// FIXME(msolomon) This suggests that the master is dead and we
@@ -80,7 +81,7 @@ func (wr *Wrangler) reparentShardGraceful(ev *events.Reparent, si *topo.ShardInf
 		return fmt.Errorf("demote master failed: %v, if the master is dead, run: vtctl -force ScrapTablet %v", err, masterTablet.Alias)
 	}
 
-	ev.UpdateStatus("checking slave consistency")
+	event.DispatchUpdate(ev, "checking slave consistency")
 	wr.logger.Infof("check slaves %v/%v", masterTablet.Keyspace, masterTablet.Shard)
 	restartableSlaveTabletMap := wr.restartableTabletMap(slaveTabletMap)
 	err = wr.checkSlaveConsistency(restartableSlaveTabletMap, masterPosition)
@@ -88,7 +89,7 @@ func (wr *Wrangler) reparentShardGraceful(ev *events.Reparent, si *topo.ShardInf
 		return fmt.Errorf("check slave consistency failed %v, demoted master is still read only, run: vtctl SetReadWrite %v", err, masterTablet.Alias)
 	}
 
-	ev.UpdateStatus("promoting new master")
+	event.DispatchUpdate(ev, "promoting new master")
 	rsd, err := wr.promoteSlave(masterElectTablet)
 	if err != nil {
 		// FIXME(msolomon) This suggests that the master-elect is dead.
@@ -99,7 +100,7 @@ func (wr *Wrangler) reparentShardGraceful(ev *events.Reparent, si *topo.ShardInf
 	// Once the slave is promoted, remove it from our map
 	delete(slaveTabletMap, masterElectTablet.Alias)
 
-	ev.UpdateStatus("restarting slaves")
+	event.DispatchUpdate(ev, "restarting slaves")
 	majorityRestart, restartSlaveErr := wr.restartSlaves(slaveTabletMap, rsd)
 
 	// For now, scrap the old master regardless of how many
@@ -107,7 +108,7 @@ func (wr *Wrangler) reparentShardGraceful(ev *events.Reparent, si *topo.ShardInf
 	//
 	// FIXME(msolomon) We could reintroduce it and reparent it and use
 	// it as new replica.
-	ev.UpdateStatus("scrapping old master")
+	event.DispatchUpdate(ev, "scrapping old master")
 	wr.logger.Infof("scrap demoted master %v", masterTablet.Alias)
 	scrapActionPath, scrapErr := wr.ai.Scrap(masterTablet.Alias)
 	if scrapErr == nil {
@@ -118,13 +119,13 @@ func (wr *Wrangler) reparentShardGraceful(ev *events.Reparent, si *topo.ShardInf
 		wr.logger.Warningf("scrap demoted master failed: %v", scrapErr)
 	}
 
-	ev.UpdateStatus("rebuilding shard serving graph")
+	event.DispatchUpdate(ev, "rebuilding shard serving graph")
 	err = wr.finishReparent(si, masterElectTablet, majorityRestart, leaveMasterReadOnly)
 	if err != nil {
 		return err
 	}
 
-	ev.UpdateStatus("finished")
+	event.DispatchUpdate(ev, "finished")
 
 	if restartSlaveErr != nil {
 		// This is more of a warning at this point.

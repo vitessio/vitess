@@ -140,3 +140,17 @@ func callListeners(t reflect.Type, vals []reflect.Value) {
 		reflect.ValueOf(fn).Call(vals)
 	}
 }
+
+// Updater is an interface that events can implement to combine updating and
+// dispatching into one call.
+type Updater interface {
+	// Update is called by DispatchUpdate() before the event is dispatched.
+	Update(update interface{})
+}
+
+// DispatchUpdate calls Update() on the event and then dispatches it. This is a
+// shortcut for combining updates and dispatches into a single call.
+func DispatchUpdate(ev Updater, update interface{}) {
+	ev.Update(update)
+	Dispatch(ev)
+}
