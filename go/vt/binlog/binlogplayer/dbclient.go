@@ -90,6 +90,5 @@ func (dc *DBClient) ExecuteFetch(query string, maxrows int, wantfields bool) (*m
 		dc.handleError(err)
 		return nil, err
 	}
-	qr := mproto.QueryResult(*mqr)
-	return &qr, nil
+	return mqr, nil
 }
