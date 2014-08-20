@@ -26,6 +26,10 @@ var tabletManagerProtocol = flag.String("tablet_manager_protocol", "bson", "the 
 
 // Wrangler manages complex actions on the topology, like reparents,
 // snapshots, restores, ...
+// It is not a thread safe structure. Two go routines cannot usually
+// call wrangler methods at the same time (they probably would not
+// have the same logger, and definitely not the same timeouts /
+// deadlines).
 type Wrangler struct {
 	logger      logutil.Logger
 	ts          topo.Server

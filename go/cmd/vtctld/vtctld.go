@@ -348,7 +348,7 @@ func main() {
 
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, 30*time.Second, 30*time.Second)
 
-	actionRepo = NewActionRepository(wr)
+	actionRepo = NewActionRepository(ts)
 
 	// keyspace actions
 	actionRepo.RegisterKeyspaceAction("ValidateKeyspace",
@@ -537,7 +537,7 @@ func main() {
 
 		cell := parts[len(parts)-1]
 		if cell == "" {
-			cells, err := wr.TopoServer().GetKnownCells()
+			cells, err := ts.GetKnownCells()
 			if err != nil {
 				httpError(w, "cannot get known cells: %v", err)
 				return

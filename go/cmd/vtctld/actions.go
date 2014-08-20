@@ -6,6 +6,8 @@ import (
 	"net/url"
 
 	"github.com/youtube/vitess/go/acl"
+	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -43,16 +45,16 @@ type ActionRepository struct {
 	keyspaceActions map[string]actionKeyspaceMethod
 	shardActions    map[string]actionShardMethod
 	tabletActions   map[string]actionTabletRecord
-	wr              *wrangler.Wrangler
+	ts              topo.Server
 }
 
-func NewActionRepository(wr *wrangler.Wrangler) *ActionRepository {
+func NewActionRepository(ts topo.Server) *ActionRepository {
 	return &ActionRepository{
 		keyspaceActions: make(map[string]actionKeyspaceMethod),
 		shardActions:    make(map[string]actionShardMethod),
 		tabletActions:   make(map[string]actionTabletRecord),
-		wr:              wr}
-
+		ts:              ts,
+	}
 }
 
 func (ar *ActionRepository) RegisterKeyspaceAction(name string, method actionKeyspaceMethod) {
@@ -78,8 +80,9 @@ func (ar *ActionRepository) ApplyKeyspaceAction(actionName, keyspace string, r *
 		result.error("Unknown keyspace action")
 		return result
 	}
-	ar.wr.ResetActionTimeout(wrangler.DefaultActionTimeout)
-	output, err := action(ar.wr, keyspace, r)
+
+	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, wrangler.DefaultActionTimeout, actionnode.DefaultLockTimeout)
+	output, err := action(wr, keyspace, r)
 	if err != nil {
 		result.error(err.Error())
 		return result
@@ -96,8 +99,8 @@ func (ar *ActionRepository) ApplyShardAction(actionName, keyspace, shard string,
 		result.error("Unknown shard action")
 		return result
 	}
-	ar.wr.ResetActionTimeout(wrangler.DefaultActionTimeout)
-	output, err := action(ar.wr, keyspace, shard, r)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, wrangler.DefaultActionTimeout, actionnode.DefaultLockTimeout)
+	output, err := action(wr, keyspace, shard, r)
 	if err != nil {
 		result.error(err.Error())
 		return result
@@ -124,8 +127,8 @@ func (ar *ActionRepository) ApplyTabletAction(actionName string, tabletAlias top
 	}
 
 	// run the action
-	ar.wr.ResetActionTimeout(wrangler.DefaultActionTimeout)
-	output, err := action.method(ar.wr, tabletAlias, r)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, wrangler.DefaultActionTimeout, actionnode.DefaultLockTimeout)
+	output, err := action.method(wr, tabletAlias, r)
 	if err != nil {
 		result.error(err.Error())
 		return result
