@@ -28,46 +28,8 @@ tablets = [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica,
 vtgate_server = None
 vtgate_port = None
 
-
-class VtctldError(Exception): pass
-
-
-class Vtctld(object):
-
-  def __init__(self):
-    self.port = environment.reserve_ports(1)
-
-  def dbtopo(self):
-    data = json.load(urllib2.urlopen('http://localhost:%u/dbtopo?format=json' %
-                                     self.port))
-    if data["Error"]:
-      raise VtctldError(data)
-    return data["Topology"]
-
-  def serving_graph(self):
-    data = json.load(urllib2.urlopen('http://localhost:%u/serving_graph/test_nj?format=json' % self.port))
-    if data['Errors']:
-      raise VtctldError(data['Errors'])
-    return data["Keyspaces"]
-
-  def start(self):
-    args = environment.binary_args('vtctld') + [
-            '-debug',
-            '-templates', environment.vttop + '/go/cmd/vtctld/templates',
-            '-log_dir', environment.vtlogroot,
-            '-port', str(self.port),
-            ] + \
-            environment.topo_server_flags() + \
-            environment.tablet_manager_protocol_flags()
-    stderr_fd = open(os.path.join(environment.tmproot, "vtctld.stderr"), "w")
-    self.proc = utils.run_bg(args, stderr=stderr_fd)
-    return self.proc
-
-  def process_args(self):
-    return ['-vtctld_addr', 'http://localhost:%u/' % self.port]
-
-
-vtctld = Vtctld()
+# vtctld
+vtctld = utils.Vtctld()
 
 
 def setUpModule():
