@@ -28,7 +28,7 @@ type VtctlServer struct {
 
 // ExecuteVtctlCommand is the server side method that will execute the query,
 // and stream the results.
-func (s *VtctlServer) ExecuteVtctlCommand(context context.Context, query *gorpcproto.ExecuteVtctlCommandArgs, sendReply func(*logutil.LoggerEvent) error) error {
+func (s *VtctlServer) ExecuteVtctlCommand(context context.Context, query *gorpcproto.ExecuteVtctlCommandArgs, sendReply func(interface{}) error) error {
 	// create a logger, send the result back to the caller
 	logger := logutil.NewChannelLogger(10)
 	wg := sync.WaitGroup{}
