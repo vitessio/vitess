@@ -243,7 +243,7 @@ func (wr *Wrangler) getMastersPosition(shards []*topo.ShardInfo) (map[*topo.Shar
 				return
 			}
 
-			pos, err := wr.ai.MasterPosition(ti, wr.actionTimeout())
+			pos, err := wr.ai.MasterPosition(ti, wr.ActionTimeout())
 			if err != nil {
 				rec.RecordError(err)
 				return
@@ -279,7 +279,7 @@ func (wr *Wrangler) waitForFilteredReplication(sourcePositions map[*topo.ShardIn
 				}
 
 				log.Infof("Waiting for %v to catch up", si.MasterAlias)
-				if err := wr.ai.WaitBlpPosition(si.MasterAlias, blpPosition, wr.actionTimeout()); err != nil {
+				if err := wr.ai.WaitBlpPosition(si.MasterAlias, blpPosition, wr.ActionTimeout()); err != nil {
 					rec.RecordError(err)
 				} else {
 					log.Infof("%v caught up", si.MasterAlias)
@@ -593,7 +593,7 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 		if err != nil {
 			return err
 		}
-		masterPosition, err := wr.ai.MasterPosition(sourceMasterTabletInfo, wr.actionTimeout())
+		masterPosition, err := wr.ai.MasterPosition(sourceMasterTabletInfo, wr.ActionTimeout())
 		if err != nil {
 			return err
 		}
@@ -603,7 +603,7 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 		if err := wr.ai.WaitBlpPosition(si.MasterAlias, blproto.BlpPosition{
 			Uid:       0,
 			GTIDField: masterPosition.MasterLogGTIDField,
-		}, wr.actionTimeout()); err != nil {
+		}, wr.ActionTimeout()); err != nil {
 			return err
 		}
 
@@ -636,7 +636,7 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 	// Now blacklist the table list on the right servers
 	event.DispatchUpdate(ev, "setting blacklisted tables on source shard")
 	if servedType == topo.TYPE_MASTER {
-		if err := wr.ai.SetBlacklistedTables(sourceMasterTabletInfo, tables, wr.actionTimeout()); err != nil {
+		if err := wr.ai.SetBlacklistedTables(sourceMasterTabletInfo, tables, wr.ActionTimeout()); err != nil {
 			return err
 		}
 	} else {
@@ -678,7 +678,7 @@ func (wr *Wrangler) SetBlacklistedTablesByShard(keyspace, shard string, tabletTy
 
 		wg.Add(1)
 		go func(ti *topo.TabletInfo) {
-			if err := wr.ai.SetBlacklistedTables(ti, tables, wr.actionTimeout()); err != nil {
+			if err := wr.ai.SetBlacklistedTables(ti, tables, wr.ActionTimeout()); err != nil {
 				log.Warningf("SetBlacklistedTablesByShard: failed to set tables for %v: %v", ti.Alias, err)
 			}
 			wg.Done()

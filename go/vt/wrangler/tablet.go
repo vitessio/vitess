@@ -226,7 +226,7 @@ func (wr *Wrangler) ChangeTypeNoRebuild(tabletAlias topo.TabletAlias, tabletType
 		}
 	} else {
 		if wr.UseRPCs {
-			if err := wr.ai.RpcChangeType(ti, tabletType, wr.actionTimeout()); err != nil {
+			if err := wr.ai.RpcChangeType(ti, tabletType, wr.ActionTimeout()); err != nil {
 				return false, "", "", "", err
 			}
 
@@ -270,7 +270,7 @@ func (wr *Wrangler) changeTypeInternal(tabletAlias topo.TabletAlias, dbType topo
 
 	// change the type
 	if wr.UseRPCs {
-		if err := wr.ai.RpcChangeType(ti, dbType, wr.actionTimeout()); err != nil {
+		if err := wr.ai.RpcChangeType(ti, dbType, wr.ActionTimeout()); err != nil {
 			return err
 		}
 	} else {
@@ -314,5 +314,5 @@ func (wr *Wrangler) ExecuteFetch(tabletAlias topo.TabletAlias, query string, max
 	if err != nil {
 		return nil, err
 	}
-	return wr.ai.ExecuteFetch(ti, query, maxRows, wantFields, disableBinlogs, wr.actionTimeout())
+	return wr.ai.ExecuteFetch(ti, query, maxRows, wantFields, disableBinlogs, wr.ActionTimeout())
 }

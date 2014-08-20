@@ -64,7 +64,7 @@ func (wr *Wrangler) checkSlaveReplication(tabletMap map[topo.TabletAlias]*topo.T
 				return
 			}
 
-			replPos, err := wr.ai.SlavePosition(tablet, wr.actionTimeout())
+			replPos, err := wr.ai.SlavePosition(tablet, wr.ActionTimeout())
 			if err != nil {
 				if tablet.Type == topo.TYPE_BACKUP {
 					wr.logger.Warningf("  failed to get slave position from backup tablet %v, either wait for backup to finish or scrap tablet (%v)", tablet.Alias, err)
@@ -84,13 +84,13 @@ func (wr *Wrangler) checkSlaveReplication(tabletMap map[topo.TabletAlias]*topo.T
 				}
 
 				var dur time.Duration = time.Duration(uint(time.Second) * replPos.SecondsBehindMaster)
-				if dur > wr.actionTimeout() {
-					err = fmt.Errorf("slave is too far behind to complete reparent in time (%v>%v), either increase timeout using 'vtctl -wait-time XXX ReparentShard ...' or scrap tablet %v", dur, wr.actionTimeout(), tablet.Alias)
+				if dur > wr.ActionTimeout() {
+					err = fmt.Errorf("slave is too far behind to complete reparent in time (%v>%v), either increase timeout using 'vtctl -wait-time XXX ReparentShard ...' or scrap tablet %v", dur, wr.ActionTimeout(), tablet.Alias)
 					wr.logger.Errorf("  %v", err)
 					return
 				}
 
-				wr.logger.Infof("  slave is %v behind master (<%v), reparent should work for %v", dur, wr.actionTimeout(), tablet.Alias)
+				wr.logger.Infof("  slave is %v behind master (<%v), reparent should work for %v", dur, wr.ActionTimeout(), tablet.Alias)
 			}
 		}(tablet)
 	}
@@ -119,7 +119,7 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo,
 		} else {
 			// In the case where a master is down, look for the last bit of data copied and wait
 			// for that to apply. That gives us a chance to wait for all data.
-			replPos, err := wr.ai.SlavePosition(ti, wr.actionTimeout())
+			replPos, err := wr.ai.SlavePosition(ti, wr.ActionTimeout())
 			if err != nil {
 				ctx.err = err
 				return
@@ -131,7 +131,7 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo,
 		}
 
 		// This option waits for the SQL thread to apply all changes to this instance.
-		rp, err := wr.ai.WaitSlavePosition(ti, args, wr.actionTimeout())
+		rp, err := wr.ai.WaitSlavePosition(ti, args, wr.ActionTimeout())
 		if err != nil {
 			ctx.err = err
 			return
@@ -192,7 +192,7 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo,
 func (wr *Wrangler) stopSlaves(tabletMap map[topo.TabletAlias]*topo.TabletInfo) error {
 	errs := make(chan error, len(tabletMap))
 	f := func(ti *topo.TabletInfo) {
-		err := wr.ai.StopSlave(ti, wr.actionTimeout())
+		err := wr.ai.StopSlave(ti, wr.ActionTimeout())
 		if err != nil {
 			wr.logger.Infof("StopSlave failed: %v", err)
 		}
@@ -228,9 +228,9 @@ func (wr *Wrangler) tabletReplicationPositions(tablets []*topo.TabletInfo) ([]*m
 		ctx := &rpcContext{tablet: ti}
 		calls[idx] = ctx
 		if ti.Type == topo.TYPE_MASTER {
-			ctx.position, ctx.err = wr.ai.MasterPosition(ti, wr.actionTimeout())
+			ctx.position, ctx.err = wr.ai.MasterPosition(ti, wr.ActionTimeout())
 		} else if ti.IsSlaveType() {
-			ctx.position, ctx.err = wr.ai.SlavePosition(ti, wr.actionTimeout())
+			ctx.position, ctx.err = wr.ai.SlavePosition(ti, wr.ActionTimeout())
 		}
 	}
 
@@ -275,7 +275,7 @@ func (wr *Wrangler) demoteMaster(ti *topo.TabletInfo) (*myproto.ReplicationPosit
 	if err != nil {
 		return nil, err
 	}
-	return wr.ai.MasterPosition(ti, wr.actionTimeout())
+	return wr.ai.MasterPosition(ti, wr.ActionTimeout())
 }
 
 func (wr *Wrangler) promoteSlave(ti *topo.TabletInfo) (rsd *actionnode.RestartSlaveData, err error) {

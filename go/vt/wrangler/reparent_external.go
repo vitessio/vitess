@@ -160,7 +160,7 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[to
 	// The following two blocks of actions are very likely to time
 	// out for some tablets (one random guy is dead, the old
 	// master is dead, ...). We execute them all in parallel until
-	// we get to wr.actionTimeout(). After this, no other action
+	// we get to wr.ActionTimeout(). After this, no other action
 	// with a timeout is executed, so even if we got to the
 	// timeout, we're still good.
 	wr.logger.Infof("Updating individual tablets with the right master...")
@@ -200,7 +200,7 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[to
 func (wr *Wrangler) slaveWasPromoted(ti *topo.TabletInfo) error {
 	wr.logger.Infof("slaveWasPromoted(%v)", ti.Alias)
 	if wr.UseRPCs {
-		return wr.ai.RpcSlaveWasPromoted(ti, wr.actionTimeout())
+		return wr.ai.RpcSlaveWasPromoted(ti, wr.ActionTimeout())
 	} else {
 		actionPath, err := wr.ai.SlaveWasPromoted(ti.Alias)
 		if err != nil {
@@ -217,7 +217,7 @@ func (wr *Wrangler) slaveWasPromoted(ti *topo.TabletInfo) error {
 func (wr *Wrangler) slaveWasRestarted(ti *topo.TabletInfo, swrd *actionnode.SlaveWasRestartedArgs) (err error) {
 	wr.logger.Infof("slaveWasRestarted(%v)", ti.Alias)
 	if wr.UseRPCs {
-		return wr.ai.RpcSlaveWasRestarted(ti, swrd, wr.actionTimeout())
+		return wr.ai.RpcSlaveWasRestarted(ti, swrd, wr.ActionTimeout())
 	} else {
 		actionPath, err := wr.ai.SlaveWasRestarted(ti.Alias, swrd)
 		if err != nil {

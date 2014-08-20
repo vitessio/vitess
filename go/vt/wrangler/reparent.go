@@ -213,7 +213,7 @@ func (wr *Wrangler) ReparentTablet(tabletAlias topo.TabletAlias) error {
 		return fmt.Errorf("master %v and potential slave not in same keyspace/shard", shardInfo.MasterAlias)
 	}
 
-	pos, err := wr.ai.SlavePosition(ti, wr.actionTimeout())
+	pos, err := wr.ai.SlavePosition(ti, wr.ActionTimeout())
 	if err != nil {
 		return err
 	}

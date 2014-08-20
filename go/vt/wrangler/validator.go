@@ -27,7 +27,7 @@ type vresult struct {
 }
 
 func (wr *Wrangler) waitForResults(wg *sync.WaitGroup, results chan vresult) error {
-	timer := time.NewTimer(wr.actionTimeout())
+	timer := time.NewTimer(wr.ActionTimeout())
 	done := make(chan bool, 1)
 	go func() {
 		wg.Wait()
@@ -199,7 +199,7 @@ func (wr *Wrangler) validateReplication(shardInfo *topo.ShardInfo, tabletMap map
 		return
 	}
 
-	slaveList, err := wr.ai.GetSlaves(masterTablet, wr.actionTimeout())
+	slaveList, err := wr.ai.GetSlaves(masterTablet, wr.ActionTimeout())
 	if err != nil {
 		results <- vresult{shardInfo.MasterAlias.String(), err}
 		return

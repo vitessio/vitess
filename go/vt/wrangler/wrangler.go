@@ -58,7 +58,9 @@ func New(logger logutil.Logger, ts topo.Server, actionTimeout, lockTimeout time.
 	return &Wrangler{logger, ts, initiator.NewActionInitiator(ts, *tabletManagerProtocol), time.Now().Add(actionTimeout), lockTimeout, true}
 }
 
-func (wr *Wrangler) actionTimeout() time.Duration {
+// ActionTimeout returns the timeout to use so the action finishes before
+// the deadline.
+func (wr *Wrangler) ActionTimeout() time.Duration {
 	return wr.deadline.Sub(time.Now())
 }
 
@@ -94,13 +96,13 @@ func (wr *Wrangler) ResetActionTimeout(actionTimeout time.Duration) {
 // WaitForCompletion will wait for the actionPath to complete, using the
 // wrangler default action timeout.
 func (wr *Wrangler) WaitForCompletion(actionPath string) error {
-	return wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+	return wr.ai.WaitForCompletion(actionPath, wr.ActionTimeout())
 }
 
 // WaitForCompletionReply will wait for the actionPath to complete, using the
 // wrangler default action timeout, and return the result
 func (wr *Wrangler) WaitForCompletionReply(actionPath string) (interface{}, error) {
-	return wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
+	return wr.ai.WaitForCompletionReply(actionPath, wr.ActionTimeout())
 }
 
 // signal handling

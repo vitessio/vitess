@@ -2,12 +2,12 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package main
+package vtctl
 
 import (
 	"flag"
+	"fmt"
 
-	log "github.com/golang/glog"
 	_ "github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -31,32 +31,50 @@ func init() {
 }
 
 func commandDemoteMaster(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
-	subFlags.Parse(args)
-	if subFlags.NArg() != 1 {
-		log.Fatalf("action DemoteMaster requires <tablet alias|zk tablet path>")
+	if err := subFlags.Parse(args); err != nil {
+		return "", err
 	}
-	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
+	if subFlags.NArg() != 1 {
+		return "", fmt.Errorf("action DemoteMaster requires <tablet alias|zk tablet path>")
+	}
+	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	if err != nil {
+		return "", err
+	}
 	return wr.ActionInitiator().DemoteMaster(tabletAlias)
 }
 
 func commandReparentTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
-	subFlags.Parse(args)
-	if subFlags.NArg() != 1 {
-		log.Fatalf("action ReparentTablet requires <tablet alias|zk tablet path>")
+	if err := subFlags.Parse(args); err != nil {
+		return "", err
 	}
-	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
+	if subFlags.NArg() != 1 {
+		return "", fmt.Errorf("action ReparentTablet requires <tablet alias|zk tablet path>")
+	}
+	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	if err != nil {
+		return "", err
+	}
 	return "", wr.ReparentTablet(tabletAlias)
 }
 
 func commandReparentShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	leaveMasterReadOnly := subFlags.Bool("leave-master-read-only", false, "leaves the master read-only after reparenting")
 	force := subFlags.Bool("force", false, "will force the reparent even if the master is already correct")
-	subFlags.Parse(args)
+	if err := subFlags.Parse(args); err != nil {
+		return "", err
+	}
 	if subFlags.NArg() != 2 {
-		log.Fatalf("action ReparentShard requires <keyspace/shard|zk shard path> <tablet alias|zk tablet path>")
+		return "", fmt.Errorf("action ReparentShard requires <keyspace/shard|zk shard path> <tablet alias|zk tablet path>")
 	}
 
-	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
-	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(1))
+	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	if err != nil {
+		return "", err
+	}
+	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(1))
+	if err != nil {
+		return "", err
+	}
 	return "", wr.ReparentShard(keyspace, shard, tabletAlias, *leaveMasterReadOnly, *force)
 }
