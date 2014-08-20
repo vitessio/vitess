@@ -21,14 +21,14 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
-// Server is our RPC server
-type Server struct {
+// VtctlServer is our RPC server
+type VtctlServer struct {
 	ts topo.Server
 }
 
 // ExecuteVtctlCommand is the server side method that will execute the query,
 // and stream the results.
-func (s *Server) ExecuteVtctlCommand(context context.Context, query *gorpcproto.ExecuteVtctlCommandArgs, sendReply func(*logutil.LoggerEvent) error) error {
+func (s *VtctlServer) ExecuteVtctlCommand(context context.Context, query *gorpcproto.ExecuteVtctlCommandArgs, sendReply func(*logutil.LoggerEvent) error) error {
 	// create a logger, send the result back to the caller
 	logger := logutil.NewChannelLogger(10)
 	wg := sync.WaitGroup{}
@@ -64,5 +64,5 @@ func (s *Server) ExecuteVtctlCommand(context context.Context, query *gorpcproto.
 
 // StartServer registers the Server for RPCs
 func StartServer(ts topo.Server) {
-	rpcwrap.RegisterAuthenticated(&Server{ts})
+	rpcwrap.RegisterAuthenticated(&VtctlServer{ts})
 }
