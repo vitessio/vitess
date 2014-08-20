@@ -1,7 +1,6 @@
 package logutil
 
 import (
-	"bytes"
 	"testing"
 	"time"
 )
@@ -19,7 +18,7 @@ func TestLoggerEventFormat(t *testing.T) {
 				Line:  123,
 				Value: "message",
 			},
-			expected: "I1110 23:30:12.123456 file.go:123] message\n",
+			expected: "I1110 23:30:12.123456 file.go:123] message",
 		},
 		{
 			event: LoggerEvent{
@@ -29,14 +28,13 @@ func TestLoggerEventFormat(t *testing.T) {
 				Line:  567,
 				Value: "message %v %v",
 			},
-			expected: "W0120 23:30:12.000000 file2.go:567] message %v %v\n",
+			expected: "W0120 23:30:12.000000 file2.go:567] message %v %v",
 		},
 	}
 	for _, testValue := range testValues {
-		buf := new(bytes.Buffer)
-		testValue.event.ToBuffer(buf)
-		if testValue.expected != buf.String() {
-			t.Errorf("invalid printing of %v: want '%v' got '%v'", testValue.event, testValue.expected, buf.String())
+		got := testValue.event.String()
+		if testValue.expected != got {
+			t.Errorf("invalid printing of %v: expected '%v' got '%v'", testValue.event, testValue.expected, got)
 		}
 	}
 }

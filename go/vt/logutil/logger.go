@@ -20,9 +20,13 @@ type Logger interface {
 
 // The logger levels are used to store individual logging events
 const (
+	// the usual logging levels
 	LOGGER_INFO = iota
 	LOGGER_WARNING
 	LOGGER_ERROR
+
+	// for messages that may contains non-logging events
+	LOGGER_CONSOLE
 )
 
 // LoggerEvent is used to manage individual logging events. It is used
@@ -35,7 +39,8 @@ type LoggerEvent struct {
 	Value string
 }
 
-// ToBuffer formats an individual LoggerEvent into a buffer
+// ToBuffer formats an individual LoggerEvent into a buffer, without the
+// final '\n'
 func (event *LoggerEvent) ToBuffer(buf *bytes.Buffer) {
 	// Avoid Fprintf, for speed. The format is so simple that we
 	// can do it quickly by hand.  It's worth about 3X. Fprintf is hard.
@@ -48,6 +53,9 @@ func (event *LoggerEvent) ToBuffer(buf *bytes.Buffer) {
 		buf.WriteByte('W')
 	case LOGGER_ERROR:
 		buf.WriteByte('E')
+	case LOGGER_CONSOLE:
+		buf.WriteString(event.Value)
+		return
 	}
 
 	_, month, day := event.Time.Date()
@@ -69,7 +77,13 @@ func (event *LoggerEvent) ToBuffer(buf *bytes.Buffer) {
 	buf.WriteByte(']')
 	buf.WriteByte(' ')
 	buf.WriteString(event.Value)
-	buf.WriteByte('\n')
+}
+
+// String returns the line in one string
+func (event *LoggerEvent) String() string {
+	buf := new(bytes.Buffer)
+	event.ToBuffer(buf)
+	return buf.String()
 }
 
 // ChannelLogger is a Logger that sends the logging events through a channel for
@@ -171,13 +185,14 @@ func (ml *MemoryLogger) Errorf(format string, v ...interface{}) {
 	})
 }
 
-// String returns all the lines in one String
+// String returns all the lines in one String, separated by '\n'
 func (ml *MemoryLogger) String() string {
 	buf := new(bytes.Buffer)
 	ml.mu.Lock()
 	defer ml.mu.Unlock()
 	for _, event := range ml.Events {
 		event.ToBuffer(buf)
+		buf.WriteByte('\n')
 	}
 	return buf.String()
 }

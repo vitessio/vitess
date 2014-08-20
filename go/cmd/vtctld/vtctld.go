@@ -336,6 +336,7 @@ var indexContent = IndexContent{
 		"Serving Graph":   "/serving_graph",
 	},
 }
+var ts topo.Server
 
 func main() {
 	flag.Parse()
@@ -343,12 +344,12 @@ func main() {
 	defer servenv.Close()
 	templateLoader = NewTemplateLoader(*templateDir, dummyTemplate, *debug)
 
-	ts := topo.GetServer()
+	ts = topo.GetServer()
 	defer topo.CloseServers()
 
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, 30*time.Second, 30*time.Second)
 
-	actionRepo = NewActionRepository(ts)
+	actionRepo = NewActionRepository()
 
 	// keyspace actions
 	actionRepo.RegisterKeyspaceAction("ValidateKeyspace",

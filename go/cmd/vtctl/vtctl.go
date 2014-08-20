@@ -99,7 +99,7 @@ func main() {
 		if *noWaitForAction {
 			fmt.Println(actionPath)
 		} else {
-			err := wr.ActionInitiator().WaitForCompletion(actionPath, *waitTime)
+			err := wr.WaitForCompletion(actionPath)
 			if err != nil {
 				log.Error(err.Error())
 				exit.Return(255)
