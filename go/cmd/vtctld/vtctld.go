@@ -349,7 +349,7 @@ func main() {
 
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, 30*time.Second, 30*time.Second)
 
-	actionRepo = NewActionRepository()
+	actionRepo = NewActionRepository(ts)
 
 	// keyspace actions
 	actionRepo.RegisterKeyspaceAction("ValidateKeyspace",

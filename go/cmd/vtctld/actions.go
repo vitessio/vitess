@@ -45,13 +45,15 @@ type ActionRepository struct {
 	keyspaceActions map[string]actionKeyspaceMethod
 	shardActions    map[string]actionShardMethod
 	tabletActions   map[string]actionTabletRecord
+	ts              topo.Server
 }
 
-func NewActionRepository() *ActionRepository {
+func NewActionRepository(ts topo.Server) *ActionRepository {
 	return &ActionRepository{
 		keyspaceActions: make(map[string]actionKeyspaceMethod),
 		shardActions:    make(map[string]actionShardMethod),
 		tabletActions:   make(map[string]actionTabletRecord),
+		ts:              ts,
 	}
 }
 
@@ -79,7 +81,7 @@ func (ar *ActionRepository) ApplyKeyspaceAction(actionName, keyspace string, r *
 		return result
 	}
 
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, wrangler.DefaultActionTimeout, actionnode.DefaultLockTimeout)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, wrangler.DefaultActionTimeout, actionnode.DefaultLockTimeout)
 	output, err := action(wr, keyspace, r)
 	if err != nil {
 		result.error(err.Error())
@@ -97,7 +99,7 @@ func (ar *ActionRepository) ApplyShardAction(actionName, keyspace, shard string,
 		result.error("Unknown shard action")
 		return result
 	}
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, wrangler.DefaultActionTimeout, actionnode.DefaultLockTimeout)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, wrangler.DefaultActionTimeout, actionnode.DefaultLockTimeout)
 	output, err := action(wr, keyspace, shard, r)
 	if err != nil {
 		result.error(err.Error())
@@ -125,7 +127,7 @@ func (ar *ActionRepository) ApplyTabletAction(actionName string, tabletAlias top
 	}
 
 	// run the action
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, wrangler.DefaultActionTimeout, actionnode.DefaultLockTimeout)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, wrangler.DefaultActionTimeout, actionnode.DefaultLockTimeout)
 	output, err := action.method(wr, tabletAlias, r)
 	if err != nil {
 		result.error(err.Error())
