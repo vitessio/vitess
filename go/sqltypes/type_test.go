@@ -57,17 +57,17 @@ func TestNumeric(t *testing.T) {
 }
 
 func TestTime(t *testing.T) {
-    date := time.Date(1999, 1, 2, 3, 4, 5, 0, time.UTC)
-    v, _ := BuildValue(date)
-    if !v.IsString() || v.String() != "1999-01-02 03:04:05" {
-        t.Errorf("Expecting 1999-01-02 03:04:05, got %s", v.String())
-    }
+	date := time.Date(1999, 1, 2, 3, 4, 5, 0, time.UTC)
+	v, _ := BuildValue(date)
+	if !v.IsString() || v.String() != "1999-01-02 03:04:05" {
+		t.Errorf("Expecting 1999-01-02 03:04:05, got %s", v.String())
+	}
 
-    b := &bytes.Buffer{}
-    v.EncodeSql(b)
-    if b.String() != "'1999-01-02 03:04:05'" {
-        t.Errorf("Expecting '1999-01-02 03:04:05', got %s", b.String())
-    }
+	b := &bytes.Buffer{}
+	v.EncodeSql(b)
+	if b.String() != "'1999-01-02 03:04:05'" {
+		t.Errorf("Expecting '1999-01-02 03:04:05', got %s", b.String())
+	}
 }
 
 const (
