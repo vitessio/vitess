@@ -26,9 +26,11 @@ var tabletAddr string
 
 func initCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
 	waitTime := subFlags.Duration("wait_time", mysqlctl.MysqlWaitTime, "how long to wait for startup")
+	bootstrapArchive := subFlags.String("bootstrap_archive", "mysql-db-dir.tbz", "name of bootstrap archive within vitess/data/bootstrap directory")
+	skipSchema := subFlags.Bool("skip_schema", false, "don't apply initial schema")
 	subFlags.Parse(args)
 
-	if err := mysqld.Init(*waitTime); err != nil {
+	if err := mysqld.Init(*waitTime, *bootstrapArchive, *skipSchema); err != nil {
 		log.Fatalf("failed init mysql: %v", err)
 	}
 }
@@ -219,7 +221,7 @@ type command struct {
 }
 
 var commands = []command{
-	command{"init", initCmd, "",
+	command{"init", initCmd, "[-wait_time=20s] [-bootstrap_archive=mysql-db-dir.tbz] [-skip_schema]",
 		"Initalizes the directory structure and starts mysqld"},
 	command{"teardown", teardownCmd, "[-force]",
 		"Shuts mysqld down, and removes the directory"},

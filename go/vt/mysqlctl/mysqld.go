@@ -79,20 +79,18 @@ func NewMysqld(name string, config *Mycnf, dba, repl *mysql.ConnectionParams) *M
 }
 
 // Cnf returns the mysql config for the daemon
-func (mt *Mysqld) Cnf() *Mycnf {
-	return mt.config
+func (mysqld *Mysqld) Cnf() *Mycnf {
+	return mysqld.config
 }
 
 // Start will start the mysql daemon, either by running the 'mysqld_start'
 // hook, or by running mysqld_safe in the background.
-func (mt *Mysqld) Start(mysqlWaitTime time.Duration) error {
+func (mysqld *Mysqld) Start(mysqlWaitTime time.Duration) error {
 	var name string
 	ts := fmt.Sprintf("Mysqld.Start(%v)", time.Now().Unix())
 
 	// try the mysqld start hook, if any
-	h := hook.NewSimpleHook("mysqld_start")
-	hr := h.Execute()
-	switch hr.ExitStatus {
+	switch hr := hook.NewSimpleHook("mysqld_start").Execute(); hr.ExitStatus {
 	case hook.HOOK_SUCCESS:
 		// hook exists and worked, we can keep going
 		name = "mysqld_start hook"
@@ -105,7 +103,7 @@ func (mt *Mysqld) Start(mysqlWaitTime time.Duration) error {
 		}
 		name = path.Join(dir, "bin/mysqld_safe")
 		arg := []string{
-			"--defaults-file=" + mt.config.path}
+			"--defaults-file=" + mysqld.config.path}
 		env := []string{os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql")}
 
 		cmd := exec.Command(name, arg...)
@@ -150,10 +148,10 @@ func (mt *Mysqld) Start(mysqlWaitTime time.Duration) error {
 	// give it some time to succeed - usually by the time the socket emerges
 	// we are in good shape
 	for i := mysqlWaitTime; i >= 0; i -= time.Second {
-		_, statErr := os.Stat(mt.config.SocketFile)
+		_, statErr := os.Stat(mysqld.config.SocketFile)
 		if statErr == nil {
 			// Make sure the socket file isn't stale.
-			conn, connErr := mt.dbaPool.Get()
+			conn, connErr := mysqld.dbaPool.Get()
 			if connErr == nil {
 				conn.Recycle()
 				return nil
@@ -161,10 +159,10 @@ func (mt *Mysqld) Start(mysqlWaitTime time.Duration) error {
 		} else if !os.IsNotExist(statErr) {
 			return statErr
 		}
-		log.Infof("%v: sleeping for 1s waiting for socket file %v", ts, mt.config.SocketFile)
+		log.Infof("%v: sleeping for 1s waiting for socket file %v", ts, mysqld.config.SocketFile)
 		time.Sleep(time.Second)
 	}
-	return errors.New(name + ": deadline exceeded waiting for " + mt.config.SocketFile)
+	return errors.New(name + ": deadline exceeded waiting for " + mysqld.config.SocketFile)
 }
 
 // Shutdown will stop the mysqld daemon that is running in the background.
@@ -172,11 +170,11 @@ func (mt *Mysqld) Start(mysqlWaitTime time.Duration) error {
 // waitForMysqld: should the function block until mysqld has stopped?
 // This can actually take a *long* time if the buffer cache needs to be fully
 // flushed - on the order of 20-30 minutes.
-func (mt *Mysqld) Shutdown(waitForMysqld bool, mysqlWaitTime time.Duration) error {
+func (mysqld *Mysqld) Shutdown(waitForMysqld bool, mysqlWaitTime time.Duration) error {
 	log.Infof("mysqlctl.Shutdown")
 	// possibly mysql is already shutdown, check for a few files first
-	_, socketPathErr := os.Stat(mt.config.SocketFile)
-	_, pidPathErr := os.Stat(mt.config.PidFile)
+	_, socketPathErr := os.Stat(mysqld.config.SocketFile)
+	_, pidPathErr := os.Stat(mysqld.config.PidFile)
 	if socketPathErr != nil && pidPathErr != nil {
 		log.Warningf("assuming shutdown - no socket, no pid file")
 		return nil
@@ -197,7 +195,7 @@ func (mt *Mysqld) Shutdown(waitForMysqld bool, mysqlWaitTime time.Duration) erro
 		}
 		name := path.Join(dir, "bin/mysqladmin")
 		arg := []string{
-			"-u", "vt_dba", "-S", mt.config.SocketFile,
+			"-u", "vt_dba", "-S", mysqld.config.SocketFile,
 			"shutdown"}
 		env := []string{
 			os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql"),
@@ -215,11 +213,11 @@ func (mt *Mysqld) Shutdown(waitForMysqld bool, mysqlWaitTime time.Duration) erro
 	// we can't call wait() in a process we didn't start.
 	if waitForMysqld {
 		for i := mysqlWaitTime; i >= 0; i -= time.Second {
-			_, statErr := os.Stat(mt.config.SocketFile)
+			_, statErr := os.Stat(mysqld.config.SocketFile)
 			if statErr != nil && os.IsNotExist(statErr) {
 				return nil
 			}
-			log.Infof("Mysqld.Shutdown: sleeping for 1s waiting for socket file %v", mt.config.SocketFile)
+			log.Infof("Mysqld.Shutdown: sleeping for 1s waiting for socket file %v", mysqld.config.SocketFile)
 			time.Sleep(time.Second)
 		}
 		return errors.New("gave up waiting for mysqld to stop")
@@ -246,9 +244,9 @@ func execCmd(name string, args, env []string, dir string) (cmd *exec.Cmd, err er
 // Init will create the default directory structure for the mysqld process,
 // generate / configure a my.cnf file, unpack a skeleton database,
 // and create some management tables.
-func (mt *Mysqld) Init(mysqlWaitTime time.Duration) error {
+func (mysqld *Mysqld) Init(mysqlWaitTime time.Duration, bootstrapArchive string, skipSchema bool) error {
 	log.Infof("mysqlctl.Init")
-	err := mt.createDirs()
+	err := mysqld.createDirs()
 	if err != nil {
 		log.Errorf("%s", err.Error())
 		return err
@@ -259,48 +257,30 @@ func (mt *Mysqld) Init(mysqlWaitTime time.Duration) error {
 		return err
 	}
 
-	hr := hook.NewSimpleHook("make_mycnf").Execute()
-
-	configData := ""
-	if hr.ExitStatus == hook.HOOK_DOES_NOT_EXIST {
-		log.Infof("make_mycnf hook doesn't exist, reading default template files")
-		cnfTemplatePaths := []string{
-			path.Join(root, "config/mycnf/default.cnf"),
-			path.Join(root, "config/mycnf/master.cnf"),
-			path.Join(root, "config/mycnf/replica.cnf"),
-		}
-
-		if extraCnf := os.Getenv("EXTRA_MY_CNF"); extraCnf != "" {
-			parts := strings.Split(extraCnf, ":")
-			cnfTemplatePaths = append(cnfTemplatePaths, parts...)
-		}
-
-		configData, err = mt.config.makeMycnf(cnfTemplatePaths)
-	} else if hr.ExitStatus == hook.HOOK_SUCCESS {
-		configData, err = mt.config.fillMycnfTemplate(hr.Stdout)
-	} else {
-		err = fmt.Errorf("make_mycnf hook failed(%v): %v", hr.ExitStatus, hr.Stderr)
-	}
-
-	if err == nil {
-		err = ioutil.WriteFile(mt.config.path, []byte(configData), 0664)
-	}
-	if err != nil {
-		log.Errorf("failed creating %v: %v", mt.config.path, err)
+	// Set up config files.
+	if err = mysqld.initConfig(root); err != nil {
+		log.Errorf("failed creating %v: %v", mysqld.config.path, err)
 		return err
 	}
 
-	dbTbzPath := path.Join(root, "data/bootstrap/mysql-db-dir.tbz")
+	// Unpack bootstrap DB files.
+	dbTbzPath := path.Join(root, "data/bootstrap/"+bootstrapArchive)
 	log.Infof("decompress bootstrap db %v", dbTbzPath)
-	args := []string{"-xj", "-C", mt.config.DataDir, "-f", dbTbzPath}
-	_, tarErr := execCmd("tar", args, []string{}, "")
-	if tarErr != nil {
-		log.Errorf("failed unpacking %v: %v", dbTbzPath, tarErr)
-		return tarErr
-	}
-	if err = mt.Start(mysqlWaitTime); err != nil {
-		log.Errorf("failed starting, check %v", mt.config.ErrorLogPath)
+	args := []string{"-xj", "-C", mysqld.config.DataDir, "-f", dbTbzPath}
+	if _, err = execCmd("tar", args, []string{}, ""); err != nil {
+		log.Errorf("failed unpacking %v: %v", dbTbzPath, err)
 		return err
+	}
+
+	// Start mysqld.
+	if err = mysqld.Start(mysqlWaitTime); err != nil {
+		log.Errorf("failed starting, check %v", mysqld.config.ErrorLogPath)
+		return err
+	}
+
+	// Load initial schema.
+	if skipSchema {
+		return nil
 	}
 	schemaPath := path.Join(root, "data/bootstrap/_vt_schema.sql")
 	schema, err := ioutil.ReadFile(schemaPath)
@@ -318,20 +298,51 @@ func (mt *Mysqld) Init(mysqlWaitTime time.Duration) error {
 		sqlCmds = append(sqlCmds, cmd)
 	}
 
-	return mt.ExecuteSuperQueryList(sqlCmds)
+	return mysqld.ExecuteSuperQueryList(sqlCmds)
 }
 
-func (mt *Mysqld) createDirs() error {
-	log.Infof("creating directory %s", mt.TabletDir)
-	if err := os.MkdirAll(mt.TabletDir, 0775); err != nil {
+func (mysqld *Mysqld) initConfig(root string) error {
+	var err error
+	var configData string
+
+	switch hr := hook.NewSimpleHook("make_mycnf").Execute(); hr.ExitStatus {
+	case hook.HOOK_DOES_NOT_EXIST:
+		log.Infof("make_mycnf hook doesn't exist, reading default template files")
+		cnfTemplatePaths := []string{
+			path.Join(root, "config/mycnf/default.cnf"),
+			path.Join(root, "config/mycnf/master.cnf"),
+			path.Join(root, "config/mycnf/replica.cnf"),
+		}
+
+		if extraCnf := os.Getenv("EXTRA_MY_CNF"); extraCnf != "" {
+			parts := strings.Split(extraCnf, ":")
+			cnfTemplatePaths = append(cnfTemplatePaths, parts...)
+		}
+
+		configData, err = mysqld.config.makeMycnf(cnfTemplatePaths)
+	case hook.HOOK_SUCCESS:
+		configData, err = mysqld.config.fillMycnfTemplate(hr.Stdout)
+	default:
+		return fmt.Errorf("make_mycnf hook failed(%v): %v", hr.ExitStatus, hr.Stderr)
+	}
+	if err != nil {
+		return err
+	}
+
+	return ioutil.WriteFile(mysqld.config.path, []byte(configData), 0664)
+}
+
+func (mysqld *Mysqld) createDirs() error {
+	log.Infof("creating directory %s", mysqld.TabletDir)
+	if err := os.MkdirAll(mysqld.TabletDir, 0775); err != nil {
 		return err
 	}
 	for _, dir := range TopLevelDirs() {
-		if err := mt.createTopDir(dir); err != nil {
+		if err := mysqld.createTopDir(dir); err != nil {
 			return err
 		}
 	}
-	for _, dir := range mt.config.directoryList() {
+	for _, dir := range mysqld.config.directoryList() {
 		log.Infof("creating directory %s", dir)
 		if err := os.MkdirAll(dir, 0775); err != nil {
 			return err
@@ -348,20 +359,20 @@ func (mt *Mysqld) createDirs() error {
 // that points to the newly created directory.  For example, if
 // /vt/data is present, it will create the following structure:
 // /vt/data/vt_xxxx /vt/vt_xxxx/data -> /vt/data/vt_xxxx
-func (mt *Mysqld) createTopDir(dir string) error {
-	vtname := path.Base(mt.TabletDir)
+func (mysqld *Mysqld) createTopDir(dir string) error {
+	vtname := path.Base(mysqld.TabletDir)
 	target := path.Join(vtenv.VtDataRoot(), dir)
 	_, err := os.Lstat(target)
 	if err != nil {
 		if os.IsNotExist(err) {
-			topdir := path.Join(mt.TabletDir, dir)
+			topdir := path.Join(mysqld.TabletDir, dir)
 			log.Infof("creating directory %s", topdir)
 			return os.MkdirAll(topdir, 0775)
 		}
 		return err
 	}
 	linkto := path.Join(target, vtname)
-	source := path.Join(mt.TabletDir, dir)
+	source := path.Join(mysqld.TabletDir, dir)
 	log.Infof("creating directory %s", linkto)
 	err = os.MkdirAll(linkto, 0775)
 	if err != nil {
@@ -372,9 +383,9 @@ func (mt *Mysqld) createTopDir(dir string) error {
 }
 
 // Teardown will shutdown the running daemon, and delete the root directory.
-func (mt *Mysqld) Teardown(force bool) error {
+func (mysqld *Mysqld) Teardown(force bool) error {
 	log.Infof("mysqlctl.Teardown")
-	if err := mt.Shutdown(true, MysqlWaitTime); err != nil {
+	if err := mysqld.Shutdown(true, MysqlWaitTime); err != nil {
 		log.Warningf("failed mysqld shutdown: %v", err.Error())
 		if !force {
 			return err
@@ -382,7 +393,7 @@ func (mt *Mysqld) Teardown(force bool) error {
 	}
 	var removalErr error
 	for _, dir := range TopLevelDirs() {
-		qdir := path.Join(mt.TabletDir, dir)
+		qdir := path.Join(mysqld.TabletDir, dir)
 		if err := deleteTopDir(qdir); err != nil {
 			removalErr = err
 		}
