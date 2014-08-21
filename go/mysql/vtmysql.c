@@ -3,9 +3,7 @@
 // license that can be found in the LICENSE file.
 
 #include "vtmysql.h"
-#include <my_global.h>
-#include <m_ctype.h>
-#include <sql_common.h>
+#include "vtmysql_internals.h"
 
 // All functions must call mysql_thread_init before calling mysql. This is
 // because the go runtime controls thread creation, and we don't control
@@ -162,10 +160,6 @@ unsigned long vt_cli_safe_read(VT_CONN *conn) {
   len = cli_safe_read(conn->mysql);
   return len == packet_error ? 0 : len;
 }
-
-// This function is defined in libmysqlclient for internal use, but is not
-// declared in the client headers.
-extern int vio_close(Vio*);
 
 void vt_force_close(VT_CONN *conn) {
   mysql_thread_init();
