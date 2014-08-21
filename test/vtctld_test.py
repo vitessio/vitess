@@ -9,6 +9,7 @@ import environment
 import tablet
 import utils
 from zk import zkocc
+from vtctl import vtctl_client
 
 
 # range "" - 80
@@ -140,6 +141,11 @@ class TestVtctld(unittest.TestCase):
     out, err = utils.run_vtctl(['ListAllTablets', 'test_nj'],
                                trap_output=True, auto_log=True)
     self._check_all_tablets(out)
+
+    # python RPC client to vtctld
+    c = vtctl_client.connect(environment.vtctl_client_protocol(), 'localhost:%u' % vtctld.port, 30)
+    result = c.execute_vtctl_command(['ListAllTablets', 'test_nj'])
+    self._check_all_tablets(result)
 
   def test_assigned(self):
     logging.debug("test_assigned: %s", str(self.data))

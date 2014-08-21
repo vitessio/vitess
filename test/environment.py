@@ -170,3 +170,6 @@ def tablet_manager_protocol_flags():
 
 def tabletconn_protocol_flags():
   return ['-tablet_protocol', 'gorpc']
+
+def vtctl_client_protocol():
+  return 'gorpc'

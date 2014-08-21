@@ -615,8 +615,9 @@ class Vtctld(object):
       log_level='ERROR'
 
     out, err = run(environment.binary_args('vtctlclient') + 
-                   ['-server', 'localhost:%u' % self.port,
-                    '--stderrthreshold=%s' % log_level] + args,
+                   ['-vtctl_client_protocol', environment.vtctl_client_protocol(),
+                    '-server', 'localhost:%u' % self.port,
+                    '-stderrthreshold', log_level] + args,
                    trap_output=True)
     return out
 
