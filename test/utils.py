@@ -605,3 +605,18 @@ class Vtctld(object):
 
   def process_args(self):
     return ['-vtctld_addr', 'http://localhost:%u/' % self.port]
+
+  def vtctl_client(self, args):
+    if options.verbose == 2:
+      log_level='INFO'
+    elif options.verbose == 1:
+      log_level='WARNING'
+    else:
+      log_level='ERROR'
+
+    out, err = run(environment.binary_args('vtctlclient') + 
+                   ['-server', 'localhost:%u' % self.port,
+                    '--stderrthreshold=%s' % log_level] + args,
+                   trap_output=True)
+    return out
+

@@ -118,6 +118,29 @@ class TestVtctld(unittest.TestCase):
     self.data = vtctld.dbtopo()
     self.serving_data = vtctld.serving_graph()
 
+  def _check_all_tablets(self, result):
+    lines = result.splitlines()
+    self.assertEqual(len(lines), len(tablets))
+    line_map = {}
+    for line in lines:
+      parts = line.split()
+      alias = parts[0]
+      line_map[alias] = parts
+    for tablet in tablets:
+      if not tablet.tablet_alias in line_map:
+         self.assertFalse('tablet %s is not in the result: %s' % (
+                          tablet.tablet_alias, str(line_map)))
+    
+  def test_vtctl(self):
+    # standalone RPC client to vtctld
+    result = vtctld.vtctl_client(['ListAllTablets', 'test_nj'])
+    self._check_all_tablets(result)
+
+    # vtctl querying the topology directly
+    out, err = utils.run_vtctl(['ListAllTablets', 'test_nj'],
+                               trap_output=True, auto_log=True)
+    self._check_all_tablets(out)
+
   def test_assigned(self):
     logging.debug("test_assigned: %s", str(self.data))
     self.assertItemsEqual(self.data["Assigned"].keys(), ["test_keyspace"])
