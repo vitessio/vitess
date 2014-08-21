@@ -7,7 +7,7 @@ import time
 import warnings
 # Dropping a table inexplicably produces a warning despite
 # the "IF EXISTS" clause. Squelch these warnings.
-warnings.simplefilter("ignore")
+warnings.simplefilter('ignore')
 
 import MySQLdb
 
@@ -24,28 +24,29 @@ tablet_cell_map = {
     31981: 'ny',
 }
 
+
 class Tablet(object):
   default_uid = 62344
   seq = 0
   tablets_running = 0
   default_db_config = {
-    "app": {
-      "uname": "vt_app",
-      "charset": "utf8"
+      'app': {
+          'uname': 'vt_app',
+          'charset': 'utf8'
       },
-    "dba": {
-      "uname": "vt_dba",
-      "charset": "utf8"
+      'dba': {
+          'uname': 'vt_dba',
+          'charset': 'utf8'
       },
-    "filtered": {
-      "uname": "vt_filtered",
-      "charset": "utf8"
+      'filtered': {
+          'uname': 'vt_filtered',
+          'charset': 'utf8'
       },
-    "repl": {
-      "uname": "vt_repl",
-      "charset": "utf8"
+      'repl': {
+          'uname': 'vt_repl',
+          'charset': 'utf8'
       }
-    }
+  }
 
   def __init__(self, tablet_uid=None, port=None, mysql_port=None, cell=None):
     self.tablet_uid = tablet_uid or (Tablet.default_uid + Tablet.seq)
@@ -65,24 +66,25 @@ class Tablet(object):
 
     # utility variables
     self.tablet_alias = 'test_%s-%010d' % (self.cell, self.tablet_uid)
-    self.zk_tablet_path = '/zk/test_%s/vt/tablets/%010d' % (self.cell, self.tablet_uid)
+    self.zk_tablet_path = (
+        '/zk/test_%s/vt/tablets/%010d' % (self.cell, self.tablet_uid))
     self.zk_pid = self.zk_tablet_path + '/pid'
 
   def mysqlctl(self, cmd, extra_my_cnf=None, with_ports=False, verbose=False):
     all_extra_my_cnf = []
-    if environment.mysql_flavor == "GoogleMysql":
-      # we have to manually enable hierarchical replication to support group_id
-      all_extra_my_cnf.append(environment.vttop + "/config/mycnf/master_google.cnf")
+    flavor_my_cnf = mysql_flavor.extra_my_cnf()
+    if flavor_my_cnf:
+      all_extra_my_cnf.append(flavor_my_cnf)
     if extra_my_cnf:
-       all_extra_my_cnf.append(extra_my_cnf)
+      all_extra_my_cnf.append(extra_my_cnf)
     extra_env = None
     if all_extra_my_cnf:
       extra_env = {
-          'EXTRA_MY_CNF': ":".join(all_extra_my_cnf),
-          }
+          'EXTRA_MY_CNF': ':'.join(all_extra_my_cnf),
+      }
     args = environment.binary_args('mysqlctl') + [
-            '-log_dir', environment.vtlogroot,
-            '-tablet_uid', str(self.tablet_uid)]
+        '-log_dir', environment.vtlogroot,
+        '-tablet_uid', str(self.tablet_uid)]
     if with_ports:
       args.extend(['-port', str(self.port),
                    '-mysql_port', str(self.mysql_port)])
@@ -92,8 +94,9 @@ class Tablet(object):
     return utils.run_bg(args, extra_env=extra_env)
 
   def init_mysql(self, extra_my_cnf=None):
-    return self.mysqlctl(['init'], extra_my_cnf=extra_my_cnf,
-                         with_ports=True)
+    return self.mysqlctl(
+        ['init', '-bootstrap_archive', mysql_flavor.bootstrap_archive()],
+        extra_my_cnf=extra_my_cnf, with_ports=True)
 
   def start_mysql(self):
     return self.mysqlctl(['start'], with_ports=True)
@@ -113,12 +116,12 @@ class Tablet(object):
 
   def mysql_connection_parameters(self, dbname, user='vt_dba'):
     return dict(user=user,
-                unix_socket=self.tablet_dir+'/mysql.sock',
+                unix_socket=self.tablet_dir + '/mysql.sock',
                 db=dbname)
 
   def connect(self, dbname='', user='vt_dba'):
     conn = MySQLdb.Connect(
-      **self.mysql_connection_parameters(dbname, user))
+        **self.mysql_connection_parameters(dbname, user))
     return conn, conn.cursor()
 
   # Query the MySQL instance directly
@@ -153,19 +156,19 @@ class Tablet(object):
   def assert_table_count(self, dbname, table, n, where=''):
     result = self.mquery(dbname, 'select count(*) from ' + table + ' ' + where)
     if result[0][0] != n:
-      raise utils.TestError("expected %u rows in %s" % (n, table), result)
+      raise utils.TestError('expected %u rows in %s' % (n, table), result)
 
   def reset_replication(self):
     self.mquery('', mysql_flavor.reset_replication_commands())
 
   def populate(self, dbname, create_sql, insert_sqls=[]):
-      self.create_db(dbname)
-      if isinstance(create_sql, basestring):
-        create_sql= [create_sql]
-      for q in create_sql:
-        self.mquery(dbname, q)
-      for q in insert_sqls:
-        self.mquery(dbname, q, write=True)
+    self.create_db(dbname)
+    if isinstance(create_sql, basestring):
+      create_sql = [create_sql]
+    for q in create_sql:
+      self.mquery(dbname, q)
+    for q in insert_sqls:
+      self.mquery(dbname, q, write=True)
 
   def has_db(self, name):
     rows = self.mquery('', 'show databases')
@@ -178,7 +181,7 @@ class Tablet(object):
   def drop_db(self, name):
     self.mquery('', 'drop database if exists %s' % name)
     while self.has_db(name):
-      logging.debug("%s sleeping while waiting for database drop: %s",
+      logging.debug('%s sleeping while waiting for database drop: %s',
                     self.tablet_alias, name)
       time.sleep(0.3)
       self.mquery('', 'drop database if exists %s' % name)
@@ -188,7 +191,7 @@ class Tablet(object):
     self.mquery('', 'create database %s' % name)
 
   def clean_dbs(self):
-    logging.debug("mysql(%s): removing all databases", self.tablet_uid)
+    logging.debug('mysql(%s): removing all databases', self.tablet_uid)
     rows = self.mquery('', 'show databases')
     for row in rows:
       dbname = row[0]
@@ -227,33 +230,35 @@ class Tablet(object):
         '-vt-port', '%u' % self.port,
         '-vts-port', '%u' % (self.port + 500),
         self.tablet_alias
-        ]
+    ]
     return utils.run_vtctl(args)
 
   def scrap(self, force=False, skip_rebuild=False):
     args = ['ScrapTablet']
     if force:
-      args.append("-force")
+      args.append('-force')
     if skip_rebuild:
-      args.append("-skip-rebuild")
+      args.append('-skip-rebuild')
     args.append(self.tablet_alias)
     utils.run_vtctl(args, auto_log=True)
 
-  def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, start=False, dbname=None, parent=True, wait_for_start=True, **kwargs):
+  def init_tablet(
+      self, tablet_type, keyspace=None, shard=None, force=True,
+      start=False, dbname=None, parent=True, wait_for_start=True,
+      **kwargs):
     self.tablet_type = tablet_type
     self.keyspace = keyspace
     self.shard = shard
 
     if dbname is None:
-      self.dbname = "vt_" + (self.keyspace or "database")
+      self.dbname = 'vt_' + (self.keyspace or 'database')
     else:
       self.dbname = dbname
 
     args = ['InitTablet',
             '-hostname', 'localhost',
             '-port', str(self.port),
-            '-mysql_port', str(self.mysql_port),
-            ]
+            '-mysql_port', str(self.mysql_port)]
     if force:
       args.append('-force')
     if parent:
@@ -270,86 +275,94 @@ class Tablet(object):
       if not wait_for_start:
         expected_state = None
       elif tablet_type == 'master' or tablet_type == 'replica' or tablet_type == 'rdonly' or tablet_type == 'batch':
-        expected_state = "SERVING"
+        expected_state = 'SERVING'
       else:
-        expected_state = "NOT_SERVING"
+        expected_state = 'NOT_SERVING'
       self.start_vttablet(wait_for_state=expected_state, **kwargs)
 
   def conn(self):
-    conn = tablet.TabletConnection("localhost:%d" % self.port, self.tablet_type, self.keyspace, self.shard, 30)
+    conn = tablet.TabletConnection(
+        'localhost:%d' % self.port, self.tablet_type, self.keyspace,
+        self.shard, 30)
     conn.dial()
     return conn
 
   @property
   def tablet_dir(self):
-    return "%s/vt_%010d" % (environment.vtdataroot, self.tablet_uid)
+    return '%s/vt_%010d' % (environment.vtdataroot, self.tablet_uid)
 
   def flush(self):
-    utils.curl('http://localhost:%s%s' % (self.port, environment.flush_logs_url), stderr=utils.devnull, stdout=utils.devnull)
+    utils.curl('http://localhost:%s%s' %
+               (self.port, environment.flush_logs_url),
+               stderr=utils.devnull, stdout=utils.devnull)
 
   def start_vttablet(self, port=None, auth=False, memcache=False,
-                     wait_for_state="SERVING", customrules=None,
+                     wait_for_state='SERVING', customrules=None,
                      schema_override=None, cert=None, key=None, ca_cert=None,
-                     repl_extra_flags={},table_acl_config=None,
+                     repl_extra_flags={}, table_acl_config=None,
                      target_tablet_type=None, lameduck_period=None,
                      extra_args=None, full_mycnf_args=False,
                      security_policy=None):
-    """
-    Starts a vttablet process, and returns it.
+    """Starts a vttablet process, and returns it.
+
     The process is also saved in self.proc, so it's easy to kill as well.
     """
     environment.prog_compile('vtaction')
     args = environment.binary_args('vttablet') + [
-            '-port', '%s' % (port or self.port),
-            '-tablet-path', self.tablet_alias,
-            '-log_dir', environment.vtlogroot]
+        '-port', '%s' % (port or self.port),
+        '-tablet-path', self.tablet_alias,
+        '-log_dir', environment.vtlogroot]
     args.extend(environment.topo_server_flags())
     args.extend(utils.binlog_player_protocol_flags)
 
     dbconfigs = self._get_db_configs_file(repl_extra_flags)
     for key1 in dbconfigs:
       for key2 in dbconfigs[key1]:
-        args.extend(["-db-config-"+key1+"-"+key2, dbconfigs[key1][key2]])
+        args.extend(['-db-config-' + key1 + '-' + key2, dbconfigs[key1][key2]])
 
     if full_mycnf_args:
       # this flag is used to specify all the mycnf_ flags, to make
       # sure that code works and can fork actions.
-      relay_log_path = os.path.join(self.tablet_dir, "relay-logs",
-                                    "vt-%010d-relay-bin" % self.tablet_uid)
+      relay_log_path = os.path.join(self.tablet_dir, 'relay-logs',
+                                    'vt-%010d-relay-bin' % self.tablet_uid)
       args.extend([
-          "-mycnf_server_id", str(self.tablet_uid),
-          "-mycnf_mysql_port", str(self.mysql_port),
-          "-mycnf_data_dir", os.path.join(self.tablet_dir, "data"),
-          "-mycnf_innodb_data_home_dir", os.path.join(self.tablet_dir,
-                                                      "innodb", "data"),
-          "-mycnf_innodb_log_group_home_dir", os.path.join(self.tablet_dir,
-                                                           "innodb", "logs"),
-          "-mycnf_socket_file", os.path.join(self.tablet_dir, "mysql.sock"),
-          "-mycnf_error_log_path", os.path.join(self.tablet_dir, "error.log"),
-          "-mycnf_slow_log_path", os.path.join(self.tablet_dir,
-                                               "slow-query.log"),
-          "-mycnf_relay_log_path", relay_log_path,
-          "-mycnf_relay_log_index_path", relay_log_path + ".index",
-          "-mycnf_relay_log_info_path", os.path.join(self.tablet_dir,
-                                                     "relay-logs",
-                                                     "relay-log.info"),
-          "-mycnf_bin_log_path", os.path.join(self.tablet_dir, "bin-logs",
-                                              "vt-%010d-bin" % self.tablet_uid),
-          "-mycnf_master_info_file", os.path.join(self.tablet_dir,
-                                                  "master.info"),
-          "-mycnf_pid_file", os.path.join(self.tablet_dir, "mysql.pid"),
-          "-mycnf_tmp_dir", os.path.join(self.tablet_dir, "tmp"),
-          "-mycnf_slave_load_tmp_dir", os.path.join(self.tablet_dir, "tmp"),
-          ])
+          '-mycnf_server_id', str(self.tablet_uid),
+          '-mycnf_mysql_port', str(self.mysql_port),
+          '-mycnf_data_dir', os.path.join(self.tablet_dir, 'data'),
+          '-mycnf_innodb_data_home_dir', os.path.join(self.tablet_dir,
+                                                      'innodb', 'data'),
+          '-mycnf_innodb_log_group_home_dir', os.path.join(self.tablet_dir,
+                                                           'innodb', 'logs'),
+          '-mycnf_socket_file', os.path.join(self.tablet_dir, 'mysql.sock'),
+          '-mycnf_error_log_path', os.path.join(self.tablet_dir, 'error.log'),
+          '-mycnf_slow_log_path', os.path.join(self.tablet_dir,
+                                               'slow-query.log'),
+          '-mycnf_relay_log_path', relay_log_path,
+          '-mycnf_relay_log_index_path', relay_log_path + '.index',
+          '-mycnf_relay_log_info_path', os.path.join(self.tablet_dir,
+                                                     'relay-logs',
+                                                     'relay-log.info'),
+          '-mycnf_bin_log_path', os.path.join(self.tablet_dir, 'bin-logs',
+                                              'vt-%010d-bin' % self.tablet_uid),
+          '-mycnf_master_info_file', os.path.join(self.tablet_dir,
+                                                  'master.info'),
+          '-mycnf_pid_file', os.path.join(self.tablet_dir, 'mysql.pid'),
+          '-mycnf_tmp_dir', os.path.join(self.tablet_dir, 'tmp'),
+          '-mycnf_slave_load_tmp_dir', os.path.join(self.tablet_dir, 'tmp'),
+      ])
 
     if memcache:
-      args.extend(["-rowcache-bin", environment.memcached_bin()])
-      memcache_socket = os.path.join(self.tablet_dir, "memcache.sock")
-      args.extend(["-rowcache-socket", memcache_socket])
-      args.extend(["-enable-rowcache"])
+      args.extend(['-rowcache-bin', environment.memcached_bin()])
+      memcache_socket = os.path.join(self.tablet_dir, 'memcache.sock')
+      args.extend(['-rowcache-socket', memcache_socket])
+      args.extend(['-enable-rowcache'])
 
     if auth:
-      args.extend(['-auth-credentials', os.path.join(environment.vttop, 'test', 'test_data', 'authcredentials_test.json')])
+      args.extend(
+          ['-auth-credentials',
+           os.path.join(
+               environment.vttop, 'test', 'test_data',
+               'authcredentials_test.json')])
 
     if customrules:
       args.extend(['-customrules', customrules])
@@ -358,8 +371,8 @@ class Tablet(object):
       args.extend(['-schema-override', schema_override])
 
     if table_acl_config:
-        args.extend(['-table-acl-config', table_acl_config])
-        args.extend(['-queryserver-config-strict-table-acl'])
+      args.extend(['-table-acl-config', table_acl_config])
+      args.extend(['-queryserver-config-strict-table-acl'])
 
     if cert:
       self.secure_port = environment.reserve_ports(1)
@@ -379,7 +392,7 @@ class Tablet(object):
     if security_policy:
       args.extend(['-security_policy', security_policy])
 
-    stderr_fd = open(os.path.join(self.tablet_dir, "vttablet.stderr"), "w")
+    stderr_fd = open(os.path.join(self.tablet_dir, 'vttablet.stderr'), 'w')
     # increment count only the first time
     if not self.proc:
       Tablet.tablets_running += 1
@@ -388,7 +401,9 @@ class Tablet(object):
 
     # wait for zookeeper PID just to be sure we have it
     if environment.topo_server_implementation == 'zookeeper':
-      utils.run(environment.binary_argstr('zk')+' wait -e ' + self.zk_pid, stdout=utils.devnull)
+      utils.run(
+          environment.binary_argstr('zk') + ' wait -e ' + self.zk_pid,
+          stdout=utils.devnull)
 
     # wait for query service to be in the right state
     if wait_for_state:
@@ -400,14 +415,20 @@ class Tablet(object):
     while True:
       v = utils.get_vars(port or self.port)
       if v == None:
-        logging.debug("  vttablet %s not answering at /debug/vars, waiting...", self.tablet_alias)
+        logging.debug(
+            '  vttablet %s not answering at /debug/vars, waiting...',
+            self.tablet_alias)
       else:
         if 'Voltron' not in v:
-          logging.debug("  vttablet %s not exporting Voltron, waiting...", self.tablet_alias)
+          logging.debug(
+              '  vttablet %s not exporting Voltron, waiting...',
+              self.tablet_alias)
         else:
-          s = v["TabletStateName"]
+          s = v['TabletStateName']
           if s != expected:
-            logging.debug("  vttablet %s in state %s != %s", self.tablet_alias, s, expected)
+            logging.debug(
+                '  vttablet %s in state %s != %s', self.tablet_alias, s,
+                expected)
           else:
             break
       timeout = utils.wait_step('waiting for state %s' % expected, timeout,
@@ -427,7 +448,7 @@ class Tablet(object):
     return utils.get_status(self.port)
 
   def kill_vttablet(self):
-    logging.debug("killing vttablet: %s", self.tablet_alias)
+    logging.debug('killing vttablet: %s', self.tablet_alias)
     if self.proc is not None:
       Tablet.tablets_running -= 1
       self.proc.terminate()
@@ -438,10 +459,11 @@ class Tablet(object):
     while True:
       v = utils.get_vars(self.port)
       if v == None:
-        logging.debug("  vttablet not answering at /debug/vars, waiting...")
+        logging.debug('  vttablet not answering at /debug/vars, waiting...')
       else:
         if 'UpdateStreamState' not in v:
-          logging.debug("  vttablet not exporting BinlogServerState, waiting...")
+          logging.debug(
+              '  vttablet not exporting BinlogServerState, waiting...')
         else:
           s = v['UpdateStreamState']
           if s != expected:
@@ -451,17 +473,18 @@ class Tablet(object):
             break
       timeout = utils.wait_step('waiting for binlog server state %s' % expected,
                                 timeout, sleep_time=0.5)
-    logging.debug("tablet %s binlog service is in state %s",
+    logging.debug('tablet %s binlog service is in state %s',
                   self.tablet_alias, expected)
 
   def wait_for_binlog_player_count(self, expected, timeout=30.0):
     while True:
       v = utils.get_vars(self.port)
       if v == None:
-        logging.debug("  vttablet not answering at /debug/vars, waiting...")
+        logging.debug('  vttablet not answering at /debug/vars, waiting...')
       else:
         if 'BinlogPlayerMapSize' not in v:
-          logging.debug("  vttablet not exporting BinlogPlayerMapSize, waiting...")
+          logging.debug(
+              '  vttablet not exporting BinlogPlayerMapSize, waiting...')
         else:
           s = v['BinlogPlayerMapSize']
           if s != expected:
@@ -471,17 +494,18 @@ class Tablet(object):
             break
       timeout = utils.wait_step('waiting for binlog player count %d' % expected,
                                 timeout, sleep_time=0.5)
-    logging.debug("tablet %s binlog player has %d players",
+    logging.debug('tablet %s binlog player has %d players',
                   self.tablet_alias, expected)
 
   @classmethod
   def check_vttablet_count(klass):
     if Tablet.tablets_running > 0:
-      raise utils.TestError("This test is not killing all its vttablets")
+      raise utils.TestError('This test is not killing all its vttablets')
+
 
 def kill_tablets(tablets):
   for t in tablets:
-    logging.debug("killing vttablet: %s", t.tablet_alias)
+    logging.debug('killing vttablet: %s', t.tablet_alias)
     if t.proc is not None:
       Tablet.tablets_running -= 1
       t.proc.terminate()

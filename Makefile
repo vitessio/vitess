@@ -43,6 +43,7 @@ integration_test_files = clone.py \
 	initial_sharding.py \
 	keyrange_test.py \
 	keyspace_test.py \
+	mysqlctl.py \
 	reparent.py \
 	resharding_bytes.py \
 	resharding.py \

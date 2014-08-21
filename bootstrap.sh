@@ -106,7 +106,13 @@ fi
 cp $VTTOP/config/gomysql.pc.tmpl $VTROOT/lib/gomysql.pc
 echo "Version:" "$($VT_MYSQL_ROOT/bin/mysql_config --version)" >> $VTROOT/lib/gomysql.pc
 echo "Cflags:" "$($VT_MYSQL_ROOT/bin/mysql_config --cflags) -ggdb -fPIC" >> $VTROOT/lib/gomysql.pc
-echo "Libs:" "$($VT_MYSQL_ROOT/bin/mysql_config --libs_r)" >> $VTROOT/lib/gomysql.pc
+if [ "$MYSQL_FLAVOR" == "MariaDB" ]; then
+  # Use static linking because the shared library doesn't export
+  # some internal functions we use, like cli_safe_read.
+  echo "Libs:" "$($VT_MYSQL_ROOT/bin/mysql_config --libs_r | sed 's,-lmysqlclient_r,-l:libmysqlclient.a -lstdc++,')" >> $VTROOT/lib/gomysql.pc
+else
+  echo "Libs:" "$($VT_MYSQL_ROOT/bin/mysql_config --libs_r)" >> $VTROOT/lib/gomysql.pc
+fi
 
 # install bson
 bson_dist=$VTROOT/dist/py-vt-bson-0.3.2

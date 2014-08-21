@@ -81,9 +81,15 @@ func (*mariaDB10) SendBinlogDumpCommand(mysqld *Mysqld, conn *SlaveConnection, s
 	// MariaDB expects the slave to set the @slave_connect_state variable before
 	// issuing COM_BINLOG_DUMP if it wants to use GTID mode.
 	query := fmt.Sprintf("SET @slave_connect_state='%s'", startPos)
-	_, err := conn.ExecuteFetch(query, 0, false)
-	if err != nil {
-		return fmt.Errorf("mariaDB10.SendBinlogDumpCommand: failed to set @slave_connect_state='%s': %v", startPos, err)
+	if _, err := conn.ExecuteFetch(query, 0, false); err != nil {
+		return fmt.Errorf("failed to set @slave_connect_state='%s': %v", startPos, err)
+	}
+
+	// Real slaves send this upon connecting if their gtid_strict_mode option was
+	// enabled. We always use gtid_strict_mode because we need it to make our
+	// internal GTID comparisons safe.
+	if _, err := conn.ExecuteFetch("SET @slave_gtid_strict_mode=1", 0, false); err != nil {
+		return fmt.Errorf("failed to set @slave_gtid_strict_mode=1: %v", err)
 	}
 
 	// Since we use @slave_connect_state, the file and position here are ignored.
