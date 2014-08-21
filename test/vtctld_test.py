@@ -131,7 +131,7 @@ class TestVtctld(unittest.TestCase):
       if not tablet.tablet_alias in line_map:
          self.assertFalse('tablet %s is not in the result: %s' % (
                           tablet.tablet_alias, str(line_map)))
-    
+
   def test_vtctl(self):
     # standalone RPC client to vtctld
     result = vtctld.vtctl_client(['ListAllTablets', 'test_nj'])
@@ -164,6 +164,11 @@ class TestVtctld(unittest.TestCase):
     self.assertEqual(self.data["Partial"], True)
 
   def test_explorer_redirects(self):
+    if environment.topo_server_implementation != 'zookeeper':
+      logging.info('Skipping zookeeper tests in topology %s',
+                   environment.topo_server_implementation)
+      return
+
     base = 'http://localhost:%u' % vtctld.port
     self.assertEqual(urllib2.urlopen(base + '/explorers/redirect?type=keyspace&explorer=zk&keyspace=test_keyspace').geturl(),
                      base + '/zk/global/vt/keyspaces/test_keyspace')

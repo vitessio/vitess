@@ -7,16 +7,19 @@ package main
 import (
 	"flag"
 	"fmt"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
 )
 
+// The default values used by these flags cannot be taken from wrangler and
+// actionnode modules, as we do't want to depend on them at all.
 var (
-	actionTimeout   = flag.Duration("action_timeout", 0, "timeout for the total command")
-	dialTimeout     = flag.Duration("dial_timeout", 0, "time to wait for the dial phase")
-	lockWaitTimeout = flag.Duration("lock_wait_timeout", 0, "time to wait for a lock before starting an action")
+	actionTimeout   = flag.Duration("action_timeout", 30*time.Second, "timeout for the total command")
+	dialTimeout     = flag.Duration("dial_timeout", 30*time.Second, "time to wait for the dial phase")
+	lockWaitTimeout = flag.Duration("lock_wait_timeout", 10*time.Second, "time to wait for a lock before starting an action")
 	server          = flag.String("server", "", "server to use for connection")
 )
 
