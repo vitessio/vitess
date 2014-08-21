@@ -345,16 +345,6 @@ func RegisterBinlogPlayerMap(blm *BinlogPlayerMap) {
 		blm.mu.Unlock()
 		return result
 	}))
-	stats.Publish("BinlogPlayerGTIDMap", stats.StringMapFunc(func() map[string]string {
-		blm.mu.Lock()
-		result := make(map[string]string, len(blm.players))
-		for i, bpc := range blm.players {
-			lgtid := bpc.binlogPlayerStats.GetLastGTID()
-			result[fmt.Sprintf("%v", i)] = myproto.EncodeGTID(lgtid)
-		}
-		blm.mu.Unlock()
-		return result
-	}))
 	stats.Publish("BinlogPlayerSourceShardNameMap", stats.StringMapFunc(func() map[string]string {
 		blm.mu.Lock()
 		result := make(map[string]string, len(blm.players))
