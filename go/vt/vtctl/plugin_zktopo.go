@@ -149,7 +149,7 @@ func commandStaleActions(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 				return
 			}
 			for _, action := range staleActions {
-				fmt.Println(fmtAction(action))
+				wr.Logger().Printf("%v\n", fmtAction(action))
 			}
 			if *purge && len(staleActions) > 0 {
 				err := zkts.PurgeActions(zkActionPath, actionnode.ActionNodeCanBePurged)
@@ -286,7 +286,7 @@ func listActionsByShard(wr *wrangler.Wrangler, keyspace, shard string) error {
 		return err
 	}
 	for _, shardAction := range shardActionNodes {
-		fmt.Println(fmtAction(shardAction))
+		wr.Logger().Printf("%v\n", fmtAction(shardAction))
 	}
 
 	// get and print the tablet action nodes
@@ -333,7 +333,7 @@ func listActionsByShard(wr *wrangler.Wrangler, keyspace, shard string) error {
 		if action == nil {
 			wr.Logger().Warningf("nil action: %v", key)
 		} else {
-			fmt.Println(fmtAction(action))
+			wr.Logger().Printf("%v\n", fmtAction(action))
 		}
 	}
 	return nil

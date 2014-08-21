@@ -1,6 +1,8 @@
 package logutil
 
 import (
+	"fmt"
+
 	log "github.com/golang/glog"
 )
 
@@ -36,4 +38,9 @@ func (cl ConsoleLogger) Errorf(format string, v ...interface{}) {
 	vals := []interface{}{file, line}
 	vals = append(vals, v...)
 	log.Errorf("%v:%v] "+format, vals...)
+}
+
+// Printf is part of the Logger interface
+func (cl ConsoleLogger) Printf(format string, v ...interface{}) {
+	fmt.Printf(format, v...)
 }

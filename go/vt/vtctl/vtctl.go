@@ -329,27 +329,27 @@ func fmtAction(action *actionnode.ActionNode) string {
 	return fmt.Sprintf("%v %v %v %v %v", action.Path, action.Action, state, action.ActionGuid, action.Error)
 }
 
-func listTabletsByShard(ts topo.Server, keyspace, shard string) error {
-	tabletAliases, err := topo.FindAllTabletAliasesInShard(ts, keyspace, shard)
+func listTabletsByShard(wr *wrangler.Wrangler, keyspace, shard string) error {
+	tabletAliases, err := topo.FindAllTabletAliasesInShard(wr.TopoServer(), keyspace, shard)
 	if err != nil {
 		return err
 	}
-	return dumpTablets(ts, tabletAliases)
+	return dumpTablets(wr, tabletAliases)
 }
 
-func dumpAllTablets(ts topo.Server, zkVtPath string) error {
-	tablets, err := wrangler.GetAllTablets(ts, zkVtPath)
+func dumpAllTablets(wr *wrangler.Wrangler, zkVtPath string) error {
+	tablets, err := wrangler.GetAllTablets(wr.TopoServer(), zkVtPath)
 	if err != nil {
 		return err
 	}
 	for _, ti := range tablets {
-		fmt.Println(fmtTabletAwkable(ti))
+		wr.Logger().Printf("%v\n", fmtTabletAwkable(ti))
 	}
 	return nil
 }
 
-func dumpTablets(ts topo.Server, tabletAliases []topo.TabletAlias) error {
-	tabletMap, err := topo.GetTabletMap(ts, tabletAliases)
+func dumpTablets(wr *wrangler.Wrangler, tabletAliases []topo.TabletAlias) error {
+	tabletMap, err := topo.GetTabletMap(wr.TopoServer(), tabletAliases)
 	if err != nil {
 		return err
 	}
@@ -358,14 +358,14 @@ func dumpTablets(ts topo.Server, tabletAliases []topo.TabletAlias) error {
 		if !ok {
 			log.Warningf("failed to load tablet %v", tabletAlias)
 		} else {
-			fmt.Println(fmtTabletAwkable(ti))
+			wr.Logger().Printf("%v\n", fmtTabletAwkable(ti))
 		}
 	}
 	return nil
 }
 
-func kquery(ts topo.Server, cell, keyspace, query string) error {
-	sconn, err := client2.Dial(ts, cell, keyspace, "master", false, 5*time.Second)
+func kquery(wr *wrangler.Wrangler, cell, keyspace, query string) error {
+	sconn, err := client2.Dial(wr.TopoServer(), cell, keyspace, "master", false, 5*time.Second)
 	if err != nil {
 		return err
 	}
@@ -374,7 +374,7 @@ func kquery(ts topo.Server, cell, keyspace, query string) error {
 		return err
 	}
 	cols := rows.Columns()
-	fmt.Println(strings.Join(cols, "\t"))
+	wr.Logger().Printf("%v\n", strings.Join(cols, "\t"))
 
 	rowStrs := make([]string, len(cols)+1)
 	for row := rows.Next(); row != nil; row = rows.Next() {
@@ -387,7 +387,7 @@ func kquery(ts topo.Server, cell, keyspace, query string) error {
 			}
 		}
 
-		fmt.Println(strings.Join(rowStrs, "\t"))
+		wr.Logger().Printf("%v\n", strings.Join(rowStrs, "\t"))
 	}
 	return nil
 }
@@ -664,7 +664,7 @@ func commandGetTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []stri
 	}
 	tabletInfo, err := wr.TopoServer().GetTablet(tabletAlias)
 	if err == nil {
-		fmt.Println(jscfg.ToJson(tabletInfo))
+		wr.Logger().Printf("%v\n", jscfg.ToJson(tabletInfo))
 	}
 	return "", err
 }
@@ -832,9 +832,9 @@ func commandChangeSlaveType(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args 
 		if !topo.IsTrivialTypeChange(ti.Type, newType) || !topo.IsValidTypeChange(ti.Type, newType) {
 			return "", fmt.Errorf("invalid type transition %v: %v -> %v", tabletAlias, ti.Type, newType)
 		}
-		fmt.Printf("- %v\n", fmtTabletAwkable(ti))
+		wr.Logger().Printf("- %v\n", fmtTabletAwkable(ti))
 		ti.Type = newType
-		fmt.Printf("+ %v\n", fmtTabletAwkable(ti))
+		wr.Logger().Printf("+ %v\n", fmtTabletAwkable(ti))
 		return "", nil
 	}
 	return "", wr.ChangeType(tabletAlias, newType, *force)
@@ -875,7 +875,7 @@ func commandQuery(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) 
 	if subFlags.NArg() != 3 {
 		return "", fmt.Errorf("action Query requires 3")
 	}
-	return "", kquery(wr.TopoServer(), subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2))
+	return "", kquery(wr, subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2))
 }
 
 func commandSleep(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -1081,7 +1081,7 @@ func commandReadTabletAction(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args
 	if err == nil {
 		actionNode, err := actionnode.ActionNodeFromJson(data, actionPath)
 		if err == nil {
-			fmt.Println(jscfg.ToJson(actionNode))
+			wr.Logger().Printf("%v\n", jscfg.ToJson(actionNode))
 		}
 	}
 	return "", err
@@ -1105,7 +1105,7 @@ func commandExecuteFetch(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	query := subFlags.Arg(1)
 	qr, err := wr.ExecuteFetch(alias, query, *maxRows, *wantFields, *disableBinlogs)
 	if err == nil {
-		fmt.Println(jscfg.ToJson(qr))
+		wr.Logger().Printf("%v\n", jscfg.ToJson(qr))
 	}
 	return "", err
 }
@@ -1172,7 +1172,7 @@ func commandGetShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []strin
 	}
 	shardInfo, err := wr.TopoServer().GetShard(keyspace, shard)
 	if err == nil {
-		fmt.Println(jscfg.ToJson(shardInfo))
+		wr.Logger().Printf("%v\n", jscfg.ToJson(shardInfo))
 	}
 	return "", err
 }
@@ -1265,7 +1265,7 @@ func commandShardReplicationPositions(wr *wrangler.Wrangler, subFlags *flag.Flag
 		}
 	}
 	for _, l := range lines {
-		fmt.Println(l)
+		wr.Logger().Printf("%v\n", l)
 	}
 	return "", nil
 }
@@ -1281,7 +1281,7 @@ func commandListShardTablets(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args
 	if err != nil {
 		return "", err
 	}
-	return "", listTabletsByShard(wr.TopoServer(), keyspace, shard)
+	return "", listTabletsByShard(wr, keyspace, shard)
 }
 
 func commandSetShardServedTypes(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -1501,7 +1501,7 @@ func commandGetKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []st
 	}
 	keyspaceInfo, err := wr.TopoServer().GetKeyspace(keyspace)
 	if err == nil {
-		fmt.Println(jscfg.ToJson(keyspaceInfo))
+		wr.Logger().Printf("%v\n", jscfg.ToJson(keyspaceInfo))
 	}
 	return "", err
 }
@@ -1661,7 +1661,7 @@ func commandResolve(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string
 		return "", err
 	}
 	for _, addr := range addrs {
-		fmt.Printf("%v:%v\n", addr.Target, addr.Port)
+		wr.Logger().Printf("%v:%v\n", addr.Target, addr.Port)
 	}
 	return "", nil
 }
@@ -1721,7 +1721,7 @@ func commandListAllTablets(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 	if err != nil {
 		return "", err
 	}
-	return "", dumpAllTablets(wr.TopoServer(), cell)
+	return "", dumpAllTablets(wr, cell)
 }
 
 func commandListTablets(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -1743,7 +1743,7 @@ func commandListTablets(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []st
 			return "", err
 		}
 	}
-	return "", dumpTablets(wr.TopoServer(), aliases)
+	return "", dumpTablets(wr, aliases)
 }
 
 func commandGetSchema(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -1774,10 +1774,10 @@ func commandGetSchema(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []stri
 	if err == nil {
 		if *tableNamesOnly {
 			for _, td := range sd.TableDefinitions {
-				fmt.Println(td.Name)
+				wr.Logger().Printf("%v\n", td.Name)
 			}
 		} else {
-			fmt.Println(jscfg.ToJson(sd))
+			wr.Logger().Printf("%v\n", jscfg.ToJson(sd))
 		}
 	}
 	return "", err
@@ -2064,7 +2064,7 @@ func commandGetSrvKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 
 	srvKeyspace, err := wr.TopoServer().GetSrvKeyspace(subFlags.Arg(0), subFlags.Arg(1))
 	if err == nil {
-		fmt.Println(jscfg.ToJson(srvKeyspace))
+		wr.Logger().Printf("%v\n", jscfg.ToJson(srvKeyspace))
 	}
 	return "", err
 }
@@ -2083,7 +2083,7 @@ func commandGetSrvShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []st
 	}
 	srvShard, err := wr.TopoServer().GetSrvShard(subFlags.Arg(0), keyspace, shard)
 	if err == nil {
-		fmt.Println(jscfg.ToJson(srvShard))
+		wr.Logger().Printf("%v\n", jscfg.ToJson(srvShard))
 	}
 	return "", err
 }
@@ -2103,7 +2103,7 @@ func commandGetEndPoints(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	tabletType := topo.TabletType(subFlags.Arg(2))
 	endPoints, err := wr.TopoServer().GetEndPoints(subFlags.Arg(0), keyspace, shard, tabletType)
 	if err == nil {
-		fmt.Println(jscfg.ToJson(endPoints))
+		wr.Logger().Printf("%v\n", jscfg.ToJson(endPoints))
 	}
 	return "", err
 }
@@ -2122,7 +2122,7 @@ func commandGetShardReplication(wr *wrangler.Wrangler, subFlags *flag.FlagSet, a
 	}
 	shardReplication, err := wr.TopoServer().GetShardReplication(subFlags.Arg(0), keyspace, shard)
 	if err == nil {
-		fmt.Println(jscfg.ToJson(shardReplication))
+		wr.Logger().Printf("%v\n", jscfg.ToJson(shardReplication))
 	}
 	return "", err
 }

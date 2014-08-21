@@ -30,6 +30,16 @@ func TestLoggerEventFormat(t *testing.T) {
 			},
 			expected: "W0120 23:30:12.000000 file2.go:567] message %v %v",
 		},
+		{
+			event: LoggerEvent{
+				Time:  time.Date(2014, time.January, 20, 23, 30, 12, 0, time.UTC),
+				Level: LOGGER_CONSOLE,
+				File:  "file2.go",
+				Line:  567,
+				Value: "message %v %v",
+			},
+			expected: "message %v %v",
+		},
 	}
 	for _, testValue := range testValues {
 		got := testValue.event.String()

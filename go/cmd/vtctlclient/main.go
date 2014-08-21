@@ -45,7 +45,7 @@ func main() {
 		case logutil.LOGGER_ERROR:
 			log.Error(e.String())
 		case logutil.LOGGER_CONSOLE:
-			fmt.Println(e.Value)
+			fmt.Print(e.Value)
 		}
 	}
 

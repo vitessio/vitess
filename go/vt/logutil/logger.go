@@ -13,9 +13,14 @@ import (
 // All methods should be thread safe (i.e. multiple go routines can
 // call these methods simultaneously).
 type Logger interface {
+	// The three usual interfaces, format should not contain the trailing '\n'
 	Infof(format string, v ...interface{})
 	Warningf(format string, v ...interface{})
 	Errorf(format string, v ...interface{})
+
+	// Printf will just display information on stdout when possible,
+	// and will not add any '\n'.
+	Printf(format string, v ...interface{})
 }
 
 // The logger levels are used to store individual logging events
@@ -131,6 +136,18 @@ func (cl ChannelLogger) Errorf(format string, v ...interface{}) {
 	}
 }
 
+// Errorf is part of the Logger interface
+func (cl ChannelLogger) Printf(format string, v ...interface{}) {
+	file, line := fileAndLine(2)
+	(chan LoggerEvent)(cl) <- LoggerEvent{
+		Time:  time.Now(),
+		Level: LOGGER_CONSOLE,
+		File:  file,
+		Line:  line,
+		Value: fmt.Sprintf(format, v...),
+	}
+}
+
 // MemoryLogger keeps the logging events in memory.
 // All protected by a mutex.
 type MemoryLogger struct {
@@ -179,6 +196,20 @@ func (ml *MemoryLogger) Errorf(format string, v ...interface{}) {
 	ml.Events = append(ml.Events, LoggerEvent{
 		Time:  time.Now(),
 		Level: LOGGER_ERROR,
+		File:  file,
+		Line:  line,
+		Value: fmt.Sprintf(format, v...),
+	})
+}
+
+// Printf is part of the Logger interface
+func (ml *MemoryLogger) Printf(format string, v ...interface{}) {
+	file, line := fileAndLine(2)
+	ml.mu.Lock()
+	defer ml.mu.Unlock()
+	ml.Events = append(ml.Events, LoggerEvent{
+		Time:  time.Now(),
+		Level: LOGGER_CONSOLE,
 		File:  file,
 		Line:  line,
 		Value: fmt.Sprintf(format, v...),
