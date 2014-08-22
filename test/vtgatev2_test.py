@@ -179,6 +179,12 @@ def do_write(count, shard_index):
   master_conn.commit()
 
 
+def restart_vtgate(extra_args={}):
+  global vtgate_server, vtgate_port
+  utils.vtgate_kill(vtgate_server)
+  vtgate_server, vtgate_port = utils.vtgate_start(vtgate_port, extra_args=extra_args)
+
+
 class TestVTGateFunctions(unittest.TestCase):
   def setUp(self):
     self.shard_index = 0

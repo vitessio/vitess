@@ -214,8 +214,9 @@ class TestSharded(unittest.TestCase):
       self.fail('wrong ValidateSchemaKeyspace output: ' + err)
 
     # validate versions
-    utils.run_vtctl(['ValidateVersionShard', 'test_keyspace/-80', auto_log=True)
-    utils.run_vtctl(['ValidateVersionKeyspace', 'test_keyspace', auto_log=True)
+    utils.run_vtctl(['ValidateVersionShard', 'test_keyspace/-80'],
+                    auto_log=True)
+    utils.run_vtctl(['ValidateVersionKeyspace', 'test_keyspace'], auto_log=True)
 
     # show and validate permissions
     utils.run_vtctl(['GetPermissions', 'test_nj-0000062344'], auto_log=True)
