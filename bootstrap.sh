@@ -97,6 +97,10 @@ else
   esac
 fi
 
+# save the flavor that was used in bootstrap, so it can be restored
+# every time dev.env is sourced.
+echo "$MYSQL_FLAVOR" > $VT_MYSQL_ROOT/VTFLAVOR
+
 # generate pkg-config, so go can use mysql C client
 if [ ! -x $VT_MYSQL_ROOT/bin/mysql_config ]; then
   echo "cannot execute $VT_MYSQL_ROOT/bin/mysql_config, exiting" 1>&2
