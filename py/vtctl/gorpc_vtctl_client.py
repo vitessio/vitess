@@ -37,10 +37,16 @@ class GoRpcVtctlClient(object):
 
   def execute_vtctl_command(self, args, action_timeout=30.0,
                             lock_timeout=5.0, info_to_debug=False):
-    """execute_vtctl_command executes a remote command on the vtctl server.
+    """Executes a remote command on the vtctl server.
 
-    action_timeout and lock_timeout are in seconds, floats.
-    info_to_debug will change the info messages into the debug level.
+    Args:
+      args: Command line to run.
+      action_timeout: total timeout for the action (float, in seconds).
+      lock_timeout: timeout for locking topology (float, in seconds).
+      info_to_debug: if set, changes the info messages to debug.
+
+    Returns:
+      The console output of the action.
     """
     req = {
       'Args':          args,

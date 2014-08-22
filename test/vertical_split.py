@@ -46,6 +46,7 @@ def setUpModule():
         destination_rdonly.init_mysql(),
 
         ]
+    utils.Vtctld().start()
     utils.wait_procs(setup_procs)
   except:
     tearDownModule()
@@ -146,8 +147,8 @@ index by_msg (msg)
     return result
 
   def _check_values(self, tablet, dbname, table, first, count):
-    logging.info("Checking %u values from %s/%s starting at %u", count, dbname,
-                 table, first)
+    logging.debug("Checking %u values from %s/%s starting at %u", count, dbname,
+                  table, first)
     rows = tablet.mquery(dbname, 'select id, msg from %s where id>=%u order by id limit %u' % (table, first, count))
     self.assertEqual(count, len(rows), "got wrong number of rows: %u != %u" %
                      (len(rows), count))

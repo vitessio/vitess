@@ -65,6 +65,7 @@ def setUpModule():
         shard_3_replica.init_mysql(),
         shard_3_rdonly.init_mysql(),
         ]
+    utils.Vtctld().start()
     utils.wait_procs(setup_procs)
   except:
     tearDownModule()
@@ -540,7 +541,7 @@ primary key (name)
       if not "not starting because flag &#39;DontStart&#39; is set" in shard_2_master_status:
         timeout = utils.wait_step('shard 2 master has not failed starting yet', timeout)
         continue
-      logging.info("shard 2 master is waiting on flag removal, good")
+      logging.debug("shard 2 master is waiting on flag removal, good")
       break
 
     qr = utils.run_vtctl_json(['ExecuteFetch', shard_2_master.tablet_alias, 'update _vt.blp_checkpoint set flags="" where source_shard_uid=0'])
@@ -552,7 +553,7 @@ primary key (name)
       if "not starting because flag &#39;DontStart&#39; is set" in shard_2_master_status:
         timeout = utils.wait_step('shard 2 master has not started replication yet', timeout)
         continue
-      logging.info("shard 2 master has started replication, good")
+      logging.debug("shard 2 master has started replication, good")
       break
 
     # second restore from storage: to be sure, we stop vttablet, and restart

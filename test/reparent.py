@@ -34,6 +34,7 @@ def setUpModule():
         tablet_41983.init_mysql(),
         tablet_31981.init_mysql(),
         ]
+    utils.Vtctld().start()
     utils.wait_procs(setup_procs)
   except:
     tearDownModule()
@@ -72,10 +73,13 @@ class TestReparent(unittest.TestCase):
     super(TestReparent, self).tearDown()
 
   def _check_db_addr(self, shard, db_type, expected_port, cell='test_nj'):
-    ep = utils.run_vtctl_json(['GetEndPoints', cell, 'test_keyspace/'+shard, db_type])
+    ep = utils.run_vtctl_json(['GetEndPoints', cell, 'test_keyspace/'+shard,
+                               db_type])
     self.assertEqual(len(ep['entries']), 1 , 'Wrong number of entries: %s' % str(ep))
     port = ep['entries'][0]['named_port_map']['_vtocc']
-    self.assertEqual(port, expected_port, 'Unexpected port: %u != %u from %s' % (port, expected_port, str(ep)))
+    self.assertEqual(port, expected_port,
+                     'Unexpected port: %u != %u from %s' % (port, expected_port,
+                                                            str(ep)))
     host = ep['entries'][0]['host']
     if not host.startswith(utils.hostname):
       self.fail('Invalid hostname %s was expecting something starting with %s' % (host, utils.hostname))
@@ -177,16 +181,19 @@ class TestReparent(unittest.TestCase):
       utils.run_vtctl(['PurgeActions',
                        '/zk/global/vt/keyspaces/test_keyspace/shards/0/action'])
 
-    # Re-run reparent operation, this shoud now proceed unimpeded.
+    # Re-run reparent operation, this should now proceed unimpeded.
     utils.run_vtctl(['-wait-time', '1m', 'ReparentShard', 'test_keyspace/0',
-                     tablet_62044.tablet_alias], auto_log=True)
+                     tablet_62044.tablet_alias],
+                    mode=utils.VTCTL_VTCTL, auto_log=True)
 
     utils.validate_topology()
     self._check_db_addr('0', 'master', tablet_62044.port)
 
-    utils.run_vtctl(['ChangeSlaveType', '-force', tablet_62344.tablet_alias, 'idle'])
+    utils.run_vtctl(['ChangeSlaveType', '-force', tablet_62344.tablet_alias,
+                     'idle'])
 
-    idle_tablets, _ = utils.run_vtctl('ListAllTablets test_nj', trap_output=True)
+    idle_tablets, _ = utils.run_vtctl(['ListAllTablets', 'test_nj'],
+                                      trap_output=True)
     if '0000062344 <null> <null> idle' not in idle_tablets:
       self.fail('idle tablet not found: %s' % idle_tablets)
 
@@ -544,7 +551,8 @@ class TestReparent(unittest.TestCase):
 
     utils.run_vtctl(['ReparentTablet', tablet_41983.tablet_alias])
 
-    result = tablet_41983.mquery('vt_test_keyspace', 'select msg from vt_insert_test where id=1')
+    result = tablet_41983.mquery('vt_test_keyspace',
+                                 'select msg from vt_insert_test where id=1')
     if len(result) != 1:
       self.fail('expected 1 row from vt_insert_test: %s' % str(result))
 

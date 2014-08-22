@@ -412,7 +412,7 @@ VTCTL_RPC         = 3
 def run_vtctl(clargs, log_level='', auto_log=False, expect_fail=False,
               mode=VTCTL_AUTO, **kwargs):
   if mode == VTCTL_AUTO:
-    if vtctld:
+    if not expect_fail and vtctld:
       mode = VTCTL_RPC
     else:
       mode = VTCTL_VTCTL

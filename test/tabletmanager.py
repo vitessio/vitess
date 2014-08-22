@@ -37,6 +37,7 @@ def setUpModule():
         tablet_62344.init_mysql(),
         tablet_62044.init_mysql(),
         ]
+    utils.Vtctld().start()
     utils.wait_procs(setup_procs)
   except:
     tearDownModule()
@@ -90,7 +91,9 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.start_vttablet()
 
     # make sure the query service is started right away
-    result, _ = utils.run_vtctl(['Query', 'test_nj', 'test_keyspace', 'select * from vt_select_test'], trap_output=True)
+    result, _ = utils.run_vtctl(['Query', 'test_nj', 'test_keyspace',
+                                 'select * from vt_select_test'],
+                                mode=utils.VTCTL_VTCTL, trap_output=True)
     rows = result.splitlines()
     self.assertEqual(len(rows), 5, "expected 5 rows in vt_select_test: %s %s" % (str(rows), result))
 
@@ -114,10 +117,10 @@ class TestTabletManager(unittest.TestCase):
     utils.wait_db_read_only(62344)
 
     utils.validate_topology()
-    utils.run_vtctl('ValidateKeyspace test_keyspace')
+    utils.run_vtctl(['ValidateKeyspace', 'test_keyspace'])
     # not pinging tablets, as it enables replication checks, and they
     # break because we only have a single master, no slaves
-    utils.run_vtctl('ValidateShard -ping-tablets=false test_keyspace/0')
+    utils.run_vtctl(['ValidateShard', '-ping-tablets=false', 'test_keyspace/0'])
     srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj', 'test_keyspace/0'])
     self.assertEqual(srvShard['MasterCell'], 'test_nj')
 
@@ -133,7 +136,8 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.init_tablet('master', 'test_keyspace', '0', parent=False)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'])
     utils.validate_topology()
-    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj', 'test_keyspace/0'])
+    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj',
+                                     'test_keyspace/0'])
     self.assertEqual(srvShard['MasterCell'], 'test_nj')
 
     # if these statements don't run before the tablet it will wedge waiting for the
@@ -145,7 +149,8 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.start_vttablet()
     gate_proc, gate_port = utils.vtgate_start()
 
-    conn = vtgate.connect("localhost:%s"%(gate_port), "master", "test_keyspace", "0", 2.0)
+    conn = vtgate.connect("localhost:%s"%(gate_port), "master", "test_keyspace",
+                          "0", 2.0)
 
     # _execute
     (result, count, lastrow, fields) = conn._execute("select * from vt_select_test", {})
@@ -198,7 +203,8 @@ class TestTabletManager(unittest.TestCase):
     conn.commit()
 
     # interleaving
-    conn2 = vtgate.connect("localhost:%s"%(gate_port), "master", "test_keyspace", "0", 2.0)
+    conn2 = vtgate.connect("localhost:%s"%(gate_port), "master",
+                           "test_keyspace", "0", 2.0)
     thd = threading.Thread(target=self._query_lots, args=(conn2,))
     thd.start()
     for i in xrange(250):
@@ -232,12 +238,14 @@ class TestTabletManager(unittest.TestCase):
     tablet_62044.init_tablet('replica', 'test_keyspace', '0')
     utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/*'])
     utils.validate_topology()
-    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj', 'test_keyspace/0'])
+    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj',
+                                     'test_keyspace/0'])
     self.assertEqual(srvShard['MasterCell'], 'test_nj')
 
     tablet_62044.scrap(force=True)
     utils.validate_topology()
-    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj', 'test_keyspace/0'])
+    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj',
+                                     'test_keyspace/0'])
     self.assertEqual(srvShard['MasterCell'], 'test_nj')
 
 
@@ -259,7 +267,8 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.init_tablet('master', 'test_keyspace', '0')
     utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/0'])
     utils.validate_topology()
-    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj', 'test_keyspace/0'])
+    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj',
+                                     'test_keyspace/0'])
     self.assertEqual(srvShard['MasterCell'], 'test_nj')
     tablet_62344.create_db('vt_test_keyspace')
     tablet_62344.start_vttablet()
@@ -267,9 +276,12 @@ class TestTabletManager(unittest.TestCase):
     utils.run_vtctl(['Ping', tablet_62344.tablet_alias])
 
     # schedule long action
-    utils.run_vtctl(['-no-wait', 'Sleep', tablet_62344.tablet_alias, '15s'], stdout=utils.devnull)
+    utils.run_vtctl(['-no-wait', 'Sleep', tablet_62344.tablet_alias, '15s'],
+                    mode=utils.VTCTL_VTCTL, stdout=utils.devnull)
     # ping blocks until the sleep finishes unless we have a schedule race
-    action_path, _ = utils.run_vtctl(['-no-wait', 'Ping', tablet_62344.tablet_alias], trap_output=True)
+    action_path, _ = utils.run_vtctl(['-no-wait', 'Ping',
+                                      tablet_62344.tablet_alias],
+                                     mode=utils.VTCTL_VTCTL, trap_output=True)
     action_path = action_path.strip()
 
     # kill agent leaving vtaction running
@@ -281,14 +293,14 @@ class TestTabletManager(unittest.TestCase):
     # we expect this action with a short wait time to fail. this isn't the best
     # and has some potential for flakiness.
     utils.run_vtctl(['-wait-time', '2s', 'WaitForAction', action_path],
-                    expect_fail=True)
+                    mode=utils.VTCTL_VTCTL, expect_fail=True)
 
     # wait until the background sleep action is done, otherwise there will be
     # a leftover vtaction whose result may overwrite running actions
     # NOTE(alainjobart): Yes, I've seen it happen, it's a pain to debug:
     # the zombie Sleep clobbers the Clone command in the following tests
     utils.run_vtctl(['-wait-time', '20s', 'WaitForAction', action_path],
-                    auto_log=True)
+                    mode=utils.VTCTL_VTCTL, auto_log=True)
 
     if environment.topo_server_implementation == 'zookeeper':
       # extra small test: we ran for a while, get the states we were in,
@@ -347,7 +359,10 @@ class TestTabletManager(unittest.TestCase):
     self.fail("ExecuteHook returned unexpected result, no string: '" + "', '".join(expected) + "'")
 
   def _run_hook(self, params, expectedStrings):
-    out, err = utils.run_vtctl(['--alsologtostderr', 'ExecuteHook', tablet_62344.tablet_alias] + params, trap_output=True, raise_on_error=False)
+    out, err = utils.run_vtctl(['--alsologtostderr', 'ExecuteHook',
+                                tablet_62344.tablet_alias] + params,
+                               mode=utils.VTCTL_VTCTL, trap_output=True,
+                               raise_on_error=False)
     for expected in expectedStrings:
       self._check_string_in_hook_result(err, expected)
 
@@ -405,7 +420,9 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True)
 
     # start a 'vtctl Sleep' command, don't wait for it
-    action_path, _ = utils.run_vtctl(['-no-wait', 'Sleep', tablet_62344.tablet_alias, '60s'], trap_output=True)
+    action_path, _ = utils.run_vtctl(['-no-wait', 'Sleep',
+                                      tablet_62344.tablet_alias, '60s'],
+                                     mode=utils.VTCTL_VTCTL, trap_output=True)
     action_path = action_path.strip()
 
     # wait for the action to be 'Running', capture its pid
@@ -414,7 +431,7 @@ class TestTabletManager(unittest.TestCase):
       an = utils.run_vtctl_json(['ReadTabletAction', action_path])
       if an.get('State', None) == 'Running':
         pid = an['Pid']
-        logging.info("Action is running with pid %u, good", pid)
+        logging.debug("Action is running with pid %u, good", pid)
         break
       timeout = utils.wait_step('sleep action to run', timeout)
 
@@ -423,7 +440,7 @@ class TestTabletManager(unittest.TestCase):
 
     # check the vtctl command got the right remote error back
     out, err = utils.run_vtctl(['WaitForAction', action_path], trap_output=True,
-                               raise_on_error=False)
+                               mode=utils.VTCTL_VTCTL, raise_on_error=False)
     if "vtaction interrupted by signal" not in err:
       self.fail("cannot find expected output in error: " + err)
     logging.debug("vtaction was interrupted correctly:\n" + err)
@@ -441,7 +458,9 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True)
 
     # start a 'vtctl Sleep' command, don't wait for it
-    action_path, _ = utils.run_vtctl(['-no-wait', 'Sleep', tablet_62344.tablet_alias, '60s'], trap_output=True)
+    action_path, _ = utils.run_vtctl(['-no-wait', 'Sleep',
+                                      tablet_62344.tablet_alias, '60s'],
+                                     mode=utils.VTCTL_VTCTL, trap_output=True)
     action_path = action_path.strip()
 
     # wait for the action to be 'Running', capture its pid
@@ -450,7 +469,7 @@ class TestTabletManager(unittest.TestCase):
       an = utils.run_vtctl_json(['ReadTabletAction', action_path])
       if an.get('State', None) == 'Running':
         pid = an['Pid']
-        logging.info("Action is running with pid %u, good", pid)
+        logging.debug("Action is running with pid %u, good", pid)
         break
       timeout = utils.wait_step('sleep action to run', timeout)
 
@@ -478,7 +497,7 @@ class TestTabletManager(unittest.TestCase):
     proc1 = tablet_62344.start_vttablet()
     proc2 = tablet_62344.start_vttablet()
     for timeout in xrange(20):
-      logging.info("Sleeping waiting for first process to die")
+      logging.debug("Sleeping waiting for first process to die")
       time.sleep(1.0)
       proc1.poll()
       if proc1.returncode is not None:
@@ -512,14 +531,18 @@ class TestTabletManager(unittest.TestCase):
 
     # manually add a bogus entry to the replication graph, and check
     # it is removed by ShardReplicationFix
-    utils.run_vtctl(['ShardReplicationAdd', 'test_keyspace/0', 'test_nj-0000066666', 'test_nj-0000062344'], auto_log=True)
+    utils.run_vtctl(['ShardReplicationAdd', 'test_keyspace/0',
+                     'test_nj-0000066666', 'test_nj-0000062344'], auto_log=True)
     with_bogus = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
                                         'test_keyspace/0'])
-    self.assertEqual(2, len(with_bogus['ReplicationLinks']), 'wrong replication links with bogus: %s' % str(with_bogus))
-    utils.run_vtctl(['ShardReplicationFix', 'test_nj', 'test_keyspace/0'], auto_log=True)
+    self.assertEqual(2, len(with_bogus['ReplicationLinks']),
+                     'wrong replication links with bogus: %s' % str(with_bogus))
+    utils.run_vtctl(['ShardReplicationFix', 'test_nj', 'test_keyspace/0'],
+                    auto_log=True)
     after_fix = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
                                         'test_keyspace/0'])
-    self.assertEqual(1, len(after_scrap['ReplicationLinks']), 'wrong replication links after fix: %s' % str(after_fix))
+    self.assertEqual(1, len(after_scrap['ReplicationLinks']),
+                     'wrong replication links after fix: %s' % str(after_fix))
 
   def test_health_check(self):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
@@ -537,14 +560,15 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.wait_for_vttablet_state('SERVING')
     tablet_62044.wait_for_vttablet_state('NOT_SERVING')
 
-    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/0', tablet_62344.tablet_alias])
+    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/0',
+                     tablet_62344.tablet_alias])
 
     # make sure the 'spare' slave goes to 'replica'
     timeout = 10
     while True:
       ti = utils.run_vtctl_json(['GetTablet', tablet_62044.tablet_alias])
       if ti['Type'] == "replica":
-        logging.info("Slave tablet went to replica, good")
+        logging.debug("Slave tablet went to replica, good")
         break
       timeout = utils.wait_step('slave tablet going to replica', timeout)
 
@@ -561,7 +585,7 @@ class TestTabletManager(unittest.TestCase):
       if 'Health' in ti and ti['Health']:
         if 'replication_lag' in ti['Health']:
           if ti['Health']['replication_lag'] == 'high':
-            logging.info("Slave tablet replication_lag went to high, good")
+            logging.debug("Slave tablet replication_lag went to high, good")
             break
       timeout = utils.wait_step('slave has high replication lag', timeout)
 
@@ -588,7 +612,7 @@ class TestTabletManager(unittest.TestCase):
           if ti['Health']['replication_lag'] == 'high':
             timeout = utils.wait_step('slave has no replication lag', timeout)
             continue
-      logging.info("Slave tablet replication_lag is gone, good")
+      logging.debug("Slave tablet replication_lag is gone, good")
       break
 
     # make sure status web page is healthy

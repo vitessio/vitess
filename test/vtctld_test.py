@@ -29,17 +29,14 @@ tablets = [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica,
 vtgate_server = None
 vtgate_port = None
 
-# vtctld
-vtctld = utils.Vtctld()
-
 
 def setUpModule():
   try:
     environment.topo_server_setup()
 
     setup_procs = [t.init_mysql() for t in tablets]
+    utils.Vtctld().start()
     utils.wait_procs(setup_procs)
-    vtctld.start()
 
   except:
     tearDownModule()
@@ -87,14 +84,16 @@ class TestVtctld(unittest.TestCase):
     # start running all the tablets
     for t in [shard_0_master, shard_1_master, shard_1_replica]:
       t.create_db('vt_test_keyspace')
-      t.start_vttablet(wait_for_state=None, extra_args=vtctld.process_args())
+      t.start_vttablet(wait_for_state=None,
+                       extra_args=utils.vtctld.process_args())
     shard_0_replica.create_db('vt_test_keyspace')
-    shard_0_replica.start_vttablet(extra_args=vtctld.process_args(),
+    shard_0_replica.start_vttablet(extra_args=utils.vtctld.process_args(),
                                    target_tablet_type='replica',
                                    wait_for_state=None)
 
     for t in scrap, idle, shard_0_spare:
-      t.start_vttablet(wait_for_state=None, extra_args=vtctld.process_args())
+      t.start_vttablet(wait_for_state=None,
+                       extra_args=utils.vtctld.process_args())
 
     # wait for the right states
     for t in [shard_0_master, shard_1_master, shard_1_replica]:
@@ -119,11 +118,11 @@ class TestVtctld(unittest.TestCase):
     # start a vtgate server too
     global vtgate_server, vtgate_port
     vtgate_server, vtgate_port = utils.vtgate_start(
-        cache_ttl='0s', extra_args=vtctld.process_args())
+        cache_ttl='0s', extra_args=utils.vtctld.process_args())
 
   def setUp(self):
-    self.data = vtctld.dbtopo()
-    self.serving_data = vtctld.serving_graph()
+    self.data = utils.vtctld.dbtopo()
+    self.serving_data = utils.vtctld.serving_graph()
 
   def _check_all_tablets(self, result):
     lines = result.splitlines()
@@ -168,7 +167,7 @@ class TestVtctld(unittest.TestCase):
     self.assertEqual(len(self.data["Scrap"]), 1)
 
   def test_partial(self):
-    utils.pause("You can now run a browser and connect to http://localhost:%u to manually check topology" % vtctld.port)
+    utils.pause("You can now run a browser and connect to http://localhost:%u to manually check topology" % utils.vtctld.port)
     self.assertEqual(self.data["Partial"], True)
 
   def test_explorer_redirects(self):
@@ -177,7 +176,7 @@ class TestVtctld(unittest.TestCase):
                    environment.topo_server_implementation)
       return
 
-    base = 'http://localhost:%u' % vtctld.port
+    base = 'http://localhost:%u' % utils.vtctld.port
     self.assertEqual(urllib2.urlopen(base + '/explorers/redirect?type=keyspace&explorer=zk&keyspace=test_keyspace').geturl(),
                      base + '/zk/global/vt/keyspaces/test_keyspace')
     self.assertEqual(urllib2.urlopen(base + '/explorers/redirect?type=shard&explorer=zk&keyspace=test_keyspace&shard=-80').geturl(),
