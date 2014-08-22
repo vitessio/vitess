@@ -35,11 +35,17 @@ class GoRpcVtctlClient(object):
   def is_closed(self):
     return self.client.is_closed()
 
-  def execute_vtctl_command(self, args, action_timeout=30000000000, lock_timeout=5000000000):
+  def execute_vtctl_command(self, args, action_timeout=3.0,
+                            lock_timeout=5.0, info_to_debug=False):
+    """execute_vtctl_command executes a remote command on the vtctl server.
+
+    action_timeout and lock_timeout are in seconds, floats.
+    info_to_debug will change the info messages into the debug level.
+    """
     req = {
       'Args':          args,
-      'ActionTimeout': action_timeout,
-      'LockTimeout':   lock_timeout,
+      'ActionTimeout': long(action_timeout * 1000000000),
+      'LockTimeout':   long(lock_timeout * 1000000000),
     }
     self.client.stream_call('VtctlServer.ExecuteVtctlCommand', req)
     console_result = ''
@@ -48,7 +54,10 @@ class GoRpcVtctlClient(object):
       if e is None:
         break
       if e.reply['Level'] == 0:
-        logging.info('%s', e.reply['Value'])
+        if info_to_debug:
+          logging.debug('%s', e.reply['Value'])
+        else:
+          logging.info('%s', e.reply['Value'])
       elif e.reply['Level'] == 1:
         logging.warning('%s', e.reply['Value'])
       elif e.reply['Level'] == 2:

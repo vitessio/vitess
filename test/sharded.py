@@ -94,7 +94,7 @@ class TestSharded(unittest.TestCase):
     shard_1_master.init_tablet( 'master',  'test_keyspace', '80-')
     shard_1_replica.init_tablet('replica', 'test_keyspace', '80-')
 
-    utils.run_vtctl('RebuildKeyspaceGraph test_keyspace', auto_log=True)
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     # run checks now before we start the tablets
     utils.validate_topology()
@@ -127,8 +127,10 @@ class TestSharded(unittest.TestCase):
 
     for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
       t.reset_replication()
-    utils.run_vtctl('ReparentShard -force test_keyspace/-80 ' + shard_0_master.tablet_alias, auto_log=True)
-    utils.run_vtctl('ReparentShard -force test_keyspace/80- ' + shard_1_master.tablet_alias, auto_log=True)
+    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/-80',
+                     shard_0_master.tablet_alias], auto_log=True)
+    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/80-',
+                     shard_1_master.tablet_alias], auto_log=True)
 
     # apply the schema on the second shard using a simple schema upgrade
     utils.run_vtctl(['ApplySchemaShard',
@@ -138,8 +140,8 @@ class TestSharded(unittest.TestCase):
 
     # insert some values directly (db is RO after minority reparent)
     # FIXME(alainjobart) these values don't match the shard map
-    utils.run_vtctl('SetReadWrite ' + shard_0_master.tablet_alias)
-    utils.run_vtctl('SetReadWrite ' + shard_1_master.tablet_alias)
+    utils.run_vtctl(['SetReadWrite', shard_0_master.tablet_alias])
+    utils.run_vtctl(['SetReadWrite', shard_1_master.tablet_alias])
     shard_0_master.mquery('vt_test_keyspace', "insert into vt_select_test (id, msg) values (1, 'test 1')", write=True)
     shard_1_master.mquery('vt_test_keyspace', "insert into vt_select_test (id, msg) values (10, 'test 10')", write=True)
 
@@ -203,26 +205,28 @@ class TestSharded(unittest.TestCase):
 
     # throw in some schema validation step
     # we created the schema differently, so it should show
-    utils.run_vtctl('ValidateSchemaShard test_keyspace/-80')
-    utils.run_vtctl('ValidateSchemaShard test_keyspace/80-')
-    out, err = utils.run_vtctl('ValidateSchemaKeyspace test_keyspace',
+    utils.run_vtctl(['ValidateSchemaShard', 'test_keyspace/-80'])
+    utils.run_vtctl(['ValidateSchemaShard', 'test_keyspace/80-'])
+    out, err = utils.run_vtctl(['ValidateSchemaKeyspace', 'test_keyspace'],
                                trap_output=True, raise_on_error=False)
-    if "test_nj-0000062344 and test_nj-0000062346 disagree on schema for table vt_select_test:\nCREATE TABLE" not in err or \
-       "test_nj-0000062344 and test_nj-0000062347 disagree on schema for table vt_select_test:\nCREATE TABLE" not in err:
+    if 'test_nj-0000062344 and test_nj-0000062346 disagree on schema for table vt_select_test:\nCREATE TABLE' not in err or \
+       'test_nj-0000062344 and test_nj-0000062347 disagree on schema for table vt_select_test:\nCREATE TABLE' not in err:
       self.fail('wrong ValidateSchemaKeyspace output: ' + err)
 
     # validate versions
-    utils.run_vtctl('ValidateVersionShard test_keyspace/-80', auto_log=True)
-    utils.run_vtctl('ValidateVersionKeyspace test_keyspace', auto_log=True)
+    utils.run_vtctl(['ValidateVersionShard', 'test_keyspace/-80', auto_log=True)
+    utils.run_vtctl(['ValidateVersionKeyspace', 'test_keyspace', auto_log=True)
 
     # show and validate permissions
-    utils.run_vtctl('GetPermissions test_nj-0000062344', auto_log=True)
-    utils.run_vtctl('ValidatePermissionsShard test_keyspace/-80', auto_log=True)
-    utils.run_vtctl('ValidatePermissionsKeyspace test_keyspace', auto_log=True)
+    utils.run_vtctl(['GetPermissions', 'test_nj-0000062344'], auto_log=True)
+    utils.run_vtctl(['ValidatePermissionsShard', 'test_keyspace/-80'],
+                    auto_log=True)
+    utils.run_vtctl(['ValidatePermissionsKeyspace', 'test_keyspace'],
+                    auto_log=True)
 
     if environment.topo_server_implementation == 'zookeeper':
       # and create zkns on this complex keyspace, make sure a few files are created
-      utils.run_vtctl('ExportZknsForKeyspace test_keyspace')
+      utils.run_vtctl(['ExportZknsForKeyspace', 'test_keyspace'])
       out, err = utils.run(environment.binary_argstr('zk')+' ls -R /zk/test_nj/zk?s/vt/test_keysp*', trap_output=True)
       lines = out.splitlines()
       for base in ['-80', '80-']:

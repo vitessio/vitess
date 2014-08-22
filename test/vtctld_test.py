@@ -84,17 +84,23 @@ class TestVtctld(unittest.TestCase):
     utils.run_vtctl(['RebuildKeyspaceGraph', 'redirected_keyspace'],
                     auto_log=True)
 
+    # start running all the tablets
     for t in [shard_0_master, shard_1_master, shard_1_replica]:
       t.create_db('vt_test_keyspace')
-      t.start_vttablet(extra_args=vtctld.process_args())
+      t.start_vttablet(wait_for_state=None, extra_args=vtctld.process_args())
     shard_0_replica.create_db('vt_test_keyspace')
     shard_0_replica.start_vttablet(extra_args=vtctld.process_args(),
                                    target_tablet_type='replica',
-                                   wait_for_state='NOT_SERVING')
+                                   wait_for_state=None)
 
     for t in scrap, idle, shard_0_spare:
-      t.start_vttablet(wait_for_state='NOT_SERVING',
-                       extra_args=vtctld.process_args())
+      t.start_vttablet(wait_for_state=None, extra_args=vtctld.process_args())
+
+    # wait for the right states
+    for t in [shard_0_master, shard_1_master, shard_1_replica]:
+      t.wait_for_vttablet_state('SERVING')
+    for t in [scrap, idle, shard_0_replica, shard_0_spare]:
+      t.wait_for_vttablet_state('NOT_SERVING')
 
     scrap.scrap()
 
@@ -134,18 +140,20 @@ class TestVtctld(unittest.TestCase):
 
   def test_vtctl(self):
     # standalone RPC client to vtctld
-    result = vtctld.vtctl_client(['ListAllTablets', 'test_nj'])
-    self._check_all_tablets(result)
+    out, err = utils.run_vtctl(['ListAllTablets', 'test_nj'],
+                               mode=utils.VTCTL_RPC)
+    self._check_all_tablets(out)
 
     # vtctl querying the topology directly
     out, err = utils.run_vtctl(['ListAllTablets', 'test_nj'],
+                               mode=utils.VTCTL_VTCTL,
                                trap_output=True, auto_log=True)
     self._check_all_tablets(out)
 
     # python RPC client to vtctld
-    c = vtctl_client.connect(environment.vtctl_client_protocol(), 'localhost:%u' % vtctld.port, 30)
-    result = c.execute_vtctl_command(['ListAllTablets', 'test_nj'])
-    self._check_all_tablets(result)
+    out, err = utils.run_vtctl(['ListAllTablets', 'test_nj'],
+                               mode=utils.VTCTL_RPC)
+    self._check_all_tablets(out)
 
   def test_assigned(self):
     logging.debug("test_assigned: %s", str(self.data))

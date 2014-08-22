@@ -81,18 +81,20 @@ class TestReparent(unittest.TestCase):
       self.fail('Invalid hostname %s was expecting something starting with %s' % (host, utils.hostname))
 
   def test_master_to_spare_state_change_impossible(self):
-    utils.run_vtctl('CreateKeyspace test_keyspace')
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
     # create the database so vttablets start, as they are serving
     tablet_62344.create_db('vt_test_keyspace')
     tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True, wait_for_start=True)
 
-    utils.run_vtctl('ChangeSlaveType %s spare' % tablet_62344.tablet_alias, expect_fail=True)
-    utils.run_vtctl('ChangeSlaveType --force %s spare' % tablet_62344.tablet_alias, expect_fail=True)
+    utils.run_vtctl(['ChangeSlaveType', tablet_62344.tablet_alias, 'spare'],
+                    expect_fail=True)
+    utils.run_vtctl(['ChangeSlaveType', '--force', tablet_62344.tablet_alias,
+                     'spare'], expect_fail=True)
     tablet_62344.kill_vttablet()
 
   def test_reparent_down_master(self):
-    utils.run_vtctl('CreateKeyspace test_keyspace')
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
     # create the database so vttablets start, as they are serving
     tablet_62344.create_db('vt_test_keyspace')
@@ -113,13 +115,14 @@ class TestReparent(unittest.TestCase):
       t.wait_for_vttablet_state("SERVING")
 
     # Recompute the shard layout node - until you do that, it might not be valid.
-    utils.run_vtctl('RebuildShardGraph test_keyspace/0')
+    utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/0'])
     utils.validate_topology()
 
     # Force the slaves to reparent assuming that all the datasets are identical.
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.reset_replication()
-    utils.run_vtctl('ReparentShard -force test_keyspace/0 ' + tablet_62344.tablet_alias, auto_log=True)
+    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/0',
+                     tablet_62344.tablet_alias], auto_log=True)
     utils.validate_topology()
 
     # Make the master agent and database unavailable.
@@ -130,13 +133,18 @@ class TestReparent(unittest.TestCase):
 
     # Perform a reparent operation - the Validate part will try to ping
     # the master and fail somewhat quickly
-    stdout, stderr = utils.run_vtctl('-wait-time 5s ReparentShard test_keyspace/0 ' + tablet_62044.tablet_alias, expect_fail=True)
+    stdout, stderr = utils.run_vtctl(['-wait-time', '5s', 'ReparentShard',
+                                      'test_keyspace/0',
+                                      tablet_62044.tablet_alias],
+                                     expect_fail=True)
     logging.debug("Failed ReparentShard output:\n" + stderr)
     if 'ValidateShard verification failed' not in stderr:
       self.fail("didn't find the right error strings in failed ReparentShard: " + stderr)
 
     # Should timeout and fail
-    stdout, stderr = utils.run_vtctl('-wait-time 5s ScrapTablet ' + tablet_62344.tablet_alias, expect_fail=True)
+    stdout, stderr = utils.run_vtctl(['-wait-time', '5s', 'ScrapTablet',
+                                      tablet_62344.tablet_alias],
+                                     expect_fail=True)
     logging.debug("Failed ScrapTablet output:\n" + stderr)
     if 'deadline exceeded' not in stderr:
       self.fail("didn't find the right error strings in failed ScrapTablet: " + stderr)
@@ -161,15 +169,17 @@ class TestReparent(unittest.TestCase):
     # Force the scrap action in zk even though tablet is not accessible.
     tablet_62344.scrap(force=True)
 
-    utils.run_vtctl('ChangeSlaveType -force %s idle' %
-                    tablet_62344.tablet_alias, expect_fail=True)
+    utils.run_vtctl(['ChangeSlaveType', '-force', tablet_62344.tablet_alias,
+                     'idle'], expect_fail=True)
 
     # Remove pending locks (make this the force option to ReparentShard?)
     if environment.topo_server_implementation == 'zookeeper':
-      utils.run_vtctl('PurgeActions /zk/global/vt/keyspaces/test_keyspace/shards/0/action')
+      utils.run_vtctl(['PurgeActions',
+                       '/zk/global/vt/keyspaces/test_keyspace/shards/0/action'])
 
     # Re-run reparent operation, this shoud now proceed unimpeded.
-    utils.run_vtctl('-wait-time 1m ReparentShard test_keyspace/0 ' + tablet_62044.tablet_alias, auto_log=True)
+    utils.run_vtctl(['-wait-time', '1m', 'ReparentShard', 'test_keyspace/0',
+                     tablet_62044.tablet_alias], auto_log=True)
 
     utils.validate_topology()
     self._check_db_addr('0', 'master', tablet_62044.port)
@@ -186,7 +196,7 @@ class TestReparent(unittest.TestCase):
     tablet_62344.start_mysql().wait()
 
   def test_reparent_cross_cell(self, shard_id='0'):
-    utils.run_vtctl('CreateKeyspace test_keyspace')
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
     # create the database so vttablets start, as they are serving
     tablet_62344.create_db('vt_test_keyspace')
@@ -211,14 +221,15 @@ class TestReparent(unittest.TestCase):
       self.assertEqual(shard['Cells'], ['test_nj', 'test_ny'], 'wrong list of cell in Shard: %s' % str(shard['Cells']))
 
     # Recompute the shard layout node - until you do that, it might not be valid.
-    utils.run_vtctl('RebuildShardGraph test_keyspace/' + shard_id)
+    utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/' + shard_id])
     utils.validate_topology()
 
     # Force the slaves to reparent assuming that all the datasets are identical.
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.reset_replication()
     utils.pause("force ReparentShard?")
-    utils.run_vtctl('ReparentShard -force test_keyspace/%s %s' % (shard_id, tablet_62344.tablet_alias))
+    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/' + shard_id,
+                     tablet_62344.tablet_alias])
     utils.validate_topology(ping_tablets=True)
 
     self._check_db_addr(shard_id, 'master', tablet_62344.port)
@@ -231,7 +242,8 @@ class TestReparent(unittest.TestCase):
 
     # Perform a graceful reparent operation to another cell.
     utils.pause("graceful ReparentShard?")
-    utils.run_vtctl('ReparentShard test_keyspace/%s %s' % (shard_id, tablet_31981.tablet_alias), auto_log=True)
+    utils.run_vtctl(['ReparentShard', 'test_keyspace/' + shard_id,
+                     tablet_31981.tablet_alias], auto_log=True)
     utils.validate_topology()
 
     self._check_db_addr(shard_id, 'master', tablet_31981.port, cell='test_ny')
@@ -254,7 +266,7 @@ class TestReparent(unittest.TestCase):
     self._test_reparent_graceful(shard_id)
 
   def _test_reparent_graceful(self, shard_id):
-    utils.run_vtctl('CreateKeyspace test_keyspace')
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
     # create the database so vttablets start, as they are serving
     tablet_62344.create_db('vt_test_keyspace')
@@ -279,14 +291,15 @@ class TestReparent(unittest.TestCase):
       self.assertEqual(shard['Cells'], ['test_nj', 'test_ny'], 'wrong list of cell in Shard: %s' % str(shard['Cells']))
 
     # Recompute the shard layout node - until you do that, it might not be valid.
-    utils.run_vtctl('RebuildShardGraph test_keyspace/' + shard_id)
+    utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/' + shard_id])
     utils.validate_topology()
 
     # Force the slaves to reparent assuming that all the datasets are identical.
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.reset_replication()
     utils.pause("force ReparentShard?")
-    utils.run_vtctl('ReparentShard -force test_keyspace/%s %s' % (shard_id, tablet_62344.tablet_alias))
+    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/' + shard_id,
+                     tablet_62344.tablet_alias])
     utils.validate_topology(ping_tablets=True)
 
     self._check_db_addr(shard_id, 'master', tablet_62344.port)
@@ -305,11 +318,13 @@ class TestReparent(unittest.TestCase):
     self._check_db_addr(shard_id, 'replica', tablet_62044.port)
 
     # Run this to make sure it succeeds.
-    utils.run_vtctl('ShardReplicationPositions test_keyspace/%s' % shard_id, stdout=utils.devnull)
+    utils.run_vtctl(['ShardReplicationPositions', 'test_keyspace/' + shard_id],
+                    stdout=utils.devnull)
 
     # Perform a graceful reparent operation.
     utils.pause("graceful ReparentShard?")
-    utils.run_vtctl('ReparentShard test_keyspace/%s %s' % (shard_id, tablet_62044.tablet_alias), auto_log=True)
+    utils.run_vtctl(['ReparentShard', 'test_keyspace/' + shard_id,
+                     tablet_62044.tablet_alias], auto_log=True)
     utils.validate_topology()
 
     self._check_db_addr(shard_id, 'master', tablet_62044.port)
@@ -335,7 +350,7 @@ class TestReparent(unittest.TestCase):
 
   # This is a manual test to check error formatting.
   def _test_reparent_slave_offline(self, shard_id='0'):
-    utils.run_vtctl('CreateKeyspace test_keyspace')
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
     # create the database so vttablets start, as they are serving
     tablet_62344.create_db('vt_test_keyspace')
@@ -356,13 +371,14 @@ class TestReparent(unittest.TestCase):
       t.wait_for_vttablet_state("SERVING")
 
     # Recompute the shard layout node - until you do that, it might not be valid.
-    utils.run_vtctl('RebuildShardGraph test_keyspace/' + shard_id)
+    utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/' + shard_id])
     utils.validate_topology()
 
     # Force the slaves to reparent assuming that all the datasets are identical.
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.reset_replication()
-    utils.run_vtctl('ReparentShard -force test_keyspace/%s %s' % (shard_id, tablet_62344.tablet_alias))
+    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/' + shard_id,
+                     tablet_62344.tablet_alias])
     utils.validate_topology(ping_tablets=True)
 
     self._check_db_addr(shard_id, 'master', tablet_62344.port)
@@ -371,7 +387,8 @@ class TestReparent(unittest.TestCase):
     tablet_31981.kill_vttablet()
 
     # Perform a graceful reparent operation.
-    utils.run_vtctl('ReparentShard test_keyspace/%s %s' % (shard_id, tablet_62044.tablet_alias))
+    utils.run_vtctl(['ReparentShard', 'test_keyspace/' + shard_id,
+                     tablet_62044.tablet_alias])
 
     tablet.kill_tablets([tablet_62344, tablet_62044, tablet_41983])
 
@@ -384,7 +401,7 @@ class TestReparent(unittest.TestCase):
     self._test_reparent_from_outside(True)
 
   def _test_reparent_from_outside(self, brutal=False):
-    utils.run_vtctl('CreateKeyspace test_keyspace')
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
     # create the database so vttablets start, as they are serving
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
@@ -405,7 +422,8 @@ class TestReparent(unittest.TestCase):
     # Reparent as a starting point
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.reset_replication()
-    utils.run_vtctl('ReparentShard -force test_keyspace/0 %s' % tablet_62344.tablet_alias, auto_log=True)
+    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/0',
+                     tablet_62344.tablet_alias], auto_log=True)
 
     # now manually reparent 1 out of 2 tablets
     # 62044 will be the new master
@@ -437,11 +455,12 @@ class TestReparent(unittest.TestCase):
         utils.run(environment.binary_argstr('zk')+' rm -rf ' + tablet_62344.zk_tablet_path)
 
     # update zk with the new graph
-    utils.run_vtctl('ShardExternallyReparented test_keyspace/0 %s' % tablet_62044.tablet_alias, auto_log=True)
+    utils.run_vtctl(['ShardExternallyReparented', 'test_keyspace/0',
+                     tablet_62044.tablet_alias], auto_log=True)
 
     self._test_reparent_from_outside_check(brutal)
 
-    utils.run_vtctl('RebuildReplicationGraph test_nj test_keyspace')
+    utils.run_vtctl(['RebuildReplicationGraph', 'test_nj', 'test_keyspace'])
 
     self._test_reparent_from_outside_check(brutal)
 
@@ -476,7 +495,7 @@ class TestReparent(unittest.TestCase):
 
   # See if a lag slave can be safely reparent.
   def test_reparent_lag_slave(self, shard_id='0'):
-    utils.run_vtctl('CreateKeyspace test_keyspace')
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
     # create the database so vttablets start, as they are serving
     tablet_62344.create_db('vt_test_keyspace')
@@ -498,13 +517,14 @@ class TestReparent(unittest.TestCase):
     tablet_41983.wait_for_vttablet_state("NOT_SERVING")
 
     # Recompute the shard layout node - until you do that, it might not be valid.
-    utils.run_vtctl('RebuildShardGraph test_keyspace/' + shard_id)
+    utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/' + shard_id])
     utils.validate_topology()
 
     # Force the slaves to reparent assuming that all the datasets are identical.
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.reset_replication()
-    utils.run_vtctl('ReparentShard -force test_keyspace/%s %s' % (shard_id, tablet_62344.tablet_alias))
+    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/' + shard_id,
+                     tablet_62344.tablet_alias])
     utils.validate_topology(ping_tablets=True)
 
     tablet_62344.mquery('vt_test_keyspace', self._create_vt_insert_test)
@@ -514,14 +534,15 @@ class TestReparent(unittest.TestCase):
       tablet_62344.mquery('vt_test_keyspace', q, write=True)
 
     # Perform a graceful reparent operation.
-    utils.run_vtctl('ReparentShard test_keyspace/%s %s' % (shard_id, tablet_62044.tablet_alias))
+    utils.run_vtctl(['ReparentShard', 'test_keyspace/' + shard_id,
+                     tablet_62044.tablet_alias])
 
     tablet_41983.mquery('', 'start slave')
     time.sleep(1)
 
     utils.pause("check orphan")
 
-    utils.run_vtctl('ReparentTablet %s' % tablet_41983.tablet_alias)
+    utils.run_vtctl(['ReparentTablet', tablet_41983.tablet_alias])
 
     result = tablet_41983.mquery('vt_test_keyspace', 'select msg from vt_insert_test where id=1')
     if len(result) != 1:

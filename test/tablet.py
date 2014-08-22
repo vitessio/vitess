@@ -69,6 +69,7 @@ class Tablet(object):
     self.zk_tablet_path = (
         '/zk/test_%s/vt/tablets/%010d' % (self.cell, self.tablet_uid))
     self.zk_pid = self.zk_tablet_path + '/pid'
+    self.checked_zk_pid = False
 
   def mysqlctl(self, cmd, extra_my_cnf=None, with_ports=False, verbose=False):
     all_extra_my_cnf = []
@@ -399,19 +400,20 @@ class Tablet(object):
     self.proc = utils.run_bg(args, stderr=stderr_fd)
     stderr_fd.close()
 
-    # wait for zookeeper PID just to be sure we have it
-    if environment.topo_server_implementation == 'zookeeper':
-      utils.run(
-          environment.binary_argstr('zk') + ' wait -e ' + self.zk_pid,
-          stdout=utils.devnull)
-
     # wait for query service to be in the right state
     if wait_for_state:
-      self.wait_for_vttablet_state(wait_for_state, port=port)
+      self.wait_for_vttablet_state(wait_for_state)
 
     return self.proc
 
   def wait_for_vttablet_state(self, expected, timeout=60.0, port=None):
+    # wait for zookeeper PID just to be sure we have it
+    if environment.topo_server_implementation == 'zookeeper':
+      if not self.checked_zk_pid:
+        utils.run(environment.binary_args('zk') + ['wait', '-e', self.zk_pid],
+                  stdout=utils.devnull)
+        self.checked_zk_pid = True
+
     while True:
       v = utils.get_vars(port or self.port)
       if v == None:

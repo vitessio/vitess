@@ -18,6 +18,8 @@ import MySQLdb
 
 import environment
 
+from vtctl import vtctl_client
+
 options = None
 devnull = open('/dev/null', 'w')
 hostname = socket.gethostname()
@@ -274,9 +276,9 @@ def zk_wipe():
 
 def validate_topology(ping_tablets=False):
   if ping_tablets:
-    run_vtctl('Validate -ping-tablets')
+    run_vtctl(['Validate', '-ping-tablets'])
   else:
-    run_vtctl('Validate')
+    run_vtctl(['Validate'])
 
 def zk_ls(path):
   out, err = run(environment.binary_argstr('zk')+' ls '+path, trap_output=True)
@@ -301,7 +303,7 @@ def wait_step(msg, timeout, sleep_time=1.0):
   timeout -= sleep_time
   if timeout <= 0:
     raise TestError("timeout waiting for condition '%s'" % msg)
-  logging.info("Sleeping for %f seconds waiting for condition '%s'" %
+  logging.debug("Sleeping for %f seconds waiting for condition '%s'" %
                (sleep_time, msg))
   time.sleep(sleep_time)
   return timeout
@@ -314,7 +316,6 @@ def get_vars(port):
   """
   try:
     url = 'http://localhost:%u/debug/vars' % int(port)
-    logging.debug('get_vars: loading ' + url)
     f = urllib2.urlopen(url)
     data = f.read()
     f.close()
@@ -401,7 +402,35 @@ def vtgate_kill(sp):
   sp.wait()
 
 # vtctl helpers
-def run_vtctl(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs):
+# The modes are not all equivalent, and we don't really thrive for it.
+# If a client needs to rely on vtctl's command line behavior, make
+# sure to use mode=utils.VTCTL_VTCTL
+VTCTL_AUTO        = 0
+VTCTL_VTCTL       = 1
+VTCTL_VTCTLCLIENT = 2
+VTCTL_RPC         = 3
+def run_vtctl(clargs, log_level='', auto_log=False, expect_fail=False,
+              mode=VTCTL_AUTO, **kwargs):
+  if mode == VTCTL_AUTO:
+    if vtctld:
+      mode = VTCTL_RPC
+    else:
+      mode = VTCTL_VTCTL
+
+  if mode == VTCTL_VTCTL:
+    return run_vtctl_vtctl(clargs, log_level=log_level, auto_log=auto_log,
+                           expect_fail=expect_fail, **kwargs)
+  elif mode == VTCTL_VTCTLCLIENT:
+    result = vtctld.vtctl_client(clargs)
+    return result, ""
+  elif mode == VTCTL_RPC:
+    result = vtctld_connection.execute_vtctl_command(clargs, info_to_debug=True)
+    return result, ""
+
+  raise Exception('Unknown mode: %s', mode)
+
+def run_vtctl_vtctl(clargs, log_level='', auto_log=False, expect_fail=False,
+                    **kwargs):
   args = environment.binary_args('vtctl') + ['-log_dir', environment.vtlogroot]
   args.extend(environment.topo_server_flags())
   args.extend(environment.tablet_manager_protocol_flags())
@@ -430,8 +459,8 @@ def run_vtctl(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs)
 # run_vtctl_json runs the provided vtctl command and returns the result
 # parsed as json
 def run_vtctl_json(clargs):
-    stdout, stderr = run_vtctl(clargs, trap_output=True, auto_log=True)
-    return json.loads(stdout)
+  stdout, stderr = run_vtctl(clargs, trap_output=True, auto_log=True)
+  return json.loads(stdout)
 
 # vtworker helpers
 def run_vtworker(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs):
@@ -572,6 +601,11 @@ def curl(url, background=False, **kwargs):
 
 class VtctldError(Exception): pass
 
+# save the first running instance, and an RPC connection to it,
+# so we can use it to run remote vtctl commands
+vtctld = None
+vtctld_connection = None
+
 class Vtctld(object):
 
   def __init__(self):
@@ -601,6 +635,23 @@ class Vtctld(object):
             environment.tablet_manager_protocol_flags()
     stderr_fd = open(os.path.join(environment.tmproot, "vtctld.stderr"), "w")
     self.proc = run_bg(args, stderr=stderr_fd)
+
+    # wait for the process to listen to RPC
+    timeout = 30
+    while True:
+      v = get_vars(self.port)
+      if v:
+        break
+      timeout = wait_step('waiting for vtgate to start', timeout,
+                          sleep_time=0.2)
+
+    # save the running instance so vtctl commands can be remote executed now
+    global vtctld, vtctld_connection
+    if not vtctld:
+      vtctld = self
+      vtctld_connection = vtctl_client.connect(
+          environment.vtctl_client_protocol(), 'localhost:%u' % self.port, 30)
+
     return self.proc
 
   def process_args(self):
@@ -614,10 +665,10 @@ class Vtctld(object):
     else:
       log_level='ERROR'
 
-    out, err = run(environment.binary_args('vtctlclient') + 
-                   ['-vtctl_client_protocol', environment.vtctl_client_protocol(),
+    out, err = run(environment.binary_args('vtctlclient') +
+                   ['-vtctl_client_protocol',
+                    environment.vtctl_client_protocol(),
                     '-server', 'localhost:%u' % self.port,
                     '-stderrthreshold', log_level] + args,
                    trap_output=True)
     return out
-
