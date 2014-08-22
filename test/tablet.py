@@ -402,7 +402,7 @@ class Tablet(object):
 
     # wait for query service to be in the right state
     if wait_for_state:
-      self.wait_for_vttablet_state(wait_for_state)
+      self.wait_for_vttablet_state(wait_for_state, port=port)
 
     return self.proc
 
