@@ -35,7 +35,7 @@ class GoRpcVtctlClient(object):
   def is_closed(self):
     return self.client.is_closed()
 
-  def execute_vtctl_command(self, args, action_timeout=3.0,
+  def execute_vtctl_command(self, args, action_timeout=30.0,
                             lock_timeout=5.0, info_to_debug=False):
     """execute_vtctl_command executes a remote command on the vtctl server.
 
