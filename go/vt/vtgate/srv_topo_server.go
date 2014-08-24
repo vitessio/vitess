@@ -325,19 +325,19 @@ func (server *ResilientSrvTopoServer) GetEndPoints(context context.Context, cell
 
 	// Record some stats regardless of cache status.
 	defer func() {
+		if remote {
+			server.endPointCounters.remoteQueries.Add(key, 1)
+		}
 		if err != nil {
 			server.endPointCounters.errors.Add(key, 1)
 			return
 		}
-		// We either serve all healthy endpoints or all degraded endpoints.
 		if len(result.Entries) == 0 {
 			server.endPointCounters.emptyResults.Add(key, 1)
 			return
 		}
-		if remote {
-			server.endPointCounters.remoteQueries.Add(key, 1)
-		}
 		server.endPointCounters.numberReturned.Add(key, int64(len(result.Entries)))
+		// We either serve all healthy endpoints or all degraded endpoints, so the first entry is representative.
 		if !endPointIsHealthy(result.Entries[0]) {
 			server.endPointCounters.degradedResults.Add(key, 1)
 			return
