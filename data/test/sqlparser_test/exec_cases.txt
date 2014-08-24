@@ -941,6 +941,30 @@
   "SetValue": null
 }
 
+# pk IN, limit clause
+"select * from d where name in (:a) limit 1"
+{
+  "PlanId": "PASS_SELECT",
+  "Reason": "PKINDEX",
+  "TableName": "d",
+  "FieldQuery": "select * from d where 1 != 1",
+  "FullQuery": "select * from d where name in (:a) limit 1",
+  "OuterQuery": null,
+  "Subquery": null,
+  "IndexUsed": "PRIMARY",
+  "ColumnNumbers": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
 # double pk IN
 "select * from a where eid in (1) and id in (1, 2)"
 {
@@ -1122,6 +1146,30 @@
   "OuterQuery": "select name, id, foo, bar from d where name in (:*)",
   "Subquery": "select name from d use index (d_id) where id between 1 and 2 limit :_vtMaxResultSize",
   "IndexUsed": "d_id",
+  "ColumnNumbers": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
+# non-pk not between
+"select * from d where id not between 1 and 2"
+{
+  "PlanId": "PASS_SELECT",
+  "Reason": "WHERE",
+  "TableName": "d",
+  "FieldQuery": "select * from d where 1 != 1",
+  "FullQuery": "select * from d where id not between 1 and 2 limit :_vtMaxResultSize",
+  "OuterQuery": null,
+  "Subquery": null,
+  "IndexUsed": "",
   "ColumnNumbers": [
     0,
     1,

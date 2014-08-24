@@ -104,7 +104,7 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 				goto nopk
 			}
 		default:
-			// A more complext limit clause.
+			// A more complex limit clause.
 			goto nopk
 		}
 		plan.PlanId = PLAN_PK_EQUAL
