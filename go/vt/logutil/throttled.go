@@ -31,6 +31,12 @@ func NewThrottledLogger(name string, maxInterval time.Duration) *ThrottledLogger
 
 type logFunc func(string, ...interface{})
 
+var (
+	infof    = log.Infof
+	warningf = log.Warningf
+	errorf   = log.Errorf
+)
+
 func (tl *ThrottledLogger) log(logF logFunc, format string, v ...interface{}) {
 	now := time.Now()
 
@@ -58,15 +64,15 @@ func (tl *ThrottledLogger) log(logF logFunc, format string, v ...interface{}) {
 
 // Infof logs an info if not throttled.
 func (tl *ThrottledLogger) Infof(format string, v ...interface{}) {
-	tl.log(log.Infof, format, v...)
+	tl.log(infof, format, v...)
 }
 
 // Warningf logs a warning if not throttled.
 func (tl *ThrottledLogger) Warningf(format string, v ...interface{}) {
-	tl.log(log.Warningf, format, v...)
+	tl.log(warningf, format, v...)
 }
 
 // Errorf logs an error if not throttled.
 func (tl *ThrottledLogger) Errorf(format string, v ...interface{}) {
-	tl.log(log.Errorf, format, v...)
+	tl.log(errorf, format, v...)
 }
