@@ -6,6 +6,8 @@ package sqlparser
 
 import (
 	"errors"
+	"fmt"
+	"strconv"
 
 	"github.com/youtube/vitess/go/sqltypes"
 )
@@ -825,6 +827,41 @@ func (node *Limit) Format(buf *TrackedBuffer) {
 		buf.Myprintf("%v, ", node.Offset)
 	}
 	buf.Myprintf("%v", node.Rowcount)
+}
+
+// Limits returns the values of the LIMIT clause as interfaces.
+// The returned values can be nil for absent field, string for
+// bind variable names, or int64 for an actual number.
+// Otherwise, it's an error.
+func (node *Limit) Limits() (offset, rowcount interface{}, err error) {
+	if node == nil {
+		return nil, nil, nil
+	}
+	switch v := node.Offset.(type) {
+	case NumVal:
+		offset, err = strconv.ParseInt(string(v), 0, 64)
+		if err != nil {
+			return nil, nil, err
+		}
+	case ValArg:
+		offset = string(v)
+	case nil:
+		// pass
+	default:
+		return nil, nil, fmt.Errorf("unexpected node for offset: %+v", v)
+	}
+	switch v := node.Rowcount.(type) {
+	case NumVal:
+		rowcount, err = strconv.ParseInt(string(v), 0, 64)
+		if err != nil {
+			return nil, nil, err
+		}
+	case ValArg:
+		rowcount = string(v)
+	default:
+		return nil, nil, fmt.Errorf("unexpected node for rowcount: %+v", v)
+	}
+	return offset, rowcount, nil
 }
 
 // UpdateExprs represents a list of update expressions.

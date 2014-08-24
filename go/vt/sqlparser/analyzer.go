@@ -47,7 +47,7 @@ func IsValue(node ValExpr) bool {
 	return false
 }
 
-// HasINCaluse returns true if an yof the conditions has an IN clause.
+// HasINCaluse returns true if any of the conditions has an IN clause.
 func HasINClause(conditions []BoolExpr) bool {
 	for _, node := range conditions {
 		if c, ok := node.(*ComparisonExpr); ok && c.Operator == AST_IN {

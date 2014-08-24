@@ -712,11 +712,37 @@
 # string pk match with limit
 "select * from d where name='foo' limit 1"
 {
+  "PlanId": "PK_EQUAL",
+  "Reason": "DEFAULT",
+  "TableName": "d",
+  "FieldQuery": "select * from d where 1 != 1",
+  "FullQuery": "select * from d where name = 'foo' limit 1",
+  "OuterQuery": "select name, id, foo, bar from d where name = :0",
+  "Subquery": null,
+  "IndexUsed": "",
+  "ColumnNumbers": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "PKValues": [
+    "Zm9v"
+  ],
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
+# string pk match with limit 0
+"select * from d where name='foo' limit 0"
+{
   "PlanId": "PASS_SELECT",
   "Reason": "PKINDEX",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
-  "FullQuery": "select * from d where name = 'foo' limit 1",
+  "FullQuery": "select * from d where name = 'foo' limit 0",
   "OuterQuery": null,
   "Subquery": null,
   "IndexUsed": "PRIMARY",
@@ -732,6 +758,58 @@
   "SetKey": "",
   "SetValue": null
 }
+
+# string pk match with limit bindvar
+"select * from d where name='foo' limit :a"
+{
+  "PlanId": "PASS_SELECT",
+  "Reason": "PKINDEX",
+  "TableName": "d",
+  "FieldQuery": "select * from d where 1 != 1",
+  "FullQuery": "select * from d where name = 'foo' limit :a",
+  "OuterQuery": null,
+  "Subquery": null,
+  "IndexUsed": "PRIMARY",
+  "ColumnNumbers": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
+# string pk match with offset limit
+"select * from d where name='foo' limit 1, 1"
+{
+  "PlanId": "PASS_SELECT",
+  "Reason": "PKINDEX",
+  "TableName": "d",
+  "FieldQuery": "select * from d where 1 != 1",
+  "FullQuery": "select * from d where name = 'foo' limit 1, 1",
+  "OuterQuery": null,
+  "Subquery": null,
+  "IndexUsed": "PRIMARY",
+  "ColumnNumbers": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
+# string pk match with invalid limit
+"select * from d where name='foo' limit (1)"
+"unexpected node for rowcount: [[49]]"
 
 # reversed conditions with and clause
 "select * from d where 'foo'=name and eid=1"
