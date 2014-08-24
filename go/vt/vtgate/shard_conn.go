@@ -194,10 +194,20 @@ func (sdc *ShardConn) withRetry(ctx context.Context, action func(conn tabletconn
 
 // getConn reuses an existing connection if possible. Otherwise
 // it returns a connection which it will save for future reuse.
-// If it returns an error,  retry will tell you if getConn can be retried.
+// If it returns an error, retry will tell you if getConn can be retried.
+// If the context has a deadline and exceeded, it returns error and no-retry immediately.
 func (sdc *ShardConn) getConn(ctx context.Context) (conn tabletconn.TabletConn, endPoint topo.EndPoint, err error, retry bool) {
 	sdc.mu.Lock()
 	defer sdc.mu.Unlock()
+
+	// fail-fast if deadline exceeded
+	deadline := ctx.Deadline()
+	if !deadline.IsZero() {
+		if time.Now().After(deadline) {
+			return nil, topo.EndPoint{}, tabletconn.OperationalError("vttablet: deadline exceeded"), false
+		}
+	}
+
 	if sdc.conn != nil {
 		return sdc.conn, sdc.conn.EndPoint(), nil, false
 	}

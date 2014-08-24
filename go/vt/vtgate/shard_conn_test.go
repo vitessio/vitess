@@ -18,12 +18,12 @@ import (
 func TestShardConnExecute(t *testing.T) {
 	testShardConnGeneric(t, "TestShardConnExecute", func() error {
 		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnExecute", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
-		_, err := sdc.Execute(nil, "query", nil, 0)
+		_, err := sdc.Execute(&context.DummyContext{}, "query", nil, 0)
 		return err
 	})
 	testShardConnTransact(t, "TestShardConnExecute", func() error {
 		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnExecute", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
-		_, err := sdc.Execute(nil, "query", nil, 1)
+		_, err := sdc.Execute(&context.DummyContext{}, "query", nil, 1)
 		return err
 	})
 }
@@ -32,13 +32,13 @@ func TestShardConnExecuteBatch(t *testing.T) {
 	testShardConnGeneric(t, "TestShardConnExecuteBatch", func() error {
 		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnExecuteBatch", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
 		queries := []tproto.BoundQuery{{"query", nil}}
-		_, err := sdc.ExecuteBatch(nil, queries, 0)
+		_, err := sdc.ExecuteBatch(&context.DummyContext{}, queries, 0)
 		return err
 	})
 	testShardConnTransact(t, "TestShardConnExecuteBatch", func() error {
 		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnExecuteBatch", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
 		queries := []tproto.BoundQuery{{"query", nil}}
-		_, err := sdc.ExecuteBatch(nil, queries, 1)
+		_, err := sdc.ExecuteBatch(&context.DummyContext{}, queries, 1)
 		return err
 	})
 }
@@ -46,12 +46,12 @@ func TestShardConnExecuteBatch(t *testing.T) {
 func TestShardConnExecuteStream(t *testing.T) {
 	testShardConnGeneric(t, "TestShardConnExecuteStream", func() error {
 		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnExecuteStream", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
-		_, errfunc := sdc.StreamExecute(nil, "query", nil, 0)
+		_, errfunc := sdc.StreamExecute(&context.DummyContext{}, "query", nil, 0)
 		return errfunc()
 	})
 	testShardConnTransact(t, "TestShardConnExecuteStream", func() error {
 		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnExecuteStream", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
-		_, errfunc := sdc.StreamExecute(nil, "query", nil, 1)
+		_, errfunc := sdc.StreamExecute(&context.DummyContext{}, "query", nil, 1)
 		return errfunc()
 	})
 }
@@ -59,7 +59,7 @@ func TestShardConnExecuteStream(t *testing.T) {
 func TestShardConnBegin(t *testing.T) {
 	testShardConnGeneric(t, "TestShardConnBegin", func() error {
 		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnBegin", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
-		_, err := sdc.Begin(nil)
+		_, err := sdc.Begin(&context.DummyContext{})
 		return err
 	})
 }
@@ -67,14 +67,14 @@ func TestShardConnBegin(t *testing.T) {
 func TestShardConnCommit(t *testing.T) {
 	testShardConnTransact(t, "TestShardConnCommit", func() error {
 		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnCommit", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
-		return sdc.Commit(nil, 1)
+		return sdc.Commit(&context.DummyContext{}, 1)
 	})
 }
 
 func TestShardConnRollback(t *testing.T) {
 	testShardConnTransact(t, "TestShardConnRollback", func() error {
 		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnRollback", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
-		return sdc.Rollback(nil, 1)
+		return sdc.Rollback(&context.DummyContext{}, 1)
 	})
 }
 
@@ -244,7 +244,7 @@ func TestShardConnBeginOther(t *testing.T) {
 	s.MapTestConn("0", sbc)
 	sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnBeginOther", "0", "", 10*time.Millisecond, 3, 1*time.Millisecond)
 	startTime := time.Now()
-	_, err := sdc.Begin(nil)
+	_, err := sdc.Begin(&context.DummyContext{})
 	// If transaction pool is full, Begin should wait and retry.
 	if time.Now().Sub(startTime) < (10 * time.Millisecond) {
 		t.Errorf("want >10ms, got %v", time.Now().Sub(startTime))

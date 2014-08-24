@@ -3,6 +3,7 @@ package proto
 import (
 	"fmt"
 	"html/template"
+	"time"
 )
 
 type Context struct {
@@ -30,4 +31,9 @@ func (ctx *Context) HTML() template.HTML {
 // String implements Context.String
 func (ctx *Context) String() string {
 	return fmt.Sprintf("GoRPCContext %#v", ctx)
+}
+
+// Deadline implements Context.Deadline
+func (ctx *Context) Deadline() time.Time {
+	return time.Time{}
 }

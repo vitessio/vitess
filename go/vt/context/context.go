@@ -1,6 +1,7 @@
 package context
 
 import "html/template"
+import "time"
 
 // Context represents the context for SqlQuery RPC calls.
 type Context interface {
@@ -12,6 +13,8 @@ type Context interface {
 	HTML() template.HTML
 	// String returns a string representation of this Context
 	String() string
+	// Deadline returns the deadline of this context
+	Deadline() time.Time
 }
 
 // DummyContext is a dummy implementation of Context
@@ -21,3 +24,4 @@ func (dc *DummyContext) GetRemoteAddr() string { return "DummyRemoteAddr" }
 func (dc *DummyContext) GetUsername() string   { return "DummyUsername" }
 func (dc *DummyContext) HTML() template.HTML   { return template.HTML("DummyContext") }
 func (dc *DummyContext) String() string        { return "DummyContext" }
+func (dc *DummyContext) Deadline() time.Time   { return time.Time{} }
