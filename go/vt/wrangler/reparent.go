@@ -67,7 +67,6 @@ On X: (promoted slave)
 import (
 	"fmt"
 
-	log "github.com/golang/glog"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -141,7 +140,7 @@ func (wr *Wrangler) reparentShardLocked(keyspace, shard string, masterElectTable
 
 	if err == nil {
 		// only log if it works, if it fails we'll show the error
-		log.Infof("reparentShard finished")
+		wr.Logger().Infof("reparentShard finished")
 	}
 	return err
 }
@@ -217,7 +216,7 @@ func (wr *Wrangler) ReparentTablet(tabletAlias topo.TabletAlias) error {
 	if err != nil {
 		return err
 	}
-	log.Infof("slave tablet position: %v %v %v", tabletAlias, ti.MysqlAddr(), pos.MapKey())
+	wr.Logger().Infof("slave tablet position: %v %v %v", tabletAlias, ti.MysqlAddr(), pos.MapKey())
 
 	actionPath, err := wr.ai.ReparentPosition(masterTi.Alias, pos)
 	if err != nil {
@@ -229,7 +228,7 @@ func (wr *Wrangler) ReparentTablet(tabletAlias topo.TabletAlias) error {
 	}
 	rsd := result.(*actionnode.RestartSlaveData)
 
-	log.Infof("master tablet position: %v %v %v", shardInfo.MasterAlias, masterTi.MysqlAddr(), rsd.ReplicationState.ReplicationPosition.MapKey())
+	wr.Logger().Infof("master tablet position: %v %v %v", shardInfo.MasterAlias, masterTi.MysqlAddr(), rsd.ReplicationState.ReplicationPosition.MapKey())
 	// An orphan is already in the replication graph but it is
 	// disconnected, hence we have to force this action.
 	rsd.Force = ti.Type == topo.TYPE_LAG_ORPHAN
