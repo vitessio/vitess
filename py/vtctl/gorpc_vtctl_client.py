@@ -6,13 +6,16 @@ import logging
 import re
 
 from net import bsonrpc
+from vtctl import vtctl_client
 
 
-# A simple, direct connection to the vtctl server, using go rpc.
-# If something goes wrong, this object should be thrown away and a new one instantiated.
-class GoRpcVtctlClient(object):
+class GoRpcVtctlClient(vtctl_client.VctlClient):
+  """GoRpcVtctlClient is the go rpc implementation of VctlClient.
+  It is registered as 'gorpc' protocol.
+  """
 
-  def __init__(self, addr, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None):
+  def __init__(self, addr, timeout, user=None, password=None, encrypted=False,
+               keyfile=None, certfile=None):
     self.addr = addr
     self.timeout = timeout
     self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password, encrypted=encrypted, keyfile=keyfile, certfile=certfile)
@@ -72,9 +75,3 @@ class GoRpcVtctlClient(object):
         console_result += e.reply['Value']
 
     return console_result
-
-
-def connect(*pargs, **kargs):
-  conn = VtctlClient(*pargs, **kargs)
-  conn.dial()
-  return conn
