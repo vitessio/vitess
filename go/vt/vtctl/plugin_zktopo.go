@@ -18,6 +18,7 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
@@ -326,7 +327,7 @@ func listActionsByShard(wr *wrangler.Wrangler, keyspace, shard string) error {
 	mu.Lock()
 	defer mu.Unlock()
 
-	keys := wrangler.CopyMapKeys(actionMap, []string{}).([]string)
+	keys := topotools.CopyMapKeys(actionMap, []string{}).([]string)
 	sort.Strings(keys)
 	for _, key := range keys {
 		action := actionMap[key]

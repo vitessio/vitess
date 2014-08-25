@@ -1,4 +1,4 @@
-package wrangler
+package topotools
 
 import (
 	"fmt"
@@ -157,8 +157,8 @@ type Topology struct {
 	Partial  bool
 }
 
-// DbTopology returns the Topology for the current topo server.
-func (wr *Wrangler) DbTopology() (*Topology, error) {
+// DbTopology returns the Topology for the topo server.
+func DbTopology(ts topo.Server) (*Topology, error) {
 	topology := &Topology{
 		Assigned: make(map[string]*KeyspaceNodes),
 		Idle:     make([]*TabletNode, 0),
@@ -166,7 +166,7 @@ func (wr *Wrangler) DbTopology() (*Topology, error) {
 		Partial:  false,
 	}
 
-	tabletInfos, err := GetAllTabletsAccrossCells(wr.ts)
+	tabletInfos, err := GetAllTabletsAccrossCells(ts)
 	switch err {
 	case nil:
 		// we're good, no error
@@ -223,15 +223,15 @@ type ServingGraph struct {
 	Errors    []string                  // collected during creation
 }
 
-// ServingGraph returns the ServingGraph for the given cell.
-func (wr *Wrangler) ServingGraph(cell string) (servingGraph *ServingGraph) {
+// DbServingGraph returns the ServingGraph for the given cell.
+func DbServingGraph(ts topo.Server, cell string) (servingGraph *ServingGraph) {
 	servingGraph = &ServingGraph{
 		Cell:      cell,
 		Keyspaces: make(map[string]*KeyspaceNodes),
 	}
 	rec := concurrency.AllErrorRecorder{}
 
-	keyspaces, err := wr.ts.GetSrvKeyspaceNames(cell)
+	keyspaces, err := ts.GetSrvKeyspaceNames(cell)
 	if err != nil {
 		servingGraph.Errors = append(servingGraph.Errors, fmt.Sprintf("GetSrvKeyspaceNames failed: %v", err))
 		return
@@ -245,7 +245,7 @@ func (wr *Wrangler) ServingGraph(cell string) (servingGraph *ServingGraph) {
 		go func(keyspace string, kn *KeyspaceNodes) {
 			defer wg.Done()
 
-			ks, err := wr.ts.GetSrvKeyspace(cell, keyspace)
+			ks, err := ts.GetSrvKeyspace(cell, keyspace)
 			if err != nil {
 				rec.RecordError(fmt.Errorf("GetSrvKeyspace(%v, %v) failed: %v", cell, keyspace, err))
 				return
@@ -274,13 +274,13 @@ func (wr *Wrangler) ServingGraph(cell string) (servingGraph *ServingGraph) {
 					wg.Add(1)
 					go func(shard string, sn *ShardNodes) {
 						defer wg.Done()
-						tabletTypes, err := wr.ts.GetSrvTabletTypesPerShard(cell, keyspace, shard)
+						tabletTypes, err := ts.GetSrvTabletTypesPerShard(cell, keyspace, shard)
 						if err != nil {
 							rec.RecordError(fmt.Errorf("GetSrvTabletTypesPerShard(%v, %v, %v) failed: %v", cell, keyspace, shard, err))
 							return
 						}
 						for _, tabletType := range tabletTypes {
-							endPoints, err := wr.ts.GetEndPoints(cell, keyspace, shard, tabletType)
+							endPoints, err := ts.GetEndPoints(cell, keyspace, shard, tabletType)
 							if err != nil {
 								rec.RecordError(fmt.Errorf("GetEndPoints(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err))
 								continue

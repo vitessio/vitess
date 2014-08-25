@@ -102,7 +102,7 @@ func (wr *Wrangler) checkSlaveReplication(tabletMap map[topo.TabletAlias]*topo.T
 // masterPosition is supplied from the demoted master if we are doing
 // this gracefully.
 func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo, masterPosition *myproto.ReplicationPosition) error {
-	wr.logger.Infof("checkSlaveConsistency %v %#v", mapKeys(tabletMap), masterPosition)
+	wr.logger.Infof("checkSlaveConsistency %v %#v", topotools.MapKeys(tabletMap), masterPosition)
 
 	// FIXME(msolomon) Something still feels clumsy here and I can't put my finger on it.
 	calls := make(chan *rpcContext, len(tabletMap))
@@ -294,7 +294,7 @@ func (wr *Wrangler) promoteSlave(ti *topo.TabletInfo) (rsd *actionnode.RestartSl
 
 func (wr *Wrangler) restartSlaves(slaveTabletMap map[topo.TabletAlias]*topo.TabletInfo, rsd *actionnode.RestartSlaveData) (majorityRestart bool, err error) {
 	wg := new(sync.WaitGroup)
-	slaves := CopyMapValues(slaveTabletMap, []*topo.TabletInfo{}).([]*topo.TabletInfo)
+	slaves := topotools.CopyMapValues(slaveTabletMap, []*topo.TabletInfo{}).([]*topo.TabletInfo)
 	errs := make([]error, len(slaveTabletMap))
 
 	f := func(i int) {

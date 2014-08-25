@@ -29,7 +29,7 @@ func (wr *Wrangler) reparentShardBrutal(ev *events.Reparent, si *topo.ShardInfo,
 	wr.logger.Infof("Skipping ValidateShard - not a graceful situation")
 
 	if _, ok := slaveTabletMap[masterElectTablet.Alias]; !ok && !force {
-		return fmt.Errorf("master elect tablet not in replication graph %v %v/%v %v", masterElectTablet.Alias, si.Keyspace(), si.ShardName(), mapKeys(slaveTabletMap))
+		return fmt.Errorf("master elect tablet not in replication graph %v %v/%v %v", masterElectTablet.Alias, si.Keyspace(), si.ShardName(), topotools.MapKeys(slaveTabletMap))
 	}
 
 	// Check the master-elect and slaves are in good shape when the action

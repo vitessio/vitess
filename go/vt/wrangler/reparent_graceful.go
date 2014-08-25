@@ -10,6 +10,7 @@ import (
 
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler/events"
 )
 
@@ -51,7 +52,7 @@ func (wr *Wrangler) reparentShardGraceful(ev *events.Reparent, si *topo.ShardInf
 	}
 
 	if _, ok := slaveTabletMap[masterElectTablet.Alias]; !ok {
-		return fmt.Errorf("master elect tablet not in replication graph %v %v/%v %v", masterElectTablet.Alias, masterTablet.Keyspace, masterTablet.Shard, mapKeys(slaveTabletMap))
+		return fmt.Errorf("master elect tablet not in replication graph %v %v/%v %v", masterElectTablet.Alias, masterTablet.Keyspace, masterTablet.Shard, topotools.MapKeys(slaveTabletMap))
 	}
 
 	if err := wr.ValidateShard(masterTablet.Keyspace, masterTablet.Shard, true); err != nil {

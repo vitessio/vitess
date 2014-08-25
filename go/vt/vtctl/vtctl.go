@@ -24,6 +24,7 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
@@ -338,7 +339,7 @@ func listTabletsByShard(wr *wrangler.Wrangler, keyspace, shard string) error {
 }
 
 func dumpAllTablets(wr *wrangler.Wrangler, zkVtPath string) error {
-	tablets, err := wrangler.GetAllTablets(wr.TopoServer(), zkVtPath)
+	tablets, err := topotools.GetAllTablets(wr.TopoServer(), zkVtPath)
 	if err != nil {
 		return err
 	}

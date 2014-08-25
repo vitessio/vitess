@@ -18,6 +18,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
@@ -318,7 +319,7 @@ func httpError(w http.ResponseWriter, format string, err error) {
 }
 
 type DbTopologyResult struct {
-	Topology *wrangler.Topology
+	Topology *topotools.Topology
 	Error    string
 }
 
@@ -523,7 +524,7 @@ func main() {
 			return
 		}
 		result := DbTopologyResult{}
-		topology, err := wr.DbTopology()
+		topology, err := topotools.DbTopology(wr.TopoServer())
 		if err != nil {
 			result.Error = err.Error()
 		} else {
@@ -548,7 +549,7 @@ func main() {
 			return
 		}
 
-		servingGraph := wr.ServingGraph(cell)
+		servingGraph := topotools.DbServingGraph(wr.TopoServer(), cell)
 		templateLoader.ServeTemplate("serving_graph.html", servingGraph, w, r)
 	})
 

@@ -70,6 +70,7 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler/events"
 )
 
@@ -119,7 +120,7 @@ func (wr *Wrangler) reparentShardLocked(keyspace, shard string, masterElectTable
 
 	masterElectTablet, ok := tabletMap[masterElectTabletAlias]
 	if !ok {
-		return fmt.Errorf("master-elect tablet %v not found in replication graph %v/%v %v", masterElectTabletAlias, keyspace, shard, mapKeys(tabletMap))
+		return fmt.Errorf("master-elect tablet %v not found in replication graph %v/%v %v", masterElectTabletAlias, keyspace, shard, topotools.MapKeys(tabletMap))
 	}
 
 	// Create reusable Reparent event with available info
@@ -170,7 +171,7 @@ func (wr *Wrangler) shardReplicationPositions(shardInfo *topo.ShardInfo) ([]*top
 	if err != nil {
 		return nil, nil, err
 	}
-	tablets := CopyMapValues(tabletMap, []*topo.TabletInfo{}).([]*topo.TabletInfo)
+	tablets := topotools.CopyMapValues(tabletMap, []*topo.TabletInfo{}).([]*topo.TabletInfo)
 	positions, err := wr.tabletReplicationPositions(tablets)
 	return tablets, positions, err
 }

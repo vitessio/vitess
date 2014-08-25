@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package wrangler
+package topotools
 
 import (
 	"reflect"
@@ -107,7 +107,8 @@ func CopyMapValues(m interface{}, typeHint interface{}) interface{} {
 	return vals.Interface()
 }
 
-func mapKeys(m interface{}) []interface{} {
+// MapKeys returns an array with th provided map keys.
+func MapKeys(m interface{}) []interface{} {
 	keys := make([]interface{}, 0, 16)
 	mapVal := reflect.ValueOf(m)
 	for _, kv := range mapVal.MapKeys() {
