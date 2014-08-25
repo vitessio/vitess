@@ -73,3 +73,9 @@ func TestActions(t *testing.T) {
 	defer ts.Close()
 	test.CheckActions(t, ts)
 }
+
+func TestLotsOfActions(t *testing.T) {
+	ts := NewTestServer(t, []string{"test"})
+	defer ts.Close()
+	test.CheckLotsOfActions(t, ts)
+}

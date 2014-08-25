@@ -591,8 +591,7 @@ class TestReparent(unittest.TestCase):
 
     utils.pause("check orphan")
 
-    utils.run_vtctl(['ReparentTablet', tablet_41983.tablet_alias],
-                    mode=utils.VTCTL_VTCTL)
+    utils.run_vtctl(['ReparentTablet', tablet_41983.tablet_alias])
 
     result = tablet_41983.mquery('vt_test_keyspace',
                                  'select msg from vt_insert_test where id=1')

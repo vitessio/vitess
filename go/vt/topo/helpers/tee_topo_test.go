@@ -102,3 +102,8 @@ func TestActions(t *testing.T) {
 	ts := newFakeTeeServer(t)
 	test.CheckActions(t, ts)
 }
+
+func TestLotsOfActions(t *testing.T) {
+	ts := newFakeTeeServer(t)
+	test.CheckLotsOfActions(t, ts)
+}
