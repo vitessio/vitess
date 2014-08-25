@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"html/template"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -59,6 +60,40 @@ type ResilientSrvTopoServer struct {
 	srvKeyspaceNamesCache map[string]*srvKeyspaceNamesEntry
 	srvKeyspaceCache      map[string]*srvKeyspaceEntry
 	endPointsCache        map[string]*endPointsEntry
+
+	// GetEndPoints stats.
+	endPointCounters *endPointCounters
+}
+
+type endPointCounters struct {
+	queries             *stats.MultiCounters
+	errors              *stats.MultiCounters
+	emptyResults        *stats.MultiCounters
+	remoteQueries       *stats.MultiCounters
+	numberReturned      *stats.MultiCounters
+	degradedResults     *stats.MultiCounters
+	cacheHits           *stats.MultiCounters
+	remoteLookups       *stats.MultiCounters
+	remoteLookupErrors  *stats.MultiCounters
+	lookupErrors        *stats.MultiCounters
+	staleCacheFallbacks *stats.MultiCounters
+}
+
+func newEndPointCounters(counterPrefix string) *endPointCounters {
+	labels := []string{"Cell", "Keyspace", "ShardName", "DbType"}
+	return &endPointCounters{
+		queries:             stats.NewMultiCounters(counterPrefix+"EndPointQueryCount", labels),
+		errors:              stats.NewMultiCounters(counterPrefix+"EndPointErrorCount", labels),
+		emptyResults:        stats.NewMultiCounters(counterPrefix+"EndPointEmptyResultCount", labels),
+		numberReturned:      stats.NewMultiCounters(counterPrefix+"EndPointsReturnedCount", labels),
+		degradedResults:     stats.NewMultiCounters(counterPrefix+"EndPointDegradedResultCount", labels),
+		cacheHits:           stats.NewMultiCounters(counterPrefix+"EndPointCacheHitCount", labels),
+		remoteQueries:       stats.NewMultiCounters(counterPrefix+"EndPointRemoteQueryCount", labels),
+		remoteLookups:       stats.NewMultiCounters(counterPrefix+"EndPointRemoteLookupCount", labels),
+		remoteLookupErrors:  stats.NewMultiCounters(counterPrefix+"EndPointRemoteLookupErrorCount", labels),
+		lookupErrors:        stats.NewMultiCounters(counterPrefix+"EndPointLookupErrorCount", labels),
+		staleCacheFallbacks: stats.NewMultiCounters(counterPrefix+"EndPointStaleCacheFallbackCount", labels),
+	}
 }
 
 type srvKeyspaceNamesEntry struct {
@@ -94,6 +129,7 @@ type endPointsEntry struct {
 	keyspace   string
 	shard      string
 	tabletType topo.TabletType
+	remote     bool
 
 	// the mutex protects any access to this structure (read or write)
 	mutex sync.Mutex
@@ -109,6 +145,11 @@ type endPointsEntry struct {
 	lastErrorContext context.Context
 }
 
+func endPointIsHealthy(ep topo.EndPoint) bool {
+	// if we are behind on replication, we're not 100% healthy
+	return ep.Health == nil || ep.Health[health.ReplicationLag] != health.ReplicationLagHigh
+}
+
 // filterUnhealthyServers removes the unhealthy servers from the list,
 // unless all servers are unhealthy, then it keeps them all.
 func filterUnhealthyServers(endPoints *topo.EndPoints) *topo.EndPoints {
@@ -121,7 +162,7 @@ func filterUnhealthyServers(endPoints *topo.EndPoints) *topo.EndPoints {
 	healthyEndPoints := make([]topo.EndPoint, 0, len(endPoints.Entries))
 	for _, ep := range endPoints.Entries {
 		// if we are behind on replication, we're not 100% healthy
-		if ep.Health != nil && ep.Health[health.ReplicationLag] == health.ReplicationLagHigh {
+		if !endPointIsHealthy(ep) {
 			continue
 		}
 
@@ -139,16 +180,18 @@ func filterUnhealthyServers(endPoints *topo.EndPoints) *topo.EndPoints {
 
 // NewResilientSrvTopoServer creates a new ResilientSrvTopoServer
 // based on the provided SrvTopoServer.
-func NewResilientSrvTopoServer(base topo.Server, counterName string) *ResilientSrvTopoServer {
+func NewResilientSrvTopoServer(base topo.Server, counterPrefix string) *ResilientSrvTopoServer {
 	return &ResilientSrvTopoServer{
 		topoServer:         base,
 		cacheTTL:           *srvTopoCacheTTL,
 		enableRemoteMaster: *enableRemoteMaster,
-		counts:             stats.NewCounters(counterName),
+		counts:             stats.NewCounters(counterPrefix + "Counts"),
 
 		srvKeyspaceNamesCache: make(map[string]*srvKeyspaceNamesEntry),
 		srvKeyspaceCache:      make(map[string]*srvKeyspaceEntry),
 		endPointsCache:        make(map[string]*endPointsEntry),
+
+		endPointCounters: newEndPointCounters(counterPrefix),
 	}
 }
 
@@ -250,13 +293,16 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(context context.Context, ce
 }
 
 // GetEndPoints return all endpoints for the given cell, keyspace, shard, and tablet type.
-func (server *ResilientSrvTopoServer) GetEndPoints(context context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
+func (server *ResilientSrvTopoServer) GetEndPoints(context context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (result *topo.EndPoints, err error) {
+	key := []string{cell, keyspace, shard, string(tabletType)}
+
 	server.counts.Add(queryCategory, 1)
+	server.endPointCounters.queries.Add(key, 1)
 
 	// find the entry in the cache, add it if not there
-	key := cell + "." + keyspace + "." + shard + "." + string(tabletType)
+	keyStr := strings.Join(key, ".")
 	server.mutex.Lock()
-	entry, ok := server.endPointsCache[key]
+	entry, ok := server.endPointsCache[keyStr]
 	if !ok {
 		entry = &endPointsEntry{
 			cell:       cell,
@@ -264,7 +310,7 @@ func (server *ResilientSrvTopoServer) GetEndPoints(context context.Context, cell
 			shard:      shard,
 			tabletType: tabletType,
 		}
-		server.endPointsCache[key] = entry
+		server.endPointsCache[keyStr] = entry
 	}
 	server.mutex.Unlock()
 
@@ -274,20 +320,49 @@ func (server *ResilientSrvTopoServer) GetEndPoints(context context.Context, cell
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
 
+	// Whether the query was serviced with remote endpoints.
+	remote := false
+
+	// Record some stats regardless of cache status.
+	defer func() {
+		if remote {
+			server.endPointCounters.remoteQueries.Add(key, 1)
+		}
+		if err != nil {
+			server.endPointCounters.errors.Add(key, 1)
+			return
+		}
+		if len(result.Entries) == 0 {
+			server.endPointCounters.emptyResults.Add(key, 1)
+			return
+		}
+		server.endPointCounters.numberReturned.Add(key, int64(len(result.Entries)))
+		// We either serve all healthy endpoints or all degraded endpoints, so the first entry is representative.
+		if !endPointIsHealthy(result.Entries[0]) {
+			server.endPointCounters.degradedResults.Add(key, 1)
+			return
+		}
+	}()
+
 	// If the entry is fresh enough, return it
 	if time.Now().Sub(entry.insertionTime) < server.cacheTTL {
+		server.endPointCounters.cacheHits.Add(key, 1)
+		remote = entry.remote
 		return entry.value, entry.lastError
 	}
 
 	// not in cache or too old, get the real value
-	result, err := server.topoServer.GetEndPoints(cell, keyspace, shard, tabletType)
+	result, err = server.topoServer.GetEndPoints(cell, keyspace, shard, tabletType)
 	// get remote endpoints for master if enabled
 	if err != nil && server.enableRemoteMaster && tabletType == topo.TYPE_MASTER {
+		remote = true
 		server.counts.Add(remoteQueryCategory, 1)
+		server.endPointCounters.remoteLookups.Add(key, 1)
 		var ss *topo.SrvShard
 		ss, err = server.topoServer.GetSrvShard(cell, keyspace, shard)
 		if err != nil {
 			server.counts.Add(remoteErrorCategory, 1)
+			server.endPointCounters.remoteLookupErrors.Add(key, 1)
 			log.Errorf("GetEndPoints(%v, %v, %v, %v, %v) failed to get SrvShard for remote master: %v",
 				context, cell, keyspace, shard, tabletType, err)
 		} else {
@@ -297,12 +372,13 @@ func (server *ResilientSrvTopoServer) GetEndPoints(context context.Context, cell
 		}
 	}
 	if err != nil {
-		// handle error
+		server.endPointCounters.lookupErrors.Add(key, 1)
 		if entry.insertionTime.IsZero() {
 			server.counts.Add(errorCategory, 1)
 			log.Errorf("GetEndPoints(%v, %v, %v, %v, %v) failed: %v (no cached value, caching and returning error)", context, cell, keyspace, shard, tabletType, err)
 		} else {
 			server.counts.Add(cachedCategory, 1)
+			server.endPointCounters.staleCacheFallbacks.Add(key, 1)
 			log.Warningf("GetEndPoints(%v, %v, %v, %v, %v) failed: %v (returning cached value: %v %v)", context, cell, keyspace, shard, tabletType, err, entry.value, entry.lastError)
 			return entry.value, entry.lastError
 		}
@@ -314,6 +390,7 @@ func (server *ResilientSrvTopoServer) GetEndPoints(context context.Context, cell
 	entry.value = filterUnhealthyServers(result)
 	entry.lastError = err
 	entry.lastErrorContext = context
+	entry.remote = remote
 	return entry.value, err
 }
 

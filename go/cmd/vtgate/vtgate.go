@@ -37,7 +37,7 @@ func main() {
 	ts := topo.GetServer()
 	defer topo.CloseServers()
 
-	resilientSrvTopoServer = vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServerCounts")
+	resilientSrvTopoServer = vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServer")
 
 	labels := []string{"Cell", "Keyspace", "ShardName", "DbType"}
 	_ = stats.NewMultiCountersFunc("EndpointCount", labels, resilientSrvTopoServer.EndpointCount)
