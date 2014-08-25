@@ -82,26 +82,46 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 		panic("unexpected")
 	}
 
-	// Attempt PK match only if there's no limit clause
-	if sel.Limit == nil {
-		planId, pkValues, err := getSelectPKValues(conditions, tableInfo.Indexes[0])
+	planId, pkValues, err := getSelectPKValues(conditions, tableInfo.Indexes[0])
+	if err != nil {
+		return nil, err
+	}
+	switch planId {
+	case PLAN_PK_EQUAL:
+		offset, rowcount, err := sel.Limit.Limits()
 		if err != nil {
 			return nil, err
 		}
-		switch planId {
-		case PLAN_PK_EQUAL:
-			plan.PlanId = PLAN_PK_EQUAL
-			plan.OuterQuery = GenerateEqualOuterQuery(sel, tableInfo)
-			plan.PKValues = pkValues
-			return plan, nil
-		case PLAN_PK_IN:
-			plan.PlanId = PLAN_PK_IN
-			plan.OuterQuery = GenerateInOuterQuery(sel, tableInfo)
-			plan.PKValues = pkValues
-			return plan, nil
+		if offset != nil {
+			goto nopk
 		}
+		switch r := rowcount.(type) {
+		case nil:
+			// no limit clause. Ok to fetch by pk.
+		case int64:
+			// A rowcount >= 1 is redundant for fetch by pk.
+			if r < 1 {
+				goto nopk
+			}
+		default:
+			// A more complex limit clause.
+			goto nopk
+		}
+		plan.PlanId = PLAN_PK_EQUAL
+		plan.OuterQuery = GenerateEqualOuterQuery(sel, tableInfo)
+		plan.PKValues = pkValues
+		return plan, nil
+	case PLAN_PK_IN:
+		if sel.Limit != nil {
+			goto nopk
+		}
+		plan.PlanId = PLAN_PK_IN
+		plan.OuterQuery = GenerateInOuterQuery(sel, tableInfo)
+		plan.PKValues = pkValues
+		return plan, nil
 	}
 
+nopk:
 	if len(tableInfo.Indexes[0].Columns) != 1 {
 		plan.Reason = REASON_COMPOSITE_PK
 		return plan, nil

@@ -67,7 +67,7 @@ def run(args, raise_on_error=True, **kargs):
     stdout, stderr = proc.communicate()
   except Exception as e:
     raise Exception('Command failed', e, args)
-    
+
   if proc.returncode:
     if raise_on_error:
       raise Exception('Command failed: ' + ' '.join(args) + ':\n' + stdout +
