@@ -7,12 +7,14 @@
 package vtgate
 
 import (
+	"errors"
 	"strings"
 	"time"
 
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
@@ -30,6 +32,8 @@ var (
 	ErrorsByOperation *stats.Rates
 	ErrorsByKeyspace  *stats.Rates
 	ErrorsByDbType    *stats.Rates
+
+	ErrTooManyInFlight = errors.New("too many requests in flight")
 )
 
 // VTGate is the rpc interface to vtgate. Only one instance
@@ -39,6 +43,9 @@ type VTGate struct {
 	timings    *stats.MultiTimings
 	errors     *stats.MultiCounters
 	infoErrors *stats.Counters
+
+	maxInFlight int64
+	inFlight    sync2.AtomicInt64
 
 	// the throttled loggers for all errors, one per API entry
 	logExecuteShard             *logutil.ThrottledLogger
@@ -57,7 +64,7 @@ type RegisterVTGate func(*VTGate)
 
 var RegisterVTGates []RegisterVTGate
 
-func Init(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount int, timeout time.Duration) {
+func Init(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount int, timeout time.Duration, maxInFlight int) {
 	if RpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
@@ -66,6 +73,9 @@ func Init(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount 
 		timings:    stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
 		errors:     stats.NewMultiCounters("VtgateApiErrorCounts", []string{"Operation", "Keyspace", "DbType"}),
 		infoErrors: stats.NewCounters("VtgateInfoErrorCounts"),
+
+		maxInFlight: int64(maxInFlight),
+		inFlight:    0,
 
 		logExecuteShard:             logutil.NewThrottledLogger("ExecuteShard", 5*time.Second),
 		logExecuteKeyspaceIds:       logutil.NewThrottledLogger("ExecuteKeyspaceIds", 5*time.Second),
@@ -95,6 +105,12 @@ func (vtg *VTGate) ExecuteShard(context context.Context, query *proto.QueryShard
 	startTime := time.Now()
 	statsKey := []string{"ExecuteShard", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
+
+	x := vtg.inFlight.Add(1)
+	defer vtg.inFlight.Add(-1)
+	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
+		return ErrTooManyInFlight
+	}
 
 	qr, err := vtg.resolver.Execute(
 		context,
@@ -128,6 +144,12 @@ func (vtg *VTGate) ExecuteKeyspaceIds(context context.Context, query *proto.Keys
 	statsKey := []string{"ExecuteKeyspaceIds", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
 
+	x := vtg.inFlight.Add(1)
+	defer vtg.inFlight.Add(-1)
+	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
+		return ErrTooManyInFlight
+	}
+
 	qr, err := vtg.resolver.ExecuteKeyspaceIds(context, query)
 	if err == nil {
 		reply.Result = qr
@@ -149,6 +171,12 @@ func (vtg *VTGate) ExecuteKeyRanges(context context.Context, query *proto.KeyRan
 	startTime := time.Now()
 	statsKey := []string{"ExecuteKeyRanges", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
+
+	x := vtg.inFlight.Add(1)
+	defer vtg.inFlight.Add(-1)
+	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
+		return ErrTooManyInFlight
+	}
 
 	qr, err := vtg.resolver.ExecuteKeyRanges(context, query)
 	if err == nil {
@@ -172,6 +200,12 @@ func (vtg *VTGate) ExecuteEntityIds(context context.Context, query *proto.Entity
 	statsKey := []string{"ExecuteEntityIds", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
 
+	x := vtg.inFlight.Add(1)
+	defer vtg.inFlight.Add(-1)
+	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
+		return ErrTooManyInFlight
+	}
+
 	qr, err := vtg.resolver.ExecuteEntityIds(context, query)
 	if err == nil {
 		reply.Result = qr
@@ -193,6 +227,12 @@ func (vtg *VTGate) ExecuteBatchShard(context context.Context, batchQuery *proto.
 	startTime := time.Now()
 	statsKey := []string{"ExecuteBatchShard", batchQuery.Keyspace, string(batchQuery.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
+
+	x := vtg.inFlight.Add(1)
+	defer vtg.inFlight.Add(-1)
+	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
+		return ErrTooManyInFlight
+	}
 
 	qrs, err := vtg.resolver.ExecuteBatch(
 		context,
@@ -225,6 +265,12 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(context context.Context, query *proto
 	statsKey := []string{"ExecuteBatchKeyspaceIds", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
 
+	x := vtg.inFlight.Add(1)
+	defer vtg.inFlight.Add(-1)
+	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
+		return ErrTooManyInFlight
+	}
+
 	qrs, err := vtg.resolver.ExecuteBatchKeyspaceIds(
 		context,
 		query)
@@ -253,6 +299,12 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(context context.Context, query *prot
 	startTime := time.Now()
 	statsKey := []string{"StreamExecuteKeyspaceIds", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
+
+	x := vtg.inFlight.Add(1)
+	defer vtg.inFlight.Add(-1)
+	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
+		return ErrTooManyInFlight
+	}
 
 	err := vtg.resolver.StreamExecuteKeyspaceIds(
 		context,
@@ -286,6 +338,12 @@ func (vtg *VTGate) StreamExecuteKeyRanges(context context.Context, query *proto.
 	statsKey := []string{"StreamExecuteKeyRanges", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
 
+	x := vtg.inFlight.Add(1)
+	defer vtg.inFlight.Add(-1)
+	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
+		return ErrTooManyInFlight
+	}
+
 	err := vtg.resolver.StreamExecuteKeyRanges(
 		context,
 		query,
@@ -313,6 +371,12 @@ func (vtg *VTGate) StreamExecuteShard(context context.Context, query *proto.Quer
 	startTime := time.Now()
 	statsKey := []string{"StreamExecuteShard", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
+
+	x := vtg.inFlight.Add(1)
+	defer vtg.inFlight.Add(-1)
+	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
+		return ErrTooManyInFlight
+	}
 
 	err := vtg.resolver.StreamExecute(
 		context,
