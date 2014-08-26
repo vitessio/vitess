@@ -159,7 +159,7 @@ func CheckLotsOfActions(t *testing.T, ts topo.Server) {
 		t.Fatalf("CreateTablet: %v", err)
 	}
 
-	nActions := 100
+	nActions := 64
 	paths := make([]string, nActions)
 
 	// write the actions in parallel, save the paths
