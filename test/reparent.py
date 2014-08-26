@@ -219,11 +219,11 @@ class TestReparent(unittest.TestCase):
     tablet_31981.create_db('vt_test_keyspace')
 
     # Start up a master mysql and vttablet
-    tablet_62344.init_tablet('master', 'test_keyspace', shard_id, start=True)
-    if environment.topo_server_implementation == 'zookeeper':
-      shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/'+shard_id])
-      self.assertEqual(shard['Cells'], ['test_nj'],
-                       'wrong list of cell in Shard: %s' % str(shard['Cells']))
+    tablet_62344.init_tablet('master', 'test_keyspace', shard_id, start=True,
+                             wait_for_start=False)
+    shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/'+shard_id])
+    self.assertEqual(shard['Cells'], ['test_nj'],
+                     'wrong list of cell in Shard: %s' % str(shard['Cells']))
 
     # Create a few slaves for testing reparenting.
     tablet_62044.init_tablet('replica', 'test_keyspace', shard_id, start=True,
@@ -232,11 +232,10 @@ class TestReparent(unittest.TestCase):
                              wait_for_start=False)
     tablet_31981.init_tablet('replica', 'test_keyspace', shard_id, start=True,
                              wait_for_start=False)
-    for t in [tablet_62044, tablet_41983, tablet_31981]:
+    for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.wait_for_vttablet_state("SERVING")
-    if environment.topo_server_implementation == 'zookeeper':
-      shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/'+shard_id])
-      self.assertEqual(shard['Cells'], ['test_nj', 'test_ny'], 'wrong list of cell in Shard: %s' % str(shard['Cells']))
+    shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/'+shard_id])
+    self.assertEqual(shard['Cells'], ['test_nj', 'test_ny'], 'wrong list of cell in Shard: %s' % str(shard['Cells']))
 
     # Recompute the shard layout node - until you do that, it might not be valid.
     utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/' + shard_id])

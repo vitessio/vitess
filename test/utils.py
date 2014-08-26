@@ -642,7 +642,7 @@ class Vtctld(object):
       v = get_vars(self.port)
       if v:
         break
-      timeout = wait_step('waiting for vtgate to start', timeout,
+      timeout = wait_step('waiting for vtctld to start', timeout,
                           sleep_time=0.2)
 
     # save the running instance so vtctl commands can be remote executed now
