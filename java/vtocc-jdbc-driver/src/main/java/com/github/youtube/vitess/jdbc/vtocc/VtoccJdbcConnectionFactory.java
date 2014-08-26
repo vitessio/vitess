@@ -16,7 +16,7 @@ import java.sql.SQLException;
 import javax.inject.Provider;
 
 /**
- * Provides instances of JDBC {@link Connection}s which use {@link acolyte.Driver} and Vtocc Stubby
+ * Provides instances of JDBC {@link Connection}s which use {@link acolyte.jdbc.Driver} and Vtocc Stubby
  * RPC as a transport-level protocol.
  *
  * All the connections are returned fully initialized and ready to be used with transaction already

@@ -33,8 +33,8 @@
         <dependency>
             <!-- Build separately in third-party by sbt -->
             <groupId>org.eu.acolyte</groupId>
-            <artifactId>acolyte-core</artifactId>
-            <version>1.0.13</version>
+            <artifactId>jdbc-driver</artifactId>
+            <version>1.0.28</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>

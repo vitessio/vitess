@@ -1,6 +1,5 @@
 package com.github.youtube.vitess.jdbc.vtocc;
 
-
 import com.google.common.base.Function;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -19,11 +18,11 @@ import java.util.Map;
 
 import javax.annotation.Nullable;
 
-import acolyte.Row;
-import acolyte.RowList;
+import acolyte.jdbc.RowList;
+import acolyte.jdbc.Row;
 
 /**
- * Provides {@link acolyte.RowList} instances that wrap vtocc's {@link com.github.youtube.vitess.jdbc.vtocc.QueryService.QueryResult}.
+ * Provides {@link acolyte.jdbc.RowList} instances that wrap vtocc's {@link com.github.youtube.vitess.jdbc.vtocc.QueryService.QueryResult}.
  *
  * Instances returned are read-only.
  *
@@ -31,7 +30,7 @@ import acolyte.RowList;
  * for data storage is selected, and byte array provided by MySQL through vtocc is converted into
  * the type selected.
  *
- * Instances are only called from within {@link acolyte.Driver}, contract is not well defined
+ * Instances are only called from within {@link acolyte.jdbc.Driver}, contract is not well defined
  * therefore there are no unit tests. This code is tested as a part of integration tests
  * running SQL queries through JDBC.
  */

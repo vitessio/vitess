@@ -18,7 +18,7 @@ import java.util.Properties;
  *
  * Driver is very lightweight, so you can create as many instances as you need.
  */
-public class Driver extends acolyte.Driver {
+public class Driver extends acolyte.jdbc.Driver {
 
   private static final Logger logger = LoggerFactory.getLogger(Driver.class);
 

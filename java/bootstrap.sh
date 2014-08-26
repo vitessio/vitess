@@ -14,7 +14,7 @@ type protoc >/dev/null 2>&1 || { echo >&2 "[ERROR] Install protoc with sudo apt-
 type mvn >/dev/null 2>&1 || { echo >&2 "[ERROR] Install maven with sudo apt-get install maven. Aborting."; exit 1; }
 type git >/dev/null 2>&1 || { echo >&2 "[ERROR] Install git with sudo apt-get install git. Aborting."; exit 1; }
 
-ACOLYTE_DIST="$VTROOT/dist/java/org/eu/acolyte/acolyte-core/1.0.13-PATCHED"
+ACOLYTE_DIST="$VTROOT/dist/java/org/eu/acolyte/acolyte-core/1.0.28-PATCHED"
 ACOLYTE="$VTTOP/third_party/acolyte"
 VTOCC_JARS="$(find ~/.m2/repository/com/github/youtube/vitess/vtocc-jdbc-driver | grep .jar)"
 if [ ! -z "$VTOCC_JARS" ]; then
@@ -25,7 +25,7 @@ else
   rm -rf "$ACOLYTE"
   git clone https://github.com/cchantep/acolyte.git "$ACOLYTE"
   cd "$ACOLYTE"
-  git checkout tags/1.0.13
+  git checkout tags/1.0.28
   git apply ../acolyte.patch --ignore-whitespace
   sbt publish
   mkdir -p "$ACOLYTE_DIST"

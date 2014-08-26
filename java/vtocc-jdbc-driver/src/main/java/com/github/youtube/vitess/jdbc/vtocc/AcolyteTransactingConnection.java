@@ -5,16 +5,15 @@ import java.sql.SQLException;
 import javax.inject.Inject;
 
 /**
- * Implements connection which handles non-transaction SQL logic in addition to {@link
- * acolyte.Connection} internal logic. Transaction logic itself is handled in a separate class
+ * Implements connection which handles non-transaction SQL logic in addition to {@link acolyte.jdbc.Connection} internal logic. Transaction logic itself is handled in a separate class
  * {@link VtoccTransactionHandler}.
  */
-public class AcolyteTransactingConnection extends acolyte.Connection {
+public class AcolyteTransactingConnection extends acolyte.jdbc.Connection {
 
   private final VtoccTransactionHandler vtoccTransactionHandler;
 
   @Inject
-  AcolyteTransactingConnection(acolyte.Connection connection,
+  AcolyteTransactingConnection(acolyte.jdbc.Connection connection,
       VtoccTransactionHandler vtoccTransactionHandler) {
     super(connection);
     this.vtoccTransactionHandler = vtoccTransactionHandler;
