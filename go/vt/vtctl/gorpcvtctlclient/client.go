@@ -30,6 +30,7 @@ func goRpcVtctlClientFactory(addr string, dialTimeout time.Duration) (vtctlclien
 	return &goRpcVtctlClient{rpcClient}, nil
 }
 
+// ExecuteVtctlCommand is part of the VtctlClient interface
 func (client *goRpcVtctlClient) ExecuteVtctlCommand(args []string, actionTimeout, lockTimeout time.Duration) (<-chan *logutil.LoggerEvent, vtctlclient.ErrFunc) {
 	req := &gorpcproto.ExecuteVtctlCommandArgs{
 		Args:          args,
@@ -39,6 +40,11 @@ func (client *goRpcVtctlClient) ExecuteVtctlCommand(args []string, actionTimeout
 	sr := make(chan *logutil.LoggerEvent, 10)
 	c := client.rpcClient.StreamGo("VtctlServer.ExecuteVtctlCommand", req, sr)
 	return sr, func() error { return c.Error }
+}
+
+// Close is part of the VtctlClient interface
+func (client *goRpcVtctlClient) Close() {
+	client.rpcClient.Close()
 }
 
 func init() {

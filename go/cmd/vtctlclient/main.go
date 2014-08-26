@@ -31,6 +31,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Cannot dial to server %v: %v", *server, err)
 	}
+	defer client.Close()
 
 	// run the command
 	c, errFunc := client.ExecuteVtctlCommand(flag.Args(), *actionTimeout, *lockWaitTimeout)

@@ -23,6 +23,10 @@ type ErrFunc func() error
 type VtctlClient interface {
 	// ExecuteVtctlCommand will execute the command remotely
 	ExecuteVtctlCommand(args []string, actionTimeout, lockTimeout time.Duration) (<-chan *logutil.LoggerEvent, ErrFunc)
+
+	// Close will terminate the connection. This object won't be
+	// used after this.
+	Close()
 }
 
 // VtctlClientFactory are registered by client implementations
