@@ -56,3 +56,7 @@ class TimeoutError(OperationalError):
 
 class TxPoolFull(DatabaseError):
   pass
+
+
+class RequestBacklog(DatabaseError):
+  pass

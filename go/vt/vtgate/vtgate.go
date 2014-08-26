@@ -33,7 +33,7 @@ var (
 	ErrorsByKeyspace  *stats.Rates
 	ErrorsByDbType    *stats.Rates
 
-	ErrTooManyInFlight = errors.New("too many requests in flight")
+	ErrTooManyInFlight = errors.New("request_backlog: too many requests in flight")
 )
 
 // VTGate is the rpc interface to vtgate. Only one instance
