@@ -6,7 +6,6 @@ package wrangler
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
@@ -137,61 +136,20 @@ func (wr *Wrangler) reparentShardExternal(ev *events.Reparent, slaveTabletMap, m
 	delete(slaveTabletMap, masterElectTablet.Alias)
 	delete(masterTabletMap, masterElectTablet.Alias)
 
-	// then fix all the slaves, including the old master
+	// Then fix all the slaves, including the old master.  This
+	// last step is very likely to time out for some tablets (one
+	// random guy is dead, the old master is dead, ...). We
+	// execute them all in parallel until we get to
+	// wr.ActionTimeout(). After this, no other action with a
+	// timeout is executed, so even if we got to the timeout,
+	// we're still good.
 	event.DispatchUpdate(ev, "restarting slaves")
 	swr := wr.slaveWasRestartedActionNode
 	if wr.UseRPCs {
 		swr = wr.slaveWasRestartedRpc
 	}
-	wr.restartSlavesExternal(slaveTabletMap, masterTabletMap, masterElectTablet.Alias, swr)
+	topotools.RestartSlavesExternal(wr.ts, wr.logger, slaveTabletMap, masterTabletMap, masterElectTablet.Alias, swr)
 	return nil
-}
-
-func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTabletAlias topo.TabletAlias, slaveWasRestarted func(*topo.TabletInfo, *actionnode.SlaveWasRestartedArgs) error) {
-	wg := sync.WaitGroup{}
-
-	swrd := actionnode.SlaveWasRestartedArgs{
-		Parent: masterElectTabletAlias,
-	}
-
-	// The following two blocks of actions are very likely to time
-	// out for some tablets (one random guy is dead, the old
-	// master is dead, ...). We execute them all in parallel until
-	// we get to wr.ActionTimeout(). After this, no other action
-	// with a timeout is executed, so even if we got to the
-	// timeout, we're still good.
-	wr.logger.Infof("Updating individual tablets with the right master...")
-
-	// do all the slaves
-	for _, ti := range slaveTabletMap {
-		wg.Add(1)
-		go func(ti *topo.TabletInfo) {
-			if err := slaveWasRestarted(ti, &swrd); err != nil {
-				wr.logger.Warningf("Slave %v had an error: %v", ti.Alias, err)
-			}
-			wg.Done()
-		}(ti)
-	}
-
-	// and do the old master and any straggler, if possible.
-	for _, ti := range masterTabletMap {
-		wg.Add(1)
-		go func(ti *topo.TabletInfo) {
-			err := slaveWasRestarted(ti, &swrd)
-			if err != nil {
-				// the old master can be annoying if left
-				// around in the replication graph, so if we
-				// can't restart it, we just scrap it.
-				// We don't rebuild the Shard just yet though.
-				wr.logger.Warningf("Old master %v is not restarting, scrapping it: %v", ti.Alias, err)
-				if err := topotools.Scrap(wr.ts, ti.Alias, true /*force*/); err != nil {
-					wr.logger.Warningf("Failed to scrap old master %v: %v", ti.Alias, err)
-				}
-			}
-			wg.Done()
-		}(ti)
-	}
-	wg.Wait()
 }
 
 func (wr *Wrangler) slaveWasPromoted(ti *topo.TabletInfo) error {
