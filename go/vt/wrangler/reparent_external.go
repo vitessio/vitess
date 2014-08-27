@@ -137,24 +137,21 @@ func (wr *Wrangler) reparentShardExternal(ev *events.Reparent, slaveTabletMap, m
 	delete(slaveTabletMap, masterElectTablet.Alias)
 	delete(masterTabletMap, masterElectTablet.Alias)
 
-	// Re-read the master elect tablet, as its mysql port may have been updated
-	event.DispatchUpdate(ev, "re-reading new master record")
-	masterElectTablet, err = wr.TopoServer().GetTablet(masterElectTablet.Alias)
-	if err != nil {
-		return fmt.Errorf("cannot re-read the master record, something is seriously wrong: %v", err)
-	}
-
 	// then fix all the slaves, including the old master
 	event.DispatchUpdate(ev, "restarting slaves")
-	wr.restartSlavesExternal(slaveTabletMap, masterTabletMap, masterElectTablet)
+	swr := wr.slaveWasRestartedActionNode
+	if wr.UseRPCs {
+		swr = wr.slaveWasRestartedRpc
+	}
+	wr.restartSlavesExternal(slaveTabletMap, masterTabletMap, masterElectTablet.Alias, swr)
 	return nil
 }
 
-func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo) {
+func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTabletAlias topo.TabletAlias, slaveWasRestarted func(*topo.TabletInfo, *actionnode.SlaveWasRestartedArgs) error) {
 	wg := sync.WaitGroup{}
 
 	swrd := actionnode.SlaveWasRestartedArgs{
-		Parent: masterElectTablet.Alias,
+		Parent: masterElectTabletAlias,
 	}
 
 	// The following two blocks of actions are very likely to time
@@ -169,7 +166,7 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[to
 	for _, ti := range slaveTabletMap {
 		wg.Add(1)
 		go func(ti *topo.TabletInfo) {
-			if err := wr.slaveWasRestarted(ti, &swrd); err != nil {
+			if err := slaveWasRestarted(ti, &swrd); err != nil {
 				wr.logger.Warningf("Slave %v had an error: %v", ti.Alias, err)
 			}
 			wg.Done()
@@ -180,14 +177,14 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[to
 	for _, ti := range masterTabletMap {
 		wg.Add(1)
 		go func(ti *topo.TabletInfo) {
-			err := wr.slaveWasRestarted(ti, &swrd)
+			err := slaveWasRestarted(ti, &swrd)
 			if err != nil {
 				// the old master can be annoying if left
 				// around in the replication graph, so if we
 				// can't restart it, we just scrap it.
 				// We don't rebuild the Shard just yet though.
 				wr.logger.Warningf("Old master %v is not restarting, scrapping it: %v", ti.Alias, err)
-				if _, err := wr.Scrap(ti.Alias, true /*force*/, true /*skipRebuild*/); err != nil {
+				if err := topotools.Scrap(wr.ts, ti.Alias, true /*force*/); err != nil {
 					wr.logger.Warningf("Failed to scrap old master %v: %v", ti.Alias, err)
 				}
 			}
@@ -214,15 +211,16 @@ func (wr *Wrangler) slaveWasPromoted(ti *topo.TabletInfo) error {
 	return nil
 }
 
-func (wr *Wrangler) slaveWasRestarted(ti *topo.TabletInfo, swrd *actionnode.SlaveWasRestartedArgs) (err error) {
-	wr.logger.Infof("slaveWasRestarted(%v)", ti.Alias)
-	if wr.UseRPCs {
-		return wr.ai.RpcSlaveWasRestarted(ti, swrd, wr.ActionTimeout())
-	} else {
-		actionPath, err := wr.ai.SlaveWasRestarted(ti.Alias, swrd)
-		if err != nil {
-			return err
-		}
-		return wr.WaitForCompletion(actionPath)
+func (wr *Wrangler) slaveWasRestartedRpc(ti *topo.TabletInfo, swrd *actionnode.SlaveWasRestartedArgs) (err error) {
+	wr.logger.Infof("slaveWasRestartedRpc(%v)", ti.Alias)
+	return wr.ai.RpcSlaveWasRestarted(ti, swrd, wr.ActionTimeout())
+}
+
+func (wr *Wrangler) slaveWasRestartedActionNode(ti *topo.TabletInfo, swrd *actionnode.SlaveWasRestartedArgs) (err error) {
+	wr.logger.Infof("slaveWasRestartedActionNode(%v)", ti.Alias)
+	actionPath, err := wr.ai.SlaveWasRestarted(ti.Alias, swrd)
+	if err != nil {
+		return err
 	}
+	return wr.WaitForCompletion(actionPath)
 }
