@@ -11,11 +11,13 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Connection struct {
 	conn     net.Conn
 	buffered bufio.ReadWriter
+	timeout  time.Duration
 }
 
 type Result struct {
@@ -25,7 +27,7 @@ type Result struct {
 	Cas   uint64
 }
 
-func Connect(address string) (conn *Connection, err error) {
+func Connect(address string, timeout time.Duration) (conn *Connection, err error) {
 	var network string
 	if strings.Contains(address, "/") {
 		network = "unix"
@@ -33,21 +35,18 @@ func Connect(address string) (conn *Connection, err error) {
 		network = "tcp"
 	}
 	var nc net.Conn
-	nc, err = net.Dial(network, address)
+	nc, err = net.DialTimeout(network, address, timeout)
 	if err != nil {
 		return nil, err
 	}
-	return newConnection(nc), nil
-}
-
-func newConnection(nc net.Conn) *Connection {
 	return &Connection{
 		conn: nc,
 		buffered: bufio.ReadWriter{
 			Reader: bufio.NewReader(nc),
 			Writer: bufio.NewWriter(nc),
 		},
-	}
+		timeout: timeout,
+	}, nil
 }
 
 func (mc *Connection) Close() {
@@ -103,6 +102,7 @@ func (mc *Connection) Cas(key string, flags uint16, timeout uint64, value []byte
 
 func (mc *Connection) Delete(key string) (deleted bool, err error) {
 	defer handleError(&err)
+	mc.setDeadline()
 	// delete <key> [<time>] [noreply]\r\n
 	mc.writestrings("delete ", key, "\r\n")
 	reply := mc.readline()
@@ -115,6 +115,7 @@ func (mc *Connection) Delete(key string) (deleted bool, err error) {
 //This purges the entire cache.
 func (mc *Connection) FlushAll() (err error) {
 	defer handleError(&err)
+	mc.setDeadline()
 	// flush_all [delay] [noreply]\r\n
 	mc.writestrings("flush_all\r\n")
 	response := mc.readline()
@@ -126,6 +127,7 @@ func (mc *Connection) FlushAll() (err error) {
 
 func (mc *Connection) Stats(argument string) (result []byte, err error) {
 	defer handleError(&err)
+	mc.setDeadline()
 	if argument == "" {
 		mc.writestrings("stats\r\n")
 	} else {
@@ -147,6 +149,7 @@ func (mc *Connection) Stats(argument string) (result []byte, err error) {
 }
 
 func (mc *Connection) get(command string, keys []string) (results []Result) {
+	mc.setDeadline()
 	results = make([]Result, 0, len(keys))
 	if len(keys) == 0 {
 		return
@@ -197,6 +200,7 @@ func (mc *Connection) store(command, key string, flags uint16, timeout uint64, v
 		return false
 	}
 
+	mc.setDeadline()
 	// <command name> <key> <flags> <exptime> <bytes> [noreply]\r\n
 	mc.writestrings(command, " ", key, " ")
 	mc.write(strconv.AppendUint(nil, uint64(flags), 10))
@@ -227,18 +231,21 @@ func (mc *Connection) writestrings(strs ...string) {
 
 func (mc *Connection) writestring(s string) {
 	if _, err := mc.buffered.WriteString(s); err != nil {
+		mc.Close()
 		panic(NewMemcacheError("%s", err))
 	}
 }
 
 func (mc *Connection) write(b []byte) {
 	if _, err := mc.buffered.Write(b); err != nil {
+		mc.Close()
 		panic(NewMemcacheError("%s", err))
 	}
 }
 
 func (mc *Connection) flush() {
 	if err := mc.buffered.Flush(); err != nil {
+		mc.Close()
 		panic(NewMemcacheError("%s", err))
 	}
 }
@@ -247,6 +254,7 @@ func (mc *Connection) readline() string {
 	mc.flush()
 	l, isPrefix, err := mc.buffered.ReadLine()
 	if isPrefix || err != nil {
+		mc.Close()
 		panic(NewMemcacheError("Prefix: %v, %s", isPrefix, err))
 	}
 	return string(l)
@@ -256,9 +264,17 @@ func (mc *Connection) read(count int) []byte {
 	mc.flush()
 	b := make([]byte, count)
 	if _, err := io.ReadFull(mc.buffered, b); err != nil {
+		mc.Close()
 		panic(NewMemcacheError("%s", err))
 	}
 	return b
+}
+
+func (mc *Connection) setDeadline() {
+	if err := mc.conn.SetDeadline(time.Now().Add(mc.timeout)); err != nil {
+		mc.Close()
+		panic(NewMemcacheError("%s", err))
+	}
 }
 
 type MemcacheError struct {
