@@ -6,7 +6,7 @@ import (
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
-	"github.com/youtube/vitess/go/vt/wrangler/events"
+	"github.com/youtube/vitess/go/vt/topotools/events"
 )
 
 // reparentShardBrutal executes a brutal reparent.

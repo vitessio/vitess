@@ -15,7 +15,7 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/wrangler/events"
+	"github.com/youtube/vitess/go/vt/topotools/events"
 )
 
 // GetSchema uses an RPC to get the schema from a remote tablet

@@ -16,7 +16,7 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/wrangler/events"
+	"github.com/youtube/vitess/go/vt/topotools/events"
 )
 
 // keyspace related methods for Wrangler
