@@ -41,9 +41,6 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet) error {
 	if agent.DBConfigs.App.DbName == "" {
 		agent.DBConfigs.App.DbName = tablet.DbName()
 	}
-	if agent.DBConfigs.Filtered.DbName == "" {
-		agent.DBConfigs.Filtered.DbName = tablet.DbName()
-	}
 	agent.DBConfigs.App.Keyspace = tablet.Keyspace
 	agent.DBConfigs.App.Shard = tablet.Shard
 	if tablet.Type != topo.TYPE_MASTER {

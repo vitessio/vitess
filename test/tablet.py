@@ -442,7 +442,6 @@ class Tablet(object):
     if self.keyspace:
       config['app']['dbname'] = self.dbname
       config['dba']['dbname'] = self.dbname
-      config['filtered']['dbname'] = self.dbname
       config['repl']['dbname'] = self.dbname
     config['repl'].update(repl_extra_flags)
     return config

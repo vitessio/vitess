@@ -424,6 +424,9 @@ func (blm *BinlogPlayerMap) RefreshMap(tablet topo.Tablet, keyspaceInfo *topo.Ke
 	}
 
 	blm.mu.Lock()
+	if blm.dbConfig.DbName == "" {
+		blm.dbConfig.DbName = tablet.DbName()
+	}
 
 	// get the existing sources and build a map of sources to remove
 	toRemove := make(map[uint32]bool)
