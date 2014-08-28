@@ -431,12 +431,28 @@ class TestReparent(unittest.TestCase):
 
   # assume a different entity is doing the reparent, and telling us it was done
   def test_reparent_from_outside(self):
-    self._test_reparent_from_outside(False)
+    self._test_reparent_from_outside(brutal=False)
 
   def test_reparent_from_outside_brutal(self):
-    self._test_reparent_from_outside(True)
+    self._test_reparent_from_outside(brutal=True)
 
-  def _test_reparent_from_outside(self, brutal=False):
+  def test_reparent_from_outside_rpc(self):
+    self._test_reparent_from_outside(brutal=False, rpc=True)
+
+  def test_reparent_from_outside_brutal_rpc(self):
+    self._test_reparent_from_outside(brutal=True, rpc=True)
+
+  def _test_reparent_from_outside(self, brutal=False, rpc=False):
+    """This test will start a master and 3 slaves. Then:
+    - one slave will be the new master
+    - one slave will be reparented to that new master
+    - one slave will be busted and ded in the water
+    and we'll call ShardExternallyReparented.
+
+    Args:
+      brutal: scraps the old master first
+      rpc: sends an RPC to the new master instead of doing the work.
+    """
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
     # create the database so vttablets start, as they are serving
@@ -496,8 +512,12 @@ class TestReparent(unittest.TestCase):
                    tablet_62344.zk_tablet_path])
 
     # update zk with the new graph
-    utils.run_vtctl(['ShardExternallyReparented', 'test_keyspace/0',
-                     tablet_62044.tablet_alias], auto_log=True)
+    extra_args = []
+    if rpc:
+      extra_args = ['-use_rpc']
+    utils.run_vtctl(['ShardExternallyReparented'] + extra_args +
+                    ['test_keyspace/0', tablet_62044.tablet_alias],
+                    mode=utils.VTCTL_VTCTL, auto_log=True)
 
     self._test_reparent_from_outside_check(brutal)
 

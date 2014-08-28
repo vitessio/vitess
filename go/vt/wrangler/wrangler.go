@@ -6,7 +6,6 @@
 package wrangler
 
 import (
-	"flag"
 	"time"
 
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -21,8 +20,6 @@ var (
 	// so basing this to be greater than DefaultLockTimeout is good.
 	DefaultActionTimeout = actionnode.DefaultLockTimeout * 4
 )
-
-var tabletManagerProtocol = flag.String("tablet_manager_protocol", "bson", "the protocol to use to talk to vttablet")
 
 // Wrangler manages complex actions on the topology, like reparents,
 // snapshots, restores, ...
@@ -59,7 +56,7 @@ type Wrangler struct {
 // fail. However, automated action will need some time to arbitrate
 // the locks.
 func New(logger logutil.Logger, ts topo.Server, actionTimeout, lockTimeout time.Duration) *Wrangler {
-	return &Wrangler{logger, ts, initiator.NewActionInitiator(ts, *tabletManagerProtocol), time.Now().Add(actionTimeout), lockTimeout, true}
+	return &Wrangler{logger, ts, initiator.NewActionInitiator(ts), time.Now().Add(actionTimeout), lockTimeout, true}
 }
 
 // ActionTimeout returns the timeout to use so the action finishes before

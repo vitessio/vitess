@@ -166,6 +166,11 @@ func (client *GoRpcTabletManagerConn) StartSlave(tablet *topo.TabletInfo, waitTi
 	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_START_SLAVE, "", &noOutput, waitTime)
 }
 
+func (client *GoRpcTabletManagerConn) TabletExternallyReparented(tablet *topo.TabletInfo, waitTime time.Duration) error {
+	var noOutput rpc.UnusedResponse
+	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_EXTERNALLY_REPARENTED, "", &noOutput, waitTime)
+}
+
 func (client *GoRpcTabletManagerConn) GetSlaves(tablet *topo.TabletInfo, waitTime time.Duration) ([]string, error) {
 	var sl gorpcproto.GetSlavesReply
 	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_GET_SLAVES, "", &sl, waitTime); err != nil {

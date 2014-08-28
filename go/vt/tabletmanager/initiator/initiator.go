@@ -13,6 +13,7 @@
 package initiator
 
 import (
+	"flag"
 	"fmt"
 	"sync"
 	"time"
@@ -25,6 +26,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
+
+var tabletManagerProtocol = flag.String("tablet_manager_protocol", "bson", "the protocol to use to talk to vttablet")
 
 // The actor applies individual commands to execute an action read from a node
 // in topology server.
@@ -54,10 +57,10 @@ type ActionInitiator struct {
 	rpc TabletManagerConn
 }
 
-func NewActionInitiator(ts topo.Server, tabletManagerProtocol string) *ActionInitiator {
-	f, ok := tabletManagerConnFactories[tabletManagerProtocol]
+func NewActionInitiator(ts topo.Server) *ActionInitiator {
+	f, ok := tabletManagerConnFactories[*tabletManagerProtocol]
 	if !ok {
-		log.Fatalf("No TabletManagerProtocol registered with name %s", tabletManagerProtocol)
+		log.Fatalf("No TabletManagerProtocol registered with name %s", *tabletManagerProtocol)
 	}
 
 	return &ActionInitiator{ts, f(ts)}
@@ -189,6 +192,15 @@ func (ai *ActionInitiator) StartSlave(tabletAlias topo.TabletAlias, waitTime tim
 	}
 
 	return ai.rpc.StartSlave(tablet, waitTime)
+}
+
+func (ai *ActionInitiator) TabletExternallyReparented(tabletAlias topo.TabletAlias, waitTime time.Duration) error {
+	tablet, err := ai.ts.GetTablet(tabletAlias)
+	if err != nil {
+		return err
+	}
+
+	return ai.rpc.TabletExternallyReparented(tablet, waitTime)
 }
 
 func (ai *ActionInitiator) WaitBlpPosition(tabletAlias topo.TabletAlias, blpPosition blproto.BlpPosition, waitTime time.Duration) error {

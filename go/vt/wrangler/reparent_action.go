@@ -422,22 +422,3 @@ func (wr *Wrangler) restartableTabletMap(slaves map[topo.TabletAlias]*topo.Table
 	}
 	return tabletMap
 }
-
-// sortedTabletMap returns two maps:
-// - The slaveMap contains all the non-master non-scrapped hosts.
-//   This can be used as a list of slaves to fix up for reparenting
-// - The masterMap contains all the tablets without parents
-//   (scrapped or not). This can be used to special case
-//   the old master, and any tablet in a weird state, left over, ...
-func sortedTabletMap(tabletMap map[topo.TabletAlias]*topo.TabletInfo) (map[topo.TabletAlias]*topo.TabletInfo, map[topo.TabletAlias]*topo.TabletInfo) {
-	slaveMap := make(map[topo.TabletAlias]*topo.TabletInfo)
-	masterMap := make(map[topo.TabletAlias]*topo.TabletInfo)
-	for alias, ti := range tabletMap {
-		if ti.Type != topo.TYPE_MASTER && ti.Type != topo.TYPE_SCRAP {
-			slaveMap[alias] = ti
-		} else if ti.Parent.Uid == topo.NO_TABLET {
-			masterMap[alias] = ti
-		}
-	}
-	return slaveMap, masterMap
-}

@@ -113,7 +113,7 @@ func (wr *Wrangler) reparentShardLocked(keyspace, shard string, masterElectTable
 		return err
 	}
 
-	slaveTabletMap, masterTabletMap := sortedTabletMap(tabletMap)
+	slaveTabletMap, masterTabletMap := topotools.SortedTabletMap(tabletMap)
 	if shardInfo.MasterAlias == masterElectTabletAlias && !forceReparentToCurrentMaster {
 		return fmt.Errorf("master-elect tablet %v is already master - specify -force to override", masterElectTabletAlias)
 	}

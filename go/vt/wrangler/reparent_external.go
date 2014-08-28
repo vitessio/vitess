@@ -84,7 +84,7 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 	}()
 
 	// sort the tablets, and handle them
-	slaveTabletMap, masterTabletMap := sortedTabletMap(tabletMap)
+	slaveTabletMap, masterTabletMap := topotools.SortedTabletMap(tabletMap)
 	err = wr.reparentShardExternal(ev, slaveTabletMap, masterTabletMap, masterElectTablet)
 	if err != nil {
 		wr.logger.Infof("Skipping shard rebuild with failed reparent")

@@ -6,6 +6,7 @@ package gorpctmserver
 
 import (
 	"fmt"
+	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcwrap"
@@ -160,6 +161,15 @@ func (tm *TabletManager) StopSlaveMinimum(context *rpcproto.Context, args *gorpc
 func (tm *TabletManager) StartSlave(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLock(context.RemoteAddr, actionnode.TABLET_ACTION_START_SLAVE, args, reply, func() error {
 		return tm.agent.Mysqld.StartSlave(map[string]string{"TABLET_ALIAS": tm.agent.TabletAlias.String()})
+	})
+}
+
+func (tm *TabletManager) TabletExternallyReparented(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+	// TODO(alainjobart) we should forward the RPC deadline from
+	// the original gorpc call. Until we support that, use a
+	// reasonnable hard-coded value.
+	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_EXTERNALLY_REPARENTED, args, reply, func() error {
+		return actor.TabletExternallyReparented(tm.agent.TopoServer, tm.agent.TabletAlias, 30*time.Second, *tabletmanager.LockTimeout)
 	})
 }
 

@@ -19,7 +19,6 @@ import (
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 )
@@ -27,7 +26,6 @@ import (
 var (
 	healthCheckInterval = flag.Duration("health_check_interval", 20*time.Second, "Interval between health checks")
 	targetTabletType    = flag.String("target_tablet_type", "", "The tablet type we are thriving to be when healthy. When not healthy, we'll go to spare.")
-	lockTimeout         = flag.Duration("lock_timeout", actionnode.DefaultLockTimeout, "lock time for wrangler/topo operations")
 )
 
 // HealthRecord records one run of the health checker
@@ -78,10 +76,10 @@ func (agent *ActionAgent) initHeathCheck() {
 		t.Stop()
 
 		// Now we can finish up and force ourselves to not healthy.
-		agent.terminateHealthChecks(topo.TabletType(*targetTabletType), *lockTimeout)
+		agent.terminateHealthChecks(topo.TabletType(*targetTabletType))
 	})
 	t.Start(func() {
-		agent.runHealthCheck(topo.TabletType(*targetTabletType), *lockTimeout)
+		agent.runHealthCheck(topo.TabletType(*targetTabletType))
 	})
 }
 
@@ -93,7 +91,7 @@ func (agent *ActionAgent) initHeathCheck() {
 //
 // Note we only update the topo record if we need to, that is if our type or
 // health details changed.
-func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType, lockTimeout time.Duration) {
+func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 	agent.actionMutex.Lock()
 	defer agent.actionMutex.Unlock()
 
@@ -170,7 +168,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType, lockT
 
 	// Rebuild the serving graph in our cell, only if we're dealing with
 	// a serving type
-	if err := agent.rebuildShardIfNeeded(tablet, targetTabletType, lockTimeout); err != nil {
+	if err := agent.rebuildShardIfNeeded(tablet, targetTabletType); err != nil {
 		log.Warningf("rebuildShardIfNeeded failed, not running post action callbacks: %v", err)
 		return
 	}
@@ -183,7 +181,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType, lockT
 // We will clean up our state, and shut down query service.
 // We only do something if we are in targetTabletType state, and then
 // we just go to spare.
-func (agent *ActionAgent) terminateHealthChecks(targetTabletType topo.TabletType, lockTimeout time.Duration) {
+func (agent *ActionAgent) terminateHealthChecks(targetTabletType topo.TabletType) {
 	agent.actionMutex.Lock()
 	defer agent.actionMutex.Unlock()
 	log.Info("agent.terminateHealthChecks is starting")
@@ -207,7 +205,7 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topo.TabletType
 
 	// Rebuild the serving graph in our cell, only if we're dealing with
 	// a serving type
-	if err := agent.rebuildShardIfNeeded(tablet, targetTabletType, lockTimeout); err != nil {
+	if err := agent.rebuildShardIfNeeded(tablet, targetTabletType); err != nil {
 		log.Warningf("rebuildShardIfNeeded failed, not running post action callbacks: %v", err)
 		return
 	}
@@ -217,13 +215,13 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topo.TabletType
 }
 
 // rebuildShardIfNeeded will rebuild the serving graph if we need to
-func (agent *ActionAgent) rebuildShardIfNeeded(tablet *topo.TabletInfo, targetTabletType topo.TabletType, lockTimeout time.Duration) error {
+func (agent *ActionAgent) rebuildShardIfNeeded(tablet *topo.TabletInfo, targetTabletType topo.TabletType) error {
 	if topo.IsInServingGraph(targetTabletType) {
 		// TODO: interrupted may need to be a global one closed when we exit
 		interrupted := make(chan struct{})
 
 		// no need to take the shard lock in this case
-		if err := topotools.RebuildShard(logutil.NewConsoleLogger(), agent.TopoServer, tablet.Keyspace, tablet.Shard, []string{tablet.Alias.Cell}, lockTimeout, interrupted); err != nil {
+		if err := topotools.RebuildShard(logutil.NewConsoleLogger(), agent.TopoServer, tablet.Keyspace, tablet.Shard, []string{tablet.Alias.Cell}, *LockTimeout, interrupted); err != nil {
 			return fmt.Errorf("topotools.RebuildShard returned an error: %v", err)
 		}
 	}

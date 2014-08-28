@@ -71,6 +71,9 @@ type TabletManagerConn interface {
 	// StartSlave starts the mysql replication
 	StartSlave(tablet *topo.TabletInfo, waitTime time.Duration) error
 
+	// TabletExternallyReparented tells a tablet it is now the master
+	TabletExternallyReparented(tablet *topo.TabletInfo, waitTime time.Duration) error
+
 	// GetSlaves returns the addresses of the slaves
 	GetSlaves(tablet *topo.TabletInfo, waitTime time.Duration) ([]string, error)
 

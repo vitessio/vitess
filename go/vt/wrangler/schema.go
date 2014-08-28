@@ -15,6 +15,7 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/topotools/events"
 )
 
@@ -394,7 +395,7 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 			return nil, err
 		}
 
-		slaveTabletMap, masterTabletMap := sortedTabletMap(tabletMap)
+		slaveTabletMap, masterTabletMap := topotools.SortedTabletMap(tabletMap)
 		newMasterTablet, err := wr.ts.GetTablet(newParentTabletAlias)
 		if err != nil {
 			return nil, err

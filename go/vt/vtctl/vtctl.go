@@ -136,7 +136,7 @@ var commands = []commandGroup{
 				"[-cells=a,b] <zk shard path> ... (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>)",
 				"Rebuild the replication graph and shard serving data in zk. This may trigger an update to all connected clients."},
 			command{"ShardExternallyReparented", commandShardExternallyReparented,
-				"<keyspace/shard|zk shard path> <tablet alias|zk tablet path>",
+				"[-use_rpc] <keyspace/shard|zk shard path> <tablet alias|zk tablet path>",
 				"Changes metadata to acknowledge a shard master change performed by an external tool."},
 			command{"ValidateShard", commandValidateShard,
 				"[-ping-tablets] <keyspace/shard|zk shard path>",
@@ -1205,6 +1205,7 @@ func commandRebuildShardGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 }
 
 func commandShardExternallyReparented(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	useRpc := subFlags.Bool("use_rpc", false, "send an RPC call to the new master instead of doing the operation internally")
 	if err := subFlags.Parse(args); err != nil {
 		return "", err
 	}
@@ -1219,6 +1220,9 @@ func commandShardExternallyReparented(wr *wrangler.Wrangler, subFlags *flag.Flag
 	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(1))
 	if err != nil {
 		return "", err
+	}
+	if *useRpc {
+		return "", wr.ActionInitiator().TabletExternallyReparented(tabletAlias, wr.ActionTimeout())
 	}
 	return "", wr.ShardExternallyReparented(keyspace, shard, tabletAlias)
 }

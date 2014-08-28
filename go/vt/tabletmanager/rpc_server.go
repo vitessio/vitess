@@ -50,7 +50,7 @@ func (agent *ActionAgent) rpcWrapper(from, name string, args, reply interface{},
 		return fmt.Errorf("TabletManager.%v on %v error: %v", name, agent.TabletAlias, err)
 	}
 	if verbose {
-		log.Infof("TabletManager.%v(%v)(from %v): %v", name, args, from, reply)
+		log.Infof("TabletManager.%v(%v)(from %v): %#v", name, args, from, reply)
 	}
 	if runAfterAction {
 		agent.afterAction("RPC("+name+")", reloadSchema)
