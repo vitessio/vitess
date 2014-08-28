@@ -97,6 +97,7 @@ func (svm *ServiceManager) StateName() string {
 
 // ServiceContext is passed into the service function to give it access to
 // information about the running service.
+// You can create an empty service context, in which case it will be non-cancelable.
 type ServiceContext struct {
 	// ShuttingDown is a channel that the service can select on to be notified
 	// when it should shut down. The channel is closed when the state transitions

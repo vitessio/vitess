@@ -50,7 +50,7 @@ type UpdateStream struct {
 }
 
 type streamer interface {
-	Stop()
+	Stop() bool
 }
 
 type streamList struct {
@@ -203,19 +203,22 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamReque
 	defer streamCount.Add("Updates", -1)
 	log.Infof("ServeUpdateStream starting @ %#v", req.GTIDField.Value)
 
-	evs := NewEventStreamer(updateStream.dbname, updateStream.mysqld)
-	updateStream.streams.Add(evs)
-	defer updateStream.streams.Delete(evs)
-
-	// Calls cascade like this: BinlogStreamer->func(*proto.StreamEvent)->sendReply
-	return evs.Stream(req.GTIDField.Value, func(reply *proto.StreamEvent) error {
-		if reply.Category == "ERR" {
-			updateStreamErrors.Add("UpdateStream", 1)
-		} else {
-			updateStreamEvents.Add(reply.Category, 1)
-		}
-		return sendReply(reply)
+	svm := &sync2.ServiceManager{}
+	svm.Go(func(ctx *sync2.ServiceContext) error {
+		evs := NewEventStreamer(updateStream.dbname, updateStream.mysqld)
+		// Calls cascade like this: BinlogStreamer->func(*proto.StreamEvent)->sendReply
+		return evs.Stream(ctx, req.GTIDField.Value, func(reply *proto.StreamEvent) error {
+			if reply.Category == "ERR" {
+				updateStreamErrors.Add("UpdateStream", 1)
+			} else {
+				updateStreamEvents.Add(reply.Category, 1)
+			}
+			return sendReply(reply)
+		})
 	})
+	updateStream.streams.Add(svm)
+	defer updateStream.streams.Delete(svm)
+	return svm.Join()
 }
 
 func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sendReply func(reply *proto.BinlogTransaction) error) (err error) {
@@ -239,17 +242,20 @@ func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sen
 	defer streamCount.Add("KeyRange", -1)
 	log.Infof("ServeUpdateStream starting @ %#v", req.GTIDField.Value)
 
-	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld)
-	updateStream.streams.Add(bls)
-	defer updateStream.streams.Delete(bls)
-
-	// Calls cascade like this: BinlogStreamer->KeyRangeFilterFunc->func(*proto.BinlogTransaction)->sendReply
-	f := KeyRangeFilterFunc(req.KeyspaceIdType, req.KeyRange, func(reply *proto.BinlogTransaction) error {
-		keyrangeStatements.Add(int64(len(reply.Statements)))
-		keyrangeTransactions.Add(1)
-		return sendReply(reply)
+	svm := &sync2.ServiceManager{}
+	svm.Go(func(ctx *sync2.ServiceContext) error {
+		bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld)
+		// Calls cascade like this: BinlogStreamer->KeyRangeFilterFunc->func(*proto.BinlogTransaction)->sendReply
+		f := KeyRangeFilterFunc(req.KeyspaceIdType, req.KeyRange, func(reply *proto.BinlogTransaction) error {
+			keyrangeStatements.Add(int64(len(reply.Statements)))
+			keyrangeTransactions.Add(1)
+			return sendReply(reply)
+		})
+		return bls.Stream(ctx, req.GTIDField.Value, f)
 	})
-	return bls.Stream(req.GTIDField.Value, f)
+	updateStream.streams.Add(svm)
+	defer updateStream.streams.Delete(svm)
+	return svm.Join()
 }
 
 func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendReply func(reply *proto.BinlogTransaction) error) (err error) {
@@ -273,17 +279,20 @@ func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendRep
 	defer streamCount.Add("Tables", -1)
 	log.Infof("ServeUpdateStream starting @ %#v", req.GTIDField.Value)
 
-	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld)
-	updateStream.streams.Add(bls)
-	defer updateStream.streams.Delete(bls)
-
-	// Calls cascade like this: BinlogStreamer->KeyRangeFilterFunc->func(*proto.BinlogTransaction)->sendReply
-	f := TablesFilterFunc(req.Tables, func(reply *proto.BinlogTransaction) error {
-		keyrangeStatements.Add(int64(len(reply.Statements)))
-		keyrangeTransactions.Add(1)
-		return sendReply(reply)
+	svm := &sync2.ServiceManager{}
+	svm.Go(func(ctx *sync2.ServiceContext) error {
+		bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld)
+		// Calls cascade like this: BinlogStreamer->TablesFilterFunc->func(*proto.BinlogTransaction)->sendReply
+		f := TablesFilterFunc(req.Tables, func(reply *proto.BinlogTransaction) error {
+			keyrangeStatements.Add(int64(len(reply.Statements)))
+			keyrangeTransactions.Add(1)
+			return sendReply(reply)
+		})
+		return bls.Stream(ctx, req.GTIDField.Value, f)
 	})
-	return bls.Stream(req.GTIDField.Value, f)
+	updateStream.streams.Add(svm)
+	defer updateStream.streams.Delete(svm)
+	return svm.Join()
 }
 
 func (updateStream *UpdateStream) getReplicationPosition() (myproto.GTID, error) {

@@ -11,6 +11,7 @@ import (
 	"strconv"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -44,13 +45,9 @@ func NewEventStreamer(dbname string, mysqld *mysqlctl.Mysqld) *EventStreamer {
 	}
 }
 
-func (evs *EventStreamer) Stream(gtid myproto.GTID, sendEvent sendEventFunc) error {
+func (evs *EventStreamer) Stream(ctx *sync2.ServiceContext, gtid myproto.GTID, sendEvent sendEventFunc) error {
 	evs.sendEvent = sendEvent
-	return evs.bls.Stream(gtid, evs.transactionToEvent)
-}
-
-func (evs *EventStreamer) Stop() {
-	evs.bls.Stop()
+	return evs.bls.Stream(ctx, gtid, evs.transactionToEvent)
 }
 
 func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) error {

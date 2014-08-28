@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -36,10 +37,7 @@ var (
 type BinlogStreamer interface {
 	// Stream starts streaming binlog events from a given GTID.
 	// It calls sendTransaction() with the contens of each event.
-	Stream(gtid myproto.GTID, sendTransaction sendTransactionFunc) error
-
-	// Stop stops the currently executing Stream() call if there is one.
-	Stop()
+	Stream(ctx *sync2.ServiceContext, gtid myproto.GTID, sendTransaction sendTransactionFunc) error
 }
 
 // NewBinlogStreamer creates a BinlogStreamer. The underlying implementation is

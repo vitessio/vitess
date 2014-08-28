@@ -26,11 +26,6 @@ type RowcacheInvalidator struct {
 	qe  *QueryEngine
 	svm sync2.ServiceManager
 
-	// mu mainly protects access to evs by Open and Close.
-	mu         sync.Mutex
-	dbname     string
-	mysqld     *mysqlctl.Mysqld
-	evs        *binlog.EventStreamer
 	lagSeconds sync2.AtomicInt64
 	gtid       myproto.GTID
 	gtidMutex  sync.RWMutex
@@ -77,19 +72,9 @@ func (rci *RowcacheInvalidator) Open(dbname string, mysqld *mysqlctl.Mysqld) {
 		panic(NewTabletError(FATAL, "Rowcache invalidator aborting: binlog path not specified"))
 	}
 
-	ok := rci.svm.Go(func(_ *sync2.ServiceContext) error {
-		rci.mu.Lock()
-		rci.dbname = dbname
-		rci.mysqld = mysqld
-		rci.evs = binlog.NewEventStreamer(dbname, mysqld)
+	ok := rci.svm.Go(func(ctx *sync2.ServiceContext) error {
 		rci.SetGTID(rp.MasterLogGTIDField.Value)
-		rci.mu.Unlock()
-
-		rci.run()
-
-		rci.mu.Lock()
-		rci.evs = nil
-		rci.mu.Unlock()
+		rci.run(ctx, binlog.NewEventStreamer(dbname, mysqld))
 		return nil
 	})
 	if ok {
@@ -102,22 +87,10 @@ func (rci *RowcacheInvalidator) Open(dbname string, mysqld *mysqlctl.Mysqld) {
 // Close terminates the invalidation loop. It returns only of the
 // loop has terminated.
 func (rci *RowcacheInvalidator) Close() {
-	rci.mu.Lock()
-	if rci.evs == nil {
-		log.Infof("Rowcache is not running")
-		rci.mu.Unlock()
-		return
-	}
-	// This will cause the event streamer to exit, but run
-	// may still be running.
-	rci.evs.Stop()
-	rci.mu.Unlock()
-	// Stop will wait for run and rci to shutdown, which will set
-	// evs to nil. So, we need to release the lock before this.
 	rci.svm.Stop()
 }
 
-func (rci *RowcacheInvalidator) run() {
+func (rci *RowcacheInvalidator) run(ctx *sync2.ServiceContext, evs *binlog.EventStreamer) {
 	for {
 		// We wrap this code in a func so we can catch all panics.
 		// If an error is returned, we log it, wait 1 second, and retry.
@@ -128,7 +101,7 @@ func (rci *RowcacheInvalidator) run() {
 					inner = fmt.Errorf("%v: uncaught panic:\n%s", x, tb.Stack(4))
 				}
 			}()
-			return rci.evs.Stream(rci.GetGTID(), func(reply *blproto.StreamEvent) error {
+			return evs.Stream(ctx, rci.GetGTID(), func(reply *blproto.StreamEvent) error {
 				rci.processEvent(reply)
 				return nil
 			})
