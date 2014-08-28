@@ -21,10 +21,11 @@ var ServerEOF = fmt.Errorf("binlog stream connection was closed by mysqld")
 // binlogConnStreamer streams binlog events from MySQL by connecting as a slave.
 type binlogConnStreamer struct {
 	// dbname and mysqld are set at creation.
-	dbname string
-	mysqld *mysqlctl.Mysqld
+	dbname          string
+	mysqld          *mysqlctl.Mysqld
+	startPos        myproto.GTID
+	sendTransaction sendTransactionFunc
 
-	svm  sync2.ServiceManager
 	conn *mysqlctl.SlaveConnection
 
 	// pos is the GTID of the most recent event we've seen.
@@ -34,55 +35,40 @@ type binlogConnStreamer struct {
 // newBinlogConnStreamer creates a BinlogStreamer.
 //
 // dbname specifes the db to stream events for.
-func newBinlogConnStreamer(dbname string, mysqld *mysqlctl.Mysqld) BinlogStreamer {
+func newBinlogConnStreamer(dbname string, mysqld *mysqlctl.Mysqld, startPos myproto.GTID, sendTransaction sendTransactionFunc) BinlogStreamer {
 	return &binlogConnStreamer{
-		dbname: dbname,
-		mysqld: mysqld,
+		dbname:          dbname,
+		mysqld:          mysqld,
+		startPos:        startPos,
+		sendTransaction: sendTransaction,
 	}
 }
 
 // Stream implements BinlogStreamer.Stream().
-func (bls *binlogConnStreamer) Stream(startPos myproto.GTID, sendTransaction sendTransactionFunc) error {
-	// Launch using service manager so we can stop this as needed.
-	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		var events <-chan proto.BinlogEvent
-		var err error
-
-		if bls.conn, err = mysqlctl.NewSlaveConnection(bls.mysqld); err != nil {
-			return err
-		}
-		defer bls.conn.Close()
-
-		events, err = bls.conn.StartBinlogDump(startPos)
+func (bls *binlogConnStreamer) Stream(ctx *sync2.ServiceContext) (err error) {
+	defer func() {
 		if err != nil {
-			return err
+			binlogStreamerErrors.Add("Stream", 1)
+			err = fmt.Errorf("stream error @ %#v, error: %v", bls.pos, err)
+			log.Error(err.Error())
 		}
-		// parseEvents will loop until the events channel is closed, the
-		// service enters the SHUTTING_DOWN state, or an error occurs.
-		err = bls.parseEvents(svc, events, sendTransaction)
-		if err == ClientEOF {
-			return nil
-		}
-		return err
-	})
+		log.Infof("Stream ended @ %#v", bls.pos)
+	}()
 
-	// Wait for service to exit, and handle errors if any.
-	err := bls.svm.Join()
-
-	if err != nil {
-		binlogStreamerErrors.Add("Stream", 1)
-		err = fmt.Errorf("stream error @ %#v, error: %v", bls.pos, err)
-		log.Error(err.Error())
-		return err
+	if bls.conn, err = mysqlctl.NewSlaveConnection(bls.mysqld); err != nil {
+		return
 	}
+	defer bls.conn.Close()
 
-	log.Infof("stream ended @ %#v", bls.pos)
-	return nil
-}
-
-// Stop implements BinlogStreamer.Stop().
-func (bls *binlogConnStreamer) Stop() {
-	bls.svm.Stop()
+	var events <-chan proto.BinlogEvent
+	events, err = bls.conn.StartBinlogDump(bls.startPos)
+	if err != nil {
+		return
+	}
+	// parseEvents will loop until the events channel is closed, the
+	// service enters the SHUTTING_DOWN state, or an error occurs.
+	err = bls.parseEvents(ctx, events)
+	return
 }
 
 // parseEvents processes the raw binlog dump stream from the server, one event
@@ -91,7 +77,7 @@ func (bls *binlogConnStreamer) Stop() {
 //
 // If the sendTransaction func returns io.EOF, parseEvents returns ClientEOF.
 // If the events channel is closed, parseEvents returns ServerEOF.
-func (bls *binlogConnStreamer) parseEvents(svc *sync2.ServiceContext, events <-chan proto.BinlogEvent, sendTransaction sendTransactionFunc) (err error) {
+func (bls *binlogConnStreamer) parseEvents(ctx *sync2.ServiceContext, events <-chan proto.BinlogEvent) (err error) {
 	var statements []proto.Statement
 	var format proto.BinlogFormat
 	var autocommit = true
@@ -103,7 +89,7 @@ func (bls *binlogConnStreamer) parseEvents(svc *sync2.ServiceContext, events <-c
 			Timestamp:  timestamp,
 			GTIDField:  myproto.GTIDField{Value: bls.pos},
 		}
-		if err = sendTransaction(trans); err != nil {
+		if err = bls.sendTransaction(trans); err != nil {
 			if err == io.EOF {
 				return ClientEOF
 			}
@@ -115,7 +101,7 @@ func (bls *binlogConnStreamer) parseEvents(svc *sync2.ServiceContext, events <-c
 	}
 
 	// Parse events.
-	for svc.IsRunning() {
+	for ctx.IsRunning() {
 		var ev proto.BinlogEvent
 		var ok bool
 
@@ -126,7 +112,7 @@ func (bls *binlogConnStreamer) parseEvents(svc *sync2.ServiceContext, events <-c
 				log.Infof("reached end of binlog event stream")
 				return ServerEOF
 			}
-		case <-svc.ShuttingDown:
+		case <-ctx.ShuttingDown:
 			log.Infof("stopping early due to BinlogStreamer service shutdown")
 			return nil
 		}

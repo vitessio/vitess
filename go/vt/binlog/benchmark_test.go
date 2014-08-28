@@ -13,20 +13,18 @@ import (
 
 func BenchmarkFileStreamerParseEvents(b *testing.B) {
 	filename := testfiles.Locate("binlog_test/vt-0000062347-bin.000001")
-	bls := newTestBinlogFileStreamer("vt_test_database", "")
 	var svm sync2.ServiceManager
 	count := 0
+	bls := newTestBinlogFileStreamer("vt_test_database", "", nil, func(tx *proto.BinlogTransaction) error {
+		count++
+		return nil
+	})
 
 	for i := 0; i < b.N; i++ {
 		if err := bls.file.Init(filename, 0); err != nil {
 			b.Fatalf("%v", err)
 		}
-		svm.Go(func(svc *sync2.ServiceContext) error {
-			return bls.run(svc, func(tx *proto.BinlogTransaction) error {
-				count++
-				return nil
-			})
-		})
+		svm.Go(bls.run)
 		if err := svm.Join(); err != nil {
 			b.Errorf("%v", err)
 		}
@@ -73,17 +71,17 @@ func readEvents(b *testing.B, filename string) <-chan proto.BinlogEvent {
 
 func BenchmarkConnStreamerParseEvents(b *testing.B) {
 	filename := testfiles.Locate("binlog_test/vt-0000062347-bin.000001")
-	bls := &binlogConnStreamer{dbname: "vt_test_database"}
 	var svm sync2.ServiceManager
 	count := 0
+	bls := &binlogConnStreamer{dbname: "vt_test_database", sendTransaction: func(tx *proto.BinlogTransaction) error {
+		count++
+		return nil
+	}}
 
 	for i := 0; i < b.N; i++ {
 		events := readEvents(b, filename)
 		svm.Go(func(svc *sync2.ServiceContext) error {
-			return bls.parseEvents(svc, events, func(tx *proto.BinlogTransaction) error {
-				count++
-				return nil
-			})
+			return bls.parseEvents(svc, events)
 		})
 		if err := svm.Join(); err != ServerEOF {
 			b.Errorf("%v", err)

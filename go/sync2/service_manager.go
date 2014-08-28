@@ -22,6 +22,11 @@ var stateNames = []string{
 }
 
 // ServiceManager manages the state of a service through its lifecycle.
+// It's not recommended to nest service managers because they introduce
+// race conditions in the Stop functions that can cause one service to
+// indefinitely wait for the other. You can instead pass the top level
+// ServiceContext around and manage shutdown using the single
+// ServiceManager.
 type ServiceManager struct {
 	mu    sync.Mutex
 	wg    sync.WaitGroup
@@ -97,6 +102,7 @@ func (svm *ServiceManager) StateName() string {
 
 // ServiceContext is passed into the service function to give it access to
 // information about the running service.
+// You can create an empty service context, in which case it will be non-cancelable.
 type ServiceContext struct {
 	// ShuttingDown is a channel that the service can select on to be notified
 	// when it should shut down. The channel is closed when the state transitions

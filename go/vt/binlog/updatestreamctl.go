@@ -49,28 +49,24 @@ type UpdateStream struct {
 	streams        streamList
 }
 
-type streamer interface {
-	Stop()
-}
-
 type streamList struct {
 	sync.Mutex
-	streams map[streamer]bool
+	streams map[*sync2.ServiceManager]bool
 }
 
 func (sl *streamList) Init() {
 	sl.Lock()
-	sl.streams = make(map[streamer]bool)
+	sl.streams = make(map[*sync2.ServiceManager]bool)
 	sl.Unlock()
 }
 
-func (sl *streamList) Add(e streamer) {
+func (sl *streamList) Add(e *sync2.ServiceManager) {
 	sl.Lock()
 	sl.streams[e] = true
 	sl.Unlock()
 }
 
-func (sl *streamList) Delete(e streamer) {
+func (sl *streamList) Delete(e *sync2.ServiceManager) {
 	sl.Lock()
 	delete(sl.streams, e)
 	sl.Unlock()
@@ -203,12 +199,7 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamReque
 	defer streamCount.Add("Updates", -1)
 	log.Infof("ServeUpdateStream starting @ %#v", req.GTIDField.Value)
 
-	evs := NewEventStreamer(updateStream.dbname, updateStream.mysqld)
-	updateStream.streams.Add(evs)
-	defer updateStream.streams.Delete(evs)
-
-	// Calls cascade like this: BinlogStreamer->func(*proto.StreamEvent)->sendReply
-	return evs.Stream(req.GTIDField.Value, func(reply *proto.StreamEvent) error {
+	evs := NewEventStreamer(updateStream.dbname, updateStream.mysqld, req.GTIDField.Value, func(reply *proto.StreamEvent) error {
 		if reply.Category == "ERR" {
 			updateStreamErrors.Add("UpdateStream", 1)
 		} else {
@@ -216,6 +207,12 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamReque
 		}
 		return sendReply(reply)
 	})
+
+	svm := &sync2.ServiceManager{}
+	svm.Go(evs.Stream)
+	updateStream.streams.Add(svm)
+	defer updateStream.streams.Delete(svm)
+	return svm.Join()
 }
 
 func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sendReply func(reply *proto.BinlogTransaction) error) (err error) {
@@ -239,17 +236,19 @@ func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sen
 	defer streamCount.Add("KeyRange", -1)
 	log.Infof("ServeUpdateStream starting @ %#v", req.GTIDField.Value)
 
-	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld)
-	updateStream.streams.Add(bls)
-	defer updateStream.streams.Delete(bls)
-
 	// Calls cascade like this: BinlogStreamer->KeyRangeFilterFunc->func(*proto.BinlogTransaction)->sendReply
 	f := KeyRangeFilterFunc(req.KeyspaceIdType, req.KeyRange, func(reply *proto.BinlogTransaction) error {
 		keyrangeStatements.Add(int64(len(reply.Statements)))
 		keyrangeTransactions.Add(1)
 		return sendReply(reply)
 	})
-	return bls.Stream(req.GTIDField.Value, f)
+	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld, req.GTIDField.Value, f)
+
+	svm := &sync2.ServiceManager{}
+	svm.Go(bls.Stream)
+	updateStream.streams.Add(svm)
+	defer updateStream.streams.Delete(svm)
+	return svm.Join()
 }
 
 func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendReply func(reply *proto.BinlogTransaction) error) (err error) {
@@ -273,17 +272,19 @@ func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendRep
 	defer streamCount.Add("Tables", -1)
 	log.Infof("ServeUpdateStream starting @ %#v", req.GTIDField.Value)
 
-	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld)
-	updateStream.streams.Add(bls)
-	defer updateStream.streams.Delete(bls)
-
-	// Calls cascade like this: BinlogStreamer->KeyRangeFilterFunc->func(*proto.BinlogTransaction)->sendReply
+	// Calls cascade like this: BinlogStreamer->TablesFilterFunc->func(*proto.BinlogTransaction)->sendReply
 	f := TablesFilterFunc(req.Tables, func(reply *proto.BinlogTransaction) error {
 		keyrangeStatements.Add(int64(len(reply.Statements)))
 		keyrangeTransactions.Add(1)
 		return sendReply(reply)
 	})
-	return bls.Stream(req.GTIDField.Value, f)
+	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld, req.GTIDField.Value, f)
+
+	svm := &sync2.ServiceManager{}
+	svm.Go(bls.Stream)
+	updateStream.streams.Add(svm)
+	defer updateStream.streams.Delete(svm)
+	return svm.Join()
 }
 
 func (updateStream *UpdateStream) getReplicationPosition() (myproto.GTID, error) {
