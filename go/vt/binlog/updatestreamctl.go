@@ -49,28 +49,24 @@ type UpdateStream struct {
 	streams        streamList
 }
 
-type streamer interface {
-	Stop() bool
-}
-
 type streamList struct {
 	sync.Mutex
-	streams map[streamer]bool
+	streams map[*sync2.ServiceManager]bool
 }
 
 func (sl *streamList) Init() {
 	sl.Lock()
-	sl.streams = make(map[streamer]bool)
+	sl.streams = make(map[*sync2.ServiceManager]bool)
 	sl.Unlock()
 }
 
-func (sl *streamList) Add(e streamer) {
+func (sl *streamList) Add(e *sync2.ServiceManager) {
 	sl.Lock()
 	sl.streams[e] = true
 	sl.Unlock()
 }
 
-func (sl *streamList) Delete(e streamer) {
+func (sl *streamList) Delete(e *sync2.ServiceManager) {
 	sl.Lock()
 	delete(sl.streams, e)
 	sl.Unlock()
@@ -203,19 +199,17 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamReque
 	defer streamCount.Add("Updates", -1)
 	log.Infof("ServeUpdateStream starting @ %#v", req.GTIDField.Value)
 
-	svm := &sync2.ServiceManager{}
-	svm.Go(func(ctx *sync2.ServiceContext) error {
-		evs := NewEventStreamer(updateStream.dbname, updateStream.mysqld)
-		// Calls cascade like this: BinlogStreamer->func(*proto.StreamEvent)->sendReply
-		return evs.Stream(ctx, req.GTIDField.Value, func(reply *proto.StreamEvent) error {
-			if reply.Category == "ERR" {
-				updateStreamErrors.Add("UpdateStream", 1)
-			} else {
-				updateStreamEvents.Add(reply.Category, 1)
-			}
-			return sendReply(reply)
-		})
+	evs := NewEventStreamer(updateStream.dbname, updateStream.mysqld, req.GTIDField.Value, func(reply *proto.StreamEvent) error {
+		if reply.Category == "ERR" {
+			updateStreamErrors.Add("UpdateStream", 1)
+		} else {
+			updateStreamEvents.Add(reply.Category, 1)
+		}
+		return sendReply(reply)
 	})
+
+	svm := &sync2.ServiceManager{}
+	svm.Go(evs.Stream)
 	updateStream.streams.Add(svm)
 	defer updateStream.streams.Delete(svm)
 	return svm.Join()
@@ -242,17 +236,16 @@ func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sen
 	defer streamCount.Add("KeyRange", -1)
 	log.Infof("ServeUpdateStream starting @ %#v", req.GTIDField.Value)
 
-	svm := &sync2.ServiceManager{}
-	svm.Go(func(ctx *sync2.ServiceContext) error {
-		bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld)
-		// Calls cascade like this: BinlogStreamer->KeyRangeFilterFunc->func(*proto.BinlogTransaction)->sendReply
-		f := KeyRangeFilterFunc(req.KeyspaceIdType, req.KeyRange, func(reply *proto.BinlogTransaction) error {
-			keyrangeStatements.Add(int64(len(reply.Statements)))
-			keyrangeTransactions.Add(1)
-			return sendReply(reply)
-		})
-		return bls.Stream(ctx, req.GTIDField.Value, f)
+	// Calls cascade like this: BinlogStreamer->KeyRangeFilterFunc->func(*proto.BinlogTransaction)->sendReply
+	f := KeyRangeFilterFunc(req.KeyspaceIdType, req.KeyRange, func(reply *proto.BinlogTransaction) error {
+		keyrangeStatements.Add(int64(len(reply.Statements)))
+		keyrangeTransactions.Add(1)
+		return sendReply(reply)
 	})
+	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld, req.GTIDField.Value, f)
+
+	svm := &sync2.ServiceManager{}
+	svm.Go(bls.Stream)
 	updateStream.streams.Add(svm)
 	defer updateStream.streams.Delete(svm)
 	return svm.Join()
@@ -279,17 +272,16 @@ func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendRep
 	defer streamCount.Add("Tables", -1)
 	log.Infof("ServeUpdateStream starting @ %#v", req.GTIDField.Value)
 
-	svm := &sync2.ServiceManager{}
-	svm.Go(func(ctx *sync2.ServiceContext) error {
-		bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld)
-		// Calls cascade like this: BinlogStreamer->TablesFilterFunc->func(*proto.BinlogTransaction)->sendReply
-		f := TablesFilterFunc(req.Tables, func(reply *proto.BinlogTransaction) error {
-			keyrangeStatements.Add(int64(len(reply.Statements)))
-			keyrangeTransactions.Add(1)
-			return sendReply(reply)
-		})
-		return bls.Stream(ctx, req.GTIDField.Value, f)
+	// Calls cascade like this: BinlogStreamer->TablesFilterFunc->func(*proto.BinlogTransaction)->sendReply
+	f := TablesFilterFunc(req.Tables, func(reply *proto.BinlogTransaction) error {
+		keyrangeStatements.Add(int64(len(reply.Statements)))
+		keyrangeTransactions.Add(1)
+		return sendReply(reply)
 	})
+	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld, req.GTIDField.Value, f)
+
+	svm := &sync2.ServiceManager{}
+	svm.Go(bls.Stream)
 	updateStream.streams.Add(svm)
 	defer updateStream.streams.Delete(svm)
 	return svm.Join()

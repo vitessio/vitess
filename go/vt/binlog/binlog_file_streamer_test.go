@@ -290,10 +290,12 @@ type transaction struct {
 	GTIDField myproto.GTIDField
 }
 
-func newTestBinlogFileStreamer(dbname, binlogPath string) *binlogFileStreamer {
+func newTestBinlogFileStreamer(dbname, binlogPath string, gtid myproto.GTID, sendTransaction sendTransactionFunc) *binlogFileStreamer {
 	return &binlogFileStreamer{
-		dbname: dbname,
-		dir:    path.Dir(binlogPath),
+		dbname:          dbname,
+		gtid:            gtid,
+		dir:             path.Dir(binlogPath),
+		sendTransaction: sendTransaction,
 	}
 }
 
@@ -311,45 +313,46 @@ func TestStream(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	svm := &sync2.ServiceManager{}
 
 	curTransaction := 0
-	bls := newTestBinlogFileStreamer("db", testfiles.Locate("mysqlctl_test/vt-0000041983-bin"))
-	svm := &sync2.ServiceManager{}
+	sendTx := func(tx *proto.BinlogTransaction) error {
+		for i, stmt := range tx.Statements {
+			if transactions[curTransaction].Statements[i].Sql != string(stmt.Sql) {
+				t.Errorf("want %s, got %s", transactions[curTransaction].Statements[i].Sql, stmt.Sql)
+			}
+			if transactions[curTransaction].Statements[i].Category != stmt.Category {
+				t.Errorf("want %d, got %d", transactions[curTransaction].Statements[i].Category, stmt.Category)
+			}
+		}
+		if transactions[curTransaction].GTIDField != tx.GTIDField {
+			t.Errorf("want %#v, got %#v", transactions[curTransaction].GTIDField, tx.GTIDField)
+		}
+		curTransaction++
+		if curTransaction == len(transactions) {
+			// Launch as goroutine to prevent deadlock.
+			go svm.Stop()
+		}
+		// Uncomment the following lines to produce a different set of
+		// expected outputs. You'll need to massage the file a bit afterwards.
+		/*
+			fmt.Printf("{\n\"Statements\": [\n")
+			for i := 0; i < len(tx.Statements); i++ {
+				fmt.Printf(`{"Category": %d, "Sql": %#v}`, tx.Statements[i].Category, string(tx.Statements[i].Sql))
+				if i == len(tx.Statements)-1 {
+					fmt.Printf("\n")
+				} else {
+					fmt.Printf(",\n")
+				}
+			}
+			fmt.Printf("],\n")
+			fmt.Printf("\"GTID\": \"%s\"\n},\n", tx.GTID)
+		*/
+		return nil
+	}
+	bls := newTestBinlogFileStreamer("db", testfiles.Locate("mysqlctl_test/vt-0000041983-bin"), nil, sendTx)
 	svm.Go(func(ctx *sync2.ServiceContext) error {
-		return bls.streamFilePos(ctx, "vt-0000041983-bin.000001", 0, func(tx *proto.BinlogTransaction) error {
-			for i, stmt := range tx.Statements {
-				if transactions[curTransaction].Statements[i].Sql != string(stmt.Sql) {
-					t.Errorf("want %s, got %s", transactions[curTransaction].Statements[i].Sql, stmt.Sql)
-				}
-				if transactions[curTransaction].Statements[i].Category != stmt.Category {
-					t.Errorf("want %d, got %d", transactions[curTransaction].Statements[i].Category, stmt.Category)
-				}
-			}
-			if transactions[curTransaction].GTIDField != tx.GTIDField {
-				t.Errorf("want %#v, got %#v", transactions[curTransaction].GTIDField, tx.GTIDField)
-			}
-			curTransaction++
-			if curTransaction == len(transactions) {
-				// Launch as goroutine to prevent deadlock.
-				go svm.Stop()
-			}
-			// Uncomment the following lines to produce a different set of
-			// expected outputs. You'll need to massage the file a bit afterwards.
-			/*
-				fmt.Printf("{\n\"Statements\": [\n")
-				for i := 0; i < len(tx.Statements); i++ {
-					fmt.Printf(`{"Category": %d, "Sql": %#v}`, tx.Statements[i].Category, string(tx.Statements[i].Sql))
-					if i == len(tx.Statements)-1 {
-						fmt.Printf("\n")
-					} else {
-						fmt.Printf(",\n")
-					}
-				}
-				fmt.Printf("],\n")
-				fmt.Printf("\"GTID\": \"%s\"\n},\n", tx.GTID)
-			*/
-			return nil
-		})
+		return bls.streamFilePos(ctx, "vt-0000041983-bin.000001", 0)
 	})
 	err = svm.Join()
 	if err != nil {
@@ -362,14 +365,14 @@ func TestRotation(t *testing.T) {
 	env := setup("cat $3", 0)
 	defer cleanup(env)
 
-	bls := newTestBinlogFileStreamer("db", testfiles.Locate("mysqlctl_test/vt-0000041983-bin"))
 	svm := &sync2.ServiceManager{}
+	bls := newTestBinlogFileStreamer("db", testfiles.Locate("mysqlctl_test/vt-0000041983-bin"), nil, func(tx *proto.BinlogTransaction) error {
+		// Launch as goroutine to prevent deadlock.
+		go svm.Stop()
+		return nil
+	})
 	svm.Go(func(ctx *sync2.ServiceContext) error {
-		return bls.streamFilePos(ctx, "vt-0000041983-bin.000004", 2682, func(tx *proto.BinlogTransaction) error {
-			// Launch as goroutine to prevent deadlock.
-			go svm.Stop()
-			return nil
-		})
+		return bls.streamFilePos(ctx, "vt-0000041983-bin.000004", 2682)
 	})
 	err := svm.Join()
 	if err != nil {

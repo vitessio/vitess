@@ -37,7 +37,7 @@ var (
 type BinlogStreamer interface {
 	// Stream starts streaming binlog events from a given GTID.
 	// It calls sendTransaction() with the contens of each event.
-	Stream(ctx *sync2.ServiceContext, gtid myproto.GTID, sendTransaction sendTransactionFunc) error
+	Stream(ctx *sync2.ServiceContext) error
 }
 
 // NewBinlogStreamer creates a BinlogStreamer. The underlying implementation is
@@ -45,15 +45,15 @@ type BinlogStreamer interface {
 //
 // dbname specifes the db to stream events for.
 // mysqld is the local instance of mysqlctl.Mysqld.
-func NewBinlogStreamer(dbname string, mysqld *mysqlctl.Mysqld) BinlogStreamer {
+func NewBinlogStreamer(dbname string, mysqld *mysqlctl.Mysqld, gtid myproto.GTID, sendTransaction sendTransactionFunc) BinlogStreamer {
 	fn := binlogStreamers[*binlogStreamer]
 	if fn == nil {
 		panic(fmt.Errorf("unknown BinlogStreamer implementation: %#v", *binlogStreamer))
 	}
-	return fn(dbname, mysqld)
+	return fn(dbname, mysqld, gtid, sendTransaction)
 }
 
-type newBinlogStreamerFunc func(string, *mysqlctl.Mysqld) BinlogStreamer
+type newBinlogStreamerFunc func(string, *mysqlctl.Mysqld, myproto.GTID, sendTransactionFunc) BinlogStreamer
 
 // sendTransactionFunc is used to send binlog events.
 // reply is of type proto.BinlogTransaction.

@@ -39,15 +39,16 @@ type EventStreamer struct {
 	sendEvent sendEventFunc
 }
 
-func NewEventStreamer(dbname string, mysqld *mysqlctl.Mysqld) *EventStreamer {
-	return &EventStreamer{
-		bls: NewBinlogStreamer(dbname, mysqld),
+func NewEventStreamer(dbname string, mysqld *mysqlctl.Mysqld, gtid myproto.GTID, sendEvent sendEventFunc) *EventStreamer {
+	evs := &EventStreamer{
+		sendEvent: sendEvent,
 	}
+	evs.bls = NewBinlogStreamer(dbname, mysqld, gtid, evs.transactionToEvent)
+	return evs
 }
 
-func (evs *EventStreamer) Stream(ctx *sync2.ServiceContext, gtid myproto.GTID, sendEvent sendEventFunc) error {
-	evs.sendEvent = sendEvent
-	return evs.bls.Stream(ctx, gtid, evs.transactionToEvent)
+func (evs *EventStreamer) Stream(ctx *sync2.ServiceContext) error {
+	return evs.bls.Stream(ctx)
 }
 
 func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) error {

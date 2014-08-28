@@ -64,9 +64,11 @@ type binlogPosition struct {
 // binlogFileStreamer streams binlog events from a set of local files.
 type binlogFileStreamer struct {
 	// dbname, dir, and mysqld are set at creation.
-	dbname string
-	dir    string
-	mysqld *mysqlctl.Mysqld
+	dbname          string
+	dir             string
+	mysqld          *mysqlctl.Mysqld
+	gtid            myproto.GTID
+	sendTransaction sendTransactionFunc
 
 	svm sync2.ServiceManager
 
@@ -79,27 +81,29 @@ type binlogFileStreamer struct {
 // newBinlogFileStreamer creates a BinlogStreamer.
 //
 // dbname specifes the db to stream events for.
-func newBinlogFileStreamer(dbname string, mysqld *mysqlctl.Mysqld) BinlogStreamer {
+func newBinlogFileStreamer(dbname string, mysqld *mysqlctl.Mysqld, gtid myproto.GTID, sendTransaction sendTransactionFunc) BinlogStreamer {
 	return &binlogFileStreamer{
-		dbname: dbname,
-		dir:    path.Dir(mysqld.Cnf().BinLogPath),
-		mysqld: mysqld,
+		dbname:          dbname,
+		dir:             path.Dir(mysqld.Cnf().BinLogPath),
+		mysqld:          mysqld,
+		gtid:            gtid,
+		sendTransaction: sendTransaction,
 	}
 }
 
 // Stream implements BinlogStreamer.Stream().
-func (bls *binlogFileStreamer) Stream(ctx *sync2.ServiceContext, gtid myproto.GTID, sendTransaction sendTransactionFunc) error {
+func (bls *binlogFileStreamer) Stream(ctx *sync2.ServiceContext) error {
 	// Query mysqld to convert GTID to file & pos.
-	rp, err := bls.mysqld.BinlogInfo(gtid)
+	rp, err := bls.mysqld.BinlogInfo(bls.gtid)
 	if err != nil {
 		log.Errorf("Unable to serve client request: error computing start position: %v", err)
 		return fmt.Errorf("error computing start position: %v", err)
 	}
-	return bls.streamFilePos(ctx, rp.MasterLogFile, int64(rp.MasterLogPosition), sendTransaction)
+	return bls.streamFilePos(ctx, rp.MasterLogFile, int64(rp.MasterLogPosition))
 }
 
 // streamFilePos starts streaming events from a given file and position.
-func (bls *binlogFileStreamer) streamFilePos(ctx *sync2.ServiceContext, file string, pos int64, sendTransaction sendTransactionFunc) error {
+func (bls *binlogFileStreamer) streamFilePos(ctx *sync2.ServiceContext, file string, pos int64) error {
 	var err error
 	if err = bls.file.Init(path.Join(bls.dir, file), pos); err != nil {
 		return err
@@ -107,7 +111,7 @@ func (bls *binlogFileStreamer) streamFilePos(ctx *sync2.ServiceContext, file str
 	defer bls.file.Close()
 
 	for {
-		if err = bls.run(ctx, sendTransaction); err != nil {
+		if err = bls.run(ctx); err != nil {
 			break
 		}
 		if err = bls.file.WaitForChange(ctx); err != nil {
@@ -124,14 +128,14 @@ func (bls *binlogFileStreamer) streamFilePos(ctx *sync2.ServiceContext, file str
 
 // run launches mysqlbinlog and starts the stream. It takes care of
 // cleaning up the process when streaming returns.
-func (bls *binlogFileStreamer) run(ctx *sync2.ServiceContext, sendTransaction sendTransactionFunc) (err error) {
+func (bls *binlogFileStreamer) run(ctx *sync2.ServiceContext) (err error) {
 	mbl := &MysqlBinlog{}
 	reader, err := mbl.Launch(bls.dbname, bls.file.name, bls.file.pos)
 	if err != nil {
 		return fmt.Errorf("launch error: %v", err)
 	}
 	defer reader.Close()
-	err = bls.parseEvents(ctx, sendTransaction, reader)
+	err = bls.parseEvents(ctx, reader)
 	// Always kill because we don't read from reader all the way to EOF.
 	// If we wait, we may deadlock.
 	mbl.Kill()
@@ -139,7 +143,7 @@ func (bls *binlogFileStreamer) run(ctx *sync2.ServiceContext, sendTransaction se
 }
 
 // parseEvents parses events and transmits them as transactions for the current mysqlbinlog stream.
-func (bls *binlogFileStreamer) parseEvents(ctx *sync2.ServiceContext, sendTransaction sendTransactionFunc, reader io.Reader) (err error) {
+func (bls *binlogFileStreamer) parseEvents(ctx *sync2.ServiceContext, reader io.Reader) (err error) {
 	bls.delim = DEFAULT_DELIM
 	bufReader := bufio.NewReader(reader)
 	var statements []proto.Statement
@@ -167,7 +171,7 @@ func (bls *binlogFileStreamer) parseEvents(ctx *sync2.ServiceContext, sendTransa
 				Timestamp:  timestamp,
 				GTIDField:  myproto.GTIDField{Value: bls.blPos.GTID},
 			}
-			if err = sendTransaction(trans); err != nil {
+			if err = bls.sendTransaction(trans); err != nil {
 				if err == io.EOF {
 					return err
 				}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 func TestNewBinlogStreamer(t *testing.T) {
@@ -17,13 +18,13 @@ func TestNewBinlogStreamer(t *testing.T) {
 
 	*binlogStreamer = "fake"
 	binlogStreamers = map[string]newBinlogStreamerFunc{
-		"fake": func(string, *mysqlctl.Mysqld) BinlogStreamer {
+		"fake": func(string, *mysqlctl.Mysqld, myproto.GTID, sendTransactionFunc) BinlogStreamer {
 			triggered = true
 			return nil
 		},
 	}
 
-	NewBinlogStreamer("", nil)
+	NewBinlogStreamer("", nil, nil, nil)
 
 	if !triggered {
 		t.Errorf("NewBinlogStreamer() failed to call the right newBinlogStreamerFunc.")
@@ -46,7 +47,7 @@ func TestNewBinlogStreamerUnknown(t *testing.T) {
 		}
 	}()
 
-	NewBinlogStreamer("", nil)
+	NewBinlogStreamer("", nil, nil, nil)
 }
 
 func TestGetStatementCategory(t *testing.T) {

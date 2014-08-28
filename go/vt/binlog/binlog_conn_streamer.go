@@ -21,8 +21,10 @@ var ServerEOF = fmt.Errorf("binlog stream connection was closed by mysqld")
 // binlogConnStreamer streams binlog events from MySQL by connecting as a slave.
 type binlogConnStreamer struct {
 	// dbname and mysqld are set at creation.
-	dbname string
-	mysqld *mysqlctl.Mysqld
+	dbname          string
+	mysqld          *mysqlctl.Mysqld
+	startPos        myproto.GTID
+	sendTransaction sendTransactionFunc
 
 	conn *mysqlctl.SlaveConnection
 
@@ -33,15 +35,17 @@ type binlogConnStreamer struct {
 // newBinlogConnStreamer creates a BinlogStreamer.
 //
 // dbname specifes the db to stream events for.
-func newBinlogConnStreamer(dbname string, mysqld *mysqlctl.Mysqld) BinlogStreamer {
+func newBinlogConnStreamer(dbname string, mysqld *mysqlctl.Mysqld, startPos myproto.GTID, sendTransaction sendTransactionFunc) BinlogStreamer {
 	return &binlogConnStreamer{
-		dbname: dbname,
-		mysqld: mysqld,
+		dbname:          dbname,
+		mysqld:          mysqld,
+		startPos:        startPos,
+		sendTransaction: sendTransaction,
 	}
 }
 
 // Stream implements BinlogStreamer.Stream().
-func (bls *binlogConnStreamer) Stream(ctx *sync2.ServiceContext, startPos myproto.GTID, sendTransaction sendTransactionFunc) error {
+func (bls *binlogConnStreamer) Stream(ctx *sync2.ServiceContext) error {
 	var events <-chan proto.BinlogEvent
 	var err error
 
@@ -50,13 +54,13 @@ func (bls *binlogConnStreamer) Stream(ctx *sync2.ServiceContext, startPos myprot
 	}
 	defer bls.conn.Close()
 
-	events, err = bls.conn.StartBinlogDump(startPos)
+	events, err = bls.conn.StartBinlogDump(bls.startPos)
 	if err != nil {
 		goto conclude
 	}
 	// parseEvents will loop until the events channel is closed, the
 	// service enters the SHUTTING_DOWN state, or an error occurs.
-	err = bls.parseEvents(ctx, events, sendTransaction)
+	err = bls.parseEvents(ctx, events)
 
 conclude:
 	if err != nil {
@@ -76,7 +80,7 @@ conclude:
 //
 // If the sendTransaction func returns io.EOF, parseEvents returns ClientEOF.
 // If the events channel is closed, parseEvents returns ServerEOF.
-func (bls *binlogConnStreamer) parseEvents(ctx *sync2.ServiceContext, events <-chan proto.BinlogEvent, sendTransaction sendTransactionFunc) (err error) {
+func (bls *binlogConnStreamer) parseEvents(ctx *sync2.ServiceContext, events <-chan proto.BinlogEvent) (err error) {
 	var statements []proto.Statement
 	var format proto.BinlogFormat
 	var autocommit = true
@@ -88,7 +92,7 @@ func (bls *binlogConnStreamer) parseEvents(ctx *sync2.ServiceContext, events <-c
 			Timestamp:  timestamp,
 			GTIDField:  myproto.GTIDField{Value: bls.pos},
 		}
-		if err = sendTransaction(trans); err != nil {
+		if err = bls.sendTransaction(trans); err != nil {
 			if err == io.EOF {
 				return ClientEOF
 			}
