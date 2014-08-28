@@ -22,6 +22,11 @@ var stateNames = []string{
 }
 
 // ServiceManager manages the state of a service through its lifecycle.
+// It's not recommended to nest service managers because they introduce
+// race conditions in the Stop functions that can cause one service to
+// indefinitely wait for the other. You can instead pass the top level
+// ServiceContext around and manage shutdown using the single
+// ServiceManager.
 type ServiceManager struct {
 	mu    sync.Mutex
 	wg    sync.WaitGroup

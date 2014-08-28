@@ -45,33 +45,30 @@ func newBinlogConnStreamer(dbname string, mysqld *mysqlctl.Mysqld, startPos mypr
 }
 
 // Stream implements BinlogStreamer.Stream().
-func (bls *binlogConnStreamer) Stream(ctx *sync2.ServiceContext) error {
-	var events <-chan proto.BinlogEvent
-	var err error
+func (bls *binlogConnStreamer) Stream(ctx *sync2.ServiceContext) (err error) {
+	defer func() {
+		if err != nil {
+			binlogStreamerErrors.Add("Stream", 1)
+			err = fmt.Errorf("stream error @ %#v, error: %v", bls.pos, err)
+			log.Error(err.Error())
+		}
+		log.Infof("Stream ended @ %#v", bls.pos)
+	}()
 
 	if bls.conn, err = mysqlctl.NewSlaveConnection(bls.mysqld); err != nil {
-		goto conclude
+		return
 	}
 	defer bls.conn.Close()
 
+	var events <-chan proto.BinlogEvent
 	events, err = bls.conn.StartBinlogDump(bls.startPos)
 	if err != nil {
-		goto conclude
+		return
 	}
 	// parseEvents will loop until the events channel is closed, the
 	// service enters the SHUTTING_DOWN state, or an error occurs.
 	err = bls.parseEvents(ctx, events)
-
-conclude:
-	if err != nil {
-		binlogStreamerErrors.Add("Stream", 1)
-		err = fmt.Errorf("stream error @ %#v, error: %v", bls.pos, err)
-		log.Error(err.Error())
-		return err
-	}
-
-	log.Infof("Stream ended @ %#v", bls.pos)
-	return nil
+	return
 }
 
 // parseEvents processes the raw binlog dump stream from the server, one event
