@@ -15,10 +15,11 @@ import (
 )
 
 var (
-	cell       = flag.String("cell", "test_nj", "cell to use")
-	retryDelay = flag.Duration("retry-delay", 200*time.Millisecond, "retry delay")
-	retryCount = flag.Int("retry-count", 10, "retry count")
-	timeout    = flag.Duration("timeout", 5*time.Second, "connection and call timeout")
+	cell        = flag.String("cell", "test_nj", "cell to use")
+	retryDelay  = flag.Duration("retry-delay", 200*time.Millisecond, "retry delay")
+	retryCount  = flag.Int("retry-count", 10, "retry count")
+	timeout     = flag.Duration("timeout", 5*time.Second, "connection and call timeout")
+	maxInFlight = flag.Int("max-in-flight", 0, "maximum number of calls to allow simultaneously")
 )
 
 var resilientSrvTopoServer *vtgate.ResilientSrvTopoServer
@@ -49,6 +50,6 @@ func main() {
 	topoReader = NewTopoReader(resilientSrvTopoServer)
 	topo.RegisterTopoReader(topoReader)
 
-	vtgate.Init(resilientSrvTopoServer, *cell, *retryDelay, *retryCount, *timeout)
+	vtgate.Init(resilientSrvTopoServer, *cell, *retryDelay, *retryCount, *timeout, *maxInFlight)
 	servenv.RunDefault()
 }

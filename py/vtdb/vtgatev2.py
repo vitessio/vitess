@@ -27,6 +27,8 @@ def convert_exception(exc, *args):
     return dbexceptions.TimeoutError(new_args)
   elif isinstance(exc, gorpc.AppError):
     msg = str(exc[0]).lower()
+    if msg.startswith('request_backlog'):
+      return dbexceptions.RequestBacklog(new_args)
     match = _errno_pattern.search(msg)
     if match:
       mysql_errno = int(match.group(1))
