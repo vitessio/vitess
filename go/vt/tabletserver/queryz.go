@@ -21,6 +21,7 @@ var (
 			<th>Query</th>
 			<th>Table</th>
 			<th>Plan</th>
+			<th>Reason</th>
 			<th>Count</th>
 			<th>Time</th>
 			<th>Rows</th>
@@ -36,6 +37,7 @@ var (
 			<td>{{.Query}}</td>
 			<td>{{.Table}}</td>
 			<td>{{.Plan}}</td>
+			<td>{{.Reason}}</td>
 			<td>{{.Count}}</td>
 			<td>{{.Time}}</td>
 			<td>{{.Rows}}</td>
@@ -53,6 +55,7 @@ type queryzRow struct {
 	Query  string
 	Table  string
 	Plan   planbuilder.PlanType
+	Reason planbuilder.ReasonType
 	Count  int64
 	tm     time.Duration
 	Rows   int64
@@ -133,9 +136,10 @@ func queryzHandler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		Value := &queryzRow{
-			Query: wrappable(v),
-			Table: plan.TableName,
-			Plan:  plan.PlanId,
+			Query:  wrappable(v),
+			Table:  plan.TableName,
+			Plan:   plan.PlanId,
+			Reason: plan.Reason,
 		}
 		Value.Count, Value.tm, Value.Rows, Value.Errors = plan.Stats()
 		timepq := time.Duration(int64(Value.tm) / Value.Count)
