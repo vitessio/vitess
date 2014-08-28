@@ -22,13 +22,13 @@ func startHTMLTable(w http.ResponseWriter) {
 			border-collapse: collapse;
                         table-layout:fixed;
                         overflow: hidden;
-                        white-space: nowrap;
 		}
 		table.gridtable th {
 			border-width: 1px;
 			padding: 8px;
 			border-style: solid;
 			background-color: #dedede;
+			white-space: nowrap;
 		}
 		table.gridtable tr.low {
 			background-color: #f0f0f0;
