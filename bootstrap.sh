@@ -50,35 +50,21 @@ ln -snf $VTTOP/test/vthook-copy_snapshot_to_storage.sh $VTROOT/vthook/copy_snaps
 ln -snf $VTTOP/test/vthook-test.sh $VTROOT/vthook/test.sh
 
 # install mysql
-if [ -d $VTROOT/dist/mysql ];
-then
-  echo "skipping MySQL build"
-else
-  export VT_MYSQL_ROOT=$VTROOT/dist/mysql
+case "$MYSQL_FLAVOR" in
+  "MariaDB")
+    myversion=`$VT_MYSQL_ROOT/bin/mysql --version | grep MariaDB`
+    if [ "$myversion" == "" ]; then
+      echo "Couldn't find MariaDB in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
+      exit 1
+    fi
+    echo "Found MariaDB installation in $VT_MYSQL_ROOT."
+    ;;
 
-  case "$MYSQL_FLAVOR" in
-    "MariaDB")
-      echo "Getting and compiling MariaDB"
-      # MariaDB may require cmake and libaio-dev to compile, I ran:
-      # sudo apt-get install cmake
-      # sudo apt-get install libaio-dev
-      echo "Downloading and compiling MariaDB"
-      pushd third_party
-      version="10.0.10"
-      wget https://downloads.mariadb.org/interstitial/mariadb-${version}/kvm-tarbake-jaunty-x86/mariadb-${version}.tar.gz
-      tar xzf mariadb-${version}.tar.gz
-      popd
-
-      pushd third_party/mariadb-${version}
-      cmake . -DBUILD_CONFIG=mysql_release -DCMAKE_INSTALL_PREFIX=$VTROOT/dist/mysql
-      make -j 8 install
-      rm -rf $VTROOT/dist/mysql/mysql-test
-      rm -rf $VTROOT/dist/mysql/sql-bench
-      popd
-      rm -rf third_party/mariadb-${version}.tar.gz third_party/mariadb-${version}
-      ;;
-
-    *)
+  *)
+    export VT_MYSQL_ROOT=$VTROOT/dist/mysql
+	if [ -d $VT_MYSQL_ROOT ]; then
+      echo "Skipping Google MySQL build. Delete $VT_MYSQL_ROOT to force rebuild."
+    else
       echo "Getting and compiling Google MySQL"
       git clone https://code.google.com/r/sougou-vitess-mysql/ third_party/mysql
       pushd third_party/mysql
@@ -93,17 +79,17 @@ else
       rm -rf $VTROOT/dist/mysql/sql-bench
       popd
       rm -rf third_party/mysql
-      ;;
-  esac
-fi
+    fi
+  ;;
+esac
 
 # save the flavor that was used in bootstrap, so it can be restored
 # every time dev.env is sourced.
-echo "$MYSQL_FLAVOR" > $VT_MYSQL_ROOT/VTFLAVOR
+echo "$MYSQL_FLAVOR" > $VTROOT/dist/MYSQL_FLAVOR
 
 # generate pkg-config, so go can use mysql C client
 if [ ! -x $VT_MYSQL_ROOT/bin/mysql_config ]; then
-  echo "cannot execute $VT_MYSQL_ROOT/bin/mysql_config, exiting" 1>&2
+  echo "Cannot execute $VT_MYSQL_ROOT/bin/mysql_config. Did you install a client dev package?" 1>&2
   exit 1
 fi
 

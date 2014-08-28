@@ -15,6 +15,9 @@ vtroot = os.environ['VTROOT']
 # vtdataroot is where to put all the data files
 vtdataroot = os.environ.get('VTDATAROOT', '/vt')
 
+# vt_mysql_root is where MySQL is installed
+vt_mysql_root = os.environ.get('VT_MYSQL_ROOT', os.path.join(vtroot, 'dist', 'mysql'))
+
 # tmproot is the temporary place to put all test files
 tmproot = os.path.join(vtdataroot, 'tmp')
 
@@ -110,7 +113,7 @@ def binary_argstr(name):
 
 # binary management for the MySQL distribution.
 def mysql_binary_path(name):
-  return os.path.join(vtroot, 'dist', 'mysql', 'bin', name)
+  return os.path.join(vt_mysql_root, 'bin', name)
 
 # topology server management: we use zookeeper in all the tests
 topo_server_implementation = 'zookeeper'
