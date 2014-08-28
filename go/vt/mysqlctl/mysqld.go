@@ -266,7 +266,7 @@ func (mysqld *Mysqld) Init(mysqlWaitTime time.Duration, bootstrapArchive string,
 	// Unpack bootstrap DB files.
 	dbTbzPath := path.Join(root, "data/bootstrap/"+bootstrapArchive)
 	log.Infof("decompress bootstrap db %v", dbTbzPath)
-	args := []string{"-xj", "-C", mysqld.config.DataDir, "-f", dbTbzPath}
+	args := []string{"-xj", "-C", mysqld.TabletDir, "-f", dbTbzPath}
 	if _, err = execCmd("tar", args, []string{}, ""); err != nil {
 		log.Errorf("failed unpacking %v: %v", dbTbzPath, err)
 		return err

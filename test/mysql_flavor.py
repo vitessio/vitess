@@ -62,7 +62,7 @@ class MariaDB(MysqlFlavor):
     return environment.vttop + "/config/mycnf/master_mariadb.cnf"
 
   def bootstrap_archive(self):
-    return "mysql-db-dir_10.0.10-MariaDB.tbz"
+    return "mysql-db-dir_10.0.13-MariaDB.tbz"
 
 
 if environment.mysql_flavor == "MariaDB":
