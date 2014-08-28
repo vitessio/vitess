@@ -64,9 +64,11 @@ type binlogPosition struct {
 // binlogFileStreamer streams binlog events from a set of local files.
 type binlogFileStreamer struct {
 	// dbname, dir, and mysqld are set at creation.
-	dbname string
-	dir    string
-	mysqld *mysqlctl.Mysqld
+	dbname          string
+	dir             string
+	mysqld          *mysqlctl.Mysqld
+	gtid            myproto.GTID
+	sendTransaction sendTransactionFunc
 
 	svm sync2.ServiceManager
 
@@ -79,35 +81,43 @@ type binlogFileStreamer struct {
 // newBinlogFileStreamer creates a BinlogStreamer.
 //
 // dbname specifes the db to stream events for.
-func newBinlogFileStreamer(dbname string, mysqld *mysqlctl.Mysqld) BinlogStreamer {
+func newBinlogFileStreamer(dbname string, mysqld *mysqlctl.Mysqld, gtid myproto.GTID, sendTransaction sendTransactionFunc) BinlogStreamer {
 	return &binlogFileStreamer{
-		dbname: dbname,
-		dir:    path.Dir(mysqld.Cnf().BinLogPath),
-		mysqld: mysqld,
+		dbname:          dbname,
+		dir:             path.Dir(mysqld.Cnf().BinLogPath),
+		mysqld:          mysqld,
+		gtid:            gtid,
+		sendTransaction: sendTransaction,
 	}
 }
 
+// Stream implements BinlogStreamer.Stream().
+func (bls *binlogFileStreamer) Stream(ctx *sync2.ServiceContext) error {
+	// Query mysqld to convert GTID to file & pos.
+	rp, err := bls.mysqld.BinlogInfo(bls.gtid)
+	if err != nil {
+		log.Errorf("Unable to serve client request: error computing start position: %v", err)
+		return fmt.Errorf("error computing start position: %v", err)
+	}
+	return bls.streamFilePos(ctx, rp.MasterLogFile, int64(rp.MasterLogPosition))
+}
+
 // streamFilePos starts streaming events from a given file and position.
-func (bls *binlogFileStreamer) streamFilePos(file string, pos int64, sendTransaction sendTransactionFunc) error {
-	if err := bls.file.Init(path.Join(bls.dir, file), pos); err != nil {
+func (bls *binlogFileStreamer) streamFilePos(ctx *sync2.ServiceContext, file string, pos int64) error {
+	var err error
+	if err = bls.file.Init(path.Join(bls.dir, file), pos); err != nil {
 		return err
 	}
 	defer bls.file.Close()
 
-	// Launch using service manager so we can stop this as needed.
-	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		for {
-			if err := bls.run(svc, sendTransaction); err != nil {
-				return err
-			}
-			if err := bls.file.WaitForChange(svc); err != nil {
-				return err
-			}
+	for {
+		if err = bls.run(ctx); err != nil {
+			break
 		}
-	})
-
-	// Wait for service to exit, and handle errors if any.
-	err := bls.svm.Join()
+		if err = bls.file.WaitForChange(ctx); err != nil {
+			break
+		}
+	}
 	if err == io.EOF {
 		log.Infof("Stream ended @ %#v", bls.file)
 		return nil
@@ -116,32 +126,16 @@ func (bls *binlogFileStreamer) streamFilePos(file string, pos int64, sendTransac
 	return fmt.Errorf("stream error @ %#v, error: %v", bls.file, err)
 }
 
-// Stream implements BinlogStreamer.Stream().
-func (bls *binlogFileStreamer) Stream(gtid myproto.GTID, sendTransaction sendTransactionFunc) error {
-	// Query mysqld to convert GTID to file & pos.
-	rp, err := bls.mysqld.BinlogInfo(gtid)
-	if err != nil {
-		log.Errorf("Unable to serve client request: error computing start position: %v", err)
-		return fmt.Errorf("error computing start position: %v", err)
-	}
-	return bls.streamFilePos(rp.MasterLogFile, int64(rp.MasterLogPosition), sendTransaction)
-}
-
-// Stop implements BinlogStreamer.Stop().
-func (bls *binlogFileStreamer) Stop() {
-	bls.svm.Stop()
-}
-
 // run launches mysqlbinlog and starts the stream. It takes care of
 // cleaning up the process when streaming returns.
-func (bls *binlogFileStreamer) run(svc *sync2.ServiceContext, sendTransaction sendTransactionFunc) (err error) {
+func (bls *binlogFileStreamer) run(ctx *sync2.ServiceContext) (err error) {
 	mbl := &MysqlBinlog{}
 	reader, err := mbl.Launch(bls.dbname, bls.file.name, bls.file.pos)
 	if err != nil {
 		return fmt.Errorf("launch error: %v", err)
 	}
 	defer reader.Close()
-	err = bls.parseEvents(svc, sendTransaction, reader)
+	err = bls.parseEvents(ctx, reader)
 	// Always kill because we don't read from reader all the way to EOF.
 	// If we wait, we may deadlock.
 	mbl.Kill()
@@ -149,13 +143,13 @@ func (bls *binlogFileStreamer) run(svc *sync2.ServiceContext, sendTransaction se
 }
 
 // parseEvents parses events and transmits them as transactions for the current mysqlbinlog stream.
-func (bls *binlogFileStreamer) parseEvents(svc *sync2.ServiceContext, sendTransaction sendTransactionFunc, reader io.Reader) (err error) {
+func (bls *binlogFileStreamer) parseEvents(ctx *sync2.ServiceContext, reader io.Reader) (err error) {
 	bls.delim = DEFAULT_DELIM
 	bufReader := bufio.NewReader(reader)
 	var statements []proto.Statement
 	var timestamp int64
 	for {
-		sql, err := bls.nextStatement(svc, bufReader)
+		sql, err := bls.nextStatement(ctx, bufReader)
 		if sql == nil {
 			return err
 		}
@@ -177,7 +171,7 @@ func (bls *binlogFileStreamer) parseEvents(svc *sync2.ServiceContext, sendTransa
 				Timestamp:  timestamp,
 				GTIDField:  myproto.GTIDField{Value: bls.blPos.GTID},
 			}
-			if err = sendTransaction(trans); err != nil {
+			if err = bls.sendTransaction(trans); err != nil {
 				if err == io.EOF {
 					return err
 				}
@@ -203,11 +197,11 @@ func (bls *binlogFileStreamer) parseEvents(svc *sync2.ServiceContext, sendTransa
 // positional comments, it updates the binlogFileStreamer state. It also ignores events that
 // are not material. If it returns nil, it's the end of stream. If err is also nil, then
 // it was due to a normal termination.
-func (bls *binlogFileStreamer) nextStatement(svc *sync2.ServiceContext, bufReader *bufio.Reader) (stmt []byte, err error) {
+func (bls *binlogFileStreamer) nextStatement(ctx *sync2.ServiceContext, bufReader *bufio.Reader) (stmt []byte, err error) {
 eventLoop:
 	for {
 		// Stop processing if we're shutting down
-		if !svc.IsRunning() {
+		if !ctx.IsRunning() {
 			return nil, io.EOF
 		}
 		event, err := bls.readEvent(bufReader)
@@ -345,10 +339,10 @@ func (f *fileInfo) Save() {
 	}
 }
 
-func (f *fileInfo) WaitForChange(svc *sync2.ServiceContext) error {
+func (f *fileInfo) WaitForChange(ctx *sync2.ServiceContext) error {
 	for {
 		// Stop waiting if we're shutting down
-		if !svc.IsRunning() {
+		if !ctx.IsRunning() {
 			return io.EOF
 		}
 		time.Sleep(100 * time.Millisecond)

@@ -26,7 +26,7 @@ func TestMemcache(t *testing.T) {
 	defer cmd.Process.Kill()
 	time.Sleep(time.Second)
 
-	c, err := Connect("/tmp/vtocc_cache.sock")
+	c, err := Connect("/tmp/vtocc_cache.sock", 30*time.Millisecond)
 	if err != nil {
 		t.Fatalf("Connect: %v", err)
 	}
@@ -253,6 +253,14 @@ func TestMemcache(t *testing.T) {
 	}
 	if string(results[1].Value) != "val2" {
 		t.Errorf("want val2, got %s", string(results[1].Value))
+	}
+
+	// timeout test
+	c.timeout = 1 * time.Nanosecond
+	results, err = c.Gets("key1", "key3", "key2")
+	want := "write unix /tmp/vtocc_cache.sock: i/o timeout"
+	if err == nil || err.Error() != want {
+		t.Errorf("want %s, got %v", want, err)
 	}
 }
 

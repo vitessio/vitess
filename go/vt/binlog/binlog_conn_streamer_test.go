@@ -48,7 +48,6 @@ func TestBinlogConnStreamerParseEventsXID(t *testing.T) {
 		xidEvent,
 	}
 
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil).(*binlogConnStreamer)
 	events := make(chan proto.BinlogEvent)
 
 	want := []proto.BinlogTransaction{
@@ -67,12 +66,14 @@ func TestBinlogConnStreamerParseEventsXID(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		return bls.parseEvents(svc, events, sendTransaction)
+	svm := &sync2.ServiceManager{}
+	svm.Go(func(ctx *sync2.ServiceContext) error {
+		return bls.parseEvents(ctx, events)
 	})
-	if err := bls.svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -90,7 +91,6 @@ func TestBinlogConnStreamerParseEventsCommit(t *testing.T) {
 		commitEvent,
 	}
 
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil).(*binlogConnStreamer)
 	events := make(chan proto.BinlogEvent)
 
 	want := []proto.BinlogTransaction{
@@ -109,12 +109,14 @@ func TestBinlogConnStreamerParseEventsCommit(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		return bls.parseEvents(svc, events, sendTransaction)
+	svm := &sync2.ServiceManager{}
+	svm.Go(func(ctx *sync2.ServiceContext) error {
+		return bls.parseEvents(ctx, events)
 	})
-	if err := bls.svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -124,16 +126,17 @@ func TestBinlogConnStreamerParseEventsCommit(t *testing.T) {
 }
 
 func TestBinlogConnStreamerStop(t *testing.T) {
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil).(*binlogConnStreamer)
 	events := make(chan proto.BinlogEvent)
 
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return nil
 	}
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
 
 	// Start parseEvents(), but don't send it anything, so it just waits.
-	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		err := bls.parseEvents(svc, events, sendTransaction)
+	svm := &sync2.ServiceManager{}
+	svm.Go(func(ctx *sync2.ServiceContext) error {
+		err := bls.parseEvents(ctx, events)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -142,7 +145,7 @@ func TestBinlogConnStreamerStop(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		bls.Stop()
+		svm.Stop()
 		close(done)
 	}()
 
@@ -163,18 +166,19 @@ func TestBinlogConnStreamerParseEventsClientEOF(t *testing.T) {
 	}
 	want := ClientEOF
 
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil).(*binlogConnStreamer)
 	events := make(chan proto.BinlogEvent)
 
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return io.EOF
 	}
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		return bls.parseEvents(svc, events, sendTransaction)
+	svm := &sync2.ServiceManager{}
+	svm.Go(func(ctx *sync2.ServiceContext) error {
+		return bls.parseEvents(ctx, events)
 	})
-	err := bls.svm.Join()
+	err := svm.Join()
 	if err == nil {
 		t.Errorf("expected error, got none")
 	}
@@ -186,18 +190,19 @@ func TestBinlogConnStreamerParseEventsClientEOF(t *testing.T) {
 func TestBinlogConnStreamerParseEventsServerEOF(t *testing.T) {
 	want := ServerEOF
 
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil).(*binlogConnStreamer)
 	events := make(chan proto.BinlogEvent)
 	close(events)
 
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return nil
 	}
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
 
-	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		return bls.parseEvents(svc, events, sendTransaction)
+	svm := &sync2.ServiceManager{}
+	svm.Go(func(ctx *sync2.ServiceContext) error {
+		return bls.parseEvents(ctx, events)
 	})
-	err := bls.svm.Join()
+	err := svm.Join()
 	if err == nil {
 		t.Errorf("expected error, got none")
 	}
@@ -216,18 +221,19 @@ func TestBinlogConnStreamerParseEventsSendErrorXID(t *testing.T) {
 	}
 	want := "send reply error: foobar"
 
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil).(*binlogConnStreamer)
 	events := make(chan proto.BinlogEvent)
 
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return fmt.Errorf("foobar")
 	}
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		return bls.parseEvents(svc, events, sendTransaction)
+	svm := &sync2.ServiceManager{}
+	svm.Go(func(ctx *sync2.ServiceContext) error {
+		return bls.parseEvents(ctx, events)
 	})
-	err := bls.svm.Join()
+	err := svm.Join()
 	if err == nil {
 		t.Errorf("expected error, got none")
 		return
@@ -247,18 +253,19 @@ func TestBinlogConnStreamerParseEventsSendErrorCommit(t *testing.T) {
 	}
 	want := "send reply error: foobar"
 
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil).(*binlogConnStreamer)
 	events := make(chan proto.BinlogEvent)
 
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return fmt.Errorf("foobar")
 	}
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		return bls.parseEvents(svc, events, sendTransaction)
+	svm := &sync2.ServiceManager{}
+	svm.Go(func(ctx *sync2.ServiceContext) error {
+		return bls.parseEvents(ctx, events)
 	})
-	err := bls.svm.Join()
+	err := svm.Join()
 	if err == nil {
 		t.Errorf("expected error, got none")
 		return
@@ -280,18 +287,19 @@ func TestBinlogConnStreamerParseEventsInvalid(t *testing.T) {
 	}
 	want := "can't parse binlog event, invalid data: mysqlctl.googleBinlogEvent{binlogEvent:mysqlctl.binlogEvent{0x0, 0x0, 0x0, 0x0, 0x4, 0x88, 0xf3, 0x0, 0x0, 0x33, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x20, 0x0}}"
 
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil).(*binlogConnStreamer)
 	events := make(chan proto.BinlogEvent)
 
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return nil
 	}
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		return bls.parseEvents(svc, events, sendTransaction)
+	svm := &sync2.ServiceManager{}
+	svm.Go(func(ctx *sync2.ServiceContext) error {
+		return bls.parseEvents(ctx, events)
 	})
-	err := bls.svm.Join()
+	err := svm.Join()
 	if err == nil {
 		t.Errorf("expected error, got none")
 		return
@@ -315,18 +323,19 @@ func TestBinlogConnStreamerParseEventsInvalidFormat(t *testing.T) {
 	}
 	want := "can't parse FORMAT_DESCRIPTION_EVENT: header length = 12, should be >= 19, event data: mysqlctl.googleBinlogEvent{binlogEvent:mysqlctl.binlogEvent{0x98, 0x68, 0xe9, 0x53, 0xf, 0x88, 0xf3, 0x0, 0x0, 0x66, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x4, 0x0, 0x35, 0x2e, 0x31, 0x2e, 0x36, 0x33, 0x2d, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2d, 0x6c, 0x6f, 0x67, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xc, 0x38, 0xd, 0x0, 0x8, 0x0, 0x12, 0x0, 0x4, 0x4, 0x4, 0x4, 0x12, 0x0, 0x0, 0x53, 0x0, 0x4, 0x1a, 0x8, 0x0, 0x0, 0x0, 0x8, 0x8, 0x8, 0x2}}"
 
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil).(*binlogConnStreamer)
 	events := make(chan proto.BinlogEvent)
 
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return nil
 	}
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		return bls.parseEvents(svc, events, sendTransaction)
+	svm := &sync2.ServiceManager{}
+	svm.Go(func(ctx *sync2.ServiceContext) error {
+		return bls.parseEvents(ctx, events)
 	})
-	err := bls.svm.Join()
+	err := svm.Join()
 	if err == nil {
 		t.Errorf("expected error, got none")
 		return
@@ -346,18 +355,19 @@ func TestBinlogConnStreamerParseEventsNoFormat(t *testing.T) {
 	}
 	want := "got a real event before FORMAT_DESCRIPTION_EVENT: mysqlctl.googleBinlogEvent{binlogEvent:mysqlctl.binlogEvent{0x98, 0x68, 0xe9, 0x53, 0x2, 0x88, 0xf3, 0x0, 0x0, 0x58, 0x0, 0x0, 0x0, 0xc2, 0x0, 0x0, 0x0, 0x8, 0x0, 0xd, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x23, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x10, 0x0, 0x0, 0x1a, 0x0, 0x0, 0x0, 0x40, 0x0, 0x0, 0x1, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x0, 0x0, 0x6, 0x3, 0x73, 0x74, 0x64, 0x4, 0x21, 0x0, 0x21, 0x0, 0x21, 0x0, 0x76, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x0, 0x42, 0x45, 0x47, 0x49, 0x4e}}"
 
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil).(*binlogConnStreamer)
 	events := make(chan proto.BinlogEvent)
 
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return nil
 	}
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		return bls.parseEvents(svc, events, sendTransaction)
+	svm := &sync2.ServiceManager{}
+	svm.Go(func(ctx *sync2.ServiceContext) error {
+		return bls.parseEvents(ctx, events)
 	})
-	err := bls.svm.Join()
+	err := svm.Join()
 	if err == nil {
 		t.Errorf("expected error, got none")
 		return
@@ -381,18 +391,19 @@ func TestBinlogConnStreamerParseEventsInvalidQuery(t *testing.T) {
 	}
 	want := "can't get query from binlog event: SQL query position = 240, which is outside buffer, event data: mysqlctl.googleBinlogEvent{binlogEvent:mysqlctl.binlogEvent{0x98, 0x68, 0xe9, 0x53, 0x2, 0x88, 0xf3, 0x0, 0x0, 0x9f, 0x0, 0x0, 0x0, 0x61, 0x1, 0x0, 0x0, 0x0, 0x0, 0xd, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x23, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xc8, 0x0, 0x0, 0x1a, 0x0, 0x0, 0x0, 0x40, 0x0, 0x0, 0x1, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x0, 0x0, 0x6, 0x3, 0x73, 0x74, 0x64, 0x4, 0x21, 0x0, 0x21, 0x0, 0x21, 0x0, 0x76, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x0, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x20, 0x69, 0x6e, 0x74, 0x6f, 0x20, 0x76, 0x74, 0x5f, 0x61, 0x28, 0x65, 0x69, 0x64, 0x2c, 0x20, 0x69, 0x64, 0x29, 0x20, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x73, 0x20, 0x28, 0x31, 0x2c, 0x20, 0x31, 0x29, 0x20, 0x2f, 0x2a, 0x20, 0x5f, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x20, 0x76, 0x74, 0x5f, 0x61, 0x20, 0x28, 0x65, 0x69, 0x64, 0x20, 0x69, 0x64, 0x20, 0x29, 0x20, 0x28, 0x31, 0x20, 0x31, 0x20, 0x29, 0x3b, 0x20, 0x2a, 0x2f}}"
 
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil).(*binlogConnStreamer)
 	events := make(chan proto.BinlogEvent)
 
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return nil
 	}
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		return bls.parseEvents(svc, events, sendTransaction)
+	svm := &sync2.ServiceManager{}
+	svm.Go(func(ctx *sync2.ServiceContext) error {
+		return bls.parseEvents(ctx, events)
 	})
-	err := bls.svm.Join()
+	err := svm.Join()
 	if err == nil {
 		t.Errorf("expected error, got none")
 		return
@@ -415,7 +426,6 @@ func TestBinlogConnStreamerParseEventsRollback(t *testing.T) {
 		xidEvent,
 	}
 
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil).(*binlogConnStreamer)
 	events := make(chan proto.BinlogEvent)
 
 	want := []proto.BinlogTransaction{
@@ -440,12 +450,14 @@ func TestBinlogConnStreamerParseEventsRollback(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		return bls.parseEvents(svc, events, sendTransaction)
+	svm := &sync2.ServiceManager{}
+	svm.Go(func(ctx *sync2.ServiceContext) error {
+		return bls.parseEvents(ctx, events)
 	})
-	if err := bls.svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -462,7 +474,6 @@ func TestBinlogConnStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 		xidEvent,
 	}
 
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil).(*binlogConnStreamer)
 	events := make(chan proto.BinlogEvent)
 
 	want := []proto.BinlogTransaction{
@@ -487,12 +498,14 @@ func TestBinlogConnStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		return bls.parseEvents(svc, events, sendTransaction)
+	svm := &sync2.ServiceManager{}
+	svm.Go(func(ctx *sync2.ServiceContext) error {
+		return bls.parseEvents(ctx, events)
 	})
-	if err := bls.svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -510,7 +523,6 @@ func TestBinlogConnStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 		xidEvent,
 	}
 
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil).(*binlogConnStreamer)
 	events := make(chan proto.BinlogEvent)
 
 	want := []proto.BinlogTransaction{
@@ -535,12 +547,14 @@ func TestBinlogConnStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		return bls.parseEvents(svc, events, sendTransaction)
+	svm := &sync2.ServiceManager{}
+	svm.Go(func(ctx *sync2.ServiceContext) error {
+		return bls.parseEvents(ctx, events)
 	})
-	if err := bls.svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -559,7 +573,6 @@ func TestBinlogConnStreamerParseEventsSetInsertID(t *testing.T) {
 		xidEvent,
 	}
 
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil).(*binlogConnStreamer)
 	events := make(chan proto.BinlogEvent)
 
 	want := []proto.BinlogTransaction{
@@ -579,12 +592,14 @@ func TestBinlogConnStreamerParseEventsSetInsertID(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		return bls.parseEvents(svc, events, sendTransaction)
+	svm := &sync2.ServiceManager{}
+	svm.Go(func(ctx *sync2.ServiceContext) error {
+		return bls.parseEvents(ctx, events)
 	})
-	if err := bls.svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -608,18 +623,19 @@ func TestBinlogConnStreamerParseEventsInvalidIntVar(t *testing.T) {
 	}
 	want := "can't parse INTVAR_EVENT: invalid IntVar ID: 3, event data: mysqlctl.googleBinlogEvent{binlogEvent:mysqlctl.binlogEvent{0xea, 0xa8, 0xea, 0x53, 0x5, 0x88, 0xf3, 0x0, 0x0, 0x24, 0x0, 0x0, 0x0, 0xb8, 0x6, 0x0, 0x0, 0x0, 0x0, 0xd, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x3, 0x65, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}}"
 
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil).(*binlogConnStreamer)
 	events := make(chan proto.BinlogEvent)
 
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return nil
 	}
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		return bls.parseEvents(svc, events, sendTransaction)
+	svm := &sync2.ServiceManager{}
+	svm.Go(func(ctx *sync2.ServiceContext) error {
+		return bls.parseEvents(ctx, events)
 	})
-	err := bls.svm.Join()
+	err := svm.Join()
 	if err == nil {
 		t.Errorf("expected error, got none")
 		return
@@ -639,7 +655,6 @@ func TestBinlogConnStreamerParseEventsOtherDB(t *testing.T) {
 		xidEvent,
 	}
 
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil).(*binlogConnStreamer)
 	events := make(chan proto.BinlogEvent)
 
 	want := []proto.BinlogTransaction{
@@ -658,12 +673,14 @@ func TestBinlogConnStreamerParseEventsOtherDB(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		return bls.parseEvents(svc, events, sendTransaction)
+	svm := &sync2.ServiceManager{}
+	svm.Go(func(ctx *sync2.ServiceContext) error {
+		return bls.parseEvents(ctx, events)
 	})
-	if err := bls.svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -682,7 +699,6 @@ func TestBinlogConnStreamerParseEventsOtherDBBegin(t *testing.T) {
 		xidEvent,
 	}
 
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil).(*binlogConnStreamer)
 	events := make(chan proto.BinlogEvent)
 
 	want := []proto.BinlogTransaction{
@@ -701,12 +717,14 @@ func TestBinlogConnStreamerParseEventsOtherDBBegin(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		return bls.parseEvents(svc, events, sendTransaction)
+	svm := &sync2.ServiceManager{}
+	svm.Go(func(ctx *sync2.ServiceContext) error {
+		return bls.parseEvents(ctx, events)
 	})
-	if err := bls.svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -724,19 +742,20 @@ func TestBinlogConnStreamerParseEventsBeginAgain(t *testing.T) {
 		beginEvent,
 	}
 
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil).(*binlogConnStreamer)
 	events := make(chan proto.BinlogEvent)
 
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return nil
 	}
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
 	before := binlogStreamerErrors.Counts()["ParseEvents"]
 
 	go sendTestEvents(events, input)
-	bls.svm.Go(func(svc *sync2.ServiceContext) error {
-		return bls.parseEvents(svc, events, sendTransaction)
+	svm := &sync2.ServiceManager{}
+	svm.Go(func(ctx *sync2.ServiceContext) error {
+		return bls.parseEvents(ctx, events)
 	})
-	if err := bls.svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 	after := binlogStreamerErrors.Counts()["ParseEvents"]

@@ -103,7 +103,7 @@ func (cp *CachePool) Open() {
 	cp.startMemcache()
 	log.Infof("rowcache is enabled")
 	f := func() (pools.Resource, error) {
-		c, err := memcache.Connect(cp.port)
+		c, err := memcache.Connect(cp.port, 30*time.Millisecond)
 		if err != nil {
 			return nil, err
 		}
@@ -126,7 +126,7 @@ func (cp *CachePool) startMemcache() {
 	attempts := 0
 	for {
 		time.Sleep(100 * time.Millisecond)
-		c, err := memcache.Connect(cp.port)
+		c, err := memcache.Connect(cp.port, 30*time.Millisecond)
 		if err != nil {
 			attempts++
 			if attempts >= 50 {

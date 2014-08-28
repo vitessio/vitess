@@ -23,31 +23,15 @@ import (
 // RowcacheInvalidator runs the service to invalidate
 // the rowcache based on binlog events.
 type RowcacheInvalidator struct {
-	qe  *QueryEngine
+	qe     *QueryEngine
+	dbname string
+	mysqld *mysqlctl.Mysqld
+
 	svm sync2.ServiceManager
 
-	// mu mainly protects access to evs by Open and Close.
-	mu         sync.Mutex
-	dbname     string
-	mysqld     *mysqlctl.Mysqld
-	evs        *binlog.EventStreamer
-	lagSeconds sync2.AtomicInt64
+	gtidMutex  sync.Mutex
 	gtid       myproto.GTID
-	gtidMutex  sync.RWMutex
-}
-
-func (rci *RowcacheInvalidator) GetGTID() myproto.GTID {
-	rci.gtidMutex.RLock()
-	defer rci.gtidMutex.RUnlock()
-	return rci.gtid
-}
-
-func (rci *RowcacheInvalidator) GetGTIDString() string {
-	gtid := rci.GetGTID()
-	if gtid == nil {
-		return "<nil>"
-	}
-	return gtid.String()
+	lagSeconds sync2.AtomicInt64
 }
 
 func (rci *RowcacheInvalidator) SetGTID(gtid myproto.GTID) {
@@ -56,13 +40,27 @@ func (rci *RowcacheInvalidator) SetGTID(gtid myproto.GTID) {
 	rci.gtid = gtid
 }
 
+func (rci *RowcacheInvalidator) GTID() myproto.GTID {
+	rci.gtidMutex.Lock()
+	defer rci.gtidMutex.Unlock()
+	return rci.gtid
+}
+
+func (rci *RowcacheInvalidator) GTIDString() string {
+	gtid := rci.GTID()
+	if gtid == nil {
+		return "<nil>"
+	}
+	return gtid.String()
+}
+
 // NewRowcacheInvalidator creates a new RowcacheInvalidator.
 // Just like QueryEngine, this is a singleton class.
 // You must call this only once.
 func NewRowcacheInvalidator(qe *QueryEngine) *RowcacheInvalidator {
 	rci := &RowcacheInvalidator{qe: qe}
 	stats.Publish("RowcacheInvalidatorState", stats.StringFunc(rci.svm.StateName))
-	stats.Publish("RowcacheInvalidatorPosition", stats.StringFunc(rci.GetGTIDString))
+	stats.Publish("RowcacheInvalidatorPosition", stats.StringFunc(rci.GTIDString))
 	stats.Publish("RowcacheInvalidatorLagSeconds", stats.IntFunc(rci.lagSeconds.Get))
 	return rci
 }
@@ -76,22 +74,12 @@ func (rci *RowcacheInvalidator) Open(dbname string, mysqld *mysqlctl.Mysqld) {
 	if mysqld.Cnf().BinLogPath == "" {
 		panic(NewTabletError(FATAL, "Rowcache invalidator aborting: binlog path not specified"))
 	}
+	rci.dbname = dbname
+	rci.mysqld = mysqld
+	rci.SetGTID(rp.MasterLogGTIDField.Value)
+	// We'll set gtid inside the run function.
 
-	ok := rci.svm.Go(func(_ *sync2.ServiceContext) error {
-		rci.mu.Lock()
-		rci.dbname = dbname
-		rci.mysqld = mysqld
-		rci.evs = binlog.NewEventStreamer(dbname, mysqld)
-		rci.SetGTID(rp.MasterLogGTIDField.Value)
-		rci.mu.Unlock()
-
-		rci.run()
-
-		rci.mu.Lock()
-		rci.evs = nil
-		rci.mu.Unlock()
-		return nil
-	})
+	ok := rci.svm.Go(rci.run)
 	if ok {
 		log.Infof("Rowcache invalidator starting, dbname: %s, path: %s, logfile: %s, position: %d", dbname, mysqld.Cnf().BinLogPath, rp.MasterLogFile, rp.MasterLogPosition)
 	} else {
@@ -102,23 +90,12 @@ func (rci *RowcacheInvalidator) Open(dbname string, mysqld *mysqlctl.Mysqld) {
 // Close terminates the invalidation loop. It returns only of the
 // loop has terminated.
 func (rci *RowcacheInvalidator) Close() {
-	rci.mu.Lock()
-	if rci.evs == nil {
-		log.Infof("Rowcache is not running")
-		rci.mu.Unlock()
-		return
-	}
-	// This will cause the event streamer to exit, but run
-	// may still be running.
-	rci.evs.Stop()
-	rci.mu.Unlock()
-	// Stop will wait for run and rci to shutdown, which will set
-	// evs to nil. So, we need to release the lock before this.
 	rci.svm.Stop()
 }
 
-func (rci *RowcacheInvalidator) run() {
+func (rci *RowcacheInvalidator) run(ctx *sync2.ServiceContext) error {
 	for {
+		evs := binlog.NewEventStreamer(rci.dbname, rci.mysqld, rci.GTID(), rci.processEvent)
 		// We wrap this code in a func so we can catch all panics.
 		// If an error is returned, we log it, wait 1 second, and retry.
 		// This loop can only be stopped by calling Close.
@@ -128,10 +105,7 @@ func (rci *RowcacheInvalidator) run() {
 					inner = fmt.Errorf("%v: uncaught panic:\n%s", x, tb.Stack(4))
 				}
 			}()
-			return rci.evs.Stream(rci.GetGTID(), func(reply *blproto.StreamEvent) error {
-				rci.processEvent(reply)
-				return nil
-			})
+			return evs.Stream(ctx)
 		}()
 		if err == nil {
 			break
@@ -141,6 +115,7 @@ func (rci *RowcacheInvalidator) run() {
 		time.Sleep(1 * time.Second)
 	}
 	log.Infof("Rowcache invalidator stopped")
+	return nil
 }
 
 func handleInvalidationError(event *blproto.StreamEvent) {
@@ -156,7 +131,7 @@ func handleInvalidationError(event *blproto.StreamEvent) {
 	}
 }
 
-func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) {
+func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) error {
 	defer handleInvalidationError(event)
 	switch event.Category {
 	case "DDL":
@@ -171,9 +146,10 @@ func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) {
 	default:
 		log.Errorf("unknown event: %#v", event)
 		internalErrors.Add("Invalidation", 1)
-		return
+		return nil
 	}
 	rci.lagSeconds.Set(time.Now().Unix() - event.Timestamp)
+	return nil
 }
 
 func (rci *RowcacheInvalidator) handleDmlEvent(event *blproto.StreamEvent) {
