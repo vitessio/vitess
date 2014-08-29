@@ -50,6 +50,9 @@ func Connect(address string, timeout time.Duration) (conn *Connection, err error
 }
 
 func (mc *Connection) Close() {
+	if mc.conn == nil {
+		return
+	}
 	mc.conn.Close()
 	mc.conn = nil
 }
