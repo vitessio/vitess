@@ -44,7 +44,7 @@ func loadTableInfo(conn dbconnpool.PoolConnection, tableName string) (ti *TableI
 }
 
 func (ti *TableInfo) fetchColumns(conn dbconnpool.PoolConnection) error {
-	columns, err := conn.ExecuteFetch(fmt.Sprintf("describe %s", ti.Name), 10000, false)
+	columns, err := conn.ExecuteFetch(fmt.Sprintf("describe `%s`", ti.Name), 10000, false)
 	if err != nil {
 		return err
 	}
@@ -79,7 +79,7 @@ func (ti *TableInfo) SetPK(colnames []string) error {
 }
 
 func (ti *TableInfo) fetchIndexes(conn dbconnpool.PoolConnection) error {
-	indexes, err := conn.ExecuteFetch(fmt.Sprintf("show index from %s", ti.Name), 10000, false)
+	indexes, err := conn.ExecuteFetch(fmt.Sprintf("show index from `%s`", ti.Name), 10000, false)
 	if err != nil {
 		return err
 	}

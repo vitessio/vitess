@@ -223,7 +223,7 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		case '\'', '"':
 			return tkn.scanString(ch, STRING)
 		case '`':
-			return tkn.scanString(ch, ID)
+			return tkn.scanLiteralIdentifier()
 		default:
 			return LEX_ERROR, []byte{byte(ch)}
 		}
@@ -248,6 +248,22 @@ func (tkn *Tokenizer) scanIdentifier() (int, []byte) {
 	if keywordId, found := keywords[string(lowered)]; found {
 		return keywordId, lowered
 	}
+	return ID, buffer.Bytes()
+}
+
+func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {
+	buffer := bytes.NewBuffer(make([]byte, 0, 8))
+	buffer.WriteByte(byte(tkn.lastChar))
+	if !isLetter(tkn.lastChar) {
+		return LEX_ERROR, buffer.Bytes()
+	}
+	for tkn.next(); isLetter(tkn.lastChar) || isDigit(tkn.lastChar); tkn.next() {
+		buffer.WriteByte(byte(tkn.lastChar))
+	}
+	if tkn.lastChar != '`' {
+		return LEX_ERROR, buffer.Bytes()
+	}
+	tkn.next()
 	return ID, buffer.Bytes()
 }
 

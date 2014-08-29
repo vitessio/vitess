@@ -68,7 +68,6 @@ func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) err
 			var dmlEvent *proto.StreamEvent
 			dmlEvent, insertid, err = evs.buildDMLEvent(stmt.Sql, insertid)
 			if err != nil {
-				log.Warningf("%v: %s", err, stmt.Sql)
 				dmlEvent = &proto.StreamEvent{
 					Category: "ERR",
 					Sql:      string(stmt.Sql),

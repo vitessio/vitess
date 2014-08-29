@@ -262,6 +262,10 @@ func TestMemcache(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
+
+	// test double close
+	c.Close()
+	c.Close()
 }
 
 func expect(t *testing.T, c *Connection, key, value string) {
