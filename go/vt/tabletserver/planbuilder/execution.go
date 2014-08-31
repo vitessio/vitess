@@ -138,6 +138,8 @@ func analyzeSQL(statement sqlparser.Statement, getTable TableGetter) (plan *Exec
 		return analyzeSet(stmt), nil
 	case *sqlparser.DDL:
 		return analyzeDDL(stmt, getTable), nil
+	case *sqlparser.Other:
+		return &ExecPlan{PlanId: PLAN_OTHER}, nil
 	}
 	return nil, errors.New("invalid SQL")
 }

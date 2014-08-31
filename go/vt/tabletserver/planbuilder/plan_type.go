@@ -40,6 +40,8 @@ const (
 	PLAN_SET
 	// PLAN_DDL is for DDL statements
 	PLAN_DDL
+	// PLAN_OTHER is for SHOW, DESCRIBE & EXPLAIN statements
+	PLAN_OTHER
 	NumPlans
 )
 
@@ -56,6 +58,7 @@ var planName = []string{
 	"INSERT_SUBQUERY",
 	"SET",
 	"DDL",
+	"OTHER",
 }
 
 func (pt PlanType) String() string {
@@ -99,6 +102,7 @@ var tableAclRoles = map[PlanType]tableacl.Role{
 	PLAN_INSERT_PK:       tableacl.WRITER,
 	PLAN_INSERT_SUBQUERY: tableacl.WRITER,
 	PLAN_DDL:             tableacl.ADMIN,
+	PLAN_OTHER:           tableacl.ADMIN,
 }
 
 type ReasonType int

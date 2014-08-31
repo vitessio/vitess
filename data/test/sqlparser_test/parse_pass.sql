@@ -177,3 +177,7 @@ drop table a
 drop table if exists a#drop table a
 drop view if exists a#drop table a
 drop index b on a#alter table a
+analyze table a#alter table a
+show foobar#other
+describe foobar#other
+explain foobar#other

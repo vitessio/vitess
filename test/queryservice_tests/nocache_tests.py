@@ -456,6 +456,15 @@ class TestNocache(framework.TestCase):
     self.assertEqual(tstartErrorCounts+1, tendErrorCounts)
     self.assertTrue((tendTimesNs - tstartTimesNs) > 0)
 
+  def test_other(self):
+    cu = self.env.execute("show variables like 'version'")
+    for v in cu:
+      self.assertEqual(v[0], 'version')
+    cu = self.env.execute("describe vtocc_a")
+    self.assertEqual(cu.rowcount, 4)
+    cu = self.env.execute("explain vtocc_a")
+    self.assertEqual(cu.rowcount, 4)
+
   def _verify_mismatch(self, query, bindvars=None):
     self._verify_error(query, bindvars, "error: type mismatch")
 
