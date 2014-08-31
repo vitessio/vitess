@@ -1,7 +1,7 @@
 # select
 "select * from a"
 {
-  "PlanId":"PASS_SELECT",
+  "PlanId":"SELECT_STREAM",
   "Reason":"DEFAULT",
   "TableName":"a",
   "FieldQuery":null,
@@ -20,7 +20,7 @@
 # select join
 "select * from a join b"
 {
-  "PlanId":"PASS_SELECT",
+  "PlanId":"SELECT_STREAM",
   "Reason":"DEFAULT",
   "TableName":"",
   "FieldQuery":null,
@@ -43,7 +43,7 @@
 # union
 "select * from a union select * from b"
 {
-  "PlanId":"PASS_SELECT",
+  "PlanId":"SELECT_STREAM",
   "Reason":"DEFAULT",
   "TableName":"",
   "FieldQuery":null,

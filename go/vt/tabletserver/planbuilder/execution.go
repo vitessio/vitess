@@ -94,7 +94,7 @@ func GetStreamExecPlan(sql string, getTable TableGetter) (plan *ExecPlan, err er
 	}
 
 	plan = &ExecPlan{
-		PlanId:    PLAN_PASS_SELECT,
+		PlanId:    PLAN_SELECT_STREAM,
 		FullQuery: GenerateFullQuery(statement),
 	}
 

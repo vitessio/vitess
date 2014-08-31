@@ -412,9 +412,9 @@ func (qe *QueryEngine) StreamExecute(logStats *SQLQueryStats, query *proto.Query
 	stripTrailing(query)
 
 	plan := qe.schemaInfo.GetStreamPlan(query.Sql)
-	logStats.PlanType = "SELECT_STREAM"
+	logStats.PlanType = plan.PlanId.String()
 	logStats.OriginalSql = query.Sql
-	defer queryStats.Record("SELECT_STREAM", time.Now())
+	defer queryStats.Record(plan.PlanId.String(), time.Now())
 
 	authorized := tableacl.Authorized(plan.TableName, plan.PlanId.MinRole())
 	qe.checkTableAcl(plan.TableName, plan.PlanId, authorized, logStats.context.GetUsername())
