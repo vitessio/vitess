@@ -221,8 +221,8 @@ func (sdc *ShardConn) getConn(ctx context.Context) (conn tabletconn.TabletConn, 
 	defer sdc.mu.Unlock()
 
 	// fail-fast if deadline exceeded
-	deadline := ctx.Deadline()
-	if !deadline.IsZero() {
+	deadline, ok := ctx.Deadline()
+	if ok {
 		if time.Now().After(deadline) {
 			return nil, topo.EndPoint{}, tabletconn.OperationalError("vttablet: deadline exceeded"), false
 		}

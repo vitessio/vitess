@@ -34,6 +34,18 @@ func (ctx *Context) String() string {
 }
 
 // Deadline implements Context.Deadline
-func (ctx *Context) Deadline() time.Time {
-	return time.Time{}
+func (ctx *Context) Deadline() (deadline time.Time, ok bool) {
+	return time.Time{}, false
+}
+
+func (ctx *Context) Done() <-chan struct{} {
+	return nil
+}
+
+func (ctx *Context) Err() error {
+	return nil
+}
+
+func (ctx *Context) Value(key interface{}) interface{} {
+	return nil
 }
