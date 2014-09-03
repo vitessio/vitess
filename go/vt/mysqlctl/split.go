@@ -99,6 +99,7 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl/csvsplitter"
@@ -193,7 +194,7 @@ func (mysqld *Mysqld) getReplicationPositionForClones(allowHierarchicalReplicati
 	return
 }
 
-func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool, hookExtraEnv map[string]string) (slaveStartRequired, readOnly bool, replicationPosition, myMasterPosition *proto.ReplicationPosition, masterAddr string, err error) {
+func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool, hookExtraEnv map[string]string) (slaveStartRequired, readOnly bool, replicationPosition, myMasterPosition *proto.ReplicationPosition, masterAddr string, connToRelease dbconnpool.PoolConnection, err error) {
 	// save initial state so we can restore on Start()
 	if slaveStatus, slaveErr := mysqld.slaveStatus(); slaveErr == nil {
 		slaveStartRequired = (slaveStatus["Slave_IO_Running"] == "Yes" && slaveStatus["Slave_SQL_Running"] == "Yes")
@@ -228,16 +229,25 @@ func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool, hookE
 	}
 
 	log.Infof("Flush tables")
-	if err = mysqld.ExecuteSuperQuery("FLUSH TABLES WITH READ LOCK"); err != nil {
+	if connToRelease, err = mysqld.dbaPool.Get(); err != nil {
 		return
 	}
+	log.Infof("exec FLUSH TABLES WITH READ LOCK")
+	if _, err = connToRelease.ExecuteFetch("FLUSH TABLES WITH READ LOCK", 10000, false); err != nil {
+		connToRelease.Recycle()
+		return
+	}
+
 	return
 }
 
-func (mysqld *Mysqld) restoreAfterSnapshot(slaveStartRequired, readOnly bool, hookExtraEnv map[string]string) (err error) {
+func (mysqld *Mysqld) restoreAfterSnapshot(slaveStartRequired, readOnly bool, hookExtraEnv map[string]string, connToRelease dbconnpool.PoolConnection) (err error) {
 	// Try to fix mysqld regardless of snapshot success..
-	if err = mysqld.ExecuteSuperQuery("UNLOCK TABLES"); err != nil {
-		return
+	log.Infof("exec UNLOCK TABLES")
+	_, err = connToRelease.ExecuteFetch("UNLOCK TABLES", 10000, false)
+	connToRelease.Recycle()
+	if err != nil {
+		return fmt.Errorf("failed to UNLOCK TABLES: %v", err)
 	}
 
 	// restore original mysqld state that we saved above
@@ -579,7 +589,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 
 	// prepareToSnapshot will get the tablet in the rigth state,
 	// and return the current mysql status.
-	slaveStartRequired, readOnly, replicationPosition, myMasterPosition, masterAddr, err := mysqld.prepareToSnapshot(allowHierarchicalReplication, hookExtraEnv)
+	slaveStartRequired, readOnly, replicationPosition, myMasterPosition, masterAddr, conn, err := mysqld.prepareToSnapshot(allowHierarchicalReplication, hookExtraEnv)
 	if err != nil {
 		return
 	}
@@ -590,7 +600,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 		slaveStartRequired = false
 	}
 	defer func() {
-		err = replaceError(err, mysqld.restoreAfterSnapshot(slaveStartRequired, readOnly, hookExtraEnv))
+		err = replaceError(err, mysqld.restoreAfterSnapshot(slaveStartRequired, readOnly, hookExtraEnv, conn))
 	}()
 
 	// dump the files in parallel with a pre-defined concurrency
