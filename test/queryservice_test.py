@@ -48,13 +48,7 @@ if __name__ == "__main__":
     for m in modules:
       suite.addTests(unittest.TestLoader().loadTestsFromModule(m))
 
-  if options.env == 'vttablet':
-    env = test_env.VttabletTestEnv()
-  elif options.env == 'vtocc':
-    env = test_env.VtoccTestEnv()
-  else:
-    raise Exception("Valid options for -e: vtocc, vttablet")
-
+  env = test_env.TestEnv(options.env)
   try:
     env.memcache = options.memcache
     env.setUp()

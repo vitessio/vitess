@@ -36,6 +36,18 @@ class TestEnv(object):
 
   txlog_file = os.path.join(environment.vtlogroot, "txlog")
 
+  tablet = tablet.Tablet(62344)
+  vttop = environment.vttop
+  vtroot = environment.vtroot
+
+  def __init__(self, env):
+    if env not in ['vttablet', 'vtocc']:
+      raise Exception('unexptected env', env)
+    self.env = env
+
+  @property
+  def port(self):
+    return self.tablet.port
 
   # call postSetup after the derived class setUp is done.
   def postSetup(self):
@@ -152,20 +164,7 @@ class TestEnv(object):
     error_count += self.check_full_streamlog(open(self.querylog.path_full, 'r'))
     return error_count
 
-
-class VttabletTestEnv(TestEnv):
-  tablet = tablet.Tablet(62344)
-  vttop = environment.vttop
-  vtroot = environment.vtroot
-
-  @property
-  def port(self):
-    return self.tablet.port
-
   def setUp(self):
-    environment.topo_server_setup()
-    utils.run_vtctl('CreateKeyspace -force test_keyspace')
-
     utils.wait_procs([self.tablet.init_mysql()])
     self.tablet.mquery("", ["create database vt_test_keyspace", "set global read_only = off"])
 
@@ -196,25 +195,30 @@ class VttabletTestEnv(TestEnv):
     self.create_schema_override(schema_override)
     table_acl_config = os.path.join(environment.vttop, 'test', 'test_data', 'table_acl_config.json')
 
-    self.tablet.init_tablet('master', 'test_keyspace', '0')
-    self.tablet.start_vttablet(
-            memcache=self.memcache,
-            customrules=customrules,
-            schema_override=schema_override,
-            table_acl_config=table_acl_config,
-            auth=True,
-    )
-    for i in range(30):
-      try:
-        self.conn = self.connect()
-        self.txlogger = utils.curl(self.url('/debug/txlog'), background=True, stdout=open(self.txlog_file, 'w'))
-        self.txlog = framework.Tailer(open(self.txlog_file), flush=self.tablet.flush)
-        self.log = framework.Tailer(open(os.path.join(environment.vtlogroot, 'vttablet.INFO')), flush=self.tablet.flush)
-        break
-      except dbexceptions.OperationalError:
-        if i == 29:
-          raise
-        time.sleep(1)
+    if self.env == 'vttablet':
+      environment.topo_server_setup()
+      utils.run_vtctl('CreateKeyspace -force test_keyspace')
+      self.tablet.init_tablet('master', 'test_keyspace', '0')
+      self.tablet.start_vttablet(
+              memcache=self.memcache,
+              customrules=customrules,
+              schema_override=schema_override,
+              table_acl_config=table_acl_config,
+              auth=True,
+      )
+    else:
+      self.tablet.start_vtocc(
+              memcache=self.memcache,
+              customrules=customrules,
+              schema_override=schema_override,
+              table_acl_config=table_acl_config,
+              auth=True,
+              keyspace="test_keyspace", shard="0",
+      )
+    self.conn = self.connect()
+    self.txlogger = utils.curl(self.url('/debug/txlog'), background=True, stdout=open(self.txlog_file, 'w'))
+    self.txlog = framework.Tailer(open(self.txlog_file), flush=self.tablet.flush)
+    self.log = framework.Tailer(open(os.path.join(environment.vtlogroot, '%s.INFO' % self.env)), flush=self.tablet.flush)
     self.postSetup()
 
   def tearDown(self):
@@ -227,83 +231,8 @@ class VttabletTestEnv(TestEnv):
       pass
     if getattr(self, "txlogger", None):
       self.txlogger.terminate()
-    environment.topo_server_teardown()
-    utils.kill_sub_processes()
-    utils.remove_tmp_files()
-    self.tablet.remove_tree()
-
-class VtoccTestEnv(TestEnv):
-  tablet = tablet.Tablet(62344)
-  vttop = environment.vttop
-  vtroot = environment.vtroot
-
-  @property
-  def port(self):
-    return self.tablet.port
-
-  def setUp(self):
-    utils.wait_procs([self.tablet.init_mysql()])
-    self.tablet.mquery("", ["create database vt_test_keyspace", "set global read_only = off"])
-
-    self.mysql_conn, mcu = self.tablet.connect('vt_test_keyspace')
-    self.clean_sqls = []
-    self.init_sqls = []
-    clean_mode = False
-    with open(os.path.join(environment.vttop, "test", "test_data", "test_schema.sql")) as f:
-      for line in f:
-        line = line.rstrip()
-        if line == "# clean":
-          clean_mode = True
-        if line=='' or line.startswith("#"):
-          continue
-        if clean_mode:
-          self.clean_sqls.append(line)
-        else:
-          self.init_sqls.append(line)
-    try:
-      for line in self.init_sqls:
-        mcu.execute(line, {})
-    finally:
-      mcu.close()
-
-    customrules = os.path.join(environment.tmproot, 'customrules.json')
-    self.create_customrules(customrules)
-    schema_override = os.path.join(environment.tmproot, 'schema_override.json')
-    self.create_schema_override(schema_override)
-    table_acl_config = os.path.join(environment.vttop, 'test', 'test_data', 'table_acl_config.json')
-
-    self.tablet.start_vtocc(
-            memcache=self.memcache,
-            customrules=customrules,
-            schema_override=schema_override,
-            table_acl_config=table_acl_config,
-            auth=True,
-            keyspace="test_keyspace", shard="0",
-    )
-    for i in range(30):
-      try:
-        self.conn = self.connect()
-        self.txlogger = utils.curl(self.url('/debug/txlog'), background=True, stdout=open(self.txlog_file, 'w'))
-        self.txlog = framework.Tailer(open(self.txlog_file, 'r'))
-        self.log = framework.Tailer(open(os.path.join(environment.vtlogroot, 'vtocc.INFO')), flush=self.tablet.flush)
-        break
-      except (dbexceptions.OperationalError, dbexceptions.RetryError):
-        if i == 29:
-          raise
-        time.sleep(1)
-    self.postSetup()
-
-  def tearDown(self):
-    self.preTeardown()
-    self.tablet.kill_vttablet()
-    try:
-      utils.wait_procs([self.tablet.teardown_mysql()])
-    except:
-      # FIXME: remove
-      pass
-    if getattr(self, "txlogger", None):
-      self.txlogger.terminate()
-    environment.topo_server_teardown()
+    if self.env == 'vttablet':
+      environment.topo_server_teardown()
     utils.kill_sub_processes()
     utils.remove_tmp_files()
     self.tablet.remove_tree()
