@@ -407,15 +407,15 @@ func (mysqld *Mysqld) dumpTableSplit(td proto.TableDefinition, dbName, keyName s
 	}
 	sio, err := fillStringTemplate(selectIntoOutfile, queryParams)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fillStringTemplate for %v: %v", td.Name, err)
 	}
 	if err := mysqld.ExecuteSuperQuery(sio); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ExecuteSuperQuery failed for %v with query %v: %v", td.Name, sio, err)
 	}
 
 	file, err := os.Open(filename)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Cannot open file %v for table %v: %v", filename, td.Name, err)
 	}
 
 	defer func() {
@@ -431,7 +431,7 @@ func (mysqld *Mysqld) dumpTableSplit(td proto.TableDefinition, dbName, keyName s
 		filenamePattern := path.Join(cloneSourcePath, td.Name+".%v.csv.gz")
 		w, err := newCompressedNamedHasherWriter(filenamePattern, mysqld.SnapshotDir, td.Name, maximumFilesize)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("newCompressedNamedHasherWriter failed for %v: %v", td.Name, err)
 		}
 		hasherWriters[kr] = w
 	}
@@ -443,13 +443,13 @@ func (mysqld *Mysqld) dumpTableSplit(td proto.TableDefinition, dbName, keyName s
 			break
 		}
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("ReadRecord failed for table %v: %v", td.Name, err)
 		}
 		for kr, w := range hasherWriters {
 			if kr.Contains(keyspaceId) {
 				_, err = w.Write(line)
 				if err != nil {
-					return nil, err
+					return nil, fmt.Errorf("Write failed for %v: %v", td.Name, err)
 				}
 				break
 			}
@@ -459,7 +459,7 @@ func (mysqld *Mysqld) dumpTableSplit(td proto.TableDefinition, dbName, keyName s
 	snapshotFiles := make(map[key.KeyRange][]SnapshotFile)
 	for i, hw := range hasherWriters {
 		if snapshotFiles[i], err = hw.SnapshotFiles(); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("SnapshotFiles failed for %v: %v", td.Name, err)
 		}
 	}
 
