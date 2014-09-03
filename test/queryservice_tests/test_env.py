@@ -164,6 +164,7 @@ class VttabletTestEnv(TestEnv):
 
   def setUp(self):
     environment.topo_server_setup()
+    utils.run_vtctl('CreateKeyspace -force test_keyspace')
 
     utils.wait_procs([self.tablet.init_mysql()])
     self.tablet.mquery("", ["create database vt_test_keyspace", "set global read_only = off"])
@@ -189,14 +190,13 @@ class VttabletTestEnv(TestEnv):
     finally:
       mcu.close()
 
-    utils.run_vtctl('CreateKeyspace -force test_keyspace')
-    self.tablet.init_tablet('master', 'test_keyspace', '0')
-
     customrules = os.path.join(environment.tmproot, 'customrules.json')
     self.create_customrules(customrules)
     schema_override = os.path.join(environment.tmproot, 'schema_override.json')
     self.create_schema_override(schema_override)
     table_acl_config = os.path.join(environment.vttop, 'test', 'test_data', 'table_acl_config.json')
+
+    self.tablet.init_tablet('master', 'test_keyspace', '0')
     self.tablet.start_vttablet(
             memcache=self.memcache,
             customrules=customrules,
@@ -204,11 +204,6 @@ class VttabletTestEnv(TestEnv):
             table_acl_config=table_acl_config,
             auth=True,
     )
-
-    # FIXME(szopa): This is necessary here only because of a bug that
-    # makes the qs reload its config only after an action.
-    utils.run_vtctl('Ping ' + self.tablet.tablet_alias)
-
     for i in range(30):
       try:
         self.conn = self.connect()
@@ -237,11 +232,8 @@ class VttabletTestEnv(TestEnv):
     utils.remove_tmp_files()
     self.tablet.remove_tree()
 
-  def mysql_connect(self, dbname=''):
-    return self.tablet.connect()
-
 class VtoccTestEnv(TestEnv):
-  tablet = tablet.Tablet(9460)
+  tablet = tablet.Tablet(62344)
   vttop = environment.vttop
   vtroot = environment.vtroot
 
@@ -250,7 +242,6 @@ class VtoccTestEnv(TestEnv):
     return self.tablet.port
 
   def setUp(self):
-    # start mysql
     utils.wait_procs([self.tablet.init_mysql()])
     self.tablet.mquery("", ["create database vt_test_keyspace", "set global read_only = off"])
 
@@ -280,9 +271,9 @@ class VtoccTestEnv(TestEnv):
     schema_override = os.path.join(environment.tmproot, 'schema_override.json')
     self.create_schema_override(schema_override)
     table_acl_config = os.path.join(environment.vttop, 'test', 'test_data', 'table_acl_config.json')
+
     self.tablet.start_vtocc(
             memcache=self.memcache,
-            wait_for_state=None,
             customrules=customrules,
             schema_override=schema_override,
             table_acl_config=table_acl_config,
@@ -294,11 +285,7 @@ class VtoccTestEnv(TestEnv):
         self.conn = self.connect()
         self.txlogger = utils.curl(self.url('/debug/txlog'), background=True, stdout=open(self.txlog_file, 'w'))
         self.txlog = framework.Tailer(open(self.txlog_file, 'r'))
-
-        def flush():
-          utils.curl(self.url(environment.flush_logs_url), trap_output=True)
-
-        self.log = framework.Tailer(open(os.path.join(environment.vtlogroot, 'vtocc.INFO')), flush=flush)
+        self.log = framework.Tailer(open(os.path.join(environment.vtlogroot, 'vtocc.INFO')), flush=self.tablet.flush)
         break
       except (dbexceptions.OperationalError, dbexceptions.RetryError):
         if i == 29:
@@ -320,9 +307,6 @@ class VtoccTestEnv(TestEnv):
     utils.kill_sub_processes()
     utils.remove_tmp_files()
     self.tablet.remove_tree()
-
-  def mysql_connect(self):
-    return self.tablet.connect()
 
 
 class Querylog(object):

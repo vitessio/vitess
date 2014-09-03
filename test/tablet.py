@@ -359,7 +359,10 @@ class Tablet(object):
 
     # wait for query service to be in the right state
     if wait_for_state:
-      self.wait_for_vttablet_state(wait_for_state, port=port)
+      if binary == 'vttablet':
+        self.wait_for_vttablet_state(wait_for_state, port=port)
+      else:
+        self.wait_for_vtocc_state(wait_for_state, port=port)
 
     return self.proc
 
@@ -471,7 +474,9 @@ class Tablet(object):
         utils.run(environment.binary_args('zk') + ['wait', '-e', self.zk_pid],
                   stdout=utils.devnull)
         self.checked_zk_pid = True
+    self.wait_for_vtocc_state(expected, timeout=timeout, port=port)
 
+  def wait_for_vtocc_state(self, expected, timeout=60.0, port=None):
     while True:
       v = utils.get_vars(port or self.port)
       if v == None:
