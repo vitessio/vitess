@@ -26,6 +26,12 @@ tablet_cell_map = {
 
 
 class Tablet(object):
+  """This class helps manage a vttablet or vtocc instance.
+
+  To use it for vttablet, you need to use init_tablet and/or
+  start_vttablet. For vtocc, you can just call start_vtocc.
+  If you use it to start as vtocc, many of the support functions
+  that are meant for vttablet will not work."""
   default_uid = 62344
   seq = 0
   tablets_running = 0
@@ -297,61 +303,21 @@ class Tablet(object):
                (self.port, environment.flush_logs_url),
                stderr=utils.devnull, stdout=utils.devnull)
 
-  def start_vttablet(self, port=None, auth=False, memcache=False,
-                     wait_for_state='SERVING', customrules=None,
-                     schema_override=None, cert=None, key=None, ca_cert=None,
-                     repl_extra_flags={}, table_acl_config=None,
-                     target_tablet_type=None, lameduck_period=None,
-                     extra_args=None, full_mycnf_args=False,
-                     security_policy=None):
-    """Starts a vttablet process, and returns it.
-
-    The process is also saved in self.proc, so it's easy to kill as well.
-    """
-    environment.prog_compile('vtaction')
-    args = environment.binary_args('vttablet') + [
-        '-port', '%s' % (port or self.port),
-        '-tablet-path', self.tablet_alias,
-        '-log_dir', environment.vtlogroot]
-    args.extend(environment.topo_server_flags())
-    args.extend(utils.binlog_player_protocol_flags)
-    args.extend(environment.tablet_manager_protocol_flags())
+  def _start_prog(self, binary, port=None, auth=False, memcache=False,
+                  wait_for_state='SERVING', customrules=None,
+                  schema_override=None, cert=None, key=None, ca_cert=None,
+                  repl_extra_flags={}, table_acl_config=None,
+                  lameduck_period=None, security_policy=None,
+                  extra_args=None):
+    environment.prog_compile(binary)
+    args = environment.binary_args(binary)
+    args.extend(['-port', '%s' % (port or self.port),
+                 '-log_dir', environment.vtlogroot])
 
     dbconfigs = self._get_db_configs_file(repl_extra_flags)
     for key1 in dbconfigs:
       for key2 in dbconfigs[key1]:
         args.extend(['-db-config-' + key1 + '-' + key2, dbconfigs[key1][key2]])
-
-    if full_mycnf_args:
-      # this flag is used to specify all the mycnf_ flags, to make
-      # sure that code works and can fork actions.
-      relay_log_path = os.path.join(self.tablet_dir, 'relay-logs',
-                                    'vt-%010d-relay-bin' % self.tablet_uid)
-      args.extend([
-          '-mycnf_server_id', str(self.tablet_uid),
-          '-mycnf_mysql_port', str(self.mysql_port),
-          '-mycnf_data_dir', os.path.join(self.tablet_dir, 'data'),
-          '-mycnf_innodb_data_home_dir', os.path.join(self.tablet_dir,
-                                                      'innodb', 'data'),
-          '-mycnf_innodb_log_group_home_dir', os.path.join(self.tablet_dir,
-                                                           'innodb', 'logs'),
-          '-mycnf_socket_file', os.path.join(self.tablet_dir, 'mysql.sock'),
-          '-mycnf_error_log_path', os.path.join(self.tablet_dir, 'error.log'),
-          '-mycnf_slow_log_path', os.path.join(self.tablet_dir,
-                                               'slow-query.log'),
-          '-mycnf_relay_log_path', relay_log_path,
-          '-mycnf_relay_log_index_path', relay_log_path + '.index',
-          '-mycnf_relay_log_info_path', os.path.join(self.tablet_dir,
-                                                     'relay-logs',
-                                                     'relay-log.info'),
-          '-mycnf_bin_log_path', os.path.join(self.tablet_dir, 'bin-logs',
-                                              'vt-%010d-bin' % self.tablet_uid),
-          '-mycnf_master_info_file', os.path.join(self.tablet_dir,
-                                                  'master.info'),
-          '-mycnf_pid_file', os.path.join(self.tablet_dir, 'mysql.pid'),
-          '-mycnf_tmp_dir', os.path.join(self.tablet_dir, 'tmp'),
-          '-mycnf_slave_load_tmp_dir', os.path.join(self.tablet_dir, 'tmp'),
-      ])
 
     if memcache:
       args.extend(['-rowcache-bin', environment.memcached_bin()])
@@ -383,18 +349,14 @@ class Tablet(object):
                    '-key', key])
       if ca_cert:
         args.extend(['-ca_cert', ca_cert])
-    if target_tablet_type:
-      args.extend(['-target_tablet_type', target_tablet_type,
-                   '-health_check_interval', '2s',
-                   '-allowed_replication_lag', '30'])
     if lameduck_period:
       args.extend(['-lameduck-period', lameduck_period])
-    if extra_args:
-      args.extend(extra_args)
     if security_policy:
       args.extend(['-security_policy', security_policy])
+    if extra_args:
+      args.extend(extra_args)
 
-    stderr_fd = open(os.path.join(self.tablet_dir, 'vttablet.stderr'), 'w')
+    stderr_fd = open(os.path.join(self.tablet_dir, '%s.stderr' % binary), 'w')
     # increment count only the first time
     if not self.proc:
       Tablet.tablets_running += 1
@@ -403,9 +365,113 @@ class Tablet(object):
 
     # wait for query service to be in the right state
     if wait_for_state:
-      self.wait_for_vttablet_state(wait_for_state, port=port)
+      if binary == 'vttablet':
+        self.wait_for_vttablet_state(wait_for_state, port=port)
+      else:
+        self.wait_for_vtocc_state(wait_for_state, port=port)
 
     return self.proc
+
+  def start_vttablet(self, port=None, auth=False, memcache=False,
+                     wait_for_state='SERVING', customrules=None,
+                     schema_override=None, cert=None, key=None, ca_cert=None,
+                     repl_extra_flags={}, table_acl_config=None,
+                     lameduck_period=None, security_policy=None,
+                     target_tablet_type=None, full_mycnf_args=False,
+                     extra_args=None):
+    """Starts a vttablet process, and returns it.
+
+    The process is also saved in self.proc, so it's easy to kill as well.
+    """
+    environment.prog_compile('vtaction')
+    args = []
+    args.extend(['-tablet-path', self.tablet_alias])
+    args.extend(environment.topo_server_flags())
+    args.extend(utils.binlog_player_protocol_flags)
+    args.extend(environment.tablet_manager_protocol_flags())
+
+    if full_mycnf_args:
+      # this flag is used to specify all the mycnf_ flags, to make
+      # sure that code works and can fork actions.
+      relay_log_path = os.path.join(self.tablet_dir, 'relay-logs',
+                                    'vt-%010d-relay-bin' % self.tablet_uid)
+      args.extend([
+          '-mycnf_server_id', str(self.tablet_uid),
+          '-mycnf_mysql_port', str(self.mysql_port),
+          '-mycnf_data_dir', os.path.join(self.tablet_dir, 'data'),
+          '-mycnf_innodb_data_home_dir', os.path.join(self.tablet_dir,
+                                                      'innodb', 'data'),
+          '-mycnf_innodb_log_group_home_dir', os.path.join(self.tablet_dir,
+                                                           'innodb', 'logs'),
+          '-mycnf_socket_file', os.path.join(self.tablet_dir, 'mysql.sock'),
+          '-mycnf_error_log_path', os.path.join(self.tablet_dir, 'error.log'),
+          '-mycnf_slow_log_path', os.path.join(self.tablet_dir,
+                                               'slow-query.log'),
+          '-mycnf_relay_log_path', relay_log_path,
+          '-mycnf_relay_log_index_path', relay_log_path + '.index',
+          '-mycnf_relay_log_info_path', os.path.join(self.tablet_dir,
+                                                     'relay-logs',
+                                                     'relay-log.info'),
+          '-mycnf_bin_log_path', os.path.join(self.tablet_dir, 'bin-logs',
+                                              'vt-%010d-bin' % self.tablet_uid),
+          '-mycnf_master_info_file', os.path.join(self.tablet_dir,
+                                                  'master.info'),
+          '-mycnf_pid_file', os.path.join(self.tablet_dir, 'mysql.pid'),
+          '-mycnf_tmp_dir', os.path.join(self.tablet_dir, 'tmp'),
+          '-mycnf_slave_load_tmp_dir', os.path.join(self.tablet_dir, 'tmp'),
+      ])
+    if target_tablet_type:
+      args.extend(['-target_tablet_type', target_tablet_type,
+                   '-health_check_interval', '2s',
+                   '-allowed_replication_lag', '30'])
+
+    if extra_args:
+      args.extend(extra_args)
+
+    return self._start_prog(binary='vttablet', port=port, auth=auth,
+                            memcache=memcache, wait_for_state=wait_for_state,
+                            customrules=customrules,
+                            schema_override=schema_override,
+                            cert=cert, key=key, ca_cert=ca_cert,
+                            repl_extra_flags=repl_extra_flags,
+                            table_acl_config=table_acl_config,
+                            lameduck_period=lameduck_period, extra_args=args,
+                            security_policy=security_policy)
+
+  def start_vtocc(self, port=None, auth=False, memcache=False,
+                  wait_for_state='SERVING', customrules=None,
+                  schema_override=None, cert=None, key=None, ca_cert=None,
+                  repl_extra_flags={}, table_acl_config=None,
+                  lameduck_period=None, security_policy=None,
+                  keyspace=None, shard=False,
+                  extra_args=None):
+    """Starts a vtocc process, and returns it.
+
+    The process is also saved in self.proc, so it's easy to kill as well.
+    """
+    self.keyspace = keyspace
+    self.shard = shard
+    self.dbname = 'vt_' + (self.keyspace or 'database')
+    args = []
+    args.extend(["-db-config-app-unixsocket", self.tablet_dir + '/mysql.sock'])
+    args.extend(["-db-config-dba-unixsocket", self.tablet_dir + '/mysql.sock'])
+    args.extend(["-db-config-app-keyspace", keyspace])
+    args.extend(["-db-config-app-shard", shard])
+    args.extend(["-binlog-path", "foo"])
+
+    if extra_args:
+      args.extend(extra_args)
+
+    return self._start_prog(binary='vtocc', port=port, auth=auth,
+                            memcache=memcache, wait_for_state=wait_for_state,
+                            customrules=customrules,
+                            schema_override=schema_override,
+                            cert=cert, key=key, ca_cert=ca_cert,
+                            repl_extra_flags=repl_extra_flags,
+                            table_acl_config=table_acl_config,
+                            lameduck_period=lameduck_period, extra_args=args,
+                            security_policy=security_policy)
+
 
   def wait_for_vttablet_state(self, expected, timeout=60.0, port=None):
     # wait for zookeeper PID just to be sure we have it
@@ -414,7 +480,9 @@ class Tablet(object):
         utils.run(environment.binary_args('zk') + ['wait', '-e', self.zk_pid],
                   stdout=utils.devnull)
         self.checked_zk_pid = True
+    self.wait_for_vtocc_state(expected, timeout=timeout, port=port)
 
+  def wait_for_vtocc_state(self, expected, timeout=60.0, port=None):
     while True:
       v = utils.get_vars(port or self.port)
       if v == None:

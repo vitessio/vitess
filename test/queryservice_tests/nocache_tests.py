@@ -315,7 +315,7 @@ class TestNocache(framework.TestCase):
 
   def test_query_timeout(self):
     vstart = self.env.debug_vars()
-    conn = tablet_conn.connect("localhost:%s" % self.env.port, '', 'test_keyspace', '0', 5, user='youtube-dev-dedicated', password='vtpass')
+    conn = tablet_conn.connect(self.env.address, '', 'test_keyspace', '0', 5, user='youtube-dev-dedicated', password='vtpass')
     cu = cursor.TabletCursor(conn)
     self.env.execute("set vt_query_timeout=0.25")
     try:

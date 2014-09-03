@@ -99,6 +99,7 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl/csvsplitter"
@@ -193,7 +194,7 @@ func (mysqld *Mysqld) getReplicationPositionForClones(allowHierarchicalReplicati
 	return
 }
 
-func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool, hookExtraEnv map[string]string) (slaveStartRequired, readOnly bool, replicationPosition, myMasterPosition *proto.ReplicationPosition, masterAddr string, err error) {
+func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool, hookExtraEnv map[string]string) (slaveStartRequired, readOnly bool, replicationPosition, myMasterPosition *proto.ReplicationPosition, masterAddr string, connToRelease dbconnpool.PoolConnection, err error) {
 	// save initial state so we can restore on Start()
 	if slaveStatus, slaveErr := mysqld.slaveStatus(); slaveErr == nil {
 		slaveStartRequired = (slaveStatus["Slave_IO_Running"] == "Yes" && slaveStatus["Slave_SQL_Running"] == "Yes")
@@ -228,16 +229,25 @@ func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool, hookE
 	}
 
 	log.Infof("Flush tables")
-	if err = mysqld.ExecuteSuperQuery("FLUSH TABLES WITH READ LOCK"); err != nil {
+	if connToRelease, err = mysqld.dbaPool.Get(); err != nil {
 		return
 	}
+	log.Infof("exec FLUSH TABLES WITH READ LOCK")
+	if _, err = connToRelease.ExecuteFetch("FLUSH TABLES WITH READ LOCK", 10000, false); err != nil {
+		connToRelease.Recycle()
+		return
+	}
+
 	return
 }
 
-func (mysqld *Mysqld) restoreAfterSnapshot(slaveStartRequired, readOnly bool, hookExtraEnv map[string]string) (err error) {
+func (mysqld *Mysqld) restoreAfterSnapshot(slaveStartRequired, readOnly bool, hookExtraEnv map[string]string, connToRelease dbconnpool.PoolConnection) (err error) {
 	// Try to fix mysqld regardless of snapshot success..
-	if err = mysqld.ExecuteSuperQuery("UNLOCK TABLES"); err != nil {
-		return
+	log.Infof("exec UNLOCK TABLES")
+	_, err = connToRelease.ExecuteFetch("UNLOCK TABLES", 10000, false)
+	connToRelease.Recycle()
+	if err != nil {
+		return fmt.Errorf("failed to UNLOCK TABLES: %v", err)
 	}
 
 	// restore original mysqld state that we saved above
@@ -407,15 +417,15 @@ func (mysqld *Mysqld) dumpTableSplit(td proto.TableDefinition, dbName, keyName s
 	}
 	sio, err := fillStringTemplate(selectIntoOutfile, queryParams)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fillStringTemplate for %v: %v", td.Name, err)
 	}
 	if err := mysqld.ExecuteSuperQuery(sio); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ExecuteSuperQuery failed for %v with query %v: %v", td.Name, sio, err)
 	}
 
 	file, err := os.Open(filename)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Cannot open file %v for table %v: %v", filename, td.Name, err)
 	}
 
 	defer func() {
@@ -431,7 +441,7 @@ func (mysqld *Mysqld) dumpTableSplit(td proto.TableDefinition, dbName, keyName s
 		filenamePattern := path.Join(cloneSourcePath, td.Name+".%v.csv.gz")
 		w, err := newCompressedNamedHasherWriter(filenamePattern, mysqld.SnapshotDir, td.Name, maximumFilesize)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("newCompressedNamedHasherWriter failed for %v: %v", td.Name, err)
 		}
 		hasherWriters[kr] = w
 	}
@@ -443,13 +453,13 @@ func (mysqld *Mysqld) dumpTableSplit(td proto.TableDefinition, dbName, keyName s
 			break
 		}
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("ReadRecord failed for table %v: %v", td.Name, err)
 		}
 		for kr, w := range hasherWriters {
 			if kr.Contains(keyspaceId) {
 				_, err = w.Write(line)
 				if err != nil {
-					return nil, err
+					return nil, fmt.Errorf("Write failed for %v: %v", td.Name, err)
 				}
 				break
 			}
@@ -459,7 +469,7 @@ func (mysqld *Mysqld) dumpTableSplit(td proto.TableDefinition, dbName, keyName s
 	snapshotFiles := make(map[key.KeyRange][]SnapshotFile)
 	for i, hw := range hasherWriters {
 		if snapshotFiles[i], err = hw.SnapshotFiles(); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("SnapshotFiles failed for %v: %v", td.Name, err)
 		}
 	}
 
@@ -579,7 +589,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 
 	// prepareToSnapshot will get the tablet in the rigth state,
 	// and return the current mysql status.
-	slaveStartRequired, readOnly, replicationPosition, myMasterPosition, masterAddr, err := mysqld.prepareToSnapshot(allowHierarchicalReplication, hookExtraEnv)
+	slaveStartRequired, readOnly, replicationPosition, myMasterPosition, masterAddr, conn, err := mysqld.prepareToSnapshot(allowHierarchicalReplication, hookExtraEnv)
 	if err != nil {
 		return
 	}
@@ -590,7 +600,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 		slaveStartRequired = false
 	}
 	defer func() {
-		err = replaceError(err, mysqld.restoreAfterSnapshot(slaveStartRequired, readOnly, hookExtraEnv))
+		err = replaceError(err, mysqld.restoreAfterSnapshot(slaveStartRequired, readOnly, hookExtraEnv, conn))
 	}()
 
 	// dump the files in parallel with a pre-defined concurrency
