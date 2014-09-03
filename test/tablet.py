@@ -26,6 +26,12 @@ tablet_cell_map = {
 
 
 class Tablet(object):
+  """This class helps manage a vttablet or vtocc instance.
+
+  To use it for vttablet, you need to use init_tablet and/or
+  start_vttablet. For vtocc, you can just call start_vtocc.
+  If you use it to start as vtocc, many of the support functions
+  that are meant for vttablet will not work."""
   default_uid = 62344
   seq = 0
   tablets_running = 0

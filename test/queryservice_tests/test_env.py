@@ -42,7 +42,7 @@ class TestEnv(object):
 
   def __init__(self, env):
     if env not in ['vttablet', 'vtocc']:
-      raise Exception('unexptected env', env)
+      raise EnvironmentError('unexptected env', env)
     self.env = env
 
   @property
@@ -169,25 +169,13 @@ class TestEnv(object):
     self.tablet.mquery("", ["create database vt_test_keyspace", "set global read_only = off"])
 
     self.mysql_conn, mcu = self.tablet.connect('vt_test_keyspace')
-    self.clean_sqls = []
-    self.init_sqls = []
-    clean_mode = False
     with open(os.path.join(self.vttop, "test", "test_data", "test_schema.sql")) as f:
       for line in f:
         line = line.rstrip()
-        if line == "# clean":
-          clean_mode = True
         if line=='' or line.startswith("#"):
           continue
-        if clean_mode:
-          self.clean_sqls.append(line)
-        else:
-          self.init_sqls.append(line)
-    try:
-      for line in self.init_sqls:
         mcu.execute(line, {})
-    finally:
-      mcu.close()
+    mcu.close()
 
     customrules = os.path.join(environment.tmproot, 'customrules.json')
     self.create_customrules(customrules)
