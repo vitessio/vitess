@@ -39,13 +39,13 @@ func TestMustParseGTID(t *testing.T) {
 
 	got := MustParseGTID(flavor, input)
 	if got != want {
-		t.Errorf("ParseGTID(%#v, %#v) = %#v, want %#v", flavor, input, got, want)
+		t.Errorf("MustParseGTID(%#v, %#v) = %#v, want %#v", flavor, input, got, want)
 	}
 }
 
 func TestMustParseGTIDError(t *testing.T) {
 	defer func() {
-		want := "ParseGTID: unknown flavor"
+		want := `parse error: unknown GTID flavor "unknown flavor !@$!@"`
 		err := recover()
 		if err == nil {
 			t.Errorf("wrong error, got %#v, want %#v", err, want)
@@ -60,7 +60,7 @@ func TestMustParseGTIDError(t *testing.T) {
 }
 
 func TestParseUnknownFlavor(t *testing.T) {
-	want := "ParseGTID: unknown flavor 'foobar8675309'"
+	want := `parse error: unknown GTID flavor "foobar8675309"`
 
 	_, err := ParseGTID("foobar8675309", "foo")
 	if !strings.HasPrefix(err.Error(), want) {
@@ -111,7 +111,7 @@ func TestMustDecodeGTID(t *testing.T) {
 
 func TestMustDecodeGTIDError(t *testing.T) {
 	defer func() {
-		want := "ParseGTID: unknown flavor"
+		want := `parse error: unknown GTID flavor "unknown flavor !@$!@"`
 		err := recover()
 		if err == nil {
 			t.Errorf("wrong error, got %#v, want %#v", err, want)
@@ -421,6 +421,15 @@ type fakeGTID struct {
 	flavor, value string
 }
 
-func (f fakeGTID) String() string             { return f.value }
-func (f fakeGTID) Flavor() string             { return f.flavor }
-func (fakeGTID) TryCompare(GTID) (int, error) { return 0, nil }
+func (f fakeGTID) String() string       { return f.value }
+func (f fakeGTID) Flavor() string       { return f.flavor }
+func (fakeGTID) SourceServer() string   { return "" }
+func (fakeGTID) SequenceNumber() uint64 { return 0 }
+func (fakeGTID) SequenceDomain() string { return "" }
+func (f fakeGTID) GTIDSet() GTIDSet     { return nil }
+
+func (fakeGTID) Last() GTID                 { return nil }
+func (fakeGTID) ContainsGTID(GTID) bool     { return false }
+func (fakeGTID) Contains(GTIDSet) bool      { return false }
+func (f fakeGTID) Equal(other GTIDSet) bool { return f == other.(fakeGTID) }
+func (fakeGTID) AddGTID(GTID) GTIDSet       { return nil }

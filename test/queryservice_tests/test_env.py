@@ -49,16 +49,6 @@ class TestEnv(object):
   def port(self):
     return self.tablet.port
 
-  # call postSetup after the derived class setUp is done.
-  def postSetup(self):
-    self.querylog = Querylog(self)
-
-  # call preTeardown before the derived class tearDown does its cleanup.
-  def preTeardown(self):
-    if self.querylog:
-      self.querylog.close()
-    self.querylog = None
-
   @property
   def address(self):
     return "localhost:%s" % self.port
@@ -170,12 +160,24 @@ class TestEnv(object):
 
     self.mysql_conn, mcu = self.tablet.connect('vt_test_keyspace')
     with open(os.path.join(self.vttop, "test", "test_data", "test_schema.sql")) as f:
+      self.clean_sqls = []
+      self.init_sqls = []
+      clean_mode = False
       for line in f:
         line = line.rstrip()
+        if line == "# clean":
+          clean_mode = True
         if line=='' or line.startswith("#"):
           continue
-        mcu.execute(line, {})
-    mcu.close()
+        if clean_mode:
+          self.clean_sqls.append(line)
+        else:
+          self.init_sqls.append(line)
+      try:
+        for line in self.init_sqls:
+          mcu.execute(line, {})
+      finally:
+        mcu.close()
 
     customrules = os.path.join(environment.tmproot, 'customrules.json')
     self.create_customrules(customrules)
@@ -207,12 +209,20 @@ class TestEnv(object):
     self.txlogger = utils.curl(self.url('/debug/txlog'), background=True, stdout=open(self.txlog_file, 'w'))
     self.txlog = framework.Tailer(open(self.txlog_file), flush=self.tablet.flush)
     self.log = framework.Tailer(open(os.path.join(environment.vtlogroot, '%s.INFO' % self.env)), flush=self.tablet.flush)
-    self.postSetup()
+    self.querylog = Querylog(self)
 
   def tearDown(self):
-    self.preTeardown()
+    if self.querylog:
+      self.querylog.close()
     self.tablet.kill_vttablet()
     try:
+      mcu = self.mysql_conn.cursor()
+      for line in self.clean_sqls:
+        try:
+          mcu.execute(line, {})
+        except:
+          pass
+      mcu.close()
       utils.wait_procs([self.tablet.teardown_mysql()])
     except:
       # FIXME: remove

@@ -582,7 +582,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	// then create and populate the blp_checkpoint table
 	if strings.Index(vscw.strategy, "populateBlpCheckpoint") != -1 {
 		// get the current position from the source
-		pos, err := vscw.wr.ActionInitiator().SlavePosition(vscw.sourceTablet, 30*time.Second)
+		status, err := vscw.wr.ActionInitiator().SlaveStatus(vscw.sourceTablet, 30*time.Second)
 		if err != nil {
 			return err
 		}
@@ -593,7 +593,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 		if strings.Index(vscw.strategy, "dontStartBinlogPlayer") != -1 {
 			flags = binlogplayer.BLP_FLAG_DONT_START
 		}
-		queries = append(queries, binlogplayer.PopulateBlpCheckpoint(0, pos.MasterLogGTIDField.Value, time.Now().Unix(), flags))
+		queries = append(queries, binlogplayer.PopulateBlpCheckpoint(0, status.Position, time.Now().Unix(), flags))
 		for _, tabletAlias := range vscw.destinationAliases {
 			destinationWaitGroup.Add(1)
 			go func(ti *topo.TabletInfo) {

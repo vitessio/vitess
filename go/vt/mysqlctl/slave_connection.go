@@ -63,7 +63,7 @@ var slaveIDPool = pools.NewIDPool()
 // be sent. The stream will continue, waiting for new events if necessary,
 // until the connection is closed, either by the master or by calling
 // SlaveConnection.Close(). At that point, the channel will also be closed.
-func (sc *SlaveConnection) StartBinlogDump(startPos proto.GTID) (<-chan blproto.BinlogEvent, error) {
+func (sc *SlaveConnection) StartBinlogDump(startPos proto.ReplicationPosition) (<-chan blproto.BinlogEvent, error) {
 	log.Infof("sending binlog dump command: startPos=%v, slaveID=%v", startPos, sc.slaveID)
 	err := sc.mysqld.flavor.SendBinlogDumpCommand(sc.mysqld, sc, startPos)
 	if err != nil {

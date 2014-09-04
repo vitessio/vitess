@@ -33,10 +33,10 @@ var (
 )
 
 // BinlogStreamer is an interface for requesting a stream of binlog events from
-// mysqld starting at a given GTID.
+// mysqld starting at a given position. A BinlogStreamer should only be used
+// once. To start another stream, call NewBinlogStreamer() again.
 type BinlogStreamer interface {
-	// Stream starts streaming binlog events from a given GTID.
-	// It calls sendTransaction() with the contens of each event.
+	// Stream starts streaming binlog events using the settings from NewBinlogStreamer().
 	Stream(ctx *sync2.ServiceContext) error
 }
 
@@ -45,15 +45,17 @@ type BinlogStreamer interface {
 //
 // dbname specifes the db to stream events for.
 // mysqld is the local instance of mysqlctl.Mysqld.
-func NewBinlogStreamer(dbname string, mysqld *mysqlctl.Mysqld, gtid myproto.GTID, sendTransaction sendTransactionFunc) BinlogStreamer {
+// startPos is the position to start streaming at.
+// sendTransaction is called each time a transaction is committed or rolled back.
+func NewBinlogStreamer(dbname string, mysqld *mysqlctl.Mysqld, startPos myproto.ReplicationPosition, sendTransaction sendTransactionFunc) BinlogStreamer {
 	fn := binlogStreamers[*binlogStreamer]
 	if fn == nil {
 		panic(fmt.Errorf("unknown BinlogStreamer implementation: %#v", *binlogStreamer))
 	}
-	return fn(dbname, mysqld, gtid, sendTransaction)
+	return fn(dbname, mysqld, startPos, sendTransaction)
 }
 
-type newBinlogStreamerFunc func(string, *mysqlctl.Mysqld, myproto.GTID, sendTransactionFunc) BinlogStreamer
+type newBinlogStreamerFunc func(string, *mysqlctl.Mysqld, myproto.ReplicationPosition, sendTransactionFunc) BinlogStreamer
 
 // sendTransactionFunc is used to send binlog events.
 // reply is of type proto.BinlogTransaction.

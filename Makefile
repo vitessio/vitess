@@ -30,7 +30,7 @@ unit_test_race:
 	go test -race ./go/...
 
 queryservice_test:
-	echo "queryservice test"
+	echo $$(date): Running test/queryservice_test.py...
 	if [ -e "/usr/bin/memcached" ]; then \
 		time test/queryservice_test.py -m -e vtocc; \
 		time test/queryservice_test.py -m -e vttablet; \
@@ -67,7 +67,7 @@ SHELL = /bin/bash
 integration_test:
 	cd test ; \
 	for t in $(integration_test_files) ; do \
-		echo Running test/$$t... ; \
+		echo $$(date): Running test/$$t... ; \
 		output=$$(time ./$$t $$VT_TEST_FLAGS 2>&1) ; \
 		if [[ $$? != 0 ]]; then \
 			echo "$$output" >&2 ; \

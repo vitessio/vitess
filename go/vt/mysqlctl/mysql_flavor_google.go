@@ -5,9 +5,15 @@
 package mysqlctl
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
+	"strconv"
+	"strings"
+	"time"
 
+	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/mysql"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
@@ -18,47 +24,102 @@ type googleMysql51 struct {
 
 const googleMysqlFlavorID = "GoogleMysql"
 
-// MasterStatus implements MysqlFlavor.MasterStatus
+// MasterPosition implements MysqlFlavor.MasterPosition().
 //
 // The command looks like:
-// mysql> show master status\G
+// mysql> SHOW MASTER STATUS\G
 // **************************** 1. row ***************************
 // File: vt-000001c6-bin.000003
 // Position: 106
 // Binlog_Do_DB:
 // Binlog_Ignore_DB:
 // Group_ID:
-func (flavor *googleMysql51) MasterStatus(mysqld *Mysqld) (rp *proto.ReplicationPosition, err error) {
-	qr, err := mysqld.fetchSuperQuery("SHOW MASTER STATUS")
+func (flavor *googleMysql51) MasterPosition(mysqld *Mysqld) (rp proto.ReplicationPosition, err error) {
+	fields, err := mysqld.fetchSuperQueryMap("SHOW MASTER STATUS")
 	if err != nil {
-		return
+		return rp, err
 	}
-	if len(qr.Rows) != 1 {
-		return nil, ErrNotMaster
+	groupID, ok := fields["Group_ID"]
+	if !ok {
+		return rp, fmt.Errorf("this db does not support group id")
 	}
-	if len(qr.Rows[0]) < 5 {
-		return nil, fmt.Errorf("this db does not support group id")
-	}
-	rp = &proto.ReplicationPosition{}
-	rp.MasterLogFile = qr.Rows[0][0].String()
-	utemp, err := qr.Rows[0][1].ParseUint64()
+	// Get the server_id that created this group_id.
+	info, err := mysqld.fetchSuperQueryMap("SHOW BINLOG INFO FOR " + groupID)
 	if err != nil {
-		return nil, err
+		return proto.ReplicationPosition{}, err
 	}
-	rp.MasterLogPosition = uint(utemp)
-	rp.MasterLogGTIDField.Value, err = flavor.ParseGTID(qr.Rows[0][4].String())
-	if err != nil {
-		return nil, err
-	}
-
-	// On the master, the SQL position and IO position are at
-	// necessarily the same point.
-	rp.MasterLogFileIo = rp.MasterLogFile
-	rp.MasterLogPositionIo = rp.MasterLogPosition
-	return
+	// Google MySQL does not define a format to describe both a server_id and
+	// group_id, so we invented one.
+	pos := info["Server_ID"] + "-" + groupID
+	return flavor.ParseReplicationPosition(pos)
 }
 
-// PromoteSlaveCommands implements MysqlFlavor.PromoteSlaveCommands
+// SlaveStatus implements MysqlFlavor.SlaveStatus().
+func (flavor *googleMysql51) SlaveStatus(mysqld *Mysqld) (*proto.ReplicationStatus, error) {
+	fields, err := mysqld.fetchSuperQueryMap("SHOW SLAVE STATUS")
+	if err != nil {
+		return nil, ErrNotSlave
+	}
+	status := &proto.ReplicationStatus{
+		SlaveIORunning:  fields["Slave_IO_Running"] == "Yes",
+		SlaveSQLRunning: fields["Slave_SQL_Running"] == "Yes",
+	}
+	groupID := fields["Exec_Master_Group_ID"]
+
+	// Get the server_id that created this group_id.
+	info, err := mysqld.fetchSuperQueryMap("SHOW BINLOG INFO FOR " + groupID)
+	if err != nil {
+		return nil, err
+	}
+	// Create the fake Google GTID syntax we invented.
+	pos := info["Server_ID"] + "-" + groupID
+
+	status.Position, err = flavor.ParseReplicationPosition(pos)
+	if err != nil {
+		return nil, err
+	}
+	temp, _ := strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
+	status.SecondsBehindMaster = uint(temp)
+	return status, nil
+}
+
+// WaitMasterPos implements MysqlFlavor.WaitMasterPos().
+//
+// waitTimeout of 0 means wait indefinitely.
+//
+// Google MySQL doesn't have a function to wait for a GTID. MASTER_POS_WAIT()
+// requires a file:pos, which we don't know anymore because we're passing around
+// only GTIDs internally now.
+//
+// We can't ask the local mysqld instance to convert the GTID with BinlogInfo()
+// because this instance hasn't seen that GTID yet. For now, we have to poll.
+//
+// There used to be a function called Mysqld.WaitForMinimumReplicationPosition,
+// which was the same as WaitMasterPos except it used polling because it worked
+// on GTIDs. Now that WaitMasterPos uses GTIDs too, they've been merged.
+func (*googleMysql51) WaitMasterPos(mysqld *Mysqld, targetPos proto.ReplicationPosition, waitTimeout time.Duration) error {
+	stopTime := time.Now().Add(waitTimeout)
+	for waitTimeout == 0 || time.Now().Before(stopTime) {
+		status, err := mysqld.SlaveStatus()
+		if err != nil {
+			return err
+		}
+
+		if status.Position.AtLeast(targetPos) {
+			return nil
+		}
+
+		if !status.SlaveRunning() && waitTimeout == 0 {
+			return fmt.Errorf("slave not running during WaitMasterPos and no timeout is set, status = %+v", status)
+		}
+
+		log.Infof("WaitMasterPos got position %v, sleeping for 1s waiting for position %v", status.Position, targetPos)
+		time.Sleep(time.Second)
+	}
+	return fmt.Errorf("timed out waiting for position %v", targetPos)
+}
+
+// PromoteSlaveCommands implements MysqlFlavor.PromoteSlaveCommands().
 func (*googleMysql51) PromoteSlaveCommands() []string {
 	return []string{
 		"RESET MASTER",
@@ -67,28 +128,76 @@ func (*googleMysql51) PromoteSlaveCommands() []string {
 	}
 }
 
+// StartReplicationCommands implements MysqlFlavor.StartReplicationCommands().
+func (*googleMysql51) StartReplicationCommands(params *mysql.ConnectionParams, status *proto.ReplicationStatus) ([]string, error) {
+	// Make SET binlog_group_id command. We have to cast to the Google-specific
+	// struct to access the fields because there is no canonical printed format to
+	// represent both a group_id and server_id in Google MySQL.
+	gtid, ok := status.Position.GTIDSet.(proto.GoogleGTID)
+	if !ok {
+		return nil, fmt.Errorf("can't start replication at GTIDSet %#v, expected GoogleGTID", status.Position.GTIDSet)
+	}
+	setGroupID := fmt.Sprintf(
+		"SET binlog_group_id = %d, master_server_id = %d",
+		gtid.GroupID, gtid.ServerID)
+
+	// Make CHANGE MASTER TO command.
+	args := changeMasterArgs(params, status)
+	args = append(args, "CONNECT_USING_GROUP_ID")
+	changeMasterTo := "CHANGE MASTER TO\n  " + strings.Join(args, ",\n  ")
+
+	return []string{
+		"STOP SLAVE",
+		"RESET SLAVE",
+		setGroupID,
+		changeMasterTo,
+		"START SLAVE",
+	}, nil
+}
+
 // ParseGTID implements MysqlFlavor.ParseGTID().
 func (*googleMysql51) ParseGTID(s string) (proto.GTID, error) {
 	return proto.ParseGTID(googleMysqlFlavorID, s)
 }
 
-// SendBinlogDumpCommand implements MysqlFlavor.SendBinlogDumpCommand().
-func (*googleMysql51) SendBinlogDumpCommand(mysqld *Mysqld, conn *SlaveConnection, startPos proto.GTID) error {
-	const COM_BINLOG_DUMP = 0x12
+// ParseReplicationPosition implements MysqlFlavor.ParseReplicationPosition().
+func (*googleMysql51) ParseReplicationPosition(s string) (proto.ReplicationPosition, error) {
+	return proto.ParseReplicationPosition(googleMysqlFlavorID, s)
+}
 
-	// We can't use Google MySQL's group_id command COM_BINLOG_DUMP2 because it
-	// requires us to know the server_id of the server that generated the event,
-	// to avoid connecting to a master with an alternate future. We don't know
-	// that server_id, so we have to use the old file and position method, which
-	// bypasses that check.
-	pos, err := mysqld.BinlogInfo(startPos)
-	if err != nil {
-		return fmt.Errorf("error computing start position: %v", err)
+// makeBinlogDump2Command builds a buffer containing the data for a Google MySQL
+// COM_BINLOG_DUMP2 command.
+func makeBinlogDump2Command(flags uint16, slave_id uint32, group_id uint64, source_server_id uint32) []byte {
+	var buf bytes.Buffer
+	buf.Grow(2 + 4 + 8 + 4)
+
+	// binlog_flags (2 bytes)
+	binary.Write(&buf, binary.LittleEndian, flags)
+	// server_id of slave (4 bytes)
+	binary.Write(&buf, binary.LittleEndian, slave_id)
+	// group_id (8 bytes)
+	binary.Write(&buf, binary.LittleEndian, group_id)
+	// server_id of the server that generated the group_id (4 bytes)
+	binary.Write(&buf, binary.LittleEndian, source_server_id)
+
+	return buf.Bytes()
+}
+
+// SendBinlogDumpCommand implements MysqlFlavor.SendBinlogDumpCommand().
+func (flavor *googleMysql51) SendBinlogDumpCommand(mysqld *Mysqld, conn *SlaveConnection, startPos proto.ReplicationPosition) error {
+	const (
+		COM_BINLOG_DUMP2    = 0x27
+		BINLOG_USE_GROUP_ID = 0x04
+	)
+
+	gtid, ok := startPos.GTIDSet.(proto.GoogleGTID)
+	if !ok {
+		return fmt.Errorf("startPos.GTIDSet = %#v is wrong type, expected GoogleGTID", startPos.GTIDSet)
 	}
 
 	// Build the command.
-	buf := makeBinlogDumpCommand(uint32(pos.MasterLogPosition), 0, conn.slaveID, pos.MasterLogFile)
-	return conn.SendCommand(COM_BINLOG_DUMP, buf)
+	buf := makeBinlogDump2Command(BINLOG_USE_GROUP_ID, conn.slaveID, gtid.GroupID, gtid.ServerID)
+	return conn.SendCommand(COM_BINLOG_DUMP2, buf)
 }
 
 // MakeBinlogEvent implements MysqlFlavor.MakeBinlogEvent().
@@ -154,7 +263,7 @@ func (ev googleBinlogEvent) GTID(f blproto.BinlogFormat) (proto.GTID, error) {
 	if group_id == 0 {
 		return nil, fmt.Errorf("invalid group_id 0")
 	}
-	return proto.GoogleGTID{GroupID: group_id}, nil
+	return proto.GoogleGTID{ServerID: ev.ServerID(), GroupID: group_id}, nil
 }
 
 func init() {

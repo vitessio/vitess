@@ -2254,6 +2254,82 @@
   "SetValue":null
 }
 
+# analyze
+"analyze table a"
+{
+  "PlanId":"DDL",
+  "Reason":"DEFAULT",
+  "TableName":"a",
+  "FieldQuery":null,
+  "FullQuery":null,
+  "OuterQuery":null,
+  "Subquery":null,
+  "IndexUsed":"",
+  "ColumnNumbers":null,
+  "PKValues":null,
+  "SecondaryPKValues":null,
+  "SubqueryPKColumns":null,
+  "SetKey":"",
+  "SetValue":null
+}
+
+# show
+"show a"
+{
+  "PlanId":"OTHER",
+  "Reason":"DEFAULT",
+  "TableName":"",
+  "FieldQuery":null,
+  "FullQuery":null,
+  "OuterQuery":null,
+  "Subquery":null,
+  "IndexUsed":"",
+  "ColumnNumbers":null,
+  "PKValues":null,
+  "SecondaryPKValues":null,
+  "SubqueryPKColumns":null,
+  "SetKey":"",
+  "SetValue":null
+}
+
+# describe
+"describe a"
+{
+  "PlanId":"OTHER",
+  "Reason":"DEFAULT",
+  "TableName":"",
+  "FieldQuery":null,
+  "FullQuery":null,
+  "OuterQuery":null,
+  "Subquery":null,
+  "IndexUsed":"",
+  "ColumnNumbers":null,
+  "PKValues":null,
+  "SecondaryPKValues":null,
+  "SubqueryPKColumns":null,
+  "SetKey":"",
+  "SetValue":null
+}
+
+# explain
+"explain a"
+{
+  "PlanId":"OTHER",
+  "Reason":"DEFAULT",
+  "TableName":"",
+  "FieldQuery":null,
+  "FullQuery":null,
+  "OuterQuery":null,
+  "Subquery":null,
+  "IndexUsed":"",
+  "ColumnNumbers":null,
+  "PKValues":null,
+  "SecondaryPKValues":null,
+  "SubqueryPKColumns":null,
+  "SetKey":"",
+  "SetValue":null
+}
+
 # table not found
 "select * from aaaa"
 "table aaaa not found in schema"

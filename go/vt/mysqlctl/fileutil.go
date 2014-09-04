@@ -285,31 +285,24 @@ type SnapshotManifest struct {
 	DbName string
 	Files  SnapshotFiles
 
-	ReplicationState *proto.ReplicationState
-	MasterState      *proto.ReplicationState
+	ReplicationStatus *proto.ReplicationStatus
+	MasterPosition    proto.ReplicationPosition
 }
 
-func newSnapshotManifest(addr, mysqlAddr, masterAddr, dbName string, files []SnapshotFile, pos, masterPos *proto.ReplicationPosition) (*SnapshotManifest, error) {
-	nrs, err := proto.NewReplicationState(masterAddr)
-	if err != nil {
-		return nil, err
-	}
-	mrs, err := proto.NewReplicationState(mysqlAddr)
+func newSnapshotManifest(addr, mysqlAddr, masterAddr, dbName string, files []SnapshotFile, pos, masterPos proto.ReplicationPosition) (*SnapshotManifest, error) {
+	nrs, err := proto.NewReplicationStatus(masterAddr)
 	if err != nil {
 		return nil, err
 	}
 	rs := &SnapshotManifest{
-		Addr:             addr,
-		DbName:           dbName,
-		Files:            files,
-		ReplicationState: nrs,
-		MasterState:      mrs,
+		Addr:              addr,
+		DbName:            dbName,
+		Files:             files,
+		ReplicationStatus: nrs,
+		MasterPosition:    masterPos,
 	}
 	sort.Sort(rs.Files)
-	rs.ReplicationState.ReplicationPosition = *pos
-	if masterPos != nil {
-		rs.MasterState.ReplicationPosition = *masterPos
-	}
+	rs.ReplicationStatus.Position = pos
 	return rs, nil
 }
 
