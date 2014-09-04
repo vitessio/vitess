@@ -131,6 +131,11 @@ class Tablet(object):
         **self.mysql_connection_parameters(dbname, user))
     return conn, conn.cursor()
 
+  def connect_dict(self, dbname='', user='vt_dba'):
+    conn = MySQLdb.Connect(
+        **self.mysql_connection_parameters(dbname, user))
+    return conn, MySQLdb.cursors.DictCursor(conn)
+
   # Query the MySQL instance directly
   def mquery(self, dbname, query, write=False, user='vt_dba'):
     conn, cursor = self.connect(dbname, user=user)

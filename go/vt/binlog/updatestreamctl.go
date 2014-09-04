@@ -133,7 +133,7 @@ func IsUpdateStreamEnabled() bool {
 	return UpdateStreamRpcService.isEnabled()
 }
 
-func GetReplicationPosition() (myproto.GTID, error) {
+func GetReplicationPosition() (myproto.ReplicationPosition, error) {
 	return UpdateStreamRpcService.getReplicationPosition()
 }
 
@@ -197,9 +197,9 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamReque
 
 	streamCount.Add("Updates", 1)
 	defer streamCount.Add("Updates", -1)
-	log.Infof("ServeUpdateStream starting @ %#v", req.GTIDField.Value)
+	log.Infof("ServeUpdateStream starting @ %#v", req.Position)
 
-	evs := NewEventStreamer(updateStream.dbname, updateStream.mysqld, req.GTIDField.Value, func(reply *proto.StreamEvent) error {
+	evs := NewEventStreamer(updateStream.dbname, updateStream.mysqld, req.Position, func(reply *proto.StreamEvent) error {
 		if reply.Category == "ERR" {
 			updateStreamErrors.Add("UpdateStream", 1)
 		} else {
@@ -234,7 +234,7 @@ func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sen
 
 	streamCount.Add("KeyRange", 1)
 	defer streamCount.Add("KeyRange", -1)
-	log.Infof("ServeUpdateStream starting @ %#v", req.GTIDField.Value)
+	log.Infof("ServeUpdateStream starting @ %#v", req.Position)
 
 	// Calls cascade like this: BinlogStreamer->KeyRangeFilterFunc->func(*proto.BinlogTransaction)->sendReply
 	f := KeyRangeFilterFunc(req.KeyspaceIdType, req.KeyRange, func(reply *proto.BinlogTransaction) error {
@@ -242,7 +242,7 @@ func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sen
 		keyrangeTransactions.Add(1)
 		return sendReply(reply)
 	})
-	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld, req.GTIDField.Value, f)
+	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld, req.Position, f)
 
 	svm := &sync2.ServiceManager{}
 	svm.Go(bls.Stream)
@@ -270,7 +270,7 @@ func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendRep
 
 	streamCount.Add("Tables", 1)
 	defer streamCount.Add("Tables", -1)
-	log.Infof("ServeUpdateStream starting @ %#v", req.GTIDField.Value)
+	log.Infof("ServeUpdateStream starting @ %#v", req.Position)
 
 	// Calls cascade like this: BinlogStreamer->TablesFilterFunc->func(*proto.BinlogTransaction)->sendReply
 	f := TablesFilterFunc(req.Tables, func(reply *proto.BinlogTransaction) error {
@@ -278,7 +278,7 @@ func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendRep
 		keyrangeTransactions.Add(1)
 		return sendReply(reply)
 	})
-	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld, req.GTIDField.Value, f)
+	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld, req.Position, f)
 
 	svm := &sync2.ServiceManager{}
 	svm.Go(bls.Stream)
@@ -287,16 +287,12 @@ func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendRep
 	return svm.Join()
 }
 
-func (updateStream *UpdateStream) getReplicationPosition() (myproto.GTID, error) {
+func (updateStream *UpdateStream) getReplicationPosition() (myproto.ReplicationPosition, error) {
 	updateStream.actionLock.Lock()
 	defer updateStream.actionLock.Unlock()
 	if !updateStream.isEnabled() {
-		return nil, fmt.Errorf("update stream service is not enabled")
+		return myproto.ReplicationPosition{}, fmt.Errorf("update stream service is not enabled")
 	}
 
-	rp, err := updateStream.mysqld.MasterStatus()
-	if err != nil {
-		return nil, err
-	}
-	return rp.MasterLogGTIDField.Value, nil
+	return updateStream.mysqld.MasterPosition()
 }

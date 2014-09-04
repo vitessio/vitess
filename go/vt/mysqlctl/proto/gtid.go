@@ -21,25 +21,29 @@ import (
 // Types that implement GTID should use a non-pointer receiver. This ensures
 // that comparing GTID interface values with == has the expected semantics.
 type GTID interface {
-	// String returns the canonical form of the GTID as expected by a particular
-	// flavor of MySQL.
+	// String returns the canonical printed form of the GTID as expected by a
+	// particular flavor of MySQL.
 	String() string
 
 	// Flavor returns the key under which the corresponding GTID parser function
-	// is registered in the GTIDParsers map.
+	// is registered in the gtidParsers map.
 	Flavor() string
 
-	// TryCompare tries to compare two GTIDs. Some flavors of GTID can always be
-	// compared (e.g. Google MySQL group_id). Others can only be compared if they
-	// came from the same master (e.g. MariaDB, MySQL 5.6).
-	//
-	// If the comparison is possible, a.TryCompare(b) will return an int that is:
-	//    < 0  if a < b  (a came before b)
-	//   == 0  if a == b
-	//    > 0  if a > b  (a came after b)
-	//
-	// If the comparison is not possible, a non-nil error will be returned.
-	TryCompare(GTID) (int, error)
+	// SourceServer returns the ID of the server that generated the transaction.
+	SourceServer() string
+
+	// SequenceNumber returns the ID number that increases with each transaction.
+	// It is only valid to compare the sequence numbers of two GTIDs if they have
+	// the same domain value.
+	SequenceNumber() uint64
+
+	// SequenceDomain returns the ID of the domain within which two sequence
+	// numbers can be meaningfully compared.
+	SequenceDomain() string
+
+	// GTIDSet returns a GTIDSet of the same flavor as this GTID, containing only
+	// this GTID.
+	GTIDSet() GTIDSet
 }
 
 // gtidParsers maps flavor names to parser functions.
@@ -49,7 +53,7 @@ var gtidParsers = make(map[string]func(string) (GTID, error))
 func ParseGTID(flavor, value string) (GTID, error) {
 	parser := gtidParsers[flavor]
 	if parser == nil {
-		return nil, fmt.Errorf("ParseGTID: unknown flavor '%v'", flavor)
+		return nil, fmt.Errorf("parse error: unknown GTID flavor %#v", flavor)
 	}
 	return parser(value)
 }
@@ -84,7 +88,7 @@ func DecodeGTID(s string) (GTID, error) {
 	parts := strings.SplitN(s, "/", 2)
 	if len(parts) != 2 {
 		// There is no flavor. Try looking for a default parser.
-		parts = []string{"", s}
+		return ParseGTID("", s)
 	}
 	return ParseGTID(parts[0], parts[1])
 }

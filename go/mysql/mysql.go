@@ -92,6 +92,10 @@ func (c *ConnectionParams) EnableMultiStatements() {
 	c.Flags |= C.CLIENT_MULTI_STATEMENTS
 }
 
+func (c *ConnectionParams) EnableSSL() {
+	c.Flags |= C.CLIENT_SSL
+}
+
 func (c *ConnectionParams) SslEnabled() bool {
 	return (c.Flags & C.CLIENT_SSL) != 0
 }

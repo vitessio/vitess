@@ -67,7 +67,7 @@ type binlogFileStreamer struct {
 	dbname          string
 	dir             string
 	mysqld          *mysqlctl.Mysqld
-	gtid            myproto.GTID
+	startPos        myproto.ReplicationPosition
 	sendTransaction sendTransactionFunc
 
 	svm sync2.ServiceManager
@@ -81,12 +81,12 @@ type binlogFileStreamer struct {
 // newBinlogFileStreamer creates a BinlogStreamer.
 //
 // dbname specifes the db to stream events for.
-func newBinlogFileStreamer(dbname string, mysqld *mysqlctl.Mysqld, gtid myproto.GTID, sendTransaction sendTransactionFunc) BinlogStreamer {
+func newBinlogFileStreamer(dbname string, mysqld *mysqlctl.Mysqld, startPos myproto.ReplicationPosition, sendTransaction sendTransactionFunc) BinlogStreamer {
 	return &binlogFileStreamer{
 		dbname:          dbname,
 		dir:             path.Dir(mysqld.Cnf().BinLogPath),
 		mysqld:          mysqld,
-		gtid:            gtid,
+		startPos:        startPos,
 		sendTransaction: sendTransaction,
 	}
 }
@@ -94,12 +94,12 @@ func newBinlogFileStreamer(dbname string, mysqld *mysqlctl.Mysqld, gtid myproto.
 // Stream implements BinlogStreamer.Stream().
 func (bls *binlogFileStreamer) Stream(ctx *sync2.ServiceContext) error {
 	// Query mysqld to convert GTID to file & pos.
-	rp, err := bls.mysqld.BinlogInfo(bls.gtid)
+	fileName, filePos, err := bls.mysqld.BinlogInfo(bls.startPos)
 	if err != nil {
 		log.Errorf("Unable to serve client request: error computing start position: %v", err)
 		return fmt.Errorf("error computing start position: %v", err)
 	}
-	return bls.streamFilePos(ctx, rp.MasterLogFile, int64(rp.MasterLogPosition))
+	return bls.streamFilePos(ctx, fileName, int64(filePos))
 }
 
 // streamFilePos starts streaming events from a given file and position.
@@ -215,7 +215,10 @@ eventLoop:
 		if values != nil {
 			bls.blPos.ServerId = mustParseInt64(values[1])
 			bls.file.Set(mustParseInt64(values[2]))
-			bls.blPos.GTID = myproto.MustParseGTID(blsMysqlFlavor, string(values[3]))
+
+			// Make the fake Google GTID format we invented.
+			gtid := string(values[1]) + "-" + string(values[3])
+			bls.blPos.GTID = myproto.MustParseGTID(blsMysqlFlavor, gtid)
 			continue
 		}
 		values = rotateRE.FindSubmatch(event)

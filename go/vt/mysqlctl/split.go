@@ -142,7 +142,7 @@ type SplitSnapshotManifest struct {
 // masterAddr is the address of the server to use as master.
 // pos is the replication position to use on that master.
 // myMasterPos is the local server master position
-func NewSplitSnapshotManifest(myAddr, myMysqlAddr, masterAddr, dbName string, files []SnapshotFile, pos, myMasterPos *proto.ReplicationPosition, keyRange key.KeyRange, sd *proto.SchemaDefinition) (*SplitSnapshotManifest, error) {
+func NewSplitSnapshotManifest(myAddr, myMysqlAddr, masterAddr, dbName string, files []SnapshotFile, pos, myMasterPos proto.ReplicationPosition, keyRange key.KeyRange, sd *proto.SchemaDefinition) (*SplitSnapshotManifest, error) {
 	sm, err := newSnapshotManifest(myAddr, myMysqlAddr, masterAddr, dbName, files, pos, myMasterPos)
 	if err != nil {
 		return nil, err
@@ -167,23 +167,24 @@ func SanityCheckManifests(ssms []*SplitSnapshotManifest) error {
 
 // getReplicationPositionForClones returns what position the clones
 // need to replicate from. Can be ours if we are a master, or our master's.
-func (mysqld *Mysqld) getReplicationPositionForClones(allowHierarchicalReplication bool) (replicationPosition *proto.ReplicationPosition, masterAddr string, err error) {
+func (mysqld *Mysqld) getReplicationPositionForClones(allowHierarchicalReplication bool) (replicationPosition proto.ReplicationPosition, masterAddr string, err error) {
 	// If the source is a slave use the master replication position,
 	// unless we are allowing hierachical replicas.
-	replicationPosition, err = mysqld.SlaveStatus()
-	if err != nil {
-		if err != ErrNotSlave {
-			// this is a real error
-			return
-		}
+	var status *proto.ReplicationStatus
+	status, err = mysqld.SlaveStatus()
+	if err == ErrNotSlave {
 		// we are really a master, so we need that position
-		replicationPosition, err = mysqld.MasterStatus()
+		replicationPosition, err = mysqld.MasterPosition()
 		if err != nil {
 			return
 		}
 		masterAddr = mysqld.IpAddr()
 		return
 	}
+	if err != nil {
+		return
+	}
+	replicationPosition = status.Position
 
 	// we are a slave, check our replication strategy
 	if allowHierarchicalReplication {
@@ -194,10 +195,10 @@ func (mysqld *Mysqld) getReplicationPositionForClones(allowHierarchicalReplicati
 	return
 }
 
-func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool, hookExtraEnv map[string]string) (slaveStartRequired, readOnly bool, replicationPosition, myMasterPosition *proto.ReplicationPosition, masterAddr string, connToRelease dbconnpool.PoolConnection, err error) {
+func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool, hookExtraEnv map[string]string) (slaveStartRequired, readOnly bool, replicationPosition, myMasterPosition proto.ReplicationPosition, masterAddr string, connToRelease dbconnpool.PoolConnection, err error) {
 	// save initial state so we can restore on Start()
-	if slaveStatus, slaveErr := mysqld.slaveStatus(); slaveErr == nil {
-		slaveStartRequired = (slaveStatus["Slave_IO_Running"] == "Yes" && slaveStatus["Slave_SQL_Running"] == "Yes")
+	if slaveStatus, slaveErr := mysqld.SlaveStatus(); slaveErr == nil {
+		slaveStartRequired = slaveStatus.SlaveRunning()
 	}
 
 	// For masters, set read-only so we don't write anything during snapshot
@@ -222,7 +223,7 @@ func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool, hookE
 	}
 
 	// get our master position, some targets may use it
-	myMasterPosition, err = mysqld.MasterStatus()
+	myMasterPosition, err = mysqld.MasterPosition()
 	if err != nil && err != ErrNotMaster {
 		// this is a real error
 		return
@@ -634,13 +635,12 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 
 	// Check the replication position after snapshot is done
 	// hasn't changed, to be sure we haven't inserted any data
-	var newReplicationPosition *proto.ReplicationPosition
-	newReplicationPosition, _, err = mysqld.getReplicationPositionForClones(allowHierarchicalReplication)
+	newReplicationPosition, _, err := mysqld.getReplicationPositionForClones(allowHierarchicalReplication)
 	if err != nil {
 		return
 	}
-	if newReplicationPosition.MasterLogGTIDField != replicationPosition.MasterLogGTIDField {
-		return nil, fmt.Errorf("replicationPosition position changed during snapshot, from %v to %v", replicationPosition.MasterLogGTIDField, newReplicationPosition.MasterLogGTIDField)
+	if !newReplicationPosition.Equal(replicationPosition) {
+		return nil, fmt.Errorf("replicationPosition position changed during snapshot, from %v to %v", replicationPosition, newReplicationPosition)
 	}
 
 	// Write all the manifest files
@@ -1064,7 +1064,7 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.Key
 			flags = binlogplayer.BLP_FLAG_DONT_START
 		}
 		for manifestIndex, manifest := range manifests {
-			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(uint32(manifestIndex), manifest.Source.MasterState.ReplicationPosition.MasterLogGTIDField.Value, time.Now().Unix(), flags))
+			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(uint32(manifestIndex), manifest.Source.MasterPosition, time.Now().Unix(), flags))
 		}
 		if err = mysqld.ExecuteSuperQueryList(queries); err != nil {
 			return err

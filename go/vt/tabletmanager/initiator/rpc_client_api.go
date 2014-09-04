@@ -51,22 +51,22 @@ type TabletManagerConn interface {
 	// Replication related methods
 	//
 
-	// SlavePosition returns the tablet's mysql slave position
-	SlavePosition(tablet *topo.TabletInfo, waitTime time.Duration) (*myproto.ReplicationPosition, error)
+	// SlaveStatus returns the tablet's mysql slave status.
+	SlaveStatus(tablet *topo.TabletInfo, waitTime time.Duration) (*myproto.ReplicationStatus, error)
 
 	// WaitSlavePosition asks the tablet to wait until it reaches that
 	// position in mysql replication
-	WaitSlavePosition(tablet *topo.TabletInfo, replicationPosition *myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationPosition, error)
+	WaitSlavePosition(tablet *topo.TabletInfo, waitPos myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error)
 
 	// MasterPosition returns the tablet's master position
-	MasterPosition(tablet *topo.TabletInfo, waitTime time.Duration) (*myproto.ReplicationPosition, error)
+	MasterPosition(tablet *topo.TabletInfo, waitTime time.Duration) (myproto.ReplicationPosition, error)
 
 	// StopSlave stops the mysql replication
 	StopSlave(tablet *topo.TabletInfo, waitTime time.Duration) error
 
 	// StopSlaveMinimum stops the mysql replication after it reaches
 	// the provided minimum point
-	StopSlaveMinimum(tablet *topo.TabletInfo, gtid myproto.GTID, waitTime time.Duration) (*myproto.ReplicationPosition, error)
+	StopSlaveMinimum(tablet *topo.TabletInfo, stopPos myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error)
 
 	// StartSlave starts the mysql replication
 	StartSlave(tablet *topo.TabletInfo, waitTime time.Duration) error
@@ -90,7 +90,7 @@ type TabletManagerConn interface {
 
 	// RunBlpUntil asks the tablet to restart its binlog players until
 	// it reaches the given positions, if not there yet.
-	RunBlpUntil(tablet *topo.TabletInfo, positions *blproto.BlpPositionList, waitTime time.Duration) (*myproto.ReplicationPosition, error)
+	RunBlpUntil(tablet *topo.TabletInfo, positions *blproto.BlpPositionList, waitTime time.Duration) (myproto.ReplicationPosition, error)
 
 	//
 	// Reparenting related functions

@@ -26,15 +26,15 @@ Note it's OK to rename the structures as the type name is not saved in json.
 // tablet action node structures
 
 type RestartSlaveData struct {
-	ReplicationState *myproto.ReplicationState
-	WaitPosition     *myproto.ReplicationPosition
-	TimePromoted     int64 // used to verify replication - a row will be inserted with this timestamp
-	Parent           topo.TabletAlias
-	Force            bool
+	ReplicationStatus *myproto.ReplicationStatus
+	WaitPosition      myproto.ReplicationPosition
+	TimePromoted      int64 // used to verify replication - a row will be inserted with this timestamp
+	Parent            topo.TabletAlias
+	Force             bool
 }
 
 func (rsd *RestartSlaveData) String() string {
-	return fmt.Sprintf("RestartSlaveData{ReplicationState:%#v WaitPosition:%#v TimePromoted:%v Parent:%v Force:%v}", rsd.ReplicationState, rsd.WaitPosition, rsd.TimePromoted, rsd.Parent, rsd.Force)
+	return fmt.Sprintf("RestartSlaveData{ReplicationStatus:%#v WaitPosition:%#v TimePromoted:%v Parent:%v Force:%v}", rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted, rsd.Parent, rsd.Force)
 }
 
 type SlaveWasRestartedArgs struct {
