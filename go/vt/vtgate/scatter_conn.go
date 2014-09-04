@@ -80,22 +80,20 @@ func (stc *ScatterConn) InitializeConnections(ctx context.Context) error {
 				return
 			}
 			// work on all shards of all tablet types
-			var ksWg sync.WaitGroup
 			for tabletType, ksPartition := range ks.Partitions {
 				for _, shard := range ksPartition.Shards {
-					ksWg.Add(1)
-					go func(shardName string) {
-						defer ksWg.Done()
+					wg.Add(1)
+					go func(shardName string, tabletType topo.TabletType) {
+						defer wg.Done()
 						shardConn := stc.getConnection(ctx, keyspace, shardName, tabletType)
 						err = shardConn.Dial(ctx)
 						if err != nil {
 							errRecorder.RecordError(err)
 							return
 						}
-					}(shard.ShardName())
+					}(shard.ShardName(), tabletType)
 				}
 			}
-			ksWg.Wait()
 		}(ksName)
 	}
 	wg.Wait()
