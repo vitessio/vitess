@@ -31,7 +31,21 @@ func TestParseGoogleGTIDSet(t *testing.T) {
 		t.Errorf("%v", err)
 	}
 	if got.(GoogleGTID) != want {
-		t.Errorf("parseGoogleGTIDSet(%v) = %v, want %v", input, got, want)
+		t.Errorf("parseGoogleGTIDSet(%#v) = %#v, want %#v", input, got, want)
+	}
+}
+
+func TestParseInvalidGoogleGTIDSet(t *testing.T) {
+	input := "12-3456d78"
+	want := "invalid Google MySQL group_id"
+
+	_, err := parseGoogleGTIDSet(input)
+	if err == nil {
+		t.Errorf("expected error for invalid input (%#v)", input)
+		return
+	}
+	if got := err.Error(); !strings.HasPrefix(got, want) {
+		t.Errorf("parseGoogleGTIDSet(%#v) error = %#v, want %#v", input, got, want)
 	}
 }
 
