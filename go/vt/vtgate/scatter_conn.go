@@ -58,7 +58,7 @@ func NewScatterConn(serv SrvTopoServer, statsName, cell string, retryDelay time.
 	}
 }
 
-// InitilizeConnections pre-initializes all ShardConn which create underlying connections.
+// InitializeConnections pre-initializes all ShardConn which create underlying connections.
 // It also populates topology cache by accessing it.
 // It is not necessary to call this function before serving queries,
 // but it would reduce connection overhead when serving.
