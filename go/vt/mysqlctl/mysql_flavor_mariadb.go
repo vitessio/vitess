@@ -7,7 +7,6 @@ package mysqlctl
 import (
 	"encoding/binary"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -37,20 +36,16 @@ func (flavor *mariaDB10) MasterPosition(mysqld *Mysqld) (rp proto.ReplicationPos
 
 // SlaveStatus implements MysqlFlavor.SlaveStatus().
 func (flavor *mariaDB10) SlaveStatus(mysqld *Mysqld) (*proto.ReplicationStatus, error) {
-	fields, err := mysqld.fetchSuperQueryMap("SHOW SLAVE STATUS")
+	fields, err := mysqld.fetchSuperQueryMap("SHOW ALL SLAVES STATUS")
 	if err != nil {
 		return nil, ErrNotSlave
 	}
-	status := &proto.ReplicationStatus{
-		SlaveIORunning:  fields["Slave_IO_Running"] == "Yes",
-		SlaveSQLRunning: fields["Slave_SQL_Running"] == "Yes",
-	}
-	status.Position, err = flavor.ParseReplicationPosition(fields["Exec_Master_Group_ID"])
+	status := parseSlaveStatus(fields)
+
+	status.Position, err = flavor.ParseReplicationPosition(fields["Gtid_Slave_Pos"])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("SlaveStatus can't parse MariaDB GTID (Gtid_Slave_Pos: %#v): %v", fields["Gtid_Slave_Pos"], err)
 	}
-	temp, _ := strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
-	status.SecondsBehindMaster = uint(temp)
 	return status, nil
 }
 

@@ -110,28 +110,23 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo,
 			calls <- ctx
 		}()
 
-		var waitPos myproto.ReplicationPosition
 		if !masterPosition.IsZero() {
 			// If the master position is known, do our best to wait for replication to catch up.
-			waitPos = masterPosition
+			status, err := wr.ai.WaitSlavePosition(ti, masterPosition, wr.ActionTimeout())
+			if err != nil {
+				ctx.err = err
+				return
+			}
+			ctx.status = status
 		} else {
-			// In the case where a master is down, look for the last bit of data copied and wait
-			// for that to apply. That gives us a chance to wait for all data.
+			// If the master is down, just get the slave status.
 			status, err := wr.ai.SlaveStatus(ti, wr.ActionTimeout())
 			if err != nil {
 				ctx.err = err
 				return
 			}
-			waitPos = status.IOPosition
+			ctx.status = status
 		}
-
-		// This option waits for the SQL thread to apply all changes to this instance.
-		status, err := wr.ai.WaitSlavePosition(ti, waitPos, wr.ActionTimeout())
-		if err != nil {
-			ctx.err = err
-			return
-		}
-		ctx.status = status
 	}
 
 	for _, tablet := range tabletMap {
@@ -226,10 +221,7 @@ func (wr *Wrangler) tabletReplicationStatuses(tablets []*topo.TabletInfo) ([]*my
 			pos, err := wr.ai.MasterPosition(ti, wr.ActionTimeout())
 			ctx.err = err
 			if err == nil {
-				ctx.status = &myproto.ReplicationStatus{
-					Position:   pos,
-					IOPosition: pos,
-				}
+				ctx.status = &myproto.ReplicationStatus{Position: pos}
 			}
 		} else if ti.IsSlaveType() {
 			ctx.status, ctx.err = wr.ai.SlaveStatus(ti, wr.ActionTimeout())

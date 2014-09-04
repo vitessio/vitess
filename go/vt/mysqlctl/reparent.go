@@ -75,7 +75,6 @@ func (mysqld *Mysqld) PromoteSlave(setReadWrite bool, hookExtraEnv map[string]st
 		return
 	}
 	replicationStatus.Position = replicationPosition
-	replicationStatus.IOPosition = replicationPosition
 	timePromoted = time.Now().UnixNano()
 	// write a row to verify that replication is functioning
 	cmds = []string{

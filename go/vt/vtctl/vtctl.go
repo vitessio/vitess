@@ -1266,7 +1266,7 @@ func commandShardReplicationPositions(wr *wrangler.Wrangler, subFlags *flag.Flag
 		if status == nil {
 			lines = append(lines, fmtTabletAwkable(ti)+" <err> <err> <err>")
 		} else {
-			lines = append(lines, fmtTabletAwkable(ti)+fmt.Sprintf(" %v %v %v", status.Position, status.IOPosition, status.SecondsBehindMaster))
+			lines = append(lines, fmtTabletAwkable(ti)+fmt.Sprintf(" %v %v", status.Position, status.SecondsBehindMaster))
 		}
 	}
 	for _, l := range lines {
@@ -2167,10 +2167,7 @@ func (rts rTablets) Less(i, j int) bool {
 		return true
 	}
 	if lTypeMaster == rTypeMaster {
-		if l.IOPosition.Equal(r.IOPosition) {
-			return !l.Position.AtLeast(r.Position)
-		}
-		return !l.IOPosition.AtLeast(r.IOPosition)
+		return !l.Position.AtLeast(r.Position)
 	}
 	return false
 }

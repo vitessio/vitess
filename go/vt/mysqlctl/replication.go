@@ -72,6 +72,22 @@ func changeMasterArgs(params *mysql.ConnectionParams, status *proto.ReplicationS
 	return args
 }
 
+// parseSlaveStatus parses the common fields of SHOW SLAVE STATUS.
+func parseSlaveStatus(fields map[string]string) *proto.ReplicationStatus {
+	status := &proto.ReplicationStatus{
+		MasterHost:      fields["Master_Host"],
+		SlaveIORunning:  fields["Slave_IO_Running"] == "Yes",
+		SlaveSQLRunning: fields["Slave_SQL_Running"] == "Yes",
+	}
+	parseInt, _ := strconv.ParseInt(fields["Master_Port"], 10, 0)
+	status.MasterPort = int(parseInt)
+	parseInt, _ = strconv.ParseInt(fields["Connect_Retry"], 10, 0)
+	status.MasterConnectRetry = int(parseInt)
+	parseUint, _ := strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
+	status.SecondsBehindMaster = uint(parseUint)
+	return status
+}
+
 func (mysqld *Mysqld) WaitForSlaveStart(slaveStartDeadline int) error {
 	var rowMap map[string]string
 	for slaveWait := 0; slaveWait < slaveStartDeadline; slaveWait++ {
