@@ -100,6 +100,20 @@ func Init(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount 
 	}
 }
 
+// InitializeConnections pre-initializes VTGate by connecting to vttablets of all keyspace/shard/type.
+// It is not necessary to call this function before serving queries,
+// but it would reduce connection overhead when serving.
+func (vtg *VTGate) InitializeConnections(ctx context.Context) error {
+	log.Infof("Initialize VTTablet connections")
+	err := vtg.resolver.InitializeConnections(ctx)
+	if err != nil {
+		log.Errorf("failed to initialize connections: %v", err)
+		return err
+	}
+	log.Infof("Initialize VTTablet connections completed")
+	return nil
+}
+
 // ExecuteShard executes a non-streaming query on the specified shards.
 func (vtg *VTGate) ExecuteShard(context context.Context, query *proto.QueryShard, reply *proto.QueryResult) error {
 	startTime := time.Now()

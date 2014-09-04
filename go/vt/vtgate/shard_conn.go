@@ -71,6 +71,15 @@ func (e *ShardConnError) Error() string {
 	return fmt.Sprintf("%v, shard, host: %s", e.Err, e.ShardIdentifier)
 }
 
+// Dial creates tablet connection and connects to the vttablet.
+// It is not necessary to call this function before serving queries,
+// but it would reduce connection overhead when serving the first query.
+func (sdc *ShardConn) Dial(ctx context.Context) error {
+	return sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
+		return nil
+	}, 0, false)
+}
+
 // Execute executes a non-streaming query on vttablet. If there are connection errors,
 // it retries retryCount times before failing. It does not retry if the connection is in
 // the middle of a transaction.

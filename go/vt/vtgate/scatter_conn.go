@@ -58,6 +58,32 @@ func NewScatterConn(serv SrvTopoServer, statsName, cell string, retryDelay time.
 	}
 }
 
+// InitilizeConnections pre-initializes all ShardConn which create underlying connections.
+// It also populates topology cache by accessing it.
+// It is not necessary to call this function before serving queries,
+// but it would reduce connection overhead when serving.
+func (stc *ScatterConn) InitializeConnections(ctx context.Context) error {
+	ksNames, err := stc.toposerv.GetSrvKeyspaceNames(ctx, stc.cell)
+	if err != nil {
+		return err
+	}
+	for ksName := range ksNames {
+		ks, err := stc.toposerver.GetSrvKeyspace(ctx, stc.cell, ksName)
+		if err != nil {
+			return err
+		}
+		for tabletType, ksPartition := range ks.Partitions {
+			for shard := range ksPartition.Shards {
+				shardConn := stc.getConnection(ctx, ksName, shard.ShardName(), tabletType)
+				err = shardConn.Dial(ctx)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+}
+
 // Execute executes a non-streaming query on the specified shards.
 func (stc *ScatterConn) Execute(
 	context context.Context,
