@@ -36,6 +36,18 @@ class TestEnv(object):
 
   txlog_file = os.path.join(environment.vtlogroot, "txlog")
 
+  tablet = tablet.Tablet(62344)
+  vttop = environment.vttop
+  vtroot = environment.vtroot
+
+  def __init__(self, env):
+    if env not in ['vttablet', 'vtocc']:
+      raise EnvironmentError('unexptected env', env)
+    self.env = env
+
+  @property
+  def port(self):
+    return self.tablet.port
 
   # call postSetup after the derived class setUp is done.
   def postSetup(self):
@@ -152,74 +164,49 @@ class TestEnv(object):
     error_count += self.check_full_streamlog(open(self.querylog.path_full, 'r'))
     return error_count
 
-
-class VttabletTestEnv(TestEnv):
-  tablet = tablet.Tablet(62344)
-  vttop = environment.vttop
-  vtroot = environment.vtroot
-
-  @property
-  def port(self):
-    return self.tablet.port
-
   def setUp(self):
-    environment.topo_server_setup()
-
     utils.wait_procs([self.tablet.init_mysql()])
     self.tablet.mquery("", ["create database vt_test_keyspace", "set global read_only = off"])
 
     self.mysql_conn, mcu = self.tablet.connect('vt_test_keyspace')
-    self.clean_sqls = []
-    self.init_sqls = []
-    clean_mode = False
     with open(os.path.join(self.vttop, "test", "test_data", "test_schema.sql")) as f:
       for line in f:
         line = line.rstrip()
-        if line == "# clean":
-          clean_mode = True
         if line=='' or line.startswith("#"):
           continue
-        if clean_mode:
-          self.clean_sqls.append(line)
-        else:
-          self.init_sqls.append(line)
-    try:
-      for line in self.init_sqls:
         mcu.execute(line, {})
-    finally:
-      mcu.close()
-
-    utils.run_vtctl('CreateKeyspace -force test_keyspace')
-    self.tablet.init_tablet('master', 'test_keyspace', '0')
+    mcu.close()
 
     customrules = os.path.join(environment.tmproot, 'customrules.json')
     self.create_customrules(customrules)
     schema_override = os.path.join(environment.tmproot, 'schema_override.json')
     self.create_schema_override(schema_override)
     table_acl_config = os.path.join(environment.vttop, 'test', 'test_data', 'table_acl_config.json')
-    self.tablet.start_vttablet(
-            memcache=self.memcache,
-            customrules=customrules,
-            schema_override=schema_override,
-            table_acl_config=table_acl_config,
-            auth=True,
-    )
 
-    # FIXME(szopa): This is necessary here only because of a bug that
-    # makes the qs reload its config only after an action.
-    utils.run_vtctl('Ping ' + self.tablet.tablet_alias)
-
-    for i in range(30):
-      try:
-        self.conn = self.connect()
-        self.txlogger = utils.curl(self.url('/debug/txlog'), background=True, stdout=open(self.txlog_file, 'w'))
-        self.txlog = framework.Tailer(open(self.txlog_file), flush=self.tablet.flush)
-        self.log = framework.Tailer(open(os.path.join(environment.vtlogroot, 'vttablet.INFO')), flush=self.tablet.flush)
-        break
-      except dbexceptions.OperationalError:
-        if i == 29:
-          raise
-        time.sleep(1)
+    if self.env == 'vttablet':
+      environment.topo_server_setup()
+      utils.run_vtctl('CreateKeyspace -force test_keyspace')
+      self.tablet.init_tablet('master', 'test_keyspace', '0')
+      self.tablet.start_vttablet(
+              memcache=self.memcache,
+              customrules=customrules,
+              schema_override=schema_override,
+              table_acl_config=table_acl_config,
+              auth=True,
+      )
+    else:
+      self.tablet.start_vtocc(
+              memcache=self.memcache,
+              customrules=customrules,
+              schema_override=schema_override,
+              table_acl_config=table_acl_config,
+              auth=True,
+              keyspace="test_keyspace", shard="0",
+      )
+    self.conn = self.connect()
+    self.txlogger = utils.curl(self.url('/debug/txlog'), background=True, stdout=open(self.txlog_file, 'w'))
+    self.txlog = framework.Tailer(open(self.txlog_file), flush=self.tablet.flush)
+    self.log = framework.Tailer(open(os.path.join(environment.vtlogroot, '%s.INFO' % self.env)), flush=self.tablet.flush)
     self.postSetup()
 
   def tearDown(self):
@@ -232,140 +219,11 @@ class VttabletTestEnv(TestEnv):
       pass
     if getattr(self, "txlogger", None):
       self.txlogger.terminate()
-    environment.topo_server_teardown()
+    if self.env == 'vttablet':
+      environment.topo_server_teardown()
     utils.kill_sub_processes()
-
-  def mysql_connect(self, dbname=''):
-    return self.tablet.connect()
-
-class VtoccTestEnv(TestEnv):
-  tabletuid = "9460"
-  port = environment.reserve_ports(1)
-  mysqlport = environment.reserve_ports(1)
-  mysqldir = os.path.join(environment.vtdataroot, "vt_0000009460")
-
-  def setUp(self):
-    # start mysql
-    res = subprocess.call(environment.binary_args("mysqlctl") + [
-        "-tablet_uid",  self.tabletuid,
-        "-port", str(self.port),
-        "-mysql_port", str(self.mysqlport),
-        "init"
-        ])
-    if res != 0:
-      raise EnvironmentError("Cannot start mysql")
-    res = subprocess.call([
-        environment.mysql_binary_path('mysql'),
-        "-S",  self.mysqldir+"/mysql.sock",
-        "-u", "vt_dba",
-        "-e", "create database vt_test_keyspace ; set global read_only = off"])
-    if res != 0:
-      raise Exception("Cannot create vt_test_keyspace database")
-
-    self.mysql_conn = self.mysql_connect()
-    mcu = self.mysql_conn.cursor()
-    self.clean_sqls = []
-    self.init_sqls = []
-    clean_mode = False
-    with open(os.path.join(environment.vttop, "test", "test_data", "test_schema.sql")) as f:
-      for line in f:
-        line = line.rstrip()
-        if line == "# clean":
-          clean_mode = True
-        if line=='' or line.startswith("#"):
-          continue
-        if clean_mode:
-          self.clean_sqls.append(line)
-        else:
-          self.init_sqls.append(line)
-    try:
-      for line in self.init_sqls:
-        mcu.execute(line, {})
-    finally:
-      mcu.close()
-
-    customrules = os.path.join(environment.tmproot, 'customrules.json')
-    self.create_customrules(customrules)
-    schema_override = os.path.join(environment.tmproot, 'schema_override.json')
-    self.create_schema_override(schema_override)
-    table_acl_config = os.path.join(environment.vttop, 'test', 'test_data', 'table_acl_config.json')
-
-    occ_args = environment.binary_args('vtocc') + [
-      "-port", str(self.port),
-      "-customrules", customrules,
-      "-log_dir", environment.vtlogroot,
-      "-schema-override", schema_override,
-      "-table-acl-config", table_acl_config,
-      "-queryserver-config-strict-table-acl",
-      "-db-config-app-charset", "utf8",
-      "-db-config-app-dbname", "vt_test_keyspace",
-      "-db-config-app-host", "localhost",
-      "-db-config-app-unixsocket", self.mysqldir+"/mysql.sock",
-      "-db-config-app-uname", 'vt_dba',   # use vt_dba as some tests depend on 'drop'
-      "-db-config-app-keyspace", "test_keyspace",
-      "-db-config-app-shard", "0",
-      "-auth-credentials", os.path.join(environment.vttop, 'test', 'test_data', 'authcredentials_test.json'),
-    ]
-
-    if self.memcache:
-      memcache = self.mysqldir+"/memcache.sock"
-      occ_args.extend(["-rowcache-bin", environment.memcached_bin()])
-      occ_args.extend(["-rowcache-socket", memcache])
-      occ_args.extend(["-enable-rowcache"])
-
-    self.vtocc = subprocess.Popen(occ_args, stdout=utils.devnull, stderr=utils.devnull)
-    for i in range(30):
-      try:
-        self.conn = self.connect()
-        self.txlogger = utils.curl(self.url('/debug/txlog'), background=True, stdout=open(self.txlog_file, 'w'))
-        self.txlog = framework.Tailer(open(self.txlog_file, 'r'))
-
-        def flush():
-          utils.curl(self.url(environment.flush_logs_url), trap_output=True)
-
-        self.log = framework.Tailer(open(os.path.join(environment.vtlogroot, 'vtocc.INFO')), flush=flush)
-        break
-      except (dbexceptions.OperationalError, dbexceptions.RetryError):
-        if i == 29:
-          raise
-        time.sleep(1)
-    self.postSetup()
-
-  def tearDown(self):
-    self.preTeardown()
-    try:
-      mcu = self.mysql_conn.cursor()
-      for line in self.clean_sqls:
-        try:
-          mcu.execute(line, {})
-        except:
-          pass
-      mcu.close()
-    except:
-      pass
-    if getattr(self, "txlogger", None):
-      self.txlogger.terminate()
-    if getattr(self, "vtocc", None):
-      self.vtocc.terminate()
-
-    # stop mysql, delete directory
-    subprocess.call(environment.binary_args('mysqlctl') + [
-        "-tablet_uid",  self.tabletuid,
-        "teardown", "-force"
-        ])
-    try:
-      shutil.rmtree(self.mysqldir)
-    except:
-      pass
-
-  def mysql_connect(self):
-    return mysql.connect(
-      host='localhost',
-      user='vt_dba',
-      port=self.mysqlport,
-      db='vt_test_keyspace',
-      unix_socket=self.mysqldir+"/mysql.sock",
-      charset='utf8')
+    utils.remove_tmp_files()
+    self.tablet.remove_tree()
 
 
 class Querylog(object):

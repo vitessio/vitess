@@ -68,30 +68,3 @@ create table vtocc_acl_read_write(key1 bigint, key2 bigint, primary key(key1))
 create table vtocc_acl_admin(key1 bigint, key2 bigint, primary key(key1))
 create table vtocc_acl_unmatched(key1 bigint, key2 bigint, primary key(key1))
 create table vtocc_acl_all_user_read_only(key1 bigint, key2 bigint, primary key(key1))
-
-# clean
-drop table if exists vtocc_test
-drop table if exists vtocc_a
-drop table if exists vtocc_b
-drop table if exists vtocc_c
-drop table if exists vtocc_d
-drop table if exists vtocc_e
-drop table if exists vtocc_f
-drop table if exists vtocc_cached1
-drop table if exists vtocc_cached2
-drop table if exists vtocc_renamed
-drop table if exists vtocc_nocache
-drop table if exists vtocc_big
-drop table if exists vtocc_ints
-drop table if exists vtocc_fracts
-drop table if exists vtocc_strings
-drop table if exists vtocc_misc
-drop view if exists vtocc_view
-drop table if exists vtocc_part1
-drop table if exists vtocc_part2
-drop table if exists vtocc_acl_no_access
-drop table if exists vtocc_acl_read_only
-drop table if exists vtocc_acl_read_write
-drop table if exists vtocc_acl_admin
-drop table if exists vtocc_acl_unmatched
-drop table if exists vtocc_acl_all_user_read_only
