@@ -67,21 +67,42 @@ func (stc *ScatterConn) InitializeConnections(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	for ksName := range ksNames {
-		ks, err := stc.toposerver.GetSrvKeyspace(ctx, stc.cell, ksName)
-		if err != nil {
-			return err
-		}
-		for tabletType, ksPartition := range ks.Partitions {
-			for shard := range ksPartition.Shards {
-				shardConn := stc.getConnection(ctx, ksName, shard.ShardName(), tabletType)
-				err = shardConn.Dial(ctx)
-				if err != nil {
-					return err
+	var wg sync.WaitGroup
+	var errRecorder concurrency.AllErrorRecorder
+	for _, ksName := range ksNames {
+		wg.Add(1)
+		go func(keyspace string) {
+			defer wg.Done()
+			// get SrvKeyspace for cell/keyspace
+			ks, err := stc.toposerv.GetSrvKeyspace(ctx, stc.cell, keyspace)
+			if err != nil {
+				errRecorder.RecordError(err)
+				return
+			}
+			// work on all shards of all tablet types
+			var ksWg sync.WaitGroup
+			for tabletType, ksPartition := range ks.Partitions {
+				for _, shard := range ksPartition.Shards {
+					ksWg.Add(1)
+					go func(shardName string) {
+						defer ksWg.Done()
+						shardConn := stc.getConnection(ctx, keyspace, shardName, tabletType)
+						err = shardConn.Dial(ctx)
+						if err != nil {
+							errRecorder.RecordError(err)
+							return
+						}
+					}(shard.ShardName())
 				}
 			}
-		}
+			ksWg.Wait()
+		}(ksName)
 	}
+	wg.Wait()
+	if errRecorder.HasErrors() {
+		return errRecorder.Error()
+	}
+	return nil
 }
 
 // Execute executes a non-streaming query on the specified shards.
