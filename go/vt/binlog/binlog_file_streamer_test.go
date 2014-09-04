@@ -290,10 +290,10 @@ type transaction struct {
 	GTIDField myproto.GTIDField
 }
 
-func newTestBinlogFileStreamer(dbname, binlogPath string, gtid myproto.GTID, sendTransaction sendTransactionFunc) *binlogFileStreamer {
+func newTestBinlogFileStreamer(dbname, binlogPath string, startPos myproto.ReplicationPosition, sendTransaction sendTransactionFunc) *binlogFileStreamer {
 	return &binlogFileStreamer{
 		dbname:          dbname,
-		gtid:            gtid,
+		startPos:        startPos,
 		dir:             path.Dir(binlogPath),
 		sendTransaction: sendTransaction,
 	}
@@ -350,7 +350,7 @@ func TestStream(t *testing.T) {
 		*/
 		return nil
 	}
-	bls := newTestBinlogFileStreamer("db", testfiles.Locate("mysqlctl_test/vt-0000041983-bin"), nil, sendTx)
+	bls := newTestBinlogFileStreamer("db", testfiles.Locate("mysqlctl_test/vt-0000041983-bin"), myproto.ReplicationPosition{}, sendTx)
 	svm.Go(func(ctx *sync2.ServiceContext) error {
 		return bls.streamFilePos(ctx, "vt-0000041983-bin.000001", 0)
 	})
@@ -366,7 +366,7 @@ func TestRotation(t *testing.T) {
 	defer cleanup(env)
 
 	svm := &sync2.ServiceManager{}
-	bls := newTestBinlogFileStreamer("db", testfiles.Locate("mysqlctl_test/vt-0000041983-bin"), nil, func(tx *proto.BinlogTransaction) error {
+	bls := newTestBinlogFileStreamer("db", testfiles.Locate("mysqlctl_test/vt-0000041983-bin"), myproto.ReplicationPosition{}, func(tx *proto.BinlogTransaction) error {
 		// Launch as goroutine to prevent deadlock.
 		go svm.Stop()
 		return nil

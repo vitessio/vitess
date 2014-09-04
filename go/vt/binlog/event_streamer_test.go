@@ -102,7 +102,7 @@ func TestDMLEvent(t *testing.T) {
 			},
 		},
 		Timestamp: 1,
-		GTIDField: myproto.GTIDField{Value: myproto.MustParseGTID(blsMysqlFlavor, "20")},
+		GTIDField: myproto.GTIDField{Value: myproto.MustParseGTID(blsMysqlFlavor, "41983-20")},
 	}
 	evs := &EventStreamer{
 		sendEvent: func(event *proto.StreamEvent) error {
@@ -120,7 +120,7 @@ func TestDMLEvent(t *testing.T) {
 					t.Errorf("got %s, want %s", got, want)
 				}
 			case "POS":
-				want := `&{POS  [] []  1 20}`
+				want := `&{POS  [] []  1 41983-20}`
 				got := fmt.Sprintf("%v", event)
 				if got != want {
 					t.Errorf("got %s, want %s", got, want)
@@ -149,7 +149,7 @@ func TestDDLEvent(t *testing.T) {
 			},
 		},
 		Timestamp: 1,
-		GTIDField: myproto.GTIDField{Value: myproto.MustParseGTID(blsMysqlFlavor, "20")},
+		GTIDField: myproto.GTIDField{Value: myproto.MustParseGTID(blsMysqlFlavor, "41983-20")},
 	}
 	evs := &EventStreamer{
 		sendEvent: func(event *proto.StreamEvent) error {
@@ -161,7 +161,7 @@ func TestDDLEvent(t *testing.T) {
 					t.Errorf("got %s, want %s", got, want)
 				}
 			case "POS":
-				want := `&{POS  [] []  1 20}`
+				want := `&{POS  [] []  1 41983-20}`
 				got := fmt.Sprintf("%v", event)
 				if got != want {
 					t.Errorf("got %s, want %s", got, want)

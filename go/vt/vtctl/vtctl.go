@@ -1254,19 +1254,19 @@ func commandShardReplicationPositions(wr *wrangler.Wrangler, subFlags *flag.Flag
 	if err != nil {
 		return "", err
 	}
-	tablets, positions, err := wr.ShardReplicationPositions(keyspace, shard)
+	tablets, stats, err := wr.ShardReplicationStatuses(keyspace, shard)
 	if tablets == nil {
 		return "", err
 	}
 
 	lines := make([]string, 0, 24)
-	for _, rt := range sortReplicatingTablets(tablets, positions) {
-		pos := rt.ReplicationPosition
+	for _, rt := range sortReplicatingTablets(tablets, stats) {
+		status := rt.ReplicationStatus
 		ti := rt.TabletInfo
-		if pos == nil {
+		if status == nil {
 			lines = append(lines, fmtTabletAwkable(ti)+" <err> <err> <err>")
 		} else {
-			lines = append(lines, fmtTabletAwkable(ti)+fmt.Sprintf(" %v:%010d %v:%010d %v", pos.MasterLogFile, pos.MasterLogPosition, pos.MasterLogFileIo, pos.MasterLogPositionIo, pos.SecondsBehindMaster))
+			lines = append(lines, fmtTabletAwkable(ti)+fmt.Sprintf(" %v %v %v", status.Position, status.IOPosition, status.SecondsBehindMaster))
 		}
 	}
 	for _, l := range lines {
@@ -2134,7 +2134,7 @@ func commandGetShardReplication(wr *wrangler.Wrangler, subFlags *flag.FlagSet, a
 
 type rTablet struct {
 	*topo.TabletInfo
-	*myproto.ReplicationPosition
+	*myproto.ReplicationStatus
 }
 
 type rTablets []*rTablet
@@ -2148,12 +2148,12 @@ func (rts rTablets) Swap(i, j int) { rts[i], rts[j] = rts[j], rts[i] }
 func (rts rTablets) Less(i, j int) bool {
 	// NOTE: Swap order of unpack to reverse sort
 	l, r := rts[j], rts[i]
-	// l or r ReplicationPosition would be nil if we failed to get
+	// l or r ReplicationStatus would be nil if we failed to get
 	// the position (put them at the beginning of the list)
-	if l.ReplicationPosition == nil {
-		return r.ReplicationPosition != nil
+	if l.ReplicationStatus == nil {
+		return r.ReplicationStatus != nil
 	}
-	if r.ReplicationPosition == nil {
+	if r.ReplicationStatus == nil {
 		return false
 	}
 	var lTypeMaster, rTypeMaster int
@@ -2167,22 +2167,18 @@ func (rts rTablets) Less(i, j int) bool {
 		return true
 	}
 	if lTypeMaster == rTypeMaster {
-		if l.MapKeyIo() < r.MapKeyIo() {
-			return true
+		if l.IOPosition.Equal(r.IOPosition) {
+			return !l.Position.AtLeast(r.Position)
 		}
-		if l.MapKeyIo() == r.MapKeyIo() {
-			if l.MapKey() < r.MapKey() {
-				return true
-			}
-		}
+		return !l.IOPosition.AtLeast(r.IOPosition)
 	}
 	return false
 }
 
-func sortReplicatingTablets(tablets []*topo.TabletInfo, positions []*myproto.ReplicationPosition) []*rTablet {
+func sortReplicatingTablets(tablets []*topo.TabletInfo, stats []*myproto.ReplicationStatus) []*rTablet {
 	rtablets := make([]*rTablet, len(tablets))
-	for i, pos := range positions {
-		rtablets[i] = &rTablet{tablets[i], pos}
+	for i, status := range stats {
+		rtablets[i] = &rTablet{TabletInfo: tablets[i], ReplicationStatus: status}
 	}
 	sort.Sort(rTablets(rtablets))
 	return rtablets

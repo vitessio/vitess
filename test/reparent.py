@@ -3,7 +3,7 @@
 import warnings
 # Dropping a table inexplicably produces a warning despite
 # the "IF EXISTS" clause. Squelch these warnings.
-warnings.simplefilter("ignore")
+warnings.simplefilter('ignore')
 
 import logging
 import os
@@ -23,6 +23,7 @@ tablet_62044 = tablet.Tablet(62044)
 tablet_41983 = tablet.Tablet(41983)
 tablet_31981 = tablet.Tablet(31981)
 
+
 def setUpModule():
   try:
     environment.topo_server_setup()
@@ -33,12 +34,13 @@ def setUpModule():
         tablet_62044.init_mysql(),
         tablet_41983.init_mysql(),
         tablet_31981.init_mysql(),
-        ]
+    ]
     utils.Vtctld().start()
     utils.wait_procs(setup_procs)
   except:
     tearDownModule()
     raise
+
 
 def tearDownModule():
   if utils.options.skip_teardown:
@@ -49,7 +51,7 @@ def tearDownModule():
       tablet_62044.teardown_mysql(),
       tablet_41983.teardown_mysql(),
       tablet_31981.teardown_mysql(),
-      ]
+  ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
   environment.topo_server_teardown()
@@ -73,16 +75,19 @@ class TestReparent(unittest.TestCase):
     super(TestReparent, self).tearDown()
 
   def _check_db_addr(self, shard, db_type, expected_port, cell='test_nj'):
-    ep = utils.run_vtctl_json(['GetEndPoints', cell, 'test_keyspace/'+shard,
+    ep = utils.run_vtctl_json(['GetEndPoints', cell, 'test_keyspace/' + shard,
                                db_type])
-    self.assertEqual(len(ep['entries']), 1 , 'Wrong number of entries: %s' % str(ep))
+    self.assertEqual(
+        len(ep['entries']), 1, 'Wrong number of entries: %s' % str(ep))
     port = ep['entries'][0]['named_port_map']['_vtocc']
     self.assertEqual(port, expected_port,
                      'Unexpected port: %u != %u from %s' % (port, expected_port,
                                                             str(ep)))
     host = ep['entries'][0]['host']
     if not host.startswith(utils.hostname):
-      self.fail('Invalid hostname %s was expecting something starting with %s' % (host, utils.hostname))
+      self.fail(
+          'Invalid hostname %s was expecting something starting with %s' %
+          (host, utils.hostname))
 
   def test_master_to_spare_state_change_impossible(self):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
@@ -121,9 +126,10 @@ class TestReparent(unittest.TestCase):
 
     # wait for all tablets to start
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
-      t.wait_for_vttablet_state("SERVING")
+      t.wait_for_vttablet_state('SERVING')
 
-    # Recompute the shard layout node - until you do that, it might not be valid.
+    # Recompute the shard layout node - until you do that, it might not be
+    # valid.
     utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/0'])
     utils.validate_topology()
 
@@ -146,23 +152,25 @@ class TestReparent(unittest.TestCase):
                                       'test_keyspace/0',
                                       tablet_62044.tablet_alias],
                                      expect_fail=True)
-    logging.debug("Failed ReparentShard output:\n" + stderr)
+    logging.debug('Failed ReparentShard output:\n' + stderr)
     if 'ValidateShard verification failed' not in stderr:
-      self.fail("didn't find the right error strings in failed ReparentShard: " + stderr)
+      self.fail(
+          "didn't find the right error strings in failed ReparentShard: " +
+          stderr)
 
     # Should timeout and fail
     stdout, stderr = utils.run_vtctl(['-wait-time', '5s', 'ScrapTablet',
                                       tablet_62344.tablet_alias],
                                      expect_fail=True)
-    logging.debug("Failed ScrapTablet output:\n" + stderr)
+    logging.debug('Failed ScrapTablet output:\n' + stderr)
     if 'deadline exceeded' not in stderr:
       self.fail("didn't find the right error strings in failed ScrapTablet: " +
                 stderr)
 
     # Should interrupt and fail
     args = environment.binary_args('vtctl') + [
-            '-log_dir', environment.vtlogroot,
-            '-wait-time', '10s']
+        '-log_dir', environment.vtlogroot,
+        '-wait-time', '10s']
     args.extend(environment.topo_server_flags())
     args.extend(environment.tablet_manager_protocol_flags())
     args.extend(['ScrapTablet', tablet_62344.tablet_alias])
@@ -172,7 +180,7 @@ class TestReparent(unittest.TestCase):
     os.kill(sp.pid, signal.SIGINT)
     stdout, stderr = sp.communicate()
 
-    logging.debug("Failed ScrapTablet output:\n" + stderr)
+    logging.debug('Failed ScrapTablet output:\n' + stderr)
     if 'interrupted' not in stderr:
       self.fail("didn't find the right error strings in failed ScrapTablet: " +
                 stderr)
@@ -221,7 +229,7 @@ class TestReparent(unittest.TestCase):
     # Start up a master mysql and vttablet
     tablet_62344.init_tablet('master', 'test_keyspace', shard_id, start=True,
                              wait_for_start=False)
-    shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/'+shard_id])
+    shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/' + shard_id])
     self.assertEqual(shard['Cells'], ['test_nj'],
                      'wrong list of cell in Shard: %s' % str(shard['Cells']))
 
@@ -233,18 +241,21 @@ class TestReparent(unittest.TestCase):
     tablet_31981.init_tablet('replica', 'test_keyspace', shard_id, start=True,
                              wait_for_start=False)
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
-      t.wait_for_vttablet_state("SERVING")
-    shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/'+shard_id])
-    self.assertEqual(shard['Cells'], ['test_nj', 'test_ny'], 'wrong list of cell in Shard: %s' % str(shard['Cells']))
+      t.wait_for_vttablet_state('SERVING')
+    shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/' + shard_id])
+    self.assertEqual(
+        shard['Cells'], ['test_nj', 'test_ny'],
+        'wrong list of cell in Shard: %s' % str(shard['Cells']))
 
-    # Recompute the shard layout node - until you do that, it might not be valid.
+    # Recompute the shard layout node - until you do that, it might not be
+    # valid.
     utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/' + shard_id])
     utils.validate_topology()
 
     # Force the slaves to reparent assuming that all the datasets are identical.
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.reset_replication()
-    utils.pause("force ReparentShard?")
+    utils.pause('force ReparentShard?')
     utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/' + shard_id,
                      tablet_62344.tablet_alias])
     utils.validate_topology(ping_tablets=True)
@@ -260,7 +271,7 @@ class TestReparent(unittest.TestCase):
     self.assertEqual(srvShard['MasterCell'], 'test_nj')
 
     # Perform a graceful reparent operation to another cell.
-    utils.pause("graceful ReparentShard?")
+    utils.pause('graceful ReparentShard?')
     utils.run_vtctl(['ReparentShard', 'test_keyspace/' + shard_id,
                      tablet_31981.tablet_alias], auto_log=True)
     utils.validate_topology()
@@ -277,7 +288,6 @@ class TestReparent(unittest.TestCase):
 
     tablet.kill_tablets([tablet_62344, tablet_62044, tablet_41983,
                          tablet_31981])
-
 
   def test_reparent_graceful_range_based(self):
     shard_id = '0000000000000000-FFFFFFFFFFFFFFFF'
@@ -299,7 +309,7 @@ class TestReparent(unittest.TestCase):
     # Start up a master mysql and vttablet
     tablet_62344.init_tablet('master', 'test_keyspace', shard_id, start=True)
     if environment.topo_server_implementation == 'zookeeper':
-      shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/'+shard_id])
+      shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/' + shard_id])
       self.assertEqual(shard['Cells'], ['test_nj'],
                        'wrong list of cell in Shard: %s' % str(shard['Cells']))
 
@@ -311,20 +321,21 @@ class TestReparent(unittest.TestCase):
     tablet_31981.init_tablet('replica', 'test_keyspace', shard_id, start=True,
                              wait_for_start=False)
     for t in [tablet_62044, tablet_41983, tablet_31981]:
-      t.wait_for_vttablet_state("SERVING")
+      t.wait_for_vttablet_state('SERVING')
     if environment.topo_server_implementation == 'zookeeper':
-      shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/'+shard_id])
+      shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/' + shard_id])
       self.assertEqual(shard['Cells'], ['test_nj', 'test_ny'],
                        'wrong list of cell in Shard: %s' % str(shard['Cells']))
 
-    # Recompute the shard layout node - until you do that, it might not be valid.
+    # Recompute the shard layout node - until you do that, it might not be
+    # valid.
     utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/' + shard_id])
     utils.validate_topology()
 
     # Force the slaves to reparent assuming that all the datasets are identical.
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.reset_replication()
-    utils.pause("force ReparentShard?")
+    utils.pause('force ReparentShard?')
     utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/' + shard_id,
                      tablet_62344.tablet_alias])
     utils.validate_topology(ping_tablets=True)
@@ -351,7 +362,7 @@ class TestReparent(unittest.TestCase):
                     stdout=utils.devnull)
 
     # Perform a graceful reparent operation.
-    utils.pause("graceful ReparentShard?")
+    utils.pause('graceful ReparentShard?')
     utils.run_vtctl(['ReparentShard', 'test_keyspace/' + shard_id,
                      tablet_62044.tablet_alias], auto_log=True)
     utils.validate_topology()
@@ -379,7 +390,6 @@ class TestReparent(unittest.TestCase):
 
     tablet_62044.kill_vttablet()
 
-
   # This is a manual test to check error formatting.
   def _test_reparent_slave_offline(self, shard_id='0'):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
@@ -404,9 +414,10 @@ class TestReparent(unittest.TestCase):
 
     # wait for all tablets to start
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
-      t.wait_for_vttablet_state("SERVING")
+      t.wait_for_vttablet_state('SERVING')
 
-    # Recompute the shard layout node - until you do that, it might not be valid.
+    # Recompute the shard layout node - until you do that, it might not be
+    # valid.
     utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/' + shard_id])
     utils.validate_topology()
 
@@ -427,7 +438,6 @@ class TestReparent(unittest.TestCase):
                      tablet_62044.tablet_alias])
 
     tablet.kill_tablets([tablet_62344, tablet_62044, tablet_41983])
-
 
   # assume a different entity is doing the reparent, and telling us it was done
   def test_reparent_from_outside(self):
@@ -473,7 +483,7 @@ class TestReparent(unittest.TestCase):
 
     # wait for all tablets to start
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
-      t.wait_for_vttablet_state("SERVING")
+      t.wait_for_vttablet_state('SERVING')
 
     # Reparent as a starting point
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
@@ -485,23 +495,22 @@ class TestReparent(unittest.TestCase):
     # 62044 will be the new master
     # 31981 won't be re-parented, so it will be busted
     tablet_62044.mquery('', mysql_flavor.promote_slave_commands())
-    new_pos = tablet_62044.mquery('', 'show master status')
-    logging.debug("New master position: %s" % str(new_pos))
+    new_pos = mysql_flavor.master_position(tablet_62044)
+    logging.debug('New master position: %s', str(new_pos))
+    changeMasterCmds = mysql_flavor.change_master_commands(
+                            utils.hostname,
+                            tablet_62044.mysql_port,
+                            new_pos)
 
     # 62344 will now be a slave of 62044
-    tablet_62344.mquery('', [
-        "RESET MASTER",
-        "RESET SLAVE",
-        "change master to master_host='%s', master_port=%u, master_log_file='%s', master_log_pos=%u" % (utils.hostname, tablet_62044.mysql_port, new_pos[0][0], new_pos[0][1]),
-        'start slave'
-        ])
+    tablet_62344.mquery('', ['RESET MASTER', 'RESET SLAVE'] +
+                        changeMasterCmds +
+                        ['START SLAVE'])
 
     # 41983 will be a slave of 62044
-    tablet_41983.mquery('', [
-        'stop slave',
-        "change master to master_port=%u, master_log_file='%s', master_log_pos=%u" % (tablet_62044.mysql_port, new_pos[0][0], new_pos[0][1]),
-        'start slave'
-        ])
+    tablet_41983.mquery('', ['STOP SLAVE'] +
+                        changeMasterCmds +
+                        ['START SLAVE'])
 
     # in brutal mode, we scrap the old master first
     if brutal:
@@ -509,7 +518,7 @@ class TestReparent(unittest.TestCase):
       # we have some automated tools that do this too, so it's good to simulate
       if environment.topo_server_implementation == 'zookeeper':
         utils.run(environment.binary_args('zk') + ['rm', '-rf',
-                   tablet_62344.zk_tablet_path])
+                                                   tablet_62344.zk_tablet_path])
 
     # update zk with the new graph
     extra_args = []
@@ -536,15 +545,15 @@ class TestReparent(unittest.TestCase):
                                               'test_keyspace/0'])
     hashed_links = {}
     for rl in shard_replication['ReplicationLinks']:
-      key = rl['TabletAlias']['Cell'] + "-" + str(rl['TabletAlias']['Uid'])
-      value = rl['Parent']['Cell'] + "-" + str(rl['Parent']['Uid'])
+      key = rl['TabletAlias']['Cell'] + '-' + str(rl['TabletAlias']['Uid'])
+      value = rl['Parent']['Cell'] + '-' + str(rl['Parent']['Uid'])
       hashed_links[key] = value
-    logging.debug("Got replication links: %s", str(hashed_links))
-    expected_links = { 'test_nj-41983': 'test_nj-62044' }
+    logging.debug('Got replication links: %s', str(hashed_links))
+    expected_links = {'test_nj-41983': 'test_nj-62044'}
     if not brutal:
       expected_links['test_nj-62344'] = 'test_nj-62044'
     self.assertEqual(expected_links, hashed_links,
-                     "Got unexpected links: %s != %s" % (str(expected_links),
+                     'Got unexpected links: %s != %s' % (str(expected_links),
                                                          str(hashed_links)))
 
   _create_vt_insert_test = '''create table vt_insert_test (
@@ -581,10 +590,11 @@ class TestReparent(unittest.TestCase):
 
     # wait for all tablets to start
     for t in [tablet_62344, tablet_62044, tablet_31981]:
-      t.wait_for_vttablet_state("SERVING")
-    tablet_41983.wait_for_vttablet_state("NOT_SERVING")
+      t.wait_for_vttablet_state('SERVING')
+    tablet_41983.wait_for_vttablet_state('NOT_SERVING')
 
-    # Recompute the shard layout node - until you do that, it might not be valid.
+    # Recompute the shard layout node - until you do that, it might not be
+    # valid.
     utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/' + shard_id])
     utils.validate_topology()
 
@@ -608,7 +618,7 @@ class TestReparent(unittest.TestCase):
     tablet_41983.mquery('', 'start slave')
     time.sleep(1)
 
-    utils.pause("check orphan")
+    utils.pause('check orphan')
 
     utils.run_vtctl(['ReparentTablet', tablet_41983.tablet_alias])
 
@@ -617,7 +627,7 @@ class TestReparent(unittest.TestCase):
     if len(result) != 1:
       self.fail('expected 1 row from vt_insert_test: %s' % str(result))
 
-    utils.pause("check lag reparent")
+    utils.pause('check lag reparent')
 
     tablet.kill_tablets([tablet_62344, tablet_62044, tablet_41983,
                          tablet_31981])

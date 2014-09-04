@@ -12,7 +12,7 @@ import (
 
 const mariadbFlavorID = "MariaDB"
 
-// parseMariadbGTID is registered as a parser for ParseGTID().
+// parseMariadbGTID is registered as a GTID parser.
 func parseMariadbGTID(s string) (GTID, error) {
 	// Split into parts.
 	parts := strings.Split(s, "-")
@@ -45,9 +45,19 @@ func parseMariadbGTID(s string) (GTID, error) {
 	}, nil
 }
 
+// parseMariadbGTIDSet is registered as a GTIDSet parser.
+func parseMariadbGTIDSet(s string) (GTIDSet, error) {
+	gtid, err := parseMariadbGTID(s)
+	return gtid.(MariadbGTID), err
+}
+
+// MariadbGTID implements GTID.
 type MariadbGTID struct {
-	Domain   uint32
-	Server   uint32
+	// Domain is the ID number of the domain within which sequence numbers apply.
+	Domain uint32
+	// Server is the ID of the server that generated the transaction.
+	Server uint32
+	// Sequence is the sequence number of the transaction within the domain.
 	Sequence uint64
 }
 
@@ -61,31 +71,74 @@ func (gtid MariadbGTID) Flavor() string {
 	return mariadbFlavorID
 }
 
-// TryCompare implements GTID.TryCompare().
-func (gtid MariadbGTID) TryCompare(cmp GTID) (int, error) {
-	other, ok := cmp.(MariadbGTID)
+// SequenceDomain implements GTID.SequenceDomain().
+func (gtid MariadbGTID) SequenceDomain() string {
+	return strconv.FormatUint(uint64(gtid.Domain), 10)
+}
+
+// SourceServer implements GTID.SourceServer().
+func (gtid MariadbGTID) SourceServer() string {
+	return strconv.FormatUint(uint64(gtid.Server), 10)
+}
+
+// SequenceNumber implements GTID.SequenceNumber().
+func (gtid MariadbGTID) SequenceNumber() uint64 {
+	return gtid.Sequence
+}
+
+// GTIDSet implements GTID.GTIDSet().
+func (gtid MariadbGTID) GTIDSet() GTIDSet {
+	return gtid
+}
+
+// Last implements GTIDSet.Last().
+func (gtid MariadbGTID) Last() GTID {
+	return gtid
+}
+
+// ContainsGTID implements GTIDSet.ContainsGTID().
+func (gtid MariadbGTID) ContainsGTID(other GTID) bool {
+	if other == nil {
+		return true
+	}
+	mdbOther, ok := other.(MariadbGTID)
+	if !ok || gtid.Domain != mdbOther.Domain {
+		return false
+	}
+	return gtid.Sequence >= mdbOther.Sequence
+}
+
+// Contains implements GTIDSet.Contains().
+func (gtid MariadbGTID) Contains(other GTIDSet) bool {
+	if other == nil {
+		return true
+	}
+	mdbOther, ok := other.(MariadbGTID)
+	if !ok || gtid.Domain != mdbOther.Domain {
+		return false
+	}
+	return gtid.Sequence >= mdbOther.Sequence
+}
+
+// Equal implements GTIDSet.Equal().
+func (gtid MariadbGTID) Equal(other GTIDSet) bool {
+	mdbOther, ok := other.(MariadbGTID)
 	if !ok {
-		return 0, fmt.Errorf("can't compare GTID, wrong type: %#v.TryCompare(%#v)",
-			gtid, cmp)
+		return false
 	}
+	return gtid == mdbOther
+}
 
-	if gtid.Domain != other.Domain {
-		return 0, fmt.Errorf("can't compare GTID, MariaDB Domain doesn't match: %v != %v", gtid.Domain, other.Domain)
+// AddGTID implements GTIDSet.AddGTID().
+func (gtid MariadbGTID) AddGTID(other GTID) GTIDSet {
+	mdbOther, ok := other.(MariadbGTID)
+	if !ok || gtid.Domain != mdbOther.Domain || gtid.Sequence >= mdbOther.Sequence {
+		return gtid
 	}
-	if gtid.Server != other.Server {
-		return 0, fmt.Errorf("can't compare GTID, MariaDB Server doesn't match: %v != %v", gtid.Server, other.Server)
-	}
-
-	switch true {
-	case gtid.Sequence < other.Sequence:
-		return -1, nil
-	case gtid.Sequence > other.Sequence:
-		return 1, nil
-	default:
-		return 0, nil
-	}
+	return mdbOther
 }
 
 func init() {
 	gtidParsers[mariadbFlavorID] = parseMariadbGTID
+	gtidSetParsers[mariadbFlavorID] = parseMariadbGTIDSet
 }

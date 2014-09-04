@@ -5,72 +5,223 @@
 package proto
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/youtube/vitess/go/bson"
+	"github.com/youtube/vitess/go/bytes2"
 )
 
-const (
-	// InvalidLagSeconds is a special value for SecondsBehindMaster
-	// that means replication is not running
-	InvalidLagSeconds = 0xFFFFFFFF
-)
-
-// ReplicationPosition tracks the replication position on both a master
-// and a slave.
+// ReplicationPosition represents the information necessary to describe which
+// transactions a server has seen, so that it can request a replication stream
+// from a new master that picks up where it left off.
+//
+// This must be a concrete struct because custom Unmarshalers can't be
+// registered on an interface.
+//
+// The == operator should not be used with ReplicationPosition, because the
+// underlying GTIDSet might use slices, which are not comparable. Using == in
+// those cases will result in a run-time panic.
 type ReplicationPosition struct {
-	// MasterLogFile, MasterLogPosition and MasterLogGTID are
-	// the position on the logs for transactions that have been
-	// applied (SQL position):
-	// - on the master, it's File, Position and Group_ID from
-	//   'show master status'.
-	// - on the slave, it's Relay_Master_Log_File, Exec_Master_Log_Pos
-	//   and Exec_Master_Group_ID from 'show slave status'.
-	MasterLogFile      string
-	MasterLogPosition  uint
-	MasterLogGTIDField GTIDField
+	GTIDSet GTIDSet
 
-	// MasterLogFileIo and MasterLogPositionIo are the position on the logs
-	// that have been downloaded from the master (IO position),
-	// but not necessarely applied yet:
-	// - on the master, same as MasterLogFile and MasterLogPosition.
-	// - on the slave, it's Master_Log_File and Read_Master_Log_Pos
-	//   from 'show slave status'.
-	MasterLogFileIo     string
-	MasterLogPositionIo uint
+	// This is a zero byte compile-time check that no one is trying to
+	// use == or != with ReplicationPosition. Without this, we won't know there's
+	// a problem until the runtime panic.
+	_ [0]struct{ notComparable []byte }
+}
 
-	// SecondsBehindMaster is how far behind we are in applying logs in
-	// replication. If equal to InvalidLagSeconds, it means replication
-	// is not running.
+// Equal returns true if this position is equal to another.
+func (rp ReplicationPosition) Equal(other ReplicationPosition) bool {
+	if rp.GTIDSet == nil {
+		return other.GTIDSet == nil
+	}
+	return rp.GTIDSet.Equal(other.GTIDSet)
+}
+
+// AtLeast returns true if this position is equal to or after another.
+func (rp ReplicationPosition) AtLeast(other ReplicationPosition) bool {
+	if rp.GTIDSet == nil {
+		return other.GTIDSet == nil
+	}
+	return rp.GTIDSet.Contains(other.GTIDSet)
+}
+
+// String returns a string representation of the underlying GTIDSet.
+// If the set is nil, it returns "<nil>" in the style of Sprintf("%v", nil).
+func (rp ReplicationPosition) String() string {
+	if rp.GTIDSet == nil {
+		return "<nil>"
+	}
+	return rp.GTIDSet.String()
+}
+
+// IsZero returns true if this is the zero value, ReplicationPosition{}.
+func (rp ReplicationPosition) IsZero() bool {
+	return rp.GTIDSet == nil
+}
+
+// AppendGTID returns a new ReplicationPosition that represents the position
+// after the given GTID is replicated.
+func AppendGTID(rp ReplicationPosition, gtid GTID) ReplicationPosition {
+	if gtid == nil {
+		return rp
+	}
+	if rp.GTIDSet == nil {
+		return ReplicationPosition{GTIDSet: gtid.GTIDSet()}
+	}
+	return ReplicationPosition{GTIDSet: rp.GTIDSet.AddGTID(gtid)}
+}
+
+// MustParseReplicationPosition calls ParseReplicationPosition and panics
+// on error.
+func MustParseReplicationPosition(flavor, value string) ReplicationPosition {
+	rp, err := ParseReplicationPosition(flavor, value)
+	if err != nil {
+		panic(err)
+	}
+	return rp
+}
+
+// EncodeReplicationPosition returns a string that contains both the flavor
+// and value of the ReplicationPosition, so that the correct parser can be
+// selected when that string is passed to DecodeReplicationPosition.
+func EncodeReplicationPosition(rp ReplicationPosition) string {
+	if rp.GTIDSet == nil {
+		return ""
+	}
+	return fmt.Sprintf("%s/%s", rp.GTIDSet.Flavor(), rp.GTIDSet.String())
+}
+
+// DecodeReplicationPosition converts a string in the format returned by
+// EncodeReplicationPosition back into a ReplicationPosition value with the
+// correct underlying flavor.
+func DecodeReplicationPosition(s string) (rp ReplicationPosition, err error) {
+	if s == "" {
+		return rp, nil
+	}
+
+	parts := strings.SplitN(s, "/", 2)
+	if len(parts) != 2 {
+		// There is no flavor. Try looking for a default parser.
+		return ParseReplicationPosition("", s)
+	}
+	return ParseReplicationPosition(parts[0], parts[1])
+}
+
+// ParseReplicationPosition calls the parser for the specified flavor.
+func ParseReplicationPosition(flavor, value string) (rp ReplicationPosition, err error) {
+	parser := gtidSetParsers[flavor]
+	if parser == nil {
+		return rp, fmt.Errorf("parse error: unknown GTIDSet flavor %#v", flavor)
+	}
+	gtidSet, err := parser(value)
+	if err != nil {
+		return rp, err
+	}
+	rp.GTIDSet = gtidSet
+	return rp, err
+}
+
+// MarshalBson bson-encodes ReplicationPosition.
+func (rp ReplicationPosition) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	bson.EncodeOptionalPrefix(buf, bson.Object, key)
+
+	lenWriter := bson.NewLenWriter(buf)
+
+	if rp.GTIDSet != nil {
+		// The name of the bson field is the MySQL flavor.
+		bson.EncodeString(buf, rp.GTIDSet.Flavor(), rp.GTIDSet.String())
+	}
+
+	lenWriter.Close()
+}
+
+// UnmarshalBson bson-decodes into ReplicationPosition.
+func (rp *ReplicationPosition) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	switch kind {
+	case bson.EOO, bson.Object:
+		// valid
+	case bson.Null:
+		return
+	default:
+		panic(bson.NewBsonError("unexpected kind %v for ReplicationPosition", kind))
+	}
+	bson.Next(buf, 4)
+
+	// We expect exactly zero or one fields in this bson object.
+	kind = bson.NextByte(buf)
+	if kind == bson.EOO {
+		// The value was nil, nothing to do.
+		return
+	}
+
+	// The field name is the MySQL flavor.
+	flavor := bson.ReadCString(buf)
+	value := bson.DecodeString(buf, kind)
+
+	// Check for and consume the end byte.
+	if kind = bson.NextByte(buf); kind != bson.EOO {
+		panic(bson.NewBsonError("too many fields for ReplicationPosition"))
+	}
+
+	// Parse the value.
+	var err error
+	*rp, err = ParseReplicationPosition(flavor, value)
+	if err != nil {
+		panic(bson.NewBsonError("invalid value %#v for ReplicationPosition: %v", value, err))
+	}
+}
+
+// MarshalJSON implements encoding/json.Marshaler.
+func (rp ReplicationPosition) MarshalJSON() ([]byte, error) {
+	return json.Marshal(EncodeReplicationPosition(rp))
+}
+
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+func (rp *ReplicationPosition) UnmarshalJSON(buf []byte) error {
+	var s string
+	err := json.Unmarshal(buf, &s)
+	if err != nil {
+		return err
+	}
+
+	*rp, err = DecodeReplicationPosition(s)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ReplicationStatus holds replication information from SHOW SLAVE STATUS.
+type ReplicationStatus struct {
+	Position            ReplicationPosition
+	IOPosition          ReplicationPosition
+	SlaveIORunning      bool
+	SlaveSQLRunning     bool
 	SecondsBehindMaster uint
-}
-
-func (rp *ReplicationPosition) MapKey() string {
-	return fmt.Sprintf("%v:%d", rp.MasterLogFile, rp.MasterLogPosition)
-}
-
-func (rp *ReplicationPosition) MapKeyIo() string {
-	return fmt.Sprintf("%v:%d", rp.MasterLogFileIo, rp.MasterLogPositionIo)
-}
-
-type ReplicationState struct {
-	// ReplicationPosition is not anonymous because the default json encoder has begun to fail here.
-	ReplicationPosition ReplicationPosition
 	MasterHost          string
 	MasterPort          int
 	MasterConnectRetry  int
 }
 
-func (rs *ReplicationState) MasterAddr() string {
+func (rs *ReplicationStatus) SlaveRunning() bool {
+	return rs.SlaveIORunning && rs.SlaveSQLRunning
+}
+
+func (rs *ReplicationStatus) MasterAddr() string {
 	return fmt.Sprintf("%v:%v", rs.MasterHost, rs.MasterPort)
 }
 
-func NewReplicationState(masterAddr string) (*ReplicationState, error) {
+func NewReplicationStatus(masterAddr string) (*ReplicationStatus, error) {
 	addrPieces := strings.Split(masterAddr, ":")
 	port, err := strconv.Atoi(addrPieces[1])
 	if err != nil {
 		return nil, err
 	}
-	return &ReplicationState{MasterConnectRetry: 10,
+	return &ReplicationStatus{MasterConnectRetry: 10,
 		MasterHost: addrPieces[0], MasterPort: port}, nil
 }

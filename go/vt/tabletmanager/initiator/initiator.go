@@ -156,33 +156,33 @@ func (ai *ActionInitiator) RpcSlaveWasRestarted(tablet *topo.TabletInfo, args *a
 	return ai.rpc.SlaveWasRestarted(tablet, args, waitTime)
 }
 
-func (ai *ActionInitiator) ReparentPosition(tabletAlias topo.TabletAlias, slavePos *myproto.ReplicationPosition) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_REPARENT_POSITION, Args: slavePos})
+func (ai *ActionInitiator) ReparentPosition(tabletAlias topo.TabletAlias, slavePos myproto.ReplicationPosition) (actionPath string, err error) {
+	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_REPARENT_POSITION, Args: &slavePos})
 }
 
-func (ai *ActionInitiator) MasterPosition(tablet *topo.TabletInfo, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
+func (ai *ActionInitiator) MasterPosition(tablet *topo.TabletInfo, waitTime time.Duration) (myproto.ReplicationPosition, error) {
 	return ai.rpc.MasterPosition(tablet, waitTime)
 }
 
-func (ai *ActionInitiator) SlavePosition(tablet *topo.TabletInfo, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
-	return ai.rpc.SlavePosition(tablet, waitTime)
+func (ai *ActionInitiator) SlaveStatus(tablet *topo.TabletInfo, waitTime time.Duration) (*myproto.ReplicationStatus, error) {
+	return ai.rpc.SlaveStatus(tablet, waitTime)
 }
 
-func (ai *ActionInitiator) WaitSlavePosition(tablet *topo.TabletInfo, replicationPosition *myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
-	return ai.rpc.WaitSlavePosition(tablet, replicationPosition, waitTime)
+func (ai *ActionInitiator) WaitSlavePosition(tablet *topo.TabletInfo, waitPos myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error) {
+	return ai.rpc.WaitSlavePosition(tablet, waitPos, waitTime)
 }
 
 func (ai *ActionInitiator) StopSlave(tablet *topo.TabletInfo, waitTime time.Duration) error {
 	return ai.rpc.StopSlave(tablet, waitTime)
 }
 
-func (ai *ActionInitiator) StopSlaveMinimum(tabletAlias topo.TabletAlias, gtid myproto.GTID, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
+func (ai *ActionInitiator) StopSlaveMinimum(tabletAlias topo.TabletAlias, minPos myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error) {
 	tablet, err := ai.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return nil, err
 	}
 
-	return ai.rpc.StopSlaveMinimum(tablet, gtid, waitTime)
+	return ai.rpc.StopSlaveMinimum(tablet, minPos, waitTime)
 }
 
 func (ai *ActionInitiator) StartSlave(tabletAlias topo.TabletAlias, waitTime time.Duration) error {
@@ -230,10 +230,10 @@ func (ai *ActionInitiator) StartBlp(tabletAlias topo.TabletAlias, waitTime time.
 	return ai.rpc.StartBlp(tablet, waitTime)
 }
 
-func (ai *ActionInitiator) RunBlpUntil(tabletAlias topo.TabletAlias, positions *blproto.BlpPositionList, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
+func (ai *ActionInitiator) RunBlpUntil(tabletAlias topo.TabletAlias, positions *blproto.BlpPositionList, waitTime time.Duration) (myproto.ReplicationPosition, error) {
 	tablet, err := ai.ts.GetTablet(tabletAlias)
 	if err != nil {
-		return nil, err
+		return myproto.ReplicationPosition{}, err
 	}
 
 	return ai.rpc.RunBlpUntil(tablet, positions, waitTime)

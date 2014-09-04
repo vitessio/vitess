@@ -4,21 +4,21 @@
 {"Category": 6, "Sql": "SET TIMESTAMP=1382160043"},
 {"Category": 5, "Sql": "create database sougou"}
 ],
-"GTIDField": "GoogleMysql/5"
+"GTIDField": "GoogleMysql/41983-5"
 },
 {
 "Statements": [
 {"Category": 6, "Sql": "SET TIMESTAMP=1382160061"},
 {"Category": 5, "Sql": "create table a(id int, data varchar(128))"}
 ],
-"GTIDField": "GoogleMysql/6"
+"GTIDField": "GoogleMysql/41983-6"
 },
 {
 "Statements": [
 {"Category": 6, "Sql": "SET TIMESTAMP=1382160107"},
 {"Category": 4, "Sql": "insert into a values(1, 'aa')"}
 ],
-"GTIDField": "GoogleMysql/7"
+"GTIDField": "GoogleMysql/41983-7"
 },
 {
 "Statements": [
@@ -27,49 +27,49 @@
 {"Category": 6, "Sql": "SET TIMESTAMP=1382231687"},
 {"Category": 4, "Sql": "insert into a values(3, 'cc')"}
 ],
-"GTIDField": "GoogleMysql/8"
+"GTIDField": "GoogleMysql/41983-8"
 },
 {
 "Statements": [
 {"Category": 6, "Sql": "SET TIMESTAMP=1382231687"},
 {"Category": 4, "Sql": "insert into a values(4, 'dd')"}
 ],
-"GTIDField": "GoogleMysql/9"
+"GTIDField": "GoogleMysql/41983-9"
 },
 {
 "Statements": [
 {"Category": 6, "Sql": "SET TIMESTAMP=1382231687"},
 {"Category": 4, "Sql": "insert into a values(5, 'ee')"}
 ],
-"GTIDField": "GoogleMysql/10"
+"GTIDField": "GoogleMysql/41983-10"
 },
 {
 "Statements": [
 {"Category": 6, "Sql": "SET TIMESTAMP=1382232554"},
 {"Category": 4, "Sql": "insert into a\nvalues(6, 'ff')"}
 ],
-"GTIDField": "GoogleMysql/11"
+"GTIDField": "GoogleMysql/41983-11"
 },
 {
 "Statements": [
 {"Category": 6, "Sql": "SET TIMESTAMP=1382251656"},
 {"Category": 4, "Sql": "insert into a values(7, 'gg')"}
 ],
-"GTIDField": "GoogleMysql/12"
+"GTIDField": "GoogleMysql/41983-12"
 },
 {
 "Statements": [
 {"Category": 6, "Sql": "SET TIMESTAMP=1382330065"},
 {"Category": 5, "Sql": "alter table a add constraint primary key(id)"}
 ],
-"GTIDField": "GoogleMysql/13"
+"GTIDField": "GoogleMysql/41983-13"
 },
 {
 "Statements": [
 {"Category": 6, "Sql": "SET TIMESTAMP=1382330121"},
 {"Category": 4, "Sql": "UPDATE a set data='ggg' where id = 7"}
 ],
-"GTIDField": "GoogleMysql/14"
+"GTIDField": "GoogleMysql/41983-14"
 },
 {
 "Statements": [
@@ -78,6 +78,6 @@
 {"Category": 6, "Sql": "SET TIMESTAMP=1382330252"},
 {"Category": 4, "Sql": "insert into a values(9, 'ii')"}
 ],
-"GTIDField": "GoogleMysql/15"
+"GTIDField": "GoogleMysql/41983-15"
 }
 ]

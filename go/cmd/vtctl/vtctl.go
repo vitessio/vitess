@@ -112,7 +112,7 @@ func main() {
 
 type rTablet struct {
 	*topo.TabletInfo
-	*myproto.ReplicationPosition
+	*myproto.ReplicationStatus
 }
 
 type rTablets []*rTablet
@@ -128,10 +128,10 @@ func (rts rTablets) Less(i, j int) bool {
 	l, r := rts[j], rts[i]
 	// l or r ReplicationPosition would be nil if we failed to get
 	// the position (put them at the beginning of the list)
-	if l.ReplicationPosition == nil {
-		return r.ReplicationPosition != nil
+	if l.ReplicationStatus == nil {
+		return r.ReplicationStatus != nil
 	}
-	if r.ReplicationPosition == nil {
+	if r.ReplicationStatus == nil {
 		return false
 	}
 	var lTypeMaster, rTypeMaster int
@@ -145,22 +145,18 @@ func (rts rTablets) Less(i, j int) bool {
 		return true
 	}
 	if lTypeMaster == rTypeMaster {
-		if l.MapKeyIo() < r.MapKeyIo() {
-			return true
+		if l.IOPosition.Equal(r.IOPosition) {
+			return !l.Position.AtLeast(r.Position)
 		}
-		if l.MapKeyIo() == r.MapKeyIo() {
-			if l.MapKey() < r.MapKey() {
-				return true
-			}
-		}
+		return !l.IOPosition.AtLeast(r.IOPosition)
 	}
 	return false
 }
 
-func sortReplicatingTablets(tablets []*topo.TabletInfo, positions []*myproto.ReplicationPosition) []*rTablet {
+func sortReplicatingTablets(tablets []*topo.TabletInfo, stats []*myproto.ReplicationStatus) []*rTablet {
 	rtablets := make([]*rTablet, len(tablets))
-	for i, pos := range positions {
-		rtablets[i] = &rTablet{tablets[i], pos}
+	for i, status := range stats {
+		rtablets[i] = &rTablet{tablets[i], status}
 	}
 	sort.Sort(rTablets(rtablets))
 	return rtablets

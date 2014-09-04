@@ -16,9 +16,9 @@ import (
 
 // helper struct to queue up results
 type rpcContext struct {
-	tablet   *topo.TabletInfo
-	position *myproto.ReplicationPosition
-	err      error
+	tablet *topo.TabletInfo
+	status *myproto.ReplicationStatus
+	err    error
 }
 
 // Check all the tablets replication positions to find if some
@@ -64,7 +64,7 @@ func (wr *Wrangler) checkSlaveReplication(tabletMap map[topo.TabletAlias]*topo.T
 				return
 			}
 
-			replPos, err := wr.ai.SlavePosition(tablet, wr.ActionTimeout())
+			status, err := wr.ai.SlaveStatus(tablet, wr.ActionTimeout())
 			if err != nil {
 				if tablet.Type == topo.TYPE_BACKUP {
 					wr.logger.Warningf("  failed to get slave position from backup tablet %v, either wait for backup to finish or scrap tablet (%v)", tablet.Alias, err)
@@ -75,15 +75,13 @@ func (wr *Wrangler) checkSlaveReplication(tabletMap map[topo.TabletAlias]*topo.T
 			}
 
 			if !masterIsDead {
-				// This case used to be handled by the timeout check below, but checking
-				// it explicitly provides a more informative error message.
-				if replPos.SecondsBehindMaster == myproto.InvalidLagSeconds {
+				if !status.SlaveRunning() {
 					err = fmt.Errorf("slave %v is not replicating (Slave_IO or Slave_SQL not running), can't complete reparent in time", tablet.Alias)
 					wr.logger.Errorf("  %v", err)
 					return
 				}
 
-				var dur time.Duration = time.Duration(uint(time.Second) * replPos.SecondsBehindMaster)
+				var dur time.Duration = time.Duration(uint(time.Second) * status.SecondsBehindMaster)
 				if dur > wr.ActionTimeout() {
 					err = fmt.Errorf("slave is too far behind to complete reparent in time (%v>%v), either increase timeout using 'vtctl -wait-time XXX ReparentShard ...' or scrap tablet %v", dur, wr.ActionTimeout(), tablet.Alias)
 					wr.logger.Errorf("  %v", err)
@@ -101,7 +99,7 @@ func (wr *Wrangler) checkSlaveReplication(tabletMap map[topo.TabletAlias]*topo.T
 // Check all the tablets to see if we can proceed with reparenting.
 // masterPosition is supplied from the demoted master if we are doing
 // this gracefully.
-func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo, masterPosition *myproto.ReplicationPosition) error {
+func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo, masterPosition myproto.ReplicationPosition) error {
 	wr.logger.Infof("checkSlaveConsistency %v %#v", topotools.MapKeys(tabletMap), masterPosition)
 
 	// FIXME(msolomon) Something still feels clumsy here and I can't put my finger on it.
@@ -112,31 +110,28 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo,
 			calls <- ctx
 		}()
 
-		var args *myproto.ReplicationPosition
-		if masterPosition != nil {
+		var waitPos myproto.ReplicationPosition
+		if !masterPosition.IsZero() {
 			// If the master position is known, do our best to wait for replication to catch up.
-			args = masterPosition
+			waitPos = masterPosition
 		} else {
 			// In the case where a master is down, look for the last bit of data copied and wait
 			// for that to apply. That gives us a chance to wait for all data.
-			replPos, err := wr.ai.SlavePosition(ti, wr.ActionTimeout())
+			status, err := wr.ai.SlaveStatus(ti, wr.ActionTimeout())
 			if err != nil {
 				ctx.err = err
 				return
 			}
-			args = &myproto.ReplicationPosition{
-				MasterLogFile:       replPos.MasterLogFileIo,
-				MasterLogPositionIo: replPos.MasterLogPositionIo,
-			}
+			waitPos = status.IOPosition
 		}
 
 		// This option waits for the SQL thread to apply all changes to this instance.
-		rp, err := wr.ai.WaitSlavePosition(ti, args, wr.ActionTimeout())
+		status, err := wr.ai.WaitSlavePosition(ti, waitPos, wr.ActionTimeout())
 		if err != nil {
 			ctx.err = err
 			return
 		}
-		ctx.position = rp
+		ctx.status = status
 	}
 
 	for _, tablet := range tabletMap {
@@ -150,7 +145,7 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo,
 		ctx := <-calls
 		mapKey := "unavailable-tablet-error"
 		if ctx.err == nil {
-			mapKey = ctx.position.MapKey()
+			mapKey = ctx.status.Position.String()
 		}
 		if _, ok := positionMap[mapKey]; !ok {
 			positionMap[mapKey] = make([]uint32, 0, 32)
@@ -161,8 +156,8 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo,
 	if len(positionMap) == 1 {
 		// great, everyone agrees
 		// demotedMasterReplicationState is nil if demotion failed
-		if masterPosition != nil {
-			demotedMapKey := masterPosition.MapKey()
+		if !masterPosition.IsZero() {
+			demotedMapKey := masterPosition.String()
 			if _, ok := positionMap[demotedMapKey]; !ok {
 				for slaveMapKey := range positionMap {
 					return fmt.Errorf("slave position doesn't match demoted master: %v != %v", demotedMapKey,
@@ -214,11 +209,11 @@ func (wr *Wrangler) stopSlaves(tabletMap map[topo.TabletAlias]*topo.TabletInfo) 
 	return nil
 }
 
-// Return a list of corresponding replication positions.
-// Handles masters and slaves, but it's up to the caller to guarantee
-// all tablets are in the same shard.
-func (wr *Wrangler) tabletReplicationPositions(tablets []*topo.TabletInfo) ([]*myproto.ReplicationPosition, error) {
-	wr.logger.Infof("tabletReplicationPositions %v", tablets)
+// tabletReplicationStatuses returns the ReplicationStatus of each tablet in
+// tablets. It handles masters and slaves, but it's up to the caller to
+// guarantee all tablets are in the same shard.
+func (wr *Wrangler) tabletReplicationStatuses(tablets []*topo.TabletInfo) ([]*myproto.ReplicationStatus, error) {
+	wr.logger.Infof("tabletReplicationStatuses: %v", tablets)
 	calls := make([]*rpcContext, len(tablets))
 	wg := sync.WaitGroup{}
 
@@ -228,9 +223,16 @@ func (wr *Wrangler) tabletReplicationPositions(tablets []*topo.TabletInfo) ([]*m
 		ctx := &rpcContext{tablet: ti}
 		calls[idx] = ctx
 		if ti.Type == topo.TYPE_MASTER {
-			ctx.position, ctx.err = wr.ai.MasterPosition(ti, wr.ActionTimeout())
+			pos, err := wr.ai.MasterPosition(ti, wr.ActionTimeout())
+			ctx.err = err
+			if err == nil {
+				ctx.status = &myproto.ReplicationStatus{
+					Position:   pos,
+					IOPosition: pos,
+				}
+			}
 		} else if ti.IsSlaveType() {
-			ctx.position, ctx.err = wr.ai.SlavePosition(ti, wr.ActionTimeout())
+			ctx.status, ctx.err = wr.ai.SlaveStatus(ti, wr.ActionTimeout())
 		}
 	}
 
@@ -247,33 +249,33 @@ func (wr *Wrangler) tabletReplicationPositions(tablets []*topo.TabletInfo) ([]*m
 	wg.Wait()
 
 	someErrors := false
-	positions := make([]*myproto.ReplicationPosition, len(tablets))
+	stats := make([]*myproto.ReplicationStatus, len(tablets))
 	for i, ctx := range calls {
 		if ctx == nil {
 			continue
 		}
 		if ctx.err != nil {
-			wr.logger.Warningf("could not get replication position for tablet %v %v", ctx.tablet.Alias, ctx.err)
+			wr.logger.Warningf("could not get replication status for tablet %v %v", ctx.tablet.Alias, ctx.err)
 			someErrors = true
 		} else {
-			positions[i] = ctx.position
+			stats[i] = ctx.status
 		}
 	}
 	if someErrors {
-		return positions, fmt.Errorf("partial position map, some errors")
+		return stats, fmt.Errorf("partial position map, some errors")
 	}
-	return positions, nil
+	return stats, nil
 }
 
-func (wr *Wrangler) demoteMaster(ti *topo.TabletInfo) (*myproto.ReplicationPosition, error) {
+func (wr *Wrangler) demoteMaster(ti *topo.TabletInfo) (myproto.ReplicationPosition, error) {
 	wr.logger.Infof("demote master %v", ti.Alias)
 	actionPath, err := wr.ai.DemoteMaster(ti.Alias)
 	if err != nil {
-		return nil, err
+		return myproto.ReplicationPosition{}, err
 	}
 	err = wr.WaitForCompletion(actionPath)
 	if err != nil {
-		return nil, err
+		return myproto.ReplicationPosition{}, err
 	}
 	return wr.ai.MasterPosition(ti, wr.ActionTimeout())
 }
