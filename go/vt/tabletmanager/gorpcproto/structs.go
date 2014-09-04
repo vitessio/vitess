@@ -38,13 +38,13 @@ type SetBlacklistedTablesArgs struct {
 }
 
 type WaitSlavePositionArgs struct {
-	ReplicationPosition myproto.ReplicationPosition
-	WaitTimeout         time.Duration // pass in zero to wait indefinitely
+	Position    myproto.ReplicationPosition
+	WaitTimeout time.Duration // pass in zero to wait indefinitely
 }
 
 type StopSlaveMinimumArgs struct {
-	GTIDField myproto.GTIDField
-	WaitTime  time.Duration
+	Position myproto.ReplicationPosition
+	WaitTime time.Duration
 }
 
 type GetSlavesReply struct {

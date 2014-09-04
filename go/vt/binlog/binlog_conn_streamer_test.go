@@ -58,7 +58,7 @@ func TestBinlogConnStreamerParseEventsXID(t *testing.T) {
 			},
 			Timestamp: 1407805592,
 			GTIDField: myproto.GTIDField{
-				Value: myproto.GoogleGTID{GroupID: 0x0d}},
+				Value: myproto.GoogleGTID{ServerID: 62344, GroupID: 0x0d}},
 		},
 	}
 	var got []proto.BinlogTransaction
@@ -66,7 +66,7 @@ func TestBinlogConnStreamerParseEventsXID(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -101,7 +101,7 @@ func TestBinlogConnStreamerParseEventsCommit(t *testing.T) {
 			},
 			Timestamp: 1407805592,
 			GTIDField: myproto.GTIDField{
-				Value: myproto.GoogleGTID{GroupID: 0x0d}},
+				Value: myproto.GoogleGTID{ServerID: 62344, GroupID: 0x0d}},
 		},
 	}
 	var got []proto.BinlogTransaction
@@ -109,7 +109,7 @@ func TestBinlogConnStreamerParseEventsCommit(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -131,7 +131,7 @@ func TestBinlogConnStreamerStop(t *testing.T) {
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return nil
 	}
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction).(*binlogConnStreamer)
 
 	// Start parseEvents(), but don't send it anything, so it just waits.
 	svm := &sync2.ServiceManager{}
@@ -171,7 +171,7 @@ func TestBinlogConnStreamerParseEventsClientEOF(t *testing.T) {
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return io.EOF
 	}
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -196,7 +196,7 @@ func TestBinlogConnStreamerParseEventsServerEOF(t *testing.T) {
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return nil
 	}
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction).(*binlogConnStreamer)
 
 	svm := &sync2.ServiceManager{}
 	svm.Go(func(ctx *sync2.ServiceContext) error {
@@ -226,7 +226,7 @@ func TestBinlogConnStreamerParseEventsSendErrorXID(t *testing.T) {
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return fmt.Errorf("foobar")
 	}
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -258,7 +258,7 @@ func TestBinlogConnStreamerParseEventsSendErrorCommit(t *testing.T) {
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return fmt.Errorf("foobar")
 	}
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -292,7 +292,7 @@ func TestBinlogConnStreamerParseEventsInvalid(t *testing.T) {
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return nil
 	}
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -328,7 +328,7 @@ func TestBinlogConnStreamerParseEventsInvalidFormat(t *testing.T) {
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return nil
 	}
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -360,7 +360,7 @@ func TestBinlogConnStreamerParseEventsNoFormat(t *testing.T) {
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return nil
 	}
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -396,7 +396,7 @@ func TestBinlogConnStreamerParseEventsInvalidQuery(t *testing.T) {
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return nil
 	}
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -433,7 +433,7 @@ func TestBinlogConnStreamerParseEventsRollback(t *testing.T) {
 			Statements: nil,
 			Timestamp:  1407805592,
 			GTIDField: myproto.GTIDField{
-				Value: myproto.GoogleGTID{GroupID: 0x0d}},
+				Value: myproto.GoogleGTID{ServerID: 62344, GroupID: 0x0d}},
 		},
 		proto.BinlogTransaction{
 			Statements: []proto.Statement{
@@ -442,7 +442,7 @@ func TestBinlogConnStreamerParseEventsRollback(t *testing.T) {
 			},
 			Timestamp: 1407805592,
 			GTIDField: myproto.GTIDField{
-				Value: myproto.GoogleGTID{GroupID: 0x0d}},
+				Value: myproto.GoogleGTID{ServerID: 62344, GroupID: 0x0d}},
 		},
 	}
 	var got []proto.BinlogTransaction
@@ -450,7 +450,7 @@ func TestBinlogConnStreamerParseEventsRollback(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -484,13 +484,13 @@ func TestBinlogConnStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 			},
 			Timestamp: 1407805592,
 			GTIDField: myproto.GTIDField{
-				Value: myproto.GoogleGTID{GroupID: 0x0d}},
+				Value: myproto.GoogleGTID{ServerID: 62344, GroupID: 0x0d}},
 		},
 		proto.BinlogTransaction{
 			Statements: nil,
 			Timestamp:  1407805592,
 			GTIDField: myproto.GTIDField{
-				Value: myproto.GoogleGTID{GroupID: 0x0d}},
+				Value: myproto.GoogleGTID{ServerID: 62344, GroupID: 0x0d}},
 		},
 	}
 	var got []proto.BinlogTransaction
@@ -498,7 +498,7 @@ func TestBinlogConnStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -533,13 +533,13 @@ func TestBinlogConnStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 			},
 			Timestamp: 1407805592,
 			GTIDField: myproto.GTIDField{
-				Value: myproto.GoogleGTID{GroupID: 0x0d}},
+				Value: myproto.GoogleGTID{ServerID: 62344, GroupID: 0x0d}},
 		},
 		proto.BinlogTransaction{
 			Statements: []proto.Statement{},
 			Timestamp:  1407805592,
 			GTIDField: myproto.GTIDField{
-				Value: myproto.GoogleGTID{GroupID: 0x0d}},
+				Value: myproto.GoogleGTID{ServerID: 62344, GroupID: 0x0d}},
 		},
 	}
 	var got []proto.BinlogTransaction
@@ -547,7 +547,7 @@ func TestBinlogConnStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -584,7 +584,7 @@ func TestBinlogConnStreamerParseEventsSetInsertID(t *testing.T) {
 			},
 			Timestamp: 1407805592,
 			GTIDField: myproto.GTIDField{
-				Value: myproto.GoogleGTID{GroupID: 0x0d}},
+				Value: myproto.GoogleGTID{ServerID: 62344, GroupID: 0x0d}},
 		},
 	}
 	var got []proto.BinlogTransaction
@@ -592,7 +592,7 @@ func TestBinlogConnStreamerParseEventsSetInsertID(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -628,7 +628,7 @@ func TestBinlogConnStreamerParseEventsInvalidIntVar(t *testing.T) {
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return nil
 	}
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -665,7 +665,7 @@ func TestBinlogConnStreamerParseEventsOtherDB(t *testing.T) {
 			},
 			Timestamp: 1407805592,
 			GTIDField: myproto.GTIDField{
-				Value: myproto.GoogleGTID{GroupID: 0x0d}},
+				Value: myproto.GoogleGTID{ServerID: 62344, GroupID: 0x0d}},
 		},
 	}
 	var got []proto.BinlogTransaction
@@ -673,7 +673,7 @@ func TestBinlogConnStreamerParseEventsOtherDB(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -709,7 +709,7 @@ func TestBinlogConnStreamerParseEventsOtherDBBegin(t *testing.T) {
 			},
 			Timestamp: 1407805592,
 			GTIDField: myproto.GTIDField{
-				Value: myproto.GoogleGTID{GroupID: 0x0d}},
+				Value: myproto.GoogleGTID{ServerID: 62344, GroupID: 0x0d}},
 		},
 	}
 	var got []proto.BinlogTransaction
@@ -717,7 +717,7 @@ func TestBinlogConnStreamerParseEventsOtherDBBegin(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction).(*binlogConnStreamer)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -747,7 +747,7 @@ func TestBinlogConnStreamerParseEventsBeginAgain(t *testing.T) {
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return nil
 	}
-	bls := newBinlogConnStreamer("vt_test_keyspace", nil, nil, sendTransaction).(*binlogConnStreamer)
+	bls := newBinlogConnStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction).(*binlogConnStreamer)
 	before := binlogStreamerErrors.Counts()["ParseEvents"]
 
 	go sendTestEvents(events, input)

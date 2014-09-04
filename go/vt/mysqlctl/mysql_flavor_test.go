@@ -7,23 +7,33 @@ package mysqlctl
 import (
 	"os"
 	"testing"
+	"time"
 
+	"github.com/youtube/vitess/go/mysql"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 type fakeMysqlFlavor struct{}
 
-func (fakeMysqlFlavor) MasterStatus(mysqld *Mysqld) (*proto.ReplicationPosition, error) {
+func (fakeMysqlFlavor) PromoteSlaveCommands() []string                 { return nil }
+func (fakeMysqlFlavor) ParseGTID(string) (proto.GTID, error)           { return nil, nil }
+func (fakeMysqlFlavor) MakeBinlogEvent(buf []byte) blproto.BinlogEvent { return nil }
+func (fakeMysqlFlavor) ParseReplicationPosition(string) (proto.ReplicationPosition, error) {
+	return proto.ReplicationPosition{}, nil
+}
+func (fakeMysqlFlavor) SendBinlogDumpCommand(mysqld *Mysqld, conn *SlaveConnection, startPos proto.ReplicationPosition) error {
+	return nil
+}
+func (fakeMysqlFlavor) WaitMasterPos(mysqld *Mysqld, targetPos proto.ReplicationPosition, waitTimeout time.Duration) error {
+	return nil
+}
+func (fakeMysqlFlavor) MasterPosition(mysqld *Mysqld) (proto.ReplicationPosition, error) {
+	return proto.ReplicationPosition{}, nil
+}
+func (fakeMysqlFlavor) SlaveStatus(mysqld *Mysqld) (*proto.ReplicationStatus, error) { return nil, nil }
+func (fakeMysqlFlavor) StartReplicationCommands(params *mysql.ConnectionParams, status *proto.ReplicationStatus) ([]string, error) {
 	return nil, nil
-}
-func (fakeMysqlFlavor) PromoteSlaveCommands() []string       { return nil }
-func (fakeMysqlFlavor) ParseGTID(string) (proto.GTID, error) { return nil, nil }
-func (fakeMysqlFlavor) SendBinlogDumpCommand(mysqld *Mysqld, conn *SlaveConnection, startPos proto.GTID) error {
-	return nil
-}
-func (fakeMysqlFlavor) MakeBinlogEvent(buf []byte) blproto.BinlogEvent {
-	return nil
 }
 
 func TestDefaultMysqlFlavor(t *testing.T) {

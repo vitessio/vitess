@@ -274,19 +274,19 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	}
 	for i, ss := range sdw.shardInfo.SourceShards {
 		// find where we should be stopping
-		pos, err := blpPositionList.FindBlpPositionById(ss.Uid)
+		blpPos, err := blpPositionList.FindBlpPositionById(ss.Uid)
 		if err != nil {
 			return fmt.Errorf("no binlog position on the master for Uid %v", ss.Uid)
 		}
 
 		// stop replication
-		sdw.wr.Logger().Infof("Stopping slave[%v] %v at a minimum of %v", i, sdw.sourceAliases[i], pos.GTIDField)
-		stoppedAt, err := sdw.wr.ActionInitiator().StopSlaveMinimum(sdw.sourceAliases[i], pos.GTIDField.Value, 30*time.Second)
+		sdw.wr.Logger().Infof("Stopping slave[%v] %v at a minimum of %v", i, sdw.sourceAliases[i], blpPos.Position)
+		stoppedAt, err := sdw.wr.ActionInitiator().StopSlaveMinimum(sdw.sourceAliases[i], blpPos.Position, 30*time.Second)
 		if err != nil {
-			return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", sdw.sourceAliases[i], pos.GTIDField, err)
+			return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", sdw.sourceAliases[i], blpPos.Position, err)
 		}
 		stopPositionList.Entries[i].Uid = ss.Uid
-		stopPositionList.Entries[i].GTIDField = stoppedAt.MasterLogGTIDField
+		stopPositionList.Entries[i].Position = stoppedAt.Position
 
 		// change the cleaner actions from ChangeSlaveType(rdonly)
 		// to StartSlave() + ChangeSlaveType(spare)
@@ -308,10 +308,10 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 
 	// 4 - wait until the destination checker is equal or passed
 	//     that master binlog position, and stop its replication.
-	sdw.wr.Logger().Infof("Waiting for destination checker %v to catch up to %v", sdw.destinationAlias, masterPos.MasterLogGTIDField)
-	_, err = sdw.wr.ActionInitiator().StopSlaveMinimum(sdw.destinationAlias, masterPos.MasterLogGTIDField.Value, 30*time.Second)
+	sdw.wr.Logger().Infof("Waiting for destination checker %v to catch up to %v", sdw.destinationAlias, masterPos)
+	_, err = sdw.wr.ActionInitiator().StopSlaveMinimum(sdw.destinationAlias, masterPos, 30*time.Second)
 	if err != nil {
-		return fmt.Errorf("StopSlaveMinimum for %v at %v failed: %v", sdw.destinationAlias, masterPos.MasterLogGTIDField, err)
+		return fmt.Errorf("StopSlaveMinimum for %v at %v failed: %v", sdw.destinationAlias, masterPos, err)
 	}
 	wrangler.RecordStartSlaveAction(sdw.cleaner, sdw.destinationAlias, 30*time.Second)
 	action, err := wrangler.FindChangeSlaveTypeActionByTarget(sdw.cleaner, sdw.destinationAlias)

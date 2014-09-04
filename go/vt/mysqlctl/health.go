@@ -19,11 +19,11 @@ func (mrl *mysqlReplicationLag) Report(typ topo.TabletType) (status map[string]s
 		return nil, nil
 	}
 
-	rp, err := mrl.mysqld.SlaveStatus()
+	slaveStatus, err := mrl.mysqld.SlaveStatus()
 	if err != nil {
 		return nil, err
 	}
-	if int(rp.SecondsBehindMaster) > mrl.allowedLagInSeconds {
+	if !slaveStatus.SlaveRunning() || int(slaveStatus.SecondsBehindMaster) > mrl.allowedLagInSeconds {
 		return map[string]string{health.ReplicationLag: health.ReplicationLagHigh}, nil
 	}
 

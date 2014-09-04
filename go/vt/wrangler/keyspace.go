@@ -226,9 +226,9 @@ func (wr *Wrangler) makeMastersReadOnly(shards []*topo.ShardInfo) error {
 	return rec.Error()
 }
 
-func (wr *Wrangler) getMastersPosition(shards []*topo.ShardInfo) (map[*topo.ShardInfo]*myproto.ReplicationPosition, error) {
+func (wr *Wrangler) getMastersPosition(shards []*topo.ShardInfo) (map[*topo.ShardInfo]myproto.ReplicationPosition, error) {
 	mu := sync.Mutex{}
-	result := make(map[*topo.ShardInfo]*myproto.ReplicationPosition)
+	result := make(map[*topo.ShardInfo]myproto.ReplicationPosition)
 
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
@@ -259,7 +259,7 @@ func (wr *Wrangler) getMastersPosition(shards []*topo.ShardInfo) (map[*topo.Shar
 	return result, rec.Error()
 }
 
-func (wr *Wrangler) waitForFilteredReplication(sourcePositions map[*topo.ShardInfo]*myproto.ReplicationPosition, destinationShards []*topo.ShardInfo) error {
+func (wr *Wrangler) waitForFilteredReplication(sourcePositions map[*topo.ShardInfo]myproto.ReplicationPosition, destinationShards []*topo.ShardInfo) error {
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 	for _, si := range destinationShards {
@@ -272,9 +272,9 @@ func (wr *Wrangler) waitForFilteredReplication(sourcePositions map[*topo.ShardIn
 				}
 
 				// find the position it should be at
-				for s, rp := range sourcePositions {
+				for s, pos := range sourcePositions {
 					if s.Keyspace() == sourceShard.Keyspace && s.ShardName() == sourceShard.Shard {
-						blpPosition.GTIDField = rp.MasterLogGTIDField
+						blpPosition.Position = pos
 					}
 				}
 
@@ -601,8 +601,8 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 		// wait for it
 		event.DispatchUpdate(ev, "waiting for destination master to catch up to source master")
 		if err := wr.ai.WaitBlpPosition(si.MasterAlias, blproto.BlpPosition{
-			Uid:       0,
-			GTIDField: masterPosition.MasterLogGTIDField,
+			Uid:      0,
+			Position: masterPosition,
 		}, wr.ActionTimeout()); err != nil {
 			return err
 		}

@@ -18,13 +18,13 @@ func TestNewBinlogStreamer(t *testing.T) {
 
 	*binlogStreamer = "fake"
 	binlogStreamers = map[string]newBinlogStreamerFunc{
-		"fake": func(string, *mysqlctl.Mysqld, myproto.GTID, sendTransactionFunc) BinlogStreamer {
+		"fake": func(string, *mysqlctl.Mysqld, myproto.ReplicationPosition, sendTransactionFunc) BinlogStreamer {
 			triggered = true
 			return nil
 		},
 	}
 
-	NewBinlogStreamer("", nil, nil, nil)
+	NewBinlogStreamer("", nil, myproto.ReplicationPosition{}, nil)
 
 	if !triggered {
 		t.Errorf("NewBinlogStreamer() failed to call the right newBinlogStreamerFunc.")
@@ -47,7 +47,7 @@ func TestNewBinlogStreamerUnknown(t *testing.T) {
 		}
 	}()
 
-	NewBinlogStreamer("", nil, nil, nil)
+	NewBinlogStreamer("", nil, myproto.ReplicationPosition{}, nil)
 }
 
 func TestGetStatementCategory(t *testing.T) {

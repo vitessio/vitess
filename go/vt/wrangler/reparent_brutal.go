@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/event"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/topotools/events"
@@ -50,7 +51,7 @@ func (wr *Wrangler) reparentShardBrutal(ev *events.Reparent, si *topo.ShardInfo,
 		event.DispatchUpdate(ev, "checking slave consistency")
 		wr.logger.Infof("check slaves %v/%v", masterElectTablet.Keyspace, masterElectTablet.Shard)
 		restartableSlaveTabletMap := wr.restartableTabletMap(slaveTabletMap)
-		err = wr.checkSlaveConsistency(restartableSlaveTabletMap, nil)
+		err = wr.checkSlaveConsistency(restartableSlaveTabletMap, myproto.ReplicationPosition{})
 		if err != nil {
 			return err
 		}

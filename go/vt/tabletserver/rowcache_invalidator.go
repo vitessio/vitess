@@ -29,29 +29,36 @@ type RowcacheInvalidator struct {
 
 	svm sync2.ServiceManager
 
-	gtidMutex  sync.Mutex
-	gtid       myproto.GTID
+	posMutex   sync.Mutex
+	pos        myproto.ReplicationPosition
 	lagSeconds sync2.AtomicInt64
 }
 
-func (rci *RowcacheInvalidator) SetGTID(gtid myproto.GTID) {
-	rci.gtidMutex.Lock()
-	defer rci.gtidMutex.Unlock()
-	rci.gtid = gtid
+// AppendGTID updates the current replication position by appending a GTID to
+// the set of transactions that have been processed.
+func (rci *RowcacheInvalidator) AppendGTID(gtid myproto.GTID) {
+	rci.posMutex.Lock()
+	defer rci.posMutex.Unlock()
+	rci.pos = myproto.AppendGTID(rci.pos, gtid)
 }
 
-func (rci *RowcacheInvalidator) GTID() myproto.GTID {
-	rci.gtidMutex.Lock()
-	defer rci.gtidMutex.Unlock()
-	return rci.gtid
+// SetPosition sets the current ReplicationPosition.
+func (rci *RowcacheInvalidator) SetPosition(rp myproto.ReplicationPosition) {
+	rci.posMutex.Lock()
+	defer rci.posMutex.Unlock()
+	rci.pos = rp
 }
 
-func (rci *RowcacheInvalidator) GTIDString() string {
-	gtid := rci.GTID()
-	if gtid == nil {
-		return "<nil>"
-	}
-	return gtid.String()
+// Position returns the current ReplicationPosition.
+func (rci *RowcacheInvalidator) Position() myproto.ReplicationPosition {
+	rci.posMutex.Lock()
+	defer rci.posMutex.Unlock()
+	return rci.pos
+}
+
+// PositionString returns the current ReplicationPosition as a string.
+func (rci *RowcacheInvalidator) PositionString() string {
+	return rci.Position().String()
 }
 
 // NewRowcacheInvalidator creates a new RowcacheInvalidator.
@@ -60,14 +67,14 @@ func (rci *RowcacheInvalidator) GTIDString() string {
 func NewRowcacheInvalidator(qe *QueryEngine) *RowcacheInvalidator {
 	rci := &RowcacheInvalidator{qe: qe}
 	stats.Publish("RowcacheInvalidatorState", stats.StringFunc(rci.svm.StateName))
-	stats.Publish("RowcacheInvalidatorPosition", stats.StringFunc(rci.GTIDString))
+	stats.Publish("RowcacheInvalidatorPosition", stats.StringFunc(rci.PositionString))
 	stats.Publish("RowcacheInvalidatorLagSeconds", stats.IntFunc(rci.lagSeconds.Get))
 	return rci
 }
 
 // Open runs the invalidation loop.
 func (rci *RowcacheInvalidator) Open(dbname string, mysqld *mysqlctl.Mysqld) {
-	rp, err := mysqld.MasterStatus()
+	rp, err := mysqld.MasterPosition()
 	if err != nil {
 		panic(NewTabletError(FATAL, "Rowcache invalidator aborting: cannot determine replication position: %v", err))
 	}
@@ -76,12 +83,11 @@ func (rci *RowcacheInvalidator) Open(dbname string, mysqld *mysqlctl.Mysqld) {
 	}
 	rci.dbname = dbname
 	rci.mysqld = mysqld
-	rci.SetGTID(rp.MasterLogGTIDField.Value)
-	// We'll set gtid inside the run function.
+	rci.SetPosition(rp)
 
 	ok := rci.svm.Go(rci.run)
 	if ok {
-		log.Infof("Rowcache invalidator starting, dbname: %s, path: %s, logfile: %s, position: %d", dbname, mysqld.Cnf().BinLogPath, rp.MasterLogFile, rp.MasterLogPosition)
+		log.Infof("Rowcache invalidator starting, dbname: %s, path: %s, position: %v", dbname, mysqld.Cnf().BinLogPath, rp)
 	} else {
 		log.Infof("Rowcache invalidator already running")
 	}
@@ -95,7 +101,7 @@ func (rci *RowcacheInvalidator) Close() {
 
 func (rci *RowcacheInvalidator) run(ctx *sync2.ServiceContext) error {
 	for {
-		evs := binlog.NewEventStreamer(rci.dbname, rci.mysqld, rci.GTID(), rci.processEvent)
+		evs := binlog.NewEventStreamer(rci.dbname, rci.mysqld, rci.Position(), rci.processEvent)
 		// We wrap this code in a func so we can catch all panics.
 		// If an error is returned, we log it, wait 1 second, and retry.
 		// This loop can only be stopped by calling Close.
@@ -142,7 +148,7 @@ func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) error {
 	case "ERR":
 		rci.qe.InvalidateForUnrecognized(event.Sql)
 	case "POS":
-		rci.SetGTID(event.GTIDField.Value)
+		rci.AppendGTID(event.GTIDField.Value)
 	default:
 		log.Errorf("unknown event: %#v", event)
 		internalErrors.Add("Invalidation", 1)
