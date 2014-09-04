@@ -85,8 +85,9 @@ var (
 %left <empty> END
 
 // DDL Tokens
-%token <empty> CREATE ALTER DROP RENAME
+%token <empty> CREATE ALTER DROP RENAME ANALYZE
 %token <empty> TABLE INDEX VIEW TO IGNORE IF UNIQUE USING
+%token <empty> SHOW DESCRIBE EXPLAIN
 
 %start any_command
 
@@ -94,6 +95,7 @@ var (
 %type <selStmt> select_statement
 %type <statement> insert_statement update_statement delete_statement set_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement
+%type <statement> analyze_statement other_statement
 %type <bytes2> comment_opt comment_list
 %type <str> union_op
 %type <str> distinct_opt
@@ -160,6 +162,8 @@ command:
 | alter_statement
 | rename_statement
 | drop_statement
+| analyze_statement
+| other_statement
 
 select_statement:
   SELECT comment_opt distinct_opt select_expression_list FROM table_expression_list where_expression_opt group_by_opt having_opt order_by_opt limit_opt lock_opt
@@ -254,6 +258,26 @@ drop_statement:
 | DROP VIEW exists_opt sql_id force_eof
   {
     $$ = &DDL{Action: AST_DROP, Table: $4}
+  }
+
+analyze_statement:
+  ANALYZE TABLE ID
+  {
+    $$ = &DDL{Action: AST_ALTER, Table: $3, NewName: $3}
+  }
+
+other_statement:
+  SHOW force_eof
+  {
+    $$ = &Other{}
+  }
+| DESCRIBE force_eof
+  {
+    $$ = &Other{}
+  }
+| EXPLAIN force_eof
+  {
+    $$ = &Other{}
   }
 
 comment_opt:

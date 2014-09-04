@@ -361,6 +361,8 @@ func (qe *QueryEngine) Execute(logStats *SQLQueryStats, query *proto.Query) (rep
 			reply = qe.execDMLPK(logStats, conn, plan, invalidator)
 		case planbuilder.PLAN_DML_SUBQUERY:
 			reply = qe.execDMLSubquery(logStats, conn, plan, invalidator)
+		case planbuilder.PLAN_OTHER:
+			reply = qe.executeSqlString(logStats, conn, query.Sql, true)
 		default: // select or set in a transaction, just count as select
 			reply = qe.execDirect(logStats, plan, conn)
 		}
@@ -378,11 +380,13 @@ func (qe *QueryEngine) Execute(logStats *SQLQueryStats, query *proto.Query) (rep
 		case planbuilder.PLAN_SELECT_SUBQUERY:
 			reply = qe.execSubquery(logStats, plan)
 		case planbuilder.PLAN_SET:
+			reply = qe.execSet(logStats, plan)
+		case planbuilder.PLAN_OTHER:
 			waitingForConnectionStart := time.Now()
 			conn := getOrPanic(qe.connPool)
 			logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 			defer conn.Recycle()
-			reply = qe.execSet(logStats, conn, plan)
+			reply = qe.executeSqlString(logStats, conn, query.Sql, true)
 		default:
 			panic(NewTabletError(NOT_IN_TX, "DMLs not allowed outside of transactions"))
 		}
@@ -408,9 +412,9 @@ func (qe *QueryEngine) StreamExecute(logStats *SQLQueryStats, query *proto.Query
 	stripTrailing(query)
 
 	plan := qe.schemaInfo.GetStreamPlan(query.Sql)
-	logStats.PlanType = "SELECT_STREAM"
+	logStats.PlanType = plan.PlanId.String()
 	logStats.OriginalSql = query.Sql
-	defer queryStats.Record("SELECT_STREAM", time.Now())
+	defer queryStats.Record(plan.PlanId.String(), time.Now())
 
 	authorized := tableacl.Authorized(plan.TableName, plan.PlanId.MinRole())
 	qe.checkTableAcl(plan.TableName, plan.PlanId, authorized, logStats.context.GetUsername())
@@ -547,7 +551,7 @@ func (qe *QueryEngine) execDDL(logStats *SQLQueryStats, ddl string) *mproto.Quer
 	defer conn.Recycle()
 	result, err := qe.executeSql(logStats, conn, ddl, false)
 	if err != nil {
-		panic(NewTabletErrorSql(FAIL, err))
+		panic(err)
 	}
 
 	qe.schemaInfo.DropTable(ddlPlan.TableName)
@@ -829,7 +833,7 @@ func (qe *QueryEngine) execDMLPKRows(logStats *SQLQueryStats, conn dbconnpool.Po
 	return &mproto.QueryResult{RowsAffected: rowsAffected}
 }
 
-func (qe *QueryEngine) execSet(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, plan *compiledPlan) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execSet(logStats *SQLQueryStats, plan *compiledPlan) (result *mproto.QueryResult) {
 	switch plan.SetKey {
 	case "vt_pool_size":
 		qe.connPool.SetCapacity(int(getInt64(plan.SetValue)))
@@ -868,6 +872,10 @@ func (qe *QueryEngine) execSet(logStats *SQLQueryStats, conn dbconnpool.PoolConn
 	case "vt_strict_mode":
 		qe.strictMode.Set(getInt64(plan.SetValue))
 	default:
+		waitingForConnectionStart := time.Now()
+		conn := getOrPanic(qe.connPool)
+		logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
+		defer conn.Recycle()
 		return qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
 	}
 	return &mproto.QueryResult{}
@@ -954,6 +962,14 @@ func (qe *QueryEngine) generateFinalSql(parsedQuery *sqlparser.ParsedQuery, bind
 	// undo hack done by stripTrailing
 	sql = restoreTrailing(sql, bindVars)
 	return hack.String(sql)
+}
+
+func (qe *QueryEngine) executeSqlString(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, sql string, wantfields bool) *mproto.QueryResult {
+	result, err := qe.executeSql(logStats, conn, sql, true)
+	if err != nil {
+		panic(err)
+	}
+	return result
 }
 
 func (qe *QueryEngine) executeSql(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, sql string, wantfields bool) (*mproto.QueryResult, error) {

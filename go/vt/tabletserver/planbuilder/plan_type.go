@@ -40,6 +40,10 @@ const (
 	PLAN_SET
 	// PLAN_DDL is for DDL statements
 	PLAN_DDL
+	// PLAN_SELECT_STREAM is used for streaming queries
+	PLAN_SELECT_STREAM
+	// PLAN_OTHER is for SHOW, DESCRIBE & EXPLAIN statements
+	PLAN_OTHER
 	NumPlans
 )
 
@@ -56,6 +60,8 @@ var planName = []string{
 	"INSERT_SUBQUERY",
 	"SET",
 	"DDL",
+	"SELECT_STREAM",
+	"OTHER",
 }
 
 func (pt PlanType) String() string {
@@ -75,7 +81,7 @@ func PlanByName(s string) (pt PlanType, ok bool) {
 }
 
 func (pt PlanType) IsSelect() bool {
-	return pt == PLAN_PASS_SELECT || pt == PLAN_PK_EQUAL || pt == PLAN_PK_IN || pt == PLAN_SELECT_SUBQUERY
+	return pt == PLAN_PASS_SELECT || pt == PLAN_PK_EQUAL || pt == PLAN_PK_IN || pt == PLAN_SELECT_SUBQUERY || pt == PLAN_SELECT_STREAM
 }
 
 func (pt PlanType) MarshalJSON() ([]byte, error) {
@@ -99,6 +105,8 @@ var tableAclRoles = map[PlanType]tableacl.Role{
 	PLAN_INSERT_PK:       tableacl.WRITER,
 	PLAN_INSERT_SUBQUERY: tableacl.WRITER,
 	PLAN_DDL:             tableacl.ADMIN,
+	PLAN_SELECT_STREAM:   tableacl.READER,
+	PLAN_OTHER:           tableacl.ADMIN,
 }
 
 type ReasonType int

@@ -60,6 +60,7 @@ func (*Update) IStatement() {}
 func (*Delete) IStatement() {}
 func (*Set) IStatement()    {}
 func (*DDL) IStatement()    {}
+func (*Other) IStatement()  {}
 
 // SelectStatement any SELECT statement.
 type SelectStatement interface {
@@ -215,6 +216,15 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 	default:
 		buf.Myprintf("%s table %s", node.Action, node.Table)
 	}
+}
+
+// Other represents a SHOW, DESCRIBE, or EXPLAIN statement.
+// It should be used only as an indicator. It does not contain
+// the full AST for the statement.
+type Other struct{}
+
+func (node *Other) Format(buf *TrackedBuffer) {
+	buf.WriteString("other")
 }
 
 // Comments represents a list of comments.
