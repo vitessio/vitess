@@ -17,6 +17,7 @@ import urllib
 import environment
 import utils
 import tablet
+from mysql_flavor import mysql_flavor
 from vtdb import dbexceptions
 from vtdb import vtgate
 
@@ -80,11 +81,13 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.init_tablet('master', 'test_keyspace', '0', parent=False)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'])
     utils.validate_topology()
-    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj', 'test_keyspace/0'])
+    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj',
+                                     'test_keyspace/0'])
     self.assertEqual(srvShard['MasterCell'], 'test_nj')
 
-    # if these statements don't run before the tablet it will wedge waiting for the
-    # db to become accessible. this is more a bug than a feature.
+    # if these statements don't run before the tablet it will wedge
+    # waiting for the db to become accessible. this is more a bug than
+    # a feature.
     tablet_62344.populate('vt_test_keyspace', self._create_vt_select_test,
                           self._populate_vt_select_test)
 
@@ -95,7 +98,8 @@ class TestTabletManager(unittest.TestCase):
                                  'select * from vt_select_test'],
                                 mode=utils.VTCTL_VTCTL, trap_output=True)
     rows = result.splitlines()
-    self.assertEqual(len(rows), 5, "expected 5 rows in vt_select_test: %s %s" % (str(rows), result))
+    self.assertEqual(len(rows), 5, "expected 5 rows in vt_select_test: %s %s" %
+                     (str(rows), result))
 
     # make sure direct dba queries work
     query_result = utils.run_vtctl_json(['ExecuteFetch', '-want_fields', tablet_62344.tablet_alias, 'select * from vt_test_keyspace.vt_select_test'])
@@ -120,8 +124,10 @@ class TestTabletManager(unittest.TestCase):
     utils.run_vtctl(['ValidateKeyspace', 'test_keyspace'])
     # not pinging tablets, as it enables replication checks, and they
     # break because we only have a single master, no slaves
-    utils.run_vtctl(['ValidateShard', '-ping-tablets=false', 'test_keyspace/0'])
-    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj', 'test_keyspace/0'])
+    utils.run_vtctl(['ValidateShard', '-ping-tablets=false',
+                     'test_keyspace/0'])
+    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj',
+                                     'test_keyspace/0'])
     self.assertEqual(srvShard['MasterCell'], 'test_nj')
 
     tablet_62344.kill_vttablet()
@@ -140,8 +146,9 @@ class TestTabletManager(unittest.TestCase):
                                      'test_keyspace/0'])
     self.assertEqual(srvShard['MasterCell'], 'test_nj')
 
-    # if these statements don't run before the tablet it will wedge waiting for the
-    # db to become accessible. this is more a bug than a feature.
+    # if these statements don't run before the tablet it will wedge
+    # waiting for the db to become accessible. this is more a bug than
+    # a feature.
     tablet_62344.mquery("", ["set global read_only = off"])
     tablet_62344.populate('vt_test_keyspace', self._create_vt_select_test,
                           self._populate_vt_select_test)
@@ -330,7 +337,8 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.init_tablet('master', 'test_keyspace', '0')
     utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/0'])
     utils.validate_topology()
-    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj', 'test_keyspace/0'])
+    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj',
+                                     'test_keyspace/0'])
     self.assertEqual(srvShard['MasterCell'], 'test_nj')
 
     tablet_62344.populate('vt_test_keyspace', self._create_vt_select_test,
@@ -554,8 +562,11 @@ class TestTabletManager(unittest.TestCase):
     for t in tablet_62344, tablet_62044:
       t.create_db('vt_test_keyspace')
 
-    tablet_62344.start_vttablet(wait_for_state=None, target_tablet_type='replica')
-    tablet_62044.start_vttablet(wait_for_state=None, target_tablet_type='replica', lameduck_period='5s')
+    tablet_62344.start_vttablet(wait_for_state=None,
+                                target_tablet_type='replica')
+    tablet_62044.start_vttablet(wait_for_state=None,
+                                target_tablet_type='replica',
+                                lameduck_period='5s')
 
     tablet_62344.wait_for_vttablet_state('SERVING')
     tablet_62044.wait_for_vttablet_state('NOT_SERVING')
@@ -574,7 +585,8 @@ class TestTabletManager(unittest.TestCase):
 
     # make sure the master is still master
     ti = utils.run_vtctl_json(['GetTablet', tablet_62344.tablet_alias])
-    self.assertEqual(ti['Type'], 'master', "unexpected master type: %s" % ti['Type'])
+    self.assertEqual(ti['Type'], 'master',
+                     "unexpected master type: %s" % ti['Type'])
 
     # stop replication on the slave, see it trigger the slave going
     # slightly unhealthy
@@ -590,7 +602,8 @@ class TestTabletManager(unittest.TestCase):
       timeout = utils.wait_step('slave has high replication lag', timeout)
 
     # make sure the serving graph was updated
-    ep = utils.run_vtctl_json(['GetEndPoints', 'test_nj', 'test_keyspace/0', 'replica'])
+    ep = utils.run_vtctl_json(['GetEndPoints', 'test_nj', 'test_keyspace/0',
+                               'replica'])
     if not ep['entries'][0]['health']:
       self.fail('Replication lag parameter not propagated to serving graph: %s' % str(ep))
     self.assertEqual(ep['entries'][0]['health']['replication_lag'], 'high', 'Replication lag parameter not propagated to serving graph: %s' % str(ep))
@@ -629,6 +642,60 @@ class TestTabletManager(unittest.TestCase):
     # to reset its state to spare
     ti = utils.run_vtctl_json(['GetTablet', tablet_62044.tablet_alias])
     self.assertEqual(ti['Type'], 'spare', "tablet didn't go to spare while in lameduck mode: %s" % str(ti))
+
+  def test_no_mysql_healthcheck(self):
+    """This test starts a vttablet with no mysql port, while mysql is down.
+    It makes sure vttablet will start properly and be unhealthy.
+    Then we start mysql, and make sure vttablet becomes healthy.
+    """
+    # we need replication to be enabled, so the slave tablet can be healthy.
+    for t in tablet_62344, tablet_62044:
+      t.create_db('vt_test_keyspace')
+    pos = mysql_flavor.master_position(tablet_62344)
+    changeMasterCmds = mysql_flavor.change_master_commands(
+                            utils.hostname,
+                            tablet_62344.mysql_port,
+                            pos)
+    tablet_62044.mquery('', ['RESET MASTER', 'RESET SLAVE'] +
+                        changeMasterCmds +
+                        ['START SLAVE'])
+
+    # now shutdown all mysqld
+    shutdown_procs = [
+        tablet_62344.shutdown_mysql(),
+        tablet_62044.shutdown_mysql(),
+        ]
+    utils.wait_procs(shutdown_procs)
+
+    # start the tablets, wait for them to be NOT_SERVING (mysqld not there)
+    tablet_62344.init_tablet('master', 'test_keyspace', '0')
+    tablet_62044.init_tablet('spare', 'test_keyspace', '0',
+                             include_mysql_port=False)
+    for t in tablet_62344, tablet_62044:
+      t.start_vttablet(wait_for_state=None,
+                       target_tablet_type='replica',
+                       full_mycnf_args=True, include_mysql_port=False)
+    for t in tablet_62344, tablet_62044:
+      t.wait_for_vttablet_state('NOT_SERVING')
+
+    # restart mysqld
+    start_procs = [
+        tablet_62344.start_mysql(),
+        tablet_62044.start_mysql(),
+        ]
+    utils.wait_procs(start_procs)
+
+    # wait for the tablets to become healthy and fix their mysql port
+    for t in tablet_62344, tablet_62044:
+      t.wait_for_vttablet_state('SERVING')
+    for t in tablet_62344, tablet_62044:
+      ti = utils.run_vtctl_json(['GetTablet', t.tablet_alias])
+      if not 'mysql' in ti['Portmap']:
+        self.assertFalse('No mysql port in tablet record: %s', str(ti))
+      self.assertEqual(ti['Portmap']['mysql'], t.mysql_port)
+
+    # all done
+    tablet.kill_tablets([tablet_62344, tablet_62044])
 
   def test_fallback_policy(self):
     tablet_62344.create_db('vt_test_keyspace')

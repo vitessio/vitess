@@ -79,8 +79,13 @@ func (stc *ScatterConn) InitializeConnections(ctx context.Context) error {
 				errRecorder.RecordError(err)
 				return
 			}
-			// work on all shards of all tablet types
-			for tabletType, ksPartition := range ks.Partitions {
+			// work on all shards of all serving tablet types
+			for _, tabletType := range ks.TabletTypes {
+				ksPartition, ok := ks.Partitions[tabletType]
+				if !ok {
+					errRecorder.RecordError(fmt.Errorf("%v.%v is not in SrvKeyspace.Partitions", keyspace, string(tabletType)))
+					continue
+				}
 				for _, shard := range ksPartition.Shards {
 					wg.Add(1)
 					go func(shardName string, tabletType topo.TabletType) {

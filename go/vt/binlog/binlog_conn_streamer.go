@@ -27,9 +27,6 @@ type binlogConnStreamer struct {
 	sendTransaction sendTransactionFunc
 
 	conn *mysqlctl.SlaveConnection
-
-	// pos is the GTID of the most recent event we've seen.
-	pos myproto.GTID
 }
 
 // newBinlogConnStreamer creates a BinlogStreamer.
@@ -46,13 +43,14 @@ func newBinlogConnStreamer(dbname string, mysqld *mysqlctl.Mysqld, startPos mypr
 
 // Stream implements BinlogStreamer.Stream().
 func (bls *binlogConnStreamer) Stream(ctx *sync2.ServiceContext) (err error) {
+	var stopPos myproto.ReplicationPosition
 	defer func() {
 		if err != nil {
 			binlogStreamerErrors.Add("Stream", 1)
-			err = fmt.Errorf("stream error @ %#v, error: %v", bls.pos, err)
+			err = fmt.Errorf("stream error @ %v, error: %v", stopPos, err)
 			log.Error(err.Error())
 		}
-		log.Infof("Stream ended @ %#v", bls.pos)
+		log.Infof("Stream ended @ %v", stopPos)
 	}()
 
 	if bls.conn, err = mysqlctl.NewSlaveConnection(bls.mysqld); err != nil {
@@ -67,7 +65,7 @@ func (bls *binlogConnStreamer) Stream(ctx *sync2.ServiceContext) (err error) {
 	}
 	// parseEvents will loop until the events channel is closed, the
 	// service enters the SHUTTING_DOWN state, or an error occurs.
-	err = bls.parseEvents(ctx, events)
+	stopPos, err = bls.parseEvents(ctx, events)
 	return
 }
 
@@ -77,17 +75,31 @@ func (bls *binlogConnStreamer) Stream(ctx *sync2.ServiceContext) (err error) {
 //
 // If the sendTransaction func returns io.EOF, parseEvents returns ClientEOF.
 // If the events channel is closed, parseEvents returns ServerEOF.
-func (bls *binlogConnStreamer) parseEvents(ctx *sync2.ServiceContext, events <-chan proto.BinlogEvent) (err error) {
+func (bls *binlogConnStreamer) parseEvents(ctx *sync2.ServiceContext, events <-chan proto.BinlogEvent) (myproto.ReplicationPosition, error) {
 	var statements []proto.Statement
 	var format proto.BinlogFormat
+	var gtid myproto.GTID
+	var pos = bls.startPos
 	var autocommit = true
+	var err error
 
+	// A begin can be triggered either by a BEGIN query, or by a GTID_EVENT.
+	begin := func() {
+		if statements != nil {
+			// If this happened, it would be a legitimate error.
+			log.Errorf("BEGIN in binlog stream while still in another transaction; dropping %d statements: %v", len(statements), statements)
+			binlogStreamerErrors.Add("ParseEvents", 1)
+		}
+		statements = make([]proto.Statement, 0, 10)
+		autocommit = false
+	}
 	// A commit can be triggered either by a COMMIT query, or by an XID_EVENT.
-	commit := func(timestamp int64) error {
+	// Statements that aren't wrapped in BEGIN/COMMIT are committed immediately.
+	commit := func(timestamp uint32) error {
 		trans := &proto.BinlogTransaction{
 			Statements: statements,
-			Timestamp:  timestamp,
-			GTIDField:  myproto.GTIDField{Value: bls.pos},
+			Timestamp:  int64(timestamp),
+			GTIDField:  myproto.GTIDField{Value: gtid},
 		}
 		if err = bls.sendTransaction(trans); err != nil {
 			if err == io.EOF {
@@ -110,16 +122,16 @@ func (bls *binlogConnStreamer) parseEvents(ctx *sync2.ServiceContext, events <-c
 			if !ok {
 				// events channel has been closed, which means the connection died.
 				log.Infof("reached end of binlog event stream")
-				return ServerEOF
+				return pos, ServerEOF
 			}
 		case <-ctx.ShuttingDown:
 			log.Infof("stopping early due to BinlogStreamer service shutdown")
-			return nil
+			return pos, nil
 		}
 
 		// Validate the buffer before reading fields from it.
 		if !ev.IsValid() {
-			return fmt.Errorf("can't parse binlog event, invalid data: %#v", ev)
+			return pos, fmt.Errorf("can't parse binlog event, invalid data: %#v", ev)
 		}
 
 		// We can't parse anything until we get a FORMAT_DESCRIPTION_EVENT that
@@ -132,12 +144,12 @@ func (bls *binlogConnStreamer) parseEvents(ctx *sync2.ServiceContext, events <-c
 				if ev.IsRotate() {
 					continue
 				}
-				return fmt.Errorf("got a real event before FORMAT_DESCRIPTION_EVENT: %#v", ev)
+				return pos, fmt.Errorf("got a real event before FORMAT_DESCRIPTION_EVENT: %#v", ev)
 			}
 
 			format, err = ev.Format()
 			if err != nil {
-				return fmt.Errorf("can't parse FORMAT_DESCRIPTION_EVENT: %v, event data: %#v", err, ev)
+				return pos, fmt.Errorf("can't parse FORMAT_DESCRIPTION_EVENT: %v, event data: %#v", err, ev)
 			}
 			continue
 		}
@@ -146,25 +158,26 @@ func (bls *binlogConnStreamer) parseEvents(ctx *sync2.ServiceContext, events <-c
 		// something special like GTID_EVENT (MariaDB, MySQL 5.6), or it could be
 		// an arbitrary event with a GTID in the header (Google MySQL).
 		if ev.HasGTID(format) {
-			bls.pos, err = ev.GTID(format)
+			gtid, err = ev.GTID(format)
 			if err != nil {
-				return fmt.Errorf("can't get GTID from binlog event: %v, event data: %#v", err, ev)
+				return pos, fmt.Errorf("can't get GTID from binlog event: %v, event data: %#v", err, ev)
 			}
-			// If it's a dedicated GTID_EVENT, there's nothing else to do.
-			if ev.IsGTID() {
-				continue
-			}
+			pos = myproto.AppendGTID(pos, gtid)
 		}
 
 		switch {
+		case ev.IsGTID(): // GTID_EVENT
+			if ev.IsBeginGTID(format) {
+				begin()
+			}
 		case ev.IsXID(): // XID_EVENT (equivalent to COMMIT)
-			if err = commit(int64(ev.Timestamp())); err != nil {
-				return err
+			if err = commit(ev.Timestamp()); err != nil {
+				return pos, err
 			}
 		case ev.IsIntVar(): // INTVAR_EVENT
 			name, value, err := ev.IntVar(format)
 			if err != nil {
-				return fmt.Errorf("can't parse INTVAR_EVENT: %v, event data: %#v", err, ev)
+				return pos, fmt.Errorf("can't parse INTVAR_EVENT: %v, event data: %#v", err, ev)
 			}
 			statements = append(statements, proto.Statement{
 				Category: proto.BL_SET,
@@ -173,7 +186,7 @@ func (bls *binlogConnStreamer) parseEvents(ctx *sync2.ServiceContext, events <-c
 		case ev.IsRand(): // RAND_EVENT
 			seed1, seed2, err := ev.Rand(format)
 			if err != nil {
-				return fmt.Errorf("can't parse RAND_EVENT: %v, event data: %#v", err, ev)
+				return pos, fmt.Errorf("can't parse RAND_EVENT: %v, event data: %#v", err, ev)
 			}
 			statements = append(statements, proto.Statement{
 				Category: proto.BL_SET,
@@ -183,17 +196,11 @@ func (bls *binlogConnStreamer) parseEvents(ctx *sync2.ServiceContext, events <-c
 			// Extract the query string and group into transactions.
 			db, sql, err := ev.Query(format)
 			if err != nil {
-				return fmt.Errorf("can't get query from binlog event: %v, event data: %#v", err, ev)
+				return pos, fmt.Errorf("can't get query from binlog event: %v, event data: %#v", err, ev)
 			}
 			switch cat := getStatementCategory(sql); cat {
 			case proto.BL_BEGIN:
-				if statements != nil {
-					// If this happened, it would be a legitimate error.
-					log.Errorf("BEGIN in binlog stream while still in another transaction; dropping %d statements: %v", len(statements), statements)
-					binlogStreamerErrors.Add("ParseEvents", 1)
-				}
-				statements = make([]proto.Statement, 0, 10)
-				autocommit = false
+				begin()
 			case proto.BL_ROLLBACK:
 				// Rollbacks are possible under some circumstances. Since the stream
 				// client keeps track of its replication position by updating the set
@@ -202,8 +209,8 @@ func (bls *binlogConnStreamer) parseEvents(ctx *sync2.ServiceContext, events <-c
 				statements = nil
 				fallthrough
 			case proto.BL_COMMIT:
-				if err = commit(int64(ev.Timestamp())); err != nil {
-					return err
+				if err = commit(ev.Timestamp()); err != nil {
+					return pos, err
 				}
 			default: // BL_DDL, BL_DML, BL_SET, BL_UNRECOGNIZED
 				if db != "" && db != bls.dbname {
@@ -216,13 +223,13 @@ func (bls *binlogConnStreamer) parseEvents(ctx *sync2.ServiceContext, events <-c
 				})
 				statements = append(statements, proto.Statement{Category: cat, Sql: sql})
 				if autocommit {
-					if err = commit(int64(ev.Timestamp())); err != nil {
-						return err
+					if err = commit(ev.Timestamp()); err != nil {
+						return pos, err
 					}
 				}
 			}
 		}
 	}
 
-	return nil
+	return pos, nil
 }

@@ -44,8 +44,9 @@ Writing a client for your language should not be difficult, as it's a matter of
 implementing only a few API calls (please send us a pull request if you do!).
 
 To learn more, please click on the documentation links below.
-You can also watch an [9 minute introduction](https://www.youtube.com/watch?v=midJ6b1LkA0) to Vitess [sougou](https://github.com/sougou) prepared for Google I/O 2014. There's also a longer presentation from the Fosdem '14 go
-devroom
+You can also watch a [9 minute introduction](https://www.youtube.com/watch?v=midJ6b1LkA0)
+to Vitess [sougou](https://github.com/sougou) prepared for Google I/O 2014.
+There's also a longer presentation from the Fosdem '14 go devroom
 ([slides](https://github.com/youtube/vitess/blob/master/doc/Vitess2014.pdf?raw=true),
 [video](http://youtu.be/qATTTSg6zXk)).
 
@@ -54,29 +55,36 @@ devroom
 Vitess is not entirely ready for unsupervised use yet. Some functionality is
 still under development, APIs may change, and parts of the code are
 undocumented. However, if you feel adventurous, you're more than welcome to try
-it. We know that there are some rough edges, so please don't hesitate to reach
+it. We know that there are some rough edges, so please don't hesitate to reach out
 to us through [our mailing list](https://groups.google.com/forum/#!forum/vitess)
-if you run into any issues. Warnings aside, please take a look at our [getting
-started
-doc](https://github.com/youtube/vitess/blob/master/doc/GettingStarted.markdown).
+if you run into any issues. Warnings aside, please take a look at our [Getting
+Started](https://github.com/youtube/vitess/blob/master/doc/GettingStarted.markdown)
+guide.
 
 ## Documentation
 
 ### Intro
- * [Helicopter
- overview](https://github.com/youtube/vitess/blob/master/doc/HelicopterOverview.markdown): high level overview of Vitess that should tell you whether Vitess is for you.
+ * [Helicopter overview](https://github.com/youtube/vitess/blob/master/doc/HelicopterOverview.markdown):
+     high level overview of Vitess that should tell you whether Vitess is for you.
  * [Frequently Asked Questions](https://github.com/youtube/vitess/blob/master/doc/FAQ.markdown).
- * [Vision](https://github.com/youtube/vitess/blob/master/doc/Vision.markdown): principles guiding the design of Vitess.
+ * [Vision](https://github.com/youtube/vitess/blob/master/doc/Vision.markdown):
+     principles guiding the design of Vitess.
 
 ### Using Vitess
 
- * [Getting Started](https://github.com/youtube/vitess/blob/master/doc/GettingStarted.markdown): how to set your environment to work with Vitess.
- * [Tools](https://github.com/youtube/vitess/blob/master/doc/Tools.markdown): all Vitess tools and servers.
- * [Vttablet](https://github.com/youtube/vitess/blob/master/doc/Vttablet.markdown): information about the most important Vitess server.
- * [Reparenting](https://github.com/youtube/vitess/blob/master/doc/Reparenting.markdown): performing master failover.
- * [Resharding](https://github.com/youtube/vitess/blob/master/doc/Resharding.markdown): adding more shards to your cluster.
+ * [Getting Started](https://github.com/youtube/vitess/blob/master/doc/GettingStarted.markdown):
+     how to set your environment to work with Vitess.
+ * [Tools](https://github.com/youtube/vitess/blob/master/doc/Tools.markdown):
+     all Vitess tools and servers.
+ * [Vttablet](https://github.com/youtube/vitess/blob/master/doc/Vttablet.markdown):
+     information about the most important Vitess server.
+ * [Reparenting](https://github.com/youtube/vitess/blob/master/doc/Reparenting.markdown):
+     performing master failover.
+ * [Resharding](https://github.com/youtube/vitess/blob/master/doc/Resharding.markdown):
+     adding more shards to your cluster.
  * [Preparing for production](https://github.com/youtube/vitess/blob/master/doc/Production.markdown) (wip).
- * [Schema management](https://github.com/youtube/vitess/blob/master/doc/SchemaManagement.markdown): managing your database schema using Vitess.
+ * [Schema management](https://github.com/youtube/vitess/blob/master/doc/SchemaManagement.markdown):
+     managing your database schema using Vitess.
 
 ### Reference
 

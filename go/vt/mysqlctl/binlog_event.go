@@ -207,3 +207,8 @@ func (ev binlogEvent) Rand(f blproto.BinlogFormat) (seed1 uint64, seed2 uint64, 
 	seed2 = binary.LittleEndian.Uint64(data[8 : 8+8])
 	return seed1, seed2, nil
 }
+
+// IsBeginGTID implements BinlogEvent.IsBeginGTID().
+func (ev binlogEvent) IsBeginGTID(f blproto.BinlogFormat) bool {
+	return false
+}

@@ -303,3 +303,14 @@ func TestMakeBinlogDump2Command(t *testing.T) {
 		t.Errorf("makeBinlogDump2Command() = %#v, want %#v", got, want)
 	}
 }
+
+func TestGooglePromoteSlaveCommands(t *testing.T) {
+	want := []string{
+		"RESET MASTER",
+		"RESET SLAVE",
+		"CHANGE MASTER TO MASTER_HOST = ''",
+	}
+	if got := (&googleMysql51{}).PromoteSlaveCommands(); !reflect.DeepEqual(got, want) {
+		t.Errorf("(&googleMysql51{}).PromoteSlaveCommands() = %#v, want %#v", got, want)
+	}
+}

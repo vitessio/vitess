@@ -254,10 +254,9 @@ class Tablet(object):
     args.append(self.tablet_alias)
     utils.run_vtctl(args, auto_log=True)
 
-  def init_tablet(
-      self, tablet_type, keyspace=None, shard=None, force=True,
-      start=False, dbname=None, parent=True, wait_for_start=True,
-      **kwargs):
+  def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True,
+                  start=False, dbname=None, parent=True, wait_for_start=True,
+                  include_mysql_port=True, **kwargs):
     self.tablet_type = tablet_type
     self.keyspace = keyspace
     self.shard = shard
@@ -269,8 +268,9 @@ class Tablet(object):
 
     args = ['InitTablet',
             '-hostname', 'localhost',
-            '-port', str(self.port),
-            '-mysql_port', str(self.mysql_port)]
+            '-port', str(self.port)]
+    if include_mysql_port:
+      args.extend(['-mysql_port', str(self.mysql_port)])
     if force:
       args.append('-force')
     if parent:
@@ -383,7 +383,7 @@ class Tablet(object):
                      repl_extra_flags={}, table_acl_config=None,
                      lameduck_period=None, security_policy=None,
                      target_tablet_type=None, full_mycnf_args=False,
-                     extra_args=None):
+                     extra_args=None, include_mysql_port=True):
     """Starts a vttablet process, and returns it.
 
     The process is also saved in self.proc, so it's easy to kill as well.
@@ -402,7 +402,6 @@ class Tablet(object):
                                     'vt-%010d-relay-bin' % self.tablet_uid)
       args.extend([
           '-mycnf_server_id', str(self.tablet_uid),
-          '-mycnf_mysql_port', str(self.mysql_port),
           '-mycnf_data_dir', os.path.join(self.tablet_dir, 'data'),
           '-mycnf_innodb_data_home_dir', os.path.join(self.tablet_dir,
                                                       'innodb', 'data'),
@@ -425,6 +424,8 @@ class Tablet(object):
           '-mycnf_tmp_dir', os.path.join(self.tablet_dir, 'tmp'),
           '-mycnf_slave_load_tmp_dir', os.path.join(self.tablet_dir, 'tmp'),
       ])
+      if include_mysql_port:
+        args.extend(['-mycnf_mysql_port', str(self.mysql_port)])
     if target_tablet_type:
       args.extend(['-target_tablet_type', target_tablet_type,
                    '-health_check_interval', '2s',
