@@ -121,6 +121,24 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 	}
 	agent.History.Add(record)
 
+	// try to figure out the mysql port if we don't have it yet
+	if _, ok := tablet.Portmap["mysql"]; !ok {
+		// we don't know the port, try to get it from mysqld
+		mysqlPort, err := agent.Mysqld.GetMysqlPort()
+		if err != nil {
+			log.Warningf("Cannot get current mysql port, won't populate the Tablet record in topology: %v", err)
+		} else {
+			log.Infof("Updating tablet mysql port to %v", mysqlPort)
+			if err := agent.TopoServer.UpdateTabletFields(tablet.Alias, func(tablet *topo.Tablet) error {
+				tablet.Portmap["mysql"] = mysqlPort
+				return nil
+			}); err != nil {
+				log.Infof("Error updating mysql port in tablet record: %v", err)
+				return
+			}
+		}
+	}
+
 	// Update our topo.Server state, start with no change
 	newTabletType := tablet.Type
 	if err != nil {

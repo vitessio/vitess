@@ -424,6 +424,7 @@ def run_vtctl(clargs, log_level='', auto_log=False, expect_fail=False,
     result = vtctld.vtctl_client(clargs)
     return result, ""
   elif mode == VTCTL_RPC:
+    logging.debug("vtctl: %s", " ".join(clargs))
     result = vtctld_connection.execute_vtctl_command(clargs, info_to_debug=True)
     return result, ""
 

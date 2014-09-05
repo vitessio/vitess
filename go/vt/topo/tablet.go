@@ -371,12 +371,11 @@ type Tablet struct {
 
 // ValidatePortmap returns an error if the tablet's portmap doesn't
 // contain all the necessary ports for the tablet to be fully
-// operational.
+// operational. We only care about vt port now, as mysql may not even
+// be running.
 func (tablet *Tablet) ValidatePortmap() error {
-	for _, name := range []string{"vt", "mysql"} {
-		if _, ok := tablet.Portmap[name]; !ok {
-			return fmt.Errorf("no %v port available", name)
-		}
+	if _, ok := tablet.Portmap["vt"]; !ok {
+		return fmt.Errorf("no vt port available")
 	}
 	return nil
 }
@@ -391,7 +390,9 @@ func (tablet *Tablet) EndPoint() (*EndPoint, error) {
 	// TODO(szopa): Rename _vtocc to vt.
 	entry.NamedPortMap = map[string]int{
 		"_vtocc": tablet.Portmap["vt"],
-		"_mysql": tablet.Portmap["mysql"],
+	}
+	if port, ok := tablet.Portmap["mysql"]; ok {
+		entry.NamedPortMap["_mysql"] = port
 	}
 	if port, ok := tablet.Portmap["vts"]; ok {
 		entry.NamedPortMap["_vts"] = port
