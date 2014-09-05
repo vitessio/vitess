@@ -85,8 +85,8 @@ type compiledPlan struct {
 	TransactionID int64
 }
 
-// stats are globals to allow anybody to set them
 var (
+	// stats are globals to allow anybody to set them
 	mysqlStats     *stats.Timings
 	queryStats     *stats.Timings
 	waitStats      *stats.Timings
@@ -97,17 +97,11 @@ var (
 	resultStats    *stats.Histogram
 	spotCheckCount *stats.Int
 	QPSRates       *stats.Rates
+
+	resultBuckets = []int64{0, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000}
+
+	connPoolClosedErr = NewTabletError(FATAL, "connection pool is closed")
 )
-
-var resultBuckets = []int64{0, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000}
-
-// CacheInvalidator provides the abstraction needed for an instant invalidation
-// vs. delayed invalidation in the case of in-transaction dmls
-type CacheInvalidator interface {
-	Delete(key string) bool
-}
-
-var connPoolClosedErr = NewTabletError(FATAL, "connection pool is closed")
 
 // Helper method for conn pools to convert errors
 func getOrPanic(pool *dbconnpool.ConnectionPool) dbconnpool.PoolConnection {
@@ -191,8 +185,6 @@ func (qe *QueryEngine) Open(dbconfig *dbconfigs.DBConfig, schemaOverrides []Sche
 		qe.cachePool.Open()
 		log.Infof("rowcache is enabled")
 	} else {
-		// Invalidator should not be enabled if rowcache is not enabled.
-		dbconfig.EnableInvalidator = false
 		log.Infof("rowcache is not enabled")
 	}
 
@@ -206,7 +198,7 @@ func (qe *QueryEngine) Open(dbconfig *dbconfigs.DBConfig, schemaOverrides []Sche
 	// This will allow qe to find the table info
 	// for the invalidation events that will start coming
 	// immediately.
-	if dbconfig.EnableInvalidator {
+	if dbconfig.EnableRowcache {
 		qe.invalidator.Open(dbconfig.DbName, mysqld)
 	}
 	qe.connPool.Open(connFactory)
@@ -266,27 +258,7 @@ func (qe *QueryEngine) Begin(logStats *SQLQueryStats) int64 {
 // Commit commits the specified transaction.
 func (qe *QueryEngine) Commit(logStats *SQLQueryStats, transactionID int64) {
 	defer queryStats.Record("COMMIT", time.Now())
-	dirtyTables, err := qe.activeTxPool.SafeCommit(transactionID)
-	qe.invalidateRows(logStats, dirtyTables)
-	if err != nil {
-		panic(err)
-	}
-}
-
-func (qe *QueryEngine) invalidateRows(logStats *SQLQueryStats, dirtyTables map[string]DirtyKeys) {
-	for tableName, invalidList := range dirtyTables {
-		tableInfo := qe.schemaInfo.GetTable(tableName)
-		if tableInfo == nil {
-			continue
-		}
-		invalidations := int64(0)
-		for key := range invalidList {
-			tableInfo.Cache.Delete(key)
-			invalidations++
-		}
-		logStats.CacheInvalidations += invalidations
-		tableInfo.invalidations.Add(invalidations)
-	}
+	qe.activeTxPool.Commit(transactionID)
 }
 
 // Rollback rolls back the specified transaction.
@@ -343,10 +315,6 @@ func (qe *QueryEngine) Execute(logStats *SQLQueryStats, query *proto.Query) (rep
 		conn := qe.activeTxPool.Get(query.TransactionId)
 		defer conn.Recycle()
 		conn.RecordQuery(plan.Query)
-		var invalidator CacheInvalidator
-		if plan.TableInfo != nil && plan.TableInfo.CacheType != schema.CACHE_NONE {
-			invalidator = conn.DirtyKeys(plan.TableName)
-		}
 		switch plan.PlanId {
 		case planbuilder.PLAN_PASS_DML:
 			if qe.strictMode.Get() != 0 {
@@ -354,13 +322,13 @@ func (qe *QueryEngine) Execute(logStats *SQLQueryStats, query *proto.Query) (rep
 			}
 			reply = qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
 		case planbuilder.PLAN_INSERT_PK:
-			reply = qe.execInsertPK(logStats, conn, plan, invalidator)
+			reply = qe.execInsertPK(logStats, conn, plan)
 		case planbuilder.PLAN_INSERT_SUBQUERY:
-			reply = qe.execInsertSubquery(logStats, conn, plan, invalidator)
+			reply = qe.execInsertSubquery(logStats, conn, plan)
 		case planbuilder.PLAN_DML_PK:
-			reply = qe.execDMLPK(logStats, conn, plan, invalidator)
+			reply = qe.execDMLPK(logStats, conn, plan)
 		case planbuilder.PLAN_DML_SUBQUERY:
-			reply = qe.execDMLSubquery(logStats, conn, plan, invalidator)
+			reply = qe.execDMLSubquery(logStats, conn, plan)
 		case planbuilder.PLAN_OTHER:
 			reply = qe.executeSqlString(logStats, conn, query.Sql, true)
 		default: // select or set in a transaction, just count as select
@@ -544,7 +512,7 @@ func (qe *QueryEngine) execDDL(logStats *SQLQueryStats, ddl string) *mproto.Quer
 		panic(err)
 	}
 	// Stolen from Commit
-	defer qe.activeTxPool.SafeCommit(txid)
+	defer qe.activeTxPool.Commit(txid)
 
 	// Stolen from Execute
 	conn = qe.activeTxPool.Get(txid)
@@ -553,11 +521,7 @@ func (qe *QueryEngine) execDDL(logStats *SQLQueryStats, ddl string) *mproto.Quer
 	if err != nil {
 		panic(err)
 	}
-
-	qe.schemaInfo.DropTable(ddlPlan.TableName)
-	if ddlPlan.Action != sqlparser.AST_DROP { // CREATE, ALTER, RENAME
-		qe.schemaInfo.CreateTable(ddlPlan.NewName)
-	}
+	qe.schemaInfo.triggerReload()
 	return result
 }
 
@@ -743,15 +707,15 @@ func (qe *QueryEngine) execSelect(logStats *SQLQueryStats, plan *compiledPlan) (
 	return
 }
 
-func (qe *QueryEngine) execInsertPK(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, plan *compiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execInsertPK(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, plan *compiledPlan) (result *mproto.QueryResult) {
 	pkRows, err := buildValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
 	if err != nil {
 		panic(err)
 	}
-	return qe.execInsertPKRows(logStats, conn, plan, pkRows, invalidator)
+	return qe.execInsertPKRows(logStats, conn, plan, pkRows)
 }
 
-func (qe *QueryEngine) execInsertSubquery(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, plan *compiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execInsertSubquery(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, plan *compiledPlan) (result *mproto.QueryResult) {
 	innerResult := qe.directFetch(logStats, conn, plan.Subquery, plan.BindVars, nil, nil)
 	innerRows := innerResult.Rows
 	if len(innerRows) == 0 {
@@ -770,10 +734,10 @@ func (qe *QueryEngine) execInsertSubquery(logStats *SQLQueryStats, conn dbconnpo
 	}
 
 	plan.BindVars["_rowValues"] = innerRows
-	return qe.execInsertPKRows(logStats, conn, plan, pkRows, invalidator)
+	return qe.execInsertPKRows(logStats, conn, plan, pkRows)
 }
 
-func (qe *QueryEngine) execInsertPKRows(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, plan *compiledPlan, pkRows [][]sqltypes.Value, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execInsertPKRows(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, plan *compiledPlan, pkRows [][]sqltypes.Value) (result *mproto.QueryResult) {
 	secondaryList, err := buildSecondaryList(plan.TableInfo, pkRows, plan.SecondaryPKValues, plan.BindVars)
 	if err != nil {
 		panic(err)
@@ -783,7 +747,7 @@ func (qe *QueryEngine) execInsertPKRows(logStats *SQLQueryStats, conn dbconnpool
 	return result
 }
 
-func (qe *QueryEngine) execDMLPK(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, plan *compiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execDMLPK(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, plan *compiledPlan) (result *mproto.QueryResult) {
 	pkRows, err := buildValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
 	if err != nil {
 		panic(err)
@@ -794,23 +758,16 @@ func (qe *QueryEngine) execDMLPK(logStats *SQLQueryStats, conn dbconnpool.PoolCo
 	}
 
 	bsc := buildStreamComment(plan.TableInfo, pkRows, secondaryList)
-	result = qe.directFetch(logStats, conn, plan.OuterQuery, plan.BindVars, nil, bsc)
-	if invalidator != nil {
-		for _, pk := range pkRows {
-			key := buildKey(pk)
-			invalidator.Delete(key)
-		}
-	}
-	return result
+	return qe.directFetch(logStats, conn, plan.OuterQuery, plan.BindVars, nil, bsc)
 }
 
-func (qe *QueryEngine) execDMLSubquery(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, plan *compiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execDMLSubquery(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, plan *compiledPlan) (result *mproto.QueryResult) {
 	innerResult := qe.directFetch(logStats, conn, plan.Subquery, plan.BindVars, nil, nil)
 	// no need to validate innerResult
-	return qe.execDMLPKRows(logStats, conn, plan, innerResult.Rows, invalidator)
+	return qe.execDMLPKRows(logStats, conn, plan, innerResult.Rows)
 }
 
-func (qe *QueryEngine) execDMLPKRows(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, plan *compiledPlan, pkRows [][]sqltypes.Value, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execDMLPKRows(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, plan *compiledPlan, pkRows [][]sqltypes.Value) (result *mproto.QueryResult) {
 	if len(pkRows) == 0 {
 		return &mproto.QueryResult{RowsAffected: 0}
 	}
@@ -825,10 +782,6 @@ func (qe *QueryEngine) execDMLPKRows(logStats *SQLQueryStats, conn dbconnpool.Po
 
 		bsc := buildStreamComment(plan.TableInfo, singleRow, secondaryList)
 		rowsAffected += qe.directFetch(logStats, conn, plan.OuterQuery, plan.BindVars, pkRow, bsc).RowsAffected
-		if invalidator != nil {
-			key := buildKey(pkRow)
-			invalidator.Delete(key)
-		}
 	}
 	return &mproto.QueryResult{RowsAffected: rowsAffected}
 }

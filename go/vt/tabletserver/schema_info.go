@@ -78,27 +78,23 @@ type SchemaOverride struct {
 }
 
 type SchemaInfo struct {
-	mu             sync.Mutex
-	tables         map[string]*TableInfo
-	overrides      []SchemaOverride
-	queryCacheSize int
-	queries        *cache.LRUCache
-	rules          *QueryRules
-	connPool       *dbconnpool.ConnectionPool
-	cachePool      *CachePool
-	reloadTime     time.Duration
-	lastChange     time.Time
-	ticks          *timer.Timer
+	mu         sync.Mutex
+	tables     map[string]*TableInfo
+	overrides  []SchemaOverride
+	queries    *cache.LRUCache
+	rules      *QueryRules
+	connPool   *dbconnpool.ConnectionPool
+	cachePool  *CachePool
+	lastChange time.Time
+	ticks      *timer.Timer
 }
 
 func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration) *SchemaInfo {
 	si := &SchemaInfo{
-		queryCacheSize: queryCacheSize,
-		queries:        cache.NewLRUCache(int64(queryCacheSize)),
-		rules:          NewQueryRules(),
-		connPool:       dbconnpool.NewConnectionPool("", 2, idleTimeout),
-		reloadTime:     reloadTime,
-		ticks:          timer.NewTimer(reloadTime),
+		queries:  cache.NewLRUCache(int64(queryCacheSize)),
+		rules:    NewQueryRules(),
+		connPool: dbconnpool.NewConnectionPool("", 2, idleTimeout),
+		ticks:    timer.NewTimer(reloadTime),
 	}
 	stats.Publish("QueryCacheLength", stats.IntFunc(si.queries.Length))
 	stats.Publish("QueryCacheSize", stats.IntFunc(si.queries.Size))
@@ -106,9 +102,7 @@ func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout tim
 	stats.Publish("QueryCacheOldest", stats.StringFunc(func() string {
 		return fmt.Sprintf("%v", si.queries.Oldest())
 	}))
-	stats.Publish("SchemaReloadTime", stats.DurationFunc(func() time.Duration {
-		return si.reloadTime
-	}))
+	stats.Publish("SchemaReloadTime", stats.DurationFunc(si.ticks.Interval))
 	_ = stats.NewMultiCountersFunc("TableStats", []string{"Table", "Stats"}, si.getTableStats)
 	_ = stats.NewMultiCountersFunc("TableInvalidations", []string{"Table"}, si.getTableInvalidations)
 	_ = stats.NewMultiCountersFunc("QueryCounts", []string{"Table", "Plan"}, si.getQueryCount)
@@ -234,9 +228,13 @@ func (si *SchemaInfo) Close() {
 
 func (si *SchemaInfo) Reload() {
 	defer logError()
-	conn := getOrPanic(si.connPool)
-	defer conn.Recycle()
-	tables, err := conn.ExecuteFetch(fmt.Sprintf("%s and unix_timestamp(create_time) > %v", base_show_tables, si.lastChange.Unix()), maxTableCount, false)
+	var tables *mproto.QueryResult
+	var err error
+	func() {
+		conn := getOrPanic(si.connPool)
+		defer conn.Recycle()
+		tables, err = conn.ExecuteFetch(fmt.Sprintf("%s and unix_timestamp(create_time) > %v", base_show_tables, si.lastChange.Unix()), maxTableCount, false)
+	}()
 	if err != nil {
 		log.Warningf("Could not get table list for reload: %v", err)
 		return
@@ -252,7 +250,7 @@ func (si *SchemaInfo) Reload() {
 		if ok {
 			si.DropTable(tableName)
 		}
-		si.createTable(conn, tableName)
+		si.CreateTable(tableName)
 	}
 }
 
@@ -263,12 +261,11 @@ func (si *SchemaInfo) triggerReload() {
 }
 
 func (si *SchemaInfo) CreateTable(tableName string) {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+
 	conn := getOrPanic(si.connPool)
 	defer conn.Recycle()
-	si.createTable(conn, tableName)
-}
-
-func (si *SchemaInfo) createTable(conn dbconnpool.PoolConnection, tableName string) {
 	tables, err := conn.ExecuteFetch(fmt.Sprintf("%s and table_name = '%s'", base_show_tables, tableName), 1, false)
 	if err != nil {
 		panic(NewTabletError(FAIL, "Error fetching table %s: %v", tableName, err))
@@ -290,10 +287,8 @@ func (si *SchemaInfo) createTable(conn dbconnpool.PoolConnection, tableName stri
 	if tableInfo.CacheType == schema.CACHE_NONE {
 		log.Infof("Initialized table: %s", tableName)
 	} else {
-		log.Infof("Initialized cached table: %s", tableInfo.Cache.prefix)
+		log.Infof("Initialized cached table: %s, prefix: %s", tableName, tableInfo.Cache.prefix)
 	}
-	si.mu.Lock()
-	defer si.mu.Unlock()
 	if _, ok := si.tables[tableName]; ok {
 		panic(NewTabletError(FAIL, "Table %s already exists", tableName))
 	}
@@ -311,14 +306,21 @@ func (si *SchemaInfo) createTable(conn dbconnpool.PoolConnection, tableName stri
 func (si *SchemaInfo) DropTable(tableName string) {
 	si.mu.Lock()
 	defer si.mu.Unlock()
+
 	delete(si.tables, tableName)
 	si.queries.Clear()
 	log.Infof("Table %s forgotten", tableName)
 }
 
 func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string) (plan *ExecPlan) {
+	// Fastpath if plan already exists.
+	if plan := si.getQuery(sql); plan != nil {
+		return plan
+	}
+
 	si.mu.Lock()
 	defer si.mu.Unlock()
+	// Recheck. A plan might have been built by someone else.
 	if plan := si.getQuery(sql); plan != nil {
 		return plan
 	}
@@ -418,12 +420,10 @@ func (si *SchemaInfo) SetQueryCacheSize(size int) {
 	if size <= 0 {
 		panic(NewTabletError(FAIL, "cache size %v out of range", size))
 	}
-	si.queryCacheSize = size
 	si.queries.SetCapacity(int64(size))
 }
 
 func (si *SchemaInfo) SetReloadTime(reloadTime time.Duration) {
-	si.reloadTime = reloadTime
 	si.ticks.Trigger()
 	si.ticks.SetInterval(reloadTime)
 }
@@ -558,20 +558,22 @@ func (si *SchemaInfo) ServeHTTP(response http.ResponseWriter, request *http.Requ
 		}
 	} else if request.URL.Path == "/debug/table_stats" {
 		response.Header().Set("Content-Type", "application/json; charset=utf-8")
-		si.mu.Lock()
 		tstats := make(map[string]struct{ hits, absent, misses, invalidations int64 })
 		var temp, totals struct{ hits, absent, misses, invalidations int64 }
-		for k, v := range si.tables {
-			if v.CacheType != schema.CACHE_NONE {
-				temp.hits, temp.absent, temp.misses, temp.invalidations = v.Stats()
-				tstats[k] = temp
-				totals.hits += temp.hits
-				totals.absent += temp.absent
-				totals.misses += temp.misses
-				totals.invalidations += temp.invalidations
+		func() {
+			si.mu.Lock()
+			defer si.mu.Unlock()
+			for k, v := range si.tables {
+				if v.CacheType != schema.CACHE_NONE {
+					temp.hits, temp.absent, temp.misses, temp.invalidations = v.Stats()
+					tstats[k] = temp
+					totals.hits += temp.hits
+					totals.absent += temp.absent
+					totals.misses += temp.misses
+					totals.invalidations += temp.invalidations
+				}
 			}
-		}
-		si.mu.Unlock()
+		}()
 		response.Write([]byte("{\n"))
 		for k, v := range tstats {
 			fmt.Fprintf(response, "\"%s\": {\"Hits\": %v, \"Absent\": %v, \"Misses\": %v, \"Invalidations\": %v},\n", k, v.hits, v.absent, v.misses, v.invalidations)

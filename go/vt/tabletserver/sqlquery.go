@@ -435,7 +435,6 @@ func (sq *SqlQuery) statsJSON() string {
 	fmt.Fprintf(buf, "\n \"State\": \"%v\",", stateName[sq.state.Get()])
 	fmt.Fprintf(buf, "\n \"CachePool\": %v,", sq.qe.cachePool.StatsJSON())
 	fmt.Fprintf(buf, "\n \"QueryCache\": %v,", sq.qe.schemaInfo.queries.StatsJSON())
-	fmt.Fprintf(buf, "\n \"SchemaReloadTime\": %v,", int64(sq.qe.schemaInfo.reloadTime))
 	fmt.Fprintf(buf, "\n \"ConnPool\": %v,", sq.qe.connPool.StatsJSON())
 	fmt.Fprintf(buf, "\n \"StreamConnPool\": %v,", sq.qe.streamConnPool.StatsJSON())
 	fmt.Fprintf(buf, "\n \"TxPool\": %v,", sq.qe.txPool.StatsJSON())

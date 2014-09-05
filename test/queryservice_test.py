@@ -24,12 +24,16 @@ if __name__ == "__main__":
                     help="Environment that will be used. Valid options: vttablet, vtocc")
   parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=1)
   parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=0)
+  parser.add_option('--skip-teardown', action='store_true')
   (options, args) = parser.parse_args()
   utils.options = options
   logging.getLogger().setLevel(logging.ERROR)
 
   suite = unittest.TestSuite()
   if args:
+    if args[0] == 'teardown':
+      test_env.TestEnv(options.env).tearDown()
+      exit(0)
     for arg in args:
       if hasattr(nocache_tests.TestNocache, arg):
         suite.addTest(nocache_tests.TestNocache(arg))
@@ -59,4 +63,6 @@ if __name__ == "__main__":
     if not result.wasSuccessful():
       raise Exception("test failures")
   finally:
-    env.tearDown()
+    if not options.skip_teardown:
+      env.tearDown()
+

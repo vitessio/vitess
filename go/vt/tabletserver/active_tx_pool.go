@@ -108,16 +108,14 @@ func (axp *ActiveTxPool) SafeBegin(conn dbconnpool.PoolConnection) (transactionI
 	return transactionId, nil
 }
 
-func (axp *ActiveTxPool) SafeCommit(transactionId int64) (invalidList map[string]DirtyKeys, err error) {
-	defer handleError(&err, nil)
+func (axp *ActiveTxPool) Commit(transactionId int64) {
 	conn := axp.Get(transactionId)
 	defer conn.discard(TX_COMMIT)
 	axp.txStats.Add("Completed", time.Now().Sub(conn.StartTime))
-	if _, err = conn.ExecuteFetch(COMMIT, 1, false); err != nil {
+	if _, err := conn.ExecuteFetch(COMMIT, 1, false); err != nil {
 		conn.Close()
-		return conn.dirtyTables, NewTabletErrorSql(FAIL, err)
+		panic(NewTabletErrorSql(FAIL, err))
 	}
-	return conn.dirtyTables, nil
 }
 
 func (axp *ActiveTxPool) Rollback(transactionId int64) {
@@ -164,7 +162,6 @@ type TxConnection struct {
 	inUse         bool
 	StartTime     time.Time
 	EndTime       time.Time
-	dirtyTables   map[string]DirtyKeys
 	Queries       []string
 	Conclusion    string
 }
@@ -175,18 +172,8 @@ func newTxConnection(conn dbconnpool.PoolConnection, transactionId int64, pool *
 		TransactionID:  transactionId,
 		pool:           pool,
 		StartTime:      time.Now(),
-		dirtyTables:    make(map[string]DirtyKeys),
 		Queries:        make([]string, 0, 8),
 	}
-}
-
-func (txc *TxConnection) DirtyKeys(tableName string) DirtyKeys {
-	if list, ok := txc.dirtyTables[tableName]; ok {
-		return list
-	}
-	list := make(DirtyKeys)
-	txc.dirtyTables[tableName] = list
-	return list
 }
 
 func (txc *TxConnection) Recycle() {
@@ -221,12 +208,4 @@ func (txc *TxConnection) Format(params url.Values) string {
 		txc.Conclusion,
 		strings.Join(txc.Queries, ";"),
 	)
-}
-
-type DirtyKeys map[string]bool
-
-// Delete just keeps track of what needs to be deleted
-func (dk DirtyKeys) Delete(key string) bool {
-	dk[key] = true
-	return true
 }
