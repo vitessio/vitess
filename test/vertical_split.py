@@ -112,9 +112,6 @@ index by_msg (msg)
                        '-sql=' + create_table_template % (t),
                        'source_keyspace'],
                       auto_log=True)
-      # Two schema updates in the same second are not properly processed.
-      # So sleep a little bit between updates. This is crazy.
-      time.sleep(1)
     utils.run_vtctl(['ApplySchemaKeyspace',
                      '-simple',
                      '-sql=' + create_view_template % ('view1', 'moving1'),
