@@ -4,12 +4,8 @@ If you run into issues or have questions, you can use our mailing list: vitess@g
 ## Dependencies
 
 * [Go](http://golang.org): Needed for building vitess.
-* [Google MySQL](https://code.google.com/r/sougou-vitess-mysql/):
-  We plan to support [MariaDB](https://mariadb.org/) in the future.
-  We currently depend on
-  [Google MySQL's group_id](https://code.google.com/p/google-mysql-tools/wiki/GlobalTransactionIds)
-  capabilities for some of the maintenance operations like
-  reparenting, etc.
+* [MariaDB](https://mariadb.org/): We currently develop with version 10.0.13.
+  Other 10.0.x versions may also work.
 * [ZooKeeper](http://zookeeper.apache.org/): By default, Vitess
   uses Zookeeper as the lock service. It is possible to plug in
   something else as long as the new service supports the
@@ -21,13 +17,21 @@ If you run into issues or have questions, you can use our mailing list: vitess@g
 
 [Install Go](http://golang.org/doc/install).
 
+[Install MariaDB](https://downloads.mariadb.org/).
+You can use any installation method (src/bin/rpm/deb),
+but be sure to include the client development headers (**libmariadbclient-dev**).
+
+Then download and build Vitess. Note that the value of MYSQL_FLAVOR is case-sensitive.
+
 ``` sh
 cd $WORKSPACE
 sudo apt-get install automake libtool memcached python-dev python-mysqldb libssl-dev g++ mercurial git pkg-config bison
 git clone https://github.com/youtube/vitess.git src/github.com/youtube/vitess
 cd src/github.com/youtube/vitess
+export MYSQL_FLAVOR=MariaDB
 ./bootstrap.sh
 . ./dev.env
+make build
 ```
 
 To run the tests:

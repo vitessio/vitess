@@ -1,11 +1,10 @@
 # Production setup
 Setting up vitess in production will depend on many factors.
 Here are some initial considerations:
-* *Google MySQL*: Vitess needs
-[Google MySQL's group_id](https://code.google.com/p/google-mysql-tools/wiki/GlobalTransactionIds)
-capabilities to work correctly, which is based on MySQL 5.1.*.
-Most Vitess features will not work without group_ids.
-TODO: Publish a list of features that won't work.
+* *Global Transaction IDs*: Vitess requires a version of MySQL
+that supports GTIDs, such as Google MySQL 5.1+, MariaDB 10.0+,
+or MySQL 5.6+. We currently support Google MySQL and MariaDB,
+with plans to add MySQL 5.6.
 * *Firewalls*: Vitess tools and servers assume that they
 can open direct TCP connection to each other. If you have
 firewalls between your servers, you may have to add exceptions
@@ -23,7 +22,7 @@ which is assumed to have all administrative privileges.
 * *Client Language*: We currently support
 Python and Go.
 It's not too hard to add support for more languages,
-and are open to contributions in this area.
+and we are open to contributions in this area.
 
 ## Setting up Zookeeper
 ### Global zk setup

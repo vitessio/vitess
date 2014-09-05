@@ -44,7 +44,7 @@ the prefix VT in our code. *Vitesse* means speed in French – and we
 dropped the final E to make it easier to find using Google (also, it
 looks much cooler without the E!).
 
-## Why are using you ZooKeeper instead of Etcd/Doozer/Consul/etc?
+## Why are you using ZooKeeper instead of Etcd/Doozer/Consul/etc?
 
 The topology is a crucial part of our infrastructure, so we didn’t
 want to take any risks with it. ZooKeeper may have some rough edges
@@ -62,7 +62,7 @@ Source first” – when we develop a new feature, we first make it work
 in the Open Source tree, and only then write a plugin that makes use
 of Google specific technologies. We believe this is very important to
 keep us honest, and to ensure that the Open Source version of Vitess
-is as high quality as the internal one. The vast majority of of our
+is as high quality as the internal one. The vast majority of our
 development takes place in the open, on GitHub. This also means that
 Vitess is built with extensibility in mind – it should be pretty
 straightforward to adjust it to the needs of your infrastructure.
