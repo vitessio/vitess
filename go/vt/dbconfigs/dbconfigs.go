@@ -105,10 +105,9 @@ func MysqlParams(cp *mysql.ConnectionParams) (mysql.ConnectionParams, error) {
 // shard.
 type DBConfig struct {
 	mysql.ConnectionParams
-	Keyspace          string
-	Shard             string
-	EnableRowcache    bool
-	EnableInvalidator bool
+	Keyspace       string
+	Shard          string
+	EnableRowcache bool
 }
 
 func (d *DBConfig) String() string {

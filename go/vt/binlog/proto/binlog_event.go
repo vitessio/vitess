@@ -57,6 +57,11 @@ type BinlogEvent interface {
 	// GTID returns the GTID from the event.
 	// This is only valid if HasGTID() returns true.
 	GTID(BinlogFormat) (myproto.GTID, error)
+	// IsBeginGTID returns true if this is a GTID_EVENT that also serves as a
+	// BEGIN statement. Otherwise, the GTID_EVENT is just providing the GTID for
+	// the following QUERY_EVENT.
+	// This is only valid if IsGTID() returns true.
+	IsBeginGTID(BinlogFormat) bool
 	// Query returns the database name (or "" if none) and SQL statement for a
 	// QUERY_EVENT.
 	// This is only valid if IsQuery() returns true.

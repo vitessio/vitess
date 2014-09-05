@@ -82,7 +82,8 @@ func BenchmarkConnStreamerParseEvents(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		events := readEvents(b, filename)
 		svm.Go(func(svc *sync2.ServiceContext) error {
-			return bls.parseEvents(svc, events)
+			_, err := bls.parseEvents(svc, events)
+			return err
 		})
 		if err := svm.Join(); err != ServerEOF {
 			b.Errorf("%v", err)
