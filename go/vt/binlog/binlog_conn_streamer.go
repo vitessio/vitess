@@ -23,7 +23,7 @@ type binlogConnStreamer struct {
 	// dbname and mysqld are set at creation.
 	dbname          string
 	mysqld          *mysqlctl.Mysqld
-	startPos        myproto.GTID
+	startPos        myproto.ReplicationPosition
 	sendTransaction sendTransactionFunc
 
 	conn *mysqlctl.SlaveConnection
@@ -35,7 +35,7 @@ type binlogConnStreamer struct {
 // newBinlogConnStreamer creates a BinlogStreamer.
 //
 // dbname specifes the db to stream events for.
-func newBinlogConnStreamer(dbname string, mysqld *mysqlctl.Mysqld, startPos myproto.GTID, sendTransaction sendTransactionFunc) BinlogStreamer {
+func newBinlogConnStreamer(dbname string, mysqld *mysqlctl.Mysqld, startPos myproto.ReplicationPosition, sendTransaction sendTransactionFunc) BinlogStreamer {
 	return &binlogConnStreamer{
 		dbname:          dbname,
 		mysqld:          mysqld,
@@ -156,7 +156,7 @@ func (bls *binlogConnStreamer) parseEvents(ctx *sync2.ServiceContext, events <-c
 			}
 		}
 
-		switch true {
+		switch {
 		case ev.IsXID(): // XID_EVENT (equivalent to COMMIT)
 			if err = commit(int64(ev.Timestamp())); err != nil {
 				return err
@@ -195,8 +195,10 @@ func (bls *binlogConnStreamer) parseEvents(ctx *sync2.ServiceContext, events <-c
 				statements = make([]proto.Statement, 0, 10)
 				autocommit = false
 			case proto.BL_ROLLBACK:
-				// Rollbacks are possible under some circumstances. So, let's honor them
-				// by sending an empty transaction, which will contain the new binlog position.
+				// Rollbacks are possible under some circumstances. Since the stream
+				// client keeps track of its replication position by updating the set
+				// of GTIDs it's seen, we must commit an empty transaction so the client
+				// can update its position.
 				statements = nil
 				fallthrough
 			case proto.BL_COMMIT:

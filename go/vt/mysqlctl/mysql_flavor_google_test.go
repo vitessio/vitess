@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/youtube/vitess/go/mysql"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	proto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
@@ -169,12 +170,136 @@ func TestGoogleBinlogEventGTID(t *testing.T) {
 	}
 
 	input := googleBinlogEvent{binlogEvent: binlogEvent(googleQueryEvent)}
-	want := proto.GoogleGTID{GroupID: 0xb}
+	want := proto.GoogleGTID{ServerID: 62344, GroupID: 0xb}
 	got, err := input.GTID(f)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("%#v.GTID() = %#v, want %#v", input, got, want)
+	}
+}
+
+func TestGoogleStartReplicationCommands(t *testing.T) {
+	params := &mysql.ConnectionParams{
+		Uname: "username",
+		Pass:  "password",
+	}
+	status := &proto.ReplicationStatus{
+		Position:           proto.ReplicationPosition{GTIDSet: proto.GoogleGTID{ServerID: 41983, GroupID: 12345}},
+		MasterHost:         "localhost",
+		MasterPort:         123,
+		MasterConnectRetry: 1234,
+	}
+	want := []string{
+		"STOP SLAVE",
+		"RESET SLAVE",
+		"SET binlog_group_id = 12345, master_server_id = 41983",
+		`CHANGE MASTER TO
+  MASTER_HOST = 'localhost',
+  MASTER_PORT = 123,
+  MASTER_USER = 'username',
+  MASTER_PASSWORD = 'password',
+  MASTER_CONNECT_RETRY = 1234,
+  CONNECT_USING_GROUP_ID`,
+		"START SLAVE",
+	}
+
+	got, err := (&googleMysql51{}).StartReplicationCommands(params, status)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("(&googleMysql51{}).StartReplicationCommands(%#v, %#v) = %#v, want %#v", params, status, got, want)
+	}
+}
+
+func TestGoogleStartReplicationCommandsSSL(t *testing.T) {
+	params := &mysql.ConnectionParams{
+		Uname:     "username",
+		Pass:      "password",
+		SslCa:     "ssl-ca",
+		SslCaPath: "ssl-ca-path",
+		SslCert:   "ssl-cert",
+		SslKey:    "ssl-key",
+	}
+	params.EnableSSL()
+	status := &proto.ReplicationStatus{
+		Position:           proto.ReplicationPosition{GTIDSet: proto.GoogleGTID{ServerID: 41983, GroupID: 12345}},
+		MasterHost:         "localhost",
+		MasterPort:         123,
+		MasterConnectRetry: 1234,
+	}
+	want := []string{
+		"STOP SLAVE",
+		"RESET SLAVE",
+		"SET binlog_group_id = 12345, master_server_id = 41983",
+		`CHANGE MASTER TO
+  MASTER_HOST = 'localhost',
+  MASTER_PORT = 123,
+  MASTER_USER = 'username',
+  MASTER_PASSWORD = 'password',
+  MASTER_CONNECT_RETRY = 1234,
+  MASTER_SSL = 1,
+  MASTER_SSL_CA = 'ssl-ca',
+  MASTER_SSL_CAPATH = 'ssl-ca-path',
+  MASTER_SSL_CERT = 'ssl-cert',
+  MASTER_SSL_KEY = 'ssl-key',
+  CONNECT_USING_GROUP_ID`,
+		"START SLAVE",
+	}
+
+	got, err := (&googleMysql51{}).StartReplicationCommands(params, status)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("(&googleMysql51{}).StartReplicationCommands(%#v, %#v) = %#v, want %#v", params, status, got, want)
+	}
+}
+
+func TestGoogleParseGTID(t *testing.T) {
+	input := "123-456"
+	want := proto.GoogleGTID{ServerID: 123, GroupID: 456}
+
+	got, err := (&googleMysql51{}).ParseGTID(input)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got != want {
+		t.Errorf("(&googleMysql51{}).ParseGTID(%#v) = %#v, want %#v", input, got, want)
+	}
+}
+
+func TestGoogleParseReplicationPosition(t *testing.T) {
+	input := "123-456"
+	want := proto.ReplicationPosition{GTIDSet: proto.GoogleGTID{ServerID: 123, GroupID: 456}}
+
+	got, err := (&googleMysql51{}).ParseReplicationPosition(input)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if !got.Equal(want) {
+		t.Errorf("(&googleMysql51{}).ParseReplicationPosition(%#v) = %#v, want %#v", input, got, want)
+	}
+}
+
+func TestMakeBinlogDump2Command(t *testing.T) {
+	want := []byte{
+		// binlog_flags
+		0xfe, 0xca,
+		// slave_server_id
+		0xef, 0xbe, 0xad, 0xde,
+		// group_id
+		0x78, 0x56, 0x34, 0x12, 0x78, 0x56, 0x34, 0x12,
+		// event_server_id
+		0x21, 0x43, 0x65, 0x87,
+	}
+
+	got := makeBinlogDump2Command(0xcafe, 0xdeadbeef, 0x1234567812345678, 0x87654321)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("makeBinlogDump2Command() = %#v, want %#v", got, want)
 	}
 }

@@ -14,8 +14,8 @@ import (
 
 // BlpPosition describes a binlog player position to start from.
 type BlpPosition struct {
-	Uid       uint32
-	GTIDField myproto.GTIDField
+	Uid      uint32
+	Position myproto.ReplicationPosition
 }
 
 // BlpPositionList is a list of BlpPosition, not sorted.

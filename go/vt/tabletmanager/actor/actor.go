@@ -222,7 +222,7 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 		actionnode.TABLET_ACTION_GET_SCHEMA,
 		actionnode.TABLET_ACTION_RELOAD_SCHEMA,
 		actionnode.TABLET_ACTION_GET_PERMISSIONS,
-		actionnode.TABLET_ACTION_SLAVE_POSITION,
+		actionnode.TABLET_ACTION_SLAVE_STATUS,
 		actionnode.TABLET_ACTION_WAIT_SLAVE_POSITION,
 		actionnode.TABLET_ACTION_MASTER_POSITION,
 		actionnode.TABLET_ACTION_STOP_SLAVE,
@@ -314,12 +314,15 @@ func (ta *TabletActor) promoteSlave(actionNode *actionnode.ActionNode) error {
 	}
 
 	// Perform the action.
-	rsd := &actionnode.RestartSlaveData{Parent: tablet.Alias, Force: (tablet.Parent.Uid == topo.NO_TABLET)}
-	rsd.ReplicationState, rsd.WaitPosition, rsd.TimePromoted, err = ta.mysqld.PromoteSlave(false, ta.hookExtraEnv())
+	rsd := &actionnode.RestartSlaveData{
+		Parent: tablet.Alias,
+		Force:  (tablet.Parent.Uid == topo.NO_TABLET),
+	}
+	rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted, err = ta.mysqld.PromoteSlave(false, ta.hookExtraEnv())
 	if err != nil {
 		return err
 	}
-	log.Infof("PromoteSlave %v", rsd.String())
+	log.Infof("PromoteSlave %v", rsd)
 	actionNode.Reply = rsd
 
 	return updateReplicationGraphForPromotedSlave(ta.ts, tablet)
@@ -370,18 +373,18 @@ func updateReplicationGraphForPromotedSlave(ts topo.Server, tablet *topo.TabletI
 }
 
 func (ta *TabletActor) reparentPosition(actionNode *actionnode.ActionNode) error {
-	slavePos := actionNode.Args.(*myproto.ReplicationPosition)
+	slavePos := *actionNode.Args.(*myproto.ReplicationPosition)
 
-	replicationState, waitPosition, timePromoted, err := ta.mysqld.ReparentPosition(slavePos)
+	replicationStatus, waitPosition, timePromoted, err := ta.mysqld.ReparentPosition(slavePos)
 	if err != nil {
 		return err
 	}
 	rsd := new(actionnode.RestartSlaveData)
-	rsd.ReplicationState = replicationState
+	rsd.ReplicationStatus = replicationStatus
 	rsd.TimePromoted = timePromoted
 	rsd.WaitPosition = waitPosition
 	rsd.Parent = ta.tabletAlias
-	log.V(6).Infof("reparentPosition %v", rsd.String())
+	log.V(6).Infof("reparentPosition: %v", rsd)
 	actionNode.Reply = rsd
 	return nil
 }
@@ -410,7 +413,7 @@ func (ta *TabletActor) restartSlave(actionNode *actionnode.ActionNode) error {
 		if tablet.Type == topo.TYPE_LAG {
 			tablet.Type = topo.TYPE_LAG_ORPHAN
 		} else {
-			err = ta.mysqld.RestartSlave(rsd.ReplicationState, rsd.WaitPosition, rsd.TimePromoted)
+			err = ta.mysqld.RestartSlave(rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted)
 			if err != nil {
 				return err
 			}
@@ -422,7 +425,7 @@ func (ta *TabletActor) restartSlave(actionNode *actionnode.ActionNode) error {
 			return err
 		}
 	} else if rsd.Force {
-		err = ta.mysqld.RestartSlave(rsd.ReplicationState, rsd.WaitPosition, rsd.TimePromoted)
+		err = ta.mysqld.RestartSlave(rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted)
 		if err != nil {
 			return err
 		}
@@ -437,11 +440,11 @@ func (ta *TabletActor) restartSlave(actionNode *actionnode.ActionNode) error {
 	} else {
 		// There is nothing to safely reparent, so check replication. If
 		// either replication thread is not running, report an error.
-		replicationPos, err := ta.mysqld.SlaveStatus()
+		status, err := ta.mysqld.SlaveStatus()
 		if err != nil {
 			return fmt.Errorf("cannot verify replication for slave: %v", err)
 		}
-		if replicationPos.SecondsBehindMaster == myproto.InvalidLagSeconds {
+		if !status.SlaveRunning() {
 			return fmt.Errorf("replication not running for slave")
 		}
 	}

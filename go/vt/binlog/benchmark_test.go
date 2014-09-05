@@ -9,13 +9,14 @@ import (
 	"github.com/youtube/vitess/go/testfiles"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 func BenchmarkFileStreamerParseEvents(b *testing.B) {
 	filename := testfiles.Locate("binlog_test/vt-0000062347-bin.000001")
 	var svm sync2.ServiceManager
 	count := 0
-	bls := newTestBinlogFileStreamer("vt_test_database", "", nil, func(tx *proto.BinlogTransaction) error {
+	bls := newTestBinlogFileStreamer("vt_test_database", "", myproto.ReplicationPosition{}, func(tx *proto.BinlogTransaction) error {
 		count++
 		return nil
 	})

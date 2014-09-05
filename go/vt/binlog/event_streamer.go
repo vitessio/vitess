@@ -39,11 +39,11 @@ type EventStreamer struct {
 	sendEvent sendEventFunc
 }
 
-func NewEventStreamer(dbname string, mysqld *mysqlctl.Mysqld, gtid myproto.GTID, sendEvent sendEventFunc) *EventStreamer {
+func NewEventStreamer(dbname string, mysqld *mysqlctl.Mysqld, startPos myproto.ReplicationPosition, sendEvent sendEventFunc) *EventStreamer {
 	evs := &EventStreamer{
 		sendEvent: sendEvent,
 	}
-	evs.bls = NewBinlogStreamer(dbname, mysqld, gtid, evs.transactionToEvent)
+	evs.bls = NewBinlogStreamer(dbname, mysqld, startPos, evs.transactionToEvent)
 	return evs
 }
 

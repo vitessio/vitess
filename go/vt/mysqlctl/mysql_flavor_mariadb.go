@@ -7,7 +7,12 @@ package mysqlctl
 import (
 	"encoding/binary"
 	"fmt"
+	"strconv"
+	"strings"
+	"time"
 
+	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/mysql"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
@@ -18,55 +23,83 @@ type mariaDB10 struct {
 
 const mariadbFlavorID = "MariaDB"
 
-// MasterStatus implements MysqlFlavor.MasterStatus
-func (flavor *mariaDB10) MasterStatus(mysqld *Mysqld) (rp *proto.ReplicationPosition, err error) {
-	// grab what we need from SHOW MASTER STATUS
-	qr, err := mysqld.fetchSuperQuery("SHOW MASTER STATUS")
+// MasterPosition implements MysqlFlavor.MasterPosition().
+func (flavor *mariaDB10) MasterPosition(mysqld *Mysqld) (rp proto.ReplicationPosition, err error) {
+	qr, err := mysqld.fetchSuperQuery("SELECT @@GLOBAL.gtid_binlog_pos")
 	if err != nil {
-		return
+		return rp, err
 	}
-	if len(qr.Rows) != 1 {
-		return nil, ErrNotMaster
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return rp, fmt.Errorf("unexpected result format for gtid_binlog_pos: %#v", qr)
 	}
-	if len(qr.Rows[0]) < 2 {
-		return nil, fmt.Errorf("unknown format for SHOW MASTER STATUS")
-	}
-	rp = &proto.ReplicationPosition{}
-	rp.MasterLogFile = qr.Rows[0][0].String()
-	utemp, err := qr.Rows[0][1].ParseUint64()
-	if err != nil {
-		return nil, err
-	}
-	rp.MasterLogPosition = uint(utemp)
-
-	// grab the corresponding GTID
-	qr, err = mysqld.fetchSuperQuery(fmt.Sprintf("SELECT BINLOG_GTID_POS('%v', %v)", rp.MasterLogFile, rp.MasterLogPosition))
-	if err != nil {
-		return
-	}
-	if len(qr.Rows) != 1 {
-		return nil, fmt.Errorf("BINLOG_GTID_POS failed with no rows")
-	}
-	if len(qr.Rows[0]) < 1 {
-		return nil, fmt.Errorf("BINLOG_GTID_POS returned no result")
-	}
-	rp.MasterLogGTIDField.Value, err = flavor.ParseGTID(qr.Rows[0][0].String())
-	if err != nil {
-		return nil, err
-	}
-
-	// On the master, the SQL position and IO position are at
-	// necessarily the same point.
-	rp.MasterLogFileIo = rp.MasterLogFile
-	rp.MasterLogPositionIo = rp.MasterLogPosition
-	return
+	return flavor.ParseReplicationPosition(qr.Rows[0][0].String())
 }
 
-// PromoteSlaveCommands implements MysqlFlavor.PromoteSlaveCommands
+// SlaveStatus implements MysqlFlavor.SlaveStatus().
+func (flavor *mariaDB10) SlaveStatus(mysqld *Mysqld) (*proto.ReplicationStatus, error) {
+	fields, err := mysqld.fetchSuperQueryMap("SHOW SLAVE STATUS")
+	if err != nil {
+		return nil, ErrNotSlave
+	}
+	status := &proto.ReplicationStatus{
+		SlaveIORunning:  fields["Slave_IO_Running"] == "Yes",
+		SlaveSQLRunning: fields["Slave_SQL_Running"] == "Yes",
+	}
+	status.Position, err = flavor.ParseReplicationPosition(fields["Exec_Master_Group_ID"])
+	if err != nil {
+		return nil, err
+	}
+	temp, _ := strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
+	status.SecondsBehindMaster = uint(temp)
+	return status, nil
+}
+
+// WaitMasterPos implements MysqlFlavor.WaitMasterPos().
+//
+// Note: Unlike MASTER_POS_WAIT(), MASTER_GTID_WAIT() will continue waiting even
+// if the slave thread stops. If that is a problem, we'll have to change this.
+func (*mariaDB10) WaitMasterPos(mysqld *Mysqld, targetPos proto.ReplicationPosition, waitTimeout time.Duration) error {
+	query := fmt.Sprintf("SELECT MASTER_GTID_WAIT('%s', %.6f)", targetPos, waitTimeout.Seconds())
+
+	log.Infof("Waiting for minimum replication position with query: %v", query)
+	qr, err := mysqld.fetchSuperQuery(query)
+	if err != nil {
+		return fmt.Errorf("MASTER_GTID_WAIT() failed: %v", err)
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return fmt.Errorf("unexpected result format from MASTER_GTID_WAIT(): %#v", qr)
+	}
+	result := qr.Rows[0][0].String()
+	if result == "-1" {
+		return fmt.Errorf("timed out waiting for position %v", targetPos)
+	}
+	return nil
+}
+
+// PromoteSlaveCommands implements MysqlFlavor.PromoteSlaveCommands().
 func (*mariaDB10) PromoteSlaveCommands() []string {
 	return []string{
 		"RESET SLAVE",
 	}
+}
+
+// StartReplicationCommands implements MysqlFlavor.StartReplicationCommands().
+func (*mariaDB10) StartReplicationCommands(params *mysql.ConnectionParams, status *proto.ReplicationStatus) ([]string, error) {
+	// Make SET gtid_slave_pos command.
+	setSlavePos := fmt.Sprintf("SET GLOBAL gtid_slave_pos = '%s'", status.Position)
+
+	// Make CHANGE MASTER TO command.
+	args := changeMasterArgs(params, status)
+	args = append(args, "MASTER_USE_GTID = slave_pos")
+	changeMasterTo := "CHANGE MASTER TO\n  " + strings.Join(args, ",\n  ")
+
+	return []string{
+		"STOP SLAVE",
+		"RESET SLAVE",
+		setSlavePos,
+		changeMasterTo,
+		"START SLAVE",
+	}, nil
 }
 
 // ParseGTID implements MysqlFlavor.ParseGTID().
@@ -74,8 +107,13 @@ func (*mariaDB10) ParseGTID(s string) (proto.GTID, error) {
 	return proto.ParseGTID(mariadbFlavorID, s)
 }
 
+// ParseReplicationPosition implements MysqlFlavor.ParseReplicationposition().
+func (*mariaDB10) ParseReplicationPosition(s string) (proto.ReplicationPosition, error) {
+	return proto.ParseReplicationPosition(mariadbFlavorID, s)
+}
+
 // SendBinlogDumpCommand implements MysqlFlavor.SendBinlogDumpCommand().
-func (*mariaDB10) SendBinlogDumpCommand(mysqld *Mysqld, conn *SlaveConnection, startPos proto.GTID) error {
+func (*mariaDB10) SendBinlogDumpCommand(mysqld *Mysqld, conn *SlaveConnection, startPos proto.ReplicationPosition) error {
 	const COM_BINLOG_DUMP = 0x12
 
 	// MariaDB expects the slave to set the @slave_connect_state variable before
