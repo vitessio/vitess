@@ -137,7 +137,7 @@ func (tm *Timer) Stop() {
 	}
 }
 
-// Interval returns the curren interval.
+// Interval returns the current interval.
 func (tm *Timer) Interval() time.Duration {
 	return tm.interval.Get()
 }
