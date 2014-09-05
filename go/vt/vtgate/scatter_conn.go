@@ -58,6 +58,51 @@ func NewScatterConn(serv SrvTopoServer, statsName, cell string, retryDelay time.
 	}
 }
 
+// InitializeConnections pre-initializes all ShardConn which create underlying connections.
+// It also populates topology cache by accessing it.
+// It is not necessary to call this function before serving queries,
+// but it would reduce connection overhead when serving.
+func (stc *ScatterConn) InitializeConnections(ctx context.Context) error {
+	ksNames, err := stc.toposerv.GetSrvKeyspaceNames(ctx, stc.cell)
+	if err != nil {
+		return err
+	}
+	var wg sync.WaitGroup
+	var errRecorder concurrency.AllErrorRecorder
+	for _, ksName := range ksNames {
+		wg.Add(1)
+		go func(keyspace string) {
+			defer wg.Done()
+			// get SrvKeyspace for cell/keyspace
+			ks, err := stc.toposerv.GetSrvKeyspace(ctx, stc.cell, keyspace)
+			if err != nil {
+				errRecorder.RecordError(err)
+				return
+			}
+			// work on all shards of all tablet types
+			for tabletType, ksPartition := range ks.Partitions {
+				for _, shard := range ksPartition.Shards {
+					wg.Add(1)
+					go func(shardName string, tabletType topo.TabletType) {
+						defer wg.Done()
+						shardConn := stc.getConnection(ctx, keyspace, shardName, tabletType)
+						err = shardConn.Dial(ctx)
+						if err != nil {
+							errRecorder.RecordError(err)
+							return
+						}
+					}(shard.ShardName(), tabletType)
+				}
+			}
+		}(ksName)
+	}
+	wg.Wait()
+	if errRecorder.HasErrors() {
+		return errRecorder.Error()
+	}
+	return nil
+}
+
 // Execute executes a non-streaming query on the specified shards.
 func (stc *ScatterConn) Execute(
 	context context.Context,
