@@ -233,7 +233,7 @@ func (si *SchemaInfo) Reload() {
 	func() {
 		conn := getOrPanic(si.connPool)
 		defer conn.Recycle()
-		tables, err = conn.ExecuteFetch(fmt.Sprintf("%s and unix_timestamp(create_time) > %v", base_show_tables, si.lastChange.Unix()), maxTableCount, false)
+		tables, err = conn.ExecuteFetch(fmt.Sprintf("%s and unix_timestamp(create_time) >= %v", base_show_tables, si.lastChange.Unix()), maxTableCount, false)
 	}()
 	if err != nil {
 		log.Warningf("Could not get table list for reload: %v", err)
