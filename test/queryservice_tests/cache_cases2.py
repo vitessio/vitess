@@ -126,7 +126,7 @@ cases = [
        "begin",
        "insert into vtocc_cached2(eid, bid, name, foo) values (1, 'bar', 'abcd1', 'efgh')",
        Case2(sql="commit",
-            cache_invalidations=0)]),
+            cache_invalidations=1)]),
   # (1.foo, 2.foo)
 
   Case2(doc="Verify 1.foo is in cache",
