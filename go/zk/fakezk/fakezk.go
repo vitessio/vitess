@@ -318,6 +318,9 @@ func (conn *zconn) Delete(zkPath string, version int) (err error) {
 }
 
 func (conn *zconn) Close() error {
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+
 	for _, watches := range conn.existWatches {
 		for _, c := range watches {
 			close(c)

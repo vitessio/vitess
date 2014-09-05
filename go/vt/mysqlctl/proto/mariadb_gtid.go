@@ -48,6 +48,9 @@ func parseMariadbGTID(s string) (GTID, error) {
 // parseMariadbGTIDSet is registered as a GTIDSet parser.
 func parseMariadbGTIDSet(s string) (GTIDSet, error) {
 	gtid, err := parseMariadbGTID(s)
+	if err != nil {
+		return nil, err
+	}
 	return gtid.(MariadbGTID), err
 }
 

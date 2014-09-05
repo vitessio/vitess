@@ -46,6 +46,13 @@ func NewResolver(serv SrvTopoServer, statsName, cell string, retryDelay time.Dur
 	}
 }
 
+// InitializeConnections pre-initializes VTGate by connecting to vttablets of all keyspace/shard/type.
+// It is not necessary to call this function before serving queries,
+// but it would reduce connection overhead when serving.
+func (res *Resolver) InitializeConnections(ctx context.Context) error {
+	return res.scatterConn.InitializeConnections(ctx)
+}
+
 // ExecuteKeyspaceIds executes a non-streaming query based on KeyspaceIds.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 func (res *Resolver) ExecuteKeyspaceIds(context context.Context, query *proto.KeyspaceIdQuery) (*mproto.QueryResult, error) {

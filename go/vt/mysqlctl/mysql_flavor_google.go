@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -60,26 +59,21 @@ func (flavor *googleMysql51) SlaveStatus(mysqld *Mysqld) (*proto.ReplicationStat
 	if err != nil {
 		return nil, ErrNotSlave
 	}
-	status := &proto.ReplicationStatus{
-		SlaveIORunning:  fields["Slave_IO_Running"] == "Yes",
-		SlaveSQLRunning: fields["Slave_SQL_Running"] == "Yes",
-	}
+	status := parseSlaveStatus(fields)
+
 	groupID := fields["Exec_Master_Group_ID"]
 
 	// Get the server_id that created this group_id.
 	info, err := mysqld.fetchSuperQueryMap("SHOW BINLOG INFO FOR " + groupID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("SlaveStatus can't get server_id for group_id (%v): %v", groupID, err)
 	}
 	// Create the fake Google GTID syntax we invented.
 	pos := info["Server_ID"] + "-" + groupID
-
 	status.Position, err = flavor.ParseReplicationPosition(pos)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("SlaveStatus can't parse Google GTID (%v): %v", pos, err)
 	}
-	temp, _ := strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
-	status.SecondsBehindMaster = uint(temp)
 	return status, nil
 }
 

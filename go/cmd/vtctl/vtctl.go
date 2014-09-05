@@ -145,10 +145,7 @@ func (rts rTablets) Less(i, j int) bool {
 		return true
 	}
 	if lTypeMaster == rTypeMaster {
-		if l.IOPosition.Equal(r.IOPosition) {
-			return !l.Position.AtLeast(r.Position)
-		}
-		return !l.IOPosition.AtLeast(r.IOPosition)
+		return !l.Position.AtLeast(r.Position)
 	}
 	return false
 }

@@ -36,6 +36,9 @@ func parseGoogleGTID(s string) (GTID, error) {
 // parseGoogleGTIDSet is registered as a GTIDSet parser.
 func parseGoogleGTIDSet(s string) (GTIDSet, error) {
 	gtid, err := parseGoogleGTID(s)
+	if err != nil {
+		return nil, err
+	}
 	return gtid.(GoogleGTID), err
 }
 

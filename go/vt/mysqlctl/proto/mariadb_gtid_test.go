@@ -83,7 +83,21 @@ func TestParseMariaGTIDSet(t *testing.T) {
 		t.Errorf("%v", err)
 	}
 	if got.(MariadbGTID) != want {
-		t.Errorf("parseMariadbGTIDSet(%v) = %v, want %v", input, got, want)
+		t.Errorf("parseMariadbGTIDSet(%#v) = %#v, want %#v", input, got, want)
+	}
+}
+
+func TestParseInvalidMariaGTIDSet(t *testing.T) {
+	input := "12-34-56d78"
+	want := "invalid MariaDB GTID Sequence number"
+
+	_, err := parseMariadbGTIDSet(input)
+	if err == nil {
+		t.Errorf("expected error for invalid input (%#v)", input)
+		return
+	}
+	if got := err.Error(); !strings.HasPrefix(got, want) {
+		t.Errorf("parseMariadbGTIDSet(%#v) error = %#v, want %#v", input, got, want)
 	}
 }
 

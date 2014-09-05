@@ -199,7 +199,6 @@ func (rp *ReplicationPosition) UnmarshalJSON(buf []byte) error {
 // ReplicationStatus holds replication information from SHOW SLAVE STATUS.
 type ReplicationStatus struct {
 	Position            ReplicationPosition
-	IOPosition          ReplicationPosition
 	SlaveIORunning      bool
 	SlaveSQLRunning     bool
 	SecondsBehindMaster uint
