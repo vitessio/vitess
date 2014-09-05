@@ -9,10 +9,12 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/event"
 	cc "github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topotools/events"
 )
 
 // replaceError replaces original with recent if recent is not nil,
@@ -32,18 +34,13 @@ func replaceError(original, recent error) error {
 // the original type is master, it will proceed only if
 // forceMasterSnapshot is true). It returns a function that will
 // restore the original state.
-func (wr *Wrangler) prepareToSnapshot(tabletAlias topo.TabletAlias, forceMasterSnapshot bool) (restoreAfterSnapshot func() error, err error) {
-	ti, err := wr.ts.GetTablet(tabletAlias)
-	if err != nil {
-		return
-	}
-
+func (wr *Wrangler) prepareToSnapshot(ti *topo.TabletInfo, forceMasterSnapshot bool) (restoreAfterSnapshot func() error, err error) {
 	originalType := ti.Tablet.Type
 
 	if ti.Tablet.Type == topo.TYPE_MASTER && forceMasterSnapshot {
 		// In this case, we don't bother recomputing the serving graph.
 		// All queries will have to fail anyway.
-		log.Infof("force change type master -> backup: %v", tabletAlias)
+		log.Infof("force change type master -> backup: %v", ti.Alias)
 		// There is a legitimate reason to force in the case of a single
 		// master.
 		ti.Tablet.Type = topo.TYPE_BACKUP
@@ -57,10 +54,10 @@ func (wr *Wrangler) prepareToSnapshot(tabletAlias topo.TabletAlias, forceMasterS
 	}
 
 	restoreAfterSnapshot = func() (err error) {
-		log.Infof("change type after snapshot: %v %v", tabletAlias, originalType)
+		log.Infof("change type after snapshot: %v %v", ti.Alias, originalType)
 
 		if ti.Tablet.Parent.Uid == topo.NO_TABLET && forceMasterSnapshot {
-			log.Infof("force change type backup -> master: %v", tabletAlias)
+			log.Infof("force change type backup -> master: %v", ti.Alias)
 			ti.Tablet.Type = topo.TYPE_MASTER
 			return topo.UpdateTablet(wr.ts, ti)
 		}
@@ -69,26 +66,64 @@ func (wr *Wrangler) prepareToSnapshot(tabletAlias topo.TabletAlias, forceMasterS
 	}
 
 	return
-
 }
 
-func (wr *Wrangler) MultiRestore(dstTabletAlias topo.TabletAlias, sources []topo.TabletAlias, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) error {
-	actionPath, err := wr.ai.MultiRestore(dstTabletAlias, &actionnode.MultiRestoreArgs{
-		SrcTabletAliases:       sources,
-		Concurrency:            concurrency,
-		FetchConcurrency:       fetchConcurrency,
-		InsertTableConcurrency: insertTableConcurrency,
-		FetchRetryCount:        fetchRetryCount,
-		Strategy:               strategy})
+func (wr *Wrangler) MultiRestore(dstTabletAlias topo.TabletAlias, sources []topo.TabletAlias, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) (err error) {
+	var ti *topo.TabletInfo
+	ti, err = wr.ts.GetTablet(dstTabletAlias)
+	if err != nil {
+		return
+	}
+
+	args := &actionnode.MultiRestoreArgs{SrcTabletAliases: sources, Concurrency: concurrency, FetchConcurrency: fetchConcurrency, InsertTableConcurrency: insertTableConcurrency, FetchRetryCount: fetchRetryCount, Strategy: strategy}
+	ev := &events.MultiRestore{
+		Tablet: *ti.Tablet,
+		Args:   *args,
+	}
+	event.DispatchUpdate(ev, "starting")
+	defer func() {
+		if err != nil {
+			event.DispatchUpdate(ev, "failed: "+err.Error())
+		}
+	}()
+
+	actionPath, err := wr.ai.MultiRestore(dstTabletAlias, args)
 	if err != nil {
 		return err
 	}
 
-	return wr.WaitForCompletion(actionPath)
+	if err := wr.WaitForCompletion(actionPath); err != nil {
+		return err
+	}
+
+	event.DispatchUpdate(ev, "finished")
+	return nil
 }
 
 func (wr *Wrangler) MultiSnapshot(keyRanges []key.KeyRange, tabletAlias topo.TabletAlias, concurrency int, tables, excludeTables []string, forceMasterSnapshot, skipSlaveRestart bool, maximumFilesize uint64) (manifests []string, parent topo.TabletAlias, err error) {
-	restoreAfterSnapshot, err := wr.prepareToSnapshot(tabletAlias, forceMasterSnapshot)
+	var ti *topo.TabletInfo
+	ti, err = wr.ts.GetTablet(tabletAlias)
+	if err != nil {
+		return
+	}
+
+	args := &actionnode.MultiSnapshotArgs{KeyRanges: keyRanges, Concurrency: concurrency, Tables: tables, ExcludeTables: excludeTables, SkipSlaveRestart: skipSlaveRestart, MaximumFilesize: maximumFilesize}
+	ev := &events.MultiSnapshot{
+		Tablet: *ti.Tablet,
+		Args:   *args,
+	}
+	if len(tables) > 0 {
+		event.DispatchUpdate(ev, "starting table")
+	} else {
+		event.DispatchUpdate(ev, "starting keyrange")
+	}
+	defer func() {
+		if err != nil {
+			event.DispatchUpdate(ev, "failed: "+err.Error())
+		}
+	}()
+
+	restoreAfterSnapshot, err := wr.prepareToSnapshot(ti, forceMasterSnapshot)
 	if err != nil {
 		return
 	}
@@ -96,7 +131,7 @@ func (wr *Wrangler) MultiSnapshot(keyRanges []key.KeyRange, tabletAlias topo.Tab
 		err = replaceError(err, restoreAfterSnapshot())
 	}()
 
-	actionPath, err := wr.ai.MultiSnapshot(tabletAlias, &actionnode.MultiSnapshotArgs{KeyRanges: keyRanges, Concurrency: concurrency, Tables: tables, ExcludeTables: excludeTables, SkipSlaveRestart: skipSlaveRestart, MaximumFilesize: maximumFilesize})
+	actionPath, err := wr.ai.MultiSnapshot(tabletAlias, args)
 	if err != nil {
 		return
 	}
@@ -108,6 +143,7 @@ func (wr *Wrangler) MultiSnapshot(keyRanges []key.KeyRange, tabletAlias topo.Tab
 
 	reply := results.(*actionnode.MultiSnapshotReply)
 
+	event.DispatchUpdate(ev, "finished")
 	return reply.ManifestPaths, reply.ParentAlias, nil
 }
 
