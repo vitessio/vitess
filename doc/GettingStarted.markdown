@@ -22,6 +22,9 @@ You can use any installation method (src/bin/rpm/deb),
 but be sure to include the client development headers (**libmariadbclient-dev**).
 
 Then download and build Vitess. Note that the value of MYSQL_FLAVOR is case-sensitive.
+If the mysql_config command from libmariadbclient-dev is not on the PATH,
+you'll need to *export VT_MYSQL_ROOT=/path/to/mariadb* before running bootstrap.sh,
+where mysql_config is found at /path/to/mariadb/**bin**/mysql_config.
 
 ``` sh
 cd $WORKSPACE
