@@ -54,7 +54,14 @@ func (flavor *mariaDB10) SlaveStatus(mysqld *Mysqld) (*proto.ReplicationStatus, 
 // Note: Unlike MASTER_POS_WAIT(), MASTER_GTID_WAIT() will continue waiting even
 // if the slave thread stops. If that is a problem, we'll have to change this.
 func (*mariaDB10) WaitMasterPos(mysqld *Mysqld, targetPos proto.ReplicationPosition, waitTimeout time.Duration) error {
-	query := fmt.Sprintf("SELECT MASTER_GTID_WAIT('%s', %.6f)", targetPos, waitTimeout.Seconds())
+	var query string
+	if waitTimeout == 0 {
+		// Omit the timeout to wait indefinitely. In MariaDB, a timeout of 0 means
+		// return immediately.
+		query = fmt.Sprintf("SELECT MASTER_GTID_WAIT('%s')", targetPos)
+	} else {
+		query = fmt.Sprintf("SELECT MASTER_GTID_WAIT('%s', %.6f)", targetPos, waitTimeout.Seconds())
+	}
 
 	log.Infof("Waiting for minimum replication position with query: %v", query)
 	qr, err := mysqld.fetchSuperQuery(query)
@@ -111,14 +118,20 @@ func (*mariaDB10) ParseReplicationPosition(s string) (proto.ReplicationPosition,
 func (*mariaDB10) SendBinlogDumpCommand(mysqld *Mysqld, conn *SlaveConnection, startPos proto.ReplicationPosition) error {
 	const COM_BINLOG_DUMP = 0x12
 
-	// MariaDB expects the slave to set the @slave_connect_state variable before
-	// issuing COM_BINLOG_DUMP if it wants to use GTID mode.
+	// Tell the server that we understand GTIDs by setting our slave capability
+	// to MARIA_SLAVE_CAPABILITY_GTID = 4 (MariaDB >= 10.0.1).
+	if _, err := conn.ExecuteFetch("SET @mariadb_slave_capability=4", 0, false); err != nil {
+		return fmt.Errorf("failed to set @mariadb_slave_capability=4: %v", err)
+	}
+
+	// Set the slave_connect_state variable before issuing COM_BINLOG_DUMP to
+	// provide the start position in GTID form.
 	query := fmt.Sprintf("SET @slave_connect_state='%s'", startPos)
 	if _, err := conn.ExecuteFetch(query, 0, false); err != nil {
 		return fmt.Errorf("failed to set @slave_connect_state='%s': %v", startPos, err)
 	}
 
-	// Real slaves send this upon connecting if their gtid_strict_mode option was
+	// Real slaves set this upon connecting if their gtid_strict_mode option was
 	// enabled. We always use gtid_strict_mode because we need it to make our
 	// internal GTID comparisons safe.
 	if _, err := conn.ExecuteFetch("SET @slave_gtid_strict_mode=1", 0, false); err != nil {
@@ -157,12 +170,28 @@ func (ev mariadbBinlogEvent) IsGTID() bool {
 	return ev.Type() == 162
 }
 
-// GTID implements BinlogEvent.GTID().
+// IsBeginGTID implements BinlogEvent.IsBeginGTID().
 //
-// Expected format (L = total length of event data):
+// Expected format:
 //   # bytes   field
 //   8         sequence number
 //   4         domain ID
+//   1         flags2
+func (ev mariadbBinlogEvent) IsBeginGTID(f blproto.BinlogFormat) bool {
+	const FL_STANDALONE = 1
+
+	data := ev.Bytes()[f.HeaderLength:]
+	flags2 := data[8+4]
+	return flags2&FL_STANDALONE == 0
+}
+
+// GTID implements BinlogEvent.GTID().
+//
+// Expected format:
+//   # bytes   field
+//   8         sequence number
+//   4         domain ID
+//   1         flags2
 func (ev mariadbBinlogEvent) GTID(f blproto.BinlogFormat) (proto.GTID, error) {
 	data := ev.Bytes()[f.HeaderLength:]
 

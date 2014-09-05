@@ -54,7 +54,10 @@ class MysqlFlavor(object):
 
   def position_append(self, pos, gtid):
     """Returns a new position with the given GTID appended"""
-    return None
+    if self.position_at_least(pos, gtid):
+      return pos
+    else:
+      return gtid
 
 
 class GoogleMysql(MysqlFlavor):
@@ -83,12 +86,6 @@ class GoogleMysql(MysqlFlavor):
   def position_at_least(self, a, b):
     return int(a["GoogleMysql"].split("-")[1]) >= int(
         b["GoogleMysql"].split("-")[1])
-
-  def position_append(self, pos, gtid):
-    if self.position_at_least(pos, gtid):
-      return pos
-    else:
-      return gtid
 
   def change_master_commands(self, host, port, pos):
     parts = pos["GoogleMysql"].split("-")
@@ -124,6 +121,25 @@ class MariaDB(MysqlFlavor):
 
   def bootstrap_archive(self):
     return "mysql-db-dir_10.0.13-MariaDB.tbz"
+
+  def master_position(self, tablet):
+    return {
+        "MariaDB": tablet.mquery("", "SELECT @@GLOBAL.gtid_binlog_pos")[0]
+                         [0]
+    }
+
+  def position_equal(self, a, b):
+    return a["MariaDB"] == b["MariaDB"]
+
+  def position_at_least(self, a, b):
+    return int(a["MariaDB"].split("-")[2]) >= int(b["MariaDB"].split("-")[2])
+
+  def change_master_commands(self, host, port, pos):
+    return [
+        "SET GLOBAL gtid_slave_pos = '%s'" % pos["MariaDB"],
+        "CHANGE MASTER TO "
+        "MASTER_HOST='%s', MASTER_PORT=%u, MASTER_USE_GTID = slave_pos" %
+        (host, port)]
 
 
 if environment.mysql_flavor == "MariaDB":
