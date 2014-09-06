@@ -137,6 +137,8 @@ import (
 	"sync"
 	"unicode"
 	"unicode/utf8"
+
+	"code.google.com/p/go.net/context"
 )
 
 const (
@@ -399,7 +401,7 @@ func (m *methodType) NumCalls() (n uint) {
 	return n
 }
 
-func (s *service) call(server *Server, sending *sync.Mutex, mtype *methodType, req *Request, argv, replyv reflect.Value, codec ServerCodec, context interface{}) {
+func (s *service) call(ctx context.Context, server *Server, sending *sync.Mutex, mtype *methodType, req *Request, argv, replyv reflect.Value, codec ServerCodec) {
 	mtype.Lock()
 	mtype.numCalls++
 	mtype.Unlock()
@@ -410,7 +412,7 @@ func (s *service) call(server *Server, sending *sync.Mutex, mtype *methodType, r
 
 		// Invoke the method, providing a new value for the reply.
 		if mtype.TakesContext() {
-			returnValues = function.Call([]reflect.Value{s.rcvr, mtype.prepareContext(context), argv, replyv})
+			returnValues = function.Call([]reflect.Value{s.rcvr, mtype.prepareContext(ctx), argv, replyv})
 		} else {
 			returnValues = function.Call([]reflect.Value{s.rcvr, argv, replyv})
 		}
@@ -463,7 +465,7 @@ func (s *service) call(server *Server, sending *sync.Mutex, mtype *methodType, r
 
 	// Invoke the method, providing a new value for the reply.
 	if mtype.TakesContext() {
-		returnValues = function.Call([]reflect.Value{s.rcvr, mtype.prepareContext(context), argv, reflect.ValueOf(sendReply)})
+		returnValues = function.Call([]reflect.Value{s.rcvr, mtype.prepareContext(ctx), argv, reflect.ValueOf(sendReply)})
 	} else {
 		returnValues = function.Call([]reflect.Value{s.rcvr, argv, reflect.ValueOf(sendReply)})
 	}
@@ -522,26 +524,26 @@ func (c *gobServerCodec) Close() error {
 // ServeConn uses the gob wire format (see package gob) on the
 // connection. To use an alternate codec, use ServeCodec.
 func (server *Server) ServeConn(conn io.ReadWriteCloser) {
-	server.ServeConnWithContext(conn, nil)
+	server.ServeConnWithContext(context.TODO(), conn)
 }
 
 // ServeConnWithContext is like ServeConn but makes it possible to
 // pass a connection context to the RPC methods.
-func (server *Server) ServeConnWithContext(conn io.ReadWriteCloser, context interface{}) {
+func (server *Server) ServeConnWithContext(ctx context.Context, conn io.ReadWriteCloser) {
 	buf := bufio.NewWriter(conn)
 	srv := &gobServerCodec{conn, gob.NewDecoder(conn), gob.NewEncoder(buf), buf}
-	server.ServeCodecWithContext(srv, context)
+	server.ServeCodecWithContext(ctx, srv)
 }
 
 // ServeCodec is like ServeConn but uses the specified codec to
 // decode requests and encode responses.
 func (server *Server) ServeCodec(codec ServerCodec) {
-	server.ServeCodecWithContext(codec, nil)
+	server.ServeCodecWithContext(context.TODO(), codec)
 }
 
 // ServeCodecWithContext is like ServeCodec but it makes it possible
 // to pass a connection context to the RPC methods.
-func (server *Server) ServeCodecWithContext(codec ServerCodec, context interface{}) {
+func (server *Server) ServeCodecWithContext(ctx context.Context, codec ServerCodec) {
 	sending := new(sync.Mutex)
 	for {
 		service, mtype, req, argv, replyv, keepReading, err := server.readRequest(codec)
@@ -559,13 +561,13 @@ func (server *Server) ServeCodecWithContext(codec ServerCodec, context interface
 			}
 			continue
 		}
-		go service.call(server, sending, mtype, req, argv, replyv, codec, context)
+		go service.call(ctx, server, sending, mtype, req, argv, replyv, codec)
 	}
 	codec.Close()
 }
 
-func (mtype *methodType) prepareContext(context interface{}) reflect.Value {
-	if contextv := reflect.ValueOf(context); contextv.IsValid() {
+func (mtype *methodType) prepareContext(ctx context.Context) reflect.Value {
+	if contextv := reflect.ValueOf(ctx); contextv.IsValid() {
 		return contextv
 	}
 	return reflect.Zero(mtype.ContextType)
@@ -574,12 +576,12 @@ func (mtype *methodType) prepareContext(context interface{}) reflect.Value {
 // ServeRequest is like ServeCodec but synchronously serves a single request.
 // It does not close the codec upon completion.
 func (server *Server) ServeRequest(codec ServerCodec) error {
-	return server.ServeRequestWithContext(codec, nil)
+	return server.ServeRequestWithContext(context.TODO(), codec)
 }
 
 // ServeRequestWithContext is like ServeRequest but makes it possible
 // to pass a connection context to the RPC methods.
-func (server *Server) ServeRequestWithContext(codec ServerCodec, context interface{}) error {
+func (server *Server) ServeRequestWithContext(ctx context.Context, codec ServerCodec) error {
 	sending := new(sync.Mutex)
 	service, mtype, req, argv, replyv, keepReading, err := server.readRequest(codec)
 	if err != nil {
@@ -593,7 +595,7 @@ func (server *Server) ServeRequestWithContext(codec ServerCodec, context interfa
 		}
 		return err
 	}
-	service.call(server, sending, mtype, req, argv, replyv, codec, context)
+	service.call(ctx, server, sending, mtype, req, argv, replyv, codec)
 	return nil
 }
 
@@ -750,38 +752,38 @@ type ServerCodec interface {
 // ServeConn uses the gob wire format (see package gob) on the
 // connection. To use an alternate codec, use ServeCodec.
 func ServeConn(conn io.ReadWriteCloser) {
-	ServeConnWithContext(conn, nil)
+	ServeConnWithContext(context.TODO(), conn)
 }
 
 // ServeConnWithContext is like ServeConn but it allows to pass a
 // connection context to the RPC methods.
-func ServeConnWithContext(conn io.ReadWriteCloser, context interface{}) {
-	DefaultServer.ServeConnWithContext(conn, context)
+func ServeConnWithContext(ctx context.Context, conn io.ReadWriteCloser) {
+	DefaultServer.ServeConnWithContext(ctx, conn)
 }
 
 // ServeCodec is like ServeConn but uses the specified codec to
 // decode requests and encode responses.
 func ServeCodec(codec ServerCodec) {
-	ServeCodecWithContext(codec, nil)
+	ServeCodecWithContext(context.TODO(), codec)
 }
 
 // ServeCodecWithContext is like ServeCodec but it allows to pass a
 // connection context to the RPC methods.
-func ServeCodecWithContext(codec ServerCodec, context interface{}) {
-	DefaultServer.ServeCodecWithContext(codec, context)
+func ServeCodecWithContext(ctx context.Context, codec ServerCodec) {
+	DefaultServer.ServeCodecWithContext(ctx, codec)
 }
 
 // ServeRequest is like ServeCodec but synchronously serves a single request.
 // It does not close the codec upon completion.
 func ServeRequest(codec ServerCodec) error {
-	return ServeRequestWithContext(codec, nil)
+	return ServeRequestWithContext(context.TODO(), codec)
 
 }
 
 // ServeRequestWithContext is like ServeRequest but it allows to pass
 // a connection context to the RPC methods.
-func ServeRequestWithContext(codec ServerCodec, context interface{}) error {
-	return DefaultServer.ServeRequestWithContext(codec, context)
+func ServeRequestWithContext(ctx context.Context, codec ServerCodec) error {
+	return DefaultServer.ServeRequestWithContext(ctx, codec)
 }
 
 // Accept accepts connections on the listener and serves requests

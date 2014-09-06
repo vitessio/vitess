@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"strings"
 
+	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/proto"
@@ -65,10 +66,10 @@ func LoadCredentials(filename string) error {
 
 // Authenticate returns true if it the client manages to authenticate
 // the codec in at most maxRequest number of requests.
-func Authenticate(c rpc.ServerCodec, context *proto.Context) (bool, error) {
+func Authenticate(ctx context.Context, c rpc.ServerCodec) (bool, error) {
 	auth := newAuthenticatedCodec(c)
 	for i := 0; i < CRAMMD5MaxRequests; i++ {
-		err := AuthenticationServer.ServeRequestWithContext(auth, context)
+		err := AuthenticationServer.ServeRequestWithContext(ctx, auth)
 		if err != nil {
 			return false, err
 		}
@@ -91,7 +92,7 @@ func (a *AuthenticatorCRAMMD5) GetNewChallenge(_ UnusedArgument, reply *GetNewCh
 }
 
 // Authenticate checks if the client proof is correct.
-func (a *AuthenticatorCRAMMD5) Authenticate(context *proto.Context, req *AuthenticateRequest, reply *AuthenticateReply) error {
+func (a *AuthenticatorCRAMMD5) Authenticate(ctx context.Context, req *AuthenticateRequest, reply *AuthenticateReply) error {
 	username := strings.SplitN(req.Proof, " ", 2)[0]
 	secrets, ok := a.Credentials[username]
 	if !ok {
@@ -104,7 +105,7 @@ func (a *AuthenticatorCRAMMD5) Authenticate(context *proto.Context, req *Authent
 	}
 	for _, secret := range secrets {
 		if expected := CRAMMD5GetExpected(username, secret, req.state.challenge); expected == req.Proof {
-			proto.SetUsername(context, username)
+			proto.SetUsername(ctx, username)
 			return nil
 		}
 	}

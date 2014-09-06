@@ -56,29 +56,29 @@ func SetUsername(ctx context.Context, username string) (ok bool) {
 	return true
 }
 
-func NewContext(remoteAddr string) *Context {
-	return &Context{remoteAddr: remoteAddr}
+func NewContext(remoteAddr string) context.Context {
+	return &rpcContext{remoteAddr: remoteAddr}
 }
 
-type Context struct {
+type rpcContext struct {
 	remoteAddr string
 	username   string
 }
 
 // Deadline implements Context.Deadline
-func (ctx *Context) Deadline() (deadline time.Time, ok bool) {
+func (ctx *rpcContext) Deadline() (deadline time.Time, ok bool) {
 	return time.Time{}, false
 }
 
-func (ctx *Context) Done() <-chan struct{} {
+func (ctx *rpcContext) Done() <-chan struct{} {
 	return nil
 }
 
-func (ctx *Context) Err() error {
+func (ctx *rpcContext) Err() error {
 	return nil
 }
 
-func (ctx *Context) Value(key interface{}) interface{} {
+func (ctx *rpcContext) Value(key interface{}) interface{} {
 	k, ok := key.(contextKey)
 	if !ok {
 		return nil

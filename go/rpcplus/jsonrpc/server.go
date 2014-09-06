@@ -10,6 +10,7 @@ import (
 	"io"
 	"sync"
 
+	"code.google.com/p/go.net/context"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 )
 
@@ -135,11 +136,11 @@ func (c *serverCodec) Close() error {
 // ServeConn blocks, serving the connection until the client hangs up.
 // The caller typically invokes ServeConn in a go statement.
 func ServeConn(conn io.ReadWriteCloser) {
-	ServeConnWithContext(conn, nil)
+	ServeConnWithContext(context.TODO(), conn)
 }
 
 // ServeConnWithContext is like ServeConn but it allows to pass a
 // connection context to the RPC methods.
-func ServeConnWithContext(conn io.ReadWriteCloser, context interface{}) {
-	rpc.ServeCodecWithContext(NewServerCodec(conn), context)
+func ServeConnWithContext(ctx context.Context, conn io.ReadWriteCloser) {
+	rpc.ServeCodecWithContext(ctx, NewServerCodec(conn))
 }

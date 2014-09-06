@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"code.google.com/p/go.net/context"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/key"
@@ -36,7 +36,7 @@ func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo
 	return nil
 }
 
-func (sq *SqlQuery) StreamExecute(ctx *rpcproto.Context, query *proto.Query, sendReply func(reply interface{}) error) error {
+func (sq *SqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(reply interface{}) error) error {
 	// Custom parsing of the query we expect
 	min := 100
 	max := 200

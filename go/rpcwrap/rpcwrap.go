@@ -161,9 +161,9 @@ func (h *rpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 	}
 	io.WriteString(conn, "HTTP/1.0 "+connected+"\n\n")
 	codec := h.cFactory(NewBufferedConnection(conn))
-	context := proto.NewContext(req.RemoteAddr)
+	ctx := proto.NewContext(req.RemoteAddr)
 	if h.useAuth {
-		if authenticated, err := auth.Authenticate(codec, context); !authenticated {
+		if authenticated, err := auth.Authenticate(ctx, codec); !authenticated {
 			if err != nil {
 				log.Errorf("authentication erred at %s: %v", req.RemoteAddr, err)
 			}
@@ -171,7 +171,7 @@ func (h *rpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 			return
 		}
 	}
-	h.server.ServeCodecWithContext(codec, context)
+	h.server.ServeCodecWithContext(ctx, codec)
 }
 
 // GetRpcPath returns the toplevel path used for serving RPCs over HTTP
