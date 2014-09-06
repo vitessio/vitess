@@ -104,7 +104,7 @@ func (a *AuthenticatorCRAMMD5) Authenticate(context *proto.Context, req *Authent
 	}
 	for _, secret := range secrets {
 		if expected := CRAMMD5GetExpected(username, secret, req.state.challenge); expected == req.Proof {
-			context.Username = username
+			proto.SetUsername(context, username)
 			return nil
 		}
 	}

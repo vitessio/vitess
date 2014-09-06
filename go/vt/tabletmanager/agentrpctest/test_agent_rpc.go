@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
+	"code.google.com/p/go.net/context"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"

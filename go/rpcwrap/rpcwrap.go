@@ -161,7 +161,7 @@ func (h *rpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 	}
 	io.WriteString(conn, "HTTP/1.0 "+connected+"\n\n")
 	codec := h.cFactory(NewBufferedConnection(conn))
-	context := &proto.Context{RemoteAddr: req.RemoteAddr}
+	context := proto.NewContext(req.RemoteAddr)
 	if h.useAuth {
 		if authenticated, err := auth.Authenticate(codec, context); !authenticated {
 			if err != nil {

@@ -8,8 +8,9 @@ import (
 	"fmt"
 	"time"
 
+	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/context"
+	"github.com/youtube/vitess/go/vt/callinfo"
 )
 
 // This file contains the RPC method helpers for the tablet manager.
@@ -28,6 +29,7 @@ const rpcTimeout = time.Second * 30
 
 // rpcWrapper handles all the logic for rpc calls.
 func (agent *ActionAgent) rpcWrapper(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error, lock, runAfterAction bool) (err error) {
+	from := callinfo.FromContext(ctx).String()
 	defer func() {
 		if x := recover(); x != nil {
 			log.Errorf("TabletManager.%v(%v) panic: %v", name, args, x)
@@ -45,11 +47,11 @@ func (agent *ActionAgent) rpcWrapper(ctx context.Context, name string, args, rep
 	}
 
 	if err = f(); err != nil {
-		log.Warningf("TabletManager.%v(%v)(from %v) error: %v", name, args, ctx, err.Error())
+		log.Warningf("TabletManager.%v(%v)(from %v) error: %v", name, args, from, err.Error())
 		return fmt.Errorf("TabletManager.%v on %v error: %v", name, agent.TabletAlias, err)
 	}
 	if verbose {
-		log.Infof("TabletManager.%v(%v)(from %v): %#v", name, args, ctx, reply)
+		log.Infof("TabletManager.%v(%v)(from %v): %#v", name, args, from, reply)
 	}
 	if runAfterAction {
 		err = agent.refreshTablet("RPC(" + name + ")")
