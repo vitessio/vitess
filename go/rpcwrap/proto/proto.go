@@ -4,7 +4,40 @@ import (
 	"fmt"
 	"html/template"
 	"time"
+
+	"code.google.com/p/go.net/context"
 )
+
+type contextKey int
+
+const (
+	remoteAddrKey contextKey = 0
+	usernameKey   contextKey = 1
+)
+
+func RemoteAddr(ctx context.Context) (addr string, ok bool) {
+	val := ctx.Value(remoteAddrKey)
+	if val == nil {
+		return "", false
+	}
+	addr, ok = val.(string)
+	if !ok {
+		return "", false
+	}
+	return addr, true
+}
+
+func Username(ctx context.Context) (user string, ok bool) {
+	val := ctx.Value(usernameKey)
+	if val == nil {
+		return "", false
+	}
+	user, ok = val.(string)
+	if !ok {
+		return "", false
+	}
+	return user, ok
+}
 
 type Context struct {
 	RemoteAddr string
@@ -47,5 +80,16 @@ func (ctx *Context) Err() error {
 }
 
 func (ctx *Context) Value(key interface{}) interface{} {
-	return nil
+	k, ok := key.(contextKey)
+	if !ok {
+		return nil
+	}
+	switch k {
+	case remoteAddrKey:
+		return ctx.RemoteAddr
+	case usernameKey:
+		return ctx.Username
+	default:
+		return nil
+	}
 }
