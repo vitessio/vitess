@@ -1,8 +1,6 @@
 package proto
 
 import (
-	"fmt"
-	"html/template"
 	"time"
 
 	"code.google.com/p/go.net/context"
@@ -65,28 +63,6 @@ func NewContext(remoteAddr string) *Context {
 type Context struct {
 	remoteAddr string
 	username   string
-}
-
-// GetRemoteAddr implements Context.GetRemoteAddr
-func (ctx *Context) GetRemoteAddr() string {
-	return ctx.remoteAddr
-}
-
-// GetUsername implements Context.GetUsername
-func (ctx *Context) GetUsername() string {
-	return ctx.username
-}
-
-// HTML implements Context.HTML
-func (ctx *Context) HTML() template.HTML {
-	result := "<b>RemoteAddr:</b> " + ctx.remoteAddr + "</br>\n"
-	result += "<b>Username:</b> " + ctx.username + "</br>\n"
-	return template.HTML(result)
-}
-
-// String implements Context.String
-func (ctx *Context) String() string {
-	return fmt.Sprintf("GoRPCContext %#v", ctx)
 }
 
 // Deadline implements Context.Deadline
