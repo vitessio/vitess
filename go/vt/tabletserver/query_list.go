@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/context"
 )
 
@@ -96,7 +97,7 @@ func (ql *QueryList) GetQueryzRows() []QueryDetailzRow {
 	for _, qd := range ql.queryDetails {
 		row := QueryDetailzRow{
 			Query:       qd.query,
-			ContextHTML: qd.context.HTML(),
+			ContextHTML: callinfo.FromContext(qd.context).HTML(),
 			Start:       qd.start,
 			Duration:    time.Now().Sub(qd.start),
 			ConnID:      qd.connID,
