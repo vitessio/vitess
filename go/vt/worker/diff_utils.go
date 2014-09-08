@@ -103,7 +103,7 @@ func uint64FromKeyspaceId(keyspaceId key.KeyspaceId) string {
 // table, ordered by Primary Key. The returned columns are ordered
 // with the Primary Key columns in front.
 func TableScan(log logutil.Logger, ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *myproto.TableDefinition) (*QueryResultReader, error) {
-	sql := fmt.Sprintf("SELECT %v FROM %v ORDER BY (%v)", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
+	sql := fmt.Sprintf("SELECT %v FROM %v ORDER BY %v", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
 	log.Infof("SQL query for %v/%v: %v", tabletAlias, tableDefinition.Name, sql)
 	return NewQueryResultReaderForTablet(ts, tabletAlias, sql)
 }
@@ -149,7 +149,7 @@ func TableScanByKeyRange(log logutil.Logger, ts topo.Server, tabletAlias topo.Ta
 		return nil, fmt.Errorf("Unsupported KeyspaceIdType: %v", keyspaceIdType)
 	}
 
-	sql := fmt.Sprintf("SELECT %v FROM %v %vORDER BY (%v)", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, where, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
+	sql := fmt.Sprintf("SELECT %v FROM %v %vORDER BY %v", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, where, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
 	log.Infof("SQL query for %v/%v: %v", tabletAlias, tableDefinition.Name, sql)
 	return NewQueryResultReaderForTablet(ts, tabletAlias, sql)
 }
