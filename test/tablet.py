@@ -79,7 +79,7 @@ class Tablet(object):
 
   def mysqlctl(self, cmd, extra_my_cnf=None, with_ports=False, verbose=False):
     all_extra_my_cnf = []
-    flavor_my_cnf = mysql_flavor.extra_my_cnf()
+    flavor_my_cnf = mysql_flavor().extra_my_cnf()
     if flavor_my_cnf:
       all_extra_my_cnf.append(flavor_my_cnf)
     if extra_my_cnf:
@@ -102,7 +102,7 @@ class Tablet(object):
 
   def init_mysql(self, extra_my_cnf=None):
     return self.mysqlctl(
-        ['init', '-bootstrap_archive', mysql_flavor.bootstrap_archive()],
+        ['init', '-bootstrap_archive', mysql_flavor().bootstrap_archive()],
         extra_my_cnf=extra_my_cnf, with_ports=True)
 
   def start_mysql(self):
@@ -171,7 +171,7 @@ class Tablet(object):
       raise utils.TestError('expected %u rows in %s' % (n, table), result)
 
   def reset_replication(self):
-    self.mquery('', mysql_flavor.reset_replication_commands())
+    self.mquery('', mysql_flavor().reset_replication_commands())
 
   def populate(self, dbname, create_sql, insert_sqls=[]):
     self.create_db(dbname)

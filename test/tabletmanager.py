@@ -651,8 +651,8 @@ class TestTabletManager(unittest.TestCase):
     # we need replication to be enabled, so the slave tablet can be healthy.
     for t in tablet_62344, tablet_62044:
       t.create_db('vt_test_keyspace')
-    pos = mysql_flavor.master_position(tablet_62344)
-    changeMasterCmds = mysql_flavor.change_master_commands(
+    pos = mysql_flavor().master_position(tablet_62344)
+    changeMasterCmds = mysql_flavor().change_master_commands(
                             utils.hostname,
                             tablet_62344.mysql_port,
                             pos)

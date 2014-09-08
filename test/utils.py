@@ -19,6 +19,7 @@ import MySQLdb
 import environment
 
 from vtctl import vtctl_client
+from mysql_flavor import set_mysql_flavor
 
 options = None
 devnull = open('/dev/null', 'w')
@@ -70,6 +71,7 @@ def main(mod=None):
   parser.add_option('--skip-teardown', action='store_true')
   parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=1)
   parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=1)
+  parser.add_option("--mysql-flavor", action="store", type="string")
 
   (options, args) = parser.parse_args()
 
@@ -80,6 +82,8 @@ def main(mod=None):
   else:
     level = logging.DEBUG
   logging.basicConfig(format='-- %(asctime)s %(module)s:%(lineno)d %(levelname)s %(message)s', level=level)
+
+  set_mysql_flavor(options.mysql_flavor)
 
   try:
     suite = unittest.TestSuite()
@@ -254,7 +258,7 @@ def zk_setup(add_bad_host=False):
                        'test_ca:_zkocc': 'localhost:%u'%(environment.zkocc_port_base),
                        'global:_zkocc': 'localhost:%u'%(environment.zkocc_port_base),}
     json.dump(zk_cell_mapping, f)
-  os.putenv('ZK_CLIENT_CONFIG', config)
+  os.environ['ZK_CLIENT_CONFIG'] = config
   run(environment.binary_argstr('zk')+' touch -p /zk/test_nj/vt')
   run(environment.binary_argstr('zk')+' touch -p /zk/test_ny/vt')
   run(environment.binary_argstr('zk')+' touch -p /zk/test_ca/vt')

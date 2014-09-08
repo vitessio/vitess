@@ -494,10 +494,10 @@ class TestReparent(unittest.TestCase):
     # now manually reparent 1 out of 2 tablets
     # 62044 will be the new master
     # 31981 won't be re-parented, so it will be busted
-    tablet_62044.mquery('', mysql_flavor.promote_slave_commands())
-    new_pos = mysql_flavor.master_position(tablet_62044)
+    tablet_62044.mquery('', mysql_flavor().promote_slave_commands())
+    new_pos = mysql_flavor().master_position(tablet_62044)
     logging.debug('New master position: %s', str(new_pos))
-    changeMasterCmds = mysql_flavor.change_master_commands(
+    changeMasterCmds = mysql_flavor().change_master_commands(
                             utils.hostname,
                             tablet_62044.mysql_port,
                             new_pos)
