@@ -3,7 +3,10 @@ If you run into issues or have questions, you can use our mailing list: vitess@g
 
 ## Dependencies
 
-* [Go](http://golang.org): Needed for building Vitess.
+* We currently develop on Ubuntu 12.04.4.
+* You'll need some kind of Java Runtime (for ZooKeeper).
+  We use OpenJDK (*sudo apt-get install openjdk-7-jre*).
+* [Go](http://golang.org) 1.2+: Needed for building Vitess.
 * [MariaDB](https://mariadb.org/): We currently develop with version 10.0.13.
   Other 10.0.x versions may also work.
 * [ZooKeeper](http://zookeeper.apache.org/): By default, Vitess
