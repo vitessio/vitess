@@ -290,7 +290,7 @@ class TestReparent(unittest.TestCase):
                          tablet_31981])
 
   def test_reparent_graceful_range_based(self):
-    shard_id = '0000000000000000-FFFFFFFFFFFFFFFF'
+    shard_id = '0000000000000000-ffffffffffffffff'
     self._test_reparent_graceful(shard_id)
 
   def test_reparent_graceful(self):
@@ -383,10 +383,16 @@ class TestReparent(unittest.TestCase):
     # Test address correction.
     new_port = environment.reserve_ports(1)
     tablet_62044.start_vttablet(port=new_port)
-    # Wait a moment for address to reregister.
-    time.sleep(1.0)
 
-    self._check_db_addr(shard_id, 'master', new_port)
+    # Wait until the new address registers.
+    timeout = 30.0
+    while True:
+      try:
+        self._check_db_addr(shard_id, 'master', new_port)
+        break
+      except:
+        timeout = utils.wait_step('waiting for new port to register',
+                                  timeout, sleep_time=0.1)
 
     tablet_62044.kill_vttablet()
 

@@ -26,9 +26,9 @@ var MaxKey = KeyspaceId("")
 // KeyspaceId is the type we base sharding on.
 type KeyspaceId string
 
-// Hex prints a KeyspaceId in capital hex.
+// Hex prints a KeyspaceId in lower case hex.
 func (kid KeyspaceId) Hex() HexKeyspaceId {
-	return HexKeyspaceId(strings.ToUpper(hex.EncodeToString([]byte(kid))))
+	return HexKeyspaceId(hex.EncodeToString([]byte(kid)))
 }
 
 func (kid KeyspaceId) String() string {

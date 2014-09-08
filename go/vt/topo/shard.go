@@ -114,7 +114,7 @@ func ValidateShardName(shard string) (string, key.KeyRange, error) {
 		return "", key.KeyRange{}, fmt.Errorf("Out of order keys: %v is not strictly smaller than %v", keyRange.Start.Hex(), keyRange.End.Hex())
 	}
 
-	return strings.ToUpper(shard), keyRange, nil
+	return strings.ToLower(shard), keyRange, nil
 }
 
 // HasCell returns true if the cell is listed in the Cells for the shard.
