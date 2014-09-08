@@ -28,7 +28,7 @@
           <dia:boolean val="false"/>
         </dia:attribute>
         <dia:attribute name="scaling">
-          <dia:real val="0.52738893032073975"/>
+          <dia:real val="0.52383142709732056"/>
         </dia:attribute>
         <dia:attribute name="fitto">
           <dia:boolean val="true"/>
@@ -1107,16 +1107,16 @@ plan cache#</dia:string>
     </dia:object>
     <dia:object type="Flowchart - Box" version="0" id="O26">
       <dia:attribute name="obj_pos">
-        <dia:point val="33.21,-6.2675"/>
+        <dia:point val="32.9156,-6.2675"/>
       </dia:attribute>
       <dia:attribute name="obj_bb">
-        <dia:rectangle val="33.16,-6.3175;38.0737,-4.3175"/>
+        <dia:rectangle val="32.8656,-6.3175;38.3681,-4.3175"/>
       </dia:attribute>
       <dia:attribute name="elem_corner">
-        <dia:point val="33.21,-6.2675"/>
+        <dia:point val="32.9156,-6.2675"/>
       </dia:attribute>
       <dia:attribute name="elem_width">
-        <dia:real val="4.8137499999999989"/>
+        <dia:real val="5.4024999999999999"/>
       </dia:attribute>
       <dia:attribute name="elem_height">
         <dia:real val="1.9000000000000001"/>
@@ -1130,7 +1130,7 @@ plan cache#</dia:string>
       <dia:attribute name="text">
         <dia:composite type="text">
           <dia:attribute name="string">
-            <dia:string>#subscirbers#</dia:string>
+            <dia:string>#subscribers#</dia:string>
           </dia:attribute>
           <dia:attribute name="font">
             <dia:font family="sans" style="0" name="Helvetica"/>
@@ -1155,11 +1155,11 @@ plan cache#</dia:string>
         <dia:point val="30.1369,-5.3525"/>
       </dia:attribute>
       <dia:attribute name="obj_bb">
-        <dia:rectangle val="30.0863,-5.68625;33.3218,-4.96269"/>
+        <dia:rectangle val="30.0863,-5.68698;33.0274,-4.96343"/>
       </dia:attribute>
       <dia:attribute name="conn_endpoints">
         <dia:point val="30.1369,-5.3525"/>
-        <dia:point val="33.21,-5.3175"/>
+        <dia:point val="32.9156,-5.3175"/>
       </dia:attribute>
       <dia:attribute name="numcp">
         <dia:int val="1"/>
