@@ -5,16 +5,24 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import org.bson.BSONObject;
+import org.bson.BasicBSONObject;
 import org.junit.After;
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Test;
+
+import com.youtube.gorpc.Exceptions.ApplicationError;
+import com.youtube.gorpc.Exceptions.GoRpcException;
+import com.youtube.gorpc.codecs.bson.BsonClientCodecFactory;
 
 /**
- * ClientIntegrationTest runs the same tests as ClientTest but uses a real Go
- * BSON RPC server.
+ * ClientIT runs the same tests as ClientTest but uses a real Go BSON RPC
+ * server.
  */
-public class ClientIntegrationTest extends ClientTest {
+public class ClientIT extends ClientTest {
 	private static Process serverProcess;
 	private static final int PORT = 1234;
 
@@ -38,8 +46,7 @@ public class ClientIntegrationTest extends ClientTest {
 		List<String> command = new ArrayList<String>();
 		command.add("go");
 		command.add("run");
-		command.add(ClientIntegrationTest.class.getResource("/arithserver.go")
-				.getPath());
+		command.add(ClientIT.class.getResource("/arithserver.go").getPath());
 		command.add("-port");
 		command.add("" + PORT);
 		ProcessBuilder builder = new ProcessBuilder(command);
@@ -50,5 +57,19 @@ public class ClientIntegrationTest extends ClientTest {
 	@AfterClass
 	public static void tearDownServer() {
 		serverProcess.destroy();
+	}
+
+	@Test
+	public void testDivide() throws GoRpcException, IOException,
+			ApplicationError {
+		Client client = Client.dialHttp("localhost", getPort(), "/_bson_rpc_",
+				new BsonClientCodecFactory());
+		BSONObject mArgs = new BasicBSONObject();
+		mArgs.put("A", 10L);
+		mArgs.put("B", 3L);
+		Response response = client.call("Arith.Divide", mArgs);
+		BSONObject result = (BSONObject) response.result;
+		Assert.assertEquals(3L, result.get("Quo"));
+		Assert.assertEquals(1L, result.get("Rem"));
 	}
 }
