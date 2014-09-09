@@ -100,7 +100,7 @@ def main(mod=None):
 
     if suite.countTestCases() > 0:
       logger = LoggingStream()
-      result = unittest.TextTestRunner(stream=logger, verbosity=options.verbose).run(suite)
+      result = unittest.TextTestRunner(stream=logger, verbosity=options.verbose, failfast=True).run(suite)
       if not result.wasSuccessful():
         sys.exit(-1)
   except KeyboardInterrupt:
