@@ -1,8 +1,6 @@
 package com.youtube.gorpc;
 
 public class Request {
-	public static final String SERVICE_METHOD = "ServiceMethod";
-	public static final String SEQ = "Seq";
 
 	private String serviceMethod;
 	private long seq;

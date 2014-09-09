@@ -10,20 +10,25 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.youtube.gorpc.Client.GoRpcException;
+import com.youtube.gorpc.Exceptions.ApplicationError;
+import com.youtube.gorpc.Exceptions.GoRpcException;
 import com.youtube.gorpc.codecs.bson.BsonClientCodecFactory;
 
 public class ClientTest {
 
-	static int port = 15773;
-	ServerSocket serverSocket;
+	private static ServerSocket serverSocket;
+	private static final int PORT = 15773;
+
+	public int getPort() {
+		return PORT;
+	}
 
 	@Before
 	public void setUp() throws IOException, InterruptedException {
-		serverSocket = new ServerSocket(port);
+		serverSocket = new ServerSocket(PORT);
 		FakeGoServer server = new FakeGoServer(serverSocket);
 		server.start();
-		Thread.sleep(100);
+		Thread.sleep(500);
 	}
 
 	@After
@@ -32,24 +37,24 @@ public class ClientTest {
 	}
 
 	@Test
-	public void testValidCase() throws IOException, GoRpcException {
-		Client client = Client.dialHttp("localhost", port, "/_bson_rpc_",
+	public void testValidCase() throws IOException, GoRpcException,
+			ApplicationError {
+		Client client = Client.dialHttp("localhost", getPort(), "/_bson_rpc_",
 				new BsonClientCodecFactory());
 		BSONObject mArgs = new BasicBSONObject();
-		mArgs.put("A", 5);
-		mArgs.put("B", 7);
+		mArgs.put("A", 5L);
+		mArgs.put("B", 7L);
 		Response response = client.call("Arith.Multiply", mArgs);
-		Assert.assertNull(response.getHeader().getError());
-		Assert.assertNull(response.getBody().getError());
-		Assert.assertEquals(35, response.getBody().getResult());
+		Assert.assertNull(response.getError());
+		Assert.assertEquals(35L, response.getResult());
 		client.close();
 	}
 
 	@Test
 	public void testInValidHandshake() throws IOException, GoRpcException {
 		try {
-			Client client = Client.dialHttp("localhost", port, "/_somerpc_",
-					new BsonClientCodecFactory());
+			Client client = Client.dialHttp("localhost", getPort(),
+					"/_somerpc_", new BsonClientCodecFactory());
 			client.close();
 			Assert.fail("did not raise exception");
 		} catch (GoRpcException e) {
@@ -60,61 +65,65 @@ public class ClientTest {
 
 	@Test
 	public void testInValidMethodName() throws IOException, GoRpcException {
-		Client client = Client.dialHttp("localhost", port, "/_bson_rpc_",
+		Client client = Client.dialHttp("localhost", getPort(), "/_bson_rpc_",
 				new BsonClientCodecFactory());
 		try {
 			client.call("Arith.SomeMethod", new BasicBSONObject());
 			client.close();
 			Assert.fail("did not raise exception");
-		} catch (GoRpcException e) {
-			Assert.assertTrue("unknown method".equals(e.getMessage()));
+		} catch (ApplicationError e) {
+			Assert.assertTrue(e.getMessage().contains("rpc: can't find method"));
 		}
 
 		client.close();
 	}
 
 	@Test
-	public void testInValidMethodArgs() throws IOException, GoRpcException {
-		Client client = Client.dialHttp("localhost", port, "/_bson_rpc_",
+	public void testMissingMethodArgs() throws IOException, GoRpcException,
+			ApplicationError {
+		Client client = Client.dialHttp("localhost", getPort(), "/_bson_rpc_",
 				new BsonClientCodecFactory());
 		BSONObject mArgs = new BasicBSONObject();
-		mArgs.put("A", 5);
+		mArgs.put("A", 5L);
+		// incomplete args defaults to zero values
 		Response response = client.call("Arith.Multiply", mArgs);
-		Assert.assertEquals(null, response.getBody().getResult());
-		Assert.assertNotNull(response.getBody().getError());
+		Assert.assertEquals(0L, response.getResult());
+		Assert.assertNull(response.getError());
 		client.close();
 	}
 
 	@Test
-	public void testValidMultipleCalls() throws IOException, GoRpcException {
-		Client client = Client.dialHttp("localhost", port, "/_bson_rpc_",
+	public void testValidMultipleCalls() throws IOException, GoRpcException,
+			ApplicationError {
+		Client client = Client.dialHttp("localhost", getPort(), "/_bson_rpc_",
 				new BsonClientCodecFactory());
 
 		BSONObject mArgs = new BasicBSONObject();
-		mArgs.put("A", 5);
-		mArgs.put("B", 7);
+		mArgs.put("A", 5L);
+		mArgs.put("B", 7L);
 		Response response = client.call("Arith.Multiply", mArgs);
-		Assert.assertEquals(35, response.getBody().getResult());
+		Assert.assertEquals(35L, response.getResult());
 
 		mArgs = new BasicBSONObject();
-		mArgs.put("A", 2);
-		mArgs.put("B", 3);
+		mArgs.put("A", 2L);
+		mArgs.put("B", 3L);
 		response = client.call("Arith.Multiply", mArgs);
-		Assert.assertEquals(6, response.getBody().getResult());
+		Assert.assertEquals(6L, response.getResult());
 
 		client.close();
 	}
 
 	@Test
-	public void testCallOnClosedClient() throws IOException, GoRpcException {
-		Client client = Client.dialHttp("localhost", port, "/_bson_rpc_",
+	public void testCallOnClosedClient() throws IOException, GoRpcException,
+			ApplicationError {
+		Client client = Client.dialHttp("localhost", getPort(), "/_bson_rpc_",
 				new BsonClientCodecFactory());
 
 		BSONObject mArgs = new BasicBSONObject();
-		mArgs.put("A", 5);
-		mArgs.put("B", 7);
+		mArgs.put("A", 5L);
+		mArgs.put("B", 7L);
 		Response response = client.call("Arith.Multiply", mArgs);
-		Assert.assertEquals(35, response.getBody().getResult());
+		Assert.assertEquals(35L, response.getResult());
 		client.close();
 
 		try {

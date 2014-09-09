@@ -9,6 +9,8 @@ import java.net.Socket;
 
 import org.apache.commons.lang.CharEncoding;
 
+import com.youtube.gorpc.Exceptions.ApplicationError;
+import com.youtube.gorpc.Exceptions.GoRpcException;
 import com.youtube.gorpc.codecs.ClientCodec;
 import com.youtube.gorpc.codecs.ClientCodecFactory;
 
@@ -34,7 +36,7 @@ public class Client {
 	}
 
 	public Response call(String serviceMethod, Object args) throws IOException,
-			GoRpcException {
+			GoRpcException, ApplicationError {
 		if (closed) {
 			throw new GoRpcException("cannot call on a closed client");
 		}
@@ -43,13 +45,13 @@ public class Client {
 		codec.WriteRequest(request, args);
 		Response response = new Response();
 		codec.ReadResponseHeader(response);
-		if (response.getHeader().getSeq() != request.getSeq()) {
+		codec.ReadResponseBody(response);
+		if (response.getSeq() != request.getSeq()) {
 			throw new GoRpcException("sequence number mismatch");
 		}
-		if (response.getHeader().getError() != null) {
-			throw new GoRpcException(response.getHeader().getError());
+		if (response.getError() != null) {
+			throw new ApplicationError(response.getError());
 		}
-		codec.ReadResponseBody(response);
 		return response;
 	}
 
@@ -73,12 +75,5 @@ public class Client {
 					+ response);
 		}
 		return new Client(cFactory.createCodec(s));
-	}
-
-	@SuppressWarnings("serial")
-	public static class GoRpcException extends Exception {
-		public GoRpcException(String message) {
-			super(message);
-		}
 	}
 }
