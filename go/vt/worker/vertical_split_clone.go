@@ -14,6 +14,7 @@ import (
 	ttemplate "text/template"
 	"time"
 
+	"github.com/youtube/vitess/go/event"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
@@ -21,6 +22,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/worker/events"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
@@ -95,6 +97,8 @@ type VerticalSplitCloneWorker struct {
 	// populated during stateVSCCopy
 	tableStatus []tableStatus
 	startTime   time.Time
+
+	ev *events.VerticalSplitClone
 }
 
 // NewVerticalSplitCloneWorker returns a new VerticalSplitCloneWorker object.
@@ -112,6 +116,13 @@ func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspac
 		cleaner:                &wrangler.Cleaner{},
 
 		state: stateVSCNotSarted,
+		ev: &events.VerticalSplitClone{
+			Cell:     cell,
+			Keyspace: destinationKeyspace,
+			Shard:    destinationShard,
+			Tables:   tables,
+			Strategy: strategy,
+		},
 	}
 }
 
@@ -119,6 +130,8 @@ func (vscw *VerticalSplitCloneWorker) setState(state string) {
 	vscw.mu.Lock()
 	vscw.state = state
 	vscw.mu.Unlock()
+
+	event.DispatchUpdate(vscw.ev, state)
 }
 
 func (vscw *VerticalSplitCloneWorker) recordError(err error) {
@@ -126,6 +139,8 @@ func (vscw *VerticalSplitCloneWorker) recordError(err error) {
 	vscw.state = stateVSCError
 	vscw.err = err
 	vscw.mu.Unlock()
+
+	event.DispatchUpdate(vscw.ev, "error: "+err.Error())
 }
 
 func (vscw *VerticalSplitCloneWorker) tableStatuses() ([]string, time.Time) {
