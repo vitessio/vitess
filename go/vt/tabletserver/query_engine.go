@@ -524,7 +524,7 @@ func (qe *QueryEngine) execDDL(logStats *SQLQueryStats, ddl string) *mproto.Quer
 	qe.schemaInfo.DropTable(ddlPlan.TableName)
 	if ddlPlan.Action != sqlparser.AST_DROP {
 		// CREATE, ALTER, RENAME
-		qe.schemaInfo.CreateTable(ddlPlan.TableName)
+		qe.schemaInfo.CreateTable(ddlPlan.NewName)
 	}
 	return result
 }
