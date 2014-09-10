@@ -15,9 +15,9 @@ import (
 func TestMigrateServedFromSyslogForward(t *testing.T) {
 	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-1 [migrate served-from keyspace-2/source-shard -> keyspace-1/dest-shard] status"
 	ev := &MigrateServedFrom{
-		Keyspace:         *topo.NewKeyspaceInfo("keyspace-1", nil),
-		SourceShard:      *topo.NewShardInfo("keyspace-2", "source-shard", nil),
-		DestinationShard: *topo.NewShardInfo("keyspace-1", "dest-shard", nil),
+		Keyspace:         *topo.NewKeyspaceInfo("keyspace-1", nil, -1),
+		SourceShard:      *topo.NewShardInfo("keyspace-2", "source-shard", nil, -1),
+		DestinationShard: *topo.NewShardInfo("keyspace-1", "dest-shard", nil, -1),
 		Reverse:          false,
 		StatusUpdater:    base.StatusUpdater{Status: "status"},
 	}
@@ -34,9 +34,9 @@ func TestMigrateServedFromSyslogForward(t *testing.T) {
 func TestMigrateServedFromSyslogReverse(t *testing.T) {
 	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-1 [migrate served-from keyspace-2/source-shard <- keyspace-1/dest-shard] status"
 	ev := &MigrateServedFrom{
-		Keyspace:         *topo.NewKeyspaceInfo("keyspace-1", nil),
-		SourceShard:      *topo.NewShardInfo("keyspace-2", "source-shard", nil),
-		DestinationShard: *topo.NewShardInfo("keyspace-1", "dest-shard", nil),
+		Keyspace:         *topo.NewKeyspaceInfo("keyspace-1", nil, -1),
+		SourceShard:      *topo.NewShardInfo("keyspace-2", "source-shard", nil, -1),
+		DestinationShard: *topo.NewShardInfo("keyspace-1", "dest-shard", nil, -1),
 		Reverse:          true,
 		StatusUpdater:    base.StatusUpdater{Status: "status"},
 	}
@@ -53,14 +53,14 @@ func TestMigrateServedFromSyslogReverse(t *testing.T) {
 func TestMigrateServedTypesSyslogForward(t *testing.T) {
 	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-1 [migrate served-types {src1, src2} -> {dst1, dst2}] status"
 	ev := &MigrateServedTypes{
-		Keyspace: *topo.NewKeyspaceInfo("keyspace-1", nil),
+		Keyspace: *topo.NewKeyspaceInfo("keyspace-1", nil, -1),
 		SourceShards: []*topo.ShardInfo{
-			topo.NewShardInfo("keyspace-1", "src1", nil),
-			topo.NewShardInfo("keyspace-1", "src2", nil),
+			topo.NewShardInfo("keyspace-1", "src1", nil, -1),
+			topo.NewShardInfo("keyspace-1", "src2", nil, -1),
 		},
 		DestinationShards: []*topo.ShardInfo{
-			topo.NewShardInfo("keyspace-1", "dst1", nil),
-			topo.NewShardInfo("keyspace-1", "dst2", nil),
+			topo.NewShardInfo("keyspace-1", "dst1", nil, -1),
+			topo.NewShardInfo("keyspace-1", "dst2", nil, -1),
 		},
 		Reverse:       false,
 		StatusUpdater: base.StatusUpdater{Status: "status"},
@@ -78,14 +78,14 @@ func TestMigrateServedTypesSyslogForward(t *testing.T) {
 func TestMigrateServedTypesSyslogReverse(t *testing.T) {
 	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-1 [migrate served-types {src1, src2} <- {dst1, dst2}] status"
 	ev := &MigrateServedTypes{
-		Keyspace: *topo.NewKeyspaceInfo("keyspace-1", nil),
+		Keyspace: *topo.NewKeyspaceInfo("keyspace-1", nil, -1),
 		SourceShards: []*topo.ShardInfo{
-			topo.NewShardInfo("keyspace-1", "src1", nil),
-			topo.NewShardInfo("keyspace-1", "src2", nil),
+			topo.NewShardInfo("keyspace-1", "src1", nil, -1),
+			topo.NewShardInfo("keyspace-1", "src2", nil, -1),
 		},
 		DestinationShards: []*topo.ShardInfo{
-			topo.NewShardInfo("keyspace-1", "dst1", nil),
-			topo.NewShardInfo("keyspace-1", "dst2", nil),
+			topo.NewShardInfo("keyspace-1", "dst1", nil, -1),
+			topo.NewShardInfo("keyspace-1", "dst2", nil, -1),
 		},
 		Reverse:       true,
 		StatusUpdater: base.StatusUpdater{Status: "status"},

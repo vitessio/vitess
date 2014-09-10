@@ -370,7 +370,7 @@ func (wr *Wrangler) finishReparent(si *topo.ShardInfo, masterElect *topo.TabletI
 
 	// save the new master in the shard info
 	si.MasterAlias = masterElect.Alias
-	if err := wr.ts.UpdateShard(si); err != nil {
+	if err := topo.UpdateShard(wr.ts, si); err != nil {
 		wr.logger.Errorf("Failed to save new master into shard: %v", err)
 		return err
 	}

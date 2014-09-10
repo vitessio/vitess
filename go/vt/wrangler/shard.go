@@ -69,7 +69,7 @@ func (wr *Wrangler) updateShardCellsAndMaster(si *topo.ShardInfo, tabletAlias to
 
 	if wasUpdated {
 		// write it back
-		if err := wr.ts.UpdateShard(si); err != nil {
+		if err := topo.UpdateShard(wr.ts, si); err != nil {
 			return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 		}
 	}
@@ -99,7 +99,7 @@ func (wr *Wrangler) setShardServedTypes(keyspace, shard string, servedTypes []to
 	}
 
 	shardInfo.ServedTypes = servedTypes
-	return wr.ts.UpdateShard(shardInfo)
+	return topo.UpdateShard(wr.ts, shardInfo)
 }
 
 // DeleteShard will do all the necessary changes in the topology server
@@ -210,5 +210,5 @@ func (wr *Wrangler) removeShardCell(keyspace, shard, cell string, force bool) er
 	}
 	shardInfo.Cells = newCells
 
-	return wr.ts.UpdateShard(shardInfo)
+	return topo.UpdateShard(wr.ts, shardInfo)
 }

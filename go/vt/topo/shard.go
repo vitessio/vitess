@@ -132,6 +132,7 @@ func (shard *Shard) HasCell(cell string) bool {
 type ShardInfo struct {
 	keyspace  string
 	shardName string
+	version   int64
 	*Shard
 }
 
@@ -145,15 +146,35 @@ func (si *ShardInfo) ShardName() string {
 	return si.shardName
 }
 
+// Version returns the shard version from last time it was read or updated.
+func (si *ShardInfo) Version() int64 {
+	return si.version
+}
+
 // NewShardInfo returns a ShardInfo basing on shard with the
 // keyspace / shard. This function should be only used by Server
 // implementations.
-func NewShardInfo(keyspace, shard string, value *Shard) *ShardInfo {
+func NewShardInfo(keyspace, shard string, value *Shard, version int64) *ShardInfo {
 	return &ShardInfo{
 		keyspace:  keyspace,
 		shardName: shard,
+		version:   version,
 		Shard:     value,
 	}
+}
+
+// UpdateShard updates the shard data, with the right version
+func UpdateShard(ts Server, si *ShardInfo) error {
+	var version int64 = -1
+	if si.version != 0 {
+		version = si.version
+	}
+
+	newVersion, err := ts.UpdateShard(si, version)
+	if err == nil {
+		si.version = newVersion
+	}
+	return err
 }
 
 // CreateShard creates a new shard and tries to fill in the right information.

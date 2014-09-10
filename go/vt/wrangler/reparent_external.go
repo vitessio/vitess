@@ -102,7 +102,7 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 	event.DispatchUpdate(ev, "updating shard record")
 	wr.logger.Infof("Updating Shard's MasterAlias record")
 	shardInfo.MasterAlias = masterElectTabletAlias
-	if err = wr.ts.UpdateShard(shardInfo); err != nil {
+	if err = topo.UpdateShard(wr.ts, shardInfo); err != nil {
 		return err
 	}
 

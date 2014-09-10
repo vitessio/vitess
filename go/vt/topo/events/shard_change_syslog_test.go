@@ -10,7 +10,7 @@ import (
 func TestShardChangeSyslog(t *testing.T) {
 	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-123/shard-123 [shard] status"
 	sc := &ShardChange{
-		ShardInfo: *topo.NewShardInfo("keyspace-123", "shard-123", nil),
+		ShardInfo: *topo.NewShardInfo("keyspace-123", "shard-123", nil, -1),
 		Status:    "status",
 	}
 	gotSev, gotMsg := sc.Syslog()

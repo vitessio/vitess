@@ -68,7 +68,7 @@ func CheckKeyspace(t *testing.T, ts topo.Server) {
 	ki.ShardingColumnType = key.KIT_BYTES
 	delete(ki.ServedFrom, topo.TYPE_MASTER)
 	ki.ServedFrom[topo.TYPE_REPLICA] = "test_keyspace4"
-	err = ts.UpdateKeyspace(ki)
+	err = topo.UpdateKeyspace(ts, ki)
 	if err != nil {
 		t.Fatalf("UpdateKeyspace: %v", err)
 	}

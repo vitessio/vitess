@@ -145,7 +145,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 		// The tablet is not healthy, let's see what we need to do
 		if tablet.Type != targetTabletType {
 			if tablet.Type != topo.TYPE_SPARE {
-				// we onyl log if we're not in spare,
+				// we only log if we're not in spare,
 				// as the spare state is normal for a
 				// failed health check.
 				log.Infof("Tablet not healthy and in state %v, not changing it: %v", tablet.Type, err)

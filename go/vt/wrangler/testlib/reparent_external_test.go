@@ -40,7 +40,7 @@ func TestShardExternallyReparented(t *testing.T) {
 		t.Fatalf("GetShard failed: %v", err)
 	}
 	si.Cells = append(si.Cells, "cell666")
-	if err := ts.UpdateShard(si); err != nil {
+	if err := topo.UpdateShard(ts, si); err != nil {
 		t.Fatalf("UpdateShard failed: %v", err)
 	}
 

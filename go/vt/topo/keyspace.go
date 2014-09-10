@@ -31,6 +31,7 @@ type Keyspace struct {
 // with a keyspace.
 type KeyspaceInfo struct {
 	keyspace string
+	version  int64
 	*Keyspace
 }
 
@@ -39,14 +40,34 @@ func (ki *KeyspaceInfo) KeyspaceName() string {
 	return ki.keyspace
 }
 
+// Version returns the keyspace version from last time it was read or updated.
+func (ki *KeyspaceInfo) Version() int64 {
+	return ki.version
+}
+
 // NewKeyspaceInfo returns a KeyspaceInfo basing on keyspace with the
 // keyspace. This function should be only used by Server
 // implementations.
-func NewKeyspaceInfo(keyspace string, value *Keyspace) *KeyspaceInfo {
+func NewKeyspaceInfo(keyspace string, value *Keyspace, version int64) *KeyspaceInfo {
 	return &KeyspaceInfo{
 		keyspace: keyspace,
+		version:  version,
 		Keyspace: value,
 	}
+}
+
+// UpdateKeyspace updates the keyspace data, with the right version
+func UpdateKeyspace(ts Server, ki *KeyspaceInfo) error {
+	var version int64 = -1
+	if ki.version != 0 {
+		version = ki.version
+	}
+
+	newVersion, err := ts.UpdateKeyspace(ki, version)
+	if err == nil {
+		ki.version = newVersion
+	}
+	return err
 }
 
 // FindAllShardsInKeyspace reads and returns all the existing shards in

@@ -95,7 +95,13 @@ func CopyShards(fromTS, toTS topo.Server, deleteKeyspaceShards bool) {
 						return
 					}
 
-					if err := toTS.UpdateShard(si); err != nil {
+					toSi, err := toTS.GetShard(keyspace, shard)
+					if err != nil {
+						rec.RecordError(fmt.Errorf("toTS.GetShard(%v, %v): %v", keyspace, shard, err))
+						return
+					}
+
+					if _, err := toTS.UpdateShard(si, toSi.Version()); err != nil {
 						rec.RecordError(fmt.Errorf("UpdateShard(%v, %v): %v", keyspace, shard, err))
 					}
 				}(keyspace, shard)

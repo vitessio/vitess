@@ -47,7 +47,7 @@ func CheckShard(t *testing.T, ts topo.Server) {
 		},
 	}
 
-	if err := ts.UpdateShard(shardInfo); err != nil {
+	if err := topo.UpdateShard(ts, shardInfo); err != nil {
 		t.Errorf("UpdateShard: %v", err)
 	}
 
