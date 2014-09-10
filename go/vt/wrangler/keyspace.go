@@ -44,12 +44,7 @@ func (wr *Wrangler) SetKeyspaceShardingInfo(keyspace, shardingColumnName string,
 func (wr *Wrangler) setKeyspaceShardingInfo(keyspace, shardingColumnName string, shardingColumnType key.KeyspaceIdType, force bool) error {
 	ki, err := wr.ts.GetKeyspace(keyspace)
 	if err != nil {
-		// Temporary change: we try to keep going even if node
-		// doesn't exist
-		if err != topo.ErrNoNode {
-			return err
-		}
-		ki = topo.NewKeyspaceInfo(keyspace, &topo.Keyspace{})
+		return err
 	}
 
 	if ki.ShardingColumnName != "" && ki.ShardingColumnName != shardingColumnName {
@@ -70,7 +65,7 @@ func (wr *Wrangler) setKeyspaceShardingInfo(keyspace, shardingColumnName string,
 
 	ki.ShardingColumnName = shardingColumnName
 	ki.ShardingColumnType = shardingColumnType
-	return wr.ts.UpdateKeyspace(ki)
+	return topo.UpdateKeyspace(wr.ts, ki)
 }
 
 func (wr *Wrangler) MigrateServedTypes(keyspace, shard string, servedType topo.TabletType, reverse, skipRebuild bool) error {
@@ -339,7 +334,7 @@ func (wr *Wrangler) migrateServedTypes(keyspace string, sourceShards, destinatio
 	}
 
 	ev := &events.MigrateServedTypes{
-		Keyspace:          *topo.NewKeyspaceInfo(keyspace, nil),
+		Keyspace:          *topo.NewKeyspaceInfo(keyspace, nil, -1),
 		SourceShards:      sourceShards,
 		DestinationShards: destinationShards,
 		ServedType:        servedType,
@@ -415,14 +410,14 @@ func (wr *Wrangler) migrateServedTypes(keyspace string, sourceShards, destinatio
 	// All is good, we can save the shards now
 	event.DispatchUpdate(ev, "updating source shards")
 	for _, si := range sourceShards {
-		if err := wr.ts.UpdateShard(si); err != nil {
+		if err := topo.UpdateShard(wr.ts, si); err != nil {
 			return err
 		}
 		shardCache[si.ShardName()] = si
 	}
 	event.DispatchUpdate(ev, "updating destination shards")
 	for _, si := range destinationShards {
-		if err := wr.ts.UpdateShard(si); err != nil {
+		if err := topo.UpdateShard(wr.ts, si); err != nil {
 			return err
 		}
 		shardCache[si.ShardName()] = si
@@ -613,12 +608,12 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 
 	// All is good, we can save the keyspace and shard (if needed) now
 	event.DispatchUpdate(ev, "updating keyspace")
-	if err = wr.ts.UpdateKeyspace(ki); err != nil {
+	if err = topo.UpdateKeyspace(wr.ts, ki); err != nil {
 		return err
 	}
 	event.DispatchUpdate(ev, "updating destination shard")
 	if servedType == topo.TYPE_MASTER {
-		if err := wr.ts.UpdateShard(si); err != nil {
+		if err := topo.UpdateShard(wr.ts, si); err != nil {
 			return err
 		}
 	}

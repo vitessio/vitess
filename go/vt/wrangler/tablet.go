@@ -168,7 +168,7 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 			si.MasterAlias = topo.TabletAlias{}
 
 			// write it back
-			if err := wr.ts.UpdateShard(si); err != nil {
+			if err := topo.UpdateShard(wr.ts, si); err != nil {
 				return "", wr.unlockShard(ti.Keyspace, ti.Shard, actionNode, lockPath, err)
 			}
 		} else {

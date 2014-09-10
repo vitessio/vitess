@@ -72,18 +72,19 @@ type Server interface {
 	// yet. Can return ErrNodeExists if it already exists.
 	CreateKeyspace(keyspace string, value *Keyspace) error
 
-	// UpdateKeyspace unconditionnally updates the keyspace information
+	// UpdateKeyspace updates the keyspace information
 	// pointed at by ki.keyspace to the *ki value.
 	// This will only be called with a lock on the keyspace.
-	// Can return ErrNoNode if the keyspace doesn't exist yet.
-	UpdateKeyspace(ki *KeyspaceInfo) error
+	// Can return ErrNoNode if the keyspace doesn't exist yet,
+	// or ErrBadVersion if the version has changed.
+	UpdateKeyspace(ki *KeyspaceInfo, existingVersion int64) (newVersion int64, err error)
 
 	// GetKeyspace reads a keyspace and returns it. This returns an
 	// object stored in the global cell.
 	// Can return ErrNoNode
 	GetKeyspace(keyspace string) (*KeyspaceInfo, error)
 
-	// GetKeyspaces returns the known keyspaces. They shall be sorted.
+	// GetKeyspaces returns the known keyspace names. They shall be sorted.
 	GetKeyspaces() ([]string, error)
 
 	// DeleteKeyspaceShards deletes all the shards in a keyspace.
@@ -100,11 +101,12 @@ type Server interface {
 	// Can return ErrNodeExists if it already exists.
 	CreateShard(keyspace, shard string, value *Shard) error
 
-	// UpdateShard unconditionnally updates the shard information
+	// UpdateShard updates the shard information
 	// pointed at by si.keyspace / si.shard to the *si value.
 	// This will only be called with a lock on the shard.
-	// Can return ErrNoNode if the shard doesn't exist yet.
-	UpdateShard(si *ShardInfo) error
+	// Can return ErrNoNode if the shard doesn't exist yet,
+	// or ErrBadVersion if the version has changed.
+	UpdateShard(si *ShardInfo, existingVersion int64) (newVersion int64, err error)
 
 	// ValidateShard performs routine checks on the shard.
 	ValidateShard(keyspace, shard string) error

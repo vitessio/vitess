@@ -55,50 +55,33 @@ func (zkts *Server) CreateKeyspace(keyspace string, value *topo.Keyspace) error 
 	}
 
 	event.Dispatch(&events.KeyspaceChange{
-		KeyspaceInfo: *topo.NewKeyspaceInfo(keyspace, value),
+		KeyspaceInfo: *topo.NewKeyspaceInfo(keyspace, value, -1),
 		Status:       "created",
 	})
 	return nil
 }
 
-func (zkts *Server) UpdateKeyspace(ki *topo.KeyspaceInfo) error {
+func (zkts *Server) UpdateKeyspace(ki *topo.KeyspaceInfo, existingVersion int64) (int64, error) {
 	keyspacePath := path.Join(globalKeyspacesPath, ki.KeyspaceName())
 	data := jscfg.ToJson(ki.Keyspace)
-	_, err := zkts.zconn.Set(keyspacePath, data, -1)
+	stat, err := zkts.zconn.Set(keyspacePath, data, int(existingVersion))
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			// The code should be:
-			//   err = topo.ErrNoNode
-			// Temporary code until we have Keyspace object
-			// everywhere:
-			_, err = zkts.zconn.Create(keyspacePath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-			if err != nil {
-				if zookeeper.IsError(err, zookeeper.ZNONODE) {
-					// the directory doesn't even exist
-					err = topo.ErrNoNode
-				}
-				return err
-			}
-
-			event.Dispatch(&events.KeyspaceChange{
-				KeyspaceInfo: *ki,
-				Status:       "updated (had to create Keyspace object)",
-			})
-			return nil
+			err = topo.ErrNoNode
 		}
-		return err
+		return -1, err
 	}
 
 	event.Dispatch(&events.KeyspaceChange{
 		KeyspaceInfo: *ki,
 		Status:       "updated",
 	})
-	return nil
+	return int64(stat.Version()), nil
 }
 
 func (zkts *Server) GetKeyspace(keyspace string) (*topo.KeyspaceInfo, error) {
 	keyspacePath := path.Join(globalKeyspacesPath, keyspace)
-	data, _, err := zkts.zconn.Get(keyspacePath)
+	data, stat, err := zkts.zconn.Get(keyspacePath)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			err = topo.ErrNoNode
@@ -111,7 +94,7 @@ func (zkts *Server) GetKeyspace(keyspace string) (*topo.KeyspaceInfo, error) {
 		return nil, fmt.Errorf("bad keyspace data %v", err)
 	}
 
-	return topo.NewKeyspaceInfo(keyspace, k), nil
+	return topo.NewKeyspaceInfo(keyspace, k, int64(stat.Version())), nil
 }
 
 func (zkts *Server) GetKeyspaces() ([]string, error) {
@@ -134,7 +117,7 @@ func (zkts *Server) DeleteKeyspaceShards(keyspace string) error {
 	}
 
 	event.Dispatch(&events.KeyspaceChange{
-		KeyspaceInfo: *topo.NewKeyspaceInfo(keyspace, nil),
+		KeyspaceInfo: *topo.NewKeyspaceInfo(keyspace, nil, -1),
 		Status:       "deleted all shards",
 	})
 	return nil

@@ -210,17 +210,21 @@ func (ft *fakeTopo) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, er
 func (ft *fakeTopo) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
 	return nil, fmt.Errorf("No endpoints")
 }
-func (ft *fakeTopo) Close()                                                      {}
-func (ft *fakeTopo) GetKnownCells() ([]string, error)                            { return nil, nil }
-func (ft *fakeTopo) CreateKeyspace(keyspace string, value *topo.Keyspace) error  { return nil }
-func (ft *fakeTopo) UpdateKeyspace(ki *topo.KeyspaceInfo) error                  { return nil }
+func (ft *fakeTopo) Close()                                                     {}
+func (ft *fakeTopo) GetKnownCells() ([]string, error)                           { return nil, nil }
+func (ft *fakeTopo) CreateKeyspace(keyspace string, value *topo.Keyspace) error { return nil }
+func (ft *fakeTopo) UpdateKeyspace(ki *topo.KeyspaceInfo, existingVersion int64) (int64, error) {
+	return 0, nil
+}
 func (ft *fakeTopo) GetKeyspace(keyspace string) (*topo.KeyspaceInfo, error)     { return nil, nil }
 func (ft *fakeTopo) GetKeyspaces() ([]string, error)                             { return nil, nil }
 func (ft *fakeTopo) DeleteKeyspaceShards(keyspace string) error                  { return nil }
 func (ft *fakeTopo) CreateShard(keyspace, shard string, value *topo.Shard) error { return nil }
-func (ft *fakeTopo) UpdateShard(si *topo.ShardInfo) error                        { return nil }
-func (ft *fakeTopo) ValidateShard(keyspace, shard string) error                  { return nil }
-func (ft *fakeTopo) GetShard(keyspace, shard string) (*topo.ShardInfo, error)    { return nil, nil }
+func (ft *fakeTopo) UpdateShard(si *topo.ShardInfo, existingVersion int64) (int64, error) {
+	return 0, nil
+}
+func (ft *fakeTopo) ValidateShard(keyspace, shard string) error               { return nil }
+func (ft *fakeTopo) GetShard(keyspace, shard string) (*topo.ShardInfo, error) { return nil, nil }
 func (ft *fakeTopo) GetShardCritical(keyspace, shard string) (si *topo.ShardInfo, err error) {
 	return nil, nil
 }

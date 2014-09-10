@@ -470,6 +470,8 @@ type TabletInfo struct {
 	*Tablet
 }
 
+// Version returns the version of this tablet from last time it was read or
+// updated.
 func (ti *TabletInfo) Version() int64 {
 	return ti.version
 }

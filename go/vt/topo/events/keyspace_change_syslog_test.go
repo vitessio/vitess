@@ -10,7 +10,7 @@ import (
 func TestKeyspaceChangeSyslog(t *testing.T) {
 	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-123 [keyspace] status"
 	kc := &KeyspaceChange{
-		KeyspaceInfo: *topo.NewKeyspaceInfo("keyspace-123", nil),
+		KeyspaceInfo: *topo.NewKeyspaceInfo("keyspace-123", nil, -1),
 		Status:       "status",
 	}
 	gotSev, gotMsg := kc.Syslog()

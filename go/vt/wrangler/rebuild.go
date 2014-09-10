@@ -81,12 +81,7 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, shardCache 
 
 	ki, err := wr.ts.GetKeyspace(keyspace)
 	if err != nil {
-		// Temporary change: we try to keep going even if node
-		// doesn't exist
-		if err != topo.ErrNoNode {
-			return err
-		}
-		ki = topo.NewKeyspaceInfo(keyspace, &topo.Keyspace{})
+		return err
 	}
 
 	shards, err := wr.ts.GetShardNames(keyspace)

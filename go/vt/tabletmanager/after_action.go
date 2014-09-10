@@ -124,13 +124,7 @@ func (agent *ActionAgent) changeCallback(oldTablet, newTablet topo.Tablet) {
 
 		// read the keyspace to get ShardingColumnType
 		keyspaceInfo, err = agent.TopoServer.GetKeyspace(newTablet.Keyspace)
-		switch err {
-		case nil:
-			// continue
-		case topo.ErrNoNode:
-			// backward compatible mode
-			keyspaceInfo = topo.NewKeyspaceInfo(newTablet.Keyspace, &topo.Keyspace{})
-		default:
+		if err != nil {
 			log.Errorf("Cannot read keyspace for this tablet %v: %v", newTablet.Alias, err)
 			keyspaceInfo = nil
 		}

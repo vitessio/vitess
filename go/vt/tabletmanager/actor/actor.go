@@ -613,7 +613,7 @@ func tabletExternallyReparentedLocked(ts topo.Server, tablet *topo.TabletInfo, a
 	event.DispatchUpdate(ev, "updating shard record")
 	log.Infof("Updating Shard's MasterAlias record")
 	shardInfo.MasterAlias = tablet.Alias
-	if err = ts.UpdateShard(shardInfo); err != nil {
+	if err = topo.UpdateShard(ts, shardInfo); err != nil {
 		return err
 	}
 
