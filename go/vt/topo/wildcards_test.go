@@ -101,7 +101,7 @@ func TestShardWildcards(t *testing.T) {
 		keyspaces: []string{"aaaaa", "bbbbb"},
 		shards: map[string][]string{
 			"aaaaa": []string{"s0", "s1"},
-			"bbbbb": []string{"-40", "40-80", "80-C0", "C0-"},
+			"bbbbb": []string{"-40", "40-80", "80-c0", "c0-"},
 		},
 	}
 	validateShardWildcard(t, fwb, "*/*", []KeyspaceShard{
@@ -109,8 +109,8 @@ func TestShardWildcards(t *testing.T) {
 		KeyspaceShard{"aaaaa", "s1"},
 		KeyspaceShard{"bbbbb", "-40"},
 		KeyspaceShard{"bbbbb", "40-80"},
-		KeyspaceShard{"bbbbb", "80-C0"},
-		KeyspaceShard{"bbbbb", "C0-"},
+		KeyspaceShard{"bbbbb", "80-c0"},
+		KeyspaceShard{"bbbbb", "c0-"},
 	})
 	validateShardWildcard(t, fwb, "aaaaa/*", []KeyspaceShard{
 		KeyspaceShard{"aaaaa", "s0"},
@@ -123,14 +123,17 @@ func TestShardWildcards(t *testing.T) {
 		KeyspaceShard{"aaaaa", "s0"},
 		KeyspaceShard{"bbbbb", "-40"},
 		KeyspaceShard{"bbbbb", "40-80"},
-		KeyspaceShard{"bbbbb", "80-C0"},
-		KeyspaceShard{"bbbbb", "C0-"},
+		KeyspaceShard{"bbbbb", "80-c0"},
+		KeyspaceShard{"bbbbb", "c0-"},
 	})
 	validateShardWildcard(t, fwb, "aaaaa/ccccc", []KeyspaceShard{
 		KeyspaceShard{"aaaaa", "ccccc"},
 	})
 	validateShardWildcard(t, fwb, "ccccc/s0", []KeyspaceShard{
 		KeyspaceShard{"ccccc", "s0"},
+	})
+	validateShardWildcard(t, fwb, "bbbbb/C0-", []KeyspaceShard{
+		KeyspaceShard{"bbbbb", "c0-"},
 	})
 
 	// error cases

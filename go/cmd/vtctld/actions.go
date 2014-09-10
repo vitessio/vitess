@@ -4,6 +4,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -92,6 +93,11 @@ func (ar *ActionRepository) ApplyKeyspaceAction(actionName, keyspace string, r *
 }
 
 func (ar *ActionRepository) ApplyShardAction(actionName, keyspace, shard string, r *http.Request) *ActionResult {
+	// if the shard name contains a '-', we assume it's the
+	// name for a ranged based shard, so we lower case it.
+	if strings.Contains(shard, "-") {
+		shard = strings.ToLower(shard)
+	}
 	result := &ActionResult{Name: actionName, Parameters: keyspace + "/" + shard}
 
 	action, ok := ar.shardActions[actionName]
