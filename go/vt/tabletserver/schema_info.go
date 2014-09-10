@@ -244,12 +244,6 @@ func (si *SchemaInfo) Reload() {
 		tableName := row[0].String()
 		si.updateLastChange(row[2])
 		log.Infof("Reloading: %s", tableName)
-		si.mu.Lock()
-		_, ok := si.tables[tableName]
-		si.mu.Unlock()
-		if ok {
-			si.DropTable(tableName)
-		}
 		si.CreateTable(tableName)
 	}
 }

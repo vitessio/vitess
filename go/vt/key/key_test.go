@@ -46,8 +46,8 @@ func TestKey(t *testing.T) {
 	f(k4, "\xff\xff\xff\xff\xff\xff\xff\xff")
 
 	hv := k4.Hex()
-	if hv != "FFFFFFFFFFFFFFFF" {
-		t.Errorf("Was expecting FFFFFFFFFFFFFFFF but got %v", hv)
+	if hv != "ffffffffffffffff" {
+		t.Errorf("Was expecting ffffffffffffffff but got %v", hv)
 	}
 }
 
@@ -182,17 +182,17 @@ func TestIntersectOverlap(t *testing.T) {
 		{a: "40", b: "80", c: "c0", d: "d0", intersects: false},
 		{a: "", b: "80", c: "80", d: "", intersects: false},
 		{a: "", b: "80", c: "", d: "40", intersects: true, overlap: "-40"},
-		{a: "80", b: "", c: "C0", d: "", intersects: true, overlap: "C0-"},
+		{a: "80", b: "", c: "c0", d: "", intersects: true, overlap: "c0-"},
 		{a: "", b: "80", c: "40", d: "80", intersects: true, overlap: "40-80"},
-		{a: "40", b: "80", c: "60", d: "A0", intersects: true, overlap: "60-80"},
+		{a: "40", b: "80", c: "60", d: "a0", intersects: true, overlap: "60-80"},
 		{a: "40", b: "80", c: "50", d: "60", intersects: true, overlap: "50-60"},
 		{a: "40", b: "80", c: "10", d: "50", intersects: true, overlap: "40-50"},
 		{a: "40", b: "80", c: "40", d: "80", intersects: true, overlap: "40-80"},
 		{a: "", b: "80", c: "", d: "80", intersects: true, overlap: "-80"},
 		{a: "40", b: "", c: "40", d: "", intersects: true, overlap: "40-"},
 		{a: "40", b: "80", c: "20", d: "40", intersects: false},
-		{a: "80", b: "", c: "80", d: "C0", intersects: true, overlap: "80-C0"},
-		{a: "", b: "", c: "C0", d: "D0", intersects: true, overlap: "C0-D0"},
+		{a: "80", b: "", c: "80", d: "c0", intersects: true, overlap: "80-c0"},
+		{a: "", b: "", c: "c0", d: "d0", intersects: true, overlap: "c0-d0"},
 	}
 
 	for _, el := range table {

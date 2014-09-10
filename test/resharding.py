@@ -35,11 +35,11 @@ shard_1_ny_slave = tablet.Tablet(cell='ny')
 shard_1_rdonly = tablet.Tablet()
 
 # split shards
-# range 80 - C0
+# range 80 - c0
 shard_2_master = tablet.Tablet()
 shard_2_replica1 = tablet.Tablet()
 shard_2_replica2 = tablet.Tablet()
-# range C0 - ""
+# range c0 - ""
 shard_3_master = tablet.Tablet()
 shard_3_replica = tablet.Tablet()
 shard_3_rdonly = tablet.Tablet()
@@ -481,12 +481,12 @@ primary key (name)
     self._test_keyrange_constraints()
 
     # create the split shards
-    shard_2_master.init_tablet(  'master', 'test_keyspace', '80-C0')
-    shard_2_replica1.init_tablet('spare',  'test_keyspace', '80-C0')
-    shard_2_replica2.init_tablet('spare',  'test_keyspace', '80-C0')
-    shard_3_master.init_tablet(  'master', 'test_keyspace', 'C0-')
-    shard_3_replica.init_tablet( 'spare',  'test_keyspace', 'C0-')
-    shard_3_rdonly.init_tablet(  'rdonly', 'test_keyspace', 'C0-')
+    shard_2_master.init_tablet(  'master', 'test_keyspace', '80-c0')
+    shard_2_replica1.init_tablet('spare',  'test_keyspace', '80-c0')
+    shard_2_replica2.init_tablet('spare',  'test_keyspace', '80-c0')
+    shard_3_master.init_tablet(  'master', 'test_keyspace', 'c0-')
+    shard_3_replica.init_tablet( 'spare',  'test_keyspace', 'c0-')
+    shard_3_rdonly.init_tablet(  'rdonly', 'test_keyspace', 'c0-')
 
     # start vttablet on the split shards (no db created,
     # so they're all not serving)
@@ -499,9 +499,9 @@ primary key (name)
               shard_3_master, shard_3_replica, shard_3_rdonly]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
-    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/80-C0',
+    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/80-c0',
                      shard_2_master.tablet_alias], auto_log=True)
-    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/C0-',
+    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/c0-',
                      shard_3_master.tablet_alias], auto_log=True)
 
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'],
@@ -514,7 +514,7 @@ primary key (name)
                              keyspace_id_type=keyspace_id_type)
 
     # take the snapshot for the split
-    utils.run_vtctl(['MultiSnapshot', '--spec=80-C0-',
+    utils.run_vtctl(['MultiSnapshot', '--spec=80-c0-',
                      '--exclude_tables=unrelated',
                      shard_1_slave1.tablet_alias], auto_log=True)
 
@@ -522,7 +522,7 @@ primary key (name)
     # VTDATAROOT/tmp/... as a test. We want to use these for one half,
     # but not for the other, so we test both scenarios.
     os.unlink(os.path.join(environment.tmproot, "snapshot-from-%s-for-%s.tar" %
-                           (shard_1_slave1.tablet_alias, "80-C0")))
+                           (shard_1_slave1.tablet_alias, "80-c0")))
 
     # wait for tablet's binlog server service to be enabled after snapshot
     shard_1_slave1.wait_for_binlog_server_state("Enabled")
@@ -532,7 +532,7 @@ primary key (name)
     # we also delay starting the binlog player, then enable it.
     utils.run_vtctl(['ShardMultiRestore',
                      '-strategy=populateBlpCheckpoint,dontStartBinlogPlayer',
-                     'test_keyspace/80-C0', shard_1_slave1.tablet_alias],
+                     'test_keyspace/80-c0', shard_1_slave1.tablet_alias],
                     auto_log=True)
 
     timeout = 10
@@ -560,7 +560,7 @@ primary key (name)
     # it afterwards
     shard_1_slave1.kill_vttablet()
     utils.run_vtctl(['ShardMultiRestore', '-strategy=populateBlpCheckpoint',
-                     'test_keyspace/C0-', shard_1_slave1.tablet_alias],
+                     'test_keyspace/c0-', shard_1_slave1.tablet_alias],
                     auto_log=True)
     shard_1_slave1.start_vttablet(wait_for_state=None)
     shard_1_slave1.wait_for_binlog_server_state("Enabled")
@@ -597,7 +597,7 @@ primary key (name)
 
     # use the vtworker checker to compare the data
     logging.debug("Running vtworker SplitDiff")
-    utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff', 'test_keyspace/C0-'],
+    utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff', 'test_keyspace/c0-'],
                        auto_log=True)
     utils.run_vtctl(['ChangeSlaveType', shard_1_rdonly.tablet_alias, 'rdonly'],
                     auto_log=True)
@@ -650,7 +650,7 @@ primary key (name)
                     auto_log=True)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
-                             'Partitions(rdonly): -80 80-C0 C0-\n' +
+                             'Partitions(rdonly): -80 80-c0 c0-\n' +
                              'Partitions(replica): -80 80-\n' +
                              'TabletTypes: master,rdonly,replica',
                              keyspace_id_type=keyspace_id_type)
@@ -660,8 +660,8 @@ primary key (name)
                     auto_log=True)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
-                             'Partitions(rdonly): -80 80-C0 C0-\n' +
-                             'Partitions(replica): -80 80-C0 C0-\n' +
+                             'Partitions(rdonly): -80 80-c0 c0-\n' +
+                             'Partitions(replica): -80 80-c0 c0-\n' +
                              'TabletTypes: master,rdonly,replica',
                              keyspace_id_type=keyspace_id_type)
 
@@ -670,7 +670,7 @@ primary key (name)
                     auto_log=True)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
-                             'Partitions(rdonly): -80 80-C0 C0-\n' +
+                             'Partitions(rdonly): -80 80-c0 c0-\n' +
                              'Partitions(replica): -80 80-\n' +
                              'TabletTypes: master,rdonly,replica',
                              keyspace_id_type=keyspace_id_type)
@@ -678,14 +678,14 @@ primary key (name)
                     auto_log=True)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
-                             'Partitions(rdonly): -80 80-C0 C0-\n' +
-                             'Partitions(replica): -80 80-C0 C0-\n' +
+                             'Partitions(rdonly): -80 80-c0 c0-\n' +
+                             'Partitions(replica): -80 80-c0 c0-\n' +
                              'TabletTypes: master,rdonly,replica',
                              keyspace_id_type=keyspace_id_type)
 
     # reparent shard_2 to shard_2_replica1, then insert more data and
     # see it flow through still
-    utils.run_vtctl(['ReparentShard', 'test_keyspace/80-C0',
+    utils.run_vtctl(['ReparentShard', 'test_keyspace/80-c0',
                     shard_2_replica1.tablet_alias])
     logging.debug("Inserting lots of data on source shard after reparenting")
     self._insert_lots(3000, base=2000)
@@ -694,7 +694,7 @@ primary key (name)
 
     # use the vtworker checker to compare the data again
     logging.debug("Running vtworker SplitDiff")
-    utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff', 'test_keyspace/C0-'],
+    utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff', 'test_keyspace/c0-'],
                        auto_log=True)
     utils.run_vtctl(['ChangeSlaveType', shard_1_rdonly.tablet_alias, 'rdonly'],
                     auto_log=True)
@@ -719,9 +719,9 @@ primary key (name)
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'master'],
                     auto_log=True)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
-                             'Partitions(master): -80 80-C0 C0-\n' +
-                             'Partitions(rdonly): -80 80-C0 C0-\n' +
-                             'Partitions(replica): -80 80-C0 C0-\n' +
+                             'Partitions(master): -80 80-c0 c0-\n' +
+                             'Partitions(rdonly): -80 80-c0 c0-\n' +
+                             'Partitions(replica): -80 80-c0 c0-\n' +
                              'TabletTypes: master,rdonly,replica',
                              keyspace_id_type=keyspace_id_type)
 
