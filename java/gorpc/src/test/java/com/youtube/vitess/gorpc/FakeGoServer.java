@@ -1,4 +1,4 @@
-package com.youtube.gorpc;
+package com.youtube.vitess.gorpc;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -14,8 +14,8 @@ import org.bson.BSONObject;
 import org.bson.BasicBSONEncoder;
 import org.bson.BasicBSONObject;
 
-import com.youtube.gorpc.codecs.bson.BsonClientCodec;
-import com.youtube.gorpc.codecs.bson.GoRpcBsonDecoder;
+import com.youtube.vitess.gorpc.codecs.bson.BsonClientCodec;
+import com.youtube.vitess.gorpc.codecs.bson.GoRpcBsonDecoder;
 
 /**
  * FakeGoServer emulates a Go rpc server using bson codec. It does minimal error

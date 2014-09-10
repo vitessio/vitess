@@ -1,4 +1,4 @@
-package com.youtube.gorpc;
+package com.youtube.vitess.gorpc;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -9,10 +9,10 @@ import java.net.Socket;
 
 import org.apache.commons.lang.CharEncoding;
 
-import com.youtube.gorpc.Exceptions.ApplicationError;
-import com.youtube.gorpc.Exceptions.GoRpcException;
-import com.youtube.gorpc.codecs.ClientCodec;
-import com.youtube.gorpc.codecs.ClientCodecFactory;
+import com.youtube.vitess.gorpc.Exceptions.ApplicationError;
+import com.youtube.vitess.gorpc.Exceptions.GoRpcException;
+import com.youtube.vitess.gorpc.codecs.ClientCodec;
+import com.youtube.vitess.gorpc.codecs.ClientCodecFactory;
 
 /**
  * Client represents an RPC client that can communicate with a Go RPC server.

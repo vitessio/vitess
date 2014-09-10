@@ -1,4 +1,4 @@
-package com.youtube.gorpc;
+package com.youtube.vitess.gorpc;
 
 public class Exceptions {
 	@SuppressWarnings("serial")

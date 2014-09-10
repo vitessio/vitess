@@ -1,4 +1,4 @@
-package com.youtube.gorpc.codecs.bson;
+package com.youtube.vitess.gorpc.codecs.bson;
 
 import java.io.IOException;
 import java.net.Socket;
@@ -10,10 +10,10 @@ import org.bson.BSONObject;
 import org.bson.BasicBSONEncoder;
 import org.bson.BasicBSONObject;
 
-import com.youtube.gorpc.Constants;
-import com.youtube.gorpc.Request;
-import com.youtube.gorpc.Response;
-import com.youtube.gorpc.codecs.ClientCodec;
+import com.youtube.vitess.gorpc.Constants;
+import com.youtube.vitess.gorpc.Request;
+import com.youtube.vitess.gorpc.Response;
+import com.youtube.vitess.gorpc.codecs.ClientCodec;
 
 public class BsonClientCodec implements ClientCodec {
 	// Server uses MAGIC_TAG to embed simple types inside BSON document

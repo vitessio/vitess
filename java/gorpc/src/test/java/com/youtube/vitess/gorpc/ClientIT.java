@@ -1,4 +1,4 @@
-package com.youtube.gorpc;
+package com.youtube.vitess.gorpc;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -14,9 +14,9 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import com.youtube.gorpc.Exceptions.ApplicationError;
-import com.youtube.gorpc.Exceptions.GoRpcException;
-import com.youtube.gorpc.codecs.bson.BsonClientCodecFactory;
+import com.youtube.vitess.gorpc.Exceptions.ApplicationError;
+import com.youtube.vitess.gorpc.Exceptions.GoRpcException;
+import com.youtube.vitess.gorpc.codecs.bson.BsonClientCodecFactory;
 
 /**
  * ClientIT runs the same tests as ClientTest but uses a real Go BSON RPC

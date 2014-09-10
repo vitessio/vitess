@@ -1,9 +1,9 @@
-package com.youtube.gorpc.codecs;
+package com.youtube.vitess.gorpc.codecs;
 
 import java.io.IOException;
 
-import com.youtube.gorpc.Request;
-import com.youtube.gorpc.Response;
+import com.youtube.vitess.gorpc.Request;
+import com.youtube.vitess.gorpc.Response;
 
 /**
  * Mirrors rpc.ClientCodec in Golang net/rpc package

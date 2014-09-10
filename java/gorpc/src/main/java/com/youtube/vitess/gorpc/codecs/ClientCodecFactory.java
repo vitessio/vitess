@@ -1,4 +1,4 @@
-package com.youtube.gorpc.codecs;
+package com.youtube.vitess.gorpc.codecs;
 
 import java.net.Socket;
 

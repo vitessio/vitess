@@ -1,4 +1,4 @@
-package com.youtube.gorpc.codecs.bson;
+package com.youtube.vitess.gorpc.codecs.bson;
 
 import java.io.IOException;
 import java.util.regex.Matcher;

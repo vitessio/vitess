@@ -1,4 +1,4 @@
-package com.youtube.gorpc;
+package com.youtube.vitess.gorpc;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -10,9 +10,9 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.youtube.gorpc.Exceptions.ApplicationError;
-import com.youtube.gorpc.Exceptions.GoRpcException;
-import com.youtube.gorpc.codecs.bson.BsonClientCodecFactory;
+import com.youtube.vitess.gorpc.Exceptions.ApplicationError;
+import com.youtube.vitess.gorpc.Exceptions.GoRpcException;
+import com.youtube.vitess.gorpc.codecs.bson.BsonClientCodecFactory;
 
 public class ClientTest {
 
