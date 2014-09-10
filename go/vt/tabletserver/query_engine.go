@@ -521,7 +521,11 @@ func (qe *QueryEngine) execDDL(logStats *SQLQueryStats, ddl string) *mproto.Quer
 	if err != nil {
 		panic(err)
 	}
-	qe.schemaInfo.triggerReload()
+	qe.schemaInfo.DropTable(ddlPlan.TableName)
+	if ddlPlan.Action != sqlparser.AST_DROP {
+		// CREATE, ALTER, RENAME
+		qe.schemaInfo.CreateTable(ddlPlan.TableName)
+	}
 	return result
 }
 
