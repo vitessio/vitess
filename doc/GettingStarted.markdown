@@ -16,7 +16,7 @@ If you run into issues or have questions, you can use our mailing list: vitess@g
 * [Memcached](http://memcached.org): Used for the rowcache.
 * [Python](http://python.org): For the client and testing.
 
-## Installation
+## Building
 
 [Install Go](http://golang.org/doc/install).
 
@@ -40,13 +40,56 @@ export MYSQL_FLAVOR=MariaDB
 make build
 ```
 
-To run the tests:
+## Testing
+
+The full set of tests included in the default _make_ and _make test_ targets
+is intended for use by Vitess developers to verify code changes.
+These tests simulate a small cluster by launching many servers on the local
+machine, so they require a lot of resources (minimum 8GB RAM and SSD recommended).
+
+If you are only interested in checking that Vitess is working in your
+environment, you can run a set of lighter tests:
 
 ``` sh
-make  # run the tests
+make site_test
 ```
 
-Note: If you see failing tests, it may be that your disk is too slow for the testsuite, leading to timeouts. You might try [testing against a ramdisk](TestingOnARamDisk.markdown).
+### Common Test Issues
+
+Many common failures come from running the full developer test suite
+(_make_ or _make test_) on an underpowered machine. If you still get
+these errors with the lighter set of site tests (*make site_test*),
+please let us know on the mailing list.
+
+#### Node already exists, port in use, etc.
+
+Sometimes a failed test may leave behind orphaned processes.
+If you use the default settings, you can find these by looking for
+*vtdataroot* in the command line, since every process is told to put
+its files there with a command line flag. For example:
+
+``` sh
+pgrep -f -l '(vtdataroot|VTDATAROOT)' # list Vitess processes
+pkill -f '(vtdataroot|VTDATAROOT)' # kill Vitess processes
+```
+
+#### Too many connections to MySQL, or other timeouts
+
+This often means your disk is too slow. If you don't have access to an SSD,
+you can try [testing against a ramdisk](TestingOnARamDisk.markdown).
+
+#### Connection refused to tablet, MySQL socket not found, etc.
+
+This could mean you ran out of RAM and a server crashed when it tried to allocate more.
+Some of the heavier tests currently require up to 8GB RAM.
+
+#### Connection refused in zkctl test
+
+This could indicate that no Java Runtime is installed.
+
+#### Running out of disk space
+
+Some of the larger tests use up to 4GB of temporary space on disk.
 
 ## Setting up a cluster
 TODO: Expand on all sections
