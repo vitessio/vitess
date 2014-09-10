@@ -5,6 +5,7 @@ import optparse
 import traceback
 import unittest
 import sys
+import os
 
 import utils
 import framework
@@ -14,6 +15,8 @@ from queryservice_tests import nocache_tests
 from queryservice_tests import stream_tests
 from queryservice_tests import status_tests
 from queryservice_tests import test_env
+
+from mysql_flavor import set_mysql_flavor
 
 
 if __name__ == "__main__":
@@ -25,9 +28,12 @@ if __name__ == "__main__":
   parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=1)
   parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=0)
   parser.add_option('--skip-teardown', action='store_true')
+  parser.add_option("--mysql-flavor", action="store", type="string")
   (options, args) = parser.parse_args()
+
   utils.options = options
   logging.getLogger().setLevel(logging.ERROR)
+  set_mysql_flavor(options.mysql_flavor)
 
   suite = unittest.TestSuite()
   if args:
@@ -59,7 +65,7 @@ if __name__ == "__main__":
     print "Starting queryservice_test.py: %s" % options.env
     sys.stdout.flush()
     framework.TestCase.setenv(env)
-    result = unittest.TextTestRunner(verbosity=options.verbose).run(suite)
+    result = unittest.TextTestRunner(verbosity=options.verbose, failfast=True).run(suite)
     if not result.wasSuccessful():
       raise Exception("test failures")
   finally:

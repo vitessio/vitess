@@ -271,7 +271,8 @@ func (si *SchemaInfo) CreateTable(tableName string) {
 		panic(NewTabletError(FAIL, "Error fetching table %s: %v", tableName, err))
 	}
 	if len(tables.Rows) != 1 {
-		panic(NewTabletError(FAIL, "rows for %s !=1: %v", tableName, len(tables.Rows)))
+		// This can happen if DDLs race with each other.
+		return
 	}
 	tableInfo, err := NewTableInfo(
 		conn,
@@ -282,7 +283,8 @@ func (si *SchemaInfo) CreateTable(tableName string) {
 		si.cachePool,
 	)
 	if err != nil {
-		panic(NewTabletError(FATAL, "Could not get load table %s: %v", tableName, err))
+		// This can happen if DDLs race with each other.
+		return
 	}
 	if tableInfo.CacheType == schema.CACHE_NONE {
 		log.Infof("Initialized table: %s", tableName)
@@ -290,7 +292,12 @@ func (si *SchemaInfo) CreateTable(tableName string) {
 		log.Infof("Initialized cached table: %s, prefix: %s", tableName, tableInfo.Cache.prefix)
 	}
 	if _, ok := si.tables[tableName]; ok {
-		panic(NewTabletError(FAIL, "Table %s already exists", tableName))
+		// This can happen if people do 'create table if exists',
+		// or if there's a race between rowcache invalidator and query_engine.
+		// In this case, we overwrite the table with the latest info just to
+		// be safe. This also means that the query cache needs to be cleared.
+		// Otherwise, the query plans may not be in sync with the schema.
+		si.queries.Clear()
 	}
 	si.tables[tableName] = tableInfo
 

@@ -55,11 +55,11 @@ primary key(eid, name)
 
 
 def _get_master_current_position():
-  return mysql_flavor.master_position(master_tablet)
+  return mysql_flavor().master_position(master_tablet)
 
 
 def _get_repl_current_position():
-  return mysql_flavor.master_position(replica_tablet)
+  return mysql_flavor().master_position(replica_tablet)
 
 
 def setUpModule():
@@ -385,8 +385,8 @@ class TestUpdateStream(unittest.TestCase):
       data = master_conn.stream_next()
       if data['Category'] == 'POS':
         master_txn_count += 1
-        position = mysql_flavor.position_append(position, data['GTIDField'])
-        if mysql_flavor.position_after(position, start_position):
+        position = mysql_flavor().position_append(position, data['GTIDField'])
+        if mysql_flavor().position_after(position, start_position):
           logs_correct = True
           logging.debug('Log rotation correctly interpreted')
           break

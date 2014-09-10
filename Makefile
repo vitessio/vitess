@@ -32,11 +32,11 @@ unit_test_race:
 queryservice_test:
 	echo $$(date): Running test/queryservice_test.py...
 	if [ -e "/usr/bin/memcached" ]; then \
-		time test/queryservice_test.py -m -e vtocc; \
-		time test/queryservice_test.py -m -e vttablet; \
+		time test/queryservice_test.py -m -e vtocc $$VT_TEST_FLAGS || exit 1 ; \
+		time test/queryservice_test.py -m -e vttablet $$VT_TEST_FLAGS || exit 1 ; \
 	else \
-		time test/queryservice_test.py -e vtocc; \
-		time test/queryservice_test.py -e vttablet; \
+		time test/queryservice_test.py -e vtocc $$VT_TEST_FLAGS || exit 1 ; \
+		time test/queryservice_test.py -e vttablet $$VT_TEST_FLAGS || exit 1 ; \
 	fi
 
 #export VT_TEST_FLAGS=-v for instance

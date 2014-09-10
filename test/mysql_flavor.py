@@ -2,6 +2,7 @@
 
 import environment
 import logging
+import os
 
 
 class MysqlFlavor(object):
@@ -142,11 +143,37 @@ class MariaDB(MysqlFlavor):
         (host, port)]
 
 
-if environment.mysql_flavor == "MariaDB":
-  mysql_flavor = MariaDB()
-elif environment.mysql_flavor == "GoogleMysql":
-  mysql_flavor = GoogleMysql()
-else:
-  mysql_flavor = MysqlFlavor()
-  logging.warning(
-      "Unknown MYSQL_FLAVOR '%s', using defaults", environment.mysql_flavor)
+__mysql_flavor = None
+
+
+# mysql_flavor is a function because we need something to import before the
+# actual __mysql_flavor is initialized, since that doesn't happen until after
+# the command-line options are parsed. If we make mysql_flavor a variable and
+# import it before it's initialized, the module that imported it won't get the
+# updated value when it's later initialized.
+def mysql_flavor():
+  return __mysql_flavor
+
+
+def set_mysql_flavor(flavor):
+  global __mysql_flavor
+
+  if not flavor:
+    flavor = os.environ.get("MYSQL_FLAVOR", "GoogleMysql")
+    # The environment variable might be set, but equal to "".
+    if flavor == "":
+      flavor = "GoogleMysql"
+
+  # Set the environment variable explicitly in case we're overriding it via
+  # command-line flag.
+  os.environ["MYSQL_FLAVOR"] = flavor
+
+  if flavor == "MariaDB":
+    __mysql_flavor = MariaDB()
+  elif flavor == "GoogleMysql":
+    __mysql_flavor = GoogleMysql()
+  else:
+    logging.error("Unknown MYSQL_FLAVOR '%s'", flavor)
+    exit(1)
+
+  logging.debug("Using MYSQL_FLAVOR=%s", str(flavor))

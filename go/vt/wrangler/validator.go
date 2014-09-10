@@ -6,6 +6,7 @@ package wrangler
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -183,6 +184,14 @@ func (wr *Wrangler) validateShard(keyspace, shard string, pingTablets bool, wg *
 	return
 }
 
+func normalizeIP(ip string) string {
+	// Normalize loopback to avoid spurious validation errors.
+	if strings.HasPrefix(ip, "127.") {
+		return "127.0.0.1"
+	}
+	return ip
+}
+
 func strInList(sl []string, s string) bool {
 	for _, x := range sl {
 		if x == s {
@@ -216,15 +225,17 @@ func (wr *Wrangler) validateReplication(shardInfo *topo.ShardInfo, tabletMap map
 	}
 
 	tabletIpMap := make(map[string]*topo.Tablet)
+	slaveIpMap := make(map[string]bool)
 	for _, tablet := range tabletMap {
-		tabletIpMap[tablet.IPAddr] = tablet.Tablet
+		tabletIpMap[normalizeIP(tablet.IPAddr)] = tablet.Tablet
 	}
 
 	// See if every slave is in the replication graph.
 	for _, slaveAddr := range slaveList {
-		if tabletIpMap[slaveAddr] == nil {
+		if tabletIpMap[normalizeIP(slaveAddr)] == nil {
 			results <- vresult{shardInfo.Keyspace() + "/" + shardInfo.ShardName(), fmt.Errorf("slave not in replication graph: %v (mysql instance without vttablet?)", slaveAddr)}
 		}
+		slaveIpMap[normalizeIP(slaveAddr)] = true
 	}
 
 	// See if every entry in the replication graph is connected to the master.
@@ -233,7 +244,7 @@ func (wr *Wrangler) validateReplication(shardInfo *topo.ShardInfo, tabletMap map
 			continue
 		}
 
-		if !strInList(slaveList, tablet.IPAddr) {
+		if !slaveIpMap[normalizeIP(tablet.IPAddr)] {
 			results <- vresult{tablet.Alias.String(), fmt.Errorf("slave not replicating: %v %q", tablet.IPAddr, slaveList)}
 		}
 	}
