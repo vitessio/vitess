@@ -28,7 +28,7 @@
           <dia:boolean val="false"/>
         </dia:attribute>
         <dia:attribute name="scaling">
-          <dia:real val="0.52383142709732056"/>
+          <dia:real val="0.52383172512054443"/>
         </dia:attribute>
         <dia:attribute name="fitto">
           <dia:boolean val="true"/>
@@ -141,22 +141,22 @@
     </dia:object>
     <dia:object type="Flowchart - Document" version="1" id="O1">
       <dia:attribute name="obj_pos">
-        <dia:point val="18.45,7.5"/>
+        <dia:point val="18.0513,7.1075"/>
       </dia:attribute>
       <dia:attribute name="obj_bb">
-        <dia:rectangle val="18.4,7.45;21.1,9.5"/>
+        <dia:rectangle val="18.0013,7.0575;21.2988,9.7675"/>
       </dia:attribute>
       <dia:attribute name="meta">
         <dia:composite type="dict"/>
       </dia:attribute>
       <dia:attribute name="elem_corner">
-        <dia:point val="18.45,7.5"/>
+        <dia:point val="18.0513,7.1075"/>
       </dia:attribute>
       <dia:attribute name="elem_width">
-        <dia:real val="2.6000000000000001"/>
+        <dia:real val="3.1974999999999998"/>
       </dia:attribute>
       <dia:attribute name="elem_height">
-        <dia:real val="2"/>
+        <dia:real val="2.6600000000000006"/>
       </dia:attribute>
       <dia:attribute name="line_width">
         <dia:real val="0.10000000000000001"/>
@@ -180,7 +180,8 @@
       <dia:attribute name="text">
         <dia:composite type="text">
           <dia:attribute name="string">
-            <dia:string>#binlogs#</dia:string>
+            <dia:string>#binlog
+streamer#</dia:string>
           </dia:attribute>
           <dia:attribute name="font">
             <dia:font family="sans" style="0" name="Helvetica"/>
@@ -189,7 +190,7 @@
             <dia:real val="0.80000000000000004"/>
           </dia:attribute>
           <dia:attribute name="pos">
-            <dia:point val="19.75,8.41429"/>
+            <dia:point val="19.65,7.8575"/>
           </dia:attribute>
           <dia:attribute name="color">
             <dia:color val="#000000"/>
@@ -214,11 +215,11 @@
         <dia:point val="6.78,8.29583"/>
       </dia:attribute>
       <dia:attribute name="obj_bb">
-        <dia:rectangle val="6.72974,7.99213;18.5618,8.71572"/>
+        <dia:rectangle val="6.72979,7.88832;18.1631,8.61192"/>
       </dia:attribute>
       <dia:attribute name="conn_endpoints">
         <dia:point val="6.78,8.29583"/>
-        <dia:point val="18.45,8.35714"/>
+        <dia:point val="18.0513,8.2475"/>
       </dia:attribute>
       <dia:attribute name="numcp">
         <dia:int val="1"/>
@@ -1006,13 +1007,13 @@ plan cache#</dia:string>
     </dia:object>
     <dia:object type="Standard - Line" version="0" id="O23">
       <dia:attribute name="obj_pos">
-        <dia:point val="19.75,7.5"/>
+        <dia:point val="19.65,7.1075"/>
       </dia:attribute>
       <dia:attribute name="obj_bb">
-        <dia:rectangle val="18.8548,-4.36418;19.8023,7.55234"/>
+        <dia:rectangle val="18.8503,-4.36421;19.702,7.1595"/>
       </dia:attribute>
       <dia:attribute name="conn_endpoints">
-        <dia:point val="19.75,7.5"/>
+        <dia:point val="19.65,7.1075"/>
         <dia:point val="19.1869,-4.2525"/>
       </dia:attribute>
       <dia:attribute name="numcp">
@@ -1139,7 +1140,7 @@ plan cache#</dia:string>
             <dia:real val="0.80000000000000004"/>
           </dia:attribute>
           <dia:attribute name="pos">
-            <dia:point val="35.6169,-5.1225"/>
+            <dia:point val="35.6168,-5.1225"/>
           </dia:attribute>
           <dia:attribute name="color">
             <dia:color val="#000000"/>
@@ -1180,22 +1181,22 @@ plan cache#</dia:string>
     </dia:object>
     <dia:object type="Network - Cloud" version="1" id="O28">
       <dia:attribute name="obj_pos">
-        <dia:point val="28.2926,-1.348"/>
+        <dia:point val="28.7426,-1.175"/>
       </dia:attribute>
       <dia:attribute name="obj_bb">
-        <dia:rectangle val="28.2926,-1.348;35.2574,0.873007"/>
+        <dia:rectangle val="28.7426,-1.175;35.7074,1.725"/>
       </dia:attribute>
       <dia:attribute name="meta">
         <dia:composite type="dict"/>
       </dia:attribute>
       <dia:attribute name="elem_corner">
-        <dia:point val="28.2926,-1.348"/>
+        <dia:point val="28.7426,-1.175"/>
       </dia:attribute>
       <dia:attribute name="elem_width">
-        <dia:real val="6.9648484163815336"/>
+        <dia:real val="6.9648484163815221"/>
       </dia:attribute>
       <dia:attribute name="elem_height">
-        <dia:real val="2.2210072987721694"/>
+        <dia:real val="2.9000000000000021"/>
       </dia:attribute>
       <dia:attribute name="line_width">
         <dia:real val="0.10000000000000001"/>
@@ -1228,7 +1229,7 @@ plan cache#</dia:string>
             <dia:real val="0.80000000000000004"/>
           </dia:attribute>
           <dia:attribute name="pos">
-            <dia:point val="31.9617,0.00165532"/>
+            <dia:point val="32.4117,0.526121"/>
           </dia:attribute>
           <dia:attribute name="color">
             <dia:color val="#000000"/>
@@ -1253,11 +1254,11 @@ plan cache#</dia:string>
         <dia:point val="15.2475,-1.815"/>
       </dia:attribute>
       <dia:attribute name="obj_bb">
-        <dia:rectangle val="15.192,-1.87048;28.5336,0.0177542"/>
+        <dia:rectangle val="15.1906,-1.87187;28.9832,0.498997"/>
       </dia:attribute>
       <dia:attribute name="conn_endpoints">
         <dia:point val="15.2475,-1.815"/>
-        <dia:point val="28.4226,-0.270348"/>
+        <dia:point val="28.8726,0.23211"/>
       </dia:attribute>
       <dia:attribute name="numcp">
         <dia:int val="1"/>
@@ -1278,16 +1279,16 @@ plan cache#</dia:string>
     </dia:object>
     <dia:object type="Flowchart - Box" version="0" id="O30">
       <dia:attribute name="obj_pos">
-        <dia:point val="25.98,7.2975"/>
+        <dia:point val="25.1125,7.2975"/>
       </dia:attribute>
       <dia:attribute name="obj_bb">
-        <dia:rectangle val="25.93,7.2475;31.2475,9.2475"/>
+        <dia:rectangle val="25.0625,7.2475;32.115,9.2475"/>
       </dia:attribute>
       <dia:attribute name="elem_corner">
-        <dia:point val="25.98,7.2975"/>
+        <dia:point val="25.1125,7.2975"/>
       </dia:attribute>
       <dia:attribute name="elem_width">
-        <dia:real val="5.2174999999999994"/>
+        <dia:real val="6.9524999999999997"/>
       </dia:attribute>
       <dia:attribute name="elem_height">
         <dia:real val="1.9000000000000001"/>
@@ -1301,7 +1302,7 @@ plan cache#</dia:string>
       <dia:attribute name="text">
         <dia:composite type="text">
           <dia:attribute name="string">
-            <dia:string>#results reuse#</dia:string>
+            <dia:string>#filtered replicatoin#</dia:string>
           </dia:attribute>
           <dia:attribute name="font">
             <dia:font family="sans" style="0" name="Helvetica"/>
@@ -1323,16 +1324,16 @@ plan cache#</dia:string>
     </dia:object>
     <dia:object type="Flowchart - Magnetic Disk" version="1" id="O31">
       <dia:attribute name="obj_pos">
-        <dia:point val="33.25,3.8475"/>
+        <dia:point val="35,3.7975"/>
       </dia:attribute>
       <dia:attribute name="obj_bb">
-        <dia:rectangle val="33.2,3.7975;36.37,6.1125"/>
+        <dia:rectangle val="34.95,3.7475;38.12,6.0625"/>
       </dia:attribute>
       <dia:attribute name="meta">
         <dia:composite type="dict"/>
       </dia:attribute>
       <dia:attribute name="elem_corner">
-        <dia:point val="33.25,3.8475"/>
+        <dia:point val="35,3.7975"/>
       </dia:attribute>
       <dia:attribute name="elem_width">
         <dia:real val="3.0700000000000029"/>
@@ -1371,7 +1372,7 @@ plan cache#</dia:string>
             <dia:real val="0.80000000000000004"/>
           </dia:attribute>
           <dia:attribute name="pos">
-            <dia:point val="34.785,5.33958"/>
+            <dia:point val="36.535,5.28958"/>
           </dia:attribute>
           <dia:attribute name="color">
             <dia:color val="#000000"/>
@@ -1393,16 +1394,16 @@ plan cache#</dia:string>
     </dia:object>
     <dia:object type="Flowchart - Magnetic Disk" version="1" id="O32">
       <dia:attribute name="obj_pos">
-        <dia:point val="33.43,6.9475"/>
+        <dia:point val="34.98,6.7975"/>
       </dia:attribute>
       <dia:attribute name="obj_bb">
-        <dia:rectangle val="33.38,6.8975;36.55,9.2125"/>
+        <dia:rectangle val="34.93,6.7475;38.1,9.0625"/>
       </dia:attribute>
       <dia:attribute name="meta">
         <dia:composite type="dict"/>
       </dia:attribute>
       <dia:attribute name="elem_corner">
-        <dia:point val="33.43,6.9475"/>
+        <dia:point val="34.98,6.7975"/>
       </dia:attribute>
       <dia:attribute name="elem_width">
         <dia:real val="3.0700000000000029"/>
@@ -1441,7 +1442,7 @@ plan cache#</dia:string>
             <dia:real val="0.80000000000000004"/>
           </dia:attribute>
           <dia:attribute name="pos">
-            <dia:point val="34.965,8.43958"/>
+            <dia:point val="36.515,8.28958"/>
           </dia:attribute>
           <dia:attribute name="color">
             <dia:color val="#000000"/>
@@ -1463,16 +1464,16 @@ plan cache#</dia:string>
     </dia:object>
     <dia:object type="Flowchart - Magnetic Disk" version="1" id="O33">
       <dia:attribute name="obj_pos">
-        <dia:point val="33.66,9.9325"/>
+        <dia:point val="35.11,9.8825"/>
       </dia:attribute>
       <dia:attribute name="obj_bb">
-        <dia:rectangle val="33.61,9.8825;36.78,12.1975"/>
+        <dia:rectangle val="35.06,9.8325;38.23,12.1475"/>
       </dia:attribute>
       <dia:attribute name="meta">
         <dia:composite type="dict"/>
       </dia:attribute>
       <dia:attribute name="elem_corner">
-        <dia:point val="33.66,9.9325"/>
+        <dia:point val="35.11,9.8825"/>
       </dia:attribute>
       <dia:attribute name="elem_width">
         <dia:real val="3.0700000000000029"/>
@@ -1511,7 +1512,7 @@ plan cache#</dia:string>
             <dia:real val="0.80000000000000004"/>
           </dia:attribute>
           <dia:attribute name="pos">
-            <dia:point val="35.195,11.4246"/>
+            <dia:point val="36.645,11.3746"/>
           </dia:attribute>
           <dia:attribute name="color">
             <dia:color val="#000000"/>
@@ -1533,14 +1534,14 @@ plan cache#</dia:string>
     </dia:object>
     <dia:object type="Standard - Line" version="0" id="O34">
       <dia:attribute name="obj_pos">
-        <dia:point val="31.1975,8.2475"/>
+        <dia:point val="32.065,8.2475"/>
       </dia:attribute>
       <dia:attribute name="obj_bb">
-        <dia:rectangle val="31.128,5.13944;33.3195,8.31697"/>
+        <dia:rectangle val="31.9943,5.10112;35.0773,8.31819"/>
       </dia:attribute>
       <dia:attribute name="conn_endpoints">
-        <dia:point val="31.1975,8.2475"/>
-        <dia:point val="33.25,5.23187"/>
+        <dia:point val="32.065,8.2475"/>
+        <dia:point val="35,5.18188"/>
       </dia:attribute>
       <dia:attribute name="numcp">
         <dia:int val="1"/>
@@ -1561,14 +1562,14 @@ plan cache#</dia:string>
     </dia:object>
     <dia:object type="Standard - Line" version="0" id="O35">
       <dia:attribute name="obj_pos">
-        <dia:point val="31.1975,8.2475"/>
+        <dia:point val="32.065,8.2475"/>
       </dia:attribute>
       <dia:attribute name="obj_bb">
-        <dia:rectangle val="31.1272,8.17721;33.7303,11.4041"/>
+        <dia:rectangle val="31.9943,8.17679;35.1894,11.3456"/>
       </dia:attribute>
       <dia:attribute name="conn_endpoints">
-        <dia:point val="31.1975,8.2475"/>
-        <dia:point val="33.66,11.3169"/>
+        <dia:point val="32.065,8.2475"/>
+        <dia:point val="35.11,11.2669"/>
       </dia:attribute>
       <dia:attribute name="numcp">
         <dia:int val="1"/>
@@ -1589,14 +1590,14 @@ plan cache#</dia:string>
     </dia:object>
     <dia:object type="Standard - Line" version="0" id="O36">
       <dia:attribute name="obj_pos">
-        <dia:point val="31.1975,8.2475"/>
+        <dia:point val="32.065,8.2475"/>
       </dia:attribute>
       <dia:attribute name="obj_bb">
-        <dia:rectangle val="31.1456,7.94723;33.5417,8.67032"/>
+        <dia:rectangle val="32.0139,7.83393;35.0918,8.55736"/>
       </dia:attribute>
       <dia:attribute name="conn_endpoints">
-        <dia:point val="31.1975,8.2475"/>
-        <dia:point val="33.43,8.33188"/>
+        <dia:point val="32.065,8.2475"/>
+        <dia:point val="34.98,8.18188"/>
       </dia:attribute>
       <dia:attribute name="numcp">
         <dia:int val="1"/>
@@ -1617,14 +1618,14 @@ plan cache#</dia:string>
     </dia:object>
     <dia:object type="Standard - Line" version="0" id="O37">
       <dia:attribute name="obj_pos">
-        <dia:point val="21.05,8.35714"/>
+        <dia:point val="21.2488,8.2475"/>
       </dia:attribute>
       <dia:attribute name="obj_bb">
-        <dia:rectangle val="20.9989,7.89939;26.0918,8.62282"/>
+        <dia:rectangle val="21.1988,7.8857;25.2243,8.6093"/>
       </dia:attribute>
       <dia:attribute name="conn_endpoints">
-        <dia:point val="21.05,8.35714"/>
-        <dia:point val="25.98,8.2475"/>
+        <dia:point val="21.2488,8.2475"/>
+        <dia:point val="25.1125,8.2475"/>
       </dia:attribute>
       <dia:attribute name="numcp">
         <dia:int val="1"/>
@@ -1645,13 +1646,13 @@ plan cache#</dia:string>
     </dia:object>
     <dia:object type="Standard - Line" version="0" id="O38">
       <dia:attribute name="obj_pos">
-        <dia:point val="21.05,7.5"/>
+        <dia:point val="21.2488,7.1075"/>
       </dia:attribute>
       <dia:attribute name="obj_bb">
-        <dia:rectangle val="20.9826,-4.5017;27.3067,7.56743"/>
+        <dia:rectangle val="21.1813,-4.50168;27.3067,7.17493"/>
       </dia:attribute>
       <dia:attribute name="conn_endpoints">
-        <dia:point val="21.05,7.5"/>
+        <dia:point val="21.2488,7.1075"/>
         <dia:point val="27.2369,-4.4025"/>
       </dia:attribute>
       <dia:attribute name="numcp">
