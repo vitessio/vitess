@@ -38,21 +38,6 @@ type CachePool struct {
 	mu             sync.Mutex
 }
 
-// Cache re-exposes memcache.Connection
-// that can be recycled.
-type Cache struct {
-	*memcache.Connection
-	pool *CachePool
-}
-
-func (cache *Cache) Recycle() {
-	if cache.IsClosed() {
-		cache.pool.Put(nil)
-	} else {
-		cache.pool.Put(cache)
-	}
-}
-
 func NewCachePool(name string, rowCacheConfig RowCacheConfig, queryTimeout time.Duration, idleTimeout time.Duration) *CachePool {
 	cp := &CachePool{name: name, idleTimeout: idleTimeout}
 	if name != "" {
@@ -103,11 +88,7 @@ func (cp *CachePool) Open() {
 	cp.startMemcache()
 	log.Infof("rowcache is enabled")
 	f := func() (pools.Resource, error) {
-		c, err := memcache.Connect(cp.port, 30*time.Millisecond)
-		if err != nil {
-			return nil, err
-		}
-		return &Cache{c, cp}, nil
+		return memcache.Connect(cp.port, 10*time.Second)
 	}
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
@@ -174,25 +155,29 @@ func (cp *CachePool) getPool() *pools.ResourcePool {
 	return cp.pool
 }
 
-// You must call Recycle on the *Cache once done.
-func (cp *CachePool) Get() *Cache {
+// You must call Put after Get.
+func (cp *CachePool) Get() *memcache.Connection {
 	pool := cp.getPool()
 	if pool == nil {
-		return nil
+		panic(NewTabletError(FATAL, "cache pool is not open"))
 	}
 	r, err := pool.Get()
 	if err != nil {
 		panic(NewTabletErrorSql(FATAL, err))
 	}
-	return r.(*Cache)
+	return r.(*memcache.Connection)
 }
 
-func (cp *CachePool) Put(conn *Cache) {
+func (cp *CachePool) Put(conn *memcache.Connection) {
 	pool := cp.getPool()
 	if pool == nil {
 		return
 	}
-	pool.Put(conn)
+	if conn == nil {
+		pool.Put(nil)
+	} else {
+		pool.Put(conn)
+	}
 }
 
 func (cp *CachePool) StatsJSON() string {
@@ -272,9 +257,12 @@ func (cp *CachePool) ServeHTTP(response http.ResponseWriter, request *http.Reque
 		command = ""
 	}
 	conn := cp.Get()
-	defer conn.Recycle()
+	// This is not the same as defer rc.cachePool.Put(conn)
+	defer func() { cp.Put(conn) }()
 	r, err := conn.Stats(command)
 	if err != nil {
+		conn.Close()
+		conn = nil
 		response.Write(([]byte)(err.Error()))
 	} else {
 		response.Write(r)

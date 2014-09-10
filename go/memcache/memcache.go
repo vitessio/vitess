@@ -50,15 +50,7 @@ func Connect(address string, timeout time.Duration) (conn *Connection, err error
 }
 
 func (mc *Connection) Close() {
-	if mc.conn == nil {
-		return
-	}
 	mc.conn.Close()
-	mc.conn = nil
-}
-
-func (mc *Connection) IsClosed() bool {
-	return mc.conn == nil
 }
 
 func (mc *Connection) Get(keys ...string) (results []Result, err error) {
@@ -234,21 +226,18 @@ func (mc *Connection) writestrings(strs ...string) {
 
 func (mc *Connection) writestring(s string) {
 	if _, err := mc.buffered.WriteString(s); err != nil {
-		mc.Close()
 		panic(NewMemcacheError("%s", err))
 	}
 }
 
 func (mc *Connection) write(b []byte) {
 	if _, err := mc.buffered.Write(b); err != nil {
-		mc.Close()
 		panic(NewMemcacheError("%s", err))
 	}
 }
 
 func (mc *Connection) flush() {
 	if err := mc.buffered.Flush(); err != nil {
-		mc.Close()
 		panic(NewMemcacheError("%s", err))
 	}
 }
@@ -257,7 +246,6 @@ func (mc *Connection) readline() string {
 	mc.flush()
 	l, isPrefix, err := mc.buffered.ReadLine()
 	if isPrefix || err != nil {
-		mc.Close()
 		panic(NewMemcacheError("Prefix: %v, %s", isPrefix, err))
 	}
 	return string(l)
@@ -267,7 +255,6 @@ func (mc *Connection) read(count int) []byte {
 	mc.flush()
 	b := make([]byte, count)
 	if _, err := io.ReadFull(mc.buffered, b); err != nil {
-		mc.Close()
 		panic(NewMemcacheError("%s", err))
 	}
 	return b
@@ -275,7 +262,6 @@ func (mc *Connection) read(count int) []byte {
 
 func (mc *Connection) setDeadline() {
 	if err := mc.conn.SetDeadline(time.Now().Add(mc.timeout)); err != nil {
-		mc.Close()
 		panic(NewMemcacheError("%s", err))
 	}
 }

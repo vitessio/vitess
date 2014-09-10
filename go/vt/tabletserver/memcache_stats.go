@@ -317,12 +317,13 @@ func (s *MemcacheStats) readStats(k string, proc func(key, value string)) {
 		}
 	}()
 	conn := s.cachePool.Get()
-	if conn == nil {
-		return
-	}
-	defer conn.Recycle()
+	// This is not the same as defer rc.cachePool.Put(conn)
+	defer func() { s.cachePool.Put(conn) }()
+
 	stats, err := conn.Stats(k)
 	if err != nil {
+		conn.Close()
+		conn = nil
 		log.Errorf("Cannot export memcache %v stats: %v", k, err)
 		internalErrors.Add("MemcacheStats", 1)
 		return

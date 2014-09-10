@@ -294,7 +294,7 @@ func (si *SchemaInfo) CreateTable(tableName string) {
 	if _, ok := si.tables[tableName]; ok {
 		// This can happen if people do 'create table if exists',
 		// or if there's a race between rowcache invalidator and query_engine.
-		// In this case, we overwrite the tablet with the latest info just to
+		// In this case, we overwrite the table with the latest info just to
 		// be safe. This also means that the query cache needs to be cleared.
 		// Otherwise, the query plans may not be in sync with the schema.
 		si.queries.Clear()
