@@ -136,6 +136,12 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 				log.Infof("Error updating mysql port in tablet record: %v", err)
 				return
 			}
+
+			// save the port so we don't update it again next time
+			// we do the health check.
+			agent.mutex.Lock()
+			agent._tablet.Portmap["mysql"] = mysqlPort
+			agent.mutex.Unlock()
 		}
 	}
 
