@@ -77,12 +77,22 @@ type Server interface {
 	// This will only be called with a lock on the keyspace.
 	// Can return ErrNoNode if the keyspace doesn't exist yet,
 	// or ErrBadVersion if the version has changed.
+	//
+	// Do not use directly, but instead use topo.UpdateKeyspace.
 	UpdateKeyspace(ki *KeyspaceInfo, existingVersion int64) (newVersion int64, err error)
 
 	// GetKeyspace reads a keyspace and returns it. This returns an
-	// object stored in the global cell.
+	// object stored in the global cell, and a topology
+	// implementation may choose to return a value from some sort
+	// of cache. If you need stronger consistency guarantees,
+	// please use GetKeyspaceCritical.
+	//
 	// Can return ErrNoNode
 	GetKeyspace(keyspace string) (*KeyspaceInfo, error)
+
+	// GetKeyspaceCritical is like GetKeyspace, but it always returns
+	// consistent data.
+	GetKeyspaceCritical(keyspace string) (*KeyspaceInfo, error)
 
 	// GetKeyspaces returns the known keyspace names. They shall be sorted.
 	GetKeyspaces() ([]string, error)
@@ -106,6 +116,8 @@ type Server interface {
 	// This will only be called with a lock on the shard.
 	// Can return ErrNoNode if the shard doesn't exist yet,
 	// or ErrBadVersion if the version has changed.
+	//
+	// Do not use directly, but instead use topo.UpdateShard.
 	UpdateShard(si *ShardInfo, existingVersion int64) (newVersion int64, err error)
 
 	// ValidateShard performs routine checks on the shard.
@@ -146,6 +158,8 @@ type Server interface {
 	// for atomic updates. UpdateTablet will return ErrNoNode if
 	// the tablet doesn't exist and ErrBadVersion if the version
 	// has changed.
+	//
+	// Do not use directly, but instead use topo.UpdateTablet.
 	UpdateTablet(tablet *TabletInfo, existingVersion int64) (newVersion int64, err error)
 
 	// UpdateTabletFields updates the current tablet record

@@ -181,6 +181,10 @@ func (tee *Tee) GetKeyspace(keyspace string) (*topo.KeyspaceInfo, error) {
 	return ki, nil
 }
 
+func (tee *Tee) GetKeyspaceCritical(keyspace string) (*topo.KeyspaceInfo, error) {
+	return tee.readFrom.GetKeyspaceCritical(keyspace)
+}
+
 func (tee *Tee) GetKeyspaces() ([]string, error) {
 	return tee.readFrom.GetKeyspaces()
 }

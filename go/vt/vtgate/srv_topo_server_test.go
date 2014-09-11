@@ -216,7 +216,10 @@ func (ft *fakeTopo) CreateKeyspace(keyspace string, value *topo.Keyspace) error 
 func (ft *fakeTopo) UpdateKeyspace(ki *topo.KeyspaceInfo, existingVersion int64) (int64, error) {
 	return 0, nil
 }
-func (ft *fakeTopo) GetKeyspace(keyspace string) (*topo.KeyspaceInfo, error)     { return nil, nil }
+func (ft *fakeTopo) GetKeyspace(keyspace string) (*topo.KeyspaceInfo, error) { return nil, nil }
+func (ft *fakeTopo) GetKeyspaceCritical(keyspace string) (*topo.KeyspaceInfo, error) {
+	return nil, nil
+}
 func (ft *fakeTopo) GetKeyspaces() ([]string, error)                             { return nil, nil }
 func (ft *fakeTopo) DeleteKeyspaceShards(keyspace string) error                  { return nil }
 func (ft *fakeTopo) CreateShard(keyspace, shard string, value *topo.Shard) error { return nil }
