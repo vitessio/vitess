@@ -441,9 +441,12 @@ func (qe *QueryEngine) InvalidateForDDL(ddl string) {
 	if ddlPlan.Action == "" {
 		panic(NewTabletError(FAIL, "DDL is not understood"))
 	}
-	qe.schemaInfo.DropTable(ddlPlan.TableName)
-	if ddlPlan.Action != sqlparser.AST_DROP { // CREATE, ALTER, RENAME
-		qe.schemaInfo.CreateTable(ddlPlan.NewName)
+	if ddlPlan.TableName != "" && ddlPlan.TableName != ddlPlan.NewName {
+		// It's a drop or rename.
+		qe.schemaInfo.DropTable(ddlPlan.TableName)
+	}
+	if ddlPlan.NewName != "" {
+		qe.schemaInfo.CreateOrUpdateTable(ddlPlan.NewName)
 	}
 }
 
@@ -491,8 +494,7 @@ func (qe *QueryEngine) InvalidateForUnrecognized(sql string) {
 	// Treat the statement as a DDL.
 	// It will conservatively invalidate all rows of the table.
 	log.Warningf("Treating '%s' as DDL for table %s", sql, tableName)
-	qe.schemaInfo.DropTable(tableName)
-	qe.schemaInfo.CreateTable(tableName)
+	qe.schemaInfo.CreateOrUpdateTable(tableName)
 }
 
 //-----------------------------------------------
@@ -521,10 +523,12 @@ func (qe *QueryEngine) execDDL(logStats *SQLQueryStats, ddl string) *mproto.Quer
 	if err != nil {
 		panic(err)
 	}
-	qe.schemaInfo.DropTable(ddlPlan.TableName)
-	if ddlPlan.Action != sqlparser.AST_DROP {
-		// CREATE, ALTER, RENAME
-		qe.schemaInfo.CreateTable(ddlPlan.NewName)
+	if ddlPlan.TableName != "" && ddlPlan.TableName != ddlPlan.NewName {
+		// It's a drop or rename.
+		qe.schemaInfo.DropTable(ddlPlan.TableName)
+	}
+	if ddlPlan.NewName != "" {
+		qe.schemaInfo.CreateOrUpdateTable(ddlPlan.NewName)
 	}
 	return result
 }
