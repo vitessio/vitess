@@ -11,9 +11,11 @@ import time
 import unittest
 
 from vtdb import dbexceptions
+from vtdb import keyrange
+from vtdb import keyrange_constants
 from vtdb import tablet as tablet3
 from vtdb import topology
-from vtdb import vtgate
+from vtdb import vtgatev2
 from zk import zkocc
 
 import environment
@@ -285,24 +287,32 @@ class TestSecure(unittest.TestCase):
         key=cert_dir + "/vt-server-key.pem")
 
     # try to connect to vtgate with regular client
+    timeout = 2.0
     try:
-      conn = vtgate.VtgateConnection("localhost:%s" % (gate_secure_port),
-                                      "master", "test_keyspace", "0", 2.0)
-      conn.dial()
+      conn = vtgatev2.connect(["localhost:%s" % (gate_secure_port),],
+                               timeout)
       self.fail("No exception raised to VTGate secure port")
-    except dbexceptions.FatalError as e:
-      if not e.args[0][0].startswith('Unexpected EOF in handshake to'):
-        self.fail("Unexpected exception: %s" % str(e))
+    except dbexceptions.OperationalError as e:
+      exception_type = e.args[2]
+      exception_msg = str(e.args[2][0][0])
+      self.assertIsInstance(exception_type, dbexceptions.FatalError,
+                            "unexpected exception type")
+      if not exception_msg.startswith('Unexpected EOF in handshake to'):
+        self.fail("Unexpected exception message: %s" % exception_msg)
 
     sconn = utils.get_vars(gate_port)["SecureConnections"]
     if sconn != 0:
       self.fail("unexpected conns %s" % sconn)
 
     # connect to vtgate with encrypted port
-    conn = vtgate.VtgateConnection("localhost:%s" % (gate_secure_port),
-                                    "master", "test_keyspace", "0", 2.0, encrypted=True)
-    conn.dial()
-    (results, rowcount, lastrowid, fields) = conn._execute("select 1 from dual", {})
+    conn = vtgatev2.connect(["localhost:%s" % (gate_secure_port),],
+                             timeout, encrypted=True)
+    (results, rowcount, lastrowid, fields) = conn._execute(
+        "select 1 from dual",
+        {},
+        "test_keyspace",
+        "master",
+        keyranges=[keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE),])
     self.assertEqual(rowcount, 1, "want 1, got %d" % (rowcount))
     self.assertEqual(len(fields), 1, "want 1, got %d" % (len(fields)))
     self.assertEqual(results, [(1,),], 'wrong conn._execute output: %s' % str(results))
@@ -316,12 +326,14 @@ class TestSecure(unittest.TestCase):
 
     # trigger a time out on a vtgate secure connection, see what exception we get
     try:
-      conn._execute("select sleep(4) from dual", {})
+      conn._execute("select sleep(4) from dual",
+                    {},
+                    "test_keyspace",
+                    "master",
+                    keyranges=[keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE),])
       self.fail("No timeout exception")
     except dbexceptions.TimeoutError as e:
       logging.debug("Got the right exception for SSL timeout: %s", str(e))
-
-
     conn.close()
     utils.vtgate_kill(gate_proc)
 
