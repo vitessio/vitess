@@ -75,7 +75,6 @@ integration_test_files = \
 	vertical_split.py \
 	vertical_split_vtgate.py \
 	vtdb_test.py \
-	vtgate_test.py \
 	vtgatev2_test.py \
 	zkocc_test.py
 
