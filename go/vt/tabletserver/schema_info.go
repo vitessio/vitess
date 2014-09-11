@@ -17,7 +17,6 @@ import (
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/cache"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
@@ -118,6 +117,9 @@ func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout tim
 
 func (si *SchemaInfo) Open(connFactory dbconnpool.CreateConnectionFunc, schemaOverrides []SchemaOverride, cachePool *CachePool, qrs *QueryRules, strictMode bool) {
 	si.connPool.Open(connFactory)
+	// Get time first because it needs a connection from the pool.
+	curTime := si.mysqlTime()
+
 	conn := getOrPanic(si.connPool)
 	defer conn.Recycle()
 
@@ -137,7 +139,6 @@ func (si *SchemaInfo) Open(connFactory dbconnpool.CreateConnectionFunc, schemaOv
 	si.tables["DUAL"] = &TableInfo{Table: schema.NewTable("DUAL")}
 	for _, row := range tables.Rows {
 		tableName := row[0].String()
-		si.updateLastChange(row[2])
 		tableInfo, err := NewTableInfo(
 			conn,
 			tableName,
@@ -155,24 +156,11 @@ func (si *SchemaInfo) Open(connFactory dbconnpool.CreateConnectionFunc, schemaOv
 		si.overrides = schemaOverrides
 		si.override()
 	}
+	si.lastChange = curTime
 	// Clear is not really needed. Doing it for good measure.
 	si.queries.Clear()
 	si.rules = qrs.Copy()
 	si.ticks.Start(func() { si.Reload() })
-}
-
-func (si *SchemaInfo) updateLastChange(createTime sqltypes.Value) {
-	if createTime.IsNull() {
-		return
-	}
-	t, err := strconv.ParseInt(createTime.String(), 10, 64)
-	if err != nil {
-		log.Warningf("Could not parse time %s: %v", createTime.String(), err)
-		return
-	}
-	if si.lastChange.Unix() < t {
-		si.lastChange = time.Unix(t, 0)
-	}
 }
 
 func (si *SchemaInfo) override() {
@@ -228,6 +216,9 @@ func (si *SchemaInfo) Close() {
 
 func (si *SchemaInfo) Reload() {
 	defer logError()
+	// Get time first because it needs a connection from the pool.
+	curTime := si.mysqlTime()
+
 	var tables *mproto.QueryResult
 	var err error
 	func() {
@@ -242,10 +233,27 @@ func (si *SchemaInfo) Reload() {
 	log.Infof("Reloading schema")
 	for _, row := range tables.Rows {
 		tableName := row[0].String()
-		si.updateLastChange(row[2])
 		log.Infof("Reloading: %s", tableName)
-		si.CreateTable(tableName)
+		si.CreateOrUpdateTable(tableName)
 	}
+	si.lastChange = curTime
+}
+
+func (si *SchemaInfo) mysqlTime() time.Time {
+	conn := getOrPanic(si.connPool)
+	defer conn.Recycle()
+	tm, err := conn.ExecuteFetch("select unix_timestamp()", 1, false)
+	if err != nil {
+		panic(NewTabletError(FAIL, "Could not get MySQL time: %v", err))
+	}
+	if len(tm.Rows) != 1 || len(tm.Rows[0]) != 1 || tm.Rows[0][0].IsNull() {
+		panic(NewTabletError(FAIL, "Unexpected result for MySQL time: %+v", tm.Rows))
+	}
+	t, err := strconv.ParseInt(tm.Rows[0][0].String(), 10, 64)
+	if err != nil {
+		panic(NewTabletError(FAIL, "Could not parse time %+v: %v", tm, err))
+	}
+	return time.Unix(t, 0)
 }
 
 // safe to call this if Close has been called, as si.ticks will be stopped
@@ -254,7 +262,7 @@ func (si *SchemaInfo) triggerReload() {
 	si.ticks.Trigger()
 }
 
-func (si *SchemaInfo) CreateTable(tableName string) {
+func (si *SchemaInfo) CreateOrUpdateTable(tableName string) {
 	si.mu.Lock()
 	defer si.mu.Unlock()
 
@@ -280,20 +288,20 @@ func (si *SchemaInfo) CreateTable(tableName string) {
 		// This can happen if DDLs race with each other.
 		return
 	}
+	if _, ok := si.tables[tableName]; ok {
+		// If the table already exists, we overwrite it with the latest info.
+		// This also means that the query cache needs to be cleared.
+		// Otherwise, the query plans may not be in sync with the schema.
+		si.queries.Clear()
+		log.Infof("Updating table %s", tableName)
+	}
+	si.tables[tableName] = tableInfo
+
 	if tableInfo.CacheType == schema.CACHE_NONE {
 		log.Infof("Initialized table: %s", tableName)
 	} else {
 		log.Infof("Initialized cached table: %s, prefix: %s", tableName, tableInfo.Cache.prefix)
 	}
-	if _, ok := si.tables[tableName]; ok {
-		// This can happen if people do 'create table if exists',
-		// or if there's a race between rowcache invalidator and query_engine.
-		// In this case, we overwrite the table with the latest info just to
-		// be safe. This also means that the query cache needs to be cleared.
-		// Otherwise, the query plans may not be in sync with the schema.
-		si.queries.Clear()
-	}
-	si.tables[tableName] = tableInfo
 
 	// If the table has an override, re-apply all overrides.
 	for _, o := range si.overrides {
