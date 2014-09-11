@@ -4,14 +4,17 @@
 
 MAKEFLAGS = -s
 
-.PHONY: all build test clean unit_test unit_test_cover unit_test_race queryservice_test integration_test bson
+.PHONY: all build test clean unit_test unit_test_cover unit_test_race queryservice_test integration_test bson site_test site_integration_test
 
 all: build test
 
 build:
 	go install ./go/...
 
+# Set VT_TEST_FLAGS to pass flags to python tests.
+# For example, verbose output: export VT_TEST_FLAGS=-v
 test: unit_test queryservice_test integration_test
+site_test: unit_test site_integration_test
 
 clean:
 	go clean -i ./go/...
@@ -39,8 +42,21 @@ queryservice_test:
 		time test/queryservice_test.py -e vttablet $$VT_TEST_FLAGS || exit 1 ; \
 	fi
 
-#export VT_TEST_FLAGS=-v for instance
-integration_test_files = clone.py \
+# These tests should be run by users to check that Vitess works in their environment.
+site_integration_test_files = \
+	keyrange_test.py \
+	keyspace_test.py \
+	mysqlctl.py \
+	secure.py \
+	tabletmanager.py \
+	update_stream.py \
+	vtdb_test.py \
+	vtgatev2_test.py \
+	zkocc_test.py
+
+# These tests should be run by developers after making code changes.
+integration_test_files = \
+	clone.py \
 	initial_sharding_bytes.py \
 	initial_sharding.py \
 	keyrange_test.py \
@@ -67,6 +83,18 @@ SHELL = /bin/bash
 integration_test:
 	cd test ; \
 	for t in $(integration_test_files) ; do \
+		echo $$(date): Running test/$$t... ; \
+		output=$$(time ./$$t $$VT_TEST_FLAGS 2>&1) ; \
+		if [[ $$? != 0 ]]; then \
+			echo "$$output" >&2 ; \
+			exit 1 ; \
+		fi ; \
+		echo ; \
+	done
+
+site_integration_test:
+	cd test ; \
+	for t in $(site_integration_test_files) ; do \
 		echo $$(date): Running test/$$t... ; \
 		output=$$(time ./$$t $$VT_TEST_FLAGS 2>&1) ; \
 		if [[ $$? != 0 ]]; then \
