@@ -97,6 +97,10 @@ func (zkts *Server) GetKeyspace(keyspace string) (*topo.KeyspaceInfo, error) {
 	return topo.NewKeyspaceInfo(keyspace, k, int64(stat.Version())), nil
 }
 
+func (zkts *Server) GetKeyspaceCritical(keyspace string) (*topo.KeyspaceInfo, error) {
+	return zkts.GetKeyspace(keyspace)
+}
+
 func (zkts *Server) GetKeyspaces() ([]string, error) {
 	children, _, err := zkts.zconn.Children(globalKeyspacesPath)
 	if err != nil {
