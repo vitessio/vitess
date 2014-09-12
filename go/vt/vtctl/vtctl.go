@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"os"
 	"sort"
 	"strings"
 	"time"
@@ -21,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/vt/client2"
 	hk "github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -2185,15 +2185,22 @@ func sortReplicatingTablets(tablets []*topo.TabletInfo, stats []*myproto.Replica
 // It will return the actionPath to wait on for long remote actions if
 // applicable.
 func RunCommand(wr *wrangler.Wrangler, args []string) (string, error) {
+	if len(args) == 0 {
+		wr.Logger().Printf("No command specified. Please see the list below:\n\n")
+		PrintAllCommands(wr.Logger())
+		return "", fmt.Errorf("No command specified")
+	}
+
 	action := args[0]
 	actionLowerCase := strings.ToLower(action)
 	for _, group := range commands {
 		for _, cmd := range group.commands {
 			if strings.ToLower(cmd.name) == actionLowerCase {
-				subFlags := flag.NewFlagSet(action, flag.ExitOnError)
+				subFlags := flag.NewFlagSet(action, flag.ContinueOnError)
+				subFlags.SetOutput(logutil.NewLoggerWriter(wr.Logger()))
 				subFlags.Usage = func() {
-					wr.Logger().Errorf("Usage: %s %s %s\n\n", action, cmd.name, cmd.params)
-					wr.Logger().Errorf("%s\n\n", cmd.help)
+					wr.Logger().Printf("Usage: %s %s\n\n", action, cmd.params)
+					wr.Logger().Printf("%s\n\n", cmd.help)
 					subFlags.PrintDefaults()
 				}
 				return cmd.method(wr, subFlags, args[1:])
@@ -2201,20 +2208,20 @@ func RunCommand(wr *wrangler.Wrangler, args []string) (string, error) {
 		}
 	}
 
-	wr.Logger().Errorf("Unknown command: %#v", action)
+	wr.Logger().Printf("Unknown command: %v\n", action)
 	return "", ErrUnknownCommand
 }
 
-// PrintHelp will print the list of commands to stderr
-func PrintHelp() {
+// PrintAllCommands will print the list of commands to the logger
+func PrintAllCommands(logger logutil.Logger) {
 	for _, group := range commands {
-		fmt.Fprintf(os.Stderr, "%s:\n", group.name)
+		logger.Printf("%s:\n", group.name)
 		for _, cmd := range group.commands {
 			if strings.HasPrefix(cmd.help, "HIDDEN") {
 				continue
 			}
-			fmt.Fprintf(os.Stderr, "  %s %s\n", cmd.name, cmd.params)
+			logger.Printf("  %s %s\n", cmd.name, cmd.params)
 		}
-		fmt.Fprintf(os.Stderr, "\n")
+		logger.Printf("\n")
 	}
 }

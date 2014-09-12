@@ -3,6 +3,7 @@ package logutil
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"runtime"
 	"strings"
 	"sync"
@@ -228,6 +229,28 @@ func (ml *MemoryLogger) String() string {
 	return buf.String()
 }
 
+// LoggerWriter is an adapter that implements the io.Writer interface.
+type LoggerWriter struct {
+	logger Logger
+}
+
+// NewLoggerWriter returns an io.Writer on top of the logger
+func NewLoggerWriter(logger Logger) io.Writer {
+	return LoggerWriter{
+		logger: logger,
+	}
+}
+
+// Write implements io.Writer
+func (lw LoggerWriter) Write(p []byte) (n int, err error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+	lw.logger.Printf("%v", string(p))
+	return len(p), nil
+}
+
+// array for fast int -> string conversion
 const digits = "0123456789"
 
 // twoDigits adds a zero-prefixed two-digit integer to buf
