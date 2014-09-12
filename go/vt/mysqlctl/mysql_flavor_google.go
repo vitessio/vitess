@@ -159,6 +159,31 @@ func (*googleMysql51) ParseReplicationPosition(s string) (proto.ReplicationPosit
 	return proto.ParseReplicationPosition(googleMysqlFlavorID, s)
 }
 
+// EnableBinlogPlayback implements MysqlFlavor.EnableBinlogPlayback().
+func (*googleMysql51) EnableBinlogPlayback(mysqld *Mysqld) error {
+	// The Google-specific option super_to_set_timestamp is on by default.
+	// We need to turn it off when we're about to start binlog streamer.
+	if err := mysqld.ExecuteSuperQuery("SET @@global.super_to_set_timestamp = 0"); err != nil {
+		log.Errorf("Cannot set super_to_set_timestamp=0: %v", err)
+		return fmt.Errorf("EnableBinlogPlayback: can't set super_to_timestamp=0: %v", err)
+	}
+
+	log.Info("Successfully set super_to_set_timestamp=0")
+	return nil
+}
+
+// DisableBinlogPlayback implements MysqlFlavor.DisableBinlogPlayback().
+func (*googleMysql51) DisableBinlogPlayback(mysqld *Mysqld) error {
+	// Re-enable super_to_set_timestamp when we're done streaming.
+	if err := mysqld.ExecuteSuperQuery("SET @@global.super_to_set_timestamp = 1"); err != nil {
+		log.Warningf("Cannot set super_to_set_timestamp=1: %v", err)
+		return fmt.Errorf("DisableBinlogPlayback: can't set super_to_timestamp=1: %v", err)
+	}
+
+	log.Info("Successfully set super_to_set_timestamp=1")
+	return nil
+}
+
 // makeBinlogDump2Command builds a buffer containing the data for a Google MySQL
 // COM_BINLOG_DUMP2 command.
 func makeBinlogDump2Command(flags uint16, slave_id uint32, group_id uint64, source_server_id uint32) []byte {

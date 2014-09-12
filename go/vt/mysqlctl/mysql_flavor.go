@@ -53,6 +53,14 @@ type MysqlFlavor interface {
 
 	// WaitMasterPos waits until slave replication reaches at least targetPos.
 	WaitMasterPos(mysqld *Mysqld, targetPos proto.ReplicationPosition, waitTimeout time.Duration) error
+
+	// EnableBinlogPlayback prepares the server to play back events from a binlog stream.
+	// Whatever it does for a given flavor, it must be idempotent.
+	EnableBinlogPlayback(mysqld *Mysqld) error
+
+	// DisableBinlogPlayback returns the server to the normal state after playback is done.
+	// Whatever it does for a given flavor, it must be idempotent.
+	DisableBinlogPlayback(mysqld *Mysqld) error
 }
 
 var mysqlFlavors map[string]MysqlFlavor = make(map[string]MysqlFlavor)

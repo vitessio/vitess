@@ -492,3 +492,15 @@ func (mysqld *Mysqld) WaitBlpPos(bp *blproto.BlpPosition, waitTimeout time.Durat
 
 	return fmt.Errorf("WaitBlpPos(%v) timed out", bp.Uid)
 }
+
+// EnableBinlogPlayback prepares the server to play back events from a binlog stream.
+// Whatever it does for a given flavor, it must be idempotent.
+func (mysqld *Mysqld) EnableBinlogPlayback() error {
+	return mysqld.flavor.EnableBinlogPlayback(mysqld)
+}
+
+// DisableBinlogPlayback returns the server to the normal state after streaming.
+// Whatever it does for a given flavor, it must be idempotent.
+func (mysqld *Mysqld) DisableBinlogPlayback() error {
+	return mysqld.flavor.DisableBinlogPlayback(mysqld)
+}

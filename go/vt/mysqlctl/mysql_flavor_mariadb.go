@@ -148,6 +148,16 @@ func (*mariaDB10) MakeBinlogEvent(buf []byte) blproto.BinlogEvent {
 	return NewMariadbBinlogEvent(buf)
 }
 
+// EnableBinlogPlayback implements MysqlFlavor.EnableBinlogPlayback().
+func (*mariaDB10) EnableBinlogPlayback(mysqld *Mysqld) error {
+	return nil
+}
+
+// DisableBinlogPlayback implements MysqlFlavor.DisableBinlogPlayback().
+func (*mariaDB10) DisableBinlogPlayback(mysqld *Mysqld) error {
+	return nil
+}
+
 // mariadbBinlogEvent wraps a raw packet buffer and provides methods to examine
 // it by implementing blproto.BinlogEvent. Some methods are pulled in from
 // binlogEvent.
