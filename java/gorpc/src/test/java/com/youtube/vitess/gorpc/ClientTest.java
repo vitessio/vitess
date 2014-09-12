@@ -10,7 +10,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.youtube.vitess.gorpc.Exceptions.ApplicationError;
+import com.youtube.vitess.gorpc.Exceptions.ApplicationException;
 import com.youtube.vitess.gorpc.Exceptions.GoRpcException;
 import com.youtube.vitess.gorpc.codecs.bson.BsonClientCodecFactory;
 
@@ -38,7 +38,7 @@ public class ClientTest {
 
 	@Test
 	public void testValidCase() throws IOException, GoRpcException,
-			ApplicationError {
+			ApplicationException {
 		Client client = Client.dialHttp("localhost", getPort(), "/_bson_rpc_",
 				new BsonClientCodecFactory());
 		BSONObject mArgs = new BasicBSONObject();
@@ -46,7 +46,7 @@ public class ClientTest {
 		mArgs.put("B", 7L);
 		Response response = client.call("Arith.Multiply", mArgs);
 		Assert.assertNull(response.getError());
-		Assert.assertEquals(35L, response.getResult());
+		Assert.assertEquals(35L, response.getReply());
 		client.close();
 	}
 
@@ -71,7 +71,7 @@ public class ClientTest {
 			client.call("Arith.SomeMethod", new BasicBSONObject());
 			client.close();
 			Assert.fail("did not raise exception");
-		} catch (ApplicationError e) {
+		} catch (ApplicationException e) {
 			Assert.assertTrue(e.getMessage().contains("rpc: can't find method"));
 		}
 
@@ -80,21 +80,21 @@ public class ClientTest {
 
 	@Test
 	public void testMissingMethodArgs() throws IOException, GoRpcException,
-			ApplicationError {
+			ApplicationException {
 		Client client = Client.dialHttp("localhost", getPort(), "/_bson_rpc_",
 				new BsonClientCodecFactory());
 		BSONObject mArgs = new BasicBSONObject();
 		mArgs.put("A", 5L);
 		// incomplete args defaults to zero values
 		Response response = client.call("Arith.Multiply", mArgs);
-		Assert.assertEquals(0L, response.getResult());
+		Assert.assertEquals(0L, response.getReply());
 		Assert.assertNull(response.getError());
 		client.close();
 	}
 
 	@Test
 	public void testValidMultipleCalls() throws IOException, GoRpcException,
-			ApplicationError {
+			ApplicationException {
 		Client client = Client.dialHttp("localhost", getPort(), "/_bson_rpc_",
 				new BsonClientCodecFactory());
 
@@ -102,20 +102,20 @@ public class ClientTest {
 		mArgs.put("A", 5L);
 		mArgs.put("B", 7L);
 		Response response = client.call("Arith.Multiply", mArgs);
-		Assert.assertEquals(35L, response.getResult());
+		Assert.assertEquals(35L, response.getReply());
 
 		mArgs = new BasicBSONObject();
 		mArgs.put("A", 2L);
 		mArgs.put("B", 3L);
 		response = client.call("Arith.Multiply", mArgs);
-		Assert.assertEquals(6L, response.getResult());
+		Assert.assertEquals(6L, response.getReply());
 
 		client.close();
 	}
 
 	@Test
 	public void testCallOnClosedClient() throws IOException, GoRpcException,
-			ApplicationError {
+			ApplicationException {
 		Client client = Client.dialHttp("localhost", getPort(), "/_bson_rpc_",
 				new BsonClientCodecFactory());
 
@@ -123,7 +123,7 @@ public class ClientTest {
 		mArgs.put("A", 5L);
 		mArgs.put("B", 7L);
 		Response response = client.call("Arith.Multiply", mArgs);
-		Assert.assertEquals(35L, response.getResult());
+		Assert.assertEquals(35L, response.getReply());
 		client.close();
 
 		try {

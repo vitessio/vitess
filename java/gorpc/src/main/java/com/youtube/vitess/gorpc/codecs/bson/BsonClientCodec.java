@@ -59,9 +59,9 @@ public class BsonClientCodec implements ClientCodec {
 	public void ReadResponseBody(Response response) throws IOException {
 		BSONObject bodyBson = decoder.readObject(socket.getInputStream());
 		if (bodyBson.containsField(MAGIC_TAG)) {
-			response.setResult(bodyBson.get(MAGIC_TAG));
+			response.setReply(bodyBson.get(MAGIC_TAG));
 		} else {
-			response.setResult(bodyBson);
+			response.setReply(bodyBson);
 		}
 	}
 

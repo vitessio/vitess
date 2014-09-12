@@ -14,7 +14,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import com.youtube.vitess.gorpc.Exceptions.ApplicationError;
+import com.youtube.vitess.gorpc.Exceptions.ApplicationException;
 import com.youtube.vitess.gorpc.Exceptions.GoRpcException;
 import com.youtube.vitess.gorpc.codecs.bson.BsonClientCodecFactory;
 
@@ -61,14 +61,14 @@ public class ClientIT extends ClientTest {
 
 	@Test
 	public void testDivide() throws GoRpcException, IOException,
-			ApplicationError {
+			ApplicationException {
 		Client client = Client.dialHttp("localhost", getPort(), "/_bson_rpc_",
 				new BsonClientCodecFactory());
 		BSONObject mArgs = new BasicBSONObject();
 		mArgs.put("A", 10L);
 		mArgs.put("B", 3L);
 		Response response = client.call("Arith.Divide", mArgs);
-		BSONObject result = (BSONObject) response.result;
+		BSONObject result = (BSONObject) response.reply;
 		Assert.assertEquals(3L, result.get("Quo"));
 		Assert.assertEquals(1L, result.get("Rem"));
 	}

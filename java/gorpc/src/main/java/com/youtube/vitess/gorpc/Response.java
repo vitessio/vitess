@@ -4,7 +4,7 @@ public class Response {
 	private String serviceMethod;
 	private long seq;
 	private String error;
-	Object result;
+	Object reply;
 
 	public String getServiceMethod() {
 		return serviceMethod;
@@ -30,11 +30,11 @@ public class Response {
 		this.error = error;
 	}
 
-	public Object getResult() {
-		return result;
+	public Object getReply() {
+		return reply;
 	}
 
-	public void setResult(Object result) {
-		this.result = result;
+	public void setReply(Object reply) {
+		this.reply = reply;
 	}
 }
