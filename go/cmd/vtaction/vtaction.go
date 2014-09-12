@@ -17,26 +17,25 @@ import (
 	_ "github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actor"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
 var (
-	port       = flag.Int("port", 0, "port for debug http server")
 	action     = flag.String("action", "", "management action to perform")
 	actionNode = flag.String("action-node", "", "path to zk node representing the action")
 	actionGuid = flag.String("action-guid", "", "a label to help track processes")
 	force      = flag.Bool("force", false, "force an action to rerun")
-
-	mycnfFile = flag.String("mycnf-file", "/etc/my.cnf", "path to my.cnf")
 )
 
 func init() {
+	servenv.RegisterDefaultFlags()
 	stats.NewString("BinaryName").Set("vtaction")
 }
 
 func main() {
 	dbconfigs.RegisterFlags()
+	mysqlctl.RegisterFlags()
 	flag.Parse()
 	servenv.Init()
 	defer servenv.Close()
@@ -45,7 +44,7 @@ func main() {
 
 	servenv.ServeRPC()
 
-	mycnf, mycnfErr := mysqlctl.ReadMycnf(*mycnfFile)
+	mycnf, mycnfErr := mysqlctl.NewMycnfFromFlags(0)
 	if mycnfErr != nil {
 		log.Fatalf("mycnf read failed: %v", mycnfErr)
 	}
@@ -56,16 +55,17 @@ func main() {
 	if cfErr != nil {
 		log.Fatalf("%s", cfErr)
 	}
-	mysqld := mysqlctl.NewMysqld(mycnf, &dbcfgs.Dba, &dbcfgs.Repl)
+	mysqld := mysqlctl.NewMysqld("Dba", mycnf, &dbcfgs.Dba, &dbcfgs.Repl)
+	defer mysqld.Close()
 
 	topoServer := topo.GetServer()
 	defer topo.CloseServers()
 
-	actor := tabletmanager.NewTabletActor(mysqld, mysqld, topoServer, topo.TabletAlias{})
+	actor := actor.NewTabletActor(mysqld, mysqld, topoServer, topo.TabletAlias{})
 
 	// we delegate out startup to the micromanagement server so these actions
 	// will occur after we have obtained our socket.
-	bindAddr := fmt.Sprintf(":%v", *port)
+	bindAddr := fmt.Sprintf(":%v", *servenv.Port)
 	httpServer := &http.Server{Addr: bindAddr}
 	go func() {
 		if err := httpServer.ListenAndServe(); err != nil {

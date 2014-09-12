@@ -1,0 +1,319 @@
+<?xml version="1.0"?>
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0   http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.github.youtube.vitess</groupId>
+        <artifactId>vitess-parent</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <artifactId>vtocc-jdbc-driver</artifactId>
+    <packaging>jar</packaging>
+    <version>1.0-SNAPSHOT</version>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <VTROOT>${basedir}/../../../../../..</VTROOT>
+        <VTTOP>${basedir}/../..</VTTOP>
+        <VTDATAROOT>${basedir}/../../../../../../vtdataroot</VTDATAROOT>
+        <mysql.port>9999</mysql.port>
+        <vtocc.port>9000</vtocc.port>
+        <mysqlctl.port>9500</mysqlctl.port>
+    </properties>
+
+    <repositories>
+        <repository>
+            <id>dist.local</id>
+            <url>file:${VTROOT}/dist/java</url>
+        </repository>
+    </repositories>
+
+    <dependencies>
+        <dependency>
+            <!-- Build separately in third-party by sbt -->
+            <groupId>org.eu.acolyte</groupId>
+            <artifactId>acolyte-core</artifactId>
+            <version>1.0.13</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>1.7.7</version>
+        </dependency>
+        <dependency>
+            <groupId>javax.inject</groupId>
+            <artifactId>javax.inject</artifactId>
+            <version>1</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.code.findbugs</groupId>
+            <artifactId>jsr305</artifactId>
+            <version>2.0.3</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.inject</groupId>
+            <artifactId>guice</artifactId>
+            <version>3.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>17.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.mongodb</groupId>
+            <artifactId>bson</artifactId>
+            <version>2.12.2</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java</artifactId>
+            <version>2.4.1</version>
+        </dependency>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.8.1</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-all</artifactId>
+            <version>1.9.5</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>1.7.7</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.2.4</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+    <pluginRepositories>
+        <pluginRepository>
+            <id>dtrott</id>
+            <url>http://maven.davidtrott.com/repository</url>
+        </pluginRepository>
+    </pluginRepositories>
+
+    <build>
+        <testResources>
+            <testResource>
+                <directory>${VTROOT}/dist/py-vt-bson-0.3.2/lib/python2.7/site-packages</directory>
+            </testResource>
+            <testResource>
+                <directory>${VTTOP}/py</directory>
+            </testResource>
+            <testResource>
+                <directory>${VTTOP}/test</directory>
+            </testResource>
+            <testResource>
+                <!-- Is copied last to overwrite implementation with fakes -->
+                <directory>${basedir}/src/test/resources</directory>
+            </testResource>
+        </testResources>
+        <plugins>
+            <plugin>
+                <!-- Compile Proto Buffers -->
+                <groupId>com.google.protobuf.tools</groupId>
+                <artifactId>maven-protoc-plugin</artifactId>
+                <version>0.1.10</version>
+                <executions>
+                    <execution>
+                        <id>generate-sources</id>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                        <phase>generate-sources</phase>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <!-- Compile against Java 7 sources -->
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.1</version>
+                <configuration>
+                    <source>1.7</source>
+                    <target>1.7</target>
+                </configuration>
+            </plugin>
+            <plugin>
+                <!-- Copying *.py files required for testing -->
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>2.6</version>
+                <configuration>
+                    <overwrite>true</overwrite>
+                </configuration>
+            </plugin>
+            <plugin>
+                <!-- Save dev.env into a .properties file -->
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>1.3</version>
+                <configuration>
+                    <executable>bash</executable>
+                    <environmentVariables>
+                        <VTTOP>${VTTOP}</VTTOP>
+                        <TEST_OUTPUT>${project.build.testOutputDirectory}</TEST_OUTPUT>
+                        <VTDATAROOT>${VTDATAROOT}</VTDATAROOT>
+                    </environmentVariables>
+                    <workingDirectory>${VTTOP}</workingDirectory>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>process-devenv-properties</id>
+                        <phase>process-test-resources</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <arguments>
+                                <argument>-ce</argument>
+                                <argument>
+                                    source "$VTTOP/dev.env"
+                                    mkdir -p "$TEST_OUTPUT"
+                                    env | grep -v '\\' > "$TEST_OUTPUT/dev.env.properties"
+                                </argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>generate-sql-tests-json</id>
+                        <phase>process-test-classes</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <arguments>
+                                <argument>-ce</argument>
+                                <argument>
+                                    mkdir -p "$TEST_OUTPUT"
+                                    python "$TEST_OUTPUT/gen_sql_tests_json.py" > \
+                                    "$TEST_OUTPUT/sql_tests.json"
+                                    python "$TEST_OUTPUT/gen_test_schema_sql.py" > \
+                                    "$TEST_OUTPUT/test_schema.sql"
+                                </argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>startup-sql-tests-json</id>
+                        <phase>pre-integration-test</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <arguments>
+                                <argument>-ce</argument>
+                                <argument>
+                                    export CANONICALIZED_VTDATAROOT="$(readlink -f \
+                                    "$VTDATAROOT")/vt_0000000000"
+                                    rm "$CANONICALIZED_VTDATAROOT" -rf
+                                    $VTROOT/bin/mysqlctl --tablet_uid=0 --mysql_port=${mysql.port} \
+                                    --port=${mysqlctl.port} init
+                                    $VTROOT/dist/mysql/bin/mysql "-S" \
+                                    "$CANONICALIZED_VTDATAROOT/mysql.sock" \
+                                    "-u" "vt_dba" \
+                                    "-e" "create database vt_test_keyspace ; set global read_only =
+                                    off"
+                                </argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>teardown-sql-tests-json</id>
+                        <phase>post-integration-test</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <arguments>
+                                <argument>-c</argument>
+                                <argument>
+                                    $VTROOT/bin/mysqlctl --tablet_uid=0 --mysql_port=${mysql.port} \
+                                    --port=${mysqlctl.port} shutdown
+                                </argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <!-- Run unit tests excluding integration tests -->
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>2.10</version>
+                <configuration>
+                    <excludes>
+                        <exclude>**/*IntegrationTest.java</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+            <plugin>
+                <!-- Generate html reports -->
+                <artifactId>maven-surefire-report-plugin</artifactId>
+                <version>2.17</version>
+            </plugin>
+            <plugin>
+                <!-- Create jars with all the dependencies -->
+                <artifactId>maven-assembly-plugin</artifactId>
+                <version>2.3</version>
+                <configuration>
+                    <descriptorRefs>
+                        <descriptorRef>jar-with-dependencies</descriptorRef>
+                    </descriptorRefs>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>make-assembly</id>
+                        <!-- this is used for inheritance merges -->
+                        <phase>package</phase>
+                        <!--  bind to the packaging phase -->
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <!-- Runs integration tests -->
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>2.17</version>
+                <executions>
+                    <execution>
+                        <id>integration-test</id>
+                        <goals>
+                            <goal>integration-test</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>verify</id>
+                        <goals>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <systemProperties>
+                        <vtocc.port>${vtocc.port}</vtocc.port>
+                        <VTDATA>${VTDATAROOT}/vt_0000000000</VTDATA>
+                        <VTROOT>${VTROOT}</VTROOT>
+                        <org.slf4j.simpleLogger.defaultLogLevel>
+                            debug
+                        </org.slf4j.simpleLogger.defaultLogLevel>
+                    </systemProperties>
+                    <includes>
+                        <include>**/*IntegrationTest.java</include>
+                    </includes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

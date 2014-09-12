@@ -17,8 +17,8 @@ func TestCounters(t *testing.T) {
 	c.Add("c2", 1)
 	want1 := `{"c1": 1, "c2": 2}`
 	want2 := `{"c2": 2, "c1": 1}`
-	if c.String() != want1 && c.String() != want2 {
-		t.Errorf("want %s or %s, got %s", want1, want2, c.String())
+	if s := c.String(); s != want1 && s != want2 {
+		t.Errorf("want %s or %s, got %s", want1, want2, s)
 	}
 	counts := c.Counts()
 	if counts["c1"] != 1 {
@@ -33,8 +33,37 @@ func TestCounters(t *testing.T) {
 			"c2": 2,
 		}
 	})
-	if f.String() != want1 && f.String() != want2 {
-		t.Errorf("want %s or %s, got %s", want1, want2, f.String())
+	if s := f.String(); s != want1 && s != want2 {
+		t.Errorf("want %s or %s, got %s", want1, want2, s)
+	}
+}
+
+func TestMultiCounters(t *testing.T) {
+	clear()
+	c := NewMultiCounters("mapCounter1", []string{"aaa", "bbb"})
+	c.Add([]string{"c1a", "c1b"}, 1)
+	c.Add([]string{"c2a", "c2b"}, 1)
+	c.Add([]string{"c2a", "c2b"}, 1)
+	want1 := `{"c1a.c1b": 1, "c2a.c2b": 2}`
+	want2 := `{"c2a.c2b": 2, "c1a.c1b": 1}`
+	if s := c.String(); s != want1 && s != want2 {
+		t.Errorf("want %s or %s, got %s", want1, want2, s)
+	}
+	counts := c.Counts()
+	if counts["c1a.c1b"] != 1 {
+		t.Errorf("want 1, got %d", counts["c1a.c1b"])
+	}
+	if counts["c2a.c2b"] != 2 {
+		t.Errorf("want 2, got %d", counts["c2a.c2b"])
+	}
+	f := NewMultiCountersFunc("", []string{"aaa", "bbb"}, func() map[string]int64 {
+		return map[string]int64{
+			"c1a.c1b": 1,
+			"c2a.c2b": 2,
+		}
+	})
+	if s := f.String(); s != want1 && s != want2 {
+		t.Errorf("want %s or %s, got %s", want1, want2, s)
 	}
 }
 

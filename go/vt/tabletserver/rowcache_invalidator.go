@@ -17,20 +17,48 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
+// RowcacheInvalidator runs the service to invalidate
+// the rowcache based on binlog events.
 type RowcacheInvalidator struct {
-	qe  *QueryEngine
+	qe     *QueryEngine
+	dbname string
+	mysqld *mysqlctl.Mysqld
+
 	svm sync2.ServiceManager
 
-	// mu mainly protects access to evs by Open and Close.
-	mu      sync.Mutex
-	dbname  string
-	mysqld  *mysqlctl.Mysqld
-	evs     *binlog.EventStreamer
-	GroupId sync2.AtomicInt64
+	posMutex   sync.Mutex
+	pos        myproto.ReplicationPosition
+	lagSeconds sync2.AtomicInt64
+}
+
+// AppendGTID updates the current replication position by appending a GTID to
+// the set of transactions that have been processed.
+func (rci *RowcacheInvalidator) AppendGTID(gtid myproto.GTID) {
+	rci.posMutex.Lock()
+	defer rci.posMutex.Unlock()
+	rci.pos = myproto.AppendGTID(rci.pos, gtid)
+}
+
+// SetPosition sets the current ReplicationPosition.
+func (rci *RowcacheInvalidator) SetPosition(rp myproto.ReplicationPosition) {
+	rci.posMutex.Lock()
+	defer rci.posMutex.Unlock()
+	rci.pos = rp
+}
+
+// Position returns the current ReplicationPosition.
+func (rci *RowcacheInvalidator) Position() myproto.ReplicationPosition {
+	rci.posMutex.Lock()
+	defer rci.posMutex.Unlock()
+	return rci.pos
+}
+
+// PositionString returns the current ReplicationPosition as a string.
+func (rci *RowcacheInvalidator) PositionString() string {
+	return rci.Position().String()
 }
 
 // NewRowcacheInvalidator creates a new RowcacheInvalidator.
@@ -39,36 +67,27 @@ type RowcacheInvalidator struct {
 func NewRowcacheInvalidator(qe *QueryEngine) *RowcacheInvalidator {
 	rci := &RowcacheInvalidator{qe: qe}
 	stats.Publish("RowcacheInvalidatorState", stats.StringFunc(rci.svm.StateName))
-	stats.Publish("RowcacheInvalidatorPosition", stats.IntFunc(rci.GroupId.Get))
+	stats.Publish("RowcacheInvalidatorPosition", stats.StringFunc(rci.PositionString))
+	stats.Publish("RowcacheInvalidatorLagSeconds", stats.IntFunc(rci.lagSeconds.Get))
 	return rci
 }
 
 // Open runs the invalidation loop.
 func (rci *RowcacheInvalidator) Open(dbname string, mysqld *mysqlctl.Mysqld) {
-	rp, err := mysqld.MasterStatus()
+	rp, err := mysqld.MasterPosition()
 	if err != nil {
 		panic(NewTabletError(FATAL, "Rowcache invalidator aborting: cannot determine replication position: %v", err))
 	}
 	if mysqld.Cnf().BinLogPath == "" {
 		panic(NewTabletError(FATAL, "Rowcache invalidator aborting: binlog path not specified"))
 	}
+	rci.dbname = dbname
+	rci.mysqld = mysqld
+	rci.SetPosition(rp)
 
-	ok := rci.svm.Go(func(_ *sync2.ServiceManager) {
-		rci.mu.Lock()
-		rci.dbname = dbname
-		rci.mysqld = mysqld
-		rci.evs = binlog.NewEventStreamer(dbname, mysqld.Cnf().BinLogPath)
-		rci.GroupId.Set(rp.MasterLogGroupId)
-		rci.mu.Unlock()
-
-		rci.run()
-
-		rci.mu.Lock()
-		rci.evs = nil
-		rci.mu.Unlock()
-	})
+	ok := rci.svm.Go(rci.run)
 	if ok {
-		log.Infof("Rowcache invalidator starting, dbname: %s, path: %s, logfile: %s, position: %d", dbname, mysqld.Cnf().BinLogPath, rp.MasterLogFile, rp.MasterLogPosition)
+		log.Infof("Rowcache invalidator starting, dbname: %s, path: %s, position: %v", dbname, mysqld.Cnf().BinLogPath, rp)
 	} else {
 		log.Infof("Rowcache invalidator already running")
 	}
@@ -77,18 +96,12 @@ func (rci *RowcacheInvalidator) Open(dbname string, mysqld *mysqlctl.Mysqld) {
 // Close terminates the invalidation loop. It returns only of the
 // loop has terminated.
 func (rci *RowcacheInvalidator) Close() {
-	rci.mu.Lock()
-	defer rci.mu.Unlock()
-	if rci.evs == nil {
-		log.Infof("Rowcache is not running")
-		return
-	}
-	rci.evs.Stop()
-	rci.evs = nil
+	rci.svm.Stop()
 }
 
-func (rci *RowcacheInvalidator) run() {
+func (rci *RowcacheInvalidator) run(ctx *sync2.ServiceContext) error {
 	for {
+		evs := binlog.NewEventStreamer(rci.dbname, rci.mysqld, rci.Position(), rci.processEvent)
 		// We wrap this code in a func so we can catch all panics.
 		// If an error is returned, we log it, wait 1 second, and retry.
 		// This loop can only be stopped by calling Close.
@@ -98,13 +111,7 @@ func (rci *RowcacheInvalidator) run() {
 					inner = fmt.Errorf("%v: uncaught panic:\n%s", x, tb.Stack(4))
 				}
 			}()
-			rp, err := rci.mysqld.BinlogInfo(rci.GroupId.Get())
-			if err != nil {
-				return err
-			}
-			return rci.evs.Stream(rp.MasterLogFile, int64(rp.MasterLogPosition), func(reply *blproto.StreamEvent) error {
-				return rci.processEvent(reply)
-			})
+			return evs.Stream(ctx)
 		}()
 		if err == nil {
 			break
@@ -114,36 +121,46 @@ func (rci *RowcacheInvalidator) run() {
 		time.Sleep(1 * time.Second)
 	}
 	log.Infof("Rowcache invalidator stopped")
+	return nil
+}
+
+func handleInvalidationError(event *blproto.StreamEvent) {
+	if x := recover(); x != nil {
+		terr, ok := x.(*TabletError)
+		if !ok {
+			log.Errorf("Uncaught panic for %+v:\n%v\n%s", event, x, tb.Stack(4))
+			internalErrors.Add("Panic", 1)
+			return
+		}
+		log.Errorf("%v: %+v", terr, event)
+		internalErrors.Add("Invalidation", 1)
+	}
 }
 
 func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) error {
+	defer handleInvalidationError(event)
 	switch event.Category {
 	case "DDL":
-		InvalidateForDDL(&proto.DDLInvalidate{DDL: event.Sql})
+		log.Infof("DDL invalidation: %s", event.Sql)
+		rci.qe.InvalidateForDDL(event.Sql)
 	case "DML":
 		rci.handleDmlEvent(event)
 	case "ERR":
-		dbname, err := sqlparser.GetDBName(event.Sql)
-		if err != nil || dbname == "" || dbname == rci.dbname {
-			log.Errorf("Unrecognized: %s", event.Sql)
-			internalErrors.Add("Invalidation", 1)
-		} else {
-			log.Warningf("Ignoring cross-db statement: %s", event.Sql)
-			infoErrors.Add("Invalidation", 1)
-		}
+		rci.qe.InvalidateForUnrecognized(event.Sql)
 	case "POS":
-		rci.GroupId.Set(event.GroupId)
+		rci.AppendGTID(event.GTIDField.Value)
 	default:
 		log.Errorf("unknown event: %#v", event)
 		internalErrors.Add("Invalidation", 1)
+		return nil
 	}
+	rci.lagSeconds.Set(time.Now().Unix() - event.Timestamp)
 	return nil
 }
 
 func (rci *RowcacheInvalidator) handleDmlEvent(event *blproto.StreamEvent) {
-	dml := new(proto.DmlType)
-	dml.Table = event.TableName
-	dml.Keys = make([]string, 0, len(event.PKValues))
+	table := event.TableName
+	keys := make([]string, 0, len(event.PKValues))
 	sqlTypeKeys := make([]sqltypes.Value, 0, len(event.PKColNames))
 	for _, pkTuple := range event.PKValues {
 		sqlTypeKeys = sqlTypeKeys[:0]
@@ -158,8 +175,8 @@ func (rci *RowcacheInvalidator) handleDmlEvent(event *blproto.StreamEvent) {
 		}
 		invalidateKey := buildKey(sqlTypeKeys)
 		if invalidateKey != "" {
-			dml.Keys = append(dml.Keys, invalidateKey)
+			keys = append(keys, invalidateKey)
 		}
 	}
-	InvalidateForDml(dml)
+	rci.qe.InvalidateForDml(table, keys)
 }

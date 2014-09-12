@@ -11,17 +11,17 @@ import (
 )
 
 type ZkStat struct {
-	czxid          int64
-	mzxid          int64
-	cTime          time.Time
-	mTime          time.Time
-	version        int
-	cVersion       int
-	aVersion       int
-	ephemeralOwner int64
-	dataLength     int
-	numChildren    int
-	pzxid          int64
+	czxid          int64     `bson:"Czxid"`
+	mzxid          int64     `bson:"Mzxid"`
+	cTime          time.Time `bson:"CTime"`
+	mTime          time.Time `bson:"MTime"`
+	version        int       `bson:"Version"`
+	cVersion       int       `bson:"CVersion"`
+	aVersion       int       `bson:"AVersion"`
+	ephemeralOwner int64     `bson:"EphemeralOwner"`
+	dataLength     int       `bson:"DataLength"`
+	numChildren    int       `bson:"NumChildren"`
+	pzxid          int64     `bson:"Pzxid"`
 }
 
 type ZkPath struct {

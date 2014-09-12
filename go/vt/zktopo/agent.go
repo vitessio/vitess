@@ -139,6 +139,9 @@ func (zkts *Server) ReadTabletActionPath(actionPath string) (topo.TabletAlias, s
 
 	data, stat, err := zkts.zconn.Get(actionPath)
 	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+			err = topo.ErrNoNode
+		}
 		return topo.TabletAlias{}, "", 0, err
 	}
 

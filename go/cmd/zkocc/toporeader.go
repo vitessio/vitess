@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
-	"sort"
 
+	"github.com/youtube/vitess/go/rpcwrap/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
 )
@@ -31,18 +31,17 @@ func zkPathForVtType(cell, keyspace, shard string, tabletType topo.TabletType) s
 	return path.Join(zkPathForVt(cell), keyspace, shard, string(tabletType))
 }
 
-func (tr *TopoReader) GetSrvKeyspaceNames(req topo.GetSrvKeyspaceNamesArgs, reply *topo.SrvKeyspaceNames) error {
+func (tr *TopoReader) GetSrvKeyspaceNames(context *proto.Context, req *topo.GetSrvKeyspaceNamesArgs, reply *topo.SrvKeyspaceNames) error {
 	vtPath := zkPathForVt(req.Cell)
 	zkrReply := &zk.ZkNode{}
 	if err := tr.zkr.Children(&zk.ZkPath{Path: vtPath}, zkrReply); err != nil {
 		return err
 	}
 	reply.Entries = zkrReply.Children
-	sort.Strings(reply.Entries)
 	return nil
 }
 
-func (tr *TopoReader) GetSrvKeyspace(req topo.GetSrvKeyspaceArgs, reply *topo.SrvKeyspace) (err error) {
+func (tr *TopoReader) GetSrvKeyspace(context *proto.Context, req *topo.GetSrvKeyspaceArgs, reply *topo.SrvKeyspace) (err error) {
 	keyspacePath := zkPathForVtKeyspace(req.Cell, req.Keyspace)
 	zkrReply := &zk.ZkNode{}
 	if err := tr.zkr.Get(&zk.ZkPath{Path: keyspacePath}, zkrReply); err != nil {
@@ -59,7 +58,7 @@ func (tr *TopoReader) GetSrvKeyspace(req topo.GetSrvKeyspaceArgs, reply *topo.Sr
 	return
 }
 
-func (tr *TopoReader) GetEndPoints(req topo.GetEndPointsArgs, reply *topo.EndPoints) (err error) {
+func (tr *TopoReader) GetEndPoints(context *proto.Context, req *topo.GetEndPointsArgs, reply *topo.EndPoints) (err error) {
 	tabletTypePath := zkPathForVtType(req.Cell, req.Keyspace, req.Shard, req.TabletType)
 	zkrReply := &zk.ZkNode{}
 	if err := tr.zkr.Get(&zk.ZkPath{Path: tabletTypePath}, zkrReply); err != nil {

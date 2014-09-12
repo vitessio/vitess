@@ -21,7 +21,8 @@ def tearDownModule():
 
 
 class TestVtgateFunctions(vtdb_test.TestTabletFunctions):
-  pass
+  def test_status(self):
+    self.assertIn('</html>', utils.get_status(vtdb_test.vtgate_port))
 
 # FIXME(shrutip): this class needs reworking once
 # the error handling is resolved the right way at vtgate binary.

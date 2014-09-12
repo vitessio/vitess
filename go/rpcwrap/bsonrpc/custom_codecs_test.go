@@ -13,13 +13,13 @@ import (
 
 type reflectRequestBson struct {
 	ServiceMethod string
-	Seq           int64
+	Seq           uint64
 }
 
 type extraRequestBson struct {
 	Extra         int
 	ServiceMethod string
-	Seq           int64
+	Seq           uint64
 }
 
 func TestRequestBson(t *testing.T) {
@@ -71,14 +71,14 @@ func TestRequestBson(t *testing.T) {
 
 type reflectResponseBson struct {
 	ServiceMethod string
-	Seq           int64
+	Seq           uint64
 	Error         string
 }
 
 type extraResponseBson struct {
 	Extra         int
 	ServiceMethod string
-	Seq           int64
+	Seq           uint64
 	Error         string
 }
 

@@ -4,47 +4,147 @@
 
 MAKEFLAGS = -s
 
-all: build unit_test queryservice_test integration_test
+.PHONY: all build test clean unit_test unit_test_cover unit_test_race queryservice_test integration_test bson site_test site_integration_test
+
+all: build test
 
 build:
 	go install ./go/...
 
+# Set VT_TEST_FLAGS to pass flags to python tests.
+# For example, verbose output: export VT_TEST_FLAGS=-v
+test: unit_test queryservice_test integration_test
+site_test: unit_test site_integration_test
+
 clean:
 	go clean -i ./go/...
+	rm -rf java/vtocc-client/target java/vtocc-jdbc-driver/target third_party/acolyte
 
 unit_test:
 	go test ./go/...
+
+# Run the code coverage tools, compute aggregate.
+# If you want to improve in a directory, run:
+#   go test -coverprofile=coverage.out && go tool cover -html=coverage.out
+unit_test_cover:
+	go test -cover ./go/... | misc/parse_cover.py
 
 unit_test_race:
 	go test -race ./go/...
 
 queryservice_test:
-	echo "queryservice test"
+	echo $$(date): Running test/queryservice_test.py...
 	if [ -e "/usr/bin/memcached" ]; then \
-		time test/queryservice_test.py -m ; \
+		time test/queryservice_test.py -m -e vtocc $$VT_TEST_FLAGS || exit 1 ; \
+		time test/queryservice_test.py -m -e vttablet $$VT_TEST_FLAGS || exit 1 ; \
 	else \
-		time test/queryservice_test.py ; \
+		time test/queryservice_test.py -e vtocc $$VT_TEST_FLAGS || exit 1 ; \
+		time test/queryservice_test.py -e vttablet $$VT_TEST_FLAGS || exit 1 ; \
 	fi
 
-# export VT_TEST_FLAGS=-v for instance
+# These tests should be run by users to check that Vitess works in their environment.
+site_integration_test_files = \
+	keyrange_test.py \
+	keyspace_test.py \
+	mysqlctl.py \
+	secure.py \
+	tabletmanager.py \
+	update_stream.py \
+	vtdb_test.py \
+	vtgatev2_test.py \
+	zkocc_test.py
 
+# These tests should be run by developers after making code changes.
+integration_test_files = \
+	clone.py \
+	initial_sharding_bytes.py \
+	initial_sharding.py \
+	keyrange_test.py \
+	keyspace_test.py \
+	mysqlctl.py \
+	reparent.py \
+	resharding_bytes.py \
+	resharding.py \
+	rowcache_invalidator.py \
+	secure.py \
+	schema.py \
+	sharded.py \
+	tabletmanager.py \
+	update_stream.py \
+	vertical_split.py \
+	vertical_split_vtgate.py \
+	vtdb_test.py \
+	vtgate_test.py \
+	vtgatev2_test.py \
+	zkocc_test.py
+
+.ONESHELL:
+SHELL = /bin/bash
 integration_test:
-	cd test ; echo "schema test"; time ./schema.py $$VT_TEST_FLAGS
-	cd test ; echo "sharded test"; time ./sharded.py $$VT_TEST_FLAGS
-	cd test ; echo "tabletmanager test"; time ./tabletmanager.py $$VT_TEST_FLAGS
-	cd test ; echo "clone test"; time ./clone.py $$VT_TEST_FLAGS
-	cd test ; echo "reparent test"; time ./reparent.py $$VT_TEST_FLAGS
-	cd test ; echo "zkocc test"; time ./zkocc_test.py $$VT_TEST_FLAGS
-	cd test ; echo "updatestream test"; time ./update_stream.py
-	cd test ; echo "rowcache_invalidator test"; time ./rowcache_invalidator.py
-	cd test ; echo "secure test"; time ./secure.py $$VT_TEST_FLAGS
-	cd test ; echo "resharding test"; time ./resharding.py $$VT_TEST_FLAGS
-	cd test ; echo "resharding_bytes test"; time ./resharding_bytes.py $$VT_TEST_FLAGS
-	cd test ; echo "vtdb test"; time ./vtdb_test.py $$VT_TEST_FLAGS
-	cd test ; echo "vtgate test"; time ./vtgate_test.py $$VT_TEST_FLAGS
-	cd test ; echo "keyrange test"; time ./keyrange_test.py $$VT_TEST_FLAGS
-	cd test ; echo "vertical_split test"; time ./vertical_split.py $$VT_TEST_FLAGS
-	cd test ; echo "vertical_split_vtgate test"; time ./vertical_split_vtgate.py $$VT_TEST_FLAGS
-	cd test ; echo "initial_sharding test"; time ./initial_sharding.py $$VT_TEST_FLAGS
-	cd test ; echo "initial_sharding_bytes test"; time ./initial_sharding_bytes.py $$VT_TEST_FLAGS
-	cd test ; echo "keyspace_test test"; time ./keyspace_test.py $$VT_TEST_FLAGS
+	cd test ; \
+	for t in $(integration_test_files) ; do \
+		echo $$(date): Running test/$$t... ; \
+		output=$$(time ./$$t $$VT_TEST_FLAGS 2>&1) ; \
+		if [[ $$? != 0 ]]; then \
+			echo "$$output" >&2 ; \
+			exit 1 ; \
+		fi ; \
+		echo ; \
+	done
+
+site_integration_test:
+	cd test ; \
+	for t in $(site_integration_test_files) ; do \
+		echo $$(date): Running test/$$t... ; \
+		output=$$(time ./$$t $$VT_TEST_FLAGS 2>&1) ; \
+		if [[ $$? != 0 ]]; then \
+			echo "$$output" >&2 ; \
+			exit 1 ; \
+		fi ; \
+		echo ; \
+	done
+
+# this rule only works if bootstrap.sh was successfully ran in ./java
+java_test:
+	cd java && mvn verify
+
+bson:
+	bsongen -file ./go/mysql/proto/structs.go -type QueryResult -o ./go/mysql/proto/query_result_bson.go
+	bsongen -file ./go/mysql/proto/structs.go -type Field -o ./go/mysql/proto/field_bson.go
+	bsongen -file ./go/vt/key/key.go -type KeyRange -o ./go/vt/key/key_range_bson.go
+	bsongen -file ./go/vt/key/key.go -type KeyspaceId -o ./go/vt/key/keyspace_id_bson.go
+	bsongen -file ./go/vt/key/key.go -type KeyspaceIdType -o ./go/vt/key/keyspace_id_type_bson.go
+	bsongen -file ./go/vt/tabletserver/proto/structs.go -type Query -o ./go/vt/tabletserver/proto/query_bson.go
+	bsongen -file ./go/vt/tabletserver/proto/structs.go -type Session -o ./go/vt/tabletserver/proto/session_bson.go
+	bsongen -file ./go/vt/tabletserver/proto/structs.go -type BoundQuery -o ./go/vt/tabletserver/proto/bound_query_bson.go
+	bsongen -file ./go/vt/tabletserver/proto/structs.go -type QueryList -o ./go/vt/tabletserver/proto/query_list_bson.go
+	bsongen -file ./go/vt/tabletserver/proto/structs.go -type QueryResultList -o ./go/vt/tabletserver/proto/query_result_list_bson.go
+	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type QueryShard -o ./go/vt/vtgate/proto/query_shard_bson.go
+	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type BatchQueryShard -o ./go/vt/vtgate/proto/batch_query_shard_bson.go
+	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type KeyspaceIdQuery -o ./go/vt/vtgate/proto/keyspace_id_query_bson.go
+	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type KeyRangeQuery -o ./go/vt/vtgate/proto/key_range_query_bson.go
+	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type EntityId -o ./go/vt/vtgate/proto/entity_id_bson.go
+	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type EntityIdsQuery -o ./go/vt/vtgate/proto/entity_ids_query_bson.go
+	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type KeyspaceIdBatchQuery -o ./go/vt/vtgate/proto/keyspace_id_batch_query_bson.go
+	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type Session -o ./go/vt/vtgate/proto/session_bson.go
+	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type ShardSession -o ./go/vt/vtgate/proto/shard_session_bson.go
+	bsongen -file ./go/vt/vtgate/proto/vtgate_proto.go -type QueryResult -o ./go/vt/vtgate/proto/query_result_bson.go
+	bsongen -file ./go/vt/topo/srvshard.go -type SrvShard -o ./go/vt/topo/srvshard_bson.go
+	bsongen -file ./go/vt/topo/srvshard.go -type SrvKeyspace -o ./go/vt/topo/srvkeyspace_bson.go
+	bsongen -file ./go/vt/topo/srvshard.go -type KeyspacePartition -o ./go/vt/topo/keyspace_partition_bson.go
+	bsongen -file ./go/vt/topo/tablet.go -type TabletType -o ./go/vt/topo/tablet_type_bson.go
+	bsongen -file ./go/vt/topo/toporeader.go -type GetSrvKeyspaceNamesArgs -o ./go/vt/topo/get_srv_keyspace_names_args_bson.go
+	bsongen -file ./go/vt/topo/toporeader.go -type GetSrvKeyspaceArgs -o ./go/vt/topo/get_srv_keyspace_args_bson.go
+	bsongen -file ./go/vt/topo/toporeader.go -type SrvKeyspaceNames -o ./go/vt/topo/srv_keyspace_names_bson.go
+	bsongen -file ./go/vt/topo/toporeader.go -type GetEndPointsArgs -o ./go/vt/topo/get_end_points_args_bson.go
+	bsongen -file ./go/vt/binlog/proto/binlog_player.go -type BlpPosition -o ./go/vt/binlog/proto/blp_position_bson.go
+	bsongen -file ./go/vt/binlog/proto/binlog_player.go -type BlpPositionList -o ./go/vt/binlog/proto/blp_position_list_bson.go
+	bsongen -file ./go/vt/binlog/proto/binlog_transaction.go -type BinlogTransaction -o ./go/vt/binlog/proto/binlog_transaction_bson.go
+	bsongen -file ./go/vt/binlog/proto/binlog_transaction.go -type Statement -o ./go/vt/binlog/proto/statement_bson.go
+	bsongen -file ./go/vt/binlog/proto/stream_event.go -type StreamEvent -o ./go/vt/binlog/proto/stream_event_bson.go
+	bsongen -file ./go/zk/zkocc_structs.go -type ZkPath -o ./go/zk/zkpath_bson.go
+	bsongen -file ./go/zk/zkocc_structs.go -type ZkPathV -o ./go/zk/zkpathv_bson.go
+	bsongen -file ./go/zk/zkocc_structs.go -type ZkStat -o ./go/zk/zkstat_bson.go
+	bsongen -file ./go/zk/zkocc_structs.go -type ZkNode -o ./go/zk/zknode_bson.go
+	bsongen -file ./go/zk/zkocc_structs.go -type ZkNodeV -o ./go/zk/zknodev_bson.go
+

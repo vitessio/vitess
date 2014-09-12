@@ -5,12 +5,9 @@
 package topo
 
 import (
-	"bytes"
 	"fmt"
 	"sort"
 
-	"github.com/youtube/vitess/go/bson"
-	"github.com/youtube/vitess/go/bytes2"
 	"github.com/youtube/vitess/go/vt/key"
 )
 
@@ -21,9 +18,13 @@ const SHARD_ZERO = "0"
 // SrvShard contains a roll-up of the shard in the local namespace.
 // In zk, it is under /zk/<cell>/vt/ns/<keyspace>/<shard>
 type SrvShard struct {
-	// Copied from Shard
+	// Copied / infered from Shard
+	Name        string
 	KeyRange    key.KeyRange
 	ServedTypes []TabletType
+
+	// MasterCell indicates the cell that master tablet resides
+	MasterCell string
 
 	// TabletTypes represents the list of types we have serving tablets
 	// for, in this cell only.
@@ -33,99 +34,36 @@ type SrvShard struct {
 	version int64
 }
 
+// SrvShardArray is used for sorting SrvShard arrays
 type SrvShardArray []SrvShard
 
+// Len implements sort.Interface
 func (sa SrvShardArray) Len() int { return len(sa) }
 
+// Len implements sort.Interface
 func (sa SrvShardArray) Less(i, j int) bool {
 	return sa[i].KeyRange.Start < sa[j].KeyRange.Start
 }
 
+// Len implements sort.Interface
 func (sa SrvShardArray) Swap(i, j int) {
 	sa[i], sa[j] = sa[j], sa[i]
 }
 
 func (sa SrvShardArray) Sort() { sort.Sort(sa) }
 
+// NewSrvShard returns an empty SrvShard with the given version.
 func NewSrvShard(version int64) *SrvShard {
 	return &SrvShard{
 		version: version,
 	}
 }
 
-func EncodeTabletTypeArray(buf *bytes2.ChunkedWriter, name string, values []TabletType) {
-	if len(values) == 0 {
-		bson.EncodePrefix(buf, bson.Null, name)
-	} else {
-		bson.EncodePrefix(buf, bson.Array, name)
-		lenWriter := bson.NewLenWriter(buf)
-		for i, val := range values {
-			bson.EncodeString(buf, bson.Itoa(i), string(val))
-		}
-		buf.WriteByte(0)
-		lenWriter.RecordLen()
-	}
-}
-
-func DecodeTabletTypeArray(buf *bytes.Buffer, kind byte) []TabletType {
-	switch kind {
-	case bson.Array:
-		// valid
-	case bson.Null:
-		return nil
-	default:
-		panic(bson.NewBsonError("Unexpected data type %v for TabletType array", kind))
-	}
-
-	bson.Next(buf, 4)
-	values := make([]TabletType, 0, 8)
-	kind = bson.NextByte(buf)
-	for i := 0; kind != bson.EOO; i++ {
-		if kind != bson.Binary {
-			panic(bson.NewBsonError("Unexpected data type %v for TabletType array", kind))
-		}
-		bson.ExpectIndex(buf, i)
-		values = append(values, TabletType(bson.DecodeString(buf, kind)))
-		kind = bson.NextByte(buf)
-	}
-	return values
-}
-
-func (ss *SrvShard) MarshalBson(buf *bytes2.ChunkedWriter) {
-	lenWriter := bson.NewLenWriter(buf)
-
-	bson.EncodePrefix(buf, bson.Object, "KeyRange")
-	ss.KeyRange.MarshalBson(buf)
-
-	EncodeTabletTypeArray(buf, "ServedTypes", ss.ServedTypes)
-	EncodeTabletTypeArray(buf, "TabletTypes", ss.TabletTypes)
-
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
-
-}
-
-func (ss *SrvShard) UnmarshalBson(buf *bytes.Buffer) {
-	bson.Next(buf, 4)
-
-	kind := bson.NextByte(buf)
-	for kind != bson.EOO {
-		keyName := bson.ReadCString(buf)
-		switch keyName {
-		case "KeyRange":
-			ss.KeyRange.UnmarshalBson(buf)
-		case "ServedTypes":
-			ss.ServedTypes = DecodeTabletTypeArray(buf, kind)
-		case "TabletTypes":
-			ss.TabletTypes = DecodeTabletTypeArray(buf, kind)
-		default:
-			bson.Skip(buf, kind)
-		}
-		kind = bson.NextByte(buf)
-	}
-}
-
+// ShardName returns the name of a shard.
 func (ss *SrvShard) ShardName() string {
+	if ss.Name != "" {
+		return ss.Name
+	}
 	if !ss.KeyRange.IsPartial() {
 		return SHARD_ZERO
 	}
@@ -139,76 +77,21 @@ type KeyspacePartition struct {
 	Shards []SrvShard
 }
 
-func EncodeSrvShardArray(buf *bytes2.ChunkedWriter, name string, values []SrvShard) {
-	if len(values) == 0 {
-		bson.EncodePrefix(buf, bson.Null, name)
-	} else {
-		bson.EncodePrefix(buf, bson.Array, name)
-		lenWriter := bson.NewLenWriter(buf)
-		for i, val := range values {
-			bson.EncodePrefix(buf, bson.Object, bson.Itoa(i))
-			val.MarshalBson(buf)
+// HasShard returns true if this KeyspacePartition has the shard with
+// the given name in it.
+func (kp *KeyspacePartition) HasShard(name string) bool {
+	for _, srvShard := range kp.Shards {
+		if srvShard.ShardName() == name {
+			return true
 		}
-		buf.WriteByte(0)
-		lenWriter.RecordLen()
 	}
-}
-
-func DecodeSrvShardArray(buf *bytes.Buffer, kind byte) []SrvShard {
-	switch kind {
-	case bson.Array:
-		// valid
-	case bson.Null:
-		return nil
-	default:
-		panic(bson.NewBsonError("Unexpected data type %v for SrvShard array", kind))
-	}
-
-	bson.Next(buf, 4)
-	values := make([]SrvShard, 0, 8)
-	kind = bson.NextByte(buf)
-	for i := 0; kind != bson.EOO; i++ {
-		if kind != bson.Object {
-			panic(bson.NewBsonError("Unexpected data type %v for SrvShard array", kind))
-		}
-		bson.ExpectIndex(buf, i)
-		value := &SrvShard{}
-		value.UnmarshalBson(buf)
-		values = append(values, *value)
-		kind = bson.NextByte(buf)
-	}
-	return values
-}
-
-func (kp *KeyspacePartition) MarshalBson(buf *bytes2.ChunkedWriter) {
-	lenWriter := bson.NewLenWriter(buf)
-
-	EncodeSrvShardArray(buf, "Shards", kp.Shards)
-
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
-}
-
-func (kp *KeyspacePartition) UnmarshalBson(buf *bytes.Buffer) {
-	bson.Next(buf, 4)
-
-	kind := bson.NextByte(buf)
-	for kind != bson.EOO {
-		keyName := bson.ReadCString(buf)
-		switch keyName {
-		case "Shards":
-			kp.Shards = DecodeSrvShardArray(buf, kind)
-		default:
-			bson.Skip(buf, kind)
-		}
-		kind = bson.NextByte(buf)
-	}
+	return false
 }
 
 // A distilled serving copy of keyspace detail stored in the local
 // cell for fast access. Derived from the global keyspace, shards and
 // local details.
-// In zk, it is in /zk/local/vt/ns/<keyspace>
+// In zk, it is in /zk/<cell>/vt/ns/<keyspace>
 type SrvKeyspace struct {
 	// Shards to use per type, only contains complete partitions.
 	Partitions map[TabletType]*KeyspacePartition
@@ -230,123 +113,9 @@ type SrvKeyspace struct {
 	version int64
 }
 
+// NewSrvKeyspace returns an empty SrvKeyspace with the given version.
 func NewSrvKeyspace(version int64) *SrvKeyspace {
 	return &SrvKeyspace{
 		version: version,
-	}
-}
-
-func EncodeKeyspacePartitionMap(buf *bytes2.ChunkedWriter, name string, values map[TabletType]*KeyspacePartition) {
-	if len(values) == 0 {
-		bson.EncodePrefix(buf, bson.Null, name)
-	} else {
-		bson.EncodePrefix(buf, bson.Object, name)
-		lenWriter := bson.NewLenWriter(buf)
-		for i, val := range values {
-			bson.EncodePrefix(buf, bson.Object, string(i))
-			val.MarshalBson(buf)
-		}
-		buf.WriteByte(0)
-		lenWriter.RecordLen()
-	}
-}
-
-func DecodeKeyspacePartitionMap(buf *bytes.Buffer, kind byte) map[TabletType]*KeyspacePartition {
-	switch kind {
-	case bson.Object:
-		// valid
-	case bson.Null:
-		return nil
-	default:
-		panic(bson.NewBsonError("Unexpected data type %v for KeyspacePartition map", kind))
-	}
-
-	bson.Next(buf, 4)
-	values := make(map[TabletType]*KeyspacePartition)
-	kind = bson.NextByte(buf)
-	for kind != bson.EOO {
-		if kind != bson.Object {
-			panic(bson.NewBsonError("Unexpected data type %v for KeyspacePartition map", kind))
-		}
-		keyName := bson.ReadCString(buf)
-		value := &KeyspacePartition{}
-		value.UnmarshalBson(buf)
-		values[TabletType(keyName)] = value
-		kind = bson.NextByte(buf)
-	}
-	return values
-}
-
-func EncodeServedFrom(buf *bytes2.ChunkedWriter, name string, servedFrom map[TabletType]string) {
-	bson.EncodePrefix(buf, bson.Object, name)
-	lenWriter := bson.NewLenWriter(buf)
-	for k, v := range servedFrom {
-		bson.EncodeString(buf, string(k), v)
-	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
-}
-
-func DecodeServedFrom(buf *bytes.Buffer, kind byte) map[TabletType]string {
-	switch kind {
-	case bson.Object:
-		//valid
-	case bson.Null:
-		return nil
-	default:
-		panic(bson.NewBsonError("Unexpected data type %v for ServedFrom map", kind))
-	}
-
-	servedFrom := make(map[TabletType]string)
-	bson.Next(buf, 4)
-	for kind = bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
-		keyName := bson.ReadCString(buf)
-		switch kind {
-		case bson.String, bson.Binary:
-			servedFrom[TabletType(keyName)] = bson.DecodeString(buf, kind)
-		}
-	}
-	return servedFrom
-}
-
-func (sk *SrvKeyspace) MarshalBson(buf *bytes2.ChunkedWriter) {
-	lenWriter := bson.NewLenWriter(buf)
-
-	EncodeKeyspacePartitionMap(buf, "Partitions", sk.Partitions)
-
-	EncodeSrvShardArray(buf, "Shards", sk.Shards)
-
-	EncodeTabletTypeArray(buf, "TabletTypes", sk.TabletTypes)
-	bson.EncodeString(buf, "ShardingColumnName", sk.ShardingColumnName)
-	bson.EncodeString(buf, "ShardingColumnType", string(sk.ShardingColumnType))
-	EncodeServedFrom(buf, "ServedFrom", sk.ServedFrom)
-
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
-}
-
-func (sk *SrvKeyspace) UnmarshalBson(buf *bytes.Buffer) {
-	bson.Next(buf, 4)
-
-	kind := bson.NextByte(buf)
-	for kind != bson.EOO {
-		keyName := bson.ReadCString(buf)
-		switch keyName {
-		case "Partitions":
-			sk.Partitions = DecodeKeyspacePartitionMap(buf, kind)
-		case "Shards":
-			sk.Shards = DecodeSrvShardArray(buf, kind)
-		case "TabletTypes":
-			sk.TabletTypes = DecodeTabletTypeArray(buf, kind)
-		case "ShardingColumnName":
-			sk.ShardingColumnName = bson.DecodeString(buf, kind)
-		case "ShardingColumnType":
-			sk.ShardingColumnType = key.KeyspaceIdType(bson.DecodeString(buf, kind))
-		case "ServedFrom":
-			sk.ServedFrom = DecodeServedFrom(buf, kind)
-		default:
-			bson.Skip(buf, kind)
-		}
-		kind = bson.NextByte(buf)
 	}
 }

@@ -15,7 +15,12 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 // byPriorityWeight sorts records by ascending priority and weight.
 type byPriorityWeight []*net.SRV
@@ -31,6 +36,7 @@ func (s byPriorityWeight) Less(i, j int) bool {
 
 // shuffleByWeight shuffles SRV records by weight using the algorithm
 // described in RFC 2782.
+// NOTE(msolo) This is disabled when the weights are zero.
 func (addrs byPriorityWeight) shuffleByWeight() {
 	sum := 0
 	for _, addr := range addrs {
@@ -38,10 +44,10 @@ func (addrs byPriorityWeight) shuffleByWeight() {
 	}
 	for sum > 0 && len(addrs) > 1 {
 		s := 0
-		n := rand.Intn(sum + 1)
+		n := rand.Intn(sum)
 		for i := range addrs {
 			s += int(addrs[i].Weight)
-			if s >= n {
+			if s > n {
 				if i > 0 {
 					t := addrs[i]
 					copy(addrs[1:i+1], addrs[0:i])
@@ -137,4 +143,20 @@ func ResolveIpAddr(addr string) (string, error) {
 		return "", err
 	}
 	return net.JoinHostPort(ipAddrs[0], port), nil
+}
+
+// ResolveIpAddr resolves the address:port part into an IP address:port pair
+func ResolveIPv4Addr(addr string) (string, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return "", err
+	}
+	ipAddrs, err := net.LookupIP(host)
+	for _, ipAddr := range ipAddrs {
+		ipv4 := ipAddr.To4()
+		if ipv4 != nil {
+			return net.JoinHostPort(ipv4.String(), port), nil
+		}
+	}
+	return "", fmt.Errorf("no IPv4addr for name %v", host)
 }

@@ -11,9 +11,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-
-	"github.com/youtube/vitess/go/bson"
-	"github.com/youtube/vitess/go/bytes2"
 )
 
 //
@@ -29,9 +26,13 @@ var MaxKey = KeyspaceId("")
 // KeyspaceId is the type we base sharding on.
 type KeyspaceId string
 
-// Hex prints a KeyspaceId in capital hex.
+// Hex prints a KeyspaceId in lower case hex.
 func (kid KeyspaceId) Hex() HexKeyspaceId {
-	return HexKeyspaceId(strings.ToUpper(hex.EncodeToString([]byte(kid))))
+	return HexKeyspaceId(hex.EncodeToString([]byte(kid)))
+}
+
+func (kid KeyspaceId) String() string {
+	return string(kid.Hex())
 }
 
 // MarshalJSON turns a KeyspaceId into json (using hex encoding).
@@ -154,34 +155,6 @@ func (kr KeyRange) IsPartial() bool {
 	return !(kr.Start == MinKey && kr.End == MaxKey)
 }
 
-func (kr *KeyRange) MarshalBson(buf *bytes2.ChunkedWriter) {
-	lenWriter := bson.NewLenWriter(buf)
-
-	bson.EncodeString(buf, "Start", string(kr.Start))
-	bson.EncodeString(buf, "End", string(kr.End))
-
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
-}
-
-func (kr *KeyRange) UnmarshalBson(buf *bytes.Buffer) {
-	bson.Next(buf, 4)
-
-	kind := bson.NextByte(buf)
-	for kind != bson.EOO {
-		key := bson.ReadCString(buf)
-		switch key {
-		case "Start":
-			kr.Start = KeyspaceId(bson.DecodeString(buf, kind))
-		case "End":
-			kr.End = KeyspaceId(bson.DecodeString(buf, kind))
-		default:
-			bson.Skip(buf, kind)
-		}
-		kind = bson.NextByte(buf)
-	}
-}
-
 // KeyRangesIntersect returns true if some Keyspace values exist in both ranges.
 //
 // See: http://stackoverflow.com/questions/4879315/what-is-a-tidy-algorithm-to-find-overlapping-intervals
@@ -221,6 +194,7 @@ func KeyRangesOverlap(first, second KeyRange) (KeyRange, error) {
 //
 
 // KeyspaceIdArray is an array of KeyspaceId that can be sorted
+// We use it only if we need to sort []KeyspaceId
 type KeyspaceIdArray []KeyspaceId
 
 func (p KeyspaceIdArray) Len() int { return len(p) }
@@ -240,6 +214,7 @@ func (p KeyspaceIdArray) Sort() { sort.Sort(p) }
 //
 
 // KeyRangeArray is an array of KeyRange that can be sorted
+// We use it only if we need to sort []KeyRange
 type KeyRangeArray []KeyRange
 
 func (p KeyRangeArray) Len() int { return len(p) }
@@ -258,7 +233,7 @@ func (p KeyRangeArray) Sort() { sort.Sort(p) }
 // specification. a-b-c-d will be parsed as a-b, b-c, c-d. The empty
 // string may serve both as the start and end of the keyspace: -a-b-
 // will be parsed as start-a, a-b, b-end.
-func ParseShardingSpec(spec string) (KeyRangeArray, error) {
+func ParseShardingSpec(spec string) ([]KeyRange, error) {
 	parts := strings.Split(spec, "-")
 	if len(parts) == 1 {
 		return nil, fmt.Errorf("malformed spec: doesn't define a range: %q", spec)

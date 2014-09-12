@@ -1,9 +1,64 @@
-create table a(abcd)#{"Action": "CREATE", "NewName": "a"}
-drop  table b#{"Action": "DROP", "TableName": "b"}
-alter table c alter foo#{"Action": "ALTER", "TableName": "c", "NewTable": "c"}
-alter table c comment 'aa'#{"Action": "ALTER", "TableName": "c", "NewTable": "c"}
-drop index a on b#{"Action": "ALTER", "TableName": "b", "NewName": "b"}
-rename table a to b#{"Action": "RENAME", "TableName": "a", "NewTable": "b"}
-alter table a rename b#{"Action": "RENAME", "TableName": "a", "NewTable": "b"}
-alter table a rename to b#{"Action": "RENAME", "TableName": "a", "NewTable": "b"}
-syntax error#{"Action": "NONE"}
+"create table a(abcd)"
+{
+  "Action": "create", "NewName": "a"
+}
+
+"drop  table b"
+{
+  "Action": "drop", "TableName": "b"
+}
+
+"alter table c alter foo"
+{
+  "Action": "alter", "TableName": "c", "NewTable": "c"
+}
+
+"alter table c comment 'aa'"
+{
+  "Action": "alter", "TableName": "c", "NewTable": "c"
+}
+
+"drop index a on b"
+{
+  "Action": "alter", "TableName": "b", "NewName": "b"
+}
+
+"rename table a to b"
+{
+  "Action": "rename", "TableName": "a", "NewTable": "b"
+}
+
+"alter table a rename b"
+{
+  "Action": "rename", "TableName": "a", "NewTable": "b"
+}
+
+"alter table a rename to b"
+{
+  "Action": "rename", "TableName": "a", "NewTable": "b"
+}
+
+"create view a asdasd"
+{
+  "Action": "create", "NewName": "a"
+}
+
+"alter view c alter foo"
+{
+  "Action": "alter", "TableName": "c", "NewTable": "c"
+}
+
+"drop  view b"
+{
+  "Action": "drop", "TableName": "b"
+}
+
+"select * from a"
+{
+  "Action": ""
+}
+
+"syntax error"
+{
+  "Action": ""
+}

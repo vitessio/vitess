@@ -6,12 +6,17 @@ package tabletserver
 
 import (
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/acl"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/streamlog"
+	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -35,7 +40,8 @@ func init() {
 	flag.Float64Var(&qsConfig.QueryTimeout, "queryserver-config-query-timeout", DefaultQsConfig.QueryTimeout, "query server query timeout")
 	flag.Float64Var(&qsConfig.IdleTimeout, "queryserver-config-idle-timeout", DefaultQsConfig.IdleTimeout, "query server idle timeout")
 	flag.Float64Var(&qsConfig.SpotCheckRatio, "queryserver-config-spot-check-ratio", DefaultQsConfig.SpotCheckRatio, "query server rowcache spot check frequency")
-	flag.Float64Var(&qsConfig.StreamWaitTimeout, "queryserver-config-stream-exec-timeout", DefaultQsConfig.StreamWaitTimeout, "Timeout for stream-exec-throttle")
+	flag.BoolVar(&qsConfig.StrictMode, "queryserver-config-strict-mode", DefaultQsConfig.StrictMode, "allow only predictable DMLs and enforces MySQL's STRICT_TRANS_TABLES")
+	flag.BoolVar(&qsConfig.StrictTableAcl, "queryserver-config-strict-table-acl", DefaultQsConfig.StrictTableAcl, "only allow queries that pass table acl checks")
 	flag.StringVar(&qsConfig.RowCache.Binary, "rowcache-bin", DefaultQsConfig.RowCache.Binary, "rowcache binary file")
 	flag.IntVar(&qsConfig.RowCache.Memory, "rowcache-memory", DefaultQsConfig.RowCache.Memory, "rowcache max memory usage in MB")
 	flag.StringVar(&qsConfig.RowCache.Socket, "rowcache-socket", DefaultQsConfig.RowCache.Socket, "rowcache socket path to listen on")
@@ -96,7 +102,8 @@ type Config struct {
 	IdleTimeout        float64
 	RowCache           RowCacheConfig
 	SpotCheckRatio     float64
-	StreamWaitTimeout  float64
+	StrictMode         bool
+	StrictTableAcl     bool
 }
 
 // DefaultQSConfig is the default value for the query service config.
@@ -120,7 +127,8 @@ var DefaultQsConfig = Config{
 	StreamBufferSize:   32 * 1024,
 	RowCache:           RowCacheConfig{Memory: -1, TcpPort: -1, Connections: -1, Threads: -1},
 	SpotCheckRatio:     0,
-	StreamWaitTimeout:  4 * 60,
+	StrictMode:         true,
+	StrictTableAcl:     false,
 }
 
 var qsConfig Config
@@ -147,9 +155,8 @@ func RegisterQueryService() {
 
 // AllowQueries can take an indefinite amount of time to return because
 // it keeps retrying until it obtains a valid connection to the database.
-func AllowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules, mysqld *mysqlctl.Mysqld) {
-	defer logError()
-	SqlQueryRpcService.allowQueries(dbconfig, schemaOverrides, qrs, mysqld)
+func AllowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules, mysqld *mysqlctl.Mysqld, waitForMysql bool) error {
+	return SqlQueryRpcService.allowQueries(dbconfig, schemaOverrides, qrs, mysqld, waitForMysql)
 }
 
 // DisallowQueries can take a long time to return (not indefinite) because
@@ -174,14 +181,6 @@ func IsCachePoolAvailable() bool {
 	return !SqlQueryRpcService.qe.cachePool.IsClosed()
 }
 
-func InvalidateForDml(dml *proto.DmlType) {
-	SqlQueryRpcService.invalidateForDml(dml)
-}
-
-func InvalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
-	SqlQueryRpcService.invalidateForDDL(ddlInvalidate)
-}
-
 func SetQueryRules(qrs *QueryRules) {
 	SqlQueryRpcService.qe.schemaInfo.SetRules(qrs)
 }
@@ -195,13 +194,17 @@ func GetQueryRules() (qrs *QueryRules) {
 // the unhealthiness otherwise.
 func IsHealthy() error {
 	return SqlQueryRpcService.Execute(
-		new(Context),
+		&context.DummyContext{},
 		&proto.Query{Sql: "select 1 from dual", SessionId: SqlQueryRpcService.sessionId},
 		new(mproto.QueryResult),
 	)
 }
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
+	if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
+		acl.SendError(w, err)
+		return
+	}
 	w.Header().Set("Content-Type", "text/plain")
 	if err := IsHealthy(); err != nil {
 		w.Write([]byte("notok"))
@@ -209,11 +212,25 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("ok"))
 }
 
+func buildFmter(logger *streamlog.StreamLogger) func(url.Values, interface{}) string {
+	type formatter interface {
+		Format(url.Values) string
+	}
+
+	return func(params url.Values, val interface{}) string {
+		fmter, ok := val.(formatter)
+		if !ok {
+			return fmt.Sprintf("Error: unexpected value of type %T in %s!", val, logger.Name())
+		}
+		return fmter.Format(params)
+	}
+}
+
 // InitQueryService registers the query service, after loading any
 // necessary config files. It also starts any relevant streaming logs.
 func InitQueryService() {
-	SqlQueryLogger.ServeLogs(*queryLogHandler)
-	TxLogger.ServeLogs(*txLogHandler)
+	SqlQueryLogger.ServeLogs(*queryLogHandler, buildFmter(SqlQueryLogger))
+	TxLogger.ServeLogs(*txLogHandler, buildFmter(TxLogger))
 	RegisterQueryService()
 }
 

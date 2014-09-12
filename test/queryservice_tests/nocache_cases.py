@@ -46,11 +46,11 @@ cases = [
            'select eid, id from vtocc_a where 1 != 1',
            'select /* limit */ eid, id from vtocc_a limit 1']),
     Case(doc='multi-table',
-         sql='select /* multi-table */ a.eid, a.id, b.eid, b.id  from vtocc_a as a, vtocc_b as b',
-         result=[(1L, 1L, 1L, 1L), (1L, 2L, 1L, 1L), (1L, 1L, 1L, 2L), (1L, 2L, 1L, 2L)],
+         sql='select /* multi-table */ a.eid, a.id, b.eid, b.id  from vtocc_a as a, vtocc_b as b order by a.eid, a.id, b.eid, b.id',
+         result=[(1L, 1L, 1L, 1L), (1L, 1L, 1L, 2L), (1L, 2L, 1L, 1L), (1L, 2L, 1L, 2L)],
          rewritten=[
            'select a.eid, a.id, b.eid, b.id from vtocc_a as a, vtocc_b as b where 1 != 1',
-           'select /* multi-table */ a.eid, a.id, b.eid, b.id from vtocc_a as a, vtocc_b as b limit 10001']),
+           'select /* multi-table */ a.eid, a.id, b.eid, b.id from vtocc_a as a, vtocc_b as b order by a.eid asc, a.id asc, b.eid asc, b.id asc limit 10001']),
 
     Case(doc='join',
          sql='select /* join */ a.eid, a.id, b.eid, b.id from vtocc_a as a join vtocc_b as b on a.eid = b.eid and a.id = b.id',
@@ -119,8 +119,8 @@ cases = [
          sql='select /* parenthesised col */ (eid) from vtocc_a where eid = 1 and id = 1',
          result=[(1L,)],
          rewritten=[
-           'select eid from vtocc_a where 1 != 1',
-           'select /* parenthesised col */ eid from vtocc_a where eid = 1 and id = 1 limit 10001']),
+           'select (eid) from vtocc_a where 1 != 1',
+           'select /* parenthesised col */ (eid) from vtocc_a where eid = 1 and id = 1 limit 10001']),
 
     MultiCase('for update',
               ['begin',
@@ -129,6 +129,15 @@ cases = [
                     rewritten=[
                       'select eid from vtocc_a where 1 != 1',
                       'select /* for update */ eid from vtocc_a where eid = 1 and id = 1 limit 10001 for update']),
+               'commit']),
+
+    MultiCase('lock in share mode',
+              ['begin',
+               Case(sql='select /* for update */ eid from vtocc_a where eid = 1 and id = 1 lock in share mode',
+                    result=[(1L,)],
+                    rewritten=[
+                      'select eid from vtocc_a where 1 != 1',
+                      'select /* for update */ eid from vtocc_a where eid = 1 and id = 1 limit 10001 lock in share mode']),
                'commit']),
 
     Case(doc='complex where',
@@ -216,7 +225,6 @@ cases = [
         'simple insert',
         ['begin',
          Case(sql="insert /* simple */ into vtocc_a values (2, 1, 'aaaa', 'bbbb')",
-              result=[],
               rewritten="insert /* simple */ into vtocc_a values (2, 1, 'aaaa', 'bbbb') /* _stream vtocc_a (eid id ) (2 1 )"),
          'commit',
          Case(sql='select * from vtocc_a where eid = 2 and id = 1',
@@ -233,6 +241,18 @@ cases = [
          'commit',
          Case(sql='select * from vtocc_a where eid = 3 and id = 1',
               result=[(3L, 1L, 'aaaa', 'cccc')]),
+         'begin',
+         'delete from vtocc_a where eid>1',
+         'commit']),
+
+    MultiCase(
+        'insert with qualified column name',
+        ['begin',
+         Case(sql="insert /* qualified */ into vtocc_a(vtocc_a.eid, id, name, foo) values (4, 1, 'aaaa', 'cccc')",
+              rewritten="insert /* qualified */ into vtocc_a(vtocc_a.eid, id, name, foo) values (4, 1, 'aaaa', 'cccc') /* _stream vtocc_a (eid id ) (4 1 )"),
+         'commit',
+         Case(sql='select * from vtocc_a where eid = 4 and id = 1',
+              result=[(4L, 1L, 'aaaa', 'cccc')]),
          'begin',
          'delete from vtocc_a where eid>1',
          'commit']),
@@ -288,6 +308,19 @@ cases = [
          'commit']),
 
     MultiCase(
+        'positional values',
+        ['begin',
+         Case(sql="insert /* positional values */ into vtocc_a(eid, id, name, foo) values (?, ?, ?, ?)",
+              bindings={"v1": 4, "v2": 1, "v3": "aaaa", "v4": "cccc"},
+              rewritten="insert /* positional values */ into vtocc_a(eid, id, name, foo) values (4, 1, 'aaaa', 'cccc') /* _stream vtocc_a (eid id ) (4 1 )"),
+         'commit',
+         Case(sql='select * from vtocc_a where eid = 4 and id = 1',
+              result=[(4L, 1L, 'aaaa', 'cccc')]),
+         'begin',
+         'delete from vtocc_a where eid>1',
+         'commit']),
+
+    MultiCase(
         'out of sequence columns',
         ['begin',
          Case(sql="insert into vtocc_a(id, eid, foo, name) values (-1, 5, 'aaa', 'bbb')",
@@ -310,7 +343,7 @@ cases = [
          'commit',
          Case(sql='select * from vtocc_a where eid in (10, 11)',
               result=[(10L, 1L, 'abcd', '20'), (11L, 1L, 'bcde', '30')]),
-         'alter table vtocc_e auto_increment = 1',
+         'alter table vtocc_e auto_increment = 20',
          'begin',
          Case(sql='insert into vtocc_e(id, name, foo) select eid, name, foo from vtocc_c',
            rewritten=[
@@ -319,7 +352,7 @@ cases = [
              ]),
          'commit',
          Case(sql='select eid, id, name, foo from vtocc_e',
-           result=[(1L, 10L, 'abcd', '20'), (2L, 11L, 'bcde', '30')]),
+           result=[(20L, 10L, 'abcd', '20'), (21L, 11L, 'bcde', '30')]),
          'begin',
          'delete from vtocc_a where eid>1',
          'delete from vtocc_c where eid<10',
@@ -400,6 +433,18 @@ cases = [
       ['begin',
        Case(sql="update vtocc_a set eid = 2 where eid = 1 and id = 1",
             rewritten="update vtocc_a set eid = 2 where eid = 1 and id = 1 /* _stream vtocc_a (eid id ) (1 1 ) (2 1 )"),
+       'commit',
+       Case(sql='select eid from vtocc_a where id = 1',
+            result=[(2L,)]),
+       'begin',
+       "update vtocc_a set eid=1 where id=1",
+       'commit']),
+
+  MultiCase(
+      'pk change with qualifed column name',
+      ['begin',
+       Case(sql="update vtocc_a set vtocc_a.eid = 2 where eid = 1 and id = 1",
+            rewritten="update vtocc_a set vtocc_a.eid = 2 where eid = 1 and id = 1 /* _stream vtocc_a (eid id ) (1 1 ) (2 1 )"),
        'commit',
        Case(sql='select eid from vtocc_a where id = 1',
             result=[(2L,)]),

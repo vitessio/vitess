@@ -11,42 +11,75 @@
 
 import logging
 import random
+import time
 
+from vtdb import dbexceptions
+from vtdb import keyrange
+from vtdb import keyrange_constants
 from vtdb import keyspace
+from vtdb import vtdb_logger
 from zk import zkocc
 
+
 # keeps a global version of the topology
+# This is a map of keyspace_name: (keyspace object, time when keyspace was last fetched)
+# eg - {'keyspace_name': (keyspace_object, time_of_last_fetch)}
+# keyspace object is defined at py/vtdb/keyspace.py:Keyspace
 __keyspace_map = {}
 
-__topo_client = None
 
-def set_topo_client(topo_client):
-  global __topo_client
-  __topo_client = topo_client
-
-def read_and_get_keyspace(zkocc_client, name):
-  ks = None
-  try:
-    ks = __keyspace_map[name]
-  except KeyError:
-    ks = keyspace.read_keyspace(zkocc_client, name)
-    if ks is not None:
-      __add_keyspace(ks)
-    else:
-      raise
-  return ks
+# Throttle to clear the keyspace cache and re-read it.
+__keyspace_fetch_throttle = 5
 
 
+def set_keyspace_fetch_throttle(throttle):
+  global __keyspace_fetch_throttle
+  __keyspace_fetch_throttle = throttle
+
+
+# This returns the keyspace object for the keyspace name
+# from the cached topology map or None if not found.
 def get_keyspace(name):
   try:
-    return __keyspace_map[name]
+    return __keyspace_map[name][0]
   except KeyError:
-    global __topo_client
-    return keyspace.read_keyspace(__topo_client, name)
+    return None
 
 
-def __add_keyspace(ks):
-  __keyspace_map[ks.name] = ks
+# This returns the time of last fetch for the keyspace name
+# from the cached topology map or None if not found.
+def get_time_last_fetch(name):
+  try:
+    return __keyspace_map[name][1]
+  except KeyError:
+    return None
+
+
+# This adds the keyspace object to the cached topology map.
+def __set_keyspace(ks):
+  __keyspace_map[ks.name] = (ks, time.time())
+
+
+# This function refreshes the keyspace in the cached topology
+# map throttled by __keyspace_fetch_throttle secs. If the topo
+# server is unavailable, it retains the old keyspace object.
+def refresh_keyspace(zkocc_client, name):
+  global __keyspace_fetch_throttle
+
+  time_last_fetch = get_time_last_fetch(name)
+  if time_last_fetch is None:
+    return
+
+  if (time_last_fetch + __keyspace_fetch_throttle) > time.time():
+    return
+
+  start_time = time.time()
+  ks = keyspace.read_keyspace(zkocc_client, name)
+  topo_rtt = time.time() - start_time
+  if ks is not None:
+    __set_keyspace(ks)
+
+  vtdb_logger.get_logger().topo_keyspace_fetch(name, topo_rtt)
 
 
 # read all the keyspaces, populates __keyspace_map, can call get_keyspace
@@ -67,14 +100,14 @@ def read_topology(zkocc_client, read_fqdb_keys=True):
   keyspace_list = zkocc_client.get_srv_keyspace_names('local')
   # validate step
   if len(keyspace_list) == 0:
-    logging.exception('zkocc returned empty keyspace list')
+    vtdb_logger.get_logger().topo_empty_keyspace_list()
     raise Exception('zkocc returned empty keyspace list')
   for keyspace_name in keyspace_list:
     try:
       ks = keyspace.read_keyspace(zkocc_client, keyspace_name)
-      __add_keyspace(ks)
-      for shard_name in ks.shard_names:
-        for db_type in ks.db_types:
+      __set_keyspace(ks)
+      for db_type in ks.db_types:
+        for shard_name in ks.get_shard_names(db_type):
           db_key_parts = [ks.name, shard_name, db_type]
           db_key = '.'.join(db_key_parts)
           db_keys.append(db_key)
@@ -84,8 +117,7 @@ def read_topology(zkocc_client, read_fqdb_keys=True):
             for db_i in xrange(db_instances):
               fqdb_keys.append('.'.join(db_key_parts + [str(db_i)]))
     except Exception:
-      logging.exception('error getting or parsing keyspace data for %s',
-                        keyspace_name)
+      vtdb_logger.get_logger().topo_bad_keyspace_data(keyspace_name)
   return db_keys, fqdb_keys
 
 
@@ -109,13 +141,13 @@ def get_host_port_by_name(topo_client, db_key, encrypted=False):
   try:
     data = topo_client.get_end_points('local', ks, shard, tablet_type)
   except zkocc.ZkOccError as e:
-    logging.warning('no data for %s: %s', db_key, e)
+    vtdb_logger.get_logger().topo_zkocc_error('do data', db_key, e)
     return []
   except Exception as e:
-    logging.warning('failed to get or parse topo data %s (%s): %s', db_key, e,
-                    data)
+    vtdb_logger.get_logger().topo_exception('failed to get or parse topo data', db_key, e)
     return []
   if 'Entries' not in data:
+    vtdb_logger.get_logger().topo_exception('topo server returned: ' + str(data), db_key, e)
     raise Exception('zkocc returned: %s' % str(data))
   for entry in data['Entries']:
     if service in entry['NamedPortMap']:
@@ -131,3 +163,23 @@ def get_host_port_by_name(topo_client, db_key, encrypted=False):
     return encrypted_host_port_list
   random.shuffle(host_port_list)
   return host_port_list
+
+
+def is_sharded_keyspace(keyspace_name, db_type):
+  ks = get_keyspace(keyspace_name)
+  shard_count = ks.get_shard_count(db_type)
+  return shard_count > 1
+
+def get_keyrange_from_shard_name(keyspace, shard_name, db_type):
+  kr = None
+  if not is_sharded_keyspace(keyspace, db_type):
+    if shard_name == keyrange_constants.SHARD_ZERO:
+      kr = keyrange_constants.NON_PARTIAL_KEYRANGE
+    else:
+      raise dbexceptions.DatabaseError('Invalid shard_name %s for keyspace %s', shard_name, keyspace)
+  else:
+    kr_parts = shard_name.split('-')
+    if len(kr_parts) != 2:
+      raise dbexceptions.DatabaseError('Invalid shard_name %s for keyspace %s', shard_name, keyspace)
+    kr = keyrange.KeyRange((kr_parts[0].decode('hex'), kr_parts[1].decode('hex')))
+  return kr

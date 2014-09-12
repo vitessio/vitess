@@ -6,12 +6,13 @@ package worker
 
 import (
 	"fmt"
-	"strings"
+	"html/template"
+	"regexp"
 	"sync"
 	"time"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sync2"
+	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -56,7 +57,6 @@ type VerticalSplitDiffWorker struct {
 	destinationAlias topo.TabletAlias
 
 	// populated during stateVSDDiff
-	diffLogs                    []string
 	sourceSchemaDefinition      *myproto.SchemaDefinition
 	destinationSchemaDefinition *myproto.SchemaDefinition
 }
@@ -87,7 +87,7 @@ func (vsdw *VerticalSplitDiffWorker) recordError(err error) {
 	vsdw.mu.Unlock()
 }
 
-func (vsdw *VerticalSplitDiffWorker) StatusAsHTML() string {
+func (vsdw *VerticalSplitDiffWorker) StatusAsHTML() template.HTML {
 	vsdw.mu.Lock()
 	defer vsdw.mu.Unlock()
 	result := "<b>Working on:</b> " + vsdw.keyspace + "/" + vsdw.shard + "</br>\n"
@@ -97,13 +97,11 @@ func (vsdw *VerticalSplitDiffWorker) StatusAsHTML() string {
 		result += "<b>Error</b>: " + vsdw.err.Error() + "</br>\n"
 	case stateVSDDiff:
 		result += "<b>Running</b>:</br>\n"
-		result += strings.Join(vsdw.diffLogs, "</br>\n")
 	case stateVSDDone:
 		result += "<b>Success</b>:</br>\n"
-		result += strings.Join(vsdw.diffLogs, "</br>\n")
 	}
 
-	return result
+	return template.HTML(result)
 }
 
 func (vsdw *VerticalSplitDiffWorker) StatusAsText() string {
@@ -115,11 +113,9 @@ func (vsdw *VerticalSplitDiffWorker) StatusAsText() string {
 	case stateVSDError:
 		result += "Error: " + vsdw.err.Error() + "\n"
 	case stateVSDDiff:
-		result += "Running:\n"
-		result += strings.Join(vsdw.diffLogs, "\n")
+		result += "Running...\n"
 	case stateVSDDone:
-		result += "Success:\n"
-		result += strings.Join(vsdw.diffLogs, "\n")
+		result += "Success.\n"
 	}
 	return result
 }
@@ -142,7 +138,7 @@ func (vsdw *VerticalSplitDiffWorker) Run() {
 	cerr := vsdw.cleaner.CleanUp(vsdw.wr)
 	if cerr != nil {
 		if err != nil {
-			log.Errorf("CleanUp failed in addition to job error: %v", cerr)
+			vsdw.wr.Logger().Errorf("CleanUp failed in addition to job error: %v", cerr)
 		} else {
 			err = cerr
 		}
@@ -154,10 +150,14 @@ func (vsdw *VerticalSplitDiffWorker) Run() {
 	vsdw.setState(stateVSDDone)
 }
 
+func (vsdw *VerticalSplitDiffWorker) Error() error {
+	return vsdw.err
+}
+
 func (vsdw *VerticalSplitDiffWorker) run() error {
 	// first state: read what we need to do
 	if err := vsdw.init(); err != nil {
-		return err
+		return fmt.Errorf("init() failed: %v", err)
 	}
 	if vsdw.CheckInterrupted() {
 		return topo.ErrInterrupted
@@ -165,7 +165,7 @@ func (vsdw *VerticalSplitDiffWorker) run() error {
 
 	// second state: find targets
 	if err := vsdw.findTargets(); err != nil {
-		return err
+		return fmt.Errorf("findTargets() failed: %v", err)
 	}
 	if vsdw.CheckInterrupted() {
 		return topo.ErrInterrupted
@@ -173,7 +173,7 @@ func (vsdw *VerticalSplitDiffWorker) run() error {
 
 	// third phase: synchronize replication
 	if err := vsdw.synchronizeReplication(); err != nil {
-		return err
+		return fmt.Errorf("synchronizeReplication() failed: %v", err)
 	}
 	if vsdw.CheckInterrupted() {
 		return topo.ErrInterrupted
@@ -181,7 +181,7 @@ func (vsdw *VerticalSplitDiffWorker) run() error {
 
 	// fourth phase: diff
 	if err := vsdw.diff(); err != nil {
-		return err
+		return fmt.Errorf("diff() failed: %v", err)
 	}
 
 	return nil
@@ -197,22 +197,25 @@ func (vsdw *VerticalSplitDiffWorker) init() error {
 	// read the keyspace and validate it
 	vsdw.keyspaceInfo, err = vsdw.wr.TopoServer().GetKeyspace(vsdw.keyspace)
 	if err != nil {
-		return fmt.Errorf("Cannot read keyspace %v: %v", vsdw.keyspace, err)
+		return fmt.Errorf("cannot read keyspace %v: %v", vsdw.keyspace, err)
 	}
 	if len(vsdw.keyspaceInfo.ServedFrom) == 0 {
-		return fmt.Errorf("Keyspace %v has no ServedFrom", vsdw.keyspace)
+		return fmt.Errorf("keyspace %v has no ServedFrom", vsdw.keyspace)
 	}
 
 	// read the shardinfo and validate it
 	vsdw.shardInfo, err = vsdw.wr.TopoServer().GetShard(vsdw.keyspace, vsdw.shard)
 	if err != nil {
-		return fmt.Errorf("Cannot read shard %v/%v: %v", vsdw.keyspace, vsdw.shard, err)
+		return fmt.Errorf("cannot read shard %v/%v: %v", vsdw.keyspace, vsdw.shard, err)
 	}
 	if len(vsdw.shardInfo.SourceShards) != 1 {
-		return fmt.Errorf("Shard %v/%v has bad number of source shards", vsdw.keyspace, vsdw.shard)
+		return fmt.Errorf("shard %v/%v has bad number of source shards", vsdw.keyspace, vsdw.shard)
+	}
+	if len(vsdw.shardInfo.SourceShards[0].Tables) == 0 {
+		return fmt.Errorf("shard %v/%v has no tables in source shard[0]", vsdw.keyspace, vsdw.shard)
 	}
 	if vsdw.shardInfo.MasterAlias.IsZero() {
-		return fmt.Errorf("Shard %v/%v has no master", vsdw.keyspace, vsdw.shard)
+		return fmt.Errorf("shard %v/%v has no master", vsdw.keyspace, vsdw.shard)
 	}
 
 	return nil
@@ -229,13 +232,13 @@ func (vsdw *VerticalSplitDiffWorker) findTargets() error {
 	var err error
 	vsdw.destinationAlias, err = findChecker(vsdw.wr, vsdw.cleaner, vsdw.cell, vsdw.keyspace, vsdw.shard)
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot find checker for %v/%v/%v: %v", vsdw.cell, vsdw.keyspace, vsdw.shard, err)
 	}
 
 	// find an appropriate endpoint in the source shard
 	vsdw.sourceAlias, err = findChecker(vsdw.wr, vsdw.cleaner, vsdw.cell, vsdw.shardInfo.SourceShards[0].Keyspace, vsdw.shardInfo.SourceShards[0].Shard)
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot find checker for %v/%v/%v: %v", vsdw.cell, vsdw.shardInfo.SourceShards[0].Keyspace, vsdw.shardInfo.SourceShards[0].Shard, err)
 	}
 
 	return nil
@@ -263,33 +266,33 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 	vsdw.setState(stateVSDSynchronizeReplication)
 
 	// 1 - stop the master binlog replication, get its current position
-	log.Infof("Stopping master binlog replication on %v", vsdw.shardInfo.MasterAlias)
+	vsdw.wr.Logger().Infof("Stopping master binlog replication on %v", vsdw.shardInfo.MasterAlias)
 	blpPositionList, err := vsdw.wr.ActionInitiator().StopBlp(vsdw.shardInfo.MasterAlias, 30*time.Second)
 	if err != nil {
-		return err
+		return fmt.Errorf("StopBlp on master %v failed: %v", vsdw.shardInfo.MasterAlias, err)
 	}
 	wrangler.RecordStartBlpAction(vsdw.cleaner, vsdw.shardInfo.MasterAlias, 30*time.Second)
 
 	// 2 - stop the source 'checker' at a binlog position
 	//     higher than the destination master
-	stopPositionList := myproto.BlpPositionList{
-		Entries: make([]myproto.BlpPosition, 1),
+	stopPositionList := blproto.BlpPositionList{
+		Entries: make([]blproto.BlpPosition, 1),
 	}
 	ss := vsdw.shardInfo.SourceShards[0]
 	// find where we should be stopping
 	pos, err := blpPositionList.FindBlpPositionById(ss.Uid)
 	if err != nil {
-		return fmt.Errorf("No binlog position on the master for Uid %v", ss.Uid)
+		return fmt.Errorf("no binlog position on the master for Uid %v", ss.Uid)
 	}
 
 	// stop replication
-	log.Infof("Stopping slave %v at a minimum of %v", vsdw.sourceAlias, pos.GroupId)
-	stoppedAt, err := vsdw.wr.ActionInitiator().StopSlaveMinimum(vsdw.sourceAlias, pos.GroupId, 30*time.Second)
+	vsdw.wr.Logger().Infof("Stopping slave %v at a minimum of %v", vsdw.sourceAlias, pos.Position)
+	stoppedAt, err := vsdw.wr.ActionInitiator().StopSlaveMinimum(vsdw.sourceAlias, pos.Position, 30*time.Second)
 	if err != nil {
-		return fmt.Errorf("Cannot stop slave %v at right binlog position %v: %v", vsdw.sourceAlias, pos.GroupId, err)
+		return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", vsdw.sourceAlias, pos.Position, err)
 	}
 	stopPositionList.Entries[0].Uid = ss.Uid
-	stopPositionList.Entries[0].GroupId = stoppedAt.MasterLogGroupId
+	stopPositionList.Entries[0].Position = stoppedAt.Position
 
 	// change the cleaner actions from ChangeSlaveType(rdonly)
 	// to StartSlave() + ChangeSlaveType(spare)
@@ -302,18 +305,18 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 
 	// 3 - ask the master of the destination shard to resume filtered
 	//     replication up to the new list of positions
-	log.Infof("Restarting master %v until it catches up to %v", vsdw.shardInfo.MasterAlias, stopPositionList)
+	vsdw.wr.Logger().Infof("Restarting master %v until it catches up to %v", vsdw.shardInfo.MasterAlias, stopPositionList)
 	masterPos, err := vsdw.wr.ActionInitiator().RunBlpUntil(vsdw.shardInfo.MasterAlias, &stopPositionList, 30*time.Second)
 	if err != nil {
-		return err
+		return fmt.Errorf("RunBlpUntil on %v until %v failed: %v", vsdw.shardInfo.MasterAlias, stopPositionList, err)
 	}
 
 	// 4 - wait until the destination checker is equal or passed
 	//     that master binlog position, and stop its replication.
-	log.Infof("Waiting for destination checker %v to catch up to %v", vsdw.destinationAlias, masterPos.MasterLogGroupId)
-	_, err = vsdw.wr.ActionInitiator().StopSlaveMinimum(vsdw.destinationAlias, masterPos.MasterLogGroupId, 30*time.Second)
+	vsdw.wr.Logger().Infof("Waiting for destination checker %v to catch up to %v", vsdw.destinationAlias, masterPos)
+	_, err = vsdw.wr.ActionInitiator().StopSlaveMinimum(vsdw.destinationAlias, masterPos, 30*time.Second)
 	if err != nil {
-		return err
+		return fmt.Errorf("StopSlaveMinimum on %v at %v failed: %v", vsdw.destinationAlias, masterPos, err)
 	}
 	wrangler.RecordStartSlaveAction(vsdw.cleaner, vsdw.destinationAlias, 30*time.Second)
 	action, err = wrangler.FindChangeSlaveTypeActionByTarget(vsdw.cleaner, vsdw.destinationAlias)
@@ -323,13 +326,13 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 	action.TabletType = topo.TYPE_SPARE
 
 	// 5 - restart filtered replication on destination master
-	log.Infof("Restarting filtered replication on master %v", vsdw.shardInfo.MasterAlias)
+	vsdw.wr.Logger().Infof("Restarting filtered replication on master %v", vsdw.shardInfo.MasterAlias)
 	err = vsdw.wr.ActionInitiator().StartBlp(vsdw.shardInfo.MasterAlias, 30*time.Second)
 	if err := vsdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, vsdw.shardInfo.MasterAlias.String()); err != nil {
-		log.Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, vsdw.shardInfo.MasterAlias.String(), err)
+		vsdw.wr.Logger().Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, vsdw.shardInfo.MasterAlias.String(), err)
 	}
 	if err != nil {
-		return err
+		return fmt.Errorf("StartBlp on %v failed: %v", vsdw.shardInfo.MasterAlias, err)
 	}
 
 	return nil
@@ -340,33 +343,26 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 // - if some table schema mismatches, record them (use existing schema diff tools).
 // - for each table in destination, run a diff pipeline.
 
-func (vsdw *VerticalSplitDiffWorker) diffLog(msg string) {
-	vsdw.mu.Lock()
-	vsdw.diffLogs = append(vsdw.diffLogs, msg)
-	vsdw.mu.Unlock()
-	log.Infof("diffLog: %v", msg)
-}
-
 func (vsdw *VerticalSplitDiffWorker) diff() error {
 	vsdw.setState(stateVSDDiff)
 
-	vsdw.diffLog("Gathering schema information...")
+	vsdw.wr.Logger().Infof("Gathering schema information...")
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 	wg.Add(1)
 	go func() {
 		var err error
-		vsdw.destinationSchemaDefinition, err = vsdw.wr.GetSchema(vsdw.destinationAlias, nil, false)
+		vsdw.destinationSchemaDefinition, err = vsdw.wr.GetSchema(vsdw.destinationAlias, nil, nil, false)
 		rec.RecordError(err)
-		vsdw.diffLog(fmt.Sprintf("Got schema from destination %v", vsdw.destinationAlias))
+		vsdw.wr.Logger().Infof("Got schema from destination %v", vsdw.destinationAlias)
 		wg.Done()
 	}()
 	wg.Add(1)
 	go func() {
 		var err error
-		vsdw.sourceSchemaDefinition, err = vsdw.wr.GetSchema(vsdw.sourceAlias, nil, false)
+		vsdw.sourceSchemaDefinition, err = vsdw.wr.GetSchema(vsdw.sourceAlias, nil, nil, false)
 		rec.RecordError(err)
-		vsdw.diffLog(fmt.Sprintf("Got schema from source %v", vsdw.sourceAlias))
+		vsdw.wr.Logger().Infof("Got schema from source %v", vsdw.sourceAlias)
 		wg.Done()
 	}()
 	wg.Wait()
@@ -374,18 +370,28 @@ func (vsdw *VerticalSplitDiffWorker) diff() error {
 		return rec.Error()
 	}
 
+	// Build a list of regexp to exclude tables from source schema
+	tableRegexps := make([]*regexp.Regexp, len(vsdw.shardInfo.SourceShards[0].Tables))
+	for i, table := range vsdw.shardInfo.SourceShards[0].Tables {
+		var err error
+		tableRegexps[i], err = regexp.Compile(table)
+		if err != nil {
+			return fmt.Errorf("cannot compile regexp %v for table: %v", table, err)
+		}
+	}
+
 	// Remove the tables we don't need from the source schema
 	newSourceTableDefinitions := make([]myproto.TableDefinition, 0, len(vsdw.destinationSchemaDefinition.TableDefinitions))
 	for _, tableDefinition := range vsdw.sourceSchemaDefinition.TableDefinitions {
 		found := false
-		for _, t := range vsdw.shardInfo.SourceShards[0].Tables {
-			if t == tableDefinition.Name {
+		for _, tableRegexp := range tableRegexps {
+			if tableRegexp.MatchString(tableDefinition.Name) {
 				found = true
 				break
 			}
 		}
 		if !found {
-			log.Infof("Removing table %v from source schema", tableDefinition.Name)
+			vsdw.wr.Logger().Infof("Removing table %v from source schema", tableDefinition.Name)
 			continue
 		}
 		newSourceTableDefinitions = append(newSourceTableDefinitions, tableDefinition)
@@ -393,17 +399,17 @@ func (vsdw *VerticalSplitDiffWorker) diff() error {
 	vsdw.sourceSchemaDefinition.TableDefinitions = newSourceTableDefinitions
 
 	// Check the schema
-	vsdw.diffLog("Diffing the schema...")
+	vsdw.wr.Logger().Infof("Diffing the schema...")
 	rec = concurrency.AllErrorRecorder{}
 	myproto.DiffSchema("destination", vsdw.destinationSchemaDefinition, "source", vsdw.sourceSchemaDefinition, &rec)
 	if rec.HasErrors() {
-		vsdw.diffLog("Different schemas: " + rec.Error().Error())
+		vsdw.wr.Logger().Warningf("Different schemas: %v", rec.Error())
 	} else {
-		vsdw.diffLog("Schema match, good.")
+		vsdw.wr.Logger().Infof("Schema match, good.")
 	}
 
 	// run the diffs, 8 at a time
-	vsdw.diffLog("Running the diffs...")
+	vsdw.wr.Logger().Infof("Running the diffs...")
 	sem := sync2.NewSemaphore(8, 0)
 	for _, tableDefinition := range vsdw.destinationSchemaDefinition.TableDefinitions {
 		wg.Add(1)
@@ -412,35 +418,35 @@ func (vsdw *VerticalSplitDiffWorker) diff() error {
 			sem.Acquire()
 			defer sem.Release()
 
-			log.Infof("Starting the diff on table %v", tableDefinition.Name)
-			sourceQueryResultReader, err := TableScan(vsdw.wr.TopoServer(), vsdw.sourceAlias, &tableDefinition)
+			vsdw.wr.Logger().Infof("Starting the diff on table %v", tableDefinition.Name)
+			sourceQueryResultReader, err := TableScan(vsdw.wr.Logger(), vsdw.wr.TopoServer(), vsdw.sourceAlias, &tableDefinition)
 			if err != nil {
-				vsdw.diffLog("TableScan(source) failed: " + err.Error())
+				vsdw.wr.Logger().Errorf("TableScan(source) failed: %v", err)
 				return
 			}
 			defer sourceQueryResultReader.Close()
 
-			destinationQueryResultReader, err := TableScan(vsdw.wr.TopoServer(), vsdw.destinationAlias, &tableDefinition)
+			destinationQueryResultReader, err := TableScan(vsdw.wr.Logger(), vsdw.wr.TopoServer(), vsdw.destinationAlias, &tableDefinition)
 			if err != nil {
-				vsdw.diffLog("TableScan(destination) failed: " + err.Error())
+				vsdw.wr.Logger().Errorf("TableScan(destination) failed: %v", err)
 				return
 			}
 			defer destinationQueryResultReader.Close()
 
 			differ, err := NewRowDiffer(sourceQueryResultReader, destinationQueryResultReader, &tableDefinition)
 			if err != nil {
-				vsdw.diffLog("NewRowDiffer() failed: " + err.Error())
+				vsdw.wr.Logger().Errorf("NewRowDiffer() failed: %v", err)
 				return
 			}
 
-			report, err := differ.Go()
+			report, err := differ.Go(vsdw.wr.Logger())
 			if err != nil {
-				vsdw.diffLog("Differ.Go failed: " + err.Error())
+				vsdw.wr.Logger().Errorf("Differ.Go failed: %v", err)
 			} else {
 				if report.HasDifferences() {
-					vsdw.diffLog(fmt.Sprintf("Table %v has differences: %v", tableDefinition.Name, report.String()))
+					vsdw.wr.Logger().Errorf("Table %v has differences: %v", tableDefinition.Name, report.String())
 				} else {
-					vsdw.diffLog(fmt.Sprintf("Table %v checks out (%v rows processed, %v qps)", tableDefinition.Name, report.processedRows, report.processingQPS))
+					vsdw.wr.Logger().Infof("Table %v checks out (%v rows processed, %v qps)", tableDefinition.Name, report.processedRows, report.processingQPS)
 				}
 			}
 		}(tableDefinition)

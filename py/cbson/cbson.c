@@ -370,10 +370,16 @@ _decode_document(BufIter* buf_iter, int is_array) {
       element_value = PyTuple_Pack(1, element_types[max]);
     }
     else {
-      PyErr_Format(BSONError,
-                   "invalid element type id 0x%x at buffer[%d] for %s",
-                   type_id, INDEX_OF(buf_iter),
-                   PyString_AsString(element_name));
+      if (!is_array) {
+        PyErr_Format(BSONError,
+                     "invalid element type id 0x%x at buffer[%d] for %s",
+                     type_id, INDEX_OF(buf_iter),
+                     PyString_AsString(element_name));
+      } else {
+        PyErr_Format(BSONError,
+                     "invalid element type id 0x%x at buffer[%d]",
+                     type_id, INDEX_OF(buf_iter));
+      }
       goto error;
     }
 
@@ -426,52 +432,47 @@ static PyObject* decode_binary(BufIter* buf_iter) {
   PyObject* result;
   eltype = NULL;
   binary_buf = NULL;
-  if (!scan_int32(buf_iter, &binary_size, "binary-size"))
-    return NULL;
-  if (!next(buf_iter, 1, "binary-subtype"))
-    return NULL;
+  if (!scan_int32(buf_iter, &binary_size, "binary-size")) return NULL;
+  if (!next(buf_iter, 1, "binary-subtype")) return NULL;
 
   subtype = VAL_AT(buf_iter, unsigned char);
   switch (subtype) {
-      case 0x00:
-        eltype = element_types[binary_generic];
-        break;
-      case 0x01:
-        eltype = element_types[binary_function];
-        break;
-      case 0x02:
-        eltype = element_types[binary_old];
-        break;
-      case 0x03:
-        eltype = element_types[binary_uuid];
-        break;
-      case 0x05:
-        eltype = element_types[binary_md5];
-        break;
-      case 0x80:
-        eltype = element_types[binary_user_defined];
-        break;
+    case 0x00:
+      eltype = element_types[binary_generic];
+      break;
+    case 0x01:
+      eltype = element_types[binary_function];
+      break;
+    case 0x02:
+      eltype = element_types[binary_old];
+      break;
+    case 0x03:
+      eltype = element_types[binary_uuid];
+      break;
+    case 0x05:
+      eltype = element_types[binary_md5];
+      break;
+    case 0x80:
+      eltype = element_types[binary_user_defined];
+      break;
     default:
-      PyErr_Format(BSONError,
-                   "invalid binary subtype 0x%x at buffer[%d]",
+      PyErr_Format(BSONError, "invalid binary subtype 0x%x at buffer[%d]",
                    subtype, INDEX_OF(buf_iter));
-      goto error;
-    }
+      return NULL;
+  }
 
-  if (!next(buf_iter, binary_size, "binary-buffer"))
-    return NULL;
+  if (!next(buf_iter, binary_size, "binary-buffer")) return NULL;
 
-  binary_buf = PyString_FromStringAndSize(PTR_AT(buf_iter, const char*), binary_size);
-  if (!binary_buf)
-    return NULL;
+  binary_buf =
+      PyString_FromStringAndSize(PTR_AT(buf_iter, const char*), binary_size);
+  if (!binary_buf) return NULL;
 
   /* special case - we just return a normal Python string nfor
    * binary_generic elements - this imitates the other bson module's
    * behavior */
   if (eltype == element_types[binary_generic]) {
     return binary_buf;
-  }
-  else {
+  } else {
     /* a tuple such as ('binary_md5', '<buffer content>') */
     result = PyTuple_Pack(2, eltype, binary_buf);
   }
@@ -482,8 +483,8 @@ static PyObject* decode_binary(BufIter* buf_iter) {
   return result;
 
 error:
-    Py_DECREF(binary_buf);
-    return NULL;
+  Py_DECREF(binary_buf);
+  return NULL;
 }
 
 static inline PyObject* decode_string(BufIter* buf_iter) {
@@ -493,6 +494,11 @@ static inline PyObject* decode_string(BufIter* buf_iter) {
   if (!scan_int32(buf_iter, &elem_size, "string-length"))
     return 0;
   if (!next_cstring(buf_iter, "string-body")) return 0;
+  if (strlen(PTR_AT(buf_iter, const char*))+1 != elem_size) {
+    PyErr_Format(BSONError, "invalid string length: %zu != %u",
+                 strlen(PTR_AT(buf_iter, const char*))+1, elem_size);
+    return 0;
+  }
 
   result = PyUnicode_FromStringAndSize(PTR_AT(buf_iter, const char*), elem_size-1);
   if (!result)

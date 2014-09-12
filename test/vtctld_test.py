@@ -8,6 +8,8 @@ import urllib2
 import environment
 import tablet
 import utils
+from zk import zkocc
+from vtctl import vtctl_client
 
 
 # range "" - 80
@@ -17,65 +19,35 @@ shard_0_spare = tablet.Tablet()
 # range 80 - ""
 shard_1_master = tablet.Tablet()
 shard_1_replica = tablet.Tablet()
-
+# not assigned
 idle = tablet.Tablet()
 scrap = tablet.Tablet()
-assigned = [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]
-tablets = assigned + [idle, scrap, shard_0_spare]
+# all tablets
+tablets = [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica,
+           idle, scrap, shard_0_spare]
+# vtgate
+vtgate_server = None
+vtgate_port = None
 
-
-class VtctldError(Exception): pass
-
-
-class Vtctld(object):
-
-  def __init__(self):
-    self.port = environment.reserve_ports(1)
-
-  def dbtopo(self):
-    data = json.load(urllib2.urlopen('http://localhost:%u/dbtopo?format=json' %
-                                     self.port))
-    if data["Error"]:
-      raise VtctldError(data)
-    return data["Topology"]
-
-  def serving_graph(self):
-    data = json.load(urllib2.urlopen('http://localhost:%u/serving_graph/test_nj?format=json' % self.port))
-    if data["Error"]:
-      raise VtctldError(data)
-    return data["ServingGraph"]["Keyspaces"]
-
-  def start(self):
-    args = [environment.binary_path('vtctld'),
-            '-debug',
-            '-templates', environment.vttop + '/go/cmd/vtctld/templates',
-            '-log_dir', environment.vtlogroot,
-            '-port', str(self.port),
-            ] + \
-            environment.topo_server_flags() + \
-            environment.tablet_manager_protocol_flags()
-    stderr_fd = open(os.path.join(environment.tmproot, "vtctld.stderr"), "w")
-    self.proc = utils.run_bg(args, stderr=stderr_fd)
-    return self.proc
-
-
-vtctld = Vtctld()
 
 def setUpModule():
   try:
     environment.topo_server_setup()
 
     setup_procs = [t.init_mysql() for t in tablets]
+    utils.Vtctld().start()
     utils.wait_procs(setup_procs)
-    vtctld.start()
 
   except:
     tearDownModule()
     raise
 
+
 def tearDownModule():
   if utils.options.skip_teardown:
     return
+
+  utils.vtgate_kill(vtgate_server)
 
   teardown_procs = [t.teardown_mysql() for t in tablets]
   utils.wait_procs(teardown_procs, raise_on_error=False)
@@ -92,56 +64,119 @@ class TestVtctld(unittest.TestCase):
 
   @classmethod
   def setUpClass(klass):
-    utils.run_vtctl('CreateKeyspace test_keyspace')
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
+    utils.run_vtctl(['CreateKeyspace',
+                     '--served-from', 'master:test_keyspace,replica:test_keyspace,rdonly:test_keyspace',
+                     'redirected_keyspace'])
 
     shard_0_master.init_tablet( 'master',  'test_keyspace', '-80')
-    shard_0_replica.init_tablet('replica', 'test_keyspace', '-80')
-    shard_0_spare.init_tablet('spare', 'test_keyspace', '-80')
+    shard_0_replica.init_tablet('spare',   'test_keyspace', '-80')
+    shard_0_spare.init_tablet(  'spare',   'test_keyspace', '-80')
     shard_1_master.init_tablet( 'master',  'test_keyspace', '80-')
     shard_1_replica.init_tablet('replica', 'test_keyspace', '80-')
     idle.init_tablet('idle')
     scrap.init_tablet('idle')
 
-    utils.run_vtctl('RebuildKeyspaceGraph test_keyspace', auto_log=True)
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'redirected_keyspace'],
+                    auto_log=True)
 
-    for t in assigned:
+    # start running all the tablets
+    for t in [shard_0_master, shard_1_master, shard_1_replica]:
       t.create_db('vt_test_keyspace')
-      t.start_vttablet()
+      t.start_vttablet(wait_for_state=None,
+                       extra_args=utils.vtctld.process_args())
+    shard_0_replica.create_db('vt_test_keyspace')
+    shard_0_replica.start_vttablet(extra_args=utils.vtctld.process_args(),
+                                   target_tablet_type='replica',
+                                   wait_for_state=None)
 
     for t in scrap, idle, shard_0_spare:
-      t.start_vttablet(wait_for_state='NOT_SERVING')
+      t.start_vttablet(wait_for_state=None,
+                       extra_args=utils.vtctld.process_args())
+
+    # wait for the right states
+    for t in [shard_0_master, shard_1_master, shard_1_replica]:
+      t.wait_for_vttablet_state('SERVING')
+    for t in [scrap, idle, shard_0_replica, shard_0_spare]:
+      t.wait_for_vttablet_state('NOT_SERVING')
 
     scrap.scrap()
 
     for t in [shard_0_master, shard_0_replica, shard_0_spare,
               shard_1_master, shard_1_replica, idle, scrap]:
       t.reset_replication()
-    utils.run_vtctl('ReparentShard -force test_keyspace/-80 ' + shard_0_master.tablet_alias, auto_log=True)
-    utils.run_vtctl('ReparentShard -force test_keyspace/80- ' + shard_1_master.tablet_alias, auto_log=True)
-
+    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/-80',
+                     shard_0_master.tablet_alias], auto_log=True)
+    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/80-',
+                     shard_1_master.tablet_alias], auto_log=True)
+    shard_0_replica.wait_for_vttablet_state('SERVING')
 
     # run checks now before we start the tablets
     utils.validate_topology()
 
+    # start a vtgate server too
+    global vtgate_server, vtgate_port
+    vtgate_server, vtgate_port = utils.vtgate_start(
+        cache_ttl='0s', extra_args=utils.vtctld.process_args())
+
   def setUp(self):
-    self.data = vtctld.dbtopo()
-    self.serving_data = vtctld.serving_graph()
+    self.data = utils.vtctld.dbtopo()
+    self.serving_data = utils.vtctld.serving_graph()
+
+  def _check_all_tablets(self, result):
+    lines = result.splitlines()
+    self.assertEqual(len(lines), len(tablets))
+    line_map = {}
+    for line in lines:
+      parts = line.split()
+      alias = parts[0]
+      line_map[alias] = parts
+    for tablet in tablets:
+      if not tablet.tablet_alias in line_map:
+         self.assertFalse('tablet %s is not in the result: %s' % (
+                          tablet.tablet_alias, str(line_map)))
+
+  def test_vtctl(self):
+    # standalone RPC client to vtctld
+    out, err = utils.run_vtctl(['ListAllTablets', 'test_nj'],
+                               mode=utils.VTCTL_RPC)
+    self._check_all_tablets(out)
+
+    # vtctl querying the topology directly
+    out, err = utils.run_vtctl(['ListAllTablets', 'test_nj'],
+                               mode=utils.VTCTL_VTCTL,
+                               trap_output=True, auto_log=True)
+    self._check_all_tablets(out)
+
+    # python RPC client to vtctld
+    out, err = utils.run_vtctl(['ListAllTablets', 'test_nj'],
+                               mode=utils.VTCTL_RPC)
+    self._check_all_tablets(out)
 
   def test_assigned(self):
     logging.debug("test_assigned: %s", str(self.data))
     self.assertItemsEqual(self.data["Assigned"].keys(), ["test_keyspace"])
-    self.assertItemsEqual(self.data["Assigned"]["test_keyspace"].keys(), ["-80", "80-"])
+    s0 = self.data["Assigned"]["test_keyspace"]['ShardNodes'][0]
+    self.assertItemsEqual(s0['Name'], "-80")
+    s1 = self.data["Assigned"]["test_keyspace"]['ShardNodes'][1]
+    self.assertItemsEqual(s1['Name'], "80-")
 
   def test_not_assigned(self):
     self.assertEqual(len(self.data["Idle"]), 1)
     self.assertEqual(len(self.data["Scrap"]), 1)
 
   def test_partial(self):
-    utils.pause("You can now run a browser and connect to http://localhost:%u to manually check topology" % vtctld.port)
+    utils.pause("You can now run a browser and connect to http://localhost:%u to manually check topology" % utils.vtctld.port)
     self.assertEqual(self.data["Partial"], True)
 
   def test_explorer_redirects(self):
-    base = 'http://localhost:%u' % vtctld.port
+    if environment.topo_server_implementation != 'zookeeper':
+      logging.info('Skipping zookeeper tests in topology %s',
+                   environment.topo_server_implementation)
+      return
+
+    base = 'http://localhost:%u' % utils.vtctld.port
     self.assertEqual(urllib2.urlopen(base + '/explorers/redirect?type=keyspace&explorer=zk&keyspace=test_keyspace').geturl(),
                      base + '/zk/global/vt/keyspaces/test_keyspace')
     self.assertEqual(urllib2.urlopen(base + '/explorers/redirect?type=shard&explorer=zk&keyspace=test_keyspace&shard=-80').geturl(),
@@ -159,12 +194,42 @@ class TestVtctld(unittest.TestCase):
     self.assertEqual(urllib2.urlopen(base + '/explorers/redirect?type=replication&explorer=zk&keyspace=test_keyspace&shard=-80&cell=test_nj').geturl(),
                      base + '/zk/test_nj/vt/replication/test_keyspace/-80')
 
-
   def test_serving_graph(self):
-    self.assertItemsEqual(self.serving_data.keys(), ["test_keyspace"])
-    self.assertItemsEqual(self.serving_data["test_keyspace"].keys(), ["-80", "80-"])
-    self.assertItemsEqual(self.serving_data["test_keyspace"]["-80"].keys(), ["master", "replica"])
-    self.assertEqual(len(self.serving_data["test_keyspace"]["-80"]["master"]), 1)
+    self.assertItemsEqual(sorted(self.serving_data.keys()),
+                          ["redirected_keyspace", "test_keyspace"])
+    s0 = self.serving_data["test_keyspace"]['ShardNodes'][0]
+    self.assertItemsEqual(s0['Name'], "-80")
+    self.assertItemsEqual(s0['ServedTypes'], ['master', 'replica', 'rdonly'])
+    s1 = self.serving_data["test_keyspace"]['ShardNodes'][1]
+    self.assertItemsEqual(s1['Name'], "80-")
+    self.assertItemsEqual(sorted(s0['TabletNodes'].keys()),
+                          ["master", "replica"])
+    self.assertEqual(len(s0['TabletNodes']['master']), 1)
+    self.assertEqual(self.serving_data["redirected_keyspace"]['ServedFrom']['master'],
+                     'test_keyspace')
+
+  def test_tablet_status(self):
+    # the vttablet that has a health check has a bit more, so using it
+    shard_0_replica_status = shard_0_replica.get_status()
+    self.assertIn('Polling health information from MySQLReplicationLag(allowedLag=30)', shard_0_replica_status)
+    self.assertIn('Alias: <a href="http://localhost:', shard_0_replica_status)
+    self.assertIn('</html>', shard_0_replica_status)
+
+  def test_vtgate(self):
+    # do a few vtgate topology queries to prime the cache
+    vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
+                                          "test_nj", 30.0)
+    vtgate_client.dial()
+    vtgate_client.get_srv_keyspace_names("test_nj")
+    vtgate_client.get_srv_keyspace("test_nj", "test_keyspace")
+    vtgate_client.get_end_points("test_nj", "test_keyspace", "-80", "master")
+    vtgate_client.close()
+
+    status = utils.get_status(vtgate_port)
+    self.assertIn('</html>', status) # end of page
+    self.assertIn('/serving_graph/test_nj">test_nj', status) # vtctld link
+
+    utils.pause("You can now run a browser and connect to http://localhost:%u%s to manually check vtgate status page" % (vtgate_port, environment.status_url))
 
 if __name__ == '__main__':
   utils.main()

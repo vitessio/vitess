@@ -15,30 +15,67 @@ import (
 // shard related methods for Wrangler
 
 func (wr *Wrangler) lockShard(keyspace, shard string, actionNode *actionnode.ActionNode) (lockPath string, err error) {
-	log.Infof("Locking shard %v/%v for action %v", keyspace, shard, actionNode.Action)
-	return wr.ts.LockShardForAction(keyspace, shard, actionNode.ToJson(), wr.lockTimeout, interrupted)
+	return actionNode.LockShard(wr.ts, keyspace, shard, wr.lockTimeout, interrupted)
 }
 
 func (wr *Wrangler) unlockShard(keyspace, shard string, actionNode *actionnode.ActionNode, lockPath string, actionError error) error {
-	// first update the actionNode
-	if actionError != nil {
-		log.Infof("Unlocking shard %v/%v for action %v with error %v", keyspace, shard, actionNode.Action, actionError)
-		actionNode.Error = actionError.Error()
-		actionNode.State = actionnode.ACTION_STATE_FAILED
-	} else {
-		log.Infof("Unlocking shard %v/%v for successful action %v", keyspace, shard, actionNode.Action)
-		actionNode.Error = ""
-		actionNode.State = actionnode.ACTION_STATE_DONE
+	return actionNode.UnlockShard(wr.ts, keyspace, shard, lockPath, actionError)
+}
+
+// updateShardCellsAndMaster will update the 'Cells' and possibly
+// MasterAlias records for the shard, if needed.
+func (wr *Wrangler) updateShardCellsAndMaster(si *topo.ShardInfo, tabletAlias topo.TabletAlias, tabletType topo.TabletType, force bool) error {
+	// See if we need to update the Shard:
+	// - add the tablet's cell to the shard's Cells if needed
+	// - change the master if needed
+	shardUpdateRequired := false
+	if !si.HasCell(tabletAlias.Cell) {
+		shardUpdateRequired = true
 	}
-	err := wr.ts.UnlockShardForAction(keyspace, shard, lockPath, actionNode.ToJson())
-	if actionError != nil {
-		if err != nil {
-			// this will be masked
-			log.Warningf("UnlockShardForAction failed: %v", err)
+	if tabletType == topo.TYPE_MASTER && si.MasterAlias != tabletAlias {
+		shardUpdateRequired = true
+	}
+	if !shardUpdateRequired {
+		return nil
+	}
+
+	actionNode := actionnode.UpdateShard()
+	keyspace := si.Keyspace()
+	shard := si.ShardName()
+	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
+	if err != nil {
+		return err
+	}
+
+	// re-read the shard with the lock
+	si, err = wr.ts.GetShard(keyspace, shard)
+	if err != nil {
+		return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
+	}
+
+	// update it
+	wasUpdated := false
+	if !si.HasCell(tabletAlias.Cell) {
+		si.Cells = append(si.Cells, tabletAlias.Cell)
+		wasUpdated = true
+	}
+	if tabletType == topo.TYPE_MASTER && si.MasterAlias != tabletAlias {
+		if !si.MasterAlias.IsZero() && !force {
+			return wr.unlockShard(keyspace, shard, actionNode, lockPath, fmt.Errorf("creating this tablet would override old master %v in shard %v/%v", si.MasterAlias, keyspace, shard))
 		}
-		return actionError
+		si.MasterAlias = tabletAlias
+		wasUpdated = true
 	}
-	return err
+
+	if wasUpdated {
+		// write it back
+		if err := topo.UpdateShard(wr.ts, si); err != nil {
+			return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
+		}
+	}
+
+	// and unlock
+	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 }
 
 // SetShardServedTypes changes the ServedTypes parameter of a shard.
@@ -62,7 +99,7 @@ func (wr *Wrangler) setShardServedTypes(keyspace, shard string, servedTypes []to
 	}
 
 	shardInfo.ServedTypes = servedTypes
-	return wr.ts.UpdateShard(shardInfo)
+	return topo.UpdateShard(wr.ts, shardInfo)
 }
 
 // DeleteShard will do all the necessary changes in the topology server
@@ -74,7 +111,7 @@ func (wr *Wrangler) DeleteShard(keyspace, shard string) error {
 		return err
 	}
 
-	tabletMap, err := GetTabletMapForShard(wr.ts, keyspace, shard)
+	tabletMap, err := topo.GetTabletMapForShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -93,7 +130,7 @@ func (wr *Wrangler) DeleteShard(keyspace, shard string) error {
 				continue
 			}
 
-			if err := wr.ts.DeleteSrvTabletType(cell, keyspace, shard, t); err != nil && err != topo.ErrNoNode {
+			if err := wr.ts.DeleteEndPoints(cell, keyspace, shard, t); err != nil && err != topo.ErrNoNode {
 				log.Warningf("Cannot delete EndPoints in cell %v for %v/%v/%v: %v", cell, keyspace, shard, t, err)
 			}
 		}
@@ -173,5 +210,5 @@ func (wr *Wrangler) removeShardCell(keyspace, shard, cell string, force bool) er
 	}
 	shardInfo.Cells = newCells
 
-	return wr.ts.UpdateShard(shardInfo)
+	return topo.UpdateShard(wr.ts, shardInfo)
 }

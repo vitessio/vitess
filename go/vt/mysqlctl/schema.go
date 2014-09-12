@@ -17,7 +17,7 @@ var autoIncr = regexp.MustCompile(" AUTO_INCREMENT=\\d+")
 
 // GetSchema returns the schema for database for tables listed in
 // tables. If tables is empty, return the schema for all tables.
-func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews bool) (*proto.SchemaDefinition, error) {
+func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*proto.SchemaDefinition, error) {
 	sd := &proto.SchemaDefinition{}
 
 	// get the database creation command
@@ -30,11 +30,32 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews boo
 	}
 	sd.DatabaseSchema = strings.Replace(qr.Rows[0][1].String(), "`"+dbName+"`", "`{{.DatabaseName}}`", 1)
 
-	// get the list of tables we're interested in
-	sql := "SELECT table_name, table_type, data_length FROM information_schema.tables WHERE table_schema = '" + dbName + "'"
-	if len(tables) != 0 {
-		sql += " AND table_name IN ('" + strings.Join(tables, "','") + "')"
+	// build a list of regexp to match table names against
+	var tableRegexps []*regexp.Regexp
+	if len(tables) > 0 {
+		tableRegexps = make([]*regexp.Regexp, len(tables))
+		for i, table := range tables {
+			var err error
+			tableRegexps[i], err = regexp.Compile(table)
+			if err != nil {
+				return nil, fmt.Errorf("cannot compile regexp %v for table: %v", table, err)
+			}
+		}
 	}
+	var excludeTableRegexps []*regexp.Regexp
+	if len(excludeTables) > 0 {
+		excludeTableRegexps = make([]*regexp.Regexp, len(excludeTables))
+		for i, table := range excludeTables {
+			var err error
+			excludeTableRegexps[i], err = regexp.Compile(table)
+			if err != nil {
+				return nil, fmt.Errorf("cannot compile regexp %v for excludeTable: %v", table, err)
+			}
+		}
+	}
+
+	// get the list of tables we're interested in
+	sql := "SELECT table_name, table_type, data_length, table_rows FROM information_schema.tables WHERE table_schema = '" + dbName + "'"
 	if !includeViews {
 		sql += " AND table_type = '" + proto.TABLE_BASE_TABLE + "'"
 	}
@@ -46,14 +67,49 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews boo
 		return sd, nil
 	}
 
-	sd.TableDefinitions = make([]proto.TableDefinition, len(qr.Rows))
-	for i, row := range qr.Rows {
+	sd.TableDefinitions = make([]proto.TableDefinition, 0, len(qr.Rows))
+	for _, row := range qr.Rows {
 		tableName := row[0].String()
 		tableType := row[1].String()
+
+		// check it's a table we want
+		if tableRegexps != nil {
+			foundMatch := false
+			for _, tableRegexp := range tableRegexps {
+				if tableRegexp.Match(row[0].Raw()) {
+					foundMatch = true
+					break
+				}
+			}
+			if !foundMatch {
+				continue
+			}
+		}
+		foundMatch := false
+		for _, tableRegexp := range excludeTableRegexps {
+			if tableRegexp.Match(row[0].Raw()) {
+				foundMatch = true
+				break
+			}
+		}
+		if foundMatch {
+			continue
+		}
+
+		// compute dataLength
 		var dataLength uint64
 		if !row[2].IsNull() {
 			// dataLength is NULL for views, then we use 0
 			dataLength, err = row[2].ParseUint64()
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		// get row count
+		var rowCount uint64
+		if !row[3].IsNull() {
+			rowCount, err = row[3].ParseUint64()
 			if err != nil {
 				return nil, err
 			}
@@ -78,32 +134,49 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews boo
 			norm = strings.Replace(norm, "`"+dbName+"`", "`{{.DatabaseName}}`", -1)
 		}
 
-		sd.TableDefinitions[i].Name = tableName
-		sd.TableDefinitions[i].Schema = norm
+		td := proto.TableDefinition{}
+		td.Name = tableName
+		td.Schema = norm
 
-		sd.TableDefinitions[i].Columns, err = mysqld.GetColumns(dbName, tableName)
+		td.Columns, err = mysqld.GetColumns(dbName, tableName)
 		if err != nil {
 			return nil, err
 		}
-		sd.TableDefinitions[i].PrimaryKeyColumns, err = mysqld.GetPrimaryKeyColumns(dbName, tableName)
+		td.PrimaryKeyColumns, err = mysqld.GetPrimaryKeyColumns(dbName, tableName)
 		if err != nil {
 			return nil, err
 		}
-		sd.TableDefinitions[i].Type = tableType
-		sd.TableDefinitions[i].DataLength = dataLength
+		td.Type = tableType
+		td.DataLength = dataLength
+		td.RowCount = rowCount
+		sd.TableDefinitions = append(sd.TableDefinitions, td)
 	}
 
 	sd.GenerateSchemaVersion()
 	return sd, nil
 }
 
-// GetColumns returns the columns of table.
-func (mysqld *Mysqld) GetColumns(dbName, table string) ([]string, error) {
-	conn, err := mysqld.createDbaConnection()
+// ResolveTables returns a list of actual tables+views matching a list
+// of regexps
+func (mysqld *Mysqld) ResolveTables(dbName string, tables []string) ([]string, error) {
+	sd, err := mysqld.GetSchema(dbName, tables, nil, true)
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	result := make([]string, len(sd.TableDefinitions))
+	for i, td := range sd.TableDefinitions {
+		result[i] = td.Name
+	}
+	return result, nil
+}
+
+// GetColumns returns the columns of table.
+func (mysqld *Mysqld) GetColumns(dbName, table string) ([]string, error) {
+	conn, err := mysqld.dbaPool.Get()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
 	qr, err := conn.ExecuteFetch(fmt.Sprintf("select * from %v.%v where 1=0", dbName, table), 0, true)
 	if err != nil {
 		return nil, err
@@ -118,11 +191,11 @@ func (mysqld *Mysqld) GetColumns(dbName, table string) ([]string, error) {
 
 // GetPrimaryKeyColumns returns the primary key columns of table.
 func (mysqld *Mysqld) GetPrimaryKeyColumns(dbName, table string) ([]string, error) {
-	conn, err := mysqld.createDbaConnection()
+	conn, err := mysqld.dbaPool.Get()
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	defer conn.Recycle()
 	qr, err := conn.ExecuteFetch(fmt.Sprintf("show index from %v.%v", dbName, table), 100, true)
 	if err != nil {
 		return nil, err
@@ -167,9 +240,12 @@ func (mysqld *Mysqld) GetPrimaryKeyColumns(dbName, table string) ([]string, erro
 	return columns, err
 }
 
+// PreflightSchemaChange will apply the schema change to a fake
+// database that has the same schema as the target database, see if it
+// works.
 func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*proto.SchemaChangeResult, error) {
 	// gather current schema on real database
-	beforeSchema, err := mysqld.GetSchema(dbName, nil, true)
+	beforeSchema, err := mysqld.GetSchema(dbName, nil, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +273,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*prot
 	}
 
 	// get the result
-	afterSchema, err := mysqld.GetSchema("_vt_preflight", nil, true)
+	afterSchema, err := mysqld.GetSchema("_vt_preflight", nil, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -209,12 +285,13 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*prot
 		return nil, err
 	}
 
-	return &proto.SchemaChangeResult{beforeSchema, afterSchema}, nil
+	return &proto.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: afterSchema}, nil
 }
 
+// ApplySchemaChange will apply the schema change to the given database.
 func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *proto.SchemaChange) (*proto.SchemaChangeResult, error) {
 	// check current schema matches
-	beforeSchema, err := mysqld.GetSchema(dbName, nil, false)
+	beforeSchema, err := mysqld.GetSchema(dbName, nil, nil, false)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +309,7 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *proto.SchemaChang
 					// no diff between the schema we expect
 					// after the change and the current
 					// schema, we already applied it
-					return &proto.SchemaChangeResult{beforeSchema, beforeSchema}, nil
+					return &proto.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: beforeSchema}, nil
 				}
 			}
 
@@ -259,7 +336,7 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *proto.SchemaChang
 	}
 
 	// get AfterSchema
-	afterSchema, err := mysqld.GetSchema(dbName, nil, false)
+	afterSchema, err := mysqld.GetSchema(dbName, nil, nil, false)
 	if err != nil {
 		return nil, err
 	}
@@ -279,5 +356,5 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *proto.SchemaChang
 		}
 	}
 
-	return &proto.SchemaChangeResult{beforeSchema, afterSchema}, nil
+	return &proto.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: afterSchema}, nil
 }

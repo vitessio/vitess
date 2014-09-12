@@ -14,17 +14,17 @@ import (
 
 // if the master is still alive, then we need to demote it gracefully
 // make it read-only, flush the writes and get the position
-func (mysqld *Mysqld) DemoteMaster() (*proto.ReplicationPosition, error) {
+func (mysqld *Mysqld) DemoteMaster() (rp proto.ReplicationPosition, err error) {
 	// label as TYPE_REPLICA
 	mysqld.SetReadOnly(true)
 	cmds := []string{
 		"FLUSH TABLES WITH READ LOCK",
 		"UNLOCK TABLES",
 	}
-	if err := mysqld.executeSuperQueryList(cmds); err != nil {
-		return nil, err
+	if err = mysqld.ExecuteSuperQueryList(cmds); err != nil {
+		return rp, err
 	}
-	return mysqld.MasterStatus()
+	return mysqld.MasterPosition()
 }
 
 // setReadWrite: set the new master in read-write mode.
@@ -32,66 +32,74 @@ func (mysqld *Mysqld) DemoteMaster() (*proto.ReplicationPosition, error) {
 // replicationState: info slaves need to reparent themselves
 // waitPosition: slaves can wait for this position when restarting replication
 // timePromoted: this timestamp (unix nanoseconds) is inserted into _vt.replication_log to verify the replication config
-func (mysqld *Mysqld) PromoteSlave(setReadWrite bool, hookExtraEnv map[string]string) (replicationState *proto.ReplicationState, waitPosition *proto.ReplicationPosition, timePromoted int64, err error) {
+func (mysqld *Mysqld) PromoteSlave(setReadWrite bool, hookExtraEnv map[string]string) (replicationStatus *proto.ReplicationStatus, waitPosition proto.ReplicationPosition, timePromoted int64, err error) {
 	if err = mysqld.StopSlave(hookExtraEnv); err != nil {
 		return
 	}
 
 	// If we are forced, we have to get our status as a master, not a slave.
-	lastRepPos, err := mysqld.SlaveStatus()
+	var lastRepPos proto.ReplicationPosition
+	slaveStatus, err := mysqld.SlaveStatus()
 	if err == ErrNotSlave {
-		lastRepPos, err = mysqld.MasterStatus()
+		lastRepPos, err = mysqld.MasterPosition()
+	} else {
+		if err != nil {
+			return
+		}
+		lastRepPos = slaveStatus.Position
 	}
-	if err != nil {
+
+	// Promote to master.
+	cmds := mysqld.flavor.PromoteSlaveCommands()
+	if err = mysqld.ExecuteSuperQueryList(cmds); err != nil {
 		return
 	}
 
-	cmds := []string{
-		"RESET MASTER",
-		"RESET SLAVE",
-		"CHANGE MASTER TO MASTER_HOST = ''",
+	// Write a row so there's something in the binlog before we fetch the
+	// master position. Otherwise, the slave may request a GTID that has
+	// already been purged from the binlog.
+	cmds = []string{
+		fmt.Sprintf("INSERT INTO _vt.replication_log (time_created_ns, note) VALUES (%v, 'first binlog event')", time.Now().UnixNano()),
 	}
-	if err = mysqld.executeSuperQueryList(cmds); err != nil {
+	if err = mysqld.ExecuteSuperQueryList(cmds); err != nil {
 		return
 	}
-	replicationPosition, err := mysqld.MasterStatus()
+
+	replicationPosition, err := mysqld.MasterPosition()
 	if err != nil {
 		return
 	}
 	mysqldAddr := mysqld.IpAddr()
-	replicationState, err = proto.NewReplicationState(mysqldAddr)
+	replicationStatus, err = proto.NewReplicationStatus(mysqldAddr)
 	if err != nil {
 		return
 	}
-	replicationState.ReplicationPosition = *replicationPosition
-	lastPos := lastRepPos.MapKey()
-	newAddr := replicationState.MasterAddr()
-	newPos := replicationState.ReplicationPosition.MapKey()
+	replicationStatus.Position = replicationPosition
 	timePromoted = time.Now().UnixNano()
 	// write a row to verify that replication is functioning
 	cmds = []string{
 		fmt.Sprintf("INSERT INTO _vt.replication_log (time_created_ns, note) VALUES (%v, 'reparent check')", timePromoted),
 	}
-	if err = mysqld.executeSuperQueryList(cmds); err != nil {
+	if err = mysqld.ExecuteSuperQueryList(cmds); err != nil {
 		return
 	}
 	// this is the wait-point for checking replication
-	waitPosition, err = mysqld.MasterStatus()
+	waitPosition, err = mysqld.MasterPosition()
 	if err != nil {
 		return
 	}
-	if waitPosition.MasterLogFile == replicationPosition.MasterLogFile && waitPosition.MasterLogPosition == replicationPosition.MasterLogPosition {
-		// we inserted a row, but our binlog position didn't
-		// change. This is a serious problem. we don't want to
-		// ever promote a master like that.
+	if waitPosition.Equal(replicationPosition) {
+		// We inserted a row, but our binlog position didn't change. This is a
+		// serious problem. We don't want to ever promote a master like that.
 		err = fmt.Errorf("cannot promote slave to master, non-functional binlogs")
 		return
 	}
 
 	cmds = []string{
-		fmt.Sprintf("INSERT INTO _vt.reparent_log (time_created_ns, last_position, new_addr, new_position, wait_position) VALUES (%v, '%v', '%v', '%v', '%v')", timePromoted, lastPos, newAddr, newPos, waitPosition.MapKey()),
+		fmt.Sprintf("INSERT INTO _vt.reparent_log (time_created_ns, last_position, new_addr, new_position, wait_position) VALUES (%v, '%v', '%v', '%v', '%v')",
+			timePromoted, lastRepPos, replicationStatus.MasterAddr(), replicationPosition, waitPosition),
 	}
-	if err = mysqld.executeSuperQueryList(cmds); err != nil {
+	if err = mysqld.ExecuteSuperQueryList(cmds); err != nil {
 		return
 	}
 
@@ -101,13 +109,13 @@ func (mysqld *Mysqld) PromoteSlave(setReadWrite bool, hookExtraEnv map[string]st
 	return
 }
 
-func (mysqld *Mysqld) RestartSlave(replicationState *proto.ReplicationState, waitPosition *proto.ReplicationPosition, timeCheck int64) error {
+func (mysqld *Mysqld) RestartSlave(replicationStatus *proto.ReplicationStatus, waitPosition proto.ReplicationPosition, timeCheck int64) error {
 	log.Infof("Restart Slave")
-	cmds, err := StartReplicationCommands(mysqld, replicationState)
+	cmds, err := mysqld.StartReplicationCommands(replicationStatus)
 	if err != nil {
 		return err
 	}
-	if err := mysqld.executeSuperQueryList(cmds); err != nil {
+	if err := mysqld.ExecuteSuperQueryList(cmds); err != nil {
 		return err
 	}
 

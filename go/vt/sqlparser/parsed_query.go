@@ -7,6 +7,7 @@ package sqlparser
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strconv"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -36,10 +37,10 @@ func (pq *ParsedQuery) GenerateQuery(bindVariables map[string]interface{}, listV
 		if varName[0] >= '0' && varName[0] <= '9' {
 			index, err := strconv.Atoi(varName)
 			if err != nil {
-				return nil, NewParserError("Unexpected: %v for %s", err, varName)
+				return nil, fmt.Errorf("unexpected: %v for %s", err, varName)
 			}
 			if index >= len(listVariables) {
-				return nil, NewParserError("Index out of range: %d", index)
+				return nil, fmt.Errorf("index out of range: %d", index)
 			}
 			supplied = listVariables[index]
 		} else if varName[0] == '*' {
@@ -48,7 +49,7 @@ func (pq *ParsedQuery) GenerateQuery(bindVariables map[string]interface{}, listV
 			var ok bool
 			supplied, ok = bindVariables[varName]
 			if !ok {
-				return nil, NewParserError("Missing bind var %s", varName)
+				return nil, fmt.Errorf("missing bind var %s", varName)
 			}
 		}
 		if err := EncodeValue(buf, supplied); err != nil {

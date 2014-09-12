@@ -11,7 +11,7 @@ import (
 	"strconv"
 
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 )
 
 //-----------------------------------------------
@@ -90,7 +90,7 @@ func (qrs *QueryRules) UnmarshalJSON(data []byte) (err error) {
 // filterByPlan creates a new QueryRules by prefiltering on the query and planId. This allows
 // us to create query plan specific QueryRules out of the original QueryRules. In the new rules,
 // query, plans and tableNames predicates are empty.
-func (qrs *QueryRules) filterByPlan(query string, planid sqlparser.PlanType, tableName string) (newqrs *QueryRules) {
+func (qrs *QueryRules) filterByPlan(query string, planid planbuilder.PlanType, tableName string) (newqrs *QueryRules) {
 	var newrules []*QueryRule
 	for _, qr := range qrs.rules {
 		if newrule := qr.filterByPlan(query, planid, tableName); newrule != nil {
@@ -102,8 +102,8 @@ func (qrs *QueryRules) filterByPlan(query string, planid sqlparser.PlanType, tab
 
 func (qrs *QueryRules) getAction(ip, user string, bindVars map[string]interface{}) (action Action, desc string) {
 	for _, qr := range qrs.rules {
-		if qr.getAction(ip, user, bindVars) == QR_FAIL_QUERY {
-			return QR_FAIL_QUERY, qr.Description
+		if act := qr.getAction(ip, user, bindVars); act != QR_CONTINUE {
+			return act, qr.Description
 		}
 	}
 	return QR_CONTINUE, ""
@@ -129,19 +129,22 @@ type QueryRule struct {
 	requestIP, user, query *regexp.Regexp
 
 	// Any matched plan will make this condition true (OR)
-	plans []sqlparser.PlanType
+	plans []planbuilder.PlanType
 
 	// Any matched tableNames will make this condition true (OR)
 	tableNames []string
 
 	// All BindVar conditions have to be fulfilled to make this true (AND)
 	bindVarConds []BindVarCond
+
+	// Action to be performed on trigger
+	act Action
 }
 
 // NewQueryRule creates a new QueryRule.
 func NewQueryRule(description, name string, act Action) (qr *QueryRule) {
 	// We ignore act because there's only one action right now
-	return &QueryRule{Description: description, Name: name}
+	return &QueryRule{Description: description, Name: name, act: act}
 }
 
 // Copy performs a deep copy of a QueryRule.
@@ -152,9 +155,10 @@ func (qr *QueryRule) Copy() (newqr *QueryRule) {
 		requestIP:   qr.requestIP,
 		user:        qr.user,
 		query:       qr.query,
+		act:         qr.act,
 	}
 	if qr.plans != nil {
-		newqr.plans = make([]sqlparser.PlanType, len(qr.plans))
+		newqr.plans = make([]planbuilder.PlanType, len(qr.plans))
 		copy(newqr.plans, qr.plans)
 	}
 	if qr.tableNames != nil {
@@ -185,7 +189,7 @@ func (qr *QueryRule) SetUserCond(pattern string) (err error) {
 // AddPlanCond adds to the list of plans that can be matched for
 // the rule to fire.
 // This function acts as an OR: Any plan id match is considered a match.
-func (qr *QueryRule) AddPlanCond(planType sqlparser.PlanType) {
+func (qr *QueryRule) AddPlanCond(planType planbuilder.PlanType) {
 	qr.plans = append(qr.plans, planType)
 }
 
@@ -250,7 +254,7 @@ func (qr *QueryRule) AddBindVarCond(name string, onAbsent, onMismatch bool, op O
 			// Change the value to compiled regexp
 			re, err := regexp.Compile(makeExact(v))
 			if err != nil {
-				return NewTabletError(FAIL, "Processing %s: %v", v, err)
+				return NewTabletError(FAIL, "processing %s: %v", v, err)
 			}
 			converted = bvcre{re}
 		} else {
@@ -262,20 +266,20 @@ func (qr *QueryRule) AddBindVarCond(name string, onAbsent, onMismatch bool, op O
 		}
 		converted = bvcKeyRange(v)
 	default:
-		return NewTabletError(FAIL, "Type %T not allowed as condition operand (%v)", value, value)
+		return NewTabletError(FAIL, "type %T not allowed as condition operand (%v)", value, value)
 	}
 	qr.bindVarConds = append(qr.bindVarConds, BindVarCond{name, onAbsent, onMismatch, op, converted})
 	return nil
 
 Error:
-	return NewTabletError(FAIL, "Invalid operator %s for type %T (%v)", op, value, value)
+	return NewTabletError(FAIL, "invalid operator %s for type %T (%v)", op, value, value)
 }
 
 // filterByPlan returns a new QueryRule if the query and planid match.
 // The new QueryRule will contain all the original constraints other
 // than the plan and query. If the plan and query don't match the QueryRule,
 // then it returns nil.
-func (qr *QueryRule) filterByPlan(query string, planid sqlparser.PlanType, tableName string) (newqr *QueryRule) {
+func (qr *QueryRule) filterByPlan(query string, planid planbuilder.PlanType, tableName string) (newqr *QueryRule) {
 	if !reMatch(qr.query, query) {
 		return nil
 	}
@@ -304,14 +308,14 @@ func (qr *QueryRule) getAction(ip, user string, bindVars map[string]interface{})
 			return QR_CONTINUE
 		}
 	}
-	return QR_FAIL_QUERY
+	return qr.act
 }
 
 func reMatch(re *regexp.Regexp, val string) bool {
 	return re == nil || re.MatchString(val)
 }
 
-func planMatch(plans []sqlparser.PlanType, plan sqlparser.PlanType) bool {
+func planMatch(plans []planbuilder.PlanType, plan planbuilder.PlanType) bool {
 	if plans == nil {
 		return true
 	}
@@ -353,8 +357,11 @@ func bvMatch(bvcond BindVarCond, bindVars map[string]interface{}) bool {
 // when a QueryRule is triggered.
 type Action int
 
-const QR_CONTINUE = Action(0)
-const QR_FAIL_QUERY = Action(1)
+const (
+	QR_CONTINUE = Action(iota)
+	QR_FAIL
+	QR_FAIL_RETRY
+)
 
 // BindVarCond represents a bind var condition.
 type BindVarCond struct {
@@ -676,13 +683,13 @@ func getstring(val interface{}) (sv string, status int) {
 // Support functions for JSON
 
 func buildQueryRule(ruleInfo map[string]interface{}) (qr *QueryRule, err error) {
-	qr = NewQueryRule("", "", QR_FAIL_QUERY)
+	qr = NewQueryRule("", "", QR_FAIL)
 	for k, v := range ruleInfo {
 		var sv string
 		var lv []interface{}
 		var ok bool
 		switch k {
-		case "Name", "Description", "RequestIP", "User", "Query":
+		case "Name", "Description", "RequestIP", "User", "Query", "Action":
 			sv, ok = v.(string)
 			if !ok {
 				return nil, NewTabletError(FAIL, "want string for %s", k)
@@ -703,17 +710,17 @@ func buildQueryRule(ruleInfo map[string]interface{}) (qr *QueryRule, err error) 
 		case "RequestIP":
 			err = qr.SetIPCond(sv)
 			if err != nil {
-				return nil, NewTabletError(FAIL, "Could not set IP condition: %v", sv)
+				return nil, NewTabletError(FAIL, "could not set IP condition: %v", sv)
 			}
 		case "User":
 			err = qr.SetUserCond(sv)
 			if err != nil {
-				return nil, NewTabletError(FAIL, "Could not set User condition: %v", sv)
+				return nil, NewTabletError(FAIL, "could not set User condition: %v", sv)
 			}
 		case "Query":
 			err = qr.SetQueryCond(sv)
 			if err != nil {
-				return nil, NewTabletError(FAIL, "Could not set Query condition: %v", sv)
+				return nil, NewTabletError(FAIL, "could not set Query condition: %v", sv)
 			}
 		case "Plans":
 			for _, p := range lv {
@@ -721,9 +728,9 @@ func buildQueryRule(ruleInfo map[string]interface{}) (qr *QueryRule, err error) 
 				if !ok {
 					return nil, NewTabletError(FAIL, "want string for Plans")
 				}
-				pt, ok := sqlparser.PlanByName(pv)
+				pt, ok := planbuilder.PlanByName(pv)
 				if !ok {
-					return nil, NewTabletError(FAIL, "Invalid plan name: %s", pv)
+					return nil, NewTabletError(FAIL, "invalid plan name: %s", pv)
 				}
 				qr.AddPlanCond(pt)
 			}
@@ -746,6 +753,15 @@ func buildQueryRule(ruleInfo map[string]interface{}) (qr *QueryRule, err error) 
 				if err != nil {
 					return nil, err
 				}
+			}
+		case "Action":
+			switch sv {
+			case "FAIL":
+				qr.act = QR_FAIL
+			case "FAIL_RETRY":
+				qr.act = QR_FAIL_RETRY
+			default:
+				return nil, NewTabletError(FAIL, "invalid Action %s", sv)
 			}
 		}
 	}
@@ -794,7 +810,7 @@ func buildBindVarCondition(bvc interface{}) (name string, onAbsent, onMismatch b
 	}
 	op, ok = opmap[strop]
 	if !ok {
-		err = NewTabletError(FAIL, "Invalid Operator %s", strop)
+		err = NewTabletError(FAIL, "invalid Operator %s", strop)
 		return
 	}
 	if op == QR_NOOP {

@@ -13,16 +13,21 @@
 package initiator
 
 import (
+	"flag"
 	"fmt"
 	"sync"
 	"time"
 
 	log "github.com/golang/glog"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
+	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/hook"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
+
+var tabletManagerProtocol = flag.String("tablet_manager_protocol", "bson", "the protocol to use to talk to vttablet")
 
 // The actor applies individual commands to execute an action read from a node
 // in topology server.
@@ -52,10 +57,10 @@ type ActionInitiator struct {
 	rpc TabletManagerConn
 }
 
-func NewActionInitiator(ts topo.Server, tabletManagerProtocol string) *ActionInitiator {
-	f, ok := tabletManagerConnFactories[tabletManagerProtocol]
+func NewActionInitiator(ts topo.Server) *ActionInitiator {
+	f, ok := tabletManagerConnFactories[*tabletManagerProtocol]
 	if !ok {
-		log.Fatalf("No TabletManagerProtocol registered with name %s", tabletManagerProtocol)
+		log.Fatalf("No TabletManagerProtocol registered with name %s", *tabletManagerProtocol)
 	}
 
 	return &ActionInitiator{ts, f(ts)}
@@ -151,33 +156,33 @@ func (ai *ActionInitiator) RpcSlaveWasRestarted(tablet *topo.TabletInfo, args *a
 	return ai.rpc.SlaveWasRestarted(tablet, args, waitTime)
 }
 
-func (ai *ActionInitiator) ReparentPosition(tabletAlias topo.TabletAlias, slavePos *myproto.ReplicationPosition) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_REPARENT_POSITION, Args: slavePos})
+func (ai *ActionInitiator) ReparentPosition(tabletAlias topo.TabletAlias, slavePos myproto.ReplicationPosition) (actionPath string, err error) {
+	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_REPARENT_POSITION, Args: &slavePos})
 }
 
-func (ai *ActionInitiator) MasterPosition(tablet *topo.TabletInfo, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
+func (ai *ActionInitiator) MasterPosition(tablet *topo.TabletInfo, waitTime time.Duration) (myproto.ReplicationPosition, error) {
 	return ai.rpc.MasterPosition(tablet, waitTime)
 }
 
-func (ai *ActionInitiator) SlavePosition(tablet *topo.TabletInfo, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
-	return ai.rpc.SlavePosition(tablet, waitTime)
+func (ai *ActionInitiator) SlaveStatus(tablet *topo.TabletInfo, waitTime time.Duration) (*myproto.ReplicationStatus, error) {
+	return ai.rpc.SlaveStatus(tablet, waitTime)
 }
 
-func (ai *ActionInitiator) WaitSlavePosition(tablet *topo.TabletInfo, replicationPosition *myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
-	return ai.rpc.WaitSlavePosition(tablet, replicationPosition, waitTime)
+func (ai *ActionInitiator) WaitSlavePosition(tablet *topo.TabletInfo, waitPos myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error) {
+	return ai.rpc.WaitSlavePosition(tablet, waitPos, waitTime)
 }
 
 func (ai *ActionInitiator) StopSlave(tablet *topo.TabletInfo, waitTime time.Duration) error {
 	return ai.rpc.StopSlave(tablet, waitTime)
 }
 
-func (ai *ActionInitiator) StopSlaveMinimum(tabletAlias topo.TabletAlias, groupId int64, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
+func (ai *ActionInitiator) StopSlaveMinimum(tabletAlias topo.TabletAlias, minPos myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error) {
 	tablet, err := ai.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return nil, err
 	}
 
-	return ai.rpc.StopSlaveMinimum(tablet, groupId, waitTime)
+	return ai.rpc.StopSlaveMinimum(tablet, minPos, waitTime)
 }
 
 func (ai *ActionInitiator) StartSlave(tabletAlias topo.TabletAlias, waitTime time.Duration) error {
@@ -189,7 +194,16 @@ func (ai *ActionInitiator) StartSlave(tabletAlias topo.TabletAlias, waitTime tim
 	return ai.rpc.StartSlave(tablet, waitTime)
 }
 
-func (ai *ActionInitiator) WaitBlpPosition(tabletAlias topo.TabletAlias, blpPosition myproto.BlpPosition, waitTime time.Duration) error {
+func (ai *ActionInitiator) TabletExternallyReparented(tabletAlias topo.TabletAlias, waitTime time.Duration) error {
+	tablet, err := ai.ts.GetTablet(tabletAlias)
+	if err != nil {
+		return err
+	}
+
+	return ai.rpc.TabletExternallyReparented(tablet, waitTime)
+}
+
+func (ai *ActionInitiator) WaitBlpPosition(tabletAlias topo.TabletAlias, blpPosition blproto.BlpPosition, waitTime time.Duration) error {
 	tablet, err := ai.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return err
@@ -198,7 +212,7 @@ func (ai *ActionInitiator) WaitBlpPosition(tabletAlias topo.TabletAlias, blpPosi
 	return ai.rpc.WaitBlpPosition(tablet, blpPosition, waitTime)
 }
 
-func (ai *ActionInitiator) StopBlp(tabletAlias topo.TabletAlias, waitTime time.Duration) (*myproto.BlpPositionList, error) {
+func (ai *ActionInitiator) StopBlp(tabletAlias topo.TabletAlias, waitTime time.Duration) (*blproto.BlpPositionList, error) {
 	tablet, err := ai.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return nil, err
@@ -216,10 +230,10 @@ func (ai *ActionInitiator) StartBlp(tabletAlias topo.TabletAlias, waitTime time.
 	return ai.rpc.StartBlp(tablet, waitTime)
 }
 
-func (ai *ActionInitiator) RunBlpUntil(tabletAlias topo.TabletAlias, positions *myproto.BlpPositionList, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
+func (ai *ActionInitiator) RunBlpUntil(tabletAlias topo.TabletAlias, positions *blproto.BlpPositionList, waitTime time.Duration) (myproto.ReplicationPosition, error) {
 	tablet, err := ai.ts.GetTablet(tabletAlias)
 	if err != nil {
-		return nil, err
+		return myproto.ReplicationPosition{}, err
 	}
 
 	return ai.rpc.RunBlpUntil(tablet, positions, waitTime)
@@ -237,8 +251,8 @@ func (ai *ActionInitiator) Scrap(tabletAlias topo.TabletAlias) (actionPath strin
 	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_SCRAP})
 }
 
-func (ai *ActionInitiator) GetSchema(tablet *topo.TabletInfo, tables []string, includeViews bool, waitTime time.Duration) (*myproto.SchemaDefinition, error) {
-	return ai.rpc.GetSchema(tablet, tables, includeViews, waitTime)
+func (ai *ActionInitiator) GetSchema(tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool, waitTime time.Duration) (*myproto.SchemaDefinition, error) {
+	return ai.rpc.GetSchema(tablet, tables, excludeTables, includeViews, waitTime)
 }
 
 func (ai *ActionInitiator) PreflightSchema(tabletAlias topo.TabletAlias, change string) (actionPath string, err error) {
@@ -251,6 +265,10 @@ func (ai *ActionInitiator) ApplySchema(tabletAlias topo.TabletAlias, sc *myproto
 
 func (ai *ActionInitiator) ReloadSchema(tablet *topo.TabletInfo, waitTime time.Duration) error {
 	return ai.rpc.ReloadSchema(tablet, waitTime)
+}
+
+func (ai *ActionInitiator) ExecuteFetch(tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs bool, waitTime time.Duration) (*mproto.QueryResult, error) {
+	return ai.rpc.ExecuteFetch(tablet, query, maxRows, wantFields, disableBinlogs, waitTime)
 }
 
 func (ai *ActionInitiator) GetPermissions(tabletAlias topo.TabletAlias, waitTime time.Duration) (*myproto.Permissions, error) {

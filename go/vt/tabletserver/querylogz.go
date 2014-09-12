@@ -6,19 +6,21 @@ package tabletserver
 
 import (
 	"fmt"
+	"io"
 	"net/http"
-	"strconv"
 	"strings"
 	"text/template"
 	"time"
+
+	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/acl"
 )
 
 var (
 	querylogzHeader = []byte(`
 		<tr>
 			<th>Method</th>
-			<th>Client</th>
-			<th>User</th>
+			<th>Context</th>
 			<th>Start</th>
 			<th>End</th>
 			<th>Duration</th>
@@ -28,56 +30,41 @@ var (
 			<th>SQL</th>
 			<th>Queries</th>
 			<th>Sources</th>
-			<th>Rows</th>
-			<th>Hits</th>
-			<th>Misses</th>
-			<th>Absent</th>
-			<th>Invalidations</th>
+			<th>Response Size (Rows)</th>
+			<th>Cache Hits</th>
+			<th>Cache Misses</th>
+			<th>Cache Absent</th>
+			<th>Cache Invalidations</th>
+			<th>Transaction ID</th>
 		</tr>
 	`)
-	querylogzTmpl = template.Must(template.New("example").Parse(`
-		<tr class="{{.Color}}">
+	querylogzFuncMap = template.FuncMap{
+		"stampMicro":   func(t time.Time) string { return t.Format(time.StampMicro) },
+		"cssWrappable": wrappable,
+		"unquote":      func(s string) string { return strings.Trim(s, "\"") },
+	}
+	querylogzTmpl = template.Must(template.New("example").Funcs(querylogzFuncMap).Parse(`
+		<tr class=".ColorLevel">
 			<td>{{.Method}}</td>
-			<td>{{.RemoteAddr}}</td>
-			<td>{{.Username}}</td>
-			<td>{{.Start}}</td>
-			<td>{{.End}}</td>
-			<td>{{.Duration}}</td>
-			<td>{{.MySQL}}</td>
-			<td>{{.Conn}}</td>
+			<td>{{.ContextHTML}}</td>
+			<td>{{.StartTime | stampMicro}}</td>
+			<td>{{.EndTime | stampMicro}}</td>
+			<td>{{.TotalTime.Seconds}}</td>
+			<td>{{.MysqlResponseTime.Seconds}}</td>
+			<td>{{.WaitingForConnection.Seconds}}</td>
 			<td>{{.PlanType}}</td>
-			<td>{{.Sql}}</td>
-			<td>{{.Queries}}</td>
-			<td>{{.Sources}}</td>
-			<td>{{.Rows}}</td>
-			<td>{{.Hits}}</td>
-			<td>{{.Misses}}</td>
-			<td>{{.Absent}}</td>
-			<td>{{.Invalidations}}</td>
+			<td>{{.OriginalSql | unquote | cssWrappable}}</td>
+			<td>{{.NumberOfQueries}}</td>
+			<td>{{.FmtQuerySources}}</td>
+			<td>{{.SizeOfResponse}}</td>
+			<td>{{.CacheHits}}</td>
+			<td>{{.CacheMisses}}</td>
+			<td>{{.CacheAbsent}}</td>
+			<td>{{.CacheInvalidations}}</td>
+                        <td>{{.TransactionID}}</td>
 		</tr>
 	`))
 )
-
-type querylogzRow struct {
-	Method        string
-	RemoteAddr    string
-	Username      string
-	Start         string
-	End           string
-	Duration      string
-	MySQL         string
-	Conn          string
-	PlanType      string
-	Sql           string
-	Queries       string
-	Sources       string
-	Rows          string
-	Hits          string
-	Misses        string
-	Absent        string
-	Invalidations string
-	Color         string
-}
 
 func init() {
 	http.HandleFunc("/querylogz", querylogzHandler)
@@ -86,7 +73,11 @@ func init() {
 // querylogzHandler serves a human readable snapshot of the
 // current query log.
 func querylogzHandler(w http.ResponseWriter, r *http.Request) {
-	ch := SqlQueryLogger.Subscribe(nil)
+	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
+		acl.SendError(w, err)
+		return
+	}
+	ch := SqlQueryLogger.Subscribe()
 	defer SqlQueryLogger.Unsubscribe(ch)
 	startHTMLTable(w)
 	defer endHTMLTable(w)
@@ -96,39 +87,28 @@ func querylogzHandler(w http.ResponseWriter, r *http.Request) {
 	for i := 0; i < 300; i++ {
 		select {
 		case out := <-ch:
-			strs := strings.Split(strings.Trim(out, "\n"), "\t")
-			if len(strs) < 19 {
-				querylogzTmpl.Execute(w, &querylogzRow{Method: fmt.Sprintf("Short: %d", len(strs))})
+			stats, ok := out.(*SQLQueryStats)
+			if !ok {
+				err := fmt.Errorf("Unexpected value in %s: %#v (expecting value of type %T)", TxLogger.Name(), out, &SQLQueryStats{})
+				io.WriteString(w, `<tr class="error">`)
+				io.WriteString(w, err.Error())
+				io.WriteString(w, "</tr>")
+				log.Error(err)
 				continue
 			}
-			Value := &querylogzRow{
-				Method:        strs[0],
-				RemoteAddr:    strs[1],
-				Username:      strs[2],
-				Start:         strs[3],
-				End:           strs[4],
-				Duration:      strs[5],
-				MySQL:         strs[12],
-				Conn:          strs[13],
-				PlanType:      strs[6],
-				Sql:           strings.Trim(strs[7], "\""),
-				Queries:       strs[9],
-				Sources:       strs[11],
-				Rows:          strs[14],
-				Hits:          strs[15],
-				Misses:        strs[16],
-				Absent:        strs[17],
-				Invalidations: strs[18],
-			}
-			duration, _ := strconv.ParseFloat(Value.Duration, 64)
-			if duration < 0.01 {
-				Value.Color = "low"
-			} else if duration < 0.1 {
-				Value.Color = "medium"
+			var level string
+			if stats.TotalTime().Seconds() < 0.01 {
+				level = "low"
+			} else if stats.TotalTime().Seconds() < 0.1 {
+				level = "medium"
 			} else {
-				Value.Color = "high"
+				level = "high"
 			}
-			querylogzTmpl.Execute(w, Value)
+			tmplData := struct {
+				*SQLQueryStats
+				ColorLevel string
+			}{stats, level}
+			querylogzTmpl.Execute(w, tmplData)
 		case <-deadline:
 			return
 		}

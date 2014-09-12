@@ -32,27 +32,28 @@ func TestHTTP(t *testing.T) {
 	go http.Serve(l, nil)
 
 	logger := New("logger", 1)
-	logger.ServeLogs("/log")
+	logger.ServeLogs("/log", func(params url.Values, x interface{}) string { return x.(*logMessage).Format(params) })
 
 	// This should not block
 	logger.Send(&logMessage{"val1"})
 
-	lastValue := ""
+	lastValue := sync2.AtomicString{}
 	svm := sync2.ServiceManager{}
-	svm.Go(func(_ *sync2.ServiceManager) {
+	svm.Go(func(svc *sync2.ServiceContext) error {
 		resp, err := http.Get(fmt.Sprintf("http://%s/log", addr))
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer resp.Body.Close()
 		buf := make([]byte, 100)
-		for svm.State() == sync2.SERVICE_RUNNING {
+		for svc.IsRunning() {
 			n, err := resp.Body.Read(buf)
 			if err != nil {
 				t.Fatal(err)
 			}
-			lastValue = string(buf[:n])
+			lastValue.Set(string(buf[:n]))
 		}
+		return nil
 	})
 
 	time.Sleep(100 * time.Millisecond)
@@ -61,8 +62,8 @@ func TestHTTP(t *testing.T) {
 	}
 	logger.Send(&logMessage{"val2"})
 	time.Sleep(100 * time.Millisecond)
-	if lastValue != "val2\n" {
-		t.Errorf("want val2\\n, got %q", lastValue)
+	if lastValue.Get() != "val2\n" {
+		t.Errorf("want val2\\n, got %q", lastValue.Get())
 	}
 
 	// This part of the test is flaky.
@@ -89,14 +90,15 @@ func TestHTTP(t *testing.T) {
 func TestChannel(t *testing.T) {
 	logger := New("logger", 1)
 
-	lastValue := ""
+	lastValue := sync2.AtomicString{}
 	svm := sync2.ServiceManager{}
-	svm.Go(func(_ *sync2.ServiceManager) {
-		ch := logger.Subscribe(nil)
+	svm.Go(func(svc *sync2.ServiceContext) error {
+		ch := logger.Subscribe()
 		defer logger.Unsubscribe(ch)
-		for svm.State() == sync2.SERVICE_RUNNING {
-			lastValue = <-ch
+		for svc.IsRunning() {
+			lastValue.Set((<-ch).(*logMessage).Format(nil))
 		}
+		return nil
 	})
 
 	time.Sleep(10 * time.Millisecond)
@@ -105,8 +107,8 @@ func TestChannel(t *testing.T) {
 	}
 	logger.Send(&logMessage{"val2"})
 	time.Sleep(10 * time.Millisecond)
-	if lastValue != "val2\n" {
-		t.Errorf("want val2\\n, got %q", lastValue)
+	if lastValue.Get() != "val2\n" {
+		t.Errorf("want val2\\n, got %q", lastValue.Get())
 	}
 
 	go logger.Send(&logMessage{"val3"})

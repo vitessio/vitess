@@ -6,6 +6,7 @@
 package sqltypes
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/gob"
 	"encoding/json"
@@ -13,6 +14,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/youtube/vitess/go/bson"
+	"github.com/youtube/vitess/go/bytes2"
 	"github.com/youtube/vitess/go/hack"
 )
 
@@ -123,12 +126,35 @@ func (v Value) EncodeAscii(b BinWriter) {
 	}
 }
 
+func (v Value) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
+	if key == "" {
+		lenWriter := bson.NewLenWriter(buf)
+		defer lenWriter.Close()
+		key = bson.MAGICTAG
+	}
+	if v.IsNull() {
+		bson.EncodePrefix(buf, bson.Null, key)
+	} else {
+		bson.EncodeBinary(buf, key, v.Raw())
+	}
+}
+
+func (v *Value) UnmarshalBson(buf *bytes.Buffer, kind byte) {
+	if kind == bson.EOO {
+		bson.Next(buf, 4)
+		kind = bson.NextByte(buf)
+		bson.ReadCString(buf)
+	}
+	if kind != bson.Null {
+		*v = MakeString(bson.DecodeBinary(buf, kind))
+	}
+}
+
 func (v Value) IsNull() bool {
 	return v.Inner == nil
 }
 
 func (v Value) IsNumeric() (ok bool) {
-	_ = Numeric(nil) // compiler bug work-around
 	if v.Inner != nil {
 		_, ok = v.Inner.(Numeric)
 	}
@@ -136,7 +162,6 @@ func (v Value) IsNumeric() (ok bool) {
 }
 
 func (v Value) IsFractional() (ok bool) {
-	_ = Fractional(nil) // compiler bug work-around
 	if v.Inner != nil {
 		_, ok = v.Inner.(Fractional)
 	}
@@ -144,15 +169,47 @@ func (v Value) IsFractional() (ok bool) {
 }
 
 func (v Value) IsString() (ok bool) {
-	_ = String(nil) // compiler bug work-around
 	if v.Inner != nil {
 		_, ok = v.Inner.(String)
 	}
 	return ok
 }
 
+// MarshalJSON should only be used for testing.
+// It's not a complete implementation.
 func (v Value) MarshalJSON() ([]byte, error) {
 	return json.Marshal(v.Inner)
+}
+
+// UnmarshalJSON should only be used for testing.
+// It's not a complete implementation.
+func (v *Value) UnmarshalJSON(b []byte) error {
+	if len(b) == 0 {
+		return fmt.Errorf("error unmarshaling empty bytes")
+	}
+	var val interface{}
+	var err error
+	switch b[0] {
+	case '-':
+		var ival int64
+		err = json.Unmarshal(b, &ival)
+		val = ival
+	case '"':
+		var bval []byte
+		err = json.Unmarshal(b, &bval)
+		val = bval
+	case 'n': // null
+		err = json.Unmarshal(b, &val)
+	default:
+		var uval uint64
+		err = json.Unmarshal(b, &uval)
+		val = uval
+	}
+	if err != nil {
+		return err
+	}
+	*v, err = BuildValue(val)
+	return err
 }
 
 // InnerValue defines methods that need to be supported by all non-null value types.
@@ -185,13 +242,13 @@ func BuildValue(goval interface{}) (v Value, err error) {
 	case []byte:
 		v = Value{String(bindVal)}
 	case time.Time:
-		v = Value{String([]byte(bindVal.Format("'2006-01-02 15:04:05'")))}
+		v = Value{String([]byte(bindVal.Format("2006-01-02 15:04:05")))}
 	case Numeric, Fractional, String:
 		v = Value{bindVal.(InnerValue)}
 	case Value:
 		v = bindVal
 	default:
-		return Value{}, fmt.Errorf("Unsupported bind variable type %T: %v", goval, goval)
+		return Value{}, fmt.Errorf("unsupported bind variable type %T: %v", goval, goval)
 	}
 	return v, nil
 }

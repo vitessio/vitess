@@ -8,9 +8,10 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/tabletmanager"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topotools"
 )
 
 // Tablet related methods for wrangler
@@ -59,60 +60,9 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 			tablet.Parent = si.MasterAlias
 		}
 
-		// See if we need to update the Shard:
-		// - add the tablet's cell to the shard's Cells if needed
-		// - change the master if needed
-		shardUpdateRequired := false
-		if !si.HasCell(tablet.Alias.Cell) {
-			shardUpdateRequired = true
-		}
-		if tablet.Type == topo.TYPE_MASTER && si.MasterAlias != tablet.Alias {
-			shardUpdateRequired = true
-		}
-
-		if shardUpdateRequired {
-			actionNode := actionnode.UpdateShard()
-			lockPath, err := wr.lockShard(tablet.Keyspace, tablet.Shard, actionNode)
-			if err != nil {
-				return err
-			}
-
-			// re-read the shard with the lock
-			si, err = wr.ts.GetShard(tablet.Keyspace, tablet.Shard)
-			if err != nil {
-				return wr.unlockShard(tablet.Keyspace, tablet.Shard, actionNode, lockPath, err)
-			}
-
-			// update it
-			wasUpdated := false
-			if !si.HasCell(tablet.Alias.Cell) {
-				si.Cells = append(si.Cells, tablet.Alias.Cell)
-				wasUpdated = true
-			}
-			if tablet.Type == topo.TYPE_MASTER && si.MasterAlias != tablet.Alias {
-				if !si.MasterAlias.IsZero() && !force {
-					return wr.unlockShard(tablet.Keyspace, tablet.Shard, actionNode, lockPath, fmt.Errorf("creating this tablet would override old master %v in shard %v/%v", si.MasterAlias, tablet.Keyspace, tablet.Shard))
-				}
-				si.MasterAlias = tablet.Alias
-				wasUpdated = true
-			}
-
-			if wasUpdated {
-				// write it back
-				if err := wr.ts.UpdateShard(si); err != nil {
-					return wr.unlockShard(tablet.Keyspace, tablet.Shard, actionNode, lockPath, err)
-				}
-			}
-
-			// and unlock
-			if err := wr.unlockShard(tablet.Keyspace, tablet.Shard, actionNode, lockPath, err); err != nil {
-				return err
-			}
-
-			// also create the cell's ShardReplication
-			if err := wr.ts.CreateShardReplication(tablet.Alias.Cell, tablet.Keyspace, tablet.Shard, &topo.ShardReplication{}); err != nil && err != topo.ErrNodeExists {
-				return err
-			}
+		// update the shard record if needed
+		if err := wr.updateShardCellsAndMaster(si, tablet.Alias, tablet.Type, force); err != nil {
+			return err
 		}
 	}
 
@@ -174,7 +124,7 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 	wasMaster := ti.Type == topo.TYPE_MASTER
 
 	if force {
-		err = tabletmanager.Scrap(wr.ts, ti.Alias, force)
+		err = topotools.Scrap(wr.ts, ti.Alias, force)
 	} else {
 		actionPath, err = wr.ai.Scrap(ti.Alias)
 	}
@@ -193,7 +143,7 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 
 	// wait for the remote Scrap if necessary
 	if actionPath != "" {
-		err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+		err = wr.WaitForCompletion(actionPath)
 		if err != nil {
 			return "", err
 		}
@@ -218,7 +168,7 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 			si.MasterAlias = topo.TabletAlias{}
 
 			// write it back
-			if err := wr.ts.UpdateShard(si); err != nil {
+			if err := topo.UpdateShard(wr.ts, si); err != nil {
 				return "", wr.unlockShard(ti.Keyspace, ti.Shard, actionNode, lockPath, err)
 			}
 		} else {
@@ -271,12 +221,12 @@ func (wr *Wrangler) ChangeTypeNoRebuild(tabletAlias topo.TabletAlias, tabletType
 	}
 
 	if force {
-		if err := tabletmanager.ChangeType(wr.ts, tabletAlias, tabletType, false); err != nil {
+		if err := topotools.ChangeType(wr.ts, tabletAlias, tabletType, nil, false); err != nil {
 			return false, "", "", "", err
 		}
 	} else {
 		if wr.UseRPCs {
-			if err := wr.ai.RpcChangeType(ti, tabletType, wr.actionTimeout()); err != nil {
+			if err := wr.ai.RpcChangeType(ti, tabletType, wr.ActionTimeout()); err != nil {
 				return false, "", "", "", err
 			}
 
@@ -289,7 +239,7 @@ func (wr *Wrangler) ChangeTypeNoRebuild(tabletAlias topo.TabletAlias, tabletType
 
 			// You don't have a choice - you must wait for
 			// completion before rebuilding.
-			if err := wr.ai.WaitForCompletion(actionPath, wr.actionTimeout()); err != nil {
+			if err := wr.WaitForCompletion(actionPath); err != nil {
 				return false, "", "", "", err
 			}
 		}
@@ -320,7 +270,7 @@ func (wr *Wrangler) changeTypeInternal(tabletAlias topo.TabletAlias, dbType topo
 
 	// change the type
 	if wr.UseRPCs {
-		if err := wr.ai.RpcChangeType(ti, dbType, wr.actionTimeout()); err != nil {
+		if err := wr.ai.RpcChangeType(ti, dbType, wr.ActionTimeout()); err != nil {
 			return err
 		}
 	} else {
@@ -328,7 +278,7 @@ func (wr *Wrangler) changeTypeInternal(tabletAlias topo.TabletAlias, dbType topo
 		if err != nil {
 			return err
 		}
-		err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+		err = wr.WaitForCompletion(actionPath)
 		if err != nil {
 			return err
 		}
@@ -336,13 +286,33 @@ func (wr *Wrangler) changeTypeInternal(tabletAlias topo.TabletAlias, dbType topo
 
 	// rebuild if necessary
 	if rebuildRequired {
-		err = wr.rebuildShard(ti.Keyspace, ti.Shard, rebuildShardOptions{
-			Cells:               []string{ti.Alias.Cell},
-			IgnorePartialResult: false,
-		})
+		err = topotools.RebuildShard(wr.logger, wr.ts, ti.Keyspace, ti.Shard, []string{ti.Alias.Cell}, wr.lockTimeout, interrupted)
 		if err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// DeleteTablet will get the tablet record, and if it's scrapped, will
+// delete the record from the topology.
+func (wr *Wrangler) DeleteTablet(tabletAlias topo.TabletAlias) error {
+	ti, err := wr.ts.GetTablet(tabletAlias)
+	if err != nil {
+		return err
+	}
+	// refuse to delete tablets that are not scrapped
+	if ti.Type != topo.TYPE_SCRAP {
+		return fmt.Errorf("Can only delete scrapped tablets")
+	}
+	return wr.TopoServer().DeleteTablet(tabletAlias)
+}
+
+// ExecuteFetch will get data from a remote tablet
+func (wr *Wrangler) ExecuteFetch(tabletAlias topo.TabletAlias, query string, maxRows int, wantFields, disableBinlogs bool) (*mproto.QueryResult, error) {
+	ti, err := wr.ts.GetTablet(tabletAlias)
+	if err != nil {
+		return nil, err
+	}
+	return wr.ai.ExecuteFetch(ti, query, maxRows, wantFields, disableBinlogs, wr.ActionTimeout())
 }

@@ -6,9 +6,11 @@ package topo
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
@@ -37,18 +39,23 @@ type TabletAlias struct {
 	Uid  uint32
 }
 
+// IsZero returns true iff cell and uid are empty
 func (ta TabletAlias) IsZero() bool {
 	return ta.Cell == "" && ta.Uid == 0
 }
 
+// String formats a TabletAlias
 func (ta TabletAlias) String() string {
 	return fmtAlias(ta.Cell, ta.Uid)
 }
 
+// TabletUidStr returns a string version of the uid
 func (ta TabletAlias) TabletUidStr() string {
 	return tabletUidStr(ta.Uid)
 }
 
+// ParseTabletAliasString returns a TabletAlias for the input string,
+// of the form <cell>-<uid>
 func ParseTabletAliasString(aliasStr string) (result TabletAlias, err error) {
 	nameParts := strings.Split(aliasStr, "-")
 	if len(nameParts) != 2 {
@@ -68,6 +75,7 @@ func tabletUidStr(uid uint32) string {
 	return fmt.Sprintf("%010d", uid)
 }
 
+// ParseUid parses just the uid (a number)
 func ParseUid(value string) (uint32, error) {
 	uid, err := strconv.ParseUint(value, 10, 32)
 	if err != nil {
@@ -83,10 +91,12 @@ func fmtAlias(cell string, uid uint32) string {
 // TabletAliasList is used mainly for sorting
 type TabletAliasList []TabletAlias
 
+// Len is part of sort.Interface
 func (tal TabletAliasList) Len() int {
 	return len(tal)
 }
 
+// Less is part of sort.Interface
 func (tal TabletAliasList) Less(i, j int) bool {
 	if tal[i].Cell < tal[j].Cell {
 		return true
@@ -96,6 +106,7 @@ func (tal TabletAliasList) Less(i, j int) bool {
 	return tal[i].Uid < tal[j].Uid
 }
 
+// Swap is part of sort.Interface
 func (tal TabletAliasList) Swap(i, j int) {
 	tal[i], tal[j] = tal[j], tal[i]
 }
@@ -206,6 +217,7 @@ func IsTypeInList(tabletType TabletType, types []TabletType) bool {
 	return false
 }
 
+// IsSlaveType returns true iff the type is a mysql replication slave.
 func (tt TabletType) IsSlaveType() bool {
 	return IsTypeInList(tt, SlaveTabletTypes)
 }
@@ -315,13 +327,9 @@ const (
 // Tablet is a pure data struct for information serialized into json
 // and stored into topo.Server
 type Tablet struct {
-	Cell        string      // the cell this tablet is assigned to (doesn't change). DEPRECATED: use Alias
-	Uid         uint32      // the server id for this instance. DEPRECATED: use Alias
-	Parent      TabletAlias // the globally unique alias for our replication parent - zero if this is the global master
-	Addr        string      // host:port for queryserver. DEPRECATED: use Hostname and Portmap
-	SecureAddr  string      // host:port for queryserver using encrypted connection. DEPRECATED: use Hostname and Portmap
-	MysqlAddr   string      // host:port for the mysql instance. DEPRECATED: use Hostname and Portmap
-	MysqlIpAddr string      // ip:port for the mysql instance - needed to match slaves with tablets and preferable to relying on reverse dns. DEPRECATED: use IPAddr and Portmap
+	// Parent is the globally unique alias for our replication
+	// parent - IsZero() if this tablet has no parent
+	Parent TabletAlias
 
 	// What is this tablet?
 	Alias TabletAlias
@@ -336,6 +344,11 @@ type Tablet struct {
 
 	// Tags contain freeform information about the tablet.
 	Tags map[string]string
+
+	// Health tracks how healthy the tablet is. Clients may decide
+	// to use this information to make educated decisions on which
+	// tablet to connect to.
+	Health map[string]string
 
 	// Information about the tablet inside a keyspace/shard
 	Keyspace string
@@ -358,27 +371,54 @@ type Tablet struct {
 
 // ValidatePortmap returns an error if the tablet's portmap doesn't
 // contain all the necessary ports for the tablet to be fully
-// operational.
+// operational. We only care about vt port now, as mysql may not even
+// be running.
 func (tablet *Tablet) ValidatePortmap() error {
-	for _, name := range []string{"vt", "mysql"} {
-		if _, ok := tablet.Portmap[name]; !ok {
-			return fmt.Errorf("no %v port available", name)
-		}
+	if _, ok := tablet.Portmap["vt"]; !ok {
+		return fmt.Errorf("no vt port available")
 	}
 	return nil
 }
 
-// Rename the next 3 methods when we retire the extra tablet fields
+// EndPoint returns an EndPoint associated with the tablet record
+func (tablet *Tablet) EndPoint() (*EndPoint, error) {
+	entry := NewEndPoint(tablet.Alias.Uid, tablet.Hostname)
+	if err := tablet.ValidatePortmap(); err != nil {
+		return nil, err
+	}
 
-func (tablet *Tablet) GetAddr() string {
+	// TODO(szopa): Rename _vtocc to vt.
+	entry.NamedPortMap = map[string]int{
+		"_vtocc": tablet.Portmap["vt"],
+	}
+	if port, ok := tablet.Portmap["mysql"]; ok {
+		entry.NamedPortMap["_mysql"] = port
+	}
+	if port, ok := tablet.Portmap["vts"]; ok {
+		entry.NamedPortMap["_vts"] = port
+	}
+
+	if len(tablet.Health) > 0 {
+		entry.Health = make(map[string]string, len(tablet.Health))
+		for k, v := range tablet.Health {
+			entry.Health[k] = v
+		}
+	}
+	return entry, nil
+}
+
+// Addr returns hostname:vt port
+func (tablet *Tablet) Addr() string {
 	return fmt.Sprintf("%v:%v", tablet.Hostname, tablet.Portmap["vt"])
 }
 
-func (tablet *Tablet) GetMysqlAddr() string {
+// MysqlAddr returns hostname:mysql port
+func (tablet *Tablet) MysqlAddr() string {
 	return fmt.Sprintf("%v:%v", tablet.Hostname, tablet.Portmap["mysql"])
 }
 
-func (tablet *Tablet) GetMysqlIpAddr() string {
+// MysqlIpAddr returns ip:mysql port
+func (tablet *Tablet) MysqlIpAddr() string {
 	return fmt.Sprintf("%v:%v", tablet.IPAddr, tablet.Portmap["mysql"])
 }
 
@@ -424,11 +464,14 @@ func (tablet *Tablet) Json() string {
 	return jscfg.ToJson(tablet)
 }
 
+// TabletInfo is the container for a Tablet, read from the topology server.
 type TabletInfo struct {
 	version int64 // node version - used to prevent stomping concurrent writes
 	*Tablet
 }
 
+// Version returns the version of this tablet from last time it was read or
+// updated.
 func (ti *TabletInfo) Version() int64 {
 	return ti.version
 }
@@ -456,6 +499,16 @@ func (tablet *Tablet) Complete() error {
 	return err
 }
 
+// IsHealthEqual compares the tablet's health with the passed one, and
+// returns true if they're equivalent.
+func (tablet *Tablet) IsHealthEqual(health map[string]string) bool {
+	if len(health) == 0 && len(tablet.Health) == 0 {
+		return true
+	}
+
+	return reflect.DeepEqual(health, tablet.Health)
+}
+
 // NewTabletInfo returns a TabletInfo basing on tablet with the
 // version set. This function should be only used by Server
 // implementations.
@@ -477,6 +530,7 @@ func UpdateTablet(ts Server, tablet *TabletInfo) error {
 	return err
 }
 
+// Validate makes sure a tablet is represented correctly in the topology server.
 func Validate(ts Server, tabletAlias TabletAlias) error {
 	// read the tablet record, make sure it parses
 	tablet, err := ts.GetTablet(tabletAlias)
@@ -490,14 +544,33 @@ func Validate(ts Server, tabletAlias TabletAlias) error {
 	}
 
 	// Some tablets have no information to generate valid replication paths.
-	// We have two cases to handle:
+	// We have three cases to handle:
+	// - we are a master, in which case we may have an entry or not
+	// (we are in the process of adding entries to the graph for masters)
 	// - we are a slave in the replication graph, and should have
-	// replication data (first case below)
+	// replication data (second case below)
 	// - we are a master, or in scrap mode but used to be assigned
-	// in the graph somewhere (second case below)
+	// in the graph somewhere (third case below)
 	// Idle tablets are just not in any graph at all, we don't even know
 	// their keyspace / shard to know where to check.
-	if tablet.IsInReplicationGraph() && tablet.Type != TYPE_MASTER {
+	if tablet.Type == TYPE_MASTER {
+		si, err := ts.GetShardReplication(tablet.Alias.Cell, tablet.Keyspace, tablet.Shard)
+		if err != nil {
+			log.Warningf("master tablet %v with no ShardReplication object, assuming it's because of transition", tabletAlias)
+			return nil
+		}
+
+		rl, err := si.GetReplicationLink(tabletAlias)
+		if err != nil {
+			log.Warningf("master tablet %v with no ReplicationLink entry, assuming it's because of transition", tabletAlias)
+			return nil
+		}
+
+		if rl.Parent != tablet.Parent {
+			return fmt.Errorf("tablet %v has parent %v but has %v in shard replication object", tabletAlias, tablet.Parent, rl.Parent)
+		}
+
+	} else if tablet.IsInReplicationGraph() {
 		if err = ts.ValidateShard(tablet.Keyspace, tablet.Shard); err != nil {
 			return err
 		}
@@ -538,22 +611,6 @@ func Validate(ts Server, tabletAlias TabletAlias) error {
 // CreateTablet creates a new tablet and all associated paths for the
 // replication graph.
 func CreateTablet(ts Server, tablet *Tablet) error {
-	// Backfill data
-	tablet.Cell = tablet.Alias.Cell
-	tablet.Uid = tablet.Alias.Uid
-	if tablet.Hostname != "" && tablet.Portmap["vt"] != 0 {
-		tablet.Addr = fmt.Sprintf("%v:%v", tablet.Hostname, tablet.Portmap["vt"])
-	}
-	if tablet.Hostname != "" && tablet.Portmap["vts"] != 0 {
-		tablet.SecureAddr = fmt.Sprintf("%v:%v", tablet.Hostname, tablet.Portmap["vts"])
-	}
-	if tablet.Hostname != "" && tablet.Portmap["mysql"] != 0 {
-		tablet.MysqlAddr = fmt.Sprintf("%v:%v", tablet.Hostname, tablet.Portmap["mysql"])
-	}
-	if tablet.IPAddr != "" && tablet.Portmap["mysql"] != 0 {
-		tablet.MysqlIpAddr = fmt.Sprintf("%v:%v", tablet.IPAddr, tablet.Portmap["mysql"])
-	}
-
 	// Have the Server create the tablet
 	err := ts.CreateTablet(tablet)
 	if err != nil {
@@ -578,4 +635,37 @@ func CreateTabletReplicationData(ts Server, tablet *Tablet) error {
 // DeleteTabletReplicationData deletes replication data.
 func DeleteTabletReplicationData(ts Server, tablet *Tablet) error {
 	return RemoveShardReplicationRecord(ts, tablet.Keyspace, tablet.Shard, tablet.Alias)
+}
+
+// GetTabletMap tries to read all the tablets in the provided list,
+// and returns them all in a map.
+// If error is ErrPartialResult, the results in the dictionary are
+// incomplete, meaning some tablets couldn't be read.
+func GetTabletMap(ts Server, tabletAliases []TabletAlias) (map[TabletAlias]*TabletInfo, error) {
+	wg := sync.WaitGroup{}
+	mutex := sync.Mutex{}
+
+	tabletMap := make(map[TabletAlias]*TabletInfo)
+	var someError error
+
+	for _, tabletAlias := range tabletAliases {
+		wg.Add(1)
+		go func(tabletAlias TabletAlias) {
+			defer wg.Done()
+			tabletInfo, err := ts.GetTablet(tabletAlias)
+			mutex.Lock()
+			if err != nil {
+				log.Warningf("%v: %v", tabletAlias, err)
+				// There can be data races removing nodes - ignore them for now.
+				if err != ErrNoNode {
+					someError = ErrPartialResult
+				}
+			} else {
+				tabletMap[tabletAlias] = tabletInfo
+			}
+			mutex.Unlock()
+		}(tabletAlias)
+	}
+	wg.Wait()
+	return tabletMap, someError
 }

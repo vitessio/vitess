@@ -27,6 +27,10 @@ var DefaultDBConfigs = DBConfigs{
 		Uname:   "vt_dba",
 		Charset: "utf8",
 	},
+	Filtered: mysql.ConnectionParams{
+		Uname:   "vt_filtered",
+		Charset: "utf8",
+	},
 	Repl: mysql.ConnectionParams{
 		Uname:   "vt_repl",
 		Charset: "utf8",
@@ -57,6 +61,7 @@ func registerConnFlags(connParams *mysql.ConnectionParams, name string, defaultP
 // vttablet will register client, dba and repl.
 func RegisterFlags() {
 	registerConnFlags(&dbConfigs.Dba, "dba", DefaultDBConfigs.Dba)
+	registerConnFlags(&dbConfigs.Filtered, "filtered", DefaultDBConfigs.Filtered)
 	registerConnFlags(&dbConfigs.Repl, "repl", DefaultDBConfigs.Repl)
 	registerConnFlags(&dbConfigs.App.ConnectionParams, "app", DefaultDBConfigs.App.ConnectionParams)
 	flag.StringVar(&dbConfigs.App.Keyspace, "db-config-app-keyspace", DefaultDBConfigs.App.Keyspace, "db app connection keyspace")
@@ -100,10 +105,9 @@ func MysqlParams(cp *mysql.ConnectionParams) (mysql.ConnectionParams, error) {
 // shard.
 type DBConfig struct {
 	mysql.ConnectionParams
-	Keyspace          string
-	Shard             string
-	EnableRowcache    bool
-	EnableInvalidator bool
+	Keyspace       string
+	Shard          string
+	EnableRowcache bool
 }
 
 func (d *DBConfig) String() string {
@@ -117,11 +121,13 @@ func (d *DBConfig) String() string {
 // DBConfigs is all we need for a smart tablet server:
 // - DBConfig for the query engine, running for the specified keyspace / shard
 // - Dba access for any dba-type operation (db creation, replication, ...)
+// - Filtered access for filtered replication
 // - Replication access to change master
 type DBConfigs struct {
-	App  DBConfig
-	Dba  mysql.ConnectionParams
-	Repl mysql.ConnectionParams
+	App      DBConfig
+	Dba      mysql.ConnectionParams
+	Filtered mysql.ConnectionParams
+	Repl     mysql.ConnectionParams
 }
 
 func (dbcfgs *DBConfigs) String() string {
@@ -139,15 +145,19 @@ func (dbcfgs *DBConfigs) String() string {
 func (dbcfgs *DBConfigs) Redact() {
 	dbcfgs.App.ConnectionParams.Redact()
 	dbcfgs.Dba.Redact()
+	dbcfgs.Filtered.Redact()
 	dbcfgs.Repl.Redact()
 }
 
-// Initialize app, dba and repl configs
+// Initialize app, dba, filterec and repl configs
 func Init(socketFile string) (*DBConfigs, error) {
 	if err := InitConnectionParams(&dbConfigs.App.ConnectionParams, socketFile); err != nil {
 		return nil, err
 	}
 	if err := InitConnectionParams(&dbConfigs.Dba, socketFile); err != nil {
+		return nil, err
+	}
+	if err := InitConnectionParams(&dbConfigs.Filtered, socketFile); err != nil {
 		return nil, err
 	}
 	if err := InitConnectionParams(&dbConfigs.Repl, socketFile); err != nil {
@@ -209,6 +219,7 @@ func GetSubprocessFlags() []string {
 		cmd = append(cmd, "-db-config-app-shard", dbConfigs.App.Shard)
 	}
 	f(&dbConfigs.Dba, "dba")
+	f(&dbConfigs.Filtered, "filtered")
 	f(&dbConfigs.Repl, "repl")
 	cmd = append(cmd, getCredentialsServerSubprocessFlags()...)
 	return cmd

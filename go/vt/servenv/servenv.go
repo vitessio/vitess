@@ -21,51 +21,43 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"flag"
+	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"runtime"
 	"sync"
 	"syscall"
 	"time"
 
+	_ "net/http/pprof"
+
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/event"
+	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/stats"
 	_ "github.com/youtube/vitess/go/vt/logutil"
-	_ "net/http/pprof"
 )
 
 var (
+	// The flags used when calling RegisterDefaultFlags.
+	Port *int
+
+	// Flags to alter the behavior of the library.
+	lameduckPeriod = flag.Duration("lameduck-period", 50*time.Millisecond, "how long to keep the server running on SIGTERM before stopping")
 	memProfileRate = flag.Int("mem-profile-rate", 512*1024, "profile every n bytes allocated")
-	mu             sync.Mutex
 
-	onInitHooks hooks
-	onRunHooks  hooks
+	// mutex used to protect the Init function
+	mu sync.Mutex
+
+	onInitHooks event.Hooks
+	onTermHooks event.Hooks
+	onRunHooks  event.Hooks
 	inited      bool
+
+	// filled in when calling Run
+	ListeningURL url.URL
 )
-
-type hooks struct {
-	funcs []func()
-	mu    sync.Mutex
-}
-
-func (h *hooks) Add(f func()) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.funcs = append(h.funcs, f)
-}
-
-func (h *hooks) Fire() {
-	wg := sync.WaitGroup{}
-
-	for _, f := range h.funcs {
-		wg.Add(1)
-		go func(f func()) {
-			f()
-			wg.Done()
-		}(f)
-	}
-	wg.Wait()
-}
 
 func Init() {
 	mu.Lock()
@@ -126,14 +118,48 @@ func exportBinaryVersion() error {
 	return nil
 }
 
+func populateListeningURL() {
+	host, err := netutil.FullyQualifiedHostname()
+	if err != nil {
+		host, err = os.Hostname()
+		if err != nil {
+			log.Fatalf("os.Hostname() failed: %v", err)
+		}
+	}
+	ListeningURL = url.URL{
+		Scheme: "http",
+		Host:   fmt.Sprintf("%v:%v", host, *Port),
+		Path:   "/",
+	}
+}
+
 // onInit registers f to be run at the beginning of the app
 // lifecycle. It should be called in an init() function.
 func onInit(f func()) {
 	onInitHooks.Add(f)
 }
 
+// OnTerm registers f to be run when the process receives a SIGTERM.
+// All hooks are run in parallel.
+// This allows the program to change its behavior during the lameduck period.
+func OnTerm(f func()) {
+	onTermHooks.Add(f)
+}
+
 // OnRun registers f to be run right at the beginning of Run. All
 // hooks are run in parallel.
 func OnRun(f func()) {
 	onRunHooks.Add(f)
+}
+
+// RegisterDefaultFlags registers the default flags for
+// listening to a given port for standard connections.
+// If calling this, then call RunDefault()
+func RegisterDefaultFlags() {
+	Port = flag.Int("port", 0, "port for the server")
+}
+
+// RunDefault calls Run() with the parameters from the flags.
+func RunDefault() {
+	Run(*Port)
 }

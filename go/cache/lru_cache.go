@@ -2,10 +2,11 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// The implementation borrows heavily from SmallLRUCache (originally by Nathan
-// Schrenk). The object maintains a doubly-linked list of elements in the
-// When an element is accessed it is promoted to the head of the list, and when
-// space is needed the element at the tail of the list (the least recently used
+// cache implements a LRU cache. The implementation borrows heavily
+// from SmallLRUCache (originally by Nathan Schrenk). The object
+// maintains a doubly-linked list of elements.  When an element is
+// accessed it is promoted to the head of the list, and when space is
+// needed the element at the tail of the list (the least recently used
 // element) is evicted.
 package cache
 
@@ -16,6 +17,10 @@ import (
 	"time"
 )
 
+// LRUCache is a typical LRU cache implementation.  If the cache
+// reaches the capacity, the least recently used item is deleted from
+// the cache. Note the capacity is not the number of items, but the
+// total sum of the Size() of each item.
 type LRUCache struct {
 	mu sync.Mutex
 
@@ -23,19 +28,21 @@ type LRUCache struct {
 	list  *list.List
 	table map[string]*list.Element
 
-	// Our current size, in bytes. Obviously a gross simplification and low-grade
-	// approximation.
+	// Our current size. Obviously a gross simplification and
+	// low-grade approximation.
 	size int64
 
-	// How many bytes we are limiting the cache to.
+	// How much we are limiting the cache to.
 	capacity int64
 }
 
-// Values that go into LRUCache need to satisfy this interface.
+// Value is the interface values that go into LRUCache need to satisfy
 type Value interface {
+	// Size returns how big this value is.
 	Size() int
 }
 
+// Item is what is stored in the cache
 type Item struct {
 	Key   string
 	Value Value
@@ -48,6 +55,7 @@ type entry struct {
 	time_accessed time.Time
 }
 
+// NewLRUCache creates a new empty cache with the given capacity.
 func NewLRUCache(capacity int64) *LRUCache {
 	return &LRUCache{
 		list:     list.New(),
@@ -56,6 +64,8 @@ func NewLRUCache(capacity int64) *LRUCache {
 	}
 }
 
+// Get returns a value from the cache, and marks the entry as most
+// recently used.
 func (lru *LRUCache) Get(key string) (v Value, ok bool) {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
@@ -68,6 +78,7 @@ func (lru *LRUCache) Get(key string) (v Value, ok bool) {
 	return element.Value.(*entry).value, true
 }
 
+// Set sets a value in the cache.
 func (lru *LRUCache) Set(key string, value Value) {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
@@ -79,6 +90,8 @@ func (lru *LRUCache) Set(key string, value Value) {
 	}
 }
 
+// SetIfAbsent will set the value in the cache if not present. If the
+// value exists in the cache, we don't set it.
 func (lru *LRUCache) SetIfAbsent(key string, value Value) {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
@@ -90,6 +103,7 @@ func (lru *LRUCache) SetIfAbsent(key string, value Value) {
 	}
 }
 
+// Delete removes an entry from the cache, and returns if the entry existed.
 func (lru *LRUCache) Delete(key string) bool {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
@@ -105,6 +119,7 @@ func (lru *LRUCache) Delete(key string) bool {
 	return true
 }
 
+// Clear will clear the entire cache.
 func (lru *LRUCache) Clear() {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
@@ -114,6 +129,9 @@ func (lru *LRUCache) Clear() {
 	lru.size = 0
 }
 
+// SetCapacity will set the capacity of the cache. If the capacity is
+// smaller, and the current cache size exceed that capacity, the cache
+// will be shrank.
 func (lru *LRUCache) SetCapacity(capacity int64) {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
@@ -122,6 +140,7 @@ func (lru *LRUCache) SetCapacity(capacity int64) {
 	lru.checkCapacity()
 }
 
+// Stats returns a few stats on the cache.
 func (lru *LRUCache) Stats() (length, size, capacity int64, oldest time.Time) {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
@@ -131,6 +150,7 @@ func (lru *LRUCache) Stats() (length, size, capacity int64, oldest time.Time) {
 	return int64(lru.list.Len()), lru.size, lru.capacity, oldest
 }
 
+// StatsJSON returns stats as a JSON object in a string.
 func (lru *LRUCache) StatsJSON() string {
 	if lru == nil {
 		return "{}"
@@ -139,24 +159,29 @@ func (lru *LRUCache) StatsJSON() string {
 	return fmt.Sprintf("{\"Length\": %v, \"Size\": %v, \"Capacity\": %v, \"OldestAccess\": \"%v\"}", l, s, c, o)
 }
 
+// Length returns how many elements are in the cache
 func (lru *LRUCache) Length() int64 {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 	return int64(lru.list.Len())
 }
 
+// Size returns the sum of the objects' Size() method.
 func (lru *LRUCache) Size() int64 {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 	return lru.size
 }
 
+// Capacity returns the cache maximum capacity.
 func (lru *LRUCache) Capacity() int64 {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 	return lru.capacity
 }
 
+// Oldest returns the insertion time of the oldest element in the cache,
+// or a IsZero() time if cache is empty.
 func (lru *LRUCache) Oldest() (oldest time.Time) {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
@@ -166,6 +191,8 @@ func (lru *LRUCache) Oldest() (oldest time.Time) {
 	return
 }
 
+// Keys returns all the keys for the cache, ordered from most recently
+// used to last recently used.
 func (lru *LRUCache) Keys() []string {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
@@ -177,6 +204,8 @@ func (lru *LRUCache) Keys() []string {
 	return keys
 }
 
+// Items returns all the values for the cache, ordered from most recently
+// used to last recently used.
 func (lru *LRUCache) Items() []Item {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()

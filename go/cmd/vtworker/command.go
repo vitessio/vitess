@@ -12,8 +12,13 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/wrangler"
+)
+
+var (
+	commandDisplayInterval = flag.Duration("command_display_interval", time.Second, "Interval between each status update when vtworker is executing a single command from the command line")
 )
 
 type command struct {
@@ -34,6 +39,11 @@ var commands = []commandGroup{
 	commandGroup{
 		"Diffs",
 		"Workers comparing and validating data",
+		[]command{},
+	},
+	commandGroup{
+		"Clones",
+		"Workers copying data for backups and clones",
 		[]command{},
 	},
 }
@@ -102,21 +112,24 @@ func commandWorker(wr *wrangler.Wrangler, args []string) worker.Worker {
 	return nil
 }
 
-func runCommand(wr *wrangler.Wrangler, args []string) {
+func runCommand(args []string) {
 	wrk := commandWorker(wr, args)
-	done, err := setAndStartWorker(wrk)
+	done, err := setAndStartWorker(wrk, logutil.NewConsoleLogger())
 	if err != nil {
 		log.Fatalf("Cannot set worker: %v", err)
 	}
 
 	// a go routine displays the status every second
 	go func() {
-		timer := time.Tick(time.Second)
+		timer := time.Tick(*commandDisplayInterval)
 		for {
 			select {
 			case <-done:
 				log.Infof("Command is done:")
 				log.Info(wrk.StatusAsText())
+				if wrk.Error() != nil {
+					os.Exit(1)
+				}
 				os.Exit(0)
 			case <-timer:
 				log.Info(wrk.StatusAsText())

@@ -7,6 +7,7 @@ package zkocc
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -179,6 +180,7 @@ func (entry *zkCacheEntry) children(zcell *zkCell, path string, reply *zk.ZkNode
 			}
 			return err
 		}
+		sort.Strings(entry.node.Children)
 		zcell.zkrStats.zkReads.Add(zcell.cellName, 1)
 		entry.node.Stat.FromZookeeperStat(stat)
 		entry.childrenTime = time.Now()

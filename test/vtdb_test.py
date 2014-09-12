@@ -5,18 +5,25 @@ import hmac
 import json
 import logging
 import os
+import threading
+import time
 import traceback
 import unittest
+import urllib
 
 import environment
 import tablet
 import utils
 
 from net import gorpc
-from vtdb import tablet as tablet3
 from vtdb import cursor
+from vtdb import keyrange_constants
+from vtdb import keyspace
+from vtdb import tablet as tablet3
+from vtdb import topology
 from vtdb import vtclient
 from vtdb import dbexceptions
+from vtdb import vtdb_logger
 from zk import zkocc
 
 # default the test to use vttablet connection
@@ -142,6 +149,9 @@ def setup_tablets():
                            'TabletTypes: master,replica')
 
   vtgate_server, vtgate_port = utils.vtgate_start()
+  vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
+                                        "test_nj", 30.0)
+  topology.read_topology(vtgate_client)
 
 
 def get_connection(db_type='master', shard_index=0, user=None, password=None):
@@ -150,7 +160,7 @@ def get_connection(db_type='master', shard_index=0, user=None, password=None):
   timeout = 10.0
   conn = None
   shard = shard_names[shard_index]
-  vtgate_addrs = ["localhost:%s" % (vtgate_port),]
+  vtgate_addrs = {"_vt": ["localhost:%s" % (vtgate_port),]}
   vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
                                         "test_nj", 30.0)
   conn = vtclient.VtOCCConnection(vtgate_client, 'test_keyspace', shard,
@@ -339,7 +349,6 @@ class TestTabletFunctions(unittest.TestCase):
     except Exception, e:
       self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))
 
-
 class TestFailures(unittest.TestCase):
   def setUp(self):
     self.shard_index = 0
@@ -448,6 +457,28 @@ class TestFailures(unittest.TestCase):
     master_conn._execute("delete from vt_insert_test", {})
     master_conn.commit()
 
+  def test_read_only(self):
+    master_conn = get_connection(db_type='master')
+    count = 10
+    master_conn.begin()
+    master_conn._execute("delete from vt_insert_test", {})
+    kid_list = shard_kid_map[master_conn.shard]
+    for x in xrange(count):
+      keyspace_id = kid_list[count%len(kid_list)]
+      master_conn._execute("insert into vt_insert_test (msg, keyspace_id) values (%(msg)s, %(keyspace_id)s)",
+                           {'msg': 'test %s' % x, 'keyspace_id': keyspace_id})
+    master_conn.commit()
+
+    self.master_tablet.mquery(self.master_tablet.dbname, "set global read_only=on")
+    master_conn.begin()
+    with self.assertRaises(dbexceptions.FatalError):
+      master_conn._execute("delete from vt_insert_test", {})
+    master_conn.rollback()
+    self.master_tablet.mquery(self.master_tablet.dbname, "set global read_only=off")
+    master_conn.begin()
+    master_conn._execute("delete from vt_insert_test", {})
+    master_conn.commit()
+
 class TestAuthentication(unittest.TestCase):
 
   def setUp(self):
@@ -514,6 +545,90 @@ class TestAuthentication(unittest.TestCase):
         break
     else:
       self.fail("Too many requests were allowed (%s)." % (i + 1))
+
+
+class LocalLogger(vtdb_logger.VtdbLogger):
+
+  def __init__(self):
+    self._topo_rtt = 0
+
+  def topo_keyspace_fetch(self, keyspace_name, topo_rtt):
+    self._topo_rtt += 1
+
+  def get_topo_rtt(self):
+    return self._topo_rtt
+
+
+class TestTopoReResolve(unittest.TestCase):
+  def setUp(self):
+    global vtgate_port
+    self.shard_index = 0
+    self.replica_tablet = shard_0_replica
+    self.keyspace_fetch_throttle = 1
+    vtdb_logger.register_vtdb_logger(LocalLogger())
+    # Lowering the keyspace refresh throttle so things are testable.
+    topology.set_keyspace_fetch_throttle(0.1)
+    self.vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
+                                               "test_nj", 30.0)
+
+  def test_topo_read_threshold(self):
+    before_topo_rtt = vtdb_logger.get_logger().get_topo_rtt()
+    # Check original state.
+    keyspace_obj = topology.get_keyspace('test_keyspace')
+    self.assertNotEqual(keyspace_obj, None, "test_keyspace should be not None")
+    self.assertEqual(keyspace_obj.sharding_col_type, keyrange_constants.KIT_UINT64, "ShardingColumnType be %s" % keyrange_constants.KIT_UINT64)
+
+    # Change the keyspace object.
+    utils.run_vtctl(['SetKeyspaceShardingInfo', '-force', 'test_keyspace',
+                     'keyspace_id', keyrange_constants.KIT_BYTES])
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
+
+    # sleep throttle interval and check values again.
+    # the keyspace should have changed and also caused a rtt to topo server.
+    time.sleep(self.keyspace_fetch_throttle)
+    topology.refresh_keyspace(self.vtgate_client, 'test_keyspace')
+    keyspace_obj = topology.get_keyspace('test_keyspace')
+    after_1st_clear = vtdb_logger.get_logger().get_topo_rtt()
+    self.assertEqual(after_1st_clear - before_topo_rtt, 1, "One additional round-trips to topo server")
+    self.assertEqual(keyspace_obj.sharding_col_type, keyrange_constants.KIT_BYTES, "ShardingColumnType be %s" % keyrange_constants.KIT_BYTES)
+
+    # Refresh without sleeping for throttle time shouldn't cause additional rtt.
+    topology.refresh_keyspace(self.vtgate_client, 'test_keyspace')
+    keyspace_obj = topology.get_keyspace('test_keyspace')
+    after_2nd_clear = vtdb_logger.get_logger().get_topo_rtt()
+    self.assertEqual(after_2nd_clear - after_1st_clear, 0, "No additional round-trips to topo server")
+
+  def test_keyspace_reresolve_on_execute(self):
+    before_topo_rtt = vtdb_logger.get_logger().get_topo_rtt()
+    try:
+      replica_conn = get_connection(db_type='replica', shard_index=self.shard_index)
+    except Exception, e:
+      self.fail("Connection to shard %s replica failed with error %s" % (shard_names[self.shard_index], str(e)))
+    self.replica_tablet.kill_vttablet()
+    time.sleep(self.keyspace_fetch_throttle)
+
+    # this should cause a refresh of the topology.
+    try:
+      results = replica_conn._execute("select 1 from vt_insert_test", {})
+    except Exception, e:
+      pass
+
+    after_tablet_error = vtdb_logger.get_logger().get_topo_rtt()
+    self.assertEqual(after_tablet_error - before_topo_rtt, 1, "One additional round-trips to topo server")
+    self.replica_tablet.start_vttablet()
+
+  def test_keyspace_reresolve_on_conn_failure(self):
+    before_topo_rtt = vtdb_logger.get_logger().get_topo_rtt()
+    self.replica_tablet.kill_vttablet()
+    time.sleep(self.keyspace_fetch_throttle)
+    try:
+      replica_conn = get_connection(db_type='replica', shard_index=self.shard_index)
+    except Exception, e:
+      pass
+
+    after_tablet_conn_error = vtdb_logger.get_logger().get_topo_rtt()
+    self.assertEqual(after_tablet_conn_error - before_topo_rtt, 1, "One additional round-trips to topo server")
+    self.replica_tablet.start_vttablet()
 
 
 if __name__ == '__main__':

@@ -9,9 +9,10 @@ import (
 	"os"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/tb"
+	"github.com/youtube/vitess/go/exit"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topotools"
+	"github.com/youtube/vitess/go/vt/topo/helpers"
 )
 
 var fromTopo = flag.String("from", "", "topology to copy data from")
@@ -25,11 +26,8 @@ var doTablets = flag.Bool("do-tablets", false, "copies the tablet information")
 var deleteKeyspaceShards = flag.Bool("delete-keyspace-shards", false, "when copying shards, first removes the destination shards (will nuke the replication graph)")
 
 func main() {
-	defer func() {
-		if panicErr := recover(); panicErr != nil {
-			log.Fatalf("panic: %v", tb.Errorf("%v", panicErr))
-		}
-	}()
+	defer exit.RecoverAll()
+	defer logutil.Flush()
 
 	flag.Parse()
 	args := flag.Args()
@@ -46,15 +44,15 @@ func main() {
 	toTS := topo.GetServerByName(*toTopo)
 
 	if *doKeyspaces {
-		topotools.CopyKeyspaces(fromTS, toTS)
+		helpers.CopyKeyspaces(fromTS, toTS)
 	}
 	if *doShards {
-		topotools.CopyShards(fromTS, toTS, *deleteKeyspaceShards)
+		helpers.CopyShards(fromTS, toTS, *deleteKeyspaceShards)
 	}
 	if *doShardReplications {
-		topotools.CopyShardReplications(fromTS, toTS)
+		helpers.CopyShardReplications(fromTS, toTS)
 	}
 	if *doTablets {
-		topotools.CopyTablets(fromTS, toTS)
+		helpers.CopyTablets(fromTS, toTS)
 	}
 }

@@ -1,18 +1,29 @@
 select 1 from t
+select .1 from t
+select 1.2e1 from t
+select 1.2e+1 from t
+select 1.2e-1 from t
+select 08.3 from t
 select -1 from t where b = -2
+select 1 from t // aa#select 1 from t
+select 1 from t -- aa#select 1 from t
 select /* simplest */ 1 from t
+select /* double star **/ 1 from t
+select /* double */ /* comment */ 1 from t
 select /* back-quote */ 1 from `t`#select /* back-quote */ 1 from t
 select /* back-quote keyword */ 1 from `from`#select /* back-quote keyword */ 1 from `from`
 select /* @ */ @@a from b
 select /* \0 */ '\0' from a
 select 1 /* drop this comment */ from t#select 1 from t
 select /* union */ 1 from t union select 1 from t
+select /* double union */ 1 from t union select 1 from t union select 1 from t
 select /* union all */ 1 from t union all select 1 from t
 select /* minus */ 1 from t minus select 1 from t
 select /* except */ 1 from t except select 1 from t
 select /* intersect */ 1 from t intersect select 1 from t
 select /* distinct */ distinct 1 from t
 select /* for update */ 1 from t for update
+select /* lock in share mode */ 1 from t lock in share mode
 select /* select list */ 1, 2 from t
 select /* * */ * from t
 select /* column alias */ a b from t#select /* column alias */ a as b from t
@@ -25,7 +36,10 @@ select /* case_when_when_else */ case when a = b then c when b = d then d else d
 select /* case */ case aa when a = b then c end from t
 select /* parenthesis */ 1 from (t)
 select /* table list */ 1 from t1, t2
+select /* parenthessis in table list 1 */ 1 from (t1), t2
+select /* parenthessis in table list 2 */ 1 from t1, (t2)
 select /* use */ 1 from t1 use index (a) where b = 1
+select /* ignore */ 1 from t1 as t2 ignore index (a), t3 use index (b) where b = 1
 select /* use */ 1 from t1 as t2 use index (a), t3 use index (b) where b = 1
 select /* force */ 1 from t1 as t2 force index (a), t3 force index (b) where b = 1
 select /* table alias */ 1 from t t1#select /* table alias */ 1 from t as t1
@@ -60,14 +74,14 @@ select /* is not null */ 1 from t where a is not null
 select /* < */ 1 from t where a < b
 select /* <= */ 1 from t where a <= b
 select /* >= */ 1 from t where a >= b
-select /* <> */ 1 from t where a <> b
+select /* <> */ 1 from t where a != b
 select /* <=> */ 1 from t where a <=> b
 select /* != */ 1 from t where a != b
 select /* single value expre list */ 1 from t where a in (b)
 select /* select as a value expression */ 1 from t where a = (select a from t)
-select /* parenthesised value */ 1 from t where a = (b)#select /* parenthesised value */ 1 from t where a = b
-select /* over-parenthesize */ ((1)) from t where ((a)) in (((1))) and ((a, b)) in ((((1,1))), ((2,2)))#select /* over-parenthesize */ 1 from t where a in (1) and (a, b) in ((1, 1), (2, 2))
-select /* dot-parenthesize */ (a.b) from t where (b.c) = 2#select /* dot-parenthesize */ a.b from t where b.c = 2
+select /* parenthesised value */ 1 from t where a = (b)
+select /* over-parenthesize */ ((1)) from t where ((a)) in (((1))) and ((a, b)) in ((((1, 1))), ((2, 2)))
+select /* dot-parenthesize */ (a.b) from t where (b.c) = 2
 select /* & */ 1 from t where a = b&c
 select /* | */ 1 from t where a = b|c
 select /* ^ */ 1 from t where a = b^c
@@ -98,9 +112,12 @@ select /* non-escape */ '\x' from t#select /* non-escape */ 'x' from t
 select /* unescaped backslash */ '\n' from t
 select /* value argument */ :a from t
 select /* value argument with dot */ :a.b from t
+select /* positional argument */ ? from t#select /* positional argument */ :v1 from t
+select /* multiple positional arguments */ ?, ? from t#select /* multiple positional arguments */ :v1, :v2 from t
 select /* null */ null from t
 select /* octal */ 010 from t
 select /* hex */ 0xf0 from t
+select /* hex caps */ 0xF0 from t
 select /* float */ 0.1 from t
 select /* group by */ 1 from t group by a
 select /* having */ 1 from t having a = b
@@ -113,12 +130,15 @@ insert /* simple */ into a values (1)
 insert /* a.b */ into a.b values (1)
 insert /* multi-value */ into a values (1, 2)
 insert /* multi-value list */ into a values (1, 2), (3, 4)
+insert /* set */ into a set a = 1, a.b = 2#insert /* set */ into a(a, a.b) values (1, 2)
 insert /* value expression list */ into a values (a+1, 2*3)
 insert /* column list */ into a(a, b) values (1, 2)
+insert /* qualified column list */ into a(a, a.b) values (1, 2)
 insert /* select */ into a select b, c from d
 insert /* on duplicate */ into a values (1, 2) on duplicate key update b = values(a), c = d
 update /* simple */ a set b = 3
 update /* a.b */ a.b set b = 3
+update /* b.c */ a set b.c = 3
 update /* list */ a set b = 3, c = 4
 update /* expression */ a set b = 3+4
 update /* where */ a set b = 3 where a = b
@@ -150,6 +170,14 @@ create table if not exists a#create table a
 create index a on b#alter table b
 create unique index a on b#alter table b
 create unique index a using foo on b#alter table b
+create view a#create table a
+alter view a#alter table a
+drop view a#drop table a
 drop table a
 drop table if exists a#drop table a
+drop view if exists a#drop table a
 drop index b on a#alter table a
+analyze table a#alter table a
+show foobar#other
+describe foobar#other
+explain foobar#other

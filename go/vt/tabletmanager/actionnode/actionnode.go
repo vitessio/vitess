@@ -64,10 +64,15 @@ const (
 	// StartSlave will start MySQL replication.
 	TABLET_ACTION_START_SLAVE = "StartSlave"
 
+	// TabletExternallyReparented is sent directly to the new master
+	// tablet when it becomes the master. It is functionnaly equivalent
+	// to calling "ShardExternallyReparented" on the topology.
+	TABLET_ACTION_EXTERNALLY_REPARENTED = "TabletExternallyReparented"
+
 	TABLET_ACTION_BREAK_SLAVES        = "BreakSlaves"
 	TABLET_ACTION_MASTER_POSITION     = "MasterPosition"
 	TABLET_ACTION_REPARENT_POSITION   = "ReparentPosition"
-	TABLET_ACTION_SLAVE_POSITION      = "SlavePosition"
+	TABLET_ACTION_SLAVE_STATUS        = "SlaveStatus"
 	TABLET_ACTION_WAIT_SLAVE_POSITION = "WaitSlavePosition"
 	TABLET_ACTION_WAIT_BLP_POSITION   = "WaitBlpPosition"
 	TABLET_ACTION_STOP_BLP            = "StopBlp"
@@ -78,6 +83,7 @@ const (
 	TABLET_ACTION_PREFLIGHT_SCHEMA    = "PreflightSchema"
 	TABLET_ACTION_APPLY_SCHEMA        = "ApplySchema"
 	TABLET_ACTION_RELOAD_SCHEMA       = "ReloadSchema"
+	TABLET_ACTION_EXECUTE_FETCH       = "ExecuteFetch"
 	TABLET_ACTION_GET_PERMISSIONS     = "GetPermissions"
 	TABLET_ACTION_EXECUTE_HOOK        = "ExecuteHook"
 	TABLET_ACTION_GET_SLAVES          = "GetSlaves"
@@ -120,6 +126,15 @@ const (
 	KEYSPACE_ACTION_APPLY_SCHEMA        = "ApplySchemaKeyspace"
 	KEYSPACE_ACTION_SET_SHARDING_INFO   = "SetKeyspaceShardingInfo"
 	KEYSPACE_ACTION_MIGRATE_SERVED_FROM = "MigrateServedFrom"
+
+	//
+	// SrvShard actions - very local locking, for consistency.
+	// These are just descriptive and used for locking / logging.
+	//
+
+	SRV_SHARD_ACTION_REBUILD = "RebuildSrvShard"
+
+	// all the valid states for an action
 
 	ACTION_STATE_QUEUED  = ActionState("")        // All actions are queued initially
 	ACTION_STATE_RUNNING = ActionState("Running") // Running inside vtaction process
@@ -229,13 +244,24 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case KEYSPACE_ACTION_MIGRATE_SERVED_FROM:
 		node.Args = &MigrateServedFromArgs{}
 
-	case TABLET_ACTION_SET_BLACKLISTED_TABLES, TABLET_ACTION_GET_SCHEMA,
-		TABLET_ACTION_RELOAD_SCHEMA, TABLET_ACTION_GET_PERMISSIONS,
-		TABLET_ACTION_SLAVE_POSITION, TABLET_ACTION_WAIT_SLAVE_POSITION,
-		TABLET_ACTION_MASTER_POSITION, TABLET_ACTION_STOP_SLAVE,
-		TABLET_ACTION_STOP_SLAVE_MINIMUM, TABLET_ACTION_START_SLAVE,
-		TABLET_ACTION_GET_SLAVES, TABLET_ACTION_WAIT_BLP_POSITION,
-		TABLET_ACTION_STOP_BLP, TABLET_ACTION_START_BLP,
+	case SRV_SHARD_ACTION_REBUILD:
+
+	case TABLET_ACTION_SET_BLACKLISTED_TABLES,
+		TABLET_ACTION_GET_SCHEMA,
+		TABLET_ACTION_RELOAD_SCHEMA,
+		TABLET_ACTION_EXECUTE_FETCH,
+		TABLET_ACTION_GET_PERMISSIONS,
+		TABLET_ACTION_SLAVE_STATUS,
+		TABLET_ACTION_WAIT_SLAVE_POSITION,
+		TABLET_ACTION_MASTER_POSITION,
+		TABLET_ACTION_STOP_SLAVE,
+		TABLET_ACTION_STOP_SLAVE_MINIMUM,
+		TABLET_ACTION_START_SLAVE,
+		TABLET_ACTION_EXTERNALLY_REPARENTED,
+		TABLET_ACTION_GET_SLAVES,
+		TABLET_ACTION_WAIT_BLP_POSITION,
+		TABLET_ACTION_STOP_BLP,
+		TABLET_ACTION_START_BLP,
 		TABLET_ACTION_RUN_BLP_UNTIL:
 		return nil, fmt.Errorf("rpc-only action: %v", node.Action)
 

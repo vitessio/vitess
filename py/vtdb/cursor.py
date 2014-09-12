@@ -112,7 +112,7 @@ class BatchCursor(BaseCursor):
     self.exec_list.append(BatchQueryItem(sql, bind_variables, key, keys))
 
   def flush(self):
-    self.rowcount = self.connection._exec_batch(self.exec_list)
+    self.rowcount = self.connection._execute_batch(self.exec_list)
     self.exec_list = []
 
 

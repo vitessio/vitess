@@ -61,8 +61,9 @@ class TestNocache(framework.TestCase):
     # We should have at least one connection
     self.assertEqual(vstart.mget("Transactions.TotalCount", 0)+2, vend.Transactions.TotalCount)
     self.assertEqual(vstart.mget("Transactions.Histograms.Completed.Count", 0)+2, vend.Transactions.Histograms.Completed.Count)
-    self.assertEqual(vstart.mget("TransactionCompletion.Histograms.Commit.Count", 0)+2, vend.TransactionCompletion.Histograms.Commit.Count)
-    self.assertEqual(vstart.mget("Queries.TotalCount", 0)+4, vend.Queries.TotalCount)
+    self.assertEqual(vstart.mget("Queries.TotalCount", 0)+8, vend.Queries.TotalCount)
+    self.assertEqual(vstart.mget("Queries.Histograms.BEGIN.Count", 0)+2, vend.Queries.Histograms.BEGIN.Count)
+    self.assertEqual(vstart.mget("Queries.Histograms.COMMIT.Count", 0)+2, vend.Queries.Histograms.COMMIT.Count)
     self.assertEqual(vstart.mget("Queries.Histograms.INSERT_PK.Count", 0)+1, vend.Queries.Histograms.INSERT_PK.Count)
     self.assertEqual(vstart.mget("Queries.Histograms.DML_PK.Count", 0)+1, vend.Queries.Histograms.DML_PK.Count)
     self.assertEqual(vstart.mget("Queries.Histograms.PASS_SELECT.Count", 0)+2, vend.Queries.Histograms.PASS_SELECT.Count)
@@ -97,7 +98,8 @@ class TestNocache(framework.TestCase):
     vend = self.env.debug_vars()
     self.assertEqual(vstart.mget("Transactions.TotalCount", 0)+1, vend.Transactions.TotalCount)
     self.assertEqual(vstart.mget("Transactions.Histograms.Aborted.Count", 0)+1, vend.Transactions.Histograms.Aborted.Count)
-    self.assertEqual(vstart.mget("TransactionCompletion.Histograms.Rollback.Count", 0)+1, vend.TransactionCompletion.Histograms.Rollback.Count)
+    self.assertEqual(vstart.mget("Queries.Histograms.BEGIN.Count", 0)+1, vend.Queries.Histograms.BEGIN.Count)
+    self.assertEqual(vstart.mget("Queries.Histograms.ROLLBACK.Count", 0)+1, vend.Queries.Histograms.ROLLBACK.Count)
 
   def test_nontx_dml(self):
     vstart = self.env.debug_vars()
@@ -144,20 +146,34 @@ class TestNocache(framework.TestCase):
     finally:
       self.env.conn.rollback()
 
-  def test_for_update(self):
-    try:
-      self.env.execute("select * from vtocc_test where intval=2 for update")
-    except dbexceptions.DatabaseError as e:
-      self.assertContains(str(e), "error: Disallowed")
-    else:
-      self.fail("Did not receive exception")
-
-    # If these throw no exceptions, we're good
+  def test_pass_dml(self):
+    self.env.execute("set vt_strict_mode=0")
     self.env.conn.begin()
-    self.env.execute("select * from vtocc_test where intval=2 for update")
-    self.env.conn.commit()
-    # Make sure the row is not locked for read
-    self.env.execute("select * from vtocc_test where intval=2")
+    try:
+      self.env.execute("insert into vtocc_a(eid, id, name, foo) values (7, 1+1, '', '')")
+      self.env.execute("insert into vtocc_d(eid, id) values (1, 1)")
+      self.env.execute("insert into vtocc_a(eid, id, name, foo) values (8, 2, '', '') on duplicate key update id = 2+1")
+      self.env.execute("update vtocc_a set eid = 1+1 where eid = 1 and id = 1")
+      self.env.execute("insert into vtocc_d(eid, id) values (1, 1)")
+    finally:
+      self.env.conn.rollback()
+      self.env.execute("set vt_strict_mode=1")
+
+  def test_select_lock(self):
+    for lock_mode in ['for update', 'lock in share mode']:
+      try:
+        self.env.execute("select * from vtocc_test where intval=2 %s" % lock_mode)
+      except dbexceptions.DatabaseError as e:
+        self.assertContains(str(e), "error: Disallowed")
+      else:
+        self.fail("Did not receive exception")
+
+      # If these throw no exceptions, we're good
+      self.env.conn.begin()
+      self.env.execute("select * from vtocc_test where intval=2 %s" % lock_mode)
+      self.env.conn.commit()
+      # Make sure the row is not locked for read
+      self.env.execute("select * from vtocc_test where intval=2")
 
   def test_pool_size(self):
     vstart = self.env.debug_vars()
@@ -257,14 +273,12 @@ class TestNocache(framework.TestCase):
 
   def test_schema_reload_time(self):
     vend = self.env.debug_vars()
-    self.assertEqual(vend.Voltron.SchemaReloadTime, 1800 * 1e9)
     self.assertEqual(vend.SchemaReloadTime, 1800 * 1e9)
     mcu = self.env.mysql_conn.cursor()
     mcu.execute("create table vtocc_temp(intval int)")
     # This should cause a reload
     self.env.execute("set vt_schema_reload_time=600")
     vend = self.env.debug_vars()
-    self.assertEqual(vend.Voltron.SchemaReloadTime, 600 * 1e9)
     self.assertEqual(vend.SchemaReloadTime, 600 * 1e9)
     try:
       for i in range(10):
@@ -299,7 +313,7 @@ class TestNocache(framework.TestCase):
 
   def test_query_timeout(self):
     vstart = self.env.debug_vars()
-    conn = tablet_conn.connect("localhost:9461", '', 'test_keyspace', '0', 5)
+    conn = tablet_conn.connect(self.env.address, '', 'test_keyspace', '0', 5, user='youtube-dev-dedicated', password='vtpass')
     cu = cursor.TabletCursor(conn)
     self.env.execute("set vt_query_timeout=0.25")
     try:
@@ -440,8 +454,17 @@ class TestNocache(framework.TestCase):
     self.assertEqual(tstartErrorCounts+1, tendErrorCounts)
     self.assertTrue((tendTimesNs - tstartTimesNs) > 0)
 
+  def test_other(self):
+    cu = self.env.execute("show variables like 'version'")
+    for v in cu:
+      self.assertEqual(v[0], 'version')
+    cu = self.env.execute("describe vtocc_a")
+    self.assertEqual(cu.rowcount, 4)
+    cu = self.env.execute("explain vtocc_a")
+    self.assertEqual(cu.rowcount, 4)
+
   def _verify_mismatch(self, query, bindvars=None):
-    self._verify_error(query, bindvars, "error: Type mismatch")
+    self._verify_error(query, bindvars, "error: type mismatch")
 
   def _verify_error(self, query, bindvars, err):
     self.env.conn.begin()
@@ -455,13 +478,7 @@ class TestNocache(framework.TestCase):
       self.env.conn.rollback()
 
   def _get_vars_query_stats(self, query_stats, table, plan):
-    for stat in query_stats:
-      if stat["Table"] != table:
-        continue
-      if stat["Plan"] != plan:
-        continue
-      return stat["Value"]
-    raise KeyError
+    return query_stats[table + "." + plan]
 
   def _verify_query_stats(self, query_stats, query, table, plan, count, rows, errors):
     for stat in query_stats:
@@ -480,3 +497,77 @@ class TestNocache(framework.TestCase):
     error_count = self.env.run_cases(nocache_cases.cases)
     if error_count != 0:
       self.fail("test_execution errors: %d"%(error_count))
+
+  def test_table_acl_no_access(self):
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, '.*table acl error.*'):
+      self.env.execute("select * from vtocc_acl_no_access where key1=1")
+    self.env.conn.begin()
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, '.*table acl error.*'):
+      self.env.execute("delete from vtocc_acl_no_access where key1=1")
+    self.env.conn.commit()
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, '.*table acl error.*'):
+      self.env.execute("alter table vtocc_acl_no_access comment 'comment'")
+    cu = cursor.StreamCursor(self.env.conn)
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, '.*table acl error.*'):
+      cu.execute("select * from vtocc_acl_no_access where key1=1", {})
+    cu.close()
+
+  def test_table_acl_read_only(self):
+    self.env.execute("select * from vtocc_acl_read_only where key1=1")
+    self.env.conn.begin()
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, '.*table acl error.*'):
+      self.env.execute("delete from vtocc_acl_read_only where key1=1")
+    self.env.conn.commit()
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, '.*table acl error.*'):
+      self.env.execute("alter table vtocc_acl_read_only comment 'comment'")
+    cu = cursor.StreamCursor(self.env.conn)
+    cu.execute("select * from vtocc_acl_read_only where key1=1", {})
+    cu.fetchall()
+    cu.close()
+
+  def test_table_acl_read_write(self):
+    self.env.execute("select * from vtocc_acl_read_write where key1=1")
+    self.env.conn.begin()
+    self.env.execute("delete from vtocc_acl_read_write where key1=1")
+    self.env.conn.commit()
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, '.*table acl error.*'):
+      self.env.execute("alter table vtocc_acl_read_write comment 'comment'")
+    cu = cursor.StreamCursor(self.env.conn)
+    cu.execute("select * from vtocc_acl_read_write where key1=1", {})
+    cu.fetchall()
+    cu.close()
+
+  def test_table_acl_admin(self):
+    self.env.execute("select * from vtocc_acl_admin where key1=1")
+    self.env.conn.begin()
+    self.env.execute("delete from vtocc_acl_admin where key1=1")
+    self.env.conn.commit()
+    self.env.execute("alter table vtocc_acl_admin comment 'comment'")
+    cu = cursor.StreamCursor(self.env.conn)
+    cu.execute("select * from vtocc_acl_admin where key1=1", {})
+    cu.fetchall()
+    cu.close()
+
+  def test_table_acl_unmatched(self):
+    self.env.execute("select * from vtocc_acl_unmatched where key1=1")
+    self.env.conn.begin()
+    self.env.execute("delete from vtocc_acl_unmatched where key1=1")
+    self.env.conn.commit()
+    self.env.execute("alter table vtocc_acl_unmatched comment 'comment'")
+    cu = cursor.StreamCursor(self.env.conn)
+    cu.execute("select * from vtocc_acl_unmatched where key1=1", {})
+    cu.fetchall()
+    cu.close()
+
+  def test_table_acl_all_user_read_only(self):
+    self.env.execute("select * from vtocc_acl_all_user_read_only where key1=1")
+    self.env.conn.begin()
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, '.*table acl error.*'):
+      self.env.execute("delete from vtocc_acl_all_user_read_only where key1=1")
+    self.env.conn.commit()
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, '.*table acl error.*'):
+      self.env.execute("alter table vtocc_acl_all_user_read_only comment 'comment'")
+    cu = cursor.StreamCursor(self.env.conn)
+    cu.execute("select * from vtocc_acl_all_user_read_only where key1=1", {})
+    cu.fetchall()
+    cu.close()

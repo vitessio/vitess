@@ -7,6 +7,7 @@ package stats
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"sync"
 )
 
@@ -18,6 +19,7 @@ type Counters struct {
 	counts map[string]int64
 }
 
+// NewCounters create a new Counters instance. If name is set, all publishes it.
 func NewCounters(name string) *Counters {
 	c := &Counters{counts: make(map[string]int64)}
 	if name != "" {
@@ -26,24 +28,28 @@ func NewCounters(name string) *Counters {
 	return c
 }
 
+// String is used by expvar.
 func (c *Counters) String() string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return counterToString(c.counts)
 }
 
+// Add adds a value to a named counter.
 func (c *Counters) Add(name string, value int64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.counts[name] += value
 }
 
+// Set sets the value of a named counter.
 func (c *Counters) Set(name string, value int64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.counts[name] = value
 }
 
+// Counts returns a copy of the Counters' map.
 func (c *Counters) Counts() map[string]int64 {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -59,10 +65,12 @@ func (c *Counters) Counts() map[string]int64 {
 // a map of int64 as an expvar.
 type CountersFunc func() map[string]int64
 
+// Counts returns a copy of the Counters' map.
 func (f CountersFunc) Counts() map[string]int64 {
 	return f()
 }
 
+// String is used by expvar.
 func (f CountersFunc) String() string {
 	m := f()
 	if m == nil {
@@ -85,4 +93,74 @@ func counterToString(m map[string]int64) string {
 	}
 	fmt.Fprintf(b, "}")
 	return b.String()
+}
+
+// MultiCounters is a multidimensional Counters implementation where
+// names of categories are compound names made with joining multiple
+// strings with '.'.
+type MultiCounters struct {
+	Counters
+	labels []string
+}
+
+// NewMultiCounters creates a new MultiCounters instance, and publishes it
+// if name is set.
+func NewMultiCounters(name string, labels []string) *MultiCounters {
+	t := &MultiCounters{
+		Counters: Counters{counts: make(map[string]int64)},
+		labels:   labels,
+	}
+	if name != "" {
+		Publish(name, t)
+	}
+	return t
+}
+func (mc *MultiCounters) Labels() []string {
+	return mc.labels
+}
+
+// Add adds a value to a named counter. len(names) must be equal to
+// len(Labels)
+func (mc *MultiCounters) Add(names []string, value int64) {
+	if len(names) != len(mc.labels) {
+		panic("MultiCounters: wrong number of values in Add")
+	}
+	mc.Counters.Add(strings.Join(names, "."), value)
+}
+
+// Set sets the value of a named counter. len(names) must be equal to
+// len(Labels)
+func (mc *MultiCounters) Set(names []string, value int64) {
+	if len(names) != len(mc.labels) {
+		panic("MultiCounters: wrong number of values in Set")
+	}
+	mc.Counters.Set(strings.Join(names, "."), value)
+}
+
+// MultiCountersFunc is a multidimensional CountersFunc implementation
+// where names of categories are compound names made with joining
+// multiple strings with '.'.  Since the map is returned by the
+// function, we assume it's in the rigth format (meaning each key is
+// of the form 'aaa.bbb.ccc' with as many elements as there are in
+// Labels).
+type MultiCountersFunc struct {
+	CountersFunc
+	labels []string
+}
+
+func (mcf *MultiCountersFunc) Labels() []string {
+	return mcf.labels
+}
+
+// NewMultiCountersFunc creates a new MultiCountersFunc mapping to the provided
+// function.
+func NewMultiCountersFunc(name string, labels []string, f CountersFunc) *MultiCountersFunc {
+	t := &MultiCountersFunc{
+		CountersFunc: f,
+		labels:       labels,
+	}
+	if name != "" {
+		Publish(name, t)
+	}
+	return t
 }

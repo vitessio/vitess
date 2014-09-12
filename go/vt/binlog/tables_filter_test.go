@@ -29,7 +29,6 @@ func TestTablesFilterPass(t *testing.T) {
 				Sql:      []byte("dml2 /* _stream included2 (id ) (500 ); */"),
 			},
 		},
-		GroupId: 1,
 	}
 	var got string
 	f := TablesFilterFunc(testTables, func(reply *proto.BinlogTransaction) error {
@@ -37,7 +36,7 @@ func TestTablesFilterPass(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `statement: <6, "set1"> statement: <4, "dml1 /* _stream included1 (id ) (500 ); */"> statement: <4, "dml2 /* _stream included2 (id ) (500 ); */"> position: "1" `
+	want := `statement: <6, "set1"> statement: <4, "dml1 /* _stream included1 (id ) (500 ); */"> statement: <4, "dml2 /* _stream included2 (id ) (500 ); */"> position: "<nil>" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
@@ -54,7 +53,6 @@ func TestTablesFilterSkip(t *testing.T) {
 				Sql:      []byte("dml1 /* _stream excluded1 (id ) (500 ); */"),
 			},
 		},
-		GroupId: 1,
 	}
 	var got string
 	f := TablesFilterFunc(testTables, func(reply *proto.BinlogTransaction) error {
@@ -62,7 +60,7 @@ func TestTablesFilterSkip(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `position: "1" `
+	want := `position: "<nil>" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
@@ -79,7 +77,6 @@ func TestTablesFilterDDL(t *testing.T) {
 				Sql:      []byte("ddl"),
 			},
 		},
-		GroupId: 1,
 	}
 	var got string
 	f := TablesFilterFunc(testTables, func(reply *proto.BinlogTransaction) error {
@@ -87,7 +84,7 @@ func TestTablesFilterDDL(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `statement: <6, "set1"> statement: <5, "ddl"> position: "1" `
+	want := `position: "<nil>" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
@@ -107,7 +104,6 @@ func TestTablesFilterMalformed(t *testing.T) {
 				Sql:      []byte("dml1 /* _stream excluded1*/"),
 			},
 		},
-		GroupId: 1,
 	}
 	var got string
 	f := TablesFilterFunc(testTables, func(reply *proto.BinlogTransaction) error {
@@ -115,7 +111,7 @@ func TestTablesFilterMalformed(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `position: "1" `
+	want := `position: "<nil>" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}

@@ -246,10 +246,10 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 	sourceIsMaster := false
 	readOnly = true
 
-	slaveStatus, slaveErr := mysqld.slaveStatus()
-	if slaveErr == nil {
-		slaveStartRequired = (slaveStatus["Slave_IO_Running"] == "Yes" && slaveStatus["Slave_SQL_Running"] == "Yes")
-	} else if slaveErr == ErrNotSlave {
+	slaveStatus, err := mysqld.SlaveStatus()
+	if err == nil {
+		slaveStartRequired = slaveStatus.SlaveRunning()
+	} else if err == ErrNotSlave {
 		sourceIsMaster = true
 	} else {
 		// If we can't get any data, just fail.
@@ -265,12 +265,12 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 	// If the source is a slave use the master replication position
 	// unless we are allowing hierachical replicas.
 	masterAddr := ""
-	var replicationPosition *proto.ReplicationPosition
+	var replicationPosition proto.ReplicationPosition
 	if sourceIsMaster {
 		if err = mysqld.SetReadOnly(true); err != nil {
 			return
 		}
-		replicationPosition, err = mysqld.MasterStatus()
+		replicationPosition, err = mysqld.MasterPosition()
 		if err != nil {
 			return
 		}
@@ -279,10 +279,13 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 		if err = mysqld.StopSlave(hookExtraEnv); err != nil {
 			return
 		}
-		replicationPosition, err = mysqld.SlaveStatus()
+		var slaveStatus *proto.ReplicationStatus
+		slaveStatus, err = mysqld.SlaveStatus()
 		if err != nil {
 			return
 		}
+		replicationPosition = slaveStatus.Position
+
 		// We are a slave, check our replication strategy before
 		// choosing the master address.
 		if allowHierarchicalReplication {
@@ -295,7 +298,7 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 		}
 	}
 
-	if err = Shutdown(mysqld, true, MysqlWaitTime); err != nil {
+	if err = mysqld.Shutdown(true, MysqlWaitTime); err != nil {
 		return
 	}
 
@@ -306,7 +309,7 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 	} else {
 		var sm *SnapshotManifest
 		sm, snapshotErr = newSnapshotManifest(sourceAddr, mysqld.IpAddr(),
-			masterAddr, dbName, dataFiles, replicationPosition, nil)
+			masterAddr, dbName, dataFiles, replicationPosition, proto.ReplicationPosition{})
 		if snapshotErr != nil {
 			log.Errorf("CreateSnapshot failed: %v", snapshotErr)
 		} else {
@@ -347,7 +350,7 @@ func (mysqld *Mysqld) SnapshotSourceEnd(slaveStartRequired, readOnly, deleteSnap
 	}
 
 	// Try to restart mysqld
-	if err := Start(mysqld, MysqlWaitTime); err != nil {
+	if err := mysqld.Start(MysqlWaitTime); err != nil {
 		return err
 	}
 
@@ -413,7 +416,7 @@ func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest, fe
 	}
 
 	log.V(6).Infof("Shutdown mysqld")
-	if err := Shutdown(mysqld, true, MysqlWaitTime); err != nil {
+	if err := mysqld.Shutdown(true, MysqlWaitTime); err != nil {
 		return err
 	}
 
@@ -423,15 +426,15 @@ func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest, fe
 	}
 
 	log.V(6).Infof("Restart mysqld")
-	if err := Start(mysqld, MysqlWaitTime); err != nil {
+	if err := mysqld.Start(MysqlWaitTime); err != nil {
 		return err
 	}
 
-	cmdList, err := StartReplicationCommands(mysqld, snapshotManifest.ReplicationState)
+	cmdList, err := mysqld.StartReplicationCommands(snapshotManifest.ReplicationStatus)
 	if err != nil {
 		return err
 	}
-	if err := mysqld.executeSuperQueryList(cmdList); err != nil {
+	if err := mysqld.ExecuteSuperQueryList(cmdList); err != nil {
 		return err
 	}
 

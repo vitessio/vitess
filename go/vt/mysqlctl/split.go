@@ -90,13 +90,17 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/bufio2"
 	"github.com/youtube/vitess/go/cgzip"
 	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/dbconnpool"
+	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl/csvsplitter"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -138,7 +142,7 @@ type SplitSnapshotManifest struct {
 // masterAddr is the address of the server to use as master.
 // pos is the replication position to use on that master.
 // myMasterPos is the local server master position
-func NewSplitSnapshotManifest(myAddr, myMysqlAddr, masterAddr, dbName string, files []SnapshotFile, pos, myMasterPos *proto.ReplicationPosition, keyRange key.KeyRange, sd *proto.SchemaDefinition) (*SplitSnapshotManifest, error) {
+func NewSplitSnapshotManifest(myAddr, myMysqlAddr, masterAddr, dbName string, files []SnapshotFile, pos, myMasterPos proto.ReplicationPosition, keyRange key.KeyRange, sd *proto.SchemaDefinition) (*SplitSnapshotManifest, error) {
 	sm, err := newSnapshotManifest(myAddr, myMysqlAddr, masterAddr, dbName, files, pos, myMasterPos)
 	if err != nil {
 		return nil, err
@@ -161,10 +165,40 @@ func SanityCheckManifests(ssms []*SplitSnapshotManifest) error {
 	return nil
 }
 
-func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool, hookExtraEnv map[string]string) (slaveStartRequired, readOnly bool, replicationPosition, myMasterPosition *proto.ReplicationPosition, masterAddr string, err error) {
+// getReplicationPositionForClones returns what position the clones
+// need to replicate from. Can be ours if we are a master, or our master's.
+func (mysqld *Mysqld) getReplicationPositionForClones(allowHierarchicalReplication bool) (replicationPosition proto.ReplicationPosition, masterAddr string, err error) {
+	// If the source is a slave use the master replication position,
+	// unless we are allowing hierachical replicas.
+	var status *proto.ReplicationStatus
+	status, err = mysqld.SlaveStatus()
+	if err == ErrNotSlave {
+		// we are really a master, so we need that position
+		replicationPosition, err = mysqld.MasterPosition()
+		if err != nil {
+			return
+		}
+		masterAddr = mysqld.IpAddr()
+		return
+	}
+	if err != nil {
+		return
+	}
+	replicationPosition = status.Position
+
+	// we are a slave, check our replication strategy
+	if allowHierarchicalReplication {
+		masterAddr = mysqld.IpAddr()
+	} else {
+		masterAddr, err = mysqld.GetMasterAddr()
+	}
+	return
+}
+
+func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool, hookExtraEnv map[string]string) (slaveStartRequired, readOnly bool, replicationPosition, myMasterPosition proto.ReplicationPosition, masterAddr string, connToRelease dbconnpool.PoolConnection, err error) {
 	// save initial state so we can restore on Start()
-	if slaveStatus, slaveErr := mysqld.slaveStatus(); slaveErr == nil {
-		slaveStartRequired = (slaveStatus["Slave_IO_Running"] == "Yes" && slaveStatus["Slave_SQL_Running"] == "Yes")
+	if slaveStatus, slaveErr := mysqld.SlaveStatus(); slaveErr == nil {
+		slaveStartRequired = slaveStatus.SlaveRunning()
 	}
 
 	// For masters, set read-only so we don't write anything during snapshot
@@ -182,50 +216,39 @@ func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool, hookE
 		return
 	}
 
-	// If the source is a slave use the master replication position,
-	// unless we are allowing hierachical replicas.
-	replicationPosition, err = mysqld.SlaveStatus()
+	// Get the replication position and master addr
+	replicationPosition, masterAddr, err = mysqld.getReplicationPositionForClones(allowHierarchicalReplication)
 	if err != nil {
-		if err != ErrNotSlave {
-			// this is a real error
-			return
-		}
-		// we are really a master, so we need that position
-		replicationPosition, err = mysqld.MasterStatus()
-		if err != nil {
-			return
-		}
-		masterAddr = mysqld.IpAddr()
-	} else {
-		// we are a slave, check our replication strategy
-		if allowHierarchicalReplication {
-			masterAddr = mysqld.IpAddr()
-		} else {
-			masterAddr, err = mysqld.GetMasterAddr()
-			if err != nil {
-				return
-			}
-		}
+		return
 	}
 
 	// get our master position, some targets may use it
-	myMasterPosition, err = mysqld.MasterStatus()
+	myMasterPosition, err = mysqld.MasterPosition()
 	if err != nil && err != ErrNotMaster {
 		// this is a real error
 		return
 	}
 
 	log.Infof("Flush tables")
-	if err = mysqld.executeSuperQuery("FLUSH TABLES WITH READ LOCK"); err != nil {
+	if connToRelease, err = mysqld.dbaPool.Get(); err != nil {
 		return
 	}
+	log.Infof("exec FLUSH TABLES WITH READ LOCK")
+	if _, err = connToRelease.ExecuteFetch("FLUSH TABLES WITH READ LOCK", 10000, false); err != nil {
+		connToRelease.Recycle()
+		return
+	}
+
 	return
 }
 
-func (mysqld *Mysqld) restoreAfterSnapshot(slaveStartRequired, readOnly bool, hookExtraEnv map[string]string) (err error) {
+func (mysqld *Mysqld) restoreAfterSnapshot(slaveStartRequired, readOnly bool, hookExtraEnv map[string]string, connToRelease dbconnpool.PoolConnection) (err error) {
 	// Try to fix mysqld regardless of snapshot success..
-	if err = mysqld.executeSuperQuery("UNLOCK TABLES"); err != nil {
-		return
+	log.Infof("exec UNLOCK TABLES")
+	_, err = connToRelease.ExecuteFetch("UNLOCK TABLES", 10000, false)
+	connToRelease.Recycle()
+	if err != nil {
+		return fmt.Errorf("failed to UNLOCK TABLES: %v", err)
 	}
 
 	// restore original mysqld state that we saved above
@@ -395,15 +418,15 @@ func (mysqld *Mysqld) dumpTableSplit(td proto.TableDefinition, dbName, keyName s
 	}
 	sio, err := fillStringTemplate(selectIntoOutfile, queryParams)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fillStringTemplate for %v: %v", td.Name, err)
 	}
-	if err := mysqld.executeSuperQuery(sio); err != nil {
-		return nil, err
+	if err := mysqld.ExecuteSuperQuery(sio); err != nil {
+		return nil, fmt.Errorf("ExecuteSuperQuery failed for %v with query %v: %v", td.Name, sio, err)
 	}
 
 	file, err := os.Open(filename)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Cannot open file %v for table %v: %v", filename, td.Name, err)
 	}
 
 	defer func() {
@@ -419,7 +442,7 @@ func (mysqld *Mysqld) dumpTableSplit(td proto.TableDefinition, dbName, keyName s
 		filenamePattern := path.Join(cloneSourcePath, td.Name+".%v.csv.gz")
 		w, err := newCompressedNamedHasherWriter(filenamePattern, mysqld.SnapshotDir, td.Name, maximumFilesize)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("newCompressedNamedHasherWriter failed for %v: %v", td.Name, err)
 		}
 		hasherWriters[kr] = w
 	}
@@ -431,13 +454,13 @@ func (mysqld *Mysqld) dumpTableSplit(td proto.TableDefinition, dbName, keyName s
 			break
 		}
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("ReadRecord failed for table %v: %v", td.Name, err)
 		}
 		for kr, w := range hasherWriters {
 			if kr.Contains(keyspaceId) {
 				_, err = w.Write(line)
 				if err != nil {
-					return nil, err
+					return nil, fmt.Errorf("Write failed for %v: %v", td.Name, err)
 				}
 				break
 			}
@@ -447,7 +470,7 @@ func (mysqld *Mysqld) dumpTableSplit(td proto.TableDefinition, dbName, keyName s
 	snapshotFiles := make(map[key.KeyRange][]SnapshotFile)
 	for i, hw := range hasherWriters {
 		if snapshotFiles[i], err = hw.SnapshotFiles(); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("SnapshotFiles failed for %v: %v", td.Name, err)
 		}
 	}
 
@@ -468,7 +491,7 @@ func (mysqld *Mysqld) dumpTableFull(td proto.TableDefinition, dbName, mainCloneS
 	if err != nil {
 		return nil, err
 	}
-	if err := mysqld.executeSuperQuery(sio); err != nil {
+	if err := mysqld.ExecuteSuperQuery(sio); err != nil {
 		return nil, err
 	}
 
@@ -516,7 +539,7 @@ func (mysqld *Mysqld) dumpTableFull(td proto.TableDefinition, dbName, mainCloneS
 //   keyName+keyType are empty. It will create a single snapshot of
 //   the contents of the tables.
 // Note combinations of table subset and keyranges are not supported.
-func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyName string, keyType key.KeyspaceIdType, sourceAddr string, allowHierarchicalReplication bool, snapshotConcurrency int, tables []string, skipSlaveRestart bool, maximumFilesize uint64, hookExtraEnv map[string]string) (snapshotManifestFilenames []string, err error) {
+func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyName string, keyType key.KeyspaceIdType, sourceAddr string, allowHierarchicalReplication bool, snapshotConcurrency int, tables, excludeTables []string, skipSlaveRestart bool, maximumFilesize uint64, hookExtraEnv map[string]string) (snapshotManifestFilenames []string, err error) {
 	if dbName == "" {
 		err = fmt.Errorf("no database name provided")
 		return
@@ -556,7 +579,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 	}
 
 	// get the schema for each table
-	sd, fetchErr := mysqld.GetSchema(dbName, tables, true)
+	sd, fetchErr := mysqld.GetSchema(dbName, tables, excludeTables, true)
 	if fetchErr != nil {
 		return []string{}, fetchErr
 	}
@@ -565,7 +588,9 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 	}
 	sd.SortByReverseDataLength()
 
-	slaveStartRequired, readOnly, replicationPosition, myMasterPosition, masterAddr, err := mysqld.prepareToSnapshot(allowHierarchicalReplication, hookExtraEnv)
+	// prepareToSnapshot will get the tablet in the rigth state,
+	// and return the current mysql status.
+	slaveStartRequired, readOnly, replicationPosition, myMasterPosition, masterAddr, conn, err := mysqld.prepareToSnapshot(allowHierarchicalReplication, hookExtraEnv)
 	if err != nil {
 		return
 	}
@@ -576,9 +601,10 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 		slaveStartRequired = false
 	}
 	defer func() {
-		err = replaceError(err, mysqld.restoreAfterSnapshot(slaveStartRequired, readOnly, hookExtraEnv))
+		err = replaceError(err, mysqld.restoreAfterSnapshot(slaveStartRequired, readOnly, hookExtraEnv, conn))
 	}()
 
+	// dump the files in parallel with a pre-defined concurrency
 	datafiles := make([]map[key.KeyRange][]SnapshotFile, len(sd.TableDefinitions))
 	dumpTableWorker := func(i int) (err error) {
 		table := sd.TableDefinitions[i]
@@ -607,6 +633,17 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 		log.Errorf("Cannot remove %v: %v", mainCloneSourcePath, e)
 	}
 
+	// Check the replication position after snapshot is done
+	// hasn't changed, to be sure we haven't inserted any data
+	newReplicationPosition, _, err := mysqld.getReplicationPositionForClones(allowHierarchicalReplication)
+	if err != nil {
+		return
+	}
+	if !newReplicationPosition.Equal(replicationPosition) {
+		return nil, fmt.Errorf("replicationPosition position changed during snapshot, from %v to %v", replicationPosition, newReplicationPosition)
+	}
+
+	// Write all the manifest files
 	ssmFiles := make([]string, len(keyRanges))
 	for i, kr := range keyRanges {
 		krDatafiles := make([]SnapshotFile, 0, len(datafiles))
@@ -625,11 +662,34 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 		}
 	}
 
+	// Call the (optional) hook to send the files somewhere else
+	wg := sync.WaitGroup{}
+	rec := concurrency.AllErrorRecorder{}
+	for _, kr := range keyRanges {
+		wg.Add(1)
+		go func(kr key.KeyRange) {
+			defer wg.Done()
+			h := hook.NewSimpleHook("copy_snapshot_to_storage")
+			h.ExtraEnv = make(map[string]string)
+			for k, v := range hookExtraEnv {
+				h.ExtraEnv[k] = v
+			}
+			h.ExtraEnv["KEYRANGE"] = fmt.Sprintf("%v-%v", kr.Start.Hex(), kr.End.Hex())
+			h.ExtraEnv["SNAPSHOT_PATH"] = cloneSourcePaths[kr]
+			rec.RecordError(h.ExecuteOptional())
+		}(kr)
+	}
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, err
+	}
+
+	// Return all the URLs for the MANIFESTs
 	snapshotURLPaths := make([]string, len(keyRanges))
 	for i := 0; i < len(keyRanges); i++ {
 		relative, err := filepath.Rel(mysqld.SnapshotDir, ssmFiles[i])
 		if err != nil {
-			return []string{}, err
+			return nil, err
 		}
 		snapshotURLPaths[i] = path.Join(SnapshotURLPath, relative)
 	}
@@ -654,7 +714,7 @@ func (lsf localSnapshotFile) tableName() string {
 	return lsf.file.TableName
 }
 
-// makeCreateTableSql returns a table creation statement
+// MakeSplitCreateTableSql returns a table creation statement
 // that is modified to be faster, and the associated optional
 // 'alter table' to modify the table at the end.
 // - If the strategy contains the string 'skipAutoIncrement(NNN)' then
@@ -665,7 +725,7 @@ func (lsf localSnapshotFile) tableName() string {
 // the data into a myisam table and we then convert to innodb
 // - If the strategy contains the string 'delayPrimaryKey',
 // then the primary key index will be added afterwards (use with useMyIsam)
-func makeCreateTableSql(schema, tableName string, strategy string) (string, string, error) {
+func MakeSplitCreateTableSql(schema, databaseName, tableName string, strategy string) (string, string, error) {
 	alters := make([]string, 0, 5)
 	lines := strings.Split(schema, "\n")
 	delayPrimaryKey := strings.Contains(strategy, "delayPrimaryKey")
@@ -673,6 +733,11 @@ func makeCreateTableSql(schema, tableName string, strategy string) (string, stri
 	useMyIsam := strings.Contains(strategy, "useMyIsam")
 
 	for i, line := range lines {
+		if strings.HasPrefix(line, "CREATE TABLE `") {
+			lines[i] = strings.Replace(line, "CREATE TABLE `", "CREATE TABLE `"+databaseName+"`.`", 1)
+			continue
+		}
+
 		if strings.Contains(line, " AUTO_INCREMENT") {
 			// only add to the final ALTER TABLE if we're not
 			// dropping the AUTO_INCREMENT on the table
@@ -712,7 +777,7 @@ func makeCreateTableSql(schema, tableName string, strategy string) (string, stri
 
 	alter := ""
 	if len(alters) > 0 {
-		alter = "ALTER TABLE `" + tableName + "` " + strings.Join(alters, ", ")
+		alter = "ALTER TABLE `" + databaseName + "`.`" + tableName + "` " + strings.Join(alters, ", ")
 	}
 	return strings.Join(lines, "\n"), alter, nil
 }
@@ -731,37 +796,59 @@ func buildQueryList(destinationDbName, query string, writeBinLogs bool) []string
 }
 
 // MultiRestore is the main entry point for multi restore.
-// - If the strategy contains the string 'writeBinLogs' then we will
-//   also write to the binary logs.
-// - If the strategy contains the command 'populateBlpCheckpoint' then we
-//   will populate the blp_checkpoint table with master positions to start from
-func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.KeyRange, sourceAddrs []*url.URL, snapshotConcurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) (err error) {
+//
+// We will either:
+// - read from the network if sourceAddrs != nil
+// - read from a disk snapshot if fromStoragePaths != nil
+//
+// The strategy is used as follows:
+// - If it contains the string 'writeBinLogs' then we will also write
+//   to the binary logs.
+// - If it contains the command 'populateBlpCheckpoint' then we will
+//   populate the blp_checkpoint table with master positions to start from
+//   - If is also contains the command 'dontStartBinlogPlayer' we won't
+//   start binlog replication on the destination (but it will be configured)
+func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.KeyRange, sourceAddrs []*url.URL, fromStoragePaths []string, snapshotConcurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) (err error) {
 	writeBinLogs := strings.Contains(strategy, "writeBinLogs")
 
-	manifests := make([]*SplitSnapshotManifest, len(sourceAddrs))
-	rc := concurrency.NewResourceConstraint(fetchConcurrency)
-	for i, sourceAddr := range sourceAddrs {
-		rc.Add(1)
-		go func(sourceAddr *url.URL, i int) {
-			rc.Acquire()
-			defer rc.ReleaseAndDone()
-			if rc.HasErrors() {
-				return
-			}
+	var manifests []*SplitSnapshotManifest
+	if sourceAddrs != nil {
+		// get the manifests from the network
+		manifests = make([]*SplitSnapshotManifest, len(sourceAddrs))
+		rc := concurrency.NewResourceConstraint(fetchConcurrency)
+		for i, sourceAddr := range sourceAddrs {
+			rc.Add(1)
+			go func(sourceAddr *url.URL, i int) {
+				rc.Acquire()
+				defer rc.ReleaseAndDone()
+				if rc.HasErrors() {
+					return
+				}
 
-			var sourceDbName string
-			if len(sourceAddr.Path) < 2 { // "" or "/"
-				sourceDbName = destinationDbName
-			} else {
-				sourceDbName = sourceAddr.Path[1:]
+				var sourceDbName string
+				if len(sourceAddr.Path) < 2 { // "" or "/"
+					sourceDbName = destinationDbName
+				} else {
+					sourceDbName = sourceAddr.Path[1:]
+				}
+				ssm, e := fetchSnapshotManifestWithRetry("http://"+sourceAddr.Host, sourceDbName, keyRanges[i], fetchRetryCount)
+				manifests[i] = ssm
+				rc.RecordError(e)
+			}(sourceAddr, i)
+		}
+		if err = rc.Wait(); err != nil {
+			return
+		}
+	} else {
+		// get the manifests from the local snapshots
+		manifests = make([]*SplitSnapshotManifest, len(fromStoragePaths))
+		for i, fromStoragePath := range fromStoragePaths {
+			var err error
+			manifests[i], err = readSnapshotManifest(fromStoragePath)
+			if err != nil {
+				return err
 			}
-			ssm, e := fetchSnapshotManifestWithRetry("http://"+sourceAddr.Host, sourceDbName, keyRanges[i], fetchRetryCount)
-			manifests[i] = ssm
-			rc.RecordError(e)
-		}(sourceAddr, i)
-	}
-	if err = rc.Wait(); err != nil {
-		return
+		}
 	}
 
 	if e := SanityCheckManifests(manifests); e != nil {
@@ -787,11 +874,11 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.Key
 	}()
 
 	// Handle our concurrency:
-	// - fetchConcurrency tasks for network
+	// - fetchConcurrency tasks for network / decompress from disk
 	// - insertTableConcurrency for table inserts from a file
 	//   into an innodb table
 	// - snapshotConcurrency tasks for table inserts / modify tables
-	sems := make(map[string]*sync2.Semaphore, len(manifests[0].SchemaDefinition.TableDefinitions)+3)
+	sems := make(map[string]*sync2.Semaphore, len(manifests[0].SchemaDefinition.TableDefinitions)+2)
 	sems["net"] = sync2.NewSemaphore(fetchConcurrency, 0)
 	sems["db"] = sync2.NewSemaphore(snapshotConcurrency, 0)
 
@@ -824,7 +911,7 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.Key
 	createViewCmds := make([]string, 0, 16)
 	for _, td := range manifest.SchemaDefinition.TableDefinitions {
 		if td.Type == proto.TABLE_BASE_TABLE {
-			createDbCmd, alterTable, err := makeCreateTableSql(td.Schema, td.Name, strategy)
+			createDbCmd, alterTable, err := MakeSplitCreateTableSql(td.Schema, destinationDbName, td.Name, strategy)
 			if err != nil {
 				return err
 			}
@@ -847,7 +934,7 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.Key
 		}
 	}
 	createDbCmds = append(createDbCmds, createViewCmds...)
-	if err = mysqld.executeSuperQueryList(createDbCmds); err != nil {
+	if err = mysqld.ExecuteSuperQueryList(createDbCmds); err != nil {
 		return
 	}
 
@@ -902,7 +989,11 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.Key
 					mrc.Release("net")
 					return
 				}
-				e = fetchFileWithRetry(lsf.url(), lsf.file.Hash, lsf.filename(), fetchRetryCount)
+				if sourceAddrs == nil {
+					e = uncompressLocalFile(path.Join(fromStoragePaths[manifestIndex], path.Base(lsf.file.Path)), lsf.file.Hash, lsf.filename())
+				} else {
+					e = fetchFileWithRetry(lsf.url(), lsf.file.Hash, lsf.filename(), fetchRetryCount)
+				}
 				mrc.Release("net")
 				if e != nil {
 					mrc.RecordError(e)
@@ -935,7 +1026,7 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.Key
 
 				// load the data in
 				queries := buildQueryList(destinationDbName, loadStatement, writeBinLogs)
-				e = mysqld.executeSuperQueryList(queries)
+				e = mysqld.ExecuteSuperQueryList(queries)
 				if e != nil {
 					mrc.RecordError(e)
 					return
@@ -946,7 +1037,7 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.Key
 				remainingInserts := jobCount[lsf.tableName()].Add(-1)
 				if remainingInserts == 0 && postSql[lsf.tableName()] != "" {
 					queries = buildQueryList(destinationDbName, postSql[lsf.tableName()], writeBinLogs)
-					e = mysqld.executeSuperQueryList(queries)
+					e = mysqld.ExecuteSuperQueryList(queries)
 					if e != nil {
 						mrc.RecordError(e)
 						return
@@ -963,20 +1054,19 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.Key
 	// populate blp_checkpoint table if we want to
 	if strings.Index(strategy, "populateBlpCheckpoint") != -1 {
 		queries := make([]string, 0, 4)
-		queries = append(queries, "USE `_vt`")
 		if !writeBinLogs {
 			queries = append(queries, "SET sql_log_bin = OFF")
 			queries = append(queries, "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
 		}
-		for manifestIndex, manifest := range manifests {
-			insertRecovery := fmt.Sprintf(
-				`insert into _vt.blp_checkpoint (source_shard_uid, group_id, time_updated) values (%v, %v, %v)`,
-				manifestIndex,
-				manifest.Source.MasterState.ReplicationPosition.MasterLogGroupId,
-				time.Now().Unix())
-			queries = append(queries, insertRecovery)
+		queries = append(queries, binlogplayer.CreateBlpCheckpoint()...)
+		flags := ""
+		if strings.Index(strategy, "dontStartBinlogPlayer") != -1 {
+			flags = binlogplayer.BLP_FLAG_DONT_START
 		}
-		if err = mysqld.executeSuperQueryList(queries); err != nil {
+		for manifestIndex, manifest := range manifests {
+			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(uint32(manifestIndex), manifest.Source.MasterPosition, time.Now().Unix(), flags))
+		}
+		if err = mysqld.ExecuteSuperQueryList(queries); err != nil {
 			return err
 		}
 	}

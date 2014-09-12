@@ -105,6 +105,9 @@ func callOnceAndCheck(t *testing.T, client *Client) {
 }
 
 func TestStreamingRpc(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping wait-based test in short mode.")
+	}
 
 	client := makeLink(t)
 

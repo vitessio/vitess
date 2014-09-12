@@ -21,7 +21,10 @@ const (
 )
 
 var (
-	zkConfigPaths = []string{"/etc/zookeeper/zk_client.json"}
+	// DefaultZkConfigPaths is the default list of config files to check.
+	DefaultZkConfigPaths = []string{"/etc/zookeeper/zk_client.json"}
+	// MagicPrefix is the Default name for the root note in the zookeeper tree.
+	MagicPrefix = "zk"
 
 	localCell      = flag.String("zk.local-cell", "", "closest zk cell used for /zk/local paths")
 	localAddrs     = flag.String("zk.local-addrs", "", "list of zookeeper servers (host:port, ...)")
@@ -61,8 +64,8 @@ func ZkCellFromZkPath(zkPath string) (string, error) {
 	if len(pathParts) < 3 {
 		return "", fmt.Errorf("no cell name in path: %v", zkPath)
 	}
-	if pathParts[0] != "" || pathParts[1] != "zk" {
-		return "", fmt.Errorf("path should start with /zk/: %v", zkPath)
+	if pathParts[0] != "" || pathParts[1] != MagicPrefix {
+		return "", fmt.Errorf("path should start with /%v: %v", MagicPrefix, zkPath)
 	}
 	cell := pathParts[2]
 	if strings.Contains(cell, "-") {
@@ -76,7 +79,7 @@ func getConfigPaths() []string {
 	if zkConfigPath != "" {
 		return []string{zkConfigPath}
 	}
-	return zkConfigPaths
+	return DefaultZkConfigPaths
 }
 
 func getCellAddrMap() map[string]string {

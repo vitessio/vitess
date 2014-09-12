@@ -8,28 +8,35 @@ import (
 	"encoding/json"
 	"flag"
 	"io/ioutil"
-	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
-	ts "github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/tableacl"
+	"github.com/youtube/vitess/go/vt/tabletserver"
 )
 
 var (
-	port              = flag.Int("port", 6510, "tcp port to serve on")
-	overridesFile     = flag.String("schema-override", "", "schema overrides file")
-	enableRowcache    = flag.Bool("enable-rowcache", false, "enable rowcacche")
-	enableInvalidator = flag.Bool("enable-invalidator", false, "enable rowcache invalidator")
-	binlogPath        = flag.String("binlog-path", "", "binlog path used by rowcache invalidator")
+	overridesFile  = flag.String("schema-override", "", "schema overrides file")
+	enableRowcache = flag.Bool("enable-rowcache", false, "enable rowcacche")
+	binlogPath     = flag.String("binlog-path", "", "binlog path used by rowcache invalidator")
+	tableAclConfig = flag.String("table-acl-config", "", "path to table access checker config file")
 )
 
-var schemaOverrides []ts.SchemaOverride
+var schemaOverrides []tabletserver.SchemaOverride
+
+func init() {
+	servenv.RegisterDefaultFlags()
+}
 
 func main() {
 	dbconfigs.RegisterFlags()
 	flag.Parse()
+	if len(flag.Args()) > 0 {
+		flag.Usage()
+		log.Fatalf("vtocc doesn't take any positional arguments")
+	}
 	servenv.Init()
 
 	dbConfigs, err := dbconfigs.Init("")
@@ -38,27 +45,30 @@ func main() {
 	}
 	if *enableRowcache {
 		dbConfigs.App.EnableRowcache = true
-		if *enableInvalidator {
-			dbConfigs.App.EnableInvalidator = true
-		}
 	}
 	mycnf := &mysqlctl.Mycnf{BinLogPath: *binlogPath}
-	mysqld := mysqlctl.NewMysqld(mycnf, &dbConfigs.Dba, &dbConfigs.Repl)
+	mysqld := mysqlctl.NewMysqld("Dba", mycnf, &dbConfigs.Dba, &dbConfigs.Repl)
 
 	unmarshalFile(*overridesFile, &schemaOverrides)
 	data, _ := json.MarshalIndent(schemaOverrides, "", "  ")
 	log.Infof("schemaOverrides: %s\n", data)
 
-	ts.InitQueryService()
+	if *tableAclConfig != "" {
+		tableacl.Init(*tableAclConfig)
+	}
+	tabletserver.InitQueryService()
 
-	ts.AllowQueries(&dbConfigs.App, schemaOverrides, ts.LoadCustomRules(), mysqld)
+	err = tabletserver.AllowQueries(&dbConfigs.App, schemaOverrides, tabletserver.LoadCustomRules(), mysqld, true)
+	if err != nil {
+		return
+	}
 
-	log.Infof("starting vtocc %v", *port)
-	servenv.OnClose(func() {
-		time.Sleep(5 * time.Millisecond)
-		ts.DisallowQueries()
+	log.Infof("starting vtocc %v", *servenv.Port)
+	servenv.OnTerm(func() {
+		tabletserver.DisallowQueries()
+		mysqld.Close()
 	})
-	servenv.Run(*port)
+	servenv.RunDefault()
 }
 
 func unmarshalFile(name string, val interface{}) {

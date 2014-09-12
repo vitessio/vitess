@@ -204,3 +204,26 @@ func TestPublishFunc(t *testing.T) {
 		t.Errorf("want %v, got %#v", f(), gotv())
 	}
 }
+
+func TestStringMap(t *testing.T) {
+	clear()
+	c := NewStringMap("stringmap1")
+	c.Set("c1", "val1")
+	c.Set("c2", "val2")
+	c.Set("c2", "val3")
+	want1 := `{"c1": "val1", "c2": "val3"}`
+	want2 := `{"c2": "val3", "c1": "val1"}`
+	if s := c.String(); s != want1 && s != want2 {
+		t.Errorf("want %s or %s, got %s", want1, want2, s)
+	}
+
+	f := StringMapFunc(func() map[string]string {
+		return map[string]string{
+			"c1": "val1",
+			"c2": "val3",
+		}
+	})
+	if s := f.String(); s != want1 && s != want2 {
+		t.Errorf("want %s or %s, got %s", want1, want2, s)
+	}
+}

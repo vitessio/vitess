@@ -5,6 +5,7 @@
 package test
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -32,9 +33,8 @@ func CheckActions(t *testing.T, ts topo.Server) {
 	if err := ts.CreateTablet(tablet); err != nil {
 		t.Fatalf("CreateTablet: %v", err)
 	}
-	tabletAlias := topo.TabletAlias{Cell: cell, Uid: 1}
 
-	actionPath, err := ts.WriteTabletAction(tabletAlias, "contents1")
+	actionPath, err := ts.WriteTabletAction(tablet.Alias, "contents1")
 	if err != nil {
 		t.Fatalf("WriteTabletAction: %v", err)
 	}
@@ -82,7 +82,7 @@ func CheckActions(t *testing.T, ts topo.Server) {
 	done := make(chan struct{}, 1)
 	wg2 := sync.WaitGroup{}
 	wg2.Add(1)
-	go ts.ActionEventLoop(tabletAlias, func(ap, data string) error {
+	go ts.ActionEventLoop(tablet.Alias, func(ap, data string) error {
 		// the actionPath sent back to the action processor
 		// is the exact one we have in normal cases,
 		// but for the tee, we add extra information.
@@ -99,7 +99,7 @@ func CheckActions(t *testing.T, ts topo.Server) {
 		if contents != data {
 			t.Errorf("Bad contents: %v", contents)
 		}
-		if ta != tabletAlias {
+		if ta != tablet.Alias {
 			t.Errorf("Bad tablet alias: %v", ta)
 		}
 
@@ -122,4 +122,105 @@ func CheckActions(t *testing.T, ts topo.Server) {
 	wg2.Wait()
 	close(done)
 	wg1.Wait()
+
+	// start an action, and try to purge all actions, to test
+	// PurgeTabletActions
+	actionPath, err = ts.WriteTabletAction(tablet.Alias, "contents2")
+	if err != nil {
+		t.Fatalf("WriteTabletAction(contents2): %v", err)
+	}
+	if err := ts.PurgeTabletActions(tablet.Alias, func(data string) bool {
+		return true
+	}); err != nil {
+		t.Fatalf("PurgeTabletActions(contents2) failed: %v", err)
+	}
+	if _, _, _, err := ts.ReadTabletActionPath(actionPath); err != topo.ErrNoNode {
+		t.Fatalf("ReadTabletActionPath(contents2) should have failed with ErrNoNode: %v", err)
+	}
+}
+
+func CheckLotsOfActions(t *testing.T, ts topo.Server) {
+	cell := getLocalCell(t, ts)
+	tablet := &topo.Tablet{
+		Alias:    topo.TabletAlias{Cell: cell, Uid: 1},
+		Hostname: "localhost",
+		IPAddr:   "10.11.12.13",
+		Portmap: map[string]int{
+			"vt":    3333,
+			"mysql": 3334,
+		},
+		Parent:   topo.TabletAlias{},
+		Keyspace: "test_keyspace",
+		Type:     topo.TYPE_MASTER,
+		State:    topo.STATE_READ_WRITE,
+		KeyRange: newKeyRange("-10"),
+	}
+	if err := ts.CreateTablet(tablet); err != nil {
+		t.Fatalf("CreateTablet: %v", err)
+	}
+
+	nActions := 64
+	paths := make([]string, nActions)
+
+	// write the actions in parallel, save the paths
+	writeWG := sync.WaitGroup{}
+	for i := 0; i < nActions; i++ {
+		writeWG.Add(1)
+		go func(i int) {
+			var err error
+			paths[i], err = ts.WriteTabletAction(tablet.Alias, fmt.Sprintf("contents %v", i))
+			if err != nil {
+				t.Fatalf("WriteTabletAction(%v): %v", i, err)
+			}
+			t.Logf("WriteTabletAction(%v) done", i)
+			writeWG.Done()
+		}(i)
+	}
+	writeWG.Wait()
+
+	// wait for all actions in parallel
+	waitWG := sync.WaitGroup{}
+	interrupted := make(chan struct{}, 1)
+	for i := 0; i < nActions; i++ {
+		waitWG.Add(1)
+		go func(i int) {
+			if _, err := ts.WaitForTabletAction(paths[i], time.Second*30, interrupted); err != nil {
+				t.Fatalf("WaitForTabletAction returned %v", err)
+			}
+			t.Logf("WaitForTabletAction(%v) done", i)
+			waitWG.Done()
+		}(i)
+	}
+
+	// and unblock them all in parallel
+	unblockWG := sync.WaitGroup{}
+	for i := 0; i < nActions; i++ {
+		unblockWG.Add(1)
+		go func(i int) {
+			defer unblockWG.Done()
+			ta, contents, _, err := ts.ReadTabletActionPath(paths[i])
+			if err != nil {
+				t.Errorf("Error from ReadTabletActionPath: %v", err)
+			}
+			t.Logf("ReadTabletActionPath(%v) done", i)
+			if contents != fmt.Sprintf("contents %v", i) {
+				t.Errorf("Bad contents: %v", contents)
+			}
+			if ta != tablet.Alias {
+				t.Errorf("Bad tablet alias: %v", ta)
+			}
+
+			if err := ts.StoreTabletActionResponse(paths[i], fmt.Sprintf("contents after %v", i)); err != nil {
+				t.Errorf("StoreTabletActionResponse failed: %v", err)
+			}
+			t.Logf("StoreTabletActionResponse(%v) done", i)
+			if err := ts.UnblockTabletAction(paths[i]); err != nil {
+				t.Errorf("UnblockTabletAction failed: %v", err)
+			}
+			t.Logf("UnblockTabletAction(%v) done", i)
+		}(i)
+	}
+	unblockWG.Wait()
+
+	waitWG.Wait()
 }

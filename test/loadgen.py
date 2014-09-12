@@ -159,7 +159,7 @@ if __name__ == "__main__":
     raise Exception("Valid options for -e: vtocc, vttablet")
 
   try:
-    os.putenv("GOMAXPROCS", "%d" % options.gomaxprocs)
+    os.environ["GOMAXPROCS"] = str(options.gomaxprocs)
     env.setUp()
     init_data(env)
     subprocess.call([

@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -60,7 +60,7 @@ func NewQueryResultReaderForTablet(ts topo.Server, tabletAlias topo.TabletAlias,
 	// read the columns, or grab the error
 	cols, ok := <-sr
 	if !ok {
-		return nil, fmt.Errorf("Cannot read Fields for query: %v", sql)
+		return nil, fmt.Errorf("Cannot read Fields for query '%v': %v", sql, call.Error)
 	}
 
 	return &QueryResultReader{
@@ -102,8 +102,8 @@ func uint64FromKeyspaceId(keyspaceId key.KeyspaceId) string {
 // TableScan returns a QueryResultReader that gets all the rows from a
 // table, ordered by Primary Key. The returned columns are ordered
 // with the Primary Key columns in front.
-func TableScan(ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *myproto.TableDefinition) (*QueryResultReader, error) {
-	sql := fmt.Sprintf("SELECT %v FROM %v ORDER BY (%v)", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
+func TableScan(log logutil.Logger, ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *myproto.TableDefinition) (*QueryResultReader, error) {
+	sql := fmt.Sprintf("SELECT %v FROM %v ORDER BY %v", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
 	log.Infof("SQL query for %v/%v: %v", tabletAlias, tableDefinition.Name, sql)
 	return NewQueryResultReaderForTablet(ts, tabletAlias, sql)
 }
@@ -112,7 +112,7 @@ func TableScan(ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *my
 // rows from a table that match the supplied KeyRange, ordered by
 // Primary Key. The returned columns are ordered with the Primary Key
 // columns in front.
-func TableScanByKeyRange(ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *myproto.TableDefinition, keyRange key.KeyRange, keyspaceIdType key.KeyspaceIdType) (*QueryResultReader, error) {
+func TableScanByKeyRange(log logutil.Logger, ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *myproto.TableDefinition, keyRange key.KeyRange, keyspaceIdType key.KeyspaceIdType) (*QueryResultReader, error) {
 	where := ""
 	switch keyspaceIdType {
 	case key.KIT_UINT64:
@@ -149,7 +149,7 @@ func TableScanByKeyRange(ts topo.Server, tabletAlias topo.TabletAlias, tableDefi
 		return nil, fmt.Errorf("Unsupported KeyspaceIdType: %v", keyspaceIdType)
 	}
 
-	sql := fmt.Sprintf("SELECT %v FROM %v %vORDER BY (%v)", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, where, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
+	sql := fmt.Sprintf("SELECT %v FROM %v %vORDER BY %v", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, where, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
 	log.Infof("SQL query for %v/%v: %v", tabletAlias, tableDefinition.Name, sql)
 	return NewQueryResultReaderForTablet(ts, tabletAlias, sql)
 }
@@ -328,7 +328,7 @@ func NewRowDiffer(left, right *QueryResultReader, tableDefinition *myproto.Table
 
 // Go runs the diff. If there is no error, it will drain both sides.
 // If an error occurs, it will just return it and stop.
-func (rd *RowDiffer) Go() (dr DiffReport, err error) {
+func (rd *RowDiffer) Go(log logutil.Logger) (dr DiffReport, err error) {
 
 	dr.startingTime = time.Now()
 	defer dr.ComputeQPS()
@@ -463,7 +463,7 @@ func NewRowSubsetDiffer(superset, subset *QueryResultReader, pkFieldCount int) (
 
 // Go runs the diff. If there is no error, it will drain both sides.
 // If an error occurs, it will just return it and stop.
-func (rd *RowSubsetDiffer) Go() (dr DiffReport, err error) {
+func (rd *RowSubsetDiffer) Go(log logutil.Logger) (dr DiffReport, err error) {
 
 	dr.startingTime = time.Now()
 	defer dr.ComputeQPS()

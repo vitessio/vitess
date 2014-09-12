@@ -16,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/timer"
+	"github.com/youtube/vitess/go/vt/dbconnpool"
 )
 
 /* Function naming convention:
@@ -43,22 +44,20 @@ const (
 )
 
 type ActiveTxPool struct {
-	pool            *pools.Numbered
-	lastId          sync2.AtomicInt64
-	timeout         sync2.AtomicDuration
-	ticks           *timer.Timer
-	txStats         *stats.Timings
-	completionStats *stats.Timings
+	pool    *pools.Numbered
+	lastId  sync2.AtomicInt64
+	timeout sync2.AtomicDuration
+	ticks   *timer.Timer
+	txStats *stats.Timings
 }
 
 func NewActiveTxPool(name string, timeout time.Duration) *ActiveTxPool {
 	axp := &ActiveTxPool{
-		pool:            pools.NewNumbered(),
-		lastId:          sync2.AtomicInt64(time.Now().UnixNano()),
-		timeout:         sync2.AtomicDuration(timeout),
-		ticks:           timer.NewTimer(timeout / 10),
-		txStats:         stats.NewTimings("Transactions"),
-		completionStats: stats.NewTimings("TransactionCompletion"),
+		pool:    pools.NewNumbered(),
+		lastId:  sync2.AtomicInt64(time.Now().UnixNano()),
+		timeout: sync2.AtomicDuration(timeout),
+		ticks:   timer.NewTimer(timeout / 10),
+		txStats: stats.NewTimings("Transactions"),
 	}
 	stats.Publish(name+"Size", stats.IntFunc(axp.pool.Size))
 	stats.Publish(
@@ -77,6 +76,8 @@ func (axp *ActiveTxPool) Close() {
 	axp.ticks.Stop()
 	for _, v := range axp.pool.GetOutdated(time.Duration(0), "for closing") {
 		conn := v.(*TxConnection)
+		log.Warningf("killing transaction for shutdown: %s", conn.Format(nil))
+		internalErrors.Add("StrayTransactions", 1)
 		conn.Close()
 		conn.discard(TX_CLOSE)
 	}
@@ -87,16 +88,17 @@ func (axp *ActiveTxPool) WaitForEmpty() {
 }
 
 func (axp *ActiveTxPool) TransactionKiller() {
+	defer logError()
 	for _, v := range axp.pool.GetOutdated(time.Duration(axp.Timeout()), "for rollback") {
 		conn := v.(*TxConnection)
-		log.Infof("killing transaction %d: %#v", conn.transactionId, conn.queries)
+		log.Warningf("killing transaction: %s", conn.Format(nil))
 		killStats.Add("Transactions", 1)
 		conn.Close()
 		conn.discard(TX_KILL)
 	}
 }
 
-func (axp *ActiveTxPool) SafeBegin(conn PoolConnection) (transactionId int64, err error) {
+func (axp *ActiveTxPool) SafeBegin(conn dbconnpool.PoolConnection) (transactionId int64, err error) {
 	defer handleError(&err, nil)
 	if _, err := conn.ExecuteFetch(BEGIN, 1, false); err != nil {
 		panic(NewTabletErrorSql(FAIL, err))
@@ -106,24 +108,20 @@ func (axp *ActiveTxPool) SafeBegin(conn PoolConnection) (transactionId int64, er
 	return transactionId, nil
 }
 
-func (axp *ActiveTxPool) SafeCommit(transactionId int64) (invalidList map[string]DirtyKeys, err error) {
-	defer handleError(&err, nil)
+func (axp *ActiveTxPool) Commit(transactionId int64) {
 	conn := axp.Get(transactionId)
 	defer conn.discard(TX_COMMIT)
-	axp.txStats.Add("Completed", time.Now().Sub(conn.startTime))
-	defer axp.completionStats.Record("Commit", time.Now())
-	if _, err = conn.ExecuteFetch(COMMIT, 1, false); err != nil {
+	axp.txStats.Add("Completed", time.Now().Sub(conn.StartTime))
+	if _, err := conn.ExecuteFetch(COMMIT, 1, false); err != nil {
 		conn.Close()
-		return conn.dirtyTables, NewTabletErrorSql(FAIL, err)
+		panic(NewTabletErrorSql(FAIL, err))
 	}
-	return conn.dirtyTables, nil
 }
 
 func (axp *ActiveTxPool) Rollback(transactionId int64) {
 	conn := axp.Get(transactionId)
 	defer conn.discard(TX_ROLLBACK)
-	axp.txStats.Add("Aborted", time.Now().Sub(conn.startTime))
-	defer axp.completionStats.Record("Rollback", time.Now())
+	axp.txStats.Add("Aborted", time.Now().Sub(conn.StartTime))
 	if _, err := conn.ExecuteFetch(ROLLBACK, 1, false); err != nil {
 		conn.Close()
 		panic(NewTabletErrorSql(FAIL, err))
@@ -158,53 +156,42 @@ func (axp *ActiveTxPool) Stats() (size int64, timeout time.Duration) {
 }
 
 type TxConnection struct {
-	PoolConnection
-	transactionId int64
+	dbconnpool.PoolConnection
+	TransactionID int64
 	pool          *ActiveTxPool
 	inUse         bool
-	startTime     time.Time
-	endTime       time.Time
-	dirtyTables   map[string]DirtyKeys
-	queries       []string
-	conclusion    string
+	StartTime     time.Time
+	EndTime       time.Time
+	Queries       []string
+	Conclusion    string
 }
 
-func newTxConnection(conn PoolConnection, transactionId int64, pool *ActiveTxPool) *TxConnection {
+func newTxConnection(conn dbconnpool.PoolConnection, transactionId int64, pool *ActiveTxPool) *TxConnection {
 	return &TxConnection{
 		PoolConnection: conn,
-		transactionId:  transactionId,
+		TransactionID:  transactionId,
 		pool:           pool,
-		startTime:      time.Now(),
-		dirtyTables:    make(map[string]DirtyKeys),
-		queries:        make([]string, 0, 8),
+		StartTime:      time.Now(),
+		Queries:        make([]string, 0, 8),
 	}
-}
-
-func (txc *TxConnection) DirtyKeys(tableName string) DirtyKeys {
-	if list, ok := txc.dirtyTables[tableName]; ok {
-		return list
-	}
-	list := make(DirtyKeys)
-	txc.dirtyTables[tableName] = list
-	return list
 }
 
 func (txc *TxConnection) Recycle() {
 	if txc.IsClosed() {
 		txc.discard(TX_CLOSE)
 	} else {
-		txc.pool.pool.Put(txc.transactionId)
+		txc.pool.pool.Put(txc.TransactionID)
 	}
 }
 
 func (txc *TxConnection) RecordQuery(query string) {
-	txc.queries = append(txc.queries, query)
+	txc.Queries = append(txc.Queries, query)
 }
 
 func (txc *TxConnection) discard(conclusion string) {
-	txc.conclusion = conclusion
-	txc.endTime = time.Now()
-	txc.pool.pool.Unregister(txc.transactionId)
+	txc.Conclusion = conclusion
+	txc.EndTime = time.Now()
+	txc.pool.pool.Unregister(txc.TransactionID)
 	txc.PoolConnection.Recycle()
 	// Ensure PoolConnection won't be accessed after Recycle.
 	txc.PoolConnection = nil
@@ -214,19 +201,11 @@ func (txc *TxConnection) discard(conclusion string) {
 func (txc *TxConnection) Format(params url.Values) string {
 	return fmt.Sprintf(
 		"%v\t%v\t%v\t%.6f\t%v\t%v\t\n",
-		txc.transactionId,
-		txc.startTime.Format(time.StampMicro),
-		txc.endTime.Format(time.StampMicro),
-		txc.endTime.Sub(txc.startTime).Seconds(),
-		txc.conclusion,
-		strings.Join(txc.queries, ";"),
+		txc.TransactionID,
+		txc.StartTime.Format(time.StampMicro),
+		txc.EndTime.Format(time.StampMicro),
+		txc.EndTime.Sub(txc.StartTime).Seconds(),
+		txc.Conclusion,
+		strings.Join(txc.Queries, ";"),
 	)
-}
-
-type DirtyKeys map[string]bool
-
-// Delete just keeps track of what needs to be deleted
-func (dk DirtyKeys) Delete(key string) bool {
-	dk[key] = true
-	return true
 }

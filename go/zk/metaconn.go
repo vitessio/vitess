@@ -131,6 +131,11 @@ func (conn *MetaConn) GetW(path string) (data string, stat Stat, watch <-chan zo
 }
 
 func (conn *MetaConn) Children(path string) (children []string, stat Stat, err error) {
+	if path == ("/" + MagicPrefix) {
+		// NOTE(msolo) There is a slight hack there - but there really is
+		// no valid stat for the top level path.
+		return ZkKnownCells(false), nil, nil
+	}
 	var zconn Conn
 	for i := 0; i < maxAttempts; i++ {
 		zconn, err = conn.connCache.ConnForPath(path)

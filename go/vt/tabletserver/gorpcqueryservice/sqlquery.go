@@ -20,48 +20,30 @@ func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo
 	return sq.server.GetSessionId(sessionParams, sessionInfo)
 }
 
-func (sq *SqlQuery) Begin(context *rpcproto.Context, session *proto.Session, txInfo *proto.TransactionInfo) error {
-	return sq.server.Begin(&tabletserver.Context{
-		RemoteAddr: context.RemoteAddr,
-		Username:   context.Username,
-	}, session, txInfo)
+func (sq *SqlQuery) Begin(ctx *rpcproto.Context, session *proto.Session, txInfo *proto.TransactionInfo) error {
+	return sq.server.Begin(ctx, session, txInfo)
 }
 
-func (sq *SqlQuery) Commit(context *rpcproto.Context, session *proto.Session, noOutput *string) error {
-	return sq.server.Commit(&tabletserver.Context{
-		RemoteAddr: context.RemoteAddr,
-		Username:   context.Username,
-	}, session)
+func (sq *SqlQuery) Commit(ctx *rpcproto.Context, session *proto.Session, noOutput *string) error {
+	return sq.server.Commit(ctx, session)
 }
 
-func (sq *SqlQuery) Rollback(context *rpcproto.Context, session *proto.Session, noOutput *string) error {
-	return sq.server.Rollback(&tabletserver.Context{
-		RemoteAddr: context.RemoteAddr,
-		Username:   context.Username,
-	}, session)
+func (sq *SqlQuery) Rollback(ctx *rpcproto.Context, session *proto.Session, noOutput *string) error {
+	return sq.server.Rollback(ctx, session)
 }
 
-func (sq *SqlQuery) Execute(context *rpcproto.Context, query *proto.Query, reply *mproto.QueryResult) error {
-	return sq.server.Execute(&tabletserver.Context{
-		RemoteAddr: context.RemoteAddr,
-		Username:   context.Username,
-	}, query, reply)
+func (sq *SqlQuery) Execute(ctx *rpcproto.Context, query *proto.Query, reply *mproto.QueryResult) error {
+	return sq.server.Execute(ctx, query, reply)
 }
 
-func (sq *SqlQuery) StreamExecute(context *rpcproto.Context, query *proto.Query, sendReply func(reply interface{}) error) error {
-	return sq.server.StreamExecute(&tabletserver.Context{
-		RemoteAddr: context.RemoteAddr,
-		Username:   context.Username,
-	}, query, func(reply *mproto.QueryResult) error {
+func (sq *SqlQuery) StreamExecute(ctx *rpcproto.Context, query *proto.Query, sendReply func(reply interface{}) error) error {
+	return sq.server.StreamExecute(ctx, query, func(reply *mproto.QueryResult) error {
 		return sendReply(reply)
 	})
 }
 
-func (sq *SqlQuery) ExecuteBatch(context *rpcproto.Context, queryList *proto.QueryList, reply *proto.QueryResultList) error {
-	return sq.server.ExecuteBatch(&tabletserver.Context{
-		RemoteAddr: context.RemoteAddr,
-		Username:   context.Username,
-	}, queryList, reply)
+func (sq *SqlQuery) ExecuteBatch(ctx *rpcproto.Context, queryList *proto.QueryList, reply *proto.QueryResultList) error {
+	return sq.server.ExecuteBatch(ctx, queryList, reply)
 }
 
 func init() {

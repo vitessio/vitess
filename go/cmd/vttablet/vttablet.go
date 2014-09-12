@@ -7,47 +7,68 @@ package main
 
 import (
 	"flag"
-	"time"
+	"strings"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
-	ts "github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vttablet"
 )
 
 var (
-	port           = flag.Int("port", 6509, "port for the server")
 	tabletPath     = flag.String("tablet-path", "", "tablet alias or path to zk node representing the tablet")
-	mycnfFile      = flag.String("mycnf-file", "", "my.cnf file")
 	enableRowcache = flag.Bool("enable-rowcache", false, "enable rowcacche")
 	overridesFile  = flag.String("schema-override", "", "schema overrides file")
-
-	securePort = flag.Int("secure-port", 0, "port for the secure server")
-	cert       = flag.String("cert", "", "cert file")
-	key        = flag.String("key", "", "key file")
-	caCert     = flag.String("ca-cert", "", "ca-cert file")
+	tableAclConfig = flag.String("table-acl-config", "", "path to table access checker config file")
 
 	agent *tabletmanager.ActionAgent
 )
 
+func init() {
+	servenv.RegisterDefaultFlags()
+	servenv.RegisterDefaultSecureFlags()
+}
+
+// tabletParamToTabletAlias takes either an old style ZK tablet path or a
+// new style tablet alias as a string, and returns a TabletAlias.
+func tabletParamToTabletAlias(param string) topo.TabletAlias {
+	if param[0] == '/' {
+		// old zookeeper path, convert to new-style string tablet alias
+		zkPathParts := strings.Split(param, "/")
+		if len(zkPathParts) != 6 || zkPathParts[0] != "" || zkPathParts[1] != "zk" || zkPathParts[3] != "vt" || zkPathParts[4] != "tablets" {
+			log.Fatalf("Invalid tablet path: %v", param)
+		}
+		param = zkPathParts[2] + "-" + zkPathParts[5]
+	}
+	result, err := topo.ParseTabletAliasString(param)
+	if err != nil {
+		log.Fatalf("Invalid tablet alias %v: %v", param, err)
+	}
+	return result
+}
+
 func main() {
 	dbconfigs.RegisterFlags()
+	mysqlctl.RegisterFlags()
 	flag.Parse()
+	if len(flag.Args()) > 0 {
+		flag.Usage()
+		log.Fatalf("vttablet doesn't take any positional arguments")
+	}
 
 	servenv.Init()
 
-	tabletAlias := vttablet.TabletParamToTabletAlias(*tabletPath)
-
-	if *mycnfFile == "" {
-		*mycnfFile = mysqlctl.MycnfFile(tabletAlias.Uid)
+	if *tabletPath == "" {
+		log.Fatalf("tabletPath required")
 	}
+	tabletAlias := tabletParamToTabletAlias(*tabletPath)
 
-	mycnf, err := mysqlctl.ReadMycnf(*mycnfFile)
+	mycnf, err := mysqlctl.NewMycnfFromFlags(tabletAlias.Uid)
 	if err != nil {
 		log.Fatalf("mycnf read failed: %v", err)
 	}
@@ -58,22 +79,28 @@ func main() {
 	}
 	dbcfgs.App.EnableRowcache = *enableRowcache
 
-	ts.InitQueryService()
+	if *tableAclConfig != "" {
+		tableacl.Init(*tableAclConfig)
+	}
+	tabletserver.InitQueryService()
 	binlog.RegisterUpdateStreamService(mycnf)
 
 	// Depends on both query and updateStream.
-	agent, err = vttablet.InitAgent(tabletAlias, dbcfgs, mycnf, *port, *securePort, *overridesFile)
+	agent, err = tabletmanager.NewActionAgent(tabletAlias, dbcfgs, mycnf, *servenv.Port, *servenv.SecurePort, *overridesFile)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	vttablet.HttpHandleSnapshots(mycnf, tabletAlias.Uid)
-	servenv.OnClose(func() {
-		time.Sleep(5 * time.Millisecond)
-		ts.DisallowQueries()
+	tabletmanager.HttpHandleSnapshots(mycnf, tabletAlias.Uid)
+	servenv.OnTerm(func() {
+		tabletserver.DisallowQueries()
 		binlog.DisableUpdateStreamService()
-		topo.CloseServers()
 		agent.Stop()
 	})
-	servenv.RunSecure(*port, *securePort, *cert, *key, *caCert)
+	servenv.OnClose(func() {
+		// We will still use the topo server during lameduck period
+		// to update our state, so closing it in OnClose()
+		topo.CloseServers()
+	})
+	servenv.RunDefault()
 }

@@ -12,6 +12,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -34,7 +35,7 @@ const splitDiffHTML = `
 </body>
 `
 
-var splitDiffTemplate = loadTemplate("splitdiff", splitDiffHTML)
+var splitDiffTemplate = loadTemplate("splitDiff", splitDiffHTML)
 
 func commandSplitDiff(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) worker.Worker {
 	subFlags.Parse(args)
@@ -118,16 +119,17 @@ func interactiveSplitDiff(wr *wrangler.Wrangler, w http.ResponseWriter, r *http.
 		}
 
 		executeTemplate(w, splitDiffTemplate, result)
-	} else {
-		// start the diff job
-		wrk := worker.NewSplitDiffWorker(wr, *cell, keyspace, shard)
-		if _, err := setAndStartWorker(wrk); err != nil {
-			httpError(w, "cannot set worker: %s", err)
-			return
-		}
-
-		http.Redirect(w, r, "/status", http.StatusTemporaryRedirect)
+		return
 	}
+
+	// start the diff job
+	wrk := worker.NewSplitDiffWorker(wr, *cell, keyspace, shard)
+	if _, err := setAndStartWorker(wrk, nil); err != nil {
+		httpError(w, "cannot set worker: %s", err)
+		return
+	}
+
+	http.Redirect(w, r, servenv.StatusURLPath(), http.StatusTemporaryRedirect)
 }
 
 func init() {

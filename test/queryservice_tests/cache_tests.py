@@ -1,8 +1,12 @@
+import time
+
 from vtdb import dbexceptions
 
 import framework
 import cache_cases1
 import cache_cases2
+
+import cases_framework
 
 class TestWillNotBeCached(framework.TestCase):
 
@@ -30,7 +34,7 @@ class TestCache(framework.TestCase):
     try:
       self.env.execute("select bid, eid from vtocc_cached2 where eid = 1 and bid = 1")
     except dbexceptions.DatabaseError as e:
-      self.assertContains(str(e), "error: Type")
+      self.assertContains(str(e), "error: type mismatch")
     else:
       self.fail("Did not receive exception")
 
@@ -44,6 +48,8 @@ class TestCache(framework.TestCase):
       self.assertEqual(tstart["Hits"]+1, tend["Hits"])
       # disable
       self.env.execute("alter table vtocc_cached2 comment 'vtocc_nocache'")
+      # Short sleep to allow invalidator to catch up
+      time.sleep(0.05)
       self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'")
       try:
         tstart = self.env.table_stats()["vtocc_cached2"]
@@ -53,6 +59,8 @@ class TestCache(framework.TestCase):
         self.fail("Did not receive exception")
     finally:
       self.env.execute("alter table vtocc_cached2 comment ''")
+      # Short sleep to allow invalidator to catch up
+      time.sleep(0.05)
 
     # Verify row cache is working again
     self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'")
@@ -71,6 +79,8 @@ class TestCache(framework.TestCase):
       self.assertEqual(tstart["Hits"]+1, tend["Hits"])
       # rename
       self.env.execute("alter table vtocc_cached2 rename to vtocc_renamed")
+      # Short sleep to allow invalidator to catch up
+      time.sleep(0.05)
       try:
         tstart = self.env.table_stats()["vtocc_cached2"]
       except KeyError:
@@ -86,7 +96,11 @@ class TestCache(framework.TestCase):
     finally:
       # alter table so there's no hash collision when renamed
       self.env.execute("alter table vtocc_renamed comment 'renamed'")
+      # Short sleep to allow invalidator to catch up
+      time.sleep(0.05)
       self.env.execute("rename table vtocc_renamed to vtocc_cached2")
+      # Short sleep to allow invalidator to catch up
+      time.sleep(0.05)
 
     # Verify row cache is working again
     self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'")
@@ -95,26 +109,14 @@ class TestCache(framework.TestCase):
     tend = self.env.table_stats()["vtocc_cached2"]
     self.assertEqual(tstart["Hits"]+1, tend["Hits"])
 
-  def test_nopass(self):
-    try:
-      self.env.conn.begin()
-      self.env.execute("insert into vtocc_cached2(eid, bid, name, foo) values(unix_time(), 'foo', 'bar', 'bar')")
-    except dbexceptions.DatabaseError as e:
-      self.assertContains(str(e), "error: DML too complex")
-    else:
-      self.fail("Did not receive exception")
-    finally:
-      self.env.conn.rollback()
-
   def test_overrides(self):
     tstart = self.env.table_stats()["vtocc_view"]
     self.env.querylog.reset()
-
     cu = self.env.execute("select * from vtocc_view where key2 = 1")
     self.assertEqual(cu.fetchone(), (1L, 10L, 1L, 3L))
     tend = self.env.table_stats()["vtocc_view"]
     self.assertEqual(tstart["Misses"]+1, tend["Misses"])
-    log = self.env.querylog.read()
+    log = self.env.querylog.tailer.read()
 
     self.assertContains(log, "select * from vtocc_view where 1 != 1")
     self.assertContains(log, "select key2, key1, data1, data2 from vtocc_view where key2 = 1")
@@ -129,16 +131,17 @@ class TestCache(framework.TestCase):
     self.env.conn.begin()
     self.env.querylog.reset()
     self.env.execute("update vtocc_part1 set data1 = 2 where key2 = 1")
-    log = self.env.querylog.read()
+    log = self.env.querylog.tailer.read()
     self.env.conn.commit()
     self.assertContains(log, "update vtocc_part1 set data1 = 2 where key2 = 1 /* _stream vtocc_part1 (key2 ) (1 ); */")
+
 
     self.env.querylog.reset()
     cu = self.env.execute("select * from vtocc_view where key2 = 1")
     self.assertEqual(cu.fetchone(), (1L, 10L, 2L, 3L))
     tend = self.env.table_stats()["vtocc_view"]
     self.assertEqual(tstart["Misses"]+1, tend["Misses"])
-    log = self.env.querylog.read()
+    log = self.env.querylog.tailer.read()
     self.assertContains(log, "select key2, key1, data1, data2 from vtocc_view where key2 = 1")
 
     tstart = self.env.table_stats()["vtocc_view"]
@@ -152,12 +155,13 @@ class TestCache(framework.TestCase):
     self.env.execute("update vtocc_part2 set data2 = 2 where key3 = 1")
     self.env.conn.commit()
 
+
     self.env.querylog.reset()
     cu = self.env.execute("select * from vtocc_view where key2 = 1")
     self.assertEqual(cu.fetchone(), (1L, 10L, 2L, 2L))
     tend = self.env.table_stats()["vtocc_view"]
     self.assertEqual(tstart["Misses"]+1, tend["Misses"])
-    log = self.env.querylog.read()
+    log = self.env.querylog.tailer.read()
     self.assertContains(log, "select key2, key1, data1, data2 from vtocc_view where key2 = 1")
 
     tstart = self.env.table_stats()["vtocc_view"]
@@ -196,28 +200,28 @@ class TestCache(framework.TestCase):
 
   def test_spot_check(self):
     vstart = self.env.debug_vars()
-    self.assertEqual(vstart["SpotCheckRatio"], 0)
+    self.assertEqual(vstart["RowcacheSpotCheckRatio"], 0)
     self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'")
-    self.assertEqual(vstart["SpotCheckCount"], self.env.debug_vars()["SpotCheckCount"])
+    self.assertEqual(vstart["RowcacheSpotCheckCount"], self.env.debug_vars()["RowcacheSpotCheckCount"])
     self.env.execute("set vt_spot_check_ratio=1")
-    self.assertEqual(self.env.debug_vars()["SpotCheckRatio"], 1)
+    self.assertEqual(self.env.debug_vars()["RowcacheSpotCheckRatio"], 1)
     self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'")
-    self.assertEqual(vstart["SpotCheckCount"]+1, self.env.debug_vars()["SpotCheckCount"])
+    self.assertEqual(vstart["RowcacheSpotCheckCount"]+1, self.env.debug_vars()["RowcacheSpotCheckCount"])
 
     vstart = self.env.debug_vars()
     self.env.execute("select * from vtocc_cached1 where eid in (9)")
-    self.assertEqual(vstart["SpotCheckCount"], self.env.debug_vars()["SpotCheckCount"])
+    self.assertEqual(vstart["RowcacheSpotCheckCount"], self.env.debug_vars()["RowcacheSpotCheckCount"])
     self.env.execute("select * from vtocc_cached1 where eid in (9)")
-    self.assertEqual(vstart["SpotCheckCount"]+1, self.env.debug_vars()["SpotCheckCount"])
+    self.assertEqual(vstart["RowcacheSpotCheckCount"]+1, self.env.debug_vars()["RowcacheSpotCheckCount"])
 
     self.env.execute("set vt_spot_check_ratio=0")
-    self.assertEqual(self.env.debug_vars()["SpotCheckRatio"], 0)
+    self.assertEqual(self.env.debug_vars()["RowcacheSpotCheckRatio"], 0)
 
   def _verify_mismatch(self, query, bindvars=None):
     try:
       self.env.execute(query, bindvars)
     except dbexceptions.DatabaseError as e:
-      self.assertContains(str(e), "error: Type mismatch")
+      self.assertContains(str(e), "error: type mismatch")
     else:
       self.fail("Did not receive exception")
 
@@ -232,10 +236,4 @@ class TestCache(framework.TestCase):
       self.fail("test_cache2_sqls errors: %d" % error_count)
 
   def _get_vars_table_stats(self, table_stats, table, stats):
-    for item in table_stats:
-      if item["Table"] != table:
-        continue
-      if item["Stats"] != stats:
-        continue
-      return item["Value"]
-    raise KeyError
+    return table_stats[table + "." + stats]

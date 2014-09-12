@@ -14,20 +14,23 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 )
 
 var port = flag.Int("port", 6612, "vtocc port")
-var mysqlPort = flag.Int("mysql-port", 3306, "mysql port")
-var tabletUid = flag.Uint("tablet-uid", 41983, "tablet uid")
-var mysqlSocket = flag.String("mysql-socket", "", "path to the mysql socket")
+var mysqlPort = flag.Int("mysql_port", 3306, "mysql port")
+var tabletUid = flag.Uint("tablet_uid", 41983, "tablet uid")
+var mysqlSocket = flag.String("mysql_socket", "", "path to the mysql socket")
 var tabletAddr string
 
 func initCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
-	waitTime := subFlags.Duration("wait-time", mysqlctl.MysqlWaitTime, "how long to wait for startup")
+	waitTime := subFlags.Duration("wait_time", mysqlctl.MysqlWaitTime, "how long to wait for startup")
+	bootstrapArchive := subFlags.String("bootstrap_archive", "mysql-db-dir.tbz", "name of bootstrap archive within vitess/data/bootstrap directory")
+	skipSchema := subFlags.Bool("skip_schema", false, "don't apply initial schema")
 	subFlags.Parse(args)
 
-	if err := mysqlctl.Init(mysqld, *waitTime); err != nil {
+	if err := mysqld.Init(*waitTime, *bootstrapArchive, *skipSchema); err != nil {
 		log.Fatalf("failed init mysql: %v", err)
 	}
 }
@@ -35,9 +38,10 @@ func initCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
 func multisnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
 	concurrency := subFlags.Int("concurrency", 8, "how many compression jobs to run simultaneously")
 	spec := subFlags.String("spec", "-", "shard specification")
-	tablesString := subFlags.String("tables", "", "dump only this comma separated list of tables")
-	skipSlaveRestart := subFlags.Bool("skip-slave-restart", false, "after the snapshot is done, do not restart slave replication")
-	maximumFilesize := subFlags.Uint64("maximum-file-size", 128*1024*1024, "the maximum size for an uncompressed data file")
+	tablesString := subFlags.String("tables", "", "dump only this comma separated list of regexp for tables")
+	excludeTablesString := subFlags.String("exclude_tables", "", "do not dump this comma separated list of regexp for tables")
+	skipSlaveRestart := subFlags.Bool("skip_slave_restart", false, "after the snapshot is done, do not restart slave replication")
+	maximumFilesize := subFlags.Uint64("maximum_file_size", 128*1024*1024, "the maximum size for an uncompressed data file")
 	keyType := subFlags.String("key_type", "uint64", "type of the key column")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 2 {
@@ -52,13 +56,17 @@ func multisnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []st
 	if *tablesString != "" {
 		tables = strings.Split(*tablesString, ",")
 	}
+	var excludedTables []string
+	if *excludeTablesString != "" {
+		excludedTables = strings.Split(*excludeTablesString, ",")
+	}
 
 	kit := key.KeyspaceIdType(*keyType)
 	if !key.IsKeyspaceIdTypeInList(kit, key.AllKeyspaceIdTypes) {
 		log.Fatalf("invalid key_type")
 	}
 
-	filenames, err := mysqld.CreateMultiSnapshot(shards, subFlags.Arg(0), subFlags.Arg(1), kit, tabletAddr, false, *concurrency, tables, *skipSlaveRestart, *maximumFilesize, nil)
+	filenames, err := mysqld.CreateMultiSnapshot(shards, subFlags.Arg(0), subFlags.Arg(1), kit, tabletAddr, false, *concurrency, tables, excludedTables, *skipSlaveRestart, *maximumFilesize, nil)
 	if err != nil {
 		log.Fatalf("multisnapshot failed: %v", err)
 	} else {
@@ -69,10 +77,10 @@ func multisnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []st
 func multiRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
 	starts := subFlags.String("starts", "", "starts of the key range")
 	ends := subFlags.String("ends", "", "ends of the key range")
-	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
+	fetchRetryCount := subFlags.Int("fetch_retry_count", 3, "how many times to retry a failed transfer")
 	concurrency := subFlags.Int("concurrency", 8, "how many concurrent db inserts to run simultaneously")
-	fetchConcurrency := subFlags.Int("fetch-concurrency", 4, "how many files to fetch simultaneously")
-	insertTableConcurrency := subFlags.Int("insert-table-concurrency", 4, "how many myisam tables to load into a single destination table simultaneously")
+	fetchConcurrency := subFlags.Int("fetch_concurrency", 4, "how many files to fetch simultaneously")
+	insertTableConcurrency := subFlags.Int("insert_table_concurrency", 4, "how many myisam tables to load into a single destination table simultaneously")
 	strategy := subFlags.String("strategy", "", "which strategy to use for restore, can contain:\n"+
 		"    skipAutoIncrement(TTT): we won't add the AUTO_INCREMENT back to that table\n"+
 		"    delayPrimaryKey: we won't add the primary key until after the table is populated\n"+
@@ -112,15 +120,15 @@ func multiRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []str
 		}
 		sources[i] = dbUrl
 	}
-	if err := mysqld.MultiRestore(dbName, keyRanges, sources, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, *strategy); err != nil {
+	if err := mysqld.MultiRestore(dbName, keyRanges, sources, nil, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, *strategy); err != nil {
 		log.Fatalf("multirestore failed: %v", err)
 	}
 }
 
 func restoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
-	dontWaitForSlaveStart := subFlags.Bool("dont-wait-for-slave-start", false, "won't wait for replication to start (useful when restoring from master server)")
-	fetchConcurrency := subFlags.Int("fetch-concurrency", 3, "how many files to fetch simultaneously")
-	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
+	dontWaitForSlaveStart := subFlags.Bool("dont_wait_for_slave_start", false, "won't wait for replication to start (useful when restoring from master server)")
+	fetchConcurrency := subFlags.Int("fetch_concurrency", 3, "how many files to fetch simultaneously")
+	fetchRetryCount := subFlags.Int("fetch_retry_count", 3, "how many times to retry a failed transfer")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
 		log.Fatalf("Command restore requires <snapshot manifest file>")
@@ -136,10 +144,10 @@ func restoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) 
 }
 
 func shutdownCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
-	waitTime := subFlags.Duration("wait-time", mysqlctl.MysqlWaitTime, "how long to wait for shutdown")
+	waitTime := subFlags.Duration("wait_time", mysqlctl.MysqlWaitTime, "how long to wait for shutdown")
 	subFlags.Parse(args)
 
-	if mysqlErr := mysqlctl.Shutdown(mysqld, true, *waitTime); mysqlErr != nil {
+	if mysqlErr := mysqld.Shutdown(true, *waitTime); mysqlErr != nil {
 		log.Fatalf("failed shutdown mysql: %v", mysqlErr)
 	}
 }
@@ -177,8 +185,8 @@ func snapshotSourceStartCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, arg
 }
 
 func snapshotSourceEndCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
-	slaveStartRequired := subFlags.Bool("slave-start", false, "will restart replication")
-	readWrite := subFlags.Bool("read-write", false, "will make the server read-write")
+	slaveStartRequired := subFlags.Bool("slave_start", false, "will restart replication")
+	readWrite := subFlags.Bool("read_write", false, "will make the server read-write")
 	subFlags.Parse(args)
 
 	err := mysqld.SnapshotSourceEnd(*slaveStartRequired, !(*readWrite), true, map[string]string{})
@@ -188,10 +196,10 @@ func snapshotSourceEndCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args 
 }
 
 func startCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
-	waitTime := subFlags.Duration("wait-time", mysqlctl.MysqlWaitTime, "how long to wait for startup")
+	waitTime := subFlags.Duration("wait_time", mysqlctl.MysqlWaitTime, "how long to wait for startup")
 	subFlags.Parse(args)
 
-	if err := mysqlctl.Start(mysqld, *waitTime); err != nil {
+	if err := mysqld.Start(*waitTime); err != nil {
 		log.Fatalf("failed start mysql: %v", err)
 	}
 }
@@ -200,7 +208,7 @@ func teardownCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string)
 	force := subFlags.Bool("force", false, "will remove the root directory even if mysqld shutdown fails")
 	subFlags.Parse(args)
 
-	if err := mysqlctl.Teardown(mysqld, *force); err != nil {
+	if err := mysqld.Teardown(*force); err != nil {
 		log.Fatalf("failed teardown mysql (forced? %v): %v", *force, err)
 	}
 }
@@ -213,13 +221,13 @@ type command struct {
 }
 
 var commands = []command{
-	command{"init", initCmd, "",
+	command{"init", initCmd, "[-wait_time=20s] [-bootstrap_archive=mysql-db-dir.tbz] [-skip_schema]",
 		"Initalizes the directory structure and starts mysqld"},
 	command{"teardown", teardownCmd, "[-force]",
 		"Shuts mysqld down, and removes the directory"},
-	command{"start", startCmd, "[-wait-time=20s]",
+	command{"start", startCmd, "[-wait_time=20s]",
 		"Starts mysqld on an already 'init'-ed directory"},
-	command{"shutdown", shutdownCmd, "[-wait-time=20s]",
+	command{"shutdown", shutdownCmd, "[-wait_time=20s]",
 		"Shuts down mysqld, does not remove any file"},
 
 	command{"snapshot", snapshotCmd,
@@ -229,19 +237,21 @@ var commands = []command{
 		"[-concurrency=4] <db name>",
 		"Enters snapshot server mode (mysqld stopped, serving innodb data files)"},
 	command{"snapshotsourceend", snapshotSourceEndCmd,
-		"[-slave-start] [-read-write]",
+		"[-slave_start] [-read_write]",
 		"Gets out of snapshot server mode"},
 	command{"restore", restoreCmd,
-		"[-fetch-concurrency=3] [-fetch-retry-count=3] [-dont-wait-for-slave-start] <snapshot manifest file>",
+		"[-fetch_concurrency=3] [-fetch_retry_count=3] [-dont_wait_for_slave_start] <snapshot manifest file>",
 		"Restores a full snapshot"},
 	command{"multirestore", multiRestoreCmd,
-		"[-force] [-concurrency=3] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-starts=start1,start2,...] [-ends=end1,end2,...] [-strategy=] <destination_dbname> <source_host>[/<source_dbname>]...",
+		"[-force] [-concurrency=3] [-fetch_concurrency=4] [-insert_table_concurrency=4] [-fetch_retry_count=3] [-starts=start1,start2,...] [-ends=end1,end2,...] [-strategy=] <destination_dbname> <source_host>[/<source_dbname>]...",
 		"Restores a snapshot form multiple hosts"},
-	command{"multisnapshot", multisnapshotCmd, "[-concurrency=8] [-spec='-'] [-tables=''] [-skip-slave-restart] [-maximum-file-size=134217728] <db name> <key name>",
+	command{"multisnapshot", multisnapshotCmd, "[-concurrency=8] [-spec='-'] [-tables=''] [-exclude_tables=''] [-skip_slave_restart] [-maximum_file_size=134217728] <db name> <key name>",
 		"Makes a complete snapshot using 'select * into' commands."},
 }
 
 func main() {
+	defer logutil.Flush()
+
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [global parameters] command [command parameters]\n", os.Args[0])
 
@@ -262,7 +272,7 @@ func main() {
 	flag.Parse()
 
 	tabletAddr = fmt.Sprintf("%v:%v", "localhost", *port)
-	mycnf := mysqlctl.NewMycnf(uint32(*tabletUid), *mysqlPort, mysqlctl.VtReplParams{})
+	mycnf := mysqlctl.NewMycnf(uint32(*tabletUid), *mysqlPort)
 
 	if *mysqlSocket != "" {
 		mycnf.SocketFile = *mysqlSocket
@@ -272,7 +282,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
-	mysqld := mysqlctl.NewMysqld(mycnf, &dbcfgs.Dba, &dbcfgs.Repl)
+	mysqld := mysqlctl.NewMysqld("Dba", mycnf, &dbcfgs.Dba, &dbcfgs.Repl)
+	defer mysqld.Close()
 
 	action := flag.Arg(0)
 	for _, cmd := range commands {

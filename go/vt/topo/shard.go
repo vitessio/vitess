@@ -6,6 +6,7 @@ package topo
 
 import (
 	"fmt"
+	"html/template"
 	"strings"
 	"sync"
 
@@ -42,8 +43,23 @@ type SourceShard struct {
 	Tables []string
 }
 
+// String returns a printable view of a SourceShard.
 func (source *SourceShard) String() string {
 	return fmt.Sprintf("SourceShard(%v,%v/%v)", source.Uid, source.Keyspace, source.Shard)
+}
+
+// AsHTML returns a HTML version of the object.
+func (source *SourceShard) AsHTML() template.HTML {
+	result := fmt.Sprintf("<b>Uid</b>: %v</br>\n<b>Source</b>: %v/%v</br>\n", source.Uid, source.Keyspace, source.Shard)
+	if source.KeyRange.IsPartial() {
+		result += fmt.Sprintf("<b>KeyRange</b>: %v-%v</br>\n",
+			source.KeyRange.Start.Hex(), source.KeyRange.End.Hex())
+	}
+	if len(source.Tables) > 0 {
+		result += fmt.Sprintf("<b>Tables</b>: %v</br>\n",
+			strings.Join(source.Tables, " "))
+	}
+	return template.HTML(result)
 }
 
 // A pure data struct for information stored in topology server.  This
@@ -98,7 +114,7 @@ func ValidateShardName(shard string) (string, key.KeyRange, error) {
 		return "", key.KeyRange{}, fmt.Errorf("Out of order keys: %v is not strictly smaller than %v", keyRange.Start.Hex(), keyRange.End.Hex())
 	}
 
-	return strings.ToUpper(shard), keyRange, nil
+	return strings.ToLower(shard), keyRange, nil
 }
 
 // HasCell returns true if the cell is listed in the Cells for the shard.
@@ -116,6 +132,7 @@ func (shard *Shard) HasCell(cell string) bool {
 type ShardInfo struct {
 	keyspace  string
 	shardName string
+	version   int64
 	*Shard
 }
 
@@ -129,15 +146,35 @@ func (si *ShardInfo) ShardName() string {
 	return si.shardName
 }
 
+// Version returns the shard version from last time it was read or updated.
+func (si *ShardInfo) Version() int64 {
+	return si.version
+}
+
 // NewShardInfo returns a ShardInfo basing on shard with the
 // keyspace / shard. This function should be only used by Server
 // implementations.
-func NewShardInfo(keyspace, shard string, value *Shard) *ShardInfo {
+func NewShardInfo(keyspace, shard string, value *Shard, version int64) *ShardInfo {
 	return &ShardInfo{
 		keyspace:  keyspace,
 		shardName: shard,
+		version:   version,
 		Shard:     value,
 	}
+}
+
+// UpdateShard updates the shard data, with the right version
+func UpdateShard(ts Server, si *ShardInfo) error {
+	var version int64 = -1
+	if si.version != 0 {
+		version = si.version
+	}
+
+	newVersion, err := ts.UpdateShard(si, version)
+	if err == nil {
+		si.version = newVersion
+	}
+	return err
 }
 
 // CreateShard creates a new shard and tries to fill in the right information.
@@ -235,7 +272,7 @@ func FindAllTabletAliasesInShardByCell(ts Server, keyspace, shard string, cells 
 			mutex.Lock()
 			for _, rl := range sri.ReplicationLinks {
 				resultAsMap[rl.TabletAlias] = true
-				if InCellList(rl.Parent.Cell, cells) {
+				if !rl.Parent.IsZero() && InCellList(rl.Parent.Cell, cells) {
 					resultAsMap[rl.Parent] = true
 				}
 			}
@@ -254,4 +291,31 @@ func FindAllTabletAliasesInShardByCell(ts Server, keyspace, shard string, cells 
 		result = append(result, a)
 	}
 	return result, err
+}
+
+// GetTabletMapForShard returns the tablets for a shard. It can return
+// ErrPartialResult if it couldn't read all the cells, or all
+// the individual tablets, in which case the map is valid, but partial.
+func GetTabletMapForShard(ts Server, keyspace, shard string) (map[TabletAlias]*TabletInfo, error) {
+	return GetTabletMapForShardByCell(ts, keyspace, shard, nil)
+}
+
+// GetTabletMapForShardByCell returns the tablets for a shard. It can return
+// ErrPartialResult if it couldn't read all the cells, or all
+// the individual tablets, in which case the map is valid, but partial.
+func GetTabletMapForShardByCell(ts Server, keyspace, shard string, cells []string) (map[TabletAlias]*TabletInfo, error) {
+	// if we get a partial result, we keep going. It most likely means
+	// a cell is out of commission.
+	aliases, err := FindAllTabletAliasesInShardByCell(ts, keyspace, shard, cells)
+	if err != nil && err != ErrPartialResult {
+		return nil, err
+	}
+
+	// get the tablets for the cells we were able to reach, forward
+	// ErrPartialResult from FindAllTabletAliasesInShard
+	result, gerr := GetTabletMap(ts, aliases)
+	if gerr == nil && err != nil {
+		gerr = err
+	}
+	return result, gerr
 }

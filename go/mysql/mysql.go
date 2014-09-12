@@ -5,6 +5,7 @@
 package mysql
 
 /*
+#cgo CFLAGS: -Werror=implicit
 #cgo pkg-config: gomysql
 #include <stdlib.h>
 #include <mysqld_error.h>
@@ -33,9 +34,10 @@ func init() {
 }
 
 const (
-	DUP_ENTRY         = C.ER_DUP_ENTRY
-	LOCK_WAIT_TIMEOUT = C.ER_LOCK_WAIT_TIMEOUT
-	LOCK_DEADLOCK     = C.ER_LOCK_DEADLOCK
+	DUP_ENTRY                 = C.ER_DUP_ENTRY
+	LOCK_WAIT_TIMEOUT         = C.ER_LOCK_WAIT_TIMEOUT
+	LOCK_DEADLOCK             = C.ER_LOCK_DEADLOCK
+	OPTION_PREVENTS_STATEMENT = C.ER_OPTION_PREVENTS_STATEMENT
 
 	REDACTED_PASSWORD = "****"
 )
@@ -88,6 +90,10 @@ type ConnectionParams struct {
 
 func (c *ConnectionParams) EnableMultiStatements() {
 	c.Flags |= C.CLIENT_MULTI_STATEMENTS
+}
+
+func (c *ConnectionParams) EnableSSL() {
+	c.Flags |= C.CLIENT_SSL
 }
 
 func (c *ConnectionParams) SslEnabled() bool {
@@ -244,6 +250,7 @@ func (conn *Connection) CloseResult() {
 	C.vt_close_result(&conn.c)
 }
 
+// Id returns the MySQL thread_id of the connection.
 func (conn *Connection) Id() int64 {
 	if conn.c.mysql == nil {
 		return 0
@@ -256,6 +263,43 @@ func (conn *Connection) lastError(query string) error {
 		return &SqlError{Num: int(C.vt_errno(&conn.c)), Message: C.GoString(err), Query: query}
 	}
 	return &SqlError{0, "Dummy", string(query)}
+}
+
+// ReadPacket reads a raw packet from the MySQL connection.
+//
+// A MySQL packet is "a single SQL statement sent to the MySQL server, a
+// single row that is sent to the client, or a binary log event sent from a
+// master replication server to a slave." -MySQL 5.1 Reference Manual
+func (conn *Connection) ReadPacket() ([]byte, error) {
+	length := C.vt_cli_safe_read(&conn.c)
+	if length == 0 {
+		return nil, fmt.Errorf("error reading packet from MySQL with cli_safe_read(): %v", conn.lastError(""))
+	}
+
+	return C.GoBytes(unsafe.Pointer(conn.c.mysql.net.read_pos), C.int(length)), nil
+}
+
+// SendCommand sends a raw command to the MySQL server.
+func (conn *Connection) SendCommand(command uint32, data []byte) error {
+	var ret C.my_bool
+	if data == nil {
+		ret = C.vt_simple_command(&conn.c, command, nil, 0, 1)
+	} else {
+		ret = C.vt_simple_command(&conn.c, command, (*C.uchar)(unsafe.Pointer(&data[0])), C.ulong(len(data)), 1)
+	}
+	if ret != 0 {
+		return fmt.Errorf("error sending raw MySQL command: %v", conn.lastError(""))
+	}
+	return nil
+}
+
+// ForceClose closes a MySQL connection forcibly at the socket level, instead of
+// gracefully through mysql_close(). This is necessary when a thread is blocked
+// in a call to ReadPacket(), and another thread wants to cancel the read. We
+// can't use mysql_close() because it isn't safe to use while another thread is
+// blocked in an I/O call on that MySQL connection.
+func (conn *Connection) ForceClose() {
+	C.vt_force_close(&conn.c)
 }
 
 func BuildValue(bytes []byte, fieldType uint32) sqltypes.Value {

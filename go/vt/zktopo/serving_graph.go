@@ -44,9 +44,13 @@ func (zkts *Server) GetSrvTabletTypesPerShard(cell, keyspace, shard string) ([]t
 		}
 		return nil, err
 	}
-	result := make([]topo.TabletType, len(children))
-	for i, tt := range children {
-		result[i] = topo.TabletType(tt)
+	result := make([]topo.TabletType, 0, len(children))
+	for _, tt := range children {
+		// these two are used for locking
+		if tt == "action" || tt == "actionlog" {
+			continue
+		}
+		result = append(result, topo.TabletType(tt))
 	}
 	return result, nil
 }
@@ -86,7 +90,7 @@ func (zkts *Server) GetEndPoints(cell, keyspace, shard string, tabletType topo.T
 	return result, nil
 }
 
-func (zkts *Server) DeleteSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType) error {
+func (zkts *Server) DeleteEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) error {
 	path := zkPathForVtName(cell, keyspace, shard, tabletType)
 	err := zkts.zconn.Delete(path, -1)
 	if err != nil {
@@ -139,6 +143,9 @@ func (zkts *Server) UpdateSrvKeyspace(cell, keyspace string, srvKeyspace *topo.S
 	path := zkPathForVtKeyspace(cell, keyspace)
 	data := jscfg.ToJson(srvKeyspace)
 	_, err := zkts.zconn.Set(path, data, -1)
+	if zookeeper.IsError(err, zookeeper.ZNONODE) {
+		_, err = zk.CreateRecursive(zkts.zconn, path, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	}
 	return err
 }
 

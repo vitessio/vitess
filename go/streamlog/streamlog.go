@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 )
@@ -21,18 +22,12 @@ var droppedMessages = stats.NewCounters("StreamlogDroppedMessages")
 // Subscribers can use channels or HTTP.
 type StreamLogger struct {
 	name       string
-	dataQueue  chan Formatter
+	dataQueue  chan interface{}
 	mu         sync.Mutex
-	subscribed map[chan string]url.Values
+	subscribed map[chan interface{}]struct{}
 	// size is used to check if there are any subscriptions. Keep
 	// it atomically in sync with the size of subscribed.
 	size sync2.AtomicUint32
-}
-
-// Formatter defines the interface that messages have to satisfy
-// to be broadcast through StreamLogger.
-type Formatter interface {
-	Format(url.Values) string
 }
 
 // New returns a new StreamLogger with a buffer that can contain size
@@ -40,23 +35,16 @@ type Formatter interface {
 func New(name string, size int) *StreamLogger {
 	logger := &StreamLogger{
 		name:       name,
-		dataQueue:  make(chan Formatter, size),
-		subscribed: make(map[chan string]url.Values),
+		dataQueue:  make(chan interface{}, size),
+		subscribed: make(map[chan interface{}]struct{}),
 	}
 	go logger.stream()
 	return logger
 }
 
-// ServeLogs registers the URL on which messages will be broadcast.
-// It is safe to register multiple URLs for the same StreamLogger.
-func (logger *StreamLogger) ServeLogs(url string) {
-	http.Handle(url, logger)
-	log.Infof("Streaming logs from %s at %v.", logger.Name(), url)
-}
-
 // Send sends message to all the writers subscribed to logger. Calling
 // Send does not block.
-func (logger *StreamLogger) Send(message Formatter) {
+func (logger *StreamLogger) Send(message interface{}) {
 	if logger.size.Get() == 0 {
 		// There are no subscribers, do nothing.
 		return
@@ -70,18 +58,19 @@ func (logger *StreamLogger) Send(message Formatter) {
 
 // Subscribe returns a channel which can be used to listen
 // for messages.
-func (logger *StreamLogger) Subscribe(params url.Values) chan string {
+func (logger *StreamLogger) Subscribe() chan interface{} {
 	logger.mu.Lock()
 	defer logger.mu.Unlock()
 
-	ch := make(chan string, 1)
-	logger.subscribed[ch] = params
+	ch := make(chan interface{}, 1)
+	var empty struct{}
+	logger.subscribed[ch] = empty
 	logger.size.Set(uint32(len(logger.subscribed)))
 	return ch
 }
 
 // Unsubscribe removes the channel from the subscription.
-func (logger *StreamLogger) Unsubscribe(ch chan string) {
+func (logger *StreamLogger) Unsubscribe(ch chan interface{}) {
 	logger.mu.Lock()
 	defer logger.mu.Unlock()
 
@@ -97,14 +86,13 @@ func (logger *StreamLogger) stream() {
 	}
 }
 
-func (logger *StreamLogger) transmit(message Formatter) {
+func (logger *StreamLogger) transmit(message interface{}) {
 	logger.mu.Lock()
 	defer logger.mu.Unlock()
 
-	for ch, params := range logger.subscribed {
-		messageString := message.Format(params)
+	for ch := range logger.subscribed {
 		select {
-		case ch <- messageString:
+		case ch <- message:
 		default:
 			droppedMessages.Add(logger.name, 1)
 		}
@@ -116,18 +104,26 @@ func (logger *StreamLogger) Name() string {
 	return logger.name
 }
 
-// ServeHTTP is the http handler for StreamLogger.
-func (logger *StreamLogger) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-	}
-	ch := logger.Subscribe(r.Form)
-	defer logger.Unsubscribe(ch)
-
-	for messageString := range ch {
-		if _, err := io.WriteString(w, messageString); err != nil {
+// ServeLogs registers the URL on which messages will be broadcast.
+// It is safe to register multiple URLs for the same StreamLogger.
+func (logger *StreamLogger) ServeLogs(url string, messageFmt func(url.Values, interface{}) string) {
+	http.HandleFunc(url, func(w http.ResponseWriter, r *http.Request) {
+		if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
+			acl.SendError(w, err)
 			return
 		}
-		w.(http.Flusher).Flush()
-	}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
+		ch := logger.Subscribe()
+		defer logger.Unsubscribe(ch)
+
+		for message := range ch {
+			if _, err := io.WriteString(w, messageFmt(r.Form, message)); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+		}
+	})
+	log.Infof("Streaming logs from %s at %v.", logger.Name(), url)
 }

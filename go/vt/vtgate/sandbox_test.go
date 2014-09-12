@@ -8,12 +8,14 @@ import (
 	"flag"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
@@ -22,61 +24,108 @@ import (
 
 // sandbox_test.go provides a sandbox for unit testing VTGate.
 
-func init() {
-	tabletconn.RegisterDialer("sandbox", sandboxDialer)
-	flag.Set("tablet_protocol", "sandbox")
-}
-
-var (
-	// Use sandmu to access the variables below
-	sandmu sync.Mutex
-
-	// endPointCounter tracks how often GetEndPoints was called
-	endPointCounter int
-
-	// endPointMustFail specifies how often GetEndPoints must fail before succeeding
-	endPointMustFail int
-
-	// dialerCoun tracks how often sandboxDialer was called
-	dialCounter int
-
-	// dialMustFail specifies how often sandboxDialer must fail before succeeding
-	dialMustFail int
-)
-
-var (
-	// transaction id generator
-	transactionId sync2.AtomicInt64
-)
-
 const (
 	TEST_SHARDED               = "TestSharded"
 	TEST_UNSHARDED             = "TestUnshared"
 	TEST_UNSHARDED_SERVED_FROM = "TestUnshardedServedFrom"
 )
 
-func resetSandbox() {
-	sandmu.Lock()
-	defer sandmu.Unlock()
-	testConns = make(map[uint32]tabletconn.TabletConn)
-	endPointCounter = 0
-	dialCounter = 0
-	dialMustFail = 0
-	transactionId.Set(0)
+func init() {
+	sandboxMap = make(map[string]*sandbox)
+	createSandbox(TEST_SHARDED)
+	createSandbox(TEST_UNSHARDED)
+	tabletconn.RegisterDialer("sandbox", sandboxDialer)
+	flag.Set("tablet_protocol", "sandbox")
 }
 
-// sandboxTopo satisfies the SrvTopoServer interface
-type sandboxTopo struct {
+var sandboxMu sync.Mutex
+var sandboxMap map[string]*sandbox
+
+func createSandbox(keyspace string) *sandbox {
+	sandboxMu.Lock()
+	defer sandboxMu.Unlock()
+	s := &sandbox{}
+	s.Reset()
+	sandboxMap[keyspace] = s
+	return s
 }
 
-var ShardSpec = "-20-40-60-80-a0-c0-e0-"
-var ShardedKrArray key.KeyRangeArray
+func getSandbox(keyspace string) *sandbox {
+	sandboxMu.Lock()
+	defer sandboxMu.Unlock()
+	return sandboxMap[keyspace]
+}
 
-func getAllShards() (key.KeyRangeArray, error) {
-	if ShardedKrArray != nil {
-		return ShardedKrArray, nil
+func addSandboxServedFrom(keyspace, servedFrom string) {
+	sandboxMu.Lock()
+	defer sandboxMu.Unlock()
+	sandboxMap[keyspace].KeyspaceServedFrom = servedFrom
+	sandboxMap[servedFrom] = sandboxMap[keyspace]
+}
+
+type sandbox struct {
+	// Use sandmu to access the variables below
+	sandmu sync.Mutex
+
+	// SrvKeyspaceCounter tracks how often GetSrvKeyspace was called
+	SrvKeyspaceCounter int
+
+	// SrvKeyspaceMustFail specifies how often GetSrvKeyspace must fail before succeeding
+	SrvKeyspaceMustFail int
+
+	// EndPointCounter tracks how often GetEndPoints was called
+	EndPointCounter int
+
+	// EndPointMustFail specifies how often GetEndPoints must fail before succeeding
+	EndPointMustFail int
+
+	// DialerCoun tracks how often sandboxDialer was called
+	DialCounter int
+
+	// DialMustFail specifies how often sandboxDialer must fail before succeeding
+	DialMustFail int
+
+	// KeyspaceServedFrom specifies the served-from keyspace for vertical resharding
+	KeyspaceServedFrom string
+
+	// ShardSpec specifies the sharded keyranges
+	ShardSpec string
+
+	// SrvKeyspaceCallback specifies the callback function in GetSrvKeyspace
+	SrvKeyspaceCallback func()
+
+	TestConns map[uint32]tabletconn.TabletConn
+}
+
+func (s *sandbox) Reset() {
+	s.sandmu.Lock()
+	defer s.sandmu.Unlock()
+	s.TestConns = make(map[uint32]tabletconn.TabletConn)
+	s.SrvKeyspaceCounter = 0
+	s.SrvKeyspaceMustFail = 0
+	s.EndPointCounter = 0
+	s.EndPointMustFail = 0
+	s.DialCounter = 0
+	s.DialMustFail = 0
+	s.KeyspaceServedFrom = ""
+	s.ShardSpec = DefaultShardSpec
+	s.SrvKeyspaceCallback = nil
+}
+
+func (s *sandbox) MapTestConn(shard string, conn tabletconn.TabletConn) {
+	s.sandmu.Lock()
+	defer s.sandmu.Unlock()
+	uid, err := getUidForShard(shard, s.ShardSpec)
+	if err != nil {
+		panic(err)
 	}
-	shardedKrArray, err := key.ParseShardingSpec(ShardSpec)
+	s.TestConns[uint32(uid)] = conn
+}
+
+var DefaultShardSpec = "-20-40-60-80-a0-c0-e0-"
+
+func getAllShards(shardSpec string) (key.KeyRangeArray, error) {
+	shardedKrArray, err := key.ParseShardingSpec(shardSpec)
 	if err != nil {
 		return nil, err
 	}
@@ -87,13 +136,15 @@ func getKeyRangeName(kr key.KeyRange) string {
 	return fmt.Sprintf("%v-%v", string(kr.Start.Hex()), string(kr.End.Hex()))
 }
 
-func getUidForShard(shardName string) (int, error) {
+func getUidForShard(shardName string, shardSpec string) (int, error) {
 	// Try simple unsharded case first
-	uid, err := strconv.Atoi(shardName)
-	if err == nil {
-		return uid, nil
+	if strings.Contains(shardName, "-") == false {
+		uid, err := strconv.Atoi(shardName)
+		if err == nil {
+			return uid, nil
+		}
 	}
-	shards, err := getAllShards()
+	shards, err := getAllShards(shardSpec)
 	if err != nil {
 		return 0, fmt.Errorf("shard not found %v", shardName)
 	}
@@ -105,8 +156,8 @@ func getUidForShard(shardName string) (int, error) {
 	return 0, fmt.Errorf("shard not found %v", shardName)
 }
 
-func createShardedSrvKeyspace() (*topo.SrvKeyspace, error) {
-	shardKrArray, err := getAllShards()
+func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*topo.SrvKeyspace, error) {
+	shardKrArray, err := getAllShards(shardSpec)
 	if err != nil {
 		return nil, err
 	}
@@ -127,6 +178,12 @@ func createShardedSrvKeyspace() (*topo.SrvKeyspace, error) {
 			},
 		},
 		TabletTypes: allTabletTypes,
+	}
+	if servedFromKeyspace != "" {
+		shardedSrvKeyspace.ServedFrom = map[topo.TabletType]string{
+			topo.TYPE_RDONLY: servedFromKeyspace,
+			topo.TYPE_MASTER: servedFromKeyspace,
+		}
 	}
 	return shardedSrvKeyspace, nil
 }
@@ -156,11 +213,30 @@ func createUnshardedKeyspace() (*topo.SrvKeyspace, error) {
 	return unshardedSrvKeyspace, nil
 }
 
-func (sct *sandboxTopo) GetSrvKeyspaceNames(cell string) ([]string, error) {
-	return []string{TEST_SHARDED, TEST_UNSHARDED}, nil
+// sandboxTopo satisfies the SrvTopoServer interface
+type sandboxTopo struct {
 }
 
-func (sct *sandboxTopo) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, error) {
+func (sct *sandboxTopo) GetSrvKeyspaceNames(context context.Context, cell string) ([]string, error) {
+	sandboxMu.Lock()
+	defer sandboxMu.Unlock()
+	keyspaces := make([]string, 0, 1)
+	for k := range sandboxMap {
+		keyspaces = append(keyspaces, k)
+	}
+	return keyspaces, nil
+}
+
+func (sct *sandboxTopo) GetSrvKeyspace(context context.Context, cell, keyspace string) (*topo.SrvKeyspace, error) {
+	sand := getSandbox(keyspace)
+	if sand.SrvKeyspaceCallback != nil {
+		sand.SrvKeyspaceCallback()
+	}
+	sand.SrvKeyspaceCounter++
+	if sand.SrvKeyspaceMustFail > 0 {
+		sand.SrvKeyspaceMustFail--
+		return nil, fmt.Errorf("topo error GetSrvKeyspace")
+	}
 	switch keyspace {
 	case TEST_UNSHARDED_SERVED_FROM:
 		servedFromKeyspace, err := createUnshardedKeyspace()
@@ -175,18 +251,17 @@ func (sct *sandboxTopo) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace
 		return createUnshardedKeyspace()
 	}
 
-	return createShardedSrvKeyspace()
+	return createShardedSrvKeyspace(sand.ShardSpec, sand.KeyspaceServedFrom)
 }
 
-func (sct *sandboxTopo) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
-	sandmu.Lock()
-	defer sandmu.Unlock()
-	endPointCounter++
-	if endPointMustFail > 0 {
-		endPointMustFail--
+func (sct *sandboxTopo) GetEndPoints(context context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
+	sand := getSandbox(keyspace)
+	sand.EndPointCounter++
+	if sand.EndPointMustFail > 0 {
+		sand.EndPointMustFail--
 		return nil, fmt.Errorf("topo error")
 	}
-	uid, err := getUidForShard(shard)
+	uid, err := getUidForShard(shard, sand.ShardSpec)
 	if err != nil {
 		panic(err)
 	}
@@ -195,30 +270,21 @@ func (sct *sandboxTopo) GetEndPoints(cell, keyspace, shard string, tabletType to
 	}}, nil
 }
 
-var testConns map[uint32]tabletconn.TabletConn
-
-func sandboxDialer(context interface{}, endPoint topo.EndPoint, keyspace, shard string, timeout time.Duration) (tabletconn.TabletConn, error) {
-	sandmu.Lock()
-	defer sandmu.Unlock()
-	dialCounter++
-	if dialMustFail > 0 {
-		dialMustFail--
+func sandboxDialer(context context.Context, endPoint topo.EndPoint, keyspace, shard string, timeout time.Duration) (tabletconn.TabletConn, error) {
+	sand := getSandbox(keyspace)
+	sand.sandmu.Lock()
+	defer sand.sandmu.Unlock()
+	sand.DialCounter++
+	if sand.DialMustFail > 0 {
+		sand.DialMustFail--
 		return nil, tabletconn.OperationalError(fmt.Sprintf("conn error"))
 	}
-	tconn := testConns[endPoint.Uid]
+	tconn := sand.TestConns[endPoint.Uid]
 	if tconn == nil {
 		panic(fmt.Sprintf("can't find conn %v", endPoint.Uid))
 	}
 	tconn.(*sandboxConn).endPoint = endPoint
 	return tconn, nil
-}
-
-func mapTestConn(shard string, conn tabletconn.TabletConn) {
-	uid, err := getUidForShard(shard)
-	if err != nil {
-		panic(err)
-	}
-	testConns[uint32(uid)] = conn
 }
 
 // sandboxConn satisfies the TabletConn interface
@@ -239,6 +305,9 @@ type sandboxConn struct {
 	CommitCount   sync2.AtomicInt64
 	RollbackCount sync2.AtomicInt64
 	CloseCount    sync2.AtomicInt64
+
+	// transaction id generator
+	TransactionId sync2.AtomicInt64
 }
 
 func (sbc *sandboxConn) getError() error {
@@ -269,7 +338,7 @@ func (sbc *sandboxConn) getError() error {
 	return nil
 }
 
-func (sbc *sandboxConn) Execute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (*mproto.QueryResult, error) {
+func (sbc *sandboxConn) Execute(context context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
 	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
@@ -280,7 +349,7 @@ func (sbc *sandboxConn) Execute(context interface{}, query string, bindVars map[
 	return singleRowResult, nil
 }
 
-func (sbc *sandboxConn) ExecuteBatch(context interface{}, queries []tproto.BoundQuery, transactionId int64) (*tproto.QueryResultList, error) {
+func (sbc *sandboxConn) ExecuteBatch(context context.Context, queries []tproto.BoundQuery, transactionID int64) (*tproto.QueryResultList, error) {
 	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
@@ -296,7 +365,7 @@ func (sbc *sandboxConn) ExecuteBatch(context interface{}, queries []tproto.Bound
 	return qrl, nil
 }
 
-func (sbc *sandboxConn) StreamExecute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc) {
+func (sbc *sandboxConn) StreamExecute(context context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc) {
 	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
@@ -308,7 +377,7 @@ func (sbc *sandboxConn) StreamExecute(context interface{}, query string, bindVar
 	return ch, func() error { return err }
 }
 
-func (sbc *sandboxConn) Begin(context interface{}) (int64, error) {
+func (sbc *sandboxConn) Begin(context context.Context) (int64, error) {
 	sbc.ExecCount.Add(1)
 	sbc.BeginCount.Add(1)
 	if sbc.mustDelay != 0 {
@@ -318,10 +387,10 @@ func (sbc *sandboxConn) Begin(context interface{}) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return transactionId.Add(1), nil
+	return sbc.TransactionId.Add(1), nil
 }
 
-func (sbc *sandboxConn) Commit(context interface{}, transactionId int64) error {
+func (sbc *sandboxConn) Commit(context context.Context, transactionID int64) error {
 	sbc.ExecCount.Add(1)
 	sbc.CommitCount.Add(1)
 	if sbc.mustDelay != 0 {
@@ -330,7 +399,7 @@ func (sbc *sandboxConn) Commit(context interface{}, transactionId int64) error {
 	return sbc.getError()
 }
 
-func (sbc *sandboxConn) Rollback(context interface{}, transactionId int64) error {
+func (sbc *sandboxConn) Rollback(context context.Context, transactionID int64) error {
 	sbc.ExecCount.Add(1)
 	sbc.RollbackCount.Add(1)
 	if sbc.mustDelay != 0 {

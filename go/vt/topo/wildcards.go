@@ -85,7 +85,8 @@ func ResolveShardWildcard(server WildcardBackend, param string) ([]KeyspaceShard
 
 	// for each matched keyspace, get the shards
 	for _, matchedKeyspace := range matchedKeyspaces {
-		if fileutil.HasWildcard(parts[1]) {
+		shard := parts[1]
+		if fileutil.HasWildcard(shard) {
 			// get all the shards for the keyspace
 			shardNames, err := server.GetShardNames(matchedKeyspace)
 			switch err {
@@ -102,31 +103,36 @@ func ResolveShardWildcard(server WildcardBackend, param string) ([]KeyspaceShard
 				return nil, fmt.Errorf("cannot read keyspace shards for %v: %v", matchedKeyspace, err)
 			}
 			for _, s := range shardNames {
-				matched, err := path.Match(parts[1], s)
+				matched, err := path.Match(shard, s)
 				if err != nil {
-					return nil, fmt.Errorf("Invalid pattern %v: %v", parts[1], err)
+					return nil, fmt.Errorf("Invalid pattern %v: %v", shard, err)
 				}
 				if matched {
 					result = append(result, KeyspaceShard{matchedKeyspace, s})
 				}
 			}
 		} else {
+			// if the shard name contains a '-', we assume it's the
+			// name for a ranged based shard, so we lower case it.
+			if strings.Contains(shard, "-") {
+				shard = strings.ToLower(shard)
+			}
 			if keyspaceHasWildcards {
 				// keyspace was a wildcard, shard is not, just try it
-				_, err := server.GetShard(matchedKeyspace, parts[1])
+				_, err := server.GetShard(matchedKeyspace, shard)
 				switch err {
 				case nil:
 					// shard exists, add it
-					result = append(result, KeyspaceShard{matchedKeyspace, parts[1]})
+					result = append(result, KeyspaceShard{matchedKeyspace, shard})
 				case ErrNoNode:
 					// no shard, ignore
 				default:
 					// other error
-					return nil, fmt.Errorf("Cannot read shard %v/%v: %v", matchedKeyspace, parts[1], err)
+					return nil, fmt.Errorf("Cannot read shard %v/%v: %v", matchedKeyspace, shard, err)
 				}
 			} else {
 				// keyspace and shards are not wildcards, just add the value
-				result = append(result, KeyspaceShard{matchedKeyspace, parts[1]})
+				result = append(result, KeyspaceShard{matchedKeyspace, shard})
 			}
 		}
 	}

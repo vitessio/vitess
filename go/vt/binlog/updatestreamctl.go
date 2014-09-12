@@ -12,8 +12,8 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 /* API and config for UpdateStream Service */
@@ -49,28 +49,24 @@ type UpdateStream struct {
 	streams        streamList
 }
 
-type streamer interface {
-	Stop()
-}
-
 type streamList struct {
 	sync.Mutex
-	streams map[streamer]bool
+	streams map[*sync2.ServiceManager]bool
 }
 
 func (sl *streamList) Init() {
 	sl.Lock()
-	sl.streams = make(map[streamer]bool)
+	sl.streams = make(map[*sync2.ServiceManager]bool)
 	sl.Unlock()
 }
 
-func (sl *streamList) Add(e streamer) {
+func (sl *streamList) Add(e *sync2.ServiceManager) {
 	sl.Lock()
 	sl.streams[e] = true
 	sl.Unlock()
 }
 
-func (sl *streamList) Delete(e streamer) {
+func (sl *streamList) Delete(e *sync2.ServiceManager) {
 	sl.Lock()
 	delete(sl.streams, e)
 	sl.Unlock()
@@ -119,9 +115,9 @@ func logError() {
 	}
 }
 
-func EnableUpdateStreamService(dbcfgs *dbconfigs.DBConfigs) {
+func EnableUpdateStreamService(dbname string, mysqld *mysqlctl.Mysqld) {
 	defer logError()
-	UpdateStreamRpcService.enable(dbcfgs)
+	UpdateStreamRpcService.enable(dbname, mysqld)
 }
 
 func DisableUpdateStreamService() {
@@ -137,23 +133,18 @@ func IsUpdateStreamEnabled() bool {
 	return UpdateStreamRpcService.isEnabled()
 }
 
-func GetReplicationPosition() (int64, error) {
+func GetReplicationPosition() (myproto.ReplicationPosition, error) {
 	return UpdateStreamRpcService.getReplicationPosition()
 }
 
-func (updateStream *UpdateStream) enable(dbcfgs *dbconfigs.DBConfigs) {
+func (updateStream *UpdateStream) enable(dbname string, mysqld *mysqlctl.Mysqld) {
 	updateStream.actionLock.Lock()
 	defer updateStream.actionLock.Unlock()
 	if updateStream.isEnabled() {
 		return
 	}
 
-	if dbcfgs.Dba.UnixSocket == "" {
-		log.Errorf("Missing dba socket connection, cannot enable update stream service")
-		return
-	}
-
-	if dbcfgs.App.DbName == "" {
+	if dbname == "" {
 		log.Errorf("Missing db name, cannot enable update stream service")
 		return
 	}
@@ -164,8 +155,8 @@ func (updateStream *UpdateStream) enable(dbcfgs *dbconfigs.DBConfigs) {
 	}
 
 	updateStream.state.Set(ENABLED)
-	updateStream.mysqld = mysqlctl.NewMysqld(updateStream.mycnf, &dbcfgs.Dba, &dbcfgs.Repl)
-	updateStream.dbname = dbcfgs.App.DbName
+	updateStream.mysqld = mysqld
+	updateStream.dbname = dbname
 	updateStream.streams.Init()
 	log.Infof("Enabling update stream, dbname: %s, binlogpath: %s", updateStream.dbname, updateStream.mycnf.BinLogPath)
 }
@@ -204,21 +195,11 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamReque
 	updateStream.actionLock.Unlock()
 	defer updateStream.stateWaitGroup.Done()
 
-	rp, err := updateStream.mysqld.BinlogInfo(req.GroupId)
-	if err != nil {
-		log.Errorf("Unable to serve client request: error computing start position: %v", err)
-		return fmt.Errorf("error computing start position: %v", err)
-	}
 	streamCount.Add("Updates", 1)
 	defer streamCount.Add("Updates", -1)
-	log.Infof("ServeUpdateStream starting @ %v", rp)
+	log.Infof("ServeUpdateStream starting @ %#v", req.Position)
 
-	evs := NewEventStreamer(updateStream.dbname, updateStream.mycnf.BinLogPath)
-	updateStream.streams.Add(evs)
-	defer updateStream.streams.Delete(evs)
-
-	// Calls cascade like this: BinlogStreamer->func(*proto.StreamEvent)->sendReply
-	return evs.Stream(rp.MasterLogFile, int64(rp.MasterLogPosition), func(reply *proto.StreamEvent) error {
+	evs := NewEventStreamer(updateStream.dbname, updateStream.mysqld, req.Position, func(reply *proto.StreamEvent) error {
 		if reply.Category == "ERR" {
 			updateStreamErrors.Add("UpdateStream", 1)
 		} else {
@@ -226,6 +207,12 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamReque
 		}
 		return sendReply(reply)
 	})
+
+	svm := &sync2.ServiceManager{}
+	svm.Go(evs.Stream)
+	updateStream.streams.Add(svm)
+	defer updateStream.streams.Delete(svm)
+	return svm.Join()
 }
 
 func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sendReply func(reply *proto.BinlogTransaction) error) (err error) {
@@ -245,18 +232,9 @@ func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sen
 	updateStream.actionLock.Unlock()
 	defer updateStream.stateWaitGroup.Done()
 
-	rp, err := updateStream.mysqld.BinlogInfo(req.GroupId)
-	if err != nil {
-		log.Errorf("Unable to serve client request: error computing start position: %v", err)
-		return fmt.Errorf("error computing start position: %v", err)
-	}
 	streamCount.Add("KeyRange", 1)
 	defer streamCount.Add("KeyRange", -1)
-	log.Infof("ServeUpdateStream starting @ %v", rp)
-
-	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mycnf.BinLogPath)
-	updateStream.streams.Add(bls)
-	defer updateStream.streams.Delete(bls)
+	log.Infof("ServeUpdateStream starting @ %#v", req.Position)
 
 	// Calls cascade like this: BinlogStreamer->KeyRangeFilterFunc->func(*proto.BinlogTransaction)->sendReply
 	f := KeyRangeFilterFunc(req.KeyspaceIdType, req.KeyRange, func(reply *proto.BinlogTransaction) error {
@@ -264,7 +242,13 @@ func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sen
 		keyrangeTransactions.Add(1)
 		return sendReply(reply)
 	})
-	return bls.Stream(rp.MasterLogFile, int64(rp.MasterLogPosition), f)
+	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld, req.Position, f)
+
+	svm := &sync2.ServiceManager{}
+	svm.Go(bls.Stream)
+	updateStream.streams.Add(svm)
+	defer updateStream.streams.Delete(svm)
+	return svm.Join()
 }
 
 func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendReply func(reply *proto.BinlogTransaction) error) (err error) {
@@ -284,38 +268,31 @@ func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendRep
 	updateStream.actionLock.Unlock()
 	defer updateStream.stateWaitGroup.Done()
 
-	rp, err := updateStream.mysqld.BinlogInfo(req.GroupId)
-	if err != nil {
-		log.Errorf("Unable to serve client request: error computing start position: %v", err)
-		return fmt.Errorf("error computing start position: %v", err)
-	}
 	streamCount.Add("Tables", 1)
 	defer streamCount.Add("Tables", -1)
-	log.Infof("ServeUpdateStream starting @ %v", rp)
+	log.Infof("ServeUpdateStream starting @ %#v", req.Position)
 
-	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mycnf.BinLogPath)
-	updateStream.streams.Add(bls)
-	defer updateStream.streams.Delete(bls)
-
-	// Calls cascade like this: BinlogStreamer->KeyRangeFilterFunc->func(*proto.BinlogTransaction)->sendReply
+	// Calls cascade like this: BinlogStreamer->TablesFilterFunc->func(*proto.BinlogTransaction)->sendReply
 	f := TablesFilterFunc(req.Tables, func(reply *proto.BinlogTransaction) error {
 		keyrangeStatements.Add(int64(len(reply.Statements)))
 		keyrangeTransactions.Add(1)
 		return sendReply(reply)
 	})
-	return bls.Stream(rp.MasterLogFile, int64(rp.MasterLogPosition), f)
+	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld, req.Position, f)
+
+	svm := &sync2.ServiceManager{}
+	svm.Go(bls.Stream)
+	updateStream.streams.Add(svm)
+	defer updateStream.streams.Delete(svm)
+	return svm.Join()
 }
 
-func (updateStream *UpdateStream) getReplicationPosition() (int64, error) {
+func (updateStream *UpdateStream) getReplicationPosition() (myproto.ReplicationPosition, error) {
 	updateStream.actionLock.Lock()
 	defer updateStream.actionLock.Unlock()
 	if !updateStream.isEnabled() {
-		return 0, fmt.Errorf("update stream service is not enabled")
+		return myproto.ReplicationPosition{}, fmt.Errorf("update stream service is not enabled")
 	}
 
-	rp, err := updateStream.mysqld.MasterStatus()
-	if err != nil {
-		return 0, err
-	}
-	return rp.MasterLogGroupId, nil
+	return updateStream.mysqld.MasterPosition()
 }

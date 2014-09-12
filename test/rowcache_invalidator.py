@@ -12,6 +12,7 @@ import unittest
 import urllib2
 
 from zk import zkocc
+from vtdb import topology
 from vtdb import vtclient
 
 import environment
@@ -93,6 +94,7 @@ class RowCacheInvalidator(unittest.TestCase):
   def setUp(self):
     self.vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
                                                "test_nj", 30.0)
+    topology.read_topology(self.vtgate_client)
     self.perform_insert(400)
 
   def tearDown(self):
@@ -151,23 +153,55 @@ class RowCacheInvalidator(unittest.TestCase):
     self.assertEqual(stats_dict['Hits'] - hits, 1,
                      "This should have hit the cache")
 
-  def test_invalidation_failure(self):
+  def test_outofband_statements(self):
     start = self.replica_vars()['InternalErrors'].get('Invalidation', 0)
-    self.perform_insert(10)
-    utils.mysql_write_query(master_tablet.tablet_uid,
-                            'vt_test_keyspace',
-                            "update vt_insert_test set msg = 'foo' where id = 1")
+    self._exec_vt_txn(["insert into vt_insert_test (id, msg) values (1000000, 'start')"])
     self._wait_for_replica()
     time.sleep(1.0)
+
+    # Test update statement
+    result = self._exec_replica_query("select * from vt_insert_test where id = 1000000")
+    self.assertEqual(result, [(1000000, 'start')])
+    utils.mysql_write_query(master_tablet.tablet_uid,
+                            'vt_test_keyspace',
+                            "update vt_insert_test set msg = 'foo' where id = 1000000")
+    self._wait_for_replica()
+    time.sleep(1.0)
+    result = self._exec_replica_query("select * from vt_insert_test where id = 1000000")
+    self.assertEqual(result, [(1000000, 'foo')])
     end1 = self.replica_vars()['InternalErrors'].get('Invalidation', 0)
-    self.assertEqual(start+1, end1)
+    self.assertEqual(start, end1)
+
+    # Test delete statement
+    utils.mysql_write_query(master_tablet.tablet_uid,
+                            'vt_test_keyspace',
+                            "delete from vt_insert_test where id = 1000000")
+    self._wait_for_replica()
+    time.sleep(1.0)
+    result = self._exec_replica_query("select * from vt_insert_test where id = 1000000")
+    self.assertEqual(result, [])
+    end2 = self.replica_vars()['InternalErrors'].get('Invalidation', 0)
+    self.assertEqual(end1, end2)
+
+    # Test insert statement
+    utils.mysql_write_query(master_tablet.tablet_uid,
+                            'vt_test_keyspace',
+                            "insert into vt_insert_test (id, msg) values(1000000, 'bar')")
+    self._wait_for_replica()
+    time.sleep(1.0)
+    result = self._exec_replica_query("select * from vt_insert_test where id = 1000000")
+    self.assertEqual(result, [(1000000, 'bar')])
+    end3 = self.replica_vars()['InternalErrors'].get('Invalidation', 0)
+    self.assertEqual(end2, end3)
+
+    # Test unrecognized statement
     utils.mysql_query(master_tablet.tablet_uid,
                       'vt_test_keyspace',
                        "truncate table vt_insert_test")
     self._wait_for_replica()
     time.sleep(1.0)
-    end2 = self.replica_vars()['InternalErrors'].get('Invalidation', 0)
-    self.assertEqual(end1+1, end2)
+    end4 = self.replica_vars()['InternalErrors'].get('Invalidation', 0)
+    self.assertEqual(end4, end3+1)
 
   def test_stop_replication(self):
     # restart the replica tablet so the stats are reset
@@ -287,6 +321,16 @@ class RowCacheInvalidator(unittest.TestCase):
     for q in query_list:
       vtdb_cursor.execute(q, {})
     vtdb_conn.commit()
+
+  def _exec_replica_query(self, query):
+    conn = vtclient.VtOCCConnection(self.vtgate_client, 'test_keyspace', '0',
+                                    'replica', 30)
+    conn.connect()
+    cursor = conn.cursor()
+    cursor.execute(query, {})
+    conn.close()
+    return list(cursor)
+
 
 if __name__ == '__main__':
   utils.main()

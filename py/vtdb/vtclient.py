@@ -9,6 +9,8 @@ from vtdb import cursor
 from vtdb import dbapi
 from vtdb import dbexceptions
 from vtdb import topo_utils
+from vtdb import topology
+from vtdb import vtdb_logger
 
 RECONNECT_DELAY = 0.002 # 2 ms
 BEGIN_RECONNECT_DELAY = 0.2 # 200 ms
@@ -24,7 +26,7 @@ def register_conn_class(protocol, c):
 def get_vt_connection_params_list(topo_client, keyspace, shard, db_type, timeout, encrypted, user, password, vtgate_protocol, vtgate_addrs):
   if vtgate_protocol != 'v0':
     if vtgate_addrs is None:
-      return []
+      return {}
     return topo_utils.get_db_params_for_vtgate_conn(vtgate_addrs, keyspace, shard, db_type, timeout, encrypted, user, password)
 
   return topo_utils.get_db_params_for_tablet_conn(topo_client, keyspace, shard, db_type, timeout, encrypted, user, password)
@@ -38,8 +40,13 @@ def reconnect(method):
         return method(self, *args, **kargs)
       except (dbexceptions.RetryError, dbexceptions.FatalError, dbexceptions.TxPoolFull) as e:
         attempt += 1
+        # Execution attempt failed with OperationalError, re-read the keyspace.
+        if not isinstance(e, dbexceptions.TxPoolFull):
+          self.resolve_topology()
+
         if attempt >= self.max_attempts or self.in_txn:
           self.close()
+          vtdb_logger.get_logger().vtclient_exception(self.keyspace, self.shard, self.db_type, e)
           raise dbexceptions.FatalError(*e.args)
         if method.__name__ == 'begin':
           time.sleep(BEGIN_RECONNECT_DELAY)
@@ -54,11 +61,12 @@ def reconnect(method):
           logging.info("Waiting to retry for dbexceptions.TxPoolFull to %s, attempt %d", str(self.conn), attempt)
   return _run_with_reconnect
 
+
 # Provide compatibility with the MySQLdb query param style and prune bind_vars
 class VtOCCConnection(object):
   cursorclass = cursor.TabletCursor
 
-  def __init__(self, zkocc_client, keyspace, shard, db_type, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None, vtgate_protocol='v0', vtgate_addrs=[]):
+  def __init__(self, zkocc_client, keyspace, shard, db_type, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None, vtgate_protocol='v0', vtgate_addrs=None):
     self.zkocc_client = zkocc_client
     self.keyspace = keyspace
     self.shard = str(shard)
@@ -88,9 +96,18 @@ class VtOCCConnection(object):
       self.conn.close()
 
   def connect(self):
+    try:
+      return self._connect()
+    except dbexceptions.OperationalError as e:
+      vtdb_logger.get_logger().vtclient_exception(self.keyspace, self.shard, self.db_type, e)
+      raise
+
+  def _connect(self):
     db_key = "%s.%s.%s" % (self.keyspace, self.shard, self.db_type)
     db_params_list = get_vt_connection_params_list(self.zkocc_client, self.keyspace, self.shard, self.db_type, self.timeout, self.encrypted, self.user, self.password, self.vtgate_protocol, self.vtgate_addrs)
     if not db_params_list:
+      # no valid end-points were found, re-read the keyspace
+      self.resolve_topology()
       raise dbexceptions.OperationalError("empty db params list - no db instance available for key %s" % db_key)
     db_exception = None
     host_addr = None
@@ -109,6 +126,9 @@ class VtOCCConnection(object):
       except Exception as e:
         db_exception = e
         logging.warning('db connection failed: %s %s, %s', db_key, host_addr, e)
+        # vttablet threw an Operational Error on connect, re-read the keyspace
+        if isinstance(e, dbexceptions.OperationalError):
+          self.resolve_topology()
 
     raise dbexceptions.OperationalError(
       'unable to create vt connection', db_key, host_addr, db_exception)
@@ -158,3 +178,8 @@ class VtOCCConnection(object):
 
   def _stream_next(self):
     return self.conn._stream_next()
+
+  # This function clears the cached value for the keyspace
+  # and re-reads it from the toposerver once per 'n' secs.
+  def resolve_topology(self):
+    topology.refresh_keyspace(self.zkocc_client, self.keyspace)

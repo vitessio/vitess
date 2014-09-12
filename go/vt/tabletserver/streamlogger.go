@@ -7,6 +7,7 @@ package tabletserver
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"net/url"
 	"strings"
 	"time"
@@ -14,6 +15,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/streamlog"
+	"github.com/youtube/vitess/go/vt/context"
 )
 
 var SqlQueryLogger = streamlog.New("SqlQuery", 50)
@@ -24,7 +26,7 @@ const (
 	QUERY_SOURCE_MYSQL
 )
 
-type sqlQueryStats struct {
+type SQLQueryStats struct {
 	Method               string
 	PlanType             string
 	OriginalSql          string
@@ -42,37 +44,41 @@ type sqlQueryStats struct {
 	CacheInvalidations   int64
 	QuerySources         byte
 	Rows                 [][]sqltypes.Value
-	context              *Context
+	TransactionID        int64
+	context              context.Context
 }
 
-func newSqlQueryStats(methodName string, context *Context) *sqlQueryStats {
-	s := &sqlQueryStats{Method: methodName, StartTime: time.Now(), context: context}
-	return s
+func newSqlQueryStats(methodName string, context context.Context) *SQLQueryStats {
+	return &SQLQueryStats{
+		Method:    methodName,
+		StartTime: time.Now(),
+		context:   context,
+	}
 }
 
-func (stats *sqlQueryStats) Send() {
+func (stats *SQLQueryStats) Send() {
 	stats.EndTime = time.Now()
 	SqlQueryLogger.Send(stats)
 }
 
-func (stats *sqlQueryStats) AddRewrittenSql(sql string) {
+func (stats *SQLQueryStats) AddRewrittenSql(sql string) {
 	stats.rewrittenSqls = append(stats.rewrittenSqls, sql)
 }
 
-func (stats *sqlQueryStats) TotalTime() time.Duration {
+func (stats *SQLQueryStats) TotalTime() time.Duration {
 	return stats.EndTime.Sub(stats.StartTime)
 }
 
 // RewrittenSql returns a semicolon separated list of SQL statements
 // that were executed.
-func (stats *sqlQueryStats) RewrittenSql() string {
+func (stats *SQLQueryStats) RewrittenSql() string {
 	return strings.Join(stats.rewrittenSqls, "; ")
 }
 
 // SizeOfResponse returns the approximate size of the response in
 // bytes (this does not take in account BSON encoding). It will return
 // 0 for streaming requests.
-func (stats *sqlQueryStats) SizeOfResponse() int {
+func (stats *SQLQueryStats) SizeOfResponse() int {
 	if stats.Rows == nil {
 		return 0
 	}
@@ -88,7 +94,7 @@ func (stats *sqlQueryStats) SizeOfResponse() int {
 // FmtBindVariables returns the map of bind variables as JSON. For
 // values that are strings or byte slices it only reports their type
 // and length.
-func (stats *sqlQueryStats) FmtBindVariables(full bool) string {
+func (stats *SQLQueryStats) FmtBindVariables(full bool) string {
 	var out map[string]interface{}
 	if full {
 		out = stats.BindVariables
@@ -118,7 +124,7 @@ func (stats *sqlQueryStats) FmtBindVariables(full bool) string {
 // FmtQuerySources returns a comma separated list of query
 // sources. If there were no query sources, it returns the string
 // "none".
-func (stats *sqlQueryStats) FmtQuerySources() string {
+func (stats *SQLQueryStats) FmtQuerySources() string {
 	if stats.QuerySources == 0 {
 		return "none"
 	}
@@ -139,16 +145,20 @@ func (stats *sqlQueryStats) FmtQuerySources() string {
 	return strings.Join(sources[:n], ",")
 }
 
-func (log *sqlQueryStats) RemoteAddr() string {
-	return log.context.RemoteAddr
+func (log *SQLQueryStats) RemoteAddr() string {
+	return log.context.GetRemoteAddr()
 }
 
-func (log *sqlQueryStats) Username() string {
-	return log.context.Username
+func (log *SQLQueryStats) Username() string {
+	return log.context.GetUsername()
+}
+
+func (log *SQLQueryStats) ContextHTML() template.HTML {
+	return log.context.HTML()
 }
 
 // String returns a tab separated list of logged fields.
-func (log *sqlQueryStats) Format(params url.Values) string {
+func (log *SQLQueryStats) Format(params url.Values) string {
 	_, fullBindParams := params["full"]
 	return fmt.Sprintf(
 		"%v\t%v\t%v\t%v\t%v\t%.6f\t%v\t%q\t%v\t%v\t%q\t%v\t%.6f\t%.6f\t%v\t%v\t%v\t%v\t%v\t\n",

@@ -11,6 +11,10 @@ import (
 )
 
 func TestRates(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping wait-based test in short mode.")
+	}
+
 	clear()
 	c := NewCounters("rcounter1")
 	r := NewRates("rates1", c, 3, 1*time.Second)
@@ -39,6 +43,46 @@ func TestRates(t *testing.T) {
 	if r.String() != want {
 		t.Errorf("want %s, got %s", want, r.String())
 	}
+}
+
+func TestRatesConsistency(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping wait-based test in short mode.")
+	}
+
+	// This tests the following invariant: in the time window
+	// covered by rates, the sum of the rates reported must be
+	// equal to the count reported by the counter.
+	const (
+		interval = 1 * time.Second
+		epsilon  = 50 * time.Millisecond
+	)
+
+	clear()
+	c := NewCounters("rcounter4")
+	r := NewRates("rates4", c, 100, interval)
+
+	time.Sleep(epsilon)
+	c.Add("a", 1000)
+	time.Sleep(interval)
+	c.Add("a", 1)
+	time.Sleep(interval)
+
+	result := r.Get()
+	counts := c.Counts()
+	t.Logf("r.Get(): %v", result)
+	t.Logf("c.Counts(): %v", counts)
+
+	rate, count := result["a"], counts["a"]
+
+	var sum float64
+	for _, v := range rate {
+		sum += v
+	}
+	if sum != float64(counts["a"]) {
+		t.Errorf("rate inconsistent with count: sum of %v != %v", rate, count)
+	}
+
 }
 
 func TestRatesHook(t *testing.T) {

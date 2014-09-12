@@ -24,7 +24,7 @@ This file contains the lock management code for zktopo.Server
 // queue lock, displays a nice error message if it cant get it
 func (zkts *Server) lockForAction(actionDir, contents string, timeout time.Duration, interrupted chan struct{}) (string, error) {
 	// create the action path
-	actionPath, err := zkts.zconn.Create(actionDir, contents, zookeeper.SEQUENCE, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	actionPath, err := zkts.zconn.Create(actionDir, contents, zookeeper.SEQUENCE|zookeeper.EPHEMERAL, zookeeper.WorldACL(zk.PERM_FILE))
 	if err != nil {
 		return "", err
 	}
@@ -103,5 +103,27 @@ func (zkts *Server) LockShardForAction(keyspace, shard, contents string, timeout
 }
 
 func (zkts *Server) UnlockShardForAction(keyspace, shard, lockPath, results string) error {
+	return zkts.unlockForAction(lockPath, results)
+}
+
+func (zkts *Server) LockSrvShardForAction(cell, keyspace, shard, contents string, timeout time.Duration, interrupted chan struct{}) (string, error) {
+	// Action paths end in a trailing slash to that when we create
+	// sequential nodes, they are created as children, not siblings.
+	actionDir := path.Join(zkPathForVtShard(cell, keyspace, shard), "action")
+
+	// if we can't create the lock file because the directory doesn't exist,
+	// create it
+	p, err := zkts.lockForAction(actionDir+"/", contents, timeout, interrupted)
+	if err != nil && zookeeper.IsError(err, zookeeper.ZNONODE) {
+		_, err = zk.CreateRecursive(zkts.zconn, actionDir, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+		if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+			return "", err
+		}
+		p, err = zkts.lockForAction(actionDir+"/", contents, timeout, interrupted)
+	}
+	return p, err
+}
+
+func (zkts *Server) UnlockSrvShardForAction(cell, keyspace, shard, lockPath, results string) error {
 	return zkts.unlockForAction(lockPath, results)
 }

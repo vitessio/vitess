@@ -10,7 +10,6 @@ import (
 	"net/http"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
 const indexHTML = `
@@ -60,7 +59,7 @@ func executeTemplate(w http.ResponseWriter, t *template.Template, data interface
 	}
 }
 
-func initInteractiveMode(wr *wrangler.Wrangler) {
+func initInteractiveMode() {
 	indexTemplate := loadTemplate("index", indexHTML)
 	subIndexTemplate := loadTemplate("subIndex", subIndexHTML)
 
@@ -71,8 +70,11 @@ func initInteractiveMode(wr *wrangler.Wrangler) {
 
 	// command group menus
 	for _, cg := range commands {
+		// keep a local copy of the Command pointer for the
+		// closure.
+		pcg := cg
 		http.HandleFunc("/"+cg.Name, func(w http.ResponseWriter, r *http.Request) {
-			executeTemplate(w, subIndexTemplate, cg)
+			executeTemplate(w, subIndexTemplate, pcg)
 		})
 
 		for _, c := range cg.Commands {

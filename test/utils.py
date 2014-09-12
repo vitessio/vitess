@@ -12,15 +12,22 @@ from subprocess import Popen, CalledProcessError, PIPE
 import sys
 import time
 import unittest
-import urllib
+import urllib2
 
 import MySQLdb
 
 import environment
 
+from vtctl import vtctl_client
+from mysql_flavor import set_mysql_flavor
+
 options = None
 devnull = open('/dev/null', 'w')
 hostname = socket.gethostname()
+
+# binlog_player_protocol_flags defines the flags to use for the binlog players.
+# A test can overwrite these flags before calling utils.main().
+binlog_player_protocol_flags = ['-binlog_player_protocol', 'gorpc']
 
 class TestError(Exception):
   pass
@@ -64,6 +71,7 @@ def main(mod=None):
   parser.add_option('--skip-teardown', action='store_true')
   parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=1)
   parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=1)
+  parser.add_option("--mysql-flavor", action="store", type="string")
 
   (options, args) = parser.parse_args()
 
@@ -74,6 +82,8 @@ def main(mod=None):
   else:
     level = logging.DEBUG
   logging.basicConfig(format='-- %(asctime)s %(module)s:%(lineno)d %(levelname)s %(message)s', level=level)
+
+  set_mysql_flavor(options.mysql_flavor)
 
   try:
     suite = unittest.TestSuite()
@@ -94,12 +104,14 @@ def main(mod=None):
 
     if suite.countTestCases() > 0:
       logger = LoggingStream()
-      result = unittest.TextTestRunner(stream=logger, verbosity=options.verbose).run(suite)
+      result = unittest.TextTestRunner(stream=logger, verbosity=options.verbose, failfast=True).run(suite)
       if not result.wasSuccessful():
         sys.exit(-1)
   except KeyboardInterrupt:
     logging.warning("======== Tests interrupted, cleaning up ========")
     mod.tearDownModule()
+    # If you interrupt a test, you probably want to stop evaluating the rest.
+    sys.exit(1)
 
 def remove_tmp_files():
   try:
@@ -137,11 +149,14 @@ def kill_sub_processes():
       except OSError as e:
         logging.debug("kill_sub_processes: %s", str(e))
 
-def kill_sub_process(proc):
+def kill_sub_process(proc, soft=False):
   if proc is None:
     return
   pid = proc.pid
-  proc.kill()
+  if soft:
+    proc.terminate()
+  else:
+    proc.kill()
   if pid and pid in pid_map:
     del pid_map[pid]
     already_killed.append(pid)
@@ -188,6 +203,11 @@ def run_fail(cmd, **kargs):
 def run_bg(cmd, **kargs):
   if options.verbose == 2:
     logging.debug("run: %s %s", cmd, ', '.join('%s=%s' % x for x in kargs.iteritems()))
+  if 'extra_env' in kargs:
+    kargs['env'] = os.environ.copy()
+    if kargs['extra_env']:
+      kargs['env'].update(kargs['extra_env'])
+    del(kargs['extra_env'])
   if isinstance(cmd, str):
     args = shlex.split(cmd)
   else:
@@ -223,7 +243,7 @@ zk_port_base = environment.reserve_ports(3)
 def zk_setup(add_bad_host=False):
   global zk_port_base
   zk_ports = ":".join([str(zk_port_base), str(zk_port_base+1), str(zk_port_base+2)])
-  run('%s -log_dir %s -zk.cfg 1@%s:%s init' % (environment.binary_path('zkctl'), environment.vtlogroot, hostname, zk_ports))
+  run('%s -log_dir %s -zk.cfg 1@%s:%s init' % (environment.binary_argstr('zkctl'), environment.vtlogroot, hostname, zk_ports))
   config = environment.tmproot+'/test-zk-client-conf.json'
   with open(config, 'w') as f:
     ca_server = 'localhost:%u' % (zk_port_base+2)
@@ -238,44 +258,59 @@ def zk_setup(add_bad_host=False):
                        'test_ca:_zkocc': 'localhost:%u'%(environment.zkocc_port_base),
                        'global:_zkocc': 'localhost:%u'%(environment.zkocc_port_base),}
     json.dump(zk_cell_mapping, f)
-  os.putenv('ZK_CLIENT_CONFIG', config)
-  run(environment.binary_path('zk')+' touch -p /zk/test_nj/vt')
-  run(environment.binary_path('zk')+' touch -p /zk/test_ny/vt')
-  run(environment.binary_path('zk')+' touch -p /zk/test_ca/vt')
+  os.environ['ZK_CLIENT_CONFIG'] = config
+  run(environment.binary_argstr('zk')+' touch -p /zk/test_nj/vt')
+  run(environment.binary_argstr('zk')+' touch -p /zk/test_ny/vt')
+  run(environment.binary_argstr('zk')+' touch -p /zk/test_ca/vt')
 
 def zk_teardown():
   global zk_port_base
   zk_ports = ":".join([str(zk_port_base), str(zk_port_base+1), str(zk_port_base+2)])
-  run('%s -log_dir %s -zk.cfg 1@%s:%s teardown' % (environment.binary_path('zkctl'), environment.vtlogroot, hostname, zk_ports), raise_on_error=False)
+  run('%s -log_dir %s -zk.cfg 1@%s:%s teardown' % (environment.binary_argstr('zkctl'), environment.vtlogroot, hostname, zk_ports), raise_on_error=False)
 
 def zk_wipe():
   # Work around safety check on recursive delete.
-  run(environment.binary_path('zk')+' rm -rf /zk/test_nj/vt/*')
-  run(environment.binary_path('zk')+' rm -rf /zk/test_ny/vt/*')
-  run(environment.binary_path('zk')+' rm -rf /zk/global/vt/*')
+  run(environment.binary_argstr('zk')+' rm -rf /zk/test_nj/vt/*')
+  run(environment.binary_argstr('zk')+' rm -rf /zk/test_ny/vt/*')
+  run(environment.binary_argstr('zk')+' rm -rf /zk/global/vt/*')
 
-  run(environment.binary_path('zk')+' rm -f /zk/test_nj/vt')
-  run(environment.binary_path('zk')+' rm -f /zk/test_ny/vt')
-  run(environment.binary_path('zk')+' rm -f /zk/global/vt')
+  run(environment.binary_argstr('zk')+' rm -f /zk/test_nj/vt')
+  run(environment.binary_argstr('zk')+' rm -f /zk/test_ny/vt')
+  run(environment.binary_argstr('zk')+' rm -f /zk/global/vt')
 
 def validate_topology(ping_tablets=False):
   if ping_tablets:
-    run_vtctl('Validate -ping-tablets')
+    run_vtctl(['Validate', '-ping-tablets'])
   else:
-    run_vtctl('Validate')
+    run_vtctl(['Validate'])
 
 def zk_ls(path):
-  out, err = run(environment.binary_path('zk')+' ls '+path, trap_output=True)
+  out, err = run(environment.binary_argstr('zk')+' ls '+path, trap_output=True)
   return sorted(out.splitlines())
 
 def zk_cat(path):
-  out, err = run(environment.binary_path('zk')+' cat '+path, trap_output=True)
+  out, err = run(environment.binary_argstr('zk')+' cat '+path, trap_output=True)
   return out
 
 def zk_cat_json(path):
   data = zk_cat(path)
   return json.loads(data)
 
+# wait_step is a helper for looping until a condition is true.
+# use as follow:
+#    timeout = 10
+#    while True:
+#      if done:
+#        break
+#      timeout = utils.wait_step('condition', timeout)
+def wait_step(msg, timeout, sleep_time=1.0):
+  timeout -= sleep_time
+  if timeout <= 0:
+    raise TestError("timeout waiting for condition '%s'" % msg)
+  logging.debug("Sleeping for %f seconds waiting for condition '%s'" %
+               (sleep_time, msg))
+  time.sleep(sleep_time)
+  return timeout
 
 # vars helpers
 def get_vars(port):
@@ -284,7 +319,8 @@ def get_vars(port):
   if we can't get them.
   """
   try:
-    f = urllib.urlopen('http://localhost:%u/debug/vars' % port)
+    url = 'http://localhost:%u/debug/vars' % int(port)
+    f = urllib2.urlopen(url)
     data = f.read()
     f.close()
   except:
@@ -295,24 +331,19 @@ def get_vars(port):
     print data
     raise
 
-def wait_for_vars(name, port):
+# wait_for_vars will wait until we can actually get the vars from a process,
+# and if var is specified, will wait until that var is in vars
+def wait_for_vars(name, port, var=None):
   timeout = 5.0
   while True:
     v = get_vars(port)
-    if v == None:
-      logging.debug("  %s not answering at /debug/vars, waiting..." % (name))
-    else:
+    if v and (var is None or var in v):
       break
-
-    logging.debug("sleeping a bit while we wait")
-    time.sleep(0.1)
-    timeout -= 0.1
-    if timeout <= 0:
-      raise TestError("timeout waiting for %s" % (name))
+    timeout = wait_step('waiting for /debug/vars of %s' % name, timeout)
 
 # zkocc helpers
 def zkocc_start(cells=['test_nj'], extra_params=[]):
-  args = [environment.binary_path('zkocc'),
+  args = environment.binary_args('zkocc') + [
           '-port', str(environment.zkocc_port_base),
           '-stderrthreshold=ERROR',
           ] + extra_params + cells
@@ -325,9 +356,13 @@ def zkocc_kill(sp):
   sp.wait()
 
 # vtgate helpers, assuming it always restarts on the same port
-def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1, topo_impl=None, tablet_bson_encrypted=False, cache_ttl='1s', auth=False, timeout="5s"):
+def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1,
+                 topo_impl=None, tablet_bson_encrypted=False, cache_ttl='1s',
+                 auth=False, timeout="5s", cert=None, key=None, ca_cert=None,
+                 socket_file=None, extra_args=None):
   port = vtport or environment.reserve_ports(1)
-  args = [environment.binary_path('vtgate'),
+  secure_port = None
+  args = environment.binary_args('vtgate') + [
           '-port', str(port),
           '-cell', cell,
           '-retry-delay', '%ss' % (str(retry_delay)),
@@ -344,19 +379,64 @@ def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1, topo
     args.append('-tablet-bson-encrypted')
   if auth:
     args.extend(['-auth-credentials', os.path.join(environment.vttop, 'test', 'test_data', 'authcredentials_test.json')])
+  if cert:
+    secure_port = environment.reserve_ports(1)
+    args.extend(['-secure-port', '%s' % secure_port,
+                 '-cert', cert,
+                 '-key', key])
+    if ca_cert:
+      args.extend(['-ca_cert', ca_cert])
+  if socket_file:
+    args.extend(['-socket_file', socket_file])
+  if extra_args:
+    args.extend(extra_args)
+
   sp = run_bg(args)
-  wait_for_vars("vtgate", port)
-  return sp, port
+  if cert:
+    wait_for_vars("vtgate", port, "SecureConnections")
+    return sp, port, secure_port
+  else:
+    wait_for_vars("vtgate", port)
+    return sp, port
 
 def vtgate_kill(sp):
   if sp is None:
     return
-  kill_sub_process(sp)
+  kill_sub_process(sp, soft=True)
   sp.wait()
 
 # vtctl helpers
-def run_vtctl(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs):
-  args = [environment.binary_path('vtctl'), '-log_dir', environment.vtlogroot]
+# The modes are not all equivalent, and we don't really thrive for it.
+# If a client needs to rely on vtctl's command line behavior, make
+# sure to use mode=utils.VTCTL_VTCTL
+VTCTL_AUTO        = 0
+VTCTL_VTCTL       = 1
+VTCTL_VTCTLCLIENT = 2
+VTCTL_RPC         = 3
+def run_vtctl(clargs, log_level='', auto_log=False, expect_fail=False,
+              mode=VTCTL_AUTO, **kwargs):
+  if mode == VTCTL_AUTO:
+    if not expect_fail and vtctld:
+      mode = VTCTL_RPC
+    else:
+      mode = VTCTL_VTCTL
+
+  if mode == VTCTL_VTCTL:
+    return run_vtctl_vtctl(clargs, log_level=log_level, auto_log=auto_log,
+                           expect_fail=expect_fail, **kwargs)
+  elif mode == VTCTL_VTCTLCLIENT:
+    result = vtctld.vtctl_client(clargs)
+    return result, ""
+  elif mode == VTCTL_RPC:
+    logging.debug("vtctl: %s", " ".join(clargs))
+    result = vtctld_connection.execute_vtctl_command(clargs, info_to_debug=True)
+    return result, ""
+
+  raise Exception('Unknown mode: %s', mode)
+
+def run_vtctl_vtctl(clargs, log_level='', auto_log=False, expect_fail=False,
+                    **kwargs):
+  args = environment.binary_args('vtctl') + ['-log_dir', environment.vtlogroot]
   args.extend(environment.topo_server_flags())
   args.extend(environment.tablet_manager_protocol_flags())
   args.extend(environment.tabletconn_protocol_flags())
@@ -384,14 +464,16 @@ def run_vtctl(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs)
 # run_vtctl_json runs the provided vtctl command and returns the result
 # parsed as json
 def run_vtctl_json(clargs):
-    stdout, stderr = run_vtctl(clargs, trap_output=True, auto_log=True)
-    return json.loads(stdout)
+  stdout, stderr = run_vtctl(clargs, trap_output=True, auto_log=True)
+  return json.loads(stdout)
 
 # vtworker helpers
 def run_vtworker(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs):
-  args = [environment.binary_path('vtworker'),
+  args = environment.binary_args('vtworker') + [
           '-log_dir', environment.vtlogroot,
           '-port', str(environment.reserve_ports(1))]
+  args.extend(environment.topo_server_flags())
+  args.extend(environment.tablet_manager_protocol_flags())
 
   if auto_log:
     if options.verbose == 2:
@@ -425,7 +507,7 @@ def vtclient2(uid, path, query, bindvars=None, user=None, password=None, driver=
     path = path[1:]
   server = "localhost:%u/%s" % (uid, path)
 
-  cmdline = [environment.binary_path('vtclient2'), '-server', server]
+  cmdline = environment.binary_args('vtclient2') + ['-server', server]
   cmdline += environment.topo_server_flags()
   cmdline += environment.tabletconn_protocol_flags()
   if user is not None:
@@ -513,3 +595,85 @@ def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
   if keyspace_id_type != ks.get('ShardingColumnType'):
     raise Exception("Got wrong ShardingColumnType in SrvKeyspace: %s" %
                    str(ks))
+
+def get_status(port):
+  return urllib2.urlopen('http://localhost:%u%s' % (port, environment.status_url)).read()
+
+def curl(url, background=False, **kwargs):
+  if background:
+    return run_bg([environment.curl_bin, '-s', '-N', '-L', url], **kwargs)
+  return run([environment.curl_bin, '-s', '-N', '-L', url], **kwargs)
+
+class VtctldError(Exception): pass
+
+# save the first running instance, and an RPC connection to it,
+# so we can use it to run remote vtctl commands
+vtctld = None
+vtctld_connection = None
+
+class Vtctld(object):
+
+  def __init__(self):
+    self.port = environment.reserve_ports(1)
+
+  def dbtopo(self):
+    data = json.load(urllib2.urlopen('http://localhost:%u/dbtopo?format=json' %
+                                     self.port))
+    if data["Error"]:
+      raise VtctldError(data)
+    return data["Topology"]
+
+  def serving_graph(self):
+    data = json.load(urllib2.urlopen('http://localhost:%u/serving_graph/test_nj?format=json' % self.port))
+    if data['Errors']:
+      raise VtctldError(data['Errors'])
+    return data["Keyspaces"]
+
+  def start(self):
+    args = environment.binary_args('vtctld') + [
+            '-debug',
+            '-templates', environment.vttop + '/go/cmd/vtctld/templates',
+            '-log_dir', environment.vtlogroot,
+            '-port', str(self.port),
+            ] + \
+            environment.topo_server_flags() + \
+            environment.tablet_manager_protocol_flags()
+    stderr_fd = open(os.path.join(environment.tmproot, "vtctld.stderr"), "w")
+    self.proc = run_bg(args, stderr=stderr_fd)
+
+    # wait for the process to listen to RPC
+    timeout = 30
+    while True:
+      v = get_vars(self.port)
+      if v:
+        break
+      timeout = wait_step('waiting for vtctld to start', timeout,
+                          sleep_time=0.2)
+
+    # save the running instance so vtctl commands can be remote executed now
+    global vtctld, vtctld_connection
+    if not vtctld:
+      vtctld = self
+      vtctld_connection = vtctl_client.connect(
+          environment.vtctl_client_protocol(), 'localhost:%u' % self.port, 30)
+
+    return self.proc
+
+  def process_args(self):
+    return ['-vtctld_addr', 'http://localhost:%u/' % self.port]
+
+  def vtctl_client(self, args):
+    if options.verbose == 2:
+      log_level='INFO'
+    elif options.verbose == 1:
+      log_level='WARNING'
+    else:
+      log_level='ERROR'
+
+    out, err = run(environment.binary_args('vtctlclient') +
+                   ['-vtctl_client_protocol',
+                    environment.vtctl_client_protocol(),
+                    '-server', 'localhost:%u' % self.port,
+                    '-stderrthreshold', log_level] + args,
+                   trap_output=True)
+    return out

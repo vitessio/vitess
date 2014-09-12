@@ -43,7 +43,7 @@ var (
 	ErrPartialResult = errors.New("partial result")
 )
 
-// topo.Server is the interface used to talk to a persistent
+// Server is the interface used to talk to a persistent
 // backend storage server and locking service.
 //
 // Zookeeper is a good example of this, and zktopo contains the
@@ -72,18 +72,29 @@ type Server interface {
 	// yet. Can return ErrNodeExists if it already exists.
 	CreateKeyspace(keyspace string, value *Keyspace) error
 
-	// UpdateKeyspace unconditionnally updates the keyspace information
+	// UpdateKeyspace updates the keyspace information
 	// pointed at by ki.keyspace to the *ki value.
 	// This will only be called with a lock on the keyspace.
-	// Can return ErrNoNode if the keyspace doesn't exist yet.
-	UpdateKeyspace(ki *KeyspaceInfo) error
+	// Can return ErrNoNode if the keyspace doesn't exist yet,
+	// or ErrBadVersion if the version has changed.
+	//
+	// Do not use directly, but instead use topo.UpdateKeyspace.
+	UpdateKeyspace(ki *KeyspaceInfo, existingVersion int64) (newVersion int64, err error)
 
 	// GetKeyspace reads a keyspace and returns it. This returns an
-	// object stored in the global cell.
+	// object stored in the global cell, and a topology
+	// implementation may choose to return a value from some sort
+	// of cache. If you need stronger consistency guarantees,
+	// please use GetKeyspaceCritical.
+	//
 	// Can return ErrNoNode
 	GetKeyspace(keyspace string) (*KeyspaceInfo, error)
 
-	// GetKeyspaces returns the known keyspaces. They shall be sorted.
+	// GetKeyspaceCritical is like GetKeyspace, but it always returns
+	// consistent data.
+	GetKeyspaceCritical(keyspace string) (*KeyspaceInfo, error)
+
+	// GetKeyspaces returns the known keyspace names. They shall be sorted.
 	GetKeyspaces() ([]string, error)
 
 	// DeleteKeyspaceShards deletes all the shards in a keyspace.
@@ -100,11 +111,14 @@ type Server interface {
 	// Can return ErrNodeExists if it already exists.
 	CreateShard(keyspace, shard string, value *Shard) error
 
-	// UpdateShard unconditionnally updates the shard information
+	// UpdateShard updates the shard information
 	// pointed at by si.keyspace / si.shard to the *si value.
 	// This will only be called with a lock on the shard.
-	// Can return ErrNoNode if the shard doesn't exist yet.
-	UpdateShard(si *ShardInfo) error
+	// Can return ErrNoNode if the shard doesn't exist yet,
+	// or ErrBadVersion if the version has changed.
+	//
+	// Do not use directly, but instead use topo.UpdateShard.
+	UpdateShard(si *ShardInfo, existingVersion int64) (newVersion int64, err error)
 
 	// ValidateShard performs routine checks on the shard.
 	ValidateShard(keyspace, shard string) error
@@ -144,6 +158,8 @@ type Server interface {
 	// for atomic updates. UpdateTablet will return ErrNoNode if
 	// the tablet doesn't exist and ErrBadVersion if the version
 	// has changed.
+	//
+	// Do not use directly, but instead use topo.UpdateTablet.
 	UpdateTablet(tablet *TabletInfo, existingVersion int64) (newVersion int64, err error)
 
 	// UpdateTabletFields updates the current tablet record
@@ -172,14 +188,11 @@ type Server interface {
 	// Replication graph management, per cell.
 	//
 
-	// CreateShardReplication creates the ShardReplication object,
-	// assuming it doesn't exist yet.
-	// Can return ErrNodeExists if it already exists.
-	CreateShardReplication(cell, keyspace, shard string, sr *ShardReplication) error
-
 	// UpdateShardReplicationFields updates the current
-	// ShardReplication record with new values
-	// Can return ErrNoNode if the object doesn't exist.
+	// ShardReplication record with new values. If the
+	// ShardReplication object does not exist, an empty one will
+	// be passed to the update function. All necessary directories
+	// need to be created by this method, if applicable.
 	UpdateShardReplicationFields(cell, keyspace, shard string, update func(*ShardReplication) error) error
 
 	// GetShardReplication returns the replication data.
@@ -193,6 +206,17 @@ type Server interface {
 	//
 	// Serving Graph management, per cell.
 	//
+
+	// LockSrvShardForAction locks the serving shard in order to
+	// perform the action described by contents. It will wait for
+	// the lock for at most duration. The wait can be interrupted
+	// if the interrupted channel is closed. It returns the lock
+	// path.
+	// Can return ErrTimeout or ErrInterrupted.
+	LockSrvShardForAction(cell, keyspace, shard, contents string, timeout time.Duration, interrupted chan struct{}) (string, error)
+
+	// UnlockSrvShardForAction unlocks a serving shard.
+	UnlockSrvShardForAction(cell, keyspace, shard, lockPath, results string) error
 
 	// GetSrvTabletTypesPerShard returns the existing serving types
 	// for a shard.
@@ -208,10 +232,10 @@ type Server interface {
 	// Can return ErrNoNode.
 	GetEndPoints(cell, keyspace, shard string, tabletType TabletType) (*EndPoints, error)
 
-	// DeleteSrvTabletType deletes the serving records for a cell,
+	// DeleteEndPoints deletes the serving records for a cell,
 	// keyspace, shard, tabletType.
 	// Can return ErrNoNode.
-	DeleteSrvTabletType(cell, keyspace, shard string, tabletType TabletType) error
+	DeleteEndPoints(cell, keyspace, shard string, tabletType TabletType) error
 
 	// UpdateSrvShard updates the serving records for a cell,
 	// keyspace, shard.

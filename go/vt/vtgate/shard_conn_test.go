@@ -5,115 +5,117 @@
 package vtgate
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/context"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
 // This file uses the sandbox_test framework.
 
 func TestShardConnExecute(t *testing.T) {
-	testShardConnGeneric(t, func() error {
-		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
-		_, err := sdc.Execute(nil, "query", nil, 0)
+	testShardConnGeneric(t, "TestShardConnExecute", func() error {
+		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnExecute", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
+		_, err := sdc.Execute(&context.DummyContext{}, "query", nil, 0)
 		return err
 	})
-	testShardConnTransact(t, func() error {
-		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
-		_, err := sdc.Execute(nil, "query", nil, 1)
+	testShardConnTransact(t, "TestShardConnExecute", func() error {
+		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnExecute", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
+		_, err := sdc.Execute(&context.DummyContext{}, "query", nil, 1)
 		return err
 	})
 }
 
 func TestShardConnExecuteBatch(t *testing.T) {
-	testShardConnGeneric(t, func() error {
-		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
+	testShardConnGeneric(t, "TestShardConnExecuteBatch", func() error {
+		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnExecuteBatch", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
 		queries := []tproto.BoundQuery{{"query", nil}}
-		_, err := sdc.ExecuteBatch(nil, queries, 0)
+		_, err := sdc.ExecuteBatch(&context.DummyContext{}, queries, 0)
 		return err
 	})
-	testShardConnTransact(t, func() error {
-		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
+	testShardConnTransact(t, "TestShardConnExecuteBatch", func() error {
+		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnExecuteBatch", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
 		queries := []tproto.BoundQuery{{"query", nil}}
-		_, err := sdc.ExecuteBatch(nil, queries, 1)
+		_, err := sdc.ExecuteBatch(&context.DummyContext{}, queries, 1)
 		return err
 	})
 }
 
 func TestShardConnExecuteStream(t *testing.T) {
-	testShardConnGeneric(t, func() error {
-		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
-		_, errfunc := sdc.StreamExecute(nil, "query", nil, 0)
+	testShardConnGeneric(t, "TestShardConnExecuteStream", func() error {
+		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnExecuteStream", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
+		_, errfunc := sdc.StreamExecute(&context.DummyContext{}, "query", nil, 0)
 		return errfunc()
 	})
-	testShardConnTransact(t, func() error {
-		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
-		_, errfunc := sdc.StreamExecute(nil, "query", nil, 1)
+	testShardConnTransact(t, "TestShardConnExecuteStream", func() error {
+		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnExecuteStream", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
+		_, errfunc := sdc.StreamExecute(&context.DummyContext{}, "query", nil, 1)
 		return errfunc()
 	})
 }
 
 func TestShardConnBegin(t *testing.T) {
-	testShardConnGeneric(t, func() error {
-		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
-		_, err := sdc.Begin(nil)
+	testShardConnGeneric(t, "TestShardConnBegin", func() error {
+		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnBegin", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
+		_, err := sdc.Begin(&context.DummyContext{})
 		return err
 	})
 }
 
-func TestShardConnCommi(t *testing.T) {
-	testShardConnTransact(t, func() error {
-		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
-		return sdc.Commit(nil, 1)
+func TestShardConnCommit(t *testing.T) {
+	testShardConnTransact(t, "TestShardConnCommit", func() error {
+		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnCommit", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
+		return sdc.Commit(&context.DummyContext{}, 1)
 	})
 }
 
 func TestShardConnRollback(t *testing.T) {
-	testShardConnTransact(t, func() error {
-		sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
-		return sdc.Rollback(nil, 1)
+	testShardConnTransact(t, "TestShardConnRollback", func() error {
+		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnRollback", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
+		return sdc.Rollback(&context.DummyContext{}, 1)
 	})
 }
 
-func testShardConnGeneric(t *testing.T, f func() error) {
+func testShardConnGeneric(t *testing.T, name string, f func() error) {
 	// Topo failure
-	resetSandbox()
-	endPointMustFail = 1
+	s := createSandbox(name)
+	s.EndPointMustFail = 1
 	err := f()
-	want := "endpoints fetch error: topo error, shard, host: .0."
+	want := fmt.Sprintf("endpoints fetch error: topo error, shard, host: %v.0., {Uid:0 Host: NamedPortMap:map[] Health:map[]}", name)
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
-	if endPointCounter != 1 {
-		t.Errorf("want 1, got %v", endPointCounter)
+	if s.EndPointCounter != 1 {
+		t.Errorf("want 1, got %v", s.EndPointCounter)
 	}
 
 	// Connect failure
-	resetSandbox()
-	dialMustFail = 4
+	s.Reset()
+	s.DialMustFail = 4
 	err = f()
-	want = "conn error, shard, host: .0."
+	want = fmt.Sprintf("conn error, shard, host: %v.0., {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}", name)
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
 	// Ensure we dialed 4 times before failing.
-	if dialCounter != 4 {
-		t.Errorf("want 4, got %v", dialCounter)
+	if s.DialCounter != 4 {
+		t.Errorf("want 4, got %v", s.DialCounter)
 	}
 
 	// retry error (multiple failure)
-	resetSandbox()
+	s.Reset()
 	sbc := &sandboxConn{mustFailRetry: 4}
-	testConns[0] = sbc
+	s.MapTestConn("0", sbc)
 	err = f()
-	want = "retry: err, shard, host: .0., {Uid:0 Host:0 NamedPortMap:map[vt:1]}"
+	want = fmt.Sprintf("retry: err, shard, host: %v.0., {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}", name)
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
 	// Ensure we dialed 4 times before failing.
-	if dialCounter != 4 {
-		t.Errorf("want 4, got %v", dialCounter)
+	if s.DialCounter != 4 {
+		t.Errorf("want 4, got %v", s.DialCounter)
 	}
 	// Ensure we executed 4 times before failing.
 	if sbc.ExecCount != 4 {
@@ -121,16 +123,16 @@ func testShardConnGeneric(t *testing.T, f func() error) {
 	}
 
 	// retry error (one failure)
-	resetSandbox()
+	s.Reset()
 	sbc = &sandboxConn{mustFailRetry: 1}
-	testConns[0] = sbc
+	s.MapTestConn("0", sbc)
 	err = f()
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
 	// Ensure we dialed twice (second one succeeded)
-	if dialCounter != 2 {
-		t.Errorf("want 2, got %v", dialCounter)
+	if s.DialCounter != 2 {
+		t.Errorf("want 2, got %v", s.DialCounter)
 	}
 	// Ensure we executed twice (second one succeeded)
 	if sbc.ExecCount != 2 {
@@ -138,16 +140,16 @@ func testShardConnGeneric(t *testing.T, f func() error) {
 	}
 
 	// fatal error (one failure)
-	resetSandbox()
+	s.Reset()
 	sbc = &sandboxConn{mustFailRetry: 1}
-	testConns[0] = sbc
+	s.MapTestConn("0", sbc)
 	err = f()
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
 	// Ensure we dialed twice (second one succeeded)
-	if dialCounter != 2 {
-		t.Errorf("want 2, got %v", dialCounter)
+	if s.DialCounter != 2 {
+		t.Errorf("want 2, got %v", s.DialCounter)
 	}
 	// Ensure we executed twice (second one succeeded)
 	if sbc.ExecCount != 2 {
@@ -155,17 +157,17 @@ func testShardConnGeneric(t *testing.T, f func() error) {
 	}
 
 	// server error
-	resetSandbox()
+	s.Reset()
 	sbc = &sandboxConn{mustFailServer: 1}
-	testConns[0] = sbc
+	s.MapTestConn("0", sbc)
 	err = f()
-	want = "error: err, shard, host: .0., {Uid:0 Host:0 NamedPortMap:map[vt:1]}"
+	want = fmt.Sprintf("error: err, shard, host: %v.0., {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}", name)
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
 	// Ensure we did not redial.
-	if dialCounter != 1 {
-		t.Errorf("want 1, got %v", dialCounter)
+	if s.DialCounter != 1 {
+		t.Errorf("want 1, got %v", s.DialCounter)
 	}
 	// Ensure we did not re-execute.
 	if sbc.ExecCount != 1 {
@@ -173,16 +175,16 @@ func testShardConnGeneric(t *testing.T, f func() error) {
 	}
 
 	// conn error (one failure)
-	resetSandbox()
+	s.Reset()
 	sbc = &sandboxConn{mustFailConn: 1}
-	testConns[0] = sbc
+	s.MapTestConn("0", sbc)
 	err = f()
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
 	// Ensure we dialed twice (second one succeeded)
-	if dialCounter != 2 {
-		t.Errorf("want 2, got %v", dialCounter)
+	if s.DialCounter != 2 {
+		t.Errorf("want 2, got %v", s.DialCounter)
 	}
 	// Ensure we executed twice (second one succeeded)
 	if sbc.ExecCount != 2 {
@@ -190,28 +192,28 @@ func testShardConnGeneric(t *testing.T, f func() error) {
 	}
 
 	// no failures
-	resetSandbox()
+	s.Reset()
 	sbc = &sandboxConn{}
-	testConns[0] = sbc
+	s.MapTestConn("0", sbc)
 	err = f()
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	if dialCounter != 1 {
-		t.Errorf("want 1, got %v", dialCounter)
+	if s.DialCounter != 1 {
+		t.Errorf("want 1, got %v", s.DialCounter)
 	}
 	if sbc.ExecCount != 1 {
 		t.Errorf("want 1, got %v", sbc.ExecCount)
 	}
 }
 
-func testShardConnTransact(t *testing.T, f func() error) {
+func testShardConnTransact(t *testing.T, name string, f func() error) {
 	// retry error
-	resetSandbox()
+	s := createSandbox(name)
 	sbc := &sandboxConn{mustFailRetry: 3}
-	testConns[0] = sbc
+	s.MapTestConn("0", sbc)
 	err := f()
-	want := "retry: err, shard, host: .0., {Uid:0 Host:0 NamedPortMap:map[vt:1]}"
+	want := fmt.Sprintf("retry: err, shard, host: %v.0., {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}", name)
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
@@ -221,11 +223,11 @@ func testShardConnTransact(t *testing.T, f func() error) {
 	}
 
 	// conn error
-	resetSandbox()
+	s.Reset()
 	sbc = &sandboxConn{mustFailConn: 3}
-	testConns[0] = sbc
+	s.MapTestConn("0", sbc)
 	err = f()
-	want = "error: conn, shard, host: .0., {Uid:0 Host:0 NamedPortMap:map[vt:1]}"
+	want = fmt.Sprintf("error: conn, shard, host: %v.0., {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}", name)
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
@@ -237,12 +239,12 @@ func testShardConnTransact(t *testing.T, f func() error) {
 
 func TestShardConnBeginOther(t *testing.T) {
 	// tx_pool_full
-	resetSandbox()
+	s := createSandbox("TestShardConnBeginOther")
 	sbc := &sandboxConn{mustFailTxPool: 1}
-	testConns[0] = sbc
-	sdc := NewShardConn(new(sandboxTopo), "aa", "", "0", "", 10*time.Millisecond, 3, 1*time.Millisecond)
+	s.MapTestConn("0", sbc)
+	sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnBeginOther", "0", "", 10*time.Millisecond, 3, 1*time.Millisecond)
 	startTime := time.Now()
-	_, err := sdc.Begin(nil)
+	_, err := sdc.Begin(&context.DummyContext{})
 	// If transaction pool is full, Begin should wait and retry.
 	if time.Now().Sub(startTime) < (10 * time.Millisecond) {
 		t.Errorf("want >10ms, got %v", time.Now().Sub(startTime))
@@ -251,8 +253,8 @@ func TestShardConnBeginOther(t *testing.T) {
 		t.Errorf("want nil, got %v", err)
 	}
 	// There should have been no redial.
-	if dialCounter != 1 {
-		t.Errorf("want 1, got %v", dialCounter)
+	if s.DialCounter != 1 {
+		t.Errorf("want 1, got %v", s.DialCounter)
 	}
 	// Account for 2 calls to Begin.
 	if sbc.ExecCount != 2 {

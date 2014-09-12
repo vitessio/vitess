@@ -7,6 +7,7 @@ package cgzip
 // See http://www.zlib.net/zlib_how.html for more information on this
 
 /*
+#cgo CFLAGS: -Werror=implicit
 #cgo pkg-config: zlib
 
 #include "zlib.h"

@@ -266,11 +266,7 @@ index by_msg (msg)
       value = self._check_lots(count, base=base)
       if value >= threshold:
         return
-      if timeout == 0:
-        self.fail("timeout waiting for %u%% of the data" % threshold)
-      logging.debug("sleeping until we get %u%%", threshold)
-      time.sleep(1)
-      timeout -= 1
+      timeout = utils.wait_step('enough data went through', timeout)
 
   # _check_lots_not_present makes sure no data is in the wrong shard
   def _check_lots_not_present(self, count, base=0):
@@ -334,7 +330,7 @@ index by_msg (msg)
       t.start_vttablet(wait_for_state=None)
     for t in [shard_0_master, shard_0_replica, shard_0_rdonly,
               shard_1_master, shard_1_replica, shard_1_rdonly]:
-      t.wait_for_vttablet_state('CONNECTING')
+      t.wait_for_vttablet_state('NOT_SERVING')
 
     utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/-80',
                      shard_0_master.tablet_alias], auto_log=True)
@@ -372,6 +368,7 @@ index by_msg (msg)
     utils.run_vtctl(['ValidateSchemaKeyspace', 'test_keyspace'], auto_log=True)
 
     # check the binlog players are running
+    logging.debug("Waiting for binlog players to start on new masters...")
     shard_0_master.wait_for_binlog_player_count(1)
     shard_1_master.wait_for_binlog_player_count(1)
 
@@ -469,6 +466,8 @@ index by_msg (msg)
     for t in [shard_master, shard_replica, shard_rdonly]:
       utils.run_vtctl(['ScrapTablet', t.tablet_alias], auto_log=True)
     tablet.kill_tablets([shard_master, shard_replica, shard_rdonly])
+    for t in [shard_master, shard_replica, shard_rdonly]:
+      utils.run_vtctl(['DeleteTablet', t.tablet_alias], auto_log=True)
 
     # rebuild the serving graph, all mentions of the old shards shoud be gone
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)

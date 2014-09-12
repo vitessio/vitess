@@ -11,15 +11,17 @@ import (
 	"sort"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/acl"
+	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 )
 
 var (
-	queryzHeader = []byte(`
+	queryzHeader = []byte(`<thead>
 		<tr>
 			<th>Query</th>
 			<th>Table</th>
 			<th>Plan</th>
+			<th>Reason</th>
 			<th>Count</th>
 			<th>Time</th>
 			<th>Rows</th>
@@ -28,12 +30,14 @@ var (
 			<th>Rows per query</th>
 			<th>Errors per query</th>
 		</tr>
+        </thead>
 	`)
 	queryzTmpl = template.Must(template.New("example").Parse(`
 		<tr class="{{.Color}}">
 			<td>{{.Query}}</td>
 			<td>{{.Table}}</td>
 			<td>{{.Plan}}</td>
+			<td>{{.Reason}}</td>
 			<td>{{.Count}}</td>
 			<td>{{.Time}}</td>
 			<td>{{.Rows}}</td>
@@ -50,7 +54,8 @@ var (
 type queryzRow struct {
 	Query  string
 	Table  string
-	Plan   sqlparser.PlanType
+	Plan   planbuilder.PlanType
+	Reason planbuilder.ReasonType
 	Count  int64
 	tm     time.Duration
 	Rows   int64
@@ -109,13 +114,16 @@ func init() {
 
 // queryzHandler displays the query stats.
 func queryzHandler(w http.ResponseWriter, r *http.Request) {
+	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
+		acl.SendError(w, err)
+		return
+	}
 	startHTMLTable(w)
 	defer endHTMLTable(w)
 	w.Write(queryzHeader)
 
 	si := SqlQueryRpcService.qe.schemaInfo
 	keys := si.queries.Keys()
-	// TODO(sougou): Provide more sorting options.
 	sorter := queryzSorter{
 		rows: make([]*queryzRow, 0, len(keys)),
 		less: func(row1, row2 *queryzRow) bool {
@@ -128,14 +136,16 @@ func queryzHandler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		Value := &queryzRow{
-			Query: v,
-			Table: plan.TableName,
-			Plan:  plan.PlanId,
+			Query:  wrappable(v),
+			Table:  plan.TableName,
+			Plan:   plan.PlanId,
+			Reason: plan.Reason,
 		}
 		Value.Count, Value.tm, Value.Rows, Value.Errors = plan.Stats()
-		if Value.tm < 10*time.Millisecond {
+		timepq := time.Duration(int64(Value.tm) / Value.Count)
+		if timepq < 10*time.Millisecond {
 			Value.Color = "low"
-		} else if Value.tm < 100*time.Millisecond {
+		} else if timepq < 100*time.Millisecond {
 			Value.Color = "medium"
 		} else {
 			Value.Color = "high"

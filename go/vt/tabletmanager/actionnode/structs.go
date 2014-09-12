@@ -26,25 +26,19 @@ Note it's OK to rename the structures as the type name is not saved in json.
 // tablet action node structures
 
 type RestartSlaveData struct {
-	ReplicationState *myproto.ReplicationState
-	WaitPosition     *myproto.ReplicationPosition
-	TimePromoted     int64 // used to verify replication - a row will be inserted with this timestamp
-	Parent           topo.TabletAlias
-	Force            bool
+	ReplicationStatus *myproto.ReplicationStatus
+	WaitPosition      myproto.ReplicationPosition
+	TimePromoted      int64 // used to verify replication - a row will be inserted with this timestamp
+	Parent            topo.TabletAlias
+	Force             bool
 }
 
 func (rsd *RestartSlaveData) String() string {
-	return fmt.Sprintf("RestartSlaveData{ReplicationState:%#v WaitPosition:%#v TimePromoted:%v Parent:%v Force:%v}", rsd.ReplicationState, rsd.WaitPosition, rsd.TimePromoted, rsd.Parent, rsd.Force)
+	return fmt.Sprintf("RestartSlaveData{ReplicationStatus:%#v WaitPosition:%#v TimePromoted:%v Parent:%v Force:%v}", rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted, rsd.Parent, rsd.Force)
 }
 
 type SlaveWasRestartedArgs struct {
-	Parent               topo.TabletAlias
-	ExpectedMasterAddr   string
-	ExpectedMasterIpAddr string
-	ScrapStragglers      bool
-
-	// Temporarely disable this flag
-	// ContinueOnUnexpectedMaster bool
+	Parent topo.TabletAlias
 }
 
 type SnapshotArgs struct {
@@ -74,6 +68,7 @@ type SnapshotSourceEndArgs struct {
 type MultiSnapshotArgs struct {
 	KeyRanges        []key.KeyRange
 	Tables           []string
+	ExcludeTables    []string
 	Concurrency      int
 	SkipSlaveRestart bool
 	MaximumFilesize  uint64
@@ -229,5 +224,13 @@ func MigrateServedFrom(servedType topo.TabletType) *ActionNode {
 		Args: &MigrateServedFromArgs{
 			ServedType: servedType,
 		},
+	}).SetGuid()
+}
+
+//methods to build the serving shard action nodes
+
+func RebuildSrvShard() *ActionNode {
+	return (&ActionNode{
+		Action: SRV_SHARD_ACTION_REBUILD,
 	}).SetGuid()
 }

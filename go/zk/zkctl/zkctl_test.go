@@ -27,10 +27,18 @@ func getUUID(t *testing.T) string {
 // so some manual cleanup may be required.
 
 func TestLifeCycle(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode.")
+	}
+
 	testLifeCycle(t, "255@voltron:2888:3888:2181", 255)
 }
 
 func TestLifeCycleGlobal(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode.")
+	}
+
 	testLifeCycle(t, "1255@voltron:2890:3890:2183", 1255)
 }
 

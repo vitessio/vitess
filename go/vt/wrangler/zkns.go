@@ -143,13 +143,16 @@ func (wr *Wrangler) ExportZknsForKeyspace(keyspace string) error {
 func (wr *Wrangler) exportVtnsToZkns(zconn zk.Conn, vtnsAddrPath, zknsAddrPath string) ([]string, error) {
 	zknsPaths := make([]string, 0, 32)
 	parts := strings.Split(vtnsAddrPath, "/")
-	if len(parts) != 8 {
+	if len(parts) != 8 && len(parts) != 9 {
 		return nil, fmt.Errorf("Invalid leaf zk path: %v", vtnsAddrPath)
 	}
 	cell := parts[2]
 	keyspace := parts[5]
 	shard := parts[6]
 	tabletType := topo.TabletType(parts[7])
+	if tabletType == "action" || tabletType == "actionlog" {
+		return nil, nil
+	}
 	addrs, err := wr.ts.GetEndPoints(cell, keyspace, shard, tabletType)
 	if err != nil {
 		return nil, err

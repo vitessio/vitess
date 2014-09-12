@@ -14,7 +14,9 @@
 {{.Error}}
 {{else}}
 <h1>{{breadcrumbs .Path}}</h1>
-
+{{range $key, $link := .Links}}
+  <small>[<a href="{{$link}}">{{$key}}</a>]</small>
+{{end}}
 <h2>Children</h2>
 <ul>
   <li><a href="{{$path}}/..">..</a></li>

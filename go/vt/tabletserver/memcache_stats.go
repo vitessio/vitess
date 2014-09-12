@@ -14,6 +14,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/timer"
 )
 
 var interval = 5 * time.Second
@@ -103,142 +104,143 @@ var itemsMetrics = []string{
 	"tailrepairs",
 }
 
-type mainStats struct {
-	mu        sync.Mutex
-	lastQuery time.Time
-	stats     map[string]string
-}
-
-func (s *mainStats) clear() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for key := range s.stats {
-		if mainStringMetrics[key] {
-			s.stats[key] = ""
-		} else {
-			s.stats[key] = "0"
-		}
-	}
-}
-
-type slabsStats struct {
-	mu        sync.Mutex
-	lastQuery time.Time
-	stats     map[string]map[string]int64
-}
-
-func (s *slabsStats) clear() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for k1 := range s.stats {
-		s.stats[k1] = make(map[string]int64)
-	}
-}
-
-type itemsStats struct {
-	mu        sync.Mutex
-	lastQuery time.Time
-	stats     map[string]map[string]int64
-}
-
-func (s *itemsStats) clear() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for k1 := range s.stats {
-		s.stats[k1] = make(map[string]int64)
-	}
-}
-
 // MemcacheStats exports the Memcache internal stats through stats package.
 type MemcacheStats struct {
 	cachePool *CachePool
-	main      mainStats
-	slabs     slabsStats
-	items     itemsStats
+	ticks     *timer.Timer
+	mu        sync.Mutex
+	main      map[string]string
+	slabs     map[string]map[string]int64
+	items     map[string]map[string]int64
 }
 
 // NewMemcacheStats creates a new MemcacheStats based on given CachePool.
-func NewMemcacheStats(cachePool *CachePool) *MemcacheStats {
-	m := MemcacheStats{
-		main:      mainStats{stats: make(map[string]string)},
-		slabs:     slabsStats{stats: make(map[string]map[string]int64)},
-		items:     itemsStats{stats: make(map[string]map[string]int64)},
+// main, slabs and items specify the categories of stats that need to be exported.
+func NewMemcacheStats(cachePool *CachePool, main, slabs, items bool) *MemcacheStats {
+	s := &MemcacheStats{
 		cachePool: cachePool,
+		ticks:     timer.NewTimer(10 * time.Second),
 	}
-	m.publishMainStats()
-	m.publishSlabsStats()
-	m.publishItemsStats()
-	return &m
+	if main {
+		s.publishMainStats()
+	}
+	if slabs {
+		s.publishSlabsStats()
+	}
+	if items {
+		s.publishItemsStats()
+	}
+	return s
 }
 
-// Open provides a common function API, and does nothing.
+// Open starts exporting the stats.
 func (s *MemcacheStats) Open() {
-	// noop
-}
-
-// Close clears the variable values.
-func (s *MemcacheStats) Close() {
-	s.main.clear()
-	s.slabs.clear()
-	s.items.clear()
-}
-
-func (s *MemcacheStats) updateMainStats() {
-	if time.Now().Sub(s.main.lastQuery) <= interval {
-		return
-	}
-	s.readStats("", func(sKey, sValue string) {
-		s.main.stats[sKey] = sValue
+	s.ticks.Start(func() {
+		s.updateMainStats()
+		s.updateSlabsStats()
+		s.updateItemsStats()
 	})
-	s.main.lastQuery = time.Now()
+}
+
+// Close clears the variable values and stops exporting the stats.
+func (s *MemcacheStats) Close() {
+	s.ticks.Stop()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for key := range s.main {
+		if mainStringMetrics[key] {
+			s.main[key] = ""
+		} else {
+			s.main[key] = "0"
+		}
+	}
+	for key := range s.slabs {
+		s.slabs[key] = make(map[string]int64)
+	}
+	for key := range s.items {
+		s.items[key] = make(map[string]int64)
+	}
 }
 
 func (s *MemcacheStats) publishMainStats() {
-	s.main.mu.Lock()
-	defer s.main.mu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.main = make(map[string]string)
 	for key, isstr := range mainStringMetrics {
 		key := key
 		if isstr {
-			s.main.stats[key] = ""
-			f := func() string {
-				s.main.mu.Lock()
-				defer s.main.mu.Unlock()
-				s.updateMainStats()
-				return s.main.stats[key]
-			}
-			stats.Publish(s.cachePool.name+"Memcache"+formatKey(key), stats.StringFunc(f))
-			continue
+			s.main[key] = ""
+			stats.Publish(s.cachePool.name+"Memcache"+formatKey(key), stats.StringFunc(func() string {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				return s.main[key]
+			}))
+		} else {
+			s.main[key] = "0"
+			stats.Publish(s.cachePool.name+"Memcache"+formatKey(key), stats.IntFunc(func() int64 {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				ival, err := strconv.ParseInt(s.main[key], 10, 64)
+				if err != nil {
+					log.Errorf("value '%v' for key %v is not an int", s.main[key], key)
+					internalErrors.Add("MemcacheStats", 1)
+					return -1
+				}
+				return ival
+			}))
 		}
-		s.main.stats[key] = "0"
-		f := func() int64 {
-			s.main.mu.Lock()
-			defer s.main.mu.Unlock()
-			s.updateMainStats()
-			ival, err := strconv.ParseInt(s.main.stats[key], 10, 64)
-			if err != nil {
-				log.Errorf("value '%v' for key %v is not an int", s.main.stats[key], key)
-				return -1
-			}
-			return ival
+	}
+}
+
+func (s *MemcacheStats) updateMainStats() {
+	if s.main == nil {
+		return
+	}
+	s.readStats("", func(sKey, sValue string) {
+		s.main[sKey] = sValue
+	})
+}
+
+func (s *MemcacheStats) publishSlabsStats() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.slabs = make(map[string]map[string]int64)
+	for key, isSingle := range slabsSingleMetrics {
+		key := key
+		s.slabs[key] = make(map[string]int64)
+		if isSingle {
+			stats.Publish(s.cachePool.name+"MemcacheSlabs"+formatKey(key), stats.IntFunc(func() int64 {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				return s.slabs[key][""]
+			}))
+		} else {
+			stats.Publish(s.cachePool.name+"MemcacheSlabs"+formatKey(key), stats.CountersFunc(func() map[string]int64 {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				return copyMap(s.slabs[key])
+			}))
 		}
-		stats.Publish(s.cachePool.name+"Memcache"+formatKey(key), stats.IntFunc(f))
 	}
 }
 
 func (s *MemcacheStats) updateSlabsStats() {
-	if time.Now().Sub(s.slabs.lastQuery) <= interval {
+	if s.slabs == nil {
 		return
 	}
 	s.readStats("slabs", func(sKey, sValue string) {
 		ival, err := strconv.ParseInt(sValue, 10, 64)
 		if err != nil {
 			log.Error(err)
+			internalErrors.Add("MemcacheStats", 1)
 			return
 		}
 		if slabsSingleMetrics[sKey] {
-			m, ok := s.slabs.stats[sKey]
+			m, ok := s.slabs[sKey]
 			if !ok {
 				log.Errorf("Unknown memcache slabs stats %v: %v", sKey, ival)
+				internalErrors.Add("MemcacheStats", 1)
 				return
 			}
 			m[""] = ival
@@ -247,83 +249,59 @@ func (s *MemcacheStats) updateSlabsStats() {
 		subkey, slabid, err := parseSlabKey(sKey)
 		if err != nil {
 			log.Error(err)
+			internalErrors.Add("MemcacheStats", 1)
 			return
 		}
-		m, ok := s.slabs.stats[subkey]
+		m, ok := s.slabs[subkey]
 		if !ok {
 			log.Errorf("Unknown memcache slabs stats %v %v: %v", subkey, slabid, ival)
+			internalErrors.Add("MemcacheStats", 1)
 			return
 		}
 		m[slabid] = ival
 	})
-	s.slabs.lastQuery = time.Now()
 }
 
-func (s *MemcacheStats) publishSlabsStats() {
-	s.slabs.mu.Lock()
-	defer s.slabs.mu.Unlock()
-	for key, isSingle := range slabsSingleMetrics {
-		key := key
-		s.slabs.stats[key] = make(map[string]int64)
-		if isSingle {
-			f := func() int64 {
-				s.slabs.mu.Lock()
-				defer s.slabs.mu.Unlock()
-				s.updateSlabsStats()
-				return s.slabs.stats[key][""]
-			}
-			stats.Publish(s.cachePool.name+"MemcacheSlabs"+formatKey(key), stats.IntFunc(f))
-			continue
-		}
-		f := func() map[string]int64 {
-			s.slabs.mu.Lock()
-			defer s.slabs.mu.Unlock()
-			s.updateSlabsStats()
-			return copyMap(s.slabs.stats[key])
-		}
-		stats.Publish(s.cachePool.name+"MemcacheSlabs"+formatKey(key), stats.CountersFunc(f))
+func (s *MemcacheStats) publishItemsStats() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.items = make(map[string]map[string]int64)
+	for _, key := range itemsMetrics {
+		key := key // create local var to keep current key
+		s.items[key] = make(map[string]int64)
+		stats.Publish(s.cachePool.name+"MemcacheItems"+formatKey(key), stats.CountersFunc(func() map[string]int64 {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			return copyMap(s.items[key])
+		}))
 	}
 }
 
 func (s *MemcacheStats) updateItemsStats() {
-	if time.Now().Sub(s.items.lastQuery) <= interval {
+	if s.items == nil {
 		return
 	}
 	s.readStats("items", func(sKey, sValue string) {
 		ival, err := strconv.ParseInt(sValue, 10, 64)
 		if err != nil {
 			log.Error(err)
+			internalErrors.Add("MemcacheStats", 1)
 			return
 		}
 		subkey, slabid, err := parseItemKey(sKey)
 		if err != nil {
 			log.Error(err)
+			internalErrors.Add("MemcacheStats", 1)
 			return
 		}
-		m, ok := s.items.stats[subkey]
+		m, ok := s.items[subkey]
 		if !ok {
 			log.Errorf("Unknown memcache items stats %v %v: %v", subkey, slabid, ival)
+			internalErrors.Add("MemcacheStats", 1)
 			return
 		}
 		m[slabid] = ival
 	})
-	s.items.lastQuery = time.Now()
-}
-
-func (s *MemcacheStats) publishItemsStats() {
-	s.items.mu.Lock()
-	defer s.items.mu.Unlock()
-	for _, key := range itemsMetrics {
-		key := key // create local var to keep current key
-		s.items.stats[key] = make(map[string]int64)
-		f := func() map[string]int64 {
-			s.items.mu.Lock()
-			defer s.items.mu.Unlock()
-			s.updateItemsStats()
-			return copyMap(s.items.stats[key])
-		}
-		stats.Publish(s.cachePool.name+"MemcacheItems"+formatKey(key), stats.CountersFunc(f))
-	}
 }
 
 func (s *MemcacheStats) readStats(k string, proc func(key, value string)) {
@@ -332,21 +310,27 @@ func (s *MemcacheStats) readStats(k string, proc func(key, value string)) {
 			_, ok := x.(*TabletError)
 			if !ok {
 				log.Errorf("Uncaught panic when reading memcache stats: %v", x)
-				return
+			} else {
+				log.Errorf("Could not read memcache stats: %v", x)
 			}
-			// ignore if cache pool is closed
+			internalErrors.Add("MemcacheStats", 1)
 		}
 	}()
 	conn := s.cachePool.Get()
-	if conn == nil {
-		return
-	}
-	defer conn.Recycle()
+	// This is not the same as defer rc.cachePool.Put(conn)
+	defer func() { s.cachePool.Put(conn) }()
+
 	stats, err := conn.Stats(k)
 	if err != nil {
+		conn.Close()
+		conn = nil
 		log.Errorf("Cannot export memcache %v stats: %v", k, err)
+		internalErrors.Add("MemcacheStats", 1)
 		return
 	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	st := string(stats)
 	lines := strings.Split(st, "\n")
 	for _, line := range lines {
@@ -356,6 +340,7 @@ func (s *MemcacheStats) readStats(k string, proc func(key, value string)) {
 		items := strings.Split(line, " ")
 		if len(items) != 3 {
 			log.Errorf("Unexpected stats: %v", line)
+			internalErrors.Add("MemcacheStats", 1)
 			continue
 		}
 		proc(items[1], items[2])

@@ -39,7 +39,9 @@ func TestSrvKeySpace(t *testing.T) {
 			string(TYPE_MASTER): &KeyspacePartition{
 				Shards: []SrvShard{
 					SrvShard{
+						Name:        "test_shard",
 						ServedTypes: []TabletType{TYPE_MASTER},
+						MasterCell:  "test_cell",
 					},
 				},
 			},
@@ -61,11 +63,15 @@ func TestSrvKeySpace(t *testing.T) {
 			TYPE_MASTER: &KeyspacePartition{
 				Shards: []SrvShard{
 					SrvShard{
+						Name:        "test_shard",
 						ServedTypes: []TabletType{TYPE_MASTER},
+						MasterCell:  "test_cell",
+						TabletTypes: []TabletType{},
 					},
 				},
 			},
 		},
+		Shards:             []SrvShard{},
 		TabletTypes:        []TabletType{TYPE_MASTER},
 		ShardingColumnName: "video_id",
 		ShardingColumnType: key.KIT_UINT64,

@@ -49,7 +49,7 @@ func (wr *Wrangler) Snapshot(tabletAlias topo.TabletAlias, forceMasterSnapshot b
 	}
 
 	// wait for completion, and save the error
-	results, actionErr := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
+	results, actionErr := wr.WaitForCompletionReply(actionPath)
 	var reply *actionnode.SnapshotReply
 	newType := originalType
 	if actionErr != nil {
@@ -94,7 +94,7 @@ func (wr *Wrangler) SnapshotSourceEnd(tabletAlias topo.TabletAlias, slaveStartRe
 	}
 
 	// wait for completion, and save the error
-	err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+	err = wr.WaitForCompletion(actionPath)
 	if err != nil {
 		log.Errorf("SnapshotSourceEnd failed (%v), leaving tablet type alone", err)
 		return
@@ -127,7 +127,7 @@ func (wr *Wrangler) ReserveForRestore(srcTabletAlias, dstTabletAlias topo.Tablet
 		return
 	}
 
-	return wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+	return wr.WaitForCompletion(actionPath)
 }
 
 func (wr *Wrangler) UnreserveForRestore(dstTabletAlias topo.TabletAlias) (err error) {
@@ -160,18 +160,33 @@ func (wr *Wrangler) Restore(srcTabletAlias topo.TabletAlias, srcFilePath string,
 		}
 	}
 
+	// update the shard record if we need to, to update Cells
+	srcTablet, err := wr.ts.GetTablet(srcTabletAlias)
+	if err != nil {
+		return err
+	}
+	si, err := wr.ts.GetShard(srcTablet.Keyspace, srcTablet.Shard)
+	if err != nil {
+		return fmt.Errorf("Cannot read shard: %v", err)
+	}
+	if err := wr.updateShardCellsAndMaster(si, tablet.Alias, topo.TYPE_SPARE, false); err != nil {
+		return err
+	}
+
 	// do the work
 	actionPath, err := wr.ai.Restore(dstTabletAlias, &actionnode.RestoreArgs{SrcTabletAlias: srcTabletAlias, SrcFilePath: srcFilePath, ParentAlias: parentAlias, FetchConcurrency: fetchConcurrency, FetchRetryCount: fetchRetryCount, WasReserved: wasReserved, DontWaitForSlaveStart: dontWaitForSlaveStart})
 	if err != nil {
 		return err
 	}
 
-	if err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout()); err != nil {
+	if err = wr.WaitForCompletion(actionPath); err != nil {
 		return err
 	}
 
-	// Restore moves us into the replication graph as a spare. There are no
-	// consequences to the replication or serving graphs, so no rebuild required.
+	// Restore moves us into the replication graph as a
+	// spare. There are no consequences to the replication or
+	// serving graphs, so no rebuild required.
+
 	return nil
 }
 

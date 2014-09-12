@@ -5,6 +5,7 @@
 package cgzip
 
 /*
+#cgo CFLAGS: -Werror=implicit
 #cgo pkg-config: zlib
 
 #include "zlib.h"
@@ -71,6 +72,18 @@ func (z *reader) Read(p []byte) (int, error) {
 		if !z.skipIn && z.strm.avail_in == 0 {
 			var n int
 			n, z.err = z.r.Read(z.in)
+			// If we got data and EOF, pretend we didn't get the
+			// EOF.  That way we will return the right values
+			// upstream.  Note this will trigger another read
+			// later on, that should return (0, EOF).
+			if n > 0 && z.err == io.EOF {
+				z.err = nil
+			}
+
+			// FIXME(alainjobart) this code is not compliant with
+			// the Reader interface. We should process all the
+			// data we got from the reader, and then return the
+			// error, whatever it is.
 			if (z.err != nil && z.err != io.EOF) || (n == 0 && z.err == io.EOF) {
 				C.inflateEnd(&z.strm)
 				return 0, z.err

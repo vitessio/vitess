@@ -9,117 +9,266 @@ package bson
 import (
 	"bytes"
 	"math"
-	"strconv"
 	"time"
 
 	"github.com/youtube/vitess/go/hack"
 )
 
-var (
-	emptybytes = []byte{}
-)
+// VerifyObject verifies kind to make sure it's
+// either a top level document (EOO) or an Object.
+// TODO(sougou): deprecate this function.
+func VerifyObject(kind byte) {
+	if kind != EOO && kind != Object {
+		panic(NewBsonError("unexpected kind: %v", kind))
+	}
+}
 
+// DecodeString decodes a string from buf.
+// Allowed types: String, Binary, Null,
 func DecodeString(buf *bytes.Buffer, kind byte) string {
 	switch kind {
 	case String:
-		l := int(Pack.Uint32(buf.Next(4)))
-		s := buf.Next(l - 1)
+		l := int(Pack.Uint32(Next(buf, 4)))
+		s := Next(buf, l-1)
 		NextByte(buf)
 		return string(s)
 	case Binary:
-		l := int(Pack.Uint32(buf.Next(4)))
+		l := int(Pack.Uint32(Next(buf, 4)))
 		NextByte(buf)
-		return string(buf.Next(l))
+		return string(Next(buf, l))
 	case Null:
 		return ""
 	}
-	panic(NewBsonError("Unexpected data type %v for string", kind))
+	panic(NewBsonError("unexpected kind %v for string", kind))
 }
 
-func DecodeBytes(buf *bytes.Buffer, kind byte) []byte {
+// DecodeBinary decodes a []byte from buf.
+// Allowed types: String, Binary, Null.
+func DecodeBinary(buf *bytes.Buffer, kind byte) []byte {
 	switch kind {
 	case String:
-		l := int(Pack.Uint32(buf.Next(4)))
-		b := buf.Next(l - 1)
+		l := int(Pack.Uint32(Next(buf, 4)))
+		b := Next(buf, l-1)
 		NextByte(buf)
 		return b
 	case Binary:
-		l := int(Pack.Uint32(buf.Next(4)))
+		l := int(Pack.Uint32(Next(buf, 4)))
 		NextByte(buf)
-		return buf.Next(l)
+		return Next(buf, l)
 	case Null:
-		return emptybytes
+		return nil
 	}
-	panic(NewBsonError("Unexpected data type %v for string", kind))
+	panic(NewBsonError("unexpected kind %v for []byte", kind))
 }
 
-func DecodeInt32(buf *bytes.Buffer, kind byte) int32 {
-	switch kind {
-	case Int:
-		return int32(Pack.Uint32(buf.Next(4)))
-	case Null:
-		return 0
-	}
-	panic(NewBsonError("Unexpected data type %v for int", kind))
-}
-
-func DecodeInt(buf *bytes.Buffer, kind byte) int {
-	switch kind {
-	case Int:
-		return int(Pack.Uint32(buf.Next(4)))
-	case Long, Ulong:
-		return int(Pack.Uint64(buf.Next(8)))
-	case Null:
-		return 0
-	}
-	panic(NewBsonError("Unexpected data type %v for int", kind))
-}
-
+// DecodeInt64 decodes a int64 from buf.
+// Allowed types: Int, Long, Ulong, Null.
 func DecodeInt64(buf *bytes.Buffer, kind byte) int64 {
 	switch kind {
 	case Int:
-		return int64(int32(Pack.Uint32(buf.Next(4))))
+		return int64(int32(Pack.Uint32(Next(buf, 4))))
 	case Long, Ulong:
-		return int64(Pack.Uint64(buf.Next(8)))
+		return int64(Pack.Uint64(Next(buf, 8)))
 	case Null:
 		return 0
 	}
-	panic(NewBsonError("Unexpected data type %v for int", kind))
+	panic(NewBsonError("unexpected kind %v for int64", kind))
 }
 
+// DecodeInt32 decodes a int32 from buf.
+// Allowed types: Int, Null.
+func DecodeInt32(buf *bytes.Buffer, kind byte) int32 {
+	switch kind {
+	case Int:
+		return int32(Pack.Uint32(Next(buf, 4)))
+	case Null:
+		return 0
+	}
+	panic(NewBsonError("unexpected kind %v for int32", kind))
+}
+
+// DecodeInt decodes a int64 from buf.
+// Allowed types: Int, Long, Ulong, Null.
+func DecodeInt(buf *bytes.Buffer, kind byte) int {
+	switch kind {
+	case Int:
+		return int(Pack.Uint32(Next(buf, 4)))
+	case Long, Ulong:
+		return int(Pack.Uint64(Next(buf, 8)))
+	case Null:
+		return 0
+	}
+	panic(NewBsonError("unexpected kind %v for int", kind))
+}
+
+// DecodeUint64 decodes a uint64 from buf.
+// Allowed types: Int, Long, Ulong, Null.
 func DecodeUint64(buf *bytes.Buffer, kind byte) uint64 {
 	switch kind {
 	case Int:
-		return uint64(Pack.Uint32(buf.Next(4)))
+		return uint64(Pack.Uint32(Next(buf, 4)))
 	case Long, Ulong:
-		return Pack.Uint64(buf.Next(8))
+		return Pack.Uint64(Next(buf, 8))
 	case Null:
 		return 0
 	}
-	panic(NewBsonError("Unexpected data type %v for int", kind))
+	panic(NewBsonError("unexpected kind %v for uint64", kind))
 }
 
+// DecodeUint32 decodes a uint32 from buf.
+// Allowed types: Int, Long, Null.
+func DecodeUint32(buf *bytes.Buffer, kind byte) uint32 {
+	switch kind {
+	case Int:
+		return Pack.Uint32(Next(buf, 4))
+	case Ulong:
+		return uint32(Pack.Uint64(Next(buf, 8)))
+	case Null:
+		return 0
+	}
+	panic(NewBsonError("unexpected kind %v for uint32", kind))
+}
+
+// DecodeUint decodes a uint64 from buf.
+// Allowed types: Int, Long, Ulong, Null.
+func DecodeUint(buf *bytes.Buffer, kind byte) uint {
+	switch kind {
+	case Int:
+		return uint(Pack.Uint32(Next(buf, 4)))
+	case Long, Ulong:
+		return uint(Pack.Uint64(Next(buf, 8)))
+	case Null:
+		return 0
+	}
+	panic(NewBsonError("unexpected kind %v for uint", kind))
+}
+
+// DecodeFloat64 decodes a float64 from buf.
+// Allowed types: Number, Null.
 func DecodeFloat64(buf *bytes.Buffer, kind byte) float64 {
 	switch kind {
 	case Number:
-		return float64(math.Float64frombits(Pack.Uint64(buf.Next(8))))
+		return float64(math.Float64frombits(Pack.Uint64(Next(buf, 8))))
 	case Null:
 		return 0
 	}
-	panic(NewBsonError("Unexpected data type %v for int", kind))
+	panic(NewBsonError("unexpected kind %v for float64", kind))
 }
 
+// DecodeBool decodes a bool from buf.
+// Allowed types: Boolean, Int, Long, Ulong, Null.
+func DecodeBool(buf *bytes.Buffer, kind byte) bool {
+	switch kind {
+	case Boolean:
+		b, _ := buf.ReadByte()
+		return (b != 0)
+	case Int:
+		return (Pack.Uint32(Next(buf, 4)) != 0)
+	case Long, Ulong:
+		return (Pack.Uint64(Next(buf, 8)) != 0)
+	case Null:
+		return false
+	default:
+		panic(NewBsonError("unexpected kind %v for bool", kind))
+	}
+}
+
+// DecodeBinary decodes a time.Time from buf.
+// Allowed types: Datetime, Null.
 func DecodeTime(buf *bytes.Buffer, kind byte) time.Time {
 	switch kind {
 	case Datetime:
-		ui64 := Pack.Uint64(buf.Next(8))
+		ui64 := Pack.Uint64(Next(buf, 8))
 		return time.Unix(0, int64(ui64)*1e6).UTC()
 	case Null:
 		return time.Time{}
 	}
-	panic(NewBsonError("Unexpected data type %v for time", kind))
+	panic(NewBsonError("unexpected kind %v for time.Time", kind))
 }
 
+// DecodeInterface decodes the next object into an interface.
+// Object is decoded as map[string]interface{}.
+// Array is decoded as []interface{}
+func DecodeInterface(buf *bytes.Buffer, kind byte) interface{} {
+	switch kind {
+	case Number:
+		return DecodeFloat64(buf, kind)
+	case String:
+		return DecodeString(buf, kind)
+	case Object:
+		return DecodeMap(buf, kind)
+	case Array:
+		return DecodeArray(buf, kind)
+	case Binary:
+		return DecodeBinary(buf, kind)
+	case Boolean:
+		return DecodeBool(buf, kind)
+	case Datetime:
+		return DecodeTime(buf, kind)
+	case Null:
+		return nil
+	case Int:
+		return DecodeInt32(buf, kind)
+	case Long:
+		return DecodeInt64(buf, kind)
+	case Ulong:
+		return DecodeUint64(buf, kind)
+	}
+	panic(NewBsonError("unexpected kind %v for interface{}", kind))
+}
+
+// DecodeMap decodes a map[string]interface{} from buf.
+// Allowed types: Object, Null.
+func DecodeMap(buf *bytes.Buffer, kind byte) map[string]interface{} {
+	switch kind {
+	case Object:
+		// valid
+	case Null:
+		return nil
+	default:
+		panic(NewBsonError("unexpected kind %v for map", kind))
+	}
+
+	result := make(map[string]interface{})
+	Next(buf, 4)
+	for kind := NextByte(buf); kind != EOO; kind = NextByte(buf) {
+		key := ReadCString(buf)
+		if kind == Null {
+			result[key] = nil
+			continue
+		}
+		result[key] = DecodeInterface(buf, kind)
+	}
+	return result
+}
+
+// DecodeMap decodes a []interface{} from buf.
+// Allowed types: Array, Null.
+func DecodeArray(buf *bytes.Buffer, kind byte) []interface{} {
+	switch kind {
+	case Array:
+		// valid
+	case Null:
+		return nil
+	default:
+		panic(NewBsonError("unexpected kind %v for slice", kind))
+	}
+
+	result := make([]interface{}, 0, 8)
+	Next(buf, 4)
+	for kind := NextByte(buf); kind != EOO; kind = NextByte(buf) {
+		ReadCString(buf)
+		if kind == Null {
+			result = append(result, nil)
+			continue
+		}
+		result = append(result, DecodeInterface(buf, kind))
+	}
+	return result
+}
+
+// DecodeMap decodes a []string from buf.
+// Allowed types: Array, Null.
 func DecodeStringArray(buf *bytes.Buffer, kind byte) []string {
 	switch kind {
 	case Array:
@@ -127,68 +276,78 @@ func DecodeStringArray(buf *bytes.Buffer, kind byte) []string {
 	case Null:
 		return nil
 	default:
-		panic(NewBsonError("Unexpected data type %v for string array", kind))
+		panic(NewBsonError("unexpected kind %v for []string", kind))
 	}
 
+	result := make([]string, 0, 8)
 	Next(buf, 4)
-	values := make([]string, 0, 8)
-	kind = NextByte(buf)
-	for i := 0; kind != EOO; i++ {
+	for kind := NextByte(buf); kind != EOO; kind = NextByte(buf) {
 		if kind != Binary {
-			panic(NewBsonError("Unexpected data type %v for string array", kind))
+			panic(NewBsonError("unexpected kind %v for string", kind))
 		}
-		ExpectIndex(buf, i)
-		values = append(values, DecodeString(buf, kind))
-		kind = NextByte(buf)
+		SkipIndex(buf)
+		result = append(result, DecodeString(buf, kind))
 	}
-	return values
+	return result
 }
 
-func DecodeBool(buf *bytes.Buffer, kind byte) bool {
+// Skip will skip the next field we don't want to read.
+func Skip(buf *bytes.Buffer, kind byte) {
 	switch kind {
+	case Number, Datetime, Long, Ulong:
+		Next(buf, 8)
+	case String:
+		// length of a string includes the 0 at the end, but not the size
+		l := int(Pack.Uint32(Next(buf, 4)))
+		Next(buf, l)
+	case Object, Array:
+		// the encoded length includes the 4 bytes for the size
+		l := int(Pack.Uint32(Next(buf, 4)))
+		if l < 4 {
+			panic(NewBsonError("Object or Array should at least be 4 bytes long"))
+		}
+		Next(buf, l-4)
+	case Binary:
+		// length of a binary doesn't include the subtype
+		l := int(Pack.Uint32(Next(buf, 4)))
+		Next(buf, l+1)
 	case Boolean:
-		b, _ := buf.ReadByte()
-		return (b != 0)
+		buf.ReadByte()
 	case Int:
-		return (Pack.Uint32(buf.Next(4)) != 0)
-	case Long, Ulong:
-		return (Pack.Uint64(buf.Next(8)) != 0)
+		Next(buf, 4)
 	case Null:
-		return false
+		// no op
 	default:
-		panic(NewBsonError("Unexpected data type %v for boolean", kind))
+		panic(NewBsonError("unexpected kind %v for skip", kind))
 	}
 }
 
-func ExpectIndex(buf *bytes.Buffer, index int) {
-	key := ReadCString(buf)
-	received, err := strconv.Atoi(key)
-	if err != nil {
-		panic(NewBsonError("%s", err))
-	}
-	if received != index {
-		panic(NewBsonError("non-sequential index in array. Expected: %d, Received: %d", index, received))
-	}
+// SkipIndex must be used to skip indexes in arrays.
+func SkipIndex(buf *bytes.Buffer) {
+	ReadCString(buf)
 }
 
+// ReadCString reads the the bson document tag.
 func ReadCString(buf *bytes.Buffer) string {
 	index := bytes.IndexByte(buf.Bytes(), 0)
 	if index < 0 {
-		panic(NewBsonError("Unexpected EOF"))
+		panic(NewBsonError("unexpected EOF"))
 	}
 	// Read including null termination, but
 	// return the string without the null.
-	return hack.String(buf.Next(index + 1)[:index])
+	return hack.String(Next(buf, index+1)[:index])
 }
 
+// Next returns the next n bytes from buf.
 func Next(buf *bytes.Buffer, n int) []byte {
 	b := buf.Next(n)
 	if len(b) != n {
-		panic(NewBsonError("Unexpected EOF"))
+		panic(NewBsonError("unexpected EOF"))
 	}
-	return b
+	return b[:n:n]
 }
 
+// NextByte returns the next byte from buf.
 func NextByte(buf *bytes.Buffer) byte {
 	return Next(buf, 1)[0]
 }

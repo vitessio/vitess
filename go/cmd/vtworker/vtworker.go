@@ -22,6 +22,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager/initiator"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -31,8 +32,11 @@ import (
 
 var (
 	cell = flag.String("cell", "", "cell to pick servers from")
-	port = flag.Int("port", 8080, "port for the status / interactive mode")
 )
+
+func init() {
+	servenv.RegisterDefaultFlags()
+}
 
 // signal handling, centralized here
 func installSignalHandlers() {
@@ -51,13 +55,21 @@ func installSignalHandlers() {
 }
 
 var (
+	// global wrangler object we'll use
+	wr *wrangler.Wrangler
+
 	// mutex is protecting all the following variables
-	currentWorkerMutex sync.Mutex
-	currentWorker      worker.Worker
-	currentDone        chan struct{}
+	currentWorkerMutex  sync.Mutex
+	currentWorker       worker.Worker
+	currentMemoryLogger *logutil.MemoryLogger
+	currentDone         chan struct{}
 )
 
-func setAndStartWorker(wrk worker.Worker) (chan struct{}, error) {
+// setAndStartWorker will set the current worker.
+// If logger is nil, we create and save a MemoryLogger (so the web
+// status can display it). The command line worker (or RPC worker)
+// will use its own logger.
+func setAndStartWorker(wrk worker.Worker, logger logutil.Logger) (chan struct{}, error) {
 	currentWorkerMutex.Lock()
 	defer currentWorkerMutex.Unlock()
 	if currentWorker != nil {
@@ -65,7 +77,12 @@ func setAndStartWorker(wrk worker.Worker) (chan struct{}, error) {
 	}
 
 	currentWorker = wrk
+	if logger == nil {
+		currentMemoryLogger = logutil.NewMemoryLogger()
+		logger = currentMemoryLogger
+	}
 	currentDone = make(chan struct{})
+	wr.SetLogger(logger)
 
 	// one go function runs the worker, closes 'done' when done
 	go func() {
@@ -89,14 +106,16 @@ func main() {
 	ts := topo.GetServer()
 	defer topo.CloseServers()
 
-	wr := wrangler.New(ts, 30*time.Second, 30*time.Second)
+	// the logger will be replaced when we start a job
+	wr = wrangler.New(logutil.NewConsoleLogger(), ts, 30*time.Second, 30*time.Second)
 	if len(args) == 0 {
 		// interactive mode, initialize the web UI to chose a command
-		initInteractiveMode(wr)
+		initInteractiveMode()
 	} else {
-		runCommand(wr, args)
+		// single command mode, just runs it
+		runCommand(args)
 	}
 	initStatusHandling()
 
-	servenv.Run(*port)
+	servenv.RunDefault()
 }

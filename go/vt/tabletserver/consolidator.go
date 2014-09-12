@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/cache"
 	"github.com/youtube/vitess/go/mysql/proto"
 )
@@ -19,18 +20,22 @@ var (
 	waitError = NewTabletError(FAIL, "Error waiting for consolidation")
 )
 
+// Consolidator consolidates duplicate queries from executing simulaneously
+// and shares results between them.
 type Consolidator struct {
 	mu             sync.Mutex
 	queries        map[string]*Result
 	consolidations *cache.LRUCache
 }
 
+// NewConsolidator creates a new Consolidator
 func NewConsolidator() *Consolidator {
 	co := &Consolidator{queries: make(map[string]*Result), consolidations: cache.NewLRUCache(1000)}
 	http.Handle("/debug/consolidations", co)
 	return co
 }
 
+// Result is a wrapper for QueryResult of a query.
 type Result struct {
 	executing    sync.RWMutex
 	consolidator *Consolidator
@@ -39,6 +44,9 @@ type Result struct {
 	Err          error
 }
 
+// Create adds a query to currently executing queries and acquires a
+// lock on its Result if it is not already present. If the query is
+// a duplicate, Create returns false.
 func (co *Consolidator) Create(sql string) (r *Result, created bool) {
 	co.mu.Lock()
 	defer co.mu.Unlock()
@@ -54,6 +62,10 @@ func (co *Consolidator) Create(sql string) (r *Result, created bool) {
 }
 
 func (co *Consolidator) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
+		acl.SendError(response, err)
+		return
+	}
 	items := co.consolidations.Items()
 	response.Header().Set("Content-Type", "text/plain")
 	if items == nil {
@@ -75,6 +87,9 @@ func (co *Consolidator) record(sql string) {
 	}
 }
 
+// Broadcast removes the entry from current queries and releases the
+// lock on its Result. Broadcast should be invoked when original
+// query completes execution.
 func (rs *Result) Broadcast() {
 	rs.consolidator.mu.Lock()
 	defer rs.consolidator.mu.Unlock()
@@ -82,6 +97,8 @@ func (rs *Result) Broadcast() {
 	rs.executing.Unlock()
 }
 
+// Wait waits for the original query to complete execution. Wait should
+// be invoked for duplicate queries.
 func (rs *Result) Wait() {
 	rs.consolidator.record(rs.sql)
 	defer waitStats.Record("Consolidations", time.Now())

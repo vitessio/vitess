@@ -23,7 +23,7 @@ from zk import zkocc
 SHARDED_KEYSPACE = "TEST_KEYSPACE_SHARDED"
 UNSHARDED_KEYSPACE = "TEST_KEYSPACE_UNSHARDED"
 
-# shards for SHARDED_KEYSPACE 
+# shards for SHARDED_KEYSPACE
 # range "" - 80
 shard_0_master = tablet.Tablet()
 shard_0_replica = tablet.Tablet()
@@ -206,38 +206,26 @@ class TestKeyspace(unittest.TestCase):
                                         "test_nj", 30.0)
     return keyspace.read_keyspace(vtgate_client, keyspace_name)
 
+  def test_get_keyspace(self):
+    ki = utils.run_vtctl_json(['GetKeyspace', UNSHARDED_KEYSPACE])
+    self.assertEqual('keyspace_id', ki['ShardingColumnName'])
+    self.assertEqual('uint64', ki['ShardingColumnType'])
+
   def test_shard_count(self):
     sharded_ks = self._read_keyspace(SHARDED_KEYSPACE)
-    self.assertEqual(sharded_ks.shard_count, 2)
     for db_type in ALL_DB_TYPES:
       self.assertEqual(sharded_ks.get_shard_count(db_type), 2)
     unsharded_ks = self._read_keyspace(UNSHARDED_KEYSPACE)
-    self.assertEqual(unsharded_ks.shard_count, 1)
     for db_type in ALL_DB_TYPES:
       self.assertEqual(unsharded_ks.get_shard_count(db_type), 1)
 
   def test_shard_names(self):
     sharded_ks = self._read_keyspace(SHARDED_KEYSPACE)
-    self.assertEqual(sharded_ks.shard_names, ['-80', '80-'])
     for db_type in ALL_DB_TYPES:
       self.assertEqual(sharded_ks.get_shard_names(db_type), ['-80', '80-'])
     unsharded_ks = self._read_keyspace(UNSHARDED_KEYSPACE)
-    self.assertEqual(unsharded_ks.shard_names, ['0'])
     for db_type in ALL_DB_TYPES:
       self.assertEqual(unsharded_ks.get_shard_names(db_type), ['0'])
-
-  def test_shard_max_keys(self):
-    sharded_ks = self._read_keyspace(SHARDED_KEYSPACE)
-    want = ['80', '']
-    for i, smk in enumerate(sharded_ks.shard_max_keys):
-      self.assertEqual(smk.encode('hex').upper(), want[i])
-    for db_type in ALL_DB_TYPES:
-      for i, smk in enumerate(sharded_ks.get_shard_max_keys(db_type)):
-        self.assertEqual(smk.encode('hex').upper(), want[i])
-    unsharded_ks = self._read_keyspace(UNSHARDED_KEYSPACE)
-    self.assertEqual(unsharded_ks.shard_max_keys, None)
-    for db_type in ALL_DB_TYPES:
-      self.assertEqual(unsharded_ks.get_shard_max_keys(db_type), [''])
 
   def test_db_types(self):
     sharded_ks = self._read_keyspace(SHARDED_KEYSPACE)
@@ -245,13 +233,15 @@ class TestKeyspace(unittest.TestCase):
     unsharded_ks = self._read_keyspace(UNSHARDED_KEYSPACE)
     self.assertEqual(set(unsharded_ks.db_types), set(ALL_DB_TYPES))
 
-
-  def test_keyspace_id_to_shard_index(self):
+  def test_keyspace_id_to_shard_name(self):
     sharded_ks = self._read_keyspace(SHARDED_KEYSPACE)
-    for i, sn in enumerate(shard_names):
+    for _, sn in enumerate(shard_names):
       for keyspace_id in shard_kid_map[sn]:
-        self.assertEqual(sharded_ks.keyspace_id_to_shard_index(keyspace_id), i)
-        self.assertEqual(sharded_ks.keyspace_id_to_shard_index_for_db_type(keyspace_id, 'master'), i)
+        self.assertEqual(sharded_ks.keyspace_id_to_shard_name_for_db_type(keyspace_id, 'master'), sn)
+    unsharded_ks = self._read_keyspace(UNSHARDED_KEYSPACE)
+    for keyspace_id in shard_kid_map[sn]:
+      self.assertEqual(unsharded_ks.keyspace_id_to_shard_name_for_db_type(keyspace_id, 'master'), '0')
+
 
 if __name__ == '__main__':
   utils.main()

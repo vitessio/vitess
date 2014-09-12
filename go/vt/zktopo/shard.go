@@ -10,8 +10,10 @@ import (
 	"path"
 	"sort"
 
+	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/events"
 	"github.com/youtube/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -46,18 +48,29 @@ func (zkts *Server) CreateShard(keyspace, shard string, value *topo.Shard) error
 	if alreadyExists {
 		return topo.ErrNodeExists
 	}
+
+	event.Dispatch(&events.ShardChange{
+		ShardInfo: *topo.NewShardInfo(keyspace, shard, value, -1),
+		Status:    "created",
+	})
 	return nil
 }
 
-func (zkts *Server) UpdateShard(si *topo.ShardInfo) error {
+func (zkts *Server) UpdateShard(si *topo.ShardInfo, existingVersion int64) (int64, error) {
 	shardPath := path.Join(globalKeyspacesPath, si.Keyspace(), "shards", si.ShardName())
-	_, err := zkts.zconn.Set(shardPath, jscfg.ToJson(si.Shard), -1)
+	stat, err := zkts.zconn.Set(shardPath, jscfg.ToJson(si.Shard), int(existingVersion))
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			err = topo.ErrNoNode
 		}
+		return -1, err
 	}
-	return err
+
+	event.Dispatch(&events.ShardChange{
+		ShardInfo: *si,
+		Status:    "updated",
+	})
+	return int64(stat.Version()), nil
 }
 
 func (zkts *Server) ValidateShard(keyspace, shard string) error {
@@ -77,7 +90,7 @@ func (zkts *Server) ValidateShard(keyspace, shard string) error {
 
 func (zkts *Server) GetShard(keyspace, shard string) (*topo.ShardInfo, error) {
 	shardPath := path.Join(globalKeyspacesPath, keyspace, "shards", shard)
-	data, _, err := zkts.zconn.Get(shardPath)
+	data, stat, err := zkts.zconn.Get(shardPath)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			err = topo.ErrNoNode
@@ -90,7 +103,7 @@ func (zkts *Server) GetShard(keyspace, shard string) (*topo.ShardInfo, error) {
 		return nil, fmt.Errorf("bad shard data %v", err)
 	}
 
-	return topo.NewShardInfo(keyspace, shard, s), nil
+	return topo.NewShardInfo(keyspace, shard, s, int64(stat.Version())), nil
 }
 
 func (zkts *Server) GetShardCritical(keyspace, shard string) (*topo.ShardInfo, error) {
@@ -118,6 +131,12 @@ func (zkts *Server) DeleteShard(keyspace, shard string) error {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			err = topo.ErrNoNode
 		}
+		return err
 	}
-	return err
+
+	event.Dispatch(&events.ShardChange{
+		ShardInfo: *topo.NewShardInfo(keyspace, shard, nil, -1),
+		Status:    "deleted",
+	})
+	return nil
 }

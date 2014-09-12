@@ -10,63 +10,70 @@ import (
 	"fmt"
 	"strconv"
 
+	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
 var (
-	BINLOG_SET_TIMESTAMP = []byte("SET TIMESTAMP=")
-	BINLOG_SET_INSERT    = []byte("SET INSERT_ID=")
-	STREAM_COMMENT_START = []byte("/* _stream ")
+	BINLOG_SET_TIMESTAMP     = []byte("SET TIMESTAMP=")
+	BINLOG_SET_TIMESTAMP_LEN = len(BINLOG_SET_TIMESTAMP)
+	BINLOG_SET_INSERT        = []byte("SET INSERT_ID=")
+	BINLOG_SET_INSERT_LEN    = len(BINLOG_SET_INSERT)
+	STREAM_COMMENT_START     = []byte("/* _stream ")
 )
+
+type EventNode struct {
+	Table   string
+	Columns []string
+	Tuples  []sqlparser.ValTuple
+}
 
 type sendEventFunc func(event *proto.StreamEvent) error
 
 type EventStreamer struct {
-	bls       *BinlogStreamer
+	bls       BinlogStreamer
 	sendEvent sendEventFunc
 }
 
-func NewEventStreamer(dbname, binlogPrefix string) *EventStreamer {
-	return &EventStreamer{
-		bls: NewBinlogStreamer(dbname, binlogPrefix),
+func NewEventStreamer(dbname string, mysqld *mysqlctl.Mysqld, startPos myproto.ReplicationPosition, sendEvent sendEventFunc) *EventStreamer {
+	evs := &EventStreamer{
+		sendEvent: sendEvent,
 	}
+	evs.bls = NewBinlogStreamer(dbname, mysqld, startPos, evs.transactionToEvent)
+	return evs
 }
 
-func (evs *EventStreamer) Stream(file string, pos int64, sendEvent sendEventFunc) error {
-	evs.sendEvent = sendEvent
-	return evs.bls.Stream(file, pos, evs.transactionToEvent)
-}
-
-func (evs *EventStreamer) Stop() {
-	evs.bls.Stop()
+func (evs *EventStreamer) Stream(ctx *sync2.ServiceContext) error {
+	return evs.bls.Stream(ctx)
 }
 
 func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) error {
 	var err error
-	var timestamp int64
 	var insertid int64
 	for _, stmt := range trans.Statements {
 		switch stmt.Category {
 		case proto.BL_SET:
-			if bytes.HasPrefix(stmt.Sql, BINLOG_SET_TIMESTAMP) {
-				if timestamp, err = strconv.ParseInt(string(stmt.Sql[len(BINLOG_SET_TIMESTAMP):]), 10, 64); err != nil {
-					return fmt.Errorf("%v: %s", err, stmt.Sql)
+			if bytes.HasPrefix(stmt.Sql, BINLOG_SET_INSERT) {
+				insertid, err = strconv.ParseInt(string(stmt.Sql[BINLOG_SET_INSERT_LEN:]), 10, 64)
+				if err != nil {
+					binlogStreamerErrors.Add("EventStreamer", 1)
+					log.Errorf("%v: %s", err, stmt.Sql)
 				}
-			} else if bytes.HasPrefix(stmt.Sql, BINLOG_SET_INSERT) {
-				if insertid, err = strconv.ParseInt(string(stmt.Sql[len(BINLOG_SET_INSERT):]), 10, 64); err != nil {
-					return fmt.Errorf("%v: %s", err, stmt.Sql)
-				}
-			} else {
-				return fmt.Errorf("unrecognized: %s", stmt.Sql)
 			}
 		case proto.BL_DML:
 			var dmlEvent *proto.StreamEvent
 			dmlEvent, insertid, err = evs.buildDMLEvent(stmt.Sql, insertid)
 			if err != nil {
-				return fmt.Errorf("%v: %s", err, stmt.Sql)
+				dmlEvent = &proto.StreamEvent{
+					Category: "ERR",
+					Sql:      string(stmt.Sql),
+				}
 			}
-			dmlEvent.Timestamp = timestamp
+			dmlEvent.Timestamp = trans.Timestamp
 			if err = evs.sendEvent(dmlEvent); err != nil {
 				return err
 			}
@@ -74,7 +81,7 @@ func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) err
 			ddlEvent := &proto.StreamEvent{
 				Category:  "DDL",
 				Sql:       string(stmt.Sql),
-				Timestamp: timestamp,
+				Timestamp: trans.Timestamp,
 			}
 			if err = evs.sendEvent(ddlEvent); err != nil {
 				return err
@@ -83,14 +90,21 @@ func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) err
 			unrecognized := &proto.StreamEvent{
 				Category:  "ERR",
 				Sql:       string(stmt.Sql),
-				Timestamp: timestamp,
+				Timestamp: trans.Timestamp,
 			}
 			if err = evs.sendEvent(unrecognized); err != nil {
 				return err
 			}
+		default:
+			binlogStreamerErrors.Add("EventStreamer", 1)
+			log.Errorf("Unrecognized event: %v: %s", stmt.Category, stmt.Sql)
 		}
 	}
-	posEvent := &proto.StreamEvent{Category: "POS", GroupId: trans.GroupId}
+	posEvent := &proto.StreamEvent{
+		Category:  "POS",
+		GTIDField: trans.GTIDField,
+		Timestamp: trans.Timestamp,
+	}
 	if err = evs.sendEvent(posEvent); err != nil {
 		return err
 	}
@@ -100,38 +114,27 @@ func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) err
 func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (dmlEvent *proto.StreamEvent, newinsertid int64, err error) {
 	commentIndex := bytes.LastIndex(sql, STREAM_COMMENT_START)
 	if commentIndex == -1 {
-		return &proto.StreamEvent{Category: "ERR", Sql: string(sql)}, insertid, nil
+		return nil, insertid, fmt.Errorf("missing stream comment")
 	}
 	streamComment := string(sql[commentIndex+len(STREAM_COMMENT_START):])
-	eventTree, err := parseStreamComment(streamComment)
+	eventNode, err := parseStreamComment(streamComment)
 	if err != nil {
 		return nil, insertid, err
 	}
 
-	tableName := string(eventTree.At(0).Value)
-	pkColNamesNode := eventTree.At(1)
-	pkColNames := make([]string, 0, pkColNamesNode.Len())
-	for _, pkCol := range pkColNamesNode.Sub {
-		if pkCol.Type != sqlparser.ID {
-			return nil, insertid, fmt.Errorf("expecting column name: %v", string(pkCol.Value))
-		}
-		pkColNames = append(pkColNames, string(pkCol.Value))
+	dmlEvent = &proto.StreamEvent{
+		Category:   "DML",
+		TableName:  eventNode.Table,
+		PKColNames: eventNode.Columns,
+		PKValues:   make([][]interface{}, 0, len(eventNode.Tuples)),
 	}
-	pkColLen := pkColNamesNode.Len()
 
-	dmlEvent = new(proto.StreamEvent)
-	dmlEvent.Category = "DML"
-	dmlEvent.TableName = tableName
-	dmlEvent.PKColNames = pkColNames
-	dmlEvent.PKValues = make([][]interface{}, 0, len(eventTree.Sub[2:]))
-
-	rowPk := make([]interface{}, pkColLen)
-	for _, node := range eventTree.Sub[2:] {
-		rowPk = rowPk[:0]
-		if node.Len() != pkColLen {
+	for _, tuple := range eventNode.Tuples {
+		if len(tuple) != len(eventNode.Columns) {
 			return nil, insertid, fmt.Errorf("length mismatch in values")
 		}
-		rowPk, insertid, err = encodePKValues(node.Sub, insertid)
+		var rowPk []interface{}
+		rowPk, insertid, err = encodePKValues(tuple, insertid)
 		if err != nil {
 			return nil, insertid, err
 		}
@@ -142,82 +145,95 @@ func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (dmlEvent *p
 
 /*
 parseStreamComment parses the tuples of the full stream comment.
-The _stream comment is extracted into a tree node with the following structure.
-EventNode.Sub[0] table name
-EventNode.Sub[1] Pk column names
-EventNode.Sub[2:] Pk Value lists
+The _stream comment is extracted into an EventNode tree.
 */
 // Example query: insert into vtocc_e(foo) values ('foo') /* _stream vtocc_e (eid id name ) (null 1 'bmFtZQ==' ); */
 // the "null" value is used for auto-increment columns.
-func parseStreamComment(dmlComment string) (EventNode *sqlparser.Node, err error) {
-	EventNode = sqlparser.NewSimpleParseNode(sqlparser.NODE_LIST, "")
+func parseStreamComment(dmlComment string) (eventNode EventNode, err error) {
 	tokenizer := sqlparser.NewStringTokenizer(dmlComment)
 
-	node := tokenizer.Scan()
-	if node.Type != sqlparser.ID {
-		return nil, fmt.Errorf("expecting table name in stream comment")
+	typ, val := tokenizer.Scan()
+	if typ != sqlparser.ID {
+		return eventNode, fmt.Errorf("expecting table name in stream comment")
 	}
-	EventNode.Push(node)
+	eventNode.Table = string(val)
 
-	for node = tokenizer.Scan(); node.Type != ';'; node = tokenizer.Scan() {
-		switch node.Type {
+	eventNode.Columns, err = parsePkNames(tokenizer)
+	if err != nil {
+		return eventNode, err
+	}
+
+	for typ, val = tokenizer.Scan(); typ != ';'; typ, val = tokenizer.Scan() {
+		switch typ {
 		case '(':
 			// pkTuple is a list of pk value Nodes
 			pkTuple, err := parsePkTuple(tokenizer)
 			if err != nil {
-				return nil, err
+				return eventNode, err
 			}
-			EventNode.Push(pkTuple)
+			eventNode.Tuples = append(eventNode.Tuples, pkTuple)
 		default:
-			return nil, fmt.Errorf("expecting '('")
+			return eventNode, fmt.Errorf("expecting '('")
 		}
 	}
 
-	return EventNode, nil
+	return eventNode, nil
+}
+
+func parsePkNames(tokenizer *sqlparser.Tokenizer) (columns []string, err error) {
+	if typ, _ := tokenizer.Scan(); typ != '(' {
+		return nil, fmt.Errorf("expecting '('")
+	}
+	for typ, val := tokenizer.Scan(); typ != ')'; typ, val = tokenizer.Scan() {
+		switch typ {
+		case sqlparser.ID:
+			columns = append(columns, string(val))
+		default:
+			return nil, fmt.Errorf("syntax error at position: %d", tokenizer.Position)
+		}
+	}
+	return columns, nil
 }
 
 // parsePkTuple parese one pk tuple.
-func parsePkTuple(tokenizer *sqlparser.Tokenizer) (pkTuple *sqlparser.Node, err error) {
-	// pkTuple is a list of pk value Nodes
-	pkTuple = sqlparser.NewSimpleParseNode(sqlparser.NODE_LIST, "")
+func parsePkTuple(tokenizer *sqlparser.Tokenizer) (tuple sqlparser.ValTuple, err error) {
 	// start scanning the list
-	for tempNode := tokenizer.Scan(); tempNode.Type != ')'; tempNode = tokenizer.Scan() {
-		switch tempNode.Type {
+	for typ, val := tokenizer.Scan(); typ != ')'; typ, val = tokenizer.Scan() {
+		switch typ {
 		case '-':
 			// handle negative numbers
-			t2 := tokenizer.Scan()
-			if t2.Type != sqlparser.NUMBER {
+			typ2, val2 := tokenizer.Scan()
+			if typ2 != sqlparser.NUMBER {
 				return nil, fmt.Errorf("expecing number after '-'")
 			}
-			t2.Value = append(tempNode.Value, t2.Value...)
-			pkTuple.Push(t2)
-		case sqlparser.ID, sqlparser.NUMBER, sqlparser.NULL:
-			pkTuple.Push(tempNode)
+			num := append(sqlparser.NumVal("-"), val2...)
+			tuple = append(tuple, num)
+		case sqlparser.NUMBER:
+			tuple = append(tuple, sqlparser.NumVal(val))
+		case sqlparser.NULL:
+			tuple = append(tuple, new(sqlparser.NullVal))
 		case sqlparser.STRING:
-			b := tempNode.Value
-			decoded := make([]byte, base64.StdEncoding.DecodedLen(len(b)))
-			numDecoded, err := base64.StdEncoding.Decode(decoded, b)
+			decoded := make([]byte, base64.StdEncoding.DecodedLen(len(val)))
+			numDecoded, err := base64.StdEncoding.Decode(decoded, val)
 			if err != nil {
 				return nil, err
 			}
-			tempNode.Value = decoded[:numDecoded]
-			pkTuple.Push(tempNode)
+			tuple = append(tuple, sqlparser.StrVal(decoded[:numDecoded]))
 		default:
-			return nil, fmt.Errorf("unexpected token: '%v'", string(tempNode.Value))
+			return nil, fmt.Errorf("syntax error at position: %d", tokenizer.Position)
 		}
 	}
-	return pkTuple, nil
+	return tuple, nil
 }
 
 // Interprets the parsed node and correctly encodes the primary key values.
-func encodePKValues(pkValues []*sqlparser.Node, insertid int64) (rowPk []interface{}, newinsertid int64, err error) {
-	for _, pkVal := range pkValues {
-		if pkVal.Type == sqlparser.STRING {
-			rowPk = append(rowPk, string(pkVal.Value))
-		} else if pkVal.Type == sqlparser.NUMBER {
-			// pkVal.Value is a byte array, convert this to string and use strconv to find
-			// the right numberic type.
-			valstr := string(pkVal.Value)
+func encodePKValues(tuple sqlparser.ValTuple, insertid int64) (rowPk []interface{}, newinsertid int64, err error) {
+	for _, pkVal := range tuple {
+		switch pkVal := pkVal.(type) {
+		case sqlparser.StrVal:
+			rowPk = append(rowPk, []byte(pkVal))
+		case sqlparser.NumVal:
+			valstr := string(pkVal)
 			if ival, err := strconv.ParseInt(valstr, 0, 64); err == nil {
 				rowPk = append(rowPk, ival)
 			} else if uval, err := strconv.ParseUint(valstr, 0, 64); err == nil {
@@ -225,11 +241,11 @@ func encodePKValues(pkValues []*sqlparser.Node, insertid int64) (rowPk []interfa
 			} else {
 				return nil, insertid, err
 			}
-		} else if pkVal.Type == sqlparser.NULL {
+		case *sqlparser.NullVal:
 			rowPk = append(rowPk, insertid)
 			insertid++
-		} else {
-			return nil, insertid, fmt.Errorf("unexpected token: '%v'", string(pkVal.Value))
+		default:
+			return nil, insertid, fmt.Errorf("unexpected token: '%v'", sqlparser.String(pkVal))
 		}
 	}
 	return rowPk, insertid, nil

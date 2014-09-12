@@ -12,6 +12,10 @@ import (
 )
 
 func TestMemcache(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode.")
+	}
+
 	cmd := exec.Command("memcached", "-s", "/tmp/vtocc_cache.sock")
 	if err := cmd.Start(); err != nil {
 		if strings.Contains(err.Error(), "executable file not found in $PATH") {
@@ -22,7 +26,7 @@ func TestMemcache(t *testing.T) {
 	defer cmd.Process.Kill()
 	time.Sleep(time.Second)
 
-	c, err := Connect("/tmp/vtocc_cache.sock")
+	c, err := Connect("/tmp/vtocc_cache.sock", 30*time.Millisecond)
 	if err != nil {
 		t.Fatalf("Connect: %v", err)
 	}
@@ -250,6 +254,18 @@ func TestMemcache(t *testing.T) {
 	if string(results[1].Value) != "val2" {
 		t.Errorf("want val2, got %s", string(results[1].Value))
 	}
+
+	// timeout test
+	c.timeout = 1 * time.Nanosecond
+	results, err = c.Gets("key1", "key3", "key2")
+	want := "write unix /tmp/vtocc_cache.sock: i/o timeout"
+	if err == nil || err.Error() != want {
+		t.Errorf("want %s, got %v", want, err)
+	}
+
+	// test double close
+	c.Close()
+	c.Close()
 }
 
 func expect(t *testing.T, c *Connection, key, value string) {
@@ -262,6 +278,6 @@ func expect(t *testing.T, c *Connection, key, value string) {
 		got = string(results[0].Value)
 	}
 	if got != value {
-		t.Errorf("want %s, got %s", value, results[0].Value)
+		t.Errorf("want %s, got %s", value, got)
 	}
 }

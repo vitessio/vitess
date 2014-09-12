@@ -8,10 +8,14 @@ functions for long running actions. 'vtworker' binary will use these.
 */
 package worker
 
+import (
+	"html/template"
+)
+
 // Worker is the base interface for all long running workers.
 type Worker interface {
 	// StatusAsHTML returns the current worker status in HTML
-	StatusAsHTML() string
+	StatusAsHTML() template.HTML
 
 	// StatusAsText returns the current worker status in plain text
 	StatusAsText() string
@@ -21,6 +25,10 @@ type Worker interface {
 	// When the SignalInterrupt() is called, Run should exit as soon as
 	// possible.
 	Run()
+
+	// Error returns the error status of the job, if any.
+	// It will only be called after Run() has completed.
+	Error() error
 }
 
 // signal handling

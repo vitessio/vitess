@@ -67,6 +67,7 @@ func (rt *Rates) snapshot() {
 			values.Add(v)
 		} else {
 			rt.counts[k] = NewRingInt64(rt.samples)
+			rt.counts[k].Add(0)
 			rt.counts[k].Add(v)
 		}
 	}

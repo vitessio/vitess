@@ -14,17 +14,22 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	_ "github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/acl"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
 var (
-	port        = flag.Int("port", 8080, "port for the server")
 	templateDir = flag.String("templates", "", "directory containing templates")
 	debug       = flag.Bool("debug", false, "recompile templates for every request")
 )
+
+func init() {
+	servenv.RegisterDefaultFlags()
+}
 
 // FHtmlize writes data to w as debug HTML (using definition lists).
 func FHtmlize(w io.Writer, data interface{}) {
@@ -314,13 +319,8 @@ func httpError(w http.ResponseWriter, format string, err error) {
 }
 
 type DbTopologyResult struct {
-	Topology *wrangler.Topology
+	Topology *topotools.Topology
 	Error    string
-}
-
-type ServingGraphResult struct {
-	ServingGraph *wrangler.ServingGraph
-	Error        string
 }
 
 type IndexContent struct {
@@ -337,6 +337,7 @@ var indexContent = IndexContent{
 		"Serving Graph":   "/serving_graph",
 	},
 }
+var ts topo.Server
 
 func main() {
 	flag.Parse()
@@ -344,12 +345,12 @@ func main() {
 	defer servenv.Close()
 	templateLoader = NewTemplateLoader(*templateDir, dummyTemplate, *debug)
 
-	ts := topo.GetServer()
+	ts = topo.GetServer()
 	defer topo.CloseServers()
 
-	wr := wrangler.New(ts, 30*time.Second, 30*time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, 30*time.Second, 30*time.Second)
 
-	actionRepo = NewActionRepository(wr)
+	actionRepo = NewActionRepository(ts)
 
 	// keyspace actions
 	actionRepo.RegisterKeyspaceAction("ValidateKeyspace",
@@ -359,7 +360,7 @@ func main() {
 
 	actionRepo.RegisterKeyspaceAction("ValidateSchemaKeyspace",
 		func(wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
-			return "", wr.ValidateSchemaKeyspace(keyspace, false)
+			return "", wr.ValidateSchemaKeyspace(keyspace, nil, false)
 		})
 
 	actionRepo.RegisterKeyspaceAction("ValidateVersionKeyspace",
@@ -380,7 +381,7 @@ func main() {
 
 	actionRepo.RegisterShardAction("ValidateSchemaShard",
 		func(wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (string, error) {
-			return "", wr.ValidateSchemaShard(keyspace, shard, false)
+			return "", wr.ValidateSchemaShard(keyspace, shard, nil, false)
 		})
 
 	actionRepo.RegisterShardAction("ValidateVersionShard",
@@ -394,14 +395,53 @@ func main() {
 		})
 
 	// tablet actions
-	actionRepo.RegisterTabletAction("RpcPing",
+	actionRepo.RegisterTabletAction("RpcPing", "",
 		func(wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
 			return "", wr.ActionInitiator().RpcPing(tabletAlias, 10*time.Second)
 		})
 
+	actionRepo.RegisterTabletAction("ScrapTablet", acl.ADMIN,
+		func(wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
+			// refuse to scrap tablets that are not spare
+			ti, err := wr.TopoServer().GetTablet(tabletAlias)
+			if err != nil {
+				return "", err
+			}
+			if ti.Type != topo.TYPE_SPARE {
+				return "", fmt.Errorf("Can only scrap spare tablets")
+			}
+			actionPath, err := wr.Scrap(tabletAlias, false, false)
+			if err != nil {
+				return "", err
+			}
+			return "", wr.WaitForCompletion(actionPath)
+		})
+
+	actionRepo.RegisterTabletAction("ScrapTabletForce", acl.ADMIN,
+		func(wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
+			// refuse to scrap tablets that are not spare
+			ti, err := wr.TopoServer().GetTablet(tabletAlias)
+			if err != nil {
+				return "", err
+			}
+			if ti.Type != topo.TYPE_SPARE {
+				return "", fmt.Errorf("Can only scrap spare tablets")
+			}
+			_, err = wr.Scrap(tabletAlias, true, false)
+			return "", err
+		})
+
+	actionRepo.RegisterTabletAction("DeleteTablet", acl.ADMIN,
+		func(wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
+			return "", wr.DeleteTablet(tabletAlias)
+		})
+
+	// toplevel index
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		templateLoader.ServeTemplate("index.html", indexContent, w, r)
 	})
+
+	// keyspace actions
 	http.HandleFunc("/keyspace_actions", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			httpError(w, "cannot parse form: %s", err)
@@ -422,6 +462,8 @@ func main() {
 
 		templateLoader.ServeTemplate("action.html", result, w, r)
 	})
+
+	// shard actions
 	http.HandleFunc("/shard_actions", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			httpError(w, "cannot parse form: %s", err)
@@ -447,6 +489,8 @@ func main() {
 
 		templateLoader.ServeTemplate("action.html", result, w, r)
 	})
+
+	// tablet actions
 	http.HandleFunc("/tablet_actions", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			httpError(w, "cannot parse form: %s", err)
@@ -472,13 +516,15 @@ func main() {
 
 		templateLoader.ServeTemplate("action.html", result, w, r)
 	})
+
+	// topology server
 	http.HandleFunc("/dbtopo", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			httpError(w, "cannot parse form: %s", err)
 			return
 		}
 		result := DbTopologyResult{}
-		topology, err := wr.DbTopology()
+		topology, err := topotools.DbTopology(wr.TopoServer())
 		if err != nil {
 			result.Error = err.Error()
 		} else {
@@ -486,12 +532,14 @@ func main() {
 		}
 		templateLoader.ServeTemplate("dbtopo.html", result, w, r)
 	})
+
+	// serving graph
 	http.HandleFunc("/serving_graph/", func(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(r.URL.Path, "/")
 
 		cell := parts[len(parts)-1]
 		if cell == "" {
-			cells, err := wr.TopoServer().GetKnownCells()
+			cells, err := ts.GetKnownCells()
 			if err != nil {
 				httpError(w, "cannot get known cells: %v", err)
 				return
@@ -501,26 +549,36 @@ func main() {
 			return
 		}
 
-		result := ServingGraphResult{}
-		servingGraph, err := wr.ServingGraph(cell)
-		if err != nil {
-			result.Error = err.Error()
-		} else {
-			result.ServingGraph = servingGraph
-		}
-		templateLoader.ServeTemplate("serving_graph.html", result, w, r)
+		servingGraph := topotools.DbServingGraph(wr.TopoServer(), cell)
+		templateLoader.ServeTemplate("serving_graph.html", servingGraph, w, r)
 	})
+
+	// redirects for explorers
 	http.HandleFunc("/explorers/redirect", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			httpError(w, "cannot parse form: %s", err)
 			return
 		}
-		explorerName := r.FormValue("explorer")
-		explorer, ok := explorers[explorerName]
-		if !ok {
-			http.Error(w, "bad explorer name", http.StatusBadRequest)
+
+		var explorer Explorer
+		switch len(explorers) {
+		case 0:
+			http.Error(w, "no explorer configured", http.StatusInternalServerError)
 			return
+		case 1:
+			for _, ex := range explorers {
+				explorer = ex
+			}
+		default:
+			explorerName := r.FormValue("explorer")
+			var ok bool
+			explorer, ok = explorers[explorerName]
+			if !ok {
+				http.Error(w, "bad explorer name", http.StatusBadRequest)
+				return
+			}
 		}
+
 		var target string
 		switch r.FormValue("type") {
 		case "keyspace":
@@ -530,6 +588,7 @@ func main() {
 				return
 			}
 			target = explorer.GetKeyspacePath(keyspace)
+
 		case "shard":
 			keyspace, shard := r.FormValue("keyspace"), r.FormValue("shard")
 			if keyspace == "" || shard == "" {
@@ -537,31 +596,31 @@ func main() {
 				return
 			}
 			target = explorer.GetShardPath(keyspace, shard)
+
 		case "srv_keyspace":
-			keyspace := r.FormValue("keyspace")
-			if keyspace == "" {
-				http.Error(w, "keyspace is obligatory for this redirect", http.StatusBadRequest)
-				return
-			}
 			cell := r.FormValue("cell")
 			if cell == "" {
 				http.Error(w, "cell is obligatory for this redirect", http.StatusBadRequest)
+				return
+			}
+			keyspace := r.FormValue("keyspace")
+			if keyspace == "" {
+				http.Error(w, "keyspace is obligatory for this redirect", http.StatusBadRequest)
 				return
 			}
 			target = explorer.GetSrvKeyspacePath(cell, keyspace)
 
 		case "srv_shard":
-			keyspace := r.FormValue("keyspace")
-			if keyspace == "" {
-				http.Error(w, "keyspace is obligatory for this redirect", http.StatusBadRequest)
-				return
-			}
 			cell := r.FormValue("cell")
 			if cell == "" {
 				http.Error(w, "cell is obligatory for this redirect", http.StatusBadRequest)
 				return
 			}
-
+			keyspace := r.FormValue("keyspace")
+			if keyspace == "" {
+				http.Error(w, "keyspace is obligatory for this redirect", http.StatusBadRequest)
+				return
+			}
 			shard := r.FormValue("shard")
 			if shard == "" {
 				http.Error(w, "shard is obligatory for this redirect", http.StatusBadRequest)
@@ -570,23 +629,21 @@ func main() {
 			target = explorer.GetSrvShardPath(cell, keyspace, shard)
 
 		case "srv_type":
-			keyspace := r.FormValue("keyspace")
-			if keyspace == "" {
-				http.Error(w, "keyspace is obligatory for this redirect", http.StatusBadRequest)
-				return
-			}
 			cell := r.FormValue("cell")
 			if cell == "" {
 				http.Error(w, "cell is obligatory for this redirect", http.StatusBadRequest)
 				return
 			}
-
+			keyspace := r.FormValue("keyspace")
+			if keyspace == "" {
+				http.Error(w, "keyspace is obligatory for this redirect", http.StatusBadRequest)
+				return
+			}
 			shard := r.FormValue("shard")
 			if shard == "" {
 				http.Error(w, "shard is obligatory for this redirect", http.StatusBadRequest)
 				return
 			}
-
 			tabletType := r.FormValue("tablet_type")
 			if tabletType == "" {
 				http.Error(w, "tablet_type is obligatory for this redirect", http.StatusBadRequest)
@@ -606,29 +663,30 @@ func main() {
 				return
 			}
 			target = explorer.GetTabletPath(alias)
+
 		case "replication":
-			keyspace := r.FormValue("keyspace")
-			if keyspace == "" {
-				http.Error(w, "keyspace is obligatory for this redirect", http.StatusBadRequest)
-				return
-			}
 			cell := r.FormValue("cell")
 			if cell == "" {
 				http.Error(w, "cell is obligatory for this redirect", http.StatusBadRequest)
 				return
 			}
-
+			keyspace := r.FormValue("keyspace")
+			if keyspace == "" {
+				http.Error(w, "keyspace is obligatory for this redirect", http.StatusBadRequest)
+				return
+			}
 			shard := r.FormValue("shard")
 			if shard == "" {
 				http.Error(w, "shard is obligatory for this redirect", http.StatusBadRequest)
 				return
 			}
 			target = explorer.GetReplicationSlaves(cell, keyspace, shard)
+
 		default:
 			http.Error(w, "bad redirect type", http.StatusBadRequest)
 			return
 		}
 		http.Redirect(w, r, target, http.StatusFound)
 	})
-	servenv.Run(*port)
+	servenv.RunDefault()
 }

@@ -202,7 +202,7 @@ func (conn *zconn) Create(zkPath, value string, flags int, aclv []zookeeper.ACL)
 
 	zxid := conn.getZxid()
 	name := rest[0]
-	if flags == zookeeper.SEQUENCE && name == "" {
+	if (flags&zookeeper.SEQUENCE) != 0 && name == "" {
 		sequence := node.nextSequence()
 		name = sequence
 		zkPath = zkPath + sequence
@@ -318,6 +318,9 @@ func (conn *zconn) Delete(zkPath string, version int) (err error) {
 }
 
 func (conn *zconn) Close() error {
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+
 	for _, watches := range conn.existWatches {
 		for _, c := range watches {
 			close(c)
