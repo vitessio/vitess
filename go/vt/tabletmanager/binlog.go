@@ -198,15 +198,6 @@ func (bpc *BinlogPlayerController) Loop() {
 	close(bpc.done)
 }
 
-// DisableSuperToSetTimestamp disables the super_to_set_timestamp mysql flag.
-func (bpc *BinlogPlayerController) DisableSuperToSetTimestamp() {
-	if err := bpc.mysqld.ExecuteSuperQuery("SET @@global.super_to_set_timestamp = 0"); err != nil {
-		log.Warningf("Cannot set super_to_set_timestamp=0: %v", err)
-	} else {
-		log.Info("Successfully set super_to_set_timestamp=0")
-	}
-}
-
 // Iteration is a single iteration for the player: get the current status,
 // try to play, and plays until interrupted, or until an error occurs.
 func (bpc *BinlogPlayerController) Iteration() (err error) {
@@ -217,10 +208,12 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		}
 	}()
 
-	// Enable any user to set the timestamp.
-	// We do it on every iteration to be sure, in case mysql was
-	// restarted.
-	bpc.DisableSuperToSetTimestamp()
+	// Apply any special settings necessary for playback of binlogs.
+	// We do it on every iteration to be sure, in case MySQL was restarted.
+	if err := bpc.mysqld.EnableBinlogPlayback(); err != nil {
+		// We failed to apply the required settings, so we shouldn't keep going.
+		return err
+	}
 
 	// create the db connection, connect it
 	vtClient := binlogplayer.NewDbClient(bpc.dbConfig)
@@ -405,7 +398,8 @@ func (blm *BinlogPlayerMap) StopAllPlayersAndReset() {
 	blm.mu.Unlock()
 
 	if hadPlayers {
-		blm.enableSuperToSetTimestamp()
+		// We're done streaming, so turn off special playback settings.
+		blm.mysqld.DisableBinlogPlayback()
 	}
 }
 
@@ -452,17 +446,8 @@ func (blm *BinlogPlayerMap) RefreshMap(tablet topo.Tablet, keyspaceInfo *topo.Ke
 	blm.mu.Unlock()
 
 	if hadPlayers && !hasPlayers {
-		blm.enableSuperToSetTimestamp()
-	}
-}
-
-// After this is called, the clients will need super privileges
-// to set timestamp
-func (blm *BinlogPlayerMap) enableSuperToSetTimestamp() {
-	if err := blm.mysqld.ExecuteSuperQuery("SET @@global.super_to_set_timestamp = 1"); err != nil {
-		log.Warningf("Cannot set super_to_set_timestamp=1: %v", err)
-	} else {
-		log.Info("Successfully set super_to_set_timestamp=1")
+		// We're done streaming, so turn off special playback settings.
+		blm.mysqld.DisableBinlogPlayback()
 	}
 }
 

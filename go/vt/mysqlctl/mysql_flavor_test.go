@@ -35,6 +35,8 @@ func (fakeMysqlFlavor) SlaveStatus(mysqld *Mysqld) (*proto.ReplicationStatus, er
 func (fakeMysqlFlavor) StartReplicationCommands(params *mysql.ConnectionParams, status *proto.ReplicationStatus) ([]string, error) {
 	return nil, nil
 }
+func (fakeMysqlFlavor) EnableBinlogPlayback(mysqld *Mysqld) error  { return nil }
+func (fakeMysqlFlavor) DisableBinlogPlayback(mysqld *Mysqld) error { return nil }
 
 func TestDefaultMysqlFlavor(t *testing.T) {
 	os.Setenv("MYSQL_FLAVOR", "")
