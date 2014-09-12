@@ -14,7 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
-type fakeMysqlFlavor struct{}
+type fakeMysqlFlavor string
 
 func (fakeMysqlFlavor) PromoteSlaveCommands() []string                 { return nil }
 func (fakeMysqlFlavor) ParseGTID(string) (proto.GTID, error)           { return nil, nil }
@@ -41,7 +41,7 @@ func (fakeMysqlFlavor) DisableBinlogPlayback(mysqld *Mysqld) error { return nil 
 func TestDefaultMysqlFlavor(t *testing.T) {
 	os.Setenv("MYSQL_FLAVOR", "")
 	mysqlFlavors = make(map[string]MysqlFlavor)
-	mysqlFlavors["only one"] = &fakeMysqlFlavor{}
+	mysqlFlavors["only one"] = fakeMysqlFlavor("only one")
 	want := mysqlFlavors["only one"]
 
 	if got := mysqlFlavor(); got != want {
@@ -52,10 +52,39 @@ func TestDefaultMysqlFlavor(t *testing.T) {
 func TestMysqlFlavorEnvironmentVariable(t *testing.T) {
 	os.Setenv("MYSQL_FLAVOR", "fake flavor")
 	mysqlFlavors = make(map[string]MysqlFlavor)
-	mysqlFlavors["fake flavor"] = &fakeMysqlFlavor{}
+	mysqlFlavors["fake flavor"] = fakeMysqlFlavor("fake flavor")
 	want := mysqlFlavors["fake flavor"]
 
 	if got := mysqlFlavor(); got != want {
 		t.Errorf("mysqlFlavor() = %#v, want %#v", got, want)
+	}
+}
+
+func TestRegisterFlavorBuiltin(t *testing.T) {
+	registerFlavorBuiltin("TestRegisterFlavorBuiltin", fakeMysqlFlavor("builtin"))
+
+	want := fakeMysqlFlavor("builtin")
+	if got := mysqlFlavors["TestRegisterFlavorBuiltin"]; got != want {
+		t.Errorf("got %#v, want %#v", got, want)
+	}
+}
+
+func TestRegisterFlavorOverrideFirst(t *testing.T) {
+	registerFlavorOverride("TestRegisterFlavorOverrideFirst", fakeMysqlFlavor("override"))
+	registerFlavorBuiltin("TestRegisterFlavorOverrideFirst", fakeMysqlFlavor("builtin"))
+
+	want := fakeMysqlFlavor("override")
+	if got := mysqlFlavors["TestRegisterFlavorOverrideFirst"]; got != want {
+		t.Errorf("got %#v, want %#v", got, want)
+	}
+}
+
+func TestRegisterFlavorOverrideSecond(t *testing.T) {
+	registerFlavorBuiltin("TestRegisterFlavorOverrideSecond", fakeMysqlFlavor("builtin"))
+	registerFlavorOverride("TestRegisterFlavorOverrideSecond", fakeMysqlFlavor("override"))
+
+	want := fakeMysqlFlavor("override")
+	if got := mysqlFlavors["TestRegisterFlavorOverrideSecond"]; got != want {
+		t.Errorf("got %#v, want %#v", got, want)
 	}
 }
