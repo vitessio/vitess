@@ -65,6 +65,24 @@ type MysqlFlavor interface {
 
 var mysqlFlavors map[string]MysqlFlavor = make(map[string]MysqlFlavor)
 
+// registerFlavorBuiltin adds a flavor to the map only if the name is unused.
+// The flavor implementation passed to this function will only be used if there
+// are no calls to registerFlavorOverride with the same flavor name.
+// This should only be called from the init() goroutine.
+func registerFlavorBuiltin(name string, flavor MysqlFlavor) {
+	if _, ok := mysqlFlavors[name]; !ok {
+		mysqlFlavors[name] = flavor
+	}
+}
+
+// registerFlavorOverride adds a flavor to the map, overriding any built-in
+// implementations registered with registerFlavorBuiltin. There should only
+// be one override per name, or else there's no guarantee which will win.
+// This should only be called from the init() goroutine.
+func registerFlavorOverride(name string, flavor MysqlFlavor) {
+	mysqlFlavors[name] = flavor
+}
+
 func mysqlFlavor() MysqlFlavor {
 	f := os.Getenv("MYSQL_FLAVOR")
 	if f == "" {
@@ -85,5 +103,5 @@ func mysqlFlavor() MysqlFlavor {
 		return v
 	}
 	log.Fatalf("MYSQL_FLAVOR is set to unknown value %v", f)
-	panic("")
+	panic("unreachable")
 }

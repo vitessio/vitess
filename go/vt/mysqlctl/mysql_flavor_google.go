@@ -286,5 +286,5 @@ func (ev googleBinlogEvent) GTID(f blproto.BinlogFormat) (proto.GTID, error) {
 }
 
 func init() {
-	mysqlFlavors[googleMysqlFlavorID] = &googleMysql51{}
+	registerFlavorBuiltin(googleMysqlFlavorID, &googleMysql51{})
 }
