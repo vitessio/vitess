@@ -61,6 +61,18 @@ public class Query {
 		this.keyspaceIds = keyspaceIds;
 	}
 
+	public void populate(Map<String, Object> map) {
+		map.put("Sql", sql);
+		map.put("Keyspace", keyspace);
+		map.put("TabletType", tabletType);
+		map.put("BindVariables", bindVars);
+
+		if (keyspaceIds != null) {
+			map.put("KeyspaceIds", keyspaceIds);
+		}
+
+	}
+
 	public static class QueryBuilder {
 		private Query query;
 

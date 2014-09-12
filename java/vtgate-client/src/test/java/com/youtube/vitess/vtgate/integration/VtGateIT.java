@@ -1,13 +1,11 @@
 package com.youtube.vitess.vtgate.integration;
 
 import java.io.BufferedReader;
-import java.io.IOException;
 import java.io.InputStreamReader;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -19,13 +17,13 @@ import com.google.common.collect.ImmutableMap;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.youtube.vitess.vtgate.Cursor;
-import com.youtube.vitess.vtgate.Query;
-import com.youtube.vitess.vtgate.Row;
-import com.youtube.vitess.vtgate.VtGate;
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.Exceptions.DatabaseException;
+import com.youtube.vitess.vtgate.Query;
 import com.youtube.vitess.vtgate.Query.QueryBuilder;
+import com.youtube.vitess.vtgate.Row;
 import com.youtube.vitess.vtgate.Row.Cell;
+import com.youtube.vitess.vtgate.VtGate;
 
 public class VtGateIT {
 

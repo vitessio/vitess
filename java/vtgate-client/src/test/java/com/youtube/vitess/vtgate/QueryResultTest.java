@@ -6,9 +6,6 @@ import org.bson.types.BasicBSONList;
 import org.junit.Assert;
 import org.junit.Test;
 
-import com.youtube.vitess.vtgate.Cursor;
-import com.youtube.vitess.vtgate.QueryResult;
-import com.youtube.vitess.vtgate.Row;
 import com.youtube.vitess.vtgate.Exceptions.InvalidFieldException;
 import com.youtube.vitess.vtgate.Row.Cell;
 
@@ -38,7 +35,7 @@ public class QueryResultTest {
 		}
 		result.put("Rows", rows);
 
-		QueryResult qr = QueryResult.parse(result);
+		QueryResult qr = QueryResult.parse(result.toMap());
 		Cursor cursor = new Cursor(qr);
 		Assert.assertEquals(12L, cursor.getRowsAffected());
 		Assert.assertEquals(12345L, cursor.getLastRowId());

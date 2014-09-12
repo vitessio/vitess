@@ -3,9 +3,7 @@ package com.youtube.vitess.vtgate;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-
-import org.bson.BSONObject;
-import org.bson.types.BasicBSONList;
+import java.util.Map;
 
 import com.google.common.primitives.Ints;
 import com.youtube.vitess.vtgate.Row.Cell;
@@ -27,20 +25,21 @@ public class QueryResult {
 	private long rowsAffected;
 	private long lastRowId;
 
-	public static QueryResult parse(BSONObject result) {
+	public static QueryResult parse(Map<String, Object> result) {
 		QueryResult qr = new QueryResult();
 		qr.rowsAffected = (Long) result.get(ROWS_AFFECTED);
 		qr.lastRowId = (Long) result.get(INSERT_ID);
 		qr.rows = new LinkedList<>();
-		BasicBSONList fields = (BasicBSONList) result.get(FIELDS);
-		BasicBSONList rows = (BasicBSONList) result.get(ROWS);
+		List<Object> fields = (List<Object>) result.get(FIELDS);
+		List<Object> rows = (List<Object>) result.get(ROWS);
 		for (Object row : rows) {
 			LinkedList<Cell> cells = new LinkedList<>();
-			BasicBSONList cols = (BasicBSONList) row;
+			List<Object> cols = (List<Object>) row;
 			Iterator<Object> fieldsIter = fields.iterator();
 			for (Object col : cols) {
 				String cell = new String((byte[]) col);
-				BSONObject field = (BSONObject) fieldsIter.next();
+				Map<String, Object> field = (Map<String, Object>) fieldsIter
+						.next();
 				String fieldName = new String(
 						(byte[]) field.get(NAME));
 				int mysqlType = Ints.checkedCast((Long) field
