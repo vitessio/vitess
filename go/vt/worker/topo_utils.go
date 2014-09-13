@@ -13,21 +13,32 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
+// findHealthyEndPoint returns the first healthy endpoint.
+func findHealthyEndPoint(wr *wrangler.Wrangler, cell, keyspace, shard string) (topo.TabletAlias, error) {
+	endPoints, err := wr.TopoServer().GetEndPoints(cell, keyspace, shard, topo.TYPE_RDONLY)
+	if err != nil {
+		return topo.TabletAlias{}, fmt.Errorf("GetEndPoints(%v,%v,%v,rdonly) failed: %v", cell, keyspace, shard, err)
+	}
+	for _, entry := range endPoints.Entries {
+		if len(entry.Health) == 0 {
+			// first healthy server is what we want
+			return topo.TabletAlias{
+				Cell: cell,
+				Uid:  entry.Uid,
+			}, nil
+		}
+	}
+	return topo.TabletAlias{}, fmt.Errorf("No endpoint to chose from in (%v,%v/%v)", cell, keyspace, shard)
+}
+
 // findChecker:
 // - find a rdonly instance in the keyspace / shard
 // - mark it as checker
 // - tag it with our worker process
 func findChecker(wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, cell, keyspace, shard string) (topo.TabletAlias, error) {
-	endPoints, err := wr.TopoServer().GetEndPoints(cell, keyspace, shard, topo.TYPE_RDONLY)
+	tabletAlias, err := findHealthyEndPoint(wr, cell, keyspace, shard)
 	if err != nil {
-		return topo.TabletAlias{}, fmt.Errorf("GetEndPoints(%v,%v,%v,rdonly) failed: %v", cell, keyspace, shard, err)
-	}
-	if len(endPoints.Entries) == 0 {
-		return topo.TabletAlias{}, fmt.Errorf("No endpoint to chose from in (%v,%v/%v)", cell, keyspace, shard)
-	}
-	tabletAlias := topo.TabletAlias{
-		Cell: cell,
-		Uid:  endPoints.Entries[0].Uid,
+		return topo.TabletAlias{}, err
 	}
 
 	// We add the tag before calling ChangeSlaveType, so the destination

@@ -32,13 +32,14 @@ var (
 )
 
 func init() {
-	// FIXME(msolomon) need to send all of this to stdout
+	logger := logutil.NewConsoleLogger()
+	flag.CommandLine.SetOutput(logutil.NewLoggerWriter(logger))
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [global parameters] command [command parameters]\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "\nThe global optional parameters are:\n")
+		logger.Printf("Usage: %s [global parameters] command [command parameters]\n", os.Args[0])
+		logger.Printf("\nThe global optional parameters are:\n")
 		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, "\nThe commands are listed below, sorted by group. Use '%s <command> -h' for more help.\n\n", os.Args[0])
-		vtctl.PrintHelp()
+		logger.Printf("\nThe commands are listed below, sorted by group. Use '%s <command> -h' for more help.\n\n", os.Args[0])
+		vtctl.PrintAllCommands(logger)
 	}
 }
 
