@@ -21,5 +21,4 @@ public class Exceptions {
 			super(message);
 		}
 	}
-
 }
