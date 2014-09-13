@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 # NAME
 #
-#  dia.Makefile - To automate dia files rendering.
+#  Makefile.diadot - To automate dia files rendering.
 #
 #
 #
@@ -11,7 +11,7 @@
 #     09/13/2014   T.J. Yang init.
 #
 # USAGE
-#     make [all|clean] 
+#     make -f Makefile.diadot [all|clean] 
 #
 #
 #
