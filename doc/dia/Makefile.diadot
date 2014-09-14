@@ -50,7 +50,7 @@ dia2jpg := $(patsubst %.dia,%.jpg,$(wildcard *.dia))
 
 # Rule 0: Convert .dia file into .png file 
 %.png: %.dia
-	$(DIA) -t png $< 
+	$(DIA) -t png --size=900x900 $< 
 # all the *.dia files will be turn into png format
 dia2pngs := $(patsubst %.dia,%.png,$(wildcard *.dia))
 
