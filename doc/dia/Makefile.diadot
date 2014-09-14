@@ -49,7 +49,7 @@ CONVERT :=/usr/bin/convert
 dia2jpg := $(patsubst %.dia,%.jpg,$(wildcard *.dia))
 
 # Rule 0: Convert .dia file into .png file 
-# size=WidthxHeight
+# size=WidthxHeight, set x900, resolution is much better.
 %.png: %.dia
 	$(DIA) -t png --size=x900 $< 
 # all the *.dia files will be turn into png format
