@@ -48,6 +48,7 @@ ADDON_DIR=$(shell pwd)/9.1addon
 ADDON_DIR2=$(shell pwd)
 MKFILES=osmkfiles
 BOOKS="books/bpi-en books/bpi-ch" 
+GRAPH="doc/dia" 
 # 
 PERL=/usr/bin/perl
 SUDO=/usr/bin/sudo
@@ -571,6 +572,12 @@ gitpull:
 
 books:
 	(for i in "$(BOOKS)" ;do  $(MAKE) -C $$i ; done)	
+
+diaclean:
+	(for i in "$(GRAPH)" ;do  $(MAKE) -C $$i  -f Makefile.diadot clean; done)	
+
+dia:
+	(for i in "$(GRAPH)" ;do  $(MAKE) -C $$i  -f Makefile.diadot ; done)	
 
 books-clean:
 	@(for i in "$(BOOKS)" ;do  $(MAKE) -C $$i clean ; done)	

@@ -43,16 +43,25 @@ CONVERT :=/usr/bin/convert
 # ---------------------------- DIA Makefile Rules  ---------------------------
 # DIA Rules
 # Rule 0: Convert .dia file into .png file 
+%.jpg: %.dia
+	$(DIA) -t jpg $< 
+# all the *.dia files will be turn into png format
+dia2jpg := $(patsubst %.dia,%.jpg,$(wildcard *.dia))
+
+# Rule 0: Convert .dia file into .png file 
 %.png: %.dia
 	$(DIA) -t png $< 
+# all the *.dia files will be turn into png format
+dia2pngs := $(patsubst %.dia,%.png,$(wildcard *.dia))
+
 # Rule 1: Convert .dia file into .eps file 
 %.eps: %.dia
 	$(DIA) -t eps $< 
 # Rule 2: Convert .eps file into pdf file 
 %.pdf: %.eps
 	$(EPSTOPDF)  $<
+# all the *.dia files will be turn into pdf format
 pdfs := $(patsubst %.dia,%.pdf,$(wildcard *.dia))
-dia2pngs := $(patsubst %.dia,%.png,$(wildcard *.dia))
 
 # ---------------------------- DOT Makefile Rules  ---------------------------
 
@@ -76,8 +85,6 @@ dot2pngs := $(patsubst %.dot,%.png,$(wildcard *.dot))
 #instead of using the general form:
 #          $(patsubst %.o,%.c,$(objects))
 #
-
-
 
 
 all:${pdfs}  ${dia2pngs} 
