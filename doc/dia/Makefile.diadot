@@ -43,12 +43,6 @@ CONVERT :=/usr/bin/convert
 # ---------------------------- DIA Makefile Rules  ---------------------------
 # DIA Rules
 # Rule 0: Convert .dia file into .png file 
-%.jpg: %.dia
-	$(DIA) -t jpg $< 
-# all the *.dia files will be turn into png format
-dia2jpg := $(patsubst %.dia,%.jpg,$(wildcard *.dia))
-
-# Rule 0: Convert .dia file into .png file 
 # size=WidthxHeight, set x900, resolution is much better.
 %.png: %.dia
 	$(DIA) -t png --size=x900 $< 
@@ -63,6 +57,13 @@ dia2pngs := $(patsubst %.dia,%.png,$(wildcard *.dia))
 	$(EPSTOPDF)  $<
 # all the *.dia files will be turn into pdf format
 pdfs := $(patsubst %.dia,%.pdf,$(wildcard *.dia))
+
+# Rule 4: Convert .dia file into .png file 
+%.jpg: %.dia
+	$(DIA) -t jpg $< 
+# all the *.dia files will be turn into png format
+dia2jpg := $(patsubst %.dia,%.jpg,$(wildcard *.dia))
+
 
 # ---------------------------- DOT Makefile Rules  ---------------------------
 
