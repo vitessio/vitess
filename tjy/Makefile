@@ -574,10 +574,10 @@ books:
 	(for i in "$(BOOKS)" ;do  $(MAKE) -C $$i ; done)	
 
 diaclean:
-	(for i in "$(GRAPH)" ;do  $(MAKE) -C $$i  -f Makefile.diadot clean; done)	
+	(for i in "$(GRAPH)" ;do  $(MAKE) -C $$i clean; done)	
 
 dia:
-	(for i in "$(GRAPH)" ;do  $(MAKE) -C $$i  -f Makefile.diadot ; done)	
+	(for i in "$(GRAPH)" ;do  $(MAKE) -C $$i all  ; done)	
 
 books-clean:
 	@(for i in "$(BOOKS)" ;do  $(MAKE) -C $$i clean ; done)	
