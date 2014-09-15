@@ -16,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -25,6 +26,7 @@ var (
 	enableRowcache = flag.Bool("enable-rowcache", false, "enable rowcacche")
 	overridesFile  = flag.String("schema-override", "", "schema overrides file")
 	tableAclConfig = flag.String("table-acl-config", "", "path to table access checker config file")
+	lockTimeout    = flag.Duration("lock_timeout", actionnode.DefaultLockTimeout, "lock time for wrangler/topo operations")
 
 	agent *tabletmanager.ActionAgent
 )
@@ -86,7 +88,7 @@ func main() {
 	binlog.RegisterUpdateStreamService(mycnf)
 
 	// Depends on both query and updateStream.
-	agent, err = tabletmanager.NewActionAgent(tabletAlias, dbcfgs, mycnf, *servenv.Port, *servenv.SecurePort, *overridesFile)
+	agent, err = tabletmanager.NewActionAgent(tabletAlias, dbcfgs, mycnf, *servenv.Port, *servenv.SecurePort, *overridesFile, *lockTimeout)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -170,7 +170,7 @@ func (tm *TabletManager) TabletExternallyReparented(context *rpcproto.Context, a
 	// the original gorpc call. Until we support that, use a
 	// reasonnable hard-coded value.
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_EXTERNALLY_REPARENTED, args, reply, func() error {
-		return actor.TabletExternallyReparented(tm.agent.TopoServer, tm.agent.TabletAlias, 30*time.Second, *tabletmanager.LockTimeout)
+		return actor.TabletExternallyReparented(tm.agent.TopoServer, tm.agent.TabletAlias, 30*time.Second, tm.agent.LockTimeout)
 	})
 }
 

@@ -60,7 +60,6 @@ import (
 
 var (
 	vtactionBinaryPath = flag.String("vtaction_binary_path", "", "Full path (including filename) to vtaction binary. If not set, tries VTROOT/bin/vtaction.")
-	LockTimeout        = flag.Duration("lock_timeout", actionnode.DefaultLockTimeout, "lock time for wrangler/topo operations")
 )
 
 type tabletChangeItem struct {
@@ -80,6 +79,7 @@ type ActionAgent struct {
 	DBConfigs       *dbconfigs.DBConfigs
 	SchemaOverrides []tabletserver.SchemaOverride
 	BinlogPlayerMap *BinlogPlayerMap
+	LockTimeout     time.Duration
 
 	// Internal variables
 	vtActionBinFile string        // path to vtaction binary
@@ -123,6 +123,7 @@ func NewActionAgent(
 	mycnf *mysqlctl.Mycnf,
 	port, securePort int,
 	overridesFile string,
+	lockTimeout time.Duration,
 ) (agent *ActionAgent, err error) {
 	schemaOverrides := loadSchemaOverrides(overridesFile)
 
@@ -136,6 +137,7 @@ func NewActionAgent(
 		MysqlDaemon:        mysqld,
 		DBConfigs:          dbcfgs,
 		SchemaOverrides:    schemaOverrides,
+		LockTimeout:        lockTimeout,
 		done:               make(chan struct{}),
 		History:            history.New(historyLength),
 		lastHealthMapCount: stats.NewInt("LastHealthMapCount"),
