@@ -213,5 +213,5 @@ func (ev mariadbBinlogEvent) GTID(f blproto.BinlogFormat) (proto.GTID, error) {
 }
 
 func init() {
-	mysqlFlavors[mariadbFlavorID] = &mariaDB10{}
+	registerFlavorBuiltin(mariadbFlavorID, &mariaDB10{})
 }

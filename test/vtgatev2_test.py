@@ -65,6 +65,8 @@ keyspace_id bigint(20) unsigned NOT NULL,
 primary key(eid, id)
 ) Engine=InnoDB'''
 
+create_tables = [create_vt_insert_test, create_vt_a]
+
 
 def setUpModule():
   logging.debug("in setUpModule")
@@ -127,8 +129,8 @@ def setup_tablets():
 
   for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
     t.create_db('vt_test_keyspace')
-    t.mquery(shard_0_master.dbname, create_vt_insert_test)
-    t.mquery(shard_0_master.dbname, create_vt_a)
+    for create_table in create_tables:
+      t.mquery(shard_0_master.dbname, create_table)
     t.start_vttablet(wait_for_state=None)
 
   for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
