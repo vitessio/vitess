@@ -225,23 +225,8 @@ func (wr *Wrangler) ChangeTypeNoRebuild(tabletAlias topo.TabletAlias, tabletType
 			return false, "", "", "", err
 		}
 	} else {
-		if wr.UseRPCs {
-			if err := wr.ai.RpcChangeType(ti, tabletType, wr.ActionTimeout()); err != nil {
-				return false, "", "", "", err
-			}
-
-		} else {
-			// the remote action will run the hooks
-			actionPath, err := wr.ai.ChangeType(tabletAlias, tabletType)
-			if err != nil {
-				return false, "", "", "", err
-			}
-
-			// You don't have a choice - you must wait for
-			// completion before rebuilding.
-			if err := wr.WaitForCompletion(actionPath); err != nil {
-				return false, "", "", "", err
-			}
+		if err := wr.ai.RpcChangeType(ti, tabletType, wr.ActionTimeout()); err != nil {
+			return false, "", "", "", err
 		}
 	}
 
@@ -269,19 +254,8 @@ func (wr *Wrangler) changeTypeInternal(tabletAlias topo.TabletAlias, dbType topo
 	rebuildRequired := ti.Tablet.IsInServingGraph()
 
 	// change the type
-	if wr.UseRPCs {
-		if err := wr.ai.RpcChangeType(ti, dbType, wr.ActionTimeout()); err != nil {
-			return err
-		}
-	} else {
-		actionPath, err := wr.ai.ChangeType(ti.Alias, dbType)
-		if err != nil {
-			return err
-		}
-		err = wr.WaitForCompletion(actionPath)
-		if err != nil {
-			return err
-		}
+	if err := wr.ai.RpcChangeType(ti, dbType, wr.ActionTimeout()); err != nil {
+		return err
 	}
 
 	// rebuild if necessary

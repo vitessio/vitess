@@ -144,41 +144,16 @@ func (wr *Wrangler) reparentShardExternal(ev *events.Reparent, slaveTabletMap, m
 	// timeout is executed, so even if we got to the timeout,
 	// we're still good.
 	event.DispatchUpdate(ev, "restarting slaves")
-	swr := wr.slaveWasRestartedActionNode
-	if wr.UseRPCs {
-		swr = wr.slaveWasRestartedRpc
-	}
-	topotools.RestartSlavesExternal(wr.ts, wr.logger, slaveTabletMap, masterTabletMap, masterElectTablet.Alias, swr)
+	topotools.RestartSlavesExternal(wr.ts, wr.logger, slaveTabletMap, masterTabletMap, masterElectTablet.Alias, wr.slaveWasRestarted)
 	return nil
 }
 
 func (wr *Wrangler) slaveWasPromoted(ti *topo.TabletInfo) error {
 	wr.logger.Infof("slaveWasPromoted(%v)", ti.Alias)
-	if wr.UseRPCs {
-		return wr.ai.RpcSlaveWasPromoted(ti, wr.ActionTimeout())
-	} else {
-		actionPath, err := wr.ai.SlaveWasPromoted(ti.Alias)
-		if err != nil {
-			return err
-		}
-		err = wr.WaitForCompletion(actionPath)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return wr.ai.RpcSlaveWasPromoted(ti, wr.ActionTimeout())
 }
 
-func (wr *Wrangler) slaveWasRestartedRpc(ti *topo.TabletInfo, swrd *actionnode.SlaveWasRestartedArgs) (err error) {
-	wr.logger.Infof("slaveWasRestartedRpc(%v)", ti.Alias)
-	return wr.ai.RpcSlaveWasRestarted(ti, swrd, wr.ActionTimeout())
-}
-
-func (wr *Wrangler) slaveWasRestartedActionNode(ti *topo.TabletInfo, swrd *actionnode.SlaveWasRestartedArgs) (err error) {
-	wr.logger.Infof("slaveWasRestartedActionNode(%v)", ti.Alias)
-	actionPath, err := wr.ai.SlaveWasRestarted(ti.Alias, swrd)
-	if err != nil {
-		return err
-	}
-	return wr.WaitForCompletion(actionPath)
+func (wr *Wrangler) slaveWasRestarted(ti *topo.TabletInfo, swra *actionnode.SlaveWasRestartedArgs) (err error) {
+	wr.logger.Infof("slaveWasRestarted(%v)", ti.Alias)
+	return wr.ai.RpcSlaveWasRestarted(ti, swra, wr.ActionTimeout())
 }

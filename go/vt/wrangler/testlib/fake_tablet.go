@@ -10,11 +10,15 @@ package testlib
 
 import (
 	"fmt"
+	"net"
+	"net/http"
 	"testing"
 
+	"github.com/youtube/vitess/go/rpcplus"
+	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actor"
+	"github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager/gorpctmserver"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -32,9 +36,10 @@ type FakeTablet struct {
 	Tablet          *topo.Tablet
 	FakeMysqlDaemon *mysqlctl.FakeMysqlDaemon
 
-	// Done is created when we start the event loop for the tablet,
-	// and closed / cleared when we stop it.
-	Done chan struct{}
+	// Agent and Listener are created when we start the event loop for
+	// the tablet, and closed / cleared when we stop it.
+	Agent    *tabletmanager.ActionAgent
+	Listener net.Listener
 }
 
 // TabletOption is an interface for changing tablet parameters.
@@ -110,42 +115,41 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 // StartActionLoop will start the action loop for a fake tablet,
 // using ft.FakeMysqlDaemon as the backing mysqld.
 func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
-	if ft.Done != nil {
-		t.Fatalf("ActionLoop for %v is already running", ft.Tablet.Alias)
+	if ft.Agent != nil {
+		t.Fatalf("Agent for %v is already running", ft.Tablet.Alias)
 	}
-	ft.Done = make(chan struct{}, 1)
-	go func() {
-		wr.TopoServer().ActionEventLoop(ft.Tablet.Alias, func(actionPath, data string) error {
-			actionNode, err := actionnode.ActionNodeFromJson(data, actionPath)
-			if err != nil {
-				t.Fatalf("ActionNodeFromJson failed: %v\n%v", err, data)
-			}
-			ta := actor.NewTabletActor(nil, ft.FakeMysqlDaemon, wr.TopoServer(), ft.Tablet.Alias)
-			if err := ta.HandleAction(actionPath, actionNode.Action, actionNode.ActionGuid, false); err != nil {
-				// action may just fail for any good reason
-				t.Logf("HandleAction failed for %v: %v", actionNode.Action, err)
-			}
 
-			// this part would also be done by the agent
-			tablet, err := wr.TopoServer().GetTablet(ft.Tablet.Alias)
-			if err != nil {
-				t.Logf("Cannot get tablet: %v", err)
-			} else {
-				updatedTablet := actor.CheckTabletMysqlPort(wr.TopoServer(), ft.FakeMysqlDaemon, tablet)
-				if updatedTablet != nil {
-					t.Logf("Updated tablet record")
-				}
-			}
-			return nil
-		}, ft.Done)
-	}()
+	// Listen on a random port
+	var err error
+	ft.Listener, err = net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatalf("Cannot listen: %v", err)
+	}
+	port := ft.Listener.Addr().(*net.TCPAddr).Port
+
+	// create a test agent on that port
+	ft.Agent = tabletmanager.NewTestActionAgent(wr.TopoServer(), ft.Tablet.Alias, port, ft.FakeMysqlDaemon)
+
+	// create the RPC server
+	server := rpcplus.NewServer()
+	gorpctmserver.RegisterForTest(server, ft.Agent)
+
+	// create the HTTP server, serve the server from it
+	handler := http.NewServeMux()
+	bsonrpc.ServeTestRPC(handler, server)
+	httpServer := http.Server{
+		Handler: handler,
+	}
+	go httpServer.Serve(ft.Listener)
 }
 
 // StopActionLoop will stop the Action Loop for the given FakeTablet
 func (ft *FakeTablet) StopActionLoop(t *testing.T) {
-	if ft.Done == nil {
-		t.Fatalf("ActionLoop for %v is not running", ft.Tablet.Alias)
+	if ft.Agent == nil {
+		t.Fatalf("Agent for %v is not running", ft.Tablet.Alias)
 	}
-	close(ft.Done)
-	ft.Done = nil
+	ft.Listener.Close()
+	ft.Agent.Stop()
+	ft.Agent = nil
+	ft.Listener = nil
 }

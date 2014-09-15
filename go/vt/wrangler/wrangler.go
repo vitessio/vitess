@@ -33,13 +33,6 @@ type Wrangler struct {
 	ai          *initiator.ActionInitiator
 	deadline    time.Time
 	lockTimeout time.Duration
-
-	// Configuration parameters, mostly for tests.
-
-	// UseRPCs makes the wrangler use RPCs to trigger short live
-	// remote actions. It is faster in production, as we don't
-	// fork a vtaction. However, unit tests don't support it.
-	UseRPCs bool
 }
 
 // New creates a new Wrangler object.
@@ -56,7 +49,7 @@ type Wrangler struct {
 // fail. However, automated action will need some time to arbitrate
 // the locks.
 func New(logger logutil.Logger, ts topo.Server, actionTimeout, lockTimeout time.Duration) *Wrangler {
-	return &Wrangler{logger, ts, initiator.NewActionInitiator(ts), time.Now().Add(actionTimeout), lockTimeout, true}
+	return &Wrangler{logger, ts, initiator.NewActionInitiator(ts), time.Now().Add(actionTimeout), lockTimeout}
 }
 
 // ActionTimeout returns the timeout to use so the action finishes before

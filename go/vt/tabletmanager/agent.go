@@ -76,6 +76,7 @@ type ActionAgent struct {
 	TopoServer      topo.Server
 	TabletAlias     topo.TabletAlias
 	Mysqld          *mysqlctl.Mysqld
+	MysqlDaemon     mysqlctl.MysqlDaemon
 	DBConfigs       *dbconfigs.DBConfigs
 	SchemaOverrides []tabletserver.SchemaOverride
 	BinlogPlayerMap *BinlogPlayerMap
@@ -132,6 +133,7 @@ func NewActionAgent(
 		TopoServer:         topoServer,
 		TabletAlias:        tabletAlias,
 		Mysqld:             mysqld,
+		MysqlDaemon:        mysqld,
 		DBConfigs:          dbcfgs,
 		SchemaOverrides:    schemaOverrides,
 		done:               make(chan struct{}),
@@ -166,6 +168,28 @@ func NewActionAgent(
 	agent.initHeathCheck()
 
 	return agent, nil
+}
+
+// NewTestActionAgent creates an agent for test purposes. Only a
+// subset of features are supported now, but we'll add more over time.
+func NewTestActionAgent(ts topo.Server, tabletAlias topo.TabletAlias, port int, mysqlDaemon mysqlctl.MysqlDaemon) (agent *ActionAgent) {
+	agent = &ActionAgent{
+		TopoServer:         ts,
+		TabletAlias:        tabletAlias,
+		Mysqld:             nil,
+		MysqlDaemon:        mysqlDaemon,
+		DBConfigs:          nil,
+		SchemaOverrides:    nil,
+		BinlogPlayerMap:    nil,
+		done:               make(chan struct{}),
+		History:            history.New(historyLength),
+		lastHealthMapCount: new(stats.Int),
+		changeItems:        make(chan tabletChangeItem, 100),
+	}
+	if err := agent.Start(0, port, 0); err != nil {
+		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
+	}
+	return agent
 }
 
 func (agent *ActionAgent) runChangeCallback(oldTablet *topo.Tablet, context string) {
@@ -274,7 +298,7 @@ func (agent *ActionAgent) afterAction(context string, reloadSchema bool) {
 	if err := agent.readTablet(); err != nil {
 		log.Warningf("Failed rereading tablet after %v - services may be inconsistent: %v", context, err)
 	} else {
-		if updatedTablet := actor.CheckTabletMysqlPort(agent.TopoServer, agent.Mysqld, agent.Tablet()); updatedTablet != nil {
+		if updatedTablet := actor.CheckTabletMysqlPort(agent.TopoServer, agent.MysqlDaemon, agent.Tablet()); updatedTablet != nil {
 			agent.mutex.Lock()
 			agent._tablet = updatedTablet
 			agent.mutex.Unlock()
@@ -395,8 +419,12 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 
 func (agent *ActionAgent) Stop() {
 	close(agent.done)
-	agent.BinlogPlayerMap.StopAllPlayersAndReset()
-	agent.Mysqld.Close()
+	if agent.BinlogPlayerMap != nil {
+		agent.BinlogPlayerMap.StopAllPlayersAndReset()
+	}
+	if agent.Mysqld != nil {
+		agent.Mysqld.Close()
+	}
 }
 
 func (agent *ActionAgent) actionEventLoop() {
