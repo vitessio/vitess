@@ -13,6 +13,7 @@ import com.youtube.vitess.gorpc.Exceptions.GoRpcException;
 import com.youtube.vitess.gorpc.Response;
 import com.youtube.vitess.gorpc.codecs.bson.BsonClientCodecFactory;
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
+import com.youtube.vitess.vtgate.Exceptions.DatabaseException;
 import com.youtube.vitess.vtgate.rpcclient.RpcClient;
 
 public class GoRpcClient implements RpcClient {
@@ -43,6 +44,37 @@ public class GoRpcClient implements RpcClient {
 		return reply.toMap();
 	}
 
+	@SuppressWarnings("unchecked")
+	@Override
+	public Map<String, Object> streamExecuteKeyspaceIds(Map<String, Object> args)
+			throws DatabaseException, ConnectionException {
+		BSONObject params = new BasicBSONObject();
+		params.putAll(args);
+		Response response = streamCall("VTGate.StreamExecuteKeyspaceIds",
+				params);
+		BSONObject reply = (BSONObject) response.getReply();
+		return reply.toMap();
+	}
+
+	@SuppressWarnings("unchecked")
+	@Override
+	public Map<String, Object> streamNext() throws ConnectionException {
+		Response response;
+		try {
+			response = client.streamNext();
+		} catch (GoRpcException | ApplicationException e) {
+			logger.error("vtgate exception", e);
+			throw new ConnectionException("vtgate exception: " + e.getMessage());
+		}
+
+		if (response == null) {
+			return null;
+		}
+
+		BSONObject reply = (BSONObject) response.getReply();
+		return reply.toMap();
+	}
+
 	@Override
 	public void commit(Object session) throws ConnectionException {
 		call("VTGate.Commit", session);
@@ -68,6 +100,17 @@ public class GoRpcClient implements RpcClient {
 		try {
 			Response response = client.call(methodName, args);
 			return response;
+		} catch (GoRpcException | ApplicationException e) {
+			logger.error("vtgate exception", e);
+			throw new ConnectionException("vtgate exception: " + e.getMessage());
+		}
+	}
+
+	private Response streamCall(String methodName, Object args)
+			throws ConnectionException {
+		try {
+			client.streamCall(methodName, args);
+			return client.streamNext();
 		} catch (GoRpcException | ApplicationException e) {
 			logger.error("vtgate exception", e);
 			throw new ConnectionException("vtgate exception: " + e.getMessage());

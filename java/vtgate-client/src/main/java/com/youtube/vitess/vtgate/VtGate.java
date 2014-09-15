@@ -10,6 +10,9 @@ import com.google.common.net.HostAndPort;
 import com.youtube.vitess.gorpc.Exceptions.GoRpcException;
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.Exceptions.DatabaseException;
+import com.youtube.vitess.vtgate.cursor.Cursor;
+import com.youtube.vitess.vtgate.cursor.CursorImpl;
+import com.youtube.vitess.vtgate.cursor.StreamCursor;
 import com.youtube.vitess.vtgate.rpcclient.RpcClient;
 import com.youtube.vitess.vtgate.rpcclient.gorpc.GoRpcClient.GoRpcClientFactory;
 
@@ -79,7 +82,11 @@ public class VtGate {
 
 		Map<String, Object> reply = null;
 		if (query.getKeyspaceIds() != null) {
-			reply = client.executeKeyspaceIds(params);
+			if (query.isStream()) {
+				reply = client.streamExecuteKeyspaceIds(params);
+			} else {
+				reply = client.executeKeyspaceIds(params);
+			}
 		}
 
 		if (reply.containsKey("Error")) {
@@ -89,12 +96,15 @@ public class VtGate {
 			}
 		}
 		Map<String, Object> result = (Map<String, Object>) reply.get("Result");
+		QueryResult qr = QueryResult.parse(result);
+		if (query.isStream()) {
+			return new StreamCursor(qr, client);
+		}
+
 		if (reply.containsKey("Session")) {
 			session = reply.get("Session");
 		}
-		QueryResult qr = QueryResult.parse(result);
-		Cursor cursor = new Cursor(qr);
-		return cursor;
+		return new CursorImpl(qr);
 	}
 
 	public void commit() throws ConnectionException {
@@ -119,5 +129,4 @@ public class VtGate {
 		}
 		client.close();
 	}
-
 }

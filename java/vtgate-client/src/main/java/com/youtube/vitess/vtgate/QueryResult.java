@@ -7,10 +7,11 @@ import java.util.Map;
 
 import com.google.common.primitives.Ints;
 import com.youtube.vitess.vtgate.Row.Cell;
+import com.youtube.vitess.vtgate.cursor.Cursor;
 
 /**
  * Represents a VtGate query result set. For selects, rows are better accessed
- * through the iterator {@link Cursor} class.
+ * through the iterator {@link Cursor}.
  */
 public class QueryResult {
 
@@ -26,11 +27,24 @@ public class QueryResult {
 	private long rowsAffected;
 	private long lastRowId;
 
+	private QueryResult() {
+
+	}
+
 	public static QueryResult parse(Map<String, Object> result) {
+		return parse(result, null);
+	}
+
+	public static QueryResult parse(Map<String, Object> result,
+			List<Field> fields) {
 		QueryResult qr = new QueryResult();
 		qr.rowsAffected = (Long) result.get(ROWS_AFFECTED);
 		qr.lastRowId = (Long) result.get(INSERT_ID);
-		qr.populateFields(result);
+		if (fields != null) {
+			qr.fields = fields;
+		} else {
+			qr.populateFields(result);
+		}
 		qr.populateRows(result);
 		return qr;
 	}
@@ -45,7 +59,7 @@ public class QueryResult {
 			FieldType fieldType = FieldType.get(mysqlType);
 			fieldList.add(new Field(fieldName, fieldType));
 		}
-		setFields(fieldList);
+		this.fields = fieldList;
 	}
 
 	void populateRows(Map<String, Object> result) {
@@ -64,38 +78,22 @@ public class QueryResult {
 			}
 			rowList.add(new Row(cells));
 		}
-		setRows(rowList);
+		this.rows = rowList;
 	}
 
 	public List<Field> getFields() {
 		return fields;
 	}
 
-	public void setFields(List<Field> fields) {
-		this.fields = fields;
-	}
-
 	public List<Row> getRows() {
 		return rows;
-	}
-
-	public void setRows(List<Row> rows) {
-		this.rows = rows;
 	}
 
 	public long getRowsAffected() {
 		return rowsAffected;
 	}
 
-	public void setRowsAffected(long rowsAffected) {
-		this.rowsAffected = rowsAffected;
-	}
-
 	public long getLastRowId() {
 		return lastRowId;
-	}
-
-	public void setLastRowId(long lastRowId) {
-		this.lastRowId = lastRowId;
 	}
 }
