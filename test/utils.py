@@ -429,7 +429,7 @@ def run_vtctl(clargs, log_level='', auto_log=False, expect_fail=False,
     return result, ""
   elif mode == VTCTL_RPC:
     logging.debug("vtctl: %s", " ".join(clargs))
-    result = vtctld_connection.execute_vtctl_command(clargs, info_to_debug=True)
+    result = vtctld_connection.execute_vtctl_command(clargs, info_to_debug=True, action_timeout=120)
     return result, ""
 
   raise Exception('Unknown mode: %s', mode)
