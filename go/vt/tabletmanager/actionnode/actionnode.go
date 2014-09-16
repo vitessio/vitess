@@ -186,11 +186,8 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case TABLET_ACTION_DEMOTE_MASTER:
 	case TABLET_ACTION_PROMOTE_SLAVE:
 		node.Reply = &RestartSlaveData{}
-	case TABLET_ACTION_SLAVE_WAS_PROMOTED:
 	case TABLET_ACTION_RESTART_SLAVE:
 		node.Args = &RestartSlaveData{}
-	case TABLET_ACTION_SLAVE_WAS_RESTARTED:
-		node.Args = &SlaveWasRestartedArgs{}
 	case TABLET_ACTION_BREAK_SLAVES:
 	case TABLET_ACTION_REPARENT_POSITION:
 		node.Args = &myproto.ReplicationPosition{}
@@ -254,6 +251,8 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 		TABLET_ACTION_SLAVE_STATUS,
 		TABLET_ACTION_WAIT_SLAVE_POSITION,
 		TABLET_ACTION_MASTER_POSITION,
+		TABLET_ACTION_SLAVE_WAS_PROMOTED,
+		TABLET_ACTION_SLAVE_WAS_RESTARTED,
 		TABLET_ACTION_STOP_SLAVE,
 		TABLET_ACTION_STOP_SLAVE_MINIMUM,
 		TABLET_ACTION_START_SLAVE,

@@ -187,12 +187,8 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 		err = nil
 	case actionnode.TABLET_ACTION_PROMOTE_SLAVE:
 		err = ta.promoteSlave(actionNode)
-	case actionnode.TABLET_ACTION_SLAVE_WAS_PROMOTED:
-		err = SlaveWasPromoted(ta.ts, ta.tabletAlias)
 	case actionnode.TABLET_ACTION_RESTART_SLAVE:
 		err = ta.restartSlave(actionNode)
-	case actionnode.TABLET_ACTION_SLAVE_WAS_RESTARTED:
-		err = SlaveWasRestarted(ta.ts, ta.tabletAlias, actionNode.Args.(*actionnode.SlaveWasRestartedArgs))
 	case actionnode.TABLET_ACTION_RESERVE_FOR_RESTORE:
 		err = ta.reserveForRestore(actionNode)
 	case actionnode.TABLET_ACTION_RESTORE:
@@ -225,6 +221,8 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 		actionnode.TABLET_ACTION_SLAVE_STATUS,
 		actionnode.TABLET_ACTION_WAIT_SLAVE_POSITION,
 		actionnode.TABLET_ACTION_MASTER_POSITION,
+		actionnode.TABLET_ACTION_SLAVE_WAS_PROMOTED,
+		actionnode.TABLET_ACTION_SLAVE_WAS_RESTARTED,
 		actionnode.TABLET_ACTION_STOP_SLAVE,
 		actionnode.TABLET_ACTION_STOP_SLAVE_MINIMUM,
 		actionnode.TABLET_ACTION_START_SLAVE,
@@ -328,8 +326,7 @@ func (ta *TabletActor) promoteSlave(actionNode *actionnode.ActionNode) error {
 	return updateReplicationGraphForPromotedSlave(ta.ts, tablet)
 }
 
-// SlaveWasPromoted promotes a slave to master. Called both by RPC and
-// actionnode.
+// SlaveWasPromoted promotes a slave to master. Called both by RPC only
 func SlaveWasPromoted(ts topo.Server, tabletAlias topo.TabletAlias) error {
 	tablet, err := ts.GetTablet(tabletAlias)
 	if err != nil {
@@ -460,7 +457,7 @@ func (ta *TabletActor) restartSlave(actionNode *actionnode.ActionNode) error {
 }
 
 // SlaveWasRestarted updates the parent record for a tablet. It is
-// called both by actionnode server and RPC server.
+// called by RPC only.
 func SlaveWasRestarted(ts topo.Server, tabletAlias topo.TabletAlias, swrd *actionnode.SlaveWasRestartedArgs) error {
 	tablet, err := ts.GetTablet(tabletAlias)
 	if err != nil {
@@ -599,7 +596,7 @@ func tabletExternallyReparentedLocked(ts topo.Server, tablet *topo.TabletInfo, a
 	logger := logutil.NewConsoleLogger()
 	ai := initiator.NewActionInitiator(ts)
 	topotools.RestartSlavesExternal(ts, logger, slaveTabletMap, masterTabletMap, masterElectTablet.Alias, func(ti *topo.TabletInfo, swrd *actionnode.SlaveWasRestartedArgs) error {
-		return ai.RpcSlaveWasRestarted(ti, swrd, actionTimeout)
+		return ai.SlaveWasRestarted(ti, swrd, actionTimeout)
 	})
 
 	// Compute the list of Cells we need to rebuild: old master and

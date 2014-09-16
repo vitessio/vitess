@@ -136,11 +136,7 @@ func (ai *ActionInitiator) PromoteSlave(tabletAlias topo.TabletAlias) (actionPat
 	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_PROMOTE_SLAVE})
 }
 
-func (ai *ActionInitiator) SlaveWasPromoted(tabletAlias topo.TabletAlias) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_SLAVE_WAS_PROMOTED})
-}
-
-func (ai *ActionInitiator) RpcSlaveWasPromoted(tablet *topo.TabletInfo, waitTime time.Duration) error {
+func (ai *ActionInitiator) SlaveWasPromoted(tablet *topo.TabletInfo, waitTime time.Duration) error {
 	return ai.rpc.SlaveWasPromoted(tablet, waitTime)
 }
 
@@ -148,11 +144,7 @@ func (ai *ActionInitiator) RestartSlave(tabletAlias topo.TabletAlias, args *acti
 	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_RESTART_SLAVE, Args: args})
 }
 
-func (ai *ActionInitiator) SlaveWasRestarted(tabletAlias topo.TabletAlias, args *actionnode.SlaveWasRestartedArgs) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_SLAVE_WAS_RESTARTED, Args: args})
-}
-
-func (ai *ActionInitiator) RpcSlaveWasRestarted(tablet *topo.TabletInfo, args *actionnode.SlaveWasRestartedArgs, waitTime time.Duration) error {
+func (ai *ActionInitiator) SlaveWasRestarted(tablet *topo.TabletInfo, args *actionnode.SlaveWasRestartedArgs, waitTime time.Duration) error {
 	return ai.rpc.SlaveWasRestarted(tablet, args, waitTime)
 }
 
