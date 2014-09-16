@@ -1,9 +1,6 @@
 package com.youtube.vitess.gorpc;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 import org.bson.BSONObject;
 import org.bson.BasicBSONObject;
@@ -14,8 +11,10 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.youtube.vitess.gorpc.Client;
 import com.youtube.vitess.gorpc.Exceptions.ApplicationException;
 import com.youtube.vitess.gorpc.Exceptions.GoRpcException;
+import com.youtube.vitess.gorpc.Response;
 import com.youtube.vitess.gorpc.codecs.bson.BsonClientCodecFactory;
 
 /**
@@ -23,12 +22,15 @@ import com.youtube.vitess.gorpc.codecs.bson.BsonClientCodecFactory;
  * server.
  */
 public class ClientIT extends ClientTest {
-	private static Process serverProcess;
-	private static final int PORT = 1234;
 
-	@Override
-	public int getPort() {
-		return PORT;
+	@BeforeClass
+	public static void initServer() throws IOException, InterruptedException {
+		Util.startRealGoServer();
+	}
+
+	@AfterClass
+	public static void tearDownServer() throws Exception {
+		Util.stopRealGoServer();
 	}
 
 	@Before
@@ -41,35 +43,34 @@ public class ClientIT extends ClientTest {
 	public void tearDown() throws IOException {
 	}
 
-	@BeforeClass
-	public static void initServer() throws IOException, InterruptedException {
-		List<String> command = new ArrayList<String>();
-		command.add("go");
-		command.add("run");
-		command.add(ClientIT.class.getResource("/arithserver.go").getPath());
-		command.add("-port");
-		command.add("" + PORT);
-		ProcessBuilder builder = new ProcessBuilder(command);
-		serverProcess = builder.start();
-		Thread.sleep(TimeUnit.SECONDS.toMillis(1));
-	}
-
-	@AfterClass
-	public static void tearDownServer() {
-		serverProcess.destroy();
-	}
-
 	@Test
 	public void testDivide() throws GoRpcException, IOException,
 			ApplicationException {
-		Client client = Client.dialHttp("localhost", getPort(), "/_bson_rpc_",
+		Client client = Client.dialHttp(Util.HOST, Util.PORT, Util.PATH,
 				new BsonClientCodecFactory());
 		BSONObject mArgs = new BasicBSONObject();
 		mArgs.put("A", 10L);
 		mArgs.put("B", 3L);
 		Response response = client.call("Arith.Divide", mArgs);
-		BSONObject result = (BSONObject) response.reply;
+		BSONObject result = (BSONObject) response.getReply();
 		Assert.assertEquals(3L, result.get("Quo"));
 		Assert.assertEquals(1L, result.get("Rem"));
 	}
+
+	@Test
+	public void testDivideError() throws GoRpcException, IOException,
+			ApplicationException {
+		Client client = Client.dialHttp(Util.HOST, Util.PORT, Util.PATH,
+				new BsonClientCodecFactory());
+		BSONObject mArgs = new BasicBSONObject();
+		mArgs.put("A", 10L);
+		mArgs.put("B", 0L);
+		try {
+			client.call("Arith.Divide", mArgs);
+			Assert.fail("did not raise application error");
+		} catch (ApplicationException e) {
+			Assert.assertEquals("divide by zero", e.getMessage());
+		}
+	}
+
 }

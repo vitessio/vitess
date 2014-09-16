@@ -1,7 +1,6 @@
 package com.youtube.vitess.gorpc;
 
 import java.io.IOException;
-import java.net.ServerSocket;
 
 import org.bson.BSONObject;
 import org.bson.BasicBSONObject;
@@ -16,30 +15,20 @@ import com.youtube.vitess.gorpc.codecs.bson.BsonClientCodecFactory;
 
 public class ClientTest {
 
-	private static ServerSocket serverSocket;
-	private static final int PORT = 15773;
-
-	public int getPort() {
-		return PORT;
-	}
-
 	@Before
 	public void setUp() throws IOException, InterruptedException {
-		serverSocket = new ServerSocket(PORT);
-		FakeGoServer server = new FakeGoServer(serverSocket);
-		server.start();
-		Thread.sleep(500);
+		Util.startFakeGoServer();
 	}
 
 	@After
 	public void tearDown() throws IOException {
-		serverSocket.close();
+		Util.stopFakeGoServer();
 	}
 
 	@Test
 	public void testValidCase() throws IOException, GoRpcException,
 			ApplicationException {
-		Client client = Client.dialHttp("localhost", getPort(), "/_bson_rpc_",
+		Client client = Client.dialHttp(Util.HOST, Util.PORT, Util.PATH,
 				new BsonClientCodecFactory());
 		BSONObject mArgs = new BasicBSONObject();
 		mArgs.put("A", 5L);
@@ -53,7 +42,7 @@ public class ClientTest {
 	@Test
 	public void testInValidHandshake() throws IOException, GoRpcException {
 		try {
-			Client client = Client.dialHttp("localhost", getPort(),
+			Client client = Client.dialHttp(Util.HOST, Util.PORT,
 					"/_somerpc_", new BsonClientCodecFactory());
 			client.close();
 			Assert.fail("did not raise exception");
@@ -65,7 +54,7 @@ public class ClientTest {
 
 	@Test
 	public void testInValidMethodName() throws IOException, GoRpcException {
-		Client client = Client.dialHttp("localhost", getPort(), "/_bson_rpc_",
+		Client client = Client.dialHttp(Util.HOST, Util.PORT, Util.PATH,
 				new BsonClientCodecFactory());
 		try {
 			client.call("Arith.SomeMethod", new BasicBSONObject());
@@ -81,7 +70,7 @@ public class ClientTest {
 	@Test
 	public void testMissingMethodArgs() throws IOException, GoRpcException,
 			ApplicationException {
-		Client client = Client.dialHttp("localhost", getPort(), "/_bson_rpc_",
+		Client client = Client.dialHttp(Util.HOST, Util.PORT, Util.PATH,
 				new BsonClientCodecFactory());
 		BSONObject mArgs = new BasicBSONObject();
 		mArgs.put("A", 5L);
@@ -95,7 +84,7 @@ public class ClientTest {
 	@Test
 	public void testValidMultipleCalls() throws IOException, GoRpcException,
 			ApplicationException {
-		Client client = Client.dialHttp("localhost", getPort(), "/_bson_rpc_",
+		Client client = Client.dialHttp(Util.HOST, Util.PORT, Util.PATH,
 				new BsonClientCodecFactory());
 
 		BSONObject mArgs = new BasicBSONObject();
@@ -116,7 +105,7 @@ public class ClientTest {
 	@Test
 	public void testCallOnClosedClient() throws IOException, GoRpcException,
 			ApplicationException {
-		Client client = Client.dialHttp("localhost", getPort(), "/_bson_rpc_",
+		Client client = Client.dialHttp(Util.HOST, Util.PORT, Util.PATH,
 				new BsonClientCodecFactory());
 
 		BSONObject mArgs = new BasicBSONObject();
@@ -130,7 +119,7 @@ public class ClientTest {
 			client.call("Arith.Multiply", mArgs);
 			Assert.fail("did not raise exception");
 		} catch (GoRpcException e) {
-			Assert.assertTrue("cannot call on a closed client".equals(e
+			Assert.assertTrue("client is closed".equals(e
 					.getMessage()));
 		}
 

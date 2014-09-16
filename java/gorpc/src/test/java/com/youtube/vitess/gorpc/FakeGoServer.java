@@ -24,7 +24,7 @@ import com.youtube.vitess.gorpc.codecs.bson.GoRpcBsonDecoder;
 public class FakeGoServer extends Thread {
 	ServerSocket serverSocket;
 
-	FakeGoServer(ServerSocket serverSocket) {
+	public FakeGoServer(ServerSocket serverSocket) {
 		this.serverSocket = serverSocket;
 	}
 
@@ -38,6 +38,10 @@ public class FakeGoServer extends Thread {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+	}
+
+	public void stopServer() throws IOException {
+		this.serverSocket.close();
 	}
 
 	private static class ArithThread extends Thread {

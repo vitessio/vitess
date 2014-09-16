@@ -14,6 +14,7 @@ public class Query {
 	private Map<String, Object> bindVars;
 	private String tabletType;
 	private List<String> keyspaceIds;
+	private boolean stream;
 
 	private Query(String sql, String keyspace, String tabletType) {
 		this.sql = sql;
@@ -61,6 +62,14 @@ public class Query {
 		this.keyspaceIds = keyspaceIds;
 	}
 
+	public boolean isStream() {
+		return stream;
+	}
+
+	public void setStream(boolean stream) {
+		this.stream = stream;
+	}
+
 	public void populate(Map<String, Object> map) {
 		map.put("Sql", sql);
 		map.put("Keyspace", keyspace);
@@ -91,6 +100,11 @@ public class Query {
 
 		public QueryBuilder withKeyspaceIds(List<String> keyspaceIds) {
 			query.setKeyspaceIds(keyspaceIds);
+			return this;
+		}
+
+		public QueryBuilder withStream(boolean stream) {
+			query.setStream(stream);
 			return this;
 		}
 
