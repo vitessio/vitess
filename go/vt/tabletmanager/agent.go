@@ -353,8 +353,10 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 		return err
 	}
 
-	if err = agent.resolvePaths(); err != nil {
-		return err
+	if agent.DBConfigs != nil {
+		if err = agent.resolvePaths(); err != nil {
+			return err
+		}
 	}
 
 	// find our hostname as fully qualified, and IP
