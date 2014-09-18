@@ -127,7 +127,7 @@ or Doozer. At Google, for example, we use Chubby through the plugin mechanism.
 Vitess has the notion of a keyspace – a logical database that may consist of
 many shards. If you handle sharding yourself or don’t need it, this is just a
 matter of choosing a name (your database name is a reasonable choice). If you
-want Vitess to handle sharding, or think you may need that in the feature,
+want Vitess to handle sharding, or think you may need that in the future,
 there’s a bit more work that you should do.
 
 First, you have to think about your sharding scheme. This is quite a big topic
