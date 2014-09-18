@@ -220,3 +220,15 @@ func TestMariadbPromoteSlaveCommands(t *testing.T) {
 		t.Errorf("(&mariaDB10{}).PromoteSlaveCommands() = %#v, want %#v", got, want)
 	}
 }
+
+func TestMariadbVersionMatch(t *testing.T) {
+	table := map[string]bool{
+		"10.0.13-MariaDB-1~precise-log": true,
+		"5.1.63-google-log":             false,
+	}
+	for input, want := range table {
+		if got := (&mariaDB10{}).VersionMatch(input); got != want {
+			t.Errorf("(&mariaDB10{}).VersionMatch(%#v) = %v, want %v", input, got, want)
+		}
+	}
+}

@@ -22,6 +22,11 @@ type mariaDB10 struct {
 
 const mariadbFlavorID = "MariaDB"
 
+// VersionMatch implements MysqlFlavor.VersionMatch().
+func (*mariaDB10) VersionMatch(version string) bool {
+	return strings.HasPrefix(version, "10.0") && strings.Contains(strings.ToLower(version), "mariadb")
+}
+
 // MasterPosition implements MysqlFlavor.MasterPosition().
 func (flavor *mariaDB10) MasterPosition(mysqld *Mysqld) (rp proto.ReplicationPosition, err error) {
 	qr, err := mysqld.fetchSuperQuery("SELECT @@GLOBAL.gtid_binlog_pos")

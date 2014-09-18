@@ -5,6 +5,7 @@
 package mysqlctl
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -20,6 +21,10 @@ This file handles the differences between flavors of mysql.
 
 // MysqlFlavor is the abstract interface for a flavor.
 type MysqlFlavor interface {
+	// VersionMatch returns true if the version string (from SELECT VERSION())
+	// represents a server that this flavor knows how to talk to.
+	VersionMatch(version string) bool
+
 	// MasterPosition returns the ReplicationPosition of a master.
 	MasterPosition(mysqld *Mysqld) (proto.ReplicationPosition, error)
 
@@ -83,25 +88,48 @@ func registerFlavorOverride(name string, flavor MysqlFlavor) {
 	mysqlFlavors[name] = flavor
 }
 
-func mysqlFlavor() MysqlFlavor {
-	f := os.Getenv("MYSQL_FLAVOR")
-	if f == "" {
-		if len(mysqlFlavors) == 1 {
-			for k, v := range mysqlFlavors {
-				log.Infof("Only one MySQL flavor declared, using %v", k)
-				return v
-			}
+// detectFlavor decides which flavor to assume, based on the MYSQL_FLAVOR
+// environment variable. If that variable is empty or unset, we will try to
+// auto-detect the flavor.
+func (mysqld *Mysqld) detectFlavor() (MysqlFlavor, error) {
+	// Check environment variable, which overrides auto-detect.
+	if env := os.Getenv("MYSQL_FLAVOR"); env != "" {
+		if flavor, ok := mysqlFlavors[env]; ok {
+			log.Infof("Using MySQL flavor %v (set by MYSQL_FLAVOR)", env)
+			return flavor, nil
 		}
-		if v, ok := mysqlFlavors["GoogleMysql"]; ok {
-			log.Info("MYSQL_FLAVOR is not set, using GoogleMysql flavor by default")
-			return v
+		return nil, fmt.Errorf("Unknown flavor (MYSQL_FLAVOR=%v)", env)
+	}
+
+	// If no environment variable set, fall back to auto-detect.
+	log.Infof("MYSQL_FLAVOR empty or unset, attempting to auto-detect...")
+	qr, err := mysqld.fetchSuperQuery("SELECT VERSION()")
+	if err != nil {
+		return nil, fmt.Errorf("Couldn't SELECT VERSION(): %v", err)
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return nil, fmt.Errorf("Unexpected result for SELECT VERSION(): %#v", qr)
+	}
+	version := qr.Rows[0][0].String()
+	log.Infof("SELECT VERSION() = %s", version)
+
+	for name, flavor := range mysqlFlavors {
+		if flavor.VersionMatch(version) {
+			log.Infof("Using MySQL flavor %v (auto-detect match)", name)
+			return flavor, nil
 		}
-		log.Fatal("MYSQL_FLAVOR is not set, and no GoogleMysql flavor registered")
 	}
-	if v, ok := mysqlFlavors[f]; ok {
-		log.Infof("Using MySQL flavor %v", f)
-		return v
-	}
-	log.Fatalf("MYSQL_FLAVOR is set to unknown value %v", f)
-	panic("unreachable")
+
+	return nil, fmt.Errorf("MYSQL_FLAVOR empty or unset, no auto-detect match found for VERSION() = %v", version)
+}
+
+func (mysqld *Mysqld) flavor() MysqlFlavor {
+	mysqld.mysqlFlavorInit.Do(func() {
+		flavor, err := mysqld.detectFlavor()
+		if err != nil {
+			log.Fatalf("Couldn't detect MySQL flavor: %v", err)
+		}
+		mysqld.mysqlFlavor = flavor
+	})
+	return mysqld.mysqlFlavor
 }
