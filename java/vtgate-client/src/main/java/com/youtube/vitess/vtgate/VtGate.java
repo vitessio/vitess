@@ -51,16 +51,18 @@ public class VtGate {
 	 * 
 	 * @param addresses
 	 *            comma separated list of host:port pairs
+	 * @params timeoutMs connection timeout in ms, 0 for no timeout
 	 * @throws ConnectionException
 	 * @throws GoRpcException
 	 */
-	public static VtGate connect(String addresses) throws ConnectionException {
+	public static VtGate connect(String addresses, int timeoutMs)
+			throws ConnectionException {
 		List<String> addressList = Arrays.asList(addresses.split(","));
 		int index = new Random().nextInt(addressList.size());
 		HostAndPort hostAndPort = HostAndPort
 				.fromString(addressList.get(index));
 		RpcClient client = new GoRpcClientFactory().connect(
-				hostAndPort.getHostText(), hostAndPort.getPort());
+				hostAndPort.getHostText(), hostAndPort.getPort(), timeoutMs);
 		return new VtGate(client);
 	}
 

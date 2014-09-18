@@ -49,7 +49,7 @@ public class VtGateIT {
 
 	@Test
 	public void testDMLOutsideTransaction() throws ConnectionException {
-		VtGate vtgate = VtGate.connect("localhost:" + params.port);
+		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
 		String deleteSql = "delete from vtgate_test";
 		try {
 			vtgate.execute(new QueryBuilder(deleteSql, params.keyspace_name,
@@ -65,7 +65,7 @@ public class VtGateIT {
 
 	@Test
 	public void testReadsAndWrites() throws Exception {
-		VtGate vtgate = VtGate.connect("localhost:" + params.port);
+		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
 		String selectSql = "select * from vtgate_test";
 		Query allRowsQuery = new QueryBuilder(selectSql,
 				params.keyspace_name, "master").withKeyspaceIds(
@@ -79,7 +79,7 @@ public class VtGateIT {
 
 		Util.insertRows(params, 1000, 100);
 
-		vtgate = VtGate.connect("localhost:" + params.port);
+		vtgate = VtGate.connect("localhost:" + params.port, 0);
 		cursor = vtgate.execute(allRowsQuery);
 		Assert.assertEquals(100, cursor.getRowsAffected());
 		Assert.assertEquals(0, cursor.getLastRowId());
@@ -109,7 +109,7 @@ public class VtGateIT {
 
 	@Test
 	public void testStreamCursorType() throws Exception {
-		VtGate vtgate = VtGate.connect("localhost:" + params.port);
+		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
 		String selectSql = "select * from vtgate_test";
 		Query allRowsQuery = new QueryBuilder(selectSql,
 				params.keyspace_name, "master").withKeyspaceIds(
@@ -122,7 +122,7 @@ public class VtGateIT {
 	@Test
 	public void testStreamingReads() throws Exception {
 		Util.insertRows(params, 1, 200);
-		VtGate vtgate = VtGate.connect("localhost:" + params.port);
+		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
 		String selectSql = "select A.* from vtgate_test A join vtgate_test B";
 		Query joinQuery = new QueryBuilder(selectSql,
 				params.keyspace_name, "master").withKeyspaceIds(
@@ -143,7 +143,7 @@ public class VtGateIT {
 	@Test
 	@Ignore("currently failing as vtgate doesn't set the error")
 	public void testStreamingWritesThrowsError() throws Exception {
-		VtGate vtgate = VtGate.connect("localhost:" + params.port);
+		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
 
 		vtgate.begin();
 		String insertSql = "insert into vtgate_test "
@@ -171,7 +171,7 @@ public class VtGateIT {
 	@Test
 	public void testNewQueryWhileStreaming() throws Exception {
 		Util.insertRows(params, 1, 10);
-		VtGate vtgate = VtGate.connect("localhost:" + params.port);
+		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
 		String selectSql = "select * from vtgate_test";
 		Query query = new QueryBuilder(selectSql,
 				params.keyspace_name, "master").withKeyspaceIds(
@@ -192,7 +192,7 @@ public class VtGateIT {
 	public void testDateFieldTypes() throws Exception {
 		Date date = new Date();
 		Util.insertRows(params, 100, 1, date);
-		VtGate vtgate = VtGate.connect("localhost:" + params.port);
+		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
 		Query allRowsQuery = new QueryBuilder(
 				"select * from vtgate_test",
 				params.keyspace_name, "master").withKeyspaceIds(
@@ -217,5 +217,30 @@ public class VtGateIT {
 		gmtFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
 		return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(gmtFormat
 				.format(d));
+	}
+
+	@Test
+	public void testTimeout() throws ConnectionException, DatabaseException {
+		VtGate vtgate = VtGate.connect("localhost:" + params.port, 200);
+
+		// Check timeout error raised for slow query
+		Query sleepQuery = new QueryBuilder("select sleep(0.5) from dual",
+				params.keyspace_name, "master").withKeyspaceIds(
+				params.getKeyspaceIds()).build();
+		try {
+			vtgate.execute(sleepQuery);
+			Assert.fail("did not raise timeout exception");
+		} catch (ConnectionException e) {
+			Assert.assertEquals(
+					"vtgate exception: connection exception Read timed out",
+					e.getMessage());
+		}
+
+		// Check no timeout error for fast query
+		sleepQuery = new QueryBuilder("select sleep(0.01) from dual",
+				params.keyspace_name, "master").withKeyspaceIds(
+				params.getKeyspaceIds()).build();
+		vtgate.execute(sleepQuery);
+		vtgate.close();
 	}
 }

@@ -120,12 +120,11 @@ public class GoRpcClient implements RpcClient {
 	public static class GoRpcClientFactory implements RpcClientFactory {
 
 		@Override
-		public RpcClient connect(String host, int port)
+		public RpcClient connect(String host, int port, int timeoutMs)
 				throws ConnectionException {
 			Client client;
 			try {
-				client = Client.dialHttp(host,
-						port, BSON_RPC_PATH,
+				client = Client.dialHttp(host, port, BSON_RPC_PATH, timeoutMs,
 						new BsonClientCodecFactory());
 				return new GoRpcClient(client);
 			} catch (GoRpcException e) {

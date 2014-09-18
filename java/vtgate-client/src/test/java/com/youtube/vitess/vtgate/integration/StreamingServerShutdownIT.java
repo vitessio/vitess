@@ -29,7 +29,7 @@ public class StreamingServerShutdownIT {
 	@Test
 	public void testShutdownServerWhileStreaming() throws Exception {
 		Util.insertRows(params, 1, 2000);
-		VtGate vtgate = VtGate.connect("localhost:" + params.port);
+		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
 		String selectSql = "select A.* from vtgate_test A join vtgate_test B";
 		Query joinQuery = new QueryBuilder(selectSql,
 				params.keyspace_name, "master").withKeyspaceIds(

@@ -66,7 +66,7 @@ public class Util {
 
 	static void insertRows(VtGateParams params, int startId, int count,
 			Date date) throws ConnectionException, DatabaseException {
-		VtGate vtgate = VtGate.connect("localhost:" + params.port);
+		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
 
 		vtgate.begin();
 		String insertSql = "insert into vtgate_test "
@@ -98,7 +98,7 @@ public class Util {
 	}
 
 	static void truncateTable(VtGateParams params) throws Exception {
-		VtGate vtgate = VtGate.connect("localhost:" + params.port);
+		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
 		vtgate.begin();
 		vtgate.execute(new QueryBuilder("delete from vtgate_test",
 				params.keyspace_name, "master").withKeyspaceIds(

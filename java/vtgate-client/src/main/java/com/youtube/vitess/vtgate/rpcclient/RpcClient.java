@@ -24,7 +24,7 @@ public interface RpcClient {
 	public void close() throws ConnectionException;
 
 	public static interface RpcClientFactory {
-		public RpcClient connect(String host, int port)
+		public RpcClient connect(String host, int port, int timeoutMs)
 				throws ConnectionException;
 	}
 }
