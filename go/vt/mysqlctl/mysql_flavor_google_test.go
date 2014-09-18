@@ -314,3 +314,15 @@ func TestGooglePromoteSlaveCommands(t *testing.T) {
 		t.Errorf("(&googleMysql51{}).PromoteSlaveCommands() = %#v, want %#v", got, want)
 	}
 }
+
+func TestGoogleVersionMatch(t *testing.T) {
+	table := map[string]bool{
+		"10.0.13-MariaDB-1~precise-log": false,
+		"5.1.63-google-log":             true,
+	}
+	for input, want := range table {
+		if got := (&googleMysql51{}).VersionMatch(input); got != want {
+			t.Errorf("(&googleMysql51{}).VersionMatch(%#v) = %v, want %v", input, got, want)
+		}
+	}
+}

@@ -230,12 +230,12 @@ func (mysqld *Mysqld) ReparentPosition(slavePosition proto.ReplicationPosition) 
 	if err != nil {
 		return
 	}
-	rs.Position, err = mysqld.flavor.ParseReplicationPosition(qr.Rows[0][2].String())
+	rs.Position, err = mysqld.flavor().ParseReplicationPosition(qr.Rows[0][2].String())
 	if err != nil {
 		return
 	}
 
-	waitPosition, err = mysqld.flavor.ParseReplicationPosition(qr.Rows[0][3].String())
+	waitPosition, err = mysqld.flavor().ParseReplicationPosition(qr.Rows[0][3].String())
 	if err != nil {
 		return
 	}
@@ -243,15 +243,15 @@ func (mysqld *Mysqld) ReparentPosition(slavePosition proto.ReplicationPosition) 
 }
 
 func (mysqld *Mysqld) WaitMasterPos(targetPos proto.ReplicationPosition, waitTimeout time.Duration) error {
-	return mysqld.flavor.WaitMasterPos(mysqld, targetPos, waitTimeout)
+	return mysqld.flavor().WaitMasterPos(mysqld, targetPos, waitTimeout)
 }
 
 func (mysqld *Mysqld) SlaveStatus() (*proto.ReplicationStatus, error) {
-	return mysqld.flavor.SlaveStatus(mysqld)
+	return mysqld.flavor().SlaveStatus(mysqld)
 }
 
 func (mysqld *Mysqld) MasterPosition() (rp proto.ReplicationPosition, err error) {
-	return mysqld.flavor.MasterPosition(mysqld)
+	return mysqld.flavor().MasterPosition(mysqld)
 }
 
 func (mysqld *Mysqld) StartReplicationCommands(status *proto.ReplicationStatus) ([]string, error) {
@@ -259,7 +259,7 @@ func (mysqld *Mysqld) StartReplicationCommands(status *proto.ReplicationStatus) 
 	if err != nil {
 		return nil, err
 	}
-	return mysqld.flavor.StartReplicationCommands(&params, status)
+	return mysqld.flavor().StartReplicationCommands(&params, status)
 }
 
 /*
@@ -496,11 +496,11 @@ func (mysqld *Mysqld) WaitBlpPos(bp *blproto.BlpPosition, waitTimeout time.Durat
 // EnableBinlogPlayback prepares the server to play back events from a binlog stream.
 // Whatever it does for a given flavor, it must be idempotent.
 func (mysqld *Mysqld) EnableBinlogPlayback() error {
-	return mysqld.flavor.EnableBinlogPlayback(mysqld)
+	return mysqld.flavor().EnableBinlogPlayback(mysqld)
 }
 
 // DisableBinlogPlayback returns the server to the normal state after streaming.
 // Whatever it does for a given flavor, it must be idempotent.
 func (mysqld *Mysqld) DisableBinlogPlayback() error {
-	return mysqld.flavor.DisableBinlogPlayback(mysqld)
+	return mysqld.flavor().DisableBinlogPlayback(mysqld)
 }
