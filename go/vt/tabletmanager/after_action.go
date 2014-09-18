@@ -48,6 +48,11 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet) error {
 	}
 	agent.DBConfigs.App.Keyspace = tablet.Keyspace
 	agent.DBConfigs.App.Shard = tablet.Shard
+	if tablet.Type != topo.TYPE_MASTER {
+		agent.DBConfigs.App.EnableInvalidator = true
+	} else {
+		agent.DBConfigs.App.EnableInvalidator = false
+	}
 
 	qrs, err := agent.createQueryRules(tablet)
 	if err != nil {

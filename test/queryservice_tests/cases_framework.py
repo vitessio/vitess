@@ -89,6 +89,10 @@ class Log(object):
     if case.cache_misses is not None and int(self.cache_misses) != case.cache_misses:
       return self.fail("Bad Cache Misses", case.cache_misses, self.cache_misses)
 
+  def check_cache_invalidations(self, case):
+    if case.cache_invalidations is not None and int(self.cache_invalidations) != case.cache_invalidations:
+      return self.fail("Bad Cache Invalidations", case.cache_invalidations, self.cache_invalidations)
+
   def check_query_plan(self, case):
     if case.query_plan is not None and case.query_plan != self.plan_type:
       return self.fail("Bad query plan", case.query_plan, self.plan_type)

@@ -1,5 +1,3 @@
-import time
-
 from vtdb import dbexceptions
 
 import framework
@@ -48,8 +46,6 @@ class TestCache(framework.TestCase):
       self.assertEqual(tstart["Hits"]+1, tend["Hits"])
       # disable
       self.env.execute("alter table vtocc_cached2 comment 'vtocc_nocache'")
-      # Short sleep to allow invalidator to catch up
-      time.sleep(0.05)
       self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'")
       try:
         tstart = self.env.table_stats()["vtocc_cached2"]
@@ -59,8 +55,6 @@ class TestCache(framework.TestCase):
         self.fail("Did not receive exception")
     finally:
       self.env.execute("alter table vtocc_cached2 comment ''")
-      # Short sleep to allow invalidator to catch up
-      time.sleep(0.05)
 
     # Verify row cache is working again
     self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'")
@@ -79,8 +73,6 @@ class TestCache(framework.TestCase):
       self.assertEqual(tstart["Hits"]+1, tend["Hits"])
       # rename
       self.env.execute("alter table vtocc_cached2 rename to vtocc_renamed")
-      # Short sleep to allow invalidator to catch up
-      time.sleep(0.05)
       try:
         tstart = self.env.table_stats()["vtocc_cached2"]
       except KeyError:
@@ -96,11 +88,7 @@ class TestCache(framework.TestCase):
     finally:
       # alter table so there's no hash collision when renamed
       self.env.execute("alter table vtocc_renamed comment 'renamed'")
-      # Short sleep to allow invalidator to catch up
-      time.sleep(0.05)
       self.env.execute("rename table vtocc_renamed to vtocc_cached2")
-      # Short sleep to allow invalidator to catch up
-      time.sleep(0.05)
 
     # Verify row cache is working again
     self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'")
