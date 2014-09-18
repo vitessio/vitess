@@ -1,6 +1,7 @@
 package com.youtube.vitess.vtgate;
 
 import java.math.BigInteger;
+import java.util.Date;
 import java.util.Iterator;
 import java.util.LinkedList;
 
@@ -87,10 +88,18 @@ public class Row implements Iterator<Cell>, Iterable<Cell> {
 		return (Float) getAndCheckType(index, Float.class);
 	}
 
+	public Date getDate(String fieldName) throws InvalidFieldException {
+		return (Date) getAndCheckType(fieldName, Date.class);
+	}
+
+	public Date getDate(int index) throws InvalidFieldException {
+		return (Date) getAndCheckType(index, Date.class);
+	}
+
 	private Object getAndCheckType(String fieldName, Class clazz)
 			throws InvalidFieldException {
 		Object o = get(fieldName);
-		if (!clazz.isInstance(o)) {
+		if (o != null && !clazz.isInstance(o)) {
 			throw new InvalidFieldException("type mismatch expected:"
 					+ clazz.getName() + "actual: " + o.getClass().getName());
 		}

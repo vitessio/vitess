@@ -1,7 +1,12 @@
 package com.youtube.vitess.vtgate.integration;
 
 import java.math.BigInteger;
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Map;
+import java.util.TimeZone;
 
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -30,7 +35,6 @@ public class VtGateIT {
 	@BeforeClass
 	public static void setUpVtGate() throws Exception {
 		params = Util.runVtGate(true);
-
 	}
 
 	@AfterClass
@@ -54,6 +58,8 @@ public class VtGateIT {
 			Assert.fail("did not raise DatabaseException");
 		} catch (DatabaseException e) {
 			Assert.assertTrue(e.getMessage().contains("not_in_tx"));
+		} finally {
+			vtgate.close();
 		}
 	}
 
@@ -97,6 +103,8 @@ public class VtGateIT {
 		Assert.assertEquals(Integer.class, ageCell.getType());
 		Assert.assertEquals(Integer.valueOf(2000),
 				row.getInt(ageCell.getName()));
+
+		vtgate.close();
 	}
 
 	@Test
@@ -157,6 +165,7 @@ public class VtGateIT {
 				.build();
 		vtgate.execute(query);
 		vtgate.commit();
+		vtgate.close();
 	}
 
 	@Test
@@ -177,5 +186,36 @@ public class VtGateIT {
 		} finally {
 			vtgate.close();
 		}
+	}
+
+	@Test
+	public void testDateFieldTypes() throws Exception {
+		Date date = new Date();
+		Util.insertRows(params, 100, 1, date);
+		VtGate vtgate = VtGate.connect("localhost:" + params.port);
+		Query allRowsQuery = new QueryBuilder(
+				"select * from vtgate_test",
+				params.keyspace_name, "master").withKeyspaceIds(
+				params.getKeyspaceIds()).build();
+		Row row = vtgate.execute(allRowsQuery).next();
+		Date expected = convertToGMT(date);
+		Assert.assertEquals(expected, row.getDate("timestamp_col"));
+		Assert.assertEquals(expected, row.getDate("datetime_col"));
+
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+		Date dateWithoutTime = sdf.parse(sdf.format(expected));
+		Assert.assertEquals(dateWithoutTime, row.getDate("date_col"));
+
+		sdf = new SimpleDateFormat("HH:mm:ss");
+		Date dateWithoutDay = sdf.parse(sdf.format(expected));
+		Assert.assertEquals(dateWithoutDay, row.getDate("time_col"));
+		vtgate.close();
+	}
+
+	private Date convertToGMT(Date d) throws ParseException {
+		DateFormat gmtFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+		gmtFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
+		return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(gmtFormat
+				.format(d));
 	}
 }

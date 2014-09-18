@@ -70,7 +70,7 @@ public class QueryResult {
 			List<Object> cols = (List<Object>) row;
 			Iterator<Field> fieldsIter = this.fields.iterator();
 			for (Object col : cols) {
-				String cell = new String((byte[]) col);
+				String cell = col != null ? new String((byte[]) col) : null;
 				Field field = fieldsIter.next();
 				FieldType ft = field.getType();
 				cells.add(new Cell(field.getName(), ft.convert(cell),

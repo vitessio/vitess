@@ -1,13 +1,15 @@
 package com.youtube.vitess.vtgate;
 
 import java.math.BigInteger;
+import java.sql.Time;
+import java.sql.Timestamp;
+import java.util.Date;
 
 /**
  * Represents all field types supported by Vitess and their corresponding types
  * in Java. mysqlType numbers should exactly match values defined in
  * dist/mysql-5.1.52/include/mysql/mysql_com.h
  * 
- * TODO: support date types correctly
  */
 public enum FieldType {
 	VT_DECIMAL(0, Double.class),
@@ -17,12 +19,12 @@ public enum FieldType {
 	VT_FLOAT(4, Float.class),
 	VT_DOUBLE(5, Double.class),
 	VT_NULL(6, String.class),
-	VT_TIMESTAMP(7, String.class),
+	VT_TIMESTAMP(7, Date.class),
 	VT_LONGLONG(8, BigInteger.class),
 	VT_INT24(9, Integer.class),
-	VT_DATE(10, String.class),
-	VT_TIME(11, String.class),
-	VT_DATETIME(12, String.class),
+	VT_DATE(10, Date.class),
+	VT_TIME(11, Date.class),
+	VT_DATETIME(12, Date.class),
 	VT_YEAR(13, String.class),
 	VT_NEWDATE(14, String.class),
 	VT_VARCHAR(15, String.class),
@@ -60,6 +62,10 @@ public enum FieldType {
 	 * types corresponding to VT types
 	 */
 	Object convert(String s) {
+		if (s == null) {
+			return null;
+		}
+
 		if (this.javaType == Integer.class) {
 			return Integer.valueOf(s);
 		}
@@ -74,6 +80,19 @@ public enum FieldType {
 		}
 		if (this.javaType == BigInteger.class) {
 			return new BigInteger(s);
+		}
+		if (this.javaType == Date.class) {
+			Long ts = null;
+			if (this == VT_DATETIME || this == VT_TIMESTAMP) {
+				ts = Timestamp.valueOf(s).getTime();
+			} else {
+				if (this == VT_DATE) {
+					ts = java.sql.Date.valueOf(s).getTime();
+				} else {
+					ts = Time.valueOf(s).getTime();
+				}
+			}
+			return new Date(ts);
 		}
 
 		return s;

@@ -3,6 +3,7 @@ package com.youtube.vitess.vtgate.integration;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
@@ -60,12 +61,17 @@ public class Util {
 
 	static void insertRows(VtGateParams params, int startId, int count)
 			throws ConnectionException, DatabaseException {
+		insertRows(params, startId, count, new Date());
+	}
+
+	static void insertRows(VtGateParams params, int startId, int count,
+			Date date) throws ConnectionException, DatabaseException {
 		VtGate vtgate = VtGate.connect("localhost:" + params.port);
 
 		vtgate.begin();
 		String insertSql = "insert into vtgate_test "
-				+ "(id, name, age, percent, keyspace_id) "
-				+ "values (:id, :name, :age, :percent, :keyspace_id)";
+				+ "(id, name, age, percent, datetime_col, timestamp_col, date_col, time_col, keyspace_id) "
+				+ "values (:id, :name, :age, :percent, :datetime_col, :timestamp_col, :date_col, :time_col, :keyspace_id)";
 		for (int i = startId; i < startId + count; i++) {
 			String kid = params.getKeyspaceIds().get(
 					i % params.getKeyspaceIds().size());
@@ -75,6 +81,10 @@ public class Util {
 					.put("age", i * 2)
 					.put("percent", new Double(i / 100.0))
 					.put("keyspace_id", kid)
+					.put("datetime_col", date)
+					.put("timestamp_col", date)
+					.put("date_col", date)
+					.put("time_col", date)
 					.build();
 			Query query = new QueryBuilder(insertSql,
 					params.keyspace_name, "master")
@@ -84,6 +94,7 @@ public class Util {
 			vtgate.execute(query);
 		}
 		vtgate.commit();
+		vtgate.close();
 	}
 
 	static void truncateTable(VtGateParams params) throws Exception {
