@@ -157,7 +157,13 @@ class Case(object):
       result = list(cursor)
       if self.result != result:
         failures.append("%r:\n%s !=\n%s" % (self.sql, self.result, result))
-    case_failures = Log(env.querylog.tailer.read()).check(self)
+    for i in range(30):
+      line = env.querylog.tailer.read()
+      if line == '':
+        time.sleep(0.1)
+        continue
+      break
+    case_failures = Log(line).check(self)
     if case_failures:
       failures.extend(case_failures)
 
