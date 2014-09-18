@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"time"
 
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
@@ -34,6 +35,16 @@ func (t *Arith) Divide(args *Args, quo *Quotient) error {
 	}
 	quo.Quo = args.A / args.B
 	quo.Rem = args.A % args.B
+	return nil
+}
+
+type SleepArgs struct {
+	Duration int
+}
+
+func (t *Arith) Sleep(args *SleepArgs, ret *bool) error {
+	time.Sleep(time.Duration(args.Duration) * time.Millisecond)
+	*ret = true
 	return nil
 }
 

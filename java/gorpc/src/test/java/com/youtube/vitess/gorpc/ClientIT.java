@@ -11,10 +11,8 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import com.youtube.vitess.gorpc.Client;
 import com.youtube.vitess.gorpc.Exceptions.ApplicationException;
 import com.youtube.vitess.gorpc.Exceptions.GoRpcException;
-import com.youtube.vitess.gorpc.Response;
 import com.youtube.vitess.gorpc.codecs.bson.BsonClientCodecFactory;
 
 /**
@@ -55,6 +53,7 @@ public class ClientIT extends ClientTest {
 		BSONObject result = (BSONObject) response.getReply();
 		Assert.assertEquals(3L, result.get("Quo"));
 		Assert.assertEquals(1L, result.get("Rem"));
+		client.close();
 	}
 
 	@Test
@@ -71,6 +70,48 @@ public class ClientIT extends ClientTest {
 		} catch (ApplicationException e) {
 			Assert.assertEquals("divide by zero", e.getMessage());
 		}
+		client.close();
 	}
 
+	/**
+	 * Test no exception raised for client with timeouts disabled
+	 */
+	@Test
+	public void testNoTimeoutCase() throws Exception {
+		Client client = Client.dialHttp(Util.HOST, Util.PORT, Util.PATH,
+				new BsonClientCodecFactory());
+		timeoutCheck(client, 500, false);
+		client.close();
+	}
+
+	/**
+	 * Test client with timeout enabled
+	 */
+	@Test
+	public void testTimeout() throws Exception {
+		int clientTimeoutMs = 100;
+		Client client = Client.dialHttp(Util.HOST, Util.PORT, Util.PATH,
+				clientTimeoutMs, new BsonClientCodecFactory());
+		timeoutCheck(client, clientTimeoutMs / 2, false);
+		timeoutCheck(client, clientTimeoutMs * 2, true);
+		client.close();
+	}
+
+	private void timeoutCheck(Client client, int timeoutMs,
+			boolean shouldTimeout) throws Exception {
+		BSONObject mArgs = new BasicBSONObject();
+		mArgs.put("Duration", timeoutMs);
+
+		if (shouldTimeout) {
+			try {
+				client.call("Arith.Sleep", mArgs);
+				Assert.fail("did not raise timeout error");
+			} catch (GoRpcException e) {
+				Assert.assertEquals("connection exception Read timed out",
+						e.getMessage());
+			}
+		} else {
+			client.call("Arith.Sleep", mArgs);
+		}
+	}
 }
