@@ -66,35 +66,30 @@ public enum FieldType {
 			return null;
 		}
 
-		if (this.javaType == Integer.class) {
-			return Integer.valueOf(s);
-		}
-		if (this.javaType == Long.class) {
-			return Long.valueOf(s);
-		}
-		if (this.javaType == Float.class) {
-			return Float.valueOf(s);
-		}
-		if (this.javaType == Double.class) {
+		switch (this) {
+		case VT_DECIMAL:
+		case VT_DOUBLE:
+		case VT_NEWDECIMAL:
 			return Double.valueOf(s);
-		}
-		if (this.javaType == BigInteger.class) {
+		case VT_TINY:
+		case VT_SHORT:
+		case VT_INT24:
+			return Integer.valueOf(s);
+		case VT_LONG:
+			return Long.valueOf(s);
+		case VT_FLOAT:
+			return Float.valueOf(s);
+		case VT_LONGLONG:
 			return new BigInteger(s);
+		case VT_DATETIME:
+		case VT_TIMESTAMP:
+			return new Date(Timestamp.valueOf(s).getTime());
+		case VT_DATE:
+			return new Date(java.sql.Date.valueOf(s).getTime());
+		case VT_TIME:
+			return new Date(Time.valueOf(s).getTime());
+		default:
+			return s;
 		}
-		if (this.javaType == Date.class) {
-			Long ts = null;
-			if (this == VT_DATETIME || this == VT_TIMESTAMP) {
-				ts = Timestamp.valueOf(s).getTime();
-			} else {
-				if (this == VT_DATE) {
-					ts = java.sql.Date.valueOf(s).getTime();
-				} else {
-					ts = Time.valueOf(s).getTime();
-				}
-			}
-			return new Date(ts);
-		}
-
-		return s;
 	}
 }
