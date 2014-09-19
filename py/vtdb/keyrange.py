@@ -6,6 +6,7 @@ from bson import codec
 from vtdb import dbexceptions
 from vtdb import keyrange_constants
 
+
 # This module computes task map and query where clause and
 # bind_vars for distrubuting the workload of streaming queries.
 
@@ -42,6 +43,7 @@ class KeyRange(codec.BSONCoding):
     self.Start = raw_values["Start"]
     self.End = raw_values["End"]
 
+
 class StreamingTaskMap(object):
 
   def __init__(self, num_tasks):
@@ -64,6 +66,25 @@ class StreamingTaskMap(object):
     kr_chunks[-1] = ''
     self.keyrange_list = [str(KeyRange((kr_chunks[i], kr_chunks[i+1],))) for i in xrange(len(kr_chunks) - 1)]
 
+
+class VTKeyRange(object):
+
+  def __init__(self, db_keyrange, where_clause, bind_vars):
+    self.db_keyrange = db_keyrange
+    self.extra_where_clause = where_clause
+    self.extra_bind_vars = bind_vars
+
+  def update_query(self, where_clause, bind_vars):
+    if self.extra_where_clause:
+      if where_clause:
+        where_clause += ' AND ' + self.extra_where_clause
+      else:
+        where_clause = self.extra_where_clause
+    if self.extra_bind_vars:
+      bind_vars.update(self.extra_bind_vars)
+    return where_clause, bind_vars
+
+
 # Compute the task map for a streaming query.
 # shard_count is read from config, using it as a param for simplicity.
 def create_streaming_task_map(num_tasks, shard_count):
@@ -85,8 +106,16 @@ def _true_int_kr_value(kr_value):
   return int(kr_value, base=16)
 
 
+def create_vt_key_range(keyrange, keyspace_name):
+  from google3.third_party.golang.vitess.py.vtdb import topology
+  col_name, col_type = topology.get_sharding_col(keyspace_name)
+  if not col_name or col_type == keyrange_constants.KIT_UNSET:
+    return VTKeyRange(keyrange, "", {})
+  where_clause, bind_vars = _create_where_clause_for_keyrange(keyrange, col_name, col_type)
+  return VTKeyRange(keyrange, where_clause, bind_vars)
+
 # Compute the where clause and bind_vars for a given keyrange.
-def create_where_clause_for_keyrange(keyrange, keyspace_col_name='keyspace_id', keyspace_col_type=keyrange_constants.KIT_UINT64):
+def _create_where_clause_for_keyrange(keyrange, keyspace_col_name='keyspace_id', keyspace_col_type=keyrange_constants.KIT_UINT64):
   if isinstance(keyrange, str):
     # If the keyrange is for unsharded db, there is no
     # where clause to add to or bind_vars to add to.
