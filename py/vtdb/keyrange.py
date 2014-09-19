@@ -67,14 +67,14 @@ class StreamingTaskMap(object):
     self.keyrange_list = [str(KeyRange((kr_chunks[i], kr_chunks[i+1],))) for i in xrange(len(kr_chunks) - 1)]
 
 
-class VTKeyRange(object):
+class VTRoutingInfo(object):
 
   def __init__(self, db_keyrange, where_clause, bind_vars):
     self.db_keyrange = db_keyrange
     self.extra_where_clause = where_clause
     self.extra_bind_vars = bind_vars
 
-  def update_query(self, where_clause, bind_vars):
+  def update_where_clause(self, where_clause, bind_vars):
     if self.extra_where_clause:
       if where_clause:
         where_clause += ' AND ' + self.extra_where_clause
@@ -106,13 +106,13 @@ def _true_int_kr_value(kr_value):
   return int(kr_value, base=16)
 
 
-def create_vt_key_range(keyrange, keyspace_name):
+def create_vt_routing_info(keyrange, keyspace_name):
   from google3.third_party.golang.vitess.py.vtdb import topology
   col_name, col_type = topology.get_sharding_col(keyspace_name)
   if not col_name or col_type == keyrange_constants.KIT_UNSET:
-    return VTKeyRange(keyrange, "", {})
+    return VTRoutingInfo(keyrange, "", {})
   where_clause, bind_vars = _create_where_clause_for_keyrange(keyrange, col_name, col_type)
-  return VTKeyRange(keyrange, where_clause, bind_vars)
+  return VTRoutingInfo(keyrange, where_clause, bind_vars)
 
 # Compute the where clause and bind_vars for a given keyrange.
 def _create_where_clause_for_keyrange(keyrange, keyspace_col_name='keyspace_id', keyspace_col_type=keyrange_constants.KIT_UINT64):
