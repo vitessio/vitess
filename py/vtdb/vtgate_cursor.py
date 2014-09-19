@@ -300,3 +300,15 @@ class StreamVTGateCursor(VTGateCursor):
     if val is None:
       raise StopIteration
     return val
+
+
+# assumes the leading columns are used for sorting
+def sort_row_list_by_columns(row_list, sort_columns=(), desc_columns=()):
+  for column_index, column_name in reversed([x for x in enumerate(sort_columns)]):
+    og = operator.itemgetter(column_index)
+    if type(row_list) != list:
+      row_list = sorted(
+          row_list, key=og, reverse=bool(column_name in desc_columns))
+    else:
+      row_list.sort(key=og, reverse=bool(column_name in desc_columns))
+  return row_list
