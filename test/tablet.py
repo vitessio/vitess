@@ -394,6 +394,7 @@ class Tablet(object):
     args.extend(environment.topo_server_flags())
     args.extend(utils.binlog_player_protocol_flags)
     args.extend(environment.tablet_manager_protocol_flags())
+    args.extend(['-pid_file', os.path.join(self.tablet_dir, 'vttablet.pid')])
 
     if full_mycnf_args:
       # this flag is used to specify all the mycnf_ flags, to make
