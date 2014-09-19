@@ -5,6 +5,7 @@ import hmac
 import json
 import logging
 import os
+import struct
 import threading
 import time
 import traceback
@@ -38,13 +39,13 @@ vtgate_server = None
 vtgate_port = None
 
 KEYSPACE_NAME = 'test_keyspace'
-shard_names = ['-80', '80-']
-shard_kid_map = {'-80': [527875958493693904, 626750931627689502,
+shard_names = ['-\x80', '\x80-']
+shard_kid_map = {'-\x80': [527875958493693904, 626750931627689502,
                          345387386794260318, 332484755310826578,
                          1842642426274125671, 1326307661227634652,
                          1761124146422844620, 1661669973250483744,
                          3361397649937244239, 2444880764308344533],
-                 '80-': [9767889778372766922, 9742070682920810358,
+                 '\x80-': [9767889778372766922, 9742070682920810358,
                          10296850775085416642, 9537430901666854108,
                          10440455099304929791, 11454183276974683945,
                          11185910247776122031, 10460396697869122981,
@@ -66,6 +67,7 @@ primary key(eid, id)
 ) Engine=InnoDB'''
 
 create_tables = [create_vt_insert_test, create_vt_a]
+pack_kid = struct.Struct('!Q').pack
 
 
 def setUpModule():
@@ -164,6 +166,7 @@ def get_connection(user=None, password=None):
                           user=user, password=password)
   return conn
 
+
 def do_write(count, shard_index):
   kid_list = shard_kid_map[shard_names[shard_index]]
   master_conn = get_connection()
@@ -173,11 +176,11 @@ def do_write(count, shard_index):
       KEYSPACE_NAME, 'master',
       keyranges=[keyrange.KeyRange(shard_names[shard_index])])
   for x in xrange(count):
-    keyspace_id = kid_list[count%len(kid_list)]
+    keyspace_id = kid_list[x%len(kid_list)]
     master_conn._execute(
         "insert into vt_insert_test (msg, keyspace_id) values (%(msg)s, %(keyspace_id)s)",
         {'msg': 'test %s' % x, 'keyspace_id': keyspace_id},
-        KEYSPACE_NAME, 'master', keyspace_ids=[str(keyspace_id)])
+        KEYSPACE_NAME, 'master', keyspace_ids=[pack_kid(keyspace_id)])
   master_conn.commit()
 
 
@@ -209,8 +212,35 @@ class TestVTGateFunctions(unittest.TestCase):
       raise
     self.assertNotEqual(replica_conn, None)
 
+  def test_query_routing(self):
+    """Test VtGate routes queries to the right tablets"""
+    try:
+      row_counts = [50, 75]
+      for shard_index in [0,1]:
+        do_write(row_counts[shard_index], shard_index)
+      master_conn = get_connection()
+      for shard_index in [0,1]:
+        # Fetch all rows in each shard
+        results, rowcount = master_conn._execute("select * from vt_insert_test", {},
+              KEYSPACE_NAME, 'master', keyranges=[keyrange.KeyRange(shard_names[shard_index])])[:2]
+        # Verify row count
+        self.assertEqual(rowcount, row_counts[shard_index])
+        # Verify keyspace id
+        for result in results:
+          kid = result[2]
+          self.assertTrue(kid in shard_kid_map[shard_names[shard_index]])
+      # Do a cross shard range query and assert all rows are fetched
+      results, rowcount = master_conn._execute("select * from vt_insert_test", {},
+            KEYSPACE_NAME, 'master', keyranges=[keyrange.KeyRange('\x75-\x95')])[:2]
+      self.assertEqual(rowcount, row_counts[0] + row_counts[1])
+    except Exception, e:
+      logging.debug("failed with error %s, %s" % (str(e), traceback.print_exc()))
+      raise
+
+
   def test_writes(self):
     try:
+      self.shard_index = 0
       master_conn = get_connection()
       count = 10
       master_conn.begin()
@@ -220,11 +250,11 @@ class TestVTGateFunctions(unittest.TestCase):
           keyranges=[keyrange.KeyRange(shard_names[self.shard_index])])
       kid_list = shard_kid_map[shard_names[self.shard_index]]
       for x in xrange(count):
-        keyspace_id = kid_list[count%len(kid_list)]
+        keyspace_id = kid_list[x%len(kid_list)]
         master_conn._execute(
             "insert into vt_insert_test (msg, keyspace_id) values (%(msg)s, %(keyspace_id)s)",
             {'msg': 'test %s' % x, 'keyspace_id': keyspace_id},
-            KEYSPACE_NAME, 'master', keyspace_ids=[str(keyspace_id)])
+            KEYSPACE_NAME, 'master', keyspace_ids=[pack_kid(keyspace_id)])
       master_conn.commit()
       results, rowcount = master_conn._execute(
           "select * from vt_insert_test", {},
@@ -247,13 +277,13 @@ class TestVTGateFunctions(unittest.TestCase):
       eid_map = {}
       kid_list = shard_kid_map[shard_names[self.shard_index]]
       for x in xrange(count):
-        keyspace_id = kid_list[count%len(kid_list)]
+        keyspace_id = kid_list[x%len(kid_list)]
         eid_map[x] = str(keyspace_id)
         master_conn._execute(
             "insert into vt_a (eid, id, keyspace_id) \
              values (%(eid)s, %(id)s, %(keyspace_id)s)",
             {'eid': x, 'id': x, 'keyspace_id': keyspace_id},
-            KEYSPACE_NAME, 'master', keyspace_ids=[str(keyspace_id)])
+            KEYSPACE_NAME, 'master', keyspace_ids=[pack_kid(keyspace_id)])
       master_conn.commit()
       results, rowcount, _, _ = master_conn._execute_entity_ids(
           "select * from vt_a", {},
@@ -275,11 +305,11 @@ class TestVTGateFunctions(unittest.TestCase):
           keyranges=[keyrange.KeyRange(shard_names[self.shard_index])])
       kid_list = shard_kid_map[shard_names[self.shard_index]]
       for x in xrange(count):
-        keyspace_id = kid_list[count%len(kid_list)]
+        keyspace_id = kid_list[x%len(kid_list)]
         master_conn._execute(
             "insert into vt_insert_test (msg, keyspace_id) values (%(msg)s, %(keyspace_id)s)",
             {'msg': 'test %s' % x, 'keyspace_id': keyspace_id},
-            KEYSPACE_NAME, 'master', keyspace_ids=[str(keyspace_id)])
+            KEYSPACE_NAME, 'master', keyspace_ids=[pack_kid(keyspace_id)])
       master_conn.commit()
       master_conn.begin()
       master_conn._execute(
@@ -287,12 +317,12 @@ class TestVTGateFunctions(unittest.TestCase):
           KEYSPACE_NAME, 'master',
           keyranges=[keyrange.KeyRange(shard_names[self.shard_index])])
       for x in xrange(count):
-        keyspace_id = kid_list[count%len(kid_list)]
+        keyspace_id = kid_list[x%len(kid_list)]
         master_conn._execute(
             "insert into vt_a (eid, id, keyspace_id) \
              values (%(eid)s, %(id)s, %(keyspace_id)s)",
             {'eid': x, 'id': x, 'keyspace_id': keyspace_id},
-            KEYSPACE_NAME, 'master', keyspace_ids=[str(keyspace_id)])
+            KEYSPACE_NAME, 'master', keyspace_ids=[pack_kid(keyspace_id)])
       master_conn.commit()
       rowsets = master_conn._execute_batch(
           ["select * from vt_insert_test",
@@ -314,13 +344,13 @@ class TestVTGateFunctions(unittest.TestCase):
       bind_vars_list.append({})
       kid_list = shard_kid_map[shard_names[self.shard_index]]
       for x in xrange(count):
-        keyspace_id = kid_list[count%len(kid_list)]
+        keyspace_id = kid_list[x%len(kid_list)]
         query_list.append("insert into vt_insert_test (msg, keyspace_id) values (%(msg)s, %(keyspace_id)s)")
         bind_vars_list.append({'msg': 'test %s' % x, 'keyspace_id': keyspace_id})
       query_list.append("delete from vt_a")
       bind_vars_list.append({})
       for x in xrange(count):
-        keyspace_id = kid_list[count%len(kid_list)]
+        keyspace_id = kid_list[x%len(kid_list)]
         query_list.append("insert into vt_a (eid, id, keyspace_id) values (%(eid)s, %(id)s, %(keyspace_id)s)")
         bind_vars_list.append({'eid': x, 'id': x, 'keyspace_id': keyspace_id})
       master_conn.begin()
