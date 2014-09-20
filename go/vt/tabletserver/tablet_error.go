@@ -7,10 +7,12 @@ package tabletserver
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/tb"
+	"github.com/youtube/vitess/go/vt/logutil"
 )
 
 const (
@@ -20,6 +22,8 @@ const (
 	TX_POOL_FULL
 	NOT_IN_TX
 )
+
+var logTxPoolFull = logutil.NewThrottledLogger("TxPoolFull", 1*time.Minute)
 
 type TabletError struct {
 	ErrorType int
@@ -111,7 +115,11 @@ func handleError(err *error, logStats *SQLQueryStats) {
 		if terr.ErrorType == RETRY { // Retry errors are too spammy
 			return
 		}
-		log.Errorf("%v", terr)
+		if terr.ErrorType == TX_POOL_FULL {
+			logTxPoolFull.Errorf("%v", terr)
+		} else {
+			log.Errorf("%v", terr)
+		}
 	}
 }
 
@@ -123,6 +131,10 @@ func logError() {
 			internalErrors.Add("Panic", 1)
 			return
 		}
-		log.Errorf("%v", terr)
+		if terr.ErrorType == TX_POOL_FULL {
+			logTxPoolFull.Errorf("%v", terr)
+		} else {
+			log.Errorf("%v", terr)
+		}
 	}
 }
