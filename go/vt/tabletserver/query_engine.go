@@ -253,6 +253,7 @@ func (qe *QueryEngine) Begin(logStats *SQLQueryStats) int64 {
 		panic(NewTabletErrorSql(FATAL, err))
 	}
 	if conn == nil {
+		qe.activeTxPool.LogActive()
 		panic(NewTabletError(TX_POOL_FULL, "Transaction pool connection limit exceeded"))
 	}
 	transactionID, err := qe.activeTxPool.SafeBegin(conn)

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	log "github.com/golang/glog"
@@ -43,12 +44,18 @@ const (
 	TX_KILL     = "kill"
 )
 
+const txLogInterval = time.Duration(1 * time.Minute)
+
 type ActiveTxPool struct {
 	pool    *pools.Numbered
 	lastId  sync2.AtomicInt64
 	timeout sync2.AtomicDuration
 	ticks   *timer.Timer
 	txStats *stats.Timings
+
+	// Tracking culprits that cause tx pool full errors.
+	logMu   sync.Mutex
+	lastLog time.Time
 }
 
 func NewActiveTxPool(name string, timeout time.Duration) *ActiveTxPool {
@@ -142,6 +149,20 @@ func (axp *ActiveTxPool) Get(transactionId int64) (conn *TxConnection) {
 	return v.(*TxConnection)
 }
 
+// LogActive causes all existing transsactions to be logged when they complete.
+func (axp *ActiveTxPool) LogActive() {
+	axp.logMu.Lock()
+	defer axp.logMu.Unlock()
+	if time.Now().Sub(axp.lastLog) < txLogInterval {
+		return
+	}
+	axp.lastLog = time.Now()
+	conns := axp.pool.GetAll()
+	for _, c := range conns {
+		c.(*TxConnection).LogToFile.Set(1)
+	}
+}
+
 func (axp *ActiveTxPool) Timeout() time.Duration {
 	return axp.timeout.Get()
 }
@@ -170,6 +191,7 @@ type TxConnection struct {
 	dirtyTables   map[string]DirtyKeys
 	Queries       []string
 	Conclusion    string
+	LogToFile     sync2.AtomicInt32
 }
 
 func newTxConnection(conn dbconnpool.PoolConnection, transactionId int64, pool *ActiveTxPool) *TxConnection {
@@ -211,6 +233,9 @@ func (txc *TxConnection) discard(conclusion string) {
 	txc.PoolConnection.Recycle()
 	// Ensure PoolConnection won't be accessed after Recycle.
 	txc.PoolConnection = nil
+	if txc.LogToFile.Get() != 0 {
+		log.Warningf("Logged transaction: %s", txc.Format(nil))
+	}
 	TxLogger.Send(txc)
 }
 
