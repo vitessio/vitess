@@ -6,6 +6,7 @@ package mysqlctl
 
 import (
 	"io/ioutil"
+	"os"
 	"path"
 	"testing"
 
@@ -16,6 +17,7 @@ import (
 var MYCNF_PATH = "/tmp/my.cnf"
 
 func TestMycnf(t *testing.T) {
+	os.Setenv("MYSQL_FLAVOR", "GoogleMysql")
 	dbaConfig := dbconfigs.DefaultDBConfigs.Dba
 	replConfig := dbconfigs.DefaultDBConfigs.Repl
 	tablet0 := NewMysqld("Dba", NewMycnf(0, 6802), &dbaConfig, &replConfig)

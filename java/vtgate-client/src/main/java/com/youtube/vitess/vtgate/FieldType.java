@@ -1,13 +1,15 @@
 package com.youtube.vitess.vtgate;
 
 import java.math.BigInteger;
+import java.sql.Time;
+import java.sql.Timestamp;
+import java.util.Date;
 
 /**
  * Represents all field types supported by Vitess and their corresponding types
  * in Java. mysqlType numbers should exactly match values defined in
  * dist/mysql-5.1.52/include/mysql/mysql_com.h
  * 
- * TODO: support date types correctly
  */
 public enum FieldType {
 	VT_DECIMAL(0, Double.class),
@@ -17,12 +19,12 @@ public enum FieldType {
 	VT_FLOAT(4, Float.class),
 	VT_DOUBLE(5, Double.class),
 	VT_NULL(6, String.class),
-	VT_TIMESTAMP(7, String.class),
+	VT_TIMESTAMP(7, Date.class),
 	VT_LONGLONG(8, BigInteger.class),
 	VT_INT24(9, Integer.class),
-	VT_DATE(10, String.class),
-	VT_TIME(11, String.class),
-	VT_DATETIME(12, String.class),
+	VT_DATE(10, Date.class),
+	VT_TIME(11, Date.class),
+	VT_DATETIME(12, Date.class),
 	VT_YEAR(13, String.class),
 	VT_NEWDATE(14, String.class),
 	VT_VARCHAR(15, String.class),
@@ -60,22 +62,34 @@ public enum FieldType {
 	 * types corresponding to VT types
 	 */
 	Object convert(String s) {
-		if (this.javaType == Integer.class) {
-			return Integer.valueOf(s);
-		}
-		if (this.javaType == Long.class) {
-			return Long.valueOf(s);
-		}
-		if (this.javaType == Float.class) {
-			return Float.valueOf(s);
-		}
-		if (this.javaType == Double.class) {
-			return Double.valueOf(s);
-		}
-		if (this.javaType == BigInteger.class) {
-			return new BigInteger(s);
+		if (s == null) {
+			return null;
 		}
 
-		return s;
+		switch (this) {
+		case VT_DECIMAL:
+		case VT_DOUBLE:
+		case VT_NEWDECIMAL:
+			return Double.valueOf(s);
+		case VT_TINY:
+		case VT_SHORT:
+		case VT_INT24:
+			return Integer.valueOf(s);
+		case VT_LONG:
+			return Long.valueOf(s);
+		case VT_FLOAT:
+			return Float.valueOf(s);
+		case VT_LONGLONG:
+			return new BigInteger(s);
+		case VT_DATETIME:
+		case VT_TIMESTAMP:
+			return new Date(Timestamp.valueOf(s).getTime());
+		case VT_DATE:
+			return new Date(java.sql.Date.valueOf(s).getTime());
+		case VT_TIME:
+			return new Date(Time.valueOf(s).getTime());
+		default:
+			return s;
+		}
 	}
 }

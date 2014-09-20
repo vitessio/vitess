@@ -243,7 +243,6 @@ class Querylog(object):
     self.id = str(uuid.uuid4())
     self.curl = utils.curl(self.env.url('/debug/querylog'), background=True, stdout=open(self.path, 'w'))
     self.curl_full = utils.curl(self.env.url('/debug/querylog?full=true'), background=True, stdout=open(self.path_full, 'w'))
-    time.sleep(0.3)
     self.tailer = framework.Tailer(open(self.path), sleep=0.02)
     self.tailer_full = framework.Tailer(open(self.path_full), sleep=0.02)
 

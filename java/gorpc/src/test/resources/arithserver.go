@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"time"
 
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
@@ -37,6 +38,53 @@ func (t *Arith) Divide(args *Args, quo *Quotient) error {
 	return nil
 }
 
+type SleepArgs struct {
+	Duration int
+}
+
+func (t *Arith) Sleep(args *SleepArgs, ret *bool) error {
+	time.Sleep(time.Duration(args.Duration) * time.Millisecond)
+	*ret = true
+	return nil
+}
+
+type StreamingArgs struct {
+	A     int
+	Count int
+	// next two values have to be between 0 and Count-2 to trigger anything
+	ErrorAt   int // will trigger an error at the given spot,
+	BadTypeAt int // will send the wrong type in sendReply
+}
+
+type StreamingReply struct {
+	C     int
+	Index int
+}
+
+func (t *Arith) Thrive(args StreamingArgs, sendReply func(reply interface{}) error) error {
+
+	for i := 0; i < args.Count; i++ {
+		if i == args.ErrorAt {
+			return errors.New("Triggered error in middle")
+		}
+		if i == args.BadTypeAt {
+			// send args instead of response
+			sr := new(StreamingArgs)
+			err := sendReply(sr)
+			if err != nil {
+				return err
+			}
+		}
+		sr := &StreamingReply{C: args.A, Index: i}
+		err := sendReply(sr)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 type rpcHandler struct{}
 
 func (h *rpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
@@ -56,6 +104,15 @@ func (h *rpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 	rpc.ServeCodec(codec)
 }
 
+var l net.Listener
+
+type shutdownHandler struct{}
+
+func (h *shutdownHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
+	l.Close()
+	c.Write([]byte("shutting down"))
+}
+
 func main() {
 	port := flag.Int("port", 9279, "server port")
 	flag.Parse()
@@ -63,8 +120,10 @@ func main() {
 	rpc.Register(arith)
 
 	http.Handle("/_bson_rpc_", &rpcHandler{})
+	http.Handle("/shutdown", &shutdownHandler{})
 	addr := fmt.Sprintf("localhost:%d", *port)
-	l, e := net.Listen("tcp", addr)
+	var e error
+	l, e = net.Listen("tcp", addr)
 	if e != nil {
 		log.Fatal("listen error:", e)
 	}

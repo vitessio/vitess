@@ -90,6 +90,17 @@ func (nu *Numbered) Put(id int64) {
 	}
 }
 
+// GetAll returns the list of all resources in the pool.
+func (nu *Numbered) GetAll() (vals []interface{}) {
+	nu.mu.Lock()
+	defer nu.mu.Unlock()
+	vals = make([]interface{}, 0, len(nu.resources))
+	for _, nw := range nu.resources {
+		vals = append(vals, nw.val)
+	}
+	return vals
+}
+
 // GetOutdated returns a list of resources that are older than age, and locks them.
 // It does not return any resources that are already locked.
 func (nu *Numbered) GetOutdated(age time.Duration, purpose string) (vals []interface{}) {

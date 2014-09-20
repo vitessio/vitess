@@ -65,7 +65,7 @@ var slaveIDPool = pools.NewIDPool()
 // SlaveConnection.Close(). At that point, the channel will also be closed.
 func (sc *SlaveConnection) StartBinlogDump(startPos proto.ReplicationPosition) (<-chan blproto.BinlogEvent, error) {
 	log.Infof("sending binlog dump command: startPos=%v, slaveID=%v", startPos, sc.slaveID)
-	err := sc.mysqld.flavor.SendBinlogDumpCommand(sc.mysqld, sc, startPos)
+	err := sc.mysqld.flavor().SendBinlogDumpCommand(sc.mysqld, sc, startPos)
 	if err != nil {
 		log.Errorf("binlog dump command failed: %v", err)
 		return nil, err
@@ -94,7 +94,7 @@ func (sc *SlaveConnection) StartBinlogDump(startPos proto.ReplicationPosition) (
 
 			select {
 			// Skip the first byte because it's only used for signaling EOF.
-			case eventChan <- sc.mysqld.flavor.MakeBinlogEvent(buf[1:]):
+			case eventChan <- sc.mysqld.flavor().MakeBinlogEvent(buf[1:]):
 			case <-svc.ShuttingDown:
 				return nil
 			}

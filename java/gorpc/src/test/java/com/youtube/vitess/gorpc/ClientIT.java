@@ -1,9 +1,6 @@
 package com.youtube.vitess.gorpc;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 import org.bson.BSONObject;
 import org.bson.BasicBSONObject;
@@ -23,12 +20,15 @@ import com.youtube.vitess.gorpc.codecs.bson.BsonClientCodecFactory;
  * server.
  */
 public class ClientIT extends ClientTest {
-	private static Process serverProcess;
-	private static final int PORT = 1234;
 
-	@Override
-	public int getPort() {
-		return PORT;
+	@BeforeClass
+	public static void initServer() throws IOException, InterruptedException {
+		Util.startRealGoServer();
+	}
+
+	@AfterClass
+	public static void tearDownServer() throws Exception {
+		Util.stopRealGoServer();
 	}
 
 	@Before
@@ -41,35 +41,77 @@ public class ClientIT extends ClientTest {
 	public void tearDown() throws IOException {
 	}
 
-	@BeforeClass
-	public static void initServer() throws IOException, InterruptedException {
-		List<String> command = new ArrayList<String>();
-		command.add("go");
-		command.add("run");
-		command.add(ClientIT.class.getResource("/arithserver.go").getPath());
-		command.add("-port");
-		command.add("" + PORT);
-		ProcessBuilder builder = new ProcessBuilder(command);
-		serverProcess = builder.start();
-		Thread.sleep(TimeUnit.SECONDS.toMillis(1));
-	}
-
-	@AfterClass
-	public static void tearDownServer() {
-		serverProcess.destroy();
-	}
-
 	@Test
 	public void testDivide() throws GoRpcException, IOException,
 			ApplicationException {
-		Client client = Client.dialHttp("localhost", getPort(), "/_bson_rpc_",
+		Client client = Client.dialHttp(Util.HOST, Util.PORT, Util.PATH,
 				new BsonClientCodecFactory());
 		BSONObject mArgs = new BasicBSONObject();
 		mArgs.put("A", 10L);
 		mArgs.put("B", 3L);
 		Response response = client.call("Arith.Divide", mArgs);
-		BSONObject result = (BSONObject) response.reply;
+		BSONObject result = (BSONObject) response.getReply();
 		Assert.assertEquals(3L, result.get("Quo"));
 		Assert.assertEquals(1L, result.get("Rem"));
+		client.close();
+	}
+
+	@Test
+	public void testDivideError() throws GoRpcException, IOException,
+			ApplicationException {
+		Client client = Client.dialHttp(Util.HOST, Util.PORT, Util.PATH,
+				new BsonClientCodecFactory());
+		BSONObject mArgs = new BasicBSONObject();
+		mArgs.put("A", 10L);
+		mArgs.put("B", 0L);
+		try {
+			client.call("Arith.Divide", mArgs);
+			Assert.fail("did not raise application error");
+		} catch (ApplicationException e) {
+			Assert.assertEquals("divide by zero", e.getMessage());
+		}
+		client.close();
+	}
+
+	/**
+	 * Test no exception raised for client with timeouts disabled
+	 */
+	@Test
+	public void testNoTimeoutCase() throws Exception {
+		Client client = Client.dialHttp(Util.HOST, Util.PORT, Util.PATH,
+				new BsonClientCodecFactory());
+		timeoutCheck(client, 500, false);
+		client.close();
+	}
+
+	/**
+	 * Test client with timeout enabled
+	 */
+	@Test
+	public void testTimeout() throws Exception {
+		int clientTimeoutMs = 100;
+		Client client = Client.dialHttp(Util.HOST, Util.PORT, Util.PATH,
+				clientTimeoutMs, new BsonClientCodecFactory());
+		timeoutCheck(client, clientTimeoutMs / 2, false);
+		timeoutCheck(client, clientTimeoutMs * 2, true);
+		client.close();
+	}
+
+	private void timeoutCheck(Client client, int timeoutMs,
+			boolean shouldTimeout) throws Exception {
+		BSONObject mArgs = new BasicBSONObject();
+		mArgs.put("Duration", timeoutMs);
+
+		if (shouldTimeout) {
+			try {
+				client.call("Arith.Sleep", mArgs);
+				Assert.fail("did not raise timeout error");
+			} catch (GoRpcException e) {
+				Assert.assertEquals("connection exception Read timed out",
+						e.getMessage());
+			}
+		} else {
+			client.call("Arith.Sleep", mArgs);
+		}
 	}
 }

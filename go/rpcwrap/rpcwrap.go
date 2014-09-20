@@ -120,13 +120,18 @@ type ServerCodecFactory func(conn io.ReadWriteCloser) rpc.ServerCodec
 
 // ServeRPC handles rpc requests using the hijack scheme of rpc
 func ServeRPC(codecName string, cFactory ServerCodecFactory) {
-	http.Handle(GetRpcPath(codecName, false), &rpcHandler{cFactory, false})
+	http.Handle(GetRpcPath(codecName, false), &rpcHandler{cFactory, rpc.DefaultServer, false})
 }
 
 // ServeAuthRPC handles authenticated rpc requests using the hijack
 // scheme of rpc
 func ServeAuthRPC(codecName string, cFactory ServerCodecFactory) {
-	http.Handle(GetRpcPath(codecName, true), &rpcHandler{cFactory, true})
+	http.Handle(GetRpcPath(codecName, true), &rpcHandler{cFactory, AuthenticatedServer, true})
+}
+
+// ServeTestRPC serves the given rpc requests with the provided ServeMux
+func ServeTestRPC(handler *http.ServeMux, server *rpc.Server, codecName string, cFactory ServerCodecFactory) {
+	handler.Handle(GetRpcPath(codecName, false), &rpcHandler{cFactory, server, false})
 }
 
 // AuthenticatedServer is an rpc.Server instance that serves
@@ -147,19 +152,11 @@ func RegisterAuthenticated(rcvr interface{}) error {
 // rpcHandler handles rpc queries for a 'CONNECT' method.
 type rpcHandler struct {
 	cFactory ServerCodecFactory
+	server   *rpc.Server
 	useAuth  bool
 }
 
-// ServeCodec calls ServeCodec for the appropriate server
-// (authenticated or default).
-func (h *rpcHandler) ServeCodecWithContext(c rpc.ServerCodec, context *proto.Context) {
-	if h.useAuth {
-		AuthenticatedServer.ServeCodecWithContext(c, context)
-	} else {
-		rpc.ServeCodecWithContext(c, context)
-	}
-}
-
+// ServeHTTP implements http.Handler's ServeHTTP
 func (h *rpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 	if req.Method != "CONNECT" {
 		c.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -184,9 +181,10 @@ func (h *rpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 			return
 		}
 	}
-	h.ServeCodecWithContext(codec, context)
+	h.server.ServeCodecWithContext(codec, context)
 }
 
+// GetRpcPath returns the toplevel path used for serving RPCs over HTTP
 func GetRpcPath(codecName string, auth bool) string {
 	path := "/_" + codecName + "_rpc_"
 	if auth {

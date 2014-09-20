@@ -210,7 +210,7 @@ func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo
 	if sessionParams.Keyspace != sq.dbconfig.Keyspace {
 		return NewTabletError(FATAL, "Keyspace mismatch, expecting %v, received %v", sq.dbconfig.Keyspace, sessionParams.Keyspace)
 	}
-	if sessionParams.Shard != sq.dbconfig.Shard {
+	if strings.ToLower(sessionParams.Shard) != strings.ToLower(sq.dbconfig.Shard) {
 		return NewTabletError(FATAL, "Shard mismatch, expecting %v, received %v", sq.dbconfig.Shard, sessionParams.Shard)
 	}
 	sessionInfo.SessionId = sq.sessionId

@@ -8,6 +8,8 @@ import org.junit.Test;
 
 import com.youtube.vitess.vtgate.Exceptions.InvalidFieldException;
 import com.youtube.vitess.vtgate.Row.Cell;
+import com.youtube.vitess.vtgate.cursor.Cursor;
+import com.youtube.vitess.vtgate.cursor.CursorImpl;
 
 public class QueryResultTest {
 
@@ -36,7 +38,7 @@ public class QueryResultTest {
 		result.put("Rows", rows);
 
 		QueryResult qr = QueryResult.parse(result.toMap());
-		Cursor cursor = new Cursor(qr);
+		Cursor cursor = new CursorImpl(qr);
 		Assert.assertEquals(12L, cursor.getRowsAffected());
 		Assert.assertEquals(12345L, cursor.getLastRowId());
 

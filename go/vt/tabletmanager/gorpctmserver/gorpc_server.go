@@ -9,6 +9,7 @@ import (
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
@@ -169,7 +170,7 @@ func (tm *TabletManager) TabletExternallyReparented(context *rpcproto.Context, a
 	// the original gorpc call. Until we support that, use a
 	// reasonnable hard-coded value.
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_EXTERNALLY_REPARENTED, args, reply, func() error {
-		return actor.TabletExternallyReparented(tm.agent.TopoServer, tm.agent.TabletAlias, 30*time.Second, *tabletmanager.LockTimeout)
+		return actor.TabletExternallyReparented(tm.agent.TopoServer, tm.agent.TabletAlias, 30*time.Second, tm.agent.LockTimeout)
 	})
 }
 
@@ -250,4 +251,9 @@ func init() {
 	tabletmanager.RegisterQueryServices = append(tabletmanager.RegisterQueryServices, func(agent *tabletmanager.ActionAgent) {
 		rpcwrap.RegisterAuthenticated(&TabletManager{agent})
 	})
+}
+
+// RegisterForTest will register the RPC, to be used by test instances only
+func RegisterForTest(server *rpcplus.Server, agent *tabletmanager.ActionAgent) {
+	server.Register(&TabletManager{agent})
 }

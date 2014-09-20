@@ -1,12 +1,15 @@
-package com.youtube.vitess.vtgate;
+package com.youtube.vitess.vtgate.cursor;
 
 import java.util.Iterator;
 
-public class Cursor implements Iterator<Row>, Iterable<Row> {
+import com.youtube.vitess.vtgate.QueryResult;
+import com.youtube.vitess.vtgate.Row;
+
+public class CursorImpl implements Cursor {
 	private QueryResult result;
 	private Iterator<Row> iter;
 
-	protected Cursor(QueryResult result) {
+	public CursorImpl(QueryResult result) {
 		this.result = result;
 		this.iter = result.getRows().iterator();
 	}

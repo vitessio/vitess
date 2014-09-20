@@ -23,6 +23,11 @@ type googleMysql51 struct {
 
 const googleMysqlFlavorID = "GoogleMysql"
 
+// VersionMatch implements MysqlFlavor.VersionMatch().
+func (*googleMysql51) VersionMatch(version string) bool {
+	return strings.HasPrefix(version, "5.1") && strings.Contains(strings.ToLower(version), "google")
+}
+
 // MasterPosition implements MysqlFlavor.MasterPosition().
 //
 // The command looks like:

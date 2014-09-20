@@ -20,7 +20,6 @@ import (
 func TestShardExternallyReparented(t *testing.T) {
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Minute, time.Second)
-	wr.UseRPCs = false
 
 	// Create an old master, a new master, two good slaves, one bad slave
 	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER)
@@ -149,7 +148,6 @@ func TestShardExternallyReparented(t *testing.T) {
 func TestShardExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	ts := zktopo.NewTestServer(t, []string{"cell1"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Minute, time.Second)
-	wr.UseRPCs = false
 
 	// Create an old master, a new master, two good slaves, one bad slave
 	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER)
@@ -193,7 +191,6 @@ func TestShardExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 func TestShardExternallyReparentedContinueOnUnexpectedMaster(t *testing.T) {
 	ts := zktopo.NewTestServer(t, []string{"cell1"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Minute, time.Second)
-	wr.UseRPCs = false
 
 	// Create an old master, a new master, two good slaves, one bad slave
 	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER)

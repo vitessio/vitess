@@ -59,7 +59,7 @@ class TestKeyRange(unittest.TestCase):
     stm = keyrange.create_streaming_task_map(16, 16)
     for i, kr in enumerate(stm.keyrange_list):
       kr_parts = kr.split('-')
-      where_clause, bind_vars = keyrange.create_where_clause_for_keyrange(kr)
+      where_clause, bind_vars = keyrange._create_where_clause_for_keyrange(kr)
       if len(bind_vars.keys()) == 1:
         if kr_parts[0] == '':
           self.assertNotEqual(where_clause.find('<'), -1)
@@ -90,7 +90,7 @@ class TestKeyRange(unittest.TestCase):
     stm = keyrange.create_streaming_task_map(16, 16)
     for i, kr in enumerate(stm.keyrange_list):
       kr_parts = kr.split('-')
-      where_clause, bind_vars = keyrange.create_where_clause_for_keyrange(kr, keyspace_col_type=keyrange_constants.KIT_BYTES)
+      where_clause, bind_vars = keyrange._create_where_clause_for_keyrange(kr, keyspace_col_type=keyrange_constants.KIT_BYTES)
       if len(bind_vars.keys()) == 1:
         if kr_parts[0] == '':
           self.assertNotEqual(where_clause.find('<'), -1)
@@ -114,7 +114,7 @@ class TestKeyRange(unittest.TestCase):
   def test_bind_values_for_unsharded_keyspace(self):
     stm = keyrange.create_streaming_task_map(1, 1)
     self.assertEqual(len(stm.keyrange_list), 1)
-    where_clause, bind_vars = keyrange.create_where_clause_for_keyrange(stm.keyrange_list[0])
+    where_clause, bind_vars = keyrange._create_where_clause_for_keyrange(stm.keyrange_list[0])
     self.assertEqual(where_clause, "")
     self.assertEqual(bind_vars, {})
 

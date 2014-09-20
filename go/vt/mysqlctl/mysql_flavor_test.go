@@ -16,6 +16,7 @@ import (
 
 type fakeMysqlFlavor string
 
+func (f fakeMysqlFlavor) VersionMatch(version string) bool             { return version == string(f) }
 func (fakeMysqlFlavor) PromoteSlaveCommands() []string                 { return nil }
 func (fakeMysqlFlavor) ParseGTID(string) (proto.GTID, error)           { return nil, nil }
 func (fakeMysqlFlavor) MakeBinlogEvent(buf []byte) blproto.BinlogEvent { return nil }
@@ -38,25 +39,19 @@ func (fakeMysqlFlavor) StartReplicationCommands(params *mysql.ConnectionParams, 
 func (fakeMysqlFlavor) EnableBinlogPlayback(mysqld *Mysqld) error  { return nil }
 func (fakeMysqlFlavor) DisableBinlogPlayback(mysqld *Mysqld) error { return nil }
 
-func TestDefaultMysqlFlavor(t *testing.T) {
-	os.Setenv("MYSQL_FLAVOR", "")
-	mysqlFlavors = make(map[string]MysqlFlavor)
-	mysqlFlavors["only one"] = fakeMysqlFlavor("only one")
-	want := mysqlFlavors["only one"]
-
-	if got := mysqlFlavor(); got != want {
-		t.Errorf("mysqlFlavor() = %#v, want %#v", got, want)
-	}
-}
-
 func TestMysqlFlavorEnvironmentVariable(t *testing.T) {
 	os.Setenv("MYSQL_FLAVOR", "fake flavor")
 	mysqlFlavors = make(map[string]MysqlFlavor)
 	mysqlFlavors["fake flavor"] = fakeMysqlFlavor("fake flavor")
+	mysqlFlavors["it's a trap"] = fakeMysqlFlavor("it's a trap")
 	want := mysqlFlavors["fake flavor"]
 
-	if got := mysqlFlavor(); got != want {
-		t.Errorf("mysqlFlavor() = %#v, want %#v", got, want)
+	got, err := ((*Mysqld)(nil)).detectFlavor()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got != want {
+		t.Errorf("detectFlavor() = %#v, want %#v", got, want)
 	}
 }
 

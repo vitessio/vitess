@@ -4,7 +4,7 @@ public class Response {
 	private String serviceMethod;
 	private long seq;
 	private String error;
-	Object reply;
+	private Object reply;
 
 	public String getServiceMethod() {
 		return serviceMethod;

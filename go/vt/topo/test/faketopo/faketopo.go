@@ -53,7 +53,6 @@ func New(t *testing.T, cells []string) *Fixture {
 	ts := zktopo.NewTestServer(t, cells)
 
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, 1*time.Second, 1*time.Second)
-	wr.UseRPCs = false
 
 	return &Fixture{
 		T:        t,

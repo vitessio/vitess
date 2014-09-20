@@ -7,6 +7,7 @@ package bsonrpc
 import (
 	"crypto/tls"
 	"io"
+	"net/http"
 	"time"
 
 	"github.com/youtube/vitess/go/bson"
@@ -100,4 +101,8 @@ func ServeRPC() {
 
 func ServeAuthRPC() {
 	rpcwrap.ServeAuthRPC(codecName, NewServerCodec)
+}
+
+func ServeTestRPC(handler *http.ServeMux, server *rpc.Server) {
+	rpcwrap.ServeTestRPC(handler, server, codecName, NewServerCodec)
 }

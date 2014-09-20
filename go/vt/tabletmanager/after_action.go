@@ -32,6 +32,11 @@ var (
 )
 
 func (agent *ActionAgent) allowQueries(tablet *topo.Tablet) error {
+	if agent.DBConfigs == nil {
+		// test instance, do nothing
+		return nil
+	}
+
 	// if the query service is already running, we're not starting it again
 	if tabletserver.SqlQueryRpcService.GetState() == "SERVING" {
 		return nil
@@ -43,6 +48,11 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet) error {
 	}
 	agent.DBConfigs.App.Keyspace = tablet.Keyspace
 	agent.DBConfigs.App.Shard = tablet.Shard
+	if tablet.Type != topo.TYPE_MASTER {
+		agent.DBConfigs.App.EnableInvalidator = true
+	} else {
+		agent.DBConfigs.App.EnableInvalidator = false
+	}
 
 	qrs, err := agent.createQueryRules(tablet)
 	if err != nil {
@@ -102,6 +112,10 @@ func (agent *ActionAgent) createQueryRules(tablet *topo.Tablet) (qrs *tabletserv
 }
 
 func (agent *ActionAgent) disallowQueries() {
+	if agent.DBConfigs == nil {
+		// test instance, do nothing
+		return
+	}
 	tabletserver.DisallowQueries()
 }
 
@@ -152,11 +166,15 @@ func (agent *ActionAgent) changeCallback(oldTablet, newTablet topo.Tablet) {
 		}
 
 		// Disable before enabling to force existing streams to stop.
-		binlog.DisableUpdateStreamService()
-		binlog.EnableUpdateStreamService(agent.DBConfigs.App.DbName, agent.Mysqld)
+		if agent.DBConfigs != nil {
+			binlog.DisableUpdateStreamService()
+			binlog.EnableUpdateStreamService(agent.DBConfigs.App.DbName, agent.Mysqld)
+		}
 	} else {
 		agent.disallowQueries()
-		binlog.DisableUpdateStreamService()
+		if agent.DBConfigs != nil {
+			binlog.DisableUpdateStreamService()
+		}
 	}
 
 	statsType.Set(string(newTablet.Type))
@@ -166,9 +184,11 @@ func (agent *ActionAgent) changeCallback(oldTablet, newTablet topo.Tablet) {
 	statsKeyRangeEnd.Set(string(newTablet.KeyRange.End.Hex()))
 
 	// See if we need to start or stop any binlog player
-	if newTablet.Type == topo.TYPE_MASTER {
-		agent.BinlogPlayerMap.RefreshMap(newTablet, keyspaceInfo, shardInfo)
-	} else {
-		agent.BinlogPlayerMap.StopAllPlayersAndReset()
+	if agent.BinlogPlayerMap != nil {
+		if newTablet.Type == topo.TYPE_MASTER {
+			agent.BinlogPlayerMap.RefreshMap(newTablet, keyspaceInfo, shardInfo)
+		} else {
+			agent.BinlogPlayerMap.StopAllPlayersAndReset()
+		}
 	}
 }
