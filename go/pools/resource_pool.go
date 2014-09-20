@@ -7,6 +7,7 @@
 package pools
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -14,7 +15,7 @@ import (
 )
 
 var (
-	CLOSED_ERR = fmt.Errorf("ResourcePool is closed")
+	CLOSED_ERR = errors.New("ResourcePool is closed")
 )
 
 // Factory is a function that can be used to create a resource.
@@ -51,7 +52,7 @@ type resourceWrapper struct {
 // An idleTimeout of 0 means that there is no timeout.
 func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Duration) *ResourcePool {
 	if capacity <= 0 || maxCap <= 0 || capacity > maxCap {
-		panic(fmt.Errorf("Invalid/out of range capacity"))
+		panic(errors.New("invalid/out of range capacity"))
 	}
 	rp := &ResourcePool{
 		resources:   make(chan resourceWrapper, maxCap),
@@ -81,17 +82,22 @@ func (rp *ResourcePool) IsClosed() (closed bool) {
 // has not been reached, it will create a new one using the factory. Otherwise,
 // it will indefinitely wait till the next resource becomes available.
 func (rp *ResourcePool) Get() (resource Resource, err error) {
-	return rp.get(true)
+	return rp.get(true, 0)
+}
+
+// GetTimeout is like Get, but it returns an error on timeout.
+func (rp *ResourcePool) GetTimeout(timeout time.Duration) (resource Resource, err error) {
+	return rp.get(true, timeout)
 }
 
 // TryGet will return the next available resource. If none is available, and capacity
 // has not been reached, it will create a new one using the factory. Otherwise,
 // it will return nil with no error.
 func (rp *ResourcePool) TryGet() (resource Resource, err error) {
-	return rp.get(false)
+	return rp.get(false, 0)
 }
 
-func (rp *ResourcePool) get(wait bool) (resource Resource, err error) {
+func (rp *ResourcePool) get(wait bool, timeout time.Duration) (resource Resource, err error) {
 	// Fetch
 	var wrapper resourceWrapper
 	var ok bool
@@ -102,7 +108,17 @@ func (rp *ResourcePool) get(wait bool) (resource Resource, err error) {
 			return nil, nil
 		}
 		startTime := time.Now()
-		wrapper, ok = <-rp.resources
+		if timeout == 0 {
+			wrapper, ok = <-rp.resources
+		} else {
+			tmr := time.NewTimer(timeout)
+			defer tmr.Stop()
+			select {
+			case wrapper, ok = <-rp.resources:
+			case <-tmr.C:
+				return nil, errors.New("timed out")
+			}
+		}
 		rp.recordWait(startTime)
 	}
 	if !ok {
@@ -110,8 +126,8 @@ func (rp *ResourcePool) get(wait bool) (resource Resource, err error) {
 	}
 
 	// Unwrap
-	timeout := rp.idleTimeout.Get()
-	if wrapper.resource != nil && timeout > 0 && wrapper.timeUsed.Add(timeout).Sub(time.Now()) < 0 {
+	idleTimeout := rp.idleTimeout.Get()
+	if wrapper.resource != nil && idleTimeout > 0 && wrapper.timeUsed.Add(idleTimeout).Sub(time.Now()) < 0 {
 		wrapper.resource.Close()
 		wrapper.resource = nil
 	}
@@ -136,7 +152,7 @@ func (rp *ResourcePool) Put(resource Resource) {
 	select {
 	case rp.resources <- wrapper:
 	default:
-		panic(fmt.Errorf("Attempt to Put into a full ResourcePool"))
+		panic(errors.New("attempt to Put into a full ResourcePool"))
 	}
 }
 

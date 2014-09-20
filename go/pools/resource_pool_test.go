@@ -485,3 +485,20 @@ func TestSlowCreateFail(t *testing.T) {
 		t.Errorf("Expecting 2, received %d", available)
 	}
 }
+
+func TestTimeout(t *testing.T) {
+	lastId.Set(0)
+	count.Set(0)
+	p := NewResourcePool(PoolFactory, 1, 1, time.Second)
+	defer p.Close()
+	r, err := p.Get()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = p.GetTimeout(time.Millisecond)
+	want := "timed out"
+	if err == nil || err.Error() != want {
+		t.Errorf("got %v, want %s", err, want)
+	}
+	p.Put(r)
+}
