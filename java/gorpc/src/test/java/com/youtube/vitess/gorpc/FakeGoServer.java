@@ -14,8 +14,10 @@ import org.bson.BSONObject;
 import org.bson.BasicBSONEncoder;
 import org.bson.BasicBSONObject;
 
+import com.google.common.primitives.UnsignedLong;
 import com.youtube.vitess.gorpc.codecs.bson.BsonClientCodec;
 import com.youtube.vitess.gorpc.codecs.bson.GoRpcBsonDecoder;
+import com.youtube.vitess.gorpc.codecs.bson.GoRpcBsonEncoder;
 
 /**
  * FakeGoServer emulates a Go rpc server using bson codec. It does minimal error
@@ -47,7 +49,7 @@ public class FakeGoServer extends Thread {
 	private static class ArithThread extends Thread {
 		private Socket clientSocket;
 		private BSONDecoder decoder = new GoRpcBsonDecoder();
-		private BSONEncoder encoder = new BasicBSONEncoder();
+		private BSONEncoder encoder = new GoRpcBsonEncoder();
 
 		ArithThread(Socket clientSocket) {
 			this.clientSocket = clientSocket;
@@ -85,7 +87,8 @@ public class FakeGoServer extends Thread {
 			BSONObject respHead = new BasicBSONObject();
 			respHead.put(Constants.SERVICE_METHOD,
 					((String) reqHead.get(Constants.SERVICE_METHOD)).getBytes());
-			respHead.put(Constants.SEQ, (Long) reqHead.get(Constants.SEQ));
+			respHead.put(Constants.SEQ,
+					(UnsignedLong) reqHead.get(Constants.SEQ));
 			if (!"Arith.Multiply".equals((String) reqHead
 					.get(Constants.SERVICE_METHOD))) {
 				respHead.put(Constants.ERROR,
