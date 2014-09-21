@@ -13,7 +13,7 @@ public class Query {
 	private String keyspace;
 	private Map<String, Object> bindVars;
 	private String tabletType;
-	private List<String> keyspaceIds;
+	private List<byte[]> keyspaceIds;
 	private boolean stream;
 
 	private Query(String sql, String keyspace, String tabletType) {
@@ -54,11 +54,11 @@ public class Query {
 		this.tabletType = tabletType;
 	}
 
-	public List<String> getKeyspaceIds() {
+	public List<byte[]> getKeyspaceIds() {
 		return keyspaceIds;
 	}
 
-	public void setKeyspaceIds(List<String> keyspaceIds) {
+	public void setKeyspaceIds(List<byte[]> keyspaceIds) {
 		this.keyspaceIds = keyspaceIds;
 	}
 
@@ -79,7 +79,6 @@ public class Query {
 		if (keyspaceIds != null) {
 			map.put("KeyspaceIds", keyspaceIds);
 		}
-
 	}
 
 	public static class QueryBuilder {
@@ -98,8 +97,12 @@ public class Query {
 			return this;
 		}
 
-		public QueryBuilder withKeyspaceIds(List<String> keyspaceIds) {
-			query.setKeyspaceIds(keyspaceIds);
+		public QueryBuilder withKeyspaceIds(List<KeyspaceId> keyspaceIds) {
+			List<byte[]> kidsBytes = new ArrayList<>();
+			for (KeyspaceId kid : keyspaceIds) {
+				kidsBytes.add(kid.getBytes());
+			}
+			query.setKeyspaceIds(kidsBytes);
 			return this;
 		}
 
@@ -108,11 +111,11 @@ public class Query {
 			return this;
 		}
 
-		public QueryBuilder withAddedKeyspaceId(String keyspaceId) {
+		public QueryBuilder withAddedKeyspaceId(KeyspaceId keyspaceId) {
 			if (query.getKeyspaceIds() == null) {
-				query.setKeyspaceIds(new ArrayList<String>());
+				query.setKeyspaceIds(new ArrayList<byte[]>());
 			}
-			query.getKeyspaceIds().add(keyspaceId);
+			query.getKeyspaceIds().add(keyspaceId.getBytes());
 			return this;
 		}
 	}

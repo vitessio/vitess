@@ -18,6 +18,7 @@ import org.junit.Test;
 import com.google.common.collect.ImmutableMap;
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.Exceptions.DatabaseException;
+import com.youtube.vitess.vtgate.KeyspaceId;
 import com.youtube.vitess.vtgate.Query;
 import com.youtube.vitess.vtgate.Query.QueryBuilder;
 import com.youtube.vitess.vtgate.Row;
@@ -26,7 +27,6 @@ import com.youtube.vitess.vtgate.VtGate;
 import com.youtube.vitess.vtgate.cursor.Cursor;
 import com.youtube.vitess.vtgate.cursor.CursorImpl;
 import com.youtube.vitess.vtgate.cursor.StreamCursor;
-import com.youtube.vitess.vtgate.integration.Util.VtGateParams;
 
 public class VtGateIT {
 
@@ -35,6 +35,7 @@ public class VtGateIT {
 	@BeforeClass
 	public static void setUpVtGate() throws Exception {
 		params = Util.runVtGate(true);
+
 	}
 
 	@AfterClass
@@ -54,7 +55,7 @@ public class VtGateIT {
 		try {
 			vtgate.execute(new QueryBuilder(deleteSql, params.keyspace_name,
 					"master").withAddedKeyspaceId(
-					params.getKeyspaceIds().get(0)).build());
+					params.getAllKeyspaceIds().get(0)).build());
 			Assert.fail("did not raise DatabaseException");
 		} catch (DatabaseException e) {
 			Assert.assertTrue(e.getMessage().contains("not_in_tx"));
@@ -69,7 +70,7 @@ public class VtGateIT {
 		String selectSql = "select * from vtgate_test";
 		Query allRowsQuery = new QueryBuilder(selectSql,
 				params.keyspace_name, "master").withKeyspaceIds(
-				params.getKeyspaceIds()).build();
+				params.getAllKeyspaceIds()).build();
 		Cursor cursor = vtgate.execute(allRowsQuery);
 		Assert.assertEquals(CursorImpl.class, cursor.getClass());
 		Assert.assertEquals(0, cursor.getRowsAffected());
@@ -85,6 +86,12 @@ public class VtGateIT {
 		Assert.assertEquals(0, cursor.getLastRowId());
 		Assert.assertTrue(cursor.hasNext());
 
+		KeyspaceId firstKid = params.getAllKeyspaceIds().get(0);
+		Query query = new QueryBuilder(selectSql,
+				params.keyspace_name, "master")
+				.withAddedKeyspaceId(firstKid)
+				.build();
+		cursor = vtgate.execute(query);
 		Row row = cursor.next();
 
 		Cell idCell = row.next();
@@ -108,12 +115,32 @@ public class VtGateIT {
 	}
 
 	@Test
+	public void testQueryRouting() throws Exception {
+		for (String shardName : params.shard_kid_map.keySet()) {
+			Util.insertRowsInShard(params, shardName, 10);
+		}
+
+		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
+		String allRowsSql = "select * from vtgate_test";
+
+		for (String shardName : params.shard_kid_map.keySet()) {
+			Query shardRows = new QueryBuilder(allRowsSql,
+					params.keyspace_name, "master").withKeyspaceIds(
+					params.getKeyspaceIds(shardName)).build();
+			Cursor cursor = vtgate.execute(shardRows);
+			Assert.assertEquals(10, cursor.getRowsAffected());
+		}
+
+		vtgate.close();
+	}
+
+	@Test
 	public void testStreamCursorType() throws Exception {
 		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
 		String selectSql = "select * from vtgate_test";
 		Query allRowsQuery = new QueryBuilder(selectSql,
 				params.keyspace_name, "master").withKeyspaceIds(
-				params.getKeyspaceIds()).withStream(true).build();
+				params.getAllKeyspaceIds()).withStream(true).build();
 		Cursor cursor = vtgate.execute(allRowsQuery);
 		Assert.assertEquals(StreamCursor.class, cursor.getClass());
 		vtgate.close();
@@ -124,9 +151,11 @@ public class VtGateIT {
 		Util.insertRows(params, 1, 200);
 		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
 		String selectSql = "select A.* from vtgate_test A join vtgate_test B";
-		Query joinQuery = new QueryBuilder(selectSql,
-				params.keyspace_name, "master").withKeyspaceIds(
-				params.getKeyspaceIds()).withStream(true).build();
+		Query joinQuery = new QueryBuilder(selectSql, params.keyspace_name,
+				"master")
+				.withKeyspaceIds(params.getAllKeyspaceIds())
+				.withStream(true)
+				.build();
 		Cursor cursor = vtgate.execute(joinQuery);
 
 		int count = 0;
@@ -149,7 +178,7 @@ public class VtGateIT {
 		String insertSql = "insert into vtgate_test "
 				+ "(id, name, age, percent, keyspace_id) "
 				+ "values (:id, :name, :age, :percent, :keyspace_id)";
-		String kid = params.getKeyspaceIds().get(0);
+		KeyspaceId kid = params.getAllKeyspaceIds().get(0);
 		Map<String, Object> bindVars = new ImmutableMap.Builder<String, Object>()
 				.put("id", 1)
 				.put("name", "name_" + 1)
@@ -175,7 +204,7 @@ public class VtGateIT {
 		String selectSql = "select * from vtgate_test";
 		Query query = new QueryBuilder(selectSql,
 				params.keyspace_name, "master").withKeyspaceIds(
-				params.getKeyspaceIds()).withStream(true).build();
+				params.getAllKeyspaceIds()).withStream(true).build();
 		vtgate.execute(query);
 		try {
 			vtgate.execute(query);
@@ -196,7 +225,7 @@ public class VtGateIT {
 		Query allRowsQuery = new QueryBuilder(
 				"select * from vtgate_test",
 				params.keyspace_name, "master").withKeyspaceIds(
-				params.getKeyspaceIds()).build();
+				params.getAllKeyspaceIds()).build();
 		Row row = vtgate.execute(allRowsQuery).next();
 		Date expected = convertToGMT(date);
 		Assert.assertEquals(expected, row.getDate("timestamp_col"));
@@ -226,7 +255,7 @@ public class VtGateIT {
 		// Check timeout error raised for slow query
 		Query sleepQuery = new QueryBuilder("select sleep(0.5) from dual",
 				params.keyspace_name, "master").withKeyspaceIds(
-				params.getKeyspaceIds()).build();
+				params.getAllKeyspaceIds()).build();
 		try {
 			vtgate.execute(sleepQuery);
 			Assert.fail("did not raise timeout exception");
@@ -239,7 +268,7 @@ public class VtGateIT {
 		// Check no timeout error for fast query
 		sleepQuery = new QueryBuilder("select sleep(0.01) from dual",
 				params.keyspace_name, "master").withKeyspaceIds(
-				params.getKeyspaceIds()).build();
+				params.getAllKeyspaceIds()).build();
 		vtgate.execute(sleepQuery);
 		vtgate.close();
 	}
