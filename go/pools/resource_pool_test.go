@@ -495,7 +495,7 @@ func TestTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = p.GetTimeout(time.Millisecond)
+	_, err = p.GetWithTimeout(time.Millisecond)
 	want := "timed out"
 	if err == nil || err.Error() != want {
 		t.Errorf("got %v, want %s", err, want)

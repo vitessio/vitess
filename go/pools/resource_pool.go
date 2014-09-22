@@ -85,8 +85,8 @@ func (rp *ResourcePool) Get() (resource Resource, err error) {
 	return rp.get(true, 0)
 }
 
-// GetTimeout is like Get, but it returns an error on timeout.
-func (rp *ResourcePool) GetTimeout(timeout time.Duration) (resource Resource, err error) {
+// GetWithTimeout is like Get, but it returns an error on timeout.
+func (rp *ResourcePool) GetWithTimeout(timeout time.Duration) (resource Resource, err error) {
 	return rp.get(true, timeout)
 }
 
