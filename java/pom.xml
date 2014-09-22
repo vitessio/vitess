@@ -14,6 +14,8 @@
     <modules>
         <module>vtocc-client</module>
         <module>vtocc-jdbc-driver</module>
+        <module>gorpc</module>
+        <module>vtgate-client</module>
     </modules>
 
     <organization>
@@ -28,6 +30,10 @@
         <developer>
             <id>GarethCOliver</id>
             <name>Gareth Oliver</name>
+        </developer>
+        <developer>
+            <id>anandhenry</id>
+            <name>Anand Henry</name>
         </developer>
     </developers>
 
