@@ -1,6 +1,7 @@
 package com.youtube.vitess.vtgate;
 
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -14,6 +15,7 @@ public class Query {
 	private Map<String, Object> bindVars;
 	private String tabletType;
 	private List<byte[]> keyspaceIds;
+	private List<Map<String, byte[]>> keyRanges;
 	private boolean stream;
 
 	private Query(String sql, String keyspace, String tabletType) {
@@ -62,6 +64,14 @@ public class Query {
 		this.keyspaceIds = keyspaceIds;
 	}
 
+	public List<Map<String, byte[]>> getKeyRanges() {
+		return keyRanges;
+	}
+
+	public void setKeyRanges(List<Map<String, byte[]>> keyRanges) {
+		this.keyRanges = keyRanges;
+	}
+
 	public boolean isStream() {
 		return stream;
 	}
@@ -78,6 +88,10 @@ public class Query {
 
 		if (keyspaceIds != null) {
 			map.put("KeyspaceIds", keyspaceIds);
+		} else {
+			if (keyRanges != null) {
+				map.put("KeyRanges", keyRanges);
+			}
 		}
 	}
 
@@ -106,6 +120,15 @@ public class Query {
 			return this;
 		}
 
+		public QueryBuilder withKeyRanges(List<KeyRange> keyRanges) {
+			List<Map<String, byte[]>> keyRangeMaps = new ArrayList<>();
+			for (KeyRange kr : keyRanges) {
+				keyRangeMaps.add(kr.toMap());
+			}
+			query.setKeyRanges(keyRangeMaps);
+			return this;
+		}
+
 		public QueryBuilder withStream(boolean stream) {
 			query.setStream(stream);
 			return this;
@@ -116,6 +139,14 @@ public class Query {
 				query.setKeyspaceIds(new ArrayList<byte[]>());
 			}
 			query.getKeyspaceIds().add(keyspaceId.getBytes());
+			return this;
+		}
+
+		public QueryBuilder withAddedKeyRange(KeyRange keyRange) {
+			if (query.getKeyRanges() == null) {
+				query.setKeyRanges(new ArrayList<Map<String, byte[]>>());
+			}
+			query.getKeyRanges().add(keyRange.toMap());
 			return this;
 		}
 	}

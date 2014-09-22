@@ -46,6 +46,17 @@ public class GoRpcClient implements RpcClient {
 
 	@SuppressWarnings("unchecked")
 	@Override
+	public Map<String, Object> executeKeyRanges(Map<String, Object> args)
+			throws ConnectionException {
+		BSONObject params = new BasicBSONObject();
+		params.putAll(args);
+		Response response = call("VTGate.ExecuteKeyRanges", params);
+		BSONObject reply = (BSONObject) response.getReply();
+		return reply.toMap();
+	}
+
+	@SuppressWarnings("unchecked")
+	@Override
 	public Map<String, Object> streamExecuteKeyspaceIds(Map<String, Object> args)
 			throws DatabaseException, ConnectionException {
 		BSONObject params = new BasicBSONObject();
@@ -128,7 +139,7 @@ public class GoRpcClient implements RpcClient {
 						new BsonClientCodecFactory());
 				return new GoRpcClient(client);
 			} catch (GoRpcException e) {
-				logger.error("vtgate connection exception", e);
+				logger.error("vtgate connection exception: ", e);
 				throw new ConnectionException(e.getMessage());
 			}
 		}

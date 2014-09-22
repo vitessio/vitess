@@ -89,6 +89,10 @@ public class VtGate {
 			} else {
 				reply = client.executeKeyspaceIds(params);
 			}
+		} else {
+			if (query.getKeyRanges() != null) {
+				reply = client.executeKeyRanges(params);
+			}
 		}
 
 		if (reply.containsKey("Error")) {
