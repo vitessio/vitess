@@ -69,6 +69,18 @@ public class GoRpcClient implements RpcClient {
 
 	@SuppressWarnings("unchecked")
 	@Override
+	public Map<String, Object> streamExecuteKeyRanges(Map<String, Object> args)
+			throws DatabaseException, ConnectionException {
+		BSONObject params = new BasicBSONObject();
+		params.putAll(args);
+		Response response = streamCall("VTGate.StreamExecuteKeyRanges",
+				params);
+		BSONObject reply = (BSONObject) response.getReply();
+		return reply.toMap();
+	}
+
+	@SuppressWarnings("unchecked")
+	@Override
 	public Map<String, Object> streamNext() throws ConnectionException {
 		Response response;
 		try {

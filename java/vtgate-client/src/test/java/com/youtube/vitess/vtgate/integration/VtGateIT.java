@@ -161,7 +161,7 @@ public class VtGateIT {
 	}
 
 	@Test
-	public void testStreamingReads() throws Exception {
+	public void testStreamExecuteKeyspaceIdsReads() throws Exception {
 		Util.insertRows(params, 1, 200);
 		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
 		String selectSql = "select A.* from vtgate_test A join vtgate_test B";
@@ -180,6 +180,32 @@ public class VtGateIT {
 			Assert.assertEquals(BigInteger.class, idCell.getType());
 		}
 		Assert.assertEquals(40000, count);
+		vtgate.close();
+	}
+
+	@Test
+	public void testStreamExecuteKeyRangesReads() throws Exception {
+		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
+		int rowCount = 100;
+		for (String shardName : params.shard_kid_map.keySet()) {
+			Util.insertRowsInShard(params, shardName, rowCount);
+			List<KeyspaceId> kids = params.getKeyspaceIds(shardName);
+			KeyRange kr = new KeyRange(Collections.min(kids),
+					Collections.max(kids));
+			String selectSql = "select A.* from vtgate_test A join vtgate_test B";
+			Query query = new QueryBuilder(selectSql, params.keyspace_name,
+					"master")
+					.withAddedKeyRange(kr)
+					.withStream(true)
+					.build();
+			Cursor cursor = vtgate.execute(query);
+			int count = 0;
+			while (cursor.hasNext()) {
+				cursor.next();
+				count++;
+			}
+			Assert.assertEquals(rowCount * rowCount, count);
+		}
 		vtgate.close();
 	}
 

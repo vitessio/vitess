@@ -91,7 +91,11 @@ public class VtGate {
 			}
 		} else {
 			if (query.getKeyRanges() != null) {
-				reply = client.executeKeyRanges(params);
+				if (query.isStream()) {
+					reply = client.streamExecuteKeyRanges(params);
+				} else {
+					reply = client.executeKeyRanges(params);
+				}
 			}
 		}
 
