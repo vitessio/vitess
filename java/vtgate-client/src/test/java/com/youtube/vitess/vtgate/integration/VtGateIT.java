@@ -154,7 +154,7 @@ public class VtGateIT {
 		String selectSql = "select * from vtgate_test";
 		Query allRowsQuery = new QueryBuilder(selectSql,
 				params.keyspace_name, "master").withKeyspaceIds(
-				params.getAllKeyspaceIds()).withStream(true).build();
+				params.getAllKeyspaceIds()).withStreaming(true).build();
 		Cursor cursor = vtgate.execute(allRowsQuery);
 		Assert.assertEquals(StreamCursor.class, cursor.getClass());
 		vtgate.close();
@@ -168,7 +168,7 @@ public class VtGateIT {
 		Query joinQuery = new QueryBuilder(selectSql, params.keyspace_name,
 				"master")
 				.withKeyspaceIds(params.getAllKeyspaceIds())
-				.withStream(true)
+				.withStreaming(true)
 				.build();
 		Cursor cursor = vtgate.execute(joinQuery);
 
@@ -196,7 +196,7 @@ public class VtGateIT {
 			Query query = new QueryBuilder(selectSql, params.keyspace_name,
 					"master")
 					.withAddedKeyRange(kr)
-					.withStream(true)
+					.withStreaming(true)
 					.build();
 			Cursor cursor = vtgate.execute(query);
 			int count = 0;
@@ -230,7 +230,7 @@ public class VtGateIT {
 				params.keyspace_name, "master")
 				.withBindVars(bindVars)
 				.withAddedKeyspaceId(kid)
-				.withStream(true)
+				.withStreaming(true)
 				.build();
 		vtgate.execute(query);
 		vtgate.commit();
@@ -244,7 +244,7 @@ public class VtGateIT {
 		String selectSql = "select * from vtgate_test";
 		Query query = new QueryBuilder(selectSql,
 				params.keyspace_name, "master").withKeyspaceIds(
-				params.getAllKeyspaceIds()).withStream(true).build();
+				params.getAllKeyspaceIds()).withStreaming(true).build();
 		vtgate.execute(query);
 		try {
 			vtgate.execute(query);

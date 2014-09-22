@@ -32,7 +32,7 @@ public class StreamingServerShutdownIT {
 		String selectSql = "select A.* from vtgate_test A join vtgate_test B";
 		Query joinQuery = new QueryBuilder(selectSql,
 				params.keyspace_name, "master").withKeyspaceIds(
-				params.getAllKeyspaceIds()).withStream(true).build();
+				params.getAllKeyspaceIds()).withStreaming(true).build();
 		Cursor cursor = vtgate.execute(joinQuery);
 
 		int count = 0;

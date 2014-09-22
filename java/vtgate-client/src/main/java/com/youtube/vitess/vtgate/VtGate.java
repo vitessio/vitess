@@ -84,18 +84,16 @@ public class VtGate {
 
 		Map<String, Object> reply = null;
 		if (query.getKeyspaceIds() != null) {
-			if (query.isStream()) {
+			if (query.isStreaming()) {
 				reply = client.streamExecuteKeyspaceIds(params);
 			} else {
 				reply = client.executeKeyspaceIds(params);
 			}
 		} else {
-			if (query.getKeyRanges() != null) {
-				if (query.isStream()) {
-					reply = client.streamExecuteKeyRanges(params);
-				} else {
-					reply = client.executeKeyRanges(params);
-				}
+			if (query.isStreaming()) {
+				reply = client.streamExecuteKeyRanges(params);
+			} else {
+				reply = client.executeKeyRanges(params);
 			}
 		}
 
@@ -107,7 +105,7 @@ public class VtGate {
 		}
 		Map<String, Object> result = (Map<String, Object>) reply.get("Result");
 		QueryResult qr = QueryResult.parse(result);
-		if (query.isStream()) {
+		if (query.isStreaming()) {
 			return new StreamCursor(qr, client);
 		}
 
