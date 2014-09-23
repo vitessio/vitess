@@ -46,11 +46,34 @@ public class GoRpcClient implements RpcClient {
 
 	@SuppressWarnings("unchecked")
 	@Override
+	public Map<String, Object> executeKeyRanges(Map<String, Object> args)
+			throws ConnectionException {
+		BSONObject params = new BasicBSONObject();
+		params.putAll(args);
+		Response response = call("VTGate.ExecuteKeyRanges", params);
+		BSONObject reply = (BSONObject) response.getReply();
+		return reply.toMap();
+	}
+
+	@SuppressWarnings("unchecked")
+	@Override
 	public Map<String, Object> streamExecuteKeyspaceIds(Map<String, Object> args)
 			throws DatabaseException, ConnectionException {
 		BSONObject params = new BasicBSONObject();
 		params.putAll(args);
 		Response response = streamCall("VTGate.StreamExecuteKeyspaceIds",
+				params);
+		BSONObject reply = (BSONObject) response.getReply();
+		return reply.toMap();
+	}
+
+	@SuppressWarnings("unchecked")
+	@Override
+	public Map<String, Object> streamExecuteKeyRanges(Map<String, Object> args)
+			throws DatabaseException, ConnectionException {
+		BSONObject params = new BasicBSONObject();
+		params.putAll(args);
+		Response response = streamCall("VTGate.StreamExecuteKeyRanges",
 				params);
 		BSONObject reply = (BSONObject) response.getReply();
 		return reply.toMap();
@@ -120,16 +143,15 @@ public class GoRpcClient implements RpcClient {
 	public static class GoRpcClientFactory implements RpcClientFactory {
 
 		@Override
-		public RpcClient connect(String host, int port)
+		public RpcClient connect(String host, int port, int timeoutMs)
 				throws ConnectionException {
 			Client client;
 			try {
-				client = Client.dialHttp(host,
-						port, BSON_RPC_PATH,
+				client = Client.dialHttp(host, port, BSON_RPC_PATH, timeoutMs,
 						new BsonClientCodecFactory());
 				return new GoRpcClient(client);
 			} catch (GoRpcException e) {
-				logger.error("vtgate connection exception", e);
+				logger.error("vtgate connection exception: ", e);
 				throw new ConnectionException(e.getMessage());
 			}
 		}

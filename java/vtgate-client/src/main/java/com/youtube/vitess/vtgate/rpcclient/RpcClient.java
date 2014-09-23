@@ -12,7 +12,13 @@ public interface RpcClient {
 	public Map<String, Object> executeKeyspaceIds(Map<String, Object> args)
 			throws DatabaseException, ConnectionException;
 
+	public Map<String, Object> executeKeyRanges(Map<String, Object> args)
+			throws DatabaseException, ConnectionException;
+
 	public Map<String, Object> streamExecuteKeyspaceIds(Map<String, Object> args)
+			throws DatabaseException, ConnectionException;
+
+	public Map<String, Object> streamExecuteKeyRanges(Map<String, Object> args)
 			throws DatabaseException, ConnectionException;
 
 	public Map<String, Object> streamNext() throws ConnectionException;
@@ -24,7 +30,7 @@ public interface RpcClient {
 	public void close() throws ConnectionException;
 
 	public static interface RpcClientFactory {
-		public RpcClient connect(String host, int port)
+		public RpcClient connect(String host, int port, int timeoutMs)
 				throws ConnectionException;
 	}
 }

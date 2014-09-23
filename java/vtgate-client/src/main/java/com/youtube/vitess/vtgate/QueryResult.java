@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.google.common.primitives.Ints;
+import com.google.common.primitives.UnsignedLong;
 import com.youtube.vitess.vtgate.Row.Cell;
 import com.youtube.vitess.vtgate.cursor.Cursor;
 
@@ -38,8 +39,9 @@ public class QueryResult {
 	public static QueryResult parse(Map<String, Object> result,
 			List<Field> fields) {
 		QueryResult qr = new QueryResult();
-		qr.rowsAffected = (Long) result.get(ROWS_AFFECTED);
-		qr.lastRowId = (Long) result.get(INSERT_ID);
+		qr.rowsAffected = ((UnsignedLong) result.get(ROWS_AFFECTED))
+				.longValue();
+		qr.lastRowId = ((UnsignedLong) result.get(INSERT_ID)).longValue();
 		if (fields != null) {
 			qr.fields = fields;
 		} else {
@@ -70,7 +72,7 @@ public class QueryResult {
 			List<Object> cols = (List<Object>) row;
 			Iterator<Field> fieldsIter = this.fields.iterator();
 			for (Object col : cols) {
-				String cell = new String((byte[]) col);
+				String cell = col != null ? new String((byte[]) col) : null;
 				Field field = fieldsIter.next();
 				FieldType ft = field.getType();
 				cells.add(new Cell(field.getName(), ft.convert(cell),

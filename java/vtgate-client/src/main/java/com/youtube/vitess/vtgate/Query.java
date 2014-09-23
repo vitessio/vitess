@@ -13,8 +13,9 @@ public class Query {
 	private String keyspace;
 	private Map<String, Object> bindVars;
 	private String tabletType;
-	private List<String> keyspaceIds;
-	private boolean stream;
+	private List<byte[]> keyspaceIds;
+	private List<Map<String, byte[]>> keyRanges;
+	private boolean streaming;
 
 	private Query(String sql, String keyspace, String tabletType) {
 		this.sql = sql;
@@ -26,48 +27,28 @@ public class Query {
 		return sql;
 	}
 
-	public void setSql(String sql) {
-		this.sql = sql;
-	}
-
 	public String getKeyspace() {
 		return keyspace;
-	}
-
-	public void setKeyspace(String keyspace) {
-		this.keyspace = keyspace;
 	}
 
 	public Map<String, Object> getBindVars() {
 		return bindVars;
 	}
 
-	public void setBindVars(Map<String, Object> bindVars) {
-		this.bindVars = bindVars;
-	}
-
 	public String getTabletType() {
 		return tabletType;
 	}
 
-	public void setTabletType(String tabletType) {
-		this.tabletType = tabletType;
-	}
-
-	public List<String> getKeyspaceIds() {
+	public List<byte[]> getKeyspaceIds() {
 		return keyspaceIds;
 	}
 
-	public void setKeyspaceIds(List<String> keyspaceIds) {
-		this.keyspaceIds = keyspaceIds;
+	public List<Map<String, byte[]>> getKeyRanges() {
+		return keyRanges;
 	}
 
-	public boolean isStream() {
-		return stream;
-	}
-
-	public void setStream(boolean stream) {
-		this.stream = stream;
+	public boolean isStreaming() {
+		return streaming;
 	}
 
 	public void populate(Map<String, Object> map) {
@@ -78,8 +59,9 @@ public class Query {
 
 		if (keyspaceIds != null) {
 			map.put("KeyspaceIds", keyspaceIds);
+		} else {
+			map.put("KeyRanges", keyRanges);
 		}
-
 	}
 
 	public static class QueryBuilder {
@@ -90,29 +72,58 @@ public class Query {
 		}
 
 		public Query build() {
+			if (query.keyRanges == null && query.keyspaceIds == null) {
+				throw new IllegalStateException(
+						"query must have either keyspaceIds or keyRanges");
+			}
+			if (query.keyRanges != null && query.keyspaceIds != null) {
+				throw new IllegalStateException(
+						"query cannot have both keyspaceIds and keyRanges");
+			}
 			return query;
 		}
 
 		public QueryBuilder withBindVars(Map<String, Object> bindVars) {
-			query.setBindVars(bindVars);
+			query.bindVars = bindVars;
 			return this;
 		}
 
-		public QueryBuilder withKeyspaceIds(List<String> keyspaceIds) {
-			query.setKeyspaceIds(keyspaceIds);
-			return this;
-		}
-
-		public QueryBuilder withStream(boolean stream) {
-			query.setStream(stream);
-			return this;
-		}
-
-		public QueryBuilder withAddedKeyspaceId(String keyspaceId) {
-			if (query.getKeyspaceIds() == null) {
-				query.setKeyspaceIds(new ArrayList<String>());
+		public QueryBuilder withKeyspaceIds(List<KeyspaceId> keyspaceIds) {
+			List<byte[]> kidsBytes = new ArrayList<>();
+			for (KeyspaceId kid : keyspaceIds) {
+				kidsBytes.add(kid.getBytes());
 			}
-			query.getKeyspaceIds().add(keyspaceId);
+			query.keyspaceIds = kidsBytes;
+			return this;
+		}
+
+		public QueryBuilder withKeyRanges(List<KeyRange> keyRanges) {
+			List<Map<String, byte[]>> keyRangeMaps = new ArrayList<>();
+			for (KeyRange kr : keyRanges) {
+				keyRangeMaps.add(kr.toMap());
+			}
+			query.keyRanges = keyRangeMaps;
+			return this;
+		}
+
+		public QueryBuilder withStreaming(boolean streaming) {
+			query.streaming = streaming;
+			return this;
+		}
+
+		public QueryBuilder withAddedKeyspaceId(KeyspaceId keyspaceId) {
+			if (query.getKeyspaceIds() == null) {
+				query.keyspaceIds = new ArrayList<byte[]>();
+			}
+			query.getKeyspaceIds().add(keyspaceId.getBytes());
+			return this;
+		}
+
+		public QueryBuilder withAddedKeyRange(KeyRange keyRange) {
+			if (query.getKeyRanges() == null) {
+				query.keyRanges = new ArrayList<Map<String, byte[]>>();
+			}
+			query.getKeyRanges().add(keyRange.toMap());
 			return this;
 		}
 	}

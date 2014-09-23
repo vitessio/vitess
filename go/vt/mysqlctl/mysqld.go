@@ -22,6 +22,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	log "github.com/golang/glog"
@@ -45,13 +46,14 @@ var (
 
 // Mysqld is the object that represents a mysqld daemon running on this server.
 type Mysqld struct {
-	flavor      MysqlFlavor
-	config      *Mycnf
-	dba         *mysql.ConnectionParams
-	dbaPool     *dbconnpool.ConnectionPool
-	replParams  *mysql.ConnectionParams
-	TabletDir   string
-	SnapshotDir string
+	mysqlFlavor     MysqlFlavor
+	mysqlFlavorInit sync.Once
+	config          *Mycnf
+	dba             *mysql.ConnectionParams
+	dbaPool         *dbconnpool.ConnectionPool
+	replParams      *mysql.ConnectionParams
+	TabletDir       string
+	SnapshotDir     string
 }
 
 // NewMysqld creates a Mysqld object based on the provided configuration
@@ -68,7 +70,6 @@ func NewMysqld(name string, config *Mycnf, dba, repl *mysql.ConnectionParams) *M
 	dbaPool.Open(dbconnpool.DBConnectionCreator(dba, mysqlStats))
 
 	return &Mysqld{
-		flavor:      mysqlFlavor(),
 		config:      config,
 		dba:         dba,
 		dbaPool:     dbaPool,

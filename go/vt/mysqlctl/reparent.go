@@ -50,7 +50,7 @@ func (mysqld *Mysqld) PromoteSlave(setReadWrite bool, hookExtraEnv map[string]st
 	}
 
 	// Promote to master.
-	cmds := mysqld.flavor.PromoteSlaveCommands()
+	cmds := mysqld.flavor().PromoteSlaveCommands()
 	if err = mysqld.ExecuteSuperQueryList(cmds); err != nil {
 		return
 	}

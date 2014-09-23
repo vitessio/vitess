@@ -9,7 +9,6 @@ import com.youtube.vitess.vtgate.Query;
 import com.youtube.vitess.vtgate.Query.QueryBuilder;
 import com.youtube.vitess.vtgate.VtGate;
 import com.youtube.vitess.vtgate.cursor.Cursor;
-import com.youtube.vitess.vtgate.integration.Util.VtGateParams;
 
 public class StreamingServerShutdownIT {
 
@@ -29,11 +28,11 @@ public class StreamingServerShutdownIT {
 	@Test
 	public void testShutdownServerWhileStreaming() throws Exception {
 		Util.insertRows(params, 1, 2000);
-		VtGate vtgate = VtGate.connect("localhost:" + params.port);
+		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
 		String selectSql = "select A.* from vtgate_test A join vtgate_test B";
 		Query joinQuery = new QueryBuilder(selectSql,
 				params.keyspace_name, "master").withKeyspaceIds(
-				params.getKeyspaceIds()).withStream(true).build();
+				params.getAllKeyspaceIds()).withStreaming(true).build();
 		Cursor cursor = vtgate.execute(joinQuery);
 
 		int count = 0;

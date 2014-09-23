@@ -6,6 +6,7 @@ import org.bson.types.BasicBSONList;
 import org.junit.Assert;
 import org.junit.Test;
 
+import com.google.common.primitives.UnsignedLong;
 import com.youtube.vitess.vtgate.Exceptions.InvalidFieldException;
 import com.youtube.vitess.vtgate.Row.Cell;
 import com.youtube.vitess.vtgate.cursor.Cursor;
@@ -16,8 +17,8 @@ public class QueryResultTest {
 	@Test
 	public void testResultParse() throws InvalidFieldException {
 		BSONObject result = new BasicBSONObject();
-		result.put("RowsAffected", 12L);
-		result.put("InsertId", 12345L);
+		result.put("RowsAffected", UnsignedLong.valueOf(12L));
+		result.put("InsertId", UnsignedLong.valueOf(12345L));
 		BasicBSONList fields = new BasicBSONList();
 		for (long l = 0; l < 4; l++) {
 			BSONObject field = new BasicBSONObject();

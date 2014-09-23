@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	log "github.com/golang/glog"
@@ -43,12 +44,18 @@ const (
 	TX_KILL     = "kill"
 )
 
+const txLogInterval = time.Duration(1 * time.Minute)
+
 type ActiveTxPool struct {
 	pool    *pools.Numbered
 	lastId  sync2.AtomicInt64
 	timeout sync2.AtomicDuration
 	ticks   *timer.Timer
 	txStats *stats.Timings
+
+	// Tracking culprits that cause tx pool full errors.
+	logMu   sync.Mutex
+	lastLog time.Time
 }
 
 func NewActiveTxPool(name string, timeout time.Duration) *ActiveTxPool {
@@ -108,14 +115,19 @@ func (axp *ActiveTxPool) SafeBegin(conn dbconnpool.PoolConnection) (transactionI
 	return transactionId, nil
 }
 
-func (axp *ActiveTxPool) Commit(transactionId int64) {
+func (axp *ActiveTxPool) SafeCommit(transactionId int64) (invalidList map[string]DirtyKeys, err error) {
+	defer handleError(&err, nil)
+
 	conn := axp.Get(transactionId)
 	defer conn.discard(TX_COMMIT)
+	// Assign this upfront to make sure we always return the invalidList.
+	invalidList = conn.dirtyTables
 	axp.txStats.Add("Completed", time.Now().Sub(conn.StartTime))
-	if _, err := conn.ExecuteFetch(COMMIT, 1, false); err != nil {
+	if _, fetchErr := conn.ExecuteFetch(COMMIT, 1, false); fetchErr != nil {
 		conn.Close()
-		panic(NewTabletErrorSql(FAIL, err))
+		err = NewTabletErrorSql(FAIL, fetchErr)
 	}
+	return
 }
 
 func (axp *ActiveTxPool) Rollback(transactionId int64) {
@@ -135,6 +147,20 @@ func (axp *ActiveTxPool) Get(transactionId int64) (conn *TxConnection) {
 		panic(NewTabletError(NOT_IN_TX, "Transaction %d: %v", transactionId, err))
 	}
 	return v.(*TxConnection)
+}
+
+// LogActive causes all existing transsactions to be logged when they complete.
+func (axp *ActiveTxPool) LogActive() {
+	axp.logMu.Lock()
+	defer axp.logMu.Unlock()
+	if time.Now().Sub(axp.lastLog) < txLogInterval {
+		return
+	}
+	axp.lastLog = time.Now()
+	conns := axp.pool.GetAll()
+	for _, c := range conns {
+		c.(*TxConnection).LogToFile.Set(1)
+	}
 }
 
 func (axp *ActiveTxPool) Timeout() time.Duration {
@@ -162,8 +188,10 @@ type TxConnection struct {
 	inUse         bool
 	StartTime     time.Time
 	EndTime       time.Time
+	dirtyTables   map[string]DirtyKeys
 	Queries       []string
 	Conclusion    string
+	LogToFile     sync2.AtomicInt32
 }
 
 func newTxConnection(conn dbconnpool.PoolConnection, transactionId int64, pool *ActiveTxPool) *TxConnection {
@@ -172,8 +200,18 @@ func newTxConnection(conn dbconnpool.PoolConnection, transactionId int64, pool *
 		TransactionID:  transactionId,
 		pool:           pool,
 		StartTime:      time.Now(),
+		dirtyTables:    make(map[string]DirtyKeys),
 		Queries:        make([]string, 0, 8),
 	}
+}
+
+func (txc *TxConnection) DirtyKeys(tableName string) DirtyKeys {
+	if list, ok := txc.dirtyTables[tableName]; ok {
+		return list
+	}
+	list := make(DirtyKeys)
+	txc.dirtyTables[tableName] = list
+	return list
 }
 
 func (txc *TxConnection) Recycle() {
@@ -195,6 +233,9 @@ func (txc *TxConnection) discard(conclusion string) {
 	txc.PoolConnection.Recycle()
 	// Ensure PoolConnection won't be accessed after Recycle.
 	txc.PoolConnection = nil
+	if txc.LogToFile.Get() != 0 {
+		log.Warningf("Logged transaction: %s", txc.Format(nil))
+	}
 	TxLogger.Send(txc)
 }
 
@@ -208,4 +249,11 @@ func (txc *TxConnection) Format(params url.Values) string {
 		txc.Conclusion,
 		strings.Join(txc.Queries, ";"),
 	)
+}
+
+type DirtyKeys map[string]bool
+
+// Delete just keeps track of what needs to be deleted
+func (dk DirtyKeys) Delete(key string) {
+	dk[key] = true
 }

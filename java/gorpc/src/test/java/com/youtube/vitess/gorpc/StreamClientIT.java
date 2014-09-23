@@ -60,6 +60,7 @@ public class StreamClientIT {
 			index++;
 		}
 		Assert.assertEquals(args.get("Count").longValue(), index);
+		client.close();
 	}
 
 	@Test
@@ -155,7 +156,7 @@ public class StreamClientIT {
 					"request not allowed as client is in the middle of streaming",
 					e.getMessage());
 		}
-
+		client.close();
 	}
 
 	/**
@@ -184,5 +185,6 @@ public class StreamClientIT {
 		} catch (GoRpcException e) {
 			Assert.assertEquals("no streaming requests pending", e.getMessage());
 		}
+		client.close();
 	}
 }

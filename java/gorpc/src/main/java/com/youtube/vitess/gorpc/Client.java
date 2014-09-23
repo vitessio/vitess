@@ -11,6 +11,7 @@ import org.apache.commons.lang.CharEncoding;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import com.google.common.primitives.UnsignedLong;
 import com.youtube.vitess.gorpc.Exceptions.ApplicationException;
 import com.youtube.vitess.gorpc.Exceptions.GoRpcException;
 import com.youtube.vitess.gorpc.codecs.ClientCodec;
@@ -22,7 +23,7 @@ import com.youtube.vitess.gorpc.codecs.ClientCodecFactory;
  * not supported. Multiple codecs can be supported by extending ClientCodec
  * interface.
  *
- * TODO(anandhenry): deadlines, authentication
+ * TODO(anandhenry): authentication
  */
 public class Client {
 	public static final String CONNECTED = "HTTP/1.0 200 Connected to Go RPC";
@@ -31,13 +32,13 @@ public class Client {
 
 	private ClientCodec codec;
 	private boolean closed;
-	private long seq;
+	private UnsignedLong seq;
 	private boolean isStreaming;
 
 	public Client(ClientCodec codec) {
 		this.codec = codec;
 		closed = false;
-		seq = 0;
+		seq = UnsignedLong.ZERO;
 	}
 
 	/**
@@ -102,7 +103,7 @@ public class Client {
 			throw new GoRpcException(
 					"request not allowed as client is in the middle of streaming");
 		}
-		seq++;
+		seq = seq.plus(UnsignedLong.ONE);
 		Request request = new Request(serviceMethod, seq);
 		try {
 			codec.WriteRequest(request, args);
@@ -119,9 +120,9 @@ public class Client {
 			codec.ReadResponseBody(response);
 		} catch (IOException e) {
 			logger.error("connection exception", e);
-			throw new GoRpcException("connection exception" + e.getMessage());
+			throw new GoRpcException("connection exception " + e.getMessage());
 		}
-		if (response.getSeq() != seq) {
+		if (response.getSeq().compareTo(seq) != 0) {
 			throw new GoRpcException("sequence number mismatch");
 		}
 		if (response.getError() != null) {
@@ -131,10 +132,18 @@ public class Client {
 	}
 
 	public static Client dialHttp(String host, int port, String path,
-			ClientCodecFactory cFactory) throws GoRpcException {
+			ClientCodecFactory cFactory)
+			throws GoRpcException {
+		return dialHttp(host, port, path, 0, cFactory);
+	}
+
+	public static Client dialHttp(String host, int port, String path,
+			int socketTimeoutMs, ClientCodecFactory cFactory)
+			throws GoRpcException {
 		Socket s = null;
 		try {
 			s = new Socket(host, port);
+			s.setSoTimeout(socketTimeoutMs);
 			InputStream in = s.getInputStream();
 			OutputStream out = s.getOutputStream();
 			out.write(("CONNECT " + path + " HTTP/1.0\n\n")

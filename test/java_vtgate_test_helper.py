@@ -14,6 +14,10 @@ def setUp():
   age SMALLINT,
   percent DECIMAL(5,2),
   keyspace_id bigint(20) unsigned NOT NULL,
+  datetime_col DATETIME,
+  timestamp_col TIMESTAMP,
+  date_col DATE,
+  time_col TIME,
   primary key (id)
   ) Engine=InnoDB'''
   vtgatev2_test.create_tables.append(create_table)

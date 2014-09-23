@@ -51,16 +51,18 @@ public class VtGate {
 	 * 
 	 * @param addresses
 	 *            comma separated list of host:port pairs
+	 * @params timeoutMs connection timeout in ms, 0 for no timeout
 	 * @throws ConnectionException
 	 * @throws GoRpcException
 	 */
-	public static VtGate connect(String addresses) throws ConnectionException {
+	public static VtGate connect(String addresses, int timeoutMs)
+			throws ConnectionException {
 		List<String> addressList = Arrays.asList(addresses.split(","));
 		int index = new Random().nextInt(addressList.size());
 		HostAndPort hostAndPort = HostAndPort
 				.fromString(addressList.get(index));
 		RpcClient client = new GoRpcClientFactory().connect(
-				hostAndPort.getHostText(), hostAndPort.getPort());
+				hostAndPort.getHostText(), hostAndPort.getPort(), timeoutMs);
 		return new VtGate(client);
 	}
 
@@ -82,10 +84,16 @@ public class VtGate {
 
 		Map<String, Object> reply = null;
 		if (query.getKeyspaceIds() != null) {
-			if (query.isStream()) {
+			if (query.isStreaming()) {
 				reply = client.streamExecuteKeyspaceIds(params);
 			} else {
 				reply = client.executeKeyspaceIds(params);
+			}
+		} else {
+			if (query.isStreaming()) {
+				reply = client.streamExecuteKeyRanges(params);
+			} else {
+				reply = client.executeKeyRanges(params);
 			}
 		}
 
@@ -97,7 +105,7 @@ public class VtGate {
 		}
 		Map<String, Object> result = (Map<String, Object>) reply.get("Result");
 		QueryResult qr = QueryResult.parse(result);
-		if (query.isStream()) {
+		if (query.isStreaming()) {
 			return new StreamCursor(qr, client);
 		}
 
