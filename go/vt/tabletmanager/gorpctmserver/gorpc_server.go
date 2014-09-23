@@ -241,7 +241,7 @@ func (tm *TabletManager) SlaveWasPromoted(context *rpcproto.Context, args *rpc.U
 
 func (tm *TabletManager) SlaveWasRestarted(context *rpcproto.Context, args *actionnode.SlaveWasRestartedArgs, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SLAVE_WAS_RESTARTED, args, reply, func() error {
-		return actor.SlaveWasRestarted(tm.agent.TopoServer, tm.agent.TabletAlias, args)
+		return tm.agent.SlaveWasRestarted(args)
 	})
 }
 

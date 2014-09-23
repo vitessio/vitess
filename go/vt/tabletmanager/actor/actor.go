@@ -456,35 +456,6 @@ func (ta *TabletActor) restartSlave(actionNode *actionnode.ActionNode) error {
 	return nil
 }
 
-// SlaveWasRestarted updates the parent record for a tablet. It is
-// called by RPC only.
-func SlaveWasRestarted(ts topo.Server, tabletAlias topo.TabletAlias, swrd *actionnode.SlaveWasRestartedArgs) error {
-	tablet, err := ts.GetTablet(tabletAlias)
-	if err != nil {
-		return err
-	}
-
-	// Once this action completes, update authoritive tablet node first.
-	tablet.Parent = swrd.Parent
-	if tablet.Type == topo.TYPE_MASTER {
-		tablet.Type = topo.TYPE_SPARE
-		tablet.State = topo.STATE_READ_ONLY
-	}
-	err = topo.UpdateTablet(ts, tablet)
-	if err != nil {
-		return err
-	}
-
-	// Update the new tablet location in the replication graph now that
-	// we've updated the tablet.
-	err = topo.CreateTabletReplicationData(ts, tablet.Tablet)
-	if err != nil && err != topo.ErrNodeExists {
-		return err
-	}
-
-	return nil
-}
-
 // TabletExternallyReparented updates all topo records so the current
 // tablet is the new master for this shard. It is called by the RPC
 // server.
