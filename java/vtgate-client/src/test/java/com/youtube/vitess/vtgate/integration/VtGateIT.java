@@ -135,6 +135,7 @@ public class VtGateIT {
 			Cursor cursor = vtgate.execute(shardRows);
 			Assert.assertEquals(10, cursor.getRowsAffected());
 		}
+		vtgate.close();
 	}
 
 	public void testAllKeyRange() throws Exception {
@@ -160,42 +161,54 @@ public class VtGateIT {
 		vtgate.close();
 	}
 
+	/**
+	 * Test StreamExecuteKeyspaceIds query on a single shard
+	 */
 	@Test
-	public void testStreamExecuteKeyspaceIdsReads() throws Exception {
-		Util.insertRows(params, 1, 200);
-		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
-		String selectSql = "select A.* from vtgate_test A join vtgate_test B";
-		Query joinQuery = new QueryBuilder(selectSql, params.keyspace_name,
-				"master")
-				.withKeyspaceIds(params.getAllKeyspaceIds())
-				.withStreaming(true)
-				.build();
-		Cursor cursor = vtgate.execute(joinQuery);
-
-		int count = 0;
-		for (Row row : cursor) {
-			count++;
-			Cell idCell = row.next();
-			Assert.assertEquals("id", idCell.getName());
-			Assert.assertEquals(BigInteger.class, idCell.getType());
+	public void testStreamExecuteKeyspaceIds() throws Exception {
+		// Insert 100 rows per shard
+		int rowCount = 100;
+		for (String shardName : params.shard_kid_map.keySet()) {
+			Util.insertRowsInShard(params, shardName, rowCount);
 		}
-		Assert.assertEquals(40000, count);
+		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
+		for (String shardName : params.shard_kid_map.keySet()) {
+			// Do a self join within each shard
+			String selectSql = "select A.* from vtgate_test A join vtgate_test B";
+			Query query = new QueryBuilder(selectSql, params.keyspace_name,
+					"master")
+					.withKeyspaceIds(params.getKeyspaceIds(shardName))
+					.withStreaming(true)
+					.build();
+			Cursor cursor = vtgate.execute(query);
+			int count = 0;
+			while (cursor.hasNext()) {
+				cursor.next();
+				count++;
+			}
+			// Assert 10000 rows fetched
+			Assert.assertEquals(rowCount * rowCount, count);
+		}
 		vtgate.close();
 	}
 
+	/**
+	 * Same as testStreamExecuteKeyspaceIds but for StreamExecuteKeyRanges
+	 */
 	@Test
-	public void testStreamExecuteKeyRangesReads() throws Exception {
+	public void testStreamExecuteKeyRanges() throws Exception {
 		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
 		int rowCount = 100;
 		for (String shardName : params.shard_kid_map.keySet()) {
 			Util.insertRowsInShard(params, shardName, rowCount);
+		}
+		for (String shardName : params.shard_kid_map.keySet()) {
 			List<KeyspaceId> kids = params.getKeyspaceIds(shardName);
 			KeyRange kr = new KeyRange(Collections.min(kids),
 					Collections.max(kids));
 			String selectSql = "select A.* from vtgate_test A join vtgate_test B";
 			Query query = new QueryBuilder(selectSql, params.keyspace_name,
-					"master")
-					.withAddedKeyRange(kr)
+					"master").withAddedKeyRange(kr)
 					.withStreaming(true)
 					.build();
 			Cursor cursor = vtgate.execute(query);
@@ -206,6 +219,34 @@ public class VtGateIT {
 			}
 			Assert.assertEquals(rowCount * rowCount, count);
 		}
+		vtgate.close();
+	}
+
+	/**
+	 * Test that scatter streaming queries fetch rows from all shards
+	 */
+	@Test
+	public void testScatterStreamingQuery() throws Exception {
+		// Insert 100 rows per shard
+		int rowCount = 100;
+		for (String shardName : params.shard_kid_map.keySet()) {
+			Util.insertRowsInShard(params, shardName, rowCount);
+		}
+		// Run a self join query
+		String selectSql = "select A.* from vtgate_test A join vtgate_test B";
+		Query query = new QueryBuilder(selectSql, params.keyspace_name,
+				"master")
+				.withKeyspaceIds(params.getAllKeyspaceIds())
+				.withStreaming(true)
+				.build();
+		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
+		Cursor cursor = vtgate.execute(query);
+		int count = 0;
+		for (Row row : cursor) {
+			count++;
+		}
+		// Check 10000 rows were fetched from each shard
+		Assert.assertEquals(2 * rowCount * rowCount, count);
 		vtgate.close();
 	}
 
