@@ -71,9 +71,6 @@ var commands = []commandGroup{
 			command{"SetReadWrite", commandSetReadWrite,
 				"[<tablet alias|zk tablet path>]",
 				"Sets the tablet as ReadWrite."},
-			command{"SetBlacklistedTables", commandSetBlacklistedTables,
-				"[<tablet alias|zk tablet path>] [table1,table2,...]",
-				"Sets the list of blacklisted tables for a tablet. Use no tables to clear the list."},
 			command{"ChangeSlaveType", commandChangeSlaveType,
 				"[-force] [-dry-run] <tablet alias|zk tablet path> <tablet type>",
 				"Change the db type for this tablet if possible. This is mostly for arranging replicas - it will not convert a master.\n" +
@@ -150,6 +147,9 @@ var commands = []commandGroup{
 			command{"SetShardServedTypes", commandSetShardServedTypes,
 				"<keyspace/shard|zk shard path> [<served type1>,<served type2>,...]",
 				"Sets a given shard's served types. Does not rebuild any serving graph."},
+			command{"SetShardBlacklistedTables", commandSetShardBlacklistedTables,
+				"<keyspace/shard|zk shard path> <tabletType> [table1,table2,...]",
+				"Sets the list of blacklisted tables for a shard and type. Use no tables to clear the list for that type. Only use this for an emergency fix, or after a finished vertical split. MigrateServedFrom will set this field appropriately already."},
 			command{"ShardMultiRestore", commandShardMultiRestore,
 				"[-force] [-concurrency=4] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-strategy=] [-tables=<table1>,<table2>,...] <keyspace/shard|zk shard path> <source zk path>...",
 				"Restore multi-snapshots on all the tablets of a shard."},
@@ -783,29 +783,6 @@ func commandSetReadWrite(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	return wr.ActionInitiator().SetReadWrite(tabletAlias)
 }
 
-func commandSetBlacklistedTables(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
-	if err := subFlags.Parse(args); err != nil {
-		return "", err
-	}
-	if subFlags.NArg() != 1 && subFlags.NArg() != 2 {
-		return "", fmt.Errorf("action SetBlacklistedTables requires <tablet alias|zk tablet path> [table1,table2,...]")
-	}
-
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
-	if err != nil {
-		return "", err
-	}
-	var tables []string
-	if subFlags.NArg() == 2 {
-		tables = strings.Split(subFlags.Arg(1), ",")
-	}
-	ti, err := wr.TopoServer().GetTablet(tabletAlias)
-	if err != nil {
-		return "", fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
-	}
-	return "", wr.ActionInitiator().SetBlacklistedTables(ti, tables, wr.ActionTimeout())
-}
-
 func commandChangeSlaveType(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	force := subFlags.Bool("force", false, "will change the type in zookeeper, and not run hooks")
 	dryRun := subFlags.Bool("dry-run", false, "just list the proposed change")
@@ -1314,6 +1291,29 @@ func commandSetShardServedTypes(wr *wrangler.Wrangler, subFlags *flag.FlagSet, a
 	}
 
 	return "", wr.SetShardServedTypes(keyspace, shard, servedTypes)
+}
+
+func commandSetShardBlacklistedTables(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	if err := subFlags.Parse(args); err != nil {
+		return "", err
+	}
+	if subFlags.NArg() != 2 && subFlags.NArg() != 3 {
+		return "", fmt.Errorf("action SetShardBlacklistedTables requires <keyspace/shard|zk shard path> <tabletType> [table1,table2,...]")
+	}
+	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	if err != nil {
+		return "", err
+	}
+	tabletType, err := parseTabletType(subFlags.Arg(1), []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY})
+	if err != nil {
+		return "", err
+	}
+	var tables []string
+	if subFlags.NArg() == 3 {
+		tables = strings.Split(subFlags.Arg(2), ",")
+	}
+
+	return "", wr.SetShardBlacklistedTables(keyspace, shard, tabletType, tables)
 }
 
 func commandShardMultiRestore(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (status string, err error) {
