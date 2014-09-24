@@ -123,23 +123,28 @@ func (agent *ActionAgent) disallowQueries() {
 // have changed something in the tablet record.
 func (agent *ActionAgent) changeCallback(oldTablet, newTablet topo.Tablet) {
 
-	allowQuery := true
+	allowQuery := newTablet.IsRunningQueryService()
 
-	// read the shard to get SourceShards / BlacklistedTables
-	shardInfo, err := agent.TopoServer.GetShard(newTablet.Keyspace, newTablet.Shard)
+	// Read the shard to get SourceShards / BlacklistedTables if
+	// we're going to use it.
+	var shardInfo *topo.ShardInfo
 	var blacklistedTables []string
-	if err != nil {
-		log.Errorf("Cannot read shard for this tablet %v, might have inaccurate SourceShards and BlacklistedTables: %v", newTablet.Alias, err)
-	} else {
-		if newTablet.Type == topo.TYPE_MASTER {
-			allowQuery = len(shardInfo.SourceShards) == 0
-		}
-		if shardInfo.BlacklistedTablesMap != nil {
-			blacklistedTables = shardInfo.BlacklistedTablesMap[newTablet.Type]
+	var err error
+	if allowQuery {
+		shardInfo, err = agent.TopoServer.GetShard(newTablet.Keyspace, newTablet.Shard)
+		if err != nil {
+			log.Errorf("Cannot read shard for this tablet %v, might have inaccurate SourceShards and BlacklistedTables: %v", newTablet.Alias, err)
+		} else {
+			if newTablet.Type == topo.TYPE_MASTER {
+				allowQuery = len(shardInfo.SourceShards) == 0
+			}
+			if shardInfo.BlacklistedTablesMap != nil {
+				blacklistedTables = shardInfo.BlacklistedTablesMap[newTablet.Type]
+			}
 		}
 	}
 
-	// read the keyspace on masters to get ShardingColumnType,
+	// Read the keyspace on masters to get ShardingColumnType,
 	// for binlog replication, only if source shards are set.
 	var keyspaceInfo *topo.KeyspaceInfo
 	if newTablet.Type == topo.TYPE_MASTER && shardInfo != nil && len(shardInfo.SourceShards) > 0 {
@@ -150,7 +155,7 @@ func (agent *ActionAgent) changeCallback(oldTablet, newTablet topo.Tablet) {
 		}
 	}
 
-	if newTablet.IsRunningQueryService() && allowQuery {
+	if allowQuery {
 		// There are a few transitions when we're
 		// going to need to restart the query service:
 		// - transitioning from replica to master, so clients
