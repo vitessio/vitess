@@ -33,7 +33,8 @@ type GoRpcTabletManagerConn struct {
 func (client *GoRpcTabletManagerConn) rpcCallTablet(tablet *topo.TabletInfo, name string, args, reply interface{}, waitTime time.Duration) error {
 	// create the RPC client, using waitTime as the connect
 	// timeout, and starting the overall timeout as well
-	timer := time.After(waitTime)
+	tmr := time.NewTimer(waitTime)
+	defer tmr.Stop()
 	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), waitTime, nil)
 	if err != nil {
 		return fmt.Errorf("RPC error for %v: %v", tablet.Alias, err.Error())
@@ -43,7 +44,7 @@ func (client *GoRpcTabletManagerConn) rpcCallTablet(tablet *topo.TabletInfo, nam
 	// do the call in the remaining time
 	call := rpcClient.Go("TabletManager."+name, args, reply, nil)
 	select {
-	case <-timer:
+	case <-tmr.C:
 		return fmt.Errorf("Timeout waiting for TabletManager.%v to %v", name, tablet.Alias)
 	case <-call.Done:
 		if call.Error != nil {
