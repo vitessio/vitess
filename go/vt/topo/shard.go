@@ -89,7 +89,7 @@ type Shard struct {
 	Cells []string
 
 	// BlacklistedTablesMap is a map from served type to
-	// blacklisted tables. If a table has the listed TabletType,
+	// blacklisted tables. If a tablet has the listed TabletType,
 	// it should blacklist the provided list of tables.
 	// This is used in vertical splits to guarantee a tablet
 	// stops serving the given tables.

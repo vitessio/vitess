@@ -441,7 +441,7 @@ func (wr *Wrangler) migrateServedTypes(keyspace string, sourceShards, destinatio
 	return nil
 }
 
-// MigrateServedTypes is used during vertical splits to migrate a
+// MigrateServedFrom is used during vertical splits to migrate a
 // served type from a keyspace to another.
 func (wr *Wrangler) MigrateServedFrom(keyspace, shard string, servedType topo.TabletType, reverse, skipRebuild bool) error {
 	if servedType == topo.TYPE_MASTER {
