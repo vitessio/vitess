@@ -9,8 +9,6 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
-	"github.com/youtube/vitess/go/vt/topo"
 )
 
 // This file contains the RPC method helpers for the tablet manager.
@@ -88,35 +86,6 @@ func (agent *ActionAgent) RpcWrapLockAction(from, name string, args, reply inter
 func (agent *ActionAgent) RpcWrapLockActionSchema(from, name string, args, reply interface{}, verbose bool, f func() error) error {
 	return agent.rpcWrapper(from, name, args, reply, verbose, f,
 		true /*lock*/, true /*runAfterAction*/, true /*reloadSchema*/)
-}
-
-// SlaveWasRestarted updates the parent record for a tablet. It is
-// called by RPC only.
-func (agent *ActionAgent) SlaveWasRestarted(swrd *actionnode.SlaveWasRestartedArgs) error {
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
-	if err != nil {
-		return err
-	}
-
-	// Once this action completes, update authoritive tablet node first.
-	tablet.Parent = swrd.Parent
-	if tablet.Type == topo.TYPE_MASTER {
-		tablet.Type = topo.TYPE_SPARE
-		tablet.State = topo.STATE_READ_ONLY
-	}
-	err = topo.UpdateTablet(agent.TopoServer, tablet)
-	if err != nil {
-		return err
-	}
-
-	// Update the new tablet location in the replication graph now that
-	// we've updated the tablet.
-	err = topo.CreateTabletReplicationData(agent.TopoServer, tablet.Tablet)
-	if err != nil && err != topo.ErrNodeExists {
-		return err
-	}
-
-	return nil
 }
 
 //

@@ -6,6 +6,8 @@ package tabletmanager
 
 import (
 	"github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 // This file contains the actions that exist as RPC only on the ActionAgent.
@@ -44,4 +46,32 @@ func (agent *ActionAgent) ExecuteFetch(query string, maxrows int, wantFields, di
 	}
 
 	return qr, err
+}
+
+// SlaveWasRestarted updates the parent record for a tablet.
+func (agent *ActionAgent) SlaveWasRestarted(swrd *actionnode.SlaveWasRestartedArgs) error {
+	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	if err != nil {
+		return err
+	}
+
+	// Once this action completes, update authoritive tablet node first.
+	tablet.Parent = swrd.Parent
+	if tablet.Type == topo.TYPE_MASTER {
+		tablet.Type = topo.TYPE_SPARE
+		tablet.State = topo.STATE_READ_ONLY
+	}
+	err = topo.UpdateTablet(agent.TopoServer, tablet)
+	if err != nil {
+		return err
+	}
+
+	// Update the new tablet location in the replication graph now that
+	// we've updated the tablet.
+	err = topo.CreateTabletReplicationData(agent.TopoServer, tablet.Tablet)
+	if err != nil && err != topo.ErrNodeExists {
+		return err
+	}
+
+	return nil
 }
