@@ -336,13 +336,11 @@ class TestNocache(framework.TestCase):
     conn.close()
 
     vend = self.env.debug_vars()
-    self.assertEqual(vend.Voltron.ActivePool.Timeout, 250000000)
-    self.assertEqual(vend.ActivePoolTimeout, 250000000)
+    self.assertEqual(vend.Voltron.QueryTimeout, 250000000)
     self.assertEqual(vstart.mget("Kills.Queries", 0)+1, vend.Kills.Queries)
     self.env.execute("set vt_query_timeout=30")
     vend = self.env.debug_vars()
-    self.assertEqual(vend.Voltron.ActivePool.Timeout, 30000000000)
-    self.assertEqual(vend.ActivePoolTimeout, 30000000000)
+    self.assertEqual(vend.Voltron.QueryTimeout, 30000000000)
 
   def test_idle_timeout(self):
     self.env.execute("set vt_idle_timeout=1")
