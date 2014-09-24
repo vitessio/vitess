@@ -176,6 +176,12 @@ func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*topo.SrvKe
 			topo.TYPE_MASTER: &topo.KeyspacePartition{
 				Shards: shards,
 			},
+			topo.TYPE_REPLICA: &topo.KeyspacePartition{
+				Shards: shards,
+			},
+			topo.TYPE_RDONLY: &topo.KeyspacePartition{
+				Shards: shards,
+			},
 		},
 		TabletTypes: allTabletTypes,
 	}

@@ -71,6 +71,10 @@ func (vtg *VTGate) Rollback(ctx *rpcproto.Context, inSession *proto.Session, noO
 	return vtg.server.Rollback(ctx, inSession)
 }
 
+func (vtg *VTGate) GetMRSplits(ctx *rpcproto.Context, req *proto.GetMRSplitsRequest, reply *proto.GetMRSplitsResult) error {
+	return vtg.server.GetMRSplits(ctx, req, reply)
+}
+
 func init() {
 	vtgate.RegisterVTGates = append(vtgate.RegisterVTGates, func(vtGate *vtgate.VTGate) {
 		rpcwrap.RegisterAuthenticated(&VTGate{vtGate})
