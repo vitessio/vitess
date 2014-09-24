@@ -67,7 +67,14 @@ func (sc *SlaveConnection) StartBinlogDump(startPos proto.ReplicationPosition) (
 	log.Infof("sending binlog dump command: startPos=%v, slaveID=%v", startPos, sc.slaveID)
 	err := sc.mysqld.flavor().SendBinlogDumpCommand(sc.mysqld, sc, startPos)
 	if err != nil {
-		log.Errorf("binlog dump command failed: %v", err)
+		log.Errorf("couldn't send binlog dump command: %v", err)
+		return nil, err
+	}
+
+	// Read the first packet to see if it's an error response to our dump command.
+	buf, err := sc.Connection.ReadPacket()
+	if err != nil {
+		log.Errorf("couldn't start binlog dump: %v", err)
 		return nil, err
 	}
 
@@ -78,14 +85,6 @@ func (sc *SlaveConnection) StartBinlogDump(startPos proto.ReplicationPosition) (
 		defer close(eventChan)
 
 		for svc.IsRunning() {
-			buf, err := sc.Connection.ReadPacket()
-			if err != nil || len(buf) == 0 {
-				// This is not necessarily an error. It could just be that we closed
-				// the connection from outside.
-				log.Infof("read error while streaming binlog events")
-				return nil
-			}
-
 			if buf[0] == 254 {
 				// The master is telling us to stop.
 				log.Infof("received EOF packet in binlog dump: %#v", buf)
@@ -97,6 +96,19 @@ func (sc *SlaveConnection) StartBinlogDump(startPos proto.ReplicationPosition) (
 			case eventChan <- sc.mysqld.flavor().MakeBinlogEvent(buf[1:]):
 			case <-svc.ShuttingDown:
 				return nil
+			}
+
+			buf, err = sc.Connection.ReadPacket()
+			if err != nil {
+				if sqlErr, ok := err.(*mysql.SqlError); ok && sqlErr.Number() == 2013 {
+					// errno 2013 = Lost connection to MySQL server during query
+					// This is not necessarily an error. It could just be that we closed
+					// the connection from outside.
+					log.Infof("connection closed during binlog stream (possibly intentional): %v", err)
+					return err
+				}
+				log.Errorf("read error while streaming binlog events: %v", err)
+				return err
 			}
 		}
 		return nil
