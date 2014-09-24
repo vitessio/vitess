@@ -843,7 +843,11 @@ func commandRpcPing(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string
 	if err != nil {
 		return "", err
 	}
-	return "", wr.ActionInitiator().RpcPing(tabletAlias, wr.ActionTimeout())
+	tabletInfo, err := wr.TopoServer().GetTablet(tabletAlias)
+	if err != nil {
+		return "", err
+	}
+	return "", wr.ActionInitiator().RpcPing(tabletInfo, wr.ActionTimeout())
 }
 
 func commandQuery(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

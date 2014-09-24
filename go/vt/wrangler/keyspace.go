@@ -291,9 +291,8 @@ func (wr *Wrangler) waitForFilteredReplication(sourcePositions map[*topo.ShardIn
 	return rec.Error()
 }
 
-// FIXME(alainjobart) no action to become read-write now, just use Ping,
-// that forces the shard reload and will stop replication.
-func (wr *Wrangler) makeMastersReadWrite(shards []*topo.ShardInfo) error {
+// pingMasters will just RPC-ping all the masters
+func (wr *Wrangler) pingMasters(shards []*topo.ShardInfo) error {
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 	for _, si := range shards {
@@ -301,19 +300,17 @@ func (wr *Wrangler) makeMastersReadWrite(shards []*topo.ShardInfo) error {
 		go func(si *topo.ShardInfo) {
 			defer wg.Done()
 			log.Infof("Pinging master %v", si.MasterAlias)
-
-			actionPath, err := wr.ai.Ping(si.MasterAlias)
+			ti, err := wr.ts.GetTablet(si.MasterAlias)
 			if err != nil {
 				rec.RecordError(err)
 				return
 			}
 
-			if err := wr.WaitForCompletion(actionPath); err != nil {
+			if err := wr.ai.RpcPing(ti, wr.ActionTimeout()); err != nil {
 				rec.RecordError(err)
 			} else {
 				log.Infof("%v responded", si.MasterAlias)
 			}
-
 		}(si)
 	}
 	wg.Wait()
@@ -432,7 +429,7 @@ func (wr *Wrangler) migrateServedTypes(keyspace string, sourceShards, destinatio
 	// replication.
 	if servedType == topo.TYPE_MASTER {
 		event.DispatchUpdate(ev, "setting destination masters read-write")
-		if err := wr.makeMastersReadWrite(destinationShards); err != nil {
+		if err := wr.pingMasters(destinationShards); err != nil {
 			return err
 		}
 	}
@@ -652,7 +649,7 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 	// replication.
 	event.DispatchUpdate(ev, "setting destination shard masters read-write")
 	if servedType == topo.TYPE_MASTER {
-		if err := wr.makeMastersReadWrite([]*topo.ShardInfo{si}); err != nil {
+		if err := wr.pingMasters([]*topo.ShardInfo{si}); err != nil {
 			return err
 		}
 	}
@@ -660,7 +657,7 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 	// Now blacklist the table list on the right servers
 	event.DispatchUpdate(ev, "pinging sources tablets so they update their blacklisted tables")
 	if servedType == topo.TYPE_MASTER {
-		if err := wr.ai.RpcPing(sourceShard.MasterAlias, wr.ActionTimeout()); err != nil {
+		if err := wr.ai.RpcPing(sourceMasterTabletInfo, wr.ActionTimeout()); err != nil {
 			return err
 		}
 	} else {
@@ -696,7 +693,7 @@ func (wr *Wrangler) PingTablesByShard(keyspace, shard string, tabletType topo.Ta
 
 		wg.Add(1)
 		go func(ti *topo.TabletInfo) {
-			if err := wr.ai.RpcPing(ti.Alias, wr.ActionTimeout()); err != nil {
+			if err := wr.ai.RpcPing(ti, wr.ActionTimeout()); err != nil {
 				log.Warningf("PingTablesByShard: failed to ping %v: %v", ti.Alias, err)
 			}
 			wg.Done()

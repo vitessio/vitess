@@ -395,9 +395,13 @@ func main() {
 		})
 
 	// tablet actions
-	actionRepo.RegisterTabletAction("RpcPing", "",
+	actionRepo.RegisterTabletAction("Ping", "",
 		func(wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
-			return "", wr.ActionInitiator().RpcPing(tabletAlias, 10*time.Second)
+			ti, err := wr.TopoServer().GetTablet(tabletAlias)
+			if err != nil {
+				return "", err
+			}
+			return "", wr.ActionInitiator().RpcPing(ti, 10*time.Second)
 		})
 
 	actionRepo.RegisterTabletAction("ScrapTablet", acl.ADMIN,

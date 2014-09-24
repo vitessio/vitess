@@ -75,12 +75,7 @@ func (ai *ActionInitiator) Ping(tabletAlias topo.TabletAlias) (actionPath string
 	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_PING})
 }
 
-func (ai *ActionInitiator) RpcPing(tabletAlias topo.TabletAlias, waitTime time.Duration) error {
-	tablet, err := ai.ts.GetTablet(tabletAlias)
-	if err != nil {
-		return err
-	}
-
+func (ai *ActionInitiator) RpcPing(tablet *topo.TabletInfo, waitTime time.Duration) error {
 	return ai.rpc.Ping(tablet, waitTime)
 }
 
