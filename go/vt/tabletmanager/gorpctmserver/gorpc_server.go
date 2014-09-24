@@ -33,7 +33,7 @@ type TabletManager struct {
 //
 
 func (tm *TabletManager) Ping(context *rpcproto.Context, args, reply *string) error {
-	return tm.agent.RpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_PING, args, reply, func() error {
+	return tm.agent.RpcWrapLockActionSchema(context.RemoteAddr, actionnode.TABLET_ACTION_PING, args, reply, func() error {
 		*reply = *args
 		return nil
 	})

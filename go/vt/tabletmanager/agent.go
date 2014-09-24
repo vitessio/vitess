@@ -95,10 +95,11 @@ type ActionAgent struct {
 	// take actionMutex first.
 	actionMutex sync.Mutex // to run only one action at a time
 
-	// mutex protects _tablet and serializes writes to changeItems.
-	mutex       sync.Mutex
-	changeItems chan tabletChangeItem
-	_tablet     *topo.TabletInfo
+	// mutex protects the following fields
+	mutex              sync.Mutex
+	changeItems        chan tabletChangeItem
+	_tablet            *topo.TabletInfo
+	_blacklistedTables []string
 }
 
 func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
@@ -231,6 +232,19 @@ func (agent *ActionAgent) Tablet() *topo.TabletInfo {
 	tablet := agent._tablet
 	agent.mutex.Unlock()
 	return tablet
+}
+
+func (agent *ActionAgent) BlacklistedTables() []string {
+	agent.mutex.Lock()
+	blacklistedTables := agent._blacklistedTables
+	agent.mutex.Unlock()
+	return blacklistedTables
+}
+
+func (agent *ActionAgent) setBlacklistedTables(blacklistedTables []string) {
+	agent.mutex.Lock()
+	agent._blacklistedTables = blacklistedTables
+	agent.mutex.Unlock()
 }
 
 func (agent *ActionAgent) resolvePaths() error {

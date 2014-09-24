@@ -191,14 +191,11 @@ index by_msg (msg)
                      str(ks))
 
   def _check_blacklisted_tables(self, tablet, expected):
-    ti = utils.run_vtctl_json(['GetTablet', tablet.tablet_alias])
-    logging.debug("Tablet %s has blacklisted tables: %s", tablet.tablet_alias,
-                  ti['BlacklistedTables'])
-    if ti['BlacklistedTables'] == []:
-        ti['BlacklistedTables'] = None
-    self.assertEqual(ti['BlacklistedTables'], expected,
-                     "Got unexpected BlacklistedTables: %s (expecting %s)" %(
-                         ti['BlacklistedTables'], expected))
+    status = tablet.get_status()
+    if expected:
+      self.assertIn("BlacklistedTables: %s" % " ".join(expected), status)
+    else:
+      self.assertNotIn("BlacklistedTables", status)
 
     # check we can or cannot access the tables
     utils.run_vtctl(['ReloadSchema', tablet.tablet_alias])
@@ -221,8 +218,9 @@ index by_msg (msg)
     time.sleep(self.throttle_sleep_interval)
     topology.refresh_keyspace(self.vtgate_client, keyspace_name)
 
-  def _check_client_conn_redirection(self, source_ks, destination_ks, db_types, servedfrom_db_types, moved_tables=None):
-    # In normal operations, it takes the first error for keyspce to be re-read.
+  def _check_client_conn_redirection(self, source_ks, destination_ks, db_types,
+                                     servedfrom_db_types, moved_tables=None):
+    # In normal operations, it takes the first error for keyspace to be re-read.
     # For testing purposes, refreshing the topology manually.
     self.refresh_keyspace(destination_ks)
 
@@ -360,8 +358,8 @@ index by_msg (msg)
 
     # use the vtworker checker to compare the data
     logging.debug("Running vtworker VerticalSplitDiff")
-    utils.run_vtworker(['-cell', 'test_nj', 'VerticalSplitDiff', 'destination_keyspace/0'],
-                       auto_log=True)
+    utils.run_vtworker(['-cell', 'test_nj', 'VerticalSplitDiff',
+                        'destination_keyspace/0'], auto_log=True)
     utils.run_vtctl(['ChangeSlaveType', source_rdonly.tablet_alias, 'rdonly'],
                     auto_log=True)
     utils.run_vtctl(['ChangeSlaveType', destination_rdonly.tablet_alias,
@@ -393,7 +391,9 @@ index by_msg (msg)
     self._check_blacklisted_tables(source_master, None)
     self._check_blacklisted_tables(source_replica, None)
     self._check_blacklisted_tables(source_rdonly, ['moving.*', 'view1'])
-    self._check_client_conn_redirection('source_keyspace', 'destination_keyspace', ['rdonly'], ['master', 'replica'], ['moving1', 'moving2'])
+    self._check_client_conn_redirection(
+        'source_keyspace', 'destination_keyspace', ['rdonly'],
+        ['master', 'replica'], ['moving1', 'moving2'])
 
     # then serve replica from the destination shards
     utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'replica'],
@@ -405,8 +405,8 @@ index by_msg (msg)
     self._check_client_conn_redirection('source_keyspace', 'destination_keyspace', ['replica', 'rdonly'], ['master'], ['moving1', 'moving2'])
 
     # move replica back and forth
-    utils.run_vtctl(['MigrateServedFrom', '-reverse', 'destination_keyspace/0', 'replica'],
-                    auto_log=True)
+    utils.run_vtctl(['MigrateServedFrom', '-reverse',
+                     'destination_keyspace/0', 'replica'], auto_log=True)
     self._check_srv_keyspace('ServedFrom(master): source_keyspace\n' +
                              'ServedFrom(replica): source_keyspace\n')
     self._check_blacklisted_tables(source_master, None)
@@ -418,7 +418,9 @@ index by_msg (msg)
     self._check_blacklisted_tables(source_master, None)
     self._check_blacklisted_tables(source_replica, ['moving.*', 'view1'])
     self._check_blacklisted_tables(source_rdonly, ['moving.*', 'view1'])
-    self._check_client_conn_redirection('source_keyspace', 'destination_keyspace', ['replica', 'rdonly'], ['master'], ['moving1', 'moving2'])
+    self._check_client_conn_redirection(
+        'source_keyspace', 'destination_keyspace', ['replica', 'rdonly'],
+        ['master'], ['moving1', 'moving2'])
 
     # then serve master from the destination shards
     utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'master'],
@@ -427,15 +429,9 @@ index by_msg (msg)
     self._check_blacklisted_tables(source_master, ['moving.*', 'view1'])
     self._check_blacklisted_tables(source_replica, ['moving.*', 'view1'])
     self._check_blacklisted_tables(source_rdonly, ['moving.*', 'view1'])
-    self._check_client_conn_redirection('source_keyspace', 'destination_keyspace', ['replica', 'rdonly', 'master'], [], ['moving1', 'moving2'])
-
-    # check 'vtctl SetBlacklistedTables' command works as expected
-    utils.run_vtctl(['SetBlacklistedTables', source_master.tablet_alias,
-                     'moving.*'], auto_log=True)
-    self._check_blacklisted_tables(source_master, ['moving.*'])
-    utils.run_vtctl(['SetBlacklistedTables', source_master.tablet_alias],
-                    auto_log=True)
-    self._check_blacklisted_tables(source_master, None)
+    self._check_client_conn_redirection(
+        'source_keyspace', 'destination_keyspace',
+        ['replica', 'rdonly', 'master'], [], ['moving1', 'moving2'])
 
     # check the binlog player is gone now
     destination_master.wait_for_binlog_player_count(0)
