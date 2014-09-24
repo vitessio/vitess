@@ -62,6 +62,7 @@ func (agent *ActionAgent) rpcWrapper(from, name string, args, reply interface{},
 
 // There are multiple kinds of actions:
 // 1 - read-only actions that can be executed in parallel.
+//     verbose is forced to false there.
 // 2 - read-write actions that change something, and need to take the
 //     action lock.
 // 3 - read-write actions that need to take the action lock, and also
@@ -74,18 +75,18 @@ func (agent *ActionAgent) RpcWrap(from, name string, args, reply interface{}, f 
 		false /*lock*/, false /*runAfterAction*/, false /*reloadSchema*/)
 }
 
-func (agent *ActionAgent) RpcWrapLock(from, name string, args, reply interface{}, f func() error) error {
-	return agent.rpcWrapper(from, name, args, reply, true /*verbose*/, f,
+func (agent *ActionAgent) RpcWrapLock(from, name string, args, reply interface{}, verbose bool, f func() error) error {
+	return agent.rpcWrapper(from, name, args, reply, verbose, f,
 		true /*lock*/, false /*runAfterAction*/, false /*reloadSchema*/)
 }
 
-func (agent *ActionAgent) RpcWrapLockAction(from, name string, args, reply interface{}, f func() error) error {
-	return agent.rpcWrapper(from, name, args, reply, true /*verbose*/, f,
+func (agent *ActionAgent) RpcWrapLockAction(from, name string, args, reply interface{}, verbose bool, f func() error) error {
+	return agent.rpcWrapper(from, name, args, reply, verbose, f,
 		true /*lock*/, true /*runAfterAction*/, false /*reloadSchema*/)
 }
 
-func (agent *ActionAgent) RpcWrapLockActionSchema(from, name string, args, reply interface{}, f func() error) error {
-	return agent.rpcWrapper(from, name, args, reply, true /*verbose*/, f,
+func (agent *ActionAgent) RpcWrapLockActionSchema(from, name string, args, reply interface{}, verbose bool, f func() error) error {
+	return agent.rpcWrapper(from, name, args, reply, verbose, f,
 		true /*lock*/, true /*runAfterAction*/, true /*reloadSchema*/)
 }
 
