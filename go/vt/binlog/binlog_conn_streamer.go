@@ -46,11 +46,9 @@ func (bls *binlogConnStreamer) Stream(ctx *sync2.ServiceContext) (err error) {
 	stopPos := bls.startPos
 	defer func() {
 		if err != nil {
-			binlogStreamerErrors.Add("Stream", 1)
-			err = fmt.Errorf("stream error @ %v, error: %v", stopPos, err)
-			log.Error(err.Error())
+			err = fmt.Errorf("stream error @ %v: %v", stopPos, err)
 		}
-		log.Infof("Stream ended @ %v", stopPos)
+		log.Infof("stream ended @ %v, err = %v", stopPos, err)
 	}()
 
 	if bls.conn, err = mysqlctl.NewSlaveConnection(bls.mysqld); err != nil {
