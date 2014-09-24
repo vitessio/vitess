@@ -214,8 +214,7 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 	case actionnode.TABLET_ACTION_SNAPSHOT_SOURCE_END:
 		err = ta.snapshotSourceEnd(actionNode)
 
-	case actionnode.TABLET_ACTION_SET_BLACKLISTED_TABLES,
-		actionnode.TABLET_ACTION_GET_SCHEMA,
+	case actionnode.TABLET_ACTION_GET_SCHEMA,
 		actionnode.TABLET_ACTION_RELOAD_SCHEMA,
 		actionnode.TABLET_ACTION_GET_PERMISSIONS,
 		actionnode.TABLET_ACTION_SLAVE_STATUS,
@@ -977,19 +976,6 @@ func (ta *TabletActor) multiRestore(actionNode *actionnode.ActionNode) (err erro
 	// restore type back
 	tablet.Type = originalType
 	return topo.UpdateTablet(ta.ts, tablet)
-}
-
-// SetBlacklistedTables updates the BlacklistedTables field for a
-// tablet. Make this external, since these transitions need to be
-// forced from time to time.
-func SetBlacklistedTables(ts topo.Server, tabletAlias topo.TabletAlias, tables []string) error {
-	tablet, err := ts.GetTablet(tabletAlias)
-	if err != nil {
-		return err
-	}
-
-	tablet.BlacklistedTables = tables
-	return topo.UpdateTablet(ts, tablet)
 }
 
 // ChecktabletMysqlPort will check the mysql port for the tablet is good,

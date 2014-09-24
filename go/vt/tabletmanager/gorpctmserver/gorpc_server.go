@@ -76,12 +76,6 @@ func (tm *TabletManager) ChangeType(context *rpcproto.Context, args *topo.Tablet
 	})
 }
 
-func (tm *TabletManager) SetBlacklistedTables(context *rpcproto.Context, args *gorpcproto.SetBlacklistedTablesArgs, reply *rpc.UnusedResponse) error {
-	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SET_BLACKLISTED_TABLES, args, reply, func() error {
-		return actor.SetBlacklistedTables(tm.agent.TopoServer, tm.agent.TabletAlias, args.Tables)
-	})
-}
-
 func (tm *TabletManager) ReloadSchema(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLockActionSchema(context.RemoteAddr, actionnode.TABLET_ACTION_RELOAD_SCHEMA, args, reply, func() error {
 		// no-op, the framework will force the schema reload

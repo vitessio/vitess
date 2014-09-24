@@ -33,10 +33,6 @@ type GetSchemaArgs struct {
 	IncludeViews  bool
 }
 
-type SetBlacklistedTablesArgs struct {
-	Tables []string
-}
-
 type WaitSlavePositionArgs struct {
 	Position    myproto.ReplicationPosition
 	WaitTimeout time.Duration // pass in zero to wait indefinitely

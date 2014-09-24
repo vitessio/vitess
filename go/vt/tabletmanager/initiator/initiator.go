@@ -96,10 +96,6 @@ func (ai *ActionInitiator) RpcChangeType(tablet *topo.TabletInfo, dbType topo.Ta
 	return ai.rpc.ChangeType(tablet, dbType, waitTime)
 }
 
-func (ai *ActionInitiator) SetBlacklistedTables(tablet *topo.TabletInfo, tables []string, waitTime time.Duration) error {
-	return ai.rpc.SetBlacklistedTables(tablet, tables, waitTime)
-}
-
 func (ai *ActionInitiator) SetReadOnly(tabletAlias topo.TabletAlias) (actionPath string, err error) {
 	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_SET_RDONLY})
 }
