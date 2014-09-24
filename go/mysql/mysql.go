@@ -273,7 +273,7 @@ func (conn *Connection) lastError(query string) error {
 func (conn *Connection) ReadPacket() ([]byte, error) {
 	length := C.vt_cli_safe_read(&conn.c)
 	if length == 0 {
-		return nil, fmt.Errorf("error reading packet from MySQL with cli_safe_read(): %v", conn.lastError(""))
+		return nil, conn.lastError("ReadPacket()")
 	}
 
 	return C.GoBytes(unsafe.Pointer(conn.c.mysql.net.read_pos), C.int(length)), nil
@@ -288,7 +288,7 @@ func (conn *Connection) SendCommand(command uint32, data []byte) error {
 		ret = C.vt_simple_command(&conn.c, command, (*C.uchar)(unsafe.Pointer(&data[0])), C.ulong(len(data)), 1)
 	}
 	if ret != 0 {
-		return fmt.Errorf("error sending raw MySQL command: %v", conn.lastError(""))
+		return conn.lastError(fmt.Sprintf("SendCommand(%#v, %#v)", command, data))
 	}
 	return nil
 }
