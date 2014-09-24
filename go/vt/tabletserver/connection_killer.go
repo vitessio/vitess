@@ -48,3 +48,32 @@ func (ck *ConnectionKiller) Kill(connID int64) error {
 func (ck *ConnectionKiller) SetIdleTimeout(idleTimeout time.Duration) {
 	ck.connPool.SetIdleTimeout(idleTimeout)
 }
+
+// QueryDeadliner is meant to kill a query if it doesn't
+// complete by the specified deadline.
+type QueryDeadliner chan bool
+
+// SetDeadline sets a deadline for the specifed connID. It also returns a QueryDeadliner.
+// If Done is not called on QueryDeadliner before the deadline is reached, the connection
+// is killed.
+func (ck *ConnectionKiller) SetDeadline(connID int64, deadline time.Time) QueryDeadliner {
+	qd := make(QueryDeadliner)
+	go func() {
+		timeout := deadline.Sub(time.Now())
+		tmr := time.NewTimer(timeout)
+		defer tmr.Stop()
+		select {
+		case <-tmr.C:
+			_ = ck.Kill(connID)
+		case <-qd:
+		}
+	}()
+	return qd
+}
+
+// Done informs the ConnectionKiller that the query completed successfully.
+// If this happens before the deadline, the query will not be killed.
+// Done should not be called more than once.
+func (qd QueryDeadliner) Done() {
+	close(qd)
+}
