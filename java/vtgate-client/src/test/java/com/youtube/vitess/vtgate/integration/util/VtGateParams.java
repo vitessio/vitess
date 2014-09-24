@@ -1,10 +1,14 @@
 package com.youtube.vitess.vtgate.integration.util;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.lang.StringUtils;
+
 import com.google.common.primitives.UnsignedLong;
+import com.google.gson.Gson;
 import com.youtube.vitess.vtgate.KeyspaceId;
 
 /**
@@ -12,10 +16,30 @@ import com.youtube.vitess.vtgate.KeyspaceId;
  * tests
  */
 public class VtGateParams {
+	public Map<String, List<String>> shard_kid_map;
+	public Map<String, Integer> tablets;
 	public String keyspace_name;
 	public int port;
-	public Map<String, List<String>> shard_kid_map;
 	public List<KeyspaceId> kids;
+
+	public VtGateParams(Map<String, List<String>> shard_kid_map,
+			String keyspace_name) {
+		this.shard_kid_map = shard_kid_map;
+		this.keyspace_name = keyspace_name;
+		this.tablets = new HashMap<String, Integer>();
+	}
+
+	public void addTablet(String type, int count) {
+		tablets.put(type, count);
+	}
+
+	public String getShardNames() {
+		return StringUtils.join(shard_kid_map.keySet(), ",");
+	}
+
+	public String getTabletConfig() {
+		return new Gson().toJson(tablets);
+	}
 
 	/**
 	 * Return all keyspaceIds in the Keyspace
