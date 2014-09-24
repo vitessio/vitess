@@ -120,3 +120,21 @@ type QueryResultList struct {
 	Session *Session
 	Error   string
 }
+
+// GetMRSplitsRequest is the request to fetch input splits for a MapReduce job.
+type GetMRSplitsRequest struct {
+	Keyspace string
+	Table    string
+	Columns  []string
+}
+
+// InputSplit is a slice of table typically assigned to a single Mapper
+type InputSplit struct {
+	Query *KeyRangeQuery
+	Size  int64
+}
+
+// Result for GetMRSplitsRequest
+type GetMRSplitsResult struct {
+	Splits []InputSplit
+}
