@@ -61,13 +61,13 @@ type QueryEngine struct {
 
 	// Services
 	activeTxPool *ActiveTxPool
-	activePool   *ActivePool
 	consolidator *Consolidator
 	invalidator  *RowcacheInvalidator
 	streamQList  *QueryList
 	connKiller   *ConnectionKiller
 
 	// Vars
+	queryTimeout     sync2.AtomicDuration
 	spotCheckFreq    sync2.AtomicInt64
 	strictMode       sync2.AtomicInt64
 	maxResultSize    sync2.AtomicInt64
@@ -139,12 +139,12 @@ func NewQueryEngine(config Config) *QueryEngine {
 	// Services
 	qe.activeTxPool = NewActiveTxPool("ActiveTransactionPool", time.Duration(config.TransactionTimeout*1e9))
 	qe.connKiller = NewConnectionKiller(1, time.Duration(config.IdleTimeout*1e9))
-	qe.activePool = NewActivePool("ActivePool", time.Duration(config.QueryTimeout*1e9), qe.connKiller)
 	qe.consolidator = NewConsolidator()
 	qe.invalidator = NewRowcacheInvalidator(qe)
 	qe.streamQList = NewQueryList(qe.connKiller)
 
 	// Vars
+	qe.queryTimeout.Set(time.Duration(config.QueryTimeout * 1e9))
 	qe.spotCheckFreq = sync2.AtomicInt64(config.SpotCheckRatio * SPOT_CHECK_MULTIPLIER)
 	if config.StrictMode {
 		qe.strictMode.Set(1)
@@ -214,7 +214,6 @@ func (qe *QueryEngine) Open(dbconfig *dbconfigs.DBConfig, schemaOverrides []Sche
 	qe.txPool.Open(connFactory)
 	qe.activeTxPool.Open()
 	qe.connKiller.Open(connFactory)
-	qe.activePool.Open()
 }
 
 // WaitForTxEmpty must be called before calling Close.
@@ -229,7 +228,6 @@ func (qe *QueryEngine) WaitForTxEmpty() {
 // before calling Close.
 func (qe *QueryEngine) Close() {
 	// Close in reverse order of Open.
-	qe.activePool.Close()
 	qe.connKiller.Close()
 	qe.activeTxPool.Close()
 	qe.txPool.Close()
@@ -866,7 +864,7 @@ func (qe *QueryEngine) execSet(logStats *SQLQueryStats, plan *compiledPlan) (res
 		}
 		qe.streamBufferSize.Set(val)
 	case "vt_query_timeout":
-		qe.activePool.SetTimeout(getDuration(plan.SetValue))
+		qe.queryTimeout.Set(getDuration(plan.SetValue))
 	case "vt_idle_timeout":
 		t := getDuration(plan.SetValue)
 		qe.connPool.SetIdleTimeout(t)
@@ -979,9 +977,10 @@ func (qe *QueryEngine) executeSqlString(logStats *SQLQueryStats, conn dbconnpool
 }
 
 func (qe *QueryEngine) executeSql(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, sql string, wantfields bool) (*mproto.QueryResult, error) {
-	connid := conn.Id()
-	qe.activePool.Put(connid)
-	defer qe.activePool.Remove(connid)
+	if timeout := qe.queryTimeout.Get(); timeout != 0 {
+		qd := qe.connKiller.SetDeadline(conn.Id(), time.Now().Add(timeout))
+		defer qd.Done()
+	}
 
 	logStats.QuerySources |= QUERY_SOURCE_MYSQL
 	logStats.NumberOfQueries++

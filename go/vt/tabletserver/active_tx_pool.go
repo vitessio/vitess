@@ -149,7 +149,8 @@ func (axp *ActiveTxPool) Get(transactionId int64) (conn *TxConnection) {
 	return v.(*TxConnection)
 }
 
-// LogActive causes all existing transsactions to be logged when they complete.
+// LogActive causes all existing transactions to be logged when they complete.
+// The logging is throttled to no more than once every txLogInterval.
 func (axp *ActiveTxPool) LogActive() {
 	axp.logMu.Lock()
 	defer axp.logMu.Unlock()
