@@ -363,10 +363,6 @@ type Tablet struct {
 	// hard to rename.
 	DbNameOverride string
 	KeyRange       key.KeyRange
-
-	// BlacklistedTables is a list of tables we're not going to serve
-	// data for. This is used in vertical splits.
-	BlacklistedTables []string
 }
 
 // ValidatePortmap returns an error if the tablet's portmap doesn't
