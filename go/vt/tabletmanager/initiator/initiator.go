@@ -99,10 +99,6 @@ func (ai *ActionInitiator) SetReadWrite(tabletAlias topo.TabletAlias) (actionPat
 	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_SET_RDWR})
 }
 
-func (ai *ActionInitiator) DemoteMaster(tabletAlias topo.TabletAlias) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_DEMOTE_MASTER})
-}
-
 func (ai *ActionInitiator) Snapshot(tabletAlias topo.TabletAlias, args *actionnode.SnapshotArgs) (actionPath string, err error) {
 	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_SNAPSHOT, Args: args})
 }
@@ -121,6 +117,10 @@ func (ai *ActionInitiator) MultiRestore(tabletAlias topo.TabletAlias, args *acti
 
 func (ai *ActionInitiator) BreakSlaves(tabletAlias topo.TabletAlias) (actionPath string, err error) {
 	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_BREAK_SLAVES})
+}
+
+func (ai *ActionInitiator) DemoteMaster(tablet *topo.TabletInfo, waitTime time.Duration) error {
+	return ai.rpc.DemoteMaster(tablet, waitTime)
 }
 
 func (ai *ActionInitiator) PromoteSlave(tabletAlias topo.TabletAlias) (actionPath string, err error) {

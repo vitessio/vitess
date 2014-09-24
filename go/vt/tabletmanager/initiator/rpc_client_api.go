@@ -92,6 +92,9 @@ type TabletManagerConn interface {
 	// Reparenting related functions
 	//
 
+	// DemoteMaster tells the soon-to-be-former master it's gonna change
+	DemoteMaster(tablet *topo.TabletInfo, waitTime time.Duration) error
+
 	// SlaveWasPromoted tells the remote tablet it is now the master
 	SlaveWasPromoted(tablet *topo.TabletInfo, waitTime time.Duration) error
 

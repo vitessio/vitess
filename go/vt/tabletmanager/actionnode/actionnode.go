@@ -182,7 +182,6 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case TABLET_ACTION_CHANGE_TYPE:
 		node.Args = new(topo.TabletType)
 
-	case TABLET_ACTION_DEMOTE_MASTER:
 	case TABLET_ACTION_PROMOTE_SLAVE:
 		node.Reply = &RestartSlaveData{}
 	case TABLET_ACTION_RESTART_SLAVE:
@@ -249,6 +248,7 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 		TABLET_ACTION_SLAVE_STATUS,
 		TABLET_ACTION_WAIT_SLAVE_POSITION,
 		TABLET_ACTION_MASTER_POSITION,
+		TABLET_ACTION_DEMOTE_MASTER,
 		TABLET_ACTION_SLAVE_WAS_PROMOTED,
 		TABLET_ACTION_SLAVE_WAS_RESTARTED,
 		TABLET_ACTION_STOP_SLAVE,

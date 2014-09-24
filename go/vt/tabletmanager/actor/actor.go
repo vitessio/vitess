@@ -176,8 +176,6 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 		err = ta.mysqld.BreakSlaves()
 	case actionnode.TABLET_ACTION_CHANGE_TYPE:
 		err = ta.changeType(actionNode)
-	case actionnode.TABLET_ACTION_DEMOTE_MASTER:
-		err = ta.demoteMaster()
 	case actionnode.TABLET_ACTION_MULTI_SNAPSHOT:
 		err = ta.multiSnapshot(actionNode)
 	case actionnode.TABLET_ACTION_MULTI_RESTORE:
@@ -220,6 +218,7 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 		actionnode.TABLET_ACTION_SLAVE_STATUS,
 		actionnode.TABLET_ACTION_WAIT_SLAVE_POSITION,
 		actionnode.TABLET_ACTION_MASTER_POSITION,
+		actionnode.TABLET_ACTION_DEMOTE_MASTER,
 		actionnode.TABLET_ACTION_SLAVE_WAS_PROMOTED,
 		actionnode.TABLET_ACTION_SLAVE_WAS_RESTARTED,
 		actionnode.TABLET_ACTION_STOP_SLAVE,
@@ -285,23 +284,6 @@ func (ta *TabletActor) setReadOnly(rdonly bool) error {
 func (ta *TabletActor) changeType(actionNode *actionnode.ActionNode) error {
 	dbType := actionNode.Args.(*topo.TabletType)
 	return topotools.ChangeType(ta.ts, ta.tabletAlias, *dbType, nil, true /*runHooks*/)
-}
-
-func (ta *TabletActor) demoteMaster() error {
-	_, err := ta.mysqld.DemoteMaster()
-	if err != nil {
-		return err
-	}
-
-	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
-	if err != nil {
-		return err
-	}
-	tablet.State = topo.STATE_READ_ONLY
-	// NOTE(msolomon) there is no serving graph update - the master tablet will
-	// be replaced. Even though writes may fail, reads will succeed. It will be
-	// less noisy to simply leave the entry until well promote the master.
-	return topo.UpdateTablet(ta.ts, tablet)
 }
 
 func (ta *TabletActor) promoteSlave(actionNode *actionnode.ActionNode) error {

@@ -41,7 +41,11 @@ func commandDemoteMaster(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	if err != nil {
 		return "", err
 	}
-	return wr.ActionInitiator().DemoteMaster(tabletAlias)
+	tabletInfo, err := wr.TopoServer().GetTablet(tabletAlias)
+	if err != nil {
+		return "", err
+	}
+	return "", wr.ActionInitiator().DemoteMaster(tabletInfo, wr.ActionTimeout())
 }
 
 func commandReparentTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

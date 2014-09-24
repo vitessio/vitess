@@ -261,12 +261,7 @@ func (wr *Wrangler) tabletReplicationStatuses(tablets []*topo.TabletInfo) ([]*my
 
 func (wr *Wrangler) demoteMaster(ti *topo.TabletInfo) (myproto.ReplicationPosition, error) {
 	wr.logger.Infof("demote master %v", ti.Alias)
-	actionPath, err := wr.ai.DemoteMaster(ti.Alias)
-	if err != nil {
-		return myproto.ReplicationPosition{}, err
-	}
-	err = wr.WaitForCompletion(actionPath)
-	if err != nil {
+	if err := wr.ai.DemoteMaster(ti, wr.ActionTimeout()); err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
 	return wr.ai.MasterPosition(ti, wr.ActionTimeout())
