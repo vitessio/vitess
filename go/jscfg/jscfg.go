@@ -2,10 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// Package jscfg implements a simple API for reading and writing JSON files.
 package jscfg
-
-// A few simple macros for keeping JSON config files human readable
-// and consistent.
 
 import (
 	"encoding/json"

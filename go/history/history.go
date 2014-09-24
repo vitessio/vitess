@@ -1,3 +1,4 @@
+// Package history implements a circular buffer with adjacent-item deduplication.
 package history
 
 import (
@@ -28,8 +29,8 @@ func New(length int) *History {
 	return &History{records: make([]interface{}, length)}
 }
 
-// Add a new record in a treadsafe manner. If record implements
-// Equivalent, and IsEquivalent returns true when called on the last
+// Add a new record in a threadsafe manner. If record implements
+// Deduplicable, and IsDuplicate returns true when called on the last
 // previously added record, it will not be added.
 func (history *History) Add(record interface{}) {
 	history.mu.Lock()

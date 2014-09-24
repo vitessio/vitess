@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 // Package jsonrpc implements a JSON-RPC ClientCodec and ServerCodec
-// for the rpc package.
+// for the rpcplus package.
 package jsonrpc
 
 import (

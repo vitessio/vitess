@@ -1,5 +1,5 @@
 // Package pbrpc implements a ClientCodec and ServerCodec
-// for the rpc package using proto.
+// for the rpcplus package using Protocol Buffers.
 package pbrpc
 
 import (

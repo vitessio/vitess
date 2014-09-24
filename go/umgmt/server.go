@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// The micromanagment module provides a tiny server running on a unix
+// Package umgmt (micromanagment) provides a tiny server running on a unix
 // domain socket.
 //
 // It is meant as an alternative to signals for handling graceful
@@ -14,7 +14,6 @@
 // previously bound sockets will be released and startup can
 // continue. You must delegate execution of your server initialization
 // to this module via AddStartupCallback().
-
 package umgmt
 
 import (

@@ -2,9 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-/*
-filutil contains a few utility functions related to files and path
-*/
+// Package fileutil contains utility functions related to files and paths.
 package fileutil
 
 // HasWildcard checks if a string has a wildcard in it. In the cases
