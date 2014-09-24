@@ -43,7 +43,7 @@ func newBinlogConnStreamer(dbname string, mysqld *mysqlctl.Mysqld, startPos mypr
 
 // Stream implements BinlogStreamer.Stream().
 func (bls *binlogConnStreamer) Stream(ctx *sync2.ServiceContext) (err error) {
-	var stopPos myproto.ReplicationPosition
+	stopPos := bls.startPos
 	defer func() {
 		if err != nil {
 			binlogStreamerErrors.Add("Stream", 1)
