@@ -227,6 +227,12 @@ func (tm *TabletManager) RunBlpUntil(context *rpcproto.Context, args *gorpcproto
 // Reparenting related functions
 //
 
+func (tm *TabletManager) DemoteMaster(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_DEMOTE_MASTER, args, reply, true, func() error {
+		return tm.agent.DemoteMaster()
+	})
+}
+
 func (tm *TabletManager) SlaveWasPromoted(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SLAVE_WAS_PROMOTED, args, reply, true, func() error {
 		return actor.SlaveWasPromoted(tm.agent.TopoServer, tm.agent.TabletAlias)

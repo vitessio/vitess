@@ -48,6 +48,23 @@ func (agent *ActionAgent) ExecuteFetch(query string, maxrows int, wantFields, di
 	return qr, err
 }
 
+// DemoteMaster demotes the current master, and marks it read-only in the topo.
+func (agent *ActionAgent) DemoteMaster() error {
+	_, err := agent.Mysqld.DemoteMaster()
+	if err != nil {
+		return err
+	}
+
+	// There is no serving graph update - the master tablet will
+	// be replaced. Even though writes may fail, reads will
+	// succeed. It will be less noisy to simply leave the entry
+	// until well promote the master.
+	return agent.TopoServer.UpdateTabletFields(agent.TabletAlias, func(tablet *topo.Tablet) error {
+		tablet.State = topo.STATE_READ_ONLY
+		return nil
+	})
+}
+
 // SlaveWasRestarted updates the parent record for a tablet.
 func (agent *ActionAgent) SlaveWasRestarted(swrd *actionnode.SlaveWasRestartedArgs) error {
 	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)

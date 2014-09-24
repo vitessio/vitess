@@ -208,6 +208,10 @@ func (client *GoRpcTabletManagerConn) RunBlpUntil(tablet *topo.TabletInfo, posit
 //
 // Reparenting related functions
 //
+func (client *GoRpcTabletManagerConn) DemoteMaster(tablet *topo.TabletInfo, waitTime time.Duration) error {
+	var noOutput rpc.UnusedResponse
+	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_DEMOTE_MASTER, "", &noOutput, waitTime)
+}
 
 func (client *GoRpcTabletManagerConn) SlaveWasPromoted(tablet *topo.TabletInfo, waitTime time.Duration) error {
 	var noOutput rpc.UnusedResponse
