@@ -2,9 +2,11 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package bufio implements buffered I/O.  It wraps an io.Reader or io.Writer
-// object, creating another object (Reader or AsyncWriter) that also implements
-// the interface but provides buffering and some help for textual I/O.
+// Package bufio2 implements buffered I/O.
+//
+// It wraps an io.Reader or io.Writer object, creating another object
+// (Reader or AsyncWriter) that also implements the interface but provides
+// buffering and some help for textual I/O.
 package bufio2
 
 import (

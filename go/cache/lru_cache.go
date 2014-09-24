@@ -2,12 +2,13 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// cache implements a LRU cache. The implementation borrows heavily
-// from SmallLRUCache (originally by Nathan Schrenk). The object
-// maintains a doubly-linked list of elements.  When an element is
-// accessed it is promoted to the head of the list, and when space is
-// needed the element at the tail of the list (the least recently used
-// element) is evicted.
+// Package cache implements a LRU cache.
+//
+// The implementation borrows heavily from SmallLRUCache
+// (originally by Nathan Schrenk). The object maintains a doubly-linked list of
+// elements. When an element is accessed, it is promoted to the head of the
+// list. When space is needed, the element at the tail of the list
+// (the least recently used element) is evicted.
 package cache
 
 import (

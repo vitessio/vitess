@@ -2,6 +2,15 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// Package tb exposes some handy traceback functionality buried in the runtime.
+//
+// It can also be used to provide context to errors reducing the temptation to
+// panic carelessly, just to get stack information.
+//
+// The theory is that most errors that are created with the fmt.Errorf
+// style are likely to be rare, but require more context to debug
+// properly. The additional cost of computing a stack trace is
+// therefore negligible.
 package tb
 
 import (
@@ -17,15 +26,7 @@ var (
 	dot       = []byte(".")
 )
 
-// This package exposes some handy traceback functionality buried in the runtime.
-//
-// It can also be used to provide context to errors reducing the temptation to
-// panic carelessly, just to get stack information.
-//
-// The theory is that most errors that are created with the fmt.Errorf
-// style are likely to be rare, but require more context to debug
-// properly. The additional cost of computing a stack trace is
-// therefore negligible.
+// StackError represents an error along with a stack trace.
 type StackError interface {
 	Error() string
 	StackTrace() string
