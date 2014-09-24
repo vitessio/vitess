@@ -34,13 +34,13 @@ public class StreamCursor implements Cursor {
 
 	@Override
 	public boolean hasNext() {
-		updateIterator();
+		fetchMoreIfNeeded();
 		return iterator.hasNext();
 	}
 
 	@Override
 	public Row next() {
-		updateIterator();
+		fetchMoreIfNeeded();
 		return this.iterator.next();
 	}
 
@@ -67,7 +67,7 @@ public class StreamCursor implements Cursor {
 	/**
 	 * Update the iterator by fetching more rows if current buffer is done
 	 */
-	private void updateIterator() {
+	private void fetchMoreIfNeeded() {
 		// Either current buffer is not empty or we have reached end of stream,
 		// nothing to do here.
 		if (this.iterator.hasNext() || streamEnded) {
@@ -82,17 +82,23 @@ public class StreamCursor implements Cursor {
 			throw new RuntimeException(e);
 		}
 
-		// null reply indicates EndOfStream mark stream as ended and return
+		// null reply indicates EndOfStream, mark stream as ended and return
 		if (reply == null) {
 			streamEnded = true;
 			return;
 		}
 
 		Map<String, Object> result = (Map<String, Object>) reply.get("Result");
-		// Fields are only returned in the StreamExecute calls. Subsequent
-		// fetches do not return fields, so propagate it from the current
-		// queryResult
-		queryResult = QueryResult.parse(result, queryResult.getFields());
-		iterator = queryResult.getRows().iterator();
+		QueryResult qr = QueryResult.parse(result, queryResult.getFields());
+		// For scatter streaming queries, VtGate sends fields data from each
+		// shard. Since fields has already been fetched, just ignore these and
+		// fetch the next batch.
+		if (qr.getRows().size() == 0) {
+			fetchMoreIfNeeded();
+		} else {
+			// We got more rows, update the current buffer and iterator
+			queryResult = qr;
+			iterator = queryResult.getRows().iterator();
+		}
 	}
 }

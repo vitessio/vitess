@@ -1,4 +1,4 @@
-package com.youtube.vitess.vtgate.integration;
+package com.youtube.vitess.vtgate.integration.util;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -7,20 +7,20 @@ import java.util.Map;
 import com.google.common.primitives.UnsignedLong;
 import com.youtube.vitess.vtgate.KeyspaceId;
 
-public/**
- * Helper class to hold the configurations for VtGate setup used in
- * integration tests
+/**
+ * Helper class to hold the configurations for VtGate setup used in integration
+ * tests
  */
-class VtGateParams {
-	String keyspace_name;
-	int port;
-	Map<String, List<String>> shard_kid_map;
-	List<KeyspaceId> kids;
+public class VtGateParams {
+	public String keyspace_name;
+	public int port;
+	public Map<String, List<String>> shard_kid_map;
+	public List<KeyspaceId> kids;
 
 	/**
 	 * Return all keyspaceIds in the Keyspace
 	 */
-	List<KeyspaceId> getAllKeyspaceIds() {
+	public List<KeyspaceId> getAllKeyspaceIds() {
 		if (kids != null) {
 			return kids;
 		}
@@ -37,7 +37,7 @@ class VtGateParams {
 	/**
 	 * Return all keyspaceIds in a specific shard
 	 */
-	List<KeyspaceId> getKeyspaceIds(String shardName) {
+	public List<KeyspaceId> getKeyspaceIds(String shardName) {
 		List<String> kidsStr = shard_kid_map.get(shardName);
 		if (kidsStr != null) {
 			List<KeyspaceId> kids = new ArrayList<>();

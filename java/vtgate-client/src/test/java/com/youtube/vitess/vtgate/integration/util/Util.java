@@ -1,4 +1,4 @@
-package com.youtube.vitess.vtgate.integration;
+package com.youtube.vitess.vtgate.integration.util;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -21,7 +21,7 @@ import com.youtube.vitess.vtgate.Query.QueryBuilder;
 import com.youtube.vitess.vtgate.VtGate;
 
 public class Util {
-	static VtGateParams runVtGate(boolean setUp) throws Exception {
+	public static VtGateParams runVtGate(boolean setUp) throws Exception {
 		String vtTop = System.getenv("VTTOP");
 		if (vtTop == null) {
 			Assert.fail("VTTOP is not set");
@@ -61,12 +61,12 @@ public class Util {
 		return null;
 	}
 
-	static void insertRows(VtGateParams params, int startId, int count)
+	public static void insertRows(VtGateParams params, int startId, int count)
 			throws ConnectionException, DatabaseException {
 		insertRows(params, startId, count, new Date());
 	}
 
-	static void insertRows(VtGateParams params, int startId, int count,
+	public static void insertRows(VtGateParams params, int startId, int count,
 			Date date) throws ConnectionException, DatabaseException {
 		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
 
@@ -102,7 +102,7 @@ public class Util {
 	/**
 	 * Insert rows to a specific shard using ExecuteKeyspaceIds
 	 */
-	static void insertRowsInShard(VtGateParams params, String shardName,
+	public static void insertRowsInShard(VtGateParams params, String shardName,
 			int count) throws DatabaseException, ConnectionException {
 		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
 		vtgate.begin();
@@ -129,7 +129,7 @@ public class Util {
 		vtgate.close();
 	}
 
-	static void truncateTable(VtGateParams params) throws Exception {
+	public static void truncateTable(VtGateParams params) throws Exception {
 		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
 		vtgate.begin();
 		vtgate.execute(new QueryBuilder("delete from vtgate_test",
