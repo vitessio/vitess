@@ -326,7 +326,7 @@ func (ta *TabletActor) promoteSlave(actionNode *actionnode.ActionNode) error {
 	return updateReplicationGraphForPromotedSlave(ta.ts, tablet)
 }
 
-// SlaveWasPromoted promotes a slave to master. Called both by RPC only
+// SlaveWasPromoted promotes a slave to master. Called by RPC only.
 func SlaveWasPromoted(ts topo.Server, tabletAlias topo.TabletAlias) error {
 	tablet, err := ts.GetTablet(tabletAlias)
 	if err != nil {
