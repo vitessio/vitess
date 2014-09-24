@@ -562,6 +562,9 @@ class TestReparent(unittest.TestCase):
                      'Got unexpected links: %s != %s' % (str(expected_links),
                                                          str(hashed_links)))
 
+    tablet_62044_master_status = tablet_62044.get_status()
+    self.assertIn('Serving graph: test_keyspace 0 master', tablet_62044_master_status)
+
   _create_vt_insert_test = '''create table vt_insert_test (
   id bigint auto_increment,
   msg varchar(64),
