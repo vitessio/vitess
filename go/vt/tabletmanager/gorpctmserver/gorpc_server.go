@@ -162,7 +162,7 @@ func (tm *TabletManager) TabletExternallyReparented(context *rpcproto.Context, a
 	// TODO(alainjobart) we should forward the RPC deadline from
 	// the original gorpc call. Until we support that, use a
 	// reasonnable hard-coded value.
-	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_EXTERNALLY_REPARENTED, args, reply, false, func() error {
+	return tm.agent.RpcWrapLock(context.RemoteAddr, actionnode.TABLET_ACTION_EXTERNALLY_REPARENTED, args, reply, false, func() error {
 		return tm.agent.TabletExternallyReparented(30 * time.Second)
 	})
 }

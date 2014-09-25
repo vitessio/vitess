@@ -24,7 +24,15 @@ import (
 // (if an action can be both an ActionNode and a RPC, it's implemented
 // in the actor code).
 
+// TODO(alainjobart): all the calls mention something like:
+// Should be called under RpcWrap.
+// Eventually, when all calls are going through RPCs, we'll refactor
+// this so there is only one wrapper, and the extra stuff done by the
+// RpcWrapXXX methods will be done internally. Until then, it's safer
+// to have the comment.
+
 // ExecuteFetch will execute the given query, possibly disabling binlogs.
+// Should be called under RpcWrap.
 func (agent *ActionAgent) ExecuteFetch(query string, maxrows int, wantFields, disableBinlogs bool) (*proto.QueryResult, error) {
 	// get a connection
 	conn, err := agent.Mysqld.GetDbaConnection()
@@ -58,6 +66,7 @@ func (agent *ActionAgent) ExecuteFetch(query string, maxrows int, wantFields, di
 }
 
 // DemoteMaster demotes the current master, and marks it read-only in the topo.
+// Should be called under RpcWrapLockAction.
 func (agent *ActionAgent) DemoteMaster() error {
 	_, err := agent.Mysqld.DemoteMaster()
 	if err != nil {
@@ -75,6 +84,7 @@ func (agent *ActionAgent) DemoteMaster() error {
 }
 
 // SlaveWasPromoted promotes a slave to master, no questions asked.
+// Should be called under RpcWrapLockAction.
 func (agent *ActionAgent) SlaveWasPromoted() error {
 	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
 	if err != nil {
@@ -85,6 +95,7 @@ func (agent *ActionAgent) SlaveWasPromoted() error {
 }
 
 // SlaveWasRestarted updates the parent record for a tablet.
+// Should be called under RpcWrapLockAction.
 func (agent *ActionAgent) SlaveWasRestarted(swrd *actionnode.SlaveWasRestartedArgs) error {
 	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
 	if err != nil {
@@ -114,19 +125,18 @@ func (agent *ActionAgent) SlaveWasRestarted(swrd *actionnode.SlaveWasRestartedAr
 
 // TabletExternallyReparented updates all topo records so the current
 // tablet is the new master for this shard.
+// Should be called under RpcWrapLock.
 func (agent *ActionAgent) TabletExternallyReparented(actionTimeout time.Duration) error {
-	// we're apparently not the master yet, so let's do the work
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
-	if err != nil {
-		return err
-	}
+	tablet := agent.Tablet()
 
-	// fast quick check on the shard
+	// fast quick check on the shard to see if we're not the master already
 	shardInfo, err := agent.TopoServer.GetShard(tablet.Keyspace, tablet.Shard)
 	if err != nil {
+		log.Warningf("TabletExternallyReparented: Cannot read the shard %v/%v: %v", tablet.Keyspace, tablet.Shard, err)
 		return err
 	}
 	if shardInfo.MasterAlias == agent.TabletAlias {
+		// we are already the master, nothing more to do.
 		return nil
 	}
 
@@ -135,25 +145,44 @@ func (agent *ActionAgent) TabletExternallyReparented(actionTimeout time.Duration
 	interrupted := make(chan struct{})
 	lockPath, err := actionNode.LockShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, agent.LockTimeout, interrupted)
 	if err != nil {
+		log.Warningf("TabletExternallyReparented: Cannot lock shard %v/%v: %v", tablet.Keyspace, tablet.Shard, err)
 		return err
 	}
 
 	// do the work
-	err = agent.tabletExternallyReparentedLocked(tablet, actionTimeout, interrupted)
+	runAfterAction, err := agent.tabletExternallyReparentedLocked(actionTimeout, interrupted)
+	if err != nil {
+		log.Warningf("TabletExternallyReparented: internal error: %v", err)
+	}
 
-	// release the lock in any case
-	return actionNode.UnlockShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, lockPath, err)
+	// release the lock in any case, and run afterAction if necessary
+	err = actionNode.UnlockShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, lockPath, err)
+	if runAfterAction {
+		agent.afterAction("RPC(TabletExternallyReparented)" /*reloadSchema*/, false)
+	}
+	return err
 }
 
-func (agent *ActionAgent) tabletExternallyReparentedLocked(tablet *topo.TabletInfo, actionTimeout time.Duration, interrupted chan struct{}) (err error) {
+// tabletExternallyReparentedLocked is called with the shard lock.
+// It returns if agent.afterAction should be called, and the error.
+// Note both are set independently (can have both true and an error).
+func (agent *ActionAgent) tabletExternallyReparentedLocked(actionTimeout time.Duration, interrupted chan struct{}) (bool, error) {
+	// re-read the tablet record to be sure we have the latest version
+	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	if err != nil {
+		return false, err
+	}
+
 	// read the shard, make sure again the master is not already good.
 	shardInfo, err := agent.TopoServer.GetShard(tablet.Keyspace, tablet.Shard)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if shardInfo.MasterAlias == tablet.Alias {
-		return fmt.Errorf("this tablet is already the master")
+		log.Infof("TabletExternallyReparented: tablet became the master before we get the lock?")
+		return false, nil
 	}
+	log.Infof("TabletExternallyReparented called and we're not the master, doing the work")
 
 	// Read the tablets, make sure the master elect is known to the shard
 	// (it's this tablet, so it better be!).
@@ -171,11 +200,11 @@ func (agent *ActionAgent) tabletExternallyReparentedLocked(tablet *topo.TabletIn
 	case topo.ErrPartialResult:
 		log.Warningf("Got topo.ErrPartialResult from GetTabletMapForShard, may need to re-init some tablets")
 	default:
-		return err
+		return false, err
 	}
 	masterElectTablet, ok := tabletMap[tablet.Alias]
 	if !ok {
-		return fmt.Errorf("this master-elect tablet %v not found in replication graph %v/%v %v", tablet.Alias, tablet.Keyspace, tablet.Shard, topotools.MapKeys(tabletMap))
+		return false, fmt.Errorf("this master-elect tablet %v not found in replication graph %v/%v %v", tablet.Alias, tablet.Keyspace, tablet.Shard, topotools.MapKeys(tabletMap))
 	}
 
 	// Create reusable Reparent event with available info
@@ -198,12 +227,15 @@ func (agent *ActionAgent) tabletExternallyReparentedLocked(tablet *topo.TabletIn
 	slaveTabletMap, masterTabletMap := topotools.SortedTabletMap(tabletMap)
 	event.DispatchUpdate(ev, "starting external from tablet")
 
-	// we fix the new master in the replication graph
+	// We fix the new master in the replication graph.
+	// Note after this call, we may have changed the tablet record,
+	// so we will always return true, so the tablet record is re-read
+	// by the agent.
 	event.DispatchUpdate(ev, "mark ourself as new master")
 	err = agent.updateReplicationGraphForPromotedSlave(tablet)
 	if err != nil {
 		// This suggests we can't talk to topo server. This is bad.
-		return fmt.Errorf("updateReplicationGraphForPromotedSlave failed: %v", err)
+		return true, fmt.Errorf("updateReplicationGraphForPromotedSlave failed: %v", err)
 	}
 
 	// Once this tablet is promoted, remove it from our maps
@@ -236,18 +268,18 @@ func (agent *ActionAgent) tabletExternallyReparentedLocked(tablet *topo.TabletIn
 	log.Infof("Updating Shard's MasterAlias record")
 	shardInfo.MasterAlias = tablet.Alias
 	if err = topo.UpdateShard(agent.TopoServer, shardInfo); err != nil {
-		return err
+		return true, err
 	}
 
 	// and rebuild the shard serving graph
 	event.DispatchUpdate(ev, "rebuilding shard serving graph")
 	log.Infof("Rebuilding shard serving graph data")
 	if err = topotools.RebuildShard(logger, agent.TopoServer, tablet.Keyspace, tablet.Shard, cells, agent.LockTimeout, interrupted); err != nil {
-		return err
+		return true, err
 	}
 
 	event.DispatchUpdate(ev, "finished")
-	return nil
+	return true, nil
 }
 
 // updateReplicationGraphForPromotedSlave amkes sure the newly promoted slave
