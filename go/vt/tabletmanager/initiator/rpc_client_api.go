@@ -106,6 +106,10 @@ type TabletManagerConn interface {
 
 	// SlaveWasRestarted tells the remote tablet its master has changed
 	SlaveWasRestarted(tablet *topo.TabletInfo, args *actionnode.SlaveWasRestartedArgs, waitTime time.Duration) error
+
+	// BreakSlaves will tinker with the replication stream in a
+	// way that will stop all the slaves.
+	BreakSlaves(tablet *topo.TabletInfo, waitTime time.Duration) error
 }
 
 type TabletManagerConnFactory func(topo.Server) TabletManagerConn

@@ -237,3 +237,8 @@ func (client *GoRpcTabletManagerConn) SlaveWasRestarted(tablet *topo.TabletInfo,
 	var noOutput rpc.UnusedResponse
 	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_SLAVE_WAS_RESTARTED, args, &noOutput, waitTime)
 }
+
+func (client *GoRpcTabletManagerConn) BreakSlaves(tablet *topo.TabletInfo, waitTime time.Duration) error {
+	var noOutput rpc.UnusedResponse
+	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_BREAK_SLAVES, "", &noOutput, waitTime)
+}

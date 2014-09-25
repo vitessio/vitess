@@ -115,8 +115,8 @@ func (ai *ActionInitiator) MultiRestore(tabletAlias topo.TabletAlias, args *acti
 	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_MULTI_RESTORE, Args: args})
 }
 
-func (ai *ActionInitiator) BreakSlaves(tabletAlias topo.TabletAlias) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_BREAK_SLAVES})
+func (ai *ActionInitiator) BreakSlaves(tablet *topo.TabletInfo, waitTime time.Duration) error {
+	return ai.rpc.BreakSlaves(tablet, waitTime)
 }
 
 func (ai *ActionInitiator) DemoteMaster(tablet *topo.TabletInfo, waitTime time.Duration) error {

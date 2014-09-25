@@ -375,11 +375,7 @@ func (wr *Wrangler) breakReplication(slaveMap map[topo.TabletAlias]*topo.TabletI
 	// Force slaves to break, just in case they were not advertised in
 	// the replication graph.
 	wr.logger.Infof("break slaves %v", masterElect.Alias)
-	actionPath, err := wr.ai.BreakSlaves(masterElect.Alias)
-	if err == nil {
-		err = wr.WaitForCompletion(actionPath)
-	}
-	return err
+	return wr.ai.BreakSlaves(masterElect, wr.ActionTimeout())
 }
 
 func (wr *Wrangler) restartableTabletMap(slaves map[topo.TabletAlias]*topo.TabletInfo) map[uint32]*topo.TabletInfo {

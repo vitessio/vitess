@@ -118,6 +118,7 @@ func (agent *ActionAgent) SlaveWasPromoted() error {
 }
 
 // RestartSlave tells the tablet it has a new master
+// Should be called under RpcWrapLockAction.
 func (agent *ActionAgent) RestartSlave(rsd *actionnode.RestartSlaveData) error {
 	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
 	if err != nil {
@@ -213,6 +214,13 @@ func (agent *ActionAgent) SlaveWasRestarted(swrd *actionnode.SlaveWasRestartedAr
 	}
 
 	return nil
+}
+
+// BreakSlaves will tinker with the replication stream in a way that
+// will stop all the slaves.
+// Should be called under RpcWrapLockAction.
+func (agent *ActionAgent) BreakSlaves() error {
+	return agent.Mysqld.BreakSlaves()
 }
 
 // TabletExternallyReparented updates all topo records so the current

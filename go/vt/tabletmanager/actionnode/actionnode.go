@@ -52,6 +52,10 @@ const (
 	// topology record.
 	TABLET_ACTION_SLAVE_WAS_RESTARTED = "SlaveWasRestarted"
 
+	// BreakSlaves will tinker with the replication stream in a way
+	// that will stop all the slaves.
+	TABLET_ACTION_BREAK_SLAVES = "BreakSlaves"
+
 	// StopSlave will stop MySQL replication.
 	TABLET_ACTION_STOP_SLAVE = "StopSlave"
 
@@ -116,7 +120,6 @@ const (
 	TABLET_ACTION_CHANGE_TYPE = "ChangeType"
 	TABLET_ACTION_SCRAP       = "Scrap"
 
-	TABLET_ACTION_BREAK_SLAVES      = "BreakSlaves"
 	TABLET_ACTION_REPARENT_POSITION = "ReparentPosition"
 
 	TABLET_ACTION_PREFLIGHT_SCHEMA = "PreflightSchema"
@@ -226,7 +229,6 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case TABLET_ACTION_CHANGE_TYPE:
 		node.Args = new(topo.TabletType)
 
-	case TABLET_ACTION_BREAK_SLAVES:
 	case TABLET_ACTION_REPARENT_POSITION:
 		node.Args = &myproto.ReplicationPosition{}
 		node.Reply = &RestartSlaveData{}
@@ -288,6 +290,7 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 		TABLET_ACTION_SLAVE_WAS_PROMOTED,
 		TABLET_ACTION_RESTART_SLAVE,
 		TABLET_ACTION_SLAVE_WAS_RESTARTED,
+		TABLET_ACTION_BREAK_SLAVES,
 		TABLET_ACTION_STOP_SLAVE,
 		TABLET_ACTION_STOP_SLAVE_MINIMUM,
 		TABLET_ACTION_START_SLAVE,

@@ -169,8 +169,6 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 	}()
 
 	switch actionNode.Action {
-	case actionnode.TABLET_ACTION_BREAK_SLAVES:
-		err = ta.mysqld.BreakSlaves()
 	case actionnode.TABLET_ACTION_CHANGE_TYPE:
 		err = ta.changeType(actionNode)
 	case actionnode.TABLET_ACTION_MULTI_SNAPSHOT:
@@ -216,6 +214,7 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 		actionnode.TABLET_ACTION_SLAVE_WAS_PROMOTED,
 		actionnode.TABLET_ACTION_RESTART_SLAVE,
 		actionnode.TABLET_ACTION_SLAVE_WAS_RESTARTED,
+		actionnode.TABLET_ACTION_BREAK_SLAVES,
 		actionnode.TABLET_ACTION_STOP_SLAVE,
 		actionnode.TABLET_ACTION_STOP_SLAVE_MINIMUM,
 		actionnode.TABLET_ACTION_START_SLAVE,

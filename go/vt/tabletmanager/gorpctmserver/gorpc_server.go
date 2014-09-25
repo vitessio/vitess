@@ -260,6 +260,12 @@ func (tm *TabletManager) SlaveWasRestarted(context *rpcproto.Context, args *acti
 	})
 }
 
+func (tm *TabletManager) BreakSlaves(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_BREAK_SLAVES, args, reply, true, func() error {
+		return tm.agent.BreakSlaves()
+	})
+}
+
 // registration glue
 
 func init() {
