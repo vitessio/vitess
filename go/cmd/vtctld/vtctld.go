@@ -414,11 +414,7 @@ func main() {
 			if ti.Type != topo.TYPE_SPARE {
 				return "", fmt.Errorf("Can only scrap spare tablets")
 			}
-			actionPath, err := wr.Scrap(tabletAlias, false, false)
-			if err != nil {
-				return "", err
-			}
-			return "", wr.WaitForCompletion(actionPath)
+			return "", wr.Scrap(tabletAlias, false, false)
 		})
 
 	actionRepo.RegisterTabletAction("ScrapTabletForce", acl.ADMIN,
@@ -431,8 +427,7 @@ func main() {
 			if ti.Type != topo.TYPE_SPARE {
 				return "", fmt.Errorf("Can only scrap spare tablets")
 			}
-			_, err = wr.Scrap(tabletAlias, true, false)
-			return "", err
+			return "", wr.Scrap(tabletAlias, true, false)
 		})
 
 	actionRepo.RegisterTabletAction("DeleteTablet", acl.ADMIN,

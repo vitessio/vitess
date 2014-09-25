@@ -32,6 +32,32 @@ import (
 // RpcWrapXXX methods will be done internally. Until then, it's safer
 // to have the comment.
 
+// SetReadOnly makes the mysql instance read-only or read-write
+// Should be called under RpcWrapLockAction.
+func (agent *ActionAgent) SetReadOnly(rdonly bool) error {
+	err := agent.Mysqld.SetReadOnly(rdonly)
+	if err != nil {
+		return err
+	}
+
+	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	if err != nil {
+		return err
+	}
+	if rdonly {
+		tablet.State = topo.STATE_READ_ONLY
+	} else {
+		tablet.State = topo.STATE_READ_WRITE
+	}
+	return topo.UpdateTablet(agent.TopoServer, tablet)
+}
+
+// Scrap scraps the live running tablet
+// Should be called under RpcWrapLockAction.
+func (agent *ActionAgent) Scrap() error {
+	return topotools.Scrap(agent.TopoServer, agent.TabletAlias, false)
+}
+
 // ExecuteFetch will execute the given query, possibly disabling binlogs.
 // Should be called under RpcWrap.
 func (agent *ActionAgent) ExecuteFetch(query string, maxrows int, wantFields, disableBinlogs bool) (*proto.QueryResult, error) {

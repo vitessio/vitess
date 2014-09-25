@@ -338,11 +338,7 @@ func (wr *Wrangler) finishReparent(si *topo.ShardInfo, masterElect *topo.TabletI
 			wr.logger.Warningf("leaving master-elect read-only, change with: vtctl SetReadWrite %v", masterElect.Alias)
 		} else {
 			wr.logger.Infof("marking master-elect read-write %v", masterElect.Alias)
-			actionPath, err := wr.ai.SetReadWrite(masterElect.Alias)
-			if err == nil {
-				err = wr.WaitForCompletion(actionPath)
-			}
-			if err != nil {
+			if err := wr.ai.SetReadWrite(masterElect, wr.ActionTimeout()); err != nil {
 				wr.logger.Warningf("master master-elect read-write failed, leaving master-elect read-only, change with: vtctl SetReadWrite %v", masterElect.Alias)
 			}
 		}

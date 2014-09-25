@@ -34,8 +34,17 @@ type TabletManagerConn interface {
 	// Various read-write methods
 	//
 
+	// SetReadOnly makes the mysql instance read-only
+	SetReadOnly(tablet *topo.TabletInfo, waitTime time.Duration) error
+
+	// SetReadWrite makes the mysql instance read-write
+	SetReadWrite(tablet *topo.TabletInfo, waitTime time.Duration) error
+
 	// ChangeType asks the remote tablet to change its type
 	ChangeType(tablet *topo.TabletInfo, dbType topo.TabletType, waitTime time.Duration) error
+
+	// Scrap scraps the live running tablet
+	Scrap(tablet *topo.TabletInfo, waitTime time.Duration) error
 
 	// ReloadSchema asks the remote tablet to reload its schema
 	ReloadSchema(tablet *topo.TabletInfo, waitTime time.Duration) error

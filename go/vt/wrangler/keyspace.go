@@ -212,12 +212,16 @@ func (wr *Wrangler) makeMastersReadOnly(shards []*topo.ShardInfo) error {
 			defer wg.Done()
 
 			log.Infof("Making master %v read-only", si.MasterAlias)
-			actionPath, err := wr.ai.SetReadOnly(si.MasterAlias)
+			ti, err := wr.ts.GetTablet(si.MasterAlias)
 			if err != nil {
 				rec.RecordError(err)
 				return
 			}
-			rec.RecordError(wr.WaitForCompletion(actionPath))
+
+			if err = wr.ai.SetReadOnly(ti, wr.ActionTimeout()); err != nil {
+				rec.RecordError(err)
+				return
+			}
 			log.Infof("Master %v is now read-only", si.MasterAlias)
 		}(si)
 	}
@@ -588,20 +592,16 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 	if servedType == topo.TYPE_MASTER {
 		// set master to read-only
 		event.DispatchUpdate(ev, "setting source shard master to read-only")
-		actionPath, err := wr.ai.SetReadOnly(sourceShard.MasterAlias)
+		sourceMasterTabletInfo, err = wr.ts.GetTablet(sourceShard.MasterAlias)
 		if err != nil {
 			return err
 		}
-		if err := wr.WaitForCompletion(actionPath); err != nil {
+		if err := wr.ai.SetReadOnly(sourceMasterTabletInfo, wr.ActionTimeout()); err != nil {
 			return err
 		}
 
 		// get the position
 		event.DispatchUpdate(ev, "getting master position")
-		sourceMasterTabletInfo, err = wr.ts.GetTablet(sourceShard.MasterAlias)
-		if err != nil {
-			return err
-		}
 		masterPosition, err := wr.ai.MasterPosition(sourceMasterTabletInfo, wr.ActionTimeout())
 		if err != nil {
 			return err

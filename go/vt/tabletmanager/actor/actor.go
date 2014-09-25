@@ -169,8 +169,6 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 	}()
 
 	switch actionNode.Action {
-	case actionnode.TABLET_ACTION_CHANGE_TYPE:
-		err = ta.changeType(actionNode)
 	case actionnode.TABLET_ACTION_MULTI_SNAPSHOT:
 		err = ta.multiSnapshot(actionNode)
 	case actionnode.TABLET_ACTION_MULTI_RESTORE:
@@ -182,18 +180,12 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 		err = ta.reserveForRestore(actionNode)
 	case actionnode.TABLET_ACTION_RESTORE:
 		err = ta.restore(actionNode)
-	case actionnode.TABLET_ACTION_SCRAP:
-		err = ta.scrap()
 	case actionnode.TABLET_ACTION_PREFLIGHT_SCHEMA:
 		err = ta.preflightSchema(actionNode)
 	case actionnode.TABLET_ACTION_APPLY_SCHEMA:
 		err = ta.applySchema(actionNode)
 	case actionnode.TABLET_ACTION_EXECUTE_HOOK:
 		err = ta.executeHook(actionNode)
-	case actionnode.TABLET_ACTION_SET_RDONLY:
-		err = ta.setReadOnly(true)
-	case actionnode.TABLET_ACTION_SET_RDWR:
-		err = ta.setReadOnly(false)
 	case actionnode.TABLET_ACTION_SLEEP:
 		err = ta.sleep(actionNode)
 	case actionnode.TABLET_ACTION_SNAPSHOT:
@@ -201,7 +193,11 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 	case actionnode.TABLET_ACTION_SNAPSHOT_SOURCE_END:
 		err = ta.snapshotSourceEnd(actionNode)
 
-	case actionnode.TABLET_ACTION_GET_SCHEMA,
+	case actionnode.TABLET_ACTION_SET_RDONLY,
+		actionnode.TABLET_ACTION_SET_RDWR,
+		actionnode.TABLET_ACTION_CHANGE_TYPE,
+		actionnode.TABLET_ACTION_SCRAP,
+		actionnode.TABLET_ACTION_GET_SCHEMA,
 		actionnode.TABLET_ACTION_RELOAD_SCHEMA,
 		actionnode.TABLET_ACTION_GET_PERMISSIONS,
 		actionnode.TABLET_ACTION_SLAVE_STATUS,
@@ -254,33 +250,6 @@ func (ta *TabletActor) sleep(actionNode *actionnode.ActionNode) error {
 	duration := actionNode.Args.(*time.Duration)
 	time.Sleep(*duration)
 	return nil
-}
-
-func (ta *TabletActor) setReadOnly(rdonly bool) error {
-	err := ta.mysqld.SetReadOnly(rdonly)
-	if err != nil {
-		return err
-	}
-
-	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
-	if err != nil {
-		return err
-	}
-	if rdonly {
-		tablet.State = topo.STATE_READ_ONLY
-	} else {
-		tablet.State = topo.STATE_READ_WRITE
-	}
-	return topo.UpdateTablet(ta.ts, tablet)
-}
-
-func (ta *TabletActor) changeType(actionNode *actionnode.ActionNode) error {
-	dbType := actionNode.Args.(*topo.TabletType)
-	return topotools.ChangeType(ta.ts, ta.tabletAlias, *dbType, nil, true /*runHooks*/)
-}
-
-func (ta *TabletActor) scrap() error {
-	return topotools.Scrap(ta.ts, ta.tabletAlias, false)
 }
 
 func (ta *TabletActor) preflightSchema(actionNode *actionnode.ActionNode) error {

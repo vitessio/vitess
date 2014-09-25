@@ -730,7 +730,7 @@ func commandScrapTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []st
 	if err != nil {
 		return "", err
 	}
-	return wr.Scrap(tabletAlias, *force, *skipRebuild)
+	return "", wr.Scrap(tabletAlias, *force, *skipRebuild)
 }
 
 func commandDeleteTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -765,7 +765,11 @@ func commandSetReadOnly(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []st
 	if err != nil {
 		return "", err
 	}
-	return wr.ActionInitiator().SetReadOnly(tabletAlias)
+	ti, err := wr.TopoServer().GetTablet(tabletAlias)
+	if err != nil {
+		return "", fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
+	}
+	return "", wr.ActionInitiator().SetReadOnly(ti, wr.ActionTimeout())
 }
 
 func commandSetReadWrite(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -780,7 +784,11 @@ func commandSetReadWrite(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	if err != nil {
 		return "", err
 	}
-	return wr.ActionInitiator().SetReadWrite(tabletAlias)
+	ti, err := wr.TopoServer().GetTablet(tabletAlias)
+	if err != nil {
+		return "", fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
+	}
+	return "", wr.ActionInitiator().SetReadWrite(ti, wr.ActionTimeout())
 }
 
 func commandChangeSlaveType(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

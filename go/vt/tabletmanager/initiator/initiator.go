@@ -83,20 +83,20 @@ func (ai *ActionInitiator) Sleep(tabletAlias topo.TabletAlias, duration time.Dur
 	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_SLEEP, Args: &duration})
 }
 
-func (ai *ActionInitiator) ChangeType(tabletAlias topo.TabletAlias, dbType topo.TabletType) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_CHANGE_TYPE, Args: &dbType})
+func (ai *ActionInitiator) SetReadOnly(tablet *topo.TabletInfo, waitTime time.Duration) error {
+	return ai.rpc.SetReadOnly(tablet, waitTime)
 }
 
-func (ai *ActionInitiator) RpcChangeType(tablet *topo.TabletInfo, dbType topo.TabletType, waitTime time.Duration) error {
+func (ai *ActionInitiator) SetReadWrite(tablet *topo.TabletInfo, waitTime time.Duration) error {
+	return ai.rpc.SetReadWrite(tablet, waitTime)
+}
+
+func (ai *ActionInitiator) ChangeType(tablet *topo.TabletInfo, dbType topo.TabletType, waitTime time.Duration) error {
 	return ai.rpc.ChangeType(tablet, dbType, waitTime)
 }
 
-func (ai *ActionInitiator) SetReadOnly(tabletAlias topo.TabletAlias) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_SET_RDONLY})
-}
-
-func (ai *ActionInitiator) SetReadWrite(tabletAlias topo.TabletAlias) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_SET_RDWR})
+func (ai *ActionInitiator) Scrap(tablet *topo.TabletInfo, waitTime time.Duration) error {
+	return ai.rpc.Scrap(tablet, waitTime)
 }
 
 func (ai *ActionInitiator) Snapshot(tabletAlias topo.TabletAlias, args *actionnode.SnapshotArgs) (actionPath string, err error) {
@@ -228,10 +228,6 @@ func (ai *ActionInitiator) ReserveForRestore(dstTabletAlias topo.TabletAlias, ar
 
 func (ai *ActionInitiator) Restore(dstTabletAlias topo.TabletAlias, args *actionnode.RestoreArgs) (actionPath string, err error) {
 	return ai.writeTabletAction(dstTabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_RESTORE, Args: args})
-}
-
-func (ai *ActionInitiator) Scrap(tabletAlias topo.TabletAlias) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_SCRAP})
 }
 
 func (ai *ActionInitiator) GetSchema(tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool, waitTime time.Duration) (*myproto.SchemaDefinition, error) {

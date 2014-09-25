@@ -69,9 +69,27 @@ func (tm *TabletManager) GetPermissions(context *rpcproto.Context, args *rpc.Unu
 // Various read-write methods
 //
 
+func (tm *TabletManager) SetReadOnly(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SET_RDONLY, args, reply, true, func() error {
+		return tm.agent.SetReadOnly(true)
+	})
+}
+
+func (tm *TabletManager) SetReadWrite(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SET_RDWR, args, reply, true, func() error {
+		return tm.agent.SetReadOnly(false)
+	})
+}
+
 func (tm *TabletManager) ChangeType(context *rpcproto.Context, args *topo.TabletType, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_CHANGE_TYPE, args, reply, true, func() error {
 		return topotools.ChangeType(tm.agent.TopoServer, tm.agent.TabletAlias, *args, nil, true /*runHooks*/)
+	})
+}
+
+func (tm *TabletManager) Scrap(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SCRAP, args, reply, true, func() error {
+		return tm.agent.Scrap()
 	})
 }
 

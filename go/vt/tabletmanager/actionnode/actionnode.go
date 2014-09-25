@@ -21,7 +21,6 @@ import (
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/hook"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
-	"github.com/youtube/vitess/go/vt/topo"
 )
 
 const (
@@ -31,6 +30,18 @@ const (
 	// Tablet actions. This first list is RPC only. In the process
 	// of converting them all to RPCs.
 	//
+
+	// SetReadOnly makes the mysql instance read-only
+	TABLET_ACTION_SET_RDONLY = "SetReadOnly"
+
+	// SetReadWrite makes the mysql instance read-write
+	TABLET_ACTION_SET_RDWR = "SetReadWrite"
+
+	// ChangeType changes the type of the tablet
+	TABLET_ACTION_CHANGE_TYPE = "ChangeType"
+
+	// Scrap scraps the live running tablet
+	TABLET_ACTION_SCRAP = "Scrap"
 
 	// DemoteMaster tells the current master it's about to not be a master
 	// any more, and should go read-only.
@@ -118,11 +129,6 @@ const (
 	//
 
 	TABLET_ACTION_SLEEP = "Sleep"
-
-	TABLET_ACTION_SET_RDONLY  = "SetReadOnly"
-	TABLET_ACTION_SET_RDWR    = "SetReadWrite"
-	TABLET_ACTION_CHANGE_TYPE = "ChangeType"
-	TABLET_ACTION_SCRAP       = "Scrap"
 
 	TABLET_ACTION_PREFLIGHT_SCHEMA = "PreflightSchema"
 	TABLET_ACTION_APPLY_SCHEMA     = "ApplySchema"
@@ -226,12 +232,7 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case TABLET_ACTION_PING:
 	case TABLET_ACTION_SLEEP:
 		node.Args = new(time.Duration)
-	case TABLET_ACTION_SET_RDONLY:
-	case TABLET_ACTION_SET_RDWR:
-	case TABLET_ACTION_CHANGE_TYPE:
-		node.Args = new(topo.TabletType)
 
-	case TABLET_ACTION_SCRAP:
 	case TABLET_ACTION_PREFLIGHT_SCHEMA:
 		node.Args = new(string)
 		node.Reply = &myproto.SchemaChangeResult{}
@@ -277,7 +278,11 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case SRV_SHARD_ACTION_REBUILD:
 		return nil, fmt.Errorf("locking-only SRV_SHARD action: %v", node.Action)
 
-	case TABLET_ACTION_GET_SCHEMA,
+	case TABLET_ACTION_SET_RDONLY,
+		TABLET_ACTION_SET_RDWR,
+		TABLET_ACTION_CHANGE_TYPE,
+		TABLET_ACTION_SCRAP,
+		TABLET_ACTION_GET_SCHEMA,
 		TABLET_ACTION_RELOAD_SCHEMA,
 		TABLET_ACTION_EXECUTE_FETCH,
 		TABLET_ACTION_GET_PERMISSIONS,

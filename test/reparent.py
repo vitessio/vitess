@@ -158,30 +158,11 @@ class TestReparent(unittest.TestCase):
           "didn't find the right error strings in failed ReparentShard: " +
           stderr)
 
-    # Should timeout and fail
-    stdout, stderr = utils.run_vtctl(['-wait-time', '5s', 'ScrapTablet',
-                                      tablet_62344.tablet_alias],
+    # Should fail to connect and fail
+    stdout, stderr = utils.run_vtctl(['ScrapTablet', tablet_62344.tablet_alias],
                                      expect_fail=True)
     logging.debug('Failed ScrapTablet output:\n' + stderr)
-    if 'deadline exceeded' not in stderr:
-      self.fail("didn't find the right error strings in failed ScrapTablet: " +
-                stderr)
-
-    # Should interrupt and fail
-    args = environment.binary_args('vtctl') + [
-        '-log_dir', environment.vtlogroot,
-        '-wait-time', '10s']
-    args.extend(environment.topo_server_flags())
-    args.extend(environment.tablet_manager_protocol_flags())
-    args.extend(['ScrapTablet', tablet_62344.tablet_alias])
-    sp = utils.run_bg(args, stdout=PIPE, stderr=PIPE)
-    # Need time for the process to start before killing it.
-    time.sleep(3.0)
-    os.kill(sp.pid, signal.SIGINT)
-    stdout, stderr = sp.communicate()
-
-    logging.debug('Failed ScrapTablet output:\n' + stderr)
-    if 'interrupted' not in stderr:
+    if 'connection refused' not in stderr:
       self.fail("didn't find the right error strings in failed ScrapTablet: " +
                 stderr)
 
@@ -190,11 +171,6 @@ class TestReparent(unittest.TestCase):
 
     utils.run_vtctl(['ChangeSlaveType', '-force', tablet_62344.tablet_alias,
                      'idle'], expect_fail=True)
-
-    # Remove pending locks (make this the force option to ReparentShard?)
-    if environment.topo_server_implementation == 'zookeeper':
-      utils.run_vtctl(['PurgeActions',
-                       '/zk/global/vt/keyspaces/test_keyspace/shards/0/action'])
 
     # Re-run reparent operation, this should now proceed unimpeded.
     utils.run_vtctl(['-wait-time', '1m', 'ReparentShard', 'test_keyspace/0',

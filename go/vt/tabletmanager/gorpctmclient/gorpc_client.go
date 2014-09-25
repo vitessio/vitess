@@ -91,9 +91,24 @@ func (client *GoRpcTabletManagerConn) GetPermissions(tablet *topo.TabletInfo, wa
 // Various read-write methods
 //
 
+func (client *GoRpcTabletManagerConn) SetReadOnly(tablet *topo.TabletInfo, waitTime time.Duration) error {
+	var noOutput rpc.UnusedResponse
+	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_SET_RDONLY, "", &noOutput, waitTime)
+}
+
+func (client *GoRpcTabletManagerConn) SetReadWrite(tablet *topo.TabletInfo, waitTime time.Duration) error {
+	var noOutput rpc.UnusedResponse
+	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_SET_RDWR, "", &noOutput, waitTime)
+}
+
 func (client *GoRpcTabletManagerConn) ChangeType(tablet *topo.TabletInfo, dbType topo.TabletType, waitTime time.Duration) error {
 	var noOutput rpc.UnusedResponse
 	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_CHANGE_TYPE, &dbType, &noOutput, waitTime)
+}
+
+func (client *GoRpcTabletManagerConn) Scrap(tablet *topo.TabletInfo, waitTime time.Duration) error {
+	var noOutput rpc.UnusedResponse
+	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_SCRAP, "", &noOutput, waitTime)
 }
 
 func (client *GoRpcTabletManagerConn) ReloadSchema(tablet *topo.TabletInfo, waitTime time.Duration) error {
