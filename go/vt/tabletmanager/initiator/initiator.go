@@ -123,8 +123,8 @@ func (ai *ActionInitiator) DemoteMaster(tablet *topo.TabletInfo, waitTime time.D
 	return ai.rpc.DemoteMaster(tablet, waitTime)
 }
 
-func (ai *ActionInitiator) PromoteSlave(tabletAlias topo.TabletAlias) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_PROMOTE_SLAVE})
+func (ai *ActionInitiator) PromoteSlave(tablet *topo.TabletInfo, waitTime time.Duration) (*actionnode.RestartSlaveData, error) {
+	return ai.rpc.PromoteSlave(tablet, waitTime)
 }
 
 func (ai *ActionInitiator) SlaveWasPromoted(tablet *topo.TabletInfo, waitTime time.Duration) error {

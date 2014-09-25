@@ -209,9 +209,18 @@ func (client *GoRpcTabletManagerConn) RunBlpUntil(tablet *topo.TabletInfo, posit
 //
 // Reparenting related functions
 //
+
 func (client *GoRpcTabletManagerConn) DemoteMaster(tablet *topo.TabletInfo, waitTime time.Duration) error {
 	var noOutput rpc.UnusedResponse
 	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_DEMOTE_MASTER, "", &noOutput, waitTime)
+}
+
+func (client *GoRpcTabletManagerConn) PromoteSlave(tablet *topo.TabletInfo, waitTime time.Duration) (*actionnode.RestartSlaveData, error) {
+	var rsd actionnode.RestartSlaveData
+	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_PROMOTE_SLAVE, "", &rsd, waitTime); err != nil {
+		return nil, err
+	}
+	return &rsd, nil
 }
 
 func (client *GoRpcTabletManagerConn) SlaveWasPromoted(tablet *topo.TabletInfo, waitTime time.Duration) error {

@@ -36,6 +36,9 @@ const (
 	// any more, and should go read-only.
 	TABLET_ACTION_DEMOTE_MASTER = "DemoteMaster"
 
+	// PromoteSlave tells the tablet it is going to be the master.
+	TABLET_ACTION_PROMOTE_SLAVE = "PromoteSlave"
+
 	// SlaveWasPromoted tells a tablet this previously slave
 	// tablet is now the master. The tablet will update its
 	// own topology record.
@@ -110,7 +113,6 @@ const (
 	TABLET_ACTION_CHANGE_TYPE = "ChangeType"
 	TABLET_ACTION_SCRAP       = "Scrap"
 
-	TABLET_ACTION_PROMOTE_SLAVE     = "PromoteSlave"
 	TABLET_ACTION_RESTART_SLAVE     = "RestartSlave"
 	TABLET_ACTION_BREAK_SLAVES      = "BreakSlaves"
 	TABLET_ACTION_REPARENT_POSITION = "ReparentPosition"
@@ -222,8 +224,6 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case TABLET_ACTION_CHANGE_TYPE:
 		node.Args = new(topo.TabletType)
 
-	case TABLET_ACTION_PROMOTE_SLAVE:
-		node.Reply = &RestartSlaveData{}
 	case TABLET_ACTION_RESTART_SLAVE:
 		node.Args = &RestartSlaveData{}
 	case TABLET_ACTION_BREAK_SLAVES:
@@ -284,6 +284,7 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 		TABLET_ACTION_WAIT_SLAVE_POSITION,
 		TABLET_ACTION_MASTER_POSITION,
 		TABLET_ACTION_DEMOTE_MASTER,
+		TABLET_ACTION_PROMOTE_SLAVE,
 		TABLET_ACTION_SLAVE_WAS_PROMOTED,
 		TABLET_ACTION_SLAVE_WAS_RESTARTED,
 		TABLET_ACTION_STOP_SLAVE,

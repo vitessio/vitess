@@ -95,6 +95,9 @@ type TabletManagerConn interface {
 	// DemoteMaster tells the soon-to-be-former master it's gonna change
 	DemoteMaster(tablet *topo.TabletInfo, waitTime time.Duration) error
 
+	// PromoteSlave transforms the tablet from a slave to a master.
+	PromoteSlave(tablet *topo.TabletInfo, waitTime time.Duration) (*actionnode.RestartSlaveData, error)
+
 	// SlaveWasPromoted tells the remote tablet it is now the master
 	SlaveWasPromoted(tablet *topo.TabletInfo, waitTime time.Duration) error
 

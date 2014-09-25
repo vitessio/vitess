@@ -180,8 +180,6 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 	case actionnode.TABLET_ACTION_PING:
 		// Just an end-to-end verification that we got the message.
 		err = nil
-	case actionnode.TABLET_ACTION_PROMOTE_SLAVE:
-		err = ta.promoteSlave(actionNode)
 	case actionnode.TABLET_ACTION_RESTART_SLAVE:
 		err = ta.restartSlave(actionNode)
 	case actionnode.TABLET_ACTION_RESERVE_FOR_RESTORE:
@@ -216,6 +214,7 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 		actionnode.TABLET_ACTION_WAIT_SLAVE_POSITION,
 		actionnode.TABLET_ACTION_MASTER_POSITION,
 		actionnode.TABLET_ACTION_DEMOTE_MASTER,
+		actionnode.TABLET_ACTION_PROMOTE_SLAVE,
 		actionnode.TABLET_ACTION_SLAVE_WAS_PROMOTED,
 		actionnode.TABLET_ACTION_SLAVE_WAS_RESTARTED,
 		actionnode.TABLET_ACTION_STOP_SLAVE,
@@ -281,60 +280,6 @@ func (ta *TabletActor) setReadOnly(rdonly bool) error {
 func (ta *TabletActor) changeType(actionNode *actionnode.ActionNode) error {
 	dbType := actionNode.Args.(*topo.TabletType)
 	return topotools.ChangeType(ta.ts, ta.tabletAlias, *dbType, nil, true /*runHooks*/)
-}
-
-func (ta *TabletActor) promoteSlave(actionNode *actionnode.ActionNode) error {
-	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
-	if err != nil {
-		return err
-	}
-
-	// Perform the action.
-	rsd := &actionnode.RestartSlaveData{
-		Parent: tablet.Alias,
-		Force:  (tablet.Parent.Uid == topo.NO_TABLET),
-	}
-	rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted, err = ta.mysqld.PromoteSlave(false, ta.hookExtraEnv())
-	if err != nil {
-		return err
-	}
-	log.Infof("PromoteSlave %v", rsd)
-	actionNode.Reply = rsd
-
-	return updateReplicationGraphForPromotedSlave(ta.ts, tablet)
-}
-
-func updateReplicationGraphForPromotedSlave(ts topo.Server, tablet *topo.TabletInfo) error {
-	// Remove tablet from the replication graph if this is not already the master.
-	if tablet.Parent.Uid != topo.NO_TABLET {
-		if err := topo.DeleteTabletReplicationData(ts, tablet.Tablet); err != nil && err != topo.ErrNoNode {
-			return err
-		}
-	}
-
-	// Update tablet regardless - trend towards consistency.
-	tablet.State = topo.STATE_READ_WRITE
-	tablet.Type = topo.TYPE_MASTER
-	tablet.Parent.Cell = ""
-	tablet.Parent.Uid = topo.NO_TABLET
-	tablet.Health = nil
-	err := topo.UpdateTablet(ts, tablet)
-	if err != nil {
-		return err
-	}
-	// NOTE(msolomon) A serving graph update is required, but in
-	// order for the shard to be consistent the old master must be
-	// scrapped first. That is externally coordinated by the
-	// wrangler reparent action.
-
-	// Insert the new tablet location in the replication graph now that
-	// we've updated the tablet.
-	err = topo.CreateTabletReplicationData(ts, tablet.Tablet)
-	if err != nil && err != topo.ErrNodeExists {
-		return err
-	}
-
-	return nil
 }
 
 func (ta *TabletActor) reparentPosition(actionNode *actionnode.ActionNode) error {

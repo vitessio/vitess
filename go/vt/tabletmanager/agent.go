@@ -435,6 +435,7 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 	return nil
 }
 
+// Stop shutdowns this agent.
 func (agent *ActionAgent) Stop() {
 	close(agent.done)
 	if agent.BinlogPlayerMap != nil {
@@ -443,6 +444,11 @@ func (agent *ActionAgent) Stop() {
 	if agent.Mysqld != nil {
 		agent.Mysqld.Close()
 	}
+}
+
+// hookExtraEnv returns the map to pass to local hooks
+func (agent *ActionAgent) hookExtraEnv() map[string]string {
+	return map[string]string{"TABLET_ALIAS": agent.TabletAlias.String()}
 }
 
 func (agent *ActionAgent) actionEventLoop() {

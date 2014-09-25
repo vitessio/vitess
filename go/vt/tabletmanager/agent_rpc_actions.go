@@ -83,6 +83,29 @@ func (agent *ActionAgent) DemoteMaster() error {
 	})
 }
 
+// PromoteSlave transforms the current tablet from a slave to a master.
+// It returns the data needed for other tablets to become a slave.
+// Should be called under RpcWrapLockAction.
+func (agent *ActionAgent) PromoteSlave() (*actionnode.RestartSlaveData, error) {
+	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	// Perform the action.
+	rsd := &actionnode.RestartSlaveData{
+		Parent: tablet.Alias,
+		Force:  (tablet.Parent.Uid == topo.NO_TABLET),
+	}
+	rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted, err = agent.Mysqld.PromoteSlave(false, agent.hookExtraEnv())
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("PromoteSlave response: %v", *rsd)
+
+	return rsd, agent.updateReplicationGraphForPromotedSlave(tablet)
+}
+
 // SlaveWasPromoted promotes a slave to master, no questions asked.
 // Should be called under RpcWrapLockAction.
 func (agent *ActionAgent) SlaveWasPromoted() error {

@@ -269,16 +269,7 @@ func (wr *Wrangler) demoteMaster(ti *topo.TabletInfo) (myproto.ReplicationPositi
 
 func (wr *Wrangler) promoteSlave(ti *topo.TabletInfo) (rsd *actionnode.RestartSlaveData, err error) {
 	wr.logger.Infof("promote slave %v", ti.Alias)
-	actionPath, err := wr.ai.PromoteSlave(ti.Alias)
-	if err != nil {
-		return
-	}
-	result, err := wr.WaitForCompletionReply(actionPath)
-	if err != nil {
-		return
-	}
-	rsd = result.(*actionnode.RestartSlaveData)
-	return
+	return wr.ai.PromoteSlave(ti, wr.ActionTimeout())
 }
 
 func (wr *Wrangler) restartSlaves(slaveTabletMap map[topo.TabletAlias]*topo.TabletInfo, rsd *actionnode.RestartSlaveData) (majorityRestart bool, err error) {

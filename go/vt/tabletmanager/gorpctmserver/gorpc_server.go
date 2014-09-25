@@ -232,6 +232,16 @@ func (tm *TabletManager) DemoteMaster(context *rpcproto.Context, args *rpc.Unuse
 	})
 }
 
+func (tm *TabletManager) PromoteSlave(context *rpcproto.Context, args *rpc.UnusedRequest, reply *actionnode.RestartSlaveData) error {
+	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_PROMOTE_SLAVE, args, reply, true, func() error {
+		rsd, err := tm.agent.PromoteSlave()
+		if err == nil {
+			*reply = *rsd
+		}
+		return err
+	})
+}
+
 func (tm *TabletManager) SlaveWasPromoted(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SLAVE_WAS_PROMOTED, args, reply, true, func() error {
 		return tm.agent.SlaveWasPromoted()
