@@ -17,7 +17,6 @@ import (
 	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actor"
 	"github.com/youtube/vitess/go/vt/tabletmanager/gorpcproto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
@@ -164,7 +163,7 @@ func (tm *TabletManager) TabletExternallyReparented(context *rpcproto.Context, a
 	// the original gorpc call. Until we support that, use a
 	// reasonnable hard-coded value.
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_EXTERNALLY_REPARENTED, args, reply, false, func() error {
-		return actor.TabletExternallyReparented(tm.agent.TopoServer, tm.agent.TabletAlias, 30*time.Second, tm.agent.LockTimeout)
+		return tm.agent.TabletExternallyReparented(30 * time.Second)
 	})
 }
 
@@ -235,7 +234,7 @@ func (tm *TabletManager) DemoteMaster(context *rpcproto.Context, args *rpc.Unuse
 
 func (tm *TabletManager) SlaveWasPromoted(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SLAVE_WAS_PROMOTED, args, reply, true, func() error {
-		return actor.SlaveWasPromoted(tm.agent.TopoServer, tm.agent.TabletAlias)
+		return tm.agent.SlaveWasPromoted()
 	})
 }
 
