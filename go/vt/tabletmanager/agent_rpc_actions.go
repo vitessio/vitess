@@ -117,6 +117,75 @@ func (agent *ActionAgent) SlaveWasPromoted() error {
 	return agent.updateReplicationGraphForPromotedSlave(tablet)
 }
 
+// RestartSlave tells the tablet it has a new master
+func (agent *ActionAgent) RestartSlave(rsd *actionnode.RestartSlaveData) error {
+	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	if err != nil {
+		return err
+	}
+
+	// If this check fails, we seem reparented. The only part that
+	// could have failed is the insert in the replication
+	// graph. Do NOT try to reparent again. That will either wedge
+	// replication or corrupt data.
+	if tablet.Parent != rsd.Parent {
+		log.V(6).Infof("restart with new parent")
+		// Remove tablet from the replication graph.
+		if err = topo.DeleteTabletReplicationData(agent.TopoServer, tablet.Tablet); err != nil && err != topo.ErrNoNode {
+			return err
+		}
+
+		// Move a lag slave into the orphan lag type so we can safely ignore
+		// this reparenting until replication catches up.
+		if tablet.Type == topo.TYPE_LAG {
+			tablet.Type = topo.TYPE_LAG_ORPHAN
+		} else {
+			err = agent.Mysqld.RestartSlave(rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted)
+			if err != nil {
+				return err
+			}
+		}
+		// Once this action completes, update authoritive tablet node first.
+		tablet.Parent = rsd.Parent
+		err = topo.UpdateTablet(agent.TopoServer, tablet)
+		if err != nil {
+			return err
+		}
+	} else if rsd.Force {
+		err = agent.Mysqld.RestartSlave(rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted)
+		if err != nil {
+			return err
+		}
+		// Complete the special orphan accounting.
+		if tablet.Type == topo.TYPE_LAG_ORPHAN {
+			tablet.Type = topo.TYPE_LAG
+			err = topo.UpdateTablet(agent.TopoServer, tablet)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		// There is nothing to safely reparent, so check replication. If
+		// either replication thread is not running, report an error.
+		status, err := agent.Mysqld.SlaveStatus()
+		if err != nil {
+			return fmt.Errorf("cannot verify replication for slave: %v", err)
+		}
+		if !status.SlaveRunning() {
+			return fmt.Errorf("replication not running for slave")
+		}
+	}
+
+	// Insert the new tablet location in the replication graph now that
+	// we've updated the tablet.
+	err = topo.CreateTabletReplicationData(agent.TopoServer, tablet.Tablet)
+	if err != nil && err != topo.ErrNodeExists {
+		return err
+	}
+
+	return nil
+}
+
 // SlaveWasRestarted updates the parent record for a tablet.
 // Should be called under RpcWrapLockAction.
 func (agent *ActionAgent) SlaveWasRestarted(swrd *actionnode.SlaveWasRestartedArgs) error {

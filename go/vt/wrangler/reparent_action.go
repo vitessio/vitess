@@ -319,11 +319,7 @@ func (wr *Wrangler) restartSlaves(slaveTabletMap map[topo.TabletAlias]*topo.Tabl
 
 func (wr *Wrangler) restartSlave(ti *topo.TabletInfo, rsd *actionnode.RestartSlaveData) (err error) {
 	wr.logger.Infof("restart slave %v", ti.Alias)
-	actionPath, err := wr.ai.RestartSlave(ti.Alias, rsd)
-	if err != nil {
-		return err
-	}
-	return wr.WaitForCompletion(actionPath)
+	return wr.ai.RestartSlave(ti, rsd, wr.ActionTimeout())
 }
 
 func (wr *Wrangler) checkMasterElect(ti *topo.TabletInfo) error {

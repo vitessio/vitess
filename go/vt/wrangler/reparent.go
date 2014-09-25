@@ -231,9 +231,5 @@ func (wr *Wrangler) ReparentTablet(tabletAlias topo.TabletAlias) error {
 	// An orphan is already in the replication graph but it is
 	// disconnected, hence we have to force this action.
 	rsd.Force = ti.Type == topo.TYPE_LAG_ORPHAN
-	actionPath, err = wr.ai.RestartSlave(ti.Alias, rsd)
-	if err != nil {
-		return err
-	}
-	return wr.WaitForCompletion(actionPath)
+	return wr.ai.RestartSlave(ti, rsd, wr.ActionTimeout())
 }

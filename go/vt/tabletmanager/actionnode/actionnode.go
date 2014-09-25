@@ -44,6 +44,9 @@ const (
 	// own topology record.
 	TABLET_ACTION_SLAVE_WAS_PROMOTED = "SlaveWasPromoted"
 
+	// RestartSlave tells the remote tablet it has a new master.
+	TABLET_ACTION_RESTART_SLAVE = "RestartSlave"
+
 	// SlaveWasRestarted tells a tablet the mysql master was changed.
 	// The tablet will check it is indeed the case, and update its own
 	// topology record.
@@ -113,7 +116,6 @@ const (
 	TABLET_ACTION_CHANGE_TYPE = "ChangeType"
 	TABLET_ACTION_SCRAP       = "Scrap"
 
-	TABLET_ACTION_RESTART_SLAVE     = "RestartSlave"
 	TABLET_ACTION_BREAK_SLAVES      = "BreakSlaves"
 	TABLET_ACTION_REPARENT_POSITION = "ReparentPosition"
 
@@ -224,8 +226,6 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case TABLET_ACTION_CHANGE_TYPE:
 		node.Args = new(topo.TabletType)
 
-	case TABLET_ACTION_RESTART_SLAVE:
-		node.Args = &RestartSlaveData{}
 	case TABLET_ACTION_BREAK_SLAVES:
 	case TABLET_ACTION_REPARENT_POSITION:
 		node.Args = &myproto.ReplicationPosition{}
@@ -286,6 +286,7 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 		TABLET_ACTION_DEMOTE_MASTER,
 		TABLET_ACTION_PROMOTE_SLAVE,
 		TABLET_ACTION_SLAVE_WAS_PROMOTED,
+		TABLET_ACTION_RESTART_SLAVE,
 		TABLET_ACTION_SLAVE_WAS_RESTARTED,
 		TABLET_ACTION_STOP_SLAVE,
 		TABLET_ACTION_STOP_SLAVE_MINIMUM,

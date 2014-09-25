@@ -131,8 +131,8 @@ func (ai *ActionInitiator) SlaveWasPromoted(tablet *topo.TabletInfo, waitTime ti
 	return ai.rpc.SlaveWasPromoted(tablet, waitTime)
 }
 
-func (ai *ActionInitiator) RestartSlave(tabletAlias topo.TabletAlias, args *actionnode.RestartSlaveData) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_RESTART_SLAVE, Args: args})
+func (ai *ActionInitiator) RestartSlave(tablet *topo.TabletInfo, rsd *actionnode.RestartSlaveData, waitTime time.Duration) error {
+	return ai.rpc.RestartSlave(tablet, rsd, waitTime)
 }
 
 func (ai *ActionInitiator) SlaveWasRestarted(tablet *topo.TabletInfo, args *actionnode.SlaveWasRestartedArgs, waitTime time.Duration) error {

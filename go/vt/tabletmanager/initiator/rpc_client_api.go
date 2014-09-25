@@ -101,6 +101,9 @@ type TabletManagerConn interface {
 	// SlaveWasPromoted tells the remote tablet it is now the master
 	SlaveWasPromoted(tablet *topo.TabletInfo, waitTime time.Duration) error
 
+	// RestartSlave tells the remote tablet it has a new master
+	RestartSlave(tablet *topo.TabletInfo, rsd *actionnode.RestartSlaveData, waitTime time.Duration) error
+
 	// SlaveWasRestarted tells the remote tablet its master has changed
 	SlaveWasRestarted(tablet *topo.TabletInfo, args *actionnode.SlaveWasRestartedArgs, waitTime time.Duration) error
 }

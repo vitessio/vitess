@@ -180,8 +180,6 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 	case actionnode.TABLET_ACTION_PING:
 		// Just an end-to-end verification that we got the message.
 		err = nil
-	case actionnode.TABLET_ACTION_RESTART_SLAVE:
-		err = ta.restartSlave(actionNode)
 	case actionnode.TABLET_ACTION_RESERVE_FOR_RESTORE:
 		err = ta.reserveForRestore(actionNode)
 	case actionnode.TABLET_ACTION_RESTORE:
@@ -216,6 +214,7 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 		actionnode.TABLET_ACTION_DEMOTE_MASTER,
 		actionnode.TABLET_ACTION_PROMOTE_SLAVE,
 		actionnode.TABLET_ACTION_SLAVE_WAS_PROMOTED,
+		actionnode.TABLET_ACTION_RESTART_SLAVE,
 		actionnode.TABLET_ACTION_SLAVE_WAS_RESTARTED,
 		actionnode.TABLET_ACTION_STOP_SLAVE,
 		actionnode.TABLET_ACTION_STOP_SLAVE_MINIMUM,
@@ -296,76 +295,6 @@ func (ta *TabletActor) reparentPosition(actionNode *actionnode.ActionNode) error
 	rsd.Parent = ta.tabletAlias
 	log.V(6).Infof("reparentPosition: %v", rsd)
 	actionNode.Reply = rsd
-	return nil
-}
-
-func (ta *TabletActor) restartSlave(actionNode *actionnode.ActionNode) error {
-	rsd := actionNode.Args.(*actionnode.RestartSlaveData)
-
-	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
-	if err != nil {
-		return err
-	}
-
-	// If this check fails, we seem reparented. The only part that
-	// could have failed is the insert in the replication
-	// graph. Do NOT try to reparent again. That will either wedge
-	// replication or corrupt data.
-	if tablet.Parent != rsd.Parent {
-		log.V(6).Infof("restart with new parent")
-		// Remove tablet from the replication graph.
-		if err = topo.DeleteTabletReplicationData(ta.ts, tablet.Tablet); err != nil && err != topo.ErrNoNode {
-			return err
-		}
-
-		// Move a lag slave into the orphan lag type so we can safely ignore
-		// this reparenting until replication catches up.
-		if tablet.Type == topo.TYPE_LAG {
-			tablet.Type = topo.TYPE_LAG_ORPHAN
-		} else {
-			err = ta.mysqld.RestartSlave(rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted)
-			if err != nil {
-				return err
-			}
-		}
-		// Once this action completes, update authoritive tablet node first.
-		tablet.Parent = rsd.Parent
-		err = topo.UpdateTablet(ta.ts, tablet)
-		if err != nil {
-			return err
-		}
-	} else if rsd.Force {
-		err = ta.mysqld.RestartSlave(rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted)
-		if err != nil {
-			return err
-		}
-		// Complete the special orphan accounting.
-		if tablet.Type == topo.TYPE_LAG_ORPHAN {
-			tablet.Type = topo.TYPE_LAG
-			err = topo.UpdateTablet(ta.ts, tablet)
-			if err != nil {
-				return err
-			}
-		}
-	} else {
-		// There is nothing to safely reparent, so check replication. If
-		// either replication thread is not running, report an error.
-		status, err := ta.mysqld.SlaveStatus()
-		if err != nil {
-			return fmt.Errorf("cannot verify replication for slave: %v", err)
-		}
-		if !status.SlaveRunning() {
-			return fmt.Errorf("replication not running for slave")
-		}
-	}
-
-	// Insert the new tablet location in the replication graph now that
-	// we've updated the tablet.
-	err = topo.CreateTabletReplicationData(ta.ts, tablet.Tablet)
-	if err != nil && err != topo.ErrNodeExists {
-		return err
-	}
-
 	return nil
 }
 
