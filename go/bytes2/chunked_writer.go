@@ -2,9 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package bytes2 gives you alternate implementations of functionality
-// similar to go's bytes package
-
+// Package bytes2 provides alternate implementations of functionality similar
+// to go's bytes package.
 package bytes2
 
 import (

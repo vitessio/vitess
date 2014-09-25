@@ -2,9 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package hack gives you some efficient functionality at the cost
-// breaking some go rules
-
+// Package hack gives you some efficient functionality at the cost of
+// breaking some Go rules.
 package hack
 
 import (
