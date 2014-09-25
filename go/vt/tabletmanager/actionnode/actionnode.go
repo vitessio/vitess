@@ -216,30 +216,25 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case TABLET_ACTION_MULTI_RESTORE:
 		node.Args = &MultiRestoreArgs{}
 
-	case SHARD_ACTION_REPARENT:
-		node.Args = &topo.TabletAlias{}
-	case SHARD_ACTION_EXTERNALLY_REPARENTED:
-		node.Args = &topo.TabletAlias{}
-	case SHARD_ACTION_REBUILD:
-	case SHARD_ACTION_CHECK:
-	case SHARD_ACTION_APPLY_SCHEMA:
-		node.Args = &ApplySchemaShardArgs{}
-	case SHARD_ACTION_SET_SERVED_TYPES:
-		node.Args = &SetShardServedTypesArgs{}
-	case SHARD_ACTION_MULTI_RESTORE:
-		node.Args = &MultiRestoreArgs{}
-	case SHARD_ACTION_MIGRATE_SERVED_TYPES:
-		node.Args = &MigrateServedTypesArgs{}
-	case SHARD_ACTION_UPDATE_SHARD:
+	case SHARD_ACTION_REPARENT,
+		SHARD_ACTION_EXTERNALLY_REPARENTED,
+		SHARD_ACTION_REBUILD,
+		SHARD_ACTION_CHECK,
+		SHARD_ACTION_APPLY_SCHEMA,
+		SHARD_ACTION_SET_SERVED_TYPES,
+		SHARD_ACTION_MULTI_RESTORE,
+		SHARD_ACTION_MIGRATE_SERVED_TYPES,
+		SHARD_ACTION_UPDATE_SHARD:
+		return nil, fmt.Errorf("locking-only SHARD action: %v", node.Action)
 
-	case KEYSPACE_ACTION_REBUILD:
-	case KEYSPACE_ACTION_APPLY_SCHEMA:
-		node.Args = &ApplySchemaKeyspaceArgs{}
-	case KEYSPACE_ACTION_SET_SHARDING_INFO:
-	case KEYSPACE_ACTION_MIGRATE_SERVED_FROM:
-		node.Args = &MigrateServedFromArgs{}
+	case KEYSPACE_ACTION_REBUILD,
+		KEYSPACE_ACTION_APPLY_SCHEMA,
+		KEYSPACE_ACTION_SET_SHARDING_INFO,
+		KEYSPACE_ACTION_MIGRATE_SERVED_FROM:
+		return nil, fmt.Errorf("locking-only KEYSPACE action: %v", node.Action)
 
 	case SRV_SHARD_ACTION_REBUILD:
+		return nil, fmt.Errorf("locking-only SRV_SHARD action: %v", node.Action)
 
 	case TABLET_ACTION_GET_SCHEMA,
 		TABLET_ACTION_RELOAD_SCHEMA,
