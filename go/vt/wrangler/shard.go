@@ -199,7 +199,7 @@ func (wr *Wrangler) RemoveShardCell(keyspace, shard, cell string, force bool) er
 }
 
 func (wr *Wrangler) removeShardCell(keyspace, shard, cell string, force bool) error {
-	shardInfo, err := wr.ts.GetShardCritical(keyspace, shard)
+	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
 	}

@@ -81,18 +81,9 @@ type Server interface {
 	// Do not use directly, but instead use topo.UpdateKeyspace.
 	UpdateKeyspace(ki *KeyspaceInfo, existingVersion int64) (newVersion int64, err error)
 
-	// GetKeyspace reads a keyspace and returns it. This returns an
-	// object stored in the global cell, and a topology
-	// implementation may choose to return a value from some sort
-	// of cache. If you need stronger consistency guarantees,
-	// please use GetKeyspaceCritical.
-	//
+	// GetKeyspace reads a keyspace and returns it.
 	// Can return ErrNoNode
 	GetKeyspace(keyspace string) (*KeyspaceInfo, error)
-
-	// GetKeyspaceCritical is like GetKeyspace, but it always returns
-	// consistent data.
-	GetKeyspaceCritical(keyspace string) (*KeyspaceInfo, error)
 
 	// GetKeyspaces returns the known keyspace names. They shall be sorted.
 	GetKeyspaces() ([]string, error)
@@ -123,18 +114,9 @@ type Server interface {
 	// ValidateShard performs routine checks on the shard.
 	ValidateShard(keyspace, shard string) error
 
-	// GetShard reads a shard and returns it. This returns an
-	// object stored in the global cell, and a topology
-	// implementation may choose to return a value from some sort
-	// of cache. If you need stronger consistency guarantees,
-	// please use GetShardCritical.
-	//
+	// GetShard reads a shard and returns it.
 	// Can return ErrNoNode
 	GetShard(keyspace, shard string) (*ShardInfo, error)
-
-	// GetShardCritical is like GetShard, but it always returns
-	// consistent data.
-	GetShardCritical(keyspace, shard string) (si *ShardInfo, err error)
 
 	// GetShardNames returns the known shards in a keyspace.
 	// Can return ErrNoNode if the keyspace wasn't created,

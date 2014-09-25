@@ -473,8 +473,7 @@ func TabletExternallyReparented(ts topo.Server, tabletAlias topo.TabletAlias, ac
 
 func tabletExternallyReparentedLocked(ts topo.Server, tablet *topo.TabletInfo, actionTimeout, lockTimeout time.Duration, interrupted chan struct{}) (err error) {
 	// read the shard, make sure again the master is not already good.
-	// critical read, we want up to date info (and the shard is locked).
-	shardInfo, err := ts.GetShardCritical(tablet.Keyspace, tablet.Shard)
+	shardInfo, err := ts.GetShard(tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		return err
 	}
