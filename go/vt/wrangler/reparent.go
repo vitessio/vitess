@@ -102,8 +102,7 @@ func (wr *Wrangler) ReparentShard(keyspace, shard string, masterElectTabletAlias
 }
 
 func (wr *Wrangler) reparentShardLocked(keyspace, shard string, masterElectTabletAlias topo.TabletAlias, leaveMasterReadOnly, forceReparentToCurrentMaster bool) error {
-	// critical read, we want up to date info (and the shard is locked).
-	shardInfo, err := wr.ts.GetShardCritical(keyspace, shard)
+	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
 	}

@@ -181,10 +181,6 @@ func (tee *Tee) GetKeyspace(keyspace string) (*topo.KeyspaceInfo, error) {
 	return ki, nil
 }
 
-func (tee *Tee) GetKeyspaceCritical(keyspace string) (*topo.KeyspaceInfo, error) {
-	return tee.readFrom.GetKeyspaceCritical(keyspace)
-}
-
 func (tee *Tee) GetKeyspaces() ([]string, error) {
 	return tee.readFrom.GetKeyspaces()
 }
@@ -302,10 +298,6 @@ func (tee *Tee) GetShard(keyspace, shard string) (*topo.ShardInfo, error) {
 	}
 	tee.mu.Unlock()
 	return si, nil
-}
-
-func (tee *Tee) GetShardCritical(keyspace, shard string) (*topo.ShardInfo, error) {
-	return tee.readFrom.GetShardCritical(keyspace, shard)
 }
 
 func (tee *Tee) GetShardNames(keyspace string) ([]string, error) {
