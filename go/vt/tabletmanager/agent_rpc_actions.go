@@ -12,6 +12,7 @@ import (
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/logutil"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/initiator"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -63,6 +64,22 @@ func (agent *ActionAgent) ExecuteFetch(query string, maxrows int, wantFields, di
 	}
 
 	return qr, err
+}
+
+// ReparentPosition returns the RestartSlaveData for the provided
+// ReplicationPosition.
+// Should be called under RpcWrap.
+func (agent *ActionAgent) ReparentPosition(rp *myproto.ReplicationPosition) (*actionnode.RestartSlaveData, error) {
+	replicationStatus, waitPosition, timePromoted, err := agent.Mysqld.ReparentPosition(*rp)
+	if err != nil {
+		return nil, err
+	}
+	rsd := new(actionnode.RestartSlaveData)
+	rsd.ReplicationStatus = replicationStatus
+	rsd.TimePromoted = timePromoted
+	rsd.WaitPosition = waitPosition
+	rsd.Parent = agent.TabletAlias
+	return rsd, nil
 }
 
 // DemoteMaster demotes the current master, and marks it read-only in the topo.

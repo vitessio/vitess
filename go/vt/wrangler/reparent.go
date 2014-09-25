@@ -217,15 +217,10 @@ func (wr *Wrangler) ReparentTablet(tabletAlias topo.TabletAlias) error {
 	}
 	wr.Logger().Infof("slave tablet position: %v %v %v", tabletAlias, ti.MysqlAddr(), status.Position)
 
-	actionPath, err := wr.ai.ReparentPosition(masterTi.Alias, status.Position)
+	rsd, err := wr.ai.ReparentPosition(masterTi, &status.Position, wr.ActionTimeout())
 	if err != nil {
 		return err
 	}
-	result, err := wr.WaitForCompletionReply(actionPath)
-	if err != nil {
-		return err
-	}
-	rsd := result.(*actionnode.RestartSlaveData)
 
 	wr.Logger().Infof("master tablet position: %v %v %v", shardInfo.MasterAlias, masterTi.MysqlAddr(), rsd.ReplicationStatus.Position)
 	// An orphan is already in the replication graph but it is

@@ -196,8 +196,6 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 		err = ta.setReadOnly(false)
 	case actionnode.TABLET_ACTION_SLEEP:
 		err = ta.sleep(actionNode)
-	case actionnode.TABLET_ACTION_REPARENT_POSITION:
-		err = ta.reparentPosition(actionNode)
 	case actionnode.TABLET_ACTION_SNAPSHOT:
 		err = ta.snapshot(actionNode)
 	case actionnode.TABLET_ACTION_SNAPSHOT_SOURCE_END:
@@ -209,6 +207,7 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 		actionnode.TABLET_ACTION_SLAVE_STATUS,
 		actionnode.TABLET_ACTION_WAIT_SLAVE_POSITION,
 		actionnode.TABLET_ACTION_MASTER_POSITION,
+		actionnode.TABLET_ACTION_REPARENT_POSITION,
 		actionnode.TABLET_ACTION_DEMOTE_MASTER,
 		actionnode.TABLET_ACTION_PROMOTE_SLAVE,
 		actionnode.TABLET_ACTION_SLAVE_WAS_PROMOTED,
@@ -278,23 +277,6 @@ func (ta *TabletActor) setReadOnly(rdonly bool) error {
 func (ta *TabletActor) changeType(actionNode *actionnode.ActionNode) error {
 	dbType := actionNode.Args.(*topo.TabletType)
 	return topotools.ChangeType(ta.ts, ta.tabletAlias, *dbType, nil, true /*runHooks*/)
-}
-
-func (ta *TabletActor) reparentPosition(actionNode *actionnode.ActionNode) error {
-	slavePos := *actionNode.Args.(*myproto.ReplicationPosition)
-
-	replicationStatus, waitPosition, timePromoted, err := ta.mysqld.ReparentPosition(slavePos)
-	if err != nil {
-		return err
-	}
-	rsd := new(actionnode.RestartSlaveData)
-	rsd.ReplicationStatus = replicationStatus
-	rsd.TimePromoted = timePromoted
-	rsd.WaitPosition = waitPosition
-	rsd.Parent = ta.tabletAlias
-	log.V(6).Infof("reparentPosition: %v", rsd)
-	actionNode.Reply = rsd
-	return nil
 }
 
 func (ta *TabletActor) scrap() error {

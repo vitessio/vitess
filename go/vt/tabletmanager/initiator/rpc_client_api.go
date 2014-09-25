@@ -57,6 +57,10 @@ type TabletManagerConn interface {
 	// MasterPosition returns the tablet's master position
 	MasterPosition(tablet *topo.TabletInfo, waitTime time.Duration) (myproto.ReplicationPosition, error)
 
+	// ReparentPosition returns the data for a slave to use to reparent
+	// to the target tablet at the given position.
+	ReparentPosition(tablet *topo.TabletInfo, rp *myproto.ReplicationPosition, waitTime time.Duration) (*actionnode.RestartSlaveData, error)
+
 	// StopSlave stops the mysql replication
 	StopSlave(tablet *topo.TabletInfo, waitTime time.Duration) error
 

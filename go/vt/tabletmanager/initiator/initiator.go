@@ -139,8 +139,8 @@ func (ai *ActionInitiator) SlaveWasRestarted(tablet *topo.TabletInfo, args *acti
 	return ai.rpc.SlaveWasRestarted(tablet, args, waitTime)
 }
 
-func (ai *ActionInitiator) ReparentPosition(tabletAlias topo.TabletAlias, slavePos myproto.ReplicationPosition) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_REPARENT_POSITION, Args: &slavePos})
+func (ai *ActionInitiator) ReparentPosition(tablet *topo.TabletInfo, slavePos *myproto.ReplicationPosition, waitTime time.Duration) (*actionnode.RestartSlaveData, error) {
+	return ai.rpc.ReparentPosition(tablet, slavePos, waitTime)
 }
 
 func (ai *ActionInitiator) MasterPosition(tablet *topo.TabletInfo, waitTime time.Duration) (myproto.ReplicationPosition, error) {

@@ -74,6 +74,10 @@ const (
 	// MasterPosition returns the current master position
 	TABLET_ACTION_MASTER_POSITION = "MasterPosition"
 
+	// ReparentPosition returns the data for a slave to use to reparent
+	// to the target tablet at the given position.
+	TABLET_ACTION_REPARENT_POSITION = "ReparentPosition"
+
 	// SlaveStatus returns the current slave status
 	TABLET_ACTION_SLAVE_STATUS = "SlaveStatus"
 
@@ -119,8 +123,6 @@ const (
 	TABLET_ACTION_SET_RDWR    = "SetReadWrite"
 	TABLET_ACTION_CHANGE_TYPE = "ChangeType"
 	TABLET_ACTION_SCRAP       = "Scrap"
-
-	TABLET_ACTION_REPARENT_POSITION = "ReparentPosition"
 
 	TABLET_ACTION_PREFLIGHT_SCHEMA = "PreflightSchema"
 	TABLET_ACTION_APPLY_SCHEMA     = "ApplySchema"
@@ -229,9 +231,6 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case TABLET_ACTION_CHANGE_TYPE:
 		node.Args = new(topo.TabletType)
 
-	case TABLET_ACTION_REPARENT_POSITION:
-		node.Args = &myproto.ReplicationPosition{}
-		node.Reply = &RestartSlaveData{}
 	case TABLET_ACTION_SCRAP:
 	case TABLET_ACTION_PREFLIGHT_SCHEMA:
 		node.Args = new(string)
@@ -285,6 +284,7 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 		TABLET_ACTION_SLAVE_STATUS,
 		TABLET_ACTION_WAIT_SLAVE_POSITION,
 		TABLET_ACTION_MASTER_POSITION,
+		TABLET_ACTION_REPARENT_POSITION,
 		TABLET_ACTION_DEMOTE_MASTER,
 		TABLET_ACTION_PROMOTE_SLAVE,
 		TABLET_ACTION_SLAVE_WAS_PROMOTED,

@@ -140,6 +140,14 @@ func (client *GoRpcTabletManagerConn) MasterPosition(tablet *topo.TabletInfo, wa
 	return rp, nil
 }
 
+func (client *GoRpcTabletManagerConn) ReparentPosition(tablet *topo.TabletInfo, rp *myproto.ReplicationPosition, waitTime time.Duration) (*actionnode.RestartSlaveData, error) {
+	var rsd actionnode.RestartSlaveData
+	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_REPARENT_POSITION, rp, &rsd, waitTime); err != nil {
+		return nil, err
+	}
+	return &rsd, nil
+}
+
 func (client *GoRpcTabletManagerConn) StopSlave(tablet *topo.TabletInfo, waitTime time.Duration) error {
 	var noOutput rpc.UnusedResponse
 	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_STOP_SLAVE, "", &noOutput, waitTime)

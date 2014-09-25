@@ -130,6 +130,16 @@ func (tm *TabletManager) MasterPosition(context *rpcproto.Context, args *rpc.Unu
 	})
 }
 
+func (tm *TabletManager) ReparentPosition(context *rpcproto.Context, args *myproto.ReplicationPosition, reply *actionnode.RestartSlaveData) error {
+	return tm.agent.RpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_REPARENT_POSITION, args, reply, func() error {
+		rsd, err := tm.agent.ReparentPosition(args)
+		if err == nil {
+			*reply = *rsd
+		}
+		return err
+	})
+}
+
 func (tm *TabletManager) StopSlave(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLock(context.RemoteAddr, actionnode.TABLET_ACTION_STOP_SLAVE, args, reply, true, func() error {
 		return tm.agent.Mysqld.StopSlave(map[string]string{"TABLET_ALIAS": tm.agent.TabletAlias.String()})
