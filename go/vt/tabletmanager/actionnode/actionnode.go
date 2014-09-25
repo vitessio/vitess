@@ -4,7 +4,8 @@
 
 // Actions modify the state of a tablet, shard or keyspace.
 //
-// They are currenty managed through a series of queues stored in topology server.
+// They are currenty managed through a series of queues stored in
+// topology server, or RPCs. Switching to RPCs only now.
 
 package actionnode
 
@@ -27,26 +28,18 @@ const (
 	// FIXME(msolomon) why is ActionState a type, but Action is not?
 
 	//
-	// Tablet actions. These are triggered by ActionNodes or RPCs,
-	// and executed by an agent within vttablet.
+	// Tablet actions. This first list is RPC only. In the process
+	// of converting them all to RPCs.
 	//
 
-	TABLET_ACTION_PING  = "Ping"
-	TABLET_ACTION_SLEEP = "Sleep"
-
-	TABLET_ACTION_SET_RDONLY  = "SetReadOnly"
-	TABLET_ACTION_SET_RDWR    = "SetReadWrite"
-	TABLET_ACTION_CHANGE_TYPE = "ChangeType"
-
+	// DemoteMaster tells the current master it's about to not be a master
+	// any more, and should go read-only.
 	TABLET_ACTION_DEMOTE_MASTER = "DemoteMaster"
-	TABLET_ACTION_PROMOTE_SLAVE = "PromoteSlave"
 
 	// SlaveWasPromoted tells a tablet this previously slave
 	// tablet is now the master. The tablet will update its
 	// own topology record.
 	TABLET_ACTION_SLAVE_WAS_PROMOTED = "SlaveWasPromoted"
-
-	TABLET_ACTION_RESTART_SLAVE = "RestartSlave"
 
 	// SlaveWasRestarted tells a tablet the mysql master was changed.
 	// The tablet will check it is indeed the case, and update its own
@@ -68,24 +61,64 @@ const (
 	// to calling "ShardExternallyReparented" on the topology.
 	TABLET_ACTION_EXTERNALLY_REPARENTED = "TabletExternallyReparented"
 
-	TABLET_ACTION_BREAK_SLAVES        = "BreakSlaves"
-	TABLET_ACTION_MASTER_POSITION     = "MasterPosition"
-	TABLET_ACTION_REPARENT_POSITION   = "ReparentPosition"
-	TABLET_ACTION_SLAVE_STATUS        = "SlaveStatus"
+	// MasterPosition returns the current master position
+	TABLET_ACTION_MASTER_POSITION = "MasterPosition"
+
+	// SlaveStatus returns the current slave status
+	TABLET_ACTION_SLAVE_STATUS = "SlaveStatus"
+
+	// WaitSlavePosition waits until the slave reaches a
+	// replication position in MySQL replication
 	TABLET_ACTION_WAIT_SLAVE_POSITION = "WaitSlavePosition"
-	TABLET_ACTION_WAIT_BLP_POSITION   = "WaitBlpPosition"
-	TABLET_ACTION_STOP_BLP            = "StopBlp"
-	TABLET_ACTION_START_BLP           = "StartBlp"
-	TABLET_ACTION_RUN_BLP_UNTIL       = "RunBlpUntil"
-	TABLET_ACTION_SCRAP               = "Scrap"
-	TABLET_ACTION_GET_SCHEMA          = "GetSchema"
-	TABLET_ACTION_PREFLIGHT_SCHEMA    = "PreflightSchema"
-	TABLET_ACTION_APPLY_SCHEMA        = "ApplySchema"
-	TABLET_ACTION_RELOAD_SCHEMA       = "ReloadSchema"
-	TABLET_ACTION_EXECUTE_FETCH       = "ExecuteFetch"
-	TABLET_ACTION_GET_PERMISSIONS     = "GetPermissions"
-	TABLET_ACTION_EXECUTE_HOOK        = "ExecuteHook"
-	TABLET_ACTION_GET_SLAVES          = "GetSlaves"
+
+	// WaitBlpPosition waits until the slave reaches a
+	// replication position in filtered replication
+	TABLET_ACTION_WAIT_BLP_POSITION = "WaitBlpPosition"
+
+	// Stop and Start filtered replication
+	TABLET_ACTION_STOP_BLP  = "StopBlp"
+	TABLET_ACTION_START_BLP = "StartBlp"
+
+	// RunBlpUntil will run filtered replication until it reaches
+	// the provided stop position.
+	TABLET_ACTION_RUN_BLP_UNTIL = "RunBlpUntil"
+
+	// GetSchema returns the tablet current schema.
+	TABLET_ACTION_GET_SCHEMA = "GetSchema"
+
+	// ReloadSchema tells the tablet to reload its schema.
+	TABLET_ACTION_RELOAD_SCHEMA = "ReloadSchema"
+
+	// ExecuteFetch uses the DBA connection pool to run queries.
+	TABLET_ACTION_EXECUTE_FETCH = "ExecuteFetch"
+
+	// GetPermissions returns the mysql permissions set
+	TABLET_ACTION_GET_PERMISSIONS = "GetPermissions"
+
+	// GetSlaves returns the current set of mysql replication slaves.
+	TABLET_ACTION_GET_SLAVES = "GetSlaves"
+
+	//
+	// Tablet actions. These are triggered by ActionNode only,
+	// will be documented / converted to RPC soon.
+	//
+
+	TABLET_ACTION_SLEEP = "Sleep"
+
+	TABLET_ACTION_SET_RDONLY  = "SetReadOnly"
+	TABLET_ACTION_SET_RDWR    = "SetReadWrite"
+	TABLET_ACTION_CHANGE_TYPE = "ChangeType"
+	TABLET_ACTION_SCRAP       = "Scrap"
+
+	TABLET_ACTION_PROMOTE_SLAVE     = "PromoteSlave"
+	TABLET_ACTION_RESTART_SLAVE     = "RestartSlave"
+	TABLET_ACTION_BREAK_SLAVES      = "BreakSlaves"
+	TABLET_ACTION_REPARENT_POSITION = "ReparentPosition"
+
+	TABLET_ACTION_PREFLIGHT_SCHEMA = "PreflightSchema"
+	TABLET_ACTION_APPLY_SCHEMA     = "ApplySchema"
+
+	TABLET_ACTION_EXECUTE_HOOK = "ExecuteHook"
 
 	TABLET_ACTION_SNAPSHOT            = "Snapshot"
 	TABLET_ACTION_SNAPSHOT_SOURCE_END = "SnapshotSourceEnd"
@@ -93,6 +126,13 @@ const (
 	TABLET_ACTION_RESTORE             = "Restore"
 	TABLET_ACTION_MULTI_SNAPSHOT      = "MultiSnapshot"
 	TABLET_ACTION_MULTI_RESTORE       = "MultiRestore"
+
+	//
+	// Tablet actions. These are triggered by both RPC and ActionNode,
+	// will be documented / converted to RPC only soon.
+	//
+
+	TABLET_ACTION_PING = "Ping"
 
 	//
 	// Shard actions - involve all tablets in a shard.
