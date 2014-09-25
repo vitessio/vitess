@@ -46,6 +46,9 @@ type TabletManagerConn interface {
 	// Scrap scraps the live running tablet
 	Scrap(tablet *topo.TabletInfo, waitTime time.Duration) error
 
+	// Sleep will sleep for a duration (used for tests)
+	Sleep(tablet *topo.TabletInfo, duration, waitTime time.Duration) error
+
 	// ReloadSchema asks the remote tablet to reload its schema
 	ReloadSchema(tablet *topo.TabletInfo, waitTime time.Duration) error
 

@@ -879,11 +879,15 @@ func commandSleep(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) 
 	if err != nil {
 		return "", err
 	}
+	ti, err := wr.TopoServer().GetTablet(tabletAlias)
+	if err != nil {
+		return "", err
+	}
 	duration, err := time.ParseDuration(subFlags.Arg(1))
 	if err != nil {
 		return "", err
 	}
-	return wr.ActionInitiator().Sleep(tabletAlias, duration)
+	return "", wr.ActionInitiator().Sleep(ti, duration, wr.ActionTimeout())
 }
 
 func commandSnapshotSourceEnd(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

@@ -58,6 +58,12 @@ func (agent *ActionAgent) Scrap() error {
 	return topotools.Scrap(agent.TopoServer, agent.TabletAlias, false)
 }
 
+// Sleep sleeps for the duration
+// Should be called under RpcWrapLockAction.
+func (agent *ActionAgent) Sleep(duration time.Duration) {
+	time.Sleep(duration)
+}
+
 // ExecuteFetch will execute the given query, possibly disabling binlogs.
 // Should be called under RpcWrap.
 func (agent *ActionAgent) ExecuteFetch(query string, maxrows int, wantFields, disableBinlogs bool) (*proto.QueryResult, error) {

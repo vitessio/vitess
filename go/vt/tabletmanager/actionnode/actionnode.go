@@ -31,6 +31,9 @@ const (
 	// of converting them all to RPCs.
 	//
 
+	// Sleep will sleep for a duration (used for tests)
+	TABLET_ACTION_SLEEP = "Sleep"
+
 	// SetReadOnly makes the mysql instance read-only
 	TABLET_ACTION_SET_RDONLY = "SetReadOnly"
 
@@ -127,8 +130,6 @@ const (
 	// Tablet actions. These are triggered by ActionNode only,
 	// will be documented / converted to RPC soon.
 	//
-
-	TABLET_ACTION_SLEEP = "Sleep"
 
 	TABLET_ACTION_PREFLIGHT_SCHEMA = "PreflightSchema"
 	TABLET_ACTION_APPLY_SCHEMA     = "ApplySchema"
@@ -230,8 +231,6 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	// figure out our args and reply types
 	switch node.Action {
 	case TABLET_ACTION_PING:
-	case TABLET_ACTION_SLEEP:
-		node.Args = new(time.Duration)
 
 	case TABLET_ACTION_PREFLIGHT_SCHEMA:
 		node.Args = new(string)
@@ -278,7 +277,8 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case SRV_SHARD_ACTION_REBUILD:
 		return nil, fmt.Errorf("locking-only SRV_SHARD action: %v", node.Action)
 
-	case TABLET_ACTION_SET_RDONLY,
+	case TABLET_ACTION_SLEEP,
+		TABLET_ACTION_SET_RDONLY,
 		TABLET_ACTION_SET_RDWR,
 		TABLET_ACTION_CHANGE_TYPE,
 		TABLET_ACTION_SCRAP,

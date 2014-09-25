@@ -22,7 +22,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/tb"
@@ -186,8 +185,6 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 		err = ta.applySchema(actionNode)
 	case actionnode.TABLET_ACTION_EXECUTE_HOOK:
 		err = ta.executeHook(actionNode)
-	case actionnode.TABLET_ACTION_SLEEP:
-		err = ta.sleep(actionNode)
 	case actionnode.TABLET_ACTION_SNAPSHOT:
 		err = ta.snapshot(actionNode)
 	case actionnode.TABLET_ACTION_SNAPSHOT_SOURCE_END:
@@ -197,6 +194,7 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 		actionnode.TABLET_ACTION_SET_RDWR,
 		actionnode.TABLET_ACTION_CHANGE_TYPE,
 		actionnode.TABLET_ACTION_SCRAP,
+		actionnode.TABLET_ACTION_SLEEP,
 		actionnode.TABLET_ACTION_GET_SCHEMA,
 		actionnode.TABLET_ACTION_RELOAD_SCHEMA,
 		actionnode.TABLET_ACTION_GET_PERMISSIONS,
@@ -244,12 +242,6 @@ func StoreActionResponse(ts topo.Server, actionNode *actionnode.ActionNode, acti
 	// In the error case, this node will be left behind to debug.
 	data := actionNode.ToJson()
 	return ts.StoreTabletActionResponse(actionPath, data)
-}
-
-func (ta *TabletActor) sleep(actionNode *actionnode.ActionNode) error {
-	duration := actionNode.Args.(*time.Duration)
-	time.Sleep(*duration)
-	return nil
 }
 
 func (ta *TabletActor) preflightSchema(actionNode *actionnode.ActionNode) error {

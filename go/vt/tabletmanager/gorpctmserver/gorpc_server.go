@@ -38,6 +38,13 @@ func (tm *TabletManager) Ping(context *rpcproto.Context, args, reply *string) er
 	})
 }
 
+func (tm *TabletManager) Sleep(context *rpcproto.Context, args *time.Duration, reply *rpc.UnusedResponse) error {
+	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SLEEP, args, reply, true, func() error {
+		tm.agent.Sleep(*args)
+		return nil
+	})
+}
+
 func (tm *TabletManager) GetSchema(context *rpcproto.Context, args *gorpcproto.GetSchemaArgs, reply *myproto.SchemaDefinition) error {
 	return tm.agent.RpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_GET_SCHEMA, args, reply, func() error {
 		// read the tablet to get the dbname

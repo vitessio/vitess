@@ -267,7 +267,7 @@ class TestTabletManager(unittest.TestCase):
       for x in xrange(4)]
 
 
-  def test_restart_during_action(self):
+  def test_actions_and_timeouts(self):
     # Start up a master mysql and vttablet
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
@@ -280,34 +280,30 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.create_db('vt_test_keyspace')
     tablet_62344.start_vttablet()
 
-    utils.run_vtctl(['Ping', tablet_62344.tablet_alias])
+    utils.run_vtctl(['RpcPing', tablet_62344.tablet_alias])
 
-    # schedule long action
-    utils.run_vtctl(['-no-wait', 'Sleep', tablet_62344.tablet_alias, '15s'],
-                    mode=utils.VTCTL_VTCTL, stdout=utils.devnull)
-    # ping blocks until the sleep finishes unless we have a schedule race
-    action_path, _ = utils.run_vtctl(['-no-wait', 'Ping',
-                                      tablet_62344.tablet_alias],
-                                     mode=utils.VTCTL_VTCTL, trap_output=True)
-    action_path = action_path.strip()
+    # schedule long action in the background, sleep a little bit to make sure
+    # it started to run
+    args = (environment.binary_args('vtctl') +
+            environment.topo_server_flags() +
+            environment.tablet_manager_protocol_flags() +
+            environment.tabletconn_protocol_flags() +
+            ['-log_dir', environment.vtlogroot,
+             'Sleep', tablet_62344.tablet_alias, '10s'])
+    bg = utils.run_bg(args)
+    time.sleep(3)
 
-    # kill agent leaving vtaction running
-    tablet_62344.kill_vttablet()
+    # try a frontend RpcPing that should timeout as the tablet is busy
+    # running the other one
+    stdout, stderr = utils.run_vtctl(['-wait-time', '3s',
+                                      'RpcPing', tablet_62344.tablet_alias],
+                                     expect_fail=True)
+    if 'Timeout waiting for' not in stderr:
+      self.fail("didn't find the right error strings in failed RpcPing: " +
+                stderr)
 
-    # restart agent
-    tablet_62344.start_vttablet()
-
-    # we expect this action with a short wait time to fail. this isn't the best
-    # and has some potential for flakiness.
-    utils.run_vtctl(['-wait-time', '2s', 'WaitForAction', action_path],
-                    mode=utils.VTCTL_VTCTL, expect_fail=True)
-
-    # wait until the background sleep action is done, otherwise there will be
-    # a leftover vtaction whose result may overwrite running actions
-    # NOTE(alainjobart): Yes, I've seen it happen, it's a pain to debug:
-    # the zombie Sleep clobbers the Clone command in the following tests
-    utils.run_vtctl(['-wait-time', '20s', 'WaitForAction', action_path],
-                    mode=utils.VTCTL_VTCTL, auto_log=True)
+    # wait for the background vtctl
+    bg.wait()
 
     if environment.topo_server_implementation == 'zookeeper':
       # extra small test: we ran for a while, get the states we were in,
@@ -416,82 +412,6 @@ class TestTabletManager(unittest.TestCase):
     self._run_hook(['/bin/ls'], [
         "action failed: ExecuteHook hook name cannot have a '/' in it",
         ])
-
-    tablet_62344.kill_vttablet()
-
-  def test_sigterm(self):
-    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
-
-    # create the database so vttablets start, as it is serving
-    tablet_62344.create_db('vt_test_keyspace')
-
-    tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True)
-
-    # start a 'vtctl Sleep' command, don't wait for it
-    action_path, _ = utils.run_vtctl(['-no-wait', 'Sleep',
-                                      tablet_62344.tablet_alias, '60s'],
-                                     mode=utils.VTCTL_VTCTL, trap_output=True)
-    action_path = action_path.strip()
-
-    # wait for the action to be 'Running', capture its pid
-    timeout = 10
-    while True:
-      an = utils.run_vtctl_json(['ReadTabletAction', action_path])
-      if an.get('State', None) == 'Running':
-        pid = an['Pid']
-        logging.debug("Action is running with pid %u, good", pid)
-        break
-      timeout = utils.wait_step('sleep action to run', timeout)
-
-    # let's kill the vtaction process with a regular SIGTERM
-    os.kill(pid, signal.SIGTERM)
-
-    # check the vtctl command got the right remote error back
-    out, err = utils.run_vtctl(['WaitForAction', action_path], trap_output=True,
-                               mode=utils.VTCTL_VTCTL, raise_on_error=False)
-    if "vtaction interrupted by signal" not in err:
-      self.fail("cannot find expected output in error: " + err)
-    logging.debug("vtaction was interrupted correctly:\n" + err)
-
-    tablet_62344.kill_vttablet()
-
-  # test_vtaction_dies_hard makes sure that the recovery code works
-  # properly when action dies hard (with a crash for instance)
-  def test_vtaction_dies_hard(self):
-    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
-
-    # create the database so vttablets start, as it is serving
-    tablet_62344.create_db('vt_test_keyspace')
-
-    tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True)
-
-    # start a 'vtctl Sleep' command, don't wait for it
-    action_path, _ = utils.run_vtctl(['-no-wait', 'Sleep',
-                                      tablet_62344.tablet_alias, '60s'],
-                                     mode=utils.VTCTL_VTCTL, trap_output=True)
-    action_path = action_path.strip()
-
-    # wait for the action to be 'Running', capture its pid
-    timeout = 10
-    while True:
-      an = utils.run_vtctl_json(['ReadTabletAction', action_path])
-      if an.get('State', None) == 'Running':
-        pid = an['Pid']
-        logging.debug("Action is running with pid %u, good", pid)
-        break
-      timeout = utils.wait_step('sleep action to run', timeout)
-
-    # let's kill it hard, wait until it's gone for good
-    os.kill(pid, signal.SIGKILL)
-    try:
-      os.waitpid(pid, 0)
-    except OSError:
-      # this means the process doesn't exist any more, we're good
-      pass
-
-    # Then let's make sure the next action cleans up properly and can execute.
-    # If that doesn't work, this will time out and the test will fail.
-    utils.run_vtctl(['Ping', tablet_62344.tablet_alias])
 
     tablet_62344.kill_vttablet()
 

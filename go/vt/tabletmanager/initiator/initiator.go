@@ -79,10 +79,6 @@ func (ai *ActionInitiator) RpcPing(tablet *topo.TabletInfo, waitTime time.Durati
 	return ai.rpc.Ping(tablet, waitTime)
 }
 
-func (ai *ActionInitiator) Sleep(tabletAlias topo.TabletAlias, duration time.Duration) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_SLEEP, Args: &duration})
-}
-
 func (ai *ActionInitiator) SetReadOnly(tablet *topo.TabletInfo, waitTime time.Duration) error {
 	return ai.rpc.SetReadOnly(tablet, waitTime)
 }
@@ -97,6 +93,10 @@ func (ai *ActionInitiator) ChangeType(tablet *topo.TabletInfo, dbType topo.Table
 
 func (ai *ActionInitiator) Scrap(tablet *topo.TabletInfo, waitTime time.Duration) error {
 	return ai.rpc.Scrap(tablet, waitTime)
+}
+
+func (ai *ActionInitiator) Sleep(tablet *topo.TabletInfo, duration, waitTime time.Duration) error {
+	return ai.rpc.Sleep(tablet, duration, waitTime)
 }
 
 func (ai *ActionInitiator) Snapshot(tabletAlias topo.TabletAlias, args *actionnode.SnapshotArgs) (actionPath string, err error) {
