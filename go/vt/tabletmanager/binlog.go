@@ -143,12 +143,13 @@ func (bpc *BinlogPlayerController) WaitForStop(waitTimeout time.Duration) error 
 	bpc.playerMutex.Unlock()
 
 	// start waiting
-	timer := time.After(waitTimeout)
+	tmr := time.NewTimer(waitTimeout)
+	defer tmr.Stop()
 	select {
 	case <-done:
 		bpc.reset()
 		return nil
-	case <-timer:
+	case <-tmr.C:
 		bpc.Stop()
 		return fmt.Errorf("WaitForStop timeout, stopping current player")
 	}
