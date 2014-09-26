@@ -18,9 +18,10 @@ import environment
 import utils
 import tablet
 
+TABLET = "tablet"
+VTGATE = "vtgate"
 VTGATE_PROTOCOL_TABLET = 'v0'
-VTGATE_PROTOCOL_V1BSON = 'v1bson'
-vtgate_protocol = VTGATE_PROTOCOL_TABLET
+client_type = TABLET
 use_clone_worker = False
 
 # source keyspace, with 4 tables
@@ -84,7 +85,7 @@ class TestVerticalSplit(unittest.TestCase):
     self.vtgate_client = zkocc.ZkOccConnection("localhost:%u"%self.vtgate_port,
                                                "test_nj", 30.0)
     self.vtgate_addrs = None
-    if vtgate_protocol == VTGATE_PROTOCOL_V1BSON:
+    if client_type == VTGATE:
       global vtgate_addrs
       self.vtgate_addrs = {"_vt": ["localhost:%s"%(self.vtgate_port),]}
 
@@ -119,9 +120,12 @@ index by_msg (msg)
                     auto_log=True)
 
   def _vtdb_conn(self, db_type='master', keyspace='source_keyspace'):
-    global vtgate_protocol
+    global client_type
+    vtgate_protocol = None
     if self.vtgate_addrs is None:
       self.vtgate_addrs = {}
+    if client_type == TABLET:
+      vtgate_protocol = VTGATE_PROTOCOL_TABLET
     conn = vtclient.VtOCCConnection(self.vtgate_client, keyspace, '0',
                                     db_type, 30,
                                     vtgate_protocol=vtgate_protocol,
