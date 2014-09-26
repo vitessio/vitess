@@ -11,6 +11,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/youtube/vitess/go/vt/hook"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
@@ -74,6 +75,14 @@ func (client *GoRpcTabletManagerConn) Ping(tablet *topo.TabletInfo, waitTime tim
 func (client *GoRpcTabletManagerConn) Sleep(tablet *topo.TabletInfo, duration, waitTime time.Duration) error {
 	var noOutput rpc.UnusedResponse
 	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_SLEEP, &duration, &noOutput, waitTime)
+}
+
+func (client *GoRpcTabletManagerConn) ExecuteHook(tablet *topo.TabletInfo, hk *hook.Hook, waitTime time.Duration) (*hook.HookResult, error) {
+	var hr hook.HookResult
+	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_EXECUTE_HOOK, hk, &hr, waitTime); err != nil {
+		return nil, err
+	}
+	return &hr, nil
 }
 
 func (client *GoRpcTabletManagerConn) GetSchema(tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool, waitTime time.Duration) (*myproto.SchemaDefinition, error) {

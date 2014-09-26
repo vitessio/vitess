@@ -259,8 +259,8 @@ func (ai *ActionInitiator) GetPermissions(tabletAlias topo.TabletAlias, waitTime
 	return ai.rpc.GetPermissions(tablet, waitTime)
 }
 
-func (ai *ActionInitiator) ExecuteHook(tabletAlias topo.TabletAlias, _hook *hook.Hook) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_EXECUTE_HOOK, Args: _hook})
+func (ai *ActionInitiator) ExecuteHook(tablet *topo.TabletInfo, hk *hook.Hook, waitTime time.Duration) (*hook.HookResult, error) {
+	return ai.rpc.ExecuteHook(tablet, hk, waitTime)
 }
 
 func (ai *ActionInitiator) GetSlaves(tablet *topo.TabletInfo, waitTime time.Duration) ([]string, error) {

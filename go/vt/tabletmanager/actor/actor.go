@@ -183,14 +183,13 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 		err = ta.preflightSchema(actionNode)
 	case actionnode.TABLET_ACTION_APPLY_SCHEMA:
 		err = ta.applySchema(actionNode)
-	case actionnode.TABLET_ACTION_EXECUTE_HOOK:
-		err = ta.executeHook(actionNode)
 	case actionnode.TABLET_ACTION_SNAPSHOT:
 		err = ta.snapshot(actionNode)
 	case actionnode.TABLET_ACTION_SNAPSHOT_SOURCE_END:
 		err = ta.snapshotSourceEnd(actionNode)
 
-	case actionnode.TABLET_ACTION_SET_RDONLY,
+	case actionnode.TABLET_ACTION_EXECUTE_HOOK,
+		actionnode.TABLET_ACTION_SET_RDONLY,
 		actionnode.TABLET_ACTION_SET_RDWR,
 		actionnode.TABLET_ACTION_CHANGE_TYPE,
 		actionnode.TABLET_ACTION_SCRAP,
@@ -277,14 +276,6 @@ func (ta *TabletActor) applySchema(actionNode *actionnode.ActionNode) error {
 		return err
 	}
 	actionNode.Reply = scr
-	return nil
-}
-
-func (ta *TabletActor) executeHook(actionNode *actionnode.ActionNode) (err error) {
-	// FIXME(msolomon) shouldn't the reply get distilled into an error?
-	h := actionNode.Args.(*hook.Hook)
-	topotools.ConfigureTabletHook(h, ta.tabletAlias)
-	actionNode.Reply = h.Execute()
 	return nil
 }
 

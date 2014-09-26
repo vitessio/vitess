@@ -11,6 +11,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
@@ -62,6 +63,13 @@ func (agent *ActionAgent) Scrap() error {
 // Should be called under RpcWrapLockAction.
 func (agent *ActionAgent) Sleep(duration time.Duration) {
 	time.Sleep(duration)
+}
+
+// ExecuteHook executes the provided hook locally, and returns the result.
+// Should be called under RpcWrapLockAction.
+func (agent *ActionAgent) ExecuteHook(hk *hook.Hook) *hook.HookResult {
+	topotools.ConfigureTabletHook(hk, agent.TabletAlias)
+	return hk.Execute()
 }
 
 // ExecuteFetch will execute the given query, possibly disabling binlogs.

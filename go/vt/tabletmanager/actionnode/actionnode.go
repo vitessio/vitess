@@ -19,7 +19,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/vt/hook"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
@@ -33,6 +32,9 @@ const (
 
 	// Sleep will sleep for a duration (used for tests)
 	TABLET_ACTION_SLEEP = "Sleep"
+
+	// ExecuteHook will execute the provided hook remotely
+	TABLET_ACTION_EXECUTE_HOOK = "ExecuteHook"
 
 	// SetReadOnly makes the mysql instance read-only
 	TABLET_ACTION_SET_RDONLY = "SetReadOnly"
@@ -133,8 +135,6 @@ const (
 
 	TABLET_ACTION_PREFLIGHT_SCHEMA = "PreflightSchema"
 	TABLET_ACTION_APPLY_SCHEMA     = "ApplySchema"
-
-	TABLET_ACTION_EXECUTE_HOOK = "ExecuteHook"
 
 	TABLET_ACTION_SNAPSHOT            = "Snapshot"
 	TABLET_ACTION_SNAPSHOT_SOURCE_END = "SnapshotSourceEnd"
@@ -238,9 +238,6 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case TABLET_ACTION_APPLY_SCHEMA:
 		node.Args = &myproto.SchemaChange{}
 		node.Reply = &myproto.SchemaChangeResult{}
-	case TABLET_ACTION_EXECUTE_HOOK:
-		node.Args = &hook.Hook{}
-		node.Reply = &hook.HookResult{}
 
 	case TABLET_ACTION_SNAPSHOT:
 		node.Args = &SnapshotArgs{}
@@ -278,6 +275,7 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 		return nil, fmt.Errorf("locking-only SRV_SHARD action: %v", node.Action)
 
 	case TABLET_ACTION_SLEEP,
+		TABLET_ACTION_EXECUTE_HOOK,
 		TABLET_ACTION_SET_RDONLY,
 		TABLET_ACTION_SET_RDWR,
 		TABLET_ACTION_CHANGE_TYPE,

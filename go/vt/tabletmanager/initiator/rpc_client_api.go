@@ -10,6 +10,7 @@ import (
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/youtube/vitess/go/vt/hook"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -48,6 +49,9 @@ type TabletManagerConn interface {
 
 	// Sleep will sleep for a duration (used for tests)
 	Sleep(tablet *topo.TabletInfo, duration, waitTime time.Duration) error
+
+	// ExecuteHook executes the provided hook remotely
+	ExecuteHook(tablet *topo.TabletInfo, hk *hook.Hook, waitTime time.Duration) (*hook.HookResult, error)
 
 	// ReloadSchema asks the remote tablet to reload its schema
 	ReloadSchema(tablet *topo.TabletInfo, waitTime time.Duration) error

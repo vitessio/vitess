@@ -13,6 +13,7 @@ import (
 	"github.com/youtube/vitess/go/rpcwrap"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/youtube/vitess/go/vt/hook"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
@@ -41,6 +42,13 @@ func (tm *TabletManager) Ping(context *rpcproto.Context, args, reply *string) er
 func (tm *TabletManager) Sleep(context *rpcproto.Context, args *time.Duration, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SLEEP, args, reply, true, func() error {
 		tm.agent.Sleep(*args)
+		return nil
+	})
+}
+
+func (tm *TabletManager) ExecuteHook(context *rpcproto.Context, args *hook.Hook, reply *hook.HookResult) error {
+	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_EXECUTE_HOOK, args, reply, true, func() error {
+		*reply = *tm.agent.ExecuteHook(args)
 		return nil
 	})
 }
