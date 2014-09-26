@@ -8,15 +8,7 @@ apilevel = '2.0'
 threadsafety = 0  # Threads may not share the module because multi_client is not thread safe
 paramstyle = 'named'
 
-from vtdb import vtclient, tablet, vtgate
 from vtdb.dbexceptions import *
 from vtdb.times import Date, Time, Timestamp, DateFromTicks, TimeFromTicks, TimestampFromTicks
 from vtdb.field_types import Binary
 from vtdb.field_types import STRING, BINARY, NUMBER, DATETIME, ROWID
-
-
-def init():
-  vtclient.register_conn_class('v0', tablet.TabletConnection)
-  vtclient.register_conn_class('v1bson', vtgate.VtgateConnection)
-
-init()
