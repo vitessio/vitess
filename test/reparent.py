@@ -159,10 +159,11 @@ class TestReparent(unittest.TestCase):
           stderr)
 
     # Should fail to connect and fail
-    stdout, stderr = utils.run_vtctl(['ScrapTablet', tablet_62344.tablet_alias],
+    stdout, stderr = utils.run_vtctl(['-wait-time', '10s', 'ScrapTablet',
+                                      tablet_62344.tablet_alias],
                                      expect_fail=True)
     logging.debug('Failed ScrapTablet output:\n' + stderr)
-    if 'connection refused' not in stderr:
+    if 'connection refused' not in stderr and environment.rpc_timeout_message not in stderr:
       self.fail("didn't find the right error strings in failed ScrapTablet: " +
                 stderr)
 

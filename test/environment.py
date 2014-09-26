@@ -33,6 +33,9 @@ status_url = '/debug/status'
 # location of the curl binary, used for some tests.
 curl_bin = '/usr/bin/curl'
 
+# when an RPC times out, this message will be in the logs
+rpc_timeout_message = 'Timeout waiting for'
+
 def memcached_bin():
   in_vt = os.path.join(vtroot, 'bin', 'memcached')
   if os.path.exists(in_vt):

@@ -298,9 +298,7 @@ class TestTabletManager(unittest.TestCase):
     stdout, stderr = utils.run_vtctl(['-wait-time', '3s',
                                       'RpcPing', tablet_62344.tablet_alias],
                                      expect_fail=True)
-    if 'Timeout waiting for' not in stderr:
-      self.fail("didn't find the right error strings in failed RpcPing: " +
-                stderr)
+    self.assertIn(environment.rpc_timeout_message, stderr)
 
     # wait for the background vtctl
     bg.wait()
@@ -416,6 +414,10 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.kill_vttablet()
 
   def test_restart(self):
+    if environment.topo_server_implementation != 'zookeeper':
+      logging.info("Skipping this test in non-github tree")
+      return
+
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
     # create the database so vttablets start, as it is serving
