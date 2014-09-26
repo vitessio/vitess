@@ -35,7 +35,7 @@ type EventNode struct {
 type sendEventFunc func(event *proto.StreamEvent) error
 
 type EventStreamer struct {
-	bls       BinlogStreamer
+	bls       *BinlogStreamer
 	sendEvent sendEventFunc
 }
 
