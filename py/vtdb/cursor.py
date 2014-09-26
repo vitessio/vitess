@@ -105,15 +105,21 @@ class TabletCursor(BaseCursor):
 
 class BatchCursor(BaseCursor):
   def __init__(self, connection):
-    self.exec_list = []
+    # rowset is [(results, rowcount, lastrowid, fields),]
+    self.rowsets = None
+    self.query_list = []
+    self.bind_vars_list = []
     BaseCursor.__init__(self, connection)
 
-  def execute(self, sql, bind_variables=None, key=None, keys=None):
-    self.exec_list.append(BatchQueryItem(sql, bind_variables, key, keys))
+  def execute(self, sql, bind_variables=None):
+    self.query_list.append(sql)
+    self.bind_vars_list.append(bind_variables)
 
   def flush(self):
-    self.rowcount = self.connection._execute_batch(self.exec_list)
-    self.exec_list = []
+    self.rowsets = self.connection._execute_batch(self.query_list,
+                                                  self.bind_vars_list)
+    self.query_list = []
+    self.bind_vars_list = []
 
 
 # just used for batch items

@@ -199,16 +199,27 @@ class VTGateCursor(object):
 
 
 class BatchVTGateCursor(VTGateCursor):
-  def __init__(self, connection, keyspace, tablet_type, keyspace_ids=None, keyranges=None, writable=False):
-    self.exec_list = []
-    VTGateCursor.__init__(self, connection, keyspace, tablet_type, keyspace_ids=keyspace_ids, writable=writable)
+  def __init__(self, connection, keyspace, tablet_type, keyspace_ids=None,
+               keyranges=None, writable=False):
+    # rowset is [(results, rowcount, lastrowid, fields),]
+    self.rowsets = None
+    self.query_list = []
+    self.bind_vars_list = []
+    VTGateCursor.__init__(self, connection, keyspace, tablet_type,
+                          keyspace_ids=keyspace_ids, writable=writable)
 
-  def execute(self, sql, bind_variables=None, key=None, keys=None):
-    self.exec_list.append(cursor.BatchQueryItem(sql, bind_variables, key, keys))
+  def execute(self, sql, bind_variables=None):
+    self.query_list.append(sql)
+    self.bind_vars_list.append(bind_variables)
 
   def flush(self):
-    self.rowcount = self._conn._execute_batch(self.exec_list, self.keyspace, self.tablet_type, self.keyspace_ids)
-    self.exec_list = []
+    self.rowsets = self._conn._execute_batch(self.query_list,
+                                              self.bind_vars_list,
+                                              self.keyspace,
+                                              self.tablet_type,
+                                              self.keyspace_ids)
+    self.query_list = []
+    self.bind_vars_list = []
 
 
 class StreamVTGateCursor(VTGateCursor):
