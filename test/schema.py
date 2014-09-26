@@ -176,9 +176,6 @@ class TestSchema(unittest.TestCase):
     if err.find('ApplySchemaKeyspace Shard 1 has inconsistent schema') == -1:
       self.fail('Unexpected ApplySchemaKeyspace output: %s' % err)
 
-    if environment.topo_server_implementation == 'zookeeper':
-      utils.run_vtctl(['PurgeActions', '/zk/global/vt/keyspaces/test_keyspace/action'])
-
     # shard 1: catch it up with simple updates
     utils.run_vtctl(['ApplySchemaShard',
                      '-simple',
@@ -225,25 +222,6 @@ class TestSchema(unittest.TestCase):
     self._check_tables(shard_0_backup, 4)
     self._check_tables(shard_1_master, 3) # current master
     self._check_tables(shard_1_replica1, 4)
-
-    # now test action log pruning
-    if environment.topo_server_implementation == 'zookeeper':
-      oldLines = utils.zk_ls(shard_0_replica1.zk_tablet_path+'/actionlog')
-      oldCount = len(oldLines)
-      logging.debug("I have %u actionlog before", oldCount)
-      if oldCount <= 5:
-        self.fail('Not enough actionlog before: %u' % oldCount)
-
-      utils.run_vtctl(['PruneActionLogs', '-keep-count=5', '/zk/*/vt/tablets/*/actionlog'], auto_log=True)
-
-      newLines = utils.zk_ls(shard_0_replica1.zk_tablet_path+'/actionlog')
-      newCount = len(newLines)
-      logging.debug("I have %u actionlog after", newCount)
-
-      self.assertEqual(newCount, 5, 'Unexpected actionlog count after: %u' % newCount)
-      if oldLines[-5:] != newLines:
-        self.fail('Unexpected actionlog values:\n%s\n%s' %
-                  (' '.join(oldLines[-5:]), ' '.join(newLines)))
 
     utils.pause("Look at schema now!")
 

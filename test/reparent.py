@@ -174,9 +174,8 @@ class TestReparent(unittest.TestCase):
                      'idle'], expect_fail=True)
 
     # Re-run reparent operation, this should now proceed unimpeded.
-    utils.run_vtctl(['-wait-time', '1m', 'ReparentShard', 'test_keyspace/0',
-                     tablet_62044.tablet_alias],
-                    mode=utils.VTCTL_VTCTL, auto_log=True)
+    utils.run_vtctl(['ReparentShard', 'test_keyspace/0',
+                     tablet_62044.tablet_alias], auto_log=True)
 
     utils.validate_topology()
     self._check_db_addr('0', 'master', tablet_62044.port)
