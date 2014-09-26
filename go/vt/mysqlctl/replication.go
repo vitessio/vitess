@@ -22,7 +22,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -187,27 +186,6 @@ var (
 	ErrNotMaster = errors.New("no master status")
 )
 
-// fetchSuperQueryMap returns a map from column names to cell data for a query
-// that should return exactly 1 row.
-func (mysqld *Mysqld) fetchSuperQueryMap(query string) (map[string]string, error) {
-	qr, err := mysqld.fetchSuperQuery(query)
-	if err != nil {
-		return nil, err
-	}
-	if len(qr.Rows) != 1 {
-		return nil, fmt.Errorf("query %#v returned %d rows, expected 1", query, len(qr.Rows))
-	}
-	if len(qr.Fields) != len(qr.Rows[0]) {
-		return nil, fmt.Errorf("query %#v returned %d column names, expected %d", query, len(qr.Fields), len(qr.Rows[0]))
-	}
-
-	rowMap := make(map[string]string)
-	for i, value := range qr.Rows[0] {
-		rowMap[qr.Fields[i].Name] = value.String()
-	}
-	return rowMap, nil
-}
-
 // Return a replication state that will reparent a slave to the
 // correct master for a specified position.
 func (mysqld *Mysqld) ReparentPosition(slavePosition proto.ReplicationPosition) (rs *proto.ReplicationStatus, waitPosition proto.ReplicationPosition, reparentTime int64, err error) {
@@ -328,54 +306,6 @@ func (mysqld *Mysqld) WaitForSlave(maxLag int) (err error) {
 		return errors.New(strings.Join(errs, ", "))
 	}
 	return errors.New("replication stopped, it will never catch up")
-}
-
-func (mysqld *Mysqld) ExecuteSuperQuery(query string) error {
-	return mysqld.ExecuteSuperQueryList([]string{query})
-}
-
-// FIXME(msolomon) should there be a query lock so we only
-// run one admin action at a time?
-func (mysqld *Mysqld) fetchSuperQuery(query string) (*mproto.QueryResult, error) {
-	conn, connErr := mysqld.dbaPool.Get()
-	if connErr != nil {
-		return nil, connErr
-	}
-	defer conn.Recycle()
-	log.V(6).Infof("fetch %v", query)
-	qr, err := conn.ExecuteFetch(query, 10000, true)
-	if err != nil {
-		return nil, err
-	}
-	return qr, nil
-}
-
-func redactMasterPassword(input string) string {
-	i := strings.Index(input, masterPasswordStart)
-	if i == -1 {
-		return input
-	}
-	j := strings.Index(input[i+len(masterPasswordStart):], masterPasswordEnd)
-	if j == -1 {
-		return input
-	}
-	return input[:i+len(masterPasswordStart)] + strings.Repeat("*", j) + input[i+len(masterPasswordStart)+j:]
-}
-
-// ExecuteSuperQueryList alows the user to execute queries at a super user.
-func (mysqld *Mysqld) ExecuteSuperQueryList(queryList []string) error {
-	conn, connErr := mysqld.dbaPool.Get()
-	if connErr != nil {
-		return connErr
-	}
-	defer conn.Recycle()
-	for _, query := range queryList {
-		log.Infof("exec %v", redactMasterPassword(query))
-		if _, err := conn.ExecuteFetch(query, 10000, false); err != nil {
-			return fmt.Errorf("ExecuteFetch(%v) failed: %v", redactMasterPassword(query), err.Error())
-		}
-	}
-	return nil
 }
 
 // Force all slaves to error and stop. This is extreme, but helpful for emergencies

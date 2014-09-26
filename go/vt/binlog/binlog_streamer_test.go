@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -68,8 +69,8 @@ func TestBinlogStreamerParseEventsXID(t *testing.T) {
 	want := []proto.BinlogTransaction{
 		proto.BinlogTransaction{
 			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
-				proto.Statement{Category: proto.BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+				proto.Statement{Category: proto.BL_SET, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("SET TIMESTAMP=1407805592")},
+				proto.Statement{Category: proto.BL_DML, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
 			},
 			Timestamp: 1407805592,
 			GTIDField: myproto.GTIDField{
@@ -81,7 +82,7 @@ func TestBinlogStreamerParseEventsXID(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -112,8 +113,8 @@ func TestBinlogStreamerParseEventsCommit(t *testing.T) {
 	want := []proto.BinlogTransaction{
 		proto.BinlogTransaction{
 			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
-				proto.Statement{Category: proto.BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+				proto.Statement{Category: proto.BL_SET, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("SET TIMESTAMP=1407805592")},
+				proto.Statement{Category: proto.BL_DML, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
 			},
 			Timestamp: 1407805592,
 			GTIDField: myproto.GTIDField{
@@ -125,7 +126,7 @@ func TestBinlogStreamerParseEventsCommit(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -148,7 +149,7 @@ func TestBinlogStreamerStop(t *testing.T) {
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	// Start parseEvents(), but don't send it anything, so it just waits.
 	svm := &sync2.ServiceManager{}
@@ -188,7 +189,7 @@ func TestBinlogStreamerParseEventsClientEOF(t *testing.T) {
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return io.EOF
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -214,7 +215,7 @@ func TestBinlogStreamerParseEventsServerEOF(t *testing.T) {
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	svm := &sync2.ServiceManager{}
 	svm.Go(func(ctx *sync2.ServiceContext) error {
@@ -245,7 +246,7 @@ func TestBinlogStreamerParseEventsSendErrorXID(t *testing.T) {
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return fmt.Errorf("foobar")
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -278,7 +279,7 @@ func TestBinlogStreamerParseEventsSendErrorCommit(t *testing.T) {
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return fmt.Errorf("foobar")
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -313,7 +314,7 @@ func TestBinlogStreamerParseEventsInvalid(t *testing.T) {
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -350,7 +351,7 @@ func TestBinlogStreamerParseEventsInvalidFormat(t *testing.T) {
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -383,7 +384,7 @@ func TestBinlogStreamerParseEventsNoFormat(t *testing.T) {
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -413,14 +414,14 @@ func TestBinlogStreamerParseEventsInvalidQuery(t *testing.T) {
 		invalidEvent,
 		xidEvent,
 	}
-	want := "can't get query from binlog event: SQL query position = 240, which is outside buffer, event data: mysqlctl.googleBinlogEvent{binlogEvent:mysqlctl.binlogEvent{0x98, 0x68, 0xe9, 0x53, 0x2, 0x88, 0xf3, 0x0, 0x0, 0x9f, 0x0, 0x0, 0x0, 0x61, 0x1, 0x0, 0x0, 0x0, 0x0, 0xd, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x23, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xc8, 0x0, 0x0, 0x1a, 0x0, 0x0, 0x0, 0x40, 0x0, 0x0, 0x1, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x0, 0x0, 0x6, 0x3, 0x73, 0x74, 0x64, 0x4, 0x21, 0x0, 0x21, 0x0, 0x21, 0x0, 0x76, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x0, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x20, 0x69, 0x6e, 0x74, 0x6f, 0x20, 0x76, 0x74, 0x5f, 0x61, 0x28, 0x65, 0x69, 0x64, 0x2c, 0x20, 0x69, 0x64, 0x29, 0x20, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x73, 0x20, 0x28, 0x31, 0x2c, 0x20, 0x31, 0x29, 0x20, 0x2f, 0x2a, 0x20, 0x5f, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x20, 0x76, 0x74, 0x5f, 0x61, 0x20, 0x28, 0x65, 0x69, 0x64, 0x20, 0x69, 0x64, 0x20, 0x29, 0x20, 0x28, 0x31, 0x20, 0x31, 0x20, 0x29, 0x3b, 0x20, 0x2a, 0x2f}}"
+	want := "can't get query from binlog event: SQL query position overflows buffer (240 > 132), event data: mysqlctl.googleBinlogEvent{binlogEvent:mysqlctl.binlogEvent{0x98, 0x68, 0xe9, 0x53, 0x2, 0x88, 0xf3, 0x0, 0x0, 0x9f, 0x0, 0x0, 0x0, 0x61, 0x1, 0x0, 0x0, 0x0, 0x0, 0xd, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x23, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xc8, 0x0, 0x0, 0x1a, 0x0, 0x0, 0x0, 0x40, 0x0, 0x0, 0x1, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x0, 0x0, 0x6, 0x3, 0x73, 0x74, 0x64, 0x4, 0x21, 0x0, 0x21, 0x0, 0x21, 0x0, 0x76, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x0, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x20, 0x69, 0x6e, 0x74, 0x6f, 0x20, 0x76, 0x74, 0x5f, 0x61, 0x28, 0x65, 0x69, 0x64, 0x2c, 0x20, 0x69, 0x64, 0x29, 0x20, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x73, 0x20, 0x28, 0x31, 0x2c, 0x20, 0x31, 0x29, 0x20, 0x2f, 0x2a, 0x20, 0x5f, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x20, 0x76, 0x74, 0x5f, 0x61, 0x20, 0x28, 0x65, 0x69, 0x64, 0x20, 0x69, 0x64, 0x20, 0x29, 0x20, 0x28, 0x31, 0x20, 0x31, 0x20, 0x29, 0x3b, 0x20, 0x2a, 0x2f}}"
 
 	events := make(chan proto.BinlogEvent)
 
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -462,8 +463,8 @@ func TestBinlogStreamerParseEventsRollback(t *testing.T) {
 		},
 		proto.BinlogTransaction{
 			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
-				proto.Statement{Category: proto.BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+				proto.Statement{Category: proto.BL_SET, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("SET TIMESTAMP=1407805592")},
+				proto.Statement{Category: proto.BL_DML, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
 			},
 			Timestamp: 1407805592,
 			GTIDField: myproto.GTIDField{
@@ -475,7 +476,7 @@ func TestBinlogStreamerParseEventsRollback(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -505,8 +506,8 @@ func TestBinlogStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 	want := []proto.BinlogTransaction{
 		proto.BinlogTransaction{
 			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
-				proto.Statement{Category: proto.BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+				proto.Statement{Category: proto.BL_SET, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("SET TIMESTAMP=1407805592")},
+				proto.Statement{Category: proto.BL_DML, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
 			},
 			Timestamp: 1407805592,
 			GTIDField: myproto.GTIDField{
@@ -524,7 +525,7 @@ func TestBinlogStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -555,8 +556,8 @@ func TestBinlogStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 	want := []proto.BinlogTransaction{
 		proto.BinlogTransaction{
 			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
-				proto.Statement{Category: proto.BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+				proto.Statement{Category: proto.BL_SET, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("SET TIMESTAMP=1407805592")},
+				proto.Statement{Category: proto.BL_DML, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
 			},
 			Timestamp: 1407805592,
 			GTIDField: myproto.GTIDField{
@@ -574,7 +575,7 @@ func TestBinlogStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -606,9 +607,9 @@ func TestBinlogStreamerParseEventsSetInsertID(t *testing.T) {
 	want := []proto.BinlogTransaction{
 		proto.BinlogTransaction{
 			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: []byte("SET INSERT_ID=101")},
-				proto.Statement{Category: proto.BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
-				proto.Statement{Category: proto.BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+				proto.Statement{Category: proto.BL_SET, Charset: nil, Sql: []byte("SET INSERT_ID=101")},
+				proto.Statement{Category: proto.BL_SET, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("SET TIMESTAMP=1407805592")},
+				proto.Statement{Category: proto.BL_DML, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
 			},
 			Timestamp: 1407805592,
 			GTIDField: myproto.GTIDField{
@@ -620,7 +621,7 @@ func TestBinlogStreamerParseEventsSetInsertID(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -657,7 +658,7 @@ func TestBinlogStreamerParseEventsInvalidIntVar(t *testing.T) {
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -690,8 +691,8 @@ func TestBinlogStreamerParseEventsOtherDB(t *testing.T) {
 	want := []proto.BinlogTransaction{
 		proto.BinlogTransaction{
 			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
-				proto.Statement{Category: proto.BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+				proto.Statement{Category: proto.BL_SET, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("SET TIMESTAMP=1407805592")},
+				proto.Statement{Category: proto.BL_DML, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
 			},
 			Timestamp: 1407805592,
 			GTIDField: myproto.GTIDField{
@@ -703,7 +704,7 @@ func TestBinlogStreamerParseEventsOtherDB(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -735,8 +736,8 @@ func TestBinlogStreamerParseEventsOtherDBBegin(t *testing.T) {
 	want := []proto.BinlogTransaction{
 		proto.BinlogTransaction{
 			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
-				proto.Statement{Category: proto.BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+				proto.Statement{Category: proto.BL_SET, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("SET TIMESTAMP=1407805592")},
+				proto.Statement{Category: proto.BL_DML, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
 			},
 			Timestamp: 1407805592,
 			GTIDField: myproto.GTIDField{
@@ -748,7 +749,7 @@ func TestBinlogStreamerParseEventsOtherDBBegin(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -779,7 +780,7 @@ func TestBinlogStreamerParseEventsBeginAgain(t *testing.T) {
 	sendTransaction := func(trans *proto.BinlogTransaction) error {
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 	before := binlogStreamerErrors.Counts()["ParseEvents"]
 
 	go sendTestEvents(events, input)
@@ -811,8 +812,8 @@ func TestBinlogStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 	want := []proto.BinlogTransaction{
 		proto.BinlogTransaction{
 			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: []byte("SET TIMESTAMP=1409892744")},
-				proto.Statement{Category: proto.BL_DML, Sql: []byte("insert into vt_insert_test(msg) values ('test 0') /* _stream vt_insert_test (id ) (null ); */")},
+				proto.Statement{Category: proto.BL_SET, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("SET TIMESTAMP=1409892744")},
+				proto.Statement{Category: proto.BL_DML, Charset: &mproto.Charset{Client: 33, Conn: 33, Server: 33}, Sql: []byte("insert into vt_insert_test(msg) values ('test 0') /* _stream vt_insert_test (id ) (null ); */")},
 			},
 			Timestamp: 1409892744,
 			GTIDField: myproto.GTIDField{
@@ -824,7 +825,7 @@ func TestBinlogStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendMariadbTestEvents(events, input)
 	svm := &sync2.ServiceManager{}
@@ -854,8 +855,8 @@ func TestBinlogStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 	want := []proto.BinlogTransaction{
 		proto.BinlogTransaction{
 			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: []byte("SET TIMESTAMP=1409892744")},
-				proto.Statement{Category: proto.BL_DDL, Sql: []byte("create table if not exists vt_insert_test (\nid bigint auto_increment,\nmsg varchar(64),\nprimary key (id)\n) Engine=InnoDB")},
+				proto.Statement{Category: proto.BL_SET, Charset: &mproto.Charset{Client: 8, Conn: 8, Server: 33}, Sql: []byte("SET TIMESTAMP=1409892744")},
+				proto.Statement{Category: proto.BL_DDL, Charset: &mproto.Charset{Client: 8, Conn: 8, Server: 33}, Sql: []byte("create table if not exists vt_insert_test (\nid bigint auto_increment,\nmsg varchar(64),\nprimary key (id)\n) Engine=InnoDB")},
 			},
 			Timestamp: 1409892744,
 			GTIDField: myproto.GTIDField{
@@ -867,7 +868,7 @@ func TestBinlogStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewBinlogStreamer("vt_test_keyspace", nil, myproto.ReplicationPosition{}, sendTransaction)
+	bls := NewBinlogStreamer("vt_test_keyspace", nil, nil, myproto.ReplicationPosition{}, sendTransaction)
 
 	go sendMariadbTestEvents(events, input)
 	svm := &sync2.ServiceManager{}

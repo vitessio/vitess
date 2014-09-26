@@ -5,6 +5,7 @@
 package proto
 
 import (
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/key"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
@@ -19,10 +20,12 @@ type KeyRangeRequest struct {
 	Position       myproto.ReplicationPosition
 	KeyspaceIdType key.KeyspaceIdType
 	KeyRange       key.KeyRange
+	Charset        *mproto.Charset
 }
 
 // TablesRequest is used to make a request for StreamTables.
 type TablesRequest struct {
 	Position myproto.ReplicationPosition
 	Tables   []string
+	Charset  *mproto.Charset
 }

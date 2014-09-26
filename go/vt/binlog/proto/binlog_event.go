@@ -5,6 +5,9 @@
 package proto
 
 import (
+	"fmt"
+
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
@@ -62,10 +65,9 @@ type BinlogEvent interface {
 	// the following QUERY_EVENT.
 	// This is only valid if IsGTID() returns true.
 	IsBeginGTID(BinlogFormat) bool
-	// Query returns the database name (or "" if none) and SQL statement for a
-	// QUERY_EVENT.
+	// Query returns a Query struct representing data from a QUERY_EVENT.
 	// This is only valid if IsQuery() returns true.
-	Query(BinlogFormat) (db string, query []byte, err error)
+	Query(BinlogFormat) (Query, error)
 	// IntVar returns the name and value of the variable for an INTVAR_EVENT.
 	// This is only valid if IsIntVar() returns true.
 	IntVar(BinlogFormat) (string, uint64, error)
@@ -89,4 +91,17 @@ type BinlogFormat struct {
 // IsZero returns true if the BinlogFormat has not been initialized.
 func (f BinlogFormat) IsZero() bool {
 	return f.FormatVersion == 0 && f.HeaderLength == 0
+}
+
+// Query contains data from a QUERY_EVENT.
+type Query struct {
+	Database string
+	Charset  *mproto.Charset
+	Sql      []byte
+}
+
+// String pretty-prints a Query.
+func (q Query) String() string {
+	return fmt.Sprintf("{Database: %q, Charset: %v, Sql: %q}",
+		q.Database, q.Charset, string(q.Sql))
 }

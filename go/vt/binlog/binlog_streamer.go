@@ -10,6 +10,7 @@ import (
 	"io"
 
 	log "github.com/golang/glog"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
@@ -59,6 +60,7 @@ type BinlogStreamer struct {
 	// dbname and mysqld are set at creation.
 	dbname          string
 	mysqld          *mysqlctl.Mysqld
+	clientCharset   *mproto.Charset
 	startPos        myproto.ReplicationPosition
 	sendTransaction sendTransactionFunc
 
@@ -69,12 +71,14 @@ type BinlogStreamer struct {
 //
 // dbname specifes the database to stream events for.
 // mysqld is the local instance of mysqlctl.Mysqld.
+// charset is the default character set on the BinlogPlayer side.
 // startPos is the position to start streaming at.
 // sendTransaction is called each time a transaction is committed or rolled back.
-func NewBinlogStreamer(dbname string, mysqld *mysqlctl.Mysqld, startPos myproto.ReplicationPosition, sendTransaction sendTransactionFunc) *BinlogStreamer {
+func NewBinlogStreamer(dbname string, mysqld *mysqlctl.Mysqld, clientCharset *mproto.Charset, startPos myproto.ReplicationPosition, sendTransaction sendTransactionFunc) *BinlogStreamer {
 	return &BinlogStreamer{
 		dbname:          dbname,
 		mysqld:          mysqld,
+		clientCharset:   clientCharset,
 		startPos:        startPos,
 		sendTransaction: sendTransaction,
 	}
@@ -91,19 +95,37 @@ func (bls *BinlogStreamer) Stream(ctx *sync2.ServiceContext) (err error) {
 	}()
 
 	if bls.conn, err = mysqlctl.NewSlaveConnection(bls.mysqld); err != nil {
-		return
+		return err
 	}
 	defer bls.conn.Close()
+
+	// Check that the default charsets match, if the client specified one.
+	// Note that BinlogStreamer uses the settings for the 'dba' user, while
+	// BinlogPlayer uses the 'filtered' user, so those are the ones whose charset
+	// must match. Filtered replication should still succeed even with a default
+	// mismatch, since we pass per-statement charset info. However, Vitess in
+	// general doesn't support servers with different default charsets, so we
+	// treat it as a configuration error.
+	if bls.clientCharset != nil {
+		cs, err := bls.conn.GetCharset()
+		if err != nil {
+			return fmt.Errorf("can't get charset to check binlog stream: %v", err)
+		}
+		log.Infof("binlog stream client charset = %v, server charset = %v", *bls.clientCharset, cs)
+		if cs != *bls.clientCharset {
+			return fmt.Errorf("binlog stream client charset (%v) doesn't match server (%v)", *bls.clientCharset, cs)
+		}
+	}
 
 	var events <-chan proto.BinlogEvent
 	events, err = bls.conn.StartBinlogDump(bls.startPos)
 	if err != nil {
-		return
+		return err
 	}
 	// parseEvents will loop until the events channel is closed, the
 	// service enters the SHUTTING_DOWN state, or an error occurs.
 	stopPos, err = bls.parseEvents(ctx, events)
-	return
+	return err
 }
 
 // parseEvents processes the raw binlog dump stream from the server, one event
@@ -231,11 +253,11 @@ func (bls *BinlogStreamer) parseEvents(ctx *sync2.ServiceContext, events <-chan 
 			})
 		case ev.IsQuery(): // QUERY_EVENT
 			// Extract the query string and group into transactions.
-			db, sql, err := ev.Query(format)
+			q, err := ev.Query(format)
 			if err != nil {
 				return pos, fmt.Errorf("can't get query from binlog event: %v, event data: %#v", err, ev)
 			}
-			switch cat := getStatementCategory(sql); cat {
+			switch cat := getStatementCategory(q.Sql); cat {
 			case proto.BL_BEGIN:
 				begin()
 			case proto.BL_ROLLBACK:
@@ -250,15 +272,23 @@ func (bls *BinlogStreamer) parseEvents(ctx *sync2.ServiceContext, events <-chan 
 					return pos, err
 				}
 			default: // BL_DDL, BL_DML, BL_SET, BL_UNRECOGNIZED
-				if db != "" && db != bls.dbname {
+				if q.Database != "" && q.Database != bls.dbname {
 					// Skip cross-db statements.
 					continue
 				}
-				statements = append(statements, proto.Statement{
+				setTimestamp := proto.Statement{
 					Category: proto.BL_SET,
 					Sql:      []byte(fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp())),
-				})
-				statements = append(statements, proto.Statement{Category: cat, Sql: sql})
+				}
+				statement := proto.Statement{Category: cat, Sql: q.Sql}
+				// If the statement has a charset and it's different than our client's
+				// default charset, send it along with the statement.
+				// If our client hasn't told us its charset, always send it.
+				if bls.clientCharset == nil || (q.Charset != nil && *q.Charset != *bls.clientCharset) {
+					setTimestamp.Charset = q.Charset
+					statement.Charset = q.Charset
+				}
+				statements = append(statements, setTimestamp, statement)
 				if autocommit {
 					if err = commit(ev.Timestamp()); err != nil {
 						return pos, err

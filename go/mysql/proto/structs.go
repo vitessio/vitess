@@ -58,6 +58,14 @@ type QueryResult struct {
 	Rows         [][]sqltypes.Value
 }
 
+// Charset contains the per-statement character set settings that accompany
+// binlog QUERY_EVENT entries.
+type Charset struct {
+	Client int // @@session.character_set_client
+	Conn   int // @@session.collation_connection
+	Server int // @@session.collation_server
+}
+
 // Convert takes a type and a value, and returns the type:
 // - nil for NULL value
 // - int64 for integer number types that fit in 64 bits

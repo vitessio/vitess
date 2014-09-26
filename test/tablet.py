@@ -126,19 +126,19 @@ class Tablet(object):
                 unix_socket=self.tablet_dir + '/mysql.sock',
                 db=dbname)
 
-  def connect(self, dbname='', user='vt_dba'):
-    conn = MySQLdb.Connect(
-        **self.mysql_connection_parameters(dbname, user))
+  def connect(self, dbname='', user='vt_dba', **params):
+    params.update(self.mysql_connection_parameters(dbname, user))
+    conn = MySQLdb.Connect(**params)
     return conn, conn.cursor()
 
-  def connect_dict(self, dbname='', user='vt_dba'):
-    conn = MySQLdb.Connect(
-        **self.mysql_connection_parameters(dbname, user))
+  def connect_dict(self, dbname='', user='vt_dba', **params):
+    params.update(self.mysql_connection_parameters(dbname, user))
+    conn = MySQLdb.Connect(**params)
     return conn, MySQLdb.cursors.DictCursor(conn)
 
   # Query the MySQL instance directly
-  def mquery(self, dbname, query, write=False, user='vt_dba'):
-    conn, cursor = self.connect(dbname, user=user)
+  def mquery(self, dbname, query, write=False, user='vt_dba', conn_params={}):
+    conn, cursor = self.connect(dbname, user=user, **conn_params)
     if write:
       conn.begin()
     if isinstance(query, basestring):
