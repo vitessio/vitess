@@ -12,6 +12,7 @@ import (
 
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 )
 
 // MarshalBson bson-encodes Statement.
@@ -20,6 +21,12 @@ func (statement *Statement) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodeInt(buf, "Category", statement.Category)
+	// *mproto.Charset
+	if statement.Charset == nil {
+		bson.EncodePrefix(buf, bson.Null, "Charset")
+	} else {
+		(*statement.Charset).MarshalBson(buf, "Charset")
+	}
 	bson.EncodeBinary(buf, "Sql", statement.Sql)
 
 	lenWriter.Close()
@@ -41,6 +48,12 @@ func (statement *Statement) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 		switch bson.ReadCString(buf) {
 		case "Category":
 			statement.Category = bson.DecodeInt(buf, kind)
+		case "Charset":
+			// *mproto.Charset
+			if kind != bson.Null {
+				statement.Charset = new(mproto.Charset)
+				(*statement.Charset).UnmarshalBson(buf, kind)
+			}
 		case "Sql":
 			statement.Sql = bson.DecodeBinary(buf, kind)
 		default:

@@ -43,7 +43,7 @@ func NewEventStreamer(dbname string, mysqld *mysqlctl.Mysqld, startPos myproto.R
 	evs := &EventStreamer{
 		sendEvent: sendEvent,
 	}
-	evs.bls = NewBinlogStreamer(dbname, mysqld, startPos, evs.transactionToEvent)
+	evs.bls = NewBinlogStreamer(dbname, mysqld, nil, startPos, evs.transactionToEvent)
 	return evs
 }
 

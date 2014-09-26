@@ -83,9 +83,11 @@ type BinlogPlayer struct {
 	tables []string
 
 	// common to all
-	blpPos       proto.BlpPosition
-	stopPosition myproto.ReplicationPosition
-	blplStats    *BinlogPlayerStats
+	blpPos         proto.BlpPosition
+	stopPosition   myproto.ReplicationPosition
+	blplStats      *BinlogPlayerStats
+	defaultCharset mproto.Charset
+	currentCharset mproto.Charset
 }
 
 // NewBinlogPlayerKeyRange returns a new BinlogPlayer pointing at the server
@@ -177,7 +179,30 @@ func (blp *BinlogPlayer) processTransaction(tx *proto.BinlogTransaction) (ok boo
 	if err = blp.writeRecoveryPosition(tx); err != nil {
 		return false, err
 	}
-	for _, stmt := range tx.Statements {
+	for i, stmt := range tx.Statements {
+		// Make sure the statement is replayed in the proper charset.
+		if dbClient, ok := blp.dbClient.(*DBClient); ok {
+			var stmtCharset mproto.Charset
+			if stmt.Charset != nil {
+				stmtCharset = *stmt.Charset
+			} else {
+				// BinlogStreamer sends a nil Charset for statements that use the
+				// charset we specified in the request.
+				stmtCharset = blp.defaultCharset
+			}
+			if blp.currentCharset != stmtCharset {
+				// In regular MySQL replication, the charset is silently adjusted as
+				// needed during event playback. Here we also adjust so that playback
+				// proceeds, but in Vitess-land this usually means a misconfigured
+				// server or a misbehaving client, so we spam the logs with warnings.
+				log.Warningf("BinlogPlayer changing charset from %v to %v for statement %d in transaction %v", blp.currentCharset, stmtCharset, i, *tx)
+				err = dbClient.dbConn.SetCharset(stmtCharset)
+				if err != nil {
+					return false, fmt.Errorf("can't set charset for statement %d in transaction %v: %v", i, *tx, err)
+				}
+				blp.currentCharset = stmtCharset
+			}
+		}
 		if _, err = blp.exec(string(stmt.Sql)); err == nil {
 			continue
 		}
@@ -255,12 +280,32 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 	}
 	defer blplClient.Close()
 
+	// Get the current charset of our connection, so we can ask the stream server
+	// to check that they match. The streamer will also only send per-statement
+	// charset data if that statement's charset is different from what we specify.
+	if dbClient, ok := blp.dbClient.(*DBClient); ok {
+		blp.defaultCharset, err = dbClient.dbConn.GetCharset()
+		if err != nil {
+			return fmt.Errorf("can't get charset to request binlog stream: %v", err)
+		}
+		log.Infof("original charset: %v", blp.defaultCharset)
+		blp.currentCharset = blp.defaultCharset
+		// Restore original charset when we're done.
+		defer func() {
+			log.Infof("restoring original charset %v", blp.defaultCharset)
+			if csErr := dbClient.dbConn.SetCharset(blp.defaultCharset); csErr != nil {
+				log.Errorf("can't restore original charset %v: %v", blp.defaultCharset, csErr)
+			}
+		}()
+	}
+
 	responseChan := make(chan *proto.BinlogTransaction)
 	var resp BinlogPlayerResponse
 	if len(blp.tables) > 0 {
 		req := &proto.TablesRequest{
 			Tables:   blp.tables,
 			Position: blp.blpPos.Position,
+			Charset:  &blp.defaultCharset,
 		}
 		resp = blplClient.StreamTables(req, responseChan)
 	} else {
@@ -268,6 +313,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 			KeyspaceIdType: blp.keyspaceIdType,
 			KeyRange:       blp.keyRange,
 			Position:       blp.blpPos.Position,
+			Charset:        &blp.defaultCharset,
 		}
 		resp = blplClient.StreamKeyRange(req, responseChan)
 	}
