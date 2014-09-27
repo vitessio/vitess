@@ -4,6 +4,7 @@
 
 import logging
 import time
+import traceback
 
 from vtdb import cursor
 from vtdb import dbapi
@@ -23,13 +24,13 @@ def register_conn_class(protocol, c):
   vtclient_conn_classes[protocol] = c
 
 
-def get_vt_connection_params_list(topo_client, keyspace, shard, db_type, timeout, encrypted, user, password, vtgate_protocol, vtgate_addrs):
+def get_vt_connection_params_list(topo_client, keyspace, shard, db_type, deadline, socket_timeout, encrypted, user, password, vtgate_protocol, vtgate_addrs):
   if vtgate_protocol != 'v0':
     if vtgate_addrs is None:
       return {}
-    return topo_utils.get_db_params_for_vtgate_conn(vtgate_addrs, keyspace, shard, db_type, timeout, encrypted, user, password)
+    return topo_utils.get_db_params_for_vtgate_conn(vtgate_addrs, keyspace, shard, db_type, deadline, socket_timeout, encrypted, user, password)
 
-  return topo_utils.get_db_params_for_tablet_conn(topo_client, keyspace, shard, db_type, timeout, encrypted, user, password)
+  return topo_utils.get_db_params_for_tablet_conn(topo_client, keyspace, shard, db_type, deadline, socket_timeout, encrypted, user, password)
 
 
 def reconnect(method):
@@ -66,12 +67,13 @@ def reconnect(method):
 class VtOCCConnection(object):
   cursorclass = cursor.TabletCursor
 
-  def __init__(self, zkocc_client, keyspace, shard, db_type, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None, vtgate_protocol='v0', vtgate_addrs=None):
+  def __init__(self, zkocc_client, keyspace, shard, db_type, deadline, socket_timeout=1, user=None, password=None, encrypted=False, keyfile=None, certfile=None, vtgate_protocol='v0', vtgate_addrs=None):
     self.zkocc_client = zkocc_client
     self.keyspace = keyspace
     self.shard = str(shard)
     self.db_type = db_type
-    self.timeout = timeout
+    self.deadline = deadline
+    self.socket_timeout = socket_timeout
     self.user = user
     self.password = password
     self.encrypted = encrypted
@@ -104,7 +106,7 @@ class VtOCCConnection(object):
 
   def _connect(self):
     db_key = "%s.%s.%s" % (self.keyspace, self.shard, self.db_type)
-    db_params_list = get_vt_connection_params_list(self.zkocc_client, self.keyspace, self.shard, self.db_type, self.timeout, self.encrypted, self.user, self.password, self.vtgate_protocol, self.vtgate_addrs)
+    db_params_list = get_vt_connection_params_list(self.zkocc_client, self.keyspace, self.shard, self.db_type, self.deadline, self.socket_timeout, self.encrypted, self.user, self.password, self.vtgate_protocol, self.vtgate_addrs)
     if not db_params_list:
       # no valid end-points were found, re-read the keyspace
       self.resolve_topology()
@@ -131,7 +133,7 @@ class VtOCCConnection(object):
           self.resolve_topology()
 
     raise dbexceptions.OperationalError(
-      'unable to create vt connection', db_key, host_addr, db_exception)
+      'unable to create vt connection', db_key, host_addr, traceback.format_exc(db_exception))
 
   def cursor(self, cursorclass=None, **kargs):
     return (cursorclass or self.cursorclass)(self, **kargs)

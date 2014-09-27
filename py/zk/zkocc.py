@@ -40,8 +40,8 @@ class ZkOccError(Exception):
 # You probably want to use ZkOccConnection instead.
 class SimpleZkOccConnection(object):
 
-  def __init__(self, addr, timeout, user=None, password=None):
-    self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password)
+  def __init__(self, addr, deadline, socket_timeout=1, user=None, password=None):
+    self.client = bsonrpc.BsonRpcClient(addr, deadline, socket_timeout, user, password)
 
   def dial(self):
     self.client.dial()
@@ -86,8 +86,9 @@ class ZkOccConnection(object):
   max_attempts = 2
 
   # addrs is a comma separated list of server:ip pairs.
-  def __init__(self, addrs, local_cell, timeout, user=None, password=None):
-    self.timeout = timeout
+  def __init__(self, addrs, local_cell, deadline, socket_timeout=1, user=None, password=None):
+    self.socket_timeout = socket_timeout
+    self.deadline = deadline
     self._input_addrs = addrs.split(',')
     random.shuffle(self._input_addrs)
     self.addr_count = len(self._input_addrs)
@@ -123,7 +124,7 @@ class ZkOccConnection(object):
     # try to connect to each server once (this will always work
     # if no auth is used, as then no connection is really established here)
     for i in xrange(self.addr_count):
-      self.simple_conn = SimpleZkOccConnection(self.addrs.next(), self.timeout, self.user, self.password)
+      self.simple_conn = SimpleZkOccConnection(self.addrs.next(), self.deadline, self.socket_timeout, self.user, self.password)
       try:
         self.simple_conn.dial()
         return

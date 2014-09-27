@@ -15,28 +15,30 @@ class VTConnParams(object):
   shard = None
   db_type = None
   addr = None
-  timeout = 0
+  deadline = 0
+  socket_timeout = 0
   encrypted = False
   user = None
   password = None
 
-  def __init__(self, keyspace_name, shard, db_type, addr, timeout, encrypted, user, password):
+  def __init__(self, keyspace_name, shard, db_type, addr, deadline, socket_timeout, encrypted, user, password):
     self.keyspace = keyspace_name
     self.shard = shard
     self.tablet_type = db_type
     self.addr = addr
-    self.timeout = timeout
+    self.deadline = deadline
+    self.socket_timeout = socket_timeout
     self.encrypted = encrypted
     self.user = user
     self.password = password
 
 
-def get_db_params_for_vtgate_conn(vtgate_addrs, keyspace_name, shard, db_type, timeout, encrypted, user, password):
+def get_db_params_for_vtgate_conn(vtgate_addrs, keyspace_name, shard, db_type, deadline, socket_timeout, encrypted, user, password):
   db_params_list = []
   if isinstance(vtgate_addrs, list):
     random.shuffle(vtgate_addrs)
     for addr in vtgate_addrs:
-      vt_params = VTConnParams(keyspace_name, shard, db_type, addr, timeout, encrypted, user, password).__dict__
+      vt_params = VTConnParams(keyspace_name, shard, db_type, addr, deadline, socket_timeout, encrypted, user, password).__dict__
       db_params_list.append(vt_params)
   elif isinstance(vtgate_addrs, dict):
     service = '_vt'
@@ -47,12 +49,12 @@ def get_db_params_for_vtgate_conn(vtgate_addrs, keyspace_name, shard, db_type, t
     addrs = vtgate_addrs[service]
     random.shuffle(addrs)
     for addr in addrs:
-      vt_params = VTConnParams(keyspace_name, shard, db_type, addr, timeout, encrypted, user, password).__dict__
+      vt_params = VTConnParams(keyspace_name, shard, db_type, addr, deadline, socket_timeout, encrypted, user, password).__dict__
       db_params_list.append(vt_params)
   return db_params_list
 
 
-def get_db_params_for_tablet_conn(topo_client, keyspace_name, shard, db_type, timeout, encrypted, user, password):
+def get_db_params_for_tablet_conn(topo_client, keyspace_name, shard, db_type, deadline, socket_timeout, encrypted, user, password):
   db_params_list = []
   encrypted_service = '_vts'
   if encrypted:
@@ -104,6 +106,6 @@ def get_db_params_for_tablet_conn(topo_client, keyspace_name, shard, db_type, ti
 
 
   for host, port, encrypted in end_points_list:
-    vt_params = VTConnParams(keyspace_name, shard, db_type, "%s:%s" % (host, port), timeout, encrypted, user, password).__dict__
+    vt_params = VTConnParams(keyspace_name, shard, db_type, "%s:%s" % (host, port), deadline, socket_timeout, encrypted, user, password).__dict__
     db_params_list.append(vt_params)
   return db_params_list
