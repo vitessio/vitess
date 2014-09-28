@@ -130,6 +130,22 @@ func (client *GoRpcTabletManagerConn) ReloadSchema(tablet *topo.TabletInfo, wait
 	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_RELOAD_SCHEMA, "", &noOutput, waitTime)
 }
 
+func (client *GoRpcTabletManagerConn) PreflightSchema(tablet *topo.TabletInfo, change string, waitTime time.Duration) (*myproto.SchemaChangeResult, error) {
+	var scr myproto.SchemaChangeResult
+	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_PREFLIGHT_SCHEMA, change, &scr, waitTime); err != nil {
+		return nil, err
+	}
+	return &scr, nil
+}
+
+func (client *GoRpcTabletManagerConn) ApplySchema(tablet *topo.TabletInfo, change *myproto.SchemaChange, waitTime time.Duration) (*myproto.SchemaChangeResult, error) {
+	var scr myproto.SchemaChangeResult
+	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_APPLY_SCHEMA, change, &scr, waitTime); err != nil {
+		return nil, err
+	}
+	return &scr, nil
+}
+
 func (client *GoRpcTabletManagerConn) ExecuteFetch(tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs bool, waitTime time.Duration) (*mproto.QueryResult, error) {
 	var qr mproto.QueryResult
 	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_EXECUTE_FETCH, &gorpcproto.ExecuteFetchArgs{Query: query, MaxRows: maxRows, WantFields: wantFields, DisableBinlogs: disableBinlogs}, &qr, waitTime); err != nil {

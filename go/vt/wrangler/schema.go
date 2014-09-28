@@ -180,29 +180,20 @@ func (wr *Wrangler) ValidateSchemaKeyspace(keyspace string, excludeTables []stri
 
 // PreflightSchema will try a schema change on the remote tablet.
 func (wr *Wrangler) PreflightSchema(tabletAlias topo.TabletAlias, change string) (*myproto.SchemaChangeResult, error) {
-	actionPath, err := wr.ai.PreflightSchema(tabletAlias, change)
+	ti, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return nil, err
 	}
-
-	result, err := wr.WaitForCompletionReply(actionPath)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*myproto.SchemaChangeResult), nil
+	return wr.ai.PreflightSchema(ti, change, wr.ActionTimeout())
 }
 
 // ApplySchema will apply a schema change on the remote tablet.
 func (wr *Wrangler) ApplySchema(tabletAlias topo.TabletAlias, sc *myproto.SchemaChange) (*myproto.SchemaChangeResult, error) {
-	actionPath, err := wr.ai.ApplySchema(tabletAlias, sc)
-
-	// the timeout is for the entire action, so it might be too big
-	// for an individual tablet
-	results, err := wr.WaitForCompletionReply(actionPath)
+	ti, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return nil, err
 	}
-	return results.(*myproto.SchemaChangeResult), nil
+	return wr.ai.ApplySchema(ti, sc, wr.ActionTimeout())
 }
 
 // Note for 'complex' mode (the 'simple' mode is easy enough that we

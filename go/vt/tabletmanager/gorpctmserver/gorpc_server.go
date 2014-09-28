@@ -115,6 +115,26 @@ func (tm *TabletManager) ReloadSchema(context *rpcproto.Context, args *rpc.Unuse
 	})
 }
 
+func (tm *TabletManager) PreflightSchema(context *rpcproto.Context, args *string, reply *myproto.SchemaChangeResult) error {
+	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_PREFLIGHT_SCHEMA, args, reply, true, func() error {
+		scr, err := tm.agent.PreflightSchema(*args)
+		if err == nil {
+			*reply = *scr
+		}
+		return err
+	})
+}
+
+func (tm *TabletManager) ApplySchema(context *rpcproto.Context, args *myproto.SchemaChange, reply *myproto.SchemaChangeResult) error {
+	return tm.agent.RpcWrapLockActionSchema(context.RemoteAddr, actionnode.TABLET_ACTION_APPLY_SCHEMA, args, reply, true, func() error {
+		scr, err := tm.agent.ApplySchema(args)
+		if err == nil {
+			*reply = *scr
+		}
+		return err
+	})
+}
+
 func (tm *TabletManager) ExecuteFetch(context *rpcproto.Context, args *gorpcproto.ExecuteFetchArgs, reply *mproto.QueryResult) error {
 	return tm.agent.RpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_EXECUTE_FETCH, args, reply, func() error {
 		qr, err := tm.agent.ExecuteFetch(args.Query, args.MaxRows, args.WantFields, args.DisableBinlogs)

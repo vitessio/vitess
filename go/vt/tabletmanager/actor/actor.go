@@ -29,7 +29,6 @@ import (
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/initiator"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -179,10 +178,6 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 		err = ta.reserveForRestore(actionNode)
 	case actionnode.TABLET_ACTION_RESTORE:
 		err = ta.restore(actionNode)
-	case actionnode.TABLET_ACTION_PREFLIGHT_SCHEMA:
-		err = ta.preflightSchema(actionNode)
-	case actionnode.TABLET_ACTION_APPLY_SCHEMA:
-		err = ta.applySchema(actionNode)
 	case actionnode.TABLET_ACTION_SNAPSHOT:
 		err = ta.snapshot(actionNode)
 	case actionnode.TABLET_ACTION_SNAPSHOT_SOURCE_END:
@@ -196,6 +191,8 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 		actionnode.TABLET_ACTION_SLEEP,
 		actionnode.TABLET_ACTION_GET_SCHEMA,
 		actionnode.TABLET_ACTION_RELOAD_SCHEMA,
+		actionnode.TABLET_ACTION_PREFLIGHT_SCHEMA,
+		actionnode.TABLET_ACTION_APPLY_SCHEMA,
 		actionnode.TABLET_ACTION_GET_PERMISSIONS,
 		actionnode.TABLET_ACTION_SLAVE_STATUS,
 		actionnode.TABLET_ACTION_WAIT_SLAVE_POSITION,
@@ -241,42 +238,6 @@ func StoreActionResponse(ts topo.Server, actionNode *actionnode.ActionNode, acti
 	// In the error case, this node will be left behind to debug.
 	data := actionNode.ToJson()
 	return ts.StoreTabletActionResponse(actionPath, data)
-}
-
-func (ta *TabletActor) preflightSchema(actionNode *actionnode.ActionNode) error {
-	change := actionNode.Args.(*string)
-
-	// read the tablet to get the dbname
-	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
-	if err != nil {
-		return err
-	}
-
-	// and preflight the change
-	scr, err := ta.mysqld.PreflightSchemaChange(tablet.DbName(), *change)
-	if err != nil {
-		return err
-	}
-	actionNode.Reply = scr
-	return nil
-}
-
-func (ta *TabletActor) applySchema(actionNode *actionnode.ActionNode) error {
-	sc := actionNode.Args.(*myproto.SchemaChange)
-
-	// read the tablet to get the dbname
-	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
-	if err != nil {
-		return err
-	}
-
-	// and apply the change
-	scr, err := ta.mysqld.ApplySchemaChange(tablet.DbName(), sc)
-	if err != nil {
-		return err
-	}
-	actionNode.Reply = scr
-	return nil
 }
 
 func (ta *TabletActor) hookExtraEnv() map[string]string {

@@ -19,7 +19,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 const (
@@ -119,6 +118,12 @@ const (
 	// ReloadSchema tells the tablet to reload its schema.
 	TABLET_ACTION_RELOAD_SCHEMA = "ReloadSchema"
 
+	// PreflightSchema will check a schema change works
+	TABLET_ACTION_PREFLIGHT_SCHEMA = "PreflightSchema"
+
+	// ApplySchema will actually apply the schema change
+	TABLET_ACTION_APPLY_SCHEMA = "ApplySchema"
+
 	// ExecuteFetch uses the DBA connection pool to run queries.
 	TABLET_ACTION_EXECUTE_FETCH = "ExecuteFetch"
 
@@ -132,9 +137,6 @@ const (
 	// Tablet actions. These are triggered by ActionNode only,
 	// will be documented / converted to RPC soon.
 	//
-
-	TABLET_ACTION_PREFLIGHT_SCHEMA = "PreflightSchema"
-	TABLET_ACTION_APPLY_SCHEMA     = "ApplySchema"
 
 	TABLET_ACTION_SNAPSHOT            = "Snapshot"
 	TABLET_ACTION_SNAPSHOT_SOURCE_END = "SnapshotSourceEnd"
@@ -232,13 +234,6 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	switch node.Action {
 	case TABLET_ACTION_PING:
 
-	case TABLET_ACTION_PREFLIGHT_SCHEMA:
-		node.Args = new(string)
-		node.Reply = &myproto.SchemaChangeResult{}
-	case TABLET_ACTION_APPLY_SCHEMA:
-		node.Args = &myproto.SchemaChange{}
-		node.Reply = &myproto.SchemaChangeResult{}
-
 	case TABLET_ACTION_SNAPSHOT:
 		node.Args = &SnapshotArgs{}
 		node.Reply = &SnapshotReply{}
@@ -282,6 +277,8 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 		TABLET_ACTION_SCRAP,
 		TABLET_ACTION_GET_SCHEMA,
 		TABLET_ACTION_RELOAD_SCHEMA,
+		TABLET_ACTION_PREFLIGHT_SCHEMA,
+		TABLET_ACTION_APPLY_SCHEMA,
 		TABLET_ACTION_EXECUTE_FETCH,
 		TABLET_ACTION_GET_PERMISSIONS,
 		TABLET_ACTION_SLAVE_STATUS,

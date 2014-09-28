@@ -234,12 +234,12 @@ func (ai *ActionInitiator) GetSchema(tablet *topo.TabletInfo, tables, excludeTab
 	return ai.rpc.GetSchema(tablet, tables, excludeTables, includeViews, waitTime)
 }
 
-func (ai *ActionInitiator) PreflightSchema(tabletAlias topo.TabletAlias, change string) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_PREFLIGHT_SCHEMA, Args: &change})
+func (ai *ActionInitiator) PreflightSchema(tablet *topo.TabletInfo, change string, waitTime time.Duration) (*myproto.SchemaChangeResult, error) {
+	return ai.rpc.PreflightSchema(tablet, change, waitTime)
 }
 
-func (ai *ActionInitiator) ApplySchema(tabletAlias topo.TabletAlias, sc *myproto.SchemaChange) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_APPLY_SCHEMA, Args: sc})
+func (ai *ActionInitiator) ApplySchema(tablet *topo.TabletInfo, sc *myproto.SchemaChange, waitTime time.Duration) (*myproto.SchemaChangeResult, error) {
+	return ai.rpc.ApplySchema(tablet, sc, waitTime)
 }
 
 func (ai *ActionInitiator) ReloadSchema(tablet *topo.TabletInfo, waitTime time.Duration) error {

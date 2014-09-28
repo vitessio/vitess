@@ -56,6 +56,12 @@ type TabletManagerConn interface {
 	// ReloadSchema asks the remote tablet to reload its schema
 	ReloadSchema(tablet *topo.TabletInfo, waitTime time.Duration) error
 
+	// PreflightSchema will test a schema change
+	PreflightSchema(tablet *topo.TabletInfo, change string, waitTime time.Duration) (*myproto.SchemaChangeResult, error)
+
+	// ApplySchema will apply a schema change
+	ApplySchema(tablet *topo.TabletInfo, change *myproto.SchemaChange, waitTime time.Duration) (*myproto.SchemaChangeResult, error)
+
 	// ExecuteFetch executes a query remotely using the DBA pool
 	ExecuteFetch(tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs bool, waitTime time.Duration) (*mproto.QueryResult, error)
 

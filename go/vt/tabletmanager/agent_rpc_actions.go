@@ -72,6 +72,24 @@ func (agent *ActionAgent) ExecuteHook(hk *hook.Hook) *hook.HookResult {
 	return hk.Execute()
 }
 
+// PreflightSchema will try out the schema change
+func (agent *ActionAgent) PreflightSchema(change string) (*myproto.SchemaChangeResult, error) {
+	// get the db name from the tablet
+	tablet := agent.Tablet()
+
+	// and preflight the change
+	return agent.Mysqld.PreflightSchemaChange(tablet.DbName(), change)
+}
+
+// ApplySchema will apply a schema change
+func (agent *ActionAgent) ApplySchema(change *myproto.SchemaChange) (*myproto.SchemaChangeResult, error) {
+	// get the db name from the tablet
+	tablet := agent.Tablet()
+
+	// and apply the change
+	return agent.Mysqld.ApplySchemaChange(tablet.DbName(), change)
+}
+
 // ExecuteFetch will execute the given query, possibly disabling binlogs.
 // Should be called under RpcWrap.
 func (agent *ActionAgent) ExecuteFetch(query string, maxrows int, wantFields, disableBinlogs bool) (*proto.QueryResult, error) {
