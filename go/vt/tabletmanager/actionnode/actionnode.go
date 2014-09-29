@@ -29,6 +29,9 @@ const (
 	// of converting them all to RPCs.
 	//
 
+	// Ping checks a tablet is alive
+	TABLET_ACTION_PING = "Ping"
+
 	// Sleep will sleep for a duration (used for tests)
 	TABLET_ACTION_SLEEP = "Sleep"
 
@@ -152,13 +155,6 @@ const (
 	TABLET_ACTION_MULTI_RESTORE = "MultiRestore"
 
 	//
-	// Tablet actions. These are triggered by both RPC and ActionNode,
-	// will be documented / converted to RPC only soon.
-	//
-
-	TABLET_ACTION_PING = "Ping"
-
-	//
 	// Shard actions - involve all tablets in a shard.
 	// These are just descriptive and used for locking / logging.
 	//
@@ -238,8 +234,6 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 
 	// figure out our args and reply types
 	switch node.Action {
-	case TABLET_ACTION_PING:
-
 	case SHARD_ACTION_REPARENT,
 		SHARD_ACTION_EXTERNALLY_REPARENTED,
 		SHARD_ACTION_REBUILD,
@@ -260,7 +254,8 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case SRV_SHARD_ACTION_REBUILD:
 		return nil, fmt.Errorf("locking-only SRV_SHARD action: %v", node.Action)
 
-	case TABLET_ACTION_SLEEP,
+	case TABLET_ACTION_PING,
+		TABLET_ACTION_SLEEP,
 		TABLET_ACTION_EXECUTE_HOOK,
 		TABLET_ACTION_SET_RDONLY,
 		TABLET_ACTION_SET_RDWR,
@@ -303,30 +298,6 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	default:
 		return nil, fmt.Errorf("unrecognized action: %v", node.Action)
 	}
-
-	// decode the args
-	if node.Args != nil {
-		err = decoder.Decode(node.Args)
-	} else {
-		var a interface{}
-		err = decoder.Decode(&a)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	// decode the reply
-	if node.Reply != nil {
-		err = decoder.Decode(node.Reply)
-	} else {
-		var a interface{}
-		err = decoder.Decode(&a)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	return node, nil
 }
 
 // ToJson returns a JSON representation of the object.

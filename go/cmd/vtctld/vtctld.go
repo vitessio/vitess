@@ -401,7 +401,7 @@ func main() {
 			if err != nil {
 				return "", err
 			}
-			return "", wr.ActionInitiator().RpcPing(ti, 10*time.Second)
+			return "", wr.ActionInitiator().Ping(ti, 10*time.Second)
 		})
 
 	actionRepo.RegisterTabletAction("ScrapTablet", acl.ADMIN,

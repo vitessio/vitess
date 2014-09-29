@@ -310,7 +310,7 @@ func (wr *Wrangler) pingMasters(shards []*topo.ShardInfo) error {
 				return
 			}
 
-			if err := wr.ai.RpcPing(ti, wr.ActionTimeout()); err != nil {
+			if err := wr.ai.Ping(ti, wr.ActionTimeout()); err != nil {
 				rec.RecordError(err)
 			} else {
 				log.Infof("%v responded", si.MasterAlias)
@@ -657,7 +657,7 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 	// Now blacklist the table list on the right servers
 	event.DispatchUpdate(ev, "pinging sources tablets so they update their blacklisted tables")
 	if servedType == topo.TYPE_MASTER {
-		if err := wr.ai.RpcPing(sourceMasterTabletInfo, wr.ActionTimeout()); err != nil {
+		if err := wr.ai.Ping(sourceMasterTabletInfo, wr.ActionTimeout()); err != nil {
 			return err
 		}
 	} else {
@@ -693,7 +693,7 @@ func (wr *Wrangler) PingTablesByShard(keyspace, shard string, tabletType topo.Ta
 
 		wg.Add(1)
 		go func(ti *topo.TabletInfo) {
-			if err := wr.ai.RpcPing(ti, wr.ActionTimeout()); err != nil {
+			if err := wr.ai.Ping(ti, wr.ActionTimeout()); err != nil {
 				log.Warningf("PingTablesByShard: failed to ping %v: %v", ti.Alias, err)
 			}
 			wg.Done()

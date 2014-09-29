@@ -106,9 +106,8 @@ class TestTabletManager(unittest.TestCase):
     self.assertEqual(len(query_result['Rows']), 4, "expected 4 rows in vt_select_test: %s" % str(query_result))
     self.assertEqual(len(query_result['Fields']), 2, "expected 2 fields in vt_select_test: %s" % str(query_result))
 
-    # check Pings
+    # check Ping
     utils.run_vtctl(['Ping', tablet_62344.tablet_alias])
-    utils.run_vtctl(['RpcPing', tablet_62344.tablet_alias])
 
     # Quickly check basic actions.
     utils.run_vtctl(['SetReadOnly', tablet_62344.tablet_alias])
@@ -280,7 +279,7 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.create_db('vt_test_keyspace')
     tablet_62344.start_vttablet()
 
-    utils.run_vtctl(['RpcPing', tablet_62344.tablet_alias])
+    utils.run_vtctl(['Ping', tablet_62344.tablet_alias])
 
     # schedule long action in the background, sleep a little bit to make sure
     # it started to run
@@ -293,10 +292,10 @@ class TestTabletManager(unittest.TestCase):
     bg = utils.run_bg(args)
     time.sleep(3)
 
-    # try a frontend RpcPing that should timeout as the tablet is busy
+    # try a frontend Ping that should timeout as the tablet is busy
     # running the other one
     stdout, stderr = utils.run_vtctl(['-wait-time', '3s',
-                                      'RpcPing', tablet_62344.tablet_alias],
+                                      'Ping', tablet_62344.tablet_alias],
                                      expect_fail=True)
     self.assertIn(environment.rpc_timeout_message, stderr)
 

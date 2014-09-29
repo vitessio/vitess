@@ -261,8 +261,8 @@ func (wr *Wrangler) pingTablets(tabletMap map[topo.TabletAlias]*topo.TabletInfo,
 				return
 			}
 
-			if err := wr.ai.RpcPing(tabletInfo, wr.ActionTimeout()); err != nil {
-				results <- vresult{tabletAlias.String(), fmt.Errorf("RpcPing failed: %v %v", err, tabletInfo.Hostname)}
+			if err := wr.ai.Ping(tabletInfo, wr.ActionTimeout()); err != nil {
+				results <- vresult{tabletAlias.String(), fmt.Errorf("Ping failed: %v %v", err, tabletInfo.Hostname)}
 			}
 		}(tabletAlias, tabletInfo)
 	}

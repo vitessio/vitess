@@ -156,11 +156,8 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 	}()
 
 	switch actionNode.Action {
-	case actionnode.TABLET_ACTION_PING:
-		// Just an end-to-end verification that we got the message.
-		err = nil
-
-	case actionnode.TABLET_ACTION_EXECUTE_HOOK,
+	case actionnode.TABLET_ACTION_PING,
+		actionnode.TABLET_ACTION_EXECUTE_HOOK,
 		actionnode.TABLET_ACTION_SET_RDONLY,
 		actionnode.TABLET_ACTION_SET_RDWR,
 		actionnode.TABLET_ACTION_CHANGE_TYPE,
