@@ -13,7 +13,7 @@ const (
 )
 
 // VtRoot returns $VTROOT or tries to guess its value if it's not set.
-// This is the root for the 'vt' distribution, which contains bin/vtaction
+// This is the root for the 'vt' distribution, which contains bin/vttablet
 // for instance.
 func VtRoot() (root string, err error) {
 	if root = os.Getenv("VTROOT"); root != "" {

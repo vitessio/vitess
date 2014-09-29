@@ -38,7 +38,7 @@ import (
 )
 
 var (
-	_ = flag.String("vtaction_binary_path", "", "Full path (including filename) to vtaction binary. If not set, tries VTROOT/bin/vtaction.")
+	_ = flag.String("vtaction_binary_path", "", "(DEPRECATED) Full path (including filename) to vtaction binary. If not set, tries VTROOT/bin/vtaction.")
 )
 
 type tabletChangeItem struct {

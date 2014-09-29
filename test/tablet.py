@@ -388,7 +388,6 @@ class Tablet(object):
 
     The process is also saved in self.proc, so it's easy to kill as well.
     """
-    environment.prog_compile('vtaction')
     args = []
     args.extend(['-tablet-path', self.tablet_alias])
     args.extend(environment.topo_server_flags())

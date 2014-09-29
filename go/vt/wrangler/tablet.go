@@ -178,7 +178,7 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 }
 
 // Change the type of tablet and recompute all necessary derived paths in the
-// serving graph. If force is true, it will bypass the vtaction
+// serving graph. If force is true, it will bypass the RPC action
 // system and make the data change directly, and not run the remote
 // hooks.
 //
@@ -197,7 +197,7 @@ func (wr *Wrangler) ChangeType(tabletAlias topo.TabletAlias, tabletType topo.Tab
 
 // ChangeTypeNoRebuild changes a tablet's type, and returns whether
 // there's a shard that should be rebuilt, along with its cell,
-// keyspace, and shard. If force is true, it will bypass the vtaction
+// keyspace, and shard. If force is true, it will bypass the RPC action
 // system and make the data change directly, and not run the remote
 // hooks.
 //
