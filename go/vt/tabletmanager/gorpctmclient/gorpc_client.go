@@ -301,7 +301,7 @@ func (client *GoRpcTabletManagerConn) BreakSlaves(tablet *topo.TabletInfo, waitT
 // Backup related methods
 //
 
-func (client *GoRpcTabletManagerConn) Snapshot(tablet *topo.TabletInfo, sa *actionnode.SnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, *actionnode.SnapshotReply, initiator.ErrFunc) {
+func (client *GoRpcTabletManagerConn) Snapshot(tablet *topo.TabletInfo, sa *actionnode.SnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, initiator.SnapshotReplyFunc) {
 	logstream := make(chan *logutil.LoggerEvent, 10)
 	rpcstream := make(chan *gorpcproto.SnapshotStreamingReply, 10)
 	result := &actionnode.SnapshotReply{}
@@ -309,8 +309,8 @@ func (client *GoRpcTabletManagerConn) Snapshot(tablet *topo.TabletInfo, sa *acti
 	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), waitTime, nil)
 	if err != nil {
 		close(logstream)
-		return logstream, nil, func() error {
-			return fmt.Errorf("RPC error for %v: %v", tablet.Alias, err)
+		return logstream, func() (*actionnode.SnapshotReply, error) {
+			return nil, fmt.Errorf("RPC error for %v: %v", tablet.Alias, err)
 		}
 	}
 	c := rpcClient.StreamGo("TabletManager.Snapshot", sa, rpcstream)
@@ -326,7 +326,9 @@ func (client *GoRpcTabletManagerConn) Snapshot(tablet *topo.TabletInfo, sa *acti
 		close(logstream)
 		rpcClient.Close()
 	}()
-	return logstream, result, func() error { return c.Error }
+	return logstream, func() (*actionnode.SnapshotReply, error) {
+		return result, c.Error
+	}
 }
 
 func (client *GoRpcTabletManagerConn) SnapshotSourceEnd(tablet *topo.TabletInfo, args *actionnode.SnapshotSourceEndArgs, waitTime time.Duration) error {
@@ -356,7 +358,7 @@ func (client *GoRpcTabletManagerConn) Restore(tablet *topo.TabletInfo, sa *actio
 	}
 }
 
-func (client *GoRpcTabletManagerConn) MultiSnapshot(tablet *topo.TabletInfo, sa *actionnode.MultiSnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, *actionnode.MultiSnapshotReply, initiator.ErrFunc) {
+func (client *GoRpcTabletManagerConn) MultiSnapshot(tablet *topo.TabletInfo, sa *actionnode.MultiSnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, initiator.MultiSnapshotReplyFunc) {
 	logstream := make(chan *logutil.LoggerEvent, 10)
 	rpcstream := make(chan *gorpcproto.MultiSnapshotStreamingReply, 10)
 	result := &actionnode.MultiSnapshotReply{}
@@ -364,8 +366,8 @@ func (client *GoRpcTabletManagerConn) MultiSnapshot(tablet *topo.TabletInfo, sa 
 	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), waitTime, nil)
 	if err != nil {
 		close(logstream)
-		return logstream, nil, func() error {
-			return fmt.Errorf("RPC error for %v: %v", tablet.Alias, err)
+		return logstream, func() (*actionnode.MultiSnapshotReply, error) {
+			return nil, fmt.Errorf("RPC error for %v: %v", tablet.Alias, err)
 		}
 	}
 	c := rpcClient.StreamGo("TabletManager.MultiSnapshot", sa, rpcstream)
@@ -381,7 +383,9 @@ func (client *GoRpcTabletManagerConn) MultiSnapshot(tablet *topo.TabletInfo, sa 
 		close(logstream)
 		rpcClient.Close()
 	}()
-	return logstream, result, func() error { return c.Error }
+	return logstream, func() (*actionnode.MultiSnapshotReply, error) {
+		return result, c.Error
+	}
 }
 
 func (client *GoRpcTabletManagerConn) MultiRestore(tablet *topo.TabletInfo, sa *actionnode.MultiRestoreArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, initiator.ErrFunc) {

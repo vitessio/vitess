@@ -131,11 +131,12 @@ func (wr *Wrangler) MultiSnapshot(keyRanges []key.KeyRange, tabletAlias topo.Tab
 	}()
 
 	// execute the remote action, log the results, save the error
-	logStream, reply, errFunc := wr.ai.MultiSnapshot(ti, args, wr.ActionTimeout())
+	logStream, errFunc := wr.ai.MultiSnapshot(ti, args, wr.ActionTimeout())
 	for e := range logStream {
 		log.Infof("MultiSnapshot: %v", e)
 	}
-	if err = errFunc(); err != nil {
+	var reply *actionnode.MultiSnapshotReply
+	if reply, err = errFunc(); err != nil {
 		return
 	}
 

@@ -43,11 +43,11 @@ func (wr *Wrangler) Snapshot(tabletAlias topo.TabletAlias, forceMasterSnapshot b
 
 	// execute the remote action, log the results, save the error
 	args := &actionnode.SnapshotArgs{Concurrency: snapshotConcurrency, ServerMode: serverMode}
-	logStream, reply, errFunc := wr.ai.Snapshot(ti, args, wr.ActionTimeout())
+	logStream, errFunc := wr.ai.Snapshot(ti, args, wr.ActionTimeout())
 	for e := range logStream {
 		log.Infof("Snapshot: %v", e)
 	}
-	actionErr := errFunc()
+	reply, actionErr := errFunc()
 
 	// changing the type now
 	newType := originalType

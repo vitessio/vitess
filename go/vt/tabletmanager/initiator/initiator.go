@@ -96,7 +96,7 @@ func (ai *ActionInitiator) Sleep(tablet *topo.TabletInfo, duration, waitTime tim
 	return ai.rpc.Sleep(tablet, duration, waitTime)
 }
 
-func (ai *ActionInitiator) Snapshot(tablet *topo.TabletInfo, args *actionnode.SnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, *actionnode.SnapshotReply, ErrFunc) {
+func (ai *ActionInitiator) Snapshot(tablet *topo.TabletInfo, args *actionnode.SnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, SnapshotReplyFunc) {
 	return ai.rpc.Snapshot(tablet, args, waitTime)
 }
 
@@ -104,7 +104,7 @@ func (ai *ActionInitiator) SnapshotSourceEnd(tablet *topo.TabletInfo, args *acti
 	return ai.rpc.SnapshotSourceEnd(tablet, args, waitTime)
 }
 
-func (ai *ActionInitiator) MultiSnapshot(tablet *topo.TabletInfo, args *actionnode.MultiSnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, *actionnode.MultiSnapshotReply, ErrFunc) {
+func (ai *ActionInitiator) MultiSnapshot(tablet *topo.TabletInfo, args *actionnode.MultiSnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, MultiSnapshotReplyFunc) {
 	return ai.rpc.MultiSnapshot(tablet, args, waitTime)
 }
 

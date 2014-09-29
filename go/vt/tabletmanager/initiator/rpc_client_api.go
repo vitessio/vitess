@@ -17,8 +17,14 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-// ErrFunc is used by streaming RPCs
+// ErrFunc is used by streaming RPCs that don't return a specific result
 type ErrFunc func() error
+
+// SnapshotReplyFunc is used by Snapshot to return result and error
+type SnapshotReplyFunc func() (*actionnode.SnapshotReply, error)
+
+// MultiSnapshotReplyFunc is used by MultiSnapshot to return result and error
+type MultiSnapshotReplyFunc func() (*actionnode.MultiSnapshotReply, error)
 
 // TabletManagerConn defines the interface used to talk to a remote tablet
 type TabletManagerConn interface {
@@ -146,7 +152,7 @@ type TabletManagerConn interface {
 	//
 
 	// Snapshot takes a database snapshot
-	Snapshot(tablet *topo.TabletInfo, sa *actionnode.SnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, *actionnode.SnapshotReply, ErrFunc)
+	Snapshot(tablet *topo.TabletInfo, sa *actionnode.SnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, SnapshotReplyFunc)
 
 	// SnapshotSourceEnd restarts the mysql server
 	SnapshotSourceEnd(tablet *topo.TabletInfo, ssea *actionnode.SnapshotSourceEndArgs, waitTime time.Duration) error
@@ -158,7 +164,7 @@ type TabletManagerConn interface {
 	Restore(tablet *topo.TabletInfo, sa *actionnode.RestoreArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, ErrFunc)
 
 	// MultiSnapshot takes a database snapshot
-	MultiSnapshot(tablet *topo.TabletInfo, sa *actionnode.MultiSnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, *actionnode.MultiSnapshotReply, ErrFunc)
+	MultiSnapshot(tablet *topo.TabletInfo, sa *actionnode.MultiSnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, MultiSnapshotReplyFunc)
 
 	// MultiRestore restores a database snapshot
 	MultiRestore(tablet *topo.TabletInfo, sa *actionnode.MultiRestoreArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, ErrFunc)
