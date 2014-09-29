@@ -1,9 +1,10 @@
 package com.youtube.vitess.vtgate;
 
-import java.math.BigInteger;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.util.Date;
+
+import com.google.common.primitives.UnsignedLong;
 
 /**
  * Represents all field types supported by Vitess and their corresponding types
@@ -20,7 +21,7 @@ public enum FieldType {
 	VT_DOUBLE(5, Double.class),
 	VT_NULL(6, String.class),
 	VT_TIMESTAMP(7, Date.class),
-	VT_LONGLONG(8, BigInteger.class),
+	VT_LONGLONG(8, UnsignedLong.class),
 	VT_INT24(9, Integer.class),
 	VT_DATE(10, Date.class),
 	VT_TIME(11, Date.class),
@@ -80,7 +81,7 @@ public enum FieldType {
 		case VT_FLOAT:
 			return Float.valueOf(s);
 		case VT_LONGLONG:
-			return new BigInteger(s);
+			return UnsignedLong.valueOf(s);
 		case VT_DATETIME:
 		case VT_TIMESTAMP:
 			return new Date(Timestamp.valueOf(s).getTime());

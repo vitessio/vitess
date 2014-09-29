@@ -21,8 +21,8 @@ import com.youtube.vitess.vtgate.Row;
 import com.youtube.vitess.vtgate.VtGate;
 import com.youtube.vitess.vtgate.cursor.Cursor;
 import com.youtube.vitess.vtgate.cursor.StreamCursor;
-import com.youtube.vitess.vtgate.integration.util.Util;
 import com.youtube.vitess.vtgate.integration.util.TestEnv;
+import com.youtube.vitess.vtgate.integration.util.Util;
 
 /**
  * Test cases for streaming queries in VtGate

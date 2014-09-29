@@ -1,5 +1,7 @@
 package com.youtube.vitess.vtgate;
 
+import java.util.Arrays;
+
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -9,7 +11,7 @@ public class QueryBuilderTest {
 	@Test
 	public void testValidQueryWithKeyspaceIds() {
 		String sql = "select 1 from dual";
-		KeyspaceId kid = KeyspaceId.valueOf("someId");
+		KeyspaceId kid = KeyspaceId.valueOf("80");
 		QueryBuilder builder = new QueryBuilder("select 1 from dual",
 				"test_keyspace", "master").withAddedKeyspaceId(kid);
 		Query query = builder.build();
@@ -18,7 +20,8 @@ public class QueryBuilderTest {
 		Assert.assertEquals("master", query.getTabletType());
 		Assert.assertEquals(null, query.getBindVars());
 		Assert.assertEquals(1, query.getKeyspaceIds().size());
-		Assert.assertEquals(kid.getBytes(), query.getKeyspaceIds().get(0));
+		Assert.assertTrue(Arrays.equals(kid.getBytes(), query.getKeyspaceIds()
+				.get(0)));
 		Assert.assertEquals(null, query.getKeyRanges());
 	}
 
@@ -55,7 +58,7 @@ public class QueryBuilderTest {
 	public void testBothKeyspaceIdAndKeyrange() {
 		QueryBuilder builder = new QueryBuilder("select 1 from dual",
 				"test_keyspace", "master").withAddedKeyRange(KeyRange.ALL)
-				.withAddedKeyspaceId(KeyspaceId.valueOf("someId"));
+				.withAddedKeyspaceId(KeyspaceId.valueOf("80"));
 		try {
 			builder.build();
 			Assert.fail("did not raise IllegalStateException");
