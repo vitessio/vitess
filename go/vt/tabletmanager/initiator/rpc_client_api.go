@@ -11,10 +11,14 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/hook"
+	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
+
+// ErrFunc is used by streaming RPCs
+type ErrFunc func() error
 
 // TabletManagerConn defines the interface used to talk to a remote tablet
 type TabletManagerConn interface {
@@ -136,6 +140,13 @@ type TabletManagerConn interface {
 	// BreakSlaves will tinker with the replication stream in a
 	// way that will stop all the slaves.
 	BreakSlaves(tablet *topo.TabletInfo, waitTime time.Duration) error
+
+	//
+	// Backup / restore related methods
+	//
+
+	// Snapshot takes a database snapshot
+	Snapshot(tablet *topo.TabletInfo, sa *actionnode.SnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, *actionnode.SnapshotReply, ErrFunc)
 }
 
 type TabletManagerConnFactory func(topo.Server) TabletManagerConn

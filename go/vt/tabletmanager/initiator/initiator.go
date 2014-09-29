@@ -22,6 +22,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/hook"
+	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -99,8 +100,8 @@ func (ai *ActionInitiator) Sleep(tablet *topo.TabletInfo, duration, waitTime tim
 	return ai.rpc.Sleep(tablet, duration, waitTime)
 }
 
-func (ai *ActionInitiator) Snapshot(tabletAlias topo.TabletAlias, args *actionnode.SnapshotArgs) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_SNAPSHOT, Args: args})
+func (ai *ActionInitiator) Snapshot(tablet *topo.TabletInfo, args *actionnode.SnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, *actionnode.SnapshotReply, ErrFunc) {
+	return ai.rpc.Snapshot(tablet, args, waitTime)
 }
 
 func (ai *ActionInitiator) SnapshotSourceEnd(tabletAlias topo.TabletAlias, args *actionnode.SnapshotSourceEndArgs) (actionPath string, err error) {

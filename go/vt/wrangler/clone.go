@@ -37,26 +37,24 @@ func (wr *Wrangler) Snapshot(tabletAlias topo.TabletAlias, forceMasterSnapshot b
 	} else {
 		err = wr.ChangeType(ti.Alias, topo.TYPE_BACKUP, false)
 	}
-
 	if err != nil {
 		return
 	}
 
-	var actionPath string
-	actionPath, err = wr.ai.Snapshot(tabletAlias, &actionnode.SnapshotArgs{Concurrency: snapshotConcurrency, ServerMode: serverMode})
-	if err != nil {
-		return
+	// execute the remote action, log the results, save the error
+	args := &actionnode.SnapshotArgs{Concurrency: snapshotConcurrency, ServerMode: serverMode}
+	logStream, reply, errFunc := wr.ai.Snapshot(ti, args, wr.ActionTimeout())
+	for e := range logStream {
+		log.Infof("Snapshot: %v", e)
 	}
+	actionErr := errFunc()
 
-	// wait for completion, and save the error
-	results, actionErr := wr.WaitForCompletionReply(actionPath)
-	var reply *actionnode.SnapshotReply
+	// changing the type now
 	newType := originalType
 	if actionErr != nil {
 		log.Errorf("snapshot failed, still restoring tablet type: %v", actionErr)
 		reply = &actionnode.SnapshotReply{}
 	} else {
-		reply = results.(*actionnode.SnapshotReply)
 		if serverMode {
 			log.Infof("server mode specified, switching tablet to snapshot_source mode")
 			newType = topo.TYPE_SNAPSHOT_SOURCE

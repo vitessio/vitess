@@ -6,14 +6,17 @@ package gorpctmserver
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
+	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/hook"
+	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
@@ -327,6 +330,44 @@ func (tm *TabletManager) BreakSlaves(context *rpcproto.Context, args *rpc.Unused
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_BREAK_SLAVES, args, reply, true, func() error {
 		return tm.agent.BreakSlaves()
 	})
+}
+
+// backup related methods
+
+func (tm *TabletManager) Snapshot(context *rpcproto.Context, args *actionnode.SnapshotArgs, sendReply func(interface{}) error) error {
+	// create a logger, send the result back to the caller
+	logger := logutil.NewChannelLogger(10)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		for e := range logger {
+			ssr := &gorpcproto.SnapshotStreamingReply{
+				Log: &e,
+			}
+			// Note we don't interrupt the loop here, as
+			// we still need to flush and finish the
+			// command, even if the channel to the client
+			// has been broken. We'll just keep logging the lines.
+			if err := sendReply(ssr); err != nil {
+				log.Warningf("Cannot send snapshot log line (%v): %v", err, e)
+			}
+		}
+		wg.Done()
+	}()
+
+	sr, err := tm.agent.Snapshot(args, logger)
+	close(logger)
+	wg.Wait()
+	if err != nil {
+		return err
+	}
+	ssr := &gorpcproto.SnapshotStreamingReply{
+		Result: sr,
+	}
+	if err := sendReply(ssr); err != nil {
+		log.Warningf("Cannot send snapshot result %v: %v", *sr, err)
+	}
+	return nil
 }
 
 // registration glue

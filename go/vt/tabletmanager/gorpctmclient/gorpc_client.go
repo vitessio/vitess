@@ -12,6 +12,7 @@ import (
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/hook"
+	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
@@ -294,4 +295,36 @@ func (client *GoRpcTabletManagerConn) SlaveWasRestarted(tablet *topo.TabletInfo,
 func (client *GoRpcTabletManagerConn) BreakSlaves(tablet *topo.TabletInfo, waitTime time.Duration) error {
 	var noOutput rpc.UnusedResponse
 	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_BREAK_SLAVES, "", &noOutput, waitTime)
+}
+
+//
+// Backup related methods
+//
+
+func (client *GoRpcTabletManagerConn) Snapshot(tablet *topo.TabletInfo, sa *actionnode.SnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, *actionnode.SnapshotReply, initiator.ErrFunc) {
+	logstream := make(chan *logutil.LoggerEvent, 10)
+	rpcstream := make(chan *gorpcproto.SnapshotStreamingReply, 10)
+	result := &actionnode.SnapshotReply{}
+
+	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), waitTime, nil)
+	if err != nil {
+		close(logstream)
+		return logstream, nil, func() error {
+			return fmt.Errorf("RPC error for %v: %v", tablet.Alias, err)
+		}
+	}
+	c := rpcClient.StreamGo("TabletManager.Snapshot", sa, rpcstream)
+	go func() {
+		for ssr := range rpcstream {
+			if ssr.Log != nil {
+				logstream <- ssr.Log
+			}
+			if ssr.Result != nil {
+				*result = *ssr.Result
+			}
+		}
+		close(logstream)
+		rpcClient.Close()
+	}()
+	return logstream, result, func() error { return c.Error }
 }

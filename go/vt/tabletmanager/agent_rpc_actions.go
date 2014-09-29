@@ -492,3 +492,33 @@ func (agent *ActionAgent) updateReplicationGraphForPromotedSlave(tablet *topo.Ta
 
 	return nil
 }
+
+//
+// Backup related methods
+//
+
+// Snapshot takes a db snapshot
+func (agent *ActionAgent) Snapshot(args *actionnode.SnapshotArgs, logger logutil.Logger) (*actionnode.SnapshotReply, error) {
+	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+	if tablet.Type != topo.TYPE_BACKUP {
+		return nil, fmt.Errorf("expected backup type, not %v", tablet.Type)
+	}
+
+	filename, slaveStartRequired, readOnly, err := agent.Mysqld.CreateSnapshot(tablet.DbName(), tablet.Addr(), false, args.Concurrency, args.ServerMode, agent.hookExtraEnv())
+	if err != nil {
+		return nil, err
+	}
+
+	sr := &actionnode.SnapshotReply{ManifestPath: filename, SlaveStartRequired: slaveStartRequired, ReadOnly: readOnly}
+	if tablet.Parent.Uid == topo.NO_TABLET {
+		// If this is a master, this will be the new parent.
+		// FIXME(msolomon) this doesn't work in hierarchical replication.
+		sr.ParentAlias = tablet.Alias
+	} else {
+		sr.ParentAlias = tablet.Parent
+	}
+	return sr, nil
+}
