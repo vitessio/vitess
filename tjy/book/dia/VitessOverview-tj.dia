@@ -28,7 +28,7 @@
           <dia:boolean val="false"/>
         </dia:attribute>
         <dia:attribute name="scaling">
-          <dia:real val="0.65492153167724609"/>
+          <dia:real val="0.65492141246795654"/>
         </dia:attribute>
         <dia:attribute name="fitto">
           <dia:boolean val="true"/>
@@ -916,13 +916,13 @@
     </dia:object>
     <dia:object type="Standard - Line" version="0" id="O15">
       <dia:attribute name="obj_pos">
-        <dia:point val="14.34,14.455"/>
+        <dia:point val="15.0167,14.655"/>
       </dia:attribute>
       <dia:attribute name="obj_bb">
-        <dia:rectangle val="8.01809,14.3854;14.4096,18.8396"/>
+        <dia:rectangle val="8.01395,14.5865;15.0852,18.8391"/>
       </dia:attribute>
       <dia:attribute name="conn_endpoints">
-        <dia:point val="14.34,14.455"/>
+        <dia:point val="15.0167,14.655"/>
         <dia:point val="8.11,18.77"/>
       </dia:attribute>
       <dia:attribute name="numcp">
@@ -938,7 +938,7 @@
         <dia:real val="0.5"/>
       </dia:attribute>
       <dia:connections>
-        <dia:connection handle="0" to="O6" connection="8"/>
+        <dia:connection handle="0" to="O6" connection="13"/>
         <dia:connection handle="1" to="O12" connection="2"/>
       </dia:connections>
     </dia:object>
@@ -1043,6 +1043,15 @@
       <dia:attribute name="line_style">
         <dia:enum val="4"/>
       </dia:attribute>
+      <dia:attribute name="start_arrow">
+        <dia:enum val="1"/>
+      </dia:attribute>
+      <dia:attribute name="start_arrow_length">
+        <dia:real val="0.5"/>
+      </dia:attribute>
+      <dia:attribute name="start_arrow_width">
+        <dia:real val="0.5"/>
+      </dia:attribute>
       <dia:connections>
         <dia:connection handle="0" to="O7" connection="4"/>
         <dia:connection handle="1" to="O1" connection="4"/>
@@ -1050,13 +1059,13 @@
     </dia:object>
     <dia:object type="Standard - Line" version="0" id="O20">
       <dia:attribute name="obj_pos">
-        <dia:point val="18.3772,6.6024"/>
+        <dia:point val="18.3771,6.6024"/>
       </dia:attribute>
       <dia:attribute name="obj_bb">
         <dia:rectangle val="17.243,6.54541;18.4341,13.697"/>
       </dia:attribute>
       <dia:attribute name="conn_endpoints">
-        <dia:point val="18.3772,6.6024"/>
+        <dia:point val="18.3771,6.6024"/>
         <dia:point val="17.3,13.64"/>
       </dia:attribute>
       <dia:attribute name="numcp">
@@ -1506,7 +1515,7 @@ MariaDB#</dia:string>
               <dia:real val="0.80000000000000004"/>
             </dia:attribute>
             <dia:attribute name="pos">
-              <dia:point val="13.26,5.80375"/>
+              <dia:point val="13.2599,5.80375"/>
             </dia:attribute>
             <dia:attribute name="color">
               <dia:color val="#000000"/>
@@ -1661,7 +1670,7 @@ MariaDB#</dia:string>
               <dia:real val="0.80000000000000004"/>
             </dia:attribute>
             <dia:attribute name="pos">
-              <dia:point val="18.53,5.79875"/>
+              <dia:point val="18.5299,5.79875"/>
             </dia:attribute>
             <dia:attribute name="color">
               <dia:color val="#000000"/>
