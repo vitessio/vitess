@@ -5,7 +5,6 @@ import java.io.InputStreamReader;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -13,7 +12,6 @@ import java.util.Random;
 import org.junit.Assert;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
@@ -27,24 +25,25 @@ import com.youtube.vitess.vtgate.VtGate;
 public class Util {
 	/**
 	 * Setup MySQL, Vttablet and VtGate instances required for the tests. This
-	 * uses a Python helper script to start and stop instances.
+	 * uses a Python helper script to start and stop instances. Use the setUp
+	 * flag to indicate setUp or teardown.
 	 */
-	public static VtGateParams runVtGate(boolean setUp) throws Exception {
+	public static void setupTestEnv(TestEnv testEnv, boolean setUp)
+			throws Exception {
 		String vtTop = System.getenv("VTTOP");
 		if (vtTop == null) {
 			Assert.fail("VTTOP is not set");
 		}
 
-		VtGateParams params = getParams();
 		List<String> command = new ArrayList<String>();
 		command.add("python");
 		command.add(vtTop + "/test/java_vtgate_test_helper.py");
 		command.add("--shards");
-		command.add(params.getShardNames());
+		command.add(testEnv.getShardNames());
 		command.add("--tablet-config");
-		command.add(params.getTabletConfig());
+		command.add(testEnv.getTabletConfig());
 		command.add("--keyspace");
-		command.add(params.keyspace_name);
+		command.add(testEnv.keyspace);
 		if (setUp) {
 			command.add("setup");
 		} else {
@@ -72,32 +71,30 @@ public class Util {
 					}.getType();
 					Map<String, Integer> map = new Gson().fromJson(line,
 							mapType);
-					params.port = map.get("port");
-					return params;
+					testEnv.port = map.get("port");
 				} catch (JsonSyntaxException e) {
 				}
 			}
+			Assert.fail("setup script failed to parse vtgate port");
 		}
-
-		return null;
 	}
 
-	public static void insertRows(VtGateParams params, int startId, int count)
+	public static void insertRows(TestEnv testEnv, int startId, int count)
 			throws ConnectionException, DatabaseException {
-		insertRows(params, startId, count, new Date());
+		insertRows(testEnv, startId, count, new Date());
 	}
 
-	public static void insertRows(VtGateParams params, int startId, int count,
+	public static void insertRows(TestEnv testEnv, int startId, int count,
 			Date date) throws ConnectionException, DatabaseException {
-		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
+		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
 
 		vtgate.begin();
 		String insertSql = "insert into vtgate_test "
 				+ "(id, name, age, percent, datetime_col, timestamp_col, date_col, time_col, keyspace_id) "
 				+ "values (:id, :name, :age, :percent, :datetime_col, :timestamp_col, :date_col, :time_col, :keyspace_id)";
 		for (int i = startId; i < startId + count; i++) {
-			KeyspaceId kid = params.getAllKeyspaceIds().get(
-					i % params.getAllKeyspaceIds().size());
+			KeyspaceId kid = testEnv.getAllKeyspaceIds().get(
+					i % testEnv.getAllKeyspaceIds().size());
 			Map<String, Object> bindVars = new ImmutableMap.Builder<String, Object>()
 					.put("id", i)
 					.put("name", "name_" + i)
@@ -110,7 +107,7 @@ public class Util {
 					.put("time_col", date)
 					.build();
 			Query query = new QueryBuilder(insertSql,
-					params.keyspace_name, "master")
+					testEnv.keyspace, "master")
 					.withBindVars(bindVars)
 					.withAddedKeyspaceId(kid)
 					.build();
@@ -123,14 +120,14 @@ public class Util {
 	/**
 	 * Insert rows to a specific shard using ExecuteKeyspaceIds
 	 */
-	public static void insertRowsInShard(VtGateParams params, String shardName,
+	public static void insertRowsInShard(TestEnv testEnv, String shardName,
 			int count) throws DatabaseException, ConnectionException {
-		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
+		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
 		vtgate.begin();
 		String insertSql = "insert into vtgate_test "
 				+ "(id, name, keyspace_id) "
 				+ "values (:id, :name, :keyspace_id)";
-		List<KeyspaceId> kids = params.getKeyspaceIds(shardName);
+		List<KeyspaceId> kids = testEnv.getKeyspaceIds(shardName);
 		Random random = new Random();
 		for (int i = 0; i < count; i++) {
 			KeyspaceId kid = kids.get(i % kids.size());
@@ -140,7 +137,7 @@ public class Util {
 					.put("keyspace_id", kid.getId())
 					.build();
 			Query query = new QueryBuilder(insertSql,
-					params.keyspace_name, "master")
+					testEnv.keyspace, "master")
 					.withBindVars(bindVars)
 					.withAddedKeyspaceId(kid)
 					.build();
@@ -150,28 +147,13 @@ public class Util {
 		vtgate.close();
 	}
 
-	public static void truncateTable(VtGateParams params) throws Exception {
-		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
+	public static void truncateTable(TestEnv testEnv) throws Exception {
+		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
 		vtgate.begin();
 		vtgate.execute(new QueryBuilder("delete from vtgate_test",
-				params.keyspace_name, "master").withKeyspaceIds(
-				params.getAllKeyspaceIds()).build());
+				testEnv.keyspace, "master").withKeyspaceIds(
+				testEnv.getAllKeyspaceIds()).build());
 		vtgate.commit();
 		vtgate.close();
-	}
-
-	/**
-	 * Create a VtGate env with two shards
-	 */
-	private static VtGateParams getParams() {
-		Map<String, List<String>> shardKidMap = new HashMap<>();
-		shardKidMap.put("-80",
-				Lists.newArrayList("527875958493693904", "626750931627689502",
-						"345387386794260318"));
-		shardKidMap.put("80-", Lists.newArrayList("9767889778372766922",
-				"9742070682920810358", "10296850775085416642"));
-		VtGateParams env = new VtGateParams(shardKidMap, "test_keyspace");
-		env.addTablet("replica", 1);
-		return env;
 	}
 }

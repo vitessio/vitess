@@ -15,17 +15,17 @@ import com.youtube.vitess.vtgate.KeyspaceId;
  * Helper class to hold the configurations for VtGate setup used in integration
  * tests
  */
-public class VtGateParams {
-	public Map<String, List<String>> shard_kid_map;
+public class TestEnv {
+	public Map<String, List<String>> shardKidMap;
 	public Map<String, Integer> tablets;
-	public String keyspace_name;
+	public String keyspace;
 	public int port;
 	public List<KeyspaceId> kids;
 
-	public VtGateParams(Map<String, List<String>> shard_kid_map,
+	public TestEnv(Map<String, List<String>> shardKidMap,
 			String keyspace_name) {
-		this.shard_kid_map = shard_kid_map;
-		this.keyspace_name = keyspace_name;
+		this.shardKidMap = shardKidMap;
+		this.keyspace = keyspace_name;
 		this.tablets = new HashMap<String, Integer>();
 	}
 
@@ -34,7 +34,7 @@ public class VtGateParams {
 	}
 
 	public String getShardNames() {
-		return StringUtils.join(shard_kid_map.keySet(), ",");
+		return StringUtils.join(shardKidMap.keySet(), ",");
 	}
 
 	public String getTabletConfig() {
@@ -50,7 +50,7 @@ public class VtGateParams {
 		}
 
 		kids = new ArrayList<>();
-		for (List<String> ids : shard_kid_map.values()) {
+		for (List<String> ids : shardKidMap.values()) {
 			for (String id : ids) {
 				kids.add(KeyspaceId.valueOf(UnsignedLong.valueOf(id)));
 			}
@@ -62,7 +62,7 @@ public class VtGateParams {
 	 * Return all keyspaceIds in a specific shard
 	 */
 	public List<KeyspaceId> getKeyspaceIds(String shardName) {
-		List<String> kidsStr = shard_kid_map.get(shardName);
+		List<String> kidsStr = shardKidMap.get(shardName);
 		if (kidsStr != null) {
 			List<KeyspaceId> kids = new ArrayList<>();
 			for (String kid : kidsStr) {

@@ -22,37 +22,37 @@ import com.youtube.vitess.vtgate.VtGate;
 import com.youtube.vitess.vtgate.cursor.Cursor;
 import com.youtube.vitess.vtgate.cursor.StreamCursor;
 import com.youtube.vitess.vtgate.integration.util.Util;
-import com.youtube.vitess.vtgate.integration.util.VtGateParams;
+import com.youtube.vitess.vtgate.integration.util.TestEnv;
 
 /**
  * Test cases for streaming queries in VtGate
  *
  */
 public class StreamingVtGateIT {
-	public static VtGateParams params;
+	public static TestEnv testEnv = VtGateIT.getTestEnv();
 
 	@BeforeClass
 	public static void setUpVtGate() throws Exception {
-		params = Util.runVtGate(true);
+		Util.setupTestEnv(testEnv, true);
 	}
 
 	@AfterClass
 	public static void tearDownVtGate() throws Exception {
-		Util.runVtGate(false);
+		Util.setupTestEnv(testEnv, false);
 	}
 
 	@Before
 	public void truncateTable() throws Exception {
-		Util.truncateTable(params);
+		Util.truncateTable(testEnv);
 	}
 
 	@Test
 	public void testStreamCursorType() throws Exception {
-		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
+		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
 		String selectSql = "select * from vtgate_test";
 		Query allRowsQuery = new QueryBuilder(selectSql,
-				params.keyspace_name, "master").withKeyspaceIds(
-				params.getAllKeyspaceIds()).withStreaming(true).build();
+				testEnv.keyspace, "master").withKeyspaceIds(
+				testEnv.getAllKeyspaceIds()).withStreaming(true).build();
 		Cursor cursor = vtgate.execute(allRowsQuery);
 		Assert.assertEquals(StreamCursor.class, cursor.getClass());
 		vtgate.close();
@@ -65,16 +65,16 @@ public class StreamingVtGateIT {
 	public void testStreamExecuteKeyspaceIds() throws Exception {
 		// Insert 100 rows per shard
 		int rowCount = 100;
-		for (String shardName : params.shard_kid_map.keySet()) {
-			Util.insertRowsInShard(params, shardName, rowCount);
+		for (String shardName : testEnv.shardKidMap.keySet()) {
+			Util.insertRowsInShard(testEnv, shardName, rowCount);
 		}
-		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
-		for (String shardName : params.shard_kid_map.keySet()) {
+		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+		for (String shardName : testEnv.shardKidMap.keySet()) {
 			// Do a self join within each shard
 			String selectSql = "select A.* from vtgate_test A join vtgate_test B";
-			Query query = new QueryBuilder(selectSql, params.keyspace_name,
+			Query query = new QueryBuilder(selectSql, testEnv.keyspace,
 					"master")
-					.withKeyspaceIds(params.getKeyspaceIds(shardName))
+					.withKeyspaceIds(testEnv.getKeyspaceIds(shardName))
 					.withStreaming(true)
 					.build();
 			Cursor cursor = vtgate.execute(query);
@@ -94,17 +94,17 @@ public class StreamingVtGateIT {
 	 */
 	@Test
 	public void testStreamExecuteKeyRanges() throws Exception {
-		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
+		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
 		int rowCount = 100;
-		for (String shardName : params.shard_kid_map.keySet()) {
-			Util.insertRowsInShard(params, shardName, rowCount);
+		for (String shardName : testEnv.shardKidMap.keySet()) {
+			Util.insertRowsInShard(testEnv, shardName, rowCount);
 		}
-		for (String shardName : params.shard_kid_map.keySet()) {
-			List<KeyspaceId> kids = params.getKeyspaceIds(shardName);
+		for (String shardName : testEnv.shardKidMap.keySet()) {
+			List<KeyspaceId> kids = testEnv.getKeyspaceIds(shardName);
 			KeyRange kr = new KeyRange(Collections.min(kids),
 					Collections.max(kids));
 			String selectSql = "select A.* from vtgate_test A join vtgate_test B";
-			Query query = new QueryBuilder(selectSql, params.keyspace_name,
+			Query query = new QueryBuilder(selectSql, testEnv.keyspace,
 					"master").withAddedKeyRange(kr)
 					.withStreaming(true)
 					.build();
@@ -126,17 +126,17 @@ public class StreamingVtGateIT {
 	public void testScatterStreamingQuery() throws Exception {
 		// Insert 100 rows per shard
 		int rowCount = 100;
-		for (String shardName : params.shard_kid_map.keySet()) {
-			Util.insertRowsInShard(params, shardName, rowCount);
+		for (String shardName : testEnv.shardKidMap.keySet()) {
+			Util.insertRowsInShard(testEnv, shardName, rowCount);
 		}
 		// Run a self join query
 		String selectSql = "select A.* from vtgate_test A join vtgate_test B";
-		Query query = new QueryBuilder(selectSql, params.keyspace_name,
+		Query query = new QueryBuilder(selectSql, testEnv.keyspace,
 				"master")
-				.withKeyspaceIds(params.getAllKeyspaceIds())
+				.withKeyspaceIds(testEnv.getAllKeyspaceIds())
 				.withStreaming(true)
 				.build();
-		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
+		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
 		Cursor cursor = vtgate.execute(query);
 		int count = 0;
 		for (Row row : cursor) {
@@ -150,13 +150,13 @@ public class StreamingVtGateIT {
 	@Test
 	@Ignore("currently failing as vtgate doesn't set the error")
 	public void testStreamingWrites() throws Exception {
-		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
+		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
 
 		vtgate.begin();
 		String insertSql = "insert into vtgate_test "
 				+ "(id, name, age, percent, keyspace_id) "
 				+ "values (:id, :name, :age, :percent, :keyspace_id)";
-		KeyspaceId kid = params.getAllKeyspaceIds().get(0);
+		KeyspaceId kid = testEnv.getAllKeyspaceIds().get(0);
 		Map<String, Object> bindVars = new ImmutableMap.Builder<String, Object>()
 				.put("id", 1)
 				.put("name", "name_" + 1)
@@ -165,7 +165,7 @@ public class StreamingVtGateIT {
 				.put("keyspace_id", kid)
 				.build();
 		Query query = new QueryBuilder(insertSql,
-				params.keyspace_name, "master")
+				testEnv.keyspace, "master")
 				.withBindVars(bindVars)
 				.withAddedKeyspaceId(kid)
 				.withStreaming(true)
@@ -180,12 +180,12 @@ public class StreamingVtGateIT {
 	 */
 	@Test
 	public void testNewQueryWhileStreaming() throws Exception {
-		Util.insertRows(params, 1, 10);
-		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
+		Util.insertRows(testEnv, 1, 10);
+		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
 		String selectSql = "select * from vtgate_test";
 		Query query = new QueryBuilder(selectSql,
-				params.keyspace_name, "master").withKeyspaceIds(
-				params.getAllKeyspaceIds()).withStreaming(true).build();
+				testEnv.keyspace, "master").withKeyspaceIds(
+				testEnv.getAllKeyspaceIds()).withStreaming(true).build();
 		vtgate.execute(query);
 		try {
 			vtgate.execute(query);
