@@ -26,6 +26,7 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/initiator"
+	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/topotools/events"
@@ -42,6 +43,12 @@ import (
 // this so there is only one wrapper, and the extra stuff done by the
 // RpcWrapXXX methods will be done internally. Until then, it's safer
 // to have the comment.
+
+// Ping makes sure RPCs work, and refreshes the tablet record.
+// Should be called under RpcWrapLockAction.
+func (agent *ActionAgent) Ping(args string) string {
+	return args
+}
 
 // SetReadOnly makes the mysql instance read-only or read-write
 // Should be called under RpcWrapLockAction.
@@ -82,7 +89,17 @@ func (agent *ActionAgent) ExecuteHook(hk *hook.Hook) *hook.HookResult {
 	return hk.Execute()
 }
 
+// ReloadSchema will reload the schema
+// Should be called under RpcWrapLockAction.
+func (agent *ActionAgent) ReloadSchema() {
+	// This adds a dependency between tabletmanager and tabletserver,
+	// so it's not ideal. But I (alainjobart) think it's better
+	// to have up to date schema in vttablet.
+	tabletserver.ReloadSchema()
+}
+
 // PreflightSchema will try out the schema change
+// Should be called under RpcWrapLockAction.
 func (agent *ActionAgent) PreflightSchema(change string) (*myproto.SchemaChangeResult, error) {
 	// get the db name from the tablet
 	tablet := agent.Tablet()
@@ -92,12 +109,20 @@ func (agent *ActionAgent) PreflightSchema(change string) (*myproto.SchemaChangeR
 }
 
 // ApplySchema will apply a schema change
+// Should be called under RpcWrapLockAction.
 func (agent *ActionAgent) ApplySchema(change *myproto.SchemaChange) (*myproto.SchemaChangeResult, error) {
 	// get the db name from the tablet
 	tablet := agent.Tablet()
 
-	// and apply the change
-	return agent.Mysqld.ApplySchemaChange(tablet.DbName(), change)
+	// apply the change
+	scr, err := agent.Mysqld.ApplySchemaChange(tablet.DbName(), change)
+	if err != nil {
+		return nil, err
+	}
+
+	// and if it worked, reload the schema
+	agent.ReloadSchema()
+	return scr, nil
 }
 
 // ExecuteFetch will execute the given query, possibly disabling binlogs.
@@ -343,7 +368,7 @@ func (agent *ActionAgent) TabletExternallyReparented(actionTimeout time.Duration
 	// release the lock in any case, and run afterAction if necessary
 	err = actionNode.UnlockShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, lockPath, err)
 	if runAfterAction {
-		agent.afterAction("RPC(TabletExternallyReparented)" /*reloadSchema*/, false)
+		agent.afterAction("RPC(TabletExternallyReparented)")
 	}
 	return err
 }
@@ -508,6 +533,7 @@ func (agent *ActionAgent) updateReplicationGraphForPromotedSlave(tablet *topo.Ta
 //
 
 // Snapshot takes a db snapshot
+// Should be called under RpcWrapLockAction.
 func (agent *ActionAgent) Snapshot(args *actionnode.SnapshotArgs, logger logutil.Logger) (*actionnode.SnapshotReply, error) {
 	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
 	if err != nil {
@@ -533,6 +559,9 @@ func (agent *ActionAgent) Snapshot(args *actionnode.SnapshotArgs, logger logutil
 	return sr, nil
 }
 
+// SnapshotSourceEnd restores the state of the server after a
+// Snapshot(server_mode =true)
+// Should be called under RpcWrapLockAction.
 func (agent *ActionAgent) SnapshotSourceEnd(args *actionnode.SnapshotSourceEndArgs) error {
 	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
 	if err != nil {
@@ -574,6 +603,9 @@ func (agent *ActionAgent) changeTypeToRestore(tablet, sourceTablet *topo.TabletI
 	return topo.CreateTabletReplicationData(agent.TopoServer, tablet.Tablet)
 }
 
+// ReserveForRestore reserves the current tablet for an upcoming
+// restore operation.
+// Should be called under RpcWrapLockAction.
 func (agent *ActionAgent) ReserveForRestore(args *actionnode.ReserveForRestoreArgs) error {
 	// first check mysql, no need to go further if we can't restore
 	if err := agent.Mysqld.ValidateCloneTarget(agent.hookExtraEnv()); err != nil {
@@ -634,6 +666,7 @@ func fetchAndParseJsonFile(addr, filename string, result interface{}) error {
 // Load the snapshot from source tablet.
 // Restart mysqld and replication.
 // Put tablet into the replication graph as a spare.
+// Should be called under RpcWrapLockAction.
 func (agent *ActionAgent) Restore(args *actionnode.RestoreArgs, logger logutil.Logger) error {
 	// read our current tablet, verify its state
 	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
@@ -689,10 +722,15 @@ func (agent *ActionAgent) Restore(args *actionnode.RestoreArgs, logger logutil.L
 		return err
 	}
 
+	// reload the schema
+	agent.ReloadSchema()
+
 	// change to TYPE_SPARE, we're done!
 	return topotools.ChangeType(agent.TopoServer, agent.TabletAlias, topo.TYPE_SPARE, nil, true)
 }
 
+// MultiSnapshot takes a multi-part snapshot
+// Should be called under RpcWrapLockAction.
 func (agent *ActionAgent) MultiSnapshot(args *actionnode.MultiSnapshotArgs, logger logutil.Logger) (*actionnode.MultiSnapshotReply, error) {
 	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
 	if err != nil {
@@ -723,6 +761,8 @@ func (agent *ActionAgent) MultiSnapshot(args *actionnode.MultiSnapshotArgs, logg
 	return sr, nil
 }
 
+// MultiRestore performs the multi-part restore.
+// Should be called under RpcWrapLockAction.
 func (agent *ActionAgent) MultiRestore(args *actionnode.MultiRestoreArgs, logger logutil.Logger) error {
 	// read our current tablet, verify its state
 	// we only support restoring to the master or active replicas
@@ -804,6 +844,9 @@ func (agent *ActionAgent) MultiRestore(args *actionnode.MultiRestoreArgs, logger
 		}
 		return err
 	}
+
+	// reload the schema
+	agent.ReloadSchema()
 
 	// restart replication
 	if topo.IsSlaveType(originalType) {

@@ -36,8 +36,8 @@ type TabletManager struct {
 //
 
 func (tm *TabletManager) Ping(context *rpcproto.Context, args, reply *string) error {
-	return tm.agent.RpcWrapLockActionSchema(context.RemoteAddr, actionnode.TABLET_ACTION_PING, args, reply, false, func() error {
-		*reply = *args
+	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_PING, args, reply, false, func() error {
+		*reply = tm.agent.Ping(*args)
 		return nil
 	})
 }
@@ -112,8 +112,8 @@ func (tm *TabletManager) Scrap(context *rpcproto.Context, args *rpc.UnusedReques
 }
 
 func (tm *TabletManager) ReloadSchema(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
-	return tm.agent.RpcWrapLockActionSchema(context.RemoteAddr, actionnode.TABLET_ACTION_RELOAD_SCHEMA, args, reply, true, func() error {
-		// no-op, the framework will force the schema reload
+	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_RELOAD_SCHEMA, args, reply, true, func() error {
+		tm.agent.ReloadSchema()
 		return nil
 	})
 }
@@ -129,7 +129,7 @@ func (tm *TabletManager) PreflightSchema(context *rpcproto.Context, args *string
 }
 
 func (tm *TabletManager) ApplySchema(context *rpcproto.Context, args *myproto.SchemaChange, reply *myproto.SchemaChangeResult) error {
-	return tm.agent.RpcWrapLockActionSchema(context.RemoteAddr, actionnode.TABLET_ACTION_APPLY_SCHEMA, args, reply, true, func() error {
+	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_APPLY_SCHEMA, args, reply, true, func() error {
 		scr, err := tm.agent.ApplySchema(args)
 		if err == nil {
 			*reply = *scr

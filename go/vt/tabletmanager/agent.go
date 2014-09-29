@@ -296,13 +296,13 @@ func (agent *ActionAgent) dispatchAction(actionPath, data string) error {
 	}
 
 	log.Infof("Agent action completed %v %s", actionPath, stdOut)
-	agent.afterAction(actionPath, actionNode.Action == actionnode.TABLET_ACTION_APPLY_SCHEMA)
+	agent.afterAction(actionPath)
 	return nil
 }
 
 // afterAction needs to be run after an action may have changed the current
 // state of the tablet.
-func (agent *ActionAgent) afterAction(context string, reloadSchema bool) {
+func (agent *ActionAgent) afterAction(context string) {
 	log.Infof("Executing post-action change callbacks")
 
 	// Save the old tablet so callbacks can have a better idea of
@@ -320,14 +320,6 @@ func (agent *ActionAgent) afterAction(context string, reloadSchema bool) {
 		}
 
 		agent.runChangeCallback(oldTablet, context)
-	}
-
-	// Maybe invalidate the schema.
-	// This adds a dependency between tabletmanager and tabletserver,
-	// so it's not ideal. But I (alainjobart) think it's better
-	// to have up to date schema in vtocc.
-	if reloadSchema {
-		tabletserver.ReloadSchema()
 	}
 	log.Infof("Done with post-action change callbacks")
 }

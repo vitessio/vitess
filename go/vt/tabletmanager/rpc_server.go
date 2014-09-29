@@ -53,7 +53,7 @@ func (agent *ActionAgent) rpcWrapper(from, name string, args, reply interface{},
 		log.Infof("TabletManager.%v(%v)(from %v): %#v", name, args, from, reply)
 	}
 	if runAfterAction {
-		agent.afterAction("RPC("+name+")", reloadSchema)
+		agent.afterAction("RPC(" + name + ")")
 	}
 	return
 }

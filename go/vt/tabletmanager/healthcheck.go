@@ -199,7 +199,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 	}
 
 	// run the post action callbacks
-	agent.afterAction("healthcheck", false /* reloadSchema */)
+	agent.afterAction("healthcheck")
 }
 
 // terminateHealthChecks is called when we enter lame duck mode.
@@ -236,7 +236,7 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topo.TabletType
 	}
 
 	// Run the post action callbacks (let them shutdown the query service)
-	agent.afterAction("terminatehealthcheck", false /* reloadSchema */)
+	agent.afterAction("terminatehealthcheck")
 }
 
 // rebuildShardIfNeeded will rebuild the serving graph if we need to
