@@ -133,17 +133,23 @@ const (
 	// GetSlaves returns the current set of mysql replication slaves.
 	TABLET_ACTION_GET_SLAVES = "GetSlaves"
 
+	// Snapshot takes a db snapshot
+	TABLET_ACTION_SNAPSHOT = "Snapshot"
+
+	// SnapshotSourceEnd restarts the mysql server
+	TABLET_ACTION_SNAPSHOT_SOURCE_END = "SnapshotSourceEnd"
+
+	// ReserveForRestore will prepare a server for restore
+	TABLET_ACTION_RESERVE_FOR_RESTORE = "ReserveForRestore"
+
 	//
 	// Tablet actions. These are triggered by ActionNode only,
 	// will be documented / converted to RPC soon.
 	//
 
-	TABLET_ACTION_SNAPSHOT            = "Snapshot"
-	TABLET_ACTION_SNAPSHOT_SOURCE_END = "SnapshotSourceEnd"
-	TABLET_ACTION_RESERVE_FOR_RESTORE = "ReserveForRestore"
-	TABLET_ACTION_RESTORE             = "Restore"
-	TABLET_ACTION_MULTI_SNAPSHOT      = "MultiSnapshot"
-	TABLET_ACTION_MULTI_RESTORE       = "MultiRestore"
+	TABLET_ACTION_RESTORE        = "Restore"
+	TABLET_ACTION_MULTI_SNAPSHOT = "MultiSnapshot"
+	TABLET_ACTION_MULTI_RESTORE  = "MultiRestore"
 
 	//
 	// Tablet actions. These are triggered by both RPC and ActionNode,
@@ -234,13 +240,6 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	switch node.Action {
 	case TABLET_ACTION_PING:
 
-	case TABLET_ACTION_SNAPSHOT:
-		node.Args = &SnapshotArgs{}
-		node.Reply = &SnapshotReply{}
-	case TABLET_ACTION_SNAPSHOT_SOURCE_END:
-		node.Args = &SnapshotSourceEndArgs{}
-	case TABLET_ACTION_RESERVE_FOR_RESTORE:
-		node.Args = &ReserveForRestoreArgs{}
 	case TABLET_ACTION_RESTORE:
 		node.Args = &RestoreArgs{}
 	case TABLET_ACTION_MULTI_SNAPSHOT:
@@ -299,7 +298,10 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 		TABLET_ACTION_WAIT_BLP_POSITION,
 		TABLET_ACTION_STOP_BLP,
 		TABLET_ACTION_START_BLP,
-		TABLET_ACTION_RUN_BLP_UNTIL:
+		TABLET_ACTION_RUN_BLP_UNTIL,
+		TABLET_ACTION_SNAPSHOT,
+		TABLET_ACTION_SNAPSHOT_SOURCE_END,
+		TABLET_ACTION_RESERVE_FOR_RESTORE:
 		return nil, fmt.Errorf("rpc-only action: %v", node.Action)
 
 	default:

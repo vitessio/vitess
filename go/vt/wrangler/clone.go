@@ -85,17 +85,13 @@ func (wr *Wrangler) SnapshotSourceEnd(tabletAlias topo.TabletAlias, slaveStartRe
 		return
 	}
 
-	var actionPath string
-	actionPath, err = wr.ai.SnapshotSourceEnd(tabletAlias, &actionnode.SnapshotSourceEndArgs{SlaveStartRequired: slaveStartRequired, ReadOnly: !readWrite})
-	if err != nil {
-		return
+	args := &actionnode.SnapshotSourceEndArgs{
+		SlaveStartRequired: slaveStartRequired,
+		ReadOnly:           !readWrite,
 	}
-
-	// wait for completion, and save the error
-	err = wr.WaitForCompletion(actionPath)
-	if err != nil {
+	if err := wr.ai.SnapshotSourceEnd(ti, args, wr.ActionTimeout()); err != nil {
 		log.Errorf("SnapshotSourceEnd failed (%v), leaving tablet type alone", err)
-		return
+		return err
 	}
 
 	if ti.Tablet.Parent.Uid == topo.NO_TABLET {
@@ -119,13 +115,10 @@ func (wr *Wrangler) ReserveForRestore(srcTabletAlias, dstTabletAlias topo.Tablet
 		return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, dstTabletAlias)
 	}
 
-	var actionPath string
-	actionPath, err = wr.ai.ReserveForRestore(dstTabletAlias, &actionnode.ReserveForRestoreArgs{SrcTabletAlias: srcTabletAlias})
-	if err != nil {
-		return
+	args := &actionnode.ReserveForRestoreArgs{
+		SrcTabletAlias: srcTabletAlias,
 	}
-
-	return wr.WaitForCompletion(actionPath)
+	return wr.ai.ReserveForRestore(tablet, args, wr.ActionTimeout())
 }
 
 func (wr *Wrangler) UnreserveForRestore(dstTabletAlias topo.TabletAlias) (err error) {

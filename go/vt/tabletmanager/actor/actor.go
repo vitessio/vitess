@@ -174,14 +174,8 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 	case actionnode.TABLET_ACTION_PING:
 		// Just an end-to-end verification that we got the message.
 		err = nil
-	case actionnode.TABLET_ACTION_RESERVE_FOR_RESTORE:
-		err = ta.reserveForRestore(actionNode)
 	case actionnode.TABLET_ACTION_RESTORE:
 		err = ta.restore(actionNode)
-	case actionnode.TABLET_ACTION_SNAPSHOT:
-		err = ta.snapshot(actionNode)
-	case actionnode.TABLET_ACTION_SNAPSHOT_SOURCE_END:
-		err = ta.snapshotSourceEnd(actionNode)
 
 	case actionnode.TABLET_ACTION_EXECUTE_HOOK,
 		actionnode.TABLET_ACTION_SET_RDONLY,
@@ -212,7 +206,10 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 		actionnode.TABLET_ACTION_WAIT_BLP_POSITION,
 		actionnode.TABLET_ACTION_STOP_BLP,
 		actionnode.TABLET_ACTION_START_BLP,
-		actionnode.TABLET_ACTION_RUN_BLP_UNTIL:
+		actionnode.TABLET_ACTION_RUN_BLP_UNTIL,
+		actionnode.TABLET_ACTION_SNAPSHOT,
+		actionnode.TABLET_ACTION_SNAPSHOT_SOURCE_END,
+		actionnode.TABLET_ACTION_RESERVE_FOR_RESTORE:
 		err = TabletActorError("Operation " + actionNode.Action + "  only supported as RPC")
 	default:
 		err = TabletActorError("invalid action: " + actionNode.Action)
@@ -242,51 +239,6 @@ func StoreActionResponse(ts topo.Server, actionNode *actionnode.ActionNode, acti
 
 func (ta *TabletActor) hookExtraEnv() map[string]string {
 	return map[string]string{"TABLET_ALIAS": ta.tabletAlias.String()}
-}
-
-// Operate on a backup tablet. Shutdown mysqld and copy the data files aside.
-func (ta *TabletActor) snapshot(actionNode *actionnode.ActionNode) error {
-	args := actionNode.Args.(*actionnode.SnapshotArgs)
-
-	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
-	if err != nil {
-		return err
-	}
-
-	if tablet.Type != topo.TYPE_BACKUP {
-		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.tabletAlias)
-	}
-
-	filename, slaveStartRequired, readOnly, err := ta.mysqld.CreateSnapshot(tablet.DbName(), tablet.Addr(), false, args.Concurrency, args.ServerMode, ta.hookExtraEnv())
-	if err != nil {
-		return err
-	}
-
-	sr := &actionnode.SnapshotReply{ManifestPath: filename, SlaveStartRequired: slaveStartRequired, ReadOnly: readOnly}
-	if tablet.Parent.Uid == topo.NO_TABLET {
-		// If this is a master, this will be the new parent.
-		// FIXME(msolomon) this doesn't work in hierarchical replication.
-		sr.ParentAlias = tablet.Alias
-	} else {
-		sr.ParentAlias = tablet.Parent
-	}
-	actionNode.Reply = sr
-	return nil
-}
-
-func (ta *TabletActor) snapshotSourceEnd(actionNode *actionnode.ActionNode) error {
-	args := actionNode.Args.(*actionnode.SnapshotSourceEndArgs)
-
-	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
-	if err != nil {
-		return err
-	}
-
-	if tablet.Type != topo.TYPE_SNAPSHOT_SOURCE {
-		return fmt.Errorf("expected snapshot_source type, not %v: %v", tablet.Type, ta.tabletAlias)
-	}
-
-	return ta.mysqld.SnapshotSourceEnd(args.SlaveStartRequired, args.ReadOnly, true, ta.hookExtraEnv())
 }
 
 // fetch a json file and parses it
@@ -337,43 +289,6 @@ func (ta *TabletActor) changeTypeToRestore(tablet, sourceTablet *topo.TabletInfo
 
 	// and create the replication graph items
 	return topo.CreateTabletReplicationData(ta.ts, tablet.Tablet)
-}
-
-// Reserve a tablet for restore.
-// Can be called remotely
-func (ta *TabletActor) reserveForRestore(actionNode *actionnode.ActionNode) error {
-	// first check mysql, no need to go further if we can't restore
-	if err := ta.mysqld.ValidateCloneTarget(ta.hookExtraEnv()); err != nil {
-		return err
-	}
-	args := actionNode.Args.(*actionnode.ReserveForRestoreArgs)
-
-	// read our current tablet, verify its state
-	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
-	if err != nil {
-		return err
-	}
-	if tablet.Type != topo.TYPE_IDLE {
-		return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, ta.tabletAlias)
-	}
-
-	// read the source tablet
-	sourceTablet, err := ta.ts.GetTablet(args.SrcTabletAlias)
-	if err != nil {
-		return err
-	}
-
-	// find the parent tablet alias we will be using
-	var parentAlias topo.TabletAlias
-	if sourceTablet.Parent.Uid == topo.NO_TABLET {
-		// If this is a master, this will be the new parent.
-		// FIXME(msolomon) this doesn't work in hierarchical replication.
-		parentAlias = sourceTablet.Alias
-	} else {
-		parentAlias = sourceTablet.Parent
-	}
-
-	return ta.changeTypeToRestore(tablet, sourceTablet, parentAlias, sourceTablet.KeyRange)
 }
 
 // Operate on restore tablet.

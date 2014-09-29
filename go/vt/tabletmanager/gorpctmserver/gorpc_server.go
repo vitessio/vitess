@@ -370,6 +370,18 @@ func (tm *TabletManager) Snapshot(context *rpcproto.Context, args *actionnode.Sn
 	return nil
 }
 
+func (tm *TabletManager) SnapshotSourceEnd(context *rpcproto.Context, args *actionnode.SnapshotSourceEndArgs, reply *rpc.UnusedResponse) error {
+	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SNAPSHOT_SOURCE_END, args, reply, true, func() error {
+		return tm.agent.SnapshotSourceEnd(args)
+	})
+}
+
+func (tm *TabletManager) ReserveForRestore(context *rpcproto.Context, args *actionnode.ReserveForRestoreArgs, reply *rpc.UnusedResponse) error {
+	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_RESERVE_FOR_RESTORE, args, reply, true, func() error {
+		return tm.agent.ReserveForRestore(args)
+	})
+}
+
 // registration glue
 
 func init() {

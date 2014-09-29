@@ -12,6 +12,7 @@ import (
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/hook"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
@@ -521,4 +522,79 @@ func (agent *ActionAgent) Snapshot(args *actionnode.SnapshotArgs, logger logutil
 		sr.ParentAlias = tablet.Parent
 	}
 	return sr, nil
+}
+
+func (agent *ActionAgent) SnapshotSourceEnd(args *actionnode.SnapshotSourceEndArgs) error {
+	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	if err != nil {
+		return err
+	}
+	if tablet.Type != topo.TYPE_SNAPSHOT_SOURCE {
+		return fmt.Errorf("expected snapshot_source type, not %v", tablet.Type)
+	}
+
+	return agent.Mysqld.SnapshotSourceEnd(args.SlaveStartRequired, args.ReadOnly, true, agent.hookExtraEnv())
+}
+
+// change a tablet type to RESTORE and set all the other arguments.
+// from now on, we can go to:
+// - back to IDLE if we don't use the tablet at all (after for instance
+//   a successful ReserveForRestore but a failed Snapshot)
+// - to SCRAP if something in the process on the target host fails
+// - to SPARE if the clone works
+func (agent *ActionAgent) changeTypeToRestore(tablet, sourceTablet *topo.TabletInfo, parentAlias topo.TabletAlias, keyRange key.KeyRange) error {
+	// run the optional preflight_assigned hook
+	hk := hook.NewSimpleHook("preflight_assigned")
+	topotools.ConfigureTabletHook(hk, agent.TabletAlias)
+	if err := hk.ExecuteOptional(); err != nil {
+		return err
+	}
+
+	// change the type
+	tablet.Parent = parentAlias
+	tablet.Keyspace = sourceTablet.Keyspace
+	tablet.Shard = sourceTablet.Shard
+	tablet.Type = topo.TYPE_RESTORE
+	tablet.KeyRange = keyRange
+	tablet.DbNameOverride = sourceTablet.DbNameOverride
+	if err := topo.UpdateTablet(agent.TopoServer, tablet); err != nil {
+		return err
+	}
+
+	// and create the replication graph items
+	return topo.CreateTabletReplicationData(agent.TopoServer, tablet.Tablet)
+}
+
+func (agent *ActionAgent) ReserveForRestore(args *actionnode.ReserveForRestoreArgs) error {
+	// first check mysql, no need to go further if we can't restore
+	if err := agent.Mysqld.ValidateCloneTarget(agent.hookExtraEnv()); err != nil {
+		return err
+	}
+
+	// read our current tablet, verify its state
+	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	if err != nil {
+		return err
+	}
+	if tablet.Type != topo.TYPE_IDLE {
+		return fmt.Errorf("expected idle type, not %v", tablet.Type)
+	}
+
+	// read the source tablet
+	sourceTablet, err := agent.TopoServer.GetTablet(args.SrcTabletAlias)
+	if err != nil {
+		return err
+	}
+
+	// find the parent tablet alias we will be using
+	var parentAlias topo.TabletAlias
+	if sourceTablet.Parent.Uid == topo.NO_TABLET {
+		// If this is a master, this will be the new parent.
+		// FIXME(msolomon) this doesn't work in hierarchical replication.
+		parentAlias = sourceTablet.Alias
+	} else {
+		parentAlias = sourceTablet.Parent
+	}
+
+	return agent.changeTypeToRestore(tablet, sourceTablet, parentAlias, sourceTablet.KeyRange)
 }

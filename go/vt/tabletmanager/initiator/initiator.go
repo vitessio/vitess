@@ -104,8 +104,8 @@ func (ai *ActionInitiator) Snapshot(tablet *topo.TabletInfo, args *actionnode.Sn
 	return ai.rpc.Snapshot(tablet, args, waitTime)
 }
 
-func (ai *ActionInitiator) SnapshotSourceEnd(tabletAlias topo.TabletAlias, args *actionnode.SnapshotSourceEndArgs) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_SNAPSHOT_SOURCE_END, Args: args})
+func (ai *ActionInitiator) SnapshotSourceEnd(tablet *topo.TabletInfo, args *actionnode.SnapshotSourceEndArgs, waitTime time.Duration) error {
+	return ai.rpc.SnapshotSourceEnd(tablet, args, waitTime)
 }
 
 func (ai *ActionInitiator) MultiSnapshot(tabletAlias topo.TabletAlias, args *actionnode.MultiSnapshotArgs) (actionPath string, err error) {
@@ -223,8 +223,8 @@ func (ai *ActionInitiator) RunBlpUntil(tabletAlias topo.TabletAlias, positions *
 	return ai.rpc.RunBlpUntil(tablet, positions, waitTime)
 }
 
-func (ai *ActionInitiator) ReserveForRestore(dstTabletAlias topo.TabletAlias, args *actionnode.ReserveForRestoreArgs) (actionPath string, err error) {
-	return ai.writeTabletAction(dstTabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_RESERVE_FOR_RESTORE, Args: args})
+func (ai *ActionInitiator) ReserveForRestore(tablet *topo.TabletInfo, args *actionnode.ReserveForRestoreArgs, waitTime time.Duration) error {
+	return ai.rpc.ReserveForRestore(tablet, args, waitTime)
 }
 
 func (ai *ActionInitiator) Restore(dstTabletAlias topo.TabletAlias, args *actionnode.RestoreArgs) (actionPath string, err error) {

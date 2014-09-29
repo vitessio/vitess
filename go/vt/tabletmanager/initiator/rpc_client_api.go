@@ -147,6 +147,12 @@ type TabletManagerConn interface {
 
 	// Snapshot takes a database snapshot
 	Snapshot(tablet *topo.TabletInfo, sa *actionnode.SnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, *actionnode.SnapshotReply, ErrFunc)
+
+	// SnapshotSourceEnd restarts the mysql server
+	SnapshotSourceEnd(tablet *topo.TabletInfo, ssea *actionnode.SnapshotSourceEndArgs, waitTime time.Duration) error
+
+	// ReserveForRestore will prepare a server for restore
+	ReserveForRestore(tablet *topo.TabletInfo, rfra *actionnode.ReserveForRestoreArgs, waitTime time.Duration) error
 }
 
 type TabletManagerConnFactory func(topo.Server) TabletManagerConn

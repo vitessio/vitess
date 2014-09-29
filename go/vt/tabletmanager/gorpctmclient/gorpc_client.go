@@ -328,3 +328,13 @@ func (client *GoRpcTabletManagerConn) Snapshot(tablet *topo.TabletInfo, sa *acti
 	}()
 	return logstream, result, func() error { return c.Error }
 }
+
+func (client *GoRpcTabletManagerConn) SnapshotSourceEnd(tablet *topo.TabletInfo, args *actionnode.SnapshotSourceEndArgs, waitTime time.Duration) error {
+	var noOutput rpc.UnusedResponse
+	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_SNAPSHOT_SOURCE_END, args, &noOutput, waitTime)
+}
+
+func (client *GoRpcTabletManagerConn) ReserveForRestore(tablet *topo.TabletInfo, args *actionnode.ReserveForRestoreArgs, waitTime time.Duration) error {
+	var noOutput rpc.UnusedResponse
+	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_RESERVE_FOR_RESTORE, args, &noOutput, waitTime)
+}
