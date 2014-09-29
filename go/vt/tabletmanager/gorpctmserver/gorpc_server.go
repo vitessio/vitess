@@ -335,39 +335,41 @@ func (tm *TabletManager) BreakSlaves(context *rpcproto.Context, args *rpc.Unused
 // backup related methods
 
 func (tm *TabletManager) Snapshot(context *rpcproto.Context, args *actionnode.SnapshotArgs, sendReply func(interface{}) error) error {
-	// create a logger, send the result back to the caller
-	logger := logutil.NewChannelLogger(10)
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		for e := range logger {
-			ssr := &gorpcproto.SnapshotStreamingReply{
-				Log: &e,
+	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SNAPSHOT, args, nil, true, func() error {
+		// create a logger, send the result back to the caller
+		logger := logutil.NewChannelLogger(10)
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			for e := range logger {
+				ssr := &gorpcproto.SnapshotStreamingReply{
+					Log: &e,
+				}
+				// Note we don't interrupt the loop here, as
+				// we still need to flush and finish the
+				// command, even if the channel to the client
+				// has been broken. We'll just keep logging the lines.
+				if err := sendReply(ssr); err != nil {
+					log.Warningf("Cannot send snapshot log line (%v): %v", err, e)
+				}
 			}
-			// Note we don't interrupt the loop here, as
-			// we still need to flush and finish the
-			// command, even if the channel to the client
-			// has been broken. We'll just keep logging the lines.
-			if err := sendReply(ssr); err != nil {
-				log.Warningf("Cannot send snapshot log line (%v): %v", err, e)
-			}
-		}
-		wg.Done()
-	}()
+			wg.Done()
+		}()
 
-	sr, err := tm.agent.Snapshot(args, logger)
-	close(logger)
-	wg.Wait()
-	if err != nil {
-		return err
-	}
-	ssr := &gorpcproto.SnapshotStreamingReply{
-		Result: sr,
-	}
-	if err := sendReply(ssr); err != nil {
-		log.Warningf("Cannot send snapshot result %v: %v", *sr, err)
-	}
-	return nil
+		sr, err := tm.agent.Snapshot(args, logger)
+		close(logger)
+		wg.Wait()
+		if err != nil {
+			return err
+		}
+		ssr := &gorpcproto.SnapshotStreamingReply{
+			Result: sr,
+		}
+		if err := sendReply(ssr); err != nil {
+			log.Warningf("Cannot send snapshot result %v: %v", *sr, err)
+		}
+		return nil
+	})
 }
 
 func (tm *TabletManager) SnapshotSourceEnd(context *rpcproto.Context, args *actionnode.SnapshotSourceEndArgs, reply *rpc.UnusedResponse) error {
@@ -379,6 +381,96 @@ func (tm *TabletManager) SnapshotSourceEnd(context *rpcproto.Context, args *acti
 func (tm *TabletManager) ReserveForRestore(context *rpcproto.Context, args *actionnode.ReserveForRestoreArgs, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_RESERVE_FOR_RESTORE, args, reply, true, func() error {
 		return tm.agent.ReserveForRestore(args)
+	})
+}
+
+func (tm *TabletManager) Restore(context *rpcproto.Context, args *actionnode.RestoreArgs, sendReply func(interface{}) error) error {
+	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_RESTORE, args, nil, true, func() error {
+		// create a logger, send the result back to the caller
+		logger := logutil.NewChannelLogger(10)
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			for e := range logger {
+				// Note we don't interrupt the loop here, as
+				// we still need to flush and finish the
+				// command, even if the channel to the client
+				// has been broken. We'll just keep logging the lines.
+				if err := sendReply(&e); err != nil {
+					log.Warningf("Cannot send snapshot log line (%v): %v", err, e)
+				}
+			}
+			wg.Done()
+		}()
+
+		err := tm.agent.Restore(args, logger)
+		close(logger)
+		wg.Wait()
+		return err
+	})
+}
+
+func (tm *TabletManager) MultiSnapshot(context *rpcproto.Context, args *actionnode.MultiSnapshotArgs, sendReply func(interface{}) error) error {
+	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_MULTI_SNAPSHOT, args, nil, true, func() error {
+		// create a logger, send the result back to the caller
+		logger := logutil.NewChannelLogger(10)
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			for e := range logger {
+				ssr := &gorpcproto.MultiSnapshotStreamingReply{
+					Log: &e,
+				}
+				// Note we don't interrupt the loop here, as
+				// we still need to flush and finish the
+				// command, even if the channel to the client
+				// has been broken. We'll just keep logging the lines.
+				if err := sendReply(ssr); err != nil {
+					log.Warningf("Cannot send snapshot log line (%v): %v", err, e)
+				}
+			}
+			wg.Done()
+		}()
+
+		sr, err := tm.agent.MultiSnapshot(args, logger)
+		close(logger)
+		wg.Wait()
+		if err != nil {
+			return err
+		}
+		ssr := &gorpcproto.MultiSnapshotStreamingReply{
+			Result: sr,
+		}
+		if err := sendReply(ssr); err != nil {
+			log.Warningf("Cannot send snapshot result %v: %v", *sr, err)
+		}
+		return nil
+	})
+}
+
+func (tm *TabletManager) MultiRestore(context *rpcproto.Context, args *actionnode.MultiRestoreArgs, sendReply func(interface{}) error) error {
+	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_MULTI_RESTORE, args, nil, true, func() error {
+		// create a logger, send the result back to the caller
+		logger := logutil.NewChannelLogger(10)
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			for e := range logger {
+				// Note we don't interrupt the loop here, as
+				// we still need to flush and finish the
+				// command, even if the channel to the client
+				// has been broken. We'll just keep logging the lines.
+				if err := sendReply(&e); err != nil {
+					log.Warningf("Cannot send snapshot log line (%v): %v", err, e)
+				}
+			}
+			wg.Done()
+		}()
+
+		err := tm.agent.MultiRestore(args, logger)
+		close(logger)
+		wg.Wait()
+		return err
 	})
 }
 

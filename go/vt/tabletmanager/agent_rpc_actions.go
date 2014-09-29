@@ -5,15 +5,24 @@
 package tabletmanager
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"net/url"
+	"path"
+	"strings"
+	"sync"
 	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/initiator"
@@ -597,4 +606,213 @@ func (agent *ActionAgent) ReserveForRestore(args *actionnode.ReserveForRestoreAr
 	}
 
 	return agent.changeTypeToRestore(tablet, sourceTablet, parentAlias, sourceTablet.KeyRange)
+}
+
+func fetchAndParseJsonFile(addr, filename string, result interface{}) error {
+	// read the manifest
+	murl := "http://" + addr + filename
+	resp, err := http.Get(murl)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("Error fetching url %v: %v", murl, resp.Status)
+	}
+	data, err := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return err
+	}
+
+	// unpack it
+	return json.Unmarshal(data, result)
+}
+
+// Operate on restore tablet.
+// Check that the SnapshotManifest is valid and the master has not changed.
+// Shutdown mysqld.
+// Load the snapshot from source tablet.
+// Restart mysqld and replication.
+// Put tablet into the replication graph as a spare.
+func (agent *ActionAgent) Restore(args *actionnode.RestoreArgs, logger logutil.Logger) error {
+	// read our current tablet, verify its state
+	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	if err != nil {
+		return err
+	}
+	if args.WasReserved {
+		if tablet.Type != topo.TYPE_RESTORE {
+			return fmt.Errorf("expected restore type, not %v", tablet.Type)
+		}
+	} else {
+		if tablet.Type != topo.TYPE_IDLE {
+			return fmt.Errorf("expected idle type, not %v", tablet.Type)
+		}
+	}
+	// read the source tablet, compute args.SrcFilePath if default
+	sourceTablet, err := agent.TopoServer.GetTablet(args.SrcTabletAlias)
+	if err != nil {
+		return err
+	}
+	if strings.ToLower(args.SrcFilePath) == "default" {
+		args.SrcFilePath = path.Join(mysqlctl.SnapshotURLPath, mysqlctl.SnapshotManifestFile)
+	}
+
+	// read the parent tablet, verify its state
+	parentTablet, err := agent.TopoServer.GetTablet(args.ParentAlias)
+	if err != nil {
+		return err
+	}
+	if parentTablet.Type != topo.TYPE_MASTER && parentTablet.Type != topo.TYPE_SNAPSHOT_SOURCE {
+		return fmt.Errorf("restore expected master or snapshot_source parent: %v %v", parentTablet.Type, args.ParentAlias)
+	}
+
+	// read & unpack the manifest
+	sm := new(mysqlctl.SnapshotManifest)
+	if err := fetchAndParseJsonFile(sourceTablet.Addr(), args.SrcFilePath, sm); err != nil {
+		return err
+	}
+
+	if !args.WasReserved {
+		if err := agent.changeTypeToRestore(tablet, sourceTablet, parentTablet.Alias, sourceTablet.KeyRange); err != nil {
+			return err
+		}
+	}
+
+	// do the work
+	if err := agent.Mysqld.RestoreFromSnapshot(sm, args.FetchConcurrency, args.FetchRetryCount, args.DontWaitForSlaveStart, agent.hookExtraEnv()); err != nil {
+		log.Errorf("RestoreFromSnapshot failed (%v), scrapping", err)
+		if err := topotools.Scrap(agent.TopoServer, agent.TabletAlias, false); err != nil {
+			log.Errorf("Failed to Scrap after failed RestoreFromSnapshot: %v", err)
+		}
+
+		return err
+	}
+
+	// change to TYPE_SPARE, we're done!
+	return topotools.ChangeType(agent.TopoServer, agent.TabletAlias, topo.TYPE_SPARE, nil, true)
+}
+
+func (agent *ActionAgent) MultiSnapshot(args *actionnode.MultiSnapshotArgs, logger logutil.Logger) (*actionnode.MultiSnapshotReply, error) {
+	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+	ki, err := agent.TopoServer.GetKeyspace(tablet.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	if tablet.Type != topo.TYPE_BACKUP {
+		return nil, fmt.Errorf("expected backup type, not %v", tablet.Type)
+	}
+
+	filenames, err := agent.Mysqld.CreateMultiSnapshot(args.KeyRanges, tablet.DbName(), ki.ShardingColumnName, ki.ShardingColumnType, tablet.Addr(), false, args.Concurrency, args.Tables, args.ExcludeTables, args.SkipSlaveRestart, args.MaximumFilesize, agent.hookExtraEnv())
+	if err != nil {
+		return nil, err
+	}
+
+	sr := &actionnode.MultiSnapshotReply{ManifestPaths: filenames}
+	if tablet.Parent.Uid == topo.NO_TABLET {
+		// If this is a master, this will be the new parent.
+		// FIXME(msolomon) this doens't work in hierarchical replication.
+		sr.ParentAlias = tablet.Alias
+	} else {
+		sr.ParentAlias = tablet.Parent
+	}
+	return sr, nil
+}
+
+func (agent *ActionAgent) MultiRestore(args *actionnode.MultiRestoreArgs, logger logutil.Logger) error {
+	// read our current tablet, verify its state
+	// we only support restoring to the master or active replicas
+	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	if err != nil {
+		return err
+	}
+	if tablet.Type != topo.TYPE_MASTER && !topo.IsSlaveType(tablet.Type) {
+		return fmt.Errorf("expected master, or slave type, not %v", tablet.Type)
+	}
+	// get source tablets addresses
+	sourceAddrs := make([]*url.URL, len(args.SrcTabletAliases))
+	keyRanges := make([]key.KeyRange, len(args.SrcTabletAliases))
+	fromStoragePaths := make([]string, len(args.SrcTabletAliases))
+	for i, alias := range args.SrcTabletAliases {
+		t, e := agent.TopoServer.GetTablet(alias)
+		if e != nil {
+			return e
+		}
+		sourceAddrs[i] = &url.URL{
+			Host: t.Addr(),
+			Path: "/" + t.DbName(),
+		}
+		keyRanges[i], e = key.KeyRangesOverlap(tablet.KeyRange, t.KeyRange)
+		if e != nil {
+			return e
+		}
+		fromStoragePaths[i] = path.Join(agent.Mysqld.SnapshotDir, "from-storage", fmt.Sprintf("from-%v-%v", keyRanges[i].Start.Hex(), keyRanges[i].End.Hex()))
+	}
+
+	// change type to restore, no change to replication graph
+	originalType := tablet.Type
+	tablet.Type = topo.TYPE_RESTORE
+	err = topo.UpdateTablet(agent.TopoServer, tablet)
+	if err != nil {
+		return err
+	}
+
+	// first try to get the data from a remote storage
+	wg := sync.WaitGroup{}
+	rec := concurrency.AllErrorRecorder{}
+	for i, alias := range args.SrcTabletAliases {
+		wg.Add(1)
+		go func(i int, alias topo.TabletAlias) {
+			defer wg.Done()
+			h := hook.NewSimpleHook("copy_snapshot_from_storage")
+			h.ExtraEnv = make(map[string]string)
+			for k, v := range agent.hookExtraEnv() {
+				h.ExtraEnv[k] = v
+			}
+			h.ExtraEnv["KEYRANGE"] = fmt.Sprintf("%v-%v", keyRanges[i].Start.Hex(), keyRanges[i].End.Hex())
+			h.ExtraEnv["SNAPSHOT_PATH"] = fromStoragePaths[i]
+			h.ExtraEnv["SOURCE_TABLET_ALIAS"] = alias.String()
+			hr := h.Execute()
+			if hr.ExitStatus != hook.HOOK_SUCCESS {
+				rec.RecordError(fmt.Errorf("%v hook failed(%v): %v", h.Name, hr.ExitStatus, hr.Stderr))
+			}
+		}(i, alias)
+	}
+	wg.Wait()
+	// stop replication for slaves, so it doesn't interfere
+	if topo.IsSlaveType(originalType) {
+		if err := agent.Mysqld.StopSlave(map[string]string{"TABLET_ALIAS": tablet.Alias.String()}); err != nil {
+			return err
+		}
+	}
+
+	// run the action, scrap if it fails
+	if rec.HasErrors() {
+		log.Infof("Got errors trying to get snapshots from storage, trying to get them from original tablets: %v", rec.Error())
+		err = agent.Mysqld.MultiRestore(tablet.DbName(), keyRanges, sourceAddrs, nil, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, args.Strategy)
+	} else {
+		log.Infof("Got snapshots from storage, reading them from disk directly")
+		err = agent.Mysqld.MultiRestore(tablet.DbName(), keyRanges, nil, fromStoragePaths, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, args.Strategy)
+	}
+	if err != nil {
+		if e := topotools.Scrap(agent.TopoServer, agent.TabletAlias, false); e != nil {
+			log.Errorf("Failed to Scrap after failed RestoreFromMultiSnapshot: %v", e)
+		}
+		return err
+	}
+
+	// restart replication
+	if topo.IsSlaveType(originalType) {
+		if err := agent.Mysqld.StartSlave(map[string]string{"TABLET_ALIAS": tablet.Alias.String()}); err != nil {
+			return err
+		}
+	}
+
+	// restore type back
+	tablet.Type = originalType
+	return topo.UpdateTablet(agent.TopoServer, tablet)
 }

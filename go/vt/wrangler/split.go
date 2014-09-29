@@ -87,12 +87,11 @@ func (wr *Wrangler) MultiRestore(dstTabletAlias topo.TabletAlias, sources []topo
 		}
 	}()
 
-	actionPath, err := wr.ai.MultiRestore(dstTabletAlias, args)
-	if err != nil {
-		return err
+	logStream, errFunc := wr.ai.MultiRestore(ti, args, wr.ActionTimeout())
+	for e := range logStream {
+		log.Infof("MultiRestore: %v", e)
 	}
-
-	if err := wr.WaitForCompletion(actionPath); err != nil {
+	if err := errFunc(); err != nil {
 		return err
 	}
 
@@ -131,17 +130,14 @@ func (wr *Wrangler) MultiSnapshot(keyRanges []key.KeyRange, tabletAlias topo.Tab
 		err = replaceError(err, restoreAfterSnapshot())
 	}()
 
-	actionPath, err := wr.ai.MultiSnapshot(tabletAlias, args)
-	if err != nil {
+	// execute the remote action, log the results, save the error
+	logStream, reply, errFunc := wr.ai.MultiSnapshot(ti, args, wr.ActionTimeout())
+	for e := range logStream {
+		log.Infof("MultiSnapshot: %v", e)
+	}
+	if err = errFunc(); err != nil {
 		return
 	}
-
-	results, err := wr.WaitForCompletionReply(actionPath)
-	if err != nil {
-		return
-	}
-
-	reply := results.(*actionnode.MultiSnapshotReply)
 
 	event.DispatchUpdate(ev, "finished")
 	return reply.ManifestPaths, reply.ParentAlias, nil

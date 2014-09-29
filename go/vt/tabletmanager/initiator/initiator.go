@@ -108,12 +108,12 @@ func (ai *ActionInitiator) SnapshotSourceEnd(tablet *topo.TabletInfo, args *acti
 	return ai.rpc.SnapshotSourceEnd(tablet, args, waitTime)
 }
 
-func (ai *ActionInitiator) MultiSnapshot(tabletAlias topo.TabletAlias, args *actionnode.MultiSnapshotArgs) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_MULTI_SNAPSHOT, Args: args})
+func (ai *ActionInitiator) MultiSnapshot(tablet *topo.TabletInfo, args *actionnode.MultiSnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, *actionnode.MultiSnapshotReply, ErrFunc) {
+	return ai.rpc.MultiSnapshot(tablet, args, waitTime)
 }
 
-func (ai *ActionInitiator) MultiRestore(tabletAlias topo.TabletAlias, args *actionnode.MultiRestoreArgs) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_MULTI_RESTORE, Args: args})
+func (ai *ActionInitiator) MultiRestore(tablet *topo.TabletInfo, args *actionnode.MultiRestoreArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, ErrFunc) {
+	return ai.rpc.MultiRestore(tablet, args, waitTime)
 }
 
 func (ai *ActionInitiator) BreakSlaves(tablet *topo.TabletInfo, waitTime time.Duration) error {
@@ -227,8 +227,8 @@ func (ai *ActionInitiator) ReserveForRestore(tablet *topo.TabletInfo, args *acti
 	return ai.rpc.ReserveForRestore(tablet, args, waitTime)
 }
 
-func (ai *ActionInitiator) Restore(dstTabletAlias topo.TabletAlias, args *actionnode.RestoreArgs) (actionPath string, err error) {
-	return ai.writeTabletAction(dstTabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_RESTORE, Args: args})
+func (ai *ActionInitiator) Restore(tablet *topo.TabletInfo, args *actionnode.RestoreArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, ErrFunc) {
+	return ai.rpc.Restore(tablet, args, waitTime)
 }
 
 func (ai *ActionInitiator) GetSchema(tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool, waitTime time.Duration) (*myproto.SchemaDefinition, error) {

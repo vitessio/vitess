@@ -165,12 +165,20 @@ func (wr *Wrangler) Restore(srcTabletAlias topo.TabletAlias, srcFilePath string,
 	}
 
 	// do the work
-	actionPath, err := wr.ai.Restore(dstTabletAlias, &actionnode.RestoreArgs{SrcTabletAlias: srcTabletAlias, SrcFilePath: srcFilePath, ParentAlias: parentAlias, FetchConcurrency: fetchConcurrency, FetchRetryCount: fetchRetryCount, WasReserved: wasReserved, DontWaitForSlaveStart: dontWaitForSlaveStart})
-	if err != nil {
-		return err
+	args := &actionnode.RestoreArgs{
+		SrcTabletAlias:        srcTabletAlias,
+		SrcFilePath:           srcFilePath,
+		ParentAlias:           parentAlias,
+		FetchConcurrency:      fetchConcurrency,
+		FetchRetryCount:       fetchRetryCount,
+		WasReserved:           wasReserved,
+		DontWaitForSlaveStart: dontWaitForSlaveStart,
 	}
-
-	if err = wr.WaitForCompletion(actionPath); err != nil {
+	logStream, errFunc := wr.ai.Restore(tablet, args, wr.ActionTimeout())
+	for e := range logStream {
+		log.Infof("Restore: %v", e)
+	}
+	if err := errFunc(); err != nil {
 		return err
 	}
 

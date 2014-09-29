@@ -73,3 +73,8 @@ type SnapshotStreamingReply struct {
 	Log    *logutil.LoggerEvent
 	Result *actionnode.SnapshotReply
 }
+
+type MultiSnapshotStreamingReply struct {
+	Log    *logutil.LoggerEvent
+	Result *actionnode.MultiSnapshotReply
+}

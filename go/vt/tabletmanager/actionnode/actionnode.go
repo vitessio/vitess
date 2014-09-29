@@ -142,14 +142,14 @@ const (
 	// ReserveForRestore will prepare a server for restore
 	TABLET_ACTION_RESERVE_FOR_RESTORE = "ReserveForRestore"
 
-	//
-	// Tablet actions. These are triggered by ActionNode only,
-	// will be documented / converted to RPC soon.
-	//
+	// Restore will restore a backup
+	TABLET_ACTION_RESTORE = "Restore"
 
-	TABLET_ACTION_RESTORE        = "Restore"
+	// MultiSnapshot takes a split snapshot
 	TABLET_ACTION_MULTI_SNAPSHOT = "MultiSnapshot"
-	TABLET_ACTION_MULTI_RESTORE  = "MultiRestore"
+
+	// MultiRestore restores a split snapshot
+	TABLET_ACTION_MULTI_RESTORE = "MultiRestore"
 
 	//
 	// Tablet actions. These are triggered by both RPC and ActionNode,
@@ -240,14 +240,6 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	switch node.Action {
 	case TABLET_ACTION_PING:
 
-	case TABLET_ACTION_RESTORE:
-		node.Args = &RestoreArgs{}
-	case TABLET_ACTION_MULTI_SNAPSHOT:
-		node.Args = &MultiSnapshotArgs{}
-		node.Reply = &MultiSnapshotReply{}
-	case TABLET_ACTION_MULTI_RESTORE:
-		node.Args = &MultiRestoreArgs{}
-
 	case SHARD_ACTION_REPARENT,
 		SHARD_ACTION_EXTERNALLY_REPARENTED,
 		SHARD_ACTION_REBUILD,
@@ -301,7 +293,11 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 		TABLET_ACTION_RUN_BLP_UNTIL,
 		TABLET_ACTION_SNAPSHOT,
 		TABLET_ACTION_SNAPSHOT_SOURCE_END,
-		TABLET_ACTION_RESERVE_FOR_RESTORE:
+		TABLET_ACTION_RESERVE_FOR_RESTORE,
+		TABLET_ACTION_RESTORE,
+		TABLET_ACTION_MULTI_SNAPSHOT,
+		TABLET_ACTION_MULTI_RESTORE:
+
 		return nil, fmt.Errorf("rpc-only action: %v", node.Action)
 
 	default:

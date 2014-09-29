@@ -338,3 +338,65 @@ func (client *GoRpcTabletManagerConn) ReserveForRestore(tablet *topo.TabletInfo,
 	var noOutput rpc.UnusedResponse
 	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_RESERVE_FOR_RESTORE, args, &noOutput, waitTime)
 }
+
+func (client *GoRpcTabletManagerConn) Restore(tablet *topo.TabletInfo, sa *actionnode.RestoreArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, initiator.ErrFunc) {
+	logstream := make(chan *logutil.LoggerEvent, 10)
+
+	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), waitTime, nil)
+	if err != nil {
+		close(logstream)
+		return logstream, func() error {
+			return fmt.Errorf("RPC error for %v: %v", tablet.Alias, err)
+		}
+	}
+	c := rpcClient.StreamGo("TabletManager.Restore", sa, logstream)
+	return logstream, func() error {
+		rpcClient.Close()
+		return c.Error
+	}
+}
+
+func (client *GoRpcTabletManagerConn) MultiSnapshot(tablet *topo.TabletInfo, sa *actionnode.MultiSnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, *actionnode.MultiSnapshotReply, initiator.ErrFunc) {
+	logstream := make(chan *logutil.LoggerEvent, 10)
+	rpcstream := make(chan *gorpcproto.MultiSnapshotStreamingReply, 10)
+	result := &actionnode.MultiSnapshotReply{}
+
+	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), waitTime, nil)
+	if err != nil {
+		close(logstream)
+		return logstream, nil, func() error {
+			return fmt.Errorf("RPC error for %v: %v", tablet.Alias, err)
+		}
+	}
+	c := rpcClient.StreamGo("TabletManager.MultiSnapshot", sa, rpcstream)
+	go func() {
+		for ssr := range rpcstream {
+			if ssr.Log != nil {
+				logstream <- ssr.Log
+			}
+			if ssr.Result != nil {
+				*result = *ssr.Result
+			}
+		}
+		close(logstream)
+		rpcClient.Close()
+	}()
+	return logstream, result, func() error { return c.Error }
+}
+
+func (client *GoRpcTabletManagerConn) MultiRestore(tablet *topo.TabletInfo, sa *actionnode.MultiRestoreArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, initiator.ErrFunc) {
+	logstream := make(chan *logutil.LoggerEvent, 10)
+
+	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), waitTime, nil)
+	if err != nil {
+		close(logstream)
+		return logstream, func() error {
+			return fmt.Errorf("RPC error for %v: %v", tablet.Alias, err)
+		}
+	}
+	c := rpcClient.StreamGo("TabletManager.MultiRestore", sa, logstream)
+	return logstream, func() error {
+		rpcClient.Close()
+		return c.Error
+	}
+}

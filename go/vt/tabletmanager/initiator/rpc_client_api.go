@@ -153,6 +153,15 @@ type TabletManagerConn interface {
 
 	// ReserveForRestore will prepare a server for restore
 	ReserveForRestore(tablet *topo.TabletInfo, rfra *actionnode.ReserveForRestoreArgs, waitTime time.Duration) error
+
+	// Restore restores a database snapshot
+	Restore(tablet *topo.TabletInfo, sa *actionnode.RestoreArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, ErrFunc)
+
+	// MultiSnapshot takes a database snapshot
+	MultiSnapshot(tablet *topo.TabletInfo, sa *actionnode.MultiSnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, *actionnode.MultiSnapshotReply, ErrFunc)
+
+	// MultiRestore restores a database snapshot
+	MultiRestore(tablet *topo.TabletInfo, sa *actionnode.MultiRestoreArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, ErrFunc)
 }
 
 type TabletManagerConnFactory func(topo.Server) TabletManagerConn
