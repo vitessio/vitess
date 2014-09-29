@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 import warnings
 # Dropping a table inexplicably produces a warning despite
