@@ -501,6 +501,9 @@ func (vtg *VTGate) GetMRSplits(context context.Context, req *proto.GetMRSplitsRe
 	if err != nil {
 		return err
 	}
+	if len(qr.Rows) == 0 {
+		return fmt.Errorf("can't fetch split sizes, is this a valid table?")
+	}
 	sizes := []int64{}
 	for _, row := range qr.Rows {
 		size, err := strconv.ParseInt(row[0].String(), 10, 64)
@@ -509,6 +512,7 @@ func (vtg *VTGate) GetMRSplits(context context.Context, req *proto.GetMRSplitsRe
 		}
 		sizes = append(sizes, size)
 	}
+
 	// Create one split per shard
 	reply.Splits = []proto.InputSplit{}
 	sql := fmt.Sprintf("select %s from %s", strings.Join(req.Columns, ","), req.Table)
