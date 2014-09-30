@@ -650,6 +650,12 @@ class TestFailures(unittest.TestCase):
           "select sleep(12) from dual", {},
           KEYSPACE_NAME, 'master',
           keyranges=[get_keyrange(shard_names[self.shard_index])])
+     # Currently this is causing vttablet to become unreachable at
+     # the timeout boundary and kill any query being executed
+     # at the time. Prevent flakiness in other tests by sleeping
+     # until the query times out.
+     # TODO fix b/17733518
+    time.sleep(3)
 
   # test timeout between vtgate and vttablet
   # the default timeout is 5 seconds
