@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	log "github.com/golang/glog"
 )
@@ -33,9 +34,14 @@ var (
 	connectTimeout = flag.Duration("zk.connect-timeout", 30*time.Second, "zk connect timeout")
 )
 
-// Read the cell from -zk.local-cell, or the environment ZK_CLIENT_LOCAL_CELL
-// or guess the cell by the hostname. This is either the first two characters
-// or the character before a dash '-'.
+// Read the cell from -zk.local-cell, or the environment
+// ZK_CLIENT_LOCAL_CELL or guess the cell by the hostname. The
+// letter-only prefix of the string is used as the cell name. For
+// instance:
+//
+// pa1 -> pa
+// sjl-1 -> sjl
+// lwc1 -> lwc
 func GuessLocalCell() string {
 	if *localCell != "" {
 		return *localCell
@@ -52,11 +58,17 @@ func GuessLocalCell() string {
 	}
 
 	shortHostname := strings.Split(hostname, ".")[0]
-	hostParts := strings.Split(shortHostname, "-")
-	if len(hostParts) > 1 {
-		return hostParts[0]
+	return letterPrefix(shortHostname)
+}
+
+// Return the string prefix up to the first non-letter.
+func letterPrefix(str string) string {
+	for i, rune := range str {
+		if !unicode.IsLetter(rune) {
+			return str[:i]
+		}
 	}
-	return shortHostname[:2]
+	return str
 }
 
 func ZkCellFromZkPath(zkPath string) (string, error) {
