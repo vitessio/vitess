@@ -53,7 +53,7 @@ func overlappingShardMatch(ol []*topo.ShardInfo, or []*topo.ShardInfo, e expecte
 	return true
 }
 
-func compareResultLists(t *testing.T, os []OverlappingShards, expected []expectedOverlappingShard) {
+func compareResultLists(t *testing.T, os []*OverlappingShards, expected []expectedOverlappingShard) {
 	if len(os) != len(expected) {
 		t.Errorf("Unexpected result length, got %v, want %v", len(os), len(expected))
 		return
@@ -78,7 +78,7 @@ func compareResultLists(t *testing.T, os []OverlappingShards, expected []expecte
 
 func TestFindOverlappingShardsNoOverlap(t *testing.T) {
 	var shardMap map[string]*topo.ShardInfo
-	var os []OverlappingShards
+	var os []*OverlappingShards
 	var err error
 
 	// no shards
@@ -147,7 +147,7 @@ func TestFindOverlappingShardsNoOverlap(t *testing.T) {
 
 func TestFindOverlappingShardsOverlap(t *testing.T) {
 	var shardMap map[string]*topo.ShardInfo
-	var os []OverlappingShards
+	var os []*OverlappingShards
 	var err error
 
 	// split in progress
@@ -230,6 +230,22 @@ func TestFindOverlappingShardsOverlap(t *testing.T) {
 			right: []string{"80", "c0", ""},
 		},
 	})
+
+	// find a shard in there
+	if o := OverlappingShardsForShard(os, "-60"); o != nil {
+		t.Errorf("Found a shard where I shouldn't have!")
+	}
+	if o := OverlappingShardsForShard(os, "-40"); o == nil {
+		t.Errorf("Found no shard where I should have!")
+	} else {
+		compareResultLists(t, []*OverlappingShards{o},
+			[]expectedOverlappingShard{
+				expectedOverlappingShard{
+					left:  []string{"", "80"},
+					right: []string{"", "40", "80"},
+				},
+			})
+	}
 }
 
 func TestFindOverlappingShardsErrors(t *testing.T) {

@@ -19,13 +19,40 @@ type OverlappingShards struct {
 	Right []*topo.ShardInfo
 }
 
+// ContainsShard returns true if either Left or Right lists contain
+// the provided Shard.
+func (os *OverlappingShards) ContainsShard(shardName string) bool {
+	for _, l := range os.Left {
+		if l.ShardName() == shardName {
+			return true
+		}
+	}
+	for _, r := range os.Right {
+		if r.ShardName() == shardName {
+			return true
+		}
+	}
+	return false
+}
+
+// OverlappingShardsForShard returns the OverlappingShards object
+// from the list that has he provided shard, or nil
+func OverlappingShardsForShard(os []*OverlappingShards, shardName string) *OverlappingShards {
+	for _, o := range os {
+		if o.ContainsShard(shardName) {
+			return o
+		}
+	}
+	return nil
+}
+
 // FindOverlappingShards will return an array of OverlappingShards
 // for the provided keyspace.
 // We do not support more than two overlapping shards (for instance,
 // having 40-80, 40-60 and 40-50 in the same keyspace is not supported and
 // will return an error).
 // If shards don't perfectly overlap, they are not returned.
-func FindOverlappingShards(ts topo.Server, keyspace string) ([]OverlappingShards, error) {
+func FindOverlappingShards(ts topo.Server, keyspace string) ([]*OverlappingShards, error) {
 	shardMap, err := topo.FindAllShardsInKeyspace(ts, keyspace)
 	if err != nil {
 		return nil, err
@@ -36,9 +63,9 @@ func FindOverlappingShards(ts topo.Server, keyspace string) ([]OverlappingShards
 
 // findOverlappingShards does the work for FindOverlappingShards but
 // can be called on test data too.
-func findOverlappingShards(shardMap map[string]*topo.ShardInfo) ([]OverlappingShards, error) {
+func findOverlappingShards(shardMap map[string]*topo.ShardInfo) ([]*OverlappingShards, error) {
 
-	var result []OverlappingShards
+	var result []*OverlappingShards
 
 	for len(shardMap) > 0 {
 		var left []*topo.ShardInfo
@@ -114,7 +141,7 @@ func findOverlappingShards(shardMap map[string]*topo.ShardInfo) ([]OverlappingSh
 			}
 
 			// all good, we have a valid overlap
-			result = append(result, OverlappingShards{
+			result = append(result, &OverlappingShards{
 				Left:  left,
 				Right: right,
 			})
