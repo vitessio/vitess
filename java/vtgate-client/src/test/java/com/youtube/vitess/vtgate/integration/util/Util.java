@@ -72,6 +72,7 @@ public class Util {
 					Map<String, Integer> map = new Gson().fromJson(line,
 							mapType);
 					testEnv.port = map.get("port");
+					return;
 				} catch (JsonSyntaxException e) {
 				}
 			}

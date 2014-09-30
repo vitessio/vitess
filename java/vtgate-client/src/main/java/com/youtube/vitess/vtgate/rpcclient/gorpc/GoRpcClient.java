@@ -118,6 +118,19 @@ public class GoRpcClient implements RpcClient {
 		}
 	}
 
+	@SuppressWarnings("unchecked")
+	@Override
+	public Map<String, Object> getMRSplits(Map<String, Object> args)
+			throws ConnectionException {
+		BSONObject params = new BasicBSONObject();
+		params.putAll(args);
+		Response response = call("VTGate.GetMRSplits",
+				params);
+		BSONObject reply = (BSONObject) response.getReply();
+		return reply.toMap();
+
+	}
+
 	private Response call(String methodName, Object args)
 			throws ConnectionException {
 		try {

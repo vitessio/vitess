@@ -1,5 +1,8 @@
 package com.youtube.vitess.vtgate;
 
+import org.apache.commons.codec.DecoderException;
+import org.apache.commons.codec.binary.Hex;
+
 import com.google.common.primitives.Longs;
 import com.google.common.primitives.UnsignedLong;
 
@@ -8,12 +11,22 @@ import com.google.common.primitives.UnsignedLong;
  * to create instances
  */
 public class KeyspaceId implements Comparable<KeyspaceId> {
-	private final Object id;
-	private final byte[] bytes;
+	private Object id;
 
-	private KeyspaceId(Object id, byte[] bytes) {
+	public static final String COL_NAME = "keyspace_id";
+
+	public KeyspaceId() {
+
+	}
+
+	public void setId(Object id) {
+		if (!(id instanceof String) && !(id instanceof UnsignedLong)) {
+			throw new IllegalArgumentException(
+					"invalid id type, must be either String or UnsignedLong "
+							+ id.getClass());
+		}
+
 		this.id = id;
-		this.bytes = bytes;
 	}
 
 	public Object getId() {
@@ -21,27 +34,40 @@ public class KeyspaceId implements Comparable<KeyspaceId> {
 	}
 
 	public byte[] getBytes() {
-		return bytes;
+		if (id instanceof String) {
+			try {
+				return Hex.decodeHex(((String) id).toCharArray());
+			} catch (DecoderException e) {
+				throw new IllegalArgumentException("illegal string id", e);
+			}
+		} else {
+			return Longs.toByteArray(((UnsignedLong) id).longValue());
+		}
 	}
 
 	/**
 	 * Creates a KeyspaceId from id which must be a String or UnsignedLong.
 	 */
 	public static KeyspaceId valueOf(Object id) {
-		if (id instanceof String) {
-			String idStr = (String) id;
-			return new KeyspaceId(idStr, idStr.getBytes());
-		}
+		KeyspaceId kid = new KeyspaceId();
+		kid.setId(id);
+		return kid;
+	}
 
+	@Override
+	public boolean equals(Object o) {
+		if (o instanceof KeyspaceId) {
+			return this.compareTo((KeyspaceId) o) == 0;
+		}
+		return false;
+	}
+
+	@Override
+	public int hashCode() {
 		if (id instanceof UnsignedLong) {
-			UnsignedLong idULong = (UnsignedLong) id;
-			return new KeyspaceId(idULong,
-					Longs.toByteArray(idULong.longValue()));
+			return ((UnsignedLong) id).hashCode();
 		}
-
-		throw new IllegalArgumentException(
-				"invalid id type, must be either String or UnsignedLong "
-						+ id.getClass());
+		return ((String) id).hashCode();
 	}
 
 	@Override

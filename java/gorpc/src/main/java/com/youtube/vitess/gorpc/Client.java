@@ -168,7 +168,7 @@ public class Client {
 				}
 			}
 			logger.error("connection exception", e);
-			throw new GoRpcException("connection exception" + e.getMessage());
+			throw new GoRpcException("connection exception " + e.getMessage());
 		}
 	}
 }

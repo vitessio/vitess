@@ -1,6 +1,5 @@
 package com.youtube.vitess.vtgate.integration;
 
-import java.math.BigInteger;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -21,6 +20,7 @@ import org.junit.Test;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import com.google.common.primitives.UnsignedLong;
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.Exceptions.DatabaseException;
 import com.youtube.vitess.vtgate.KeyRange;
@@ -114,9 +114,9 @@ public class VtGateIT {
 		Row row = cursor.next();
 		Cell idCell = row.next();
 		Assert.assertEquals("id", idCell.getName());
-		Assert.assertEquals(BigInteger.class, idCell.getType());
-		Assert.assertEquals(BigInteger.valueOf(1000),
-				row.getBigInt(idCell.getName()));
+		Assert.assertEquals(UnsignedLong.class, idCell.getType());
+		Assert.assertEquals(UnsignedLong.valueOf(1000),
+				row.getULong(idCell.getName()));
 
 		Cell nameCell = row.next();
 		Assert.assertEquals("name", nameCell.getName());

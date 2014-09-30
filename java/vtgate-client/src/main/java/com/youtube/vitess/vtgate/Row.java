@@ -1,11 +1,11 @@
 package com.youtube.vitess.vtgate;
 
-import java.math.BigInteger;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.LinkedList;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.primitives.UnsignedLong;
 import com.youtube.vitess.vtgate.Exceptions.InvalidFieldException;
 import com.youtube.vitess.vtgate.Row.Cell;
 
@@ -13,7 +13,7 @@ public class Row implements Iterator<Cell>, Iterable<Cell> {
 	private ImmutableMap<String, Cell> contents;
 	private Iterator<String> iterator;
 
-	Row(LinkedList<Cell> cells) {
+	public Row(LinkedList<Cell> cells) {
 		ImmutableMap.Builder<String, Cell> builder = new ImmutableMap.Builder<>();
 		for (Cell cell : cells) {
 			builder.put(cell.getName(), cell);
@@ -48,12 +48,12 @@ public class Row implements Iterator<Cell>, Iterable<Cell> {
 		return (Integer) getAndCheckType(index, Integer.class);
 	}
 
-	public BigInteger getBigInt(String fieldName) throws InvalidFieldException {
-		return (BigInteger) getAndCheckType(fieldName, BigInteger.class);
+	public UnsignedLong getULong(String fieldName) throws InvalidFieldException {
+		return (UnsignedLong) getAndCheckType(fieldName, UnsignedLong.class);
 	}
 
-	public BigInteger getBigInt(int index) throws InvalidFieldException {
-		return (BigInteger) getAndCheckType(index, BigInteger.class);
+	public UnsignedLong getULong(int index) throws InvalidFieldException {
+		return (UnsignedLong) getAndCheckType(index, UnsignedLong.class);
 	}
 
 	public String getString(String fieldName) throws InvalidFieldException {
@@ -136,7 +136,7 @@ public class Row implements Iterator<Cell>, Iterable<Cell> {
 		private Object value;
 		private Class type;
 
-		Cell(String name, Object value, Class type) {
+		public Cell(String name, Object value, Class type) {
 			this.name = name;
 			this.value = value;
 			this.type = type;

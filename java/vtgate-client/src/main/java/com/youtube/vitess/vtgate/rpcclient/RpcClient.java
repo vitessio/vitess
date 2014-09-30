@@ -25,6 +25,9 @@ public interface RpcClient {
 
 	public void commit(Object session) throws ConnectionException;
 
+	public Map<String, Object> getMRSplits(Map<String, Object> args)
+			throws ConnectionException;
+
 	public void rollback(Object session) throws ConnectionException;
 
 	public void close() throws ConnectionException;
