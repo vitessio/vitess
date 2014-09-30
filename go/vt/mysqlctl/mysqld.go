@@ -46,14 +46,14 @@ var (
 
 // Mysqld is the object that represents a mysqld daemon running on this server.
 type Mysqld struct {
-	mysqlFlavor     MysqlFlavor
-	mysqlFlavorInit sync.Once
-	config          *Mycnf
-	dba             *mysql.ConnectionParams
-	dbaPool         *dbconnpool.ConnectionPool
-	replParams      *mysql.ConnectionParams
-	TabletDir       string
-	SnapshotDir     string
+	mysqlFlavor      MysqlFlavor
+	mysqlFlavorMutex sync.Mutex
+	config           *Mycnf
+	dba              *mysql.ConnectionParams
+	dbaPool          *dbconnpool.ConnectionPool
+	replParams       *mysql.ConnectionParams
+	TabletDir        string
+	SnapshotDir      string
 }
 
 // NewMysqld creates a Mysqld object based on the provided configuration

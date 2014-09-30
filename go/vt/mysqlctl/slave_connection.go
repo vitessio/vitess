@@ -7,6 +7,7 @@ package mysqlctl
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
@@ -64,9 +65,13 @@ var slaveIDPool = pools.NewIDPool()
 // until the connection is closed, either by the master or by calling
 // SlaveConnection.Close(). At that point, the channel will also be closed.
 func (sc *SlaveConnection) StartBinlogDump(startPos proto.ReplicationPosition) (<-chan blproto.BinlogEvent, error) {
-	log.Infof("sending binlog dump command: startPos=%v, slaveID=%v", startPos, sc.slaveID)
-	err := sc.mysqld.flavor().SendBinlogDumpCommand(sc.mysqld, sc, startPos)
+	flavor, err := sc.mysqld.flavor()
 	if err != nil {
+		return nil, fmt.Errorf("StartBinlogDump needs flavor: %v", err)
+	}
+
+	log.Infof("sending binlog dump command: startPos=%v, slaveID=%v", startPos, sc.slaveID)
+	if err = flavor.SendBinlogDumpCommand(sc.mysqld, sc, startPos); err != nil {
 		log.Errorf("couldn't send binlog dump command: %v", err)
 		return nil, err
 	}
@@ -93,7 +98,7 @@ func (sc *SlaveConnection) StartBinlogDump(startPos proto.ReplicationPosition) (
 
 			select {
 			// Skip the first byte because it's only used for signaling EOF.
-			case eventChan <- sc.mysqld.flavor().MakeBinlogEvent(buf[1:]):
+			case eventChan <- flavor.MakeBinlogEvent(buf[1:]):
 			case <-svc.ShuttingDown:
 				return nil
 			}
