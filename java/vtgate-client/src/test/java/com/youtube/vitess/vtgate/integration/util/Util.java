@@ -133,7 +133,7 @@ public class Util {
 		for (int i = 0; i < count; i++) {
 			KeyspaceId kid = kids.get(i % kids.size());
 			Map<String, Object> bindVars = new ImmutableMap.Builder<String, Object>()
-					.put("id", random.nextInt())
+					.put("id", random.nextInt(Integer.MAX_VALUE))
 					.put("name", "name_" + i)
 					.put("keyspace_id", kid.getId())
 					.build();
