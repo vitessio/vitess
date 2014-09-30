@@ -29,7 +29,6 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -64,16 +63,6 @@ func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
 	err = topo.UpdateTablet(ts, tablet)
 	if err != nil {
 		return err
-	}
-
-	// Remove any pending actions. Presumably forcing a scrap
-	// means you don't want the agent doing anything and the
-	// machine requires manual attention.
-	if force {
-		err := ts.PurgeTabletActions(tabletAlias, actionnode.ActionNodeCanBePurged)
-		if err != nil {
-			log.Warningf("purge actions failed: %v", err)
-		}
 	}
 
 	if wasAssigned {

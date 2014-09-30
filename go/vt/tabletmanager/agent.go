@@ -260,7 +260,7 @@ func (agent *ActionAgent) verifyTopology() error {
 		log.Warningf("tablet validate failed: %v %v", agent.TabletAlias, err)
 	}
 
-	return agent.TopoServer.ValidateTabletActions(agent.TabletAlias)
+	return nil
 }
 
 func (agent *ActionAgent) verifyServingAddrs() error {

@@ -10,14 +10,11 @@
 package actionnode
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/user"
-	"strings"
 	"time"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
 )
 
@@ -220,86 +217,6 @@ type ActionNode struct {
 	Reply interface{} `json:"-"`
 }
 
-// ActionNodeFromJson interprets the data from JSON.
-func ActionNodeFromJson(data, path string) (*ActionNode, error) {
-	decoder := json.NewDecoder(strings.NewReader(data))
-
-	// decode the ActionNode
-	node := &ActionNode{}
-	err := decoder.Decode(node)
-	if err != nil {
-		return nil, err
-	}
-	node.Path = path
-
-	// figure out our args and reply types
-	switch node.Action {
-	case SHARD_ACTION_REPARENT,
-		SHARD_ACTION_EXTERNALLY_REPARENTED,
-		SHARD_ACTION_REBUILD,
-		SHARD_ACTION_CHECK,
-		SHARD_ACTION_APPLY_SCHEMA,
-		SHARD_ACTION_SET_SERVED_TYPES,
-		SHARD_ACTION_MULTI_RESTORE,
-		SHARD_ACTION_MIGRATE_SERVED_TYPES,
-		SHARD_ACTION_UPDATE_SHARD:
-		return nil, fmt.Errorf("locking-only SHARD action: %v", node.Action)
-
-	case KEYSPACE_ACTION_REBUILD,
-		KEYSPACE_ACTION_APPLY_SCHEMA,
-		KEYSPACE_ACTION_SET_SHARDING_INFO,
-		KEYSPACE_ACTION_MIGRATE_SERVED_FROM:
-		return nil, fmt.Errorf("locking-only KEYSPACE action: %v", node.Action)
-
-	case SRV_SHARD_ACTION_REBUILD:
-		return nil, fmt.Errorf("locking-only SRV_SHARD action: %v", node.Action)
-
-	case TABLET_ACTION_PING,
-		TABLET_ACTION_SLEEP,
-		TABLET_ACTION_EXECUTE_HOOK,
-		TABLET_ACTION_SET_RDONLY,
-		TABLET_ACTION_SET_RDWR,
-		TABLET_ACTION_CHANGE_TYPE,
-		TABLET_ACTION_SCRAP,
-		TABLET_ACTION_GET_SCHEMA,
-		TABLET_ACTION_RELOAD_SCHEMA,
-		TABLET_ACTION_PREFLIGHT_SCHEMA,
-		TABLET_ACTION_APPLY_SCHEMA,
-		TABLET_ACTION_EXECUTE_FETCH,
-		TABLET_ACTION_GET_PERMISSIONS,
-		TABLET_ACTION_SLAVE_STATUS,
-		TABLET_ACTION_WAIT_SLAVE_POSITION,
-		TABLET_ACTION_MASTER_POSITION,
-		TABLET_ACTION_REPARENT_POSITION,
-		TABLET_ACTION_DEMOTE_MASTER,
-		TABLET_ACTION_PROMOTE_SLAVE,
-		TABLET_ACTION_SLAVE_WAS_PROMOTED,
-		TABLET_ACTION_RESTART_SLAVE,
-		TABLET_ACTION_SLAVE_WAS_RESTARTED,
-		TABLET_ACTION_BREAK_SLAVES,
-		TABLET_ACTION_STOP_SLAVE,
-		TABLET_ACTION_STOP_SLAVE_MINIMUM,
-		TABLET_ACTION_START_SLAVE,
-		TABLET_ACTION_EXTERNALLY_REPARENTED,
-		TABLET_ACTION_GET_SLAVES,
-		TABLET_ACTION_WAIT_BLP_POSITION,
-		TABLET_ACTION_STOP_BLP,
-		TABLET_ACTION_START_BLP,
-		TABLET_ACTION_RUN_BLP_UNTIL,
-		TABLET_ACTION_SNAPSHOT,
-		TABLET_ACTION_SNAPSHOT_SOURCE_END,
-		TABLET_ACTION_RESERVE_FOR_RESTORE,
-		TABLET_ACTION_RESTORE,
-		TABLET_ACTION_MULTI_SNAPSHOT,
-		TABLET_ACTION_MULTI_RESTORE:
-
-		return nil, fmt.Errorf("rpc-only action: %v", node.Action)
-
-	default:
-		return nil, fmt.Errorf("unrecognized action: %v", node.Action)
-	}
-}
-
 // ToJson returns a JSON representation of the object.
 func (n *ActionNode) ToJson() string {
 	result := jscfg.ToJson(n) + "\n"
@@ -330,32 +247,4 @@ func (n *ActionNode) SetGuid() *ActionNode {
 	}
 	n.ActionGuid = fmt.Sprintf("%v-%v-%v", now, username, hostname)
 	return n
-}
-
-// ActionNodeCanBePurged returns true if that ActionNode can be purged
-// from the topology server.
-func ActionNodeCanBePurged(data string) bool {
-	actionNode, err := ActionNodeFromJson(data, "")
-	if err != nil {
-		log.Warningf("bad action data: %v %#v", err, data)
-		return true
-	}
-
-	if actionNode.State == ACTION_STATE_RUNNING {
-		log.Infof("cannot remove running action: %v %v", actionNode.Action, actionNode.ActionGuid)
-		return false
-	}
-
-	return true
-}
-
-// ActionNodeIsStale returns true if that ActionNode is not Running
-func ActionNodeIsStale(data string) bool {
-	actionNode, err := ActionNodeFromJson(data, "")
-	if err != nil {
-		log.Warningf("bad action data: %v %#v", err, data)
-		return false
-	}
-
-	return actionNode.State != ACTION_STATE_RUNNING
 }

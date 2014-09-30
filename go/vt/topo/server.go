@@ -275,32 +275,8 @@ type Server interface {
 	UnlockShardForAction(keyspace, shard, lockPath, results string) error
 
 	//
-	// Remote Tablet Actions, local cell.
-	//
-
-	// WriteTabletAction initiates a remote action on the tablet.
-	// Actions are queued up, and executed sequentially.  An
-	// action is identified by the returned string, actionPath.
-	WriteTabletAction(tabletAlias TabletAlias, contents string) (string, error)
-
-	// WaitForTabletAction waits for a tablet action to complete. It
-	// will wait for the result for at most duration. The wait can
-	// be interrupted if the interrupted channel is closed.
-	// Can return ErrTimeout or ErrInterrupted
-	WaitForTabletAction(actionPath string, waitTime time.Duration, interrupted chan struct{}) (string, error)
-
-	// PurgeTabletActions removes all queued actions for a tablet.
-	// This might break the locking mechanism of the remote action
-	// queue, used with caution.
-	PurgeTabletActions(tabletAlias TabletAlias, canBePurged func(data string) bool) error
-
-	//
 	// Supporting the local agent process, local cell.
 	//
-
-	// ValidateTabletActions checks a tablet can execute remote
-	// actions.
-	ValidateTabletActions(tabletAlias TabletAlias) error
 
 	// CreateTabletPidNode will keep a PID node up to date with
 	// this tablet's current PID, until 'done' is closed.
@@ -313,32 +289,6 @@ type Server interface {
 	// subprocess that uses the same Server parameters as
 	// this process.
 	GetSubprocessFlags() []string
-
-	// ActionEventLoop is the main loop for the action processing engine.
-	// It will feed events to the dispatchAction callback.
-	// If dispatchAction returns an error, we'll wait a bit before trying
-	// again.
-	// If 'done' is closed, the loop returns.
-	ActionEventLoop(tabletAlias TabletAlias, dispatchAction func(actionPath, data string) error, done chan struct{})
-
-	// ReadTabletActionPath reads the actionPath and returns the
-	// associated TabletAlias, the data (originally written by
-	// WriteTabletAction), and its version
-	ReadTabletActionPath(actionPath string) (TabletAlias, string, int64, error)
-
-	// UpdateTabletAction updates the actionPath with the new data.
-	// version is the current version we're expecting. Use -1 to set
-	// any version.
-	// Can return ErrBadVersion.
-	UpdateTabletAction(actionPath, data string, version int64) error
-
-	// StoreTabletActionResponse stores the data for the response.
-	// This will not unblock the caller yet.
-	StoreTabletActionResponse(actionPath, data string) error
-
-	// UnblockTabletAction will let the client continue.
-	// StoreTabletActionResponse must have been called already.
-	UnblockTabletAction(actionPath string) error
 }
 
 // Registry for Server implementations.

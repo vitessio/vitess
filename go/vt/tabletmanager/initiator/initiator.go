@@ -14,7 +14,6 @@ package initiator
 
 import (
 	"flag"
-	"fmt"
 	"sync"
 	"time"
 
@@ -257,35 +256,4 @@ func (ai *ActionInitiator) ExecuteHook(tablet *topo.TabletInfo, hk *hook.Hook, w
 
 func (ai *ActionInitiator) GetSlaves(tablet *topo.TabletInfo, waitTime time.Duration) ([]string, error) {
 	return ai.rpc.GetSlaves(tablet, waitTime)
-}
-
-func (ai *ActionInitiator) WaitForCompletion(actionPath string, waitTime time.Duration) error {
-	_, err := WaitForCompletion(ai.ts, actionPath, waitTime)
-	return err
-}
-
-func (ai *ActionInitiator) WaitForCompletionReply(actionPath string, waitTime time.Duration) (interface{}, error) {
-	return WaitForCompletion(ai.ts, actionPath, waitTime)
-}
-
-func WaitForCompletion(ts topo.Server, actionPath string, waitTime time.Duration) (interface{}, error) {
-	// If there is no duration specified, block for a sufficiently long time
-	if waitTime <= 0 {
-		waitTime = 24 * time.Hour
-	}
-
-	data, err := ts.WaitForTabletAction(actionPath, waitTime, interrupted)
-	if err != nil {
-		return nil, err
-	}
-
-	// parse it
-	actionNode, dataErr := actionnode.ActionNodeFromJson(data, "")
-	if dataErr != nil {
-		return nil, fmt.Errorf("action data error: %v %v %#v", actionPath, dataErr, data)
-	} else if actionNode.Error != "" {
-		return nil, fmt.Errorf("action failed: %v %v", actionPath, actionNode.Error)
-	}
-
-	return actionNode.Reply, nil
 }

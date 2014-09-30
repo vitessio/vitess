@@ -724,37 +724,8 @@ func (tee *Tee) UnlockShardForAction(keyspace, shard, lockPath, results string) 
 }
 
 //
-// Remote Tablet Actions, local cell.
-// We just send these actions through the primary topo.Server.
-//
-
-func (tee *Tee) WriteTabletAction(tabletAlias topo.TabletAlias, contents string) (string, error) {
-	return tee.primary.WriteTabletAction(tabletAlias, contents)
-}
-
-func (tee *Tee) WaitForTabletAction(actionPath string, waitTime time.Duration, interrupted chan struct{}) (string, error) {
-	return tee.primary.WaitForTabletAction(actionPath, waitTime, interrupted)
-}
-
-func (tee *Tee) PurgeTabletActions(tabletAlias topo.TabletAlias, canBePurged func(data string) bool) error {
-	return tee.primary.PurgeTabletActions(tabletAlias, canBePurged)
-}
-
-//
 // Supporting the local agent process, local cell.
 //
-
-func (tee *Tee) ValidateTabletActions(tabletAlias topo.TabletAlias) error {
-	// if the primary fails, no need to go on
-	if err := tee.primary.ValidateTabletActions(tabletAlias); err != nil {
-		return err
-	}
-
-	if err := tee.secondary.ValidateTabletActions(tabletAlias); err != nil {
-		log.Warningf("secondary.ValidateTabletActions(%v) failed: %v", tabletAlias, err)
-	}
-	return nil
-}
 
 func (tee *Tee) CreateTabletPidNode(tabletAlias topo.TabletAlias, contents string, done chan struct{}) error {
 	// if the primary fails, no need to go on
@@ -783,69 +754,4 @@ func (tee *Tee) ValidateTabletPidNode(tabletAlias topo.TabletAlias) error {
 func (tee *Tee) GetSubprocessFlags() []string {
 	p := tee.primary.GetSubprocessFlags()
 	return append(p, tee.secondary.GetSubprocessFlags()...)
-}
-
-func (tee *Tee) ActionEventLoop(tabletAlias topo.TabletAlias, dispatchAction func(actionPath, data string) error, done chan struct{}) {
-	// We run the action loop on both primary and secondary.
-	// We dispatch actions by adding a 'p' or 's'
-	// as the first character of the action.
-	wg := sync.WaitGroup{}
-
-	// loop on primary
-	wg.Add(1)
-	go func() {
-		tee.primary.ActionEventLoop(tabletAlias, func(actionPath, data string) error {
-			return dispatchAction("p"+actionPath, data)
-		}, done)
-		wg.Done()
-	}()
-
-	// loop on secondary
-	wg.Add(1)
-	go func() {
-		tee.secondary.ActionEventLoop(tabletAlias, func(actionPath, data string) error {
-			return dispatchAction("s"+actionPath, data)
-		}, done)
-		wg.Done()
-	}()
-
-	// wait for both
-	wg.Wait()
-}
-
-func (tee *Tee) ReadTabletActionPath(actionPath string) (topo.TabletAlias, string, int64, error) {
-	if actionPath[0] == 'p' {
-		return tee.primary.ReadTabletActionPath(actionPath[1:])
-	} else if actionPath[0] == 's' {
-		return tee.secondary.ReadTabletActionPath(actionPath[1:])
-	}
-	log.Warningf("ReadTabletActionPath(%v): actionPath doesn't start with 'p' or 's', using primary", actionPath)
-	return tee.primary.ReadTabletActionPath(actionPath)
-}
-
-func (tee *Tee) UpdateTabletAction(actionPath, data string, version int64) error {
-	if actionPath[0] == 'p' {
-		return tee.primary.UpdateTabletAction(actionPath[1:], data, version)
-	} else if actionPath[0] == 's' {
-		return tee.secondary.UpdateTabletAction(actionPath[1:], data, version)
-	}
-	return tee.primary.UpdateTabletAction(actionPath, data, version)
-}
-
-func (tee *Tee) StoreTabletActionResponse(actionPath, data string) error {
-	if actionPath[0] == 'p' {
-		return tee.primary.StoreTabletActionResponse(actionPath[1:], data)
-	} else if actionPath[0] == 's' {
-		return tee.secondary.StoreTabletActionResponse(actionPath[1:], data)
-	}
-	return tee.primary.StoreTabletActionResponse(actionPath, data)
-}
-
-func (tee *Tee) UnblockTabletAction(actionPath string) error {
-	if actionPath[0] == 'p' {
-		return tee.primary.UnblockTabletAction(actionPath[1:])
-	} else if actionPath[0] == 's' {
-		return tee.secondary.UnblockTabletAction(actionPath[1:])
-	}
-	return tee.primary.UnblockTabletAction(actionPath)
 }
