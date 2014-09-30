@@ -67,11 +67,6 @@ func NewActionInitiator(ts topo.Server) *ActionInitiator {
 	return &ActionInitiator{ts, f(ts)}
 }
 
-func (ai *ActionInitiator) writeTabletAction(tabletAlias topo.TabletAlias, node *actionnode.ActionNode) (actionPath string, err error) {
-	data := node.SetGuid().ToJson()
-	return ai.ts.WriteTabletAction(tabletAlias, data)
-}
-
 func (ai *ActionInitiator) Ping(tablet *topo.TabletInfo, waitTime time.Duration) error {
 	return ai.rpc.Ping(tablet, waitTime)
 }

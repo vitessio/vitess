@@ -26,7 +26,6 @@ import (
 )
 
 var (
-	noWaitForAction = flag.Bool("no-wait", false, "don't wait for action completion, detach")
 	waitTime        = flag.Duration("wait-time", 24*time.Hour, "time to wait on an action")
 	lockWaitTimeout = flag.Duration("lock-wait-timeout", 0, "time to wait for a lock before starting an action")
 )
@@ -84,7 +83,7 @@ func main() {
 
 	wr := wrangler.New(logutil.NewConsoleLogger(), topoServer, *waitTime, *lockWaitTimeout)
 
-	actionPath, err := vtctl.RunCommand(wr, args)
+	err := vtctl.RunCommand(wr, args)
 	switch err {
 	case vtctl.ErrUnknownCommand:
 		flag.Usage()
@@ -94,20 +93,6 @@ func main() {
 	default:
 		log.Errorf("action failed: %v %v", action, err)
 		exit.Return(255)
-	}
-
-	if actionPath != "" {
-		if *noWaitForAction {
-			fmt.Println(actionPath)
-		} else {
-			err := wr.WaitForCompletion(actionPath)
-			if err != nil {
-				log.Error(err.Error())
-				exit.Return(255)
-			} else {
-				log.Infof("action completed: %v", actionPath)
-			}
-		}
 	}
 }
 

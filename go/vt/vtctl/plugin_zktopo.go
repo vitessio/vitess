@@ -76,28 +76,28 @@ func zkResolveWildcards(wr *wrangler.Wrangler, args []string) ([]string, error) 
 	return zk.ResolveWildcards(zkts.GetZConn(), args)
 }
 
-func commandPurgeActions(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+func commandPurgeActions(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
-		return "", err
+		return err
 	}
 	if subFlags.NArg() == 0 {
-		return "", fmt.Errorf("action PurgeActions requires <zk action path> ...")
+		return fmt.Errorf("action PurgeActions requires <zk action path> ...")
 	}
 	zkts, ok := wr.TopoServer().(*zktopo.Server)
 	if !ok {
-		return "", fmt.Errorf("PurgeActions requires a zktopo.Server")
+		return fmt.Errorf("PurgeActions requires a zktopo.Server")
 	}
 	zkActionPaths, err := resolveWildcards(wr, subFlags.Args())
 	if err != nil {
-		return "", err
+		return err
 	}
 	for _, zkActionPath := range zkActionPaths {
 		err := zkts.PurgeActions(zkActionPath, actionnode.ActionNodeCanBePurged)
 		if err != nil {
-			return "", err
+			return err
 		}
 	}
-	return "", nil
+	return nil
 }
 
 func staleActions(zkts *zktopo.Server, zkActionPath string, maxStaleness time.Duration) ([]*actionnode.ActionNode, error) {
@@ -120,22 +120,22 @@ func staleActions(zkts *zktopo.Server, zkActionPath string, maxStaleness time.Du
 	return staleActions, nil
 }
 
-func commandStaleActions(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+func commandStaleActions(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	maxStaleness := subFlags.Duration("max-staleness", 5*time.Minute, "how long since the last modification before an action considered stale")
 	purge := subFlags.Bool("purge", false, "purge stale actions")
 	if err := subFlags.Parse(args); err != nil {
-		return "", err
+		return err
 	}
 	if subFlags.NArg() == 0 {
-		return "", fmt.Errorf("action StaleActions requires <zk action path>")
+		return fmt.Errorf("action StaleActions requires <zk action path>")
 	}
 	zkts, ok := wr.TopoServer().(*zktopo.Server)
 	if !ok {
-		return "", fmt.Errorf("StaleActions requires a zktopo.Server")
+		return fmt.Errorf("StaleActions requires a zktopo.Server")
 	}
 	zkPaths, err := resolveWildcards(wr, subFlags.Args())
 	if err != nil {
-		return "", err
+		return err
 	}
 	var errCount sync2.AtomicInt32
 	wg := sync.WaitGroup{}
@@ -164,29 +164,29 @@ func commandStaleActions(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	}
 	wg.Wait()
 	if errCount.Get() > 0 {
-		return "", fmt.Errorf("some errors occurred, check the log")
+		return fmt.Errorf("some errors occurred, check the log")
 	}
-	return "", nil
+	return nil
 }
 
-func commandPruneActionLogs(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+func commandPruneActionLogs(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	keepCount := subFlags.Int("keep-count", 10, "count to keep")
 	if err := subFlags.Parse(args); err != nil {
-		return "", err
+		return err
 	}
 
 	if subFlags.NArg() == 0 {
-		return "", fmt.Errorf("action PruneActionLogs requires <zk action log path> ...")
+		return fmt.Errorf("action PruneActionLogs requires <zk action log path> ...")
 	}
 
 	paths, err := resolveWildcards(wr, subFlags.Args())
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	zkts, ok := wr.TopoServer().(*zktopo.Server)
 	if !ok {
-		return "", fmt.Errorf("PruneActionLogs requires a zktopo.Server")
+		return fmt.Errorf("PruneActionLogs requires a zktopo.Server")
 	}
 
 	var errCount sync2.AtomicInt32
@@ -206,37 +206,37 @@ func commandPruneActionLogs(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args 
 	}
 	wg.Wait()
 	if errCount.Get() > 0 {
-		return "", fmt.Errorf("some errors occurred, check the log")
+		return fmt.Errorf("some errors occurred, check the log")
 	}
-	return "", nil
+	return nil
 }
 
-func commandExportZkns(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+func commandExportZkns(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
-		return "", err
+		return err
 	}
 	if subFlags.NArg() != 1 {
-		return "", fmt.Errorf("action ExportZkns requires <cell name|zk vt root path>")
+		return fmt.Errorf("action ExportZkns requires <cell name|zk vt root path>")
 	}
 	cell, err := vtPathToCell(subFlags.Arg(0))
 	if err != nil {
-		return "", err
+		return err
 	}
-	return "", wr.ExportZkns(cell)
+	return wr.ExportZkns(cell)
 }
 
-func commandExportZknsForKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+func commandExportZknsForKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
-		return "", err
+		return err
 	}
 	if subFlags.NArg() != 1 {
-		return "", fmt.Errorf("action ExportZknsForKeyspace requires <keyspace|zk global keyspace path>")
+		return fmt.Errorf("action ExportZknsForKeyspace requires <keyspace|zk global keyspace path>")
 	}
 	keyspace, err := keyspaceParamToKeyspace(subFlags.Arg(0))
 	if err != nil {
-		return "", err
+		return err
 	}
-	return "", wr.ExportZknsForKeyspace(keyspace)
+	return wr.ExportZknsForKeyspace(keyspace)
 }
 
 func getActions(wr *wrangler.Wrangler, zconn zk.Conn, actionPath string) ([]*actionnode.ActionNode, error) {
@@ -340,16 +340,16 @@ func listActionsByShard(wr *wrangler.Wrangler, keyspace, shard string) error {
 	return nil
 }
 
-func commandListShardActions(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+func commandListShardActions(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
-		return "", err
+		return err
 	}
 	if subFlags.NArg() != 1 {
-		return "", fmt.Errorf("action ListShardActions requires <keyspace/shard|zk shard path>")
+		return fmt.Errorf("action ListShardActions requires <keyspace/shard|zk shard path>")
 	}
 	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
-		return "", err
+		return err
 	}
-	return "", listActionsByShard(wr, keyspace, shard)
+	return listActionsByShard(wr, keyspace, shard)
 }
