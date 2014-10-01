@@ -513,6 +513,8 @@ primary key (name)
                              'TabletTypes: master,rdonly,replica',
                              keyspace_id_type=keyspace_id_type)
 
+    utils.pause("AAAAAAAAAAAAAAAAAAAAAAAAA")
+
     # take the snapshot for the split
     utils.run_vtctl(['MultiSnapshot', '--spec=80-c0-',
                      '--exclude_tables=unrelated',
