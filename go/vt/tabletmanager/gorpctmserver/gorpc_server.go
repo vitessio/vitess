@@ -5,7 +5,6 @@
 package gorpctmserver
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -58,14 +57,7 @@ func (tm *TabletManager) ExecuteHook(context *rpcproto.Context, args *hook.Hook,
 
 func (tm *TabletManager) GetSchema(context *rpcproto.Context, args *gorpcproto.GetSchemaArgs, reply *myproto.SchemaDefinition) error {
 	return tm.agent.RpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_GET_SCHEMA, args, reply, func() error {
-		// read the tablet to get the dbname
-		tablet, err := tm.agent.TopoServer.GetTablet(tm.agent.TabletAlias)
-		if err != nil {
-			return err
-		}
-
-		// and get the schema
-		sd, err := tm.agent.Mysqld.GetSchema(tablet.DbName(), args.Tables, args.ExcludeTables, args.IncludeViews)
+		sd, err := tm.agent.GetSchema(args.Tables, args.ExcludeTables, args.IncludeViews)
 		if err == nil {
 			*reply = *sd
 		}
@@ -164,11 +156,7 @@ func (tm *TabletManager) SlaveStatus(context *rpcproto.Context, args *rpc.Unused
 
 func (tm *TabletManager) WaitSlavePosition(context *rpcproto.Context, args *gorpcproto.WaitSlavePositionArgs, reply *myproto.ReplicationStatus) error {
 	return tm.agent.RpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_WAIT_SLAVE_POSITION, args, reply, func() error {
-		if err := tm.agent.Mysqld.WaitMasterPos(args.Position, args.WaitTimeout); err != nil {
-			return err
-		}
-
-		status, err := tm.agent.Mysqld.SlaveStatus()
+		status, err := tm.agent.WaitSlavePosition(args.Position, args.WaitTimeout)
 		if err == nil {
 			*reply = *status
 		}
@@ -204,13 +192,7 @@ func (tm *TabletManager) StopSlave(context *rpcproto.Context, args *rpc.UnusedRe
 
 func (tm *TabletManager) StopSlaveMinimum(context *rpcproto.Context, args *gorpcproto.StopSlaveMinimumArgs, reply *myproto.ReplicationStatus) error {
 	return tm.agent.RpcWrapLock(context.RemoteAddr, actionnode.TABLET_ACTION_STOP_SLAVE_MINIMUM, args, reply, true, func() error {
-		if err := tm.agent.Mysqld.WaitMasterPos(args.Position, args.WaitTime); err != nil {
-			return err
-		}
-		if err := tm.agent.Mysqld.StopSlave(map[string]string{"TABLET_ALIAS": tm.agent.TabletAlias.String()}); err != nil {
-			return err
-		}
-		status, err := tm.agent.Mysqld.SlaveStatus()
+		status, err := tm.agent.StopSlaveMinimum(args.Position, args.WaitTime)
 		if err == nil {
 			*reply = *status
 		}
@@ -249,40 +231,25 @@ func (tm *TabletManager) WaitBlpPosition(context *rpcproto.Context, args *gorpcp
 
 func (tm *TabletManager) StopBlp(context *rpcproto.Context, args *rpc.UnusedRequest, reply *blproto.BlpPositionList) error {
 	return tm.agent.RpcWrapLock(context.RemoteAddr, actionnode.TABLET_ACTION_STOP_BLP, args, reply, true, func() error {
-		if tm.agent.BinlogPlayerMap == nil {
-			return fmt.Errorf("No BinlogPlayerMap configured")
+		positions, err := tm.agent.StopBlp()
+		if err == nil {
+			*reply = *positions
 		}
-		tm.agent.BinlogPlayerMap.Stop()
-		positions, err := tm.agent.BinlogPlayerMap.BlpPositionList()
-		if err != nil {
-			return err
-		}
-		*reply = *positions
-		return nil
+		return err
 	})
 }
 
 func (tm *TabletManager) StartBlp(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLock(context.RemoteAddr, actionnode.TABLET_ACTION_START_BLP, args, reply, true, func() error {
-		if tm.agent.BinlogPlayerMap == nil {
-			return fmt.Errorf("No BinlogPlayerMap configured")
-		}
-		tm.agent.BinlogPlayerMap.Start()
-		return nil
+		return tm.agent.StartBlp()
 	})
 }
 
 func (tm *TabletManager) RunBlpUntil(context *rpcproto.Context, args *gorpcproto.RunBlpUntilArgs, reply *myproto.ReplicationPosition) error {
 	return tm.agent.RpcWrapLock(context.RemoteAddr, actionnode.TABLET_ACTION_RUN_BLP_UNTIL, args, reply, true, func() error {
-		if tm.agent.BinlogPlayerMap == nil {
-			return fmt.Errorf("No BinlogPlayerMap configured")
-		}
-		if err := tm.agent.BinlogPlayerMap.RunUntil(args.BlpPositionList, args.WaitTimeout); err != nil {
-			return err
-		}
-		position, err := tm.agent.Mysqld.MasterPosition()
+		position, err := tm.agent.RunBlpUntil(args.BlpPositionList, args.WaitTimeout)
 		if err == nil {
-			*reply = position
+			*reply = *position
 		}
 		return err
 	})

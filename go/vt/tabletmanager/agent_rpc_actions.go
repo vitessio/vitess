@@ -18,6 +18,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/mysql/proto"
+	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
@@ -87,6 +88,19 @@ func (agent *ActionAgent) Sleep(duration time.Duration) {
 func (agent *ActionAgent) ExecuteHook(hk *hook.Hook) *hook.HookResult {
 	topotools.ConfigureTabletHook(hk, agent.TabletAlias)
 	return hk.Execute()
+}
+
+// GetSchema returns the schema.
+// Should be called under RpcWrap.
+func (agent *ActionAgent) GetSchema(tables, excludeTables []string, includeViews bool) (*myproto.SchemaDefinition, error) {
+	// read the tablet to get the dbname
+	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	// and get the schema
+	return agent.Mysqld.GetSchema(tablet.DbName(), tables, excludeTables, includeViews)
 }
 
 // ReloadSchema will reload the schema
@@ -331,6 +345,59 @@ func (agent *ActionAgent) SlaveWasRestarted(swrd *actionnode.SlaveWasRestartedAr
 // Should be called under RpcWrapLockAction.
 func (agent *ActionAgent) BreakSlaves() error {
 	return agent.Mysqld.BreakSlaves()
+}
+
+// WaitSlavePosition waits until we reach the provided position,
+// and returns the current position
+func (agent *ActionAgent) WaitSlavePosition(position myproto.ReplicationPosition, waitTimeout time.Duration) (*myproto.ReplicationStatus, error) {
+	if err := agent.Mysqld.WaitMasterPos(position, waitTimeout); err != nil {
+		return nil, err
+	}
+
+	return agent.Mysqld.SlaveStatus()
+}
+
+// StopSlaveMinimum will stop the slave after it reaches at least the
+// provided position.
+func (agent *ActionAgent) StopSlaveMinimum(position myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error) {
+	if err := agent.Mysqld.WaitMasterPos(position, waitTime); err != nil {
+		return nil, err
+	}
+	if err := agent.Mysqld.StopSlave(agent.hookExtraEnv()); err != nil {
+		return nil, err
+	}
+	return agent.Mysqld.SlaveStatus()
+}
+
+// StopBlp stops the binlog players, and return their positions.
+func (agent *ActionAgent) StopBlp() (*blproto.BlpPositionList, error) {
+	if agent.BinlogPlayerMap == nil {
+		return nil, fmt.Errorf("No BinlogPlayerMap configured")
+	}
+	agent.BinlogPlayerMap.Stop()
+	return agent.BinlogPlayerMap.BlpPositionList()
+}
+
+// StartBlp starts the binlog players
+func (agent *ActionAgent) StartBlp() error {
+	if agent.BinlogPlayerMap == nil {
+		return fmt.Errorf("No BinlogPlayerMap configured")
+	}
+	agent.BinlogPlayerMap.Start()
+	return nil
+}
+
+// RunBlpUntil runs the binlog player server until the position is reached,
+// and returns the current mysql master replication position.
+func (agent *ActionAgent) RunBlpUntil(bpl *blproto.BlpPositionList, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
+	if agent.BinlogPlayerMap == nil {
+		return nil, fmt.Errorf("No BinlogPlayerMap configured")
+	}
+	if err := agent.BinlogPlayerMap.RunUntil(bpl, waitTime); err != nil {
+		return nil, err
+	}
+	rp, err := agent.Mysqld.MasterPosition()
+	return &rp, err
 }
 
 // TabletExternallyReparented updates all topo records so the current
