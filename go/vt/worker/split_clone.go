@@ -7,14 +7,11 @@ package worker
 import (
 	"fmt"
 	"html/template"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/youtube/vitess/go/event"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -410,9 +407,10 @@ func (scw *SplitCloneWorker) copy() error {
 	createDbCmds = append(createDbCmds, sourceSchemaDefinition.DatabaseSchema)
 	createViewCmds := make([]string, 0, 16)
 	alterTablesCmds := make([]string, 0, 16)
-	for i, td := range sourceSchemaDefinition.TableDefinitions {
-		scw.tableStatus[i].mu.Lock()
+	columnIndexes := make([]int, len(sourceSchemaDefinition.TableDefinitions))
+	for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
 		if td.Type == myproto.TABLE_BASE_TABLE {
+			// build the create and alter statements
 			create, alter, err := mysqlctl.MakeSplitCreateTableSql(td.Schema, "{{.DatabaseName}}", td.Name, scw.strategy)
 			if err != nil {
 				return fmt.Errorf("MakeSplitCreateTableSql(%v) returned: %v", td.Name, err)
@@ -421,14 +419,30 @@ func (scw *SplitCloneWorker) copy() error {
 			if alter != "" {
 				alterTablesCmds = append(alterTablesCmds, alter)
 			}
-			scw.tableStatus[i].state = "before table creation"
-			scw.tableStatus[i].rowCount = td.RowCount
+
+			// find the column to split on
+			columnIndexes[tableIndex] = -1
+			for i, name := range td.Columns {
+				if name == scw.keyspaceInfo.ShardingColumnName {
+					columnIndexes[tableIndex] = i
+					break
+				}
+			}
+			if columnIndexes[tableIndex] == -1 {
+				return fmt.Errorf("table %v doesn't have a column named '%v'", td.Name, scw.keyspaceInfo.ShardingColumnName)
+			}
+
+			scw.tableStatus[tableIndex].mu.Lock()
+			scw.tableStatus[tableIndex].state = "before table creation"
+			scw.tableStatus[tableIndex].rowCount = td.RowCount
+			scw.tableStatus[tableIndex].mu.Unlock()
 		} else {
+			scw.tableStatus[tableIndex].mu.Lock()
 			createViewCmds = append(createViewCmds, td.Schema)
-			scw.tableStatus[i].state = "before view creation"
-			scw.tableStatus[i].rowCount = 0
+			scw.tableStatus[tableIndex].state = "before view creation"
+			scw.tableStatus[tableIndex].rowCount = 0
+			scw.tableStatus[tableIndex].mu.Unlock()
 		}
-		scw.tableStatus[i].mu.Unlock()
 	}
 
 	// For each destination tablet (in parallel):
@@ -467,13 +481,13 @@ func (scw *SplitCloneWorker) copy() error {
 			go func(ti *topo.TabletInfo, insertChannel chan string) {
 				defer destinationWaitGroup.Done()
 				scw.wr.Logger().Infof("Creating tables on tablet %v", ti.Alias)
-				if err := scw.runSqlCommands(ti, createDbCmds, abort); err != nil {
+				if err := runSqlCommands(scw.wr, ti, createDbCmds, abort); err != nil {
 					processError("createDbCmds failed: %v", err)
 					return
 				}
 				if len(createViewCmds) > 0 {
 					scw.wr.Logger().Infof("Creating views on tablet %v", ti.Alias)
-					if err := scw.runSqlCommands(ti, createViewCmds, abort); err != nil {
+					if err := runSqlCommands(scw.wr, ti, createViewCmds, abort); err != nil {
 						processError("createViewCmds failed: %v", err)
 						return
 					}
@@ -482,21 +496,8 @@ func (scw *SplitCloneWorker) copy() error {
 					destinationWaitGroup.Add(1)
 					go func() {
 						defer destinationWaitGroup.Done()
-						for {
-							select {
-							case cmd, ok := <-insertChannel:
-								if !ok {
-									return
-								}
-								cmd = "INSERT INTO `" + ti.DbName() + "`." + cmd
-								_, err := scw.wr.ActionInitiator().ExecuteFetch(ti, cmd, 0, false, true, 30*time.Second)
-								if err != nil {
-									processError("ExecuteFetch failed: %v", err)
-									return
-								}
-							case <-abort:
-								return
-							}
+						if err := executeFetchLoop(scw.wr, ti, insertChannel, abort); err != nil {
+							processError("executeFetchLoop failed: %v", err)
 						}
 					}()
 				}
@@ -514,21 +515,9 @@ func (scw *SplitCloneWorker) copy() error {
 				continue
 			}
 
-			// find the column to split on
-			columnIndex := -1
-			for i, name := range td.Columns {
-				if name == scw.keyspaceInfo.ShardingColumnName {
-					columnIndex = i
-					break
-				}
-			}
-			if columnIndex == -1 {
-				return fmt.Errorf("table %v doesn't have a %v column", td.Name, scw.keyspaceInfo.ShardingColumnName)
-			}
+			rowSplitter := NewRowSplitter(scw.destinationShards, scw.keyspaceInfo.ShardingColumnType, columnIndexes[tableIndex])
 
-			rowSplitter := NewRowSplitter(scw.destinationShards, scw.keyspaceInfo.ShardingColumnType, columnIndex)
-
-			chunks, err := scw.findChunks(scw.sourceTablets[shardIndex], td)
+			chunks, err := findChunks(scw.wr, scw.sourceTablets[shardIndex], &td, scw.minTableSizeForSplit, scw.sourceReaderCount)
 			if err != nil {
 				return err
 			}
@@ -542,23 +531,7 @@ func (scw *SplitCloneWorker) copy() error {
 					defer sema.Release()
 
 					// build the query, and start the streaming
-					selectSQL := "SELECT " + strings.Join(td.Columns, ", ") + " FROM " + td.Name
-					if chunks[chunkIndex] != "" || chunks[chunkIndex+1] != "" {
-						scw.wr.Logger().Infof("Starting to stream all data from tablet %v table %v between '%v' and '%v'", scw.sourceAliases[shardIndex], td.Name, chunks[chunkIndex], chunks[chunkIndex+1])
-						clauses := make([]string, 0, 2)
-						if chunks[chunkIndex] != "" {
-							clauses = append(clauses, td.PrimaryKeyColumns[0]+">="+chunks[chunkIndex])
-						}
-						if chunks[chunkIndex+1] != "" {
-							clauses = append(clauses, td.PrimaryKeyColumns[0]+"<"+chunks[chunkIndex+1])
-						}
-						selectSQL += " WHERE " + strings.Join(clauses, " AND ")
-					} else {
-						scw.wr.Logger().Infof("Starting to stream all data from tablet %v table %v", scw.sourceAliases[shardIndex], td.Name)
-					}
-					if len(td.PrimaryKeyColumns) > 0 {
-						selectSQL += " ORDER BY " + strings.Join(td.PrimaryKeyColumns, ", ")
-					}
+					selectSQL := buildSQLFromChunks(scw.wr, td, chunks, chunkIndex, scw.sourceAliases[shardIndex].String())
 					qrr, err := NewQueryResultReaderForTablet(scw.wr.TopoServer(), scw.sourceAliases[shardIndex], selectSQL)
 					if err != nil {
 						processError("NewQueryResultReaderForTablet failed: %v", err)
@@ -566,40 +539,8 @@ func (scw *SplitCloneWorker) copy() error {
 					}
 
 					// process the data
-					baseCmd := td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
-				loop:
-					for {
-						select {
-						case r, ok := <-qrr.Output:
-							if !ok {
-								if err := qrr.Error(); err != nil {
-									// error case
-									processError("QueryResultReader failed: %v", err)
-									return
-								}
-
-								// we're done with the data
-								break loop
-							}
-
-							// Split the rows by keyspace_id, and insert each chunk into each destination
-							sr, err := rowSplitter.Split(r.Rows)
-							if err != nil {
-								processError("rowSplitter.Split failed: %v", err)
-								return
-							}
-
-							// send the rows to be inserted
-							scw.tableStatus[tableIndex].addCopiedRows(len(r.Rows))
-							for i, cs := range insertChannels {
-								cmd := baseCmd + makeValueString(qrr.Fields, sr[i])
-								for _, c := range cs {
-									c <- cmd
-								}
-							}
-						case <-abort:
-							return
-						}
+					if err := scw.processData(td, tableIndex, qrr, rowSplitter, insertChannels, abort); err != nil {
+						processError("processData failed: %v", err)
 					}
 				}(td, tableIndex, chunkIndex)
 			}
@@ -625,7 +566,7 @@ func (scw *SplitCloneWorker) copy() error {
 				go func(ti *topo.TabletInfo) {
 					defer destinationWaitGroup.Done()
 					scw.wr.Logger().Infof("Altering tables on tablet %v", ti.Alias)
-					if err := scw.runSqlCommands(ti, alterTablesCmds, abort); err != nil {
+					if err := runSqlCommands(scw.wr, ti, alterTablesCmds, abort); err != nil {
 						processError("alterTablesCmds failed on tablet %v: %v", ti.Alias, err)
 					}
 				}(scw.destinationTablets[shardIndex][tabletAlias])
@@ -662,7 +603,7 @@ func (scw *SplitCloneWorker) copy() error {
 				go func(ti *topo.TabletInfo) {
 					defer destinationWaitGroup.Done()
 					scw.wr.Logger().Infof("Making and populating blp_checkpoint table on tablet %v", ti.Alias)
-					if err := scw.runSqlCommands(ti, queries, abort); err != nil {
+					if err := runSqlCommands(scw.wr, ti, queries, abort); err != nil {
 						processError("blp_checkpoint queries failed on tablet %v: %v", ti.Alias, err)
 					}
 				}(scw.destinationTablets[shardIndex][tabletAlias])
@@ -704,147 +645,42 @@ func (scw *SplitCloneWorker) copy() error {
 	return firstError
 }
 
-func (scw *SplitCloneWorker) runSqlCommands(ti *topo.TabletInfo, commands []string, abort chan struct{}) error {
-	for _, command := range commands {
-		command, err := fillStringTemplate(command, map[string]string{"DatabaseName": ti.DbName()})
-		if err != nil {
-			return fmt.Errorf("fillStringTemplate failed: %v", err)
-		}
+// processData pumps the data out of the provided QueryResultReader.
+// It returns any error the source encounters.
+func (scw *SplitCloneWorker) processData(td myproto.TableDefinition, tableIndex int, qrr *QueryResultReader, rowSplitter *RowSplitter, insertChannels [][]chan string, abort chan struct{}) error {
+	baseCmd := td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
 
-		_, err = scw.wr.ActionInitiator().ExecuteFetch(ti, command, 0, false, true, 30*time.Second)
-		if err != nil {
-			return err
-		}
-
-		// check on abort
+	for {
 		select {
+		case r, ok := <-qrr.Output:
+			if !ok {
+				return qrr.Error()
+			}
+
+			// Split the rows by keyspace_id, and insert
+			// each chunk into each destination
+			sr, err := rowSplitter.Split(r.Rows)
+			if err != nil {
+				return fmt.Errorf("RowSplitter failed for table %v: %v", td.Name, err)
+			}
+
+			// send the rows to be inserted
+			scw.tableStatus[tableIndex].addCopiedRows(len(r.Rows))
+			for i, cs := range insertChannels {
+				// one of the chunks might be empty, so no need
+				// to send data in that case
+				if len(sr[i]) > 0 {
+					cmd := baseCmd + makeValueString(qrr.Fields, sr[i])
+					for _, c := range cs {
+						c <- cmd
+					}
+				}
+			}
 		case <-abort:
+			// FIXME(alainjobart): note this select case
+			// could be starved here, and we might miss
+			// the abort in some corner cases.
 			return nil
-		default:
-			break
 		}
 	}
-
-	return nil
-}
-
-// findChunks returns an array of chunks to use for splitting up a table
-// into multiple data chunks. It only works for tables with a primary key
-// (and the primary key first column is an integer type).
-// The array will always look like:
-// "", "value1", "value2", ""
-// A non-split tablet will just return:
-// "", ""
-func (scw *SplitCloneWorker) findChunks(ti *topo.TabletInfo, td myproto.TableDefinition) ([]string, error) {
-	result := []string{"", ""}
-
-	// eliminate a few cases we don't split tables for
-	if len(td.PrimaryKeyColumns) == 0 {
-		// no primary key, what can we do?
-		return result, nil
-	}
-	if td.DataLength < scw.minTableSizeForSplit {
-		// table is too small to split up
-		return result, nil
-	}
-
-	// get the min and max of the leading column of the primary key
-	query := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v.%v", td.PrimaryKeyColumns[0], td.PrimaryKeyColumns[0], ti.DbName(), td.Name)
-	qr, err := scw.wr.ActionInitiator().ExecuteFetch(ti, query, 1, true, false, 30*time.Second)
-	if err != nil {
-		scw.wr.Logger().Infof("Not splitting table %v into multiple chunks: %v", td.Name, err)
-		return result, nil
-	}
-	if len(qr.Rows) != 1 {
-		scw.wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot get min and max", td.Name)
-		return result, nil
-	}
-	if qr.Rows[0][0].IsNull() || qr.Rows[0][1].IsNull() {
-		scw.wr.Logger().Infof("Not splitting table %v into multiple chunks, min or max is NULL: %v %v", td.Name, qr.Rows[0][0], qr.Rows[0][1])
-		return result, nil
-	}
-	switch qr.Fields[0].Type {
-	case mproto.VT_TINY, mproto.VT_SHORT, mproto.VT_LONG, mproto.VT_LONGLONG, mproto.VT_INT24:
-		minNumeric := sqltypes.MakeNumeric(qr.Rows[0][0].Raw())
-		maxNumeric := sqltypes.MakeNumeric(qr.Rows[0][1].Raw())
-		if qr.Rows[0][0].Raw()[0] == '-' {
-			// signed values, use int64
-			min, err := minNumeric.ParseInt64()
-			if err != nil {
-				scw.wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, minNumeric, err)
-				return result, nil
-			}
-			max, err := maxNumeric.ParseInt64()
-			if err != nil {
-				scw.wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert max: %v %v", td.Name, maxNumeric, err)
-				return result, nil
-			}
-			interval := (max - min) / int64(scw.sourceReaderCount)
-			if interval == 0 {
-				scw.wr.Logger().Infof("Not splitting table %v into multiple chunks, interval=0: %v %v", max, min)
-				return result, nil
-			}
-
-			result = make([]string, scw.sourceReaderCount+1)
-			result[0] = ""
-			result[scw.sourceReaderCount] = ""
-			for i := int64(1); i < int64(scw.sourceReaderCount); i++ {
-				result[i] = fmt.Sprintf("%v", min+interval*i)
-			}
-			return result, nil
-		}
-
-		// unsigned values, use uint64
-		min, err := minNumeric.ParseUint64()
-		if err != nil {
-			scw.wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, minNumeric, err)
-			return result, nil
-		}
-		max, err := maxNumeric.ParseUint64()
-		if err != nil {
-			scw.wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert max: %v %v", td.Name, maxNumeric, err)
-			return result, nil
-		}
-		interval := (max - min) / uint64(scw.sourceReaderCount)
-		if interval == 0 {
-			scw.wr.Logger().Infof("Not splitting table %v into multiple chunks, interval=0: %v %v", max, min)
-			return result, nil
-		}
-
-		result = make([]string, scw.sourceReaderCount+1)
-		result[0] = ""
-		result[scw.sourceReaderCount] = ""
-		for i := uint64(1); i < uint64(scw.sourceReaderCount); i++ {
-			result[i] = fmt.Sprintf("%v", min+interval*i)
-		}
-		return result, nil
-
-	case mproto.VT_FLOAT, mproto.VT_DOUBLE:
-		min, err := strconv.ParseFloat(qr.Rows[0][0].String(), 64)
-		if err != nil {
-			scw.wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert min: %v %v", td.Name, qr.Rows[0][0], err)
-			return result, nil
-		}
-		max, err := strconv.ParseFloat(qr.Rows[0][1].String(), 64)
-		if err != nil {
-			scw.wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot convert max: %v %v", td.Name, qr.Rows[0][1].String(), err)
-			return result, nil
-		}
-		interval := (max - min) / float64(scw.sourceReaderCount)
-		if interval == 0 {
-			scw.wr.Logger().Infof("Not splitting table %v into multiple chunks, interval=0: %v %v", max, min)
-			return result, nil
-		}
-
-		result = make([]string, scw.sourceReaderCount+1)
-		result[0] = ""
-		result[scw.sourceReaderCount] = ""
-		for i := 1; i < scw.sourceReaderCount; i++ {
-			result[i] = fmt.Sprintf("%v", min+interval*float64(i))
-		}
-		return result, nil
-	}
-
-	scw.wr.Logger().Infof("Not splitting table %v into multiple chunks, primary key not numeric", td.Name)
-	return result, nil
 }
