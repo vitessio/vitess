@@ -1,15 +1,18 @@
+// Copyright 2014, Google Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package worker
 
 import (
 	"fmt"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-// RowSplitter is a helper function to split rows into multiple
+// RowSplitter is a helper class to split rows into multiple
 // subsets targetted to different shards.
 type RowSplitter struct {
 	Type       key.KeyspaceIdType
@@ -31,10 +34,10 @@ func NewRowSplitter(shardInfos []*topo.ShardInfo, typ key.KeyspaceIdType, valueI
 }
 
 // Split will split the rows into subset for each distribution
-func (rs *RowSplitter) Split(qr *mproto.QueryResult) ([][][]sqltypes.Value, error) {
+func (rs *RowSplitter) Split(rows [][]sqltypes.Value) ([][][]sqltypes.Value, error) {
 	result := make([][][]sqltypes.Value, len(rs.KeyRanges))
 	if rs.Type == key.KIT_UINT64 {
-		for _, row := range qr.Rows {
+		for _, row := range rows {
 			v := sqltypes.MakeNumeric(row[rs.ValueIndex].Raw())
 			i, err := v.ParseUint64()
 			if err != nil {

@@ -383,7 +383,7 @@ func (scw *SplitCloneWorker) copy() error {
 	// TODO(alainjobart): for now, we assume the schema is compatible
 	// on all source shards. Furthermore, we estimate the number of rows
 	// in each source shard for each table to be about the same
-	// (rowCount is used for estimate on ETA)
+	// (rowCount is used to estimate an ETA)
 	sourceSchemaDefinition, err := scw.wr.GetSchema(scw.sourceAliases[0], nil, scw.excludeTables, true)
 	if err != nil {
 		return fmt.Errorf("cannot get schema from source %v: %v", scw.sourceAliases[0], err)
@@ -583,7 +583,7 @@ func (scw *SplitCloneWorker) copy() error {
 							}
 
 							// Split the rows by keyspace_id, and insert each chunk into each destination
-							sr, err := rowSplitter.Split(r)
+							sr, err := rowSplitter.Split(r.Rows)
 							if err != nil {
 								processError("rowSplitter.Split failed: %v", err)
 								return
@@ -676,8 +676,8 @@ func (scw *SplitCloneWorker) copy() error {
 
 	// Now we're done with data copy, update the shard's source info.
 	// TODO(alainjobart) this is a superset, some shards may not
-	// overlap, have to deal with this better (for 2 -> 3 splits
-	// for instance)
+	// overlap, have to deal with this better (for N -> M splits
+	// where both N>1 and M>1)
 	for _, si := range scw.destinationShards {
 		scw.wr.Logger().Infof("Setting SourceShard on shard %v/%v", si.Keyspace(), si.ShardName())
 		if err := scw.wr.SetSourceShards(si.Keyspace(), si.ShardName(), scw.sourceAliases, nil); err != nil {

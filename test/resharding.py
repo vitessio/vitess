@@ -516,7 +516,6 @@ primary key (name)
                              keyspace_id_type=keyspace_id_type)
 
     if use_clone_worker:
-      utils.pause("AAAAAAAAAAAAAAAAAAAAAAAAA")
       # the worker will do everything. We test with source_reader_count=10
       # (down from default=20) as connection pool is not big enough for 20.
       # min_table_size_for_split is set to 1 as to force a split even on the
