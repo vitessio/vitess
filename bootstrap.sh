@@ -42,6 +42,11 @@ go get code.google.com/p/go.net/context
 go get code.google.com/p/go.tools/cmd/goimports
 go get github.com/golang/glog
 
+# Packages for uploading code coverage to coveralls.io
+go get code.google.com/p/go.tools/cmd/cover
+go get github.com/modocache/gover
+go get github.com/mattn/goveralls
+
 ln -snf $VTTOP/config $VTROOT/config
 ln -snf $VTTOP/data $VTROOT/data
 ln -snf $VTTOP/py $VTROOT/py-vtdb

@@ -40,6 +40,11 @@ unit_test_cover:
 unit_test_race:
 	go test -race ./go/...
 
+unit_test_goveralls:
+	go list -f '{{if len .TestGoFiles}}go test -coverprofile={{.Dir}}/.coverprofile {{.ImportPath}}{{end}}' ./go/... | xargs -i sh -c {}
+	gover ./go/
+	goveralls -coverprofile=gover.coverprofile -repotoken $$COVERALLS_TOKEN
+
 queryservice_test:
 	echo $$(date): Running test/queryservice_test.py...
 	if [ -e "/usr/bin/memcached" ]; then \
@@ -63,34 +68,47 @@ site_integration_test_files = \
 	zkocc_test.py
 
 # These tests should be run by developers after making code changes.
-integration_test_files = \
-	binlog.py \
-	clone.py \
-	initial_sharding_bytes.py \
-	initial_sharding.py \
+# integration tests that take under 45s to run
+small_integration_test_files = \
 	keyrange_test.py \
-	keyspace_test.py \
 	mysqlctl.py \
-	reparent.py \
-	resharding_bytes.py \
-	resharding.py \
-	rowcache_invalidator.py \
-	secure.py \
-	schema.py \
 	sharded.py \
-	tabletmanager.py \
+	keyspace_test.py \
 	update_stream.py \
+	schema.py \
 	vertical_split.py \
+	secure.py \
 	vertical_split_vtgate.py \
+	binlog.py \
+	clone.py
+
+# integration tests that take between 45s and 1 min
+medium_integration_test_files = \
+	tabletmanager.py \
+	reparent.py \
 	vtdb_test.py \
+	rowcache_invalidator.py \
+	initial_sharding.py
+
+# integration tests that take between 1-2 mins
+large_integration_test_files = \
 	vtgatev2_test.py \
-	zkocc_test.py
+	resharding_bytes.py \
+	zkocc_test.py \
+	initial_sharding_bytes.py
+
+# integration tests that take more than 2 mins
+huge_integration_test_files = \
+	resharding.py
 
 .ONESHELL:
 SHELL = /bin/bash
-integration_test:
+
+# function to execute a list of integration test files
+# exits on first failure
+define run_integration_tests
 	cd test ; \
-	for t in $(integration_test_files) ; do \
+	for t in $1 ; do \
 		echo $$(date): Running test/$$t... ; \
 		output=$$(time ./$$t $$VT_TEST_FLAGS 2>&1) ; \
 		if [[ $$? != 0 ]]; then \
@@ -99,22 +117,32 @@ integration_test:
 		fi ; \
 		echo ; \
 	done
+endef
+
+small_integration_test:
+	$(call run_integration_tests, $(small_integration_test_files))
+
+medium_integration_test:
+	$(call run_integration_tests, $(medium_integration_test_files))
+
+large_integration_test:
+	$(call run_integration_tests, $(large_integration_test_files))
+
+huge_integration_test:
+	$(call run_integration_tests, $(huge_integration_test_files))
+
+integration_test: small_integration_test medium_integration_test large_integration_test huge_integration_test
 
 site_integration_test:
-	cd test ; \
-	for t in $(site_integration_test_files) ; do \
-		echo $$(date): Running test/$$t... ; \
-		output=$$(time ./$$t $$VT_TEST_FLAGS 2>&1) ; \
-		if [[ $$? != 0 ]]; then \
-			echo "$$output" >&2 ; \
-			exit 1 ; \
-		fi ; \
-		echo ; \
-	done
+	$(call run_integration_tests, $(site_integration_test_files))
 
 # this rule only works if bootstrap.sh was successfully ran in ./java
 java_test:
 	cd java && mvn verify
+
+java_vtgate_client_test:
+	mvn -f java/gorpc/pom.xml clean install -DskipTests
+	mvn -f java/vtgate-client/pom.xml clean verify
 
 v3_test:
 	cd test && ./vtgatev3_test.py
