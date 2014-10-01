@@ -1342,7 +1342,7 @@ func commandShardReplicationAdd(wr *wrangler.Wrangler, subFlags *flag.FlagSet, a
 	if err != nil {
 		return err
 	}
-	return topo.AddShardReplicationRecord(wr.TopoServer(), keyspace, shard, tabletAlias, parentAlias)
+	return topo.UpdateShardReplicationRecord(wr.TopoServer(), keyspace, shard, tabletAlias, parentAlias)
 }
 
 func commandShardReplicationRemove(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

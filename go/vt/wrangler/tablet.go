@@ -84,7 +84,7 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 							return nil
 						}
 
-						if err := topo.CreateTabletReplicationData(wr.ts, tablet); err != nil {
+						if err := topo.UpdateTabletReplicationData(wr.ts, tablet); err != nil {
 							log.Warningf("failed updating tablet replication data for %v: %v", tablet.Alias, err)
 							// now fall through the Scrap case
 						} else {

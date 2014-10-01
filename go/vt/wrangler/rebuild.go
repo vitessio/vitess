@@ -276,12 +276,12 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 				}
 			}
 			mu.Unlock()
-			err := topo.CreateTabletReplicationData(wr.ts, ti.Tablet)
+			err := topo.UpdateTabletReplicationData(wr.ts, ti.Tablet)
 			if err != nil {
 				mu.Lock()
 				hasErr = true
 				mu.Unlock()
-				wr.logger.Warningf("failed creating replication path: %v", err)
+				wr.logger.Warningf("failed updating replication data: %v", err)
 			}
 		}(ti)
 	}

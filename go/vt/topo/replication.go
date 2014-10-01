@@ -68,9 +68,9 @@ func (sri *ShardReplicationInfo) Shard() string {
 	return sri.shard
 }
 
-// AddShardReplicationRecord is a low level function to add an
+// UpdateShardReplicationRecord is a low level function to add / update an
 // entry to the ShardReplication object.
-func AddShardReplicationRecord(ts Server, keyspace, shard string, tabletAlias, parent TabletAlias) error {
+func UpdateShardReplicationRecord(ts Server, keyspace, shard string, tabletAlias, parent TabletAlias) error {
 	return ts.UpdateShardReplicationFields(tabletAlias.Cell, keyspace, shard, func(sr *ShardReplication) error {
 		// not very efficient, but easy to read
 		links := make([]ReplicationLink, 0, len(sr.ReplicationLinks)+1)
@@ -82,16 +82,12 @@ func AddShardReplicationRecord(ts Server, keyspace, shard string, tabletAlias, p
 					continue
 				}
 				found = true
-				if parent.IsZero() {
-					// no master now, we skip the record
-					continue
-				}
 				// update the master
 				link.Parent = parent
 			}
 			links = append(links, link)
 		}
-		if !found && !parent.IsZero() {
+		if !found {
 			links = append(links, ReplicationLink{TabletAlias: tabletAlias, Parent: parent})
 		}
 		sr.ReplicationLinks = links

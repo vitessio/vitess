@@ -531,7 +531,10 @@ class TestReparent(unittest.TestCase):
       value = rl['Parent']['Cell'] + '-' + str(rl['Parent']['Uid'])
       hashed_links[key] = value
     logging.debug('Got replication links: %s', str(hashed_links))
-    expected_links = {'test_nj-41983': 'test_nj-62044'}
+    expected_links = {
+        'test_nj-41983': 'test_nj-62044',
+        'test_nj-62044': '-0',
+        }
     if not brutal:
       expected_links['test_nj-62344'] = 'test_nj-62044'
     self.assertEqual(expected_links, hashed_links,

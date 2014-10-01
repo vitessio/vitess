@@ -303,7 +303,7 @@ func (agent *ActionAgent) RestartSlave(rsd *actionnode.RestartSlaveData) error {
 
 	// Insert the new tablet location in the replication graph now that
 	// we've updated the tablet.
-	err = topo.CreateTabletReplicationData(agent.TopoServer, tablet.Tablet)
+	err = topo.UpdateTabletReplicationData(agent.TopoServer, tablet.Tablet)
 	if err != nil && err != topo.ErrNodeExists {
 		return err
 	}
@@ -332,7 +332,7 @@ func (agent *ActionAgent) SlaveWasRestarted(swrd *actionnode.SlaveWasRestartedAr
 
 	// Update the new tablet location in the replication graph now that
 	// we've updated the tablet.
-	err = topo.CreateTabletReplicationData(agent.TopoServer, tablet.Tablet)
+	err = topo.UpdateTabletReplicationData(agent.TopoServer, tablet.Tablet)
 	if err != nil && err != topo.ErrNodeExists {
 		return err
 	}
@@ -562,14 +562,6 @@ func (agent *ActionAgent) tabletExternallyReparentedLocked(actionTimeout time.Du
 // updateReplicationGraphForPromotedSlave amkes sure the newly promoted slave
 // is correctly represented in the replication graph
 func (agent *ActionAgent) updateReplicationGraphForPromotedSlave(tablet *topo.TabletInfo) error {
-	// Remove tablet from the replication graph if this is not
-	// already the master.
-	if tablet.Parent.Uid != topo.NO_TABLET {
-		if err := topo.DeleteTabletReplicationData(agent.TopoServer, tablet.Tablet); err != nil && err != topo.ErrNoNode {
-			return err
-		}
-	}
-
 	// Update tablet regardless - trend towards consistency.
 	tablet.State = topo.STATE_READ_WRITE
 	tablet.Type = topo.TYPE_MASTER
@@ -587,7 +579,7 @@ func (agent *ActionAgent) updateReplicationGraphForPromotedSlave(tablet *topo.Ta
 
 	// Insert the new tablet location in the replication graph now that
 	// we've updated the tablet.
-	err = topo.CreateTabletReplicationData(agent.TopoServer, tablet.Tablet)
+	err = topo.UpdateTabletReplicationData(agent.TopoServer, tablet.Tablet)
 	if err != nil && err != topo.ErrNodeExists {
 		return err
 	}
@@ -667,7 +659,7 @@ func (agent *ActionAgent) changeTypeToRestore(tablet, sourceTablet *topo.TabletI
 	}
 
 	// and create the replication graph items
-	return topo.CreateTabletReplicationData(agent.TopoServer, tablet.Tablet)
+	return topo.UpdateTabletReplicationData(agent.TopoServer, tablet.Tablet)
 }
 
 // ReserveForRestore reserves the current tablet for an upcoming
