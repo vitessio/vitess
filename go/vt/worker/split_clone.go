@@ -387,7 +387,7 @@ func (scw *SplitCloneWorker) copy() error {
 		return fmt.Errorf("cannot get schema from source %v: %v", scw.sourceAliases[0], err)
 	}
 	if len(sourceSchemaDefinition.TableDefinitions) == 0 {
-		return fmt.Errorf("no tables matching the table filter")
+		return fmt.Errorf("no tables matching the table filter in tablet %v", scw.sourceAliases[0])
 	}
 	scw.wr.Logger().Infof("Source tablet 0 has %v tables to copy", len(sourceSchemaDefinition.TableDefinitions))
 	scw.mu.Lock()

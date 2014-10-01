@@ -19,6 +19,8 @@ import environment
 import utils
 import tablet
 
+use_clone_worker = False
+
 keyspace_id_type = keyrange_constants.KIT_UINT64
 pack_keyspace_id = struct.Struct('!Q').pack
 
@@ -513,59 +515,76 @@ primary key (name)
                              'TabletTypes: master,rdonly,replica',
                              keyspace_id_type=keyspace_id_type)
 
-    utils.pause("AAAAAAAAAAAAAAAAAAAAAAAAA")
+    if use_clone_worker:
+      utils.pause("AAAAAAAAAAAAAAAAAAAAAAAAA")
+      # the worker will do everything. We test with source_reader_count=10
+      # (down from default=20) as connection pool is not big enough for 20.
+      # min_table_size_for_split is set to 1 as to force a split even on the
+      # small table we have.
+      utils.run_vtworker(['--cell', 'test_nj',
+                          '--command_display_interval', '10ms',
+                          'SplitClone',
+                          '--exclude_tables' ,'unrelated',
+                          '--strategy', 'populateBlpCheckpoint',
+                          '--source_reader_count', '10',
+                          '--min_table_size_for_split', '1',
+                          'test_keyspace/80-c0'],
+                         auto_log=True)
 
-    # take the snapshot for the split
-    utils.run_vtctl(['MultiSnapshot', '--spec=80-c0-',
-                     '--exclude_tables=unrelated',
-                     shard_1_slave1.tablet_alias], auto_log=True)
+      # TODO(alainjobart): experiment with the dontStartBinlogPlayer option
 
-    # the snapshot_copy hook will copy the snapshot files to
-    # VTDATAROOT/tmp/... as a test. We want to use these for one half,
-    # but not for the other, so we test both scenarios.
-    os.unlink(os.path.join(environment.tmproot, "snapshot-from-%s-for-%s.tar" %
-                           (shard_1_slave1.tablet_alias, "80-c0")))
+    else:
+      # take the snapshot for the split
+      utils.run_vtctl(['MultiSnapshot', '--spec=80-c0-',
+                       '--exclude_tables=unrelated',
+                       shard_1_slave1.tablet_alias], auto_log=True)
 
-    # wait for tablet's binlog server service to be enabled after snapshot
-    shard_1_slave1.wait_for_binlog_server_state("Enabled")
+      # the snapshot_copy hook will copy the snapshot files to
+      # VTDATAROOT/tmp/... as a test. We want to use these for one half,
+      # but not for the other, so we test both scenarios.
+      os.unlink(os.path.join(environment.tmproot, "snapshot-from-%s-for-%s.tar" %
+                             (shard_1_slave1.tablet_alias, "80-c0")))
 
-    # perform the restores: first one from source tablet. We removed the
-    # storage backup, so it's coming from the tablet itself.
-    # we also delay starting the binlog player, then enable it.
-    utils.run_vtctl(['ShardMultiRestore',
-                     '-strategy=populateBlpCheckpoint,dontStartBinlogPlayer',
-                     'test_keyspace/80-c0', shard_1_slave1.tablet_alias],
-                    auto_log=True)
+      # wait for tablet's binlog server service to be enabled after snapshot
+      shard_1_slave1.wait_for_binlog_server_state("Enabled")
 
-    timeout = 10
-    while True:
-      shard_2_master_status = shard_2_master.get_status()
-      if not "not starting because flag &#39;DontStart&#39; is set" in shard_2_master_status:
-        timeout = utils.wait_step('shard 2 master has not failed starting yet', timeout)
-        continue
-      logging.debug("shard 2 master is waiting on flag removal, good")
-      break
+      # perform the restores: first one from source tablet. We removed the
+      # storage backup, so it's coming from the tablet itself.
+      # we also delay starting the binlog player, then enable it.
+      utils.run_vtctl(['ShardMultiRestore',
+                       '-strategy=populateBlpCheckpoint,dontStartBinlogPlayer',
+                       'test_keyspace/80-c0', shard_1_slave1.tablet_alias],
+                      auto_log=True)
 
-    qr = utils.run_vtctl_json(['ExecuteFetch', shard_2_master.tablet_alias, 'update _vt.blp_checkpoint set flags="" where source_shard_uid=0'])
-    self.assertEqual(qr['RowsAffected'], 1)
+      timeout = 10
+      while True:
+        shard_2_master_status = shard_2_master.get_status()
+        if not "not starting because flag &#39;DontStart&#39; is set" in shard_2_master_status:
+          timeout = utils.wait_step('shard 2 master has not failed starting yet', timeout)
+          continue
+        logging.debug("shard 2 master is waiting on flag removal, good")
+        break
 
-    timeout = 10
-    while True:
-      shard_2_master_status = shard_2_master.get_status()
-      if "not starting because flag &#39;DontStart&#39; is set" in shard_2_master_status:
-        timeout = utils.wait_step('shard 2 master has not started replication yet', timeout)
-        continue
-      logging.debug("shard 2 master has started replication, good")
-      break
+      qr = utils.run_vtctl_json(['ExecuteFetch', shard_2_master.tablet_alias, 'update _vt.blp_checkpoint set flags="" where source_shard_uid=0'])
+      self.assertEqual(qr['RowsAffected'], 1)
 
-    # second restore from storage: to be sure, we stop vttablet, and restart
-    # it afterwards
-    shard_1_slave1.kill_vttablet()
-    utils.run_vtctl(['ShardMultiRestore', '-strategy=populateBlpCheckpoint',
-                     'test_keyspace/c0-', shard_1_slave1.tablet_alias],
-                    auto_log=True)
-    shard_1_slave1.start_vttablet(wait_for_state=None)
-    shard_1_slave1.wait_for_binlog_server_state("Enabled")
+      timeout = 10
+      while True:
+        shard_2_master_status = shard_2_master.get_status()
+        if "not starting because flag &#39;DontStart&#39; is set" in shard_2_master_status:
+          timeout = utils.wait_step('shard 2 master has not started replication yet', timeout)
+          continue
+        logging.debug("shard 2 master has started replication, good")
+        break
+
+      # second restore from storage: to be sure, we stop vttablet, and restart
+      # it afterwards
+      shard_1_slave1.kill_vttablet()
+      utils.run_vtctl(['ShardMultiRestore', '-strategy=populateBlpCheckpoint',
+                       'test_keyspace/c0-', shard_1_slave1.tablet_alias],
+                      auto_log=True)
+      shard_1_slave1.start_vttablet(wait_for_state=None)
+      shard_1_slave1.wait_for_binlog_server_state("Enabled")
 
     # check the startup values are in the right place
     self._check_startup_values()
