@@ -16,6 +16,7 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/topotools/events"
 )
 
@@ -85,58 +86,64 @@ func (wr *Wrangler) MigrateServedTypes(keyspace, shard string, servedType topo.T
 		}
 	}
 
-	// first figure out the destination shards
-	// TODO(alainjobart) for now we only look in the same keyspace.
-	// We might want to look elsewhere eventually too, maybe through
-	// an extra command line parameter?
-	shardNames, err := wr.ts.GetShardNames(keyspace)
+	// find overlapping shards in this keyspace
+	osList, err := topotools.FindOverlappingShards(wr.ts, keyspace)
 	if err != nil {
-		return nil
+		return fmt.Errorf("FindOverlappingShards failed: %v", err)
 	}
-	destinationShards := make([]*topo.ShardInfo, 0, 0)
-	for _, shardName := range shardNames {
-		si, err := wr.ts.GetShard(keyspace, shardName)
-		if err != nil {
-			return err
+
+	// find our shard in there
+	os := topotools.OverlappingShardsForShard(osList, shard)
+	if os == nil {
+		return fmt.Errorf("Shard %v is not involved in any overlapping shards", shard)
+	}
+
+	// find which list is which: the sources have no source
+	// shards, the destination have source shards. We check the
+	// first entry in the lists, then just check they're
+	// consistent
+	var sourceShards []*topo.ShardInfo
+	var destinationShards []*topo.ShardInfo
+	if len(os.Left[0].SourceShards) == 0 {
+		sourceShards = os.Left
+		destinationShards = os.Right
+	} else {
+		sourceShards = os.Right
+		destinationShards = os.Left
+	}
+
+	// Verify the sources has the type we're migrating (or not if reverse)
+	for _, si := range sourceShards {
+		foundType := topo.IsTypeInList(servedType, si.ServedTypes)
+		if reverse {
+			if foundType {
+				return fmt.Errorf("Source shard %v/%v is already serving type %v", si.Keyspace(), si.ShardName(), servedType)
+			}
+		} else {
+			if !foundType {
+				return fmt.Errorf("Source shard %v/%v is not serving type %v", si.Keyspace, si.ShardName(), servedType)
+			}
 		}
 
-		for _, sourceShard := range si.SourceShards {
-			if sourceShard.Keyspace == keyspace && sourceShard.Shard == shard {
-				// this shard is replicating from the source shard we specified
-				log.Infof("Found %v/%v as a destination shard", si.Keyspace(), si.ShardName())
-				destinationShards = append(destinationShards, si)
-				break
+		if servedType == topo.TYPE_MASTER && len(si.ServedTypes) > 1 {
+			return fmt.Errorf("Cannot migrate master out of %v/%v until everything else is migrated out", si.Keyspace(), si.ShardName())
+		}
+	}
+
+	// Verify the destinations do not have the type we're
+	// migrating (or do if reverse)
+	for _, si := range destinationShards {
+		foundType := topo.IsTypeInList(servedType, si.ServedTypes)
+		if reverse {
+			if !foundType {
+				return fmt.Errorf("Destination shard %v/%v is not serving type %v", si.Keyspace, si.ShardName(), servedType)
+			}
+		} else {
+			if foundType {
+				return fmt.Errorf("Destination shard %v/%v is already serving type %v", si.Keyspace(), si.ShardName(), servedType)
 			}
 		}
 	}
-	if len(destinationShards) == 0 {
-		return fmt.Errorf("Cannot find any destination shard replicating from %v/%v", keyspace, shard)
-	}
-
-	// TODO(alainjobart) for a reverse split, we also need to find
-	// more sources. For now, a single source is all we need, but we
-	// still use a list of sources to not have to change the code later.
-	sourceShards := make([]*topo.ShardInfo, 0, 0)
-
-	// Verify the source has the type we're migrating
-	si, err := wr.ts.GetShard(keyspace, shard)
-	if err != nil {
-		return err
-	}
-	foundType := topo.IsTypeInList(servedType, si.ServedTypes)
-	if reverse {
-		if foundType {
-			return fmt.Errorf("Source shard %v/%v is already serving type %v", keyspace, shard, servedType)
-		}
-	} else {
-		if !foundType {
-			return fmt.Errorf("Source shard %v/%v is not serving type %v", keyspace, shard, servedType)
-		}
-	}
-	if servedType == topo.TYPE_MASTER && len(si.ServedTypes) > 1 {
-		return fmt.Errorf("Cannot migrate master out of %v/%v until everything else is migrated out", keyspace, shard)
-	}
-	sourceShards = append(sourceShards, si)
 
 	// lock the shards: sources, then destinations
 	// (note they're all ordered by shard name)
