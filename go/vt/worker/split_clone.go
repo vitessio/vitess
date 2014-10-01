@@ -517,14 +517,14 @@ func (scw *SplitCloneWorker) copy() error {
 
 			rowSplitter := NewRowSplitter(scw.destinationShards, scw.keyspaceInfo.ShardingColumnType, columnIndexes[tableIndex])
 
-			chunks, err := findChunks(scw.wr, scw.sourceTablets[shardIndex], &td, scw.minTableSizeForSplit, scw.sourceReaderCount)
+			chunks, err := findChunks(scw.wr, scw.sourceTablets[shardIndex], td, scw.minTableSizeForSplit, scw.sourceReaderCount)
 			if err != nil {
 				return err
 			}
 
 			for chunkIndex := 0; chunkIndex < len(chunks)-1; chunkIndex++ {
 				sourceWaitGroup.Add(1)
-				go func(td myproto.TableDefinition, tableIndex, chunkIndex int) {
+				go func(td *myproto.TableDefinition, tableIndex, chunkIndex int) {
 					defer sourceWaitGroup.Done()
 
 					sema.Acquire()
@@ -647,7 +647,7 @@ func (scw *SplitCloneWorker) copy() error {
 
 // processData pumps the data out of the provided QueryResultReader.
 // It returns any error the source encounters.
-func (scw *SplitCloneWorker) processData(td myproto.TableDefinition, tableIndex int, qrr *QueryResultReader, rowSplitter *RowSplitter, insertChannels [][]chan string, abort chan struct{}) error {
+func (scw *SplitCloneWorker) processData(td *myproto.TableDefinition, tableIndex int, qrr *QueryResultReader, rowSplitter *RowSplitter, insertChannels [][]chan string, abort chan struct{}) error {
 	baseCmd := td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
 
 	for {

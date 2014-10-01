@@ -455,14 +455,14 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 		}
 
 		vscw.tableStatus[tableIndex].setState("before copy")
-		chunks, err := findChunks(vscw.wr, vscw.sourceTablet, &td, vscw.minTableSizeForSplit, vscw.sourceReaderCount)
+		chunks, err := findChunks(vscw.wr, vscw.sourceTablet, td, vscw.minTableSizeForSplit, vscw.sourceReaderCount)
 		if err != nil {
 			return err
 		}
 
 		for chunkIndex := 0; chunkIndex < len(chunks)-1; chunkIndex++ {
 			sourceWaitGroup.Add(1)
-			go func(td myproto.TableDefinition, tableIndex, chunkIndex int) {
+			go func(td *myproto.TableDefinition, tableIndex, chunkIndex int) {
 				defer sourceWaitGroup.Done()
 
 				sema.Acquire()
@@ -569,7 +569,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 
 // processData pumps the data out of the provided QueryResultReader.
 // It returns any error the source encounters.
-func (vscw *VerticalSplitCloneWorker) processData(td myproto.TableDefinition, tableIndex int, qrr *QueryResultReader, insertChannels []chan string, abort chan struct{}) error {
+func (vscw *VerticalSplitCloneWorker) processData(td *myproto.TableDefinition, tableIndex int, qrr *QueryResultReader, insertChannels []chan string, abort chan struct{}) error {
 	// process the data
 	baseCmd := td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
 	for {

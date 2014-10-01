@@ -210,7 +210,7 @@ func findChunks(wr *wrangler.Wrangler, ti *topo.TabletInfo, td *myproto.TableDef
 
 // buildSQLFromChunks returns the SQL command to run to insert the data
 // using the chunks definitions into the provided table.
-func buildSQLFromChunks(wr *wrangler.Wrangler, td myproto.TableDefinition, chunks []string, chunkIndex int, source string) string {
+func buildSQLFromChunks(wr *wrangler.Wrangler, td *myproto.TableDefinition, chunks []string, chunkIndex int, source string) string {
 	selectSQL := "SELECT " + strings.Join(td.Columns, ", ") + " FROM " + td.Name
 	if chunks[chunkIndex] != "" || chunks[chunkIndex+1] != "" {
 		wr.Logger().Infof("Starting to stream all data from tablet %v table %v between '%v' and '%v'", source, td.Name, chunks[chunkIndex], chunks[chunkIndex+1])

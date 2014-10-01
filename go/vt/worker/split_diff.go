@@ -387,7 +387,7 @@ func (sdw *SplitDiffWorker) diff() error {
 	sem := sync2.NewSemaphore(8, 0)
 	for _, tableDefinition := range sdw.destinationSchemaDefinition.TableDefinitions {
 		wg.Add(1)
-		go func(tableDefinition myproto.TableDefinition) {
+		go func(tableDefinition *myproto.TableDefinition) {
 			defer wg.Done()
 			sem.Acquire()
 			defer sem.Release()
@@ -403,21 +403,21 @@ func (sdw *SplitDiffWorker) diff() error {
 				sdw.wr.Logger().Errorf("Source shard doesn't overlap with destination????: %v", err)
 				return
 			}
-			sourceQueryResultReader, err := TableScanByKeyRange(sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.sourceAliases[0], &tableDefinition, overlap, sdw.keyspaceInfo.ShardingColumnType)
+			sourceQueryResultReader, err := TableScanByKeyRange(sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.sourceAliases[0], tableDefinition, overlap, sdw.keyspaceInfo.ShardingColumnType)
 			if err != nil {
 				sdw.wr.Logger().Errorf("TableScanByKeyRange(source) failed: %v", err)
 				return
 			}
 			defer sourceQueryResultReader.Close()
 
-			destinationQueryResultReader, err := TableScanByKeyRange(sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.destinationAlias, &tableDefinition, key.KeyRange{}, sdw.keyspaceInfo.ShardingColumnType)
+			destinationQueryResultReader, err := TableScanByKeyRange(sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.destinationAlias, tableDefinition, key.KeyRange{}, sdw.keyspaceInfo.ShardingColumnType)
 			if err != nil {
 				sdw.wr.Logger().Errorf("TableScanByKeyRange(destination) failed: %v", err)
 				return
 			}
 			defer destinationQueryResultReader.Close()
 
-			differ, err := NewRowDiffer(sourceQueryResultReader, destinationQueryResultReader, &tableDefinition)
+			differ, err := NewRowDiffer(sourceQueryResultReader, destinationQueryResultReader, tableDefinition)
 			if err != nil {
 				sdw.wr.Logger().Errorf("NewRowDiffer() failed: %v", err)
 				return
