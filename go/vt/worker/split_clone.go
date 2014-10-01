@@ -59,6 +59,7 @@ type SplitCloneWorker struct {
 	err error
 
 	// populated during stateSCInit, read-only after that
+	keyspaceInfo      *topo.KeyspaceInfo
 	sourceShards      []*topo.ShardInfo
 	destinationShards []*topo.ShardInfo
 
@@ -261,9 +262,10 @@ func (scw *SplitCloneWorker) run() error {
 // - read the destination keyspace, make sure it has 'servedFrom' values
 func (scw *SplitCloneWorker) init() error {
 	scw.setState(stateSCInit)
+	var err error
 
 	// read the keyspace and validate it
-	_, err := scw.wr.TopoServer().GetKeyspace(scw.keyspace)
+	scw.keyspaceInfo, err = scw.wr.TopoServer().GetKeyspace(scw.keyspace)
 	if err != nil {
 		return fmt.Errorf("cannot read keyspace %v: %v", scw.keyspace, err)
 	}
@@ -512,6 +514,20 @@ func (scw *SplitCloneWorker) copy() error {
 				continue
 			}
 
+			// find the column to split on
+			columnIndex := -1
+			for i, name := range td.Columns {
+				if name == scw.keyspaceInfo.ShardingColumnName {
+					columnIndex = i
+					break
+				}
+			}
+			if columnIndex == -1 {
+				return fmt.Errorf("table %v doesn't have a %v column", td.Name, scw.keyspaceInfo.ShardingColumnName)
+			}
+
+			rowSplitter := NewRowSplitter(scw.destinationShards, scw.keyspaceInfo.ShardingColumnType, columnIndex)
+
 			chunks, err := scw.findChunks(scw.sourceTablets[shardIndex], td)
 			if err != nil {
 				return err
@@ -566,16 +582,18 @@ func (scw *SplitCloneWorker) copy() error {
 								break loop
 							}
 
-							// XXXXXXXXXXXXX
 							// Split the rows by keyspace_id, and insert each chunk into each destination
+							sr, err := rowSplitter.Split(r)
+							if err != nil {
+								processError("rowSplitter.Split failed: %v", err)
+								return
+							}
 
 							// send the rows to be inserted
 							scw.tableStatus[tableIndex].addCopiedRows(len(r.Rows))
-							cmd := baseCmd + makeValueString(qrr.Fields, r)
-
-							// XXXXX HACK
-							for i, _ := range insertChannels {
-								for _, c := range insertChannels[i] {
+							for i, cs := range insertChannels {
+								cmd := baseCmd + makeValueString(qrr.Fields, sr[i])
+								for _, c := range cs {
 									c <- cmd
 								}
 							}
