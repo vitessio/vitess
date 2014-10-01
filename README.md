@@ -1,5 +1,7 @@
 # Vitess
 
+[![Build Status](https://travis-ci.org/henryanand/vitess.svg?branch=master)](https://travis-ci.org/henryanand/vitess) [![Coverage Status](https://coveralls.io/repos/henryanand/vitess/badge.png?branch=master)](https://coveralls.io/r/henryanand/vitess?branch=master)
+
 Vitess is a set of servers and tools meant to facilitate scaling of MySQL
 databases for the web. It's been developed since 2011, and is currently used as
 a fundamental component of YouTube's MySQL infrastructure, serving thousands of

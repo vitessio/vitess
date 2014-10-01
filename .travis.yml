@@ -1,0 +1,17 @@
+language: go
+env:
+  global:
+    - MYSQL_FLAVOR=MariaDB
+  matrix:
+    - TEST_SUITE=unit_test
+    - TEST_SUITE=queryservice_test
+    - TEST_SUITE=integration_test
+    - TEST_SUITE=java_vtgate_client_test
+    - TEST_SUITE=unit_test_goveralls
+before_install:
+  - bash -v travis/dependencies.sh
+install:
+  - bash -v bootstrap.sh
+script:
+  - source dev.env
+  - make $TEST_SUITE

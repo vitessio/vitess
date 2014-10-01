@@ -40,6 +40,11 @@ unit_test_cover:
 unit_test_race:
 	go test -race ./go/...
 
+unit_test_goveralls:
+	go list -f '{{if len .TestGoFiles}}go test -coverprofile={{.Dir}}/.coverprofile {{.ImportPath}}{{end}}' ./go/... | xargs -i sh -c {}
+	gover ./go/
+	goveralls -coverprofile=gover.coverprofile -repotoken $$COVERALLS_TOKEN
+
 queryservice_test:
 	echo $$(date): Running test/queryservice_test.py...
 	if [ -e "/usr/bin/memcached" ]; then \
@@ -115,6 +120,10 @@ site_integration_test:
 # this rule only works if bootstrap.sh was successfully ran in ./java
 java_test:
 	cd java && mvn verify
+
+java_vtgate_client_test:
+	mvn -f java/gorpc/pom.xml clean install -DskipTests
+	mvn -f java/vtgate-client/pom.xml clean verify
 
 v3_test:
 	cd test && ./vtgatev3_test.py

@@ -25,7 +25,7 @@ from topo_flavor.server import set_topo_server_flavor
 
 options = None
 devnull = open('/dev/null', 'w')
-hostname = socket.gethostname()
+hostname = socket.getfqdn()
 
 class TestError(Exception):
   pass
