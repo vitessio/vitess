@@ -555,7 +555,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 
 						// send the rows to be inserted
 						vscw.tableStatus[tableIndex].addCopiedRows(len(r.Rows))
-						cmd := baseCmd + makeValueString(qrr.Fields, r)
+						cmd := baseCmd + makeValueString(qrr.Fields, r.Rows)
 						for _, c := range insertChannels {
 							c <- cmd
 						}
@@ -802,9 +802,9 @@ func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
 	return data.String(), nil
 }
 
-func makeValueString(fields []mproto.Field, qr *mproto.QueryResult) string {
+func makeValueString(fields []mproto.Field, rows [][]sqltypes.Value) string {
 	buf := bytes.Buffer{}
-	for i, row := range qr.Rows {
+	for i, row := range rows {
 		if i > 0 {
 			buf.Write([]byte(",("))
 		} else {
