@@ -164,8 +164,9 @@ def set_mysql_flavor(flavor):
     if flavor == "":
       flavor = "GoogleMysql"
 
-  # Don't pass the env var to subprocesses. Let them auto-detect the flavor.
-  os.environ.pop("MYSQL_FLAVOR", None)
+  # Set the environment variable explicitly in case we're overriding it via
+  # command-line flag.
+  os.environ["MYSQL_FLAVOR"] = flavor
 
   if flavor == "MariaDB":
     __mysql_flavor = MariaDB()

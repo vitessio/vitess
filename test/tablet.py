@@ -313,7 +313,7 @@ class Tablet(object):
                   schema_override=None, cert=None, key=None, ca_cert=None,
                   repl_extra_flags={}, table_acl_config=None,
                   lameduck_period=None, security_policy=None,
-                  extra_args=None):
+                  extra_args=None, extra_env=None):
     environment.prog_compile(binary)
     args = environment.binary_args(binary)
     args.extend(['-port', '%s' % (port or self.port),
@@ -365,7 +365,7 @@ class Tablet(object):
     # increment count only the first time
     if not self.proc:
       Tablet.tablets_running += 1
-    self.proc = utils.run_bg(args, stderr=stderr_fd)
+    self.proc = utils.run_bg(args, stderr=stderr_fd, extra_env=extra_env)
     stderr_fd.close()
 
     # wait for query service to be in the right state
@@ -383,7 +383,7 @@ class Tablet(object):
                      repl_extra_flags={}, table_acl_config=None,
                      lameduck_period=None, security_policy=None,
                      target_tablet_type=None, full_mycnf_args=False,
-                     extra_args=None, include_mysql_port=True):
+                     extra_args=None, extra_env=None, include_mysql_port=True):
     """Starts a vttablet process, and returns it.
 
     The process is also saved in self.proc, so it's easy to kill as well.
@@ -442,7 +442,7 @@ class Tablet(object):
                             repl_extra_flags=repl_extra_flags,
                             table_acl_config=table_acl_config,
                             lameduck_period=lameduck_period, extra_args=args,
-                            security_policy=security_policy)
+                            security_policy=security_policy, extra_env=extra_env)
 
   def start_vtocc(self, port=None, auth=False, memcache=False,
                   wait_for_state='SERVING', customrules=None,
