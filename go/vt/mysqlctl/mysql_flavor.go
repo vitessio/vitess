@@ -32,7 +32,7 @@ type MysqlFlavor interface {
 	SlaveStatus(mysqld *Mysqld) (*proto.ReplicationStatus, error)
 
 	// PromoteSlaveCommands returns the commands to run to change
-	// a slave into a master
+	// a slave into a master.
 	PromoteSlaveCommands() []string
 
 	// StartReplicationCommands returns the commands to start replicating from
@@ -105,10 +105,10 @@ func (mysqld *Mysqld) detectFlavor() (MysqlFlavor, error) {
 	log.Infof("MYSQL_FLAVOR empty or unset, attempting to auto-detect...")
 	qr, err := mysqld.fetchSuperQuery("SELECT VERSION()")
 	if err != nil {
-		return nil, fmt.Errorf("Couldn't SELECT VERSION(): %v", err)
+		return nil, fmt.Errorf("couldn't SELECT VERSION(): %v", err)
 	}
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
-		return nil, fmt.Errorf("Unexpected result for SELECT VERSION(): %#v", qr)
+		return nil, fmt.Errorf("unexpected result for SELECT VERSION(): %#v", qr)
 	}
 	version := qr.Rows[0][0].String()
 	log.Infof("SELECT VERSION() = %s", version)
@@ -123,13 +123,16 @@ func (mysqld *Mysqld) detectFlavor() (MysqlFlavor, error) {
 	return nil, fmt.Errorf("MYSQL_FLAVOR empty or unset, no auto-detect match found for VERSION() = %v", version)
 }
 
-func (mysqld *Mysqld) flavor() MysqlFlavor {
-	mysqld.mysqlFlavorInit.Do(func() {
+func (mysqld *Mysqld) flavor() (MysqlFlavor, error) {
+	mysqld.mysqlFlavorMutex.Lock()
+	defer mysqld.mysqlFlavorMutex.Unlock()
+
+	if mysqld.mysqlFlavor == nil {
 		flavor, err := mysqld.detectFlavor()
 		if err != nil {
-			log.Fatalf("Couldn't detect MySQL flavor: %v", err)
+			return nil, fmt.Errorf("couldn't detect MySQL flavor: %v", err)
 		}
 		mysqld.mysqlFlavor = flavor
-	})
-	return mysqld.mysqlFlavor
+	}
+	return mysqld.mysqlFlavor, nil
 }
