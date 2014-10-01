@@ -208,12 +208,17 @@ func (mysqld *Mysqld) ReparentPosition(slavePosition proto.ReplicationPosition) 
 	if err != nil {
 		return
 	}
-	rs.Position, err = mysqld.flavor().ParseReplicationPosition(qr.Rows[0][2].String())
+	flavor, err := mysqld.flavor()
+	if err != nil {
+		err = fmt.Errorf("can't parse replication position: %v", err)
+		return
+	}
+	rs.Position, err = flavor.ParseReplicationPosition(qr.Rows[0][2].String())
 	if err != nil {
 		return
 	}
 
-	waitPosition, err = mysqld.flavor().ParseReplicationPosition(qr.Rows[0][3].String())
+	waitPosition, err = flavor.ParseReplicationPosition(qr.Rows[0][3].String())
 	if err != nil {
 		return
 	}
@@ -221,23 +226,39 @@ func (mysqld *Mysqld) ReparentPosition(slavePosition proto.ReplicationPosition) 
 }
 
 func (mysqld *Mysqld) WaitMasterPos(targetPos proto.ReplicationPosition, waitTimeout time.Duration) error {
-	return mysqld.flavor().WaitMasterPos(mysqld, targetPos, waitTimeout)
+	flavor, err := mysqld.flavor()
+	if err != nil {
+		return fmt.Errorf("WaitMasterPos needs flavor: %v", err)
+	}
+	return flavor.WaitMasterPos(mysqld, targetPos, waitTimeout)
 }
 
 func (mysqld *Mysqld) SlaveStatus() (*proto.ReplicationStatus, error) {
-	return mysqld.flavor().SlaveStatus(mysqld)
+	flavor, err := mysqld.flavor()
+	if err != nil {
+		return nil, fmt.Errorf("SlaveStatus needs flavor: %v", err)
+	}
+	return flavor.SlaveStatus(mysqld)
 }
 
 func (mysqld *Mysqld) MasterPosition() (rp proto.ReplicationPosition, err error) {
-	return mysqld.flavor().MasterPosition(mysqld)
+	flavor, err := mysqld.flavor()
+	if err != nil {
+		return rp, fmt.Errorf("MasterPosition needs flavor: %v", err)
+	}
+	return flavor.MasterPosition(mysqld)
 }
 
 func (mysqld *Mysqld) StartReplicationCommands(status *proto.ReplicationStatus) ([]string, error) {
+	flavor, err := mysqld.flavor()
+	if err != nil {
+		return nil, fmt.Errorf("StartReplicationCommands needs flavor: %v", err)
+	}
 	params, err := dbconfigs.MysqlParams(mysqld.replParams)
 	if err != nil {
 		return nil, err
 	}
-	return mysqld.flavor().StartReplicationCommands(&params, status)
+	return flavor.StartReplicationCommands(&params, status)
 }
 
 /*
@@ -426,11 +447,19 @@ func (mysqld *Mysqld) WaitBlpPos(bp *blproto.BlpPosition, waitTimeout time.Durat
 // EnableBinlogPlayback prepares the server to play back events from a binlog stream.
 // Whatever it does for a given flavor, it must be idempotent.
 func (mysqld *Mysqld) EnableBinlogPlayback() error {
-	return mysqld.flavor().EnableBinlogPlayback(mysqld)
+	flavor, err := mysqld.flavor()
+	if err != nil {
+		return fmt.Errorf("EnableBinlogPlayback needs flavor: %v", err)
+	}
+	return flavor.EnableBinlogPlayback(mysqld)
 }
 
 // DisableBinlogPlayback returns the server to the normal state after streaming.
 // Whatever it does for a given flavor, it must be idempotent.
 func (mysqld *Mysqld) DisableBinlogPlayback() error {
-	return mysqld.flavor().DisableBinlogPlayback(mysqld)
+	flavor, err := mysqld.flavor()
+	if err != nil {
+		return fmt.Errorf("DisableBinlogPlayback needs flavor: %v", err)
+	}
+	return flavor.DisableBinlogPlayback(mysqld)
 }

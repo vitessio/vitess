@@ -50,7 +50,12 @@ func (mysqld *Mysqld) PromoteSlave(setReadWrite bool, hookExtraEnv map[string]st
 	}
 
 	// Promote to master.
-	cmds := mysqld.flavor().PromoteSlaveCommands()
+	flavor, err := mysqld.flavor()
+	if err != nil {
+		err = fmt.Errorf("PromoteSlave needs flavor: %v", err)
+		return
+	}
+	cmds := flavor.PromoteSlaveCommands()
 	if err = mysqld.ExecuteSuperQueryList(cmds); err != nil {
 		return
 	}

@@ -523,11 +523,16 @@ class TestTabletManager(unittest.TestCase):
       timeout = utils.wait_step('slave has high replication lag', timeout)
 
     # make sure the serving graph was updated
-    ep = utils.run_vtctl_json(['GetEndPoints', 'test_nj', 'test_keyspace/0',
-                               'replica'])
-    if not ep['entries'][0]['health']:
-      self.fail('Replication lag parameter not propagated to serving graph: %s' % str(ep))
-    self.assertEqual(ep['entries'][0]['health']['replication_lag'], 'high', 'Replication lag parameter not propagated to serving graph: %s' % str(ep))
+    timeout = 10
+    while True:
+      ep = utils.run_vtctl_json(['GetEndPoints', 'test_nj', 'test_keyspace/0',
+                                 'replica'])
+      if 'health' in ep['entries'][0] and ep['entries'][0]['health']:
+        if 'replication_lag' in ep['entries'][0]['health']:
+          if ep['entries'][0]['health']['replication_lag'] == 'high':
+            logging.debug("Replication lag parameter propagated to serving graph, good")
+            break
+      timeout = utils.wait_step('Replication lag parameter not propagated to serving graph', timeout)
 
     # make sure status web page is unhappy
     self.assertIn('>unhappy</span></div>', tablet_62044.get_status())

@@ -29,6 +29,7 @@ import org.junit.Test;
 import com.google.common.collect.Lists;
 import com.google.common.primitives.UnsignedLong;
 import com.google.gson.Gson;
+import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.KeyspaceId;
 import com.youtube.vitess.vtgate.VtGate;
 import com.youtube.vitess.vtgate.hadoop.VitessInputFormat;
@@ -70,7 +71,7 @@ public class MapReduceIT extends HadoopTestCase {
 		}
 		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
 		List<InputSplit> splits = vtgate.getMRSplits("test_keyspace",
-				"vtgate_test", Lists.newArrayList("id, keyspace_id"));
+				"vtgate_test", Lists.newArrayList("id", "keyspace_id"));
 		vtgate.close();
 
 		// Verify 2 splits, one per shard
@@ -78,7 +79,7 @@ public class MapReduceIT extends HadoopTestCase {
 		Set<String> shardsInSplits = new HashSet<>();
 		for (InputSplit s : splits) {
 			VitessInputSplit split = (VitessInputSplit) s;
-			assertEquals("select id, keyspace_id from vtgate_test", split
+			assertEquals("select id,keyspace_id from vtgate_test", split
 					.getQuery().getSql());
 			assertEquals("test_keyspace", split.getQuery().getKeyspace());
 			assertEquals("rdonly", split.getQuery().getTabletType());
@@ -94,6 +95,25 @@ public class MapReduceIT extends HadoopTestCase {
 		// Verify the keyrange queries in splits cover the entire keyspace
 		assertTrue(shardsInSplits.containsAll(testEnv.shardKidMap
 				.keySet()));
+	}
+
+	/**
+	 * Call VtGate.GetMRSplits with an invalid table and check it throws the
+	 * right exception.
+	 */
+	@Test
+	public void testGetMRSplitsInvalidTable() throws Exception {
+		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+		try {
+			vtgate.getMRSplits("test_keyspace",
+					"invalid_table", Lists.newArrayList("id"));
+			fail("failed to raise connection exception");
+		} catch (ConnectionException e) {
+			assertTrue(e.getMessage().contains(
+					"vtgate exception: can't fetch split sizes"));
+		} finally {
+			vtgate.close();
+		}
 	}
 
 	/**
