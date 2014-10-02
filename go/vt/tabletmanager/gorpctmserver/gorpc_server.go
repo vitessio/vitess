@@ -27,7 +27,12 @@ import (
 
 // TabletManager is the Go RPC implementation of the RPC service
 type TabletManager struct {
+	// agent is the full thing, to be replaced by rpcAgent when it has
+	// all the API calls.
 	agent *tabletmanager.ActionAgent
+
+	// implementation of the agent to call
+	rpcAgent tabletmanager.RpcAgent
 }
 
 //
@@ -302,7 +307,7 @@ func (tm *TabletManager) BreakSlaves(context *rpcproto.Context, args *rpc.Unused
 // backup related methods
 
 func (tm *TabletManager) Snapshot(context *rpcproto.Context, args *actionnode.SnapshotArgs, sendReply func(interface{}) error) error {
-	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SNAPSHOT, args, nil, true, func() error {
+	return tm.rpcAgent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SNAPSHOT, args, nil, true, func() error {
 		// create a logger, send the result back to the caller
 		logger := logutil.NewChannelLogger(10)
 		wg := sync.WaitGroup{}
@@ -323,7 +328,7 @@ func (tm *TabletManager) Snapshot(context *rpcproto.Context, args *actionnode.Sn
 			wg.Done()
 		}()
 
-		sr, err := tm.agent.Snapshot(args, logger)
+		sr, err := tm.rpcAgent.Snapshot(args, logger)
 		close(logger)
 		wg.Wait()
 		if err != nil {
@@ -445,11 +450,15 @@ func (tm *TabletManager) MultiRestore(context *rpcproto.Context, args *actionnod
 
 func init() {
 	tabletmanager.RegisterQueryServices = append(tabletmanager.RegisterQueryServices, func(agent *tabletmanager.ActionAgent) {
-		rpcwrap.RegisterAuthenticated(&TabletManager{agent})
+		// agent also implements RpcAgent. Eventually we will only have
+		// RpcAgent, and no agent, so this will be simpler.
+		rpcwrap.RegisterAuthenticated(&TabletManager{agent, agent})
 	})
 }
 
 // RegisterForTest will register the RPC, to be used by test instances only
 func RegisterForTest(server *rpcplus.Server, agent *tabletmanager.ActionAgent) {
-	server.Register(&TabletManager{agent})
+	// agent also implements RpcAgent. Eventually we will only have
+	// RpcAgent, and no agent, so this will be simpler.
+	server.Register(&TabletManager{agent, agent})
 }

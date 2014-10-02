@@ -38,6 +38,19 @@ import (
 // (if an action can be both an ActionNode and a RPC, it's implemented
 // in the actor code).
 
+// RpcAgent defines the interface implemented by the Agent for RPCs.
+// It is useful for RPC implementations to test their full stack.
+type RpcAgent interface {
+	// RPC calls
+
+	Snapshot(args *actionnode.SnapshotArgs, logger logutil.Logger) (*actionnode.SnapshotReply, error)
+
+	// RPC helpers
+	RpcWrap(from, name string, args, reply interface{}, f func() error) error
+	RpcWrapLock(from, name string, args, reply interface{}, verbose bool, f func() error) error
+	RpcWrapLockAction(from, name string, args, reply interface{}, verbose bool, f func() error) error
+}
+
 // TODO(alainjobart): all the calls mention something like:
 // Should be called under RpcWrap.
 // Eventually, when all calls are going through RPCs, we'll refactor

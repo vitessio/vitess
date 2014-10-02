@@ -23,14 +23,12 @@ import (
 
 func init() {
 	initiator.RegisterTabletManagerConnFactory("bson", func(ts topo.Server) initiator.TabletManagerConn {
-		return &GoRpcTabletManagerConn{ts}
+		return &GoRpcTabletManagerConn{}
 	})
 }
 
 // GoRpcTabletManagerConn implements initiator.TabletManagerConn
-type GoRpcTabletManagerConn struct {
-	ts topo.Server
-}
+type GoRpcTabletManagerConn struct{}
 
 func (client *GoRpcTabletManagerConn) rpcCallTablet(tablet *topo.TabletInfo, name string, args, reply interface{}, waitTime time.Duration) error {
 	// create the RPC client, using waitTime as the connect
