@@ -46,8 +46,11 @@ func (wr *Wrangler) Snapshot(tabletAlias topo.TabletAlias, forceMasterSnapshot b
 		log.Infof("Snapshot: %v", e)
 	}
 	reply, err := errFunc()
+	if err != nil {
+		return "", topo.TabletAlias{}, false, false, "", err
+	}
 
-	return reply.ManifestPath, reply.ParentAlias, reply.SlaveStartRequired, reply.ReadOnly, originalType, err
+	return reply.ManifestPath, reply.ParentAlias, reply.SlaveStartRequired, reply.ReadOnly, originalType, nil
 }
 
 // SnapshotSourceEnd will change the tablet back to its original type
