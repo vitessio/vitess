@@ -8,6 +8,7 @@ from vtdb import dbexceptions
 from vtdb import keyspace
 from vtdb import keyrange
 from vtdb import keyrange_constants
+from vtdb import vtrouting
 
 # This unittest tests the computation of task map
 # and where clauses for streaming queries.
@@ -39,27 +40,27 @@ class TestKeyRange(unittest.TestCase):
   def test_incorrect_tasks(self):
     global_shard_count = 16
     with self.assertRaises(dbexceptions.ProgrammingError):
-      stm = keyrange.create_streaming_task_map(4, global_shard_count)
+      stm = vtrouting.create_parallel_task_keyrange_map(4, global_shard_count)
 
   def test_keyranges_for_tasks(self):
     for global_shard_count in (16,32,64):
       num_tasks = global_shard_count
-      stm = keyrange.create_streaming_task_map(num_tasks, global_shard_count)
+      stm = vtrouting.create_parallel_task_keyrange_map(num_tasks, global_shard_count)
       self.assertEqual(len(stm.keyrange_list), num_tasks)
       num_tasks = global_shard_count*2
-      stm = keyrange.create_streaming_task_map(num_tasks, global_shard_count)
+      stm = vtrouting.create_parallel_task_keyrange_map(num_tasks, global_shard_count)
       self.assertEqual(len(stm.keyrange_list), num_tasks)
       num_tasks = global_shard_count*8
-      stm = keyrange.create_streaming_task_map(num_tasks, global_shard_count)
+      stm = vtrouting.create_parallel_task_keyrange_map(num_tasks, global_shard_count)
       self.assertEqual(len(stm.keyrange_list), num_tasks)
 
   # This tests that the where clause and bind_vars generated for each shard
   # against a few sample values where keyspace_id is an int column.
   def test_bind_values_for_int_keyspace(self):
-    stm = keyrange.create_streaming_task_map(16, 16)
+    stm = vtrouting.create_parallel_task_keyrange_map(16, 16)
     for i, kr in enumerate(stm.keyrange_list):
       kr_parts = kr.split('-')
-      where_clause, bind_vars = keyrange._create_where_clause_for_keyrange(kr)
+      where_clause, bind_vars = vtrouting._create_where_clause_for_keyrange(kr)
       if len(bind_vars.keys()) == 1:
         if kr_parts[0] == '':
           self.assertNotEqual(where_clause.find('<'), -1)
@@ -87,10 +88,10 @@ class TestKeyRange(unittest.TestCase):
   # and use byte comparison. Since the exact function is not available,
   # the test emulates that by using keyspace_id.encode('hex').
   def test_bind_values_for_str_keyspace(self):
-    stm = keyrange.create_streaming_task_map(16, 16)
+    stm = vtrouting.create_parallel_task_keyrange_map(16, 16)
     for i, kr in enumerate(stm.keyrange_list):
       kr_parts = kr.split('-')
-      where_clause, bind_vars = keyrange._create_where_clause_for_keyrange(kr, keyspace_col_type=keyrange_constants.KIT_BYTES)
+      where_clause, bind_vars = vtrouting._create_where_clause_for_keyrange(kr, keyspace_col_type=keyrange_constants.KIT_BYTES)
       if len(bind_vars.keys()) == 1:
         if kr_parts[0] == '':
           self.assertNotEqual(where_clause.find('<'), -1)
@@ -112,9 +113,9 @@ class TestKeyRange(unittest.TestCase):
           self.assertLess(keyspace_id.encode('hex'), bind_vars['keyspace_id1'])
 
   def test_bind_values_for_unsharded_keyspace(self):
-    stm = keyrange.create_streaming_task_map(1, 1)
+    stm = vtrouting.create_parallel_task_keyrange_map(1, 1)
     self.assertEqual(len(stm.keyrange_list), 1)
-    where_clause, bind_vars = keyrange._create_where_clause_for_keyrange(stm.keyrange_list[0])
+    where_clause, bind_vars = vtrouting._create_where_clause_for_keyrange(stm.keyrange_list[0])
     self.assertEqual(where_clause, "")
     self.assertEqual(bind_vars, {})
 
