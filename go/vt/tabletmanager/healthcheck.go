@@ -194,8 +194,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 	// Rebuild the serving graph in our cell, only if we're dealing with
 	// a serving type
 	if err := agent.rebuildShardIfNeeded(tablet, targetTabletType); err != nil {
-		log.Warningf("rebuildShardIfNeeded failed, not running post action callbacks: %v", err)
-		return
+		log.Warningf("rebuildShardIfNeeded failed (will still run post action callbacks, serving graph might be out of date): %v", err)
 	}
 
 	// run the post action callbacks
@@ -212,10 +211,7 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topo.TabletType
 	log.Info("agent.terminateHealthChecks is starting")
 
 	// read the current tablet record
-	agent.mutex.Lock()
-	tablet := agent._tablet
-	agent.mutex.Unlock()
-
+	tablet := agent.Tablet()
 	if tablet.Type != targetTabletType {
 		log.Infof("Tablet in state %v, not changing it", tablet.Type)
 		return
@@ -231,8 +227,7 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topo.TabletType
 	// Rebuild the serving graph in our cell, only if we're dealing with
 	// a serving type
 	if err := agent.rebuildShardIfNeeded(tablet, targetTabletType); err != nil {
-		log.Warningf("rebuildShardIfNeeded failed, not running post action callbacks: %v", err)
-		return
+		log.Warningf("rebuildShardIfNeeded failed (will still run post action callbacks, serving graph might be out of date): %v", err)
 	}
 
 	// Run the post action callbacks (let them shutdown the query service)

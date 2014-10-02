@@ -93,14 +93,7 @@ func (agent *ActionAgent) ExecuteHook(hk *hook.Hook) *hook.HookResult {
 // GetSchema returns the schema.
 // Should be called under RpcWrap.
 func (agent *ActionAgent) GetSchema(tables, excludeTables []string, includeViews bool) (*myproto.SchemaDefinition, error) {
-	// read the tablet to get the dbname
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
-	if err != nil {
-		return nil, err
-	}
-
-	// and get the schema
-	return agent.Mysqld.GetSchema(tablet.DbName(), tables, excludeTables, includeViews)
+	return agent.Mysqld.GetSchema(agent.Tablet().DbName(), tables, excludeTables, includeViews)
 }
 
 // ReloadSchema will reload the schema
@@ -594,20 +587,73 @@ func (agent *ActionAgent) updateReplicationGraphForPromotedSlave(tablet *topo.Ta
 // Snapshot takes a db snapshot
 // Should be called under RpcWrapLockAction.
 func (agent *ActionAgent) Snapshot(args *actionnode.SnapshotArgs, logger logutil.Logger) (*actionnode.SnapshotReply, error) {
+	// update our type to TYPE_BACKUP
 	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
 	if err != nil {
 		return nil, err
 	}
-	if tablet.Type != topo.TYPE_BACKUP {
-		return nil, fmt.Errorf("expected backup type, not %v", tablet.Type)
-	}
+	originalType := tablet.Type
 
-	filename, slaveStartRequired, readOnly, err := agent.Mysqld.CreateSnapshot(tablet.DbName(), tablet.Addr(), false, args.Concurrency, args.ServerMode, agent.hookExtraEnv())
+	// ForceMasterSnapshot: Normally a master is not a viable tablet
+	// to snapshot.  However, there are degenerate cases where you need
+	// to override this, for instance the initial clone of a new master.
+	if tablet.Type == topo.TYPE_MASTER && args.ForceMasterSnapshot {
+		// In this case, we don't bother recomputing the serving graph.
+		// All queries will have to fail anyway.
+		log.Infof("force change type master -> backup")
+		// There is a legitimate reason to force in the case of a single
+		// master.
+		tablet.Tablet.Type = topo.TYPE_BACKUP
+		err = topo.UpdateTablet(agent.TopoServer, tablet)
+	} else {
+		err = topotools.ChangeType(agent.TopoServer, tablet.Alias, topo.TYPE_BACKUP, make(map[string]string), true /*runHooks*/)
+	}
 	if err != nil {
 		return nil, err
 	}
 
-	sr := &actionnode.SnapshotReply{ManifestPath: filename, SlaveStartRequired: slaveStartRequired, ReadOnly: readOnly}
+	// let's update our internal state (stop query service and other things)
+	agent.afterAction("snapshotStart")
+
+	// now we can run the backup
+	filename, slaveStartRequired, readOnly, returnErr := agent.Mysqld.CreateSnapshot(tablet.DbName(), tablet.Addr(), false, args.Concurrency, args.ServerMode, agent.hookExtraEnv())
+
+	// and change our type to the appropriate value
+	newType := originalType
+	if returnErr != nil {
+		log.Errorf("snapshot failed, restoring tablet type back to %v: %v", newType, returnErr)
+	} else {
+		if args.ServerMode {
+			log.Infof("server mode specified, switching tablet to snapshot_source mode")
+			newType = topo.TYPE_SNAPSHOT_SOURCE
+		} else {
+			log.Infof("change type back after snapshot: %v", newType)
+		}
+	}
+	if tablet.Parent.Uid == topo.NO_TABLET && args.ForceMasterSnapshot && newType != topo.TYPE_SNAPSHOT_SOURCE {
+		log.Infof("force change type backup -> master: %v", tablet.Alias)
+		tablet.Tablet.Type = topo.TYPE_MASTER
+		err = topo.UpdateTablet(agent.TopoServer, tablet)
+	} else {
+		err = topotools.ChangeType(agent.TopoServer, tablet.Alias, newType, nil, true /*runHooks*/)
+	}
+	if err != nil {
+		// failure in changing the topology type is probably worse,
+		// so returning that (we logged the snapshot error anyway)
+		returnErr = err
+	}
+
+	// if anything failed, don't return anything
+	if returnErr != nil {
+		return nil, returnErr
+	}
+
+	// it all worked, return the required information
+	sr := &actionnode.SnapshotReply{
+		ManifestPath:       filename,
+		SlaveStartRequired: slaveStartRequired,
+		ReadOnly:           readOnly,
+	}
 	if tablet.Parent.Uid == topo.NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doesn't work in hierarchical replication.
@@ -630,7 +676,21 @@ func (agent *ActionAgent) SnapshotSourceEnd(args *actionnode.SnapshotSourceEndAr
 		return fmt.Errorf("expected snapshot_source type, not %v", tablet.Type)
 	}
 
-	return agent.Mysqld.SnapshotSourceEnd(args.SlaveStartRequired, args.ReadOnly, true, agent.hookExtraEnv())
+	if err := agent.Mysqld.SnapshotSourceEnd(args.SlaveStartRequired, args.ReadOnly, true, agent.hookExtraEnv()); err != nil {
+		log.Errorf("SnapshotSourceEnd failed, leaving tablet type alone: %v", err)
+		return err
+	}
+
+	// change the type back
+	if args.OriginalType == topo.TYPE_MASTER {
+		// force the master update
+		tablet.Tablet.Type = topo.TYPE_MASTER
+		err = topo.UpdateTablet(agent.TopoServer, tablet)
+	} else {
+		err = topotools.ChangeType(agent.TopoServer, tablet.Alias, args.OriginalType, make(map[string]string), true /*runHooks*/)
+	}
+
+	return err
 }
 
 // change a tablet type to RESTORE and set all the other arguments.

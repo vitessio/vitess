@@ -42,8 +42,9 @@ type SlaveWasRestartedArgs struct {
 }
 
 type SnapshotArgs struct {
-	Concurrency int
-	ServerMode  bool
+	Concurrency         int
+	ServerMode          bool
+	ForceMasterSnapshot bool
 }
 
 type SnapshotReply struct {
@@ -63,6 +64,7 @@ type MultiSnapshotReply struct {
 type SnapshotSourceEndArgs struct {
 	SlaveStartRequired bool
 	ReadOnly           bool
+	OriginalType       topo.TabletType
 }
 
 type MultiSnapshotArgs struct {
