@@ -12,6 +12,7 @@ type SplitClone struct {
 	base.StatusUpdater
 
 	Keyspace, Shard, Cell string
+	ExcludeTables         []string
 	Strategy              string
 }
 

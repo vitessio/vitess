@@ -90,10 +90,11 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, ex
 
 		state: stateSCNotSarted,
 		ev: &events.SplitClone{
-			Cell:     cell,
-			Keyspace: keyspace,
-			Shard:    shard,
-			Strategy: strategy,
+			Cell:          cell,
+			Keyspace:      keyspace,
+			Shard:         shard,
+			ExcludeTables: excludeTables,
+			Strategy:      strategy,
 		},
 	}
 }
