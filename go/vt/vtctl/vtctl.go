@@ -903,13 +903,13 @@ func commandSnapshot(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []strin
 	if err != nil {
 		return err
 	}
-	filename, parentAlias, slaveStartRequired, readOnly, originalType, err := wr.Snapshot(tabletAlias, *force, *concurrency, *serverMode)
+	sr, originalType, err := wr.Snapshot(tabletAlias, *force, *concurrency, *serverMode)
 	if err == nil {
-		log.Infof("Manifest: %v", filename)
-		log.Infof("ParentAlias: %v", parentAlias)
+		log.Infof("Manifest: %v", sr.ManifestPath)
+		log.Infof("ParentAlias: %v", sr.ParentAlias)
 		if *serverMode {
-			log.Infof("SlaveStartRequired: %v", slaveStartRequired)
-			log.Infof("ReadOnly: %v", readOnly)
+			log.Infof("SlaveStartRequired: %v", sr.SlaveStartRequired)
+			log.Infof("ReadOnly: %v", sr.ReadOnly)
 			log.Infof("OriginalType: %v", originalType)
 		}
 	}
