@@ -41,6 +41,26 @@ func NewFakeRpcAgent(t *testing.T) tabletmanager.RpcAgent {
 // for each possible method of the interface.
 // This makes the implementations all in the same spot.
 
+func compare(t *testing.T, name string, got, want interface{}) {
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Unexpected %v: got %v expected %v", name, got, want)
+	}
+}
+
+func compareBool(t *testing.T, name string, got bool) {
+	if !got {
+		t.Errorf("Unexpected %v: got false expected true", name)
+	}
+}
+
+func compareError(t *testing.T, name string, err error, got, want interface{}) {
+	if err != nil {
+		t.Errorf("%v failed: %v", name, err)
+	} else {
+		compare(t, name+" result", got, want)
+	}
+}
+
 //
 // Various read-only methods
 //
@@ -84,27 +104,15 @@ var testGetSchemaReply = &myproto.SchemaDefinition{
 }
 
 func (fra *fakeRpcAgent) GetSchema(tables, excludeTables []string, includeViews bool) (*myproto.SchemaDefinition, error) {
-	if !reflect.DeepEqual(tables, testGetSchemaTables) {
-		fra.t.Errorf("Unexpected GetSchema tables: got %v expected %v", tables, testGetSchemaTables)
-	}
-	if !reflect.DeepEqual(excludeTables, testGetSchemaExcludeTables) {
-		fra.t.Errorf("Unexpected GetSchema excludeTables: got %v expected %v", excludeTables, testGetSchemaExcludeTables)
-	}
-	if !includeViews {
-		fra.t.Errorf("Unexpected GetSchema includeViews: got false expected true")
-	}
+	compare(fra.t, "GetSchema tables", tables, testGetSchemaTables)
+	compare(fra.t, "GetSchema excludeTables", excludeTables, testGetSchemaExcludeTables)
+	compareBool(fra.t, "GetSchema includeViews", includeViews)
 	return testGetSchemaReply, nil
 }
 
 func agentRpcTestGetSchema(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
 	result, err := client.GetSchema(ti, testGetSchemaTables, testGetSchemaExcludeTables, true, time.Minute)
-	if err != nil {
-		t.Errorf("GetSchema failed: %v", err)
-	} else {
-		if !reflect.DeepEqual(result, testGetSchemaReply) {
-			t.Errorf("Unexpected GetSchema result: got %v expected %v", *result, *testGetSchemaReply)
-		}
-	}
+	compareError(t, "GetSchema", err, result, testGetSchemaReply)
 }
 
 var testGetPermissionsReply = &myproto.Permissions{
@@ -148,13 +156,7 @@ func (fra *fakeRpcAgent) GetPermissions() (*myproto.Permissions, error) {
 
 func agentRpcTestGetPermissions(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
 	result, err := client.GetPermissions(ti, time.Minute)
-	if err != nil {
-		t.Errorf("GetPermissions failed: %v", err)
-	} else {
-		if !reflect.DeepEqual(result, testGetPermissionsReply) {
-			t.Errorf("Unexpected GetPermissions result: got %v expected %v", *result, *testGetPermissionsReply)
-		}
-	}
+	compareError(t, "GetPermissions", err, result, testGetPermissionsReply)
 }
 
 //
@@ -186,9 +188,7 @@ func agentRpcTestSetReadOnly(t *testing.T, client initiator.TabletManagerConn, t
 var testChangeTypeValue = topo.TYPE_REPLICA
 
 func (fra *fakeRpcAgent) ChangeType(tabletType topo.TabletType) error {
-	if tabletType != testChangeTypeValue {
-		fra.t.Errorf("Wrong TabletType value: got %v expected %v", tabletType, testChangeTypeValue)
-	}
+	compare(fra.t, "ChangeType tabletType", tabletType, testChangeTypeValue)
 	return nil
 }
 
@@ -215,9 +215,7 @@ func agentRpcTestScrap(t *testing.T, client initiator.TabletManagerConn, ti *top
 var testSleepDuration = time.Minute
 
 func (fra *fakeRpcAgent) Sleep(duration time.Duration) {
-	if duration != testSleepDuration {
-		fra.t.Errorf("Unexpected Sleep duration: got %v expected %v", duration, testSleepDuration)
-	}
+	compare(fra.t, "Sleep duration", duration, testSleepDuration)
 }
 
 func agentRpcTestSleep(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
@@ -242,21 +240,13 @@ var testExecuteHookHookResult = &hook.HookResult{
 }
 
 func (fra *fakeRpcAgent) ExecuteHook(hk *hook.Hook) *hook.HookResult {
-	if !reflect.DeepEqual(hk, testExecuteHookHook) {
-		fra.t.Errorf("Unexpected ExecuteHook hook: got %v expected %v", hk, testExecuteHookHook)
-	}
+	compare(fra.t, "ExecuteHook hook", hk, testExecuteHookHook)
 	return testExecuteHookHookResult
 }
 
 func agentRpcTestExecuteHook(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
 	hr, err := client.ExecuteHook(ti, testExecuteHookHook, time.Minute)
-	if err != nil {
-		t.Errorf("ExecuteHook failed: %v", err)
-	} else {
-		if !reflect.DeepEqual(hr, testExecuteHookHookResult) {
-			t.Errorf("Unexpected ExecuteHook result: got %v expected %v", hr, testExecuteHookHookResult)
-		}
-	}
+	compareError(t, "ExecuteHook", err, hr, testExecuteHookHookResult)
 }
 
 var testReloadSchemaCalled = false
@@ -285,21 +275,13 @@ var testSchemaChangeResult = &myproto.SchemaChangeResult{
 }
 
 func (fra *fakeRpcAgent) PreflightSchema(change string) (*myproto.SchemaChangeResult, error) {
-	if change != testPreflightSchema {
-		fra.t.Errorf("Unexpected PreflightSchema result: got %v expected %v", change, testPreflightSchema)
-	}
+	compare(fra.t, "PreflightSchema result", change, testPreflightSchema)
 	return testSchemaChangeResult, nil
 }
 
 func agentRpcTestPreflightSchema(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
 	scr, err := client.PreflightSchema(ti, testPreflightSchema, time.Minute)
-	if err != nil {
-		t.Errorf("PreflightSchema failed: %v", err)
-	} else {
-		if !reflect.DeepEqual(scr, testSchemaChangeResult) {
-			t.Errorf("Unexpected PreflightSchema result: got %v expected %v", scr, testSchemaChangeResult)
-		}
-	}
+	compareError(t, "PreflightSchema", err, scr, testSchemaChangeResult)
 }
 
 var testSchemaChange = &myproto.SchemaChange{
@@ -311,21 +293,13 @@ var testSchemaChange = &myproto.SchemaChange{
 }
 
 func (fra *fakeRpcAgent) ApplySchema(change *myproto.SchemaChange) (*myproto.SchemaChangeResult, error) {
-	if !reflect.DeepEqual(change, testSchemaChange) {
-		fra.t.Errorf("Unexpected ApplySchema change: got %v expected %v", change, testSchemaChange)
-	}
+	compare(fra.t, "ApplySchema change", change, testSchemaChange)
 	return testSchemaChangeResult, nil
 }
 
 func agentRpcTestApplySchema(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
 	scr, err := client.ApplySchema(ti, testSchemaChange, time.Minute)
-	if err != nil {
-		t.Errorf("ApplySchema failed: %v", err)
-	} else {
-		if !reflect.DeepEqual(scr, testSchemaChangeResult) {
-			t.Errorf("Unexpected ApplySchema result: got %v expected %v", scr, testSchemaChangeResult)
-		}
-	}
+	compareError(t, "ApplySchema", err, scr, testSchemaChangeResult)
 }
 
 var testExecuteFetchQuery = "fetch this"
@@ -351,86 +325,215 @@ var testExecuteFetchResult = &mproto.QueryResult{
 }
 
 func (fra *fakeRpcAgent) ExecuteFetch(query string, maxrows int, wantFields, disableBinlogs bool) (*mproto.QueryResult, error) {
-	if query != testExecuteFetchQuery {
-		fra.t.Errorf("Unexpected ExecuteFetch query: got %v expected %v", query, testExecuteFetchQuery)
-	}
-	if maxrows != testExecuteFetchMaxRows {
-		fra.t.Errorf("Unexpected ExecuteFetch maxrows: got %v expected %v", maxrows, testExecuteFetchQuery)
-	}
-	if !wantFields {
-		fra.t.Errorf("Unexpected ExecuteFetch wantFields: got false expected true")
-	}
-	if !disableBinlogs {
-		fra.t.Errorf("Unexpected ExecuteFetch disableBinlogs: got false expected true")
-	}
+	compare(fra.t, "ExecuteFetch query", query, testExecuteFetchQuery)
+	compare(fra.t, "ExecuteFetch maxrows", maxrows, testExecuteFetchMaxRows)
+	compareBool(fra.t, "ExecuteFetch wantFields", wantFields)
+	compareBool(fra.t, "ExecuteFetch disableBinlogs", disableBinlogs)
 	return testExecuteFetchResult, nil
 }
 
 func agentRpcTestExecuteFetch(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
 	qr, err := client.ExecuteFetch(ti, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true, time.Minute)
-	if err != nil {
-		t.Errorf("ApplySchema failed: %v", err)
-	} else {
-		if !reflect.DeepEqual(qr, testExecuteFetchResult) {
-			t.Errorf("Unexpected ExecuteFetch result: got %v expected %v", qr, testExecuteFetchResult)
-		}
-	}
+	compareError(t, "ExecuteFetch", err, qr, testExecuteFetchResult)
 }
 
 //
 // Replication related methods
 //
 
-func (fra *fakeRpcAgent) SlaveStatus() (*myproto.ReplicationStatus, error) {
-	return nil, nil
+var testReplicationStatus = &myproto.ReplicationStatus{
+	Position: myproto.ReplicationPosition{
+		GTIDSet: myproto.GoogleGTID{
+			ServerID: 345,
+			GroupID:  789,
+		},
+	},
+	SlaveIORunning:      true,
+	SlaveSQLRunning:     true,
+	SecondsBehindMaster: 654,
+	MasterHost:          "master.host",
+	MasterPort:          3366,
+	MasterConnectRetry:  12,
 }
 
+func (fra *fakeRpcAgent) SlaveStatus() (*myproto.ReplicationStatus, error) {
+	return testReplicationStatus, nil
+}
+
+func agentRpcTestSlaveStatus(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+	rs, err := client.SlaveStatus(ti, time.Minute)
+	compareError(t, "SlaveStatus", err, rs, testReplicationStatus)
+}
+
+var testReplicationPosition = myproto.ReplicationPosition{
+	GTIDSet: myproto.MariadbGTID{
+		Domain:   5,
+		Server:   456,
+		Sequence: 890,
+	},
+}
+var testWaitSlavePositionWaitTimeout = time.Hour
+
 func (fra *fakeRpcAgent) WaitSlavePosition(position myproto.ReplicationPosition, waitTimeout time.Duration) (*myproto.ReplicationStatus, error) {
-	return nil, nil
+	compare(fra.t, "WaitSlavePosition position", position, testReplicationPosition)
+	compare(fra.t, "WaitSlavePosition waitTimeout", waitTimeout, testWaitSlavePositionWaitTimeout)
+	return testReplicationStatus, nil
+}
+
+func agentRpcTestWaitSlavePosition(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+	rs, err := client.WaitSlavePosition(ti, testReplicationPosition, testWaitSlavePositionWaitTimeout)
+	compareError(t, "WaitSlavePosition", err, rs, testReplicationStatus)
 }
 
 func (fra *fakeRpcAgent) MasterPosition() (myproto.ReplicationPosition, error) {
-	return myproto.ReplicationPosition{}, nil
+	return testReplicationPosition, nil
+}
+
+func agentRpcTestMasterPosition(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+	rs, err := client.MasterPosition(ti, time.Minute)
+	compareError(t, "MasterPosition", err, rs, testReplicationPosition)
+}
+
+var testRestartSlaveData = &actionnode.RestartSlaveData{
+	ReplicationStatus: testReplicationStatus,
+	WaitPosition:      testReplicationPosition,
+	TimePromoted:      0x7000000000000000,
+	Parent: topo.TabletAlias{
+		Cell: "ce",
+		Uid:  372,
+	},
+	Force: true,
 }
 
 func (fra *fakeRpcAgent) ReparentPosition(rp *myproto.ReplicationPosition) (*actionnode.RestartSlaveData, error) {
-	return nil, nil
+	compare(fra.t, "ReparentPosition position", rp.GTIDSet, testReplicationPosition.GTIDSet)
+	return testRestartSlaveData, nil
 }
+
+func agentRpcTestReparentPosition(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+	rsd, err := client.ReparentPosition(ti, &testReplicationPosition, time.Minute)
+	compareError(t, "ReparentPosition", err, rsd, testRestartSlaveData)
+}
+
+var testStopSlaveCalled = false
 
 func (fra *fakeRpcAgent) StopSlave() error {
+	testStopSlaveCalled = true
 	return nil
 }
+
+func agentRpcTestStopSlave(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+	err := client.StopSlave(ti, time.Minute)
+	compareError(t, "StopSlave", err, true, testStopSlaveCalled)
+}
+
+var testStopSlaveMinimumWaitTime = time.Hour
 
 func (fra *fakeRpcAgent) StopSlaveMinimum(position myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error) {
-	return nil, nil
+	compare(fra.t, "StopSlaveMinimum position", position.GTIDSet, testReplicationPosition.GTIDSet)
+	compare(fra.t, "StopSlaveMinimum waitTime", waitTime, testStopSlaveMinimumWaitTime)
+	return testReplicationStatus, nil
 }
+
+func agentRpcTestStopSlaveMinimum(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+	rs, err := client.StopSlaveMinimum(ti, testReplicationPosition, testStopSlaveMinimumWaitTime)
+	compareError(t, "StopSlave", err, rs, testReplicationStatus)
+}
+
+var testStartSlaveCalled = false
 
 func (fra *fakeRpcAgent) StartSlave() error {
+	testStartSlaveCalled = true
 	return nil
 }
+
+func agentRpcTestStartSlave(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+	err := client.StartSlave(ti, time.Minute)
+	compareError(t, "StartSlave", err, true, testStartSlaveCalled)
+}
+
+var testTabletExternallyReparentedActionTimeout = 30 * time.Second
+var testTabletExternallyReparentedCalled = false
 
 func (fra *fakeRpcAgent) TabletExternallyReparented(actionTimeout time.Duration) error {
+	compare(fra.t, "TabletExternallyReparented actionTimeout", actionTimeout, testTabletExternallyReparentedActionTimeout)
+	testTabletExternallyReparentedCalled = true
 	return nil
 }
+
+func agentRpcTestTabletExternallyReparented(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+	err := client.TabletExternallyReparented(ti, testTabletExternallyReparentedActionTimeout)
+	compareError(t, "TabletExternallyReparented", err, true, testTabletExternallyReparentedCalled)
+}
+
+var testGetSlavesResult = []string{"slave1", "slave2"}
 
 func (fra *fakeRpcAgent) GetSlaves() ([]string, error) {
-	return nil, nil
+	return testGetSlavesResult, nil
 }
 
+func agentRpcTestGetSlaves(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+	s, err := client.GetSlaves(ti, time.Minute)
+	compareError(t, "GetSlaves", err, s, testGetSlavesResult)
+}
+
+var testBlpPosition = &blproto.BlpPosition{
+	Uid:      73,
+	Position: testReplicationPosition,
+}
+var testWaitBlpPositionWaitTime = time.Hour
+var testWaitBlpPositionCalled = false
+
 func (fra *fakeRpcAgent) WaitBlpPosition(blpPosition *blproto.BlpPosition, waitTime time.Duration) error {
+	compare(fra.t, "WaitBlpPosition blpPosition", blpPosition, testBlpPosition)
+	compare(fra.t, "WaitBlpPosition waitTime", waitTime, testWaitBlpPositionWaitTime)
+	testWaitBlpPositionCalled = true
 	return nil
+}
+
+func agentRpcTestWaitBlpPosition(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+	err := client.WaitBlpPosition(ti, *testBlpPosition, testWaitBlpPositionWaitTime)
+	compareError(t, "WaitBlpPosition", err, true, testWaitBlpPositionCalled)
+}
+
+var testBlpPositionList = &blproto.BlpPositionList{
+	Entries: []blproto.BlpPosition{
+		*testBlpPosition,
+	},
 }
 
 func (fra *fakeRpcAgent) StopBlp() (*blproto.BlpPositionList, error) {
-	return nil, nil
+	return testBlpPositionList, nil
 }
 
+func agentRpcTestStopBlp(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+	bpl, err := client.StopBlp(ti, time.Minute)
+	compareError(t, "StopBlp", err, bpl, testBlpPositionList)
+}
+
+var testStartBlpCalled = false
+
 func (fra *fakeRpcAgent) StartBlp() error {
+	testStartBlpCalled = true
 	return nil
 }
 
+func agentRpcTestStartBlp(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+	err := client.StartBlp(ti, time.Minute)
+	compareError(t, "StartBlp", err, true, testStartBlpCalled)
+}
+
+var testRunBlpUntilWaitTime = 3 * time.Minute
+
 func (fra *fakeRpcAgent) RunBlpUntil(bpl *blproto.BlpPositionList, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
-	return nil, nil
+	compare(fra.t, "RunBlpUntil bpl", bpl, testBlpPositionList)
+	compare(fra.t, "RunBlpUntil waitTime", waitTime, testRunBlpUntilWaitTime)
+	return &testReplicationPosition, nil
+}
+
+func agentRpcTestRunBlpUntil(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+	rp, err := client.RunBlpUntil(ti, testBlpPositionList, testRunBlpUntilWaitTime)
+	compareError(t, "RunBlpUntil", err, rp, testReplicationPosition)
 }
 
 //
@@ -441,24 +544,42 @@ func (fra *fakeRpcAgent) DemoteMaster() error {
 	return nil
 }
 
+func agentRpcTestDemoteMaster(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+}
+
 func (fra *fakeRpcAgent) PromoteSlave() (*actionnode.RestartSlaveData, error) {
 	return nil, nil
+}
+
+func agentRpcTestPromoteSlave(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
 }
 
 func (fra *fakeRpcAgent) SlaveWasPromoted() error {
 	return nil
 }
 
+func agentRpcTestSlaveWasPromoted(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+}
+
 func (fra *fakeRpcAgent) RestartSlave(rsd *actionnode.RestartSlaveData) error {
 	return nil
+}
+
+func agentRpcTestRestartSlave(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
 }
 
 func (fra *fakeRpcAgent) SlaveWasRestarted(swrd *actionnode.SlaveWasRestartedArgs) error {
 	return nil
 }
 
+func agentRpcTestSlaveWasRestarted(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+}
+
 func (fra *fakeRpcAgent) BreakSlaves() error {
 	return nil
+}
+
+func agentRpcTestBreakSlaves(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
 }
 
 //
@@ -518,20 +639,35 @@ func (fra *fakeRpcAgent) SnapshotSourceEnd(args *actionnode.SnapshotSourceEndArg
 	return nil
 }
 
+func agentRpcTestSnapshotSourceEnd(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+}
+
 func (fra *fakeRpcAgent) ReserveForRestore(args *actionnode.ReserveForRestoreArgs) error {
 	return nil
+}
+
+func agentRpcTestReserveForRestore(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
 }
 
 func (fra *fakeRpcAgent) Restore(args *actionnode.RestoreArgs, logger logutil.Logger) error {
 	return nil
 }
 
+func agentRpcTestRestore(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+}
+
 func (fra *fakeRpcAgent) MultiSnapshot(args *actionnode.MultiSnapshotArgs, logger logutil.Logger) (*actionnode.MultiSnapshotReply, error) {
 	return nil, nil
 }
 
+func agentRpcTestMultiSnapshot(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+}
+
 func (fra *fakeRpcAgent) MultiRestore(args *actionnode.MultiRestoreArgs, logger logutil.Logger) error {
 	return nil
+}
+
+func agentRpcTestMultiRestore(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
 }
 
 //
@@ -577,9 +713,33 @@ func AgentRpcTestSuite(t *testing.T, client initiator.TabletManagerConn, ti *top
 	agentRpcTestExecuteFetch(t, client, ti)
 
 	// Replication related methods
+	agentRpcTestSlaveStatus(t, client, ti)
+	agentRpcTestWaitSlavePosition(t, client, ti)
+	agentRpcTestMasterPosition(t, client, ti)
+	agentRpcTestReparentPosition(t, client, ti)
+	agentRpcTestStopSlave(t, client, ti)
+	agentRpcTestStopSlaveMinimum(t, client, ti)
+	agentRpcTestStartSlave(t, client, ti)
+	agentRpcTestTabletExternallyReparented(t, client, ti)
+	agentRpcTestGetSlaves(t, client, ti)
+	agentRpcTestWaitBlpPosition(t, client, ti)
+	agentRpcTestStopBlp(t, client, ti)
+	agentRpcTestStartBlp(t, client, ti)
+	agentRpcTestRunBlpUntil(t, client, ti)
 
 	// Reparenting related functions
+	agentRpcTestDemoteMaster(t, client, ti)
+	agentRpcTestPromoteSlave(t, client, ti)
+	agentRpcTestSlaveWasPromoted(t, client, ti)
+	agentRpcTestRestartSlave(t, client, ti)
+	agentRpcTestSlaveWasRestarted(t, client, ti)
+	agentRpcTestBreakSlaves(t, client, ti)
 
 	// Backup / restore related methods
 	agentRpcTestSnapshot(t, client, ti)
+	agentRpcTestSnapshotSourceEnd(t, client, ti)
+	agentRpcTestReserveForRestore(t, client, ti)
+	agentRpcTestRestore(t, client, ti)
+	agentRpcTestMultiSnapshot(t, client, ti)
+	agentRpcTestMultiRestore(t, client, ti)
 }
