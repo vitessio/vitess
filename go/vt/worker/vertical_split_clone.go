@@ -113,29 +113,6 @@ func (vscw *VerticalSplitCloneWorker) recordError(err error) {
 	event.DispatchUpdate(vscw.ev, "error: "+err.Error())
 }
 
-func (vscw *VerticalSplitCloneWorker) tableStatuses() ([]string, time.Time) {
-	copiedRows := uint64(0)
-	rowCount := uint64(0)
-	result := make([]string, len(vscw.tableStatus))
-	for i, ts := range vscw.tableStatus {
-		ts.mu.Lock()
-		if ts.rowCount > 0 {
-			result[i] = fmt.Sprintf("%v: %v (%v/%v)", ts.name, ts.state, ts.copiedRows, ts.rowCount)
-			copiedRows += ts.copiedRows
-			rowCount += ts.rowCount
-		} else {
-			result[i] = fmt.Sprintf("%v: %v", ts.name, ts.state)
-		}
-		ts.mu.Unlock()
-	}
-	now := time.Now()
-	if rowCount == 0 || copiedRows == 0 {
-		return result, now
-	}
-	eta := now.Add(time.Duration(float64(now.Sub(vscw.startTime)) * float64(copiedRows) / float64(rowCount)))
-	return result, eta
-}
-
 // StatusAsHTML implements the Worker interface
 func (vscw *VerticalSplitCloneWorker) StatusAsHTML() template.HTML {
 	vscw.mu.Lock()
@@ -148,12 +125,12 @@ func (vscw *VerticalSplitCloneWorker) StatusAsHTML() template.HTML {
 	case stateVSCCopy:
 		result += "<b>Running</b>:</br>\n"
 		result += "<b>Copying from</b>: " + vscw.sourceAlias.String() + "</br>\n"
-		statuses, eta := vscw.tableStatuses()
+		statuses, eta := formatTableStatuses(vscw.tableStatus, vscw.startTime)
 		result += "<b>ETA</b>: " + eta.String() + "</br>\n"
 		result += strings.Join(statuses, "</br>\n")
 	case stateVSCDone:
 		result += "<b>Success</b>:</br>\n"
-		statuses, _ := vscw.tableStatuses()
+		statuses, _ := formatTableStatuses(vscw.tableStatus, vscw.startTime)
 		result += strings.Join(statuses, "</br>\n")
 	}
 
@@ -172,12 +149,12 @@ func (vscw *VerticalSplitCloneWorker) StatusAsText() string {
 	case stateVSCCopy:
 		result += "Running:\n"
 		result += "Copying from: " + vscw.sourceAlias.String() + "\n"
-		statuses, eta := vscw.tableStatuses()
+		statuses, eta := formatTableStatuses(vscw.tableStatus, vscw.startTime)
 		result += "ETA: " + eta.String() + "\n"
 		result += strings.Join(statuses, "\n")
 	case stateVSCDone:
 		result += "Success:\n"
-		statuses, _ := vscw.tableStatuses()
+		statuses, _ := formatTableStatuses(vscw.tableStatus, vscw.startTime)
 		result += strings.Join(statuses, "\n")
 	}
 	return result

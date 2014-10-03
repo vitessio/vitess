@@ -52,6 +52,29 @@ func (ts *tableStatus) addCopiedRows(copiedRows int) {
 	ts.mu.Unlock()
 }
 
+func formatTableStatuses(tableStatuses []tableStatus, startTime time.Time) ([]string, time.Time) {
+	copiedRows := uint64(0)
+	rowCount := uint64(0)
+	result := make([]string, len(tableStatuses))
+	for i, ts := range tableStatuses {
+		ts.mu.Lock()
+		if ts.rowCount > 0 {
+			result[i] = fmt.Sprintf("%v: %v (%v/%v)", ts.name, ts.state, ts.copiedRows, ts.rowCount)
+			copiedRows += ts.copiedRows
+			rowCount += ts.rowCount
+		} else {
+			result[i] = fmt.Sprintf("%v: %v", ts.name, ts.state)
+		}
+		ts.mu.Unlock()
+	}
+	now := time.Now()
+	if rowCount == 0 || copiedRows == 0 {
+		return result, now
+	}
+	eta := now.Add(time.Duration(float64(now.Sub(startTime)) * float64(copiedRows) / float64(rowCount)))
+	return result, eta
+}
+
 // fillStringTemplate returns the string template filled
 func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
 	myTemplate := template.Must(template.New("").Parse(tmpl))

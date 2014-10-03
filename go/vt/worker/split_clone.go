@@ -116,29 +116,6 @@ func (scw *SplitCloneWorker) recordError(err error) {
 	event.DispatchUpdate(scw.ev, "error: "+err.Error())
 }
 
-func (scw *SplitCloneWorker) tableStatuses() ([]string, time.Time) {
-	copiedRows := uint64(0)
-	rowCount := uint64(0)
-	result := make([]string, len(scw.tableStatus))
-	for i, ts := range scw.tableStatus {
-		ts.mu.Lock()
-		if ts.rowCount > 0 {
-			result[i] = fmt.Sprintf("%v: %v (%v/%v)", ts.name, ts.state, ts.copiedRows, ts.rowCount)
-			copiedRows += ts.copiedRows
-			rowCount += ts.rowCount
-		} else {
-			result[i] = fmt.Sprintf("%v: %v", ts.name, ts.state)
-		}
-		ts.mu.Unlock()
-	}
-	now := time.Now()
-	if rowCount == 0 || copiedRows == 0 {
-		return result, now
-	}
-	eta := now.Add(time.Duration(float64(now.Sub(scw.startTime)) * float64(copiedRows) / float64(rowCount)))
-	return result, eta
-}
-
 func (scw *SplitCloneWorker) formatSources() string {
 	result := ""
 	for _, alias := range scw.sourceAliases {
@@ -159,12 +136,12 @@ func (scw *SplitCloneWorker) StatusAsHTML() template.HTML {
 	case stateSCCopy:
 		result += "<b>Running</b>:</br>\n"
 		result += "<b>Copying from</b>: " + scw.formatSources() + "</br>\n"
-		statuses, eta := scw.tableStatuses()
+		statuses, eta := formatTableStatuses(scw.tableStatus, scw.startTime)
 		result += "<b>ETA</b>: " + eta.String() + "</br>\n"
 		result += strings.Join(statuses, "</br>\n")
 	case stateSCDone:
 		result += "<b>Success</b>:</br>\n"
-		statuses, _ := scw.tableStatuses()
+		statuses, _ := formatTableStatuses(scw.tableStatus, scw.startTime)
 		result += strings.Join(statuses, "</br>\n")
 	}
 
@@ -183,12 +160,12 @@ func (scw *SplitCloneWorker) StatusAsText() string {
 	case stateSCCopy:
 		result += "Running:\n"
 		result += "Copying from: " + scw.formatSources() + "\n"
-		statuses, eta := scw.tableStatuses()
+		statuses, eta := formatTableStatuses(scw.tableStatus, scw.startTime)
 		result += "ETA: " + eta.String() + "\n"
 		result += strings.Join(statuses, "\n")
 	case stateSCDone:
 		result += "Success:\n"
-		statuses, _ := scw.tableStatuses()
+		statuses, _ := formatTableStatuses(scw.tableStatus, scw.startTime)
 		result += strings.Join(statuses, "\n")
 	}
 	return result
