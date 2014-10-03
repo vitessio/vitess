@@ -620,10 +620,14 @@ func (scw *SplitCloneWorker) copy() error {
 	// TODO(alainjobart) this is a superset, some shards may not
 	// overlap, have to deal with this better (for N -> M splits
 	// where both N>1 and M>1)
-	for _, si := range scw.destinationShards {
-		scw.wr.Logger().Infof("Setting SourceShard on shard %v/%v", si.Keyspace(), si.ShardName())
-		if err := scw.wr.SetSourceShards(si.Keyspace(), si.ShardName(), scw.sourceAliases, nil); err != nil {
-			return fmt.Errorf("Failed to set source shards: %v", err)
+	if strings.Index(scw.strategy, "skipSetSourceShards") != -1 {
+		scw.wr.Logger().Infof("Skipping setting SourceShard on destination shards.")
+	} else {
+		for _, si := range scw.destinationShards {
+			scw.wr.Logger().Infof("Setting SourceShard on shard %v/%v", si.Keyspace(), si.ShardName())
+			if err := scw.wr.SetSourceShards(si.Keyspace(), si.ShardName(), scw.sourceAliases, nil); err != nil {
+				return fmt.Errorf("Failed to set source shards: %v", err)
+			}
 		}
 	}
 
