@@ -669,7 +669,10 @@ func (fra *fakeRpcAgent) Snapshot(args *actionnode.SnapshotArgs, logger logutil.
 }
 
 func agentRpcTestSnapshot(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
-	logChannel, errFunc := client.Snapshot(ti, testSnapshotArgs, time.Minute)
+	logChannel, errFunc, err := client.Snapshot(ti, testSnapshotArgs, time.Minute)
+	if err != nil {
+		t.Fatalf("Snapshot failed: %v", err)
+	}
 	compareLoggedStuff(t, "Snapshot", logChannel, 0)
 	sr, err := errFunc()
 	compareError(t, "Snapshot", err, sr, testSnapshotReply)
@@ -737,9 +740,12 @@ func (fra *fakeRpcAgent) Restore(args *actionnode.RestoreArgs, logger logutil.Lo
 }
 
 func agentRpcTestRestore(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
-	logChannel, errFunc := client.Restore(ti, testRestoreArgs, time.Minute)
+	logChannel, errFunc, err := client.Restore(ti, testRestoreArgs, time.Minute)
+	if err != nil {
+		t.Fatalf("Restore failed: %v", err)
+	}
 	compareLoggedStuff(t, "Restore", logChannel, 10)
-	err := errFunc()
+	err = errFunc()
 	compareError(t, "Restore", err, true, testRestoreCalled)
 }
 
@@ -766,7 +772,10 @@ func (fra *fakeRpcAgent) MultiSnapshot(args *actionnode.MultiSnapshotArgs, logge
 }
 
 func agentRpcTestMultiSnapshot(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
-	logChannel, errFunc := client.MultiSnapshot(ti, testMultiSnapshotArgs, time.Minute)
+	logChannel, errFunc, err := client.MultiSnapshot(ti, testMultiSnapshotArgs, time.Minute)
+	if err != nil {
+		t.Fatalf("MultiSnapshot failed: %v", err)
+	}
 	compareLoggedStuff(t, "MultiSnapshot", logChannel, 100)
 	sr, err := errFunc()
 	compareError(t, "MultiSnapshot", err, sr, testMultiSnapshotReply)
@@ -799,9 +808,12 @@ func (fra *fakeRpcAgent) MultiRestore(args *actionnode.MultiRestoreArgs, logger 
 }
 
 func agentRpcTestMultiRestore(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
-	logChannel, errFunc := client.MultiRestore(ti, testMultiRestoreArgs, time.Minute)
+	logChannel, errFunc, err := client.MultiRestore(ti, testMultiRestoreArgs, time.Minute)
+	if err != nil {
+		t.Fatalf("MultiRestore failed: %v", err)
+	}
 	compareLoggedStuff(t, "MultiRestore", logChannel, 1000)
-	err := errFunc()
+	err = errFunc()
 	compareError(t, "MultiRestore", err, true, testMultiRestoreCalled)
 }
 
