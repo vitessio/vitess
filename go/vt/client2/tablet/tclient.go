@@ -132,9 +132,9 @@ func (conn *Conn) Close() error {
 
 func (conn *Conn) Exec(query string, bindVars map[string]interface{}) (db.Result, error) {
 	if conn.stream {
-		sr, errFunc := conn.tabletConn.StreamExecute(nil, query, bindVars, conn.TransactionId)
-		if errFunc() != nil {
-			return nil, errFunc()
+		sr, errFunc, err := conn.tabletConn.StreamExecute(nil, query, bindVars, conn.TransactionId)
+		if err != nil {
+			return nil, conn.fmtErr(err)
 		}
 		// read the columns, or grab the error
 		cols, ok := <-sr

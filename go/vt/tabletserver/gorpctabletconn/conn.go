@@ -114,13 +114,11 @@ func (conn *TabletBson) ExecuteBatch(context context.Context, queries []tproto.B
 }
 
 // StreamExecute starts a streaming query to VTTablet.
-func (conn *TabletBson) StreamExecute(context context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc) {
+func (conn *TabletBson) StreamExecute(context context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
-		sr := make(chan *mproto.QueryResult, 1)
-		close(sr)
-		return sr, func() error { return tabletconn.CONN_CLOSED }
+		return nil, nil, tabletconn.CONN_CLOSED
 	}
 
 	req := &tproto.Query{
@@ -131,7 +129,7 @@ func (conn *TabletBson) StreamExecute(context context.Context, query string, bin
 	}
 	sr := make(chan *mproto.QueryResult, 10)
 	c := conn.rpcClient.StreamGo("SqlQuery.StreamExecute", req, sr)
-	return sr, func() error { return tabletError(c.Error) }
+	return sr, func() error { return tabletError(c.Error) }, nil
 }
 
 // Begin starts a transaction.

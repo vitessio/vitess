@@ -108,9 +108,10 @@ func (sdc *ShardConn) StreamExecute(ctx context.Context, query string, bindVars 
 	var erFunc tabletconn.ErrFunc
 	var results <-chan *mproto.QueryResult
 	err := sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
-		results, erFunc = conn.StreamExecute(ctx, query, bindVars, transactionID)
+		var err error
+		results, erFunc, err = conn.StreamExecute(ctx, query, bindVars, transactionID)
 		usedConn = conn
-		return erFunc()
+		return err
 	}, transactionID, true)
 	if err != nil {
 		return results, func() error { return err }
