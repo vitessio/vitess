@@ -294,111 +294,6 @@ func (qe *QueryEngine) Rollback(logStats *SQLQueryStats, transactionID int64) {
 	qe.activeTxPool.Rollback(transactionID)
 }
 
-// Execute executes the specified query and returns its result.
-func (qe *QueryEngine) Execute(logStats *SQLQueryStats, query *proto.Query) (reply *mproto.QueryResult) {
-	if query.BindVariables == nil { // will help us avoid repeated nil checks
-		query.BindVariables = make(map[string]interface{})
-	}
-	logStats.BindVariables = query.BindVariables
-	// cheap hack: strip trailing comment into a special bind var
-	stripTrailing(query)
-	basePlan := qe.schemaInfo.GetPlan(logStats, query.Sql)
-	planName := basePlan.PlanId.String()
-	logStats.PlanType = planName
-	logStats.OriginalSql = query.Sql
-	defer func(start time.Time) {
-		duration := time.Now().Sub(start)
-		queryStats.Add(planName, duration)
-		if reply == nil {
-			basePlan.AddStats(1, duration, 0, 1)
-		} else {
-			basePlan.AddStats(1, duration, int64(len(reply.Rows)), 0)
-		}
-	}(time.Now())
-
-	// Run it by the rules engine
-	action, desc := basePlan.Rules.getAction(logStats.RemoteAddr(), logStats.Username(), query.BindVariables)
-	switch action {
-	case QR_FAIL:
-		panic(NewTabletError(FAIL, "Query disallowed due to rule: %s", desc))
-	case QR_FAIL_RETRY:
-		panic(NewTabletError(RETRY, "Query disallowed due to rule: %s", desc))
-	}
-
-	qe.checkTableAcl(basePlan.TableName, basePlan.PlanId, basePlan.Authorized, logStats.context.GetUsername())
-
-	if basePlan.PlanId == planbuilder.PLAN_DDL {
-		return qe.execDDL(logStats, query.Sql)
-	}
-
-	plan := &compiledPlan{
-		Query:         query.Sql,
-		ExecPlan:      basePlan,
-		BindVars:      query.BindVariables,
-		TransactionID: query.TransactionId,
-	}
-	if query.TransactionId != 0 {
-		// Need upfront connection for DMLs and transactions
-		conn := qe.activeTxPool.Get(query.TransactionId)
-		defer conn.Recycle()
-		conn.RecordQuery(plan.Query)
-		var invalidator CacheInvalidator
-		if plan.TableInfo != nil && plan.TableInfo.CacheType != schema.CACHE_NONE {
-			invalidator = conn.DirtyKeys(plan.TableName)
-		}
-		switch plan.PlanId {
-		case planbuilder.PLAN_PASS_DML:
-			if qe.strictMode.Get() != 0 {
-				panic(NewTabletError(FAIL, "DML too complex"))
-			}
-			reply = qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
-		case planbuilder.PLAN_INSERT_PK:
-			reply = qe.execInsertPK(logStats, conn, plan)
-		case planbuilder.PLAN_INSERT_SUBQUERY:
-			reply = qe.execInsertSubquery(logStats, conn, plan)
-		case planbuilder.PLAN_DML_PK:
-			reply = qe.execDMLPK(logStats, conn, plan, invalidator)
-		case planbuilder.PLAN_DML_SUBQUERY:
-			reply = qe.execDMLSubquery(logStats, conn, plan, invalidator)
-		case planbuilder.PLAN_OTHER:
-			reply = qe.executeSqlString(logStats, conn, query.Sql, true)
-		default: // select or set in a transaction, just count as select
-			reply = qe.execDirect(logStats, plan, conn)
-		}
-	} else {
-		switch plan.PlanId {
-		case planbuilder.PLAN_PASS_SELECT:
-			if plan.Reason == planbuilder.REASON_LOCK {
-				panic(NewTabletError(FAIL, "Disallowed outside transaction"))
-			}
-			reply = qe.execSelect(logStats, plan)
-		case planbuilder.PLAN_PK_EQUAL:
-			reply = qe.execPKEqual(logStats, plan)
-		case planbuilder.PLAN_PK_IN:
-			reply = qe.execPKIN(logStats, plan)
-		case planbuilder.PLAN_SELECT_SUBQUERY:
-			reply = qe.execSubquery(logStats, plan)
-		case planbuilder.PLAN_SET:
-			reply = qe.execSet(logStats, plan)
-		case planbuilder.PLAN_OTHER:
-			waitingForConnectionStart := time.Now()
-			conn := getOrPanic(qe.connPool)
-			logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
-			defer conn.Recycle()
-			reply = qe.executeSqlString(logStats, conn, query.Sql, true)
-		default:
-			panic(NewTabletError(NOT_IN_TX, "DMLs not allowed outside of transactions"))
-		}
-	}
-	if plan.PlanId.IsSelect() {
-		logStats.RowsAffected = int(reply.RowsAffected)
-		resultStats.Add(int64(reply.RowsAffected))
-		logStats.Rows = reply.Rows
-	}
-
-	return reply
-}
-
 // StreamExecute executes the query and streams its result.
 // The first QueryResult will have Fields set (and Rows nil)
 // The subsequent QueryResult will have Rows set (and Fields nil)
@@ -550,10 +445,7 @@ func (qe *QueryEngine) execDDL(logStats *SQLQueryStats, ddl string) *mproto.Quer
 	// Stolen from Execute
 	conn = qe.activeTxPool.Get(txid)
 	defer conn.Recycle()
-	result, err := qe.executeSql(logStats, conn, ddl, false)
-	if err != nil {
-		panic(err)
-	}
+	result := qe.execSQL(logStats, conn, ddl, false)
 	if ddlPlan.TableName != "" && ddlPlan.TableName != ddlPlan.NewName {
 		// It's a drop or rename.
 		qe.schemaInfo.DropTable(ddlPlan.TableName)
@@ -562,348 +454,6 @@ func (qe *QueryEngine) execDDL(logStats *SQLQueryStats, ddl string) *mproto.Quer
 		qe.schemaInfo.CreateOrUpdateTable(ddlPlan.NewName)
 	}
 	return result
-}
-
-//-----------------------------------------------
-// Execution
-
-func (qe *QueryEngine) execPKEqual(logStats *SQLQueryStats, plan *compiledPlan) (result *mproto.QueryResult) {
-	pkRows, err := buildValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
-	if err != nil {
-		panic(err)
-	}
-	if len(pkRows) != 1 || plan.Fields == nil {
-		panic("unexpected")
-	}
-	row := qe.fetchOne(logStats, plan, pkRows[0])
-	result = &mproto.QueryResult{}
-	result.Fields = plan.Fields
-	if row == nil {
-		return
-	}
-	result.Rows = make([][]sqltypes.Value, 1)
-	result.Rows[0] = applyFilter(plan.ColumnNumbers, row)
-	result.RowsAffected = 1
-	return
-}
-
-func (qe *QueryEngine) fetchOne(logStats *SQLQueryStats, plan *compiledPlan, pk []sqltypes.Value) (row []sqltypes.Value) {
-	logStats.QuerySources |= QUERY_SOURCE_ROWCACHE
-	tableInfo := plan.TableInfo
-	keys := make([]string, 1)
-	keys[0] = buildKey(pk)
-	rcresults := tableInfo.Cache.Get(keys)
-	rcresult := rcresults[keys[0]]
-	if rcresult.Row != nil {
-		if qe.mustVerify() {
-			qe.spotCheck(logStats, plan, rcresult, pk)
-		}
-		logStats.CacheHits++
-		tableInfo.hits.Add(1)
-		return rcresult.Row
-	}
-	resultFromdb := qe.qFetch(logStats, plan.OuterQuery, plan.BindVars, pk)
-	if len(resultFromdb.Rows) == 0 {
-		logStats.CacheAbsent++
-		tableInfo.absent.Add(1)
-		return nil
-	}
-	row = resultFromdb.Rows[0]
-	tableInfo.Cache.Set(keys[0], row, rcresult.Cas)
-	logStats.CacheMisses++
-	tableInfo.misses.Add(1)
-	return row
-}
-
-func (qe *QueryEngine) execPKIN(logStats *SQLQueryStats, plan *compiledPlan) (result *mproto.QueryResult) {
-	pkRows, err := buildINValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
-	if err != nil {
-		panic(err)
-	}
-	return qe.fetchMulti(logStats, plan, pkRows)
-}
-
-func (qe *QueryEngine) execSubquery(logStats *SQLQueryStats, plan *compiledPlan) (result *mproto.QueryResult) {
-	innerResult := qe.qFetch(logStats, plan.Subquery, plan.BindVars, nil)
-	return qe.fetchMulti(logStats, plan, innerResult.Rows)
-}
-
-func (qe *QueryEngine) fetchMulti(logStats *SQLQueryStats, plan *compiledPlan, pkRows [][]sqltypes.Value) (result *mproto.QueryResult) {
-	result = &mproto.QueryResult{}
-	if len(pkRows) == 0 {
-		return
-	}
-	if len(pkRows[0]) != 1 || plan.Fields == nil {
-		panic("unexpected")
-	}
-
-	tableInfo := plan.TableInfo
-	keys := make([]string, len(pkRows))
-	for i, pk := range pkRows {
-		keys[i] = buildKey(pk)
-	}
-	rcresults := tableInfo.Cache.Get(keys)
-
-	result.Fields = plan.Fields
-	rows := make([][]sqltypes.Value, 0, len(pkRows))
-	missingRows := make([]sqltypes.Value, 0, len(pkRows))
-	var hits, absent, misses int64
-	for i, pk := range pkRows {
-		rcresult := rcresults[keys[i]]
-		if rcresult.Row != nil {
-			if qe.mustVerify() {
-				qe.spotCheck(logStats, plan, rcresult, pk)
-			}
-			rows = append(rows, applyFilter(plan.ColumnNumbers, rcresult.Row))
-			hits++
-		} else {
-			missingRows = append(missingRows, pk[0])
-		}
-	}
-	if len(missingRows) != 0 {
-		resultFromdb := qe.qFetch(logStats, plan.OuterQuery, plan.BindVars, missingRows)
-		misses = int64(len(resultFromdb.Rows))
-		absent = int64(len(pkRows)) - hits - misses
-		for _, row := range resultFromdb.Rows {
-			rows = append(rows, applyFilter(plan.ColumnNumbers, row))
-			key := buildKey(applyFilter(plan.TableInfo.PKColumns, row))
-			tableInfo.Cache.Set(key, row, rcresults[key].Cas)
-		}
-	}
-
-	logStats.CacheHits = hits
-	logStats.CacheAbsent = absent
-	logStats.CacheMisses = misses
-
-	logStats.QuerySources |= QUERY_SOURCE_ROWCACHE
-
-	tableInfo.hits.Add(hits)
-	tableInfo.absent.Add(absent)
-	tableInfo.misses.Add(misses)
-	result.RowsAffected = uint64(len(rows))
-	result.Rows = rows
-	return result
-}
-
-func (qe *QueryEngine) mustVerify() bool {
-	return (Rand() % SPOT_CHECK_MULTIPLIER) < qe.spotCheckFreq.Get()
-}
-
-func (qe *QueryEngine) spotCheck(logStats *SQLQueryStats, plan *compiledPlan, rcresult RCResult, pk []sqltypes.Value) {
-	spotCheckCount.Add(1)
-	resultFromdb := qe.qFetch(logStats, plan.OuterQuery, plan.BindVars, pk)
-	var dbrow []sqltypes.Value
-	if len(resultFromdb.Rows) != 0 {
-		dbrow = resultFromdb.Rows[0]
-	}
-	if dbrow == nil || !rowsAreEqual(rcresult.Row, dbrow) {
-		qe.recheckLater(plan, rcresult, dbrow, pk)
-	}
-}
-
-func (qe *QueryEngine) recheckLater(plan *compiledPlan, rcresult RCResult, dbrow []sqltypes.Value, pk []sqltypes.Value) {
-	if qe.cachePool.IsClosed() {
-		return
-	}
-
-	time.Sleep(10 * time.Second)
-	keys := make([]string, 1)
-	keys[0] = buildKey(pk)
-	reloaded := plan.TableInfo.Cache.Get(keys)[keys[0]]
-	// If reloaded row is absent or has changed, we're good
-	if reloaded.Row == nil || reloaded.Cas != rcresult.Cas {
-		return
-	}
-	log.Warningf("query: %v", plan.FullQuery)
-	log.Warningf("mismatch for: %v\ncache: %v\ndb:    %v", pk, rcresult.Row, dbrow)
-	internalErrors.Add("Mismatch", 1)
-}
-
-// execDirect always sends the query to mysql
-func (qe *QueryEngine) execDirect(logStats *SQLQueryStats, plan *compiledPlan, conn dbconnpool.PoolConnection) (result *mproto.QueryResult) {
-	if plan.Fields != nil {
-		result = qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
-		result.Fields = plan.Fields
-		return
-	}
-	result = qe.fullFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
-	return
-}
-
-// execSelect sends a query to mysql only if another identical query is not running. Otherwise, it waits and
-// reuses the result. If the plan is missng field info, it sends the query to mysql requesting full info.
-func (qe *QueryEngine) execSelect(logStats *SQLQueryStats, plan *compiledPlan) (result *mproto.QueryResult) {
-	if plan.Fields != nil {
-		result = qe.qFetch(logStats, plan.FullQuery, plan.BindVars, nil)
-		result.Fields = plan.Fields
-		return
-	}
-	waitingForConnectionStart := time.Now()
-	conn := getOrPanic(qe.connPool)
-	logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
-	defer conn.Recycle()
-	result = qe.fullFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
-	return
-}
-
-func (qe *QueryEngine) execInsertPK(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, plan *compiledPlan) (result *mproto.QueryResult) {
-	pkRows, err := buildValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
-	if err != nil {
-		panic(err)
-	}
-	return qe.execInsertPKRows(logStats, conn, plan, pkRows)
-}
-
-func (qe *QueryEngine) execInsertSubquery(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, plan *compiledPlan) (result *mproto.QueryResult) {
-	innerResult := qe.directFetch(logStats, conn, plan.Subquery, plan.BindVars, nil, nil)
-	innerRows := innerResult.Rows
-	if len(innerRows) == 0 {
-		return &mproto.QueryResult{RowsAffected: 0}
-	}
-	if len(plan.ColumnNumbers) != len(innerRows[0]) {
-		panic(NewTabletError(FAIL, "Subquery length does not match column list"))
-	}
-	pkRows := make([][]sqltypes.Value, len(innerRows))
-	for i, innerRow := range innerRows {
-		pkRows[i] = applyFilterWithPKDefaults(plan.TableInfo, plan.SubqueryPKColumns, innerRow)
-	}
-	// Validating first row is sufficient
-	if err := validateRow(plan.TableInfo, plan.TableInfo.PKColumns, pkRows[0]); err != nil {
-		panic(err)
-	}
-
-	plan.BindVars["_rowValues"] = innerRows
-	return qe.execInsertPKRows(logStats, conn, plan, pkRows)
-}
-
-func (qe *QueryEngine) execInsertPKRows(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, plan *compiledPlan, pkRows [][]sqltypes.Value) (result *mproto.QueryResult) {
-	secondaryList, err := buildSecondaryList(plan.TableInfo, pkRows, plan.SecondaryPKValues, plan.BindVars)
-	if err != nil {
-		panic(err)
-	}
-	bsc := buildStreamComment(plan.TableInfo, pkRows, secondaryList)
-	result = qe.directFetch(logStats, conn, plan.OuterQuery, plan.BindVars, nil, bsc)
-	return result
-}
-
-func (qe *QueryEngine) execDMLPK(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, plan *compiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
-	pkRows, err := buildValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
-	if err != nil {
-		panic(err)
-	}
-	secondaryList, err := buildSecondaryList(plan.TableInfo, pkRows, plan.SecondaryPKValues, plan.BindVars)
-	if err != nil {
-		panic(err)
-	}
-
-	bsc := buildStreamComment(plan.TableInfo, pkRows, secondaryList)
-	result = qe.directFetch(logStats, conn, plan.OuterQuery, plan.BindVars, nil, bsc)
-	if invalidator == nil {
-		return result
-	}
-	for _, pk := range pkRows {
-		key := buildKey(pk)
-		invalidator.Delete(key)
-	}
-	return result
-}
-
-func (qe *QueryEngine) execDMLSubquery(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, plan *compiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
-	innerResult := qe.directFetch(logStats, conn, plan.Subquery, plan.BindVars, nil, nil)
-	// no need to validate innerResult
-	return qe.execDMLPKRows(logStats, conn, plan, innerResult.Rows, invalidator)
-}
-
-func (qe *QueryEngine) execDMLPKRows(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, plan *compiledPlan, pkRows [][]sqltypes.Value, invalidator CacheInvalidator) (result *mproto.QueryResult) {
-	if len(pkRows) == 0 {
-		return &mproto.QueryResult{RowsAffected: 0}
-	}
-	rowsAffected := uint64(0)
-	singleRow := make([][]sqltypes.Value, 1)
-	for _, pkRow := range pkRows {
-		singleRow[0] = pkRow
-		secondaryList, err := buildSecondaryList(plan.TableInfo, singleRow, plan.SecondaryPKValues, plan.BindVars)
-		if err != nil {
-			panic(err)
-		}
-
-		bsc := buildStreamComment(plan.TableInfo, singleRow, secondaryList)
-		rowsAffected += qe.directFetch(logStats, conn, plan.OuterQuery, plan.BindVars, pkRow, bsc).RowsAffected
-		if invalidator != nil {
-			key := buildKey(pkRow)
-			invalidator.Delete(key)
-		}
-	}
-	return &mproto.QueryResult{RowsAffected: rowsAffected}
-}
-
-func (qe *QueryEngine) execSet(logStats *SQLQueryStats, plan *compiledPlan) (result *mproto.QueryResult) {
-	switch plan.SetKey {
-	case "vt_pool_size":
-		qe.connPool.SetCapacity(int(getInt64(plan.SetValue)))
-	case "vt_stream_pool_size":
-		qe.streamConnPool.SetCapacity(int(getInt64(plan.SetValue)))
-	case "vt_transaction_cap":
-		qe.txPool.SetCapacity(int(getInt64(plan.SetValue)))
-	case "vt_transaction_timeout":
-		qe.activeTxPool.SetTimeout(getDuration(plan.SetValue))
-	case "vt_schema_reload_time":
-		qe.schemaInfo.SetReloadTime(getDuration(plan.SetValue))
-	case "vt_query_cache_size":
-		qe.schemaInfo.SetQueryCacheSize(int(getInt64(plan.SetValue)))
-	case "vt_max_result_size":
-		val := getInt64(plan.SetValue)
-		if val < 1 {
-			panic(NewTabletError(FAIL, "max result size out of range %v", val))
-		}
-		qe.maxResultSize.Set(val)
-	case "vt_stream_buffer_size":
-		val := getInt64(plan.SetValue)
-		if val < 1024 {
-			panic(NewTabletError(FAIL, "stream buffer size out of range %v", val))
-		}
-		qe.streamBufferSize.Set(val)
-	case "vt_query_timeout":
-		qe.queryTimeout.Set(getDuration(plan.SetValue))
-	case "vt_idle_timeout":
-		t := getDuration(plan.SetValue)
-		qe.connPool.SetIdleTimeout(t)
-		qe.streamConnPool.SetIdleTimeout(t)
-		qe.txPool.SetIdleTimeout(t)
-		qe.connKiller.SetIdleTimeout(t)
-	case "vt_spot_check_ratio":
-		qe.spotCheckFreq.Set(int64(getFloat64(plan.SetValue) * SPOT_CHECK_MULTIPLIER))
-	case "vt_strict_mode":
-		qe.strictMode.Set(getInt64(plan.SetValue))
-	default:
-		waitingForConnectionStart := time.Now()
-		conn := getOrPanic(qe.connPool)
-		logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
-		defer conn.Recycle()
-		return qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
-	}
-	return &mproto.QueryResult{}
-}
-
-func getInt64(v interface{}) int64 {
-	if ival, ok := v.(int64); ok {
-		return ival
-	}
-	panic(NewTabletError(FAIL, "expecting int"))
-}
-
-func getFloat64(v interface{}) float64 {
-	if ival, ok := v.(int64); ok {
-		return float64(ival)
-	}
-	if fval, ok := v.(float64); ok {
-		return fval
-	}
-	panic(NewTabletError(FAIL, "expecting number"))
-}
-
-func getDuration(v interface{}) time.Duration {
-	return time.Duration(getFloat64(v) * 1e9)
 }
 
 func (qe *QueryEngine) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value) (result *mproto.QueryResult) {
@@ -918,7 +468,7 @@ func (qe *QueryEngine) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser.Pa
 			q.Err = NewTabletErrorSql(FATAL, err)
 		} else {
 			defer conn.Recycle()
-			q.Result, q.Err = qe.executeSql(logStats, conn, sql, false)
+			q.Result, q.Err = qe.execSQLNoPanic(logStats, conn, sql, false)
 		}
 	} else {
 		logStats.QuerySources |= QUERY_SOURCE_CONSOLIDATOR
@@ -932,26 +482,18 @@ func (qe *QueryEngine) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser.Pa
 
 func (qe *QueryEngine) directFetch(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) (result *mproto.QueryResult) {
 	sql := qe.generateFinalSql(parsedQuery, bindVars, listVars, buildStreamComment)
-	result, err := qe.executeSql(logStats, conn, sql, false)
-	if err != nil {
-		panic(err)
-	}
-	return result
+	return qe.execSQL(logStats, conn, sql, false)
 }
 
 // fullFetch also fetches field info
 func (qe *QueryEngine) fullFetch(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) (result *mproto.QueryResult) {
 	sql := qe.generateFinalSql(parsedQuery, bindVars, listVars, buildStreamComment)
-	result, err := qe.executeSql(logStats, conn, sql, true)
-	if err != nil {
-		panic(err)
-	}
-	return result
+	return qe.execSQL(logStats, conn, sql, true)
 }
 
 func (qe *QueryEngine) fullStreamFetch(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte, callback func(*mproto.QueryResult) error) {
 	sql := qe.generateFinalSql(parsedQuery, bindVars, listVars, buildStreamComment)
-	qe.executeStreamSql(logStats, conn, sql, callback)
+	qe.execStreamSQL(logStats, conn, sql, callback)
 }
 
 func (qe *QueryEngine) generateFinalSql(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) string {
@@ -968,15 +510,15 @@ func (qe *QueryEngine) generateFinalSql(parsedQuery *sqlparser.ParsedQuery, bind
 	return hack.String(sql)
 }
 
-func (qe *QueryEngine) executeSqlString(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, sql string, wantfields bool) *mproto.QueryResult {
-	result, err := qe.executeSql(logStats, conn, sql, true)
+func (qe *QueryEngine) execSQL(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, sql string, wantfields bool) *mproto.QueryResult {
+	result, err := qe.execSQLNoPanic(logStats, conn, sql, true)
 	if err != nil {
 		panic(err)
 	}
 	return result
 }
 
-func (qe *QueryEngine) executeSql(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, sql string, wantfields bool) (*mproto.QueryResult, error) {
+func (qe *QueryEngine) execSQLNoPanic(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, sql string, wantfields bool) (*mproto.QueryResult, error) {
 	if timeout := qe.queryTimeout.Get(); timeout != 0 {
 		qd := qe.connKiller.SetDeadline(conn.Id(), time.Now().Add(timeout))
 		defer qd.Done()
@@ -986,9 +528,6 @@ func (qe *QueryEngine) executeSql(logStats *SQLQueryStats, conn dbconnpool.PoolC
 	logStats.NumberOfQueries++
 	logStats.AddRewrittenSql(sql)
 
-	// NOTE(szopa): I am not doing this measurement inside
-	// conn.ExecuteFetch because that would require changing the
-	// PoolConnection interface. Same applies to executeStreamSql.
 	fetchStart := time.Now()
 	result, err := conn.ExecuteFetch(sql, int(qe.maxResultSize.Get()), wantfields)
 	logStats.MysqlResponseTime += time.Now().Sub(fetchStart)
@@ -999,7 +538,7 @@ func (qe *QueryEngine) executeSql(logStats *SQLQueryStats, conn dbconnpool.PoolC
 	return result, nil
 }
 
-func (qe *QueryEngine) executeStreamSql(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, sql string, callback func(*mproto.QueryResult) error) {
+func (qe *QueryEngine) execStreamSQL(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, sql string, callback func(*mproto.QueryResult) error) {
 	logStats.QuerySources |= QUERY_SOURCE_MYSQL
 	logStats.NumberOfQueries++
 	logStats.AddRewrittenSql(sql)
@@ -1009,19 +548,4 @@ func (qe *QueryEngine) executeStreamSql(logStats *SQLQueryStats, conn dbconnpool
 	if err != nil {
 		panic(NewTabletErrorSql(FAIL, err))
 	}
-}
-
-func rowsAreEqual(row1, row2 []sqltypes.Value) bool {
-	if len(row1) != len(row2) {
-		return false
-	}
-	for i := 0; i < len(row1); i++ {
-		if row1[i].IsNull() && row2[i].IsNull() {
-			continue
-		}
-		if (row1[i].IsNull() && !row2[i].IsNull()) || (!row1[i].IsNull() && row2[i].IsNull()) || row1[i].String() != row2[i].String() {
-			return false
-		}
-	}
-	return true
 }

@@ -328,7 +328,6 @@ func handleExecError(query *proto.Query, err *error, logStats *SQLQueryStats) {
 // Execute executes the query and returns the result as response.
 func (sq *SqlQuery) Execute(context context.Context, query *proto.Query, reply *mproto.QueryResult) (err error) {
 	logStats := newSqlQueryStats("Execute", context)
-	logStats.TransactionID = query.TransactionId
 	allowShutdown := (query.TransactionId != 0)
 	if err = sq.startRequest(query.SessionId, allowShutdown); err != nil {
 		return err
@@ -336,7 +335,7 @@ func (sq *SqlQuery) Execute(context context.Context, query *proto.Query, reply *
 	defer sq.endRequest()
 	defer handleExecError(query, &err, logStats)
 
-	*reply = *sq.qe.Execute(logStats, query)
+	*reply = *ExecuteQueryRequest(context, logStats, query, sq)
 	return nil
 }
 
