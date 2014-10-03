@@ -129,7 +129,19 @@ func (conn *TabletBson) StreamExecute(context context.Context, query string, bin
 	}
 	sr := make(chan *mproto.QueryResult, 10)
 	c := conn.rpcClient.StreamGo("SqlQuery.StreamExecute", req, sr)
-	return sr, func() error { return tabletError(c.Error) }, nil
+	firstResult, ok := <-sr
+	if !ok {
+		return nil, nil, tabletError(c.Error)
+	}
+	srout := make(chan *mproto.QueryResult, 1)
+	go func() {
+		defer close(srout)
+		srout <- firstResult
+		for r := range sr {
+			srout <- r
+		}
+	}()
+	return srout, func() error { return tabletError(c.Error) }, nil
 }
 
 // Begin starts a transaction.
