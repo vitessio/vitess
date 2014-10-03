@@ -361,7 +361,7 @@ func (qe *QueryEngine) Execute(logStats *SQLQueryStats, query *proto.Query) (rep
 		case planbuilder.PLAN_DML_SUBQUERY:
 			reply = qe.execDMLSubquery(logStats, conn, plan, invalidator)
 		case planbuilder.PLAN_OTHER:
-			reply = qe.executeSqlString(logStats, conn, query.Sql, true)
+			reply = qe.execSQL(logStats, conn, query.Sql, true)
 		default: // select or set in a transaction, just count as select
 			reply = qe.execDirect(logStats, plan, conn)
 		}
@@ -385,7 +385,7 @@ func (qe *QueryEngine) Execute(logStats *SQLQueryStats, query *proto.Query) (rep
 			conn := getOrPanic(qe.connPool)
 			logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 			defer conn.Recycle()
-			reply = qe.executeSqlString(logStats, conn, query.Sql, true)
+			reply = qe.execSQL(logStats, conn, query.Sql, true)
 		default:
 			panic(NewTabletError(NOT_IN_TX, "DMLs not allowed outside of transactions"))
 		}
@@ -550,10 +550,7 @@ func (qe *QueryEngine) execDDL(logStats *SQLQueryStats, ddl string) *mproto.Quer
 	// Stolen from Execute
 	conn = qe.activeTxPool.Get(txid)
 	defer conn.Recycle()
-	result, err := qe.executeSql(logStats, conn, ddl, false)
-	if err != nil {
-		panic(err)
-	}
+	result := qe.execSQL(logStats, conn, ddl, false)
 	if ddlPlan.TableName != "" && ddlPlan.TableName != ddlPlan.NewName {
 		// It's a drop or rename.
 		qe.schemaInfo.DropTable(ddlPlan.TableName)
@@ -885,27 +882,6 @@ func (qe *QueryEngine) execSet(logStats *SQLQueryStats, plan *compiledPlan) (res
 	return &mproto.QueryResult{}
 }
 
-func getInt64(v interface{}) int64 {
-	if ival, ok := v.(int64); ok {
-		return ival
-	}
-	panic(NewTabletError(FAIL, "expecting int"))
-}
-
-func getFloat64(v interface{}) float64 {
-	if ival, ok := v.(int64); ok {
-		return float64(ival)
-	}
-	if fval, ok := v.(float64); ok {
-		return fval
-	}
-	panic(NewTabletError(FAIL, "expecting number"))
-}
-
-func getDuration(v interface{}) time.Duration {
-	return time.Duration(getFloat64(v) * 1e9)
-}
-
 func (qe *QueryEngine) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value) (result *mproto.QueryResult) {
 	sql := qe.generateFinalSql(parsedQuery, bindVars, listVars, nil)
 	q, ok := qe.consolidator.Create(string(sql))
@@ -918,7 +894,7 @@ func (qe *QueryEngine) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser.Pa
 			q.Err = NewTabletErrorSql(FATAL, err)
 		} else {
 			defer conn.Recycle()
-			q.Result, q.Err = qe.executeSql(logStats, conn, sql, false)
+			q.Result, q.Err = qe.execSQLNoPanic(logStats, conn, sql, false)
 		}
 	} else {
 		logStats.QuerySources |= QUERY_SOURCE_CONSOLIDATOR
@@ -932,21 +908,13 @@ func (qe *QueryEngine) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser.Pa
 
 func (qe *QueryEngine) directFetch(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) (result *mproto.QueryResult) {
 	sql := qe.generateFinalSql(parsedQuery, bindVars, listVars, buildStreamComment)
-	result, err := qe.executeSql(logStats, conn, sql, false)
-	if err != nil {
-		panic(err)
-	}
-	return result
+	return qe.execSQL(logStats, conn, sql, false)
 }
 
 // fullFetch also fetches field info
 func (qe *QueryEngine) fullFetch(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) (result *mproto.QueryResult) {
 	sql := qe.generateFinalSql(parsedQuery, bindVars, listVars, buildStreamComment)
-	result, err := qe.executeSql(logStats, conn, sql, true)
-	if err != nil {
-		panic(err)
-	}
-	return result
+	return qe.execSQL(logStats, conn, sql, true)
 }
 
 func (qe *QueryEngine) fullStreamFetch(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte, callback func(*mproto.QueryResult) error) {
@@ -968,15 +936,15 @@ func (qe *QueryEngine) generateFinalSql(parsedQuery *sqlparser.ParsedQuery, bind
 	return hack.String(sql)
 }
 
-func (qe *QueryEngine) executeSqlString(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, sql string, wantfields bool) *mproto.QueryResult {
-	result, err := qe.executeSql(logStats, conn, sql, true)
+func (qe *QueryEngine) execSQL(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, sql string, wantfields bool) *mproto.QueryResult {
+	result, err := qe.execSQLNoPanic(logStats, conn, sql, true)
 	if err != nil {
 		panic(err)
 	}
 	return result
 }
 
-func (qe *QueryEngine) executeSql(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, sql string, wantfields bool) (*mproto.QueryResult, error) {
+func (qe *QueryEngine) execSQLNoPanic(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, sql string, wantfields bool) (*mproto.QueryResult, error) {
 	if timeout := qe.queryTimeout.Get(); timeout != 0 {
 		qd := qe.connKiller.SetDeadline(conn.Id(), time.Now().Add(timeout))
 		defer qd.Done()
@@ -986,9 +954,6 @@ func (qe *QueryEngine) executeSql(logStats *SQLQueryStats, conn dbconnpool.PoolC
 	logStats.NumberOfQueries++
 	logStats.AddRewrittenSql(sql)
 
-	// NOTE(szopa): I am not doing this measurement inside
-	// conn.ExecuteFetch because that would require changing the
-	// PoolConnection interface. Same applies to executeStreamSql.
 	fetchStart := time.Now()
 	result, err := conn.ExecuteFetch(sql, int(qe.maxResultSize.Get()), wantfields)
 	logStats.MysqlResponseTime += time.Now().Sub(fetchStart)
