@@ -205,7 +205,7 @@ func interactiveSplitClone(wr *wrangler.Wrangler, w http.ResponseWriter, r *http
 
 	// start the clone job
 	wrk := worker.NewSplitCloneWorker(wr, *cell, keyspace, shard, excludeTableArray, strategy, int(sourceReaderCount), uint64(minTableSizeForSplit), int(destinationWriterCount))
-	if _, err := setAndStartWorker(wrk, nil); err != nil {
+	if _, err := setAndStartWorker(wrk); err != nil {
 		httpError(w, "cannot set worker: %s", err)
 		return
 	}
