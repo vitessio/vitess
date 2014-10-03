@@ -144,6 +144,15 @@ func (sdc *ShardConn) Rollback(ctx context.Context, transactionID int64) (err er
 	}, transactionID, false)
 }
 
+func (sdc *ShardConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitCount int) (queries []tproto.QuerySplit, err error) {
+	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
+		var innerErr error
+		queries, innerErr = conn.SplitQuery(ctx, query, splitCount)
+		return innerErr
+	}, 0, false)
+	return
+}
+
 // Close closes the underlying TabletConn. ShardConn can be
 // reused after this because it opens connections on demand.
 func (sdc *ShardConn) Close() {

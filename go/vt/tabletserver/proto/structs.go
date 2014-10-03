@@ -77,3 +77,22 @@ type Session struct {
 type TransactionInfo struct {
 	TransactionId int64
 }
+
+// SplitQueryRequest represents a request to split a Query into queries that
+// each return a subset of the original query.
+type SplitQueryRequest struct {
+	Query      BoundQuery
+	SplitCount int
+}
+
+// QuerySplit represents a split of SplitQueryRequest.Query. RowCount is only
+// approximate.
+type QuerySplit struct {
+	Query    BoundQuery
+	RowCount int64
+}
+
+// SplitQueryResult represents the result of a SplitQueryRequest
+type SplitQueryResult struct {
+	Queries []QuerySplit
+}

@@ -427,6 +427,19 @@ func (sq *SqlQuery) ExecuteBatch(context context.Context, queryList *proto.Query
 	return nil
 }
 
+//
+func (sq *SqlQuery) SplitQuery(context context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
+	logStats := newSqlQueryStats("SplitQuery", context)
+	var err error
+	defer handleError(&err, logStats)
+	queries, err := sq.qe.SplitQuery(logStats, &(req.Query), req.SplitCount)
+	if err != nil {
+		return err
+	}
+	reply.Queries = queries
+	return nil
+}
+
 // statsJSON is used to export SqlQuery status variables into expvar.
 func (sq *SqlQuery) statsJSON() string {
 	buf := bytes.NewBuffer(make([]byte, 0, 128))

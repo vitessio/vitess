@@ -549,3 +549,20 @@ func (qe *QueryEngine) execStreamSQL(logStats *SQLQueryStats, conn dbconnpool.Po
 		panic(NewTabletErrorSql(FAIL, err))
 	}
 }
+
+// SplitQuery uses QuerySplitter to split a BoundQuery into smaller queries
+// that return a subset of rows from the original query.
+func (qe *QueryEngine) SplitQuery(logStats *SQLQueryStats, query *proto.BoundQuery, splitCount int) ([]proto.QuerySplit, error) {
+	splitter := NewQuerySplitter(query, splitCount, qe.schemaInfo)
+	err := splitter.validateQuery()
+	if err != nil {
+		return nil, NewTabletError(FAIL, "query validation error: %s", err)
+	}
+	conn := getOrPanic(qe.connPool)
+	// TODO: For fetching pkMinMax, include where clauses on the
+	// primary key, if any, in the original query which might give a narrower
+	// range of PKs to work with.
+	minMaxSql := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v", splitter.pkCol, splitter.pkCol, splitter.tableName)
+	pkMinMax := qe.execSQL(logStats, conn, minMaxSql, true)
+	return splitter.split(pkMinMax), nil
+}

@@ -9,7 +9,6 @@ package vtgate
 import (
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -474,8 +473,8 @@ func (vtg *VTGate) Rollback(context context.Context, inSession *proto.Session) (
 // for its jobs. An InputSplit represents a set of rows in the specified table.
 // The mapper responsible for an InputSplit can execute the KeyRangeQuery of
 // that split to fetch the corresponding rows. The sum of InputSplits returned
-// by this method will add up to the entire table. An InputSplit is created
-// for each shard.
+// by this method will add up to the entire table. By default one split is created
+// per shard, but this can be controlled by changing req.SplitsPerShard
 func (vtg *VTGate) GetMRSplits(context context.Context, req *proto.GetMRSplitsRequest, reply *proto.GetMRSplitsResult) (err error) {
 	defer handlePanic(&err)
 	sc := vtg.resolver.scatterConn
@@ -483,53 +482,16 @@ func (vtg *VTGate) GetMRSplits(context context.Context, req *proto.GetMRSplitsRe
 	if err != nil {
 		return err
 	}
-	keyranges := []kproto.KeyRange{}
+	keyRangeByShard := map[string]kproto.KeyRange{}
 	for _, shard := range shards {
-		keyranges = append(keyranges, shard.KeyRange)
+		keyRangeByShard[shard.ShardName()] = shard.KeyRange
 	}
-	// Fetch approximate row counts in each shard to estimate split size. This
-	// returns 0 for Views, but it is okay for now.
-	// TODO (anandhenry): Use max PK and shard size to estimate split size.
-	rowCountSql := fmt.Sprintf("select TABLE_ROWS from information_schema.tables where table_schema = database() and TABLE_NAME='%v'", req.Table)
-	countRowsQuery := &proto.KeyRangeQuery{
-		Sql:        rowCountSql,
-		Keyspace:   keyspace,
-		KeyRanges:  keyranges,
-		TabletType: topo.TYPE_RDONLY,
-	}
-	qr, err := vtg.resolver.ExecuteKeyRanges(context, countRowsQuery)
+	splits, err := vtg.resolver.scatterConn.SplitQuery(context, req.Query, req.SplitsPerShard, keyRangeByShard, keyspace)
 	if err != nil {
 		return err
 	}
-	if len(qr.Rows) == 0 {
-		return fmt.Errorf("can't fetch split sizes, is this a valid table?")
-	}
-	sizes := []int64{}
-	for _, row := range qr.Rows {
-		size, err := strconv.ParseInt(row[0].String(), 10, 64)
-		if err != nil {
-			return err
-		}
-		sizes = append(sizes, size)
-	}
-
-	// Create one split per shard
-	reply.Splits = []proto.InputSplit{}
-	sql := fmt.Sprintf("select %s from %s", strings.Join(req.Columns, ","), req.Table)
-	for i, keyrange := range keyranges {
-		query := &proto.KeyRangeQuery{
-			Sql:        sql,
-			Keyspace:   keyspace,
-			KeyRanges:  []kproto.KeyRange{keyrange},
-			TabletType: topo.TYPE_RDONLY,
-		}
-		split := &proto.InputSplit{
-			Query: query,
-			Size:  sizes[i],
-		}
-		reply.Splits = append(reply.Splits, *split)
-	}
-	return err
+	reply.Splits = splits
+	return nil
 }
 
 func handlePanic(err *error) {
