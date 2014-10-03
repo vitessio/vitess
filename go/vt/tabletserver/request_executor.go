@@ -474,3 +474,18 @@ func getFloat64(v interface{}) float64 {
 func getDuration(v interface{}) time.Duration {
 	return time.Duration(getFloat64(v) * 1e9)
 }
+
+func rowsAreEqual(row1, row2 []sqltypes.Value) bool {
+	if len(row1) != len(row2) {
+		return false
+	}
+	for i := 0; i < len(row1); i++ {
+		if row1[i].IsNull() && row2[i].IsNull() {
+			continue
+		}
+		if (row1[i].IsNull() && !row2[i].IsNull()) || (!row1[i].IsNull() && row2[i].IsNull()) || row1[i].String() != row2[i].String() {
+			return false
+		}
+	}
+	return true
+}
