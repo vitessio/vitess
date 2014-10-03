@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/hook"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
@@ -58,6 +59,31 @@ func compareError(t *testing.T, name string, err error, got, want interface{}) {
 		t.Errorf("%v failed: %v", name, err)
 	} else {
 		compare(t, name+" result", got, want)
+	}
+}
+
+var testLogString = "test log"
+
+func logStuff(logger logutil.Logger, count int) {
+	for i := 0; i < count; i++ {
+		logger.Infof(testLogString)
+	}
+}
+
+func compareLoggedStuff(t *testing.T, name string, logChannel <-chan *logutil.LoggerEvent, count int) {
+	for i := 0; i < count; i++ {
+		le, ok := <-logChannel
+		if !ok {
+			t.Errorf("No logged value for %v/%v", name, i)
+			return
+		}
+		if le.Value != testLogString {
+			t.Errorf("Unexpected log response for %v: got %v expected %v", name, le.Value, testLogString)
+		}
+	}
+	_, ok := <-logChannel
+	if ok {
+		t.Fatalf("log channel wasn't closed for %v", name)
 	}
 }
 
@@ -540,53 +566,86 @@ func agentRpcTestRunBlpUntil(t *testing.T, client initiator.TabletManagerConn, t
 // Reparenting related functions
 //
 
+var testDemoteMasterCalled = false
+
 func (fra *fakeRpcAgent) DemoteMaster() error {
+	testDemoteMasterCalled = true
 	return nil
 }
 
 func agentRpcTestDemoteMaster(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+	err := client.DemoteMaster(ti, time.Minute)
+	compareError(t, "DemoteMaster", err, true, testDemoteMasterCalled)
 }
 
 func (fra *fakeRpcAgent) PromoteSlave() (*actionnode.RestartSlaveData, error) {
-	return nil, nil
+	return testRestartSlaveData, nil
 }
 
 func agentRpcTestPromoteSlave(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+	rsd, err := client.PromoteSlave(ti, time.Minute)
+	compareError(t, "PromoteSlave", err, rsd, testRestartSlaveData)
 }
 
+var testSlaveWasPromotedCalled = false
+
 func (fra *fakeRpcAgent) SlaveWasPromoted() error {
+	testSlaveWasPromotedCalled = true
 	return nil
 }
 
 func agentRpcTestSlaveWasPromoted(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+	err := client.SlaveWasPromoted(ti, time.Minute)
+	compareError(t, "SlaveWasPromoted", err, true, testSlaveWasPromotedCalled)
 }
 
+var testRestartSlaveCalled = false
+
 func (fra *fakeRpcAgent) RestartSlave(rsd *actionnode.RestartSlaveData) error {
+	compare(fra.t, "RestartSlave rsd", rsd, testRestartSlaveData)
+	testRestartSlaveCalled = true
 	return nil
 }
 
 func agentRpcTestRestartSlave(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+	err := client.RestartSlave(ti, testRestartSlaveData, time.Minute)
+	compareError(t, "RestartSlave", err, true, testRestartSlaveCalled)
 }
 
+var testSlaveWasRestartedArgs = &actionnode.SlaveWasRestartedArgs{
+	Parent: topo.TabletAlias{
+		Cell: "prison",
+		Uid:  42,
+	},
+}
+var testSlaveWasRestartedCalled = false
+
 func (fra *fakeRpcAgent) SlaveWasRestarted(swrd *actionnode.SlaveWasRestartedArgs) error {
+	compare(fra.t, "SlaveWasRestarted swrd", swrd, testSlaveWasRestartedArgs)
+	testSlaveWasRestartedCalled = true
 	return nil
 }
 
 func agentRpcTestSlaveWasRestarted(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+	err := client.SlaveWasRestarted(ti, testSlaveWasRestartedArgs, time.Minute)
+	compareError(t, "RestartSlave", err, true, testRestartSlaveCalled)
 }
 
+var testBreakSlavesCalled = false
+
 func (fra *fakeRpcAgent) BreakSlaves() error {
+	testBreakSlavesCalled = true
 	return nil
 }
 
 func agentRpcTestBreakSlaves(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+	err := client.BreakSlaves(ti, time.Minute)
+	compareError(t, "BreakSlaves", err, true, testBreakSlavesCalled)
 }
 
 //
 // Backup / restore related methods
 //
-
-var testLogString = "test log"
 
 var testSnapshotArgs = &actionnode.SnapshotArgs{
 	Concurrency:         42,
@@ -604,70 +663,146 @@ var testSnapshotReply = &actionnode.SnapshotReply{
 }
 
 func (fra *fakeRpcAgent) Snapshot(args *actionnode.SnapshotArgs, logger logutil.Logger) (*actionnode.SnapshotReply, error) {
-	if !reflect.DeepEqual(args, testSnapshotArgs) {
-		fra.t.Errorf("Unexpected SnapshotArgs: got %v expected %v", *args, *testSnapshotArgs)
-	}
-
-	logger.Infof(testLogString)
-	var result = *testSnapshotReply
-	return &result, nil
+	compare(fra.t, "Snapshot args", args, testSnapshotArgs)
+	logStuff(logger, 0)
+	return testSnapshotReply, nil
 }
 
 func agentRpcTestSnapshot(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
-	// Snapshot
-	args := *testSnapshotArgs
-	logChannel, errFunc := client.Snapshot(ti, &args, time.Minute)
-	le := <-logChannel
-	if le.Value != testLogString {
-		t.Errorf("Unexpected log response: got %v expected %v", le.Value, testLogString)
-	}
-	le, ok := <-logChannel
-	if ok {
-		t.Fatalf("log channel wasn't closed")
-	}
+	logChannel, errFunc := client.Snapshot(ti, testSnapshotArgs, time.Minute)
+	compareLoggedStuff(t, "Snapshot", logChannel, 0)
 	sr, err := errFunc()
-	if err != nil {
-		t.Errorf("Snapshot failed: %v", err)
-	} else {
-		if !reflect.DeepEqual(sr, testSnapshotReply) {
-			t.Errorf("Unexpected SnapshotReply: got %v expected %v", *sr, *testSnapshotReply)
-		}
-	}
+	compareError(t, "Snapshot", err, sr, testSnapshotReply)
 }
 
+var testSnapshotSourceEndArgs = &actionnode.SnapshotSourceEndArgs{
+	SlaveStartRequired: true,
+	ReadOnly:           true,
+	OriginalType:       topo.TYPE_RDONLY,
+}
+var testSnapshotSourceEndCalled = false
+
 func (fra *fakeRpcAgent) SnapshotSourceEnd(args *actionnode.SnapshotSourceEndArgs) error {
+	compare(fra.t, "SnapshotSourceEnd args", args, testSnapshotSourceEndArgs)
+	testSnapshotSourceEndCalled = true
 	return nil
 }
 
 func agentRpcTestSnapshotSourceEnd(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+	err := client.SnapshotSourceEnd(ti, testSnapshotSourceEndArgs, time.Minute)
+	compareError(t, "SnapshotSourceEnd", err, true, testSnapshotSourceEndCalled)
 }
 
+var testReserveForRestoreArgs = &actionnode.ReserveForRestoreArgs{
+	SrcTabletAlias: topo.TabletAlias{
+		Cell: "test",
+		Uid:  456,
+	},
+}
+var testReserveForRestoreCalled = false
+
 func (fra *fakeRpcAgent) ReserveForRestore(args *actionnode.ReserveForRestoreArgs) error {
+	compare(fra.t, "ReserveForRestore args", args, testReserveForRestoreArgs)
+	testReserveForRestoreCalled = true
 	return nil
 }
 
 func agentRpcTestReserveForRestore(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+	err := client.ReserveForRestore(ti, testReserveForRestoreArgs, time.Minute)
+	compareError(t, "ReserveForRestore", err, true, testReserveForRestoreCalled)
 }
 
+var testRestoreArgs = &actionnode.RestoreArgs{
+	SrcTabletAlias: topo.TabletAlias{
+		Cell: "jail1",
+		Uid:  890,
+	},
+	SrcFilePath: "source",
+	ParentAlias: topo.TabletAlias{
+		Cell: "jail2",
+		Uid:  901,
+	},
+	FetchConcurrency:      12,
+	FetchRetryCount:       678,
+	WasReserved:           true,
+	DontWaitForSlaveStart: true,
+}
+var testRestoreCalled = false
+
 func (fra *fakeRpcAgent) Restore(args *actionnode.RestoreArgs, logger logutil.Logger) error {
+	compare(fra.t, "Restore args", args, testRestoreArgs)
+	logStuff(logger, 10)
+	testRestoreCalled = true
 	return nil
 }
 
 func agentRpcTestRestore(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+	logChannel, errFunc := client.Restore(ti, testRestoreArgs, time.Minute)
+	compareLoggedStuff(t, "Restore", logChannel, 10)
+	err := errFunc()
+	compareError(t, "Restore", err, true, testRestoreCalled)
+}
+
+var testMultiSnapshotArgs = &actionnode.MultiSnapshotArgs{
+	KeyRanges:        []key.KeyRange{},
+	Tables:           []string{"table1", "table2"},
+	ExcludeTables:    []string{"etable1", "etable2"},
+	Concurrency:      34,
+	SkipSlaveRestart: true,
+	MaximumFilesize:  0x2000,
+}
+var testMultiSnapshotReply = &actionnode.MultiSnapshotReply{
+	ParentAlias: topo.TabletAlias{
+		Cell: "test",
+		Uid:  4567,
+	},
+	ManifestPaths: []string{"path1", "path2"},
 }
 
 func (fra *fakeRpcAgent) MultiSnapshot(args *actionnode.MultiSnapshotArgs, logger logutil.Logger) (*actionnode.MultiSnapshotReply, error) {
-	return nil, nil
+	compare(fra.t, "MultiSnapshot args", args, testMultiSnapshotArgs)
+	logStuff(logger, 100)
+	return testMultiSnapshotReply, nil
 }
 
 func agentRpcTestMultiSnapshot(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+	logChannel, errFunc := client.MultiSnapshot(ti, testMultiSnapshotArgs, time.Minute)
+	compareLoggedStuff(t, "MultiSnapshot", logChannel, 100)
+	sr, err := errFunc()
+	compareError(t, "MultiSnapshot", err, sr, testMultiSnapshotReply)
 }
 
+var testMultiRestoreArgs = &actionnode.MultiRestoreArgs{
+	SrcTabletAliases: []topo.TabletAlias{
+		topo.TabletAlias{
+			Cell: "jail1",
+			Uid:  8902,
+		},
+		topo.TabletAlias{
+			Cell: "jail2",
+			Uid:  8901,
+		},
+	},
+	Concurrency:            124,
+	FetchConcurrency:       162,
+	InsertTableConcurrency: 6178,
+	FetchRetryCount:        887,
+	Strategy:               "cool one",
+}
+var testMultiRestoreCalled = false
+
 func (fra *fakeRpcAgent) MultiRestore(args *actionnode.MultiRestoreArgs, logger logutil.Logger) error {
+	compare(fra.t, "MultiRestore args", args, testMultiRestoreArgs)
+	logStuff(logger, 1000)
+	testMultiRestoreCalled = true
 	return nil
 }
 
 func agentRpcTestMultiRestore(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+	logChannel, errFunc := client.MultiRestore(ti, testMultiRestoreArgs, time.Minute)
+	compareLoggedStuff(t, "MultiRestore", logChannel, 1000)
+	err := errFunc()
+	compareError(t, "MultiRestore", err, true, testMultiRestoreCalled)
 }
 
 //
