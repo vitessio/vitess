@@ -47,7 +47,7 @@ BUILD_DB=$(shell pwd)/build/.sb
 ADDON_DIR=$(shell pwd)/9.1addon
 ADDON_DIR2=$(shell pwd)
 MKFILES=osmkfiles
-BOOKS="books/bpi-en books/bpi-ch" 
+BOOKS="book" 
 GRAPH="doc/dia" 
 # 
 PERL=/usr/bin/perl
