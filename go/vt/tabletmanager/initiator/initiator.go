@@ -90,7 +90,7 @@ func (ai *ActionInitiator) Sleep(tablet *topo.TabletInfo, duration, waitTime tim
 	return ai.rpc.Sleep(tablet, duration, waitTime)
 }
 
-func (ai *ActionInitiator) Snapshot(tablet *topo.TabletInfo, args *actionnode.SnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, SnapshotReplyFunc) {
+func (ai *ActionInitiator) Snapshot(tablet *topo.TabletInfo, args *actionnode.SnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, SnapshotReplyFunc, error) {
 	return ai.rpc.Snapshot(tablet, args, waitTime)
 }
 
@@ -98,11 +98,11 @@ func (ai *ActionInitiator) SnapshotSourceEnd(tablet *topo.TabletInfo, args *acti
 	return ai.rpc.SnapshotSourceEnd(tablet, args, waitTime)
 }
 
-func (ai *ActionInitiator) MultiSnapshot(tablet *topo.TabletInfo, args *actionnode.MultiSnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, MultiSnapshotReplyFunc) {
+func (ai *ActionInitiator) MultiSnapshot(tablet *topo.TabletInfo, args *actionnode.MultiSnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, MultiSnapshotReplyFunc, error) {
 	return ai.rpc.MultiSnapshot(tablet, args, waitTime)
 }
 
-func (ai *ActionInitiator) MultiRestore(tablet *topo.TabletInfo, args *actionnode.MultiRestoreArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, ErrFunc) {
+func (ai *ActionInitiator) MultiRestore(tablet *topo.TabletInfo, args *actionnode.MultiRestoreArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, ErrFunc, error) {
 	return ai.rpc.MultiRestore(tablet, args, waitTime)
 }
 
@@ -217,7 +217,7 @@ func (ai *ActionInitiator) ReserveForRestore(tablet *topo.TabletInfo, args *acti
 	return ai.rpc.ReserveForRestore(tablet, args, waitTime)
 }
 
-func (ai *ActionInitiator) Restore(tablet *topo.TabletInfo, args *actionnode.RestoreArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, ErrFunc) {
+func (ai *ActionInitiator) Restore(tablet *topo.TabletInfo, args *actionnode.RestoreArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, ErrFunc, error) {
 	return ai.rpc.Restore(tablet, args, waitTime)
 }
 

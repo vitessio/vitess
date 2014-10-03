@@ -545,9 +545,13 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	}
 
 	// Now we're done with data copy, update the shard's source info.
-	vscw.wr.Logger().Infof("Setting SourceShard on shard %v/%v", vscw.destinationKeyspace, vscw.destinationShard)
-	if err := vscw.wr.SetSourceShards(vscw.destinationKeyspace, vscw.destinationShard, []topo.TabletAlias{vscw.sourceAlias}, vscw.tables); err != nil {
-		return fmt.Errorf("Failed to set source shards: %v", err)
+	if strings.Index(vscw.strategy, "skipSetSourceShards") != -1 {
+		vscw.wr.Logger().Infof("Skipping setting SourceShard on destination shard.")
+	} else {
+		vscw.wr.Logger().Infof("Setting SourceShard on shard %v/%v", vscw.destinationKeyspace, vscw.destinationShard)
+		if err := vscw.wr.SetSourceShards(vscw.destinationKeyspace, vscw.destinationShard, []topo.TabletAlias{vscw.sourceAlias}, vscw.tables); err != nil {
+			return fmt.Errorf("Failed to set source shards: %v", err)
+		}
 	}
 
 	// And force a schema reload on all destination tablets.

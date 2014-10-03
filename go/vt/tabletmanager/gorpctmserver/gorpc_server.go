@@ -22,17 +22,12 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/gorpcproto"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topotools"
 )
 
 // TabletManager is the Go RPC implementation of the RPC service
 type TabletManager struct {
-	// agent is the full thing, to be replaced by rpcAgent when it has
-	// all the API calls.
-	agent *tabletmanager.ActionAgent
-
 	// implementation of the agent to call
-	rpcAgent tabletmanager.RpcAgent
+	agent tabletmanager.RpcAgent
 }
 
 //
@@ -72,7 +67,7 @@ func (tm *TabletManager) GetSchema(context *rpcproto.Context, args *gorpcproto.G
 
 func (tm *TabletManager) GetPermissions(context *rpcproto.Context, args *rpc.UnusedRequest, reply *myproto.Permissions) error {
 	return tm.agent.RpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_GET_PERMISSIONS, args, reply, func() error {
-		p, err := tm.agent.Mysqld.GetPermissions()
+		p, err := tm.agent.GetPermissions()
 		if err == nil {
 			*reply = *p
 		}
@@ -98,7 +93,7 @@ func (tm *TabletManager) SetReadWrite(context *rpcproto.Context, args *rpc.Unuse
 
 func (tm *TabletManager) ChangeType(context *rpcproto.Context, args *topo.TabletType, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_CHANGE_TYPE, args, reply, true, func() error {
-		return topotools.ChangeType(tm.agent.TopoServer, tm.agent.TabletAlias, *args, nil, true /*runHooks*/)
+		return tm.agent.ChangeType(*args)
 	})
 }
 
@@ -151,7 +146,7 @@ func (tm *TabletManager) ExecuteFetch(context *rpcproto.Context, args *gorpcprot
 
 func (tm *TabletManager) SlaveStatus(context *rpcproto.Context, args *rpc.UnusedRequest, reply *myproto.ReplicationStatus) error {
 	return tm.agent.RpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_SLAVE_STATUS, args, reply, func() error {
-		status, err := tm.agent.Mysqld.SlaveStatus()
+		status, err := tm.agent.SlaveStatus()
 		if err == nil {
 			*reply = *status
 		}
@@ -160,7 +155,7 @@ func (tm *TabletManager) SlaveStatus(context *rpcproto.Context, args *rpc.Unused
 }
 
 func (tm *TabletManager) WaitSlavePosition(context *rpcproto.Context, args *gorpcproto.WaitSlavePositionArgs, reply *myproto.ReplicationStatus) error {
-	return tm.agent.RpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_WAIT_SLAVE_POSITION, args, reply, func() error {
+	return tm.agent.RpcWrapLock(context.RemoteAddr, actionnode.TABLET_ACTION_WAIT_SLAVE_POSITION, args, reply, true, func() error {
 		status, err := tm.agent.WaitSlavePosition(args.Position, args.WaitTimeout)
 		if err == nil {
 			*reply = *status
@@ -171,7 +166,7 @@ func (tm *TabletManager) WaitSlavePosition(context *rpcproto.Context, args *gorp
 
 func (tm *TabletManager) MasterPosition(context *rpcproto.Context, args *rpc.UnusedRequest, reply *myproto.ReplicationPosition) error {
 	return tm.agent.RpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_MASTER_POSITION, args, reply, func() error {
-		position, err := tm.agent.Mysqld.MasterPosition()
+		position, err := tm.agent.MasterPosition()
 		if err == nil {
 			*reply = position
 		}
@@ -191,7 +186,7 @@ func (tm *TabletManager) ReparentPosition(context *rpcproto.Context, args *mypro
 
 func (tm *TabletManager) StopSlave(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLock(context.RemoteAddr, actionnode.TABLET_ACTION_STOP_SLAVE, args, reply, true, func() error {
-		return tm.agent.Mysqld.StopSlave(map[string]string{"TABLET_ALIAS": tm.agent.TabletAlias.String()})
+		return tm.agent.StopSlave()
 	})
 }
 
@@ -207,7 +202,7 @@ func (tm *TabletManager) StopSlaveMinimum(context *rpcproto.Context, args *gorpc
 
 func (tm *TabletManager) StartSlave(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLock(context.RemoteAddr, actionnode.TABLET_ACTION_START_SLAVE, args, reply, true, func() error {
-		return tm.agent.Mysqld.StartSlave(map[string]string{"TABLET_ALIAS": tm.agent.TabletAlias.String()})
+		return tm.agent.StartSlave()
 	})
 }
 
@@ -223,14 +218,14 @@ func (tm *TabletManager) TabletExternallyReparented(context *rpcproto.Context, a
 func (tm *TabletManager) GetSlaves(context *rpcproto.Context, args *rpc.UnusedRequest, reply *gorpcproto.GetSlavesReply) error {
 	return tm.agent.RpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_GET_SLAVES, args, reply, func() error {
 		var err error
-		reply.Addrs, err = tm.agent.Mysqld.FindSlaves()
+		reply.Addrs, err = tm.agent.GetSlaves()
 		return err
 	})
 }
 
 func (tm *TabletManager) WaitBlpPosition(context *rpcproto.Context, args *gorpcproto.WaitBlpPositionArgs, reply *rpc.UnusedResponse) error {
-	return tm.agent.RpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_WAIT_BLP_POSITION, args, reply, func() error {
-		return tm.agent.Mysqld.WaitBlpPos(&args.BlpPosition, args.WaitTimeout)
+	return tm.agent.RpcWrapLock(context.RemoteAddr, actionnode.TABLET_ACTION_WAIT_BLP_POSITION, args, reply, true, func() error {
+		return tm.agent.WaitBlpPosition(&args.BlpPosition, args.WaitTimeout)
 	})
 }
 
@@ -307,7 +302,7 @@ func (tm *TabletManager) BreakSlaves(context *rpcproto.Context, args *rpc.Unused
 // backup related methods
 
 func (tm *TabletManager) Snapshot(context *rpcproto.Context, args *actionnode.SnapshotArgs, sendReply func(interface{}) error) error {
-	return tm.rpcAgent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SNAPSHOT, args, nil, true, func() error {
+	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SNAPSHOT, args, nil, true, func() error {
 		// create a logger, send the result back to the caller
 		logger := logutil.NewChannelLogger(10)
 		wg := sync.WaitGroup{}
@@ -328,7 +323,7 @@ func (tm *TabletManager) Snapshot(context *rpcproto.Context, args *actionnode.Sn
 			wg.Done()
 		}()
 
-		sr, err := tm.rpcAgent.Snapshot(args, logger)
+		sr, err := tm.agent.Snapshot(args, logger)
 		close(logger)
 		wg.Wait()
 		if err != nil {
@@ -450,15 +445,11 @@ func (tm *TabletManager) MultiRestore(context *rpcproto.Context, args *actionnod
 
 func init() {
 	tabletmanager.RegisterQueryServices = append(tabletmanager.RegisterQueryServices, func(agent *tabletmanager.ActionAgent) {
-		// agent also implements RpcAgent. Eventually we will only have
-		// RpcAgent, and no agent, so this will be simpler.
-		rpcwrap.RegisterAuthenticated(&TabletManager{agent, agent})
+		rpcwrap.RegisterAuthenticated(&TabletManager{agent})
 	})
 }
 
 // RegisterForTest will register the RPC, to be used by test instances only
 func RegisterForTest(server *rpcplus.Server, agent *tabletmanager.ActionAgent) {
-	// agent also implements RpcAgent. Eventually we will only have
-	// RpcAgent, and no agent, so this will be simpler.
-	server.Register(&TabletManager{agent, agent})
+	server.Register(&TabletManager{agent})
 }

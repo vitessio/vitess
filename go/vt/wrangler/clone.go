@@ -43,7 +43,10 @@ func (wr *Wrangler) Snapshot(tabletAlias topo.TabletAlias, forceMasterSnapshot b
 		ServerMode:          serverMode,
 		ForceMasterSnapshot: forceMasterSnapshot,
 	}
-	logStream, errFunc := wr.ai.Snapshot(ti, args, wr.ActionTimeout())
+	logStream, errFunc, err := wr.ai.Snapshot(ti, args, wr.ActionTimeout())
+	if err != nil {
+		return nil, "", err
+	}
 	for e := range logStream {
 		log.Infof("Snapshot: %v", e)
 	}
@@ -143,7 +146,10 @@ func (wr *Wrangler) Restore(srcTabletAlias topo.TabletAlias, srcFilePath string,
 		WasReserved:           wasReserved,
 		DontWaitForSlaveStart: dontWaitForSlaveStart,
 	}
-	logStream, errFunc := wr.ai.Restore(tablet, args, wr.ActionTimeout())
+	logStream, errFunc, err := wr.ai.Restore(tablet, args, wr.ActionTimeout())
+	if err != nil {
+		return err
+	}
 	for e := range logStream {
 		log.Infof("Restore: %v", e)
 	}

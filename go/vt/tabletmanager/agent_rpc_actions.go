@@ -43,7 +43,89 @@ import (
 type RpcAgent interface {
 	// RPC calls
 
+	// Various read-only methods
+
+	Ping(args string) string
+
+	GetSchema(tables, excludeTables []string, includeViews bool) (*myproto.SchemaDefinition, error)
+
+	GetPermissions() (*myproto.Permissions, error)
+
+	// Various read-write methods
+
+	SetReadOnly(rdonly bool) error
+
+	ChangeType(topo.TabletType) error
+
+	Scrap() error
+
+	Sleep(duration time.Duration)
+
+	ExecuteHook(hk *hook.Hook) *hook.HookResult
+
+	ReloadSchema()
+
+	PreflightSchema(change string) (*myproto.SchemaChangeResult, error)
+
+	ApplySchema(change *myproto.SchemaChange) (*myproto.SchemaChangeResult, error)
+
+	ExecuteFetch(query string, maxrows int, wantFields, disableBinlogs bool) (*proto.QueryResult, error)
+
+	// Replication related methods
+
+	SlaveStatus() (*myproto.ReplicationStatus, error)
+
+	WaitSlavePosition(position myproto.ReplicationPosition, waitTimeout time.Duration) (*myproto.ReplicationStatus, error)
+
+	MasterPosition() (myproto.ReplicationPosition, error)
+
+	ReparentPosition(rp *myproto.ReplicationPosition) (*actionnode.RestartSlaveData, error)
+
+	StopSlave() error
+
+	StopSlaveMinimum(position myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error)
+
+	StartSlave() error
+
+	TabletExternallyReparented(actionTimeout time.Duration) error
+
+	GetSlaves() ([]string, error)
+
+	WaitBlpPosition(blpPosition *blproto.BlpPosition, waitTime time.Duration) error
+
+	StopBlp() (*blproto.BlpPositionList, error)
+
+	StartBlp() error
+
+	RunBlpUntil(bpl *blproto.BlpPositionList, waitTime time.Duration) (*myproto.ReplicationPosition, error)
+
+	// Reparenting related functions
+
+	DemoteMaster() error
+
+	PromoteSlave() (*actionnode.RestartSlaveData, error)
+
+	SlaveWasPromoted() error
+
+	RestartSlave(rsd *actionnode.RestartSlaveData) error
+
+	SlaveWasRestarted(swrd *actionnode.SlaveWasRestartedArgs) error
+
+	BreakSlaves() error
+
+	// Backup / restore related methods
+
 	Snapshot(args *actionnode.SnapshotArgs, logger logutil.Logger) (*actionnode.SnapshotReply, error)
+
+	SnapshotSourceEnd(args *actionnode.SnapshotSourceEndArgs) error
+
+	ReserveForRestore(args *actionnode.ReserveForRestoreArgs) error
+
+	Restore(args *actionnode.RestoreArgs, logger logutil.Logger) error
+
+	MultiSnapshot(args *actionnode.MultiSnapshotArgs, logger logutil.Logger) (*actionnode.MultiSnapshotReply, error)
+
+	MultiRestore(args *actionnode.MultiRestoreArgs, logger logutil.Logger) error
 
 	// RPC helpers
 	RpcWrap(from, name string, args, reply interface{}, f func() error) error
@@ -62,6 +144,18 @@ type RpcAgent interface {
 // Should be called under RpcWrapLockAction.
 func (agent *ActionAgent) Ping(args string) string {
 	return args
+}
+
+// GetSchema returns the schema.
+// Should be called under RpcWrap.
+func (agent *ActionAgent) GetSchema(tables, excludeTables []string, includeViews bool) (*myproto.SchemaDefinition, error) {
+	return agent.Mysqld.GetSchema(agent.Tablet().DbName(), tables, excludeTables, includeViews)
+}
+
+// GetPermissions returns the db permissions.
+// Should be called under RpcWrap.
+func (agent *ActionAgent) GetPermissions() (*myproto.Permissions, error) {
+	return agent.Mysqld.GetPermissions()
 }
 
 // SetReadOnly makes the mysql instance read-only or read-write
@@ -84,6 +178,12 @@ func (agent *ActionAgent) SetReadOnly(rdonly bool) error {
 	return topo.UpdateTablet(agent.TopoServer, tablet)
 }
 
+// ChangeType changes the tablet type
+// Should be called under RpcWrapLockAction.
+func (agent *ActionAgent) ChangeType(tabletType topo.TabletType) error {
+	return topotools.ChangeType(agent.TopoServer, agent.TabletAlias, tabletType, nil, true /*runHooks*/)
+}
+
 // Scrap scraps the live running tablet
 // Should be called under RpcWrapLockAction.
 func (agent *ActionAgent) Scrap() error {
@@ -101,12 +201,6 @@ func (agent *ActionAgent) Sleep(duration time.Duration) {
 func (agent *ActionAgent) ExecuteHook(hk *hook.Hook) *hook.HookResult {
 	topotools.ConfigureTabletHook(hk, agent.TabletAlias)
 	return hk.Execute()
-}
-
-// GetSchema returns the schema.
-// Should be called under RpcWrap.
-func (agent *ActionAgent) GetSchema(tables, excludeTables []string, includeViews bool) (*myproto.SchemaDefinition, error) {
-	return agent.Mysqld.GetSchema(agent.Tablet().DbName(), tables, excludeTables, includeViews)
 }
 
 // ReloadSchema will reload the schema
@@ -179,6 +273,29 @@ func (agent *ActionAgent) ExecuteFetch(query string, maxrows int, wantFields, di
 	return qr, err
 }
 
+// SlaveStatus returns the replication status
+// Should be called under RpcWrap.
+func (agent *ActionAgent) SlaveStatus() (*myproto.ReplicationStatus, error) {
+	return agent.Mysqld.SlaveStatus()
+}
+
+// WaitSlavePosition waits until we reach the provided position,
+// and returns the current position
+// Should be called under RpcWrapLock.
+func (agent *ActionAgent) WaitSlavePosition(position myproto.ReplicationPosition, waitTimeout time.Duration) (*myproto.ReplicationStatus, error) {
+	if err := agent.Mysqld.WaitMasterPos(position, waitTimeout); err != nil {
+		return nil, err
+	}
+
+	return agent.Mysqld.SlaveStatus()
+}
+
+// MasterPosition returns the master position
+// Should be called under RpcWrap.
+func (agent *ActionAgent) MasterPosition() (myproto.ReplicationPosition, error) {
+	return agent.Mysqld.MasterPosition()
+}
+
 // ReparentPosition returns the RestartSlaveData for the provided
 // ReplicationPosition.
 // Should be called under RpcWrap.
@@ -195,172 +312,10 @@ func (agent *ActionAgent) ReparentPosition(rp *myproto.ReplicationPosition) (*ac
 	return rsd, nil
 }
 
-// DemoteMaster demotes the current master, and marks it read-only in the topo.
-// Should be called under RpcWrapLockAction.
-func (agent *ActionAgent) DemoteMaster() error {
-	_, err := agent.Mysqld.DemoteMaster()
-	if err != nil {
-		return err
-	}
-
-	// There is no serving graph update - the master tablet will
-	// be replaced. Even though writes may fail, reads will
-	// succeed. It will be less noisy to simply leave the entry
-	// until well promote the master.
-	return agent.TopoServer.UpdateTabletFields(agent.TabletAlias, func(tablet *topo.Tablet) error {
-		tablet.State = topo.STATE_READ_ONLY
-		return nil
-	})
-}
-
-// PromoteSlave transforms the current tablet from a slave to a master.
-// It returns the data needed for other tablets to become a slave.
-// Should be called under RpcWrapLockAction.
-func (agent *ActionAgent) PromoteSlave() (*actionnode.RestartSlaveData, error) {
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
-	if err != nil {
-		return nil, err
-	}
-
-	// Perform the action.
-	rsd := &actionnode.RestartSlaveData{
-		Parent: tablet.Alias,
-		Force:  (tablet.Parent.Uid == topo.NO_TABLET),
-	}
-	rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted, err = agent.Mysqld.PromoteSlave(false, agent.hookExtraEnv())
-	if err != nil {
-		return nil, err
-	}
-	log.Infof("PromoteSlave response: %v", *rsd)
-
-	return rsd, agent.updateReplicationGraphForPromotedSlave(tablet)
-}
-
-// SlaveWasPromoted promotes a slave to master, no questions asked.
-// Should be called under RpcWrapLockAction.
-func (agent *ActionAgent) SlaveWasPromoted() error {
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
-	if err != nil {
-		return err
-	}
-
-	return agent.updateReplicationGraphForPromotedSlave(tablet)
-}
-
-// RestartSlave tells the tablet it has a new master
-// Should be called under RpcWrapLockAction.
-func (agent *ActionAgent) RestartSlave(rsd *actionnode.RestartSlaveData) error {
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
-	if err != nil {
-		return err
-	}
-
-	// If this check fails, we seem reparented. The only part that
-	// could have failed is the insert in the replication
-	// graph. Do NOT try to reparent again. That will either wedge
-	// replication or corrupt data.
-	if tablet.Parent != rsd.Parent {
-		log.V(6).Infof("restart with new parent")
-		// Remove tablet from the replication graph.
-		if err = topo.DeleteTabletReplicationData(agent.TopoServer, tablet.Tablet); err != nil && err != topo.ErrNoNode {
-			return err
-		}
-
-		// Move a lag slave into the orphan lag type so we can safely ignore
-		// this reparenting until replication catches up.
-		if tablet.Type == topo.TYPE_LAG {
-			tablet.Type = topo.TYPE_LAG_ORPHAN
-		} else {
-			err = agent.Mysqld.RestartSlave(rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted)
-			if err != nil {
-				return err
-			}
-		}
-		// Once this action completes, update authoritive tablet node first.
-		tablet.Parent = rsd.Parent
-		err = topo.UpdateTablet(agent.TopoServer, tablet)
-		if err != nil {
-			return err
-		}
-	} else if rsd.Force {
-		err = agent.Mysqld.RestartSlave(rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted)
-		if err != nil {
-			return err
-		}
-		// Complete the special orphan accounting.
-		if tablet.Type == topo.TYPE_LAG_ORPHAN {
-			tablet.Type = topo.TYPE_LAG
-			err = topo.UpdateTablet(agent.TopoServer, tablet)
-			if err != nil {
-				return err
-			}
-		}
-	} else {
-		// There is nothing to safely reparent, so check replication. If
-		// either replication thread is not running, report an error.
-		status, err := agent.Mysqld.SlaveStatus()
-		if err != nil {
-			return fmt.Errorf("cannot verify replication for slave: %v", err)
-		}
-		if !status.SlaveRunning() {
-			return fmt.Errorf("replication not running for slave")
-		}
-	}
-
-	// Insert the new tablet location in the replication graph now that
-	// we've updated the tablet.
-	err = topo.UpdateTabletReplicationData(agent.TopoServer, tablet.Tablet)
-	if err != nil && err != topo.ErrNodeExists {
-		return err
-	}
-
-	return nil
-}
-
-// SlaveWasRestarted updates the parent record for a tablet.
-// Should be called under RpcWrapLockAction.
-func (agent *ActionAgent) SlaveWasRestarted(swrd *actionnode.SlaveWasRestartedArgs) error {
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
-	if err != nil {
-		return err
-	}
-
-	// Once this action completes, update authoritive tablet node first.
-	tablet.Parent = swrd.Parent
-	if tablet.Type == topo.TYPE_MASTER {
-		tablet.Type = topo.TYPE_SPARE
-		tablet.State = topo.STATE_READ_ONLY
-	}
-	err = topo.UpdateTablet(agent.TopoServer, tablet)
-	if err != nil {
-		return err
-	}
-
-	// Update the new tablet location in the replication graph now that
-	// we've updated the tablet.
-	err = topo.UpdateTabletReplicationData(agent.TopoServer, tablet.Tablet)
-	if err != nil && err != topo.ErrNodeExists {
-		return err
-	}
-
-	return nil
-}
-
-// BreakSlaves will tinker with the replication stream in a way that
-// will stop all the slaves.
-// Should be called under RpcWrapLockAction.
-func (agent *ActionAgent) BreakSlaves() error {
-	return agent.Mysqld.BreakSlaves()
-}
-
-// WaitSlavePosition waits until we reach the provided position,
-// and returns the current position
-func (agent *ActionAgent) WaitSlavePosition(position myproto.ReplicationPosition, waitTimeout time.Duration) (*myproto.ReplicationStatus, error) {
-	if err := agent.Mysqld.WaitMasterPos(position, waitTimeout); err != nil {
-		return nil, err
-	}
-
-	return agent.Mysqld.SlaveStatus()
+// StopSlave will stop the replication
+// Should be called under RpcWrapLock.
+func (agent *ActionAgent) StopSlave() error {
+	return agent.Mysqld.StopSlave(agent.hookExtraEnv())
 }
 
 // StopSlaveMinimum will stop the slave after it reaches at least the
@@ -375,35 +330,10 @@ func (agent *ActionAgent) StopSlaveMinimum(position myproto.ReplicationPosition,
 	return agent.Mysqld.SlaveStatus()
 }
 
-// StopBlp stops the binlog players, and return their positions.
-func (agent *ActionAgent) StopBlp() (*blproto.BlpPositionList, error) {
-	if agent.BinlogPlayerMap == nil {
-		return nil, fmt.Errorf("No BinlogPlayerMap configured")
-	}
-	agent.BinlogPlayerMap.Stop()
-	return agent.BinlogPlayerMap.BlpPositionList()
-}
-
-// StartBlp starts the binlog players
-func (agent *ActionAgent) StartBlp() error {
-	if agent.BinlogPlayerMap == nil {
-		return fmt.Errorf("No BinlogPlayerMap configured")
-	}
-	agent.BinlogPlayerMap.Start()
-	return nil
-}
-
-// RunBlpUntil runs the binlog player server until the position is reached,
-// and returns the current mysql master replication position.
-func (agent *ActionAgent) RunBlpUntil(bpl *blproto.BlpPositionList, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
-	if agent.BinlogPlayerMap == nil {
-		return nil, fmt.Errorf("No BinlogPlayerMap configured")
-	}
-	if err := agent.BinlogPlayerMap.RunUntil(bpl, waitTime); err != nil {
-		return nil, err
-	}
-	rp, err := agent.Mysqld.MasterPosition()
-	return &rp, err
+// StartSlave will start the replication
+// Should be called under RpcWrapLock.
+func (agent *ActionAgent) StartSlave() error {
+	return agent.Mysqld.StartSlave(agent.hookExtraEnv())
 }
 
 // TabletExternallyReparented updates all topo records so the current
@@ -565,7 +495,215 @@ func (agent *ActionAgent) tabletExternallyReparentedLocked(actionTimeout time.Du
 	return true, nil
 }
 
-// updateReplicationGraphForPromotedSlave amkes sure the newly promoted slave
+// GetSlaves returns the address of all the slaves
+// Should be called under RpcWrap.
+func (agent *ActionAgent) GetSlaves() ([]string, error) {
+	return agent.Mysqld.FindSlaves()
+}
+
+// WaitBlpPosition waits until a specific filtered replication position is
+// reached.
+// Should be called under RpcWrapLock.
+func (agent *ActionAgent) WaitBlpPosition(blpPosition *blproto.BlpPosition, waitTime time.Duration) error {
+	return agent.Mysqld.WaitBlpPos(blpPosition, waitTime)
+}
+
+// StopBlp stops the binlog players, and return their positions.
+// Should be called under RpcWrapLockAction.
+func (agent *ActionAgent) StopBlp() (*blproto.BlpPositionList, error) {
+	if agent.BinlogPlayerMap == nil {
+		return nil, fmt.Errorf("No BinlogPlayerMap configured")
+	}
+	agent.BinlogPlayerMap.Stop()
+	return agent.BinlogPlayerMap.BlpPositionList()
+}
+
+// StartBlp starts the binlog players
+// Should be called under RpcWrapLockAction.
+func (agent *ActionAgent) StartBlp() error {
+	if agent.BinlogPlayerMap == nil {
+		return fmt.Errorf("No BinlogPlayerMap configured")
+	}
+	agent.BinlogPlayerMap.Start()
+	return nil
+}
+
+// RunBlpUntil runs the binlog player server until the position is reached,
+// and returns the current mysql master replication position.
+func (agent *ActionAgent) RunBlpUntil(bpl *blproto.BlpPositionList, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
+	if agent.BinlogPlayerMap == nil {
+		return nil, fmt.Errorf("No BinlogPlayerMap configured")
+	}
+	if err := agent.BinlogPlayerMap.RunUntil(bpl, waitTime); err != nil {
+		return nil, err
+	}
+	rp, err := agent.Mysqld.MasterPosition()
+	return &rp, err
+}
+
+//
+// Reparenting related functions
+//
+
+// DemoteMaster demotes the current master, and marks it read-only in the topo.
+// Should be called under RpcWrapLockAction.
+func (agent *ActionAgent) DemoteMaster() error {
+	_, err := agent.Mysqld.DemoteMaster()
+	if err != nil {
+		return err
+	}
+
+	// There is no serving graph update - the master tablet will
+	// be replaced. Even though writes may fail, reads will
+	// succeed. It will be less noisy to simply leave the entry
+	// until well promote the master.
+	return agent.TopoServer.UpdateTabletFields(agent.TabletAlias, func(tablet *topo.Tablet) error {
+		tablet.State = topo.STATE_READ_ONLY
+		return nil
+	})
+}
+
+// PromoteSlave transforms the current tablet from a slave to a master.
+// It returns the data needed for other tablets to become a slave.
+// Should be called under RpcWrapLockAction.
+func (agent *ActionAgent) PromoteSlave() (*actionnode.RestartSlaveData, error) {
+	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	// Perform the action.
+	rsd := &actionnode.RestartSlaveData{
+		Parent: tablet.Alias,
+		Force:  (tablet.Parent.Uid == topo.NO_TABLET),
+	}
+	rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted, err = agent.Mysqld.PromoteSlave(false, agent.hookExtraEnv())
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("PromoteSlave response: %v", *rsd)
+
+	return rsd, agent.updateReplicationGraphForPromotedSlave(tablet)
+}
+
+// SlaveWasPromoted promotes a slave to master, no questions asked.
+// Should be called under RpcWrapLockAction.
+func (agent *ActionAgent) SlaveWasPromoted() error {
+	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	if err != nil {
+		return err
+	}
+
+	return agent.updateReplicationGraphForPromotedSlave(tablet)
+}
+
+// RestartSlave tells the tablet it has a new master
+// Should be called under RpcWrapLockAction.
+func (agent *ActionAgent) RestartSlave(rsd *actionnode.RestartSlaveData) error {
+	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	if err != nil {
+		return err
+	}
+
+	// If this check fails, we seem reparented. The only part that
+	// could have failed is the insert in the replication
+	// graph. Do NOT try to reparent again. That will either wedge
+	// replication or corrupt data.
+	if tablet.Parent != rsd.Parent {
+		log.V(6).Infof("restart with new parent")
+		// Remove tablet from the replication graph.
+		if err = topo.DeleteTabletReplicationData(agent.TopoServer, tablet.Tablet); err != nil && err != topo.ErrNoNode {
+			return err
+		}
+
+		// Move a lag slave into the orphan lag type so we can safely ignore
+		// this reparenting until replication catches up.
+		if tablet.Type == topo.TYPE_LAG {
+			tablet.Type = topo.TYPE_LAG_ORPHAN
+		} else {
+			err = agent.Mysqld.RestartSlave(rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted)
+			if err != nil {
+				return err
+			}
+		}
+		// Once this action completes, update authoritive tablet node first.
+		tablet.Parent = rsd.Parent
+		err = topo.UpdateTablet(agent.TopoServer, tablet)
+		if err != nil {
+			return err
+		}
+	} else if rsd.Force {
+		err = agent.Mysqld.RestartSlave(rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted)
+		if err != nil {
+			return err
+		}
+		// Complete the special orphan accounting.
+		if tablet.Type == topo.TYPE_LAG_ORPHAN {
+			tablet.Type = topo.TYPE_LAG
+			err = topo.UpdateTablet(agent.TopoServer, tablet)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		// There is nothing to safely reparent, so check replication. If
+		// either replication thread is not running, report an error.
+		status, err := agent.Mysqld.SlaveStatus()
+		if err != nil {
+			return fmt.Errorf("cannot verify replication for slave: %v", err)
+		}
+		if !status.SlaveRunning() {
+			return fmt.Errorf("replication not running for slave")
+		}
+	}
+
+	// Insert the new tablet location in the replication graph now that
+	// we've updated the tablet.
+	err = topo.UpdateTabletReplicationData(agent.TopoServer, tablet.Tablet)
+	if err != nil && err != topo.ErrNodeExists {
+		return err
+	}
+
+	return nil
+}
+
+// SlaveWasRestarted updates the parent record for a tablet.
+// Should be called under RpcWrapLockAction.
+func (agent *ActionAgent) SlaveWasRestarted(swrd *actionnode.SlaveWasRestartedArgs) error {
+	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	if err != nil {
+		return err
+	}
+
+	// Once this action completes, update authoritive tablet node first.
+	tablet.Parent = swrd.Parent
+	if tablet.Type == topo.TYPE_MASTER {
+		tablet.Type = topo.TYPE_SPARE
+		tablet.State = topo.STATE_READ_ONLY
+	}
+	err = topo.UpdateTablet(agent.TopoServer, tablet)
+	if err != nil {
+		return err
+	}
+
+	// Update the new tablet location in the replication graph now that
+	// we've updated the tablet.
+	err = topo.UpdateTabletReplicationData(agent.TopoServer, tablet.Tablet)
+	if err != nil && err != topo.ErrNodeExists {
+		return err
+	}
+
+	return nil
+}
+
+// BreakSlaves will tinker with the replication stream in a way that
+// will stop all the slaves.
+// Should be called under RpcWrapLockAction.
+func (agent *ActionAgent) BreakSlaves() error {
+	return agent.Mysqld.BreakSlaves()
+}
+
+// updateReplicationGraphForPromotedSlave makes sure the newly promoted slave
 // is correctly represented in the replication graph
 func (agent *ActionAgent) updateReplicationGraphForPromotedSlave(tablet *topo.TabletInfo) error {
 	// Update tablet regardless - trend towards consistency.
@@ -594,7 +732,7 @@ func (agent *ActionAgent) updateReplicationGraphForPromotedSlave(tablet *topo.Ta
 }
 
 //
-// Backup related methods
+// Backup / restore related methods
 //
 
 // Snapshot takes a db snapshot
