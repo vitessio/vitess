@@ -28,7 +28,7 @@ func TestGoRpcTMServer(t *testing.T) {
 
 	// Create a Go Rpc server and listen on the port
 	server := rpcplus.NewServer()
-	server.Register(&TabletManager{nil, agentrpctest.NewFakeRpcAgent(t)})
+	server.Register(&TabletManager{agentrpctest.NewFakeRpcAgent(t)})
 
 	// create the HTTP server, serve the server from it
 	handler := http.NewServeMux()
