@@ -63,6 +63,8 @@ type RpcAgent interface {
 
 	ExecuteHook(hk *hook.Hook) *hook.HookResult
 
+	RefreshState()
+
 	ReloadSchema()
 
 	PreflightSchema(change string) (*myproto.SchemaChangeResult, error)
@@ -141,7 +143,7 @@ type RpcAgent interface {
 // to have the comment.
 
 // Ping makes sure RPCs work, and refreshes the tablet record.
-// Should be called under RpcWrapLockAction.
+// Should be called under RpcWrap.
 func (agent *ActionAgent) Ping(args string) string {
 	return args
 }
@@ -201,6 +203,11 @@ func (agent *ActionAgent) Sleep(duration time.Duration) {
 func (agent *ActionAgent) ExecuteHook(hk *hook.Hook) *hook.HookResult {
 	topotools.ConfigureTabletHook(hk, agent.TabletAlias)
 	return hk.Execute()
+}
+
+// RefreshState reload the tablet record from the topo server.
+// Should be called under RpcWrapLockAction, so it actually works.
+func (agent *ActionAgent) RefreshState() {
 }
 
 // ReloadSchema will reload the schema

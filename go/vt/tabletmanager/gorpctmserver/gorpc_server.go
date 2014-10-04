@@ -35,7 +35,7 @@ type TabletManager struct {
 //
 
 func (tm *TabletManager) Ping(context *rpcproto.Context, args, reply *string) error {
-	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_PING, args, reply, false, func() error {
+	return tm.agent.RpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_PING, args, reply, func() error {
 		*reply = tm.agent.Ping(*args)
 		return nil
 	})
@@ -100,6 +100,13 @@ func (tm *TabletManager) ChangeType(context *rpcproto.Context, args *topo.Tablet
 func (tm *TabletManager) Scrap(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SCRAP, args, reply, true, func() error {
 		return tm.agent.Scrap()
+	})
+}
+
+func (tm *TabletManager) RefreshState(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_REFRESH_STATE, args, reply, true, func() error {
+		tm.agent.RefreshState()
+		return nil
 	})
 }
 

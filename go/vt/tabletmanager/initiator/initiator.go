@@ -233,6 +233,10 @@ func (ai *ActionInitiator) ApplySchema(tablet *topo.TabletInfo, sc *myproto.Sche
 	return ai.rpc.ApplySchema(tablet, sc, waitTime)
 }
 
+func (ai *ActionInitiator) RefreshState(tablet *topo.TabletInfo, waitTime time.Duration) error {
+	return ai.rpc.RefreshState(tablet, waitTime)
+}
+
 func (ai *ActionInitiator) ReloadSchema(tablet *topo.TabletInfo, waitTime time.Duration) error {
 	return ai.rpc.ReloadSchema(tablet, waitTime)
 }

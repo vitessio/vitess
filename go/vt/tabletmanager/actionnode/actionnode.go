@@ -115,6 +115,10 @@ const (
 	// GetSchema returns the tablet current schema.
 	TABLET_ACTION_GET_SCHEMA = "GetSchema"
 
+	// RefreshState tells the tablet to refresh its tablet record from
+	// the topo server.
+	TABLET_ACTION_REFRESH_STATE = "RefreshState"
+
 	// ReloadSchema tells the tablet to reload its schema.
 	TABLET_ACTION_RELOAD_SCHEMA = "ReloadSchema"
 

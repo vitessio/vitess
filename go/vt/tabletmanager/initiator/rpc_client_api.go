@@ -63,6 +63,9 @@ type TabletManagerConn interface {
 	// ExecuteHook executes the provided hook remotely
 	ExecuteHook(tablet *topo.TabletInfo, hk *hook.Hook, waitTime time.Duration) (*hook.HookResult, error)
 
+	// RefreshState asks the remote tablet to reload its tablet record
+	RefreshState(tablet *topo.TabletInfo, waitTime time.Duration) error
+
 	// ReloadSchema asks the remote tablet to reload its schema
 	ReloadSchema(tablet *topo.TabletInfo, waitTime time.Duration) error
 

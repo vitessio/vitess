@@ -302,22 +302,22 @@ func (wr *Wrangler) waitForFilteredReplication(sourcePositions map[*topo.ShardIn
 	return rec.Error()
 }
 
-// pingMasters will just RPC-ping all the masters
-func (wr *Wrangler) pingMasters(shards []*topo.ShardInfo) error {
+// refreshMasters will just RPC-ping all the masters with RefreshState
+func (wr *Wrangler) refreshMasters(shards []*topo.ShardInfo) error {
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 	for _, si := range shards {
 		wg.Add(1)
 		go func(si *topo.ShardInfo) {
 			defer wg.Done()
-			log.Infof("Pinging master %v", si.MasterAlias)
+			log.Infof("RefreshState master %v", si.MasterAlias)
 			ti, err := wr.ts.GetTablet(si.MasterAlias)
 			if err != nil {
 				rec.RecordError(err)
 				return
 			}
 
-			if err := wr.ai.Ping(ti, wr.ActionTimeout()); err != nil {
+			if err := wr.ai.RefreshState(ti, wr.ActionTimeout()); err != nil {
 				rec.RecordError(err)
 			} else {
 				log.Infof("%v responded", si.MasterAlias)
@@ -440,7 +440,7 @@ func (wr *Wrangler) migrateServedTypes(keyspace string, sourceShards, destinatio
 	// replication.
 	if servedType == topo.TYPE_MASTER {
 		event.DispatchUpdate(ev, "setting destination masters read-write")
-		if err := wr.pingMasters(destinationShards); err != nil {
+		if err := wr.refreshMasters(destinationShards); err != nil {
 			return err
 		}
 	}
@@ -656,19 +656,19 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 	// replication.
 	event.DispatchUpdate(ev, "setting destination shard masters read-write")
 	if servedType == topo.TYPE_MASTER {
-		if err := wr.pingMasters([]*topo.ShardInfo{si}); err != nil {
+		if err := wr.refreshMasters([]*topo.ShardInfo{si}); err != nil {
 			return err
 		}
 	}
 
 	// Now blacklist the table list on the right servers
-	event.DispatchUpdate(ev, "pinging sources tablets so they update their blacklisted tables")
+	event.DispatchUpdate(ev, "refreshing sources tablets state so they update their blacklisted tables")
 	if servedType == topo.TYPE_MASTER {
-		if err := wr.ai.Ping(sourceMasterTabletInfo, wr.ActionTimeout()); err != nil {
+		if err := wr.ai.RefreshState(sourceMasterTabletInfo, wr.ActionTimeout()); err != nil {
 			return err
 		}
 	} else {
-		if err := wr.PingTablesByShard(sourceShard.Keyspace(), sourceShard.ShardName(), servedType); err != nil {
+		if err := wr.RefreshTablesByShard(sourceShard.Keyspace(), sourceShard.ShardName(), servedType); err != nil {
 			return err
 		}
 	}
@@ -677,16 +677,16 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 	return nil
 }
 
-// PingTablesByShard ping all the tables of a given type in a
-// shard. It would work for the master, but the discovery wouldn't be very
-// efficient.
-func (wr *Wrangler) PingTablesByShard(keyspace, shard string, tabletType topo.TabletType) error {
+// RefreshTablesByShard calls RefreshState on all the tables of a
+// given type in a shard. It would work for the master, but the
+// discovery wouldn't be very efficient.
+func (wr *Wrangler) RefreshTablesByShard(keyspace, shard string, tabletType topo.TabletType) error {
 	tabletMap, err := topo.GetTabletMapForShard(wr.ts, keyspace, shard)
 	switch err {
 	case nil:
 		// keep going
 	case topo.ErrPartialResult:
-		log.Warningf("PingTablesByShard: got partial result, may not blacklist everything everywhere")
+		log.Warningf("RefreshTablesByShard: got partial result, may not blacklist everything everywhere")
 	default:
 		return err
 	}
@@ -700,8 +700,8 @@ func (wr *Wrangler) PingTablesByShard(keyspace, shard string, tabletType topo.Ta
 
 		wg.Add(1)
 		go func(ti *topo.TabletInfo) {
-			if err := wr.ai.Ping(ti, wr.ActionTimeout()); err != nil {
-				log.Warningf("PingTablesByShard: failed to ping %v: %v", ti.Alias, err)
+			if err := wr.ai.RefreshState(ti, wr.ActionTimeout()); err != nil {
+				log.Warningf("RefreshTablesByShard: failed to ping %v: %v", ti.Alias, err)
 			}
 			wg.Done()
 		}(ti)

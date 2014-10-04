@@ -275,6 +275,25 @@ func agentRpcTestExecuteHook(t *testing.T, client initiator.TabletManagerConn, t
 	compareError(t, "ExecuteHook", err, hr, testExecuteHookHookResult)
 }
 
+var testRefreshStateCalled = false
+
+func (fra *fakeRpcAgent) RefreshState() {
+	if testRefreshStateCalled {
+		fra.t.Errorf("RefreshState called multiple times?")
+	}
+	testRefreshStateCalled = true
+}
+
+func agentRpcTestRefreshState(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
+	err := client.RefreshState(ti, time.Minute)
+	if err != nil {
+		t.Errorf("RefreshState failed: %v", err)
+	}
+	if !testRefreshStateCalled {
+		t.Errorf("RefreshState didn't call the server side")
+	}
+}
+
 var testReloadSchemaCalled = false
 
 func (fra *fakeRpcAgent) ReloadSchema() {
