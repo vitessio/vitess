@@ -64,11 +64,11 @@ type TabletConn interface {
 	// ExecuteBatch executes a group of queries.
 	ExecuteBatch(context context.Context, queries []tproto.BoundQuery, transactionId int64) (*tproto.QueryResultList, error)
 
-	// StreamExecute executes a streaming query on vttablet. It returns a channel that will stream results.
-	// It also returns an ErrFunc that can be called to check if there were any errors. ErrFunc can be called
-	// immediately after StreamExecute returns to check if there were errors sending the call. It should also
-	// be called after finishing the iteration over the channel to see if there were other errors.
-	StreamExecute(context context.Context, query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, ErrFunc)
+	// StreamExecute executes a streaming query on vttablet. It returns a channel, ErrFunc and error.
+	// If error is non-nil, it means that the StreamExecute failed to send the request. Otherwise,
+	// you can pull values from the channel till it's closed. Following this, you can call ErrFunc
+	// to see if the stream ended normally or due to a failure.
+	StreamExecute(context context.Context, query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, ErrFunc, error)
 
 	// Transaction support
 	Begin(context context.Context) (transactionId int64, err error)
