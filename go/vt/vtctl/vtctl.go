@@ -80,6 +80,9 @@ var commands = []commandGroup{
 			command{"Ping", commandPing,
 				"<tablet alias|zk tablet path>",
 				"Check that the agent is awake and responding to RPCs. Can be blocked by other in-flight operations."},
+			command{"RefreshState", commandRefreshState,
+				"<tablet alias|zk tablet path>",
+				"Asks a remote tablet to reload its tablet record."},
 			command{"Query", commandQuery,
 				"<cell> <keyspace> <query>",
 				"Send a SQL query to a tablet."},
@@ -833,6 +836,24 @@ func commandPing(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) e
 		return err
 	}
 	return wr.ActionInitiator().Ping(tabletInfo, wr.ActionTimeout())
+}
+
+func commandRefreshState(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("action RefreshState requires <tablet alias|zk tablet path>")
+	}
+	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	tabletInfo, err := wr.TopoServer().GetTablet(tabletAlias)
+	if err != nil {
+		return err
+	}
+	return wr.ActionInitiator().RefreshState(tabletInfo, wr.ActionTimeout())
 }
 
 func commandQuery(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

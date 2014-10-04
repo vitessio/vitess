@@ -105,8 +105,9 @@ class TestTabletManager(unittest.TestCase):
     self.assertEqual(len(query_result['Rows']), 4, "expected 4 rows in vt_select_test: %s" % str(query_result))
     self.assertEqual(len(query_result['Fields']), 2, "expected 2 fields in vt_select_test: %s" % str(query_result))
 
-    # check Ping
+    # check Ping / RefreshState
     utils.run_vtctl(['Ping', tablet_62344.tablet_alias])
+    utils.run_vtctl(['RefreshState', tablet_62344.tablet_alias])
 
     # Quickly check basic actions.
     utils.run_vtctl(['SetReadOnly', tablet_62344.tablet_alias])
@@ -189,10 +190,10 @@ class TestTabletManager(unittest.TestCase):
     bg = utils.run_bg(args)
     time.sleep(3)
 
-    # try a frontend Ping that should timeout as the tablet is busy
+    # try a frontend RefreshState that should timeout as the tablet is busy
     # running the other one
     stdout, stderr = utils.run_vtctl(['-wait-time', '3s',
-                                      'Ping', tablet_62344.tablet_alias],
+                                      'RefreshState', tablet_62344.tablet_alias],
                                      expect_fail=True)
     self.assertIn(environment.rpc_timeout_message, stderr)
 
