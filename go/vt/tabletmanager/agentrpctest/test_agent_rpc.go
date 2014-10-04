@@ -119,8 +119,8 @@ var testGetSchemaReply = &myproto.SchemaDefinition{
 		&myproto.TableDefinition{
 			Name:              "table_name2",
 			Schema:            "create table_name2",
-			Columns:           []string{},
-			PrimaryKeyColumns: []string{},
+			Columns:           []string{"col1"},
+			PrimaryKeyColumns: []string{"col1"},
 			Type:              myproto.TABLE_BASE_TABLE,
 			DataLength:        12,
 			RowCount:          6,
@@ -497,17 +497,15 @@ func agentRpcTestStartSlave(t *testing.T, client initiator.TabletManagerConn, ti
 	compareError(t, "StartSlave", err, true, testStartSlaveCalled)
 }
 
-var testTabletExternallyReparentedActionTimeout = 30 * time.Second
 var testTabletExternallyReparentedCalled = false
 
 func (fra *fakeRpcAgent) TabletExternallyReparented(actionTimeout time.Duration) error {
-	compare(fra.t, "TabletExternallyReparented actionTimeout", actionTimeout, testTabletExternallyReparentedActionTimeout)
 	testTabletExternallyReparentedCalled = true
 	return nil
 }
 
 func agentRpcTestTabletExternallyReparented(t *testing.T, client initiator.TabletManagerConn, ti *topo.TabletInfo) {
-	err := client.TabletExternallyReparented(ti, testTabletExternallyReparentedActionTimeout)
+	err := client.TabletExternallyReparented(ti, time.Minute)
 	compareError(t, "TabletExternallyReparented", err, true, testTabletExternallyReparentedCalled)
 }
 
@@ -769,7 +767,12 @@ func agentRpcTestRestore(t *testing.T, client initiator.TabletManagerConn, ti *t
 }
 
 var testMultiSnapshotArgs = &actionnode.MultiSnapshotArgs{
-	KeyRanges:        []key.KeyRange{},
+	KeyRanges: []key.KeyRange{
+		key.KeyRange{
+			Start: "",
+			End:   "",
+		},
+	},
 	Tables:           []string{"table1", "table2"},
 	ExcludeTables:    []string{"etable1", "etable2"},
 	Concurrency:      34,
