@@ -1,4 +1,4 @@
-\section{Reparenting}\hypertarget{reparenting}{}\label{reparenting}
+\section{Reparenting}\label{Reparenting}
 
 This document describes the reparenting features of Vitess. Reparenting is used when the master for a Shard is
 changing from one host to another. It can be triggered (for maintenance for instance) or happen automatically
@@ -8,11 +8,11 @@ Two main types of reparenting supported by Vitess are Active Reparents (the Vite
 and External Reparents (another tool is responsible for reparenting, and the Vitess toolchain just update its
 internal state.
 
-\subsection{Active Reparents}\hypertarget{active-reparents}{}\label{active-reparents}
+\subsection{Active Reparents}\label{active-reparents}
 
 They are triggered by using the 'vtctl ReparentShard' command. See the help for that command. It currently doesn't use transaction GroupId.
 
-\subsection{External Reparents}\hypertarget{external-reparents}{}\label{external-reparents}
+\subsection{External Reparents}\label{external-reparents}
 
 In this part, we assume another tool has been reparenting our servers. We then trigger the
 'vtctl ShardExternallyReparented' command.
@@ -45,7 +45,8 @@ Failure cases:
 \item if more than 20\% of the tablets fails, we don't update the Shard object, and don't rebuild. We assume something is seriously wrong, and it might be our process, not the servers. Figuring out the cause and re-running 'vtctl ShardExternallyReparented' should work.
 \item if for some reasons none of the slaves report the right master (replication is going through a proxy for instance, and the master address is not what the clients are showing in 'show slave status'), the result is pretty bad. All slaves are kept in the replication graph, but with their old (incorrect) master. Next time a Shard rebuild happens, all the servers will disappear. At that point, fixing the issue and then re-parenting will work.
 \end{itemize}
-\subsection{Reparenting And Serving Graph}\hypertarget{reparenting-and-serving-graph}{}\label{reparenting-and-serving-graph}
+
+\subsection{Reparenting And Serving Graph}\label{reparenting-and-serving-graph}
 
 When reparenting, we shuffle servers around. A server may get demoted, another promoted, and some servers may end up with the wrong master in the replication graph, or scrapped.
 

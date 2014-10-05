@@ -1,4 +1,4 @@
-\section{Concepts}\hypertarget{concepts}{}\label{concepts}
+\section{Concepts}\label{Concepts}
 
 We need to introduce some common terminologies that are used in Vitess:
 \#\#\# Keyspace
@@ -21,7 +21,7 @@ modulo some replication lag).
 
 A Keyspace usually has one shard when not using any sharding (we name it `0' by convention). When sharded, a Keyspace will have N shards (usually, N is a power of 2) with non-overlapping data.
 
-We support \href{Resharding.markdown}{dynamic resharding}, when one shard is split into 2 shards for instance. In this case, the data in the
+We support ~\ref{Resharding}{dynamic resharding}, when one shard is split into 2 shards for instance. In this case, the data in the
 source shard is duplicated into the 2 destination shards, but only during the transition. Afterwards, the source shard is
 deleted.
 
@@ -89,21 +89,21 @@ the same shard, as all rows will share that keyspace\_id.
 
 \subsubsection{Replication graph}\hypertarget{replication-graph}{}\label{replication-graph}
 
-The \href{ReplicationGraph.markdown}{Replication Graph} represents the relationships between the master
+The Replication Graph(~\ref{Replication-Graph}) represents the relationships between the master
 databases and their respective replicas.
 This data is particularly useful during a master failover.
 Once a new master has been designated, all existing replicas have to
 repointed to the new master so that replication can resume.
 
-\subsubsection{Serving graph}\hypertarget{serving-graph}{}\label{serving-graph}
+\subsubsection{Serving graph}
 
-The \href{ServingGraph.markdown}{Serving Graph} is derived from the shard and replication graph.
+The Serving Graph(~\ref{Serving-Graph}) is derived from the shard and replication graph.
 It represens the list of active servers that are available to serve
 queries.
 VTGate (or smart clients) query the serving graph to find out which servers
 they are allowed to send queries to.
 
-\subsubsection{Topology Server}\hypertarget{topology-server}{}\label{topology-server}
+\subsubsection{Topology Server}\label{topology-server}
 
 The Topology Server is the backend service used to store the Topology data, and provide a locking service. The implementation we use in the tree is based on Zookeeper. Each Zookeeper process is run on a single server, but may share that server with other processes.
 
@@ -113,11 +113,14 @@ There is one local instance of that service per Cell (Data Center). The goal is 
 using the remaining Cells. (a Zookeeper instance running on 3 or 5 hosts locally is a good configuration).
 
 The data is partitioned as follows:
-- Keyspaces: global instance
-- Shards: global instance
-- Tablets: local instances
-- Serving Graph: local instances
-- Replication Graph: the master alias is in the global instance, the master-slave map is in the local cells.
+\begin{enumerate}
+\item Keyspaces: global instance
+\item Shards: global instance
+\item Tablets: local instances
+\item Serving Graph: local instances
+\item Replication Graph: the master alias is in the global instance, the master-slave map is in the local cells.
+\end{enumerate}
+
 
 Clients usually just read the local Serving Graph, therefore they only need the local instance to be up. Also, we provide a caching layer for Zookeeper, to survive local Zookeeper failures and scale read-only access dramatically.
 

@@ -6,6 +6,7 @@
 %
 \documentclass[oneside]{book}
 \usepackage{enumerate}
+\usepackage{algorithmic}
 \usepackage{fullpage}
 \usepackage{makeidx}
 \usepackage{ifpdf}
@@ -67,8 +68,8 @@
 
 
 % leave hyperref until last
-\usepackage[colorlinks=true,bookmarks=true,pdftitle={Read The Xymon Fine Manual},pdfsubject={System Monitoring
-  },pdfkeywords={Xymon,Xymon, System Monitoring},pdfauthor={Editor: Tyng-Jing Yang}]{hyperref}
+\usepackage[colorlinks=true,bookmarks=true,pdftitle={MariaDB/MySQL scaling by Vitess},pdfsubject={Vitess scaling servers and tools
+  },pdfkeywords={Go,Python,MariaDB,MySQL},pdfauthor={Editor: Tyng-Jing Yang}]{hyperref}
 
 % \syntaxonly
 \include{99defs}
@@ -116,21 +117,16 @@
  \include{ZookeeperData}
  \include{ServingGraph}
  \include{ReplicationGraph}
- \include{TestingOnARamDisk}
+\include{TestingOnARamDisk}
 \appendix
-\include{bookmaking}
+\include{colophon}
 \include{license}
 \addcontentsline{toc}{chapter}{Bibliography}
 \bibliographystyle{alpha}
 \bibliography{99book}
-
 \addcontentsline{toc}{chapter}{Index}
 \printindex
 
 \end{document}
 
-%%% Local Variables: 
-%%% mode: latex
-%%% TeX-master: t
-%%% End: 
 

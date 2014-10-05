@@ -13,8 +13,8 @@
 # $* : The stem of the target filname. A stem is typically a filname without its suffix.
 
 BOOKNAME=vitess
-MAINTEX=$(vitess).tex
 sources := $(BOOKNAME).tex \
+        colophon.tex \
         99book.bib \
         99defs.tex \
         build-id.tex \
@@ -38,9 +38,9 @@ sources := $(BOOKNAME).tex \
         ReplicationGraph.tex \
         ZookeeperData.tex \
         bookmaking.tex 
-
 # define the source files to generate images.
 image-sources := \
+         bookmaking.dia \
         VTTabletModules.dia \
         VitessSpectrum.dia \
         VitessOverview-tj.dia \
@@ -215,7 +215,7 @@ dia:
 movetmp: 
 	sudo rsync -avz --delete pdf/*.pdf  ~tjyang/tmp
 test: 
-	pdflatex $(MAINTEX)
+	pdflatex $(BOOKNAME).tex 
 #perl -pi -e 's!\\hline!!' *.tex 
 #perl -pi -e 's!\\\\!!' *.tex 
 #perl -pi -e 's!\\begin\{document.*!!' *.tex 
