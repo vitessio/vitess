@@ -1,0 +1,102 @@
+\chapter{Making of this book}
+\label{chap:bookmaking}
+
+\section{Where to download the book source}
+\label{sec:srcinstall:unixlike}
+
+This is book version hobbit manpages.
+
+
+
+If you are using a Unix-like system that has a sufficiently recent
+version of Python (2.3~or newer) available, it is easy to install
+Mercurial from source.
+
+\begin{enumerate}
+\item Download a recent source tarball from
+  \url{http://www.selenic.com/mercurial/download}.
+\item Unpack the tarball:
+  \begin{codesample4}
+    gzip -dc mercurial-\emph{version}.tar.gz | tar xf -
+  \end{codesample4}
+\item Go into the source directory and run the installer script.  This
+  will build Mercurial and install it in your home directory.
+  \begin{codesample4}
+    cd mercurial-\emph{version}
+    python setup.py install --force --home=\$HOME
+  \end{codesample4}
+\end{enumerate}
+Once the install finishes, Mercurial will be in the \texttt{bin}
+subdirectory of your home directory.  Don't forget to make sure that
+this directory is present in your shell's search path.
+
+You will probably need to set the \envar{PYTHONPATH} environment
+variable so that the Mercurial executable can find the rest of the
+Mercurial packages.  For example, on my laptop, I have set it to
+\texttt{/home/bos/lib/python}.  The exact path that you will need to
+use depends on how Python was built for your system, but should be
+easy to figure out.  If you're uncertain, look through the output of
+the installer script above, And see where the contents of the
+\texttt{mercurial} directory were installed to.
+
+\section{Book Revision History}
+% http://www.andy-roberts.net/misc/latex/latextutorial4.html
+%\begin{table}[!bp]
+\begin{table}
+\caption{Book Revision History.} \label{BookRevisionHistory}
+
+\begin{tabular}{|l|l|l|}
+\hline
+\multicolumn{3}{|c|}{People contribute to this book} \\
+\hline
+Name  & Date  & Contribution  \\ \hline
+\multirow{2}{*}{Henrik Storner} & Winter 2002  & hobbit manpages created \\
+ & Winter 2008  & update hobbit manpages to become Xymon manpages \\ \hline
+\multirow{2}{*}{T.J. Yang} & 12/16/2009 & convert troff file to \LaTeX{}\\
+ & 12/16/2009 & Use \href{http://projects.gnome.org/dia/}{Dia} to draw Xymon Architecture diagram. \\ \hline
+\end{tabular}
+\end{table}
+
+\section{Xymon Revision History}
+% http://www.andy-roberts.net/misc/latex/latextutorial4.html
+\begin{table}
+\caption{Xymon Revision History.} \label{XymonRevisionHistory}
+
+\begin{tabular}{|l|l|l|}
+\hline
+\multicolumn{3}{|c|}{People contribute to Xymon} \\
+\hline
+Name  & Date  & Contribution  \\ \hline
+\multirow{4}{*}{Defenders} & LB & Lucus Radebe \\
+ & DC & Michael Duberry \\
+ & DC & Dominic Matteo \\
+ & RB & Didier Domi \\ \hline
+\multirow{3}{*}{Midfielders} & MC & David Batty \\
+ & MC & Eirik Bakke \\
+ & MC & Jody Morris \\ \hline
+Forward & FW & Jamie McMaster \\ \hline
+\multirow{2}{*}{Strikers} & ST & Alan Smith \\
+ & ST & Mark Viduka \\
+\hline
+\end{tabular}
+\end{table}
+
+
+
+%%%\begin{table}[!bp]
+%%%
+%%%\caption{Book Revision History.} \label{BookRevisionHistory}
+%%%
+%%%\begin{description}
+%%%\item [Winter 2002,Henrik Storner] Original author of hobbit manpages and notes,howto articles \ldots
+%%%  \index{Henrik Storner}
+%%%\item [12/16/2009,T.J. Yang] Editing above manpages and miscellaneous documentsinton into a book format using Latex.
+%%%\item [12/16/2009,T.J. Yang] Draw architecture diagram using Dia to help illustrate the idea.
+%%%  \index{T.J. Yang}
+%%%\end{description}
+%%%\end{table}
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: "00book"
+%%% End: 

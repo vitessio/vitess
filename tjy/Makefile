@@ -47,7 +47,7 @@ BUILD_DB=$(shell pwd)/build/.sb
 ADDON_DIR=$(shell pwd)/9.1addon
 ADDON_DIR2=$(shell pwd)
 MKFILES=osmkfiles
-BOOKS="book" 
+BOOK="book" 
 GRAPH="doc/dia" 
 # 
 PERL=/usr/bin/perl
@@ -63,6 +63,7 @@ YUM=/usr/bin/yum
 RM=/bin/rm -rf 
 SUDORM=${SUDO} ${RM} 
 BDIR="--builddir=/opt/build"
+KRAM=/usr/bin/kramdown
 # what : a simple way to give option "gmake" to specify either to 
 #        upload the package to repository server or not. also to
 #       specify which TWW distribution to build. 
@@ -102,8 +103,8 @@ WGET=/usr/bin/wget
 CURL=/usr/bin/curl  --create-dirs
 PKG_INST=/opt/TWWfsw/bin/pkg-inst
 CP=/bin/cp
-# without in .phony books will not act
-.PHONY: books books-clean twwtools centos-rpms
+# without in .phony book will not act
+.PHONY: book book-clean twwtools centos-rpms
 all: help
 
 help: 
@@ -117,7 +118,7 @@ help:
 	@$(ECHO) "  1. make hello-2.7-clean : to clean the current build"
 	@$(ECHO) "  2. make hello-2.7 : to build and package software"
 	@$(ECHO) "  3. make hello-2.7 upload=1 : to upload the package to package depot"
-	@$(ECHO) "  4. make {books|books-clean} : generate books using texlive."
+	@$(ECHO) "  4. make {book|book-clean} : generate book using texlive."
 	@$(ECHO) systype = $(shell  $(SYSTYPE))
 
 ifeq ($(shell  $(SYSTYPE)),sparc-sun-solaris2.11)
@@ -570,8 +571,8 @@ hgpush:
 gitpull: 
 	($(GIT) pull )
 
-books:
-	(for i in "$(BOOKS)" ;do  $(MAKE) -C $$i ; done)	
+book:
+	(for i in "$(BOOK)" ;do  $(MAKE) -C $$i ; done)	
 
 diaclean:
 	(for i in "$(GRAPH)" ;do  $(MAKE) -C $$i clean; done)	
@@ -579,9 +580,13 @@ diaclean:
 dia:
 	(for i in "$(GRAPH)" ;do  $(MAKE) -C $$i all  ; done)	
 
-books-clean:
-	@(for i in "$(BOOKS)" ;do  $(MAKE) -C $$i clean ; done)	
-
+book-clean:
+	@(for i in "$(BOOK)" ;do  $(MAKE) -C $$i clean ; done)	
 
 buildworlds:  gcc-4.4.6 perl-5.12.2 python-2.7.2 gcc-4.7.2 ruby-1.8.7 sbutils-1.3.1 pbutils-1.2.0 pkgutils-1.6.0
 	@echo "Done building $@"
+
+kram: ../doc/*.markdown
+#todo
+#          $(KRAM) -i markdown -o latex $$i >  /tmp/$(basename $$i).tex 	
+	(cd ../doc;for i in *.markdown ;do $(KRAM) -i markdown -o latex $$i >  /tmp/$(basename $$i).tex ; done)	

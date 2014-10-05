@@ -1,0 +1,136 @@
+% The use of oneside here is a temporary hack; \marginpar entries
+% don't show up on odd pages of PDF output without it.  Sigh.
+%
+%
+%
+%
+\documentclass[oneside]{book}
+\usepackage{enumerate}
+\usepackage{fullpage}
+\usepackage{makeidx}
+\usepackage{ifpdf}
+\usepackage[pdftex]{graphicx}
+\usepackage{pslatex}
+\usepackage{fancyvrb}
+\usepackage{float}
+\usepackage{syntonly}
+\usepackage{amsmath}  % for Mathmatic 
+\usepackage{multirow} % for tables and tabular
+\usepackage{shorttoc}
+\floatstyle{ruled}
+\newfloat{program}{thp}{lop}
+\floatname{program}{Program}
+
+%\usepackage[nostamp]{draftwatermark} % nostamp = final copy
+\usepackage{draftwatermark}
+\SetWatermarkAngle{45}
+%\SetWatermarkColor{red}   %Color of the watermark 
+\SetWatermarkLightness{0.9}  %Lightness of the watermark text (1=white, 0=black) 
+\SetWatermarkFontSize{5cm}      %Font size of the watermark text 
+\SetWatermarkScale{1.2}      %Scaling of the watermark text 
+\SetWatermarkText{Draft} % Watermark text 
+
+% \usepackage{glossary}
+
+\usepackage{listings}
+\lstset{numberstyle=\tiny,
+        numbers=left,
+	breaklines=true,
+	stepnumber=1,numbersep=5pt,firstnumber=1,
+	xleftmargin=12pt,showstringspaces=false
+        basicstyle=\tiny, 
+        keywordstyle=\color{black}\bfseries\underbar,
+        commentstyle=\color{white}, 
+        stringstyle=\ttfamily, 
+        showstringspaces=false
+        }
+
+\lstloadlanguages{C,Perl,Ada,XML}
+
+
+%%%%%%%%%%% 
+%%% http://www.ctan.org/tex-archive/macros/latex/contrib/fancyhdr/fancyhdr.pdf
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhead[LE,RO]
+          {\slshape\rightmark}
+\fancyhead[LO,RE]
+          {\slshape\leftmark}
+\fancyfoot[C]{\thepage}
+\renewcommand\headrulewidth{0.5pt}
+\renewcommand\footrulewidth{0pt}
+\headheight 5pt
+\voffset 0pt
+\topmargin 0pt
+\headsep  25pt
+%%%%%%%%%%% 
+
+
+% leave hyperref until last
+\usepackage[colorlinks=true,bookmarks=true,pdftitle={Read The Xymon Fine Manual},pdfsubject={System Monitoring
+  },pdfkeywords={Xymon,Xymon, System Monitoring},pdfauthor={Editor: Tyng-Jing Yang}]{hyperref}
+
+% \syntaxonly
+\include{99defs}
+
+%%\title{Vitess} \author{Editor: T.J. Yang}
+
+
+\makeindex
+\begin{document}
+% Title pate
+\input{./title.tex}
+
+% % Short toc
+\addcontentsline{toc}{chapter}{Summary Table of Contents}
+\shorttableofcontents{Summary Table of Contents}{1}
+% \setcounter{tocdepth}{1}
+% \tableofcontents
+% now Detail TOC
+\addcontentsline{toc}{chapter}{Detail Table of Contents}
+\pagenumbering{roman}
+\setcounter{tocdepth}{4}
+\tableofcontents
+\listoffigures
+\listoftables
+\pagenumbering{arabic}
+\include{overview}
+%Intro
+\chapter{Vitess Introduction}
+\include{HelicopterOverview}
+\include{Vision}
+\include{FAQ}
+\include{Contributing}
+% Using Vitess
+\chapter{Using Vitess}
+ \include{GettingStarted}
+ \include{Tools}
+ \include{Vttablet}
+ \include{Reparenting}
+ \include{Resharding}
+ \include{Production}
+ \include{SchemaManagement}
+% Reference
+\chapter{Reference}
+ \include{Concepts}
+ \include{ZookeeperData}
+ \include{ServingGraph}
+ \include{ReplicationGraph}
+ \include{TestingOnARamDisk}
+\appendix
+\include{bookmaking}
+\include{license}
+\addcontentsline{toc}{chapter}{Bibliography}
+\bibliographystyle{alpha}
+\bibliography{99book}
+
+\addcontentsline{toc}{chapter}{Index}
+\printindex
+
+\end{document}
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: t
+%%% End: 
+

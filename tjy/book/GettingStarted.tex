@@ -1,0 +1,109 @@
+\section{Getting Started}\hypertarget{getting-started}{}\label{getting-started}
+
+If you run into issues or have questions, you can use our mailing list: vitess@googlegroups.com.
+
+\subsection{Dependencies}\hypertarget{dependencies}{}\label{dependencies}
+
+\begin{itemize}
+\item We currently develop on Ubuntu 12.04 and 14.04.
+\item You'll need some kind of Java Runtime (for ZooKeeper).
+We use OpenJDK (\emph{sudo apt-get install openjdk-7-jre}).
+\item \href{http://golang.org}{Go} 1.2+: Needed for building Vitess.
+\item \href{https://mariadb.org/}{MariaDB}: We currently develop with version 10.0.13.
+Other 10.0.x versions may also work.
+\item \href{http://zookeeper.apache.org/}{ZooKeeper}: By default, Vitess
+uses Zookeeper as the lock service. It is possible to plug in
+something else as long as the new service supports the
+necessary API functions.
+\item \href{http://memcached.org}{Memcached}: Used for the rowcache.
+\item \href{http://python.org}{Python}: For the client and testing.
+\end{itemize}
+
+\subsection{Building}\hypertarget{building}{}\label{building}
+
+\href{http://golang.org/doc/install}{Install Go}.
+
+\href{https://downloads.mariadb.org/}{Install MariaDB}.
+You can use any installation method (src/bin/rpm/deb),
+but be sure to include the client development headers (\textbf{libmariadbclient-dev}).
+
+Then download and build Vitess. Note that the value of MYSQL\_FLAVOR is case-sensitive.
+If the mysql\_config command from libmariadbclient-dev is not on the PATH,
+you'll need to \emph{export VT\_MYSQL\_ROOT=/path/to/mariadb} before running bootstrap.sh,
+where mysql\_config is found at /path/to/mariadb/\textbf{bin}/mysql\_config.
+
+{\tt sh
+cd \$WORKSPACE
+sudo apt-get install make automake libtool memcached python-dev python-mysqldb libssl-dev g++ mercurial git pkg-config bison curl
+git clone https://github.com/youtube/vitess.git src/github.com/youtube/vitess
+cd src/github.com/youtube/vitess
+export MYSQL\_FLAVOR=MariaDB
+./bootstrap.sh
+. ./dev.env
+make build
+}
+
+\subsection{Testing}\hypertarget{testing}{}\label{testing}
+
+The full set of tests included in the default \emph{make} and \emph{make test} targets
+is intended for use by Vitess developers to verify code changes.
+These tests simulate a small cluster by launching many servers on the local
+machine, so they require a lot of resources (minimum 8GB RAM and SSD recommended).
+
+If you are only interested in checking that Vitess is working in your
+environment, you can run a set of lighter tests:
+
+{\tt sh
+make site\_test
+}
+
+\subsubsection{Common Test Issues}\hypertarget{common-test-issues}{}\label{common-test-issues}
+
+Many common failures come from running the full developer test suite
+(\emph{make} or \emph{make test}) on an underpowered machine. If you still get
+these errors with the lighter set of site tests (\emph{make site\_test}),
+please let us know on the mailing list.
+
+\paragraph{Node already exists, port in use, etc.}\hypertarget{node-already-exists-port-in-use-etc}{}\label{node-already-exists-port-in-use-etc}
+
+Sometimes a failed test may leave behind orphaned processes.
+If you use the default settings, you can find these by looking for
+\emph{vtdataroot} in the command line, since every process is told to put
+its files there with a command line flag. For example:
+
+{\tt sh
+pgrep -f -l '(vtdataroot\textbar{}VTDATAROOT)' \# list Vitess processes
+pkill -f '(vtdataroot\textbar{}VTDATAROOT)' \# kill Vitess processes
+}
+
+\paragraph{Too many connections to MySQL, or other timeouts}\hypertarget{too-many-connections-to-mysql-or-other-timeouts}{}\label{too-many-connections-to-mysql-or-other-timeouts}
+
+This often means your disk is too slow. If you don't have access to an SSD,
+you can try \href{TestingOnARamDisk.markdown}{testing against a ramdisk}.
+
+\paragraph{Connection refused to tablet, MySQL socket not found, etc.}\hypertarget{connection-refused-to-tablet-mysql-socket-not-found-etc}{}\label{connection-refused-to-tablet-mysql-socket-not-found-etc}
+
+This could mean you ran out of RAM and a server crashed when it tried to allocate more.
+Some of the heavier tests currently require up to 8GB RAM.
+
+\paragraph{Connection refused in zkctl test}\hypertarget{connection-refused-in-zkctl-test}{}\label{connection-refused-in-zkctl-test}
+
+This could indicate that no Java Runtime is installed.
+
+\paragraph{Running out of disk space}\hypertarget{running-out-of-disk-space}{}\label{running-out-of-disk-space}
+
+Some of the larger tests use up to 4GB of temporary space on disk.
+
+\subsection{Setting up a cluster}\hypertarget{setting-up-a-cluster}{}\label{setting-up-a-cluster}
+
+\subsection{TODO}\hypertarget{TODO}{}\label{TODO}
+TODO: Expand on all sections
+\begin{itemize}
+\item  Setup zookeeper
+\item  Start a MySql instance
+\item  Start vttablet
+\item  Start vtgate
+\item  Write a client
+\item  Test
+\end{itemize}
+

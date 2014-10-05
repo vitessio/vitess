@@ -1,0 +1,7 @@
+% To provide a big draft background picture on page
+\newcommand{\pagedraft}{
+    \begin{tikzpicture}[remember picture,overlay]
+    \node [rotate=60,scale=10,text opacity=0.1]
+	at (current page.center) {Draft};
+    \end{tikzpicture}
+}

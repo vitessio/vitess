@@ -1,0 +1,29 @@
+\section{Testing On A Ramdisk}\hypertarget{testing-on-a-ramdisk}{}\label{testing-on-a-ramdisk}
+
+The {\tt integration\_test} testsuite contains tests that may time-out if run against a slow disk. If your workspace lives on hard disk (as opposed to \href{http://en.wikipedia.org/wiki/Solid-state\_drive}{SSD}), it is recommended that you run tests using a \href{http://en.wikipedia.org/wiki/RAM\_drive}{ramdisk}.
+
+\section{Setup}\hypertarget{setup}{}\label{setup}
+
+First, set up a normal vitess development environment by running {\tt bootstrap.sh} and sourcing {\tt dev.env} (see \href{GettingStarted.markdown}{GettingStarted}). Then overwrite the testing temporary directories and make a 2GiB ramdisk at the location of your choice (this example uses {\tt /tmp/vt}):
+
+```sh
+export TEST\_TMPDIR=/tmp/vt
+
+mkdir \$\{TEST\_TMPDIR\}
+sudo mount -t tmpfs -o size=2g tmpfs \$\{TEST\_TMPDIR\}
+
+export VTDATAROOT=\$\{TEST\_TMPDIR\}
+export TEST\_UNDECLARED\_OUTPUTS\_DIR=\$\{TEST\_TMPDIR\}
+```
+
+You can now run tests (either individually or as part of {\tt make test}) normally.
+
+\section{Teardown}\hypertarget{teardown}{}\label{teardown}
+
+When you are done testing, you can remove the ramdisk by unmounting it and then removing the directory:
+
+{\tt sh
+sudo umount \$\{TEST\_TMPDIR\}
+rmdir \$\{TEST\_TMPDIR\}
+}
+

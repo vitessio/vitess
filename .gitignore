@@ -21,3 +21,9 @@ third_party/mysql
 java/vtocc-client/target
 java/vtocc-jdbc-driver/target
 third_party/acolyte
+
+# RCS directory
+tjy/book/RCS/
+tjy/book/old/
+tjy/book/#twwtools-overview.tex#
+tjy/book/#xymon-mrtg.tex#

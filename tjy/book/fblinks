@@ -1,0 +1,67 @@
+#!/usr/bin/python
+
+import errno
+import os
+import re
+import sys
+
+hg_id = sys.argv[1]
+
+dest_dir = sys.argv[2]
+
+empty_re = re.compile(r'^\s*$')
+line_re = re.compile(r'^(\w+)(.*)')
+
+try:
+    os.makedirs(dest_dir)
+except OSError, err:
+    if err.errno != errno.EEXIST:
+        raise
+
+def feedback(name, text, ctx_id):
+    return r'\marginpar{\scriptsize \href{http://demesne:8000/book/feedback/submit/%s/%s/%d/}{Feedback}}' % (hg_id, name, ctx_id)
+
+ctxs = {}
+try:
+    cfp = open(os.path.join(dest_dir, 'rev-' + hg_id + '.ctx'), 'r+')
+    for line in cfp:
+        f, l, c = line.split(':', 2)
+        ctxs[(f, int(l))] = c.strip()
+except IOError, err:
+    if err.errno != errno.ENOENT: raise
+    cfp = open(os.path.join(dest_dir, 'rev-' + hg_id + '.ctx'), 'w+')
+
+changes = 0
+
+for name in sys.argv[3:]:
+    if not name.endswith('.tex'):
+        continue
+    dest_name = os.path.join(dest_dir, name)
+    ifp = open(name)
+    ofp = open(dest_name, 'w')
+    new_par = True
+    line_num = 0
+    par_num = 0
+    for line in ifp:
+        line_num += 1
+        if new_par:
+            m = line_re.match(line)
+            if m:
+                par_num += 1
+                ls = line.strip()
+                if ctxs.get((name, par_num)) != ls:
+                    ctxs[(name, par_num)] = ls
+                    changes += 1
+                line = m.group(1) + feedback(name, line, par_num) + m.group(2)
+                new_par = False
+        elif not line.strip():
+            new_par = True
+        ofp.write(line)
+
+if changes:
+    cfp.seek(0)
+    print '%s: %d changes' % (cfp.name, changes)
+    ctxs = ctxs.items()
+    ctxs.sort()
+    for ((file, line), content) in ctxs:
+        cfp.write('%s:%d: %s\n' % (file, line, content))

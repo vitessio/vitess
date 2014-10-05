@@ -1,0 +1,198 @@
+% This file is a collection latex custom commands created for this book.
+
+% for title page
+\newcommand{\HRule}{\rule{\linewidth}{0.5mm}}
+
+% Mercurial command.
+\newcommand{\hbgraph}[1]{\index{\texttt{#1} hobbit graph}``\texttt{hg #1}''}
+
+% Bug ID.
+\newcommand{\bug}[1]{\index{Mercurial bug
+    database!\href{http://www.selenic.com/mercurial/bts/issue#1}{bug
+      ~#1}}\href{http://www.selenic.com/mercurial/bts/issue#1}{Mercurial
+    bug no.~#1}}
+
+% File name in the user's home directory.
+\newcommand{\tildefile}[1]{\texttt{\~{}/#1}}
+
+% File name.
+\newcommand{\filename}[1]{\texttt{#1}}
+
+% Directory name.
+\newcommand{\dirname}[1]{\texttt{#1}}
+
+% File name, with index entry.
+% The ``s'' prefix comes from ``special''.
+\newcommand{\sfilename}[1]{\index{\texttt{#1} file}\texttt{#1}}
+
+% Directory name, with index entry.
+\newcommand{\sdirname}[1]{\index{\texttt{#1} directory}\texttt{#1}}
+
+% Mercurial extension.
+\newcommand{\hgext}[1]{\index{\texttt{#1} extension}\texttt{#1}}
+
+% Command provided by a Mercurial extension.
+\newcommand{\hgxcmd}[2]{\index{\texttt{#2} command (\texttt{#1}
+      extension)}\index{\texttt{#1} extension!\texttt{#2} command}``\texttt{hg #2}''}
+
+% Mercurial command.
+\newcommand{\hgcmd}[1]{\index{\texttt{#1} command}``\texttt{hg #1}''}
+
+% Moto hobbit command
+\newcommand{\motohbcmd}[1]{\index{\texttt{#1} command}``\texttt{/opt/moto/bin/#1}''}
+
+
+% Mercurial command, with arguments.
+\newcommand{\hgcmdargs}[2]{\index{\texttt{#1} command}``\texttt{hg #1 #2}''}
+
+\newcommand{\tplkword}[1]{\index{\texttt{#1} template keyword}\index{template keywords!\texttt{#1}}\texttt{#1}}
+
+\newcommand{\tplkwfilt}[2]{\index{\texttt{#1} template keyword!\texttt{#2}
+    filter}\index{template filters!\texttt{#2}}\index{\texttt{#2}
+    template filter}\texttt{#2}}
+
+\newcommand{\tplfilter}[1]{\index{template
+    filters!\texttt{#1}}\index{\texttt{#1} template
+    filter}\texttt{#1}}
+
+% Shell/system command.
+\newcommand{\command}[1]{\index{\texttt{#1} system command}\texttt{#1}}
+
+% Shell/system command, with arguments.
+\newcommand{\cmdargs}[2]{\index{\texttt{#1} system command}``\texttt{#1 #2}''}
+
+% Mercurial command option.
+\newcommand{\hgopt}[2]{\index{\texttt{#1} command!\texttt{#2} option}\texttt{#2}}
+
+% Mercurial command option, provided by an extension command.
+\newcommand{\hgxopt}[3]{\index{\texttt{#2} command (\texttt{#1} extension)!\texttt{#3} option}\index{\texttt{#1} extension!\texttt{#2} command!\texttt{#3} option}\texttt{#3}}
+
+% Mercurial global option.
+\newcommand{\hggopt}[1]{\index{global options!\texttt{#1} option}\texttt{#1}}
+
+% Shell/system command option.
+\newcommand{\cmdopt}[2]{\index{\texttt{#1} command!\texttt{#2} option}\texttt{#2}}
+
+% Command option.
+\newcommand{\option}[1]{\texttt{#1}}
+
+% Software package.
+\newcommand{\package}[1]{\index{\texttt{#1} package}\texttt{#1}}
+
+% Section name from a hgrc file.
+\newcommand{\rcsection}[1]{\index{\texttt{hgrc} file!\texttt{#1} section}\texttt{[#1]}}
+
+% Named item in a hgrc file section.
+\newcommand{\rcitem}[2]{\index{\texttt{hgrc} file!\texttt{#1}
+    section!\texttt{#2} entry}\texttt{#2}}
+
+% hgrc file.
+\newcommand{\hgrc}{\index{configuration file!\texttt{hgrc}
+    (Linux/Unix)}\index{\texttt{hgrc} configuration file}\texttt{hgrc}}
+
+% Mercurial.ini file.
+\newcommand{\hgini}{\index{configuration file!\texttt{Mercurial.ini}
+    (Windows)}\index{\texttt{Mercurial.ini} configuration file}\texttt{Mercurial.ini}}
+
+% Hook name.
+\newcommand{\hook}[1]{\index{\texttt{#1} hook}\index{hooks!\texttt{#1}}\texttt{#1}}
+
+% Environment variable.
+\newcommand{\envar}[1]{\index{\texttt{#1} environment
+    variable}\index{environment variables!\texttt{#1}}\texttt{#1}}
+
+% Build Environment variable.
+\newcommand{\buildenvar}[1]{\index{\texttt{#1} environment
+    variable}\index{variables for building!\texttt{#1}}\texttt{#1}}
+
+% Golang Environment variable.
+\newcommand{\goenvar}[1]{\index{\texttt{#1} Golang environment
+    variable}\index{variables for Golang!\texttt{#1}}\texttt{#1}}
+
+% Vitess Environment variable.
+\newcommand{\vitessvar}[1]{\index{\texttt{#1} Vitess environment
+    variable}\index{variables for Vitess!\texttt{#1}}\texttt{#1}}
+
+
+
+% Vitess Concepts keywords.
+\newcommand{\vconcepts}[1]{\index{\texttt{#1} Vitess Concepts
+    keywords}\index{Vitess Concepts!\texttt{#1}}\texttt{#1}}
+
+% Xymon Environment variable.
+\newcommand{\xymonenvar}[1]{\index{\texttt{#1} Xymon environment
+    variable}\index{Xymon environment variables!\texttt{#1}}\texttt{#1}}
+
+% Xymon CGI script
+\newcommand{\xymoncgi}[1]{\index{\texttt{#1} Xymon CGI script
+        }\index{Xymon CGI scripts!\texttt{#1}}\texttt{#1}}
+
+
+% Xymon CGI script
+\newcommand{\xymoncfg}[1]{\index{\texttt{#1} Xymon configuration file
+        }\index{Xymon configuration files!\texttt{#1}}\texttt{#1}}
+
+% Xymon workers
+\newcommand{\xymonworker}[1]{\index{\texttt{#1} Xymon worker
+   }\index{Xymon Workers!\texttt{#1}}\texttt{#1}}
+
+% Xymon daemon channels
+\newcommand{\xymonchannelvar}[1]{\index{\texttt{#1} Xymon channel
+    variable}\index{Xymon daemon channel variables!\texttt{#1}}\texttt{#1}}
+
+% bb-hosts  tag.
+\newcommand{\bbhosttag}[1]{\index{\texttt{#1} bb-hosts 
+    tag}\index{bb-hosts  tags!\texttt{#1}}\texttt{#1}}
+
+
+% BBGEN  tag.
+\newcommand{\bbgentag}[1]{\index{\texttt{#1} BBGEN
+    tag}\index{BBGEN  tags!\texttt{#1}}\texttt{#1}}
+
+% Python module.
+\newcommand{\pymod}[1]{\index{\texttt{#1} module}\texttt{#1}}
+
+% Python class in a module.
+\newcommand{\pymodclass}[2]{\index{\texttt{#1} module!\texttt{#2}
+    class}\texttt{#1.#2}}
+
+% Python function in a module.
+\newcommand{\pymodfunc}[2]{\index{\texttt{#1} module!\texttt{#2}
+    function}\texttt{#1.#2}}
+
+% Note: blah blah.
+\newsavebox{\notebox}
+\newenvironment{note}%
+  {\begin{lrbox}{\notebox}\begin{minipage}{0.7\textwidth}\textbf{Note:}\space}%
+  {\end{minipage}\end{lrbox}\fbox{\usebox{\notebox}}}
+\newenvironment{caution}%
+  {\begin{lrbox}{\notebox}\begin{minipage}{0.7\textwidth}\textbf{Caution:}\space}%
+  {\end{minipage}\end{lrbox}\fbox{\usebox{\notebox}}}
+
+% Code sample, eating 4 characters of leading space.
+\DefineVerbatimEnvironment{codesample4}{Verbatim}{frame=single,gobble=4,numbers=left,commandchars=\\\{\}}
+
+% Code sample, eating 2 characters of leading space.
+\DefineVerbatimEnvironment{codesample2}{Verbatim}{frame=single,gobble=2,numbers=left,commandchars=\\\{\}}
+
+% Interaction from the examples directory.
+\newcommand{\interaction}[1]{\VerbatimInput[frame=single,numbers=left,commandchars=\\\{\}]{examples/#1.lxo}}
+% Example code from the examples directory.
+\newcommand{\excode}[1]{\VerbatimInput[frame=single,numbers=left,commandchars=\\\{\}]{../examples/#1}}
+
+% Graphics inclusion.
+\ifpdf
+  \newcommand{\grafix}[1]{\includegraphics{#1}}
+\else
+  \newcommand{\grafix}[1]{\includegraphics{#1.png}}
+\fi
+
+% Reference entry for a command.
+\newcommand{\cmdref}[2]{\section{\hgcmd{#1}---#2}\label{cmdref:#1}\index{\texttt{#1} command}}
+
+% Reference entry for a command option with long and short forms.
+\newcommand{\optref}[3]{\subsubsection{\hgopt{#1}{--#3}, also \hgopt{#1}{-#2}}}
+
+% Reference entry for a command option with only long form.
+\newcommand{\loptref}[2]{\subsubsection{\hgopt{#1}{--#2} option}}
+
