@@ -17,7 +17,6 @@ class TestStream(framework.TestCase):
 
   # UNION queries like this used to crash vtocc, only straight SELECT
   # would go through. This is a unit test to show it is fixed.
-  # The fix went in revision bad7511746ca.
   def test_union(self):
     cu = self.env.execute("select 1 from dual union select 1 from dual",
                           cursorclass=cursor.StreamCursor)
@@ -28,6 +27,14 @@ class TestStream(framework.TestCase):
         break
       count += 1
     self.assertEqual(count, 1)
+
+  def test_customrules(self):
+    bv = {'asdfg': 1}
+    try:
+      self.env.execute("select * from vtocc_test where intval=:asdfg", bv,
+                       cursorclass=cursor.StreamCursor)
+    except dbexceptions.DatabaseError as e:
+      self.assertContains(str(e), "error: Query disallowed")
 
   def test_basic_stream(self):
     self._populate_vtocc_big_table(100)

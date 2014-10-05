@@ -5,7 +5,6 @@
 package tabletserver
 
 import (
-	"fmt"
 	"time"
 
 	log "github.com/golang/glog"
@@ -20,9 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
 const (
@@ -292,50 +289,6 @@ func (qe *QueryEngine) invalidateRows(logStats *SQLQueryStats, dirtyTables map[s
 func (qe *QueryEngine) Rollback(logStats *SQLQueryStats, transactionID int64) {
 	defer queryStats.Record("ROLLBACK", time.Now())
 	qe.activeTxPool.Rollback(transactionID)
-}
-
-// StreamExecute executes the query and streams its result.
-// The first QueryResult will have Fields set (and Rows nil)
-// The subsequent QueryResult will have Rows set (and Fields nil)
-func (qe *QueryEngine) StreamExecute(logStats *SQLQueryStats, query *proto.Query, sendReply func(*mproto.QueryResult) error) {
-	if query.BindVariables == nil { // will help us avoid repeated nil checks
-		query.BindVariables = make(map[string]interface{})
-	}
-	logStats.BindVariables = query.BindVariables
-	// cheap hack: strip trailing comment into a special bind var
-	stripTrailing(query)
-
-	plan := qe.schemaInfo.GetStreamPlan(query.Sql)
-	logStats.PlanType = plan.PlanId.String()
-	logStats.OriginalSql = query.Sql
-	defer queryStats.Record(plan.PlanId.String(), time.Now())
-
-	authorized := tableacl.Authorized(plan.TableName, plan.PlanId.MinRole())
-	qe.checkTableAcl(plan.TableName, plan.PlanId, authorized, logStats.context.GetUsername())
-
-	// does the real work: first get a connection
-	waitingForConnectionStart := time.Now()
-	conn := getOrPanic(qe.streamConnPool)
-	logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
-	defer conn.Recycle()
-
-	qd := NewQueryDetail(query, logStats.context, conn.Id())
-	qe.streamQList.Add(qd)
-	defer qe.streamQList.Remove(qd)
-
-	// then let's stream! Wrap callback function to return an
-	// error on query termination to stop further streaming
-	qe.fullStreamFetch(logStats, conn, plan.FullQuery, query.BindVariables, nil, nil, sendReply)
-}
-
-func (qe *QueryEngine) checkTableAcl(table string, planId planbuilder.PlanType, authorized tableacl.ACL, user string) {
-	if !authorized.IsMember(user) {
-		err := fmt.Sprintf("table acl error: %v cannot run %v on table %v", user, planId, table)
-		if qe.strictTableAcl {
-			panic(NewTabletError(FAIL, err))
-		}
-		qe.accessCheckerLogger.Errorf(err)
-	}
 }
 
 // InvalidateForDml performs rowcache invalidations for the dml.

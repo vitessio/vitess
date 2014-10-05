@@ -335,7 +335,7 @@ func (sq *SqlQuery) Execute(context context.Context, query *proto.Query, reply *
 	defer sq.endRequest()
 	defer handleExecError(query, &err, logStats)
 
-	*reply = *ExecuteQueryRequest(context, logStats, query, sq)
+	*reply = *ExecuteQuery(context, logStats, sq, query)
 	return nil
 }
 
@@ -354,7 +354,7 @@ func (sq *SqlQuery) StreamExecute(context context.Context, query *proto.Query, s
 	}
 	defer sq.endRequest()
 	defer handleExecError(query, &err, logStats)
-	sq.qe.StreamExecute(logStats, query, sendReply)
+	ExecuteStreamQuery(context, logStats, sq, query, sendReply)
 	return nil
 }
 

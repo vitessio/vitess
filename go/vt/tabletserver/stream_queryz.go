@@ -17,8 +17,6 @@ var (
 			<th>Context</th>
 			<th>Duration</th>
 			<th>Start</th>
-			<th>SessionID</th>
-			<th>TransactionID</th>
 			<th>ConnectionID</th>
 			<th>Terminate</th>
 		</tr>
@@ -30,8 +28,6 @@ var (
 			<td>{{.ContextHTML}}</td>
 			<td>{{.Duration}}</td>
 			<td>{{.Start}}</td>
-			<td>{{.SessionID}}</td>
-			<td>{{.TransactionID}}</td>
 			<td>{{.ConnID}}</td>
 			<td><a href='/streamqueryz/terminate?connID={{.ConnID}}'>Terminate</a></td>
 		</tr>

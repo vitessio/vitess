@@ -321,7 +321,7 @@ func (si *SchemaInfo) DropTable(tableName string) {
 	log.Infof("Table %s forgotten", tableName)
 }
 
-func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string) (plan *ExecPlan) {
+func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string) *ExecPlan {
 	// Fastpath if plan already exists.
 	if plan := si.getQuery(sql); plan != nil {
 		return plan
@@ -346,7 +346,7 @@ func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string) (plan *ExecPl
 	if err != nil {
 		panic(NewTabletError(FAIL, "%s", err))
 	}
-	plan = &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
+	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
 	plan.Rules = si.rules.filterByPlan(sql, plan.PlanId, plan.TableName)
 	plan.Authorized = tableacl.Authorized(plan.TableName, plan.PlanId.MinRole())
 	if plan.PlanId.IsSelect() {
@@ -373,19 +373,23 @@ func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string) (plan *ExecPl
 }
 
 // GetStreamPlan is similar to GetPlan, but doesn't use the cache
-// and doesn't enforce a limit. It also just returns the parsed query.
-func (si *SchemaInfo) GetStreamPlan(sql string) *planbuilder.ExecPlan {
-	GetTable := func(tableName string) (*schema.Table, bool) {
-		tableInfo, ok := si.tables[tableName]
+// and doesn't enforce a limit. It just returns the parsed query.
+func (si *SchemaInfo) GetStreamPlan(sql string) *ExecPlan {
+	var tableInfo *TableInfo
+	GetTable := func(tableName string) (table *schema.Table, ok bool) {
+		tableInfo, ok = si.tables[tableName]
 		if !ok {
 			return nil, false
 		}
 		return tableInfo.Table, true
 	}
-	plan, err := planbuilder.GetStreamExecPlan(sql, GetTable)
+	splan, err := planbuilder.GetStreamExecPlan(sql, GetTable)
 	if err != nil {
 		panic(NewTabletError(FAIL, "%s", err))
 	}
+	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
+	plan.Rules = si.rules.filterByPlan(sql, plan.PlanId, plan.TableName)
+	plan.Authorized = tableacl.Authorized(plan.TableName, plan.PlanId.MinRole())
 	return plan
 }
 
