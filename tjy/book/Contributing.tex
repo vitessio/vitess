@@ -5,7 +5,7 @@ the repository and submit pull requests. If you'd like to make larger or ongoing
 changes, you'll need to follow a similar set of processes and rules that the
 Vitess team follows.
 
-\subsubsection{Prerequisites}\hypertarget{prerequisites}{}\label{prerequisites}
+\subsection{Prerequisites}\hypertarget{prerequisites}{}\label{prerequisites}
 
 \begin{itemize}
 \item \href{https://github.com/youtube/vitess/blob/master/doc/GettingStarted.markdown}{Install vitess}
@@ -24,22 +24,22 @@ For small, well contained changes, just send us a
 If you are planning to make bigger changes or add serious features to Vitess, we
 ask you to follow our code review process.
 
-\subsubsection{Recommended Git flow: single contributor}\hypertarget{recommended-git-flow-single-contributor}{}\label{recommended-git-flow-single-contributor}
+\subsection{Recommended Git flow: single contributor}\hypertarget{recommended-git-flow-single-contributor}{}\label{recommended-git-flow-single-contributor}
 
 Use your fork as a push-only staging ground for submitting pull requests. The
 assumption is that you'll never have to fetch from the fork. If this is the
 case, all you have to do is configure your local repository to pull from
 youtube, and push to myfork. This can be achieved as follows:
 
-{\tt 
-\ensuremath{\sim}/...vitess\textgreater{} git remote -v
-origin  git@github.com:youtube/vitess.git (fetch)
-origin  git@github.com:youtube/vitess (push)
-\ensuremath{\sim}/...vitess\textgreater{} git remote set-url --push origin git@github.com:myfork/vitess
-\ensuremath{\sim}/...vitess\textgreater{} git remote -v
-origin  git@github.com:youtube/vitess.git (fetch)
-origin  git@github.com:myfork/vitess (push)
-}
+\begin{codesample2}
+  ~/...vitess> git remote -v
+  origin  git@github.com:youtube/vitess.git (fetch)
+  origin  git@github.com:youtube/vitess (push)
+  ~/...vitess> git remote set-url --push origin git@github.com:myfork/vitess
+  ~/...vitess> git remote -v
+  origin  git@github.com:youtube/vitess.git (fetch)
+  origin  git@github.com:myfork/vitess (push)
+\end{codesample2}
 
 The limitation of this configuration is that you can only pull from the youtube
 repository. The {\tt git pull} command will {\tt fetch} from youtube/vitess and {\tt merge}
@@ -57,17 +57,19 @@ If more than one of you plan on contributing through a single fork, then you'll
 need to follow a more elaborate scheme of setting up multiple remotes and
 manually managing merges:
 
-{\tt 
-\ensuremath{\sim}/...vitess\textgreater{} git remote -v
-origin  git@github.com:youtube/vitess.git (fetch)
-origin  git@github.com:youtube/vitess.git (push)
-\ensuremath{\sim}/...vitess\textgreater{} git remote add myfork git@github.com:myfork/vitess.git
-\ensuremath{\sim}/...vitess\textgreater{} git remote -v
-myfork  git@github.com:myfork/vitess.git (fetch)
-myfork  git@github.com:myfork/vitess.git (push)
-origin  git@github.com:youtube/vitess.git (fetch)
-origin  git@github.com:youtube/vitess.git (push)
-}
+\begin{codesample2}
+  ~/...vitess> git remote -v
+  origin  git@github.com:youtube/vitess.git (fetch)
+  origin  git@github.com:youtube/vitess.git (push)
+  ~/...vitess> git remote add myfork git@github.com:myfork/vitess.git
+  ~/...vitess> git remote -v
+  myfork  git@github.com:myfork/vitess.git (fetch)
+  myfork  git@github.com:myfork/vitess.git (push)
+  origin  git@github.com:youtube/vitess.git (fetch)
+  origin  git@github.com:youtube/vitess.git (push)
+\end{codesample2}
+
+
 
 With this setup, commands like {\tt git pull} and {\tt git push} with default settings
 are not recommended. You will be better off using {\tt git fetch} and {\tt git merge},
@@ -79,20 +81,22 @@ which let you micromanage your remote interactions. For example, you'll need to
 We recommend that you make your changes in a separate branch.
 Make sure you're on the master branch when you create it.
 
-{\tt 
-\ensuremath{\sim}/...vitess\textgreater{} git status
-\# On branch master
-\# Your branch is up-to-date with 'origin/master'.
-\#
-nothing to commit, working directory clean
-\ensuremath{\sim}/...vitess\textgreater{} git checkout -b newfeature
-Switched to a new branch 'newfeature'
-}
+\begin{codesample2}
+  ~/...vitess> git status
+  # On branch master
+  # Your branch is up-to-date with 'origin/master'.
+  #
+  nothing to commit, working directory clean
+  ~/...vitess> git checkout -b newfeature
+  Switched to a new branch 'newfeature'
+\end{codesample2}
+
 Once your changes are ready for review and committed into your branch,
 you can run the createcl tool, for example:
-{\tt 
-createcl -r alainjobart
-}
+\begin{codesample2}
+  createcl -r alainjobart
+\end{codesample2}
+
 This command will automatically run a diff of the current branch {\tt newfeature}
 against {\tt master} and create an appspot code review with {\tt alainjobart} as
 reviewer. vitess-issues will be cc'd. If necessary, createcl allows you to
@@ -100,27 +104,39 @@ specify the exact versions to diff. (but we recommend that you don't use those).
 
 After getting feedback about your code, you can update the code by calling
 
-{\tt 
-createcl -i 12345
-}
+
+\begin{codesample2}
+  createcl -i 12345
+\end{codesample2}
+
 
 with the actual id of your change instead of 12345.
 
 During your feature development, you can fetch and merge new changes from the main youtube repository.
 If you choose to do so, make sure you merge the changes to both the {\tt master} and {\tt newfeature} branches.
 In the sole contributor case, your commands will look like this:
-{\tt 
-git checkout master
-git pull
-git checkout newfeature
-git merge master
-}
+
+\begin{codesample2}
+  git checkout master
+  git pull
+  git checkout newfeature
+  git merge master
+\end{codesample2}
+
+
+
+
 Once your change is approved, push and submit it as a pull request:
-{\tt 
-git checkout master
-git merge newfeature
-git push
-}
+
+\begin{codesample2}
+  git checkout master
+  git merge newfeature
+  git push
+\end{codesample2}
+
+
+
+
 The above commands will merge {\tt newfeature} into {\tt master} and push the changes to the myfork remote.
 You can then go to https://github.com/myfork/vitess to submit the branch as your pull request.
 If done correctly, only your changes will show up in the pull request.
