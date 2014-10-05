@@ -14,72 +14,48 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
+// Snapshot takes a tablet snapshot.
+//
 // forceMasterSnapshot: Normally a master is not a viable tablet to snapshot.
 // However, there are degenerate cases where you need to override this, for
 // instance the initial clone of a new master.
-func (wr *Wrangler) Snapshot(tabletAlias topo.TabletAlias, forceMasterSnapshot bool, snapshotConcurrency int, serverMode bool) (manifest string, parent topo.TabletAlias, slaveStartRequired, readOnly bool, originalType topo.TabletType, err error) {
-	var ti *topo.TabletInfo
-	ti, err = wr.ts.GetTablet(tabletAlias)
+//
+// serverMode: if specified, the server will stop its mysqld, and be
+// ready to serve the data files directly. Slaves can just download
+// these and use them directly. Call SnapshotSourceEnd to return into
+// serving mode. If not specified, the server will create an archive
+// of the files, store them locally, and restart.
+//
+// If error is nil, returns the SnapshotReply from the remote host,
+// and the original type the server was before the snapshot.
+func (wr *Wrangler) Snapshot(tabletAlias topo.TabletAlias, forceMasterSnapshot bool, snapshotConcurrency int, serverMode bool) (*actionnode.SnapshotReply, topo.TabletType, error) {
+	// read the tablet to be able to RPC to it, and also to get its
+	// original type
+	ti, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
-		return
+		return nil, "", err
 	}
+	originalType := ti.Tablet.Type
 
-	originalType = ti.Tablet.Type
-
-	if ti.Tablet.Type == topo.TYPE_MASTER && forceMasterSnapshot {
-		// In this case, we don't bother recomputing the serving graph.
-		// All queries will have to fail anyway.
-		log.Infof("force change type master -> backup: %v", tabletAlias)
-		// There is a legitimate reason to force in the case of a single
-		// master.
-		ti.Tablet.Type = topo.TYPE_BACKUP
-		err = topo.UpdateTablet(wr.ts, ti)
-	} else {
-		err = wr.ChangeType(ti.Alias, topo.TYPE_BACKUP, false)
+	// execute the remote action, log the results, save the error
+	args := &actionnode.SnapshotArgs{
+		Concurrency:         snapshotConcurrency,
+		ServerMode:          serverMode,
+		ForceMasterSnapshot: forceMasterSnapshot,
 	}
-
+	logStream, errFunc, err := wr.ai.Snapshot(ti, args, wr.ActionTimeout())
 	if err != nil {
-		return
+		return nil, "", err
 	}
-
-	var actionPath string
-	actionPath, err = wr.ai.Snapshot(tabletAlias, &actionnode.SnapshotArgs{Concurrency: snapshotConcurrency, ServerMode: serverMode})
-	if err != nil {
-		return
+	for e := range logStream {
+		log.Infof("Snapshot: %v", e)
 	}
-
-	// wait for completion, and save the error
-	results, actionErr := wr.WaitForCompletionReply(actionPath)
-	var reply *actionnode.SnapshotReply
-	newType := originalType
-	if actionErr != nil {
-		log.Errorf("snapshot failed, still restoring tablet type: %v", actionErr)
-		reply = &actionnode.SnapshotReply{}
-	} else {
-		reply = results.(*actionnode.SnapshotReply)
-		if serverMode {
-			log.Infof("server mode specified, switching tablet to snapshot_source mode")
-			newType = topo.TYPE_SNAPSHOT_SOURCE
-		}
-	}
-
-	// Go back to original type, or go to SNAPSHOT_SOURCE
-	log.Infof("change type after snapshot: %v %v", tabletAlias, newType)
-	if ti.Tablet.Parent.Uid == topo.NO_TABLET && forceMasterSnapshot && newType != topo.TYPE_SNAPSHOT_SOURCE {
-		log.Infof("force change type backup -> master: %v", tabletAlias)
-		ti.Tablet.Type = topo.TYPE_MASTER
-		err = topo.UpdateTablet(wr.ts, ti)
-	} else {
-		err = wr.ChangeType(ti.Alias, newType, false)
-	}
-	if err != nil {
-		// failure in changing the topology type is probably worse,
-		// so returning that (we logged actionErr anyway)
-		return
-	}
-	return reply.ManifestPath, reply.ParentAlias, reply.SlaveStartRequired, reply.ReadOnly, originalType, actionErr
+	reply, err := errFunc()
+	return reply, originalType, err
 }
 
+// SnapshotSourceEnd will change the tablet back to its original type
+// once it's done serving backups.
 func (wr *Wrangler) SnapshotSourceEnd(tabletAlias topo.TabletAlias, slaveStartRequired, readWrite bool, originalType topo.TabletType) (err error) {
 	var ti *topo.TabletInfo
 	ti, err = wr.ts.GetTablet(tabletAlias)
@@ -87,29 +63,16 @@ func (wr *Wrangler) SnapshotSourceEnd(tabletAlias topo.TabletAlias, slaveStartRe
 		return
 	}
 
-	var actionPath string
-	actionPath, err = wr.ai.SnapshotSourceEnd(tabletAlias, &actionnode.SnapshotSourceEndArgs{SlaveStartRequired: slaveStartRequired, ReadOnly: !readWrite})
-	if err != nil {
-		return
+	args := &actionnode.SnapshotSourceEndArgs{
+		SlaveStartRequired: slaveStartRequired,
+		ReadOnly:           !readWrite,
+		OriginalType:       originalType,
 	}
-
-	// wait for completion, and save the error
-	err = wr.WaitForCompletion(actionPath)
-	if err != nil {
-		log.Errorf("SnapshotSourceEnd failed (%v), leaving tablet type alone", err)
-		return
-	}
-
-	if ti.Tablet.Parent.Uid == topo.NO_TABLET {
-		ti.Tablet.Type = topo.TYPE_MASTER
-		err = topo.UpdateTablet(wr.ts, ti)
-	} else {
-		err = wr.ChangeType(ti.Alias, originalType, false)
-	}
-
-	return err
+	return wr.ai.SnapshotSourceEnd(ti, args, wr.ActionTimeout())
 }
 
+// ReserveForRestore will make sure a tablet is ready to be used as a restore
+// target.
 func (wr *Wrangler) ReserveForRestore(srcTabletAlias, dstTabletAlias topo.TabletAlias) (err error) {
 	// read our current tablet, verify its state before sending it
 	// to the tablet itself
@@ -121,15 +84,14 @@ func (wr *Wrangler) ReserveForRestore(srcTabletAlias, dstTabletAlias topo.Tablet
 		return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, dstTabletAlias)
 	}
 
-	var actionPath string
-	actionPath, err = wr.ai.ReserveForRestore(dstTabletAlias, &actionnode.ReserveForRestoreArgs{SrcTabletAlias: srcTabletAlias})
-	if err != nil {
-		return
+	args := &actionnode.ReserveForRestoreArgs{
+		SrcTabletAlias: srcTabletAlias,
 	}
-
-	return wr.WaitForCompletion(actionPath)
+	return wr.ai.ReserveForRestore(tablet, args, wr.ActionTimeout())
 }
 
+// UnreserveForRestore switches the tablet back to its original state,
+// the restore won't happen.
 func (wr *Wrangler) UnreserveForRestore(dstTabletAlias topo.TabletAlias) (err error) {
 	tablet, err := wr.ts.GetTablet(dstTabletAlias)
 	if err != nil {
@@ -143,6 +105,7 @@ func (wr *Wrangler) UnreserveForRestore(dstTabletAlias topo.TabletAlias) (err er
 	return wr.ChangeType(tablet.Alias, topo.TYPE_IDLE, false)
 }
 
+// Restore actually performs the restore action on a tablet.
 func (wr *Wrangler) Restore(srcTabletAlias topo.TabletAlias, srcFilePath string, dstTabletAlias, parentAlias topo.TabletAlias, fetchConcurrency, fetchRetryCount int, wasReserved, dontWaitForSlaveStart bool) error {
 	// read our current tablet, verify its state before sending it
 	// to the tablet itself
@@ -174,12 +137,23 @@ func (wr *Wrangler) Restore(srcTabletAlias topo.TabletAlias, srcFilePath string,
 	}
 
 	// do the work
-	actionPath, err := wr.ai.Restore(dstTabletAlias, &actionnode.RestoreArgs{SrcTabletAlias: srcTabletAlias, SrcFilePath: srcFilePath, ParentAlias: parentAlias, FetchConcurrency: fetchConcurrency, FetchRetryCount: fetchRetryCount, WasReserved: wasReserved, DontWaitForSlaveStart: dontWaitForSlaveStart})
+	args := &actionnode.RestoreArgs{
+		SrcTabletAlias:        srcTabletAlias,
+		SrcFilePath:           srcFilePath,
+		ParentAlias:           parentAlias,
+		FetchConcurrency:      fetchConcurrency,
+		FetchRetryCount:       fetchRetryCount,
+		WasReserved:           wasReserved,
+		DontWaitForSlaveStart: dontWaitForSlaveStart,
+	}
+	logStream, errFunc, err := wr.ai.Restore(tablet, args, wr.ActionTimeout())
 	if err != nil {
 		return err
 	}
-
-	if err = wr.WaitForCompletion(actionPath); err != nil {
+	for e := range logStream {
+		log.Infof("Restore: %v", e)
+	}
+	if err := errFunc(); err != nil {
 		return err
 	}
 
@@ -190,6 +164,7 @@ func (wr *Wrangler) Restore(srcTabletAlias topo.TabletAlias, srcFilePath string,
 	return nil
 }
 
+// UnreserveForRestoreMulti calls UnreserveForRestore on all targets.
 func (wr *Wrangler) UnreserveForRestoreMulti(dstTabletAliases []topo.TabletAlias) {
 	for _, dstTabletAlias := range dstTabletAliases {
 		ufrErr := wr.UnreserveForRestore(dstTabletAlias)
@@ -201,6 +176,8 @@ func (wr *Wrangler) UnreserveForRestoreMulti(dstTabletAliases []topo.TabletAlias
 	}
 }
 
+// Clone will do all the necessary actions to copy all the data from a
+// source to a set of destinations.
 func (wr *Wrangler) Clone(srcTabletAlias topo.TabletAlias, dstTabletAliases []topo.TabletAlias, forceMasterSnapshot bool, snapshotConcurrency, fetchConcurrency, fetchRetryCount int, serverMode bool) error {
 	// make sure the destination can be restored into (otherwise
 	// there is no point in taking the snapshot in the first place),
@@ -217,31 +194,33 @@ func (wr *Wrangler) Clone(srcTabletAlias topo.TabletAlias, dstTabletAliases []to
 	}
 
 	// take the snapshot, or put the server in SnapshotSource mode
-	srcFilePath, parentAlias, slaveStartRequired, readWrite, originalType, err := wr.Snapshot(srcTabletAlias, forceMasterSnapshot, snapshotConcurrency, serverMode)
+	// srcFilePath, parentAlias, slaveStartRequired, readWrite
+	sr, originalType, err := wr.Snapshot(srcTabletAlias, forceMasterSnapshot, snapshotConcurrency, serverMode)
 	if err != nil {
-		// The snapshot failed so un-reserve the destinations
+		// The snapshot failed so un-reserve the destinations and return
 		wr.UnreserveForRestoreMulti(reserved)
-	} else {
-		// try to restore the snapshot
-		// In serverMode, and in the case where we're replicating from
-		// the master, we can't wait for replication, as the master is down.
-		wg := sync.WaitGroup{}
-		er := concurrency.FirstErrorRecorder{}
-		for _, dstTabletAlias := range dstTabletAliases {
-			wg.Add(1)
-			go func(dstTabletAlias topo.TabletAlias) {
-				e := wr.Restore(srcTabletAlias, srcFilePath, dstTabletAlias, parentAlias, fetchConcurrency, fetchRetryCount, true, serverMode && originalType == topo.TYPE_MASTER)
-				er.RecordError(e)
-				wg.Done()
-			}(dstTabletAlias)
-		}
-		wg.Wait()
-		err = er.Error()
+		return err
 	}
+
+	// try to restore the snapshot
+	// In serverMode, and in the case where we're replicating from
+	// the master, we can't wait for replication, as the master is down.
+	wg := sync.WaitGroup{}
+	rec := concurrency.FirstErrorRecorder{}
+	for _, dstTabletAlias := range dstTabletAliases {
+		wg.Add(1)
+		go func(dstTabletAlias topo.TabletAlias) {
+			e := wr.Restore(srcTabletAlias, sr.ManifestPath, dstTabletAlias, sr.ParentAlias, fetchConcurrency, fetchRetryCount, true, serverMode && originalType == topo.TYPE_MASTER)
+			rec.RecordError(e)
+			wg.Done()
+		}(dstTabletAlias)
+	}
+	wg.Wait()
+	err = rec.Error()
 
 	// in any case, fix the server
 	if serverMode {
-		resetErr := wr.SnapshotSourceEnd(srcTabletAlias, slaveStartRequired, readWrite, originalType)
+		resetErr := wr.SnapshotSourceEnd(srcTabletAlias, sr.SlaveStartRequired, sr.ReadOnly, originalType)
 		if resetErr != nil {
 			if err == nil {
 				// If there is no other error, this matters.

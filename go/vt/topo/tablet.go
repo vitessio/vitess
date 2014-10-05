@@ -363,10 +363,6 @@ type Tablet struct {
 	// hard to rename.
 	DbNameOverride string
 	KeyRange       key.KeyRange
-
-	// BlacklistedTables is a list of tables we're not going to serve
-	// data for. This is used in vertical splits.
-	BlacklistedTables []string
 }
 
 // ValidatePortmap returns an error if the tablet's portmap doesn't
@@ -622,14 +618,13 @@ func CreateTablet(ts Server, tablet *Tablet) error {
 		return nil
 	}
 
-	return CreateTabletReplicationData(ts, tablet)
+	return UpdateTabletReplicationData(ts, tablet)
 }
 
-// CreateTabletReplicationData creates the replication graph data for a tablet
-func CreateTabletReplicationData(ts Server, tablet *Tablet) error {
-	log.V(6).Infof("CreateTabletReplicationData(%v)", tablet.Alias)
-
-	return AddShardReplicationRecord(ts, tablet.Keyspace, tablet.Shard, tablet.Alias, tablet.Parent)
+// UpdateTabletReplicationData creates or updates the replication
+// graph data for a tablet
+func UpdateTabletReplicationData(ts Server, tablet *Tablet) error {
+	return UpdateShardReplicationRecord(ts, tablet.Keyspace, tablet.Shard, tablet.Alias, tablet.Parent)
 }
 
 // DeleteTabletReplicationData deletes replication data.

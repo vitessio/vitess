@@ -560,6 +560,7 @@ gitpush:
 	($(GIT) push origin master )
 
 upstream-update:
+# git remote add upstream https://github.com/youtube/vitess.git
 	($(GIT) fetch upstream)
 	($(GIT)  merge upstream/master)
 	($(GIT) push origin master )

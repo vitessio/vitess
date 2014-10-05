@@ -38,11 +38,14 @@ var (
 <table width="100%" border="" frame="">
   <tr border="">
     <td width="25%" border="">
-      Alias: {{github_com_youtube_vitess_vtctld_tablet .Alias.String}}<br>
-      Keyspace: {{github_com_youtube_vitess_vtctld_keyspace .Keyspace}} Shard: {{github_com_youtube_vitess_vtctld_shard .Keyspace .Shard}}<br>
-      Serving graph: {{github_com_youtube_vitess_vtctld_srv_keyspace .Alias.Cell .Keyspace}} {{github_com_youtube_vitess_vtctld_srv_shard .Alias.Cell .Keyspace .Shard}} {{github_com_youtube_vitess_vtctld_srv_type .Alias.Cell .Keyspace .Shard .Type}}<br>
-      Replication graph: {{github_com_youtube_vitess_vtctld_replication .Alias.Cell .Keyspace .Shard}}<br>
-      State: {{.State}}<br>
+      Alias: {{github_com_youtube_vitess_vtctld_tablet .Tablet.Alias.String}}<br>
+      Keyspace: {{github_com_youtube_vitess_vtctld_keyspace .Tablet.Keyspace}} Shard: {{github_com_youtube_vitess_vtctld_shard .Tablet.Keyspace .Tablet.Shard}}<br>
+      Serving graph: {{github_com_youtube_vitess_vtctld_srv_keyspace .Tablet.Alias.Cell .Tablet.Keyspace}} {{github_com_youtube_vitess_vtctld_srv_shard .Tablet.Alias.Cell .Tablet.Keyspace .Tablet.Shard}} {{github_com_youtube_vitess_vtctld_srv_type .Tablet.Alias.Cell .Tablet.Keyspace .Tablet.Shard .Tablet.Type}}<br>
+      Replication graph: {{github_com_youtube_vitess_vtctld_replication .Tablet.Alias.Cell .Tablet.Keyspace .Tablet.Shard}}<br>
+      State: {{.Tablet.State}}<br>
+      {{if .BlacklistedTables}}
+        BlacklistedTables: {{range .BlacklistedTables}}{{.}} {{end}}<br>
+      {{end}}
     </td>
     <td width="25%" border="">
       <a href="/schemaz">Schema</a></br>
@@ -165,7 +168,10 @@ var onStatusRegistered func()
 func init() {
 	servenv.OnRun(func() {
 		servenv.AddStatusPart("Tablet", tabletTemplate, func() interface{} {
-			return agent.Tablet()
+			return map[string]interface{}{
+				"Tablet":            agent.Tablet(),
+				"BlacklistedTables": agent.BlacklistedTables(),
+			}
 		})
 		if agent.IsRunningHealthCheck() {
 			servenv.AddStatusFuncs(template.FuncMap{

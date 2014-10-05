@@ -85,6 +85,15 @@ func (t *Arith) Thrive(args StreamingArgs, sendReply func(reply interface{}) err
 	return nil
 }
 
+type IncrementArgs struct {
+	Num uint64
+}
+
+func (t *Arith) Increment(args *IncrementArgs, reply *uint64) error {
+	*reply = args.Num + 1
+	return nil
+}
+
 type rpcHandler struct{}
 
 func (h *rpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {

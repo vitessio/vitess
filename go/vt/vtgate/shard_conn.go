@@ -108,9 +108,10 @@ func (sdc *ShardConn) StreamExecute(ctx context.Context, query string, bindVars 
 	var erFunc tabletconn.ErrFunc
 	var results <-chan *mproto.QueryResult
 	err := sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
-		results, erFunc = conn.StreamExecute(ctx, query, bindVars, transactionID)
+		var err error
+		results, erFunc, err = conn.StreamExecute(ctx, query, bindVars, transactionID)
 		usedConn = conn
-		return erFunc()
+		return err
 	}, transactionID, true)
 	if err != nil {
 		return results, func() error { return err }
@@ -179,7 +180,7 @@ func (sdc *ShardConn) withRetry(ctx context.Context, action func(conn tabletconn
 		if isStreaming {
 			err = action(conn)
 		} else {
-			timer := time.After(sdc.timeout)
+			tmr := time.NewTimer(sdc.timeout)
 			done := make(chan int)
 			var errAction error
 			go func() {
@@ -187,11 +188,12 @@ func (sdc *ShardConn) withRetry(ctx context.Context, action func(conn tabletconn
 				close(done)
 			}()
 			select {
-			case <-timer:
+			case <-tmr.C:
 				err = tabletconn.OperationalError("vttablet: call timeout")
 			case <-done:
 				err = errAction
 			}
+			tmr.Stop()
 		}
 		if sdc.canRetry(err, transactionID, conn) {
 			continue

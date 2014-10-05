@@ -12,12 +12,21 @@ public interface RpcClient {
 	public Map<String, Object> executeKeyspaceIds(Map<String, Object> args)
 			throws DatabaseException, ConnectionException;
 
+	public Map<String, Object> executeKeyRanges(Map<String, Object> args)
+			throws DatabaseException, ConnectionException;
+
 	public Map<String, Object> streamExecuteKeyspaceIds(Map<String, Object> args)
+			throws DatabaseException, ConnectionException;
+
+	public Map<String, Object> streamExecuteKeyRanges(Map<String, Object> args)
 			throws DatabaseException, ConnectionException;
 
 	public Map<String, Object> streamNext() throws ConnectionException;
 
 	public void commit(Object session) throws ConnectionException;
+
+	public Map<String, Object> getMRSplits(Map<String, Object> args)
+			throws ConnectionException;
 
 	public void rollback(Object session) throws ConnectionException;
 

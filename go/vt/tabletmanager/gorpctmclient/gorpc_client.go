@@ -11,6 +11,8 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/youtube/vitess/go/vt/hook"
+	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
@@ -21,19 +23,18 @@ import (
 
 func init() {
 	initiator.RegisterTabletManagerConnFactory("bson", func(ts topo.Server) initiator.TabletManagerConn {
-		return &GoRpcTabletManagerConn{ts}
+		return &GoRpcTabletManagerConn{}
 	})
 }
 
 // GoRpcTabletManagerConn implements initiator.TabletManagerConn
-type GoRpcTabletManagerConn struct {
-	ts topo.Server
-}
+type GoRpcTabletManagerConn struct{}
 
 func (client *GoRpcTabletManagerConn) rpcCallTablet(tablet *topo.TabletInfo, name string, args, reply interface{}, waitTime time.Duration) error {
 	// create the RPC client, using waitTime as the connect
 	// timeout, and starting the overall timeout as well
-	timer := time.After(waitTime)
+	tmr := time.NewTimer(waitTime)
+	defer tmr.Stop()
 	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), waitTime, nil)
 	if err != nil {
 		return fmt.Errorf("RPC error for %v: %v", tablet.Alias, err.Error())
@@ -43,7 +44,7 @@ func (client *GoRpcTabletManagerConn) rpcCallTablet(tablet *topo.TabletInfo, nam
 	// do the call in the remaining time
 	call := rpcClient.Go("TabletManager."+name, args, reply, nil)
 	select {
-	case <-timer:
+	case <-tmr.C:
 		return fmt.Errorf("Timeout waiting for TabletManager.%v to %v", name, tablet.Alias)
 	case <-call.Done:
 		if call.Error != nil {
@@ -70,6 +71,19 @@ func (client *GoRpcTabletManagerConn) Ping(tablet *topo.TabletInfo, waitTime tim
 	return nil
 }
 
+func (client *GoRpcTabletManagerConn) Sleep(tablet *topo.TabletInfo, duration, waitTime time.Duration) error {
+	var noOutput rpc.UnusedResponse
+	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_SLEEP, &duration, &noOutput, waitTime)
+}
+
+func (client *GoRpcTabletManagerConn) ExecuteHook(tablet *topo.TabletInfo, hk *hook.Hook, waitTime time.Duration) (*hook.HookResult, error) {
+	var hr hook.HookResult
+	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_EXECUTE_HOOK, hk, &hr, waitTime); err != nil {
+		return nil, err
+	}
+	return &hr, nil
+}
+
 func (client *GoRpcTabletManagerConn) GetSchema(tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool, waitTime time.Duration) (*myproto.SchemaDefinition, error) {
 	var sd myproto.SchemaDefinition
 	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_GET_SCHEMA, &gorpcproto.GetSchemaArgs{Tables: tables, ExcludeTables: excludeTables, IncludeViews: includeViews}, &sd, waitTime); err != nil {
@@ -90,19 +104,50 @@ func (client *GoRpcTabletManagerConn) GetPermissions(tablet *topo.TabletInfo, wa
 // Various read-write methods
 //
 
+func (client *GoRpcTabletManagerConn) SetReadOnly(tablet *topo.TabletInfo, waitTime time.Duration) error {
+	var noOutput rpc.UnusedResponse
+	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_SET_RDONLY, "", &noOutput, waitTime)
+}
+
+func (client *GoRpcTabletManagerConn) SetReadWrite(tablet *topo.TabletInfo, waitTime time.Duration) error {
+	var noOutput rpc.UnusedResponse
+	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_SET_RDWR, "", &noOutput, waitTime)
+}
+
 func (client *GoRpcTabletManagerConn) ChangeType(tablet *topo.TabletInfo, dbType topo.TabletType, waitTime time.Duration) error {
 	var noOutput rpc.UnusedResponse
 	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_CHANGE_TYPE, &dbType, &noOutput, waitTime)
 }
 
-func (client *GoRpcTabletManagerConn) SetBlacklistedTables(tablet *topo.TabletInfo, tables []string, waitTime time.Duration) error {
+func (client *GoRpcTabletManagerConn) Scrap(tablet *topo.TabletInfo, waitTime time.Duration) error {
 	var noOutput rpc.UnusedResponse
-	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_SET_BLACKLISTED_TABLES, &gorpcproto.SetBlacklistedTablesArgs{Tables: tables}, &noOutput, waitTime)
+	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_SCRAP, "", &noOutput, waitTime)
+}
+
+func (client *GoRpcTabletManagerConn) RefreshState(tablet *topo.TabletInfo, waitTime time.Duration) error {
+	var noOutput rpc.UnusedResponse
+	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_REFRESH_STATE, "", &noOutput, waitTime)
 }
 
 func (client *GoRpcTabletManagerConn) ReloadSchema(tablet *topo.TabletInfo, waitTime time.Duration) error {
 	var noOutput rpc.UnusedResponse
 	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_RELOAD_SCHEMA, "", &noOutput, waitTime)
+}
+
+func (client *GoRpcTabletManagerConn) PreflightSchema(tablet *topo.TabletInfo, change string, waitTime time.Duration) (*myproto.SchemaChangeResult, error) {
+	var scr myproto.SchemaChangeResult
+	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_PREFLIGHT_SCHEMA, change, &scr, waitTime); err != nil {
+		return nil, err
+	}
+	return &scr, nil
+}
+
+func (client *GoRpcTabletManagerConn) ApplySchema(tablet *topo.TabletInfo, change *myproto.SchemaChange, waitTime time.Duration) (*myproto.SchemaChangeResult, error) {
+	var scr myproto.SchemaChangeResult
+	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_APPLY_SCHEMA, change, &scr, waitTime); err != nil {
+		return nil, err
+	}
+	return &scr, nil
 }
 
 func (client *GoRpcTabletManagerConn) ExecuteFetch(tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs bool, waitTime time.Duration) (*mproto.QueryResult, error) {
@@ -142,6 +187,14 @@ func (client *GoRpcTabletManagerConn) MasterPosition(tablet *topo.TabletInfo, wa
 		return rp, err
 	}
 	return rp, nil
+}
+
+func (client *GoRpcTabletManagerConn) ReparentPosition(tablet *topo.TabletInfo, rp *myproto.ReplicationPosition, waitTime time.Duration) (*actionnode.RestartSlaveData, error) {
+	var rsd actionnode.RestartSlaveData
+	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_REPARENT_POSITION, rp, &rsd, waitTime); err != nil {
+		return nil, err
+	}
+	return &rsd, nil
 }
 
 func (client *GoRpcTabletManagerConn) StopSlave(tablet *topo.TabletInfo, waitTime time.Duration) error {
@@ -214,12 +267,133 @@ func (client *GoRpcTabletManagerConn) RunBlpUntil(tablet *topo.TabletInfo, posit
 // Reparenting related functions
 //
 
+func (client *GoRpcTabletManagerConn) DemoteMaster(tablet *topo.TabletInfo, waitTime time.Duration) error {
+	var noOutput rpc.UnusedResponse
+	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_DEMOTE_MASTER, "", &noOutput, waitTime)
+}
+
+func (client *GoRpcTabletManagerConn) PromoteSlave(tablet *topo.TabletInfo, waitTime time.Duration) (*actionnode.RestartSlaveData, error) {
+	var rsd actionnode.RestartSlaveData
+	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_PROMOTE_SLAVE, "", &rsd, waitTime); err != nil {
+		return nil, err
+	}
+	return &rsd, nil
+}
+
 func (client *GoRpcTabletManagerConn) SlaveWasPromoted(tablet *topo.TabletInfo, waitTime time.Duration) error {
 	var noOutput rpc.UnusedResponse
 	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_SLAVE_WAS_PROMOTED, "", &noOutput, waitTime)
 }
 
+func (client *GoRpcTabletManagerConn) RestartSlave(tablet *topo.TabletInfo, rsd *actionnode.RestartSlaveData, waitTime time.Duration) error {
+	var noOutput rpc.UnusedResponse
+	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_RESTART_SLAVE, rsd, &noOutput, waitTime)
+}
+
 func (client *GoRpcTabletManagerConn) SlaveWasRestarted(tablet *topo.TabletInfo, args *actionnode.SlaveWasRestartedArgs, waitTime time.Duration) error {
 	var noOutput rpc.UnusedResponse
 	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_SLAVE_WAS_RESTARTED, args, &noOutput, waitTime)
+}
+
+func (client *GoRpcTabletManagerConn) BreakSlaves(tablet *topo.TabletInfo, waitTime time.Duration) error {
+	var noOutput rpc.UnusedResponse
+	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_BREAK_SLAVES, "", &noOutput, waitTime)
+}
+
+//
+// Backup related methods
+//
+
+func (client *GoRpcTabletManagerConn) Snapshot(tablet *topo.TabletInfo, sa *actionnode.SnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, initiator.SnapshotReplyFunc, error) {
+	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), waitTime, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	logstream := make(chan *logutil.LoggerEvent, 10)
+	rpcstream := make(chan *gorpcproto.SnapshotStreamingReply, 10)
+	result := &actionnode.SnapshotReply{}
+
+	c := rpcClient.StreamGo("TabletManager.Snapshot", sa, rpcstream)
+	go func() {
+		for ssr := range rpcstream {
+			if ssr.Log != nil {
+				logstream <- ssr.Log
+			}
+			if ssr.Result != nil {
+				*result = *ssr.Result
+			}
+		}
+		close(logstream)
+		rpcClient.Close()
+	}()
+	return logstream, func() (*actionnode.SnapshotReply, error) {
+		return result, c.Error
+	}, nil
+}
+
+func (client *GoRpcTabletManagerConn) SnapshotSourceEnd(tablet *topo.TabletInfo, args *actionnode.SnapshotSourceEndArgs, waitTime time.Duration) error {
+	var noOutput rpc.UnusedResponse
+	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_SNAPSHOT_SOURCE_END, args, &noOutput, waitTime)
+}
+
+func (client *GoRpcTabletManagerConn) ReserveForRestore(tablet *topo.TabletInfo, args *actionnode.ReserveForRestoreArgs, waitTime time.Duration) error {
+	var noOutput rpc.UnusedResponse
+	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_RESERVE_FOR_RESTORE, args, &noOutput, waitTime)
+}
+
+func (client *GoRpcTabletManagerConn) Restore(tablet *topo.TabletInfo, sa *actionnode.RestoreArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, initiator.ErrFunc, error) {
+	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), waitTime, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	logstream := make(chan *logutil.LoggerEvent, 10)
+	c := rpcClient.StreamGo("TabletManager.Restore", sa, logstream)
+	return logstream, func() error {
+		rpcClient.Close()
+		return c.Error
+	}, nil
+}
+
+func (client *GoRpcTabletManagerConn) MultiSnapshot(tablet *topo.TabletInfo, sa *actionnode.MultiSnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, initiator.MultiSnapshotReplyFunc, error) {
+	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), waitTime, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	logstream := make(chan *logutil.LoggerEvent, 10)
+	rpcstream := make(chan *gorpcproto.MultiSnapshotStreamingReply, 10)
+	result := &actionnode.MultiSnapshotReply{}
+
+	c := rpcClient.StreamGo("TabletManager.MultiSnapshot", sa, rpcstream)
+	go func() {
+		for ssr := range rpcstream {
+			if ssr.Log != nil {
+				logstream <- ssr.Log
+			}
+			if ssr.Result != nil {
+				*result = *ssr.Result
+			}
+		}
+		close(logstream)
+		rpcClient.Close()
+	}()
+	return logstream, func() (*actionnode.MultiSnapshotReply, error) {
+		return result, c.Error
+	}, nil
+}
+
+func (client *GoRpcTabletManagerConn) MultiRestore(tablet *topo.TabletInfo, sa *actionnode.MultiRestoreArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, initiator.ErrFunc, error) {
+	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), waitTime, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	logstream := make(chan *logutil.LoggerEvent, 10)
+	c := rpcClient.StreamGo("TabletManager.MultiRestore", sa, logstream)
+	return logstream, func() error {
+		rpcClient.Close()
+		return c.Error
+	}, nil
 }

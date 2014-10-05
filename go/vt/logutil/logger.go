@@ -250,6 +250,38 @@ func (lw LoggerWriter) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
+// TeeLogger is a Logger that sends its logs to two underlying logger
+type TeeLogger struct {
+	One, Two Logger
+}
+
+func NewTeeLogger(one, two Logger) *TeeLogger {
+	return &TeeLogger{
+		One: one,
+		Two: two,
+	}
+}
+
+func (tl *TeeLogger) Infof(format string, v ...interface{}) {
+	tl.One.Infof(format, v...)
+	tl.Two.Infof(format, v...)
+}
+
+func (tl *TeeLogger) Warningf(format string, v ...interface{}) {
+	tl.One.Warningf(format, v...)
+	tl.Two.Warningf(format, v...)
+}
+
+func (tl *TeeLogger) Errorf(format string, v ...interface{}) {
+	tl.One.Errorf(format, v...)
+	tl.Two.Errorf(format, v...)
+}
+
+func (tl *TeeLogger) Printf(format string, v ...interface{}) {
+	tl.One.Printf(format, v...)
+	tl.Two.Printf(format, v...)
+}
+
 // array for fast int -> string conversion
 const digits = "0123456789"
 

@@ -8,7 +8,9 @@ import (
 	"time"
 
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 )
 
 /*
@@ -31,10 +33,6 @@ type GetSchemaArgs struct {
 	Tables        []string
 	ExcludeTables []string
 	IncludeViews  bool
-}
-
-type SetBlacklistedTablesArgs struct {
-	Tables []string
 }
 
 type WaitSlavePositionArgs struct {
@@ -66,4 +64,17 @@ type ExecuteFetchArgs struct {
 	MaxRows        int
 	WantFields     bool
 	DisableBinlogs bool
+}
+
+// gorpc doesn't support returning a streaming type during streaming
+// and a final return value, so using structures with either one set.
+
+type SnapshotStreamingReply struct {
+	Log    *logutil.LoggerEvent
+	Result *actionnode.SnapshotReply
+}
+
+type MultiSnapshotStreamingReply struct {
+	Log    *logutil.LoggerEvent
+	Result *actionnode.MultiSnapshotReply
 }

@@ -242,7 +242,7 @@ func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sen
 		keyrangeTransactions.Add(1)
 		return sendReply(reply)
 	})
-	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld, req.Position, f)
+	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld, req.Charset, req.Position, f)
 
 	svm := &sync2.ServiceManager{}
 	svm.Go(bls.Stream)
@@ -278,7 +278,7 @@ func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendRep
 		keyrangeTransactions.Add(1)
 		return sendReply(reply)
 	})
-	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld, req.Position, f)
+	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld, req.Charset, req.Position, f)
 
 	svm := &sync2.ServiceManager{}
 	svm.Go(bls.Stream)

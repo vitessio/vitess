@@ -22,7 +22,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -187,27 +186,6 @@ var (
 	ErrNotMaster = errors.New("no master status")
 )
 
-// fetchSuperQueryMap returns a map from column names to cell data for a query
-// that should return exactly 1 row.
-func (mysqld *Mysqld) fetchSuperQueryMap(query string) (map[string]string, error) {
-	qr, err := mysqld.fetchSuperQuery(query)
-	if err != nil {
-		return nil, err
-	}
-	if len(qr.Rows) != 1 {
-		return nil, fmt.Errorf("query %#v returned %d rows, expected 1", query, len(qr.Rows))
-	}
-	if len(qr.Fields) != len(qr.Rows[0]) {
-		return nil, fmt.Errorf("query %#v returned %d column names, expected %d", query, len(qr.Fields), len(qr.Rows[0]))
-	}
-
-	rowMap := make(map[string]string)
-	for i, value := range qr.Rows[0] {
-		rowMap[qr.Fields[i].Name] = value.String()
-	}
-	return rowMap, nil
-}
-
 // Return a replication state that will reparent a slave to the
 // correct master for a specified position.
 func (mysqld *Mysqld) ReparentPosition(slavePosition proto.ReplicationPosition) (rs *proto.ReplicationStatus, waitPosition proto.ReplicationPosition, reparentTime int64, err error) {
@@ -230,12 +208,17 @@ func (mysqld *Mysqld) ReparentPosition(slavePosition proto.ReplicationPosition) 
 	if err != nil {
 		return
 	}
-	rs.Position, err = mysqld.flavor().ParseReplicationPosition(qr.Rows[0][2].String())
+	flavor, err := mysqld.flavor()
+	if err != nil {
+		err = fmt.Errorf("can't parse replication position: %v", err)
+		return
+	}
+	rs.Position, err = flavor.ParseReplicationPosition(qr.Rows[0][2].String())
 	if err != nil {
 		return
 	}
 
-	waitPosition, err = mysqld.flavor().ParseReplicationPosition(qr.Rows[0][3].String())
+	waitPosition, err = flavor.ParseReplicationPosition(qr.Rows[0][3].String())
 	if err != nil {
 		return
 	}
@@ -243,23 +226,39 @@ func (mysqld *Mysqld) ReparentPosition(slavePosition proto.ReplicationPosition) 
 }
 
 func (mysqld *Mysqld) WaitMasterPos(targetPos proto.ReplicationPosition, waitTimeout time.Duration) error {
-	return mysqld.flavor().WaitMasterPos(mysqld, targetPos, waitTimeout)
+	flavor, err := mysqld.flavor()
+	if err != nil {
+		return fmt.Errorf("WaitMasterPos needs flavor: %v", err)
+	}
+	return flavor.WaitMasterPos(mysqld, targetPos, waitTimeout)
 }
 
 func (mysqld *Mysqld) SlaveStatus() (*proto.ReplicationStatus, error) {
-	return mysqld.flavor().SlaveStatus(mysqld)
+	flavor, err := mysqld.flavor()
+	if err != nil {
+		return nil, fmt.Errorf("SlaveStatus needs flavor: %v", err)
+	}
+	return flavor.SlaveStatus(mysqld)
 }
 
 func (mysqld *Mysqld) MasterPosition() (rp proto.ReplicationPosition, err error) {
-	return mysqld.flavor().MasterPosition(mysqld)
+	flavor, err := mysqld.flavor()
+	if err != nil {
+		return rp, fmt.Errorf("MasterPosition needs flavor: %v", err)
+	}
+	return flavor.MasterPosition(mysqld)
 }
 
 func (mysqld *Mysqld) StartReplicationCommands(status *proto.ReplicationStatus) ([]string, error) {
+	flavor, err := mysqld.flavor()
+	if err != nil {
+		return nil, fmt.Errorf("StartReplicationCommands needs flavor: %v", err)
+	}
 	params, err := dbconfigs.MysqlParams(mysqld.replParams)
 	if err != nil {
 		return nil, err
 	}
-	return mysqld.flavor().StartReplicationCommands(&params, status)
+	return flavor.StartReplicationCommands(&params, status)
 }
 
 /*
@@ -328,54 +327,6 @@ func (mysqld *Mysqld) WaitForSlave(maxLag int) (err error) {
 		return errors.New(strings.Join(errs, ", "))
 	}
 	return errors.New("replication stopped, it will never catch up")
-}
-
-func (mysqld *Mysqld) ExecuteSuperQuery(query string) error {
-	return mysqld.ExecuteSuperQueryList([]string{query})
-}
-
-// FIXME(msolomon) should there be a query lock so we only
-// run one admin action at a time?
-func (mysqld *Mysqld) fetchSuperQuery(query string) (*mproto.QueryResult, error) {
-	conn, connErr := mysqld.dbaPool.Get()
-	if connErr != nil {
-		return nil, connErr
-	}
-	defer conn.Recycle()
-	log.V(6).Infof("fetch %v", query)
-	qr, err := conn.ExecuteFetch(query, 10000, true)
-	if err != nil {
-		return nil, err
-	}
-	return qr, nil
-}
-
-func redactMasterPassword(input string) string {
-	i := strings.Index(input, masterPasswordStart)
-	if i == -1 {
-		return input
-	}
-	j := strings.Index(input[i+len(masterPasswordStart):], masterPasswordEnd)
-	if j == -1 {
-		return input
-	}
-	return input[:i+len(masterPasswordStart)] + strings.Repeat("*", j) + input[i+len(masterPasswordStart)+j:]
-}
-
-// ExecuteSuperQueryList alows the user to execute queries at a super user.
-func (mysqld *Mysqld) ExecuteSuperQueryList(queryList []string) error {
-	conn, connErr := mysqld.dbaPool.Get()
-	if connErr != nil {
-		return connErr
-	}
-	defer conn.Recycle()
-	for _, query := range queryList {
-		log.Infof("exec %v", redactMasterPassword(query))
-		if _, err := conn.ExecuteFetch(query, 10000, false); err != nil {
-			return fmt.Errorf("ExecuteFetch(%v) failed: %v", redactMasterPassword(query), err.Error())
-		}
-	}
-	return nil
 }
 
 // Force all slaves to error and stop. This is extreme, but helpful for emergencies
@@ -496,11 +447,19 @@ func (mysqld *Mysqld) WaitBlpPos(bp *blproto.BlpPosition, waitTimeout time.Durat
 // EnableBinlogPlayback prepares the server to play back events from a binlog stream.
 // Whatever it does for a given flavor, it must be idempotent.
 func (mysqld *Mysqld) EnableBinlogPlayback() error {
-	return mysqld.flavor().EnableBinlogPlayback(mysqld)
+	flavor, err := mysqld.flavor()
+	if err != nil {
+		return fmt.Errorf("EnableBinlogPlayback needs flavor: %v", err)
+	}
+	return flavor.EnableBinlogPlayback(mysqld)
 }
 
 // DisableBinlogPlayback returns the server to the normal state after streaming.
 // Whatever it does for a given flavor, it must be idempotent.
 func (mysqld *Mysqld) DisableBinlogPlayback() error {
-	return mysqld.flavor().DisableBinlogPlayback(mysqld)
+	flavor, err := mysqld.flavor()
+	if err != nil {
+		return fmt.Errorf("DisableBinlogPlayback needs flavor: %v", err)
+	}
+	return flavor.DisableBinlogPlayback(mysqld)
 }

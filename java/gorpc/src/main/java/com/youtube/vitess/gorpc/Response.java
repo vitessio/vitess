@@ -1,8 +1,10 @@
 package com.youtube.vitess.gorpc;
 
+import com.google.common.primitives.UnsignedLong;
+
 public class Response {
 	private String serviceMethod;
-	private long seq;
+	private UnsignedLong seq;
 	private String error;
 	private Object reply;
 
@@ -14,11 +16,11 @@ public class Response {
 		this.serviceMethod = serviceMethod;
 	}
 
-	public long getSeq() {
+	public UnsignedLong getSeq() {
 		return seq;
 	}
 
-	public void setSeq(long seq) {
+	public void setSeq(UnsignedLong seq) {
 		this.seq = seq;
 	}
 

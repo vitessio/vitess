@@ -4,42 +4,54 @@
 
 // Actions modify the state of a tablet, shard or keyspace.
 //
-// They are currenty managed through a series of queues stored in topology server.
+// They are currenty managed through a series of queues stored in
+// topology server, or RPCs. Switching to RPCs only now.
 
 package actionnode
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/user"
-	"strings"
 	"time"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/vt/hook"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
-	"github.com/youtube/vitess/go/vt/topo"
 )
 
 const (
 	// FIXME(msolomon) why is ActionState a type, but Action is not?
 
 	//
-	// Tablet actions. These are triggered by ActionNodes or RPCs,
-	// and executed by an agent within vttablet.
+	// Tablet actions. This first list is RPC only. In the process
+	// of converting them all to RPCs.
 	//
 
-	TABLET_ACTION_PING  = "Ping"
+	// Ping checks a tablet is alive
+	TABLET_ACTION_PING = "Ping"
+
+	// Sleep will sleep for a duration (used for tests)
 	TABLET_ACTION_SLEEP = "Sleep"
 
-	TABLET_ACTION_SET_RDONLY             = "SetReadOnly"
-	TABLET_ACTION_SET_RDWR               = "SetReadWrite"
-	TABLET_ACTION_CHANGE_TYPE            = "ChangeType"
-	TABLET_ACTION_SET_BLACKLISTED_TABLES = "SetBlacklistedTables"
+	// ExecuteHook will execute the provided hook remotely
+	TABLET_ACTION_EXECUTE_HOOK = "ExecuteHook"
 
+	// SetReadOnly makes the mysql instance read-only
+	TABLET_ACTION_SET_RDONLY = "SetReadOnly"
+
+	// SetReadWrite makes the mysql instance read-write
+	TABLET_ACTION_SET_RDWR = "SetReadWrite"
+
+	// ChangeType changes the type of the tablet
+	TABLET_ACTION_CHANGE_TYPE = "ChangeType"
+
+	// Scrap scraps the live running tablet
+	TABLET_ACTION_SCRAP = "Scrap"
+
+	// DemoteMaster tells the current master it's about to not be a master
+	// any more, and should go read-only.
 	TABLET_ACTION_DEMOTE_MASTER = "DemoteMaster"
+
+	// PromoteSlave tells the tablet it is going to be the master.
 	TABLET_ACTION_PROMOTE_SLAVE = "PromoteSlave"
 
 	// SlaveWasPromoted tells a tablet this previously slave
@@ -47,12 +59,17 @@ const (
 	// own topology record.
 	TABLET_ACTION_SLAVE_WAS_PROMOTED = "SlaveWasPromoted"
 
+	// RestartSlave tells the remote tablet it has a new master.
 	TABLET_ACTION_RESTART_SLAVE = "RestartSlave"
 
 	// SlaveWasRestarted tells a tablet the mysql master was changed.
 	// The tablet will check it is indeed the case, and update its own
 	// topology record.
 	TABLET_ACTION_SLAVE_WAS_RESTARTED = "SlaveWasRestarted"
+
+	// BreakSlaves will tinker with the replication stream in a way
+	// that will stop all the slaves.
+	TABLET_ACTION_BREAK_SLAVES = "BreakSlaves"
 
 	// StopSlave will stop MySQL replication.
 	TABLET_ACTION_STOP_SLAVE = "StopSlave"
@@ -69,31 +86,74 @@ const (
 	// to calling "ShardExternallyReparented" on the topology.
 	TABLET_ACTION_EXTERNALLY_REPARENTED = "TabletExternallyReparented"
 
-	TABLET_ACTION_BREAK_SLAVES        = "BreakSlaves"
-	TABLET_ACTION_MASTER_POSITION     = "MasterPosition"
-	TABLET_ACTION_REPARENT_POSITION   = "ReparentPosition"
-	TABLET_ACTION_SLAVE_STATUS        = "SlaveStatus"
-	TABLET_ACTION_WAIT_SLAVE_POSITION = "WaitSlavePosition"
-	TABLET_ACTION_WAIT_BLP_POSITION   = "WaitBlpPosition"
-	TABLET_ACTION_STOP_BLP            = "StopBlp"
-	TABLET_ACTION_START_BLP           = "StartBlp"
-	TABLET_ACTION_RUN_BLP_UNTIL       = "RunBlpUntil"
-	TABLET_ACTION_SCRAP               = "Scrap"
-	TABLET_ACTION_GET_SCHEMA          = "GetSchema"
-	TABLET_ACTION_PREFLIGHT_SCHEMA    = "PreflightSchema"
-	TABLET_ACTION_APPLY_SCHEMA        = "ApplySchema"
-	TABLET_ACTION_RELOAD_SCHEMA       = "ReloadSchema"
-	TABLET_ACTION_EXECUTE_FETCH       = "ExecuteFetch"
-	TABLET_ACTION_GET_PERMISSIONS     = "GetPermissions"
-	TABLET_ACTION_EXECUTE_HOOK        = "ExecuteHook"
-	TABLET_ACTION_GET_SLAVES          = "GetSlaves"
+	// MasterPosition returns the current master position
+	TABLET_ACTION_MASTER_POSITION = "MasterPosition"
 
-	TABLET_ACTION_SNAPSHOT            = "Snapshot"
+	// ReparentPosition returns the data for a slave to use to reparent
+	// to the target tablet at the given position.
+	TABLET_ACTION_REPARENT_POSITION = "ReparentPosition"
+
+	// SlaveStatus returns the current slave status
+	TABLET_ACTION_SLAVE_STATUS = "SlaveStatus"
+
+	// WaitSlavePosition waits until the slave reaches a
+	// replication position in MySQL replication
+	TABLET_ACTION_WAIT_SLAVE_POSITION = "WaitSlavePosition"
+
+	// WaitBlpPosition waits until the slave reaches a
+	// replication position in filtered replication
+	TABLET_ACTION_WAIT_BLP_POSITION = "WaitBlpPosition"
+
+	// Stop and Start filtered replication
+	TABLET_ACTION_STOP_BLP  = "StopBlp"
+	TABLET_ACTION_START_BLP = "StartBlp"
+
+	// RunBlpUntil will run filtered replication until it reaches
+	// the provided stop position.
+	TABLET_ACTION_RUN_BLP_UNTIL = "RunBlpUntil"
+
+	// GetSchema returns the tablet current schema.
+	TABLET_ACTION_GET_SCHEMA = "GetSchema"
+
+	// RefreshState tells the tablet to refresh its tablet record from
+	// the topo server.
+	TABLET_ACTION_REFRESH_STATE = "RefreshState"
+
+	// ReloadSchema tells the tablet to reload its schema.
+	TABLET_ACTION_RELOAD_SCHEMA = "ReloadSchema"
+
+	// PreflightSchema will check a schema change works
+	TABLET_ACTION_PREFLIGHT_SCHEMA = "PreflightSchema"
+
+	// ApplySchema will actually apply the schema change
+	TABLET_ACTION_APPLY_SCHEMA = "ApplySchema"
+
+	// ExecuteFetch uses the DBA connection pool to run queries.
+	TABLET_ACTION_EXECUTE_FETCH = "ExecuteFetch"
+
+	// GetPermissions returns the mysql permissions set
+	TABLET_ACTION_GET_PERMISSIONS = "GetPermissions"
+
+	// GetSlaves returns the current set of mysql replication slaves.
+	TABLET_ACTION_GET_SLAVES = "GetSlaves"
+
+	// Snapshot takes a db snapshot
+	TABLET_ACTION_SNAPSHOT = "Snapshot"
+
+	// SnapshotSourceEnd restarts the mysql server
 	TABLET_ACTION_SNAPSHOT_SOURCE_END = "SnapshotSourceEnd"
+
+	// ReserveForRestore will prepare a server for restore
 	TABLET_ACTION_RESERVE_FOR_RESTORE = "ReserveForRestore"
-	TABLET_ACTION_RESTORE             = "Restore"
-	TABLET_ACTION_MULTI_SNAPSHOT      = "MultiSnapshot"
-	TABLET_ACTION_MULTI_RESTORE       = "MultiRestore"
+
+	// Restore will restore a backup
+	TABLET_ACTION_RESTORE = "Restore"
+
+	// MultiSnapshot takes a split snapshot
+	TABLET_ACTION_MULTI_SNAPSHOT = "MultiSnapshot"
+
+	// MultiRestore restores a split snapshot
+	TABLET_ACTION_MULTI_RESTORE = "MultiRestore"
 
 	//
 	// Shard actions - involve all tablets in a shard.
@@ -161,139 +221,6 @@ type ActionNode struct {
 	Reply interface{} `json:"-"`
 }
 
-// ActionNodeFromJson interprets the data from JSON.
-func ActionNodeFromJson(data, path string) (*ActionNode, error) {
-	decoder := json.NewDecoder(strings.NewReader(data))
-
-	// decode the ActionNode
-	node := &ActionNode{}
-	err := decoder.Decode(node)
-	if err != nil {
-		return nil, err
-	}
-	node.Path = path
-
-	// figure out our args and reply types
-	switch node.Action {
-	case TABLET_ACTION_PING:
-	case TABLET_ACTION_SLEEP:
-		node.Args = new(time.Duration)
-	case TABLET_ACTION_SET_RDONLY:
-	case TABLET_ACTION_SET_RDWR:
-	case TABLET_ACTION_CHANGE_TYPE:
-		node.Args = new(topo.TabletType)
-
-	case TABLET_ACTION_DEMOTE_MASTER:
-	case TABLET_ACTION_PROMOTE_SLAVE:
-		node.Reply = &RestartSlaveData{}
-	case TABLET_ACTION_SLAVE_WAS_PROMOTED:
-	case TABLET_ACTION_RESTART_SLAVE:
-		node.Args = &RestartSlaveData{}
-	case TABLET_ACTION_SLAVE_WAS_RESTARTED:
-		node.Args = &SlaveWasRestartedArgs{}
-	case TABLET_ACTION_BREAK_SLAVES:
-	case TABLET_ACTION_REPARENT_POSITION:
-		node.Args = &myproto.ReplicationPosition{}
-		node.Reply = &RestartSlaveData{}
-	case TABLET_ACTION_SCRAP:
-	case TABLET_ACTION_PREFLIGHT_SCHEMA:
-		node.Args = new(string)
-		node.Reply = &myproto.SchemaChangeResult{}
-	case TABLET_ACTION_APPLY_SCHEMA:
-		node.Args = &myproto.SchemaChange{}
-		node.Reply = &myproto.SchemaChangeResult{}
-	case TABLET_ACTION_EXECUTE_HOOK:
-		node.Args = &hook.Hook{}
-		node.Reply = &hook.HookResult{}
-
-	case TABLET_ACTION_SNAPSHOT:
-		node.Args = &SnapshotArgs{}
-		node.Reply = &SnapshotReply{}
-	case TABLET_ACTION_SNAPSHOT_SOURCE_END:
-		node.Args = &SnapshotSourceEndArgs{}
-	case TABLET_ACTION_RESERVE_FOR_RESTORE:
-		node.Args = &ReserveForRestoreArgs{}
-	case TABLET_ACTION_RESTORE:
-		node.Args = &RestoreArgs{}
-	case TABLET_ACTION_MULTI_SNAPSHOT:
-		node.Args = &MultiSnapshotArgs{}
-		node.Reply = &MultiSnapshotReply{}
-	case TABLET_ACTION_MULTI_RESTORE:
-		node.Args = &MultiRestoreArgs{}
-
-	case SHARD_ACTION_REPARENT:
-		node.Args = &topo.TabletAlias{}
-	case SHARD_ACTION_EXTERNALLY_REPARENTED:
-		node.Args = &topo.TabletAlias{}
-	case SHARD_ACTION_REBUILD:
-	case SHARD_ACTION_CHECK:
-	case SHARD_ACTION_APPLY_SCHEMA:
-		node.Args = &ApplySchemaShardArgs{}
-	case SHARD_ACTION_SET_SERVED_TYPES:
-		node.Args = &SetShardServedTypesArgs{}
-	case SHARD_ACTION_MULTI_RESTORE:
-		node.Args = &MultiRestoreArgs{}
-	case SHARD_ACTION_MIGRATE_SERVED_TYPES:
-		node.Args = &MigrateServedTypesArgs{}
-	case SHARD_ACTION_UPDATE_SHARD:
-
-	case KEYSPACE_ACTION_REBUILD:
-	case KEYSPACE_ACTION_APPLY_SCHEMA:
-		node.Args = &ApplySchemaKeyspaceArgs{}
-	case KEYSPACE_ACTION_SET_SHARDING_INFO:
-	case KEYSPACE_ACTION_MIGRATE_SERVED_FROM:
-		node.Args = &MigrateServedFromArgs{}
-
-	case SRV_SHARD_ACTION_REBUILD:
-
-	case TABLET_ACTION_SET_BLACKLISTED_TABLES,
-		TABLET_ACTION_GET_SCHEMA,
-		TABLET_ACTION_RELOAD_SCHEMA,
-		TABLET_ACTION_EXECUTE_FETCH,
-		TABLET_ACTION_GET_PERMISSIONS,
-		TABLET_ACTION_SLAVE_STATUS,
-		TABLET_ACTION_WAIT_SLAVE_POSITION,
-		TABLET_ACTION_MASTER_POSITION,
-		TABLET_ACTION_STOP_SLAVE,
-		TABLET_ACTION_STOP_SLAVE_MINIMUM,
-		TABLET_ACTION_START_SLAVE,
-		TABLET_ACTION_EXTERNALLY_REPARENTED,
-		TABLET_ACTION_GET_SLAVES,
-		TABLET_ACTION_WAIT_BLP_POSITION,
-		TABLET_ACTION_STOP_BLP,
-		TABLET_ACTION_START_BLP,
-		TABLET_ACTION_RUN_BLP_UNTIL:
-		return nil, fmt.Errorf("rpc-only action: %v", node.Action)
-
-	default:
-		return nil, fmt.Errorf("unrecognized action: %v", node.Action)
-	}
-
-	// decode the args
-	if node.Args != nil {
-		err = decoder.Decode(node.Args)
-	} else {
-		var a interface{}
-		err = decoder.Decode(&a)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	// decode the reply
-	if node.Reply != nil {
-		err = decoder.Decode(node.Reply)
-	} else {
-		var a interface{}
-		err = decoder.Decode(&a)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	return node, nil
-}
-
 // ToJson returns a JSON representation of the object.
 func (n *ActionNode) ToJson() string {
 	result := jscfg.ToJson(n) + "\n"
@@ -324,32 +251,4 @@ func (n *ActionNode) SetGuid() *ActionNode {
 	}
 	n.ActionGuid = fmt.Sprintf("%v-%v-%v", now, username, hostname)
 	return n
-}
-
-// ActionNodeCanBePurged returns true if that ActionNode can be purged
-// from the topology server.
-func ActionNodeCanBePurged(data string) bool {
-	actionNode, err := ActionNodeFromJson(data, "")
-	if err != nil {
-		log.Warningf("bad action data: %v %#v", err, data)
-		return true
-	}
-
-	if actionNode.State == ACTION_STATE_RUNNING {
-		log.Infof("cannot remove running action: %v %v", actionNode.Action, actionNode.ActionGuid)
-		return false
-	}
-
-	return true
-}
-
-// ActionNodeIsStale returns true if that ActionNode is not Running
-func ActionNodeIsStale(data string) bool {
-	actionNode, err := ActionNodeFromJson(data, "")
-	if err != nil {
-		log.Warningf("bad action data: %v %#v", err, data)
-		return false
-	}
-
-	return actionNode.State != ACTION_STATE_RUNNING
 }

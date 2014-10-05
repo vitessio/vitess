@@ -32,7 +32,7 @@ func TestKeyRangeFilterPass(t *testing.T) {
 				Sql:      []byte("dml2 /* EMD keyspace_id:2 */"),
 			},
 		},
-		GTIDField: myproto.GTIDField{Value: myproto.MustParseGTID(blsMysqlFlavor, "41983-1")},
+		GTIDField: myproto.GTIDField{Value: myproto.MustParseGTID("GoogleMysql", "41983-1")},
 	}
 	var got string
 	f := KeyRangeFilterFunc(key.KIT_UINT64, testKeyRange, func(reply *proto.BinlogTransaction) error {
@@ -57,7 +57,7 @@ func TestKeyRangeFilterSkip(t *testing.T) {
 				Sql:      []byte("dml1 /* EMD keyspace_id:20 */"),
 			},
 		},
-		GTIDField: myproto.GTIDField{Value: myproto.MustParseGTID(blsMysqlFlavor, "41983-1")},
+		GTIDField: myproto.GTIDField{Value: myproto.MustParseGTID("GoogleMysql", "41983-1")},
 	}
 	var got string
 	f := KeyRangeFilterFunc(key.KIT_UINT64, testKeyRange, func(reply *proto.BinlogTransaction) error {
@@ -82,7 +82,7 @@ func TestKeyRangeFilterDDL(t *testing.T) {
 				Sql:      []byte("ddl"),
 			},
 		},
-		GTIDField: myproto.GTIDField{Value: myproto.MustParseGTID(blsMysqlFlavor, "41983-1")},
+		GTIDField: myproto.GTIDField{Value: myproto.MustParseGTID("GoogleMysql", "41983-1")},
 	}
 	var got string
 	f := KeyRangeFilterFunc(key.KIT_UINT64, testKeyRange, func(reply *proto.BinlogTransaction) error {
@@ -113,7 +113,7 @@ func TestKeyRangeFilterMalformed(t *testing.T) {
 				Sql:      []byte("dml1 /* EMD keyspace_id:2a */"),
 			},
 		},
-		GTIDField: myproto.GTIDField{Value: myproto.MustParseGTID(blsMysqlFlavor, "41983-1")},
+		GTIDField: myproto.GTIDField{Value: myproto.MustParseGTID("GoogleMysql", "41983-1")},
 	}
 	var got string
 	f := KeyRangeFilterFunc(key.KIT_UINT64, testKeyRange, func(reply *proto.BinlogTransaction) error {

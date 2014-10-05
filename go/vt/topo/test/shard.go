@@ -5,10 +5,23 @@
 package test
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/topo"
 )
+
+func shardEqual(left, right *topo.Shard) (bool, error) {
+	lj, err := json.Marshal(left)
+	if err != nil {
+		return false, err
+	}
+	rj, err := json.Marshal(right)
+	if err != nil {
+		return false, err
+	}
+	return string(lj) == string(rj), nil
+}
 
 func CheckShard(t *testing.T, ts topo.Server) {
 	if err := ts.CreateKeyspace("test_keyspace", &topo.Keyspace{}); err != nil {
@@ -46,35 +59,26 @@ func CheckShard(t *testing.T, ts topo.Server) {
 			Tables:   []string{"table1", "table2"},
 		},
 	}
-
+	shardInfo.BlacklistedTablesMap = map[topo.TabletType][]string{
+		topo.TYPE_MASTER:  []string{"black1", "black2"},
+		topo.TYPE_REPLICA: []string{"black3", "black4"},
+	}
 	if err := topo.UpdateShard(ts, shardInfo); err != nil {
 		t.Errorf("UpdateShard: %v", err)
 	}
 
-	shardInfo, err = ts.GetShard("test_keyspace", "b0-c0")
+	updatedShardInfo, err := ts.GetShard("test_keyspace", "b0-c0")
 	if err != nil {
-		t.Errorf("GetShard: %v", err)
-	}
-	if shardInfo.MasterAlias != master {
-		t.Errorf("after UpdateShard: shardInfo.MasterAlias got %v", shardInfo.MasterAlias)
-	}
-	if shardInfo.KeyRange != newKeyRange("b0-c0") {
-		t.Errorf("after UpdateShard: shardInfo.KeyRange got %v", shardInfo.KeyRange)
-	}
-	if len(shardInfo.ServedTypes) != 3 || shardInfo.ServedTypes[0] != topo.TYPE_MASTER || shardInfo.ServedTypes[1] != topo.TYPE_REPLICA || shardInfo.ServedTypes[2] != topo.TYPE_RDONLY {
-		t.Errorf("after UpdateShard: shardInfo.ServedTypes got %v", shardInfo.ServedTypes)
-	}
-	if len(shardInfo.SourceShards) != 1 ||
-		shardInfo.SourceShards[0].Uid != 1 ||
-		shardInfo.SourceShards[0].Keyspace != "source_ks" ||
-		shardInfo.SourceShards[0].Shard != "b8-c0" ||
-		shardInfo.SourceShards[0].KeyRange != newKeyRange("b8-c0") ||
-		len(shardInfo.SourceShards[0].Tables) != 2 ||
-		shardInfo.SourceShards[0].Tables[0] != "table1" ||
-		shardInfo.SourceShards[0].Tables[1] != "table2" {
-		t.Errorf("after UpdateShard: shardInfo.SourceShards got %v", shardInfo.SourceShards)
+		t.Fatalf("GetShard: %v", err)
 	}
 
+	if eq, err := shardEqual(shardInfo.Shard, updatedShardInfo.Shard); err != nil {
+		t.Errorf("cannot compare shards: %v", err)
+	} else if !eq {
+		t.Errorf("put and got shards are not identical:\n%#v\n%#v", shardInfo.Shard, updatedShardInfo.Shard)
+	}
+
+	// test GetShardNames
 	shards, err := ts.GetShardNames("test_keyspace")
 	if err != nil {
 		t.Errorf("GetShardNames: %v", err)

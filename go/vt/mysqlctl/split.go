@@ -402,7 +402,7 @@ func (nhw *namedHasherWriter) SnapshotFiles() ([]SnapshotFile, error) {
 
 // dumpTableSplit will dump a table, and then split it according to keyspace_id
 // into multiple files.
-func (mysqld *Mysqld) dumpTableSplit(td proto.TableDefinition, dbName, keyName string, keyType key.KeyspaceIdType, mainCloneSourcePath string, cloneSourcePaths map[key.KeyRange]string, maximumFilesize uint64) (map[key.KeyRange][]SnapshotFile, error) {
+func (mysqld *Mysqld) dumpTableSplit(td *proto.TableDefinition, dbName, keyName string, keyType key.KeyspaceIdType, mainCloneSourcePath string, cloneSourcePaths map[key.KeyRange]string, maximumFilesize uint64) (map[key.KeyRange][]SnapshotFile, error) {
 	filename := path.Join(mainCloneSourcePath, td.Name+".csv")
 	selectIntoOutfile := `SELECT {{.KeyspaceIdColumnName}}, {{.Columns}} INTO OUTFILE "{{.TableOutputPath}}" CHARACTER SET binary FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\' LINES TERMINATED BY '\n' FROM {{.TableName}}`
 	queryParams := map[string]string{
@@ -479,7 +479,7 @@ func (mysqld *Mysqld) dumpTableSplit(td proto.TableDefinition, dbName, keyName s
 
 // dumpTableFull will dump the contents of a full table, and then
 // chunk it up in multiple compressed files.
-func (mysqld *Mysqld) dumpTableFull(td proto.TableDefinition, dbName, mainCloneSourcePath string, cloneSourcePath string, maximumFilesize uint64) ([]SnapshotFile, error) {
+func (mysqld *Mysqld) dumpTableFull(td *proto.TableDefinition, dbName, mainCloneSourcePath string, cloneSourcePath string, maximumFilesize uint64) ([]SnapshotFile, error) {
 	filename := path.Join(mainCloneSourcePath, td.Name+".csv")
 	selectIntoOutfile := `SELECT {{.Columns}} INTO OUTFILE "{{.TableOutputPath}}" CHARACTER SET binary FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\' LINES TERMINATED BY '\n' FROM {{.TableName}}`
 	queryParams := map[string]string{

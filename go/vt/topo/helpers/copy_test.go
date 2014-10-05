@@ -140,7 +140,7 @@ func TestBasic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("toTS.GetShardReplication failed: %v", err)
 	}
-	if len(sr.ReplicationLinks) != 1 {
+	if len(sr.ReplicationLinks) != 2 {
 		t.Fatalf("unexpected ShardReplication: %v", sr)
 	}
 

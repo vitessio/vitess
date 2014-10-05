@@ -31,7 +31,7 @@ var (
 	historyLength = 16
 )
 
-func (agent *ActionAgent) allowQueries(tablet *topo.Tablet) error {
+func (agent *ActionAgent) allowQueries(tablet *topo.Tablet, blacklistedTables []string) error {
 	if agent.DBConfigs == nil {
 		// test instance, do nothing
 		return nil
@@ -54,7 +54,7 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet) error {
 		agent.DBConfigs.App.EnableInvalidator = false
 	}
 
-	qrs, err := agent.createQueryRules(tablet)
+	qrs, err := agent.createQueryRules(tablet, blacklistedTables)
 	if err != nil {
 		return err
 	}
@@ -63,7 +63,7 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet) error {
 }
 
 // createQueryRules computes the query rules that match the tablet record
-func (agent *ActionAgent) createQueryRules(tablet *topo.Tablet) (qrs *tabletserver.QueryRules, err error) {
+func (agent *ActionAgent) createQueryRules(tablet *topo.Tablet, blacklistedTables []string) (qrs *tabletserver.QueryRules, err error) {
 	qrs = tabletserver.LoadCustomRules()
 
 	// Keyrange rules
@@ -95,9 +95,9 @@ func (agent *ActionAgent) createQueryRules(tablet *topo.Tablet) (qrs *tabletserv
 	}
 
 	// Blacklisted tables
-	if len(tablet.BlacklistedTables) > 0 {
+	if len(blacklistedTables) > 0 {
 		// tables, first resolve wildcards
-		tables, err := agent.Mysqld.ResolveTables(tablet.DbName(), tablet.BlacklistedTables)
+		tables, err := agent.Mysqld.ResolveTables(tablet.DbName(), blacklistedTables)
 		if err != nil {
 			return nil, err
 		}
@@ -123,20 +123,31 @@ func (agent *ActionAgent) disallowQueries() {
 // have changed something in the tablet record.
 func (agent *ActionAgent) changeCallback(oldTablet, newTablet topo.Tablet) {
 
-	allowQuery := true
+	allowQuery := newTablet.IsRunningQueryService()
+
+	// Read the shard to get SourceShards / BlacklistedTables if
+	// we're going to use it.
 	var shardInfo *topo.ShardInfo
-	var keyspaceInfo *topo.KeyspaceInfo
-	if newTablet.Type == topo.TYPE_MASTER {
-		// read the shard to get SourceShards
-		var err error
+	var blacklistedTables []string
+	var err error
+	if allowQuery {
 		shardInfo, err = agent.TopoServer.GetShard(newTablet.Keyspace, newTablet.Shard)
 		if err != nil {
-			log.Errorf("Cannot read shard for this tablet %v: %v", newTablet.Alias, err)
+			log.Errorf("Cannot read shard for this tablet %v, might have inaccurate SourceShards and BlacklistedTables: %v", newTablet.Alias, err)
 		} else {
-			allowQuery = len(shardInfo.SourceShards) == 0
+			if newTablet.Type == topo.TYPE_MASTER {
+				allowQuery = len(shardInfo.SourceShards) == 0
+			}
+			if shardInfo.BlacklistedTablesMap != nil {
+				blacklistedTables = shardInfo.BlacklistedTablesMap[newTablet.Type]
+			}
 		}
+	}
 
-		// read the keyspace to get ShardingColumnType
+	// Read the keyspace on masters to get ShardingColumnType,
+	// for binlog replication, only if source shards are set.
+	var keyspaceInfo *topo.KeyspaceInfo
+	if newTablet.Type == topo.TYPE_MASTER && shardInfo != nil && len(shardInfo.SourceShards) > 0 {
 		keyspaceInfo, err = agent.TopoServer.GetKeyspace(newTablet.Keyspace)
 		if err != nil {
 			log.Errorf("Cannot read keyspace for this tablet %v: %v", newTablet.Alias, err)
@@ -144,7 +155,7 @@ func (agent *ActionAgent) changeCallback(oldTablet, newTablet topo.Tablet) {
 		}
 	}
 
-	if newTablet.IsRunningQueryService() && allowQuery {
+	if allowQuery {
 		// There are a few transitions when we're
 		// going to need to restart the query service:
 		// - transitioning from replica to master, so clients
@@ -158,11 +169,14 @@ func (agent *ActionAgent) changeCallback(oldTablet, newTablet topo.Tablet) {
 		if (newTablet.Type == topo.TYPE_MASTER &&
 			oldTablet.Type != topo.TYPE_MASTER) ||
 			(newTablet.KeyRange != oldTablet.KeyRange) ||
-			!reflect.DeepEqual(newTablet.BlacklistedTables, oldTablet.BlacklistedTables) {
+			!reflect.DeepEqual(blacklistedTables, agent.BlacklistedTables()) {
 			agent.disallowQueries()
 		}
-		if err := agent.allowQueries(&newTablet); err != nil {
+		if err := agent.allowQueries(&newTablet, blacklistedTables); err != nil {
 			log.Errorf("Cannot start query service: %v", err)
+		} else {
+			// allowQueries worked, save our blacklisted table list
+			agent.setBlacklistedTables(blacklistedTables)
 		}
 
 		// Disable before enabling to force existing streams to stop.

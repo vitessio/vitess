@@ -381,7 +381,7 @@ func (vsdw *VerticalSplitDiffWorker) diff() error {
 	}
 
 	// Remove the tables we don't need from the source schema
-	newSourceTableDefinitions := make([]myproto.TableDefinition, 0, len(vsdw.destinationSchemaDefinition.TableDefinitions))
+	newSourceTableDefinitions := make([]*myproto.TableDefinition, 0, len(vsdw.destinationSchemaDefinition.TableDefinitions))
 	for _, tableDefinition := range vsdw.sourceSchemaDefinition.TableDefinitions {
 		found := false
 		for _, tableRegexp := range tableRegexps {
@@ -413,27 +413,27 @@ func (vsdw *VerticalSplitDiffWorker) diff() error {
 	sem := sync2.NewSemaphore(8, 0)
 	for _, tableDefinition := range vsdw.destinationSchemaDefinition.TableDefinitions {
 		wg.Add(1)
-		go func(tableDefinition myproto.TableDefinition) {
+		go func(tableDefinition *myproto.TableDefinition) {
 			defer wg.Done()
 			sem.Acquire()
 			defer sem.Release()
 
 			vsdw.wr.Logger().Infof("Starting the diff on table %v", tableDefinition.Name)
-			sourceQueryResultReader, err := TableScan(vsdw.wr.Logger(), vsdw.wr.TopoServer(), vsdw.sourceAlias, &tableDefinition)
+			sourceQueryResultReader, err := TableScan(vsdw.wr.Logger(), vsdw.wr.TopoServer(), vsdw.sourceAlias, tableDefinition)
 			if err != nil {
 				vsdw.wr.Logger().Errorf("TableScan(source) failed: %v", err)
 				return
 			}
 			defer sourceQueryResultReader.Close()
 
-			destinationQueryResultReader, err := TableScan(vsdw.wr.Logger(), vsdw.wr.TopoServer(), vsdw.destinationAlias, &tableDefinition)
+			destinationQueryResultReader, err := TableScan(vsdw.wr.Logger(), vsdw.wr.TopoServer(), vsdw.destinationAlias, tableDefinition)
 			if err != nil {
 				vsdw.wr.Logger().Errorf("TableScan(destination) failed: %v", err)
 				return
 			}
 			defer destinationQueryResultReader.Close()
 
-			differ, err := NewRowDiffer(sourceQueryResultReader, destinationQueryResultReader, &tableDefinition)
+			differ, err := NewRowDiffer(sourceQueryResultReader, destinationQueryResultReader, tableDefinition)
 			if err != nil {
 				vsdw.wr.Logger().Errorf("NewRowDiffer() failed: %v", err)
 				return

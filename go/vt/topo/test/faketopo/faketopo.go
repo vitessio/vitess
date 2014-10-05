@@ -10,8 +10,6 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actor"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
@@ -68,27 +66,6 @@ func (fix *Fixture) TearDown() {
 	close(fix.done)
 }
 
-// startFakeTabletActionLoop will start the action loop for a fake
-// tablet.
-func (fix *Fixture) startFakeTabletActionLoop(tablet *tabletPack) {
-	go func() {
-		f := func(actionPath, data string) error {
-			actionNode, err := actionnode.ActionNodeFromJson(data, actionPath)
-			if err != nil {
-				fix.Fatalf("ActionNodeFromJson failed: %v\n%v", err, data)
-			}
-
-			ta := actor.NewTabletActor(nil, tablet.mysql, fix.Topo, tablet.Alias)
-			if err := ta.HandleAction(actionPath, actionNode.Action, actionNode.ActionGuid, false); err != nil {
-				// action may just fail for any good reason
-				fix.Logf("HandleAction failed for %v: %v", actionNode.Action, err)
-			}
-			return nil
-		}
-		fix.Topo.ActionEventLoop(tablet.Alias, f, fix.done)
-	}()
-}
-
 // MakeMySQLMaster makes the (fake) MySQL used by tablet identified by
 // uid the master.
 func (fix *Fixture) MakeMySQLMaster(uid int) {
@@ -135,8 +112,6 @@ func (fix *Fixture) AddTablet(uid int, cell string, tabletType topo.TabletType, 
 	mysqlDaemon.MysqlPort = 3334 + 10*uid
 
 	pack := &tabletPack{Tablet: tablet, mysql: mysqlDaemon}
-	fix.startFakeTabletActionLoop(pack)
-
 	fix.tablets[uid] = pack
 
 	return tablet

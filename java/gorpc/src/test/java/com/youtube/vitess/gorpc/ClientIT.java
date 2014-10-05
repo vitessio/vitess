@@ -11,6 +11,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.google.common.primitives.UnsignedLong;
 import com.youtube.vitess.gorpc.Exceptions.ApplicationException;
 import com.youtube.vitess.gorpc.Exceptions.GoRpcException;
 import com.youtube.vitess.gorpc.codecs.bson.BsonClientCodecFactory;
@@ -113,5 +114,21 @@ public class ClientIT extends ClientTest {
 		} else {
 			client.call("Arith.Sleep", mArgs);
 		}
+	}
+
+	/**
+	 * Test unsigned longs are encoded and decoded correctly
+	 */
+	@Test
+	public void testUnsignedLongs() throws Exception {
+		UnsignedLong a = UnsignedLong.valueOf("9767889778372766922");
+		Client client = Client.dialHttp(Util.HOST, Util.PORT, Util.PATH,
+				new BsonClientCodecFactory());
+		BSONObject mArgs = new BasicBSONObject();
+		mArgs.put("Num", a);
+		Response response = client.call("Arith.Increment", mArgs);
+		Assert.assertEquals(a.plus(UnsignedLong.ONE),
+				(UnsignedLong) response.getReply());
+		client.close();
 	}
 }

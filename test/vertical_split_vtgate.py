@@ -20,8 +20,7 @@ def tearDownModule():
 
 class TestVerticalSplitVTGate(vertical_split.TestVerticalSplit):
   def _vtdb_conn(self):
-    conn = vtgatev2.VTGateConnection(self.vtgate_addrs['_vt'][0], 30)
-    conn.dial()
+    conn = vtgatev2.connect(self.vtgate_addrs['_vt'], 30)
     return conn
 
   def _insert_values(self, table, count, db_type='master', keyspace='source_keyspace'):
@@ -59,5 +58,5 @@ class TestVerticalSplitVTGate(vertical_split.TestVerticalSplit):
     self.assertEqual(v['DegradedEndpointCount']['test_nj.source_keyspace.0.master'], 0, "unexpected DegradedEndpointCount inside %s" % str(v))
 
 if __name__ == '__main__':
-  vertical_split.vtgate_protocol = vertical_split.VTGATE_PROTOCOL_V1BSON
+  vertical_split.client_type = vertical_split.VTGATE
   utils.main()

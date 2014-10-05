@@ -49,11 +49,8 @@ func (s *VtctlServer) ExecuteVtctlCommand(context context.Context, query *gorpcp
 	// create the wrangler
 	wr := wrangler.New(logger, s.ts, query.ActionTimeout, query.LockTimeout)
 
-	// execute the command, wait for it to finish if required
-	actionPath, err := vtctl.RunCommand(wr, query.Args)
-	if err == nil && actionPath != "" {
-		err = wr.WaitForCompletion(actionPath)
-	}
+	// execute the command
+	err := vtctl.RunCommand(wr, query.Args)
 
 	// close the log channel, and wait for them all to be sent
 	close(logger)

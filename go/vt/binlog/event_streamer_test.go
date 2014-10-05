@@ -102,7 +102,7 @@ func TestDMLEvent(t *testing.T) {
 			},
 		},
 		Timestamp: 1,
-		GTIDField: myproto.GTIDField{Value: myproto.MustParseGTID(blsMysqlFlavor, "41983-20")},
+		GTIDField: myproto.GTIDField{Value: myproto.MustParseGTID("GoogleMysql", "41983-20")},
 	}
 	evs := &EventStreamer{
 		sendEvent: func(event *proto.StreamEvent) error {
@@ -149,7 +149,7 @@ func TestDDLEvent(t *testing.T) {
 			},
 		},
 		Timestamp: 1,
-		GTIDField: myproto.GTIDField{Value: myproto.MustParseGTID(blsMysqlFlavor, "41983-20")},
+		GTIDField: myproto.GTIDField{Value: myproto.MustParseGTID("GoogleMysql", "41983-20")},
 	}
 	evs := &EventStreamer{
 		sendEvent: func(event *proto.StreamEvent) error {

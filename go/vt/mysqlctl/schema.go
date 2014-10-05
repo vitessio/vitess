@@ -67,7 +67,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 		return sd, nil
 	}
 
-	sd.TableDefinitions = make([]proto.TableDefinition, 0, len(qr.Rows))
+	sd.TableDefinitions = make([]*proto.TableDefinition, 0, len(qr.Rows))
 	for _, row := range qr.Rows {
 		tableName := row[0].String()
 		tableType := row[1].String()
@@ -134,7 +134,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 			norm = strings.Replace(norm, "`"+dbName+"`", "`{{.DatabaseName}}`", -1)
 		}
 
-		td := proto.TableDefinition{}
+		td := &proto.TableDefinition{}
 		td.Name = tableName
 		td.Schema = norm
 

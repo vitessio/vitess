@@ -143,12 +143,13 @@ func (bpc *BinlogPlayerController) WaitForStop(waitTimeout time.Duration) error 
 	bpc.playerMutex.Unlock()
 
 	// start waiting
-	timer := time.After(waitTimeout)
+	tmr := time.NewTimer(waitTimeout)
+	defer tmr.Stop()
 	select {
 	case <-done:
 		bpc.reset()
 		return nil
-	case <-timer:
+	case <-tmr.C:
 		bpc.Stop()
 		return fmt.Errorf("WaitForStop timeout, stopping current player")
 	}
@@ -407,13 +408,13 @@ func (blm *BinlogPlayerMap) StopAllPlayersAndReset() {
 // we're playing the right logs.
 func (blm *BinlogPlayerMap) RefreshMap(tablet topo.Tablet, keyspaceInfo *topo.KeyspaceInfo, shardInfo *topo.ShardInfo) {
 	log.Infof("Refreshing map of binlog players")
-	if keyspaceInfo == nil {
-		log.Warningf("Could not read keyspaceInfo, not changing anything")
+	if shardInfo == nil {
+		log.Warningf("Could not read shardInfo, not changing anything")
 		return
 	}
 
-	if shardInfo == nil {
-		log.Warningf("Could not read shardInfo, not changing anything")
+	if len(shardInfo.SourceShards) > 0 && keyspaceInfo == nil {
+		log.Warningf("Could not read keyspaceInfo, not changing anything")
 		return
 	}
 

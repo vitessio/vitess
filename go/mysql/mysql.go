@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// Package mysql wraps the C client library for MySQL.
 package mysql
 
 /*
@@ -15,6 +16,7 @@ import "C"
 
 import (
 	"fmt"
+	"strconv"
 	"unsafe"
 
 	"github.com/youtube/vitess/go/hack"
@@ -169,6 +171,27 @@ func (conn *Connection) ExecuteFetch(query string, maxrows int, wantfields bool)
 	return qr, err
 }
 
+// ExecuteFetchMap returns a map from column names to cell data for a query
+// that should return exactly 1 row.
+func (conn *Connection) ExecuteFetchMap(query string) (map[string]string, error) {
+	qr, err := conn.ExecuteFetch(query, 1, true)
+	if err != nil {
+		return nil, err
+	}
+	if len(qr.Rows) != 1 {
+		return nil, fmt.Errorf("query %#v returned %d rows, expected 1", query, len(qr.Rows))
+	}
+	if len(qr.Fields) != len(qr.Rows[0]) {
+		return nil, fmt.Errorf("query %#v returned %d column names, expected %d", query, len(qr.Fields), len(qr.Rows[0]))
+	}
+
+	rowMap := make(map[string]string)
+	for i, value := range qr.Rows[0] {
+		rowMap[qr.Fields[i].Name] = value.String()
+	}
+	return rowMap, nil
+}
+
 // when using ExecuteStreamFetch, use FetchNext on the Connection until it returns nil or error
 func (conn *Connection) ExecuteStreamFetch(query string) (err error) {
 	if conn.IsClosed() {
@@ -273,7 +296,7 @@ func (conn *Connection) lastError(query string) error {
 func (conn *Connection) ReadPacket() ([]byte, error) {
 	length := C.vt_cli_safe_read(&conn.c)
 	if length == 0 {
-		return nil, fmt.Errorf("error reading packet from MySQL with cli_safe_read(): %v", conn.lastError(""))
+		return nil, conn.lastError("ReadPacket()")
 	}
 
 	return C.GoBytes(unsafe.Pointer(conn.c.mysql.net.read_pos), C.int(length)), nil
@@ -288,7 +311,7 @@ func (conn *Connection) SendCommand(command uint32, data []byte) error {
 		ret = C.vt_simple_command(&conn.c, command, (*C.uchar)(unsafe.Pointer(&data[0])), C.ulong(len(data)), 1)
 	}
 	if ret != 0 {
-		return fmt.Errorf("error sending raw MySQL command: %v", conn.lastError(""))
+		return conn.lastError(fmt.Sprintf("SendCommand(%#v, %#v)", command, data))
 	}
 	return nil
 }
@@ -300,6 +323,54 @@ func (conn *Connection) SendCommand(command uint32, data []byte) error {
 // blocked in an I/O call on that MySQL connection.
 func (conn *Connection) ForceClose() {
 	C.vt_force_close(&conn.c)
+}
+
+// GetCharset returns the current numerical values of the per-session character
+// set variables.
+func (conn *Connection) GetCharset() (cs proto.Charset, err error) {
+	// character_set_client
+	row, err := conn.ExecuteFetchMap("SHOW COLLATION WHERE `charset`=@@session.character_set_client AND `default`='Yes'")
+	if err != nil {
+		return cs, err
+	}
+	i, err := strconv.ParseInt(row["Id"], 10, 16)
+	if err != nil {
+		return cs, err
+	}
+	cs.Client = int(i)
+
+	// collation_connection
+	row, err = conn.ExecuteFetchMap("SHOW COLLATION WHERE `collation`=@@session.collation_connection")
+	if err != nil {
+		return cs, err
+	}
+	i, err = strconv.ParseInt(row["Id"], 10, 16)
+	if err != nil {
+		return cs, err
+	}
+	cs.Conn = int(i)
+
+	// collation_server
+	row, err = conn.ExecuteFetchMap("SHOW COLLATION WHERE `collation`=@@session.collation_server")
+	if err != nil {
+		return cs, err
+	}
+	i, err = strconv.ParseInt(row["Id"], 10, 16)
+	if err != nil {
+		return cs, err
+	}
+	cs.Server = int(i)
+
+	return cs, nil
+}
+
+// SetCharset changes the per-session character set variables.
+func (conn *Connection) SetCharset(cs proto.Charset) error {
+	sql := fmt.Sprintf(
+		"SET @@session.character_set_client=%d, @@session.collation_connection=%d, @@session.collation_server=%d",
+		cs.Client, cs.Conn, cs.Server)
+	_, err := conn.ExecuteFetch(sql, 1, false)
+	return err
 }
 
 func BuildValue(bytes []byte, fieldType uint32) sqltypes.Value {

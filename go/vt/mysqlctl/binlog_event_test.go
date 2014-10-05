@@ -5,8 +5,10 @@
 package mysqlctl
 
 import (
+	"reflect"
 	"testing"
 
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 )
 
@@ -236,20 +238,22 @@ func TestBinlogEventQuery(t *testing.T) {
 	}
 
 	input := binlogEvent(googleQueryEvent)
-	wantDB := "vt_test_keyspace"
-	wantSQL := `create table if not exists vt_a (
+	want := blproto.Query{
+		Database: "vt_test_keyspace",
+		Charset:  &mproto.Charset{Client: 8, Conn: 8, Server: 33},
+		Sql: []byte(`create table if not exists vt_a (
 eid bigint,
 id int,
 primary key(eid, id)
-) Engine=InnoDB`
-	gotDB, gotbytes, err := input.Query(f)
-	gotSQL := string(gotbytes)
+) Engine=InnoDB`),
+	}
+	got, err := input.Query(f)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 		return
 	}
-	if gotDB != wantDB || gotSQL != wantSQL {
-		t.Errorf("%#v.Query() = (%#v, %#v), want (%#v, %#v)", input, gotDB, gotSQL, wantDB, wantSQL)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("%#v.Query() = %v, want %v", input, got, want)
 	}
 }
 
@@ -265,8 +269,8 @@ func TestBinlogEventQueryBadLength(t *testing.T) {
 	buf[19+8+4+4] = 200 // mess up the db_name length
 
 	input := binlogEvent(buf)
-	want := "SQL query position = 240, which is outside buffer"
-	_, _, err = input.Query(f)
+	want := "SQL query position overflows buffer (240 > 146)"
+	_, err = input.Query(f)
 	if err == nil {
 		t.Errorf("expected error, got none")
 		return

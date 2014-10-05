@@ -130,16 +130,12 @@ The Shard object is changed when we add tablets in unknown cells, or when we cha
 
 ### Tablet
 
-A tablet has a path in zookeeper, with its action / actionlog and pid file:
+A tablet has a path in zookeeper, with its pid file:
 
 ```
 $ zk ls /zk/nyc/vt/tablets/0000200308
-action
-actionlog
 pid
 ```
-
-We use the action and actionlog paths for remote execution of actions. vttablet will watch that directory and launch a vtaction for every requested action.
 
 A tablet also has a node of type Tablet:
 
@@ -175,10 +171,6 @@ type Tablet struct {
         // hard to rename.
         DbNameOverride string
         KeyRange       key.KeyRange
-        
-        // BlacklistedTables is a list of tables we're not going to serve
-        // data for. This is used in vertical splits.
-        BlacklistedTables []string
 }
 ```
 

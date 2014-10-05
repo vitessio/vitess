@@ -7,9 +7,9 @@ import org.apache.commons.lang.CharEncoding;
 import org.bson.BSONDecoder;
 import org.bson.BSONEncoder;
 import org.bson.BSONObject;
-import org.bson.BasicBSONEncoder;
 import org.bson.BasicBSONObject;
 
+import com.google.common.primitives.UnsignedLong;
 import com.youtube.vitess.gorpc.Constants;
 import com.youtube.vitess.gorpc.Request;
 import com.youtube.vitess.gorpc.Response;
@@ -25,7 +25,7 @@ public class BsonClientCodec implements ClientCodec {
 
 	public BsonClientCodec(Socket socket) {
 		this.socket = socket;
-		encoder = new BasicBSONEncoder();
+		encoder = new GoRpcBsonEncoder();
 		decoder = new GoRpcBsonDecoder();
 	}
 
@@ -46,7 +46,7 @@ public class BsonClientCodec implements ClientCodec {
 		BSONObject headerBson = decoder.readObject(socket.getInputStream());
 		response.setServiceMethod(new String((byte[]) headerBson
 				.get(Constants.SERVICE_METHOD)));
-		response.setSeq((Long) headerBson.get(Constants.SEQ));
+		response.setSeq((UnsignedLong) headerBson.get(Constants.SEQ));
 		if (headerBson.containsField(Constants.ERROR)) {
 			Object error = headerBson.get(Constants.ERROR);
 			if (error instanceof byte[] && ((byte[]) error).length != 0) {

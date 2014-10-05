@@ -328,7 +328,6 @@ func handleExecError(query *proto.Query, err *error, logStats *SQLQueryStats) {
 // Execute executes the query and returns the result as response.
 func (sq *SqlQuery) Execute(context context.Context, query *proto.Query, reply *mproto.QueryResult) (err error) {
 	logStats := newSqlQueryStats("Execute", context)
-	logStats.TransactionID = query.TransactionId
 	allowShutdown := (query.TransactionId != 0)
 	if err = sq.startRequest(query.SessionId, allowShutdown); err != nil {
 		return err
@@ -336,7 +335,7 @@ func (sq *SqlQuery) Execute(context context.Context, query *proto.Query, reply *
 	defer sq.endRequest()
 	defer handleExecError(query, &err, logStats)
 
-	*reply = *sq.qe.Execute(logStats, query)
+	*reply = *ExecuteQueryRequest(context, logStats, query, sq)
 	return nil
 }
 
@@ -439,7 +438,7 @@ func (sq *SqlQuery) statsJSON() string {
 	fmt.Fprintf(buf, "\n \"StreamConnPool\": %v,", sq.qe.streamConnPool.StatsJSON())
 	fmt.Fprintf(buf, "\n \"TxPool\": %v,", sq.qe.txPool.StatsJSON())
 	fmt.Fprintf(buf, "\n \"ActiveTxPool\": %v,", sq.qe.activeTxPool.StatsJSON())
-	fmt.Fprintf(buf, "\n \"ActivePool\": %v,", sq.qe.activePool.StatsJSON())
+	fmt.Fprintf(buf, "\n \"QueryTimeout\": %v,", int64(sq.qe.queryTimeout.Get()))
 	fmt.Fprintf(buf, "\n \"MaxResultSize\": %v,", sq.qe.maxResultSize.Get())
 	fmt.Fprintf(buf, "\n \"StreamBufferSize\": %v", sq.qe.streamBufferSize.Get())
 	fmt.Fprintf(buf, "\n}")

@@ -4,30 +4,14 @@
 
 /*
 The agent handles local execution of actions triggered remotely.
-It has two execution models:
 
-- listening on an action path for ActionNode objects.  When receiving
-  an action, it will forward it to vtaction to perform it (vtaction
-  uses the actor code). We usually use this model for long-running
-  queries where an RPC would time out.
+Most RPC calls lock the actionMutex, except the easy read-only ones.
 
-  All vtaction calls lock the actionMutex.
+We will not call changeCallback for all actions, just for the ones
+that are relevant.
 
-  After executing vtaction, we always call agent.changeCallback.
-  Additionnally, for TABLET_ACTION_APPLY_SCHEMA, we will force a schema
-  reload.
-
-- listening as an RPC server. The agent performs the action itself,
-  calling the actor code directly. We use this for short lived actions.
-
-  Most RPC calls lock the actionMutex, except the easy read-donly ones.
-
-  We will not call changeCallback for all actions, just for the ones
-  that are relevant. Same for schema reload.
-
-  See rpc_server.go for all cases, and which action takes the actionMutex,
-  runs changeCallback, and reloads the schema.
-
+See rpc_server.go for all cases, and which action takes the actionMutex,
+runs changeCallback.
 */
 
 package tabletmanager
@@ -38,8 +22,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
-	"path"
 	"sync"
 	"time"
 
@@ -49,17 +31,14 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/env"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actor"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
 var (
-	vtactionBinaryPath = flag.String("vtaction_binary_path", "", "Full path (including filename) to vtaction binary. If not set, tries VTROOT/bin/vtaction.")
+	_ = flag.String("vtaction_binary_path", "", "(DEPRECATED) Full path (including filename) to vtaction binary. If not set, tries VTROOT/bin/vtaction.")
 )
 
 type tabletChangeItem struct {
@@ -82,8 +61,7 @@ type ActionAgent struct {
 	LockTimeout     time.Duration
 
 	// Internal variables
-	vtActionBinFile string        // path to vtaction binary
-	done            chan struct{} // closed when we are done.
+	done chan struct{} // closed when we are done.
 
 	// This is the History of the health checks, public so status
 	// pages can display it
@@ -95,10 +73,11 @@ type ActionAgent struct {
 	// take actionMutex first.
 	actionMutex sync.Mutex // to run only one action at a time
 
-	// mutex protects _tablet and serializes writes to changeItems.
-	mutex       sync.Mutex
-	changeItems chan tabletChangeItem
-	_tablet     *topo.TabletInfo
+	// mutex protects the following fields
+	mutex              sync.Mutex
+	changeItems        chan tabletChangeItem
+	_tablet            *topo.TabletInfo
+	_blacklistedTables []string
 }
 
 func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
@@ -233,63 +212,22 @@ func (agent *ActionAgent) Tablet() *topo.TabletInfo {
 	return tablet
 }
 
-func (agent *ActionAgent) resolvePaths() error {
-	var p string
-	if *vtactionBinaryPath != "" {
-		p = *vtactionBinaryPath
-	} else {
-		vtroot, err := env.VtRoot()
-		if err != nil {
-			return err
-		}
-		p = path.Join(vtroot, "bin/vtaction")
-	}
-	if _, err := os.Stat(p); err != nil {
-		return fmt.Errorf("vtaction binary %s not found: %v", p, err)
-	}
-	agent.vtActionBinFile = p
-	return nil
+func (agent *ActionAgent) BlacklistedTables() []string {
+	agent.mutex.Lock()
+	blacklistedTables := agent._blacklistedTables
+	agent.mutex.Unlock()
+	return blacklistedTables
 }
 
-// A non-nil return signals that event processing should stop.
-func (agent *ActionAgent) dispatchAction(actionPath, data string) error {
-	agent.actionMutex.Lock()
-	defer agent.actionMutex.Unlock()
-
-	log.Infof("action dispatch %v", actionPath)
-	actionNode, err := actionnode.ActionNodeFromJson(data, actionPath)
-	if err != nil {
-		log.Errorf("action decode failed: %v %v", actionPath, err)
-		return nil
-	}
-
-	cmd := []string{
-		agent.vtActionBinFile,
-		"-action", actionNode.Action,
-		"-action-node", actionPath,
-		"-action-guid", actionNode.ActionGuid,
-	}
-	for _, getSubprocessFlags := range getSubprocessFlagsFuncs {
-		cmd = append(cmd, getSubprocessFlags()...)
-	}
-	log.Infof("action launch %v", cmd)
-	vtActionCmd := exec.Command(cmd[0], cmd[1:]...)
-
-	stdOut, vtActionErr := vtActionCmd.CombinedOutput()
-	if vtActionErr != nil {
-		log.Errorf("agent action failed: %v %v\n%s", actionPath, vtActionErr, stdOut)
-		// If the action failed, preserve single execution path semantics.
-		return vtActionErr
-	}
-
-	log.Infof("Agent action completed %v %s", actionPath, stdOut)
-	agent.afterAction(actionPath, actionNode.Action == actionnode.TABLET_ACTION_APPLY_SCHEMA)
-	return nil
+func (agent *ActionAgent) setBlacklistedTables(blacklistedTables []string) {
+	agent.mutex.Lock()
+	agent._blacklistedTables = blacklistedTables
+	agent.mutex.Unlock()
 }
 
 // afterAction needs to be run after an action may have changed the current
 // state of the tablet.
-func (agent *ActionAgent) afterAction(context string, reloadSchema bool) {
+func (agent *ActionAgent) afterAction(context string) {
 	log.Infof("Executing post-action change callbacks")
 
 	// Save the old tablet so callbacks can have a better idea of
@@ -300,21 +238,13 @@ func (agent *ActionAgent) afterAction(context string, reloadSchema bool) {
 	if err := agent.readTablet(); err != nil {
 		log.Warningf("Failed rereading tablet after %v - services may be inconsistent: %v", context, err)
 	} else {
-		if updatedTablet := actor.CheckTabletMysqlPort(agent.TopoServer, agent.MysqlDaemon, agent.Tablet()); updatedTablet != nil {
+		if updatedTablet := agent.checkTabletMysqlPort(agent.Tablet()); updatedTablet != nil {
 			agent.mutex.Lock()
 			agent._tablet = updatedTablet
 			agent.mutex.Unlock()
 		}
 
 		agent.runChangeCallback(oldTablet, context)
-	}
-
-	// Maybe invalidate the schema.
-	// This adds a dependency between tabletmanager and tabletserver,
-	// so it's not ideal. But I (alainjobart) think it's better
-	// to have up to date schema in vtocc.
-	if reloadSchema {
-		tabletserver.ReloadSchema()
 	}
 	log.Infof("Done with post-action change callbacks")
 }
@@ -330,7 +260,7 @@ func (agent *ActionAgent) verifyTopology() error {
 		log.Warningf("tablet validate failed: %v %v", agent.TabletAlias, err)
 	}
 
-	return agent.TopoServer.ValidateTabletActions(agent.TabletAlias)
+	return nil
 }
 
 func (agent *ActionAgent) verifyServingAddrs() error {
@@ -351,12 +281,6 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 	var err error
 	if err = agent.readTablet(); err != nil {
 		return err
-	}
-
-	if agent.DBConfigs != nil {
-		if err = agent.resolvePaths(); err != nil {
-			return err
-		}
 	}
 
 	// find our hostname as fully qualified, and IP
@@ -416,11 +340,11 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 	oldTablet := &topo.Tablet{}
 	agent.runChangeCallback(oldTablet, "Start")
 
-	go agent.actionEventLoop()
 	go agent.executeCallbacksLoop()
 	return nil
 }
 
+// Stop shutdowns this agent.
 func (agent *ActionAgent) Stop() {
 	close(agent.done)
 	if agent.BinlogPlayerMap != nil {
@@ -431,11 +355,32 @@ func (agent *ActionAgent) Stop() {
 	}
 }
 
-func (agent *ActionAgent) actionEventLoop() {
-	f := func(actionPath, data string) error {
-		return agent.dispatchAction(actionPath, data)
+// hookExtraEnv returns the map to pass to local hooks
+func (agent *ActionAgent) hookExtraEnv() map[string]string {
+	return map[string]string{"TABLET_ALIAS": agent.TabletAlias.String()}
+}
+
+// checkTabletMysqlPort will check the mysql port for the tablet is good,
+// and if not will try to update it.
+func (agent *ActionAgent) checkTabletMysqlPort(tablet *topo.TabletInfo) *topo.TabletInfo {
+	mport, err := agent.MysqlDaemon.GetMysqlPort()
+	if err != nil {
+		log.Warningf("Cannot get current mysql port, not checking it: %v", err)
+		return nil
 	}
-	agent.TopoServer.ActionEventLoop(agent.TabletAlias, f, agent.done)
+
+	if mport == tablet.Portmap["mysql"] {
+		return nil
+	}
+
+	log.Warningf("MySQL port has changed from %v to %v, updating it in tablet record", tablet.Portmap["mysql"], mport)
+	tablet.Portmap["mysql"] = mport
+	if err := topo.UpdateTablet(agent.TopoServer, tablet); err != nil {
+		log.Warningf("Failed to update tablet record, may use old mysql port")
+		return nil
+	}
+
+	return tablet
 }
 
 var getSubprocessFlagsFuncs []func() []string

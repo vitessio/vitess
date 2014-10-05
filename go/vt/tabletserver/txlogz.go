@@ -63,7 +63,8 @@ func txlogzHandler(w http.ResponseWriter, r *http.Request) {
 	defer endHTMLTable(w)
 	w.Write(txlogzHeader)
 
-	deadline := time.After(10 * time.Second)
+	tmr := time.NewTimer(10 * time.Second)
+	defer tmr.Stop()
 	for i := 0; i < 300; i++ {
 		select {
 		case out := <-ch:
@@ -91,7 +92,7 @@ func txlogzHandler(w http.ResponseWriter, r *http.Request) {
 				ColorLevel string
 			}{txc, duration, level}
 			txlogzTmpl.Execute(w, tmplData)
-		case <-deadline:
+		case <-tmr.C:
 			return
 		}
 	}

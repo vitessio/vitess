@@ -75,6 +75,7 @@ const verticalSplitCloneHTML2 = `
       <li><b>populateBlpCheckpoint</b>: creates (if necessary) and populates the blp_checkpoint table in the destination. Required for filtered replication to start.</li>
       <li><b>dontStartBinlogPlayer</b>: (requires populateBlpCheckpoint) will setup, but not start binlog replication on the destination. The flag has to be manually cleared from the _vt.blp_checkpoint table.</li>
       <li><b>skipAutoIncrement(TTT)</b>: we won't add the AUTO_INCREMENT back to that table.</li>
+      <li><b>skipSetSourceShards</b>: we won't set SourceShards on the destination shards, disabling filtered replication. Usefull for worker tests.</li>
     </ul>
     <p>The following flags are also supported, but their use is very strongly discouraged:</p>
     <ul>
@@ -204,7 +205,7 @@ func interactiveVerticalSplitClone(wr *wrangler.Wrangler, w http.ResponseWriter,
 
 	// start the clone job
 	wrk := worker.NewVerticalSplitCloneWorker(wr, *cell, keyspace, "0", tableArray, strategy, int(sourceReaderCount), uint64(minTableSizeForSplit), int(destinationWriterCount))
-	if _, err := setAndStartWorker(wrk, nil); err != nil {
+	if _, err := setAndStartWorker(wrk); err != nil {
 		httpError(w, "cannot set worker: %s", err)
 		return
 	}

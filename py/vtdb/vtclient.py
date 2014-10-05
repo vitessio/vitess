@@ -8,6 +8,7 @@ import time
 from vtdb import cursor
 from vtdb import dbapi
 from vtdb import dbexceptions
+from vtdb import tablet
 from vtdb import topo_utils
 from vtdb import topology
 from vtdb import vtdb_logger
@@ -17,19 +18,11 @@ BEGIN_RECONNECT_DELAY = 0.2 # 200 ms
 MAX_RETRY_ATTEMPTS = 2
 
 
-vtclient_conn_classes = dict()  # mapping from vtgate_protocol to python Class
-
-def register_conn_class(protocol, c):
-  vtclient_conn_classes[protocol] = c
-
-
-def get_vt_connection_params_list(topo_client, keyspace, shard, db_type, timeout, encrypted, user, password, vtgate_protocol, vtgate_addrs):
-  if vtgate_protocol != 'v0':
-    if vtgate_addrs is None:
-      return {}
-    return topo_utils.get_db_params_for_vtgate_conn(vtgate_addrs, keyspace, shard, db_type, timeout, encrypted, user, password)
-
-  return topo_utils.get_db_params_for_tablet_conn(topo_client, keyspace, shard, db_type, timeout, encrypted, user, password)
+def get_vt_connection_params_list(topo_client, keyspace, shard, db_type,
+                                  timeout, encrypted, user, password):
+  return topo_utils.get_db_params_for_tablet_conn(topo_client, keyspace, shard,
+                                                  db_type, timeout, encrypted,
+                                                  user, password)
 
 
 def reconnect(method):
@@ -66,8 +59,10 @@ def reconnect(method):
 class VtOCCConnection(object):
   cursorclass = cursor.TabletCursor
 
-  def __init__(self, zkocc_client, keyspace, shard, db_type, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None, vtgate_protocol='v0', vtgate_addrs=None):
-    self.zkocc_client = zkocc_client
+  def __init__(self, topo_client, keyspace, shard, db_type, timeout, user=None,
+               password=None, encrypted=False, keyfile=None, certfile=None,
+               vtgate_protocol='v0', vtgate_addrs=None):
+    self.topo_client = topo_client
     self.keyspace = keyspace
     self.shard = str(shard)
     self.db_type = db_type
@@ -104,7 +99,14 @@ class VtOCCConnection(object):
 
   def _connect(self):
     db_key = "%s.%s.%s" % (self.keyspace, self.shard, self.db_type)
-    db_params_list = get_vt_connection_params_list(self.zkocc_client, self.keyspace, self.shard, self.db_type, self.timeout, self.encrypted, self.user, self.password, self.vtgate_protocol, self.vtgate_addrs)
+    db_params_list = get_vt_connection_params_list(self.topo_client,
+                                                   self.keyspace,
+                                                   self.shard,
+                                                   self.db_type,
+                                                   self.timeout,
+                                                   self.encrypted,
+                                                   self.user,
+                                                   self.password)
     if not db_params_list:
       # no valid end-points were found, re-read the keyspace
       self.resolve_topology()
@@ -116,10 +118,7 @@ class VtOCCConnection(object):
       try:
         db_params = params.copy()
         host_addr = db_params['addr']
-        if self.vtgate_protocol in vtclient_conn_classes:
-          self.conn = vtclient_conn_classes[self.vtgate_protocol](**db_params)
-        else:
-          raise dbexceptions.OperationalError('unknown vtgate protocol: %s' % self.vtgate_protocol)
+        self.conn = tablet.TabletConnection(**db_params)
         self.conn.dial()
         self.conn_db_params = db_params
         return self.conn
@@ -182,4 +181,4 @@ class VtOCCConnection(object):
   # This function clears the cached value for the keyspace
   # and re-reads it from the toposerver once per 'n' secs.
   def resolve_topology(self):
-    topology.refresh_keyspace(self.zkocc_client, self.keyspace)
+    topology.refresh_keyspace(self.topo_client, self.keyspace)

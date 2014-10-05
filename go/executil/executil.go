@@ -1,6 +1,8 @@
 // +build linux
 
 // Only build on Linux, since the use of procfs is platform specific.
+
+// Package executil provides information about running processes.
 package executil
 
 import (

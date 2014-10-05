@@ -7,6 +7,7 @@ package proto
 import (
 	"fmt"
 
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
@@ -43,13 +44,14 @@ type BinlogTransaction struct {
 // Statement represents one statement as read from the binlog.
 type Statement struct {
 	Category int
+	Charset  *mproto.Charset
 	Sql      []byte
 }
 
 // String pretty-prints a statement.
 func (s Statement) String() string {
 	if cat, ok := BL_CATEGORY_NAMES[s.Category]; ok {
-		return fmt.Sprintf("{%v: %#v}", cat, string(s.Sql))
+		return fmt.Sprintf("{Category: %v, Charset: %v, Sql: %q}", cat, s.Charset, string(s.Sql))
 	}
-	return fmt.Sprintf("{%v: %#v}", s.Category, string(s.Sql))
+	return fmt.Sprintf("{Category: %v, Charset: %v, Sql: %q}", s.Category, s.Charset, string(s.Sql))
 }

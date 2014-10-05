@@ -158,30 +158,12 @@ class TestReparent(unittest.TestCase):
           "didn't find the right error strings in failed ReparentShard: " +
           stderr)
 
-    # Should timeout and fail
-    stdout, stderr = utils.run_vtctl(['-wait-time', '5s', 'ScrapTablet',
+    # Should fail to connect and fail
+    stdout, stderr = utils.run_vtctl(['-wait-time', '10s', 'ScrapTablet',
                                       tablet_62344.tablet_alias],
                                      expect_fail=True)
     logging.debug('Failed ScrapTablet output:\n' + stderr)
-    if 'deadline exceeded' not in stderr:
-      self.fail("didn't find the right error strings in failed ScrapTablet: " +
-                stderr)
-
-    # Should interrupt and fail
-    args = environment.binary_args('vtctl') + [
-        '-log_dir', environment.vtlogroot,
-        '-wait-time', '10s']
-    args.extend(environment.topo_server_flags())
-    args.extend(environment.tablet_manager_protocol_flags())
-    args.extend(['ScrapTablet', tablet_62344.tablet_alias])
-    sp = utils.run_bg(args, stdout=PIPE, stderr=PIPE)
-    # Need time for the process to start before killing it.
-    time.sleep(3.0)
-    os.kill(sp.pid, signal.SIGINT)
-    stdout, stderr = sp.communicate()
-
-    logging.debug('Failed ScrapTablet output:\n' + stderr)
-    if 'interrupted' not in stderr:
+    if 'connection refused' not in stderr and environment.rpc_timeout_message not in stderr:
       self.fail("didn't find the right error strings in failed ScrapTablet: " +
                 stderr)
 
@@ -191,15 +173,9 @@ class TestReparent(unittest.TestCase):
     utils.run_vtctl(['ChangeSlaveType', '-force', tablet_62344.tablet_alias,
                      'idle'], expect_fail=True)
 
-    # Remove pending locks (make this the force option to ReparentShard?)
-    if environment.topo_server_implementation == 'zookeeper':
-      utils.run_vtctl(['PurgeActions',
-                       '/zk/global/vt/keyspaces/test_keyspace/shards/0/action'])
-
     # Re-run reparent operation, this should now proceed unimpeded.
-    utils.run_vtctl(['-wait-time', '1m', 'ReparentShard', 'test_keyspace/0',
-                     tablet_62044.tablet_alias],
-                    mode=utils.VTCTL_VTCTL, auto_log=True)
+    utils.run_vtctl(['ReparentShard', 'test_keyspace/0',
+                     tablet_62044.tablet_alias], auto_log=True)
 
     utils.validate_topology()
     self._check_db_addr('0', 'master', tablet_62044.port)
@@ -555,12 +531,18 @@ class TestReparent(unittest.TestCase):
       value = rl['Parent']['Cell'] + '-' + str(rl['Parent']['Uid'])
       hashed_links[key] = value
     logging.debug('Got replication links: %s', str(hashed_links))
-    expected_links = {'test_nj-41983': 'test_nj-62044'}
+    expected_links = {
+        'test_nj-41983': 'test_nj-62044',
+        'test_nj-62044': '-0',
+        }
     if not brutal:
       expected_links['test_nj-62344'] = 'test_nj-62044'
     self.assertEqual(expected_links, hashed_links,
                      'Got unexpected links: %s != %s' % (str(expected_links),
                                                          str(hashed_links)))
+
+    tablet_62044_master_status = tablet_62044.get_status()
+    self.assertIn('Serving graph: test_keyspace 0 master', tablet_62044_master_status)
 
   _create_vt_insert_test = '''create table vt_insert_test (
   id bigint auto_increment,

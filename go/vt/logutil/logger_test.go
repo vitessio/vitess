@@ -76,3 +76,42 @@ func TestChannelLogger(t *testing.T) {
 		t.Errorf("Invalid file name: %v", e.File)
 	}
 }
+
+func TestTeeLogger(t *testing.T) {
+	ml1 := NewMemoryLogger()
+	ml2 := NewMemoryLogger()
+	tl := NewTeeLogger(ml1, ml2)
+	tl.Infof("test infof %v %v", 1, 2)
+	tl.Warningf("test warningf %v %v", 2, 3)
+	tl.Errorf("test errorf %v %v", 3, 4)
+	tl.Printf("test printf %v %v", 4, 5)
+	for i, ml := range []*MemoryLogger{ml1, ml2} {
+		if len(ml.Events) != 4 {
+			t.Fatalf("Invalid ml%v size: %v", i+1, ml)
+		}
+		if ml.Events[0].Value != "test infof 1 2" {
+			t.Errorf("Invalid ml%v[0]: %v", i+1, ml.Events[0].Value)
+		}
+		if ml.Events[0].Level != LOGGER_INFO {
+			t.Errorf("Invalid ml%v[0].level: %v", i+1, ml.Events[0].Level)
+		}
+		if ml.Events[1].Value != "test warningf 2 3" {
+			t.Errorf("Invalid ml%v[0]: %v", i+1, ml.Events[1].Value)
+		}
+		if ml.Events[1].Level != LOGGER_WARNING {
+			t.Errorf("Invalid ml%v[0].level: %v", i+1, ml.Events[1].Level)
+		}
+		if ml.Events[2].Value != "test errorf 3 4" {
+			t.Errorf("Invalid ml%v[0]: %v", i+1, ml.Events[2].Value)
+		}
+		if ml.Events[2].Level != LOGGER_ERROR {
+			t.Errorf("Invalid ml%v[0].level: %v", i+1, ml.Events[2].Level)
+		}
+		if ml.Events[3].Value != "test printf 4 5" {
+			t.Errorf("Invalid ml%v[0]: %v", i+1, ml.Events[3].Value)
+		}
+		if ml.Events[3].Level != LOGGER_CONSOLE {
+			t.Errorf("Invalid ml%v[0].level: %v", i+1, ml.Events[3].Level)
+		}
+	}
+}

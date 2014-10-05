@@ -1,12 +1,12 @@
 package com.youtube.vitess.vtgate;
 
-import java.math.BigInteger;
 import java.util.List;
 
 import org.junit.Assert;
 import org.junit.Test;
 
 import com.google.common.collect.Lists;
+import com.google.common.primitives.UnsignedLong;
 
 public class FieldTypeTest {
 	@Test
@@ -50,10 +50,10 @@ public class FieldTypeTest {
 	}
 
 	@Test
-	public void testBigInteger() {
+	public void testULong() {
 		String val = "10000000000000";
 		Object o = FieldType.VT_LONGLONG.convert(val);
-		Assert.assertEquals(BigInteger.class, o.getClass());
-		Assert.assertEquals(10000000000000L, ((BigInteger) o).longValue());
+		Assert.assertEquals(UnsignedLong.class, o.getClass());
+		Assert.assertEquals(10000000000000L, ((UnsignedLong) o).longValue());
 	}
 }

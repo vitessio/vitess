@@ -261,12 +261,7 @@ func (wr *Wrangler) tabletReplicationStatuses(tablets []*topo.TabletInfo) ([]*my
 
 func (wr *Wrangler) demoteMaster(ti *topo.TabletInfo) (myproto.ReplicationPosition, error) {
 	wr.logger.Infof("demote master %v", ti.Alias)
-	actionPath, err := wr.ai.DemoteMaster(ti.Alias)
-	if err != nil {
-		return myproto.ReplicationPosition{}, err
-	}
-	err = wr.WaitForCompletion(actionPath)
-	if err != nil {
+	if err := wr.ai.DemoteMaster(ti, wr.ActionTimeout()); err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
 	return wr.ai.MasterPosition(ti, wr.ActionTimeout())
@@ -274,16 +269,7 @@ func (wr *Wrangler) demoteMaster(ti *topo.TabletInfo) (myproto.ReplicationPositi
 
 func (wr *Wrangler) promoteSlave(ti *topo.TabletInfo) (rsd *actionnode.RestartSlaveData, err error) {
 	wr.logger.Infof("promote slave %v", ti.Alias)
-	actionPath, err := wr.ai.PromoteSlave(ti.Alias)
-	if err != nil {
-		return
-	}
-	result, err := wr.WaitForCompletionReply(actionPath)
-	if err != nil {
-		return
-	}
-	rsd = result.(*actionnode.RestartSlaveData)
-	return
+	return wr.ai.PromoteSlave(ti, wr.ActionTimeout())
 }
 
 func (wr *Wrangler) restartSlaves(slaveTabletMap map[topo.TabletAlias]*topo.TabletInfo, rsd *actionnode.RestartSlaveData) (majorityRestart bool, err error) {
@@ -333,11 +319,7 @@ func (wr *Wrangler) restartSlaves(slaveTabletMap map[topo.TabletAlias]*topo.Tabl
 
 func (wr *Wrangler) restartSlave(ti *topo.TabletInfo, rsd *actionnode.RestartSlaveData) (err error) {
 	wr.logger.Infof("restart slave %v", ti.Alias)
-	actionPath, err := wr.ai.RestartSlave(ti.Alias, rsd)
-	if err != nil {
-		return err
-	}
-	return wr.WaitForCompletion(actionPath)
+	return wr.ai.RestartSlave(ti, rsd, wr.ActionTimeout())
 }
 
 func (wr *Wrangler) checkMasterElect(ti *topo.TabletInfo) error {
@@ -356,11 +338,7 @@ func (wr *Wrangler) finishReparent(si *topo.ShardInfo, masterElect *topo.TabletI
 			wr.logger.Warningf("leaving master-elect read-only, change with: vtctl SetReadWrite %v", masterElect.Alias)
 		} else {
 			wr.logger.Infof("marking master-elect read-write %v", masterElect.Alias)
-			actionPath, err := wr.ai.SetReadWrite(masterElect.Alias)
-			if err == nil {
-				err = wr.WaitForCompletion(actionPath)
-			}
-			if err != nil {
+			if err := wr.ai.SetReadWrite(masterElect, wr.ActionTimeout()); err != nil {
 				wr.logger.Warningf("master master-elect read-write failed, leaving master-elect read-only, change with: vtctl SetReadWrite %v", masterElect.Alias)
 			}
 		}
@@ -393,11 +371,7 @@ func (wr *Wrangler) breakReplication(slaveMap map[topo.TabletAlias]*topo.TabletI
 	// Force slaves to break, just in case they were not advertised in
 	// the replication graph.
 	wr.logger.Infof("break slaves %v", masterElect.Alias)
-	actionPath, err := wr.ai.BreakSlaves(masterElect.Alias)
-	if err == nil {
-		err = wr.WaitForCompletion(actionPath)
-	}
-	return err
+	return wr.ai.BreakSlaves(masterElect, wr.ActionTimeout())
 }
 
 func (wr *Wrangler) restartableTabletMap(slaves map[topo.TabletAlias]*topo.TabletInfo) map[uint32]*topo.TabletInfo {

@@ -84,9 +84,16 @@ type Shard struct {
 	SourceShards []SourceShard
 
 	// Cells is the list of cells that have tablets for this shard.
-	// It is populated at InitTablet time when a tabelt is added
+	// It is populated at InitTablet time when a tablet is added
 	// in a cell that is not in the list yet.
 	Cells []string
+
+	// BlacklistedTablesMap is a map from served type to
+	// blacklisted tables. If a tablet has the listed TabletType,
+	// it should blacklist the provided list of tables.
+	// This is used in vertical splits to guarantee a tablet
+	// stops serving the given tables.
+	BlacklistedTablesMap map[TabletType][]string
 }
 
 func newShard() *Shard {

@@ -39,10 +39,12 @@ func (sem *Semaphore) Acquire() bool {
 		<-sem.slots
 		return true
 	}
+	tm := time.NewTimer(sem.timeout)
+	defer tm.Stop()
 	select {
 	case <-sem.slots:
 		return true
-	case <-time.After(sem.timeout):
+	case <-tm.C:
 		return false
 	}
 }

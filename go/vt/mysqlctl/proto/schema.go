@@ -31,7 +31,7 @@ type TableDefinition struct {
 }
 
 // helper methods for sorting
-type TableDefinitions []TableDefinition
+type TableDefinitions []*TableDefinition
 
 func (tds TableDefinitions) Len() int {
 	return len(tds)
@@ -82,7 +82,7 @@ func (sd *SchemaDefinition) GenerateSchemaVersion() {
 func (sd *SchemaDefinition) GetTable(table string) (td *TableDefinition, ok bool) {
 	for _, td := range sd.TableDefinitions {
 		if td.Name == table {
-			return &td, true
+			return td, true
 		}
 	}
 	return nil, false

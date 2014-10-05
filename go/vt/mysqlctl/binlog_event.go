@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 )
 
@@ -155,22 +156,73 @@ func (ev binlogEvent) Format() (f blproto.BinlogFormat, err error) {
 //   Y         status vars block
 //   X+1       db_name + NULL terminator
 //   L-X-1-Y   SQL statement (no NULL terminator)
-func (ev binlogEvent) Query(f blproto.BinlogFormat) (string, []byte, error) {
+func (ev binlogEvent) Query(f blproto.BinlogFormat) (query blproto.Query, err error) {
+	const varsPos = 4 + 4 + 1 + 2 + 2
+
 	data := ev.Bytes()[f.HeaderLength:]
 
 	// length of database name
-	dbNameLen := int(data[4+4])
+	dbLen := int(data[4+4])
 	// length of status variables block
 	varsLen := int(binary.LittleEndian.Uint16(data[4+4+1+2 : 4+4+1+2+2]))
 
 	// position of database name
-	dbPos := 4 + 4 + 1 + 2 + 2 + varsLen
+	dbPos := varsPos + varsLen
 	// position of SQL query
-	sqlPos := dbPos + dbNameLen + 1 // +1 for NULL terminator
+	sqlPos := dbPos + dbLen + 1 // +1 for NULL terminator
 	if sqlPos > len(data) {
-		return "", nil, fmt.Errorf("SQL query position = %v, which is outside buffer", sqlPos)
+		return query, fmt.Errorf("SQL query position overflows buffer (%v > %v)", sqlPos, len(data))
 	}
-	return string(data[dbPos : dbPos+dbNameLen]), data[sqlPos:], nil
+
+	// We've checked that the buffer is big enough for sql, so everything before
+	// it (db and vars) is in-bounds too.
+	query.Database = string(data[dbPos : dbPos+dbLen])
+	query.Sql = data[sqlPos:]
+
+	// Scan the status vars for ones we care about. This requires us to know the
+	// size of every var that comes before the ones we're interested in.
+	vars := data[varsPos : varsPos+varsLen]
+
+varsLoop:
+	for pos := 0; pos < len(vars); {
+		code := vars[pos]
+		pos++
+
+		// All codes are optional, but if present they must occur in numerically
+		// increasing order (except for 6 which occurs in the place of 2) to allow
+		// for backward compatibility.
+		switch code {
+		case 0, 3: // Q_FLAGS2_CODE, Q_AUTO_INCREMENT
+			pos += 4
+		case 1: // Q_SQL_MODE_CODE
+			pos += 8
+		case 2: // Q_CATALOG_CODE (used in MySQL 5.0.0 - 5.0.3)
+			if pos+1 > len(vars) {
+				return query, fmt.Errorf("Q_CATALOG_CODE status var overflows buffer (%v + 1 > %v)", pos, len(vars))
+			}
+			pos += 1 + int(vars[pos]) + 1
+		case 6: // Q_CATALOG_NZ_CODE (used in MySQL > 5.0.3 to replace 2)
+			if pos+1 > len(vars) {
+				return query, fmt.Errorf("Q_CATALOG_NZ_CODE status var overflows buffer (%v + 1 > %v)", pos, len(vars))
+			}
+			pos += 1 + int(vars[pos])
+		case 4: // Q_CHARSET_CODE
+			if pos+6 > len(vars) {
+				return query, fmt.Errorf("Q_CHARSET_CODE status var overflows buffer (%v + 6 > %v)", pos, len(vars))
+			}
+			query.Charset = &mproto.Charset{
+				Client: int(binary.LittleEndian.Uint16(vars[pos : pos+2])),
+				Conn:   int(binary.LittleEndian.Uint16(vars[pos+2 : pos+4])),
+				Server: int(binary.LittleEndian.Uint16(vars[pos+4 : pos+6])),
+			}
+			pos += 6
+		default:
+			// If we see something higher than what we're interested in, we can stop.
+			break varsLoop
+		}
+	}
+
+	return query, nil
 }
 
 // IntVar implements BinlogEvent.IntVar().

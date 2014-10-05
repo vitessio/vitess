@@ -176,6 +176,12 @@ func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*topo.SrvKe
 			topo.TYPE_MASTER: &topo.KeyspacePartition{
 				Shards: shards,
 			},
+			topo.TYPE_REPLICA: &topo.KeyspacePartition{
+				Shards: shards,
+			},
+			topo.TYPE_RDONLY: &topo.KeyspacePartition{
+				Shards: shards,
+			},
 		},
 		TabletTypes: allTabletTypes,
 	}
@@ -365,7 +371,7 @@ func (sbc *sandboxConn) ExecuteBatch(context context.Context, queries []tproto.B
 	return qrl, nil
 }
 
-func (sbc *sandboxConn) StreamExecute(context context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc) {
+func (sbc *sandboxConn) StreamExecute(context context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
 	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
@@ -374,7 +380,7 @@ func (sbc *sandboxConn) StreamExecute(context context.Context, query string, bin
 	ch <- singleRowResult
 	close(ch)
 	err := sbc.getError()
-	return ch, func() error { return err }
+	return ch, func() error { return err }, err
 }
 
 func (sbc *sandboxConn) Begin(context context.Context) (int64, error) {

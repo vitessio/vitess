@@ -9,31 +9,32 @@ import com.youtube.vitess.vtgate.Query;
 import com.youtube.vitess.vtgate.Query.QueryBuilder;
 import com.youtube.vitess.vtgate.VtGate;
 import com.youtube.vitess.vtgate.cursor.Cursor;
-import com.youtube.vitess.vtgate.integration.Util.VtGateParams;
+import com.youtube.vitess.vtgate.integration.util.TestEnv;
+import com.youtube.vitess.vtgate.integration.util.Util;
 
 public class StreamingServerShutdownIT {
 
-	static VtGateParams params;
+	static TestEnv testEnv = VtGateIT.getTestEnv();
 
 	@Before
 	public void setUpVtGate() throws Exception {
-		params = Util.runVtGate(true);
-		Util.truncateTable(params);
+		Util.setupTestEnv(testEnv, true);
+		Util.truncateTable(testEnv);
 	}
 
 	@After
 	public void tearDownVtGate() throws Exception {
-		Util.runVtGate(false);
+		Util.setupTestEnv(testEnv, false);
 	}
 
 	@Test
 	public void testShutdownServerWhileStreaming() throws Exception {
-		Util.insertRows(params, 1, 2000);
-		VtGate vtgate = VtGate.connect("localhost:" + params.port, 0);
+		Util.insertRows(testEnv, 1, 2000);
+		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
 		String selectSql = "select A.* from vtgate_test A join vtgate_test B";
 		Query joinQuery = new QueryBuilder(selectSql,
-				params.keyspace_name, "master").withKeyspaceIds(
-				params.getKeyspaceIds()).withStream(true).build();
+				testEnv.keyspace, "master").withKeyspaceIds(
+				testEnv.getAllKeyspaceIds()).withStreaming(true).build();
 		Cursor cursor = vtgate.execute(joinQuery);
 
 		int count = 0;
@@ -41,7 +42,7 @@ public class StreamingServerShutdownIT {
 			while (cursor.hasNext()) {
 				count++;
 				if (count == 1) {
-					Util.runVtGate(false);
+					Util.setupTestEnv(testEnv, false);
 				}
 				cursor.next();
 			}

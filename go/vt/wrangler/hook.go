@@ -7,7 +7,6 @@ package wrangler
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	log "github.com/golang/glog"
 	hk "github.com/youtube/vitess/go/vt/hook"
@@ -26,17 +25,7 @@ func (wr *Wrangler) ExecuteHook(tabletAlias topo.TabletAlias, hook *hk.Hook) (ho
 }
 
 func (wr *Wrangler) ExecuteTabletInfoHook(ti *topo.TabletInfo, hook *hk.Hook) (hookResult *hk.HookResult, err error) {
-
-	actionPath, err := wr.ai.ExecuteHook(ti.Alias, hook)
-	if err != nil {
-		return nil, err
-	}
-
-	var hr interface{}
-	if hr, err = wr.ai.WaitForCompletionReply(actionPath, 10*time.Minute); err != nil {
-		return nil, err
-	}
-	return hr.(*hk.HookResult), nil
+	return wr.ai.ExecuteHook(ti, hook, wr.ActionTimeout())
 }
 
 // Execute a hook and returns an error only if the hook failed, not if

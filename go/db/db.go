@@ -4,7 +4,6 @@
 
 // Package db defines an alternate (and simplified)
 // db api compared to go's database/sql.
-
 package db
 
 import (

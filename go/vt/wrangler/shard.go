@@ -102,6 +102,45 @@ func (wr *Wrangler) setShardServedTypes(keyspace, shard string, servedTypes []to
 	return topo.UpdateShard(wr.ts, shardInfo)
 }
 
+// SetShardBlacklistedTables changes the BlacklistedTablesMap
+// parameter of a shard.  It does not rebuild any serving graph or do
+// any consistency check.
+func (wr *Wrangler) SetShardBlacklistedTables(keyspace, shard string, tabletType topo.TabletType, tables []string) error {
+
+	actionNode := actionnode.UpdateShard()
+	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
+	if err != nil {
+		return err
+	}
+
+	err = wr.setShardBlacklistedTables(keyspace, shard, tabletType, tables)
+	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
+}
+
+func (wr *Wrangler) setShardBlacklistedTables(keyspace, shard string, tabletType topo.TabletType, tables []string) error {
+	shardInfo, err := wr.ts.GetShard(keyspace, shard)
+	if err != nil {
+		return err
+	}
+
+	if len(tables) == 0 {
+		// it's a removal
+		if shardInfo.BlacklistedTablesMap != nil {
+			delete(shardInfo.BlacklistedTablesMap, tabletType)
+			if len(shardInfo.BlacklistedTablesMap) == 0 {
+				shardInfo.BlacklistedTablesMap = nil
+			}
+		}
+	} else {
+		// it's an addition
+		if shardInfo.BlacklistedTablesMap == nil {
+			shardInfo.BlacklistedTablesMap = make(map[topo.TabletType][]string)
+		}
+		shardInfo.BlacklistedTablesMap[tabletType] = tables
+	}
+	return topo.UpdateShard(wr.ts, shardInfo)
+}
+
 // DeleteShard will do all the necessary changes in the topology server
 // to entirely remove a shard. It can only work if there are no tablets
 // in that shard.
@@ -160,7 +199,7 @@ func (wr *Wrangler) RemoveShardCell(keyspace, shard, cell string, force bool) er
 }
 
 func (wr *Wrangler) removeShardCell(keyspace, shard, cell string, force bool) error {
-	shardInfo, err := wr.ts.GetShardCritical(keyspace, shard)
+	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
 	}

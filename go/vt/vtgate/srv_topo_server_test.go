@@ -216,10 +216,7 @@ func (ft *fakeTopo) CreateKeyspace(keyspace string, value *topo.Keyspace) error 
 func (ft *fakeTopo) UpdateKeyspace(ki *topo.KeyspaceInfo, existingVersion int64) (int64, error) {
 	return 0, nil
 }
-func (ft *fakeTopo) GetKeyspace(keyspace string) (*topo.KeyspaceInfo, error) { return nil, nil }
-func (ft *fakeTopo) GetKeyspaceCritical(keyspace string) (*topo.KeyspaceInfo, error) {
-	return nil, nil
-}
+func (ft *fakeTopo) GetKeyspace(keyspace string) (*topo.KeyspaceInfo, error)     { return nil, nil }
 func (ft *fakeTopo) GetKeyspaces() ([]string, error)                             { return nil, nil }
 func (ft *fakeTopo) DeleteKeyspaceShards(keyspace string) error                  { return nil }
 func (ft *fakeTopo) CreateShard(keyspace, shard string, value *topo.Shard) error { return nil }
@@ -228,12 +225,9 @@ func (ft *fakeTopo) UpdateShard(si *topo.ShardInfo, existingVersion int64) (int6
 }
 func (ft *fakeTopo) ValidateShard(keyspace, shard string) error               { return nil }
 func (ft *fakeTopo) GetShard(keyspace, shard string) (*topo.ShardInfo, error) { return nil, nil }
-func (ft *fakeTopo) GetShardCritical(keyspace, shard string) (si *topo.ShardInfo, err error) {
-	return nil, nil
-}
-func (ft *fakeTopo) GetShardNames(keyspace string) ([]string, error) { return nil, nil }
-func (ft *fakeTopo) DeleteShard(keyspace, shard string) error        { return nil }
-func (ft *fakeTopo) CreateTablet(tablet *topo.Tablet) error          { return nil }
+func (ft *fakeTopo) GetShardNames(keyspace string) ([]string, error)          { return nil, nil }
+func (ft *fakeTopo) DeleteShard(keyspace, shard string) error                 { return nil }
+func (ft *fakeTopo) CreateTablet(tablet *topo.Tablet) error                   { return nil }
 func (ft *fakeTopo) UpdateTablet(tablet *topo.TabletInfo, existingVersion int64) (newVersion int64, err error) {
 	return 0, nil
 }
@@ -285,29 +279,11 @@ func (ft *fakeTopo) LockShardForAction(keyspace, shard, contents string, timeout
 	return "", nil
 }
 func (ft *fakeTopo) UnlockShardForAction(keyspace, shard, lockPath, results string) error { return nil }
-func (ft *fakeTopo) WriteTabletAction(tabletAlias topo.TabletAlias, contents string) (string, error) {
-	return "", nil
-}
-func (ft *fakeTopo) WaitForTabletAction(actionPath string, waitTime time.Duration, interrupted chan struct{}) (string, error) {
-	return "", nil
-}
-func (ft *fakeTopo) PurgeTabletActions(tabletAlias topo.TabletAlias, canBePurged func(data string) bool) error {
-	return nil
-}
-func (ft *fakeTopo) ValidateTabletActions(tabletAlias topo.TabletAlias) error { return nil }
 func (ft *fakeTopo) CreateTabletPidNode(tabletAlias topo.TabletAlias, contents string, done chan struct{}) error {
 	return nil
 }
 func (ft *fakeTopo) ValidateTabletPidNode(tabletAlias topo.TabletAlias) error { return nil }
 func (ft *fakeTopo) GetSubprocessFlags() []string                             { return nil }
-func (ft *fakeTopo) ActionEventLoop(tabletAlias topo.TabletAlias, dispatchAction func(actionPath, data string) error, done chan struct{}) {
-}
-func (ft *fakeTopo) ReadTabletActionPath(actionPath string) (topo.TabletAlias, string, int64, error) {
-	return topo.TabletAlias{}, "", 0, nil
-}
-func (ft *fakeTopo) UpdateTabletAction(actionPath, data string, version int64) error { return nil }
-func (ft *fakeTopo) StoreTabletActionResponse(actionPath, data string) error         { return nil }
-func (ft *fakeTopo) UnblockTabletAction(actionPath string) error                     { return nil }
 
 type fakeTopoRemoteMaster struct {
 	fakeTopo

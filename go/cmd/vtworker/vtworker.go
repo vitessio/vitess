@@ -66,10 +66,9 @@ var (
 )
 
 // setAndStartWorker will set the current worker.
-// If logger is nil, we create and save a MemoryLogger (so the web
-// status can display it). The command line worker (or RPC worker)
-// will use its own logger.
-func setAndStartWorker(wrk worker.Worker, logger logutil.Logger) (chan struct{}, error) {
+// We always log to both memory logger (for display on the web) and
+// console logger (for records / display of command line worker).
+func setAndStartWorker(wrk worker.Worker) (chan struct{}, error) {
 	currentWorkerMutex.Lock()
 	defer currentWorkerMutex.Unlock()
 	if currentWorker != nil {
@@ -77,12 +76,9 @@ func setAndStartWorker(wrk worker.Worker, logger logutil.Logger) (chan struct{},
 	}
 
 	currentWorker = wrk
-	if logger == nil {
-		currentMemoryLogger = logutil.NewMemoryLogger()
-		logger = currentMemoryLogger
-	}
+	currentMemoryLogger = logutil.NewMemoryLogger()
 	currentDone = make(chan struct{})
-	wr.SetLogger(logger)
+	wr.SetLogger(logutil.NewTeeLogger(currentMemoryLogger, logutil.NewConsoleLogger()))
 
 	// one go function runs the worker, closes 'done' when done
 	go func() {

@@ -2,9 +2,12 @@ package com.youtube.vitess.vtgate;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+
+import org.apache.hadoop.mapreduce.InputSplit;
 
 import com.google.common.net.HostAndPort;
 import com.youtube.vitess.gorpc.Exceptions.GoRpcException;
@@ -13,6 +16,7 @@ import com.youtube.vitess.vtgate.Exceptions.DatabaseException;
 import com.youtube.vitess.vtgate.cursor.Cursor;
 import com.youtube.vitess.vtgate.cursor.CursorImpl;
 import com.youtube.vitess.vtgate.cursor.StreamCursor;
+import com.youtube.vitess.vtgate.hadoop.VitessInputSplit;
 import com.youtube.vitess.vtgate.rpcclient.RpcClient;
 import com.youtube.vitess.vtgate.rpcclient.gorpc.GoRpcClient.GoRpcClientFactory;
 
@@ -84,10 +88,16 @@ public class VtGate {
 
 		Map<String, Object> reply = null;
 		if (query.getKeyspaceIds() != null) {
-			if (query.isStream()) {
+			if (query.isStreaming()) {
 				reply = client.streamExecuteKeyspaceIds(params);
 			} else {
 				reply = client.executeKeyspaceIds(params);
+			}
+		} else {
+			if (query.isStreaming()) {
+				reply = client.streamExecuteKeyRanges(params);
+			} else {
+				reply = client.executeKeyRanges(params);
 			}
 		}
 
@@ -99,7 +109,7 @@ public class VtGate {
 		}
 		Map<String, Object> result = (Map<String, Object>) reply.get("Result");
 		QueryResult qr = QueryResult.parse(result);
-		if (query.isStream()) {
+		if (query.isStreaming()) {
 			return new StreamCursor(qr, client);
 		}
 
@@ -107,6 +117,38 @@ public class VtGate {
 			session = reply.get("Session");
 		}
 		return new CursorImpl(qr);
+	}
+
+	/**
+	 * Get {@link InputSplit}s for a MapReduce job using the specified table as
+	 * input. This currently produces one split per shard. Throws
+	 * {@link DatabaseException} if an rdonly instance is not available.
+	 */
+	public List<InputSplit> getMRSplits(String keyspace, String table,
+			List<String> columns)
+			throws ConnectionException, DatabaseException {
+		Map<String, Object> params = new HashMap<>();
+		params.put("Keyspace", keyspace);
+		params.put("Table", table);
+		if (!columns.contains(KeyspaceId.COL_NAME)) {
+			columns.add(KeyspaceId.COL_NAME);
+		}
+		params.put("Columns", columns);
+		Map<String, Object> reply = client.getMRSplits(params);
+		if (reply.containsKey("Error")) {
+			byte[] err = (byte[]) reply.get("Error");
+			if (err.length > 0) {
+				throw new DatabaseException(new String(err));
+			}
+		}
+		List<Map<String, Object>> result = (List<Map<String, Object>>) reply
+				.get("Splits");
+		List<InputSplit> splits = new LinkedList<>();
+		for (Map<String, Object> split : result) {
+			splits.add(VitessInputSplit.from(split));
+		}
+
+		return splits;
 	}
 
 	public void commit() throws ConnectionException {

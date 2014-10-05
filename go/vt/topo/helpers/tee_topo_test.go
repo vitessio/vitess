@@ -97,13 +97,3 @@ func TestPid(t *testing.T) {
 	ts := newFakeTeeServer(t)
 	test.CheckPid(t, ts)
 }
-
-func TestActions(t *testing.T) {
-	ts := newFakeTeeServer(t)
-	test.CheckActions(t, ts)
-}
-
-func TestLotsOfActions(t *testing.T) {
-	ts := newFakeTeeServer(t)
-	test.CheckLotsOfActions(t, ts)
-}

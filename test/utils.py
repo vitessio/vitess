@@ -81,7 +81,8 @@ def main(mod=None):
     level = logging.INFO
   else:
     level = logging.DEBUG
-  logging.basicConfig(format='-- %(asctime)s %(module)s:%(lineno)d %(levelname)s %(message)s', level=level)
+  logging.getLogger().setLevel(level)
+  logging.basicConfig(format='-- %(asctime)s %(module)s:%(lineno)d %(levelname)s %(message)s')
 
   set_mysql_flavor(options.mysql_flavor)
 
