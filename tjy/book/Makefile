@@ -36,7 +36,8 @@ sources := $(BOOKNAME).tex \
         Reparenting.tex \
         Vttablet.tex \
         ReplicationGraph.tex \
-        ZookeeperData.tex
+        ZookeeperData.tex \
+        bookmaking.tex 
 
 # define the source files to generate images.
 image-sources := \
