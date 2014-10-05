@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap"
@@ -322,10 +321,8 @@ func (tm *TabletManager) Snapshot(context *rpcproto.Context, args *actionnode.Sn
 				// Note we don't interrupt the loop here, as
 				// we still need to flush and finish the
 				// command, even if the channel to the client
-				// has been broken. We'll just keep logging the lines.
-				if err := sendReply(ssr); err != nil {
-					log.Warningf("Cannot send snapshot log line (%v): %v", err, e)
-				}
+				// has been broken. We'll just keep trying to send.
+				sendReply(ssr)
 			}
 			wg.Done()
 		}()
@@ -339,9 +336,7 @@ func (tm *TabletManager) Snapshot(context *rpcproto.Context, args *actionnode.Sn
 		ssr := &gorpcproto.SnapshotStreamingReply{
 			Result: sr,
 		}
-		if err := sendReply(ssr); err != nil {
-			log.Warningf("Cannot send snapshot result %v: %v", *sr, err)
-		}
+		sendReply(ssr)
 		return nil
 	})
 }
@@ -369,10 +364,8 @@ func (tm *TabletManager) Restore(context *rpcproto.Context, args *actionnode.Res
 				// Note we don't interrupt the loop here, as
 				// we still need to flush and finish the
 				// command, even if the channel to the client
-				// has been broken. We'll just keep logging the lines.
-				if err := sendReply(&e); err != nil {
-					log.Warningf("Cannot send snapshot log line (%v): %v", err, e)
-				}
+				// has been broken. We'll just keep trying to send.
+				sendReply(&e)
 			}
 			wg.Done()
 		}()
@@ -398,10 +391,8 @@ func (tm *TabletManager) MultiSnapshot(context *rpcproto.Context, args *actionno
 				// Note we don't interrupt the loop here, as
 				// we still need to flush and finish the
 				// command, even if the channel to the client
-				// has been broken. We'll just keep logging the lines.
-				if err := sendReply(ssr); err != nil {
-					log.Warningf("Cannot send snapshot log line (%v): %v", err, e)
-				}
+				// has been broken. We'll just keep trying to send.
+				sendReply(ssr)
 			}
 			wg.Done()
 		}()
@@ -415,9 +406,7 @@ func (tm *TabletManager) MultiSnapshot(context *rpcproto.Context, args *actionno
 		ssr := &gorpcproto.MultiSnapshotStreamingReply{
 			Result: sr,
 		}
-		if err := sendReply(ssr); err != nil {
-			log.Warningf("Cannot send snapshot result %v: %v", *sr, err)
-		}
+		sendReply(ssr)
 		return nil
 	})
 }
@@ -433,10 +422,8 @@ func (tm *TabletManager) MultiRestore(context *rpcproto.Context, args *actionnod
 				// Note we don't interrupt the loop here, as
 				// we still need to flush and finish the
 				// command, even if the channel to the client
-				// has been broken. We'll just keep logging the lines.
-				if err := sendReply(&e); err != nil {
-					log.Warningf("Cannot send snapshot log line (%v): %v", err, e)
-				}
+				// has been broken. We'll just keep trying to send.
+				sendReply(&e)
 			}
 			wg.Done()
 		}()

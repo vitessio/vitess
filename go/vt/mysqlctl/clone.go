@@ -17,6 +17,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/ioutil2"
 	"github.com/youtube/vitess/go/vt/hook"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
@@ -232,7 +233,7 @@ func (mysqld *Mysqld) createSnapshot(concurrency int, serverMode bool) ([]Snapsh
 //   Compute hash (of uncompressed files, as we serve uncompressed files)
 //   Place symlinks in /vt/clone_src where they will be served by http server
 //   Leave mysql stopped, return slaveStartRequired, readOnly
-func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchicalReplication bool, concurrency int, serverMode bool, hookExtraEnv map[string]string) (snapshotManifestUrlPath string, slaveStartRequired, readOnly bool, err error) {
+func (mysqld *Mysqld) CreateSnapshot(logger logutil.Logger, dbName, sourceAddr string, allowHierarchicalReplication bool, concurrency int, serverMode bool, hookExtraEnv map[string]string) (snapshotManifestUrlPath string, slaveStartRequired, readOnly bool, err error) {
 	if dbName == "" {
 		return "", false, false, errors.New("CreateSnapshot failed: no database name provided")
 	}
@@ -405,7 +406,7 @@ func ReadSnapshotManifest(filename string) (*SnapshotManifest, error) {
 // uncompress into /vt/vt_<target-uid>/data/vt_<keyspace>
 // start_mysql()
 // clean up compressed files
-func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest, fetchConcurrency, fetchRetryCount int, dontWaitForSlaveStart bool, hookExtraEnv map[string]string) error {
+func (mysqld *Mysqld) RestoreFromSnapshot(logger logutil.Logger, snapshotManifest *SnapshotManifest, fetchConcurrency, fetchRetryCount int, dontWaitForSlaveStart bool, hookExtraEnv map[string]string) error {
 	if snapshotManifest == nil {
 		return errors.New("RestoreFromSnapshot: nil snapshotManifest")
 	}

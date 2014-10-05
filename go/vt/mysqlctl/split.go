@@ -102,6 +102,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/csvsplitter"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
@@ -539,7 +540,7 @@ func (mysqld *Mysqld) dumpTableFull(td *proto.TableDefinition, dbName, mainClone
 //   keyName+keyType are empty. It will create a single snapshot of
 //   the contents of the tables.
 // Note combinations of table subset and keyranges are not supported.
-func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyName string, keyType key.KeyspaceIdType, sourceAddr string, allowHierarchicalReplication bool, snapshotConcurrency int, tables, excludeTables []string, skipSlaveRestart bool, maximumFilesize uint64, hookExtraEnv map[string]string) (snapshotManifestFilenames []string, err error) {
+func (mysqld *Mysqld) CreateMultiSnapshot(logger logutil.Logger, keyRanges []key.KeyRange, dbName, keyName string, keyType key.KeyspaceIdType, sourceAddr string, allowHierarchicalReplication bool, snapshotConcurrency int, tables, excludeTables []string, skipSlaveRestart bool, maximumFilesize uint64, hookExtraEnv map[string]string) (snapshotManifestFilenames []string, err error) {
 	if dbName == "" {
 		err = fmt.Errorf("no database name provided")
 		return
@@ -808,7 +809,7 @@ func buildQueryList(destinationDbName, query string, writeBinLogs bool) []string
 //   populate the blp_checkpoint table with master positions to start from
 //   - If is also contains the command 'dontStartBinlogPlayer' we won't
 //   start binlog replication on the destination (but it will be configured)
-func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.KeyRange, sourceAddrs []*url.URL, fromStoragePaths []string, snapshotConcurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) (err error) {
+func (mysqld *Mysqld) MultiRestore(logger logutil.Logger, destinationDbName string, keyRanges []key.KeyRange, sourceAddrs []*url.URL, fromStoragePaths []string, snapshotConcurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) (err error) {
 	writeBinLogs := strings.Contains(strategy, "writeBinLogs")
 
 	var manifests []*SplitSnapshotManifest
