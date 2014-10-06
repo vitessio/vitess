@@ -17,7 +17,6 @@ import (
 type RequestContext struct {
 	ctx      context.Context
 	logStats *SQLQueryStats
-	sq       *SqlQuery
 	qe       *QueryEngine
 }
 
@@ -31,7 +30,7 @@ type requestExecutor struct {
 
 // ExecuteQuery executes a single query request. It fetches (or builds) the plan
 // for the query and executes accordingly.
-func ExecuteQuery(ctx context.Context, logStats *SQLQueryStats, sq *SqlQuery, query *proto.Query) *mproto.QueryResult {
+func ExecuteQuery(ctx context.Context, logStats *SQLQueryStats, qe *QueryEngine, query *proto.Query) *mproto.QueryResult {
 	// TODO(sougou): Change usage such that we don't have to do this.
 	if query.BindVariables == nil {
 		query.BindVariables = make(map[string]interface{})
@@ -41,12 +40,11 @@ func ExecuteQuery(ctx context.Context, logStats *SQLQueryStats, sq *SqlQuery, qu
 		query:         query.Sql,
 		bindVars:      query.BindVariables,
 		transactionID: query.TransactionId,
-		plan:          sq.qe.schemaInfo.GetPlan(logStats, query.Sql),
+		plan:          qe.schemaInfo.GetPlan(logStats, query.Sql),
 		rq: RequestContext{
 			ctx:      ctx,
 			logStats: logStats,
-			sq:       sq,
-			qe:       sq.qe,
+			qe:       qe,
 		},
 	}
 	return rqe.execute()
@@ -55,7 +53,7 @@ func ExecuteQuery(ctx context.Context, logStats *SQLQueryStats, sq *SqlQuery, qu
 // ExecuteStreamQuery executes the query and streams its result.
 // The first QueryResult will have Fields set (and Rows nil)
 // The subsequent QueryResult will have Rows set (and Fields nil)
-func ExecuteStreamQuery(ctx context.Context, logStats *SQLQueryStats, sq *SqlQuery, query *proto.Query, sendReply func(*mproto.QueryResult) error) {
+func ExecuteStreamQuery(ctx context.Context, logStats *SQLQueryStats, qe *QueryEngine, query *proto.Query, sendReply func(*mproto.QueryResult) error) {
 	// TODO(sougou): Change usage such that we don't have to do this.
 	if query.BindVariables == nil {
 		query.BindVariables = make(map[string]interface{})
@@ -65,12 +63,11 @@ func ExecuteStreamQuery(ctx context.Context, logStats *SQLQueryStats, sq *SqlQue
 		query:         query.Sql,
 		bindVars:      query.BindVariables,
 		transactionID: query.TransactionId,
-		plan:          sq.qe.schemaInfo.GetStreamPlan(query.Sql),
+		plan:          qe.schemaInfo.GetStreamPlan(query.Sql),
 		rq: RequestContext{
 			ctx:      ctx,
 			logStats: logStats,
-			sq:       sq,
-			qe:       sq.qe,
+			qe:       qe,
 		},
 	}
 	rqe.stream(sendReply)
@@ -114,7 +111,7 @@ func (rqe *requestExecutor) execute() (reply *mproto.QueryResult) {
 	rqe.checkPermissions()
 
 	if rqe.plan.PlanId == planbuilder.PLAN_DDL {
-		return rqe.rq.qe.execDDL(rqe.rq.logStats, rqe.query)
+		return rqe.execDDL()
 	}
 
 	if rqe.transactionID != 0 {
@@ -197,6 +194,36 @@ func (rqe *requestExecutor) checkPermissions() {
 		}
 		rqe.rq.qe.accessCheckerLogger.Errorf("%s", errStr)
 	}
+}
+
+func (rqe *requestExecutor) execDDL() *mproto.QueryResult {
+	ddlPlan := planbuilder.DDLParse(rqe.query)
+	if ddlPlan.Action == "" {
+		panic(NewTabletError(FAIL, "DDL is not understood"))
+	}
+
+	// Stolen from Begin
+	conn := getOrPanic(rqe.rq.qe.txPool)
+	txid, err := rqe.rq.qe.activeTxPool.SafeBegin(conn)
+	if err != nil {
+		conn.Recycle()
+		panic(err)
+	}
+	// Stolen from Commit
+	defer rqe.rq.qe.activeTxPool.SafeCommit(txid)
+
+	// Stolen from Execute
+	conn = rqe.rq.qe.activeTxPool.Get(txid)
+	defer conn.Recycle()
+	result := rqe.rq.qe.execSQL(rqe.rq.logStats, conn, rqe.query, false)
+	if ddlPlan.TableName != "" && ddlPlan.TableName != ddlPlan.NewName {
+		// It's a drop or rename.
+		rqe.rq.qe.schemaInfo.DropTable(ddlPlan.TableName)
+	}
+	if ddlPlan.NewName != "" {
+		rqe.rq.qe.schemaInfo.CreateOrUpdateTable(ddlPlan.NewName)
+	}
+	return result
 }
 
 func (rqe *requestExecutor) execPKEqual() (result *mproto.QueryResult) {

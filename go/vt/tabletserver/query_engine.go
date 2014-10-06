@@ -376,39 +376,6 @@ func (qe *QueryEngine) InvalidateForUnrecognized(sql string) {
 	qe.schemaInfo.CreateOrUpdateTable(tableName)
 }
 
-//-----------------------------------------------
-// DDL
-
-func (qe *QueryEngine) execDDL(logStats *SQLQueryStats, ddl string) *mproto.QueryResult {
-	ddlPlan := planbuilder.DDLParse(ddl)
-	if ddlPlan.Action == "" {
-		panic(NewTabletError(FAIL, "DDL is not understood"))
-	}
-
-	// Stolen from Begin
-	conn := getOrPanic(qe.txPool)
-	txid, err := qe.activeTxPool.SafeBegin(conn)
-	if err != nil {
-		conn.Recycle()
-		panic(err)
-	}
-	// Stolen from Commit
-	defer qe.activeTxPool.SafeCommit(txid)
-
-	// Stolen from Execute
-	conn = qe.activeTxPool.Get(txid)
-	defer conn.Recycle()
-	result := qe.execSQL(logStats, conn, ddl, false)
-	if ddlPlan.TableName != "" && ddlPlan.TableName != ddlPlan.NewName {
-		// It's a drop or rename.
-		qe.schemaInfo.DropTable(ddlPlan.TableName)
-	}
-	if ddlPlan.NewName != "" {
-		qe.schemaInfo.CreateOrUpdateTable(ddlPlan.NewName)
-	}
-	return result
-}
-
 func (qe *QueryEngine) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value) (result *mproto.QueryResult) {
 	sql := qe.generateFinalSql(parsedQuery, bindVars, listVars, nil)
 	q, ok := qe.consolidator.Create(string(sql))
