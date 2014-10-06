@@ -20,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/mysql/proto"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -130,9 +131,9 @@ type RpcAgent interface {
 	MultiRestore(args *actionnode.MultiRestoreArgs, logger logutil.Logger) error
 
 	// RPC helpers
-	RpcWrap(from, name string, args, reply interface{}, f func() error) error
-	RpcWrapLock(from, name string, args, reply interface{}, verbose bool, f func() error) error
-	RpcWrapLockAction(from, name string, args, reply interface{}, verbose bool, f func() error) error
+	RpcWrap(ctx context.Context, name string, args, reply interface{}, f func() error) error
+	RpcWrapLock(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error) error
+	RpcWrapLockAction(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error) error
 }
 
 // TODO(alainjobart): all the calls mention something like:
@@ -773,8 +774,11 @@ func (agent *ActionAgent) Snapshot(args *actionnode.SnapshotArgs, logger logutil
 	// let's update our internal state (stop query service and other things)
 	agent.afterAction("snapshotStart")
 
+	// create the loggers: tee to console and source
+	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
+
 	// now we can run the backup
-	filename, slaveStartRequired, readOnly, returnErr := agent.Mysqld.CreateSnapshot(tablet.DbName(), tablet.Addr(), false, args.Concurrency, args.ServerMode, agent.hookExtraEnv())
+	filename, slaveStartRequired, readOnly, returnErr := agent.Mysqld.CreateSnapshot(l, tablet.DbName(), tablet.Addr(), false, args.Concurrency, args.ServerMode, agent.hookExtraEnv())
 
 	// and change our type to the appropriate value
 	newType := originalType
@@ -989,8 +993,11 @@ func (agent *ActionAgent) Restore(args *actionnode.RestoreArgs, logger logutil.L
 		}
 	}
 
+	// create the loggers: tee to console and source
+	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
+
 	// do the work
-	if err := agent.Mysqld.RestoreFromSnapshot(sm, args.FetchConcurrency, args.FetchRetryCount, args.DontWaitForSlaveStart, agent.hookExtraEnv()); err != nil {
+	if err := agent.Mysqld.RestoreFromSnapshot(l, sm, args.FetchConcurrency, args.FetchRetryCount, args.DontWaitForSlaveStart, agent.hookExtraEnv()); err != nil {
 		log.Errorf("RestoreFromSnapshot failed (%v), scrapping", err)
 		if err := topotools.Scrap(agent.TopoServer, agent.TabletAlias, false); err != nil {
 			log.Errorf("Failed to Scrap after failed RestoreFromSnapshot: %v", err)
@@ -1022,7 +1029,10 @@ func (agent *ActionAgent) MultiSnapshot(args *actionnode.MultiSnapshotArgs, logg
 		return nil, fmt.Errorf("expected backup type, not %v", tablet.Type)
 	}
 
-	filenames, err := agent.Mysqld.CreateMultiSnapshot(args.KeyRanges, tablet.DbName(), ki.ShardingColumnName, ki.ShardingColumnType, tablet.Addr(), false, args.Concurrency, args.Tables, args.ExcludeTables, args.SkipSlaveRestart, args.MaximumFilesize, agent.hookExtraEnv())
+	// create the loggers: tee to console and source
+	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
+
+	filenames, err := agent.Mysqld.CreateMultiSnapshot(l, args.KeyRanges, tablet.DbName(), ki.ShardingColumnName, ki.ShardingColumnType, tablet.Addr(), false, args.Concurrency, args.Tables, args.ExcludeTables, args.SkipSlaveRestart, args.MaximumFilesize, agent.hookExtraEnv())
 	if err != nil {
 		return nil, err
 	}
@@ -1107,13 +1117,16 @@ func (agent *ActionAgent) MultiRestore(args *actionnode.MultiRestoreArgs, logger
 		}
 	}
 
+	// create the loggers: tee to console and source
+	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
+
 	// run the action, scrap if it fails
 	if rec.HasErrors() {
 		log.Infof("Got errors trying to get snapshots from storage, trying to get them from original tablets: %v", rec.Error())
-		err = agent.Mysqld.MultiRestore(tablet.DbName(), keyRanges, sourceAddrs, nil, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, args.Strategy)
+		err = agent.Mysqld.MultiRestore(l, tablet.DbName(), keyRanges, sourceAddrs, nil, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, args.Strategy)
 	} else {
 		log.Infof("Got snapshots from storage, reading them from disk directly")
-		err = agent.Mysqld.MultiRestore(tablet.DbName(), keyRanges, nil, fromStoragePaths, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, args.Strategy)
+		err = agent.Mysqld.MultiRestore(l, tablet.DbName(), keyRanges, nil, fromStoragePaths, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, args.Strategy)
 	}
 	if err != nil {
 		if e := topotools.Scrap(agent.TopoServer, agent.TabletAlias, false); e != nil {

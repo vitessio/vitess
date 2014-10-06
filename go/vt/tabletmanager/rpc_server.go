@@ -9,6 +9,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/vt/context"
 )
 
 // This file contains the RPC method helpers for the tablet manager.
@@ -28,7 +29,7 @@ const rpcTimeout = time.Second * 30
 //
 
 // rpcWrapper handles all the logic for rpc calls.
-func (agent *ActionAgent) rpcWrapper(from, name string, args, reply interface{}, verbose bool, f func() error, lock, runAfterAction bool) (err error) {
+func (agent *ActionAgent) rpcWrapper(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error, lock, runAfterAction bool) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			log.Errorf("TabletManager.%v(%v) panic: %v", name, args, x)
@@ -46,11 +47,11 @@ func (agent *ActionAgent) rpcWrapper(from, name string, args, reply interface{},
 	}
 
 	if err = f(); err != nil {
-		log.Warningf("TabletManager.%v(%v)(from %v) error: %v", name, args, from, err.Error())
+		log.Warningf("TabletManager.%v(%v)(from %v) error: %v", name, args, ctx, err.Error())
 		return fmt.Errorf("TabletManager.%v on %v error: %v", name, agent.TabletAlias, err)
 	}
 	if verbose {
-		log.Infof("TabletManager.%v(%v)(from %v): %#v", name, args, from, reply)
+		log.Infof("TabletManager.%v(%v)(from %v): %#v", name, args, ctx, reply)
 	}
 	if runAfterAction {
 		agent.afterAction("RPC(" + name + ")")
@@ -66,18 +67,18 @@ func (agent *ActionAgent) rpcWrapper(from, name string, args, reply interface{},
 // 3 - read-write actions that need to take the action lock, and also
 //     need to reload the tablet state.
 
-func (agent *ActionAgent) RpcWrap(from, name string, args, reply interface{}, f func() error) error {
-	return agent.rpcWrapper(from, name, args, reply, false /*verbose*/, f,
+func (agent *ActionAgent) RpcWrap(ctx context.Context, name string, args, reply interface{}, f func() error) error {
+	return agent.rpcWrapper(ctx, name, args, reply, false /*verbose*/, f,
 		false /*lock*/, false /*runAfterAction*/)
 }
 
-func (agent *ActionAgent) RpcWrapLock(from, name string, args, reply interface{}, verbose bool, f func() error) error {
-	return agent.rpcWrapper(from, name, args, reply, verbose, f,
+func (agent *ActionAgent) RpcWrapLock(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error) error {
+	return agent.rpcWrapper(ctx, name, args, reply, verbose, f,
 		true /*lock*/, false /*runAfterAction*/)
 }
 
-func (agent *ActionAgent) RpcWrapLockAction(from, name string, args, reply interface{}, verbose bool, f func() error) error {
-	return agent.rpcWrapper(from, name, args, reply, verbose, f,
+func (agent *ActionAgent) RpcWrapLockAction(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error) error {
+	return agent.rpcWrapper(ctx, name, args, reply, verbose, f,
 		true /*lock*/, true /*runAfterAction*/)
 }
 

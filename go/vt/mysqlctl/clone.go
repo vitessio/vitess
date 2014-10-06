@@ -17,6 +17,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/ioutil2"
 	"github.com/youtube/vitess/go/vt/hook"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
@@ -140,12 +141,12 @@ func (mysqld *Mysqld) FindVtDatabases() ([]string, error) {
 	return dbNames, nil
 }
 
-func (mysqld *Mysqld) createSnapshot(concurrency int, serverMode bool) ([]SnapshotFile, error) {
+func (mysqld *Mysqld) createSnapshot(logger logutil.Logger, concurrency int, serverMode bool) ([]SnapshotFile, error) {
 	sources := make([]string, 0, 128)
 	destinations := make([]string, 0, 128)
 
 	// clean out and start fresh
-	log.Infof("removing previous snapshots: %v", mysqld.SnapshotDir)
+	logger.Infof("removing previous snapshots: %v", mysqld.SnapshotDir)
 	if err := os.RemoveAll(mysqld.SnapshotDir); err != nil {
 		return nil, err
 	}
@@ -232,7 +233,7 @@ func (mysqld *Mysqld) createSnapshot(concurrency int, serverMode bool) ([]Snapsh
 //   Compute hash (of uncompressed files, as we serve uncompressed files)
 //   Place symlinks in /vt/clone_src where they will be served by http server
 //   Leave mysql stopped, return slaveStartRequired, readOnly
-func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchicalReplication bool, concurrency int, serverMode bool, hookExtraEnv map[string]string) (snapshotManifestUrlPath string, slaveStartRequired, readOnly bool, err error) {
+func (mysqld *Mysqld) CreateSnapshot(logger logutil.Logger, dbName, sourceAddr string, allowHierarchicalReplication bool, concurrency int, serverMode bool, hookExtraEnv map[string]string) (snapshotManifestUrlPath string, slaveStartRequired, readOnly bool, err error) {
 	if dbName == "" {
 		return "", false, false, errors.New("CreateSnapshot failed: no database name provided")
 	}
@@ -303,26 +304,26 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 	}
 
 	var smFile string
-	dataFiles, snapshotErr := mysqld.createSnapshot(concurrency, serverMode)
+	dataFiles, snapshotErr := mysqld.createSnapshot(logger, concurrency, serverMode)
 	if snapshotErr != nil {
-		log.Errorf("CreateSnapshot failed: %v", snapshotErr)
+		logger.Errorf("CreateSnapshot failed: %v", snapshotErr)
 	} else {
 		var sm *SnapshotManifest
 		sm, snapshotErr = newSnapshotManifest(sourceAddr, mysqld.IpAddr(),
 			masterAddr, dbName, dataFiles, replicationPosition, proto.ReplicationPosition{})
 		if snapshotErr != nil {
-			log.Errorf("CreateSnapshot failed: %v", snapshotErr)
+			logger.Errorf("CreateSnapshot failed: %v", snapshotErr)
 		} else {
 			smFile = path.Join(mysqld.SnapshotDir, SnapshotManifestFile)
 			if snapshotErr = writeJson(smFile, sm); snapshotErr != nil {
-				log.Errorf("CreateSnapshot failed: %v", snapshotErr)
+				logger.Errorf("CreateSnapshot failed: %v", snapshotErr)
 			}
 		}
 	}
 
 	// restore our state if required
 	if serverMode && snapshotErr == nil {
-		log.Infof("server mode snapshot worked, not restarting mysql")
+		logger.Infof("server mode snapshot worked, not restarting mysql")
 	} else {
 		if err = mysqld.SnapshotSourceEnd(slaveStartRequired, readOnly, false /*deleteSnapshot*/, hookExtraEnv); err != nil {
 			return
@@ -405,27 +406,27 @@ func ReadSnapshotManifest(filename string) (*SnapshotManifest, error) {
 // uncompress into /vt/vt_<target-uid>/data/vt_<keyspace>
 // start_mysql()
 // clean up compressed files
-func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest, fetchConcurrency, fetchRetryCount int, dontWaitForSlaveStart bool, hookExtraEnv map[string]string) error {
+func (mysqld *Mysqld) RestoreFromSnapshot(logger logutil.Logger, snapshotManifest *SnapshotManifest, fetchConcurrency, fetchRetryCount int, dontWaitForSlaveStart bool, hookExtraEnv map[string]string) error {
 	if snapshotManifest == nil {
 		return errors.New("RestoreFromSnapshot: nil snapshotManifest")
 	}
 
-	log.V(6).Infof("ValidateCloneTarget")
+	logger.Infof("ValidateCloneTarget")
 	if err := mysqld.ValidateCloneTarget(hookExtraEnv); err != nil {
 		return err
 	}
 
-	log.V(6).Infof("Shutdown mysqld")
+	logger.Infof("Shutdown mysqld")
 	if err := mysqld.Shutdown(true, MysqlWaitTime); err != nil {
 		return err
 	}
 
-	log.V(6).Infof("Fetch snapshot")
+	logger.Infof("Fetch snapshot")
 	if err := mysqld.fetchSnapshot(snapshotManifest, fetchConcurrency, fetchRetryCount); err != nil {
 		return err
 	}
 
-	log.V(6).Infof("Restart mysqld")
+	logger.Infof("Restart mysqld")
 	if err := mysqld.Start(MysqlWaitTime); err != nil {
 		return err
 	}

@@ -92,7 +92,7 @@ func (wr *Wrangler) MultiRestore(dstTabletAlias topo.TabletAlias, sources []topo
 		return err
 	}
 	for e := range logStream {
-		log.Infof("MultiRestore: %v", e)
+		wr.Logger().Infof("MultiRestore(%v): %v", dstTabletAlias, e)
 	}
 	if err := errFunc(); err != nil {
 		return err
@@ -139,7 +139,7 @@ func (wr *Wrangler) MultiSnapshot(keyRanges []key.KeyRange, tabletAlias topo.Tab
 		return nil, topo.TabletAlias{}, err
 	}
 	for e := range logStream {
-		log.Infof("MultiSnapshot: %v", e)
+		wr.Logger().Infof("MultiSnapshot(%v): %v", tabletAlias, e)
 	}
 	var reply *actionnode.MultiSnapshotReply
 	if reply, err = errFunc(); err != nil {

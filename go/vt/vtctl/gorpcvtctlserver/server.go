@@ -11,7 +11,6 @@ package gorpcvtctlserver
 import (
 	"sync"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/rpcwrap"
 	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -30,18 +29,19 @@ type VtctlServer struct {
 // and stream the results.
 func (s *VtctlServer) ExecuteVtctlCommand(context context.Context, query *gorpcproto.ExecuteVtctlCommandArgs, sendReply func(interface{}) error) error {
 	// create a logger, send the result back to the caller
-	logger := logutil.NewChannelLogger(10)
+	logstream := logutil.NewChannelLogger(10)
+	logger := logutil.NewTeeLogger(logstream, logutil.NewConsoleLogger())
+
+	// send logs to the caller
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		for e := range logger {
+		for e := range logstream {
 			// Note we don't interrupt the loop here, as
 			// we still need to flush and finish the
 			// command, even if the channel to the client
-			// has been broken. We'll just keep logging the lines.
-			if err := sendReply(&e); err != nil {
-				log.Warningf("Cannot send vtctl log line: %v", e)
-			}
+			// has been broken. We'll just keep trying.
+			sendReply(&e)
 		}
 		wg.Done()
 	}()
@@ -53,7 +53,7 @@ func (s *VtctlServer) ExecuteVtctlCommand(context context.Context, query *gorpcp
 	err := vtctl.RunCommand(wr, query.Args)
 
 	// close the log channel, and wait for them all to be sent
-	close(logger)
+	close(logstream)
 	wg.Wait()
 
 	return err

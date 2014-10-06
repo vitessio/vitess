@@ -14,6 +14,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -844,17 +845,17 @@ func agentRpcTestMultiRestore(t *testing.T, client initiator.TabletManagerConn, 
 //
 
 // RpcWrap is part of the RpcAgent interface
-func (fra *fakeRpcAgent) RpcWrap(from, name string, args, reply interface{}, f func() error) error {
+func (fra *fakeRpcAgent) RpcWrap(ctx context.Context, name string, args, reply interface{}, f func() error) error {
 	return f()
 }
 
 // RpcWrapLock is part of the RpcAgent interface
-func (fra *fakeRpcAgent) RpcWrapLock(from, name string, args, reply interface{}, verbose bool, f func() error) error {
+func (fra *fakeRpcAgent) RpcWrapLock(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error) error {
 	return f()
 }
 
 // RpcWrapLockAction is part of the RpcAgent interface
-func (fra *fakeRpcAgent) RpcWrapLockAction(from, name string, args, reply interface{}, verbose bool, f func() error) error {
+func (fra *fakeRpcAgent) RpcWrapLockAction(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error) error {
 	return f()
 }
 

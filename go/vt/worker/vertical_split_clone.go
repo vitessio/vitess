@@ -345,7 +345,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	for i, td := range sourceSchemaDefinition.TableDefinitions {
 		vscw.tableStatus[i].mu.Lock()
 		if td.Type == myproto.TABLE_BASE_TABLE {
-			create, alter, err := mysqlctl.MakeSplitCreateTableSql(td.Schema, "{{.DatabaseName}}", td.Name, vscw.strategy)
+			create, alter, err := mysqlctl.MakeSplitCreateTableSql(vscw.wr.Logger(), td.Schema, "{{.DatabaseName}}", td.Name, vscw.strategy)
 			if err != nil {
 				return fmt.Errorf("MakeSplitCreateTableSql(%v) returned: %v", td.Name, err)
 			}
