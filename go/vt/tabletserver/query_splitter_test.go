@@ -187,24 +187,6 @@ func TestGetSplitBoundaries(t *testing.T) {
 		t.Errorf("incorrect boundaries, got: %v, want: %v", got, want)
 	}
 
-	// No min max rows should return empty bounary list
-	pkMinMax.Rows = [][]sqltypes.Value{}
-	noBounds := []sqltypes.Value{}
-	boundaries = splitter.getSplitBoundaries(pkMinMax)
-	if !reflect.DeepEqual(boundaries, noBounds) {
-		t.Errorf("should return no boundaries")
-	}
-
-	// Null min row should return empty boundary list
-	min = sqltypes.Value{}
-	row = []sqltypes.Value{min, max}
-	rows = [][]sqltypes.Value{row}
-	pkMinMax.Rows = rows
-	boundaries = splitter.getSplitBoundaries(pkMinMax)
-	if !reflect.DeepEqual(boundaries, noBounds) {
-		t.Errorf("should return no boundaries")
-	}
-
 	// Test negative min value
 	min, _ = sqltypes.BuildValue(-100)
 	max, _ = sqltypes.BuildValue(100)

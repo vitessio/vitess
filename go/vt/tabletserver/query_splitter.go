@@ -174,7 +174,7 @@ func (qs *QuerySplitter) getSplitBoundaries(pkMinMax *mproto.QueryResult) []sqlt
 	boundaries := []sqltypes.Value{}
 	var err error
 	if len(pkMinMax.Rows) != 1 || pkMinMax.Rows[0][0].IsNull() || pkMinMax.Rows[0][1].IsNull() {
-		err = fmt.Errorf("no min or max primary key")
+		panic(fmt.Errorf("no min or max primary key"))
 	}
 	switch pkMinMax.Fields[0].Type {
 	case mproto.VT_TINY, mproto.VT_SHORT, mproto.VT_LONG, mproto.VT_LONGLONG, mproto.VT_INT24:

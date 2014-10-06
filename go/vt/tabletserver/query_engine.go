@@ -5,6 +5,7 @@
 package tabletserver
 
 import (
+	"fmt"
 	"time"
 
 	log "github.com/golang/glog"
@@ -18,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
 const (
