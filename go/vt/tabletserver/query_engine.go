@@ -234,61 +234,6 @@ func (qe *QueryEngine) Close() {
 	qe.dbconfig = nil
 }
 
-// Begin begins a transaction.
-func (qe *QueryEngine) Begin(logStats *SQLQueryStats) int64 {
-	defer queryStats.Record("BEGIN", time.Now())
-
-	conn, err := qe.txPool.TryGet()
-	if err == dbconnpool.CONN_POOL_CLOSED_ERR {
-		panic(connPoolClosedErr)
-	}
-	if err != nil {
-		panic(NewTabletErrorSql(FATAL, err))
-	}
-	if conn == nil {
-		qe.activeTxPool.LogActive()
-		panic(NewTabletError(TX_POOL_FULL, "Transaction pool connection limit exceeded"))
-	}
-	transactionID, err := qe.activeTxPool.SafeBegin(conn)
-	if err != nil {
-		conn.Recycle()
-		panic(err)
-	}
-	return transactionID
-}
-
-// Commit commits the specified transaction.
-func (qe *QueryEngine) Commit(logStats *SQLQueryStats, transactionID int64) {
-	defer queryStats.Record("COMMIT", time.Now())
-	dirtyTables, err := qe.activeTxPool.SafeCommit(transactionID)
-	qe.invalidateRows(logStats, dirtyTables)
-	if err != nil {
-		panic(err)
-	}
-}
-
-func (qe *QueryEngine) invalidateRows(logStats *SQLQueryStats, dirtyTables map[string]DirtyKeys) {
-	for tableName, invalidList := range dirtyTables {
-		tableInfo := qe.schemaInfo.GetTable(tableName)
-		if tableInfo == nil {
-			continue
-		}
-		invalidations := int64(0)
-		for key := range invalidList {
-			tableInfo.Cache.Delete(key)
-			invalidations++
-		}
-		logStats.CacheInvalidations += invalidations
-		tableInfo.invalidations.Add(invalidations)
-	}
-}
-
-// Rollback rolls back the specified transaction.
-func (qe *QueryEngine) Rollback(logStats *SQLQueryStats, transactionID int64) {
-	defer queryStats.Record("ROLLBACK", time.Now())
-	qe.activeTxPool.Rollback(transactionID)
-}
-
 func (qe *QueryEngine) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value) (result *mproto.QueryResult) {
 	sql := qe.generateFinalSql(parsedQuery, bindVars, listVars, nil)
 	q, ok := qe.consolidator.Create(string(sql))

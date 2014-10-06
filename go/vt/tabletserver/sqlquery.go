@@ -232,7 +232,7 @@ func (sq *SqlQuery) Begin(context context.Context, session *proto.Session, txInf
 		return NewTabletError(RETRY, "Invalid session Id %v", session.SessionId)
 	}
 
-	txInfo.TransactionId = sq.qe.Begin(logStats)
+	txInfo.TransactionId = Begin(logStats, sq.qe)
 	logStats.TransactionID = txInfo.TransactionId
 	return nil
 }
@@ -278,7 +278,7 @@ func (sq *SqlQuery) Commit(context context.Context, session *proto.Session) (err
 	defer sq.endRequest()
 	defer handleError(&err, logStats)
 
-	sq.qe.Commit(logStats, session.TransactionId)
+	Commit(logStats, sq.qe, session.TransactionId)
 	return nil
 }
 
@@ -293,7 +293,7 @@ func (sq *SqlQuery) Rollback(context context.Context, session *proto.Session) (e
 	defer sq.endRequest()
 	defer handleError(&err, logStats)
 
-	sq.qe.Rollback(logStats, session.TransactionId)
+	Rollback(logStats, sq.qe, session.TransactionId)
 	return nil
 }
 
