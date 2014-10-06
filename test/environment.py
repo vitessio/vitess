@@ -149,11 +149,13 @@ def topo_server_setup(add_bad_host=False):
 
 def topo_server_teardown():
   global zk_port_base
+  import utils
   zk_ports = ":".join([str(zk_port_base), str(zk_port_base+1), str(zk_port_base+2)])
   run(binary_args('zkctl') + [
        '-log_dir', vtlogroot,
        '-zk.cfg', '1@%s:%s' % (hostname, zk_ports),
-       'teardown'], raise_on_error=False)
+       'shutdown' if utils.options.keep_logs else 'teardown'],
+      raise_on_error=False)
 
 def topo_server_wipe():
   # Work around safety check on recursive delete.

@@ -69,6 +69,8 @@ def main(mod=None):
   parser = optparse.OptionParser(usage="usage: %prog [options] [test_names]")
   parser.add_option('-d', '--debug', action='store_true', help='utils.pause() statements will wait for user input')
   parser.add_option('--skip-teardown', action='store_true')
+  parser.add_option('-k', '--keep-logs', action='store_true',
+                    help="Don't delete log files on teardown.")
   parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=1)
   parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=1)
   parser.add_option("--mysql-flavor", action="store", type="string")
@@ -113,8 +115,14 @@ def main(mod=None):
     mod.tearDownModule()
     # If you interrupt a test, you probably want to stop evaluating the rest.
     sys.exit(1)
+  finally:
+    if options.keep_logs:
+      logging.warning("Leaving temporary files behind (--keep-logs), please "
+                      "clean up before next run: " + os.environ["VTDATAROOT"])
 
 def remove_tmp_files():
+  if options.keep_logs:
+    return
   try:
     shutil.rmtree(environment.tmproot)
   except OSError as e:
@@ -267,7 +275,8 @@ def zk_setup(add_bad_host=False):
 def zk_teardown():
   global zk_port_base
   zk_ports = ":".join([str(zk_port_base), str(zk_port_base+1), str(zk_port_base+2)])
-  run('%s -log_dir %s -zk.cfg 1@%s:%s teardown' % (environment.binary_argstr('zkctl'), environment.vtlogroot, hostname, zk_ports), raise_on_error=False)
+  action = 'shutdown' if options.keep_logs else 'teardown'
+  run('%s -log_dir %s -zk.cfg 1@%s:%s %s' % (environment.binary_argstr('zkctl'), environment.vtlogroot, hostname, zk_ports, action), raise_on_error=False)
 
 def zk_wipe():
   # Work around safety check on recursive delete.

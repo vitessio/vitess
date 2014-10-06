@@ -28,6 +28,8 @@ if __name__ == "__main__":
   parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=1)
   parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=0)
   parser.add_option('--skip-teardown', action='store_true')
+  parser.add_option('-k', '--keep-logs', action='store_true',
+                    help="Don't delete log files on teardown.")
   parser.add_option("--mysql-flavor", action="store", type="string")
   (options, args) = parser.parse_args()
 
@@ -71,4 +73,6 @@ if __name__ == "__main__":
   finally:
     if not options.skip_teardown:
       env.tearDown()
-
+    if options.keep_logs:
+      print("Leaving temporary files behind (--keep-logs), please "
+            "clean up before next run: " + os.environ["VTDATAROOT"])
