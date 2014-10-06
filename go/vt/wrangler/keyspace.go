@@ -275,6 +275,7 @@ func (wr *Wrangler) waitForFilteredReplication(sourcePositions map[*topo.ShardIn
 	for _, si := range destinationShards {
 		wg.Add(1)
 		go func(si *topo.ShardInfo) {
+			defer wg.Done()
 			for _, sourceShard := range si.SourceShards {
 				// we're waiting on this guy
 				blpPosition := blproto.BlpPosition{
@@ -288,13 +289,19 @@ func (wr *Wrangler) waitForFilteredReplication(sourcePositions map[*topo.ShardIn
 					}
 				}
 
+				// and wait for it
 				log.Infof("Waiting for %v to catch up", si.MasterAlias)
-				if err := wr.ai.WaitBlpPosition(si.MasterAlias, blpPosition, wr.ActionTimeout()); err != nil {
+				tablet, err := wr.ts.GetTablet(si.MasterAlias)
+				if err != nil {
+					rec.RecordError(err)
+					return
+				}
+
+				if err := wr.ai.WaitBlpPosition(tablet, blpPosition, wr.ActionTimeout()); err != nil {
 					rec.RecordError(err)
 				} else {
 					log.Infof("%v caught up", si.MasterAlias)
 				}
-				wg.Done()
 			}
 		}(si)
 	}
@@ -616,7 +623,11 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 
 		// wait for it
 		event.DispatchUpdate(ev, "waiting for destination master to catch up to source master")
-		if err := wr.ai.WaitBlpPosition(si.MasterAlias, blproto.BlpPosition{
+		tablet, err := wr.ts.GetTablet(si.MasterAlias)
+		if err != nil {
+			return err
+		}
+		if err := wr.ai.WaitBlpPosition(tablet, blproto.BlpPosition{
 			Uid:      0,
 			Position: masterPosition,
 		}, wr.ActionTimeout()); err != nil {

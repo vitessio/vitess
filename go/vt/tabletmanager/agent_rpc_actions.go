@@ -472,9 +472,9 @@ func (agent *ActionAgent) tabletExternallyReparentedLocked(actionTimeout time.Du
 	// we're still good.
 	event.DispatchUpdate(ev, "restarting slaves")
 	logger := logutil.NewConsoleLogger()
-	ai := initiator.NewActionInitiator(agent.TopoServer)
+	tmc := initiator.NewTabletManagerConn()
 	topotools.RestartSlavesExternal(agent.TopoServer, logger, slaveTabletMap, masterTabletMap, masterElectTablet.Alias, func(ti *topo.TabletInfo, swrd *actionnode.SlaveWasRestartedArgs) error {
-		return ai.SlaveWasRestarted(ti, swrd, actionTimeout)
+		return tmc.SlaveWasRestarted(ti, swrd, actionTimeout)
 	})
 
 	// Compute the list of Cells we need to rebuild: old master and

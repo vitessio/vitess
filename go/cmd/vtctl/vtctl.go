@@ -19,7 +19,6 @@ import (
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
-	"github.com/youtube/vitess/go/vt/tabletmanager/initiator"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -49,10 +48,8 @@ func installSignalHandlers() {
 	go func() {
 		<-sigChan
 		// we got a signal, notify our modules:
-		// - initiator will interrupt anything waiting on a tablet action
 		// - wrangler will interrupt anything waiting on a shard or
 		//   keyspace lock
-		initiator.SignalInterrupt()
 		wrangler.SignalInterrupt()
 	}()
 }

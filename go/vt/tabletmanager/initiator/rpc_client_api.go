@@ -5,6 +5,7 @@
 package initiator
 
 import (
+	"flag"
 	"time"
 
 	log "github.com/golang/glog"
@@ -16,6 +17,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
+
+var tabletManagerProtocol = flag.String("tablet_manager_protocol", "bson", "the protocol to use to talk to vttablet")
 
 // ErrFunc is used by streaming RPCs that don't return a specific result
 type ErrFunc func() error
@@ -173,7 +176,7 @@ type TabletManagerConn interface {
 	MultiRestore(tablet *topo.TabletInfo, sa *actionnode.MultiRestoreArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, ErrFunc, error)
 }
 
-type TabletManagerConnFactory func(topo.Server) TabletManagerConn
+type TabletManagerConnFactory func() TabletManagerConn
 
 var tabletManagerConnFactories = make(map[string]TabletManagerConnFactory)
 
@@ -182,4 +185,13 @@ func RegisterTabletManagerConnFactory(name string, factory TabletManagerConnFact
 		log.Fatalf("RegisterTabletManagerConn %s already exists", name)
 	}
 	tabletManagerConnFactories[name] = factory
+}
+
+func NewTabletManagerConn() TabletManagerConn {
+	f, ok := tabletManagerConnFactories[*tabletManagerProtocol]
+	if !ok {
+		log.Fatalf("No TabletManagerProtocol registered with name %s", *tabletManagerProtocol)
+	}
+
+	return &ActionInitiator{f()}
 }

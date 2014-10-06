@@ -30,7 +30,7 @@ var (
 type Wrangler struct {
 	logger      logutil.Logger
 	ts          topo.Server
-	ai          *initiator.ActionInitiator
+	ai          initiator.TabletManagerConn
 	deadline    time.Time
 	lockTimeout time.Duration
 }
@@ -49,7 +49,7 @@ type Wrangler struct {
 // fail. However, automated action will need some time to arbitrate
 // the locks.
 func New(logger logutil.Logger, ts topo.Server, actionTimeout, lockTimeout time.Duration) *Wrangler {
-	return &Wrangler{logger, ts, initiator.NewActionInitiator(ts), time.Now().Add(actionTimeout), lockTimeout}
+	return &Wrangler{logger, ts, initiator.NewTabletManagerConn(), time.Now().Add(actionTimeout), lockTimeout}
 }
 
 // ActionTimeout returns the timeout to use so the action finishes before
@@ -64,7 +64,7 @@ func (wr *Wrangler) TopoServer() topo.Server {
 }
 
 // ActionInitiator returns the initiator.ActionInitiator this wrangler is using.
-func (wr *Wrangler) ActionInitiator() *initiator.ActionInitiator {
+func (wr *Wrangler) ActionInitiator() initiator.TabletManagerConn {
 	return wr.ai
 }
 

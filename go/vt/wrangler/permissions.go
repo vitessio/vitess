@@ -16,7 +16,12 @@ import (
 )
 
 func (wr *Wrangler) GetPermissions(tabletAlias topo.TabletAlias) (*myproto.Permissions, error) {
-	return wr.ai.GetPermissions(tabletAlias, wr.ActionTimeout())
+	tablet, err := wr.ts.GetTablet(tabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	return wr.ai.GetPermissions(tablet, wr.ActionTimeout())
 }
 
 // helper method to asynchronously diff a permissions

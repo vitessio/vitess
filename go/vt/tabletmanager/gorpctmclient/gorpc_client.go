@@ -22,7 +22,7 @@ import (
 )
 
 func init() {
-	initiator.RegisterTabletManagerConnFactory("bson", func(ts topo.Server) initiator.TabletManagerConn {
+	initiator.RegisterTabletManagerConnFactory("bson", func() initiator.TabletManagerConn {
 		return &GoRpcTabletManagerConn{}
 	})
 }

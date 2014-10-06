@@ -259,9 +259,14 @@ func (sdw *SplitDiffWorker) findTargets() error {
 func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	sdw.setState(stateSDSynchronizeReplication)
 
+	masterInfo, err := sdw.wr.TopoServer().GetTablet(sdw.shardInfo.MasterAlias)
+	if err != nil {
+		return fmt.Errorf("synchronizeReplication: cannot get Tablet record for master %v: %v", sdw.shardInfo.MasterAlias, err)
+	}
+
 	// 1 - stop the master binlog replication, get its current position
 	sdw.wr.Logger().Infof("Stopping master binlog replication on %v", sdw.shardInfo.MasterAlias)
-	blpPositionList, err := sdw.wr.ActionInitiator().StopBlp(sdw.shardInfo.MasterAlias, 30*time.Second)
+	blpPositionList, err := sdw.wr.ActionInitiator().StopBlp(masterInfo, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("StopBlp for %v failed: %v", sdw.shardInfo.MasterAlias, err)
 	}
@@ -279,9 +284,15 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 			return fmt.Errorf("no binlog position on the master for Uid %v", ss.Uid)
 		}
 
+		// read the tablet
+		tablet, err := sdw.wr.TopoServer().GetTablet(sdw.sourceAliases[i])
+		if err != nil {
+			return err
+		}
+
 		// stop replication
 		sdw.wr.Logger().Infof("Stopping slave[%v] %v at a minimum of %v", i, sdw.sourceAliases[i], blpPos.Position)
-		stoppedAt, err := sdw.wr.ActionInitiator().StopSlaveMinimum(sdw.sourceAliases[i], blpPos.Position, 30*time.Second)
+		stoppedAt, err := sdw.wr.ActionInitiator().StopSlaveMinimum(tablet, blpPos.Position, 30*time.Second)
 		if err != nil {
 			return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", sdw.sourceAliases[i], blpPos.Position, err)
 		}
@@ -301,7 +312,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	// 3 - ask the master of the destination shard to resume filtered
 	//     replication up to the new list of positions
 	sdw.wr.Logger().Infof("Restarting master %v until it catches up to %v", sdw.shardInfo.MasterAlias, stopPositionList)
-	masterPos, err := sdw.wr.ActionInitiator().RunBlpUntil(sdw.shardInfo.MasterAlias, &stopPositionList, 30*time.Second)
+	masterPos, err := sdw.wr.ActionInitiator().RunBlpUntil(masterInfo, &stopPositionList, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("RunBlpUntil for %v until %v failed: %v", sdw.shardInfo.MasterAlias, stopPositionList, err)
 	}
@@ -309,7 +320,11 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	// 4 - wait until the destination checker is equal or passed
 	//     that master binlog position, and stop its replication.
 	sdw.wr.Logger().Infof("Waiting for destination checker %v to catch up to %v", sdw.destinationAlias, masterPos)
-	_, err = sdw.wr.ActionInitiator().StopSlaveMinimum(sdw.destinationAlias, masterPos, 30*time.Second)
+	tablet, err := sdw.wr.TopoServer().GetTablet(sdw.destinationAlias)
+	if err != nil {
+		return err
+	}
+	_, err = sdw.wr.ActionInitiator().StopSlaveMinimum(tablet, masterPos, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("StopSlaveMinimum for %v at %v failed: %v", sdw.destinationAlias, masterPos, err)
 	}
@@ -322,7 +337,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 
 	// 5 - restart filtered replication on destination master
 	sdw.wr.Logger().Infof("Restarting filtered replication on master %v", sdw.shardInfo.MasterAlias)
-	err = sdw.wr.ActionInitiator().StartBlp(sdw.shardInfo.MasterAlias, 30*time.Second)
+	err = sdw.wr.ActionInitiator().StartBlp(masterInfo, 30*time.Second)
 	if err := sdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String()); err != nil {
 		sdw.wr.Logger().Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String(), err)
 	}

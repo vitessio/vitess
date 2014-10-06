@@ -1194,7 +1194,11 @@ func commandShardExternallyReparented(wr *wrangler.Wrangler, subFlags *flag.Flag
 		return err
 	}
 	if *useRpc {
-		return wr.ActionInitiator().TabletExternallyReparented(tabletAlias, wr.ActionTimeout())
+		ti, err := wr.TopoServer().GetTablet(tabletAlias)
+		if err != nil {
+			return err
+		}
+		return wr.ActionInitiator().TabletExternallyReparented(ti, wr.ActionTimeout())
 	}
 	return wr.ShardExternallyReparented(keyspace, shard, tabletAlias)
 }
