@@ -5,27 +5,25 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/hack"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/schema"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
-
-type RequestContext struct {
-	ctx      context.Context
-	logStats *SQLQueryStats
-	qe       *QueryEngine
-}
 
 type requestExecutor struct {
 	query         string
 	bindVars      map[string]interface{}
 	transactionID int64
 	plan          *ExecPlan
-	rq            RequestContext
+	ctx           context.Context
+	logStats      *SQLQueryStats
+	qe            *QueryEngine
 }
 
 // ExecuteQuery executes a single query request. It fetches (or builds) the plan
@@ -41,11 +39,9 @@ func ExecuteQuery(ctx context.Context, logStats *SQLQueryStats, qe *QueryEngine,
 		bindVars:      query.BindVariables,
 		transactionID: query.TransactionId,
 		plan:          qe.schemaInfo.GetPlan(logStats, query.Sql),
-		rq: RequestContext{
-			ctx:      ctx,
-			logStats: logStats,
-			qe:       qe,
-		},
+		ctx:           ctx,
+		logStats:      logStats,
+		qe:            qe,
 	}
 	return rqe.execute()
 }
@@ -64,40 +60,61 @@ func ExecuteStreamQuery(ctx context.Context, logStats *SQLQueryStats, qe *QueryE
 		bindVars:      query.BindVariables,
 		transactionID: query.TransactionId,
 		plan:          qe.schemaInfo.GetStreamPlan(query.Sql),
-		rq: RequestContext{
-			ctx:      ctx,
-			logStats: logStats,
-			qe:       qe,
-		},
+		ctx:           ctx,
+		logStats:      logStats,
+		qe:            qe,
 	}
 	rqe.stream(sendReply)
 }
 
+// SplitQuery uses QuerySplitter to split a BoundQuery into smaller queries
+// that return a subset of rows from the original query.
+func SplitQuery(ctx context.Context, logStats *SQLQueryStats, qe *QueryEngine, query *proto.BoundQuery, splitCount int) ([]proto.QuerySplit, error) {
+	splitter := NewQuerySplitter(query, splitCount, qe.schemaInfo)
+	err := splitter.validateQuery()
+	if err != nil {
+		return nil, NewTabletError(FAIL, "query validation error: %s", err)
+	}
+	// Partial initialization or requestExecutor is enough to call execSQL
+	rqe := &requestExecutor{
+		ctx:      ctx,
+		logStats: logStats,
+		qe:       qe,
+	}
+	conn := getOrPanic(qe.connPool)
+	// TODO: For fetching pkMinMax, include where clauses on the
+	// primary key, if any, in the original query which might give a narrower
+	// range of PKs to work with.
+	minMaxSql := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v", splitter.pkCol, splitter.pkCol, splitter.tableName)
+	pkMinMax := rqe.execSQL(conn, minMaxSql, true)
+	return splitter.split(pkMinMax), nil
+}
+
 func (rqe *requestExecutor) stream(sendReply func(*mproto.QueryResult) error) {
-	rqe.rq.logStats.OriginalSql = rqe.query
-	rqe.rq.logStats.PlanType = rqe.plan.PlanId.String()
+	rqe.logStats.OriginalSql = rqe.query
+	rqe.logStats.PlanType = rqe.plan.PlanId.String()
 	defer queryStats.Record(rqe.plan.PlanId.String(), time.Now())
 
 	rqe.checkPermissions()
 
 	waitingForConnectionStart := time.Now()
-	conn := getOrPanic(rqe.rq.qe.streamConnPool)
-	rqe.rq.logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
+	conn := getOrPanic(rqe.qe.streamConnPool)
+	rqe.logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 	defer conn.Recycle()
 
-	qd := NewQueryDetail(rqe.query, rqe.rq.logStats.context, conn.Id())
-	rqe.rq.qe.streamQList.Add(qd)
-	defer rqe.rq.qe.streamQList.Remove(qd)
+	qd := NewQueryDetail(rqe.query, rqe.logStats.context, conn.Id())
+	rqe.qe.streamQList.Add(qd)
+	defer rqe.qe.streamQList.Remove(qd)
 
-	rqe.rq.qe.fullStreamFetch(rqe.rq.logStats, conn, rqe.plan.FullQuery, rqe.bindVars, nil, nil, sendReply)
+	rqe.fullStreamFetch(conn, rqe.plan.FullQuery, rqe.bindVars, nil, nil, sendReply)
 }
 
 func (rqe *requestExecutor) execute() (reply *mproto.QueryResult) {
-	rqe.rq.logStats.OriginalSql = rqe.query
-	rqe.rq.logStats.BindVariables = rqe.bindVars
-	rqe.rq.logStats.TransactionID = rqe.transactionID
+	rqe.logStats.OriginalSql = rqe.query
+	rqe.logStats.BindVariables = rqe.bindVars
+	rqe.logStats.TransactionID = rqe.transactionID
 	planName := rqe.plan.PlanId.String()
-	rqe.rq.logStats.PlanType = planName
+	rqe.logStats.PlanType = planName
 	defer func(start time.Time) {
 		duration := time.Now().Sub(start)
 		queryStats.Add(planName, duration)
@@ -116,7 +133,7 @@ func (rqe *requestExecutor) execute() (reply *mproto.QueryResult) {
 
 	if rqe.transactionID != 0 {
 		// Need upfront connection for DMLs and transactions
-		conn := rqe.rq.qe.activeTxPool.Get(rqe.transactionID)
+		conn := rqe.qe.activeTxPool.Get(rqe.transactionID)
 		defer conn.Recycle()
 		conn.RecordQuery(rqe.query)
 		var invalidator CacheInvalidator
@@ -125,10 +142,10 @@ func (rqe *requestExecutor) execute() (reply *mproto.QueryResult) {
 		}
 		switch rqe.plan.PlanId {
 		case planbuilder.PLAN_PASS_DML:
-			if rqe.rq.qe.strictMode.Get() != 0 {
+			if rqe.qe.strictMode.Get() != 0 {
 				panic(NewTabletError(FAIL, "DML too complex"))
 			}
-			reply = rqe.rq.qe.directFetch(rqe.rq.logStats, conn, rqe.plan.FullQuery, rqe.bindVars, nil, nil)
+			reply = rqe.directFetch(conn, rqe.plan.FullQuery, rqe.bindVars, nil, nil)
 		case planbuilder.PLAN_INSERT_PK:
 			reply = rqe.execInsertPK(conn)
 		case planbuilder.PLAN_INSERT_SUBQUERY:
@@ -138,7 +155,7 @@ func (rqe *requestExecutor) execute() (reply *mproto.QueryResult) {
 		case planbuilder.PLAN_DML_SUBQUERY:
 			reply = rqe.execDMLSubquery(conn, invalidator)
 		case planbuilder.PLAN_OTHER:
-			reply = rqe.rq.qe.execSQL(rqe.rq.logStats, conn, rqe.query, true)
+			reply = rqe.execSQL(conn, rqe.query, true)
 		default: // select or set in a transaction, just count as select
 			reply = rqe.execDirect(conn)
 		}
@@ -159,18 +176,18 @@ func (rqe *requestExecutor) execute() (reply *mproto.QueryResult) {
 			reply = rqe.execSet()
 		case planbuilder.PLAN_OTHER:
 			waitingForConnectionStart := time.Now()
-			conn := getOrPanic(rqe.rq.qe.connPool)
-			rqe.rq.logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
+			conn := getOrPanic(rqe.qe.connPool)
+			rqe.logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 			defer conn.Recycle()
-			reply = rqe.rq.qe.execSQL(rqe.rq.logStats, conn, rqe.query, true)
+			reply = rqe.execSQL(conn, rqe.query, true)
 		default:
 			panic(NewTabletError(NOT_IN_TX, "DMLs not allowed outside of transactions"))
 		}
 	}
 	if rqe.plan.PlanId.IsSelect() {
-		rqe.rq.logStats.RowsAffected = int(reply.RowsAffected)
+		rqe.logStats.RowsAffected = int(reply.RowsAffected)
 		resultStats.Add(int64(reply.RowsAffected))
-		rqe.rq.logStats.Rows = reply.Rows
+		rqe.logStats.Rows = reply.Rows
 	}
 
 	return reply
@@ -178,7 +195,7 @@ func (rqe *requestExecutor) execute() (reply *mproto.QueryResult) {
 
 func (rqe *requestExecutor) checkPermissions() {
 	// Blacklist
-	action, desc := rqe.plan.Rules.getAction(rqe.rq.ctx.GetRemoteAddr(), rqe.rq.ctx.GetUsername(), rqe.bindVars)
+	action, desc := rqe.plan.Rules.getAction(rqe.ctx.GetRemoteAddr(), rqe.ctx.GetUsername(), rqe.bindVars)
 	switch action {
 	case QR_FAIL:
 		panic(NewTabletError(FAIL, "Query disallowed due to rule: %s", desc))
@@ -187,12 +204,12 @@ func (rqe *requestExecutor) checkPermissions() {
 	}
 
 	// ACLs
-	if !rqe.plan.Authorized.IsMember(rqe.rq.ctx.GetUsername()) {
-		errStr := fmt.Sprintf("table acl error: %v cannot run %v on table %v", rqe.rq.ctx.GetUsername(), rqe.plan.PlanId, rqe.plan.TableName)
-		if rqe.rq.qe.strictTableAcl {
+	if !rqe.plan.Authorized.IsMember(rqe.ctx.GetUsername()) {
+		errStr := fmt.Sprintf("table acl error: %v cannot run %v on table %v", rqe.ctx.GetUsername(), rqe.plan.PlanId, rqe.plan.TableName)
+		if rqe.qe.strictTableAcl {
 			panic(NewTabletError(FAIL, "%s", errStr))
 		}
-		rqe.rq.qe.accessCheckerLogger.Errorf("%s", errStr)
+		rqe.qe.accessCheckerLogger.Errorf("%s", errStr)
 	}
 }
 
@@ -203,25 +220,25 @@ func (rqe *requestExecutor) execDDL() *mproto.QueryResult {
 	}
 
 	// Stolen from Begin
-	conn := getOrPanic(rqe.rq.qe.txPool)
-	txid, err := rqe.rq.qe.activeTxPool.SafeBegin(conn)
+	conn := getOrPanic(rqe.qe.txPool)
+	txid, err := rqe.qe.activeTxPool.SafeBegin(conn)
 	if err != nil {
 		conn.Recycle()
 		panic(err)
 	}
 	// Stolen from Commit
-	defer rqe.rq.qe.activeTxPool.SafeCommit(txid)
+	defer rqe.qe.activeTxPool.SafeCommit(txid)
 
 	// Stolen from Execute
-	conn = rqe.rq.qe.activeTxPool.Get(txid)
+	conn = rqe.qe.activeTxPool.Get(txid)
 	defer conn.Recycle()
-	result := rqe.rq.qe.execSQL(rqe.rq.logStats, conn, rqe.query, false)
+	result := rqe.execSQL(conn, rqe.query, false)
 	if ddlPlan.TableName != "" && ddlPlan.TableName != ddlPlan.NewName {
 		// It's a drop or rename.
-		rqe.rq.qe.schemaInfo.DropTable(ddlPlan.TableName)
+		rqe.qe.schemaInfo.DropTable(ddlPlan.TableName)
 	}
 	if ddlPlan.NewName != "" {
-		rqe.rq.qe.schemaInfo.CreateOrUpdateTable(ddlPlan.NewName)
+		rqe.qe.schemaInfo.CreateOrUpdateTable(ddlPlan.NewName)
 	}
 	return result
 }
@@ -247,7 +264,7 @@ func (rqe *requestExecutor) execPKEqual() (result *mproto.QueryResult) {
 }
 
 func (rqe *requestExecutor) fetchOne(pk []sqltypes.Value) (row []sqltypes.Value) {
-	rqe.rq.logStats.QuerySources |= QUERY_SOURCE_ROWCACHE
+	rqe.logStats.QuerySources |= QUERY_SOURCE_ROWCACHE
 	tableInfo := rqe.plan.TableInfo
 	keys := make([]string, 1)
 	keys[0] = buildKey(pk)
@@ -257,19 +274,19 @@ func (rqe *requestExecutor) fetchOne(pk []sqltypes.Value) (row []sqltypes.Value)
 		if rqe.mustVerify() {
 			rqe.spotCheck(rcresult, pk)
 		}
-		rqe.rq.logStats.CacheHits++
+		rqe.logStats.CacheHits++
 		tableInfo.hits.Add(1)
 		return rcresult.Row
 	}
-	resultFromdb := rqe.rq.qe.qFetch(rqe.rq.logStats, rqe.plan.OuterQuery, rqe.bindVars, pk)
+	resultFromdb := rqe.qFetch(rqe.logStats, rqe.plan.OuterQuery, rqe.bindVars, pk)
 	if len(resultFromdb.Rows) == 0 {
-		rqe.rq.logStats.CacheAbsent++
+		rqe.logStats.CacheAbsent++
 		tableInfo.absent.Add(1)
 		return nil
 	}
 	row = resultFromdb.Rows[0]
 	tableInfo.Cache.Set(keys[0], row, rcresult.Cas)
-	rqe.rq.logStats.CacheMisses++
+	rqe.logStats.CacheMisses++
 	tableInfo.misses.Add(1)
 	return row
 }
@@ -283,7 +300,7 @@ func (rqe *requestExecutor) execPKIN() (result *mproto.QueryResult) {
 }
 
 func (rqe *requestExecutor) execSubquery() (result *mproto.QueryResult) {
-	innerResult := rqe.rq.qe.qFetch(rqe.rq.logStats, rqe.plan.Subquery, rqe.bindVars, nil)
+	innerResult := rqe.qFetch(rqe.logStats, rqe.plan.Subquery, rqe.bindVars, nil)
 	return rqe.fetchMulti(innerResult.Rows)
 }
 
@@ -320,7 +337,7 @@ func (rqe *requestExecutor) fetchMulti(pkRows [][]sqltypes.Value) (result *mprot
 		}
 	}
 	if len(missingRows) != 0 {
-		resultFromdb := rqe.rq.qe.qFetch(rqe.rq.logStats, rqe.plan.OuterQuery, rqe.bindVars, missingRows)
+		resultFromdb := rqe.qFetch(rqe.logStats, rqe.plan.OuterQuery, rqe.bindVars, missingRows)
 		misses = int64(len(resultFromdb.Rows))
 		absent = int64(len(pkRows)) - hits - misses
 		for _, row := range resultFromdb.Rows {
@@ -330,11 +347,11 @@ func (rqe *requestExecutor) fetchMulti(pkRows [][]sqltypes.Value) (result *mprot
 		}
 	}
 
-	rqe.rq.logStats.CacheHits = hits
-	rqe.rq.logStats.CacheAbsent = absent
-	rqe.rq.logStats.CacheMisses = misses
+	rqe.logStats.CacheHits = hits
+	rqe.logStats.CacheAbsent = absent
+	rqe.logStats.CacheMisses = misses
 
-	rqe.rq.logStats.QuerySources |= QUERY_SOURCE_ROWCACHE
+	rqe.logStats.QuerySources |= QUERY_SOURCE_ROWCACHE
 
 	tableInfo.hits.Add(hits)
 	tableInfo.absent.Add(absent)
@@ -345,12 +362,12 @@ func (rqe *requestExecutor) fetchMulti(pkRows [][]sqltypes.Value) (result *mprot
 }
 
 func (rqe *requestExecutor) mustVerify() bool {
-	return (Rand() % SPOT_CHECK_MULTIPLIER) < rqe.rq.qe.spotCheckFreq.Get()
+	return (Rand() % SPOT_CHECK_MULTIPLIER) < rqe.qe.spotCheckFreq.Get()
 }
 
 func (rqe *requestExecutor) spotCheck(rcresult RCResult, pk []sqltypes.Value) {
 	spotCheckCount.Add(1)
-	resultFromdb := rqe.rq.qe.qFetch(rqe.rq.logStats, rqe.plan.OuterQuery, rqe.bindVars, pk)
+	resultFromdb := rqe.qFetch(rqe.logStats, rqe.plan.OuterQuery, rqe.bindVars, pk)
 	var dbrow []sqltypes.Value
 	if len(resultFromdb.Rows) != 0 {
 		dbrow = resultFromdb.Rows[0]
@@ -377,11 +394,11 @@ func (rqe *requestExecutor) recheckLater(rcresult RCResult, dbrow []sqltypes.Val
 // execDirect always sends the query to mysql
 func (rqe *requestExecutor) execDirect(conn dbconnpool.PoolConnection) (result *mproto.QueryResult) {
 	if rqe.plan.Fields != nil {
-		result = rqe.rq.qe.directFetch(rqe.rq.logStats, conn, rqe.plan.FullQuery, rqe.bindVars, nil, nil)
+		result = rqe.directFetch(conn, rqe.plan.FullQuery, rqe.bindVars, nil, nil)
 		result.Fields = rqe.plan.Fields
 		return
 	}
-	result = rqe.rq.qe.fullFetch(rqe.rq.logStats, conn, rqe.plan.FullQuery, rqe.bindVars, nil, nil)
+	result = rqe.fullFetch(conn, rqe.plan.FullQuery, rqe.bindVars, nil, nil)
 	return
 }
 
@@ -389,15 +406,15 @@ func (rqe *requestExecutor) execDirect(conn dbconnpool.PoolConnection) (result *
 // reuses the result. If the plan is missng field info, it sends the query to mysql requesting full info.
 func (rqe *requestExecutor) execSelect() (result *mproto.QueryResult) {
 	if rqe.plan.Fields != nil {
-		result = rqe.rq.qe.qFetch(rqe.rq.logStats, rqe.plan.FullQuery, rqe.bindVars, nil)
+		result = rqe.qFetch(rqe.logStats, rqe.plan.FullQuery, rqe.bindVars, nil)
 		result.Fields = rqe.plan.Fields
 		return
 	}
 	waitingForConnectionStart := time.Now()
-	conn := getOrPanic(rqe.rq.qe.connPool)
-	rqe.rq.logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
+	conn := getOrPanic(rqe.qe.connPool)
+	rqe.logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 	defer conn.Recycle()
-	result = rqe.rq.qe.fullFetch(rqe.rq.logStats, conn, rqe.plan.FullQuery, rqe.bindVars, nil, nil)
+	result = rqe.fullFetch(conn, rqe.plan.FullQuery, rqe.bindVars, nil, nil)
 	return
 }
 
@@ -410,7 +427,7 @@ func (rqe *requestExecutor) execInsertPK(conn dbconnpool.PoolConnection) (result
 }
 
 func (rqe *requestExecutor) execInsertSubquery(conn dbconnpool.PoolConnection) (result *mproto.QueryResult) {
-	innerResult := rqe.rq.qe.directFetch(rqe.rq.logStats, conn, rqe.plan.Subquery, rqe.bindVars, nil, nil)
+	innerResult := rqe.directFetch(conn, rqe.plan.Subquery, rqe.bindVars, nil, nil)
 	innerRows := innerResult.Rows
 	if len(innerRows) == 0 {
 		return &mproto.QueryResult{RowsAffected: 0}
@@ -437,7 +454,7 @@ func (rqe *requestExecutor) execInsertPKRows(conn dbconnpool.PoolConnection, pkR
 		panic(err)
 	}
 	bsc := buildStreamComment(rqe.plan.TableInfo, pkRows, secondaryList)
-	result = rqe.rq.qe.directFetch(rqe.rq.logStats, conn, rqe.plan.OuterQuery, rqe.bindVars, nil, bsc)
+	result = rqe.directFetch(conn, rqe.plan.OuterQuery, rqe.bindVars, nil, bsc)
 	return result
 }
 
@@ -452,7 +469,7 @@ func (rqe *requestExecutor) execDMLPK(conn dbconnpool.PoolConnection, invalidato
 	}
 
 	bsc := buildStreamComment(rqe.plan.TableInfo, pkRows, secondaryList)
-	result = rqe.rq.qe.directFetch(rqe.rq.logStats, conn, rqe.plan.OuterQuery, rqe.bindVars, nil, bsc)
+	result = rqe.directFetch(conn, rqe.plan.OuterQuery, rqe.bindVars, nil, bsc)
 	if invalidator == nil {
 		return result
 	}
@@ -464,7 +481,7 @@ func (rqe *requestExecutor) execDMLPK(conn dbconnpool.PoolConnection, invalidato
 }
 
 func (rqe *requestExecutor) execDMLSubquery(conn dbconnpool.PoolConnection, invalidator CacheInvalidator) (result *mproto.QueryResult) {
-	innerResult := rqe.rq.qe.directFetch(rqe.rq.logStats, conn, rqe.plan.Subquery, rqe.bindVars, nil, nil)
+	innerResult := rqe.directFetch(conn, rqe.plan.Subquery, rqe.bindVars, nil, nil)
 	// no need to validate innerResult
 	return rqe.execDMLPKRows(conn, innerResult.Rows, invalidator)
 }
@@ -483,7 +500,7 @@ func (rqe *requestExecutor) execDMLPKRows(conn dbconnpool.PoolConnection, pkRows
 		}
 
 		bsc := buildStreamComment(rqe.plan.TableInfo, singleRow, secondaryList)
-		rowsAffected += rqe.rq.qe.directFetch(rqe.rq.logStats, conn, rqe.plan.OuterQuery, rqe.bindVars, pkRow, bsc).RowsAffected
+		rowsAffected += rqe.directFetch(conn, rqe.plan.OuterQuery, rqe.bindVars, pkRow, bsc).RowsAffected
 		if invalidator != nil {
 			key := buildKey(pkRow)
 			invalidator.Delete(key)
@@ -495,49 +512,135 @@ func (rqe *requestExecutor) execDMLPKRows(conn dbconnpool.PoolConnection, pkRows
 func (rqe *requestExecutor) execSet() (result *mproto.QueryResult) {
 	switch rqe.plan.SetKey {
 	case "vt_pool_size":
-		rqe.rq.qe.connPool.SetCapacity(int(getInt64(rqe.plan.SetValue)))
+		rqe.qe.connPool.SetCapacity(int(getInt64(rqe.plan.SetValue)))
 	case "vt_stream_pool_size":
-		rqe.rq.qe.streamConnPool.SetCapacity(int(getInt64(rqe.plan.SetValue)))
+		rqe.qe.streamConnPool.SetCapacity(int(getInt64(rqe.plan.SetValue)))
 	case "vt_transaction_cap":
-		rqe.rq.qe.txPool.SetCapacity(int(getInt64(rqe.plan.SetValue)))
+		rqe.qe.txPool.SetCapacity(int(getInt64(rqe.plan.SetValue)))
 	case "vt_transaction_timeout":
-		rqe.rq.qe.activeTxPool.SetTimeout(getDuration(rqe.plan.SetValue))
+		rqe.qe.activeTxPool.SetTimeout(getDuration(rqe.plan.SetValue))
 	case "vt_schema_reload_time":
-		rqe.rq.qe.schemaInfo.SetReloadTime(getDuration(rqe.plan.SetValue))
+		rqe.qe.schemaInfo.SetReloadTime(getDuration(rqe.plan.SetValue))
 	case "vt_query_cache_size":
-		rqe.rq.qe.schemaInfo.SetQueryCacheSize(int(getInt64(rqe.plan.SetValue)))
+		rqe.qe.schemaInfo.SetQueryCacheSize(int(getInt64(rqe.plan.SetValue)))
 	case "vt_max_result_size":
 		val := getInt64(rqe.plan.SetValue)
 		if val < 1 {
 			panic(NewTabletError(FAIL, "max result size out of range %v", val))
 		}
-		rqe.rq.qe.maxResultSize.Set(val)
+		rqe.qe.maxResultSize.Set(val)
 	case "vt_stream_buffer_size":
 		val := getInt64(rqe.plan.SetValue)
 		if val < 1024 {
 			panic(NewTabletError(FAIL, "stream buffer size out of range %v", val))
 		}
-		rqe.rq.qe.streamBufferSize.Set(val)
+		rqe.qe.streamBufferSize.Set(val)
 	case "vt_query_timeout":
-		rqe.rq.qe.queryTimeout.Set(getDuration(rqe.plan.SetValue))
+		rqe.qe.queryTimeout.Set(getDuration(rqe.plan.SetValue))
 	case "vt_idle_timeout":
 		t := getDuration(rqe.plan.SetValue)
-		rqe.rq.qe.connPool.SetIdleTimeout(t)
-		rqe.rq.qe.streamConnPool.SetIdleTimeout(t)
-		rqe.rq.qe.txPool.SetIdleTimeout(t)
-		rqe.rq.qe.connKiller.SetIdleTimeout(t)
+		rqe.qe.connPool.SetIdleTimeout(t)
+		rqe.qe.streamConnPool.SetIdleTimeout(t)
+		rqe.qe.txPool.SetIdleTimeout(t)
+		rqe.qe.connKiller.SetIdleTimeout(t)
 	case "vt_spot_check_ratio":
-		rqe.rq.qe.spotCheckFreq.Set(int64(getFloat64(rqe.plan.SetValue) * SPOT_CHECK_MULTIPLIER))
+		rqe.qe.spotCheckFreq.Set(int64(getFloat64(rqe.plan.SetValue) * SPOT_CHECK_MULTIPLIER))
 	case "vt_strict_mode":
-		rqe.rq.qe.strictMode.Set(getInt64(rqe.plan.SetValue))
+		rqe.qe.strictMode.Set(getInt64(rqe.plan.SetValue))
 	default:
 		waitingForConnectionStart := time.Now()
-		conn := getOrPanic(rqe.rq.qe.connPool)
-		rqe.rq.logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
+		conn := getOrPanic(rqe.qe.connPool)
+		rqe.logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 		defer conn.Recycle()
-		return rqe.rq.qe.directFetch(rqe.rq.logStats, conn, rqe.plan.FullQuery, rqe.bindVars, nil, nil)
+		return rqe.directFetch(conn, rqe.plan.FullQuery, rqe.bindVars, nil, nil)
 	}
 	return &mproto.QueryResult{}
+}
+
+func (rqe *requestExecutor) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value) (result *mproto.QueryResult) {
+	sql := rqe.generateFinalSql(parsedQuery, bindVars, listVars, nil)
+	q, ok := rqe.qe.consolidator.Create(string(sql))
+	if ok {
+		defer q.Broadcast()
+		waitingForConnectionStart := time.Now()
+		conn, err := rqe.qe.connPool.Get()
+		logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
+		if err != nil {
+			q.Err = NewTabletErrorSql(FATAL, err)
+		} else {
+			defer conn.Recycle()
+			q.Result, q.Err = rqe.execSQLNoPanic(conn, sql, false)
+		}
+	} else {
+		logStats.QuerySources |= QUERY_SOURCE_CONSOLIDATOR
+		q.Wait()
+	}
+	if q.Err != nil {
+		panic(q.Err)
+	}
+	return q.Result
+}
+
+func (rqe *requestExecutor) directFetch(conn dbconnpool.PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) (result *mproto.QueryResult) {
+	sql := rqe.generateFinalSql(parsedQuery, bindVars, listVars, buildStreamComment)
+	return rqe.execSQL(conn, sql, false)
+}
+
+// fullFetch also fetches field info
+func (rqe *requestExecutor) fullFetch(conn dbconnpool.PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) (result *mproto.QueryResult) {
+	sql := rqe.generateFinalSql(parsedQuery, bindVars, listVars, buildStreamComment)
+	return rqe.execSQL(conn, sql, true)
+}
+
+func (rqe *requestExecutor) fullStreamFetch(conn dbconnpool.PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte, callback func(*mproto.QueryResult) error) {
+	sql := rqe.generateFinalSql(parsedQuery, bindVars, listVars, buildStreamComment)
+	rqe.execStreamSQL(conn, sql, callback)
+}
+
+func (rqe *requestExecutor) generateFinalSql(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) string {
+	bindVars[MAX_RESULT_NAME] = rqe.qe.maxResultSize.Get() + 1
+	sql, err := parsedQuery.GenerateQuery(bindVars, listVars)
+	if err != nil {
+		panic(NewTabletError(FAIL, "%s", err))
+	}
+	if buildStreamComment != nil {
+		sql = append(sql, buildStreamComment...)
+	}
+	// undo hack done by stripTrailing
+	sql = restoreTrailing(sql, bindVars)
+	return hack.String(sql)
+}
+
+func (rqe *requestExecutor) execSQL(conn dbconnpool.PoolConnection, sql string, wantfields bool) *mproto.QueryResult {
+	result, err := rqe.execSQLNoPanic(conn, sql, true)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+func (rqe *requestExecutor) execSQLNoPanic(conn dbconnpool.PoolConnection, sql string, wantfields bool) (*mproto.QueryResult, error) {
+	if timeout := rqe.qe.queryTimeout.Get(); timeout != 0 {
+		qd := rqe.qe.connKiller.SetDeadline(conn.Id(), time.Now().Add(timeout))
+		defer qd.Done()
+	}
+
+	start := time.Now()
+	result, err := conn.ExecuteFetch(sql, int(rqe.qe.maxResultSize.Get()), wantfields)
+	rqe.logStats.AddRewrittenSql(sql, start)
+	if err != nil {
+		return nil, NewTabletErrorSql(FAIL, err)
+	}
+	return result, nil
+}
+
+func (rqe *requestExecutor) execStreamSQL(conn dbconnpool.PoolConnection, sql string, callback func(*mproto.QueryResult) error) {
+	start := time.Now()
+	err := conn.ExecuteStreamFetch(sql, callback, int(rqe.qe.streamBufferSize.Get()))
+	rqe.logStats.AddRewrittenSql(sql, start)
+	if err != nil {
+		panic(NewTabletErrorSql(FAIL, err))
+	}
 }
 
 func getInt64(v interface{}) int64 {
