@@ -204,29 +204,24 @@ func (tta TabletTagAction) CleanUp(wr *Wrangler) error {
 
 // StartSlaveAction will restart binlog replication on a server
 type StartSlaveAction struct {
-	TabletAlias topo.TabletAlias
-	WaitTime    time.Duration
+	TabletInfo *topo.TabletInfo
+	WaitTime   time.Duration
 }
 
 const StartSlaveActionName = "StartSlaveAction"
 
 // RecordStartSlaveAction records a new StartSlaveAction
 // into the specified Cleaner
-func RecordStartSlaveAction(cleaner *Cleaner, tabletAlias topo.TabletAlias, waitTime time.Duration) {
-	cleaner.Record(StartSlaveActionName, tabletAlias.String(), &StartSlaveAction{
-		TabletAlias: tabletAlias,
-		WaitTime:    waitTime,
+func RecordStartSlaveAction(cleaner *Cleaner, tabletInfo *topo.TabletInfo, waitTime time.Duration) {
+	cleaner.Record(StartSlaveActionName, tabletInfo.Alias.String(), &StartSlaveAction{
+		TabletInfo: tabletInfo,
+		WaitTime:   waitTime,
 	})
 }
 
 // CleanUp is part of CleanerAction interface.
 func (sba StartSlaveAction) CleanUp(wr *Wrangler) error {
-	tablet, err := wr.ts.GetTablet(sba.TabletAlias)
-	if err != nil {
-		return err
-	}
-
-	return wr.ActionInitiator().StartSlave(tablet, sba.WaitTime)
+	return wr.ActionInitiator().StartSlave(sba.TabletInfo, sba.WaitTime)
 }
 
 //
@@ -235,27 +230,22 @@ func (sba StartSlaveAction) CleanUp(wr *Wrangler) error {
 
 // StartBlpAction will restart binlog replication on a server
 type StartBlpAction struct {
-	TabletAlias topo.TabletAlias
-	WaitTime    time.Duration
+	TabletInfo *topo.TabletInfo
+	WaitTime   time.Duration
 }
 
 const StartBlpActionName = "StartBlpAction"
 
 // RecordStartBlpAction records a new StartBlpAction
 // into the specified Cleaner
-func RecordStartBlpAction(cleaner *Cleaner, tabletAlias topo.TabletAlias, waitTime time.Duration) {
-	cleaner.Record(StartBlpActionName, tabletAlias.String(), &StartBlpAction{
-		TabletAlias: tabletAlias,
-		WaitTime:    waitTime,
+func RecordStartBlpAction(cleaner *Cleaner, tabletInfo *topo.TabletInfo, waitTime time.Duration) {
+	cleaner.Record(StartBlpActionName, tabletInfo.Alias.String(), &StartBlpAction{
+		TabletInfo: tabletInfo,
+		WaitTime:   waitTime,
 	})
 }
 
 // CleanUp is part of CleanerAction interface.
 func (sba StartBlpAction) CleanUp(wr *Wrangler) error {
-	tablet, err := wr.ts.GetTablet(sba.TabletAlias)
-	if err != nil {
-		return err
-	}
-
-	return wr.ActionInitiator().StartBlp(tablet, sba.WaitTime)
+	return wr.ActionInitiator().StartBlp(sba.TabletInfo, sba.WaitTime)
 }

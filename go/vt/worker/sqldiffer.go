@@ -232,7 +232,7 @@ func (worker *SQLDiffWorker) synchronizeReplication() error {
 
 	// change the cleaner actions from ChangeSlaveType(rdonly)
 	// to StartSlave() + ChangeSlaveType(spare)
-	wrangler.RecordStartSlaveAction(worker.cleaner, worker.subset.alias, 30*time.Second)
+	wrangler.RecordStartSlaveAction(worker.cleaner, subsetTablet, 30*time.Second)
 	action, err := wrangler.FindChangeSlaveTypeActionByTarget(worker.cleaner, worker.subset.alias)
 	if err != nil {
 		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", worker.subset.alias, err)
@@ -257,7 +257,7 @@ func (worker *SQLDiffWorker) synchronizeReplication() error {
 
 	// change the cleaner actions from ChangeSlaveType(rdonly)
 	// to StartSlave() + ChangeSlaveType(spare)
-	wrangler.RecordStartSlaveAction(worker.cleaner, worker.superset.alias, 30*time.Second)
+	wrangler.RecordStartSlaveAction(worker.cleaner, supersetTablet, 30*time.Second)
 	action, err = wrangler.FindChangeSlaveTypeActionByTarget(worker.cleaner, worker.superset.alias)
 	if err != nil {
 		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", worker.superset.alias, err)

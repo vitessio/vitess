@@ -270,7 +270,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	if err != nil {
 		return fmt.Errorf("StopBlp for %v failed: %v", sdw.shardInfo.MasterAlias, err)
 	}
-	wrangler.RecordStartBlpAction(sdw.cleaner, sdw.shardInfo.MasterAlias, 30*time.Second)
+	wrangler.RecordStartBlpAction(sdw.cleaner, masterInfo, 30*time.Second)
 
 	// 2 - stop all the source 'checker' at a binlog position
 	//     higher than the destination master
@@ -285,14 +285,14 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 		}
 
 		// read the tablet
-		tablet, err := sdw.wr.TopoServer().GetTablet(sdw.sourceAliases[i])
+		sourceTablet, err := sdw.wr.TopoServer().GetTablet(sdw.sourceAliases[i])
 		if err != nil {
 			return err
 		}
 
 		// stop replication
 		sdw.wr.Logger().Infof("Stopping slave[%v] %v at a minimum of %v", i, sdw.sourceAliases[i], blpPos.Position)
-		stoppedAt, err := sdw.wr.ActionInitiator().StopSlaveMinimum(tablet, blpPos.Position, 30*time.Second)
+		stoppedAt, err := sdw.wr.ActionInitiator().StopSlaveMinimum(sourceTablet, blpPos.Position, 30*time.Second)
 		if err != nil {
 			return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", sdw.sourceAliases[i], blpPos.Position, err)
 		}
@@ -301,7 +301,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 
 		// change the cleaner actions from ChangeSlaveType(rdonly)
 		// to StartSlave() + ChangeSlaveType(spare)
-		wrangler.RecordStartSlaveAction(sdw.cleaner, sdw.sourceAliases[i], 30*time.Second)
+		wrangler.RecordStartSlaveAction(sdw.cleaner, sourceTablet, 30*time.Second)
 		action, err := wrangler.FindChangeSlaveTypeActionByTarget(sdw.cleaner, sdw.sourceAliases[i])
 		if err != nil {
 			return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", sdw.sourceAliases[i], err)
@@ -320,15 +320,15 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	// 4 - wait until the destination checker is equal or passed
 	//     that master binlog position, and stop its replication.
 	sdw.wr.Logger().Infof("Waiting for destination checker %v to catch up to %v", sdw.destinationAlias, masterPos)
-	tablet, err := sdw.wr.TopoServer().GetTablet(sdw.destinationAlias)
+	destinationTablet, err := sdw.wr.TopoServer().GetTablet(sdw.destinationAlias)
 	if err != nil {
 		return err
 	}
-	_, err = sdw.wr.ActionInitiator().StopSlaveMinimum(tablet, masterPos, 30*time.Second)
+	_, err = sdw.wr.ActionInitiator().StopSlaveMinimum(destinationTablet, masterPos, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("StopSlaveMinimum for %v at %v failed: %v", sdw.destinationAlias, masterPos, err)
 	}
-	wrangler.RecordStartSlaveAction(sdw.cleaner, sdw.destinationAlias, 30*time.Second)
+	wrangler.RecordStartSlaveAction(sdw.cleaner, destinationTablet, 30*time.Second)
 	action, err := wrangler.FindChangeSlaveTypeActionByTarget(sdw.cleaner, sdw.destinationAlias)
 	if err != nil {
 		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", sdw.destinationAlias, err)
