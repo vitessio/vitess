@@ -293,9 +293,6 @@ func (qe *QueryEngine) Rollback(logStats *SQLQueryStats, transactionID int64) {
 
 // InvalidateForDml performs rowcache invalidations for the dml.
 func (qe *QueryEngine) InvalidateForDml(table string, keys []string) {
-	if qe.cachePool.IsClosed() {
-		return
-	}
 	invalidations := int64(0)
 	tableInfo := qe.schemaInfo.GetTable(table)
 	if tableInfo == nil {
@@ -444,14 +441,9 @@ func (qe *QueryEngine) execSQLNoPanic(logStats *SQLQueryStats, conn dbconnpool.P
 		defer qd.Done()
 	}
 
-	logStats.QuerySources |= QUERY_SOURCE_MYSQL
-	logStats.NumberOfQueries++
-	logStats.AddRewrittenSql(sql)
-
-	fetchStart := time.Now()
+	start := time.Now()
 	result, err := conn.ExecuteFetch(sql, int(qe.maxResultSize.Get()), wantfields)
-	logStats.MysqlResponseTime += time.Now().Sub(fetchStart)
-
+	logStats.AddRewrittenSql(sql, start)
 	if err != nil {
 		return nil, NewTabletErrorSql(FAIL, err)
 	}
@@ -459,12 +451,9 @@ func (qe *QueryEngine) execSQLNoPanic(logStats *SQLQueryStats, conn dbconnpool.P
 }
 
 func (qe *QueryEngine) execStreamSQL(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, sql string, callback func(*mproto.QueryResult) error) {
-	logStats.QuerySources |= QUERY_SOURCE_MYSQL
-	logStats.NumberOfQueries++
-	logStats.AddRewrittenSql(sql)
-	fetchStart := time.Now()
+	start := time.Now()
 	err := conn.ExecuteStreamFetch(sql, callback, int(qe.streamBufferSize.Get()))
-	logStats.MysqlResponseTime += time.Now().Sub(fetchStart)
+	logStats.AddRewrittenSql(sql, start)
 	if err != nil {
 		panic(NewTabletErrorSql(FAIL, err))
 	}

@@ -356,10 +356,9 @@ func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string) *ExecPlan {
 			conn := getOrPanic(si.connPool)
 			defer conn.Recycle()
 			sql := plan.FieldQuery.Query
+			start := time.Now()
 			r, err := conn.ExecuteFetch(sql, 1, true)
-			logStats.QuerySources |= QUERY_SOURCE_MYSQL
-			logStats.NumberOfQueries += 1
-			logStats.AddRewrittenSql(sql)
+			logStats.AddRewrittenSql(sql, start)
 			if err != nil {
 				panic(NewTabletError(FAIL, "Error fetching fields: %v", err))
 			}
@@ -377,6 +376,8 @@ func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string) *ExecPlan {
 func (si *SchemaInfo) GetStreamPlan(sql string) *ExecPlan {
 	var tableInfo *TableInfo
 	GetTable := func(tableName string) (table *schema.Table, ok bool) {
+		si.mu.Lock()
+		defer si.mu.Unlock()
 		tableInfo, ok = si.tables[tableName]
 		if !ok {
 			return nil, false
