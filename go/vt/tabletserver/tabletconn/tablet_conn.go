@@ -80,6 +80,10 @@ type TabletConn interface {
 
 	// GetEndPoint returns the end point info.
 	EndPoint() topo.EndPoint
+
+	// SplitQuery splits a query into equally sized smaller queries by
+	// appending primary key range clauses to the original query
+	SplitQuery(context context.Context, query tproto.BoundQuery, splitCount int) ([]tproto.QuerySplit, error)
 }
 
 type ErrFunc func() error

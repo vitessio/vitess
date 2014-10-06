@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/context"
+	kproto "github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -294,6 +295,55 @@ func (stc *ScatterConn) Rollback(context context.Context, session *SafeSession) 
 	return nil
 }
 
+// SplitQuery scatters a SplitQuery request to all shards. For a set of
+// splits received from a shard, it construct a KeyRange queries by
+// appending that shard's keyrange to the splits. Aggregates all splits across
+// all shards in no specific order and returns.
+func (stc *ScatterConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitCount int, keyRangeByShard map[string]kproto.KeyRange, keyspace string) ([]proto.InputSplit, error) {
+	actionFunc := func(sdc *ShardConn, transactionID int64, results chan<- interface{}) error {
+		// Get all splits from this shard
+		queries, err := sdc.SplitQuery(ctx, query, splitCount)
+		if err != nil {
+			return err
+		}
+		// Append the keyrange for this shard to all the splits received
+		keyranges := []kproto.KeyRange{keyRangeByShard[sdc.shard]}
+		splits := []proto.InputSplit{}
+		for _, query := range queries {
+			krq := &proto.KeyRangeQuery{
+				Sql:           query.Query.Sql,
+				BindVariables: query.Query.BindVariables,
+				Keyspace:      keyspace,
+				KeyRanges:     keyranges,
+				TabletType:    topo.TYPE_RDONLY,
+			}
+			split := proto.InputSplit{
+				Query: krq,
+				Size:  query.RowCount,
+			}
+			splits = append(splits, split)
+		}
+		// Push all the splits from this shard to results channel
+		results <- splits
+		return nil
+	}
+
+	shards := []string{}
+	for shard := range keyRangeByShard {
+		shards = append(shards, shard)
+	}
+	allSplits, allErrors := stc.multiGo(ctx, "SplitQuery", keyspace, shards, topo.TYPE_RDONLY, NewSafeSession(&proto.Session{}), actionFunc)
+	splits := []proto.InputSplit{}
+	for s := range allSplits {
+		splits = append(splits, s.([]proto.InputSplit)...)
+	}
+	if allErrors.HasErrors() {
+		err := allErrors.AggrError(stc.aggregateErrors)
+		return nil, err
+	}
+	return splits, nil
+}
+
 // Close closes the underlying ShardConn connections.
 func (stc *ScatterConn) Close() error {
 	stc.mu.Lock()
@@ -360,7 +410,6 @@ func (stc *ScatterConn) multiGo(
 			defer wg.Done()
 			startTime := time.Now()
 			defer stc.timings.Record([]string{name, keyspace, shard, string(tabletType)}, startTime)
-
 			stc.execShardAction(context, keyspace, shard, tabletType, session, action, allErrors, results)
 		}(shard)
 	}

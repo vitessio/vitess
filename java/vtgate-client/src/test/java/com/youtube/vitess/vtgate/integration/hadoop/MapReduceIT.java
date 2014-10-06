@@ -57,6 +57,7 @@ public class MapReduceIT extends HadoopTestCase {
 
 	public void setUp() throws Exception {
 		super.setUp();
+		Util.setupTestEnv(testEnv, true);
 		Util.truncateTable(testEnv);
 	}
 
@@ -69,9 +70,10 @@ public class MapReduceIT extends HadoopTestCase {
 		for (String shardName : testEnv.shardKidMap.keySet()) {
 			Util.insertRowsInShard(testEnv, shardName, 20);
 		}
+		Util.waitForTablet("rdonly", 40, 3, testEnv);
 		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
 		List<InputSplit> splits = vtgate.getMRSplits("test_keyspace",
-				"vtgate_test", Lists.newArrayList("id", "keyspace_id"));
+				"vtgate_test", Lists.newArrayList("id", "keyspace_id"), 1);
 		vtgate.close();
 
 		// Verify 2 splits, one per shard
@@ -97,6 +99,51 @@ public class MapReduceIT extends HadoopTestCase {
 				.keySet()));
 	}
 
+	@Test
+	public void testGetMRSplitsMultipleSplitsPerShard() throws Exception {
+		int rowCount = 30;
+		Util.insertRows(testEnv, 1, 30);
+		List<String> expectedSqls = Lists
+				.newArrayList(
+						"select id, keyspace_id from vtgate_test where id < 10",
+						"select id, keyspace_id from vtgate_test where id < 11",
+						"select id, keyspace_id from vtgate_test where id >= 10 and id < 19",
+						"select id, keyspace_id from vtgate_test where id >= 11 and id < 19",
+						"select id, keyspace_id from vtgate_test where id >= 19",
+						"select id, keyspace_id from vtgate_test where id >= 19");
+		Util.waitForTablet("rdonly", rowCount, 3, testEnv);
+		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+		int splitsPerShard = 3;
+		List<InputSplit> splits = vtgate.getMRSplits("test_keyspace",
+				"vtgate_test", Lists.newArrayList("id", "keyspace_id"),
+				splitsPerShard);
+		vtgate.close();
+
+		// Verify 6 splits, 3 per shard
+		assertEquals(2 * splitsPerShard, splits.size());
+		Set<String> shardsInSplits = new HashSet<>();
+		for (InputSplit s : splits) {
+			VitessInputSplit split = (VitessInputSplit) s;
+			String sql = split.getQuery().getSql();
+			assertTrue(expectedSqls.contains(sql));
+			expectedSqls.remove(sql);
+			assertEquals("test_keyspace", split.getQuery().getKeyspace());
+			assertEquals("rdonly", split.getQuery().getTabletType());
+			assertEquals(0, split.getQuery().getBindVars().size());
+			assertEquals(null, split.getQuery().getKeyspaceIds());
+			String start = Hex.encodeHexString(split.getQuery()
+					.getKeyRanges().get(0).get("Start"));
+			String end = Hex.encodeHexString(split.getQuery()
+					.getKeyRanges().get(0).get("End"));
+			shardsInSplits.add(start + "-" + end);
+		}
+
+		// Verify the keyrange queries in splits cover the entire keyspace
+		assertTrue(shardsInSplits.containsAll(testEnv.shardKidMap
+				.keySet()));
+		assertTrue(expectedSqls.size() == 0);
+	}
+
 	/**
 	 * Call VtGate.GetMRSplits with an invalid table and check it throws the
 	 * right exception.
@@ -105,12 +152,12 @@ public class MapReduceIT extends HadoopTestCase {
 	public void testGetMRSplitsInvalidTable() throws Exception {
 		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
 		try {
-			vtgate.getMRSplits("test_keyspace",
-					"invalid_table", Lists.newArrayList("id"));
+			vtgate.getMRSplits("test_keyspace", "invalid_table",
+					Lists.newArrayList("id"), 1);
 			fail("failed to raise connection exception");
 		} catch (ConnectionException e) {
 			assertTrue(e.getMessage().contains(
-					"vtgate exception: can't fetch split sizes"));
+					"query validation error: can't find table in schema"));
 		} finally {
 			vtgate.close();
 		}
@@ -126,7 +173,7 @@ public class MapReduceIT extends HadoopTestCase {
 		for (String shardName : testEnv.shardKidMap.keySet()) {
 			Util.insertRowsInShard(testEnv, shardName, rowsPerShard);
 		}
-
+		Util.waitForTablet("rdonly", 40, 3, testEnv);
 		// Configurations for the job, output from mapper as Text
 		Configuration conf = createJobConf();
 		Job job = new Job(conf);
@@ -135,7 +182,7 @@ public class MapReduceIT extends HadoopTestCase {
 		job.setMapperClass(TableMapper.class);
 		VitessInputFormat.setInput(job, "localhost:" + testEnv.port,
 				testEnv.keyspace, "vtgate_test",
-				Lists.newArrayList("keyspace_id", "name"));
+				Lists.newArrayList("keyspace_id", "name"), 4);
 		job.setOutputKeyClass(KeyspaceIdWritable.class);
 		job.setOutputValueClass(RowWritable.class);
 		job.setOutputFormatClass(TextOutputFormat.class);
@@ -198,6 +245,7 @@ public class MapReduceIT extends HadoopTestCase {
 		for (String shardName : testEnv.shardKidMap.keySet()) {
 			Util.insertRowsInShard(testEnv, shardName, rowsPerShard);
 		}
+		Util.waitForTablet("rdonly", 40, 3, testEnv);
 		Configuration conf = createJobConf();
 
 		Job job = new Job(conf);
@@ -206,7 +254,7 @@ public class MapReduceIT extends HadoopTestCase {
 		job.setMapperClass(TableMapper.class);
 		VitessInputFormat.setInput(job, "localhost:" + testEnv.port,
 				testEnv.keyspace, "vtgate_test",
-				Lists.newArrayList("keyspace_id", "name"));
+				Lists.newArrayList("keyspace_id", "name"), 1);
 
 		job.setMapOutputKeyClass(KeyspaceIdWritable.class);
 		job.setMapOutputValueClass(RowWritable.class);

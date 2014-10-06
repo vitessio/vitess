@@ -46,6 +46,10 @@ func (sq *SqlQuery) ExecuteBatch(ctx *rpcproto.Context, queryList *proto.QueryLi
 	return sq.server.ExecuteBatch(ctx, queryList, reply)
 }
 
+func (sq *SqlQuery) SplitQuery(ctx *rpcproto.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
+	return sq.server.SplitQuery(ctx, req, reply)
+}
+
 func init() {
 	tabletserver.SqlQueryRegisterFunctions = append(tabletserver.SqlQueryRegisterFunctions, func(sq *tabletserver.SqlQuery) {
 		rpcwrap.RegisterAuthenticated(&SqlQuery{sq})

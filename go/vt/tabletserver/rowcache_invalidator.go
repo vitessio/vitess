@@ -18,6 +18,9 @@ import (
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/schema"
+	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 )
 
 // RowcacheInvalidator runs the service to invalidate
@@ -142,11 +145,11 @@ func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) error {
 	switch event.Category {
 	case "DDL":
 		log.Infof("DDL invalidation: %s", event.Sql)
-		rci.qe.InvalidateForDDL(event.Sql)
+		rci.handleDDLEvent(event.Sql)
 	case "DML":
-		rci.handleDmlEvent(event)
+		rci.handleDMLEvent(event)
 	case "ERR":
-		rci.qe.InvalidateForUnrecognized(event.Sql)
+		rci.handleUnrecognizedEvent(event.Sql)
 	case "POS":
 		rci.AppendGTID(event.GTIDField.Value)
 	default:
@@ -158,9 +161,16 @@ func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) error {
 	return nil
 }
 
-func (rci *RowcacheInvalidator) handleDmlEvent(event *blproto.StreamEvent) {
-	table := event.TableName
-	keys := make([]string, 0, len(event.PKValues))
+func (rci *RowcacheInvalidator) handleDMLEvent(event *blproto.StreamEvent) {
+	invalidations := int64(0)
+	tableInfo := rci.qe.schemaInfo.GetTable(event.TableName)
+	if tableInfo == nil {
+		panic(NewTabletError(FAIL, "Table %s not found", event.TableName))
+	}
+	if tableInfo.CacheType == schema.CACHE_NONE {
+		return
+	}
+
 	sqlTypeKeys := make([]sqltypes.Value, 0, len(event.PKColNames))
 	for _, pkTuple := range event.PKValues {
 		sqlTypeKeys = sqlTypeKeys[:0]
@@ -173,10 +183,71 @@ func (rci *RowcacheInvalidator) handleDmlEvent(event *blproto.StreamEvent) {
 			}
 			sqlTypeKeys = append(sqlTypeKeys, key)
 		}
-		invalidateKey := buildKey(sqlTypeKeys)
-		if invalidateKey != "" {
-			keys = append(keys, invalidateKey)
+		newKey := validateKey(tableInfo, buildKey(sqlTypeKeys))
+		if newKey == "" {
+			continue
 		}
+		tableInfo.Cache.Delete(newKey)
+		invalidations++
 	}
-	rci.qe.InvalidateForDml(table, keys)
+	tableInfo.invalidations.Add(invalidations)
+}
+
+func (rci *RowcacheInvalidator) handleDDLEvent(ddl string) {
+	ddlPlan := planbuilder.DDLParse(ddl)
+	if ddlPlan.Action == "" {
+		panic(NewTabletError(FAIL, "DDL is not understood"))
+	}
+	if ddlPlan.TableName != "" && ddlPlan.TableName != ddlPlan.NewName {
+		// It's a drop or rename.
+		rci.qe.schemaInfo.DropTable(ddlPlan.TableName)
+	}
+	if ddlPlan.NewName != "" {
+		rci.qe.schemaInfo.CreateOrUpdateTable(ddlPlan.NewName)
+	}
+}
+
+func (rci *RowcacheInvalidator) handleUnrecognizedEvent(sql string) {
+	statement, err := sqlparser.Parse(sql)
+	if err != nil {
+		log.Errorf("Error: %v: %s", err, sql)
+		internalErrors.Add("Invalidation", 1)
+		return
+	}
+	var table *sqlparser.TableName
+	switch stmt := statement.(type) {
+	case *sqlparser.Insert:
+		// Inserts don't affect rowcache.
+		return
+	case *sqlparser.Update:
+		table = stmt.Table
+	case *sqlparser.Delete:
+		table = stmt.Table
+	default:
+		log.Errorf("Unrecognized: %s", sql)
+		internalErrors.Add("Invalidation", 1)
+		return
+	}
+
+	// Ignore cross-db statements.
+	if table.Qualifier != nil && string(table.Qualifier) != rci.qe.dbconfig.DbName {
+		return
+	}
+
+	// Ignore if it's an uncached table.
+	tableName := string(table.Name)
+	tableInfo := rci.qe.schemaInfo.GetTable(tableName)
+	if tableInfo == nil {
+		log.Errorf("Table %s not found: %s", tableName, sql)
+		internalErrors.Add("Invalidation", 1)
+		return
+	}
+	if tableInfo.CacheType == schema.CACHE_NONE {
+		return
+	}
+
+	// Treat the statement as a DDL.
+	// It will conservatively invalidate all rows of the table.
+	log.Warningf("Treating '%s' as DDL for table %s", sql, tableName)
+	rci.qe.schemaInfo.CreateOrUpdateTable(tableName)
 }

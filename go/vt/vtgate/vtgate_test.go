@@ -7,12 +7,12 @@ package vtgate
 import (
 	"fmt"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/key"
+	kproto "github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
@@ -597,10 +597,14 @@ func TestVTGateGetMRSplits(t *testing.T) {
 	for _, kr := range keyranges {
 		s.MapTestConn(fmt.Sprintf("%s-%s", kr.Start, kr.End), &sandboxConn{})
 	}
+	sql := "select col1, col2 from table"
+	splitsPerShard := 3
 	req := proto.GetMRSplitsRequest{
-		Table:    "table",
 		Keyspace: keyspace,
-		Columns:  []string{"col1", "col2"},
+		Query: tproto.BoundQuery{
+			Sql: sql,
+		},
+		SplitsPerShard: splitsPerShard,
 	}
 	result := new(proto.GetMRSplitsResult)
 	err := RpcVTGate.GetMRSplits(&context.DummyContext{}, &req, result)
@@ -608,16 +612,14 @@ func TestVTGateGetMRSplits(t *testing.T) {
 		t.Errorf("want nil, got %v", err)
 	}
 	shards, err := getAllShards(DefaultShardSpec)
-	if len(shards) != len(result.Splits) {
-		t.Errorf("wrong number of splits, want \n%+v, got \n%+v", len(shards), len(result.Splits))
+	// Total number of splits should be number of shards * splitsPerShard
+	if splitsPerShard*len(shards) != len(result.Splits) {
+		t.Errorf("wrong number of splits, want \n%+v, got \n%+v", len(shards)*splitsPerShard, len(result.Splits))
 	}
-	sql := fmt.Sprintf("select %s from %s", strings.Join(req.Columns, ","), req.Table)
-	for i, split := range result.Splits {
-		if split.Size != 1 {
-			t.Errorf("wrong split size, want \n%+v, got \n%+v", 1, split.Size)
-		}
-		if split.Query.Sql != sql {
-			t.Errorf("wrong sql, want \n%+v, got \n%+v", sql, split.Query.Sql)
+	actualSqlsByKeyRange := map[kproto.KeyRange][]string{}
+	for _, split := range result.Splits {
+		if split.Size != sandboxSQRowCount {
+			t.Errorf("wrong split size, want \n%+v, got \n%+v", sandboxSQRowCount, split.Size)
 		}
 		if split.Query.Keyspace != keyspace {
 			t.Errorf("wrong split size, want \n%+v, got \n%+v", keyspace, split.Query.Keyspace)
@@ -625,11 +627,21 @@ func TestVTGateGetMRSplits(t *testing.T) {
 		if len(split.Query.KeyRanges) != 1 {
 			t.Errorf("wrong number of keyranges, want \n%+v, got \n%+v", 1, len(split.Query.KeyRanges))
 		}
-		if split.Query.KeyRanges[0] != keyranges[i] {
-			t.Errorf("wrong keyrange, want \n%+v, got \n%+v", keyranges[i], split.Query.KeyRanges[0])
-		}
 		if split.Query.TabletType != topo.TYPE_RDONLY {
 			t.Errorf("wrong tablet type, want \n%+v, got \n%+v", topo.TYPE_RDONLY, split.Query.TabletType)
 		}
+		kr := split.Query.KeyRanges[0]
+		actualSqlsByKeyRange[kr] = append(actualSqlsByKeyRange[kr], split.Query.Sql)
+	}
+	expectedSqlsByKeyRange := map[kproto.KeyRange][]string{}
+	for _, kr := range keyranges {
+		expectedSqlsByKeyRange[kr] = []string{
+			"select col1, col2 from table /*split 0 */",
+			"select col1, col2 from table /*split 1 */",
+			"select col1, col2 from table /*split 2 */",
+		}
+	}
+	if !reflect.DeepEqual(actualSqlsByKeyRange, expectedSqlsByKeyRange) {
+		t.Errorf("splits contain the wrong sqls and/or keyranges, got: %v, want: %v", actualSqlsByKeyRange, expectedSqlsByKeyRange)
 	}
 }

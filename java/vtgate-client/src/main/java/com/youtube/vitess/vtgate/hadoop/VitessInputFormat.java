@@ -31,9 +31,9 @@ public class VitessInputFormat extends
 			VitessConf conf = new VitessConf(context.getConfiguration());
 			VtGate vtgate = VtGate
 					.connect(conf.getHosts(), conf.getTimeoutMs());
-			List<InputSplit> splits = vtgate.getMRSplits(conf.getKeyspace(),
-					conf.getInputTable(),
-					conf.getInputColumns());
+			List<InputSplit> splits = vtgate.getMRSplits(
+					conf.getKeyspace(), conf.getInputTable(),
+					conf.getInputColumns(), conf.getSplitsPerShard());
 			for (InputSplit split : splits) {
 				((VitessInputSplit) split).setLocations(conf.getHosts().split(
 						VitessConf.HOSTS_DELIM));
@@ -54,12 +54,13 @@ public class VitessInputFormat extends
 	 * Sets the necessary configurations for Vitess table input source
 	 */
 	public static void setInput(Job job, String hosts, String keyspace,
-			String table, List<String> columns) {
+			String table, List<String> columns, int splitsPerShard) {
 		job.setInputFormatClass(VitessInputFormat.class);
 		VitessConf vtConf = new VitessConf(job.getConfiguration());
 		vtConf.setHosts(hosts);
 		vtConf.setKeyspace(keyspace);
 		vtConf.setInputTable(table);
 		vtConf.setInputColumns(columns);
+		vtConf.setSplitsPerShard(splitsPerShard);
 	}
 }
