@@ -17,9 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 )
 
 const (
@@ -289,88 +287,6 @@ func (qe *QueryEngine) invalidateRows(logStats *SQLQueryStats, dirtyTables map[s
 func (qe *QueryEngine) Rollback(logStats *SQLQueryStats, transactionID int64) {
 	defer queryStats.Record("ROLLBACK", time.Now())
 	qe.activeTxPool.Rollback(transactionID)
-}
-
-// InvalidateForDml performs rowcache invalidations for the dml.
-func (qe *QueryEngine) InvalidateForDml(table string, keys []string) {
-	invalidations := int64(0)
-	tableInfo := qe.schemaInfo.GetTable(table)
-	if tableInfo == nil {
-		panic(NewTabletError(FAIL, "Table %s not found", table))
-	}
-	if tableInfo.CacheType == schema.CACHE_NONE {
-		return
-	}
-	for _, val := range keys {
-		newKey := validateKey(tableInfo, val)
-		if newKey != "" {
-			tableInfo.Cache.Delete(newKey)
-		}
-		invalidations++
-	}
-	tableInfo.invalidations.Add(invalidations)
-}
-
-// InvalidateForDDL performs schema and rowcache changes for the ddl.
-func (qe *QueryEngine) InvalidateForDDL(ddl string) {
-	ddlPlan := planbuilder.DDLParse(ddl)
-	if ddlPlan.Action == "" {
-		panic(NewTabletError(FAIL, "DDL is not understood"))
-	}
-	if ddlPlan.TableName != "" && ddlPlan.TableName != ddlPlan.NewName {
-		// It's a drop or rename.
-		qe.schemaInfo.DropTable(ddlPlan.TableName)
-	}
-	if ddlPlan.NewName != "" {
-		qe.schemaInfo.CreateOrUpdateTable(ddlPlan.NewName)
-	}
-}
-
-// InvalidateForUnrecognized performs best effort rowcache invalidation
-// for unrecognized statements.
-func (qe *QueryEngine) InvalidateForUnrecognized(sql string) {
-	statement, err := sqlparser.Parse(sql)
-	if err != nil {
-		log.Errorf("Error: %v: %s", err, sql)
-		internalErrors.Add("Invalidation", 1)
-		return
-	}
-	var table *sqlparser.TableName
-	switch stmt := statement.(type) {
-	case *sqlparser.Insert:
-		// Inserts don't affect rowcache.
-		return
-	case *sqlparser.Update:
-		table = stmt.Table
-	case *sqlparser.Delete:
-		table = stmt.Table
-	default:
-		log.Errorf("Unrecognized: %s", sql)
-		internalErrors.Add("Invalidation", 1)
-		return
-	}
-
-	// Ignore cross-db statements.
-	if table.Qualifier != nil && string(table.Qualifier) != qe.dbconfig.DbName {
-		return
-	}
-
-	// Ignore if it's an uncached table.
-	tableName := string(table.Name)
-	tableInfo := qe.schemaInfo.GetTable(tableName)
-	if tableInfo == nil {
-		log.Errorf("Table %s not found: %s", tableName, sql)
-		internalErrors.Add("Invalidation", 1)
-		return
-	}
-	if tableInfo.CacheType == schema.CACHE_NONE {
-		return
-	}
-
-	// Treat the statement as a DDL.
-	// It will conservatively invalidate all rows of the table.
-	log.Warningf("Treating '%s' as DDL for table %s", sql, tableName)
-	qe.schemaInfo.CreateOrUpdateTable(tableName)
 }
 
 func (qe *QueryEngine) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value) (result *mproto.QueryResult) {
