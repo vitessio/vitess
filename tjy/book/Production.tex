@@ -3,7 +3,7 @@
 Setting up vitess in production will depend on many factors.
 Here are some initial considerations:
 \begin{itemize}
-\item \emph{Global Transaction IDs}: Vitess requires a version of MySQL that supports GTIDs, such as Google MySQL 5.1+, MariaDB 10.0+, or MySQL 5.6+. We currently support Google MySQL and MariaDB, with plans to add MySQL 5.6.
+\item \emph{Global Transaction IDs}: Vitess requires a version of MySQL that supports \index{GTID}{\textbf{GTID}}s, such as Google MySQL 5.1+, MariaDB 10.0+, or MySQL 5.6+. We currently support Google MySQL and MariaDB, with plans to add MySQL 5.6.
 \item \emph{Firewalls}: Vitess tools and servers assume that they can open direct TCP connection to each other. If you have firewalls between your servers, you may have to add exceptions to allow these communications.
 \item \emph{Authentication}: If you need authentication, you need to setup SASL, which is supported by Vitess.
 \item \emph{Encryption:} Vitess RPC servers support SSL. TODO: Document how to setup SSL.

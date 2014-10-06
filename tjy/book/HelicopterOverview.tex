@@ -109,13 +109,11 @@ have different properties than a regular database. It doesn’t need to support 
 lot of traffic or data, but the data should be consistent and be able to survive
 failures in the machines that host it (so, we are interested in Consistency and
 Partition Tolerance from the \href{http://en.wikipedia.org/wiki/CAP\_theorem}{CAP
-theorem}). This means that the ideal
-candidates for this role implement
+theorem}). This means that the ideal candidates for this role implement
 \href{http://en.wikipedia.org/wiki/Paxos\_(computer\_science)}{Paxos} or something
 equivalent.
 
-Out of the box, Vitess supports \href{http://zookeeper.apache.org/}{Apache
-ZooKeeper}, which is a well battle tested
+Out of the box, Vitess supports \href{http://zookeeper.apache.org/}{Apache ZooKeeper}, which is a well battle tested
 distributed lock service. If you have a reason not to use ZooKeeper, it should
 be relatively easy to write a Vitess plugin to use something like Etcd, Consul,
 or Doozer. At Google, for example, we use Chubby through the plugin mechanism.
@@ -151,7 +149,7 @@ command line tool.
 \subsubsection{Clients}\hypertarget{clients}{}\label{clients}
 
 Your app won’t connect to the tablets directly – it will always go through
-vtgate. There are many ways to setup vtgate. You can have a pool of them, or you
+\index{vtgate}{vtgate}. There are many ways to setup vtgate. You can have a pool of them, or you
 can start one per process or group of processes (it doesn’t consume much
 resources). All your app needs to do is to use the Vitess client and somehow let
 it know how to connect to a running vtgate instance.

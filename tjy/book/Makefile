@@ -100,6 +100,7 @@ endef
 pdf/${BOOKNAME}.pdf: $(sources) $(image-pdf)  $(image-dia)  
 	$(call pdf)
 	cp pdf/${BOOKNAME}.pdf ..
+	cp pdf/${BOOKNAME}.pdf /mnt/hgfs/Downloads
 
 
 html: onepage split

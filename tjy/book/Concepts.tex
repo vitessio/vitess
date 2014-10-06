@@ -1,27 +1,26 @@
 \section{Concepts}\label{Concepts}
 
 We need to introduce some common terminologies that are used in Vitess:
-\#\#\# Keyspace
-A keyspace is a logical database.
+\subsubsection{Keyspace}\label{Keyspace}
+A \vconcepts{\textbf{keyspace}} is a logical database.
 In its simplest form, it directly maps to a MySQL database name.
 When you read data from a keyspace, it is as if you read from a MySQL database.
 Vitess could fetch that data from a master or a replica depending
 on the consistency requirements of the read.
 
-When a database gets \href{http://en.wikipedia.org/wiki/Shard\_(database\_architecture)}{sharded},
-a keyspace maps to multiple MySQL databases,
+When a database gets \href{http://en.wikipedia.org/wiki/Shard\_(database\_architecture)}{sharded}, a keyspace maps to multiple MySQL databases,
 and the necessary data is fetched from one of the shards.
 Reading from a keyspace gives you the impression that the data is read from
 a single MySQL database.
 
-\subsubsection{Shard}\hypertarget{shard}{}\label{shard}
+\subsubsection{Shard}\label{shard}
 
-A division within a Keyspace. All the instances inside a Shard have the same data (or should have the same data,
+A division within a Keyspace. All the instances inside a \vconcepts{Shard\textbf{Shard}} have the same data (or should have the same data,
 modulo some replication lag).
 
 A Keyspace usually has one shard when not using any sharding (we name it `0' by convention). When sharded, a Keyspace will have N shards (usually, N is a power of 2) with non-overlapping data.
 
-We support ~\ref{Resharding}{dynamic resharding}, when one shard is split into 2 shards for instance. In this case, the data in the
+We support dynamic resharding(~\ref{Resharding}), when one shard is split into 2 shards for instance. In this case, the data in the
 source shard is duplicated into the 2 destination shards, but only during the transition. Afterwards, the source shard is
 deleted.
 
@@ -30,27 +29,29 @@ eventual consistency guarantees), run data analysis tools that take a long time 
 
 \subsubsection{Tablet}\hypertarget{tablet}{}\label{tablet}
 
-A tablet is a single server that runs:
-- a MySQL instance
-- a vttablet instance
-- a local row cache instance
-- an other per-db process that is necessary for operational purposes
+A \vconcepts{\textbf{tablet}} is a single server that runs:
+\begin{itemize}
+\item a MySQL instance
+\item a vttablet instance
+\item a local row cache instance
+\item an other per-db process that is necessary for operational purposes
+\end{itemize}
 
 It can be idle (not assigned to any keyspace), or assigned to a keyspace/shard. If it becomes unhealthy, it is usually changed to scrap.
 
 It has a type. The commonly used types are:
-- master: for the mysql master, RW database.
-- replica: for a mysql slave that serves read-only traffic, with guaranteed low replication latency.
-- rdonly: for a mysql slave that serves read-only traffic for backend processing jobs (like map-reduce type jobs). It has no real guaranteed replication latency.
-- spare: for a mysql slave not use at the moment (hot spare).
-- experimental, schema, lag, backup, restore, checker, \ldots{} : various types for specific purposes.
-
+\begin{itemize}
+\item master: for the mysql master, RW database.
+\item replica: for a mysql slave that serves read-only traffic, with guaranteed low replication latency.
+\item rdonly: for a mysql slave that serves read-only traffic for backend processing jobs (like map-reduce type jobs). It has no real guaranteed replication latency.
+\item spare: for a mysql slave not use at the moment (hot spare).
+\item experimental, schema, lag, backup, restore, checker, \ldots{} : various types for specific purposes.
+\end{itemize}
 Only master, replica and rdonly are advertised in the Serving Graph.
 
 \subsubsection{Keyspace id}\hypertarget{keyspace-id}{}\label{keyspace-id}
 
-A keyspace id (keyspace\_id) is a column that is used to identify a primary entity
-of a keyspace, like user, video, order, etc.
+A \vconcepts{\textbf{keyspace\_id}} is a column that is used to identify a primary entity of a keyspace, like user, video, order, etc.
 In order to shard a database, all tables in a keyspace need to
 contain a keyspace id column.
 Vitess sharding ensures that all rows that have a common keyspace id are
@@ -61,19 +62,17 @@ key column of all tables in a keyspace.
 
 If you do not intend to shard a database, you do not have to
 designate a keyspace\_id.
+
 However, you'll be required to designate a keyspace\_id
 if you decide to shard a currently unsharded database.
 
-A keyspace\_id can be an unsigned number or a binary character column (unsigned bigint
-or varbinary in mysql tables). Other data types are not allowed because of ambiguous
-equality or inequality rules.
+A keyspace\_id can be an unsigned number or a binary character column (unsigned bigint or varbinary in mysql tables). Other data types are not allowed because of ambiguous equality or inequality rules.
 
 TODO: The keyspace id rules need to be solidified once VTGate features are finalized.
 
 \subsubsection{Shard graph}\hypertarget{shard-graph}{}\label{shard-graph}
 
-The shard graph defines how a keyspace has been sharded. It's basically a per-keyspace
-list of non-intersecting ranges that cover all possible values a keyspace id can cover.
+The shard graph defines how a keyspace has been sharded. It's basically a per-keyspace list of non-intersecting ranges that cover all possible values a keyspace id can cover.
 In other words, any given keypsace id is guaranteed to map to one and only one
 shard of the shard graph.
 
@@ -83,13 +82,11 @@ The downside of this scheme is that it creates hot-spots for sequentially increa
 In such cases, we recommend that the application hash the keys so they
 distribute more randomly.
 
-For instance, an application may use an incrementing UserId as a primary key for user records,
-and a hashed version of that UserId as a keyspace\_id. All data related to one user will be on
-the same shard, as all rows will share that keyspace\_id.
+For instance, an application may use an incrementing UserId as a primary key for user records, and a hashed version of that UserId as a keyspace\_id. All data related to one user will be on the same shard, as all rows will share that keyspace\_id.
 
 \subsubsection{Replication graph}\hypertarget{replication-graph}{}\label{replication-graph}
 
-The Replication Graph(~\ref{Replication-Graph}) represents the relationships between the master
+The \vconcepts{\textbf{Replication Graph}}(~\ref{Replication-Graph}) represents the relationships between the master
 databases and their respective replicas.
 This data is particularly useful during a master failover.
 Once a new master has been designated, all existing replicas have to
@@ -97,7 +94,7 @@ repointed to the new master so that replication can resume.
 
 \subsubsection{Serving graph}
 
-The Serving Graph(~\ref{Serving-Graph}) is derived from the shard and replication graph.
+The \vconcepts{\textbf{Serving Graph}}(~\ref{Serving-Graph}) is derived from the shard and replication graph.
 It represens the list of active servers that are available to serve
 queries.
 VTGate (or smart clients) query the serving graph to find out which servers
@@ -105,7 +102,7 @@ they are allowed to send queries to.
 
 \subsubsection{Topology Server}\label{topology-server}
 
-The Topology Server is the backend service used to store the Topology data, and provide a locking service. The implementation we use in the tree is based on Zookeeper. Each Zookeeper process is run on a single server, but may share that server with other processes.
+The \vconcepts{\textbf{Topology Server}} is the backend service used to store the Topology data, and provide a locking service. The implementation we use in the tree is based on Zookeeper. Each Zookeeper process is run on a single server, but may share that server with other processes.
 
 There is a global instance of that service. It contains data that doesn't change often, and references other local instances. It may be replicated locally in each Data Center as read-only copies. (a Zookeeper instance with two master instances per cell and one or two replicas per cell is a good configuration).
 
@@ -126,10 +123,9 @@ Clients usually just read the local Serving Graph, therefore they only need the 
 
 \subsubsection{Cell (Data Center)}\hypertarget{cell-data-center}{}\label{cell-data-center}
 
-A Cell is a group of servers and network infrastructure collocated in an area. It is usually a full Data Center, or a subset of a full Data Center.
+A \vconcepts{\textbf{Cell}} is a group of servers and network infrastructure collocated in an area. It is usually a full Data Center, or a subset of a full Data Center.
 
 A Cell has an associated Topology Server, hosted in that Cell. Most information about the tablets in a cell is hosted in that cell's Topology Server. That way a Cell can be taken down and rebuilt as a unit, for instance.
 
-We try to limit cross-cell traffic (both for data and metadata), and gracefully handle cell-level failures (like a Cell being cut off the network). Having the ability to route client traffic to Cells individually is a great feature to have
-(but not provided by the Vitess software).
+We try to limit cross-cell traffic (both for data and metadata), and gracefully handle cell-level failures (like a Cell being cut off the network). Having the ability to route client traffic to Cells individually is a great feature to have (but not provided by the Vitess software).
 

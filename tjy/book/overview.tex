@@ -5,10 +5,10 @@ Vitess is a set of servers and tools meant to facilitate scaling of MySQL
 databases for the web. It's been developed since 2011, and is currently used as
 a fundamental component of YouTube's MySQL infrastructure, serving thousands of
 QPS (per server). If you want to find out whether Vitess is a good fit for your
-project, please read our \href{https://github.com/youtube/vitess/blob/master/doc/HelicopterOverview.markdown}{helicopter overview}.
+project, please read our helicopter overview(~\ref{Helicopter-Overview}).
 
 
-\subsection{Overview}\hypertarget{overview}{}\label{overview}
+\section{Overview}\hypertarget{overview}{}\label{overview}
 
 \begin{figure}[H]
 \caption{Vitess Overview}
@@ -24,24 +24,25 @@ metadata store. Taken together, they allow you to serve more database traffic,
 and add features like sharding, which normally you would have to implement in your
 application.
 
-\textbf{vttablet} is a server that sits in front of a MySQL database, making it more
+\index{vttable}{\textbf{vttablet}} is a server that sits in front of a MySQL database, making it more
 robust and available in the face of high traffic. Among other things, it adds a
 connection pool, has a row based cache, and it rewrites SQL queries to be safer
 and nicer to the underlying database.
 
-\textbf{vtgate} is a very light proxy that routes database traffic from your app to the
+
+\index{vtgate}{\textbf{vtgate}} is a very light proxy that routes database traffic from your app to the
 right vttablet, basing on the sharding scheme, latency required, and health of
 the vttablets. This allows the client to be very simple, as all it needs to be
 concerned about is finding the closest vtgate.
 
-The \textbf{topology} is a metadata store that contains information about running
+The \index{topology}{\textbf{topology}} is a metadata store that contains information about running
 servers, the sharding scheme, and replication graph. It is backed by a
 consistent data store, like \href{http://zookeeper.apache.org/}{Apache ZooKeeper}.
 The topology backends are plugin based, allowing you to write your own if
 ZooKeeper doesn't fit your needs. You can explore the topology through
-\textbf{vtctld}, a webserver (not shown in the diagram).
+\index{vtctld}{\textbf{vtctld}}, a webserver (not shown in the diagram).
 
-\textbf{vtctl} is a command line utility that allows a human or a script to easily
+\index{vtctl}{\textbf{vtctl}} a command line utility that allows a human or a script to easily
 interact with the system.
 
 All components communicate using a lightweight RPC system based on
@@ -58,20 +59,20 @@ There's also a longer presentation from the Fosdem `14 go devroom
 (\href{https://github.com/youtube/vitess/blob/master/doc/Vitess2014.pdf?raw=true}{slides},
 \href{http://youtu.be/qATTTSg6zXk}{video}).
 
-\subsection{Trying it out}\hypertarget{trying-it-out}{}\label{trying-it-out}
+\section{Trying it out}\hypertarget{trying-it-out}{}\label{trying-it-out}
 
 Vitess is not entirely ready for unsupervised use yet. Some functionality is
 still under development, APIs may change, and parts of the code are
 undocumented. However, if you feel adventurous, you're more than welcome to try
 it. We know that there are some rough edges, so please don't hesitate to reach out
 to us through \href{https://groups.google.com/forum/\#!forum/vitess}{our mailing list}
-if you run into any issues. Warnings aside, please take a look at our \href{https://github.com/youtube/vitess/blob/master/doc/GettingStarted.markdown}{Getting
-Started}
+if you run into any issues. Warnings aside, please take a look at Getting Started(~\ref{Getting-Started})
+
 guide.
 
-\subsection{Documentation}\hypertarget{documentation}{}\label{documentation}
+\section{Documentation}\hypertarget{documentation}{}\label{documentation}
 
-\subsubsection{Intro}\hypertarget{intro}{}\label{intro}
+\subsection{Intro}\hypertarget{intro}{}\label{intro}
 
 \begin{itemize}
 \item Helicopter overview(~\ref{Helicopter-Overview}):  high level overview of Vitess that should tell you whether Vitess is for you.
@@ -79,7 +80,7 @@ guide.
 \item Vision(~\ref{Motivation-and-Vision}): principles guiding the design of Vitess.
 \end{itemize}
 
-\subsubsection{Using Vitess}\label{using-vitess}
+\subsection{Using Vitess}\label{using-vitess}
 
 \begin{itemize}
 \item Getting Started(~\ref{Getting-Started}):  how to set your environment to work with Vitess.
@@ -91,7 +92,7 @@ guide.
 \item Schema management(~\ref{Schema-Management}): managing your database schema using Vitess.
 \end{itemize}
 
-\subsubsection{Reference}
+\subsection{Reference}
 
 \begin{itemize}
 \item General Concepts (~\ref{Concepts}):
@@ -100,7 +101,7 @@ guide.
 \item Replication Graph (~\ref{Replication-Graph}):
 \end{itemize}
 
-\subsection{License}\hypertarget{license}{}\label{license}
+\section{License}\hypertarget{license}{}\label{license}
 
 Unless otherwise noted, the vitess source files are distributed
 under the BSD-style license found in the LICENSE file.

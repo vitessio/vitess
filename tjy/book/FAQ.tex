@@ -1,11 +1,11 @@
-\section{Vitess Frequently Asked Questions}\label{Vitess-FAQ}
+\section{Frequently Asked Questions}\label{Vitess-FAQ}
 
-\subsection{Is Vitess used at Google?}\hypertarget{is-vitess-used-at-google}{}\label{is-vitess-used-at-google}
+\subsection{Is Vitess used at Google?}\label{is-vitess-used-at-google}
 
 Yes, Vitess has been used to serve all YouTube database traffic since
 2011.
 
-\subsection{Why not do it inside MySQL?}\hypertarget{why-not-do-it-inside-mysql}{}\label{why-not-do-it-inside-mysql}
+\subsection{Why not do it inside MySQL?}\label{why-not-do-it-inside-mysql}
 
 MySQL is really good at what it does: serving queries with a low
 latency, on a single server. However, it was not designed to do a lot
@@ -25,7 +25,7 @@ to C++ in certain cases). What is more, the language is extremely well
 suited for concurrent programming, and it has a very high quality
 standard library.
 
-\subsection{Why not use X (where X is usually a NoSQL database) instead of putting effort into scaling MySQL?}\hypertarget{why-not-use-x-where-x-is-usually-a-nosql-database-instead-of-putting-effort-into-scaling-mysql}{}\label{why-not-use-x-where-x-is-usually-a-nosql-database-instead-of-putting-effort-into-scaling-mysql}
+\subsection{Why not use X (where X is usually a NoSQL database) instead of putting effort into scaling MySQL?}\label{why-not-use-x-where-x-is-usually-a-nosql-database-instead-of-putting-effort-into-scaling-mysql}
 
 Every database has its performance profile, meaning that some types of
 queries usually run faster than other. Because of that, migrating from
@@ -35,7 +35,7 @@ you need to rethink how your app accesses its data. MySQL’s low
 latency is very hard to match. Moreover, even if it has some quirks,
 those quirks are usually pretty well understood.
 
-\subsection{What’s up with the name, Vitess?}\hypertarget{whats-up-with-the-name-vitess}{}\label{whats-up-with-the-name-vitess}
+\subsection{What’s up with the name, Vitess?}\label{whats-up-with-the-name-vitess}
 
 Vitess was originally named \vconcepts{\emph{Voltron}}, but we decided to change it
 before making it Open Source to avoid infringing any
