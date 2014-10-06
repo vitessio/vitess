@@ -93,7 +93,6 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/bufio2"
 	"github.com/youtube/vitess/go/cgzip"
 	"github.com/youtube/vitess/go/sync2"
@@ -115,12 +114,12 @@ const (
 // replaceError replaces original with recent if recent is not nil,
 // logging original if it wasn't nil. This should be used in deferred
 // cleanup functions if they change the returned error.
-func replaceError(original, recent error) error {
+func replaceError(logger logutil.Logger, original, recent error) error {
 	if recent == nil {
 		return original
 	}
 	if original != nil {
-		log.Errorf("One of multiple error: %v", original)
+		logger.Errorf("One of multiple error: %v", original)
 	}
 	return recent
 }
@@ -196,7 +195,7 @@ func (mysqld *Mysqld) getReplicationPositionForClones(allowHierarchicalReplicati
 	return
 }
 
-func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool, hookExtraEnv map[string]string) (slaveStartRequired, readOnly bool, replicationPosition, myMasterPosition proto.ReplicationPosition, masterAddr string, connToRelease dbconnpool.PoolConnection, err error) {
+func (mysqld *Mysqld) prepareToSnapshot(logger logutil.Logger, allowHierarchicalReplication bool, hookExtraEnv map[string]string) (slaveStartRequired, readOnly bool, replicationPosition, myMasterPosition proto.ReplicationPosition, masterAddr string, connToRelease dbconnpool.PoolConnection, err error) {
 	// save initial state so we can restore on Start()
 	if slaveStatus, slaveErr := mysqld.SlaveStatus(); slaveErr == nil {
 		slaveStartRequired = slaveStatus.SlaveRunning()
@@ -208,11 +207,11 @@ func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool, hookE
 		return
 	}
 
-	log.Infof("Set Read Only")
+	logger.Infof("Set Read Only")
 	if !readOnly {
 		mysqld.SetReadOnly(true)
 	}
-	log.Infof("Stop Slave")
+	logger.Infof("Stop Slave")
 	if err = mysqld.StopSlave(hookExtraEnv); err != nil {
 		return
 	}
@@ -230,11 +229,11 @@ func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool, hookE
 		return
 	}
 
-	log.Infof("Flush tables")
+	logger.Infof("Flush tables")
 	if connToRelease, err = mysqld.dbaPool.Get(); err != nil {
 		return
 	}
-	log.Infof("exec FLUSH TABLES WITH READ LOCK")
+	logger.Infof("exec FLUSH TABLES WITH READ LOCK")
 	if _, err = connToRelease.ExecuteFetch("FLUSH TABLES WITH READ LOCK", 10000, false); err != nil {
 		connToRelease.Recycle()
 		return
@@ -243,9 +242,9 @@ func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool, hookE
 	return
 }
 
-func (mysqld *Mysqld) restoreAfterSnapshot(slaveStartRequired, readOnly bool, hookExtraEnv map[string]string, connToRelease dbconnpool.PoolConnection) (err error) {
+func (mysqld *Mysqld) restoreAfterSnapshot(logger logutil.Logger, slaveStartRequired, readOnly bool, hookExtraEnv map[string]string, connToRelease dbconnpool.PoolConnection) (err error) {
 	// Try to fix mysqld regardless of snapshot success..
-	log.Infof("exec UNLOCK TABLES")
+	logger.Infof("exec UNLOCK TABLES")
 	_, err = connToRelease.ExecuteFetch("UNLOCK TABLES", 10000, false)
 	connToRelease.Recycle()
 	if err != nil {
@@ -403,7 +402,7 @@ func (nhw *namedHasherWriter) SnapshotFiles() ([]SnapshotFile, error) {
 
 // dumpTableSplit will dump a table, and then split it according to keyspace_id
 // into multiple files.
-func (mysqld *Mysqld) dumpTableSplit(td *proto.TableDefinition, dbName, keyName string, keyType key.KeyspaceIdType, mainCloneSourcePath string, cloneSourcePaths map[key.KeyRange]string, maximumFilesize uint64) (map[key.KeyRange][]SnapshotFile, error) {
+func (mysqld *Mysqld) dumpTableSplit(logger logutil.Logger, td *proto.TableDefinition, dbName, keyName string, keyType key.KeyspaceIdType, mainCloneSourcePath string, cloneSourcePaths map[key.KeyRange]string, maximumFilesize uint64) (map[key.KeyRange][]SnapshotFile, error) {
 	filename := path.Join(mainCloneSourcePath, td.Name+".csv")
 	selectIntoOutfile := `SELECT {{.KeyspaceIdColumnName}}, {{.Columns}} INTO OUTFILE "{{.TableOutputPath}}" CHARACTER SET binary FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\' LINES TERMINATED BY '\n' FROM {{.TableName}}`
 	queryParams := map[string]string{
@@ -433,7 +432,7 @@ func (mysqld *Mysqld) dumpTableSplit(td *proto.TableDefinition, dbName, keyName 
 	defer func() {
 		file.Close()
 		if e := os.Remove(filename); e != nil {
-			log.Errorf("Cannot remove %v: %v", filename, e)
+			logger.Errorf("Cannot remove %v: %v", filename, e)
 		}
 	}()
 
@@ -480,7 +479,7 @@ func (mysqld *Mysqld) dumpTableSplit(td *proto.TableDefinition, dbName, keyName 
 
 // dumpTableFull will dump the contents of a full table, and then
 // chunk it up in multiple compressed files.
-func (mysqld *Mysqld) dumpTableFull(td *proto.TableDefinition, dbName, mainCloneSourcePath string, cloneSourcePath string, maximumFilesize uint64) ([]SnapshotFile, error) {
+func (mysqld *Mysqld) dumpTableFull(logger logutil.Logger, td *proto.TableDefinition, dbName, mainCloneSourcePath string, cloneSourcePath string, maximumFilesize uint64) ([]SnapshotFile, error) {
 	filename := path.Join(mainCloneSourcePath, td.Name+".csv")
 	selectIntoOutfile := `SELECT {{.Columns}} INTO OUTFILE "{{.TableOutputPath}}" CHARACTER SET binary FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\' LINES TERMINATED BY '\n' FROM {{.TableName}}`
 	queryParams := map[string]string{
@@ -504,7 +503,7 @@ func (mysqld *Mysqld) dumpTableFull(td *proto.TableDefinition, dbName, mainClone
 	defer func() {
 		file.Close()
 		if e := os.Remove(filename); e != nil {
-			log.Errorf("Cannot remove %v: %v", filename, e)
+			logger.Errorf("Cannot remove %v: %v", filename, e)
 		}
 	}()
 
@@ -552,7 +551,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(logger logutil.Logger, keyRanges []key
 	}
 
 	// same logic applies here
-	log.Infof("validateCloneSource")
+	logger.Infof("validateCloneSource")
 	if err = mysqld.validateCloneSource(false, hookExtraEnv); err != nil {
 		return
 	}
@@ -591,18 +590,18 @@ func (mysqld *Mysqld) CreateMultiSnapshot(logger logutil.Logger, keyRanges []key
 
 	// prepareToSnapshot will get the tablet in the rigth state,
 	// and return the current mysql status.
-	slaveStartRequired, readOnly, replicationPosition, myMasterPosition, masterAddr, conn, err := mysqld.prepareToSnapshot(allowHierarchicalReplication, hookExtraEnv)
+	slaveStartRequired, readOnly, replicationPosition, myMasterPosition, masterAddr, conn, err := mysqld.prepareToSnapshot(logger, allowHierarchicalReplication, hookExtraEnv)
 	if err != nil {
 		return
 	}
 	if skipSlaveRestart {
 		if slaveStartRequired {
-			log.Infof("Overriding slaveStartRequired to false")
+			logger.Infof("Overriding slaveStartRequired to false")
 		}
 		slaveStartRequired = false
 	}
 	defer func() {
-		err = replaceError(err, mysqld.restoreAfterSnapshot(slaveStartRequired, readOnly, hookExtraEnv, conn))
+		err = replaceError(logger, err, mysqld.restoreAfterSnapshot(logger, slaveStartRequired, readOnly, hookExtraEnv, conn))
 	}()
 
 	// dump the files in parallel with a pre-defined concurrency
@@ -614,7 +613,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(logger logutil.Logger, keyRanges []key
 			return nil
 		}
 		if len(tables) > 0 {
-			sfs, err := mysqld.dumpTableFull(table, dbName, mainCloneSourcePath, cloneSourcePaths[key.KeyRange{}], maximumFilesize)
+			sfs, err := mysqld.dumpTableFull(logger, table, dbName, mainCloneSourcePath, cloneSourcePaths[key.KeyRange{}], maximumFilesize)
 			if err != nil {
 				return err
 			}
@@ -622,7 +621,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(logger logutil.Logger, keyRanges []key
 				key.KeyRange{}: sfs,
 			}
 		} else {
-			datafiles[i], err = mysqld.dumpTableSplit(table, dbName, keyName, keyType, mainCloneSourcePath, cloneSourcePaths, maximumFilesize)
+			datafiles[i], err = mysqld.dumpTableSplit(logger, table, dbName, keyName, keyType, mainCloneSourcePath, cloneSourcePaths, maximumFilesize)
 		}
 		return
 	}
@@ -631,7 +630,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(logger logutil.Logger, keyRanges []key
 	}
 
 	if e := os.Remove(mainCloneSourcePath); e != nil {
-		log.Errorf("Cannot remove %v: %v", mainCloneSourcePath, e)
+		logger.Errorf("Cannot remove %v: %v", mainCloneSourcePath, e)
 	}
 
 	// Check the replication position after snapshot is done
@@ -726,7 +725,7 @@ func (lsf localSnapshotFile) tableName() string {
 // the data into a myisam table and we then convert to innodb
 // - If the strategy contains the string 'delayPrimaryKey',
 // then the primary key index will be added afterwards (use with useMyIsam)
-func MakeSplitCreateTableSql(schema, databaseName, tableName string, strategy string) (string, string, error) {
+func MakeSplitCreateTableSql(logger logutil.Logger, schema, databaseName, tableName string, strategy string) (string, string, error) {
 	alters := make([]string, 0, 5)
 	lines := strings.Split(schema, "\n")
 	delayPrimaryKey := strings.Contains(strategy, "delayPrimaryKey")
@@ -743,7 +742,7 @@ func MakeSplitCreateTableSql(schema, databaseName, tableName string, strategy st
 			// only add to the final ALTER TABLE if we're not
 			// dropping the AUTO_INCREMENT on the table
 			if strings.Contains(strategy, "skipAutoIncrement("+tableName+")") {
-				log.Infof("Will not add AUTO_INCREMENT back on table %v", tableName)
+				logger.Infof("Will not add AUTO_INCREMENT back on table %v", tableName)
 			} else {
 				alters = append(alters, "MODIFY "+line[:len(line)-1])
 			}
@@ -869,7 +868,7 @@ func (mysqld *Mysqld) MultiRestore(logger logutil.Logger, destinationDbName stri
 
 	defer func() {
 		if e := os.RemoveAll(tempStoragePath); e != nil {
-			log.Errorf("error removing %v: %v", tempStoragePath, e)
+			logger.Errorf("error removing %v: %v", tempStoragePath, e)
 		}
 
 	}()
@@ -912,7 +911,7 @@ func (mysqld *Mysqld) MultiRestore(logger logutil.Logger, destinationDbName stri
 	createViewCmds := make([]string, 0, 16)
 	for _, td := range manifest.SchemaDefinition.TableDefinitions {
 		if td.Type == proto.TABLE_BASE_TABLE {
-			createDbCmd, alterTable, err := MakeSplitCreateTableSql(td.Schema, destinationDbName, td.Name, strategy)
+			createDbCmd, alterTable, err := MakeSplitCreateTableSql(logger, td.Schema, destinationDbName, td.Name, strategy)
 			if err != nil {
 				return err
 			}

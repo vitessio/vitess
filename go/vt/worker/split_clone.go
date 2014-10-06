@@ -389,7 +389,7 @@ func (scw *SplitCloneWorker) copy() error {
 	for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
 		if td.Type == myproto.TABLE_BASE_TABLE {
 			// build the create and alter statements
-			create, alter, err := mysqlctl.MakeSplitCreateTableSql(td.Schema, "{{.DatabaseName}}", td.Name, scw.strategy)
+			create, alter, err := mysqlctl.MakeSplitCreateTableSql(scw.wr.Logger(), td.Schema, "{{.DatabaseName}}", td.Name, scw.strategy)
 			if err != nil {
 				return fmt.Errorf("MakeSplitCreateTableSql(%v) returned: %v", td.Name, err)
 			}

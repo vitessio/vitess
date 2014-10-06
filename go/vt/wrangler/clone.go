@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"sync"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -48,7 +47,7 @@ func (wr *Wrangler) Snapshot(tabletAlias topo.TabletAlias, forceMasterSnapshot b
 		return nil, "", err
 	}
 	for e := range logStream {
-		log.Infof("Snapshot: %v", e)
+		wr.Logger().Infof("Snapshot(%v): %v", tabletAlias, e)
 	}
 	reply, err := errFunc()
 	return reply, originalType, err
@@ -151,7 +150,7 @@ func (wr *Wrangler) Restore(srcTabletAlias topo.TabletAlias, srcFilePath string,
 		return err
 	}
 	for e := range logStream {
-		log.Infof("Restore: %v", e)
+		wr.Logger().Infof("Restore(%v): %v", dstTabletAlias, e)
 	}
 	if err := errFunc(); err != nil {
 		return err
@@ -160,7 +159,6 @@ func (wr *Wrangler) Restore(srcTabletAlias topo.TabletAlias, srcFilePath string,
 	// Restore moves us into the replication graph as a
 	// spare. There are no consequences to the replication or
 	// serving graphs, so no rebuild required.
-
 	return nil
 }
 
@@ -169,9 +167,9 @@ func (wr *Wrangler) UnreserveForRestoreMulti(dstTabletAliases []topo.TabletAlias
 	for _, dstTabletAlias := range dstTabletAliases {
 		ufrErr := wr.UnreserveForRestore(dstTabletAlias)
 		if ufrErr != nil {
-			log.Errorf("Failed to UnreserveForRestore destination tablet after failed source snapshot: %v", ufrErr)
+			wr.Logger().Errorf("Failed to UnreserveForRestore destination tablet after failed source snapshot: %v", ufrErr)
 		} else {
-			log.Infof("Un-reserved %v", dstTabletAlias)
+			wr.Logger().Infof("Un-reserved %v", dstTabletAlias)
 		}
 	}
 }
@@ -190,7 +188,7 @@ func (wr *Wrangler) Clone(srcTabletAlias topo.TabletAlias, dstTabletAliases []to
 			return err
 		}
 		reserved = append(reserved, dstTabletAlias)
-		log.Infof("Successfully reserved %v for restore", dstTabletAlias)
+		wr.Logger().Infof("Successfully reserved %v for restore", dstTabletAlias)
 	}
 
 	// take the snapshot, or put the server in SnapshotSource mode
@@ -227,7 +225,7 @@ func (wr *Wrangler) Clone(srcTabletAlias topo.TabletAlias, dstTabletAliases []to
 				err = resetErr
 			} else {
 				// In the context of a larger failure, just log a note to cleanup.
-				log.Errorf("Failed to reset snapshot source: %v - vtctl SnapshotSourceEnd is required", resetErr)
+				wr.Logger().Errorf("Failed to reset snapshot source: %v - vtctl SnapshotSourceEnd is required", resetErr)
 			}
 		}
 	}
