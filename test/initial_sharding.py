@@ -27,6 +27,7 @@ import environment
 import utils
 import tablet
 
+use_clone_worker = False
 keyspace_id_type = keyrange_constants.KIT_UINT64
 pack_keyspace_id = struct.Struct('!Q').pack
 
@@ -346,20 +347,33 @@ index by_msg (msg)
                              'TabletTypes: master,rdonly,replica',
                              keyspace_id_type=keyspace_id_type)
 
-    # take the snapshot for the split
-    utils.run_vtctl(['MultiSnapshot', '--spec=-80-',
-                     shard_replica.tablet_alias], auto_log=True)
+    if use_clone_worker:
+      # the worker will do snapshot / restore
+      utils.run_vtworker(['--cell', 'test_nj',
+                          '--command_display_interval', '10ms',
+                          'SplitClone',
+                          '--exclude_tables' ,'unrelated',
+                          '--strategy', 'populateBlpCheckpoint',
+                          '--source_reader_count', '10',
+                          '--min_table_size_for_split', '1',
+                          'test_keyspace/0'],
+                         auto_log=True)
 
-    # wait for tablet's binlog server service to be enabled after snapshot
-    shard_replica.wait_for_binlog_server_state("Enabled")
+    else:
+      # take the snapshot for the split
+      utils.run_vtctl(['MultiSnapshot', '--spec=-80-',
+                       shard_replica.tablet_alias], auto_log=True)
 
-    # perform the restore.
-    utils.run_vtctl(['ShardMultiRestore', '-strategy=populateBlpCheckpoint',
-                     'test_keyspace/-80', shard_replica.tablet_alias],
-                    auto_log=True)
-    utils.run_vtctl(['ShardMultiRestore', '-strategy=populateBlpCheckpoint',
-                     'test_keyspace/80-', shard_replica.tablet_alias],
-                    auto_log=True)
+      # wait for tablet's binlog server service to be enabled after snapshot
+      shard_replica.wait_for_binlog_server_state("Enabled")
+
+      # perform the restore.
+      utils.run_vtctl(['ShardMultiRestore', '-strategy=populateBlpCheckpoint',
+                       'test_keyspace/-80', shard_replica.tablet_alias],
+                      auto_log=True)
+      utils.run_vtctl(['ShardMultiRestore', '-strategy=populateBlpCheckpoint',
+                       'test_keyspace/80-', shard_replica.tablet_alias],
+                      auto_log=True)
 
     # check the startup values are in the right place
     self._check_startup_values()

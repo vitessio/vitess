@@ -5,13 +5,13 @@
 # be found in the LICENSE file.
 
 import utils
-import resharding
+import initial_sharding
 
 from vtdb import keyrange_constants
 
-# this test is the same as resharding_bytes.py, but it uses vtworker to
+# this test is the same as initial_sharding)bytes.py, but it uses vtworker to
 # do the clone.
 if __name__ == '__main__':
-  resharding.keyspace_id_type = keyrange_constants.KIT_BYTES
-  resharding.use_clone_worker = True
-  utils.main(resharding)
+  initial_sharding.use_clone_worker = True
+  initial_sharding.keyspace_id_type = keyrange_constants.KIT_BYTES
+  utils.main(initial_sharding)

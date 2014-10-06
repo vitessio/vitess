@@ -163,7 +163,7 @@ func findChunks(wr *wrangler.Wrangler, ti *topo.TabletInfo, td *myproto.TableDef
 			}
 			interval := (max - min) / int64(sourceReaderCount)
 			if interval == 0 {
-				wr.Logger().Infof("Not splitting table %v into multiple chunks, interval=0: %v %v", max, min)
+				wr.Logger().Infof("Not splitting table %v into multiple chunks, interval=0: %v %v", td.Name, max, min)
 				return result, nil
 			}
 
@@ -189,7 +189,7 @@ func findChunks(wr *wrangler.Wrangler, ti *topo.TabletInfo, td *myproto.TableDef
 		}
 		interval := (max - min) / uint64(sourceReaderCount)
 		if interval == 0 {
-			wr.Logger().Infof("Not splitting table %v into multiple chunks, interval=0: %v %v", max, min)
+			wr.Logger().Infof("Not splitting table %v into multiple chunks, interval=0: %v %v", td.Name, max, min)
 			return result, nil
 		}
 
@@ -214,7 +214,7 @@ func findChunks(wr *wrangler.Wrangler, ti *topo.TabletInfo, td *myproto.TableDef
 		}
 		interval := (max - min) / float64(sourceReaderCount)
 		if interval == 0 {
-			wr.Logger().Infof("Not splitting table %v into multiple chunks, interval=0: %v %v", max, min)
+			wr.Logger().Infof("Not splitting table %v into multiple chunks, interval=0: %v %v", td.Name, max, min)
 			return result, nil
 		}
 
