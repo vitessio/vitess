@@ -21,6 +21,7 @@ import com.youtube.vitess.vtgate.KeyspaceId;
 import com.youtube.vitess.vtgate.Query;
 import com.youtube.vitess.vtgate.Query.QueryBuilder;
 import com.youtube.vitess.vtgate.VtGate;
+import com.youtube.vitess.vtgate.cursor.Cursor;
 
 public class Util {
 	/**
@@ -78,6 +79,7 @@ public class Util {
 			}
 			Assert.fail("setup script failed to parse vtgate port");
 		}
+		testEnv.port = 15017;
 	}
 
 	public static void insertRows(TestEnv testEnv, int startId, int count)
@@ -133,7 +135,7 @@ public class Util {
 		for (int i = 0; i < count; i++) {
 			KeyspaceId kid = kids.get(i % kids.size());
 			Map<String, Object> bindVars = new ImmutableMap.Builder<String, Object>()
-					.put("id", random.nextInt(Integer.MAX_VALUE))
+					.put("id", i + 1)
 					.put("name", "name_" + i)
 					.put("keyspace_id", kid.getId())
 					.build();
@@ -156,5 +158,28 @@ public class Util {
 				testEnv.getAllKeyspaceIds()).build());
 		vtgate.commit();
 		vtgate.close();
+	}
+
+	/**
+	 * Wait until the specified tablet type has received at least rowCount rows
+	 * in vtgate_test from the master. If the criteria isn't met after the
+	 * specified number of attempts raise an exception.
+	 */
+	public static void waitForTablet(String tabletType, int rowCount,
+			int attempts, TestEnv testEnv) throws Exception {
+		String sql = "select * from vtgate_test";
+		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+		for (int i = 0; i < attempts; i++) {
+			Cursor cursor = vtgate.execute(new QueryBuilder(sql,
+					testEnv.keyspace, tabletType).withKeyspaceIds(
+					testEnv.getAllKeyspaceIds()).build());
+			if (cursor.getRowsAffected() >= rowCount) {
+				vtgate.close();
+				return;
+			}
+			Thread.sleep(1000);
+		}
+		vtgate.close();
+		throw new Exception(tabletType + " fails to catch up");
 	}
 }
