@@ -123,9 +123,9 @@ type QueryResultList struct {
 
 // GetMRSplitsRequest is the request to fetch input splits for a MapReduce job.
 type GetMRSplitsRequest struct {
-	Keyspace string
-	Table    string
-	Columns  []string
+	Keyspace       string
+	Query          tproto.BoundQuery
+	SplitsPerShard int
 }
 
 // InputSplit is a slice of table typically assigned to a single Mapper

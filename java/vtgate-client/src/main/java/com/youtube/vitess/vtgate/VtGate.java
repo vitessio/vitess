@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
+import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.mapreduce.InputSplit;
 
 import com.google.common.net.HostAndPort;
@@ -121,19 +122,24 @@ public class VtGate {
 
 	/**
 	 * Get {@link InputSplit}s for a MapReduce job using the specified table as
-	 * input. This currently produces one split per shard. Throws
-	 * {@link DatabaseException} if an rdonly instance is not available.
+	 * input. Use splitsPerShard to control how many splits to generate per
+	 * shard. Throws {@link DatabaseException} if an rdonly instance is not
+	 * available.
 	 */
 	public List<InputSplit> getMRSplits(String keyspace, String table,
-			List<String> columns)
+			List<String> columns, int splitsPerShard)
 			throws ConnectionException, DatabaseException {
 		Map<String, Object> params = new HashMap<>();
 		params.put("Keyspace", keyspace);
-		params.put("Table", table);
 		if (!columns.contains(KeyspaceId.COL_NAME)) {
 			columns.add(KeyspaceId.COL_NAME);
 		}
-		params.put("Columns", columns);
+		String sql = "select " + StringUtils.join(columns, ',') + " from "
+				+ table;
+		Map<String, Object> query = new HashMap<>();
+		query.put("Sql", sql);
+		params.put("Query", query);
+		params.put("SplitsPerShard", splitsPerShard);
 		Map<String, Object> reply = client.getMRSplits(params);
 		if (reply.containsKey("Error")) {
 			byte[] err = (byte[]) reply.get("Error");

@@ -192,6 +192,25 @@ func (conn *TabletBson) Rollback(context context.Context, transactionID int64) e
 	return tabletError(conn.rpcClient.Call("SqlQuery.Rollback", req, &noOutput))
 }
 
+// SplitQuery is the stub for SqlQuery.SplitQuery RPC
+func (conn *TabletBson) SplitQuery(context context.Context, query tproto.BoundQuery, splitCount int) (queries []tproto.QuerySplit, err error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.rpcClient == nil {
+		err = tabletconn.CONN_CLOSED
+		return
+	}
+	req := &tproto.SplitQueryRequest{
+		Query:      query,
+		SplitCount: splitCount,
+	}
+	reply := new(tproto.SplitQueryResult)
+	if err := conn.rpcClient.Call("SqlQuery.SplitQuery", req, reply); err != nil {
+		return nil, tabletError(err)
+	}
+	return reply.Queries, nil
+}
+
 // Close closes underlying bsonrpc.
 func (conn *TabletBson) Close() {
 	conn.mu.Lock()

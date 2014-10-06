@@ -414,6 +414,25 @@ func (sbc *sandboxConn) Rollback(context context.Context, transactionID int64) e
 	return sbc.getError()
 }
 
+var sandboxSQRowCount = int64(10)
+
+// Fake SplitQuery creates splits from the original query by appending the
+// split index as a comment to the SQL. RowCount is always sandboxSQRowCount
+func (sbc *sandboxConn) SplitQuery(context context.Context, query tproto.BoundQuery, splitCount int) ([]tproto.QuerySplit, error) {
+	splits := []tproto.QuerySplit{}
+	for i := 0; i < splitCount; i++ {
+		split := tproto.QuerySplit{
+			Query: tproto.BoundQuery{
+				Sql:           fmt.Sprintf("%s /*split %v */", query.Sql, i),
+				BindVariables: query.BindVariables,
+			},
+			RowCount: sandboxSQRowCount,
+		}
+		splits = append(splits, split)
+	}
+	return splits, nil
+}
+
 // Close does not change ExecCount
 func (sbc *sandboxConn) Close() {
 	sbc.CloseCount.Add(1)

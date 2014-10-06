@@ -5,7 +5,6 @@
 package tabletserver
 
 import (
-	"fmt"
 	"time"
 
 	log "github.com/golang/glog"
@@ -18,11 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/tableacl"
-	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
 const (
@@ -239,223 +234,6 @@ func (qe *QueryEngine) Close() {
 	qe.dbconfig = nil
 }
 
-// Begin begins a transaction.
-func (qe *QueryEngine) Begin(logStats *SQLQueryStats) int64 {
-	defer queryStats.Record("BEGIN", time.Now())
-
-	conn, err := qe.txPool.TryGet()
-	if err == dbconnpool.CONN_POOL_CLOSED_ERR {
-		panic(connPoolClosedErr)
-	}
-	if err != nil {
-		panic(NewTabletErrorSql(FATAL, err))
-	}
-	if conn == nil {
-		qe.activeTxPool.LogActive()
-		panic(NewTabletError(TX_POOL_FULL, "Transaction pool connection limit exceeded"))
-	}
-	transactionID, err := qe.activeTxPool.SafeBegin(conn)
-	if err != nil {
-		conn.Recycle()
-		panic(err)
-	}
-	return transactionID
-}
-
-// Commit commits the specified transaction.
-func (qe *QueryEngine) Commit(logStats *SQLQueryStats, transactionID int64) {
-	defer queryStats.Record("COMMIT", time.Now())
-	dirtyTables, err := qe.activeTxPool.SafeCommit(transactionID)
-	qe.invalidateRows(logStats, dirtyTables)
-	if err != nil {
-		panic(err)
-	}
-}
-
-func (qe *QueryEngine) invalidateRows(logStats *SQLQueryStats, dirtyTables map[string]DirtyKeys) {
-	for tableName, invalidList := range dirtyTables {
-		tableInfo := qe.schemaInfo.GetTable(tableName)
-		if tableInfo == nil {
-			continue
-		}
-		invalidations := int64(0)
-		for key := range invalidList {
-			tableInfo.Cache.Delete(key)
-			invalidations++
-		}
-		logStats.CacheInvalidations += invalidations
-		tableInfo.invalidations.Add(invalidations)
-	}
-}
-
-// Rollback rolls back the specified transaction.
-func (qe *QueryEngine) Rollback(logStats *SQLQueryStats, transactionID int64) {
-	defer queryStats.Record("ROLLBACK", time.Now())
-	qe.activeTxPool.Rollback(transactionID)
-}
-
-// StreamExecute executes the query and streams its result.
-// The first QueryResult will have Fields set (and Rows nil)
-// The subsequent QueryResult will have Rows set (and Fields nil)
-func (qe *QueryEngine) StreamExecute(logStats *SQLQueryStats, query *proto.Query, sendReply func(*mproto.QueryResult) error) {
-	if query.BindVariables == nil { // will help us avoid repeated nil checks
-		query.BindVariables = make(map[string]interface{})
-	}
-	logStats.BindVariables = query.BindVariables
-	// cheap hack: strip trailing comment into a special bind var
-	stripTrailing(query)
-
-	plan := qe.schemaInfo.GetStreamPlan(query.Sql)
-	logStats.PlanType = plan.PlanId.String()
-	logStats.OriginalSql = query.Sql
-	defer queryStats.Record(plan.PlanId.String(), time.Now())
-
-	authorized := tableacl.Authorized(plan.TableName, plan.PlanId.MinRole())
-	qe.checkTableAcl(plan.TableName, plan.PlanId, authorized, logStats.context.GetUsername())
-
-	// does the real work: first get a connection
-	waitingForConnectionStart := time.Now()
-	conn := getOrPanic(qe.streamConnPool)
-	logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
-	defer conn.Recycle()
-
-	qd := NewQueryDetail(query, logStats.context, conn.Id())
-	qe.streamQList.Add(qd)
-	defer qe.streamQList.Remove(qd)
-
-	// then let's stream! Wrap callback function to return an
-	// error on query termination to stop further streaming
-	qe.fullStreamFetch(logStats, conn, plan.FullQuery, query.BindVariables, nil, nil, sendReply)
-}
-
-func (qe *QueryEngine) checkTableAcl(table string, planId planbuilder.PlanType, authorized tableacl.ACL, user string) {
-	if !authorized.IsMember(user) {
-		err := fmt.Sprintf("table acl error: %v cannot run %v on table %v", user, planId, table)
-		if qe.strictTableAcl {
-			panic(NewTabletError(FAIL, err))
-		}
-		qe.accessCheckerLogger.Errorf(err)
-	}
-}
-
-// InvalidateForDml performs rowcache invalidations for the dml.
-func (qe *QueryEngine) InvalidateForDml(table string, keys []string) {
-	if qe.cachePool.IsClosed() {
-		return
-	}
-	invalidations := int64(0)
-	tableInfo := qe.schemaInfo.GetTable(table)
-	if tableInfo == nil {
-		panic(NewTabletError(FAIL, "Table %s not found", table))
-	}
-	if tableInfo.CacheType == schema.CACHE_NONE {
-		return
-	}
-	for _, val := range keys {
-		newKey := validateKey(tableInfo, val)
-		if newKey != "" {
-			tableInfo.Cache.Delete(newKey)
-		}
-		invalidations++
-	}
-	tableInfo.invalidations.Add(invalidations)
-}
-
-// InvalidateForDDL performs schema and rowcache changes for the ddl.
-func (qe *QueryEngine) InvalidateForDDL(ddl string) {
-	ddlPlan := planbuilder.DDLParse(ddl)
-	if ddlPlan.Action == "" {
-		panic(NewTabletError(FAIL, "DDL is not understood"))
-	}
-	if ddlPlan.TableName != "" && ddlPlan.TableName != ddlPlan.NewName {
-		// It's a drop or rename.
-		qe.schemaInfo.DropTable(ddlPlan.TableName)
-	}
-	if ddlPlan.NewName != "" {
-		qe.schemaInfo.CreateOrUpdateTable(ddlPlan.NewName)
-	}
-}
-
-// InvalidateForUnrecognized performs best effort rowcache invalidation
-// for unrecognized statements.
-func (qe *QueryEngine) InvalidateForUnrecognized(sql string) {
-	statement, err := sqlparser.Parse(sql)
-	if err != nil {
-		log.Errorf("Error: %v: %s", err, sql)
-		internalErrors.Add("Invalidation", 1)
-		return
-	}
-	var table *sqlparser.TableName
-	switch stmt := statement.(type) {
-	case *sqlparser.Insert:
-		// Inserts don't affect rowcache.
-		return
-	case *sqlparser.Update:
-		table = stmt.Table
-	case *sqlparser.Delete:
-		table = stmt.Table
-	default:
-		log.Errorf("Unrecognized: %s", sql)
-		internalErrors.Add("Invalidation", 1)
-		return
-	}
-
-	// Ignore cross-db statements.
-	if table.Qualifier != nil && string(table.Qualifier) != qe.dbconfig.DbName {
-		return
-	}
-
-	// Ignore if it's an uncached table.
-	tableName := string(table.Name)
-	tableInfo := qe.schemaInfo.GetTable(tableName)
-	if tableInfo == nil {
-		log.Errorf("Table %s not found: %s", tableName, sql)
-		internalErrors.Add("Invalidation", 1)
-		return
-	}
-	if tableInfo.CacheType == schema.CACHE_NONE {
-		return
-	}
-
-	// Treat the statement as a DDL.
-	// It will conservatively invalidate all rows of the table.
-	log.Warningf("Treating '%s' as DDL for table %s", sql, tableName)
-	qe.schemaInfo.CreateOrUpdateTable(tableName)
-}
-
-//-----------------------------------------------
-// DDL
-
-func (qe *QueryEngine) execDDL(logStats *SQLQueryStats, ddl string) *mproto.QueryResult {
-	ddlPlan := planbuilder.DDLParse(ddl)
-	if ddlPlan.Action == "" {
-		panic(NewTabletError(FAIL, "DDL is not understood"))
-	}
-
-	// Stolen from Begin
-	conn := getOrPanic(qe.txPool)
-	txid, err := qe.activeTxPool.SafeBegin(conn)
-	if err != nil {
-		conn.Recycle()
-		panic(err)
-	}
-	// Stolen from Commit
-	defer qe.activeTxPool.SafeCommit(txid)
-
-	// Stolen from Execute
-	conn = qe.activeTxPool.Get(txid)
-	defer conn.Recycle()
-	result := qe.execSQL(logStats, conn, ddl, false)
-	if ddlPlan.TableName != "" && ddlPlan.TableName != ddlPlan.NewName {
-		// It's a drop or rename.
-		qe.schemaInfo.DropTable(ddlPlan.TableName)
-	}
-	if ddlPlan.NewName != "" {
-		qe.schemaInfo.CreateOrUpdateTable(ddlPlan.NewName)
-	}
-	return result
-}
-
 func (qe *QueryEngine) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value) (result *mproto.QueryResult) {
 	sql := qe.generateFinalSql(parsedQuery, bindVars, listVars, nil)
 	q, ok := qe.consolidator.Create(string(sql))
@@ -524,14 +302,9 @@ func (qe *QueryEngine) execSQLNoPanic(logStats *SQLQueryStats, conn dbconnpool.P
 		defer qd.Done()
 	}
 
-	logStats.QuerySources |= QUERY_SOURCE_MYSQL
-	logStats.NumberOfQueries++
-	logStats.AddRewrittenSql(sql)
-
-	fetchStart := time.Now()
+	start := time.Now()
 	result, err := conn.ExecuteFetch(sql, int(qe.maxResultSize.Get()), wantfields)
-	logStats.MysqlResponseTime += time.Now().Sub(fetchStart)
-
+	logStats.AddRewrittenSql(sql, start)
 	if err != nil {
 		return nil, NewTabletErrorSql(FAIL, err)
 	}
@@ -539,13 +312,27 @@ func (qe *QueryEngine) execSQLNoPanic(logStats *SQLQueryStats, conn dbconnpool.P
 }
 
 func (qe *QueryEngine) execStreamSQL(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, sql string, callback func(*mproto.QueryResult) error) {
-	logStats.QuerySources |= QUERY_SOURCE_MYSQL
-	logStats.NumberOfQueries++
-	logStats.AddRewrittenSql(sql)
-	fetchStart := time.Now()
+	start := time.Now()
 	err := conn.ExecuteStreamFetch(sql, callback, int(qe.streamBufferSize.Get()))
-	logStats.MysqlResponseTime += time.Now().Sub(fetchStart)
+	logStats.AddRewrittenSql(sql, start)
 	if err != nil {
 		panic(NewTabletErrorSql(FAIL, err))
 	}
+}
+
+// SplitQuery uses QuerySplitter to split a BoundQuery into smaller queries
+// that return a subset of rows from the original query.
+func (qe *QueryEngine) SplitQuery(logStats *SQLQueryStats, query *proto.BoundQuery, splitCount int) ([]proto.QuerySplit, error) {
+	splitter := NewQuerySplitter(query, splitCount, qe.schemaInfo)
+	err := splitter.validateQuery()
+	if err != nil {
+		return nil, NewTabletError(FAIL, "query validation error: %s", err)
+	}
+	conn := getOrPanic(qe.connPool)
+	// TODO: For fetching pkMinMax, include where clauses on the
+	// primary key, if any, in the original query which might give a narrower
+	// range of PKs to work with.
+	minMaxSql := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v", splitter.pkCol, splitter.pkCol, splitter.tableName)
+	pkMinMax := qe.execSQL(logStats, conn, minMaxSql, true)
+	return splitter.split(pkMinMax), nil
 }
