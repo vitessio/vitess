@@ -9,7 +9,7 @@ import initial_sharding
 
 from vtdb import keyrange_constants
 
-# this test is the same as initial_sharding)bytes.py, but it uses vtworker to
+# this test is the same as initial_sharding_bytes.py, but it uses vtworker to
 # do the clone.
 if __name__ == '__main__':
   initial_sharding.use_clone_worker = True
