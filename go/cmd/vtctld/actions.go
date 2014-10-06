@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -11,6 +12,11 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
+)
+
+var (
+	actionTimeout = flag.Duration("action_timeout", wrangler.DefaultActionTimeout, "time to wait for an action before resorting to force")
+	lockTimeout   = flag.Duration("lock_timeout", actionnode.DefaultLockTimeout, "lock time for wrangler/topo operations")
 )
 
 type ActionResult struct {
@@ -82,7 +88,7 @@ func (ar *ActionRepository) ApplyKeyspaceAction(actionName, keyspace string, r *
 		return result
 	}
 
-	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, wrangler.DefaultActionTimeout, actionnode.DefaultLockTimeout)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, *actionTimeout, *lockTimeout)
 	output, err := action(wr, keyspace, r)
 	if err != nil {
 		result.error(err.Error())
@@ -105,7 +111,7 @@ func (ar *ActionRepository) ApplyShardAction(actionName, keyspace, shard string,
 		result.error("Unknown shard action")
 		return result
 	}
-	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, wrangler.DefaultActionTimeout, actionnode.DefaultLockTimeout)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, *actionTimeout, *lockTimeout)
 	output, err := action(wr, keyspace, shard, r)
 	if err != nil {
 		result.error(err.Error())
@@ -133,7 +139,7 @@ func (ar *ActionRepository) ApplyTabletAction(actionName string, tabletAlias top
 	}
 
 	// run the action
-	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, wrangler.DefaultActionTimeout, actionnode.DefaultLockTimeout)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, *actionTimeout, *lockTimeout)
 	output, err := action.method(wr, tabletAlias, r)
 	if err != nil {
 		result.error(err.Error())

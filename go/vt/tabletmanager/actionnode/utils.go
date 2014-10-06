@@ -17,7 +17,7 @@ import (
 var (
 	// DefaultLockTimeout is a good value to use as a default for
 	// locking a shard / keyspace.
-	DefaultLockTimeout = 15 * time.Second
+	DefaultLockTimeout = 30 * time.Second
 )
 
 // LockKeyspace will lock the keyspace in the topology server.
