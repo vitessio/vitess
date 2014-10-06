@@ -33,7 +33,7 @@ func si(start, end string) *topo.ShardInfo {
 	}, 0)
 }
 
-func TestRowSplitter(t *testing.T) {
+func TestRowSplitterUint64(t *testing.T) {
 	shards := []*topo.ShardInfo{
 		si("", "40"),
 		si("40", "c0"),
@@ -53,6 +53,57 @@ func TestRowSplitter(t *testing.T) {
 	row2 := []sqltypes.Value{
 		sqltypes.MakeString([]byte("Ignored Value")),
 		sqltypes.MakeString([]byte(fmt.Sprintf("%v", uint64(0xe000000000000000)))),
+	}
+
+	// basic split
+	rows := [][]sqltypes.Value{row0, row1, row2, row2, row1, row2, row0}
+	result, err := rs.Split(rows)
+	if err != nil {
+		t.Fatalf("Split failed: %v", err)
+	}
+	if len(result) != 3 {
+		t.Fatalf("Bad column count: %v", rows)
+	}
+	if !reflect.DeepEqual(result[0], [][]sqltypes.Value{row0, row0}) {
+		t.Fatalf("Bad result[0]: %v", result[0])
+	}
+	if !reflect.DeepEqual(result[1], [][]sqltypes.Value{row1, row1}) {
+		t.Fatalf("Bad result[1]: %v", result[1])
+	}
+	if !reflect.DeepEqual(result[2], [][]sqltypes.Value{row2, row2, row2}) {
+		t.Fatalf("Bad result[2]: %v", result[2])
+	}
+}
+
+func siBytes(start, end string) *topo.ShardInfo {
+	return topo.NewShardInfo("keyspace", start+"-"+end, &topo.Shard{
+		KeyRange: key.KeyRange{
+			Start: key.KeyspaceId(start),
+			End:   key.KeyspaceId(end),
+		},
+	}, 0)
+}
+
+func TestRowSplitterString(t *testing.T) {
+	shards := []*topo.ShardInfo{
+		siBytes("", "E"),
+		siBytes("E", "L"),
+		siBytes("L", ""),
+	}
+	rs := NewRowSplitter(shards, key.KIT_BYTES, 1)
+
+	// rows in different shards
+	row0 := []sqltypes.Value{
+		sqltypes.MakeString([]byte("Ignored Value")),
+		sqltypes.MakeString([]byte("A")),
+	}
+	row1 := []sqltypes.Value{
+		sqltypes.MakeString([]byte("Ignored Value")),
+		sqltypes.MakeString([]byte("G")),
+	}
+	row2 := []sqltypes.Value{
+		sqltypes.MakeString([]byte("Ignored Value")),
+		sqltypes.MakeString([]byte("Q")),
 	}
 
 	// basic split

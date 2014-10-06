@@ -52,7 +52,15 @@ func (rs *RowSplitter) Split(rows [][]sqltypes.Value) ([][][]sqltypes.Value, err
 			}
 		}
 	} else {
-		return nil, fmt.Errorf("NYI: string keys")
+		for _, row := range rows {
+			k := key.KeyspaceId(row[rs.ValueIndex].Raw())
+			for i, kr := range rs.KeyRanges {
+				if kr.Contains(k) {
+					result[i] = append(result[i], row)
+					break
+				}
+			}
+		}
 	}
 	return result, nil
 }
