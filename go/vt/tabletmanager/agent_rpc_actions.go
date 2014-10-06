@@ -20,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/mysql/proto"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -130,9 +131,9 @@ type RpcAgent interface {
 	MultiRestore(args *actionnode.MultiRestoreArgs, logger logutil.Logger) error
 
 	// RPC helpers
-	RpcWrap(from, name string, args, reply interface{}, f func() error) error
-	RpcWrapLock(from, name string, args, reply interface{}, verbose bool, f func() error) error
-	RpcWrapLockAction(from, name string, args, reply interface{}, verbose bool, f func() error) error
+	RpcWrap(ctx context.Context, name string, args, reply interface{}, f func() error) error
+	RpcWrapLock(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error) error
+	RpcWrapLockAction(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error) error
 }
 
 // TODO(alainjobart): all the calls mention something like:
