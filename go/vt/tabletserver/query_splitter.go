@@ -81,10 +81,10 @@ func (qs *QuerySplitter) validateQuery() error {
 // split splits the query into multiple queries. validateQuery() must return
 // nil error before split() is called.
 func (qs *QuerySplitter) split(pkMinMax *mproto.QueryResult) []proto.QuerySplit {
-	boundaries, err := qs.getSplitBoundaries(pkMinMax)
+	boundaries := qs.getSplitBoundaries(pkMinMax)
 	splits := []proto.QuerySplit{}
-	// No splits or an error occurred, return the original query as a single split
-	if err != nil || len(boundaries) == 0 {
+	// No splits, return the original query as a single split
+	if len(boundaries) == 0 {
 		split := &proto.QuerySplit{
 			Query: *qs.query,
 		}
@@ -170,21 +170,22 @@ func (qs *QuerySplitter) getWhereClause(start, end sqltypes.Value) *sqlparser.Wh
 	}
 }
 
-func (qs *QuerySplitter) getSplitBoundaries(pkMinMax *mproto.QueryResult) ([]sqltypes.Value, error) {
+func (qs *QuerySplitter) getSplitBoundaries(pkMinMax *mproto.QueryResult) []sqltypes.Value {
 	boundaries := []sqltypes.Value{}
-	if len(pkMinMax.Rows) != 1 {
-		return boundaries, nil
-	}
-	if pkMinMax.Rows[0][0].IsNull() || pkMinMax.Rows[0][1].IsNull() {
-		return boundaries, nil
+	var err error
+	if len(pkMinMax.Rows) != 1 || pkMinMax.Rows[0][0].IsNull() || pkMinMax.Rows[0][1].IsNull() {
+		err = fmt.Errorf("no min or max primary key")
 	}
 	switch pkMinMax.Fields[0].Type {
 	case mproto.VT_TINY, mproto.VT_SHORT, mproto.VT_LONG, mproto.VT_LONGLONG, mproto.VT_INT24:
-		return qs.parseInt(pkMinMax)
+		boundaries, err = qs.parseInt(pkMinMax)
 	case mproto.VT_FLOAT, mproto.VT_DOUBLE:
-		return qs.parseFloat(pkMinMax)
+		boundaries, err = qs.parseFloat(pkMinMax)
 	}
-	return boundaries, nil
+	if err != nil {
+		panic(err)
+	}
+	return boundaries
 }
 
 func (qs *QuerySplitter) parseInt(pkMinMax *mproto.QueryResult) ([]sqltypes.Value, error) {

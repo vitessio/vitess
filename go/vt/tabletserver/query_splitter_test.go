@@ -177,14 +177,11 @@ func TestGetSplitBoundaries(t *testing.T) {
 
 	splitter := &QuerySplitter{}
 	splitter.splitCount = 5
-	boundaries, err := splitter.getSplitBoundaries(pkMinMax)
-	if err != nil {
-		t.Errorf("unexpected error %s", err)
-	}
+	boundaries := splitter.getSplitBoundaries(pkMinMax)
 	if len(boundaries) != splitter.splitCount-1 {
 		t.Errorf("wrong number of boundaries got: %v, want: %v", len(boundaries), splitter.splitCount-1)
 	}
-	got, _ := splitter.getSplitBoundaries(pkMinMax)
+	got := splitter.getSplitBoundaries(pkMinMax)
 	want := []sqltypes.Value{buildVal(20), buildVal(30), buildVal(40), buildVal(50)}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("incorrect boundaries, got: %v, want: %v", got, want)
@@ -193,7 +190,7 @@ func TestGetSplitBoundaries(t *testing.T) {
 	// No min max rows should return empty bounary list
 	pkMinMax.Rows = [][]sqltypes.Value{}
 	noBounds := []sqltypes.Value{}
-	boundaries, _ = splitter.getSplitBoundaries(pkMinMax)
+	boundaries = splitter.getSplitBoundaries(pkMinMax)
 	if !reflect.DeepEqual(boundaries, noBounds) {
 		t.Errorf("should return no boundaries")
 	}
@@ -203,7 +200,7 @@ func TestGetSplitBoundaries(t *testing.T) {
 	row = []sqltypes.Value{min, max}
 	rows = [][]sqltypes.Value{row}
 	pkMinMax.Rows = rows
-	boundaries, _ = splitter.getSplitBoundaries(pkMinMax)
+	boundaries = splitter.getSplitBoundaries(pkMinMax)
 	if !reflect.DeepEqual(boundaries, noBounds) {
 		t.Errorf("should return no boundaries")
 	}
@@ -214,7 +211,7 @@ func TestGetSplitBoundaries(t *testing.T) {
 	row = []sqltypes.Value{min, max}
 	rows = [][]sqltypes.Value{row}
 	pkMinMax.Rows = rows
-	got, _ = splitter.getSplitBoundaries(pkMinMax)
+	got = splitter.getSplitBoundaries(pkMinMax)
 	want = []sqltypes.Value{buildVal(-60), buildVal(-20), buildVal(20), buildVal(60)}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("incorrect boundaries, got: %v, want: %v", got, want)
@@ -230,7 +227,7 @@ func TestGetSplitBoundaries(t *testing.T) {
 	fields = []mproto.Field{minField, maxField}
 	pkMinMax.Rows = rows
 	pkMinMax.Fields = fields
-	got, _ = splitter.getSplitBoundaries(pkMinMax)
+	got = splitter.getSplitBoundaries(pkMinMax)
 	want = []sqltypes.Value{buildVal(20.5), buildVal(30.5), buildVal(40.5), buildVal(50.5)}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("incorrect boundaries, got: %v, want: %v", got, want)
