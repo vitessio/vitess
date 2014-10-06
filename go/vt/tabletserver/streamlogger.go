@@ -61,8 +61,11 @@ func (stats *SQLQueryStats) Send() {
 	SqlQueryLogger.Send(stats)
 }
 
-func (stats *SQLQueryStats) AddRewrittenSql(sql string) {
+func (stats *SQLQueryStats) AddRewrittenSql(sql string, start time.Time) {
+	stats.QuerySources |= QUERY_SOURCE_MYSQL
+	stats.NumberOfQueries += 1
 	stats.rewrittenSqls = append(stats.rewrittenSqls, sql)
+	stats.MysqlResponseTime += time.Now().Sub(start)
 }
 
 func (stats *SQLQueryStats) TotalTime() time.Duration {

@@ -8,19 +8,18 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/context"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
 // QueryDetail is a simple wrapper for Query, Context and PoolConnection
 type QueryDetail struct {
-	query   *proto.Query
+	query   string
 	context context.Context
 	connID  int64
 	start   time.Time
 }
 
 // NewQueryDetail creates a new QueryDetail
-func NewQueryDetail(query *proto.Query, context context.Context, connID int64) *QueryDetail {
+func NewQueryDetail(query string, context context.Context, connID int64) *QueryDetail {
 	return &QueryDetail{query: query, context: context, connID: connID, start: time.Now()}
 }
 
@@ -79,8 +78,6 @@ type QueryDetailzRow struct {
 	ContextHTML       template.HTML
 	Start             time.Time
 	Duration          time.Duration
-	SessionID         int64
-	TransactionID     int64
 	ConnID            int64
 	State             string
 	ShowTerminateLink bool
@@ -98,13 +95,11 @@ func (ql *QueryList) GetQueryzRows() []QueryDetailzRow {
 	rows := []QueryDetailzRow{}
 	for _, qd := range ql.queryDetails {
 		row := QueryDetailzRow{
-			Query:         qd.query.Sql,
-			ContextHTML:   qd.context.HTML(),
-			Start:         qd.start,
-			Duration:      time.Now().Sub(qd.start),
-			SessionID:     qd.query.SessionId,
-			TransactionID: qd.query.TransactionId,
-			ConnID:        qd.connID,
+			Query:       qd.query,
+			ContextHTML: qd.context.HTML(),
+			Start:       qd.start,
+			Duration:    time.Now().Sub(qd.start),
+			ConnID:      qd.connID,
 		}
 		rows = append(rows, row)
 	}
