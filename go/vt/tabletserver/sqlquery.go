@@ -432,7 +432,7 @@ func (sq *SqlQuery) SplitQuery(context context.Context, req *proto.SplitQueryReq
 	logStats := newSqlQueryStats("SplitQuery", context)
 	var err error
 	defer handleError(&err, logStats)
-	queries, err := sq.qe.SplitQuery(logStats, &(req.Query), req.SplitCount)
+	queries, err := SplitQuery(context, logStats, sq.qe, &(req.Query), req.SplitCount)
 	if err != nil {
 		return err
 	}

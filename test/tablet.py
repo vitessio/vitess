@@ -112,9 +112,13 @@ class Tablet(object):
     return self.mysqlctl(['shutdown'], with_ports=True)
 
   def teardown_mysql(self):
+    if utils.options.keep_logs:
+      return self.shutdown_mysql()
     return self.mysqlctl(['teardown', '-force'])
 
   def remove_tree(self):
+    if utils.options.keep_logs:
+      return
     try:
       shutil.rmtree(self.tablet_dir)
     except OSError as e:

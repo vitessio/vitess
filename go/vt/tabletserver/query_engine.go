@@ -5,21 +5,16 @@
 package tabletserver
 
 import (
-	"fmt"
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/hack"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/sqltypes"
+
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
 const (
@@ -234,107 +229,4 @@ func (qe *QueryEngine) Close() {
 	qe.schemaInfo.Close()
 	qe.cachePool.Close()
 	qe.dbconfig = nil
-}
-
-func (qe *QueryEngine) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value) (result *mproto.QueryResult) {
-	sql := qe.generateFinalSql(parsedQuery, bindVars, listVars, nil)
-	q, ok := qe.consolidator.Create(string(sql))
-	if ok {
-		defer q.Broadcast()
-		waitingForConnectionStart := time.Now()
-		conn, err := qe.connPool.Get()
-		logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
-		if err != nil {
-			q.Err = NewTabletErrorSql(FATAL, err)
-		} else {
-			defer conn.Recycle()
-			q.Result, q.Err = qe.execSQLNoPanic(logStats, conn, sql, false)
-		}
-	} else {
-		logStats.QuerySources |= QUERY_SOURCE_CONSOLIDATOR
-		q.Wait()
-	}
-	if q.Err != nil {
-		panic(q.Err)
-	}
-	return q.Result
-}
-
-func (qe *QueryEngine) directFetch(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) (result *mproto.QueryResult) {
-	sql := qe.generateFinalSql(parsedQuery, bindVars, listVars, buildStreamComment)
-	return qe.execSQL(logStats, conn, sql, false)
-}
-
-// fullFetch also fetches field info
-func (qe *QueryEngine) fullFetch(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) (result *mproto.QueryResult) {
-	sql := qe.generateFinalSql(parsedQuery, bindVars, listVars, buildStreamComment)
-	return qe.execSQL(logStats, conn, sql, true)
-}
-
-func (qe *QueryEngine) fullStreamFetch(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte, callback func(*mproto.QueryResult) error) {
-	sql := qe.generateFinalSql(parsedQuery, bindVars, listVars, buildStreamComment)
-	qe.execStreamSQL(logStats, conn, sql, callback)
-}
-
-func (qe *QueryEngine) generateFinalSql(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) string {
-	bindVars[MAX_RESULT_NAME] = qe.maxResultSize.Get() + 1
-	sql, err := parsedQuery.GenerateQuery(bindVars, listVars)
-	if err != nil {
-		panic(NewTabletError(FAIL, "%s", err))
-	}
-	if buildStreamComment != nil {
-		sql = append(sql, buildStreamComment...)
-	}
-	// undo hack done by stripTrailing
-	sql = restoreTrailing(sql, bindVars)
-	return hack.String(sql)
-}
-
-func (qe *QueryEngine) execSQL(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, sql string, wantfields bool) *mproto.QueryResult {
-	result, err := qe.execSQLNoPanic(logStats, conn, sql, true)
-	if err != nil {
-		panic(err)
-	}
-	return result
-}
-
-func (qe *QueryEngine) execSQLNoPanic(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, sql string, wantfields bool) (*mproto.QueryResult, error) {
-	if timeout := qe.queryTimeout.Get(); timeout != 0 {
-		qd := qe.connKiller.SetDeadline(conn.Id(), time.Now().Add(timeout))
-		defer qd.Done()
-	}
-
-	start := time.Now()
-	result, err := conn.ExecuteFetch(sql, int(qe.maxResultSize.Get()), wantfields)
-	logStats.AddRewrittenSql(sql, start)
-	if err != nil {
-		return nil, NewTabletErrorSql(FAIL, err)
-	}
-	return result, nil
-}
-
-func (qe *QueryEngine) execStreamSQL(logStats *SQLQueryStats, conn dbconnpool.PoolConnection, sql string, callback func(*mproto.QueryResult) error) {
-	start := time.Now()
-	err := conn.ExecuteStreamFetch(sql, callback, int(qe.streamBufferSize.Get()))
-	logStats.AddRewrittenSql(sql, start)
-	if err != nil {
-		panic(NewTabletErrorSql(FAIL, err))
-	}
-}
-
-// SplitQuery uses QuerySplitter to split a BoundQuery into smaller queries
-// that return a subset of rows from the original query.
-func (qe *QueryEngine) SplitQuery(logStats *SQLQueryStats, query *proto.BoundQuery, splitCount int) ([]proto.QuerySplit, error) {
-	splitter := NewQuerySplitter(query, splitCount, qe.schemaInfo)
-	err := splitter.validateQuery()
-	if err != nil {
-		return nil, NewTabletError(FAIL, "query validation error: %s", err)
-	}
-	conn := getOrPanic(qe.connPool)
-	// TODO: For fetching pkMinMax, include where clauses on the
-	// primary key, if any, in the original query which might give a narrower
-	// range of PKs to work with.
-	minMaxSql := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v", splitter.pkCol, splitter.pkCol, splitter.tableName)
-	pkMinMax := qe.execSQL(logStats, conn, minMaxSql, true)
-	return splitter.split(pkMinMax), nil
 }
