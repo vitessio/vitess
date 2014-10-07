@@ -113,6 +113,8 @@ def main():
   # remaining options are required to run the helper functions in utils.py
   parser.add_option('-d', '--debug', action='store_true', help='utils.pause() statements will wait for user input')
   parser.add_option('--skip-teardown', action='store_true')
+  parser.add_option('-k', '--keep-logs', action='store_true',
+                    help="Don't delete log files on teardown.")
   parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=1)
   parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=1)
   parser.add_option("--mysql-flavor", action="store", type="string")
@@ -132,3 +134,4 @@ def main():
 
 if __name__ == '__main__':
   main()
+
