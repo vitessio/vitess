@@ -37,12 +37,18 @@ func init() {
 
 type Zkd struct {
 	config *ZkConfig
-	//  createConnection CreateConnection
+	done   chan struct{}
 }
 
-// createConnection: closure that returns a new connection or an error
 func NewZkd(config *ZkConfig) *Zkd {
-	return &Zkd{config}
+	return &Zkd{config: config}
+}
+
+// Done returns a channel that is closed when the underlying process started
+// by this Zkd has terminated. If the process was started by someone else, this
+// channel will never be closed.
+func (zkd *Zkd) Done() <-chan struct{} {
+	return zkd.done
 }
 
 func (zkd *Zkd) LocalClientAddr() string {
@@ -98,8 +104,12 @@ func (zkd *Zkd) Start() error {
 			break
 		}
 	}
-	// wait so we don't get a bunch of defunct processes
-	go cmd.Wait()
+	zkd.done = make(chan struct{})
+	go func(done chan<- struct{}) {
+		// wait so we don't get a bunch of defunct processes
+		cmd.Wait()
+		close(done)
+	}(zkd.done)
 	return err
 }
 

@@ -54,6 +54,7 @@ type Mysqld struct {
 	replParams       *mysql.ConnectionParams
 	TabletDir        string
 	SnapshotDir      string
+	done             chan struct{}
 }
 
 // NewMysqld creates a Mysqld object based on the provided configuration
@@ -77,6 +78,13 @@ func NewMysqld(name string, config *Mycnf, dba, repl *mysql.ConnectionParams) *M
 		TabletDir:   TabletDir(config.ServerId),
 		SnapshotDir: SnapshotDir(config.ServerId),
 	}
+}
+
+// Done returns a channel that is closed when the underlying process started
+// by this Mysqld has terminated. If the process was started by someone else,
+// this channel will never be closed.
+func (mysqld *Mysqld) Done() <-chan struct{} {
+	return mysqld.done
 }
 
 // Cnf returns the mysql config for the daemon
@@ -136,11 +144,13 @@ func (mysqld *Mysqld) Start(mysqlWaitTime time.Duration) error {
 			return nil
 		}
 
-		// wait so we don't get a bunch of defunct processes
-		go func() {
+		mysqld.done = make(chan struct{})
+		go func(done chan<- struct{}) {
+			// wait so we don't get a bunch of defunct processes
 			err := cmd.Wait()
 			log.Infof("%v exit: %v", ts, err)
-		}()
+			close(done)
+		}(mysqld.done)
 	default:
 		// hook failed, we report error
 		return fmt.Errorf("mysqld_start hook failed: %v", hr.String())
