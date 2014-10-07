@@ -111,7 +111,7 @@ func (wr *Wrangler) reparentShardGraceful(ev *events.Reparent, si *topo.ShardInf
 	// it as new replica.
 	event.DispatchUpdate(ev, "scrapping old master")
 	wr.logger.Infof("scrap demoted master %v", masterTablet.Alias)
-	if scrapErr := wr.ai.Scrap(masterTablet, wr.ActionTimeout()); scrapErr != nil {
+	if scrapErr := wr.tmc.Scrap(masterTablet, wr.ActionTimeout()); scrapErr != nil {
 		// The sub action is non-critical, so just warn.
 		wr.logger.Warningf("scrap demoted master failed: %v", scrapErr)
 	}

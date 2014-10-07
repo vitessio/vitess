@@ -763,7 +763,7 @@ func commandSetReadOnly(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []st
 	if err != nil {
 		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
 	}
-	return wr.ActionInitiator().SetReadOnly(ti, wr.ActionTimeout())
+	return wr.TabletManagerClient().SetReadOnly(ti, wr.ActionTimeout())
 }
 
 func commandSetReadWrite(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -782,7 +782,7 @@ func commandSetReadWrite(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	if err != nil {
 		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
 	}
-	return wr.ActionInitiator().SetReadWrite(ti, wr.ActionTimeout())
+	return wr.TabletManagerClient().SetReadWrite(ti, wr.ActionTimeout())
 }
 
 func commandChangeSlaveType(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -835,7 +835,7 @@ func commandPing(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) e
 	if err != nil {
 		return err
 	}
-	return wr.ActionInitiator().Ping(tabletInfo, wr.ActionTimeout())
+	return wr.TabletManagerClient().Ping(tabletInfo, wr.ActionTimeout())
 }
 
 func commandRefreshState(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -853,7 +853,7 @@ func commandRefreshState(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	if err != nil {
 		return err
 	}
-	return wr.ActionInitiator().RefreshState(tabletInfo, wr.ActionTimeout())
+	return wr.TabletManagerClient().RefreshState(tabletInfo, wr.ActionTimeout())
 }
 
 func commandQuery(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -885,7 +885,7 @@ func commandSleep(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) 
 	if err != nil {
 		return err
 	}
-	return wr.ActionInitiator().Sleep(ti, duration, wr.ActionTimeout())
+	return wr.TabletManagerClient().Sleep(ti, duration, wr.ActionTimeout())
 }
 
 func commandSnapshotSourceEnd(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1198,7 +1198,7 @@ func commandShardExternallyReparented(wr *wrangler.Wrangler, subFlags *flag.Flag
 		if err != nil {
 			return err
 		}
-		return wr.ActionInitiator().TabletExternallyReparented(ti, wr.ActionTimeout())
+		return wr.TabletManagerClient().TabletExternallyReparented(ti, wr.ActionTimeout())
 	}
 	return wr.ShardExternallyReparented(keyspace, shard, tabletAlias)
 }

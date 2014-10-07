@@ -223,7 +223,7 @@ func (worker *SQLDiffWorker) synchronizeReplication() error {
 	if err != nil {
 		return err
 	}
-	if err := worker.wr.ActionInitiator().StopSlave(subsetTablet, 30*time.Second); err != nil {
+	if err := worker.wr.TabletManagerClient().StopSlave(subsetTablet, 30*time.Second); err != nil {
 		return fmt.Errorf("Cannot stop slave %v: %v", worker.subset.alias, err)
 	}
 	if worker.CheckInterrupted() {
@@ -251,7 +251,7 @@ func (worker *SQLDiffWorker) synchronizeReplication() error {
 	if err != nil {
 		return err
 	}
-	if err := worker.wr.ActionInitiator().StopSlave(supersetTablet, 30*time.Second); err != nil {
+	if err := worker.wr.TabletManagerClient().StopSlave(supersetTablet, 30*time.Second); err != nil {
 		return fmt.Errorf("Cannot stop slave %v: %v", worker.superset.alias, err)
 	}
 

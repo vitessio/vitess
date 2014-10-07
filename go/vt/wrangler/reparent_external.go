@@ -149,10 +149,10 @@ func (wr *Wrangler) reparentShardExternal(ev *events.Reparent, slaveTabletMap, m
 
 func (wr *Wrangler) slaveWasPromoted(ti *topo.TabletInfo) error {
 	wr.logger.Infof("slaveWasPromoted(%v)", ti.Alias)
-	return wr.ai.SlaveWasPromoted(ti, wr.ActionTimeout())
+	return wr.tmc.SlaveWasPromoted(ti, wr.ActionTimeout())
 }
 
 func (wr *Wrangler) slaveWasRestarted(ti *topo.TabletInfo, swra *actionnode.SlaveWasRestartedArgs) (err error) {
 	wr.logger.Infof("slaveWasRestarted(%v)", ti.Alias)
-	return wr.ai.SlaveWasRestarted(ti, swra, wr.ActionTimeout())
+	return wr.tmc.SlaveWasRestarted(ti, swra, wr.ActionTimeout())
 }

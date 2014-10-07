@@ -567,7 +567,7 @@ func (scw *SplitCloneWorker) copy() error {
 
 		// get the current position from the sources
 		for shardIndex, _ := range scw.sourceShards {
-			status, err := scw.wr.ActionInitiator().SlaveStatus(scw.sourceTablets[shardIndex], 30*time.Second)
+			status, err := scw.wr.TabletManagerClient().SlaveStatus(scw.sourceTablets[shardIndex], 30*time.Second)
 			if err != nil {
 				return err
 			}
@@ -617,7 +617,7 @@ func (scw *SplitCloneWorker) copy() error {
 			go func(ti *topo.TabletInfo) {
 				defer destinationWaitGroup.Done()
 				scw.wr.Logger().Infof("Reloading schema on tablet %v", ti.Alias)
-				if err := scw.wr.ActionInitiator().ReloadSchema(ti, 30*time.Second); err != nil {
+				if err := scw.wr.TabletManagerClient().ReloadSchema(ti, 30*time.Second); err != nil {
 					processError("ReloadSchema failed on tablet %v: %v", ti.Alias, err)
 				}
 			}(scw.destinationTablets[shardIndex][tabletAlias])

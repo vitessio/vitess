@@ -39,7 +39,7 @@ func TestGoRpcTMServer(t *testing.T) {
 	go httpServer.Serve(listener)
 
 	// Create a Go Rpc client to talk to the fake tablet
-	client := &gorpctmclient.GoRpcTabletManagerConn{}
+	client := &gorpctmclient.GoRpcTabletManagerClient{}
 	ti := topo.NewTabletInfo(&topo.Tablet{
 		Alias: topo.TabletAlias{
 			Cell: "test",

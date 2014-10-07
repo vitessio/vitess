@@ -211,13 +211,13 @@ func (wr *Wrangler) ReparentTablet(tabletAlias topo.TabletAlias) error {
 		return fmt.Errorf("master %v and potential slave not in same keyspace/shard", shardInfo.MasterAlias)
 	}
 
-	status, err := wr.ai.SlaveStatus(ti, wr.ActionTimeout())
+	status, err := wr.tmc.SlaveStatus(ti, wr.ActionTimeout())
 	if err != nil {
 		return err
 	}
 	wr.Logger().Infof("slave tablet position: %v %v %v", tabletAlias, ti.MysqlAddr(), status.Position)
 
-	rsd, err := wr.ai.ReparentPosition(masterTi, &status.Position, wr.ActionTimeout())
+	rsd, err := wr.tmc.ReparentPosition(masterTi, &status.Position, wr.ActionTimeout())
 	if err != nil {
 		return err
 	}
@@ -226,5 +226,5 @@ func (wr *Wrangler) ReparentTablet(tabletAlias topo.TabletAlias) error {
 	// An orphan is already in the replication graph but it is
 	// disconnected, hence we have to force this action.
 	rsd.Force = ti.Type == topo.TYPE_LAG_ORPHAN
-	return wr.ai.RestartSlave(ti, rsd, wr.ActionTimeout())
+	return wr.tmc.RestartSlave(ti, rsd, wr.ActionTimeout())
 }

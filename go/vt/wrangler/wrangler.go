@@ -10,7 +10,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
-	"github.com/youtube/vitess/go/vt/tabletmanager/initiator"
+	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -30,7 +30,7 @@ var (
 type Wrangler struct {
 	logger      logutil.Logger
 	ts          topo.Server
-	ai          initiator.TabletManagerConn
+	tmc         tmclient.TabletManagerClient
 	deadline    time.Time
 	lockTimeout time.Duration
 }
@@ -49,7 +49,7 @@ type Wrangler struct {
 // fail. However, automated action will need some time to arbitrate
 // the locks.
 func New(logger logutil.Logger, ts topo.Server, actionTimeout, lockTimeout time.Duration) *Wrangler {
-	return &Wrangler{logger, ts, initiator.NewTabletManagerConn(), time.Now().Add(actionTimeout), lockTimeout}
+	return &Wrangler{logger, ts, tmclient.NewTabletManagerClient(), time.Now().Add(actionTimeout), lockTimeout}
 }
 
 // ActionTimeout returns the timeout to use so the action finishes before
@@ -63,9 +63,10 @@ func (wr *Wrangler) TopoServer() topo.Server {
 	return wr.ts
 }
 
-// ActionInitiator returns the initiator.ActionInitiator this wrangler is using.
-func (wr *Wrangler) ActionInitiator() initiator.TabletManagerConn {
-	return wr.ai
+// TabletManagerClient returns the tmclient.TabletManagerClient this
+// wrangler is using.
+func (wr *Wrangler) TabletManagerClient() tmclient.TabletManagerClient {
+	return wr.tmc
 }
 
 // SetLogger can be used to change the current logger. Not synchronized,

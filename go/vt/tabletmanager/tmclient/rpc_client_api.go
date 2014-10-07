@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package initiator
+package tmclient
 
 import (
 	"flag"
@@ -29,8 +29,8 @@ type SnapshotReplyFunc func() (*actionnode.SnapshotReply, error)
 // MultiSnapshotReplyFunc is used by MultiSnapshot to return result and error
 type MultiSnapshotReplyFunc func() (*actionnode.MultiSnapshotReply, error)
 
-// TabletManagerConn defines the interface used to talk to a remote tablet
-type TabletManagerConn interface {
+// TabletManagerClient defines the interface used to talk to a remote tablet
+type TabletManagerClient interface {
 	//
 	// Various read-only methods
 	//
@@ -176,22 +176,22 @@ type TabletManagerConn interface {
 	MultiRestore(tablet *topo.TabletInfo, sa *actionnode.MultiRestoreArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, ErrFunc, error)
 }
 
-type TabletManagerConnFactory func() TabletManagerConn
+type TabletManagerClientFactory func() TabletManagerClient
 
-var tabletManagerConnFactories = make(map[string]TabletManagerConnFactory)
+var tabletManagerClientFactories = make(map[string]TabletManagerClientFactory)
 
-func RegisterTabletManagerConnFactory(name string, factory TabletManagerConnFactory) {
-	if _, ok := tabletManagerConnFactories[name]; ok {
-		log.Fatalf("RegisterTabletManagerConn %s already exists", name)
+func RegisterTabletManagerClientFactory(name string, factory TabletManagerClientFactory) {
+	if _, ok := tabletManagerClientFactories[name]; ok {
+		log.Fatalf("RegisterTabletManagerClient %s already exists", name)
 	}
-	tabletManagerConnFactories[name] = factory
+	tabletManagerClientFactories[name] = factory
 }
 
-func NewTabletManagerConn() TabletManagerConn {
-	f, ok := tabletManagerConnFactories[*tabletManagerProtocol]
+func NewTabletManagerClient() TabletManagerClient {
+	f, ok := tabletManagerClientFactories[*tabletManagerProtocol]
 	if !ok {
 		log.Fatalf("No TabletManagerProtocol registered with name %s", *tabletManagerProtocol)
 	}
 
-	return &ActionInitiator{f()}
+	return f()
 }

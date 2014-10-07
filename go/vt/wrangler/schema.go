@@ -26,7 +26,7 @@ func (wr *Wrangler) GetSchema(tabletAlias topo.TabletAlias, tables, excludeTable
 		return nil, err
 	}
 
-	return wr.ai.GetSchema(ti, tables, excludeTables, includeViews, wr.ActionTimeout())
+	return wr.tmc.GetSchema(ti, tables, excludeTables, includeViews, wr.ActionTimeout())
 }
 
 // ReloadSchema forces the remote tablet to reload its schema.
@@ -36,7 +36,7 @@ func (wr *Wrangler) ReloadSchema(tabletAlias topo.TabletAlias) error {
 		return err
 	}
 
-	return wr.ai.ReloadSchema(ti, wr.ActionTimeout())
+	return wr.tmc.ReloadSchema(ti, wr.ActionTimeout())
 }
 
 // helper method to asynchronously diff a schema
@@ -184,7 +184,7 @@ func (wr *Wrangler) PreflightSchema(tabletAlias topo.TabletAlias, change string)
 	if err != nil {
 		return nil, err
 	}
-	return wr.ai.PreflightSchema(ti, change, wr.ActionTimeout())
+	return wr.tmc.PreflightSchema(ti, change, wr.ActionTimeout())
 }
 
 // ApplySchema will apply a schema change on the remote tablet.
@@ -193,7 +193,7 @@ func (wr *Wrangler) ApplySchema(tabletAlias topo.TabletAlias, sc *myproto.Schema
 	if err != nil {
 		return nil, err
 	}
-	return wr.ai.ApplySchema(ti, sc, wr.ActionTimeout())
+	return wr.tmc.ApplySchema(ti, sc, wr.ActionTimeout())
 }
 
 // Note for 'complex' mode (the 'simple' mode is easy enough that we
@@ -285,7 +285,7 @@ func (wr *Wrangler) applySchemaShard(shardInfo *topo.ShardInfo, preflight *mypro
 	for _, status := range statusArray {
 		wg.Add(1)
 		go func(status *TabletStatus) {
-			status.beforeSchema, status.lastError = wr.ai.GetSchema(status.ti, nil, nil, false, wr.ActionTimeout())
+			status.beforeSchema, status.lastError = wr.tmc.GetSchema(status.ti, nil, nil, false, wr.ActionTimeout())
 			wg.Done()
 		}(status)
 	}

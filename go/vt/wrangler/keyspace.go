@@ -225,7 +225,7 @@ func (wr *Wrangler) makeMastersReadOnly(shards []*topo.ShardInfo) error {
 				return
 			}
 
-			if err = wr.ai.SetReadOnly(ti, wr.ActionTimeout()); err != nil {
+			if err = wr.tmc.SetReadOnly(ti, wr.ActionTimeout()); err != nil {
 				rec.RecordError(err)
 				return
 			}
@@ -253,7 +253,7 @@ func (wr *Wrangler) getMastersPosition(shards []*topo.ShardInfo) (map[*topo.Shar
 				return
 			}
 
-			pos, err := wr.ai.MasterPosition(ti, wr.ActionTimeout())
+			pos, err := wr.tmc.MasterPosition(ti, wr.ActionTimeout())
 			if err != nil {
 				rec.RecordError(err)
 				return
@@ -297,7 +297,7 @@ func (wr *Wrangler) waitForFilteredReplication(sourcePositions map[*topo.ShardIn
 					return
 				}
 
-				if err := wr.ai.WaitBlpPosition(tablet, blpPosition, wr.ActionTimeout()); err != nil {
+				if err := wr.tmc.WaitBlpPosition(tablet, blpPosition, wr.ActionTimeout()); err != nil {
 					rec.RecordError(err)
 				} else {
 					log.Infof("%v caught up", si.MasterAlias)
@@ -324,7 +324,7 @@ func (wr *Wrangler) refreshMasters(shards []*topo.ShardInfo) error {
 				return
 			}
 
-			if err := wr.ai.RefreshState(ti, wr.ActionTimeout()); err != nil {
+			if err := wr.tmc.RefreshState(ti, wr.ActionTimeout()); err != nil {
 				rec.RecordError(err)
 			} else {
 				log.Infof("%v responded", si.MasterAlias)
@@ -610,13 +610,13 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 		if err != nil {
 			return err
 		}
-		if err := wr.ai.SetReadOnly(sourceMasterTabletInfo, wr.ActionTimeout()); err != nil {
+		if err := wr.tmc.SetReadOnly(sourceMasterTabletInfo, wr.ActionTimeout()); err != nil {
 			return err
 		}
 
 		// get the position
 		event.DispatchUpdate(ev, "getting master position")
-		masterPosition, err := wr.ai.MasterPosition(sourceMasterTabletInfo, wr.ActionTimeout())
+		masterPosition, err := wr.tmc.MasterPosition(sourceMasterTabletInfo, wr.ActionTimeout())
 		if err != nil {
 			return err
 		}
@@ -627,7 +627,7 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 		if err != nil {
 			return err
 		}
-		if err := wr.ai.WaitBlpPosition(tablet, blproto.BlpPosition{
+		if err := wr.tmc.WaitBlpPosition(tablet, blproto.BlpPosition{
 			Uid:      0,
 			Position: masterPosition,
 		}, wr.ActionTimeout()); err != nil {
@@ -675,7 +675,7 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 	// Now blacklist the table list on the right servers
 	event.DispatchUpdate(ev, "refreshing sources tablets state so they update their blacklisted tables")
 	if servedType == topo.TYPE_MASTER {
-		if err := wr.ai.RefreshState(sourceMasterTabletInfo, wr.ActionTimeout()); err != nil {
+		if err := wr.tmc.RefreshState(sourceMasterTabletInfo, wr.ActionTimeout()); err != nil {
 			return err
 		}
 	} else {
@@ -711,7 +711,7 @@ func (wr *Wrangler) RefreshTablesByShard(keyspace, shard string, tabletType topo
 
 		wg.Add(1)
 		go func(ti *topo.TabletInfo) {
-			if err := wr.ai.RefreshState(ti, wr.ActionTimeout()); err != nil {
+			if err := wr.tmc.RefreshState(ti, wr.ActionTimeout()); err != nil {
 				log.Warningf("RefreshTablesByShard: failed to ping %v: %v", ti.Alias, err)
 			}
 			wg.Done()

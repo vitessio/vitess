@@ -45,7 +45,7 @@ func commandDemoteMaster(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	if err != nil {
 		return err
 	}
-	return wr.ActionInitiator().DemoteMaster(tabletInfo, wr.ActionTimeout())
+	return wr.TabletManagerClient().DemoteMaster(tabletInfo, wr.ActionTimeout())
 }
 
 func commandReparentTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

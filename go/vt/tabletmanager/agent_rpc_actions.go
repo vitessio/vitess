@@ -27,7 +27,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
-	"github.com/youtube/vitess/go/vt/tabletmanager/initiator"
+	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
@@ -472,7 +472,7 @@ func (agent *ActionAgent) tabletExternallyReparentedLocked(actionTimeout time.Du
 	// we're still good.
 	event.DispatchUpdate(ev, "restarting slaves")
 	logger := logutil.NewConsoleLogger()
-	tmc := initiator.NewTabletManagerConn()
+	tmc := tmclient.NewTabletManagerClient()
 	topotools.RestartSlavesExternal(agent.TopoServer, logger, slaveTabletMap, masterTabletMap, masterElectTablet.Alias, func(ti *topo.TabletInfo, swrd *actionnode.SlaveWasRestartedArgs) error {
 		return tmc.SlaveWasRestarted(ti, swrd, actionTimeout)
 	})

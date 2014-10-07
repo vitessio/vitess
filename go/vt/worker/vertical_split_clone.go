@@ -493,7 +493,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	// then create and populate the blp_checkpoint table
 	if strings.Index(vscw.strategy, "populateBlpCheckpoint") != -1 {
 		// get the current position from the source
-		status, err := vscw.wr.ActionInitiator().SlaveStatus(vscw.sourceTablet, 30*time.Second)
+		status, err := vscw.wr.TabletManagerClient().SlaveStatus(vscw.sourceTablet, 30*time.Second)
 		if err != nil {
 			return err
 		}
@@ -539,7 +539,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 		go func(ti *topo.TabletInfo) {
 			defer destinationWaitGroup.Done()
 			vscw.wr.Logger().Infof("Reloading schema on tablet %v", ti.Alias)
-			if err := vscw.wr.ActionInitiator().ReloadSchema(ti, 30*time.Second); err != nil {
+			if err := vscw.wr.TabletManagerClient().ReloadSchema(ti, 30*time.Second); err != nil {
 				processError("ReloadSchema failed on tablet %v: %v", ti.Alias, err)
 			}
 		}(vscw.destinationTablets[tabletAlias])

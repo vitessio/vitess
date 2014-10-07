@@ -87,7 +87,7 @@ func (wr *Wrangler) MultiRestore(dstTabletAlias topo.TabletAlias, sources []topo
 		}
 	}()
 
-	logStream, errFunc, err := wr.ai.MultiRestore(ti, args, wr.ActionTimeout())
+	logStream, errFunc, err := wr.tmc.MultiRestore(ti, args, wr.ActionTimeout())
 	if err != nil {
 		return err
 	}
@@ -134,7 +134,7 @@ func (wr *Wrangler) MultiSnapshot(keyRanges []key.KeyRange, tabletAlias topo.Tab
 	}()
 
 	// execute the remote action, log the results, save the error
-	logStream, errFunc, err := wr.ai.MultiSnapshot(ti, args, wr.ActionTimeout())
+	logStream, errFunc, err := wr.tmc.MultiSnapshot(ti, args, wr.ActionTimeout())
 	if err != nil {
 		return nil, topo.TabletAlias{}, err
 	}
