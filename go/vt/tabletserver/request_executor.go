@@ -5,13 +5,11 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/hack"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/schema"
-	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
@@ -21,9 +19,7 @@ type requestExecutor struct {
 	bindVars      map[string]interface{}
 	transactionID int64
 	plan          *ExecPlan
-	ctx           context.Context
-	logStats      *SQLQueryStats
-	qe            *QueryEngine
+	RequestContext
 }
 
 // ExecuteQuery executes a single query request. It fetches (or builds) the plan
@@ -39,9 +35,11 @@ func ExecuteQuery(ctx context.Context, logStats *SQLQueryStats, qe *QueryEngine,
 		bindVars:      query.BindVariables,
 		transactionID: query.TransactionId,
 		plan:          qe.schemaInfo.GetPlan(logStats, query.Sql),
-		ctx:           ctx,
-		logStats:      logStats,
-		qe:            qe,
+		RequestContext: RequestContext{
+			ctx:      ctx,
+			logStats: logStats,
+			qe:       qe,
+		},
 	}
 	return rqe.execute()
 }
@@ -60,9 +58,11 @@ func ExecuteStreamQuery(ctx context.Context, logStats *SQLQueryStats, qe *QueryE
 		bindVars:      query.BindVariables,
 		transactionID: query.TransactionId,
 		plan:          qe.schemaInfo.GetStreamPlan(query.Sql),
-		ctx:           ctx,
-		logStats:      logStats,
-		qe:            qe,
+		RequestContext: RequestContext{
+			ctx:      ctx,
+			logStats: logStats,
+			qe:       qe,
+		},
 	}
 	rqe.stream(sendReply)
 }
@@ -76,7 +76,7 @@ func SplitQuery(ctx context.Context, logStats *SQLQueryStats, qe *QueryEngine, q
 		return nil, NewTabletError(FAIL, "query validation error: %s", err)
 	}
 	// Partial initialization or requestExecutor is enough to call execSQL
-	rqe := &requestExecutor{
+	requestContext := RequestContext{
 		ctx:      ctx,
 		logStats: logStats,
 		qe:       qe,
@@ -86,7 +86,7 @@ func SplitQuery(ctx context.Context, logStats *SQLQueryStats, qe *QueryEngine, q
 	// primary key, if any, in the original query which might give a narrower
 	// range of PKs to work with.
 	minMaxSql := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v", splitter.pkCol, splitter.pkCol, splitter.tableName)
-	pkMinMax := rqe.execSQL(conn, minMaxSql, true)
+	pkMinMax := requestContext.execSQL(conn, minMaxSql, true)
 	return splitter.split(pkMinMax), nil
 }
 
@@ -555,92 +555,6 @@ func (rqe *requestExecutor) execSet() (result *mproto.QueryResult) {
 		return rqe.directFetch(conn, rqe.plan.FullQuery, rqe.bindVars, nil, nil)
 	}
 	return &mproto.QueryResult{}
-}
-
-func (rqe *requestExecutor) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value) (result *mproto.QueryResult) {
-	sql := rqe.generateFinalSql(parsedQuery, bindVars, listVars, nil)
-	q, ok := rqe.qe.consolidator.Create(string(sql))
-	if ok {
-		defer q.Broadcast()
-		waitingForConnectionStart := time.Now()
-		conn, err := rqe.qe.connPool.Get()
-		logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
-		if err != nil {
-			q.Err = NewTabletErrorSql(FATAL, err)
-		} else {
-			defer conn.Recycle()
-			q.Result, q.Err = rqe.execSQLNoPanic(conn, sql, false)
-		}
-	} else {
-		logStats.QuerySources |= QUERY_SOURCE_CONSOLIDATOR
-		q.Wait()
-	}
-	if q.Err != nil {
-		panic(q.Err)
-	}
-	return q.Result
-}
-
-func (rqe *requestExecutor) directFetch(conn dbconnpool.PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) (result *mproto.QueryResult) {
-	sql := rqe.generateFinalSql(parsedQuery, bindVars, listVars, buildStreamComment)
-	return rqe.execSQL(conn, sql, false)
-}
-
-// fullFetch also fetches field info
-func (rqe *requestExecutor) fullFetch(conn dbconnpool.PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) (result *mproto.QueryResult) {
-	sql := rqe.generateFinalSql(parsedQuery, bindVars, listVars, buildStreamComment)
-	return rqe.execSQL(conn, sql, true)
-}
-
-func (rqe *requestExecutor) fullStreamFetch(conn dbconnpool.PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte, callback func(*mproto.QueryResult) error) {
-	sql := rqe.generateFinalSql(parsedQuery, bindVars, listVars, buildStreamComment)
-	rqe.execStreamSQL(conn, sql, callback)
-}
-
-func (rqe *requestExecutor) generateFinalSql(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) string {
-	bindVars[MAX_RESULT_NAME] = rqe.qe.maxResultSize.Get() + 1
-	sql, err := parsedQuery.GenerateQuery(bindVars, listVars)
-	if err != nil {
-		panic(NewTabletError(FAIL, "%s", err))
-	}
-	if buildStreamComment != nil {
-		sql = append(sql, buildStreamComment...)
-	}
-	// undo hack done by stripTrailing
-	sql = restoreTrailing(sql, bindVars)
-	return hack.String(sql)
-}
-
-func (rqe *requestExecutor) execSQL(conn dbconnpool.PoolConnection, sql string, wantfields bool) *mproto.QueryResult {
-	result, err := rqe.execSQLNoPanic(conn, sql, true)
-	if err != nil {
-		panic(err)
-	}
-	return result
-}
-
-func (rqe *requestExecutor) execSQLNoPanic(conn dbconnpool.PoolConnection, sql string, wantfields bool) (*mproto.QueryResult, error) {
-	if timeout := rqe.qe.queryTimeout.Get(); timeout != 0 {
-		qd := rqe.qe.connKiller.SetDeadline(conn.Id(), time.Now().Add(timeout))
-		defer qd.Done()
-	}
-
-	start := time.Now()
-	result, err := conn.ExecuteFetch(sql, int(rqe.qe.maxResultSize.Get()), wantfields)
-	rqe.logStats.AddRewrittenSql(sql, start)
-	if err != nil {
-		return nil, NewTabletErrorSql(FAIL, err)
-	}
-	return result, nil
-}
-
-func (rqe *requestExecutor) execStreamSQL(conn dbconnpool.PoolConnection, sql string, callback func(*mproto.QueryResult) error) {
-	start := time.Now()
-	err := conn.ExecuteStreamFetch(sql, callback, int(rqe.qe.streamBufferSize.Get()))
-	rqe.logStats.AddRewrittenSql(sql, start)
-	if err != nil {
-		panic(NewTabletErrorSql(FAIL, err))
-	}
 }
 
 func getInt64(v interface{}) int64 {
