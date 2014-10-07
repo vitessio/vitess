@@ -701,7 +701,11 @@ class TestFailures(unittest.TestCase):
           "insert into vt_insert_test values(:msg, :keyspace_id)",
           {"msg": "test4", "keyspace_id": keyspace_id}, KEYSPACE_NAME, 'master',
           keyranges=[keyrange.KeyRange(shard_names[self.shard_index])])
-    self.assertTrue(vtgate_conn.session["ShardSessions"][0]["TransactionId"] != 0)
+    if conn_class == vtgatev2:
+      transaction_id = vtgate_conn.session["ShardSessions"][0]["TransactionId"]
+    else:
+      transaction_id = vtgate_conn.session.shard_sessions[0].transaction_id
+    self.assertTrue(transaction_id != 0)
     vtgate_conn.commit()
 
   def test_vtgate_fail_write(self):
