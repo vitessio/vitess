@@ -155,6 +155,10 @@ def _true_int_kr_value(kr_value):
   We abbreviate the keyranges for ease of use.
   To obtain true value for comparison with keyspace id,
   create true hex value for that keyrange by right padding and conversion.
+  Args:
+    kr_value: short keyranges as used by vitess.
+  Returns:
+    complete hex value of keyrange.
   """
   if kr_value == '':
     return None
@@ -164,10 +168,18 @@ def _true_int_kr_value(kr_value):
   return int(kr_value, base=16)
 
 
-def _create_where_clause_for_keyrange(key_range,
-    keyspace_col_name='keyspace_id',
+def _create_where_clause_for_keyrange(
+    key_range, keyspace_col_name='keyspace_id',
     keyspace_col_type=keyrange_constants.KIT_UINT64):
-  """Compute the where clause and bind_vars for a given keyrange."""
+  """Compute the where clause and bind_vars for a given keyrange.
+
+  Args:
+    key_range: keyrange for the query.
+    keyspace_col_name: keyspace column name of keyspace.
+    keyspace_col_type: keyspace column type of keyspace.
+  Returns:
+    where clause for the keyrange.
+  """
 
   if isinstance(key_range, str):
     # If the key_range is for unsharded db, there is no
@@ -195,6 +207,13 @@ def _create_where_clause_for_str_keyspace(key_range, keyspace_col_name):
 
   The comparison is done using mysql hex function and byte level comparison
   with the key_range values.
+
+  Args:
+    key_range: keyrange for the query.
+    keyspace_col_name: keyspace column name for the keyspace.
+
+  Returns:
+    This returns the where clause when the keyspace column type is string.
   """
   kr_min = key_range[0].strip()
   kr_max = key_range[1].strip()
@@ -221,6 +240,13 @@ def _create_where_clause_for_int_keyspace(key_range, keyspace_col_name):
 
   The comparison is done using numeric comparison on the int values hence
   the true 64-bit int values are generated for the key_range in the bind_vars.
+
+  Args:
+    key_range: keyrange for the query.
+    keyspace_col_name: keyspace column name for the keyspace.
+
+  Returns:
+    This returns the where clause when the keyspace column type is uint64.
   """
   kr_min = _true_int_kr_value(key_range[0])
   kr_max = _true_int_kr_value(key_range[1])
