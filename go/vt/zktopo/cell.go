@@ -15,7 +15,10 @@ This file contains the cell management methods of zktopo.Server
 */
 
 func (zkts *Server) GetKnownCells() ([]string, error) {
-	cellsWithGlobal := zk.ZkKnownCells(false)
+	cellsWithGlobal, err := zk.ZkKnownCells(false)
+	if err != nil {
+		return cellsWithGlobal, err
+	}
 	cells := make([]string, 0, len(cellsWithGlobal))
 	for _, cell := range cellsWithGlobal {
 		if cell != "global" {

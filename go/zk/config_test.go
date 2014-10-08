@@ -62,13 +62,19 @@ func TestZkConfig(t *testing.T) {
 	}
 
 	// test ZkKnownCells
-	knownCells := ZkKnownCells(false)
+	knownCells, err := ZkKnownCells(false)
+	if err != nil {
+		t.Errorf("unexpected error from ZkKnownCells(): %v", err)
+	}
 	expectedKnownCells := []string{fakeCell, "global"}
 	sort.Strings(expectedKnownCells)
 	if len(knownCells) != 2 || knownCells[0] != expectedKnownCells[0] || knownCells[1] != expectedKnownCells[1] {
 		t.Errorf("ZkKnownCells(false) failed, expected %v got %v", expectedKnownCells, knownCells)
 	}
-	knownCells = ZkKnownCells(true)
+	knownCells, err = ZkKnownCells(true)
+	if err != nil {
+		t.Errorf("unexpected error from ZkKnownCells(): %v", err)
+	}
 	if len(knownCells) != 1 || knownCells[0] != fakeCell+"z" {
 		t.Errorf("ZkKnownCells(true) failed, expected %v got %v", []string{fakeCell}, knownCells)
 	}
