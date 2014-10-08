@@ -114,7 +114,7 @@ class ZkOccConnection(object):
     return '/'.join(parts)
 
   # addrs is a comma separated list of server:ip pairs.
-  def update_addrs(self, addrs):
+  def refresh_addrs(self, addrs):
     self.addrs = addrs.split(',')
     if self.simple_conn.client.addr not in self.addrs:
       self.close()
