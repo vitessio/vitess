@@ -335,7 +335,23 @@ func (sq *SqlQuery) Execute(context context.Context, query *proto.Query, reply *
 	defer sq.endRequest()
 	defer handleExecError(query, &err, logStats)
 
-	*reply = *ExecuteQuery(context, logStats, sq.qe, query)
+	// TODO(sougou): Change usage such that we don't have to do this.
+	if query.BindVariables == nil {
+		query.BindVariables = make(map[string]interface{})
+	}
+	stripTrailing(query)
+	qre := &QueryExecutor{
+		query:         query.Sql,
+		bindVars:      query.BindVariables,
+		transactionID: query.TransactionId,
+		plan:          sq.qe.schemaInfo.GetPlan(logStats, query.Sql),
+		RequestContext: RequestContext{
+			ctx:      context,
+			logStats: logStats,
+			qe:       sq.qe,
+		},
+	}
+	*reply = *qre.Execute()
 	return nil
 }
 
@@ -354,7 +370,24 @@ func (sq *SqlQuery) StreamExecute(context context.Context, query *proto.Query, s
 	}
 	defer sq.endRequest()
 	defer handleExecError(query, &err, logStats)
-	ExecuteStreamQuery(context, logStats, sq.qe, query, sendReply)
+
+	// TODO(sougou): Change usage such that we don't have to do this.
+	if query.BindVariables == nil {
+		query.BindVariables = make(map[string]interface{})
+	}
+	stripTrailing(query)
+	qre := &QueryExecutor{
+		query:         query.Sql,
+		bindVars:      query.BindVariables,
+		transactionID: query.TransactionId,
+		plan:          sq.qe.schemaInfo.GetStreamPlan(query.Sql),
+		RequestContext: RequestContext{
+			ctx:      context,
+			logStats: logStats,
+			qe:       sq.qe,
+		},
+	}
+	qre.Stream(sendReply)
 	return nil
 }
 
@@ -427,16 +460,30 @@ func (sq *SqlQuery) ExecuteBatch(context context.Context, queryList *proto.Query
 	return nil
 }
 
-//
+// SplitQuery splits a BoundQuery into smaller queries that return a subset of rows from the original query.
 func (sq *SqlQuery) SplitQuery(context context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
 	logStats := newSqlQueryStats("SplitQuery", context)
 	var err error
 	defer handleError(&err, logStats)
-	queries, err := SplitQuery(context, logStats, sq.qe, &(req.Query), req.SplitCount)
+
+	splitter := NewQuerySplitter(&(req.Query), req.SplitCount, sq.qe.schemaInfo)
+	err = splitter.validateQuery()
 	if err != nil {
-		return err
+		return NewTabletError(FAIL, "query validation error: %s", err)
 	}
-	reply.Queries = queries
+	// Partial initialization or QueryExecutor is enough to call execSQL
+	requestContext := RequestContext{
+		ctx:      context,
+		logStats: logStats,
+		qe:       sq.qe,
+	}
+	conn := getOrPanic(sq.qe.connPool)
+	// TODO: For fetching pkMinMax, include where clauses on the
+	// primary key, if any, in the original query which might give a narrower
+	// range of PKs to work with.
+	minMaxSql := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v", splitter.pkCol, splitter.pkCol, splitter.tableName)
+	pkMinMax := requestContext.execSQL(conn, minMaxSql, true)
+	reply.Queries = splitter.split(pkMinMax)
 	return nil
 }
 
