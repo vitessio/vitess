@@ -608,7 +608,7 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, destinationShard *t
 
 // replicaMigrateServedFrom handles the slave (replica, rdonly) migration.
 func (wr *Wrangler) replicaMigrateServedFrom(ki *topo.KeyspaceInfo, sourceShard *topo.ShardInfo, destinationShard *topo.ShardInfo, servedType topo.TabletType, reverse bool, tables []string, ev *events.MigrateServedFrom) error {
-	// Save the destination keyspace (its SservedFrom has been changed)
+	// Save the destination keyspace (its ServedFrom has been changed)
 	event.DispatchUpdate(ev, "updating keyspace")
 	if err := topo.UpdateKeyspace(wr.ts, ki); err != nil {
 		return err
@@ -628,7 +628,8 @@ func (wr *Wrangler) replicaMigrateServedFrom(ki *topo.KeyspaceInfo, sourceShard 
 		return err
 	}
 
-	// Now blacklist the table list on the right servers
+	// Now refresh the source servers so they reload their
+	// blacklisted table list
 	event.DispatchUpdate(ev, "refreshing sources tablets state so they update their blacklisted tables")
 	if err := wr.RefreshTablesByShard(sourceShard.Keyspace(), sourceShard.ShardName(), servedType); err != nil {
 		return err
@@ -640,14 +641,38 @@ func (wr *Wrangler) replicaMigrateServedFrom(ki *topo.KeyspaceInfo, sourceShard 
 
 // masterMigrateServedFrom handles the master migration. The ordering is
 // a bit different than for rdonly / replica to guarantee a smooth transition.
+//
+// The order is as follows:
+// - Add BlacklistedTables on the source shard map for master
+// - Refresh the source master, so it stops writing on the tables
+// - Get the source master position, wait until destination master reaches it
+// - Clear SourceShard on the destination Shard
+// - Refresh the destination master, so its stops its filtered
+//   replication and starts accepting writes
 func (wr *Wrangler) masterMigrateServedFrom(ki *topo.KeyspaceInfo, sourceShard *topo.ShardInfo, destinationShard *topo.ShardInfo, servedType topo.TabletType, tables []string, ev *events.MigrateServedFrom) error {
-	// set master to read-only
-	event.DispatchUpdate(ev, "setting source shard master to read-only")
+	// Read the data we need
 	sourceMasterTabletInfo, err := wr.ts.GetTablet(sourceShard.MasterAlias)
 	if err != nil {
 		return err
 	}
-	if err := wr.tmc.SetReadOnly(sourceMasterTabletInfo, wr.ActionTimeout()); err != nil {
+	destinationMasterTabletInfo, err := wr.ts.GetTablet(destinationShard.MasterAlias)
+	if err != nil {
+		return err
+	}
+
+	// Update source shard (more blacklisted tables)
+	event.DispatchUpdate(ev, "updating source shard")
+	if sourceShard.BlacklistedTablesMap == nil {
+		sourceShard.BlacklistedTablesMap = make(map[topo.TabletType][]string)
+	}
+	sourceShard.BlacklistedTablesMap[servedType] = tables
+	if err := topo.UpdateShard(wr.ts, sourceShard); err != nil {
+		return err
+	}
+
+	// Now refresh the blacklisted table list on the source master
+	event.DispatchUpdate(ev, "refreshing source master so it updates its blacklisted tables")
+	if err := wr.tmc.RefreshState(sourceMasterTabletInfo, wr.ActionTimeout()); err != nil {
 		return err
 	}
 
@@ -660,11 +685,7 @@ func (wr *Wrangler) masterMigrateServedFrom(ki *topo.KeyspaceInfo, sourceShard *
 
 	// wait for it
 	event.DispatchUpdate(ev, "waiting for destination master to catch up to source master")
-	tablet, err := wr.ts.GetTablet(destinationShard.MasterAlias)
-	if err != nil {
-		return err
-	}
-	if err := wr.tmc.WaitBlpPosition(tablet, blproto.BlpPosition{
+	if err := wr.tmc.WaitBlpPosition(destinationMasterTabletInfo, blproto.BlpPosition{
 		Uid:      0,
 		Position: masterPosition,
 	}, wr.ActionTimeout()); err != nil {
@@ -684,27 +705,11 @@ func (wr *Wrangler) masterMigrateServedFrom(ki *topo.KeyspaceInfo, sourceShard *
 		return err
 	}
 
-	// Update source shard (more blacklisted tables)
-	event.DispatchUpdate(ev, "updating source shard")
-	if sourceShard.BlacklistedTablesMap == nil {
-		sourceShard.BlacklistedTablesMap = make(map[topo.TabletType][]string)
-	}
-	sourceShard.BlacklistedTablesMap[servedType] = tables
-	if err := topo.UpdateShard(wr.ts, sourceShard); err != nil {
-		return err
-	}
-
 	// Tell the new shards masters they can now be read-write.
 	// Invoking a remote action will also make the tablet stop filtered
 	// replication.
 	event.DispatchUpdate(ev, "setting destination shard masters read-write")
 	if err := wr.refreshMasters([]*topo.ShardInfo{destinationShard}); err != nil {
-		return err
-	}
-
-	// Now refresh the blacklisted table list on the source master
-	event.DispatchUpdate(ev, "refreshing sources tablets state so they update their blacklisted tables")
-	if err := wr.tmc.RefreshState(sourceMasterTabletInfo, wr.ActionTimeout()); err != nil {
 		return err
 	}
 
