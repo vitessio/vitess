@@ -409,9 +409,9 @@ func (mysqld *Mysqld) ValidateSnapshotPath() error {
 	return nil
 }
 
-// WaitBlpPos will wait for the filtered replication to reach at least
+// WaitBlpPosition will wait for the filtered replication to reach at least
 // the provided position.
-func (mysqld *Mysqld) WaitBlpPos(bp *blproto.BlpPosition, waitTimeout time.Duration) error {
+func (mysqld *Mysqld) WaitBlpPosition(bp *blproto.BlpPosition, waitTimeout time.Duration) error {
 	timeOut := time.Now().Add(waitTimeout)
 	for {
 		if time.Now().After(timeOut) {
@@ -433,7 +433,7 @@ func (mysqld *Mysqld) WaitBlpPos(bp *blproto.BlpPosition, waitTimeout time.Durat
 				return err
 			}
 		}
-		if pos.Equal(bp.Position) {
+		if pos.AtLeast(bp.Position) {
 			return nil
 		}
 

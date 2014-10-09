@@ -513,7 +513,7 @@ func (agent *ActionAgent) GetSlaves() ([]string, error) {
 // reached.
 // Should be called under RpcWrapLock.
 func (agent *ActionAgent) WaitBlpPosition(blpPosition *blproto.BlpPosition, waitTime time.Duration) error {
-	return agent.Mysqld.WaitBlpPos(blpPosition, waitTime)
+	return agent.Mysqld.WaitBlpPosition(blpPosition, waitTime)
 }
 
 // StopBlp stops the binlog players, and return their positions.

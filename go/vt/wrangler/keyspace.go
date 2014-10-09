@@ -547,7 +547,7 @@ func (wr *Wrangler) MigrateServedFrom(keyspace, shard string, servedType topo.Ta
 	return rec.Error()
 }
 
-func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo, servedType topo.TabletType, reverse bool) (err error) {
+func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, destinationShard *topo.ShardInfo, servedType topo.TabletType, reverse bool) (err error) {
 
 	// re-read and update keyspace info record
 	ki, err = wr.ts.GetKeyspace(ki.KeyspaceName())
@@ -558,7 +558,7 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 		if _, ok := ki.ServedFrom[servedType]; ok {
 			return fmt.Errorf("Destination Keyspace %s is not serving type %v", ki.KeyspaceName(), servedType)
 		}
-		ki.ServedFrom[servedType] = si.SourceShards[0].Keyspace
+		ki.ServedFrom[servedType] = destinationShard.SourceShards[0].Keyspace
 	} else {
 		if _, ok := ki.ServedFrom[servedType]; !ok {
 			return fmt.Errorf("Destination Keyspace %s is already serving type %v", ki.KeyspaceName(), servedType)
@@ -567,18 +567,19 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 	}
 
 	// re-read and check the destination shard
-	si, err = wr.ts.GetShard(si.Keyspace(), si.ShardName())
+	destinationShard, err = wr.ts.GetShard(destinationShard.Keyspace(), destinationShard.ShardName())
 	if err != nil {
 		return err
 	}
-	if len(si.SourceShards) != 1 {
-		return fmt.Errorf("Destination shard %v/%v is not a vertical split target", si.Keyspace(), si.ShardName())
+	if len(destinationShard.SourceShards) != 1 {
+		return fmt.Errorf("Destination shard %v/%v is not a vertical split target", destinationShard.Keyspace(), destinationShard.ShardName())
 	}
-	tables := si.SourceShards[0].Tables
+	tables := destinationShard.SourceShards[0].Tables
 
 	// read the source shard, we'll need its master, and we'll need to
 	// update the blacklisted tables.
-	sourceShard, err := wr.ts.GetShard(si.SourceShards[0].Keyspace, si.SourceShards[0].Shard)
+	var sourceShard *topo.ShardInfo
+	sourceShard, err = wr.ts.GetShard(destinationShard.SourceShards[0].Keyspace, destinationShard.SourceShards[0].Shard)
 	if err != nil {
 		return err
 	}
@@ -586,7 +587,7 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 	ev := &events.MigrateServedFrom{
 		Keyspace:         *ki,
 		SourceShard:      *sourceShard,
-		DestinationShard: *si,
+		DestinationShard: *destinationShard,
 		ServedType:       servedType,
 		Reverse:          reverse,
 	}
@@ -597,58 +598,23 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 		}
 	}()
 
-	// For master type migration, need to:
-	// - switch the source shard to read-only
-	// - gather the replication point
-	// - wait for filtered replication to catch up before we continue
-	// - disable filtered replication after the fact
-	var sourceMasterTabletInfo *topo.TabletInfo
 	if servedType == topo.TYPE_MASTER {
-		// set master to read-only
-		event.DispatchUpdate(ev, "setting source shard master to read-only")
-		sourceMasterTabletInfo, err = wr.ts.GetTablet(sourceShard.MasterAlias)
-		if err != nil {
-			return err
-		}
-		if err := wr.tmc.SetReadOnly(sourceMasterTabletInfo, wr.ActionTimeout()); err != nil {
-			return err
-		}
-
-		// get the position
-		event.DispatchUpdate(ev, "getting master position")
-		masterPosition, err := wr.tmc.MasterPosition(sourceMasterTabletInfo, wr.ActionTimeout())
-		if err != nil {
-			return err
-		}
-
-		// wait for it
-		event.DispatchUpdate(ev, "waiting for destination master to catch up to source master")
-		tablet, err := wr.ts.GetTablet(si.MasterAlias)
-		if err != nil {
-			return err
-		}
-		if err := wr.tmc.WaitBlpPosition(tablet, blproto.BlpPosition{
-			Uid:      0,
-			Position: masterPosition,
-		}, wr.ActionTimeout()); err != nil {
-			return err
-		}
-
-		// and clear the shard record
-		si.SourceShards = nil
+		err = wr.masterMigrateServedFrom(ki, sourceShard, destinationShard, servedType, tables, ev)
+	} else {
+		err = wr.replicaMigrateServedFrom(ki, sourceShard, destinationShard, servedType, reverse, tables, ev)
 	}
+	return
+}
 
-	// All is good, we can save the keyspace and shards (if needed) now
+// replicaMigrateServedFrom handles the slave (replica, rdonly) migration.
+func (wr *Wrangler) replicaMigrateServedFrom(ki *topo.KeyspaceInfo, sourceShard *topo.ShardInfo, destinationShard *topo.ShardInfo, servedType topo.TabletType, reverse bool, tables []string, ev *events.MigrateServedFrom) error {
+	// Save the destination keyspace (its SservedFrom has been changed)
 	event.DispatchUpdate(ev, "updating keyspace")
-	if err = topo.UpdateKeyspace(wr.ts, ki); err != nil {
+	if err := topo.UpdateKeyspace(wr.ts, ki); err != nil {
 		return err
 	}
-	event.DispatchUpdate(ev, "updating destination shard")
-	if servedType == topo.TYPE_MASTER {
-		if err := topo.UpdateShard(wr.ts, si); err != nil {
-			return err
-		}
-	}
+
+	// Save the source shard (its blacklisted tables field has changed)
 	event.DispatchUpdate(ev, "updating source shard")
 	if sourceShard.BlacklistedTablesMap == nil {
 		sourceShard.BlacklistedTablesMap = make(map[topo.TabletType][]string)
@@ -662,26 +628,84 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 		return err
 	}
 
+	// Now blacklist the table list on the right servers
+	event.DispatchUpdate(ev, "refreshing sources tablets state so they update their blacklisted tables")
+	if err := wr.RefreshTablesByShard(sourceShard.Keyspace(), sourceShard.ShardName(), servedType); err != nil {
+		return err
+	}
+
+	event.DispatchUpdate(ev, "finished")
+	return nil
+}
+
+// masterMigrateServedFrom handles the master migration. The ordering is
+// a bit different than for rdonly / replica to guarantee a smooth transition.
+func (wr *Wrangler) masterMigrateServedFrom(ki *topo.KeyspaceInfo, sourceShard *topo.ShardInfo, destinationShard *topo.ShardInfo, servedType topo.TabletType, tables []string, ev *events.MigrateServedFrom) error {
+	// set master to read-only
+	event.DispatchUpdate(ev, "setting source shard master to read-only")
+	sourceMasterTabletInfo, err := wr.ts.GetTablet(sourceShard.MasterAlias)
+	if err != nil {
+		return err
+	}
+	if err := wr.tmc.SetReadOnly(sourceMasterTabletInfo, wr.ActionTimeout()); err != nil {
+		return err
+	}
+
+	// get the position
+	event.DispatchUpdate(ev, "getting master position")
+	masterPosition, err := wr.tmc.MasterPosition(sourceMasterTabletInfo, wr.ActionTimeout())
+	if err != nil {
+		return err
+	}
+
+	// wait for it
+	event.DispatchUpdate(ev, "waiting for destination master to catch up to source master")
+	tablet, err := wr.ts.GetTablet(destinationShard.MasterAlias)
+	if err != nil {
+		return err
+	}
+	if err := wr.tmc.WaitBlpPosition(tablet, blproto.BlpPosition{
+		Uid:      0,
+		Position: masterPosition,
+	}, wr.ActionTimeout()); err != nil {
+		return err
+	}
+
+	// Update the destination keyspace (its ServedFrom has changed)
+	event.DispatchUpdate(ev, "updating keyspace")
+	if err = topo.UpdateKeyspace(wr.ts, ki); err != nil {
+		return err
+	}
+
+	// Update the destination shard (no more source shard)
+	event.DispatchUpdate(ev, "updating destination shard")
+	destinationShard.SourceShards = nil
+	if err := topo.UpdateShard(wr.ts, destinationShard); err != nil {
+		return err
+	}
+
+	// Update source shard (more blacklisted tables)
+	event.DispatchUpdate(ev, "updating source shard")
+	if sourceShard.BlacklistedTablesMap == nil {
+		sourceShard.BlacklistedTablesMap = make(map[topo.TabletType][]string)
+	}
+	sourceShard.BlacklistedTablesMap[servedType] = tables
+	if err := topo.UpdateShard(wr.ts, sourceShard); err != nil {
+		return err
+	}
+
 	// Tell the new shards masters they can now be read-write.
 	// Invoking a remote action will also make the tablet stop filtered
 	// replication.
 	event.DispatchUpdate(ev, "setting destination shard masters read-write")
-	if servedType == topo.TYPE_MASTER {
-		if err := wr.refreshMasters([]*topo.ShardInfo{si}); err != nil {
-			return err
-		}
+	if err := wr.refreshMasters([]*topo.ShardInfo{destinationShard}); err != nil {
+		return err
 	}
 
-	// Now blacklist the table list on the right servers
+	// Now refresh the blacklisted table list on the source master
 	event.DispatchUpdate(ev, "refreshing sources tablets state so they update their blacklisted tables")
-	if servedType == topo.TYPE_MASTER {
-		if err := wr.tmc.RefreshState(sourceMasterTabletInfo, wr.ActionTimeout()); err != nil {
-			return err
-		}
-	} else {
-		if err := wr.RefreshTablesByShard(sourceShard.Keyspace(), sourceShard.ShardName(), servedType); err != nil {
-			return err
-		}
+	if err := wr.tmc.RefreshState(sourceMasterTabletInfo, wr.ActionTimeout()); err != nil {
+		return err
 	}
 
 	event.DispatchUpdate(ev, "finished")
