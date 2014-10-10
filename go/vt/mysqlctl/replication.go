@@ -424,7 +424,7 @@ func (mysqld *Mysqld) WaitBlpPosition(bp *blproto.BlpPosition, waitTimeout time.
 			return err
 		}
 		if len(qr.Rows) != 1 {
-			return fmt.Errorf("WaitBlpPos(%v) returned unexpected row count: %v", bp.Uid, len(qr.Rows))
+			return fmt.Errorf("QueryBlpCheckpoint(%v) returned unexpected row count: %v", bp.Uid, len(qr.Rows))
 		}
 		var pos proto.ReplicationPosition
 		if !qr.Rows[0][0].IsNull() {
@@ -441,7 +441,7 @@ func (mysqld *Mysqld) WaitBlpPosition(bp *blproto.BlpPosition, waitTimeout time.
 		time.Sleep(1 * time.Second)
 	}
 
-	return fmt.Errorf("WaitBlpPos(%v) timed out", bp.Uid)
+	return fmt.Errorf("WaitBlpPosition(%v) timed out", bp.Uid)
 }
 
 // EnableBinlogPlayback prepares the server to play back events from a binlog stream.

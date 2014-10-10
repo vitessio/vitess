@@ -603,6 +603,7 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, destinationShard *t
 	} else {
 		err = wr.replicaMigrateServedFrom(ki, sourceShard, destinationShard, servedType, reverse, tables, ev)
 	}
+	event.DispatchUpdate(ev, "finished")
 	return
 }
 
@@ -635,7 +636,6 @@ func (wr *Wrangler) replicaMigrateServedFrom(ki *topo.KeyspaceInfo, sourceShard 
 		return err
 	}
 
-	event.DispatchUpdate(ev, "finished")
 	return nil
 }
 
@@ -713,7 +713,6 @@ func (wr *Wrangler) masterMigrateServedFrom(ki *topo.KeyspaceInfo, sourceShard *
 		return err
 	}
 
-	event.DispatchUpdate(ev, "finished")
 	return nil
 }
 
