@@ -1402,7 +1402,7 @@ func commandShardReplicationFix(wr *wrangler.Wrangler, subFlags *flag.FlagSet, a
 	if err != nil {
 		return err
 	}
-	return topo.FixShardReplication(wr.TopoServer(), cell, keyspace, shard)
+	return topo.FixShardReplication(wr.TopoServer(), wr.Logger(), cell, keyspace, shard)
 }
 
 func commandRemoveShardCell(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

@@ -6,6 +6,8 @@ package topo
 
 import (
 	log "github.com/golang/glog"
+
+	"github.com/youtube/vitess/go/vt/logutil"
 )
 
 // ReplicationLink describes a MySQL replication relationship.
@@ -113,7 +115,7 @@ func RemoveShardReplicationRecord(ts Server, cell, keyspace, shard string, table
 
 // FixShardReplication will fix the first problem it encounters within
 // a ShardReplication object
-func FixShardReplication(ts Server, cell, keyspace, shard string) error {
+func FixShardReplication(ts Server, logger logutil.Logger, cell, keyspace, shard string) error {
 	sri, err := ts.GetShardReplication(cell, keyspace, shard)
 	if err != nil {
 		return err
@@ -122,7 +124,7 @@ func FixShardReplication(ts Server, cell, keyspace, shard string) error {
 	for _, rl := range sri.ReplicationLinks {
 		ti, err := ts.GetTablet(rl.TabletAlias)
 		if err == ErrNoNode {
-			log.Warningf("Tablet %v is in the replication graph, but does not exist, removing it", rl.TabletAlias)
+			logger.Warningf("Tablet %v is in the replication graph, but does not exist, removing it", rl.TabletAlias)
 			return RemoveShardReplicationRecord(ts, cell, keyspace, shard, rl.TabletAlias)
 		}
 		if err != nil {
@@ -131,13 +133,13 @@ func FixShardReplication(ts Server, cell, keyspace, shard string) error {
 		}
 
 		if ti.Type == TYPE_SCRAP {
-			log.Warningf("Tablet %v is in the replication graph, but is scrapped, removing it", rl.TabletAlias)
+			logger.Warningf("Tablet %v is in the replication graph, but is scrapped, removing it", rl.TabletAlias)
 			return RemoveShardReplicationRecord(ts, cell, keyspace, shard, rl.TabletAlias)
 		}
 
-		log.Infof("Keeping tablet %v in the replication graph", rl.TabletAlias)
+		logger.Infof("Keeping tablet %v in the replication graph", rl.TabletAlias)
 	}
 
-	log.Infof("All entries in replication graph are valid")
+	logger.Infof("All entries in replication graph are valid")
 	return nil
 }
