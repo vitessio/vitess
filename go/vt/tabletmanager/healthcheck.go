@@ -197,8 +197,10 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 		log.Warningf("rebuildShardIfNeeded failed (will still run post action callbacks, serving graph might be out of date): %v", err)
 	}
 
-	// run the post action callbacks
-	agent.refreshTablet("healthcheck")
+	// run the post action callbacks, not much we can do with returned error
+	if err := agent.refreshTablet("healthcheck"); err != nil {
+		log.Warningf("refreshTablet failed: %v", err)
+	}
 }
 
 // terminateHealthChecks is called when we enter lame duck mode.
@@ -231,7 +233,9 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topo.TabletType
 	}
 
 	// Run the post action callbacks (let them shutdown the query service)
-	agent.refreshTablet("terminatehealthcheck")
+	if err := agent.refreshTablet("terminatehealthcheck"); err != nil {
+		log.Warningf("refreshTablet failed: %v", err)
+	}
 }
 
 // rebuildShardIfNeeded will rebuild the serving graph if we need to

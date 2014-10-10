@@ -121,7 +121,7 @@ func (agent *ActionAgent) disallowQueries() {
 
 // changeCallback is run after every action that might
 // have changed something in the tablet record.
-func (agent *ActionAgent) changeCallback(oldTablet, newTablet *topo.Tablet) {
+func (agent *ActionAgent) changeCallback(oldTablet, newTablet *topo.Tablet) error {
 
 	allowQuery := newTablet.IsRunningQueryService()
 
@@ -205,4 +205,5 @@ func (agent *ActionAgent) changeCallback(oldTablet, newTablet *topo.Tablet) {
 			agent.BinlogPlayerMap.StopAllPlayersAndReset()
 		}
 	}
+	return nil
 }

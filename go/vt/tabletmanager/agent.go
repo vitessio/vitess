@@ -163,12 +163,12 @@ func NewTestActionAgent(ts topo.Server, tabletAlias topo.TabletAlias, port int, 
 	return agent
 }
 
-func (agent *ActionAgent) updateState(oldTablet *topo.Tablet, context string) {
+func (agent *ActionAgent) updateState(oldTablet *topo.Tablet, context string) error {
 	agent.mutex.Lock()
 	newTablet := agent._tablet.Tablet
 	agent.mutex.Unlock()
 	log.Infof("Running tablet callback after action %v", context)
-	agent.changeCallback(oldTablet, newTablet)
+	return agent.changeCallback(oldTablet, newTablet)
 }
 
 func (agent *ActionAgent) readTablet() error {
@@ -204,7 +204,7 @@ func (agent *ActionAgent) setBlacklistedTables(blacklistedTables []string) {
 
 // refreshTablet needs to be run after an action may have changed the current
 // state of the tablet.
-func (agent *ActionAgent) refreshTablet(context string) {
+func (agent *ActionAgent) refreshTablet(context string) error {
 	log.Infof("Executing post-action state refresh")
 
 	// Save the old tablet so callbacks can have a better idea of
@@ -214,16 +214,20 @@ func (agent *ActionAgent) refreshTablet(context string) {
 	// Actions should have side effects on the tablet, so reload the data.
 	if err := agent.readTablet(); err != nil {
 		log.Warningf("Failed rereading tablet after %v - services may be inconsistent: %v", context, err)
-	} else {
-		if updatedTablet := agent.checkTabletMysqlPort(agent.Tablet()); updatedTablet != nil {
-			agent.mutex.Lock()
-			agent._tablet = updatedTablet
-			agent.mutex.Unlock()
-		}
+		return fmt.Errorf("Failed rereading tablet after %v: %v", context, err)
+	}
 
-		agent.updateState(oldTablet, context)
+	if updatedTablet := agent.checkTabletMysqlPort(agent.Tablet()); updatedTablet != nil {
+		agent.mutex.Lock()
+		agent._tablet = updatedTablet
+		agent.mutex.Unlock()
+	}
+
+	if err := agent.updateState(oldTablet, context); err != nil {
+		return err
 	}
 	log.Infof("Done with post-action state refresh")
+	return nil
 }
 
 func (agent *ActionAgent) verifyTopology() error {
@@ -315,7 +319,9 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 	}
 
 	oldTablet := &topo.Tablet{}
-	agent.updateState(oldTablet, "Start")
+	if err = agent.updateState(oldTablet, "Start"); err != nil {
+		log.Warningf("Initial updateState failed, will need a state change before running properly: %v", err)
+	}
 	return nil
 }
 

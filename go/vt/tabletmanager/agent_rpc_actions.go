@@ -379,7 +379,15 @@ func (agent *ActionAgent) TabletExternallyReparented(actionTimeout time.Duration
 	// release the lock in any case, and run refreshTablet if necessary
 	err = actionNode.UnlockShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, lockPath, err)
 	if runAfterAction {
-		agent.refreshTablet("RPC(TabletExternallyReparented)")
+		if refreshErr := agent.refreshTablet("RPC(TabletExternallyReparented)"); refreshErr != nil {
+			if err == nil {
+				// no error yet, now we have one
+				err = refreshErr
+			} else {
+				//have an error already, keep the original one
+				log.Warningf("refreshTablet failed with error: %v", refreshErr)
+			}
+		}
 	}
 	return err
 }
@@ -772,7 +780,9 @@ func (agent *ActionAgent) Snapshot(args *actionnode.SnapshotArgs, logger logutil
 	}
 
 	// let's update our internal state (stop query service and other things)
-	agent.refreshTablet("snapshotStart")
+	if err := agent.refreshTablet("snapshotStart"); err != nil {
+		return nil, fmt.Errorf("failed to update state before snaphost: %v", err)
+	}
 
 	// create the loggers: tee to console and source
 	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
