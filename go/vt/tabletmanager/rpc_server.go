@@ -15,9 +15,7 @@ import (
 // This file contains the RPC method helpers for the tablet manager.
 
 // rpcTimeout is used for timing out the queries on the server in a
-// reasonable amount of time. The actions are stored in the
-// topo.Server, and if the client goes away, it cleans up the action
-// node, and the server doesn't do the action. In the RPC case, if the
+// reasonable amount of time. In the RPC case, if the
 // client goes away (while waiting on the action mutex), the server
 // won't know, and may still execute the RPC call at a later time.
 // To prevent that, if it takes more than rpcTimeout to take the action mutex,

@@ -3,17 +3,22 @@
 // license that can be found in the LICENSE file.
 
 /*
-The agent handles local execution of actions triggered remotely.
+Package agent exports the ActionAgent object. It keeps the local tablet
+state, starts / stops all associated services (query service,
+update stream, binlog players, ...), and handles tabletmanager RPCs
+to update the state.
+
+The agent is responsible for maintaining the tablet record in the
+topology server. Only 'ScrapTablet -force' and 'DeleteTablet'
+should be run by other processes, everything else should ask
+the tablet server to make the change.
 
 Most RPC calls lock the actionMutex, except the easy read-only ones.
+RPC calls that change the tablet record will also call updateState.
 
-We will not call updateState for all actions, just for the ones
-that are relevant.
-
-See rpc_server.go for all cases, and which action takes the actionMutex,
-runs changeCallback.
+See rpc_server.go for all cases, and which actions take the actionMutex,
+and which run changeCallback.
 */
-
 package tabletmanager
 
 import (
@@ -64,7 +69,7 @@ type ActionAgent struct {
 	// actionMutex is there to run only one action at a time. If
 	// both agent.actionMutex and agent.mutex needs to be taken,
 	// take actionMutex first.
-	actionMutex sync.Mutex // to run only one action at a time
+	actionMutex sync.Mutex
 
 	// mutex protects the following fields
 	mutex              sync.Mutex

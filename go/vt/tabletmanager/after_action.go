@@ -4,7 +4,7 @@
 
 package tabletmanager
 
-// This file handles the agent initialization.
+// This file handles the agent state changes.
 
 import (
 	"fmt"

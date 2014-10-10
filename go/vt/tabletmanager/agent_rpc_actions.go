@@ -36,8 +36,6 @@ import (
 
 // This file contains the actions that exist as RPC only on the ActionAgent.
 // The various rpc server implementations just call these.
-// (if an action can be both an ActionNode and a RPC, it's implemented
-// in the actor code).
 
 // RpcAgent defines the interface implemented by the Agent for RPCs.
 // It is useful for RPC implementations to test their full stack.
