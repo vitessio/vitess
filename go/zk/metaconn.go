@@ -134,7 +134,8 @@ func (conn *MetaConn) Children(path string) (children []string, stat Stat, err e
 	if path == ("/" + MagicPrefix) {
 		// NOTE(msolo) There is a slight hack there - but there really is
 		// no valid stat for the top level path.
-		return ZkKnownCells(false), nil, nil
+		children, err = ZkKnownCells(false)
+		return
 	}
 	var zconn Conn
 	for i := 0; i < maxAttempts; i++ {

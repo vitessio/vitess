@@ -204,11 +204,14 @@ func resolveRecursive(zconn Conn, parts []string, toplevel bool) ([]string, erro
 	for i, part := range parts {
 		if fileutil.HasWildcard(part) {
 			var children []string
+			var err error
 			if i == 2 {
-				children = ZkKnownCells(false)
+				children, err = ZkKnownCells(false)
+				if err != nil {
+					return children, err
+				}
 			} else {
 				zkParentPath := strings.Join(parts[:i], "/")
-				var err error
 				children, _, err = zconn.Children(zkParentPath)
 				if err != nil {
 					// we asked for something like

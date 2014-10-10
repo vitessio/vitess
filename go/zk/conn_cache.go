@@ -60,7 +60,7 @@ func (cc *ConnCache) setState(zcell string, conn *cachedConn, state int64) {
 func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
 	zcell, err := ZkCellFromZkPath(zkPath)
 	if err != nil {
-		return nil, &zookeeper.Error{Op: "dial", Code: zookeeper.ZBADARGUMENTS}
+		return nil, &zookeeper.Error{Op: "dial", Code: zookeeper.ZSYSTEMERROR, SystemError: err, Path: zkPath}
 	}
 
 	cc.mutex.Lock()
@@ -88,7 +88,7 @@ func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
 
 	zkAddr, err := ZkPathToZkAddr(zkPath, cc.useZkocc)
 	if err != nil {
-		return nil, &zookeeper.Error{Op: "dial", Code: zookeeper.ZBADARGUMENTS}
+		return nil, &zookeeper.Error{Op: "dial", Code: zookeeper.ZSYSTEMERROR, SystemError: err, Path: zkPath}
 	}
 
 	cc.setState(zcell, conn, CONNECTING)

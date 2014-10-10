@@ -13,8 +13,6 @@ import (
 	"strings"
 	"time"
 	"unicode"
-
-	log "github.com/golang/glog"
 )
 
 const (
@@ -94,24 +92,22 @@ func getConfigPaths() []string {
 	return DefaultZkConfigPaths
 }
 
-func getCellAddrMap() map[string]string {
+func getCellAddrMap() (map[string]string, error) {
 	var cellAddrMap map[string]string
 	for _, configPath := range getConfigPaths() {
 		file, err := os.Open(configPath)
 		if err != nil {
-			log.Infof("error reading config file: %v: %v", configPath, err)
-			continue
+			return nil, fmt.Errorf("error reading config file %v: %v", configPath, err)
 		}
 		err = json.NewDecoder(file).Decode(&cellAddrMap)
 		file.Close()
 		if err != nil {
-			log.Infof("error decoding config file %v: %v", configPath, err)
-			continue
+			return nil, fmt.Errorf("error decoding config file %v: %v", configPath, err)
 		}
 
-		break
+		return cellAddrMap, nil
 	}
-	return cellAddrMap
+	return nil, fmt.Errorf("no config file paths found")
 }
 
 func ZkPathToZkAddr(zkPath string, useCache bool) (string, error) {
@@ -120,7 +116,10 @@ func ZkPathToZkAddr(zkPath string, useCache bool) (string, error) {
 		return "", err
 	}
 
-	cellAddrMap := getCellAddrMap()
+	cellAddrMap, err := getCellAddrMap()
+	if err != nil {
+		return "", err
+	}
 	if cell == "local" {
 		cell = GuessLocalCell()
 	} else if cell == "global" {
@@ -146,9 +145,12 @@ func ZkPathToZkAddr(zkPath string, useCache bool) (string, error) {
 
 // returns all the known cells, alphabetically ordered. It will
 // include 'global' if there is a dc-specific global cell or a global cell
-func ZkKnownCells(useCache bool) []string {
+func ZkKnownCells(useCache bool) ([]string, error) {
 	localCell := GuessLocalCell()
-	cellAddrMap := getCellAddrMap()
+	cellAddrMap, err := getCellAddrMap()
+	if err != nil {
+		return nil, err
+	}
 	result := make([]string, 0, len(cellAddrMap))
 	foundGlobal := false
 	for cell := range cellAddrMap {
@@ -185,7 +187,7 @@ func ZkKnownCells(useCache bool) []string {
 		result = append(result, "global")
 	}
 	sort.Strings(result)
-	return result
+	return result, nil
 }
 
 // GetZkSubprocessFlags returns the flags necessary to run a sub-process

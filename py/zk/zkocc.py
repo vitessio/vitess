@@ -1,4 +1,3 @@
-import itertools
 import json
 import logging
 import os
@@ -84,14 +83,12 @@ class SimpleZkOccConnection(object):
 # and will only do anything at all if authentication is enabled.
 class ZkOccConnection(object):
   max_attempts = 2
+  max_dial_attempts = 10
 
   # addrs is a comma separated list of server:ip pairs.
   def __init__(self, addrs, local_cell, timeout, user=None, password=None):
     self.timeout = timeout
-    self._input_addrs = addrs.split(',')
-    random.shuffle(self._input_addrs)
-    self.addr_count = len(self._input_addrs)
-    self.addrs = itertools.cycle(self._input_addrs)
+    self.addrs = addrs.split(',')
     self.local_cell = local_cell
 
     if bool(user) != bool(password):
@@ -116,14 +113,19 @@ class ZkOccConnection(object):
     parts[2] = self.local_cell
     return '/'.join(parts)
 
+  # addrs is a comma separated list of server:ip pairs.
+  def refresh_addrs(self, addrs):
+    self.addrs = addrs.split(',')
+    if self.simple_conn.client.addr not in self.addrs:
+      self.close()
+
   def dial(self):
     if self.simple_conn:
       self.simple_conn.close()
 
-    # try to connect to each server once (this will always work
-    # if no auth is used, as then no connection is really established here)
-    for i in xrange(self.addr_count):
-      self.simple_conn = SimpleZkOccConnection(self.addrs.next(), self.timeout, self.user, self.password)
+    addrs = random.sample(self.addrs, min(self.max_dial_attempts, len(self.addrs)))
+    for a in addrs:
+      self.simple_conn = SimpleZkOccConnection(a, self.timeout, self.user, self.password)
       try:
         self.simple_conn.dial()
         return
@@ -131,8 +133,7 @@ class ZkOccConnection(object):
         pass
 
     self.simple_conn = None
-    raise ZkOccError("Cannot dial to any server, tried: %s" %
-                     list(sorted(self._input_addrs)))
+    raise ZkOccError("Cannot dial to any server, tried: %s" % addrs)
 
   def close(self):
     if self.simple_conn:
