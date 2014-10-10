@@ -170,7 +170,7 @@ var commands = []commandGroup{
 	commandGroup{
 		"Keyspaces", []command{
 			command{"CreateKeyspace", commandCreateKeyspace,
-				"[-sharding_column_name=name] [-sharding_column_type=type] [-served-from=tablettype1:ks1,tablettype2,ks2,...] [-split_shard_count=N] [-force] <keyspace name|zk keyspace path>",
+				"[-sharding_column_name=name] [-sharding_column_type=type] [-served_from=tablettype1:ks1,tablettype2,ks2,...] [-split_shard_count=N] [-force] <keyspace name|zk keyspace path>",
 				"Creates the given keyspace"},
 			command{"GetKeyspace", commandGetKeyspace,
 				"<keyspace|zk keyspace path>",
@@ -1453,7 +1453,7 @@ func commandCreateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 	splitShardCount := subFlags.Int("split_shard_count", 0, "number of shards to use for data splits")
 	force := subFlags.Bool("force", false, "will keep going even if the keyspace already exists")
 	var servedFrom flagutil.StringMapValue
-	subFlags.Var(&servedFrom, "served-from", "comma separated list of dbtype:keyspace pairs used to serve traffic")
+	subFlags.Var(&servedFrom, "served_from", "comma separated list of dbtype:keyspace pairs used to serve traffic")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}

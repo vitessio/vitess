@@ -66,7 +66,7 @@ class TestVtctld(unittest.TestCase):
   def setUpClass(klass):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
     utils.run_vtctl(['CreateKeyspace',
-                     '--served-from', 'master:test_keyspace,replica:test_keyspace,rdonly:test_keyspace',
+                     '--served_from', 'master:test_keyspace,replica:test_keyspace,rdonly:test_keyspace',
                      'redirected_keyspace'])
 
     shard_0_master.init_tablet( 'master',  'test_keyspace', '-80')

@@ -243,7 +243,7 @@ index by_msg (msg)
   def test_vertical_split(self):
     utils.run_vtctl(['CreateKeyspace', 'source_keyspace'])
     utils.run_vtctl(['CreateKeyspace',
-                     '--served-from', 'master:source_keyspace,replica:source_keyspace,rdonly:source_keyspace',
+                     '--served_from', 'master:source_keyspace,replica:source_keyspace,rdonly:source_keyspace',
                      'destination_keyspace'])
     source_master.init_tablet('master', 'source_keyspace', '0')
     source_replica.init_tablet('replica', 'source_keyspace', '0')
