@@ -19,6 +19,7 @@ type reflectSrvKeyspace struct {
 	ShardingColumnName string
 	ShardingColumnType key.KeyspaceIdType
 	ServedFrom         map[string]string
+	SplitShardCount    int32
 	version            int64
 }
 
@@ -52,6 +53,7 @@ func TestSrvKeySpace(t *testing.T) {
 		ServedFrom: map[string]string{
 			string(TYPE_REPLICA): "other_keyspace",
 		},
+		SplitShardCount: 32,
 	})
 	if err != nil {
 		t.Error(err)
@@ -78,6 +80,7 @@ func TestSrvKeySpace(t *testing.T) {
 		ServedFrom: map[TabletType]string{
 			TYPE_REPLICA: "other_keyspace",
 		},
+		SplitShardCount: 32,
 	}
 
 	encoded, err := bson.Marshal(&custom)

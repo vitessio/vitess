@@ -62,6 +62,7 @@ func (srvKeyspace *SrvKeyspace) MarshalBson(buf *bytes2.ChunkedWriter, key strin
 		}
 		lenWriter.Close()
 	}
+	bson.EncodeInt32(buf, "SplitShardCount", srvKeyspace.SplitShardCount)
 
 	lenWriter.Close()
 }
@@ -148,6 +149,8 @@ func (srvKeyspace *SrvKeyspace) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 					srvKeyspace.ServedFrom[_k] = _v4
 				}
 			}
+		case "SplitShardCount":
+			srvKeyspace.SplitShardCount = bson.DecodeInt32(buf, kind)
 		default:
 			bson.Skip(buf, kind)
 		}

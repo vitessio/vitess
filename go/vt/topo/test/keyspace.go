@@ -41,6 +41,7 @@ func CheckKeyspace(t *testing.T, ts topo.Server) {
 		ServedFrom: map[topo.TabletType]string{
 			topo.TYPE_MASTER: "test_keyspace3",
 		},
+		SplitShardCount: 64,
 	}); err != nil {
 		t.Errorf("CreateKeyspace: %v", err)
 	}
@@ -60,7 +61,8 @@ func CheckKeyspace(t *testing.T, ts topo.Server) {
 	}
 	if ki.ShardingColumnName != "user_id" ||
 		ki.ShardingColumnType != key.KIT_UINT64 ||
-		ki.ServedFrom[topo.TYPE_MASTER] != "test_keyspace3" {
+		ki.ServedFrom[topo.TYPE_MASTER] != "test_keyspace3" ||
+		ki.SplitShardCount != 64 {
 		t.Errorf("GetKeyspace: unexpected keyspace, got %v", *ki)
 	}
 

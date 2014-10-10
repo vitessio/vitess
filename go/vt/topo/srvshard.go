@@ -108,6 +108,7 @@ type SrvKeyspace struct {
 	ShardingColumnName string
 	ShardingColumnType key.KeyspaceIdType
 	ServedFrom         map[TabletType]string
+	SplitShardCount    int32
 
 	// For atomic updates
 	version int64

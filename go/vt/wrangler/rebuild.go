@@ -58,6 +58,7 @@ func (wr *Wrangler) findCellsForRebuild(ki *topo.KeyspaceInfo, keyspace string, 
 							ShardingColumnName: ki.ShardingColumnName,
 							ShardingColumnType: ki.ShardingColumnType,
 							ServedFrom:         ki.ServedFrom,
+							SplitShardCount:    ki.SplitShardCount,
 						}
 					}
 				}

@@ -24,6 +24,16 @@ type Keyspace struct {
 	// ServedFrom will redirect the appropriate traffic to
 	// another keyspace
 	ServedFrom map[TabletType]string
+
+	// Number of shards to use for batch job / mapreduce jobs
+	// that need to split a given keyspace into multiple shards.
+	// The value N used should be big enough that all possible shards
+	// cover 1/Nth of the entire space or more.
+	// It is usually the number of shards in the system. It a keyspace
+	// is being resharded from M to P shards, it should be max(M, P).
+	// That way we can guarantee a query that is targetted to 1/N of the
+	// keyspace will land on just one shard.
+	SplitShardCount int32
 }
 
 // KeyspaceInfo is a meta struct that contains metadata to give the
