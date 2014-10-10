@@ -97,8 +97,8 @@ func UpdateShardReplicationRecord(ts Server, keyspace, shard string, tabletAlias
 
 // RemoveShardReplicationRecord is a low level function to remove an
 // entry from the ShardReplication object.
-func RemoveShardReplicationRecord(ts Server, keyspace, shard string, tabletAlias TabletAlias) error {
-	err := ts.UpdateShardReplicationFields(tabletAlias.Cell, keyspace, shard, func(sr *ShardReplication) error {
+func RemoveShardReplicationRecord(ts Server, cell, keyspace, shard string, tabletAlias TabletAlias) error {
+	err := ts.UpdateShardReplicationFields(cell, keyspace, shard, func(sr *ShardReplication) error {
 		links := make([]ReplicationLink, 0, len(sr.ReplicationLinks))
 		for _, link := range sr.ReplicationLinks {
 			if link.TabletAlias != tabletAlias {
@@ -123,7 +123,7 @@ func FixShardReplication(ts Server, cell, keyspace, shard string) error {
 		ti, err := ts.GetTablet(rl.TabletAlias)
 		if err == ErrNoNode {
 			log.Warningf("Tablet %v is in the replication graph, but does not exist, removing it", rl.TabletAlias)
-			return RemoveShardReplicationRecord(ts, keyspace, shard, rl.TabletAlias)
+			return RemoveShardReplicationRecord(ts, cell, keyspace, shard, rl.TabletAlias)
 		}
 		if err != nil {
 			// unknown error, we probably don't want to continue
@@ -132,7 +132,7 @@ func FixShardReplication(ts Server, cell, keyspace, shard string) error {
 
 		if ti.Type == TYPE_SCRAP {
 			log.Warningf("Tablet %v is in the replication graph, but is scrapped, removing it", rl.TabletAlias)
-			return RemoveShardReplicationRecord(ts, keyspace, shard, rl.TabletAlias)
+			return RemoveShardReplicationRecord(ts, cell, keyspace, shard, rl.TabletAlias)
 		}
 
 		log.Infof("Keeping tablet %v in the replication graph", rl.TabletAlias)

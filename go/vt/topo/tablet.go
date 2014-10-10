@@ -629,7 +629,7 @@ func UpdateTabletReplicationData(ts Server, tablet *Tablet) error {
 
 // DeleteTabletReplicationData deletes replication data.
 func DeleteTabletReplicationData(ts Server, tablet *Tablet) error {
-	return RemoveShardReplicationRecord(ts, tablet.Keyspace, tablet.Shard, tablet.Alias)
+	return RemoveShardReplicationRecord(ts, tablet.Alias.Cell, tablet.Keyspace, tablet.Shard, tablet.Alias)
 }
 
 // GetTabletMap tries to read all the tablets in the provided list,

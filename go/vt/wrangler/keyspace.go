@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"sync"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/event"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/concurrency"
@@ -52,7 +51,7 @@ func (wr *Wrangler) setKeyspaceShardingInfo(keyspace, shardingColumnName string,
 
 	if ki.ShardingColumnName != "" && ki.ShardingColumnName != shardingColumnName {
 		if force {
-			log.Warningf("Forcing keyspace ShardingColumnName change from %v to %v", ki.ShardingColumnName, shardingColumnName)
+			wr.Logger().Warningf("Forcing keyspace ShardingColumnName change from %v to %v", ki.ShardingColumnName, shardingColumnName)
 		} else {
 			return fmt.Errorf("Cannot change ShardingColumnName from %v to %v (use -force to override)", ki.ShardingColumnName, shardingColumnName)
 		}
@@ -60,7 +59,7 @@ func (wr *Wrangler) setKeyspaceShardingInfo(keyspace, shardingColumnName string,
 
 	if ki.ShardingColumnType != key.KIT_UNSET && ki.ShardingColumnType != shardingColumnType {
 		if force {
-			log.Warningf("Forcing keyspace ShardingColumnType change from %v to %v", ki.ShardingColumnType, shardingColumnType)
+			wr.Logger().Warningf("Forcing keyspace ShardingColumnType change from %v to %v", ki.ShardingColumnType, shardingColumnType)
 		} else {
 			return fmt.Errorf("Cannot change ShardingColumnType from %v to %v (use -force to override)", ki.ShardingColumnType, shardingColumnType)
 		}
@@ -87,6 +86,7 @@ func (wr *Wrangler) MigrateServedTypes(keyspace, shard string, servedType topo.T
 	}
 
 	// find overlapping shards in this keyspace
+	wr.Logger().Infof("Finding the overlapping shards in keyspace %v", keyspace)
 	osList, err := topotools.FindOverlappingShards(wr.ts, keyspace)
 	if err != nil {
 		return fmt.Errorf("FindOverlappingShards failed: %v", err)
@@ -152,7 +152,7 @@ func (wr *Wrangler) MigrateServedTypes(keyspace, shard string, servedType topo.T
 	for i, si := range sourceShards {
 		sourceLockPath[i], err = wr.lockShard(si.Keyspace(), si.ShardName(), actionNode)
 		if err != nil {
-			log.Errorf("Failed to lock source shard %v/%v, may need to unlock other shards manually", si.Keyspace(), si.ShardName())
+			wr.Logger().Errorf("Failed to lock source shard %v/%v, may need to unlock other shards manually", si.Keyspace(), si.ShardName())
 			return err
 		}
 	}
@@ -160,7 +160,7 @@ func (wr *Wrangler) MigrateServedTypes(keyspace, shard string, servedType topo.T
 	for i, si := range destinationShards {
 		destinationLockPath[i], err = wr.lockShard(si.Keyspace(), si.ShardName(), actionNode)
 		if err != nil {
-			log.Errorf("Failed to lock destination shard %v/%v, may need to unlock other shards manually", si.Keyspace(), si.ShardName())
+			wr.Logger().Errorf("Failed to lock destination shard %v/%v, may need to unlock other shards manually", si.Keyspace(), si.ShardName())
 			return err
 		}
 	}
@@ -183,7 +183,7 @@ func (wr *Wrangler) MigrateServedTypes(keyspace, shard string, servedType topo.T
 	// rebuild the keyspace serving graph if there was no error
 	if rec.Error() == nil {
 		if skipRebuild {
-			log.Infof("Skipping keyspace rebuild, please run it at earliest convenience")
+			wr.Logger().Infof("Skipping keyspace rebuild, please run it at earliest convenience")
 		} else {
 			rec.RecordError(wr.RebuildKeyspaceGraph(keyspace, nil, shardCache))
 		}
@@ -218,7 +218,7 @@ func (wr *Wrangler) makeMastersReadOnly(shards []*topo.ShardInfo) error {
 		go func(si *topo.ShardInfo) {
 			defer wg.Done()
 
-			log.Infof("Making master %v read-only", si.MasterAlias)
+			wr.Logger().Infof("Making master %v read-only", si.MasterAlias)
 			ti, err := wr.ts.GetTablet(si.MasterAlias)
 			if err != nil {
 				rec.RecordError(err)
@@ -229,7 +229,7 @@ func (wr *Wrangler) makeMastersReadOnly(shards []*topo.ShardInfo) error {
 				rec.RecordError(err)
 				return
 			}
-			log.Infof("Master %v is now read-only", si.MasterAlias)
+			wr.Logger().Infof("Master %v is now read-only", si.MasterAlias)
 		}(si)
 	}
 	wg.Wait()
@@ -246,7 +246,7 @@ func (wr *Wrangler) getMastersPosition(shards []*topo.ShardInfo) (map[*topo.Shar
 		wg.Add(1)
 		go func(si *topo.ShardInfo) {
 			defer wg.Done()
-			log.Infof("Gathering master position for %v", si.MasterAlias)
+			wr.Logger().Infof("Gathering master position for %v", si.MasterAlias)
 			ti, err := wr.ts.GetTablet(si.MasterAlias)
 			if err != nil {
 				rec.RecordError(err)
@@ -259,7 +259,7 @@ func (wr *Wrangler) getMastersPosition(shards []*topo.ShardInfo) (map[*topo.Shar
 				return
 			}
 
-			log.Infof("Got master position for %v", si.MasterAlias)
+			wr.Logger().Infof("Got master position for %v", si.MasterAlias)
 			mu.Lock()
 			result[si] = pos
 			mu.Unlock()
@@ -290,7 +290,7 @@ func (wr *Wrangler) waitForFilteredReplication(sourcePositions map[*topo.ShardIn
 				}
 
 				// and wait for it
-				log.Infof("Waiting for %v to catch up", si.MasterAlias)
+				wr.Logger().Infof("Waiting for %v to catch up", si.MasterAlias)
 				tablet, err := wr.ts.GetTablet(si.MasterAlias)
 				if err != nil {
 					rec.RecordError(err)
@@ -300,7 +300,7 @@ func (wr *Wrangler) waitForFilteredReplication(sourcePositions map[*topo.ShardIn
 				if err := wr.tmc.WaitBlpPosition(tablet, blpPosition, wr.ActionTimeout()); err != nil {
 					rec.RecordError(err)
 				} else {
-					log.Infof("%v caught up", si.MasterAlias)
+					wr.Logger().Infof("%v caught up", si.MasterAlias)
 				}
 			}
 		}(si)
@@ -317,7 +317,7 @@ func (wr *Wrangler) refreshMasters(shards []*topo.ShardInfo) error {
 		wg.Add(1)
 		go func(si *topo.ShardInfo) {
 			defer wg.Done()
-			log.Infof("RefreshState master %v", si.MasterAlias)
+			wr.Logger().Infof("RefreshState master %v", si.MasterAlias)
 			ti, err := wr.ts.GetTablet(si.MasterAlias)
 			if err != nil {
 				rec.RecordError(err)
@@ -327,7 +327,7 @@ func (wr *Wrangler) refreshMasters(shards []*topo.ShardInfo) error {
 			if err := wr.tmc.RefreshState(ti, wr.ActionTimeout()); err != nil {
 				rec.RecordError(err)
 			} else {
-				log.Infof("%v responded", si.MasterAlias)
+				wr.Logger().Infof("%v responded", si.MasterAlias)
 			}
 		}(si)
 	}
@@ -339,6 +339,7 @@ func (wr *Wrangler) refreshMasters(shards []*topo.ShardInfo) error {
 func (wr *Wrangler) migrateServedTypes(keyspace string, sourceShards, destinationShards []*topo.ShardInfo, servedType topo.TabletType, reverse bool, shardCache map[string]*topo.ShardInfo) (err error) {
 
 	// re-read all the shards so we are up to date
+	wr.Logger().Infof("Re-reading all shards")
 	for i, si := range sourceShards {
 		if sourceShards[i], err = wr.ts.GetShard(si.Keyspace(), si.ShardName()); err != nil {
 			return err
@@ -506,12 +507,12 @@ func (wr *Wrangler) MigrateServedFrom(keyspace, shard string, servedType topo.Ta
 	actionNode := actionnode.MigrateServedFrom(servedType)
 	keyspaceLockPath, err := wr.lockKeyspace(keyspace, actionNode)
 	if err != nil {
-		log.Errorf("Failed to lock destination keyspace %v", keyspace)
+		wr.Logger().Errorf("Failed to lock destination keyspace %v", keyspace)
 		return err
 	}
 	destinationShardLockPath, err := wr.lockShard(keyspace, shard, actionNode)
 	if err != nil {
-		log.Errorf("Failed to lock destination shard %v/%v", keyspace, shard)
+		wr.Logger().Errorf("Failed to lock destination shard %v/%v", keyspace, shard)
 		wr.unlockKeyspace(keyspace, actionNode, keyspaceLockPath, nil)
 		return err
 	}
@@ -519,7 +520,7 @@ func (wr *Wrangler) MigrateServedFrom(keyspace, shard string, servedType topo.Ta
 	sourceShard := si.SourceShards[0].Shard
 	sourceShardLockPath, err := wr.lockShard(sourceKeyspace, sourceShard, actionNode)
 	if err != nil {
-		log.Errorf("Failed to lock source shard %v/%v", sourceKeyspace, sourceShard)
+		wr.Logger().Errorf("Failed to lock source shard %v/%v", sourceKeyspace, sourceShard)
 		wr.unlockShard(keyspace, shard, actionNode, destinationShardLockPath, nil)
 		wr.unlockKeyspace(keyspace, actionNode, keyspaceLockPath, nil)
 		return err
@@ -538,7 +539,7 @@ func (wr *Wrangler) MigrateServedFrom(keyspace, shard string, servedType topo.Ta
 	// rebuild the keyspace serving graph if there was no error
 	if rec.Error() == nil {
 		if skipRebuild {
-			log.Infof("Skipping keyspace rebuild, please run it at earliest convenience")
+			wr.Logger().Infof("Skipping keyspace rebuild, please run it at earliest convenience")
 		} else {
 			rec.RecordError(wr.RebuildKeyspaceGraph(keyspace, nil, nil))
 		}
@@ -725,7 +726,7 @@ func (wr *Wrangler) RefreshTablesByShard(keyspace, shard string, tabletType topo
 	case nil:
 		// keep going
 	case topo.ErrPartialResult:
-		log.Warningf("RefreshTablesByShard: got partial result, may not blacklist everything everywhere")
+		wr.Logger().Warningf("RefreshTablesByShard: got partial result, may not blacklist everything everywhere")
 	default:
 		return err
 	}
@@ -740,7 +741,7 @@ func (wr *Wrangler) RefreshTablesByShard(keyspace, shard string, tabletType topo
 		wg.Add(1)
 		go func(ti *topo.TabletInfo) {
 			if err := wr.tmc.RefreshState(ti, wr.ActionTimeout()); err != nil {
-				log.Warningf("RefreshTablesByShard: failed to ping %v: %v", ti.Alias, err)
+				wr.Logger().Warningf("RefreshTablesByShard: failed to ping %v: %v", ti.Alias, err)
 			}
 			wg.Done()
 		}(ti)
