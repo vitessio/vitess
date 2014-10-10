@@ -7,7 +7,7 @@ The agent handles local execution of actions triggered remotely.
 
 Most RPC calls lock the actionMutex, except the easy read-only ones.
 
-We will not call changeCallback for all actions, just for the ones
+We will not call updateState for all actions, just for the ones
 that are relevant.
 
 See rpc_server.go for all cases, and which action takes the actionMutex,
@@ -41,13 +41,6 @@ var (
 	_ = flag.String("vtaction_binary_path", "", "(DEPRECATED) Full path (including filename) to vtaction binary. If not set, tries VTROOT/bin/vtaction.")
 )
 
-type tabletChangeItem struct {
-	oldTablet  topo.Tablet
-	newTablet  topo.Tablet
-	context    string
-	queuedTime time.Time
-}
-
 // ActionAgent is the main class for the agent.
 type ActionAgent struct {
 	// The following fields are set during creation
@@ -75,7 +68,6 @@ type ActionAgent struct {
 
 	// mutex protects the following fields
 	mutex              sync.Mutex
-	changeItems        chan tabletChangeItem
 	_tablet            *topo.TabletInfo
 	_blacklistedTables []string
 }
@@ -120,7 +112,6 @@ func NewActionAgent(
 		done:               make(chan struct{}),
 		History:            history.New(historyLength),
 		lastHealthMapCount: stats.NewInt("LastHealthMapCount"),
-		changeItems:        make(chan tabletChangeItem, 100),
 	}
 
 	// Start the binlog player services, not playing at start.
@@ -165,7 +156,6 @@ func NewTestActionAgent(ts topo.Server, tabletAlias topo.TabletAlias, port int, 
 		done:               make(chan struct{}),
 		History:            history.New(historyLength),
 		lastHealthMapCount: new(stats.Int),
-		changeItems:        make(chan tabletChangeItem, 100),
 	}
 	if err := agent.Start(0, port, 0); err != nil {
 		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
@@ -173,25 +163,12 @@ func NewTestActionAgent(ts topo.Server, tabletAlias topo.TabletAlias, port int, 
 	return agent
 }
 
-func (agent *ActionAgent) runChangeCallback(oldTablet *topo.Tablet, context string) {
+func (agent *ActionAgent) updateState(oldTablet *topo.Tablet, context string) {
 	agent.mutex.Lock()
-	// Access directly since we have the lock.
 	newTablet := agent._tablet.Tablet
-	agent.changeItems <- tabletChangeItem{oldTablet: *oldTablet, newTablet: *newTablet, context: context, queuedTime: time.Now()}
-	log.Infof("Queued tablet callback: %v", context)
 	agent.mutex.Unlock()
-}
-
-func (agent *ActionAgent) executeCallbacksLoop() {
-	for {
-		select {
-		case changeItem := <-agent.changeItems:
-			log.Infof("Running tablet callback after %v: %v", time.Now().Sub(changeItem.queuedTime), changeItem.context)
-			agent.changeCallback(changeItem.oldTablet, changeItem.newTablet)
-		case <-agent.done:
-			return
-		}
-	}
+	log.Infof("Running tablet callback after action %v", context)
+	agent.changeCallback(oldTablet, newTablet)
 }
 
 func (agent *ActionAgent) readTablet() error {
@@ -225,10 +202,10 @@ func (agent *ActionAgent) setBlacklistedTables(blacklistedTables []string) {
 	agent.mutex.Unlock()
 }
 
-// afterAction needs to be run after an action may have changed the current
+// refreshTablet needs to be run after an action may have changed the current
 // state of the tablet.
-func (agent *ActionAgent) afterAction(context string) {
-	log.Infof("Executing post-action change callbacks")
+func (agent *ActionAgent) refreshTablet(context string) {
+	log.Infof("Executing post-action state refresh")
 
 	// Save the old tablet so callbacks can have a better idea of
 	// the precise nature of the transition.
@@ -244,9 +221,9 @@ func (agent *ActionAgent) afterAction(context string) {
 			agent.mutex.Unlock()
 		}
 
-		agent.runChangeCallback(oldTablet, context)
+		agent.updateState(oldTablet, context)
 	}
-	log.Infof("Done with post-action change callbacks")
+	log.Infof("Done with post-action state refresh")
 }
 
 func (agent *ActionAgent) verifyTopology() error {
@@ -338,9 +315,7 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 	}
 
 	oldTablet := &topo.Tablet{}
-	agent.runChangeCallback(oldTablet, "Start")
-
-	go agent.executeCallbacksLoop()
+	agent.updateState(oldTablet, "Start")
 	return nil
 }
 

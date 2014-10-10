@@ -376,16 +376,16 @@ func (agent *ActionAgent) TabletExternallyReparented(actionTimeout time.Duration
 		log.Warningf("TabletExternallyReparented: internal error: %v", err)
 	}
 
-	// release the lock in any case, and run afterAction if necessary
+	// release the lock in any case, and run refreshTablet if necessary
 	err = actionNode.UnlockShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, lockPath, err)
 	if runAfterAction {
-		agent.afterAction("RPC(TabletExternallyReparented)")
+		agent.refreshTablet("RPC(TabletExternallyReparented)")
 	}
 	return err
 }
 
 // tabletExternallyReparentedLocked is called with the shard lock.
-// It returns if agent.afterAction should be called, and the error.
+// It returns if agent.refreshTablet should be called, and the error.
 // Note both are set independently (can have both true and an error).
 func (agent *ActionAgent) tabletExternallyReparentedLocked(actionTimeout time.Duration, interrupted chan struct{}) (bool, error) {
 	// re-read the tablet record to be sure we have the latest version
@@ -772,7 +772,7 @@ func (agent *ActionAgent) Snapshot(args *actionnode.SnapshotArgs, logger logutil
 	}
 
 	// let's update our internal state (stop query service and other things)
-	agent.afterAction("snapshotStart")
+	agent.refreshTablet("snapshotStart")
 
 	// create the loggers: tee to console and source
 	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)

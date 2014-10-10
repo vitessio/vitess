@@ -121,7 +121,7 @@ func (agent *ActionAgent) disallowQueries() {
 
 // changeCallback is run after every action that might
 // have changed something in the tablet record.
-func (agent *ActionAgent) changeCallback(oldTablet, newTablet topo.Tablet) {
+func (agent *ActionAgent) changeCallback(oldTablet, newTablet *topo.Tablet) {
 
 	allowQuery := newTablet.IsRunningQueryService()
 
@@ -172,7 +172,7 @@ func (agent *ActionAgent) changeCallback(oldTablet, newTablet topo.Tablet) {
 			!reflect.DeepEqual(blacklistedTables, agent.BlacklistedTables()) {
 			agent.disallowQueries()
 		}
-		if err := agent.allowQueries(&newTablet, blacklistedTables); err != nil {
+		if err := agent.allowQueries(newTablet, blacklistedTables); err != nil {
 			log.Errorf("Cannot start query service: %v", err)
 		} else {
 			// allowQueries worked, save our blacklisted table list

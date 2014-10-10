@@ -406,7 +406,7 @@ func (blm *BinlogPlayerMap) StopAllPlayersAndReset() {
 
 // RefreshMap reads the right data from topo.Server and makes sure
 // we're playing the right logs.
-func (blm *BinlogPlayerMap) RefreshMap(tablet topo.Tablet, keyspaceInfo *topo.KeyspaceInfo, shardInfo *topo.ShardInfo) {
+func (blm *BinlogPlayerMap) RefreshMap(tablet *topo.Tablet, keyspaceInfo *topo.KeyspaceInfo, shardInfo *topo.ShardInfo) {
 	log.Infof("Refreshing map of binlog players")
 	if shardInfo == nil {
 		log.Warningf("Could not read shardInfo, not changing anything")
