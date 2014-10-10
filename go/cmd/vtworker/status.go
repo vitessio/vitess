@@ -29,6 +29,11 @@ function getStatus() {
 `
 
 const workerStatusHTML = `
+<html>
+<head>
+<title>Worker Status</title>
+</head>
+<body>
 {{if .Status}}
   <h2>Worker status:</h2>
   <blockquote>
@@ -45,6 +50,8 @@ const workerStatusHTML = `
   <p>This worker is idle.</p>
   <p><a href="/">Toplevel Menu</a></p>
 {{end}}
+</body>
+</html>
 `
 
 func initStatusHandling() {
