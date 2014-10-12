@@ -26,7 +26,7 @@ It also utilizes a more efficient rowcache to short-cut some of the queries.
 This effectively increases a typical MySQL's serving capacity.
 \item \emph{Manageability}: As soon as you add replication and sharding that span
 across multiple data centers, the number of servers spirals out of control.
-Vitess provides a set of tools backed by a lockserver (zookeeper) to
+Vitess provides a set of tools backed by a \index{lockserver}{\textbf{lockserver}} (zookeeper) to
 track and administer them.
 \item \emph{Simplicity}: As the complexity grows, it's important to hide this
 from the application.
@@ -37,14 +37,16 @@ it feel like you're just interacting with one database.
 \subsubsection{Trade-offs}\hypertarget{trade-offs}{}\label{trade-offs}
 
 Scalability and availability require some trade-offs:
-* \emph{Consistency}: In a typical web application, not all reads have to be
+\begin{itemize}
+\item  \emph{Consistency}: In a typical web application, not all reads have to be
 fully consistent.
+
 Vitess lets you specify the kind of consistency you want on your read.
 It's generally recommended that you use replica reads as they're easier to scale.
 You can always request for master reads if you want up-to-date data.
 You can also additionally perform 'for update' reads that ensure that
 a row will not change until you've committed your changes.
-* \emph{Transactions}: Relational transactions are prohibitively expensive
+\item  \emph{Transactions}: Relational transactions are prohibitively expensive
 across distributed systems.
 Vitess eases this constraint and guarantees transactional integrity
 'per keyspace id', which is restricted to one shard.
@@ -52,18 +54,21 @@ Heuristically, this tends to cover most of an application's transactions.
 For the few cases that don't, you can sequence your changes in such a way
 that the system looks consistent even if a distributed transaction fails
 in the middle.
-* \emph{Latency}: There is some negligible latency introduced by the proxy servers.
+\item  \emph{Latency}: There is some negligible latency introduced by the proxy servers.
 However, they make up for the fact that you can extract more throughput from
 MySQL than you would otherwise be able to without them.
+\end{itemize}
 
 \subsubsection{Preserved MySQL features}\hypertarget{preserved-mysql-features}{}\label{preserved-mysql-features}
 
 Since the underlying storage layer is still MySQL, we still get to preserve
 its other important features:
-* \emph{Indexes}: You can create secondary indexes on your tables. This allows you
+\begin{itemize}
+\item  \emph{Indexes}: You can create secondary indexes on your tables. This allows you
 to efficiently query rows using more than one key.
-* \emph{Joins}:  MySQL allows you to split one-to-many and many-to-many relational data
+\item  \emph{Joins}:  MySQL allows you to split one-to-many and many-to-many relational data
 into separate tables, and lets you join them on demand.
+\end{itemize}
 This flexibility generally results in more efficient storage as each piece of
 data is stored only once, and fetched only if needed.
 

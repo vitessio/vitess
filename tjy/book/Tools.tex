@@ -71,7 +71,7 @@ It is very easy to add other checker processes for in-tablet integrity checks (v
 
 \subsubsection{vtprimecache}\hypertarget{vtprimecache}{}\label{vtprimecache}
 
-\index{vttable}{\textbf{vttablet}} vtprimecache is a mysql cache primer for faster replication. If the single MySQL replication thread is falling behind, vtprimecache activates and starts reading the available relay logs. It then uses a few threads / connections to MySQL to execute modified statements and prime the MySQL buffer cache. The idea is for instance if an 'update table X where id=2' statement is going to be executed by the replication SQL thread 2 or 3 seconds from now, might as well execute a concurrent 'select from table X where id=2' now and prime the MySQL buffer cache. In practice, this shows a speed improvement in replication speed by 30 to 40 percents.
+\index{vtprimecache}{\textbf{vtprimecache}}  is a mysql cache primer for faster replication. If the single MySQL replication thread is falling behind, vtprimecache activates and starts reading the available relay logs. It then uses a few threads / connections to MySQL to execute modified statements and prime the MySQL buffer cache. The idea is for instance if an 'update table X where id=2' statement is going to be executed by the replication SQL thread 2 or 3 seconds from now, might as well execute a concurrent 'select from table X where id=2' now and prime the MySQL buffer cache. In practice, this shows a speed improvement in replication speed by 30 to 40 percents.
 
 \subsubsection{Other support tools}\hypertarget{other-support-tools}{}\label{other-support-tools}
 
@@ -80,6 +80,38 @@ It is very easy to add other checker processes for in-tablet integrity checks (v
 \item \index{zkctl}{\textbf{zkctl}} : manage ZooKeeper instances.
 \item \index{zk}{\textbf{zk}}: command line ZooKeeper client and explorer.
 \end{itemize}
+
+\subsection{List of vitess commands and their sizes}\label{vitess-commands-list}
+\begin{codesample2}
+ -bash-4.1$ ls -lh /home/vitess/gocode/bin/
+    total 213M
+    vitess 4.0M Oct  9 11:31 bsongen
+    vitess 4.7M Oct  1 04:41 goimports
+    vitess  14M Oct  9 11:32 mysqlctl
+    vitess 3.7M Oct  9 11:32 query_analyzer
+    vitess 8.8M Oct  9 11:32 topo2topo
+    vitess 7.1M Oct  9 11:32 umgmtping
+    vitess  15M Oct  1 05:13 vtaction
+    vitess 9.6M Oct  9 11:32 \index{vtclient2}{\textbf{vtclient2}}
+    vitess  12M Oct  9 11:32 vtctl
+    vitess 7.8M Oct  9 11:32 vtctlclient
+    vitess  12M Oct  9 11:32 vtctld
+    vitess  11M Oct  9 11:32 vtgate
+    vitess  11M Oct  9 11:32 vtjanitor
+    vitess  16M Oct  9 11:32 vtocc
+    vitess 7.4M Oct  9 11:32 vtprimecache
+    vitess  18M Oct  9 11:32 vttablet
+    vitess  17M Oct  9 11:32 vtworker
+    vitess 8.7M Oct  9 11:32 zk
+    vitess 8.4M Oct  9 11:32 zkclient2
+    vitess 4.3M Oct  9 11:32 zkctl
+    vitess 8.2M Oct  9 11:32 zkns2pdns
+    vitess 8.8M Oct  9 11:32 zkocc
+    vitess   70 Oct  9 11:31 zksrv.sh -> 
+    /home/vitess/gocode/src/github.com/youtube/vitess/go/zk/zkctl/zksrv.sh
+  -bash-4.1$ 
+\end{codesample2}
+
 
 \subsection{Vitess components block diagram}\hypertarget{vitess-components-block-diagram}{}\label{vitess-components-block-diagram}
 

@@ -45,7 +45,7 @@ Vitess helped us alleviate them.
 \subsubsection{Connection pooling}\hypertarget{connection-pooling}{}\label{connection-pooling}
 
 Instead of using MySQL’s protocol, clients connect to Vitess uses its almost
-stateless, BSON based protocol. These connections are very lightweight (around
+stateless, \index{BSON}{\textbf{BSON}} based protocol. These connections are very lightweight (around
 32 KB per connections), which means our servers can handle thousands of them
 without breaking a sweat. These connections are efficiently mapped to a pool of
 MySQL connections thanks to Go’s awesome concurrency support.

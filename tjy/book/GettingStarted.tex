@@ -1,4 +1,4 @@
-\section{Getting Started}\label{Getting-Started}
+\section{Getting Started on Ubuntu}\label{Getting-Started}
 
 If you run into issues or have questions, you can use our mailing list: vitess@googlegroups.com.
 
@@ -36,15 +36,175 @@ but be sure to include the client development headers (\textbf{libmariadbclient-
     libssl-dev g++ mercurial git pkg-config bison curl 
 \end{codesample4}
 
-\item download .
+\item download vitess source.
+
+\begin{codesample2}
+    [vitess@psp vitess]$ tree -L 2 
+    .
+    ├── bootstrap.sh
+    ├── config
+    │   ├── gomysql.pc.tmpl
+    │   ├── mycnf
+    │   ├── zkcfg
+    │   └── zk-client-dev.json
+    ├── data
+    │   ├── bootstrap
+    │   └── test
+    ├── dev.env
+    ├── doc
+    │   ├── Concepts.markdown
+    │   ├── Contributing.markdown
+    │   ├── FAQ.markdown
+    │   ├── GettingStarted.markdown
+    │   ├── HelicopterOverview.markdown
+    │   ├── Production.markdown
+    │   ├── Reparenting.markdown
+    │   ├── ReplicationGraph.markdown
+    │   ├── Resharding.markdown
+    │   ├── SchemaManagement.markdown
+    │   ├── ServingGraph.markdown
+    │   ├── TestingOnARamDisk.markdown
+    │   ├── Tools.markdown
+    │   ├── Vision.markdown
+    │   ├── Vitess2014.pdf
+    │   ├── VitessComponents.png
+    │   ├── VitessOverview.png
+    │   ├── VitessSpectrum.png
+    │   ├── Vttablet.markdown
+    │   ├── VTTabletModules.png
+    │   └── ZookeeperData.markdown
+    ├── Dockerfile
+    ├── go
+    │   ├── acl
+    │   ├── bson
+    │   ├── bufio2
+    │   ├── bytes2
+    │   ├── cache
+    │   ├── cgzip
+    │   ├── cmd
+    │   ├── db
+    │   ├── event
+    │   ├── executil
+    │   ├── exit
+    │   ├── fileutil
+    │   ├── flagutil
+    │   ├── hack
+    │   ├── history
+    │   ├── ioutil2
+    │   ├── jscfg
+    │   ├── memcache
+    │   ├── mysql
+    │   ├── netutil
+    │   ├── pools
+    │   ├── proc
+    │   ├── README.markdown
+    │   ├── rpcplus
+    │   ├── rpcwrap
+    │   ├── sqltypes
+    │   ├── stats
+    │   ├── streamlog
+    │   ├── sync2
+    │   ├── tb
+    │   ├── terminal
+    │   ├── testfiles
+    │   ├── timer
+    │   ├── umgmt
+    │   ├── vt
+    │   └── zk
+    ├── java
+    │   ├── bootstrap.sh
+    │   ├── gorpc
+    │   ├── pom.xml
+    │   ├── README.markdown
+    │   ├── vtgate-client
+    │   ├── vtocc-client
+    │   └── vtocc-jdbc-driver
+    ├── LICENSE
+    ├── Makefile
+    ├── misc
+    │   ├── git
+    │   ├── gofmt-all
+    │   └── parse_cover.py
+    ├── py
+    │   ├── cbson
+    │   ├── checkers
+    │   ├── io
+    │   ├── net
+    │   ├── setup.py
+    │   ├── vtctl
+    │   ├── vtdb
+    │   └── zk
+    ├── README.markdown
+    ├── test
+    │   ├── barnacle_test.py
+    │   ├── binlog.py
+    │   ├── checkers_test.py
+    │   ├── clone.py
+    │   ├── environment.py
+    │   ├── environment.pyc
+    │   ├── fake_zkocc_config.json
+    │   ├── framework.py
+    │   ├── goloadgen
+    │   ├── initial_sharding_bytes.py
+    │   ├── initial_sharding.py
+    │   ├── java_vtgate_test_helper.py
+    │   ├── keyrange_test.py
+    │   ├── keyspace_test.py
+    │   ├── loadgen.py
+    │   ├── mysqlctl.py
+    │   ├── mysql_flavor.py
+    │   ├── mysql_flavor.pyc
+    │   ├── primecache.py
+    │   ├── queryservice_test.py
+    │   ├── queryservice_tests
+    │   ├── reparent.py
+    │   ├── resharding_bytes.py
+    │   ├── resharding.py
+    │   ├── resharding_vtworker.py
+    │   ├── rowcache_invalidator.py
+    │   ├── schema.py
+    │   ├── secure.py
+    │   ├── sharded.py
+    │   ├── tabletmanager.py
+    │   ├── tablet.py
+    │   ├── tablet.pyc
+    │   ├── test_data
+    │   ├── update_stream.py
+    │   ├── utils.py
+    │   ├── utils.pyc
+    │   ├── vertical_split.py
+    │   ├── vertical_split_vtgate.py
+    │   ├── vertical_split_vtworker.py
+    │   ├── vtctld_test.py
+    │   ├── vtdb_test.py
+    │   ├── vtgatev2_test.py
+    │   ├── vthook-copy_snapshot_from_storage.sh
+    │   ├── vthook-copy_snapshot_to_storage.sh
+    │   ├── vthook-test.sh
+    │   └── zkocc_test.py
+    ├── third_party
+    │   ├── acolyte.patch
+    │   ├── go
+    │   ├── mysql.patch
+    │   ├── py
+    │   └── zookeeper
+    └── tjy
+        ├── book
+        ├── Makefile
+        ├── mklb
+        ├── osmkfiles
+        └── vitess.pdf
+    
+    70 directories, 83 files
+    [vitess@psp vitess]$ 
+\end{codesample2}
 
 \item build Vitess.
+
 Note that the value of MYSQL\_FLAVOR is case-sensitive.
 If the mysql\_config command from libmariadbclient-dev is not on the PATH,
 you'll need to \emph{export VT\_MYSQL\_ROOT=/path/to/mariadb} before running bootstrap.sh,
 where mysql\_config is found at /path/to/mariadb/\textbf{bin}/mysql\_config.
-
-
 
 \begin{codesample4}
     git clone https://github.com/youtube/vitess.git src/github.com/youtube/vitess
@@ -53,22 +213,26 @@ where mysql\_config is found at /path/to/mariadb/\textbf{bin}/mysql\_config.
     
     ./bootstrap.sh
     . ./dev.env
-    make build
+    make clean && make build && make site_test
 \end{codesample4}
 \end{enumerate}
+
 \subsection{Testing}\hypertarget{testing}{}\label{testing}
 
 The full set of tests included in the default \emph{make} and \emph{make test} targets
 is intended for use by Vitess developers to verify code changes.
+
 These tests simulate a small cluster by launching many servers on the local
 machine, so they require a lot of resources (minimum 8GB RAM and SSD recommended).
 
 If you are only interested in checking that Vitess is working in your
 environment, you can run a set of lighter tests:
 
-\begin{lstlisting}[language=Bash]
-make site_test
-\end{lstlisting}
+\begin{codesample2}
+
+  make clean && make build && make site_test
+
+\end{codesample2}
 
 \subsubsection{Common Test Issues}\hypertarget{common-test-issues}{}\label{common-test-issues}
 

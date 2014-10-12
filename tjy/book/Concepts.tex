@@ -1,7 +1,9 @@
 \section{Concepts}\label{Concepts}
 
 We need to introduce some common terminologies that are used in Vitess:
+
 \subsubsection{Keyspace}\label{Keyspace}
+
 A \vconcepts{\textbf{keyspace}} is a logical database.
 In its simplest form, it directly maps to a MySQL database name.
 When you read data from a keyspace, it is as if you read from a MySQL database.
@@ -15,7 +17,7 @@ a single MySQL database.
 
 \subsubsection{Shard}\label{shard}
 
-A division within a Keyspace. All the instances inside a \vconcepts{Shard\textbf{Shard}} have the same data (or should have the same data,
+A division within a Keyspace. All the instances inside a \vconcepts{Shard} have the same data (or should have the same data,
 modulo some replication lag).
 
 A Keyspace usually has one shard when not using any sharding (we name it `0' by convention). When sharded, a Keyspace will have N shards (usually, N is a power of 2) with non-overlapping data.

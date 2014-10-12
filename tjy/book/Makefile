@@ -1,17 +1,15 @@
 # This makefile requires GNU make.
 # What: A makefile macro function to 
 # target1 target2 target3 : prerequisite1 prerequisite2  prerequisite3
-#
 #         command 1
 #         command 2
 # $< : The filename of the first prerequisite.
 # $@ : The filename representing the target
-# $< : The filename of the first prerequsite.
 # $? : The names of all prequisites that are newer than the target, separated by spaces.
 # $^ : The filnames of all the prerequisites,separted by spaces.
 # $+ : Similar to $^, this i sthe names of all the prerequisites separated by spaces.
 # $* : The stem of the target filname. A stem is typically a filname without its suffix.
-
+# TODO: move *.tex into tex-src
 BOOKNAME=vitess
 sources := $(BOOKNAME).tex \
         colophon.tex \
@@ -105,12 +103,12 @@ pdf/${BOOKNAME}.pdf: $(sources) $(image-pdf)  $(image-dia)
 
 html: onepage split
 
-onepage: $(htlatex) html/onepage/xymon-rtfm.html html/onepage/xymon-rtfm.css $(image-html:%=html/onepage/%)
+onepage: $(htlatex) html/onepage/$(BNAME).html html/onepage/$(BNAME).css $(image-html:%=html/onepage/%)
 
 html/onepage/%: %
 	cp $< $@
 
-split: $(htlatex) html/split/xymon-rtfm.html html/split/xymon-rtfm.css $(image-html:%=html/split/%)
+split: $(htlatex) html/split/$(BNAME).html html/split/$(BNAME).css $(image-html:%=html/split/%)
 
 html/split/%: %
 	cp $< $@
@@ -127,20 +125,19 @@ define htlatex
 	cd $(dir $(1)) && tex4ht -f/$(basename $(notdir $(1))) -cvalidate -cunihtf
 	cd $(dir $(1)) && t4ht -f/$(basename $(notdir $(1)))
 	./fixhtml.py $(dir $(1))/*.html
-	rm $(dir $(1))/xymon-rtfm.css
+	rm $(dir $(1))/$(BNAME).css
 endef
 
-html/onepage/xymon-rtfm.html: $(sources) $(image-html) examples bookhtml.cfg
+html/onepage/$(BNAME).html: $(sources) $(image-html) examples bookhtml.cfg
 	$(call htlatex,$@,$<)
 
-html/split/xymon-rtfm.html: $(sources) examples bookhtml.cfg
+html/split/$(BNAME).html: $(sources) examples bookhtml.cfg
 	$(call htlatex,$@,$<,2)
 
 %.tex: %.html
 	html2latex $@ $<
 
 # Produce 90dpi PNGs for the web.
-
 %.png: %.svg
 	inkscape -D -e $@ $<
 
@@ -148,9 +145,9 @@ html/split/xymon-rtfm.html: $(sources) examples bookhtml.cfg
 	dot -Tsvg -o $@ $<
 
 
-# Produce eps & pdf for the book pdf
-# % stem of a file name.
-# $< : The filename of the first prerequsite.
+# WHAT: Produce eps & pdf for the book pdf
+#       % stem of a file name without suffix.
+#       $< : The filename of the first prerequsite.
 %.eps: %.svg
 	inkscape -E $@ $<
 
@@ -201,7 +198,7 @@ install: pdf split $(dist-sources)
 	cp $(dist-sources) dist
 
 rsync: install
-	rsync -avz --delete dist sp.red-bean.com:public_html/xymon-rtfm
+	rsync -avz --delete dist sp.red-bean.com:public_html/$(BNAME)
 
 upload: all 
 	sudo rsync -avz --delete pdf/*.pdf  /var/www/html/books
@@ -217,18 +214,4 @@ movetmp:
 	sudo rsync -avz --delete pdf/*.pdf  ~tjyang/tmp
 test: 
 	pdflatex $(BOOKNAME).tex 
-#perl -pi -e 's!\\hline!!' *.tex 
-#perl -pi -e 's!\\\\!!' *.tex 
-#perl -pi -e 's!\\begin\{document.*!!' *.tex 
-#perl -pi -e 's!\\end\{doc.*!!' *.tex 
-#perl -pi -e 's!\\title!\\chapter!' *.tex 
-#perl -pi -e 's!\\section\*!\\section!' *.tex 
-#perl -pi -e 's!\\subsection\*!\\subsection!' *.tex 
-#perl -pi -e 's!\\documentclass.*!!' *.tex 
-#perl -pi -e 's!\\usepackage.*!!' *.tex 
-#perl -pi -e 's!\\setlength.*!!' *.tex 
-#perl -pi -e 's!Man page of !!' *.tex 
-#perl -pi -e 's!\\subsection!\\section!' *.tex 
-
-
 

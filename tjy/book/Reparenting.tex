@@ -22,7 +22,7 @@ The flow for that command is as follows:
 \item  the shard is locked in the global topology server.
 \item  we read the Shard object from the global topology server.
 \item  we read all the tablets in the replication graph for the shard. We also check the new master is in the map. Note we allow partial reads here, so if a data center is down, as long as the data center containing the new master is up, we keep going.
-\item  we call the 'SlaveWasPromoted' remote action on the new master. This remote action makes sure the new master is not a MySQL slave of another server (the 'show slave status' command should not return anything, meaning 'reset slave' should ave been called).
+\item  we call the '\index{SlaveWasPromoted}{\textbf{SlaveWasPromoted}}' remote action on the new master. This remote action makes sure the new master is not a MySQL slave of another server (the 'show slave status' command should not return anything, meaning 'reset slave' should ave been called).
 \item  for every host in the replication graph, we call the 'SlaveWasRestarted' action. It takes as paremeter the address of the new master. On each slave, it executes a 'show slave status'. If the master matches the new master, we update the topology server record for that tablet with the new master, and the replication graph for that tablet as well. If it doesn't match, we keep the old record in the replication graph (pointing at whatever master was there before). We optionally Scrap tablets that bad (disabled by default).
 \item  if a smaller percentage than a configurable value of the slaves works (80\% be default), we stop here.
 \item  we then update the Shard object with the new master.
