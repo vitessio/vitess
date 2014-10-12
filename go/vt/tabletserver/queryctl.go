@@ -177,10 +177,6 @@ func GetSessionId() int64 {
 	return SqlQueryRpcService.sessionId
 }
 
-func IsCachePoolAvailable() bool {
-	return !SqlQueryRpcService.qe.cachePool.IsClosed()
-}
-
 func SetQueryRules(qrs *QueryRules) {
 	SqlQueryRpcService.qe.schemaInfo.SetRules(qrs)
 }

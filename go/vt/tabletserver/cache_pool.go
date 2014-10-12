@@ -6,8 +6,10 @@ package tabletserver
 
 import (
 	"net/http"
+	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -99,6 +101,9 @@ func (cp *CachePool) Open() {
 }
 
 func (cp *CachePool) startMemcache() {
+	if strings.Contains(cp.port, "/") {
+		_ = os.Remove(cp.port)
+	}
 	commandLine := cp.rowCacheConfig.GetSubprocessFlags()
 	cp.cmd = exec.Command(commandLine[0], commandLine[1:]...)
 	if err := cp.cmd.Start(); err != nil {
@@ -140,6 +145,9 @@ func (cp *CachePool) Close() {
 	cp.cmd.Process.Kill()
 	// Avoid zombies
 	go cp.cmd.Wait()
+	if strings.Contains(cp.port, "/") {
+		_ = os.Remove(cp.port)
+	}
 	cp.pool = nil
 }
 
