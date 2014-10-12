@@ -84,6 +84,11 @@ func NewCachePool(name string, rowCacheConfig RowCacheConfig, queryTimeout time.
 }
 
 func (cp *CachePool) Open() {
+	cp.mu.Lock()
+	defer cp.mu.Unlock()
+	if cp.pool != nil {
+		panic(NewTabletError(FATAL, "rowcache is already open"))
+	}
 	if cp.rowCacheConfig.Binary == "" {
 		panic(NewTabletError(FATAL, "rowcache binary not specified"))
 	}
@@ -92,8 +97,6 @@ func (cp *CachePool) Open() {
 	f := func() (pools.Resource, error) {
 		return memcache.Connect(cp.port, 10*time.Second)
 	}
-	cp.mu.Lock()
-	defer cp.mu.Unlock()
 	cp.pool = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout)
 	if cp.memcacheStats != nil {
 		cp.memcacheStats.Open()
@@ -133,6 +136,18 @@ func (cp *CachePool) startMemcache() {
 }
 
 func (cp *CachePool) Close() {
+	// Close the underlying pool first.
+	// You cannot close the pool while holding the
+	// lock because we have to still allow Put to
+	// return outstanding connections, if any.
+	pool := cp.getPool()
+	if pool == nil {
+		return
+	}
+	pool.Close()
+
+	// No new operations will be allowed now.
+	// Safe to cleanup.
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 	if cp.pool == nil {
@@ -141,7 +156,6 @@ func (cp *CachePool) Close() {
 	if cp.memcacheStats != nil {
 		cp.memcacheStats.Close()
 	}
-	cp.pool.Close()
 	cp.cmd.Process.Kill()
 	// Avoid zombies
 	go cp.cmd.Wait()

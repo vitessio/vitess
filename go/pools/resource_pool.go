@@ -71,7 +71,7 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 // It waits for all resources to be returned (Put).
 // After a Close, Get and TryGet are not allowed.
 func (rp *ResourcePool) Close() {
-	rp.SetCapacity(0)
+	_ = rp.SetCapacity(0)
 }
 
 func (rp *ResourcePool) IsClosed() (closed bool) {
