@@ -143,7 +143,7 @@ def create_vt_routing_info(key_range, keyspace_name):
   col_name, col_type = topology.get_sharding_col(keyspace_name)
   if not col_name or col_type == keyrange_constants.KIT_UNSET:
     return VTRoutingInfo(key_range, '', {})
-  where_clause, bind_vars = _create_where_clause_for_keyrange(keyrange,
+  where_clause, bind_vars = _create_where_clause_for_keyrange(key_range,
                                                               col_name,
                                                               col_type)
   return VTRoutingInfo(key_range, where_clause, bind_vars)
@@ -191,7 +191,7 @@ def _create_where_clause_for_keyrange(
   if (not isinstance(key_range, tuple) and not isinstance(key_range, list) or
       len(key_range) != 2):
     raise dbexceptions.ProgrammingError(
-        'key_range must be list or tuple or '-' separated str %s' % key_range)
+        'key_range must be list or tuple or \'-\' separated str %s' % key_range)
 
   if keyspace_col_type == keyrange_constants.KIT_UINT64:
     return _create_where_clause_for_int_keyspace(key_range, keyspace_col_name)
