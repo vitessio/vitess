@@ -1,0 +1,9 @@
+apiVersion: v1beta1
+kind: Service
+id: zk-client
+port: 2181
+containerPort: 2181
+selector:
+  name: zk
+labels:
+  name: zk
