@@ -152,20 +152,14 @@ func (qre *QueryExecutor) execDDL() *mproto.QueryResult {
 		panic(NewTabletError(FAIL, "DDL is not understood"))
 	}
 
-	// Stolen from Begin
-	conn := getOrPanic(qre.qe.txPool)
-	txid, err := qre.qe.activeTxPool.SafeBegin(conn)
-	if err != nil {
-		conn.Recycle()
-		panic(err)
-	}
-	// Stolen from Commit
+	txid := qre.qe.activeTxPool.Begin()
 	defer qre.qe.activeTxPool.SafeCommit(txid)
 
 	// Stolen from Execute
-	conn = qre.qe.activeTxPool.Get(txid)
+	conn := qre.qe.activeTxPool.Get(txid)
 	defer conn.Recycle()
 	result := qre.execSQL(conn, qre.query, false)
+
 	if ddlPlan.TableName != "" && ddlPlan.TableName != ddlPlan.NewName {
 		// It's a drop or rename.
 		qre.qe.schemaInfo.DropTable(ddlPlan.TableName)
@@ -449,7 +443,7 @@ func (qre *QueryExecutor) execSet() (result *mproto.QueryResult) {
 	case "vt_stream_pool_size":
 		qre.qe.streamConnPool.SetCapacity(int(getInt64(qre.plan.SetValue)))
 	case "vt_transaction_cap":
-		qre.qe.txPool.SetCapacity(int(getInt64(qre.plan.SetValue)))
+		qre.qe.activeTxPool.pool.SetCapacity(int(getInt64(qre.plan.SetValue)))
 	case "vt_transaction_timeout":
 		qre.qe.activeTxPool.SetTimeout(getDuration(qre.plan.SetValue))
 	case "vt_schema_reload_time":
@@ -474,7 +468,7 @@ func (qre *QueryExecutor) execSet() (result *mproto.QueryResult) {
 		t := getDuration(qre.plan.SetValue)
 		qre.qe.connPool.SetIdleTimeout(t)
 		qre.qe.streamConnPool.SetIdleTimeout(t)
-		qre.qe.txPool.SetIdleTimeout(t)
+		qre.qe.activeTxPool.pool.SetIdleTimeout(t)
 		qre.qe.connKiller.SetIdleTimeout(t)
 	case "vt_spot_check_ratio":
 		qre.qe.spotCheckFreq.Set(int64(getFloat64(qre.plan.SetValue) * SPOT_CHECK_MULTIPLIER))

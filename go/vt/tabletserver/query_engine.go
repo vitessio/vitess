@@ -49,7 +49,6 @@ type QueryEngine struct {
 	cachePool      *CachePool
 	connPool       *dbconnpool.ConnectionPool
 	streamConnPool *dbconnpool.ConnectionPool
-	txPool         *dbconnpool.ConnectionPool
 
 	// Services
 	activeTxPool *ActiveTxPool
@@ -126,10 +125,9 @@ func NewQueryEngine(config Config) *QueryEngine {
 	qe.cachePool = NewCachePool("Rowcache", config.RowCache, time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.connPool = dbconnpool.NewConnectionPool("ConnPool", config.PoolSize, time.Duration(config.IdleTimeout*1e9))
 	qe.streamConnPool = dbconnpool.NewConnectionPool("StreamConnPool", config.StreamPoolSize, time.Duration(config.IdleTimeout*1e9))
-	qe.txPool = dbconnpool.NewConnectionPool("TransactionPool", config.TransactionCap, time.Duration(config.IdleTimeout*1e9)) // connections in pool has to be > transactionCap
 
 	// Services
-	qe.activeTxPool = NewActiveTxPool("ActiveTransactionPool", time.Duration(config.TransactionTimeout*1e9))
+	qe.activeTxPool = NewActiveTxPool("TransactionPool", config.TransactionCap, time.Duration(config.TransactionTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.connKiller = NewConnectionKiller(1, time.Duration(config.IdleTimeout*1e9))
 	qe.consolidator = NewConsolidator()
 	qe.invalidator = NewRowcacheInvalidator(qe)
@@ -203,8 +201,7 @@ func (qe *QueryEngine) Open(dbconfig *dbconfigs.DBConfig, schemaOverrides []Sche
 	}
 	qe.connPool.Open(connFactory)
 	qe.streamConnPool.Open(connFactory)
-	qe.txPool.Open(connFactory)
-	qe.activeTxPool.Open()
+	qe.activeTxPool.Open(connFactory)
 	qe.connKiller.Open(connFactory)
 }
 
@@ -222,7 +219,6 @@ func (qe *QueryEngine) Close() {
 	// Close in reverse order of Open.
 	qe.connKiller.Close()
 	qe.activeTxPool.Close()
-	qe.txPool.Close()
 	qe.streamConnPool.Close()
 	qe.connPool.Close()
 	qe.invalidator.Close()
