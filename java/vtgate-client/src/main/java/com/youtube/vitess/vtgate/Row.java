@@ -96,6 +96,14 @@ public class Row implements Iterator<Cell>, Iterable<Cell> {
 		return (Date) getAndCheckType(index, Date.class);
 	}
 
+	public byte[] getBytes(String fieldName) throws InvalidFieldException {
+		return (byte[]) getAndCheckType(fieldName, byte[].class);
+	}
+
+	public byte[] getBytes(int index) throws InvalidFieldException {
+		return (byte[]) getAndCheckType(index, byte[].class);
+	}
+
 	private Object getAndCheckType(String fieldName, Class clazz)
 			throws InvalidFieldException {
 		Object o = get(fieldName);

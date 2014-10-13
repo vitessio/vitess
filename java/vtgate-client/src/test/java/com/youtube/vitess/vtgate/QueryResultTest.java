@@ -17,8 +17,8 @@ public class QueryResultTest {
 	@Test
 	public void testResultParse() throws InvalidFieldException {
 		BSONObject result = new BasicBSONObject();
-		result.put("RowsAffected", UnsignedLong.valueOf(12L));
-		result.put("InsertId", UnsignedLong.valueOf(12345L));
+		result.put("RowsAffected", UnsignedLong.asUnsigned(12L));
+		result.put("InsertId", UnsignedLong.asUnsigned(12345L));
 		BasicBSONList fields = new BasicBSONList();
 		for (long l = 0; l < 4; l++) {
 			BSONObject field = new BasicBSONObject();

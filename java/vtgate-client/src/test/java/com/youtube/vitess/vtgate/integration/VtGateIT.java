@@ -115,7 +115,7 @@ public class VtGateIT {
 		Cell idCell = row.next();
 		Assert.assertEquals("id", idCell.getName());
 		Assert.assertEquals(UnsignedLong.class, idCell.getType());
-		Assert.assertEquals(UnsignedLong.valueOf(1000),
+		Assert.assertEquals(UnsignedLong.asUnsigned(1000),
 				row.getULong(idCell.getName()));
 
 		Cell nameCell = row.next();
