@@ -216,8 +216,14 @@ func (qe *QueryEngine) Open(dbconfig *dbconfigs.DBConfig, schemaOverrides []Sche
 func (qe *QueryEngine) Launch(f func()) {
 	qe.tasks.Add(1)
 	go func() {
+		defer func() {
+			qe.tasks.Done()
+			internalErrors.Add("Task", 1)
+			if x := recover(); x != nil {
+				log.Errorf("task error: %v", x)
+			}
+		}()
 		f()
-		qe.tasks.Done()
 	}()
 }
 

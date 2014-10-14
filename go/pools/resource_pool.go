@@ -15,7 +15,8 @@ import (
 )
 
 var (
-	CLOSED_ERR = errors.New("ResourcePool is closed")
+	CLOSED_ERR  = errors.New("resource pool is closed")
+	TIMEOUT_ERR = errors.New("resource pool timed out")
 )
 
 // Factory is a function that can be used to create a resource.
@@ -116,7 +117,7 @@ func (rp *ResourcePool) get(wait bool, timeout time.Duration) (resource Resource
 			select {
 			case wrapper, ok = <-rp.resources:
 			case <-tmr.C:
-				return nil, errors.New("timed out")
+				return nil, TIMEOUT_ERR
 			}
 		}
 		rp.recordWait(startTime)
