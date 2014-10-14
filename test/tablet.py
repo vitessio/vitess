@@ -500,9 +500,9 @@ class Tablet(object):
             '  vttablet %s not answering at /debug/vars, waiting...',
             self.tablet_alias)
       else:
-        if 'Voltron' not in v:
+        if 'TabletStateName' not in v:
           logging.debug(
-              '  vttablet %s not exporting Voltron, waiting...',
+              '  vttablet %s not exporting TabletStateName, waiting...',
               self.tablet_alias)
         else:
           s = v['TabletStateName']
