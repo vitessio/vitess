@@ -395,47 +395,6 @@ func (server *ResilientSrvTopoServer) GetEndPoints(context context.Context, cell
 	return entry.value, err
 }
 
-// EndpointCount returns how many endpoints we have per keyspace/shard/dbtype.
-func (server *ResilientSrvTopoServer) EndpointCount() map[string]int64 {
-	result := make(map[string]int64)
-	server.mutex.Lock()
-	defer server.mutex.Unlock()
-	for k, entry := range server.endPointsCache {
-		entry.mutex.Lock()
-		vl := int64(0)
-		if entry.originalValue != nil {
-			vl = int64(len(entry.originalValue.Entries))
-		}
-		entry.mutex.Unlock()
-		result[k] = vl
-	}
-	return result
-}
-
-// DegradedEndpointCount returns how many degraded endpoints we have
-// in the cache (entries that are not 100% healthy, because they are behind
-// on replication for instance)
-func (server *ResilientSrvTopoServer) DegradedEndpointCount() map[string]int64 {
-	result := make(map[string]int64)
-	server.mutex.Lock()
-	defer server.mutex.Unlock()
-	for k, entry := range server.endPointsCache {
-		entry.mutex.Lock()
-		// originalValue can be nil in case of error
-		ovl := int64(0)
-		if entry.originalValue != nil {
-			for _, ep := range entry.originalValue.Entries {
-				if len(ep.Health) > 0 {
-					ovl++
-				}
-			}
-		}
-		entry.mutex.Unlock()
-		result[k] = ovl
-	}
-	return result
-}
-
 // The next few structures and methods are used to get a displayable
 // version of the cache in a status page
 
