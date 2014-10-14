@@ -61,11 +61,13 @@ class TaskKeyrangeMap(object):
     kr_chunks.append('')
     for i in xrange(self.num_tasks):
       kr += span
-      kr_chunks.append('%x' % kr)
+      kr_chunks.append('%.2x' % kr)
     kr_chunks[-1] = ''
     for i in xrange(len(kr_chunks) - 1):
-      kr_str = str(keyrange.KeyRange((kr_chunks[i], kr_chunks[i+1],)))
-      self.keyrange_list.append(kr_str)
+      start = kr_chunks[i]
+      end = kr_chunks[i+1]
+      kr = keyrange.KeyRange((start, end,))
+      self.keyrange_list.append(str(kr))
 
 
 class VTRoutingInfo(object):

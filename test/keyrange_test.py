@@ -37,22 +37,35 @@ int_shard_kid_map = {'-10':[1, 100, 1000, 100000, 527875958493693904, 6267509316
 str_shard_kid_map = dict([(shard_name, [pkid_pack(kid) for kid in kid_list]) for shard_name, kid_list in int_shard_kid_map.iteritems()])
 
 class TestKeyRange(unittest.TestCase):
+
+  def test_keyrange_correctness(self):
+    kr = keyrange.KeyRange('')
+    self.assertEqual(kr.Start, keyrange_constants.MIN_KEY)
+    self.assertEqual(kr.End, keyrange_constants.MAX_KEY)
+    self.assertEqual(str(kr), keyrange_constants.NON_PARTIAL_KEYRANGE)
+
+    kr = keyrange.KeyRange('-')
+    self.assertEqual(kr.Start, keyrange_constants.MIN_KEY)
+    self.assertEqual(kr.End, keyrange_constants.MAX_KEY)
+    self.assertEqual(str(kr), keyrange_constants.NON_PARTIAL_KEYRANGE)
+
+    for kr_str in int_shard_kid_map.keys():
+      Start_raw, End_raw = kr_str.split('-')
+      kr = keyrange.KeyRange(kr_str)
+      self.assertEqual(kr.Start, Start_raw.strip().decode('hex'))
+      self.assertEqual(kr.End, End_raw.strip().decode('hex'))
+      self.assertEqual(str(kr), kr_str)
+
   def test_incorrect_tasks(self):
     global_shard_count = 16
     with self.assertRaises(dbexceptions.ProgrammingError):
       stm = vtrouting.create_parallel_task_keyrange_map(4, global_shard_count)
 
   def test_keyranges_for_tasks(self):
-    for global_shard_count in (16,32,64):
-      num_tasks = global_shard_count
-      stm = vtrouting.create_parallel_task_keyrange_map(num_tasks, global_shard_count)
-      self.assertEqual(len(stm.keyrange_list), num_tasks)
-      num_tasks = global_shard_count*2
-      stm = vtrouting.create_parallel_task_keyrange_map(num_tasks, global_shard_count)
-      self.assertEqual(len(stm.keyrange_list), num_tasks)
-      num_tasks = global_shard_count*8
-      stm = vtrouting.create_parallel_task_keyrange_map(num_tasks, global_shard_count)
-      self.assertEqual(len(stm.keyrange_list), num_tasks)
+    for shard_count in (16,32,64):
+      for num_tasks in (shard_count, shard_count*2, shard_count*4):
+        stm = vtrouting.create_parallel_task_keyrange_map(num_tasks, shard_count)
+        self.assertEqual(len(stm.keyrange_list), num_tasks)
 
   # This tests that the where clause and bind_vars generated for each shard
   # against a few sample values where keyspace_id is an int column.
