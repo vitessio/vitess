@@ -5,6 +5,7 @@
 package tabletserver
 
 import (
+	"sync"
 	"time"
 
 	log "github.com/golang/glog"
@@ -56,6 +57,7 @@ type QueryEngine struct {
 	invalidator  *RowcacheInvalidator
 	streamQList  *QueryList
 	connKiller   *ConnectionKiller
+	tasks        sync.WaitGroup
 
 	// Vars
 	queryTimeout     sync2.AtomicDuration
@@ -206,11 +208,25 @@ func (qe *QueryEngine) Open(dbconfig *dbconfigs.DBConfig, schemaOverrides []Sche
 	qe.connKiller.Open(connFactory)
 }
 
+// Launch launches the specified function inside a goroutine.
+// If Close or WaitForTxEmpty is called while a goroutine is running,
+// QueryEngine will not return until the existing functions have completed.
+// This functionality allows us to launch tasks with the assurance that
+// the QueryEngine will not be closed underneath us.
+func (qe *QueryEngine) Launch(f func()) {
+	qe.tasks.Add(1)
+	go func() {
+		f()
+		qe.tasks.Done()
+	}()
+}
+
 // WaitForTxEmpty must be called before calling Close.
 // Before calling WaitForTxEmpty, you must ensure that there
 // will be no more calls to Begin.
 func (qe *QueryEngine) WaitForTxEmpty() {
 	qe.txPool.WaitForEmpty()
+	qe.tasks.Wait()
 }
 
 // Close must be called to shut down QueryEngine.

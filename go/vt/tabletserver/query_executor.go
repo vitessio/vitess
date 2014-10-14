@@ -300,7 +300,7 @@ func (qre *QueryExecutor) spotCheck(rcresult RCResult, pk []sqltypes.Value) {
 		dbrow = resultFromdb.Rows[0]
 	}
 	if dbrow == nil || !rowsAreEqual(rcresult.Row, dbrow) {
-		qre.recheckLater(rcresult, dbrow, pk)
+		qre.qe.Launch(func() { qre.recheckLater(rcresult, dbrow, pk) })
 	}
 }
 
