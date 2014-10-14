@@ -1,0 +1,9 @@
+apiVersion: v1beta1
+kind: Service
+id: vtctld
+port: 15000
+containerPort: 15000
+selector:
+  name: vtctld
+labels:
+  name: vtctld
