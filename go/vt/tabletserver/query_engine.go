@@ -51,7 +51,7 @@ type QueryEngine struct {
 	streamConnPool *dbconnpool.ConnectionPool
 
 	// Services
-	activeTxPool *ActiveTxPool
+	txPool       *TxPool
 	consolidator *Consolidator
 	invalidator  *RowcacheInvalidator
 	streamQList  *QueryList
@@ -127,7 +127,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 	qe.streamConnPool = dbconnpool.NewConnectionPool("StreamConnPool", config.StreamPoolSize, time.Duration(config.IdleTimeout*1e9))
 
 	// Services
-	qe.activeTxPool = NewActiveTxPool("TransactionPool", config.TransactionCap, time.Duration(config.TransactionTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
+	qe.txPool = NewTxPool("TransactionPool", config.TransactionCap, time.Duration(config.TransactionTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.connKiller = NewConnectionKiller(1, time.Duration(config.IdleTimeout*1e9))
 	qe.consolidator = NewConsolidator()
 	qe.invalidator = NewRowcacheInvalidator(qe)
@@ -202,7 +202,7 @@ func (qe *QueryEngine) Open(dbconfig *dbconfigs.DBConfig, schemaOverrides []Sche
 	}
 	qe.connPool.Open(connFactory)
 	qe.streamConnPool.Open(connFactory)
-	qe.activeTxPool.Open(connFactory)
+	qe.txPool.Open(connFactory)
 	qe.connKiller.Open(connFactory)
 }
 
@@ -210,7 +210,7 @@ func (qe *QueryEngine) Open(dbconfig *dbconfigs.DBConfig, schemaOverrides []Sche
 // Before calling WaitForTxEmpty, you must ensure that there
 // will be no more calls to Begin.
 func (qe *QueryEngine) WaitForTxEmpty() {
-	qe.activeTxPool.WaitForEmpty()
+	qe.txPool.WaitForEmpty()
 }
 
 // Close must be called to shut down QueryEngine.
@@ -219,7 +219,7 @@ func (qe *QueryEngine) WaitForTxEmpty() {
 func (qe *QueryEngine) Close() {
 	// Close in reverse order of Open.
 	qe.connKiller.Close()
-	qe.activeTxPool.Close()
+	qe.txPool.Close()
 	qe.streamConnPool.Close()
 	qe.connPool.Close()
 	qe.invalidator.Close()
