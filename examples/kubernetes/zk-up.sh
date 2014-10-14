@@ -14,14 +14,6 @@ zkcfg=(\
 printf -v zkcfg ",%s" "${zkcfg[@]}"
 zkcfg=${zkcfg:1}
 
-# Create the pods.
-echo "Creating zk pods..."
-for zkid in 1 2 3; do
-  cat zk-pod-template.yaml | \
-    sed -e "s/{{zkid}}/$zkid/g" -e "s/{{zkcfg}}/$zkcfg/g" | \
-    kubecfg.sh -c - create pods
-done
-
 # Create the client service, which will load-balance across all replicas.
 echo "Creating zk services..."
 kubecfg.sh -c zk-client-service.yaml create services
@@ -44,4 +36,12 @@ for zkid in 1 2 3; do
       sed -e "s/{{zkid}}/$zkid/g" -e "s/{{port}}/$port/g" -e "s/{{svc}}/$svc/g" | \
       kubecfg.sh -c - create services
   done
+done
+
+# Create the pods.
+echo "Creating zk pods..."
+for zkid in 1 2 3; do
+  cat zk-pod-template.yaml | \
+    sed -e "s/{{zkid}}/$zkid/g" -e "s/{{zkcfg}}/$zkcfg/g" | \
+    kubecfg.sh -c - create pods
 done

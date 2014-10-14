@@ -50,8 +50,8 @@ The vtctld server provides a web interface to inspect the state of the system,
 and also accepts RPC commands to modify the system.
 
 ```
-vitess/examples/kubernetes$ kubecfg.sh -c vtctld-pod.yaml create pods
 vitess/examples/kubernetes$ kubecfg.sh -c vtctld-service.yaml create services
+vitess/examples/kubernetes$ kubecfg.sh -c vtctld-pod.yaml create pods
 ```
 
 To access vtctld from your workstation, open up port 15000 to any minion in your
