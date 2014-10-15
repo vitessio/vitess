@@ -479,6 +479,42 @@ class TestFailures(unittest.TestCase):
     master_conn._execute("delete from vt_insert_test", {})
     master_conn.commit()
 
+
+class TestExceptionLogging(unittest.TestCase):
+  def setUp(self):
+    self.shard_index = 0
+    self.master_tablet = shard_0_master
+    self.replica_tablet = shard_0_replica
+    vtdb_logger.register_vtdb_logger(LocalLogger())
+    self.logger = vtdb_logger.get_logger()
+
+  def test_integrity_error_logging(self):
+    try:
+      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
+    except Exception, e:
+      self.fail("Connection to shard0 master failed with error %s" % str(e))
+
+    master_conn.begin()
+    master_conn._execute("delete from vt_a", {})
+    master_conn.commit()
+
+    keyspace_id = shard_kid_map[master_conn.shard][0]
+
+    old_error_count = self.logger.get_integrity_error_count()
+    with self.assertRaises(dbexceptions.IntegrityError):
+      master_conn.begin()
+      master_conn._execute(
+        "insert into vt_a (eid, id, keyspace_id) \
+         values (%(eid)s, %(id)s, %(keyspace_id)s)",
+        {'eid': 1, 'id': 1, 'keyspace_id':keyspace_id})
+      master_conn._execute(
+        "insert into vt_a (eid, id, keyspace_id) \
+         values (%(eid)s, %(id)s, %(keyspace_id)s)",
+        {'eid': 1, 'id': 1, 'keyspace_id':keyspace_id})
+      master_conn.commit()
+    self.assertEqual(self.logger.get_integrity_error_count(), old_error_count+1)
+
+
 class TestAuthentication(unittest.TestCase):
 
   def setUp(self):
@@ -551,12 +587,19 @@ class LocalLogger(vtdb_logger.VtdbLogger):
 
   def __init__(self):
     self._topo_rtt = 0
+    self._integrity_error_count = 0
 
   def topo_keyspace_fetch(self, keyspace_name, topo_rtt):
     self._topo_rtt += 1
 
   def get_topo_rtt(self):
     return self._topo_rtt
+
+  def integrity_error(self, e):
+    self._integrity_error_count += 1
+
+  def get_integrity_error_count(self):
+    return self._integrity_error_count
 
 
 class TestTopoReResolve(unittest.TestCase):

@@ -49,6 +49,11 @@ class VtdbLogger(object):
   # vtclient callbacks
   #
 
+  # Integrity Error is called when mysql throws an IntegrityError on a query.
+  # This is thrown by both vtclient and vtgatev2.
+  def integrity_error(self, e):
+    logging.warning('integrity_error: %s', e)
+
   # vtclient_exception is called when a FatalError is raised by
   # vtclient (that error is sent back to the application, the retries
   # happen at a lower level). e can be one of

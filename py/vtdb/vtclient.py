@@ -154,7 +154,11 @@ class VtOCCConnection(object):
   @reconnect
   def _execute(self, sql, bind_variables):
     sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
-    result = self.conn._execute(sql, bind_variables)
+    try:
+      result = self.conn._execute(sql, bind_variables)
+    except dbexceptions.IntegrityError as e:
+      vtdb_logger.get_logger().integrity_error(e)
+      raise
     return result
 
   @reconnect
@@ -166,7 +170,12 @@ class VtOCCConnection(object):
       sane_sql_list.append(sane_sql)
       sane_bind_vars_list.append(sane_bind_vars)
 
-    result = self.conn._execute_batch(sane_sql_list, sane_bind_vars_list)
+    try:
+      result = self.conn._execute_batch(sane_sql_list, sane_bind_vars_list)
+    except dbexceptions.IntegrityError as e:
+      vtdb_logger.get_logger().integrity_error(e)
+      raise
+
     return result
 
   @reconnect

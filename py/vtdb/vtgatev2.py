@@ -20,9 +20,36 @@ from vtdb import vtgate_cursor
 _errno_pattern = re.compile('\(errno (\d+)\)')
 
 
+def log_exception(method):
+  """Decorator for logging the exception from vtgatev2.
+
+  The convert_exception method interprets and recasts the exceptions
+  raised by lower-layer. The inner function calls the appropriate vtdb_logger
+  method based on the exception raised.
+
+  Args:
+    exc: exception raised by calling code
+    args: additional args for the exception.
+
+  Returns:
+    Decorated method.
+  """
+  def _log_exception(exc, *args):
+    logger_object = vtdb_logger.get_logger()
+
+    new_exception = method(exc, *args)
+
+    if isinstance(new_exception, dbexceptions.IntegrityError):
+      logger_object.integrity_error(new_exception)
+    else:
+      logger_object.vtgatev2_exception(new_exception)
+    return new_exception
+  return _log_exception
+
+
+@log_exception
 def convert_exception(exc, *args):
   new_args = exc.args + args
-  vtdb_logger.get_logger().vtgatev2_exception(exc)
   if isinstance(exc, gorpc.TimeoutError):
     return dbexceptions.TimeoutError(new_args)
   elif isinstance(exc, gorpc.AppError):

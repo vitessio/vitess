@@ -21,6 +21,7 @@ from vtdb import keyrange
 from vtdb import keyrange_constants
 from vtdb import keyspace
 from vtdb import dbexceptions
+from vtdb import vtdb_logger
 from vtdb import vtgatev2
 from vtdb import vtgate_cursor
 
@@ -837,6 +838,57 @@ class TestFailures(unittest.TestCase):
         KEYSPACE_NAME, 'master',
         keyranges=[self.keyrange])
     vtgate_conn.commit()
+
+
+class VTGateTestLogger(vtdb_logger.VtdbLogger):
+
+  def __init__(self):
+    self._integrity_error_count = 0
+
+  def integrity_error(self, e):
+    self._integrity_error_count += 1
+
+  def get_integrity_error_count(self):
+    return self._integrity_error_count
+
+
+class TestExceptionLogging(unittest.TestCase):
+  def setUp(self):
+    self.shard_index = 1
+    self.keyrange = get_keyrange(shard_names[self.shard_index])
+    self.master_tablet = shard_1_master
+    self.replica_tablet = shard_1_replica
+    vtdb_logger.register_vtdb_logger(VTGateTestLogger())
+    self.logger = vtdb_logger.get_logger()
+
+  def test_integrity_error_logging(self):
+    try:
+      vtgate_conn = get_connection()
+    except Exception, e:
+      self.fail("Connection to vtgate failed with error %s" % str(e))
+
+    vtgate_conn.begin()
+    vtgate_conn._execute(
+          "delete from vt_a", {},
+          KEYSPACE_NAME, 'master',
+          keyranges=[self.keyrange])
+    vtgate_conn.commit()
+
+    keyspace_id = shard_kid_map[shard_names[self.shard_index]][0]
+
+    old_error_count = self.logger.get_integrity_error_count()
+    with self.assertRaises(dbexceptions.IntegrityError):
+      vtgate_conn.begin()
+      vtgate_conn._execute(
+        "insert into vt_a (eid, id, keyspace_id) values (%(eid)s, %(id)s, %(keyspace_id)s)",
+        {'eid': 1, 'id': 1, 'keyspace_id':keyspace_id}, KEYSPACE_NAME, 'master',
+        keyspace_ids=[pack_kid(keyspace_id)])
+      vtgate_conn._execute(
+        "insert into vt_a (eid, id, keyspace_id) values (%(eid)s, %(id)s, %(keyspace_id)s)",
+        {'eid': 1, 'id': 1, 'keyspace_id':keyspace_id}, KEYSPACE_NAME, 'master',
+        keyspace_ids=[pack_kid(keyspace_id)])
+      vtgate_conn.commit()
+    self.assertEqual(self.logger.get_integrity_error_count(), old_error_count+1)
 
 
 class TestAuthentication(unittest.TestCase):
