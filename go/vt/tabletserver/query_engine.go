@@ -232,13 +232,13 @@ func (qe *QueryEngine) Launch(f func()) {
 // will be no more calls to Begin.
 func (qe *QueryEngine) WaitForTxEmpty() {
 	qe.txPool.WaitForEmpty()
-	qe.tasks.Wait()
 }
 
 // Close must be called to shut down QueryEngine.
 // You must ensure that no more queries will be sent
 // before calling Close.
 func (qe *QueryEngine) Close() {
+	qe.tasks.Wait()
 	// Close in reverse order of Open.
 	qe.connKiller.Close()
 	qe.txPool.Close()
