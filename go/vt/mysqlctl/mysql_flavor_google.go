@@ -290,6 +290,12 @@ func (ev googleBinlogEvent) GTID(f blproto.BinlogFormat) (proto.GTID, error) {
 	return proto.GoogleGTID{ServerID: ev.ServerID(), GroupID: group_id}, nil
 }
 
+// StripChecksum implements BinlogEvent.StripChecksum().
+func (ev googleBinlogEvent) StripChecksum(f blproto.BinlogFormat) (blproto.BinlogEvent, []byte) {
+	// Checksums aren't supported in Google MySQL 5.1.
+	return ev, nil
+}
+
 func init() {
 	registerFlavorBuiltin(googleMysqlFlavorID, &googleMysql51{})
 }
