@@ -5,7 +5,6 @@
 package tabletserver
 
 import (
-	"bytes"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -85,7 +84,6 @@ type SqlQuery struct {
 func NewSqlQuery(config Config) *SqlQuery {
 	sq := &SqlQuery{}
 	sq.qe = NewQueryEngine(config)
-	stats.PublishJSONFunc("Voltron", sq.statsJSON)
 	stats.Publish("TabletState", stats.IntFunc(sq.state.Get))
 	stats.Publish("TabletStateName", stats.StringFunc(sq.GetState))
 	return sq
@@ -232,7 +230,7 @@ func (sq *SqlQuery) Begin(context context.Context, session *proto.Session, txInf
 		return NewTabletError(RETRY, "Invalid session Id %v", session.SessionId)
 	}
 	defer queryStats.Record("BEGIN", time.Now())
-	txInfo.TransactionId = sq.qe.activeTxPool.Begin()
+	txInfo.TransactionId = sq.qe.txPool.Begin()
 	logStats.TransactionID = txInfo.TransactionId
 	return nil
 }
@@ -263,7 +261,7 @@ func (sq *SqlQuery) Rollback(context context.Context, session *proto.Session) (e
 	defer sq.endRequest()
 	defer handleError(&err, logStats)
 	defer queryStats.Record("ROLLBACK", time.Now())
-	sq.qe.activeTxPool.Rollback(session.TransactionId)
+	sq.qe.txPool.Rollback(session.TransactionId)
 	return nil
 }
 
@@ -486,23 +484,6 @@ verifySession:
 // endRequest unregisters the current request (a waitgroup) as done.
 func (sq *SqlQuery) endRequest() {
 	sq.requests.Done()
-}
-
-// statsJSON is used to export SqlQuery status variables into expvar.
-func (sq *SqlQuery) statsJSON() string {
-	buf := bytes.NewBuffer(make([]byte, 0, 128))
-	fmt.Fprintf(buf, "{")
-	fmt.Fprintf(buf, "\n \"State\": \"%v\",", stateName[sq.state.Get()])
-	fmt.Fprintf(buf, "\n \"CachePool\": %v,", sq.qe.cachePool.StatsJSON())
-	fmt.Fprintf(buf, "\n \"QueryCache\": %v,", sq.qe.schemaInfo.queries.StatsJSON())
-	fmt.Fprintf(buf, "\n \"ConnPool\": %v,", sq.qe.connPool.StatsJSON())
-	fmt.Fprintf(buf, "\n \"StreamConnPool\": %v,", sq.qe.streamConnPool.StatsJSON())
-	fmt.Fprintf(buf, "\n \"ActiveTxPool\": %v,", sq.qe.activeTxPool.StatsJSON())
-	fmt.Fprintf(buf, "\n \"QueryTimeout\": %v,", int64(sq.qe.queryTimeout.Get()))
-	fmt.Fprintf(buf, "\n \"MaxResultSize\": %v,", sq.qe.maxResultSize.Get())
-	fmt.Fprintf(buf, "\n \"StreamBufferSize\": %v", sq.qe.streamBufferSize.Get())
-	fmt.Fprintf(buf, "\n}")
-	return buf.String()
 }
 
 func init() {

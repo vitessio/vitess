@@ -5,7 +5,7 @@ import "time"
 // Commit commits the specified transaction.
 func Commit(logStats *SQLQueryStats, qe *QueryEngine, transactionID int64) {
 	defer queryStats.Record("COMMIT", time.Now())
-	dirtyTables, err := qe.activeTxPool.SafeCommit(transactionID)
+	dirtyTables, err := qe.txPool.SafeCommit(transactionID)
 	for tableName, invalidList := range dirtyTables {
 		tableInfo := qe.schemaInfo.GetTable(tableName)
 		if tableInfo == nil {

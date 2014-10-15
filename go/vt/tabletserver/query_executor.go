@@ -46,7 +46,7 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult) {
 
 	if qre.transactionID != 0 {
 		// Need upfront connection for DMLs and transactions
-		conn := qre.qe.activeTxPool.Get(qre.transactionID)
+		conn := qre.qe.txPool.Get(qre.transactionID)
 		defer conn.Recycle()
 		conn.RecordQuery(qre.query)
 		var invalidator CacheInvalidator
@@ -152,11 +152,11 @@ func (qre *QueryExecutor) execDDL() *mproto.QueryResult {
 		panic(NewTabletError(FAIL, "DDL is not understood"))
 	}
 
-	txid := qre.qe.activeTxPool.Begin()
-	defer qre.qe.activeTxPool.SafeCommit(txid)
+	txid := qre.qe.txPool.Begin()
+	defer qre.qe.txPool.SafeCommit(txid)
 
 	// Stolen from Execute
-	conn := qre.qe.activeTxPool.Get(txid)
+	conn := qre.qe.txPool.Get(txid)
 	defer conn.Recycle()
 	result := qre.execSQL(conn, qre.query, false)
 
@@ -300,7 +300,7 @@ func (qre *QueryExecutor) spotCheck(rcresult RCResult, pk []sqltypes.Value) {
 		dbrow = resultFromdb.Rows[0]
 	}
 	if dbrow == nil || !rowsAreEqual(rcresult.Row, dbrow) {
-		qre.recheckLater(rcresult, dbrow, pk)
+		qre.qe.Launch(func() { qre.recheckLater(rcresult, dbrow, pk) })
 	}
 }
 
@@ -443,9 +443,9 @@ func (qre *QueryExecutor) execSet() (result *mproto.QueryResult) {
 	case "vt_stream_pool_size":
 		qre.qe.streamConnPool.SetCapacity(int(getInt64(qre.plan.SetValue)))
 	case "vt_transaction_cap":
-		qre.qe.activeTxPool.pool.SetCapacity(int(getInt64(qre.plan.SetValue)))
+		qre.qe.txPool.pool.SetCapacity(int(getInt64(qre.plan.SetValue)))
 	case "vt_transaction_timeout":
-		qre.qe.activeTxPool.SetTimeout(getDuration(qre.plan.SetValue))
+		qre.qe.txPool.SetTimeout(getDuration(qre.plan.SetValue))
 	case "vt_schema_reload_time":
 		qre.qe.schemaInfo.SetReloadTime(getDuration(qre.plan.SetValue))
 	case "vt_query_cache_size":
@@ -468,7 +468,7 @@ func (qre *QueryExecutor) execSet() (result *mproto.QueryResult) {
 		t := getDuration(qre.plan.SetValue)
 		qre.qe.connPool.SetIdleTimeout(t)
 		qre.qe.streamConnPool.SetIdleTimeout(t)
-		qre.qe.activeTxPool.pool.SetIdleTimeout(t)
+		qre.qe.txPool.pool.SetIdleTimeout(t)
 		qre.qe.connKiller.SetIdleTimeout(t)
 	case "vt_spot_check_ratio":
 		qre.qe.spotCheckFreq.Set(int64(getFloat64(qre.plan.SetValue) * SPOT_CHECK_MULTIPLIER))
