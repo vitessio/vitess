@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/mysql"
+	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
@@ -97,6 +98,71 @@ func TestMariadbBinlogEventGTID(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("%#v.GTID() = %#v, want %#v", input, got, want)
+	}
+}
+
+func TestMariadbBinlogEventFormat(t *testing.T) {
+	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbFormatEvent)}
+	want := blproto.BinlogFormat{
+		FormatVersion:     4,
+		ServerVersion:     "10.0.13-MariaDB-1~precise-log",
+		HeaderLength:      19,
+		ChecksumAlgorithm: 0,
+	}
+	got, err := input.Format()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got != want {
+		t.Errorf("%#v.Format() = %v, want %v", input, got, want)
+	}
+}
+
+func TestMariadbBinlogEventChecksumFormat(t *testing.T) {
+	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbChecksumFormatEvent)}
+	want := blproto.BinlogFormat{
+		FormatVersion:     4,
+		ServerVersion:     "10.0.13-MariaDB-1~precise-log",
+		HeaderLength:      19,
+		ChecksumAlgorithm: 1,
+	}
+	got, err := input.Format()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got != want {
+		t.Errorf("%#v.Format() = %v, want %v", input, got, want)
+	}
+}
+
+func TestMariadbBinlogEventStripChecksum(t *testing.T) {
+	f, err := (mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbChecksumFormatEvent)}).Format()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+
+	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbChecksumQueryEvent)}
+	wantEvent := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbChecksumStrippedQueryEvent)}
+	wantChecksum := []byte{0xce, 0x49, 0x7a, 0x53}
+	gotEvent, gotChecksum := input.StripChecksum(f)
+	if !reflect.DeepEqual(gotEvent, wantEvent) || !reflect.DeepEqual(gotChecksum, wantChecksum) {
+		t.Errorf("%#v.StripChecksum() = (%v, %v), want (%v, %v)", input, gotEvent, gotChecksum, wantEvent, wantChecksum)
+	}
+}
+
+func TestMariadbBinlogEventStripChecksumNone(t *testing.T) {
+	f, err := (mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbFormatEvent)}).Format()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+
+	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbStandaloneGTIDEvent)}
+	want := input
+	gotEvent, gotChecksum := input.StripChecksum(f)
+	if !reflect.DeepEqual(gotEvent, want) || gotChecksum != nil {
+		t.Errorf("%#v.StripChecksum() = (%v, %v), want (%v, nil)", input, gotEvent, gotChecksum, want)
 	}
 }
 

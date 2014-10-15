@@ -74,6 +74,11 @@ type BinlogEvent interface {
 	// Rand returns the two seed values for a RAND_EVENT.
 	// This is only valid if IsRand() returns true.
 	Rand(BinlogFormat) (uint64, uint64, error)
+
+	// StripChecksum returns the checksum and a modified event with the checksum
+	// stripped off, if any. If there is no checksum, it returns the same event
+	// and a nil checksum.
+	StripChecksum(BinlogFormat) (ev BinlogEvent, checksum []byte)
 }
 
 // BinlogFormat contains relevant data from the FORMAT_DESCRIPTION_EVENT.
@@ -86,6 +91,8 @@ type BinlogFormat struct {
 	ServerVersion string
 	// HeaderLength is the size in bytes of event headers other than FORMAT_DESCRIPTION_EVENT.
 	HeaderLength byte
+	// ChecksumAlgorithm is the ID number of the binlog checksum algorithm.
+	ChecksumAlgorithm byte
 }
 
 // IsZero returns true if the BinlogFormat has not been initialized.

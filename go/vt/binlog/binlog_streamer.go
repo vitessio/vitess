@@ -193,25 +193,31 @@ func (bls *BinlogStreamer) parseEvents(ctx *sync2.ServiceContext, events <-chan 
 			return pos, fmt.Errorf("can't parse binlog event, invalid data: %#v", ev)
 		}
 
-		// We can't parse anything until we get a FORMAT_DESCRIPTION_EVENT that
-		// tells us the size of the event header.
-		if format.IsZero() {
-			if !ev.IsFormatDescription() {
-				// The only thing that should come before the FORMAT_DESCRIPTION_EVENT
-				// is a fake ROTATE_EVENT, which the master sends to tell us the name
-				// of the current log file.
-				if ev.IsRotate() {
-					continue
-				}
-				return pos, fmt.Errorf("got a real event before FORMAT_DESCRIPTION_EVENT: %#v", ev)
-			}
-
+		// We need to keep checking for FORMAT_DESCRIPTION_EVENT even after we've
+		// seen one, because another one might come along (e.g. on log rotate due to
+		// binlog settings change) that changes the format.
+		if ev.IsFormatDescription() {
 			format, err = ev.Format()
 			if err != nil {
 				return pos, fmt.Errorf("can't parse FORMAT_DESCRIPTION_EVENT: %v, event data: %#v", err, ev)
 			}
 			continue
 		}
+
+		// We can't parse anything until we get a FORMAT_DESCRIPTION_EVENT that
+		// tells us the size of the event header.
+		if format.IsZero() {
+			// The only thing that should come before the FORMAT_DESCRIPTION_EVENT
+			// is a fake ROTATE_EVENT, which the master sends to tell us the name
+			// of the current log file.
+			if ev.IsRotate() {
+				continue
+			}
+			return pos, fmt.Errorf("got a real event before FORMAT_DESCRIPTION_EVENT: %#v", ev)
+		}
+
+		// Strip the checksum, if any. We don't actually verify the checksum, so discard it.
+		ev, _ = ev.StripChecksum(format)
 
 		// Update the GTID if the event has one. The actual event type could be
 		// something special like GTID_EVENT (MariaDB, MySQL 5.6), or it could be

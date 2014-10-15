@@ -166,6 +166,69 @@ class TestBinlog(unittest.TestCase):
     self.assertEqual(len(data[0]), 3, 'Wrong number of columns.')
     self.assertEqual(data[0][2], 'Šṛ́rỏé', 'Data corrupted due to wrong charset.')
 
+  def test_checksum_enabled(self):
+    start_position = mysql_flavor().master_position(dst_replica)
+    logging.debug('test_checksum_enabled: starting @ %s', start_position)
+
+    # Enable binlog_checksum, which will also force a log rotation that should
+    # cause binlog streamer to notice the new checksum setting.
+    if not mysql_flavor().enable_binlog_checksum(dst_replica):
+      logging.debug('skipping checksum test on flavor without binlog_checksum setting')
+      return
+
+    # Insert something and make sure it comes through intact.
+    sql = "INSERT INTO test_table (id, keyspace_id, msg) VALUES (19283, 1, 'testing checksum enabled') /* EMD keyspace_id:1 */"
+    src_master.mquery("vt_test_keyspace",
+        sql,
+        write=True)
+
+    # Look for it using update stream to see if binlog streamer can talk to
+    # dst_replica, which now has binlog_checksum enabled.
+    stream = _get_update_stream(dst_replica)
+    stream.dial()
+    data = stream.stream_start(start_position)
+    found = False
+    while data:
+      if data['Category'] == 'POS':
+        break
+      if data['Sql'] == sql:
+        found = True
+        break
+      data = stream.stream_next()
+    stream.close()
+    self.assertEqual(found, True, 'expected query not found in update stream')
+
+  def test_checksum_disabled(self):
+    # Disable binlog_checksum to make sure we can also talk to a server without
+    # checksums enabled, in case they are enabled by default.
+    start_position = mysql_flavor().master_position(dst_replica)
+    logging.debug('test_checksum_disabled: starting @ %s', start_position)
+
+    # For flavors that don't support checksums, this is a no-op.
+    mysql_flavor().disable_binlog_checksum(dst_replica)
+
+    # Insert something and make sure it comes through intact.
+    sql = "INSERT INTO test_table (id, keyspace_id, msg) VALUES (58812, 1, 'testing checksum disabled') /* EMD keyspace_id:1 */"
+    src_master.mquery("vt_test_keyspace",
+        sql,
+        write=True)
+
+    # Look for it using update stream to see if binlog streamer can talk to
+    # dst_replica, which now has binlog_checksum disabled.
+    stream = _get_update_stream(dst_replica)
+    stream.dial()
+    data = stream.stream_start(start_position)
+    found = False
+    while data:
+      if data['Category'] == 'POS':
+        break
+      if data['Sql'] == sql:
+        found = True
+        break
+      data = stream.stream_next()
+    stream.close()
+    self.assertEqual(found, True, 'expected query not found in update stream')
+
 
 if __name__ == '__main__':
   utils.main()
