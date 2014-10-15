@@ -11,12 +11,35 @@ import (
 	"os"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/rpcplus"
+	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 )
 
 var (
 	// The flags used when calling RegisterDefaultSocketFileFlags.
 	SocketFile *string
+
+	// The rpc servers to use
+	socketFileRpcServer              = rpcplus.NewServer()
+	authenticatedSocketFileRpcServer = rpcplus.NewServer()
 )
+
+// socketFileRegister registers the provided server to be served on the
+// SocketFile, if enabled by the service map.
+func socketFileRegister(name string, rcvr interface{}) {
+	if ServiceMap["bsonrpc-unix-"+name] {
+		log.Infof("Registering %v for bsonrpc over unix socket, disable it with -bsonrpc-unix-%v service_map parameter", name, name)
+		socketFileRpcServer.Register(rcvr)
+	} else {
+		log.Infof("Not registering %v for bsonrpc over unix socket, enable it with bsonrpc-unix-%v service_map parameter", name, name)
+	}
+	if ServiceMap["bsonrpc-auth-unix-"+name] {
+		log.Infof("Registering %v for SASL bsonrpc over unix socket, disable it with -bsonrpc-auth-unix-%v service_map parameter", name, name)
+		authenticatedSocketFileRpcServer.Register(rcvr)
+	} else {
+		log.Infof("Not registering %v for SASL bsonrpc over unix socket, enable it with bsonrpc-auth-unix-%v service_map parameter", name, name)
+	}
+}
 
 // ServeSocketFile listen to the named socket and serves RPCs on it.
 func ServeSocketFile(name string) {
@@ -38,7 +61,14 @@ func ServeSocketFile(name string) {
 		log.Fatalf("Error listening on socket file %v: %v", name, err)
 	}
 	log.Infof("Listening on socket file %v", name)
-	go http.Serve(l, nil)
+
+	handler := http.NewServeMux()
+	bsonrpc.ServeCustomRPC(handler, socketFileRpcServer, false)
+	bsonrpc.ServeCustomRPC(handler, authenticatedSocketFileRpcServer, true)
+	httpServer := http.Server{
+		Handler: handler,
+	}
+	go httpServer.Serve(l)
 }
 
 // RegisterDefaultSocketFileFlags registers the default flags for listening

@@ -10,7 +10,6 @@ import (
 	"os"
 
 	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
 	"github.com/youtube/vitess/go/zk/zkocc"
 )
@@ -42,6 +41,6 @@ func main() {
 	zkr := zkocc.NewZkReader(*resolveLocal, flag.Args())
 	zk.RegisterZkReader(zkr)
 
-	topo.RegisterTopoReader(&TopoReader{zkr: zkr})
+	servenv.Register("toporeader", &TopoReader{zkr: zkr})
 	servenv.RunDefault()
 }

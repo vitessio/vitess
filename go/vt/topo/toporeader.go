@@ -1,7 +1,6 @@
 package topo
 
 import (
-	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/proto"
 )
 
@@ -42,9 +41,4 @@ type GetEndPointsArgs struct {
 	Keyspace   string
 	Shard      string
 	TabletType TabletType
-}
-
-// RegisterTopoReader register the provided TopoReader for RPC
-func RegisterTopoReader(tr TopoReader) {
-	rpc.Register(tr)
 }

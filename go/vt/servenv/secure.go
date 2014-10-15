@@ -14,6 +14,8 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/proc"
+	"github.com/youtube/vitess/go/rpcplus"
+	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 )
 
 var (
@@ -26,7 +28,28 @@ var (
 	// Flags to alter the behavior of the library.
 	secureThrottle  = flag.Int64("secure-accept-rate", 64, "Maximum number of secure connection accepts per second")
 	secureMaxBuffer = flag.Int("secure-max-buffer", 1500, "Maximum number of secure accepts allowed to accumulate")
+
+	// The rpc servers to use
+	secureRpcServer              = rpcplus.NewServer()
+	authenticatedSecureRpcServer = rpcplus.NewServer()
 )
+
+// secureRegister registers the provided server to be served on the
+// secure port, if enabled by the service map.
+func secureRegister(name string, rcvr interface{}) {
+	if ServiceMap["bsonrpc-vts-"+name] {
+		log.Infof("Registering %v for bsonrpc over vts port, disable it with -bsonrpc-vts-%v service_map parameter", name, name)
+		secureRpcServer.Register(rcvr)
+	} else {
+		log.Infof("Not registering %v for bsonrpc over vts port, enable it with bsonrpc-vts-%v service_map parameter", name, name)
+	}
+	if ServiceMap["bsonrpc-auth-vts-"+name] {
+		log.Infof("Registering %v for SASL bsonrpc over vts port, disable it with -bsonrpc-auth-vts-%v service_map parameter", name, name)
+		authenticatedSecureRpcServer.Register(rcvr)
+	} else {
+		log.Infof("Not registering %v for SASL bsonrpc over vts port, enable it with bsonrpc-auth-vts-%v service_map parameter", name, name)
+	}
+}
 
 // ServerSecurePort obtains a listener that accepts secure connections.
 // If the provided port is zero, the listening is disabled.
@@ -68,7 +91,14 @@ func ServeSecurePort(securePort int, certFile, keyFile, caCertFile string) {
 	log.Infof("Listening on secure port %v", securePort)
 	throttled := NewThrottledListener(l, *secureThrottle, *secureMaxBuffer)
 	cl := proc.Published(throttled, "SecureConnections", "SecureAccepts")
-	go http.Serve(cl, nil)
+
+	handler := http.NewServeMux()
+	bsonrpc.ServeCustomRPC(handler, secureRpcServer, false)
+	bsonrpc.ServeCustomRPC(handler, authenticatedSecureRpcServer, true)
+	httpServer := http.Server{
+		Handler: handler,
+	}
+	go httpServer.Serve(cl)
 }
 
 // RegisterDefaultSecureFlags registers the default flags for

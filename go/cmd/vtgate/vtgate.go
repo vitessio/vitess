@@ -29,6 +29,14 @@ func init() {
 	servenv.RegisterDefaultFlags()
 	servenv.RegisterDefaultSecureFlags()
 	servenv.RegisterDefaultSocketFileFlags()
+
+	// by default, register the service for most RPC services
+	servenv.ServiceMap["bsonrpc-vt-toporeader"] = true
+	servenv.ServiceMap["bsonrpc-auth-vt-toporeader"] = true
+	servenv.ServiceMap["bsonrpc-vts-toporeader"] = true
+	servenv.ServiceMap["bsonrpc-auth-vts-toporeader"] = true
+	servenv.ServiceMap["bsonrpc-unix-toporeader"] = true
+	servenv.ServiceMap["bsonrpc-auth-unix-toporeader"] = true
 }
 
 func main() {
@@ -48,7 +56,7 @@ func main() {
 	// topoReader api. This will be subsumed by
 	// vtgate once vtgate's client functions become active.
 	topoReader = NewTopoReader(resilientSrvTopoServer)
-	topo.RegisterTopoReader(topoReader)
+	servenv.Register("toporeader", topoReader)
 
 	vtgate.Init(resilientSrvTopoServer, *cell, *retryDelay, *retryCount, *timeout, *maxInFlight)
 	servenv.RunDefault()

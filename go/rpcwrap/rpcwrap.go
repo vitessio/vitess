@@ -134,6 +134,12 @@ func ServeTestRPC(handler *http.ServeMux, server *rpc.Server, codecName string, 
 	handler.Handle(GetRpcPath(codecName, false), &rpcHandler{cFactory, server, false})
 }
 
+// ServeCustomRPC serves the given rpc requests with the provided ServeMux,
+// authenticated or not
+func ServeCustomRPC(handler *http.ServeMux, server *rpc.Server, useAuth bool, codecName string, cFactory ServerCodecFactory) {
+	handler.Handle(GetRpcPath(codecName, useAuth), &rpcHandler{cFactory, server, useAuth})
+}
+
 // AuthenticatedServer is an rpc.Server instance that serves
 // authenticated calls.
 var AuthenticatedServer = rpc.NewServer()
