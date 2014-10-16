@@ -29,6 +29,7 @@ var schemaOverrides []tabletserver.SchemaOverride
 
 func init() {
 	servenv.RegisterDefaultFlags()
+	servenv.InitServiceMapForBsonRpcService("queryservice")
 }
 
 func main() {
