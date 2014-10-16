@@ -1,3 +1,7 @@
+// Copyright 2014, Google Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package tabletserver
 
 import (
@@ -15,6 +19,7 @@ type RequestContext struct {
 	ctx      context.Context
 	logStats *SQLQueryStats
 	qe       *QueryEngine
+	deadline Deadline
 }
 
 func (rqc *RequestContext) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value) (result *mproto.QueryResult) {
@@ -23,7 +28,11 @@ func (rqc *RequestContext) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparse
 	if ok {
 		defer q.Broadcast()
 		waitingForConnectionStart := time.Now()
-		conn, err := rqc.qe.connPool.Get()
+		timeout, err := rqc.deadline.Timeout()
+		if err != nil {
+			q.Err = NewTabletError(FAIL, "qFetch: %v", err)
+		}
+		conn, err := rqc.qe.connPool.Get(timeout)
 		logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 		if err != nil {
 			q.Err = NewTabletErrorSql(FATAL, err)
@@ -80,8 +89,7 @@ func (rqc *RequestContext) execSQL(conn dbconnpool.PoolConnection, sql string, w
 }
 
 func (rqc *RequestContext) execSQLNoPanic(conn dbconnpool.PoolConnection, sql string, wantfields bool) (*mproto.QueryResult, error) {
-	if timeout := rqc.qe.queryTimeout.Get(); timeout != 0 {
-		qd := rqc.qe.connKiller.SetDeadline(conn.Id(), time.Now().Add(timeout))
+	if qd := rqc.qe.connKiller.SetDeadline(conn.Id(), rqc.deadline); qd != nil {
 		defer qd.Done()
 	}
 

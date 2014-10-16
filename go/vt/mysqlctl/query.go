@@ -19,7 +19,7 @@ func (mysqld *Mysqld) ExecuteSuperQuery(query string) error {
 
 // ExecuteSuperQueryList alows the user to execute queries as a super user.
 func (mysqld *Mysqld) ExecuteSuperQueryList(queryList []string) error {
-	conn, connErr := mysqld.dbaPool.Get()
+	conn, connErr := mysqld.dbaPool.Get(0)
 	if connErr != nil {
 		return connErr
 	}
@@ -37,7 +37,7 @@ func (mysqld *Mysqld) ExecuteSuperQueryList(queryList []string) error {
 // FIXME(msolomon) should there be a query lock so we only
 // run one admin action at a time?
 func (mysqld *Mysqld) fetchSuperQuery(query string) (*mproto.QueryResult, error) {
-	conn, connErr := mysqld.dbaPool.Get()
+	conn, connErr := mysqld.dbaPool.Get(0)
 	if connErr != nil {
 		return nil, connErr
 	}

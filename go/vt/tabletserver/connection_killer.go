@@ -34,7 +34,7 @@ func (ck *ConnectionKiller) Close() {
 func (ck *ConnectionKiller) Kill(connID int64) error {
 	killStats.Add("Queries", 1)
 	log.Infof("killing query %d", connID)
-	killConn := getOrPanic(ck.connPool)
+	killConn := getOrPanic(ck.connPool, 0)
 	defer killConn.Recycle()
 	sql := fmt.Sprintf("kill %d", connID)
 	var err error
@@ -56,12 +56,24 @@ type QueryDeadliner chan bool
 // SetDeadline sets a deadline for the specifed connID. It also returns a QueryDeadliner.
 // If Done is not called on QueryDeadliner before the deadline is reached, the connection
 // is killed.
-func (ck *ConnectionKiller) SetDeadline(connID int64, deadline time.Time) QueryDeadliner {
+func (ck *ConnectionKiller) SetDeadline(connID int64, deadline Deadline) QueryDeadliner {
+	timeout, err := deadline.Timeout()
+	if err != nil {
+		panic(NewTabletError(FAIL, "SetDeadline: %v", err))
+	}
+	if timeout == 0 {
+		return nil
+	}
 	qd := make(QueryDeadliner)
+	tmr := time.NewTimer(timeout)
 	go func() {
-		timeout := deadline.Sub(time.Now())
-		tmr := time.NewTimer(timeout)
-		defer tmr.Stop()
+		defer func() {
+			tmr.Stop()
+			if x := recover(); x != nil {
+				internalErrors.Add("ConnKiller", 1)
+				log.Errorf("ConnectionKiller error: %v", x)
+			}
+		}()
 		select {
 		case <-tmr.C:
 			_ = ck.Kill(connID)

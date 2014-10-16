@@ -81,13 +81,9 @@ func (rp *ResourcePool) IsClosed() (closed bool) {
 
 // Get will return the next available resource. If capacity
 // has not been reached, it will create a new one using the factory. Otherwise,
-// it will indefinitely wait till the next resource becomes available.
-func (rp *ResourcePool) Get() (resource Resource, err error) {
-	return rp.get(true, 0)
-}
-
-// GetWithTimeout is like Get, but it returns an error on timeout.
-func (rp *ResourcePool) GetWithTimeout(timeout time.Duration) (resource Resource, err error) {
+// it will wait till the next resource becomes available or a timeout.
+// A timeout of 0 is an indefinite wait.
+func (rp *ResourcePool) Get(timeout time.Duration) (resource Resource, err error) {
 	return rp.get(true, timeout)
 }
 

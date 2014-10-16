@@ -230,7 +230,7 @@ func (mysqld *Mysqld) prepareToSnapshot(logger logutil.Logger, allowHierarchical
 	}
 
 	logger.Infof("Flush tables")
-	if connToRelease, err = mysqld.dbaPool.Get(); err != nil {
+	if connToRelease, err = mysqld.dbaPool.Get(0); err != nil {
 		return
 	}
 	logger.Infof("exec FLUSH TABLES WITH READ LOCK")

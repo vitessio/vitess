@@ -1,3 +1,7 @@
+// Copyright 2014, Google Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package tabletserver
 
 import (
@@ -89,7 +93,11 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult) {
 			reply = qre.execSet()
 		case planbuilder.PLAN_OTHER:
 			waitingForConnectionStart := time.Now()
-			conn := getOrPanic(qre.qe.connPool)
+			timeout, err := qre.deadline.Timeout()
+			if err != nil {
+				panic(NewTabletError(FAIL, "plan_other: %v", err))
+			}
+			conn := getOrPanic(qre.qe.connPool, timeout)
 			qre.logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 			defer conn.Recycle()
 			reply = qre.execSQL(conn, qre.query, true)
@@ -115,7 +123,11 @@ func (qre *QueryExecutor) Stream(sendReply func(*mproto.QueryResult) error) {
 	qre.checkPermissions()
 
 	waitingForConnectionStart := time.Now()
-	conn := getOrPanic(qre.qe.streamConnPool)
+	timeout, err := qre.deadline.Timeout()
+	if err != nil {
+		panic(NewTabletError(FAIL, "Stream: %v", err))
+	}
+	conn := getOrPanic(qre.qe.streamConnPool, timeout)
 	qre.logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 	defer conn.Recycle()
 
@@ -338,7 +350,11 @@ func (qre *QueryExecutor) execSelect() (result *mproto.QueryResult) {
 		return
 	}
 	waitingForConnectionStart := time.Now()
-	conn := getOrPanic(qre.qe.connPool)
+	timeout, err := qre.deadline.Timeout()
+	if err != nil {
+		panic(NewTabletError(FAIL, "execSelect: %v", err))
+	}
+	conn := getOrPanic(qre.qe.connPool, timeout)
 	qre.logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 	defer conn.Recycle()
 	result = qre.fullFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, nil)
@@ -476,7 +492,11 @@ func (qre *QueryExecutor) execSet() (result *mproto.QueryResult) {
 		qre.qe.strictMode.Set(getInt64(qre.plan.SetValue))
 	default:
 		waitingForConnectionStart := time.Now()
-		conn := getOrPanic(qre.qe.connPool)
+		timeout, err := qre.deadline.Timeout()
+		if err != nil {
+			panic(NewTabletError(FAIL, "execSet: %v", err))
+		}
+		conn := getOrPanic(qre.qe.connPool, timeout)
 		qre.logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 		defer conn.Recycle()
 		return qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, nil)
