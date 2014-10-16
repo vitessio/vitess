@@ -877,7 +877,7 @@ class TestExceptionLogging(unittest.TestCase):
     keyspace_id = shard_kid_map[shard_names[self.shard_index]][0]
 
     old_error_count = self.logger.get_integrity_error_count()
-    with self.assertRaises(dbexceptions.IntegrityError):
+    try:
       vtgate_conn.begin()
       vtgate_conn._execute(
         "insert into vt_a (eid, id, keyspace_id) values (%(eid)s, %(id)s, %(keyspace_id)s)",
@@ -888,6 +888,9 @@ class TestExceptionLogging(unittest.TestCase):
         {'eid': 1, 'id': 1, 'keyspace_id':keyspace_id}, KEYSPACE_NAME, 'master',
         keyspace_ids=[pack_kid(keyspace_id)])
       vtgate_conn.commit()
+    except Exception as e:
+      vtgate_conn.rollback()
+    # The underlying execute is expected to catch and log the integrity error.
     self.assertEqual(self.logger.get_integrity_error_count(), old_error_count+1)
 
 
