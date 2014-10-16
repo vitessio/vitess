@@ -12,6 +12,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/rpcplus"
+	"github.com/youtube/vitess/go/rpcwrap"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 )
 
@@ -61,6 +62,18 @@ func ServeSocketFile(name string) {
 		log.Fatalf("Error listening on socket file %v: %v", name, err)
 	}
 	log.Infof("Listening on socket file %v", name)
+
+	// HandleHTTP registers the default GOB handler at /_goRPC_
+	// and the debug RPC service at /debug/rpc (it displays a list
+	// of registered services and their methods).
+	if ServiceMap["gob-unix"] {
+		log.Infof("Registering GOB handler and /debug/rpc URL for unix socket")
+		socketFileRpcServer.HandleHTTP(rpcwrap.GetRpcPath("gob", false), rpcplus.DefaultDebugPath)
+	}
+	if ServiceMap["gob-auth-unix"] {
+		log.Infof("Registering GOB handler and /debug/rpcs URL for SASL unix socket")
+		authenticatedSocketFileRpcServer.HandleHTTP(rpcwrap.GetRpcPath("gob", true), rpcplus.DefaultDebugPath+"s")
+	}
 
 	handler := http.NewServeMux()
 	bsonrpc.ServeCustomRPC(handler, socketFileRpcServer, false)

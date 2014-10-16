@@ -15,6 +15,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/proc"
 	"github.com/youtube/vitess/go/rpcplus"
+	"github.com/youtube/vitess/go/rpcwrap"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 )
 
@@ -91,6 +92,18 @@ func ServeSecurePort(securePort int, certFile, keyFile, caCertFile string) {
 	log.Infof("Listening on secure port %v", securePort)
 	throttled := NewThrottledListener(l, *secureThrottle, *secureMaxBuffer)
 	cl := proc.Published(throttled, "SecureConnections", "SecureAccepts")
+
+	// rpc.HandleHTTP registers the default GOB handler at /_goRPC_
+	// and the debug RPC service at /debug/rpc (it displays a list
+	// of registered services and their methods).
+	if ServiceMap["gob-vts"] {
+		log.Infof("Registering GOB handler and /debug/rpc URL for vts port")
+		secureRpcServer.HandleHTTP(rpcwrap.GetRpcPath("gob", false), rpcplus.DefaultDebugPath)
+	}
+	if ServiceMap["gob-auth-vts"] {
+		log.Infof("Registering GOB handler and /debug/rpcs URL for SASL vts port")
+		authenticatedSecureRpcServer.HandleHTTP(rpcwrap.GetRpcPath("gob", true), rpcplus.DefaultDebugPath+"s")
+	}
 
 	handler := http.NewServeMux()
 	bsonrpc.ServeCustomRPC(handler, secureRpcServer, false)

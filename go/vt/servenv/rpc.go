@@ -27,6 +27,8 @@ func Register(name string, rcvr interface{}) {
 	} else {
 		log.Infof("Not registering %v for SASL bsonrpc over vt port, enable it with bsonrpc-auth-vt-%v service_map parameter", name, name)
 	}
+
+	// register the other guys
 	socketFileRegister(name, rcvr)
 	secureRegister(name, rcvr)
 }
@@ -35,10 +37,14 @@ func ServeRPC() {
 	// rpc.HandleHTTP registers the default GOB handler at /_goRPC_
 	// and the debug RPC service at /debug/rpc (it displays a list
 	// of registered services and their methods).
-	// So disabling this, but leaving a trace here so it's easy
-	// to re-add for a quick test on which service is running.
-	//
-	// rpc.HandleHTTP()
+	if ServiceMap["gob-vt"] {
+		log.Infof("Registering GOB handler and /debug/rpc URL for vt port")
+		rpc.HandleHTTP()
+	}
+	if ServiceMap["gob-auth-vt"] {
+		log.Infof("Registering GOB handler and /debug/rpcs URL for SASL vt port")
+		rpcwrap.AuthenticatedServer.HandleHTTP(rpc.DefaultRPCPath, rpc.DefaultDebugPath+"s")
+	}
 
 	// if we have an authentication config, we register the authenticated
 	// bsonrpc services.
