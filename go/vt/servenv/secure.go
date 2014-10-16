@@ -38,6 +38,9 @@ var (
 // secureRegister registers the provided server to be served on the
 // secure port, if enabled by the service map.
 func secureRegister(name string, rcvr interface{}) {
+	if SecurePort == nil || *SecurePort == 0 {
+		return
+	}
 	if ServiceMap["bsonrpc-vts-"+name] {
 		log.Infof("Registering %v for bsonrpc over vts port, disable it with -bsonrpc-vts-%v service_map parameter", name, name)
 		secureRpcServer.Register(rcvr)

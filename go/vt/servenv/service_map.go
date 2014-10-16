@@ -27,7 +27,7 @@ func init() {
 	})
 }
 
-// InitServiceMapForBsonRpcService will set the default entries for a service.
+// InitServiceMapForBsonRpcService will set the default entries for a
 // bson rpc to serve the service.
 func InitServiceMapForBsonRpcService(name string) {
 	ServiceMap["bsonrpc-vt-"+name] = true

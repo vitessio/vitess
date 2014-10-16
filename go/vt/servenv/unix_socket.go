@@ -28,6 +28,9 @@ var (
 // socketFileRegister registers the provided server to be served on the
 // SocketFile, if enabled by the service map.
 func socketFileRegister(name string, rcvr interface{}) {
+	if SocketFile == nil || *SocketFile == "" {
+		return
+	}
 	if ServiceMap["bsonrpc-unix-"+name] {
 		log.Infof("Registering %v for bsonrpc over unix socket, disable it with -bsonrpc-unix-%v service_map parameter", name, name)
 		socketFileRpcServer.Register(rcvr)
