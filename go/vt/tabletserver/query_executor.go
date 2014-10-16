@@ -471,6 +471,9 @@ func (qre *QueryExecutor) execSet() (result *mproto.QueryResult) {
 		qre.qe.spotCheckFreq.Set(int64(getFloat64(qre.plan.SetValue) * SPOT_CHECK_MULTIPLIER))
 	case "vt_strict_mode":
 		qre.qe.strictMode.Set(getInt64(qre.plan.SetValue))
+	case "vt_txpool_timeout":
+		t := getDuration(qre.plan.SetValue)
+		qre.qe.txPool.SetPoolTimeout(t)
 	default:
 		conn := qre.getConn(qre.qe.connPool)
 		defer conn.Recycle()

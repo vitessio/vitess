@@ -38,6 +38,7 @@ func init() {
 	flag.IntVar(&qsConfig.QueryCacheSize, "queryserver-config-query-cache-size", DefaultQsConfig.QueryCacheSize, "query server query cache size")
 	flag.Float64Var(&qsConfig.SchemaReloadTime, "queryserver-config-schema-reload-time", DefaultQsConfig.SchemaReloadTime, "query server schema reload time")
 	flag.Float64Var(&qsConfig.QueryTimeout, "queryserver-config-query-timeout", DefaultQsConfig.QueryTimeout, "query server query timeout")
+	flag.Float64Var(&qsConfig.TxPoolTimeout, "queryserver-config-txpool-timeout", DefaultQsConfig.TxPoolTimeout, "query server transaction pool timeout")
 	flag.Float64Var(&qsConfig.IdleTimeout, "queryserver-config-idle-timeout", DefaultQsConfig.IdleTimeout, "query server idle timeout")
 	flag.Float64Var(&qsConfig.SpotCheckRatio, "queryserver-config-spot-check-ratio", DefaultQsConfig.SpotCheckRatio, "query server rowcache spot check frequency")
 	flag.BoolVar(&qsConfig.StrictMode, "queryserver-config-strict-mode", DefaultQsConfig.StrictMode, "allow only predictable DMLs and enforces MySQL's STRICT_TRANS_TABLES")
@@ -99,6 +100,7 @@ type Config struct {
 	QueryCacheSize     int
 	SchemaReloadTime   float64
 	QueryTimeout       float64
+	TxPoolTimeout      float64
 	IdleTimeout        float64
 	RowCache           RowCacheConfig
 	SpotCheckRatio     float64
@@ -123,6 +125,7 @@ var DefaultQsConfig = Config{
 	QueryCacheSize:     5000,
 	SchemaReloadTime:   30 * 60,
 	QueryTimeout:       0,
+	TxPoolTimeout:      1,
 	IdleTimeout:        30 * 60,
 	StreamBufferSize:   32 * 1024,
 	RowCache:           RowCacheConfig{Memory: -1, TcpPort: -1, Connections: -1, Threads: -1},
