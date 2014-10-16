@@ -317,6 +317,7 @@ func (sq *SqlQuery) Execute(context context.Context, query *proto.Query, reply *
 			ctx:      context,
 			logStats: logStats,
 			qe:       sq.qe,
+			deadline: NewDeadline(sq.qe.queryTimeout.Get()),
 		},
 	}
 	*reply = *qre.Execute()
@@ -353,6 +354,7 @@ func (sq *SqlQuery) StreamExecute(context context.Context, query *proto.Query, s
 			ctx:      context,
 			logStats: logStats,
 			qe:       sq.qe,
+			deadline: NewDeadline(sq.qe.queryTimeout.Get()),
 		},
 	}
 	qre.Stream(sendReply)
@@ -445,8 +447,9 @@ func (sq *SqlQuery) SplitQuery(context context.Context, req *proto.SplitQueryReq
 		ctx:      context,
 		logStats: logStats,
 		qe:       sq.qe,
+		deadline: NewDeadline(sq.qe.queryTimeout.Get()),
 	}
-	conn := getOrPanic(sq.qe.connPool)
+	conn := requestContext.getConn(sq.qe.connPool)
 	// TODO: For fetching pkMinMax, include where clauses on the
 	// primary key, if any, in the original query which might give a narrower
 	// range of PKs to work with.

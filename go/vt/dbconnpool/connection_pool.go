@@ -95,12 +95,12 @@ func (cp *ConnectionPool) Close() {
 
 // Get returns a connection.
 // You must call Recycle on the PoolConnection once done.
-func (cp *ConnectionPool) Get() (PoolConnection, error) {
+func (cp *ConnectionPool) Get(timeout time.Duration) (PoolConnection, error) {
 	p := cp.pool()
 	if p == nil {
 		return nil, CONN_POOL_CLOSED_ERR
 	}
-	r, err := p.Get()
+	r, err := p.Get(timeout)
 	if err != nil {
 		return nil, err
 	}

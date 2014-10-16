@@ -104,7 +104,7 @@ type CacheInvalidator interface {
 
 // Helper method for conn pools to convert errors
 func getOrPanic(pool *dbconnpool.ConnectionPool) dbconnpool.PoolConnection {
-	conn, err := pool.Get()
+	conn, err := pool.Get(0)
 	if err == nil {
 		return conn
 	}
@@ -218,8 +218,8 @@ func (qe *QueryEngine) Launch(f func()) {
 	go func() {
 		defer func() {
 			qe.tasks.Done()
-			internalErrors.Add("Task", 1)
 			if x := recover(); x != nil {
+				internalErrors.Add("Task", 1)
 				log.Errorf("task error: %v", x)
 			}
 		}()

@@ -162,7 +162,7 @@ func (mysqld *Mysqld) Start(mysqlWaitTime time.Duration) error {
 		_, statErr := os.Stat(mysqld.config.SocketFile)
 		if statErr == nil {
 			// Make sure the socket file isn't stale.
-			conn, connErr := mysqld.dbaPool.Get()
+			conn, connErr := mysqld.dbaPool.Get(0)
 			if connErr == nil {
 				conn.Recycle()
 				return nil
@@ -475,7 +475,7 @@ func (mysqld *Mysqld) ExecuteMysqlCommand(sql string) error {
 // GetDbaConnection returns a connection from the dba pool.
 // Recycle needs to be called on the result.
 func (mysqld *Mysqld) GetDbaConnection() (dbconnpool.PoolConnection, error) {
-	return mysqld.dbaPool.Get()
+	return mysqld.dbaPool.Get(0)
 }
 
 // Close will close this instance of Mysqld. It will wait for all dba

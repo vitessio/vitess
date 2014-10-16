@@ -53,7 +53,7 @@ func (rc *RowCache) Get(keys []string) (results map[string]RCResult) {
 		mkeys = append(mkeys, rc.prefix+key)
 	}
 	prefixlen := len(rc.prefix)
-	conn := rc.cachePool.Get()
+	conn := rc.cachePool.Get(0)
 	// This is not the same as defer rc.cachePool.Put(conn)
 	defer func() { rc.cachePool.Put(conn) }()
 
@@ -90,7 +90,7 @@ func (rc *RowCache) Set(key string, row []sqltypes.Value, cas uint64) {
 	if b == nil {
 		return
 	}
-	conn := rc.cachePool.Get()
+	conn := rc.cachePool.Get(0)
 	defer func() { rc.cachePool.Put(conn) }()
 	mkey := rc.prefix + key
 
@@ -114,7 +114,7 @@ func (rc *RowCache) Delete(key string) {
 	if len(key) > MAX_KEY_LEN {
 		return
 	}
-	conn := rc.cachePool.Get()
+	conn := rc.cachePool.Get(0)
 	defer func() { rc.cachePool.Put(conn) }()
 	mkey := rc.prefix + key
 

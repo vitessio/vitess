@@ -316,7 +316,7 @@ func (s *MemcacheStats) readStats(k string, proc func(key, value string)) {
 			internalErrors.Add("MemcacheStats", 1)
 		}
 	}()
-	conn := s.cachePool.Get()
+	conn := s.cachePool.Get(0)
 	// This is not the same as defer rc.cachePool.Put(conn)
 	defer func() { s.cachePool.Put(conn) }()
 

@@ -178,12 +178,12 @@ func (cp *CachePool) getPool() *pools.ResourcePool {
 }
 
 // You must call Put after Get.
-func (cp *CachePool) Get() *memcache.Connection {
+func (cp *CachePool) Get(timeout time.Duration) *memcache.Connection {
 	pool := cp.getPool()
 	if pool == nil {
 		panic(NewTabletError(FATAL, "cache pool is not open"))
 	}
-	r, err := pool.Get()
+	r, err := pool.Get(timeout)
 	if err != nil {
 		panic(NewTabletErrorSql(FATAL, err))
 	}
@@ -278,7 +278,7 @@ func (cp *CachePool) ServeHTTP(response http.ResponseWriter, request *http.Reque
 	if command == "stats" {
 		command = ""
 	}
-	conn := cp.Get()
+	conn := cp.Get(0)
 	// This is not the same as defer rc.cachePool.Put(conn)
 	defer func() { cp.Put(conn) }()
 	r, err := conn.Stats(command)

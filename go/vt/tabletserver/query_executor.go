@@ -1,3 +1,7 @@
+// Copyright 2014, Google Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package tabletserver
 
 import (
@@ -88,9 +92,7 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult) {
 		case planbuilder.PLAN_SET:
 			reply = qre.execSet()
 		case planbuilder.PLAN_OTHER:
-			waitingForConnectionStart := time.Now()
-			conn := getOrPanic(qre.qe.connPool)
-			qre.logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
+			conn := qre.getConn(qre.qe.connPool)
 			defer conn.Recycle()
 			reply = qre.execSQL(conn, qre.query, true)
 		default:
@@ -114,9 +116,7 @@ func (qre *QueryExecutor) Stream(sendReply func(*mproto.QueryResult) error) {
 
 	qre.checkPermissions()
 
-	waitingForConnectionStart := time.Now()
-	conn := getOrPanic(qre.qe.streamConnPool)
-	qre.logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
+	conn := qre.getConn(qre.qe.streamConnPool)
 	defer conn.Recycle()
 
 	qd := NewQueryDetail(qre.query, qre.logStats.context, conn.Id())
@@ -337,12 +337,9 @@ func (qre *QueryExecutor) execSelect() (result *mproto.QueryResult) {
 		result.Fields = qre.plan.Fields
 		return
 	}
-	waitingForConnectionStart := time.Now()
-	conn := getOrPanic(qre.qe.connPool)
-	qre.logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
+	conn := qre.getConn(qre.qe.connPool)
 	defer conn.Recycle()
-	result = qre.fullFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, nil)
-	return
+	return qre.fullFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, nil)
 }
 
 func (qre *QueryExecutor) execInsertPK(conn dbconnpool.PoolConnection) (result *mproto.QueryResult) {
@@ -475,9 +472,7 @@ func (qre *QueryExecutor) execSet() (result *mproto.QueryResult) {
 	case "vt_strict_mode":
 		qre.qe.strictMode.Set(getInt64(qre.plan.SetValue))
 	default:
-		waitingForConnectionStart := time.Now()
-		conn := getOrPanic(qre.qe.connPool)
-		qre.logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
+		conn := qre.getConn(qre.qe.connPool)
 		defer conn.Recycle()
 		return qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, nil)
 	}

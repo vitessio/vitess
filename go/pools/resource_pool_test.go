@@ -53,7 +53,7 @@ func TestOpen(t *testing.T) {
 
 	// Test Get
 	for i := 0; i < 5; i++ {
-		r, err := p.Get()
+		r, err := p.Get(0)
 		resources[i] = r
 		if err != nil {
 			t.Errorf("Unexpected error %v", err)
@@ -112,7 +112,7 @@ func TestOpen(t *testing.T) {
 	ch := make(chan bool)
 	go func() {
 		for i := 0; i < 5; i++ {
-			r, err := p.Get()
+			r, err := p.Get(0)
 			if err != nil {
 				t.Errorf("Get failed: %v", err)
 			}
@@ -141,7 +141,7 @@ func TestOpen(t *testing.T) {
 	}
 
 	// Test Close resource
-	r, err = p.Get()
+	r, err = p.Get(0)
 	if err != nil {
 		t.Errorf("Unexpected error %v", err)
 	}
@@ -151,7 +151,7 @@ func TestOpen(t *testing.T) {
 		t.Errorf("Expecting 4, received %d", count.Get())
 	}
 	for i := 0; i < 5; i++ {
-		r, err := p.Get()
+		r, err := p.Get(0)
 		if err != nil {
 			t.Errorf("Get failed: %v", err)
 		}
@@ -191,7 +191,7 @@ func TestOpen(t *testing.T) {
 		t.Errorf("Expecting 6, received %d", available)
 	}
 	for i := 0; i < 6; i++ {
-		r, err := p.Get()
+		r, err := p.Get(0)
 		if err != nil {
 			t.Errorf("Get failed: %v", err)
 		}
@@ -228,7 +228,7 @@ func TestShrinking(t *testing.T) {
 	var resources [10]Resource
 	// Leave one empty slot in the pool
 	for i := 0; i < 4; i++ {
-		r, err := p.Get()
+		r, err := p.Get(0)
 		if err != nil {
 			t.Errorf("Get failed: %v", err)
 		}
@@ -254,7 +254,7 @@ func TestShrinking(t *testing.T) {
 	// Get is allowed when shrinking, but it will wait
 	getdone := make(chan bool)
 	go func() {
-		r, err := p.Get()
+		r, err := p.Get(0)
 		if err != nil {
 			t.Errorf("Unexpected error %v", err)
 		}
@@ -280,14 +280,14 @@ func TestShrinking(t *testing.T) {
 	// Ensure no deadlock if SetCapacity is called after we start
 	// waiting for a resource
 	for i := 0; i < 3; i++ {
-		resources[i], err = p.Get()
+		resources[i], err = p.Get(0)
 		if err != nil {
 			t.Errorf("Unexpected error %v", err)
 		}
 	}
 	// This will wait because pool is empty
 	go func() {
-		r, err := p.Get()
+		r, err := p.Get(0)
 		if err != nil {
 			t.Errorf("Unexpected error %v", err)
 		}
@@ -319,14 +319,14 @@ func TestShrinking(t *testing.T) {
 	// Test race condition of SetCapacity with itself
 	p.SetCapacity(3)
 	for i := 0; i < 3; i++ {
-		resources[i], err = p.Get()
+		resources[i], err = p.Get(0)
 		if err != nil {
 			t.Errorf("Unexpected error %v", err)
 		}
 	}
 	// This will wait because pool is empty
 	go func() {
-		r, err := p.Get()
+		r, err := p.Get(0)
 		if err != nil {
 			t.Errorf("Unexpected error %v", err)
 		}
@@ -371,7 +371,7 @@ func TestClosing(t *testing.T) {
 	p := NewResourcePool(PoolFactory, 5, 5, time.Second)
 	var resources [10]Resource
 	for i := 0; i < 5; i++ {
-		r, err := p.Get()
+		r, err := p.Get(0)
 		if err != nil {
 			t.Errorf("Get failed: %v", err)
 		}
@@ -424,7 +424,7 @@ func TestIdleTimeout(t *testing.T) {
 	p := NewResourcePool(PoolFactory, 1, 1, 10*time.Nanosecond)
 	defer p.Close()
 
-	r, err := p.Get()
+	r, err := p.Get(0)
 	if err != nil {
 		t.Errorf("Unexpected error %v", err)
 	}
@@ -436,7 +436,7 @@ func TestIdleTimeout(t *testing.T) {
 		t.Errorf("Expecting 1, received %d", count.Get())
 	}
 	time.Sleep(20 * time.Nanosecond)
-	r, err = p.Get()
+	r, err = p.Get(0)
 	if err != nil {
 		t.Errorf("Unexpected error %v", err)
 	}
@@ -454,7 +454,7 @@ func TestCreateFail(t *testing.T) {
 	count.Set(0)
 	p := NewResourcePool(FailFactory, 5, 5, time.Second)
 	defer p.Close()
-	if _, err := p.Get(); err.Error() != "Failed" {
+	if _, err := p.Get(0); err.Error() != "Failed" {
 		t.Errorf("Expecting Failed, received %v", err)
 	}
 	stats := p.StatsJSON()
@@ -473,7 +473,7 @@ func TestSlowCreateFail(t *testing.T) {
 	// The third Get should not wait indefinitely
 	for i := 0; i < 3; i++ {
 		go func() {
-			p.Get()
+			p.Get(0)
 			ch <- true
 		}()
 	}
@@ -491,11 +491,11 @@ func TestTimeout(t *testing.T) {
 	count.Set(0)
 	p := NewResourcePool(PoolFactory, 1, 1, time.Second)
 	defer p.Close()
-	r, err := p.Get()
+	r, err := p.Get(0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = p.GetWithTimeout(time.Millisecond)
+	_, err = p.Get(time.Millisecond)
 	want := "resource pool timed out"
 	if err == nil || err.Error() != want {
 		t.Errorf("got %v, want %s", err, want)

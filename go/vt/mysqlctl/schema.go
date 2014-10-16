@@ -172,7 +172,7 @@ func (mysqld *Mysqld) ResolveTables(dbName string, tables []string) ([]string, e
 
 // GetColumns returns the columns of table.
 func (mysqld *Mysqld) GetColumns(dbName, table string) ([]string, error) {
-	conn, err := mysqld.dbaPool.Get()
+	conn, err := mysqld.dbaPool.Get(0)
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +191,7 @@ func (mysqld *Mysqld) GetColumns(dbName, table string) ([]string, error) {
 
 // GetPrimaryKeyColumns returns the primary key columns of table.
 func (mysqld *Mysqld) GetPrimaryKeyColumns(dbName, table string) ([]string, error) {
-	conn, err := mysqld.dbaPool.Get()
+	conn, err := mysqld.dbaPool.Get(0)
 	if err != nil {
 		return nil, err
 	}
