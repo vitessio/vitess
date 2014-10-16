@@ -29,6 +29,7 @@ var (
 
 func init() {
 	servenv.RegisterDefaultFlags()
+	servenv.InitServiceMapForBsonRpcService("vtctl")
 }
 
 // FHtmlize writes data to w as debug HTML (using definition lists).

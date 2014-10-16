@@ -6,8 +6,8 @@ package gorpcqueryservice
 
 import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/rpcwrap"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
@@ -52,6 +52,6 @@ func (sq *SqlQuery) SplitQuery(ctx *rpcproto.Context, req *proto.SplitQueryReque
 
 func init() {
 	tabletserver.SqlQueryRegisterFunctions = append(tabletserver.SqlQueryRegisterFunctions, func(sq *tabletserver.SqlQuery) {
-		rpcwrap.RegisterAuthenticated(&SqlQuery{sq})
+		servenv.Register("queryservice", &SqlQuery{sq})
 	})
 }

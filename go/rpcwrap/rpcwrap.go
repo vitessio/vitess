@@ -129,11 +129,6 @@ func ServeAuthRPC(codecName string, cFactory ServerCodecFactory) {
 	http.Handle(GetRpcPath(codecName, true), &rpcHandler{cFactory, AuthenticatedServer, true})
 }
 
-// ServeTestRPC serves the given rpc requests with the provided ServeMux
-func ServeTestRPC(handler *http.ServeMux, server *rpc.Server, codecName string, cFactory ServerCodecFactory) {
-	handler.Handle(GetRpcPath(codecName, false), &rpcHandler{cFactory, server, false})
-}
-
 // ServeCustomRPC serves the given rpc requests with the provided ServeMux,
 // authenticated or not
 func ServeCustomRPC(handler *http.ServeMux, server *rpc.Server, useAuth bool, codecName string, cFactory ServerCodecFactory) {
@@ -143,17 +138,6 @@ func ServeCustomRPC(handler *http.ServeMux, server *rpc.Server, useAuth bool, co
 // AuthenticatedServer is an rpc.Server instance that serves
 // authenticated calls.
 var AuthenticatedServer = rpc.NewServer()
-
-// RegisterAuthenticated registers a receiver with the authenticated
-// rpc server.
-func RegisterAuthenticated(rcvr interface{}) error {
-	// TODO(szopa): This should be removed after the transition
-	// period, when all the clients know about authentication.
-	if err := rpc.Register(rcvr); err != nil {
-		return err
-	}
-	return AuthenticatedServer.Register(rcvr)
-}
 
 // rpcHandler handles rpc queries for a 'CONNECT' method.
 type rpcHandler struct {

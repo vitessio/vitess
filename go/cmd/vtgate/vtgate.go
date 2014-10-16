@@ -29,14 +29,8 @@ func init() {
 	servenv.RegisterDefaultFlags()
 	servenv.RegisterDefaultSecureFlags()
 	servenv.RegisterDefaultSocketFileFlags()
-
-	// by default, register the service for most RPC services
-	servenv.ServiceMap["bsonrpc-vt-toporeader"] = true
-	servenv.ServiceMap["bsonrpc-auth-vt-toporeader"] = true
-	servenv.ServiceMap["bsonrpc-vts-toporeader"] = true
-	servenv.ServiceMap["bsonrpc-auth-vts-toporeader"] = true
-	servenv.ServiceMap["bsonrpc-unix-toporeader"] = true
-	servenv.ServiceMap["bsonrpc-auth-unix-toporeader"] = true
+	servenv.InitServiceMapForBsonRpcService("toporeader")
+	servenv.InitServiceMapForBsonRpcService("vtgateservice")
 }
 
 func main() {

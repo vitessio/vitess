@@ -11,9 +11,9 @@ package gorpcvtctlserver
 import (
 	"sync"
 
-	"github.com/youtube/vitess/go/rpcwrap"
 	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl"
 	"github.com/youtube/vitess/go/vt/vtctl/gorpcproto"
@@ -61,5 +61,5 @@ func (s *VtctlServer) ExecuteVtctlCommand(context context.Context, query *gorpcp
 
 // StartServer registers the Server for RPCs
 func StartServer(ts topo.Server) {
-	rpcwrap.RegisterAuthenticated(&VtctlServer{ts})
+	servenv.Register("vtctl", &VtctlServer{ts})
 }

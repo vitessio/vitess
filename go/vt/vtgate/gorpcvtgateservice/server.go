@@ -6,9 +6,9 @@
 package gorpcvtgateservice
 
 import (
-	"github.com/youtube/vitess/go/rpcwrap"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
 	"github.com/youtube/vitess/go/vt/rpc"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
@@ -77,6 +77,6 @@ func (vtg *VTGate) GetMRSplits(ctx *rpcproto.Context, req *proto.GetMRSplitsRequ
 
 func init() {
 	vtgate.RegisterVTGates = append(vtgate.RegisterVTGates, func(vtGate *vtgate.VTGate) {
-		rpcwrap.RegisterAuthenticated(&VTGate{vtGate})
+		servenv.Register("vtgateservice", &VTGate{vtGate})
 	})
 }

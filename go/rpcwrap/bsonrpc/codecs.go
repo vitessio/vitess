@@ -103,10 +103,6 @@ func ServeAuthRPC() {
 	rpcwrap.ServeAuthRPC(codecName, NewServerCodec)
 }
 
-func ServeTestRPC(handler *http.ServeMux, server *rpc.Server) {
-	rpcwrap.ServeTestRPC(handler, server, codecName, NewServerCodec)
-}
-
 func ServeCustomRPC(handler *http.ServeMux, server *rpc.Server, useAuth bool) {
 	rpcwrap.ServeCustomRPC(handler, server, useAuth, codecName, NewServerCodec)
 }

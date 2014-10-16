@@ -32,7 +32,7 @@ func TestGoRpcTMServer(t *testing.T) {
 
 	// create the HTTP server, serve the server from it
 	handler := http.NewServeMux()
-	bsonrpc.ServeTestRPC(handler, server)
+	bsonrpc.ServeCustomRPC(handler, server, false)
 	httpServer := http.Server{
 		Handler: handler,
 	}

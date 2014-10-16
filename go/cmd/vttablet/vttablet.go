@@ -34,6 +34,9 @@ var (
 func init() {
 	servenv.RegisterDefaultFlags()
 	servenv.RegisterDefaultSecureFlags()
+	servenv.InitServiceMapForBsonRpcService("tabletmanager")
+	servenv.InitServiceMapForBsonRpcService("queryservice")
+	servenv.InitServiceMapForBsonRpcService("updatestream")
 }
 
 // tabletParamToTabletAlias takes either an old style ZK tablet path or a

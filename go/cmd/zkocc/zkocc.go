@@ -26,6 +26,9 @@ var (
 
 func init() {
 	servenv.RegisterDefaultFlags()
+	servenv.ServiceMap["bsonrpc-vt-toporeader"] = true
+	servenv.ServiceMap["bsonrpc-auth-vt-toporeader"] = true
+
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
 		flag.PrintDefaults()

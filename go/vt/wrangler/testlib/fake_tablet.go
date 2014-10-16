@@ -138,7 +138,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 
 	// create the HTTP server, serve the server from it
 	handler := http.NewServeMux()
-	bsonrpc.ServeTestRPC(handler, server)
+	bsonrpc.ServeCustomRPC(handler, server, false)
 	httpServer := http.Server{
 		Handler: handler,
 	}

@@ -5,9 +5,9 @@
 package gorpcbinlogstreamer
 
 import (
-	"github.com/youtube/vitess/go/rpcwrap"
 	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/youtube/vitess/go/vt/servenv"
 )
 
 type UpdateStream struct {
@@ -36,6 +36,6 @@ func (server *UpdateStream) StreamTables(req *proto.TablesRequest, sendReply fun
 
 func init() {
 	binlog.RegisterUpdateStreamServices = append(binlog.RegisterUpdateStreamServices, func(updateStream *binlog.UpdateStream) {
-		rpcwrap.RegisterAuthenticated(&UpdateStream{updateStream})
+		servenv.Register("updatestream", &UpdateStream{updateStream})
 	})
 }
