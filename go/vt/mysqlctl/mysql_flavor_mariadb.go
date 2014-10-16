@@ -129,6 +129,12 @@ func (*mariaDB10) SendBinlogDumpCommand(mysqld *Mysqld, conn *SlaveConnection, s
 		return fmt.Errorf("failed to set @mariadb_slave_capability=4: %v", err)
 	}
 
+	// Tell the server that we understand the format of events that will be used
+	// if binlog_checksum is enabled on the server.
+	if _, err := conn.ExecuteFetch("SET @master_binlog_checksum=@@global.binlog_checksum", 0, false); err != nil {
+		return fmt.Errorf("failed to set @master_binlog_checksum=@@global.binlog_checksum: %v", err)
+	}
+
 	// Set the slave_connect_state variable before issuing COM_BINLOG_DUMP to
 	// provide the start position in GTID form.
 	query := fmt.Sprintf("SET @slave_connect_state='%s'", startPos)
@@ -216,6 +222,46 @@ func (ev mariadbBinlogEvent) GTID(f blproto.BinlogFormat) (proto.GTID, error) {
 		Server:   ev.ServerID(),
 	}, nil
 }
+
+// Format overrides binlogEvent.Format().
+func (ev mariadbBinlogEvent) Format() (f blproto.BinlogFormat, err error) {
+	// Call parent.
+	f, err = ev.binlogEvent.Format()
+	if err != nil {
+		return
+	}
+
+	// MariaDB 5.3+ always adds a 4-byte checksum to the end of a
+	// FORMAT_DESCRIPTION_EVENT, regardless of the server setting. The byte
+	// immediately before that checksum tells us which checksum algorithm (if any)
+	// is used for the rest of the events.
+	data := ev.Bytes()
+	f.ChecksumAlgorithm = data[len(data)-5]
+	return
+}
+
+// StripChecksum implements BinlogEvent.StripChecksum().
+func (ev mariadbBinlogEvent) StripChecksum(f blproto.BinlogFormat) (blproto.BinlogEvent, []byte) {
+	switch f.ChecksumAlgorithm {
+	case BINLOG_CHECKSUM_ALG_OFF, BINLOG_CHECKSUM_ALG_UNDEF:
+		// There is no checksum.
+		return ev, nil
+	default:
+		// Checksum is the last 4 bytes of the event buffer.
+		data := ev.Bytes()
+		length := len(data)
+		checksum := data[length-4:]
+		data = data[:length-4]
+		return mariadbBinlogEvent{binlogEvent: binlogEvent(data)}, checksum
+	}
+}
+
+const (
+	// BINLOG_CHECKSUM_ALG_OFF indicates that checksums are supported but off.
+	BINLOG_CHECKSUM_ALG_OFF = 0
+	// BINLOG_CHECKSUM_ALG_UNDEF indicates that checksums are not supported.
+	BINLOG_CHECKSUM_ALG_UNDEF = 255
+)
 
 func init() {
 	registerFlavorBuiltin(mariadbFlavorID, &mariaDB10{})

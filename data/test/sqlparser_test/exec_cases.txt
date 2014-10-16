@@ -22,7 +22,7 @@
 {
   "PlanId": "PASS_SELECT",
   "Reason": "SELECT",
-  "TableName": "",
+  "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select distinct * from a limit :_vtMaxResultSize",
   "OuterQuery": null,
@@ -41,7 +41,7 @@
 {
   "PlanId": "PASS_SELECT",
   "Reason": "SELECT",
-  "TableName": "",
+  "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a group by b limit :_vtMaxResultSize",
   "OuterQuery": null,
@@ -60,7 +60,7 @@
 {
   "PlanId": "PASS_SELECT",
   "Reason": "SELECT",
-  "TableName": "",
+  "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a having b = 1 limit :_vtMaxResultSize",
   "OuterQuery": null,
@@ -217,7 +217,7 @@
 {
   "PlanId": "PASS_SELECT",
   "Reason": "SELECT_LIST",
-  "TableName": "",
+  "TableName": "a",
   "FieldQuery": null,
   "FullQuery": "select :bv from a limit :_vtMaxResultSize",
   "OuterQuery": null,

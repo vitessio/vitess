@@ -19,17 +19,6 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 		FullQuery:  GenerateSelectLimitQuery(sel),
 	}
 
-	// There are bind variables in the SELECT list
-	if plan.FieldQuery == nil {
-		plan.Reason = REASON_SELECT_LIST
-		return plan, nil
-	}
-
-	if sel.Distinct != "" || sel.GroupBy != nil || sel.Having != nil {
-		plan.Reason = REASON_SELECT
-		return plan, nil
-	}
-
 	// from
 	tableName, hasHints := analyzeFrom(sel.From)
 	if tableName == "" {
@@ -39,6 +28,17 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 	tableInfo, err := plan.setTableInfo(tableName, getTable)
 	if err != nil {
 		return nil, err
+	}
+
+	// There are bind variables in the SELECT list
+	if plan.FieldQuery == nil {
+		plan.Reason = REASON_SELECT_LIST
+		return plan, nil
+	}
+
+	if sel.Distinct != "" || sel.GroupBy != nil || sel.Having != nil {
+		plan.Reason = REASON_SELECT
+		return plan, nil
 	}
 
 	// Don't improve the plan if the select is locking the row

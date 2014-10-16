@@ -46,27 +46,30 @@ const (
 
 const txLogInterval = time.Duration(1 * time.Minute)
 
-type ActiveTxPool struct {
-	pool    *pools.Numbered
-	lastId  sync2.AtomicInt64
-	timeout sync2.AtomicDuration
-	ticks   *timer.Timer
-	txStats *stats.Timings
+type TxPool struct {
+	pool       *dbconnpool.ConnectionPool
+	activePool *pools.Numbered
+	lastId     sync2.AtomicInt64
+	timeout    sync2.AtomicDuration
+	ticks      *timer.Timer
+	txStats    *stats.Timings
 
 	// Tracking culprits that cause tx pool full errors.
 	logMu   sync.Mutex
 	lastLog time.Time
 }
 
-func NewActiveTxPool(name string, timeout time.Duration) *ActiveTxPool {
-	axp := &ActiveTxPool{
-		pool:    pools.NewNumbered(),
-		lastId:  sync2.AtomicInt64(time.Now().UnixNano()),
-		timeout: sync2.AtomicDuration(timeout),
-		ticks:   timer.NewTimer(timeout / 10),
-		txStats: stats.NewTimings("Transactions"),
+func NewTxPool(name string, capacity int, timeout, idleTimeout time.Duration) *TxPool {
+	axp := &TxPool{
+		pool:       dbconnpool.NewConnectionPool(name, capacity, idleTimeout),
+		activePool: pools.NewNumbered(),
+		lastId:     sync2.AtomicInt64(time.Now().UnixNano()),
+		timeout:    sync2.AtomicDuration(timeout),
+		ticks:      timer.NewTimer(timeout / 10),
+		txStats:    stats.NewTimings("Transactions"),
 	}
-	stats.Publish(name+"Size", stats.IntFunc(axp.pool.Size))
+	// Careful: pool also exports name+"xxx" vars,
+	// but we know it doesn't export Timeout.
 	stats.Publish(
 		name+"Timeout",
 		stats.DurationFunc(func() time.Duration { return axp.timeout.Get() }),
@@ -74,29 +77,31 @@ func NewActiveTxPool(name string, timeout time.Duration) *ActiveTxPool {
 	return axp
 }
 
-func (axp *ActiveTxPool) Open() {
+func (axp *TxPool) Open(connFactory dbconnpool.CreateConnectionFunc) {
 	log.Infof("Starting transaction id: %d", axp.lastId)
+	axp.pool.Open(connFactory)
 	axp.ticks.Start(func() { axp.TransactionKiller() })
 }
 
-func (axp *ActiveTxPool) Close() {
+func (axp *TxPool) Close() {
 	axp.ticks.Stop()
-	for _, v := range axp.pool.GetOutdated(time.Duration(0), "for closing") {
+	for _, v := range axp.activePool.GetOutdated(time.Duration(0), "for closing") {
 		conn := v.(*TxConnection)
 		log.Warningf("killing transaction for shutdown: %s", conn.Format(nil))
 		internalErrors.Add("StrayTransactions", 1)
 		conn.Close()
 		conn.discard(TX_CLOSE)
 	}
+	axp.pool.Close()
 }
 
-func (axp *ActiveTxPool) WaitForEmpty() {
-	axp.pool.WaitForEmpty()
+func (axp *TxPool) WaitForEmpty() {
+	axp.activePool.WaitForEmpty()
 }
 
-func (axp *ActiveTxPool) TransactionKiller() {
+func (axp *TxPool) TransactionKiller() {
 	defer logError()
-	for _, v := range axp.pool.GetOutdated(time.Duration(axp.Timeout()), "for rollback") {
+	for _, v := range axp.activePool.GetOutdated(time.Duration(axp.Timeout()), "for rollback") {
 		conn := v.(*TxConnection)
 		log.Warningf("killing transaction: %s", conn.Format(nil))
 		killStats.Add("Transactions", 1)
@@ -105,17 +110,28 @@ func (axp *ActiveTxPool) TransactionKiller() {
 	}
 }
 
-func (axp *ActiveTxPool) SafeBegin(conn dbconnpool.PoolConnection) (transactionId int64, err error) {
-	defer handleError(&err, nil)
+func (axp *TxPool) Begin() int64 {
+	conn, err := axp.pool.TryGet()
+	if err != nil {
+		if err == dbconnpool.CONN_POOL_CLOSED_ERR {
+			panic(connPoolClosedErr)
+		}
+		panic(NewTabletErrorSql(FATAL, err))
+	}
+	if conn == nil {
+		axp.LogActive()
+		panic(NewTabletError(TX_POOL_FULL, "Transaction pool connection limit exceeded"))
+	}
 	if _, err := conn.ExecuteFetch(BEGIN, 1, false); err != nil {
+		conn.Recycle()
 		panic(NewTabletErrorSql(FAIL, err))
 	}
-	transactionId = axp.lastId.Add(1)
-	axp.pool.Register(transactionId, newTxConnection(conn, transactionId, axp))
-	return transactionId, nil
+	transactionId := axp.lastId.Add(1)
+	axp.activePool.Register(transactionId, newTxConnection(conn, transactionId, axp))
+	return transactionId
 }
 
-func (axp *ActiveTxPool) SafeCommit(transactionId int64) (invalidList map[string]DirtyKeys, err error) {
+func (axp *TxPool) SafeCommit(transactionId int64) (invalidList map[string]DirtyKeys, err error) {
 	defer handleError(&err, nil)
 
 	conn := axp.Get(transactionId)
@@ -130,7 +146,7 @@ func (axp *ActiveTxPool) SafeCommit(transactionId int64) (invalidList map[string
 	return
 }
 
-func (axp *ActiveTxPool) Rollback(transactionId int64) {
+func (axp *TxPool) Rollback(transactionId int64) {
 	conn := axp.Get(transactionId)
 	defer conn.discard(TX_ROLLBACK)
 	axp.txStats.Add("Aborted", time.Now().Sub(conn.StartTime))
@@ -141,8 +157,8 @@ func (axp *ActiveTxPool) Rollback(transactionId int64) {
 }
 
 // You must call Recycle on TxConnection once done.
-func (axp *ActiveTxPool) Get(transactionId int64) (conn *TxConnection) {
-	v, err := axp.pool.Get(transactionId, "for query")
+func (axp *TxPool) Get(transactionId int64) (conn *TxConnection) {
+	v, err := axp.activePool.Get(transactionId, "for query")
 	if err != nil {
 		panic(NewTabletError(NOT_IN_TX, "Transaction %d: %v", transactionId, err))
 	}
@@ -151,41 +167,41 @@ func (axp *ActiveTxPool) Get(transactionId int64) (conn *TxConnection) {
 
 // LogActive causes all existing transactions to be logged when they complete.
 // The logging is throttled to no more than once every txLogInterval.
-func (axp *ActiveTxPool) LogActive() {
+func (axp *TxPool) LogActive() {
 	axp.logMu.Lock()
 	defer axp.logMu.Unlock()
 	if time.Now().Sub(axp.lastLog) < txLogInterval {
 		return
 	}
 	axp.lastLog = time.Now()
-	conns := axp.pool.GetAll()
+	conns := axp.activePool.GetAll()
 	for _, c := range conns {
 		c.(*TxConnection).LogToFile.Set(1)
 	}
 }
 
-func (axp *ActiveTxPool) Timeout() time.Duration {
+func (axp *TxPool) Timeout() time.Duration {
 	return axp.timeout.Get()
 }
 
-func (axp *ActiveTxPool) SetTimeout(timeout time.Duration) {
+func (axp *TxPool) SetTimeout(timeout time.Duration) {
 	axp.timeout.Set(timeout)
 	axp.ticks.SetInterval(timeout / 10)
 }
 
-func (axp *ActiveTxPool) StatsJSON() string {
+func (axp *TxPool) StatsJSON() string {
 	s, t := axp.Stats()
 	return fmt.Sprintf("{\"Size\": %v, \"Timeout\": %v}", s, int64(t))
 }
 
-func (axp *ActiveTxPool) Stats() (size int64, timeout time.Duration) {
-	return axp.pool.Size(), axp.Timeout()
+func (axp *TxPool) Stats() (size int64, timeout time.Duration) {
+	return axp.activePool.Size(), axp.Timeout()
 }
 
 type TxConnection struct {
 	dbconnpool.PoolConnection
 	TransactionID int64
-	pool          *ActiveTxPool
+	pool          *TxPool
 	inUse         bool
 	StartTime     time.Time
 	EndTime       time.Time
@@ -195,7 +211,7 @@ type TxConnection struct {
 	LogToFile     sync2.AtomicInt32
 }
 
-func newTxConnection(conn dbconnpool.PoolConnection, transactionId int64, pool *ActiveTxPool) *TxConnection {
+func newTxConnection(conn dbconnpool.PoolConnection, transactionId int64, pool *TxPool) *TxConnection {
 	return &TxConnection{
 		PoolConnection: conn,
 		TransactionID:  transactionId,
@@ -219,7 +235,7 @@ func (txc *TxConnection) Recycle() {
 	if txc.IsClosed() {
 		txc.discard(TX_CLOSE)
 	} else {
-		txc.pool.pool.Put(txc.TransactionID)
+		txc.pool.activePool.Put(txc.TransactionID)
 	}
 }
 
@@ -230,7 +246,7 @@ func (txc *TxConnection) RecordQuery(query string) {
 func (txc *TxConnection) discard(conclusion string) {
 	txc.Conclusion = conclusion
 	txc.EndTime = time.Now()
-	txc.pool.pool.Unregister(txc.TransactionID)
+	txc.pool.activePool.Unregister(txc.TransactionID)
 	txc.PoolConnection.Recycle()
 	// Ensure PoolConnection won't be accessed after Recycle.
 	txc.PoolConnection = nil

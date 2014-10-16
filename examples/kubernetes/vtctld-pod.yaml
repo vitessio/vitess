@@ -1,0 +1,32 @@
+apiVersion: v1beta1
+kind: Pod
+id: vtctld
+desiredState:
+  manifest:
+    version: v1beta1
+    id: vtctld
+    containers:
+      - name: vtctld
+        image: vitess/root
+        volumeMounts:
+          - name: syslog
+            mountPath: /dev/log
+          - name: vtdataroot
+            mountPath: /vt/vtdataroot
+        command:
+          - sh
+          - "-c"
+          - >-
+            echo "{\"test_cell\":\"$SERVICE_HOST:2181\",\"global\":\"$SERVICE_HOST:2181\"}" > /vt/zk-client-conf.json &&
+            chown vitess /vt/* &&
+            su -p -c "/vt/bin/vtctld -debug -templates $VTTOP/go/cmd/vtctld/templates -log_dir $VTDATAROOT/tmp -port 15000" vitess
+        env:
+          - name: ZK_CLIENT_CONFIG
+            value: /vt/zk-client-conf.json 
+    volumes:
+      - name: syslog
+        source: {hostDir: {path: /dev/log}}
+      - name: vtdataroot
+        source: {emptyDir: {}}
+labels:
+  name: vtctld

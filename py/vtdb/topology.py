@@ -180,16 +180,11 @@ def get_keyrange_from_shard_name(keyspace, shard_name, db_type):
   kr = None
   if not is_sharded_keyspace(keyspace, db_type):
     if shard_name == keyrange_constants.SHARD_ZERO:
-      kr = keyrange_constants.NON_PARTIAL_KEYRANGE
+      kr = keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)
     else:
       raise dbexceptions.DatabaseError('Invalid shard_name %s for keyspace %s',
                                        shard_name, keyspace)
   else:
-    kr_parts = shard_name.split('-')
-    if len(kr_parts) != 2:
-      raise dbexceptions.DatabaseError('Invalid shard_name %s for keyspace %s',
-                                       shard_name, keyspace)
-    kr = keyrange.KeyRange((kr_parts[0].decode('hex'),
-                            kr_parts[1].decode('hex')))
+    kr = keyrange.KeyRange(shard_name)
   return kr
 

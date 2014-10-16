@@ -1,0 +1,24 @@
+apiVersion: v1beta1
+kind: Pod
+id: zk{{zkid}}
+desiredState:
+  manifest:
+    version: v1beta1
+    id: zk{{zkid}}
+    containers:
+      - name: zk{{zkid}}
+        image: vitess/root
+        volumeMounts:
+          - name: syslog
+            mountPath: /dev/log
+          - name: vtdataroot
+            mountPath: /vt/vtdataroot
+        command: [sh, "-c", "chown vitess /vt/vtdataroot && su -p -c \"/vt/bin/zkctl -follow -zk.myid {{zkid}} -zk.cfg {{zkcfg}} init\" vitess"] 
+    volumes:
+      - name: syslog
+        source: {hostDir: {path: /dev/log}}
+      - name: vtdataroot
+        source: {emptyDir: {}}
+labels:
+  name: zk
+  zkid: {{zkid}}

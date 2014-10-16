@@ -60,6 +60,15 @@ class MysqlFlavor(object):
     else:
       return gtid
 
+  def enable_binlog_checksum(self, tablet):
+    """Enables binlog_checksum and returns True if the flavor supports it.
+       Returns False if the flavor doesn't support binlog_checksum."""
+    return False
+
+  def disable_binlog_checksum(self, tablet):
+    """Disables binlog_checksum if the flavor supports it."""
+    return
+
 
 class GoogleMysql(MysqlFlavor):
   """Overrides specific to Google MySQL"""
@@ -142,6 +151,12 @@ class MariaDB(MysqlFlavor):
         "MASTER_HOST='%s', MASTER_PORT=%u, MASTER_USE_GTID = slave_pos" %
         (host, port)]
 
+  def enable_binlog_checksum(self, tablet):
+    tablet.mquery('', 'SET @@global.binlog_checksum=1')
+    return True
+
+  def disable_binlog_checksum(self, tablet):
+    tablet.mquery('', 'SET @@global.binlog_checksum=0')
 
 __mysql_flavor = None
 

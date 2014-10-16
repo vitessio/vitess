@@ -5,7 +5,6 @@
 package tabletserver
 
 import (
-	"bytes"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -85,7 +84,6 @@ type SqlQuery struct {
 func NewSqlQuery(config Config) *SqlQuery {
 	sq := &SqlQuery{}
 	sq.qe = NewQueryEngine(config)
-	stats.PublishJSONFunc("Voltron", sq.statsJSON)
 	stats.Publish("TabletState", stats.IntFunc(sq.state.Get))
 	stats.Publish("TabletStateName", stats.StringFunc(sq.GetState))
 	return sq
@@ -231,40 +229,10 @@ func (sq *SqlQuery) Begin(context context.Context, session *proto.Session, txInf
 	if session.SessionId == 0 || session.SessionId != sq.sessionId {
 		return NewTabletError(RETRY, "Invalid session Id %v", session.SessionId)
 	}
-
-	txInfo.TransactionId = Begin(logStats, sq.qe)
+	defer queryStats.Record("BEGIN", time.Now())
+	txInfo.TransactionId = sq.qe.txPool.Begin()
 	logStats.TransactionID = txInfo.TransactionId
 	return nil
-}
-
-// startRequest validates the current state and sessionId and registers
-// the request (a waitgroup) as started. Every startRequest requires one
-// and only one corresponding endRequest. When the service shuts down,
-// disallowQueries will wait on this waitgroup to ensure that there are
-// no requests in flight.
-func (sq *SqlQuery) startRequest(sessionId int64, allowShutdown bool) (err error) {
-	sq.mu.RLock()
-	defer sq.mu.RUnlock()
-	st := sq.state.Get()
-	if st == SERVING {
-		goto verifySession
-	}
-	if allowShutdown && st == SHUTTING_TX {
-		goto verifySession
-	}
-	return NewTabletError(RETRY, "operation not allowed in state %s", sq.GetState())
-
-verifySession:
-	if sessionId == 0 || sessionId != sq.sessionId {
-		return NewTabletError(RETRY, "Invalid session Id %v", sessionId)
-	}
-	sq.requests.Add(1)
-	return nil
-}
-
-// endRequest unregisters the current request (a waitgroup) as done.
-func (sq *SqlQuery) endRequest() {
-	sq.requests.Done()
 }
 
 // Commit commits the specified transaction.
@@ -292,8 +260,8 @@ func (sq *SqlQuery) Rollback(context context.Context, session *proto.Session) (e
 	}
 	defer sq.endRequest()
 	defer handleError(&err, logStats)
-
-	Rollback(logStats, sq.qe, session.TransactionId)
+	defer queryStats.Record("ROLLBACK", time.Now())
+	sq.qe.txPool.Rollback(session.TransactionId)
 	return nil
 }
 
@@ -464,6 +432,7 @@ func (sq *SqlQuery) ExecuteBatch(context context.Context, queryList *proto.Query
 func (sq *SqlQuery) SplitQuery(context context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
 	logStats := newSqlQueryStats("SplitQuery", context)
 	var err error
+	// TODO(sougou/anandhenry): Add session validation.
 	defer handleError(&err, logStats)
 
 	splitter := NewQuerySplitter(&(req.Query), req.SplitCount, sq.qe.schemaInfo)
@@ -487,22 +456,34 @@ func (sq *SqlQuery) SplitQuery(context context.Context, req *proto.SplitQueryReq
 	return nil
 }
 
-// statsJSON is used to export SqlQuery status variables into expvar.
-func (sq *SqlQuery) statsJSON() string {
-	buf := bytes.NewBuffer(make([]byte, 0, 128))
-	fmt.Fprintf(buf, "{")
-	fmt.Fprintf(buf, "\n \"State\": \"%v\",", stateName[sq.state.Get()])
-	fmt.Fprintf(buf, "\n \"CachePool\": %v,", sq.qe.cachePool.StatsJSON())
-	fmt.Fprintf(buf, "\n \"QueryCache\": %v,", sq.qe.schemaInfo.queries.StatsJSON())
-	fmt.Fprintf(buf, "\n \"ConnPool\": %v,", sq.qe.connPool.StatsJSON())
-	fmt.Fprintf(buf, "\n \"StreamConnPool\": %v,", sq.qe.streamConnPool.StatsJSON())
-	fmt.Fprintf(buf, "\n \"TxPool\": %v,", sq.qe.txPool.StatsJSON())
-	fmt.Fprintf(buf, "\n \"ActiveTxPool\": %v,", sq.qe.activeTxPool.StatsJSON())
-	fmt.Fprintf(buf, "\n \"QueryTimeout\": %v,", int64(sq.qe.queryTimeout.Get()))
-	fmt.Fprintf(buf, "\n \"MaxResultSize\": %v,", sq.qe.maxResultSize.Get())
-	fmt.Fprintf(buf, "\n \"StreamBufferSize\": %v", sq.qe.streamBufferSize.Get())
-	fmt.Fprintf(buf, "\n}")
-	return buf.String()
+// startRequest validates the current state and sessionId and registers
+// the request (a waitgroup) as started. Every startRequest requires one
+// and only one corresponding endRequest. When the service shuts down,
+// disallowQueries will wait on this waitgroup to ensure that there are
+// no requests in flight.
+func (sq *SqlQuery) startRequest(sessionId int64, allowShutdown bool) (err error) {
+	sq.mu.RLock()
+	defer sq.mu.RUnlock()
+	st := sq.state.Get()
+	if st == SERVING {
+		goto verifySession
+	}
+	if allowShutdown && st == SHUTTING_TX {
+		goto verifySession
+	}
+	return NewTabletError(RETRY, "operation not allowed in state %s", sq.GetState())
+
+verifySession:
+	if sessionId == 0 || sessionId != sq.sessionId {
+		return NewTabletError(RETRY, "Invalid session Id %v", sessionId)
+	}
+	sq.requests.Add(1)
+	return nil
+}
+
+// endRequest unregisters the current request (a waitgroup) as done.
+func (sq *SqlQuery) endRequest() {
+	sq.requests.Done()
 }
 
 func init() {

@@ -5,6 +5,7 @@
 package tabletserver
 
 import (
+	"sync"
 	"time"
 
 	log "github.com/golang/glog"
@@ -49,14 +50,14 @@ type QueryEngine struct {
 	cachePool      *CachePool
 	connPool       *dbconnpool.ConnectionPool
 	streamConnPool *dbconnpool.ConnectionPool
-	txPool         *dbconnpool.ConnectionPool
 
 	// Services
-	activeTxPool *ActiveTxPool
+	txPool       *TxPool
 	consolidator *Consolidator
 	invalidator  *RowcacheInvalidator
 	streamQList  *QueryList
 	connKiller   *ConnectionKiller
+	tasks        sync.WaitGroup
 
 	// Vars
 	queryTimeout     sync2.AtomicDuration
@@ -126,10 +127,9 @@ func NewQueryEngine(config Config) *QueryEngine {
 	qe.cachePool = NewCachePool("Rowcache", config.RowCache, time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.connPool = dbconnpool.NewConnectionPool("ConnPool", config.PoolSize, time.Duration(config.IdleTimeout*1e9))
 	qe.streamConnPool = dbconnpool.NewConnectionPool("StreamConnPool", config.StreamPoolSize, time.Duration(config.IdleTimeout*1e9))
-	qe.txPool = dbconnpool.NewConnectionPool("TransactionPool", config.TransactionCap, time.Duration(config.IdleTimeout*1e9)) // connections in pool has to be > transactionCap
 
 	// Services
-	qe.activeTxPool = NewActiveTxPool("ActiveTransactionPool", time.Duration(config.TransactionTimeout*1e9))
+	qe.txPool = NewTxPool("TransactionPool", config.TransactionCap, time.Duration(config.TransactionTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.connKiller = NewConnectionKiller(1, time.Duration(config.IdleTimeout*1e9))
 	qe.consolidator = NewConsolidator()
 	qe.invalidator = NewRowcacheInvalidator(qe)
@@ -151,6 +151,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 	// Stats
 	stats.Publish("MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
 	stats.Publish("StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
+	stats.Publish("QueryTimeout", stats.DurationFunc(qe.queryTimeout.Get))
 	queryStats = stats.NewTimings("Queries")
 	QPSRates = stats.NewRates("QPS", queryStats, 15, 60*time.Second)
 	waitStats = stats.NewTimings("Waits")
@@ -204,24 +205,42 @@ func (qe *QueryEngine) Open(dbconfig *dbconfigs.DBConfig, schemaOverrides []Sche
 	qe.connPool.Open(connFactory)
 	qe.streamConnPool.Open(connFactory)
 	qe.txPool.Open(connFactory)
-	qe.activeTxPool.Open()
 	qe.connKiller.Open(connFactory)
+}
+
+// Launch launches the specified function inside a goroutine.
+// If Close or WaitForTxEmpty is called while a goroutine is running,
+// QueryEngine will not return until the existing functions have completed.
+// This functionality allows us to launch tasks with the assurance that
+// the QueryEngine will not be closed underneath us.
+func (qe *QueryEngine) Launch(f func()) {
+	qe.tasks.Add(1)
+	go func() {
+		defer func() {
+			qe.tasks.Done()
+			internalErrors.Add("Task", 1)
+			if x := recover(); x != nil {
+				log.Errorf("task error: %v", x)
+			}
+		}()
+		f()
+	}()
 }
 
 // WaitForTxEmpty must be called before calling Close.
 // Before calling WaitForTxEmpty, you must ensure that there
 // will be no more calls to Begin.
 func (qe *QueryEngine) WaitForTxEmpty() {
-	qe.activeTxPool.WaitForEmpty()
+	qe.txPool.WaitForEmpty()
 }
 
 // Close must be called to shut down QueryEngine.
 // You must ensure that no more queries will be sent
 // before calling Close.
 func (qe *QueryEngine) Close() {
+	qe.tasks.Wait()
 	// Close in reverse order of Open.
 	qe.connKiller.Close()
-	qe.activeTxPool.Close()
 	qe.txPool.Close()
 	qe.streamConnPool.Close()
 	qe.connPool.Close()

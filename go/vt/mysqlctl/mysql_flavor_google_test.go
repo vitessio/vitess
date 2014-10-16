@@ -180,6 +180,21 @@ func TestGoogleBinlogEventGTID(t *testing.T) {
 	}
 }
 
+func TestGoogleBinlogEventStripChecksum(t *testing.T) {
+	f, err := binlogEvent(googleFormatEvent).Format()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+
+	input := googleBinlogEvent{binlogEvent: binlogEvent(googleQueryEvent)}
+	want := input
+	gotEvent, gotChecksum := input.StripChecksum(f)
+	if !reflect.DeepEqual(gotEvent, want) || gotChecksum != nil {
+		t.Errorf("%#v.StripChecksum() = (%v, %v), want (%v, nil)", input, gotEvent, gotChecksum, want)
+	}
+}
+
 func TestGoogleStartReplicationCommands(t *testing.T) {
 	params := &mysql.ConnectionParams{
 		Uname: "username",
