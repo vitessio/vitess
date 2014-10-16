@@ -103,8 +103,8 @@ type CacheInvalidator interface {
 }
 
 // Helper method for conn pools to convert errors
-func getOrPanic(pool *dbconnpool.ConnectionPool, timeout time.Duration) dbconnpool.PoolConnection {
-	conn, err := pool.Get(timeout)
+func getOrPanic(pool *dbconnpool.ConnectionPool) dbconnpool.PoolConnection {
+	conn, err := pool.Get(0)
 	if err == nil {
 		return conn
 	}

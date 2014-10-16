@@ -22,6 +22,23 @@ type RequestContext struct {
 	deadline Deadline
 }
 
+func (rqc *RequestContext) getConn(pool *dbconnpool.ConnectionPool) dbconnpool.PoolConnection {
+	start := time.Now()
+	timeout, err := rqc.deadline.Timeout()
+	if err != nil {
+		panic(NewTabletError(FAIL, "getConn: %v", err))
+	}
+	conn, err := pool.Get(timeout)
+	switch err {
+	case nil:
+		rqc.logStats.WaitingForConnection += time.Now().Sub(start)
+		return conn
+	case dbconnpool.CONN_POOL_CLOSED_ERR:
+		panic(connPoolClosedErr)
+	}
+	panic(NewTabletErrorSql(FATAL, err))
+}
+
 func (rqc *RequestContext) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value) (result *mproto.QueryResult) {
 	sql := rqc.generateFinalSql(parsedQuery, bindVars, listVars, nil)
 	q, ok := rqc.qe.consolidator.Create(string(sql))

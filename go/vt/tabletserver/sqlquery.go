@@ -449,7 +449,7 @@ func (sq *SqlQuery) SplitQuery(context context.Context, req *proto.SplitQueryReq
 		qe:       sq.qe,
 		deadline: NewDeadline(sq.qe.queryTimeout.Get()),
 	}
-	conn := getOrPanic(sq.qe.connPool, sq.qe.queryTimeout.Get())
+	conn := requestContext.getConn(sq.qe.connPool)
 	// TODO: For fetching pkMinMax, include where clauses on the
 	// primary key, if any, in the original query which might give a narrower
 	// range of PKs to work with.

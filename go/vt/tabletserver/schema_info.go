@@ -120,7 +120,7 @@ func (si *SchemaInfo) Open(connFactory dbconnpool.CreateConnectionFunc, schemaOv
 	// Get time first because it needs a connection from the pool.
 	curTime := si.mysqlTime()
 
-	conn := getOrPanic(si.connPool, 0)
+	conn := getOrPanic(si.connPool)
 	defer conn.Recycle()
 
 	if strictMode && !conn.(*dbconnpool.PooledDBConnection).VerifyStrict() {
@@ -222,7 +222,7 @@ func (si *SchemaInfo) Reload() {
 	var tables *mproto.QueryResult
 	var err error
 	func() {
-		conn := getOrPanic(si.connPool, 0)
+		conn := getOrPanic(si.connPool)
 		defer conn.Recycle()
 		tables, err = conn.ExecuteFetch(fmt.Sprintf("%s and unix_timestamp(create_time) >= %v", base_show_tables, si.lastChange.Unix()), maxTableCount, false)
 	}()
@@ -240,7 +240,7 @@ func (si *SchemaInfo) Reload() {
 }
 
 func (si *SchemaInfo) mysqlTime() time.Time {
-	conn := getOrPanic(si.connPool, 0)
+	conn := getOrPanic(si.connPool)
 	defer conn.Recycle()
 	tm, err := conn.ExecuteFetch("select unix_timestamp()", 1, false)
 	if err != nil {
@@ -266,7 +266,7 @@ func (si *SchemaInfo) CreateOrUpdateTable(tableName string) {
 	si.mu.Lock()
 	defer si.mu.Unlock()
 
-	conn := getOrPanic(si.connPool, 0)
+	conn := getOrPanic(si.connPool)
 	defer conn.Recycle()
 	tables, err := conn.ExecuteFetch(fmt.Sprintf("%s and table_name = '%s'", base_show_tables, tableName), 1, false)
 	if err != nil {
@@ -353,7 +353,7 @@ func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string) *ExecPlan {
 		if plan.FieldQuery == nil {
 			log.Warningf("Cannot cache field info: %s", sql)
 		} else {
-			conn := getOrPanic(si.connPool, 0)
+			conn := getOrPanic(si.connPool)
 			defer conn.Recycle()
 			sql := plan.FieldQuery.Query
 			start := time.Now()

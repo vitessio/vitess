@@ -34,7 +34,7 @@ func (ck *ConnectionKiller) Close() {
 func (ck *ConnectionKiller) Kill(connID int64) error {
 	killStats.Add("Queries", 1)
 	log.Infof("killing query %d", connID)
-	killConn := getOrPanic(ck.connPool, 0)
+	killConn := getOrPanic(ck.connPool)
 	defer killConn.Recycle()
 	sql := fmt.Sprintf("kill %d", connID)
 	var err error
