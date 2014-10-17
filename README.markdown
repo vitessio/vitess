@@ -7,6 +7,10 @@ QPS (per server). If you want to find out whether Vitess is a good fit for your
 project, please read our [helicopter
 overview](https://github.com/youtube/vitess/blob/master/doc/HelicopterOverview.markdown).
 
+There are a couple of videos from [sougou](https://github.com/sougou) that you can watch:
+a [short intro](http://youtu.be/midJ6b1LkA) prepared for Google I/O 2014
+and a more [detailed presentation from @Scale '14](http://youtu.be/5yDO-tmIoXY).
+
 ## Overview
 
 ![Overview](https://raw.githubusercontent.com/youtube/vitess/master/doc/VitessOverview.png)
@@ -42,11 +46,6 @@ write your own backend (at Google we use a Protocol Buffers based protocol). We
 provide a client implementation for three languages: Python, Go, and Java.
 Writing a client for your language should not be difficult, as it's a matter of
 implementing only a few API calls (please send us a pull request if you do!).
-
-To learn more, please click on the documentation links below.
-You can also watch a [9 minute introduction](https://www.youtube.com/watch?v=midJ6b1LkA0)
-to Vitess [sougou](https://github.com/sougou) prepared for Google I/O 2014.
-There's also a more detailed [video from the @Scale '14 conference](http://youtu.be/5yDO-tmIoXY).
 
 ## Trying it out
 
