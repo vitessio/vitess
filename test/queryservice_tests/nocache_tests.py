@@ -186,14 +186,18 @@ class TestNocache(framework.TestCase):
 
   def test_transaction_cap(self):
     self.env.execute("set vt_transaction_cap=1")
+    self.env.execute("set vt_txpool_timeout=0.5")
     vstart = self.env.debug_vars()
+    self.assertEqual(vstart.TransactionPoolPoolTimeout, 5e8)
     co2 = self.env.connect()
     self.env.conn.begin()
     try:
       cu2 = cursor.TabletCursor(co2)
+      start = time.time()
       co2.begin()
     except dbexceptions.DatabaseError as e:
       self.assertContains(str(e), "tx_pool_full")
+      self.assertTrue(time.time()-start >= 0.4)
     else:
       self.fail("Did not receive exception")
     finally:
@@ -203,8 +207,10 @@ class TestNocache(framework.TestCase):
     vend = self.env.debug_vars()
     self.assertEqual(vend.TransactionPoolCapacity, 1)
     self.env.execute("set vt_transaction_cap=20")
+    self.env.execute("set vt_txpool_timeout=1")
     vend = self.env.debug_vars()
     self.assertEqual(vend.TransactionPoolCapacity, 20)
+    self.assertEqual(vend.TransactionPoolPoolTimeout, 1e9)
     self.assertEqual(vstart.mget("Errors.TxPoolFull", 0) + 1, vend.Errors.TxPoolFull)
 
   def test_transaction_timeout(self):
@@ -214,6 +220,8 @@ class TestNocache(framework.TestCase):
     vstart = self.env.debug_vars()
     self.env.txlog.reset()
     self.env.conn.begin()
+    vmid = self.env.debug_vars()
+    self.assertEqual(vstart.TransactionPoolAvailable, vmid.TransactionPoolAvailable+1)
     time.sleep(0.3)
     try:
       self.env.conn.commit()
@@ -225,6 +233,7 @@ class TestNocache(framework.TestCase):
     txlog = self.env.txlog.read().split('\t')
     self.assertEqual(txlog[4], "kill")
     vend = self.env.debug_vars()
+    self.assertEqual(vstart.TransactionPoolAvailable, vend.TransactionPoolAvailable)
     self.assertEqual(vend.TransactionPoolTimeout, 250000000)
     self.assertEqual(vstart.mget("Kills.Transactions", 0)+1, vend.Kills.Transactions)
     self.env.execute("set vt_transaction_timeout=30")

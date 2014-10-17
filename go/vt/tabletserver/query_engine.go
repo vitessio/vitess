@@ -119,17 +119,40 @@ func getOrPanic(pool *dbconnpool.ConnectionPool) dbconnpool.PoolConnection {
 // You must call this only once.
 func NewQueryEngine(config Config) *QueryEngine {
 	qe := &QueryEngine{}
-	qe.schemaInfo = NewSchemaInfo(config.QueryCacheSize, time.Duration(config.SchemaReloadTime*1e9), time.Duration(config.IdleTimeout*1e9))
+	qe.schemaInfo = NewSchemaInfo(
+		config.QueryCacheSize,
+		time.Duration(config.SchemaReloadTime*1e9),
+		time.Duration(config.IdleTimeout*1e9),
+	)
 
 	mysqlStats = stats.NewTimings("Mysql")
 
 	// Pools
-	qe.cachePool = NewCachePool("Rowcache", config.RowCache, time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
-	qe.connPool = dbconnpool.NewConnectionPool("ConnPool", config.PoolSize, time.Duration(config.IdleTimeout*1e9))
-	qe.streamConnPool = dbconnpool.NewConnectionPool("StreamConnPool", config.StreamPoolSize, time.Duration(config.IdleTimeout*1e9))
+	qe.cachePool = NewCachePool(
+		"Rowcache",
+		config.RowCache,
+		time.Duration(config.QueryTimeout*1e9),
+		time.Duration(config.IdleTimeout*1e9),
+	)
+	qe.connPool = dbconnpool.NewConnectionPool(
+		"ConnPool",
+		config.PoolSize,
+		time.Duration(config.IdleTimeout*1e9),
+	)
+	qe.streamConnPool = dbconnpool.NewConnectionPool(
+		"StreamConnPool",
+		config.StreamPoolSize,
+		time.Duration(config.IdleTimeout*1e9),
+	)
 
 	// Services
-	qe.txPool = NewTxPool("TransactionPool", config.TransactionCap, time.Duration(config.TransactionTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
+	qe.txPool = NewTxPool(
+		"TransactionPool",
+		config.TransactionCap,
+		time.Duration(config.TransactionTimeout*1e9),
+		time.Duration(config.TxPoolTimeout*1e9),
+		time.Duration(config.IdleTimeout*1e9),
+	)
 	qe.connKiller = NewConnectionKiller(1, time.Duration(config.IdleTimeout*1e9))
 	qe.consolidator = NewConsolidator()
 	qe.invalidator = NewRowcacheInvalidator(qe)

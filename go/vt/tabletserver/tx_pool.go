@@ -47,33 +47,33 @@ const (
 const txLogInterval = time.Duration(1 * time.Minute)
 
 type TxPool struct {
-	pool       *dbconnpool.ConnectionPool
-	activePool *pools.Numbered
-	lastId     sync2.AtomicInt64
-	timeout    sync2.AtomicDuration
-	ticks      *timer.Timer
-	txStats    *stats.Timings
+	pool        *dbconnpool.ConnectionPool
+	activePool  *pools.Numbered
+	lastId      sync2.AtomicInt64
+	timeout     sync2.AtomicDuration
+	poolTimeout sync2.AtomicDuration
+	ticks       *timer.Timer
+	txStats     *stats.Timings
 
 	// Tracking culprits that cause tx pool full errors.
 	logMu   sync.Mutex
 	lastLog time.Time
 }
 
-func NewTxPool(name string, capacity int, timeout, idleTimeout time.Duration) *TxPool {
+func NewTxPool(name string, capacity int, timeout, poolTimeout, idleTimeout time.Duration) *TxPool {
 	axp := &TxPool{
-		pool:       dbconnpool.NewConnectionPool(name, capacity, idleTimeout),
-		activePool: pools.NewNumbered(),
-		lastId:     sync2.AtomicInt64(time.Now().UnixNano()),
-		timeout:    sync2.AtomicDuration(timeout),
-		ticks:      timer.NewTimer(timeout / 10),
-		txStats:    stats.NewTimings("Transactions"),
+		pool:        dbconnpool.NewConnectionPool(name, capacity, idleTimeout),
+		activePool:  pools.NewNumbered(),
+		lastId:      sync2.AtomicInt64(time.Now().UnixNano()),
+		timeout:     sync2.AtomicDuration(timeout),
+		poolTimeout: sync2.AtomicDuration(poolTimeout),
+		ticks:       timer.NewTimer(timeout / 10),
+		txStats:     stats.NewTimings("Transactions"),
 	}
 	// Careful: pool also exports name+"xxx" vars,
 	// but we know it doesn't export Timeout.
-	stats.Publish(
-		name+"Timeout",
-		stats.DurationFunc(func() time.Duration { return axp.timeout.Get() }),
-	)
+	stats.Publish(name+"Timeout", stats.DurationFunc(axp.timeout.Get))
+	stats.Publish(name+"PoolTimeout", stats.DurationFunc(axp.poolTimeout.Get))
 	return axp
 }
 
@@ -111,16 +111,16 @@ func (axp *TxPool) TransactionKiller() {
 }
 
 func (axp *TxPool) Begin() int64 {
-	conn, err := axp.pool.TryGet()
+	conn, err := axp.pool.Get(axp.poolTimeout.Get())
 	if err != nil {
-		if err == dbconnpool.CONN_POOL_CLOSED_ERR {
+		switch err {
+		case dbconnpool.CONN_POOL_CLOSED_ERR:
 			panic(connPoolClosedErr)
+		case pools.TIMEOUT_ERR:
+			axp.LogActive()
+			panic(NewTabletError(TX_POOL_FULL, "Transaction pool connection limit exceeded"))
 		}
 		panic(NewTabletErrorSql(FATAL, err))
-	}
-	if conn == nil {
-		axp.LogActive()
-		panic(NewTabletError(TX_POOL_FULL, "Transaction pool connection limit exceeded"))
 	}
 	if _, err := conn.ExecuteFetch(BEGIN, 1, false); err != nil {
 		conn.Recycle()
@@ -189,13 +189,8 @@ func (axp *TxPool) SetTimeout(timeout time.Duration) {
 	axp.ticks.SetInterval(timeout / 10)
 }
 
-func (axp *TxPool) StatsJSON() string {
-	s, t := axp.Stats()
-	return fmt.Sprintf("{\"Size\": %v, \"Timeout\": %v}", s, int64(t))
-}
-
-func (axp *TxPool) Stats() (size int64, timeout time.Duration) {
-	return axp.activePool.Size(), axp.Timeout()
+func (axp *TxPool) SetPoolTimeout(timeout time.Duration) {
+	axp.poolTimeout.Set(timeout)
 }
 
 type TxConnection struct {
