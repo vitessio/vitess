@@ -20,7 +20,7 @@ modulo some replication lag).
 
 A Keyspace usually has one shard when not using any sharding (we name it '0' by convention). When sharded, a Keyspace will have N shards (usually, N is a power of 2) with non-overlapping data.
 
-We support [dynamic resharding](Resharding.markdown), when one shard is split into 2 shards for instance. In this case, the data in the
+We support [dynamic resharding](Resharding.md), when one shard is split into 2 shards for instance. In this case, the data in the
 source shard is duplicated into the 2 destination shards, but only during the transition. Afterwards, the source shard is
 deleted.
 
@@ -85,14 +85,14 @@ and a hashed version of that UserId as a keyspace_id. All data related to one us
 the same shard, as all rows will share that keyspace_id.
 
 ### Replication graph
-The [Replication Graph](ReplicationGraph.markdown) represents the relationships between the master
+The [Replication Graph](ReplicationGraph.md) represents the relationships between the master
 databases and their respective replicas.
 This data is particularly useful during a master failover.
 Once a new master has been designated, all existing replicas have to
 repointed to the new master so that replication can resume.
 
 ### Serving graph
-The [Serving Graph](ServingGraph.markdown) is derived from the shard and replication graph.
+The [Serving Graph](ServingGraph.md) is derived from the shard and replication graph.
 It represens the list of active servers that are available to serve
 queries.
 VTGate (or smart clients) query the serving graph to find out which servers
