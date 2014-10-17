@@ -8,7 +8,7 @@ project, please read our [helicopter
 overview](https://github.com/youtube/vitess/blob/master/doc/HelicopterOverview.markdown).
 
 There are a couple of videos from [sougou](https://github.com/sougou) that you can watch:
-a [short intro](http://youtu.be/midJ6b1LkA) prepared for Google I/O 2014
+a [short intro](http://youtu.be/midJ6b1LkA0) prepared for Google I/O 2014
 and a more [detailed presentation from @Scale '14](http://youtu.be/5yDO-tmIoXY).
 
 ## Overview
