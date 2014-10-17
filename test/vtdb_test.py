@@ -512,7 +512,11 @@ class TestExceptionLogging(unittest.TestCase):
          values (%(eid)s, %(id)s, %(keyspace_id)s)",
         {'eid': 1, 'id': 1, 'keyspace_id':keyspace_id})
       master_conn.commit()
+    except dbexceptions.IntegrityError as e:
+      pass
     except Exception as e:
+      self.fail("Expected IntegrityError to be raised")
+    finally:
       master_conn.rollback()
     # The underlying execute is expected to catch and log the integrity error.
     self.assertEqual(self.logger.get_integrity_error_count(), old_error_count+1)

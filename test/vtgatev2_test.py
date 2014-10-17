@@ -888,7 +888,11 @@ class TestExceptionLogging(unittest.TestCase):
         {'eid': 1, 'id': 1, 'keyspace_id':keyspace_id}, KEYSPACE_NAME, 'master',
         keyspace_ids=[pack_kid(keyspace_id)])
       vtgate_conn.commit()
+    except dbexceptions.IntegrityError as e:
+      pass
     except Exception as e:
+      self.fail("Expected IntegrityError to be raised")
+    finally:
       vtgate_conn.rollback()
     # The underlying execute is expected to catch and log the integrity error.
     self.assertEqual(self.logger.get_integrity_error_count(), old_error_count+1)
