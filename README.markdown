@@ -46,9 +46,7 @@ implementing only a few API calls (please send us a pull request if you do!).
 To learn more, please click on the documentation links below.
 You can also watch a [9 minute introduction](https://www.youtube.com/watch?v=midJ6b1LkA0)
 to Vitess [sougou](https://github.com/sougou) prepared for Google I/O 2014.
-There's also a longer presentation from the Fosdem '14 go devroom
-([slides](https://github.com/youtube/vitess/blob/master/doc/Vitess2014.pdf?raw=true),
-[video](http://youtu.be/qATTTSg6zXk)).
+There's also a more detailed [video from the @Scale '14 conference](http://youtu.be/5yDO-tmIoXY).
 
 ## Trying it out
 
