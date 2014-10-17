@@ -5,7 +5,7 @@ databases for the web. It's been developed since 2011, and is currently used as
 a fundamental component of YouTube's MySQL infrastructure, serving thousands of
 QPS (per server). If you want to find out whether Vitess is a good fit for your
 project, please read our [helicopter
-overview](https://github.com/youtube/vitess/blob/master/doc/HelicopterOverview.markdown).
+overview](https://github.com/youtube/vitess/blob/master/doc/HelicopterOverview.md).
 
 There are a couple of videos from [sougou](https://github.com/sougou) that you can watch:
 a [short intro](http://youtu.be/midJ6b1LkA0) prepared for Google I/O 2014
@@ -55,40 +55,40 @@ undocumented. However, if you feel adventurous, you're more than welcome to try
 it. We know that there are some rough edges, so please don't hesitate to reach out
 to us through [our mailing list](https://groups.google.com/forum/#!forum/vitess)
 if you run into any issues. Warnings aside, please take a look at our [Getting
-Started](https://github.com/youtube/vitess/blob/master/doc/GettingStarted.markdown)
+Started](https://github.com/youtube/vitess/blob/master/doc/GettingStarted.md)
 guide.
 
 ## Documentation
 
 ### Intro
- * [Helicopter overview](https://github.com/youtube/vitess/blob/master/doc/HelicopterOverview.markdown):
+ * [Helicopter overview](https://github.com/youtube/vitess/blob/master/doc/HelicopterOverview.md):
      high level overview of Vitess that should tell you whether Vitess is for you.
- * [Frequently Asked Questions](https://github.com/youtube/vitess/blob/master/doc/FAQ.markdown).
- * [Vision](https://github.com/youtube/vitess/blob/master/doc/Vision.markdown):
+ * [Frequently Asked Questions](https://github.com/youtube/vitess/blob/master/doc/FAQ.md).
+ * [Vision](https://github.com/youtube/vitess/blob/master/doc/Vision.md):
      principles guiding the design of Vitess.
 
 ### Using Vitess
 
- * [Getting Started](https://github.com/youtube/vitess/blob/master/doc/GettingStarted.markdown):
+ * [Getting Started](https://github.com/youtube/vitess/blob/master/doc/GettingStarted.md):
      how to set your environment to work with Vitess.
- * [Tools](https://github.com/youtube/vitess/blob/master/doc/Tools.markdown):
+ * [Tools](https://github.com/youtube/vitess/blob/master/doc/Tools.md):
      all Vitess tools and servers.
- * [Vttablet](https://github.com/youtube/vitess/blob/master/doc/Vttablet.markdown):
+ * [Vttablet](https://github.com/youtube/vitess/blob/master/doc/Vttablet.md):
      information about the most important Vitess server.
- * [Reparenting](https://github.com/youtube/vitess/blob/master/doc/Reparenting.markdown):
+ * [Reparenting](https://github.com/youtube/vitess/blob/master/doc/Reparenting.md):
      performing master failover.
- * [Resharding](https://github.com/youtube/vitess/blob/master/doc/Resharding.markdown):
+ * [Resharding](https://github.com/youtube/vitess/blob/master/doc/Resharding.md):
      adding more shards to your cluster.
- * [Preparing for production](https://github.com/youtube/vitess/blob/master/doc/Production.markdown) (wip).
- * [Schema management](https://github.com/youtube/vitess/blob/master/doc/SchemaManagement.markdown):
+ * [Preparing for production](https://github.com/youtube/vitess/blob/master/doc/Production.md) (wip).
+ * [Schema management](https://github.com/youtube/vitess/blob/master/doc/SchemaManagement.md):
      managing your database schema using Vitess.
 
 ### Reference
 
- * [General Concepts](https://github.com/youtube/vitess/blob/master/doc/Concepts.markdown)
- * [Zookeeper data](https://github.com/youtube/vitess/blob/master/doc/ZookeeperData.markdown)
- * [Serving graph](https://github.com/youtube/vitess/blob/master/doc/ServingGraph.markdown)
- * [Replication Graph](https://github.com/youtube/vitess/blob/master/doc/ReplicationGraph.markdown)
+ * [General Concepts](https://github.com/youtube/vitess/blob/master/doc/Concepts.md)
+ * [Zookeeper data](https://github.com/youtube/vitess/blob/master/doc/ZookeeperData.md)
+ * [Serving graph](https://github.com/youtube/vitess/blob/master/doc/ServingGraph.md)
+ * [Replication Graph](https://github.com/youtube/vitess/blob/master/doc/ReplicationGraph.md)
 
 ## License
 
