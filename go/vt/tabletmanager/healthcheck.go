@@ -127,7 +127,13 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 		// we don't know the port, try to get it from mysqld
 		mysqlPort, err := agent.Mysqld.GetMysqlPort()
 		if err != nil {
-			log.Warningf("Cannot get current mysql port, won't populate the Tablet record in topology: %v", err)
+			// Don't log if we're already in a waiting-for-mysql state.
+			agent.mutex.Lock()
+			if !agent._waitingForMysql {
+				log.Warningf("Can't get mysql port, won't populate Tablet record in topology (will retry silently at healthcheck interval %v): %v", *healthCheckInterval, err)
+				agent._waitingForMysql = true
+			}
+			agent.mutex.Unlock()
 		} else {
 			log.Infof("Updating tablet mysql port to %v", mysqlPort)
 			if err := agent.TopoServer.UpdateTabletFields(tablet.Alias, func(tablet *topo.Tablet) error {
@@ -142,6 +148,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 			// we do the health check.
 			agent.mutex.Lock()
 			agent._tablet.Portmap["mysql"] = mysqlPort
+			agent._waitingForMysql = false
 			agent.mutex.Unlock()
 		}
 	}
