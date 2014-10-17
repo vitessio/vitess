@@ -75,6 +75,7 @@ type ActionAgent struct {
 	mutex              sync.Mutex
 	_tablet            *topo.TabletInfo
 	_blacklistedTables []string
+	_waitingForMysql   bool
 }
 
 func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
