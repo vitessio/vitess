@@ -220,6 +220,8 @@ class TestNocache(framework.TestCase):
     vstart = self.env.debug_vars()
     self.env.txlog.reset()
     self.env.conn.begin()
+    vmid = self.env.debug_vars()
+    self.assertEqual(vstart.TransactionPoolAvailable, vmid.TransactionPoolAvailable+1)
     time.sleep(0.3)
     try:
       self.env.conn.commit()
@@ -231,6 +233,7 @@ class TestNocache(framework.TestCase):
     txlog = self.env.txlog.read().split('\t')
     self.assertEqual(txlog[4], "kill")
     vend = self.env.debug_vars()
+    self.assertEqual(vstart.TransactionPoolAvailable, vend.TransactionPoolAvailable)
     self.assertEqual(vend.TransactionPoolTimeout, 250000000)
     self.assertEqual(vstart.mget("Kills.Transactions", 0)+1, vend.Kills.Transactions)
     self.env.execute("set vt_transaction_timeout=30")
