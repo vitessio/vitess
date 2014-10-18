@@ -1,4 +1,4 @@
-FROM golang:1.3
+FROM golang:1.3-wheezy
 
 # Install Vitess build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
