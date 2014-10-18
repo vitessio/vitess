@@ -1,5 +1,23 @@
 #!/bin/bash
 
+branch=$(git symbolic-ref --short HEAD)
+
+echo "createcl is deprecated"
+echo
+echo "Please create a Pull Request as follows:"
+echo "  1) Push your branch to GitHub:"
+echo "       $ git push -u origin $branch"
+echo "  2) Visit https://github.com/youtube/vitess/compare/master...$branch"
+echo
+echo "To update the Pull Request, simply push a new commit on this branch:"
+echo "  $ git commit"
+echo "  $ git push"
+echo
+read -p 'To continue with createcl (just this once), type "sorry"; or press enter to exit: ' -r
+if [ "$REPLY" != "sorry" ]; then
+  exit 1
+fi
+
 function _print_download()
 {
   echo "To make this script work, you need to download upload.py from:"
