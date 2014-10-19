@@ -17,7 +17,14 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 )
 
-var droppedMessages = stats.NewCounters("StreamlogDroppedMessages")
+var (
+	internalDropCount = stats.NewCounters("StreamlogInternallyDroppedMessages")
+	deliveryDropCount = stats.NewMultiCounters("StreamlogDeliveryDroppedMessages", []string{"Log", "Subscriber"})
+)
+
+type subscriber struct {
+	name string
+}
 
 // StreamLogger is a non-blocking broadcaster of messages.
 // Subscribers can use channels or HTTP.
@@ -25,7 +32,7 @@ type StreamLogger struct {
 	name       string
 	dataQueue  chan interface{}
 	mu         sync.Mutex
-	subscribed map[chan interface{}]struct{}
+	subscribed map[chan interface{}]subscriber
 	// size is used to check if there are any subscriptions. Keep
 	// it atomically in sync with the size of subscribed.
 	size sync2.AtomicUint32
@@ -37,7 +44,7 @@ func New(name string, size int) *StreamLogger {
 	logger := &StreamLogger{
 		name:       name,
 		dataQueue:  make(chan interface{}, size),
-		subscribed: make(map[chan interface{}]struct{}),
+		subscribed: make(map[chan interface{}]subscriber),
 	}
 	go logger.stream()
 	return logger
@@ -53,19 +60,18 @@ func (logger *StreamLogger) Send(message interface{}) {
 	select {
 	case logger.dataQueue <- message:
 	default:
-		droppedMessages.Add(logger.name, 1)
+		internalDropCount.Add(logger.name, 1)
 	}
 }
 
 // Subscribe returns a channel which can be used to listen
 // for messages.
-func (logger *StreamLogger) Subscribe() chan interface{} {
+func (logger *StreamLogger) Subscribe(name string) chan interface{} {
 	logger.mu.Lock()
 	defer logger.mu.Unlock()
 
 	ch := make(chan interface{}, 1)
-	var empty struct{}
-	logger.subscribed[ch] = empty
+	logger.subscribed[ch] = subscriber{name: name}
 	logger.size.Set(uint32(len(logger.subscribed)))
 	return ch
 }
@@ -91,11 +97,11 @@ func (logger *StreamLogger) transmit(message interface{}) {
 	logger.mu.Lock()
 	defer logger.mu.Unlock()
 
-	for ch := range logger.subscribed {
+	for ch, sub := range logger.subscribed {
 		select {
 		case ch <- message:
 		default:
-			droppedMessages.Add(logger.name, 1)
+			deliveryDropCount.Add([]string{logger.name, sub.name}, 1)
 		}
 	}
 }
@@ -116,7 +122,7 @@ func (logger *StreamLogger) ServeLogs(url string, messageFmt func(url.Values, in
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
-		ch := logger.Subscribe()
+		ch := logger.Subscribe("ServeLogs")
 		defer logger.Unsubscribe(ch)
 
 		for message := range ch {

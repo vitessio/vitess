@@ -93,7 +93,7 @@ func TestChannel(t *testing.T) {
 	lastValue := sync2.AtomicString{}
 	svm := sync2.ServiceManager{}
 	svm.Go(func(svc *sync2.ServiceContext) error {
-		ch := logger.Subscribe()
+		ch := logger.Subscribe("test")
 		defer logger.Unsubscribe(ch)
 		for svc.IsRunning() {
 			lastValue.Set((<-ch).(*logMessage).Format(nil))
