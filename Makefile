@@ -65,7 +65,9 @@ integration_test_files = \
 	mysqlctl.py \
 	reparent.py \
 	resharding_bytes.py \
+	resharding_bytes_vtworker.py \
 	resharding.py \
+	resharding_vtworker.py \
 	rowcache_invalidator.py \
 	secure.py \
 	schema.py \
@@ -74,6 +76,7 @@ integration_test_files = \
 	update_stream.py \
 	vertical_split.py \
 	vertical_split_vtgate.py \
+	vertical_split_vtworker.py \
 	vtdb_test.py \
 	vtgatev2_test.py \
 	zkocc_test.py
