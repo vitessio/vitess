@@ -493,7 +493,7 @@
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where id = 1 limit :#maxLimit",
-  "OuterQuery": "select name, id, foo, bar from d where name in (:*)",
+  "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": "select name from d use index (d_id) where id = 1 limit :#maxLimit",
   "IndexUsed": "d_id",
   "ColumnNumbers": [
@@ -517,7 +517,7 @@
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where id = 1 limit 1",
-  "OuterQuery": "select name, id, foo, bar from d where name in (:*)",
+  "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": "select name from d use index (d_id) where id = 1 limit 1",
   "IndexUsed": "d_id",
   "ColumnNumbers": [
@@ -613,7 +613,7 @@
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where (eid = 1) and (id = 2) limit :#maxLimit",
-  "OuterQuery": "select eid, id, name, foo from a where eid = :0 and id = :1",
+  "OuterQuery": "select eid, id, name, foo from a where :#pk",
   "Subquery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
@@ -640,7 +640,7 @@
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where eid = 1 and id = 1 limit :#maxLimit",
-  "OuterQuery": "select eid, id, name, foo from a where eid = :0 and id = :1",
+  "OuterQuery": "select eid, id, name, foo from a where :#pk",
   "Subquery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
@@ -691,7 +691,7 @@
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name = 'foo' limit :#maxLimit",
-  "OuterQuery": "select name, id, foo, bar from d where name = :0",
+  "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
@@ -717,7 +717,7 @@
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name = 'foo' limit 1",
-  "OuterQuery": "select name, id, foo, bar from d where name = :0",
+  "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
@@ -843,7 +843,7 @@
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name in ('foo', 'bar') limit :#maxLimit",
-  "OuterQuery": "select name, id, foo, bar from d where name in (:*)",
+  "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
@@ -870,7 +870,7 @@
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name in (:a, :b) limit :#maxLimit",
-  "OuterQuery": "select name, id, foo, bar from d where name in (:*)",
+  "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
@@ -897,7 +897,7 @@
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name in ('foo') limit :#maxLimit",
-  "OuterQuery": "select name, id, foo, bar from d where name in (:*)",
+  "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
@@ -923,7 +923,7 @@
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name in (:a) limit :#maxLimit",
-  "OuterQuery": "select name, id, foo, bar from d where name in (:*)",
+  "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
@@ -1069,7 +1069,7 @@
   "TableName": "d",
   "FieldQuery": "select * from d as c where 1 != 1",
   "FullQuery": "select * from d as c where c.name = 'foo' limit :#maxLimit",
-  "OuterQuery": "select name, id, foo, bar from d as c where name = :0",
+  "OuterQuery": "select name, id, foo, bar from d as c where :#pk",
   "Subquery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
@@ -1095,7 +1095,7 @@
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where id \u003c 0 limit :#maxLimit",
-  "OuterQuery": "select name, id, foo, bar from d where name in (:*)",
+  "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": "select name from d use index (d_id) where id \u003c 0 limit :#maxLimit",
   "IndexUsed": "d_id",
   "ColumnNumbers": [
@@ -1143,7 +1143,7 @@
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where id between 1 and 2 limit :#maxLimit",
-  "OuterQuery": "select name, id, foo, bar from d where name in (:*)",
+  "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": "select name from d use index (d_id) where id between 1 and 2 limit :#maxLimit",
   "IndexUsed": "d_id",
   "ColumnNumbers": [
@@ -1263,7 +1263,7 @@
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where bar = 'foo' limit :#maxLimit",
-  "OuterQuery": "select name, id, foo, bar from d where name in (:*)",
+  "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": "select name from d use index (d_bar) where bar = 'foo' limit :#maxLimit",
   "IndexUsed": "d_bar",
   "ColumnNumbers": [

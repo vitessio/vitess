@@ -15,7 +15,7 @@ cases = [
        result=[(1L, 'a', 'abcd')],
        rewritten=[
          "select * from vtocc_cached1 where 1 != 1",
-         "select eid, name, foo from vtocc_cached1 where eid = 1"],
+         "select eid, name, foo from vtocc_cached1 where eid in (1)"],
        cache_misses=1),
   # (1) is in cache
 

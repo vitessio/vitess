@@ -108,7 +108,7 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 			goto nopk
 		}
 		plan.PlanId = PLAN_PK_EQUAL
-		plan.OuterQuery = GenerateEqualOuterQuery(sel, tableInfo)
+		plan.OuterQuery = GenerateSelectOuterQuery(sel, tableInfo)
 		plan.PKValues = pkValues
 		return plan, nil
 	case PLAN_PK_IN:
@@ -116,7 +116,7 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 			goto nopk
 		}
 		plan.PlanId = PLAN_PK_IN
-		plan.OuterQuery = GenerateInOuterQuery(sel, tableInfo)
+		plan.OuterQuery = GenerateSelectOuterQuery(sel, tableInfo)
 		plan.PKValues = pkValues
 		return plan, nil
 	}
@@ -144,7 +144,7 @@ nopk:
 	}
 	// TODO: We can further optimize. Change this to pass-through if select list matches all columns in index.
 	plan.PlanId = PLAN_SELECT_SUBQUERY
-	plan.OuterQuery = GenerateInOuterQuery(sel, tableInfo)
+	plan.OuterQuery = GenerateSelectOuterQuery(sel, tableInfo)
 	plan.Subquery = GenerateSelectSubquery(sel, tableInfo, plan.IndexUsed)
 	return plan, nil
 }

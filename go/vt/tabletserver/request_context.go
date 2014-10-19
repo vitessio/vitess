@@ -84,7 +84,7 @@ func (rqc *RequestContext) fullStreamFetch(conn dbconnpool.PoolConnection, parse
 }
 
 func (rqc *RequestContext) generateFinalSql(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) string {
-	bindVars[MAX_RESULT_NAME] = rqc.qe.maxResultSize.Get() + 1
+	bindVars["#maxLimit"] = rqc.qe.maxResultSize.Get() + 1
 	sql, err := parsedQuery.GenerateQuery(bindVars, listVars)
 	if err != nil {
 		panic(NewTabletError(FAIL, "%s", err))

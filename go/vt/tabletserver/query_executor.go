@@ -176,47 +176,7 @@ func (qre *QueryExecutor) execPKEqual() (result *mproto.QueryResult) {
 	if err != nil {
 		panic(err)
 	}
-	if len(pkRows) != 1 || qre.plan.Fields == nil {
-		panic("unexpected")
-	}
-	row := qre.fetchOne(pkRows[0])
-	result = &mproto.QueryResult{}
-	result.Fields = qre.plan.Fields
-	if row == nil {
-		return
-	}
-	result.Rows = make([][]sqltypes.Value, 1)
-	result.Rows[0] = applyFilter(qre.plan.ColumnNumbers, row)
-	result.RowsAffected = 1
-	return
-}
-
-func (qre *QueryExecutor) fetchOne(pk []sqltypes.Value) (row []sqltypes.Value) {
-	qre.logStats.QuerySources |= QUERY_SOURCE_ROWCACHE
-	tableInfo := qre.plan.TableInfo
-	keys := make([]string, 1)
-	keys[0] = buildKey(pk)
-	rcresults := tableInfo.Cache.Get(keys)
-	rcresult := rcresults[keys[0]]
-	if rcresult.Row != nil {
-		if qre.mustVerify() {
-			qre.spotCheck(rcresult, pk)
-		}
-		qre.logStats.CacheHits++
-		tableInfo.hits.Add(1)
-		return rcresult.Row
-	}
-	resultFromdb := qre.qFetch(qre.logStats, qre.plan.OuterQuery, qre.bindVars, pk)
-	if len(resultFromdb.Rows) == 0 {
-		qre.logStats.CacheAbsent++
-		tableInfo.absent.Add(1)
-		return nil
-	}
-	row = resultFromdb.Rows[0]
-	tableInfo.Cache.Set(keys[0], row, rcresult.Cas)
-	qre.logStats.CacheMisses++
-	tableInfo.misses.Add(1)
-	return row
+	return qre.fetchMulti(pkRows)
 }
 
 func (qre *QueryExecutor) execPKIN() (result *mproto.QueryResult) {
@@ -233,12 +193,12 @@ func (qre *QueryExecutor) execSubquery() (result *mproto.QueryResult) {
 }
 
 func (qre *QueryExecutor) fetchMulti(pkRows [][]sqltypes.Value) (result *mproto.QueryResult) {
-	result = &mproto.QueryResult{}
+	if qre.plan.Fields == nil {
+		panic("unexpected")
+	}
+	result = &mproto.QueryResult{Fields: qre.plan.Fields}
 	if len(pkRows) == 0 {
 		return
-	}
-	if len(pkRows[0]) != 1 || qre.plan.Fields == nil {
-		panic("unexpected")
 	}
 
 	tableInfo := qre.plan.TableInfo
@@ -248,9 +208,8 @@ func (qre *QueryExecutor) fetchMulti(pkRows [][]sqltypes.Value) (result *mproto.
 	}
 	rcresults := tableInfo.Cache.Get(keys)
 
-	result.Fields = qre.plan.Fields
 	rows := make([][]sqltypes.Value, 0, len(pkRows))
-	missingRows := make([]sqltypes.Value, 0, len(pkRows))
+	missingRows := make([][]sqltypes.Value, 0, len(pkRows))
 	var hits, absent, misses int64
 	for i, pk := range pkRows {
 		rcresult := rcresults[keys[i]]
@@ -261,11 +220,17 @@ func (qre *QueryExecutor) fetchMulti(pkRows [][]sqltypes.Value) (result *mproto.
 			rows = append(rows, applyFilter(qre.plan.ColumnNumbers, rcresult.Row))
 			hits++
 		} else {
-			missingRows = append(missingRows, pk[0])
+			missingRows = append(missingRows, pk)
 		}
 	}
 	if len(missingRows) != 0 {
-		resultFromdb := qre.qFetch(qre.logStats, qre.plan.OuterQuery, qre.bindVars, missingRows)
+		bv := map[string]interface{}{
+			"#pk": sqlparser.TupleEqualityList{
+				Columns: qre.plan.TableInfo.Indexes[0].Columns,
+				Rows:    missingRows,
+			},
+		}
+		resultFromdb := qre.qFetch(qre.logStats, qre.plan.OuterQuery, bv, nil)
 		misses = int64(len(resultFromdb.Rows))
 		absent = int64(len(pkRows)) - hits - misses
 		for _, row := range resultFromdb.Rows {
@@ -290,12 +255,18 @@ func (qre *QueryExecutor) fetchMulti(pkRows [][]sqltypes.Value) (result *mproto.
 }
 
 func (qre *QueryExecutor) mustVerify() bool {
-	return (Rand() % SPOT_CHECK_MULTIPLIER) < qre.qe.spotCheckFreq.Get()
+	return (Rand() % spotCheckMultiplier) < qre.qe.spotCheckFreq.Get()
 }
 
 func (qre *QueryExecutor) spotCheck(rcresult RCResult, pk []sqltypes.Value) {
 	spotCheckCount.Add(1)
-	resultFromdb := qre.qFetch(qre.logStats, qre.plan.OuterQuery, qre.bindVars, pk)
+	bv := map[string]interface{}{
+		"#pk": sqlparser.TupleEqualityList{
+			Columns: qre.plan.TableInfo.Indexes[0].Columns,
+			Rows:    [][]sqltypes.Value{pk},
+		},
+	}
+	resultFromdb := qre.qFetch(qre.logStats, qre.plan.OuterQuery, bv, nil)
 	var dbrow []sqltypes.Value
 	if len(resultFromdb.Rows) != 0 {
 		dbrow = resultFromdb.Rows[0]
@@ -406,11 +377,13 @@ func (qre *QueryExecutor) execDMLPKRows(conn dbconnpool.PoolConnection, pkRows [
 	}
 
 	bsc := buildStreamComment(qre.plan.TableInfo, pkRows, secondaryList)
-	qre.bindVars["#pk"] = sqlparser.TupleEqualityList{
-		Columns: qre.plan.TableInfo.Indexes[0].Columns,
-		Rows:    pkRows,
+	bv := map[string]interface{}{
+		"#pk": sqlparser.TupleEqualityList{
+			Columns: qre.plan.TableInfo.Indexes[0].Columns,
+			Rows:    pkRows,
+		},
 	}
-	result = qre.directFetch(conn, qre.plan.OuterQuery, qre.bindVars, nil, bsc)
+	result = qre.directFetch(conn, qre.plan.OuterQuery, bv, nil, bsc)
 	if invalidator == nil {
 		return result
 	}
@@ -456,7 +429,7 @@ func (qre *QueryExecutor) execSet() (result *mproto.QueryResult) {
 		qre.qe.txPool.pool.SetIdleTimeout(t)
 		qre.qe.connKiller.SetIdleTimeout(t)
 	case "vt_spot_check_ratio":
-		qre.qe.spotCheckFreq.Set(int64(getFloat64(qre.plan.SetValue) * SPOT_CHECK_MULTIPLIER))
+		qre.qe.spotCheckFreq.Set(int64(getFloat64(qre.plan.SetValue) * spotCheckMultiplier))
 	case "vt_strict_mode":
 		qre.qe.strictMode.Set(getInt64(qre.plan.SetValue))
 	case "vt_txpool_timeout":
