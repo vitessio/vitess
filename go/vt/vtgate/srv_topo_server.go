@@ -294,6 +294,7 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(context context.Context, ce
 
 // GetEndPoints return all endpoints for the given cell, keyspace, shard, and tablet type.
 func (server *ResilientSrvTopoServer) GetEndPoints(context context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (result *topo.EndPoints, err error) {
+	shard = strings.ToLower(shard)
 	key := []string{cell, keyspace, shard, string(tabletType)}
 
 	server.counts.Add(queryCategory, 1)
