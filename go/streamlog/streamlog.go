@@ -14,7 +14,6 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/sync2"
 )
 
 var (
@@ -33,9 +32,6 @@ type StreamLogger struct {
 	dataQueue  chan interface{}
 	mu         sync.Mutex
 	subscribed map[chan interface{}]subscriber
-	// size is used to check if there are any subscriptions. Keep
-	// it atomically in sync with the size of subscribed.
-	size sync2.AtomicUint32
 }
 
 // New returns a new StreamLogger with a buffer that can contain size
@@ -53,10 +49,6 @@ func New(name string, size int) *StreamLogger {
 // Send sends message to all the writers subscribed to logger. Calling
 // Send does not block.
 func (logger *StreamLogger) Send(message interface{}) {
-	if logger.size.Get() == 0 {
-		// There are no subscribers, do nothing.
-		return
-	}
 	select {
 	case logger.dataQueue <- message:
 	default:
@@ -72,7 +64,6 @@ func (logger *StreamLogger) Subscribe(name string) chan interface{} {
 
 	ch := make(chan interface{}, 1)
 	logger.subscribed[ch] = subscriber{name: name}
-	logger.size.Set(uint32(len(logger.subscribed)))
 	return ch
 }
 
@@ -82,7 +73,6 @@ func (logger *StreamLogger) Unsubscribe(ch chan interface{}) {
 	defer logger.mu.Unlock()
 
 	delete(logger.subscribed, ch)
-	logger.size.Set(uint32(len(logger.subscribed)))
 }
 
 // stream sends messages sent to logger to all of its subscribed

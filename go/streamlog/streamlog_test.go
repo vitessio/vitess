@@ -57,7 +57,7 @@ func TestHTTP(t *testing.T) {
 	})
 
 	time.Sleep(100 * time.Millisecond)
-	if sz := logger.size.Get(); sz != 1 {
+	if sz := len(logger.subscribed); sz != 1 {
 		t.Errorf("want 1, got %d", sz)
 	}
 	logger.Send(&logMessage{"val2"})
@@ -102,7 +102,7 @@ func TestChannel(t *testing.T) {
 	})
 
 	time.Sleep(10 * time.Millisecond)
-	if sz := logger.size.Get(); sz != 1 {
+	if sz := len(logger.subscribed); sz != 1 {
 		t.Errorf("want 1, got %d", sz)
 	}
 	logger.Send(&logMessage{"val2"})
@@ -114,7 +114,7 @@ func TestChannel(t *testing.T) {
 	go logger.Send(&logMessage{"val3"})
 	svm.Stop()
 	time.Sleep(10 * time.Millisecond)
-	if sz := logger.size.Get(); sz != 0 {
+	if sz := len(logger.subscribed); sz != 0 {
 		t.Errorf("want 0, got %d", sz)
 	}
 }
