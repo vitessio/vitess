@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	MAX_RESULT_NAME                = "_vtMaxResultSize"
+	MAX_RESULT_NAME                = "#maxLimit"
 	ROWCACHE_INVALIDATION_POSITION = "ROWCACHE_INVALIDATION_POSITION"
 
 	// SPOT_CHECK_MULTIPLIER determines the precision of the

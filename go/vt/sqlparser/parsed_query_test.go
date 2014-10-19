@@ -106,6 +106,68 @@ func TestParsedQuery(t *testing.T) {
 				sqltypes.MakeString([]byte("aa")),
 			},
 			"index out of range: 10",
+		}, {
+			"single column tuple equality",
+			// We have to use an incorrect construct to get around the parser.
+			"select * from a where b = :equality",
+			map[string]interface{}{
+				"equality": TupleEqualityList{
+					Columns: []string{"pk"},
+					Rows: [][]sqltypes.Value{
+						[]sqltypes.Value{sqltypes.MakeNumeric([]byte("1"))},
+						[]sqltypes.Value{sqltypes.MakeString([]byte("aa"))},
+					},
+				},
+			},
+			nil,
+			"select * from a where b = pk in (1, 'aa')",
+		}, {
+			"multi column tuple equality",
+			"select * from a where b = :equality",
+			map[string]interface{}{
+				"equality": TupleEqualityList{
+					Columns: []string{"pk1", "pk2"},
+					Rows: [][]sqltypes.Value{
+						[]sqltypes.Value{
+							sqltypes.MakeNumeric([]byte("1")),
+							sqltypes.MakeString([]byte("aa")),
+						},
+						[]sqltypes.Value{
+							sqltypes.MakeNumeric([]byte("2")),
+							sqltypes.MakeString([]byte("bb")),
+						},
+					},
+				},
+			},
+			nil,
+			"select * from a where b = (pk1, pk2) = (1, 'aa') or (pk1, pk2) = (2, 'bb')",
+		}, {
+			"0 rows",
+			"select * from a where b = :equality",
+			map[string]interface{}{
+				"equality": TupleEqualityList{
+					Columns: []string{"pk"},
+					Rows:    [][]sqltypes.Value{},
+				},
+			},
+			nil,
+			"cannot encode with 0 rows",
+		}, {
+			"values don't match column count",
+			"select * from a where b = :equality",
+			map[string]interface{}{
+				"equality": TupleEqualityList{
+					Columns: []string{"pk"},
+					Rows: [][]sqltypes.Value{
+						[]sqltypes.Value{
+							sqltypes.MakeNumeric([]byte("1")),
+							sqltypes.MakeString([]byte("aa")),
+						},
+					},
+				},
+			},
+			nil,
+			"values don't match column count",
 		},
 	}
 

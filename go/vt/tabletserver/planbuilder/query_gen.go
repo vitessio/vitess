@@ -88,23 +88,21 @@ func GenerateInsertOuterQuery(ins *sqlparser.Insert) *sqlparser.ParsedQuery {
 		ins.Comments,
 		ins.Table,
 		ins.Columns,
-		"_rowValues",
+		"#values",
 		ins.OnDup,
 	)
 	return buf.ParsedQuery()
 }
 
-func GenerateUpdateOuterQuery(upd *sqlparser.Update, pkIndex *schema.Index) *sqlparser.ParsedQuery {
+func GenerateUpdateOuterQuery(upd *sqlparser.Update) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("update %v%v set %v where ", upd.Comments, upd.Table, upd.Exprs)
-	generatePKWhere(buf, pkIndex)
+	buf.Myprintf("update %v%v set %v where %a", upd.Comments, upd.Table, upd.Exprs, "#pk")
 	return buf.ParsedQuery()
 }
 
-func GenerateDeleteOuterQuery(del *sqlparser.Delete, pkIndex *schema.Index) *sqlparser.ParsedQuery {
+func GenerateDeleteOuterQuery(del *sqlparser.Delete) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("delete %vfrom %v where ", del.Comments, del.Table)
-	generatePKWhere(buf, pkIndex)
+	buf.Myprintf("delete %vfrom %v where %a", del.Comments, del.Table, "#pk")
 	return buf.ParsedQuery()
 }
 

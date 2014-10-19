@@ -121,7 +121,7 @@ class TestCache(framework.TestCase):
     self.env.execute("update vtocc_part1 set data1 = 2 where key2 = 1")
     log = self.env.querylog.tailer.read()
     self.env.conn.commit()
-    self.assertContains(log, "update vtocc_part1 set data1 = 2 where key2 = 1 /* _stream vtocc_part1 (key2 ) (1 ); */")
+    self.assertContains(log, "update vtocc_part1 set data1 = 2 where key2 in (1) /* _stream vtocc_part1 (key2 ) (1 ); */")
 
 
     self.env.querylog.reset()

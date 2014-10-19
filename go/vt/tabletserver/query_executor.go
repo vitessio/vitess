@@ -13,6 +13,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/schema"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 )
 
@@ -368,7 +369,7 @@ func (qre *QueryExecutor) execInsertSubquery(conn dbconnpool.PoolConnection) (re
 		panic(err)
 	}
 
-	qre.bindVars["_rowValues"] = innerRows
+	qre.bindVars["#values"] = innerRows
 	return qre.execInsertPKRows(conn, pkRows)
 }
 
@@ -387,12 +388,28 @@ func (qre *QueryExecutor) execDMLPK(conn dbconnpool.PoolConnection, invalidator 
 	if err != nil {
 		panic(err)
 	}
+	return qre.execDMLPKRows(conn, pkRows, invalidator)
+}
+
+func (qre *QueryExecutor) execDMLSubquery(conn dbconnpool.PoolConnection, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+	innerResult := qre.directFetch(conn, qre.plan.Subquery, qre.bindVars, nil, nil)
+	return qre.execDMLPKRows(conn, innerResult.Rows, invalidator)
+}
+
+func (qre *QueryExecutor) execDMLPKRows(conn dbconnpool.PoolConnection, pkRows [][]sqltypes.Value, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+	if len(pkRows) == 0 {
+		return &mproto.QueryResult{RowsAffected: 0}
+	}
 	secondaryList, err := buildSecondaryList(qre.plan.TableInfo, pkRows, qre.plan.SecondaryPKValues, qre.bindVars)
 	if err != nil {
 		panic(err)
 	}
 
 	bsc := buildStreamComment(qre.plan.TableInfo, pkRows, secondaryList)
+	qre.bindVars["#pk"] = sqlparser.TupleEqualityList{
+		Columns: qre.plan.TableInfo.Indexes[0].Columns,
+		Rows:    pkRows,
+	}
 	result = qre.directFetch(conn, qre.plan.OuterQuery, qre.bindVars, nil, bsc)
 	if invalidator == nil {
 		return result
@@ -402,35 +419,6 @@ func (qre *QueryExecutor) execDMLPK(conn dbconnpool.PoolConnection, invalidator 
 		invalidator.Delete(key)
 	}
 	return result
-}
-
-func (qre *QueryExecutor) execDMLSubquery(conn dbconnpool.PoolConnection, invalidator CacheInvalidator) (result *mproto.QueryResult) {
-	innerResult := qre.directFetch(conn, qre.plan.Subquery, qre.bindVars, nil, nil)
-	// no need to validate innerResult
-	return qre.execDMLPKRows(conn, innerResult.Rows, invalidator)
-}
-
-func (qre *QueryExecutor) execDMLPKRows(conn dbconnpool.PoolConnection, pkRows [][]sqltypes.Value, invalidator CacheInvalidator) (result *mproto.QueryResult) {
-	if len(pkRows) == 0 {
-		return &mproto.QueryResult{RowsAffected: 0}
-	}
-	rowsAffected := uint64(0)
-	singleRow := make([][]sqltypes.Value, 1)
-	for _, pkRow := range pkRows {
-		singleRow[0] = pkRow
-		secondaryList, err := buildSecondaryList(qre.plan.TableInfo, singleRow, qre.plan.SecondaryPKValues, qre.bindVars)
-		if err != nil {
-			panic(err)
-		}
-
-		bsc := buildStreamComment(qre.plan.TableInfo, singleRow, secondaryList)
-		rowsAffected += qre.directFetch(conn, qre.plan.OuterQuery, qre.bindVars, pkRow, bsc).RowsAffected
-		if invalidator != nil {
-			key := buildKey(pkRow)
-			invalidator.Delete(key)
-		}
-	}
-	return &mproto.QueryResult{RowsAffected: rowsAffected}
 }
 
 func (qre *QueryExecutor) execSet() (result *mproto.QueryResult) {
