@@ -485,6 +485,29 @@
   "SetValue": null
 }
 
+# covering index
+"select eid, name, id from a where name = 'foo'"
+{
+  "PlanId": "PASS_SELECT",
+  "Reason": "COVERING",
+  "TableName": "a",
+  "FieldQuery": "select eid, name, id from a where 1 != 1",
+  "FullQuery": "select eid, name, id from a where name = 'foo' limit :#maxLimit",
+  "OuterQuery": null,
+  "Subquery": null,
+  "IndexUsed": "b_name",
+  "ColumnNumbers": [
+    0,
+    2,
+    1
+  ],
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
 # subquery
 "select * from d where id = 1"
 {

@@ -50,6 +50,15 @@ cases = [
        cache_misses=1),
   # (1, 2, 3)
 
+  Case1(doc="covering index",
+       query_plan="PASS_SELECT",
+       sql="select eid, name from vtocc_cached1 where name = 'a'",
+       result=[(1L, 'a'), (2L, 'a')],
+       rewritten=[
+         "select eid, name from vtocc_cached1 where 1 != 1",
+         "select eid, name from vtocc_cached1 where name = 'a' limit 10001"]),
+  # (1, 2, 3)
+
   Case1(doc="SELECT_SUBQUERY (1, 2)",
        sql="select * from vtocc_cached1 where name = 'a'",
        result=[(1L, 'a', 'abcd'), (2L, 'a', 'abcd')],

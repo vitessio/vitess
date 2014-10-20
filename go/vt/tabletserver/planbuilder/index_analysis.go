@@ -114,7 +114,7 @@ func getPKValues(conditions []sqlparser.BoolExpr, pkIndex *schema.Index) (pkValu
 	return nil, nil
 }
 
-func getIndexMatch(conditions []sqlparser.BoolExpr, indexes []*schema.Index) string {
+func getIndexMatch(conditions []sqlparser.BoolExpr, indexes []*schema.Index) *schema.Index {
 	indexScores := NewIndexScoreList(indexes)
 	for _, condition := range conditions {
 		var col string
@@ -148,7 +148,7 @@ func getIndexMatch(conditions []sqlparser.BoolExpr, indexes []*schema.Index) str
 		}
 	}
 	if highScorer == -1 {
-		return ""
+		return nil
 	}
-	return indexes[highScorer].Name
+	return indexes[highScorer]
 }

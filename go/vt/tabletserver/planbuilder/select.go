@@ -134,16 +134,28 @@ nopk:
 		return plan, nil
 	}
 
-	plan.IndexUsed = getIndexMatch(conditions, tableInfo.Indexes)
-	if plan.IndexUsed == "" {
+	indexUsed := getIndexMatch(conditions, tableInfo.Indexes)
+	if indexUsed == nil {
 		plan.Reason = REASON_NOINDEX_MATCH
 		return plan, nil
 	}
+	plan.IndexUsed = indexUsed.Name
 	if plan.IndexUsed == "PRIMARY" {
 		plan.Reason = REASON_PKINDEX
 		return plan, nil
 	}
-	// TODO: We can further optimize. Change this to pass-through if select list matches all columns in index.
+	var missing bool
+	for _, cnum := range selects {
+		if indexUsed.FindDataColumn(tableInfo.Columns[cnum].Name) != -1 {
+			continue
+		}
+		missing = true
+		break
+	}
+	if !missing {
+		plan.Reason = REASON_COVERING
+		return plan, nil
+	}
 	plan.PlanId = PLAN_SELECT_SUBQUERY
 	plan.OuterQuery = GenerateSelectOuterQuery(sel, tableInfo)
 	plan.Subquery = GenerateSelectSubquery(sel, tableInfo, plan.IndexUsed)
