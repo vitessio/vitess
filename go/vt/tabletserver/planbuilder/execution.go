@@ -15,7 +15,7 @@ import (
 
 var (
 	TooComplex = errors.New("Complex")
-	execLimit  = &sqlparser.Limit{Rowcount: sqlparser.ValArg(":_vtMaxResultSize")}
+	execLimit  = &sqlparser.Limit{Rowcount: sqlparser.ValArg(":#maxLimit")}
 )
 
 // ExecPlan is built for selects and DMLs.

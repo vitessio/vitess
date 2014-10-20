@@ -53,25 +53,6 @@ func buildValueList(tableInfo *TableInfo, pkValues []interface{}, bindVars map[s
 	return valueList, nil
 }
 
-// buildINValueList builds the set of PK reference rows used to drive the next query
-// using an IN clause. This works only for tables with no composite PK columns.
-// The generated reference rows are validated for type match against the PK of the table.
-func buildINValueList(tableInfo *TableInfo, pkValues []interface{}, bindVars map[string]interface{}) ([][]sqltypes.Value, error) {
-	if len(tableInfo.PKColumns) != 1 {
-		panic(fmt.Sprintf("buildINValueList not allowed on composite PK table: %v", tableInfo.Name))
-	}
-
-	valueList := make([][]sqltypes.Value, len(pkValues))
-	for i, pkValue := range pkValues {
-		valueList[i] = make([]sqltypes.Value, 1)
-		var err error
-		if valueList[i][0], err = resolveValue(tableInfo.GetPKColumn(0), pkValue, bindVars); err != nil {
-			return valueList, err
-		}
-	}
-	return valueList, nil
-}
-
 // buildSecondaryList is used for handling ON DUPLICATE DMLs, or those that change the PK.
 func buildSecondaryList(tableInfo *TableInfo, pkList [][]sqltypes.Value, secondaryList []interface{}, bindVars map[string]interface{}) ([][]sqltypes.Value, error) {
 	if secondaryList == nil {

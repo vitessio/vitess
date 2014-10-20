@@ -18,14 +18,14 @@ import (
 // want to generate a query that's different from the default.
 type TrackedBuffer struct {
 	*bytes.Buffer
-	bindLocations []BindLocation
+	bindLocations []bindLocation
 	nodeFormatter func(buf *TrackedBuffer, node SQLNode)
 }
 
 func NewTrackedBuffer(nodeFormatter func(buf *TrackedBuffer, node SQLNode)) *TrackedBuffer {
 	buf := &TrackedBuffer{
 		Buffer:        bytes.NewBuffer(make([]byte, 0, 128)),
-		bindLocations: make([]BindLocation, 0, 4),
+		bindLocations: make([]bindLocation, 0, 4),
 		nodeFormatter: nodeFormatter,
 	}
 	return buf
@@ -91,13 +91,16 @@ func (buf *TrackedBuffer) Myprintf(format string, values ...interface{}) {
 // WriteArg writes a value argument into the buffer. arg should not contain
 // the ':' prefix. It also adds tracking info for future substitutions.
 func (buf *TrackedBuffer) WriteArg(arg string) {
-	buf.bindLocations = append(buf.bindLocations, BindLocation{buf.Len(), len(arg) + 1})
+	buf.bindLocations = append(buf.bindLocations, bindLocation{
+		offset: buf.Len(),
+		length: len(arg) + 1,
+	})
 	buf.WriteByte(':')
 	buf.WriteString(arg)
 }
 
 func (buf *TrackedBuffer) ParsedQuery() *ParsedQuery {
-	return &ParsedQuery{buf.String(), buf.bindLocations}
+	return &ParsedQuery{Query: buf.String(), bindLocations: buf.bindLocations}
 }
 
 func (buf *TrackedBuffer) HasBindVars() bool {

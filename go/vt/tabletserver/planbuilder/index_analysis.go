@@ -74,14 +74,10 @@ func getSelectPKValues(conditions []sqlparser.BoolExpr, pkIndex *schema.Index) (
 		return PLAN_PASS_SELECT, nil, nil
 	}
 	for _, pkValue := range pkValues {
-		inList, ok := pkValue.([]interface{})
-		if !ok {
+		if _, ok := pkValue.([]interface{}); !ok {
 			continue
 		}
-		if len(pkValues) == 1 {
-			return PLAN_PK_IN, inList, nil
-		}
-		return PLAN_PASS_SELECT, nil, nil
+		return PLAN_PK_IN, pkValues, nil
 	}
 	return PLAN_PK_EQUAL, pkValues, nil
 }
@@ -118,7 +114,7 @@ func getPKValues(conditions []sqlparser.BoolExpr, pkIndex *schema.Index) (pkValu
 	return nil, nil
 }
 
-func getIndexMatch(conditions []sqlparser.BoolExpr, indexes []*schema.Index) string {
+func getIndexMatch(conditions []sqlparser.BoolExpr, indexes []*schema.Index) *schema.Index {
 	indexScores := NewIndexScoreList(indexes)
 	for _, condition := range conditions {
 		var col string
@@ -152,7 +148,7 @@ func getIndexMatch(conditions []sqlparser.BoolExpr, indexes []*schema.Index) str
 		}
 	}
 	if highScorer == -1 {
-		return ""
+		return nil
 	}
-	return indexes[highScorer].Name
+	return indexes[highScorer]
 }

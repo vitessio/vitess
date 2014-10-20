@@ -88,6 +88,12 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 	}
 	switch planId {
 	case PLAN_PK_EQUAL:
+		// PK_EQUAL and PK_IN are identical plans except
+		// for how we handle the limit. If it's PK_EQUAL,
+		// we expect at most one row, which allows us to
+		// ignore 'LIMIT 1'.
+		// TODO(sougou): Merge the two plans once we
+		// can handle limits uniformly.
 		offset, rowcount, err := sel.Limit.Limits()
 		if err != nil {
 			return nil, err
@@ -108,7 +114,7 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 			goto nopk
 		}
 		plan.PlanId = PLAN_PK_EQUAL
-		plan.OuterQuery = GenerateEqualOuterQuery(sel, tableInfo)
+		plan.OuterQuery = GenerateSelectOuterQuery(sel, tableInfo)
 		plan.PKValues = pkValues
 		return plan, nil
 	case PLAN_PK_IN:
@@ -116,35 +122,42 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 			goto nopk
 		}
 		plan.PlanId = PLAN_PK_IN
-		plan.OuterQuery = GenerateInOuterQuery(sel, tableInfo)
+		plan.OuterQuery = GenerateSelectOuterQuery(sel, tableInfo)
 		plan.PKValues = pkValues
 		return plan, nil
 	}
 
 nopk:
-	if len(tableInfo.Indexes[0].Columns) != 1 {
-		plan.Reason = REASON_COMPOSITE_PK
-		return plan, nil
-	}
-
 	// TODO: Analyze hints to improve plan.
 	if hasHints {
 		plan.Reason = REASON_HAS_HINTS
 		return plan, nil
 	}
 
-	plan.IndexUsed = getIndexMatch(conditions, tableInfo.Indexes)
-	if plan.IndexUsed == "" {
+	indexUsed := getIndexMatch(conditions, tableInfo.Indexes)
+	if indexUsed == nil {
 		plan.Reason = REASON_NOINDEX_MATCH
 		return plan, nil
 	}
+	plan.IndexUsed = indexUsed.Name
 	if plan.IndexUsed == "PRIMARY" {
 		plan.Reason = REASON_PKINDEX
 		return plan, nil
 	}
-	// TODO: We can further optimize. Change this to pass-through if select list matches all columns in index.
+	var missing bool
+	for _, cnum := range selects {
+		if indexUsed.FindDataColumn(tableInfo.Columns[cnum].Name) != -1 {
+			continue
+		}
+		missing = true
+		break
+	}
+	if !missing {
+		plan.Reason = REASON_COVERING
+		return plan, nil
+	}
 	plan.PlanId = PLAN_SELECT_SUBQUERY
-	plan.OuterQuery = GenerateInOuterQuery(sel, tableInfo)
+	plan.OuterQuery = GenerateSelectOuterQuery(sel, tableInfo)
 	plan.Subquery = GenerateSelectSubquery(sel, tableInfo, plan.IndexUsed)
 	return plan, nil
 }
