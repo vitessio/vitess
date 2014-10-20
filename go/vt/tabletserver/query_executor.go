@@ -84,9 +84,7 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult) {
 				panic(NewTabletError(FAIL, "Disallowed outside transaction"))
 			}
 			reply = qre.execSelect()
-		case planbuilder.PLAN_PK_EQUAL:
-			reply = qre.execPKEqual()
-		case planbuilder.PLAN_PK_IN:
+		case planbuilder.PLAN_PK_EQUAL, planbuilder.PLAN_PK_IN:
 			reply = qre.execPKIN()
 		case planbuilder.PLAN_SELECT_SUBQUERY:
 			reply = qre.execSubquery()
@@ -171,16 +169,8 @@ func (qre *QueryExecutor) execDDL() *mproto.QueryResult {
 	return result
 }
 
-func (qre *QueryExecutor) execPKEqual() (result *mproto.QueryResult) {
-	pkRows, err := buildValueList(qre.plan.TableInfo, qre.plan.PKValues, qre.bindVars)
-	if err != nil {
-		panic(err)
-	}
-	return qre.fetchMulti(pkRows)
-}
-
 func (qre *QueryExecutor) execPKIN() (result *mproto.QueryResult) {
-	pkRows, err := buildINValueList(qre.plan.TableInfo, qre.plan.PKValues, qre.bindVars)
+	pkRows, err := buildValueList(qre.plan.TableInfo, qre.plan.PKValues, qre.bindVars)
 	if err != nil {
 		panic(err)
 	}

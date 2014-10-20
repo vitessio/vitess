@@ -416,12 +416,12 @@
 # composite pk supplied values
 "select * from a where eid = 1 and id in (1, 2)"
 {
-  "PlanId": "PASS_SELECT",
-  "Reason": "COMPOSITE_PK",
+  "PlanId": "PK_IN",
+  "Reason": "DEFAULT",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where eid = 1 and id in (1, 2) limit :#maxLimit",
-  "OuterQuery": null,
+  "OuterQuery": "select eid, id, name, foo from a where :#pk",
   "Subquery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
@@ -430,7 +430,7 @@
     2,
     3
   ],
-  "PKValues": null,
+  "PKValues": [1,[1,2]],
   "SecondaryPKValues": null,
   "SubqueryPKColumns": null,
   "SetKey": "",
@@ -440,12 +440,12 @@
 # positional arguments
 "select * from a where eid = ? and id in (?, ?)"
 {
-  "PlanId": "PASS_SELECT",
-  "Reason": "COMPOSITE_PK",
+  "PlanId": "PK_IN",
+  "Reason": "DEFAULT",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where eid = :v1 and id in (:v2, :v3) limit :#maxLimit",
-  "OuterQuery": null,
+  "OuterQuery": "select eid, id, name, foo from a where :#pk",
   "Subquery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
@@ -454,7 +454,7 @@
     2,
     3
   ],
-  "PKValues": null,
+  "PKValues": [":v1",[":v2",":v3"]],
   "SecondaryPKValues": null,
   "SubqueryPKColumns": null,
   "SetKey": "",
@@ -464,14 +464,14 @@
 # composite pk subquery
 "select * from a where name = 'foo'"
 {
-  "PlanId": "PASS_SELECT",
-  "Reason": "COMPOSITE_PK",
+  "PlanId": "SELECT_SUBQUERY",
+  "Reason": "DEFAULT",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where name = 'foo' limit :#maxLimit",
-  "OuterQuery": null,
-  "Subquery": null,
-  "IndexUsed": "",
+  "OuterQuery": "select eid, id, name, foo from a where :#pk",
+  "Subquery": "select eid, id from a use index (b_name) where name = 'foo' limit :#maxLimit",
+  "IndexUsed": "b_name",
   "ColumnNumbers": [
     0,
     1,
@@ -852,10 +852,10 @@
     2,
     3
   ],
-  "PKValues": [
+  "PKValues": [[
     "Zm9v",
     "YmFy"
-  ],
+  ]],
   "SecondaryPKValues": null,
   "SubqueryPKColumns": null,
   "SetKey": "",
@@ -879,10 +879,10 @@
     2,
     3
   ],
-  "PKValues": [
+  "PKValues": [[
     ":a",
     ":b"
-  ],
+  ]],
   "SecondaryPKValues": null,
   "SubqueryPKColumns": null,
   "SetKey": "",
@@ -906,9 +906,9 @@
     2,
     3
   ],
-  "PKValues": [
+  "PKValues": [[
     "Zm9v"
-  ],
+  ]],
   "SecondaryPKValues": null,
   "SubqueryPKColumns": null,
   "SetKey": "",
@@ -932,9 +932,9 @@
     2,
     3
   ],
-  "PKValues": [
+  "PKValues": [[
     ":a"
-  ],
+  ]],
   "SecondaryPKValues": null,
   "SubqueryPKColumns": null,
   "SetKey": "",

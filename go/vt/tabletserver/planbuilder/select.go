@@ -88,6 +88,12 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 	}
 	switch planId {
 	case PLAN_PK_EQUAL:
+		// PK_EQUAL and PK_IN are identical plans except
+		// for how we handle the limit. If it's PK_EQUAL,
+		// we expect at most one row, which allows us to
+		// ignore 'LIMIT 1'.
+		// TODO(sougou): Merge the two plans once we
+		// can handle limits uniformly.
 		offset, rowcount, err := sel.Limit.Limits()
 		if err != nil {
 			return nil, err
@@ -122,11 +128,6 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 	}
 
 nopk:
-	if len(tableInfo.Indexes[0].Columns) != 1 {
-		plan.Reason = REASON_COMPOSITE_PK
-		return plan, nil
-	}
-
 	// TODO: Analyze hints to improve plan.
 	if hasHints {
 		plan.Reason = REASON_HAS_HINTS

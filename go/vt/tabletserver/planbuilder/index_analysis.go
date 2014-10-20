@@ -74,14 +74,10 @@ func getSelectPKValues(conditions []sqlparser.BoolExpr, pkIndex *schema.Index) (
 		return PLAN_PASS_SELECT, nil, nil
 	}
 	for _, pkValue := range pkValues {
-		inList, ok := pkValue.([]interface{})
-		if !ok {
+		if _, ok := pkValue.([]interface{}); !ok {
 			continue
 		}
-		if len(pkValues) == 1 {
-			return PLAN_PK_IN, inList, nil
-		}
-		return PLAN_PASS_SELECT, nil, nil
+		return PLAN_PK_IN, pkValues, nil
 	}
 	return PLAN_PK_EQUAL, pkValues, nil
 }
