@@ -367,13 +367,11 @@ func (qre *QueryExecutor) execDMLPKRows(conn dbconnpool.PoolConnection, pkRows [
 	}
 
 	bsc := buildStreamComment(qre.plan.TableInfo, pkRows, secondaryList)
-	bv := map[string]interface{}{
-		"#pk": sqlparser.TupleEqualityList{
-			Columns: qre.plan.TableInfo.Indexes[0].Columns,
-			Rows:    pkRows,
-		},
+	qre.bindVars["#pk"] = sqlparser.TupleEqualityList{
+		Columns: qre.plan.TableInfo.Indexes[0].Columns,
+		Rows:    pkRows,
 	}
-	result = qre.directFetch(conn, qre.plan.OuterQuery, bv, nil, bsc)
+	result = qre.directFetch(conn, qre.plan.OuterQuery, qre.bindVars, nil, bsc)
 	if invalidator == nil {
 		return result
 	}
