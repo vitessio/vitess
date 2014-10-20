@@ -513,9 +513,13 @@ class TestTabletManager(unittest.TestCase):
     for t in tablet_62344, tablet_62044:
       t.wait_for_vttablet_state('SERVING')
     for t in tablet_62344, tablet_62044:
-      ti = utils.run_vtctl_json(['GetTablet', t.tablet_alias])
-      if not 'mysql' in ti['Portmap']:
-        self.assertFalse('No mysql port in tablet record: %s', str(ti))
+      # wait for mysql port to show up
+      timeout = 10
+      while True:
+        ti = utils.run_vtctl_json(['GetTablet', t.tablet_alias])
+        if 'mysql' in ti['Portmap']:
+          break
+        timeout = utils.wait_step('mysql port in tablet record', timeout)
       self.assertEqual(ti['Portmap']['mysql'], t.mysql_port)
 
     # all done
