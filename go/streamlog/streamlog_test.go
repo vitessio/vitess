@@ -5,14 +5,13 @@
 package streamlog
 
 import (
+	"bufio"
 	"fmt"
 	"net"
 	"net/http"
 	"net/url"
 	"testing"
 	"time"
-
-	"github.com/youtube/vitess/go/sync2"
 )
 
 type logMessage struct {
@@ -28,92 +27,128 @@ func TestHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer l.Close()
 	addr := l.Addr().String()
+
 	go http.Serve(l, nil)
 
 	logger := New("logger", 1)
 	logger.ServeLogs("/log", func(params url.Values, x interface{}) string { return x.(*logMessage).Format(params) })
 
-	// This should not block
+	// This should not block - there are no subscribers yet.
 	logger.Send(&logMessage{"val1"})
 
-	lastValue := sync2.AtomicString{}
-	svm := sync2.ServiceManager{}
-	svm.Go(func(svc *sync2.ServiceContext) error {
-		resp, err := http.Get(fmt.Sprintf("http://%s/log", addr))
-		if err != nil {
-			t.Fatal(err)
+	// Subscribe.
+	resp, err := http.Get(fmt.Sprintf("http://%s/log", addr))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if resp != nil {
+			resp.Body.Close()
 		}
-		defer resp.Body.Close()
-		buf := make([]byte, 100)
-		for svc.IsRunning() {
-			n, err := resp.Body.Read(buf)
-			if err != nil {
-				t.Fatal(err)
-			}
-			lastValue.Set(string(buf[:n]))
-		}
-		return nil
-	})
-
-	time.Sleep(100 * time.Millisecond)
+	}()
+	body := bufio.NewReader(resp.Body)
 	if sz := len(logger.subscribed); sz != 1 {
 		t.Errorf("want 1, got %d", sz)
 	}
-	logger.Send(&logMessage{"val2"})
-	time.Sleep(100 * time.Millisecond)
-	if lastValue.Get() != "val2\n" {
-		t.Errorf("want val2\\n, got %q", lastValue.Get())
+
+	// Send some messages.
+	for i := 0; i < 10; i++ {
+		msg := fmt.Sprint("msg", i)
+		logger.Send(&logMessage{msg})
+		val, err := body.ReadString('\n')
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := msg + "\n"; val != want {
+			t.Errorf("want %q, got %q", msg, val)
+		}
 	}
 
-	// This part of the test is flaky.
-	// Uncomment for one-time testing.
-	/*
-		// This send will unblock the http client
-		// which will allow it to see the stop request
-		// from svm.
-		go logger.Send(&logMessage{"val3"})
-		svm.Stop()
-		// You have to send a few times before the writer
-		// returns an error.
-		for i := 0; i < 10; i++ {
-			time.Sleep(100 * time.Millisecond)
-			logger.Send(&logMessage{"val4"})
-		}
-		time.Sleep(100 * time.Millisecond)
-		if sz := logger.size.Get(); sz != 0 {
-			t.Errorf("want 0, got %d", sz)
-		}
-	*/
+	// Shutdown.
+	resp.Body.Close()
+	resp = nil
+	body = nil
+
+	// Due to multiple layers of buffering in http.Server, we must send 4 messages to detect the client has gone away.
+	if want, got := 1, len(logger.subscribed); want != got {
+		t.Errorf("len(logger.subscribed) = %v, want %v", got, want)
+	}
+	for i := 0; i < 4; i++ {
+		logger.Send(&logMessage{"val3"})
+		// Allow time for propagation (loopback interface - expected to be fast).
+		time.Sleep(1 * time.Millisecond)
+	}
+	if want, got := 0, len(logger.subscribed); want != got {
+		t.Errorf("len(logger.subscribed) = %v, want %v", got, want)
+	}
 }
 
 func TestChannel(t *testing.T) {
 	logger := New("logger", 1)
 
-	lastValue := sync2.AtomicString{}
-	svm := sync2.ServiceManager{}
-	svm.Go(func(svc *sync2.ServiceContext) error {
-		ch := logger.Subscribe("test")
-		defer logger.Unsubscribe(ch)
-		for svc.IsRunning() {
-			lastValue.Set((<-ch).(*logMessage).Format(nil))
+	// Subscribe.
+	ch := logger.Subscribe("test")
+	defer func() {
+		if ch != nil {
+			logger.Unsubscribe(ch)
 		}
-		return nil
-	})
-
-	time.Sleep(10 * time.Millisecond)
+	}()
 	if sz := len(logger.subscribed); sz != 1 {
 		t.Errorf("want 1, got %d", sz)
 	}
-	logger.Send(&logMessage{"val2"})
-	time.Sleep(10 * time.Millisecond)
-	if lastValue.Get() != "val2\n" {
-		t.Errorf("want val2\\n, got %q", lastValue.Get())
+
+	// Send/receive some messages, one at a time.
+	for i := 0; i < 10; i++ {
+		msg := fmt.Sprint("msg", i)
+		done := make(chan struct{})
+		go func() {
+			if want, got := msg+"\n", (<-ch).(*logMessage).Format(nil); got != want {
+				t.Errorf("Unexpected message in log. got: %q, want: %q", got, want)
+			}
+			close(done)
+		}()
+		logger.Send(&logMessage{msg})
+		<-done
 	}
 
-	go logger.Send(&logMessage{"val3"})
-	svm.Stop()
-	time.Sleep(10 * time.Millisecond)
+	// Send/receive many messages with asynchronous writer/reader.
+	want := []string{"msg0", "msg1", "msg2", "msg3", "msg4", "msg5"}
+	got := make([]string, 0, len(want))
+	readDone := make(chan struct{})
+	writeDone := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case msg := <-ch:
+				got = append(got, msg.(*logMessage).Format(nil))
+			case <-writeDone:
+				close(readDone)
+				return
+			}
+		}
+	}()
+	for _, x := range want {
+		logger.Send(&logMessage{x})
+		// Allow propagation delay (cpu/memory-bound - expected to be very fast).
+		time.Sleep(1 * time.Millisecond)
+	}
+	close(writeDone)
+	<-readDone
+	if len(got) != len(want) {
+		t.Errorf("Bad results length: got %d, want %d", len(got), len(want))
+	} else {
+		for i := 0; i < len(want); i++ {
+			if want[i]+"\n" != got[i] {
+				t.Errorf("Unexpected result in log: got %q, want %q", got[i], want[i]+"\n")
+			}
+		}
+	}
+
+	// Shutdown.
+	logger.Unsubscribe(ch)
+	ch = nil
 	if sz := len(logger.subscribed); sz != 0 {
 		t.Errorf("want 0, got %d", sz)
 	}

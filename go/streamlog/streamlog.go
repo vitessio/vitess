@@ -115,6 +115,10 @@ func (logger *StreamLogger) ServeLogs(url string, messageFmt func(url.Values, in
 		ch := logger.Subscribe("ServeLogs")
 		defer logger.Unsubscribe(ch)
 
+		// Notify client that we're set up. Helpful to distinguish low-traffic streams from connection issues.
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush()
+
 		for message := range ch {
 			if _, err := io.WriteString(w, messageFmt(r.Form, message)); err != nil {
 				return
