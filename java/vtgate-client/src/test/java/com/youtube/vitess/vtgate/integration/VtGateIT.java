@@ -3,6 +3,7 @@ package com.youtube.vitess.vtgate.integration;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -21,6 +22,8 @@ import org.junit.Test;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.primitives.UnsignedLong;
+import com.youtube.vitess.vtgate.BatchQuery;
+import com.youtube.vitess.vtgate.BatchQuery.BatchQueryBuilder;
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.Exceptions.DatabaseException;
 import com.youtube.vitess.vtgate.KeyRange;
@@ -335,6 +338,32 @@ public class VtGateIT {
 			Assert.assertEquals(count, cursor.getRowsAffected());
 		}
 
+		vtgate.close();
+	}
+
+	@Test
+	public void testBatchExecuteKeyspaceIds() throws Exception {
+		int rowsPerShard = 5;
+		for (String shardName : testEnv.shardKidMap.keySet()) {
+			Util.insertRowsInShard(testEnv, shardName, rowsPerShard);
+		}
+		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+		BatchQuery query = new BatchQueryBuilder(testEnv.keyspace, "master")
+				.withAddedSqlBindVars(
+						"select * from vtgate_test where id = 3", null)
+				.withAddedSqlBindVars(
+						"select * from vtgate_test where id = 4", null)
+				.withKeyspaceIds(testEnv.getAllKeyspaceIds())
+				.build();
+		List<Long> expected = Lists.newArrayList(3L, 3L, 4L, 4L);
+		List<Cursor> cursors = vtgate.execute(query);
+		List<Long> actual = new ArrayList<>();
+		for (Cursor cursor : cursors) {
+			for (Row row : cursor) {
+				actual.add(row.getULong("id").longValue());
+			}
+		}
+		Assert.assertTrue(expected.equals(actual));
 		vtgate.close();
 	}
 
