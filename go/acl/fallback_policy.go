@@ -16,11 +16,6 @@ var fallbackError = errors.New("not allowed: fallback policy")
 // access.
 type FallbackPolicy struct{}
 
-// CheckAccessActor disallows all actor access.
-func (fp FallbackPolicy) CheckAccessActor(actor, role string) error {
-	return fallbackError
-}
-
 // CheckAccessHTTP disallows all HTTP access.
 func (fp FallbackPolicy) CheckAccessHTTP(req *http.Request, role string) error {
 	return fallbackError
