@@ -126,6 +126,51 @@ func TestBuildStreamComment(t *testing.T) {
 	}
 }
 
+func TestGetLimit(t *testing.T) {
+	bv := map[string]interface{}{
+		"negative": -1,
+		"int64":    int64(1),
+		"int32":    int32(1),
+		"int":      int(1),
+		"uint":     uint(1),
+	}
+	if result := getLimit(int64(1), bv); result != 1 {
+		t.Errorf("got %d, want 1", result)
+	}
+	if result := getLimit(nil, bv); result != -1 {
+		t.Errorf("got %d, want -1", result)
+	}
+	func() {
+		defer func() {
+			x := recover().(error).Error()
+			want := "error: negative limit -1"
+			if x != want {
+				t.Errorf("got %s, want %s", x, want)
+			}
+		}()
+		getLimit(":negative", bv)
+	}()
+	if result := getLimit(":int64", bv); result != 1 {
+		t.Errorf("got %d, want 1", result)
+	}
+	if result := getLimit(":int32", bv); result != 1 {
+		t.Errorf("got %d, want 1", result)
+	}
+	if result := getLimit(":int", bv); result != 1 {
+		t.Errorf("got %d, want 1", result)
+	}
+	func() {
+		defer func() {
+			x := recover().(error).Error()
+			want := "error: want number type for :uint, got uint"
+			if x != want {
+				t.Errorf("got %s, want %s", x, want)
+			}
+		}()
+		getLimit(":uint", bv)
+	}()
+}
+
 func createTableInfo(name string, cols map[string]string, pKeys []string) TableInfo {
 	table := schema.NewTable(name)
 	for colName, colType := range cols {

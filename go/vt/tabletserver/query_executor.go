@@ -84,7 +84,7 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult) {
 				panic(NewTabletError(FAIL, "Disallowed outside transaction"))
 			}
 			reply = qre.execSelect()
-		case planbuilder.PLAN_PK_EQUAL, planbuilder.PLAN_PK_IN:
+		case planbuilder.PLAN_PK_IN:
 			reply = qre.execPKIN()
 		case planbuilder.PLAN_SELECT_SUBQUERY:
 			reply = qre.execSubquery()
@@ -174,20 +174,20 @@ func (qre *QueryExecutor) execPKIN() (result *mproto.QueryResult) {
 	if err != nil {
 		panic(err)
 	}
-	return qre.fetchMulti(pkRows)
+	return qre.fetchMulti(pkRows, getLimit(qre.plan.Limit, qre.bindVars))
 }
 
 func (qre *QueryExecutor) execSubquery() (result *mproto.QueryResult) {
 	innerResult := qre.qFetch(qre.logStats, qre.plan.Subquery, qre.bindVars, nil)
-	return qre.fetchMulti(innerResult.Rows)
+	return qre.fetchMulti(innerResult.Rows, -1)
 }
 
-func (qre *QueryExecutor) fetchMulti(pkRows [][]sqltypes.Value) (result *mproto.QueryResult) {
+func (qre *QueryExecutor) fetchMulti(pkRows [][]sqltypes.Value, limit int64) (result *mproto.QueryResult) {
 	if qre.plan.Fields == nil {
 		panic("unexpected")
 	}
 	result = &mproto.QueryResult{Fields: qre.plan.Fields}
-	if len(pkRows) == 0 {
+	if len(pkRows) == 0 || limit == 0 {
 		return
 	}
 
@@ -241,6 +241,11 @@ func (qre *QueryExecutor) fetchMulti(pkRows [][]sqltypes.Value) (result *mproto.
 	tableInfo.misses.Add(misses)
 	result.RowsAffected = uint64(len(rows))
 	result.Rows = rows
+	// limit == 0 is already addressed upfront.
+	if limit > 0 && len(result.Rows) > int(limit) {
+		result.Rows = result.Rows[:limit]
+		result.RowsAffected = uint64(limit)
+	}
 	return result
 }
 

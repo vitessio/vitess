@@ -80,7 +80,7 @@ func resolveValue(col *schema.TableColumn, value interface{}, bindVars map[strin
 	case string:
 		lookup, ok := bindVars[v[1:]]
 		if !ok {
-			return result, NewTabletError(FAIL, "Missing bind var %s", v)
+			return result, NewTabletError(FAIL, "missing bind var %s", v)
 		}
 		if sqlval, err := sqltypes.BuildValue(lookup); err != nil {
 			return result, NewTabletError(FAIL, err.Error())
@@ -129,6 +129,37 @@ func validateValue(col *schema.TableColumn, value sqltypes.Value) error {
 		}
 	}
 	return nil
+}
+
+// getLimit resolves the rowcount or offset of the limit clause value.
+// It returns -1 if it's not set.
+func getLimit(limit interface{}, bv map[string]interface{}) int64 {
+	switch lim := limit.(type) {
+	case string:
+		lookup, ok := bv[lim[1:]]
+		if !ok {
+			panic(NewTabletError(FAIL, "missing bind var %s", lim))
+		}
+		var newlim int64
+		switch l := lookup.(type) {
+		case int64:
+			newlim = l
+		case int32:
+			newlim = int64(l)
+		case int:
+			newlim = int64(l)
+		default:
+			panic(NewTabletError(FAIL, "want number type for %s, got %T", lim, lookup))
+		}
+		if newlim < 0 {
+			panic(NewTabletError(FAIL, "negative limit %d", newlim))
+		}
+		return newlim
+	case int64:
+		return lim
+	default:
+		return -1
+	}
 }
 
 func buildKey(row []sqltypes.Value) (key string) {
