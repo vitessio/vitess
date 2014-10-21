@@ -73,7 +73,7 @@ guide.
      how to set your environment to work with Vitess.
  * [Tools](https://github.com/youtube/vitess/blob/master/doc/Tools.md):
      all Vitess tools and servers.
- * [Vttablet](https://github.com/youtube/vitess/blob/master/doc/Vttablet.md):
+ * [vttablet/vtocc](https://github.com/youtube/vitess/blob/master/doc/vtocc.md):
      information about the most important Vitess server.
  * [Reparenting](https://github.com/youtube/vitess/blob/master/doc/Reparenting.md):
      performing master failover.
