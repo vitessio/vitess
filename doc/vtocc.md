@@ -54,3 +54,28 @@ client and server side encoding. vtocc does not try to do any character set conv
 vtocc will enable rowcache only for tables that have numbers or binary data types as primary
 key columns. This is because other column types are not bitwise comparable. For example,
 varchar comparison in MySQL is collation dependent. So, those types are not supported.
+
+## Bind variables
+One major differentiator with vtocc is its use of bind variables. When you send a query,
+you build it like this:
+
+    query = "select a, b, c from t where id1 = :id1 and id2 = :id2"
+    bindVars = {"id1": 1, "id2": 2}
+
+vtocc parses the query string and caches it against an execution plan. Subsequent requests
+with the same query string will cause vtocc to reuse the cached query plan to efficiently
+handle the request.
+
+vtocc also accepts old-style positional variables. In such cases the bind vars are to be
+named as v1, v2, etc:
+
+    query = "select a, b, c from t where id1 = ? and id2 = ?"
+    bindVars = {"v1": 1, "v2": 2}
+
+vtocc also accepts list bind variables (TO BE IMPLEMENTED):
+
+    query = "select a, b, c from t where id1 in ::list"
+    bindVars = {"list": [1, 2, 3]}
+
+Additionally, vtocc tracks statistics grouped by these query strings, which are
+useful for analysis and trouble-shooting.
