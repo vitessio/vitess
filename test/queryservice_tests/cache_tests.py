@@ -63,6 +63,13 @@ class TestCache(framework.TestCase):
     tend = self.env.table_stats()["vtocc_cached2"]
     self.assertEqual(tstart["Hits"]+1, tend["Hits"])
 
+  def test_bad_limit(self):
+    try:
+      with self.assertRaises(dbexceptions.DatabaseError):
+        self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo' limit :a", {"a": -1})
+    finally:
+      self.env.execute("alter table vtocc_cached2 comment ''")
+
   def test_rename(self):
     try:
       # Verify row cache is working

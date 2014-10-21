@@ -64,4 +64,18 @@ func TestLimits(t *testing.T) {
 	if o != nil || r.(string) != ":a" || err != nil {
 		t.Errorf("got %v %v %v, want nil, :a, nil", o, r, err)
 	}
+
+	l = &Limit{Offset: NumVal([]byte("-2")), Rowcount: NumVal([]byte("0"))}
+	_, _, err = l.Limits()
+	wantErr = "negative offset: -2"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("got %v, want %s", err, wantErr)
+	}
+
+	l = &Limit{Offset: NumVal([]byte("2")), Rowcount: NumVal([]byte("-2"))}
+	_, _, err = l.Limits()
+	wantErr = "negative limit: -2"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("got %v, want %s", err, wantErr)
+	}
 }

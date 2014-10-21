@@ -9,8 +9,8 @@ class Case1(Case):
 cases = [
   "alter table vtocc_cached1 comment 'new'",
 
-  Case1(doc="PK_EQUAL (empty cache)",
-       query_plan="PK_EQUAL",
+  Case1(doc="PK_IN (empty cache)",
+       query_plan="PK_IN",
        sql="select * from vtocc_cached1 where eid = 1",
        result=[(1L, 'a', 'abcd')],
        rewritten=[
@@ -19,8 +19,8 @@ cases = [
        cache_misses=1),
   # (1) is in cache
 
-  Case1(doc="PK_EQUAL, use cache",
-       query_plan="PK_EQUAL",
+  Case1(doc="PK_IN, use cache",
+       query_plan="PK_IN",
        sql="select * from vtocc_cached1 where eid = 1",
        result=[(1L, 'a', 'abcd')],
        rewritten=[],
@@ -36,6 +36,41 @@ cases = [
          "select eid, name, foo from vtocc_cached1 where eid in (3, 6)"],
        cache_hits=1,
        cache_misses=1,
+       cache_absent=1),
+  # (1, 3)
+
+  Case1(doc="PK_IN limit 0",
+       query_plan="PK_IN",
+       sql="select * from vtocc_cached1 where eid in (1, 3, 6) limit 0",
+       result=[],
+       rewritten=["select * from vtocc_cached1 where 1 != 1"],
+       cache_hits=0,
+       cache_misses=0,
+       cache_absent=0),
+  # (1, 3)
+
+  Case1(doc="PK_IN limit 1",
+       query_plan="PK_IN",
+       sql="select * from vtocc_cached1 where eid in (1, 3, 6) limit 1",
+       result=[(1L, 'a', 'abcd')],
+       rewritten=[
+         "select * from vtocc_cached1 where 1 != 1",
+         "select eid, name, foo from vtocc_cached1 where eid in (6)"],
+       cache_hits=2,
+       cache_misses=0,
+       cache_absent=1),
+  # (1, 3)
+
+  Case1(doc="PK_IN limit :a",
+       query_plan="PK_IN",
+       sql="select * from vtocc_cached1 where eid in (1, 3, 6) limit :a",
+       bindings={"a": 1},
+       result=[(1L, 'a', 'abcd')],
+       rewritten=[
+         "select * from vtocc_cached1 where 1 != 1",
+         "select eid, name, foo from vtocc_cached1 where eid in (6)"],
+       cache_hits=2,
+       cache_misses=0,
        cache_absent=1),
   # (1, 3)
 
@@ -67,6 +102,7 @@ cases = [
   # (1, 2, 3)
 
   Case1(doc="SELECT_SUBQUERY (4, 5)",
+       query_plan="SELECT_SUBQUERY",
        sql="select * from vtocc_cached1 where name between 'd' and 'e'",
        result=[(4L, 'd', 'abcd'), (5L, 'e', 'efgh')],
        rewritten=[
@@ -78,11 +114,12 @@ cases = [
   # (1, 2, 3, 4, 5)
 
   Case1(doc="PASS_SELECT",
+      query_plan="PASS_SELECT",
       sql="select * from vtocc_cached1 where foo='abcd'",
       result=[(1L, 'a', 'abcd'), (2L, 'a', 'abcd'), (3L, 'c', 'abcd'), (4L, 'd', 'abcd')],
       rewritten=[
         "select * from vtocc_cached1 where 1 != 1",
         "select * from vtocc_cached1 where foo = 'abcd' limit 10001"],
       cache_hits=0, cache_misses=0, cache_absent=0),
-  # (1, 2, 3)
+  # (1, 2, 3, 4, 5)
 ]

@@ -10,8 +10,8 @@ class Case2(Case):
 cases = [
   "alter table vtocc_cached2 comment 'new'",
 
-  Case2(doc="PK_EQUAL (null key)",
-       query_plan="PK_EQUAL",
+  Case2(doc="PK_IN (null key)",
+       query_plan="PK_IN",
        sql="select * from vtocc_cached2 where eid = 2 and bid = :bid",
        bindings={"bid": None},
        result=[],
@@ -20,8 +20,8 @@ cases = [
          "select eid, bid, name, foo from vtocc_cached2 where (eid, bid) = (2, null)"],
        cache_absent=1),
 
-  Case2(doc="PK_EQUAL (empty cache)",
-       query_plan="PK_EQUAL",
+  Case2(doc="PK_IN (empty cache)",
+       query_plan="PK_IN",
        sql="select * from vtocc_cached2 where eid = 2 and bid = 'foo'",
        result=[(2, 'foo', 'abcd2', 'efgh')],
        rewritten=[
@@ -30,16 +30,16 @@ cases = [
        cache_misses=1),
   # (2.foo) is in cache
 
-  Case2(doc="PK_EQUAL, use cache",
-       query_plan="PK_EQUAL",
+  Case2(doc="PK_IN, use cache",
+       query_plan="PK_IN",
        sql="select bid, eid, name, foo from vtocc_cached2 where eid = 2 and bid = 'foo'",
        result=[('foo', 2, 'abcd2', 'efgh')],
        rewritten=["select bid, eid, name, foo from vtocc_cached2 where 1 != 1"],
        cache_hits=1),
-  # (2.foo) is in cache
+  # (2.foo)
 
-  Case2(doc="PK_EQUAL, absent",
-       query_plan="PK_EQUAL",
+  Case2(doc="PK_IN, absent",
+       query_plan="PK_IN",
        sql="select bid, eid, name, foo from vtocc_cached2 where eid = 3 and bid = 'foo'",
        result=[],
        rewritten=[

@@ -65,23 +65,6 @@ func NewIndexScoreList(indexes []*schema.Index) []*IndexScore {
 	return scoreList
 }
 
-func getSelectPKValues(conditions []sqlparser.BoolExpr, pkIndex *schema.Index) (planId PlanType, pkValues []interface{}, err error) {
-	pkValues, err = getPKValues(conditions, pkIndex)
-	if err != nil {
-		return 0, nil, err
-	}
-	if pkValues == nil {
-		return PLAN_PASS_SELECT, nil, nil
-	}
-	for _, pkValue := range pkValues {
-		if _, ok := pkValue.([]interface{}); !ok {
-			continue
-		}
-		return PLAN_PK_IN, pkValues, nil
-	}
-	return PLAN_PK_EQUAL, pkValues, nil
-}
-
 func getPKValues(conditions []sqlparser.BoolExpr, pkIndex *schema.Index) (pkValues []interface{}, err error) {
 	pkIndexScore := NewIndexScore(pkIndex)
 	pkValues = make([]interface{}, len(pkIndexScore.ColumnMatch))
