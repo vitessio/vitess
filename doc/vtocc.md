@@ -34,3 +34,23 @@ to send queries through it.
   transactions and manage deadlines.
 * Streaming queries to serve OLAP workloads.
 * A rich set of monitoring features to watch over, diagnose or analyze performance.
+
+## Protocol
+vtocc uses the bsonrpc protocol. This means that it uses [bson encoding](http://bsonspec.org)
+to receive and send messages. There is currently a [python client](https://github.com/youtube/vitess/blob/master/py/vtdb/tablet.py). A java client is
+also getting implemented.
+
+If you are familiar with go, you can actually plug in any protocol you desire, like json,
+thrift or protobufs.
+
+## Data types
+vtocc has not been well tested with exotic data types. Specifically, we don't know how it
+will handle boolean and timestamp columns. Otherwise, we have [tests](https://github.com/youtube/vitess/blob/master/test/test_data/test_schema.sql#L45) for
+the commonly used data types.
+
+vtocc can work with latin-1 or utf-8 encoded databases. It's highly recommended that you match
+client and server side encoding. vtocc does not try to do any character set conversions.
+
+vtocc will enable rowcache only for tables that have numbers or binary data types as primary
+key columns. This is because other column types are not bitwise comparable. For example,
+varchar comparison in MySQL is collation dependent. So, those types are not supported.
