@@ -123,3 +123,14 @@ All timeout related parameters below are specified in seconds. A value of zero m
 * **queryserver-config-strict-mode=true**: If this is turned off, vtocc allows all DMLs and does not enforce MySQL's `STRICT_TRANS_TABLES`. This setting can be tuned off for migration purposes if the database is not already configured with these settings.
 * **queryserver-config-transaction-cap=20**: This value limits the number of allowed concurrent transactions.
 * **queryserver-config-transaction-timeout=30**: The amount of time to allow a transaction to complete before killing it.
+
+#### Logging parameters
+* **alsologtostderr=false**: log to standard error as well as files.
+* **keep_logs=0**: keep logs for this long (zero to keep forever).
+* **log_backtrace_at=:0**: when logging hits line file:N, emit a stack trace.
+* **log_dir=""**: If non-empty, write log files in this directory.
+* **logtostderr=false**: log to standard error instead of files.
+* **stderrthreshold=WARNING**: logs at or above this threshold go to stderr.
+* **purge_logs_interval=1h0m0s**: how often try to remove old logs.
+
+
