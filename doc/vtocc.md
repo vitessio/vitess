@@ -79,3 +79,14 @@ vtocc also accepts list bind variables (TO BE IMPLEMENTED):
 
 Additionally, vtocc tracks statistics grouped by these query strings, which are
 useful for analysis and trouble-shooting.
+
+## Execute functions
+There are three Execute functions:
+* **Execute**: This is an OLTP execute function that is expected to return a limited set
+  of rows. If the number of rows exceeds the max allowed limit, an error is returned.
+* **BatchExecute** executes a set of OLTP statements as a single round-trip request. If you
+  are affected by network latency, this function can be used to group your requests.
+  You can call this function from within a transaction, or you can begin and commit a
+  transaction from within a batch.
+* **StreamExecute**: This function is used for returning large result sets that could
+  potentially require full table scans.
