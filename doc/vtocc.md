@@ -90,3 +90,36 @@ There are three Execute functions:
   transaction from within a batch.
 * **StreamExecute**: This function is used for returning large result sets that could
   potentially require full table scans.
+
+## Command line arguments
+'vtocc -h' should print the full set of command line arguments. Here is an explanation
+of what they mean:
+#### DB connection parameters
+There are four types of db-config parameters. db-config-app-* specify the connection parameters
+that will be used to serve the app. The 'repl' parameters will be used by the rowcache to connect
+to the server as a replica to fetch binlog events for invalidation. The 'dba' and 'filtered'
+parameters are only used when running as vttablet.
+* **db-config-app-charset="utf8"**: Only utf8 or latin1 are currently supported.
+* **db-config-app-dbname=""**: Name of the MySQL database to serve queries for.
+* **db-config-app-keyspace=""**: It’s recommended that this value be set to the same as dbname. Clients connecting to vtocc will need to specify the keyspace name, which will be used as sanity check.
+* **db-config-app-uname="vt_app"**: Set this to the username vtocc should connect as.
+* **db-config-app-unixsocket=""**: Socket file name. This is the recommended mode of connection (vs host-port).
+* **db-credentials-server="file"**: db credentials server type (use 'file' for the file implementation).
+* **db-credentials-file**: Specifies the file where db credentials are stored.
+
+TODO: Document the rest of the flags.
+
+#### Query server parameters
+All timeout related parameters below are specified in seconds. A value of zero means never.
+* **port=0**: Server port.
+* **queryserver-config-idle-timeout=1800**: vtocc has many connection pools to connect to mysql. If any connection in the pool has been idle for longer than the specified time, then vtocc discards the connection and creates a new one instead. This value should be less than the MySQL idle timeout.
+* **queryserver-config-max-result-size=10000**: vtocc adds a limit clause to all unbounded queries. If the result returned exceeds this number, it returns an error instead.
+* **queryserver-config-pool-size=16**: This is the generic read pool. This pool gets used if you issue read queries outside of transactions.
+* **queryserver-config-query-cache-size=5000**: This is the number of unique query strings that vtocc caches. You can start off with the default value and adjust up or down based on what you see.
+* **queryserver-config-query-timeout=0**: This timeout specifies how long a query is allowed to run before it’s killed.
+* **queryserver-config-schema-reload-time=1800**: This specifies how often the schema is reloaded by vtocc. If you rollout schema changes to a live serving database, you can be sure that it has been read by vtocc after the reload time has elapsed. If needed, there are ways to make vtocc reload the schema immediately.
+* **queryserver-config-stream-buffer-size=32768**: This is the buffer size for streaming queries.
+* **queryserver-config-stream-pool-size=750**: Connection pool size for streaming queries.
+* **queryserver-config-strict-mode=true**: If this is turned off, vtocc allows all DMLs and does not enforce MySQL's `STRICT_TRANS_TABLES`. This setting can be tuned off for migration purposes if the database is not already configured with these settings.
+* **queryserver-config-transaction-cap=20**: This value limits the number of allowed concurrent transactions.
+* **queryserver-config-transaction-timeout=30**: The amount of time to allow a transaction to complete before killing it.
