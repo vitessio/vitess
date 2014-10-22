@@ -7,8 +7,6 @@ package vtgate
 import (
 	"flag"
 	"fmt"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -94,13 +92,13 @@ type sandbox struct {
 	// SrvKeyspaceCallback specifies the callback function in GetSrvKeyspace
 	SrvKeyspaceCallback func()
 
-	TestConns map[uint32]tabletconn.TabletConn
+	TestConns map[string]map[uint32]tabletconn.TabletConn
 }
 
 func (s *sandbox) Reset() {
 	s.sandmu.Lock()
 	defer s.sandmu.Unlock()
-	s.TestConns = make(map[uint32]tabletconn.TabletConn)
+	s.TestConns = make(map[string]map[uint32]tabletconn.TabletConn)
 	s.SrvKeyspaceCounter = 0
 	s.SrvKeyspaceMustFail = 0
 	s.EndPointCounter = 0
@@ -115,11 +113,12 @@ func (s *sandbox) Reset() {
 func (s *sandbox) MapTestConn(shard string, conn tabletconn.TabletConn) {
 	s.sandmu.Lock()
 	defer s.sandmu.Unlock()
-	uid, err := getUidForShard(shard, s.ShardSpec)
-	if err != nil {
-		panic(err)
+	conns, ok := s.TestConns[shard]
+	if !ok {
+		conns = make(map[uint32]tabletconn.TabletConn)
 	}
-	s.TestConns[uint32(uid)] = conn
+	conns[uint32(len(conns))] = conn
+	s.TestConns[shard] = conns
 }
 
 var DefaultShardSpec = "-20-40-60-80-a0-c0-e0-"
@@ -134,26 +133,6 @@ func getAllShards(shardSpec string) (key.KeyRangeArray, error) {
 
 func getKeyRangeName(kr key.KeyRange) string {
 	return fmt.Sprintf("%v-%v", string(kr.Start.Hex()), string(kr.End.Hex()))
-}
-
-func getUidForShard(shardName string, shardSpec string) (int, error) {
-	// Try simple unsharded case first
-	if strings.Contains(shardName, "-") == false {
-		uid, err := strconv.Atoi(shardName)
-		if err == nil {
-			return uid, nil
-		}
-	}
-	shards, err := getAllShards(shardSpec)
-	if err != nil {
-		return 0, fmt.Errorf("shard not found %v", shardName)
-	}
-	for i, s := range shards {
-		if shardName == getKeyRangeName(s) {
-			return i, nil
-		}
-	}
-	return 0, fmt.Errorf("shard not found %v", shardName)
 }
 
 func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*topo.SrvKeyspace, error) {
@@ -221,6 +200,7 @@ func createUnshardedKeyspace() (*topo.SrvKeyspace, error) {
 
 // sandboxTopo satisfies the SrvTopoServer interface
 type sandboxTopo struct {
+	callbackGetEndPoints func(st *sandboxTopo)
 }
 
 func (sct *sandboxTopo) GetSrvKeyspaceNames(context context.Context, cell string) ([]string, error) {
@@ -263,17 +243,24 @@ func (sct *sandboxTopo) GetSrvKeyspace(context context.Context, cell, keyspace s
 func (sct *sandboxTopo) GetEndPoints(context context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
 	sand := getSandbox(keyspace)
 	sand.EndPointCounter++
+	if sct.callbackGetEndPoints != nil {
+		sct.callbackGetEndPoints(sct)
+	}
 	if sand.EndPointMustFail > 0 {
 		sand.EndPointMustFail--
 		return nil, fmt.Errorf("topo error")
 	}
-	uid, err := getUidForShard(shard, sand.ShardSpec)
-	if err != nil {
-		panic(err)
+	conns := sand.TestConns[shard]
+	ep := &topo.EndPoints{}
+	for i := range conns {
+		ep.Entries = append(ep.Entries,
+			topo.EndPoint{
+				Uid:          i,
+				Host:         shard,
+				NamedPortMap: map[string]int{"vt": 1},
+			})
 	}
-	return &topo.EndPoints{Entries: []topo.EndPoint{
-		{Uid: uint32(uid), Host: shard, NamedPortMap: map[string]int{"vt": 1}},
-	}}, nil
+	return ep, nil
 }
 
 func sandboxDialer(context context.Context, endPoint topo.EndPoint, keyspace, shard string, timeout time.Duration) (tabletconn.TabletConn, error) {
@@ -285,10 +272,11 @@ func sandboxDialer(context context.Context, endPoint topo.EndPoint, keyspace, sh
 		sand.DialMustFail--
 		return nil, tabletconn.OperationalError(fmt.Sprintf("conn error"))
 	}
-	tconn := sand.TestConns[endPoint.Uid]
-	if tconn == nil {
-		panic(fmt.Sprintf("can't find conn %v", endPoint.Uid))
+	conns := sand.TestConns[shard]
+	if conns == nil {
+		panic(fmt.Sprintf("can't find shard %v", shard))
 	}
+	tconn := conns[endPoint.Uid]
 	tconn.(*sandboxConn).endPoint = endPoint
 	return tconn, nil
 }
@@ -304,6 +292,9 @@ type sandboxConn struct {
 	mustFailNotTx  int
 	mustDelay      time.Duration
 
+	// A callback to tweak the behavior on each conn call
+	onConnUse func(*sandboxConn)
+
 	// These Count vars report how often the corresponding
 	// functions were called.
 	ExecCount     sync2.AtomicInt64
@@ -317,6 +308,9 @@ type sandboxConn struct {
 }
 
 func (sbc *sandboxConn) getError() error {
+	if sbc.onConnUse != nil {
+		sbc.onConnUse(sbc)
+	}
 	if sbc.mustFailRetry > 0 {
 		sbc.mustFailRetry--
 		return &tabletconn.ServerError{Code: tabletconn.ERR_RETRY, Err: "retry: err"}

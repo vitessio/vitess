@@ -232,7 +232,7 @@ func testResolverGeneric(t *testing.T, name string, action func() (*mproto.Query
 	s.MapTestConn("20-40", sbc1)
 	_, err = action()
 	want1 := fmt.Sprintf("error: err, shard, host: %s.-20.master, {Uid:0 Host:-20 NamedPortMap:map[vt:1] Health:map[]}", name)
-	want2 := fmt.Sprintf("retry: err, shard, host: %s.20-40.master, {Uid:1 Host:20-40 NamedPortMap:map[vt:1] Health:map[]}", name)
+	want2 := fmt.Sprintf("retry: err, shard, host: %s.20-40.master, {Uid:0 Host:20-40 NamedPortMap:map[vt:1] Health:map[]}", name)
 	want := []string{want1, want2}
 	sort.Strings(want)
 	if err == nil {
@@ -264,7 +264,7 @@ func testResolverGeneric(t *testing.T, name string, action func() (*mproto.Query
 	s.MapTestConn("20-40", sbc1)
 	_, err = action()
 	want1 = fmt.Sprintf("retry: err, shard, host: %s.-20.master, {Uid:0 Host:-20 NamedPortMap:map[vt:1] Health:map[]}", name)
-	want2 = fmt.Sprintf("fatal: err, shard, host: %s.20-40.master, {Uid:1 Host:20-40 NamedPortMap:map[vt:1] Health:map[]}", name)
+	want2 = fmt.Sprintf("fatal: err, shard, host: %s.20-40.master, {Uid:0 Host:20-40 NamedPortMap:map[vt:1] Health:map[]}", name)
 	want = []string{want1, want2}
 	sort.Strings(want)
 	if err == nil {
