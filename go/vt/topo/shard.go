@@ -19,6 +19,53 @@ import (
 
 // Functions for dealing with shard representations in topology.
 
+// addCells will merge both cells list, settling on nil if either list is empty
+func addCells(left, right []string) []string {
+	if len(left) == 0 || len(right) == 0 {
+		return nil
+	}
+
+	for _, cell := range right {
+		if !InCellList(cell, left) {
+			left = append(left, cell)
+		}
+	}
+	return left
+}
+
+// removeCells will remove the cells from the provided list. It returns
+// the new list, and a boolean that indicates the returned list is empty.
+func removeCells(cells, toRemove, fullList []string) ([]string, bool) {
+	// The assumption here is we already migrated something,
+	// and we're reverting that part. So we're gonna remove
+	// records only.
+	leftoverCells := make([]string, 0, len(cells))
+	if len(cells) == 0 {
+		// we migrated all the cells already, take the full list
+		// and remove all the ones we're not reverting
+		for _, cell := range fullList {
+			if !InCellList(cell, toRemove) {
+				leftoverCells = append(leftoverCells, cell)
+			}
+		}
+	} else {
+		// we migrated a subset of the cells,
+		// remove the ones we're reverting
+		for _, cell := range cells {
+			if !InCellList(cell, toRemove) {
+				leftoverCells = append(leftoverCells, cell)
+			}
+		}
+	}
+
+	if len(leftoverCells) == 0 {
+		// we don't have any cell left, we need to clear this record
+		return nil, true
+	}
+
+	return leftoverCells, false
+}
+
 // SourceShard represents a data source for filtered replication
 // accross shards. When this is used in a destination shard, the master
 // of that shard will run filtered replication.
@@ -72,20 +119,6 @@ type TabletControl struct {
 	// What specific action to take
 	DisableQueryService bool
 	BlacklistedTables   []string // only used if DisableQueryService==false
-}
-
-// addCells will merge both cells list, settling on nil if either list is empty
-func (tc *TabletControl) addCells(cells []string) {
-	if len(tc.Cells) == 0 || len(cells) == 0 {
-		tc.Cells = nil
-		return
-	}
-
-	for _, cell := range cells {
-		if !InCellList(cell, tc.Cells) {
-			tc.Cells = append(tc.Cells, cell)
-		}
-	}
 }
 
 // A pure data struct for information stored in topology server.  This
@@ -257,6 +290,9 @@ func (si *ShardInfo) UpdateSourceBlacklistedTables(tabletType TabletType, cells 
 	if !ok {
 		// handle the case where the TabletControl object is new
 		if remove {
+			if len(si.TabletControlMap) == 0 {
+				si.TabletControlMap = nil
+			}
 			// we try to remove from something that doesn't exist,
 			// log, but we're done.
 			log.Warningf("Trying to remove TabletControl.BlacklistedTables for missing type %v in shard %v/%v", tabletType, si.keyspace, si.shardName)
@@ -285,7 +321,7 @@ func (si *ShardInfo) UpdateSourceBlacklistedTables(tabletType TabletType, cells 
 			return fmt.Errorf("trying to use two different sets of blacklisted tables for shard %v/%v: %v and %v", si.keyspace, si.shardName, tc.BlacklistedTables, tables)
 		}
 
-		tc.addCells(cells)
+		tc.Cells = addCells(tc.Cells, cells)
 	}
 	return nil
 }
@@ -309,6 +345,9 @@ func (si *ShardInfo) UpdateDisableQueryService(tabletType TabletType, cells []st
 				BlacklistedTables:   nil,
 			}
 		} else {
+			if len(si.TabletControlMap) == 0 {
+				si.TabletControlMap = nil
+			}
 			log.Warningf("Trying to remove TabletControl.DisableQueryService for missing type: %v", tabletType)
 		}
 		return nil
@@ -324,7 +363,7 @@ func (si *ShardInfo) UpdateDisableQueryService(tabletType TabletType, cells []st
 	}
 
 	if disableQueryService {
-		tc.addCells(cells)
+		tc.Cells = addCells(tc.Cells, cells)
 	} else {
 		si.removeCellsFromTabletControl(tc, tabletType, cells)
 	}
@@ -332,36 +371,15 @@ func (si *ShardInfo) UpdateDisableQueryService(tabletType TabletType, cells []st
 }
 
 func (si *ShardInfo) removeCellsFromTabletControl(tc *TabletControl, tabletType TabletType, cells []string) {
-	// The assumption here is we already migrated something,
-	// and we're reverting that part. So we're gonna remove
-	// records only.
-	leftoverCells := make([]string, 0, len(tc.Cells))
-	if len(tc.Cells) == 0 {
-		// we migrated all the cells already, take the shard
-		// Cells list and remove all the ones we're not reverting
-		for _, cell := range si.Cells {
-			if !InCellList(cell, cells) {
-				leftoverCells = append(leftoverCells, cell)
-			}
-		}
-	} else {
-		// we migrated a subset of the cells,
-		// remove the ones we're reverting
-		for _, cell := range tc.Cells {
-			if !InCellList(cell, cells) {
-				leftoverCells = append(leftoverCells, cell)
-			}
-		}
-	}
-
-	if len(leftoverCells) == 0 {
+	result, emptyList := removeCells(tc.Cells, cells, si.Cells)
+	if emptyList {
 		// we don't have any cell left, we need to clear this record
 		delete(si.TabletControlMap, tabletType)
 		if len(si.TabletControlMap) == 0 {
 			si.TabletControlMap = nil
 		}
 	} else {
-		tc.Cells = leftoverCells
+		tc.Cells = result
 	}
 }
 

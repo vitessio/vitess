@@ -232,22 +232,22 @@ func (vscw *VerticalSplitCloneWorker) init() error {
 	if err != nil {
 		return fmt.Errorf("cannot read destination keyspace %v: %v", vscw.destinationKeyspace, err)
 	}
-	if len(destinationKeyspaceInfo.ServedFrom) == 0 {
-		return fmt.Errorf("destination keyspace %v has no ServedFrom", vscw.destinationKeyspace)
+	if len(destinationKeyspaceInfo.ServedFromMap) == 0 {
+		return fmt.Errorf("destination keyspace %v has no KeyspaceServedFrom", vscw.destinationKeyspace)
 	}
 
 	// validate all serving types, find sourceKeyspace
 	servingTypes := []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY}
 	servedFrom := ""
 	for _, st := range servingTypes {
-		if sf, ok := destinationKeyspaceInfo.ServedFrom[st]; !ok {
+		if sf, ok := destinationKeyspaceInfo.ServedFromMap[st]; !ok {
 			return fmt.Errorf("destination keyspace %v is serving type %v", vscw.destinationKeyspace, st)
 		} else {
 			if servedFrom == "" {
-				servedFrom = sf
+				servedFrom = sf.Keyspace
 			} else {
-				if servedFrom != sf {
-					return fmt.Errorf("destination keyspace %v is serving from multiple source keyspaces %v and %v", vscw.destinationKeyspace, servedFrom, sf)
+				if servedFrom != sf.Keyspace {
+					return fmt.Errorf("destination keyspace %v is serving from multiple source keyspaces %v and %v", vscw.destinationKeyspace, servedFrom, sf.Keyspace)
 				}
 			}
 		}

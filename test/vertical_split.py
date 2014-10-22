@@ -387,6 +387,18 @@ index by_msg (msg)
     utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'master'],
                     expect_fail=True)
 
+    # migrate rdonly only in test_ny cell, make sure nothing is migrated
+    # in test_nj
+    utils.run_vtctl(['MigrateServedFrom', '--cells=test_ny',
+                     'destination_keyspace/0', 'rdonly'],
+                    auto_log=True)
+    self._check_srv_keyspace('ServedFrom(master): source_keyspace\n' +
+                             'ServedFrom(rdonly): source_keyspace\n' +
+                             'ServedFrom(replica): source_keyspace\n')
+    self._check_blacklisted_tables(source_master, None)
+    self._check_blacklisted_tables(source_replica, None)
+    self._check_blacklisted_tables(source_rdonly, None)
+
     # now serve rdonly from the destination shards
     utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'rdonly'],
                     auto_log=True)

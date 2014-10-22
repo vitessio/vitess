@@ -11,33 +11,51 @@ import (
 
 // This file tests the shard related object functionnalities.
 
-func TestTabletControlAddCells(t *testing.T) {
-	tc := &TabletControl{}
+func TestAddCells(t *testing.T) {
+	var cells []string
 
 	// no restriction + no restriction -> no restrictions
-	tc.addCells(nil)
-	if tc.Cells != nil {
+	cells = addCells(cells, nil)
+	if cells != nil {
 		t.Fatalf("addCells(no restriction)+no restriction should be no restriction")
 	}
 
 	// no restriction + cells -> no restrictions
-	tc.addCells([]string{"c1", "c2"})
-	if tc.Cells != nil {
+	cells = addCells(cells, []string{"c1", "c2"})
+	if cells != nil {
 		t.Fatalf("addCells(no restriction)+restriction should be no restriction")
 	}
 
 	// cells + no restriction -> no restrictions
-	tc.Cells = []string{"c1", "c2"}
-	tc.addCells(nil)
-	if tc.Cells != nil {
+	cells = []string{"c1", "c2"}
+	cells = addCells(cells, nil)
+	if cells != nil {
 		t.Fatalf("addCells(restriction)+no restriction should be no restriction")
 	}
 
 	// cells + cells -> union
-	tc.Cells = []string{"c1", "c2"}
-	tc.addCells([]string{"c2", "c3"})
-	if !reflect.DeepEqual(tc.Cells, []string{"c1", "c2", "c3"}) {
-		t.Fatalf("addCells(restriction)+restriction failed: got %v", tc.Cells)
+	cells = []string{"c1", "c2"}
+	cells = addCells(cells, []string{"c2", "c3"})
+	if !reflect.DeepEqual(cells, []string{"c1", "c2", "c3"}) {
+		t.Fatalf("addCells(restriction)+restriction failed: got %v", cells)
+	}
+}
+
+func TestRemoveCells(t *testing.T) {
+	var cells []string
+	allCells := []string{"first", "second", "third"}
+
+	// remove from empty list should return allCells - what we remove
+	var emptyResult bool
+	cells, emptyResult = removeCells(cells, []string{"second"}, allCells)
+	if emptyResult || !reflect.DeepEqual(cells, []string{"first", "third"}) {
+		t.Fatalf("removeCells(full)-second failed: got %v", cells)
+	}
+
+	// removethe next two cells, should return empty list
+	cells, emptyResult = removeCells(cells, []string{"first", "third"}, allCells)
+	if !emptyResult {
+		t.Fatalf("removeCells(full)-first-third is not empty: %v", cells)
 	}
 }
 

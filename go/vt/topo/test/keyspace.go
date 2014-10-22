@@ -5,6 +5,7 @@
 package test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/key"
@@ -35,14 +36,22 @@ func CheckKeyspace(t *testing.T, ts topo.Server) {
 		t.Errorf("GetKeyspaces: want %v, got %v", []string{"test_keyspace"}, keyspaces)
 	}
 
-	if err := ts.CreateKeyspace("test_keyspace2", &topo.Keyspace{
+	k := &topo.Keyspace{
 		ShardingColumnName: "user_id",
 		ShardingColumnType: key.KIT_UINT64,
-		ServedFrom: map[topo.TabletType]string{
-			topo.TYPE_MASTER: "test_keyspace3",
+		ServedFromMap: map[topo.TabletType]*topo.KeyspaceServedFrom{
+			topo.TYPE_REPLICA: &topo.KeyspaceServedFrom{
+				Cells:    []string{"c1", "c2"},
+				Keyspace: "test_keyspace3",
+			},
+			topo.TYPE_MASTER: &topo.KeyspaceServedFrom{
+				Cells:    nil,
+				Keyspace: "test_keyspace3",
+			},
 		},
 		SplitShardCount: 64,
-	}); err != nil {
+	}
+	if err := ts.CreateKeyspace("test_keyspace2", k); err != nil {
 		t.Errorf("CreateKeyspace: %v", err)
 	}
 	keyspaces, err = ts.GetKeyspaces()
@@ -59,17 +68,14 @@ func CheckKeyspace(t *testing.T, ts topo.Server) {
 	if err != nil {
 		t.Fatalf("GetKeyspace: %v", err)
 	}
-	if ki.ShardingColumnName != "user_id" ||
-		ki.ShardingColumnType != key.KIT_UINT64 ||
-		ki.ServedFrom[topo.TYPE_MASTER] != "test_keyspace3" ||
-		ki.SplitShardCount != 64 {
-		t.Errorf("GetKeyspace: unexpected keyspace, got %v", *ki)
+	if !reflect.DeepEqual(ki.Keyspace, k) {
+		t.Fatalf("returned keyspace doesn't match: got %v expected %v", ki.Keyspace, k)
 	}
 
 	ki.ShardingColumnName = "other_id"
 	ki.ShardingColumnType = key.KIT_BYTES
-	delete(ki.ServedFrom, topo.TYPE_MASTER)
-	ki.ServedFrom[topo.TYPE_REPLICA] = "test_keyspace4"
+	delete(ki.ServedFromMap, topo.TYPE_MASTER)
+	ki.ServedFromMap[topo.TYPE_REPLICA].Keyspace = "test_keyspace4"
 	err = topo.UpdateKeyspace(ts, ki)
 	if err != nil {
 		t.Fatalf("UpdateKeyspace: %v", err)
@@ -80,7 +86,7 @@ func CheckKeyspace(t *testing.T, ts topo.Server) {
 	}
 	if ki.ShardingColumnName != "other_id" ||
 		ki.ShardingColumnType != key.KIT_BYTES ||
-		ki.ServedFrom[topo.TYPE_REPLICA] != "test_keyspace4" {
+		ki.ServedFromMap[topo.TYPE_REPLICA].Keyspace != "test_keyspace4" {
 		t.Errorf("GetKeyspace: unexpected keyspace, got %v", *ki)
 	}
 }

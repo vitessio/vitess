@@ -188,7 +188,7 @@ var commands = []commandGroup{
 				"[-reverse] [-skip-rebuild] <keyspace/shard|zk shard path> <served type>",
 				"Migrates a serving type from the source shard to the shards it replicates to. Will also rebuild the serving graph. keyspace/shard can be any of the involved shards in the migration."},
 			command{"MigrateServedFrom", commandMigrateServedFrom,
-				"[-reverse] [-skip-rebuild] <destination keyspace/shard|zk destination shard path> <served type>",
+				"[-cells=c1,c2,...] [-reverse] <destination keyspace/shard|zk destination shard path> <served type>",
 				"Makes the destination keyspace/shard serve the given type. Will also rebuild the serving graph."},
 		},
 	},
@@ -1483,13 +1483,15 @@ func commandCreateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 		SplitShardCount:    int32(*splitShardCount),
 	}
 	if len(servedFrom) > 0 {
-		ki.ServedFrom = make(map[topo.TabletType]string, len(servedFrom))
+		ki.ServedFromMap = make(map[topo.TabletType]*topo.KeyspaceServedFrom, len(servedFrom))
 		for name, value := range servedFrom {
 			tt := topo.TabletType(name)
 			if !topo.IsInServingGraph(tt) {
 				return fmt.Errorf("Cannot use tablet type that is not in serving graph: %v", tt)
 			}
-			ki.ServedFrom[tt] = value
+			ki.ServedFromMap[tt] = &topo.KeyspaceServedFrom{
+				Keyspace: value,
+			}
 		}
 	}
 	err = wr.TopoServer().CreateKeyspace(keyspace, ki)
@@ -1616,7 +1618,7 @@ func commandMigrateServedTypes(wr *wrangler.Wrangler, subFlags *flag.FlagSet, ar
 
 func commandMigrateServedFrom(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	reverse := subFlags.Bool("reverse", false, "move the served from back instead of forward, use in case of trouble")
-	skipRebuild := subFlags.Bool("skip-rebuild", false, "do not rebuild the shard and keyspace graph after the migration (replica and rdonly only)")
+	cellsStr := subFlags.String("cells", "", "comma separated list of cells to update")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1632,10 +1634,11 @@ func commandMigrateServedFrom(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 	if err != nil {
 		return err
 	}
-	if servedType == topo.TYPE_MASTER && *skipRebuild {
-		return fmt.Errorf("can only specify skip-rebuild for non-master migrations")
+	var cells []string
+	if *cellsStr != "" {
+		cells = strings.Split(*cellsStr, ",")
 	}
-	return wr.MigrateServedFrom(keyspace, shard, servedType, *reverse, *skipRebuild)
+	return wr.MigrateServedFrom(keyspace, shard, servedType, cells, *reverse)
 }
 
 func commandResolve(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
