@@ -15,7 +15,6 @@ func TestParsedQuery(t *testing.T) {
 		desc     string
 		query    string
 		bindVars map[string]interface{}
-		listVars []sqltypes.Value
 		output   string
 	}{
 		{
@@ -24,7 +23,6 @@ func TestParsedQuery(t *testing.T) {
 			map[string]interface{}{
 				"id": 1,
 			},
-			nil,
 			"select * from a where id = 2",
 		}, {
 			"simple bindvar sub",
@@ -33,7 +31,6 @@ func TestParsedQuery(t *testing.T) {
 				"id1": 1,
 				"id2": nil,
 			},
-			nil,
 			"select * from a where id1 = 1 and id2 = null",
 		}, {
 			"missing bind var",
@@ -41,7 +38,6 @@ func TestParsedQuery(t *testing.T) {
 			map[string]interface{}{
 				"id1": 1,
 			},
-			nil,
 			"missing bind var id2",
 		}, {
 			"unencodable bind var",
@@ -49,17 +45,7 @@ func TestParsedQuery(t *testing.T) {
 			map[string]interface{}{
 				"id": make([]int, 1),
 			},
-			nil,
 			"unsupported bind variable type []int: [0]",
-		}, {
-			"list var sub",
-			"select * from a where id = :0 and name = :1",
-			nil,
-			[]sqltypes.Value{
-				sqltypes.MakeNumeric([]byte("1")),
-				sqltypes.MakeString([]byte("aa")),
-			},
-			"select * from a where id = 1 and name = 'aa'",
 		}, {
 			"list inside bind vars",
 			"select * from a where id in (:vals)",
@@ -69,7 +55,6 @@ func TestParsedQuery(t *testing.T) {
 					sqltypes.MakeString([]byte("aa")),
 				},
 			},
-			nil,
 			"select * from a where id in (1, 'aa')",
 		}, {
 			"two lists inside bind vars",
@@ -86,26 +71,7 @@ func TestParsedQuery(t *testing.T) {
 					},
 				},
 			},
-			nil,
 			"select * from a where id in ((1, 'aa'), (null, 'bb'))",
-		}, {
-			"illega list var name",
-			"select * from a where id = :0a",
-			nil,
-			[]sqltypes.Value{
-				sqltypes.MakeNumeric([]byte("1")),
-				sqltypes.MakeString([]byte("aa")),
-			},
-			`unexpected: strconv.ParseInt: parsing "0a": invalid syntax for 0a`,
-		}, {
-			"out of range list var index",
-			"select * from a where id = :10",
-			nil,
-			[]sqltypes.Value{
-				sqltypes.MakeNumeric([]byte("1")),
-				sqltypes.MakeString([]byte("aa")),
-			},
-			"index out of range: 10",
 		}, {
 			"single column tuple equality",
 			// We have to use an incorrect construct to get around the parser.
@@ -119,7 +85,6 @@ func TestParsedQuery(t *testing.T) {
 					},
 				},
 			},
-			nil,
 			"select * from a where b = pk in (1, 'aa')",
 		}, {
 			"multi column tuple equality",
@@ -139,7 +104,6 @@ func TestParsedQuery(t *testing.T) {
 					},
 				},
 			},
-			nil,
 			"select * from a where b = (pk1, pk2) = (1, 'aa') or (pk1, pk2) = (2, 'bb')",
 		}, {
 			"0 rows",
@@ -150,7 +114,6 @@ func TestParsedQuery(t *testing.T) {
 					Rows:    [][]sqltypes.Value{},
 				},
 			},
-			nil,
 			"cannot encode with 0 rows",
 		}, {
 			"values don't match column count",
@@ -166,7 +129,6 @@ func TestParsedQuery(t *testing.T) {
 					},
 				},
 			},
-			nil,
 			"values don't match column count",
 		},
 	}
@@ -180,7 +142,7 @@ func TestParsedQuery(t *testing.T) {
 		buf := NewTrackedBuffer(nil)
 		buf.Myprintf("%v", tree)
 		pq := buf.ParsedQuery()
-		bytes, err := pq.GenerateQuery(tcase.bindVars, tcase.listVars)
+		bytes, err := pq.GenerateQuery(tcase.bindVars)
 		var got string
 		if err != nil {
 			got = err.Error()
@@ -190,25 +152,5 @@ func TestParsedQuery(t *testing.T) {
 		if got != tcase.output {
 			t.Errorf("for test case: %s, got: '%s', want '%s'", tcase.desc, got, tcase.output)
 		}
-	}
-}
-
-func TestStarParam(t *testing.T) {
-	buf := NewTrackedBuffer(nil)
-	buf.Myprintf("select * from a where id in (%a)", "*")
-	pq := buf.ParsedQuery()
-	listvars := []sqltypes.Value{
-		sqltypes.MakeNumeric([]byte("1")),
-		sqltypes.MakeString([]byte("aa")),
-	}
-	bytes, err := pq.GenerateQuery(nil, listvars)
-	if err != nil {
-		t.Errorf("generate failed: %v", err)
-		return
-	}
-	got := string(bytes)
-	want := "select * from a where id in (1, 'aa')"
-	if got != want {
-		t.Errorf("got %s, want %s", got, want)
 	}
 }

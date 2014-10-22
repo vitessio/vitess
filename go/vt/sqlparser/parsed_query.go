@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 
 	"github.com/youtube/vitess/go/sqltypes"
 )
@@ -25,7 +24,7 @@ type ParsedQuery struct {
 
 type EncoderFunc func(value interface{}) ([]byte, error)
 
-func (pq *ParsedQuery) GenerateQuery(bindVariables map[string]interface{}, listVariables []sqltypes.Value) ([]byte, error) {
+func (pq *ParsedQuery) GenerateQuery(bindVariables map[string]interface{}) ([]byte, error) {
 	if len(pq.bindLocations) == 0 {
 		return []byte(pq.Query), nil
 	}
@@ -35,23 +34,10 @@ func (pq *ParsedQuery) GenerateQuery(bindVariables map[string]interface{}, listV
 		buf.WriteString(pq.Query[current:loc.offset])
 		varName := pq.Query[loc.offset+1 : loc.offset+loc.length]
 		var supplied interface{}
-		if varName[0] >= '0' && varName[0] <= '9' {
-			index, err := strconv.Atoi(varName)
-			if err != nil {
-				return nil, fmt.Errorf("unexpected: %v for %s", err, varName)
-			}
-			if index >= len(listVariables) {
-				return nil, fmt.Errorf("index out of range: %d", index)
-			}
-			supplied = listVariables[index]
-		} else if varName[0] == '*' {
-			supplied = listVariables
-		} else {
-			var ok bool
-			supplied, ok = bindVariables[varName]
-			if !ok {
-				return nil, fmt.Errorf("missing bind var %s", varName)
-			}
+		var ok bool
+		supplied, ok = bindVariables[varName]
+		if !ok {
+			return nil, fmt.Errorf("missing bind var %s", varName)
 		}
 		if err := EncodeValue(buf, supplied); err != nil {
 			return nil, err
