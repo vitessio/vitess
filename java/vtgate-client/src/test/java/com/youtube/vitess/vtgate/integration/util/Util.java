@@ -79,7 +79,6 @@ public class Util {
 			}
 			Assert.fail("setup script failed to parse vtgate port");
 		}
-		testEnv.port = 15017;
 	}
 
 	public static void insertRows(TestEnv testEnv, int startId, int count)

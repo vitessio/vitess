@@ -18,14 +18,9 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 )
 
-const (
-	MAX_RESULT_NAME                = "_vtMaxResultSize"
-	ROWCACHE_INVALIDATION_POSITION = "ROWCACHE_INVALIDATION_POSITION"
-
-	// SPOT_CHECK_MULTIPLIER determines the precision of the
-	// spot check ratio: 1e6 == 6 digits
-	SPOT_CHECK_MULTIPLIER = 1e6
-)
+// spotCheckMultiplier determines the precision of the
+// spot check ratio: 1e6 == 6 digits
+const spotCheckMultiplier = 1e6
 
 // QueryEngine implements the core functionality of tabletserver.
 // It assumes that no requests will be sent to it before Open is
@@ -160,7 +155,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 
 	// Vars
 	qe.queryTimeout.Set(time.Duration(config.QueryTimeout * 1e9))
-	qe.spotCheckFreq = sync2.AtomicInt64(config.SpotCheckRatio * SPOT_CHECK_MULTIPLIER)
+	qe.spotCheckFreq = sync2.AtomicInt64(config.SpotCheckRatio * spotCheckMultiplier)
 	if config.StrictMode {
 		qe.strictMode.Set(1)
 	}
@@ -184,7 +179,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 	internalErrors = stats.NewCounters("InternalErrors")
 	resultStats = stats.NewHistogram("Results", resultBuckets)
 	stats.Publish("RowcacheSpotCheckRatio", stats.FloatFunc(func() float64 {
-		return float64(qe.spotCheckFreq.Get()) / SPOT_CHECK_MULTIPLIER
+		return float64(qe.spotCheckFreq.Get()) / spotCheckMultiplier
 	}))
 	spotCheckCount = stats.NewInt("RowcacheSpotCheckCount")
 

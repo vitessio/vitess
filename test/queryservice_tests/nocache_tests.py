@@ -152,6 +152,7 @@ class TestNocache(framework.TestCase):
       self.env.execute("insert into vtocc_a(eid, id, name, foo) values (8, 2, '', '') on duplicate key update id = 2+1")
       self.env.execute("update vtocc_a set eid = 1+1 where eid = 1 and id = 1")
       self.env.execute("insert into vtocc_d(eid, id) values (1, 1)")
+      self.env.execute("update vtocc_a set eid = :eid where eid = 1 and id = 1", {"eid": 3})
     finally:
       self.env.conn.rollback()
       self.env.execute("set vt_strict_mode=1")

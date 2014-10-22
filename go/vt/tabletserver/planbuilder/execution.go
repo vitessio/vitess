@@ -15,7 +15,7 @@ import (
 
 var (
 	TooComplex = errors.New("Complex")
-	execLimit  = &sqlparser.Limit{Rowcount: sqlparser.ValArg(":_vtMaxResultSize")}
+	execLimit  = &sqlparser.Limit{Rowcount: sqlparser.ValArg(":#maxLimit")}
 )
 
 // ExecPlan is built for selects and DMLs.
@@ -45,10 +45,12 @@ type ExecPlan struct {
 	// For PLAN_INSERT_SUBQUERY, columns to be inserted
 	ColumnNumbers []int
 
-	// PLAN_PK_EQUAL, PLAN_DML_PK: where clause values
-	// PLAN_PK_IN: IN clause values
+	// PLAN_PK_IN, PLAN_DML_PK: where clause values
 	// PLAN_INSERT_PK: values clause
 	PKValues []interface{}
+
+	// PK_IN. Limit clause value.
+	Limit interface{}
 
 	// For update: set clause if pk is changing
 	SecondaryPKValues []interface{}

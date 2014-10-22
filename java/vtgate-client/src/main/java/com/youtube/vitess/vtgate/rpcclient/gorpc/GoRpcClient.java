@@ -98,6 +98,17 @@ public class GoRpcClient implements RpcClient {
 		return reply.toMap();
 	}
 
+	@SuppressWarnings("unchecked")
+	@Override
+	public Map<String, Object> batchExecuteKeyspaceIds(Map<String, Object> args)
+			throws ConnectionException {
+		BSONObject params = new BasicBSONObject();
+		params.putAll(args);
+		Response response = call("VTGate.ExecuteBatchKeyspaceIds", params);
+		BSONObject reply = (BSONObject) response.getReply();
+		return reply.toMap();
+	}
+
 	@Override
 	public void commit(Object session) throws ConnectionException {
 		call("VTGate.Commit", session);

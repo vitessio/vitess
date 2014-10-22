@@ -57,7 +57,7 @@ func txlogzHandler(w http.ResponseWriter, r *http.Request) {
 		acl.SendError(w, err)
 		return
 	}
-	ch := TxLogger.Subscribe()
+	ch := TxLogger.Subscribe("txlogz")
 	defer TxLogger.Unsubscribe(ch)
 	startHTMLTable(w)
 	defer endHTMLTable(w)

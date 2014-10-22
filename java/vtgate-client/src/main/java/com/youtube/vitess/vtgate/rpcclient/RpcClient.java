@@ -23,6 +23,9 @@ public interface RpcClient {
 
 	public Map<String, Object> streamNext() throws ConnectionException;
 
+	public Map<String, Object> batchExecuteKeyspaceIds(Map<String, Object> args)
+			throws DatabaseException, ConnectionException;
+
 	public void commit(Object session) throws ConnectionException;
 
 	public Map<String, Object> getMRSplits(Map<String, Object> args)

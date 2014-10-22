@@ -14,10 +14,18 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/sync2"
 )
 
-var droppedMessages = stats.NewCounters("StreamlogDroppedMessages")
+var (
+	sendCount         = stats.NewCounters("StreamlogSend")
+	internalDropCount = stats.NewCounters("StreamlogInternallyDroppedMessages")
+	deliveredCount    = stats.NewMultiCounters("StreamlogDelivered", []string{"Log", "Subscriber"})
+	deliveryDropCount = stats.NewMultiCounters("StreamlogDeliveryDroppedMessages", []string{"Log", "Subscriber"})
+)
+
+type subscriber struct {
+	name string
+}
 
 // StreamLogger is a non-blocking broadcaster of messages.
 // Subscribers can use channels or HTTP.
@@ -25,10 +33,7 @@ type StreamLogger struct {
 	name       string
 	dataQueue  chan interface{}
 	mu         sync.Mutex
-	subscribed map[chan interface{}]struct{}
-	// size is used to check if there are any subscriptions. Keep
-	// it atomically in sync with the size of subscribed.
-	size sync2.AtomicUint32
+	subscribed map[chan interface{}]subscriber
 }
 
 // New returns a new StreamLogger with a buffer that can contain size
@@ -37,7 +42,7 @@ func New(name string, size int) *StreamLogger {
 	logger := &StreamLogger{
 		name:       name,
 		dataQueue:  make(chan interface{}, size),
-		subscribed: make(map[chan interface{}]struct{}),
+		subscribed: make(map[chan interface{}]subscriber),
 	}
 	go logger.stream()
 	return logger
@@ -46,27 +51,22 @@ func New(name string, size int) *StreamLogger {
 // Send sends message to all the writers subscribed to logger. Calling
 // Send does not block.
 func (logger *StreamLogger) Send(message interface{}) {
-	if logger.size.Get() == 0 {
-		// There are no subscribers, do nothing.
-		return
-	}
+	sendCount.Add(logger.name, 1)
 	select {
 	case logger.dataQueue <- message:
 	default:
-		droppedMessages.Add(logger.name, 1)
+		internalDropCount.Add(logger.name, 1)
 	}
 }
 
 // Subscribe returns a channel which can be used to listen
 // for messages.
-func (logger *StreamLogger) Subscribe() chan interface{} {
+func (logger *StreamLogger) Subscribe(name string) chan interface{} {
 	logger.mu.Lock()
 	defer logger.mu.Unlock()
 
 	ch := make(chan interface{}, 1)
-	var empty struct{}
-	logger.subscribed[ch] = empty
-	logger.size.Set(uint32(len(logger.subscribed)))
+	logger.subscribed[ch] = subscriber{name: name}
 	return ch
 }
 
@@ -76,7 +76,6 @@ func (logger *StreamLogger) Unsubscribe(ch chan interface{}) {
 	defer logger.mu.Unlock()
 
 	delete(logger.subscribed, ch)
-	logger.size.Set(uint32(len(logger.subscribed)))
 }
 
 // stream sends messages sent to logger to all of its subscribed
@@ -91,11 +90,12 @@ func (logger *StreamLogger) transmit(message interface{}) {
 	logger.mu.Lock()
 	defer logger.mu.Unlock()
 
-	for ch := range logger.subscribed {
+	for ch, sub := range logger.subscribed {
 		select {
 		case ch <- message:
+			deliveredCount.Add([]string{logger.name, sub.name}, 1)
 		default:
-			droppedMessages.Add(logger.name, 1)
+			deliveryDropCount.Add([]string{logger.name, sub.name}, 1)
 		}
 	}
 }
@@ -116,8 +116,12 @@ func (logger *StreamLogger) ServeLogs(url string, messageFmt func(url.Values, in
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
-		ch := logger.Subscribe()
+		ch := logger.Subscribe("ServeLogs")
 		defer logger.Unsubscribe(ch)
+
+		// Notify client that we're set up. Helpful to distinguish low-traffic streams from connection issues.
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush()
 
 		for message := range ch {
 			if _, err := io.WriteString(w, messageFmt(r.Form, message)); err != nil {

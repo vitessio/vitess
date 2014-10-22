@@ -77,7 +77,7 @@ func querylogzHandler(w http.ResponseWriter, r *http.Request) {
 		acl.SendError(w, err)
 		return
 	}
-	ch := SqlQueryLogger.Subscribe()
+	ch := SqlQueryLogger.Subscribe("querylogz")
 	defer SqlQueryLogger.Unsubscribe(ch)
 	startHTMLTable(w)
 	defer endHTMLTable(w)

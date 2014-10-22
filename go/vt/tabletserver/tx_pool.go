@@ -246,7 +246,7 @@ func (txc *TxConnection) discard(conclusion string) {
 	// Ensure PoolConnection won't be accessed after Recycle.
 	txc.PoolConnection = nil
 	if txc.LogToFile.Get() != 0 {
-		log.Warningf("Logged transaction: %s", txc.Format(nil))
+		log.Infof("Logged transaction: %s", txc.Format(nil))
 	}
 	TxLogger.Send(txc)
 }

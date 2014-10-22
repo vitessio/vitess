@@ -19,8 +19,7 @@ const (
 	// PLAN_PASS_DML is pass through update & delete statements. This is
 	// the default plan for update and delete statements.
 	PLAN_PASS_DML
-	// PLAN_PK_EQUAL is select statement which has an equality where clause
-	// on primary key
+	// PLAN_PK_EQUAL is deprecated. Use PLAN_PK_IN instead.
 	PLAN_PK_EQUAL
 	// PLAN_PK_IN is select statement with a single IN clause on primary key
 	PLAN_PK_IN
@@ -81,7 +80,7 @@ func PlanByName(s string) (pt PlanType, ok bool) {
 }
 
 func (pt PlanType) IsSelect() bool {
-	return pt == PLAN_PASS_SELECT || pt == PLAN_PK_EQUAL || pt == PLAN_PK_IN || pt == PLAN_SELECT_SUBQUERY || pt == PLAN_SELECT_STREAM
+	return pt == PLAN_PASS_SELECT || pt == PLAN_PK_IN || pt == PLAN_SELECT_SUBQUERY || pt == PLAN_SELECT_STREAM
 }
 
 func (pt PlanType) MarshalJSON() ([]byte, error) {
@@ -95,7 +94,6 @@ func (pt PlanType) MinRole() tableacl.Role {
 
 var tableAclRoles = map[PlanType]tableacl.Role{
 	PLAN_PASS_SELECT:     tableacl.READER,
-	PLAN_PK_EQUAL:        tableacl.READER,
 	PLAN_PK_IN:           tableacl.READER,
 	PLAN_SELECT_SUBQUERY: tableacl.READER,
 	PLAN_SET:             tableacl.READER,
@@ -120,11 +118,12 @@ const (
 	REASON_LOCK
 	REASON_WHERE
 	REASON_ORDER
+	REASON_LIMIT
 	REASON_PKINDEX
+	REASON_COVERING
 	REASON_NOINDEX_MATCH
 	REASON_TABLE_NOINDEX
 	REASON_PK_CHANGE
-	REASON_COMPOSITE_PK
 	REASON_HAS_HINTS
 	REASON_UPSERT
 )
@@ -139,11 +138,12 @@ var reasonName = []string{
 	"LOCK",
 	"WHERE",
 	"ORDER",
+	"LIMIT",
 	"PKINDEX",
+	"COVERING",
 	"NOINDEX_MATCH",
 	"TABLE_NOINDEX",
 	"PK_CHANGE",
-	"COMPOSITE_PK",
 	"HAS_HINTS",
 	"UPSERT",
 }

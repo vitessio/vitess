@@ -120,6 +120,33 @@ public class VtGate {
 		return new CursorImpl(qr);
 	}
 
+	public List<Cursor> execute(BatchQuery query) throws DatabaseException,
+			ConnectionException {
+		Map<String, Object> params = new HashMap<>();
+		query.populate(params);
+		if (session != null) {
+			params.put("Session", session);
+		}
+		Map<String, Object> reply = client.batchExecuteKeyspaceIds(params);
+		if (reply.containsKey("Error")) {
+			byte[] err = (byte[]) reply.get("Error");
+			if (err.length > 0) {
+				throw new DatabaseException(new String(err));
+			}
+		}
+		if (reply.containsKey("Session")) {
+			session = reply.get("Session");
+		}
+		List<Map<String, Object>> results = (List<Map<String, Object>>) reply
+				.get("List");
+		List<Cursor> cursors = new LinkedList<>();
+		for (Map<String, Object> result : results) {
+			QueryResult qr = QueryResult.parse(result);
+			cursors.add(new CursorImpl(qr));
+		}
+		return cursors;
+	}
+
 	/**
 	 * Get {@link InputSplit}s for a MapReduce job using the specified table as
 	 * input. Use splitsPerShard to control how many splits to generate per

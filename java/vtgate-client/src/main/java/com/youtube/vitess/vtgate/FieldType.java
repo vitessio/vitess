@@ -37,7 +37,7 @@ public enum FieldType {
 	VT_MEDIUM_BLOB(250, String.class),
 	VT_LONG_BLOB(251, String.class),
 	VT_BLOB(252, String.class),
-	VT_VAR_STRING(253, String.class),
+	VT_VAR_STRING(253, byte[].class),
 	VT_STRING(254, String.class),
 	VT_GEOMETRY(255, String.class);
 
@@ -56,6 +56,19 @@ public enum FieldType {
 			}
 		}
 		return null;
+	}
+
+	Object convertBytes(byte[] bytes) {
+		if (bytes == null) {
+			return null;
+		}
+
+		switch (this) {
+		case VT_VAR_STRING:
+			return bytes;
+		default:
+			return convert(new String(bytes));
+		}
 	}
 
 	/**

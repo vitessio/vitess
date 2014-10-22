@@ -65,27 +65,6 @@ func NewIndexScoreList(indexes []*schema.Index) []*IndexScore {
 	return scoreList
 }
 
-func getSelectPKValues(conditions []sqlparser.BoolExpr, pkIndex *schema.Index) (planId PlanType, pkValues []interface{}, err error) {
-	pkValues, err = getPKValues(conditions, pkIndex)
-	if err != nil {
-		return 0, nil, err
-	}
-	if pkValues == nil {
-		return PLAN_PASS_SELECT, nil, nil
-	}
-	for _, pkValue := range pkValues {
-		inList, ok := pkValue.([]interface{})
-		if !ok {
-			continue
-		}
-		if len(pkValues) == 1 {
-			return PLAN_PK_IN, inList, nil
-		}
-		return PLAN_PASS_SELECT, nil, nil
-	}
-	return PLAN_PK_EQUAL, pkValues, nil
-}
-
 func getPKValues(conditions []sqlparser.BoolExpr, pkIndex *schema.Index) (pkValues []interface{}, err error) {
 	pkIndexScore := NewIndexScore(pkIndex)
 	pkValues = make([]interface{}, len(pkIndexScore.ColumnMatch))
@@ -118,7 +97,7 @@ func getPKValues(conditions []sqlparser.BoolExpr, pkIndex *schema.Index) (pkValu
 	return nil, nil
 }
 
-func getIndexMatch(conditions []sqlparser.BoolExpr, indexes []*schema.Index) string {
+func getIndexMatch(conditions []sqlparser.BoolExpr, indexes []*schema.Index) *schema.Index {
 	indexScores := NewIndexScoreList(indexes)
 	for _, condition := range conditions {
 		var col string
@@ -152,7 +131,7 @@ func getIndexMatch(conditions []sqlparser.BoolExpr, indexes []*schema.Index) str
 		}
 	}
 	if highScorer == -1 {
-		return ""
+		return nil
 	}
-	return indexes[highScorer].Name
+	return indexes[highScorer]
 }

@@ -13,7 +13,6 @@ import (
 )
 
 func analyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecPlan, err error) {
-	// Default plan
 	plan = &ExecPlan{
 		PlanId:    PLAN_PASS_DML,
 		FullQuery: GenerateFullQuery(upd),
@@ -44,32 +43,26 @@ func analyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecPlan,
 		return nil, err
 	}
 
+	plan.OuterQuery = GenerateUpdateOuterQuery(upd)
+
+	if conditions := analyzeWhere(upd.Where); conditions != nil {
+		pkValues, err := getPKValues(conditions, tableInfo.Indexes[0])
+		if err != nil {
+			return nil, err
+		}
+		if pkValues != nil {
+			plan.PlanId = PLAN_DML_PK
+			plan.PKValues = pkValues
+			return plan, nil
+		}
+	}
+
 	plan.PlanId = PLAN_DML_SUBQUERY
-	plan.OuterQuery = GenerateUpdateOuterQuery(upd, tableInfo.Indexes[0])
 	plan.Subquery = GenerateUpdateSubquery(upd, tableInfo)
-
-	conditions := analyzeWhere(upd.Where)
-	if conditions == nil {
-		plan.Reason = REASON_WHERE
-		return plan, nil
-	}
-
-	pkValues, err := getPKValues(conditions, tableInfo.Indexes[0])
-	if err != nil {
-		return nil, err
-	}
-	if pkValues != nil {
-		plan.PlanId = PLAN_DML_PK
-		plan.OuterQuery = plan.FullQuery
-		plan.PKValues = pkValues
-		return plan, nil
-	}
-
 	return plan, nil
 }
 
 func analyzeDelete(del *sqlparser.Delete, getTable TableGetter) (plan *ExecPlan, err error) {
-	// Default plan
 	plan = &ExecPlan{
 		PlanId:    PLAN_PASS_DML,
 		FullQuery: GenerateFullQuery(del),
@@ -91,27 +84,22 @@ func analyzeDelete(del *sqlparser.Delete, getTable TableGetter) (plan *ExecPlan,
 		return plan, nil
 	}
 
+	plan.OuterQuery = GenerateDeleteOuterQuery(del)
+
+	if conditions := analyzeWhere(del.Where); conditions != nil {
+		pkValues, err := getPKValues(conditions, tableInfo.Indexes[0])
+		if err != nil {
+			return nil, err
+		}
+		if pkValues != nil {
+			plan.PlanId = PLAN_DML_PK
+			plan.PKValues = pkValues
+			return plan, nil
+		}
+	}
+
 	plan.PlanId = PLAN_DML_SUBQUERY
-	plan.OuterQuery = GenerateDeleteOuterQuery(del, tableInfo.Indexes[0])
 	plan.Subquery = GenerateDeleteSubquery(del, tableInfo)
-
-	conditions := analyzeWhere(del.Where)
-	if conditions == nil {
-		plan.Reason = REASON_WHERE
-		return plan, nil
-	}
-
-	pkValues, err := getPKValues(conditions, tableInfo.Indexes[0])
-	if err != nil {
-		return nil, err
-	}
-	if pkValues != nil {
-		plan.PlanId = PLAN_DML_PK
-		plan.OuterQuery = plan.FullQuery
-		plan.PKValues = pkValues
-		return plan, nil
-	}
-
 	return plan, nil
 }
 

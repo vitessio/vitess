@@ -63,6 +63,13 @@ class TestCache(framework.TestCase):
     tend = self.env.table_stats()["vtocc_cached2"]
     self.assertEqual(tstart["Hits"]+1, tend["Hits"])
 
+  def test_bad_limit(self):
+    try:
+      with self.assertRaises(dbexceptions.DatabaseError):
+        self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo' limit :a", {"a": -1})
+    finally:
+      self.env.execute("alter table vtocc_cached2 comment ''")
+
   def test_rename(self):
     try:
       # Verify row cache is working
@@ -107,7 +114,7 @@ class TestCache(framework.TestCase):
     log = self.env.querylog.tailer.read()
 
     self.assertContains(log, "select * from vtocc_view where 1 != 1")
-    self.assertContains(log, "select key2, key1, data1, data2 from vtocc_view where key2 = 1")
+    self.assertContains(log, "select key2, key1, data1, data2 from vtocc_view where key2 in (1)")
 
     tstart = self.env.table_stats()["vtocc_view"]
     cu = self.env.execute("select * from vtocc_view where key2 = 1")
@@ -121,7 +128,7 @@ class TestCache(framework.TestCase):
     self.env.execute("update vtocc_part1 set data1 = 2 where key2 = 1")
     log = self.env.querylog.tailer.read()
     self.env.conn.commit()
-    self.assertContains(log, "update vtocc_part1 set data1 = 2 where key2 = 1 /* _stream vtocc_part1 (key2 ) (1 ); */")
+    self.assertContains(log, "update vtocc_part1 set data1 = 2 where key2 in (1) /* _stream vtocc_part1 (key2 ) (1 ); */")
 
 
     self.env.querylog.reset()
@@ -130,7 +137,7 @@ class TestCache(framework.TestCase):
     tend = self.env.table_stats()["vtocc_view"]
     self.assertEqual(tstart["Misses"]+1, tend["Misses"])
     log = self.env.querylog.tailer.read()
-    self.assertContains(log, "select key2, key1, data1, data2 from vtocc_view where key2 = 1")
+    self.assertContains(log, "select key2, key1, data1, data2 from vtocc_view where key2 in (1)")
 
     tstart = self.env.table_stats()["vtocc_view"]
     cu = self.env.execute("select * from vtocc_view where key2 = 1")
@@ -150,7 +157,7 @@ class TestCache(framework.TestCase):
     tend = self.env.table_stats()["vtocc_view"]
     self.assertEqual(tstart["Misses"]+1, tend["Misses"])
     log = self.env.querylog.tailer.read()
-    self.assertContains(log, "select key2, key1, data1, data2 from vtocc_view where key2 = 1")
+    self.assertContains(log, "select key2, key1, data1, data2 from vtocc_view where key2 in (1)")
 
     tstart = self.env.table_stats()["vtocc_view"]
     cu = self.env.execute("select * from vtocc_view where key2 = 1")

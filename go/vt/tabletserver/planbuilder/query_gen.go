@@ -6,7 +6,6 @@ package planbuilder
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -63,22 +62,11 @@ func GenerateSelectLimitQuery(selStmt sqlparser.SelectStatement) *sqlparser.Pars
 	return buf.ParsedQuery()
 }
 
-func GenerateEqualOuterQuery(sel *sqlparser.Select, tableInfo *schema.Table) *sqlparser.ParsedQuery {
+func GenerateSelectOuterQuery(sel *sqlparser.Select, tableInfo *schema.Table) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	fmt.Fprintf(buf, "select ")
 	writeColumnList(buf, tableInfo.Columns)
-	buf.Myprintf(" from %v where ", sel.From)
-	generatePKWhere(buf, tableInfo.Indexes[0])
-	return buf.ParsedQuery()
-}
-
-func GenerateInOuterQuery(sel *sqlparser.Select, tableInfo *schema.Table) *sqlparser.ParsedQuery {
-	buf := sqlparser.NewTrackedBuffer(nil)
-	fmt.Fprintf(buf, "select ")
-	writeColumnList(buf, tableInfo.Columns)
-	// We assume there is one and only one PK column.
-	// A '*' argument name means all variables of the list.
-	buf.Myprintf(" from %v where %s in (%a)", sel.From, tableInfo.Indexes[0].Columns[0], "*")
+	buf.Myprintf(" from %v where %a", sel.From, "#pk")
 	return buf.ParsedQuery()
 }
 
@@ -88,33 +76,22 @@ func GenerateInsertOuterQuery(ins *sqlparser.Insert) *sqlparser.ParsedQuery {
 		ins.Comments,
 		ins.Table,
 		ins.Columns,
-		"_rowValues",
+		"#values",
 		ins.OnDup,
 	)
 	return buf.ParsedQuery()
 }
 
-func GenerateUpdateOuterQuery(upd *sqlparser.Update, pkIndex *schema.Index) *sqlparser.ParsedQuery {
+func GenerateUpdateOuterQuery(upd *sqlparser.Update) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("update %v%v set %v where ", upd.Comments, upd.Table, upd.Exprs)
-	generatePKWhere(buf, pkIndex)
+	buf.Myprintf("update %v%v set %v where %a", upd.Comments, upd.Table, upd.Exprs, "#pk")
 	return buf.ParsedQuery()
 }
 
-func GenerateDeleteOuterQuery(del *sqlparser.Delete, pkIndex *schema.Index) *sqlparser.ParsedQuery {
+func GenerateDeleteOuterQuery(del *sqlparser.Delete) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("delete %vfrom %v where ", del.Comments, del.Table)
-	generatePKWhere(buf, pkIndex)
+	buf.Myprintf("delete %vfrom %v where %a", del.Comments, del.Table, "#pk")
 	return buf.ParsedQuery()
-}
-
-func generatePKWhere(buf *sqlparser.TrackedBuffer, pkIndex *schema.Index) {
-	for i := 0; i < len(pkIndex.Columns); i++ {
-		if i != 0 {
-			buf.WriteString(" and ")
-		}
-		buf.Myprintf("%s = %a", pkIndex.Columns[i], strconv.FormatInt(int64(i), 10))
-	}
 }
 
 func GenerateSelectSubquery(sel *sqlparser.Select, tableInfo *schema.Table, index string) *sqlparser.ParsedQuery {
