@@ -683,6 +683,29 @@ func (wr *Wrangler) masterMigrateServedFrom(ki *topo.KeyspaceInfo, sourceShard *
 	return nil
 }
 
+// SetKeyspaceServedFrom locks a keyspace and changes its ServerFromMap
+func (wr *Wrangler) SetKeyspaceServedFrom(keyspace string, servedType topo.TabletType, cells []string, sourceKeyspace string, remove bool) error {
+	actionNode := actionnode.SetKeyspaceServedFrom()
+	lockPath, err := wr.lockKeyspace(keyspace, actionNode)
+	if err != nil {
+		return err
+	}
+
+	err = wr.setKeyspaceServedFrom(keyspace, servedType, cells, sourceKeyspace, remove)
+	return wr.unlockKeyspace(keyspace, actionNode, lockPath, err)
+}
+
+func (wr *Wrangler) setKeyspaceServedFrom(keyspace string, servedType topo.TabletType, cells []string, sourceKeyspace string, remove bool) error {
+	ki, err := wr.ts.GetKeyspace(keyspace)
+	if err != nil {
+		return err
+	}
+	if err := ki.UpdateServedFromMap(servedType, cells, sourceKeyspace, remove, nil); err != nil {
+		return err
+	}
+	return topo.UpdateKeyspace(wr.ts, ki)
+}
+
 // RefreshTablesByShard calls RefreshState on all the tables of a
 // given type in a shard. It would work for the master, but the
 // discovery wouldn't be very efficient.

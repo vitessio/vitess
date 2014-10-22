@@ -399,6 +399,23 @@ index by_msg (msg)
     self._check_blacklisted_tables(source_replica, None)
     self._check_blacklisted_tables(source_rdonly, None)
 
+    # migrate test_nj only, using command line manual fix command,
+    # and restore it back.
+    keyspace_json = utils.run_vtctl_json(['GetKeyspace', 'destination_keyspace'])
+    self.assertEqual(keyspace_json['ServedFromMap']['rdonly']['Cells'],
+                     ['test_nj'])
+    utils.run_vtctl(['SetKeyspaceServedFrom', '-source=source_keyspace',
+                     '-remove', '-cells=test_nj', 'destination_keyspace',
+                     'rdonly'], auto_log=True)
+    keyspace_json = utils.run_vtctl_json(['GetKeyspace', 'destination_keyspace'])
+    self.assertFalse('rdonly' in keyspace_json['ServedFromMap'])
+    utils.run_vtctl(['SetKeyspaceServedFrom', '-source=source_keyspace',
+                     'destination_keyspace', 'rdonly'],
+                    auto_log=True)
+    keyspace_json = utils.run_vtctl_json(['GetKeyspace', 'destination_keyspace'])
+    self.assertEqual(keyspace_json['ServedFromMap']['rdonly']['Cells'],
+                     None)
+
     # now serve rdonly from the destination shards
     utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'rdonly'],
                     auto_log=True)

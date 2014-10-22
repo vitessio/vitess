@@ -178,6 +178,9 @@ var commands = []commandGroup{
 			command{"SetKeyspaceShardingInfo", commandSetKeyspaceShardingInfo,
 				"[-force] [-split_shard_count=N] <keyspace name|zk keyspace path> [<column name>] [<column type>]",
 				"Updates the sharding info for a keyspace"},
+			command{"SetKeyspaceServedFrom", commandSetKeyspaceServedFrom,
+				"[-source=<source keyspace name>] [-remove] [-cells=c1,c2,...] <keyspace name> <tablet type>",
+				"Manually change the ServedFromMap. Only use this for an emergency fix. MigrateServedFrom will set this field appropriately already. Does not rebuild the serving graph."},
 			command{"RebuildKeyspaceGraph", commandRebuildKeyspaceGraph,
 				"[-cells=a,b] <zk keyspace path> ... (/zk/global/vt/keyspaces/<keyspace>)",
 				"Rebuild the serving data for all shards in this keyspace. This may trigger an update to all connected clients."},
@@ -1548,6 +1551,32 @@ func commandSetKeyspaceShardingInfo(wr *wrangler.Wrangler, subFlags *flag.FlagSe
 	}
 
 	return wr.SetKeyspaceShardingInfo(keyspace, columnName, kit, int32(*splitShardCount), *force)
+}
+
+func commandSetKeyspaceServedFrom(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	source := subFlags.String("source", "", "source keyspace name")
+	remove := subFlags.Bool("remove", false, "remove the served from record instead of adding it")
+	cellsStr := subFlags.String("cells", "", "comma separated list of cells to affect")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("action SetKeyspaceServedFrom requires <keyspace name> <tablet type>")
+	}
+	keyspace, err := keyspaceParamToKeyspace(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	servedType, err := parseTabletType(subFlags.Arg(1), []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY})
+	if err != nil {
+		return err
+	}
+	var cells []string
+	if *cellsStr != "" {
+		cells = strings.Split(*cellsStr, ",")
+	}
+
+	return wr.SetKeyspaceServedFrom(keyspace, servedType, cells, *source, *remove)
 }
 
 func commandRebuildKeyspaceGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

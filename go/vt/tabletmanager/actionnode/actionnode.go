@@ -186,6 +186,7 @@ const (
 	KEYSPACE_ACTION_APPLY_SCHEMA        = "ApplySchemaKeyspace"
 	KEYSPACE_ACTION_SET_SHARDING_INFO   = "SetKeyspaceShardingInfo"
 	KEYSPACE_ACTION_MIGRATE_SERVED_FROM = "MigrateServedFrom"
+	KEYSPACE_ACTION_SET_SERVED_FROM     = "SetKeyspaceServedFrom"
 
 	//
 	// SrvShard actions - very local locking, for consistency.
