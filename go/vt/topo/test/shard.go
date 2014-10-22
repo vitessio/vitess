@@ -59,9 +59,14 @@ func CheckShard(t *testing.T, ts topo.Server) {
 			Tables:   []string{"table1", "table2"},
 		},
 	}
-	shardInfo.BlacklistedTablesMap = map[topo.TabletType][]string{
-		topo.TYPE_MASTER:  []string{"black1", "black2"},
-		topo.TYPE_REPLICA: []string{"black3", "black4"},
+	shardInfo.TabletControlMap = map[topo.TabletType]*topo.TabletControl{
+		topo.TYPE_MASTER: &topo.TabletControl{
+			Cells:             []string{"c1", "c2"},
+			BlacklistedTables: []string{"black1", "black2"},
+		},
+		topo.TYPE_REPLICA: &topo.TabletControl{
+			DisableQueryService: true,
+		},
 	}
 	if err := topo.UpdateShard(ts, shardInfo); err != nil {
 		t.Errorf("UpdateShard: %v", err)

@@ -144,9 +144,9 @@ var commands = []commandGroup{
 			command{"SetShardServedTypes", commandSetShardServedTypes,
 				"<keyspace/shard|zk shard path> [<served type1>,<served type2>,...]",
 				"Sets a given shard's served types. Does not rebuild any serving graph."},
-			command{"SetShardBlacklistedTables", commandSetShardBlacklistedTables,
-				"<keyspace/shard|zk shard path> <tabletType> [table1,table2,...]",
-				"Sets the list of blacklisted tables for a shard and type. Use no tables to clear the list for that type. Only use this for an emergency fix, or after a finished vertical split. MigrateServedFrom will set this field appropriately already."},
+			command{"SetShardTabletControl", commandSetShardTabletControl,
+				"[--cells=c1,c2,...] [--blacklisted_tables=t1,t2,...] [--remove] [--disable_query_service] <keyspace/shard|zk shard path> <tabletType>",
+				"Sets the TabletControl record for a shard and type. Only use this for an emergency fix, or after a finished vertical split. MigrateServedFrom and MigrateServedType will set this field appropriately already. Always specify blacklisted_tables for vertical splits, never for horizontal splits."},
 			command{"ShardMultiRestore", commandShardMultiRestore,
 				"[-force] [-concurrency=4] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-strategy=] [-tables=<table1>,<table2>,...] <keyspace/shard|zk shard path> <source zk path>...",
 				"Restore multi-snapshots on all the tablets of a shard."},
@@ -1292,12 +1292,16 @@ func commandSetShardServedTypes(wr *wrangler.Wrangler, subFlags *flag.FlagSet, a
 	return wr.SetShardServedTypes(keyspace, shard, servedTypes)
 }
 
-func commandSetShardBlacklistedTables(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandSetShardTabletControl(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	cellsStr := subFlags.String("cells", "", "comma separated list of cells to update")
+	tablesStr := subFlags.String("tables", "", "comma separated list of tables to replicate (used for vertical split)")
+	remove := subFlags.Bool("remove", false, "will remove cells for vertical splits (requires tables)")
+	disableQueryService := subFlags.Bool("disableQueryService", false, "will disable query service on the provided nodes")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-	if subFlags.NArg() != 2 && subFlags.NArg() != 3 {
-		return fmt.Errorf("action SetShardBlacklistedTables requires <keyspace/shard|zk shard path> <tabletType> [table1,table2,...]")
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("action SetShardTabletControl requires <keyspace/shard|zk shard path> <tabletType>")
 	}
 	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
@@ -1308,11 +1312,15 @@ func commandSetShardBlacklistedTables(wr *wrangler.Wrangler, subFlags *flag.Flag
 		return err
 	}
 	var tables []string
-	if subFlags.NArg() == 3 {
-		tables = strings.Split(subFlags.Arg(2), ",")
+	if *tablesStr != "" {
+		tables = strings.Split(*tablesStr, ",")
+	}
+	var cells []string
+	if *cellsStr != "" {
+		cells = strings.Split(*cellsStr, ",")
 	}
 
-	return wr.SetShardBlacklistedTables(keyspace, shard, tabletType, tables)
+	return wr.SetShardTabletControl(keyspace, shard, tabletType, cells, *remove, *disableQueryService, tables)
 }
 
 func commandShardMultiRestore(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

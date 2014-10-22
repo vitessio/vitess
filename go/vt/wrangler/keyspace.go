@@ -601,7 +601,7 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, destinationShard *t
 	}()
 
 	if servedType == topo.TYPE_MASTER {
-		err = wr.masterMigrateServedFrom(ki, sourceShard, destinationShard, servedType, tables, ev)
+		err = wr.masterMigrateServedFrom(ki, sourceShard, destinationShard, tables, ev)
 	} else {
 		err = wr.replicaMigrateServedFrom(ki, sourceShard, destinationShard, servedType, reverse, tables, ev)
 	}
@@ -619,16 +619,11 @@ func (wr *Wrangler) replicaMigrateServedFrom(ki *topo.KeyspaceInfo, sourceShard 
 
 	// Save the source shard (its blacklisted tables field has changed)
 	event.DispatchUpdate(ev, "updating source shard")
-	if sourceShard.BlacklistedTablesMap == nil {
-		sourceShard.BlacklistedTablesMap = make(map[topo.TabletType][]string)
-	}
-	if reverse {
-		delete(sourceShard.BlacklistedTablesMap, servedType)
-	} else {
-		sourceShard.BlacklistedTablesMap[servedType] = tables
+	if err := sourceShard.UpdateSourceBlacklistedTables(servedType, nil, reverse, tables); err != nil {
+		return fmt.Errorf("UpdateSourceBlacklistedTables(%v/%v) failed: %v", sourceShard.Keyspace(), sourceShard.ShardName(), err)
 	}
 	if err := topo.UpdateShard(wr.ts, sourceShard); err != nil {
-		return err
+		return fmt.Errorf("UpdateShard(%v/%v) failed: %v", sourceShard.Keyspace(), sourceShard.ShardName(), err)
 	}
 
 	// Now refresh the source servers so they reload their
@@ -651,7 +646,7 @@ func (wr *Wrangler) replicaMigrateServedFrom(ki *topo.KeyspaceInfo, sourceShard 
 // - Clear SourceShard on the destination Shard
 // - Refresh the destination master, so its stops its filtered
 //   replication and starts accepting writes
-func (wr *Wrangler) masterMigrateServedFrom(ki *topo.KeyspaceInfo, sourceShard *topo.ShardInfo, destinationShard *topo.ShardInfo, servedType topo.TabletType, tables []string, ev *events.MigrateServedFrom) error {
+func (wr *Wrangler) masterMigrateServedFrom(ki *topo.KeyspaceInfo, sourceShard *topo.ShardInfo, destinationShard *topo.ShardInfo, tables []string, ev *events.MigrateServedFrom) error {
 	// Read the data we need
 	sourceMasterTabletInfo, err := wr.ts.GetTablet(sourceShard.MasterAlias)
 	if err != nil {
@@ -664,12 +659,11 @@ func (wr *Wrangler) masterMigrateServedFrom(ki *topo.KeyspaceInfo, sourceShard *
 
 	// Update source shard (more blacklisted tables)
 	event.DispatchUpdate(ev, "updating source shard")
-	if sourceShard.BlacklistedTablesMap == nil {
-		sourceShard.BlacklistedTablesMap = make(map[topo.TabletType][]string)
+	if err := sourceShard.UpdateSourceBlacklistedTables(topo.TYPE_MASTER, nil, false, tables); err != nil {
+		return fmt.Errorf("UpdateSourceBlacklistedTables(%v/%v) failed: %v", sourceShard.Keyspace(), sourceShard.ShardName(), err)
 	}
-	sourceShard.BlacklistedTablesMap[servedType] = tables
 	if err := topo.UpdateShard(wr.ts, sourceShard); err != nil {
-		return err
+		return fmt.Errorf("UpdateShard(%v/%v) failed: %v", sourceShard.Keyspace(), sourceShard.ShardName(), err)
 	}
 
 	// Now refresh the blacklisted table list on the source master

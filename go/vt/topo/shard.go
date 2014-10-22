@@ -7,6 +7,7 @@ package topo
 import (
 	"fmt"
 	"html/template"
+	"reflect"
 	"strings"
 	"sync"
 
@@ -62,6 +63,31 @@ func (source *SourceShard) AsHTML() template.HTML {
 	return template.HTML(result)
 }
 
+// TabletControl describes the parameters used by the vttablet processes
+// to know what specific configurations they should be using.
+type TabletControl struct {
+	// How to match the tablets
+	Cells []string // nil means all cells
+
+	// What specific action to take
+	DisableQueryService bool
+	BlacklistedTables   []string // only used if DisableQueryService==false
+}
+
+// addCells will merge both cells list, settling on nil if either list is empty
+func (tc *TabletControl) addCells(cells []string) {
+	if len(tc.Cells) == 0 || len(cells) == 0 {
+		tc.Cells = nil
+		return
+	}
+
+	for _, cell := range cells {
+		if !InCellList(cell, tc.Cells) {
+			tc.Cells = append(tc.Cells, cell)
+		}
+	}
+}
+
 // A pure data struct for information stored in topology server.  This
 // node is used to present a controlled view of the shard, unaware of
 // every management action. It also contains configuration data for a
@@ -88,12 +114,9 @@ type Shard struct {
 	// in a cell that is not in the list yet.
 	Cells []string
 
-	// BlacklistedTablesMap is a map from served type to
-	// blacklisted tables. If a tablet has the listed TabletType,
-	// it should blacklist the provided list of tables.
-	// This is used in vertical splits to guarantee a tablet
-	// stops serving the given tables.
-	BlacklistedTablesMap map[TabletType][]string
+	// TabletControlMap is a map of TabletControl to apply specific
+	// configurations to tablets by type.
+	TabletControlMap map[TabletType]*TabletControl
 }
 
 func newShard() *Shard {
@@ -218,6 +241,133 @@ func CreateShard(ts Server, keyspace, shard string) error {
 
 	return ts.CreateShard(keyspace, name, s)
 }
+
+// UpdateSourceBlacklistedTables will add or remove the listed tables
+// in the shard record's TabletControl structures. Note we don't
+// support a lot of the corner cases:
+// - only support one table list per shard. If we encounter a different
+//   table list that the provided one, we error out.
+// - we don't support DisableQueryService at the same time as BlacklistedTables,
+//   because it's not used in the same context (vertical vs horizontal sharding)
+func (si *ShardInfo) UpdateSourceBlacklistedTables(tabletType TabletType, cells []string, remove bool, tables []string) error {
+	if si.TabletControlMap == nil {
+		si.TabletControlMap = make(map[TabletType]*TabletControl)
+	}
+	tc, ok := si.TabletControlMap[tabletType]
+	if !ok {
+		// handle the case where the TabletControl object is new
+		if remove {
+			// we try to remove from something that doesn't exist,
+			// log, but we're done.
+			log.Warningf("Trying to remove TabletControl.BlacklistedTables for missing type %v in shard %v/%v", tabletType, si.keyspace, si.shardName)
+			return nil
+		}
+
+		// trying to add more constraints with no existing record
+		si.TabletControlMap[tabletType] = &TabletControl{
+			Cells:               cells,
+			DisableQueryService: false,
+			BlacklistedTables:   tables,
+		}
+		return nil
+	}
+
+	// we have an existing record, check table lists matches and
+	// DisableQueryService is not set
+	if tc.DisableQueryService {
+		return fmt.Errorf("cannot safely alter BlacklistedTables as DisableQueryService is set for shard %v/%v", si.keyspace, si.shardName)
+	}
+
+	if remove {
+		si.removeCellsFromTabletControl(tc, tabletType, cells)
+	} else {
+		if !reflect.DeepEqual(tc.BlacklistedTables, tables) {
+			return fmt.Errorf("trying to use two different sets of blacklisted tables for shard %v/%v: %v and %v", si.keyspace, si.shardName, tc.BlacklistedTables, tables)
+		}
+
+		tc.addCells(cells)
+	}
+	return nil
+}
+
+// UpdateDisableQueryService will make sure the disableQueryService is
+// set appropriately in the shard record. Note we don't support a lot
+// of the corner cases:
+// - we don't support DisableQueryService at the same time as BlacklistedTables,
+//   because it's not used in the same context (vertical vs horizontal sharding)
+func (si *ShardInfo) UpdateDisableQueryService(tabletType TabletType, cells []string, disableQueryService bool) error {
+	if si.TabletControlMap == nil {
+		si.TabletControlMap = make(map[TabletType]*TabletControl)
+	}
+	tc, ok := si.TabletControlMap[tabletType]
+	if !ok {
+		// handle the case where the TabletControl object is new
+		if disableQueryService {
+			si.TabletControlMap[tabletType] = &TabletControl{
+				Cells:               cells,
+				DisableQueryService: true,
+				BlacklistedTables:   nil,
+			}
+		} else {
+			log.Warningf("Trying to remove TabletControl.DisableQueryService for missing type: %v", tabletType)
+		}
+		return nil
+	}
+
+	// we have an existing record, check table list is empty and
+	// DisableQueryService is set
+	if len(tc.BlacklistedTables) > 0 {
+		return fmt.Errorf("cannot safely alter DisableQueryService as BlacklistedTables is set")
+	}
+	if !tc.DisableQueryService {
+		return fmt.Errorf("cannot safely alter DisableQueryService as DisableQueryService is not set, this record should not be there")
+	}
+
+	if disableQueryService {
+		tc.addCells(cells)
+	} else {
+		si.removeCellsFromTabletControl(tc, tabletType, cells)
+	}
+	return nil
+}
+
+func (si *ShardInfo) removeCellsFromTabletControl(tc *TabletControl, tabletType TabletType, cells []string) {
+	// The assumption here is we already migrated something,
+	// and we're reverting that part. So we're gonna remove
+	// records only.
+	leftoverCells := make([]string, 0, len(tc.Cells))
+	if len(tc.Cells) == 0 {
+		// we migrated all the cells already, take the shard
+		// Cells list and remove all the ones we're not reverting
+		for _, cell := range si.Cells {
+			if !InCellList(cell, cells) {
+				leftoverCells = append(leftoverCells, cell)
+			}
+		}
+	} else {
+		// we migrated a subset of the cells,
+		// remove the ones we're reverting
+		for _, cell := range tc.Cells {
+			if !InCellList(cell, cells) {
+				leftoverCells = append(leftoverCells, cell)
+			}
+		}
+	}
+
+	if len(leftoverCells) == 0 {
+		// we don't have any cell left, we need to clear this record
+		delete(si.TabletControlMap, tabletType)
+		if len(si.TabletControlMap) == 0 {
+			si.TabletControlMap = nil
+		}
+	} else {
+		tc.Cells = leftoverCells
+	}
+}
+
+//
+// Utility functions for shards
+//
 
 // InCellList returns true if the cell list is empty,
 // or if the passed cell is in the cell list.
