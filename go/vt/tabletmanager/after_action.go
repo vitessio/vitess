@@ -125,7 +125,7 @@ func (agent *ActionAgent) changeCallback(oldTablet, newTablet *topo.Tablet) erro
 
 	allowQuery := newTablet.IsRunningQueryService()
 
-	// Read the shard to get SourceShards / BlacklistedTables if
+	// Read the shard to get SourceShards / TabletControlMap if
 	// we're going to use it.
 	var shardInfo *topo.ShardInfo
 	var blacklistedTables []string
@@ -133,13 +133,18 @@ func (agent *ActionAgent) changeCallback(oldTablet, newTablet *topo.Tablet) erro
 	if allowQuery {
 		shardInfo, err = agent.TopoServer.GetShard(newTablet.Keyspace, newTablet.Shard)
 		if err != nil {
-			log.Errorf("Cannot read shard for this tablet %v, might have inaccurate SourceShards and BlacklistedTables: %v", newTablet.Alias, err)
+			log.Errorf("Cannot read shard for this tablet %v, might have inaccurate SourceShards and TabletControls: %v", newTablet.Alias, err)
 		} else {
 			if newTablet.Type == topo.TYPE_MASTER {
 				allowQuery = len(shardInfo.SourceShards) == 0
 			}
-			if shardInfo.BlacklistedTablesMap != nil {
-				blacklistedTables = shardInfo.BlacklistedTablesMap[newTablet.Type]
+			if tc, ok := shardInfo.TabletControlMap[newTablet.Type]; ok {
+				if topo.InCellList(newTablet.Alias.Cell, tc.Cells) {
+					if tc.DisableQueryService {
+						allowQuery = false
+					}
+					blacklistedTables = tc.BlacklistedTables
+				}
 			}
 		}
 	}

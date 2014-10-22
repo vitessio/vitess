@@ -102,10 +102,17 @@ func (wr *Wrangler) setShardServedTypes(keyspace, shard string, servedTypes []to
 	return topo.UpdateShard(wr.ts, shardInfo)
 }
 
-// SetShardBlacklistedTables changes the BlacklistedTablesMap
-// parameter of a shard.  It does not rebuild any serving graph or do
-// any consistency check.
-func (wr *Wrangler) SetShardBlacklistedTables(keyspace, shard string, tabletType topo.TabletType, tables []string) error {
+// SetShardTabletControl changes the TabletControl records
+// for a shard.  It does not rebuild any serving graph or do
+// cross-shard consistency check.
+// - if disableQueryService is set, tables has to be empty
+// - if disableQueryService is not set, and tables is empty, we remove
+//   the TabletControl record for the cells
+func (wr *Wrangler) SetShardTabletControl(keyspace, shard string, tabletType topo.TabletType, cells []string, remove, disableQueryService bool, tables []string) error {
+
+	if disableQueryService && len(tables) > 0 {
+		return fmt.Errorf("SetShardTabletControl cannot have both DisableQueryService set and tables set")
+	}
 
 	actionNode := actionnode.UpdateShard()
 	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
@@ -113,30 +120,26 @@ func (wr *Wrangler) SetShardBlacklistedTables(keyspace, shard string, tabletType
 		return err
 	}
 
-	err = wr.setShardBlacklistedTables(keyspace, shard, tabletType, tables)
+	err = wr.setShardTabletControl(keyspace, shard, tabletType, cells, remove, disableQueryService, tables)
 	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 }
 
-func (wr *Wrangler) setShardBlacklistedTables(keyspace, shard string, tabletType topo.TabletType, tables []string) error {
+func (wr *Wrangler) setShardTabletControl(keyspace, shard string, tabletType topo.TabletType, cells []string, remove, disableQueryService bool, tables []string) error {
 	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
 	}
 
-	if len(tables) == 0 {
-		// it's a removal
-		if shardInfo.BlacklistedTablesMap != nil {
-			delete(shardInfo.BlacklistedTablesMap, tabletType)
-			if len(shardInfo.BlacklistedTablesMap) == 0 {
-				shardInfo.BlacklistedTablesMap = nil
-			}
+	if len(tables) == 0 && !remove {
+		// we are setting the DisableQueryService flag only
+		if err := shardInfo.UpdateDisableQueryService(tabletType, cells, disableQueryService); err != nil {
+			return fmt.Errorf("UpdateDisableQueryService(%v/%v) failed: %v", shardInfo.Keyspace(), shardInfo.ShardName(), err)
 		}
 	} else {
-		// it's an addition
-		if shardInfo.BlacklistedTablesMap == nil {
-			shardInfo.BlacklistedTablesMap = make(map[topo.TabletType][]string)
+		// we are setting / removing the blacklisted tables only
+		if err := shardInfo.UpdateSourceBlacklistedTables(tabletType, cells, remove, tables); err != nil {
+			return fmt.Errorf("UpdateSourceBlacklistedTables(%v/%v) failed: %v", shardInfo.Keyspace(), shardInfo.ShardName(), err)
 		}
-		shardInfo.BlacklistedTablesMap[tabletType] = tables
 	}
 	return topo.UpdateShard(wr.ts, shardInfo)
 }

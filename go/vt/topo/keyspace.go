@@ -5,10 +5,24 @@
 package topo
 
 import (
+	"fmt"
+
+	log "github.com/golang/glog"
+
 	"github.com/youtube/vitess/go/vt/key"
 )
 
 // This file contains keyspace utility functions
+
+// KeyspaceServedFrom is a per-cell record to redirect traffic to another
+// keyspace. Used for vertical splits.
+type KeyspaceServedFrom struct {
+	// who is targetted
+	Cells []string // nil means all cells
+
+	// where to redirect
+	Keyspace string
+}
 
 // Keyspace is the data structure that has data about the Keyspaces in
 // the topology. Most fields are optional.
@@ -21,9 +35,9 @@ type Keyspace struct {
 	// KIT_UNSET if the keyspace is not sharded
 	ShardingColumnType key.KeyspaceIdType
 
-	// ServedFrom will redirect the appropriate traffic to
+	// ServedFromMap will redirect the appropriate traffic to
 	// another keyspace
-	ServedFrom map[TabletType]string
+	ServedFromMap map[TabletType]*KeyspaceServedFrom
 
 	// Number of shards to use for batch job / mapreduce jobs
 	// that need to split a given keyspace into multiple shards.
@@ -64,6 +78,98 @@ func NewKeyspaceInfo(keyspace string, value *Keyspace, version int64) *KeyspaceI
 		version:  version,
 		Keyspace: value,
 	}
+}
+
+// CheckServedFromMigration makes sure a requested migration is safe
+func (ki *KeyspaceInfo) CheckServedFromMigration(tabletType TabletType, cells []string, keyspace string, remove bool) error {
+	// master is a special case with a few extra checks
+	if tabletType == TYPE_MASTER {
+		if !remove {
+			return fmt.Errorf("Cannot add master back to %v", ki.keyspace)
+		}
+		if len(cells) > 0 {
+			return fmt.Errorf("Cannot migrate only some cells for master removal in keyspace %v", ki.keyspace)
+		}
+		if len(ki.ServedFromMap) > 1 {
+			return fmt.Errorf("Cannot migrate master into %v until everything else is migrated", ki.keyspace)
+		}
+	}
+
+	// we can't remove a type we don't have
+	if _, ok := ki.ServedFromMap[tabletType]; !ok && remove {
+		return fmt.Errorf("Supplied type cannot be migrated")
+	}
+
+	// check the keyspace is consistent in any case
+	for tt, ksf := range ki.ServedFromMap {
+		if ksf.Keyspace != keyspace {
+			return fmt.Errorf("Inconsistent keypace specified in migration: %v != %v for type %v", keyspace, ksf.Keyspace, tt)
+		}
+	}
+
+	return nil
+}
+
+// UpdateServedFromMap handles ServedFromMap. It can add or remove
+// records, cells, ...
+func (ki *KeyspaceInfo) UpdateServedFromMap(tabletType TabletType, cells []string, keyspace string, remove bool, allCells []string) error {
+	// check parameters to be sure
+	if err := ki.CheckServedFromMigration(tabletType, cells, keyspace, remove); err != nil {
+		return err
+	}
+
+	if ki.ServedFromMap == nil {
+		ki.ServedFromMap = make(map[TabletType]*KeyspaceServedFrom)
+	}
+	ksf, ok := ki.ServedFromMap[tabletType]
+	if !ok {
+		// the record doesn't exist
+		if remove {
+			if len(ki.ServedFromMap) == 0 {
+				ki.ServedFromMap = nil
+			}
+			log.Warningf("Trying to remove KeyspaceServedFrom for missing type %v in keyspace %v", tabletType, ki.keyspace)
+		} else {
+			ki.ServedFromMap[tabletType] = &KeyspaceServedFrom{
+				Cells:    cells,
+				Keyspace: keyspace,
+			}
+		}
+		return nil
+	}
+
+	if remove {
+		result, emptyList := removeCells(ksf.Cells, cells, allCells)
+		if emptyList {
+			// we don't have any cell left, we need to clear this record
+			delete(ki.ServedFromMap, tabletType)
+			if len(ki.ServedFromMap) == 0 {
+				ki.ServedFromMap = nil
+			}
+		} else {
+			ksf.Cells = result
+		}
+	} else {
+		if ksf.Keyspace != keyspace {
+			return fmt.Errorf("cannot UpdateServedFromMap on existing record for keyspace %v, different keyspace: %v != %v", ki.keyspace, ksf.Keyspace, keyspace)
+		}
+		ksf.Cells = addCells(ksf.Cells, cells)
+	}
+	return nil
+}
+
+// ComputeCellServedFrom returns the ServedFrom map for a cell
+func (ki *KeyspaceInfo) ComputeCellServedFrom(cell string) map[TabletType]string {
+	result := make(map[TabletType]string)
+	for tabletType, ksf := range ki.ServedFromMap {
+		if InCellList(cell, ksf.Cells) {
+			result[tabletType] = ksf.Keyspace
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
 }
 
 // UpdateKeyspace updates the keyspace data, with the right version

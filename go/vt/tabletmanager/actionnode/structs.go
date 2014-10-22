@@ -210,6 +210,12 @@ func SetKeyspaceShardingInfo() *ActionNode {
 	}).SetGuid()
 }
 
+func SetKeyspaceServedFrom() *ActionNode {
+	return (&ActionNode{
+		Action: KEYSPACE_ACTION_SET_SERVED_FROM,
+	}).SetGuid()
+}
+
 func ApplySchemaKeyspace(change string, simple bool) *ActionNode {
 	return (&ActionNode{
 		Action: KEYSPACE_ACTION_APPLY_SCHEMA,

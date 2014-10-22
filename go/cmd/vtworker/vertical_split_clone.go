@@ -130,7 +130,7 @@ func keyspacesWithServedFrom(wr *wrangler.Wrangler) ([]string, error) {
 				rec.RecordError(err)
 				return
 			}
-			if len(ki.ServedFrom) > 0 {
+			if len(ki.ServedFromMap) > 0 {
 				mu.Lock()
 				result = append(result, keyspace)
 				mu.Unlock()

@@ -199,8 +199,8 @@ func (vsdw *VerticalSplitDiffWorker) init() error {
 	if err != nil {
 		return fmt.Errorf("cannot read keyspace %v: %v", vsdw.keyspace, err)
 	}
-	if len(vsdw.keyspaceInfo.ServedFrom) == 0 {
-		return fmt.Errorf("keyspace %v has no ServedFrom", vsdw.keyspace)
+	if len(vsdw.keyspaceInfo.ServedFromMap) == 0 {
+		return fmt.Errorf("keyspace %v has no KeyspaceServedFrom", vsdw.keyspace)
 	}
 
 	// read the shardinfo and validate it

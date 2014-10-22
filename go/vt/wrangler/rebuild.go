@@ -57,7 +57,7 @@ func (wr *Wrangler) findCellsForRebuild(ki *topo.KeyspaceInfo, keyspace string, 
 							Shards:             make([]topo.SrvShard, 0, 16),
 							ShardingColumnName: ki.ShardingColumnName,
 							ShardingColumnType: ki.ShardingColumnType,
-							ServedFrom:         ki.ServedFrom,
+							ServedFrom:         ki.ComputeCellServedFrom(cell),
 							SplitShardCount:    ki.SplitShardCount,
 						}
 					}
@@ -119,12 +119,12 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, shardCache 
 	}
 
 	// Then we add the cells from the keyspaces we might be 'ServedFrom'.
-	for _, servedFrom := range ki.ServedFrom {
-		servedFromShards, err := wr.ts.GetShardNames(servedFrom)
+	for _, ksf := range ki.ServedFromMap {
+		servedFromShards, err := wr.ts.GetShardNames(ksf.Keyspace)
 		if err != nil {
 			return err
 		}
-		if err := wr.findCellsForRebuild(ki, servedFrom, servedFromShards, cells, srvKeyspaceMap); err != nil {
+		if err := wr.findCellsForRebuild(ki, ksf.Keyspace, servedFromShards, cells, srvKeyspaceMap); err != nil {
 			return err
 		}
 	}
