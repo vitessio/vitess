@@ -71,7 +71,7 @@ func formatTableStatuses(tableStatuses []tableStatus, startTime time.Time) ([]st
 	if rowCount == 0 || copiedRows == 0 {
 		return result, now
 	}
-	eta := now.Add(time.Duration(float64(now.Sub(startTime)) * float64(copiedRows) / float64(rowCount)))
+	eta := now.Add(time.Duration(float64(now.Sub(startTime)) * float64(rowCount) / float64(copiedRows)))
 	return result, eta
 }
 
