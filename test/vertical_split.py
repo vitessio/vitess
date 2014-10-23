@@ -324,6 +324,8 @@ index by_msg (msg)
                           '--min_table_size_for_split', '1',
                           'destination_keyspace/0'],
                          auto_log=True)
+      utils.run_vtctl(['ChangeSlaveType', source_rdonly.tablet_alias, 'rdonly'],
+                      auto_log=True)
 
     else:
       # take the snapshot for the split

@@ -278,6 +278,18 @@ func (vscw *VerticalSplitCloneWorker) findTargets() error {
 		return fmt.Errorf("cannot read tablet %v: %v", vscw.sourceTablet, err)
 	}
 
+	// stop replication on it
+	if err := vscw.wr.TabletManagerClient().StopSlave(vscw.sourceTablet, 30*time.Second); err != nil {
+		return fmt.Errorf("cannot stop replication on tablet %v", vscw.sourceAlias)
+	}
+
+	wrangler.RecordStartSlaveAction(vscw.cleaner, vscw.sourceTablet, 30*time.Second)
+	action, err := wrangler.FindChangeSlaveTypeActionByTarget(vscw.cleaner, vscw.sourceAlias)
+	if err != nil {
+		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", vscw.sourceAlias, err)
+	}
+	action.TabletType = topo.TYPE_SPARE
+
 	// find all the targets in the destination keyspace / shard
 	vscw.destinationAliases, err = topo.FindAllTabletAliasesInShard(vscw.wr.TopoServer(), vscw.destinationKeyspace, vscw.destinationShard)
 	if err != nil {

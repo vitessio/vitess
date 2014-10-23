@@ -534,6 +534,8 @@ primary key (name)
                           '--min_table_size_for_split', '1',
                           'test_keyspace/80-c0'],
                          auto_log=True)
+      utils.run_vtctl(['ChangeSlaveType', shard_1_rdonly.tablet_alias, 'rdonly'],
+                      auto_log=True)
 
       # TODO(alainjobart): experiment with the dontStartBinlogPlayer option
 
