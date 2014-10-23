@@ -48,10 +48,10 @@ var (
   expr        Expr
   boolExpr    BoolExpr
   valExpr     ValExpr
-  rowTuple    RowTuple
   colTuple    ColTuple
   valExprs    ValExprs
   values      Values
+  rowTuple    RowTuple
   subquery    *Subquery
   caseExpr    *CaseExpr
   whens       []*When
@@ -116,10 +116,10 @@ var (
 %type <str> compare
 %type <insRows> row_list
 %type <valExpr> value value_expression
-%type <rowTuple> row_tuple
 %type <colTuple> col_tuple
 %type <valExprs> value_expression_list
 %type <values> tuple_list
+%type <rowTuple> row_tuple
 %type <bytes> keyword_as_func
 %type <subquery> subquery
 %type <byt> unary_operator
@@ -609,36 +609,6 @@ compare:
     $$ = AST_NSE
   }
 
-row_list:
-  VALUES tuple_list
-  {
-    $$ = $2
-  }
-| select_statement
-  {
-    $$ = $1
-  }
-
-tuple_list:
-  row_tuple
-  {
-    $$ = Values{$1}
-  }
-| tuple_list ',' row_tuple
-  {
-    $$ = append($1, $3)
-  }
-
-row_tuple:
-  '(' value_expression_list ')'
-  {
-    $$ = ValTuple($2)
-  }
-| subquery
-  {
-    $$ = $1
-  }
-
 col_tuple:
   '(' value_expression_list ')'
   {
@@ -647,6 +617,10 @@ col_tuple:
 | subquery
   {
     $$ = $1
+  }
+| LIST_ARG
+  {
+    $$ = ListArg($1)
   }
 
 subquery:
@@ -954,6 +928,36 @@ on_dup_opt:
 | ON DUPLICATE KEY UPDATE update_list
   {
     $$ = $5
+  }
+
+row_list:
+  VALUES tuple_list
+  {
+    $$ = $2
+  }
+| select_statement
+  {
+    $$ = $1
+  }
+
+tuple_list:
+  row_tuple
+  {
+    $$ = Values{$1}
+  }
+| tuple_list ',' row_tuple
+  {
+    $$ = append($1, $3)
+  }
+
+row_tuple:
+  '(' value_expression_list ')'
+  {
+    $$ = ValTuple($2)
+  }
+| subquery
+  {
+    $$ = $1
   }
 
 update_list:
