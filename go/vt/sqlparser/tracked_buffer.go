@@ -93,9 +93,8 @@ func (buf *TrackedBuffer) Myprintf(format string, values ...interface{}) {
 func (buf *TrackedBuffer) WriteArg(arg string) {
 	buf.bindLocations = append(buf.bindLocations, bindLocation{
 		offset: buf.Len(),
-		length: len(arg) + 1,
+		length: len(arg),
 	})
-	buf.WriteByte(':')
 	buf.WriteString(arg)
 }
 
