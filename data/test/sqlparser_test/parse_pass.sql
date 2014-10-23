@@ -111,6 +111,7 @@ select /* all escapes */ '\0\'\"\b\n\r\t\Z\\' from t
 select /* non-escape */ '\x' from t#select /* non-escape */ 'x' from t
 select /* unescaped backslash */ '\n' from t
 select /* value argument */ :a from t
+select /* value argument with digit */ :a1 from t
 select /* value argument with dot */ :a.b from t
 select /* positional argument */ ? from t#select /* positional argument */ :v1 from t
 select /* multiple positional arguments */ ?, ? from t#select /* multiple positional arguments */ :v1, :v2 from t
