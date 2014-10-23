@@ -576,7 +576,11 @@ func (vscw *VerticalSplitCloneWorker) processData(td *myproto.TableDefinition, t
 			vscw.tableStatus[tableIndex].addCopiedRows(len(r.Rows))
 			cmd := baseCmd + makeValueString(qrr.Fields, r.Rows)
 			for _, c := range insertChannels {
-				c <- cmd
+				select {
+				case c <- cmd:
+				case <-abort:
+					return nil
+				}
 			}
 		case <-abort:
 			// FIXME(alainjobart): note this select case
