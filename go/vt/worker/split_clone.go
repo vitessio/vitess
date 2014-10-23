@@ -665,7 +665,12 @@ func (scw *SplitCloneWorker) processData(td *myproto.TableDefinition, tableIndex
 				if len(sr[i]) > 0 {
 					cmd := baseCmd + makeValueString(qrr.Fields, sr[i])
 					for _, c := range cs {
-						c <- cmd
+						// also check on abort, so we don't wait forever
+						select {
+						case c <- cmd:
+						case <-abort:
+							return nil
+						}
 					}
 				}
 			}
