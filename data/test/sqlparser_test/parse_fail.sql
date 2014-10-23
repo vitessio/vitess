@@ -9,6 +9,6 @@ select 'aa\#syntax error at position 12 near aa
 select 'aa#syntax error at position 12 near aa
 select * from t where :1 = 2#syntax error at position 24 near :
 select * from t where :. = 2#syntax error at position 24 near :
-select * from t where ::1 = 2#syntax error at position 25 near :
-select * from t where ::. = 2#syntax error at position 25 near :
+select * from t where ::1 = 2#syntax error at position 25 near ::
+select * from t where ::. = 2#syntax error at position 25 near ::
 select /* aa#syntax error at position 13 near /* aa

@@ -652,14 +652,24 @@ func escape(buf *TrackedBuffer, name []byte) {
 	}
 }
 
-// Tuple represents a tuple. It can be ValTuple, Subquery.
-type Tuple interface {
-	ITuple()
+// RowTuple represents a row of values. It can be ValTuple, Subquery.
+type RowTuple interface {
+	IRowTuple()
 	ValExpr
 }
 
-func (ValTuple) ITuple()  {}
-func (*Subquery) ITuple() {}
+func (ValTuple) IRowTuple()  {}
+func (*Subquery) IRowTuple() {}
+
+// ColTuple represents a list of column values.
+// It can be ValTuple, Subquery, ListArg.
+type ColTuple interface {
+	IColTuple()
+	ValExpr
+}
+
+func (ValTuple) IColTuple()  {}
+func (*Subquery) IColTuple() {}
 
 // ValTuple represents a tuple of actual values.
 type ValTuple ValExprs
@@ -775,7 +785,7 @@ func (node *When) Format(buf *TrackedBuffer) {
 }
 
 // Values represents a VALUES clause.
-type Values []Tuple
+type Values []RowTuple
 
 func (node Values) Format(buf *TrackedBuffer) {
 	prefix := "values "

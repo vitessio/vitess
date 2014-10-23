@@ -48,7 +48,8 @@ var (
   expr        Expr
   boolExpr    BoolExpr
   valExpr     ValExpr
-  tuple       Tuple
+  rowTuple    RowTuple
+  colTuple    ColTuple
   valExprs    ValExprs
   values      Values
   subquery    *Subquery
@@ -115,7 +116,8 @@ var (
 %type <str> compare
 %type <insRows> row_list
 %type <valExpr> value value_expression
-%type <tuple> tuple
+%type <rowTuple> row_tuple
+%type <colTuple> col_tuple
 %type <valExprs> value_expression_list
 %type <values> tuple_list
 %type <bytes> keyword_as_func
@@ -540,11 +542,11 @@ condition:
   {
     $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
   }
-| value_expression IN tuple
+| value_expression IN col_tuple
   {
     $$ = &ComparisonExpr{Left: $1, Operator: AST_IN, Right: $3}
   }
-| value_expression NOT IN tuple
+| value_expression NOT IN col_tuple
   {
     $$ = &ComparisonExpr{Left: $1, Operator: AST_NOT_IN, Right: $4}
   }
@@ -618,16 +620,26 @@ row_list:
   }
 
 tuple_list:
-  tuple
+  row_tuple
   {
     $$ = Values{$1}
   }
-| tuple_list ',' tuple
+| tuple_list ',' row_tuple
   {
     $$ = append($1, $3)
   }
 
-tuple:
+row_tuple:
+  '(' value_expression_list ')'
+  {
+    $$ = ValTuple($2)
+  }
+| subquery
+  {
+    $$ = $1
+  }
+
+col_tuple:
   '(' value_expression_list ')'
   {
     $$ = ValTuple($2)
@@ -662,7 +674,7 @@ value_expression:
   {
     $$ = $1
   }
-| tuple
+| row_tuple
   {
     $$ = $1
   }
