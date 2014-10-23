@@ -303,13 +303,24 @@ func (scw *SplitCloneWorker) findTargets() error {
 		scw.wr.Logger().Infof("Using tablet %v as source for %v/%v", scw.sourceAliases[i], si.Keyspace(), si.ShardName())
 	}
 
-	// get the tablet info for them
+	// get the tablet info for them, and stop their replication
 	scw.sourceTablets = make([]*topo.TabletInfo, len(scw.sourceAliases))
 	for i, alias := range scw.sourceAliases {
 		scw.sourceTablets[i], err = scw.wr.TopoServer().GetTablet(alias)
 		if err != nil {
 			return fmt.Errorf("cannot read tablet %v: %v", alias, err)
 		}
+
+		if err := scw.wr.TabletManagerClient().StopSlave(scw.sourceTablets[i], 30*time.Second); err != nil {
+			return fmt.Errorf("cannot stop replication on tablet %v", alias)
+		}
+
+		wrangler.RecordStartSlaveAction(scw.cleaner, scw.sourceTablets[i], 30*time.Second)
+		action, err := wrangler.FindChangeSlaveTypeActionByTarget(scw.cleaner, alias)
+		if err != nil {
+			return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", alias, err)
+		}
+		action.TabletType = topo.TYPE_SPARE
 	}
 
 	// find all the targets in the destination shards
