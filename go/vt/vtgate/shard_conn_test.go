@@ -93,6 +93,8 @@ func testShardConnGeneric(t *testing.T, name string, f func() error) {
 
 	// Connect failure
 	s.Reset()
+	sbc := &sandboxConn{}
+	s.MapTestConn("0", sbc)
 	s.DialMustFail = 4
 	err = f()
 	want = fmt.Sprintf("conn error, shard, host: %v.0., {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}", name)
@@ -106,7 +108,7 @@ func testShardConnGeneric(t *testing.T, name string, f func() error) {
 
 	// retry error (multiple failure)
 	s.Reset()
-	sbc := &sandboxConn{mustFailRetry: 4}
+	sbc = &sandboxConn{mustFailRetry: 4}
 	s.MapTestConn("0", sbc)
 	err = f()
 	want = fmt.Sprintf("retry: err, shard, host: %v.0., {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}", name)
@@ -259,5 +261,343 @@ func TestShardConnBeginOther(t *testing.T) {
 	// Account for 2 calls to Begin.
 	if sbc.ExecCount != 2 {
 		t.Errorf("want 2, got %v", sbc.ExecCount)
+	}
+}
+
+func TestShardConnReconnect(t *testing.T) {
+	retryDelay := 10 * time.Millisecond
+	retryCount := 5
+	s := createSandbox("TestShardConnReconnect")
+	// case 1: resolved 0 endpoint, return error
+	sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
+	_, err := sdc.Execute(&context.DummyContext{}, "query", nil, 0)
+	if err == nil {
+		t.Errorf("want error, got nil")
+	}
+	if s.EndPointCounter != 1 {
+		t.Errorf("want 1, got %v", s.EndPointCounter)
+	}
+
+	// case 2.1: resolve 1 endpoint and connect failed -> resolve and retry without spamming
+	s.Reset()
+	s.DialMustFail = 1
+	sbc := &sandboxConn{}
+	s.MapTestConn("0", sbc)
+	sdc = NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
+	timeStart := time.Now()
+	sdc.Execute(&context.DummyContext{}, "query", nil, 0)
+	timeDuration := time.Now().Sub(timeStart)
+	if timeDuration < retryDelay {
+		t.Errorf("want no spam delay %v, got %v", retryDelay, timeDuration)
+	}
+	if timeDuration > retryDelay*2 {
+		t.Errorf("want instant resolve %v, got %v", retryDelay, timeDuration)
+	}
+	if s.EndPointCounter != 2 {
+		t.Errorf("want 2, got %v", s.EndPointCounter)
+	}
+
+	// case 2.2: resolve 1 endpoint and execute failed -> resolve and retry without spamming
+	s.Reset()
+	sbc = &sandboxConn{mustFailConn: 1}
+	s.MapTestConn("0", sbc)
+	sdc = NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
+	timeStart = time.Now()
+	sdc.Execute(&context.DummyContext{}, "query", nil, 0)
+	timeDuration = time.Now().Sub(timeStart)
+	if timeDuration < retryDelay {
+		t.Errorf("want no spam delay %v, got %v", retryDelay, timeDuration)
+	}
+	if timeDuration > retryDelay*2 {
+		t.Errorf("want instant resolve %v, got %v", retryDelay, timeDuration)
+	}
+	if s.EndPointCounter != 2 {
+		t.Errorf("want 2, got %v", s.EndPointCounter)
+	}
+
+	// case 3.1: resolve 3 endpoints, failed connection to 1st one -> resolve and connect to 2nd one
+	s.Reset()
+	s.DialMustFail = 1
+	sbc0 := &sandboxConn{}
+	sbc1 := &sandboxConn{}
+	sbc2 := &sandboxConn{}
+	s.MapTestConn("0", sbc0)
+	s.MapTestConn("0", sbc1)
+	s.MapTestConn("0", sbc2)
+	sdc = NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
+	timeStart = time.Now()
+	sdc.Execute(&context.DummyContext{}, "query", nil, 0)
+	timeDuration = time.Now().Sub(timeStart)
+	if timeDuration >= retryDelay {
+		t.Errorf("want no delay, got %v", timeDuration)
+	}
+	if sbc0.ExecCount+sbc1.ExecCount+sbc2.ExecCount != 1 {
+		t.Errorf("want 1, got %v", sbc0.ExecCount+sbc1.ExecCount+sbc2.ExecCount)
+	}
+	// TODO: uncomment with new logic
+	//if s.EndPointCounter != 2 {
+	//	t.Errorf("want 2, got %v", s.EndPointCounter)
+	//}
+
+	// case 3.2: resolve 3 endpoints, failed execution on 1st one -> resolve and execute on 2nd one
+	s.Reset()
+	countConnUse := 0
+	onConnUse := func(conn *sandboxConn) {
+		if countConnUse == 0 {
+			conn.mustFailConn = 1
+		}
+		countConnUse++
+	}
+	sbc0 = &sandboxConn{onConnUse: onConnUse}
+	sbc1 = &sandboxConn{onConnUse: onConnUse}
+	sbc2 = &sandboxConn{onConnUse: onConnUse}
+	s.MapTestConn("0", sbc0)
+	s.MapTestConn("0", sbc1)
+	s.MapTestConn("0", sbc2)
+	sdc = NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
+	timeStart = time.Now()
+	sdc.Execute(&context.DummyContext{}, "query", nil, 0)
+	timeDuration = time.Now().Sub(timeStart)
+	if timeDuration >= retryDelay {
+		t.Errorf("want no delay, got %v", timeDuration)
+	}
+	if sbc0.ExecCount+sbc1.ExecCount+sbc2.ExecCount != 2 {
+		t.Errorf("want 2, got %v", sbc0.ExecCount+sbc1.ExecCount+sbc2.ExecCount)
+	}
+	if sbc0.ExecCount > 1 || sbc1.ExecCount > 1 || sbc2.ExecCount > 1 {
+		t.Errorf("want no more than 1, got %v,%v,%v", sbc0.ExecCount, sbc1.ExecCount, sbc2.ExecCount)
+	}
+	// TODO: uncomment with new logic
+	//if s.EndPointCounter != 2 {
+	//	t.Errorf("want 2, got %v", s.EndPointCounter)
+	//}
+
+	// case 4: resolve 3 endpoints, failed connection to 1st, resolve and failed execution on 2nd -> resolve and execute on 3rd one
+	s.Reset()
+	s.DialMustFail = 1
+	countConnUse = 0
+	onConnUse = func(conn *sandboxConn) {
+		if countConnUse == 0 {
+			conn.mustFailConn = 1
+		}
+		countConnUse++
+	}
+	sbc0 = &sandboxConn{onConnUse: onConnUse}
+	sbc1 = &sandboxConn{onConnUse: onConnUse}
+	sbc2 = &sandboxConn{onConnUse: onConnUse}
+	s.MapTestConn("0", sbc0)
+	s.MapTestConn("0", sbc1)
+	s.MapTestConn("0", sbc2)
+	sdc = NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
+	timeStart = time.Now()
+	sdc.Execute(&context.DummyContext{}, "query", nil, 0)
+	timeDuration = time.Now().Sub(timeStart)
+	if timeDuration >= retryDelay {
+		t.Errorf("want no delay, got %v", timeDuration)
+	}
+	if sbc0.ExecCount+sbc1.ExecCount+sbc2.ExecCount != 2 {
+		t.Errorf("want 2, got %v", sbc0.ExecCount+sbc1.ExecCount+sbc2.ExecCount)
+	}
+	if sbc0.ExecCount > 1 || sbc1.ExecCount > 1 || sbc2.ExecCount > 1 {
+		t.Errorf("want no more than 1, got %v,%v,%v", sbc0.ExecCount, sbc1.ExecCount, sbc2.ExecCount)
+	}
+	// TODO: uncomment with new logic
+	//if s.EndPointCounter != 3 {
+	//	t.Errorf("want 3, got %v", s.EndPointCounter)
+	//}
+
+	// case 5: always resolve the same 3 endpoints, all 3 execution failed -> resolve and use the first one
+	s.Reset()
+	var firstConn *sandboxConn
+	countConnUse = 0
+	onConnUse = func(conn *sandboxConn) {
+		if countConnUse == 0 {
+			firstConn = conn
+		}
+		countConnUse++
+	}
+	sbc0 = &sandboxConn{mustFailConn: 1, onConnUse: onConnUse}
+	sbc1 = &sandboxConn{mustFailConn: 1, onConnUse: onConnUse}
+	sbc2 = &sandboxConn{mustFailConn: 1, onConnUse: onConnUse}
+	s.MapTestConn("0", sbc0)
+	s.MapTestConn("0", sbc1)
+	s.MapTestConn("0", sbc2)
+	sdc = NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
+	timeStart = time.Now()
+	sdc.Execute(&context.DummyContext{}, "query", nil, 0)
+	timeDuration = time.Now().Sub(timeStart)
+	if timeDuration < retryDelay {
+		t.Errorf("want no spam delay %v, got %v", retryDelay, timeDuration)
+	}
+	if timeDuration > retryDelay*2 {
+		t.Errorf("want instant resolve %v, got %v", retryDelay, timeDuration)
+	}
+	// TODO: uncomment with new logic
+	//for _, conn := range []*sandboxConn{sbc0, sbc1, sbc2} {
+	//	wantExecCount := 1
+	//	if conn == firstConn {
+	//		wantExecCount = 2
+	//	}
+	//	if int(conn.ExecCount) != wantExecCount {
+	//		t.Errorf("want %v, got %v", wantExecCount, conn.ExecCount)
+	//	}
+	//}
+	//if s.EndPointCounter != 4 {
+	//	t.Errorf("want 4, got %v", s.EndPointCounter)
+	//}
+
+	// case 6: resolve 3 endpoints with 1st execution failed, resolve to a new set without the failed one -> try a random one
+	s.Reset()
+	firstConn = nil
+	onConnUse = func(conn *sandboxConn) {
+		if firstConn == nil {
+			firstConn = conn
+			conn.mustFailConn = 1
+		}
+	}
+	sbc0 = &sandboxConn{onConnUse: onConnUse}
+	sbc1 = &sandboxConn{onConnUse: onConnUse}
+	sbc2 = &sandboxConn{onConnUse: onConnUse}
+	sbc3 := &sandboxConn{}
+	s.MapTestConn("0", sbc0)
+	s.MapTestConn("0", sbc1)
+	s.MapTestConn("0", sbc2)
+	countGetEndPoints := 0
+	onGetEndPoints := func(st *sandboxTopo) {
+		if countGetEndPoints == 1 {
+			s.MapTestConn("0", sbc3)
+			delete(s.TestConns["0"], firstConn.endPoint.Uid)
+		}
+		countGetEndPoints++
+	}
+	sdc = NewShardConn(&context.DummyContext{}, &sandboxTopo{callbackGetEndPoints: onGetEndPoints}, "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
+	timeStart = time.Now()
+	sdc.Execute(&context.DummyContext{}, "query", nil, 0)
+	timeDuration = time.Now().Sub(timeStart)
+	if timeDuration >= retryDelay {
+		t.Errorf("want no delay, got %v", timeDuration)
+	}
+	if firstConn.ExecCount != 1 {
+		t.Errorf("want 1, got %v", firstConn.ExecCount)
+	}
+	totalExecCount := 0
+	for _, conn := range s.TestConns["0"] {
+		totalExecCount += int(conn.(*sandboxConn).ExecCount)
+	}
+	// TODO: uncomment with new logic
+	//if totalExecCount != 1 {
+	//	t.Errorf("want 1, got %v", totalExecCount)
+	//}
+	//if s.EndPointCounter != 2 {
+	//	t.Errorf("want 2, got %v", s.EndPointCounter)
+	//}
+
+	// case 7: resolve 3 bad endpoints with execution failed
+	// after resolve, 2nd bad endpoint changed address (once only) but still fails on execution
+	// -> should only use the 1st endpoint after all other endpoints are tried out
+	s.Reset()
+	var secondConn *sandboxConn
+	countConnUse = 0
+	onConnUse = func(conn *sandboxConn) {
+		if countConnUse == 0 {
+			firstConn = conn
+		} else if countConnUse == 1 {
+			secondConn = conn
+		}
+		countConnUse++
+	}
+	sbc0 = &sandboxConn{mustFailConn: 1, onConnUse: onConnUse}
+	sbc1 = &sandboxConn{mustFailConn: 1, onConnUse: onConnUse}
+	sbc2 = &sandboxConn{mustFailConn: 1, onConnUse: onConnUse}
+	sbc3 = &sandboxConn{mustFailConn: 1}
+	s.MapTestConn("0", sbc0)
+	s.MapTestConn("0", sbc1)
+	s.MapTestConn("0", sbc2)
+	countGetEndPoints = 0
+	onGetEndPoints = func(st *sandboxTopo) {
+		if countGetEndPoints == 1 {
+			s.MapTestConn("0", sbc3)
+			delete(s.TestConns["0"], secondConn.endPoint.Uid)
+		}
+		countGetEndPoints++
+	}
+	sdc = NewShardConn(&context.DummyContext{}, &sandboxTopo{callbackGetEndPoints: onGetEndPoints}, "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
+	timeStart = time.Now()
+	sdc.Execute(&context.DummyContext{}, "query", nil, 0)
+	timeDuration = time.Now().Sub(timeStart)
+	if timeDuration < retryDelay {
+		t.Errorf("want no spam delay %v, got %v", retryDelay, timeDuration)
+	}
+	if timeDuration > retryDelay*2 {
+		t.Errorf("want instant resolve %v, got %v", retryDelay, timeDuration)
+	}
+	if secondConn.ExecCount != 1 {
+		t.Errorf("want 1, got %v", secondConn.ExecCount)
+	}
+	// TODO: uncomment with new logic
+	//if firstConn.ExecCount != 2 {
+	//	t.Errorf("want 2, got %v", firstConn.ExecCount)
+	//}
+	//for _, conn := range s.TestConns["0"] {
+	//	if conn != firstConn && conn.(*sandboxConn).ExecCount != 1 {
+	//		t.Errorf("want 1, got %v", conn.(*sandboxConn).ExecCount)
+	//	}
+	//}
+	//if s.EndPointCounter != 5 {
+	//	t.Errorf("want 5, got %v", s.EndPointCounter)
+	//}
+
+	// case 8: resolve 3 bad endpoints with execution failed
+	// after resolve, all endpoints are valid on new addresses
+	// -> random use an endpoint without delay
+	s.Reset()
+	firstConn = nil
+	onConnUse = func(conn *sandboxConn) {
+		if firstConn == nil {
+			firstConn = conn
+		}
+	}
+	sbc0 = &sandboxConn{mustFailConn: 1, onConnUse: onConnUse}
+	sbc1 = &sandboxConn{mustFailConn: 1, onConnUse: onConnUse}
+	sbc2 = &sandboxConn{mustFailConn: 1, onConnUse: onConnUse}
+	sbc3 = &sandboxConn{}
+	sbc4 := &sandboxConn{}
+	sbc5 := &sandboxConn{}
+	s.MapTestConn("0", sbc0)
+	s.MapTestConn("0", sbc1)
+	s.MapTestConn("0", sbc2)
+	countGetEndPoints = 0
+	onGetEndPoints = func(st *sandboxTopo) {
+		if countGetEndPoints == 1 {
+			s.MapTestConn("0", sbc3)
+			s.MapTestConn("0", sbc4)
+			s.MapTestConn("0", sbc5)
+			delete(s.TestConns["0"], sbc0.endPoint.Uid)
+			delete(s.TestConns["0"], sbc1.endPoint.Uid)
+			delete(s.TestConns["0"], sbc2.endPoint.Uid)
+		}
+		countGetEndPoints++
+	}
+	sdc = NewShardConn(&context.DummyContext{}, &sandboxTopo{callbackGetEndPoints: onGetEndPoints}, "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
+	timeStart = time.Now()
+	sdc.Execute(&context.DummyContext{}, "query", nil, 0)
+	timeDuration = time.Now().Sub(timeStart)
+	// TODO: uncomment with new logic
+	//if timeDuration >= retryDelay {
+	//	t.Errorf("want no delay, got %v", timeDuration)
+	//}
+	if firstConn.ExecCount != 1 {
+		t.Errorf("want 1, got %v", firstConn.ExecCount)
+	}
+	//for _, conn := range []*sandboxConn{sbc0, sbc1, sbc2} {
+	//	if conn != firstConn && conn.ExecCount != 0 {
+	//		t.Errorf("want 0, got %v", conn.ExecCount)
+	//	}
+	//}
+	if sbc3.ExecCount+sbc4.ExecCount+sbc5.ExecCount != 1 {
+		t.Errorf("want 1, got %v", sbc3.ExecCount+sbc4.ExecCount+sbc5.ExecCount)
+	}
+	if s.EndPointCounter != 2 {
+		t.Errorf("want 2, got %v", s.EndPointCounter)
 	}
 }
