@@ -7,6 +7,7 @@ package mysqlctl
 import (
 	"fmt"
 
+	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
@@ -26,6 +27,10 @@ type MysqlDaemon interface {
 
 	// Schema related methods
 	GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*proto.SchemaDefinition, error)
+
+	// GetDbaConnection returns a connection to be able to talk
+	// to the database as the admin user.
+	GetDbaConnection() (dbconnpool.PoolConnection, error)
 }
 
 // FakeMysqlDaemon implements MysqlDaemon and allows the user to fake
@@ -45,6 +50,9 @@ type FakeMysqlDaemon struct {
 	// Schema that will be returned by GetSchema. If nil we'll
 	// return an error.
 	Schema *proto.SchemaDefinition
+
+	// DbaConnectionFactory is the factory for making fake dba connection
+	DbaConnectionFactory func() (dbconnpool.PoolConnection, error)
 }
 
 func (fmd *FakeMysqlDaemon) GetMasterAddr() (string, error) {
@@ -79,4 +87,11 @@ func (fmd *FakeMysqlDaemon) GetSchema(dbName string, tables, excludeTables []str
 		return nil, fmt.Errorf("no schema defined")
 	}
 	return fmd.Schema, nil
+}
+
+func (fmd *FakeMysqlDaemon) GetDbaConnection() (dbconnpool.PoolConnection, error) {
+	if fmd.DbaConnectionFactory == nil {
+		return nil, fmt.Errorf("no DbaConnectionFactory set in this FakeMysqlDaemon")
+	}
+	return fmd.DbaConnectionFactory()
 }

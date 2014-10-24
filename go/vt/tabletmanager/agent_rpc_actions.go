@@ -249,7 +249,7 @@ func (agent *ActionAgent) ApplySchema(change *myproto.SchemaChange) (*myproto.Sc
 // Should be called under RpcWrap.
 func (agent *ActionAgent) ExecuteFetch(query string, maxrows int, wantFields, disableBinlogs bool) (*proto.QueryResult, error) {
 	// get a connection
-	conn, err := agent.Mysqld.GetDbaConnection()
+	conn, err := agent.MysqlDaemon.GetDbaConnection()
 	if err != nil {
 		return nil, err
 	}
