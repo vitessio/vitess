@@ -73,6 +73,46 @@ func TestParsedQuery(t *testing.T) {
 			},
 			"select * from a where id in ((1, 'aa'), (null, 'bb'))",
 		}, {
+			"list bind vars",
+			"select * from a where id in ::vals",
+			map[string]interface{}{
+				"vals": []interface{}{
+					1,
+					"aa",
+				},
+			},
+			"select * from a where id in (1, 'aa')",
+		}, {
+			"list bind vars single argument",
+			"select * from a where id in ::vals",
+			map[string]interface{}{
+				"vals": []interface{}{
+					1,
+				},
+			},
+			"select * from a where id in (1)",
+		}, {
+			"list bind vars 0 arguments",
+			"select * from a where id in ::vals",
+			map[string]interface{}{
+				"vals": []interface{}{},
+			},
+			"empty list supplied for vals",
+		}, {
+			"non-list bind var supplied",
+			"select * from a where id in ::vals",
+			map[string]interface{}{
+				"vals": 1,
+			},
+			"unexpected list arg type int for key vals",
+		}, {
+			"list bind var for non-list",
+			"select * from a where id = :vals",
+			map[string]interface{}{
+				"vals": []interface{}{1},
+			},
+			"unexpected arg type []interface {} for key vals",
+		}, {
 			"single column tuple equality",
 			// We have to use an incorrect construct to get around the parser.
 			"select * from a where b = :equality",

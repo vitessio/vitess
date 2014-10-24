@@ -117,7 +117,7 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 		typ, val = tkn.Scan()
 	}
 	switch typ {
-	case ID, STRING, NUMBER, VALUE_ARG, COMMENT:
+	case ID, STRING, NUMBER, VALUE_ARG, LIST_ARG, COMMENT:
 		lval.bytes = val
 	}
 	tkn.errorToken = val

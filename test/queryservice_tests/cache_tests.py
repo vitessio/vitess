@@ -1,4 +1,5 @@
 from vtdb import dbexceptions
+from vtdb import field_types
 
 import framework
 import cache_cases1
@@ -35,6 +36,16 @@ class TestCache(framework.TestCase):
       self.assertContains(str(e), "error: type mismatch")
     else:
       self.fail("Did not receive exception")
+
+  def test_cache_list_arg(self):
+    cu = self.env.execute("select * from vtocc_cached1 where eid in ::list", {"list": field_types.List([3, 4, 32768])})
+    self.assertEqual(cu.rowcount, 2)
+    cu = self.env.execute("select * from vtocc_cached1 where eid in ::list", {"list": field_types.List([3, 4])})
+    self.assertEqual(cu.rowcount, 2)
+    cu = self.env.execute("select * from vtocc_cached1 where eid in ::list", {"list": field_types.List([3])})
+    self.assertEqual(cu.rowcount, 1)
+    with self.assertRaises(dbexceptions.DatabaseError):
+      cu = self.env.execute("select * from vtocc_cached1 where eid in ::list", {"list": field_types.List()})
 
   def test_uncache(self):
     try:

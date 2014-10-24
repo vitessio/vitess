@@ -32,12 +32,10 @@ func (pq *ParsedQuery) GenerateQuery(bindVariables map[string]interface{}) ([]by
 	current := 0
 	for _, loc := range pq.bindLocations {
 		buf.WriteString(pq.Query[current:loc.offset])
-		varName := pq.Query[loc.offset+1 : loc.offset+loc.length]
-		var supplied interface{}
-		var ok bool
-		supplied, ok = bindVariables[varName]
-		if !ok {
-			return nil, fmt.Errorf("missing bind var %s", varName)
+		name := pq.Query[loc.offset : loc.offset+loc.length]
+		supplied, _, err := FetchBindVar(name, bindVariables)
+		if err != nil {
+			return nil, err
 		}
 		if err := EncodeValue(buf, supplied); err != nil {
 			return nil, err
@@ -76,6 +74,17 @@ func EncodeValue(buf *bytes.Buffer, value interface{}) error {
 			}
 			buf.WriteByte(')')
 		}
+	case []interface{}:
+		buf.WriteByte('(')
+		for i, v := range bindVal {
+			if i != 0 {
+				buf.WriteString(", ")
+			}
+			if err := EncodeValue(buf, v); err != nil {
+				return err
+			}
+		}
+		buf.WriteByte(')')
 	case TupleEqualityList:
 		if err := bindVal.Encode(buf); err != nil {
 			return err
@@ -147,4 +156,30 @@ func (tpl *TupleEqualityList) encodeLHS(buf *bytes.Buffer) {
 		buf.WriteString(c)
 	}
 	buf.WriteByte(')')
+}
+
+func FetchBindVar(name string, bindVariables map[string]interface{}) (val interface{}, isList bool, err error) {
+	name = name[1:]
+	if name[0] == ':' {
+		name = name[1:]
+		isList = true
+	}
+	supplied, ok := bindVariables[name]
+	if !ok {
+		return nil, false, fmt.Errorf("missing bind var %s", name)
+	}
+	list, gotList := supplied.([]interface{})
+	if isList {
+		if !gotList {
+			return nil, false, fmt.Errorf("unexpected list arg type %T for key %s", supplied, name)
+		}
+		if len(list) == 0 {
+			return nil, false, fmt.Errorf("empty list supplied for %s", name)
+		}
+		return list, true, nil
+	}
+	if gotList {
+		return nil, false, fmt.Errorf("unexpected arg type %T for key %s", supplied, name)
+	}
+	return supplied, false, nil
 }

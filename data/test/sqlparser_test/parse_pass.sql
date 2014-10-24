@@ -115,6 +115,8 @@ select /* value argument with digit */ :a1 from t
 select /* value argument with dot */ :a.b from t
 select /* positional argument */ ? from t#select /* positional argument */ :v1 from t
 select /* multiple positional arguments */ ?, ? from t#select /* multiple positional arguments */ :v1, :v2 from t
+select /* list arg */ * from t where a in ::list
+select /* list arg not in */ * from t where a not in ::list
 select /* null */ null from t
 select /* octal */ 010 from t
 select /* hex */ 0xf0 from t
