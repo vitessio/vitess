@@ -16,19 +16,26 @@ import environment
 import utils
 import tablet
 
-tablet_62344 = tablet.Tablet(62344)
-tablet_31981 = tablet.Tablet(31981)
+use_mysqlctld = True
+
+tablet_62344 = tablet.Tablet(62344, use_mysqlctld=use_mysqlctld)
+tablet_31981 = tablet.Tablet(31981, use_mysqlctld=use_mysqlctld)
 
 def setUpModule():
   try:
     environment.topo_server_setup()
 
     # start mysql instance external to the test
+    global setup_procs
     setup_procs = [
         tablet_62344.init_mysql(),
         tablet_31981.init_mysql(),
         ]
-    utils.wait_procs(setup_procs)
+    if use_mysqlctld:
+      tablet_62344.wait_for_mysql_socket()
+      tablet_31981.wait_for_mysql_socket()
+    else:
+      utils.wait_procs(setup_procs)
   except:
     tearDownModule()
     raise
@@ -37,11 +44,16 @@ def tearDownModule():
   if utils.options.skip_teardown:
     return
 
-  teardown_procs = [
-      tablet_62344.teardown_mysql(),
-      tablet_31981.teardown_mysql(),
-      ]
-  utils.wait_procs(teardown_procs, raise_on_error=False)
+  if use_mysqlctld:
+    # Try to terminate mysqlctld gracefully, so it kills its mysqld.
+    for proc in setup_procs:
+      utils.kill_sub_process(proc, soft=True)
+  else:
+    teardown_procs = [
+        tablet_62344.teardown_mysql(),
+        tablet_31981.teardown_mysql(),
+        ]
+    utils.wait_procs(teardown_procs, raise_on_error=False)
 
   environment.topo_server_teardown()
   utils.kill_sub_processes()

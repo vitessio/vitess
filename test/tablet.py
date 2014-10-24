@@ -25,6 +25,16 @@ tablet_cell_map = {
 }
 
 
+def get_all_extra_my_cnf(extra_my_cnf):
+  all_extra_my_cnf = []
+  flavor_my_cnf = mysql_flavor().extra_my_cnf()
+  if flavor_my_cnf:
+    all_extra_my_cnf.append(flavor_my_cnf)
+  if extra_my_cnf:
+    all_extra_my_cnf.append(extra_my_cnf)
+  return all_extra_my_cnf
+
+
 class Tablet(object):
   """This class helps manage a vttablet or vtocc instance.
 
@@ -54,10 +64,12 @@ class Tablet(object):
       }
   }
 
-  def __init__(self, tablet_uid=None, port=None, mysql_port=None, cell=None):
+  def __init__(self, tablet_uid=None, port=None, mysql_port=None, cell=None,
+               use_mysqlctld=False):
     self.tablet_uid = tablet_uid or (Tablet.default_uid + Tablet.seq)
     self.port = port or (environment.reserve_ports(1))
     self.mysql_port = mysql_port or (environment.reserve_ports(1))
+    self.use_mysqlctld = use_mysqlctld
     Tablet.seq += 1
 
     if cell:
@@ -78,20 +90,15 @@ class Tablet(object):
     self.checked_zk_pid = False
 
   def mysqlctl(self, cmd, extra_my_cnf=None, with_ports=False, verbose=False):
-    all_extra_my_cnf = []
-    flavor_my_cnf = mysql_flavor().extra_my_cnf()
-    if flavor_my_cnf:
-      all_extra_my_cnf.append(flavor_my_cnf)
-    if extra_my_cnf:
-      all_extra_my_cnf.append(extra_my_cnf)
-    extra_env = None
+    extra_env = {}
+    all_extra_my_cnf = get_all_extra_my_cnf(extra_my_cnf)
     if all_extra_my_cnf:
-      extra_env = {
-          'EXTRA_MY_CNF': ':'.join(all_extra_my_cnf),
-      }
+      extra_env['EXTRA_MY_CNF'] =  ':'.join(all_extra_my_cnf)
     args = environment.binary_args('mysqlctl') + [
         '-log_dir', environment.vtlogroot,
         '-tablet_uid', str(self.tablet_uid)]
+    if self.use_mysqlctld:
+      args.extend(['-mysqlctl_socket', os.path.join(self.tablet_dir, 'mysqlctl.sock')])
     if with_ports:
       args.extend(['-port', str(self.port),
                    '-mysql_port', str(self.mysql_port)])
@@ -100,10 +107,30 @@ class Tablet(object):
     args.extend(cmd)
     return utils.run_bg(args, extra_env=extra_env)
 
+  def mysqlctld(self, cmd, extra_my_cnf=None, with_ports=False, verbose=False):
+    extra_env = {}
+    all_extra_my_cnf = get_all_extra_my_cnf(extra_my_cnf)
+    if all_extra_my_cnf:
+      extra_env['EXTRA_MY_CNF'] =  ':'.join(all_extra_my_cnf)
+    args = environment.binary_args('mysqlctld') + [
+        '-log_dir', environment.vtlogroot,
+        '-tablet_uid', str(self.tablet_uid),
+        '-mysql_port', str(self.mysql_port),
+        '-socket_file', os.path.join(self.tablet_dir, 'mysqlctl.sock')]
+    if verbose:
+      args.append('-alsologtostderr')
+    args.extend(cmd)
+    return utils.run_bg(args, extra_env=extra_env)
+
   def init_mysql(self, extra_my_cnf=None):
-    return self.mysqlctl(
-        ['init', '-bootstrap_archive', mysql_flavor().bootstrap_archive()],
-        extra_my_cnf=extra_my_cnf, with_ports=True)
+    if self.use_mysqlctld:
+      return self.mysqlctld(
+          ['-bootstrap_archive', mysql_flavor().bootstrap_archive()],
+          extra_my_cnf=extra_my_cnf)
+    else:
+      return self.mysqlctl(
+          ['init', '-bootstrap_archive', mysql_flavor().bootstrap_archive()],
+          extra_my_cnf=extra_my_cnf, with_ports=True)
 
   def start_mysql(self):
     return self.mysqlctl(['start'], with_ports=True)
@@ -398,6 +425,8 @@ class Tablet(object):
     args.extend(utils.binlog_player_protocol_flags)
     args.extend(environment.tablet_manager_protocol_flags())
     args.extend(['-pid_file', os.path.join(self.tablet_dir, 'vttablet.pid')])
+    if self.use_mysqlctld:
+      args.extend(['-mysqlctl_socket', os.path.join(self.tablet_dir, 'mysqlctl.sock')])
 
     if full_mycnf_args:
       # this flag is used to specify all the mycnf_ flags, to make
@@ -514,6 +543,13 @@ class Tablet(object):
             break
       timeout = utils.wait_step('waiting for state %s' % expected, timeout,
                                 sleep_time=0.1)
+
+  def wait_for_mysql_socket(self, timeout=10.0):
+    socket_file = os.path.join(self.tablet_dir, 'mysql.sock')
+    while True:
+      if os.path.exists(socket_file):
+        return
+      timeout = utils.wait_step('waiting for mysql socket file %s' % socket_file, timeout)
 
   def _get_db_configs_file(self, repl_extra_flags={}):
     config = dict(self.default_db_config)
