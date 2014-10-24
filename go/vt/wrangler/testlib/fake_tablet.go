@@ -36,10 +36,11 @@ type FakeTablet struct {
 	Tablet          *topo.Tablet
 	FakeMysqlDaemon *mysqlctl.FakeMysqlDaemon
 
-	// Agent and Listener are created when we start the event loop for
+	// The following fields are created when we start the event loop for
 	// the tablet, and closed / cleared when we stop it.
-	Agent    *tabletmanager.ActionAgent
-	Listener net.Listener
+	Agent     *tabletmanager.ActionAgent
+	Listener  net.Listener
+	RpcServer *rpcplus.Server
 }
 
 // TabletOption is an interface for changing tablet parameters.
@@ -133,12 +134,12 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 	ft.Tablet = ft.Agent.Tablet().Tablet
 
 	// create the RPC server
-	server := rpcplus.NewServer()
-	gorpctmserver.RegisterForTest(server, ft.Agent)
+	ft.RpcServer = rpcplus.NewServer()
+	gorpctmserver.RegisterForTest(ft.RpcServer, ft.Agent)
 
 	// create the HTTP server, serve the server from it
 	handler := http.NewServeMux()
-	bsonrpc.ServeCustomRPC(handler, server, false)
+	bsonrpc.ServeCustomRPC(handler, ft.RpcServer, false)
 	httpServer := http.Server{
 		Handler: handler,
 	}

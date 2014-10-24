@@ -20,10 +20,10 @@ type MysqlDaemon interface {
 	// GetMysqlPort returns the current port mysql is listening on.
 	GetMysqlPort() (int, error)
 
-	// StartSlave / StopSlave allows the caller to start or stop
-	// mysql replication
+	// replication related methods
 	StartSlave(hookExtraEnv map[string]string) error
 	StopSlave(hookExtraEnv map[string]string) error
+	SlaveStatus() (*proto.ReplicationStatus, error)
 
 	// Schema related methods
 	GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*proto.SchemaDefinition, error)
@@ -46,6 +46,9 @@ type FakeMysqlDaemon struct {
 
 	// Replicating is updated when calling StopSlave
 	Replicating bool
+
+	// CurrentSlaveStatus is returned by SlaveStatus
+	CurrentSlaveStatus *proto.ReplicationStatus
 
 	// Schema that will be returned by GetSchema. If nil we'll
 	// return an error.
@@ -80,6 +83,13 @@ func (fmd *FakeMysqlDaemon) StartSlave(hookExtraEnv map[string]string) error {
 func (fmd *FakeMysqlDaemon) StopSlave(hookExtraEnv map[string]string) error {
 	fmd.Replicating = false
 	return nil
+}
+
+func (fmd *FakeMysqlDaemon) SlaveStatus() (*proto.ReplicationStatus, error) {
+	if fmd.CurrentSlaveStatus == nil {
+		return nil, fmt.Errorf("no slave status defined")
+	}
+	return fmd.CurrentSlaveStatus, nil
 }
 
 func (fmd *FakeMysqlDaemon) GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*proto.SchemaDefinition, error) {

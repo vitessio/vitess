@@ -212,6 +212,11 @@ func (agent *ActionAgent) RefreshState() {
 // ReloadSchema will reload the schema
 // Should be called under RpcWrapLockAction.
 func (agent *ActionAgent) ReloadSchema() {
+	if agent.DBConfigs == nil {
+		// we skip this for test instances that can't connect to the DB anyway
+		return
+	}
+
 	// This adds a dependency between tabletmanager and tabletserver,
 	// so it's not ideal. But I (alainjobart) think it's better
 	// to have up to date schema in vttablet.
@@ -282,7 +287,7 @@ func (agent *ActionAgent) ExecuteFetch(query string, maxrows int, wantFields, di
 // SlaveStatus returns the replication status
 // Should be called under RpcWrap.
 func (agent *ActionAgent) SlaveStatus() (*myproto.ReplicationStatus, error) {
-	return agent.Mysqld.SlaveStatus()
+	return agent.MysqlDaemon.SlaveStatus()
 }
 
 // WaitSlavePosition waits until we reach the provided position,
