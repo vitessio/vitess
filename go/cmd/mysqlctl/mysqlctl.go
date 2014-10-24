@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// mysqlctl initializes and controls mysqld with Vitess-specific configuration.
 package main
 
 import (
@@ -9,10 +10,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
-	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -26,23 +24,9 @@ var (
 	mysqlPort   = flag.Int("mysql_port", 3306, "mysql port")
 	tabletUid   = flag.Uint("tablet_uid", 41983, "tablet uid")
 	mysqlSocket = flag.String("mysql_socket", "", "path to the mysql socket")
-	follow      = flag.Bool("follow", false, "For init or start actions, keep mysqlctl running as long as the underlying server is running. If mysqlctl is told to stop, it stops the server.")
 
 	tabletAddr string
 )
-
-func waitForSignal(mysqld *mysqlctl.Mysqld, waitTime time.Duration) {
-	log.Infof("waiting for signal or server shutdown...")
-	sig := make(chan os.Signal)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	select {
-	case <-mysqld.Done():
-		log.Infof("server shut down on its own")
-	case <-sig:
-		log.Infof("signal received, shutting down server")
-		mysqld.Shutdown(true, waitTime)
-	}
-}
 
 func initCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
 	waitTime := subFlags.Duration("wait_time", mysqlctl.MysqlWaitTime, "how long to wait for startup")
@@ -52,9 +36,6 @@ func initCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
 
 	if err := mysqld.Init(*waitTime, *bootstrapArchive, *skipSchema); err != nil {
 		log.Fatalf("failed init mysql: %v", err)
-	}
-	if *follow {
-		waitForSignal(mysqld, *waitTime)
 	}
 }
 
@@ -224,9 +205,6 @@ func startCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
 
 	if err := mysqld.Start(*waitTime); err != nil {
 		log.Fatalf("failed start mysql: %v", err)
-	}
-	if *follow {
-		waitForSignal(mysqld, *waitTime)
 	}
 }
 
