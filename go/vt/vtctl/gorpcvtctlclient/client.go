@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// gorpcvtctlclient contains the go rpc version of the vtctl client protocol
+// Package gorpcvtctlclient contains the go rpc version of the vtctl client protocol
 package gorpcvtctlclient
 
 import (

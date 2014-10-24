@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 /*
-gorpcvtctlserver contains the Go RPC implementation of the server side
+Package gorpcvtctlserver contains the Go RPC implementation of the server side
 of the remote execution of vtctl commands.
 */
 package gorpcvtctlserver
