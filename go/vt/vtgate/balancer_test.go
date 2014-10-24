@@ -124,25 +124,23 @@ func TestGetAddressesFail(t *testing.T) {
 
 func TestGetSimple(t *testing.T) {
 	b := NewBalancer(endPoints3, RETRY_DELAY)
-	endPoints := make([]topo.EndPoint, 0, 4)
-	for i := 0; i < 4; i++ {
+	firstEndPoint, _ := b.Get()
+	for i := 0; i < 100; i++ {
 		endPoint, _ := b.Get()
-		endPoints = append(endPoints, endPoint)
+		if endPoint.Uid == firstEndPoint.Uid {
+			continue
+		}
+		return
 	}
 	// Ensure that the same address is not always returned.
-	if endPoints[0].Uid == endPoints[1].Uid {
-		t.Errorf("ids are equal: %v", endPoints[0])
-	}
-	// Ensure that the 4th addres is the first one (round-robin).
-	if endPoints[0].Uid != endPoints[3].Uid {
-		t.Errorf("ids are not equal: %v, %v", endPoints[0], endPoints[3])
-	}
+	t.Errorf("ids are equal: %v", firstEndPoint)
 }
 
 func TestMarkDown(t *testing.T) {
 	start := counter
 	b := NewBalancer(endPoints3, 10*time.Millisecond)
 	addr, _ := b.Get()
+	startTime := time.Now()
 	b.MarkDown(addr.Uid, "")
 	addr, _ = b.Get()
 	b.MarkDown(addr.Uid, "")
@@ -154,11 +152,13 @@ func TestMarkDown(t *testing.T) {
 	}
 	addr, _ = b.Get()
 	b.MarkDown(addr.Uid, "")
-	startTime := time.Now()
 	addr, _ = b.Get()
-	// All were marked down. Get should return only after the retry delay.
+	// All were marked down. Get should return only after the retry delay since first markdown.
 	if time.Now().Sub(startTime) < (10 * time.Millisecond) {
 		t.Errorf("want >10ms, got %v", time.Now().Sub(startTime))
+	}
+	if time.Now().Sub(startTime) > (20 * time.Millisecond) {
+		t.Errorf("want <20ms, got %v", time.Now().Sub(startTime))
 	}
 	if addr.Host == "" {
 		t.Errorf("want non-empty")

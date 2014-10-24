@@ -334,10 +334,9 @@ func TestShardConnReconnect(t *testing.T) {
 	if sbc0.ExecCount+sbc1.ExecCount+sbc2.ExecCount != 1 {
 		t.Errorf("want 1, got %v", sbc0.ExecCount+sbc1.ExecCount+sbc2.ExecCount)
 	}
-	// TODO: uncomment with new logic
-	//if s.EndPointCounter != 2 {
-	//	t.Errorf("want 2, got %v", s.EndPointCounter)
-	//}
+	if s.EndPointCounter != 2 {
+		t.Errorf("want 2, got %v", s.EndPointCounter)
+	}
 
 	// case 3.2: resolve 3 endpoints, failed execution on 1st one -> resolve and execute on 2nd one
 	s.Reset()
@@ -367,10 +366,9 @@ func TestShardConnReconnect(t *testing.T) {
 	if sbc0.ExecCount > 1 || sbc1.ExecCount > 1 || sbc2.ExecCount > 1 {
 		t.Errorf("want no more than 1, got %v,%v,%v", sbc0.ExecCount, sbc1.ExecCount, sbc2.ExecCount)
 	}
-	// TODO: uncomment with new logic
-	//if s.EndPointCounter != 2 {
-	//	t.Errorf("want 2, got %v", s.EndPointCounter)
-	//}
+	if s.EndPointCounter != 2 {
+		t.Errorf("want 2, got %v", s.EndPointCounter)
+	}
 
 	// case 4: resolve 3 endpoints, failed connection to 1st, resolve and failed execution on 2nd -> resolve and execute on 3rd one
 	s.Reset()
@@ -401,10 +399,9 @@ func TestShardConnReconnect(t *testing.T) {
 	if sbc0.ExecCount > 1 || sbc1.ExecCount > 1 || sbc2.ExecCount > 1 {
 		t.Errorf("want no more than 1, got %v,%v,%v", sbc0.ExecCount, sbc1.ExecCount, sbc2.ExecCount)
 	}
-	// TODO: uncomment with new logic
-	//if s.EndPointCounter != 3 {
-	//	t.Errorf("want 3, got %v", s.EndPointCounter)
-	//}
+	if s.EndPointCounter != 3 {
+		t.Errorf("want 3, got %v", s.EndPointCounter)
+	}
 
 	// case 5: always resolve the same 3 endpoints, all 3 execution failed -> resolve and use the first one
 	s.Reset()
@@ -432,19 +429,18 @@ func TestShardConnReconnect(t *testing.T) {
 	if timeDuration > retryDelay*2 {
 		t.Errorf("want instant resolve %v, got %v", retryDelay, timeDuration)
 	}
-	// TODO: uncomment with new logic
-	//for _, conn := range []*sandboxConn{sbc0, sbc1, sbc2} {
-	//	wantExecCount := 1
-	//	if conn == firstConn {
-	//		wantExecCount = 2
-	//	}
-	//	if int(conn.ExecCount) != wantExecCount {
-	//		t.Errorf("want %v, got %v", wantExecCount, conn.ExecCount)
-	//	}
-	//}
-	//if s.EndPointCounter != 4 {
-	//	t.Errorf("want 4, got %v", s.EndPointCounter)
-	//}
+	for _, conn := range []*sandboxConn{sbc0, sbc1, sbc2} {
+		wantExecCount := 1
+		if conn == firstConn {
+			wantExecCount = 2
+		}
+		if int(conn.ExecCount) != wantExecCount {
+			t.Errorf("want %v, got %v", wantExecCount, conn.ExecCount)
+		}
+	}
+	if s.EndPointCounter != 4 {
+		t.Errorf("want 4, got %v", s.EndPointCounter)
+	}
 
 	// case 6: resolve 3 endpoints with 1st execution failed, resolve to a new set without the failed one -> try a random one
 	s.Reset()
@@ -466,7 +462,7 @@ func TestShardConnReconnect(t *testing.T) {
 	onGetEndPoints := func(st *sandboxTopo) {
 		if countGetEndPoints == 1 {
 			s.MapTestConn("0", sbc3)
-			delete(s.TestConns["0"], firstConn.endPoint.Uid)
+			s.DeleteTestConn("0", firstConn)
 		}
 		countGetEndPoints++
 	}
@@ -484,16 +480,15 @@ func TestShardConnReconnect(t *testing.T) {
 	for _, conn := range s.TestConns["0"] {
 		totalExecCount += int(conn.(*sandboxConn).ExecCount)
 	}
-	// TODO: uncomment with new logic
-	//if totalExecCount != 1 {
-	//	t.Errorf("want 1, got %v", totalExecCount)
-	//}
-	//if s.EndPointCounter != 2 {
-	//	t.Errorf("want 2, got %v", s.EndPointCounter)
-	//}
+	if totalExecCount != 1 {
+		t.Errorf("want 1, got %v", totalExecCount)
+	}
+	if s.EndPointCounter != 2 {
+		t.Errorf("want 2, got %v", s.EndPointCounter)
+	}
 
 	// case 7: resolve 3 bad endpoints with execution failed
-	// after resolve, 2nd bad endpoint changed address (once only) but still fails on execution
+	// upon resolve, 2nd bad endpoint changed address (once only) but still fails on execution
 	// -> should only use the 1st endpoint after all other endpoints are tried out
 	s.Reset()
 	var secondConn *sandboxConn
@@ -515,9 +510,9 @@ func TestShardConnReconnect(t *testing.T) {
 	s.MapTestConn("0", sbc2)
 	countGetEndPoints = 0
 	onGetEndPoints = func(st *sandboxTopo) {
-		if countGetEndPoints == 1 {
+		if countGetEndPoints == 2 {
 			s.MapTestConn("0", sbc3)
-			delete(s.TestConns["0"], secondConn.endPoint.Uid)
+			s.DeleteTestConn("0", secondConn)
 		}
 		countGetEndPoints++
 	}
@@ -534,20 +529,19 @@ func TestShardConnReconnect(t *testing.T) {
 	if secondConn.ExecCount != 1 {
 		t.Errorf("want 1, got %v", secondConn.ExecCount)
 	}
-	// TODO: uncomment with new logic
-	//if firstConn.ExecCount != 2 {
-	//	t.Errorf("want 2, got %v", firstConn.ExecCount)
-	//}
-	//for _, conn := range s.TestConns["0"] {
-	//	if conn != firstConn && conn.(*sandboxConn).ExecCount != 1 {
-	//		t.Errorf("want 1, got %v", conn.(*sandboxConn).ExecCount)
-	//	}
-	//}
-	//if s.EndPointCounter != 5 {
-	//	t.Errorf("want 5, got %v", s.EndPointCounter)
-	//}
+	if firstConn.ExecCount != 2 {
+		t.Errorf("want 2, got %v", firstConn.ExecCount)
+	}
+	for _, conn := range s.TestConns["0"] {
+		if conn != firstConn && conn.(*sandboxConn).ExecCount != 1 {
+			t.Errorf("want 1, got %v", conn.(*sandboxConn).ExecCount)
+		}
+	}
+	if s.EndPointCounter != 5 {
+		t.Errorf("want 5, got %v", s.EndPointCounter)
+	}
 
-	// case 8: resolve 3 bad endpoints with execution failed
+	// case 8: resolve 3 bad endpoints with execution failed,
 	// after resolve, all endpoints are valid on new addresses
 	// -> random use an endpoint without delay
 	s.Reset()
@@ -572,9 +566,9 @@ func TestShardConnReconnect(t *testing.T) {
 			s.MapTestConn("0", sbc3)
 			s.MapTestConn("0", sbc4)
 			s.MapTestConn("0", sbc5)
-			delete(s.TestConns["0"], sbc0.endPoint.Uid)
-			delete(s.TestConns["0"], sbc1.endPoint.Uid)
-			delete(s.TestConns["0"], sbc2.endPoint.Uid)
+			s.DeleteTestConn("0", sbc0)
+			s.DeleteTestConn("0", sbc1)
+			s.DeleteTestConn("0", sbc2)
 		}
 		countGetEndPoints++
 	}
@@ -582,18 +576,17 @@ func TestShardConnReconnect(t *testing.T) {
 	timeStart = time.Now()
 	sdc.Execute(&context.DummyContext{}, "query", nil, 0)
 	timeDuration = time.Now().Sub(timeStart)
-	// TODO: uncomment with new logic
-	//if timeDuration >= retryDelay {
-	//	t.Errorf("want no delay, got %v", timeDuration)
-	//}
+	if timeDuration >= retryDelay {
+		t.Errorf("want no delay, got %v", timeDuration)
+	}
 	if firstConn.ExecCount != 1 {
 		t.Errorf("want 1, got %v", firstConn.ExecCount)
 	}
-	//for _, conn := range []*sandboxConn{sbc0, sbc1, sbc2} {
-	//	if conn != firstConn && conn.ExecCount != 0 {
-	//		t.Errorf("want 0, got %v", conn.ExecCount)
-	//	}
-	//}
+	for _, conn := range []*sandboxConn{sbc0, sbc1, sbc2} {
+		if conn != firstConn && conn.ExecCount != 0 {
+			t.Errorf("want 0, got %v", conn.ExecCount)
+		}
+	}
 	if sbc3.ExecCount+sbc4.ExecCount+sbc5.ExecCount != 1 {
 		t.Errorf("want 1, got %v", sbc3.ExecCount+sbc4.ExecCount+sbc5.ExecCount)
 	}
