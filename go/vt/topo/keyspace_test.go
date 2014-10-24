@@ -69,7 +69,7 @@ func TestUpdateServedFromMap(t *testing.T) {
 	}
 
 	// couple error cases
-	if err := ki.UpdateServedFromMap(TYPE_RDONLY, []string{"second"}, "othersource", true, allCells); err == nil || err.Error() != "Inconsistent keypace specified in migration: othersource != source for type rdonly" {
+	if err := ki.UpdateServedFromMap(TYPE_RDONLY, []string{"second"}, "othersource", true, allCells); err == nil || (err.Error() != "Inconsistent keypace specified in migration: othersource != source for type master" && err.Error() != "Inconsistent keypace specified in migration: othersource != source for type rdonly") {
 		t.Fatalf("different keyspace should fail: %v", err)
 	}
 	if err := ki.UpdateServedFromMap(TYPE_MASTER, nil, "source", true, allCells); err == nil || err.Error() != "Cannot migrate master into ks until everything else is migrated" {
