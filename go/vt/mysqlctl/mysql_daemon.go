@@ -6,6 +6,8 @@ package mysqlctl
 
 import (
 	"fmt"
+
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 // MysqlDaemon is the interface we use for abstracting Mysqld.
@@ -16,17 +18,33 @@ type MysqlDaemon interface {
 
 	// GetMysqlPort returns the current port mysql is listening on.
 	GetMysqlPort() (int, error)
+
+	// StartSlave / StopSlave allows the caller to start or stop
+	// mysql replication
+	StartSlave(hookExtraEnv map[string]string) error
+	StopSlave(hookExtraEnv map[string]string) error
+
+	// Schema related methods
+	GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*proto.SchemaDefinition, error)
 }
 
 // FakeMysqlDaemon implements MysqlDaemon and allows the user to fake
 // everything.
 type FakeMysqlDaemon struct {
-	// will be returned by GetMasterAddr(). Set to "" to return
+	// MasterAddr will be returned by GetMasterAddr(). Set to "" to return
 	// ErrNotSlave, or to "ERROR" to return an error.
 	MasterAddr string
 
-	// will be returned by GetMysqlPort(). Set to -1 to return an error.
+	// MysqlPort will be returned by GetMysqlPort(). Set to -1 to
+	// return an error.
 	MysqlPort int
+
+	// Replicating is updated when calling StopSlave
+	Replicating bool
+
+	// Schema that will be returned by GetSchema. If nil we'll
+	// return an error.
+	Schema *proto.SchemaDefinition
 }
 
 func (fmd *FakeMysqlDaemon) GetMasterAddr() (string, error) {
@@ -44,4 +62,21 @@ func (fmd *FakeMysqlDaemon) GetMysqlPort() (int, error) {
 		return 0, fmt.Errorf("FakeMysqlDaemon.GetMysqlPort returns an error")
 	}
 	return fmd.MysqlPort, nil
+}
+
+func (fmd *FakeMysqlDaemon) StartSlave(hookExtraEnv map[string]string) error {
+	fmd.Replicating = true
+	return nil
+}
+
+func (fmd *FakeMysqlDaemon) StopSlave(hookExtraEnv map[string]string) error {
+	fmd.Replicating = false
+	return nil
+}
+
+func (fmd *FakeMysqlDaemon) GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*proto.SchemaDefinition, error) {
+	if fmd.Schema == nil {
+		return nil, fmt.Errorf("no schema defined")
+	}
+	return fmd.Schema, nil
 }

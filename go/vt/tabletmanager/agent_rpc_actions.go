@@ -150,7 +150,7 @@ func (agent *ActionAgent) Ping(args string) string {
 // GetSchema returns the schema.
 // Should be called under RpcWrap.
 func (agent *ActionAgent) GetSchema(tables, excludeTables []string, includeViews bool) (*myproto.SchemaDefinition, error) {
-	return agent.Mysqld.GetSchema(agent.Tablet().DbName(), tables, excludeTables, includeViews)
+	return agent.MysqlDaemon.GetSchema(agent.Tablet().DbName(), tables, excludeTables, includeViews)
 }
 
 // GetPermissions returns the db permissions.
@@ -321,7 +321,7 @@ func (agent *ActionAgent) ReparentPosition(rp *myproto.ReplicationPosition) (*ac
 // StopSlave will stop the replication
 // Should be called under RpcWrapLock.
 func (agent *ActionAgent) StopSlave() error {
-	return agent.Mysqld.StopSlave(agent.hookExtraEnv())
+	return agent.MysqlDaemon.StopSlave(agent.hookExtraEnv())
 }
 
 // StopSlaveMinimum will stop the slave after it reaches at least the
@@ -339,7 +339,7 @@ func (agent *ActionAgent) StopSlaveMinimum(position myproto.ReplicationPosition,
 // StartSlave will start the replication
 // Should be called under RpcWrapLock.
 func (agent *ActionAgent) StartSlave() error {
-	return agent.Mysqld.StartSlave(agent.hookExtraEnv())
+	return agent.MysqlDaemon.StartSlave(agent.hookExtraEnv())
 }
 
 // TabletExternallyReparented updates all topo records so the current
