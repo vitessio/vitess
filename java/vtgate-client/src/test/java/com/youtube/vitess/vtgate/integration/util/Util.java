@@ -4,17 +4,17 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 
+import org.joda.time.DateTime;
 import org.junit.Assert;
 
-import com.google.common.collect.ImmutableMap;
+import com.google.common.primitives.UnsignedLong;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
+import com.youtube.vitess.vtgate.BindVariable;
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.Exceptions.DatabaseException;
 import com.youtube.vitess.vtgate.KeyspaceId;
@@ -83,11 +83,11 @@ public class Util {
 
 	public static void insertRows(TestEnv testEnv, int startId, int count)
 			throws ConnectionException, DatabaseException {
-		insertRows(testEnv, startId, count, new Date());
+		insertRows(testEnv, startId, count, new DateTime());
 	}
 
 	public static void insertRows(TestEnv testEnv, int startId, int count,
-			Date date) throws ConnectionException, DatabaseException {
+			DateTime dateTime) throws ConnectionException, DatabaseException {
 		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
 
 		vtgate.begin();
@@ -97,21 +97,24 @@ public class Util {
 		for (int i = startId; i < startId + count; i++) {
 			KeyspaceId kid = testEnv.getAllKeyspaceIds().get(
 					i % testEnv.getAllKeyspaceIds().size());
-			Map<String, Object> bindVars = new ImmutableMap.Builder<String, Object>()
-					.put("id", i)
-					.put("name", "name_" + i)
-					.put("age", i * 2)
-					.put("percent", new Double(i / 100.0))
-					.put("keyspace_id", kid.getId())
-					.put("datetime_col", date)
-					.put("timestamp_col", date)
-					.put("date_col", date)
-					.put("time_col", date)
-					.build();
 			Query query = new QueryBuilder(insertSql,
 					testEnv.keyspace, "master")
-					.withBindVars(bindVars)
-					.withAddedKeyspaceId(kid)
+					.addBindVar(BindVariable.forULong("id",
+							UnsignedLong.valueOf("" + i)))
+					.addBindVar(BindVariable.forBytes("name",
+							("name_" + i).getBytes()))
+					.addBindVar(BindVariable.forInt("age", i * 2))
+					.addBindVar(BindVariable.forDouble("percent",
+							new Double(i / 100.0)))
+					.addBindVar(BindVariable.forULong("keyspace_id",
+							(UnsignedLong) kid.getId()))
+					.addBindVar(
+							BindVariable.forDateTime("datetime_col", dateTime))
+					.addBindVar(
+							BindVariable.forDateTime("timestamp_col", dateTime))
+					.addBindVar(BindVariable.forDate("date_col", dateTime))
+					.addBindVar(BindVariable.forTime("time_col", dateTime))
+					.addKeyspaceId(kid)
 					.build();
 			vtgate.execute(query);
 		}
@@ -126,22 +129,20 @@ public class Util {
 			int count) throws DatabaseException, ConnectionException {
 		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
 		vtgate.begin();
-		String insertSql = "insert into vtgate_test "
+		String sql = "insert into vtgate_test "
 				+ "(id, name, keyspace_id) "
 				+ "values (:id, :name, :keyspace_id)";
 		List<KeyspaceId> kids = testEnv.getKeyspaceIds(shardName);
-		Random random = new Random();
-		for (int i = 0; i < count; i++) {
+		for (int i = 1; i <= count; i++) {
 			KeyspaceId kid = kids.get(i % kids.size());
-			Map<String, Object> bindVars = new ImmutableMap.Builder<String, Object>()
-					.put("id", i + 1)
-					.put("name", "name_" + i)
-					.put("keyspace_id", kid.getId())
-					.build();
-			Query query = new QueryBuilder(insertSql,
-					testEnv.keyspace, "master")
-					.withBindVars(bindVars)
-					.withAddedKeyspaceId(kid)
+			Query query = new QueryBuilder(sql, testEnv.keyspace, "master")
+					.addBindVar(BindVariable.forULong("id",
+							UnsignedLong.valueOf("" + i)))
+					.addBindVar(BindVariable.forBytes("name",
+							("name_" + i).getBytes()))
+					.addBindVar(BindVariable.forULong("keyspace_id",
+							(UnsignedLong) kid.getId()))
+					.addKeyspaceId(kid)
 					.build();
 			vtgate.execute(query);
 		}
@@ -153,7 +154,7 @@ public class Util {
 		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
 		vtgate.begin();
 		vtgate.execute(new QueryBuilder("delete from vtgate_test",
-				testEnv.keyspace, "master").withKeyspaceIds(
+				testEnv.keyspace, "master").setKeyspaceIds(
 				testEnv.getAllKeyspaceIds()).build());
 		vtgate.commit();
 		vtgate.close();
@@ -170,7 +171,7 @@ public class Util {
 		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
 		for (int i = 0; i < attempts; i++) {
 			Cursor cursor = vtgate.execute(new QueryBuilder(sql,
-					testEnv.keyspace, tabletType).withKeyspaceIds(
+					testEnv.keyspace, tabletType).setKeyspaceIds(
 					testEnv.getAllKeyspaceIds()).build());
 			if (cursor.getRowsAffected() >= rowCount) {
 				vtgate.close();

@@ -1,24 +1,30 @@
 package com.youtube.vitess.vtgate;
 
+import java.math.BigDecimal;
+
 import org.bson.BSONObject;
 import org.bson.BasicBSONObject;
 import org.bson.types.BasicBSONList;
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import com.google.common.primitives.UnsignedLong;
 import com.youtube.vitess.vtgate.Exceptions.InvalidFieldException;
 import com.youtube.vitess.vtgate.Row.Cell;
 import com.youtube.vitess.vtgate.cursor.Cursor;
 import com.youtube.vitess.vtgate.cursor.CursorImpl;
+import com.youtube.vitess.vtgate.rpcclient.gorpc.Bsonify;
 
-public class QueryResultTest {
+@RunWith(JUnit4.class)
+public class BsonifyTest {
 
 	@Test
 	public void testResultParse() throws InvalidFieldException {
 		BSONObject result = new BasicBSONObject();
-		result.put("RowsAffected", UnsignedLong.asUnsigned(12L));
-		result.put("InsertId", UnsignedLong.asUnsigned(12345L));
+		result.put("RowsAffected", UnsignedLong.valueOf("12"));
+		result.put("InsertId", UnsignedLong.valueOf("12345"));
 		BasicBSONList fields = new BasicBSONList();
 		for (long l = 0; l < 4; l++) {
 			BSONObject field = new BasicBSONObject();
@@ -38,7 +44,7 @@ public class QueryResultTest {
 		}
 		result.put("Rows", rows);
 
-		QueryResult qr = QueryResult.parse(result.toMap());
+		QueryResult qr = Bsonify.bsonToQueryResult(result, null);
 		Cursor cursor = new CursorImpl(qr);
 		Assert.assertEquals(12L, cursor.getRowsAffected());
 		Assert.assertEquals(12345L, cursor.getLastRowId());
@@ -46,8 +52,9 @@ public class QueryResultTest {
 		Row firstRow = cursor.next();
 		Cell cell0 = firstRow.next();
 		Assert.assertEquals("col_0", cell0.getName());
-		Assert.assertEquals(Double.class, cell0.getType());
-		Assert.assertEquals(new Double(0), firstRow.getDouble(cell0.getName()));
+		Assert.assertEquals(BigDecimal.class, cell0.getType());
+		Assert.assertEquals(new BigDecimal("0.0"),
+				firstRow.getBigDecimal(cell0.getName()));
 
 		Cell cell1 = firstRow.next();
 		Assert.assertEquals("col_1", cell1.getName());

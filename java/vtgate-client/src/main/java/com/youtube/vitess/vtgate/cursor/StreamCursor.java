@@ -1,7 +1,6 @@
 package com.youtube.vitess.vtgate.cursor;
 
 import java.util.Iterator;
-import java.util.Map;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -74,22 +73,20 @@ public class StreamCursor implements Cursor {
 			return;
 		}
 
-		Map<String, Object> reply;
+		QueryResult qr;
 		try {
-			reply = client.streamNext();
+			qr = client.streamNext(queryResult.getFields());
 		} catch (ConnectionException e) {
 			logger.error("connection exception while streaming", e);
 			throw new RuntimeException(e);
 		}
 
 		// null reply indicates EndOfStream, mark stream as ended and return
-		if (reply == null) {
+		if (qr == null) {
 			streamEnded = true;
 			return;
 		}
 
-		Map<String, Object> result = (Map<String, Object>) reply.get("Result");
-		QueryResult qr = QueryResult.parse(result, queryResult.getFields());
 		// For scatter streaming queries, VtGate sends fields data from each
 		// shard. Since fields has already been fetched, just ignore these and
 		// fetch the next batch.

@@ -1,8 +1,10 @@
 package com.youtube.vitess.vtgate;
 
-import java.util.Date;
+import java.math.BigDecimal;
 import java.util.Iterator;
 import java.util.LinkedList;
+
+import org.joda.time.DateTime;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.primitives.UnsignedLong;
@@ -26,14 +28,14 @@ public class Row implements Iterator<Cell>, Iterable<Cell> {
 		return contents.keySet().size();
 	}
 
-	public Object get(int index) throws InvalidFieldException {
+	public Object getObject(int index) throws InvalidFieldException {
 		if (index >= size()) {
 			throw new InvalidFieldException("invalid field index " + index);
 		}
-		return get(contents.keySet().asList().get(index));
+		return getObject(contents.keySet().asList().get(index));
 	}
 
-	public Object get(String fieldName) throws InvalidFieldException {
+	public Object getObject(String fieldName) throws InvalidFieldException {
 		if (!contents.containsKey(fieldName)) {
 			throw new InvalidFieldException("invalid field name " + fieldName);
 		}
@@ -88,12 +90,12 @@ public class Row implements Iterator<Cell>, Iterable<Cell> {
 		return (Float) getAndCheckType(index, Float.class);
 	}
 
-	public Date getDate(String fieldName) throws InvalidFieldException {
-		return (Date) getAndCheckType(fieldName, Date.class);
+	public DateTime getDateTime(String fieldName) throws InvalidFieldException {
+		return (DateTime) getAndCheckType(fieldName, DateTime.class);
 	}
 
-	public Date getDate(int index) throws InvalidFieldException {
-		return (Date) getAndCheckType(index, Date.class);
+	public DateTime getDateTime(int index) throws InvalidFieldException {
+		return (DateTime) getAndCheckType(index, DateTime.class);
 	}
 
 	public byte[] getBytes(String fieldName) throws InvalidFieldException {
@@ -104,9 +106,27 @@ public class Row implements Iterator<Cell>, Iterable<Cell> {
 		return (byte[]) getAndCheckType(index, byte[].class);
 	}
 
+	public BigDecimal getBigDecimal(String fieldName)
+			throws InvalidFieldException {
+		return (BigDecimal) getAndCheckType(fieldName, BigDecimal.class);
+	}
+
+	public BigDecimal getBigDecimal(int index) throws InvalidFieldException {
+		return (BigDecimal) getAndCheckType(index, BigDecimal.class);
+	}
+
+	public Short getShort(String fieldName)
+			throws InvalidFieldException {
+		return (Short) getAndCheckType(fieldName, Short.class);
+	}
+
+	public Short getShort(int index) throws InvalidFieldException {
+		return (Short) getAndCheckType(index, Short.class);
+	}
+
 	private Object getAndCheckType(String fieldName, Class clazz)
 			throws InvalidFieldException {
-		Object o = get(fieldName);
+		Object o = getObject(fieldName);
 		if (o != null && !clazz.isInstance(o)) {
 			throw new InvalidFieldException("type mismatch expected:"
 					+ clazz.getName() + "actual: " + o.getClass().getName());

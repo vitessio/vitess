@@ -1,29 +1,28 @@
 package com.youtube.vitess.vtgate.integration;
 
-import java.text.DateFormat;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.TimeZone;
 
+import org.joda.time.DateTime;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.primitives.UnsignedLong;
 import com.youtube.vitess.vtgate.BatchQuery;
 import com.youtube.vitess.vtgate.BatchQuery.BatchQueryBuilder;
+import com.youtube.vitess.vtgate.BindVariable;
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.Exceptions.DatabaseException;
 import com.youtube.vitess.vtgate.KeyRange;
@@ -38,6 +37,7 @@ import com.youtube.vitess.vtgate.cursor.CursorImpl;
 import com.youtube.vitess.vtgate.integration.util.TestEnv;
 import com.youtube.vitess.vtgate.integration.util.Util;
 
+@RunWith(JUnit4.class)
 public class VtGateIT {
 
 	public static TestEnv testEnv = getTestEnv();
@@ -67,7 +67,7 @@ public class VtGateIT {
 		String deleteSql = "delete from vtgate_test";
 		try {
 			vtgate.execute(new QueryBuilder(deleteSql, testEnv.keyspace,
-					"master").withAddedKeyspaceId(
+					"master").addKeyspaceId(
 					testEnv.getAllKeyspaceIds().get(0)).build());
 			Assert.fail("did not raise DatabaseException");
 		} catch (DatabaseException e) {
@@ -87,7 +87,7 @@ public class VtGateIT {
 		// Ensure empty table
 		String selectSql = "select * from vtgate_test";
 		Query allRowsQuery = new QueryBuilder(selectSql,
-				testEnv.keyspace, "master").withKeyspaceIds(
+				testEnv.keyspace, "master").setKeyspaceIds(
 				testEnv.getAllKeyspaceIds()).build();
 		Cursor cursor = vtgate.execute(allRowsQuery);
 		Assert.assertEquals(CursorImpl.class, cursor.getClass());
@@ -109,7 +109,7 @@ public class VtGateIT {
 		KeyspaceId firstKid = testEnv.getAllKeyspaceIds().get(0);
 		Query query = new QueryBuilder(selectSql,
 				testEnv.keyspace, "master")
-				.withAddedKeyspaceId(firstKid)
+				.addKeyspaceId(firstKid)
 				.build();
 		cursor = vtgate.execute(query);
 
@@ -118,18 +118,18 @@ public class VtGateIT {
 		Cell idCell = row.next();
 		Assert.assertEquals("id", idCell.getName());
 		Assert.assertEquals(UnsignedLong.class, idCell.getType());
-		Assert.assertEquals(UnsignedLong.asUnsigned(1000),
-				row.getULong(idCell.getName()));
+		UnsignedLong id = row.getULong(idCell.getName());
 
 		Cell nameCell = row.next();
 		Assert.assertEquals("name", nameCell.getName());
-		Assert.assertEquals(String.class, nameCell.getType());
-		Assert.assertEquals("name_1000", row.getString(nameCell.getName()));
+		Assert.assertEquals(byte[].class, nameCell.getType());
+		Assert.assertTrue(Arrays.equals(("name_" + id.toString()).getBytes(),
+				row.getBytes(nameCell.getName())));
 
 		Cell ageCell = row.next();
 		Assert.assertEquals("age", ageCell.getName());
 		Assert.assertEquals(Integer.class, ageCell.getType());
-		Assert.assertEquals(Integer.valueOf(2000),
+		Assert.assertEquals(Integer.valueOf(2 * id.intValue()),
 				row.getInt(ageCell.getName()));
 
 		vtgate.close();
@@ -150,7 +150,7 @@ public class VtGateIT {
 		for (String shardName : testEnv.shardKidMap.keySet()) {
 			Query shardRows = new QueryBuilder(allRowsSql,
 					testEnv.keyspace, "master")
-					.withKeyspaceIds(testEnv.getKeyspaceIds(shardName))
+					.setKeyspaceIds(testEnv.getKeyspaceIds(shardName))
 					.build();
 			Cursor cursor = vtgate.execute(shardRows);
 			Assert.assertEquals(10, cursor.getRowsAffected());
@@ -160,42 +160,30 @@ public class VtGateIT {
 
 	@Test
 	public void testDateFieldTypes() throws Exception {
-		Date date = new Date();
-		Util.insertRows(testEnv, 100, 1, date);
+		DateTime dt = DateTime.now().minusDays(2).withMillisOfSecond(0);
+		Util.insertRows(testEnv, 100, 1, dt);
 		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
 		Query allRowsQuery = new QueryBuilder(
 				"select * from vtgate_test",
-				testEnv.keyspace, "master").withKeyspaceIds(
+				testEnv.keyspace, "master").setKeyspaceIds(
 				testEnv.getAllKeyspaceIds()).build();
 		Row row = vtgate.execute(allRowsQuery).next();
-		Date expected = convertToGMT(date);
-		Assert.assertEquals(expected, row.getDate("timestamp_col"));
-		Assert.assertEquals(expected, row.getDate("datetime_col"));
+		Assert.assertTrue(dt.equals(row.getDateTime("timestamp_col")));
+		Assert.assertTrue(dt.equals(row.getDateTime("datetime_col")));
+		Assert.assertTrue(dt.withHourOfDay(0).withMinuteOfHour(0)
+				.withSecondOfMinute(0).equals(row.getDateTime("date_col")));
+		Assert.assertTrue(dt.withYear(1970).withMonthOfYear(1)
+				.withDayOfMonth(1).equals(row.getDateTime("time_col")));
 
-		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
-		Date dateWithoutTime = sdf.parse(sdf.format(expected));
-		Assert.assertEquals(dateWithoutTime, row.getDate("date_col"));
-
-		sdf = new SimpleDateFormat("HH:mm:ss");
-		Date dateWithoutDay = sdf.parse(sdf.format(expected));
-		Assert.assertEquals(dateWithoutDay, row.getDate("time_col"));
 		vtgate.close();
-	}
-
-	private Date convertToGMT(Date d) throws ParseException {
-		DateFormat gmtFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-		gmtFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
-		return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(gmtFormat
-				.format(d));
 	}
 
 	@Test
 	public void testTimeout() throws ConnectionException, DatabaseException {
 		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 200);
-
 		// Check timeout error raised for slow query
 		Query sleepQuery = new QueryBuilder("select sleep(0.5) from dual",
-				testEnv.keyspace, "master").withKeyspaceIds(
+				testEnv.keyspace, "master").setKeyspaceIds(
 				testEnv.getAllKeyspaceIds()).build();
 		try {
 			vtgate.execute(sleepQuery);
@@ -208,7 +196,7 @@ public class VtGateIT {
 
 		// Check no timeout error for fast query
 		sleepQuery = new QueryBuilder("select sleep(0.01) from dual",
-				testEnv.keyspace, "master").withKeyspaceIds(
+				testEnv.keyspace, "master").setKeyspaceIds(
 				testEnv.getAllKeyspaceIds()).build();
 		vtgate.execute(sleepQuery);
 		vtgate.close();
@@ -223,7 +211,7 @@ public class VtGateIT {
 		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
 		String selectSql = "select * from vtgate_test";
 		Query allRowsQuery = new QueryBuilder(selectSql, testEnv.keyspace,
-				"master").withAddedKeyRange(KeyRange.ALL).build();
+				"master").addKeyRange(KeyRange.ALL).build();
 		Cursor cursor = vtgate.execute(allRowsQuery);
 		// Verify all rows returned
 		Assert.assertEquals(100, cursor.getRowsAffected());
@@ -246,7 +234,7 @@ public class VtGateIT {
 
 		// Check ALL KeyRange query returns rows from both shards
 		Query allRangeQuery = new QueryBuilder(selectSql, testEnv.keyspace,
-				"master").withAddedKeyRange(KeyRange.ALL).build();
+				"master").addKeyRange(KeyRange.ALL).build();
 		Cursor cursor = vtgate.execute(allRangeQuery);
 		Assert.assertEquals(rowsPerShard * 2, cursor.getRowsAffected());
 
@@ -258,7 +246,7 @@ public class VtGateIT {
 			KeyRange shardKeyRange = new KeyRange(minKid, maxKid);
 			Query shardRangeQuery = new QueryBuilder(selectSql,
 					testEnv.keyspace, "master")
-					.withAddedKeyRange(shardKeyRange).build();
+					.addKeyRange(shardKeyRange).build();
 			cursor = vtgate.execute(shardRangeQuery);
 			Assert.assertEquals(rowsPerShard, cursor.getRowsAffected());
 		}
@@ -278,7 +266,7 @@ public class VtGateIT {
 		}
 		Query shardRangeQuery = new QueryBuilder(selectSql,
 				testEnv.keyspace, "master")
-				.withAddedKeyRange(crossShardKeyrange).build();
+				.addKeyRange(crossShardKeyrange).build();
 		cursor = vtgate.execute(shardRangeQuery);
 		Assert.assertEquals(rowsPerShard * 2, cursor.getRowsAffected());
 		vtgate.close();
@@ -292,9 +280,9 @@ public class VtGateIT {
 		Random random = new Random();
 		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
 		vtgate.begin();
-		String insertSql = "insert into vtgate_test "
-				+ "(id, name, keyspace_id) "
-				+ "values (:id, :name, :keyspace_id)";
+		String sql = "insert into vtgate_test "
+				+ "(id, name, keyspace_id, age) "
+				+ "values (:id, :name, :keyspace_id, :age)";
 		int count = 20;
 		// Insert 20 rows per shard
 		for (String shardName : testEnv.shardKidMap.keySet()) {
@@ -304,15 +292,16 @@ public class VtGateIT {
 			KeyRange kr = new KeyRange(minKid, maxKid);
 			for (int i = 0; i < count; i++) {
 				KeyspaceId kid = kids.get(i % kids.size());
-				Map<String, Object> bindVars = new ImmutableMap.Builder<String, Object>()
-						.put("id", random.nextInt())
-						.put("name", "name_" + i)
-						.put("keyspace_id", kid.getId())
-						.build();
-				Query query = new QueryBuilder(insertSql,
-						testEnv.keyspace, "master")
-						.withBindVars(bindVars)
-						.withAddedKeyRange(kr)
+				Query query = new QueryBuilder(sql, testEnv.keyspace, "master")
+						.addBindVar(BindVariable.forULong("id",
+								UnsignedLong.valueOf(
+										"" + Math.abs(random.nextInt()))))
+						.addBindVar(BindVariable.forString("name",
+								("name_" + i)))
+						.addBindVar(BindVariable.forULong("keyspace_id",
+								(UnsignedLong) kid.getId()))
+						.addBindVar(BindVariable.forNull("age"))
+						.addKeyRange(kr)
 						.build();
 				vtgate.execute(query);
 			}
@@ -324,7 +313,7 @@ public class VtGateIT {
 		vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
 		String selectSql = "select * from vtgate_test";
 		Query allRowsQuery = new QueryBuilder(selectSql,
-				testEnv.keyspace, "master").withKeyspaceIds(
+				testEnv.keyspace, "master").setKeyspaceIds(
 				testEnv.getAllKeyspaceIds()).build();
 		Cursor cursor = vtgate.execute(allRowsQuery);
 		Assert.assertEquals(count * 2, cursor.getRowsAffected());
@@ -332,7 +321,7 @@ public class VtGateIT {
 		// Check 20 rows exist per shard
 		for (String shardName : testEnv.shardKidMap.keySet()) {
 			Query shardRows = new QueryBuilder(selectSql,
-					testEnv.keyspace, "master").withKeyspaceIds(
+					testEnv.keyspace, "master").setKeyspaceIds(
 					testEnv.getKeyspaceIds(shardName)).build();
 			cursor = vtgate.execute(shardRows);
 			Assert.assertEquals(count, cursor.getRowsAffected());

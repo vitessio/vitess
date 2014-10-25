@@ -1,41 +1,52 @@
 package com.youtube.vitess.vtgate;
 
 import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 
+import org.joda.time.DateTime;
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
+@RunWith(JUnit4.class)
 public class DateTypesTest {
 	@Test
 	public void testDateTimes() throws Exception {
-		String val = "2013-12-01 09:23:10.234";
-		SimpleDateFormat formatter = new SimpleDateFormat(
-				"yyyy-MM-dd HH:mm:ss.SSS");
-		check(FieldType.VT_TIMESTAMP, formatter, val);
-		check(FieldType.VT_DATETIME, formatter, val);
+		DateTime dt = DateTime.now();
+		byte[] bytes = BindVariable.forDateTime("", dt).getByteArrayVal();
+		check(FieldType.VT_TIMESTAMP, dt, bytes);
+		check(FieldType.VT_DATETIME, dt, bytes);
 	}
 
 	@Test
 	public void testDate() throws Exception {
-		String val = "2013-12-01";
-		SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd");
-		check(FieldType.VT_DATE, formatter, val);
+		DateTime now = DateTime.now();
+		byte[] bytes = BindVariable.forDate("", now).getByteArrayVal();
+		DateTime date = now
+				.withMillisOfSecond(0)
+				.withHourOfDay(0)
+				.withMinuteOfHour(0)
+				.withSecondOfMinute(0);
+		check(FieldType.VT_DATE, date, bytes);
+		check(FieldType.VT_NEWDATE, date, bytes);
 	}
 
 	@Test
 	public void testTime() throws Exception {
-		String val = "09:23:10";
-		SimpleDateFormat formatter = new SimpleDateFormat("HH:mm:ss");
-		check(FieldType.VT_TIME, formatter, val);
+		DateTime now = DateTime.now();
+		byte[] bytes = BindVariable.forTime("", now).getByteArrayVal();
+		DateTime time = now
+				.withMillisOfSecond(0)
+				.withYear(1970)
+				.withMonthOfYear(1)
+				.withDayOfMonth(1);
+		check(FieldType.VT_TIME, time, bytes);
 	}
 
-	private void check(FieldType typeUnderTest, SimpleDateFormat formatter,
-			String val) throws ParseException {
-		Date date = formatter.parse(val);
-		Object o = typeUnderTest.convert(val);
-		Assert.assertEquals(Date.class, o.getClass());
-		Assert.assertEquals(date, (Date) o);
+	private void check(FieldType typeUnderTest, DateTime dt,
+			byte[] bytes) throws ParseException {
+		Object o = typeUnderTest.convert(bytes);
+		Assert.assertEquals(DateTime.class, o.getClass());
+		Assert.assertEquals(dt, (DateTime) o);
 	}
 }

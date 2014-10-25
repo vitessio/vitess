@@ -4,6 +4,8 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import com.youtube.vitess.vtgate.Query;
 import com.youtube.vitess.vtgate.Query.QueryBuilder;
@@ -12,6 +14,7 @@ import com.youtube.vitess.vtgate.cursor.Cursor;
 import com.youtube.vitess.vtgate.integration.util.TestEnv;
 import com.youtube.vitess.vtgate.integration.util.Util;
 
+@RunWith(JUnit4.class)
 public class StreamingServerShutdownIT {
 
 	static TestEnv testEnv = VtGateIT.getTestEnv();
@@ -33,8 +36,8 @@ public class StreamingServerShutdownIT {
 		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
 		String selectSql = "select A.* from vtgate_test A join vtgate_test B";
 		Query joinQuery = new QueryBuilder(selectSql,
-				testEnv.keyspace, "master").withKeyspaceIds(
-				testEnv.getAllKeyspaceIds()).withStreaming(true).build();
+				testEnv.keyspace, "master").setKeyspaceIds(
+				testEnv.getAllKeyspaceIds()).setStreaming(true).build();
 		Cursor cursor = vtgate.execute(joinQuery);
 
 		int count = 0;

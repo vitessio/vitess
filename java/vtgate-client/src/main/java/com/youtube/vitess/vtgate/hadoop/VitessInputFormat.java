@@ -1,8 +1,11 @@
 package com.youtube.vitess.vtgate.hadoop;
 
 import java.io.IOException;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
+import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.Job;
@@ -12,6 +15,8 @@ import org.apache.hadoop.mapreduce.TaskAttemptContext;
 
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.Exceptions.DatabaseException;
+import com.youtube.vitess.vtgate.KeyspaceId;
+import com.youtube.vitess.vtgate.Query;
 import com.youtube.vitess.vtgate.VtGate;
 import com.youtube.vitess.vtgate.hadoop.writables.KeyspaceIdWritable;
 import com.youtube.vitess.vtgate.hadoop.writables.RowWritable;
@@ -31,9 +36,21 @@ public class VitessInputFormat extends
 			VitessConf conf = new VitessConf(context.getConfiguration());
 			VtGate vtgate = VtGate
 					.connect(conf.getHosts(), conf.getTimeoutMs());
-			List<InputSplit> splits = vtgate.getMRSplits(
-					conf.getKeyspace(), conf.getInputTable(),
-					conf.getInputColumns(), conf.getSplitsPerShard());
+			List<String> columns = conf.getInputColumns();
+			if (!columns.contains(KeyspaceId.COL_NAME)) {
+				columns.add(KeyspaceId.COL_NAME);
+			}
+			String sql = "select " + StringUtils.join(columns, ',') +
+					" from " + conf.getInputTable();
+			Map<Query, Long> queries = vtgate.splitQuery(conf.getKeyspace(),
+					sql, conf.getSplitsPerShard());
+			List<InputSplit> splits = new LinkedList<>();
+			for (Query query : queries.keySet()) {
+				Long size = queries.get(query);
+				InputSplit split = new VitessInputSplit(query, size);
+				splits.add(split);
+			}
+
 			for (InputSplit split : splits) {
 				((VitessInputSplit) split).setLocations(conf.getHosts().split(
 						VitessConf.HOSTS_DELIM));

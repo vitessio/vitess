@@ -10,9 +10,13 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.primitives.UnsignedLong;
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
+import com.youtube.vitess.vtgate.BindVariable;
 import com.youtube.vitess.vtgate.KeyRange;
 import com.youtube.vitess.vtgate.KeyspaceId;
 import com.youtube.vitess.vtgate.Query;
@@ -28,6 +32,7 @@ import com.youtube.vitess.vtgate.integration.util.Util;
  * Test cases for streaming queries in VtGate
  *
  */
+@RunWith(JUnit4.class)
 public class StreamingVtGateIT {
 	public static TestEnv testEnv = VtGateIT.getTestEnv();
 
@@ -51,8 +56,8 @@ public class StreamingVtGateIT {
 		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
 		String selectSql = "select * from vtgate_test";
 		Query allRowsQuery = new QueryBuilder(selectSql,
-				testEnv.keyspace, "master").withKeyspaceIds(
-				testEnv.getAllKeyspaceIds()).withStreaming(true).build();
+				testEnv.keyspace, "master").setKeyspaceIds(
+				testEnv.getAllKeyspaceIds()).setStreaming(true).build();
 		Cursor cursor = vtgate.execute(allRowsQuery);
 		Assert.assertEquals(StreamCursor.class, cursor.getClass());
 		vtgate.close();
@@ -74,8 +79,8 @@ public class StreamingVtGateIT {
 			String selectSql = "select A.* from vtgate_test A join vtgate_test B";
 			Query query = new QueryBuilder(selectSql, testEnv.keyspace,
 					"master")
-					.withKeyspaceIds(testEnv.getKeyspaceIds(shardName))
-					.withStreaming(true)
+					.setKeyspaceIds(testEnv.getKeyspaceIds(shardName))
+					.setStreaming(true)
 					.build();
 			Cursor cursor = vtgate.execute(query);
 			int count = 0;
@@ -105,8 +110,8 @@ public class StreamingVtGateIT {
 					Collections.max(kids));
 			String selectSql = "select A.* from vtgate_test A join vtgate_test B";
 			Query query = new QueryBuilder(selectSql, testEnv.keyspace,
-					"master").withAddedKeyRange(kr)
-					.withStreaming(true)
+					"master").addKeyRange(kr)
+					.setStreaming(true)
 					.build();
 			Cursor cursor = vtgate.execute(query);
 			int count = 0;
@@ -133,8 +138,8 @@ public class StreamingVtGateIT {
 		String selectSql = "select A.* from vtgate_test A join vtgate_test B";
 		Query query = new QueryBuilder(selectSql, testEnv.keyspace,
 				"master")
-				.withKeyspaceIds(testEnv.getAllKeyspaceIds())
-				.withStreaming(true)
+				.setKeyspaceIds(testEnv.getAllKeyspaceIds())
+				.setStreaming(true)
 				.build();
 		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
 		Cursor cursor = vtgate.execute(query);
@@ -157,18 +162,15 @@ public class StreamingVtGateIT {
 				+ "(id, name, age, percent, keyspace_id) "
 				+ "values (:id, :name, :age, :percent, :keyspace_id)";
 		KeyspaceId kid = testEnv.getAllKeyspaceIds().get(0);
-		Map<String, Object> bindVars = new ImmutableMap.Builder<String, Object>()
-				.put("id", 1)
-				.put("name", "name_" + 1)
-				.put("age", 2)
-				.put("percent", new Double(1.0))
-				.put("keyspace_id", kid)
-				.build();
 		Query query = new QueryBuilder(insertSql,
 				testEnv.keyspace, "master")
-				.withBindVars(bindVars)
-				.withAddedKeyspaceId(kid)
-				.withStreaming(true)
+				.addBindVar(BindVariable.forULong("id",
+						UnsignedLong.valueOf("" + 1)))
+				.addBindVar(BindVariable.forString("name", ("name_" + 1)))
+				.addBindVar(BindVariable.forULong("keyspace_id",
+						(UnsignedLong) kid.getId()))
+				.addKeyspaceId(kid)
+				.setStreaming(true)
 				.build();
 		vtgate.execute(query);
 		vtgate.commit();
@@ -184,8 +186,8 @@ public class StreamingVtGateIT {
 		VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
 		String selectSql = "select * from vtgate_test";
 		Query query = new QueryBuilder(selectSql,
-				testEnv.keyspace, "master").withKeyspaceIds(
-				testEnv.getAllKeyspaceIds()).withStreaming(true).build();
+				testEnv.keyspace, "master").setKeyspaceIds(
+				testEnv.getAllKeyspaceIds()).setStreaming(true).build();
 		vtgate.execute(query);
 		try {
 			vtgate.execute(query);

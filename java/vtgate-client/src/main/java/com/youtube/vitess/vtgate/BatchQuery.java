@@ -1,8 +1,6 @@
 package com.youtube.vitess.vtgate;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -13,6 +11,7 @@ public class BatchQuery {
 	private String keyspace;
 	private String tabletType;
 	private List<byte[]> keyspaceIds;
+	private Object session;
 
 	private BatchQuery(String keyspace, String tabletType) {
 		this.keyspace = keyspace;
@@ -41,20 +40,12 @@ public class BatchQuery {
 		return keyspaceIds;
 	}
 
-	public void populate(Map<String, Object> map) {
-		List<Map<String, Object>> queries = new LinkedList<>();
-		Iterator<String> sqlIter = sqls.iterator();
-		Iterator<Map<String, Object>> bvIter = bindVarsList.iterator();
-		while (sqlIter.hasNext()) {
-			Map<String, Object> query = new HashMap<>();
-			query.put("Sql", sqlIter.next());
-			query.put("BindVariables", bvIter.next());
-			queries.add(query);
-		}
-		map.put("Queries", queries);
-		map.put("Keyspace", keyspace);
-		map.put("TabletType", tabletType);
-		map.put("KeyspaceIds", keyspaceIds);
+	public Object getSession() {
+		return session;
+	}
+
+	public void setSession(Object session) {
+		this.session = session;
 	}
 
 	public static class BatchQueryBuilder {

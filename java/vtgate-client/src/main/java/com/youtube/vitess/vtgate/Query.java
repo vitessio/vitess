@@ -11,11 +11,12 @@ import java.util.Map;
 public class Query {
 	private String sql;
 	private String keyspace;
-	private Map<String, Object> bindVars;
+	private List<BindVariable> bindVars;
 	private String tabletType;
 	private List<byte[]> keyspaceIds;
 	private List<Map<String, byte[]>> keyRanges;
 	private boolean streaming;
+	private Object session;
 
 	private Query(String sql, String keyspace, String tabletType) {
 		this.sql = sql;
@@ -31,7 +32,7 @@ public class Query {
 		return keyspace;
 	}
 
-	public Map<String, Object> getBindVars() {
+	public List<BindVariable> getBindVars() {
 		return bindVars;
 	}
 
@@ -51,17 +52,12 @@ public class Query {
 		return streaming;
 	}
 
-	public void populate(Map<String, Object> map) {
-		map.put("Sql", sql);
-		map.put("Keyspace", keyspace);
-		map.put("TabletType", tabletType);
-		map.put("BindVariables", bindVars);
+	public Object getSession() {
+		return session;
+	}
 
-		if (keyspaceIds != null) {
-			map.put("KeyspaceIds", keyspaceIds);
-		} else {
-			map.put("KeyRanges", keyRanges);
-		}
+	public void setSession(Object session) {
+		this.session = session;
 	}
 
 	public static class QueryBuilder {
@@ -83,12 +79,12 @@ public class Query {
 			return query;
 		}
 
-		public QueryBuilder withBindVars(Map<String, Object> bindVars) {
+		public QueryBuilder setBindVars(List<BindVariable> bindVars) {
 			query.bindVars = bindVars;
 			return this;
 		}
 
-		public QueryBuilder withKeyspaceIds(List<KeyspaceId> keyspaceIds) {
+		public QueryBuilder setKeyspaceIds(List<KeyspaceId> keyspaceIds) {
 			List<byte[]> kidsBytes = new ArrayList<>();
 			for (KeyspaceId kid : keyspaceIds) {
 				kidsBytes.add(kid.getBytes());
@@ -97,7 +93,7 @@ public class Query {
 			return this;
 		}
 
-		public QueryBuilder withKeyRanges(List<KeyRange> keyRanges) {
+		public QueryBuilder setKeyRanges(List<KeyRange> keyRanges) {
 			List<Map<String, byte[]>> keyRangeMaps = new ArrayList<>();
 			for (KeyRange kr : keyRanges) {
 				keyRangeMaps.add(kr.toMap());
@@ -106,12 +102,20 @@ public class Query {
 			return this;
 		}
 
-		public QueryBuilder withStreaming(boolean streaming) {
+		public QueryBuilder setStreaming(boolean streaming) {
 			query.streaming = streaming;
 			return this;
 		}
 
-		public QueryBuilder withAddedKeyspaceId(KeyspaceId keyspaceId) {
+		public QueryBuilder addBindVar(BindVariable bindVariable) {
+			if (query.getBindVars() == null) {
+				query.bindVars = new ArrayList<BindVariable>();
+			}
+			query.getBindVars().add(bindVariable);
+			return this;
+		}
+
+		public QueryBuilder addKeyspaceId(KeyspaceId keyspaceId) {
 			if (query.getKeyspaceIds() == null) {
 				query.keyspaceIds = new ArrayList<byte[]>();
 			}
@@ -119,7 +123,7 @@ public class Query {
 			return this;
 		}
 
-		public QueryBuilder withAddedKeyRange(KeyRange keyRange) {
+		public QueryBuilder addKeyRange(KeyRange keyRange) {
 			if (query.getKeyRanges() == null) {
 				query.keyRanges = new ArrayList<Map<String, byte[]>>();
 			}

@@ -1,25 +1,18 @@
 package com.youtube.vitess.vtgate;
 
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
-import org.apache.commons.lang.StringUtils;
-import org.apache.hadoop.mapreduce.InputSplit;
-
-import com.google.common.net.HostAndPort;
-import com.youtube.vitess.gorpc.Exceptions.GoRpcException;
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.Exceptions.DatabaseException;
 import com.youtube.vitess.vtgate.cursor.Cursor;
 import com.youtube.vitess.vtgate.cursor.CursorImpl;
 import com.youtube.vitess.vtgate.cursor.StreamCursor;
-import com.youtube.vitess.vtgate.hadoop.VitessInputSplit;
 import com.youtube.vitess.vtgate.rpcclient.RpcClient;
-import com.youtube.vitess.vtgate.rpcclient.gorpc.GoRpcClient.GoRpcClientFactory;
+import com.youtube.vitess.vtgate.rpcclient.RpcClientFactory;
 
 /**
  * A single threaded VtGate client
@@ -56,18 +49,15 @@ public class VtGate {
 	 * 
 	 * @param addresses
 	 *            comma separated list of host:port pairs
-	 * @params timeoutMs connection timeout in ms, 0 for no timeout
+	 * @params timeoutMs connection timeout in milliseconds, 0 for no timeout
 	 * @throws ConnectionException
-	 * @throws GoRpcException
 	 */
 	public static VtGate connect(String addresses, int timeoutMs)
 			throws ConnectionException {
 		List<String> addressList = Arrays.asList(addresses.split(","));
 		int index = new Random().nextInt(addressList.size());
-		HostAndPort hostAndPort = HostAndPort
-				.fromString(addressList.get(index));
-		RpcClient client = new GoRpcClientFactory().connect(
-				hostAndPort.getHostText(), hostAndPort.getPort(), timeoutMs);
+		RpcClient client = RpcClientFactory.get(addressList.get(index),
+				timeoutMs);
 		return new VtGate(client);
 	}
 
@@ -81,107 +71,58 @@ public class VtGate {
 
 	public Cursor execute(Query query) throws DatabaseException,
 			ConnectionException {
-		Map<String, Object> params = new HashMap<>();
-		query.populate(params);
 		if (session != null) {
-			params.put("Session", session);
+			query.setSession(session);
 		}
-
-		Map<String, Object> reply = null;
-		if (query.getKeyspaceIds() != null) {
-			if (query.isStreaming()) {
-				reply = client.streamExecuteKeyspaceIds(params);
-			} else {
-				reply = client.executeKeyspaceIds(params);
-			}
-		} else {
-			if (query.isStreaming()) {
-				reply = client.streamExecuteKeyRanges(params);
-			} else {
-				reply = client.executeKeyRanges(params);
-			}
+		QueryResponse response = client.execute(query);
+		if (response.getError() != null) {
+			throw new DatabaseException(response.getError());
 		}
-
-		if (reply.containsKey("Error")) {
-			byte[] err = (byte[]) reply.get("Error");
-			if (err.length > 0) {
-				throw new DatabaseException(new String(err));
-			}
+		if (response.getSession() != null) {
+			session = response.getSession();
 		}
-		Map<String, Object> result = (Map<String, Object>) reply.get("Result");
-		QueryResult qr = QueryResult.parse(result);
 		if (query.isStreaming()) {
-			return new StreamCursor(qr, client);
+			return new StreamCursor(response.getResult(), client);
 		}
-
-		if (reply.containsKey("Session")) {
-			session = reply.get("Session");
-		}
-		return new CursorImpl(qr);
+		return new CursorImpl(response.getResult());
 	}
 
 	public List<Cursor> execute(BatchQuery query) throws DatabaseException,
 			ConnectionException {
-		Map<String, Object> params = new HashMap<>();
-		query.populate(params);
 		if (session != null) {
-			params.put("Session", session);
+			query.setSession(session);
 		}
-		Map<String, Object> reply = client.batchExecuteKeyspaceIds(params);
-		if (reply.containsKey("Error")) {
-			byte[] err = (byte[]) reply.get("Error");
-			if (err.length > 0) {
-				throw new DatabaseException(new String(err));
-			}
+		BatchQueryResponse response = client.batchExecute(query);
+		if (response.getError() != null) {
+			throw new DatabaseException(response.getError());
 		}
-		if (reply.containsKey("Session")) {
-			session = reply.get("Session");
+		if (response.getSession() != null) {
+			session = response.getSession();
 		}
-		List<Map<String, Object>> results = (List<Map<String, Object>>) reply
-				.get("List");
 		List<Cursor> cursors = new LinkedList<>();
-		for (Map<String, Object> result : results) {
-			QueryResult qr = QueryResult.parse(result);
+		for (QueryResult qr : response.getResults()) {
 			cursors.add(new CursorImpl(qr));
 		}
 		return cursors;
 	}
 
 	/**
-	 * Get {@link InputSplit}s for a MapReduce job using the specified table as
-	 * input. Use splitsPerShard to control how many splits to generate per
-	 * shard. Throws {@link DatabaseException} if an rdonly instance is not
-	 * available.
+	 * Split a query into primary key range query parts. Rows corresponding to
+	 * the sub queries will add up to original queries' rows. Sub queries are by
+	 * default built to run against 'rdonly' instances. Batch jobs or MapReduce
+	 * jobs that needs to scan all rows can use these queries to parallelize
+	 * full table scans.
 	 */
-	public List<InputSplit> getMRSplits(String keyspace, String table,
-			List<String> columns, int splitsPerShard)
+	public Map<Query, Long> splitQuery(String keyspace, String sql,
+			int splitsPerShard)
 			throws ConnectionException, DatabaseException {
-		Map<String, Object> params = new HashMap<>();
-		params.put("Keyspace", keyspace);
-		if (!columns.contains(KeyspaceId.COL_NAME)) {
-			columns.add(KeyspaceId.COL_NAME);
+		SplitQueryRequest req = new SplitQueryRequest(sql, keyspace,
+				splitsPerShard);
+		SplitQueryResponse response = client.splitQuery(req);
+		if (response.getError() != null) {
+			throw new DatabaseException(response.getError());
 		}
-		String sql = "select " + StringUtils.join(columns, ',') + " from "
-				+ table;
-		Map<String, Object> query = new HashMap<>();
-		query.put("Sql", sql);
-		params.put("Query", query);
-		params.put("SplitsPerShard", splitsPerShard);
-		Map<String, Object> reply = client.getMRSplits(params);
-		if (reply.containsKey("Error")) {
-			byte[] err = (byte[]) reply.get("Error");
-			if (err.length > 0) {
-				throw new DatabaseException(new String(err));
-			}
-		}
-		List<Map<String, Object>> result = (List<Map<String, Object>>) reply
-				.get("Splits");
-		List<InputSplit> splits = new LinkedList<>();
-		for (Map<String, Object> split : result) {
-			splits.add(VitessInputSplit.from(split));
-		}
-
-		return splits;
+		return response.getQueries();
 	}
 
 	public void commit() throws ConnectionException {

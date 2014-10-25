@@ -4,16 +4,19 @@ import java.util.Arrays;
 
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import com.youtube.vitess.vtgate.Query.QueryBuilder;
 
+@RunWith(JUnit4.class)
 public class QueryBuilderTest {
 	@Test
 	public void testValidQueryWithKeyspaceIds() {
 		String sql = "select 1 from dual";
 		KeyspaceId kid = KeyspaceId.valueOf("80");
 		QueryBuilder builder = new QueryBuilder("select 1 from dual",
-				"test_keyspace", "master").withAddedKeyspaceId(kid);
+				"test_keyspace", "master").addKeyspaceId(kid);
 		Query query = builder.build();
 		Assert.assertEquals(sql, query.getSql());
 		Assert.assertEquals("test_keyspace", query.getKeyspace());
@@ -29,7 +32,7 @@ public class QueryBuilderTest {
 	public void testValidQueryWithKeyRanges() {
 		String sql = "select 1 from dual";
 		QueryBuilder builder = new QueryBuilder("select 1 from dual",
-				"test_keyspace", "master").withAddedKeyRange(KeyRange.ALL);
+				"test_keyspace", "master").addKeyRange(KeyRange.ALL);
 		Query query = builder.build();
 		Assert.assertEquals(sql, query.getSql());
 		Assert.assertEquals("test_keyspace", query.getKeyspace());
@@ -57,8 +60,8 @@ public class QueryBuilderTest {
 	@Test
 	public void testBothKeyspaceIdAndKeyrange() {
 		QueryBuilder builder = new QueryBuilder("select 1 from dual",
-				"test_keyspace", "master").withAddedKeyRange(KeyRange.ALL)
-				.withAddedKeyspaceId(KeyspaceId.valueOf("80"));
+				"test_keyspace", "master").addKeyRange(KeyRange.ALL)
+				.addKeyspaceId(KeyspaceId.valueOf("80"));
 		try {
 			builder.build();
 			Assert.fail("did not raise IllegalStateException");
