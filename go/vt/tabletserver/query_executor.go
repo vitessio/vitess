@@ -63,7 +63,7 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult) {
 			if qre.qe.strictMode.Get() != 0 {
 				panic(NewTabletError(FAIL, "DML too complex"))
 			}
-			reply = qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, nil)
+			reply = qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
 		case planbuilder.PLAN_INSERT_PK:
 			reply = qre.execInsertPK(conn)
 		case planbuilder.PLAN_INSERT_SUBQUERY:
@@ -122,7 +122,7 @@ func (qre *QueryExecutor) Stream(sendReply func(*mproto.QueryResult) error) {
 	qre.qe.streamQList.Add(qd)
 	defer qre.qe.streamQList.Remove(qd)
 
-	qre.fullStreamFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, nil, sendReply)
+	qre.fullStreamFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, sendReply)
 }
 
 func (qre *QueryExecutor) checkPermissions() {
@@ -178,7 +178,7 @@ func (qre *QueryExecutor) execPKIN() (result *mproto.QueryResult) {
 }
 
 func (qre *QueryExecutor) execSubquery() (result *mproto.QueryResult) {
-	innerResult := qre.qFetch(qre.logStats, qre.plan.Subquery, qre.bindVars, nil)
+	innerResult := qre.qFetch(qre.logStats, qre.plan.Subquery, qre.bindVars)
 	return qre.fetchMulti(innerResult.Rows, -1)
 }
 
@@ -220,7 +220,7 @@ func (qre *QueryExecutor) fetchMulti(pkRows [][]sqltypes.Value, limit int64) (re
 				Rows:    missingRows,
 			},
 		}
-		resultFromdb := qre.qFetch(qre.logStats, qre.plan.OuterQuery, bv, nil)
+		resultFromdb := qre.qFetch(qre.logStats, qre.plan.OuterQuery, bv)
 		misses = int64(len(resultFromdb.Rows))
 		absent = int64(len(pkRows)) - hits - misses
 		for _, row := range resultFromdb.Rows {
@@ -261,7 +261,7 @@ func (qre *QueryExecutor) spotCheck(rcresult RCResult, pk []sqltypes.Value) {
 			Rows:    [][]sqltypes.Value{pk},
 		},
 	}
-	resultFromdb := qre.qFetch(qre.logStats, qre.plan.OuterQuery, bv, nil)
+	resultFromdb := qre.qFetch(qre.logStats, qre.plan.OuterQuery, bv)
 	var dbrow []sqltypes.Value
 	if len(resultFromdb.Rows) != 0 {
 		dbrow = resultFromdb.Rows[0]
@@ -288,11 +288,11 @@ func (qre *QueryExecutor) recheckLater(rcresult RCResult, dbrow []sqltypes.Value
 // execDirect always sends the query to mysql
 func (qre *QueryExecutor) execDirect(conn dbconnpool.PoolConnection) (result *mproto.QueryResult) {
 	if qre.plan.Fields != nil {
-		result = qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, nil)
+		result = qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
 		result.Fields = qre.plan.Fields
 		return
 	}
-	result = qre.fullFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, nil)
+	result = qre.fullFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
 	return
 }
 
@@ -300,13 +300,13 @@ func (qre *QueryExecutor) execDirect(conn dbconnpool.PoolConnection) (result *mp
 // reuses the result. If the plan is missng field info, it sends the query to mysql requesting full info.
 func (qre *QueryExecutor) execSelect() (result *mproto.QueryResult) {
 	if qre.plan.Fields != nil {
-		result = qre.qFetch(qre.logStats, qre.plan.FullQuery, qre.bindVars, nil)
+		result = qre.qFetch(qre.logStats, qre.plan.FullQuery, qre.bindVars)
 		result.Fields = qre.plan.Fields
 		return
 	}
 	conn := qre.getConn(qre.qe.connPool)
 	defer conn.Recycle()
-	return qre.fullFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, nil)
+	return qre.fullFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
 }
 
 func (qre *QueryExecutor) execInsertPK(conn dbconnpool.PoolConnection) (result *mproto.QueryResult) {
@@ -318,7 +318,7 @@ func (qre *QueryExecutor) execInsertPK(conn dbconnpool.PoolConnection) (result *
 }
 
 func (qre *QueryExecutor) execInsertSubquery(conn dbconnpool.PoolConnection) (result *mproto.QueryResult) {
-	innerResult := qre.directFetch(conn, qre.plan.Subquery, qre.bindVars, nil, nil)
+	innerResult := qre.directFetch(conn, qre.plan.Subquery, qre.bindVars, nil)
 	innerRows := innerResult.Rows
 	if len(innerRows) == 0 {
 		return &mproto.QueryResult{RowsAffected: 0}
@@ -345,7 +345,7 @@ func (qre *QueryExecutor) execInsertPKRows(conn dbconnpool.PoolConnection, pkRow
 		panic(err)
 	}
 	bsc := buildStreamComment(qre.plan.TableInfo, pkRows, secondaryList)
-	result = qre.directFetch(conn, qre.plan.OuterQuery, qre.bindVars, nil, bsc)
+	result = qre.directFetch(conn, qre.plan.OuterQuery, qre.bindVars, bsc)
 	return result
 }
 
@@ -358,7 +358,7 @@ func (qre *QueryExecutor) execDMLPK(conn dbconnpool.PoolConnection, invalidator 
 }
 
 func (qre *QueryExecutor) execDMLSubquery(conn dbconnpool.PoolConnection, invalidator CacheInvalidator) (result *mproto.QueryResult) {
-	innerResult := qre.directFetch(conn, qre.plan.Subquery, qre.bindVars, nil, nil)
+	innerResult := qre.directFetch(conn, qre.plan.Subquery, qre.bindVars, nil)
 	return qre.execDMLPKRows(conn, innerResult.Rows, invalidator)
 }
 
@@ -376,7 +376,7 @@ func (qre *QueryExecutor) execDMLPKRows(conn dbconnpool.PoolConnection, pkRows [
 		Columns: qre.plan.TableInfo.Indexes[0].Columns,
 		Rows:    pkRows,
 	}
-	result = qre.directFetch(conn, qre.plan.OuterQuery, qre.bindVars, nil, bsc)
+	result = qre.directFetch(conn, qre.plan.OuterQuery, qre.bindVars, bsc)
 	if invalidator == nil {
 		return result
 	}
@@ -431,7 +431,7 @@ func (qre *QueryExecutor) execSet() (result *mproto.QueryResult) {
 	default:
 		conn := qre.getConn(qre.qe.connPool)
 		defer conn.Recycle()
-		return qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, nil)
+		return qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
 	}
 	return &mproto.QueryResult{}
 }

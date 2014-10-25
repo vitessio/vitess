@@ -97,7 +97,7 @@ func analyze(line []byte) {
 func FormatWithBind(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 	switch node := node.(type) {
 	case sqlparser.StrVal, sqlparser.NumVal:
-		buf.WriteArg(fmt.Sprintf("v%d", bindIndex))
+		buf.WriteArg(fmt.Sprintf(":v%d", bindIndex))
 		bindIndex++
 	default:
 		node.Format(buf)

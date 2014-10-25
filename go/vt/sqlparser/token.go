@@ -117,7 +117,7 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 		typ, val = tkn.Scan()
 	}
 	switch typ {
-	case ID, STRING, NUMBER, VALUE_ARG, COMMENT:
+	case ID, STRING, NUMBER, VALUE_ARG, LIST_ARG, COMMENT:
 		lval.bytes = val
 	}
 	tkn.errorToken = val
@@ -270,13 +270,21 @@ func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {
 func (tkn *Tokenizer) scanBindVar() (int, []byte) {
 	buffer := bytes.NewBuffer(make([]byte, 0, 8))
 	buffer.WriteByte(byte(tkn.lastChar))
-	for tkn.next(); isLetter(tkn.lastChar) || isDigit(tkn.lastChar) || tkn.lastChar == '.'; tkn.next() {
+	token := VALUE_ARG
+	tkn.next()
+	if tkn.lastChar == ':' {
+		token = LIST_ARG
 		buffer.WriteByte(byte(tkn.lastChar))
+		tkn.next()
 	}
-	if buffer.Len() == 1 {
+	if !isLetter(tkn.lastChar) {
 		return LEX_ERROR, buffer.Bytes()
 	}
-	return VALUE_ARG, buffer.Bytes()
+	for isLetter(tkn.lastChar) || isDigit(tkn.lastChar) || tkn.lastChar == '.' {
+		buffer.WriteByte(byte(tkn.lastChar))
+		tkn.next()
+	}
+	return token, buffer.Bytes()
 }
 
 func (tkn *Tokenizer) scanMantissa(base int, buffer *bytes.Buffer) {

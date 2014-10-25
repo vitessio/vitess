@@ -48,9 +48,10 @@ var (
   expr        Expr
   boolExpr    BoolExpr
   valExpr     ValExpr
-  tuple       Tuple
+  colTuple    ColTuple
   valExprs    ValExprs
   values      Values
+  rowTuple    RowTuple
   subquery    *Subquery
   caseExpr    *CaseExpr
   whens       []*When
@@ -66,7 +67,7 @@ var (
 %token LEX_ERROR
 %token <empty> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT FOR
 %token <empty> ALL DISTINCT AS EXISTS IN IS LIKE BETWEEN NULL ASC DESC VALUES INTO DUPLICATE KEY DEFAULT SET LOCK
-%token <bytes> ID STRING NUMBER VALUE_ARG COMMENT
+%token <bytes> ID STRING NUMBER VALUE_ARG LIST_ARG COMMENT
 %token <empty> LE GE NE NULL_SAFE_EQUAL
 %token <empty> '(' '=' '<' '>' '~'
 
@@ -115,9 +116,10 @@ var (
 %type <str> compare
 %type <insRows> row_list
 %type <valExpr> value value_expression
-%type <tuple> tuple
+%type <colTuple> col_tuple
 %type <valExprs> value_expression_list
 %type <values> tuple_list
+%type <rowTuple> row_tuple
 %type <bytes> keyword_as_func
 %type <subquery> subquery
 %type <byt> unary_operator
@@ -540,11 +542,11 @@ condition:
   {
     $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
   }
-| value_expression IN tuple
+| value_expression IN col_tuple
   {
     $$ = &ComparisonExpr{Left: $1, Operator: AST_IN, Right: $3}
   }
-| value_expression NOT IN tuple
+| value_expression NOT IN col_tuple
   {
     $$ = &ComparisonExpr{Left: $1, Operator: AST_NOT_IN, Right: $4}
   }
@@ -607,27 +609,7 @@ compare:
     $$ = AST_NSE
   }
 
-row_list:
-  VALUES tuple_list
-  {
-    $$ = $2
-  }
-| select_statement
-  {
-    $$ = $1
-  }
-
-tuple_list:
-  tuple
-  {
-    $$ = Values{$1}
-  }
-| tuple_list ',' tuple
-  {
-    $$ = append($1, $3)
-  }
-
-tuple:
+col_tuple:
   '(' value_expression_list ')'
   {
     $$ = ValTuple($2)
@@ -635,6 +617,10 @@ tuple:
 | subquery
   {
     $$ = $1
+  }
+| LIST_ARG
+  {
+    $$ = ListArg($1)
   }
 
 subquery:
@@ -662,7 +648,7 @@ value_expression:
   {
     $$ = $1
   }
-| tuple
+| row_tuple
   {
     $$ = $1
   }
@@ -942,6 +928,36 @@ on_dup_opt:
 | ON DUPLICATE KEY UPDATE update_list
   {
     $$ = $5
+  }
+
+row_list:
+  VALUES tuple_list
+  {
+    $$ = $2
+  }
+| select_statement
+  {
+    $$ = $1
+  }
+
+tuple_list:
+  row_tuple
+  {
+    $$ = Values{$1}
+  }
+| tuple_list ',' row_tuple
+  {
+    $$ = append($1, $3)
+  }
+
+row_tuple:
+  '(' value_expression_list ')'
+  {
+    $$ = ValTuple($2)
+  }
+| subquery
+  {
+    $$ = $1
   }
 
 update_list:

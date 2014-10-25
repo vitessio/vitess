@@ -1,5 +1,6 @@
 import time
 
+from vtdb import field_types
 from vtdb import dbexceptions
 from vtdb import tablet as tablet_conn
 from vtdb import cursor
@@ -38,6 +39,16 @@ class TestNocache(framework.TestCase):
     self.assertEqual(cu.rowcount, 2)
     self.assertEqual(vstart.mget("Queries.TotalCount", 0)+1, vend.Queries.TotalCount)
     self.assertEqual(vstart.mget("Queries.Histograms.PASS_SELECT.Count", 0)+1, vend.Queries.Histograms.PASS_SELECT.Count)
+
+  def test_nocache_list_arg(self):
+    cu = self.env.execute("select * from vtocc_test where intval in ::list", {"list": field_types.List([2, 3, 4])})
+    self.assertEqual(cu.rowcount, 2)
+    cu = self.env.execute("select * from vtocc_test where intval in ::list", {"list": field_types.List([3, 4])})
+    self.assertEqual(cu.rowcount, 1)
+    cu = self.env.execute("select * from vtocc_test where intval in ::list", {"list": field_types.List([3])})
+    self.assertEqual(cu.rowcount, 1)
+    with self.assertRaises(dbexceptions.DatabaseError):
+      cu = self.env.execute("select * from vtocc_test where intval in ::list", {"list": field_types.List()})
 
   def test_commit(self):
     vstart = self.env.debug_vars()

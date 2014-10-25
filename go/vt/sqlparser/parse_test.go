@@ -16,7 +16,7 @@ import (
 )
 
 func TestGen(t *testing.T) {
-	_, err := Parse("select :1 from a where a in (:1)")
+	_, err := Parse("select :a from a where a in (:b)")
 	if err != nil {
 		t.Error(err)
 	}

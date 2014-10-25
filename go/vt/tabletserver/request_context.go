@@ -9,7 +9,6 @@ import (
 
 	"github.com/youtube/vitess/go/hack"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -39,8 +38,8 @@ func (rqc *RequestContext) getConn(pool *dbconnpool.ConnectionPool) dbconnpool.P
 	panic(NewTabletErrorSql(FATAL, err))
 }
 
-func (rqc *RequestContext) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value) (result *mproto.QueryResult) {
-	sql := rqc.generateFinalSql(parsedQuery, bindVars, listVars, nil)
+func (rqc *RequestContext) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}) (result *mproto.QueryResult) {
+	sql := rqc.generateFinalSql(parsedQuery, bindVars, nil)
 	q, ok := rqc.qe.consolidator.Create(string(sql))
 	if ok {
 		defer q.Broadcast()
@@ -67,25 +66,25 @@ func (rqc *RequestContext) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparse
 	return q.Result
 }
 
-func (rqc *RequestContext) directFetch(conn dbconnpool.PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) (result *mproto.QueryResult) {
-	sql := rqc.generateFinalSql(parsedQuery, bindVars, listVars, buildStreamComment)
+func (rqc *RequestContext) directFetch(conn dbconnpool.PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte) (result *mproto.QueryResult) {
+	sql := rqc.generateFinalSql(parsedQuery, bindVars, buildStreamComment)
 	return rqc.execSQL(conn, sql, false)
 }
 
 // fullFetch also fetches field info
-func (rqc *RequestContext) fullFetch(conn dbconnpool.PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) (result *mproto.QueryResult) {
-	sql := rqc.generateFinalSql(parsedQuery, bindVars, listVars, buildStreamComment)
+func (rqc *RequestContext) fullFetch(conn dbconnpool.PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte) (result *mproto.QueryResult) {
+	sql := rqc.generateFinalSql(parsedQuery, bindVars, buildStreamComment)
 	return rqc.execSQL(conn, sql, true)
 }
 
-func (rqc *RequestContext) fullStreamFetch(conn dbconnpool.PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte, callback func(*mproto.QueryResult) error) {
-	sql := rqc.generateFinalSql(parsedQuery, bindVars, listVars, buildStreamComment)
+func (rqc *RequestContext) fullStreamFetch(conn dbconnpool.PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte, callback func(*mproto.QueryResult) error) {
+	sql := rqc.generateFinalSql(parsedQuery, bindVars, buildStreamComment)
 	rqc.execStreamSQL(conn, sql, callback)
 }
 
-func (rqc *RequestContext) generateFinalSql(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) string {
+func (rqc *RequestContext) generateFinalSql(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte) string {
 	bindVars["#maxLimit"] = rqc.qe.maxResultSize.Get() + 1
-	sql, err := parsedQuery.GenerateQuery(bindVars, listVars)
+	sql, err := parsedQuery.GenerateQuery(bindVars)
 	if err != nil {
 		panic(NewTabletError(FAIL, "%s", err))
 	}

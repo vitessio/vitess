@@ -13,44 +13,98 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/schema"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
 // buildValueList builds the set of PK reference rows used to drive the next query.
 // It uses the PK values supplied in the original query and bind variables.
 // The generated reference rows are validated for type match against the PK of the table.
 func buildValueList(tableInfo *TableInfo, pkValues []interface{}, bindVars map[string]interface{}) ([][]sqltypes.Value, error) {
-	length := -1
-	for _, pkValue := range pkValues {
-		if list, ok := pkValue.([]interface{}); ok {
-			if length == -1 {
-				if length = len(list); length == 0 {
-					panic(fmt.Sprintf("empty list for values %v", pkValues))
+	resolved, length, err := resolvePKValues(tableInfo, pkValues, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	valueList := make([][]sqltypes.Value, length)
+	for i := 0; i < length; i++ {
+		valueList[i] = make([]sqltypes.Value, len(resolved))
+		for j, val := range resolved {
+			if list, ok := val.([]sqltypes.Value); ok {
+				valueList[i][j] = list[i]
+			} else {
+				valueList[i][j] = val.(sqltypes.Value)
+			}
+		}
+	}
+	return valueList, nil
+}
+
+func resolvePKValues(tableInfo *TableInfo, pkValues []interface{}, bindVars map[string]interface{}) (resolved []interface{}, length int, err error) {
+	length = -1
+	setLength := func(list []sqltypes.Value) {
+		if length == -1 {
+			length = len(list)
+		} else if len(list) != length {
+			panic(fmt.Sprintf("mismatched lengths for values %v", pkValues))
+		}
+	}
+	resolved = make([]interface{}, len(pkValues))
+	for i, val := range pkValues {
+		switch val := val.(type) {
+		case string:
+			if val[1] != ':' {
+				resolved[i], err = resolveValue(tableInfo.GetPKColumn(i), val, bindVars)
+				if err != nil {
+					return nil, 0, err
 				}
-			} else if length != len(list) {
-				panic(fmt.Sprintf("mismatched lengths for values %v", pkValues))
+			} else {
+				list, err := resolveListArg(tableInfo.GetPKColumn(i), val, bindVars)
+				if err != nil {
+					return nil, 0, err
+				}
+				setLength(list)
+				resolved[i] = list
+			}
+		case []interface{}:
+			list := make([]sqltypes.Value, len(val))
+			for j, listVal := range val {
+				list[j], err = resolveValue(tableInfo.GetPKColumn(i), listVal, bindVars)
+				if err != nil {
+					return nil, 0, err
+				}
+			}
+			setLength(list)
+			resolved[i] = list
+		default:
+			resolved[i], err = resolveValue(tableInfo.GetPKColumn(i), val, nil)
+			if err != nil {
+				return nil, 0, err
 			}
 		}
 	}
 	if length == -1 {
 		length = 1
 	}
-	valueList := make([][]sqltypes.Value, length)
-	for i := 0; i < length; i++ {
-		valueList[i] = make([]sqltypes.Value, len(pkValues))
-		for j, pkValue := range pkValues {
-			var value interface{}
-			if list, ok := pkValue.([]interface{}); ok {
-				value = list[i]
-			} else {
-				value = pkValue
-			}
-			var err error
-			if valueList[i][j], err = resolveValue(tableInfo.GetPKColumn(j), value, bindVars); err != nil {
-				return valueList, err
-			}
-		}
+	return resolved, length, nil
+}
+
+func resolveListArg(col *schema.TableColumn, key string, bindVars map[string]interface{}) ([]sqltypes.Value, error) {
+	val, _, err := sqlparser.FetchBindVar(key, bindVars)
+	if err != nil {
+		return nil, NewTabletError(FAIL, "%v", err)
 	}
-	return valueList, nil
+	list := val.([]interface{})
+	resolved := make([]sqltypes.Value, len(list))
+	for i, v := range list {
+		sqlval, err := sqltypes.BuildValue(v)
+		if err != nil {
+			return nil, NewTabletError(FAIL, "%v", err)
+		}
+		if err = validateValue(col, sqlval); err != nil {
+			return nil, err
+		}
+		resolved[i] = sqlval
+	}
+	return resolved, nil
 }
 
 // buildSecondaryList is used for handling ON DUPLICATE DMLs, or those that change the PK.
@@ -78,19 +132,17 @@ func buildSecondaryList(tableInfo *TableInfo, pkList [][]sqltypes.Value, seconda
 func resolveValue(col *schema.TableColumn, value interface{}, bindVars map[string]interface{}) (result sqltypes.Value, err error) {
 	switch v := value.(type) {
 	case string:
-		lookup, ok := bindVars[v[1:]]
-		if !ok {
-			return result, NewTabletError(FAIL, "missing bind var %s", v)
+		val, _, err := sqlparser.FetchBindVar(v, bindVars)
+		if err != nil {
+			return result, NewTabletError(FAIL, "%v", err)
 		}
-		if sqlval, err := sqltypes.BuildValue(lookup); err != nil {
-			return result, NewTabletError(FAIL, err.Error())
-		} else {
-			result = sqlval
+		sqlval, err := sqltypes.BuildValue(val)
+		if err != nil {
+			return result, NewTabletError(FAIL, "%v", err)
 		}
+		result = sqlval
 	case sqltypes.Value:
 		result = v
-	case nil:
-		// no op
 	default:
 		panic(fmt.Sprintf("incompatible value type %v", v))
 	}
