@@ -47,7 +47,7 @@ func TestPlan(t *testing.T) {
 }
 
 func TestCustom(t *testing.T) {
-	testSchemas := testfiles.Glob("sqlparser_test/*_schema.json")
+	testSchemas := testfiles.Glob("tabletserver/*_schema.json")
 	if len(testSchemas) == 0 {
 		t.Log("No schemas to test")
 		return
@@ -223,5 +223,5 @@ func locateFile(name string) string {
 	if path.IsAbs(name) {
 		return name
 	}
-	return testfiles.Locate("sqlparser_test/" + name)
+	return testfiles.Locate("tabletserver/" + name)
 }

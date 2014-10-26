@@ -1,0 +1,266 @@
+# TODO(sougou): Add more cases to cover more code paths.
+# select with no where clause
+"select * from user"
+{
+  "ID": "SelectScatter",
+  "Reason": "unwieldy where clause",
+  "TableName": "user",
+  "Query": "select * from user",
+  "Index": null,
+  "Values": null
+}
+
+# select with subquery
+"select * from user where id in (select * from music)"
+{
+  "ID": "SelectScatter",
+  "Reason": "unwieldy where clause",
+  "TableName": "user",
+  "Query": "select * from user where id in (select * from music)",
+  "Index": null,
+  "Values": null
+}
+
+# select by primary keyspace id
+"select * from user where id = 1"
+{
+  "ID": "SelectSinglePrimary",
+  "Reason": "",
+  "TableName": "user",
+  "Query": "select * from user where id = 1",
+  "Index": {
+    "Type": 0,
+    "Column": "id",
+    "Lookup": null,
+    "IsOwned": false
+  },
+  "Values": [
+    1
+  ]
+}
+
+# select with primary keyspace id through bind var
+"select * from user where id = :id"
+{
+  "ID": "SelectSinglePrimary",
+  "Reason": "",
+  "TableName": "user",
+  "Query": "select * from user where id = :id",
+  "Index": {
+    "Type": 0,
+    "Column": "id",
+    "Lookup": null,
+    "IsOwned": false
+  },
+  "Values": [
+    ":id"
+  ]
+}
+
+# select with primary id through IN clause
+"select * from user where id in (1, 2)"
+{
+  "ID": "SelectMultiPrimary",
+  "Reason": "",
+  "TableName": "user",
+  "Query": "select * from user where id in ::_vals",
+  "Index": {
+    "Type": 0,
+    "Column": "id",
+    "Lookup": null,
+    "IsOwned": false
+  },
+  "Values": [
+    1,
+    2
+  ]
+}
+
+# select with no index match
+"select * from user where user_id = 1"
+{
+  "ID": "SelectScatter",
+  "Reason": "no index match",
+  "TableName": "user",
+  "Query": "select * from user where user_id = 1",
+  "Index": null,
+  "Values": null
+}
+
+# select with primary id with different column name
+"select * from user_extra where user_id = 1"
+{
+  "ID": "SelectSinglePrimary",
+  "Reason": "",
+  "TableName": "user_extra",
+  "Query": "select * from user_extra where user_id = 1",
+  "Index": {
+    "Type": 0,
+    "Column": "user_id",
+    "Lookup": null,
+    "IsOwned": false
+  },
+  "Values": [
+    1
+  ]
+}
+
+# select with primary id when there's more than one index
+"select * from music where user_id = 1"
+{
+  "ID": "SelectSinglePrimary",
+  "Reason": "",
+  "TableName": "music",
+  "Query": "select * from music where user_id = 1",
+  "Index": {
+    "Type": 0,
+    "Column": "user_id",
+    "Lookup": null,
+    "IsOwned": false
+  },
+  "Values": [
+    1
+  ]
+}
+
+# select by lookup
+"select * from music where id = 1"
+{
+  "ID": "SelectSingleLookup",
+  "Reason": "",
+  "TableName": "music",
+  "Query": "select * from music where id = 1",
+  "Index": {
+    "Type": 1,
+    "Column": "id",
+    "Lookup": {
+      "Name": "music_user_map",
+      "From": "music_id",
+      "To": "user_id"
+    },
+    "IsOwned": false
+  },
+  "Values": [
+    1
+  ]
+}
+
+# select by lookup with IN clause
+"select * from music where id in (1, 2)"
+{
+  "ID": "SelectMultiLookup",
+  "Reason": "",
+  "TableName": "music",
+  "Query": "select * from music where id in ::_vals",
+  "Index": {
+    "Type": 1,
+    "Column": "id",
+    "Lookup": {
+      "Name": "music_user_map",
+      "From": "music_id",
+      "To": "user_id"
+    },
+    "IsOwned": false
+  },
+  "Values": [
+    1,
+    2
+  ]
+}
+
+# select by lookup with IN clause and bind vars
+"select * from music where id in (:a, 2)"
+{
+  "ID": "SelectMultiLookup",
+  "Reason": "",
+  "TableName": "music",
+  "Query": "select * from music where id in ::_vals",
+  "Index": {
+    "Type": 1,
+    "Column": "id",
+    "Lookup": {
+      "Name": "music_user_map",
+      "From": "music_id",
+      "To": "user_id"
+    },
+    "IsOwned": false
+  },
+  "Values": [
+    ":a",
+    2
+  ]
+}
+
+# select by lookup with list bind var
+"select * from music where id in ::list"
+{
+  "ID": "SelectMultiLookup",
+  "Reason": "",
+  "TableName": "music",
+  "Query": "select * from music where id in ::_vals",
+  "Index": {
+    "Type": 1,
+    "Column": "id",
+    "Lookup": {
+      "Name": "music_user_map",
+      "From": "music_id",
+      "To": "user_id"
+    },
+    "IsOwned": false
+  },
+  "Values": [
+    "::list"
+  ]
+}
+
+# select by lookup if there's no primary key
+"select * from music_extra where music_id = 1"
+{
+  "ID": "SelectSingleLookup",
+  "Reason": "",
+  "TableName": "music_extra",
+  "Query": "select * from music_extra where music_id = 1",
+  "Index": {
+    "Type": 1,
+    "Column": "music_id",
+    "Lookup": {
+      "Name": "music_user_map",
+      "From": "music_id",
+      "To": "user_id"
+    },
+    "IsOwned": false
+  },
+  "Values": [
+    1
+  ]
+}
+
+# aggregates in select
+"select count(*) from user where id in (1, 2)"
+{
+  "ID": "NoPlan",
+  "Reason": "query too complex",
+  "TableName": "user",
+  "Query": "select count(*) from user where id in ::_vals",
+  "Index": null,
+  "Values": null
+}
+
+# non-aggregate function in select
+"select fun(*) from user where id in (1, 2)"
+{
+  "ID": "SelectMultiPrimary",
+  "Reason": "",
+  "TableName": "user",
+  "Query": "select fun(*) from user where id in ::_vals",
+  "Index": {
+    "Type": 0,
+    "Column": "id",
+    "Lookup": null,
+    "IsOwned": false
+  },
+  "Values": [
+    1,
+    2
+  ]
+}

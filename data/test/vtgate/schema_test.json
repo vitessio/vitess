@@ -1,0 +1,76 @@
+{
+  "music": {
+    "Keyspace": {
+      "Name": "user",
+      "ShardingScheme": 1
+    },
+    "KeyspaceIDCol": "keyspace_id",
+    "Indexes": [
+      {
+        "Type": 0,
+        "Column": "user_id",
+        "Lookup": null,
+        "IsOwned": false
+      },
+      {
+        "Type": 1,
+        "Column": "id",
+        "Lookup": {
+          "Name": "music_user_map",
+          "From": "music_id",
+          "To": "user_id"
+        },
+        "IsOwned": false
+      }
+    ]
+  },
+  "music_extra": {
+    "Keyspace": {
+      "Name": "user",
+      "ShardingScheme": 1
+    },
+    "KeyspaceIDCol": "keyspace_id",
+    "Indexes": [
+      {
+        "Type": 1,
+        "Column": "music_id",
+        "Lookup": {
+          "Name": "music_user_map",
+          "From": "music_id",
+          "To": "user_id"
+        },
+        "IsOwned": false
+      }
+    ]
+  },
+  "user": {
+    "Keyspace": {
+      "Name": "user",
+      "ShardingScheme": 1
+    },
+    "KeyspaceIDCol": "keyspace_id",
+    "Indexes": [
+      {
+        "Type": 0,
+        "Column": "id",
+        "Lookup": null,
+        "IsOwned": false
+      }
+    ]
+  },
+  "user_extra": {
+    "Keyspace": {
+      "Name": "user",
+      "ShardingScheme": 1
+    },
+    "KeyspaceIDCol": "keyspace_id",
+    "Indexes": [
+      {
+        "Type": 0,
+        "Column": "user_id",
+        "Lookup": null,
+        "IsOwned": false
+      }
+    ]
+  }
+}

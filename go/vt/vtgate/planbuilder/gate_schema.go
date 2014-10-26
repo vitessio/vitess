@@ -42,6 +42,9 @@ type Keyspace struct {
 	ShardingScheme int
 }
 
+var gateSchema map[string]*GateTable
+
+/*
 var user = &Keyspace{
 	Name:           "user",
 	ShardingScheme: HashSharded,
@@ -92,3 +95,4 @@ var gateSchema = map[string]*GateTable{
 		}},
 	},
 }
+*/

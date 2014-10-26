@@ -6,7 +6,7 @@ package planbuilder
 
 import "github.com/youtube/vitess/go/vt/sqlparser"
 
-func buildSelectPlan(sel *sqlparser.Select, query string) *Plan {
+func buildSelectPlan(sel *sqlparser.Select) *Plan {
 	tablename, _ := analyzeFrom(sel.From)
 	// TODO(sougou): handle joins & unions.
 	if tablename == "" {
@@ -19,35 +19,40 @@ func buildSelectPlan(sel *sqlparser.Select, query string) *Plan {
 	table := gateSchema[tablename]
 	if table == nil {
 		return &Plan{
-			ID:     NoPlan,
-			Reason: "table not found",
-			Query:  generateQuery(sel),
+			ID:        NoPlan,
+			Reason:    "table not found",
+			TableName: tablename,
+			Query:     generateQuery(sel),
 		}
 	}
 	if table.Keyspace.ShardingScheme == Unsharded {
 		return &Plan{
-			ID:    SelectUnsharded,
-			Query: generateQuery(sel),
+			ID:        SelectUnsharded,
+			TableName: tablename,
+			Query:     generateQuery(sel),
 		}
 	}
 	if sel.Where == nil || !isRoutable(sel.Where.Expr) {
 		return &Plan{
-			ID:     SelectScatter,
-			Reason: "unwieldy where clause",
-			Query:  generateQuery(sel),
+			ID:        SelectScatter,
+			Reason:    "unwieldy where clause",
+			TableName: tablename,
+			Query:     generateQuery(sel),
 		}
 	}
 	plan := getRouting(sel.Where.Expr, table.Indexes)
-	if plan.ID == SelectMultiPrimary || plan.ID == SelectMultiLookup {
+	if plan.ID.IsMulti() {
 		if hasAggregates(sel.SelectExprs) || sel.Distinct != "" || sel.GroupBy != nil || sel.Having != nil || sel.OrderBy != nil || sel.Limit != nil {
 			return &Plan{
-				ID:     NoPlan,
-				Reason: "query too complex",
-				Query:  generateQuery(sel),
+				ID:        NoPlan,
+				Reason:    "query too complex",
+				TableName: tablename,
+				Query:     generateQuery(sel),
 			}
 		}
 	}
 
+	plan.TableName = tablename
 	plan.Query = generateQuery(sel)
 	return plan
 }
