@@ -14,22 +14,19 @@ import com.youtube.vitess.vtgate.SplitQueryResponse;
 
 public interface RpcClient {
 
-	public Object begin() throws ConnectionException;
+  public Object begin() throws ConnectionException;
 
-	public void commit(Object session) throws ConnectionException;
+  public void commit(Object session) throws ConnectionException;
 
-	public void rollback(Object session) throws ConnectionException;
+  public void rollback(Object session) throws ConnectionException;
 
-	public QueryResponse execute(Query query) throws ConnectionException;
+  public QueryResponse execute(Query query) throws ConnectionException;
 
-	public QueryResult streamNext(List<Field> fields)
-			throws ConnectionException;
+  public QueryResult streamNext(List<Field> fields) throws ConnectionException;
 
-	public BatchQueryResponse batchExecute(BatchQuery query)
-			throws ConnectionException;
+  public BatchQueryResponse batchExecute(BatchQuery query) throws ConnectionException;
 
-	public SplitQueryResponse splitQuery(SplitQueryRequest request)
-			throws ConnectionException;
+  public SplitQueryResponse splitQuery(SplitQueryRequest request) throws ConnectionException;
 
-	public void close() throws ConnectionException;
+  public void close() throws ConnectionException;
 }

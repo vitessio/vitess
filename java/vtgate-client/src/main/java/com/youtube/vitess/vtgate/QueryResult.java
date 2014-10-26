@@ -5,36 +5,35 @@ import java.util.List;
 import com.youtube.vitess.vtgate.cursor.Cursor;
 
 /**
- * Represents a VtGate query result set. For selects, rows are better accessed
- * through the iterator {@link Cursor}.
+ * Represents a VtGate query result set. For selects, rows are better accessed through the iterator
+ * {@link Cursor}.
  */
 public class QueryResult {
-	private List<Row> rows;
-	private List<Field> fields;
-	private long rowsAffected;
-	private long lastRowId;
+  private List<Row> rows;
+  private List<Field> fields;
+  private long rowsAffected;
+  private long lastRowId;
 
-	public QueryResult(List<Row> rows, List<Field> fields, long rowsAffected,
-			long lastRowId) {
-		this.rows = rows;
-		this.fields = fields;
-		this.rowsAffected = rowsAffected;
-		this.lastRowId = lastRowId;
-	}
+  public QueryResult(List<Row> rows, List<Field> fields, long rowsAffected, long lastRowId) {
+    this.rows = rows;
+    this.fields = fields;
+    this.rowsAffected = rowsAffected;
+    this.lastRowId = lastRowId;
+  }
 
-	public List<Field> getFields() {
-		return fields;
-	}
+  public List<Field> getFields() {
+    return fields;
+  }
 
-	public List<Row> getRows() {
-		return rows;
-	}
+  public List<Row> getRows() {
+    return rows;
+  }
 
-	public long getRowsAffected() {
-		return rowsAffected;
-	}
+  public long getRowsAffected() {
+    return rowsAffected;
+  }
 
-	public long getLastRowId() {
-		return lastRowId;
-	}
+  public long getLastRowId() {
+    return lastRowId;
+  }
 }

@@ -22,62 +22,56 @@ import com.youtube.vitess.vtgate.hadoop.writables.KeyspaceIdWritable;
 import com.youtube.vitess.vtgate.hadoop.writables.RowWritable;
 
 /**
- * {@link VitessInputFormat} is the {@link InputFormat} for tables in Vitess.
- * Input splits ({@link VitessInputSplit}) are fetched from VtGate via an RPC.
- * map() calls are supplied with a {@link KeyspaceIdWritable},
- * {@link RowWritable} pair.
+ * {@link VitessInputFormat} is the {@link InputFormat} for tables in Vitess. Input splits (
+ * {@link VitessInputSplit}) are fetched from VtGate via an RPC. map() calls are supplied with a
+ * {@link KeyspaceIdWritable}, {@link RowWritable} pair.
  */
-public class VitessInputFormat extends
-		InputFormat<KeyspaceIdWritable, RowWritable> {
+public class VitessInputFormat extends InputFormat<KeyspaceIdWritable, RowWritable> {
 
-	@Override
-	public List<InputSplit> getSplits(JobContext context) {
-		try {
-			VitessConf conf = new VitessConf(context.getConfiguration());
-			VtGate vtgate = VtGate
-					.connect(conf.getHosts(), conf.getTimeoutMs());
-			List<String> columns = conf.getInputColumns();
-			if (!columns.contains(KeyspaceId.COL_NAME)) {
-				columns.add(KeyspaceId.COL_NAME);
-			}
-			String sql = "select " + StringUtils.join(columns, ',') +
-					" from " + conf.getInputTable();
-			Map<Query, Long> queries = vtgate.splitQuery(conf.getKeyspace(),
-					sql, conf.getSplitsPerShard());
-			List<InputSplit> splits = new LinkedList<>();
-			for (Query query : queries.keySet()) {
-				Long size = queries.get(query);
-				InputSplit split = new VitessInputSplit(query, size);
-				splits.add(split);
-			}
+  @Override
+  public List<InputSplit> getSplits(JobContext context) {
+    try {
+      VitessConf conf = new VitessConf(context.getConfiguration());
+      VtGate vtgate = VtGate.connect(conf.getHosts(), conf.getTimeoutMs());
+      List<String> columns = conf.getInputColumns();
+      if (!columns.contains(KeyspaceId.COL_NAME)) {
+        columns.add(KeyspaceId.COL_NAME);
+      }
+      String sql = "select " + StringUtils.join(columns, ',') + " from " + conf.getInputTable();
+      Map<Query, Long> queries =
+          vtgate.splitQuery(conf.getKeyspace(), sql, conf.getSplitsPerShard());
+      List<InputSplit> splits = new LinkedList<>();
+      for (Query query : queries.keySet()) {
+        Long size = queries.get(query);
+        InputSplit split = new VitessInputSplit(query, size);
+        splits.add(split);
+      }
 
-			for (InputSplit split : splits) {
-				((VitessInputSplit) split).setLocations(conf.getHosts().split(
-						VitessConf.HOSTS_DELIM));
-			}
-			return splits;
-		} catch (ConnectionException | DatabaseException e) {
-			throw new RuntimeException(e);
-		}
-	}
+      for (InputSplit split : splits) {
+        ((VitessInputSplit) split).setLocations(conf.getHosts().split(VitessConf.HOSTS_DELIM));
+      }
+      return splits;
+    } catch (ConnectionException | DatabaseException e) {
+      throw new RuntimeException(e);
+    }
+  }
 
-	public RecordReader<KeyspaceIdWritable, RowWritable> createRecordReader(
-			InputSplit split, TaskAttemptContext context) throws IOException,
-			InterruptedException {
-		return new VitessRecordReader();
-	}
+  public RecordReader<KeyspaceIdWritable, RowWritable> createRecordReader(InputSplit split,
+      TaskAttemptContext context) throws IOException, InterruptedException {
+    return new VitessRecordReader();
+  }
 
-	/**
-	 * Sets the necessary configurations for Vitess table input source
-	 */
-	public static void setInput(Job job, String hosts, String keyspace,
-			String table, List<String> columns, int splitsPerShard) {
-		job.setInputFormatClass(VitessInputFormat.class);
-		VitessConf vtConf = new VitessConf(job.getConfiguration());
-		vtConf.setHosts(hosts);
-		vtConf.setKeyspace(keyspace);
-		vtConf.setInputTable(table);
-		vtConf.setInputColumns(columns);
-		vtConf.setSplitsPerShard(splitsPerShard);
-	}
+  /**
+   * Sets the necessary configurations for Vitess table input source
+   */
+  public static void setInput(Job job, String hosts, String keyspace, String table,
+      List<String> columns, int splitsPerShard) {
+    job.setInputFormatClass(VitessInputFormat.class);
+    VitessConf vtConf = new VitessConf(job.getConfiguration());
+    vtConf.setHosts(hosts);
+    vtConf.setKeyspace(keyspace);
+    vtConf.setInputTable(table);
+    vtConf.setInputColumns(columns);
+    vtConf.setSplitsPerShard(splitsPerShard);
+  }
 }

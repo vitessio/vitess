@@ -6,89 +6,86 @@ import java.util.List;
 import java.util.Map;
 
 public class BatchQuery {
-	private List<String> sqls;
-	private List<Map<String, Object>> bindVarsList;
-	private String keyspace;
-	private String tabletType;
-	private List<byte[]> keyspaceIds;
-	private Object session;
+  private List<String> sqls;
+  private List<Map<String, Object>> bindVarsList;
+  private String keyspace;
+  private String tabletType;
+  private List<byte[]> keyspaceIds;
+  private Object session;
 
-	private BatchQuery(String keyspace, String tabletType) {
-		this.keyspace = keyspace;
-		this.tabletType = tabletType;
-		this.sqls = new LinkedList<>();
-		this.bindVarsList = new LinkedList<>();
-	}
+  private BatchQuery(String keyspace, String tabletType) {
+    this.keyspace = keyspace;
+    this.tabletType = tabletType;
+    this.sqls = new LinkedList<>();
+    this.bindVarsList = new LinkedList<>();
+  }
 
-	public List<String> getSqls() {
-		return sqls;
-	}
+  public List<String> getSqls() {
+    return sqls;
+  }
 
-	public List<Map<String, Object>> getBindVarsList() {
-		return bindVarsList;
-	}
+  public List<Map<String, Object>> getBindVarsList() {
+    return bindVarsList;
+  }
 
-	public String getTabletType() {
-		return tabletType;
-	}
+  public String getTabletType() {
+    return tabletType;
+  }
 
-	public String getKeyspace() {
-		return keyspace;
-	}
+  public String getKeyspace() {
+    return keyspace;
+  }
 
-	public List<byte[]> getKeyspaceIds() {
-		return keyspaceIds;
-	}
+  public List<byte[]> getKeyspaceIds() {
+    return keyspaceIds;
+  }
 
-	public Object getSession() {
-		return session;
-	}
+  public Object getSession() {
+    return session;
+  }
 
-	public void setSession(Object session) {
-		this.session = session;
-	}
+  public void setSession(Object session) {
+    this.session = session;
+  }
 
-	public static class BatchQueryBuilder {
-		private BatchQuery query;
+  public static class BatchQueryBuilder {
+    private BatchQuery query;
 
-		public BatchQueryBuilder(String keyspace, String tabletType) {
-			query = new BatchQuery(keyspace, tabletType);
-		}
+    public BatchQueryBuilder(String keyspace, String tabletType) {
+      query = new BatchQuery(keyspace, tabletType);
+    }
 
-		public BatchQuery build() {
-			if (query.sqls.size() == 0) {
-				throw new IllegalStateException(
-						"query must have at least one sql");
-			}
-			if (query.keyspaceIds == null) {
-				throw new IllegalStateException(
-						"query must have keyspaceIds set");
-			}
-			return query;
-		}
+    public BatchQuery build() {
+      if (query.sqls.size() == 0) {
+        throw new IllegalStateException("query must have at least one sql");
+      }
+      if (query.keyspaceIds == null) {
+        throw new IllegalStateException("query must have keyspaceIds set");
+      }
+      return query;
+    }
 
-		public BatchQueryBuilder withAddedSqlBindVars(String sql,
-				Map<String, Object> bindVars) {
-			query.sqls.add(sql);
-			query.bindVarsList.add(bindVars);
-			return this;
-		}
+    public BatchQueryBuilder withAddedSqlBindVars(String sql, Map<String, Object> bindVars) {
+      query.sqls.add(sql);
+      query.bindVarsList.add(bindVars);
+      return this;
+    }
 
-		public BatchQueryBuilder withKeyspaceIds(List<KeyspaceId> keyspaceIds) {
-			List<byte[]> kidsBytes = new ArrayList<>();
-			for (KeyspaceId kid : keyspaceIds) {
-				kidsBytes.add(kid.getBytes());
-			}
-			query.keyspaceIds = kidsBytes;
-			return this;
-		}
+    public BatchQueryBuilder withKeyspaceIds(List<KeyspaceId> keyspaceIds) {
+      List<byte[]> kidsBytes = new ArrayList<>();
+      for (KeyspaceId kid : keyspaceIds) {
+        kidsBytes.add(kid.getBytes());
+      }
+      query.keyspaceIds = kidsBytes;
+      return this;
+    }
 
-		public BatchQueryBuilder withAddedKeyspaceId(KeyspaceId keyspaceId) {
-			if (query.getKeyspaceIds() == null) {
-				query.keyspaceIds = new ArrayList<byte[]>();
-			}
-			query.getKeyspaceIds().add(keyspaceId.getBytes());
-			return this;
-		}
-	}
+    public BatchQueryBuilder withAddedKeyspaceId(KeyspaceId keyspaceId) {
+      if (query.getKeyspaceIds() == null) {
+        query.keyspaceIds = new ArrayList<byte[]>();
+      }
+      query.getKeyspaceIds().add(keyspaceId.getBytes());
+      return this;
+    }
+  }
 }
