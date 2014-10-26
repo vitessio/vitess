@@ -754,6 +754,30 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%s(%s%v)", node.Name, distinct, node.Exprs)
 }
 
+// Aggregates is a map of all aggregate functions.
+var Aggregates = map[string]bool{
+	"avg":          true,
+	"bit_and":      true,
+	"bit_or":       true,
+	"bit_xor":      true,
+	"count":        true,
+	"group_concat": true,
+	"max":          true,
+	"min":          true,
+	"std":          true,
+	"stddev_pop":   true,
+	"stddev_samp":  true,
+	"stddev":       true,
+	"sum":          true,
+	"var_pop":      true,
+	"var_samp":     true,
+	"variance":     true,
+}
+
+func (node *FuncExpr) IsAggregate() bool {
+	return Aggregates[string(node.Name)]
+}
+
 // CaseExpr represents a CASE expression.
 type CaseExpr struct {
 	Expr  ValExpr

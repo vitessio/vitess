@@ -37,7 +37,7 @@ func IsColName(node ValExpr) bool {
 	return ok
 }
 
-// IsVal returns true if the ValExpr is a string, number or value arg.
+// IsValue returns true if the ValExpr is a string, number or value arg.
 // NULL is not considered to be a value.
 func IsValue(node ValExpr) bool {
 	switch node.(type) {
