@@ -24,7 +24,7 @@ type Plan struct {
 	Reason    string
 	TableName string
 	Query     string
-	Index     *GateIndex
+	Index     *VTGateIndex
 	Values    []interface{}
 }
 

@@ -110,7 +110,7 @@ func isRoutable(node sqlparser.Expr) bool {
 	}
 }
 
-func getRouting(node sqlparser.BoolExpr, indexes []*GateIndex) (plan *Plan) {
+func getRouting(node sqlparser.BoolExpr, indexes []*VTGateIndex) (plan *Plan) {
 	for _, index := range indexes {
 		if planID, values := getMatch(node, index); planID != SelectScatter {
 			return &Plan{
@@ -126,7 +126,7 @@ func getRouting(node sqlparser.BoolExpr, indexes []*GateIndex) (plan *Plan) {
 	}
 }
 
-func getMatch(node sqlparser.BoolExpr, index *GateIndex) (planID PlanID, values []interface{}) {
+func getMatch(node sqlparser.BoolExpr, index *VTGateIndex) (planID PlanID, values []interface{}) {
 	switch node := node.(type) {
 	case *sqlparser.AndExpr:
 		if planID, values = getMatch(node.Left, index); planID != SelectScatter {

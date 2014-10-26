@@ -14,25 +14,25 @@ const (
 	HashSharded
 )
 
-type GateSchema struct {
-	Tables map[string]GateTable
+type VTGateSchema struct {
+	Tables map[string]VTGateTable
 }
 
-type GateTable struct {
+type VTGateTable struct {
 	Keyspace      *Keyspace
 	KeyspaceIDCol string
-	Indexes       []*GateIndex
+	Indexes       []*VTGateIndex
 }
 
-type GateIndex struct {
+type VTGateIndex struct {
 	Type   int
 	Column string
-	Lookup *GateLookup
+	Lookup *VTGateLookup
 	// TODO(sougou): Currently unused.
 	IsOwned bool
 }
 
-type GateLookup struct {
+type VTGateLookup struct {
 	Name     string
 	From, To string
 }
@@ -42,7 +42,7 @@ type Keyspace struct {
 	ShardingScheme int
 }
 
-var gateSchema map[string]*GateTable
+var gateSchema map[string]*VTGateTable
 
 /*
 var user = &Keyspace{
@@ -50,17 +50,17 @@ var user = &Keyspace{
 	ShardingScheme: HashSharded,
 }
 
-var musicUserLookup = &GateLookup{
+var musicUserLookup = &VTGateLookup{
 	Name: "music_user_map",
 	From: "music_id",
 	To:   "user_id",
 }
 
-var gateSchema = map[string]*GateTable{
+var gateSchema = map[string]*VTGateTable{
 	"user": {
 		Keyspace:      user,
 		KeyspaceIDCol: "keyspace_id",
-		Indexes: []*GateIndex{{
+		Indexes: []*VTGateIndex{{
 			Type:   Primary,
 			Column: "id",
 		}},
@@ -68,7 +68,7 @@ var gateSchema = map[string]*GateTable{
 	"user_extra": {
 		Keyspace:      user,
 		KeyspaceIDCol: "keyspace_id",
-		Indexes: []*GateIndex{{
+		Indexes: []*VTGateIndex{{
 			Type:   Primary,
 			Column: "user_id",
 		}},
@@ -76,7 +76,7 @@ var gateSchema = map[string]*GateTable{
 	"music": {
 		Keyspace:      user,
 		KeyspaceIDCol: "keyspace_id",
-		Indexes: []*GateIndex{{
+		Indexes: []*VTGateIndex{{
 			Type:   Primary,
 			Column: "user_id",
 		}, {
@@ -88,7 +88,7 @@ var gateSchema = map[string]*GateTable{
 	"music_extra": {
 		Keyspace:      user,
 		KeyspaceIDCol: "keyspace_id",
-		Indexes: []*GateIndex{{
+		Indexes: []*VTGateIndex{{
 			Type:   Lookup,
 			Column: "music_id",
 			Lookup: musicUserLookup,

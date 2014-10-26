@@ -42,12 +42,12 @@ func TestPlan(t *testing.T) {
 	}
 }
 
-func loadSchema(name string) map[string]*GateTable {
+func loadSchema(name string) map[string]*VTGateTable {
 	b, err := ioutil.ReadFile(locateFile(name))
 	if err != nil {
 		panic(err)
 	}
-	tables := make(map[string]*GateTable)
+	tables := make(map[string]*VTGateTable)
 	err = json.Unmarshal(b, &tables)
 	if err != nil {
 		panic(err)
