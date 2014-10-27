@@ -27,13 +27,13 @@ var UseSrvShardLocks = flag.Bool("use_srv_shard_locks", true, "DEPRECATED: If tr
 //
 // This function locks individual SvrShard paths, so it doesn't need a lock
 // on the shard.
-func RebuildShard(log logutil.Logger, ts topo.Server, keyspace, shard string, cells []string, timeout time.Duration, interrupted chan struct{}) error {
+func RebuildShard(log logutil.Logger, ts topo.Server, keyspace, shard string, cells []string, timeout time.Duration, interrupted chan struct{}) (*topo.ShardInfo, error) {
 	log.Infof("RebuildShard %v/%v", keyspace, shard)
 
 	// read the existing shard info. It has to exist.
 	shardInfo, err := ts.GetShard(keyspace, shard)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// rebuild all cells in parallel
@@ -107,7 +107,7 @@ func RebuildShard(log logutil.Logger, ts topo.Server, keyspace, shard string, ce
 	}
 	wg.Wait()
 
-	return rec.Error()
+	return shardInfo, rec.Error()
 }
 
 // rebuildCellSrvShard computes and writes the serving graph data to a

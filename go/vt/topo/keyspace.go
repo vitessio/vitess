@@ -6,9 +6,11 @@ package topo
 
 import (
 	"fmt"
+	"sync"
 
 	log "github.com/golang/glog"
 
+	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
 )
 
@@ -195,12 +197,26 @@ func FindAllShardsInKeyspace(ts Server, keyspace string) (map[string]*ShardInfo,
 	}
 
 	result := make(map[string]*ShardInfo, len(shards))
+	wg := sync.WaitGroup{}
+	mu := sync.Mutex{}
+	rec := concurrency.FirstErrorRecorder{}
 	for _, shard := range shards {
-		si, err := ts.GetShard(keyspace, shard)
-		if err != nil {
-			return nil, err
-		}
-		result[shard] = si
+		wg.Add(1)
+		go func(shard string) {
+			defer wg.Done()
+			si, err := ts.GetShard(keyspace, shard)
+			if err != nil {
+				rec.RecordError(fmt.Errorf("GetShard(%v,%v) failed: %v", keyspace, shard, err))
+				return
+			}
+			mu.Lock()
+			result[shard] = si
+			mu.Unlock()
+		}(shard)
+	}
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, rec.Error()
 	}
 	return result, nil
 }

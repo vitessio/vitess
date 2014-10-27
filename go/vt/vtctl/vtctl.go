@@ -1172,7 +1172,7 @@ func commandRebuildShardGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 		return err
 	}
 	for _, ks := range keyspaceShards {
-		if err := wr.RebuildShardGraph(ks.Keyspace, ks.Shard, cellArray); err != nil {
+		if _, err := wr.RebuildShardGraph(ks.Keyspace, ks.Shard, cellArray); err != nil {
 			return err
 		}
 	}

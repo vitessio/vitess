@@ -252,7 +252,7 @@ func (agent *ActionAgent) rebuildShardIfNeeded(tablet *topo.TabletInfo, targetTa
 		interrupted := make(chan struct{})
 
 		// no need to take the shard lock in this case
-		if err := topotools.RebuildShard(logutil.NewConsoleLogger(), agent.TopoServer, tablet.Keyspace, tablet.Shard, []string{tablet.Alias.Cell}, agent.LockTimeout, interrupted); err != nil {
+		if _, err := topotools.RebuildShard(logutil.NewConsoleLogger(), agent.TopoServer, tablet.Keyspace, tablet.Shard, []string{tablet.Alias.Cell}, agent.LockTimeout, interrupted); err != nil {
 			return fmt.Errorf("topotools.RebuildShard returned an error: %v", err)
 		}
 	}
