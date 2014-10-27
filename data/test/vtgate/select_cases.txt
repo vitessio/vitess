@@ -235,6 +235,64 @@
   ]
 }
 
+# select with non-parenthesized OR clause at end
+"select * from user where id = 1 and var = 2 or var = 3"
+{
+  "ID": "SelectScatter",
+  "Reason": "no index match",
+  "TableName": "user",
+  "Query": "select * from user where id = 1 and var = 2 or var = 3",
+  "Index": null,
+  "Values": null
+}
+
+# select with acceptable parenthesized OR clause at end
+"select * from user where id = 1 and (var = 2 or var = 3)"
+{
+  "ID": "SelectSinglePrimary",
+  "Reason": "",
+  "TableName": "user",
+  "Query": "select * from user where id = 1 and (var = 2 or var = 3)",
+  "Index": {
+    "Type": 0,
+    "Column": "id",
+    "Lookup": null,
+    "IsOwned": false
+  },
+  "Values": [
+    1
+  ]
+}
+
+# select with non-parenthesized OR clause at beginning
+"select * from user where var = 2 or var = 3 and id = 1"
+{
+  "ID": "SelectScatter",
+  "Reason": "no index match",
+  "TableName": "user",
+  "Query": "select * from user where var = 2 or var = 3 and id = 1",
+  "Index": null,
+  "Values": null
+}
+
+# select with acceptable parenthesized OR clause at beginning
+"select * from user where (var = 2 or var = 3) and id = 1"
+{
+  "ID": "SelectSinglePrimary",
+  "Reason": "",
+  "TableName": "user",
+  "Query": "select * from user where (var = 2 or var = 3) and id = 1",
+  "Index": {
+    "Type": 0,
+    "Column": "id",
+    "Lookup": null,
+    "IsOwned": false
+  },
+  "Values": [
+    1
+  ]
+}
+
 # aggregates in select
 "select count(*) from user where id in (1, 2)"
 {

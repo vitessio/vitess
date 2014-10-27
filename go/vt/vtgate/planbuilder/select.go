@@ -74,7 +74,7 @@ func isRoutable(node sqlparser.Expr) bool {
 	case *sqlparser.AndExpr:
 		return isRoutable(node.Left) && isRoutable(node.Right)
 	case *sqlparser.OrExpr:
-		return false
+		return isRoutable(node.Left) && isRoutable(node.Right)
 	case *sqlparser.NotExpr:
 		return isRoutable(node.Expr)
 	case *sqlparser.ParenBoolExpr:
