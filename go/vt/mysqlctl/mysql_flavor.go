@@ -124,8 +124,8 @@ func (mysqld *Mysqld) detectFlavor() (MysqlFlavor, error) {
 }
 
 func (mysqld *Mysqld) flavor() (MysqlFlavor, error) {
-	mysqld.mysqlFlavorMutex.Lock()
-	defer mysqld.mysqlFlavorMutex.Unlock()
+	mysqld.mutex.Lock()
+	defer mysqld.mutex.Unlock()
 
 	if mysqld.mysqlFlavor == nil {
 		flavor, err := mysqld.detectFlavor()

@@ -33,6 +33,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	vtenv "github.com/youtube/vitess/go/vt/env"
 	"github.com/youtube/vitess/go/vt/hook"
+	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlclient"
 )
 
 const (
@@ -42,19 +43,24 @@ const (
 var (
 	dbaPoolSize    = flag.Int("dba_pool_size", 50, "Size of the connection pool for dba connections")
 	dbaIdleTimeout = flag.Duration("dba_idle_timeout", time.Minute, "Idle timeout for dba connections")
+
+	socketFile = flag.String("mysqlctl_socket", "", "socket file to use for remote mysqlctl actions (empty for local actions)")
 )
 
 // Mysqld is the object that represents a mysqld daemon running on this server.
 type Mysqld struct {
-	mysqlFlavor      MysqlFlavor
-	mysqlFlavorMutex sync.Mutex
-	config           *Mycnf
-	dba              *mysql.ConnectionParams
-	dbaPool          *dbconnpool.ConnectionPool
-	replParams       *mysql.ConnectionParams
-	TabletDir        string
-	SnapshotDir      string
-	done             chan struct{}
+	config      *Mycnf
+	dba         *mysql.ConnectionParams
+	dbaPool     *dbconnpool.ConnectionPool
+	replParams  *mysql.ConnectionParams
+	TabletDir   string
+	SnapshotDir string
+
+	// mutex protects the fields below.
+	mutex         sync.Mutex
+	mysqlFlavor   MysqlFlavor
+	onTermFuncs   []func()
+	cancelWaitCmd chan struct{}
 }
 
 // NewMysqld creates a Mysqld object based on the provided configuration
@@ -80,13 +86,6 @@ func NewMysqld(name string, config *Mycnf, dba, repl *mysql.ConnectionParams) *M
 	}
 }
 
-// Done returns a channel that is closed when the underlying process started
-// by this Mysqld has terminated. If the process was started by someone else,
-// this channel will never be closed.
-func (mysqld *Mysqld) Done() <-chan struct{} {
-	return mysqld.done
-}
-
 // Cnf returns the mysql config for the daemon
 func (mysqld *Mysqld) Cnf() *Mycnf {
 	return mysqld.config
@@ -94,7 +93,19 @@ func (mysqld *Mysqld) Cnf() *Mycnf {
 
 // Start will start the mysql daemon, either by running the 'mysqld_start'
 // hook, or by running mysqld_safe in the background.
+// If a mysqlctld address is provided in a flag, Start will run remotely.
 func (mysqld *Mysqld) Start(mysqlWaitTime time.Duration) error {
+	// Execute as remote action on mysqlctld if requested.
+	if *socketFile != "" {
+		log.Infof("executing Mysqld.Start() remotely via mysqlctld server: %v", *socketFile)
+		client, err := mysqlctlclient.New("unix", *socketFile, mysqlWaitTime)
+		if err != nil {
+			return fmt.Errorf("can't dial mysqlctld: %v", err)
+		}
+		defer client.Close()
+		return client.Start(mysqlWaitTime)
+	}
+
 	var name string
 	ts := fmt.Sprintf("Mysqld.Start(%v)", time.Now().Unix())
 
@@ -144,13 +155,25 @@ func (mysqld *Mysqld) Start(mysqlWaitTime time.Duration) error {
 			return nil
 		}
 
-		mysqld.done = make(chan struct{})
-		go func(done chan<- struct{}) {
-			// wait so we don't get a bunch of defunct processes
+		mysqld.mutex.Lock()
+		mysqld.cancelWaitCmd = make(chan struct{})
+		go func(cancel <-chan struct{}) {
+			// Wait regardless of cancel, so we don't generate defunct processes.
 			err := cmd.Wait()
 			log.Infof("%v exit: %v", ts, err)
-			close(done)
-		}(mysqld.done)
+
+			// The process exited. Trigger OnTerm callbacks, unless we were cancelled.
+			select {
+			case <-cancel:
+			default:
+				mysqld.mutex.Lock()
+				for _, callback := range mysqld.onTermFuncs {
+					go callback()
+				}
+				mysqld.mutex.Unlock()
+			}
+		}(mysqld.cancelWaitCmd)
+		mysqld.mutex.Unlock()
 	default:
 		// hook failed, we report error
 		return fmt.Errorf("mysqld_start hook failed: %v", hr.String())
@@ -181,13 +204,36 @@ func (mysqld *Mysqld) Start(mysqlWaitTime time.Duration) error {
 // waitForMysqld: should the function block until mysqld has stopped?
 // This can actually take a *long* time if the buffer cache needs to be fully
 // flushed - on the order of 20-30 minutes.
+//
+// If a mysqlctld address is provided in a flag, Shutdown will run remotely.
 func (mysqld *Mysqld) Shutdown(waitForMysqld bool, mysqlWaitTime time.Duration) error {
-	log.Infof("mysqlctl.Shutdown")
+	log.Infof("Mysqld.Shutdown")
+
+	// Execute as remote action on mysqlctld if requested.
+	if *socketFile != "" {
+		log.Infof("executing Mysqld.Shutdown() remotely via mysqlctld server: %v", *socketFile)
+		client, err := mysqlctlclient.New("unix", *socketFile, mysqlWaitTime)
+		if err != nil {
+			return fmt.Errorf("can't dial mysqlctld: %v", err)
+		}
+		defer client.Close()
+		return client.Shutdown(waitForMysqld, mysqlWaitTime)
+	}
+
+	// We're shutting down on purpose. We no longer want to be notified when
+	// mysqld terminates.
+	mysqld.mutex.Lock()
+	if mysqld.cancelWaitCmd != nil {
+		close(mysqld.cancelWaitCmd)
+		mysqld.cancelWaitCmd = nil
+	}
+	mysqld.mutex.Unlock()
+
 	// possibly mysql is already shutdown, check for a few files first
 	_, socketPathErr := os.Stat(mysqld.config.SocketFile)
 	_, pidPathErr := os.Stat(mysqld.config.PidFile)
 	if socketPathErr != nil && pidPathErr != nil {
-		log.Warningf("assuming shutdown - no socket, no pid file")
+		log.Warningf("assuming mysqld already shut down - no socket, no pid file found")
 		return nil
 	}
 
@@ -482,4 +528,13 @@ func (mysqld *Mysqld) GetDbaConnection() (dbconnpool.PoolConnection, error) {
 // queries to be finished.
 func (mysqld *Mysqld) Close() {
 	mysqld.dbaPool.Close()
+}
+
+// OnTerm registers a function to be called if mysqld terminates for any
+// reason other than a call to Mysqld.Shutdown(). This only works if mysqld
+// was actually started by calling Start() on this Mysqld instance.
+func (mysqld *Mysqld) OnTerm(f func()) {
+	mysqld.mutex.Lock()
+	defer mysqld.mutex.Unlock()
+	mysqld.onTermFuncs = append(mysqld.onTermFuncs, f)
 }
