@@ -34,9 +34,7 @@
     "Lookup": null,
     "IsOwned": false
   },
-  "Values": [
-    1
-  ]
+  "Values": 1
 }
 
 # select with primary keyspace id through bind var
@@ -52,9 +50,7 @@
     "Lookup": null,
     "IsOwned": false
   },
-  "Values": [
-    ":id"
-  ]
+  "Values": ":id"
 }
 
 # select with primary id through IN clause
@@ -100,9 +96,7 @@
     "Lookup": null,
     "IsOwned": false
   },
-  "Values": [
-    1
-  ]
+  "Values": 1
 }
 
 # select with primary id when there's more than one index
@@ -118,9 +112,7 @@
     "Lookup": null,
     "IsOwned": false
   },
-  "Values": [
-    1
-  ]
+  "Values": 1
 }
 
 # select by lookup
@@ -140,9 +132,7 @@
     },
     "IsOwned": false
   },
-  "Values": [
-    1
-  ]
+  "Values": 1
 }
 
 # select by lookup with IN clause
@@ -208,9 +198,7 @@
     },
     "IsOwned": false
   },
-  "Values": [
-    "::list"
-  ]
+  "Values": "::list"
 }
 
 # select by lookup if there's no primary key
@@ -230,9 +218,7 @@
     },
     "IsOwned": false
   },
-  "Values": [
-    1
-  ]
+  "Values": 1
 }
 
 # select with non-parenthesized OR clause at end
@@ -259,9 +245,7 @@
     "Lookup": null,
     "IsOwned": false
   },
-  "Values": [
-    1
-  ]
+  "Values": 1
 }
 
 # select with non-parenthesized OR clause at beginning
@@ -288,9 +272,7 @@
     "Lookup": null,
     "IsOwned": false
   },
-  "Values": [
-    1
-  ]
+  "Values": 1
 }
 
 # aggregates in select

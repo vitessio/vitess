@@ -8,39 +8,12 @@ import "github.com/youtube/vitess/go/vt/sqlparser"
 
 func buildSelectPlan(sel *sqlparser.Select, schema *VTGateSchema) *Plan {
 	tablename, _ := analyzeFrom(sel.From)
-	// TODO(sougou): handle joins & unions.
-	if tablename == "" {
-		return &Plan{
-			ID:     NoPlan,
-			Reason: "complex table expression",
-			Query:  generateQuery(sel),
-		}
+	plan := getTableRouting(tablename, schema)
+	if plan != nil {
+		plan.Query = generateQuery(sel)
+		return plan
 	}
-	table := schema.Tables[tablename]
-	if table == nil {
-		return &Plan{
-			ID:        NoPlan,
-			Reason:    "table not found",
-			TableName: tablename,
-			Query:     generateQuery(sel),
-		}
-	}
-	if table.Keyspace.ShardingScheme == Unsharded {
-		return &Plan{
-			ID:        SelectUnsharded,
-			TableName: tablename,
-			Query:     generateQuery(sel),
-		}
-	}
-	if sel.Where == nil || !isRoutable(sel.Where.Expr) {
-		return &Plan{
-			ID:        SelectScatter,
-			Reason:    "unwieldy where clause",
-			TableName: tablename,
-			Query:     generateQuery(sel),
-		}
-	}
-	plan := getRouting(sel.Where.Expr, table.Indexes)
+	plan = getWhereRouting(sel.Where, schema.Tables[tablename].Indexes)
 	if plan.ID.IsMulti() {
 		if hasAggregates(sel.SelectExprs) || sel.Distinct != "" || sel.GroupBy != nil || sel.Having != nil || sel.OrderBy != nil || sel.Limit != nil {
 			return &Plan{
@@ -67,125 +40,6 @@ func analyzeFrom(tableExprs sqlparser.TableExprs) (tablename string, hasHints bo
 		return "", false
 	}
 	return sqlparser.GetTableName(node.Expr), node.Hints != nil
-}
-
-func isRoutable(node sqlparser.Expr) bool {
-	switch node := node.(type) {
-	case *sqlparser.AndExpr:
-		return isRoutable(node.Left) && isRoutable(node.Right)
-	case *sqlparser.OrExpr:
-		return isRoutable(node.Left) && isRoutable(node.Right)
-	case *sqlparser.NotExpr:
-		return isRoutable(node.Expr)
-	case *sqlparser.ParenBoolExpr:
-		return isRoutable(node.Expr)
-	case *sqlparser.ComparisonExpr:
-		return isRoutable(node.Left) && isRoutable(node.Right)
-	case *sqlparser.RangeCond:
-		return isRoutable(node.Left) && isRoutable(node.From) && isRoutable(node.To)
-	case *sqlparser.NullCheck:
-		return isRoutable(node.Expr)
-	case *sqlparser.ExistsExpr:
-		return false
-	case sqlparser.StrVal, sqlparser.NumVal, sqlparser.ValArg,
-		*sqlparser.NullVal, *sqlparser.ColName, sqlparser.ValTuple,
-		sqlparser.ListArg:
-		return true
-	case *sqlparser.Subquery:
-		return false
-	case *sqlparser.BinaryExpr:
-		return isRoutable(node.Left) && isRoutable(node.Right)
-	case *sqlparser.UnaryExpr:
-		return isRoutable(node.Expr)
-	case *sqlparser.FuncExpr, *sqlparser.CaseExpr:
-		return true
-	default:
-		panic("unexpected")
-	}
-}
-
-func getRouting(node sqlparser.BoolExpr, indexes []*VTGateIndex) (plan *Plan) {
-	for _, index := range indexes {
-		if planID, values := getMatch(node, index); planID != SelectScatter {
-			return &Plan{
-				ID:     planID,
-				Index:  index,
-				Values: values,
-			}
-		}
-	}
-	return &Plan{
-		ID:     SelectScatter,
-		Reason: "no index match",
-	}
-}
-
-func getMatch(node sqlparser.BoolExpr, index *VTGateIndex) (planID PlanID, values []interface{}) {
-	switch node := node.(type) {
-	case *sqlparser.AndExpr:
-		if planID, values = getMatch(node.Left, index); planID != SelectScatter {
-			return planID, values
-		}
-		if planID, values = getMatch(node.Right, index); planID != SelectScatter {
-			return planID, values
-		}
-	case *sqlparser.ParenBoolExpr:
-		return getMatch(node.Expr, index)
-	case *sqlparser.ComparisonExpr:
-		switch node.Operator {
-		case "=":
-			if !nameMatch(node.Left, index.Column) {
-				return SelectScatter, nil
-			}
-			if !sqlparser.IsValue(node.Right) {
-				return SelectScatter, nil
-			}
-			val, err := sqlparser.AsInterface(node.Right)
-			if err != nil {
-				return SelectScatter, nil
-			}
-			if index.Type == Primary {
-				planID = SelectSinglePrimary
-			} else {
-				planID = SelectSingleLookup
-			}
-			return planID, []interface{}{val}
-		case "in":
-			if !nameMatch(node.Left, index.Column) {
-				return SelectScatter, nil
-			}
-			if !sqlparser.IsSimpleTuple(node.Right) {
-				return SelectScatter, nil
-			}
-			val, err := sqlparser.AsInterface(node.Right)
-			if err != nil {
-				return SelectScatter, nil
-			}
-			node.Right = sqlparser.ListArg("::_vals")
-			if index.Type == Primary {
-				planID = SelectMultiPrimary
-			} else {
-				planID = SelectMultiLookup
-			}
-			values, ok := val.([]interface{})
-			if !ok {
-				values = []interface{}{val}
-			}
-			return planID, values
-		}
-	}
-	return SelectScatter, nil
-}
-
-func nameMatch(node sqlparser.ValExpr, col string) bool {
-	colname, ok := node.(*sqlparser.ColName)
-	if !ok {
-		return false
-	}
-	if string(colname.Name) != col {
-		return false
-	}
-	return true
 }
 
 func hasAggregates(node sqlparser.SelectExprs) bool {

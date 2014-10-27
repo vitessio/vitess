@@ -29,7 +29,7 @@ type Plan struct {
 	TableName string
 	Query     string
 	Index     *VTGateIndex
-	Values    []interface{}
+	Values    interface{}
 }
 
 func (pln *Plan) Size() int {
@@ -64,7 +64,7 @@ func PlanByName(s string) (id PlanID, ok bool) {
 }
 
 func (id PlanID) IsMulti() bool {
-	return id == SelectMultiPrimary || id == SelectMultiLookup
+	return id == SelectMultiPrimary || id == SelectMultiLookup || id == SelectScatter
 }
 
 func (id PlanID) MarshalJSON() ([]byte, error) {
