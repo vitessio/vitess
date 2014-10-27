@@ -110,14 +110,27 @@ func (s *sandbox) Reset() {
 	s.SrvKeyspaceCallback = nil
 }
 
-func (s *sandbox) MapTestConn(shard string, conn tabletconn.TabletConn) {
+func (s *sandbox) MapTestConn(shard string, conn *sandboxConn) {
 	s.sandmu.Lock()
 	defer s.sandmu.Unlock()
 	conns, ok := s.TestConns[shard]
 	if !ok {
 		conns = make(map[uint32]tabletconn.TabletConn)
 	}
-	conns[uint32(len(conns))] = conn
+	uid := uint32(len(conns))
+	conn.uid = uid
+	conns[uid] = conn
+	s.TestConns[shard] = conns
+}
+
+func (s *sandbox) DeleteTestConn(shard string, conn *sandboxConn) {
+	s.sandmu.Lock()
+	defer s.sandmu.Unlock()
+	conns, ok := s.TestConns[shard]
+	if !ok {
+		panic(fmt.Sprintf("unknown shard: %v", shard))
+	}
+	delete(conns, conn.uid)
 	s.TestConns[shard] = conns
 }
 
@@ -283,6 +296,7 @@ func sandboxDialer(context context.Context, endPoint topo.EndPoint, keyspace, sh
 
 // sandboxConn satisfies the TabletConn interface
 type sandboxConn struct {
+	uid            uint32
 	endPoint       topo.EndPoint
 	mustFailRetry  int
 	mustFailFatal  int
