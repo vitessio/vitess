@@ -1,0 +1,91 @@
+# update with no where clause
+"update user set val = 1"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "TableName": "user",
+  "Query": "update user set val = 1",
+  "Index": null,
+  "Values": null
+}
+
+# update by primary keyspace id
+"update user set val = 1 where id = 1"
+{
+  "ID": "UpdateSinglePrimary",
+  "Reason": "",
+  "TableName": "user",
+  "Query": "update user set val = 1 where id = 1",
+  "Index": {
+    "Type": 0,
+    "Column": "id",
+    "Lookup": null,
+    "IsOwned": false
+  },
+  "Values": 1
+}
+
+# update with primary id through IN clause
+"update user set val = 1 where id in (1, 2)"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "TableName": "user",
+  "Query": "update user set val = 1 where id in ::_vals",
+  "Index": null,
+  "Values": null
+}
+
+# update with no index match
+"update user set val = 1 where user_id = 1"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "TableName": "user",
+  "Query": "update user set val = 1 where user_id = 1",
+  "Index": null,
+  "Values": null
+}
+
+# update by lookup
+"update music set val = 1 where id = 1"
+{
+  "ID": "UpdateSingleLookup",
+  "Reason": "",
+  "TableName": "music",
+  "Query": "update music set val = 1 where id = 1",
+  "Index": {
+    "Type": 1,
+    "Column": "id",
+    "Lookup": {
+      "Name": "music_user_map",
+      "From": "music_id",
+      "To": "user_id"
+    },
+    "IsOwned": false
+  },
+  "Values": 1
+}
+
+# update by lookup with IN clause
+"update music set val = 1 where id in (1, 2)"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "TableName": "music",
+  "Query": "update music set val = 1 where id in ::_vals",
+  "Index": null,
+  "Values": null
+}
+
+# update changes index column
+"update music set id = 1 where id = 1"
+{
+  "ID": "NoPlan",
+  "Reason": "index is changing",
+  "TableName": "music",
+  "Query": "update music set id = 1 where id = 1",
+  "Index": null,
+  "Values": null
+}
+

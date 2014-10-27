@@ -7,6 +7,7 @@ package planbuilder
 import "github.com/youtube/vitess/go/vt/sqlparser"
 
 func buildSelectPlan(sel *sqlparser.Select, schema *VTGateSchema) *Plan {
+	// TODO(sougou): handle joins & unions.
 	tablename, _ := analyzeFrom(sel.From)
 	plan := getTableRouting(tablename, schema)
 	if plan != nil {
@@ -18,7 +19,7 @@ func buildSelectPlan(sel *sqlparser.Select, schema *VTGateSchema) *Plan {
 		if hasAggregates(sel.SelectExprs) || sel.Distinct != "" || sel.GroupBy != nil || sel.Having != nil || sel.OrderBy != nil || sel.Limit != nil {
 			return &Plan{
 				ID:        NoPlan,
-				Reason:    "query too complex",
+				Reason:    "too complex",
 				TableName: tablename,
 				Query:     generateQuery(sel),
 			}

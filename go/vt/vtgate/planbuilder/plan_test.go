@@ -21,7 +21,12 @@ import (
 
 func TestPlan(t *testing.T) {
 	schema := loadSchema("schema_test.json")
-	for tcase := range iterateExecFile("select_cases.txt") {
+	testFile(t, "select_cases.txt", schema)
+	testFile(t, "update_cases.txt", schema)
+}
+
+func testFile(t *testing.T, filename string, schema *VTGateSchema) {
+	for tcase := range iterateExecFile(filename) {
 		plan := BuildPlan(tcase.input, schema)
 		bout, err := json.Marshal(plan)
 		if err != nil {
@@ -29,7 +34,7 @@ func TestPlan(t *testing.T) {
 		}
 		out := string(bout)
 		if out != tcase.output {
-			t.Error(fmt.Sprintf("Line:%v\n%s\n%s", tcase.lineno, tcase.output, out))
+			t.Error(fmt.Sprintf("File: %s, Line:%v\n%s\n%s", filename, tcase.lineno, tcase.output, out))
 		}
 		//fmt.Printf("%s\n%s\n\n", tcase.input, out)
 	}

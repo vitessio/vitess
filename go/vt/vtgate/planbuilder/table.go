@@ -5,7 +5,6 @@
 package planbuilder
 
 func getTableRouting(tablename string, schema *VTGateSchema) *Plan {
-	// TODO(sougou): handle joins & unions.
 	if tablename == "" {
 		return &Plan{
 			ID:     NoPlan,

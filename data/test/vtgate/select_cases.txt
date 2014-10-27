@@ -3,7 +3,7 @@
 "select * from user"
 {
   "ID": "SelectScatter",
-  "Reason": "unwieldy where clause",
+  "Reason": "no where clause",
   "TableName": "user",
   "Query": "select * from user",
   "Index": null,
@@ -13,8 +13,8 @@
 # select with subquery
 "select * from user where id in (select * from music)"
 {
-  "ID": "SelectScatter",
-  "Reason": "unwieldy where clause",
+  "ID": "NoPlan",
+  "Reason": "has subquery",
   "TableName": "user",
   "Query": "select * from user where id in (select * from music)",
   "Index": null,
@@ -279,7 +279,7 @@
 "select count(*) from user where id in (1, 2)"
 {
   "ID": "NoPlan",
-  "Reason": "query too complex",
+  "Reason": "too complex",
   "TableName": "user",
   "Query": "select count(*) from user where id in ::_vals",
   "Index": null,

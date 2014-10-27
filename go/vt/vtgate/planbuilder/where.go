@@ -7,10 +7,16 @@ package planbuilder
 import "github.com/youtube/vitess/go/vt/sqlparser"
 
 func getWhereRouting(where *sqlparser.Where, indexes []*VTGateIndex) (plan *Plan) {
-	if where == nil || hasSubquery(where.Expr) {
+	if where == nil {
 		return &Plan{
 			ID:     SelectScatter,
-			Reason: "unwieldy where clause",
+			Reason: "no where clause",
+		}
+	}
+	if hasSubquery(where.Expr) {
+		return &Plan{
+			ID:     NoPlan,
+			Reason: "has subquery",
 		}
 	}
 	for _, index := range indexes {

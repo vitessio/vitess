@@ -20,6 +20,9 @@ const (
 	SelectSingleLookup
 	SelectMultiLookup
 	SelectScatter
+	UpdateUnsharded
+	UpdateSinglePrimary
+	UpdateSingleLookup
 	NumPlans
 )
 
@@ -45,6 +48,9 @@ var planName = []string{
 	"SelectSingleLookup",
 	"SelectMultiLookup",
 	"SelectScatter",
+	"UpdateUnsharded",
+	"UpdateSinglePrimary",
+	"UpdateSingleLookup",
 }
 
 func (id PlanID) String() string {
@@ -86,6 +92,7 @@ func BuildPlan(query string, schema *VTGateSchema) *Plan {
 		return buildSelectPlan(statement, schema)
 	case *sqlparser.Insert:
 	case *sqlparser.Update:
+		return buildUpdatePlan(statement, schema)
 	case *sqlparser.Delete:
 	case *sqlparser.Set:
 	case *sqlparser.DDL:
