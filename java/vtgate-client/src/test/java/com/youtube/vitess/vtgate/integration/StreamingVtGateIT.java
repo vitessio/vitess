@@ -164,27 +164,4 @@ public class StreamingVtGateIT {
     vtgate.commit();
     vtgate.close();
   }
-
-  /**
-   * Test no new queries are allowed when client is in the middle of streaming
-   */
-  @Test
-  public void testNewQueryWhileStreaming() throws Exception {
-    Util.insertRows(testEnv, 1, 10);
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
-    String selectSql = "select * from vtgate_test";
-    Query query =
-        new QueryBuilder(selectSql, testEnv.keyspace, "master")
-            .setKeyspaceIds(testEnv.getAllKeyspaceIds()).setStreaming(true).build();
-    vtgate.execute(query);
-    try {
-      vtgate.execute(query);
-    } catch (ConnectionException e) {
-      Assert.assertEquals(
-          "vtgate exception: request not allowed as client is in the middle of streaming",
-          e.getMessage());
-    } finally {
-      vtgate.close();
-    }
-  }
 }

@@ -3,11 +3,10 @@ package com.youtube.vitess.vtgate;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 
 public class BatchQuery {
   private List<String> sqls;
-  private List<Map<String, Object>> bindVarsList;
+  private List<List<BindVariable>> bindVarsList;
   private String keyspace;
   private String tabletType;
   private List<byte[]> keyspaceIds;
@@ -24,7 +23,7 @@ public class BatchQuery {
     return sqls;
   }
 
-  public List<Map<String, Object>> getBindVarsList() {
+  public List<List<BindVariable>> getBindVarsList() {
     return bindVarsList;
   }
 
@@ -65,7 +64,7 @@ public class BatchQuery {
       return query;
     }
 
-    public BatchQueryBuilder withAddedSqlBindVars(String sql, Map<String, Object> bindVars) {
+    public BatchQueryBuilder addSqlAndBindVars(String sql, List<BindVariable> bindVars) {
       query.sqls.add(sql);
       query.bindVarsList.add(bindVars);
       return this;

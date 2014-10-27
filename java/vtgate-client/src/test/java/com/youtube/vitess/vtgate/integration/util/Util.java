@@ -3,7 +3,6 @@ package com.youtube.vitess.vtgate.integration.util;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.lang.reflect.Type;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -28,38 +27,14 @@ public class Util {
    * Setup MySQL, Vttablet and VtGate instances required for the tests. This uses a Python helper
    * script to start and stop instances. Use the setUp flag to indicate setUp or teardown.
    */
-  public static void setupTestEnv(TestEnv testEnv, boolean setUp) throws Exception {
-    String vtTop = System.getenv("VTTOP");
-    if (vtTop == null) {
-      Assert.fail("VTTOP is not set");
-    }
-
-    List<String> command = new ArrayList<String>();
-    command.add("python");
-    command.add(vtTop + "/test/java_vtgate_test_helper.py");
-    command.add("--shards");
-    command.add(testEnv.getShardNames());
-    command.add("--tablet-config");
-    command.add(testEnv.getTabletConfig());
-    command.add("--keyspace");
-    command.add(testEnv.keyspace);
-    if (setUp) {
-      command.add("setup");
-    } else {
-      command.add("teardown");
-    }
-
-    ProcessBuilder pb = new ProcessBuilder(command);
+  public static void setupTestEnv(TestEnv testEnv, boolean isSetUp) throws Exception {
+    ProcessBuilder pb = new ProcessBuilder(SetupCommand.get(testEnv, isSetUp));
     pb.redirectErrorStream(true);
     Process p = pb.start();
     BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
 
-    int exitValue = p.waitFor();
-    if (exitValue != 0) {
-      Assert.fail("script failed, setUp:" + setUp);
-    }
-
-    if (setUp) {
+    p.waitFor();
+    if (isSetUp) {
       // The port for VtGate is dynamically assigned and written to
       // stdout as a JSON string.
       String line;

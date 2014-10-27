@@ -76,17 +76,23 @@ public class Bsonify {
     BSONObject b = new BasicBSONObject();
     List<Map<String, Object>> queries = new LinkedList<>();
     Iterator<String> sqlIter = batchQuery.getSqls().iterator();
-    Iterator<Map<String, Object>> bvIter = batchQuery.getBindVarsList().iterator();
+    Iterator<List<BindVariable>> bvIter = batchQuery.getBindVarsList().iterator();
     while (sqlIter.hasNext()) {
       Map<String, Object> query = new HashMap<>();
       query.put("Sql", sqlIter.next());
-      query.put("BindVariables", bvIter.next());
+      List<BindVariable> bindVars = bvIter.next();
+      if (bindVars != null) {
+        query.put("BindVariables", bindVarsToBSON(bindVars));
+      }
       queries.add(query);
     }
     b.put("Queries", queries);
     b.put("Keyspace", batchQuery.getKeyspace());
     b.put("TabletType", batchQuery.getTabletType());
     b.put("KeyspaceIds", batchQuery.getKeyspaceIds());
+    if (batchQuery.getSession() != null) {
+      b.put("Session", batchQuery.getSession());
+    }
     return b;
   }
 

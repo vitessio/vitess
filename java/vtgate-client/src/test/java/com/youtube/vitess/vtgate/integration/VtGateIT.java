@@ -182,9 +182,9 @@ public class VtGateIT {
       vtgate.execute(sleepQuery);
       Assert.fail("did not raise timeout exception");
     } catch (ConnectionException e) {
-      Assert.assertEquals("vtgate exception: connection exception Read timed out", e.getMessage());
     }
-
+    vtgate.close();
+    vtgate = VtGate.connect("localhost:" + testEnv.port, 200);
     // Check no timeout error for fast query
     sleepQuery =
         new QueryBuilder("select sleep(0.01) from dual", testEnv.keyspace, "master")
@@ -325,8 +325,9 @@ public class VtGateIT {
     VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
     BatchQuery query =
         new BatchQueryBuilder(testEnv.keyspace, "master")
-            .withAddedSqlBindVars("select * from vtgate_test where id = 3", null)
-            .withAddedSqlBindVars("select * from vtgate_test where id = 4", null)
+            .addSqlAndBindVars("select * from vtgate_test where id = 3", null)
+            .addSqlAndBindVars("select * from vtgate_test where id = :id",
+                Lists.newArrayList(BindVariable.forULong("id", UnsignedLong.valueOf("4"))))
             .withKeyspaceIds(testEnv.getAllKeyspaceIds()).build();
     List<Long> expected = Lists.newArrayList(3L, 3L, 4L, 4L);
     List<Cursor> cursors = vtgate.execute(query);
