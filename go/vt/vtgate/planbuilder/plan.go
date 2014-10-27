@@ -23,6 +23,9 @@ const (
 	UpdateUnsharded
 	UpdateSinglePrimary
 	UpdateSingleLookup
+	DeleteUnsharded
+	DeleteSinglePrimary
+	DeleteSingleLookup
 	NumPlans
 )
 
@@ -51,6 +54,9 @@ var planName = []string{
 	"UpdateUnsharded",
 	"UpdateSinglePrimary",
 	"UpdateSingleLookup",
+	"DeleteUnsharded",
+	"DeleteSinglePrimary",
+	"DeleteSingleLookup",
 }
 
 func (id PlanID) String() string {
@@ -94,6 +100,7 @@ func BuildPlan(query string, schema *VTGateSchema) *Plan {
 	case *sqlparser.Update:
 		return buildUpdatePlan(statement, schema)
 	case *sqlparser.Delete:
+		return buildDeletePlan(statement, schema)
 	case *sqlparser.Set:
 	case *sqlparser.DDL:
 	case *sqlparser.Other:

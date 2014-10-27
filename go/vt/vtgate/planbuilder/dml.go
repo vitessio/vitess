@@ -59,3 +59,36 @@ func isIndexChanging(setClauses sqlparser.UpdateExprs, indexes []*VTGateIndex) b
 	}
 	return false
 }
+
+func buildDeletePlan(del *sqlparser.Delete, schema *VTGateSchema) *Plan {
+	tablename := sqlparser.GetTableName(del.Table)
+	plan := getTableRouting(tablename, schema)
+	if plan != nil {
+		if plan.ID == SelectUnsharded {
+			plan.ID = DeleteUnsharded
+		}
+		plan.Query = generateQuery(del)
+		return plan
+	}
+
+	indexes := schema.Tables[tablename].Indexes
+	plan = getWhereRouting(del.Where, indexes)
+	switch plan.ID {
+	case SelectSinglePrimary:
+		plan.ID = DeleteSinglePrimary
+	case SelectSingleLookup:
+		plan.ID = DeleteSingleLookup
+	case SelectMultiPrimary, SelectMultiLookup, SelectScatter:
+		return &Plan{
+			ID:        NoPlan,
+			Reason:    "too complex",
+			TableName: tablename,
+			Query:     generateQuery(del),
+		}
+	default:
+		panic("unexpected")
+	}
+	plan.TableName = tablename
+	plan.Query = generateQuery(del)
+	return plan
+}

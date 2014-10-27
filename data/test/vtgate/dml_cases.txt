@@ -9,6 +9,17 @@
   "Values": null
 }
 
+# delete from with no where clause
+"delete from user"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "TableName": "user",
+  "Query": "delete from user",
+  "Index": null,
+  "Values": null
+}
+
 # update by primary keyspace id
 "update user set val = 1 where id = 1"
 {
@@ -16,6 +27,22 @@
   "Reason": "",
   "TableName": "user",
   "Query": "update user set val = 1 where id = 1",
+  "Index": {
+    "Type": 0,
+    "Column": "id",
+    "Lookup": null,
+    "IsOwned": false
+  },
+  "Values": 1
+}
+
+# delete from by primary keyspace id
+"delete from user where id = 1"
+{
+  "ID": "DeleteSinglePrimary",
+  "Reason": "",
+  "TableName": "user",
+  "Query": "delete from user where id = 1",
   "Index": {
     "Type": 0,
     "Column": "id",
@@ -36,6 +63,17 @@
   "Values": null
 }
 
+# delete from with primary id through IN clause
+"delete from user where id in (1, 2)"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "TableName": "user",
+  "Query": "delete from user where id in ::_vals",
+  "Index": null,
+  "Values": null
+}
+
 # update with no index match
 "update user set val = 1 where user_id = 1"
 {
@@ -43,6 +81,17 @@
   "Reason": "too complex",
   "TableName": "user",
   "Query": "update user set val = 1 where user_id = 1",
+  "Index": null,
+  "Values": null
+}
+
+# delete from with no index match
+"delete from user where user_id = 1"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "TableName": "user",
+  "Query": "delete from user where user_id = 1",
   "Index": null,
   "Values": null
 }
@@ -67,6 +116,26 @@
   "Values": 1
 }
 
+# delete from by lookup
+"delete from music where id = 1"
+{
+  "ID": "DeleteSingleLookup",
+  "Reason": "",
+  "TableName": "music",
+  "Query": "delete from music where id = 1",
+  "Index": {
+    "Type": 1,
+    "Column": "id",
+    "Lookup": {
+      "Name": "music_user_map",
+      "From": "music_id",
+      "To": "user_id"
+    },
+    "IsOwned": false
+  },
+  "Values": 1
+}
+
 # update by lookup with IN clause
 "update music set val = 1 where id in (1, 2)"
 {
@@ -74,6 +143,17 @@
   "Reason": "too complex",
   "TableName": "music",
   "Query": "update music set val = 1 where id in ::_vals",
+  "Index": null,
+  "Values": null
+}
+
+# delete from by lookup with IN clause
+"delete from music where id in (1, 2)"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "TableName": "music",
+  "Query": "delete from music where id in ::_vals",
   "Index": null,
   "Values": null
 }
@@ -88,4 +168,3 @@
   "Index": null,
   "Values": null
 }
-
