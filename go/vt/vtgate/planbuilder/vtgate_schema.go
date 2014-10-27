@@ -15,7 +15,7 @@ const (
 )
 
 type VTGateSchema struct {
-	Tables map[string]VTGateTable
+	Tables map[string]*VTGateTable
 }
 
 type VTGateTable struct {
@@ -42,8 +42,6 @@ type Keyspace struct {
 	ShardingScheme int
 }
 
-var gateSchema map[string]*VTGateTable
-
 /*
 var user = &Keyspace{
 	Name:           "user",
@@ -56,43 +54,45 @@ var musicUserLookup = &VTGateLookup{
 	To:   "user_id",
 }
 
-var gateSchema = map[string]*VTGateTable{
-	"user": {
-		Keyspace:      user,
-		KeyspaceIDCol: "keyspace_id",
-		Indexes: []*VTGateIndex{{
-			Type:   Primary,
-			Column: "id",
-		}},
-	},
-	"user_extra": {
-		Keyspace:      user,
-		KeyspaceIDCol: "keyspace_id",
-		Indexes: []*VTGateIndex{{
-			Type:   Primary,
-			Column: "user_id",
-		}},
-	},
-	"music": {
-		Keyspace:      user,
-		KeyspaceIDCol: "keyspace_id",
-		Indexes: []*VTGateIndex{{
-			Type:   Primary,
-			Column: "user_id",
-		}, {
-			Type:   Lookup,
-			Column: "id",
-			Lookup: musicUserLookup,
-		}},
-	},
-	"music_extra": {
-		Keyspace:      user,
-		KeyspaceIDCol: "keyspace_id",
-		Indexes: []*VTGateIndex{{
-			Type:   Lookup,
-			Column: "music_id",
-			Lookup: musicUserLookup,
-		}},
+var vtgateSchema = &VTGateSchema{
+	Table: map[string]*VTGateTable{
+		"user": {
+			Keyspace:      user,
+			KeyspaceIDCol: "keyspace_id",
+			Indexes: []*VTGateIndex{{
+				Type:   Primary,
+				Column: "id",
+			}},
+		},
+		"user_extra": {
+			Keyspace:      user,
+			KeyspaceIDCol: "keyspace_id",
+			Indexes: []*VTGateIndex{{
+				Type:   Primary,
+				Column: "user_id",
+			}},
+		},
+		"music": {
+			Keyspace:      user,
+			KeyspaceIDCol: "keyspace_id",
+			Indexes: []*VTGateIndex{{
+				Type:   Primary,
+				Column: "user_id",
+			}, {
+				Type:   Lookup,
+				Column: "id",
+				Lookup: musicUserLookup,
+			}},
+		},
+		"music_extra": {
+			Keyspace:      user,
+			KeyspaceIDCol: "keyspace_id",
+			Indexes: []*VTGateIndex{{
+				Type:   Lookup,
+				Column: "music_id",
+				Lookup: musicUserLookup,
+			}},
+		},
 	},
 }
 */

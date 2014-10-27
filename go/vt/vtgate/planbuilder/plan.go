@@ -4,7 +4,11 @@
 
 package planbuilder
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/youtube/vitess/go/vt/sqlparser"
+)
 
 type PlanID int
 
@@ -26,6 +30,10 @@ type Plan struct {
 	Query     string
 	Index     *VTGateIndex
 	Values    []interface{}
+}
+
+func (pln *Plan) Size() int {
+	return 1
 }
 
 // Must exactly match order of plan constants.
@@ -61,4 +69,39 @@ func (id PlanID) IsMulti() bool {
 
 func (id PlanID) MarshalJSON() ([]byte, error) {
 	return ([]byte)(fmt.Sprintf("\"%s\"", id.String())), nil
+}
+
+func BuildPlan(query string, schema *VTGateSchema) *Plan {
+	statement, err := sqlparser.Parse(query)
+	if err != nil {
+		return &Plan{
+			ID:     NoPlan,
+			Reason: "syntax error",
+			Query:  query,
+		}
+	}
+	switch statement := statement.(type) {
+	case *sqlparser.Union:
+	case *sqlparser.Select:
+		return buildSelectPlan(statement, schema)
+	case *sqlparser.Insert:
+	case *sqlparser.Update:
+	case *sqlparser.Delete:
+	case *sqlparser.Set:
+	case *sqlparser.DDL:
+	case *sqlparser.Other:
+	default:
+		panic("unexpected")
+	}
+	return &Plan{
+		ID:     NoPlan,
+		Reason: "too complex",
+		Query:  query,
+	}
+}
+
+func generateQuery(statement sqlparser.Statement) string {
+	buf := sqlparser.NewTrackedBuffer(nil)
+	statement.Format(buf)
+	return buf.String()
 }

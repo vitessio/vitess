@@ -17,24 +17,17 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/testfiles"
-	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
 func TestPlan(t *testing.T) {
-	gateSchema = loadSchema("schema_test.json")
+	schema := loadSchema("schema_test.json")
 	for tcase := range iterateExecFile("select_cases.txt") {
-		var out string
-		sel, err := sqlparser.Parse(tcase.input)
+		plan := BuildPlan(tcase.input, schema)
+		bout, err := json.Marshal(plan)
 		if err != nil {
-			out = err.Error()
-		} else {
-			plan := buildSelectPlan(sel.(*sqlparser.Select))
-			bout, err := json.Marshal(plan)
-			if err != nil {
-				panic(fmt.Sprintf("Error marshalling %v: %v", plan, err))
-			}
-			out = string(bout)
+			panic(fmt.Sprintf("Error marshalling %v: %v", plan, err))
 		}
+		out := string(bout)
 		if out != tcase.output {
 			t.Error(fmt.Sprintf("Line:%v\n%s\n%s", tcase.lineno, tcase.output, out))
 		}
@@ -42,17 +35,17 @@ func TestPlan(t *testing.T) {
 	}
 }
 
-func loadSchema(name string) map[string]*VTGateTable {
+func loadSchema(name string) *VTGateSchema {
 	b, err := ioutil.ReadFile(locateFile(name))
 	if err != nil {
 		panic(err)
 	}
-	tables := make(map[string]*VTGateTable)
-	err = json.Unmarshal(b, &tables)
+	var schema VTGateSchema
+	err = json.Unmarshal(b, &schema)
 	if err != nil {
 		panic(err)
 	}
-	return tables
+	return &schema
 }
 
 type testCase struct {

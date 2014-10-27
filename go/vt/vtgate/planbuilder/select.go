@@ -6,7 +6,7 @@ package planbuilder
 
 import "github.com/youtube/vitess/go/vt/sqlparser"
 
-func buildSelectPlan(sel *sqlparser.Select) *Plan {
+func buildSelectPlan(sel *sqlparser.Select, schema *VTGateSchema) *Plan {
 	tablename, _ := analyzeFrom(sel.From)
 	// TODO(sougou): handle joins & unions.
 	if tablename == "" {
@@ -16,7 +16,7 @@ func buildSelectPlan(sel *sqlparser.Select) *Plan {
 			Query:  generateQuery(sel),
 		}
 	}
-	table := gateSchema[tablename]
+	table := schema.Tables[tablename]
 	if table == nil {
 		return &Plan{
 			ID:        NoPlan,
@@ -55,12 +55,6 @@ func buildSelectPlan(sel *sqlparser.Select) *Plan {
 	plan.TableName = tablename
 	plan.Query = generateQuery(sel)
 	return plan
-}
-
-func generateQuery(sel *sqlparser.Select) string {
-	buf := sqlparser.NewTrackedBuffer(nil)
-	sel.Format(buf)
-	return buf.String()
 }
 
 // TODO(sougou): Copied from tabletserver. Reuse.

@@ -1,76 +1,78 @@
 {
-  "music": {
-    "Keyspace": {
-      "Name": "user",
-      "ShardingScheme": 1
-    },
-    "KeyspaceIDCol": "keyspace_id",
-    "Indexes": [
-      {
-        "Type": 0,
-        "Column": "user_id",
-        "Lookup": null,
-        "IsOwned": false
+  "Tables": {
+    "music": {
+      "Keyspace": {
+        "Name": "user",
+        "ShardingScheme": 1
       },
-      {
-        "Type": 1,
-        "Column": "id",
-        "Lookup": {
-          "Name": "music_user_map",
-          "From": "music_id",
-          "To": "user_id"
+      "KeyspaceIDCol": "keyspace_id",
+      "Indexes": [
+        {
+          "Type": 0,
+          "Column": "user_id",
+          "Lookup": null,
+          "IsOwned": false
         },
-        "IsOwned": false
-      }
-    ]
-  },
-  "music_extra": {
-    "Keyspace": {
-      "Name": "user",
-      "ShardingScheme": 1
+        {
+          "Type": 1,
+          "Column": "id",
+          "Lookup": {
+            "Name": "music_user_map",
+            "From": "music_id",
+            "To": "user_id"
+          },
+          "IsOwned": false
+        }
+      ]
     },
-    "KeyspaceIDCol": "keyspace_id",
-    "Indexes": [
-      {
-        "Type": 1,
-        "Column": "music_id",
-        "Lookup": {
-          "Name": "music_user_map",
-          "From": "music_id",
-          "To": "user_id"
-        },
-        "IsOwned": false
-      }
-    ]
-  },
-  "user": {
-    "Keyspace": {
-      "Name": "user",
-      "ShardingScheme": 1
+    "music_extra": {
+      "Keyspace": {
+        "Name": "user",
+        "ShardingScheme": 1
+      },
+      "KeyspaceIDCol": "keyspace_id",
+      "Indexes": [
+        {
+          "Type": 1,
+          "Column": "music_id",
+          "Lookup": {
+            "Name": "music_user_map",
+            "From": "music_id",
+            "To": "user_id"
+          },
+          "IsOwned": false
+        }
+      ]
     },
-    "KeyspaceIDCol": "keyspace_id",
-    "Indexes": [
-      {
-        "Type": 0,
-        "Column": "id",
-        "Lookup": null,
-        "IsOwned": false
-      }
-    ]
-  },
-  "user_extra": {
-    "Keyspace": {
-      "Name": "user",
-      "ShardingScheme": 1
+    "user": {
+      "Keyspace": {
+        "Name": "user",
+        "ShardingScheme": 1
+      },
+      "KeyspaceIDCol": "keyspace_id",
+      "Indexes": [
+        {
+          "Type": 0,
+          "Column": "id",
+          "Lookup": null,
+          "IsOwned": false
+        }
+      ]
     },
-    "KeyspaceIDCol": "keyspace_id",
-    "Indexes": [
-      {
-        "Type": 0,
-        "Column": "user_id",
-        "Lookup": null,
-        "IsOwned": false
-      }
-    ]
+    "user_extra": {
+      "Keyspace": {
+        "Name": "user",
+        "ShardingScheme": 1
+      },
+      "KeyspaceIDCol": "keyspace_id",
+      "Indexes": [
+        {
+          "Type": 0,
+          "Column": "user_id",
+          "Lookup": null,
+          "IsOwned": false
+        }
+      ]
+    }
   }
 }

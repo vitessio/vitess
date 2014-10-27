@@ -21,6 +21,7 @@ import (
 	kproto "github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
@@ -48,6 +49,7 @@ var (
 // VTGate is the rpc interface to vtgate. Only one instance
 // can be created.
 type VTGate struct {
+	planner  *Planner
 	resolver *Resolver
 	timings  *stats.MultiTimings
 
@@ -71,11 +73,12 @@ type RegisterVTGate func(*VTGate)
 
 var RegisterVTGates []RegisterVTGate
 
-func Init(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount int, timeout time.Duration, maxInFlight int) {
+func Init(serv SrvTopoServer, schema *planbuilder.VTGateSchema, cell string, retryDelay time.Duration, retryCount int, timeout time.Duration, maxInFlight int) {
 	if RpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
 	RpcVTGate = &VTGate{
+		planner:  NewPlanner(5000, schema),
 		resolver: NewResolver(serv, "VttabletCall", cell, retryDelay, retryCount, timeout),
 		timings:  stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
 
@@ -91,6 +94,8 @@ func Init(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount 
 		logStreamExecuteKeyspaceIds: logutil.NewThrottledLogger("StreamExecuteKeyspaceIds", 5*time.Second),
 		logStreamExecuteKeyRanges:   logutil.NewThrottledLogger("StreamExecuteKeyRanges", 5*time.Second),
 		logStreamExecuteShard:       logutil.NewThrottledLogger("StreamExecuteShard", 5*time.Second),
+	}
+	if schema != nil {
 	}
 	normalErrors = stats.NewMultiCounters("VtgateApiErrorCounts", []string{"Operation", "Keyspace", "DbType"})
 	infoErrors = stats.NewCounters("VtgateInfoErrorCounts")
@@ -139,6 +144,7 @@ func (vtg *VTGate) ExecuteShard(context context.Context, query *proto.QueryShard
 		return ErrTooManyInFlight
 	}
 
+	_ = vtg.planner.GetPlan(query.Sql)
 	qr, err := vtg.resolver.Execute(
 		context,
 		query.Sql,
@@ -179,6 +185,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(context context.Context, query *proto.Keys
 		return ErrTooManyInFlight
 	}
 
+	_ = vtg.planner.GetPlan(query.Sql)
 	qr, err := vtg.resolver.ExecuteKeyspaceIds(context, query)
 	if err == nil {
 		reply.Result = qr
@@ -209,6 +216,7 @@ func (vtg *VTGate) ExecuteKeyRanges(context context.Context, query *proto.KeyRan
 		return ErrTooManyInFlight
 	}
 
+	_ = vtg.planner.GetPlan(query.Sql)
 	qr, err := vtg.resolver.ExecuteKeyRanges(context, query)
 	if err == nil {
 		reply.Result = qr
@@ -239,6 +247,7 @@ func (vtg *VTGate) ExecuteEntityIds(context context.Context, query *proto.Entity
 		return ErrTooManyInFlight
 	}
 
+	_ = vtg.planner.GetPlan(query.Sql)
 	qr, err := vtg.resolver.ExecuteEntityIds(context, query)
 	if err == nil {
 		reply.Result = qr
@@ -345,6 +354,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(context context.Context, query *prot
 		return ErrTooManyInFlight
 	}
 
+	_ = vtg.planner.GetPlan(query.Sql)
 	err = vtg.resolver.StreamExecuteKeyspaceIds(
 		context,
 		query,
@@ -385,6 +395,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges(context context.Context, query *proto.
 		return ErrTooManyInFlight
 	}
 
+	_ = vtg.planner.GetPlan(query.Sql)
 	err = vtg.resolver.StreamExecuteKeyRanges(
 		context,
 		query,
@@ -421,6 +432,7 @@ func (vtg *VTGate) StreamExecuteShard(context context.Context, query *proto.Quer
 		return ErrTooManyInFlight
 	}
 
+	_ = vtg.planner.GetPlan(query.Sql)
 	err = vtg.resolver.StreamExecute(
 		context,
 		query.Sql,
