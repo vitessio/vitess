@@ -66,7 +66,7 @@ func GenerateSelectOuterQuery(sel *sqlparser.Select, tableInfo *schema.Table) *s
 	buf := sqlparser.NewTrackedBuffer(nil)
 	fmt.Fprintf(buf, "select ")
 	writeColumnList(buf, tableInfo.Columns)
-	buf.Myprintf(" from %v where %a", sel.From, "#pk")
+	buf.Myprintf(" from %v where %a", sel.From, ":#pk")
 	return buf.ParsedQuery()
 }
 
@@ -76,7 +76,7 @@ func GenerateInsertOuterQuery(ins *sqlparser.Insert) *sqlparser.ParsedQuery {
 		ins.Comments,
 		ins.Table,
 		ins.Columns,
-		"#values",
+		":#values",
 		ins.OnDup,
 	)
 	return buf.ParsedQuery()
@@ -84,13 +84,13 @@ func GenerateInsertOuterQuery(ins *sqlparser.Insert) *sqlparser.ParsedQuery {
 
 func GenerateUpdateOuterQuery(upd *sqlparser.Update) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("update %v%v set %v where %a", upd.Comments, upd.Table, upd.Exprs, "#pk")
+	buf.Myprintf("update %v%v set %v where %a", upd.Comments, upd.Table, upd.Exprs, ":#pk")
 	return buf.ParsedQuery()
 }
 
 func GenerateDeleteOuterQuery(del *sqlparser.Delete) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("delete %vfrom %v where %a", del.Comments, del.Table, "#pk")
+	buf.Myprintf("delete %vfrom %v where %a", del.Comments, del.Table, ":#pk")
 	return buf.ParsedQuery()
 }
 

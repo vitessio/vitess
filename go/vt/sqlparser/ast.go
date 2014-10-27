@@ -461,6 +461,7 @@ func (*NullVal) IExpr()        {}
 func (*ColName) IExpr()        {}
 func (ValTuple) IExpr()        {}
 func (*Subquery) IExpr()       {}
+func (ListArg) IExpr()         {}
 func (*BinaryExpr) IExpr()     {}
 func (*UnaryExpr) IExpr()      {}
 func (*FuncExpr) IExpr()       {}
@@ -597,6 +598,7 @@ func (*NullVal) IValExpr()    {}
 func (*ColName) IValExpr()    {}
 func (ValTuple) IValExpr()    {}
 func (*Subquery) IValExpr()   {}
+func (ListArg) IValExpr()     {}
 func (*BinaryExpr) IValExpr() {}
 func (*UnaryExpr) IValExpr()  {}
 func (*FuncExpr) IValExpr()   {}
@@ -621,7 +623,7 @@ func (node NumVal) Format(buf *TrackedBuffer) {
 type ValArg []byte
 
 func (node ValArg) Format(buf *TrackedBuffer) {
-	buf.WriteArg(string(node[1:]))
+	buf.WriteArg(string(node))
 }
 
 // NullVal represents a NULL value.
@@ -652,14 +654,16 @@ func escape(buf *TrackedBuffer, name []byte) {
 	}
 }
 
-// Tuple represents a tuple. It can be ValTuple, Subquery.
-type Tuple interface {
-	ITuple()
+// ColTuple represents a list of column values.
+// It can be ValTuple, Subquery, ListArg.
+type ColTuple interface {
+	IColTuple()
 	ValExpr
 }
 
-func (ValTuple) ITuple()  {}
-func (*Subquery) ITuple() {}
+func (ValTuple) IColTuple()  {}
+func (*Subquery) IColTuple() {}
+func (ListArg) IColTuple()   {}
 
 // ValTuple represents a tuple of actual values.
 type ValTuple ValExprs
@@ -687,6 +691,13 @@ type Subquery struct {
 
 func (node *Subquery) Format(buf *TrackedBuffer) {
 	buf.Myprintf("(%v)", node.Select)
+}
+
+// ListArg represents a named list argument.
+type ListArg []byte
+
+func (node ListArg) Format(buf *TrackedBuffer) {
+	buf.WriteArg(string(node))
 }
 
 // BinaryExpr represents a binary value expression.
@@ -772,17 +783,6 @@ type When struct {
 
 func (node *When) Format(buf *TrackedBuffer) {
 	buf.Myprintf("when %v then %v", node.Cond, node.Val)
-}
-
-// Values represents a VALUES clause.
-type Values []Tuple
-
-func (node Values) Format(buf *TrackedBuffer) {
-	prefix := "values "
-	for _, n := range node {
-		buf.Myprintf("%s%v", prefix, n)
-		prefix = ", "
-	}
 }
 
 // GroupBy represents a GROUP BY clause.
@@ -881,6 +881,26 @@ func (node *Limit) Limits() (offset, rowcount interface{}, err error) {
 	}
 	return offset, rowcount, nil
 }
+
+// Values represents a VALUES clause.
+type Values []RowTuple
+
+func (node Values) Format(buf *TrackedBuffer) {
+	prefix := "values "
+	for _, n := range node {
+		buf.Myprintf("%s%v", prefix, n)
+		prefix = ", "
+	}
+}
+
+// RowTuple represents a row of values. It can be ValTuple, Subquery.
+type RowTuple interface {
+	IRowTuple()
+	ValExpr
+}
+
+func (ValTuple) IRowTuple()  {}
+func (*Subquery) IRowTuple() {}
 
 // UpdateExprs represents a list of update expressions.
 type UpdateExprs []*UpdateExpr

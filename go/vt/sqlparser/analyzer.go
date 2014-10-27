@@ -58,19 +58,21 @@ func HasINClause(conditions []BoolExpr) bool {
 }
 
 // IsSimpleTuple returns true if the ValExpr is a ValTuple that
-// contains simple values.
+// contains simple values or if it's a list arg.
 func IsSimpleTuple(node ValExpr) bool {
-	list, ok := node.(ValTuple)
-	if !ok {
-		// It's a subquery.
-		return false
-	}
-	for _, n := range list {
-		if !IsValue(n) {
-			return false
+	switch vals := node.(type) {
+	case ValTuple:
+		for _, n := range vals {
+			if !IsValue(n) {
+				return false
+			}
 		}
+		return true
+	case ListArg:
+		return true
 	}
-	return true
+	// It's a subquery
+	return false
 }
 
 // AsInterface converts the ValExpr to an interface. It converts
@@ -89,6 +91,8 @@ func AsInterface(node ValExpr) (interface{}, error) {
 		}
 		return vals, nil
 	case ValArg:
+		return string(node), nil
+	case ListArg:
 		return string(node), nil
 	case StrVal:
 		return sqltypes.MakeString(node), nil
