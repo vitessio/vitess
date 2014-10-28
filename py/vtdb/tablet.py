@@ -10,6 +10,7 @@ from net import bsonrpc
 from net import gorpc
 from vtdb import dbexceptions
 from vtdb import field_types
+from vtdb import vtdb_logger
 
 
 _errno_pattern = re.compile('\(errno (\d+)\)')
@@ -61,6 +62,7 @@ class TabletConnection(object):
     self.shard = shard
     self.timeout = timeout
     self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password, encrypted=encrypted, keyfile=keyfile, certfile=certfile)
+    self.logger_object = vtdb_logger.get_logger()
 
   def __str__(self):
     return '<TabletConnection %s %s %s/%s>' % (self.addr, self.tablet_type, self.keyspace, self.shard)
@@ -166,7 +168,8 @@ class TabletConnection(object):
       rowcount = reply['RowsAffected']
       lastrowid = reply['InsertId']
     except gorpc.GoRpcError as e:
-      raise convert_exception(e, str(self), sql, bind_variables)
+      self.logger_object.log_private_data(bind_variables)
+      raise convert_exception(e, str(self), sql)
     except:
       logging.exception('gorpc low-level error')
       raise
@@ -203,7 +206,8 @@ class TabletConnection(object):
         lastrowid = reply['InsertId']
         rowsets.append((results, rowcount, lastrowid, fields))
     except gorpc.GoRpcError as e:
-      raise convert_exception(e, str(self), sql_list, bind_variables_list)
+      self.logger_object.log_private_data(bind_variables_list)
+      raise convert_exception(e, str(self), sql_list)
     except:
       logging.exception('gorpc low-level error')
       raise
@@ -231,7 +235,8 @@ class TabletConnection(object):
         self._stream_fields.append((field['Name'], field['Type']))
         self._stream_conversions.append(field_types.conversions.get(field['Type']))
     except gorpc.GoRpcError as e:
-      raise convert_exception(e, str(self), sql, bind_variables)
+      self.logger_object.log_private_data(bind_variables)
+      raise convert_exception(e, str(self), sql)
     except:
       logging.exception('gorpc low-level error')
       raise
