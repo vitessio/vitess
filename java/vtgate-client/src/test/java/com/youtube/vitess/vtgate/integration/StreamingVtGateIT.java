@@ -14,7 +14,6 @@ import org.junit.runners.JUnit4;
 
 import com.google.common.primitives.UnsignedLong;
 import com.youtube.vitess.vtgate.BindVariable;
-import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.KeyRange;
 import com.youtube.vitess.vtgate.KeyspaceId;
 import com.youtube.vitess.vtgate.Query;
@@ -66,15 +65,13 @@ public class StreamingVtGateIT {
    */
   @Test
   public void testStreamExecuteKeyspaceIds() throws Exception {
-    // Insert 100 rows per shard
-    int rowCount = 100;
+    int rowCount = 10;
     for (String shardName : testEnv.shardKidMap.keySet()) {
       Util.insertRowsInShard(testEnv, shardName, rowCount);
     }
     VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
     for (String shardName : testEnv.shardKidMap.keySet()) {
-      // Do a self join within each shard
-      String selectSql = "select A.* from vtgate_test A join vtgate_test B";
+      String selectSql = "select A.* from vtgate_test A join vtgate_test B join vtgate_test C";
       Query query =
           new QueryBuilder(selectSql, testEnv.keyspace, "master")
               .setKeyspaceIds(testEnv.getKeyspaceIds(shardName)).setStreaming(true).build();
@@ -84,8 +81,7 @@ public class StreamingVtGateIT {
         cursor.next();
         count++;
       }
-      // Assert 10000 rows fetched
-      Assert.assertEquals(rowCount * rowCount, count);
+      Assert.assertEquals((int) Math.pow(rowCount, 3), count);
     }
     vtgate.close();
   }
@@ -96,14 +92,14 @@ public class StreamingVtGateIT {
   @Test
   public void testStreamExecuteKeyRanges() throws Exception {
     VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
-    int rowCount = 100;
+    int rowCount = 10;
     for (String shardName : testEnv.shardKidMap.keySet()) {
       Util.insertRowsInShard(testEnv, shardName, rowCount);
     }
     for (String shardName : testEnv.shardKidMap.keySet()) {
       List<KeyspaceId> kids = testEnv.getKeyspaceIds(shardName);
       KeyRange kr = new KeyRange(Collections.min(kids), Collections.max(kids));
-      String selectSql = "select A.* from vtgate_test A join vtgate_test B";
+      String selectSql = "select A.* from vtgate_test A join vtgate_test B join vtgate_test C";
       Query query =
           new QueryBuilder(selectSql, testEnv.keyspace, "master").addKeyRange(kr)
               .setStreaming(true).build();
@@ -113,7 +109,7 @@ public class StreamingVtGateIT {
         cursor.next();
         count++;
       }
-      Assert.assertEquals(rowCount * rowCount, count);
+      Assert.assertEquals((int) Math.pow(rowCount, 3), count);
     }
     vtgate.close();
   }
@@ -123,13 +119,11 @@ public class StreamingVtGateIT {
    */
   @Test
   public void testScatterStreamingQuery() throws Exception {
-    // Insert 100 rows per shard
-    int rowCount = 100;
+    int rowCount = 10;
     for (String shardName : testEnv.shardKidMap.keySet()) {
       Util.insertRowsInShard(testEnv, shardName, rowCount);
     }
-    // Run a self join query
-    String selectSql = "select A.* from vtgate_test A join vtgate_test B";
+    String selectSql = "select A.* from vtgate_test A join vtgate_test B join vtgate_test C";
     Query query =
         new QueryBuilder(selectSql, testEnv.keyspace, "master")
             .setKeyspaceIds(testEnv.getAllKeyspaceIds()).setStreaming(true).build();
@@ -139,8 +133,7 @@ public class StreamingVtGateIT {
     for (Row row : cursor) {
       count++;
     }
-    // Check 10000 rows were fetched from each shard
-    Assert.assertEquals(2 * rowCount * rowCount, count);
+    Assert.assertEquals(2 * (int) Math.pow(rowCount, 3), count);
     vtgate.close();
   }
 

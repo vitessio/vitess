@@ -94,12 +94,12 @@ public class VtGateIT {
     Assert.assertFalse(cursor.hasNext());
     vtgate.close();
 
-    // Insert 100 rows
-    Util.insertRows(testEnv, 1000, 100);
+    // Insert 10 rows
+    Util.insertRows(testEnv, 1000, 10);
 
     vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
     cursor = vtgate.execute(allRowsQuery);
-    Assert.assertEquals(100, cursor.getRowsAffected());
+    Assert.assertEquals(10, cursor.getRowsAffected());
     Assert.assertEquals(0, cursor.getLastRowId());
     Assert.assertTrue(cursor.hasNext());
 
@@ -155,7 +155,7 @@ public class VtGateIT {
   @Test
   public void testDateFieldTypes() throws Exception {
     DateTime dt = DateTime.now().minusDays(2).withMillisOfSecond(0);
-    Util.insertRows(testEnv, 100, 1, dt);
+    Util.insertRows(testEnv, 10, 1, dt);
     VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
     Query allRowsQuery =
         new QueryBuilder("select * from vtgate_test", testEnv.keyspace, "master").setKeyspaceIds(
@@ -170,6 +170,7 @@ public class VtGateIT {
 
     vtgate.close();
   }
+
 
   @Test
   public void testTimeout() throws ConnectionException, DatabaseException {
@@ -198,15 +199,15 @@ public class VtGateIT {
    */
   @Test
   public void testAllKeyRange() throws Exception {
-    // Insert 100 rows across the shards
-    Util.insertRows(testEnv, 1000, 100);
+    // Insert 10 rows across the shards
+    Util.insertRows(testEnv, 1000, 10);
     VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
     String selectSql = "select * from vtgate_test";
     Query allRowsQuery =
         new QueryBuilder(selectSql, testEnv.keyspace, "master").addKeyRange(KeyRange.ALL).build();
     Cursor cursor = vtgate.execute(allRowsQuery);
     // Verify all rows returned
-    Assert.assertEquals(100, cursor.getRowsAffected());
+    Assert.assertEquals(10, cursor.getRowsAffected());
     vtgate.close();
   }
 
@@ -215,7 +216,7 @@ public class VtGateIT {
    */
   @Test
   public void testKeyRangeReads() throws Exception {
-    int rowsPerShard = 100;
+    int rowsPerShard = 10;
     // insert rows in each shard using ExecuteKeyspaceIds
     for (String shardName : testEnv.shardKidMap.keySet()) {
       Util.insertRowsInShard(testEnv, shardName, rowsPerShard);
@@ -230,7 +231,7 @@ public class VtGateIT {
     Cursor cursor = vtgate.execute(allRangeQuery);
     Assert.assertEquals(rowsPerShard * 2, cursor.getRowsAffected());
 
-    // Check KeyRange query limited to a single shard returns 100 rows each
+    // Check KeyRange query limited to a single shard returns 10 rows each
     for (String shardName : testEnv.shardKidMap.keySet()) {
       List<KeyspaceId> shardKids = testEnv.getKeyspaceIds(shardName);
       KeyspaceId minKid = Collections.min(shardKids);
