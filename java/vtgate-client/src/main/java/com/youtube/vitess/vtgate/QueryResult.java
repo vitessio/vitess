@@ -1,8 +1,8 @@
 package com.youtube.vitess.vtgate;
 
-import java.util.List;
-
 import com.youtube.vitess.vtgate.cursor.Cursor;
+
+import java.util.List;
 
 /**
  * Represents a VtGate query result set. For selects, rows are better accessed through the iterator

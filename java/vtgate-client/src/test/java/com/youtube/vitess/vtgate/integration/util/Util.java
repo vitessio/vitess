@@ -1,18 +1,10 @@
 package com.youtube.vitess.vtgate.integration.util;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.lang.reflect.Type;
-import java.util.List;
-import java.util.Map;
-
-import org.joda.time.DateTime;
-import org.junit.Assert;
-
 import com.google.common.primitives.UnsignedLong;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
+
 import com.youtube.vitess.vtgate.BindVariable;
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.Exceptions.DatabaseException;
@@ -21,6 +13,15 @@ import com.youtube.vitess.vtgate.Query;
 import com.youtube.vitess.vtgate.Query.QueryBuilder;
 import com.youtube.vitess.vtgate.VtGate;
 import com.youtube.vitess.vtgate.cursor.Cursor;
+
+import org.joda.time.DateTime;
+import org.junit.Assert;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.lang.reflect.Type;
+import java.util.List;
+import java.util.Map;
 
 public class Util {
   /**

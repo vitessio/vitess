@@ -1,10 +1,10 @@
 package com.youtube.vitess.vtgate;
 
-import org.apache.commons.codec.DecoderException;
-import org.apache.commons.codec.binary.Hex;
-
 import com.google.common.primitives.Longs;
 import com.google.common.primitives.UnsignedLong;
+
+import org.apache.commons.codec.DecoderException;
+import org.apache.commons.codec.binary.Hex;
 
 /**
  * KeyspaceId can be either String or UnsignedLong. Use factory method valueOf to create instances

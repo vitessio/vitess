@@ -1,11 +1,18 @@
 package com.youtube.vitess.vtgate.integration.hadoop;
 
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import com.google.common.collect.Lists;
+import com.google.common.primitives.UnsignedLong;
+import com.google.gson.Gson;
+
+import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
+import com.youtube.vitess.vtgate.KeyspaceId;
+import com.youtube.vitess.vtgate.Query;
+import com.youtube.vitess.vtgate.VtGate;
+import com.youtube.vitess.vtgate.hadoop.VitessInputFormat;
+import com.youtube.vitess.vtgate.hadoop.writables.KeyspaceIdWritable;
+import com.youtube.vitess.vtgate.hadoop.writables.RowWritable;
+import com.youtube.vitess.vtgate.integration.util.TestEnv;
+import com.youtube.vitess.vtgate.integration.util.Util;
 
 import junit.extensions.TestSetup;
 import junit.framework.TestSuite;
@@ -27,18 +34,12 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import com.google.common.collect.Lists;
-import com.google.common.primitives.UnsignedLong;
-import com.google.gson.Gson;
-import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
-import com.youtube.vitess.vtgate.KeyspaceId;
-import com.youtube.vitess.vtgate.Query;
-import com.youtube.vitess.vtgate.VtGate;
-import com.youtube.vitess.vtgate.hadoop.VitessInputFormat;
-import com.youtube.vitess.vtgate.hadoop.writables.KeyspaceIdWritable;
-import com.youtube.vitess.vtgate.hadoop.writables.RowWritable;
-import com.youtube.vitess.vtgate.integration.util.TestEnv;
-import com.youtube.vitess.vtgate.integration.util.Util;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Integration tests for MapReductions in Vitess. These tests use an in-process Hadoop cluster via

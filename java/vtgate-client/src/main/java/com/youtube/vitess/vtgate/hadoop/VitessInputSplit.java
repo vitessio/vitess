@@ -1,14 +1,15 @@
 package com.youtube.vitess.vtgate.hadoop;
 
-import java.io.DataInput;
-import java.io.DataOutput;
-import java.io.IOException;
+import com.google.gson.Gson;
+
+import com.youtube.vitess.vtgate.Query;
 
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapreduce.InputSplit;
 
-import com.google.gson.Gson;
-import com.youtube.vitess.vtgate.Query;
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
 
 /**
  * {@link VitessInputSplit} has a Query corresponding to a set of rows from a Vitess table input

@@ -1,9 +1,9 @@
 package com.youtube.vitess.vtgate.cursor;
 
-import java.util.Iterator;
-
 import com.youtube.vitess.vtgate.QueryResult;
 import com.youtube.vitess.vtgate.Row;
+
+import java.util.Iterator;
 
 public class CursorImpl implements Cursor {
   private QueryResult result;

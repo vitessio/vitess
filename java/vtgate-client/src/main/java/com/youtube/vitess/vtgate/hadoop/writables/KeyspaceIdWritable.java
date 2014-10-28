@@ -1,16 +1,17 @@
 package com.youtube.vitess.vtgate.hadoop.writables;
 
-import java.io.DataInput;
-import java.io.DataOutput;
-import java.io.IOException;
-
-import org.apache.hadoop.io.WritableComparable;
-
 import com.google.common.primitives.UnsignedLong;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+
 import com.youtube.vitess.vtgate.KeyspaceId;
 import com.youtube.vitess.vtgate.utils.GsonAdapters;
+
+import org.apache.hadoop.io.WritableComparable;
+
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
 
 /**
  * Serializable version of {@link KeyspaceId}

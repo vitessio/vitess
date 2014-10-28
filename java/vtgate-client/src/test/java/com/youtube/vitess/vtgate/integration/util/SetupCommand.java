@@ -1,9 +1,9 @@
 package com.youtube.vitess.vtgate.integration.util;
 
+import org.junit.Assert;
+
 import java.util.ArrayList;
 import java.util.List;
-
-import org.junit.Assert;
 
 public class SetupCommand {
   public static List<String> get(TestEnv testEnv, boolean isSetUp) {

@@ -1,14 +1,14 @@
 package com.youtube.vitess.vtgate.cursor;
 
-import java.util.Iterator;
-
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.QueryResult;
 import com.youtube.vitess.vtgate.Row;
 import com.youtube.vitess.vtgate.rpcclient.RpcClient;
+
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
+import java.util.Iterator;
 
 /**
  * StreamCursor is for iterating through stream query results. When the current buffer is completed,

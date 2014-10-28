@@ -1,13 +1,13 @@
 package com.youtube.vitess.vtgate.utils;
 
-import java.io.IOException;
-
 import com.google.common.primitives.UnsignedLong;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.TypeAdapter;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
 import com.google.gson.stream.JsonWriter;
+
+import java.io.IOException;
 
 /**
  * Custom GSON adapters for {@link UnsignedLong} and {@link Class} types

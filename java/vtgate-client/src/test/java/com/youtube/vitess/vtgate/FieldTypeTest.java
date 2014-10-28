@@ -1,15 +1,15 @@
 package com.youtube.vitess.vtgate;
 
-import java.math.BigDecimal;
-import java.util.List;
+import com.google.common.collect.Lists;
+import com.google.common.primitives.UnsignedLong;
 
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import com.google.common.collect.Lists;
-import com.google.common.primitives.UnsignedLong;
+import java.math.BigDecimal;
+import java.util.List;
 
 @RunWith(JUnit4.class)
 public class FieldTypeTest {

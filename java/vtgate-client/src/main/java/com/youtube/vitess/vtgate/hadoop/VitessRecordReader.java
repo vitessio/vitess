@@ -1,11 +1,5 @@
 package com.youtube.vitess.vtgate.hadoop;
 
-import java.io.IOException;
-
-import org.apache.hadoop.mapreduce.InputSplit;
-import org.apache.hadoop.mapreduce.RecordReader;
-import org.apache.hadoop.mapreduce.TaskAttemptContext;
-
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.Exceptions.DatabaseException;
 import com.youtube.vitess.vtgate.Exceptions.InvalidFieldException;
@@ -15,6 +9,12 @@ import com.youtube.vitess.vtgate.VtGate;
 import com.youtube.vitess.vtgate.cursor.Cursor;
 import com.youtube.vitess.vtgate.hadoop.writables.KeyspaceIdWritable;
 import com.youtube.vitess.vtgate.hadoop.writables.RowWritable;
+
+import org.apache.hadoop.mapreduce.InputSplit;
+import org.apache.hadoop.mapreduce.RecordReader;
+import org.apache.hadoop.mapreduce.TaskAttemptContext;
+
+import java.io.IOException;
 
 public class VitessRecordReader extends RecordReader<KeyspaceIdWritable, RowWritable> {
   private VitessInputSplit split;

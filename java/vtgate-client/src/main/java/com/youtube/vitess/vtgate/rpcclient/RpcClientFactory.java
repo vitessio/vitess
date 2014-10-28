@@ -1,6 +1,7 @@
 package com.youtube.vitess.vtgate.rpcclient;
 
 import com.google.common.net.HostAndPort;
+
 import com.youtube.vitess.gorpc.Client;
 import com.youtube.vitess.gorpc.Exceptions.GoRpcException;
 import com.youtube.vitess.gorpc.codecs.bson.BsonClientCodecFactory;

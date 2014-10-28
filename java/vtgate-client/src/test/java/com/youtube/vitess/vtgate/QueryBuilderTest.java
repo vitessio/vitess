@@ -1,13 +1,13 @@
 package com.youtube.vitess.vtgate;
 
-import java.util.Arrays;
+import com.youtube.vitess.vtgate.Query.QueryBuilder;
 
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import com.youtube.vitess.vtgate.Query.QueryBuilder;
+import java.util.Arrays;
 
 @RunWith(JUnit4.class)
 public class QueryBuilderTest {

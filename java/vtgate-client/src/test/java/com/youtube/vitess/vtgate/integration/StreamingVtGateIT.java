@@ -1,18 +1,7 @@
 package com.youtube.vitess.vtgate.integration;
 
-import java.util.Collections;
-import java.util.List;
-
-import org.junit.AfterClass;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Ignore;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-
 import com.google.common.primitives.UnsignedLong;
+
 import com.youtube.vitess.vtgate.BindVariable;
 import com.youtube.vitess.vtgate.KeyRange;
 import com.youtube.vitess.vtgate.KeyspaceId;
@@ -24,6 +13,18 @@ import com.youtube.vitess.vtgate.cursor.Cursor;
 import com.youtube.vitess.vtgate.cursor.StreamCursor;
 import com.youtube.vitess.vtgate.integration.util.TestEnv;
 import com.youtube.vitess.vtgate.integration.util.Util;
+
+import org.junit.AfterClass;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Ignore;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Test cases for streaming queries in VtGate

@@ -1,25 +1,8 @@
 package com.youtube.vitess.vtgate.integration;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-
-import org.joda.time.DateTime;
-import org.junit.AfterClass;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-
 import com.google.common.collect.Lists;
 import com.google.common.primitives.UnsignedLong;
+
 import com.youtube.vitess.vtgate.BatchQuery;
 import com.youtube.vitess.vtgate.BatchQuery.BatchQueryBuilder;
 import com.youtube.vitess.vtgate.BindVariable;
@@ -36,6 +19,24 @@ import com.youtube.vitess.vtgate.cursor.Cursor;
 import com.youtube.vitess.vtgate.cursor.CursorImpl;
 import com.youtube.vitess.vtgate.integration.util.TestEnv;
 import com.youtube.vitess.vtgate.integration.util.Util;
+
+import org.joda.time.DateTime;
+import org.junit.AfterClass;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
 
 @RunWith(JUnit4.class)
 public class VtGateIT {

@@ -1,19 +1,8 @@
 package com.youtube.vitess.vtgate.rpcclient.gorpc;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-
-import org.apache.commons.codec.binary.Hex;
-import org.bson.BSONObject;
-import org.bson.BasicBSONObject;
-import org.bson.types.BasicBSONList;
-
 import com.google.common.primitives.Ints;
 import com.google.common.primitives.UnsignedLong;
+
 import com.youtube.vitess.vtgate.BatchQuery;
 import com.youtube.vitess.vtgate.BatchQueryResponse;
 import com.youtube.vitess.vtgate.BindVariable;
@@ -29,6 +18,18 @@ import com.youtube.vitess.vtgate.Row;
 import com.youtube.vitess.vtgate.Row.Cell;
 import com.youtube.vitess.vtgate.SplitQueryRequest;
 import com.youtube.vitess.vtgate.SplitQueryResponse;
+
+import org.apache.commons.codec.binary.Hex;
+import org.bson.BSONObject;
+import org.bson.BasicBSONObject;
+import org.bson.types.BasicBSONList;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 
 public class Bsonify {
   public static BSONObject queryToBson(Query query) {

@@ -1,18 +1,18 @@
 package com.youtube.vitess.vtgate.integration;
 
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-
 import com.youtube.vitess.vtgate.Query;
 import com.youtube.vitess.vtgate.Query.QueryBuilder;
 import com.youtube.vitess.vtgate.VtGate;
 import com.youtube.vitess.vtgate.cursor.Cursor;
 import com.youtube.vitess.vtgate.integration.util.TestEnv;
 import com.youtube.vitess.vtgate.integration.util.Util;
+
+import org.junit.After;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 @RunWith(JUnit4.class)
 public class StreamingServerShutdownIT {

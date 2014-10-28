@@ -1,7 +1,5 @@
 package com.youtube.vitess.vtgate.rpcclient;
 
-import java.util.List;
-
 import com.youtube.vitess.vtgate.BatchQuery;
 import com.youtube.vitess.vtgate.BatchQueryResponse;
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
@@ -11,6 +9,8 @@ import com.youtube.vitess.vtgate.QueryResponse;
 import com.youtube.vitess.vtgate.QueryResult;
 import com.youtube.vitess.vtgate.SplitQueryRequest;
 import com.youtube.vitess.vtgate.SplitQueryResponse;
+
+import java.util.List;
 
 public interface RpcClient {
 

@@ -1,12 +1,12 @@
 package com.youtube.vitess.vtgate;
 
-import java.text.ParseException;
-
 import org.joda.time.DateTime;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.text.ParseException;
 
 @RunWith(JUnit4.class)
 public class DateTypesTest {

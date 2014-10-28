@@ -1,11 +1,5 @@
 package com.youtube.vitess.vtgate;
 
-import java.util.Arrays;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.Exceptions.DatabaseException;
 import com.youtube.vitess.vtgate.cursor.Cursor;
@@ -13,6 +7,12 @@ import com.youtube.vitess.vtgate.cursor.CursorImpl;
 import com.youtube.vitess.vtgate.cursor.StreamCursor;
 import com.youtube.vitess.vtgate.rpcclient.RpcClient;
 import com.youtube.vitess.vtgate.rpcclient.RpcClientFactory;
+
+import java.util.Arrays;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
 
 /**
  * A single threaded VtGate client

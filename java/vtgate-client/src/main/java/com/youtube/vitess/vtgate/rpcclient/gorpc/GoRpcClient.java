@@ -1,12 +1,5 @@
 package com.youtube.vitess.vtgate.rpcclient.gorpc;
 
-import java.util.List;
-
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-import org.bson.BSONObject;
-import org.bson.BasicBSONObject;
-
 import com.youtube.vitess.gorpc.Client;
 import com.youtube.vitess.gorpc.Exceptions.ApplicationException;
 import com.youtube.vitess.gorpc.Exceptions.GoRpcException;
@@ -21,6 +14,13 @@ import com.youtube.vitess.vtgate.QueryResult;
 import com.youtube.vitess.vtgate.SplitQueryRequest;
 import com.youtube.vitess.vtgate.SplitQueryResponse;
 import com.youtube.vitess.vtgate.rpcclient.RpcClient;
+
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+import org.bson.BSONObject;
+import org.bson.BasicBSONObject;
+
+import java.util.List;
 
 public class GoRpcClient implements RpcClient {
   public static final Logger LOGGER = LogManager.getLogger(GoRpcClient.class.getName());

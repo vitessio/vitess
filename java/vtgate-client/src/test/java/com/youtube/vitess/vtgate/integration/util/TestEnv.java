@@ -1,15 +1,16 @@
 package com.youtube.vitess.vtgate.integration.util;
 
+import com.google.common.primitives.UnsignedLong;
+import com.google.gson.Gson;
+
+import com.youtube.vitess.vtgate.KeyspaceId;
+
+import org.apache.commons.lang.StringUtils;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import org.apache.commons.lang.StringUtils;
-
-import com.google.common.primitives.UnsignedLong;
-import com.google.gson.Gson;
-import com.youtube.vitess.vtgate.KeyspaceId;
 
 /**
  * Helper class to hold the configurations for VtGate setup used in integration tests

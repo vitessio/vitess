@@ -1,15 +1,16 @@
 package com.youtube.vitess.vtgate;
 
-import java.math.BigDecimal;
-import java.util.Iterator;
-import java.util.LinkedList;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.primitives.UnsignedLong;
+
+import com.youtube.vitess.vtgate.Exceptions.InvalidFieldException;
+import com.youtube.vitess.vtgate.Row.Cell;
 
 import org.joda.time.DateTime;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.common.primitives.UnsignedLong;
-import com.youtube.vitess.vtgate.Exceptions.InvalidFieldException;
-import com.youtube.vitess.vtgate.Row.Cell;
+import java.math.BigDecimal;
+import java.util.Iterator;
+import java.util.LinkedList;
 
 public class Row implements Iterator<Cell>, Iterable<Cell> {
   private ImmutableMap<String, Cell> contents;

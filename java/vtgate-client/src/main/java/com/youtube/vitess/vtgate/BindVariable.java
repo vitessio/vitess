@@ -1,14 +1,14 @@
 package com.youtube.vitess.vtgate;
 
-import java.io.UnsupportedEncodingException;
-import java.math.BigDecimal;
+import com.google.common.primitives.UnsignedLong;
 
 import org.apache.commons.lang.CharEncoding;
 import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.ISODateTimeFormat;
 
-import com.google.common.primitives.UnsignedLong;
+import java.io.UnsupportedEncodingException;
+import java.math.BigDecimal;
 
 public class BindVariable {
   private String name;

@@ -1,10 +1,10 @@
 package com.youtube.vitess.vtgate.hadoop;
 
-import java.util.Arrays;
-import java.util.List;
-
 import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.conf.Configuration;
+
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Collection of configuration properties used for {@link VitessInputFormat}

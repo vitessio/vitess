@@ -1,6 +1,12 @@
 package com.youtube.vitess.vtgate;
 
-import java.math.BigDecimal;
+import com.google.common.primitives.UnsignedLong;
+
+import com.youtube.vitess.vtgate.Exceptions.InvalidFieldException;
+import com.youtube.vitess.vtgate.Row.Cell;
+import com.youtube.vitess.vtgate.cursor.Cursor;
+import com.youtube.vitess.vtgate.cursor.CursorImpl;
+import com.youtube.vitess.vtgate.rpcclient.gorpc.Bsonify;
 
 import org.bson.BSONObject;
 import org.bson.BasicBSONObject;
@@ -10,12 +16,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import com.google.common.primitives.UnsignedLong;
-import com.youtube.vitess.vtgate.Exceptions.InvalidFieldException;
-import com.youtube.vitess.vtgate.Row.Cell;
-import com.youtube.vitess.vtgate.cursor.Cursor;
-import com.youtube.vitess.vtgate.cursor.CursorImpl;
-import com.youtube.vitess.vtgate.rpcclient.gorpc.Bsonify;
+import java.math.BigDecimal;
 
 @RunWith(JUnit4.class)
 public class BsonifyTest {

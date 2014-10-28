@@ -1,9 +1,12 @@
 package com.youtube.vitess.vtgate.hadoop;
 
-import java.io.IOException;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
+import com.youtube.vitess.vtgate.Exceptions.DatabaseException;
+import com.youtube.vitess.vtgate.KeyspaceId;
+import com.youtube.vitess.vtgate.Query;
+import com.youtube.vitess.vtgate.VtGate;
+import com.youtube.vitess.vtgate.hadoop.writables.KeyspaceIdWritable;
+import com.youtube.vitess.vtgate.hadoop.writables.RowWritable;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.mapreduce.InputFormat;
@@ -13,13 +16,10 @@ import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 
-import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
-import com.youtube.vitess.vtgate.Exceptions.DatabaseException;
-import com.youtube.vitess.vtgate.KeyspaceId;
-import com.youtube.vitess.vtgate.Query;
-import com.youtube.vitess.vtgate.VtGate;
-import com.youtube.vitess.vtgate.hadoop.writables.KeyspaceIdWritable;
-import com.youtube.vitess.vtgate.hadoop.writables.RowWritable;
+import java.io.IOException;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 
 /**
  * {@link VitessInputFormat} is the {@link InputFormat} for tables in Vitess. Input splits (
