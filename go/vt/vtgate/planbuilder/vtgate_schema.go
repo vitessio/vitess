@@ -19,9 +19,8 @@ type VTGateSchema struct {
 }
 
 type VTGateTable struct {
-	Keyspace      *Keyspace
-	KeyspaceIDCol string
-	Indexes       []*VTGateIndex
+	Keyspace *Keyspace
+	Indexes  []*VTGateIndex
 }
 
 type VTGateIndex struct {
@@ -30,6 +29,8 @@ type VTGateIndex struct {
 	Lookup *VTGateLookup
 	// TODO(sougou): Currently unused.
 	IsOwned bool
+	// This can be true only if IsOwned is true.
+	IsAutoInc bool
 }
 
 type VTGateLookup struct {
@@ -58,7 +59,6 @@ var vtgateSchema = &VTGateSchema{
 	Table: map[string]*VTGateTable{
 		"user": {
 			Keyspace:      user,
-			KeyspaceIDCol: "keyspace_id",
 			Indexes: []*VTGateIndex{{
 				Type:   Primary,
 				Column: "id",
@@ -66,7 +66,6 @@ var vtgateSchema = &VTGateSchema{
 		},
 		"user_extra": {
 			Keyspace:      user,
-			KeyspaceIDCol: "keyspace_id",
 			Indexes: []*VTGateIndex{{
 				Type:   Primary,
 				Column: "user_id",
@@ -74,7 +73,6 @@ var vtgateSchema = &VTGateSchema{
 		},
 		"music": {
 			Keyspace:      user,
-			KeyspaceIDCol: "keyspace_id",
 			Indexes: []*VTGateIndex{{
 				Type:   Primary,
 				Column: "user_id",
@@ -86,7 +84,6 @@ var vtgateSchema = &VTGateSchema{
 		},
 		"music_extra": {
 			Keyspace:      user,
-			KeyspaceIDCol: "keyspace_id",
 			Indexes: []*VTGateIndex{{
 				Type:   Lookup,
 				Column: "music_id",

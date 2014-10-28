@@ -32,7 +32,8 @@
     "Type": 0,
     "Column": "id",
     "Lookup": null,
-    "IsOwned": false
+    "IsOwned": false,
+    "IsAutoInc": false
   },
   "Values": 1
 }
@@ -48,7 +49,8 @@
     "Type": 0,
     "Column": "id",
     "Lookup": null,
-    "IsOwned": false
+    "IsOwned": false,
+    "IsAutoInc": false
   },
   "Values": ":id"
 }
@@ -64,7 +66,8 @@
     "Type": 0,
     "Column": "id",
     "Lookup": null,
-    "IsOwned": false
+    "IsOwned": false,
+    "IsAutoInc": false
   },
   "Values": [
     1,
@@ -94,7 +97,8 @@
     "Type": 0,
     "Column": "user_id",
     "Lookup": null,
-    "IsOwned": false
+    "IsOwned": false,
+    "IsAutoInc": false
   },
   "Values": 1
 }
@@ -110,7 +114,8 @@
     "Type": 0,
     "Column": "user_id",
     "Lookup": null,
-    "IsOwned": false
+    "IsOwned": false,
+    "IsAutoInc": false
   },
   "Values": 1
 }
@@ -130,7 +135,8 @@
       "From": "music_id",
       "To": "user_id"
     },
-    "IsOwned": false
+    "IsOwned": false,
+    "IsAutoInc": false
   },
   "Values": 1
 }
@@ -150,7 +156,8 @@
       "From": "music_id",
       "To": "user_id"
     },
-    "IsOwned": false
+    "IsOwned": false,
+    "IsAutoInc": false
   },
   "Values": [
     1,
@@ -173,7 +180,8 @@
       "From": "music_id",
       "To": "user_id"
     },
-    "IsOwned": false
+    "IsOwned": false,
+    "IsAutoInc": false
   },
   "Values": [
     ":a",
@@ -196,7 +204,8 @@
       "From": "music_id",
       "To": "user_id"
     },
-    "IsOwned": false
+    "IsOwned": false,
+    "IsAutoInc": false
   },
   "Values": "::list"
 }
@@ -216,7 +225,8 @@
       "From": "music_id",
       "To": "user_id"
     },
-    "IsOwned": false
+    "IsOwned": false,
+    "IsAutoInc": false
   },
   "Values": 1
 }
@@ -243,7 +253,8 @@
     "Type": 0,
     "Column": "id",
     "Lookup": null,
-    "IsOwned": false
+    "IsOwned": false,
+    "IsAutoInc": false
   },
   "Values": 1
 }
@@ -270,7 +281,8 @@
     "Type": 0,
     "Column": "id",
     "Lookup": null,
-    "IsOwned": false
+    "IsOwned": false,
+    "IsAutoInc": false
   },
   "Values": 1
 }
@@ -297,7 +309,8 @@
     "Type": 0,
     "Column": "id",
     "Lookup": null,
-    "IsOwned": false
+    "IsOwned": false,
+    "IsAutoInc": false
   },
   "Values": [
     1,

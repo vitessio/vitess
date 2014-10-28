@@ -31,7 +31,8 @@
     "Type": 0,
     "Column": "id",
     "Lookup": null,
-    "IsOwned": false
+    "IsOwned": false,
+    "IsAutoInc": false
   },
   "Values": 1
 }
@@ -47,7 +48,8 @@
     "Type": 0,
     "Column": "id",
     "Lookup": null,
-    "IsOwned": false
+    "IsOwned": false,
+    "IsAutoInc": false
   },
   "Values": 1
 }
@@ -111,7 +113,8 @@
       "From": "music_id",
       "To": "user_id"
     },
-    "IsOwned": false
+    "IsOwned": false,
+    "IsAutoInc": false
   },
   "Values": 1
 }
@@ -131,7 +134,8 @@
       "From": "music_id",
       "To": "user_id"
     },
-    "IsOwned": false
+    "IsOwned": false,
+    "IsAutoInc": false
   },
   "Values": 1
 }
