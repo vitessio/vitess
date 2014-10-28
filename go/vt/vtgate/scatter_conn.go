@@ -270,27 +270,39 @@ func (stc *ScatterConn) Commit(context context.Context, session *SafeSession) (e
 	if !session.InTransaction() {
 		return fmt.Errorf("cannot commit: not in transaction")
 	}
+	var wg sync.WaitGroup
 	committing := true
 	for _, shardSession := range session.ShardSessions {
 		sdc := stc.getConnection(context, shardSession.Keyspace, shardSession.Shard, shardSession.TabletType)
 		if !committing {
-			go sdc.Rollback(context, shardSession.TransactionId)
+			wg.Add(1)
+			go func(transID int64) {
+				defer wg.Done()
+				sdc.Rollback(context, transID)
+			}(shardSession.TransactionId)
 			continue
 		}
 		if err = sdc.Commit(context, shardSession.TransactionId); err != nil {
 			committing = false
 		}
 	}
+	wg.Wait()
 	session.Reset()
 	return err
 }
 
 // Rollback rolls back the current transaction. There are no retries on this operation.
 func (stc *ScatterConn) Rollback(context context.Context, session *SafeSession) (err error) {
+	var wg sync.WaitGroup
 	for _, shardSession := range session.ShardSessions {
 		sdc := stc.getConnection(context, shardSession.Keyspace, shardSession.Shard, shardSession.TabletType)
-		go sdc.Rollback(context, shardSession.TransactionId)
+		wg.Add(1)
+		go func(transID int64) {
+			defer wg.Done()
+			sdc.Rollback(context, transID)
+		}(shardSession.TransactionId)
 	}
+	wg.Wait()
 	session.Reset()
 	return nil
 }
