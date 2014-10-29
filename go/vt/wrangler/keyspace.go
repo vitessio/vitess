@@ -73,16 +73,16 @@ func (wr *Wrangler) setKeyspaceShardingInfo(keyspace, shardingColumnName string,
 
 // MigrateServedTypes is used during horizontal splits to migrate a
 // served type from a list of shards to another.
-func (wr *Wrangler) MigrateServedTypes(keyspace, shard string, cells []string, servedType topo.TabletType, reverse, skipRebuild bool) error {
+func (wr *Wrangler) MigrateServedTypes(keyspace, shard string, cells []string, servedType topo.TabletType, reverse, skipReFreshState bool) error {
 	if servedType == topo.TYPE_MASTER {
 		// we cannot migrate a master back, since when master migration
 		// is done, the source shards are dead
 		if reverse {
 			return fmt.Errorf("Cannot migrate master back to %v/%v", keyspace, shard)
 		}
-		// we cannot skip rebuild for a master
-		if skipRebuild {
-			return fmt.Errorf("Cannot skip rebuild for master migration on %v/%v", keyspace, shard)
+		// we cannot skip refresh state for a master
+		if skipReFreshState {
+			return fmt.Errorf("Cannot skip refresh state for master migration on %v/%v", keyspace, shard)
 		}
 	}
 
@@ -152,8 +152,7 @@ func (wr *Wrangler) MigrateServedTypes(keyspace, shard string, cells []string, s
 	rec := concurrency.AllErrorRecorder{}
 
 	// execute the migration
-	shardCache := make(map[string]*topo.ShardInfo)
-	rec.RecordError(wr.migrateServedTypes(keyspace, sourceShards, destinationShards, cells, servedType, reverse, shardCache))
+	rec.RecordError(wr.migrateServedTypes(keyspace, sourceShards, destinationShards, cells, servedType, reverse))
 
 	// unlock the shards, we're done
 	for i := len(destinationShards) - 1; i >= 0; i-- {
@@ -164,11 +163,18 @@ func (wr *Wrangler) MigrateServedTypes(keyspace, shard string, cells []string, s
 	}
 
 	// rebuild the keyspace serving graph if there was no error
-	if rec.Error() == nil {
-		if skipRebuild {
-			wr.Logger().Infof("Skipping keyspace rebuild, please run it at earliest convenience")
-		} else {
-			rec.RecordError(wr.RebuildKeyspaceGraph(keyspace, nil, shardCache))
+	if !rec.HasErrors() {
+		rec.RecordError(wr.RebuildKeyspaceGraph(keyspace, nil))
+	}
+
+	// Send a refresh to the source tablets we just disabled, iff:
+	// - we're not migrating a master
+	// - it is not a reverse migration
+	// - we dont' have any errors
+	// - we're not told to skip the refresh
+	if servedType != topo.TYPE_MASTER && !reverse && !rec.HasErrors() && !skipReFreshState {
+		for _, si := range sourceShards {
+			rec.RecordError(wr.RefreshTablesByShard(si, servedType, cells))
 		}
 	}
 
@@ -186,37 +192,6 @@ func removeType(tabletType topo.TabletType, types []topo.TabletType) ([]topo.Tab
 		}
 	}
 	return result, found
-}
-
-func (wr *Wrangler) makeMastersReadOnly(shards []*topo.ShardInfo) error {
-	wg := sync.WaitGroup{}
-	rec := concurrency.AllErrorRecorder{}
-	for _, si := range shards {
-		if si.MasterAlias.IsZero() {
-			rec.RecordError(fmt.Errorf("Shard %v/%v has no master?", si.Keyspace(), si.ShardName()))
-			continue
-		}
-
-		wg.Add(1)
-		go func(si *topo.ShardInfo) {
-			defer wg.Done()
-
-			wr.Logger().Infof("Making master %v read-only", si.MasterAlias)
-			ti, err := wr.ts.GetTablet(si.MasterAlias)
-			if err != nil {
-				rec.RecordError(err)
-				return
-			}
-
-			if err = wr.tmc.SetReadOnly(ti, wr.ActionTimeout()); err != nil {
-				rec.RecordError(err)
-				return
-			}
-			wr.Logger().Infof("Master %v is now read-only", si.MasterAlias)
-		}(si)
-	}
-	wg.Wait()
-	return rec.Error()
 }
 
 func (wr *Wrangler) getMastersPosition(shards []*topo.ShardInfo) (map[*topo.ShardInfo]myproto.ReplicationPosition, error) {
@@ -319,7 +294,7 @@ func (wr *Wrangler) refreshMasters(shards []*topo.ShardInfo) error {
 }
 
 // migrateServedTypes operates with all concerned shards locked.
-func (wr *Wrangler) migrateServedTypes(keyspace string, sourceShards, destinationShards []*topo.ShardInfo, cells []string, servedType topo.TabletType, reverse bool, shardCache map[string]*topo.ShardInfo) (err error) {
+func (wr *Wrangler) migrateServedTypes(keyspace string, sourceShards, destinationShards []*topo.ShardInfo, cells []string, servedType topo.TabletType, reverse bool) (err error) {
 
 	// re-read all the shards so we are up to date
 	wr.Logger().Infof("Re-reading all shards")
@@ -327,13 +302,11 @@ func (wr *Wrangler) migrateServedTypes(keyspace string, sourceShards, destinatio
 		if sourceShards[i], err = wr.ts.GetShard(si.Keyspace(), si.ShardName()); err != nil {
 			return err
 		}
-		shardCache[si.ShardName()] = sourceShards[i]
 	}
 	for i, si := range destinationShards {
 		if destinationShards[i], err = wr.ts.GetShard(si.Keyspace(), si.ShardName()); err != nil {
 			return err
 		}
-		shardCache[si.ShardName()] = destinationShards[i]
 	}
 
 	ev := &events.MigrateServedTypes{
@@ -350,28 +323,23 @@ func (wr *Wrangler) migrateServedTypes(keyspace string, sourceShards, destinatio
 		}
 	}()
 
-	// check and update all shard records, in memory only
-	for _, si := range sourceShards {
-		if err := si.UpdateServedTypesMap(servedType, cells, !reverse); err != nil {
-			return err
-		}
-	}
-	for _, si := range destinationShards {
-		if err := si.UpdateServedTypesMap(servedType, cells, reverse); err != nil {
-			return err
-		}
-	}
-
 	// For master type migration, need to:
-	// - switch the source shards to read-only
+	// - switch the source shards to read-only by disabling query service
 	// - gather all replication points
 	// - wait for filtered replication to catch up before we continue
 	// - disable filtered replication after the fact
 	if servedType == topo.TYPE_MASTER {
-		event.DispatchUpdate(ev, "setting all source masters read-only")
-		err := wr.makeMastersReadOnly(sourceShards)
-		if err != nil {
-			return err
+		event.DispatchUpdate(ev, "disabling query service on all source masters")
+		for _, si := range sourceShards {
+			if err := si.UpdateDisableQueryService(topo.TYPE_MASTER, nil, true); err != nil {
+				return err
+			}
+			if err := topo.UpdateShard(wr.ts, si); err != nil {
+				return err
+			}
+			if err := wr.refreshMasters(destinationShards); err != nil {
+				return err
+			}
 		}
 
 		event.DispatchUpdate(ev, "getting positions of source masters")
@@ -390,20 +358,56 @@ func (wr *Wrangler) migrateServedTypes(keyspace string, sourceShards, destinatio
 		}
 	}
 
+	// Check and update all shard records, in memory only.
+	// We remember if we need to refresh the state of the source tablets
+	// so their query service is enabled again, for reverse migration.
+	needToRefreshSourceTablets := false
+	for _, si := range sourceShards {
+		if err := si.UpdateServedTypesMap(servedType, cells, !reverse); err != nil {
+			return err
+		}
+		if tc, ok := si.TabletControlMap[servedType]; reverse && ok && tc.DisableQueryService {
+			// this is a backward migration, where the
+			// source tablets were disabled previously, so
+			// we need to refresh them
+			if err := si.UpdateDisableQueryService(servedType, cells, false); err != nil {
+				return err
+			}
+			needToRefreshSourceTablets = true
+		}
+		if !reverse && servedType != topo.TYPE_MASTER {
+			// this is a forward migration, we need to disable
+			// query service on the source shards.
+			// (this was already done for masters earlier)
+			if err := si.UpdateDisableQueryService(servedType, cells, true); err != nil {
+				return err
+			}
+		}
+	}
+	for _, si := range destinationShards {
+		if err := si.UpdateServedTypesMap(servedType, cells, reverse); err != nil {
+			return err
+		}
+	}
+
 	// All is good, we can save the shards now
 	event.DispatchUpdate(ev, "updating source shards")
 	for _, si := range sourceShards {
 		if err := topo.UpdateShard(wr.ts, si); err != nil {
 			return err
 		}
-		shardCache[si.ShardName()] = si
+	}
+	if needToRefreshSourceTablets {
+		event.DispatchUpdate(ev, "refreshing source shard tablets so they restart their query service")
+		for _, si := range sourceShards {
+			wr.RefreshTablesByShard(si, servedType, cells)
+		}
 	}
 	event.DispatchUpdate(ev, "updating destination shards")
 	for _, si := range destinationShards {
 		if err := topo.UpdateShard(wr.ts, si); err != nil {
 			return err
 		}
-		shardCache[si.ShardName()] = si
 	}
 
 	// And tell the new shards masters they can now be read-write.
@@ -482,7 +486,7 @@ func (wr *Wrangler) MigrateServedFrom(keyspace, shard string, servedType topo.Ta
 
 	// rebuild the keyspace serving graph if there was no error
 	if rec.Error() == nil {
-		rec.RecordError(wr.RebuildKeyspaceGraph(keyspace, cells, nil))
+		rec.RecordError(wr.RebuildKeyspaceGraph(keyspace, cells))
 	}
 
 	return rec.Error()
@@ -562,7 +566,7 @@ func (wr *Wrangler) replicaMigrateServedFrom(ki *topo.KeyspaceInfo, sourceShard 
 	// Now refresh the source servers so they reload their
 	// blacklisted table list
 	event.DispatchUpdate(ev, "refreshing sources tablets state so they update their blacklisted tables")
-	if err := wr.RefreshTablesByShard(sourceShard.Keyspace(), sourceShard.ShardName(), servedType, cells); err != nil {
+	if err := wr.RefreshTablesByShard(sourceShard, servedType, cells); err != nil {
 		return err
 	}
 
@@ -671,13 +675,13 @@ func (wr *Wrangler) setKeyspaceServedFrom(keyspace string, servedType topo.Table
 // RefreshTablesByShard calls RefreshState on all the tables of a
 // given type in a shard. It would work for the master, but the
 // discovery wouldn't be very efficient.
-func (wr *Wrangler) RefreshTablesByShard(keyspace, shard string, tabletType topo.TabletType, cells []string) error {
-	tabletMap, err := topo.GetTabletMapForShardByCell(wr.ts, keyspace, shard, cells)
+func (wr *Wrangler) RefreshTablesByShard(si *topo.ShardInfo, tabletType topo.TabletType, cells []string) error {
+	tabletMap, err := topo.GetTabletMapForShardByCell(wr.ts, si.Keyspace(), si.ShardName(), cells)
 	switch err {
 	case nil:
 		// keep going
 	case topo.ErrPartialResult:
-		wr.Logger().Warningf("RefreshTablesByShard: got partial result, may not blacklist everything everywhere")
+		wr.Logger().Warningf("RefreshTablesByShard: got partial result for shard %v/%v, may not refresh all tablets everywhere", si.Keyspace(), si.ShardName())
 	default:
 		return err
 	}
@@ -692,7 +696,7 @@ func (wr *Wrangler) RefreshTablesByShard(keyspace, shard string, tabletType topo
 		wg.Add(1)
 		go func(ti *topo.TabletInfo) {
 			if err := wr.tmc.RefreshState(ti, wr.ActionTimeout()); err != nil {
-				wr.Logger().Warningf("RefreshTablesByShard: failed to ping %v: %v", ti.Alias, err)
+				wr.Logger().Warningf("RefreshTablesByShard: failed to refresh %v: %v", ti.Alias, err)
 			}
 			wg.Done()
 		}(ti)

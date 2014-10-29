@@ -291,7 +291,7 @@ func TestSplitClone(t *testing.T) {
 	if err := wr.SetKeyspaceShardingInfo("ks", "keyspace_id", key.KIT_UINT64, 4, false); err != nil {
 		t.Fatalf("SetKeyspaceShardingInfo failed: %v", err)
 	}
-	if err := wr.RebuildKeyspaceGraph("ks", nil, nil); err != nil {
+	if err := wr.RebuildKeyspaceGraph("ks", nil); err != nil {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
 	sourceRdonly.FakeMysqlDaemon.Schema = &myproto.SchemaDefinition{

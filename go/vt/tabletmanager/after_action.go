@@ -122,7 +122,6 @@ func (agent *ActionAgent) disallowQueries() {
 // changeCallback is run after every action that might
 // have changed something in the tablet record.
 func (agent *ActionAgent) changeCallback(oldTablet, newTablet *topo.Tablet) error {
-
 	allowQuery := newTablet.IsRunningQueryService()
 
 	// Read the shard to get SourceShards / TabletControlMap if
@@ -183,15 +182,14 @@ func (agent *ActionAgent) changeCallback(oldTablet, newTablet *topo.Tablet) erro
 			// allowQueries worked, save our blacklisted table list
 			agent.setBlacklistedTables(blacklistedTables)
 		}
-
-		// Disable before enabling to force existing streams to stop.
-		if agent.DBConfigs != nil {
-			binlog.DisableUpdateStreamService()
-			binlog.EnableUpdateStreamService(agent.DBConfigs.App.DbName, agent.Mysqld)
-		}
 	} else {
 		agent.disallowQueries()
-		if agent.DBConfigs != nil {
+	}
+
+	if agent.DBConfigs != nil {
+		if topo.IsRunningUpdateStream(newTablet.Type) {
+			binlog.EnableUpdateStreamService(agent.DBConfigs.App.DbName, agent.Mysqld)
+		} else {
 			binlog.DisableUpdateStreamService()
 		}
 	}

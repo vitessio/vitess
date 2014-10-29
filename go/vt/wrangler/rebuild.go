@@ -24,14 +24,14 @@ func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) (*
 // Rebuild the serving graph data while locking out other changes.
 // If some shards were recently read / updated, pass them in the cache so
 // we don't read them again (and possible get stale replicated data)
-func (wr *Wrangler) RebuildKeyspaceGraph(keyspace string, cells []string, shardCache map[string]*topo.ShardInfo) error {
+func (wr *Wrangler) RebuildKeyspaceGraph(keyspace string, cells []string) error {
 	actionNode := actionnode.RebuildKeyspace()
 	lockPath, err := wr.lockKeyspace(keyspace, actionNode)
 	if err != nil {
 		return err
 	}
 
-	err = wr.rebuildKeyspace(keyspace, cells, shardCache)
+	err = wr.rebuildKeyspace(keyspace, cells)
 	return wr.unlockKeyspace(keyspace, actionNode, lockPath, err)
 }
 
@@ -62,7 +62,7 @@ func (wr *Wrangler) findCellsForRebuild(ki *topo.KeyspaceInfo, shardMap map[stri
 //
 // Take data from the global keyspace and rebuild the local serving
 // copies in each cell.
-func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, shardCache map[string]*topo.ShardInfo) error {
+func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
 	wr.logger.Infof("rebuildKeyspace %v", keyspace)
 
 	ki, err := wr.ts.GetKeyspace(keyspace)
@@ -76,9 +76,7 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, shardCache 
 	}
 
 	// Rebuild all shards in parallel, save the shards
-	if shardCache == nil {
-		shardCache = make(map[string]*topo.ShardInfo)
-	}
+	shardCache := make(map[string]*topo.ShardInfo)
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
 	rec := concurrency.FirstErrorRecorder{}
@@ -282,7 +280,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 		wg.Add(1)
 		go func(keyspace string) {
 			defer wg.Done()
-			if err := wr.RebuildKeyspaceGraph(keyspace, nil, nil); err != nil {
+			if err := wr.RebuildKeyspaceGraph(keyspace, nil); err != nil {
 				mu.Lock()
 				hasErr = true
 				mu.Unlock()

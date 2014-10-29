@@ -188,7 +188,7 @@ var commands = []commandGroup{
 				"[-ping-tablets] <keyspace name|zk keyspace path>",
 				"Validate all nodes reachable from this keyspace are consistent."},
 			command{"MigrateServedTypes", commandMigrateServedTypes,
-				"[-reverse] [-skip-rebuild] <keyspace/shard|zk shard path> <served type>",
+				"[-reverse] [-skip-refresh-state] <keyspace/shard|zk shard path> <served type>",
 				"Migrates a serving type from the source shard to the shards it replicates to. Will also rebuild the serving graph. keyspace/shard can be any of the involved shards in the migration."},
 			command{"MigrateServedFrom", commandMigrateServedFrom,
 				"[-cells=c1,c2,...] [-reverse] <destination keyspace/shard|zk destination shard path> <served type>",
@@ -1596,7 +1596,7 @@ func commandRebuildKeyspaceGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, 
 		return err
 	}
 	for _, keyspace := range keyspaces {
-		if err := wr.RebuildKeyspaceGraph(keyspace, cellArray, nil); err != nil {
+		if err := wr.RebuildKeyspaceGraph(keyspace, cellArray); err != nil {
 			return err
 		}
 	}
@@ -1622,7 +1622,7 @@ func commandValidateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args
 func commandMigrateServedTypes(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	cellsStr := subFlags.String("cells", "", "comma separated list of cells to update")
 	reverse := subFlags.Bool("reverse", false, "move the served type back instead of forward, use in case of trouble")
-	skipRebuild := subFlags.Bool("skip-rebuild", false, "do not rebuild the shard and keyspace graph after the migration (replica and rdonly only)")
+	skipReFreshState := subFlags.Bool("skip-refresh-state", false, "do not refresh the state of the source tablets after the migration (will need to be done manually, replica and rdonly only)")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1638,14 +1638,14 @@ func commandMigrateServedTypes(wr *wrangler.Wrangler, subFlags *flag.FlagSet, ar
 	if err != nil {
 		return err
 	}
-	if servedType == topo.TYPE_MASTER && *skipRebuild {
-		return fmt.Errorf("can only specify skip-rebuild for non-master migrations")
+	if servedType == topo.TYPE_MASTER && *skipReFreshState {
+		return fmt.Errorf("can only specify skip-refresh-state for non-master migrations")
 	}
 	var cells []string
 	if *cellsStr != "" {
 		cells = strings.Split(*cellsStr, ",")
 	}
-	return wr.MigrateServedTypes(keyspace, shard, cells, servedType, *reverse, *skipRebuild)
+	return wr.MigrateServedTypes(keyspace, shard, cells, servedType, *reverse, *skipReFreshState)
 }
 
 func commandMigrateServedFrom(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
