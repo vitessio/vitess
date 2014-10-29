@@ -72,10 +72,10 @@ type ActionAgent struct {
 	actionMutex sync.Mutex
 
 	// mutex protects the following fields
-	mutex              sync.Mutex
-	_tablet            *topo.TabletInfo
-	_blacklistedTables []string
-	_waitingForMysql   bool
+	mutex            sync.Mutex
+	_tablet          *topo.TabletInfo
+	_tabletControl   *topo.TabletControl
+	_waitingForMysql bool
 }
 
 func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
@@ -196,15 +196,28 @@ func (agent *ActionAgent) Tablet() *topo.TabletInfo {
 }
 
 func (agent *ActionAgent) BlacklistedTables() []string {
+	var blacklistedTables []string
 	agent.mutex.Lock()
-	blacklistedTables := agent._blacklistedTables
+	if agent._tabletControl != nil {
+		blacklistedTables = agent._tabletControl.BlacklistedTables
+	}
 	agent.mutex.Unlock()
 	return blacklistedTables
 }
 
-func (agent *ActionAgent) setBlacklistedTables(blacklistedTables []string) {
+func (agent *ActionAgent) DisableQueryService() bool {
+	disable := false
 	agent.mutex.Lock()
-	agent._blacklistedTables = blacklistedTables
+	if agent._tabletControl != nil {
+		disable = agent._tabletControl.DisableQueryService
+	}
+	agent.mutex.Unlock()
+	return disable
+}
+
+func (agent *ActionAgent) setTabletControl(tc *topo.TabletControl) {
+	agent.mutex.Lock()
+	agent._tabletControl = tc
 	agent.mutex.Unlock()
 }
 

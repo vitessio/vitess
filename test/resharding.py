@@ -431,13 +431,22 @@ primary key (name)
         {"keyspace_id": 0x9000000000000000},
       )
 
-  def _check_query_service(self, tablet, serving):
+  def _check_query_service(self, tablet, serving, tablet_control_disabled):
+    """_check_query_service will check that the query service is enabled
+       or disabled on the tablet. It will also check if the tablet control
+       status is the reason for being enabled / disabled."""
     tablet_vars = utils.get_vars(tablet.port)
     if serving:
       expected_state = 'SERVING'
     else:
       expected_state = 'NOT_SERVING'
     self.assertEqual(tablet_vars['TabletStateName'], expected_state, 'tablet %s is not in the right serving state: got %s expected %s' % (tablet.tablet_alias, tablet_vars['TabletStateName'], expected_state))
+
+    status = tablet.get_status()
+    if tablet_control_disabled:
+      self.assertIn("Query Service disabled by TabletControl", status)
+    else:
+      self.assertNotIn("Query Service disabled by TabletControl", status)
 
   def test_resharding(self):
     utils.run_vtctl(['CreateKeyspace',
@@ -675,8 +684,8 @@ primary key (name)
     # check query service is off on master 2 and master 3, as filtered
     # replication is enabled. Even health check that is enabled on
     # master 3 should not interfere.
-    self._check_query_service(shard_2_master, False)
-    self._check_query_service(shard_3_master, False)
+    self._check_query_service(shard_2_master, False, False)
+    self._check_query_service(shard_3_master, False, False)
 
     # now serve rdonly from the split shards, in test_nj only
     utils.run_vtctl(['MigrateServedTypes', '--cells=test_nj',
@@ -691,9 +700,9 @@ primary key (name)
                              'Partitions(rdonly): -80 80-\n' +
                              'TabletTypes: rdonly',
                              keyspace_id_type=keyspace_id_type)
-    self._check_query_service(shard_0_ny_rdonly, True)
-    self._check_query_service(shard_1_ny_rdonly, True)
-    self._check_query_service(shard_1_rdonly, False)
+    self._check_query_service(shard_0_ny_rdonly, True, False)
+    self._check_query_service(shard_1_ny_rdonly, True, False)
+    self._check_query_service(shard_1_rdonly, False, True)
 
     # now serve rdonly from the split shards, everywhere
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'rdonly'],
@@ -708,9 +717,9 @@ primary key (name)
                              'Partitions(rdonly): -80 80-c0 c0-\n' +
                              'TabletTypes: rdonly',
                              keyspace_id_type=keyspace_id_type)
-    self._check_query_service(shard_0_ny_rdonly, True)
-    self._check_query_service(shard_1_ny_rdonly, False)
-    self._check_query_service(shard_1_rdonly, False)
+    self._check_query_service(shard_0_ny_rdonly, True, False)
+    self._check_query_service(shard_1_ny_rdonly, False, True)
+    self._check_query_service(shard_1_rdonly, False, True)
 
     # then serve replica from the split shards
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'replica'],
@@ -721,7 +730,7 @@ primary key (name)
                              'Partitions(replica): -80 80-c0 c0-\n' +
                              'TabletTypes: master,rdonly,replica',
                              keyspace_id_type=keyspace_id_type)
-    self._check_query_service(shard_1_slave2, False)
+    self._check_query_service(shard_1_slave2, False, True)
 
     # move replica back and forth
     utils.run_vtctl(['MigrateServedTypes', '-reverse', 'test_keyspace/80-', 'replica'],
@@ -732,7 +741,7 @@ primary key (name)
                              'Partitions(replica): -80 80-\n' +
                              'TabletTypes: master,rdonly,replica',
                              keyspace_id_type=keyspace_id_type)
-    self._check_query_service(shard_1_slave2, True)
+    self._check_query_service(shard_1_slave2, True, False)
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'replica'],
                     auto_log=True)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
@@ -741,7 +750,7 @@ primary key (name)
                              'Partitions(replica): -80 80-c0 c0-\n' +
                              'TabletTypes: master,rdonly,replica',
                              keyspace_id_type=keyspace_id_type)
-    self._check_query_service(shard_1_slave2, False)
+    self._check_query_service(shard_1_slave2, False, True)
 
     # reparent shard_2 to shard_2_replica1, then insert more data and
     # see it flow through still
@@ -785,7 +794,7 @@ primary key (name)
                              'Partitions(replica): -80 80-c0 c0-\n' +
                              'TabletTypes: master,rdonly,replica',
                              keyspace_id_type=keyspace_id_type)
-    self._check_query_service(shard_1_master, False)
+    self._check_query_service(shard_1_master, False, True)
 
     # check the binlog players are gone now
     shard_2_master.wait_for_binlog_player_count(0)

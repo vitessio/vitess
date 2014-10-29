@@ -95,10 +95,10 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 	agent.actionMutex.Lock()
 	defer agent.actionMutex.Unlock()
 
-	// read the current tablet record and blacklisted tables
+	// read the current tablet record and tablet control
 	agent.mutex.Lock()
 	tablet := agent._tablet
-	blacklistedTables := agent._blacklistedTables
+	tabletControl := agent._tabletControl
 	agent.mutex.Unlock()
 
 	// run the health check
@@ -111,7 +111,15 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 	// Figure out if we should be running QueryService. If we should,
 	// and we aren't, and we're otherwise healthy, try to start it.
 	if err == nil && topo.IsRunningQueryService(targetTabletType) && agent.BinlogPlayerMap.size() == 0 {
-		err = agent.allowQueries(tablet.Tablet, blacklistedTables)
+		var blacklistedTables []string
+		disableQueryService := false
+		if tabletControl != nil {
+			blacklistedTables = tabletControl.BlacklistedTables
+			disableQueryService = tabletControl.DisableQueryService
+		}
+		if !disableQueryService {
+			err = agent.allowQueries(tablet.Tablet, blacklistedTables)
+		}
 	}
 
 	// save the health record
