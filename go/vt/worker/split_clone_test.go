@@ -5,18 +5,257 @@
 package worker
 
 import (
+	"fmt"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	mproto "github.com/youtube/vitess/go/mysql/proto"
+	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
+	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
+	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
 	"github.com/youtube/vitess/go/vt/zktopo"
 )
+
+// This is a local SqlQuery RCP implementation to support the tests
+type SqlQuery struct {
+	t *testing.T
+}
+
+func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
+	return nil
+}
+
+func (sq *SqlQuery) StreamExecute(ctx *rpcproto.Context, query *proto.Query, sendReply func(reply interface{}) error) error {
+	// Custom parsing of the query we expect
+	min := 100
+	max := 200
+	var err error
+	parts := strings.Split(query.Sql, " ")
+	for _, part := range parts {
+		if strings.HasPrefix(part, "id>=") {
+			min, err = strconv.Atoi(part[4:])
+			if err != nil {
+				return err
+			}
+		} else if strings.HasPrefix(part, "id<") {
+			max, err = strconv.Atoi(part[3:])
+		}
+	}
+	sq.t.Logf("SqlQuery: got query: %v with min %v max %v", *query, min, max)
+
+	// Send the headers
+	if err := sendReply(&mproto.QueryResult{
+		Fields: []mproto.Field{
+			mproto.Field{
+				Name: "id",
+				Type: mproto.VT_LONGLONG,
+			},
+			mproto.Field{
+				Name: "msg",
+				Type: mproto.VT_VARCHAR,
+			},
+			mproto.Field{
+				Name: "keyspace_id",
+				Type: mproto.VT_LONGLONG,
+			},
+		},
+	}); err != nil {
+		return err
+	}
+
+	// Send the values
+	ksids := []uint64{0x2000000000000000, 0x6000000000000000}
+	for i := min; i < max; i++ {
+		if err := sendReply(&mproto.QueryResult{
+			Rows: [][]sqltypes.Value{
+				[]sqltypes.Value{
+					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),
+					sqltypes.MakeString([]byte(fmt.Sprintf("Text for %v", i))),
+					sqltypes.MakeString([]byte(fmt.Sprintf("%v", ksids[i%2]))),
+				},
+			},
+		}); err != nil {
+			return err
+		}
+	}
+	// SELECT id, msg, keyspace_id FROM table1 WHERE id>=180 AND id<190 ORDER BY id
+	return nil
+}
+
+type ExpectedExecuteFetch struct {
+	Query       string
+	MaxRows     int
+	WantFields  bool
+	QueryResult *mproto.QueryResult
+	Error       error
+}
+
+// FakePoolConnection implements dbconnpool.PoolConnection
+type FakePoolConnection struct {
+	t      *testing.T
+	Closed bool
+
+	ExpectedExecuteFetch      []ExpectedExecuteFetch
+	ExpectedExecuteFetchIndex int
+}
+
+func (fpc *FakePoolConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {
+	if fpc.ExpectedExecuteFetchIndex >= len(fpc.ExpectedExecuteFetch) {
+		fpc.t.Errorf("got unexpected out of bound fetch: %v >= %v", fpc.ExpectedExecuteFetchIndex, len(fpc.ExpectedExecuteFetch))
+		return nil, fmt.Errorf("unexpected out of bound fetch")
+	}
+	expected := fpc.ExpectedExecuteFetch[fpc.ExpectedExecuteFetchIndex].Query
+	if strings.HasSuffix(expected, "*") {
+		if !strings.HasPrefix(query, expected[0:len(expected)-2]) {
+			fpc.t.Errorf("got unexpected query start: %v != %v", query, expected)
+			return nil, fmt.Errorf("unexpected query")
+		}
+	} else {
+		if query != expected {
+			fpc.t.Errorf("got unexpected query: %v != %v", query, expected)
+			return nil, fmt.Errorf("unexpected query")
+		}
+	}
+	fpc.t.Logf("ExecuteFetch: %v", query)
+	defer func() {
+		fpc.ExpectedExecuteFetchIndex++
+	}()
+	return fpc.ExpectedExecuteFetch[fpc.ExpectedExecuteFetchIndex].QueryResult, nil
+}
+
+func (fpc *FakePoolConnection) ExecuteStreamFetch(query string, callback func(*mproto.QueryResult) error, streamBufferSize int) error {
+	return nil
+}
+
+func (fpc *FakePoolConnection) Id() int64 {
+	return 1
+}
+
+func (fpc *FakePoolConnection) Close() {
+	fpc.Closed = true
+}
+
+func (fpc *FakePoolConnection) IsClosed() bool {
+	return fpc.Closed
+}
+
+func (fpc *FakePoolConnection) Recycle() {
+}
+
+// on the source rdonly guy, should only have one query to find min & max
+func SourceRdonlyFactory(t *testing.T) func() (dbconnpool.PoolConnection, error) {
+	return func() (dbconnpool.PoolConnection, error) {
+		return &FakePoolConnection{
+			t: t,
+			ExpectedExecuteFetch: []ExpectedExecuteFetch{
+				ExpectedExecuteFetch{
+					Query: "SELECT MIN(id), MAX(id) FROM vt_ks.table1",
+					QueryResult: &mproto.QueryResult{
+						Fields: []mproto.Field{
+							mproto.Field{
+								Name: "min",
+								Type: mproto.VT_LONGLONG,
+							},
+							mproto.Field{
+								Name: "max",
+								Type: mproto.VT_LONGLONG,
+							},
+						},
+						Rows: [][]sqltypes.Value{
+							[]sqltypes.Value{
+								sqltypes.MakeString([]byte("100")),
+								sqltypes.MakeString([]byte("200")),
+							},
+						},
+					},
+				},
+			},
+		}, nil
+	}
+}
+
+// on the destinations
+func DestinationsFactory(t *testing.T) func() (dbconnpool.PoolConnection, error) {
+	queryIndex := 0
+	return func() (dbconnpool.PoolConnection, error) {
+		defer func() {
+			queryIndex++
+		}()
+		switch queryIndex {
+		case 0:
+			return &FakePoolConnection{
+				t: t,
+				ExpectedExecuteFetch: []ExpectedExecuteFetch{
+					ExpectedExecuteFetch{
+						Query:       "SET sql_log_bin = OFF",
+						QueryResult: &mproto.QueryResult{},
+					},
+					ExpectedExecuteFetch{
+						Query:       "CREATE DATABASE `vt_ks` /*!40100 DEFAULT CHARACTER SET utf8 */",
+						QueryResult: &mproto.QueryResult{},
+					},
+					ExpectedExecuteFetch{
+						Query:       "SET sql_log_bin = ON",
+						QueryResult: &mproto.QueryResult{},
+					},
+				},
+			}, nil
+		case 1:
+			return &FakePoolConnection{
+				t: t,
+				ExpectedExecuteFetch: []ExpectedExecuteFetch{
+					ExpectedExecuteFetch{
+						Query:       "SET sql_log_bin = OFF",
+						QueryResult: &mproto.QueryResult{},
+					},
+					ExpectedExecuteFetch{
+						Query: "CREATE TABLE `vt_ks`.`resharding1` (\n" +
+							"  `id` bigint(20) NOT NULL,\n" +
+							"  `msg` varchar(64) DEFAULT NULL,\n" +
+							"  `keyspace_id` bigint(20) unsigned NOT NULL,\n" +
+							"  PRIMARY KEY (`id`),\n" +
+							"  KEY `by_msg` (`msg`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8",
+						QueryResult: &mproto.QueryResult{},
+					},
+					ExpectedExecuteFetch{
+						Query:       "SET sql_log_bin = ON",
+						QueryResult: &mproto.QueryResult{},
+					},
+				},
+			}, nil
+		default:
+			return &FakePoolConnection{
+				t: t,
+				ExpectedExecuteFetch: []ExpectedExecuteFetch{
+					ExpectedExecuteFetch{
+						Query:       "SET sql_log_bin = OFF",
+						QueryResult: &mproto.QueryResult{},
+					},
+					ExpectedExecuteFetch{
+						Query:       "INSERT INTO*",
+						QueryResult: &mproto.QueryResult{},
+					},
+					ExpectedExecuteFetch{
+						Query:       "SET sql_log_bin = ON",
+						QueryResult: &mproto.QueryResult{},
+					},
+				},
+			}, nil
+		}
+		//return nil, fmt.Errorf("Unexpected connection")
+	}
+}
 
 func TestSplitClone(t *testing.T) {
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
@@ -65,14 +304,28 @@ func TestSplitClone(t *testing.T) {
 				PrimaryKeyColumns: []string{"id"},
 				Type:              myproto.TABLE_BASE_TABLE,
 				DataLength:        2048,
-				RowCount:          10,
+				RowCount:          100,
 			},
 		},
 		Version: "unused",
 	}
+	sourceRdonly.FakeMysqlDaemon.DbaConnectionFactory = SourceRdonlyFactory(t)
+	sourceRdonly.FakeMysqlDaemon.CurrentSlaveStatus = &myproto.ReplicationStatus{
+		Position: myproto.ReplicationPosition{
+			GTIDSet: myproto.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
+		},
+	}
+	sourceRdonly.RpcServer.Register(&SqlQuery{t: t})
+	leftMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t)
+	leftRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t)
+	rightMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t)
+	rightRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t)
 
-	wrk := NewSplitCloneWorker(wr, "cell1", "ks", "-80", nil, "populateBlpCheckpoint", 10, 1, 10)
+	wrk := NewSplitCloneWorker(wr, "cell1", "ks", "-80", nil, "skipAutoIncrement(table1)", 10, 1, 10).(*SplitCloneWorker)
 	wrk.Run()
 	status := wrk.StatusAsText()
 	t.Logf("Got status: %v", status)
+	if wrk.err != nil || wrk.state != stateSCDone {
+		t.Errorf("Worker run failed")
+	}
 }
