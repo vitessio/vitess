@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// zkctl initializes and controls ZooKeeper with Vitess-specific configuration.
 package main
 
 import (
@@ -9,9 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -29,8 +28,7 @@ var (
 		"zkid@server1:leaderPort1:electionPort1:clientPort1,...)")
 	myId = flag.Uint("zk.myid", 0,
 		"which server do you want to be? only needed when running multiple instance on one box, otherwise myid is implied by hostname")
-	force  = flag.Bool("force", false, "force action, no prompting")
-	follow = flag.Bool("follow", false, "For init or start actions, keep zkctl running as long as the underlying server is running. If zkctl is told to stop, it stops the server.")
+	force = flag.Bool("force", false, "force action, no prompting")
 
 	stdin *bufio.Reader
 )
@@ -70,16 +68,13 @@ func main() {
 
 	action := flag.Arg(0)
 	var err error
-	var waitForSignal bool
 	switch action {
 	case "init":
 		err = zkd.Init()
-		waitForSignal = *follow
 	case "shutdown":
 		err = zkd.Shutdown()
 	case "start":
 		err = zkd.Start()
-		waitForSignal = *follow
 	case "teardown":
 		err = zkd.Teardown()
 	default:
@@ -87,18 +82,5 @@ func main() {
 	}
 	if err != nil {
 		log.Fatalf("failed %v: %v", action, err)
-	}
-
-	if waitForSignal {
-		log.Infof("waiting for signal or server shutdown...")
-		sig := make(chan os.Signal)
-		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-		select {
-		case <-zkd.Done():
-			log.Infof("server shut down on its own")
-		case <-sig:
-			log.Infof("signal received, shutting down server")
-			zkd.Shutdown()
-		}
 	}
 }

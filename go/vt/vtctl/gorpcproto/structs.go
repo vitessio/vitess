@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 /*
-gorpcproto contains the Go RPC definitions of the structures used to
+Package gorpcproto contains the Go RPC definitions of the structures used to
 execute remote vtctl commands.
 */
 package gorpcproto

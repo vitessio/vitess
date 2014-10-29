@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// vtctlclient contains the generic client side of the remote vtctl protocol.
+// Package vtctlclient contains the generic client side of the remote vtctl protocol.
 package vtctlclient
 
 import (
