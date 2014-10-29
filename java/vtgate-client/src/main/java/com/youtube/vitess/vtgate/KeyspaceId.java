@@ -20,8 +20,8 @@ public class KeyspaceId implements Comparable<KeyspaceId> {
 
   public void setId(Object id) {
     if (!(id instanceof String) && !(id instanceof UnsignedLong)) {
-      throw new IllegalArgumentException("invalid id type, must be either String or UnsignedLong "
-          + id.getClass());
+      throw new IllegalArgumentException(
+          "invalid id type, must be either String or UnsignedLong " + id.getClass());
     }
 
     this.id = id;

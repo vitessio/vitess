@@ -16,25 +16,25 @@ import java.util.Random;
 
 /**
  * A single threaded VtGate client
- * 
+ *
  * Usage:
- * 
+ *
  * <pre>
- * VtGate vtGate = VtGate.connect(addresses);
- * Query query = new QueryBuilder()...add params...build();
- * Cursor cursor = vtGate.execute(query);
- * for(Row row : cursor) {
- * 		processRow(row);
- * }
- * 
- * For DMLs
- * vtgate.begin();
- * Query query = new QueryBuilder()...add params...build();
- * vtgate.execute(query);
- * vtgate.commit();
- * 
- * vtgate.close();
- * </pre>
+ *VtGate vtGate = VtGate.connect(addresses);
+ *Query query = new QueryBuilder()...add params...build();
+ *Cursor cursor = vtGate.execute(query);
+ *for(Row row : cursor) {
+ *		processRow(row);
+ *}
+ *
+ *For DMLs
+ *vtgate.begin();
+ *Query query = new QueryBuilder()...add params...build();
+ *vtgate.execute(query);
+ *vtgate.commit();
+ *
+ *vtgate.close();
+ *</pre>
  *
  * TODO: Currently only ExecuteKeyspaceIds is supported, add the rest.
  */
@@ -45,7 +45,7 @@ public class VtGate {
 
   /**
    * Opens connection to a VtGate server. Connection remains open until close() is called.
-   * 
+   *
    * @param addresses comma separated list of host:port pairs
    * @params timeoutMs connection timeout in milliseconds, 0 for no timeout
    * @throws ConnectionException
