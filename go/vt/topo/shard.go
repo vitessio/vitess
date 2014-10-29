@@ -254,15 +254,18 @@ func CreateShard(ts Server, keyspace, shard string) error {
 	if err != nil {
 		return err
 	}
-	s := &Shard{KeyRange: keyRange}
 
 	// start the shard with all serving types. If it overlaps with
 	// other shards for some serving types, remove them.
-	servingTypes := map[TabletType]bool{
-		TYPE_MASTER:  true,
-		TYPE_REPLICA: true,
-		TYPE_RDONLY:  true,
+	s := &Shard{
+		KeyRange: keyRange,
+		ServedTypesMap: map[TabletType]*ShardServedType{
+			TYPE_MASTER:  &ShardServedType{},
+			TYPE_REPLICA: &ShardServedType{},
+			TYPE_RDONLY:  &ShardServedType{},
+		},
 	}
+
 	sis, err := FindAllShardsInKeyspace(ts, keyspace)
 	if err != nil && err != ErrNoNode {
 		return err
@@ -270,13 +273,12 @@ func CreateShard(ts Server, keyspace, shard string) error {
 	for _, si := range sis {
 		if key.KeyRangesIntersect(si.KeyRange, keyRange) {
 			for t, _ := range si.ServedTypesMap {
-				delete(servingTypes, t)
+				delete(s.ServedTypesMap, t)
 			}
 		}
 	}
-	s.ServedTypesMap = make(map[TabletType]*ShardServedType, len(servingTypes))
-	for st := range servingTypes {
-		s.ServedTypesMap[st] = &ShardServedType{}
+	if len(s.ServedTypesMap) == 0 {
+		s.ServedTypesMap = nil
 	}
 
 	return ts.CreateShard(keyspace, name, s)

@@ -181,3 +181,105 @@ func TestUpdateDisableQueryService(t *testing.T) {
 		t.Fatalf("one cell removal from all failed: %v", si)
 	}
 }
+
+func TestUpdateServedTypesMap(t *testing.T) {
+	si := NewShardInfo("ks", "sh", &Shard{
+		Cells: []string{"first", "second", "third"},
+	}, 1)
+
+	// add all cells for rdonly
+	if err := si.UpdateServedTypesMap(TYPE_RDONLY, nil, false); err != nil || !reflect.DeepEqual(si.ServedTypesMap, map[TabletType]*ShardServedType{
+		TYPE_RDONLY: &ShardServedType{
+			Cells: nil,
+		},
+	}) {
+		t.Fatalf("rdonly all cells add failed: %v", err)
+	}
+
+	// add some cells for replica
+	if err := si.UpdateServedTypesMap(TYPE_REPLICA, []string{"second"}, false); err != nil || !reflect.DeepEqual(si.ServedTypesMap, map[TabletType]*ShardServedType{
+		TYPE_RDONLY: &ShardServedType{
+			Cells: nil,
+		},
+		TYPE_REPLICA: &ShardServedType{
+			Cells: []string{"second"},
+		},
+	}) {
+		t.Fatalf("replica some cells add failed: %v", err)
+	}
+
+	// remove some cells for rdonly
+	if err := si.UpdateServedTypesMap(TYPE_RDONLY, []string{"second"}, true); err != nil || !reflect.DeepEqual(si.ServedTypesMap, map[TabletType]*ShardServedType{
+		TYPE_RDONLY: &ShardServedType{
+			Cells: []string{"first", "third"},
+		},
+		TYPE_REPLICA: &ShardServedType{
+			Cells: []string{"second"},
+		},
+	}) {
+		t.Fatalf("remove some cells for rdonly failed: %v", err)
+	}
+
+	// remove last cell for replica
+	if err := si.UpdateServedTypesMap(TYPE_REPLICA, []string{"second"}, true); err != nil || !reflect.DeepEqual(si.ServedTypesMap, map[TabletType]*ShardServedType{
+		TYPE_RDONLY: &ShardServedType{
+			Cells: []string{"first", "third"},
+		},
+	}) {
+		t.Fatalf("remove last cell for replica failed: %v", err)
+	}
+
+	// migrate all
+	if err := si.UpdateServedTypesMap(TYPE_REPLICA, nil, false); err != nil || !reflect.DeepEqual(si.ServedTypesMap, map[TabletType]*ShardServedType{
+		TYPE_RDONLY: &ShardServedType{
+			Cells: []string{"first", "third"},
+		},
+		TYPE_REPLICA: &ShardServedType{
+			Cells: nil,
+		},
+	}) {
+		t.Fatalf("migrate replica failed: %v", err)
+	}
+	if err := si.UpdateServedTypesMap(TYPE_RDONLY, nil, false); err != nil || !reflect.DeepEqual(si.ServedTypesMap, map[TabletType]*ShardServedType{
+		TYPE_RDONLY: &ShardServedType{
+			Cells: nil,
+		},
+		TYPE_REPLICA: &ShardServedType{
+			Cells: nil,
+		},
+	}) {
+		t.Fatalf("migrate rdonly failed: %v", err)
+	}
+	if err := si.UpdateServedTypesMap(TYPE_MASTER, nil, false); err != nil || !reflect.DeepEqual(si.ServedTypesMap, map[TabletType]*ShardServedType{
+		TYPE_RDONLY: &ShardServedType{
+			Cells: nil,
+		},
+		TYPE_REPLICA: &ShardServedType{
+			Cells: nil,
+		},
+		TYPE_MASTER: &ShardServedType{
+			Cells: nil,
+		},
+	}) {
+		t.Fatalf("migrate master failed: %v", err)
+	}
+
+	// try to migrate master away, see it fail
+	if err := si.UpdateServedTypesMap(TYPE_MASTER, nil, true); err == nil || err.Error() != "cannot migrate master away from ks/sh until everything else is migrated" {
+		t.Fatalf("migrate master away unexpected error: %v", err)
+	}
+
+	// remove all, see the map get emptied
+	if err := si.UpdateServedTypesMap(TYPE_RDONLY, nil, true); err != nil {
+		t.Fatalf("remove master failed: %v", err)
+	}
+	if err := si.UpdateServedTypesMap(TYPE_REPLICA, nil, true); err != nil {
+		t.Fatalf("remove master failed: %v", err)
+	}
+	if err := si.UpdateServedTypesMap(TYPE_MASTER, nil, true); err != nil {
+		t.Fatalf("remove master failed: %v", err)
+	}
+	if si.ServedTypesMap != nil {
+		t.Fatalf("expected empty map after removing all")
+	}
+}
