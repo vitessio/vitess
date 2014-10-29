@@ -53,9 +53,8 @@ public class StreamingVtGateIT {
   public void testStreamCursorType() throws Exception {
     VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
     String selectSql = "select * from vtgate_test";
-    Query allRowsQuery =
-        new QueryBuilder(selectSql, testEnv.keyspace, "master")
-            .setKeyspaceIds(testEnv.getAllKeyspaceIds()).setStreaming(true).build();
+    Query allRowsQuery = new QueryBuilder(selectSql, testEnv.keyspace, "master")
+        .setKeyspaceIds(testEnv.getAllKeyspaceIds()).setStreaming(true).build();
     Cursor cursor = vtgate.execute(allRowsQuery);
     Assert.assertEquals(StreamCursor.class, cursor.getClass());
     vtgate.close();
@@ -73,9 +72,8 @@ public class StreamingVtGateIT {
     VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
     for (String shardName : testEnv.shardKidMap.keySet()) {
       String selectSql = "select A.* from vtgate_test A join vtgate_test B join vtgate_test C";
-      Query query =
-          new QueryBuilder(selectSql, testEnv.keyspace, "master")
-              .setKeyspaceIds(testEnv.getKeyspaceIds(shardName)).setStreaming(true).build();
+      Query query = new QueryBuilder(selectSql, testEnv.keyspace, "master")
+          .setKeyspaceIds(testEnv.getKeyspaceIds(shardName)).setStreaming(true).build();
       Cursor cursor = vtgate.execute(query);
       int count = 0;
       while (cursor.hasNext()) {
@@ -101,9 +99,8 @@ public class StreamingVtGateIT {
       List<KeyspaceId> kids = testEnv.getKeyspaceIds(shardName);
       KeyRange kr = new KeyRange(Collections.min(kids), Collections.max(kids));
       String selectSql = "select A.* from vtgate_test A join vtgate_test B join vtgate_test C";
-      Query query =
-          new QueryBuilder(selectSql, testEnv.keyspace, "master").addKeyRange(kr)
-              .setStreaming(true).build();
+      Query query = new QueryBuilder(selectSql, testEnv.keyspace, "master").addKeyRange(kr)
+          .setStreaming(true).build();
       Cursor cursor = vtgate.execute(query);
       int count = 0;
       while (cursor.hasNext()) {
@@ -125,9 +122,8 @@ public class StreamingVtGateIT {
       Util.insertRowsInShard(testEnv, shardName, rowCount);
     }
     String selectSql = "select A.* from vtgate_test A join vtgate_test B join vtgate_test C";
-    Query query =
-        new QueryBuilder(selectSql, testEnv.keyspace, "master")
-            .setKeyspaceIds(testEnv.getAllKeyspaceIds()).setStreaming(true).build();
+    Query query = new QueryBuilder(selectSql, testEnv.keyspace, "master")
+        .setKeyspaceIds(testEnv.getAllKeyspaceIds()).setStreaming(true).build();
     VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
     Cursor cursor = vtgate.execute(query);
     int count = 0;
@@ -144,16 +140,16 @@ public class StreamingVtGateIT {
     VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
 
     vtgate.begin();
-    String insertSql =
-        "insert into vtgate_test " + "(id, name, age, percent, keyspace_id) "
-            + "values (:id, :name, :age, :percent, :keyspace_id)";
+    String insertSql = "insert into vtgate_test " + "(id, name, age, percent, keyspace_id) "
+        + "values (:id, :name, :age, :percent, :keyspace_id)";
     KeyspaceId kid = testEnv.getAllKeyspaceIds().get(0);
-    Query query =
-        new QueryBuilder(insertSql, testEnv.keyspace, "master")
-            .addBindVar(BindVariable.forULong("id", UnsignedLong.valueOf("" + 1)))
-            .addBindVar(BindVariable.forString("name", ("name_" + 1)))
-            .addBindVar(BindVariable.forULong("keyspace_id", (UnsignedLong) kid.getId()))
-            .addKeyspaceId(kid).setStreaming(true).build();
+    Query query = new QueryBuilder(insertSql, testEnv.keyspace, "master")
+        .addBindVar(BindVariable.forULong("id", UnsignedLong.valueOf("" + 1)))
+        .addBindVar(BindVariable.forString("name", ("name_" + 1)))
+        .addBindVar(BindVariable.forULong("keyspace_id", (UnsignedLong) kid.getId()))
+        .addKeyspaceId(kid)
+        .setStreaming(true)
+        .build();
     vtgate.execute(query);
     vtgate.commit();
     vtgate.close();

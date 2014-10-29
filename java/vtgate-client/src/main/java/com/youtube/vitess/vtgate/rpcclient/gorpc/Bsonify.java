@@ -240,9 +240,8 @@ public class Bsonify {
         keyranges.add(kr);
       }
 
-      Query q =
-          new QueryBuilder(sql, keyspace, tabletType).setKeyRanges(keyranges)
-              .setBindVars(bindVariables).setStreaming(true).build();
+      Query q = new QueryBuilder(sql, keyspace, tabletType).setKeyRanges(keyranges)
+          .setBindVars(bindVariables).setStreaming(true).build();
       long size = (long) splitObj.get("Size");
       queries.put(q, size);
     }

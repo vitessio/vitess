@@ -55,9 +55,8 @@ public class QueryBuilderTest {
 
   @Test
   public void testBothKeyspaceIdAndKeyrange() {
-    QueryBuilder builder =
-        new QueryBuilder("select 1 from dual", "test_keyspace", "master").addKeyRange(KeyRange.ALL)
-            .addKeyspaceId(KeyspaceId.valueOf("80"));
+    QueryBuilder builder = new QueryBuilder("select 1 from dual", "test_keyspace", "master")
+        .addKeyRange(KeyRange.ALL).addKeyspaceId(KeyspaceId.valueOf("80"));
     try {
       builder.build();
       Assert.fail("did not raise IllegalStateException");

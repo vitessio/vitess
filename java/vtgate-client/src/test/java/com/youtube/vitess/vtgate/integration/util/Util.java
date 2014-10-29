@@ -52,8 +52,8 @@ public class Util {
     }
   }
 
-  public static void insertRows(TestEnv testEnv, int startId, int count)
-      throws ConnectionException, DatabaseException {
+  public static void insertRows(TestEnv testEnv, int startId, int count) throws ConnectionException,
+      DatabaseException {
     insertRows(testEnv, startId, count, new DateTime());
   }
 
@@ -62,23 +62,23 @@ public class Util {
     VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
 
     vtgate.begin();
-    String insertSql =
-        "insert into vtgate_test "
-            + "(id, name, age, percent, datetime_col, timestamp_col, date_col, time_col, keyspace_id) "
-            + "values (:id, :name, :age, :percent, :datetime_col, :timestamp_col, :date_col, :time_col, :keyspace_id)";
+    String insertSql = "insert into vtgate_test "
+        + "(id, name, age, percent, datetime_col, timestamp_col, date_col, time_col, keyspace_id) "
+        + "values (:id, :name, :age, :percent, :datetime_col, :timestamp_col, :date_col, :time_col, :keyspace_id)";
     for (int i = startId; i < startId + count; i++) {
       KeyspaceId kid = testEnv.getAllKeyspaceIds().get(i % testEnv.getAllKeyspaceIds().size());
-      Query query =
-          new QueryBuilder(insertSql, testEnv.keyspace, "master")
-              .addBindVar(BindVariable.forULong("id", UnsignedLong.valueOf("" + i)))
-              .addBindVar(BindVariable.forBytes("name", ("name_" + i).getBytes()))
-              .addBindVar(BindVariable.forInt("age", i * 2))
-              .addBindVar(BindVariable.forDouble("percent", new Double(i / 100.0)))
-              .addBindVar(BindVariable.forULong("keyspace_id", (UnsignedLong) kid.getId()))
-              .addBindVar(BindVariable.forDateTime("datetime_col", dateTime))
-              .addBindVar(BindVariable.forDateTime("timestamp_col", dateTime))
-              .addBindVar(BindVariable.forDate("date_col", dateTime))
-              .addBindVar(BindVariable.forTime("time_col", dateTime)).addKeyspaceId(kid).build();
+      Query query = new QueryBuilder(insertSql, testEnv.keyspace, "master")
+          .addBindVar(BindVariable.forULong("id", UnsignedLong.valueOf("" + i)))
+          .addBindVar(BindVariable.forBytes("name", ("name_" + i).getBytes()))
+          .addBindVar(BindVariable.forInt("age", i * 2))
+          .addBindVar(BindVariable.forDouble("percent", new Double(i / 100.0)))
+          .addBindVar(BindVariable.forULong("keyspace_id", (UnsignedLong) kid.getId()))
+          .addBindVar(BindVariable.forDateTime("datetime_col", dateTime))
+          .addBindVar(BindVariable.forDateTime("timestamp_col", dateTime))
+          .addBindVar(BindVariable.forDate("date_col", dateTime))
+          .addBindVar(BindVariable.forTime("time_col", dateTime))
+          .addKeyspaceId(kid)
+          .build();
       vtgate.execute(query);
     }
     vtgate.commit();
@@ -92,18 +92,17 @@ public class Util {
       throws DatabaseException, ConnectionException {
     VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
     vtgate.begin();
-    String sql =
-        "insert into vtgate_test " + "(id, name, keyspace_id) "
-            + "values (:id, :name, :keyspace_id)";
+    String sql = "insert into vtgate_test " + "(id, name, keyspace_id) "
+        + "values (:id, :name, :keyspace_id)";
     List<KeyspaceId> kids = testEnv.getKeyspaceIds(shardName);
     for (int i = 1; i <= count; i++) {
       KeyspaceId kid = kids.get(i % kids.size());
-      Query query =
-          new QueryBuilder(sql, testEnv.keyspace, "master")
-              .addBindVar(BindVariable.forULong("id", UnsignedLong.valueOf("" + i)))
-              .addBindVar(BindVariable.forBytes("name", ("name_" + i).getBytes()))
-              .addBindVar(BindVariable.forULong("keyspace_id", (UnsignedLong) kid.getId()))
-              .addKeyspaceId(kid).build();
+      Query query = new QueryBuilder(sql, testEnv.keyspace, "master")
+          .addBindVar(BindVariable.forULong("id", UnsignedLong.valueOf("" + i)))
+          .addBindVar(BindVariable.forBytes("name", ("name_" + i).getBytes()))
+          .addBindVar(BindVariable.forULong("keyspace_id", (UnsignedLong) kid.getId()))
+          .addKeyspaceId(kid)
+          .build();
       vtgate.execute(query);
     }
     vtgate.commit();
@@ -129,9 +128,8 @@ public class Util {
     String sql = "select * from vtgate_test";
     VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
     for (int i = 0; i < attempts; i++) {
-      Cursor cursor =
-          vtgate.execute(new QueryBuilder(sql, testEnv.keyspace, tabletType).setKeyspaceIds(
-              testEnv.getAllKeyspaceIds()).build());
+      Cursor cursor = vtgate.execute(new QueryBuilder(sql, testEnv.keyspace, tabletType)
+          .setKeyspaceIds(testEnv.getAllKeyspaceIds()).build());
       if (cursor.getRowsAffected() >= rowCount) {
         vtgate.close();
         return;
