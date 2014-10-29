@@ -109,6 +109,26 @@ type FakePoolConnection struct {
 	ExpectedExecuteFetchIndex int
 }
 
+func NewFakePoolConnectionQueryBinlogOff(t *testing.T, query string) *FakePoolConnection {
+	return &FakePoolConnection{
+		t: t,
+		ExpectedExecuteFetch: []ExpectedExecuteFetch{
+			ExpectedExecuteFetch{
+				Query:       "SET sql_log_bin = OFF",
+				QueryResult: &mproto.QueryResult{},
+			},
+			ExpectedExecuteFetch{
+				Query:       query,
+				QueryResult: &mproto.QueryResult{},
+			},
+			ExpectedExecuteFetch{
+				Query:       "SET sql_log_bin = ON",
+				QueryResult: &mproto.QueryResult{},
+			},
+		},
+	}
+}
+
 func (fpc *FakePoolConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {
 	if fpc.ExpectedExecuteFetchIndex >= len(fpc.ExpectedExecuteFetch) {
 		fpc.t.Errorf("got unexpected out of bound fetch: %v >= %v", fpc.ExpectedExecuteFetchIndex, len(fpc.ExpectedExecuteFetch))
@@ -116,7 +136,7 @@ func (fpc *FakePoolConnection) ExecuteFetch(query string, maxrows int, wantfield
 	}
 	expected := fpc.ExpectedExecuteFetch[fpc.ExpectedExecuteFetchIndex].Query
 	if strings.HasSuffix(expected, "*") {
-		if !strings.HasPrefix(query, expected[0:len(expected)-2]) {
+		if !strings.HasPrefix(query, expected[0:len(expected)-1]) {
 			fpc.t.Errorf("got unexpected query start: %v != %v", query, expected)
 			return nil, fmt.Errorf("unexpected query")
 		}
@@ -185,75 +205,42 @@ func SourceRdonlyFactory(t *testing.T) func() (dbconnpool.PoolConnection, error)
 }
 
 // on the destinations
-func DestinationsFactory(t *testing.T) func() (dbconnpool.PoolConnection, error) {
+func DestinationsFactory(t *testing.T, rowCount int) func() (dbconnpool.PoolConnection, error) {
 	queryIndex := 0
 	return func() (dbconnpool.PoolConnection, error) {
 		defer func() {
 			queryIndex++
 		}()
-		switch queryIndex {
-		case 0:
-			return &FakePoolConnection{
-				t: t,
-				ExpectedExecuteFetch: []ExpectedExecuteFetch{
-					ExpectedExecuteFetch{
-						Query:       "SET sql_log_bin = OFF",
-						QueryResult: &mproto.QueryResult{},
-					},
-					ExpectedExecuteFetch{
-						Query:       "CREATE DATABASE `vt_ks` /*!40100 DEFAULT CHARACTER SET utf8 */",
-						QueryResult: &mproto.QueryResult{},
-					},
-					ExpectedExecuteFetch{
-						Query:       "SET sql_log_bin = ON",
-						QueryResult: &mproto.QueryResult{},
-					},
-				},
-			}, nil
-		case 1:
-			return &FakePoolConnection{
-				t: t,
-				ExpectedExecuteFetch: []ExpectedExecuteFetch{
-					ExpectedExecuteFetch{
-						Query:       "SET sql_log_bin = OFF",
-						QueryResult: &mproto.QueryResult{},
-					},
-					ExpectedExecuteFetch{
-						Query: "CREATE TABLE `vt_ks`.`resharding1` (\n" +
-							"  `id` bigint(20) NOT NULL,\n" +
-							"  `msg` varchar(64) DEFAULT NULL,\n" +
-							"  `keyspace_id` bigint(20) unsigned NOT NULL,\n" +
-							"  PRIMARY KEY (`id`),\n" +
-							"  KEY `by_msg` (`msg`)\n" +
-							") ENGINE=InnoDB DEFAULT CHARSET=utf8",
-						QueryResult: &mproto.QueryResult{},
-					},
-					ExpectedExecuteFetch{
-						Query:       "SET sql_log_bin = ON",
-						QueryResult: &mproto.QueryResult{},
-					},
-				},
-			}, nil
-		default:
-			return &FakePoolConnection{
-				t: t,
-				ExpectedExecuteFetch: []ExpectedExecuteFetch{
-					ExpectedExecuteFetch{
-						Query:       "SET sql_log_bin = OFF",
-						QueryResult: &mproto.QueryResult{},
-					},
-					ExpectedExecuteFetch{
-						Query:       "INSERT INTO*",
-						QueryResult: &mproto.QueryResult{},
-					},
-					ExpectedExecuteFetch{
-						Query:       "SET sql_log_bin = ON",
-						QueryResult: &mproto.QueryResult{},
-					},
-				},
-			}, nil
+		switch {
+		case queryIndex == 0:
+			return NewFakePoolConnectionQueryBinlogOff(t, "CREATE DATABASE `vt_ks` /*!40100 DEFAULT CHARACTER SET utf8 */"), nil
+		case queryIndex == 1:
+			return NewFakePoolConnectionQueryBinlogOff(t, "CREATE TABLE `vt_ks`.`resharding1` (\n"+
+				"  `id` bigint(20) NOT NULL,\n"+
+				"  `msg` varchar(64) DEFAULT NULL,\n"+
+				"  `keyspace_id` bigint(20) unsigned NOT NULL,\n"+
+				"  PRIMARY KEY (`id`),\n"+
+				"  KEY `by_msg` (`msg`)\n"+
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8"), nil
+		case queryIndex >= 2 && queryIndex < rowCount+2:
+			return NewFakePoolConnectionQueryBinlogOff(t, "INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*"), nil
+		case queryIndex == rowCount+2:
+			return NewFakePoolConnectionQueryBinlogOff(t, "ALTER TABLE `vt_ks`.`table1` MODIFY   `id` bigint(20) NOT NULL AUTO_INCREMENT"), nil
+		case queryIndex == rowCount+3:
+			return NewFakePoolConnectionQueryBinlogOff(t, "CREATE DATABASE IF NOT EXISTS _vt"), nil
+		case queryIndex == rowCount+4:
+			return NewFakePoolConnectionQueryBinlogOff(t, "CREATE TABLE IF NOT EXISTS _vt.blp_checkpoint (\n"+
+				"  source_shard_uid INT(10) UNSIGNED NOT NULL,\n"+
+				"  pos VARCHAR(250) DEFAULT NULL,\n"+
+				"  time_updated BIGINT UNSIGNED NOT NULL,\n"+
+				"  transaction_timestamp BIGINT UNSIGNED NOT NULL,\n"+
+				"  flags VARCHAR(250) DEFAULT NULL,\n"+
+				"  PRIMARY KEY (source_shard_uid)) ENGINE=InnoDB"), nil
+		case queryIndex == rowCount+5:
+			return NewFakePoolConnectionQueryBinlogOff(t, "INSERT INTO _vt.blp_checkpoint (source_shard_uid, pos, time_updated, transaction_timestamp, flags) VALUES (0, 'MariaDB/12-34-5678', *"), nil
 		}
-		//return nil, fmt.Errorf("Unexpected connection")
+
+		return nil, fmt.Errorf("Unexpected connection")
 	}
 }
 
@@ -316,12 +303,12 @@ func TestSplitClone(t *testing.T) {
 		},
 	}
 	sourceRdonly.RpcServer.Register(&SqlQuery{t: t})
-	leftMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t)
-	leftRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t)
-	rightMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t)
-	rightRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t)
+	leftMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 50)
+	leftRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 50)
+	rightMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 50)
+	rightRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 50)
 
-	wrk := NewSplitCloneWorker(wr, "cell1", "ks", "-80", nil, "skipAutoIncrement(table1)", 10, 1, 10).(*SplitCloneWorker)
+	wrk := NewSplitCloneWorker(wr, "cell1", "ks", "-80", nil, "populateBlpCheckpoint", 10, 1, 10).(*SplitCloneWorker)
 	wrk.Run()
 	status := wrk.StatusAsText()
 	t.Logf("Got status: %v", status)
