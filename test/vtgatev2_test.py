@@ -262,9 +262,7 @@ class TestVTGateFunctions(unittest.TestCase):
       logging.debug("failed with error %s, %s" % (str(e), traceback.print_exc()))
       raise
 
-
   def test_rollback(self):
-    return
     try:
       vtgate_conn = get_connection()
       count = 10
@@ -275,7 +273,7 @@ class TestVTGateFunctions(unittest.TestCase):
           keyranges=[self.keyrange])
       kid_list = shard_kid_map[shard_names[self.shard_index]]
       for x in xrange(count):
-        keyspace_id = kid_list[count%len(kid_list)]
+        keyspace_id = kid_list[x%len(kid_list)]
         vtgate_conn._execute(
             "insert into vt_insert_test (msg, keyspace_id) values (%(msg)s, %(keyspace_id)s)",
             {'msg': 'test %s' % x, 'keyspace_id': keyspace_id},
@@ -293,10 +291,9 @@ class TestVTGateFunctions(unittest.TestCase):
           keyranges=[self.keyrange])[:2]
       logging.debug("ROLLBACK TEST rowcount %d count %d" % (rowcount, count))
       self.assertEqual(rowcount, count, "Fetched rows(%d) != inserted rows(%d), rollback didn't work" % (rowcount, count))
+      do_write(10, self.shard_index)
     except Exception, e:
-      logging.debug("Write failed with error %s" % str(e))
-      raise
-
+      self.fail("Write failed with error %s %s" % (str(e), traceback.print_exc()))
 
   def test_execute_entity_ids(self):
     try:
