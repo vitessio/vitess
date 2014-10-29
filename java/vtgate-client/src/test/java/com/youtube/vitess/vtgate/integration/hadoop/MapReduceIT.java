@@ -107,9 +107,8 @@ public class MapReduceIT extends HadoopTestCase {
     Util.waitForTablet("rdonly", rowCount, 3, testEnv);
     VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
     int splitsPerShard = 3;
-    Map<Query, Long> queries =
-        vtgate
-            .splitQuery("test_keyspace", "select id,keyspace_id from vtgate_test", splitsPerShard);
+    Map<Query, Long> queries = vtgate.splitQuery("test_keyspace",
+        "select id,keyspace_id from vtgate_test", splitsPerShard);
     vtgate.close();
 
     // Verify 6 splits, 3 per shard
@@ -162,8 +161,12 @@ public class MapReduceIT extends HadoopTestCase {
     job.setJobName("table");
     job.setJarByClass(VitessInputFormat.class);
     job.setMapperClass(TableMapper.class);
-    VitessInputFormat.setInput(job, "localhost:" + testEnv.port, testEnv.keyspace, "vtgate_test",
-        Lists.newArrayList("keyspace_id", "name"), 4);
+    VitessInputFormat.setInput(job,
+        "localhost:" + testEnv.port,
+        testEnv.keyspace,
+        "vtgate_test",
+        Lists.newArrayList("keyspace_id", "name"),
+        4);
     job.setOutputKeyClass(KeyspaceIdWritable.class);
     job.setOutputValueClass(RowWritable.class);
     job.setOutputFormatClass(TextOutputFormat.class);
@@ -233,8 +236,12 @@ public class MapReduceIT extends HadoopTestCase {
     job.setJobName("table");
     job.setJarByClass(VitessInputFormat.class);
     job.setMapperClass(TableMapper.class);
-    VitessInputFormat.setInput(job, "localhost:" + testEnv.port, testEnv.keyspace, "vtgate_test",
-        Lists.newArrayList("keyspace_id", "name"), 1);
+    VitessInputFormat.setInput(job,
+        "localhost:" + testEnv.port,
+        testEnv.keyspace,
+        "vtgate_test",
+        Lists.newArrayList("keyspace_id", "name"),
+        1);
 
     job.setMapOutputKeyClass(KeyspaceIdWritable.class);
     job.setMapOutputValueClass(RowWritable.class);

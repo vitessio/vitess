@@ -13,7 +13,7 @@ import java.math.BigDecimal;
 /**
  * Represents all field types supported by Vitess and their corresponding types in Java. mysqlType
  * numbers should exactly match values defined in dist/mysql-5.1.52/include/mysql/mysql_com.h
- * 
+ *
  */
 public enum FieldType {
   VT_DECIMAL(0, BigDecimal.class),

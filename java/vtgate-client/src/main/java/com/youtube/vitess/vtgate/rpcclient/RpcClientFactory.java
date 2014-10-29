@@ -12,9 +12,8 @@ public class RpcClientFactory {
   public static RpcClient get(String address, int timeoutMs) throws ConnectionException {
     try {
       HostAndPort hostAndPort = HostAndPort.fromString(address);
-      Client client =
-          Client.dialHttp(hostAndPort.getHostText(), hostAndPort.getPort(),
-              GoRpcClient.BSON_RPC_PATH, timeoutMs, new BsonClientCodecFactory());
+      Client client = Client.dialHttp(hostAndPort.getHostText(), hostAndPort.getPort(),
+          GoRpcClient.BSON_RPC_PATH, timeoutMs, new BsonClientCodecFactory());
       return new GoRpcClient(client);
     } catch (GoRpcException e) {
       GoRpcClient.LOGGER.error("vtgate connection exception: ", e);

@@ -64,8 +64,12 @@ public class VitessInputFormat extends InputFormat<KeyspaceIdWritable, RowWritab
   /**
    * Sets the necessary configurations for Vitess table input source
    */
-  public static void setInput(Job job, String hosts, String keyspace, String table,
-      List<String> columns, int splitsPerShard) {
+  public static void setInput(Job job,
+      String hosts,
+      String keyspace,
+      String table,
+      List<String> columns,
+      int splitsPerShard) {
     job.setInputFormatClass(VitessInputFormat.class);
     VitessConf vtConf = new VitessConf(job.getConfiguration());
     vtConf.setHosts(hosts);
