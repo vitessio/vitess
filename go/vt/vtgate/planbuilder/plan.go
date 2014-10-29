@@ -26,6 +26,8 @@ const (
 	DeleteUnsharded
 	DeleteSinglePrimary
 	DeleteSingleLookup
+	InsertUnsharded
+	InsertSharded
 	NumPlans
 )
 
@@ -57,6 +59,8 @@ var planName = []string{
 	"DeleteUnsharded",
 	"DeleteSinglePrimary",
 	"DeleteSingleLookup",
+	"InsertUnsharded",
+	"InsertSharded",
 }
 
 func (id PlanID) String() string {

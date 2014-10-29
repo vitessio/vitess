@@ -32,7 +32,7 @@
     "Type": 0,
     "Column": "id",
     "Lookup": null,
-    "IsOwned": false,
+    "Owner": "",
     "IsAutoInc": false
   },
   "Values": 1
@@ -49,7 +49,7 @@
     "Type": 0,
     "Column": "id",
     "Lookup": null,
-    "IsOwned": false,
+    "Owner": "",
     "IsAutoInc": false
   },
   "Values": ":id"
@@ -66,7 +66,7 @@
     "Type": 0,
     "Column": "id",
     "Lookup": null,
-    "IsOwned": false,
+    "Owner": "",
     "IsAutoInc": false
   },
   "Values": [
@@ -97,7 +97,7 @@
     "Type": 0,
     "Column": "user_id",
     "Lookup": null,
-    "IsOwned": false,
+    "Owner": "",
     "IsAutoInc": false
   },
   "Values": 1
@@ -114,7 +114,7 @@
     "Type": 0,
     "Column": "user_id",
     "Lookup": null,
-    "IsOwned": false,
+    "Owner": "",
     "IsAutoInc": false
   },
   "Values": 1
@@ -135,7 +135,7 @@
       "From": "music_id",
       "To": "user_id"
     },
-    "IsOwned": false,
+    "Owner": "",
     "IsAutoInc": false
   },
   "Values": 1
@@ -156,7 +156,7 @@
       "From": "music_id",
       "To": "user_id"
     },
-    "IsOwned": false,
+    "Owner": "",
     "IsAutoInc": false
   },
   "Values": [
@@ -180,7 +180,7 @@
       "From": "music_id",
       "To": "user_id"
     },
-    "IsOwned": false,
+    "Owner": "",
     "IsAutoInc": false
   },
   "Values": [
@@ -204,7 +204,7 @@
       "From": "music_id",
       "To": "user_id"
     },
-    "IsOwned": false,
+    "Owner": "",
     "IsAutoInc": false
   },
   "Values": "::list"
@@ -225,7 +225,7 @@
       "From": "music_id",
       "To": "user_id"
     },
-    "IsOwned": false,
+    "Owner": "",
     "IsAutoInc": false
   },
   "Values": 1
@@ -253,7 +253,7 @@
     "Type": 0,
     "Column": "id",
     "Lookup": null,
-    "IsOwned": false,
+    "Owner": "",
     "IsAutoInc": false
   },
   "Values": 1
@@ -281,7 +281,7 @@
     "Type": 0,
     "Column": "id",
     "Lookup": null,
-    "IsOwned": false,
+    "Owner": "",
     "IsAutoInc": false
   },
   "Values": 1
@@ -309,7 +309,7 @@
     "Type": 0,
     "Column": "id",
     "Lookup": null,
-    "IsOwned": false,
+    "Owner": "",
     "IsAutoInc": false
   },
   "Values": [

@@ -24,12 +24,10 @@ type VTGateTable struct {
 }
 
 type VTGateIndex struct {
-	Type   int
-	Column string
-	Lookup *VTGateLookup
-	// TODO(sougou): Currently unused.
-	IsOwned bool
-	// This can be true only if IsOwned is true.
+	Type      int
+	Column    string
+	Lookup    *VTGateLookup
+	Owner     string
 	IsAutoInc bool
 }
 
