@@ -337,9 +337,9 @@ func (wr *Wrangler) migrateServedTypes(keyspace string, sourceShards, destinatio
 			if err := topo.UpdateShard(wr.ts, si); err != nil {
 				return err
 			}
-			if err := wr.refreshMasters(destinationShards); err != nil {
-				return err
-			}
+		}
+		if err := wr.refreshMasters(sourceShards); err != nil {
+			return err
 		}
 
 		event.DispatchUpdate(ev, "getting positions of source masters")

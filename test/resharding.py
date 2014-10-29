@@ -28,12 +28,12 @@ pack_keyspace_id = struct.Struct('!Q').pack
 # range "" - 80
 shard_0_master = tablet.Tablet()
 shard_0_replica = tablet.Tablet()
-shard_0_ny_slave = tablet.Tablet(cell='ny')
+shard_0_ny_rdonly = tablet.Tablet(cell='ny')
 # range 80 - ""
 shard_1_master = tablet.Tablet()
 shard_1_slave1 = tablet.Tablet()
 shard_1_slave2 = tablet.Tablet()
-shard_1_ny_slave = tablet.Tablet(cell='ny')
+shard_1_ny_rdonly = tablet.Tablet(cell='ny')
 shard_1_rdonly = tablet.Tablet()
 
 # split shards
@@ -54,11 +54,11 @@ def setUpModule():
     setup_procs = [
         shard_0_master.init_mysql(),
         shard_0_replica.init_mysql(),
-        shard_0_ny_slave.init_mysql(),
+        shard_0_ny_rdonly.init_mysql(),
         shard_1_master.init_mysql(),
         shard_1_slave1.init_mysql(),
         shard_1_slave2.init_mysql(),
-        shard_1_ny_slave.init_mysql(),
+        shard_1_ny_rdonly.init_mysql(),
         shard_1_rdonly.init_mysql(),
         shard_2_master.init_mysql(),
         shard_2_replica1.init_mysql(),
@@ -81,11 +81,11 @@ def tearDownModule():
   teardown_procs = [
       shard_0_master.teardown_mysql(),
       shard_0_replica.teardown_mysql(),
-      shard_0_ny_slave.teardown_mysql(),
+      shard_0_ny_rdonly.teardown_mysql(),
       shard_1_master.teardown_mysql(),
       shard_1_slave1.teardown_mysql(),
       shard_1_slave2.teardown_mysql(),
-      shard_1_ny_slave.teardown_mysql(),
+      shard_1_ny_rdonly.teardown_mysql(),
       shard_1_rdonly.teardown_mysql(),
       shard_2_master.teardown_mysql(),
       shard_2_replica1.teardown_mysql(),
@@ -102,11 +102,11 @@ def tearDownModule():
 
   shard_0_master.remove_tree()
   shard_0_replica.remove_tree()
-  shard_0_ny_slave.remove_tree()
+  shard_0_ny_rdonly.remove_tree()
   shard_1_master.remove_tree()
   shard_1_slave1.remove_tree()
   shard_1_slave2.remove_tree()
-  shard_1_ny_slave.remove_tree()
+  shard_1_ny_rdonly.remove_tree()
   shard_1_rdonly.remove_tree()
   shard_2_master.remove_tree()
   shard_2_replica1.remove_tree()
@@ -431,6 +431,14 @@ primary key (name)
         {"keyspace_id": 0x9000000000000000},
       )
 
+  def _check_query_service(self, tablet, serving):
+    tablet_vars = utils.get_vars(tablet.port)
+    if serving:
+      expected_state = 'SERVING'
+    else:
+      expected_state = 'NOT_SERVING'
+    self.assertEqual(tablet_vars['TabletStateName'], expected_state, 'tablet %s is not in the right serving state: got %s expected %s' % (tablet.tablet_alias, tablet_vars['TabletStateName'], expected_state))
+
   def test_resharding(self):
     utils.run_vtctl(['CreateKeyspace',
                      '--sharding_column_name', 'bad_column',
@@ -445,11 +453,11 @@ primary key (name)
 
     shard_0_master.init_tablet( 'master',  'test_keyspace', '-80')
     shard_0_replica.init_tablet('replica', 'test_keyspace', '-80')
-    shard_0_ny_slave.init_tablet('spare', 'test_keyspace', '-80')
+    shard_0_ny_rdonly.init_tablet('rdonly', 'test_keyspace', '-80')
     shard_1_master.init_tablet( 'master',  'test_keyspace', '80-')
     shard_1_slave1.init_tablet('replica', 'test_keyspace', '80-')
     shard_1_slave2.init_tablet('spare', 'test_keyspace', '80-')
-    shard_1_ny_slave.init_tablet('spare', 'test_keyspace', '80-')
+    shard_1_ny_rdonly.init_tablet('rdonly', 'test_keyspace', '80-')
     shard_1_rdonly.init_tablet('rdonly', 'test_keyspace', '80-')
 
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
@@ -461,19 +469,19 @@ primary key (name)
     full_mycnf_args = keyspace_id_type == keyrange_constants.KIT_BYTES
 
     # create databases so vttablet can start behaving normally
-    for t in [shard_0_master, shard_0_replica, shard_0_ny_slave, shard_1_master,
-              shard_1_slave1, shard_1_slave2, shard_1_ny_slave, shard_1_rdonly]:
+    for t in [shard_0_master, shard_0_replica, shard_0_ny_rdonly, shard_1_master,
+              shard_1_slave1, shard_1_slave2, shard_1_ny_rdonly, shard_1_rdonly]:
       t.create_db('vt_test_keyspace')
       t.start_vttablet(wait_for_state=None, full_mycnf_args=full_mycnf_args)
 
     # wait for the tablets
     shard_0_master.wait_for_vttablet_state('SERVING')
     shard_0_replica.wait_for_vttablet_state('SERVING')
-    shard_0_ny_slave.wait_for_vttablet_state('NOT_SERVING') # spare
+    shard_0_ny_rdonly.wait_for_vttablet_state('SERVING')
     shard_1_master.wait_for_vttablet_state('SERVING')
     shard_1_slave1.wait_for_vttablet_state('SERVING')
     shard_1_slave2.wait_for_vttablet_state('NOT_SERVING') # spare
-    shard_1_ny_slave.wait_for_vttablet_state('NOT_SERVING') # spare
+    shard_1_ny_rdonly.wait_for_vttablet_state('SERVING')
     shard_1_rdonly.wait_for_vttablet_state('SERVING')
 
     # reparent to make the tablets work
@@ -667,12 +675,27 @@ primary key (name)
     # check query service is off on master 2 and master 3, as filtered
     # replication is enabled. Even health check that is enabled on
     # master 3 should not interfere.
-    shard_2_master_vars = utils.get_vars(shard_2_master.port)
-    self.assertEqual(shard_2_master_vars['TabletStateName'], 'NOT_SERVING')
-    shard_3_master_vars = utils.get_vars(shard_3_master.port)
-    self.assertEqual(shard_3_master_vars['TabletStateName'], 'NOT_SERVING')
+    self._check_query_service(shard_2_master, False)
+    self._check_query_service(shard_3_master, False)
 
-    # now serve rdonly from the split shards
+    # now serve rdonly from the split shards, in test_nj only
+    utils.run_vtctl(['MigrateServedTypes', '--cells=test_nj',
+                     'test_keyspace/80-', 'rdonly'], auto_log=True)
+    utils.check_srv_keyspace('test_nj', 'test_keyspace',
+                             'Partitions(master): -80 80-\n' +
+                             'Partitions(rdonly): -80 80-c0 c0-\n' +
+                             'Partitions(replica): -80 80-\n' +
+                             'TabletTypes: master,rdonly,replica',
+                             keyspace_id_type=keyspace_id_type)
+    utils.check_srv_keyspace('test_ny', 'test_keyspace',
+                             'Partitions(rdonly): -80 80-\n' +
+                             'TabletTypes: rdonly',
+                             keyspace_id_type=keyspace_id_type)
+    self._check_query_service(shard_0_ny_rdonly, True)
+    self._check_query_service(shard_1_ny_rdonly, True)
+    self._check_query_service(shard_1_rdonly, False)
+
+    # now serve rdonly from the split shards, everywhere
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'rdonly'],
                     auto_log=True)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
@@ -681,6 +704,13 @@ primary key (name)
                              'Partitions(replica): -80 80-\n' +
                              'TabletTypes: master,rdonly,replica',
                              keyspace_id_type=keyspace_id_type)
+    utils.check_srv_keyspace('test_ny', 'test_keyspace',
+                             'Partitions(rdonly): -80 80-c0 c0-\n' +
+                             'TabletTypes: rdonly',
+                             keyspace_id_type=keyspace_id_type)
+    self._check_query_service(shard_0_ny_rdonly, True)
+    self._check_query_service(shard_1_ny_rdonly, False)
+    self._check_query_service(shard_1_rdonly, False)
 
     # then serve replica from the split shards
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'replica'],
@@ -691,6 +721,7 @@ primary key (name)
                              'Partitions(replica): -80 80-c0 c0-\n' +
                              'TabletTypes: master,rdonly,replica',
                              keyspace_id_type=keyspace_id_type)
+    self._check_query_service(shard_1_slave2, False)
 
     # move replica back and forth
     utils.run_vtctl(['MigrateServedTypes', '-reverse', 'test_keyspace/80-', 'replica'],
@@ -701,6 +732,7 @@ primary key (name)
                              'Partitions(replica): -80 80-\n' +
                              'TabletTypes: master,rdonly,replica',
                              keyspace_id_type=keyspace_id_type)
+    self._check_query_service(shard_1_slave2, True)
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'replica'],
                     auto_log=True)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
@@ -709,6 +741,7 @@ primary key (name)
                              'Partitions(replica): -80 80-c0 c0-\n' +
                              'TabletTypes: master,rdonly,replica',
                              keyspace_id_type=keyspace_id_type)
+    self._check_query_service(shard_1_slave2, False)
 
     # reparent shard_2 to shard_2_replica1, then insert more data and
     # see it flow through still
@@ -742,7 +775,8 @@ primary key (name)
                   monitor_thread_2.max_lag,
                   monitor_thread_2.lag_sum / monitor_thread_2.sample_count)
 
-    # then serve master from the split shards
+    # then serve master from the split shards, make sure the source master's
+    # query service is now turned off
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'master'],
                     auto_log=True)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
@@ -751,6 +785,7 @@ primary key (name)
                              'Partitions(replica): -80 80-c0 c0-\n' +
                              'TabletTypes: master,rdonly,replica',
                              keyspace_id_type=keyspace_id_type)
+    self._check_query_service(shard_1_master, False)
 
     # check the binlog players are gone now
     shard_2_master.wait_for_binlog_player_count(0)
@@ -762,12 +797,12 @@ primary key (name)
     self.assertIn('</html>', shard_2_master_status)
 
     # scrap the original tablets in the original shard
-    for t in [shard_1_master, shard_1_slave1, shard_1_slave2, shard_1_ny_slave,
+    for t in [shard_1_master, shard_1_slave1, shard_1_slave2, shard_1_ny_rdonly,
               shard_1_rdonly]:
       utils.run_vtctl(['ScrapTablet', t.tablet_alias], auto_log=True)
     tablet.kill_tablets([shard_1_master, shard_1_slave1, shard_1_slave2,
-                         shard_1_ny_slave, shard_1_rdonly])
-    for t in [shard_1_master, shard_1_slave1, shard_1_slave2, shard_1_ny_slave,
+                         shard_1_ny_rdonly, shard_1_rdonly])
+    for t in [shard_1_master, shard_1_slave1, shard_1_slave2, shard_1_ny_rdonly,
               shard_1_rdonly]:
       utils.run_vtctl(['DeleteTablet', t.tablet_alias], auto_log=True)
 
@@ -786,7 +821,7 @@ primary key (name)
     utils.run_vtctl(['DeleteShard', 'test_keyspace/80-'], auto_log=True)
 
     # kill everything
-    tablet.kill_tablets([shard_0_master, shard_0_replica, shard_0_ny_slave,
+    tablet.kill_tablets([shard_0_master, shard_0_replica, shard_0_ny_rdonly,
                          shard_2_master, shard_2_replica1, shard_2_replica2,
                          shard_3_master, shard_3_replica, shard_3_rdonly])
 
