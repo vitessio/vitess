@@ -71,6 +71,10 @@ class VtdbLogger(object):
   def vtgatev2_exception(self, e):
     logging.warning('vtgatev2_exception: %s', e)
 
+  def log_private_data(self, private_data):
+    logging.info("Additional exception data %s", private_data)
+
+
 # registration mechanism for VtdbLogger
 __vtdb_logger = VtdbLogger()
 
