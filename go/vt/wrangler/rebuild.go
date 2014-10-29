@@ -137,7 +137,7 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, shardCache 
 				srvShard = &topo.SrvShard{
 					Name:        si.ShardName(),
 					KeyRange:    si.KeyRange,
-					ServedTypes: si.ServedTypes,
+					ServedTypes: si.GetServedTypesPerCell(cell),
 					MasterCell:  si.MasterAlias.Cell,
 				}
 			default:

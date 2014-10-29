@@ -206,7 +206,7 @@ func rebuildCellSrvShard(log logutil.Logger, ts topo.Server, shardInfo *topo.Sha
 		srvShard := &topo.SrvShard{
 			Name:        shardInfo.ShardName(),
 			KeyRange:    shardInfo.KeyRange,
-			ServedTypes: shardInfo.ServedTypes,
+			ServedTypes: shardInfo.GetServedTypesPerCell(cell),
 			MasterCell:  shardInfo.MasterAlias.Cell,
 			TabletTypes: make([]topo.TabletType, 0, len(locationAddrsMap)),
 		}

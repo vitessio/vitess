@@ -73,7 +73,7 @@ func (wr *Wrangler) setKeyspaceShardingInfo(keyspace, shardingColumnName string,
 
 // MigrateServedTypes is used during horizontal splits to migrate a
 // served type from a list of shards to another.
-func (wr *Wrangler) MigrateServedTypes(keyspace, shard string, servedType topo.TabletType, reverse, skipRebuild bool) error {
+func (wr *Wrangler) MigrateServedTypes(keyspace, shard string, cells []string, servedType topo.TabletType, reverse, skipRebuild bool) error {
 	if servedType == topo.TYPE_MASTER {
 		// we cannot migrate a master back, since when master migration
 		// is done, the source shards are dead
@@ -115,34 +115,16 @@ func (wr *Wrangler) MigrateServedTypes(keyspace, shard string, servedType topo.T
 
 	// Verify the sources has the type we're migrating (or not if reverse)
 	for _, si := range sourceShards {
-		foundType := topo.IsTypeInList(servedType, si.ServedTypes)
-		if reverse {
-			if foundType {
-				return fmt.Errorf("Source shard %v/%v is already serving type %v", si.Keyspace(), si.ShardName(), servedType)
-			}
-		} else {
-			if !foundType {
-				return fmt.Errorf("Source shard %v/%v is not serving type %v", si.Keyspace, si.ShardName(), servedType)
-			}
-		}
-
-		if servedType == topo.TYPE_MASTER && len(si.ServedTypes) > 1 {
-			return fmt.Errorf("Cannot migrate master out of %v/%v until everything else is migrated out", si.Keyspace(), si.ShardName())
+		if err := si.CheckServedTypesMigration(servedType, cells, !reverse); err != nil {
+			return err
 		}
 	}
 
 	// Verify the destinations do not have the type we're
 	// migrating (or do if reverse)
 	for _, si := range destinationShards {
-		foundType := topo.IsTypeInList(servedType, si.ServedTypes)
-		if reverse {
-			if !foundType {
-				return fmt.Errorf("Destination shard %v/%v is not serving type %v", si.Keyspace, si.ShardName(), servedType)
-			}
-		} else {
-			if foundType {
-				return fmt.Errorf("Destination shard %v/%v is already serving type %v", si.Keyspace(), si.ShardName(), servedType)
-			}
+		if err := si.CheckServedTypesMigration(servedType, cells, reverse); err != nil {
+			return err
 		}
 	}
 
@@ -171,7 +153,7 @@ func (wr *Wrangler) MigrateServedTypes(keyspace, shard string, servedType topo.T
 
 	// execute the migration
 	shardCache := make(map[string]*topo.ShardInfo)
-	rec.RecordError(wr.migrateServedTypes(keyspace, sourceShards, destinationShards, servedType, reverse, shardCache))
+	rec.RecordError(wr.migrateServedTypes(keyspace, sourceShards, destinationShards, cells, servedType, reverse, shardCache))
 
 	// unlock the shards, we're done
 	for i := len(destinationShards) - 1; i >= 0; i-- {
@@ -337,7 +319,7 @@ func (wr *Wrangler) refreshMasters(shards []*topo.ShardInfo) error {
 }
 
 // migrateServedTypes operates with all concerned shards locked.
-func (wr *Wrangler) migrateServedTypes(keyspace string, sourceShards, destinationShards []*topo.ShardInfo, servedType topo.TabletType, reverse bool, shardCache map[string]*topo.ShardInfo) (err error) {
+func (wr *Wrangler) migrateServedTypes(keyspace string, sourceShards, destinationShards []*topo.ShardInfo, cells []string, servedType topo.TabletType, reverse bool, shardCache map[string]*topo.ShardInfo) (err error) {
 
 	// re-read all the shards so we are up to date
 	wr.Logger().Infof("Re-reading all shards")
@@ -370,33 +352,13 @@ func (wr *Wrangler) migrateServedTypes(keyspace string, sourceShards, destinatio
 
 	// check and update all shard records, in memory only
 	for _, si := range sourceShards {
-		if reverse {
-			// need to add to source
-			if topo.IsTypeInList(servedType, si.ServedTypes) {
-				return fmt.Errorf("Source shard %v/%v is already serving type %v", si.Keyspace(), si.ShardName(), servedType)
-			}
-			si.ServedTypes = append(si.ServedTypes, servedType)
-		} else {
-			// need to remove from source
-			var found bool
-			if si.ServedTypes, found = removeType(servedType, si.ServedTypes); !found {
-				return fmt.Errorf("Source shard %v/%v is not serving type %v", si.Keyspace(), si.ShardName(), servedType)
-			}
+		if err := si.UpdateServedTypesMap(servedType, cells, !reverse); err != nil {
+			return err
 		}
 	}
 	for _, si := range destinationShards {
-		if reverse {
-			// need to remove from destination
-			var found bool
-			if si.ServedTypes, found = removeType(servedType, si.ServedTypes); !found {
-				return fmt.Errorf("Destination shard %v/%v is not serving type %v", si.Keyspace(), si.ShardName(), servedType)
-			}
-		} else {
-			// need to add to destination
-			if topo.IsTypeInList(servedType, si.ServedTypes) {
-				return fmt.Errorf("Destination shard %v/%v is already serving type %v", si.Keyspace(), si.ShardName(), servedType)
-			}
-			si.ServedTypes = append(si.ServedTypes, servedType)
+		if err := si.UpdateServedTypesMap(servedType, cells, reverse); err != nil {
+			return err
 		}
 	}
 

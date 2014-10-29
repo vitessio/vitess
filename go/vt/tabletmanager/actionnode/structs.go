@@ -108,7 +108,8 @@ type ApplySchemaShardArgs struct {
 }
 
 type SetShardServedTypesArgs struct {
-	ServedTypes []topo.TabletType
+	Cells      []string
+	ServedType topo.TabletType
 }
 
 type MigrateServedTypesArgs struct {
@@ -165,11 +166,12 @@ func ApplySchemaShard(masterTabletAlias topo.TabletAlias, change string, simple 
 	}).SetGuid()
 }
 
-func SetShardServedTypes(servedTypes []topo.TabletType) *ActionNode {
+func SetShardServedTypes(cells []string, servedType topo.TabletType) *ActionNode {
 	return (&ActionNode{
 		Action: SHARD_ACTION_SET_SERVED_TYPES,
 		Args: &SetShardServedTypesArgs{
-			ServedTypes: servedTypes,
+			Cells:      cells,
+			ServedType: servedType,
 		},
 	}).SetGuid()
 }

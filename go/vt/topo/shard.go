@@ -121,6 +121,11 @@ type TabletControl struct {
 	BlacklistedTables   []string // only used if DisableQueryService==false
 }
 
+// ShardServedType describes the cells where the given shard is serving.
+type ShardServedType struct {
+	Cells []string // nil means all cells
+}
+
 // A pure data struct for information stored in topology server.  This
 // node is used to present a controlled view of the shard, unaware of
 // every management action. It also contains configuration data for a
@@ -133,10 +138,12 @@ type Shard struct {
 	// helpful to have it decomposed here.
 	KeyRange key.KeyRange
 
-	// ServedTypes is a list of all the tablet types this shard will
-	// serve. This is usually used with overlapping shards during
-	// data shuffles like shard splitting.
-	ServedTypes []TabletType
+	// ServedTypesMap is a map of all the tablet types this shard
+	// will serve, to the cells that serve this type. This is
+	// usually used with overlapping shards during data shuffles
+	// like shard splitting. Note the master record will always
+	// list all the cells.
+	ServedTypesMap map[TabletType]*ShardServedType
 
 	// SourceShards is the list of shards we're replicating from,
 	// using filtered replication.
@@ -165,7 +172,7 @@ func ValidateShardName(shard string) (string, key.KeyRange, error) {
 
 	parts := strings.Split(shard, "-")
 	if len(parts) != 2 {
-		return "", key.KeyRange{}, fmt.Errorf("Invalid shardId, can only contain one '-': %v", shard)
+		return "", key.KeyRange{}, fmt.Errorf("invalid shardId, can only contain one '-': %v", shard)
 	}
 
 	keyRange, err := key.ParseKeyRangeParts(parts[0], parts[1])
@@ -174,7 +181,7 @@ func ValidateShardName(shard string) (string, key.KeyRange, error) {
 	}
 
 	if keyRange.End != key.MaxKey && keyRange.Start >= keyRange.End {
-		return "", key.KeyRange{}, fmt.Errorf("Out of order keys: %v is not strictly smaller than %v", keyRange.Start.Hex(), keyRange.End.Hex())
+		return "", key.KeyRange{}, fmt.Errorf("out of order keys: %v is not strictly smaller than %v", keyRange.Start.Hex(), keyRange.End.Hex())
 	}
 
 	return strings.ToLower(shard), keyRange, nil
@@ -262,14 +269,14 @@ func CreateShard(ts Server, keyspace, shard string) error {
 	}
 	for _, si := range sis {
 		if key.KeyRangesIntersect(si.KeyRange, keyRange) {
-			for _, t := range si.ServedTypes {
+			for t, _ := range si.ServedTypesMap {
 				delete(servingTypes, t)
 			}
 		}
 	}
-	s.ServedTypes = make([]TabletType, 0, len(servingTypes))
+	s.ServedTypesMap = make(map[TabletType]*ShardServedType, len(servingTypes))
 	for st := range servingTypes {
-		s.ServedTypes = append(s.ServedTypes, st)
+		s.ServedTypesMap[st] = &ShardServedType{}
 	}
 
 	return ts.CreateShard(keyspace, name, s)
@@ -381,6 +388,82 @@ func (si *ShardInfo) removeCellsFromTabletControl(tc *TabletControl, tabletType 
 	} else {
 		tc.Cells = result
 	}
+}
+
+// GetServedTypesPerCell returns the list of types this shard is serving
+// in the provided cell.
+func (si *ShardInfo) GetServedTypesPerCell(cell string) []TabletType {
+	result := make([]TabletType, 0, len(si.ServedTypesMap))
+	for tt, sst := range si.ServedTypesMap {
+		if InCellList(cell, sst.Cells) {
+			result = append(result, tt)
+		}
+	}
+	return result
+}
+
+// CheckServedTypesMigration makes sure the provided migration is possible
+func (si *ShardInfo) CheckServedTypesMigration(tabletType TabletType, cells []string, remove bool) error {
+	// master is a special case with a few extra checks
+	if tabletType == TYPE_MASTER {
+		if len(cells) > 0 {
+			return fmt.Errorf("cannot migrate only some cells for master in shard %v/%v", si.keyspace, si.shardName)
+		}
+		if remove && len(si.ServedTypesMap) > 1 {
+			return fmt.Errorf("cannot migrate master away from %v/%v until everything else is migrated", si.keyspace, si.shardName)
+		}
+	}
+
+	// we can't remove a type we don't have
+	if _, ok := si.ServedTypesMap[tabletType]; !ok && remove {
+		return fmt.Errorf("supplied type cannot be migrated")
+	}
+
+	return nil
+}
+
+// UpdateServedTypesMap handles ServedTypesMap. It can add or remove
+// records, cells, ...
+func (si *ShardInfo) UpdateServedTypesMap(tabletType TabletType, cells []string, remove bool) error {
+	// check parameters to be sure
+	if err := si.CheckServedTypesMigration(tabletType, cells, remove); err != nil {
+		return err
+	}
+
+	if si.ServedTypesMap == nil {
+		si.ServedTypesMap = make(map[TabletType]*ShardServedType)
+	}
+	sst, ok := si.ServedTypesMap[tabletType]
+	if !ok {
+		// the record doesn't exist
+		if remove {
+			if len(si.ServedTypesMap) == 0 {
+				si.ServedTypesMap = nil
+			}
+			log.Warningf("Trying to remove ShardServedType for missing type %v in shard %v/%v", tabletType, si.keyspace, si.shardName)
+		} else {
+			si.ServedTypesMap[tabletType] = &ShardServedType{
+				Cells: cells,
+			}
+		}
+		return nil
+	}
+
+	if remove {
+		result, emptyList := removeCells(sst.Cells, cells, si.Cells)
+		if emptyList {
+			// we don't have any cell left, we need to clear this record
+			delete(si.ServedTypesMap, tabletType)
+			if len(si.ServedTypesMap) == 0 {
+				si.ServedTypesMap = nil
+			}
+		} else {
+			sst.Cells = result
+		}
+	} else {
+		sst.Cells = addCells(sst.Cells, cells)
+	}
+	return nil
 }
 
 //
