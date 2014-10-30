@@ -16,7 +16,7 @@ func TestMemcache(t *testing.T) {
 		t.Skip("skipping integration test in short mode.")
 	}
 
-	cmd := exec.Command("memcached", "-s", "/tmp/vtocc_cache.sock")
+	cmd := exec.Command("memcached", "-s", "/tmp/vt_memcache_test.sock")
 	if err := cmd.Start(); err != nil {
 		if strings.Contains(err.Error(), "executable file not found in $PATH") {
 			t.Skipf("skipping: %v", err)
@@ -24,11 +24,19 @@ func TestMemcache(t *testing.T) {
 		t.Fatalf("Memcache start: %v", err)
 	}
 	defer cmd.Process.Kill()
-	time.Sleep(time.Second)
 
-	c, err := Connect("/tmp/vtocc_cache.sock", 30*time.Millisecond)
-	if err != nil {
-		t.Fatalf("Connect: %v", err)
+	var c *Connection
+	var err error
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if c, err = Connect("/tmp/vt_memcache_test.sock", 30*time.Millisecond); err == nil {
+			break
+		} else {
+			if time.Now().After(deadline) {
+				t.Fatalf("Connect: %v", err)
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
 	}
 
 	// Set
@@ -119,8 +127,7 @@ func TestMemcache(t *testing.T) {
 		t.Errorf("want true, got %v", stored)
 	}
 	expect(t, c, "Lost", "World")
-	time.Sleep(2 * time.Second)
-	expect(t, c, "Lost", "")
+	expectPoll(t, c, "Lost", "", 10*time.Second)
 
 	// cas
 	stored, err = c.Set("Data", 0, 0, []byte("Set"))
@@ -258,7 +265,7 @@ func TestMemcache(t *testing.T) {
 	// timeout test
 	c.timeout = 1 * time.Nanosecond
 	results, err = c.Gets("key1", "key3", "key2")
-	want := "write unix /tmp/vtocc_cache.sock: i/o timeout"
+	want := "write unix /tmp/vt_memcache_test.sock: i/o timeout"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
@@ -279,5 +286,26 @@ func expect(t *testing.T, c *Connection, key, value string) {
 	}
 	if got != value {
 		t.Errorf("want %s, got %s", value, got)
+	}
+}
+
+func expectPoll(t *testing.T, c *Connection, key, value string, timeout time.Duration) {
+	deadline := time.Now().Add(timeout)
+	for {
+		results, err := c.Get(key)
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		var got string
+		if len(results) != 0 {
+			got = string(results[0].Value)
+		}
+		if got == value {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Errorf("want %s, got %s", value, got)
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 }
