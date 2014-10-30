@@ -290,7 +290,7 @@ func IsRunningQueryService(tt TabletType) bool {
 // RPC service.
 func IsRunningUpdateStream(tt TabletType) bool {
 	switch tt {
-	case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH:
+	case TYPE_MASTER, TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH:
 		return true
 	}
 	return false
