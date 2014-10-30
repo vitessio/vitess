@@ -18,14 +18,14 @@ import java.util.regex.Pattern;
 
 import javax.inject.Inject;
 
-import acolyte.QueryResult;
-import acolyte.StatementHandler;
-import acolyte.UpdateResult;
+import acolyte.jdbc.StatementHandler;
+import acolyte.jdbc.UpdateResult;
+import acolyte.jdbc.QueryResult;
 
 /**
  * Implementation of {@link StatementHandler} that glues Acolyte to {@link SqlQuery} calls.
  *
- * Instances are only called from within {@link acolyte.Driver}, contract is not well defined
+ * Instances are only called from within {@link acolyte.jdbc.Driver}, contract is not well defined
  * therefore there are no unit tests. This code is tested as a part of integration tests running SQL
  * queries through JDBC.
  */

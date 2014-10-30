@@ -50,8 +50,8 @@ public class VtoccModule extends AbstractModule {
 
   @Provides
   @VtoccConnectionCreationScoped
-  acolyte.Connection getAcolyteConnection(VtoccStatementHandler vtoccStatementHandler) {
-    return acolyte.Driver.connection(vtoccStatementHandler);
+  acolyte.jdbc.Connection getAcolyteConnection(VtoccStatementHandler vtoccStatementHandler) {
+    return acolyte.jdbc.Driver.connection(vtoccStatementHandler);
   }
 
   /**

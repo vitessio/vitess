@@ -15,14 +15,14 @@ import java.util.List;
 
 import javax.inject.Inject;
 
-import acolyte.StatementHandler.Parameter;
+import acolyte.jdbc.StatementHandler.Parameter;
 
 /**
  * Builds {@link Query} from SQL and Acolyte-provided {@link Parameter}s.
  *
  * Serializes Java types into MySQL/Vtocc supported strings.
  *
- * Instances are only called from within {@link acolyte.Driver}, contract is not well defined
+ * Instances are only called from within {@link acolyte.jdbc.Driver}, contract is not well defined
  * therefore there are no unit tests. This code is tested as a part of integration tests running SQL
  * queries through JDBC.
  */
