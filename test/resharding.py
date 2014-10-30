@@ -784,6 +784,14 @@ primary key (name)
                   monitor_thread_2.max_lag,
                   monitor_thread_2.lag_sum / monitor_thread_2.sample_count)
 
+    # mock with the SourceShard records to test 'vtctl SourceShardDelete'
+    # and 'vtctl SourceShardAdd'
+    utils.run_vtctl(['SourceShardDelete', 'test_keyspace/c0-', '0'],
+                    auto_log=True)
+    utils.run_vtctl(['SourceShardAdd', '--key_range=80-',
+                     'test_keyspace/c0-', '0', 'test_keyspace/80-'],
+                    auto_log=True)
+
     # then serve master from the split shards, make sure the source master's
     # query service is now turned off
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'master'],

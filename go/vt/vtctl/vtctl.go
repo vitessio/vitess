@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"net"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -147,6 +148,12 @@ var commands = []commandGroup{
 			command{"SetShardTabletControl", commandSetShardTabletControl,
 				"[--cells=c1,c2,...] [--blacklisted_tables=t1,t2,...] [--remove] [--disable_query_service] <keyspace/shard|zk shard path> <tabletType>",
 				"Sets the TabletControl record for a shard and type. Only use this for an emergency fix, or after a finished vertical split. MigrateServedFrom and MigrateServedType will set this field appropriately already. Always specify blacklisted_tables for vertical splits, never for horizontal splits."},
+			command{"SourceShardDelete", commandSourceShardDelete,
+				"<keyspace/shard> <uid>",
+				"Deletes the SourceShard record with the provided index. This is meant as an emergency cleanup function. Does not RefreshState the shard master."},
+			command{"SourceShardAdd", commandSourceShardAdd,
+				"[--key_range=<keyrange>] [--tables=<table1,table2,...>] <keyspace/shard> <uid> <source keyspace/shard>",
+				"Adds the SourceShard record with the provided index. This is meant as an emergency function. Does not RefreshState the shard master."},
 			command{"ShardMultiRestore", commandShardMultiRestore,
 				"[-force] [-concurrency=4] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-strategy=] [-tables=<table1>,<table2>,...] <keyspace/shard|zk shard path> <source zk path>...",
 				"Restore multi-snapshots on all the tablets of a shard."},
@@ -1322,6 +1329,59 @@ func commandSetShardTabletControl(wr *wrangler.Wrangler, subFlags *flag.FlagSet,
 	}
 
 	return wr.SetShardTabletControl(keyspace, shard, tabletType, cells, *remove, *disableQueryService, tables)
+}
+
+func commandSourceShardDelete(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+
+	if subFlags.NArg() < 2 {
+		return fmt.Errorf("SourceShardDelete requires <keyspace/shard> <uid>")
+	}
+	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	uid, err := strconv.Atoi(subFlags.Arg(1))
+	if err != nil {
+		return err
+	}
+	return wr.SourceShardDelete(keyspace, shard, uint32(uid))
+}
+
+func commandSourceShardAdd(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	keyRange := subFlags.String("key_range", "", "key range to use for the SourceShard")
+	tablesStr := subFlags.String("tables", "", "comma separated list of tables to replicate (used for vertical split)")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 3 {
+		return fmt.Errorf("SourceShardAdd requires <keyspace/shard> <uid> <source keyspace/shard")
+	}
+	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	uid, err := strconv.Atoi(subFlags.Arg(1))
+	if err != nil {
+		return err
+	}
+	skeyspace, sshard, err := shardParamToKeyspaceShard(subFlags.Arg(2))
+	if err != nil {
+		return err
+	}
+	var tables []string
+	if *tablesStr != "" {
+		tables = strings.Split(*tablesStr, ",")
+	}
+	var kr key.KeyRange
+	if *keyRange != "" {
+		if _, kr, err = topo.ValidateShardName(*keyRange); err != nil {
+			return err
+		}
+	}
+	return wr.SourceShardAdd(keyspace, shard, uint32(uid), skeyspace, sshard, kr, tables)
 }
 
 func commandShardMultiRestore(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
