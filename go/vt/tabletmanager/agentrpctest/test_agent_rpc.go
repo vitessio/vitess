@@ -295,6 +295,19 @@ func agentRpcTestRefreshState(t *testing.T, client tmclient.TabletManagerClient,
 	}
 }
 
+var testRunHealthCheckValue = topo.TYPE_RDONLY
+
+func (fra *fakeRpcAgent) RunHealthCheck(targetTabletType topo.TabletType) {
+	compare(fra.t, "RunHealthCheck tabletType", targetTabletType, testRunHealthCheckValue)
+}
+
+func agentRpcTestRunHealthCheck(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	err := client.RunHealthCheck(ti, testRunHealthCheckValue, time.Minute)
+	if err != nil {
+		t.Errorf("RunHealthCheck failed: %v", err)
+	}
+}
+
 var testReloadSchemaCalled = false
 
 func (fra *fakeRpcAgent) ReloadSchema() {
@@ -877,6 +890,8 @@ func AgentRpcTestSuite(t *testing.T, client tmclient.TabletManagerClient, ti *to
 	agentRpcTestScrap(t, client, ti)
 	agentRpcTestSleep(t, client, ti)
 	agentRpcTestExecuteHook(t, client, ti)
+	agentRpcTestRefreshState(t, client, ti)
+	agentRpcTestRunHealthCheck(t, client, ti)
 	agentRpcTestReloadSchema(t, client, ti)
 	agentRpcTestPreflightSchema(t, client, ti)
 	agentRpcTestApplySchema(t, client, ti)

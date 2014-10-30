@@ -129,6 +129,11 @@ func (client *GoRpcTabletManagerClient) RefreshState(tablet *topo.TabletInfo, wa
 	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_REFRESH_STATE, "", &noOutput, waitTime)
 }
 
+func (client *GoRpcTabletManagerClient) RunHealthCheck(tablet *topo.TabletInfo, targetTabletType topo.TabletType, waitTime time.Duration) error {
+	var noOutput rpc.UnusedResponse
+	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_RUN_HEALTH_CHECK, &targetTabletType, &noOutput, waitTime)
+}
+
 func (client *GoRpcTabletManagerClient) ReloadSchema(tablet *topo.TabletInfo, waitTime time.Duration) error {
 	var noOutput rpc.UnusedResponse
 	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_RELOAD_SCHEMA, "", &noOutput, waitTime)

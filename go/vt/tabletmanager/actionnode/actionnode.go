@@ -119,6 +119,10 @@ const (
 	// the topo server.
 	TABLET_ACTION_REFRESH_STATE = "RefreshState"
 
+	// RunHealthCheck tells the tablet to refresh its tablet record from
+	// the topo server.
+	TABLET_ACTION_RUN_HEALTH_CHECK = "RunHealthCheck"
+
 	// ReloadSchema tells the tablet to reload its schema.
 	TABLET_ACTION_RELOAD_SCHEMA = "ReloadSchema"
 

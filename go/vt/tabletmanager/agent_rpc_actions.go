@@ -64,6 +64,8 @@ type RpcAgent interface {
 
 	RefreshState()
 
+	RunHealthCheck(targetTabletType topo.TabletType)
+
 	ReloadSchema()
 
 	PreflightSchema(change string) (*myproto.SchemaChangeResult, error)
@@ -207,6 +209,12 @@ func (agent *ActionAgent) ExecuteHook(hk *hook.Hook) *hook.HookResult {
 // RefreshState reload the tablet record from the topo server.
 // Should be called under RpcWrapLockAction, so it actually works.
 func (agent *ActionAgent) RefreshState() {
+}
+
+// RunHealthCheck will manually run the health check on the tablet
+// Should be called under RpcWrap.
+func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType) {
+	agent.runHealthCheck(targetTabletType)
 }
 
 // ReloadSchema will reload the schema

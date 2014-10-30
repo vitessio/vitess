@@ -109,6 +109,13 @@ func (tm *TabletManager) RefreshState(context *rpcproto.Context, args *rpc.Unuse
 	})
 }
 
+func (tm *TabletManager) RunHealthCheck(context *rpcproto.Context, args *topo.TabletType, reply *rpc.UnusedResponse) error {
+	return tm.agent.RpcWrap(context, actionnode.TABLET_ACTION_RUN_HEALTH_CHECK, args, reply, func() error {
+		tm.agent.RunHealthCheck(*args)
+		return nil
+	})
+}
+
 func (tm *TabletManager) ReloadSchema(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLockAction(context, actionnode.TABLET_ACTION_RELOAD_SCHEMA, args, reply, true, func() error {
 		tm.agent.ReloadSchema()
