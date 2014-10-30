@@ -2,6 +2,7 @@ package com.youtube.vitess.vtgate;
 
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.Exceptions.DatabaseException;
+import com.youtube.vitess.vtgate.Exceptions.IntegrityException;
 import com.youtube.vitess.vtgate.cursor.Cursor;
 import com.youtube.vitess.vtgate.cursor.CursorImpl;
 import com.youtube.vitess.vtgate.cursor.StreamCursor;
@@ -36,10 +37,9 @@ import java.util.Random;
  *vtgate.close();
  *</pre>
  *
- * TODO: Currently only ExecuteKeyspaceIds is supported, add the rest.
  */
 public class VtGate {
-
+  private static String INTEGRITY_ERROR_MSG = "(errno 1062)";
   private RpcClient client;
   private Object session;
 
@@ -47,7 +47,7 @@ public class VtGate {
    * Opens connection to a VtGate server. Connection remains open until close() is called.
    *
    * @param addresses comma separated list of host:port pairs
-   * @params timeoutMs connection timeout in milliseconds, 0 for no timeout
+   * @param timeoutMs connection timeout in milliseconds, 0 for no timeout
    * @throws ConnectionException
    */
   public static VtGate connect(String addresses, int timeoutMs) throws ConnectionException {
@@ -70,7 +70,11 @@ public class VtGate {
       query.setSession(session);
     }
     QueryResponse response = client.execute(query);
-    if (response.getError() != null) {
+    String error = response.getError();
+    if (error != null) {
+      if (error.contains(INTEGRITY_ERROR_MSG)) {
+        throw new IntegrityException(error);
+      }
       throw new DatabaseException(response.getError());
     }
     if (response.getSession() != null) {
@@ -87,7 +91,11 @@ public class VtGate {
       query.setSession(session);
     }
     BatchQueryResponse response = client.batchExecute(query);
-    if (response.getError() != null) {
+    String error = response.getError();
+    if (error != null) {
+      if (error.contains(INTEGRITY_ERROR_MSG)) {
+        throw new IntegrityException(error);
+      }
       throw new DatabaseException(response.getError());
     }
     if (response.getSession() != null) {

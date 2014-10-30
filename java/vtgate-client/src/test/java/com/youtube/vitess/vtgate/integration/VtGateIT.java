@@ -8,6 +8,7 @@ import com.youtube.vitess.vtgate.BatchQuery.BatchQueryBuilder;
 import com.youtube.vitess.vtgate.BindVariable;
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.Exceptions.DatabaseException;
+import com.youtube.vitess.vtgate.Exceptions.IntegrityException;
 import com.youtube.vitess.vtgate.KeyRange;
 import com.youtube.vitess.vtgate.KeyspaceId;
 import com.youtube.vitess.vtgate.Query;
@@ -330,6 +331,29 @@ public class VtGateIT {
     }
     Assert.assertTrue(expected.equals(actual));
     vtgate.close();
+  }
+
+  @Test
+  public void testIntegrityException() throws Exception {
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    String insertSql = "insert into vtgate_test(id, keyspace_id) values (:id, :keyspace_id)";
+    KeyspaceId kid = testEnv.getAllKeyspaceIds().get(0);
+    Query insertQuery = new QueryBuilder(insertSql, testEnv.keyspace, "master")
+        .addBindVar(BindVariable.forInt("id", 1))
+        .addBindVar(BindVariable.forULong("keyspace_id", ((UnsignedLong) kid.getId())))
+        .addKeyspaceId(kid).build();
+    vtgate.begin();
+    vtgate.execute(insertQuery);
+    vtgate.commit();
+    vtgate.begin();
+    try {
+      vtgate.execute(insertQuery);
+      Assert.fail("failed to throw exception");
+    } catch (IntegrityException e) {
+    } finally {
+      vtgate.rollback();
+      vtgate.close();
+    }
   }
 
   /**
