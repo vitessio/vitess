@@ -83,11 +83,11 @@ public class BindVariable {
     return bv;
   }
 
-  public BindVariable forShort(String name, Short value) {
+  public static BindVariable forShort(String name, Short value) {
     return forLong(name, value.longValue());
   }
 
-  public BindVariable forBigDecimal(String name, BigDecimal value) {
+  public static BindVariable forBigDecimal(String name, BigDecimal value) {
     return forDouble(name, value.doubleValue());
   }
 
