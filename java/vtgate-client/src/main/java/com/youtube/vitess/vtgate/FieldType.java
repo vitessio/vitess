@@ -91,7 +91,12 @@ public enum FieldType {
         s = s.replace(' ', 'T');
         return DateTime.parse(s);
       case VT_LONGLONG:
-        return UnsignedLong.valueOf(s);
+        // This can be an unsigned or a signed long
+        try {
+          return UnsignedLong.valueOf(s);
+        } catch (NumberFormatException e) {
+          return Long.valueOf(s);
+        }
       case VT_INT24:
         return Integer.valueOf(s);
       case VT_DATE:
