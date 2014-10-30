@@ -188,7 +188,7 @@ var commands = []commandGroup{
 				"[-ping-tablets] <keyspace name|zk keyspace path>",
 				"Validate all nodes reachable from this keyspace are consistent."},
 			command{"MigrateServedTypes", commandMigrateServedTypes,
-				"[-reverse] [-skip-rebuild] <keyspace/shard|zk shard path> <served type>",
+				"[-reverse] [-skip-refresh-state] <keyspace/shard|zk shard path> <served type>",
 				"Migrates a serving type from the source shard to the shards it replicates to. Will also rebuild the serving graph. keyspace/shard can be any of the involved shards in the migration."},
 			command{"MigrateServedFrom", commandMigrateServedFrom,
 				"[-cells=c1,c2,...] [-reverse] <destination keyspace/shard|zk destination shard path> <served type>",
@@ -1172,7 +1172,7 @@ func commandRebuildShardGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 		return err
 	}
 	for _, ks := range keyspaceShards {
-		if err := wr.RebuildShardGraph(ks.Keyspace, ks.Shard, cellArray); err != nil {
+		if _, err := wr.RebuildShardGraph(ks.Keyspace, ks.Shard, cellArray); err != nil {
 			return err
 		}
 	}
@@ -1269,30 +1269,28 @@ func commandListShardTablets(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args
 }
 
 func commandSetShardServedTypes(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	cellsStr := subFlags.String("cells", "", "comma separated list of cells to update")
+	remove := subFlags.Bool("remove", false, "will remove the served type")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-	if subFlags.NArg() != 1 && subFlags.NArg() != 2 {
-		return fmt.Errorf("action SetShardServedTypes requires <keyspace/shard|zk shard path> [<served type1>,<served type2>,...]")
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("action SetShardServedTypes requires <keyspace/shard|zk shard path> <served type>")
 	}
 	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	var servedTypes []topo.TabletType
-	if subFlags.NArg() == 2 {
-		types := strings.Split(subFlags.Arg(1), ",")
-		servedTypes = make([]topo.TabletType, 0, len(types))
-		for _, t := range types {
-			tt, err := parseTabletType(t, []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY})
-			if err != nil {
-				return err
-			}
-			servedTypes = append(servedTypes, tt)
-		}
+	servedType, err := parseTabletType(subFlags.Arg(1), []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY})
+	if err != nil {
+		return err
+	}
+	var cells []string
+	if *cellsStr != "" {
+		cells = strings.Split(*cellsStr, ",")
 	}
 
-	return wr.SetShardServedTypes(keyspace, shard, servedTypes)
+	return wr.SetShardServedTypes(keyspace, shard, cells, servedType, *remove)
 }
 
 func commandSetShardTabletControl(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1598,7 +1596,7 @@ func commandRebuildKeyspaceGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, 
 		return err
 	}
 	for _, keyspace := range keyspaces {
-		if err := wr.RebuildKeyspaceGraph(keyspace, cellArray, nil); err != nil {
+		if err := wr.RebuildKeyspaceGraph(keyspace, cellArray); err != nil {
 			return err
 		}
 	}
@@ -1622,8 +1620,9 @@ func commandValidateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args
 }
 
 func commandMigrateServedTypes(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	cellsStr := subFlags.String("cells", "", "comma separated list of cells to update")
 	reverse := subFlags.Bool("reverse", false, "move the served type back instead of forward, use in case of trouble")
-	skipRebuild := subFlags.Bool("skip-rebuild", false, "do not rebuild the shard and keyspace graph after the migration (replica and rdonly only)")
+	skipReFreshState := subFlags.Bool("skip-refresh-state", false, "do not refresh the state of the source tablets after the migration (will need to be done manually, replica and rdonly only)")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1639,10 +1638,14 @@ func commandMigrateServedTypes(wr *wrangler.Wrangler, subFlags *flag.FlagSet, ar
 	if err != nil {
 		return err
 	}
-	if servedType == topo.TYPE_MASTER && *skipRebuild {
-		return fmt.Errorf("can only specify skip-rebuild for non-master migrations")
+	if servedType == topo.TYPE_MASTER && *skipReFreshState {
+		return fmt.Errorf("can only specify skip-refresh-state for non-master migrations")
 	}
-	return wr.MigrateServedTypes(keyspace, shard, servedType, *reverse, *skipRebuild)
+	var cells []string
+	if *cellsStr != "" {
+		cells = strings.Split(*cellsStr, ",")
+	}
+	return wr.MigrateServedTypes(keyspace, shard, cells, servedType, *reverse, *skipReFreshState)
 }
 
 func commandMigrateServedFrom(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

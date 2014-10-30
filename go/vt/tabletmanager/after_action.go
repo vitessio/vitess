@@ -122,12 +122,12 @@ func (agent *ActionAgent) disallowQueries() {
 // changeCallback is run after every action that might
 // have changed something in the tablet record.
 func (agent *ActionAgent) changeCallback(oldTablet, newTablet *topo.Tablet) error {
-
 	allowQuery := newTablet.IsRunningQueryService()
 
 	// Read the shard to get SourceShards / TabletControlMap if
 	// we're going to use it.
 	var shardInfo *topo.ShardInfo
+	var tabletControl *topo.TabletControl
 	var blacklistedTables []string
 	var err error
 	if allowQuery {
@@ -144,6 +144,7 @@ func (agent *ActionAgent) changeCallback(oldTablet, newTablet *topo.Tablet) erro
 						allowQuery = false
 					}
 					blacklistedTables = tc.BlacklistedTables
+					tabletControl = tc
 				}
 			}
 		}
@@ -179,19 +180,20 @@ func (agent *ActionAgent) changeCallback(oldTablet, newTablet *topo.Tablet) erro
 		}
 		if err := agent.allowQueries(newTablet, blacklistedTables); err != nil {
 			log.Errorf("Cannot start query service: %v", err)
-		} else {
-			// allowQueries worked, save our blacklisted table list
-			agent.setBlacklistedTables(blacklistedTables)
-		}
-
-		// Disable before enabling to force existing streams to stop.
-		if agent.DBConfigs != nil {
-			binlog.DisableUpdateStreamService()
-			binlog.EnableUpdateStreamService(agent.DBConfigs.App.DbName, agent.Mysqld)
 		}
 	} else {
 		agent.disallowQueries()
-		if agent.DBConfigs != nil {
+	}
+
+	// save the tabletControl we've been using, so the background
+	// healthcheck makes the same decisions as we've been making.
+	agent.setTabletControl(tabletControl)
+
+	// update stream needs to be started or stopped too
+	if agent.DBConfigs != nil {
+		if topo.IsRunningUpdateStream(newTablet.Type) {
+			binlog.EnableUpdateStreamService(agent.DBConfigs.App.DbName, agent.Mysqld)
+		} else {
 			binlog.DisableUpdateStreamService()
 		}
 	}

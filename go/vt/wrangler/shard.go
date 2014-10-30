@@ -80,26 +80,28 @@ func (wr *Wrangler) updateShardCellsAndMaster(si *topo.ShardInfo, tabletAlias to
 
 // SetShardServedTypes changes the ServedTypes parameter of a shard.
 // It does not rebuild any serving graph or do any consistency check (yet).
-func (wr *Wrangler) SetShardServedTypes(keyspace, shard string, servedTypes []topo.TabletType) error {
+func (wr *Wrangler) SetShardServedTypes(keyspace, shard string, cells []string, servedType topo.TabletType, remove bool) error {
 
-	actionNode := actionnode.SetShardServedTypes(servedTypes)
+	actionNode := actionnode.SetShardServedTypes(cells, servedType)
 	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
 	if err != nil {
 		return err
 	}
 
-	err = wr.setShardServedTypes(keyspace, shard, servedTypes)
+	err = wr.setShardServedTypes(keyspace, shard, cells, servedType, remove)
 	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 }
 
-func (wr *Wrangler) setShardServedTypes(keyspace, shard string, servedTypes []topo.TabletType) error {
-	shardInfo, err := wr.ts.GetShard(keyspace, shard)
+func (wr *Wrangler) setShardServedTypes(keyspace, shard string, cells []string, servedType topo.TabletType, remove bool) error {
+	si, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
 	}
 
-	shardInfo.ServedTypes = servedTypes
-	return topo.UpdateShard(wr.ts, shardInfo)
+	if err := si.UpdateServedTypesMap(servedType, cells, remove); err != nil {
+		return err
+	}
+	return topo.UpdateShard(wr.ts, si)
 }
 
 // SetShardTabletControl changes the TabletControl records
