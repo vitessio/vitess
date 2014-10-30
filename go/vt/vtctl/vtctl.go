@@ -267,6 +267,9 @@ var commands = []commandGroup{
 			command{"GetSrvKeyspace", commandGetSrvKeyspace,
 				"<cell> <keyspace>",
 				"Outputs the json version of SrvKeyspace to stdout."},
+			command{"GetSrvKeyspaceNames", commandGetSrvKeyspaceNames,
+				"<cell>",
+				"Outputs a list of keyspace names."},
 			command{"GetSrvShard", commandGetSrvShard,
 				"<cell> <keyspace/shard|zk shard path>",
 				"Outputs the json version of SrvShard to stdout."},
@@ -2131,6 +2134,24 @@ func commandGetSrvKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 		wr.Logger().Printf("%v\n", jscfg.ToJson(srvKeyspace))
 	}
 	return err
+}
+
+func commandGetSrvKeyspaceNames(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("action GetSrvKeyspaceNames requires <cell>")
+	}
+
+	srvKeyspaceNames, err := wr.TopoServer().GetSrvKeyspaceNames(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	for _, ks := range srvKeyspaceNames {
+		wr.Logger().Printf("%v\n", ks)
+	}
+	return nil
 }
 
 func commandGetSrvShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

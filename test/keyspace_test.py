@@ -242,6 +242,12 @@ class TestKeyspace(unittest.TestCase):
     for keyspace_id in shard_kid_map[sn]:
       self.assertEqual(unsharded_ks.keyspace_id_to_shard_name_for_db_type(keyspace_id, 'master'), '0')
 
+  def test_get_srv_keyspace_names(self):
+    stdout, stderr = utils.run_vtctl(['GetSrvKeyspaceNames', 'test_nj'],
+                                     trap_output=True)
+    self.assertFalse(stderr)
+    self.assertEqual(set(stdout.splitlines()), {SHARDED_KEYSPACE, UNSHARDED_KEYSPACE})
+
 
 if __name__ == '__main__':
   utils.main()
