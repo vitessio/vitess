@@ -1,0 +1,8 @@
+digraph feature_branches {
+	master -> crypto;
+	master -> filesystems;
+	master -> ipc;
+	master -> memory;
+	master -> network;
+	master -> security;
+}

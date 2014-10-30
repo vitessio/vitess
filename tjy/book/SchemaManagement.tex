@@ -1,0 +1,144 @@
+\section{Schema Management}\label{Schema-Management}
+
+The schema is the list of tables and how to create them. It is managed by vtctl.
+
+\subsection{Looking at the Schema}\hypertarget{looking-at-the-schema}{}\label{looking-at-the-schema}
+
+The following vtctl commands exist to look at the schema, and validate it's the same on all databases.
+
+
+
+\begin{itemize}
+\item GetSchema \textless{}zk tablet path\textgreater{} displays the full schema for a tablet
+\item ValidateSchemaShard \textless{}zk shard path\textgreater{}
+\item validate the master schema matches all the slaves.
+\item ValidateSchemaKeyspace \textless{}zk keyspace path\textgreater{}
+\end{itemize}
+validate the master schema from shard 0 matches all the other tablets in the keyspace.
+
+Example:
+
+\begin{codesample2}
+$ vtctl -wait-time=30s ValidateSchemaKeyspace /zk/global/vt/keyspaces/user
+\end{codesample2}
+
+
+\subsection{Changing the Schema}\hypertarget{changing-the-schema}{}\label{changing-the-schema}
+
+Goals:
+\begin{enumerate}
+\item simplify schema updates on the fleet
+\item minimize human actions / errors
+\item guarantee no or very little downtime for most schema updates
+\item do not store any permanent schema data in Topology Server, just use it for actions.
+\item only look at tables for now (not stored procedures or grants for instance, although they both could be added fairly easily in the same manner)
+\end{enumerate}
+
+We’re trying to get reasonable confidence that a schema update is going to work before applying it. Since we cannot really apply a change to live tables without potentially causing trouble, we have implemented a Preflight operation: it copies the current schema into a temporary database, applies the change there to validate it, and gathers the resulting schema. After this Preflight, we have a good idea of what to expect, and we can apply the change to any database and make sure it worked.
+
+The Preflight operation takes a sql string, and returns a SchemaChangeResult:
+\begin{codesample4}
+     type SchemaChangeResult struct \{
+         Error        string
+         BeforeSchema *SchemaDefinition
+         AfterSchema  *SchemaDefinition
+     \}
+\end{codesample4}
+
+The ApplySchema action applies a schema change. It is described by the following structure (also returns a SchemaChangeResult):
+\begin{codesample4}
+    type SchemaChange struct \{
+     Sql              string
+     Force            bool
+     AllowReplication bool
+     BeforeSchema     *SchemaDefinition
+     AfterSchema      *SchemaDefinition
+    \}
+\end{codesample4}
+
+And the associated ApplySchema remote action for a tablet. Then the performed steps are:
+\begin{enumerate}
+\item The database to use is either derived from the tablet dbName if UseVt is false, or is the \_vt database. A ‘use dbname’ is prepended to the Sql.
+\item (if BeforeSchema is not nil) read the schema, make sure it is equal to BeforeSchema. If not equal: if Force is not set, we will abort, if Force is set, we’ll issue a warning and keep going.
+\item if AllowReplication is false, we’ll disable replication (adding SET sql\_log\_bin=0 before the Sql).
+\item We will then apply the Sql command.
+\item (if AfterSchema is not nil) read the schema again, make sure it is equal to AfterSchema. If not equal: if Force is not set, we will issue an error, if Force is set, we’ll issue a warning.
+\end{enumerate}
+
+We will return the following information:
+\begin{enumerate}
+\item whether it worked or not (doh!)
+\item BeforeSchema
+\item  AfterSchema
+\end{enumerate}
+
+\subsubsection{Use case 1: Single tablet update:}\hypertarget{use-case-1-single-tablet-update}{}\label{use-case-1-single-tablet-update}
+
+\begin{itemize}
+\item we first do a Preflight (to know what BeforeSchema and AfterSchema will be). This can be disabled, but is not recommended.
+\item we then do the schema upgrade. We will check BeforeSchema before the upgrade, and AfterSchema after the upgrade.
+\end{itemize}
+
+\subsubsection{Use case 2: Single Shard update:}\hypertarget{use-case-2-single-shard-update}{}\label{use-case-2-single-shard-update}
+
+\begin{itemize}
+\item need to figure out (or be told) if it’s a simple or complex schema update (does it require the shell game?). For now we'll use a command line flag.
+\item in any case, do a Preflight on the master, to get the BeforeSchema and AfterSchema values.
+\item in any case, gather the schema on all databases, to see which ones have been upgraded already or not. This guarantees we can interrupt and restart a schema change. Also, this makes sure no action is currently running on the databases we're about to change.
+\item if simple:
+\item nobody has it: apply to master, very similar to a single tablet update.
+\item some tablets have it but not others: error out
+\item if complex: do the shell game while disabling replication. Skip the tablets that already have it. Have an option to re-parent a the end.
+\item Note the Backup, and Lag servers won't apply a complex schema change. Only the servers actively in the replication graph will.
+\item the process can be interrupted at any time, restarting it as a complex schema upgrade should just work.
+\end{itemize}
+
+\subsubsection{Use case 3: Keyspace update:}\hypertarget{use-case-3-keyspace-update}{}\label{use-case-3-keyspace-update}
+
+\begin{itemize}
+\item Similar to Single Shard, but the BeforeSchema and AfterSchema values are taken from the first shard, and used in all shards after that.
+\item We don't know the new masters to use on each shard, so just skip re-parenting all together.
+\end{itemize}
+
+This translates into the following vtctl commands:
+
+\begin{codesample2}
+  ApplySchema {-sql=<sql> || -sql_file=<filename>} 
+              [-skip_preflight] [-stop_replication] <zk tablet path> 
+\end{codesample2}
+
+apply the schema change to a temporary database to gather before and after schema and validate the change. The sql can be inlined or read from a file.
+This will create a temporary database, copy the existing keyspace schema into it, apply the schema change, and re-read the resulting schema.
+
+
+\begin{codesample2}
+$ echo "create table test\_table(id int);" \textgreater{} change.sql
+$ vtctl PreflightSchema -sql\_file=change.sql /zk/nyc/vt/tablets/0002009001
+\end{codesample2}
+
+apply the schema change to the specific tablet (allowing replication by default). 
+The sql can be inlined or read from a file.
+a PreflightSchema operation will first be used to make sure the schema is OK (unless skip\_preflight is specified).
+
+\begin{codesample2}
+  ApplySchemaShard {-sql=<sql> ||   -sql_file=<filename>} 
+     [-simple] [-new_parent=<zk tablet path>] <zk shard path>
+\end{codesample2}
+
+apply the schema change to the specific shard. If simple is specified, we just apply on the live master. Otherwise we do the shell game and will optionally re-parent. 
+if new\_parent is set, we will also reparent (otherwise the master won't be touched at all). Using the force flag will cause a bunch of checks to be ignored, use with care.
+
+\begin{codesample2}
+$ vtctl ApplySchemaShard --sql-file=change.sql 
+                     -simple /zk/global/vt/keyspaces/vtx/shards/0
+$ vtctl ApplySchemaShard --sql-file=change.sql 
+      -new\_parent=/zk/nyc/vt/tablets/0002009002 /zk/global/vt/keyspaces/vtx/shards/0
+\end{codesample2}
+
+\begin{codesample2}
+  ApplySchemaKeyspace {-sql=<sql> || -sql_file=<filename>} 
+                                  [-simple] <zk keyspace path> 
+\end{codesample2}
+
+apply the schema change to the specified shard. If simple is specified, we just apply on the live master. Otherwise we will need to do the shell game. So we will apply the schema change to every single slave. 
+

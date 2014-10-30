@@ -1,0 +1,69 @@
+\section{Frequently Asked Questions}\label{Vitess-FAQ}
+
+\subsection{Is Vitess used at Google?}\label{is-vitess-used-at-google}
+
+Yes, Vitess has been used to serve all YouTube database traffic since
+2011.
+
+\subsection{Why not do it inside MySQL?}\label{why-not-do-it-inside-mysql}
+
+MySQL is really good at what it does: serving queries with a low
+latency, on a single server. However, it was not designed to do a lot
+of the things at the scale that we need at YouTube. Including the
+changes we needed inside MySQL itself would have been a huge
+project. Additionally, it’s a large C++ codebase that’s almost 20
+years old, which means that making changes is more complicated than we
+would like. We decided to correct or enforce the behaviors we
+needed from the outside.
+
+\subsection{Why is it written in Go?}\hypertarget{why-is-it-written-in-go}{}\label{why-is-it-written-in-go}
+
+Go is a language that hits the sweet spot in terms of expressiveness
+and performance: it’s almost as expressive as Python, very
+maintainable, but its performance is in the same range as Java (close
+to C++ in certain cases). What is more, the language is extremely well
+suited for concurrent programming, and it has a very high quality
+standard library.
+
+\subsection{Why not use X (where X is usually a NoSQL database) instead of putting effort into scaling MySQL?}\label{why-not-use-x-where-x-is-usually-a-nosql-database-instead-of-putting-effort-into-scaling-mysql}
+
+Every database has its performance profile, meaning that some types of
+queries usually run faster than other. Because of that, migrating from
+one datastore to another involves a lot more work than just copying
+the data and writing equivalent queries. If you need high performance,
+you need to rethink how your app accesses its data. MySQL’s low
+latency is very hard to match. Moreover, even if it has some quirks,
+those quirks are usually pretty well understood.
+
+\subsection{What’s up with the name, Vitess?}\label{whats-up-with-the-name-vitess}
+
+Vitess was originally named \vconcepts{\emph{Voltron}}, but we decided to change it
+before making it Open Source to avoid infringing any
+trademarks. Still, we wanted a name that would allow us to keep using
+the prefix VT in our code. \emph{Vitesse} means speed in French – and we
+dropped the final E to make it easier to find using Google (also, it
+looks much cooler without the E!).
+
+\subsection{Why are you using ZooKeeper instead of Etcd/Doozer/Consul/etc?}\hypertarget{why-are-you-using-zookeeper-instead-of-etcddoozerconsuletc}{}\label{why-are-you-using-zookeeper-instead-of-etcddoozerconsuletc}
+
+The topology is a crucial part of our infrastructure, so we didn’t
+want to take any risks with it. ZooKeeper may have some rough edges
+and not be very easy to set up, but it’s battle tested, so we know we
+can rely on it. Of course, you are free to write a plugin to use your
+lock service of choice – we would appreciate if you contributed the
+code back.
+
+\subsection{Is the Vitess used at Google the same as the Open Source version?}\hypertarget{is-the-vitess-used-at-google-the-same-as-the-open-source-version}{}\label{is-the-vitess-used-at-google-the-same-as-the-open-source-version}
+
+Mostly. The core functionality remains unchanged, but we add some code
+to take advantage of Google’s infrastructure (so we can use \cite{web:chubby} Chubby,
+the Protocol Buffers based RPC system, etc.). Our philosophy is “Open
+Source first” – when we develop a new feature, we first make it work
+in the Open Source tree, and only then write a plugin that makes use
+of Google specific technologies. We believe this is very important to
+keep us honest, and to ensure that the Open Source version of Vitess
+is as high quality as the internal one. The vast majority of our
+development takes place in the open, on GitHub. This also means that
+Vitess is built with extensibility in mind – it should be pretty
+straightforward to adjust it to the needs of your infrastructure.
+

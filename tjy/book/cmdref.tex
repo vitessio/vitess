@@ -1,0 +1,176 @@
+\chapter{Command reference}
+\label{cmdref}
+
+\cmdref{add}{add files at the next commit}
+\optref{add}{I}{include}
+\optref{add}{X}{exclude}
+\optref{add}{n}{dry-run}
+
+\cmdref{diff}{print changes in history or working directory}
+
+Show differences between revisions for the specified files or
+directories, using the unified diff format.  For a description of the
+unified diff format, see section~\ref{chap:userfaq}.
+
+By default, this command does not print diffs for files that Mercurial
+considers to contain binary data.  To control this behaviour, see the
+\hgopt{diff}{-a} and \hgopt{diff}{--git} options.
+
+\section{Options}
+
+\loptref{diff}{nodates}
+
+Omit date and time information when printing diff headers.
+
+\optref{diff}{B}{ignore-blank-lines}
+
+Do not print changes that only insert or delete blank lines.  A line
+that contains only whitespace is not considered blank.
+
+\optref{diff}{I}{include}
+
+Include files and directories whose names match the given patterns.
+
+\optref{diff}{X}{exclude}
+
+Exclude files and directories whose names match the given patterns.
+
+\optref{diff}{a}{text}
+
+If this option is not specified, \hgcmd{diff} will refuse to print
+diffs for files that it detects as binary. Specifying \hgopt{diff}{-a}
+forces \hgcmd{diff} to treat all files as text, and generate diffs for
+all of them.
+
+This option is useful for files that are ``mostly text'' but have a
+few embedded NUL characters.  If you use it on files that contain a
+lot of binary data, its output will be incomprehensible.
+
+\optref{diff}{b}{ignore-space-change}
+
+Do not print a line if the only change to that line is in the amount
+of white space it contains.
+
+\optref{diff}{g}{git}
+
+Print \command{git}-compatible diffs.  XXX reference a format
+description.
+
+\optref{diff}{p}{show-function}
+
+Display the name of the enclosing function in a hunk header, using a
+simple heuristic.  This functionality is enabled by default, so the
+\hgopt{diff}{-p} option has no effect unless you change the value of
+the \rcitem{diff}{showfunc} config item, as in the following example.
+\interaction{cmdref.diff-p}
+
+\optref{diff}{r}{rev}
+
+Specify one or more revisions to compare.  The \hgcmd{diff} command
+accepts up to two \hgopt{diff}{-r} options to specify the revisions to
+compare.
+
+\begin{enumerate}
+\setcounter{enumi}{0}
+\item Display the differences between the parent revision of the
+  working directory and the working directory.
+\item Display the differences between the specified changeset and the
+  working directory.
+\item Display the differences between the two specified changesets.
+\end{enumerate}
+
+You can specify two revisions using either two \hgopt{diff}{-r}
+options or revision range notation.  For example, the two revision
+specifications below are equivalent.
+\begin{codesample2}
+  hg diff -r 10 -r 20
+  hg diff -r10:20
+\end{codesample2}
+
+When you provide two revisions, Mercurial treats the order of those
+revisions as significant.  Thus, \hgcmdargs{diff}{-r10:20} will
+produce a diff that will transform files from their contents as of
+revision~10 to their contents as of revision~20, while
+\hgcmdargs{diff}{-r20:10} means the opposite: the diff that will
+transform files from their revision~20 contents to their revision~10
+contents.  You cannot reverse the ordering in this way if you are
+diffing against the working directory.
+
+\optref{diff}{w}{ignore-all-space}
+
+\cmdref{version}{print version and copyright information}
+
+This command displays the version of Mercurial you are running, and
+its copyright license.  There are four kinds of version string that
+you may see.
+\begin{itemize}
+\item The string ``\texttt{unknown}''. This version of Mercurial was
+  not built in a Mercurial repository, and cannot determine its own
+  version.
+\item A short numeric string, such as ``\texttt{1.1}''. This is a
+  build of a revision of Mercurial that was identified by a specific
+  tag in the repository where it was built.  (This doesn't necessarily
+  mean that you're running an official release; someone else could
+  have added that tag to any revision in the repository where they
+  built Mercurial.)
+\item A hexadecimal string, such as ``\texttt{875489e31abe}''.  This
+  is a build of the given revision of Mercurial.
+\item A hexadecimal string followed by a date, such as
+  ``\texttt{875489e31abe+20070205}''.  This is a build of the given
+  revision of Mercurial, where the build repository contained some
+  local changes that had not been committed.
+\end{itemize}
+
+\section{Tips and tricks}
+
+\subsubsection{Why do the results of \hgcmd{diff} and \hgcmd{status}
+  differ?}
+\label{cmdref:diff-vs-status}
+
+When you run the \hgcmd{status} command, you'll see a list of files
+that Mercurial will record changes for the next time you perform a
+commit.  If you run the \hgcmd{diff} command, you may notice that it
+prints diffs for only a \emph{subset} of the files that \hgcmd{status}
+listed.  There are two possible reasons for this.
+
+The first is that \hgcmd{status} prints some kinds of modifications
+that \hgcmd{diff} doesn't normally display.  The \hgcmd{diff} command
+normally outputs unified diffs, which don't have the ability to
+represent some changes that Mercurial can track.  Most notably,
+traditional diffs can't represent a change in whether or not a file is
+executable, but Mercurial records this information.
+
+If you use the \hgopt{diff}{--git} option to \hgcmd{diff}, it will
+display \command{git}-compatible diffs that \emph{can} display this
+extra information.
+
+The second possible reason that \hgcmd{diff} might be printing diffs
+for a subset of the files displayed by \hgcmd{status} is that if you
+invoke it without any arguments, \hgcmd{diff} prints diffs against the
+first parent of the working directory.  If you have run \hgcmd{merge}
+to merge two changesets, but you haven't yet committed the results of
+the merge, your working directory has two parents (use \hgcmd{parents}
+to see them).  While \hgcmd{status} prints modifications relative to
+\emph{both} parents after an uncommitted merge, \hgcmd{diff} still
+operates relative only to the first parent.  You can get it to print
+diffs relative to the second parent by specifying that parent with the
+\hgopt{diff}{-r} option.  There is no way to print diffs relative to
+both parents.
+
+\subsubsection{Generating safe binary diffs}
+
+If you use the \hgopt{diff}{-a} option to force Mercurial to print
+diffs of files that are either ``mostly text'' or contain lots of
+binary data, those diffs cannot subsequently be applied by either
+Mercurial's \hgcmd{import} command or the system's \command{patch}
+command.  
+
+If you want to generate a diff of a binary file that is safe to use as
+input for \hgcmd{import}, use the \hgcmd{diff}{--git} option when you
+generate the patch.  The system \command{patch} command cannot handle
+binary patches at all.
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: "00book"
+%%% End: 

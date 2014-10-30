@@ -1,0 +1,6 @@
+digraph undo_manual {
+	"first change" -> "second change";
+	"second change" -> "third change";
+	backout [label="back out\nsecond change", shape=box];
+	"second change" -> backout;
+}

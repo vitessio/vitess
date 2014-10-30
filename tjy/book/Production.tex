@@ -1,0 +1,39 @@
+\section{Production setup}\label{Production-Setup}
+
+Setting up vitess in production will depend on many factors.
+Here are some initial considerations:
+\begin{itemize}
+\item \emph{Global Transaction IDs}: Vitess requires a version of MySQL that supports \index{GTID}{\textbf{GTID}}s, such as Google MySQL 5.1+, MariaDB 10.0+, or MySQL 5.6+. We currently support Google MySQL and MariaDB, with plans to add MySQL 5.6.
+\item \emph{Firewalls}: Vitess tools and servers assume that they can open direct TCP connection to each other. If you have firewalls between your servers, you may have to add exceptions to allow these communications.
+\item \emph{Authentication}: If you need authentication, you need to setup SASL, which is supported by Vitess.
+\item \emph{Encryption:} Vitess RPC servers support SSL. TODO: Document how to setup SSL.
+\item \emph{MySQL permissions}: Vitess currently assumes that all
+application clients have uniform permissions.
+The connection pooler opens a number of connections under
+the same user (vt\_app), and rotates them for all requests.
+Vitess management tasks use a different user name (vt\_dba),
+which is assumed to have all administrative privileges.
+\item \emph{Client Language}: We currently support
+      Python and Go.
+It's not too hard to add support for more languages,
+and we are open to contributions in this area.
+\end{itemize}
+
+\subsection{Setting up Zookeeper}\hypertarget{setting-up-zookeeper}{}\label{setting-up-zookeeper}
+\begin{enumerate}
+\item Global zk setup:
+TODO: Explain
+\item Local zk setup:
+TODO: Explain
+\end{enumerate}
+\subsection{Launch vttablets}\hypertarget{launch-vttablets}{}\label{launch-vttablets}
+
+vttablet is designed to run on the same machine as mysql.
+You'll need to launch one instance of vttablet for every MySQL instance you want to track.
+
+TODO: Specify order and command-line arguments
+
+\subsection{Launch vtgate(s)}\hypertarget{launch-vtgates}{}\label{launch-vtgates}
+
+TODO: Explain
+

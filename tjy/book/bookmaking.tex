@@ -1,0 +1,61 @@
+\chapter{Making of this book}
+\label{chap:bookmaking}
+
+\section{Where to download the book source}
+\label{sec:srcinstall:unixlike}
+
+This is book version hobbit manpages.
+
+
+
+If you are using a Unix-like system that has a sufficiently recent
+version of Python (2.3~or newer) available, it is easy to install
+Mercurial from source.
+
+\begin{enumerate}
+\item Download a recent source tarball from
+  \url{http://www.selenic.com/mercurial/download}.
+\item Unpack the tarball:
+  \begin{codesample4}
+    gzip -dc mercurial-\emph{version}.tar.gz | tar xf -
+  \end{codesample4}
+\item Go into the source directory and run the installer script.  This
+  will build Mercurial and install it in your home directory.
+  \begin{codesample4}
+    cd mercurial-\emph{version}
+    python setup.py install --force --home=\$HOME
+  \end{codesample4}
+\end{enumerate}
+Once the install finishes, Mercurial will be in the \texttt{bin}
+subdirectory of your home directory.  Don't forget to make sure that
+this directory is present in your shell's search path.
+
+You will probably need to set the \envar{PYTHONPATH} environment
+variable so that the Mercurial executable can find the rest of the
+Mercurial packages.  For example, on my laptop, I have set it to
+\texttt{/home/bos/lib/python}.  The exact path that you will need to
+use depends on how Python was built for your system, but should be
+easy to figure out.  If you're uncertain, look through the output of
+the installer script above, And see where the contents of the
+\texttt{mercurial} directory were installed to.
+
+\section{Book Revision History}
+\begin{table}
+\caption{Book Revision History.} \label{BookRevisionHistory}
+               % 3 collumns
+\begin{tabular}{|l|l|l|}
+\hline
+\multicolumn{3}{|c|}{People contribute to this book} \\
+\hline
+Name  & Date  & Contribution  \\ 
+\hline
+\multirow{2}{*}
+{Google Youtube Team} & 2012         & Initiate Vitess project \\
+                      &   &  \\ 
+\hline
+\multirow{2}{*}
+{T.J. Yang} & 10/04/2014 & convert markdown files to \LaTeX{}\\
+            & 10/04/2014 & Use \href{http://projects.gnome.org/dia/}{Dia} to draw Vitess Architecture diagram. \\ \hline
+\end{tabular}
+\end{table}
+
