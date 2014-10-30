@@ -18,11 +18,12 @@ desiredState:
           - "-c"
           - >-
             echo "{\"test_cell\":\"$SERVICE_HOST:2181\",\"global\":\"$SERVICE_HOST:2181\"}" > /vt/zk-client-conf.json &&
-            chown vitess /vt/* &&
+            mkdir -p $VTDATAROOT/tmp &&
+            chown -R vitess /vt &&
             su -p -c "/vt/bin/vtctld -debug -templates $VTTOP/go/cmd/vtctld/templates -log_dir $VTDATAROOT/tmp -port 15000" vitess
         env:
           - name: ZK_CLIENT_CONFIG
-            value: /vt/zk-client-conf.json 
+            value: /vt/zk-client-conf.json
     volumes:
       - name: syslog
         source: {hostDir: {path: /dev/log}}
