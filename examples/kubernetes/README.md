@@ -3,8 +3,18 @@
 This directory contains an example configuration for running Vitess on
 [Kubernetes](https://github.com/GoogleCloudPlatform/kubernetes/). Refer to the
 appropriate [Getting Started Guide](https://github.com/GoogleCloudPlatform/kubernetes/#contents)
-to get Kubernetes up and running if you haven't already. We currently test
-against HEAD, so you may want to build Kubernetes from the latest source.
+to get Kubernetes up and running if you haven't already.
+
+## Requirements
+
+This example currently requires Kubernetes 0.4.x.
+Later versions have introduced
+[incompatible changes](https://groups.google.com/forum/#!topic/kubernetes-announce/idiwm36dN-g)
+that break ZooKeeper support. The Kubernetes team plans to support
+[ZooKeeper's use case](https://github.com/GoogleCloudPlatform/kubernetes/issues/1802)
+again in the future. Until then, please *git checkout* the
+[release-0.4](https://github.com/GoogleCloudPlatform/kubernetes/tree/release-0.4)
+branch in your Kubernetes repository.
 
 ## Starting ZooKeeper
 
@@ -15,8 +25,14 @@ Once you have a running Kubernetes deployment, make sure
 vitess$ examples/kubernetes/zk-up.sh
 ```
 
-This will create a quorum of ZooKeeper servers. Clients can connect to port 2181
-of any [minion](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/DESIGN.md#cluster-architecture)
+This will create a quorum of ZooKeeper servers. You can check the status of the
+pods with *kubecfg.sh list pods*, or by using the
+[Kubernetes web interface](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/ux.md).
+Note that it may take a while for each minion to download the Docker images the
+first time it needs them, during which time the pod status will be *Waiting*.
+
+Clients can connect to port 2181 of any
+[minion](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/DESIGN.md#cluster-architecture)
 (assuming the firewall is set to allow it), and the Kubernetes proxy will
 load-balance the connection to any of the servers.
 
