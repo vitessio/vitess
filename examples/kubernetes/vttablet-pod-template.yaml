@@ -1,0 +1,86 @@
+apiVersion: v1beta1
+kind: Pod
+id: vttablet-{{uid}}
+desiredState:
+  manifest:
+    version: v1beta1
+    id: vttablet-{{uid}}
+    containers:
+      - name: vttablet
+        image: vitess/root
+        volumeMounts:
+          - name: syslog
+            mountPath: /dev/log
+          - name: vtdataroot
+            mountPath: /vt/vtdataroot
+        command:
+          - bash
+          - "-c"
+          - >-
+            echo "{\"test_cell\":\"$SERVICE_HOST:2181\",\"global\":\"$SERVICE_HOST:2181\"}" > /vt/zk-client-conf.json &&
+            mkdir -p $VTDATAROOT/tmp &&
+            chown -R vitess /vt && \
+
+            su -p -s /bin/bash -c "/vt/bin/vtctlclient
+            -log_dir $VTDATAROOT/tmp
+            -server $SERVICE_HOST:15000
+            InitTablet -force -parent
+            -port {{port}}
+            -hostname $SERVICE_HOST
+            -keyspace {{keyspace}}
+            -shard {{shard}}
+            {{alias}} {{type}}
+            &>> $VTDATAROOT/tmp/vtctl.log" vitess && \
+
+            su -p -s /bin/bash -c "/vt/bin/vttablet
+            -log_dir $VTDATAROOT/tmp
+            -port {{port}}
+            -tablet-path {{alias}}
+            -tablet_hostname $SERVICE_HOST
+            -target_tablet_type {{type}}
+            -mysqlctl_socket $VTDATAROOT/mysqlctl.sock
+            -db-config-app-dbname vt_{{keyspace}}
+            -db-config-dba-dbname vt_{{keyspace}}
+            -db-config-repl-dbname vt_{{keyspace}}
+            -db-config-filtered-dbname vt_{{keyspace}}
+            &>> $VTDATAROOT/tmp/vttablet.log" vitess
+        env:
+          - name: ZK_CLIENT_CONFIG
+            value: /vt/zk-client-conf.json
+        ports:
+          - # We only publish this port so we can access the tablet's status
+            # page from outside the Kubernetes cluster. You can unpublish it if
+            # you don't care about that.
+            name: vttablet
+            containerPort: {{port}}
+            hostPort: {{port}}
+      - name: mysql
+        image: vitess/root
+        volumeMounts:
+          - name: syslog
+            mountPath: /dev/log
+          - name: vtdataroot
+            mountPath: /vt/vtdataroot
+        command:
+          - sh
+          - "-c"
+          - >-
+            echo "{\"test_cell\":\"$SERVICE_HOST:2181\",\"global\":\"$SERVICE_HOST:2181\"}" > /vt/zk-client-conf.json &&
+            mkdir -p $VTDATAROOT/tmp &&
+            chown -R vitess /vt &&
+            su -p -c "/vt/bin/mysqlctld -log_dir $VTDATAROOT/tmp -tablet_uid {{uid}} -socket_file $VTDATAROOT/mysqlctl.sock -bootstrap_archive mysql-db-dir_10.0.13-MariaDB.tbz" vitess
+        env:
+          - name: ZK_CLIENT_CONFIG
+            value: /vt/zk-client-conf.json
+          - name: EXTRA_MY_CNF
+            value: /vt/config/mycnf/master_mariadb.cnf
+    volumes:
+      - name: syslog
+        source: {hostDir: {path: /dev/log}}
+      - name: vtdataroot
+        source: {emptyDir: {}}
+labels:
+  name: vttablet
+  keyspace: {{keyspace}}
+  shard: {{shard}}
+  tabletAlias: {{alias}}
