@@ -699,17 +699,25 @@ class TestFailures(unittest.TestCase):
     keyspace_id = shard_kid_map[shard_names[
         (self.shard_index+1)%len(shard_names)
         ]][0]
-    with self.assertRaises(dbexceptions.DatabaseError):
+    try:
       vtgate_conn._execute(
           "insert into vt_insert_test values(:msg, :keyspace_id)",
           {"msg": "test4", "keyspace_id": keyspace_id}, KEYSPACE_NAME, 'master',
           keyranges=[self.keyrange])
-    if conn_class == vtgatev2:
-      transaction_id = vtgate_conn.session["ShardSessions"][0]["TransactionId"]
-    else:
-      transaction_id = vtgate_conn.session.shard_sessions[0].transaction_id
-    self.assertTrue(transaction_id != 0)
-    vtgate_conn.commit()
+      vtgate_conn.commit()
+      self.fail("Failed to raise DatabaseError exception")
+    except dbexceptions.DatabaseError:
+      if conn_class == vtgatev2:
+        logging.info("SHARD SESSIONS: %s", vtgate_conn.session["ShardSessions"])
+        transaction_id = vtgate_conn.session["ShardSessions"][0]["TransactionId"]
+      else:
+        transaction_id = vtgate_conn.session.shard_sessions[0].transaction_id
+      self.assertTrue(transaction_id != 0)
+    except Exception, e:
+      self.fail("Expected DatabaseError as exception, got %s" % str(e))
+    finally:
+      vtgate_conn.rollback()
+
 
   def test_vtgate_fail_write(self):
     global vtgate_server, vtgate_port
@@ -839,6 +847,10 @@ class TestFailures(unittest.TestCase):
   def test_bind_vars_in_exception_message(self):
     try:
       vtgate_conn = get_connection()
+    except Exception, e:
+      self.fail("Connection to vtgate failed with error %s" % str(e))
+
+    try:
       count = 1
       vtgate_conn.begin()
       vtgate_conn._execute(
@@ -871,6 +883,8 @@ class TestFailures(unittest.TestCase):
     finally:
       vtgate_conn.rollback()
 
+    # Start master tablet again
+    self.master_tablet.start_vttablet()
 
 
 class VTGateTestLogger(vtdb_logger.VtdbLogger):
