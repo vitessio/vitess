@@ -84,6 +84,9 @@ var commands = []commandGroup{
 			command{"RefreshState", commandRefreshState,
 				"<tablet alias|zk tablet path>",
 				"Asks a remote tablet to reload its tablet record."},
+			command{"RunHealthCheck", commandRunHealthCheck,
+				"<tablet alias> <target tablet type>",
+				"Asks a remote tablet to run a health check with the providd target type."},
 			command{"Query", commandQuery,
 				"<cell> <keyspace> <query>",
 				"Send a SQL query to a tablet."},
@@ -864,6 +867,28 @@ func commandRefreshState(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 		return err
 	}
 	return wr.TabletManagerClient().RefreshState(tabletInfo, wr.ActionTimeout())
+}
+
+func commandRunHealthCheck(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("action RunHealthCheck requires <tablet alias> <target tablet type>")
+	}
+	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	servedType, err := parseTabletType(subFlags.Arg(1), []topo.TabletType{topo.TYPE_REPLICA, topo.TYPE_RDONLY})
+	if err != nil {
+		return err
+	}
+	tabletInfo, err := wr.TopoServer().GetTablet(tabletAlias)
+	if err != nil {
+		return err
+	}
+	return wr.TabletManagerClient().RunHealthCheck(tabletInfo, servedType, wr.ActionTimeout())
 }
 
 func commandQuery(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

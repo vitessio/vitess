@@ -69,6 +69,9 @@ type TabletManagerClient interface {
 	// RefreshState asks the remote tablet to reload its tablet record
 	RefreshState(tablet *topo.TabletInfo, waitTime time.Duration) error
 
+	// RunHealthCheck asks the remote tablet to run a health check cycle
+	RunHealthCheck(tablet *topo.TabletInfo, targetTabletType topo.TabletType, waitTime time.Duration) error
+
 	// ReloadSchema asks the remote tablet to reload its schema
 	ReloadSchema(tablet *topo.TabletInfo, waitTime time.Duration) error
 

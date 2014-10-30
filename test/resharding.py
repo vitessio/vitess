@@ -433,8 +433,12 @@ primary key (name)
 
   def _check_query_service(self, tablet, serving, tablet_control_disabled):
     """_check_query_service will check that the query service is enabled
-       or disabled on the tablet. It will also check if the tablet control
-       status is the reason for being enabled / disabled."""
+    or disabled on the tablet. It will also check if the tablet control
+    status is the reason for being enabled / disabled.
+
+    It will also run a remote RunHealthCheck to be sure it doesn't change
+    the serving state.
+    """
     tablet_vars = utils.get_vars(tablet.port)
     if serving:
       expected_state = 'SERVING'
@@ -447,6 +451,17 @@ primary key (name)
       self.assertIn("Query Service disabled by TabletControl", status)
     else:
       self.assertNotIn("Query Service disabled by TabletControl", status)
+
+    if tablet.tablet_type == 'rdonly':
+      utils.run_vtctl(['RunHealthCheck', tablet.tablet_alias, 'rdonly'],
+                      auto_log=True)
+
+      tablet_vars = utils.get_vars(tablet.port)
+      if serving:
+        expected_state = 'SERVING'
+      else:
+        expected_state = 'NOT_SERVING'
+      self.assertEqual(tablet_vars['TabletStateName'], expected_state, 'tablet %s is not in the right serving state after health check: got %s expected %s' % (tablet.tablet_alias, tablet_vars['TabletStateName'], expected_state))
 
   def test_resharding(self):
     utils.run_vtctl(['CreateKeyspace',
