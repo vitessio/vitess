@@ -127,7 +127,7 @@ public class Row implements Iterator<Cell>, Iterable<Cell> {
     Object o = getObject(fieldName);
     if (o != null && !clazz.isInstance(o)) {
       throw new InvalidFieldException(
-          "type mismatch expected:" + clazz.getName() + "actual: " + o.getClass().getName());
+          "type mismatch expected:" + clazz.getName() + " actual: " + o.getClass().getName());
     }
     return o;
   }
