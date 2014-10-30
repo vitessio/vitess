@@ -836,6 +836,42 @@ class TestFailures(unittest.TestCase):
         keyranges=[self.keyrange])
     vtgate_conn.commit()
 
+  def test_bind_vars_in_exception_message(self):
+    try:
+      vtgate_conn = get_connection()
+      count = 1
+      vtgate_conn.begin()
+      vtgate_conn._execute(
+          "delete from vt_a", {},
+          KEYSPACE_NAME, 'master',
+          keyranges=[get_keyrange(shard_names[self.shard_index])])
+      vtgate_conn.commit()
+      eid_map = {}
+      # start transaction
+      vtgate_conn.begin()
+      kid_list = shard_kid_map[shard_names[self.shard_index]]
+
+      #kill vttablet
+      self.master_tablet.kill_vttablet()
+
+      # perform write, this should fail
+      for x in xrange(count):
+        keyspace_id = kid_list[x%len(kid_list)]
+        eid_map[x] = str(keyspace_id)
+        vtgate_conn._execute(
+            "insert into vt_a (eid, id, keyspace_id) \
+             values (%(eid)s, %(id)s, %(keyspace_id)s)",
+            {'eid': x, 'id': x, 'keyspace_id': keyspace_id},
+            KEYSPACE_NAME, 'master', keyspace_ids=[pack_kid(keyspace_id)])
+      vtgate_conn.commit()
+    except Exception, e:
+      # check that bind var value is not present in exception message.
+      if str(keyspace_id) in str(e):
+        self.fail("bind_vars present in the exception message")
+    finally:
+      vtgate_conn.rollback()
+
+
 
 class VTGateTestLogger(vtdb_logger.VtdbLogger):
 
