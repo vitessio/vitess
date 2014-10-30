@@ -225,3 +225,61 @@ func TestShardExternallyReparentedContinueOnUnexpectedMaster(t *testing.T) {
 		t.Fatalf("ShardExternallyReparented(replica) failed: %v", err)
 	}
 }
+
+func TestShardExternallyReparentedFailedOldMaster(t *testing.T) {
+	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Minute, time.Second)
+
+	// Create an old master, a new master, two good slaves
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER)
+	newMaster := NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA,
+		TabletParent(oldMaster.Tablet.Alias))
+	goodSlave := NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA,
+		TabletParent(oldMaster.Tablet.Alias))
+
+	// Reparent to a replica, and pretend the old master is not responding
+
+	// On the elected master, we will respond to
+	// TABLET_ACTION_SLAVE_WAS_PROMOTED
+	newMaster.FakeMysqlDaemon.MasterAddr = ""
+	newMaster.StartActionLoop(t, wr)
+	defer newMaster.StopActionLoop(t)
+
+	// On the old master, we will only get a
+	// TABLET_ACTION_SLAVE_WAS_RESTARTED call, let's just not
+	// respond to it at all
+
+	// On the good slave, we will respond to
+	// TABLET_ACTION_SLAVE_WAS_RESTARTED.
+	goodSlave.FakeMysqlDaemon.MasterAddr = newMaster.Tablet.MysqlIpAddr()
+	goodSlave.StartActionLoop(t, wr)
+	defer goodSlave.StopActionLoop(t)
+
+	// The reparent should work as expected here
+	t.Logf("ShardExternallyReparented(new master) expecting success")
+	if err := wr.ShardExternallyReparented("test_keyspace", "0", newMaster.Tablet.Alias); err != nil {
+		t.Fatalf("ShardExternallyReparented(replica) failed: %v", err)
+	}
+
+	// Now double-check the serving graph is good.
+	// Should only have one good replica left.
+	addrs, err := ts.GetEndPoints("cell1", "test_keyspace", "0", topo.TYPE_REPLICA)
+	if err != nil {
+		t.Fatalf("GetEndPoints failed at the end: %v", err)
+	}
+	if len(addrs.Entries) != 1 {
+		t.Fatalf("GetEndPoints has too many entries: %v", addrs)
+	}
+
+	// check the old master was converted to spare
+	tablet, err := ts.GetTablet(oldMaster.Tablet.Alias)
+	if err != nil {
+		t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
+	}
+	if tablet.Type != topo.TYPE_SPARE {
+		t.Fatalf("old master should be spare but is: %v", tablet.Type)
+	}
+	if tablet.Parent != newMaster.Tablet.Alias {
+		t.Fatalf("old master has the wrong master, got %v expected %v", tablet.Parent, newMaster.Tablet.Alias)
+	}
+}

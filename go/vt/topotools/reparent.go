@@ -50,9 +50,12 @@ func RestartSlavesExternal(ts topo.Server, log logutil.Logger, slaveTabletMap, m
 				// around in the replication graph, so if we
 				// can't restart it, we just scrap it.
 				// We don't rebuild the Shard just yet though.
-				log.Warningf("Old master %v is not restarting, scrapping it: %v", ti.Alias, err)
-				if err := Scrap(ts, ti.Alias, true /*force*/); err != nil {
-					log.Warningf("Failed to scrap old master %v: %v", ti.Alias, err)
+				log.Warningf("Old master %v is not restarting in time, forcing it to spare: %v", ti.Alias, err)
+
+				ti.Type = topo.TYPE_SPARE
+				ti.Parent = masterElectTabletAlias
+				if err := topo.UpdateTablet(ts, ti); err != nil {
+					log.Warningf("Failed to change old master %v to spare: %v", ti.Alias, err)
 				}
 			}
 			wg.Done()
