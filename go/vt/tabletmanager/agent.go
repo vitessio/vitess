@@ -43,6 +43,8 @@ import (
 )
 
 var (
+	tabletHostname = flag.String("tablet_hostname", "", "if not empty, this hostname will be assumed instead of trying to resolve it")
+
 	_ = flag.String("vtaction_binary_path", "", "(DEPRECATED) Full path (including filename) to vtaction binary. If not set, tries VTROOT/bin/vtaction.")
 )
 
@@ -271,9 +273,12 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 	}
 
 	// find our hostname as fully qualified, and IP
-	hostname, err := netutil.FullyQualifiedHostname()
-	if err != nil {
-		return err
+	hostname := *tabletHostname
+	if hostname == "" {
+		hostname, err = netutil.FullyQualifiedHostname()
+		if err != nil {
+			return err
+		}
 	}
 	ipAddrs, err := net.LookupHost(hostname)
 	if err != nil {
