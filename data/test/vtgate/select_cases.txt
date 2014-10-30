@@ -32,8 +32,8 @@
     "Type": 0,
     "Column": "id",
     "Lookup": null,
-    "Owner": "",
-    "IsAutoInc": false
+    "Owner": "user",
+    "IsAutoInc": true
   },
   "Values": 1
 }
@@ -49,8 +49,8 @@
     "Type": 0,
     "Column": "id",
     "Lookup": null,
-    "Owner": "",
-    "IsAutoInc": false
+    "Owner": "user",
+    "IsAutoInc": true
   },
   "Values": ":id"
 }
@@ -66,8 +66,8 @@
     "Type": 0,
     "Column": "id",
     "Lookup": null,
-    "Owner": "",
-    "IsAutoInc": false
+    "Owner": "user",
+    "IsAutoInc": true
   },
   "Values": [
     1,
@@ -97,7 +97,7 @@
     "Type": 0,
     "Column": "user_id",
     "Lookup": null,
-    "Owner": "",
+    "Owner": "user",
     "IsAutoInc": false
   },
   "Values": 1
@@ -114,7 +114,7 @@
     "Type": 0,
     "Column": "user_id",
     "Lookup": null,
-    "Owner": "",
+    "Owner": "user",
     "IsAutoInc": false
   },
   "Values": 1
@@ -135,7 +135,7 @@
       "From": "music_id",
       "To": "user_id"
     },
-    "Owner": "",
+    "Owner": "music",
     "IsAutoInc": false
   },
   "Values": 1
@@ -156,7 +156,7 @@
       "From": "music_id",
       "To": "user_id"
     },
-    "Owner": "",
+    "Owner": "music",
     "IsAutoInc": false
   },
   "Values": [
@@ -180,7 +180,7 @@
       "From": "music_id",
       "To": "user_id"
     },
-    "Owner": "",
+    "Owner": "music",
     "IsAutoInc": false
   },
   "Values": [
@@ -204,7 +204,7 @@
       "From": "music_id",
       "To": "user_id"
     },
-    "Owner": "",
+    "Owner": "music",
     "IsAutoInc": false
   },
   "Values": "::list"
@@ -225,7 +225,7 @@
       "From": "music_id",
       "To": "user_id"
     },
-    "Owner": "",
+    "Owner": "music",
     "IsAutoInc": false
   },
   "Values": 1
@@ -253,8 +253,8 @@
     "Type": 0,
     "Column": "id",
     "Lookup": null,
-    "Owner": "",
-    "IsAutoInc": false
+    "Owner": "user",
+    "IsAutoInc": true
   },
   "Values": 1
 }
@@ -281,8 +281,8 @@
     "Type": 0,
     "Column": "id",
     "Lookup": null,
-    "Owner": "",
-    "IsAutoInc": false
+    "Owner": "user",
+    "IsAutoInc": true
   },
   "Values": 1
 }
@@ -309,8 +309,8 @@
     "Type": 0,
     "Column": "id",
     "Lookup": null,
-    "Owner": "",
-    "IsAutoInc": false
+    "Owner": "user",
+    "IsAutoInc": true
   },
   "Values": [
     1,

@@ -101,6 +101,7 @@ func BuildPlan(query string, schema *VTGateSchema) *Plan {
 	case *sqlparser.Select:
 		return buildSelectPlan(statement, schema)
 	case *sqlparser.Insert:
+		return buildInsertPlan(statement, schema)
 	case *sqlparser.Update:
 		return buildUpdatePlan(statement, schema)
 	case *sqlparser.Delete:

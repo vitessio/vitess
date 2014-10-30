@@ -10,7 +10,7 @@
           "Type": 0,
           "Column": "user_id",
           "Lookup": null,
-          "Owner": "",
+          "Owner": "user",
           "IsAutoInc": false
         },
         {
@@ -21,7 +21,7 @@
             "From": "music_id",
             "To": "user_id"
           },
-          "Owner": "",
+          "Owner": "music",
           "IsAutoInc": false
         }
       ]
@@ -33,6 +33,13 @@
       },
       "Indexes": [
         {
+          "Type": 0,
+          "Column": "user_id",
+          "Lookup": null,
+          "Owner": "user",
+          "IsAutoInc": false
+        },
+        {
           "Type": 1,
           "Column": "music_id",
           "Lookup": {
@@ -40,7 +47,7 @@
             "From": "music_id",
             "To": "user_id"
           },
-          "Owner": "",
+          "Owner": "music",
           "IsAutoInc": false
         }
       ]
@@ -55,8 +62,8 @@
           "Type": 0,
           "Column": "id",
           "Lookup": null,
-          "Owner": "",
-          "IsAutoInc": false
+          "Owner": "user",
+          "IsAutoInc": true
         }
       ]
     },
@@ -70,7 +77,7 @@
           "Type": 0,
           "Column": "user_id",
           "Lookup": null,
-          "Owner": "",
+          "Owner": "user",
           "IsAutoInc": false
         }
       ]

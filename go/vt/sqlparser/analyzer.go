@@ -77,7 +77,8 @@ func IsSimpleTuple(node ValExpr) bool {
 
 // AsInterface converts the ValExpr to an interface. It converts
 // ValTuple to []interface{}, ValArg to string, StrVal to sqltypes.String,
-// NumVal to sqltypes.Numeric. Otherwise, it returns an error.
+// NumVal to sqltypes.Numeric, NullVal to nil.
+// Otherwise, it returns an error.
 func AsInterface(node ValExpr) (interface{}, error) {
 	switch node := node.(type) {
 	case ValTuple:
@@ -102,6 +103,8 @@ func AsInterface(node ValExpr) (interface{}, error) {
 			return nil, fmt.Errorf("type mismatch: %s", err)
 		}
 		return n, nil
+	case *NullVal:
+		return nil, nil
 	}
 	return nil, fmt.Errorf("unexpected node %v", node)
 }

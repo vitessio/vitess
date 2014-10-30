@@ -23,6 +23,7 @@ func TestPlan(t *testing.T) {
 	schema := loadSchema("schema_test.json")
 	testFile(t, "select_cases.txt", schema)
 	testFile(t, "dml_cases.txt", schema)
+	testFile(t, "insert_cases.txt", schema)
 }
 
 func testFile(t *testing.T, filename string, schema *VTGateSchema) {

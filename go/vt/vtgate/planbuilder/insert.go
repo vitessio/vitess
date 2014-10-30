@@ -68,11 +68,13 @@ func buildInsertPlan(ins *sqlparser.Insert, schema *VTGateSchema) *Plan {
 			Query:     generateQuery(ins),
 		}
 	}
+	indexes := schema.Tables[tablename].Indexes
 	plan = &Plan{
 		ID:        InsertSharded,
 		TableName: tablename,
+		Values:    make([]interface{}, 0, len(indexes)),
 	}
-	for _, index := range schema.Tables[tablename].Indexes {
+	for _, index := range indexes {
 		if err := buildIndexPlan(ins, tablename, index, plan); err != nil {
 			return &Plan{
 				ID:        NoPlan,
@@ -82,6 +84,7 @@ func buildInsertPlan(ins *sqlparser.Insert, schema *VTGateSchema) *Plan {
 			}
 		}
 	}
+	plan.Query = generateQuery(ins)
 	return plan
 }
 
@@ -93,14 +96,22 @@ func buildIndexPlan(ins *sqlparser.Insert, tablename string, index *VTGateIndex,
 			break
 		}
 	}
+	if pos == -1 && index.Owner == tablename && index.IsAutoInc {
+		pos = len(ins.Columns)
+		ins.Columns = append(ins.Columns, &sqlparser.NonStarExpr{Expr: &sqlparser.ColName{Name: []byte(index.Column)}})
+		ins.Rows.(sqlparser.Values)[0] = append(ins.Rows.(sqlparser.Values)[0].(sqlparser.ValTuple), &sqlparser.NullVal{})
+	}
 	if pos == -1 {
-		if index.Owner == tablename && index.IsAutoInc {
-			pos = len(ins.Columns)
-			ins.Columns = append(ins.Columns, &sqlparser.NonStarExpr{Expr: &sqlparser.ColName{Name: []byte(index.Column)}})
-			ins.Rows.(sqlparser.Values)[0] = append(ins.Rows.(sqlparser.Values)[0].(sqlparser.ValTuple), &sqlparser.NullVal{})
-		} else {
-			return fmt.Errorf("must supply value for indexed column: %s", index.Column)
-		}
+		return fmt.Errorf("must supply value for indexed column: %s", index.Column)
+	}
+	row := ins.Rows.(sqlparser.Values)[0].(sqlparser.ValTuple)
+	val, err := sqlparser.AsInterface(row[pos])
+	if err != nil {
+		return fmt.Errorf("could not convert val: %v, pos: %d", row[pos], pos)
+	}
+	plan.Values = append(plan.Values.([]interface{}), val)
+	if index.Owner == tablename && index.IsAutoInc {
+		row[pos] = sqlparser.ValArg([]byte(fmt.Sprintf(":_%s", index.Column)))
 	}
 	return nil
 }
