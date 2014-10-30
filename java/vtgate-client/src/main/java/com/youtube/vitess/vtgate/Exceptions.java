@@ -13,6 +13,16 @@ public class Exceptions {
   }
 
   /**
+   * Exception raised by MySQL due to violation of unique key constraint
+   */
+  @SuppressWarnings("serial")
+  public static class IntegrityException extends DatabaseException {
+    public IntegrityException(String message) {
+      super(message);
+    }
+  }
+
+  /**
    * Exception caused due to irrecoverable connection failures or other low level exceptions
    */
   @SuppressWarnings("serial")
