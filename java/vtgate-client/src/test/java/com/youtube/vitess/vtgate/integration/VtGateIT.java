@@ -26,6 +26,7 @@ import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -167,27 +168,6 @@ public class VtGateIT {
     Assert.assertTrue(
         dt.withYear(1970).withMonthOfYear(1).withDayOfMonth(1).equals(row.getDateTime("time_col")));
 
-    vtgate.close();
-  }
-
-
-  @Test
-  public void testTimeout() throws ConnectionException, DatabaseException {
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 200);
-    // Check timeout error raised for slow query
-    Query sleepQuery = new QueryBuilder("select sleep(0.5) from dual", testEnv.keyspace, "master")
-        .setKeyspaceIds(testEnv.getAllKeyspaceIds()).build();
-    try {
-      vtgate.execute(sleepQuery);
-      Assert.fail("did not raise timeout exception");
-    } catch (ConnectionException e) {
-    }
-    vtgate.close();
-    vtgate = VtGate.connect("localhost:" + testEnv.port, 200);
-    // Check no timeout error for fast query
-    sleepQuery = new QueryBuilder("select sleep(0.01) from dual", testEnv.keyspace, "master")
-        .setKeyspaceIds(testEnv.getAllKeyspaceIds()).build();
-    vtgate.execute(sleepQuery);
     vtgate.close();
   }
 
@@ -333,28 +313,6 @@ public class VtGateIT {
     vtgate.close();
   }
 
-  @Test
-  public void testIntegrityException() throws Exception {
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
-    String insertSql = "insert into vtgate_test(id, keyspace_id) values (:id, :keyspace_id)";
-    KeyspaceId kid = testEnv.getAllKeyspaceIds().get(0);
-    Query insertQuery = new QueryBuilder(insertSql, testEnv.keyspace, "master")
-        .addBindVar(BindVariable.forInt("id", 1))
-        .addBindVar(BindVariable.forULong("keyspace_id", ((UnsignedLong) kid.getId())))
-        .addKeyspaceId(kid).build();
-    vtgate.begin();
-    vtgate.execute(insertQuery);
-    vtgate.commit();
-    vtgate.begin();
-    try {
-      vtgate.execute(insertQuery);
-      Assert.fail("failed to throw exception");
-    } catch (IntegrityException e) {
-    } finally {
-      vtgate.rollback();
-      vtgate.close();
-    }
-  }
 
   /**
    * Create env with two shards each having a master and replica

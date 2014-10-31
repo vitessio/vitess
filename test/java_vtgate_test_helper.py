@@ -69,7 +69,7 @@ class TestEnv(object):
         if t.type == "master":
           utils.run_vtctl(['ReparentShard', '-force', self.keyspace+'/'+t.shard, t.tablet_alias], auto_log=True)
       utils.run_vtctl(['RebuildKeyspaceGraph', self.keyspace], auto_log=True)
-      self.vtgate_server, self.vtgate_port = utils.vtgate_start()
+      self.vtgate_server, self.vtgate_port = utils.vtgate_start(cache_ttl='500s')
       vtgate_client = zkocc.ZkOccConnection("localhost:%u" % self.vtgate_port, "test_nj", 30.0)
       topology.read_topology(vtgate_client)
     except:

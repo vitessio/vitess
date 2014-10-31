@@ -31,7 +31,6 @@ public class Util {
   public static void setupTestEnv(TestEnv testEnv, boolean isSetUp) throws Exception {
     ProcessBuilder pb = new ProcessBuilder(SetupCommand.get(testEnv, isSetUp));
     pb.redirectErrorStream(true);
-    pb.environment().put("VTDATAROOT", "/dev/shm/vt");
     Process p = pb.start();
     BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
 
