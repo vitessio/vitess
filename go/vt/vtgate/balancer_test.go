@@ -138,7 +138,8 @@ func TestGetSimple(t *testing.T) {
 
 func TestMarkDown(t *testing.T) {
 	start := counter
-	b := NewBalancer(endPoints3, 10*time.Millisecond)
+	retryDelay := 100 * time.Millisecond
+	b := NewBalancer(endPoints3, retryDelay)
 	addr, _ := b.Get()
 	startTime := time.Now()
 	b.MarkDown(addr.Uid, "")
@@ -152,13 +153,19 @@ func TestMarkDown(t *testing.T) {
 	}
 	addr, _ = b.Get()
 	b.MarkDown(addr.Uid, "")
-	addr, _ = b.Get()
 	// All were marked down. Get should return only after the retry delay since first markdown.
-	if time.Now().Sub(startTime) < (10 * time.Millisecond) {
-		t.Errorf("want >10ms, got %v", time.Now().Sub(startTime))
-	}
-	if time.Now().Sub(startTime) > (20 * time.Millisecond) {
-		t.Errorf("want <20ms, got %v", time.Now().Sub(startTime))
+	done := make(chan struct{})
+	go func() {
+		addr, _ = b.Get()
+		if got := time.Now().Sub(startTime); got < retryDelay {
+			t.Errorf("Get() returned too soon, want >= %v, got %v", retryDelay, got)
+		}
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Errorf("Get() is stuck in Sleep()")
 	}
 	if addr.Host == "" {
 		t.Errorf("want non-empty")
