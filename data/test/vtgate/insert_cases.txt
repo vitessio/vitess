@@ -1,0 +1,65 @@
+# insert no column list
+"insert into user values(1, 2, 3)"
+{
+  "ID": "NoPlan",
+  "Reason": "no column list",
+  "TableName": "user",
+  "Query": "insert into user values (1, 2, 3)",
+  "Index": null,
+  "Values": null
+}
+
+# insert ShardKey owned autoinc
+"insert into user(id) values (1)"
+{
+  "ID":"InsertSharded",
+  "Reason":"",
+  "TableName":"user"
+  ,"Query":"insert into user(id) values (:_id)",
+  "Index":null,
+  "Values":[1]
+}
+
+# insert ShardKey owned autoinc
+"insert into user(nonid) values (2)"
+{
+  "ID":"InsertSharded",
+  "Reason":"",
+  "TableName":"user"
+  ,"Query":"insert into user(nonid, id) values (2, :_id)",
+  "Index":null,
+  "Values":[null]
+}
+
+# insert Lookup owned no-autoinc
+"insert into music(user_id, id) values(1, 2)"
+{
+  "ID":"InsertSharded",
+  "Reason":"",
+  "TableName":"music"
+  ,"Query":"insert into music(user_id, id) values (1, 2)",
+  "Index":null,
+  "Values":[1, 2]
+}
+
+# insert Lookup owned no-autoinc, value not supplied
+"insert into music(user_id) values(1)"
+{
+  "ID":"NoPlan",
+  "Reason":"must supply value for indexed column: id",
+  "TableName":"music"
+  ,"Query":"insert into music(user_id) values (1)",
+  "Index":null,
+  "Values":null
+}
+
+# insert unowned
+"insert into music_extra(music_id, user_id) values(1, 2)"
+{
+  "ID":"InsertSharded",
+  "Reason":"",
+  "TableName":"music_extra"
+  ,"Query":"insert into music_extra(music_id, user_id) values (1, 2)",
+  "Index":null,
+  "Values":[2, 1]
+}

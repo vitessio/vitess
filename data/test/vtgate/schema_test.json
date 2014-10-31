@@ -1,0 +1,76 @@
+{
+  "Tables": {
+    "user": {
+      "Keyspace": {
+        "Name": "user",
+        "ShardingScheme": 1
+      },
+      "Indexes": [
+        {
+          "Column": "id",
+          "Name": "ShardKey",
+          "Owner": "user",
+          "IsAutoInc": true
+        }
+      ]
+    },
+    "user_extra": {
+      "Keyspace": {
+        "Name": "user",
+        "ShardingScheme": 1
+      },
+      "Indexes": [
+        {
+          "Column": "user_id",
+          "Name": "ShardKey",
+          "Owner": "user",
+          "IsAutoInc": false
+        }
+      ]
+    },
+    "music": {
+      "Keyspace": {
+        "Name": "user",
+        "ShardingScheme": 1
+      },
+      "Indexes": [
+        {
+          "Column": "user_id",
+          "Name": "ShardKey",
+          "Owner": "user",
+          "IsAutoInc": false
+        },
+        {
+          "Column": "id",
+          "Name": "music_user_map",
+          "From": "music_id",
+          "To": "user_id",
+          "Owner": "music",
+          "IsAutoInc": false
+        }
+      ]
+    },
+    "music_extra": {
+      "Keyspace": {
+        "Name": "user",
+        "ShardingScheme": 1
+      },
+      "Indexes": [
+        {
+          "Column": "user_id",
+          "Name": "ShardKey",
+          "Owner": "user",
+          "IsAutoInc": false
+        },
+        {
+          "Column": "music_id",
+          "Name": "music_user_map",
+          "From": "music_id",
+          "To": "user_id",
+          "Owner": "music",
+          "IsAutoInc": false
+        }
+      ]
+    }
+  }
+}
