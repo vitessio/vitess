@@ -31,12 +31,11 @@ import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -47,7 +46,6 @@ import java.util.Set;
  * these tests require at least one rdonly instance per shard.
  *
  */
-@RunWith(JUnit4.class)
 public class MapReduceIT extends HadoopTestCase {
 
   public static TestEnv testEnv = getTestEnv();
@@ -57,9 +55,9 @@ public class MapReduceIT extends HadoopTestCase {
     super(HadoopTestCase.LOCAL_MR, HadoopTestCase.LOCAL_FS, 1, 1);
   }
 
+  @Override
   public void setUp() throws Exception {
     super.setUp();
-    Util.setupTestEnv(testEnv, true);
     Util.truncateTable(testEnv);
   }
 
@@ -193,6 +191,7 @@ public class MapReduceIT extends HadoopTestCase {
     // ids and rows.
     Gson gson = new Gson();
     for (String line : outputLines) {
+      System.out.println(line);
       String kidJson = line.split("\t")[0];
       Map<String, String> m = new HashMap<>();
       m = gson.fromJson(kidJson, m.getClass());
@@ -201,8 +200,7 @@ public class MapReduceIT extends HadoopTestCase {
       String rowJson = line.split("\t")[1];
       Map<String, Map<String, Map<String, byte[]>>> map = new HashMap<>();
       map = gson.fromJson(rowJson, map.getClass());
-      // actualNames.add(new String(map.get("contents").get("name")
-      // .get("value")));
+      actualNames.add(new String(map.get("contents").get("name").get("value")));
     }
 
     Set<String> expectedKids = new HashSet<>();
@@ -212,12 +210,13 @@ public class MapReduceIT extends HadoopTestCase {
     assertEquals(expectedKids.size(), actualKids.size());
     assertTrue(actualKids.containsAll(expectedKids));
 
-    // Set<String> expectedNames = new HashSet<>();
-    // for (int i = 0; i < rowsPerShard; i++) {
-    // expectedNames.add("name_" + i);
-    // }
-    // assertEquals(rowsPerShard, actualNames.size());
-    // assertTrue(actualNames.containsAll(expectedNames));
+    Set<String> expectedNames = new HashSet<>();
+    for (int i = 0; i < rowsPerShard; i++) {
+      expectedNames.add("name_" + i);
+    }
+
+    assertEquals(rowsPerShard, actualNames.size());
+    assertTrue(actualNames.containsAll(expectedNames));
   }
 
   /**
@@ -272,6 +271,7 @@ public class MapReduceIT extends HadoopTestCase {
 
   public static class TableMapper extends
       Mapper<KeyspaceIdWritable, RowWritable, KeyspaceIdWritable, RowWritable> {
+    @Override
     public void map(KeyspaceIdWritable key, RowWritable value, Context context) throws IOException,
         InterruptedException {
       context.write(key, value);
@@ -280,10 +280,12 @@ public class MapReduceIT extends HadoopTestCase {
 
   public static class CountReducer extends
       Reducer<KeyspaceIdWritable, RowWritable, NullWritable, LongWritable> {
+    @Override
     public void reduce(KeyspaceIdWritable key, Iterable<RowWritable> values, Context context)
         throws IOException, InterruptedException {
       long count = 0;
-      for (RowWritable _ : values) {
+      Iterator<RowWritable> iter = values.iterator();
+      while (iter.next() != null) {
         count++;
       }
       context.write(NullWritable.get(), new LongWritable(count));
@@ -307,10 +309,12 @@ public class MapReduceIT extends HadoopTestCase {
   public static TestSetup suite() {
     return new TestSetup(new TestSuite(MapReduceIT.class)) {
 
+      @Override
       protected void setUp() throws Exception {
         Util.setupTestEnv(testEnv, true);
       }
 
+      @Override
       protected void tearDown() throws Exception {
         Util.setupTestEnv(testEnv, false);
       }
