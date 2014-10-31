@@ -49,7 +49,11 @@ func CheckShard(t *testing.T, ts topo.Server) {
 	master := topo.TabletAlias{Cell: "ny", Uid: 1}
 	shardInfo.MasterAlias = master
 	shardInfo.KeyRange = newKeyRange("b0-c0")
-	shardInfo.ServedTypes = []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY}
+	shardInfo.ServedTypesMap = map[topo.TabletType]*topo.ShardServedType{
+		topo.TYPE_MASTER:  &topo.ShardServedType{},
+		topo.TYPE_REPLICA: &topo.ShardServedType{Cells: []string{"c1"}},
+		topo.TYPE_RDONLY:  &topo.ShardServedType{},
+	}
 	shardInfo.SourceShards = []topo.SourceShard{
 		topo.SourceShard{
 			Uid:      1,

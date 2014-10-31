@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -80,26 +81,28 @@ func (wr *Wrangler) updateShardCellsAndMaster(si *topo.ShardInfo, tabletAlias to
 
 // SetShardServedTypes changes the ServedTypes parameter of a shard.
 // It does not rebuild any serving graph or do any consistency check (yet).
-func (wr *Wrangler) SetShardServedTypes(keyspace, shard string, servedTypes []topo.TabletType) error {
+func (wr *Wrangler) SetShardServedTypes(keyspace, shard string, cells []string, servedType topo.TabletType, remove bool) error {
 
-	actionNode := actionnode.SetShardServedTypes(servedTypes)
+	actionNode := actionnode.SetShardServedTypes(cells, servedType)
 	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
 	if err != nil {
 		return err
 	}
 
-	err = wr.setShardServedTypes(keyspace, shard, servedTypes)
+	err = wr.setShardServedTypes(keyspace, shard, cells, servedType, remove)
 	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 }
 
-func (wr *Wrangler) setShardServedTypes(keyspace, shard string, servedTypes []topo.TabletType) error {
-	shardInfo, err := wr.ts.GetShard(keyspace, shard)
+func (wr *Wrangler) setShardServedTypes(keyspace, shard string, cells []string, servedType topo.TabletType, remove bool) error {
+	si, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
 	}
 
-	shardInfo.ServedTypes = servedTypes
-	return topo.UpdateShard(wr.ts, shardInfo)
+	if err := si.UpdateServedTypesMap(servedType, cells, remove); err != nil {
+		return err
+	}
+	return topo.UpdateShard(wr.ts, si)
 }
 
 // SetShardTabletControl changes the TabletControl records
@@ -253,4 +256,70 @@ func (wr *Wrangler) removeShardCell(keyspace, shard, cell string, force bool) er
 	shardInfo.Cells = newCells
 
 	return topo.UpdateShard(wr.ts, shardInfo)
+}
+
+func (wr *Wrangler) SourceShardDelete(keyspace, shard string, uid uint32) error {
+	actionNode := actionnode.UpdateShard()
+	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
+	if err != nil {
+		return err
+	}
+
+	err = wr.sourceShardDelete(keyspace, shard, uid)
+	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
+}
+
+func (wr *Wrangler) sourceShardDelete(keyspace, shard string, uid uint32) error {
+	si, err := wr.ts.GetShard(keyspace, shard)
+	if err != nil {
+		return err
+	}
+	newSourceShards := make([]topo.SourceShard, 0, 0)
+	for _, ss := range si.SourceShards {
+		if ss.Uid != uid {
+			newSourceShards = append(newSourceShards, ss)
+		}
+	}
+	if len(newSourceShards) == len(si.SourceShards) {
+		return fmt.Errorf("no SourceShard with uid %v", uid)
+	}
+	if len(newSourceShards) == 0 {
+		newSourceShards = nil
+	}
+	si.SourceShards = newSourceShards
+	return topo.UpdateShard(wr.ts, si)
+}
+
+func (wr *Wrangler) SourceShardAdd(keyspace, shard string, uid uint32, skeyspace, sshard string, keyRange key.KeyRange, tables []string) error {
+	actionNode := actionnode.UpdateShard()
+	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
+	if err != nil {
+		return err
+	}
+
+	err = wr.sourceShardAdd(keyspace, shard, uid, skeyspace, sshard, keyRange, tables)
+	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
+}
+
+func (wr *Wrangler) sourceShardAdd(keyspace, shard string, uid uint32, skeyspace, sshard string, keyRange key.KeyRange, tables []string) error {
+	si, err := wr.ts.GetShard(keyspace, shard)
+	if err != nil {
+		return err
+	}
+
+	// check the uid is not used already
+	for _, ss := range si.SourceShards {
+		if ss.Uid == uid {
+			return fmt.Errorf("uid %v is already in use", uid)
+		}
+	}
+
+	si.SourceShards = append(si.SourceShards, topo.SourceShard{
+		Uid:      uid,
+		Keyspace: skeyspace,
+		Shard:    sshard,
+		KeyRange: keyRange,
+		Tables:   tables,
+	})
+	return topo.UpdateShard(wr.ts, si)
 }

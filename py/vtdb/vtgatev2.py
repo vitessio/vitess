@@ -111,6 +111,7 @@ class VTGateConnection(object):
     self.addr = addr
     self.timeout = timeout
     self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password, encrypted=encrypted, keyfile=keyfile, certfile=certfile)
+    self.logger_object = vtdb_logger.get_logger()
 
   def __str__(self):
     return '<VTGateConnection %s >' % self.addr
@@ -205,7 +206,8 @@ class VTGateConnection(object):
         rowcount = res['RowsAffected']
         lastrowid = res['InsertId']
     except gorpc.GoRpcError as e:
-      raise convert_exception(e, str(self), sql, bind_variables)
+      self.logger_object.log_private_data(bind_variables)
+      raise convert_exception(e, str(self), sql)
     except:
       logging.exception('gorpc low-level error')
       raise
@@ -249,7 +251,8 @@ class VTGateConnection(object):
         rowcount = res['RowsAffected']
         lastrowid = res['InsertId']
     except gorpc.GoRpcError as e:
-      raise convert_exception(e, str(self), sql, bind_variables)
+      self.logger_object.log_private_data(bind_variables)
+      raise convert_exception(e, str(self), sql)
     except:
       logging.exception('gorpc low-level error')
       raise
@@ -296,7 +299,8 @@ class VTGateConnection(object):
         lastrowid = reply['InsertId']
         rowsets.append((results, rowcount, lastrowid, fields))
     except gorpc.GoRpcError as e:
-      raise convert_exception(e, str(self), sql_list, bind_variables_list)
+      self.logger_object.log_private_data(bind_variables_list)
+      raise convert_exception(e, str(self), sql_list)
     except:
       logging.exception('gorpc low-level error')
       raise
@@ -332,7 +336,8 @@ class VTGateConnection(object):
         self._stream_fields.append((field['Name'], field['Type']))
         self._stream_conversions.append(field_types.conversions.get(field['Type']))
     except gorpc.GoRpcError as e:
-      raise convert_exception(e, str(self), sql, bind_variables)
+      self.logger_object.log_private_data(bind_variables)
+      raise convert_exception(e, str(self), sql)
     except:
       logging.exception('gorpc low-level error')
       raise

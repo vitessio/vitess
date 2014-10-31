@@ -202,9 +202,9 @@ func (conn *zconn) Create(zkPath, value string, flags int, aclv []zookeeper.ACL)
 
 	zxid := conn.getZxid()
 	name := rest[0]
-	if (flags&zookeeper.SEQUENCE) != 0 && name == "" {
+	if (flags & zookeeper.SEQUENCE) != 0 {
 		sequence := node.nextSequence()
-		name = sequence
+		name += sequence
 		zkPath = zkPath + sequence
 	}
 

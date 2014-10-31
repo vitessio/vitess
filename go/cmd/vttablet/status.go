@@ -46,6 +46,9 @@ var (
       {{if .BlacklistedTables}}
         BlacklistedTables: {{range .BlacklistedTables}}{{.}} {{end}}<br>
       {{end}}
+      {{if .DisableQueryService}}
+        Query Service disabled by TabletControl<br>
+      {{end}}
     </td>
     <td width="25%" border="">
       <a href="/schemaz">Schema</a></br>
@@ -169,8 +172,9 @@ func init() {
 	servenv.OnRun(func() {
 		servenv.AddStatusPart("Tablet", tabletTemplate, func() interface{} {
 			return map[string]interface{}{
-				"Tablet":            agent.Tablet(),
-				"BlacklistedTables": agent.BlacklistedTables(),
+				"Tablet":              agent.Tablet(),
+				"BlacklistedTables":   agent.BlacklistedTables(),
+				"DisableQueryService": agent.DisableQueryService(),
 			}
 		})
 		if agent.IsRunningHealthCheck() {

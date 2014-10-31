@@ -64,6 +64,8 @@ type RpcAgent interface {
 
 	RefreshState()
 
+	RunHealthCheck(targetTabletType topo.TabletType)
+
 	ReloadSchema()
 
 	PreflightSchema(change string) (*myproto.SchemaChangeResult, error)
@@ -209,9 +211,20 @@ func (agent *ActionAgent) ExecuteHook(hk *hook.Hook) *hook.HookResult {
 func (agent *ActionAgent) RefreshState() {
 }
 
+// RunHealthCheck will manually run the health check on the tablet
+// Should be called under RpcWrap.
+func (agent *ActionAgent) RunHealthCheck(targetTabletType topo.TabletType) {
+	agent.runHealthCheck(targetTabletType)
+}
+
 // ReloadSchema will reload the schema
 // Should be called under RpcWrapLockAction.
 func (agent *ActionAgent) ReloadSchema() {
+	if agent.DBConfigs == nil {
+		// we skip this for test instances that can't connect to the DB anyway
+		return
+	}
+
 	// This adds a dependency between tabletmanager and tabletserver,
 	// so it's not ideal. But I (alainjobart) think it's better
 	// to have up to date schema in vttablet.
@@ -249,7 +262,7 @@ func (agent *ActionAgent) ApplySchema(change *myproto.SchemaChange) (*myproto.Sc
 // Should be called under RpcWrap.
 func (agent *ActionAgent) ExecuteFetch(query string, maxrows int, wantFields, disableBinlogs bool) (*proto.QueryResult, error) {
 	// get a connection
-	conn, err := agent.Mysqld.GetDbaConnection()
+	conn, err := agent.MysqlDaemon.GetDbaConnection()
 	if err != nil {
 		return nil, err
 	}
@@ -282,7 +295,7 @@ func (agent *ActionAgent) ExecuteFetch(query string, maxrows int, wantFields, di
 // SlaveStatus returns the replication status
 // Should be called under RpcWrap.
 func (agent *ActionAgent) SlaveStatus() (*myproto.ReplicationStatus, error) {
-	return agent.Mysqld.SlaveStatus()
+	return agent.MysqlDaemon.SlaveStatus()
 }
 
 // WaitSlavePosition waits until we reach the provided position,
@@ -501,7 +514,7 @@ func (agent *ActionAgent) tabletExternallyReparentedLocked(actionTimeout time.Du
 	// and rebuild the shard serving graph
 	event.DispatchUpdate(ev, "rebuilding shard serving graph")
 	log.Infof("Rebuilding shard serving graph data")
-	if err = topotools.RebuildShard(logger, agent.TopoServer, tablet.Keyspace, tablet.Shard, cells, agent.LockTimeout, interrupted); err != nil {
+	if _, err = topotools.RebuildShard(logger, agent.TopoServer, tablet.Keyspace, tablet.Shard, cells, agent.LockTimeout, interrupted); err != nil {
 		return true, err
 	}
 

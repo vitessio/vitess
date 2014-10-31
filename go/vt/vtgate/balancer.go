@@ -5,8 +5,10 @@
 package vtgate
 
 import (
+	"flag"
 	"fmt"
 	"math/rand"
+	"sort"
 	"sync"
 	"time"
 
@@ -14,17 +16,20 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
+var resetDownConnDelay = flag.Duration("reset-down-conn-delay", 10*time.Minute, "delay to reset a marked down tabletconn")
+
 type GetEndPointsFunc func() (*topo.EndPoints, error)
 
 // Balancer is a simple round-robin load balancer.
 // It allows you to temporarily mark down nodes that
 // are non-functional.
 type Balancer struct {
-	mu           sync.Mutex
-	addressNodes []*addressStatus
-	index        int
-	getEndPoints GetEndPointsFunc
-	retryDelay   time.Duration
+	mu                 sync.Mutex
+	addressNodes       []*addressStatus
+	index              int
+	getEndPoints       GetEndPointsFunc
+	retryDelay         time.Duration
+	resetDownConnDelay time.Duration
 }
 
 type addressStatus struct {
@@ -42,6 +47,7 @@ func NewBalancer(getEndPoints GetEndPointsFunc, retryDelay time.Duration) *Balan
 	blc := new(Balancer)
 	blc.getEndPoints = getEndPoints
 	blc.retryDelay = retryDelay
+	blc.resetDownConnDelay = *resetDownConnDelay
 	return blc
 }
 
@@ -54,36 +60,28 @@ func (blc *Balancer) Get() (endPoint topo.EndPoint, err error) {
 	blc.mu.Lock()
 	defer blc.mu.Unlock()
 
-	if len(blc.addressNodes) == 0 {
-		err = blc.refresh()
-		if err != nil {
-			return topo.EndPoint{}, err
+	// Clear timeRetry if it has been a long time
+	for _, addrNode := range blc.addressNodes {
+		if time.Now().Sub(addrNode.timeRetry) > blc.resetDownConnDelay {
+			addrNode.timeRetry = time.Time{}
 		}
 	}
 
-outer:
-	for {
-		for i := range blc.addressNodes {
-			index := (blc.index + i + 1) % len(blc.addressNodes)
-			addrNode := blc.addressNodes[index]
-			if addrNode.timeRetry.IsZero() {
-				blc.index = index
-				return addrNode.endPoint, nil
-			}
-			if time.Now().Sub(addrNode.timeRetry) > 0 {
-				addrNode.timeRetry = time.Time{}
-				err = blc.refresh()
-				if err != nil {
-					return topo.EndPoint{}, err
-				}
-				continue outer
-			}
-		}
-		// Allow mark downs to happen while sleeping.
+	// Get the latest endpoints
+	err = blc.refresh()
+	if err != nil {
+		return topo.EndPoint{}, err
+	}
+
+	// Return the first endpoint, sleep if we need to
+	addrNode := blc.addressNodes[0]
+	if addrNode.timeRetry.After(time.Now()) {
+		// Allow mark downs to happen while sleeping
 		blc.mu.Unlock()
-		time.Sleep(blc.retryDelay + (1 * time.Millisecond))
+		time.Sleep(addrNode.timeRetry.Sub(time.Now()))
 		blc.mu.Lock()
 	}
+	return addrNode.endPoint, nil
 }
 
 // MarkDown marks the specified address down. Such addresses
@@ -128,8 +126,34 @@ func (blc *Balancer) refresh() error {
 	if len(blc.addressNodes) == 0 {
 		return fmt.Errorf("no available addresses")
 	}
-	shuffle(blc.addressNodes)
+	// Sort endpoints by timeRetry (from ZERO to largest)
+	sort.Sort(AddressList(blc.addressNodes))
+	// Randomize endpoints with ZERO timeRetry
+	shuffle(blc.addressNodes, findFirstAddrNodeNonZeroTimeRetry(blc.addressNodes))
 	return nil
+}
+
+type AddressList []*addressStatus
+
+func (al AddressList) Len() int {
+	return len(al)
+}
+
+func (al AddressList) Swap(i, j int) {
+	al[i], al[j] = al[j], al[i]
+}
+
+func (al AddressList) Less(i, j int) bool {
+	return al[i].timeRetry.Before(al[j].timeRetry)
+}
+
+func findFirstAddrNodeNonZeroTimeRetry(addressNodes []*addressStatus) (index int) {
+	for i, addrNode := range addressNodes {
+		if !addrNode.timeRetry.IsZero() {
+			return i
+		}
+	}
+	return len(addressNodes)
 }
 
 func findAddrNode(addressNodes []*addressStatus, uid uint32) (index int) {
@@ -159,10 +183,10 @@ func delAddrNode(addressNodes []*addressStatus, index int) []*addressStatus {
 }
 
 // shuffle uses the Fisher-Yates algorithm.
-func shuffle(addressNodes []*addressStatus) {
+func shuffle(addressNodes []*addressStatus, length int) {
 	index := 0
-	for i := len(addressNodes) - 1; i > 0; i-- {
-		index = int(rand.Int63()) % (i + 1)
+	for i := length - 1; i > 0; i-- {
+		index = rand.Intn(i + 1)
 		addressNodes[i], addressNodes[index] = addressNodes[index], addressNodes[i]
 	}
 }

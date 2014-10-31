@@ -259,7 +259,7 @@ func (scw *SplitCloneWorker) init() error {
 
 	// one side should have served types, the other one none,
 	// figure out wich is which, then double check them all
-	if len(os.Left[0].ServedTypes) > 0 {
+	if len(os.Left[0].ServedTypesMap) > 0 {
 		scw.sourceShards = os.Left
 		scw.destinationShards = os.Right
 	} else {
@@ -271,13 +271,13 @@ func (scw *SplitCloneWorker) init() error {
 	servingTypes := []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY}
 	for _, st := range servingTypes {
 		for _, si := range scw.sourceShards {
-			if !topo.IsTypeInList(st, si.ServedTypes) {
+			if _, ok := si.ServedTypesMap[st]; !ok {
 				return fmt.Errorf("source shard %v/%v is not serving type %v", si.Keyspace(), si.ShardName(), st)
 			}
 		}
 	}
 	for _, si := range scw.destinationShards {
-		if len(si.ServedTypes) > 0 {
+		if len(si.ServedTypesMap) > 0 {
 			return fmt.Errorf("destination shard %v/%v is serving some types", si.Keyspace(), si.ShardName())
 		}
 	}

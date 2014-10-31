@@ -10,7 +10,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate"
@@ -51,10 +50,6 @@ func main() {
 	defer topo.CloseServers()
 
 	resilientSrvTopoServer = vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServer")
-
-	labels := []string{"Cell", "Keyspace", "ShardName", "DbType"}
-	_ = stats.NewMultiCountersFunc("EndpointCount", labels, resilientSrvTopoServer.EndpointCount)
-	_ = stats.NewMultiCountersFunc("DegradedEndpointCount", labels, resilientSrvTopoServer.DegradedEndpointCount)
 
 	// For the initial phase vtgate is exposing
 	// topoReader api. This will be subsumed by

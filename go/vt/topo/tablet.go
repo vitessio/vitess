@@ -286,6 +286,16 @@ func IsRunningQueryService(tt TabletType) bool {
 	return false
 }
 
+// IsRunningUpdateStream returns if a tablet is running the update stream
+// RPC service.
+func IsRunningUpdateStream(tt TabletType) bool {
+	switch tt {
+	case TYPE_MASTER, TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH:
+		return true
+	}
+	return false
+}
+
 // IsInReplicationGraph returns if this tablet appears in the replication graph
 // Only IDLE and SCRAP are not in the replication graph.
 // The other non-obvious types are BACKUP, SNAPSHOT_SOURCE, RESTORE

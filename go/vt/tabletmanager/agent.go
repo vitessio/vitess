@@ -43,6 +43,8 @@ import (
 )
 
 var (
+	tabletHostname = flag.String("tablet_hostname", "", "if not empty, this hostname will be assumed instead of trying to resolve it")
+
 	_ = flag.String("vtaction_binary_path", "", "(DEPRECATED) Full path (including filename) to vtaction binary. If not set, tries VTROOT/bin/vtaction.")
 )
 
@@ -72,10 +74,10 @@ type ActionAgent struct {
 	actionMutex sync.Mutex
 
 	// mutex protects the following fields
-	mutex              sync.Mutex
-	_tablet            *topo.TabletInfo
-	_blacklistedTables []string
-	_waitingForMysql   bool
+	mutex            sync.Mutex
+	_tablet          *topo.TabletInfo
+	_tabletControl   *topo.TabletControl
+	_waitingForMysql bool
 }
 
 func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
@@ -196,15 +198,28 @@ func (agent *ActionAgent) Tablet() *topo.TabletInfo {
 }
 
 func (agent *ActionAgent) BlacklistedTables() []string {
+	var blacklistedTables []string
 	agent.mutex.Lock()
-	blacklistedTables := agent._blacklistedTables
+	if agent._tabletControl != nil {
+		blacklistedTables = agent._tabletControl.BlacklistedTables
+	}
 	agent.mutex.Unlock()
 	return blacklistedTables
 }
 
-func (agent *ActionAgent) setBlacklistedTables(blacklistedTables []string) {
+func (agent *ActionAgent) DisableQueryService() bool {
+	disable := false
 	agent.mutex.Lock()
-	agent._blacklistedTables = blacklistedTables
+	if agent._tabletControl != nil {
+		disable = agent._tabletControl.DisableQueryService
+	}
+	agent.mutex.Unlock()
+	return disable
+}
+
+func (agent *ActionAgent) setTabletControl(tc *topo.TabletControl) {
+	agent.mutex.Lock()
+	agent._tabletControl = tc
 	agent.mutex.Unlock()
 }
 
@@ -271,9 +286,12 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 	}
 
 	// find our hostname as fully qualified, and IP
-	hostname, err := netutil.FullyQualifiedHostname()
-	if err != nil {
-		return err
+	hostname := *tabletHostname
+	if hostname == "" {
+		hostname, err = netutil.FullyQualifiedHostname()
+		if err != nil {
+			return err
+		}
 	}
 	ipAddrs, err := net.LookupHost(hostname)
 	if err != nil {

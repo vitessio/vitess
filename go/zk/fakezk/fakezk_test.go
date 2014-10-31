@@ -229,6 +229,15 @@ func TestSequence(t *testing.T) {
 		t.Errorf("new path: got %q, wanted %q", newPath, wanted)
 	}
 
+	newPath, err = conn.Create("/zk/action_", "", zookeeper.SEQUENCE, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	if err != nil {
+		t.Errorf("conn.Create: %v", err)
+	}
+
+	if wanted := "/zk/action_0000000004"; newPath != wanted {
+		t.Errorf("new path: got %q, wanted %q", newPath, wanted)
+	}
+
 }
 
 func TestFromFile(t *testing.T) {

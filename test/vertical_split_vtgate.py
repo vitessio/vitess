@@ -54,8 +54,13 @@ class TestVerticalSplitVTGate(vertical_split.TestVerticalSplit):
     self.assertEqual(v['VttabletCall']['Histograms']['Execute.source_keyspace.0.replica']['Count'], 2, "unexpected value for VttabletCall(Execute.source_keyspace.0.replica) inside %s" % str(v))
     self.assertEqual(v['VtgateApi']['Histograms']['ExecuteKeyRanges.destination_keyspace.master']['Count'], 6, "unexpected value for VtgateApi(ExecuteKeyRanges.destination_keyspace.master) inside %s" % str(v))
     self.assertEqual(len(v['VtgateApiErrorCounts']), 0, "unexpected errors for VtgateApiErrorCounts inside %s" % str(v))
-    self.assertEqual(v['EndpointCount']['test_nj.source_keyspace.0.master'], 1, "unexpected EndpointCount inside %s" % str(v))
-    self.assertEqual(v['DegradedEndpointCount']['test_nj.source_keyspace.0.master'], 0, "unexpected DegradedEndpointCount inside %s" % str(v))
+    self.assertEqual(
+            v['ResilientSrvTopoServerEndPointsReturnedCount']['test_nj.source_keyspace.0.master'] /
+              v['ResilientSrvTopoServerEndPointQueryCount']['test_nj.source_keyspace.0.master'],
+            1, "unexpected EndPointsReturnedCount inside %s" % str(v))
+    self.assertNotIn(
+            'test_nj.source_keyspace.0.master', v['ResilientSrvTopoServerEndPointDegradedResultCount'],
+            "unexpected EndPointDegradedResultCount inside %s" % str(v))
 
 if __name__ == '__main__':
   vertical_split.client_type = vertical_split.VTGATE
