@@ -16,6 +16,7 @@ echo "Creating $keyspace.shard-$shard pods in cell $cell..."
 for uid_index in 0 1 2; do
   uid=$[$uid_base + $uid_index]
   printf -v alias '%s-%010d' $cell $uid
+  printf -v tablet_subdir 'vt_%010d' $uid
 
   # It's not strictly necessary to assign a unique port to every tablet since
   # Kubernetes gives every pod its own IP address. However, Kubernetes currently
@@ -35,7 +36,7 @@ for uid_index in 0 1 2; do
 
   # Expand template variables
   sed_script=""
-  for var in alias cell uid keyspace shard type port; do
+  for var in alias cell uid keyspace shard type port tablet_subdir; do
     sed_script+="s/{{$var}}/${!var}/g;"
   done
 

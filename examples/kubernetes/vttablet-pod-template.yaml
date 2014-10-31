@@ -17,33 +17,52 @@ desiredState:
           - bash
           - "-c"
           - >-
-            echo "{\"test_cell\":\"$SERVICE_HOST:2181\",\"global\":\"$SERVICE_HOST:2181\"}" > /vt/zk-client-conf.json &&
-            mkdir -p $VTDATAROOT/tmp &&
-            chown -R vitess /vt && \
+            set -e
+
+            echo "{\"test_cell\":\"$SERVICE_HOST:2181\",\"global\":\"$SERVICE_HOST:2181\"}" > /vt/zk-client-conf.json
+
+            log_file=$VTDATAROOT/tmp/vttablet.log
+
+            mysql_socket="/vt/vtdataroot/{{tablet_subdir}}/mysql.sock"
+
+            hostname=$(hostname -i)
+
+            mkdir -p $VTDATAROOT/tmp
+
+            chown -R vitess /vt
 
             su -p -s /bin/bash -c "/vt/bin/vtctlclient
             -log_dir $VTDATAROOT/tmp
             -server $SERVICE_HOST:15000
             InitTablet -force -parent
             -port {{port}}
-            -hostname $SERVICE_HOST
+            -hostname $hostname
             -keyspace {{keyspace}}
             -shard {{shard}}
             {{alias}} {{type}}
-            &>> $VTDATAROOT/tmp/vtctl.log" vitess && \
+            &>> $log_file" vitess
+
+            while [ ! -e $mysql_socket ]; do
+            echo "[$(date)] waiting for $mysql_socket" >> $log_file ;
+            sleep 1 ;
+            done
+
+            su -p -s /bin/bash -c "mysql -u vt_dba -S $mysql_socket
+            -e 'CREATE DATABASE IF NOT EXISTS vt_{{keyspace}}'
+            &>> $log_file" vitess
 
             su -p -s /bin/bash -c "/vt/bin/vttablet
             -log_dir $VTDATAROOT/tmp
             -port {{port}}
             -tablet-path {{alias}}
-            -tablet_hostname $SERVICE_HOST
-            -target_tablet_type {{type}}
+            -tablet_hostname $hostname
+            -target_tablet_type replica
             -mysqlctl_socket $VTDATAROOT/mysqlctl.sock
             -db-config-app-dbname vt_{{keyspace}}
             -db-config-dba-dbname vt_{{keyspace}}
             -db-config-repl-dbname vt_{{keyspace}}
             -db-config-filtered-dbname vt_{{keyspace}}
-            &>> $VTDATAROOT/tmp/vttablet.log" vitess
+            &>> $log_file" vitess
         env:
           - name: ZK_CLIENT_CONFIG
             value: /vt/zk-client-conf.json
