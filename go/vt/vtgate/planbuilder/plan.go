@@ -15,16 +15,16 @@ type PlanID int
 const (
 	NoPlan = PlanID(iota)
 	SelectUnsharded
-	SelectSinglePrimary
-	SelectMultiPrimary
+	SelectSingleShardKey
+	SelectMultiShardKey
 	SelectSingleLookup
 	SelectMultiLookup
 	SelectScatter
 	UpdateUnsharded
-	UpdateSinglePrimary
+	UpdateSingleShardKey
 	UpdateSingleLookup
 	DeleteUnsharded
-	DeleteSinglePrimary
+	DeleteSingleShardKey
 	DeleteSingleLookup
 	InsertUnsharded
 	InsertSharded
@@ -48,16 +48,16 @@ func (pln *Plan) Size() int {
 var planName = []string{
 	"NoPlan",
 	"SelectUnsharded",
-	"SelectSinglePrimary",
-	"SelectMultiPrimary",
+	"SelectSingleShardKey",
+	"SelectMultiShardKey",
 	"SelectSingleLookup",
 	"SelectMultiLookup",
 	"SelectScatter",
 	"UpdateUnsharded",
-	"UpdateSinglePrimary",
+	"UpdateSingleShardKey",
 	"UpdateSingleLookup",
 	"DeleteUnsharded",
-	"DeleteSinglePrimary",
+	"DeleteSingleShardKey",
 	"DeleteSingleLookup",
 	"InsertUnsharded",
 	"InsertSharded",
@@ -80,7 +80,7 @@ func PlanByName(s string) (id PlanID, ok bool) {
 }
 
 func (id PlanID) IsMulti() bool {
-	return id == SelectMultiPrimary || id == SelectMultiLookup || id == SelectScatter
+	return id == SelectMultiShardKey || id == SelectMultiLookup || id == SelectScatter
 }
 
 func (id PlanID) MarshalJSON() ([]byte, error) {

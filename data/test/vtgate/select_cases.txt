@@ -24,14 +24,15 @@
 # select by primary keyspace id
 "select * from user where id = 1"
 {
-  "ID": "SelectSinglePrimary",
+  "ID": "SelectSingleShardKey",
   "Reason": "",
   "TableName": "user",
   "Query": "select * from user where id = 1",
   "Index": {
-    "Type": 0,
     "Column": "id",
-    "Lookup": null,
+    "Name": "ShardKey",
+    "From": "",
+    "To": "",
     "Owner": "user",
     "IsAutoInc": true
   },
@@ -41,14 +42,15 @@
 # select with primary keyspace id through bind var
 "select * from user where id = :id"
 {
-  "ID": "SelectSinglePrimary",
+  "ID": "SelectSingleShardKey",
   "Reason": "",
   "TableName": "user",
   "Query": "select * from user where id = :id",
   "Index": {
-    "Type": 0,
     "Column": "id",
-    "Lookup": null,
+    "Name": "ShardKey",
+    "From": "",
+    "To": "",
     "Owner": "user",
     "IsAutoInc": true
   },
@@ -58,14 +60,15 @@
 # select with primary id through IN clause
 "select * from user where id in (1, 2)"
 {
-  "ID": "SelectMultiPrimary",
+  "ID": "SelectMultiShardKey",
   "Reason": "",
   "TableName": "user",
   "Query": "select * from user where id in ::_vals",
   "Index": {
-    "Type": 0,
     "Column": "id",
-    "Lookup": null,
+    "Name": "ShardKey",
+    "From": "",
+    "To": "",
     "Owner": "user",
     "IsAutoInc": true
   },
@@ -89,14 +92,15 @@
 # select with primary id with different column name
 "select * from user_extra where user_id = 1"
 {
-  "ID": "SelectSinglePrimary",
+  "ID": "SelectSingleShardKey",
   "Reason": "",
   "TableName": "user_extra",
   "Query": "select * from user_extra where user_id = 1",
   "Index": {
-    "Type": 0,
     "Column": "user_id",
-    "Lookup": null,
+    "Name": "ShardKey",
+    "From": "",
+    "To": "",
     "Owner": "user",
     "IsAutoInc": false
   },
@@ -106,14 +110,15 @@
 # select with primary id when there's more than one index
 "select * from music where user_id = 1"
 {
-  "ID": "SelectSinglePrimary",
+  "ID": "SelectSingleShardKey",
   "Reason": "",
   "TableName": "music",
   "Query": "select * from music where user_id = 1",
   "Index": {
-    "Type": 0,
     "Column": "user_id",
-    "Lookup": null,
+    "Name": "ShardKey",
+    "From": "",
+    "To": "",
     "Owner": "user",
     "IsAutoInc": false
   },
@@ -128,13 +133,10 @@
   "TableName": "music",
   "Query": "select * from music where id = 1",
   "Index": {
-    "Type": 1,
     "Column": "id",
-    "Lookup": {
-      "Name": "music_user_map",
-      "From": "music_id",
-      "To": "user_id"
-    },
+    "Name": "music_user_map",
+    "From": "music_id",
+    "To": "user_id",
     "Owner": "music",
     "IsAutoInc": false
   },
@@ -149,13 +151,10 @@
   "TableName": "music",
   "Query": "select * from music where id in ::_vals",
   "Index": {
-    "Type": 1,
     "Column": "id",
-    "Lookup": {
-      "Name": "music_user_map",
-      "From": "music_id",
-      "To": "user_id"
-    },
+    "Name": "music_user_map",
+    "From": "music_id",
+    "To": "user_id",
     "Owner": "music",
     "IsAutoInc": false
   },
@@ -173,13 +172,10 @@
   "TableName": "music",
   "Query": "select * from music where id in ::_vals",
   "Index": {
-    "Type": 1,
     "Column": "id",
-    "Lookup": {
-      "Name": "music_user_map",
-      "From": "music_id",
-      "To": "user_id"
-    },
+    "Name": "music_user_map",
+    "From": "music_id",
+    "To": "user_id",
     "Owner": "music",
     "IsAutoInc": false
   },
@@ -197,13 +193,10 @@
   "TableName": "music",
   "Query": "select * from music where id in ::_vals",
   "Index": {
-    "Type": 1,
     "Column": "id",
-    "Lookup": {
-      "Name": "music_user_map",
-      "From": "music_id",
-      "To": "user_id"
-    },
+    "Name": "music_user_map",
+    "From": "music_id",
+    "To": "user_id",
     "Owner": "music",
     "IsAutoInc": false
   },
@@ -218,13 +211,10 @@
   "TableName": "music_extra",
   "Query": "select * from music_extra where music_id = 1",
   "Index": {
-    "Type": 1,
     "Column": "music_id",
-    "Lookup": {
-      "Name": "music_user_map",
-      "From": "music_id",
-      "To": "user_id"
-    },
+    "Name": "music_user_map",
+    "From": "music_id",
+    "To": "user_id",
     "Owner": "music",
     "IsAutoInc": false
   },
@@ -245,14 +235,15 @@
 # select with acceptable parenthesized OR clause at end
 "select * from user where id = 1 and (var = 2 or var = 3)"
 {
-  "ID": "SelectSinglePrimary",
+  "ID": "SelectSingleShardKey",
   "Reason": "",
   "TableName": "user",
   "Query": "select * from user where id = 1 and (var = 2 or var = 3)",
   "Index": {
-    "Type": 0,
     "Column": "id",
-    "Lookup": null,
+    "Name": "ShardKey",
+    "From": "",
+    "To": "",
     "Owner": "user",
     "IsAutoInc": true
   },
@@ -273,14 +264,15 @@
 # select with acceptable parenthesized OR clause at beginning
 "select * from user where (var = 2 or var = 3) and id = 1"
 {
-  "ID": "SelectSinglePrimary",
+  "ID": "SelectSingleShardKey",
   "Reason": "",
   "TableName": "user",
   "Query": "select * from user where (var = 2 or var = 3) and id = 1",
   "Index": {
-    "Type": 0,
     "Column": "id",
-    "Lookup": null,
+    "Name": "ShardKey",
+    "From": "",
+    "To": "",
     "Owner": "user",
     "IsAutoInc": true
   },
@@ -301,14 +293,15 @@
 # non-aggregate function in select
 "select fun(*) from user where id in (1, 2)"
 {
-  "ID": "SelectMultiPrimary",
+  "ID": "SelectMultiShardKey",
   "Reason": "",
   "TableName": "user",
   "Query": "select fun(*) from user where id in ::_vals",
   "Index": {
-    "Type": 0,
     "Column": "id",
-    "Lookup": null,
+    "Name": "ShardKey",
+    "From": "",
+    "To": "",
     "Owner": "user",
     "IsAutoInc": true
   },

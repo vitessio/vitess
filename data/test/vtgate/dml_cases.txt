@@ -23,14 +23,15 @@
 # update by primary keyspace id
 "update user set val = 1 where id = 1"
 {
-  "ID": "UpdateSinglePrimary",
+  "ID": "UpdateSingleShardKey",
   "Reason": "",
   "TableName": "user",
   "Query": "update user set val = 1 where id = 1",
   "Index": {
-    "Type": 0,
     "Column": "id",
-    "Lookup": null,
+    "Name": "ShardKey",
+    "From": "",
+    "To": "",
     "Owner": "user",
     "IsAutoInc": true
   },
@@ -40,14 +41,15 @@
 # delete from by primary keyspace id
 "delete from user where id = 1"
 {
-  "ID": "DeleteSinglePrimary",
+  "ID": "DeleteSingleShardKey",
   "Reason": "",
   "TableName": "user",
   "Query": "delete from user where id = 1",
   "Index": {
-    "Type": 0,
     "Column": "id",
-    "Lookup": null,
+    "Name": "ShardKey",
+    "From": "",
+    "To": "",
     "Owner": "user",
     "IsAutoInc": true
   },
@@ -106,13 +108,10 @@
   "TableName": "music",
   "Query": "update music set val = 1 where id = 1",
   "Index": {
-    "Type": 1,
     "Column": "id",
-    "Lookup": {
-      "Name": "music_user_map",
-      "From": "music_id",
-      "To": "user_id"
-    },
+    "Name": "music_user_map",
+    "From": "music_id",
+    "To": "user_id",
     "Owner": "music",
     "IsAutoInc": false
   },
@@ -127,13 +126,10 @@
   "TableName": "music",
   "Query": "delete from music where id = 1",
   "Index": {
-    "Type": 1,
     "Column": "id",
-    "Lookup": {
-      "Name": "music_user_map",
-      "From": "music_id",
-      "To": "user_id"
-    },
+    "Name": "music_user_map",
+    "From": "music_id",
+    "To": "user_id",
     "Owner": "music",
     "IsAutoInc": false
   },

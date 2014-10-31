@@ -1,57 +1,5 @@
 {
   "Tables": {
-    "music": {
-      "Keyspace": {
-        "Name": "user",
-        "ShardingScheme": 1
-      },
-      "Indexes": [
-        {
-          "Type": 0,
-          "Column": "user_id",
-          "Lookup": null,
-          "Owner": "user",
-          "IsAutoInc": false
-        },
-        {
-          "Type": 1,
-          "Column": "id",
-          "Lookup": {
-            "Name": "music_user_map",
-            "From": "music_id",
-            "To": "user_id"
-          },
-          "Owner": "music",
-          "IsAutoInc": false
-        }
-      ]
-    },
-    "music_extra": {
-      "Keyspace": {
-        "Name": "user",
-        "ShardingScheme": 1
-      },
-      "Indexes": [
-        {
-          "Type": 0,
-          "Column": "user_id",
-          "Lookup": null,
-          "Owner": "user",
-          "IsAutoInc": false
-        },
-        {
-          "Type": 1,
-          "Column": "music_id",
-          "Lookup": {
-            "Name": "music_user_map",
-            "From": "music_id",
-            "To": "user_id"
-          },
-          "Owner": "music",
-          "IsAutoInc": false
-        }
-      ]
-    },
     "user": {
       "Keyspace": {
         "Name": "user",
@@ -59,9 +7,8 @@
       },
       "Indexes": [
         {
-          "Type": 0,
           "Column": "id",
-          "Lookup": null,
+          "Name": "ShardKey",
           "Owner": "user",
           "IsAutoInc": true
         }
@@ -74,10 +21,53 @@
       },
       "Indexes": [
         {
-          "Type": 0,
           "Column": "user_id",
-          "Lookup": null,
+          "Name": "ShardKey",
           "Owner": "user",
+          "IsAutoInc": false
+        }
+      ]
+    },
+    "music": {
+      "Keyspace": {
+        "Name": "user",
+        "ShardingScheme": 1
+      },
+      "Indexes": [
+        {
+          "Column": "user_id",
+          "Name": "ShardKey",
+          "Owner": "user",
+          "IsAutoInc": false
+        },
+        {
+          "Column": "id",
+          "Name": "music_user_map",
+          "From": "music_id",
+          "To": "user_id",
+          "Owner": "music",
+          "IsAutoInc": false
+        }
+      ]
+    },
+    "music_extra": {
+      "Keyspace": {
+        "Name": "user",
+        "ShardingScheme": 1
+      },
+      "Indexes": [
+        {
+          "Column": "user_id",
+          "Name": "ShardKey",
+          "Owner": "user",
+          "IsAutoInc": false
+        },
+        {
+          "Column": "music_id",
+          "Name": "music_user_map",
+          "From": "music_id",
+          "To": "user_id",
+          "Owner": "music",
           "IsAutoInc": false
         }
       ]

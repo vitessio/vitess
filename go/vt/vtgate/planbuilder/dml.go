@@ -20,11 +20,11 @@ func buildUpdatePlan(upd *sqlparser.Update, schema *VTGateSchema) *Plan {
 	indexes := schema.Tables[tablename].Indexes
 	plan = getWhereRouting(upd.Where, indexes)
 	switch plan.ID {
-	case SelectSinglePrimary:
-		plan.ID = UpdateSinglePrimary
+	case SelectSingleShardKey:
+		plan.ID = UpdateSingleShardKey
 	case SelectSingleLookup:
 		plan.ID = UpdateSingleLookup
-	case SelectMultiPrimary, SelectMultiLookup, SelectScatter:
+	case SelectMultiShardKey, SelectMultiLookup, SelectScatter:
 		return &Plan{
 			ID:        NoPlan,
 			Reason:    "too complex",
@@ -74,11 +74,11 @@ func buildDeletePlan(del *sqlparser.Delete, schema *VTGateSchema) *Plan {
 	indexes := schema.Tables[tablename].Indexes
 	plan = getWhereRouting(del.Where, indexes)
 	switch plan.ID {
-	case SelectSinglePrimary:
-		plan.ID = DeleteSinglePrimary
+	case SelectSingleShardKey:
+		plan.ID = DeleteSingleShardKey
 	case SelectSingleLookup:
 		plan.ID = DeleteSingleLookup
-	case SelectMultiPrimary, SelectMultiLookup, SelectScatter:
+	case SelectMultiShardKey, SelectMultiLookup, SelectScatter:
 		return &Plan{
 			ID:        NoPlan,
 			Reason:    "too complex",

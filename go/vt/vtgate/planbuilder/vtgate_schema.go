@@ -5,7 +5,7 @@
 package planbuilder
 
 const (
-	Primary = iota
+	ShardKey = iota
 	Lookup
 )
 
@@ -24,21 +24,35 @@ type VTGateTable struct {
 }
 
 type VTGateIndex struct {
-	Type      int
 	Column    string
-	Lookup    *VTGateLookup
+	Name      string
+	From, To  string
 	Owner     string
 	IsAutoInc bool
-}
-
-type VTGateLookup struct {
-	Name     string
-	From, To string
 }
 
 type Keyspace struct {
 	Name           string
 	ShardingScheme int
+	Lookupdb       string
+}
+
+type VTGateSchemaMetadata struct {
+	Keyspaces map[string]struct {
+		ShardingScheme int
+		Lookupdb       string
+		Indexes        map[string]struct {
+			From, To  string
+			Owner     string
+			IsAutoInc bool
+		}
+		Tables map[string]struct {
+			IndexColumns []struct {
+				Column    string
+				IndexName string
+			}
+		}
+	}
 }
 
 /*
@@ -58,21 +72,21 @@ var vtgateSchema = &VTGateSchema{
 		"user": {
 			Keyspace:      user,
 			Indexes: []*VTGateIndex{{
-				Type:   Primary,
+				Type:   ShardKey,
 				Column: "id",
 			}},
 		},
 		"user_extra": {
 			Keyspace:      user,
 			Indexes: []*VTGateIndex{{
-				Type:   Primary,
+				Type:   ShardKey,
 				Column: "user_id",
 			}},
 		},
 		"music": {
 			Keyspace:      user,
 			Indexes: []*VTGateIndex{{
-				Type:   Primary,
+				Type:   ShardKey,
 				Column: "user_id",
 			}, {
 				Type:   Lookup,

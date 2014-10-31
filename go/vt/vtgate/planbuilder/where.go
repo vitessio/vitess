@@ -93,8 +93,8 @@ func getMatch(node sqlparser.BoolExpr, index *VTGateIndex) (planID PlanID, value
 			if err != nil {
 				return SelectScatter, nil
 			}
-			if index.Type == Primary {
-				planID = SelectSinglePrimary
+			if index.Name == "ShardKey" {
+				planID = SelectSingleShardKey
 			} else {
 				planID = SelectSingleLookup
 			}
@@ -111,8 +111,8 @@ func getMatch(node sqlparser.BoolExpr, index *VTGateIndex) (planID PlanID, value
 				return SelectScatter, nil
 			}
 			node.Right = sqlparser.ListArg("::_vals")
-			if index.Type == Primary {
-				planID = SelectMultiPrimary
+			if index.Name == "ShardKey" {
+				planID = SelectMultiShardKey
 			} else {
 				planID = SelectMultiLookup
 			}
