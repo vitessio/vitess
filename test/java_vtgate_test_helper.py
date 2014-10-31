@@ -126,7 +126,7 @@ def main():
     env.set_up()
     sys.stdout.write(json.dumps({
       "port": env.vtgate_port,
-      }))
+      }) + "\n")
     sys.stdout.flush()
   elif args[0] == 'teardown':
     env.shutdown()
