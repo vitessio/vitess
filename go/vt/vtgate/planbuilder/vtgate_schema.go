@@ -11,11 +11,6 @@ import (
 )
 
 const (
-	ShardKey = iota
-	Lookup
-)
-
-const (
 	Unsharded = iota
 	HashSharded
 )
@@ -30,7 +25,6 @@ func BuildSchema(source *VTGateSchemaNormalized) (schema *VTGateSchema, err erro
 		keyspace := &VTGateKeyspace{
 			Name:           ksname,
 			ShardingScheme: ks.ShardingScheme,
-			Lookupdb:       ks.Lookupdb,
 		}
 		for tname, table := range ks.Tables {
 			t := &VTGateTable{
@@ -73,13 +67,11 @@ type VTGateIndex struct {
 type VTGateKeyspace struct {
 	Name           string
 	ShardingScheme int
-	Lookupdb       string
 }
 
 type VTGateSchemaNormalized struct {
 	Keyspaces map[string]struct {
 		ShardingScheme int
-		Lookupdb       string
 		Indexes        map[string]struct {
 			From, To  string
 			Owner     string

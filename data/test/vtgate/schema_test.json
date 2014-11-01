@@ -2,7 +2,6 @@
   "Keyspaces": {
     "user": {
       "ShardingScheme": 1,
-      "Lookupdb": "lookup",
       "Indexes": {
         "ShardKey": {
           "Owner": "user",
