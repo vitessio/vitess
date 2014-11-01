@@ -199,13 +199,9 @@ func TestScatterConnCommitSuccess(t *testing.T) {
 	if sbc0.CommitCount != 1 {
 		t.Errorf("want 1, got %d", sbc0.CommitCount)
 	}
-	/*
-		// Flaky: This test should be run manually.
-		runtime.Gosched()
-		if sbc1.RollbackCount != 1 {
-			t.Errorf("want 1, got %d", sbc1.RollbackCount)
-		}
-	*/
+	if sbc1.RollbackCount != 1 {
+		t.Errorf("want 1, got %d", sbc1.RollbackCount)
+	}
 }
 
 func TestScatterConnRollback(t *testing.T) {
@@ -228,16 +224,12 @@ func TestScatterConnRollback(t *testing.T) {
 	if !reflect.DeepEqual(wantSession, *session.Session) {
 		t.Errorf("want\n%#v, got\n%#v", wantSession, *session.Session)
 	}
-	/*
-		// Flaky: This test should be run manually.
-		runtime.Gosched()
-		if sbc0.RollbackCount != 1 {
-			t.Errorf("want 1, got %d", sbc0.RollbackCount)
-		}
-		if sbc1.RollbackCount != 1 {
-			t.Errorf("want 1, got %d", sbc1.RollbackCount)
-		}
-	*/
+	if sbc0.RollbackCount != 1 {
+		t.Errorf("want 1, got %d", sbc0.RollbackCount)
+	}
+	if sbc1.RollbackCount != 1 {
+		t.Errorf("want 1, got %d", sbc1.RollbackCount)
+	}
 }
 
 func TestScatterConnClose(t *testing.T) {
@@ -247,13 +239,9 @@ func TestScatterConnClose(t *testing.T) {
 	stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
 	stc.Execute(&context.DummyContext{}, "query1", nil, "TestScatterConnClose", []string{"0"}, "", nil)
 	stc.Close()
-	/*
-		// Flaky: This test should be run manually.
-		runtime.Gosched()
-		if sbc.CloseCount != 1 {
-			t.Errorf("want 1, got %d", sbc.CloseCount)
-		}
-	*/
+	if sbc.CloseCount != 1 {
+		t.Errorf("want 1, got %d", sbc.CloseCount)
+	}
 }
 
 func TestAppendResult(t *testing.T) {
