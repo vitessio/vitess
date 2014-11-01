@@ -19,6 +19,8 @@ import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
@@ -27,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@RunWith(JUnit4.class)
 public class DataTypesIT {
 
   public static TestEnv testEnv = getTestEnv();

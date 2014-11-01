@@ -22,7 +22,7 @@ public class StreamingServerShutdownIT {
   @Before
   public void setUpVtGate() throws Exception {
     Util.setupTestEnv(testEnv, true);
-    Util.truncateTable(testEnv);
+    Util.createTable(testEnv);
   }
 
   @After

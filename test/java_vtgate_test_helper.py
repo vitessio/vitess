@@ -9,7 +9,6 @@ Start up steps include:
 - start MySQL instances
 - configure keyspace
 - start VtTablets and ensure SERVING mode
-- create vtgate_test table
 - start VtGate instance
 
 Usage:
@@ -61,7 +60,6 @@ class TestEnv(object):
       utils.run_vtctl(['RebuildKeyspaceGraph', self.keyspace], auto_log=True)
       for t in self.tablets:
         t.create_db('vt_' + self.keyspace)
-        t.mquery(t.dbname, create_table)
         t.start_vttablet(wait_for_state=None)
       for t in self.tablets:
         t.wait_for_vttablet_state('SERVING')
@@ -86,20 +84,6 @@ class TestEnv(object):
     utils.remove_tmp_files()
     for t in self.tablets:
       t.remove_tree()
-
-
-create_table = '''create table vtgate_test (
-  id bigint auto_increment,
-  name varchar(64),
-  age SMALLINT,
-  percent DECIMAL(5,2),
-  keyspace_id bigint(20) unsigned NOT NULL,
-  datetime_col DATETIME,
-  timestamp_col TIMESTAMP,
-  date_col DATE,
-  time_col TIME,
-  primary key (id)
-  ) Engine=InnoDB'''
 
 
 def main():

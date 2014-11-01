@@ -45,8 +45,8 @@ public class StreamingVtGateIT {
   }
 
   @Before
-  public void truncateTable() throws Exception {
-    Util.truncateTable(testEnv);
+  public void createTable() throws Exception {
+    Util.createTable(testEnv);
   }
 
   @Test
