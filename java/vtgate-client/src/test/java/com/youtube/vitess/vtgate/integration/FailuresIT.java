@@ -85,7 +85,7 @@ public class FailuresIT {
     } catch (ConnectionException e) {
     }
     vtgate.close();
-    vtgate = VtGate.connect("localhost:" + testEnv.port, 200);
+    vtgate = VtGate.connect("localhost:" + testEnv.port, 2000);
     // Check no timeout error for fast query
     sleepQuery = new QueryBuilder("select sleep(0.01) from dual", testEnv.keyspace, "master")
         .setKeyspaceIds(testEnv.getAllKeyspaceIds()).build();
