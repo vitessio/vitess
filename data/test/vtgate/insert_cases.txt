@@ -37,20 +37,9 @@
   "ID":"InsertSharded",
   "Reason":"",
   "TableName":"music"
-  ,"Query":"insert into music(user_id, id) values (1, 2)",
+  ,"Query":"insert into music(user_id, id) values (1, :_id)",
   "Index":null,
   "Values":[1, 2]
-}
-
-# insert Lookup owned no-autoinc, value not supplied
-"insert into music(user_id) values(1)"
-{
-  "ID":"NoPlan",
-  "Reason":"must supply value for indexed column: id",
-  "TableName":"music"
-  ,"Query":"insert into music(user_id) values (1)",
-  "Index":null,
-  "Values":null
 }
 
 # insert unowned

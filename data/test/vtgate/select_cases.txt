@@ -102,7 +102,7 @@
     "From": "",
     "To": "",
     "Owner": "user",
-    "IsAutoInc": false
+    "IsAutoInc": true
   },
   "Values": 1
 }
@@ -120,7 +120,7 @@
     "From": "",
     "To": "",
     "Owner": "user",
-    "IsAutoInc": false
+    "IsAutoInc": true
   },
   "Values": 1
 }
@@ -138,7 +138,7 @@
     "From": "music_id",
     "To": "user_id",
     "Owner": "music",
-    "IsAutoInc": false
+    "IsAutoInc": true
   },
   "Values": 1
 }
@@ -156,7 +156,7 @@
     "From": "music_id",
     "To": "user_id",
     "Owner": "music",
-    "IsAutoInc": false
+    "IsAutoInc": true
   },
   "Values": [
     1,
@@ -177,7 +177,7 @@
     "From": "music_id",
     "To": "user_id",
     "Owner": "music",
-    "IsAutoInc": false
+    "IsAutoInc": true
   },
   "Values": [
     ":a",
@@ -198,7 +198,7 @@
     "From": "music_id",
     "To": "user_id",
     "Owner": "music",
-    "IsAutoInc": false
+    "IsAutoInc": true
   },
   "Values": "::list"
 }
@@ -216,7 +216,7 @@
     "From": "music_id",
     "To": "user_id",
     "Owner": "music",
-    "IsAutoInc": false
+    "IsAutoInc": true
   },
   "Values": 1
 }

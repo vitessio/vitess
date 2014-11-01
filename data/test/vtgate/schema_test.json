@@ -1,76 +1,62 @@
 {
-  "Tables": {
+  "Keyspaces": {
     "user": {
-      "Keyspace": {
-        "Name": "user",
-        "ShardingScheme": 1
-      },
-      "Indexes": [
-        {
-          "Column": "id",
-          "Name": "ShardKey",
+      "ShardingScheme": 1,
+      "Lookupdb": "lookup",
+      "Indexes": {
+        "ShardKey": {
           "Owner": "user",
           "IsAutoInc": true
-        }
-      ]
-    },
-    "user_extra": {
-      "Keyspace": {
-        "Name": "user",
-        "ShardingScheme": 1
-      },
-      "Indexes": [
-        {
-          "Column": "user_id",
-          "Name": "ShardKey",
-          "Owner": "user",
-          "IsAutoInc": false
-        }
-      ]
-    },
-    "music": {
-      "Keyspace": {
-        "Name": "user",
-        "ShardingScheme": 1
-      },
-      "Indexes": [
-        {
-          "Column": "user_id",
-          "Name": "ShardKey",
-          "Owner": "user",
-          "IsAutoInc": false
         },
-        {
-          "Column": "id",
-          "Name": "music_user_map",
+        "music_user_map": {
           "From": "music_id",
           "To": "user_id",
           "Owner": "music",
-          "IsAutoInc": false
+          "IsAutoInc": true
         }
-      ]
-    },
-    "music_extra": {
-      "Keyspace": {
-        "Name": "user",
-        "ShardingScheme": 1
       },
-      "Indexes": [
-        {
-          "Column": "user_id",
-          "Name": "ShardKey",
-          "Owner": "user",
-          "IsAutoInc": false
+      "Tables": {
+        "user": {
+          "IndexColumns": [
+            {
+              "Column": "id",
+              "IndexName": "ShardKey"
+            }
+          ]
         },
-        {
-          "Column": "music_id",
-          "Name": "music_user_map",
-          "From": "music_id",
-          "To": "user_id",
-          "Owner": "music",
-          "IsAutoInc": false
+        "user_extra": {
+          "IndexColumns": [
+            {
+              "Column": "user_id",
+              "IndexName": "ShardKey"
+            }
+          ]
+        },
+        "music": {
+          "IndexColumns": [
+            {
+              "Column": "user_id",
+              "IndexName": "ShardKey"
+            },
+            {
+              "Column": "id",
+              "IndexName": "music_user_map"
+            }
+          ]
+        },
+        "music_extra": {
+          "IndexColumns": [
+            {
+              "Column": "user_id",
+              "IndexName": "ShardKey"
+            },
+            {
+              "Column": "music_id",
+              "IndexName": "music_user_map"
+            }
+          ]
         }
-      ]
+      }
     }
   }
 }
