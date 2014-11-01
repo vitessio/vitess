@@ -144,7 +144,6 @@ func (vtg *VTGate) ExecuteShard(context context.Context, query *proto.QueryShard
 		return ErrTooManyInFlight
 	}
 
-	_ = vtg.planner.GetPlan(query.Sql)
 	qr, err := vtg.resolver.Execute(
 		context,
 		query.Sql,
@@ -185,7 +184,6 @@ func (vtg *VTGate) ExecuteKeyspaceIds(context context.Context, query *proto.Keys
 		return ErrTooManyInFlight
 	}
 
-	_ = vtg.planner.GetPlan(query.Sql)
 	qr, err := vtg.resolver.ExecuteKeyspaceIds(context, query)
 	if err == nil {
 		reply.Result = qr
@@ -216,7 +214,6 @@ func (vtg *VTGate) ExecuteKeyRanges(context context.Context, query *proto.KeyRan
 		return ErrTooManyInFlight
 	}
 
-	_ = vtg.planner.GetPlan(query.Sql)
 	qr, err := vtg.resolver.ExecuteKeyRanges(context, query)
 	if err == nil {
 		reply.Result = qr
@@ -247,7 +244,6 @@ func (vtg *VTGate) ExecuteEntityIds(context context.Context, query *proto.Entity
 		return ErrTooManyInFlight
 	}
 
-	_ = vtg.planner.GetPlan(query.Sql)
 	qr, err := vtg.resolver.ExecuteEntityIds(context, query)
 	if err == nil {
 		reply.Result = qr
@@ -354,7 +350,6 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(context context.Context, query *prot
 		return ErrTooManyInFlight
 	}
 
-	_ = vtg.planner.GetPlan(query.Sql)
 	err = vtg.resolver.StreamExecuteKeyspaceIds(
 		context,
 		query,
@@ -395,7 +390,6 @@ func (vtg *VTGate) StreamExecuteKeyRanges(context context.Context, query *proto.
 		return ErrTooManyInFlight
 	}
 
-	_ = vtg.planner.GetPlan(query.Sql)
 	err = vtg.resolver.StreamExecuteKeyRanges(
 		context,
 		query,
@@ -432,7 +426,6 @@ func (vtg *VTGate) StreamExecuteShard(context context.Context, query *proto.Quer
 		return ErrTooManyInFlight
 	}
 
-	_ = vtg.planner.GetPlan(query.Sql)
 	err = vtg.resolver.StreamExecute(
 		context,
 		query.Sql,
