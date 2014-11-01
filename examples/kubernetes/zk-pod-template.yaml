@@ -13,7 +13,13 @@ desiredState:
             mountPath: /dev/log
           - name: vtdataroot
             mountPath: /vt/vtdataroot
-        command: [sh, "-c", "chown vitess /vt/vtdataroot && su -p -c \"/vt/bin/zkctl -follow -zk.myid {{zkid}} -zk.cfg {{zkcfg}} init\" vitess"] 
+        command:
+          - sh
+          - "-c"
+          - >-
+            mkdir -p $VTDATAROOT/tmp &&
+            chown -R vitess /vt &&
+            su -p -c "/vt/bin/zkctld -zk.myid {{zkid}} -zk.cfg {{zkcfg}} -log_dir $VTDATAROOT/tmp" vitess
     volumes:
       - name: syslog
         source: {hostDir: {path: /dev/log}}
