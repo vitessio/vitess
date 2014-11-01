@@ -8,7 +8,6 @@ import com.youtube.vitess.vtgate.BatchQuery.BatchQueryBuilder;
 import com.youtube.vitess.vtgate.BindVariable;
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.Exceptions.DatabaseException;
-import com.youtube.vitess.vtgate.Exceptions.IntegrityException;
 import com.youtube.vitess.vtgate.KeyRange;
 import com.youtube.vitess.vtgate.KeyspaceId;
 import com.youtube.vitess.vtgate.Query;
@@ -26,7 +25,6 @@ import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -56,8 +54,8 @@ public class VtGateIT {
   }
 
   @Before
-  public void truncateTable() throws Exception {
-    Util.truncateTable(testEnv);
+  public void createTable() throws Exception {
+    Util.createTable(testEnv);
   }
 
   /**

@@ -7,6 +7,7 @@ import com.youtube.vitess.vtgate.BindVariable;
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.Exceptions.DatabaseException;
 import com.youtube.vitess.vtgate.Exceptions.IntegrityException;
+import com.youtube.vitess.vtgate.KeyRange;
 import com.youtube.vitess.vtgate.KeyspaceId;
 import com.youtube.vitess.vtgate.Query;
 import com.youtube.vitess.vtgate.Query.QueryBuilder;
@@ -19,7 +20,10 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +31,7 @@ import java.util.Map;
 /**
  * Test failures and exceptions
  */
+@RunWith(JUnit4.class)
 public class FailuresIT {
   public static TestEnv testEnv = getTestEnv();
 
@@ -41,8 +46,8 @@ public class FailuresIT {
   }
 
   @Before
-  public void truncateTable() throws Exception {
-    Util.truncateTable(testEnv);
+  public void createTable() throws Exception {
+    Util.createTable(testEnv);
   }
 
   @Test
@@ -51,7 +56,7 @@ public class FailuresIT {
     String insertSql = "insert into vtgate_test(id, keyspace_id) values (:id, :keyspace_id)";
     KeyspaceId kid = testEnv.getAllKeyspaceIds().get(0);
     Query insertQuery = new QueryBuilder(insertSql, testEnv.keyspace, "master")
-        .addBindVar(BindVariable.forInt("id", 1))
+        .addBindVar(BindVariable.forULong("id", UnsignedLong.valueOf("1")))
         .addBindVar(BindVariable.forULong("keyspace_id", ((UnsignedLong) kid.getId())))
         .addKeyspaceId(kid).build();
     vtgate.begin();
@@ -87,6 +92,36 @@ public class FailuresIT {
     vtgate.execute(sleepQuery);
     vtgate.close();
   }
+
+  @Test
+  public void testTxPoolFull() throws Exception {
+    List<VtGate> vtgates = new ArrayList<>();
+    boolean failed = false;
+    try {
+      // Transaction cap is 20
+      for (int i = 0; i < 25; i++) {
+        VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+        vtgates.add(vtgate);
+        vtgate.begin();
+        // Run a query to actually begin a transaction with the tablets
+        Query query = new QueryBuilder("delete from vtgate_test", testEnv.keyspace, "master")
+            .addKeyRange(KeyRange.ALL).build();
+        vtgate.execute(query);
+      }
+    } catch (DatabaseException e) {
+      if (e.getMessage().contains("tx_pool_full")) {
+        failed = true;
+      }
+    } finally {
+      for (VtGate vtgate : vtgates) {
+        vtgate.close();
+      }
+    }
+    if (!failed) {
+      Assert.fail("failed to raise tx_pool_full exception");
+    }
+  }
+
 
   /**
    * Create env with two shards each having a master and replica

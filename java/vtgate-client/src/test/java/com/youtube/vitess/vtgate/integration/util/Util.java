@@ -109,11 +109,18 @@ public class Util {
     vtgate.close();
   }
 
-  public static void truncateTable(TestEnv testEnv) throws Exception {
+  public static void createTable(TestEnv testEnv) throws Exception {
     VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
     vtgate.begin();
-    vtgate.execute(new QueryBuilder("delete from vtgate_test", testEnv.keyspace, "master")
+    vtgate.execute(new QueryBuilder("drop table if exists vtgate_test", testEnv.keyspace, "master")
         .setKeyspaceIds(testEnv.getAllKeyspaceIds()).build());
+    String createTable = "create table vtgate_test (id bigint auto_increment,"
+        + " name varchar(64), age SMALLINT,  percent DECIMAL(5,2),"
+        + " keyspace_id bigint(20) unsigned NOT NULL, datetime_col DATETIME,"
+        + " timestamp_col TIMESTAMP,  date_col DATE, time_col TIME, primary key (id))"
+        + " Engine=InnoDB";
+    vtgate.execute(new QueryBuilder(createTable, testEnv.keyspace, "master").setKeyspaceIds(
+        testEnv.getAllKeyspaceIds()).build());
     vtgate.commit();
     vtgate.close();
   }

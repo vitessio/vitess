@@ -58,7 +58,7 @@ public class MapReduceIT extends HadoopTestCase {
   @Override
   public void setUp() throws Exception {
     super.setUp();
-    Util.truncateTable(testEnv);
+    Util.createTable(testEnv);
   }
 
   @Test
