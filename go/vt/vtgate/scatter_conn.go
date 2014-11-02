@@ -43,7 +43,7 @@ type ScatterConn struct {
 // return an error if any.
 // multiGo is capable of executing multiple shardActionFunc actions in parallel
 // and consolidating the results and errors for the caller.
-type shardActionFunc func(shardIndex int, conn *ShardConn, transactionId int64, sResults chan<- interface{}) error
+type shardActionFunc func(conn *ShardConn, transactionId int64, sResults chan<- interface{}) error
 
 // NewScatterConn creates a new ScatterConn. All input parameters are passed through
 // for creating the appropriate ShardConn.
@@ -126,7 +126,7 @@ func (stc *ScatterConn) Execute(
 		shards,
 		tabletType,
 		session,
-		func(shardIndex int, sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
+		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
 			innerqr, err := sdc.Execute(context, query, bindVars, transactionId)
 			if err != nil {
 				return err
@@ -153,23 +153,19 @@ func (stc *ScatterConn) ExecuteMulti(
 	context context.Context,
 	query string,
 	keyspace string,
-	shards []string,
-	bindVars []map[string]interface{},
+	shardVars map[string]map[string]interface{},
 	tabletType topo.TabletType,
 	session *SafeSession,
 ) (*mproto.QueryResult, error) {
-	if len(shards) != len(bindVars) {
-		panic("shards do not match supplied bind vars")
-	}
 	results, allErrors := stc.multiGo(
 		context,
 		"Execute",
 		keyspace,
-		shards,
+		getShards(shardVars),
 		tabletType,
 		session,
-		func(shardIndex int, sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
-			innerqr, err := sdc.Execute(context, query, bindVars[shardIndex], transactionId)
+		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
+			innerqr, err := sdc.Execute(context, query, shardVars[sdc.shard], transactionId)
 			if err != nil {
 				return err
 			}
@@ -204,7 +200,7 @@ func (stc *ScatterConn) ExecuteEntityIds(
 		shards,
 		tabletType,
 		session,
-		func(shardIndex int, sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
+		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
 			shard := sdc.shard
 			sql := sqls[shard]
 			bindVar := bindVars[shard]
@@ -243,7 +239,7 @@ func (stc *ScatterConn) ExecuteBatch(
 		shards,
 		tabletType,
 		session,
-		func(shardIndex int, sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
+		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
 			innerqrs, err := sdc.ExecuteBatch(context, queries, transactionId)
 			if err != nil {
 				return err
@@ -284,7 +280,7 @@ func (stc *ScatterConn) StreamExecute(
 		shards,
 		tabletType,
 		session,
-		func(shardIndex int, sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
+		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
 			sr, errFunc := sdc.StreamExecute(context, query, bindVars, transactionId)
 			if sr != nil {
 				for qr := range sr {
@@ -314,24 +310,20 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	context context.Context,
 	query string,
 	keyspace string,
-	shards []string,
-	bindVars []map[string]interface{},
+	shardVars map[string]map[string]interface{},
 	tabletType topo.TabletType,
 	session *SafeSession,
 	sendReply func(reply *mproto.QueryResult) error,
 ) error {
-	if len(shards) != len(bindVars) {
-		panic("shards do not match supplied bind vars")
-	}
 	results, allErrors := stc.multiGo(
 		context,
 		"StreamExecute",
 		keyspace,
-		shards,
+		getShards(shardVars),
 		tabletType,
 		session,
-		func(shardIndex int, sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
-			sr, errFunc := sdc.StreamExecute(context, query, bindVars[shardIndex], transactionId)
+		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
+			sr, errFunc := sdc.StreamExecute(context, query, shardVars[sdc.shard], transactionId)
 			if sr != nil {
 				for qr := range sr {
 					sResults <- qr
@@ -388,7 +380,7 @@ func (stc *ScatterConn) Rollback(context context.Context, session *SafeSession) 
 // appending that shard's keyrange to the splits. Aggregates all splits across
 // all shards in no specific order and returns.
 func (stc *ScatterConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitCount int, keyRangeByShard map[string]kproto.KeyRange, keyspace string) ([]proto.InputSplit, error) {
-	actionFunc := func(shardIndex int, sdc *ShardConn, transactionID int64, results chan<- interface{}) error {
+	actionFunc := func(sdc *ShardConn, transactionID int64, results chan<- interface{}) error {
 		// Get all splits from this shard
 		queries, err := sdc.SplitQuery(ctx, query, splitCount)
 		if err != nil {
@@ -491,9 +483,9 @@ func (stc *ScatterConn) multiGo(
 	allErrors = new(concurrency.AllErrorRecorder)
 	results := make(chan interface{}, len(shards))
 	var wg sync.WaitGroup
-	for shardIndex, shard := range shards {
+	for shard := range unique(shards) {
 		wg.Add(1)
-		go func(shardIndex int, shard string) {
+		go func(shard string) {
 			defer wg.Done()
 			startTime := time.Now()
 			defer stc.timings.Record([]string{name, keyspace, shard, string(tabletType)}, startTime)
@@ -504,12 +496,12 @@ func (stc *ScatterConn) multiGo(
 				allErrors.RecordError(err)
 				return
 			}
-			err = action(shardIndex, sdc, transactionId, results)
+			err = action(sdc, transactionId, results)
 			if err != nil {
 				allErrors.RecordError(err)
 				return
 			}
-		}(shardIndex, shard)
+		}(shard)
 	}
 	go func() {
 		wg.Wait()
@@ -573,6 +565,14 @@ func (stc *ScatterConn) updateSession(
 	return transactionId, nil
 }
 
+func getShards(shardVars map[string]map[string]interface{}) []string {
+	shards := make([]string, 0, len(shardVars))
+	for k := range shardVars {
+		shards = append(shards, k)
+	}
+	return shards
+}
+
 func appendResult(qr, innerqr *mproto.QueryResult) {
 	if innerqr.RowsAffected == 0 && len(innerqr.Fields) == 0 {
 		return
@@ -585,4 +585,12 @@ func appendResult(qr, innerqr *mproto.QueryResult) {
 		qr.InsertId = innerqr.InsertId
 	}
 	qr.Rows = append(qr.Rows, innerqr.Rows...)
+}
+
+func unique(in []string) map[string]struct{} {
+	out := make(map[string]struct{}, len(in))
+	for _, v := range in {
+		out[v] = struct{}{}
+	}
+	return out
 }

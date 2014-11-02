@@ -29,8 +29,11 @@ func TestScatterConnExecute(t *testing.T) {
 func TestScatterConnExecuteMulti(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnExecute", func(shards []string) (*mproto.QueryResult, error) {
 		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
-		bv := make([]map[string]interface{}, len(shards))
-		return stc.ExecuteMulti(&context.DummyContext{}, "query", "TestScatterConnExecute", shards, bv, "", nil)
+		shardVars := make(map[string]map[string]interface{})
+		for _, shard := range shards {
+			shardVars[shard] = nil
+		}
+		return stc.ExecuteMulti(&context.DummyContext{}, "query", "TestScatterConnExecute", shardVars, "", nil)
 	})
 }
 
@@ -62,8 +65,11 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnStreamExecute", func(shards []string) (*mproto.QueryResult, error) {
 		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
-		bv := make([]map[string]interface{}, len(shards))
-		err := stc.StreamExecuteMulti(&context.DummyContext{}, "query", "TestScatterConnStreamExecute", shards, bv, "", nil, func(r *mproto.QueryResult) error {
+		shardVars := make(map[string]map[string]interface{})
+		for _, shard := range shards {
+			shardVars[shard] = nil
+		}
+		err := stc.StreamExecuteMulti(&context.DummyContext{}, "query", "TestScatterConnStreamExecute", shardVars, "", nil, func(r *mproto.QueryResult) error {
 			appendResult(qr, r)
 			return nil
 		})
@@ -124,8 +130,8 @@ func testScatterConnGeneric(t *testing.T, name string, f func(shards []string) (
 	s.MapTestConn("0", sbc)
 	qr, err = f([]string{"0", "0"})
 	// Ensure that we executed only once.
-	if sbc.ExecCount != 2 {
-		t.Errorf("want 2, got %v", sbc.ExecCount)
+	if sbc.ExecCount != 1 {
+		t.Errorf("want 1, got %v", sbc.ExecCount)
 	}
 
 	// no errors
@@ -159,16 +165,15 @@ func TestMultiExecs(t *testing.T) {
 	sbc1 := &sandboxConn{}
 	s.MapTestConn("1", sbc1)
 	stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
-	shards := []string{"0", "1"}
-	bv := []map[string]interface{}{
-		map[string]interface{}{
+	shardVars := map[string]map[string]interface{}{
+		"0": map[string]interface{}{
 			"bv0": 0,
 		},
-		map[string]interface{}{
+		"1": map[string]interface{}{
 			"bv1": 1,
 		},
 	}
-	_, _ = stc.ExecuteMulti(&context.DummyContext{}, "query", "TestMultiExecs", shards, bv, "", nil)
+	_, _ = stc.ExecuteMulti(&context.DummyContext{}, "query", "TestMultiExecs", shardVars, "", nil)
 	if sbc0.BindVars[0] != "bv0" {
 		t.Errorf("got %s, want bv0", sbc0.BindVars[0])
 	}
@@ -177,7 +182,7 @@ func TestMultiExecs(t *testing.T) {
 	}
 	sbc0.BindVars = nil
 	sbc1.BindVars = nil
-	_ = stc.StreamExecuteMulti(&context.DummyContext{}, "query", "TestMultiExecs", shards, bv, "", nil, func(*mproto.QueryResult) error {
+	_ = stc.StreamExecuteMulti(&context.DummyContext{}, "query", "TestMultiExecs", shardVars, "", nil, func(*mproto.QueryResult) error {
 		return nil
 	})
 	if sbc0.BindVars[0] != "bv0" {
