@@ -3,11 +3,13 @@
     "user": {
       "ShardingScheme": 1,
       "Indexes": {
-        "ShardKey": {
+        "user_index": {
+          "Type": 0,
           "Owner": "user",
           "IsAutoInc": true
         },
         "music_user_map": {
+          "Type": 1,
           "From": "music_id",
           "To": "user_id",
           "Owner": "music",
@@ -19,7 +21,7 @@
           "IndexColumns": [
             {
               "Column": "id",
-              "IndexName": "ShardKey"
+              "IndexName": "user_index"
             }
           ]
         },
@@ -27,7 +29,7 @@
           "IndexColumns": [
             {
               "Column": "user_id",
-              "IndexName": "ShardKey"
+              "IndexName": "user_index"
             }
           ]
         },
@@ -35,7 +37,7 @@
           "IndexColumns": [
             {
               "Column": "user_id",
-              "IndexName": "ShardKey"
+              "IndexName": "user_index"
             },
             {
               "Column": "id",
@@ -47,7 +49,7 @@
           "IndexColumns": [
             {
               "Column": "user_id",
-              "IndexName": "ShardKey"
+              "IndexName": "user_index"
             },
             {
               "Column": "music_id",

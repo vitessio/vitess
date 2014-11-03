@@ -29,8 +29,9 @@
   "TableName": "user",
   "Query": "select * from user where id = 1",
   "Index": {
+    "Type": 0,
     "Column": "id",
-    "Name": "ShardKey",
+    "Name": "user_index",
     "From": "",
     "To": "",
     "Owner": "user",
@@ -47,8 +48,9 @@
   "TableName": "user",
   "Query": "select * from user where id = :id",
   "Index": {
+    "Type": 0,
     "Column": "id",
-    "Name": "ShardKey",
+    "Name": "user_index",
     "From": "",
     "To": "",
     "Owner": "user",
@@ -65,8 +67,9 @@
   "TableName": "user",
   "Query": "select * from user where id in ::_vals",
   "Index": {
+    "Type": 0,
     "Column": "id",
-    "Name": "ShardKey",
+    "Name": "user_index",
     "From": "",
     "To": "",
     "Owner": "user",
@@ -97,8 +100,9 @@
   "TableName": "user_extra",
   "Query": "select * from user_extra where user_id = 1",
   "Index": {
+    "Type": 0,
     "Column": "user_id",
-    "Name": "ShardKey",
+    "Name": "user_index",
     "From": "",
     "To": "",
     "Owner": "user",
@@ -115,8 +119,9 @@
   "TableName": "music",
   "Query": "select * from music where user_id = 1",
   "Index": {
+    "Type": 0,
     "Column": "user_id",
-    "Name": "ShardKey",
+    "Name": "user_index",
     "From": "",
     "To": "",
     "Owner": "user",
@@ -133,6 +138,7 @@
   "TableName": "music",
   "Query": "select * from music where id = 1",
   "Index": {
+    "Type": 1,
     "Column": "id",
     "Name": "music_user_map",
     "From": "music_id",
@@ -151,6 +157,7 @@
   "TableName": "music",
   "Query": "select * from music where id in ::_vals",
   "Index": {
+    "Type": 1,
     "Column": "id",
     "Name": "music_user_map",
     "From": "music_id",
@@ -172,6 +179,7 @@
   "TableName": "music",
   "Query": "select * from music where id in ::_vals",
   "Index": {
+    "Type": 1,
     "Column": "id",
     "Name": "music_user_map",
     "From": "music_id",
@@ -193,6 +201,7 @@
   "TableName": "music",
   "Query": "select * from music where id in ::_vals",
   "Index": {
+    "Type": 1,
     "Column": "id",
     "Name": "music_user_map",
     "From": "music_id",
@@ -211,6 +220,7 @@
   "TableName": "music_extra",
   "Query": "select * from music_extra where music_id = 1",
   "Index": {
+    "Type": 1,
     "Column": "music_id",
     "Name": "music_user_map",
     "From": "music_id",
@@ -240,8 +250,9 @@
   "TableName": "user",
   "Query": "select * from user where id = 1 and (var = 2 or var = 3)",
   "Index": {
+    "Type": 0,
     "Column": "id",
-    "Name": "ShardKey",
+    "Name": "user_index",
     "From": "",
     "To": "",
     "Owner": "user",
@@ -269,8 +280,9 @@
   "TableName": "user",
   "Query": "select * from user where (var = 2 or var = 3) and id = 1",
   "Index": {
+    "Type": 0,
     "Column": "id",
-    "Name": "ShardKey",
+    "Name": "user_index",
     "From": "",
     "To": "",
     "Owner": "user",
@@ -298,8 +310,9 @@
   "TableName": "user",
   "Query": "select fun(*) from user where id in ::_vals",
   "Index": {
+    "Type": 0,
     "Column": "id",
-    "Name": "ShardKey",
+    "Name": "user_index",
     "From": "",
     "To": "",
     "Owner": "user",
