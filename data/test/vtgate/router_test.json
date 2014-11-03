@@ -1,0 +1,63 @@
+{
+  "Keyspaces": {
+    "TestRouter": {
+      "ShardingScheme": 1,
+      "Indexes": {
+        "user_index": {
+          "Type": 0,
+          "Owner": "user",
+          "IsAutoInc": true
+        },
+        "music_user_map": {
+          "Type": 1,
+          "From": "music_id",
+          "To": "user_id",
+          "Owner": "music",
+          "IsAutoInc": true
+        }
+      },
+      "Tables": {
+        "user": {
+          "IndexColumns": [
+            {
+              "Column": "id",
+              "IndexName": "user_index"
+            }
+          ]
+        },
+        "user_extra": {
+          "IndexColumns": [
+            {
+              "Column": "user_id",
+              "IndexName": "user_index"
+            }
+          ]
+        },
+        "music": {
+          "IndexColumns": [
+            {
+              "Column": "user_id",
+              "IndexName": "user_index"
+            },
+            {
+              "Column": "id",
+              "IndexName": "music_user_map"
+            }
+          ]
+        },
+        "music_extra": {
+          "IndexColumns": [
+            {
+              "Column": "user_id",
+              "IndexName": "user_index"
+            },
+            {
+              "Column": "music_id",
+              "IndexName": "music_user_map"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

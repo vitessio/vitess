@@ -21,17 +21,18 @@ var noPlan = &planbuilder.Plan{
 }
 
 type Planner struct {
-	plans  *cache.LRUCache
 	schema *planbuilder.VTGateSchema
+	plans  *cache.LRUCache
 }
 
-func NewPlanner(cacheSize int, schema *planbuilder.VTGateSchema) *Planner {
+func NewPlanner(schema *planbuilder.VTGateSchema, cacheSize int) *Planner {
 	plr := &Planner{
-		plans:  cache.NewLRUCache(int64(cacheSize)),
 		schema: schema,
+		plans:  cache.NewLRUCache(int64(cacheSize)),
 	}
-	http.Handle("/debug/query_plans", plr)
-	http.Handle("/debug/schema", plr)
+	// TODO(sougou): Uncomment after making Planner testable.
+	//http.Handle("/debug/query_plans", plr)
+	//http.Handle("/debug/schema", plr)
 	return plr
 }
 

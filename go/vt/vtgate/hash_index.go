@@ -17,24 +17,24 @@ import (
 
 type HashIndex struct {
 	keyspace string
-	toposerv SrvTopoServer
+	serv     SrvTopoServer
 	cell     string
 }
 
 func NewHashIndex(keyspace string, serv SrvTopoServer, cell string) *HashIndex {
 	return &HashIndex{
 		keyspace: keyspace,
-		toposerv: serv,
+		serv:     serv,
 		cell:     cell,
 	}
 }
 
-func (hindex *HashIndex) Resolve(tabletType topo.TabletType, shardKeys []interface{}) (newKeyspace string, keysByShard map[string][]interface{}, err error) {
-	newKeyspace, allShards, err := getKeyspaceShards(hindex.toposerv, hindex.cell, hindex.keyspace, tabletType)
+func (hindex *HashIndex) Resolve(tabletType topo.TabletType, shardKeys []interface{}) (newKeyspace string, shards []string, err error) {
+	newKeyspace, allShards, err := getKeyspaceShards(hindex.serv, hindex.cell, hindex.keyspace, tabletType)
 	if err != nil {
 		return "", nil, err
 	}
-	keysByShard = make(map[string][]interface{})
+	shards = make([]string, 0, len(shardKeys))
 	for _, shardKey := range shardKeys {
 		num, err := getNumber(shardKey)
 		if err != nil {
@@ -44,9 +44,9 @@ func (hindex *HashIndex) Resolve(tabletType topo.TabletType, shardKeys []interfa
 		if err != nil {
 			return "", nil, err
 		}
-		keysByShard[shard] = append(keysByShard[shard], shardKey)
+		shards = append(shards, shard)
 	}
-	return newKeyspace, keysByShard, nil
+	return newKeyspace, shards, nil
 }
 
 func getNumber(v interface{}) (uint64, error) {

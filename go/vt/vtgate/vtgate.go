@@ -49,8 +49,8 @@ var (
 // VTGate is the rpc interface to vtgate. Only one instance
 // can be created.
 type VTGate struct {
-	planner  *Planner
 	resolver *Resolver
+	router   *Router
 	timings  *stats.MultiTimings
 
 	maxInFlight int64
@@ -78,7 +78,6 @@ func Init(serv SrvTopoServer, schema *planbuilder.VTGateSchema, cell string, ret
 		log.Fatalf("VTGate already initialized")
 	}
 	RpcVTGate = &VTGate{
-		planner:  NewPlanner(5000, schema),
 		resolver: NewResolver(serv, "VttabletCall", cell, retryDelay, retryCount, timeout),
 		timings:  stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
 
@@ -95,6 +94,7 @@ func Init(serv SrvTopoServer, schema *planbuilder.VTGateSchema, cell string, ret
 		logStreamExecuteKeyRanges:   logutil.NewThrottledLogger("StreamExecuteKeyRanges", 5*time.Second),
 		logStreamExecuteShard:       logutil.NewThrottledLogger("StreamExecuteShard", 5*time.Second),
 	}
+	RpcVTGate.router = NewRouter(serv, cell, schema, "VTGateRouter", RpcVTGate.resolver.scatterConn)
 	if schema != nil {
 	}
 	normalErrors = stats.NewMultiCounters("VtgateApiErrorCounts", []string{"Operation", "Keyspace", "DbType"})
@@ -127,6 +127,37 @@ func (vtg *VTGate) InitializeConnections(ctx context.Context) (err error) {
 		return err
 	}
 	log.Infof("Initialize VTTablet connections completed")
+	return nil
+}
+
+// Execute executes a non-streaming query by routing based on the values in the query.
+func (vtg *VTGate) Execute(context context.Context, query *proto.Query, reply *proto.QueryResult) (err error) {
+	defer handlePanic(&err)
+
+	startTime := time.Now()
+	// TODO(sougou): need to supply keyspace here.
+	statsKey := []string{"ExecuteShard", "", string(query.TabletType)}
+	defer vtg.timings.Record(statsKey, startTime)
+
+	x := vtg.inFlight.Add(1)
+	defer vtg.inFlight.Add(-1)
+	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
+		return ErrTooManyInFlight
+	}
+
+	qr, err := vtg.router.Execute(context, query)
+	if err == nil {
+		reply.Result = qr
+	} else {
+		reply.Error = err.Error()
+		if strings.Contains(reply.Error, errDupKey) {
+			infoErrors.Add("DupKey", 1)
+		} else {
+			normalErrors.Add(statsKey, 1)
+			vtg.logExecuteShard.Errorf("%v, query: %+v", err, query)
+		}
+	}
+	reply.Session = query.Session
 	return nil
 }
 
