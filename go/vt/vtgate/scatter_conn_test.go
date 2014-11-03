@@ -26,6 +26,17 @@ func TestScatterConnExecute(t *testing.T) {
 	})
 }
 
+func TestScatterConnExecuteMulti(t *testing.T) {
+	testScatterConnGeneric(t, "TestScatterConnExecute", func(shards []string) (*mproto.QueryResult, error) {
+		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
+		shardVars := make(map[string]map[string]interface{})
+		for _, shard := range shards {
+			shardVars[shard] = nil
+		}
+		return stc.ExecuteMulti(&context.DummyContext{}, "query", "TestScatterConnExecute", shardVars, "", nil)
+	})
+}
+
 func TestScatterConnExecuteBatch(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnExecuteBatch", func(shards []string) (*mproto.QueryResult, error) {
 		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
@@ -43,6 +54,22 @@ func TestScatterConnStreamExecute(t *testing.T) {
 		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
 		err := stc.StreamExecute(&context.DummyContext{}, "query", nil, "TestScatterConnStreamExecute", shards, "", nil, func(r *mproto.QueryResult) error {
+			appendResult(qr, r)
+			return nil
+		})
+		return qr, err
+	})
+}
+
+func TestScatterConnStreamExecuteMulti(t *testing.T) {
+	testScatterConnGeneric(t, "TestScatterConnStreamExecute", func(shards []string) (*mproto.QueryResult, error) {
+		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
+		qr := new(mproto.QueryResult)
+		shardVars := make(map[string]map[string]interface{})
+		for _, shard := range shards {
+			shardVars[shard] = nil
+		}
+		err := stc.StreamExecuteMulti(&context.DummyContext{}, "query", "TestScatterConnStreamExecute", shardVars, "", nil, func(r *mproto.QueryResult) error {
 			appendResult(qr, r)
 			return nil
 		})
@@ -131,6 +158,41 @@ func testScatterConnGeneric(t *testing.T, name string, f func(shards []string) (
 	}
 }
 
+func TestMultiExecs(t *testing.T) {
+	s := createSandbox("TestMultiExecs")
+	sbc0 := &sandboxConn{}
+	s.MapTestConn("0", sbc0)
+	sbc1 := &sandboxConn{}
+	s.MapTestConn("1", sbc1)
+	stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
+	shardVars := map[string]map[string]interface{}{
+		"0": map[string]interface{}{
+			"bv0": 0,
+		},
+		"1": map[string]interface{}{
+			"bv1": 1,
+		},
+	}
+	_, _ = stc.ExecuteMulti(&context.DummyContext{}, "query", "TestMultiExecs", shardVars, "", nil)
+	if sbc0.BindVars[0] != "bv0" {
+		t.Errorf("got %s, want bv0", sbc0.BindVars[0])
+	}
+	if sbc1.BindVars[0] != "bv1" {
+		t.Errorf("got %s, want bv0", sbc1.BindVars[0])
+	}
+	sbc0.BindVars = nil
+	sbc1.BindVars = nil
+	_ = stc.StreamExecuteMulti(&context.DummyContext{}, "query", "TestMultiExecs", shardVars, "", nil, func(*mproto.QueryResult) error {
+		return nil
+	})
+	if sbc0.BindVars[0] != "bv0" {
+		t.Errorf("got %s, want bv0", sbc0.BindVars[0])
+	}
+	if sbc1.BindVars[0] != "bv1" {
+		t.Errorf("got %s, want bv0", sbc1.BindVars[0])
+	}
+}
+
 func TestScatterConnStreamExecuteSendError(t *testing.T) {
 	s := createSandbox("TestScatterConnStreamExecuteSendError")
 	sbc := &sandboxConn{}
@@ -199,13 +261,9 @@ func TestScatterConnCommitSuccess(t *testing.T) {
 	if sbc0.CommitCount != 1 {
 		t.Errorf("want 1, got %d", sbc0.CommitCount)
 	}
-	/*
-		// Flaky: This test should be run manually.
-		runtime.Gosched()
-		if sbc1.RollbackCount != 1 {
-			t.Errorf("want 1, got %d", sbc1.RollbackCount)
-		}
-	*/
+	if sbc1.RollbackCount != 1 {
+		t.Errorf("want 1, got %d", sbc1.RollbackCount)
+	}
 }
 
 func TestScatterConnRollback(t *testing.T) {
@@ -228,16 +286,12 @@ func TestScatterConnRollback(t *testing.T) {
 	if !reflect.DeepEqual(wantSession, *session.Session) {
 		t.Errorf("want\n%#v, got\n%#v", wantSession, *session.Session)
 	}
-	/*
-		// Flaky: This test should be run manually.
-		runtime.Gosched()
-		if sbc0.RollbackCount != 1 {
-			t.Errorf("want 1, got %d", sbc0.RollbackCount)
-		}
-		if sbc1.RollbackCount != 1 {
-			t.Errorf("want 1, got %d", sbc1.RollbackCount)
-		}
-	*/
+	if sbc0.RollbackCount != 1 {
+		t.Errorf("want 1, got %d", sbc0.RollbackCount)
+	}
+	if sbc1.RollbackCount != 1 {
+		t.Errorf("want 1, got %d", sbc1.RollbackCount)
+	}
 }
 
 func TestScatterConnClose(t *testing.T) {
@@ -247,13 +301,9 @@ func TestScatterConnClose(t *testing.T) {
 	stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
 	stc.Execute(&context.DummyContext{}, "query1", nil, "TestScatterConnClose", []string{"0"}, "", nil)
 	stc.Close()
-	/*
-		// Flaky: This test should be run manually.
-		runtime.Gosched()
-		if sbc.CloseCount != 1 {
-			t.Errorf("want 1, got %d", sbc.CloseCount)
-		}
-	*/
+	if sbc.CloseCount != 1 {
+		t.Errorf("want 1, got %d", sbc.CloseCount)
+	}
 }
 
 func TestAppendResult(t *testing.T) {

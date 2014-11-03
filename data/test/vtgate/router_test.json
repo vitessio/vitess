@@ -1,6 +1,6 @@
 {
   "Keyspaces": {
-    "user": {
+    "TestRouter": {
       "ShardingScheme": 1,
       "Indexes": {
         "user_index": {

@@ -37,6 +37,14 @@ func (shardSession *ShardSession) String() string {
 	return fmt.Sprintf("Keyspace: %v, Shard: %v, TabletType: %v, TransactionId: %v", shardSession.Keyspace, shardSession.Shard, shardSession.TabletType, shardSession.TransactionId)
 }
 
+// Query represents a keyspace agnostic query request.
+type Query struct {
+	Sql           string
+	BindVariables map[string]interface{}
+	TabletType    topo.TabletType
+	Session       *Session
+}
+
 // QueryShard represents a query request for the
 // specified list of shards.
 type QueryShard struct {

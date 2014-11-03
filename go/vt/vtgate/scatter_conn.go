@@ -146,6 +146,44 @@ func (stc *ScatterConn) Execute(
 	return qr, nil
 }
 
+// ExecuteMulti is like Execute,
+// but each shard gets its own bindVars. If len(shards) is not equal to
+// len(bindVars), the function panics.
+func (stc *ScatterConn) ExecuteMulti(
+	context context.Context,
+	query string,
+	keyspace string,
+	shardVars map[string]map[string]interface{},
+	tabletType topo.TabletType,
+	session *SafeSession,
+) (*mproto.QueryResult, error) {
+	results, allErrors := stc.multiGo(
+		context,
+		"Execute",
+		keyspace,
+		getShards(shardVars),
+		tabletType,
+		session,
+		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
+			innerqr, err := sdc.Execute(context, query, shardVars[sdc.shard], transactionId)
+			if err != nil {
+				return err
+			}
+			sResults <- innerqr
+			return nil
+		})
+
+	qr := new(mproto.QueryResult)
+	for innerqr := range results {
+		innerqr := innerqr.(*mproto.QueryResult)
+		appendResult(qr, innerqr)
+	}
+	if allErrors.HasErrors() {
+		return nil, allErrors.AggrError(stc.aggregateErrors)
+	}
+	return qr, nil
+}
+
 func (stc *ScatterConn) ExecuteEntityIds(
 	context context.Context,
 	shards []string,
@@ -265,44 +303,74 @@ func (stc *ScatterConn) StreamExecute(
 	return allErrors.AggrError(stc.aggregateErrors)
 }
 
+// StreamExecuteMulti is like StreamExecute,
+// but each shard gets its own bindVars. If len(shards) is not equal to
+// len(bindVars), the function panics.
+func (stc *ScatterConn) StreamExecuteMulti(
+	context context.Context,
+	query string,
+	keyspace string,
+	shardVars map[string]map[string]interface{},
+	tabletType topo.TabletType,
+	session *SafeSession,
+	sendReply func(reply *mproto.QueryResult) error,
+) error {
+	results, allErrors := stc.multiGo(
+		context,
+		"StreamExecute",
+		keyspace,
+		getShards(shardVars),
+		tabletType,
+		session,
+		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
+			sr, errFunc := sdc.StreamExecute(context, query, shardVars[sdc.shard], transactionId)
+			if sr != nil {
+				for qr := range sr {
+					sResults <- qr
+				}
+			}
+			return errFunc()
+		})
+	var replyErr error
+	for innerqr := range results {
+		// We still need to finish pumping
+		if replyErr != nil {
+			continue
+		}
+		replyErr = sendReply(innerqr.(*mproto.QueryResult))
+	}
+	if replyErr != nil {
+		allErrors.RecordError(replyErr)
+	}
+	return allErrors.AggrError(stc.aggregateErrors)
+}
+
 // Commit commits the current transaction. There are no retries on this operation.
 func (stc *ScatterConn) Commit(context context.Context, session *SafeSession) (err error) {
 	if !session.InTransaction() {
 		return fmt.Errorf("cannot commit: not in transaction")
 	}
-	var wg sync.WaitGroup
 	committing := true
 	for _, shardSession := range session.ShardSessions {
 		sdc := stc.getConnection(context, shardSession.Keyspace, shardSession.Shard, shardSession.TabletType)
 		if !committing {
-			wg.Add(1)
-			go func(transID int64) {
-				defer wg.Done()
-				sdc.Rollback(context, transID)
-			}(shardSession.TransactionId)
+			sdc.Rollback(context, shardSession.TransactionId)
 			continue
 		}
 		if err = sdc.Commit(context, shardSession.TransactionId); err != nil {
 			committing = false
 		}
 	}
-	wg.Wait()
 	session.Reset()
 	return err
 }
 
 // Rollback rolls back the current transaction. There are no retries on this operation.
 func (stc *ScatterConn) Rollback(context context.Context, session *SafeSession) (err error) {
-	var wg sync.WaitGroup
 	for _, shardSession := range session.ShardSessions {
 		sdc := stc.getConnection(context, shardSession.Keyspace, shardSession.Shard, shardSession.TabletType)
-		wg.Add(1)
-		go func(transID int64) {
-			defer wg.Done()
-			sdc.Rollback(context, transID)
-		}(shardSession.TransactionId)
+		sdc.Rollback(context, shardSession.TransactionId)
 	}
-	wg.Wait()
 	session.Reset()
 	return nil
 }
@@ -361,7 +429,7 @@ func (stc *ScatterConn) Close() error {
 	stc.mu.Lock()
 	defer stc.mu.Unlock()
 	for _, v := range stc.shardConns {
-		go v.Close()
+		v.Close()
 	}
 	stc.shardConns = make(map[string]*ShardConn)
 	return nil
@@ -415,14 +483,24 @@ func (stc *ScatterConn) multiGo(
 	allErrors = new(concurrency.AllErrorRecorder)
 	results := make(chan interface{}, len(shards))
 	var wg sync.WaitGroup
-	// We need the shards to be unique.
 	for shard := range unique(shards) {
 		wg.Add(1)
 		go func(shard string) {
 			defer wg.Done()
 			startTime := time.Now()
 			defer stc.timings.Record([]string{name, keyspace, shard, string(tabletType)}, startTime)
-			stc.execShardAction(context, keyspace, shard, tabletType, session, action, allErrors, results)
+
+			sdc := stc.getConnection(context, keyspace, shard, tabletType)
+			transactionId, err := stc.updateSession(context, sdc, keyspace, shard, tabletType, session)
+			if err != nil {
+				allErrors.RecordError(err)
+				return
+			}
+			err = action(sdc, transactionId, results)
+			if err != nil {
+				allErrors.RecordError(err)
+				return
+			}
 		}(shard)
 	}
 	go func() {
@@ -441,36 +519,6 @@ func (stc *ScatterConn) multiGo(
 		close(results)
 	}()
 	return results, allErrors
-}
-
-// execShardAction executes the action on a particular shard.
-// If the action fails, it determines whether the keyspace/shard
-// have moved, re-resolves the topology and tries again, if it is
-// not executing a transaction.
-func (stc *ScatterConn) execShardAction(
-	context context.Context,
-	keyspace string,
-	shard string,
-	tabletType topo.TabletType,
-	session *SafeSession,
-	action shardActionFunc,
-	allErrors *concurrency.AllErrorRecorder,
-	results chan interface{},
-) {
-	for {
-		sdc := stc.getConnection(context, keyspace, shard, tabletType)
-		transactionId, err := stc.updateSession(context, sdc, keyspace, shard, tabletType, session)
-		if err != nil {
-			allErrors.RecordError(err)
-			return
-		}
-		err = action(sdc, transactionId, results)
-		if err != nil {
-			allErrors.RecordError(err)
-			return
-		}
-		break
-	}
 }
 
 func (stc *ScatterConn) getConnection(context context.Context, keyspace, shard string, tabletType topo.TabletType) *ShardConn {
@@ -515,6 +563,14 @@ func (stc *ScatterConn) updateSession(
 		TransactionId: transactionId,
 	})
 	return transactionId, nil
+}
+
+func getShards(shardVars map[string]map[string]interface{}) []string {
+	shards := make([]string, 0, len(shardVars))
+	for k := range shardVars {
+		shards = append(shards, k)
+	}
+	return shards
 }
 
 func appendResult(qr, innerqr *mproto.QueryResult) {

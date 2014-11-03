@@ -4,9 +4,10 @@
 
 package planbuilder
 
-const (
-	ShardKey = iota
-	Lookup
+import (
+	"fmt"
+
+	"github.com/youtube/vitess/go/jscfg"
 )
 
 const (
@@ -14,16 +15,77 @@ const (
 	HashSharded
 )
 
+const (
+	ShardKey = iota
+	Lookup
+)
+
 type VTGateSchema struct {
 	Tables map[string]*VTGateTable
 }
 
+func BuildSchema(source *VTGateSchemaNormalized) (schema *VTGateSchema, err error) {
+	allindexes := make(map[string]string)
+	schema = &VTGateSchema{Tables: make(map[string]*VTGateTable)}
+	for ksname, ks := range source.Keyspaces {
+		keyspace := &VTGateKeyspace{
+			Name:           ksname,
+			ShardingScheme: ks.ShardingScheme,
+		}
+		for tname, table := range ks.Tables {
+			if _, ok := schema.Tables[tname]; ok {
+				return nil, fmt.Errorf("table %s has multiple definitions", tname)
+			}
+			t := &VTGateTable{
+				Keyspace: keyspace,
+				Indexes:  make([]*VTGateIndex, 0, len(table.IndexColumns)),
+			}
+			for i, ind := range table.IndexColumns {
+				idx, ok := ks.Indexes[ind.IndexName]
+				if !ok {
+					return nil, fmt.Errorf("index %s not found for table %s", ind.IndexName, tname)
+				}
+				if i == 0 && idx.Type != ShardKey {
+					return nil, fmt.Errorf("first index is not ShardKey for table %s", tname)
+				}
+				switch prevks := allindexes[ind.IndexName]; prevks {
+				case "":
+					allindexes[ind.IndexName] = ksname
+				case ksname:
+					// We're good.
+				default:
+					return nil, fmt.Errorf("index %s used in more than one keyspace: %s %s", ind.IndexName, prevks, ksname)
+				}
+				t.Indexes = append(t.Indexes, &VTGateIndex{
+					Type:      idx.Type,
+					Column:    ind.Column,
+					Name:      ind.IndexName,
+					From:      idx.From,
+					To:        idx.To,
+					Owner:     idx.Owner,
+					IsAutoInc: idx.IsAutoInc,
+				})
+			}
+			schema.Tables[tname] = t
+		}
+	}
+	return schema, nil
+}
+
 type VTGateTable struct {
-	Keyspace *Keyspace
+	Keyspace *VTGateKeyspace
 	Indexes  []*VTGateIndex
 }
 
+type VTGateKeyspace struct {
+	Name string
+	// ShardingScheme is Unsharded or HashSharded.
+	ShardingScheme int
+}
+
 type VTGateIndex struct {
+	// Type is ShardKey or Lookup.
+	Type      int
 	Column    string
 	Name      string
 	From, To  string
@@ -31,17 +93,12 @@ type VTGateIndex struct {
 	IsAutoInc bool
 }
 
-type Keyspace struct {
-	Name           string
-	ShardingScheme int
-	Lookupdb       string
-}
-
-type VTGateSchemaMetadata struct {
+type VTGateSchemaNormalized struct {
 	Keyspaces map[string]struct {
 		ShardingScheme int
-		Lookupdb       string
 		Indexes        map[string]struct {
+			// Type is ShardKey or Lookup.
+			Type      int
 			From, To  string
 			Owner     string
 			IsAutoInc bool
@@ -55,53 +112,10 @@ type VTGateSchemaMetadata struct {
 	}
 }
 
-/*
-var user = &Keyspace{
-	Name:           "user",
-	ShardingScheme: HashSharded,
+func LoadSchemaJSON(filename string) (schema *VTGateSchema, err error) {
+	var source VTGateSchemaNormalized
+	if err := jscfg.ReadJson(filename, &source); err != nil {
+		return nil, err
+	}
+	return BuildSchema(&source)
 }
-
-var musicUserLookup = &VTGateLookup{
-	Name: "music_user_map",
-	From: "music_id",
-	To:   "user_id",
-}
-
-var vtgateSchema = &VTGateSchema{
-	Table: map[string]*VTGateTable{
-		"user": {
-			Keyspace:      user,
-			Indexes: []*VTGateIndex{{
-				Type:   ShardKey,
-				Column: "id",
-			}},
-		},
-		"user_extra": {
-			Keyspace:      user,
-			Indexes: []*VTGateIndex{{
-				Type:   ShardKey,
-				Column: "user_id",
-			}},
-		},
-		"music": {
-			Keyspace:      user,
-			Indexes: []*VTGateIndex{{
-				Type:   ShardKey,
-				Column: "user_id",
-			}, {
-				Type:   Lookup,
-				Column: "id",
-				Lookup: musicUserLookup,
-			}},
-		},
-		"music_extra": {
-			Keyspace:      user,
-			Indexes: []*VTGateIndex{{
-				Type:   Lookup,
-				Column: "music_id",
-				Lookup: musicUserLookup,
-			}},
-		},
-	},
-}
-*/

@@ -20,7 +20,10 @@ import (
 )
 
 func TestPlan(t *testing.T) {
-	schema := loadSchema("schema_test.json")
+	schema, err := LoadSchemaJSON(locateFile("schema_test.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	testFile(t, "select_cases.txt", schema)
 	testFile(t, "dml_cases.txt", schema)
 	testFile(t, "insert_cases.txt", schema)

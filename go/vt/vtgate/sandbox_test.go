@@ -317,6 +317,9 @@ type sandboxConn struct {
 	RollbackCount sync2.AtomicInt64
 	CloseCount    sync2.AtomicInt64
 
+	// BindVars keeps track of the bind vars that were sent.
+	BindVars []string
+
 	// transaction id generator
 	TransactionId sync2.AtomicInt64
 }
@@ -354,6 +357,9 @@ func (sbc *sandboxConn) getError() error {
 
 func (sbc *sandboxConn) Execute(context context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
 	sbc.ExecCount.Add(1)
+	for k, _ := range bindVars {
+		sbc.BindVars = append(sbc.BindVars, k)
+	}
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
@@ -381,6 +387,9 @@ func (sbc *sandboxConn) ExecuteBatch(context context.Context, queries []tproto.B
 
 func (sbc *sandboxConn) StreamExecute(context context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
 	sbc.ExecCount.Add(1)
+	for k, _ := range bindVars {
+		sbc.BindVars = append(sbc.BindVars, k)
+	}
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}

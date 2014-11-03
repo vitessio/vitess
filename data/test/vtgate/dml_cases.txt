@@ -28,8 +28,9 @@
   "TableName": "user",
   "Query": "update user set val = 1 where id = 1",
   "Index": {
+    "Type": 0,
     "Column": "id",
-    "Name": "ShardKey",
+    "Name": "user_index",
     "From": "",
     "To": "",
     "Owner": "user",
@@ -46,8 +47,9 @@
   "TableName": "user",
   "Query": "delete from user where id = 1",
   "Index": {
+    "Type": 0,
     "Column": "id",
-    "Name": "ShardKey",
+    "Name": "user_index",
     "From": "",
     "To": "",
     "Owner": "user",
@@ -108,12 +110,13 @@
   "TableName": "music",
   "Query": "update music set val = 1 where id = 1",
   "Index": {
+    "Type": 1,
     "Column": "id",
     "Name": "music_user_map",
     "From": "music_id",
     "To": "user_id",
     "Owner": "music",
-    "IsAutoInc": false
+    "IsAutoInc": true
   },
   "Values": 1
 }
@@ -126,12 +129,13 @@
   "TableName": "music",
   "Query": "delete from music where id = 1",
   "Index": {
+    "Type": 1,
     "Column": "id",
     "Name": "music_user_map",
     "From": "music_id",
     "To": "user_id",
     "Owner": "music",
-    "IsAutoInc": false
+    "IsAutoInc": true
   },
   "Values": 1
 }
