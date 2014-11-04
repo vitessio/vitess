@@ -68,7 +68,7 @@ func (agent *ActionAgent) initHeathCheck() {
 
 	log.Infof("Starting periodic health check every %v with target_tablet_type=%v", *healthCheckInterval, *targetTabletType)
 	t := timer.NewTimer(*healthCheckInterval)
-	servenv.OnTerm(func() {
+	servenv.OnTermSync(func() {
 		// When we enter lameduck mode, we want to not call
 		// the health check any more. After this returns, we
 		// are guaranteed to not call it.
@@ -247,10 +247,14 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topo.TabletType
 		log.Warningf("rebuildShardIfNeeded failed (will still run post action callbacks, serving graph might be out of date): %v", err)
 	}
 
-	// Run the post action callbacks (let them shutdown the query service)
-	if err := agent.refreshTablet("terminatehealthcheck"); err != nil {
-		log.Warningf("refreshTablet failed: %v", err)
-	}
+	// We've already rebuilt the shard, which is the only reason we registered
+	// ourself as OnTermSync (synchronous). The rest can be done asynchronously.
+	go func() {
+		// Run the post action callbacks (let them shutdown the query service)
+		if err := agent.refreshTablet("terminatehealthcheck"); err != nil {
+			log.Warningf("refreshTablet failed: %v", err)
+		}
+	}()
 }
 
 // rebuildShardIfNeeded will rebuild the serving graph if we need to
