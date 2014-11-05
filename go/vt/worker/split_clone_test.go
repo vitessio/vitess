@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -205,16 +206,14 @@ func SourceRdonlyFactory(t *testing.T) func() (dbconnpool.PoolConnection, error)
 }
 
 // on the destinations
-func DestinationsFactory(t *testing.T, rowCount int) func() (dbconnpool.PoolConnection, error) {
-	queryIndex := 0
+func DestinationsFactory(t *testing.T, rowCount int64) func() (dbconnpool.PoolConnection, error) {
+	var queryIndex int64 = -1
 	return func() (dbconnpool.PoolConnection, error) {
-		defer func() {
-			queryIndex++
-		}()
+		qi := atomic.AddInt64(&queryIndex, 1)
 		switch {
-		case queryIndex == 0:
+		case qi == 0:
 			return NewFakePoolConnectionQueryBinlogOff(t, "CREATE DATABASE `vt_ks` /*!40100 DEFAULT CHARACTER SET utf8 */"), nil
-		case queryIndex == 1:
+		case qi == 1:
 			return NewFakePoolConnectionQueryBinlogOff(t, "CREATE TABLE `vt_ks`.`resharding1` (\n"+
 				"  `id` bigint(20) NOT NULL,\n"+
 				"  `msg` varchar(64) DEFAULT NULL,\n"+
@@ -222,13 +221,13 @@ func DestinationsFactory(t *testing.T, rowCount int) func() (dbconnpool.PoolConn
 				"  PRIMARY KEY (`id`),\n"+
 				"  KEY `by_msg` (`msg`)\n"+
 				") ENGINE=InnoDB DEFAULT CHARSET=utf8"), nil
-		case queryIndex >= 2 && queryIndex < rowCount+2:
+		case qi >= 2 && qi < rowCount+2:
 			return NewFakePoolConnectionQueryBinlogOff(t, "INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*"), nil
-		case queryIndex == rowCount+2:
+		case qi == rowCount+2:
 			return NewFakePoolConnectionQueryBinlogOff(t, "ALTER TABLE `vt_ks`.`table1` MODIFY   `id` bigint(20) NOT NULL AUTO_INCREMENT"), nil
-		case queryIndex == rowCount+3:
+		case qi == rowCount+3:
 			return NewFakePoolConnectionQueryBinlogOff(t, "CREATE DATABASE IF NOT EXISTS _vt"), nil
-		case queryIndex == rowCount+4:
+		case qi == rowCount+4:
 			return NewFakePoolConnectionQueryBinlogOff(t, "CREATE TABLE IF NOT EXISTS _vt.blp_checkpoint (\n"+
 				"  source_shard_uid INT(10) UNSIGNED NOT NULL,\n"+
 				"  pos VARCHAR(250) DEFAULT NULL,\n"+
@@ -236,7 +235,7 @@ func DestinationsFactory(t *testing.T, rowCount int) func() (dbconnpool.PoolConn
 				"  transaction_timestamp BIGINT UNSIGNED NOT NULL,\n"+
 				"  flags VARCHAR(250) DEFAULT NULL,\n"+
 				"  PRIMARY KEY (source_shard_uid)) ENGINE=InnoDB"), nil
-		case queryIndex == rowCount+5:
+		case qi == rowCount+5:
 			return NewFakePoolConnectionQueryBinlogOff(t, "INSERT INTO _vt.blp_checkpoint (source_shard_uid, pos, time_updated, transaction_timestamp, flags) VALUES (0, 'MariaDB/12-34-5678', *"), nil
 		}
 
