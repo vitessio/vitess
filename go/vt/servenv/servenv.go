@@ -44,16 +44,18 @@ var (
 	Port *int
 
 	// Flags to alter the behavior of the library.
-	lameduckPeriod = flag.Duration("lameduck-period", 50*time.Millisecond, "how long to keep the server running on SIGTERM before stopping")
+	lameduckPeriod = flag.Duration("lameduck-period", 50*time.Millisecond, "keep running at least this long after SIGTERM before stopping")
+	onTermTimeout  = flag.Duration("onterm_timeout", 10*time.Second, "wait no more than this for OnTermSync handlers before stopping")
 	memProfileRate = flag.Int("mem-profile-rate", 512*1024, "profile every n bytes allocated")
 
 	// mutex used to protect the Init function
 	mu sync.Mutex
 
-	onInitHooks event.Hooks
-	onTermHooks event.Hooks
-	onRunHooks  event.Hooks
-	inited      bool
+	onInitHooks     event.Hooks
+	onTermHooks     event.Hooks
+	onTermSyncHooks event.Hooks
+	onRunHooks      event.Hooks
+	inited          bool
 
 	// filled in when calling Run
 	ListeningURL url.URL
@@ -139,11 +141,49 @@ func onInit(f func()) {
 	onInitHooks.Add(f)
 }
 
-// OnTerm registers f to be run when the process receives a SIGTERM.
-// All hooks are run in parallel.
+// OnTerm registers a function to be run when the process receives a SIGTERM.
 // This allows the program to change its behavior during the lameduck period.
+//
+// All hooks are run in parallel, and there is no guarantee that the process
+// will wait for them to finish before dying when the lameduck period expires.
+//
+// See also: OnTermSync
 func OnTerm(f func()) {
 	onTermHooks.Add(f)
+}
+
+// OnTermSync registers a function to be run when the process receives SIGTERM.
+// This allows the program to change its behavior during the lameduck period.
+//
+// All hooks are run in parallel, and the process will do its best to wait
+// (up to -onterm_timeout) for all of them to finish before dying.
+//
+// See also: OnTerm
+func OnTermSync(f func()) {
+	onTermSyncHooks.Add(f)
+}
+
+// fireOnTermSyncHooks returns true iff all the hooks finish before the timeout.
+func fireOnTermSyncHooks(timeout time.Duration) bool {
+	log.Infof("Firing synchronous OnTermSync hooks and waiting up to %v for them", timeout)
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	done := make(chan struct{})
+	go func() {
+		onTermSyncHooks.Fire()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		log.Infof("OnTermSync hooks finished")
+		return true
+	case <-timer.C:
+		log.Infof("OnTermSync hooks timed out")
+		return false
+	}
 }
 
 // OnRun registers f to be run right at the beginning of Run. All

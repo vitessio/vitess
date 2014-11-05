@@ -30,10 +30,19 @@ func Run(port int) {
 
 	proc.Wait()
 	l.Close()
-	log.Infof("Entering lameduck mode for %v", *lameduckPeriod)
+
+	startTime := time.Now()
+	log.Infof("Entering lameduck mode for at least %v", *lameduckPeriod)
+	log.Infof("Firing asynchronous OnTerm hooks")
 	go onTermHooks.Fire()
-	time.Sleep(*lameduckPeriod)
-	log.Info("Shutting down")
+
+	fireOnTermSyncHooks(*onTermTimeout)
+	if remain := *lameduckPeriod - time.Since(startTime); remain > 0 {
+		log.Infof("Sleeping an extra %v after OnTermSync to finish lameduck period", remain)
+		time.Sleep(remain)
+	}
+
+	log.Info("Shutting down gracefully")
 	Close()
 }
 
