@@ -10,21 +10,26 @@ import (
 	"github.com/youtube/vitess/go/jscfg"
 )
 
+// Keyspace types.
 const (
 	Unsharded = iota
 	HashSharded
 )
 
+// Index types.
 const (
 	ShardKey = iota
 	Lookup
 )
 
+// Schema represents the denormalized version of SchemaFormal,
+// used for building routing plans.
 type Schema struct {
 	Tables map[string]*Table
 }
 
-func BuildSchema(source *SchemaNormalized) (schema *Schema, err error) {
+// BuildSchema builds a Schema from a SchemaFormal.
+func BuildSchema(source *SchemaFormal) (schema *Schema, err error) {
 	allindexes := make(map[string]string)
 	schema = &Schema{Tables: make(map[string]*Table)}
 	for ksname, ks := range source.Keyspaces {
@@ -72,17 +77,20 @@ func BuildSchema(source *SchemaNormalized) (schema *Schema, err error) {
 	return schema, nil
 }
 
+// Table represnts a table in Schema.
 type Table struct {
 	Keyspace *Keyspace
 	Indexes  []*Index
 }
 
+// Keyspace contains the keyspcae info for each Table.
 type Keyspace struct {
 	Name string
 	// ShardingScheme is Unsharded or HashSharded.
 	ShardingScheme int
 }
 
+// Index contains the index info for each index of a table.
 type Index struct {
 	// Type is ShardKey or Lookup.
 	Type      int
@@ -93,27 +101,48 @@ type Index struct {
 	IsAutoInc bool
 }
 
-type SchemaNormalized struct {
-	Keyspaces map[string]struct {
-		ShardingScheme int
-		Indexes        map[string]struct {
-			// Type is ShardKey or Lookup.
-			Type      int
-			From, To  string
-			Owner     string
-			IsAutoInc bool
-		}
-		Tables map[string]struct {
-			IndexColumns []struct {
-				Column    string
-				IndexName string
-			}
-		}
-	}
+// SchemaFormal is the formal representation of the schema
+// as loaded from the source.
+type SchemaFormal struct {
+	Keyspaces map[string]KeyspaceFormal
 }
 
+// KeyspaceFormal is the keyspace info for each keyspace
+// as loaded from the source.
+type KeyspaceFormal struct {
+	ShardingScheme int
+	Indexes        map[string]IndexFormal
+	Tables         map[string]TableFormal
+}
+
+// IndexFormal is the info for each index as loaded from
+// the source.
+type IndexFormal struct {
+	// Type is ShardKey or Lookup.
+	Type      int
+	From, To  string
+	Owner     string
+	IsAutoInc bool
+}
+
+// TableFormal is the info for each table as loaded from
+// the source.
+type TableFormal struct {
+	IndexColumns []IndexColumnFormal
+}
+
+// IndexColumnFormal is the info for each indexed column
+// of a table as loaded from the source.
+type IndexColumnFormal struct {
+	Column    string
+	IndexName string
+}
+
+// LoadSchemaJSON loads the formal representation of a schema
+// from a JSON file and returns the more usable denormalized
+// representaion (Schema) for it.
 func LoadSchemaJSON(filename string) (schema *Schema, err error) {
-	var source SchemaNormalized
+	var source SchemaFormal
 	if err := jscfg.ReadJson(filename, &source); err != nil {
 		return nil, err
 	}
