@@ -1,0 +1,9 @@
+apiVersion: v1beta1
+kind: Service
+id: vtgate
+port: 15001
+containerPort: 15001
+selector:
+  name: vtgate
+labels:
+  name: vtgate
