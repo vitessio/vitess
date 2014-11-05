@@ -1,0 +1,39 @@
+apiVersion: v1beta1
+kind: ReplicationController
+id: vtgateController
+desiredState:
+  replicas: 3
+  replicaSelector: {name: vtgate}
+  podTemplate:
+    desiredState:
+      manifest:
+        version: v1beta1
+        id: vtgateController
+        containers:
+          - name: vtgate
+            image: vitess/root
+            volumeMounts:
+              - name: syslog
+                mountPath: /dev/log
+              - name: vtdataroot
+                mountPath: /vt/vtdataroot
+            command:
+              - sh
+              - "-c"
+              - >-
+                echo "{\"test_cell\":\"$SERVICE_HOST:2181\",\"global\":\"$SERVICE_HOST:2181\"}" > /vt/zk-client-conf.json &&
+                mkdir -p $VTDATAROOT/tmp &&
+                chown -R vitess /vt &&
+                su -p -c "/vt/bin/vtgate -log_dir $VTDATAROOT/tmp -port 15001 -cell test_cell" vitess
+            env:
+              - name: ZK_CLIENT_CONFIG
+                value: /vt/zk-client-conf.json
+        volumes:
+          - name: syslog
+            source: {hostDir: {path: /dev/log}}
+          - name: vtdataroot
+            source: {emptyDir: {}}
+    labels:
+      name: vtgate
+labels:
+  name: vtgate

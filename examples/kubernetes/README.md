@@ -176,7 +176,7 @@ look up the external IP of the minion that is running vttablet-101
 *http://&lt;minion-addr&gt;:15101/debug/status*. You'll of course need access
 to these ports from your workstation to be allowed by any firewalls.
 
-## Starting replication
+## Starting MySQL replication
 
 The vttablets have been assigned master and replica roles by the startup
 script, but MySQL itself has not been told to start replicating.
@@ -185,4 +185,42 @@ To do that, we do a forced reparent to the existing master.
 ```
 $ vtctl RebuildShardGraph test_keyspace/0
 $ vtctl ReparentShard -force test_keyspace/0 test_cell-0000000100
+$ vtctl RebuildKeyspaceGraph test_keyspace
+```
+
+## Creating a table
+
+The vtctl tool can manage schema across all tablets in a keyspace.
+To create the table defined in *create_test_table.sql*:
+
+```
+vitess/examples/kubernetes$ vtctl ApplySchemaKeyspace -simple -sql "$(cat create_test_table.sql)" test_keyspace
+```
+
+## Launching the vtgate pool
+
+Clients send queries to Vitess through vtgate, which routes them to the
+correct vttablet(s) behind the scenes. In Kubernetes, we define a vtgate
+service (currently using Services v1 on $SERVICE_HOST:15001) that load
+balances connections to a pool of vtgate pods curated by a
+[replication controller](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/replication-controller.md).
+
+```
+vitess/examples/kubernetes$ ./vtgate-up.sh
+```
+
+## Creating a client app
+
+The file *client.py* contains a simple example app that connects to vtgate
+and executes some queries. Assuming you have opened firewall access from
+your workstation to port 15001, you can run it locally and point it at any
+minion:
+
+```
+vitess/examples/kubernetes$ ./client.py --server=<minion-addr>:15001
+Inserting into master...
+Reading from master...
+(1L, 'V is for speed')
+Reading from replica...
+(1L, 'V is for speed')
 ```
