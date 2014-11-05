@@ -6,7 +6,7 @@ package planbuilder
 
 import "github.com/youtube/vitess/go/vt/sqlparser"
 
-func getWhereRouting(where *sqlparser.Where, indexes []*VTGateIndex) (plan *Plan) {
+func getWhereRouting(where *sqlparser.Where, indexes []*Index) (plan *Plan) {
 	if where == nil {
 		return &Plan{
 			ID:     SelectScatter,
@@ -69,7 +69,7 @@ func hasSubquery(node sqlparser.Expr) bool {
 	}
 }
 
-func getMatch(node sqlparser.BoolExpr, index *VTGateIndex) (planID PlanID, values interface{}) {
+func getMatch(node sqlparser.BoolExpr, index *Index) (planID PlanID, values interface{}) {
 	switch node := node.(type) {
 	case *sqlparser.AndExpr:
 		if planID, values = getMatch(node.Left, index); planID != SelectScatter {

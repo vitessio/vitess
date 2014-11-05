@@ -39,7 +39,7 @@ func init() {
 func main() {
 	flag.Parse()
 	servenv.Init()
-	var schema *planbuilder.VTGateSchema
+	var schema *planbuilder.Schema
 	if *schemaFile != "" {
 		if err := jscfg.ReadJson(*schemaFile, &schema); err != nil {
 			log.Fatal(err)

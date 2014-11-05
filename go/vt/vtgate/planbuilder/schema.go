@@ -20,15 +20,15 @@ const (
 	Lookup
 )
 
-type VTGateSchema struct {
-	Tables map[string]*VTGateTable
+type Schema struct {
+	Tables map[string]*Table
 }
 
-func BuildSchema(source *VTGateSchemaNormalized) (schema *VTGateSchema, err error) {
+func BuildSchema(source *SchemaNormalized) (schema *Schema, err error) {
 	allindexes := make(map[string]string)
-	schema = &VTGateSchema{Tables: make(map[string]*VTGateTable)}
+	schema = &Schema{Tables: make(map[string]*Table)}
 	for ksname, ks := range source.Keyspaces {
-		keyspace := &VTGateKeyspace{
+		keyspace := &Keyspace{
 			Name:           ksname,
 			ShardingScheme: ks.ShardingScheme,
 		}
@@ -36,9 +36,9 @@ func BuildSchema(source *VTGateSchemaNormalized) (schema *VTGateSchema, err erro
 			if _, ok := schema.Tables[tname]; ok {
 				return nil, fmt.Errorf("table %s has multiple definitions", tname)
 			}
-			t := &VTGateTable{
+			t := &Table{
 				Keyspace: keyspace,
-				Indexes:  make([]*VTGateIndex, 0, len(table.IndexColumns)),
+				Indexes:  make([]*Index, 0, len(table.IndexColumns)),
 			}
 			for i, ind := range table.IndexColumns {
 				idx, ok := ks.Indexes[ind.IndexName]
@@ -56,7 +56,7 @@ func BuildSchema(source *VTGateSchemaNormalized) (schema *VTGateSchema, err erro
 				default:
 					return nil, fmt.Errorf("index %s used in more than one keyspace: %s %s", ind.IndexName, prevks, ksname)
 				}
-				t.Indexes = append(t.Indexes, &VTGateIndex{
+				t.Indexes = append(t.Indexes, &Index{
 					Type:      idx.Type,
 					Column:    ind.Column,
 					Name:      ind.IndexName,
@@ -72,18 +72,18 @@ func BuildSchema(source *VTGateSchemaNormalized) (schema *VTGateSchema, err erro
 	return schema, nil
 }
 
-type VTGateTable struct {
-	Keyspace *VTGateKeyspace
-	Indexes  []*VTGateIndex
+type Table struct {
+	Keyspace *Keyspace
+	Indexes  []*Index
 }
 
-type VTGateKeyspace struct {
+type Keyspace struct {
 	Name string
 	// ShardingScheme is Unsharded or HashSharded.
 	ShardingScheme int
 }
 
-type VTGateIndex struct {
+type Index struct {
 	// Type is ShardKey or Lookup.
 	Type      int
 	Column    string
@@ -93,7 +93,7 @@ type VTGateIndex struct {
 	IsAutoInc bool
 }
 
-type VTGateSchemaNormalized struct {
+type SchemaNormalized struct {
 	Keyspaces map[string]struct {
 		ShardingScheme int
 		Indexes        map[string]struct {
@@ -112,8 +112,8 @@ type VTGateSchemaNormalized struct {
 	}
 }
 
-func LoadSchemaJSON(filename string) (schema *VTGateSchema, err error) {
-	var source VTGateSchemaNormalized
+func LoadSchemaJSON(filename string) (schema *Schema, err error) {
+	var source SchemaNormalized
 	if err := jscfg.ReadJson(filename, &source); err != nil {
 		return nil, err
 	}

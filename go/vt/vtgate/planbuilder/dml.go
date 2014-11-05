@@ -6,7 +6,7 @@ package planbuilder
 
 import "github.com/youtube/vitess/go/vt/sqlparser"
 
-func buildUpdatePlan(upd *sqlparser.Update, schema *VTGateSchema) *Plan {
+func buildUpdatePlan(upd *sqlparser.Update, schema *Schema) *Plan {
 	tablename := sqlparser.GetTableName(upd.Table)
 	plan := getTableRouting(tablename, schema)
 	if plan != nil {
@@ -47,7 +47,7 @@ func buildUpdatePlan(upd *sqlparser.Update, schema *VTGateSchema) *Plan {
 	return plan
 }
 
-func isIndexChanging(setClauses sqlparser.UpdateExprs, indexes []*VTGateIndex) bool {
+func isIndexChanging(setClauses sqlparser.UpdateExprs, indexes []*Index) bool {
 	indexCols := make([]string, len(indexes))
 	for i, index := range indexes {
 		indexCols[i] = index.Column
@@ -60,7 +60,7 @@ func isIndexChanging(setClauses sqlparser.UpdateExprs, indexes []*VTGateIndex) b
 	return false
 }
 
-func buildDeletePlan(del *sqlparser.Delete, schema *VTGateSchema) *Plan {
+func buildDeletePlan(del *sqlparser.Delete, schema *Schema) *Plan {
 	tablename := sqlparser.GetTableName(del.Table)
 	plan := getTableRouting(tablename, schema)
 	if plan != nil {

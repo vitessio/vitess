@@ -6,7 +6,7 @@ package planbuilder
 
 import "github.com/youtube/vitess/go/vt/sqlparser"
 
-func buildSelectPlan(sel *sqlparser.Select, schema *VTGateSchema) *Plan {
+func buildSelectPlan(sel *sqlparser.Select, schema *Schema) *Plan {
 	// TODO(sougou): handle joins & unions.
 	tablename, _ := analyzeFrom(sel.From)
 	plan := getTableRouting(tablename, schema)

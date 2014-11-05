@@ -24,7 +24,7 @@ type Router struct {
 }
 
 // NewRouter creates a new Router.
-func NewRouter(serv SrvTopoServer, cell string, schema *planbuilder.VTGateSchema, statsName string, scatterConn *ScatterConn) *Router {
+func NewRouter(serv SrvTopoServer, cell string, schema *planbuilder.Schema, statsName string, scatterConn *ScatterConn) *Router {
 	return &Router{
 		serv:        serv,
 		cell:        cell,
