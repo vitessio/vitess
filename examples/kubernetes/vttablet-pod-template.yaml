@@ -23,7 +23,7 @@ desiredState:
 
             log_file=$VTDATAROOT/tmp/vttablet.log
 
-            mysql_socket="/vt/vtdataroot/{{tablet_subdir}}/mysql.sock"
+            mysql_socket="$VTDATAROOT/{{tablet_subdir}}/mysql.sock"
 
             hostname=$(hostname -i)
 
@@ -62,6 +62,9 @@ desiredState:
             -db-config-dba-dbname vt_{{keyspace}}
             -db-config-repl-dbname vt_{{keyspace}}
             -db-config-filtered-dbname vt_{{keyspace}}
+            -enable-rowcache
+            -rowcache-bin /usr/bin/memcached
+            -rowcache-socket $VTDATAROOT/{{tablet_subdir}}/memcache.sock
             &>> $log_file" vitess
         env:
           - name: ZK_CLIENT_CONFIG
