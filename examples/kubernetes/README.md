@@ -16,6 +16,12 @@ again in the future. Until then, please *git checkout* the
 [v0.4.3](https://github.com/GoogleCloudPlatform/kubernetes/tree/v0.4.3)
 tag (or any newer v0.4.x) in your Kubernetes repository.
 
+The easiest way to run the local commands like vtctl is just to install
+[Docker](https://www.docker.com/)
+on your workstation. You can also adapt the commands below to use a local
+[Vitess build](https://github.com/youtube/vitess/blob/master/doc/GettingStarted.md)
+by removing the docker preamble if you prefer.
+
 ## Starting ZooKeeper
 
 Once you have a running Kubernetes deployment, make sure
@@ -45,13 +51,13 @@ you are running [Kubernetes on Google Compute Engine](https://github.com/GoogleC
 $ gcloud compute ssh kubernetes-minion-1
 
 # show zk command usage
-kubernetes-minion-1:~$ sudo docker run -ti --rm vitess/root zk
+kubernetes-minion-1:~$ sudo docker run -ti --rm vitess/base zk
 
 # create a test node in ZooKeeper
-kubernetes-minion-1:~$ sudo docker run -ti --rm vitess/root zk -zk.addrs $HOSTNAME:2181 touch -p /zk/test_cell/vt
+kubernetes-minion-1:~$ sudo docker run -ti --rm vitess/base zk -zk.addrs $HOSTNAME:2181 touch -p /zk/test_cell/vt
 
 # check that the node is there
-kubernetes-minion-1:~$ sudo docker run -ti --rm vitess/root zk -zk.addrs $HOSTNAME:2181 ls /zk/test_cell
+kubernetes-minion-1:~$ sudo docker run -ti --rm vitess/base zk -zk.addrs $HOSTNAME:2181 ls /zk/test_cell
 ```
 
 To tear down the ZooKeeper deployment (again, with *kubecfg.sh* in your path):
@@ -80,10 +86,10 @@ locally to issue commands:
 
 ```
 # check the connection to vtctld, and list available commands
-$ sudo docker run -ti --rm vitess/root vtctlclient -server <minion-addr>:15000
+$ sudo docker run -ti --rm vitess/base vtctlclient -server <minion-addr>:15000
 
 # create a global keyspace record
-$ sudo docker run -ti --rm vitess/root vtctlclient -server <minion-addr>:15000 CreateKeyspace my_keyspace
+$ sudo docker run -ti --rm vitess/base vtctlclient -server <minion-addr>:15000 CreateKeyspace my_keyspace
 ```
 
 If you don't want to open the port on the firewall, you can SSH into one of your
@@ -95,7 +101,7 @@ For example:
 $ gcloud compute ssh kubernetes-minion-1
 
 # run a command
-kubernetes-minion-1:~$ sudo docker run -ti --rm vitess/root vtctlclient -server $HOSTNAME:15000 CreateKeyspace your_keyspace
+kubernetes-minion-1:~$ sudo docker run -ti --rm vitess/base vtctlclient -server $HOSTNAME:15000 CreateKeyspace your_keyspace
 ```
 
 ## Creating a keyspace and shard
@@ -103,7 +109,7 @@ kubernetes-minion-1:~$ sudo docker run -ti --rm vitess/root vtctlclient -server 
 This creates the initial paths in the topology server.
 
 ```
-$ alias vtctl="sudo docker run -ti --rm vitess/root vtctlclient -server <minion-addr>:15000"
+$ alias vtctl="sudo docker run -ti --rm vitess/base vtctlclient -server <minion-addr>:15000"
 $ vtctl CreateKeyspace test_keyspace
 $ vtctl CreateShard test_keyspace/0
 ```
@@ -217,7 +223,7 @@ your workstation to port 15001, you can run it locally and point it at any
 minion:
 
 ```
-vitess/examples/kubernetes$ ./client.py --server=<minion-addr>:15001
+$ sudo docker run -ti --rm vitess/base bash -c '$VTTOP/examples/kubernetes/client.py --server=<minion-addr>:15001'
 Inserting into master...
 Reading from master...
 (1L, 'V is for speed')
