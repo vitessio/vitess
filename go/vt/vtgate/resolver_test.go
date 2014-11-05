@@ -231,8 +231,8 @@ func testResolverGeneric(t *testing.T, name string, action func() (*mproto.Query
 	sbc1 = &sandboxConn{mustFailRetry: 1}
 	s.MapTestConn("20-40", sbc1)
 	_, err = action()
-	want1 := fmt.Sprintf("error: err, shard, host: %s.-20.master, {Uid:0 Host:-20 NamedPortMap:map[vt:1] Health:map[]}", name)
-	want2 := fmt.Sprintf("retry: err, shard, host: %s.20-40.master, {Uid:0 Host:20-40 NamedPortMap:map[vt:1] Health:map[]}", name)
+	want1 := fmt.Sprintf("shard, host: %s.-20.master, {Uid:0 Host:-20 NamedPortMap:map[vt:1] Health:map[]}, error: err", name)
+	want2 := fmt.Sprintf("shard, host: %s.20-40.master, {Uid:0 Host:20-40 NamedPortMap:map[vt:1] Health:map[]}, retry: err", name)
 	want := []string{want1, want2}
 	sort.Strings(want)
 	if err == nil {
@@ -263,8 +263,8 @@ func testResolverGeneric(t *testing.T, name string, action func() (*mproto.Query
 	sbc1 = &sandboxConn{mustFailFatal: 1}
 	s.MapTestConn("20-40", sbc1)
 	_, err = action()
-	want1 = fmt.Sprintf("retry: err, shard, host: %s.-20.master, {Uid:0 Host:-20 NamedPortMap:map[vt:1] Health:map[]}", name)
-	want2 = fmt.Sprintf("fatal: err, shard, host: %s.20-40.master, {Uid:0 Host:20-40 NamedPortMap:map[vt:1] Health:map[]}", name)
+	want1 = fmt.Sprintf("shard, host: %s.-20.master, {Uid:0 Host:-20 NamedPortMap:map[vt:1] Health:map[]}, retry: err", name)
+	want2 = fmt.Sprintf("shard, host: %s.20-40.master, {Uid:0 Host:20-40 NamedPortMap:map[vt:1] Health:map[]}, fatal: err", name)
 	want = []string{want1, want2}
 	sort.Strings(want)
 	if err == nil {
@@ -406,7 +406,7 @@ func testResolverStreamGeneric(t *testing.T, name string, action func() (*mproto
 	sbc1 = &sandboxConn{}
 	s.MapTestConn("20-40", sbc1)
 	_, err = action()
-	want := fmt.Sprintf("retry: err, shard, host: %s.-20.master, {Uid:0 Host:-20 NamedPortMap:map[vt:1] Health:map[]}", name)
+	want := fmt.Sprintf("shard, host: %s.-20.master, {Uid:0 Host:-20 NamedPortMap:map[vt:1] Health:map[]}, retry: err", name)
 	if err == nil || err.Error() != want {
 		t.Errorf("want\n%s\ngot\n%v", want, err)
 	}

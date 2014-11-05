@@ -68,7 +68,7 @@ func (e *ShardConnError) Error() string {
 	if e.ShardIdentifier == "" {
 		return e.Err
 	}
-	return fmt.Sprintf("%v, shard, host: %s", e.Err, e.ShardIdentifier)
+	return fmt.Sprintf("shard, host: %s, %v", e.ShardIdentifier, e.Err)
 }
 
 // Dial creates tablet connection and connects to the vttablet.
