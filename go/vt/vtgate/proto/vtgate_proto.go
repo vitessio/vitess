@@ -131,9 +131,9 @@ type QueryResultList struct {
 
 // SplitQueryRequest is a request to split a query into multiple parts
 type SplitQueryRequest struct {
-	Keyspace       string
-	Query          tproto.BoundQuery
-	SplitsPerShard int
+	Keyspace   string
+	Query      tproto.BoundQuery
+	SplitCount int
 }
 
 // QuerySplit is a sub query of SplitQueryRequest.Query

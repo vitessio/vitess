@@ -598,23 +598,23 @@ func TestVTGateSplitQuery(t *testing.T) {
 		s.MapTestConn(fmt.Sprintf("%s-%s", kr.Start, kr.End), &sandboxConn{})
 	}
 	sql := "select col1, col2 from table"
-	splitsPerShard := 3
+	splitCount := 24
 	req := proto.SplitQueryRequest{
 		Keyspace: keyspace,
 		Query: tproto.BoundQuery{
 			Sql: sql,
 		},
-		SplitsPerShard: splitsPerShard,
+		SplitCount: splitCount,
 	}
 	result := new(proto.SplitQueryResult)
 	err := RpcVTGate.SplitQuery(&context.DummyContext{}, &req, result)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	shards, err := getAllShards(DefaultShardSpec)
+	_, err = getAllShards(DefaultShardSpec)
 	// Total number of splits should be number of shards * splitsPerShard
-	if splitsPerShard*len(shards) != len(result.Splits) {
-		t.Errorf("wrong number of splits, want \n%+v, got \n%+v", len(shards)*splitsPerShard, len(result.Splits))
+	if splitCount != len(result.Splits) {
+		t.Errorf("wrong number of splits, want \n%+v, got \n%+v", splitCount, len(result.Splits))
 	}
 	actualSqlsByKeyRange := map[kproto.KeyRange][]string{}
 	for _, split := range result.Splits {

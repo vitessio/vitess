@@ -9,6 +9,7 @@ package vtgate
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -508,7 +509,9 @@ func (vtg *VTGate) Rollback(context context.Context, inSession *proto.Session) (
 // SplitQuery splits a query into sub queries by appending keyranges and
 // primary key range clauses. Rows corresponding to the sub queries
 // are guaranteed to be non-overlapping and will add up to the rows of
-// original query.
+// original query. Number of sub queries will be a multiple of N that is
+// greater than or equal to SplitQueryRequest.SplitCount, where N is the
+// number of shards.
 func (vtg *VTGate) SplitQuery(context context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) (err error) {
 	defer handlePanic(&err)
 	sc := vtg.resolver.scatterConn
@@ -520,7 +523,8 @@ func (vtg *VTGate) SplitQuery(context context.Context, req *proto.SplitQueryRequ
 	for _, shard := range shards {
 		keyRangeByShard[shard.ShardName()] = shard.KeyRange
 	}
-	splits, err := vtg.resolver.scatterConn.SplitQuery(context, req.Query, req.SplitsPerShard, keyRangeByShard, keyspace)
+	perShardSplitCount := int(math.Ceil(float64(req.SplitCount) / float64(len(shards))))
+	splits, err := vtg.resolver.scatterConn.SplitQuery(context, req.Query, perShardSplitCount, keyRangeByShard, keyspace)
 	if err != nil {
 		return err
 	}
