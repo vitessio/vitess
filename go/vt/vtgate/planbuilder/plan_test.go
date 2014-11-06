@@ -19,6 +19,24 @@ import (
 	"github.com/youtube/vitess/go/testfiles"
 )
 
+func TestPlanName(t *testing.T) {
+	id, ok := PlanByName("SelectUnsharded")
+	if !ok {
+		t.Errorf("got false, want true")
+	}
+	if id != SelectUnsharded {
+		t.Errorf("got %d, want SelectUnsharded", id)
+	}
+	id, ok = PlanByName("NonExistent")
+	if ok {
+		t.Errorf("got true, want false")
+	}
+	fakeName := NumPlans.String()
+	if fakeName != "" {
+		t.Errorf("got %s, want \"\"", fakeName)
+	}
+}
+
 func TestPlan(t *testing.T) {
 	schema, err := LoadSchemaJSON(locateFile("schema_test.json"))
 	if err != nil {

@@ -107,7 +107,7 @@ func buildIndexPlan(ins *sqlparser.Insert, tablename string, index *Index, plan 
 	row := ins.Rows.(sqlparser.Values)[0].(sqlparser.ValTuple)
 	val, err := sqlparser.AsInterface(row[pos])
 	if err != nil {
-		return fmt.Errorf("could not convert val: %v, pos: %d", row[pos], pos)
+		return fmt.Errorf("could not convert val: %s, pos: %d", row[pos], pos)
 	}
 	plan.Values = append(plan.Values.([]interface{}), val)
 	if index.Owner == tablename && index.IsAutoInc {

@@ -1,3 +1,14 @@
+# insert unsharded
+"insert into main1 values(1, 2)"
+{
+  "ID":"InsertUnsharded",
+  "Reason":"",
+  "TableName":"main1",
+  "Query":"insert into main1 values (1, 2)",
+  "Index":null,
+  "Values":null
+}
+
 # insert no column list
 "insert into user values(1, 2, 3)"
 {
@@ -7,6 +18,50 @@
   "Query": "insert into user values (1, 2, 3)",
   "Index": null,
   "Values": null
+}
+
+# insert from select
+"insert into user(id) select 1 from dual"
+{
+  "ID":"NoPlan",
+  "Reason":"subqueries not allowed",
+  "TableName":"user",
+  "Query":"insert into user(id) select 1 from dual",
+  "Index":null,
+  "Values":null
+}
+
+# insert with multiple rows
+"insert into user(id) values (1), (2)"
+{
+  "ID":"NoPlan",
+  "Reason":"multi-row inserts not supported",
+  "TableName":"user",
+  "Query":"insert into user(id) values (1), (2)",
+  "Index":null,
+  "Values":null
+}
+
+# insert with subquery as value
+"insert into user(id) values (select 1 from dual)"
+{
+  "ID":"NoPlan",
+  "Reason":"subqueries not allowed",
+  "TableName":"user",
+  "Query":"insert into user(id) values (select 1 from dual)",
+  "Index":null,
+  "Values":null
+}
+
+# insert with mimatched column list
+"insert into user(id) values (1, 2)"
+{
+  "ID":"NoPlan",
+  "Reason":"column list doesn't match values",
+  "TableName":"user",
+  "Query":"insert into user(id) values (1, 2)",
+  "Index":null,
+  "Values":null
 }
 
 # insert ShardKey owned autoinc
@@ -51,4 +106,26 @@
   ,"Query":"insert into music_extra(music_id, user_id) values (1, 2)",
   "Index":null,
   "Values":[2, 1]
+}
+
+# insert missing index value
+"insert into music_extra(music_id) values(1)"
+{
+  "ID":"NoPlan",
+  "Reason":"must supply value for indexed column: user_id",
+  "TableName":"music_extra",
+  "Query":"insert into music_extra(music_id) values (1)",
+  "Index":null,
+  "Values":null
+}
+
+# insert invalid index value
+"insert into music_extra(music_id, user_id) values(1, 1.1)"
+{
+  "ID":"NoPlan",
+  "Reason":"could not convert val: 1.1, pos: 1",
+  "TableName":"music_extra",
+  "Query":"insert into music_extra(music_id, user_id) values (1, 1.1)",
+  "Index":null,
+  "Values":null
 }

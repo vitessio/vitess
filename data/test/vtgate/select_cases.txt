@@ -1,3 +1,58 @@
+# syntax error
+"the quick brown fox"
+{
+  "ID":"NoPlan",
+  "Reason":"syntax error at position 4 near the",
+  "TableName":"",
+  "Query":"the quick brown fox",
+  "Index":null,
+  "Values":null
+}
+
+# unions not supported yet
+"select * from user union select * from user"
+{
+  "ID":"NoPlan",
+  "Reason":"too complex",
+  "TableName":"",
+  "Query":"select * from user union select * from user",
+  "Index":null,
+  "Values":null
+}
+
+# set statements not supported yet
+"set a=1"
+{
+  "ID":"NoPlan",
+  "Reason":"too complex",
+  "TableName":"",
+  "Query":"set a=1",
+  "Index":null,
+  "Values":null
+}
+
+# ddl not supported yet
+"create table a()"
+{
+  "ID":"NoPlan",
+  "Reason":"too complex",
+  "TableName":"",
+  "Query":"create table a()",
+  "Index":null,
+  "Values":null
+}
+
+# admin statements not supported yet
+"explain select * from user"
+{
+  "ID":"NoPlan",
+  "Reason":"too complex",
+  "TableName":"",
+  "Query":"explain select * from user",
+  "Index":null,
+  "Values":null
+}
+
 # select with complex table expression
 "select * from (select 2 from dual)"
 {
@@ -5,6 +60,17 @@
   "Reason":"complex table expression",
   "TableName":"",
   "Query":"select * from (select 2 from dual)",
+  "Index":null,
+  "Values":null
+}
+
+# select on non-existent table
+"select * from nouser where id = 1"
+{
+  "ID":"NoPlan",
+  "Reason":"table not found",
+  "TableName":"nouser",
+  "Query":"select * from nouser where id = 1",
   "Index":null,
   "Values":null
 }

@@ -1,3 +1,25 @@
+# update unsharded
+"update main1 set val = 1"
+{
+  "ID":"UpdateUnsharded",
+  "Reason":"",
+  "TableName":"main1",
+  "Query":"update main1 set val = 1",
+  "Index":null,
+  "Values":null
+}
+
+# delete unsharded
+"delete from main1"
+{
+  "ID":"DeleteUnsharded",
+  "Reason":"",
+  "TableName":"main1",
+  "Query":"delete from main1",
+  "Index":null,
+  "Values":null
+}
+
 # update with no where clause
 "update user set val = 1"
 {
