@@ -590,8 +590,8 @@ func TestVTGateStreamExecuteShard(t *testing.T) {
 	}
 }
 
-func TestVTGateGetMRSplits(t *testing.T) {
-	keyspace := "TestVTGateGetMRSplits"
+func TestVTGateSplitQuery(t *testing.T) {
+	keyspace := "TestVTGateSplitQuery"
 	keyranges, _ := key.ParseShardingSpec(DefaultShardSpec)
 	s := createSandbox(keyspace)
 	for _, kr := range keyranges {
@@ -599,15 +599,15 @@ func TestVTGateGetMRSplits(t *testing.T) {
 	}
 	sql := "select col1, col2 from table"
 	splitsPerShard := 3
-	req := proto.GetMRSplitsRequest{
+	req := proto.SplitQueryRequest{
 		Keyspace: keyspace,
 		Query: tproto.BoundQuery{
 			Sql: sql,
 		},
 		SplitsPerShard: splitsPerShard,
 	}
-	result := new(proto.GetMRSplitsResult)
-	err := RpcVTGate.GetMRSplits(&context.DummyContext{}, &req, result)
+	result := new(proto.SplitQueryResult)
+	err := RpcVTGate.SplitQuery(&context.DummyContext{}, &req, result)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
