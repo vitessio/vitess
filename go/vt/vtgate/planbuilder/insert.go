@@ -10,7 +10,7 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-func buildInsertPlan(ins *sqlparser.Insert, schema *VTGateSchema) *Plan {
+func buildInsertPlan(ins *sqlparser.Insert, schema *Schema) *Plan {
 	tablename := sqlparser.GetTableName(ins.Table)
 	plan := getTableRouting(tablename, schema)
 	if plan != nil {
@@ -88,7 +88,7 @@ func buildInsertPlan(ins *sqlparser.Insert, schema *VTGateSchema) *Plan {
 	return plan
 }
 
-func buildIndexPlan(ins *sqlparser.Insert, tablename string, index *VTGateIndex, plan *Plan) error {
+func buildIndexPlan(ins *sqlparser.Insert, tablename string, index *Index, plan *Plan) error {
 	pos := -1
 	for i, column := range ins.Columns {
 		if index.Column == sqlparser.GetColName(column.(*sqlparser.NonStarExpr).Expr) {

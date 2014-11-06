@@ -1,4 +1,47 @@
-# TODO(sougou): Add more cases to cover more code paths.
+# select with complex table expression
+"select * from (select 2 from dual)"
+{
+  "ID":"NoPlan",
+  "Reason":"complex table expression",
+  "TableName":"",
+  "Query":"select * from (select 2 from dual)",
+  "Index":null,
+  "Values":null
+}
+
+# select with join
+"select * from music, user where id = 1"
+{
+  "ID":"NoPlan",
+  "Reason":"complex table expression",
+  "TableName":"",
+  "Query":"select * from music, user where id = 1",
+  "Index":null,
+  "Values":null
+}
+
+# select with parenthesized table expr
+"select * from (user) where id = 1"
+{
+  "ID":"NoPlan",
+  "Reason":"complex table expression",
+  "TableName":"",
+  "Query":"select * from (user) where id = 1",
+  "Index":null,
+  "Values":null
+}
+
+# select unsharded table
+"select * from main1"
+{
+  "ID":"SelectUnsharded",
+  "Reason":"",
+  "TableName":"main1",
+  "Query":"select * from main1",
+  "Index":null,
+  "Values":null
+}
+
 # select with no where clause
 "select * from user"
 {
@@ -21,6 +64,160 @@
   "Values": null
 }
 
+# select with subquery in NOT expression
+"select * from user where not (id in (select * from music))"
+{
+  "ID": "NoPlan",
+  "Reason": "has subquery",
+  "TableName": "user",
+  "Query": "select * from user where not (id in (select * from music))",
+  "Index": null,
+  "Values": null
+}
+
+# select with subquery in range expression
+"select * from user where id between (select 1 from dual) and 2"
+{
+  "ID": "NoPlan",
+  "Reason": "has subquery",
+  "TableName": "user",
+  "Query": "select * from user where id between (select 1 from dual) and 2",
+  "Index": null,
+  "Values": null
+}
+
+# select with subquery in null check
+"select * from user where (select 1 from dual) is null"
+{
+  "ID": "NoPlan",
+  "Reason": "has subquery",
+  "TableName": "user",
+  "Query": "select * from user where (select 1 from dual) is null",
+  "Index": null,
+  "Values": null
+}
+
+# select with subquery in exists
+"select * from user where exists (select 1 from dual)"
+{
+  "ID": "NoPlan",
+  "Reason": "has subquery",
+  "TableName": "user",
+  "Query": "select * from user where exists (select 1 from dual)",
+  "Index": null,
+  "Values": null
+}
+
+# select with subquery in binary expr
+"select * from user where 1+1 = (select 1 from dual)"
+{
+  "ID": "NoPlan",
+  "Reason": "has subquery",
+  "TableName": "user",
+  "Query": "select * from user where 1+1 = (select 1 from dual)",
+  "Index": null,
+  "Values": null
+}
+
+# select with subquery in unary expr
+"select * from user where id = -(select 1 from dual)"
+{
+  "ID": "NoPlan",
+  "Reason": "has subquery",
+  "TableName": "user",
+  "Query": "select * from user where id = -(select 1 from dual)",
+  "Index": null,
+  "Values": null
+}
+
+# select with subquery in func expr
+"select * from user where id = func(1, (select 1 from dual))"
+{
+  "ID": "NoPlan",
+  "Reason": "has subquery",
+  "TableName": "user",
+  "Query": "select * from user where id = func(1, (select 1 from dual))",
+  "Index": null,
+  "Values": null
+}
+
+# select with no subquery in func expr
+"select * from user where id = func(1)"
+{
+  "ID":"SelectScatter",
+  "Reason":"no index match",
+  "TableName":"user",
+  "Query":"select * from user where id = func(1)",
+  "Index":null,
+  "Values":null
+}
+
+# select with subquery in case Expr
+"select * from user where id = case (select 1 from dual) when a=b then c end"
+{
+  "ID": "NoPlan",
+  "Reason": "has subquery",
+  "TableName": "user",
+  "Query": "select * from user where id = case (select 1 from dual) when a = b then c end",
+  "Index": null,
+  "Values": null
+}
+
+# select with subquery in case Else
+"select * from user where id = case aa when a = b then c else (select 1 from dual) end"
+{
+  "ID": "NoPlan",
+  "Reason": "has subquery",
+  "TableName": "user",
+  "Query": "select * from user where id = case aa when a = b then c else (select 1 from dual) end",
+  "Index": null,
+  "Values": null
+}
+
+# select with subquery in case When cond
+"select * from user where id = case aa when (select 1 from dual) = b then c else d end"
+{
+  "ID": "NoPlan",
+  "Reason": "has subquery",
+  "TableName": "user",
+  "Query": "select * from user where id = case aa when (select 1 from dual) = b then c else d end",
+  "Index": null,
+  "Values": null
+}
+
+# select with subquery in case When expr
+"select * from user where id = case aa when a = b then (select 1 from dual) else d end"
+{
+  "ID": "NoPlan",
+  "Reason": "has subquery",
+  "TableName": "user",
+  "Query": "select * from user where id = case aa when a = b then (select 1 from dual) else d end",
+  "Index": null,
+  "Values": null
+}
+
+# select with no subquery in case
+"select * from user where id = case aa when a = b then c end"
+{
+  "ID":"SelectScatter",
+  "Reason":"no index match",
+  "TableName":"user",
+  "Query": "select * from user where id = case aa when a = b then c end",
+  "Index":null,
+  "Values":null
+}
+
+# select by primary keyspace id, inverted
+"select * from user where 1 = id"
+{
+  "ID":"SelectScatter",
+  "Reason":"no index match",
+  "TableName":"user",
+  "Query":"select * from user where 1 = id",
+  "Index":null,
+  "Values":null
+}
+
 # select by primary keyspace id
 "select * from user where id = 1"
 {
@@ -38,6 +235,17 @@
     "IsAutoInc": true
   },
   "Values": 1
+}
+
+# select by primary keyspace id, invalid value
+"select * from user where id = 1.1"
+{
+  "ID":"SelectScatter",
+  "Reason":"no index match",
+  "TableName":"user",
+  "Query":"select * from user where id = 1.1",
+  "Index":null,
+  "Values":null
 }
 
 # select with primary keyspace id through bind var
@@ -79,6 +287,28 @@
     1,
     2
   ]
+}
+
+# select with primary id through IN clause, complex expression
+"select * from user where id in (1+1, 2)"
+{
+  "ID":"SelectScatter",
+  "Reason":"no index match",
+  "TableName":"user",
+  "Query":"select * from user where id in (1+1, 2)",
+  "Index":null,
+  "Values":null
+}
+
+# select with primary id through IN clause, float expression
+"select * from user where id in (1.1, 2)"
+{
+  "ID":"SelectScatter",
+  "Reason":"no index match",
+  "TableName":"user",
+  "Query":"select * from user where id in (1.1, 2)",
+  "Index":null,
+  "Values":null
 }
 
 # select with no index match
@@ -291,7 +521,7 @@
   "Values": 1
 }
 
-# aggregates in select
+# aggregates in select, simple
 "select count(*) from user where id in (1, 2)"
 {
   "ID": "NoPlan",
@@ -302,13 +532,205 @@
   "Values": null
 }
 
-# non-aggregate function in select
+# aggregates in select, AND
+"select a = 1 and count(*) = 1 from user where id in (1, 2)"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "TableName": "user",
+  "Query": "select a = 1 and count(*) = 1 from user where id in ::_vals",
+  "Index": null,
+  "Values": null
+}
+
+# aggregates in select, OR
+"select a = 1 or count(*) = 1 from user where id in (1, 2)"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "TableName": "user",
+  "Query": "select a = 1 or count(*) = 1 from user where id in ::_vals",
+  "Index": null,
+  "Values": null
+}
+
+# aggregates in select, parenthesized bool
+"select (not count(*) = 1) from user where id in (1, 2)"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "TableName": "user",
+  "Query": "select (not count(*) = 1) from user where id in ::_vals",
+  "Index": null,
+  "Values": null
+}
+
+# aggregates in select, BETWEEN
+"select count(*) between 1 and 2 from user where id in (1, 2)"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "TableName": "user",
+  "Query": "select count(*) between 1 and 2 from user where id in ::_vals",
+  "Index": null,
+  "Values": null
+}
+
+# aggregates in select, IS NULL
+"select count(*) is null from user where id in (1, 2)"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "TableName": "user",
+  "Query": "select count(*) is null from user where id in ::_vals",
+  "Index": null,
+  "Values": null
+}
+
+# aggregates in select, EXISTS (cannot aggregate)
+"select exists (select 1 from dual) from user where id in (1, 2)"
+{
+  "ID":"SelectMultiShardKey",
+  "Reason":"",
+  "TableName":"user",
+  "Query":"select exists (select 1 from dual) from user where id in ::_vals",
+  "Index":{
+    "Type":0,
+    "Column":"id",
+    "Name":"user_index",
+    "From":"",
+    "To":"",
+    "Owner":"user",
+    "IsAutoInc":true
+    },
+  "Values":[1,2]
+}
+
+# aggregates in select, subquery
+"select (select 1 from dual) from user where id in (1, 2)"
+{
+  "ID":"SelectMultiShardKey",
+  "Reason":"",
+  "TableName":"user",
+  "Query": "select (select 1 from dual) from user where id in ::_vals",
+  "Index":{
+    "Type":0,
+    "Column":"id",
+    "Name":"user_index",
+    "From":"",
+    "To":"",
+    "Owner":"user",
+    "IsAutoInc":true
+    },
+  "Values":[1,2]
+}
+
+# aggregates in select, binary expression
+"select count(*)+1 from user where id in (1, 2)"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "TableName": "user",
+  "Query": "select count(*)+1 from user where id in ::_vals",
+  "Index": null,
+  "Values": null
+}
+
+# aggregates in select, binary expression
+"select -count(*) from user where id in (1, 2)"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "TableName": "user",
+  "Query": "select -count(*) from user where id in ::_vals",
+  "Index": null,
+  "Values": null
+}
+
+# aggregates in select, aggregate in non-aggregate function
+"select fun(1, count(*)) from user where id in (1, 2)"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "TableName": "user",
+  "Query": "select fun(1, count(*)) from user where id in ::_vals",
+  "Index": null,
+  "Values": null
+}
+
+# aggregates in select, non-aggregate function
 "select fun(*) from user where id in (1, 2)"
 {
   "ID": "SelectMultiShardKey",
   "Reason": "",
   "TableName": "user",
   "Query": "select fun(*) from user where id in ::_vals",
+  "Index": {
+    "Type": 0,
+    "Column": "id",
+    "Name": "user_index",
+    "From": "",
+    "To": "",
+    "Owner": "user",
+    "IsAutoInc": true
+  },
+  "Values": [
+    1,
+    2
+  ]
+}
+
+# aggregates in select, case Expr
+"select case count(*) when a = b then d end from user where id in (1, 2)"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "TableName": "user",
+  "Query": "select case count(*) when a = b then d end from user where id in ::_vals",
+  "Index": null,
+  "Values": null
+}
+
+# aggregates in select, case else
+"select case a when a = b then d else count(*) end from user where id in (1, 2)"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "TableName": "user",
+  "Query": "select case a when a = b then d else count(*) end from user where id in ::_vals",
+  "Index": null,
+  "Values": null
+}
+
+# aggregates in select, case WHEN cond
+"select case a when count(*) = b then d else e end from user where id in (1, 2)"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "TableName": "user",
+  "Query": "select case a when count(*) = b then d else e end from user where id in ::_vals",
+  "Index": null,
+  "Values": null
+}
+
+# aggregates in select, case WHEN expr
+"select case a when a = b then count(*) else e end from user where id in (1, 2)"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "TableName": "user",
+  "Query": "select case a when a = b then count(*) else e end from user where id in ::_vals",
+  "Index": null,
+  "Values": null
+}
+
+# aggregates in select, no aggregates
+"select case a when a = b then d else e end from user where id in (1, 2)"
+{
+  "ID": "SelectMultiShardKey",
+  "Reason": "",
+  "TableName": "user",
+  "Query": "select case a when a = b then d else e end from user where id in ::_vals",
   "Index": {
     "Type": 0,
     "Column": "id",

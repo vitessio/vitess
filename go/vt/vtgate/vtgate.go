@@ -73,7 +73,7 @@ type RegisterVTGate func(*VTGate)
 
 var RegisterVTGates []RegisterVTGate
 
-func Init(serv SrvTopoServer, schema *planbuilder.VTGateSchema, cell string, retryDelay time.Duration, retryCount int, timeout time.Duration, maxInFlight int) {
+func Init(serv SrvTopoServer, schema *planbuilder.Schema, cell string, retryDelay time.Duration, retryCount int, timeout time.Duration, maxInFlight int) {
 	if RpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}

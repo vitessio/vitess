@@ -6,7 +6,7 @@ package planbuilder
 
 import "github.com/youtube/vitess/go/vt/sqlparser"
 
-func getWhereRouting(where *sqlparser.Where, indexes []*VTGateIndex) (plan *Plan) {
+func getWhereRouting(where *sqlparser.Where, indexes []*Index) (plan *Plan) {
 	if where == nil {
 		return &Plan{
 			ID:     SelectScatter,
@@ -62,14 +62,34 @@ func hasSubquery(node sqlparser.Expr) bool {
 		return hasSubquery(node.Left) || hasSubquery(node.Right)
 	case *sqlparser.UnaryExpr:
 		return hasSubquery(node.Expr)
-	case *sqlparser.FuncExpr, *sqlparser.CaseExpr:
+	case *sqlparser.FuncExpr:
+		for _, expr := range node.Exprs {
+			switch expr := expr.(type) {
+			case *sqlparser.NonStarExpr:
+				if hasSubquery(expr.Expr) {
+					return true
+				}
+			}
+		}
+		return false
+	case *sqlparser.CaseExpr:
+		if hasSubquery(node.Expr) || hasSubquery(node.Else) {
+			return true
+		}
+		for _, expr := range node.Whens {
+			if hasSubquery(expr.Cond) || hasSubquery(expr.Val) {
+				return true
+			}
+		}
+		return false
+	case nil:
 		return false
 	default:
 		panic("unexpected")
 	}
 }
 
-func getMatch(node sqlparser.BoolExpr, index *VTGateIndex) (planID PlanID, values interface{}) {
+func getMatch(node sqlparser.BoolExpr, index *Index) (planID PlanID, values interface{}) {
 	switch node := node.(type) {
 	case *sqlparser.AndExpr:
 		if planID, values = getMatch(node.Left, index); planID != SelectScatter {

@@ -36,7 +36,7 @@ type Plan struct {
 	Reason    string
 	TableName string
 	Query     string
-	Index     *VTGateIndex
+	Index     *Index
 	Values    interface{}
 }
 
@@ -87,12 +87,12 @@ func (id PlanID) MarshalJSON() ([]byte, error) {
 	return ([]byte)(fmt.Sprintf("\"%s\"", id.String())), nil
 }
 
-func BuildPlan(query string, schema *VTGateSchema) *Plan {
+func BuildPlan(query string, schema *Schema) *Plan {
 	statement, err := sqlparser.Parse(query)
 	if err != nil {
 		return &Plan{
 			ID:     NoPlan,
-			Reason: "syntax error",
+			Reason: err.Error(),
 			Query:  query,
 		}
 	}

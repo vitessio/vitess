@@ -6,7 +6,7 @@ package planbuilder
 
 import "github.com/youtube/vitess/go/vt/sqlparser"
 
-func buildSelectPlan(sel *sqlparser.Select, schema *VTGateSchema) *Plan {
+func buildSelectPlan(sel *sqlparser.Select, schema *Schema) *Plan {
 	// TODO(sougou): handle joins & unions.
 	tablename, _ := analyzeFrom(sel.From)
 	plan := getTableRouting(tablename, schema)
@@ -60,7 +60,7 @@ func exprHasAggregates(node sqlparser.Expr) bool {
 	case *sqlparser.AndExpr:
 		return exprHasAggregates(node.Left) || exprHasAggregates(node.Right)
 	case *sqlparser.OrExpr:
-		return false
+		return exprHasAggregates(node.Left) || exprHasAggregates(node.Right)
 	case *sqlparser.NotExpr:
 		return exprHasAggregates(node.Expr)
 	case *sqlparser.ParenBoolExpr:
@@ -84,8 +84,27 @@ func exprHasAggregates(node sqlparser.Expr) bool {
 	case *sqlparser.UnaryExpr:
 		return exprHasAggregates(node.Expr)
 	case *sqlparser.FuncExpr:
-		return node.IsAggregate()
+		if node.IsAggregate() {
+			return true
+		}
+		for _, expr := range node.Exprs {
+			switch expr := expr.(type) {
+			case *sqlparser.NonStarExpr:
+				if exprHasAggregates(expr.Expr) {
+					return true
+				}
+			}
+		}
+		return false
 	case *sqlparser.CaseExpr:
+		if exprHasAggregates(node.Expr) || exprHasAggregates(node.Else) {
+			return true
+		}
+		for _, expr := range node.Whens {
+			if exprHasAggregates(expr.Cond) || exprHasAggregates(expr.Val) {
+				return true
+			}
+		}
 		return false
 	default:
 		panic("unexpected")

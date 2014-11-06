@@ -58,6 +58,12 @@
           ]
         }
       }
+    },
+    "main": {
+      "ShardingScheme": 0,
+      "Tables": {
+        "main1": {}
+      }
     }
   }
 }

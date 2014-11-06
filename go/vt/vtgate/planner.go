@@ -4,6 +4,8 @@
 
 package vtgate
 
+// This is a V3 file. Do not intermix with V2.
+
 import (
 	"bytes"
 	"encoding/json"
@@ -21,11 +23,11 @@ var noPlan = &planbuilder.Plan{
 }
 
 type Planner struct {
-	schema *planbuilder.VTGateSchema
+	schema *planbuilder.Schema
 	plans  *cache.LRUCache
 }
 
-func NewPlanner(schema *planbuilder.VTGateSchema, cacheSize int) *Planner {
+func NewPlanner(schema *planbuilder.Schema, cacheSize int) *Planner {
 	plr := &Planner{
 		schema: schema,
 		plans:  cache.NewLRUCache(int64(cacheSize)),

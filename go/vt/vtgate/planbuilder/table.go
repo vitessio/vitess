@@ -4,7 +4,7 @@
 
 package planbuilder
 
-func getTableRouting(tablename string, schema *VTGateSchema) *Plan {
+func getTableRouting(tablename string, schema *Schema) *Plan {
 	if tablename == "" {
 		return &Plan{
 			ID:     NoPlan,

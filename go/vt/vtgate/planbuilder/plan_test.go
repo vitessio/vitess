@@ -29,7 +29,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "insert_cases.txt", schema)
 }
 
-func testFile(t *testing.T, filename string, schema *VTGateSchema) {
+func testFile(t *testing.T, filename string, schema *Schema) {
 	for tcase := range iterateExecFile(filename) {
 		plan := BuildPlan(tcase.input, schema)
 		bout, err := json.Marshal(plan)
@@ -44,12 +44,12 @@ func testFile(t *testing.T, filename string, schema *VTGateSchema) {
 	}
 }
 
-func loadSchema(name string) *VTGateSchema {
+func loadSchema(name string) *Schema {
 	b, err := ioutil.ReadFile(locateFile(name))
 	if err != nil {
 		panic(err)
 	}
-	var schema VTGateSchema
+	var schema Schema
 	err = json.Unmarshal(b, &schema)
 	if err != nil {
 		panic(err)
