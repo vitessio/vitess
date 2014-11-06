@@ -9,6 +9,7 @@ package vtgate
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -505,13 +506,13 @@ func (vtg *VTGate) Rollback(context context.Context, inSession *proto.Session) (
 	return vtg.resolver.Rollback(context, inSession)
 }
 
-// GetMRSplits is the endpoint used by MapReduce controllers to fetch InputSplits
-// for its jobs. An InputSplit represents a set of rows in the specified table.
-// The mapper responsible for an InputSplit can execute the KeyRangeQuery of
-// that split to fetch the corresponding rows. The sum of InputSplits returned
-// by this method will add up to the entire table. By default one split is created
-// per shard, but this can be controlled by changing req.SplitsPerShard
-func (vtg *VTGate) GetMRSplits(context context.Context, req *proto.GetMRSplitsRequest, reply *proto.GetMRSplitsResult) (err error) {
+// SplitQuery splits a query into sub queries by appending keyranges and
+// primary key range clauses. Rows corresponding to the sub queries
+// are guaranteed to be non-overlapping and will add up to the rows of
+// original query. Number of sub queries will be a multiple of N that is
+// greater than or equal to SplitQueryRequest.SplitCount, where N is the
+// number of shards.
+func (vtg *VTGate) SplitQuery(context context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) (err error) {
 	defer handlePanic(&err)
 	sc := vtg.resolver.scatterConn
 	keyspace, shards, err := getKeyspaceShards(sc.toposerv, sc.cell, req.Keyspace, topo.TYPE_RDONLY)
@@ -522,7 +523,8 @@ func (vtg *VTGate) GetMRSplits(context context.Context, req *proto.GetMRSplitsRe
 	for _, shard := range shards {
 		keyRangeByShard[shard.ShardName()] = shard.KeyRange
 	}
-	splits, err := vtg.resolver.scatterConn.SplitQuery(context, req.Query, req.SplitsPerShard, keyRangeByShard, keyspace)
+	perShardSplitCount := int(math.Ceil(float64(req.SplitCount) / float64(len(shards))))
+	splits, err := vtg.resolver.scatterConn.SplitQuery(context, req.Query, perShardSplitCount, keyRangeByShard, keyspace)
 	if err != nil {
 		return err
 	}

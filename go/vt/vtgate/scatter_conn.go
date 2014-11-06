@@ -379,7 +379,7 @@ func (stc *ScatterConn) Rollback(context context.Context, session *SafeSession) 
 // splits received from a shard, it construct a KeyRange queries by
 // appending that shard's keyrange to the splits. Aggregates all splits across
 // all shards in no specific order and returns.
-func (stc *ScatterConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitCount int, keyRangeByShard map[string]kproto.KeyRange, keyspace string) ([]proto.InputSplit, error) {
+func (stc *ScatterConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitCount int, keyRangeByShard map[string]kproto.KeyRange, keyspace string) ([]proto.SplitQueryPart, error) {
 	actionFunc := func(sdc *ShardConn, transactionID int64, results chan<- interface{}) error {
 		// Get all splits from this shard
 		queries, err := sdc.SplitQuery(ctx, query, splitCount)
@@ -388,7 +388,7 @@ func (stc *ScatterConn) SplitQuery(ctx context.Context, query tproto.BoundQuery,
 		}
 		// Append the keyrange for this shard to all the splits received
 		keyranges := []kproto.KeyRange{keyRangeByShard[sdc.shard]}
-		splits := []proto.InputSplit{}
+		splits := []proto.SplitQueryPart{}
 		for _, query := range queries {
 			krq := &proto.KeyRangeQuery{
 				Sql:           query.Query.Sql,
@@ -397,7 +397,7 @@ func (stc *ScatterConn) SplitQuery(ctx context.Context, query tproto.BoundQuery,
 				KeyRanges:     keyranges,
 				TabletType:    topo.TYPE_RDONLY,
 			}
-			split := proto.InputSplit{
+			split := proto.SplitQueryPart{
 				Query: krq,
 				Size:  query.RowCount,
 			}
@@ -413,9 +413,9 @@ func (stc *ScatterConn) SplitQuery(ctx context.Context, query tproto.BoundQuery,
 		shards = append(shards, shard)
 	}
 	allSplits, allErrors := stc.multiGo(ctx, "SplitQuery", keyspace, shards, topo.TYPE_RDONLY, NewSafeSession(&proto.Session{}), actionFunc)
-	splits := []proto.InputSplit{}
+	splits := []proto.SplitQueryPart{}
 	for s := range allSplits {
-		splits = append(splits, s.([]proto.InputSplit)...)
+		splits = append(splits, s.([]proto.SplitQueryPart)...)
 	}
 	if allErrors.HasErrors() {
 		err := allErrors.AggrError(stc.aggregateErrors)

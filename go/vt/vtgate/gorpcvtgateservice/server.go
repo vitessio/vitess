@@ -71,8 +71,8 @@ func (vtg *VTGate) Rollback(ctx *rpcproto.Context, inSession *proto.Session, noO
 	return vtg.server.Rollback(ctx, inSession)
 }
 
-func (vtg *VTGate) GetMRSplits(ctx *rpcproto.Context, req *proto.GetMRSplitsRequest, reply *proto.GetMRSplitsResult) error {
-	return vtg.server.GetMRSplits(ctx, req, reply)
+func (vtg *VTGate) SplitQuery(ctx *rpcproto.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
+	return vtg.server.SplitQuery(ctx, req, reply)
 }
 
 func init() {
