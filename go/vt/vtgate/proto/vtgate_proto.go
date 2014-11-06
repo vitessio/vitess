@@ -136,13 +136,13 @@ type SplitQueryRequest struct {
 	SplitCount int
 }
 
-// QuerySplit is a sub query of SplitQueryRequest.Query
-type QuerySplit struct {
+// SplitQueryPart is a sub query of SplitQueryRequest.Query
+type SplitQueryPart struct {
 	Query *KeyRangeQuery
 	Size  int64
 }
 
 // Result for SplitQueryRequest
 type SplitQueryResult struct {
-	Splits []QuerySplit
+	Splits []SplitQueryPart
 }
