@@ -92,7 +92,7 @@ func BuildPlan(query string, schema *Schema) *Plan {
 	if err != nil {
 		return &Plan{
 			ID:     NoPlan,
-			Reason: "syntax error",
+			Reason: err.Error(),
 			Query:  query,
 		}
 	}

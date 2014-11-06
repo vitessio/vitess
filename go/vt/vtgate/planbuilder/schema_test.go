@@ -55,13 +55,14 @@ func TestBuildSchemaErrors(t *testing.T) {
 	}
 	_, err := BuildSchema(&badschema)
 	want := "index idx1 used in more than one keyspace: ks1 ks2"
-	if err == nil || err.Error() != want {
+	wantother := "index idx1 used in more than one keyspace: ks2 ks1"
+	if err == nil || (err.Error() != want && err.Error() != wantother) {
 		t.Errorf("got %v, want %s", err, want)
 	}
 
 	badschema.Keyspaces["ks2"] = KeyspaceFormal{
 		Indexes: idx1,
-		Tables:  t1idx2,
+		Tables:  t1,
 	}
 	_, err = BuildSchema(&badschema)
 	want = "table t1 has multiple definitions"
@@ -71,7 +72,7 @@ func TestBuildSchemaErrors(t *testing.T) {
 
 	badschema.Keyspaces["ks2"] = KeyspaceFormal{
 		Indexes: idx1,
-		Tables:  t1idx2,
+		Tables:  t1,
 	}
 	_, err = BuildSchema(&badschema)
 	want = "table t1 has multiple definitions"

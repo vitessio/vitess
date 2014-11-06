@@ -62,7 +62,27 @@ func hasSubquery(node sqlparser.Expr) bool {
 		return hasSubquery(node.Left) || hasSubquery(node.Right)
 	case *sqlparser.UnaryExpr:
 		return hasSubquery(node.Expr)
-	case *sqlparser.FuncExpr, *sqlparser.CaseExpr:
+	case *sqlparser.FuncExpr:
+		for _, expr := range node.Exprs {
+			switch expr := expr.(type) {
+			case *sqlparser.NonStarExpr:
+				if hasSubquery(expr.Expr) {
+					return true
+				}
+			}
+		}
+		return false
+	case *sqlparser.CaseExpr:
+		if hasSubquery(node.Expr) || hasSubquery(node.Else) {
+			return true
+		}
+		for _, expr := range node.Whens {
+			if hasSubquery(expr.Cond) || hasSubquery(expr.Val) {
+				return true
+			}
+		}
+		return false
+	case nil:
 		return false
 	default:
 		panic("unexpected")
