@@ -4,6 +4,8 @@
 
 package vtgate
 
+// This is a V3 file. Do not intermix with V2.
+
 import (
 	"fmt"
 
