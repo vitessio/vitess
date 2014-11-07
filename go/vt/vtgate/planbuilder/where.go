@@ -6,7 +6,7 @@ package planbuilder
 
 import "github.com/youtube/vitess/go/vt/sqlparser"
 
-// getWhereRouting returns a tentative plan for the where clause of a SELECT
+// getWhereRouting fills the plan fields for the where clause of a SELECT
 // statement. It gets reused for DML planning also, where the select plan is
 // replaced with the appropriate DML plan after the fact.
 func getWhereRouting(where *sqlparser.Where, plan *Plan) {
