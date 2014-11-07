@@ -5,6 +5,7 @@
 package planbuilder
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/youtube/vitess/go/jscfg"
@@ -28,6 +29,36 @@ type Schema struct {
 	Tables map[string]*Table
 }
 
+// Table represnts a table in Schema.
+type Table struct {
+	Name     string
+	Keyspace *Keyspace
+	Indexes  []*Index
+}
+
+// MarshalJSON should only be used for testing.
+func (t *Table) MarshalJSON() ([]byte, error) {
+	return json.Marshal(t.Name)
+}
+
+// Keyspace contains the keyspcae info for each Table.
+type Keyspace struct {
+	Name string
+	// ShardingScheme is Unsharded or HashSharded.
+	ShardingScheme int
+}
+
+// Index contains the index info for each index of a table.
+type Index struct {
+	// Type is ShardKey or Lookup.
+	Type      int
+	Column    string
+	Name      string
+	From, To  string
+	Owner     string
+	IsAutoInc bool
+}
+
 // BuildSchema builds a Schema from a SchemaFormal.
 func BuildSchema(source *SchemaFormal) (schema *Schema, err error) {
 	allindexes := make(map[string]string)
@@ -42,6 +73,7 @@ func BuildSchema(source *SchemaFormal) (schema *Schema, err error) {
 				return nil, fmt.Errorf("table %s has multiple definitions", tname)
 			}
 			t := &Table{
+				Name:     tname,
 				Keyspace: keyspace,
 				Indexes:  make([]*Index, 0, len(table.IndexColumns)),
 			}
@@ -77,28 +109,17 @@ func BuildSchema(source *SchemaFormal) (schema *Schema, err error) {
 	return schema, nil
 }
 
-// Table represnts a table in Schema.
-type Table struct {
-	Keyspace *Keyspace
-	Indexes  []*Index
-}
-
-// Keyspace contains the keyspcae info for each Table.
-type Keyspace struct {
-	Name string
-	// ShardingScheme is Unsharded or HashSharded.
-	ShardingScheme int
-}
-
-// Index contains the index info for each index of a table.
-type Index struct {
-	// Type is ShardKey or Lookup.
-	Type      int
-	Column    string
-	Name      string
-	From, To  string
-	Owner     string
-	IsAutoInc bool
+// LookupTable returns a pointer to the Table if found.
+// Otherwise, it returns a reason, which is equivalent to an error.
+func (schema *Schema) LookupTable(tablename string) (table *Table, reason string) {
+	if tablename == "" {
+		return nil, "complex table expression"
+	}
+	table = schema.Tables[tablename]
+	if table == nil {
+		return nil, fmt.Sprintf("table %s not found", tablename)
+	}
+	return table, ""
 }
 
 // SchemaFormal is the formal representation of the schema

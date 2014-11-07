@@ -34,8 +34,9 @@ const (
 type Plan struct {
 	ID        PlanID
 	Reason    string
-	TableName string
-	Query     string
+	Table     *Table
+	Original  string
+	Rewritten string
 	Index     *Index
 	Values    interface{}
 }
@@ -91,32 +92,33 @@ func BuildPlan(query string, schema *Schema) *Plan {
 	statement, err := sqlparser.Parse(query)
 	if err != nil {
 		return &Plan{
-			ID:     NoPlan,
-			Reason: err.Error(),
-			Query:  query,
+			ID:       NoPlan,
+			Reason:   err.Error(),
+			Original: query,
 		}
 	}
+	noplan := &Plan{
+		ID:       NoPlan,
+		Reason:   "too complex",
+		Original: query,
+	}
+	var plan *Plan
 	switch statement := statement.(type) {
-	case *sqlparser.Union:
 	case *sqlparser.Select:
-		return buildSelectPlan(statement, schema)
+		plan = buildSelectPlan(statement, schema)
 	case *sqlparser.Insert:
-		return buildInsertPlan(statement, schema)
+		plan = buildInsertPlan(statement, schema)
 	case *sqlparser.Update:
-		return buildUpdatePlan(statement, schema)
+		plan = buildUpdatePlan(statement, schema)
 	case *sqlparser.Delete:
-		return buildDeletePlan(statement, schema)
-	case *sqlparser.Set:
-	case *sqlparser.DDL:
-	case *sqlparser.Other:
+		plan = buildDeletePlan(statement, schema)
+	case *sqlparser.Union, *sqlparser.Set, *sqlparser.DDL, *sqlparser.Other:
+		return noplan
 	default:
 		panic("unexpected")
 	}
-	return &Plan{
-		ID:     NoPlan,
-		Reason: "too complex",
-		Query:  query,
-	}
+	plan.Original = query
+	return plan
 }
 
 func generateQuery(statement sqlparser.Statement) string {

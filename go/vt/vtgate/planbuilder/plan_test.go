@@ -50,6 +50,11 @@ func TestPlan(t *testing.T) {
 func testFile(t *testing.T, filename string, schema *Schema) {
 	for tcase := range iterateExecFile(filename) {
 		plan := BuildPlan(tcase.input, schema)
+		if plan.ID == NoPlan {
+			plan.Rewritten = ""
+			plan.Index = nil
+			plan.Values = nil
+		}
 		bout, err := json.Marshal(plan)
 		if err != nil {
 			panic(fmt.Sprintf("Error marshalling %v: %v", plan, err))
