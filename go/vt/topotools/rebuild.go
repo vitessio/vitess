@@ -55,6 +55,15 @@ func RebuildShard(log logutil.Logger, ts topo.Server, keyspace, shard string, ce
 		go func(cell string) {
 			defer wg.Done()
 
+			// Lock the SrvShard so we don't race with other rebuilds of the same
+			// shard in the same cell (e.g. from our peer tablets).
+			actionNode := actionnode.RebuildSrvShard()
+			lockPath, err := actionNode.LockSrvShard(ts, cell, keyspace, shard, timeout, interrupted)
+			if err != nil {
+				rec.RecordError(err)
+				return
+			}
+
 			// read the ShardReplication object to find tablets
 			sri, err := ts.GetShardReplication(cell, keyspace, shard)
 			if err != nil {
@@ -85,14 +94,6 @@ func RebuildShard(log logutil.Logger, ts topo.Server, keyspace, shard string, ce
 				log.Warningf("Got ErrPartialResult from topo.GetTabletMap in cell %v, some tablets may not be added properly to serving graph", cell)
 			default:
 				rec.RecordError(fmt.Errorf("GetTabletMap in cell %v failed: %v", cell, err))
-				return
-			}
-
-			// Lock the SrvShard so we write a consistent data set.
-			actionNode := actionnode.RebuildSrvShard()
-			lockPath, err := actionNode.LockSrvShard(ts, cell, keyspace, shard, timeout, interrupted)
-			if err != nil {
-				rec.RecordError(err)
 				return
 			}
 

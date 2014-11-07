@@ -12,11 +12,10 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"github.com/youtube/vitess/go/vt/zktopo"
 )
 
 const (
-	TestShard    = "-80"
+	TestShard    = "0"
 	TestKeyspace = "test_keyspace"
 )
 
@@ -47,10 +46,8 @@ type Fixture struct {
 }
 
 // New creates a topology fixture.
-func New(t *testing.T, cells []string) *Fixture {
-	ts := zktopo.NewTestServer(t, cells)
-
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, 1*time.Second, 1*time.Second)
+func New(t *testing.T, logger logutil.Logger, ts topo.Server, cells []string) *Fixture {
+	wr := wrangler.New(logger, ts, 1*time.Second, 1*time.Second)
 
 	return &Fixture{
 		T:        t,

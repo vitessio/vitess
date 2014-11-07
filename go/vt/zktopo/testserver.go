@@ -3,6 +3,7 @@ package zktopo
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
@@ -13,9 +14,11 @@ import (
 type TestServer struct {
 	topo.Server
 	localCells []string
+
+	HookLockSrvShardForAction func()
 }
 
-func NewTestServer(t *testing.T, cells []string) topo.Server {
+func NewTestServer(t *testing.T, cells []string) *TestServer {
 	zconn := fakezk.NewConn()
 
 	// create the toplevel zk paths
@@ -27,9 +30,18 @@ func NewTestServer(t *testing.T, cells []string) topo.Server {
 			t.Fatalf("cannot init ZooKeeper: %v", err)
 		}
 	}
-	return TestServer{Server: NewServer(zconn), localCells: cells}
+	return &TestServer{Server: NewServer(zconn), localCells: cells}
 }
 
-func (s TestServer) GetKnownCells() ([]string, error) {
+func (s *TestServer) GetKnownCells() ([]string, error) {
 	return s.localCells, nil
+}
+
+// LockSrvShardForAction should override the function defined by the underlying
+// topo.Server.
+func (s *TestServer) LockSrvShardForAction(cell, keyspace, shard, contents string, timeout time.Duration, interrupted chan struct{}) (string, error) {
+	if s.HookLockSrvShardForAction != nil {
+		s.HookLockSrvShardForAction()
+	}
+	return s.Server.LockSrvShardForAction(cell, keyspace, shard, contents, timeout, interrupted)
 }
