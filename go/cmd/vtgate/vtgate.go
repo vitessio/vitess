@@ -8,17 +8,13 @@ import (
 	"flag"
 	"time"
 
-	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate"
-	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
 var (
 	cell        = flag.String("cell", "test_nj", "cell to use")
-	schemaFile  = flag.String("schema-file", "", "JSON schema file")
 	retryDelay  = flag.Duration("retry-delay", 200*time.Millisecond, "retry delay")
 	retryCount  = flag.Int("retry-count", 10, "retry count")
 	timeout     = flag.Duration("timeout", 5*time.Second, "connection and call timeout")
@@ -39,12 +35,6 @@ func init() {
 func main() {
 	flag.Parse()
 	servenv.Init()
-	var schema *planbuilder.Schema
-	if *schemaFile != "" {
-		if err := jscfg.ReadJson(*schemaFile, &schema); err != nil {
-			log.Fatal(err)
-		}
-	}
 
 	ts := topo.GetServer()
 	defer topo.CloseServers()
@@ -57,6 +47,6 @@ func main() {
 	topoReader = NewTopoReader(resilientSrvTopoServer)
 	servenv.Register("toporeader", topoReader)
 
-	vtgate.Init(resilientSrvTopoServer, schema, *cell, *retryDelay, *retryCount, *timeout, *maxInFlight)
+	vtgate.Init(resilientSrvTopoServer, *cell, *retryDelay, *retryCount, *timeout, *maxInFlight)
 	servenv.RunDefault()
 }

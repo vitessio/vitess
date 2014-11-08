@@ -47,7 +47,6 @@ func (rtr *Router) Execute(context context.Context, query *proto.Query) (*mproto
 }
 
 func (rtr *Router) execSelectSingleShardKey(context context.Context, query *proto.Query, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
-	// TODO(sougou): simplify this.
 	hind := NewHashIndex(plan.Table.Keyspace.Name, rtr.serv, rtr.cell)
 	keys, err := resolveKeys([]interface{}{plan.Values}, query.BindVariables)
 	if err != nil {
