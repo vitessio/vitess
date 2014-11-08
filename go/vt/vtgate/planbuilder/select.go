@@ -7,27 +7,30 @@ package planbuilder
 import "github.com/youtube/vitess/go/vt/sqlparser"
 
 func buildSelectPlan(sel *sqlparser.Select, schema *Schema) *Plan {
-	// TODO(sougou): handle joins & unions.
+	plan := &Plan{
+		ID:        NoPlan,
+		Rewritten: generateQuery(sel),
+	}
 	tablename, _ := analyzeFrom(sel.From)
-	plan := getTableRouting(tablename, schema)
-	if plan != nil {
-		plan.Query = generateQuery(sel)
+	plan.Table, plan.Reason = schema.LookupTable(tablename)
+	if plan.Reason != "" {
 		return plan
 	}
-	plan = getWhereRouting(sel.Where, schema.Tables[tablename].Indexes)
-	if plan.ID.IsMulti() {
-		if hasAggregates(sel.SelectExprs) || sel.Distinct != "" || sel.GroupBy != nil || sel.Having != nil || sel.OrderBy != nil || sel.Limit != nil {
-			return &Plan{
-				ID:        NoPlan,
-				Reason:    "too complex",
-				TableName: tablename,
-				Query:     generateQuery(sel),
-			}
-		}
+	if plan.Table.Keyspace.ShardingScheme == Unsharded {
+		plan.ID = SelectUnsharded
+		return plan
 	}
 
-	plan.TableName = tablename
-	plan.Query = generateQuery(sel)
+	getWhereRouting(sel.Where, plan)
+	if plan.ID.IsMulti() {
+		if hasAggregates(sel.SelectExprs) || sel.Distinct != "" || sel.GroupBy != nil || sel.Having != nil || sel.OrderBy != nil || sel.Limit != nil {
+			plan.ID = NoPlan
+			plan.Reason = "too complex"
+			return plan
+		}
+		// The where clause changes if it's Multi.
+		plan.Rewritten = generateQuery(sel)
+	}
 	return plan
 }
 

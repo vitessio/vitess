@@ -1,10 +1,59 @@
+# update table not found
+"update nouser set val = 1"
+{
+  "ID":"NoPlan",
+  "Reason":"table nouser not found",
+  "Table":null,
+  "Original":"update nouser set val = 1",
+  "Rewritten":"",
+  "Index":null,
+  "Values":null
+}
+
+# delete table not found
+"delete from nouser"
+{
+  "ID":"NoPlan",
+  "Reason":"table nouser not found",
+  "Table":null,
+  "Original":"delete from nouser",
+  "Rewritten":"",
+  "Index":null,
+  "Values":null
+}
+
+# update unsharded
+"update main1 set val = 1"
+{
+  "ID":"UpdateUnsharded",
+  "Reason":"",
+  "Table":"main1",
+  "Original": "update main1 set val = 1",
+  "Rewritten":"update main1 set val = 1",
+  "Index":null,
+  "Values":null
+}
+
+# delete unsharded
+"delete from main1"
+{
+  "ID":"DeleteUnsharded",
+  "Reason":"",
+  "Table":"main1",
+  "Original": "delete from main1",
+  "Rewritten":"delete from main1",
+  "Index":null,
+  "Values":null
+}
+
 # update with no where clause
 "update user set val = 1"
 {
   "ID": "NoPlan",
   "Reason": "too complex",
-  "TableName": "user",
-  "Query": "update user set val = 1",
+  "Table": "user",
+  "Original": "update user set val = 1",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -14,8 +63,9 @@
 {
   "ID": "NoPlan",
   "Reason": "too complex",
-  "TableName": "user",
-  "Query": "delete from user",
+  "Table": "user",
+  "Original": "delete from user",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -25,8 +75,9 @@
 {
   "ID": "UpdateSingleShardKey",
   "Reason": "",
-  "TableName": "user",
-  "Query": "update user set val = 1 where id = 1",
+  "Table": "user",
+  "Original": "update user set val = 1 where id = 1",
+  "Rewritten": "update user set val = 1 where id = 1",
   "Index": {
     "Type": 0,
     "Column": "id",
@@ -44,8 +95,9 @@
 {
   "ID": "DeleteSingleShardKey",
   "Reason": "",
-  "TableName": "user",
-  "Query": "delete from user where id = 1",
+  "Table": "user",
+  "Original": "delete from user where id = 1",
+  "Rewritten": "delete from user where id = 1",
   "Index": {
     "Type": 0,
     "Column": "id",
@@ -63,8 +115,9 @@
 {
   "ID": "NoPlan",
   "Reason": "too complex",
-  "TableName": "user",
-  "Query": "update user set val = 1 where id in ::_vals",
+  "Table": "user",
+  "Original": "update user set val = 1 where id in (1, 2)",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -74,8 +127,9 @@
 {
   "ID": "NoPlan",
   "Reason": "too complex",
-  "TableName": "user",
-  "Query": "delete from user where id in ::_vals",
+  "Table": "user",
+  "Original": "delete from user where id in (1, 2)",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -85,8 +139,9 @@
 {
   "ID": "NoPlan",
   "Reason": "too complex",
-  "TableName": "user",
-  "Query": "update user set val = 1 where user_id = 1",
+  "Table": "user",
+  "Original": "update user set val = 1 where user_id = 1",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -96,8 +151,9 @@
 {
   "ID": "NoPlan",
   "Reason": "too complex",
-  "TableName": "user",
-  "Query": "delete from user where user_id = 1",
+  "Table": "user",
+  "Original": "delete from user where user_id = 1",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -107,8 +163,9 @@
 {
   "ID": "UpdateSingleLookup",
   "Reason": "",
-  "TableName": "music",
-  "Query": "update music set val = 1 where id = 1",
+  "Table": "music",
+  "Original": "update music set val = 1 where id = 1",
+  "Rewritten": "update music set val = 1 where id = 1",
   "Index": {
     "Type": 1,
     "Column": "id",
@@ -126,8 +183,9 @@
 {
   "ID": "DeleteSingleLookup",
   "Reason": "",
-  "TableName": "music",
-  "Query": "delete from music where id = 1",
+  "Table": "music",
+  "Original": "delete from music where id = 1",
+  "Rewritten": "delete from music where id = 1",
   "Index": {
     "Type": 1,
     "Column": "id",
@@ -145,8 +203,9 @@
 {
   "ID": "NoPlan",
   "Reason": "too complex",
-  "TableName": "music",
-  "Query": "update music set val = 1 where id in ::_vals",
+  "Table": "music",
+  "Original": "update music set val = 1 where id in (1, 2)",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -156,8 +215,9 @@
 {
   "ID": "NoPlan",
   "Reason": "too complex",
-  "TableName": "music",
-  "Query": "delete from music where id in ::_vals",
+  "Table": "music",
+  "Original": "delete from music where id in (1, 2)",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -167,8 +227,9 @@
 {
   "ID": "NoPlan",
   "Reason": "index is changing",
-  "TableName": "music",
-  "Query": "update music set id = 1 where id = 1",
+  "Table": "music",
+  "Original": "update music set id = 1 where id = 1",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }

@@ -1,12 +1,73 @@
+# insert unsharded
+"insert into main1 values(1, 2)"
+{
+  "ID":"InsertUnsharded",
+  "Reason":"",
+  "Table":"main1",
+  "Original":"insert into main1 values(1, 2)",
+  "Rewritten":"insert into main1 values (1, 2)",
+  "Index":null,
+  "Values":null
+}
+
 # insert no column list
 "insert into user values(1, 2, 3)"
 {
   "ID": "NoPlan",
   "Reason": "no column list",
-  "TableName": "user",
-  "Query": "insert into user values (1, 2, 3)",
+  "Table": "user",
+  "Original":"insert into user values(1, 2, 3)",
+  "Rewritten":"",
   "Index": null,
   "Values": null
+}
+
+# insert from select
+"insert into user(id) select 1 from dual"
+{
+  "ID":"NoPlan",
+  "Reason":"subqueries not allowed",
+  "Table":"user",
+  "Original":"insert into user(id) select 1 from dual",
+  "Rewritten":"",
+  "Index":null,
+  "Values":null
+}
+
+# insert with multiple rows
+"insert into user(id) values (1), (2)"
+{
+  "ID":"NoPlan",
+  "Reason":"multi-row inserts not supported",
+  "Table":"user",
+  "Original":"insert into user(id) values (1), (2)",
+  "Rewritten":"",
+  "Index":null,
+  "Values":null
+}
+
+# insert with subquery as value
+"insert into user(id) values (select 1 from dual)"
+{
+  "ID":"NoPlan",
+  "Reason":"subqueries not allowed",
+  "Table":"user",
+  "Original":"insert into user(id) values (select 1 from dual)",
+  "Rewritten":"",
+  "Index":null,
+  "Values":null
+}
+
+# insert with mimatched column list
+"insert into user(id) values (1, 2)"
+{
+  "ID":"NoPlan",
+  "Reason":"column list doesn't match values",
+  "Table":"user",
+  "Original":"insert into user(id) values (1, 2)",
+  "Rewritten":"",
+  "Index":null,
+  "Values":null
 }
 
 # insert ShardKey owned autoinc
@@ -14,8 +75,9 @@
 {
   "ID":"InsertSharded",
   "Reason":"",
-  "TableName":"user"
-  ,"Query":"insert into user(id) values (:_id)",
+  "Table":"user",
+  "Original":"insert into user(id) values (1)",
+  "Rewritten":"insert into user(id) values (:_id)",
   "Index":null,
   "Values":[1]
 }
@@ -25,8 +87,9 @@
 {
   "ID":"InsertSharded",
   "Reason":"",
-  "TableName":"user"
-  ,"Query":"insert into user(nonid, id) values (2, :_id)",
+  "Table":"user",
+  "Original":"insert into user(nonid) values (2)",
+  "Rewritten":"insert into user(nonid, id) values (2, :_id)",
   "Index":null,
   "Values":[null]
 }
@@ -36,8 +99,9 @@
 {
   "ID":"InsertSharded",
   "Reason":"",
-  "TableName":"music"
-  ,"Query":"insert into music(user_id, id) values (1, :_id)",
+  "Table":"music",
+  "Original":"insert into music(user_id, id) values(1, 2)",
+  "Rewritten":"insert into music(user_id, id) values (1, :_id)",
   "Index":null,
   "Values":[1, 2]
 }
@@ -47,8 +111,33 @@
 {
   "ID":"InsertSharded",
   "Reason":"",
-  "TableName":"music_extra"
-  ,"Query":"insert into music_extra(music_id, user_id) values (1, 2)",
+  "Table":"music_extra",
+  "Original":"insert into music_extra(music_id, user_id) values(1, 2)",
+  "Rewritten":"insert into music_extra(music_id, user_id) values (1, 2)",
   "Index":null,
   "Values":[2, 1]
+}
+
+# insert missing index value
+"insert into music_extra(music_id) values(1)"
+{
+  "ID":"NoPlan",
+  "Reason":"must supply value for indexed column: user_id",
+  "Table":"music_extra",
+  "Original":"insert into music_extra(music_id) values(1)",
+  "Rewritten":"",
+  "Index":null,
+  "Values":null
+}
+
+# insert invalid index value
+"insert into music_extra(music_id, user_id) values(1, 1.1)"
+{
+  "ID":"NoPlan",
+  "Reason":"could not convert val: 1.1, pos: 1",
+  "Table":"music_extra",
+  "Original":"insert into music_extra(music_id, user_id) values(1, 1.1)",
+  "Rewritten":"",
+  "Index":null,
+  "Values":null
 }

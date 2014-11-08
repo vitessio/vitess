@@ -11,80 +11,60 @@ import (
 )
 
 func buildInsertPlan(ins *sqlparser.Insert, schema *Schema) *Plan {
+	plan := &Plan{
+		ID:        NoPlan,
+		Rewritten: generateQuery(ins),
+	}
 	tablename := sqlparser.GetTableName(ins.Table)
-	plan := getTableRouting(tablename, schema)
-	if plan != nil {
-		if plan.ID == SelectUnsharded {
-			plan.ID = InsertUnsharded
-		}
-		plan.Query = generateQuery(ins)
+	plan.Table, plan.Reason = schema.LookupTable(tablename)
+	if plan.Reason != "" {
 		return plan
 	}
+	if plan.Table.Keyspace.ShardingScheme == Unsharded {
+		plan.ID = InsertUnsharded
+		return plan
+	}
+
 	if len(ins.Columns) == 0 {
-		return &Plan{
-			ID:        NoPlan,
-			Reason:    "no column list",
-			TableName: tablename,
-			Query:     generateQuery(ins),
-		}
+		plan.Reason = "no column list"
+		return plan
 	}
 	var values sqlparser.Values
 	switch rows := ins.Rows.(type) {
 	case *sqlparser.Select, *sqlparser.Union:
-		return &Plan{
-			ID:        NoPlan,
-			Reason:    "subqueries not allowed",
-			TableName: tablename,
-			Query:     generateQuery(ins),
-		}
+		plan.Reason = "subqueries not allowed"
+		return plan
 	case sqlparser.Values:
 		values = rows
 	default:
 		panic("unexpected")
 	}
 	if len(values) != 1 {
-		return &Plan{
-			ID:        NoPlan,
-			Reason:    "multi-row inserts not supported",
-			TableName: tablename,
-			Query:     generateQuery(ins),
-		}
+		plan.Reason = "multi-row inserts not supported"
+		return plan
 	}
 	switch values[0].(type) {
 	case *sqlparser.Subquery:
-		return &Plan{
-			ID:        NoPlan,
-			Reason:    "subqueries not allowed",
-			TableName: tablename,
-			Query:     generateQuery(ins),
-		}
+		plan.Reason = "subqueries not allowed"
+		return plan
 	}
 	row := values[0].(sqlparser.ValTuple)
 	if len(ins.Columns) != len(row) {
-		return &Plan{
-			ID:        NoPlan,
-			Reason:    "column list doesn't match values",
-			TableName: tablename,
-			Query:     generateQuery(ins),
-		}
+		plan.Reason = "column list doesn't match values"
+		return plan
 	}
 	indexes := schema.Tables[tablename].Indexes
-	plan = &Plan{
-		ID:        InsertSharded,
-		TableName: tablename,
-		Values:    make([]interface{}, 0, len(indexes)),
-	}
+	plan.ID = InsertSharded
+	plan.Values = make([]interface{}, 0, len(indexes))
 	for _, index := range indexes {
 		if err := buildIndexPlan(ins, tablename, index, plan); err != nil {
-			return &Plan{
-				ID:        NoPlan,
-				Reason:    err.Error(),
-				TableName: tablename,
-				Query:     generateQuery(ins),
-			}
+			plan.ID = NoPlan
+			plan.Reason = err.Error()
+			return plan
 		}
 	}
-	plan.Query = generateQuery(ins)
+	// Query was rewritten
+	plan.Rewritten = generateQuery(ins)
 	return plan
 }
 
@@ -107,7 +87,7 @@ func buildIndexPlan(ins *sqlparser.Insert, tablename string, index *Index, plan 
 	row := ins.Rows.(sqlparser.Values)[0].(sqlparser.ValTuple)
 	val, err := sqlparser.AsInterface(row[pos])
 	if err != nil {
-		return fmt.Errorf("could not convert val: %v, pos: %d", row[pos], pos)
+		return fmt.Errorf("could not convert val: %s, pos: %d", row[pos], pos)
 	}
 	plan.Values = append(plan.Values.([]interface{}), val)
 	if index.Owner == tablename && index.IsAutoInc {

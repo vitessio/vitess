@@ -6,32 +6,30 @@ package planbuilder
 
 import "github.com/youtube/vitess/go/vt/sqlparser"
 
-func getWhereRouting(where *sqlparser.Where, indexes []*Index) (plan *Plan) {
+// getWhereRouting fills the plan fields for the where clause of a SELECT
+// statement. It gets reused for DML planning also, where the select plan is
+// replaced with the appropriate DML plan after the fact.
+func getWhereRouting(where *sqlparser.Where, plan *Plan) {
 	if where == nil {
-		return &Plan{
-			ID:     SelectScatter,
-			Reason: "no where clause",
-		}
+		plan.ID = SelectScatter
+		plan.Reason = "no where clause"
+		return
 	}
 	if hasSubquery(where.Expr) {
-		return &Plan{
-			ID:     NoPlan,
-			Reason: "has subquery",
-		}
+		plan.ID = NoPlan
+		plan.Reason = "has subquery"
+		return
 	}
-	for _, index := range indexes {
+	for _, index := range plan.Table.Indexes {
 		if planID, values := getMatch(where.Expr, index); planID != SelectScatter {
-			return &Plan{
-				ID:     planID,
-				Index:  index,
-				Values: values,
-			}
+			plan.ID = planID
+			plan.Index = index
+			plan.Values = values
+			return
 		}
 	}
-	return &Plan{
-		ID:     SelectScatter,
-		Reason: "no index match",
-	}
+	plan.ID = SelectScatter
+	plan.Reason = "no index match"
 }
 
 func hasSubquery(node sqlparser.Expr) bool {

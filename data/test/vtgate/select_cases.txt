@@ -1,10 +1,83 @@
+# syntax error
+"the quick brown fox"
+{
+  "ID":"NoPlan",
+  "Reason":"syntax error at position 4 near the",
+  "Table":null,
+  "Original":"the quick brown fox",
+  "Rewritten":"",
+  "Index":null,
+  "Values":null
+}
+
+# unions not supported yet
+"select * from user union select * from user"
+{
+  "ID":"NoPlan",
+  "Reason":"too complex",
+  "Table":null,
+  "Original":"select * from user union select * from user",
+  "Rewritten":"",
+  "Index":null,
+  "Values":null
+}
+
+# set statements not supported yet
+"set a=1"
+{
+  "ID":"NoPlan",
+  "Reason":"too complex",
+  "Table":null,
+  "Original":"set a=1",
+  "Rewritten":"",
+  "Index":null,
+  "Values":null
+}
+
+# ddl not supported yet
+"create table a()"
+{
+  "ID":"NoPlan",
+  "Reason":"too complex",
+  "Table":null,
+  "Original":"create table a()",
+  "Rewritten":"",
+  "Index":null,
+  "Values":null
+}
+
+# admin statements not supported yet
+"explain select * from user"
+{
+  "ID":"NoPlan",
+  "Reason":"too complex",
+  "Table":null,
+  "Original":"explain select * from user",
+  "Rewritten":"",
+  "Index":null,
+  "Values":null
+}
+
 # select with complex table expression
 "select * from (select 2 from dual)"
 {
   "ID":"NoPlan",
   "Reason":"complex table expression",
-  "TableName":"",
-  "Query":"select * from (select 2 from dual)",
+  "Table":null,
+  "Original":"select * from (select 2 from dual)",
+  "Rewritten":"",
+  "Index":null,
+  "Values":null
+}
+
+# select on non-existent table
+"select * from nouser where id = 1"
+{
+  "ID":"NoPlan",
+  "Reason":"table nouser not found",
+  "Table":null,
+  "Original":"select * from nouser where id = 1",
+  "Rewritten":"",
   "Index":null,
   "Values":null
 }
@@ -14,8 +87,9 @@
 {
   "ID":"NoPlan",
   "Reason":"complex table expression",
-  "TableName":"",
-  "Query":"select * from music, user where id = 1",
+  "Table":null,
+  "Original":"select * from music, user where id = 1",
+  "Rewritten":"",
   "Index":null,
   "Values":null
 }
@@ -25,8 +99,9 @@
 {
   "ID":"NoPlan",
   "Reason":"complex table expression",
-  "TableName":"",
-  "Query":"select * from (user) where id = 1",
+  "Table":null,
+  "Original":"select * from (user) where id = 1",
+  "Rewritten":"",
   "Index":null,
   "Values":null
 }
@@ -36,8 +111,9 @@
 {
   "ID":"SelectUnsharded",
   "Reason":"",
-  "TableName":"main1",
-  "Query":"select * from main1",
+  "Table":"main1",
+  "Original":"select * from main1",
+  "Rewritten":"select * from main1",
   "Index":null,
   "Values":null
 }
@@ -47,8 +123,9 @@
 {
   "ID": "SelectScatter",
   "Reason": "no where clause",
-  "TableName": "user",
-  "Query": "select * from user",
+  "Table": "user",
+  "Original":"select * from user",
+  "Rewritten": "select * from user",
   "Index": null,
   "Values": null
 }
@@ -58,8 +135,9 @@
 {
   "ID": "NoPlan",
   "Reason": "has subquery",
-  "TableName": "user",
-  "Query": "select * from user where id in (select * from music)",
+  "Table": "user",
+  "Original":"select * from user where id in (select * from music)",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -69,8 +147,9 @@
 {
   "ID": "NoPlan",
   "Reason": "has subquery",
-  "TableName": "user",
-  "Query": "select * from user where not (id in (select * from music))",
+  "Table": "user",
+  "Original":"select * from user where not (id in (select * from music))",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -80,8 +159,9 @@
 {
   "ID": "NoPlan",
   "Reason": "has subquery",
-  "TableName": "user",
-  "Query": "select * from user where id between (select 1 from dual) and 2",
+  "Table": "user",
+  "Original":"select * from user where id between (select 1 from dual) and 2",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -91,8 +171,9 @@
 {
   "ID": "NoPlan",
   "Reason": "has subquery",
-  "TableName": "user",
-  "Query": "select * from user where (select 1 from dual) is null",
+  "Table": "user",
+  "Original":"select * from user where (select 1 from dual) is null",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -102,8 +183,9 @@
 {
   "ID": "NoPlan",
   "Reason": "has subquery",
-  "TableName": "user",
-  "Query": "select * from user where exists (select 1 from dual)",
+  "Table": "user",
+  "Original":"select * from user where exists (select 1 from dual)",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -113,8 +195,9 @@
 {
   "ID": "NoPlan",
   "Reason": "has subquery",
-  "TableName": "user",
-  "Query": "select * from user where 1+1 = (select 1 from dual)",
+  "Table": "user",
+  "Original":"select * from user where 1+1 = (select 1 from dual)",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -124,8 +207,9 @@
 {
   "ID": "NoPlan",
   "Reason": "has subquery",
-  "TableName": "user",
-  "Query": "select * from user where id = -(select 1 from dual)",
+  "Table": "user",
+  "Original":"select * from user where id = -(select 1 from dual)",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -135,8 +219,9 @@
 {
   "ID": "NoPlan",
   "Reason": "has subquery",
-  "TableName": "user",
-  "Query": "select * from user where id = func(1, (select 1 from dual))",
+  "Table": "user",
+  "Original":"select * from user where id = func(1, (select 1 from dual))",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -146,8 +231,9 @@
 {
   "ID":"SelectScatter",
   "Reason":"no index match",
-  "TableName":"user",
-  "Query":"select * from user where id = func(1)",
+  "Table":"user",
+  "Original":"select * from user where id = func(1)",
+  "Rewritten":"select * from user where id = func(1)",
   "Index":null,
   "Values":null
 }
@@ -157,8 +243,9 @@
 {
   "ID": "NoPlan",
   "Reason": "has subquery",
-  "TableName": "user",
-  "Query": "select * from user where id = case (select 1 from dual) when a = b then c end",
+  "Table": "user",
+  "Original":"select * from user where id = case (select 1 from dual) when a=b then c end",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -168,8 +255,9 @@
 {
   "ID": "NoPlan",
   "Reason": "has subquery",
-  "TableName": "user",
-  "Query": "select * from user where id = case aa when a = b then c else (select 1 from dual) end",
+  "Table": "user",
+  "Original":"select * from user where id = case aa when a = b then c else (select 1 from dual) end",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -179,8 +267,9 @@
 {
   "ID": "NoPlan",
   "Reason": "has subquery",
-  "TableName": "user",
-  "Query": "select * from user where id = case aa when (select 1 from dual) = b then c else d end",
+  "Table": "user",
+  "Original":"select * from user where id = case aa when (select 1 from dual) = b then c else d end",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -190,8 +279,9 @@
 {
   "ID": "NoPlan",
   "Reason": "has subquery",
-  "TableName": "user",
-  "Query": "select * from user where id = case aa when a = b then (select 1 from dual) else d end",
+  "Table": "user",
+  "Original":"select * from user where id = case aa when a = b then (select 1 from dual) else d end",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -201,8 +291,9 @@
 {
   "ID":"SelectScatter",
   "Reason":"no index match",
-  "TableName":"user",
-  "Query": "select * from user where id = case aa when a = b then c end",
+  "Table":"user",
+  "Original":"select * from user where id = case aa when a = b then c end",
+  "Rewritten": "select * from user where id = case aa when a = b then c end",
   "Index":null,
   "Values":null
 }
@@ -212,8 +303,9 @@
 {
   "ID":"SelectScatter",
   "Reason":"no index match",
-  "TableName":"user",
-  "Query":"select * from user where 1 = id",
+  "Table":"user",
+  "Original":"select * from user where 1 = id",
+  "Rewritten":"select * from user where 1 = id",
   "Index":null,
   "Values":null
 }
@@ -223,8 +315,9 @@
 {
   "ID": "SelectSingleShardKey",
   "Reason": "",
-  "TableName": "user",
-  "Query": "select * from user where id = 1",
+  "Table": "user",
+  "Original":"select * from user where id = 1",
+  "Rewritten": "select * from user where id = 1",
   "Index": {
     "Type": 0,
     "Column": "id",
@@ -242,8 +335,9 @@
 {
   "ID":"SelectScatter",
   "Reason":"no index match",
-  "TableName":"user",
-  "Query":"select * from user where id = 1.1",
+  "Table":"user",
+  "Original":"select * from user where id = 1.1",
+  "Rewritten":"select * from user where id = 1.1",
   "Index":null,
   "Values":null
 }
@@ -253,8 +347,9 @@
 {
   "ID": "SelectSingleShardKey",
   "Reason": "",
-  "TableName": "user",
-  "Query": "select * from user where id = :id",
+  "Table": "user",
+  "Original":"select * from user where id = :id",
+  "Rewritten": "select * from user where id = :id",
   "Index": {
     "Type": 0,
     "Column": "id",
@@ -272,8 +367,9 @@
 {
   "ID": "SelectMultiShardKey",
   "Reason": "",
-  "TableName": "user",
-  "Query": "select * from user where id in ::_vals",
+  "Table": "user",
+  "Original":"select * from user where id in (1, 2)",
+  "Rewritten": "select * from user where id in ::_vals",
   "Index": {
     "Type": 0,
     "Column": "id",
@@ -294,8 +390,9 @@
 {
   "ID":"SelectScatter",
   "Reason":"no index match",
-  "TableName":"user",
-  "Query":"select * from user where id in (1+1, 2)",
+  "Table":"user",
+  "Original":"select * from user where id in (1+1, 2)",
+  "Rewritten":"select * from user where id in (1+1, 2)",
   "Index":null,
   "Values":null
 }
@@ -305,8 +402,9 @@
 {
   "ID":"SelectScatter",
   "Reason":"no index match",
-  "TableName":"user",
-  "Query":"select * from user where id in (1.1, 2)",
+  "Table":"user",
+  "Original":"select * from user where id in (1.1, 2)",
+  "Rewritten":"select * from user where id in (1.1, 2)",
   "Index":null,
   "Values":null
 }
@@ -316,8 +414,9 @@
 {
   "ID": "SelectScatter",
   "Reason": "no index match",
-  "TableName": "user",
-  "Query": "select * from user where user_id = 1",
+  "Table": "user",
+  "Original":"select * from user where user_id = 1",
+  "Rewritten": "select * from user where user_id = 1",
   "Index": null,
   "Values": null
 }
@@ -327,8 +426,9 @@
 {
   "ID": "SelectSingleShardKey",
   "Reason": "",
-  "TableName": "user_extra",
-  "Query": "select * from user_extra where user_id = 1",
+  "Table": "user_extra",
+  "Original":"select * from user_extra where user_id = 1",
+  "Rewritten": "select * from user_extra where user_id = 1",
   "Index": {
     "Type": 0,
     "Column": "user_id",
@@ -346,8 +446,9 @@
 {
   "ID": "SelectSingleShardKey",
   "Reason": "",
-  "TableName": "music",
-  "Query": "select * from music where user_id = 1",
+  "Table": "music",
+  "Original":"select * from music where user_id = 1",
+  "Rewritten": "select * from music where user_id = 1",
   "Index": {
     "Type": 0,
     "Column": "user_id",
@@ -365,8 +466,9 @@
 {
   "ID": "SelectSingleLookup",
   "Reason": "",
-  "TableName": "music",
-  "Query": "select * from music where id = 1",
+  "Table": "music",
+  "Original":"select * from music where id = 1",
+  "Rewritten": "select * from music where id = 1",
   "Index": {
     "Type": 1,
     "Column": "id",
@@ -384,8 +486,9 @@
 {
   "ID": "SelectMultiLookup",
   "Reason": "",
-  "TableName": "music",
-  "Query": "select * from music where id in ::_vals",
+  "Table": "music",
+  "Original":"select * from music where id in (1, 2)",
+  "Rewritten": "select * from music where id in ::_vals",
   "Index": {
     "Type": 1,
     "Column": "id",
@@ -406,8 +509,9 @@
 {
   "ID": "SelectMultiLookup",
   "Reason": "",
-  "TableName": "music",
-  "Query": "select * from music where id in ::_vals",
+  "Table": "music",
+  "Original":"select * from music where id in (:a, 2)",
+  "Rewritten": "select * from music where id in ::_vals",
   "Index": {
     "Type": 1,
     "Column": "id",
@@ -428,8 +532,9 @@
 {
   "ID": "SelectMultiLookup",
   "Reason": "",
-  "TableName": "music",
-  "Query": "select * from music where id in ::_vals",
+  "Table": "music",
+  "Original":"select * from music where id in ::list",
+  "Rewritten": "select * from music where id in ::_vals",
   "Index": {
     "Type": 1,
     "Column": "id",
@@ -447,8 +552,9 @@
 {
   "ID": "SelectSingleLookup",
   "Reason": "",
-  "TableName": "music_extra",
-  "Query": "select * from music_extra where music_id = 1",
+  "Table": "music_extra",
+  "Original":"select * from music_extra where music_id = 1",
+  "Rewritten": "select * from music_extra where music_id = 1",
   "Index": {
     "Type": 1,
     "Column": "music_id",
@@ -466,8 +572,9 @@
 {
   "ID": "SelectScatter",
   "Reason": "no index match",
-  "TableName": "user",
-  "Query": "select * from user where id = 1 and var = 2 or var = 3",
+  "Table": "user",
+  "Original":"select * from user where id = 1 and var = 2 or var = 3",
+  "Rewritten": "select * from user where id = 1 and var = 2 or var = 3",
   "Index": null,
   "Values": null
 }
@@ -477,8 +584,9 @@
 {
   "ID": "SelectSingleShardKey",
   "Reason": "",
-  "TableName": "user",
-  "Query": "select * from user where id = 1 and (var = 2 or var = 3)",
+  "Table": "user",
+  "Original":"select * from user where id = 1 and (var = 2 or var = 3)",
+  "Rewritten": "select * from user where id = 1 and (var = 2 or var = 3)",
   "Index": {
     "Type": 0,
     "Column": "id",
@@ -496,8 +604,9 @@
 {
   "ID": "SelectScatter",
   "Reason": "no index match",
-  "TableName": "user",
-  "Query": "select * from user where var = 2 or var = 3 and id = 1",
+  "Table": "user",
+  "Original":"select * from user where var = 2 or var = 3 and id = 1",
+  "Rewritten": "select * from user where var = 2 or var = 3 and id = 1",
   "Index": null,
   "Values": null
 }
@@ -507,8 +616,9 @@
 {
   "ID": "SelectSingleShardKey",
   "Reason": "",
-  "TableName": "user",
-  "Query": "select * from user where (var = 2 or var = 3) and id = 1",
+  "Table": "user",
+  "Original":"select * from user where (var = 2 or var = 3) and id = 1",
+  "Rewritten": "select * from user where (var = 2 or var = 3) and id = 1",
   "Index": {
     "Type": 0,
     "Column": "id",
@@ -526,8 +636,9 @@
 {
   "ID": "NoPlan",
   "Reason": "too complex",
-  "TableName": "user",
-  "Query": "select count(*) from user where id in ::_vals",
+  "Table": "user",
+  "Original":"select count(*) from user where id in (1, 2)",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -537,8 +648,9 @@
 {
   "ID": "NoPlan",
   "Reason": "too complex",
-  "TableName": "user",
-  "Query": "select a = 1 and count(*) = 1 from user where id in ::_vals",
+  "Table": "user",
+  "Original":"select a = 1 and count(*) = 1 from user where id in (1, 2)",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -548,8 +660,9 @@
 {
   "ID": "NoPlan",
   "Reason": "too complex",
-  "TableName": "user",
-  "Query": "select a = 1 or count(*) = 1 from user where id in ::_vals",
+  "Table": "user",
+  "Original":"select a = 1 or count(*) = 1 from user where id in (1, 2)",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -559,8 +672,9 @@
 {
   "ID": "NoPlan",
   "Reason": "too complex",
-  "TableName": "user",
-  "Query": "select (not count(*) = 1) from user where id in ::_vals",
+  "Table": "user",
+  "Original":"select (not count(*) = 1) from user where id in (1, 2)",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -570,8 +684,9 @@
 {
   "ID": "NoPlan",
   "Reason": "too complex",
-  "TableName": "user",
-  "Query": "select count(*) between 1 and 2 from user where id in ::_vals",
+  "Table": "user",
+  "Original":"select count(*) between 1 and 2 from user where id in (1, 2)",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -581,8 +696,9 @@
 {
   "ID": "NoPlan",
   "Reason": "too complex",
-  "TableName": "user",
-  "Query": "select count(*) is null from user where id in ::_vals",
+  "Table": "user",
+  "Original":"select count(*) is null from user where id in (1, 2)",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -592,8 +708,9 @@
 {
   "ID":"SelectMultiShardKey",
   "Reason":"",
-  "TableName":"user",
-  "Query":"select exists (select 1 from dual) from user where id in ::_vals",
+  "Table":"user",
+  "Original":"select exists (select 1 from dual) from user where id in (1, 2)",
+  "Rewritten":"select exists (select 1 from dual) from user where id in ::_vals",
   "Index":{
     "Type":0,
     "Column":"id",
@@ -611,8 +728,9 @@
 {
   "ID":"SelectMultiShardKey",
   "Reason":"",
-  "TableName":"user",
-  "Query": "select (select 1 from dual) from user where id in ::_vals",
+  "Table":"user",
+  "Original":"select (select 1 from dual) from user where id in (1, 2)",
+  "Rewritten": "select (select 1 from dual) from user where id in ::_vals",
   "Index":{
     "Type":0,
     "Column":"id",
@@ -630,8 +748,9 @@
 {
   "ID": "NoPlan",
   "Reason": "too complex",
-  "TableName": "user",
-  "Query": "select count(*)+1 from user where id in ::_vals",
+  "Table": "user",
+  "Original":"select count(*)+1 from user where id in (1, 2)",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -641,8 +760,9 @@
 {
   "ID": "NoPlan",
   "Reason": "too complex",
-  "TableName": "user",
-  "Query": "select -count(*) from user where id in ::_vals",
+  "Table": "user",
+  "Original":"select -count(*) from user where id in (1, 2)",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -652,8 +772,9 @@
 {
   "ID": "NoPlan",
   "Reason": "too complex",
-  "TableName": "user",
-  "Query": "select fun(1, count(*)) from user where id in ::_vals",
+  "Table": "user",
+  "Original":"select fun(1, count(*)) from user where id in (1, 2)",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -663,8 +784,9 @@
 {
   "ID": "SelectMultiShardKey",
   "Reason": "",
-  "TableName": "user",
-  "Query": "select fun(*) from user where id in ::_vals",
+  "Table": "user",
+  "Original":"select fun(*) from user where id in (1, 2)",
+  "Rewritten": "select fun(*) from user where id in ::_vals",
   "Index": {
     "Type": 0,
     "Column": "id",
@@ -685,8 +807,9 @@
 {
   "ID": "NoPlan",
   "Reason": "too complex",
-  "TableName": "user",
-  "Query": "select case count(*) when a = b then d end from user where id in ::_vals",
+  "Table": "user",
+  "Original":"select case count(*) when a = b then d end from user where id in (1, 2)",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -696,8 +819,9 @@
 {
   "ID": "NoPlan",
   "Reason": "too complex",
-  "TableName": "user",
-  "Query": "select case a when a = b then d else count(*) end from user where id in ::_vals",
+  "Table": "user",
+  "Original":"select case a when a = b then d else count(*) end from user where id in (1, 2)",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -707,8 +831,9 @@
 {
   "ID": "NoPlan",
   "Reason": "too complex",
-  "TableName": "user",
-  "Query": "select case a when count(*) = b then d else e end from user where id in ::_vals",
+  "Table": "user",
+  "Original":"select case a when count(*) = b then d else e end from user where id in (1, 2)",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -718,8 +843,9 @@
 {
   "ID": "NoPlan",
   "Reason": "too complex",
-  "TableName": "user",
-  "Query": "select case a when a = b then count(*) else e end from user where id in ::_vals",
+  "Table": "user",
+  "Original":"select case a when a = b then count(*) else e end from user where id in (1, 2)",
+  "Rewritten": "",
   "Index": null,
   "Values": null
 }
@@ -729,8 +855,9 @@
 {
   "ID": "SelectMultiShardKey",
   "Reason": "",
-  "TableName": "user",
-  "Query": "select case a when a = b then d else e end from user where id in ::_vals",
+  "Table": "user",
+  "Original":"select case a when a = b then d else e end from user where id in (1, 2)",
+  "Rewritten": "select case a when a = b then d else e end from user where id in ::_vals",
   "Index": {
     "Type": 0,
     "Column": "id",

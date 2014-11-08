@@ -22,7 +22,6 @@ import (
 	kproto "github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
@@ -51,7 +50,6 @@ var (
 // can be created.
 type VTGate struct {
 	resolver *Resolver
-	router   *Router
 	timings  *stats.MultiTimings
 
 	maxInFlight int64
@@ -74,7 +72,7 @@ type RegisterVTGate func(*VTGate)
 
 var RegisterVTGates []RegisterVTGate
 
-func Init(serv SrvTopoServer, schema *planbuilder.Schema, cell string, retryDelay time.Duration, retryCount int, timeout time.Duration, maxInFlight int) {
+func Init(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount int, timeout time.Duration, maxInFlight int) {
 	if RpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
@@ -94,9 +92,6 @@ func Init(serv SrvTopoServer, schema *planbuilder.Schema, cell string, retryDela
 		logStreamExecuteKeyspaceIds: logutil.NewThrottledLogger("StreamExecuteKeyspaceIds", 5*time.Second),
 		logStreamExecuteKeyRanges:   logutil.NewThrottledLogger("StreamExecuteKeyRanges", 5*time.Second),
 		logStreamExecuteShard:       logutil.NewThrottledLogger("StreamExecuteShard", 5*time.Second),
-	}
-	RpcVTGate.router = NewRouter(serv, cell, schema, "VTGateRouter", RpcVTGate.resolver.scatterConn)
-	if schema != nil {
 	}
 	normalErrors = stats.NewMultiCounters("VtgateApiErrorCounts", []string{"Operation", "Keyspace", "DbType"})
 	infoErrors = stats.NewCounters("VtgateInfoErrorCounts")
@@ -128,37 +123,6 @@ func (vtg *VTGate) InitializeConnections(ctx context.Context) (err error) {
 		return err
 	}
 	log.Infof("Initialize VTTablet connections completed")
-	return nil
-}
-
-// Execute executes a non-streaming query by routing based on the values in the query.
-func (vtg *VTGate) Execute(context context.Context, query *proto.Query, reply *proto.QueryResult) (err error) {
-	defer handlePanic(&err)
-
-	startTime := time.Now()
-	// TODO(sougou): need to supply keyspace here.
-	statsKey := []string{"ExecuteShard", "", string(query.TabletType)}
-	defer vtg.timings.Record(statsKey, startTime)
-
-	x := vtg.inFlight.Add(1)
-	defer vtg.inFlight.Add(-1)
-	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
-		return ErrTooManyInFlight
-	}
-
-	qr, err := vtg.router.Execute(context, query)
-	if err == nil {
-		reply.Result = qr
-	} else {
-		reply.Error = err.Error()
-		if strings.Contains(reply.Error, errDupKey) {
-			infoErrors.Add("DupKey", 1)
-		} else {
-			normalErrors.Add(statsKey, 1)
-			vtg.logExecuteShard.Errorf("%v, query: %+v", err, query)
-		}
-	}
-	reply.Session = query.Session
 	return nil
 }
 
