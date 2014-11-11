@@ -40,7 +40,7 @@ func (tm *TabletManager) Ping(ctx context.Context, args, reply *string) error {
 	})
 }
 
-func (tm *TabletManager) Sleep(ctx context.Context, args *time.Duration, reply *rpc.UnusedResponse) error {
+func (tm *TabletManager) Sleep(ctx context.Context, args *time.Duration, reply *rpc.Unused) error {
 	return tm.agent.RpcWrapLockAction(ctx, actionnode.TABLET_ACTION_SLEEP, args, reply, true, func() error {
 		tm.agent.Sleep(*args)
 		return nil
@@ -64,7 +64,7 @@ func (tm *TabletManager) GetSchema(ctx context.Context, args *gorpcproto.GetSche
 	})
 }
 
-func (tm *TabletManager) GetPermissions(ctx context.Context, args *rpc.UnusedRequest, reply *myproto.Permissions) error {
+func (tm *TabletManager) GetPermissions(ctx context.Context, args *rpc.Unused, reply *myproto.Permissions) error {
 	return tm.agent.RpcWrap(ctx, actionnode.TABLET_ACTION_GET_PERMISSIONS, args, reply, func() error {
 		p, err := tm.agent.GetPermissions()
 		if err == nil {
@@ -78,45 +78,45 @@ func (tm *TabletManager) GetPermissions(ctx context.Context, args *rpc.UnusedReq
 // Various read-write methods
 //
 
-func (tm *TabletManager) SetReadOnly(ctx context.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+func (tm *TabletManager) SetReadOnly(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
 	return tm.agent.RpcWrapLockAction(ctx, actionnode.TABLET_ACTION_SET_RDONLY, args, reply, true, func() error {
 		return tm.agent.SetReadOnly(true)
 	})
 }
 
-func (tm *TabletManager) SetReadWrite(ctx context.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+func (tm *TabletManager) SetReadWrite(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
 	return tm.agent.RpcWrapLockAction(ctx, actionnode.TABLET_ACTION_SET_RDWR, args, reply, true, func() error {
 		return tm.agent.SetReadOnly(false)
 	})
 }
 
-func (tm *TabletManager) ChangeType(ctx context.Context, args *topo.TabletType, reply *rpc.UnusedResponse) error {
+func (tm *TabletManager) ChangeType(ctx context.Context, args *topo.TabletType, reply *rpc.Unused) error {
 	return tm.agent.RpcWrapLockAction(ctx, actionnode.TABLET_ACTION_CHANGE_TYPE, args, reply, true, func() error {
 		return tm.agent.ChangeType(*args)
 	})
 }
 
-func (tm *TabletManager) Scrap(ctx context.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+func (tm *TabletManager) Scrap(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
 	return tm.agent.RpcWrapLockAction(ctx, actionnode.TABLET_ACTION_SCRAP, args, reply, true, func() error {
 		return tm.agent.Scrap()
 	})
 }
 
-func (tm *TabletManager) RefreshState(ctx context.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+func (tm *TabletManager) RefreshState(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
 	return tm.agent.RpcWrapLockAction(ctx, actionnode.TABLET_ACTION_REFRESH_STATE, args, reply, true, func() error {
 		tm.agent.RefreshState()
 		return nil
 	})
 }
 
-func (tm *TabletManager) RunHealthCheck(ctx context.Context, args *topo.TabletType, reply *rpc.UnusedResponse) error {
+func (tm *TabletManager) RunHealthCheck(ctx context.Context, args *topo.TabletType, reply *rpc.Unused) error {
 	return tm.agent.RpcWrap(ctx, actionnode.TABLET_ACTION_RUN_HEALTH_CHECK, args, reply, func() error {
 		tm.agent.RunHealthCheck(*args)
 		return nil
 	})
 }
 
-func (tm *TabletManager) ReloadSchema(ctx context.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+func (tm *TabletManager) ReloadSchema(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
 	return tm.agent.RpcWrapLockAction(ctx, actionnode.TABLET_ACTION_RELOAD_SCHEMA, args, reply, true, func() error {
 		tm.agent.ReloadSchema()
 		return nil
@@ -157,7 +157,7 @@ func (tm *TabletManager) ExecuteFetch(ctx context.Context, args *gorpcproto.Exec
 // Replication related methods
 //
 
-func (tm *TabletManager) SlaveStatus(ctx context.Context, args *rpc.UnusedRequest, reply *myproto.ReplicationStatus) error {
+func (tm *TabletManager) SlaveStatus(ctx context.Context, args *rpc.Unused, reply *myproto.ReplicationStatus) error {
 	return tm.agent.RpcWrap(ctx, actionnode.TABLET_ACTION_SLAVE_STATUS, args, reply, func() error {
 		status, err := tm.agent.SlaveStatus()
 		if err == nil {
@@ -177,7 +177,7 @@ func (tm *TabletManager) WaitSlavePosition(ctx context.Context, args *gorpcproto
 	})
 }
 
-func (tm *TabletManager) MasterPosition(ctx context.Context, args *rpc.UnusedRequest, reply *myproto.ReplicationPosition) error {
+func (tm *TabletManager) MasterPosition(ctx context.Context, args *rpc.Unused, reply *myproto.ReplicationPosition) error {
 	return tm.agent.RpcWrap(ctx, actionnode.TABLET_ACTION_MASTER_POSITION, args, reply, func() error {
 		position, err := tm.agent.MasterPosition()
 		if err == nil {
@@ -197,7 +197,7 @@ func (tm *TabletManager) ReparentPosition(ctx context.Context, args *myproto.Rep
 	})
 }
 
-func (tm *TabletManager) StopSlave(ctx context.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+func (tm *TabletManager) StopSlave(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
 	return tm.agent.RpcWrapLock(ctx, actionnode.TABLET_ACTION_STOP_SLAVE, args, reply, true, func() error {
 		return tm.agent.StopSlave()
 	})
@@ -213,13 +213,13 @@ func (tm *TabletManager) StopSlaveMinimum(ctx context.Context, args *gorpcproto.
 	})
 }
 
-func (tm *TabletManager) StartSlave(ctx context.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+func (tm *TabletManager) StartSlave(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
 	return tm.agent.RpcWrapLock(ctx, actionnode.TABLET_ACTION_START_SLAVE, args, reply, true, func() error {
 		return tm.agent.StartSlave()
 	})
 }
 
-func (tm *TabletManager) TabletExternallyReparented(ctx context.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+func (tm *TabletManager) TabletExternallyReparented(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
 	// TODO(alainjobart) we should forward the RPC deadline from
 	// the original gorpc call. Until we support that, use a
 	// reasonnable hard-coded value.
@@ -228,7 +228,7 @@ func (tm *TabletManager) TabletExternallyReparented(ctx context.Context, args *r
 	})
 }
 
-func (tm *TabletManager) GetSlaves(ctx context.Context, args *rpc.UnusedRequest, reply *gorpcproto.GetSlavesReply) error {
+func (tm *TabletManager) GetSlaves(ctx context.Context, args *rpc.Unused, reply *gorpcproto.GetSlavesReply) error {
 	return tm.agent.RpcWrap(ctx, actionnode.TABLET_ACTION_GET_SLAVES, args, reply, func() error {
 		var err error
 		reply.Addrs, err = tm.agent.GetSlaves()
@@ -236,13 +236,13 @@ func (tm *TabletManager) GetSlaves(ctx context.Context, args *rpc.UnusedRequest,
 	})
 }
 
-func (tm *TabletManager) WaitBlpPosition(ctx context.Context, args *gorpcproto.WaitBlpPositionArgs, reply *rpc.UnusedResponse) error {
+func (tm *TabletManager) WaitBlpPosition(ctx context.Context, args *gorpcproto.WaitBlpPositionArgs, reply *rpc.Unused) error {
 	return tm.agent.RpcWrapLock(ctx, actionnode.TABLET_ACTION_WAIT_BLP_POSITION, args, reply, true, func() error {
 		return tm.agent.WaitBlpPosition(&args.BlpPosition, args.WaitTimeout)
 	})
 }
 
-func (tm *TabletManager) StopBlp(ctx context.Context, args *rpc.UnusedRequest, reply *blproto.BlpPositionList) error {
+func (tm *TabletManager) StopBlp(ctx context.Context, args *rpc.Unused, reply *blproto.BlpPositionList) error {
 	return tm.agent.RpcWrapLock(ctx, actionnode.TABLET_ACTION_STOP_BLP, args, reply, true, func() error {
 		positions, err := tm.agent.StopBlp()
 		if err == nil {
@@ -252,7 +252,7 @@ func (tm *TabletManager) StopBlp(ctx context.Context, args *rpc.UnusedRequest, r
 	})
 }
 
-func (tm *TabletManager) StartBlp(ctx context.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+func (tm *TabletManager) StartBlp(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
 	return tm.agent.RpcWrapLock(ctx, actionnode.TABLET_ACTION_START_BLP, args, reply, true, func() error {
 		return tm.agent.StartBlp()
 	})
@@ -272,13 +272,13 @@ func (tm *TabletManager) RunBlpUntil(ctx context.Context, args *gorpcproto.RunBl
 // Reparenting related functions
 //
 
-func (tm *TabletManager) DemoteMaster(ctx context.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+func (tm *TabletManager) DemoteMaster(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
 	return tm.agent.RpcWrapLockAction(ctx, actionnode.TABLET_ACTION_DEMOTE_MASTER, args, reply, true, func() error {
 		return tm.agent.DemoteMaster()
 	})
 }
 
-func (tm *TabletManager) PromoteSlave(ctx context.Context, args *rpc.UnusedRequest, reply *actionnode.RestartSlaveData) error {
+func (tm *TabletManager) PromoteSlave(ctx context.Context, args *rpc.Unused, reply *actionnode.RestartSlaveData) error {
 	return tm.agent.RpcWrapLockAction(ctx, actionnode.TABLET_ACTION_PROMOTE_SLAVE, args, reply, true, func() error {
 		rsd, err := tm.agent.PromoteSlave()
 		if err == nil {
@@ -288,25 +288,25 @@ func (tm *TabletManager) PromoteSlave(ctx context.Context, args *rpc.UnusedReque
 	})
 }
 
-func (tm *TabletManager) SlaveWasPromoted(ctx context.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+func (tm *TabletManager) SlaveWasPromoted(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
 	return tm.agent.RpcWrapLockAction(ctx, actionnode.TABLET_ACTION_SLAVE_WAS_PROMOTED, args, reply, true, func() error {
 		return tm.agent.SlaveWasPromoted()
 	})
 }
 
-func (tm *TabletManager) RestartSlave(ctx context.Context, args *actionnode.RestartSlaveData, reply *rpc.UnusedResponse) error {
+func (tm *TabletManager) RestartSlave(ctx context.Context, args *actionnode.RestartSlaveData, reply *rpc.Unused) error {
 	return tm.agent.RpcWrapLockAction(ctx, actionnode.TABLET_ACTION_RESTART_SLAVE, args, reply, true, func() error {
 		return tm.agent.RestartSlave(args)
 	})
 }
 
-func (tm *TabletManager) SlaveWasRestarted(ctx context.Context, args *actionnode.SlaveWasRestartedArgs, reply *rpc.UnusedResponse) error {
+func (tm *TabletManager) SlaveWasRestarted(ctx context.Context, args *actionnode.SlaveWasRestartedArgs, reply *rpc.Unused) error {
 	return tm.agent.RpcWrapLockAction(ctx, actionnode.TABLET_ACTION_SLAVE_WAS_RESTARTED, args, reply, true, func() error {
 		return tm.agent.SlaveWasRestarted(args)
 	})
 }
 
-func (tm *TabletManager) BreakSlaves(ctx context.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+func (tm *TabletManager) BreakSlaves(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
 	return tm.agent.RpcWrapLockAction(ctx, actionnode.TABLET_ACTION_BREAK_SLAVES, args, reply, true, func() error {
 		return tm.agent.BreakSlaves()
 	})
@@ -348,13 +348,13 @@ func (tm *TabletManager) Snapshot(ctx context.Context, args *actionnode.Snapshot
 	})
 }
 
-func (tm *TabletManager) SnapshotSourceEnd(ctx context.Context, args *actionnode.SnapshotSourceEndArgs, reply *rpc.UnusedResponse) error {
+func (tm *TabletManager) SnapshotSourceEnd(ctx context.Context, args *actionnode.SnapshotSourceEndArgs, reply *rpc.Unused) error {
 	return tm.agent.RpcWrapLockAction(ctx, actionnode.TABLET_ACTION_SNAPSHOT_SOURCE_END, args, reply, true, func() error {
 		return tm.agent.SnapshotSourceEnd(args)
 	})
 }
 
-func (tm *TabletManager) ReserveForRestore(ctx context.Context, args *actionnode.ReserveForRestoreArgs, reply *rpc.UnusedResponse) error {
+func (tm *TabletManager) ReserveForRestore(ctx context.Context, args *actionnode.ReserveForRestoreArgs, reply *rpc.Unused) error {
 	return tm.agent.RpcWrapLockAction(ctx, actionnode.TABLET_ACTION_RESERVE_FOR_RESTORE, args, reply, true, func() error {
 		return tm.agent.ReserveForRestore(args)
 	})

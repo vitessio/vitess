@@ -172,8 +172,7 @@ func (conn *TabletBson) Commit(context context.Context, transactionID int64) err
 		SessionId:     conn.sessionID,
 		TransactionId: transactionID,
 	}
-	var noOutput rpc.UnusedResponse
-	return tabletError(conn.rpcClient.Call("SqlQuery.Commit", req, &noOutput))
+	return tabletError(conn.rpcClient.Call("SqlQuery.Commit", req, &rpc.Unused{}))
 }
 
 // Rollback rolls back the ongoing transaction.
@@ -188,8 +187,7 @@ func (conn *TabletBson) Rollback(context context.Context, transactionID int64) e
 		SessionId:     conn.sessionID,
 		TransactionId: transactionID,
 	}
-	var noOutput rpc.UnusedResponse
-	return tabletError(conn.rpcClient.Call("SqlQuery.Rollback", req, &noOutput))
+	return tabletError(conn.rpcClient.Call("SqlQuery.Rollback", req, &rpc.Unused{}))
 }
 
 // SplitQuery is the stub for SqlQuery.SplitQuery RPC

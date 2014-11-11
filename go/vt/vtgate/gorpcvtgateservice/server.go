@@ -59,15 +59,15 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.Ke
 	})
 }
 
-func (vtg *VTGate) Begin(ctx context.Context, noInput *rpc.UnusedRequest, outSession *proto.Session) error {
+func (vtg *VTGate) Begin(ctx context.Context, noInput *rpc.Unused, outSession *proto.Session) error {
 	return vtg.server.Begin(ctx, outSession)
 }
 
-func (vtg *VTGate) Commit(ctx context.Context, inSession *proto.Session, noOutput *rpc.UnusedResponse) error {
+func (vtg *VTGate) Commit(ctx context.Context, inSession *proto.Session, noOutput *rpc.Unused) error {
 	return vtg.server.Commit(ctx, inSession)
 }
 
-func (vtg *VTGate) Rollback(ctx context.Context, inSession *proto.Session, noOutput *rpc.UnusedResponse) error {
+func (vtg *VTGate) Rollback(ctx context.Context, inSession *proto.Session, noOutput *rpc.Unused) error {
 	return vtg.server.Rollback(ctx, inSession)
 }
 
