@@ -11,7 +11,7 @@ package gorpcvtctlserver
 import (
 	"sync"
 
-	"github.com/youtube/vitess/go/vt/context"
+	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"

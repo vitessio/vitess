@@ -13,12 +13,12 @@ import (
 	"strings"
 	"time"
 
+	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
-	"github.com/youtube/vitess/go/vt/context"
 	kproto "github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"

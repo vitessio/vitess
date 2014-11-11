@@ -11,7 +11,7 @@ package gorpcmysqlctlserver
 import (
 	"time"
 
-	"github.com/youtube/vitess/go/vt/context"
+	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
 )

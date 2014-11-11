@@ -6,7 +6,7 @@
 package gorpcvtgateservice
 
 import (
-	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
+	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/vtgate"
@@ -17,61 +17,61 @@ type VTGate struct {
 	server *vtgate.VTGate
 }
 
-func (vtg *VTGate) ExecuteShard(ctx *rpcproto.Context, query *proto.QueryShard, reply *proto.QueryResult) error {
+func (vtg *VTGate) ExecuteShard(ctx context.Context, query *proto.QueryShard, reply *proto.QueryResult) error {
 	return vtg.server.ExecuteShard(ctx, query, reply)
 }
 
-func (vtg *VTGate) ExecuteKeyspaceIds(ctx *rpcproto.Context, query *proto.KeyspaceIdQuery, reply *proto.QueryResult) error {
+func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, reply *proto.QueryResult) error {
 	return vtg.server.ExecuteKeyspaceIds(ctx, query, reply)
 }
 
-func (vtg *VTGate) ExecuteKeyRanges(ctx *rpcproto.Context, query *proto.KeyRangeQuery, reply *proto.QueryResult) error {
+func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery, reply *proto.QueryResult) error {
 	return vtg.server.ExecuteKeyRanges(ctx, query, reply)
 }
 
-func (vtg *VTGate) ExecuteEntityIds(ctx *rpcproto.Context, query *proto.EntityIdsQuery, reply *proto.QueryResult) error {
+func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, query *proto.EntityIdsQuery, reply *proto.QueryResult) error {
 	return vtg.server.ExecuteEntityIds(ctx, query, reply)
 }
 
-func (vtg *VTGate) ExecuteBatchShard(ctx *rpcproto.Context, batchQuery *proto.BatchQueryShard, reply *proto.QueryResultList) error {
+func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, batchQuery *proto.BatchQueryShard, reply *proto.QueryResultList) error {
 	return vtg.server.ExecuteBatchShard(ctx, batchQuery, reply)
 }
 
-func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx *rpcproto.Context, batchQuery *proto.KeyspaceIdBatchQuery, reply *proto.QueryResultList) error {
+func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, batchQuery *proto.KeyspaceIdBatchQuery, reply *proto.QueryResultList) error {
 	return vtg.server.ExecuteBatchKeyspaceIds(ctx, batchQuery, reply)
 }
 
-func (vtg *VTGate) StreamExecuteShard(ctx *rpcproto.Context, query *proto.QueryShard, sendReply func(interface{}) error) error {
+func (vtg *VTGate) StreamExecuteShard(ctx context.Context, query *proto.QueryShard, sendReply func(interface{}) error) error {
 	return vtg.server.StreamExecuteShard(ctx, query, func(value *proto.QueryResult) error {
 		return sendReply(value)
 	})
 }
 
-func (vtg *VTGate) StreamExecuteKeyRanges(ctx *rpcproto.Context, query *proto.KeyRangeQuery, sendReply func(interface{}) error) error {
+func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery, sendReply func(interface{}) error) error {
 	return vtg.server.StreamExecuteKeyRanges(ctx, query, func(value *proto.QueryResult) error {
 		return sendReply(value)
 	})
 }
 
-func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx *rpcproto.Context, query *proto.KeyspaceIdQuery, sendReply func(interface{}) error) error {
+func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, sendReply func(interface{}) error) error {
 	return vtg.server.StreamExecuteKeyspaceIds(ctx, query, func(value *proto.QueryResult) error {
 		return sendReply(value)
 	})
 }
 
-func (vtg *VTGate) Begin(ctx *rpcproto.Context, noInput *rpc.UnusedRequest, outSession *proto.Session) error {
+func (vtg *VTGate) Begin(ctx context.Context, noInput *rpc.UnusedRequest, outSession *proto.Session) error {
 	return vtg.server.Begin(ctx, outSession)
 }
 
-func (vtg *VTGate) Commit(ctx *rpcproto.Context, inSession *proto.Session, noOutput *rpc.UnusedResponse) error {
+func (vtg *VTGate) Commit(ctx context.Context, inSession *proto.Session, noOutput *rpc.UnusedResponse) error {
 	return vtg.server.Commit(ctx, inSession)
 }
 
-func (vtg *VTGate) Rollback(ctx *rpcproto.Context, inSession *proto.Session, noOutput *rpc.UnusedResponse) error {
+func (vtg *VTGate) Rollback(ctx context.Context, inSession *proto.Session, noOutput *rpc.UnusedResponse) error {
 	return vtg.server.Rollback(ctx, inSession)
 }
 
-func (vtg *VTGate) SplitQuery(ctx *rpcproto.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
+func (vtg *VTGate) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
 	return vtg.server.SplitQuery(ctx, req, reply)
 }
 

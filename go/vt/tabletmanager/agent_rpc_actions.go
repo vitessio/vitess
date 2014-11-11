@@ -15,12 +15,12 @@ import (
 	"sync"
 	"time"
 
+	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/mysql/proto"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"

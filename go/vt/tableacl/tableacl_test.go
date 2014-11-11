@@ -4,15 +4,10 @@
 
 package tableacl
 
-import (
-	"testing"
-
-	"github.com/youtube/vitess/go/vt/context"
-)
+import "testing"
 
 func currentUser() string {
-	ctx := &context.DummyContext{}
-	return ctx.GetUsername()
+	return "DummyUser"
 }
 
 func TestParseInvalidJSON(t *testing.T) {

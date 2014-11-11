@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"code.google.com/p/go.net/context"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/context"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -221,8 +221,8 @@ func (sdc *ShardConn) getConn(ctx context.Context) (conn tabletconn.TabletConn, 
 	defer sdc.mu.Unlock()
 
 	// fail-fast if deadline exceeded
-	deadline := ctx.Deadline()
-	if !deadline.IsZero() {
+	deadline, ok := ctx.Deadline()
+	if ok {
 		if time.Now().After(deadline) {
 			return nil, topo.EndPoint{}, tabletconn.OperationalError("vttablet: deadline exceeded"), false
 		}

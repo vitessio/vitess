@@ -11,6 +11,7 @@ import (
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -127,7 +128,8 @@ func (qre *QueryExecutor) Stream(sendReply func(*mproto.QueryResult) error) {
 
 func (qre *QueryExecutor) checkPermissions() {
 	// Blacklist
-	action, desc := qre.plan.Rules.getAction(qre.ctx.GetRemoteAddr(), qre.ctx.GetUsername(), qre.bindVars)
+	ci := callinfo.FromContext(qre.ctx)
+	action, desc := qre.plan.Rules.getAction(ci.RemoteAddr(), ci.Username(), qre.bindVars)
 	switch action {
 	case QR_FAIL:
 		panic(NewTabletError(FAIL, "Query disallowed due to rule: %s", desc))
@@ -136,8 +138,8 @@ func (qre *QueryExecutor) checkPermissions() {
 	}
 
 	// ACLs
-	if !qre.plan.Authorized.IsMember(qre.ctx.GetUsername()) {
-		errStr := fmt.Sprintf("table acl error: %v cannot run %v on table %v", qre.ctx.GetUsername(), qre.plan.PlanId, qre.plan.TableName)
+	if !qre.plan.Authorized.IsMember(ci.Username()) {
+		errStr := fmt.Sprintf("table acl error: %v cannot run %v on table %v", ci.Username(), qre.plan.PlanId, qre.plan.TableName)
 		if qre.qe.strictTableAcl {
 			panic(NewTabletError(FAIL, "%s", errStr))
 		}

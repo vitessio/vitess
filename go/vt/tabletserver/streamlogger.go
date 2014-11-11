@@ -12,10 +12,11 @@ import (
 	"strings"
 	"time"
 
+	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/streamlog"
-	"github.com/youtube/vitess/go/vt/context"
+	"github.com/youtube/vitess/go/vt/callinfo"
 )
 
 var SqlQueryLogger = streamlog.New("SqlQuery", 50)
@@ -149,15 +150,15 @@ func (stats *SQLQueryStats) FmtQuerySources() string {
 }
 
 func (log *SQLQueryStats) RemoteAddr() string {
-	return log.context.GetRemoteAddr()
+	return callinfo.FromContext(log.context).RemoteAddr()
 }
 
 func (log *SQLQueryStats) Username() string {
-	return log.context.GetUsername()
+	return callinfo.FromContext(log.context).Username()
 }
 
 func (log *SQLQueryStats) ContextHTML() template.HTML {
-	return log.context.HTML()
+	return callinfo.FromContext(log.context).HTML()
 }
 
 // String returns a tab separated list of logged fields.

@@ -5,8 +5,8 @@
 package gorpcqueryservice
 
 import (
+	"code.google.com/p/go.net/context"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -20,33 +20,33 @@ func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo
 	return sq.server.GetSessionId(sessionParams, sessionInfo)
 }
 
-func (sq *SqlQuery) Begin(ctx *rpcproto.Context, session *proto.Session, txInfo *proto.TransactionInfo) error {
+func (sq *SqlQuery) Begin(ctx context.Context, session *proto.Session, txInfo *proto.TransactionInfo) error {
 	return sq.server.Begin(ctx, session, txInfo)
 }
 
-func (sq *SqlQuery) Commit(ctx *rpcproto.Context, session *proto.Session, noOutput *string) error {
+func (sq *SqlQuery) Commit(ctx context.Context, session *proto.Session, noOutput *string) error {
 	return sq.server.Commit(ctx, session)
 }
 
-func (sq *SqlQuery) Rollback(ctx *rpcproto.Context, session *proto.Session, noOutput *string) error {
+func (sq *SqlQuery) Rollback(ctx context.Context, session *proto.Session, noOutput *string) error {
 	return sq.server.Rollback(ctx, session)
 }
 
-func (sq *SqlQuery) Execute(ctx *rpcproto.Context, query *proto.Query, reply *mproto.QueryResult) error {
+func (sq *SqlQuery) Execute(ctx context.Context, query *proto.Query, reply *mproto.QueryResult) error {
 	return sq.server.Execute(ctx, query, reply)
 }
 
-func (sq *SqlQuery) StreamExecute(ctx *rpcproto.Context, query *proto.Query, sendReply func(reply interface{}) error) error {
+func (sq *SqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(reply interface{}) error) error {
 	return sq.server.StreamExecute(ctx, query, func(reply *mproto.QueryResult) error {
 		return sendReply(reply)
 	})
 }
 
-func (sq *SqlQuery) ExecuteBatch(ctx *rpcproto.Context, queryList *proto.QueryList, reply *proto.QueryResultList) error {
+func (sq *SqlQuery) ExecuteBatch(ctx context.Context, queryList *proto.QueryList, reply *proto.QueryResultList) error {
 	return sq.server.ExecuteBatch(ctx, queryList, reply)
 }
 
-func (sq *SqlQuery) SplitQuery(ctx *rpcproto.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
+func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
 	return sq.server.SplitQuery(ctx, req, reply)
 }
 
