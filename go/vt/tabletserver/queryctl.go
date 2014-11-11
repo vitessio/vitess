@@ -206,7 +206,8 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/plain")
 	if err := IsHealthy(); err != nil {
-		w.Write([]byte("notok"))
+		w.Write([]byte("not ok"))
+		return
 	}
 	w.Write([]byte("ok"))
 }
