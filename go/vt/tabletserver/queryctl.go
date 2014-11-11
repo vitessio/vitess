@@ -12,11 +12,11 @@ import (
 	"net/url"
 	"strconv"
 
+	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/streamlog"
-	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -193,7 +193,7 @@ func GetQueryRules() (qrs *QueryRules) {
 // the unhealthiness otherwise.
 func IsHealthy() error {
 	return SqlQueryRpcService.Execute(
-		&context.DummyContext{},
+		context.Background(),
 		&proto.Query{Sql: "select 1 from dual", SessionId: SqlQueryRpcService.sessionId},
 		new(mproto.QueryResult),
 	)

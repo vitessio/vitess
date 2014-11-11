@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -127,6 +128,11 @@ func (qre *QueryExecutor) Stream(sendReply func(*mproto.QueryResult) error) {
 }
 
 func (qre *QueryExecutor) checkPermissions() {
+	// Skip permissions check if we have a background context.
+	if qre.ctx == context.Background() {
+		return
+	}
+
 	// Blacklist
 	ci := callinfo.FromContext(qre.ctx)
 	action, desc := qre.plan.Rules.getAction(ci.RemoteAddr(), ci.Username(), qre.bindVars)
@@ -139,7 +145,7 @@ func (qre *QueryExecutor) checkPermissions() {
 
 	// ACLs
 	if !qre.plan.Authorized.IsMember(ci.Username()) {
-		errStr := fmt.Sprintf("table acl error: %v cannot run %v on table %v", ci.Username(), qre.plan.PlanId, qre.plan.TableName)
+		errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", ci.Username(), qre.plan.PlanId, qre.plan.TableName)
 		if qre.qe.strictTableAcl {
 			panic(NewTabletError(FAIL, "%s", errStr))
 		}
