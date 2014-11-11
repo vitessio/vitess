@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
+	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/vt/callinfo"
-	"github.com/youtube/vitess/go/vt/context"
 )
 
 var SqlQueryLogger = streamlog.New("SqlQuery", 50)

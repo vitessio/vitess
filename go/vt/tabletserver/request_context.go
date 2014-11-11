@@ -7,9 +7,9 @@ package tabletserver
 import (
 	"time"
 
+	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/hack"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )

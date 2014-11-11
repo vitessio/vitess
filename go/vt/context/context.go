@@ -3,12 +3,7 @@ package context
 import (
 	"html/template"
 	"time"
-
-	gcontext "code.google.com/p/go.net/context"
 )
-
-// Context represents the context for SqlQuery RPC calls.
-type Context gcontext.Context
 
 // DummyContext is a dummy implementation of Context.
 type DummyContext struct {
