@@ -78,7 +78,7 @@ type SplitCloneWorker struct {
 func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string, strategyStr string, sourceReaderCount int, minTableSizeForSplit uint64, destinationWriterCount int) (Worker, error) {
 	strategy, err := mysqlctl.NewSplitStrategy(wr.Logger(), strategyStr)
 	if err != nil {
-		return nil, fmt.Errorf("cannot parse strategy: %v", err)
+		return nil, err
 	}
 	return &SplitCloneWorker{
 		wr:                     wr,
