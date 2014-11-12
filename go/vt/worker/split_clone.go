@@ -346,11 +346,15 @@ func (scw *SplitCloneWorker) findTargets() error {
 			return fmt.Errorf("cannot read all target tablets in %v/%v: %v", si.Keyspace(), si.ShardName(), err)
 		}
 
+		shardMasterMap := make(map[topo.TabletAlias]*topo.TabletInfo)
+
 		// find and validate the master
 		for tabletAlias, ti := range scw.destinationTablets[shardIndex] {
 			if ti.Type == topo.TYPE_MASTER {
 				if scw.destinationMasterAliases[shardIndex].IsZero() {
 					scw.destinationMasterAliases[shardIndex] = tabletAlias
+					// This should be the only master tablet
+					shardMasterMap[tabletAlias] = ti
 				} else {
 					return fmt.Errorf("multiple masters in destination shard: %v and %v at least", scw.destinationMasterAliases[shardIndex], tabletAlias)
 				}
@@ -358,6 +362,15 @@ func (scw *SplitCloneWorker) findTargets() error {
 		}
 		if scw.destinationMasterAliases[shardIndex].IsZero() {
 			return fmt.Errorf("no master in destination shard")
+		}
+		// We can only mutate destinationTablets for a shardIndex after iterating through them all.
+		// Otherwise, we could have multiple masters and not detect it.
+		// TODO(aaijazi): this is a pretty inefficient way to look up all the masters.
+		// We should only have to read the global Shard record instead of filtering down from all tablets
+		// when using the writeMastersOnly strategy.
+		if strings.Contains(scw.strategy, "writeMastersOnly") {
+			scw.destinationTablets[shardIndex] = shardMasterMap
+			scw.destinationAliases[shardIndex] = []topo.TabletAlias{scw.destinationMasterAliases[shardIndex]}
 		}
 	}
 
@@ -460,6 +473,9 @@ func (scw *SplitCloneWorker) copy() error {
 		mu.Unlock()
 	}
 
+	// if we're writing only to masters, we need to enable bin logs so that replication happens
+	disableBinLogs := !strings.Contains(scw.strategy, "writeMastersOnly")
+
 	insertChannels := make([][]chan string, len(scw.destinationShards))
 	destinationWaitGroup := sync.WaitGroup{}
 	for shardIndex, _ := range scw.destinationShards {
@@ -491,7 +507,7 @@ func (scw *SplitCloneWorker) copy() error {
 					destinationWaitGroup.Add(1)
 					go func() {
 						defer destinationWaitGroup.Done()
-						if err := executeFetchLoop(scw.wr, ti, insertChannel, abort); err != nil {
+						if err := executeFetchLoop(scw.wr, ti, insertChannel, abort, disableBinLogs); err != nil {
 							processError("executeFetchLoop failed: %v", err)
 						}
 					}()

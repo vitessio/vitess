@@ -288,7 +288,7 @@ func makeValueString(fields []mproto.Field, rows [][]sqltypes.Value) string {
 
 // executeFetchLoop loops over the provided insertChannel
 // and sends the commands to the provided tablet.
-func executeFetchLoop(wr *wrangler.Wrangler, ti *topo.TabletInfo, insertChannel chan string, abort chan struct{}) error {
+func executeFetchLoop(wr *wrangler.Wrangler, ti *topo.TabletInfo, insertChannel chan string, abort chan struct{}, disableBinLogs bool) error {
 	for {
 		select {
 		case cmd, ok := <-insertChannel:
@@ -297,7 +297,7 @@ func executeFetchLoop(wr *wrangler.Wrangler, ti *topo.TabletInfo, insertChannel 
 				return nil
 			}
 			cmd = "INSERT INTO `" + ti.DbName() + "`." + cmd
-			_, err := wr.TabletManagerClient().ExecuteFetch(context.TODO(), ti, cmd, 0, false, true, 30*time.Second)
+			_, err := wr.TabletManagerClient().ExecuteFetch(context.TODO(), ti, cmd, 0, false, disableBinLogs, 30*time.Second)
 			if err != nil {
 				return fmt.Errorf("ExecuteFetch failed: %v", err)
 			}

@@ -431,7 +431,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 				go func() {
 					defer destinationWaitGroup.Done()
 
-					if err := executeFetchLoop(vscw.wr, ti, insertChannel, abort); err != nil {
+					if err := executeFetchLoop(vscw.wr, ti, insertChannel, abort, true); err != nil {
 						processError("executeFetchLoop failed: %v", err)
 					}
 				}()
