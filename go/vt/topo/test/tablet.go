@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"code.google.com/p/go.net/context"
+
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -24,7 +26,7 @@ func tabletEqual(left, right *topo.Tablet) (bool, error) {
 	return string(lj) == string(rj), nil
 }
 
-func CheckTablet(t *testing.T, ts topo.Server) {
+func CheckTablet(ctx context.Context, t *testing.T, ts topo.Server) {
 	cell := getLocalCell(t, ts)
 	tablet := &topo.Tablet{
 		Alias:    topo.TabletAlias{Cell: cell, Uid: 1},
@@ -75,7 +77,7 @@ func CheckTablet(t *testing.T, ts topo.Server) {
 	}
 
 	ti.State = topo.STATE_READ_ONLY
-	if err := topo.UpdateTablet(ts, ti); err != nil {
+	if err := topo.UpdateTablet(ctx, ts, ti); err != nil {
 		t.Errorf("UpdateTablet: %v", err)
 	}
 

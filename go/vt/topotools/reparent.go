@@ -11,6 +11,8 @@ package topotools
 import (
 	"sync"
 
+	"code.google.com/p/go.net/context"
+
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -54,7 +56,7 @@ func RestartSlavesExternal(ts topo.Server, log logutil.Logger, slaveTabletMap, m
 
 				ti.Type = topo.TYPE_SPARE
 				ti.Parent = masterElectTabletAlias
-				if err := topo.UpdateTablet(ts, ti); err != nil {
+				if err := topo.UpdateTablet(context.TODO(), ts, ti); err != nil {
 					log.Warningf("Failed to change old master %v to spare: %v", ti.Alias, err)
 				}
 			}

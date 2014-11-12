@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"sync"
 
+	"code.google.com/p/go.net/context"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/event"
 	cc "github.com/youtube/vitess/go/vt/concurrency"
@@ -44,7 +46,7 @@ func (wr *Wrangler) prepareToSnapshot(ti *topo.TabletInfo, forceMasterSnapshot b
 		// There is a legitimate reason to force in the case of a single
 		// master.
 		ti.Tablet.Type = topo.TYPE_BACKUP
-		err = topo.UpdateTablet(wr.ts, ti)
+		err = topo.UpdateTablet(context.TODO(), wr.ts, ti)
 	} else {
 		err = wr.ChangeType(ti.Alias, topo.TYPE_BACKUP, false)
 	}
@@ -59,7 +61,7 @@ func (wr *Wrangler) prepareToSnapshot(ti *topo.TabletInfo, forceMasterSnapshot b
 		if ti.Tablet.Parent.Uid == topo.NO_TABLET && forceMasterSnapshot {
 			log.Infof("force change type backup -> master: %v", ti.Alias)
 			ti.Tablet.Type = topo.TYPE_MASTER
-			return topo.UpdateTablet(wr.ts, ti)
+			return topo.UpdateTablet(context.TODO(), wr.ts, ti)
 		}
 
 		return wr.ChangeType(ti.Alias, originalType, false)
@@ -87,7 +89,7 @@ func (wr *Wrangler) MultiRestore(dstTabletAlias topo.TabletAlias, sources []topo
 		}
 	}()
 
-	logStream, errFunc, err := wr.tmc.MultiRestore(ti, args, wr.ActionTimeout())
+	logStream, errFunc, err := wr.tmc.MultiRestore(context.TODO(), ti, args, wr.ActionTimeout())
 	if err != nil {
 		return err
 	}
@@ -134,7 +136,7 @@ func (wr *Wrangler) MultiSnapshot(keyRanges []key.KeyRange, tabletAlias topo.Tab
 	}()
 
 	// execute the remote action, log the results, save the error
-	logStream, errFunc, err := wr.tmc.MultiSnapshot(ti, args, wr.ActionTimeout())
+	logStream, errFunc, err := wr.tmc.MultiSnapshot(context.TODO(), ti, args, wr.ActionTimeout())
 	if err != nil {
 		return nil, topo.TabletAlias{}, err
 	}
@@ -243,7 +245,7 @@ func (wr *Wrangler) SetSourceShards(keyspace, shard string, sources []topo.Table
 	}
 
 	// and write the shard
-	if err = topo.UpdateShard(wr.ts, shardInfo); err != nil {
+	if err = topo.UpdateShard(context.TODO(), wr.ts, shardInfo); err != nil {
 		return err
 	}
 

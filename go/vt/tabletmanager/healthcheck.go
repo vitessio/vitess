@@ -14,6 +14,8 @@ import (
 	"reflect"
 	"time"
 
+	"code.google.com/p/go.net/context"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/health"
@@ -264,7 +266,7 @@ func (agent *ActionAgent) rebuildShardIfNeeded(tablet *topo.TabletInfo, targetTa
 		interrupted := make(chan struct{})
 
 		// no need to take the shard lock in this case
-		if _, err := topotools.RebuildShard(logutil.NewConsoleLogger(), agent.TopoServer, tablet.Keyspace, tablet.Shard, []string{tablet.Alias.Cell}, agent.LockTimeout, interrupted); err != nil {
+		if _, err := topotools.RebuildShard(context.TODO(), logutil.NewConsoleLogger(), agent.TopoServer, tablet.Keyspace, tablet.Shard, []string{tablet.Alias.Cell}, agent.LockTimeout, interrupted); err != nil {
 			return fmt.Errorf("topotools.RebuildShard returned an error: %v", err)
 		}
 	}

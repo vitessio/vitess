@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"code.google.com/p/go.net/context"
+	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
@@ -27,8 +29,13 @@ var UseSrvShardLocks = flag.Bool("use_srv_shard_locks", true, "DEPRECATED: If tr
 //
 // This function locks individual SvrShard paths, so it doesn't need a lock
 // on the shard.
-func RebuildShard(log logutil.Logger, ts topo.Server, keyspace, shard string, cells []string, timeout time.Duration, interrupted chan struct{}) (*topo.ShardInfo, error) {
+func RebuildShard(ctx context.Context, log logutil.Logger, ts topo.Server, keyspace, shard string, cells []string, timeout time.Duration, interrupted chan struct{}) (*topo.ShardInfo, error) {
 	log.Infof("RebuildShard %v/%v", keyspace, shard)
+
+	span := trace.NewSpanFromContext(ctx)
+	span.StartLocal("topotools.RebuildShard")
+	defer span.Finish()
+	ctx = trace.NewContext(ctx, span)
 
 	// read the existing shard info. It has to exist.
 	shardInfo, err := ts.GetShard(keyspace, shard)
@@ -58,7 +65,7 @@ func RebuildShard(log logutil.Logger, ts topo.Server, keyspace, shard string, ce
 			// Lock the SrvShard so we don't race with other rebuilds of the same
 			// shard in the same cell (e.g. from our peer tablets).
 			actionNode := actionnode.RebuildSrvShard()
-			lockPath, err := actionNode.LockSrvShard(ts, cell, keyspace, shard, timeout, interrupted)
+			lockPath, err := actionNode.LockSrvShard(ctx, ts, cell, keyspace, shard, timeout, interrupted)
 			if err != nil {
 				rec.RecordError(err)
 				return
@@ -98,7 +105,7 @@ func RebuildShard(log logutil.Logger, ts topo.Server, keyspace, shard string, ce
 			}
 
 			// write the data we need to
-			rebuildErr := rebuildCellSrvShard(log, ts, shardInfo, cell, tablets)
+			rebuildErr := rebuildCellSrvShard(ctx, log, ts, shardInfo, cell, tablets)
 
 			// and unlock
 			if err := actionNode.UnlockSrvShard(ts, cell, keyspace, shard, lockPath, rebuildErr); err != nil {
@@ -113,7 +120,7 @@ func RebuildShard(log logutil.Logger, ts topo.Server, keyspace, shard string, ce
 
 // rebuildCellSrvShard computes and writes the serving graph data to a
 // single cell
-func rebuildCellSrvShard(log logutil.Logger, ts topo.Server, shardInfo *topo.ShardInfo, cell string, tablets map[topo.TabletAlias]*topo.TabletInfo) error {
+func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server, shardInfo *topo.ShardInfo, cell string, tablets map[topo.TabletAlias]*topo.TabletInfo) error {
 	log.Infof("rebuildCellSrvShard %v/%v in cell %v", shardInfo.Keyspace(), shardInfo.ShardName(), cell)
 
 	// Get all existing db types so they can be removed if nothing
@@ -178,9 +185,13 @@ func rebuildCellSrvShard(log logutil.Logger, ts topo.Server, shardInfo *topo.Sha
 		wg.Add(1)
 		go func(tabletType topo.TabletType, addrs *topo.EndPoints) {
 			log.Infof("saving serving graph for cell %v shard %v/%v tabletType %v", cell, shardInfo.Keyspace(), shardInfo.ShardName(), tabletType)
+			span := trace.NewSpanFromContext(ctx)
+			span.StartClient("TopoServer.UpdateEndPoints")
+			span.Annotate("tablet_type", string(tabletType))
 			if err := ts.UpdateEndPoints(cell, shardInfo.Keyspace(), shardInfo.ShardName(), tabletType, addrs); err != nil {
 				rec.RecordError(fmt.Errorf("writing endpoints for cell %v shard %v/%v tabletType %v failed: %v", cell, shardInfo.Keyspace(), shardInfo.ShardName(), tabletType, err))
 			}
+			span.Finish()
 			wg.Done()
 		}(tabletType, addrs)
 	}
@@ -192,9 +203,13 @@ func rebuildCellSrvShard(log logutil.Logger, ts topo.Server, shardInfo *topo.Sha
 			wg.Add(1)
 			go func(tabletType topo.TabletType) {
 				log.Infof("removing stale db type from serving graph: %v", tabletType)
+				span := trace.NewSpanFromContext(ctx)
+				span.StartClient("TopoServer.DeleteEndPoints")
+				span.Annotate("tablet_type", string(tabletType))
 				if err := ts.DeleteEndPoints(cell, shardInfo.Keyspace(), shardInfo.ShardName(), tabletType); err != nil {
 					log.Warningf("unable to remove stale db type %v from serving graph: %v", tabletType, err)
 				}
+				span.Finish()
 				wg.Done()
 			}(tabletType)
 		}
@@ -215,9 +230,15 @@ func rebuildCellSrvShard(log logutil.Logger, ts topo.Server, shardInfo *topo.Sha
 			srvShard.TabletTypes = append(srvShard.TabletTypes, tabletType)
 		}
 
+		span := trace.NewSpanFromContext(ctx)
+		span.StartClient("TopoServer.UpdateSrvShard")
+		span.Annotate("keyspace", shardInfo.Keyspace())
+		span.Annotate("shard", shardInfo.ShardName())
+		span.Annotate("cell", cell)
 		if err := ts.UpdateSrvShard(cell, shardInfo.Keyspace(), shardInfo.ShardName(), srvShard); err != nil {
 			rec.RecordError(fmt.Errorf("writing serving data in cell %v for %v/%v failed: %v", cell, shardInfo.Keyspace(), shardInfo.ShardName(), err))
 		}
+		span.Finish()
 		wg.Done()
 	}()
 

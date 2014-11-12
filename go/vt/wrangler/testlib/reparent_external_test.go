@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"code.google.com/p/go.net/context"
+
 	"github.com/youtube/vitess/go/vt/logutil"
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -18,6 +20,7 @@ import (
 )
 
 func TestShardExternallyReparented(t *testing.T) {
+	ctx := context.Background()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Minute, time.Second)
 
@@ -39,7 +42,7 @@ func TestShardExternallyReparented(t *testing.T) {
 		t.Fatalf("GetShard failed: %v", err)
 	}
 	si.Cells = append(si.Cells, "cell666")
-	if err := topo.UpdateShard(ts, si); err != nil {
+	if err := topo.UpdateShard(ctx, ts, si); err != nil {
 		t.Fatalf("UpdateShard failed: %v", err)
 	}
 

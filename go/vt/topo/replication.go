@@ -5,8 +5,10 @@
 package topo
 
 import (
+	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 
+	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/logutil"
 )
 
@@ -72,7 +74,14 @@ func (sri *ShardReplicationInfo) Shard() string {
 
 // UpdateShardReplicationRecord is a low level function to add / update an
 // entry to the ShardReplication object.
-func UpdateShardReplicationRecord(ts Server, keyspace, shard string, tabletAlias, parent TabletAlias) error {
+func UpdateShardReplicationRecord(ctx context.Context, ts Server, keyspace, shard string, tabletAlias, parent TabletAlias) error {
+	span := trace.NewSpanFromContext(ctx)
+	span.StartClient("TopoServer.UpdateShardReplicationFields")
+	span.Annotate("keyspace", keyspace)
+	span.Annotate("shard", shard)
+	span.Annotate("tablet", tabletAlias.String())
+	defer span.Finish()
+
 	return ts.UpdateShardReplicationFields(tabletAlias.Cell, keyspace, shard, func(sr *ShardReplication) error {
 		// not very efficient, but easy to read
 		links := make([]ReplicationLink, 0, len(sr.ReplicationLinks)+1)

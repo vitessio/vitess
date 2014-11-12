@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"code.google.com/p/go.net/context"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -208,7 +210,7 @@ func (wr *Wrangler) validateReplication(shardInfo *topo.ShardInfo, tabletMap map
 		return
 	}
 
-	slaveList, err := wr.tmc.GetSlaves(masterTablet, wr.ActionTimeout())
+	slaveList, err := wr.tmc.GetSlaves(context.TODO(), masterTablet, wr.ActionTimeout())
 	if err != nil {
 		results <- vresult{shardInfo.MasterAlias.String(), err}
 		return
@@ -261,7 +263,7 @@ func (wr *Wrangler) pingTablets(tabletMap map[topo.TabletAlias]*topo.TabletInfo,
 				return
 			}
 
-			if err := wr.tmc.Ping(tabletInfo, wr.ActionTimeout()); err != nil {
+			if err := wr.tmc.Ping(context.TODO(), tabletInfo, wr.ActionTimeout()); err != nil {
 				results <- vresult{tabletAlias.String(), fmt.Errorf("Ping failed: %v %v", err, tabletInfo.Hostname)}
 			}
 		}(tabletAlias, tabletInfo)

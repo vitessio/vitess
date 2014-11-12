@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"code.google.com/p/go.net/context"
+
 	"github.com/youtube/vitess/go/sync2"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/concurrency"
@@ -272,7 +274,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 
 	// 1 - stop the master binlog replication, get its current position
 	vsdw.wr.Logger().Infof("Stopping master binlog replication on %v", vsdw.shardInfo.MasterAlias)
-	blpPositionList, err := vsdw.wr.TabletManagerClient().StopBlp(masterInfo, 30*time.Second)
+	blpPositionList, err := vsdw.wr.TabletManagerClient().StopBlp(context.TODO(), masterInfo, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("StopBlp on master %v failed: %v", vsdw.shardInfo.MasterAlias, err)
 	}
@@ -296,7 +298,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 	if err != nil {
 		return err
 	}
-	stoppedAt, err := vsdw.wr.TabletManagerClient().StopSlaveMinimum(sourceTablet, pos.Position, 30*time.Second)
+	stoppedAt, err := vsdw.wr.TabletManagerClient().StopSlaveMinimum(context.TODO(), sourceTablet, pos.Position, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", vsdw.sourceAlias, pos.Position, err)
 	}
@@ -315,7 +317,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 	// 3 - ask the master of the destination shard to resume filtered
 	//     replication up to the new list of positions
 	vsdw.wr.Logger().Infof("Restarting master %v until it catches up to %v", vsdw.shardInfo.MasterAlias, stopPositionList)
-	masterPos, err := vsdw.wr.TabletManagerClient().RunBlpUntil(masterInfo, &stopPositionList, 30*time.Second)
+	masterPos, err := vsdw.wr.TabletManagerClient().RunBlpUntil(context.TODO(), masterInfo, &stopPositionList, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("RunBlpUntil on %v until %v failed: %v", vsdw.shardInfo.MasterAlias, stopPositionList, err)
 	}
@@ -327,7 +329,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 	if err != nil {
 		return err
 	}
-	_, err = vsdw.wr.TabletManagerClient().StopSlaveMinimum(destinationTablet, masterPos, 30*time.Second)
+	_, err = vsdw.wr.TabletManagerClient().StopSlaveMinimum(context.TODO(), destinationTablet, masterPos, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("StopSlaveMinimum on %v at %v failed: %v", vsdw.destinationAlias, masterPos, err)
 	}
@@ -340,7 +342,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 
 	// 5 - restart filtered replication on destination master
 	vsdw.wr.Logger().Infof("Restarting filtered replication on master %v", vsdw.shardInfo.MasterAlias)
-	err = vsdw.wr.TabletManagerClient().StartBlp(masterInfo, 30*time.Second)
+	err = vsdw.wr.TabletManagerClient().StartBlp(context.TODO(), masterInfo, 30*time.Second)
 	if err := vsdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, vsdw.shardInfo.MasterAlias.String()); err != nil {
 		vsdw.wr.Logger().Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, vsdw.shardInfo.MasterAlias.String(), err)
 	}

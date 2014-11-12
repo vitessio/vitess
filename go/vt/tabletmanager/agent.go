@@ -30,6 +30,8 @@ import (
 	"sync"
 	"time"
 
+	"code.google.com/p/go.net/context"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/history"
 	"github.com/youtube/vitess/go/jscfg"
@@ -380,7 +382,7 @@ func (agent *ActionAgent) checkTabletMysqlPort(tablet *topo.TabletInfo) *topo.Ta
 
 	log.Warningf("MySQL port has changed from %v to %v, updating it in tablet record", tablet.Portmap["mysql"], mport)
 	tablet.Portmap["mysql"] = mport
-	if err := topo.UpdateTablet(agent.TopoServer, tablet); err != nil {
+	if err := topo.UpdateTablet(context.TODO(), agent.TopoServer, tablet); err != nil {
 		log.Warningf("Failed to update tablet record, may use old mysql port")
 		return nil
 	}

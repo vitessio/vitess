@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"code.google.com/p/go.net/context"
 )
 
 const (
@@ -105,6 +107,7 @@ func callOnceAndCheck(t *testing.T, client *Client) {
 }
 
 func TestStreamingRpc(t *testing.T) {
+	ctx := context.Background()
 	if testing.Short() {
 		t.Skip("skipping wait-based test in short mode.")
 	}
@@ -114,7 +117,7 @@ func TestStreamingRpc(t *testing.T) {
 	// Nonexistent method
 	args := &StreamingArgs{7, 10, -1, -1}
 	reply := new(StreamingReply)
-	err := client.Call("StreamingArith.BadOperation", args, reply)
+	err := client.Call(ctx, "StreamingArith.BadOperation", args, reply)
 	// expect an error
 	if err == nil {
 		t.Error("BadOperation: expected error")

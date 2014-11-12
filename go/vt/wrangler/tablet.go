@@ -7,6 +7,7 @@ package wrangler
 import (
 	"fmt"
 
+	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
@@ -76,7 +77,7 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 			} else {
 				if oldTablet.Keyspace == tablet.Keyspace && oldTablet.Shard == tablet.Shard {
 					*(oldTablet.Tablet) = *tablet
-					if err := topo.UpdateTablet(wr.ts, oldTablet); err != nil {
+					if err := topo.UpdateTablet(context.TODO(), wr.ts, oldTablet); err != nil {
 						log.Warningf("failed updating tablet %v: %v", tablet.Alias, err)
 						// now fall through the Scrap case
 					} else {
@@ -84,7 +85,7 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 							return nil
 						}
 
-						if err := topo.UpdateTabletReplicationData(wr.ts, tablet); err != nil {
+						if err := topo.UpdateTabletReplicationData(context.TODO(), wr.ts, tablet); err != nil {
 							log.Warningf("failed updating tablet replication data for %v: %v", tablet.Alias, err)
 							// now fall through the Scrap case
 						} else {
@@ -126,7 +127,7 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 	if force {
 		err = topotools.Scrap(wr.ts, ti.Alias, force)
 	} else {
-		err = wr.tmc.Scrap(ti, wr.ActionTimeout())
+		err = wr.tmc.Scrap(context.TODO(), ti, wr.ActionTimeout())
 	}
 	if err != nil {
 		return err
@@ -160,7 +161,7 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 			si.MasterAlias = topo.TabletAlias{}
 
 			// write it back
-			if err := topo.UpdateShard(wr.ts, si); err != nil {
+			if err := topo.UpdateShard(context.TODO(), wr.ts, si); err != nil {
 				return wr.unlockShard(ti.Keyspace, ti.Shard, actionNode, lockPath, err)
 			}
 		} else {
@@ -219,7 +220,7 @@ func (wr *Wrangler) ChangeTypeNoRebuild(tabletAlias topo.TabletAlias, tabletType
 			return false, "", "", "", err
 		}
 	} else {
-		if err := wr.tmc.ChangeType(ti, tabletType, wr.ActionTimeout()); err != nil {
+		if err := wr.tmc.ChangeType(context.TODO(), ti, tabletType, wr.ActionTimeout()); err != nil {
 			return false, "", "", "", err
 		}
 	}
@@ -248,13 +249,13 @@ func (wr *Wrangler) changeTypeInternal(tabletAlias topo.TabletAlias, dbType topo
 	rebuildRequired := ti.Tablet.IsInServingGraph()
 
 	// change the type
-	if err := wr.tmc.ChangeType(ti, dbType, wr.ActionTimeout()); err != nil {
+	if err := wr.tmc.ChangeType(context.TODO(), ti, dbType, wr.ActionTimeout()); err != nil {
 		return err
 	}
 
 	// rebuild if necessary
 	if rebuildRequired {
-		_, err = topotools.RebuildShard(wr.logger, wr.ts, ti.Keyspace, ti.Shard, []string{ti.Alias.Cell}, wr.lockTimeout, interrupted)
+		_, err = topotools.RebuildShard(context.TODO(), wr.logger, wr.ts, ti.Keyspace, ti.Shard, []string{ti.Alias.Cell}, wr.lockTimeout, interrupted)
 		if err != nil {
 			return err
 		}
@@ -282,5 +283,5 @@ func (wr *Wrangler) ExecuteFetch(tabletAlias topo.TabletAlias, query string, max
 	if err != nil {
 		return nil, err
 	}
-	return wr.tmc.ExecuteFetch(ti, query, maxRows, wantFields, disableBinlogs, wr.ActionTimeout())
+	return wr.tmc.ExecuteFetch(context.TODO(), ti, query, maxRows, wantFields, disableBinlogs, wr.ActionTimeout())
 }

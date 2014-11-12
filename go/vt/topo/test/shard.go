@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	"code.google.com/p/go.net/context"
+
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -72,7 +74,7 @@ func CheckShard(t *testing.T, ts topo.Server) {
 			DisableQueryService: true,
 		},
 	}
-	if err := topo.UpdateShard(ts, shardInfo); err != nil {
+	if err := topo.UpdateShard(context.TODO(), ts, shardInfo); err != nil {
 		t.Errorf("UpdateShard: %v", err)
 	}
 

@@ -13,6 +13,8 @@ import (
 	"net/http"
 	"time"
 
+	"code.google.com/p/go.net/context"
+
 	log "github.com/golang/glog"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/auth"
@@ -68,12 +70,13 @@ func DialAuthHTTP(network, address, user, password, codecName string, cFactory C
 		return
 	}
 	reply := new(auth.GetNewChallengeReply)
-	if err = conn.Call("AuthenticatorCRAMMD5.GetNewChallenge", "", reply); err != nil {
+	if err = conn.Call(context.TODO(), "AuthenticatorCRAMMD5.GetNewChallenge", "", reply); err != nil {
 		return
 	}
 	proof := auth.CRAMMD5GetExpected(user, password, reply.Challenge)
 
 	if err = conn.Call(
+		context.TODO(),
 		"AuthenticatorCRAMMD5.Authenticate",
 		auth.AuthenticateRequest{Proof: proof}, new(auth.AuthenticateReply)); err != nil {
 		return

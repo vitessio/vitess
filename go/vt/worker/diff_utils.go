@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"code.google.com/p/go.net/context"
+
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
@@ -44,7 +46,7 @@ func NewQueryResultReaderForTablet(ts topo.Server, tabletAlias topo.TabletAlias,
 	}
 
 	var sessionInfo tproto.SessionInfo
-	if err := rpcClient.Call("SqlQuery.GetSessionId", tproto.SessionParams{Keyspace: tablet.Keyspace, Shard: tablet.Shard}, &sessionInfo); err != nil {
+	if err := rpcClient.Call(context.TODO(), "SqlQuery.GetSessionId", tproto.SessionParams{Keyspace: tablet.Keyspace, Shard: tablet.Shard}, &sessionInfo); err != nil {
 		return nil, err
 	}
 

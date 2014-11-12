@@ -3,6 +3,8 @@ package zktopo
 import (
 	"testing"
 
+	"code.google.com/p/go.net/context"
+
 	"github.com/youtube/vitess/go/vt/topo/test"
 )
 
@@ -21,7 +23,7 @@ func TestShard(t *testing.T) {
 func TestTablet(t *testing.T) {
 	ts := NewTestServer(t, []string{"test"})
 	defer ts.Close()
-	test.CheckTablet(t, ts)
+	test.CheckTablet(context.Background(), t, ts)
 }
 
 func TestShardReplication(t *testing.T) {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sync"
 
+	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/event"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/concurrency"
@@ -22,7 +23,7 @@ import (
 // keyspace related methods for Wrangler
 
 func (wr *Wrangler) lockKeyspace(keyspace string, actionNode *actionnode.ActionNode) (lockPath string, err error) {
-	return actionNode.LockKeyspace(wr.ts, keyspace, wr.lockTimeout, interrupted)
+	return actionNode.LockKeyspace(context.TODO(), wr.ts, keyspace, wr.lockTimeout, interrupted)
 }
 
 func (wr *Wrangler) unlockKeyspace(keyspace string, actionNode *actionnode.ActionNode, lockPath string, actionError error) error {
@@ -211,7 +212,7 @@ func (wr *Wrangler) getMastersPosition(shards []*topo.ShardInfo) (map[*topo.Shar
 				return
 			}
 
-			pos, err := wr.tmc.MasterPosition(ti, wr.ActionTimeout())
+			pos, err := wr.tmc.MasterPosition(context.TODO(), ti, wr.ActionTimeout())
 			if err != nil {
 				rec.RecordError(err)
 				return
@@ -255,7 +256,7 @@ func (wr *Wrangler) waitForFilteredReplication(sourcePositions map[*topo.ShardIn
 					return
 				}
 
-				if err := wr.tmc.WaitBlpPosition(tablet, blpPosition, wr.ActionTimeout()); err != nil {
+				if err := wr.tmc.WaitBlpPosition(context.TODO(), tablet, blpPosition, wr.ActionTimeout()); err != nil {
 					rec.RecordError(err)
 				} else {
 					wr.Logger().Infof("%v caught up", si.MasterAlias)
@@ -282,7 +283,7 @@ func (wr *Wrangler) refreshMasters(shards []*topo.ShardInfo) error {
 				return
 			}
 
-			if err := wr.tmc.RefreshState(ti, wr.ActionTimeout()); err != nil {
+			if err := wr.tmc.RefreshState(context.TODO(), ti, wr.ActionTimeout()); err != nil {
 				rec.RecordError(err)
 			} else {
 				wr.Logger().Infof("%v responded", si.MasterAlias)
@@ -334,7 +335,7 @@ func (wr *Wrangler) migrateServedTypes(keyspace string, sourceShards, destinatio
 			if err := si.UpdateDisableQueryService(topo.TYPE_MASTER, nil, true); err != nil {
 				return err
 			}
-			if err := topo.UpdateShard(wr.ts, si); err != nil {
+			if err := topo.UpdateShard(context.TODO(), wr.ts, si); err != nil {
 				return err
 			}
 		}
@@ -393,7 +394,7 @@ func (wr *Wrangler) migrateServedTypes(keyspace string, sourceShards, destinatio
 	// All is good, we can save the shards now
 	event.DispatchUpdate(ev, "updating source shards")
 	for _, si := range sourceShards {
-		if err := topo.UpdateShard(wr.ts, si); err != nil {
+		if err := topo.UpdateShard(context.TODO(), wr.ts, si); err != nil {
 			return err
 		}
 	}
@@ -405,7 +406,7 @@ func (wr *Wrangler) migrateServedTypes(keyspace string, sourceShards, destinatio
 	}
 	event.DispatchUpdate(ev, "updating destination shards")
 	for _, si := range destinationShards {
-		if err := topo.UpdateShard(wr.ts, si); err != nil {
+		if err := topo.UpdateShard(context.TODO(), wr.ts, si); err != nil {
 			return err
 		}
 	}
@@ -559,7 +560,7 @@ func (wr *Wrangler) replicaMigrateServedFrom(ki *topo.KeyspaceInfo, sourceShard 
 	if err := sourceShard.UpdateSourceBlacklistedTables(servedType, cells, reverse, tables); err != nil {
 		return fmt.Errorf("UpdateSourceBlacklistedTables(%v/%v) failed: %v", sourceShard.Keyspace(), sourceShard.ShardName(), err)
 	}
-	if err := topo.UpdateShard(wr.ts, sourceShard); err != nil {
+	if err := topo.UpdateShard(context.TODO(), wr.ts, sourceShard); err != nil {
 		return fmt.Errorf("UpdateShard(%v/%v) failed: %v", sourceShard.Keyspace(), sourceShard.ShardName(), err)
 	}
 
@@ -599,26 +600,26 @@ func (wr *Wrangler) masterMigrateServedFrom(ki *topo.KeyspaceInfo, sourceShard *
 	if err := sourceShard.UpdateSourceBlacklistedTables(topo.TYPE_MASTER, nil, false, tables); err != nil {
 		return fmt.Errorf("UpdateSourceBlacklistedTables(%v/%v) failed: %v", sourceShard.Keyspace(), sourceShard.ShardName(), err)
 	}
-	if err := topo.UpdateShard(wr.ts, sourceShard); err != nil {
+	if err := topo.UpdateShard(context.TODO(), wr.ts, sourceShard); err != nil {
 		return fmt.Errorf("UpdateShard(%v/%v) failed: %v", sourceShard.Keyspace(), sourceShard.ShardName(), err)
 	}
 
 	// Now refresh the blacklisted table list on the source master
 	event.DispatchUpdate(ev, "refreshing source master so it updates its blacklisted tables")
-	if err := wr.tmc.RefreshState(sourceMasterTabletInfo, wr.ActionTimeout()); err != nil {
+	if err := wr.tmc.RefreshState(context.TODO(), sourceMasterTabletInfo, wr.ActionTimeout()); err != nil {
 		return err
 	}
 
 	// get the position
 	event.DispatchUpdate(ev, "getting master position")
-	masterPosition, err := wr.tmc.MasterPosition(sourceMasterTabletInfo, wr.ActionTimeout())
+	masterPosition, err := wr.tmc.MasterPosition(context.TODO(), sourceMasterTabletInfo, wr.ActionTimeout())
 	if err != nil {
 		return err
 	}
 
 	// wait for it
 	event.DispatchUpdate(ev, "waiting for destination master to catch up to source master")
-	if err := wr.tmc.WaitBlpPosition(destinationMasterTabletInfo, blproto.BlpPosition{
+	if err := wr.tmc.WaitBlpPosition(context.TODO(), destinationMasterTabletInfo, blproto.BlpPosition{
 		Uid:      0,
 		Position: masterPosition,
 	}, wr.ActionTimeout()); err != nil {
@@ -634,7 +635,7 @@ func (wr *Wrangler) masterMigrateServedFrom(ki *topo.KeyspaceInfo, sourceShard *
 	// Update the destination shard (no more source shard)
 	event.DispatchUpdate(ev, "updating destination shard")
 	destinationShard.SourceShards = nil
-	if err := topo.UpdateShard(wr.ts, destinationShard); err != nil {
+	if err := topo.UpdateShard(context.TODO(), wr.ts, destinationShard); err != nil {
 		return err
 	}
 
@@ -695,7 +696,7 @@ func (wr *Wrangler) RefreshTablesByShard(si *topo.ShardInfo, tabletType topo.Tab
 
 		wg.Add(1)
 		go func(ti *topo.TabletInfo) {
-			if err := wr.tmc.RefreshState(ti, wr.ActionTimeout()); err != nil {
+			if err := wr.tmc.RefreshState(context.TODO(), ti, wr.ActionTimeout()); err != nil {
 				wr.Logger().Warningf("RefreshTablesByShard: failed to refresh %v: %v", ti.Alias, err)
 			}
 			wg.Done()

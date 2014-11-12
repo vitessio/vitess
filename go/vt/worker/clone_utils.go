@@ -13,6 +13,8 @@ import (
 	"text/template"
 	"time"
 
+	"code.google.com/p/go.net/context"
+
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -93,7 +95,7 @@ func runSqlCommands(wr *wrangler.Wrangler, ti *topo.TabletInfo, commands []strin
 			return fmt.Errorf("fillStringTemplate failed: %v", err)
 		}
 
-		_, err = wr.TabletManagerClient().ExecuteFetch(ti, command, 0, false, true, 30*time.Second)
+		_, err = wr.TabletManagerClient().ExecuteFetch(context.TODO(), ti, command, 0, false, true, 30*time.Second)
 		if err != nil {
 			return err
 		}
@@ -132,7 +134,7 @@ func findChunks(wr *wrangler.Wrangler, ti *topo.TabletInfo, td *myproto.TableDef
 
 	// get the min and max of the leading column of the primary key
 	query := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v.%v", td.PrimaryKeyColumns[0], td.PrimaryKeyColumns[0], ti.DbName(), td.Name)
-	qr, err := wr.TabletManagerClient().ExecuteFetch(ti, query, 1, true, false, 30*time.Second)
+	qr, err := wr.TabletManagerClient().ExecuteFetch(context.TODO(), ti, query, 1, true, false, 30*time.Second)
 	if err != nil {
 		wr.Logger().Infof("Not splitting table %v into multiple chunks: %v", td.Name, err)
 		return result, nil
@@ -295,7 +297,7 @@ func executeFetchLoop(wr *wrangler.Wrangler, ti *topo.TabletInfo, insertChannel 
 				return nil
 			}
 			cmd = "INSERT INTO `" + ti.DbName() + "`." + cmd
-			_, err := wr.TabletManagerClient().ExecuteFetch(ti, cmd, 0, false, true, 30*time.Second)
+			_, err := wr.TabletManagerClient().ExecuteFetch(context.TODO(), ti, cmd, 0, false, true, 30*time.Second)
 			if err != nil {
 				return fmt.Errorf("ExecuteFetch failed: %v", err)
 			}

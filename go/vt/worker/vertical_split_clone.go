@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"code.google.com/p/go.net/context"
+
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
@@ -283,7 +285,7 @@ func (vscw *VerticalSplitCloneWorker) findTargets() error {
 	}
 
 	// stop replication on it
-	if err := vscw.wr.TabletManagerClient().StopSlave(vscw.sourceTablet, 30*time.Second); err != nil {
+	if err := vscw.wr.TabletManagerClient().StopSlave(context.TODO(), vscw.sourceTablet, 30*time.Second); err != nil {
 		return fmt.Errorf("cannot stop replication on tablet %v", vscw.sourceAlias)
 	}
 
@@ -509,7 +511,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	// then create and populate the blp_checkpoint table
 	if vscw.strategy.PopulateBlpCheckpoint {
 		// get the current position from the source
-		status, err := vscw.wr.TabletManagerClient().SlaveStatus(vscw.sourceTablet, 30*time.Second)
+		status, err := vscw.wr.TabletManagerClient().SlaveStatus(context.TODO(), vscw.sourceTablet, 30*time.Second)
 		if err != nil {
 			return err
 		}
@@ -555,7 +557,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 		go func(ti *topo.TabletInfo) {
 			defer destinationWaitGroup.Done()
 			vscw.wr.Logger().Infof("Reloading schema on tablet %v", ti.Alias)
-			if err := vscw.wr.TabletManagerClient().ReloadSchema(ti, 30*time.Second); err != nil {
+			if err := vscw.wr.TabletManagerClient().ReloadSchema(context.TODO(), ti, 30*time.Second); err != nil {
 				processError("ReloadSchema failed on tablet %v: %v", ti.Alias, err)
 			}
 		}(vscw.destinationTablets[tabletAlias])

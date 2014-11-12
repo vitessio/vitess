@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/vt/hook"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
@@ -64,7 +65,7 @@ func (wr *Wrangler) checkSlaveReplication(tabletMap map[topo.TabletAlias]*topo.T
 				return
 			}
 
-			status, err := wr.tmc.SlaveStatus(tablet, wr.ActionTimeout())
+			status, err := wr.tmc.SlaveStatus(context.TODO(), tablet, wr.ActionTimeout())
 			if err != nil {
 				if tablet.Type == topo.TYPE_BACKUP {
 					wr.logger.Warningf("  failed to get slave position from backup tablet %v, either wait for backup to finish or scrap tablet (%v)", tablet.Alias, err)
@@ -112,7 +113,7 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo,
 
 		if !masterPosition.IsZero() {
 			// If the master position is known, do our best to wait for replication to catch up.
-			status, err := wr.tmc.WaitSlavePosition(ti, masterPosition, wr.ActionTimeout())
+			status, err := wr.tmc.WaitSlavePosition(context.TODO(), ti, masterPosition, wr.ActionTimeout())
 			if err != nil {
 				ctx.err = err
 				return
@@ -120,7 +121,7 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo,
 			ctx.status = status
 		} else {
 			// If the master is down, just get the slave status.
-			status, err := wr.tmc.SlaveStatus(ti, wr.ActionTimeout())
+			status, err := wr.tmc.SlaveStatus(context.TODO(), ti, wr.ActionTimeout())
 			if err != nil {
 				ctx.err = err
 				return
@@ -182,7 +183,7 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo,
 func (wr *Wrangler) stopSlaves(tabletMap map[topo.TabletAlias]*topo.TabletInfo) error {
 	errs := make(chan error, len(tabletMap))
 	f := func(ti *topo.TabletInfo) {
-		err := wr.tmc.StopSlave(ti, wr.ActionTimeout())
+		err := wr.tmc.StopSlave(context.TODO(), ti, wr.ActionTimeout())
 		if err != nil {
 			wr.logger.Infof("StopSlave failed: %v", err)
 		}
@@ -218,13 +219,13 @@ func (wr *Wrangler) tabletReplicationStatuses(tablets []*topo.TabletInfo) ([]*my
 		ctx := &rpcContext{tablet: ti}
 		calls[idx] = ctx
 		if ti.Type == topo.TYPE_MASTER {
-			pos, err := wr.tmc.MasterPosition(ti, wr.ActionTimeout())
+			pos, err := wr.tmc.MasterPosition(context.TODO(), ti, wr.ActionTimeout())
 			ctx.err = err
 			if err == nil {
 				ctx.status = &myproto.ReplicationStatus{Position: pos}
 			}
 		} else if ti.IsSlaveType() {
-			ctx.status, ctx.err = wr.tmc.SlaveStatus(ti, wr.ActionTimeout())
+			ctx.status, ctx.err = wr.tmc.SlaveStatus(context.TODO(), ti, wr.ActionTimeout())
 		}
 	}
 
@@ -261,15 +262,15 @@ func (wr *Wrangler) tabletReplicationStatuses(tablets []*topo.TabletInfo) ([]*my
 
 func (wr *Wrangler) demoteMaster(ti *topo.TabletInfo) (myproto.ReplicationPosition, error) {
 	wr.logger.Infof("demote master %v", ti.Alias)
-	if err := wr.tmc.DemoteMaster(ti, wr.ActionTimeout()); err != nil {
+	if err := wr.tmc.DemoteMaster(context.TODO(), ti, wr.ActionTimeout()); err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
-	return wr.tmc.MasterPosition(ti, wr.ActionTimeout())
+	return wr.tmc.MasterPosition(context.TODO(), ti, wr.ActionTimeout())
 }
 
 func (wr *Wrangler) promoteSlave(ti *topo.TabletInfo) (rsd *actionnode.RestartSlaveData, err error) {
 	wr.logger.Infof("promote slave %v", ti.Alias)
-	return wr.tmc.PromoteSlave(ti, wr.ActionTimeout())
+	return wr.tmc.PromoteSlave(context.TODO(), ti, wr.ActionTimeout())
 }
 
 func (wr *Wrangler) restartSlaves(slaveTabletMap map[topo.TabletAlias]*topo.TabletInfo, rsd *actionnode.RestartSlaveData) (majorityRestart bool, err error) {
@@ -319,7 +320,7 @@ func (wr *Wrangler) restartSlaves(slaveTabletMap map[topo.TabletAlias]*topo.Tabl
 
 func (wr *Wrangler) restartSlave(ti *topo.TabletInfo, rsd *actionnode.RestartSlaveData) (err error) {
 	wr.logger.Infof("restart slave %v", ti.Alias)
-	return wr.tmc.RestartSlave(ti, rsd, wr.ActionTimeout())
+	return wr.tmc.RestartSlave(context.TODO(), ti, rsd, wr.ActionTimeout())
 }
 
 func (wr *Wrangler) checkMasterElect(ti *topo.TabletInfo) error {
@@ -338,7 +339,7 @@ func (wr *Wrangler) finishReparent(si *topo.ShardInfo, masterElect *topo.TabletI
 			wr.logger.Warningf("leaving master-elect read-only, change with: vtctl SetReadWrite %v", masterElect.Alias)
 		} else {
 			wr.logger.Infof("marking master-elect read-write %v", masterElect.Alias)
-			if err := wr.tmc.SetReadWrite(masterElect, wr.ActionTimeout()); err != nil {
+			if err := wr.tmc.SetReadWrite(context.TODO(), masterElect, wr.ActionTimeout()); err != nil {
 				wr.logger.Warningf("master master-elect read-write failed, leaving master-elect read-only, change with: vtctl SetReadWrite %v", masterElect.Alias)
 			}
 		}
@@ -348,7 +349,7 @@ func (wr *Wrangler) finishReparent(si *topo.ShardInfo, masterElect *topo.TabletI
 
 	// save the new master in the shard info
 	si.MasterAlias = masterElect.Alias
-	if err := topo.UpdateShard(wr.ts, si); err != nil {
+	if err := topo.UpdateShard(context.TODO(), wr.ts, si); err != nil {
 		wr.logger.Errorf("Failed to save new master into shard: %v", err)
 		return err
 	}
@@ -356,7 +357,7 @@ func (wr *Wrangler) finishReparent(si *topo.ShardInfo, masterElect *topo.TabletI
 	// We rebuild all the cells, as we may have taken tablets in and
 	// out of the graph.
 	wr.logger.Infof("rebuilding shard serving graph data")
-	_, err := topotools.RebuildShard(wr.logger, wr.ts, masterElect.Keyspace, masterElect.Shard, nil, wr.lockTimeout, interrupted)
+	_, err := topotools.RebuildShard(context.TODO(), wr.logger, wr.ts, masterElect.Keyspace, masterElect.Shard, nil, wr.lockTimeout, interrupted)
 	return err
 }
 
@@ -372,7 +373,7 @@ func (wr *Wrangler) breakReplication(slaveMap map[topo.TabletAlias]*topo.TabletI
 	// Force slaves to break, just in case they were not advertised in
 	// the replication graph.
 	wr.logger.Infof("break slaves %v", masterElect.Alias)
-	return wr.tmc.BreakSlaves(masterElect, wr.ActionTimeout())
+	return wr.tmc.BreakSlaves(context.TODO(), masterElect, wr.ActionTimeout())
 }
 
 func (wr *Wrangler) restartableTabletMap(slaves map[topo.TabletAlias]*topo.TabletInfo) map[uint32]*topo.TabletInfo {

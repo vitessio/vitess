@@ -12,6 +12,8 @@ import (
 	"sort"
 	"time"
 
+	"code.google.com/p/go.net/context"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
@@ -52,7 +54,7 @@ func get(rpcClient *rpcplus.Client, path string, verbose bool) {
 	// it's a get
 	zkPath := &zk.ZkPath{Path: path}
 	zkNode := &zk.ZkNode{}
-	if err := rpcClient.Call("ZkReader.Get", zkPath, zkNode); err != nil {
+	if err := rpcClient.Call(context.TODO(), "ZkReader.Get", zkPath, zkNode); err != nil {
 		log.Fatalf("ZkReader.Get error: %v", err)
 	}
 	if verbose {
@@ -67,7 +69,7 @@ func getv(rpcClient *rpcplus.Client, paths []string, verbose bool) {
 		zkPathV.Paths[i] = v
 	}
 	zkNodeV := &zk.ZkNodeV{}
-	if err := rpcClient.Call("ZkReader.GetV", zkPathV, zkNodeV); err != nil {
+	if err := rpcClient.Call(context.TODO(), "ZkReader.GetV", zkPathV, zkNodeV); err != nil {
 		log.Fatalf("ZkReader.GetV error: %v", err)
 	}
 	if verbose {
@@ -81,7 +83,7 @@ func children(rpcClient *rpcplus.Client, paths []string, verbose bool) {
 	for _, v := range paths {
 		zkPath := &zk.ZkPath{Path: v}
 		zkNode := &zk.ZkNode{}
-		if err := rpcClient.Call("ZkReader.Children", zkPath, zkNode); err != nil {
+		if err := rpcClient.Call(context.TODO(), "ZkReader.Children", zkPath, zkNode); err != nil {
 			log.Fatalf("ZkReader.Children error: %v", err)
 		}
 		if verbose {
@@ -102,7 +104,7 @@ func getSrvKeyspaceNames(rpcClient *rpcplus.Client, cell string, verbose bool) {
 		Cell: cell,
 	}
 	reply := &topo.SrvKeyspaceNames{}
-	if err := rpcClient.Call("TopoReader.GetSrvKeyspaceNames", req, reply); err != nil {
+	if err := rpcClient.Call(context.TODO(), "TopoReader.GetSrvKeyspaceNames", req, reply); err != nil {
 		log.Fatalf("TopoReader.GetSrvKeyspaceNames error: %v", err)
 	}
 	if verbose {
@@ -118,7 +120,7 @@ func getSrvKeyspace(rpcClient *rpcplus.Client, cell, keyspace string, verbose bo
 		Keyspace: keyspace,
 	}
 	reply := &topo.SrvKeyspace{}
-	if err := rpcClient.Call("TopoReader.GetSrvKeyspace", req, reply); err != nil {
+	if err := rpcClient.Call(context.TODO(), "TopoReader.GetSrvKeyspace", req, reply); err != nil {
 		log.Fatalf("TopoReader.GetSrvKeyspace error: %v", err)
 	}
 	if verbose {
@@ -150,7 +152,7 @@ func getEndPoints(rpcClient *rpcplus.Client, cell, keyspace, shard, tabletType s
 		TabletType: topo.TabletType(tabletType),
 	}
 	reply := &topo.EndPoints{}
-	if err := rpcClient.Call("TopoReader.GetEndPoints", req, reply); err != nil {
+	if err := rpcClient.Call(context.TODO(), "TopoReader.GetEndPoints", req, reply); err != nil {
 		log.Fatalf("TopoReader.GetEndPoints error: %v", err)
 	}
 	if verbose {

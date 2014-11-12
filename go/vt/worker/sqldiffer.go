@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"code.google.com/p/go.net/context"
+
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -223,7 +225,7 @@ func (worker *SQLDiffWorker) synchronizeReplication() error {
 	if err != nil {
 		return err
 	}
-	if err := worker.wr.TabletManagerClient().StopSlave(subsetTablet, 30*time.Second); err != nil {
+	if err := worker.wr.TabletManagerClient().StopSlave(context.TODO(), subsetTablet, 30*time.Second); err != nil {
 		return fmt.Errorf("Cannot stop slave %v: %v", worker.subset.alias, err)
 	}
 	if worker.CheckInterrupted() {
@@ -251,7 +253,7 @@ func (worker *SQLDiffWorker) synchronizeReplication() error {
 	if err != nil {
 		return err
 	}
-	if err := worker.wr.TabletManagerClient().StopSlave(supersetTablet, 30*time.Second); err != nil {
+	if err := worker.wr.TabletManagerClient().StopSlave(context.TODO(), supersetTablet, 30*time.Second); err != nil {
 		return fmt.Errorf("Cannot stop slave %v: %v", worker.superset.alias, err)
 	}
 
