@@ -725,9 +725,12 @@ func (lsf localSnapshotFile) tableName() string {
 // the data into a myisam table and we then convert to innodb
 // - If the strategy contains the string 'delayPrimaryKey',
 // then the primary key index will be added afterwards (use with useMyIsam)
+// - If the strategy contains the string 'delayAutoIncrement',
+// then we will delay the addition of the AUTO_INCREMENT flag.
 func MakeSplitCreateTableSql(logger logutil.Logger, schema, databaseName, tableName string, strategy string) (string, string, error) {
 	alters := make([]string, 0, 5)
 	lines := strings.Split(schema, "\n")
+	delayAutoIncrement := strings.Contains(strategy, "delayAutoIncrement")
 	delayPrimaryKey := strings.Contains(strategy, "delayPrimaryKey")
 	delaySecondaryIndexes := strings.Contains(strategy, "delaySecondaryIndexes")
 	useMyIsam := strings.Contains(strategy, "useMyIsam")
@@ -739,14 +742,21 @@ func MakeSplitCreateTableSql(logger logutil.Logger, schema, databaseName, tableN
 		}
 
 		if strings.Contains(line, " AUTO_INCREMENT") {
-			// only add to the final ALTER TABLE if we're not
-			// dropping the AUTO_INCREMENT on the table
-			if strings.Contains(strategy, "skipAutoIncrement("+tableName+")") {
-				logger.Infof("Will not add AUTO_INCREMENT back on table %v", tableName)
-			} else {
+			skipAutoIncrement := strings.Contains(strategy, "skipAutoIncrement("+tableName+")")
+			if skipAutoIncrement {
+				logger.Infof("Will drop AUTO_INCREMENT from table %v", tableName)
+			}
+
+			// add an alter if we need to add the auto increment after the fact
+			if delayAutoIncrement && !skipAutoIncrement {
 				alters = append(alters, "MODIFY "+line[:len(line)-1])
 			}
-			lines[i] = strings.Replace(line, " AUTO_INCREMENT", "", 1)
+
+			// remove the auto increment if we need to
+			if skipAutoIncrement || delayAutoIncrement {
+				lines[i] = strings.Replace(line, " AUTO_INCREMENT", "", 1)
+			}
+
 			continue
 		}
 
