@@ -137,25 +137,20 @@ func (tpl *TupleEqualityList) encodeAsEquality(buf *bytes.Buffer) error {
 		if i != 0 {
 			buf.WriteString(" or ")
 		}
-		tpl.encodeLHS(buf)
-		buf.WriteString(" = (")
-		if err := EncodeValue(buf, r); err != nil {
-			return err
+		buf.WriteString("(")
+		for j, c := range tpl.Columns {
+			if j != 0 {
+				buf.WriteString(" and ")
+			}
+			buf.WriteString(c)
+			buf.WriteString(" = ")
+			if err := EncodeValue(buf, r[j]); err != nil {
+				return err
+			}
 		}
 		buf.WriteByte(')')
 	}
 	return nil
-}
-
-func (tpl *TupleEqualityList) encodeLHS(buf *bytes.Buffer) {
-	buf.WriteByte('(')
-	for i, c := range tpl.Columns {
-		if i != 0 {
-			buf.WriteString(", ")
-		}
-		buf.WriteString(c)
-	}
-	buf.WriteByte(')')
 }
 
 func FetchBindVar(name string, bindVariables map[string]interface{}) (val interface{}, isList bool, err error) {

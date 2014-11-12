@@ -56,9 +56,6 @@ site_integration_test_files = \
 
 # These tests should be run by developers after making code changes.
 integration_test_files = \
-	binlog.py \
-	clone.py \
-	initial_sharding_bytes.py \
 	initial_sharding.py \
 	keyrange_test.py \
 	keyspace_test.py \

@@ -17,7 +17,7 @@ cases = [
        result=[],
        rewritten=[
          "select * from vtocc_cached2 where 1 != 1",
-         "select eid, bid, name, foo from vtocc_cached2 where (eid, bid) = (2, null)"],
+         "select eid, bid, name, foo from vtocc_cached2 where (eid = 2 and bid = null)"],
        cache_absent=1),
 
   Case2(doc="PK_IN (empty cache)",
@@ -26,7 +26,7 @@ cases = [
        result=[(2, 'foo', 'abcd2', 'efgh')],
        rewritten=[
          "select * from vtocc_cached2 where 1 != 1",
-         "select eid, bid, name, foo from vtocc_cached2 where (eid, bid) = (2, 'foo')"],
+         "select eid, bid, name, foo from vtocc_cached2 where (eid = 2 and bid = 'foo')"],
        cache_misses=1),
   # (2.foo) is in cache
 
@@ -44,7 +44,7 @@ cases = [
        result=[],
        rewritten=[
          "select bid, eid, name, foo from vtocc_cached2 where 1 != 1",
-         "select eid, bid, name, foo from vtocc_cached2 where (eid, bid) = (3, 'foo')"],
+         "select eid, bid, name, foo from vtocc_cached2 where (eid = 3 and bid = 'foo')"],
        cache_absent=1),
   # (2.foo)
 
@@ -53,7 +53,7 @@ cases = [
        result=[('foo', 1)],
        rewritten=[
          "select bid, eid from vtocc_cached2 where 1 != 1",
-         "select eid, bid, name, foo from vtocc_cached2 where (eid, bid) = (1, 'foo')"],
+         "select eid, bid, name, foo from vtocc_cached2 where (eid = 1 and bid = 'foo')"],
        cache_misses=1),
   # (1.foo, 2.foo)
 
@@ -70,7 +70,7 @@ cases = [
        result=[],
        rewritten=[
          "select eid, bid, name, foo from vtocc_cached2 where 1 != 1",
-         "select eid, bid, name, foo from vtocc_cached2 where (eid, bid) = (1, 'absent1') or (eid, bid) = (1, 'absent2')"],
+         "select eid, bid, name, foo from vtocc_cached2 where (eid = 1 and bid = 'absent1') or (eid = 1 and bid = 'absent2')"],
        cache_hits=0,
        cache_misses=0,
        cache_absent=2,
@@ -83,7 +83,7 @@ cases = [
        result=[(1L, 'foo', 'abcd1', 'efgh'), (1L, 'bar', 'abcd1', 'efgh')],
        rewritten=[
          "select eid, bid, name, foo from vtocc_cached2 where 1 != 1",
-         "select eid, bid, name, foo from vtocc_cached2 where (eid, bid) = (1, 'bar')"],
+         "select eid, bid, name, foo from vtocc_cached2 where (eid = 1 and bid = 'bar')"],
        cache_hits=1,
        cache_misses=1,
        cache_absent=0,
@@ -108,7 +108,7 @@ cases = [
        rewritten=[
          "select eid, bid, name, foo from vtocc_cached2 where 1 != 1",
          "select eid, bid from vtocc_cached2 use index (aname2) where eid = 2 and name = 'abcd2' limit 10001",
-         "select eid, bid, name, foo from vtocc_cached2 where (eid, bid) = (2, 'bar')"],
+         "select eid, bid, name, foo from vtocc_cached2 where (eid = 2 and bid = 'bar')"],
        cache_hits=1,
        cache_misses=1,
        cache_absent=0,
@@ -133,7 +133,7 @@ cases = [
             result=[(1L, 'bar', 'abcd1', 'fghi')],
             rewritten=[
                 "select * from vtocc_cached2 where 1 != 1",
-                "select eid, bid, name, foo from vtocc_cached2 where (eid, bid) = (1, 'bar')"],
+                "select eid, bid, name, foo from vtocc_cached2 where (eid = 1 and bid = 'bar')"],
             cache_misses=1)]),
   # (1.foo, 1.bar, 2.foo, 2.bar)
 
@@ -156,7 +156,7 @@ cases = [
             cache_invalidations=1),
        Case2(sql="select * from vtocc_cached2 where eid = 1 and bid = 'bar'",
             result=[],
-            rewritten="select eid, bid, name, foo from vtocc_cached2 where (eid, bid) = (1, 'bar')",
+            rewritten="select eid, bid, name, foo from vtocc_cached2 where (eid = 1 and bid = 'bar')",
             cache_absent=1),
        "begin",
        "insert into vtocc_cached2(eid, bid, name, foo) values (1, 'bar', 'abcd1', 'efgh')",
@@ -179,7 +179,7 @@ cases = [
        result=[(1, 'foo', 'abcd1', 'efgh')],
        rewritten=[
          "select * from vtocc_cached2 where 1 != 1",
-         "select eid, bid, name, foo from vtocc_cached2 where (eid, bid) = (1, 'foo')"],
+         "select eid, bid, name, foo from vtocc_cached2 where (eid = 1 and bid = 'foo')"],
        cache_misses=1),
 
   # (1.foo)
