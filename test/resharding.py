@@ -561,7 +561,7 @@ primary key (name)
                           '--command_display_interval', '10ms',
                           'SplitClone',
                           '--exclude_tables' ,'unrelated',
-                          '--strategy=-populate_blp_checkpoint',
+                          '--strategy=-populate_blp_checkpoint -writeMastersOnly',
                           '--source_reader_count', '10',
                           '--min_table_size_for_split', '1',
                           'test_keyspace/80-c0'],
