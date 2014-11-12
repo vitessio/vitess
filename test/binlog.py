@@ -93,7 +93,7 @@ def setUpModule():
     logging.debug("Starting binlog stream...")
     utils.run_vtctl(['MultiSnapshot', src_replica.tablet_alias], auto_log=True)
     src_replica.wait_for_binlog_server_state("Enabled")
-    utils.run_vtctl(['ShardMultiRestore', '-strategy=populateBlpCheckpoint',
+    utils.run_vtctl(['ShardMultiRestore', '-strategy=-populate_blp_checkpoint',
                      'test_keyspace/1', src_replica.tablet_alias], auto_log=True)
     dst_master.wait_for_binlog_player_count(1)
 

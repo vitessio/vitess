@@ -319,7 +319,7 @@ index by_msg (msg)
                           '--command_display_interval', '10ms',
                           'VerticalSplitClone',
                           '--tables', 'moving.*,view1',
-                          '--strategy', 'populateBlpCheckpoint',
+                          '--strategy=-populate_blp_checkpoint',
                           '--source_reader_count', '10',
                           '--min_table_size_for_split', '1',
                           'destination_keyspace/0'],
@@ -335,7 +335,7 @@ index by_msg (msg)
 
       # perform the restore.
       utils.run_vtctl(['ShardMultiRestore',
-                       '--strategy' ,'populateBlpCheckpoint',
+                       '--strategy=-populate_blp_checkpoint',
                        '--tables', 'moving.*,view1',
                        'destination_keyspace/0', source_rdonly.tablet_alias],
                       auto_log=True)

@@ -102,7 +102,11 @@ func commandSplitClone(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	return worker.NewSplitCloneWorker(wr, *cell, keyspace, shard, excludeTableArray, *strategy, *sourceReaderCount, uint64(*minTableSizeForSplit), *destinationWriterCount)
+	worker, err := worker.NewSplitCloneWorker(wr, *cell, keyspace, shard, excludeTableArray, *strategy, *sourceReaderCount, uint64(*minTableSizeForSplit), *destinationWriterCount)
+	if err != nil {
+		log.Fatalf("cannot create split clone worker: %v", err)
+	}
+	return worker
 }
 
 func keyspacesWithOverlappingShards(wr *wrangler.Wrangler) ([]map[string]string, error) {
@@ -204,7 +208,11 @@ func interactiveSplitClone(wr *wrangler.Wrangler, w http.ResponseWriter, r *http
 	}
 
 	// start the clone job
-	wrk := worker.NewSplitCloneWorker(wr, *cell, keyspace, shard, excludeTableArray, strategy, int(sourceReaderCount), uint64(minTableSizeForSplit), int(destinationWriterCount))
+	wrk, err := worker.NewSplitCloneWorker(wr, *cell, keyspace, shard, excludeTableArray, strategy, int(sourceReaderCount), uint64(minTableSizeForSplit), int(destinationWriterCount))
+	if err != nil {
+		httpError(w, "cannot create worker: %v", err)
+		return
+	}
 	if _, err := setAndStartWorker(wrk); err != nil {
 		httpError(w, "cannot set worker: %s", err)
 		return

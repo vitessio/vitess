@@ -106,7 +106,11 @@ func commandVerticalSplitClone(wr *wrangler.Wrangler, subFlags *flag.FlagSet, ar
 	if *tables != "" {
 		tableArray = strings.Split(*tables, ",")
 	}
-	return worker.NewVerticalSplitCloneWorker(wr, *cell, keyspace, shard, tableArray, *strategy, *sourceReaderCount, uint64(*minTableSizeForSplit), *destinationWriterCount)
+	worker, err := worker.NewVerticalSplitCloneWorker(wr, *cell, keyspace, shard, tableArray, *strategy, *sourceReaderCount, uint64(*minTableSizeForSplit), *destinationWriterCount)
+	if err != nil {
+		log.Fatalf("cannot create worker: %v", err)
+	}
+	return worker
 }
 
 // keyspacesWithServedFrom returns all the keyspaces that have ServedFrom set
@@ -204,7 +208,10 @@ func interactiveVerticalSplitClone(wr *wrangler.Wrangler, w http.ResponseWriter,
 	}
 
 	// start the clone job
-	wrk := worker.NewVerticalSplitCloneWorker(wr, *cell, keyspace, "0", tableArray, strategy, int(sourceReaderCount), uint64(minTableSizeForSplit), int(destinationWriterCount))
+	wrk, err := worker.NewVerticalSplitCloneWorker(wr, *cell, keyspace, "0", tableArray, strategy, int(sourceReaderCount), uint64(minTableSizeForSplit), int(destinationWriterCount))
+	if err != nil {
+		httpError(w, "cannot create worker: %v", err)
+	}
 	if _, err := setAndStartWorker(wrk); err != nil {
 		httpError(w, "cannot set worker: %s", err)
 		return

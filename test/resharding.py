@@ -561,7 +561,7 @@ primary key (name)
                           '--command_display_interval', '10ms',
                           'SplitClone',
                           '--exclude_tables' ,'unrelated',
-                          '--strategy', 'populateBlpCheckpoint',
+                          '--strategy=-populate_blp_checkpoint',
                           '--source_reader_count', '10',
                           '--min_table_size_for_split', '1',
                           'test_keyspace/80-c0'],
@@ -590,7 +590,7 @@ primary key (name)
       # storage backup, so it's coming from the tablet itself.
       # we also delay starting the binlog player, then enable it.
       utils.run_vtctl(['ShardMultiRestore',
-                       '-strategy=populateBlpCheckpoint,dontStartBinlogPlayer',
+                       '-strategy=-populate_blp_checkpoint -dont_start_binlog_player',
                        'test_keyspace/80-c0', shard_1_slave1.tablet_alias],
                       auto_log=True)
 
@@ -618,7 +618,7 @@ primary key (name)
       # second restore from storage: to be sure, we stop vttablet, and restart
       # it afterwards
       shard_1_slave1.kill_vttablet()
-      utils.run_vtctl(['ShardMultiRestore', '-strategy=populateBlpCheckpoint',
+      utils.run_vtctl(['ShardMultiRestore', '-strategy=-populate_blp_checkpoint',
                        'test_keyspace/c0-', shard_1_slave1.tablet_alias],
                       auto_log=True)
       shard_1_slave1.start_vttablet(wait_for_state=None)

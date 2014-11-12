@@ -717,20 +717,9 @@ func (lsf localSnapshotFile) tableName() string {
 // MakeSplitCreateTableSql returns a table creation statement
 // that is modified to be faster, and the associated optional
 // 'alter table' to modify the table at the end.
-// - If the strategy contains the string 'skipAutoIncrement(NNN)' then
-// we do not re-add the auto_increment on that table.
-// - If the strategy contains the string 'delaySecondaryIndexes',
-// then non-primary key indexes will be added afterwards.
-// - If the strategy contains the string 'useMyIsam' we load
-// the data into a myisam table and we then convert to innodb
-// - If the strategy contains the string 'delayPrimaryKey',
-// then the primary key index will be added afterwards (use with useMyIsam)
-func MakeSplitCreateTableSql(logger logutil.Logger, schema, databaseName, tableName string, strategy string) (string, string, error) {
+func MakeSplitCreateTableSql(logger logutil.Logger, schema, databaseName, tableName string, strategy *SplitStrategy) (string, string, error) {
 	alters := make([]string, 0, 5)
 	lines := strings.Split(schema, "\n")
-	delayPrimaryKey := strings.Contains(strategy, "delayPrimaryKey")
-	delaySecondaryIndexes := strings.Contains(strategy, "delaySecondaryIndexes")
-	useMyIsam := strings.Contains(strategy, "useMyIsam")
 
 	for i, line := range lines {
 		if strings.HasPrefix(line, "CREATE TABLE `") {
@@ -741,7 +730,7 @@ func MakeSplitCreateTableSql(logger logutil.Logger, schema, databaseName, tableN
 		if strings.Contains(line, " AUTO_INCREMENT") {
 			// only add to the final ALTER TABLE if we're not
 			// dropping the AUTO_INCREMENT on the table
-			if strings.Contains(strategy, "skipAutoIncrement("+tableName+")") {
+			if strategy.SkipAutoIncrementOnTable(tableName) {
 				logger.Infof("Will not add AUTO_INCREMENT back on table %v", tableName)
 			} else {
 				alters = append(alters, "MODIFY "+line[:len(line)-1])
@@ -752,7 +741,7 @@ func MakeSplitCreateTableSql(logger logutil.Logger, schema, databaseName, tableN
 
 		isPrimaryKey := strings.Contains(line, " PRIMARY KEY")
 		isSecondaryIndex := !isPrimaryKey && strings.Contains(line, " KEY")
-		if (isPrimaryKey && delayPrimaryKey) || (isSecondaryIndex && delaySecondaryIndexes) {
+		if (isPrimaryKey && strategy.DelayPrimaryKey) || (isSecondaryIndex && strategy.DelaySecondaryIndexes) {
 
 			// remove the comma at the end of the previous line,
 			lines[i-1] = lines[i-1][:len(lines[i-1])-1]
@@ -769,7 +758,7 @@ func MakeSplitCreateTableSql(logger logutil.Logger, schema, databaseName, tableN
 			}
 		}
 
-		if useMyIsam && strings.Contains(line, " ENGINE=InnoDB") {
+		if strategy.UseMyIsam && strings.Contains(line, " ENGINE=InnoDB") {
 			lines[i] = strings.Replace(line, " ENGINE=InnoDB", " ENGINE=MyISAM", 1)
 			alters = append(alters, "ENGINE=InnoDB")
 		}
@@ -800,17 +789,7 @@ func buildQueryList(destinationDbName, query string, writeBinLogs bool) []string
 // We will either:
 // - read from the network if sourceAddrs != nil
 // - read from a disk snapshot if fromStoragePaths != nil
-//
-// The strategy is used as follows:
-// - If it contains the string 'writeBinLogs' then we will also write
-//   to the binary logs.
-// - If it contains the command 'populateBlpCheckpoint' then we will
-//   populate the blp_checkpoint table with master positions to start from
-//   - If is also contains the command 'dontStartBinlogPlayer' we won't
-//   start binlog replication on the destination (but it will be configured)
-func (mysqld *Mysqld) MultiRestore(logger logutil.Logger, destinationDbName string, keyRanges []key.KeyRange, sourceAddrs []*url.URL, fromStoragePaths []string, snapshotConcurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) (err error) {
-	writeBinLogs := strings.Contains(strategy, "writeBinLogs")
-
+func (mysqld *Mysqld) MultiRestore(logger logutil.Logger, destinationDbName string, keyRanges []key.KeyRange, sourceAddrs []*url.URL, fromStoragePaths []string, snapshotConcurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy *SplitStrategy) (err error) {
 	var manifests []*SplitSnapshotManifest
 	if sourceAddrs != nil {
 		// get the manifests from the network
@@ -903,7 +882,7 @@ func (mysqld *Mysqld) MultiRestore(logger logutil.Logger, destinationDbName stri
 	}
 
 	createDbCmds := make([]string, 0, len(manifest.SchemaDefinition.TableDefinitions)+2)
-	if !writeBinLogs {
+	if !strategy.WriteBinLogs {
 		createDbCmds = append(createDbCmds, "SET sql_log_bin = OFF")
 	}
 	createDbCmds = append(createDbCmds, createDatabase)
@@ -1025,7 +1004,7 @@ func (mysqld *Mysqld) MultiRestore(logger logutil.Logger, destinationDbName stri
 				}
 
 				// load the data in
-				queries := buildQueryList(destinationDbName, loadStatement, writeBinLogs)
+				queries := buildQueryList(destinationDbName, loadStatement, strategy.WriteBinLogs)
 				e = mysqld.ExecuteSuperQueryList(queries)
 				if e != nil {
 					mrc.RecordError(e)
@@ -1036,7 +1015,7 @@ func (mysqld *Mysqld) MultiRestore(logger logutil.Logger, destinationDbName stri
 				// potentially re-add the auto-increments
 				remainingInserts := jobCount[lsf.tableName()].Add(-1)
 				if remainingInserts == 0 && postSql[lsf.tableName()] != "" {
-					queries = buildQueryList(destinationDbName, postSql[lsf.tableName()], writeBinLogs)
+					queries = buildQueryList(destinationDbName, postSql[lsf.tableName()], strategy.WriteBinLogs)
 					e = mysqld.ExecuteSuperQueryList(queries)
 					if e != nil {
 						mrc.RecordError(e)
@@ -1052,15 +1031,15 @@ func (mysqld *Mysqld) MultiRestore(logger logutil.Logger, destinationDbName stri
 	}
 
 	// populate blp_checkpoint table if we want to
-	if strings.Index(strategy, "populateBlpCheckpoint") != -1 {
+	if strategy.PopulateBlpCheckpoint {
 		queries := make([]string, 0, 4)
-		if !writeBinLogs {
+		if !strategy.WriteBinLogs {
 			queries = append(queries, "SET sql_log_bin = OFF")
 			queries = append(queries, "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
 		}
 		queries = append(queries, binlogplayer.CreateBlpCheckpoint()...)
 		flags := ""
-		if strings.Index(strategy, "dontStartBinlogPlayer") != -1 {
+		if strategy.DontStartBinlogPlayer {
 			flags = binlogplayer.BLP_FLAG_DONT_START
 		}
 		for manifestIndex, manifest := range manifests {
