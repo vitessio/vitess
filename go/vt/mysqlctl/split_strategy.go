@@ -68,6 +68,9 @@ func NewSplitStrategy(logger logutil.Logger, argsStr string) (*SplitStrategy, er
 		return nil, err
 	}
 	if err := flagSet.Parse(args); err != nil {
+		return nil, fmt.Errorf("cannot parse strategy: %v", err)
+	}
+	if flagSet.NArg() > 0 {
 		return nil, fmt.Errorf("strategy doesn't have positional arguments")
 	}
 	var skipAutoIncrement []string
