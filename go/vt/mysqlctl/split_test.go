@@ -10,14 +10,12 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 )
 
-// ofunc MakeSplitCreateTableSql(logger logutil.Logger, schema, databaseName, tableName string, strategy string) (string, string, error) {
-
 func testMakeSplitCreateTableSql(t *testing.T, testCase, schema, strategy, expectedCreate, expectedAlter, expectedError string) {
 	logger := logutil.NewMemoryLogger()
 	create, alter, err := MakeSplitCreateTableSql(logger, schema, "DBNAME", "TABLENAME", strategy)
 	if expectedError != "" {
 		if err == nil || err.Error() != expectedError {
-			t.Fatalf("%v: expected error '%v' but got: %v", testCase, expectedError, err)
+			t.Fatalf("%v: got '%v' but was expecting error '%v'", testCase, err, expectedError)
 		}
 	}
 	if err != nil {
