@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"code.google.com/p/go.net/context"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
@@ -53,7 +55,7 @@ func DialZkocc(addr string, connectTimeout time.Duration) (zkocc *ZkoccConn, err
 func (conn *ZkoccConn) Get(path string) (data string, stat Stat, err error) {
 	zkPath := &ZkPath{path}
 	zkNode := &ZkNode{}
-	if err := conn.rpcClient.Call("ZkReader.Get", zkPath, zkNode); err != nil {
+	if err := conn.rpcClient.Call(context.TODO(), "ZkReader.Get", zkPath, zkNode); err != nil {
 		return "", nil, err
 	}
 	return zkNode.Data, &zkNode.Stat, nil
@@ -66,7 +68,7 @@ func (conn *ZkoccConn) GetW(path string) (data string, stat Stat, watch <-chan z
 func (conn *ZkoccConn) Children(path string) (children []string, stat Stat, err error) {
 	zkPath := &ZkPath{path}
 	zkNode := &ZkNode{}
-	if err := conn.rpcClient.Call("ZkReader.Children", zkPath, zkNode); err != nil {
+	if err := conn.rpcClient.Call(context.TODO(), "ZkReader.Children", zkPath, zkNode); err != nil {
 		return nil, nil, err
 	}
 	return zkNode.Children, &zkNode.Stat, nil
@@ -81,7 +83,7 @@ func (conn *ZkoccConn) ChildrenW(path string) (children []string, stat Stat, wat
 func (conn *ZkoccConn) Exists(path string) (stat Stat, err error) {
 	zkPath := &ZkPath{path}
 	zkNode := &ZkNode{}
-	if err := conn.rpcClient.Call("ZkReader.Get", zkPath, zkNode); err != nil {
+	if err := conn.rpcClient.Call(context.TODO(), "ZkReader.Get", zkPath, zkNode); err != nil {
 		return nil, err
 	}
 	return &zkNode.Stat, nil

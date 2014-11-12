@@ -7,6 +7,7 @@ package wrangler
 import (
 	"fmt"
 
+	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -101,14 +102,14 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 	event.DispatchUpdate(ev, "updating shard record")
 	wr.logger.Infof("Updating Shard's MasterAlias record")
 	shardInfo.MasterAlias = masterElectTabletAlias
-	if err = topo.UpdateShard(wr.ts, shardInfo); err != nil {
+	if err = topo.UpdateShard(context.TODO(), wr.ts, shardInfo); err != nil {
 		return err
 	}
 
 	// and rebuild the shard serving graph
 	event.DispatchUpdate(ev, "rebuilding shard serving graph")
 	wr.logger.Infof("Rebuilding shard serving graph data")
-	if _, err = topotools.RebuildShard(wr.logger, wr.ts, masterElectTablet.Keyspace, masterElectTablet.Shard, cells, wr.lockTimeout, interrupted); err != nil {
+	if _, err = topotools.RebuildShard(context.TODO(), wr.logger, wr.ts, masterElectTablet.Keyspace, masterElectTablet.Shard, cells, wr.lockTimeout, interrupted); err != nil {
 		return err
 	}
 
@@ -143,16 +144,15 @@ func (wr *Wrangler) reparentShardExternal(ev *events.Reparent, slaveTabletMap, m
 	// timeout is executed, so even if we got to the timeout,
 	// we're still good.
 	event.DispatchUpdate(ev, "restarting slaves")
-	topotools.RestartSlavesExternal(wr.ts, wr.logger, slaveTabletMap, masterTabletMap, masterElectTablet.Alias, wr.slaveWasRestarted)
+	ctx := context.TODO()
+	topotools.RestartSlavesExternal(wr.ts, wr.logger, slaveTabletMap, masterTabletMap, masterElectTablet.Alias, func(ti *topo.TabletInfo, swra *actionnode.SlaveWasRestartedArgs) error {
+		wr.logger.Infof("slaveWasRestarted(%v)", ti.Alias)
+		return wr.tmc.SlaveWasRestarted(ctx, ti, swra, wr.ActionTimeout())
+	})
 	return nil
 }
 
 func (wr *Wrangler) slaveWasPromoted(ti *topo.TabletInfo) error {
 	wr.logger.Infof("slaveWasPromoted(%v)", ti.Alias)
-	return wr.tmc.SlaveWasPromoted(ti, wr.ActionTimeout())
-}
-
-func (wr *Wrangler) slaveWasRestarted(ti *topo.TabletInfo, swra *actionnode.SlaveWasRestartedArgs) (err error) {
-	wr.logger.Infof("slaveWasRestarted(%v)", ti.Alias)
-	return wr.tmc.SlaveWasRestarted(ti, swra, wr.ActionTimeout())
+	return wr.tmc.SlaveWasPromoted(context.TODO(), ti, wr.ActionTimeout())
 }

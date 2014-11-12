@@ -41,7 +41,7 @@ type TabletBson struct {
 }
 
 // DialTablet creates and initializes TabletBson.
-func DialTablet(context context.Context, endPoint topo.EndPoint, keyspace, shard string, timeout time.Duration) (tabletconn.TabletConn, error) {
+func DialTablet(ctx context.Context, endPoint topo.EndPoint, keyspace, shard string, timeout time.Duration) (tabletconn.TabletConn, error) {
 	var addr string
 	var config *tls.Config
 	if *tabletBsonEncrypted {
@@ -64,7 +64,7 @@ func DialTablet(context context.Context, endPoint topo.EndPoint, keyspace, shard
 	}
 
 	var sessionInfo tproto.SessionInfo
-	if err = conn.rpcClient.Call("SqlQuery.GetSessionId", tproto.SessionParams{Keyspace: keyspace, Shard: shard}, &sessionInfo); err != nil {
+	if err = conn.rpcClient.Call(ctx, "SqlQuery.GetSessionId", tproto.SessionParams{Keyspace: keyspace, Shard: shard}, &sessionInfo); err != nil {
 		conn.rpcClient.Close()
 		return nil, tabletError(err)
 	}
@@ -73,7 +73,7 @@ func DialTablet(context context.Context, endPoint topo.EndPoint, keyspace, shard
 }
 
 // Execute sends the query to VTTablet.
-func (conn *TabletBson) Execute(context context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
+func (conn *TabletBson) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
@@ -87,14 +87,14 @@ func (conn *TabletBson) Execute(context context.Context, query string, bindVars 
 		SessionId:     conn.sessionID,
 	}
 	qr := new(mproto.QueryResult)
-	if err := conn.rpcClient.Call("SqlQuery.Execute", req, qr); err != nil {
+	if err := conn.rpcClient.Call(ctx, "SqlQuery.Execute", req, qr); err != nil {
 		return nil, tabletError(err)
 	}
 	return qr, nil
 }
 
 // ExecuteBatch sends a batch query to VTTablet.
-func (conn *TabletBson) ExecuteBatch(context context.Context, queries []tproto.BoundQuery, transactionID int64) (*tproto.QueryResultList, error) {
+func (conn *TabletBson) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, transactionID int64) (*tproto.QueryResultList, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
@@ -107,14 +107,14 @@ func (conn *TabletBson) ExecuteBatch(context context.Context, queries []tproto.B
 		SessionId:     conn.sessionID,
 	}
 	qrs := new(tproto.QueryResultList)
-	if err := conn.rpcClient.Call("SqlQuery.ExecuteBatch", req, qrs); err != nil {
+	if err := conn.rpcClient.Call(ctx, "SqlQuery.ExecuteBatch", req, qrs); err != nil {
 		return nil, tabletError(err)
 	}
 	return qrs, nil
 }
 
 // StreamExecute starts a streaming query to VTTablet.
-func (conn *TabletBson) StreamExecute(context context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
+func (conn *TabletBson) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
@@ -145,7 +145,7 @@ func (conn *TabletBson) StreamExecute(context context.Context, query string, bin
 }
 
 // Begin starts a transaction.
-func (conn *TabletBson) Begin(context context.Context) (transactionID int64, err error) {
+func (conn *TabletBson) Begin(ctx context.Context) (transactionID int64, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
@@ -156,12 +156,12 @@ func (conn *TabletBson) Begin(context context.Context) (transactionID int64, err
 		SessionId: conn.sessionID,
 	}
 	var txInfo tproto.TransactionInfo
-	err = conn.rpcClient.Call("SqlQuery.Begin", req, &txInfo)
+	err = conn.rpcClient.Call(ctx, "SqlQuery.Begin", req, &txInfo)
 	return txInfo.TransactionId, tabletError(err)
 }
 
 // Commit commits the ongoing transaction.
-func (conn *TabletBson) Commit(context context.Context, transactionID int64) error {
+func (conn *TabletBson) Commit(ctx context.Context, transactionID int64) error {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
@@ -172,11 +172,11 @@ func (conn *TabletBson) Commit(context context.Context, transactionID int64) err
 		SessionId:     conn.sessionID,
 		TransactionId: transactionID,
 	}
-	return tabletError(conn.rpcClient.Call("SqlQuery.Commit", req, &rpc.Unused{}))
+	return tabletError(conn.rpcClient.Call(ctx, "SqlQuery.Commit", req, &rpc.Unused{}))
 }
 
 // Rollback rolls back the ongoing transaction.
-func (conn *TabletBson) Rollback(context context.Context, transactionID int64) error {
+func (conn *TabletBson) Rollback(ctx context.Context, transactionID int64) error {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
@@ -187,11 +187,11 @@ func (conn *TabletBson) Rollback(context context.Context, transactionID int64) e
 		SessionId:     conn.sessionID,
 		TransactionId: transactionID,
 	}
-	return tabletError(conn.rpcClient.Call("SqlQuery.Rollback", req, &rpc.Unused{}))
+	return tabletError(conn.rpcClient.Call(ctx, "SqlQuery.Rollback", req, &rpc.Unused{}))
 }
 
 // SplitQuery is the stub for SqlQuery.SplitQuery RPC
-func (conn *TabletBson) SplitQuery(context context.Context, query tproto.BoundQuery, splitCount int) (queries []tproto.QuerySplit, err error) {
+func (conn *TabletBson) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitCount int) (queries []tproto.QuerySplit, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
@@ -203,7 +203,7 @@ func (conn *TabletBson) SplitQuery(context context.Context, query tproto.BoundQu
 		SplitCount: splitCount,
 	}
 	reply := new(tproto.SplitQueryResult)
-	if err := conn.rpcClient.Call("SqlQuery.SplitQuery", req, reply); err != nil {
+	if err := conn.rpcClient.Call(ctx, "SqlQuery.SplitQuery", req, reply); err != nil {
 		return nil, tabletError(err)
 	}
 	return reply.Queries, nil

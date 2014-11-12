@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/jscfg"
@@ -779,7 +780,7 @@ func commandSetReadOnly(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []st
 	if err != nil {
 		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
 	}
-	return wr.TabletManagerClient().SetReadOnly(ti, wr.ActionTimeout())
+	return wr.TabletManagerClient().SetReadOnly(context.TODO(), ti, wr.ActionTimeout())
 }
 
 func commandSetReadWrite(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -798,7 +799,7 @@ func commandSetReadWrite(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	if err != nil {
 		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
 	}
-	return wr.TabletManagerClient().SetReadWrite(ti, wr.ActionTimeout())
+	return wr.TabletManagerClient().SetReadWrite(context.TODO(), ti, wr.ActionTimeout())
 }
 
 func commandChangeSlaveType(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -851,7 +852,7 @@ func commandPing(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) e
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().Ping(tabletInfo, wr.ActionTimeout())
+	return wr.TabletManagerClient().Ping(context.TODO(), tabletInfo, wr.ActionTimeout())
 }
 
 func commandRefreshState(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -869,7 +870,7 @@ func commandRefreshState(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().RefreshState(tabletInfo, wr.ActionTimeout())
+	return wr.TabletManagerClient().RefreshState(context.TODO(), tabletInfo, wr.ActionTimeout())
 }
 
 func commandRunHealthCheck(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -891,7 +892,7 @@ func commandRunHealthCheck(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().RunHealthCheck(tabletInfo, servedType, wr.ActionTimeout())
+	return wr.TabletManagerClient().RunHealthCheck(context.TODO(), tabletInfo, servedType, wr.ActionTimeout())
 }
 
 func commandQuery(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -923,7 +924,7 @@ func commandSleep(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) 
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().Sleep(ti, duration, wr.ActionTimeout())
+	return wr.TabletManagerClient().Sleep(context.TODO(), ti, duration, wr.ActionTimeout())
 }
 
 func commandSnapshotSourceEnd(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1236,7 +1237,7 @@ func commandShardExternallyReparented(wr *wrangler.Wrangler, subFlags *flag.Flag
 		if err != nil {
 			return err
 		}
-		return wr.TabletManagerClient().TabletExternallyReparented(ti, wr.ActionTimeout())
+		return wr.TabletManagerClient().TabletExternallyReparented(context.TODO(), ti, wr.ActionTimeout())
 	}
 	return wr.ShardExternallyReparented(keyspace, shard, tabletAlias)
 }
@@ -1464,7 +1465,7 @@ func commandShardReplicationAdd(wr *wrangler.Wrangler, subFlags *flag.FlagSet, a
 	if err != nil {
 		return err
 	}
-	return topo.UpdateShardReplicationRecord(wr.TopoServer(), keyspace, shard, tabletAlias, parentAlias)
+	return topo.UpdateShardReplicationRecord(context.TODO(), wr.TopoServer(), keyspace, shard, tabletAlias, parentAlias)
 }
 
 func commandShardReplicationRemove(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

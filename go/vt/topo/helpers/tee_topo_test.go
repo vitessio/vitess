@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"testing"
 
+	"code.google.com/p/go.net/context"
+
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test"
 	"github.com/youtube/vitess/go/vt/zktopo"
@@ -57,7 +59,7 @@ func TestShard(t *testing.T) {
 
 func TestTablet(t *testing.T) {
 	ts := newFakeTeeServer(t)
-	test.CheckTablet(t, ts)
+	test.CheckTablet(context.Background(), t, ts)
 }
 
 func TestServingGraph(t *testing.T) {

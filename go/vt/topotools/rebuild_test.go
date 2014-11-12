@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"code.google.com/p/go.net/context"
+
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test/faketopo"
@@ -19,6 +21,7 @@ import (
 )
 
 func TestRebuildShardRace(t *testing.T) {
+	ctx := context.Background()
 	cells := []string{"test_cell"}
 	logger := logutil.NewMemoryLogger()
 	timeout := 10 * time.Second
@@ -35,7 +38,7 @@ func TestRebuildShardRace(t *testing.T) {
 	f.AddTablet(2, "test_cell", topo.TYPE_REPLICA, master)
 
 	// Do an initial rebuild.
-	if _, err := RebuildShard(logger, f.Topo, keyspace, shard, cells, timeout, interrupted); err != nil {
+	if _, err := RebuildShard(ctx, logger, f.Topo, keyspace, shard, cells, timeout, interrupted); err != nil {
 		t.Fatalf("RebuildShard: %v", err)
 	}
 
@@ -73,11 +76,11 @@ func TestRebuildShardRace(t *testing.T) {
 	// the SrvShard lock.
 	masterInfo := f.GetTablet(1)
 	masterInfo.Type = topo.TYPE_SPARE
-	if err := topo.UpdateTablet(ts, masterInfo); err != nil {
+	if err := topo.UpdateTablet(ctx, ts, masterInfo); err != nil {
 		t.Fatalf("UpdateTablet: %v", err)
 	}
 	go func() {
-		if _, err := RebuildShard(logger, f.Topo, keyspace, shard, cells, timeout, interrupted); err != nil {
+		if _, err := RebuildShard(ctx, logger, f.Topo, keyspace, shard, cells, timeout, interrupted); err != nil {
 			t.Fatalf("RebuildShard: %v", err)
 		}
 		close(done)
@@ -90,10 +93,10 @@ func TestRebuildShardRace(t *testing.T) {
 	// that doesn't stall.
 	replicaInfo := f.GetTablet(2)
 	replicaInfo.Type = topo.TYPE_SPARE
-	if err := topo.UpdateTablet(ts, replicaInfo); err != nil {
+	if err := topo.UpdateTablet(ctx, ts, replicaInfo); err != nil {
 		t.Fatalf("UpdateTablet: %v", err)
 	}
-	if _, err := RebuildShard(logger, f.Topo, keyspace, shard, cells, timeout, interrupted); err != nil {
+	if _, err := RebuildShard(ctx, logger, f.Topo, keyspace, shard, cells, timeout, interrupted); err != nil {
 		t.Fatalf("RebuildShard: %v", err)
 	}
 

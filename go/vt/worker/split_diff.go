@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"code.google.com/p/go.net/context"
+
 	"github.com/youtube/vitess/go/sync2"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/concurrency"
@@ -266,7 +268,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 
 	// 1 - stop the master binlog replication, get its current position
 	sdw.wr.Logger().Infof("Stopping master binlog replication on %v", sdw.shardInfo.MasterAlias)
-	blpPositionList, err := sdw.wr.TabletManagerClient().StopBlp(masterInfo, 30*time.Second)
+	blpPositionList, err := sdw.wr.TabletManagerClient().StopBlp(context.TODO(), masterInfo, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("StopBlp for %v failed: %v", sdw.shardInfo.MasterAlias, err)
 	}
@@ -292,7 +294,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 
 		// stop replication
 		sdw.wr.Logger().Infof("Stopping slave[%v] %v at a minimum of %v", i, sdw.sourceAliases[i], blpPos.Position)
-		stoppedAt, err := sdw.wr.TabletManagerClient().StopSlaveMinimum(sourceTablet, blpPos.Position, 30*time.Second)
+		stoppedAt, err := sdw.wr.TabletManagerClient().StopSlaveMinimum(context.TODO(), sourceTablet, blpPos.Position, 30*time.Second)
 		if err != nil {
 			return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", sdw.sourceAliases[i], blpPos.Position, err)
 		}
@@ -312,7 +314,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	// 3 - ask the master of the destination shard to resume filtered
 	//     replication up to the new list of positions
 	sdw.wr.Logger().Infof("Restarting master %v until it catches up to %v", sdw.shardInfo.MasterAlias, stopPositionList)
-	masterPos, err := sdw.wr.TabletManagerClient().RunBlpUntil(masterInfo, &stopPositionList, 30*time.Second)
+	masterPos, err := sdw.wr.TabletManagerClient().RunBlpUntil(context.TODO(), masterInfo, &stopPositionList, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("RunBlpUntil for %v until %v failed: %v", sdw.shardInfo.MasterAlias, stopPositionList, err)
 	}
@@ -324,7 +326,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	if err != nil {
 		return err
 	}
-	_, err = sdw.wr.TabletManagerClient().StopSlaveMinimum(destinationTablet, masterPos, 30*time.Second)
+	_, err = sdw.wr.TabletManagerClient().StopSlaveMinimum(context.TODO(), destinationTablet, masterPos, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("StopSlaveMinimum for %v at %v failed: %v", sdw.destinationAlias, masterPos, err)
 	}
@@ -337,7 +339,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 
 	// 5 - restart filtered replication on destination master
 	sdw.wr.Logger().Infof("Restarting filtered replication on master %v", sdw.shardInfo.MasterAlias)
-	err = sdw.wr.TabletManagerClient().StartBlp(masterInfo, 30*time.Second)
+	err = sdw.wr.TabletManagerClient().StartBlp(context.TODO(), masterInfo, 30*time.Second)
 	if err := sdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String()); err != nil {
 		sdw.wr.Logger().Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String(), err)
 	}

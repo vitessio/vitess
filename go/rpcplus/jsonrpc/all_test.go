@@ -12,6 +12,8 @@ import (
 	"net"
 	"testing"
 
+	"code.google.com/p/go.net/context"
+
 	"github.com/youtube/vitess/go/rpcplus"
 )
 
@@ -105,6 +107,7 @@ func TestServer(t *testing.T) {
 }
 
 func TestClient(t *testing.T) {
+	ctx := context.Background()
 	// Assume server is okay (TestServer is above).
 	// Test client against server.
 	cli, srv := net.Pipe()
@@ -116,7 +119,7 @@ func TestClient(t *testing.T) {
 	// Synchronous calls
 	args := &Args{7, 8}
 	reply := new(Reply)
-	err := client.Call("Arith.Add", args, reply)
+	err := client.Call(ctx, "Arith.Add", args, reply)
 	if err != nil {
 		t.Errorf("Add: expected no error but got string %q", err.Error())
 	}
@@ -126,7 +129,7 @@ func TestClient(t *testing.T) {
 
 	args = &Args{7, 8}
 	reply = new(Reply)
-	err = client.Call("Arith.Mul", args, reply)
+	err = client.Call(ctx, "Arith.Mul", args, reply)
 	if err != nil {
 		t.Errorf("Mul: expected no error but got string %q", err.Error())
 	}
@@ -137,9 +140,9 @@ func TestClient(t *testing.T) {
 	// Out of order.
 	args = &Args{7, 8}
 	mulReply := new(Reply)
-	mulCall := client.Go("Arith.Mul", args, mulReply, nil)
+	mulCall := client.Go(ctx, "Arith.Mul", args, mulReply, nil)
 	addReply := new(Reply)
-	addCall := client.Go("Arith.Add", args, addReply, nil)
+	addCall := client.Go(ctx, "Arith.Add", args, addReply, nil)
 
 	addCall = <-addCall.Done
 	if addCall.Error != nil {
@@ -160,7 +163,7 @@ func TestClient(t *testing.T) {
 	// Error test
 	args = &Args{7, 0}
 	reply = new(Reply)
-	err = client.Call("Arith.Div", args, reply)
+	err = client.Call(ctx, "Arith.Div", args, reply)
 	// expect an error: zero divide
 	if err == nil {
 		t.Error("Div: expected error")

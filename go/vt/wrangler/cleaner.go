@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"code.google.com/p/go.net/context"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -221,7 +223,7 @@ func RecordStartSlaveAction(cleaner *Cleaner, tabletInfo *topo.TabletInfo, waitT
 
 // CleanUp is part of CleanerAction interface.
 func (sba StartSlaveAction) CleanUp(wr *Wrangler) error {
-	return wr.TabletManagerClient().StartSlave(sba.TabletInfo, sba.WaitTime)
+	return wr.TabletManagerClient().StartSlave(context.TODO(), sba.TabletInfo, sba.WaitTime)
 }
 
 //
@@ -247,5 +249,5 @@ func RecordStartBlpAction(cleaner *Cleaner, tabletInfo *topo.TabletInfo, waitTim
 
 // CleanUp is part of CleanerAction interface.
 func (sba StartBlpAction) CleanUp(wr *Wrangler) error {
-	return wr.TabletManagerClient().StartBlp(sba.TabletInfo, sba.WaitTime)
+	return wr.TabletManagerClient().StartBlp(context.TODO(), sba.TabletInfo, sba.WaitTime)
 }

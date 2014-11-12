@@ -10,7 +10,9 @@ package actionnode
 import (
 	"time"
 
+	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -22,8 +24,15 @@ var (
 
 // LockKeyspace will lock the keyspace in the topology server.
 // UnlockKeyspace should be called if this returns no error.
-func (n *ActionNode) LockKeyspace(ts topo.Server, keyspace string, lockTimeout time.Duration, interrupted chan struct{}) (lockPath string, err error) {
+func (n *ActionNode) LockKeyspace(ctx context.Context, ts topo.Server, keyspace string, lockTimeout time.Duration, interrupted chan struct{}) (lockPath string, err error) {
 	log.Infof("Locking keyspace %v for action %v", keyspace, n.Action)
+
+	span := trace.NewSpanFromContext(ctx)
+	span.StartClient("TopoServer.LockKeyspaceForAction")
+	span.Annotate("action", n.Action)
+	span.Annotate("keyspace", keyspace)
+	defer span.Finish()
+
 	return ts.LockKeyspaceForAction(keyspace, n.ToJson(), lockTimeout, interrupted)
 }
 
@@ -52,8 +61,16 @@ func (n *ActionNode) UnlockKeyspace(ts topo.Server, keyspace string, lockPath st
 
 // LockShard will lock the shard in the topology server.
 // UnlockShard should be called if this returns no error.
-func (n *ActionNode) LockShard(ts topo.Server, keyspace, shard string, lockTimeout time.Duration, interrupted chan struct{}) (lockPath string, err error) {
+func (n *ActionNode) LockShard(ctx context.Context, ts topo.Server, keyspace, shard string, lockTimeout time.Duration, interrupted chan struct{}) (lockPath string, err error) {
 	log.Infof("Locking shard %v/%v for action %v", keyspace, shard, n.Action)
+
+	span := trace.NewSpanFromContext(ctx)
+	span.StartClient("TopoServer.LockShardForAction")
+	span.Annotate("action", n.Action)
+	span.Annotate("keyspace", keyspace)
+	span.Annotate("shard", shard)
+	defer span.Finish()
+
 	return ts.LockShardForAction(keyspace, shard, n.ToJson(), lockTimeout, interrupted)
 }
 
@@ -82,8 +99,17 @@ func (n *ActionNode) UnlockShard(ts topo.Server, keyspace, shard string, lockPat
 
 // LockSrvShard will lock the serving shard in the topology server.
 // UnlockSrvShard should be called if this returns no error.
-func (n *ActionNode) LockSrvShard(ts topo.Server, cell, keyspace, shard string, lockTimeout time.Duration, interrupted chan struct{}) (lockPath string, err error) {
+func (n *ActionNode) LockSrvShard(ctx context.Context, ts topo.Server, cell, keyspace, shard string, lockTimeout time.Duration, interrupted chan struct{}) (lockPath string, err error) {
 	log.Infof("Locking serving shard %v/%v/%v for action %v", cell, keyspace, shard, n.Action)
+
+	span := trace.NewSpanFromContext(ctx)
+	span.StartClient("TopoServer.LockSrvShardForAction")
+	span.Annotate("action", n.Action)
+	span.Annotate("keyspace", keyspace)
+	span.Annotate("shard", shard)
+	span.Annotate("cell", cell)
+	defer span.Finish()
+
 	return ts.LockSrvShardForAction(cell, keyspace, shard, n.ToJson(), lockTimeout, interrupted)
 }
 

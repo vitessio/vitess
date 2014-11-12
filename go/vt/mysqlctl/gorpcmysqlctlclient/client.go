@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"time"
 
+	"code.google.com/p/go.net/context"
+
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlclient"
@@ -31,7 +33,7 @@ func goRpcMysqlctlClientFactory(network, addr string, dialTimeout time.Duration)
 
 // Start is part of the MysqlctlClient interface.
 func (c *goRpcMysqlctlClient) Start(mysqlWaitTime time.Duration) error {
-	return c.rpcClient.Call("MysqlctlServer.Start", &mysqlWaitTime, nil)
+	return c.rpcClient.Call(context.TODO(), "MysqlctlServer.Start", &mysqlWaitTime, nil)
 }
 
 // Shutdown is part of the MysqlctlClient interface.
@@ -39,7 +41,7 @@ func (c *goRpcMysqlctlClient) Shutdown(waitForMysqld bool, mysqlWaitTime time.Du
 	if !waitForMysqld {
 		mysqlWaitTime = 0
 	}
-	return c.rpcClient.Call("MysqlctlServer.Shutdown", &mysqlWaitTime, nil)
+	return c.rpcClient.Call(context.TODO(), "MysqlctlServer.Shutdown", &mysqlWaitTime, nil)
 }
 
 // Close is part of the MysqlctlClient interface.

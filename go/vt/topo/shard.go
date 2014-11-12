@@ -11,8 +11,11 @@ import (
 	"strings"
 	"sync"
 
+	"code.google.com/p/go.net/context"
+
 	log "github.com/golang/glog"
 
+	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
 )
@@ -234,7 +237,13 @@ func NewShardInfo(keyspace, shard string, value *Shard, version int64) *ShardInf
 }
 
 // UpdateShard updates the shard data, with the right version
-func UpdateShard(ts Server, si *ShardInfo) error {
+func UpdateShard(ctx context.Context, ts Server, si *ShardInfo) error {
+	span := trace.NewSpanFromContext(ctx)
+	span.StartClient("TopoServer.UpdateShard")
+	span.Annotate("keyspace", si.Keyspace())
+	span.Annotate("shard", si.ShardName())
+	defer span.Finish()
+
 	var version int64 = -1
 	if si.version != 0 {
 		version = si.version

@@ -14,6 +14,9 @@ import (
 	"net/http"
 	"reflect"
 	"sync"
+
+	"code.google.com/p/go.net/context"
+	"github.com/youtube/vitess/go/trace"
 )
 
 // ServerError represents an error that has been returned from
@@ -315,7 +318,11 @@ func (client *Client) Close() error {
 // the invocation.  The done channel will signal when the call is complete by returning
 // the same Call object.  If done is nil, Go will allocate a new channel.
 // If non-nil, done must be buffered or Go will deliberately crash.
-func (client *Client) Go(serviceMethod string, args interface{}, reply interface{}, done chan *Call) *Call {
+func (client *Client) Go(ctx context.Context, serviceMethod string, args interface{}, reply interface{}, done chan *Call) *Call {
+	span := trace.NewSpanFromContext(ctx)
+	span.StartClient(serviceMethod)
+	defer span.Finish()
+
 	call := new(Call)
 	call.ServiceMethod = serviceMethod
 	call.Args = args
@@ -358,7 +365,7 @@ func (client *Client) StreamGo(serviceMethod string, args interface{}, replyStre
 }
 
 // Call invokes the named function, waits for it to complete, and returns its error status.
-func (client *Client) Call(serviceMethod string, args interface{}, reply interface{}) error {
-	call := <-client.Go(serviceMethod, args, reply, make(chan *Call, 1)).Done
+func (client *Client) Call(ctx context.Context, serviceMethod string, args interface{}, reply interface{}) error {
+	call := <-client.Go(ctx, serviceMethod, args, reply, make(chan *Call, 1)).Done
 	return call.Error
 }

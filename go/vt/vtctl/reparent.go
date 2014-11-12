@@ -8,6 +8,8 @@ import (
 	"flag"
 	"fmt"
 
+	"code.google.com/p/go.net/context"
+
 	_ "github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -45,7 +47,7 @@ func commandDemoteMaster(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().DemoteMaster(tabletInfo, wr.ActionTimeout())
+	return wr.TabletManagerClient().DemoteMaster(context.TODO(), tabletInfo, wr.ActionTimeout())
 }
 
 func commandReparentTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"sync"
 
+	"code.google.com/p/go.net/context"
+
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -42,7 +44,7 @@ func (wr *Wrangler) Snapshot(tabletAlias topo.TabletAlias, forceMasterSnapshot b
 		ServerMode:          serverMode,
 		ForceMasterSnapshot: forceMasterSnapshot,
 	}
-	logStream, errFunc, err := wr.tmc.Snapshot(ti, args, wr.ActionTimeout())
+	logStream, errFunc, err := wr.tmc.Snapshot(context.TODO(), ti, args, wr.ActionTimeout())
 	if err != nil {
 		return nil, "", err
 	}
@@ -67,7 +69,7 @@ func (wr *Wrangler) SnapshotSourceEnd(tabletAlias topo.TabletAlias, slaveStartRe
 		ReadOnly:           !readWrite,
 		OriginalType:       originalType,
 	}
-	return wr.tmc.SnapshotSourceEnd(ti, args, wr.ActionTimeout())
+	return wr.tmc.SnapshotSourceEnd(context.TODO(), ti, args, wr.ActionTimeout())
 }
 
 // ReserveForRestore will make sure a tablet is ready to be used as a restore
@@ -86,7 +88,7 @@ func (wr *Wrangler) ReserveForRestore(srcTabletAlias, dstTabletAlias topo.Tablet
 	args := &actionnode.ReserveForRestoreArgs{
 		SrcTabletAlias: srcTabletAlias,
 	}
-	return wr.tmc.ReserveForRestore(tablet, args, wr.ActionTimeout())
+	return wr.tmc.ReserveForRestore(context.TODO(), tablet, args, wr.ActionTimeout())
 }
 
 // UnreserveForRestore switches the tablet back to its original state,
@@ -145,7 +147,7 @@ func (wr *Wrangler) Restore(srcTabletAlias topo.TabletAlias, srcFilePath string,
 		WasReserved:           wasReserved,
 		DontWaitForSlaveStart: dontWaitForSlaveStart,
 	}
-	logStream, errFunc, err := wr.tmc.Restore(tablet, args, wr.ActionTimeout())
+	logStream, errFunc, err := wr.tmc.Restore(context.TODO(), tablet, args, wr.ActionTimeout())
 	if err != nil {
 		return err
 	}

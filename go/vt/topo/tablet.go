@@ -12,8 +12,11 @@ import (
 	"strings"
 	"sync"
 
+	"code.google.com/p/go.net/context"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
+	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/key"
 )
 
@@ -523,7 +526,12 @@ func NewTabletInfo(tablet *Tablet, version int64) *TabletInfo {
 }
 
 // UpdateTablet updates the tablet data only - not associated replication paths.
-func UpdateTablet(ts Server, tablet *TabletInfo) error {
+func UpdateTablet(ctx context.Context, ts Server, tablet *TabletInfo) error {
+	span := trace.NewSpanFromContext(ctx)
+	span.StartClient("TopoServer.UpdateTablet")
+	span.Annotate("tablet", tablet.Alias.String())
+	defer span.Finish()
+
 	var version int64 = -1
 	if tablet.version != 0 {
 		version = tablet.version
@@ -628,13 +636,13 @@ func CreateTablet(ts Server, tablet *Tablet) error {
 		return nil
 	}
 
-	return UpdateTabletReplicationData(ts, tablet)
+	return UpdateTabletReplicationData(context.TODO(), ts, tablet)
 }
 
 // UpdateTabletReplicationData creates or updates the replication
 // graph data for a tablet
-func UpdateTabletReplicationData(ts Server, tablet *Tablet) error {
-	return UpdateShardReplicationRecord(ts, tablet.Keyspace, tablet.Shard, tablet.Alias, tablet.Parent)
+func UpdateTabletReplicationData(ctx context.Context, ts Server, tablet *Tablet) error {
+	return UpdateShardReplicationRecord(ctx, ts, tablet.Keyspace, tablet.Shard, tablet.Alias, tablet.Parent)
 }
 
 // DeleteTabletReplicationData deletes replication data.
