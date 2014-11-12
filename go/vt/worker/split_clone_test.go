@@ -114,18 +114,18 @@ func NewFakePoolConnectionQueryBinlogOff(t *testing.T, query string) *FakePoolCo
 	return &FakePoolConnection{
 		t: t,
 		ExpectedExecuteFetch: []ExpectedExecuteFetch{
-			ExpectedExecuteFetch{
-				Query:       "SET sql_log_bin = OFF",
-				QueryResult: &mproto.QueryResult{},
-			},
+			// ExpectedExecuteFetch{
+			// 	Query:       "SET sql_log_bin = OFF",
+			// 	QueryResult: &mproto.QueryResult{},
+			// },
 			ExpectedExecuteFetch{
 				Query:       query,
 				QueryResult: &mproto.QueryResult{},
 			},
-			ExpectedExecuteFetch{
-				Query:       "SET sql_log_bin = ON",
-				QueryResult: &mproto.QueryResult{},
-			},
+			// ExpectedExecuteFetch{
+			// 	Query:       "SET sql_log_bin = ON",
+			// 	QueryResult: &mproto.QueryResult{},
+			// },
 		},
 	}
 }

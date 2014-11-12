@@ -492,13 +492,13 @@ func (scw *SplitCloneWorker) copy() error {
 			go func(ti *topo.TabletInfo, insertChannel chan string) {
 				defer destinationWaitGroup.Done()
 				scw.wr.Logger().Infof("Creating tables on tablet %v", ti.Alias)
-				if err := runSqlCommands(scw.wr, ti, createDbCmds, abort); err != nil {
+				if err := runSqlCommands(scw.wr, ti, createDbCmds, abort, disableBinLogs); err != nil {
 					processError("createDbCmds failed: %v", err)
 					return
 				}
 				if len(createViewCmds) > 0 {
 					scw.wr.Logger().Infof("Creating views on tablet %v", ti.Alias)
-					if err := runSqlCommands(scw.wr, ti, createViewCmds, abort); err != nil {
+					if err := runSqlCommands(scw.wr, ti, createViewCmds, abort, disableBinLogs); err != nil {
 						processError("createViewCmds failed: %v", err)
 						return
 					}
@@ -577,7 +577,7 @@ func (scw *SplitCloneWorker) copy() error {
 				go func(ti *topo.TabletInfo) {
 					defer destinationWaitGroup.Done()
 					scw.wr.Logger().Infof("Altering tables on tablet %v", ti.Alias)
-					if err := runSqlCommands(scw.wr, ti, alterTablesCmds, abort); err != nil {
+					if err := runSqlCommands(scw.wr, ti, alterTablesCmds, abort, disableBinLogs); err != nil {
 						processError("alterTablesCmds failed on tablet %v: %v", ti.Alias, err)
 					}
 				}(scw.destinationTablets[shardIndex][tabletAlias])
@@ -614,7 +614,7 @@ func (scw *SplitCloneWorker) copy() error {
 				go func(ti *topo.TabletInfo) {
 					defer destinationWaitGroup.Done()
 					scw.wr.Logger().Infof("Making and populating blp_checkpoint table on tablet %v", ti.Alias)
-					if err := runSqlCommands(scw.wr, ti, queries, abort); err != nil {
+					if err := runSqlCommands(scw.wr, ti, queries, abort, disableBinLogs); err != nil {
 						processError("blp_checkpoint queries failed on tablet %v: %v", ti.Alias, err)
 					}
 				}(scw.destinationTablets[shardIndex][tabletAlias])
