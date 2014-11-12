@@ -728,14 +728,21 @@ func MakeSplitCreateTableSql(logger logutil.Logger, schema, databaseName, tableN
 		}
 
 		if strings.Contains(line, " AUTO_INCREMENT") {
-			// only add to the final ALTER TABLE if we're not
-			// dropping the AUTO_INCREMENT on the table
-			if strategy.SkipAutoIncrementOnTable(tableName) {
-				logger.Infof("Will not add AUTO_INCREMENT back on table %v", tableName)
-			} else {
+			skipAutoIncrement := strategy.SkipAutoIncrementOnTable(tableName)
+			if skipAutoIncrement {
+				logger.Infof("Will drop AUTO_INCREMENT from table %v", tableName)
+			}
+
+			// add an alter if we need to add the auto increment after the fact
+			if strategy.DelayAutoIncrement && !skipAutoIncrement {
 				alters = append(alters, "MODIFY "+line[:len(line)-1])
 			}
-			lines[i] = strings.Replace(line, " AUTO_INCREMENT", "", 1)
+
+			// remove the auto increment if we need to
+			if skipAutoIncrement || strategy.DelayAutoIncrement {
+				lines[i] = strings.Replace(line, " AUTO_INCREMENT", "", 1)
+			}
+
 			continue
 		}
 

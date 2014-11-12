@@ -307,7 +307,7 @@ func TestSplitClone(t *testing.T) {
 	rightMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 50)
 	rightRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 50)
 
-	gwrk, err := NewSplitCloneWorker(wr, "cell1", "ks", "-80", nil, "-populate_blp_checkpoint", 10, 1, 10)
+	gwrk, err := NewSplitCloneWorker(wr, "cell1", "ks", "-80", nil, "-populate_blp_checkpoint -delay_auto_increment", 10, 1, 10)
 	if err != nil {
 		t.Errorf("Worker creation failed: %v", err)
 	}
