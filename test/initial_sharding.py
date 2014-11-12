@@ -353,7 +353,7 @@ index by_msg (msg)
                           '--command_display_interval', '10ms',
                           'SplitClone',
                           '--exclude_tables' ,'unrelated',
-                          '--strategy', 'populateBlpCheckpoint',
+                          '--strategy=-populate_blp_checkpoint',
                           '--source_reader_count', '10',
                           '--min_table_size_for_split', '1',
                           'test_keyspace/0'],
@@ -370,10 +370,10 @@ index by_msg (msg)
       shard_replica.wait_for_binlog_server_state("Enabled")
 
       # perform the restore.
-      utils.run_vtctl(['ShardMultiRestore', '-strategy=populateBlpCheckpoint',
+      utils.run_vtctl(['ShardMultiRestore', '-strategy=-populate_blp_checkpoint',
                        'test_keyspace/-80', shard_replica.tablet_alias],
                       auto_log=True)
-      utils.run_vtctl(['ShardMultiRestore', '-strategy=populateBlpCheckpoint',
+      utils.run_vtctl(['ShardMultiRestore', '-strategy=-populate_blp_checkpoint',
                        'test_keyspace/80-', shard_replica.tablet_alias],
                       auto_log=True)
 

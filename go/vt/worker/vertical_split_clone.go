@@ -41,7 +41,7 @@ type VerticalSplitCloneWorker struct {
 	destinationKeyspace    string
 	destinationShard       string
 	tables                 []string
-	strategy               string
+	strategy               *mysqlctl.SplitStrategy
 	sourceReaderCount      int
 	minTableSizeForSplit   uint64
 	destinationWriterCount int
@@ -72,7 +72,11 @@ type VerticalSplitCloneWorker struct {
 }
 
 // NewVerticalSplitCloneWorker returns a new VerticalSplitCloneWorker object.
-func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspace, destinationShard string, tables []string, strategy string, sourceReaderCount int, minTableSizeForSplit uint64, destinationWriterCount int) Worker {
+func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspace, destinationShard string, tables []string, strategyStr string, sourceReaderCount int, minTableSizeForSplit uint64, destinationWriterCount int) (Worker, error) {
+	strategy, err := mysqlctl.NewSplitStrategy(wr.Logger(), strategyStr)
+	if err != nil {
+		return nil, err
+	}
 	return &VerticalSplitCloneWorker{
 		wr:                     wr,
 		cell:                   cell,
@@ -91,9 +95,9 @@ func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspac
 			Keyspace: destinationKeyspace,
 			Shard:    destinationShard,
 			Tables:   tables,
-			Strategy: strategy,
+			Strategy: strategy.String(),
 		},
-	}
+	}, nil
 }
 
 func (vscw *VerticalSplitCloneWorker) setState(state string) {
@@ -503,7 +507,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	}
 
 	// then create and populate the blp_checkpoint table
-	if strings.Index(vscw.strategy, "populateBlpCheckpoint") != -1 {
+	if vscw.strategy.PopulateBlpCheckpoint {
 		// get the current position from the source
 		status, err := vscw.wr.TabletManagerClient().SlaveStatus(vscw.sourceTablet, 30*time.Second)
 		if err != nil {
@@ -513,7 +517,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 		queries := make([]string, 0, 4)
 		queries = append(queries, binlogplayer.CreateBlpCheckpoint()...)
 		flags := ""
-		if strings.Index(vscw.strategy, "dontStartBinlogPlayer") != -1 {
+		if vscw.strategy.DontStartBinlogPlayer {
 			flags = binlogplayer.BLP_FLAG_DONT_START
 		}
 		queries = append(queries, binlogplayer.PopulateBlpCheckpoint(0, status.Position, time.Now().Unix(), flags))
@@ -534,7 +538,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	}
 
 	// Now we're done with data copy, update the shard's source info.
-	if strings.Index(vscw.strategy, "skipSetSourceShards") != -1 {
+	if vscw.strategy.SkipSetSourceShards {
 		vscw.wr.Logger().Infof("Skipping setting SourceShard on destination shard.")
 	} else {
 		vscw.wr.Logger().Infof("Setting SourceShard on shard %v/%v", vscw.destinationKeyspace, vscw.destinationShard)

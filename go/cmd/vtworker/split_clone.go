@@ -53,7 +53,7 @@ const splitCloneHTML2 = `
       <LABEL for="excludeTables">Exclude Tables: </LABEL>
         <INPUT type="text" id="excludeTables" name="excludeTables" value="moving.*"></BR>
       <LABEL for="strategy">Strategy: </LABEL>
-        <INPUT type="text" id="strategy" name="strategy" value="populateBlpCheckpoint"></BR>
+        <INPUT type="text" id="strategy" name="strategy" value="-populate_blp_checkpoint"></BR>
       <LABEL for="sourceReaderCount">Source Reader Count: </LABEL>
         <INPUT type="text" id="sourceReaderCount" name="sourceReaderCount" value="{{.DefaultSourceReaderCount}}"></BR>
       <LABEL for="minTableSizeForSplit">Minimun Table Size For Split: </LABEL>
@@ -88,7 +88,7 @@ var splitCloneTemplate2 = loadTemplate("splitClone2", splitCloneHTML2)
 
 func commandSplitClone(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) worker.Worker {
 	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude")
-	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'mysqlctl multirestore -help' for more info")
+	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'mysqlctl multirestore -strategy=-help' for more info")
 	sourceReaderCount := subFlags.Int("source_reader_count", defaultSourceReaderCount, "number of concurrent streaming queries to use on the source")
 	minTableSizeForSplit := subFlags.Int("min_table_size_for_split", defaultMinTableSizeForSplit, "tables bigger than this size on disk in bytes will be split into source_reader_count chunks if possible")
 	destinationWriterCount := subFlags.Int("destination_writer_count", defaultDestinationWriterCount, "number of concurrent RPCs to execute on the destination")
@@ -102,7 +102,11 @@ func commandSplitClone(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	return worker.NewSplitCloneWorker(wr, *cell, keyspace, shard, excludeTableArray, *strategy, *sourceReaderCount, uint64(*minTableSizeForSplit), *destinationWriterCount)
+	worker, err := worker.NewSplitCloneWorker(wr, *cell, keyspace, shard, excludeTableArray, *strategy, *sourceReaderCount, uint64(*minTableSizeForSplit), *destinationWriterCount)
+	if err != nil {
+		log.Fatalf("cannot create split clone worker: %v", err)
+	}
+	return worker
 }
 
 func keyspacesWithOverlappingShards(wr *wrangler.Wrangler) ([]map[string]string, error) {
@@ -204,7 +208,11 @@ func interactiveSplitClone(wr *wrangler.Wrangler, w http.ResponseWriter, r *http
 	}
 
 	// start the clone job
-	wrk := worker.NewSplitCloneWorker(wr, *cell, keyspace, shard, excludeTableArray, strategy, int(sourceReaderCount), uint64(minTableSizeForSplit), int(destinationWriterCount))
+	wrk, err := worker.NewSplitCloneWorker(wr, *cell, keyspace, shard, excludeTableArray, strategy, int(sourceReaderCount), uint64(minTableSizeForSplit), int(destinationWriterCount))
+	if err != nil {
+		httpError(w, "cannot create worker: %v", err)
+		return
+	}
 	if _, err := setAndStartWorker(wrk); err != nil {
 		httpError(w, "cannot set worker: %s", err)
 		return

@@ -1141,13 +1141,19 @@ func (agent *ActionAgent) MultiRestore(args *actionnode.MultiRestoreArgs, logger
 	// create the loggers: tee to console and source
 	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
 
+	// parse the strategy
+	strategy, err := mysqlctl.NewSplitStrategy(l, args.Strategy)
+	if err != nil {
+		return fmt.Errorf("error parsing strategy: %v", err)
+	}
+
 	// run the action, scrap if it fails
 	if rec.HasErrors() {
 		log.Infof("Got errors trying to get snapshots from storage, trying to get them from original tablets: %v", rec.Error())
-		err = agent.Mysqld.MultiRestore(l, tablet.DbName(), keyRanges, sourceAddrs, nil, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, args.Strategy)
+		err = agent.Mysqld.MultiRestore(l, tablet.DbName(), keyRanges, sourceAddrs, nil, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, strategy)
 	} else {
 		log.Infof("Got snapshots from storage, reading them from disk directly")
-		err = agent.Mysqld.MultiRestore(l, tablet.DbName(), keyRanges, nil, fromStoragePaths, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, args.Strategy)
+		err = agent.Mysqld.MultiRestore(l, tablet.DbName(), keyRanges, nil, fromStoragePaths, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, strategy)
 	}
 	if err != nil {
 		if e := topotools.Scrap(agent.TopoServer, agent.TabletAlias, false); e != nil {

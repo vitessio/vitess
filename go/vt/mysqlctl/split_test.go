@@ -10,8 +10,12 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 )
 
-func testMakeSplitCreateTableSql(t *testing.T, testCase, schema, strategy, expectedCreate, expectedAlter, expectedError string) {
+func testMakeSplitCreateTableSql(t *testing.T, testCase, schema, strategyStr, expectedCreate, expectedAlter, expectedError string) {
 	logger := logutil.NewMemoryLogger()
+	strategy, err := NewSplitStrategy(logger, strategyStr)
+	if err != nil {
+		t.Fatalf("%v: got strategy parsing error: %v", testCase, err)
+	}
 	create, alter, err := MakeSplitCreateTableSql(logger, schema, "DBNAME", "TABLENAME", strategy)
 	if expectedError != "" {
 		if err == nil || err.Error() != expectedError {
@@ -62,7 +66,7 @@ func TestMakeSplitCreateTableSql(t *testing.T) {
 			"  `msg` varchar(64) DEFAULT NULL,\n"+
 			"  PRIMARY KEY (`id`)\n"+
 			") ENGINE=InnoDB DEFAULT CHARSET=utf8",
-		"delayPrimaryKey",
+		"-delay_primary_key",
 		"CREATE TABLE `DBNAME`.`TABLENAME` (\n"+
 			"  `id` bigint(2) NOT NULL,\n"+
 			"  `msg` varchar(64) DEFAULT NULL\n"+
@@ -90,7 +94,7 @@ func TestMakeSplitCreateTableSql(t *testing.T) {
 			"  `msg` varchar(64) DEFAULT NULL,\n"+
 			"  PRIMARY KEY (`id`)\n"+
 			") ENGINE=InnoDB DEFAULT CHARSET=utf8",
-		"skipAutoIncrement(TABLENAME)",
+		"-skip_auto_increment=TABLENAME",
 		"CREATE TABLE `DBNAME`.`TABLENAME` (\n"+
 			"  `id` bigint(2) NOT NULL,\n"+
 			"  `msg` varchar(64) DEFAULT NULL,\n"+
@@ -104,7 +108,7 @@ func TestMakeSplitCreateTableSql(t *testing.T) {
 			"  `msg` varchar(64) DEFAULT NULL,\n"+
 			"  PRIMARY KEY (`id`)\n"+
 			") ENGINE=InnoDB DEFAULT CHARSET=utf8",
-		"delayAutoIncrement",
+		"-delay_auto_increment",
 		"CREATE TABLE `DBNAME`.`TABLENAME` (\n"+
 			"  `id` bigint(2) NOT NULL,\n"+
 			"  `msg` varchar(64) DEFAULT NULL,\n"+

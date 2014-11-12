@@ -42,7 +42,7 @@ type SplitCloneWorker struct {
 	keyspace               string
 	shard                  string
 	excludeTables          []string
-	strategy               string
+	strategy               *mysqlctl.SplitStrategy
 	sourceReaderCount      int
 	minTableSizeForSplit   uint64
 	destinationWriterCount int
@@ -75,7 +75,11 @@ type SplitCloneWorker struct {
 }
 
 // NewSplitCloneWorker returns a new SplitCloneWorker object.
-func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string, strategy string, sourceReaderCount int, minTableSizeForSplit uint64, destinationWriterCount int) Worker {
+func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string, strategyStr string, sourceReaderCount int, minTableSizeForSplit uint64, destinationWriterCount int) (Worker, error) {
+	strategy, err := mysqlctl.NewSplitStrategy(wr.Logger(), strategyStr)
+	if err != nil {
+		return nil, err
+	}
 	return &SplitCloneWorker{
 		wr:                     wr,
 		cell:                   cell,
@@ -94,9 +98,9 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, ex
 			Keyspace:      keyspace,
 			Shard:         shard,
 			ExcludeTables: excludeTables,
-			Strategy:      strategy,
+			Strategy:      strategy.String(),
 		},
-	}
+	}, nil
 }
 
 func (scw *SplitCloneWorker) setState(state string) {
@@ -568,11 +572,11 @@ func (scw *SplitCloneWorker) copy() error {
 	}
 
 	// then create and populate the blp_checkpoint table
-	if strings.Index(scw.strategy, "populateBlpCheckpoint") != -1 {
+	if scw.strategy.PopulateBlpCheckpoint {
 		queries := make([]string, 0, 4)
 		queries = append(queries, binlogplayer.CreateBlpCheckpoint()...)
 		flags := ""
-		if strings.Index(scw.strategy, "dontStartBinlogPlayer") != -1 {
+		if scw.strategy.DontStartBinlogPlayer {
 			flags = binlogplayer.BLP_FLAG_DONT_START
 		}
 
@@ -608,7 +612,7 @@ func (scw *SplitCloneWorker) copy() error {
 	// TODO(alainjobart) this is a superset, some shards may not
 	// overlap, have to deal with this better (for N -> M splits
 	// where both N>1 and M>1)
-	if strings.Index(scw.strategy, "skipSetSourceShards") != -1 {
+	if scw.strategy.SkipSetSourceShards {
 		scw.wr.Logger().Infof("Skipping setting SourceShard on destination shards.")
 	} else {
 		for _, si := range scw.destinationShards {

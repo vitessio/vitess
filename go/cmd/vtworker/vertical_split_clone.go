@@ -58,7 +58,7 @@ const verticalSplitCloneHTML2 = `
       <LABEL for="tables">Tables: </LABEL>
         <INPUT type="text" id="tables" name="tables" value="moving.*"></BR>
       <LABEL for="strategy">Strategy: </LABEL>
-        <INPUT type="text" id="strategy" name="strategy" value="populateBlpCheckpoint"></BR>
+        <INPUT type="text" id="strategy" name="strategy" value="-populate_blp_checkpoint"></BR>
       <LABEL for="sourceReaderCount">Source Reader Count: </LABEL>
         <INPUT type="text" id="sourceReaderCount" name="sourceReaderCount" value="{{.DefaultSourceReaderCount}}"></BR>
       <LABEL for="minTableSizeForSplit">Minimun Table Size For Split: </LABEL>
@@ -92,7 +92,7 @@ var verticalSplitCloneTemplate2 = loadTemplate("verticalSplitClone2", verticalSp
 
 func commandVerticalSplitClone(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) worker.Worker {
 	tables := subFlags.String("tables", "", "comma separated list of tables to replicate (used for vertical split)")
-	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'mysqlctl multirestore -help' for more info")
+	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'mysqlctl multirestore -strategy=-help' for more info")
 	sourceReaderCount := subFlags.Int("source_reader_count", defaultSourceReaderCount, "number of concurrent streaming queries to use on the source")
 	minTableSizeForSplit := subFlags.Int("min_table_size_for_split", defaultMinTableSizeForSplit, "tables bigger than this size on disk in bytes will be split into source_reader_count chunks if possible")
 	destinationWriterCount := subFlags.Int("destination_writer_count", defaultDestinationWriterCount, "number of concurrent RPCs to execute on the destination")
@@ -106,7 +106,11 @@ func commandVerticalSplitClone(wr *wrangler.Wrangler, subFlags *flag.FlagSet, ar
 	if *tables != "" {
 		tableArray = strings.Split(*tables, ",")
 	}
-	return worker.NewVerticalSplitCloneWorker(wr, *cell, keyspace, shard, tableArray, *strategy, *sourceReaderCount, uint64(*minTableSizeForSplit), *destinationWriterCount)
+	worker, err := worker.NewVerticalSplitCloneWorker(wr, *cell, keyspace, shard, tableArray, *strategy, *sourceReaderCount, uint64(*minTableSizeForSplit), *destinationWriterCount)
+	if err != nil {
+		log.Fatalf("cannot create worker: %v", err)
+	}
+	return worker
 }
 
 // keyspacesWithServedFrom returns all the keyspaces that have ServedFrom set
@@ -204,7 +208,10 @@ func interactiveVerticalSplitClone(wr *wrangler.Wrangler, w http.ResponseWriter,
 	}
 
 	// start the clone job
-	wrk := worker.NewVerticalSplitCloneWorker(wr, *cell, keyspace, "0", tableArray, strategy, int(sourceReaderCount), uint64(minTableSizeForSplit), int(destinationWriterCount))
+	wrk, err := worker.NewVerticalSplitCloneWorker(wr, *cell, keyspace, "0", tableArray, strategy, int(sourceReaderCount), uint64(minTableSizeForSplit), int(destinationWriterCount))
+	if err != nil {
+		httpError(w, "cannot create worker: %v", err)
+	}
 	if _, err := setAndStartWorker(wrk); err != nil {
 		httpError(w, "cannot set worker: %s", err)
 		return

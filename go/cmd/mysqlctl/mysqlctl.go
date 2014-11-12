@@ -85,14 +85,14 @@ func multiRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []str
 	concurrency := subFlags.Int("concurrency", 8, "how many concurrent db inserts to run simultaneously")
 	fetchConcurrency := subFlags.Int("fetch_concurrency", 4, "how many files to fetch simultaneously")
 	insertTableConcurrency := subFlags.Int("insert_table_concurrency", 4, "how many myisam tables to load into a single destination table simultaneously")
-	strategy := subFlags.String("strategy", "", "which strategy to use for restore, can contain:\n"+
-		"    skipAutoIncrement(TTT): we won't add the AUTO_INCREMENT back to that table\n"+
-		"    delayPrimaryKey: we won't add the primary key until after the table is populated\n"+
-		"    delaySecondaryIndexes: we won't add the secondary indexes until after the table is populated\n"+
-		"    useMyIsam: create the table as MyISAM, then convert it to InnoDB after population\n"+
-		"    writeBinLogs: write all operations to the binlogs")
+	strategyStr := subFlags.String("strategy", "", "which strategy to use for restore, use -strategy=-help for values")
 
 	subFlags.Parse(args)
+	logger := logutil.NewConsoleLogger()
+	strategy, err := mysqlctl.NewSplitStrategy(logger, *strategyStr)
+	if err != nil {
+		log.Fatalf("invalid strategy: %v", err)
+	}
 	if subFlags.NArg() < 2 {
 		log.Fatalf("multirestore requires <destination_dbname> <source_host>[/<source_dbname>]... %v", args)
 	}
@@ -124,7 +124,7 @@ func multiRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []str
 		}
 		sources[i] = dbUrl
 	}
-	if err := mysqld.MultiRestore(logutil.NewConsoleLogger(), dbName, keyRanges, sources, nil, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, *strategy); err != nil {
+	if err := mysqld.MultiRestore(logger, dbName, keyRanges, sources, nil, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, strategy); err != nil {
 		log.Fatalf("multirestore failed: %v", err)
 	}
 }

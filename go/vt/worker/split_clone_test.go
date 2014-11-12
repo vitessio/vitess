@@ -307,7 +307,11 @@ func TestSplitClone(t *testing.T) {
 	rightMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 50)
 	rightRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 50)
 
-	wrk := NewSplitCloneWorker(wr, "cell1", "ks", "-80", nil, "populateBlpCheckpoint,delayAutoIncrement", 10, 1, 10).(*SplitCloneWorker)
+	gwrk, err := NewSplitCloneWorker(wr, "cell1", "ks", "-80", nil, "-populate_blp_checkpoint -delay_auto_increment", 10, 1, 10)
+	if err != nil {
+		t.Errorf("Worker creation failed: %v", err)
+	}
+	wrk := gwrk.(*SplitCloneWorker)
 	wrk.Run()
 	status := wrk.StatusAsText()
 	t.Logf("Got status: %v", status)
