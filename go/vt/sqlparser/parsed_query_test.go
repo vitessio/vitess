@@ -144,7 +144,7 @@ func TestParsedQuery(t *testing.T) {
 					},
 				},
 			},
-			"select * from a where b = (pk1, pk2) = (1, 'aa') or (pk1, pk2) = (2, 'bb')",
+			"select * from a where b = (pk1 = 1 and pk2 = 'aa') or (pk1 = 2 and pk2 = 'bb')",
 		}, {
 			"0 rows",
 			"select * from a where b = :equality",
