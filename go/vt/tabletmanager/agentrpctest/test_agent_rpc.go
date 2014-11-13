@@ -513,13 +513,13 @@ func agentRpcTestStartSlave(ctx context.Context, t *testing.T, client tmclient.T
 
 var testTabletExternallyReparentedCalled = false
 
-func (fra *fakeRpcAgent) TabletExternallyReparented(ctx context.Context, actionTimeout time.Duration) error {
+func (fra *fakeRpcAgent) TabletExternallyReparented(ctx context.Context, externalID string, actionTimeout time.Duration) error {
 	testTabletExternallyReparentedCalled = true
 	return nil
 }
 
 func agentRpcTestTabletExternallyReparented(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	err := client.TabletExternallyReparented(ctx, ti, time.Minute)
+	err := client.TabletExternallyReparented(ctx, ti, "", time.Minute)
 	compareError(t, "TabletExternallyReparented", err, true, testTabletExternallyReparentedCalled)
 }
 

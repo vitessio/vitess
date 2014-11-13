@@ -113,8 +113,13 @@ type TabletManagerClient interface {
 	// StartSlave starts the mysql replication
 	StartSlave(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error
 
-	// TabletExternallyReparented tells a tablet it is now the master
-	TabletExternallyReparented(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error
+	// TabletExternallyReparented tells a tablet it is now the master, after an
+	// external tool has already promoted the underlying mysqld to master and
+	// reparented the other mysqld servers to it.
+	//
+	// externalID is an optional string provided by the external tool that
+	// vttablet will emit in logs to facilitate cross-referencing.
+	TabletExternallyReparented(ctx context.Context, tablet *topo.TabletInfo, externalID string, waitTime time.Duration) error
 
 	// GetSlaves returns the addresses of the slaves
 	GetSlaves(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) ([]string, error)

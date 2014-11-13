@@ -90,7 +90,7 @@ type RpcAgent interface {
 
 	StartSlave(ctx context.Context) error
 
-	TabletExternallyReparented(ctx context.Context, actionTimeout time.Duration) error
+	TabletExternallyReparented(ctx context.Context, externalID string, actionTimeout time.Duration) error
 
 	GetSlaves(ctx context.Context) ([]string, error)
 
@@ -358,7 +358,7 @@ func (agent *ActionAgent) StartSlave(ctx context.Context) error {
 // TabletExternallyReparented updates all topo records so the current
 // tablet is the new master for this shard.
 // Should be called under RpcWrapLock.
-func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, actionTimeout time.Duration) error {
+func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, externalID string, actionTimeout time.Duration) error {
 	tablet := agent.Tablet()
 
 	// fast quick check on the shard to see if we're not the master already
@@ -382,7 +382,7 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, action
 	}
 
 	// do the work
-	runAfterAction, err := agent.tabletExternallyReparentedLocked(ctx, actionTimeout, interrupted)
+	runAfterAction, err := agent.tabletExternallyReparentedLocked(ctx, externalID, actionTimeout, interrupted)
 	if err != nil {
 		log.Warningf("TabletExternallyReparented: internal error: %v", err)
 	}
@@ -406,7 +406,7 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, action
 // tabletExternallyReparentedLocked is called with the shard lock.
 // It returns if agent.refreshTablet should be called, and the error.
 // Note both are set independently (can have both true and an error).
-func (agent *ActionAgent) tabletExternallyReparentedLocked(ctx context.Context, actionTimeout time.Duration, interrupted chan struct{}) (bool, error) {
+func (agent *ActionAgent) tabletExternallyReparentedLocked(ctx context.Context, externalID string, actionTimeout time.Duration, interrupted chan struct{}) (bool, error) {
 	// re-read the tablet record to be sure we have the latest version
 	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
 	if err != nil {
@@ -449,8 +449,9 @@ func (agent *ActionAgent) tabletExternallyReparentedLocked(ctx context.Context, 
 
 	// Create reusable Reparent event with available info
 	ev := &events.Reparent{
-		ShardInfo: *shardInfo,
-		NewMaster: *tablet.Tablet,
+		ShardInfo:  *shardInfo,
+		NewMaster:  *tablet.Tablet,
+		ExternalID: externalID,
 	}
 
 	if oldMasterTablet, ok := tabletMap[shardInfo.MasterAlias]; ok {
