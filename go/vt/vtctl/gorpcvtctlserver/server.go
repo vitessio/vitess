@@ -59,7 +59,12 @@ func (s *VtctlServer) ExecuteVtctlCommand(context context.Context, query *gorpcp
 	return err
 }
 
+// NewVtctlServer returns a new Vtctl Server for the topo server.
+func NewVtctlServer(ts topo.Server) *VtctlServer {
+	return &VtctlServer{ts}
+}
+
 // StartServer registers the Server for RPCs
 func StartServer(ts topo.Server) {
-	servenv.Register("vtctl", &VtctlServer{ts})
+	servenv.Register("vtctl", NewVtctlServer(ts))
 }
