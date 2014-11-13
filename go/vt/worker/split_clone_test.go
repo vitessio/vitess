@@ -264,17 +264,14 @@ func DestinationsFactory(t *testing.T, rowCount int64, disableBinLogs bool) func
 }
 
 func TestSplitCloneWriteMastersOnly(t *testing.T) {
-	testSplitClone(t, "populateBlpCheckpoint, writeMastersOnly")
+	testSplitClone(t, "-populate_blp_checkpoint -delay_auto_increment -write_masters_only")
 }
 
 func TestSplitCloneBinlogDisabled(t *testing.T) {
-	testSplitClone(t, "populateBlpCheckpoint")
+	testSplitClone(t, "-populate_blp_checkpoint -delay_auto_increment")
 }
 
 func testSplitClone(t *testing.T, strategy string) {
-	// the only strategy that enables bin logs
-	disableBinLogs := !strings.Contains(strategy, "writeMastersOnly")
-
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Minute, time.Second)
 
@@ -311,6 +308,15 @@ func testSplitClone(t *testing.T, strategy string) {
 	if err := wr.RebuildKeyspaceGraph("ks", nil); err != nil {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
+
+	gwrk, err := NewSplitCloneWorker(wr, "cell1", "ks", "-80", nil, strategy, 10, 1, 10)
+	if err != nil {
+		t.Errorf("Worker creation failed: %v", err)
+	}
+	wrk := gwrk.(*SplitCloneWorker)
+	// the only strategy that enables bin logs
+	disableBinLogs := !wrk.strategy.WriteMastersOnly
+
 	sourceRdonly.FakeMysqlDaemon.Schema = &myproto.SchemaDefinition{
 		DatabaseSchema: "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
 		TableDefinitions: []*myproto.TableDefinition{
@@ -338,11 +344,6 @@ func testSplitClone(t *testing.T, strategy string) {
 	rightMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 50, disableBinLogs)
 	rightRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 50, disableBinLogs)
 
-	gwrk, err := NewSplitCloneWorker(wr, "cell1", "ks", "-80", nil, strategy, 10, 1, 10)
-	if err != nil {
-		t.Errorf("Worker creation failed: %v", err)
-	}
-	wrk := gwrk.(*SplitCloneWorker)
 	wrk.Run()
 	status := wrk.StatusAsText()
 	t.Logf("Got status: %v", status)

@@ -329,7 +329,7 @@ func (scw *SplitCloneWorker) findTargets() error {
 		action.TabletType = topo.TYPE_SPARE
 	}
 
-	if strings.Contains(scw.strategy, "writeMastersOnly") {
+	if scw.strategy.WriteMastersOnly {
 		return scw.findMasterTargets()
 	} else {
 		return scw.findAllTargets()
@@ -499,7 +499,7 @@ func (scw *SplitCloneWorker) copy() error {
 	}
 
 	// if we're writing only to masters, we need to enable bin logs so that replication happens
-	disableBinLogs := !strings.Contains(scw.strategy, "writeMastersOnly")
+	disableBinLogs := !scw.strategy.WriteMastersOnly
 
 	insertChannels := make([][]chan string, len(scw.destinationShards))
 	destinationWaitGroup := sync.WaitGroup{}
