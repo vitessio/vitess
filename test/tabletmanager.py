@@ -18,6 +18,7 @@ import environment
 import utils
 import tablet
 from mysql_flavor import mysql_flavor
+from protocols_flavor import protocols_flavor
 from vtdb import dbexceptions
 
 tablet_62344 = tablet.Tablet(62344)
@@ -183,8 +184,8 @@ class TestTabletManager(unittest.TestCase):
     # it started to run
     args = (environment.binary_args('vtctl') +
             environment.topo_server_flags() +
-            environment.tablet_manager_protocol_flags() +
-            environment.tabletconn_protocol_flags() +
+            protocols_flavor().tablet_manager_protocol_flags() +
+            protocols_flavor().tabletconn_protocol_flags() +
             ['-log_dir', environment.vtlogroot,
              'Sleep', tablet_62344.tablet_alias, '10s'])
     bg = utils.run_bg(args)

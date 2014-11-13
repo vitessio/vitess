@@ -169,12 +169,3 @@ def topo_server_wipe():
 
 def topo_server_flags():
   return ['-topo_implementation', 'zookeeper']
-
-def tablet_manager_protocol_flags():
-  return ['-tablet_manager_protocol', 'bson']
-
-def tabletconn_protocol_flags():
-  return ['-tablet_protocol', 'gorpc']
-
-def vtctl_client_protocol():
-  return 'gorpc'

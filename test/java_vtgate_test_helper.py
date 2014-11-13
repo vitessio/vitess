@@ -102,9 +102,12 @@ def main():
   parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=1)
   parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=1)
   parser.add_option("--mysql-flavor", action="store", type="string")
+  parser.add_option("--protocols-flavor", action="store", type="string")
   (options, args) = parser.parse_args()
   utils.options = options
   utils.set_mysql_flavor(options.mysql_flavor)
+  utils.set_protocols_flavor(options.protocols_flavor)
+  
   env = TestEnv(options)
   if args[0] == 'setup':
     env.set_up()
