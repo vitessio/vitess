@@ -329,7 +329,45 @@ func (scw *SplitCloneWorker) findTargets() error {
 		action.TabletType = topo.TYPE_SPARE
 	}
 
-	// find all the targets in the destination shards
+	if strings.Contains(scw.strategy, "writeMastersOnly") {
+		return scw.findMasterTargets()
+	} else {
+		return scw.findAllTargets()
+	}
+}
+
+// findMasterTargets looks up the masters for all destination shards, and set the destinations appropriately.
+// It should be used if vtworker will only want to write to masters.
+func (scw *SplitCloneWorker) findMasterTargets() error {
+	scw.destinationAliases = make([][]topo.TabletAlias, len(scw.destinationShards))
+	scw.destinationTablets = make([]map[topo.TabletAlias]*topo.TabletInfo, len(scw.destinationShards))
+	scw.destinationMasterAliases = make([]topo.TabletAlias, len(scw.destinationShards))
+
+	for shardIndex, si := range scw.destinationShards {
+		// keep a local copy of MasterAlias, so that it can't be changed out from under us
+		// TODO(aaijazi): find out if this is actually necessary
+		masterAlias := si.MasterAlias
+		if masterAlias.IsZero() {
+			return fmt.Errorf("no master in destination shard")
+		}
+		scw.wr.Logger().Infof("Found master alias %v in shard %v/%v", masterAlias, si.Keyspace(), si.ShardName())
+		scw.destinationMasterAliases[shardIndex] = masterAlias
+		scw.destinationAliases[shardIndex] = []topo.TabletAlias{masterAlias}
+		mt, err := scw.wr.TopoServer().GetTablet(masterAlias)
+		if err != nil {
+			return fmt.Errorf("cannot read master tablet from alias %v in %v/%v", masterAlias, si.Keyspace(), si.ShardName())
+		}
+		scw.destinationTablets[shardIndex] = map[topo.TabletAlias]*topo.TabletInfo{masterAlias: mt}
+	}
+
+	return nil
+}
+
+// findAllTargets finds all the target aliases and tablets in the destination shards
+// It should be used if vtworker will write to all tablets in the destination shards, not just masters.
+func (scw *SplitCloneWorker) findAllTargets() error {
+	var err error
+
 	scw.destinationAliases = make([][]topo.TabletAlias, len(scw.destinationShards))
 	scw.destinationTablets = make([]map[topo.TabletAlias]*topo.TabletInfo, len(scw.destinationShards))
 	scw.destinationMasterAliases = make([]topo.TabletAlias, len(scw.destinationShards))
@@ -346,15 +384,11 @@ func (scw *SplitCloneWorker) findTargets() error {
 			return fmt.Errorf("cannot read all target tablets in %v/%v: %v", si.Keyspace(), si.ShardName(), err)
 		}
 
-		shardMasterMap := make(map[topo.TabletAlias]*topo.TabletInfo)
-
 		// find and validate the master
 		for tabletAlias, ti := range scw.destinationTablets[shardIndex] {
 			if ti.Type == topo.TYPE_MASTER {
 				if scw.destinationMasterAliases[shardIndex].IsZero() {
 					scw.destinationMasterAliases[shardIndex] = tabletAlias
-					// This should be the only master tablet
-					shardMasterMap[tabletAlias] = ti
 				} else {
 					return fmt.Errorf("multiple masters in destination shard: %v and %v at least", scw.destinationMasterAliases[shardIndex], tabletAlias)
 				}
@@ -362,15 +396,6 @@ func (scw *SplitCloneWorker) findTargets() error {
 		}
 		if scw.destinationMasterAliases[shardIndex].IsZero() {
 			return fmt.Errorf("no master in destination shard")
-		}
-		// We can only mutate destinationTablets for a shardIndex after iterating through them all.
-		// Otherwise, we could have multiple masters and not detect it.
-		// TODO(aaijazi): this is a pretty inefficient way to look up all the masters.
-		// We should only have to read the global Shard record instead of filtering down from all tablets
-		// when using the writeMastersOnly strategy.
-		if strings.Contains(scw.strategy, "writeMastersOnly") {
-			scw.destinationTablets[shardIndex] = shardMasterMap
-			scw.destinationAliases[shardIndex] = []topo.TabletAlias{scw.destinationMasterAliases[shardIndex]}
 		}
 	}
 
