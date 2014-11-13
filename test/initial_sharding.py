@@ -353,7 +353,7 @@ index by_msg (msg)
                           '--command_display_interval', '10ms',
                           'SplitClone',
                           '--exclude_tables' ,'unrelated',
-                          '--strategy=-populate_blp_checkpoint',
+                          '--strategy=-populate_blp_checkpoint -write_masters_only',
                           '--source_reader_count', '10',
                           '--min_table_size_for_split', '1',
                           'test_keyspace/0'],

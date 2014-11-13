@@ -329,7 +329,45 @@ func (scw *SplitCloneWorker) findTargets() error {
 		action.TabletType = topo.TYPE_SPARE
 	}
 
-	// find all the targets in the destination shards
+	if scw.strategy.WriteMastersOnly {
+		return scw.findMasterTargets()
+	} else {
+		return scw.findAllTargets()
+	}
+}
+
+// findMasterTargets looks up the masters for all destination shards, and set the destinations appropriately.
+// It should be used if vtworker will only want to write to masters.
+func (scw *SplitCloneWorker) findMasterTargets() error {
+	scw.destinationAliases = make([][]topo.TabletAlias, len(scw.destinationShards))
+	scw.destinationTablets = make([]map[topo.TabletAlias]*topo.TabletInfo, len(scw.destinationShards))
+	scw.destinationMasterAliases = make([]topo.TabletAlias, len(scw.destinationShards))
+
+	for shardIndex, si := range scw.destinationShards {
+		// keep a local copy of MasterAlias, so that it can't be changed out from under us
+		// TODO(aaijazi): find out if this is actually necessary
+		masterAlias := si.MasterAlias
+		if masterAlias.IsZero() {
+			return fmt.Errorf("no master in destination shard")
+		}
+		scw.wr.Logger().Infof("Found master alias %v in shard %v/%v", masterAlias, si.Keyspace(), si.ShardName())
+		scw.destinationMasterAliases[shardIndex] = masterAlias
+		scw.destinationAliases[shardIndex] = []topo.TabletAlias{masterAlias}
+		mt, err := scw.wr.TopoServer().GetTablet(masterAlias)
+		if err != nil {
+			return fmt.Errorf("cannot read master tablet from alias %v in %v/%v", masterAlias, si.Keyspace(), si.ShardName())
+		}
+		scw.destinationTablets[shardIndex] = map[topo.TabletAlias]*topo.TabletInfo{masterAlias: mt}
+	}
+
+	return nil
+}
+
+// findAllTargets finds all the target aliases and tablets in the destination shards
+// It should be used if vtworker will write to all tablets in the destination shards, not just masters.
+func (scw *SplitCloneWorker) findAllTargets() error {
+	var err error
+
 	scw.destinationAliases = make([][]topo.TabletAlias, len(scw.destinationShards))
 	scw.destinationTablets = make([]map[topo.TabletAlias]*topo.TabletInfo, len(scw.destinationShards))
 	scw.destinationMasterAliases = make([]topo.TabletAlias, len(scw.destinationShards))
@@ -460,6 +498,9 @@ func (scw *SplitCloneWorker) copy() error {
 		mu.Unlock()
 	}
 
+	// if we're writing only to masters, we need to enable bin logs so that replication happens
+	disableBinLogs := !scw.strategy.WriteMastersOnly
+
 	insertChannels := make([][]chan string, len(scw.destinationShards))
 	destinationWaitGroup := sync.WaitGroup{}
 	for shardIndex, _ := range scw.destinationShards {
@@ -476,13 +517,13 @@ func (scw *SplitCloneWorker) copy() error {
 			go func(ti *topo.TabletInfo, insertChannel chan string) {
 				defer destinationWaitGroup.Done()
 				scw.wr.Logger().Infof("Creating tables on tablet %v", ti.Alias)
-				if err := runSqlCommands(scw.wr, ti, createDbCmds, abort); err != nil {
+				if err := runSqlCommands(scw.wr, ti, createDbCmds, abort, disableBinLogs); err != nil {
 					processError("createDbCmds failed: %v", err)
 					return
 				}
 				if len(createViewCmds) > 0 {
 					scw.wr.Logger().Infof("Creating views on tablet %v", ti.Alias)
-					if err := runSqlCommands(scw.wr, ti, createViewCmds, abort); err != nil {
+					if err := runSqlCommands(scw.wr, ti, createViewCmds, abort, disableBinLogs); err != nil {
 						processError("createViewCmds failed: %v", err)
 						return
 					}
@@ -491,7 +532,7 @@ func (scw *SplitCloneWorker) copy() error {
 					destinationWaitGroup.Add(1)
 					go func() {
 						defer destinationWaitGroup.Done()
-						if err := executeFetchLoop(scw.wr, ti, insertChannel, abort); err != nil {
+						if err := executeFetchLoop(scw.wr, ti, insertChannel, abort, disableBinLogs); err != nil {
 							processError("executeFetchLoop failed: %v", err)
 						}
 					}()
@@ -561,7 +602,7 @@ func (scw *SplitCloneWorker) copy() error {
 				go func(ti *topo.TabletInfo) {
 					defer destinationWaitGroup.Done()
 					scw.wr.Logger().Infof("Altering tables on tablet %v", ti.Alias)
-					if err := runSqlCommands(scw.wr, ti, alterTablesCmds, abort); err != nil {
+					if err := runSqlCommands(scw.wr, ti, alterTablesCmds, abort, disableBinLogs); err != nil {
 						processError("alterTablesCmds failed on tablet %v: %v", ti.Alias, err)
 					}
 				}(scw.destinationTablets[shardIndex][tabletAlias])
@@ -598,7 +639,7 @@ func (scw *SplitCloneWorker) copy() error {
 				go func(ti *topo.TabletInfo) {
 					defer destinationWaitGroup.Done()
 					scw.wr.Logger().Infof("Making and populating blp_checkpoint table on tablet %v", ti.Alias)
-					if err := runSqlCommands(scw.wr, ti, queries, abort); err != nil {
+					if err := runSqlCommands(scw.wr, ti, queries, abort, disableBinLogs); err != nil {
 						processError("blp_checkpoint queries failed on tablet %v: %v", ti.Alias, err)
 					}
 				}(scw.destinationTablets[shardIndex][tabletAlias])

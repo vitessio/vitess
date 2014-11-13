@@ -42,6 +42,9 @@ type SplitStrategy struct {
 
 	// SkipSetSourceShards will not set the source shards at the end of restore
 	SkipSetSourceShards bool
+
+	// WriteMastersOnly will write only to the master of the destination shard, with binlog enabled so that replicas can catch up
+	WriteMastersOnly bool
 }
 
 func NewSplitStrategy(logger logutil.Logger, argsStr string) (*SplitStrategy, error) {
@@ -64,6 +67,7 @@ func NewSplitStrategy(logger logutil.Logger, argsStr string) (*SplitStrategy, er
 	populateBlpCheckpoint := flagSet.Bool("populate_blp_checkpoint", false, "populates the blp checkpoint table")
 	dontStartBinlogPlayer := flagSet.Bool("dont_start_binlog_player", false, "do not start the binlog player after restore is complete")
 	skipSetSourceShards := flagSet.Bool("skip_set_source_shards", false, "do not set the SourceShar field on destination shards")
+	writeMastersOnly := flagSet.Bool("write_masters_only", false, "rite only to the master of the destination shard, with binlog enabled so that replicas can catch up")
 	if err := flagSet.Parse(args); err != nil {
 		return nil, fmt.Errorf("cannot parse strategy: %v", err)
 	}
@@ -84,6 +88,7 @@ func NewSplitStrategy(logger logutil.Logger, argsStr string) (*SplitStrategy, er
 		PopulateBlpCheckpoint: *populateBlpCheckpoint,
 		DontStartBinlogPlayer: *dontStartBinlogPlayer,
 		SkipSetSourceShards:   *skipSetSourceShards,
+		WriteMastersOnly:      *writeMastersOnly,
 	}, nil
 }
 
@@ -124,6 +129,9 @@ func (strategy *SplitStrategy) String() string {
 	}
 	if strategy.SkipSetSourceShards {
 		result = append(result, "-skip_set_source_shards")
+	}
+	if strategy.WriteMastersOnly {
+		result = append(result, "-write_masters_only")
 	}
 	return strings.Join(result, " ")
 }

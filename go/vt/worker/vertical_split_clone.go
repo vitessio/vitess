@@ -415,13 +415,13 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 		go func(ti *topo.TabletInfo, insertChannel chan string) {
 			defer destinationWaitGroup.Done()
 			vscw.wr.Logger().Infof("Creating tables on tablet %v", ti.Alias)
-			if err := runSqlCommands(vscw.wr, ti, createDbCmds, abort); err != nil {
+			if err := runSqlCommands(vscw.wr, ti, createDbCmds, abort, true); err != nil {
 				processError("createDbCmds failed: %v", err)
 				return
 			}
 			if len(createViewCmds) > 0 {
 				vscw.wr.Logger().Infof("Creating views on tablet %v", ti.Alias)
-				if err := runSqlCommands(vscw.wr, ti, createViewCmds, abort); err != nil {
+				if err := runSqlCommands(vscw.wr, ti, createViewCmds, abort, true); err != nil {
 					processError("createViewCmds failed: %v", err)
 					return
 				}
@@ -431,7 +431,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 				go func() {
 					defer destinationWaitGroup.Done()
 
-					if err := executeFetchLoop(vscw.wr, ti, insertChannel, abort); err != nil {
+					if err := executeFetchLoop(vscw.wr, ti, insertChannel, abort, true); err != nil {
 						processError("executeFetchLoop failed: %v", err)
 					}
 				}()
@@ -497,7 +497,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 			go func(ti *topo.TabletInfo) {
 				defer destinationWaitGroup.Done()
 				vscw.wr.Logger().Infof("Altering tables on tablet %v", ti.Alias)
-				if err := runSqlCommands(vscw.wr, ti, alterTablesCmds, abort); err != nil {
+				if err := runSqlCommands(vscw.wr, ti, alterTablesCmds, abort, true); err != nil {
 					processError("alterTablesCmds failed on tablet %v: %v", ti.Alias, err)
 				}
 			}(vscw.destinationTablets[tabletAlias])
@@ -528,7 +528,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 			go func(ti *topo.TabletInfo) {
 				defer destinationWaitGroup.Done()
 				vscw.wr.Logger().Infof("Making and populating blp_checkpoint table on tablet %v", ti.Alias)
-				if err := runSqlCommands(vscw.wr, ti, queries, abort); err != nil {
+				if err := runSqlCommands(vscw.wr, ti, queries, abort, true); err != nil {
 					processError("blp_checkpoint queries failed on tablet %v: %v", ti.Alias, err)
 				}
 			}(vscw.destinationTablets[tabletAlias])
