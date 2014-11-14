@@ -20,14 +20,11 @@ import environment
 
 from vtctl import vtctl_client
 from mysql_flavor import set_mysql_flavor
+from protocols_flavor import set_protocols_flavor, protocols_flavor
 
 options = None
 devnull = open('/dev/null', 'w')
 hostname = socket.gethostname()
-
-# binlog_player_protocol_flags defines the flags to use for the binlog players.
-# A test can overwrite these flags before calling utils.main().
-binlog_player_protocol_flags = ['-binlog_player_protocol', 'gorpc']
 
 class TestError(Exception):
   pass
@@ -74,6 +71,7 @@ def main(mod=None):
   parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=1)
   parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=1)
   parser.add_option("--mysql-flavor", action="store", type="string")
+  parser.add_option("--protocols-flavor", action="store", type="string")
 
   (options, args) = parser.parse_args()
 
@@ -87,6 +85,7 @@ def main(mod=None):
   logging.basicConfig(format='-- %(asctime)s %(module)s:%(lineno)d %(levelname)s %(message)s')
 
   set_mysql_flavor(options.mysql_flavor)
+  set_protocols_flavor(options.protocols_flavor)
 
   try:
     suite = unittest.TestSuite()
@@ -380,7 +379,7 @@ def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1,
           '-log_dir', environment.vtlogroot,
           '-srv_topo_cache_ttl', cache_ttl,
           '-timeout', timeout,
-          ] + environment.tabletconn_protocol_flags()
+          ] + protocols_flavor().tabletconn_protocol_flags()
   if topo_impl:
     args.extend(['-topo_implementation', topo_impl])
   else:
@@ -448,8 +447,8 @@ def run_vtctl_vtctl(clargs, log_level='', auto_log=False, expect_fail=False,
                     **kwargs):
   args = environment.binary_args('vtctl') + ['-log_dir', environment.vtlogroot]
   args.extend(environment.topo_server_flags())
-  args.extend(environment.tablet_manager_protocol_flags())
-  args.extend(environment.tabletconn_protocol_flags())
+  args.extend(protocols_flavor().tablet_manager_protocol_flags())
+  args.extend(protocols_flavor().tabletconn_protocol_flags())
 
   if auto_log:
     if options.verbose == 2:
@@ -483,7 +482,7 @@ def run_vtworker(clargs, log_level='', auto_log=False, expect_fail=False, **kwar
           '-log_dir', environment.vtlogroot,
           '-port', str(environment.reserve_ports(1))]
   args.extend(environment.topo_server_flags())
-  args.extend(environment.tablet_manager_protocol_flags())
+  args.extend(protocols_flavor().tablet_manager_protocol_flags())
 
   if auto_log:
     if options.verbose == 2:
@@ -519,7 +518,7 @@ def vtclient2(uid, path, query, bindvars=None, user=None, password=None, driver=
 
   cmdline = environment.binary_args('vtclient2') + ['-server', server]
   cmdline += environment.topo_server_flags()
-  cmdline += environment.tabletconn_protocol_flags()
+  cmdline += protocols_flavor().tabletconn_protocol_flags()
   if user is not None:
     cmdline.extend(['-tablet-bson-username', user,
                     '-tablet-bson-password', password])
@@ -647,7 +646,7 @@ class Vtctld(object):
             '-port', str(self.port),
             ] + \
             environment.topo_server_flags() + \
-            environment.tablet_manager_protocol_flags()
+            protocols_flavor().tablet_manager_protocol_flags()
     stderr_fd = open(os.path.join(environment.tmproot, "vtctld.stderr"), "w")
     self.proc = run_bg(args, stderr=stderr_fd)
 
@@ -665,7 +664,7 @@ class Vtctld(object):
     if not vtctld:
       vtctld = self
       vtctld_connection = vtctl_client.connect(
-          environment.vtctl_client_protocol(), 'localhost:%u' % self.port, 30)
+          protocols_flavor().vtctl_client_protocol(), 'localhost:%u' % self.port, 30)
 
     return self.proc
 
@@ -682,7 +681,7 @@ class Vtctld(object):
 
     out, err = run(environment.binary_args('vtctlclient') +
                    ['-vtctl_client_protocol',
-                    environment.vtctl_client_protocol(),
+                    protocols_flavor().vtctl_client_protocol(),
                     '-server', 'localhost:%u' % self.port,
                     '-stderrthreshold', log_level] + args,
                    trap_output=True)

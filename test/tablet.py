@@ -14,6 +14,7 @@ import MySQLdb
 import environment
 import utils
 from mysql_flavor import mysql_flavor
+from protocols_flavor import protocols_flavor
 
 from vtdb import tablet
 
@@ -422,8 +423,8 @@ class Tablet(object):
     args = []
     args.extend(['-tablet-path', self.tablet_alias])
     args.extend(environment.topo_server_flags())
-    args.extend(utils.binlog_player_protocol_flags)
-    args.extend(environment.tablet_manager_protocol_flags())
+    args.extend(protocols_flavor().binlog_player_protocol_flags())
+    args.extend(protocols_flavor().tablet_manager_protocol_flags())
     args.extend(['-pid_file', os.path.join(self.tablet_dir, 'vttablet.pid')])
     if self.use_mysqlctld:
       args.extend(['-mysqlctl_socket', os.path.join(self.tablet_dir, 'mysqlctl.sock')])
