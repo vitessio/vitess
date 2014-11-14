@@ -1237,7 +1237,7 @@ func commandShardExternallyReparented(wr *wrangler.Wrangler, subFlags *flag.Flag
 		if err != nil {
 			return err
 		}
-		return wr.TabletManagerClient().TabletExternallyReparented(context.TODO(), ti, wr.ActionTimeout())
+		return wr.TabletManagerClient().TabletExternallyReparented(context.TODO(), ti, "", wr.ActionTimeout())
 	}
 	return wr.ShardExternallyReparented(keyspace, shard, tabletAlias)
 }

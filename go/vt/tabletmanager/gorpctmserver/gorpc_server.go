@@ -219,12 +219,12 @@ func (tm *TabletManager) StartSlave(ctx context.Context, args *rpc.Unused, reply
 	})
 }
 
-func (tm *TabletManager) TabletExternallyReparented(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
+func (tm *TabletManager) TabletExternallyReparented(ctx context.Context, args *gorpcproto.TabletExternallyReparentedArgs, reply *rpc.Unused) error {
 	// TODO(alainjobart) we should forward the RPC deadline from
 	// the original gorpc call. Until we support that, use a
-	// reasonnable hard-coded value.
+	// reasonable hard-coded value.
 	return tm.agent.RpcWrapLock(ctx, actionnode.TABLET_ACTION_EXTERNALLY_REPARENTED, args, reply, false, func() error {
-		return tm.agent.TabletExternallyReparented(ctx, 30*time.Second)
+		return tm.agent.TabletExternallyReparented(ctx, args.ExternalID, 30*time.Second)
 	})
 }
 

@@ -13,7 +13,7 @@ import (
 )
 
 func TestReparentSyslog(t *testing.T) {
-	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-123/shard-123 [reparent cell-0000012345 -> cell-0000054321] status"
+	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-123/shard-123 [reparent cell-0000012345 -> cell-0000054321] status (123-456-789)"
 	tc := &Reparent{
 		ShardInfo: *topo.NewShardInfo("keyspace-123", "shard-123", nil, -1),
 		OldMaster: topo.Tablet{
@@ -28,6 +28,7 @@ func TestReparentSyslog(t *testing.T) {
 				Uid:  54321,
 			},
 		},
+		ExternalID:    "123-456-789",
 		StatusUpdater: base.StatusUpdater{Status: "status"},
 	}
 	gotSev, gotMsg := tc.Syslog()

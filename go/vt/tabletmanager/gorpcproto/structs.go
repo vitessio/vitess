@@ -78,3 +78,7 @@ type MultiSnapshotStreamingReply struct {
 	Log    *logutil.LoggerEvent
 	Result *actionnode.MultiSnapshotReply
 }
+
+type TabletExternallyReparentedArgs struct {
+	ExternalID string
+}

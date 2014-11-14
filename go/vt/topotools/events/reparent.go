@@ -17,4 +17,5 @@ type Reparent struct {
 
 	ShardInfo            topo.ShardInfo
 	OldMaster, NewMaster topo.Tablet
+	ExternalID           string
 }

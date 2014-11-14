@@ -214,8 +214,8 @@ func (client *GoRpcTabletManagerClient) StartSlave(ctx context.Context, tablet *
 	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_START_SLAVE, "", &rpc.Unused{}, waitTime)
 }
 
-func (client *GoRpcTabletManagerClient) TabletExternallyReparented(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error {
-	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_EXTERNALLY_REPARENTED, "", &rpc.Unused{}, waitTime)
+func (client *GoRpcTabletManagerClient) TabletExternallyReparented(ctx context.Context, tablet *topo.TabletInfo, externalID string, waitTime time.Duration) error {
+	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_EXTERNALLY_REPARENTED, &gorpcproto.TabletExternallyReparentedArgs{ExternalID: externalID}, &rpc.Unused{}, waitTime)
 }
 
 func (client *GoRpcTabletManagerClient) GetSlaves(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) ([]string, error) {
