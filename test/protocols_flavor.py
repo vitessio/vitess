@@ -22,7 +22,7 @@ class ProtocolsFlavor(object):
     """Returns the flags to use for specifying the query service protocol."""
     return ['-tablet_protocol', 'gorpc']
 
-class GoRpcProtocolsFlavor(object):
+class GoRpcProtocolsFlavor(ProtocolsFlavor):
   """Overrides to use go rpc everywhere"""
 
   def binlog_player_protocol_flags(self):
