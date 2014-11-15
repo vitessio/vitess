@@ -51,7 +51,7 @@ class TestEnv(object):
 
   def set_up(self):
     try:
-      environment.topo_server_setup()
+      environment.topo_server().setup()
       utils.wait_procs([t.init_mysql() for t in self.tablets])
       utils.run_vtctl(['CreateKeyspace', self.keyspace])
       utils.run_vtctl(['SetKeyspaceShardingInfo', '-force', self.keyspace, 'keyspace_id', 'uint64'])
@@ -79,7 +79,7 @@ class TestEnv(object):
     tablet.kill_tablets(self.tablets)
     teardown_procs = [t.teardown_mysql() for t in self.tablets]
     utils.wait_procs(teardown_procs, raise_on_error=False)
-    environment.topo_server_teardown()
+    environment.topo_server().teardown()
     utils.kill_sub_processes()
     utils.remove_tmp_files()
     for t in self.tablets:

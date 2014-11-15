@@ -21,6 +21,7 @@ import environment
 from vtctl import vtctl_client
 from mysql_flavor import set_mysql_flavor
 from protocols_flavor import set_protocols_flavor, protocols_flavor
+from topo_flavor.server import set_topo_server_flavor
 
 options = None
 devnull = open('/dev/null', 'w')
@@ -72,6 +73,7 @@ def main(mod=None):
   parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=1)
   parser.add_option("--mysql-flavor", action="store", type="string")
   parser.add_option("--protocols-flavor", action="store", type="string")
+  parser.add_option("--topo-server-flavor", action="store", type="string")
 
   (options, args) = parser.parse_args()
 
@@ -86,6 +88,7 @@ def main(mod=None):
 
   set_mysql_flavor(options.mysql_flavor)
   set_protocols_flavor(options.protocols_flavor)
+  set_topo_server_flavor(options.topo_server_flavor)
 
   try:
     suite = unittest.TestSuite()
@@ -383,7 +386,7 @@ def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1,
   if topo_impl:
     args.extend(['-topo_implementation', topo_impl])
   else:
-    args.extend(environment.topo_server_flags())
+    args.extend(environment.topo_server().flags())
   if tablet_bson_encrypted:
     args.append('-tablet-bson-encrypted')
   if auth:
@@ -446,7 +449,7 @@ def run_vtctl(clargs, log_level='', auto_log=False, expect_fail=False,
 def run_vtctl_vtctl(clargs, log_level='', auto_log=False, expect_fail=False,
                     **kwargs):
   args = environment.binary_args('vtctl') + ['-log_dir', environment.vtlogroot]
-  args.extend(environment.topo_server_flags())
+  args.extend(environment.topo_server().flags())
   args.extend(protocols_flavor().tablet_manager_protocol_flags())
   args.extend(protocols_flavor().tabletconn_protocol_flags())
 
@@ -481,7 +484,7 @@ def run_vtworker(clargs, log_level='', auto_log=False, expect_fail=False, **kwar
   args = environment.binary_args('vtworker') + [
           '-log_dir', environment.vtlogroot,
           '-port', str(environment.reserve_ports(1))]
-  args.extend(environment.topo_server_flags())
+  args.extend(environment.topo_server().flags())
   args.extend(protocols_flavor().tablet_manager_protocol_flags())
 
   if auto_log:
@@ -517,7 +520,7 @@ def vtclient2(uid, path, query, bindvars=None, user=None, password=None, driver=
   server = "localhost:%u/%s" % (uid, path)
 
   cmdline = environment.binary_args('vtclient2') + ['-server', server]
-  cmdline += environment.topo_server_flags()
+  cmdline += environment.topo_server().flags()
   cmdline += protocols_flavor().tabletconn_protocol_flags()
   if user is not None:
     cmdline.extend(['-tablet-bson-username', user,
@@ -645,7 +648,7 @@ class Vtctld(object):
             '-log_dir', environment.vtlogroot,
             '-port', str(self.port),
             ] + \
-            environment.topo_server_flags() + \
+            environment.topo_server().flags() + \
             protocols_flavor().tablet_manager_protocol_flags()
     stderr_fd = open(os.path.join(environment.tmproot, "vtctld.stderr"), "w")
     self.proc = run_bg(args, stderr=stderr_fd)

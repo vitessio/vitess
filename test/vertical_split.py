@@ -36,7 +36,7 @@ destination_rdonly = tablet.Tablet()
 
 def setUpModule():
   try:
-    environment.topo_server_setup()
+    environment.topo_server().setup()
 
     setup_procs = [
         source_master.init_mysql(),
@@ -68,7 +68,7 @@ def tearDownModule():
       ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
-  environment.topo_server_teardown()
+  environment.topo_server().teardown()
   utils.kill_sub_processes()
   utils.remove_tmp_files()
 

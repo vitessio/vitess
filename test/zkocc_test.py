@@ -23,7 +23,7 @@ MIN_QPS = 5000
 
 def setUpModule():
   try:
-    environment.topo_server_setup()
+    environment.topo_server().setup()
 
   except:
     tearDownModule()
@@ -34,16 +34,16 @@ def tearDownModule():
   if utils.options.skip_teardown:
     return
 
-  environment.topo_server_teardown()
+  environment.topo_server().teardown()
   utils.kill_sub_processes()
   utils.remove_tmp_files()
 
 
 class TopoOccTest(unittest.TestCase):
   def setUp(self):
-    environment.topo_server_wipe()
+    environment.topo_server().wipe()
     self.vtgate_zk, self.vtgate_zk_port = utils.vtgate_start()
-    if environment.topo_server_implementation == 'zookeeper':
+    if environment.topo_server().flavor() == 'zookeeper':
       self.zkocc_server = utils.zkocc_start()
       self.vtgate_zkocc, self.vtgate_zkocc_port = utils.vtgate_start(topo_impl="zkocc")
       self.topo = zkocc.ZkOccConnection("localhost:%u" % environment.zkocc_port_base, 'test_nj', 30)
@@ -51,7 +51,7 @@ class TopoOccTest(unittest.TestCase):
 
   def tearDown(self):
     utils.vtgate_kill(self.vtgate_zk)
-    if environment.topo_server_implementation == 'zookeeper':
+    if environment.topo_server().flavor() == 'zookeeper':
       self.topo.close()
       utils.zkocc_kill(self.zkocc_server)
       utils.vtgate_kill(self.vtgate_zkocc)
@@ -75,7 +75,7 @@ class TopoOccTest(unittest.TestCase):
     self.assertEqual(err, "KeyspaceNames[0] = test_keyspace1\n" +
                           "KeyspaceNames[1] = test_keyspace2\n")
 
-    if environment.topo_server_implementation == 'zookeeper':
+    if environment.topo_server().flavor() == 'zookeeper':
       self.assertItemsEqual(self.topo.get_srv_keyspace_names('local'), ["test_keyspace1", "test_keyspace2"])
 
       # zkocc API test
@@ -108,7 +108,7 @@ class TopoOccTest(unittest.TestCase):
                      "TabletTypes[0] = master\n",
                      "Got wrong content: %s" % err)
 
-    if environment.topo_server_implementation == 'zookeeper':
+    if environment.topo_server().flavor() == 'zookeeper':
       reply = self.topo.get_srv_keyspace("test_nj", "test_keyspace")
       self.assertEqual(reply['TabletTypes'], ['master'])
 
@@ -158,7 +158,7 @@ class TopoOccTest(unittest.TestCase):
     out, err = utils.run(environment.binary_argstr('zkclient2')+' -server localhost:%u -mode getEndPoints test_nj test_keyspace 0 master' % self.vtgate_zk_port, trap_output=True)
     self.assertEqual(err, "Entries[0] = 1 localhost\n")
 
-    if environment.topo_server_implementation == 'zookeeper':
+    if environment.topo_server().flavor() == 'zookeeper':
       self.assertEqual(len(self.topo.get_end_points("test_nj", "test_keyspace", "0", "master")['Entries']), 1)
 
       # zkocc API test
@@ -179,8 +179,8 @@ def _format_time(timeFromBson):
 class TestZkocc(unittest.TestCase):
   longMessage = True
   def setUp(self):
-    environment.topo_server_wipe()
-    if environment.topo_server_implementation == 'zookeeper':
+    environment.topo_server().wipe()
+    if environment.topo_server().flavor() == 'zookeeper':
       utils.run(environment.binary_argstr('zk')+' touch -p /zk/test_nj/vt/zkocc1')
       utils.run(environment.binary_argstr('zk')+' touch -p /zk/test_nj/vt/zkocc2')
       fd = tempfile.NamedTemporaryFile(dir=environment.tmproot, delete=False)

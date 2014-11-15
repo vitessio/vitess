@@ -20,7 +20,7 @@ shard_1_replica = tablet.Tablet()
 
 def setUpModule():
   try:
-    environment.topo_server_setup()
+    environment.topo_server().setup()
 
     setup_procs = [
         shard_0_master.init_mysql(),
@@ -45,7 +45,7 @@ def tearDownModule():
       ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
-  environment.topo_server_teardown()
+  environment.topo_server().teardown()
   utils.kill_sub_processes()
   utils.remove_tmp_files()
 
@@ -118,7 +118,7 @@ class TestSharded(unittest.TestCase):
                      '-sql=' + create_vt_select_test.replace("\n", ""),
                      shard_0_replica.tablet_alias])
 
-    if environment.topo_server_implementation == 'zookeeper':
+    if environment.topo_server().flavor() == 'zookeeper':
       # start zkocc, we'll use it later, indirectly with the vtdb-zkocc driver
       zkocc_server = utils.zkocc_start()
 
@@ -175,7 +175,7 @@ class TestSharded(unittest.TestCase):
                       "2\ttest 2",
                       "10\ttest 10"],
                      driver="vtdb-streaming")
-    if environment.topo_server_implementation == 'zookeeper':
+    if environment.topo_server().flavor() == 'zookeeper':
       self._check_rows(["Index\tid\tmsg",
                         "1\ttest 1",
                         "2\ttest 2",
@@ -199,7 +199,7 @@ class TestSharded(unittest.TestCase):
 
     # make sure the schema checking works
     self._check_rows_schema_diff("vtdb")
-    if environment.topo_server_implementation == 'zookeeper':
+    if environment.topo_server().flavor() == 'zookeeper':
       self._check_rows_schema_diff("vtdb-zk")
       self._check_rows_schema_diff("vtdb-zkocc")
 
@@ -225,7 +225,7 @@ class TestSharded(unittest.TestCase):
     utils.run_vtctl(['ValidatePermissionsKeyspace', 'test_keyspace'],
                     auto_log=True)
 
-    if environment.topo_server_implementation == 'zookeeper':
+    if environment.topo_server().flavor() == 'zookeeper':
       # and create zkns on this complex keyspace, make sure a few files are created
       utils.run_vtctl(['ExportZknsForKeyspace', 'test_keyspace'])
       out, err = utils.run(environment.binary_argstr('zk')+' ls -R /zk/test_nj/zk?s/vt/test_keysp*', trap_output=True)
@@ -280,7 +280,7 @@ class TestSharded(unittest.TestCase):
         self.fail('unexpected exception: ' + str(e))
 
     utils.vtgate_kill(vtgate_server)
-    if environment.topo_server_implementation == 'zookeeper':
+    if environment.topo_server().flavor() == 'zookeeper':
       utils.kill_sub_process(zkocc_server)
     tablet.kill_tablets([shard_0_master, shard_0_replica, shard_1_master,
                          shard_1_replica])

@@ -26,12 +26,12 @@ tablet_62044 = tablet.Tablet(62044)
 
 def setUpModule():
   try:
-    if environment.topo_server_implementation == 'zookeeper':
+    if environment.topo_server().flavor() == 'zookeeper':
       # this is a one-off test to make sure our zookeeper implementation
       # behaves with a server that is not DNS-resolveable
-      environment.topo_server_setup(add_bad_host=True)
+      environment.topo_server().setup(add_bad_host=True)
     else:
-      environment.topo_server_setup()
+      environment.topo_server().setup()
 
     # start mysql instance external to the test
     setup_procs = [
@@ -54,7 +54,7 @@ def tearDownModule():
       ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
-  environment.topo_server_teardown()
+  environment.topo_server().teardown()
   utils.kill_sub_processes()
   utils.remove_tmp_files()
 
@@ -64,7 +64,7 @@ def tearDownModule():
 class TestTabletManager(unittest.TestCase):
   def tearDown(self):
     tablet.Tablet.check_vttablet_count()
-    environment.topo_server_wipe()
+    environment.topo_server().wipe()
     for t in [tablet_62344, tablet_62044]:
       t.reset_replication()
       t.clean_dbs()
@@ -183,7 +183,7 @@ class TestTabletManager(unittest.TestCase):
     # schedule long action in the background, sleep a little bit to make sure
     # it started to run
     args = (environment.binary_args('vtctl') +
-            environment.topo_server_flags() +
+            environment.topo_server().flags() +
             protocols_flavor().tablet_manager_protocol_flags() +
             protocols_flavor().tabletconn_protocol_flags() +
             ['-log_dir', environment.vtlogroot,
@@ -201,7 +201,7 @@ class TestTabletManager(unittest.TestCase):
     # wait for the background vtctl
     bg.wait()
 
-    if environment.topo_server_implementation == 'zookeeper':
+    if environment.topo_server().flavor() == 'zookeeper':
       # extra small test: we ran for a while, get the states we were in,
       # make sure they're accounted for properly
       # first the query engine States
@@ -312,7 +312,7 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.kill_vttablet()
 
   def test_restart(self):
-    if environment.topo_server_implementation != 'zookeeper':
+    if environment.topo_server().flavor() != 'zookeeper':
       logging.info("Skipping this test in non-github tree")
       return
 

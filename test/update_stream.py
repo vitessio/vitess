@@ -69,7 +69,7 @@ def setUpModule():
   global master_start_position
 
   try:
-    environment.topo_server_setup()
+    environment.topo_server().setup()
 
     # start mysql instance external to the test
     setup_procs = [master_tablet.init_mysql(),
@@ -131,7 +131,7 @@ def tearDownModule():
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
   utils.vtgate_kill(vtgate_server)
-  environment.topo_server_teardown()
+  environment.topo_server().teardown()
   utils.kill_sub_processes()
   utils.remove_tmp_files()
   master_tablet.remove_tree()
