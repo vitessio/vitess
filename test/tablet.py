@@ -422,7 +422,7 @@ class Tablet(object):
     """
     args = []
     args.extend(['-tablet-path', self.tablet_alias])
-    args.extend(environment.topo_server_flags())
+    args.extend(environment.topo_server().flags())
     args.extend(protocols_flavor().binlog_player_protocol_flags())
     args.extend(protocols_flavor().tablet_manager_protocol_flags())
     args.extend(['-pid_file', os.path.join(self.tablet_dir, 'vttablet.pid')])
@@ -515,7 +515,7 @@ class Tablet(object):
 
   def wait_for_vttablet_state(self, expected, timeout=60.0, port=None):
     # wait for zookeeper PID just to be sure we have it
-    if environment.topo_server_implementation == 'zookeeper':
+    if environment.topo_server().flavor() == 'zookeeper':
       if not self.checked_zk_pid:
         utils.run(environment.binary_args('zk') + ['wait', '-e', self.zk_pid],
                   stdout=utils.devnull)

@@ -38,7 +38,7 @@ def setUpModule():
   global vtgate_port
 
   try:
-    environment.topo_server_setup()
+    environment.topo_server().setup()
 
     # start mysql instance external to the test
     setup_procs = [master_tablet.init_mysql(),
@@ -83,7 +83,7 @@ def tearDownModule():
                     replica_tablet.teardown_mysql()]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
-  environment.topo_server_teardown()
+  environment.topo_server().teardown()
   utils.vtgate_kill(vtgate_server)
   utils.kill_sub_processes()
   utils.remove_tmp_files()

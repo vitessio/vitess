@@ -32,7 +32,7 @@ vtgate_port = None
 
 def setUpModule():
   try:
-    environment.topo_server_setup()
+    environment.topo_server().setup()
 
     setup_procs = [t.init_mysql() for t in tablets]
     utils.Vtctld().start()
@@ -52,7 +52,7 @@ def tearDownModule():
   teardown_procs = [t.teardown_mysql() for t in tablets]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
-  environment.topo_server_teardown()
+  environment.topo_server().teardown()
   utils.kill_sub_processes()
   utils.remove_tmp_files()
 
@@ -171,9 +171,9 @@ class TestVtctld(unittest.TestCase):
     self.assertEqual(self.data["Partial"], True)
 
   def test_explorer_redirects(self):
-    if environment.topo_server_implementation != 'zookeeper':
+    if environment.topo_server().flavor() != 'zookeeper':
       logging.info('Skipping zookeeper tests in topology %s',
-                   environment.topo_server_implementation)
+                   environment.topo_server().flavor())
       return
 
     base = 'http://localhost:%u' % utils.vtctld.port

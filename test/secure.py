@@ -35,7 +35,7 @@ def openssl(cmd):
 
 def setUpModule():
   try:
-    utils.zk_setup()
+    environment.topo_server().setup()
 
     logging.debug("Creating certificates")
     os.makedirs(cert_dir)
@@ -199,7 +199,7 @@ def tearDownModule():
       ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
-  utils.zk_teardown()
+  environment.topo_server().teardown()
   utils.kill_sub_processes()
   utils.remove_tmp_files()
 
@@ -229,7 +229,7 @@ class TestSecure(unittest.TestCase):
     utils.run_vtctl('ReparentShard -force test_keyspace/0 ' + shard_0_master.tablet_alias, auto_log=True)
 
     # then get the topology and check it
-    zkocc_client = zkocc.ZkOccConnection("localhost:%u" % environment.zkocc_port_base,
+    zkocc_client = zkocc.ZkOccConnection("localhost:%u" % environment.topo_server().zkocc_port_base,
                                          "test_nj", 30.0)
     topology.read_keyspaces(zkocc_client)
 

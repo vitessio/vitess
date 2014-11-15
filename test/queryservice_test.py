@@ -18,6 +18,7 @@ from queryservice_tests import test_env
 
 from mysql_flavor import set_mysql_flavor
 from protocols_flavor import set_protocols_flavor
+from topo_flavor.server import set_topo_server_flavor
 
 
 if __name__ == "__main__":
@@ -33,12 +34,14 @@ if __name__ == "__main__":
                     help="Don't delete log files on teardown.")
   parser.add_option("--mysql-flavor", action="store", type="string")
   parser.add_option("--protocols-flavor", action="store", type="string")
+  parser.add_option("--topo-server-flavor", action="store", type="string")
   (options, args) = parser.parse_args()
 
   utils.options = options
   logging.getLogger().setLevel(logging.ERROR)
   set_mysql_flavor(options.mysql_flavor)
   set_protocols_flavor(options.protocols_flavor)
+  set_topo_server_flavor(options.topo_server_flavor)
 
   suite = unittest.TestSuite()
   if args:

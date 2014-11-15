@@ -186,7 +186,7 @@ class TestEnv(object):
     table_acl_config = os.path.join(environment.vttop, 'test', 'test_data', 'table_acl_config.json')
 
     if self.env == 'vttablet':
-      environment.topo_server_setup()
+      environment.topo_server().setup()
       utils.run_vtctl('CreateKeyspace -force test_keyspace')
       self.tablet.init_tablet('master', 'test_keyspace', '0')
       self.tablet.start_vttablet(
@@ -230,7 +230,7 @@ class TestEnv(object):
     if getattr(self, "txlogger", None):
       self.txlogger.terminate()
     if self.env == 'vttablet':
-      environment.topo_server_teardown()
+      environment.topo_server().teardown()
     utils.kill_sub_processes()
     utils.remove_tmp_files()
     self.tablet.remove_tree()

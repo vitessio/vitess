@@ -23,7 +23,7 @@ tablet_31981 = tablet.Tablet(31981, use_mysqlctld=use_mysqlctld)
 
 def setUpModule():
   try:
-    environment.topo_server_setup()
+    environment.topo_server().setup()
 
     # start mysql instance external to the test
     global setup_procs
@@ -55,7 +55,7 @@ def tearDownModule():
         ]
     utils.wait_procs(teardown_procs, raise_on_error=False)
 
-  environment.topo_server_teardown()
+  environment.topo_server().teardown()
   utils.kill_sub_processes()
   utils.remove_tmp_files()
 
@@ -71,7 +71,7 @@ def tearDownModule():
 class TestClone(unittest.TestCase):
   def tearDown(self):
     tablet.Tablet.check_vttablet_count()
-    environment.topo_server_wipe()
+    environment.topo_server().wipe()
     for t in [tablet_62344, tablet_31981]:
       t.reset_replication()
       t.clean_dbs()
