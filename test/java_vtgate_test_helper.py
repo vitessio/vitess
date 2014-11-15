@@ -93,20 +93,9 @@ def main():
   parser.add_option("--tablet-config", action="store", type="string",
                     help="json config for for non-master tablets. e.g {'replica':2, 'rdonly':1}")
   parser.add_option("--keyspace", action="store", type="string")
-
-  # remaining options are required to run the helper functions in utils.py
-  parser.add_option('-d', '--debug', action='store_true', help='utils.pause() statements will wait for user input')
-  parser.add_option('--skip-teardown', action='store_true')
-  parser.add_option('-k', '--keep-logs', action='store_true',
-                    help="Don't delete log files on teardown.")
-  parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=1)
-  parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=1)
-  parser.add_option("--mysql-flavor", action="store", type="string")
-  parser.add_option("--protocols-flavor", action="store", type="string")
+  utils.add_options(parser)
   (options, args) = parser.parse_args()
-  utils.options = options
-  utils.set_mysql_flavor(options.mysql_flavor)
-  utils.set_protocols_flavor(options.protocols_flavor)
+  utils.set_options(options)
   
   env = TestEnv(options)
   if args[0] == 'setup':
