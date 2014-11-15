@@ -27,21 +27,11 @@ if __name__ == "__main__":
                     help="starts a memcache d, and tests rowcache")
   parser.add_option("-e", "--env", default='vttablet',
                     help="Environment that will be used. Valid options: vttablet, vtocc")
-  parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=1)
-  parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=0)
-  parser.add_option('--skip-teardown', action='store_true')
-  parser.add_option('-k', '--keep-logs', action='store_true',
-                    help="Don't delete log files on teardown.")
-  parser.add_option("--mysql-flavor", action="store", type="string")
-  parser.add_option("--protocols-flavor", action="store", type="string")
-  parser.add_option("--topo-server-flavor", action="store", type="string")
+  utils.add_options(parser)
   (options, args) = parser.parse_args()
 
-  utils.options = options
   logging.getLogger().setLevel(logging.ERROR)
-  set_mysql_flavor(options.mysql_flavor)
-  set_protocols_flavor(options.protocols_flavor)
-  set_topo_server_flavor(options.topo_server_flavor)
+  utils.set_options(options)
 
   suite = unittest.TestSuite()
   if args:

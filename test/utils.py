@@ -56,6 +56,26 @@ class LoggingStream(object):
   def flush(self):
     pass
 
+def add_options(parser):
+  parser.add_option('-d', '--debug', action='store_true',
+                    help='utils.pause() statements will wait for user input')
+  parser.add_option('-k', '--keep-logs', action='store_true',
+                    help="Don't delete log files on teardown.")
+  parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=1)
+  parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=1)
+  parser.add_option('--skip-teardown', action='store_true')
+  parser.add_option("--mysql-flavor")
+  parser.add_option("--protocols-flavor")
+  parser.add_option("--topo-server-flavor")
+
+def set_options(opts):
+  global options
+  options = opts
+
+  set_mysql_flavor(options.mysql_flavor)
+  set_protocols_flavor(options.protocols_flavor)
+  set_topo_server_flavor(options.topo_server_flavor)
+
 # main executes the test classes contained in the passed module, or
 # __main__ if empty.
 def main(mod=None):
@@ -65,16 +85,7 @@ def main(mod=None):
   global options
 
   parser = optparse.OptionParser(usage="usage: %prog [options] [test_names]")
-  parser.add_option('-d', '--debug', action='store_true', help='utils.pause() statements will wait for user input')
-  parser.add_option('--skip-teardown', action='store_true')
-  parser.add_option('-k', '--keep-logs', action='store_true',
-                    help="Don't delete log files on teardown.")
-  parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=1)
-  parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=1)
-  parser.add_option("--mysql-flavor", action="store", type="string")
-  parser.add_option("--protocols-flavor", action="store", type="string")
-  parser.add_option("--topo-server-flavor", action="store", type="string")
-
+  add_options(parser)
   (options, args) = parser.parse_args()
 
   if options.verbose == 0:
@@ -86,9 +97,7 @@ def main(mod=None):
   logging.getLogger().setLevel(level)
   logging.basicConfig(format='-- %(asctime)s %(module)s:%(lineno)d %(levelname)s %(message)s')
 
-  set_mysql_flavor(options.mysql_flavor)
-  set_protocols_flavor(options.protocols_flavor)
-  set_topo_server_flavor(options.topo_server_flavor)
+  set_options(options)
 
   try:
     suite = unittest.TestSuite()
