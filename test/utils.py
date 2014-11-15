@@ -248,48 +248,6 @@ def run_procs(cmds, raise_on_error=True):
     procs.append(run_bg(cmd))
   wait_procs(procs, raise_on_error=raise_on_error)
 
-# background zk process
-# (note the zkocc addresses will only work with an extra zkocc process)
-zk_port_base = environment.reserve_ports(3)
-def zk_setup(add_bad_host=False):
-  global zk_port_base
-  zk_ports = ":".join([str(zk_port_base), str(zk_port_base+1), str(zk_port_base+2)])
-  run('%s -log_dir %s -zk.cfg 1@%s:%s init' % (environment.binary_argstr('zkctl'), environment.vtlogroot, hostname, zk_ports))
-  config = environment.tmproot+'/test-zk-client-conf.json'
-  with open(config, 'w') as f:
-    ca_server = 'localhost:%u' % (zk_port_base+2)
-    if add_bad_host:
-      ca_server += ',does.not.exists:1234'
-    zk_cell_mapping = {'test_nj': 'localhost:%u'%(zk_port_base+2),
-                       'test_ny': 'localhost:%u'%(zk_port_base+2),
-                       'test_ca': ca_server,
-                       'global': 'localhost:%u'%(zk_port_base+2),
-                       'test_nj:_zkocc': 'localhost:%u,localhost:%u,localhost:%u'%(environment.zkocc_port_base,environment.zkocc_port_base+1,environment.zkocc_port_base+2),
-                       'test_ny:_zkocc': 'localhost:%u'%(environment.zkocc_port_base),
-                       'test_ca:_zkocc': 'localhost:%u'%(environment.zkocc_port_base),
-                       'global:_zkocc': 'localhost:%u'%(environment.zkocc_port_base),}
-    json.dump(zk_cell_mapping, f)
-  os.environ['ZK_CLIENT_CONFIG'] = config
-  run(environment.binary_argstr('zk')+' touch -p /zk/test_nj/vt')
-  run(environment.binary_argstr('zk')+' touch -p /zk/test_ny/vt')
-  run(environment.binary_argstr('zk')+' touch -p /zk/test_ca/vt')
-
-def zk_teardown():
-  global zk_port_base
-  zk_ports = ":".join([str(zk_port_base), str(zk_port_base+1), str(zk_port_base+2)])
-  action = 'shutdown' if options.keep_logs else 'teardown'
-  run('%s -log_dir %s -zk.cfg 1@%s:%s %s' % (environment.binary_argstr('zkctl'), environment.vtlogroot, hostname, zk_ports, action), raise_on_error=False)
-
-def zk_wipe():
-  # Work around safety check on recursive delete.
-  run(environment.binary_argstr('zk')+' rm -rf /zk/test_nj/vt/*')
-  run(environment.binary_argstr('zk')+' rm -rf /zk/test_ny/vt/*')
-  run(environment.binary_argstr('zk')+' rm -rf /zk/global/vt/*')
-
-  run(environment.binary_argstr('zk')+' rm -f /zk/test_nj/vt')
-  run(environment.binary_argstr('zk')+' rm -f /zk/test_ny/vt')
-  run(environment.binary_argstr('zk')+' rm -f /zk/global/vt')
-
 def validate_topology(ping_tablets=False):
   if ping_tablets:
     run_vtctl(['Validate', '-ping-tablets'])
@@ -356,11 +314,11 @@ def wait_for_vars(name, port, var=None):
 # zkocc helpers
 def zkocc_start(cells=['test_nj'], extra_params=[]):
   args = environment.binary_args('zkocc') + [
-          '-port', str(environment.zkocc_port_base),
+          '-port', str(environment.topo_server().zkocc_port_base),
           '-stderrthreshold=ERROR',
           ] + extra_params + cells
   sp = run_bg(args)
-  wait_for_vars("zkocc", environment.zkocc_port_base)
+  wait_for_vars("zkocc", environment.topo_server().zkocc_port_base)
   return sp
 
 def zkocc_kill(sp):
