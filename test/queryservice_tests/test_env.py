@@ -207,8 +207,8 @@ class TestEnv(object):
       )
     self.conn = self.connect()
     self.txlogger = utils.curl(self.url('/debug/txlog'), background=True, stdout=open(self.txlog_file, 'w'))
-    self.txlog = framework.Tailer(open(self.txlog_file), flush=self.tablet.flush)
-    self.log = framework.Tailer(open(os.path.join(environment.vtlogroot, '%s.INFO' % self.env)), flush=self.tablet.flush)
+    self.txlog = framework.Tailer(self.txlog_file, flush=self.tablet.flush)
+    self.log = framework.Tailer(os.path.join(environment.vtlogroot, '%s.INFO' % self.env), flush=self.tablet.flush)
     self.querylog = Querylog(self)
 
   def tearDown(self):
@@ -243,8 +243,8 @@ class Querylog(object):
     self.id = str(uuid.uuid4())
     self.curl = utils.curl(self.env.url('/debug/querylog'), background=True, stdout=open(self.path, 'w'))
     self.curl_full = utils.curl(self.env.url('/debug/querylog?full=true'), background=True, stdout=open(self.path_full, 'w'))
-    self.tailer = framework.Tailer(open(self.path), sleep=0.02)
-    self.tailer_full = framework.Tailer(open(self.path_full), sleep=0.02)
+    self.tailer = framework.Tailer(self.path, sleep=0.02)
+    self.tailer_full = framework.Tailer(self.path_full, sleep=0.02)
 
   @property
   def path(self):

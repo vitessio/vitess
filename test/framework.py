@@ -36,10 +36,12 @@ class MultiDict(dict):
     return v
 
 class Tailer(object):
-  def __init__(self, f, flush=None, sleep=0):
-    self.f = f
-    self.sleep = sleep
+  def __init__(self, filepath, flush=None, sleep=0, timeout=10.0):
+    self.filepath = filepath
     self.flush = flush
+    self.sleep = sleep
+    self.timeout = timeout
+    self.f = None
     self.reset()
 
   def reset(self):
@@ -48,6 +50,17 @@ class Tailer(object):
       self.flush()
     else:
       time.sleep(self.sleep)
+
+    # Re-open the file if open.
+    if self.f:
+      self.f.close()
+      self.f = None
+    # Wait for file to exist.
+    timeout = self.timeout
+    while not os.path.exists(self.filepath):
+      timeout = utils.wait_step('file exists: ' + self.filepath, timeout)
+    self.f = open(self.filepath)
+
     self.f.seek(0, os.SEEK_END)
     self.pos = self.f.tell()
 
