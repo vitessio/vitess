@@ -50,6 +50,7 @@ class ZkTopoServer(server.TopoServer):
       }
       json.dump(zk_cell_mapping, f)
     os.environ['ZK_CLIENT_CONFIG'] = config
+    logging.debug('Using ZK_CLIENT_CONFIG=%s', str(config))
     run(binary_args('zk') + ['touch', '-p', '/zk/test_nj/vt'])
     run(binary_args('zk') + ['touch', '-p', '/zk/test_ny/vt'])
     run(binary_args('zk') + ['touch', '-p', '/zk/test_ca/vt'])
