@@ -7,6 +7,7 @@ import shlex
 from subprocess import Popen, PIPE
 import time
 import unittest
+import utils
 
 class TestCase(unittest.TestCase):
   @classmethod
