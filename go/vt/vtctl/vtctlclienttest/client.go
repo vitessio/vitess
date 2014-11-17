@@ -7,6 +7,7 @@
 package vtctlclienttest
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -75,7 +76,7 @@ func VtctlClientTestSuite(t *testing.T, ts topo.Server, client vtctlclient.Vtctl
 	}
 
 	expected := "node doesn't exist"
-	if err := errFunc(); err == nil || err.Error() != expected {
-		t.Fatalf("Unexpected remote error, got: '%v' was expecting '%v'", err, expected)
+	if err := errFunc(); err == nil || !strings.Contains(err.Error(), expected) {
+		t.Fatalf("Unexpected remote error, got: '%v' was expecting to find '%v'", err, expected)
 	}
 }
