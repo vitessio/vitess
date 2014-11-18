@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/db"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
@@ -117,7 +118,7 @@ func (conn *Conn) dial() (err error) {
 	}
 
 	// and dial
-	tabletConn, err := tabletconn.GetDialer()(nil, endPoint, conn.keyspace(), conn.shard(), conn.timeout)
+	tabletConn, err := tabletconn.GetDialer()(context.TODO(), endPoint, conn.keyspace(), conn.shard(), conn.timeout)
 	if err != nil {
 		return err
 	}
@@ -132,7 +133,7 @@ func (conn *Conn) Close() error {
 
 func (conn *Conn) Exec(query string, bindVars map[string]interface{}) (db.Result, error) {
 	if conn.stream {
-		sr, errFunc, err := conn.tabletConn.StreamExecute(nil, query, bindVars, conn.TransactionId)
+		sr, errFunc, err := conn.tabletConn.StreamExecute(context.TODO(), query, bindVars, conn.TransactionId)
 		if err != nil {
 			return nil, conn.fmtErr(err)
 		}
@@ -144,7 +145,7 @@ func (conn *Conn) Exec(query string, bindVars map[string]interface{}) (db.Result
 		return &StreamResult{errFunc, sr, cols, nil, 0, nil}, nil
 	}
 
-	qr, err := conn.tabletConn.Execute(nil, query, bindVars, conn.TransactionId)
+	qr, err := conn.tabletConn.Execute(context.TODO(), query, bindVars, conn.TransactionId)
 	if err != nil {
 		return nil, conn.fmtErr(err)
 	}
@@ -155,7 +156,7 @@ func (conn *Conn) Begin() (db.Tx, error) {
 	if conn.TransactionId != 0 {
 		return &Tx{}, ErrNoNestedTxn
 	}
-	if transactionId, err := conn.tabletConn.Begin(nil); err != nil {
+	if transactionId, err := conn.tabletConn.Begin(context.TODO()); err != nil {
 		return &Tx{}, conn.fmtErr(err)
 	} else {
 		conn.TransactionId = transactionId
@@ -175,7 +176,7 @@ func (conn *Conn) Commit() error {
 	// called concurrently.  Defer this because we this affects the
 	// session referenced in the request.
 	defer func() { conn.TransactionId = 0 }()
-	return conn.fmtErr(conn.tabletConn.Commit(nil, conn.TransactionId))
+	return conn.fmtErr(conn.tabletConn.Commit(context.TODO(), conn.TransactionId))
 }
 
 func (conn *Conn) Rollback() error {
@@ -184,7 +185,7 @@ func (conn *Conn) Rollback() error {
 	}
 	// See note in Commit about the behavior of TransactionId.
 	defer func() { conn.TransactionId = 0 }()
-	return conn.fmtErr(conn.tabletConn.Rollback(nil, conn.TransactionId))
+	return conn.fmtErr(conn.tabletConn.Rollback(context.TODO(), conn.TransactionId))
 }
 
 // driver.Tx interface (forwarded to Conn)
