@@ -24,7 +24,7 @@ class ProtocolsFlavor(object):
 
   def rpc_timeout_message(self):
     """Returns the error message used by the protocol to indicate a timeout."""
-    return 'BASE CLASS MESSAGE'
+    raise NotImplementedError('Implementations need to overwrite this')
 
 class GoRpcProtocolsFlavor(ProtocolsFlavor):
   """Overrides to use go rpc everywhere"""
