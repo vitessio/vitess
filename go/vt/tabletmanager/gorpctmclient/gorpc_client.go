@@ -94,7 +94,7 @@ func (client *GoRpcTabletManagerClient) GetSchema(ctx context.Context, tablet *t
 
 func (client *GoRpcTabletManagerClient) GetPermissions(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) (*myproto.Permissions, error) {
 	var p myproto.Permissions
-	if err := client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_GET_PERMISSIONS, "", &p, waitTime); err != nil {
+	if err := client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_GET_PERMISSIONS, &rpc.Unused{}, &p, waitTime); err != nil {
 		return nil, err
 	}
 	return &p, nil
@@ -105,11 +105,11 @@ func (client *GoRpcTabletManagerClient) GetPermissions(ctx context.Context, tabl
 //
 
 func (client *GoRpcTabletManagerClient) SetReadOnly(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error {
-	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_SET_RDONLY, "", &rpc.Unused{}, waitTime)
+	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_SET_RDONLY, &rpc.Unused{}, &rpc.Unused{}, waitTime)
 }
 
 func (client *GoRpcTabletManagerClient) SetReadWrite(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error {
-	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_SET_RDWR, "", &rpc.Unused{}, waitTime)
+	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_SET_RDWR, &rpc.Unused{}, &rpc.Unused{}, waitTime)
 }
 
 func (client *GoRpcTabletManagerClient) ChangeType(ctx context.Context, tablet *topo.TabletInfo, dbType topo.TabletType, waitTime time.Duration) error {
@@ -117,11 +117,11 @@ func (client *GoRpcTabletManagerClient) ChangeType(ctx context.Context, tablet *
 }
 
 func (client *GoRpcTabletManagerClient) Scrap(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error {
-	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_SCRAP, "", &rpc.Unused{}, waitTime)
+	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_SCRAP, &rpc.Unused{}, &rpc.Unused{}, waitTime)
 }
 
 func (client *GoRpcTabletManagerClient) RefreshState(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error {
-	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_REFRESH_STATE, "", &rpc.Unused{}, waitTime)
+	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_REFRESH_STATE, &rpc.Unused{}, &rpc.Unused{}, waitTime)
 }
 
 func (client *GoRpcTabletManagerClient) RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType topo.TabletType, waitTime time.Duration) error {
@@ -129,7 +129,7 @@ func (client *GoRpcTabletManagerClient) RunHealthCheck(ctx context.Context, tabl
 }
 
 func (client *GoRpcTabletManagerClient) ReloadSchema(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error {
-	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_RELOAD_SCHEMA, "", &rpc.Unused{}, waitTime)
+	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_RELOAD_SCHEMA, &rpc.Unused{}, &rpc.Unused{}, waitTime)
 }
 
 func (client *GoRpcTabletManagerClient) PreflightSchema(ctx context.Context, tablet *topo.TabletInfo, change string, waitTime time.Duration) (*myproto.SchemaChangeResult, error) {
@@ -162,7 +162,7 @@ func (client *GoRpcTabletManagerClient) ExecuteFetch(ctx context.Context, tablet
 
 func (client *GoRpcTabletManagerClient) SlaveStatus(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) (*myproto.ReplicationStatus, error) {
 	var status myproto.ReplicationStatus
-	if err := client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_SLAVE_STATUS, "", &status, waitTime); err != nil {
+	if err := client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_SLAVE_STATUS, &rpc.Unused{}, &status, waitTime); err != nil {
 		return nil, err
 	}
 	return &status, nil
@@ -181,7 +181,7 @@ func (client *GoRpcTabletManagerClient) WaitSlavePosition(ctx context.Context, t
 
 func (client *GoRpcTabletManagerClient) MasterPosition(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) (myproto.ReplicationPosition, error) {
 	var rp myproto.ReplicationPosition
-	if err := client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_MASTER_POSITION, "", &rp, waitTime); err != nil {
+	if err := client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_MASTER_POSITION, &rpc.Unused{}, &rp, waitTime); err != nil {
 		return rp, err
 	}
 	return rp, nil
@@ -196,7 +196,7 @@ func (client *GoRpcTabletManagerClient) ReparentPosition(ctx context.Context, ta
 }
 
 func (client *GoRpcTabletManagerClient) StopSlave(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error {
-	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_STOP_SLAVE, "", &rpc.Unused{}, waitTime)
+	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_STOP_SLAVE, &rpc.Unused{}, &rpc.Unused{}, waitTime)
 }
 
 func (client *GoRpcTabletManagerClient) StopSlaveMinimum(ctx context.Context, tablet *topo.TabletInfo, minPos myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error) {
@@ -211,7 +211,7 @@ func (client *GoRpcTabletManagerClient) StopSlaveMinimum(ctx context.Context, ta
 }
 
 func (client *GoRpcTabletManagerClient) StartSlave(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error {
-	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_START_SLAVE, "", &rpc.Unused{}, waitTime)
+	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_START_SLAVE, &rpc.Unused{}, &rpc.Unused{}, waitTime)
 }
 
 func (client *GoRpcTabletManagerClient) TabletExternallyReparented(ctx context.Context, tablet *topo.TabletInfo, externalID string, waitTime time.Duration) error {
@@ -220,7 +220,7 @@ func (client *GoRpcTabletManagerClient) TabletExternallyReparented(ctx context.C
 
 func (client *GoRpcTabletManagerClient) GetSlaves(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) ([]string, error) {
 	var sl gorpcproto.GetSlavesReply
-	if err := client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_GET_SLAVES, "", &sl, waitTime); err != nil {
+	if err := client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_GET_SLAVES, &rpc.Unused{}, &sl, waitTime); err != nil {
 		return nil, err
 	}
 	return sl.Addrs, nil
@@ -235,14 +235,14 @@ func (client *GoRpcTabletManagerClient) WaitBlpPosition(ctx context.Context, tab
 
 func (client *GoRpcTabletManagerClient) StopBlp(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) (*blproto.BlpPositionList, error) {
 	var bpl blproto.BlpPositionList
-	if err := client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_STOP_BLP, "", &bpl, waitTime); err != nil {
+	if err := client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_STOP_BLP, &rpc.Unused{}, &bpl, waitTime); err != nil {
 		return nil, err
 	}
 	return &bpl, nil
 }
 
 func (client *GoRpcTabletManagerClient) StartBlp(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error {
-	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_START_BLP, "", &rpc.Unused{}, waitTime)
+	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_START_BLP, &rpc.Unused{}, &rpc.Unused{}, waitTime)
 }
 
 func (client *GoRpcTabletManagerClient) RunBlpUntil(ctx context.Context, tablet *topo.TabletInfo, positions *blproto.BlpPositionList, waitTime time.Duration) (myproto.ReplicationPosition, error) {
@@ -261,19 +261,19 @@ func (client *GoRpcTabletManagerClient) RunBlpUntil(ctx context.Context, tablet 
 //
 
 func (client *GoRpcTabletManagerClient) DemoteMaster(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error {
-	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_DEMOTE_MASTER, "", &rpc.Unused{}, waitTime)
+	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_DEMOTE_MASTER, &rpc.Unused{}, &rpc.Unused{}, waitTime)
 }
 
 func (client *GoRpcTabletManagerClient) PromoteSlave(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) (*actionnode.RestartSlaveData, error) {
 	var rsd actionnode.RestartSlaveData
-	if err := client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_PROMOTE_SLAVE, "", &rsd, waitTime); err != nil {
+	if err := client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_PROMOTE_SLAVE, &rpc.Unused{}, &rsd, waitTime); err != nil {
 		return nil, err
 	}
 	return &rsd, nil
 }
 
 func (client *GoRpcTabletManagerClient) SlaveWasPromoted(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error {
-	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_SLAVE_WAS_PROMOTED, "", &rpc.Unused{}, waitTime)
+	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_SLAVE_WAS_PROMOTED, &rpc.Unused{}, &rpc.Unused{}, waitTime)
 }
 
 func (client *GoRpcTabletManagerClient) RestartSlave(ctx context.Context, tablet *topo.TabletInfo, rsd *actionnode.RestartSlaveData, waitTime time.Duration) error {
@@ -285,7 +285,7 @@ func (client *GoRpcTabletManagerClient) SlaveWasRestarted(ctx context.Context, t
 }
 
 func (client *GoRpcTabletManagerClient) BreakSlaves(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error {
-	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_BREAK_SLAVES, "", &rpc.Unused{}, waitTime)
+	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_BREAK_SLAVES, &rpc.Unused{}, &rpc.Unused{}, waitTime)
 }
 
 //
