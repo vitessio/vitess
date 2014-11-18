@@ -13,22 +13,20 @@ import (
 	"code.google.com/p/go.net/context"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	rpc "github.com/youtube/vitess/go/rpcplus"
-	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
 // QueryResultReader will stream rows towards the output channel.
 type QueryResultReader struct {
-	Output chan *mproto.QueryResult
-	Fields []mproto.Field
-	client *rpc.Client
-	call   *rpc.Call
+	Output      <-chan *mproto.QueryResult
+	Fields      []mproto.Field
+	conn        tabletconn.TabletConn
+	clientErrFn func() error
 }
 
 // NewQueryResultReaderForTablet creates a new QueryResultReader for
@@ -39,37 +37,32 @@ func NewQueryResultReaderForTablet(ts topo.Server, tabletAlias topo.TabletAlias,
 		return nil, err
 	}
 
-	addr := fmt.Sprintf("%v:%v", tablet.IPAddr, tablet.Portmap["vt"])
-	rpcClient, err := bsonrpc.DialHTTP("tcp", addr, 30*time.Second, nil)
+	endPoint, err := tablet.EndPoint()
 	if err != nil {
 		return nil, err
 	}
 
-	var sessionInfo tproto.SessionInfo
-	if err := rpcClient.Call(context.TODO(), "SqlQuery.GetSessionId", tproto.SessionParams{Keyspace: tablet.Keyspace, Shard: tablet.Shard}, &sessionInfo); err != nil {
+	conn, err := tabletconn.GetDialer()(context.TODO(), *endPoint, tablet.Keyspace, tablet.Shard, 30*time.Second)
+	if err != nil {
 		return nil, err
 	}
 
-	req := &tproto.Query{
-		Sql:           sql,
-		BindVariables: make(map[string]interface{}),
-		TransactionId: 0,
-		SessionId:     sessionInfo.SessionId,
+	sr, clientErrFn, err := conn.StreamExecute(context.TODO(), sql, make(map[string]interface{}), 0)
+	if err != nil {
+		return nil, err
 	}
-	sr := make(chan *mproto.QueryResult, 1000)
-	call := rpcClient.StreamGo("SqlQuery.StreamExecute", req, sr)
 
 	// read the columns, or grab the error
 	cols, ok := <-sr
 	if !ok {
-		return nil, fmt.Errorf("Cannot read Fields for query '%v': %v", sql, call.Error)
+		return nil, fmt.Errorf("Cannot read Fields for query '%v': %v", sql, clientErrFn())
 	}
 
 	return &QueryResultReader{
-		Output: sr,
-		Fields: cols.Fields,
-		client: rpcClient,
-		call:   call,
+		Output:      sr,
+		Fields:      cols.Fields,
+		conn:        conn,
+		clientErrFn: clientErrFn,
 	}, nil
 }
 
@@ -157,11 +150,11 @@ func TableScanByKeyRange(log logutil.Logger, ts topo.Server, tabletAlias topo.Ta
 }
 
 func (qrr *QueryResultReader) Error() error {
-	return qrr.call.Error
+	return qrr.clientErrFn()
 }
 
-func (qrr *QueryResultReader) Close() error {
-	return qrr.client.Close()
+func (qrr *QueryResultReader) Close() {
+	qrr.conn.Close()
 }
 
 // RowReader returns individual rows from a QueryResultReader

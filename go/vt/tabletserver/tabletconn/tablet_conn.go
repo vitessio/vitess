@@ -101,5 +101,9 @@ func RegisterDialer(name string, dialer TabletDialer) {
 
 // GetDialer returns the dialer to use, described by the command line flag
 func GetDialer() TabletDialer {
-	return dialers[*tabletProtocol]
+	td, ok := dialers[*tabletProtocol]
+	if !ok {
+		log.Fatalf("No dialer registered for tablet protocol %s", *tabletProtocol)
+	}
+	return td
 }
