@@ -17,6 +17,7 @@ import environment
 import utils
 import tablet
 from mysql_flavor import mysql_flavor
+from protocols_flavor import protocols_flavor
 
 tablet_62344 = tablet.Tablet(62344)
 tablet_62044 = tablet.Tablet(62044)
@@ -163,7 +164,7 @@ class TestReparent(unittest.TestCase):
                                       tablet_62344.tablet_alias],
                                      expect_fail=True)
     logging.debug('Failed ScrapTablet output:\n' + stderr)
-    if 'connection refused' not in stderr and environment.rpc_timeout_message not in stderr:
+    if 'connection refused' not in stderr and protocols_flavor().rpc_timeout_message() not in stderr:
       self.fail("didn't find the right error strings in failed ScrapTablet: " +
                 stderr)
 

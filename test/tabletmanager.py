@@ -196,7 +196,7 @@ class TestTabletManager(unittest.TestCase):
     stdout, stderr = utils.run_vtctl(['-wait-time', '3s',
                                       'RefreshState', tablet_62344.tablet_alias],
                                      expect_fail=True)
-    self.assertIn(environment.rpc_timeout_message, stderr)
+    self.assertIn(protocols_flavor().rpc_timeout_message(), stderr)
 
     # wait for the background vtctl
     bg.wait()
