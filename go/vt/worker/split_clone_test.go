@@ -20,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
+	_ "github.com/youtube/vitess/go/vt/tabletserver/gorpctabletconn"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
