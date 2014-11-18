@@ -22,6 +22,10 @@ class ProtocolsFlavor(object):
     """Returns the flags to use for specifying the query service protocol."""
     return ['-tablet_protocol', 'gorpc']
 
+  def rpc_timeout_message(self):
+    """Returns the error message used by the protocol to indicate a timeout."""
+    return 'BASE CLASS MESSAGE'
+
 class GoRpcProtocolsFlavor(ProtocolsFlavor):
   """Overrides to use go rpc everywhere"""
 
@@ -36,6 +40,9 @@ class GoRpcProtocolsFlavor(ProtocolsFlavor):
 
   def tabletconn_protocol_flags(self):
     return ['-tablet_protocol', 'gorpc']
+
+  def rpc_timeout_message(self):
+    return 'Timeout waiting for'
 
 __knows_protocols_flavor_map = {
   'gorpc': GoRpcProtocolsFlavor,
