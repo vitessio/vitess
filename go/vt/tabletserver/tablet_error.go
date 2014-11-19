@@ -99,9 +99,6 @@ func (te *TabletError) RecordStats() {
 }
 
 func handleError(err *error, logStats *SQLQueryStats) {
-	if logStats != nil {
-		logStats.Send()
-	}
 	if x := recover(); x != nil {
 		terr, ok := x.(*TabletError)
 		if !ok {
@@ -120,6 +117,10 @@ func handleError(err *error, logStats *SQLQueryStats) {
 		} else {
 			log.Errorf("%v", terr)
 		}
+	}
+	if logStats != nil {
+		logStats.Error = *err
+		logStats.Send()
 	}
 }
 
