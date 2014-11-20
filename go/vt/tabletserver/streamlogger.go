@@ -47,6 +47,7 @@ type SQLQueryStats struct {
 	Rows                 [][]sqltypes.Value
 	TransactionID        int64
 	context              context.Context
+	Error                error
 }
 
 func newSqlQueryStats(methodName string, context context.Context) *SQLQueryStats {
@@ -161,11 +162,18 @@ func (log *SQLQueryStats) ContextHTML() template.HTML {
 	return callinfo.FromContext(log.context).HTML()
 }
 
+func (log *SQLQueryStats) ErrorStr() string {
+	if log.Error != nil {
+		return log.Error.Error()
+	}
+	return ""
+}
+
 // String returns a tab separated list of logged fields.
 func (log *SQLQueryStats) Format(params url.Values) string {
 	_, fullBindParams := params["full"]
 	return fmt.Sprintf(
-		"%v\t%v\t%v\t%v\t%v\t%.6f\t%v\t%q\t%v\t%v\t%q\t%v\t%.6f\t%.6f\t%v\t%v\t%v\t%v\t%v\t\n",
+		"%v\t%v\t%v\t%v\t%v\t%.6f\t%v\t%q\t%v\t%v\t%q\t%v\t%.6f\t%.6f\t%v\t%v\t%v\t%v\t%v\t%q\t\n",
 		log.Method,
 		log.RemoteAddr(),
 		log.Username(),
@@ -184,5 +192,7 @@ func (log *SQLQueryStats) Format(params url.Values) string {
 		log.CacheHits,
 		log.CacheMisses,
 		log.CacheAbsent,
-		log.CacheInvalidations)
+		log.CacheInvalidations,
+		log.ErrorStr(),
+	)
 }
