@@ -41,7 +41,8 @@ class Log(object):
        self.cache_hits,
        self.cache_misses,
        self.cache_absent,
-       self.cache_invalidations) = line.strip().split('\t')
+       self.cache_invalidations,
+       self.error) = line.strip().split('\t')
     except ValueError:
       print "Wrong looking line: %r" % line
       raise

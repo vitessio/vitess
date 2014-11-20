@@ -36,6 +36,7 @@ var (
 			<th>Cache Absent</th>
 			<th>Cache Invalidations</th>
 			<th>Transaction ID</th>
+			<th>Error</th>
 		</tr>
 	`)
 	querylogzFuncMap = template.FuncMap{
@@ -61,7 +62,8 @@ var (
 			<td>{{.CacheMisses}}</td>
 			<td>{{.CacheAbsent}}</td>
 			<td>{{.CacheInvalidations}}</td>
-                        <td>{{.TransactionID}}</td>
+			<td>{{.TransactionID}}</td>
+			<td>{{.ErrorStr}}</td>
 		</tr>
 	`))
 )

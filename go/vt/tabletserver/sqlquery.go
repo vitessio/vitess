@@ -268,9 +268,6 @@ func (sq *SqlQuery) Rollback(context context.Context, session *proto.Session) (e
 // handleExecError handles panics during query execution and sets
 // the supplied error return value.
 func handleExecError(query *proto.Query, err *error, logStats *SQLQueryStats) {
-	if logStats != nil {
-		logStats.Send()
-	}
 	if x := recover(); x != nil {
 		terr, ok := x.(*TabletError)
 		if !ok {
@@ -290,6 +287,10 @@ func handleExecError(query *proto.Query, err *error, logStats *SQLQueryStats) {
 		} else {
 			log.Warningf("%v: %v", terr, query)
 		}
+	}
+	if logStats != nil {
+		logStats.Error = *err
+		logStats.Send()
 	}
 }
 
