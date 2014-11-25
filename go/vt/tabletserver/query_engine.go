@@ -59,6 +59,7 @@ type QueryEngine struct {
 	spotCheckFreq    sync2.AtomicInt64
 	strictMode       sync2.AtomicInt64
 	maxResultSize    sync2.AtomicInt64
+	maxDMLRows       sync2.AtomicInt64
 	streamBufferSize sync2.AtomicInt64
 	strictTableAcl   bool
 
@@ -161,6 +162,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 	}
 	qe.strictTableAcl = config.StrictTableAcl
 	qe.maxResultSize = sync2.AtomicInt64(config.MaxResultSize)
+	qe.maxDMLRows = sync2.AtomicInt64(config.MaxDMLRows)
 	qe.streamBufferSize = sync2.AtomicInt64(config.StreamBufferSize)
 
 	// loggers
@@ -168,6 +170,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 
 	// Stats
 	stats.Publish("MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
+	stats.Publish("MaxDMLRows", stats.IntFunc(qe.maxDMLRows.Get))
 	stats.Publish("StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
 	stats.Publish("QueryTimeout", stats.DurationFunc(qe.queryTimeout.Get))
 	queryStats = stats.NewTimings("Queries")
