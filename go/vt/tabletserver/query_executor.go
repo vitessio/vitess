@@ -427,19 +427,19 @@ func (qre *QueryExecutor) execSet() (result *mproto.QueryResult) {
 	case "vt_max_result_size":
 		val := getInt64(qre.plan.SetValue)
 		if val < 1 {
-			panic(NewTabletError(FAIL, "max result size out of range %v", val))
+			panic(NewTabletError(FAIL, "vt_max_result_size out of range %v", val))
 		}
 		qre.qe.maxResultSize.Set(val)
 	case "vt_max_dml_rows":
 		val := getInt64(qre.plan.SetValue)
 		if val < 1 {
-			panic(NewTabletError(FAIL, "max result size out of range %v", val))
+			panic(NewTabletError(FAIL, "vt_max_dml_rows out of range %v", val))
 		}
 		qre.qe.maxDMLRows.Set(val)
 	case "vt_stream_buffer_size":
 		val := getInt64(qre.plan.SetValue)
 		if val < 1024 {
-			panic(NewTabletError(FAIL, "stream buffer size out of range %v", val))
+			panic(NewTabletError(FAIL, "vt_stream_buffer_size out of range %v", val))
 		}
 		qre.qe.streamBufferSize.Set(val)
 	case "vt_query_timeout":
