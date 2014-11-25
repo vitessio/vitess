@@ -379,12 +379,27 @@ func (qre *QueryExecutor) execDMLPKRows(conn dbconnpool.PoolConnection, pkRows [
 		panic(err)
 	}
 
-	bsc := buildStreamComment(qre.plan.TableInfo, pkRows, secondaryList)
-	qre.bindVars["#pk"] = sqlparser.TupleEqualityList{
-		Columns: qre.plan.TableInfo.Indexes[0].Columns,
-		Rows:    pkRows,
+	result = &mproto.QueryResult{}
+	maxRows := int(qre.qe.maxDMLRows.Get())
+	for i := 0; i < len(pkRows); i += maxRows {
+		end := i + maxRows
+		if end >= len(pkRows) {
+			end = len(pkRows)
+		}
+		pkRows := pkRows[i:end]
+		secondaryList := secondaryList
+		if secondaryList != nil {
+			secondaryList = secondaryList[i:end]
+		}
+		bsc := buildStreamComment(qre.plan.TableInfo, pkRows, secondaryList)
+		qre.bindVars["#pk"] = sqlparser.TupleEqualityList{
+			Columns: qre.plan.TableInfo.Indexes[0].Columns,
+			Rows:    pkRows,
+		}
+		r := qre.directFetch(conn, qre.plan.OuterQuery, qre.bindVars, bsc)
+		// DMLs should only return RowsAffected.
+		result.RowsAffected += r.RowsAffected
 	}
-	result = qre.directFetch(conn, qre.plan.OuterQuery, qre.bindVars, bsc)
 	if invalidator == nil {
 		return result
 	}
@@ -412,13 +427,19 @@ func (qre *QueryExecutor) execSet() (result *mproto.QueryResult) {
 	case "vt_max_result_size":
 		val := getInt64(qre.plan.SetValue)
 		if val < 1 {
-			panic(NewTabletError(FAIL, "max result size out of range %v", val))
+			panic(NewTabletError(FAIL, "vt_max_result_size out of range %v", val))
 		}
 		qre.qe.maxResultSize.Set(val)
+	case "vt_max_dml_rows":
+		val := getInt64(qre.plan.SetValue)
+		if val < 1 {
+			panic(NewTabletError(FAIL, "vt_max_dml_rows out of range %v", val))
+		}
+		qre.qe.maxDMLRows.Set(val)
 	case "vt_stream_buffer_size":
 		val := getInt64(qre.plan.SetValue)
 		if val < 1024 {
-			panic(NewTabletError(FAIL, "stream buffer size out of range %v", val))
+			panic(NewTabletError(FAIL, "vt_stream_buffer_size out of range %v", val))
 		}
 		qre.qe.streamBufferSize.Set(val)
 	case "vt_query_timeout":

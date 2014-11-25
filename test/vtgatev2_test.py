@@ -899,6 +899,9 @@ class VTGateTestLogger(vtdb_logger.VtdbLogger):
     return self._integrity_error_count
 
 
+DML_KEYWORDS = ['insert', 'update', 'delete']
+
+
 class TestExceptionLogging(unittest.TestCase):
   def setUp(self):
     self.shard_index = 1
@@ -936,9 +939,13 @@ class TestExceptionLogging(unittest.TestCase):
         keyspace_ids=[pack_kid(keyspace_id)])
       vtgate_conn.commit()
     except dbexceptions.IntegrityError as e:
-      pass
+      parts = str(e).split(',')
+      exc_msg = parts[0]
+      for kw in DML_KEYWORDS:
+        if kw in exc_msg:
+          self.fail("IntegrityError shouldn't contain the query %s" % exc_msg)
     except Exception as e:
-      self.fail("Expected IntegrityError to be raised")
+      self.fail("Expected IntegrityError to be raised, raised %s" % str(e))
     finally:
       vtgate_conn.rollback()
     # The underlying execute is expected to catch and log the integrity error.

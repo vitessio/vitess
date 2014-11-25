@@ -479,6 +479,8 @@ class TestFailures(unittest.TestCase):
     master_conn._execute("delete from vt_insert_test", {})
     master_conn.commit()
 
+DML_KEYWORDS = ['insert', 'update', 'delete']
+
 
 class TestExceptionLogging(unittest.TestCase):
   def setUp(self):
@@ -513,9 +515,13 @@ class TestExceptionLogging(unittest.TestCase):
         {'eid': 1, 'id': 1, 'keyspace_id':keyspace_id})
       master_conn.commit()
     except dbexceptions.IntegrityError as e:
-      pass
+      parts = str(e).split(',')
+      exc_msg = parts[0]
+      for kw in DML_KEYWORDS:
+        if kw in exc_msg:
+          self.fail("IntegrityError shouldn't contain the query %s" % exc_msg)
     except Exception as e:
-      self.fail("Expected IntegrityError to be raised")
+      self.fail("Expected IntegrityError to be raised, instead raised %s" % str(e))
     finally:
       master_conn.rollback()
     # The underlying execute is expected to catch and log the integrity error.
