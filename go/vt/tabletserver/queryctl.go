@@ -34,6 +34,7 @@ func init() {
 	flag.IntVar(&qsConfig.TransactionCap, "queryserver-config-transaction-cap", DefaultQsConfig.TransactionCap, "query server transaction cap")
 	flag.Float64Var(&qsConfig.TransactionTimeout, "queryserver-config-transaction-timeout", DefaultQsConfig.TransactionTimeout, "query server transaction timeout")
 	flag.IntVar(&qsConfig.MaxResultSize, "queryserver-config-max-result-size", DefaultQsConfig.MaxResultSize, "query server max result size")
+	flag.IntVar(&qsConfig.MaxDMLRows, "queryserver-config-max-dml-rows", DefaultQsConfig.MaxDMLRows, "query server max dml rows per statement")
 	flag.IntVar(&qsConfig.StreamBufferSize, "queryserver-config-stream-buffer-size", DefaultQsConfig.StreamBufferSize, "query server stream buffer size")
 	flag.IntVar(&qsConfig.QueryCacheSize, "queryserver-config-query-cache-size", DefaultQsConfig.QueryCacheSize, "query server query cache size")
 	flag.Float64Var(&qsConfig.SchemaReloadTime, "queryserver-config-schema-reload-time", DefaultQsConfig.SchemaReloadTime, "query server schema reload time")
@@ -96,6 +97,7 @@ type Config struct {
 	TransactionCap     int
 	TransactionTimeout float64
 	MaxResultSize      int
+	MaxDMLRows         int
 	StreamBufferSize   int
 	QueryCacheSize     int
 	SchemaReloadTime   float64
@@ -122,6 +124,7 @@ var DefaultQsConfig = Config{
 	TransactionCap:     20,
 	TransactionTimeout: 30,
 	MaxResultSize:      10000,
+	MaxDMLRows:         500,
 	QueryCacheSize:     5000,
 	SchemaReloadTime:   30 * 60,
 	QueryTimeout:       0,
