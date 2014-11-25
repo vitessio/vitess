@@ -95,3 +95,10 @@ func vhash(shardKey uint64) key.KeyspaceId {
 	encrypter.CryptBlocks(hashed[:], keybytes[:])
 	return key.KeyspaceId(hashed[:])
 }
+
+func vunhash(k key.KeyspaceId) uint64 {
+	var unhashed [8]byte
+	decrypter := cipher.NewCBCDecrypter(block3DES, iv3DES)
+	decrypter.CryptBlocks(unhashed[:], []byte(k))
+	return binary.BigEndian.Uint64(unhashed[:])
+}

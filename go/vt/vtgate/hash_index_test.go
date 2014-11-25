@@ -6,6 +6,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -26,7 +27,11 @@ func TestConvert(t *testing.T) {
 		got := string(vhash(c.in))
 		want := c.out
 		if got != want {
-			t.Errorf("For %d: got: %#v, want %q", c.in, got, want)
+			t.Errorf("vhash(%d): %#v, want %q", c.in, got, want)
+		}
+		back := vunhash(key.KeyspaceId(got))
+		if back != c.in {
+			t.Errorf("vunhash(%q): %d, want %d", got, back, c.in)
 		}
 	}
 }
