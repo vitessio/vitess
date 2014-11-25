@@ -652,39 +652,6 @@ cases = [
       Case(sql='select * from vtocc_a where eid=2',
            result=[])]),
 
-  MultiCase(
-      'update many rows',
-      ['begin',
-      "insert into vtocc_a(eid, id, name, foo) values (3, 1, '', ''), (3, 2, '', ''), (3, 3, '', '')",
-      'commit',
-      'begin',
-      Case(sql="update vtocc_a set foo='fghi' where eid = 3",
-           rewritten=[
-               'select eid, id from vtocc_a where eid = 3 limit 10001 for update',
-               "update vtocc_a set foo = 'fghi' where (eid = 3 and id = 1) or (eid = 3 and id = 2) or (eid = 3 and id = 3) /* _stream vtocc_a (eid id ) (3 1 ) (3 2 ) (3 3 )"]),
-      'commit',
-      "set vt_max_dml_rows=2",
-      'begin',
-      Case(sql="update vtocc_a set eid=2 where eid = 3",
-           rewritten=[
-               'select eid, id from vtocc_a where eid = 3 limit 10001 for update',
-               "update vtocc_a set eid = 2 where (eid = 3 and id = 1) or (eid = 3 and id = 2) /* _stream vtocc_a (eid id ) (3 1 ) (3 2 ) (2 1 ) (2 2 )",
-               "update vtocc_a set eid = 2 where (eid = 3 and id = 3) /* _stream vtocc_a (eid id ) (3 3 ) (2 3 )"]),
-      Case(sql="update vtocc_a set foo='fghi' where eid = 2",
-           rewritten=[
-               'select eid, id from vtocc_a where eid = 2 limit 10001 for update',
-               "update vtocc_a set foo = 'fghi' where (eid = 2 and id = 1) or (eid = 2 and id = 2) /* _stream vtocc_a (eid id ) (2 1 ) (2 2 )",
-               "update vtocc_a set foo = 'fghi' where (eid = 2 and id = 3) /* _stream vtocc_a (eid id ) (2 3 )"]),
-      Case(sql="delete from vtocc_a where eid = 2",
-           rewritten=[
-               'select eid, id from vtocc_a where eid = 2 limit 10001 for update',
-               "delete from vtocc_a where (eid = 2 and id = 1) or (eid = 2 and id = 2) /* _stream vtocc_a (eid id ) (2 1 ) (2 2 )",
-               "delete from vtocc_a where (eid = 2 and id = 3) /* _stream vtocc_a (eid id ) (2 3 )"]),
-      'commit',
-      "set vt_max_dml_rows=500",
-      Case(sql='select * from vtocc_a where eid=2',
-           result=[])]),
-
   # data types test
   MultiCase(
       'integer data types',

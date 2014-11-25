@@ -311,6 +311,51 @@ class TestNocache(framework.TestCase):
     vend = self.env.debug_vars()
     self.assertEqual(vend.MaxResultSize, 10000)
 
+  def test_max_dml_rows(self):
+    self.env.conn.begin()
+    self.env.execute("insert into vtocc_a(eid, id, name, foo) values (3, 1, '', ''), (3, 2, '', ''), (3, 3, '', '')")
+    self.env.conn.commit()
+
+    # Verify all three rows are updated in a single DML.
+    self.env.querylog.reset()
+    self.env.conn.begin()
+    self.env.execute("update vtocc_a set foo='fghi' where eid = 3")
+    self.env.conn.commit()
+    log = self.env.querylog.tailer.read()
+    self.assertContains(log, "update vtocc_a set foo = 'fghi' where (eid = 3 and id = 1) or (eid = 3 and id = 2) or (eid = 3 and id = 3) /* _stream vtocc_a (eid id ) (3 1 ) (3 2 ) (3 3 )")
+
+    # Verify that rows get split, and if pk changes, those values are also
+    # split correctly.
+    self.env.execute("set vt_max_dml_rows=2")
+    self.env.querylog.reset()
+    self.env.conn.begin()
+    self.env.execute("update vtocc_a set eid=2 where eid = 3")
+    self.env.conn.commit()
+    log = self.env.querylog.tailer.read()
+    self.assertContains(log, "update vtocc_a set eid = 2 where (eid = 3 and id = 1) or (eid = 3 and id = 2) /* _stream vtocc_a (eid id ) (3 1 ) (3 2 ) (2 1 ) (2 2 )")
+    self.assertContains(log, "update vtocc_a set eid = 2 where (eid = 3 and id = 3) /* _stream vtocc_a (eid id ) (3 3 ) (2 3 )")
+
+    # Verify that a normal update get split correctly.
+    self.env.querylog.reset()
+    self.env.conn.begin()
+    self.env.execute("update vtocc_a set foo='fghi' where eid = 2")
+    self.env.conn.commit()
+    log = self.env.querylog.tailer.read()
+    self.assertContains(log, "update vtocc_a set foo = 'fghi' where (eid = 2 and id = 1) or (eid = 2 and id = 2) /* _stream vtocc_a (eid id ) (2 1 ) (2 2 )")
+    self.assertContains(log, "update vtocc_a set foo = 'fghi' where (eid = 2 and id = 3) /* _stream vtocc_a (eid id ) (2 3 )")
+
+    # Verify that a delete get split correctly.
+    self.env.querylog.reset()
+    self.env.conn.begin()
+    self.env.execute("delete from vtocc_a where eid = 2")
+    self.env.conn.commit()
+    log = self.env.querylog.tailer.read()
+    self.assertContains(log, "delete from vtocc_a where (eid = 2 and id = 1) or (eid = 2 and id = 2) /* _stream vtocc_a (eid id ) (2 1 ) (2 2 )")
+    self.assertContains(log, "delete from vtocc_a where (eid = 2 and id = 3) /* _stream vtocc_a (eid id ) (2 3 )")
+
+    # Reset vt_max_dml_rows
+    self.env.execute("set vt_max_dml_rows=500")
+
   def test_query_timeout(self):
     vstart = self.env.debug_vars()
     conn = tablet_conn.connect(self.env.address, '', 'test_keyspace', '0', 5, user='youtube-dev-dedicated', password='vtpass')
