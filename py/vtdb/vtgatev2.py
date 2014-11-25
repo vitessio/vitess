@@ -59,7 +59,7 @@ def handle_app_error(exc_args):
     if mysql_errno == 1062:
       parts = _errno_pattern.split(msg)
       pruned_msg = msg[:msg.find(parts[2])]
-      new_args = (pruned_msg,) + exc_args[1:]
+      new_args = (pruned_msg,) + tuple(exc_args[1:])
       return dbexceptions.IntegrityError(new_args)
   return dbexceptions.DatabaseError(exc_args)
 
