@@ -47,8 +47,11 @@ type resourceWrapper struct {
 }
 
 // NewResourcePool creates a new ResourcePool pool.
-// capacity is the initial capacity of the pool.
-// maxCap is the maximum capacity.
+// capacity is the number of active resources in the pool:
+// there can be up to 'capacity' of these at a given time.
+// maxCap specifies the extent to which the pool can be resized
+// in the future through the SetCapacity function.
+// You cannot resize the pool beyond maxCap.
 // If a resource is unused beyond idleTimeout, it's discarded.
 // An idleTimeout of 0 means that there is no timeout.
 func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Duration) *ResourcePool {
