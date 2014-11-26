@@ -76,7 +76,6 @@ type SqlQuery struct {
 	qe        *QueryEngine
 	sessionId int64
 	dbconfig  *dbconfigs.DBConfig
-	mysqld    *mysqlctl.Mysqld
 }
 
 // NewSqlQuery creates an instance of SqlQuery. Only one instance
@@ -109,7 +108,7 @@ func (sq *SqlQuery) setState(state int64) {
 // If waitForMysql is set to true, allowQueries will not return
 // until it's able to connect to mysql.
 // No other operations are allowed when allowQueries is running.
-func (sq *SqlQuery) allowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules, mysqld *mysqlctl.Mysqld, waitForMysql bool) (err error) {
+func (sq *SqlQuery) allowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, qrs *QueryRules, mysqld *mysqlctl.Mysqld, waitForMysql bool) (err error) {
 	sq.mu.Lock()
 	defer sq.mu.Unlock()
 	if sq.state.Get() != NOT_SERVING {
@@ -122,7 +121,7 @@ func (sq *SqlQuery) allowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides [
 	if waitForMysql {
 		waitTime := time.Second
 		for {
-			c, err := dbconnpool.NewDBConnection(&dbconfig.ConnectionParams, mysqlStats)
+			c, err := dbconnpool.NewDBConnection(&dbconfigs.App.ConnectionParams, mysqlStats)
 			if err == nil {
 				c.Close()
 				break
@@ -147,9 +146,8 @@ func (sq *SqlQuery) allowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides [
 		sq.setState(SERVING)
 	}()
 
-	sq.qe.Open(dbconfig, schemaOverrides, qrs, mysqld)
-	sq.dbconfig = dbconfig
-	sq.mysqld = mysqld
+	sq.qe.Open(dbconfigs, schemaOverrides, qrs, mysqld)
+	sq.dbconfig = &dbconfigs.App
 	sq.sessionId = Rand()
 	log.Infof("Session id: %d", sq.sessionId)
 	return nil
