@@ -14,7 +14,7 @@ var (
 	}
 	idx2 = map[string]IndexFormal{
 		"idx2": {
-			Type: Lookup,
+			Type: LookupIndex,
 		},
 	}
 	t1 = map[string]TableFormal{

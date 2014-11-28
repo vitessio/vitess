@@ -20,7 +20,7 @@ const (
 // Index types.
 const (
 	ShardKey = iota
-	Lookup
+	LookupIndex
 )
 
 // Schema represents the denormalized version of SchemaFormal,
@@ -50,7 +50,7 @@ type Keyspace struct {
 
 // Index contains the index info for each index of a table.
 type Index struct {
-	// Type is ShardKey or Lookup.
+	// Type is ShardKey or LookupIndex.
 	Type      int
 	Column    string
 	Name      string
@@ -139,7 +139,7 @@ type KeyspaceFormal struct {
 // IndexFormal is the info for each index as loaded from
 // the source.
 type IndexFormal struct {
-	// Type is ShardKey or Lookup.
+	// Type is ShardKey or LookupIndex.
 	Type      int
 	From, To  string
 	Owner     string
