@@ -4,6 +4,7 @@
 
 package vtgate
 
+/*
 import (
 	"path"
 	"testing"
@@ -81,3 +82,4 @@ func locateFile(name string) string {
 	}
 	return testfiles.Locate("vtgate/" + name)
 }
+*/

@@ -4,6 +4,7 @@
 
 package planbuilder
 
+/*
 import "github.com/youtube/vitess/go/vt/sqlparser"
 
 func buildUpdatePlan(upd *sqlparser.Update, schema *Schema) *Plan {
@@ -12,7 +13,7 @@ func buildUpdatePlan(upd *sqlparser.Update, schema *Schema) *Plan {
 		Rewritten: generateQuery(upd),
 	}
 	tablename := sqlparser.GetTableName(upd.Table)
-	plan.Table, plan.Reason = schema.LookupTable(tablename)
+	plan.Table, plan.Reason = schema.FindTable(tablename)
 	if plan.Reason != "" {
 		return plan
 	}
@@ -83,3 +84,4 @@ func buildDeletePlan(del *sqlparser.Delete, schema *Schema) *Plan {
 	}
 	return plan
 }
+*/

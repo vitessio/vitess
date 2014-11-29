@@ -4,6 +4,7 @@
 
 package planbuilder
 
+/*
 import (
 	"fmt"
 
@@ -16,7 +17,7 @@ func buildInsertPlan(ins *sqlparser.Insert, schema *Schema) *Plan {
 		Rewritten: generateQuery(ins),
 	}
 	tablename := sqlparser.GetTableName(ins.Table)
-	plan.Table, plan.Reason = schema.LookupTable(tablename)
+	plan.Table, plan.Reason = schema.FindTable(tablename)
 	if plan.Reason != "" {
 		return plan
 	}
@@ -95,3 +96,4 @@ func buildIndexPlan(ins *sqlparser.Insert, tablename string, index *Index, plan 
 	}
 	return nil
 }
+*/

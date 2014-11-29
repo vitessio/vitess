@@ -4,6 +4,7 @@
 
 package planbuilder
 
+/*
 import "github.com/youtube/vitess/go/vt/sqlparser"
 
 func buildSelectPlan(sel *sqlparser.Select, schema *Schema) *Plan {
@@ -12,7 +13,7 @@ func buildSelectPlan(sel *sqlparser.Select, schema *Schema) *Plan {
 		Rewritten: generateQuery(sel),
 	}
 	tablename, _ := analyzeFrom(sel.From)
-	plan.Table, plan.Reason = schema.LookupTable(tablename)
+	plan.Table, plan.Reason = schema.FindTable(tablename)
 	if plan.Reason != "" {
 		return plan
 	}
@@ -113,3 +114,4 @@ func exprHasAggregates(node sqlparser.Expr) bool {
 		panic("unexpected")
 	}
 }
+*/

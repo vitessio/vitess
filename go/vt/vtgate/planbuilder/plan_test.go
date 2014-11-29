@@ -4,6 +4,7 @@
 
 package planbuilder
 
+/*
 import (
 	"bufio"
 	"bytes"
@@ -154,3 +155,4 @@ func locateFile(name string) string {
 	}
 	return testfiles.Locate("vtgate/" + name)
 }
+*/

@@ -37,7 +37,7 @@ type Plan struct {
 	Table     *Table
 	Original  string
 	Rewritten string
-	Index     *Index
+	Vindex    Vindex
 	Values    interface{}
 }
 
@@ -103,15 +103,15 @@ func BuildPlan(query string, schema *Schema) *Plan {
 		Original: query,
 	}
 	var plan *Plan
-	switch statement := statement.(type) {
+	switch statement.(type) {
 	case *sqlparser.Select:
-		plan = buildSelectPlan(statement, schema)
+		//plan = buildSelectPlan(statement, schema)
 	case *sqlparser.Insert:
-		plan = buildInsertPlan(statement, schema)
+		//plan = buildInsertPlan(statement, schema)
 	case *sqlparser.Update:
-		plan = buildUpdatePlan(statement, schema)
+		//plan = buildUpdatePlan(statement, schema)
 	case *sqlparser.Delete:
-		plan = buildDeletePlan(statement, schema)
+		//plan = buildDeletePlan(statement, schema)
 	case *sqlparser.Union, *sqlparser.Set, *sqlparser.DDL, *sqlparser.Other:
 		return noplan
 	default:

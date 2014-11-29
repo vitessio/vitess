@@ -4,6 +4,7 @@
 
 package planbuilder
 
+/*
 import "github.com/youtube/vitess/go/vt/sqlparser"
 
 // getWhereRouting fills the plan fields for the where clause of a SELECT
@@ -150,3 +151,4 @@ func nameMatch(node sqlparser.ValExpr, col string) bool {
 	}
 	return true
 }
+*/

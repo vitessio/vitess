@@ -109,3 +109,11 @@ func Register(vindexType string, newVindexFunc NewVindexFunc) {
 	}
 	registry[vindexType] = newVindexFunc
 }
+
+func createVindex(vindexType string, params map[string]interface{}) (Vindex, error) {
+	f, ok := registry[vindexType]
+	if !ok {
+		return nil, fmt.Errorf("vindexType %s not found", vindexType)
+	}
+	return f(params)
+}
