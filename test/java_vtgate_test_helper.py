@@ -96,7 +96,6 @@ def main():
   utils.add_options(parser)
   (options, args) = parser.parse_args()
   utils.set_options(options)
-  
   env = TestEnv(options)
   if args[0] == 'setup':
     env.set_up()
