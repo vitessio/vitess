@@ -109,7 +109,7 @@ public class GoRpcClient implements RpcClient {
 
   @Override
   public SplitQueryResponse splitQuery(SplitQueryRequest request) throws ConnectionException {
-    String callMethod = "VTGate.GetMRSplits";
+    String callMethod = "VTGate.SplitQuery";
     Response response = call(callMethod, Bsonify.splitQueryRequestToBson(request));
     return Bsonify.bsonToSplitQueryResponse((BSONObject) response.getReply());
   }

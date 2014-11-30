@@ -60,7 +60,10 @@ class TestEnv(object):
       utils.run_vtctl(['RebuildKeyspaceGraph', self.keyspace], auto_log=True)
       for t in self.tablets:
         t.create_db('vt_' + self.keyspace)
-        t.start_vttablet(wait_for_state=None)
+        t.start_vttablet(
+          wait_for_state=None,
+          extra_args=['-queryserver-config-schema-reload-time', '1'],
+        )
       for t in self.tablets:
         t.wait_for_vttablet_state('SERVING')
       for t in self.tablets:

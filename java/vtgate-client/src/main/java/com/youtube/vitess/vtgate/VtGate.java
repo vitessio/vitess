@@ -114,9 +114,9 @@ public class VtGate {
    * instances. Batch jobs or MapReduce jobs that needs to scan all rows can use these queries to
    * parallelize full table scans.
    */
-  public Map<Query, Long> splitQuery(String keyspace, String sql, int splitsPerShard)
+  public Map<Query, Long> splitQuery(String keyspace, String sql, int splitCount)
       throws ConnectionException, DatabaseException {
-    SplitQueryRequest req = new SplitQueryRequest(sql, keyspace, splitsPerShard);
+    SplitQueryRequest req = new SplitQueryRequest(sql, keyspace, splitCount);
     SplitQueryResponse response = client.splitQuery(req);
     if (response.getError() != null) {
       throw new DatabaseException(response.getError());
