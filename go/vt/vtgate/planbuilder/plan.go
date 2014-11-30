@@ -5,6 +5,7 @@
 package planbuilder
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -15,10 +16,8 @@ type PlanID int
 const (
 	NoPlan = PlanID(iota)
 	SelectUnsharded
-	SelectSingleShardKey
-	SelectMultiShardKey
-	SelectSingleLookup
-	SelectMultiLookup
+	SelectEqual
+	SelectIN
 	SelectScatter
 	UpdateUnsharded
 	UpdateSingleShardKey
@@ -37,7 +36,7 @@ type Plan struct {
 	Table     *Table
 	Original  string
 	Rewritten string
-	Vindex    Vindex
+	ColVindex *ColVindex
 	Values    interface{}
 }
 
@@ -45,14 +44,55 @@ func (pln *Plan) Size() int {
 	return 1
 }
 
+func (pln *Plan) MarshalJSON() ([]byte, error) {
+	var tname, vindexName, col string
+	if pln.Table != nil {
+		tname = pln.Table.Name
+	}
+	if pln.ColVindex != nil {
+		vindexName = pln.ColVindex.Name
+		col = pln.ColVindex.Col
+	}
+	marshalPlan := struct {
+		ID        PlanID
+		Reason    string
+		Table     string
+		Original  string
+		Rewritten string
+		Vindex    string
+		Col       string
+		Values    interface{}
+	}{
+		ID:        pln.ID,
+		Reason:    pln.Reason,
+		Table:     tname,
+		Original:  pln.Original,
+		Rewritten: pln.Rewritten,
+		Vindex:    vindexName,
+		Col:       col,
+		Values:    pln.Values,
+	}
+	return json.Marshal(marshalPlan)
+}
+
+// IsMulti returns true if the SELECT query can potentially
+// be sent to more than one shard.
+func (pln *Plan) IsMulti() bool {
+	if pln.ID == SelectIN || pln.ID == SelectScatter {
+		return true
+	}
+	if pln.ID == SelectEqual && !IsUnique(pln.ColVindex.Vindex) {
+		return true
+	}
+	return false
+}
+
 // Must exactly match order of plan constants.
-var planName = []string{
+var planName = [NumPlans]string{
 	"NoPlan",
 	"SelectUnsharded",
-	"SelectSingleShardKey",
-	"SelectMultiShardKey",
-	"SelectSingleLookup",
-	"SelectMultiLookup",
+	"SelectEqual",
+	"SelectIN",
 	"SelectScatter",
 	"UpdateUnsharded",
 	"UpdateSingleShardKey",
@@ -80,10 +120,6 @@ func PlanByName(s string) (id PlanID, ok bool) {
 	return NumPlans, false
 }
 
-func (id PlanID) IsMulti() bool {
-	return id == SelectMultiShardKey || id == SelectMultiLookup || id == SelectScatter
-}
-
 func (id PlanID) MarshalJSON() ([]byte, error) {
 	return ([]byte)(fmt.Sprintf("\"%s\"", id.String())), nil
 }
@@ -103,9 +139,9 @@ func BuildPlan(query string, schema *Schema) *Plan {
 		Original: query,
 	}
 	var plan *Plan
-	switch statement.(type) {
+	switch statement := statement.(type) {
 	case *sqlparser.Select:
-		//plan = buildSelectPlan(statement, schema)
+		plan = buildSelectPlan(statement, schema)
 	case *sqlparser.Insert:
 		//plan = buildInsertPlan(statement, schema)
 	case *sqlparser.Update:

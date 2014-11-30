@@ -42,6 +42,12 @@ type NonUnique interface {
 	Map(ids []interface{}) ([][]key.KeyspaceId, error)
 }
 
+// IsUnique returns true if the Vindex is Unique.
+func IsUnique(v Vindex) bool {
+	_, ok := v.(Unique)
+	return ok
+}
+
 // A Reversible vindex is one that can perform a
 // reverse lookup from a keyspace id to an id. This
 // is optional. If present, VTGate can use it to

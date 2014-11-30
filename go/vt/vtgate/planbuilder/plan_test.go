@@ -4,7 +4,6 @@
 
 package planbuilder
 
-/*
 import (
 	"bufio"
 	"bytes"
@@ -18,7 +17,47 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/testfiles"
+	"github.com/youtube/vitess/go/vt/key"
 )
+
+// hashIndex satisfies Functional, Unique.
+type hashIndex struct{}
+
+func (_ *hashIndex) Cost() int                                            { return 1 }
+func (_ *hashIndex) Verify(_ interface{}, _ key.KeyspaceId) (bool, error) { return false, nil }
+func (_ *hashIndex) Map(_ []interface{}) ([]key.KeyspaceId, error)        { return nil, nil }
+func (_ *hashIndex) Create(_ interface{}) error                           { return nil }
+func (_ *hashIndex) Delete(_ interface{}, _ key.KeyspaceId) error         { return nil }
+
+func newHashIndex(_ map[string]interface{}) (Vindex, error) { return &hashIndex{}, nil }
+
+// lookupIndex satisfies Lookup, Unique.
+type lookupIndex struct{}
+
+func (_ *lookupIndex) Cost() int                                            { return 2 }
+func (_ *lookupIndex) Verify(_ interface{}, _ key.KeyspaceId) (bool, error) { return false, nil }
+func (_ *lookupIndex) Map(_ []interface{}) ([]key.KeyspaceId, error)        { return nil, nil }
+func (_ *lookupIndex) Create(_ interface{}, _ key.KeyspaceId) error         { return nil }
+func (_ *lookupIndex) Delete(_ interface{}, _ key.KeyspaceId) error         { return nil }
+
+func newLookupIndex(_ map[string]interface{}) (Vindex, error) { return &lookupIndex{}, nil }
+
+// multiIndex satisfies Lookup, NonUnique.
+type multiIndex struct{}
+
+func (_ *multiIndex) Cost() int                                            { return 3 }
+func (_ *multiIndex) Verify(_ interface{}, _ key.KeyspaceId) (bool, error) { return false, nil }
+func (_ *multiIndex) Map(_ []interface{}) ([][]key.KeyspaceId, error)      { return nil, nil }
+func (_ *multiIndex) Create(_ interface{}, _ key.KeyspaceId) error         { return nil }
+func (_ *multiIndex) Delete(_ interface{}, _ key.KeyspaceId) error         { return nil }
+
+func newMultiIndex(_ map[string]interface{}) (Vindex, error) { return &multiIndex{}, nil }
+
+func init() {
+	Register("hash", newHashIndex)
+	Register("lookup", newLookupIndex)
+	Register("multi", newMultiIndex)
+}
 
 func TestPlanName(t *testing.T) {
 	id, ok := PlanByName("SelectUnsharded")
@@ -44,8 +83,8 @@ func TestPlan(t *testing.T) {
 		t.Fatal(err)
 	}
 	testFile(t, "select_cases.txt", schema)
-	testFile(t, "dml_cases.txt", schema)
-	testFile(t, "insert_cases.txt", schema)
+	//testFile(t, "dml_cases.txt", schema)
+	//testFile(t, "insert_cases.txt", schema)
 }
 
 func testFile(t *testing.T, filename string, schema *Schema) {
@@ -53,7 +92,7 @@ func testFile(t *testing.T, filename string, schema *Schema) {
 		plan := BuildPlan(tcase.input, schema)
 		if plan.ID == NoPlan {
 			plan.Rewritten = ""
-			plan.Index = nil
+			plan.ColVindex = nil
 			plan.Values = nil
 		}
 		bout, err := json.Marshal(plan)
@@ -155,4 +194,3 @@ func locateFile(name string) string {
 	}
 	return testfiles.Locate("vtgate/" + name)
 }
-*/

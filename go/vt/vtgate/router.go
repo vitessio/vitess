@@ -39,8 +39,6 @@ func NewRouter(serv SrvTopoServer, cell string, schema *planbuilder.Schema, stat
 func (rtr *Router) Execute(context context.Context, query *proto.Query) (*mproto.QueryResult, error) {
 	plan := rtr.planner.GetPlan(string(query.Sql))
 	switch plan.ID {
-	case planbuilder.SelectSingleShardKey:
-		return rtr.execSelectSingleShardKey(context, query, plan)
 	default:
 		return nil, fmt.Errorf("plan unimplemented")
 	}

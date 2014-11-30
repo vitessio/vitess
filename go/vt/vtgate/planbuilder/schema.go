@@ -7,6 +7,7 @@ package planbuilder
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/youtube/vitess/go/jscfg"
 )
@@ -27,9 +28,10 @@ func (s *Schema) String() string {
 
 // Table represnts a table in Schema.
 type Table struct {
-	Name     string
-	Keyspace *Keyspace
-	Vindexes []*ColumnVindex
+	Name        string
+	Keyspace    *Keyspace
+	ColVindexes []*ColVindex
+	Ordered     []*ColVindex
 }
 
 // Keyspace contains the keyspcae info for each Table.
@@ -39,8 +41,8 @@ type Keyspace struct {
 }
 
 // Index contains the index info for each index of a table.
-type ColumnVindex struct {
-	Column string
+type ColVindex struct {
+	Col    string
 	Type   string
 	Name   string
 	Owned  bool
@@ -77,13 +79,13 @@ func BuildSchema(source *SchemaFormal) (schema *Schema, err error) {
 				Name:     tname,
 				Keyspace: keyspace,
 			}
-			for i, ind := range table.ColumnVindexes {
+			for i, ind := range table.ColVindexes {
 				vindexInfo, ok := ks.Vindexes[ind.Name]
 				if !ok {
 					return nil, fmt.Errorf("index %s not found for table %s", ind.Name, tname)
 				}
-				columnVindex := &ColumnVindex{
-					Column: ind.Column,
+				columnVindex := &ColVindex{
+					Col:    ind.Col,
 					Type:   vindexInfo.Type,
 					Name:   ind.Name,
 					Owned:  vindexInfo.Owner == tname,
@@ -107,8 +109,9 @@ func BuildSchema(source *SchemaFormal) (schema *Schema, err error) {
 						}
 					}
 				}
-				t.Vindexes = append(t.Vindexes, columnVindex)
+				t.ColVindexes = append(t.ColVindexes, columnVindex)
 			}
+			t.Ordered = colVindexSorted(t.ColVindexes)
 			schema.Tables[tname] = t
 		}
 	}
@@ -126,6 +129,22 @@ func (schema *Schema) FindTable(tablename string) (table *Table, reason string) 
 		return nil, fmt.Sprintf("table %s not found", tablename)
 	}
 	return table, ""
+}
+
+// ByCost provides the interface needed for ColVindexes to
+// be sorted by cost order.
+type ByCost []*ColVindex
+
+func (bc ByCost) Len() int           { return len(bc) }
+func (bc ByCost) Swap(i, j int)      { bc[i], bc[j] = bc[j], bc[i] }
+func (bc ByCost) Less(i, j int) bool { return bc[i].Vindex.Cost() < bc[j].Vindex.Cost() }
+
+func colVindexSorted(cvs []*ColVindex) (sorted []*ColVindex) {
+	for _, cv := range cvs {
+		sorted = append(sorted, cv)
+	}
+	sort.Sort(ByCost(sorted))
+	return sorted
 }
 
 // SchemaFormal is the formal representation of the schema
@@ -153,14 +172,14 @@ type VindexFormal struct {
 // TableFormal is the info for each table as loaded from
 // the source.
 type TableFormal struct {
-	ColumnVindexes []ColumnVindexFormal
+	ColVindexes []ColVindexFormal
 }
 
-// ColumnVindexFormal is the info for each indexed column
+// ColVindexFormal is the info for each indexed column
 // of a table as loaded from the source.
-type ColumnVindexFormal struct {
-	Column string
-	Name   string
+type ColVindexFormal struct {
+	Col  string
+	Name string
 }
 
 // LoadSchemaJSON loads the formal representation of a schema

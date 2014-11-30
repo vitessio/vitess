@@ -4,7 +4,6 @@
 
 package planbuilder
 
-/*
 import "github.com/youtube/vitess/go/vt/sqlparser"
 
 func buildSelectPlan(sel *sqlparser.Select, schema *Schema) *Plan {
@@ -17,19 +16,19 @@ func buildSelectPlan(sel *sqlparser.Select, schema *Schema) *Plan {
 	if plan.Reason != "" {
 		return plan
 	}
-	if plan.Table.Keyspace.ShardingScheme == Unsharded {
+	if !plan.Table.Keyspace.Sharded {
 		plan.ID = SelectUnsharded
 		return plan
 	}
 
 	getWhereRouting(sel.Where, plan)
-	if plan.ID.IsMulti() {
-		if hasAggregates(sel.SelectExprs) || sel.Distinct != "" || sel.GroupBy != nil || sel.Having != nil || sel.OrderBy != nil || sel.Limit != nil {
+	if plan.IsMulti() {
+		if hasPostProcessing(sel) {
 			plan.ID = NoPlan
 			plan.Reason = "too complex"
 			return plan
 		}
-		// The where clause changes if it's Multi.
+		// The where clause might have changed.
 		plan.Rewritten = generateQuery(sel)
 	}
 	return plan
@@ -114,4 +113,7 @@ func exprHasAggregates(node sqlparser.Expr) bool {
 		panic("unexpected")
 	}
 }
-*/
+
+func hasPostProcessing(sel *sqlparser.Select) bool {
+	return hasAggregates(sel.SelectExprs) || sel.Distinct != "" || sel.GroupBy != nil || sel.Having != nil || sel.OrderBy != nil || sel.Limit != nil
+}

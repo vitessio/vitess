@@ -16,15 +16,11 @@ type stFU struct {
 	Params map[string]interface{}
 }
 
-func (_ *stFU) Cost() int { return 0 }
-
+func (_ *stFU) Cost() int                                            { return 1 }
 func (_ *stFU) Verify(_ interface{}, _ key.KeyspaceId) (bool, error) { return false, nil }
-
-func (_ *stFU) Map(_ []interface{}) ([]key.KeyspaceId, error) { return nil, nil }
-
-func (_ *stFU) Create(_ interface{}) error { return nil }
-
-func (_ *stFU) Delete(_ interface{}, _ key.KeyspaceId) error { return nil }
+func (_ *stFU) Map(_ []interface{}) ([]key.KeyspaceId, error)        { return nil, nil }
+func (_ *stFU) Create(_ interface{}) error                           { return nil }
+func (_ *stFU) Delete(_ interface{}, _ key.KeyspaceId) error         { return nil }
 
 func NewSTFU(params map[string]interface{}) (Vindex, error) {
 	return &stFU{Params: params}, nil
@@ -35,13 +31,10 @@ type stF struct {
 	Params map[string]interface{}
 }
 
-func (_ *stF) Cost() int { return 0 }
-
+func (_ *stF) Cost() int                                            { return 0 }
 func (_ *stF) Verify(_ interface{}, _ key.KeyspaceId) (bool, error) { return false, nil }
-
-func (_ *stF) Create(_ interface{}) error { return nil }
-
-func (_ *stF) Delete(_ interface{}, _ key.KeyspaceId) error { return nil }
+func (_ *stF) Create(_ interface{}) error                           { return nil }
+func (_ *stF) Delete(_ interface{}, _ key.KeyspaceId) error         { return nil }
 
 func NewSTF(params map[string]interface{}) (Vindex, error) {
 	return &stF{Params: params}, nil
@@ -52,15 +45,11 @@ type stLN struct {
 	Params map[string]interface{}
 }
 
-func (_ *stLN) Cost() int { return 0 }
-
+func (_ *stLN) Cost() int                                            { return 0 }
 func (_ *stLN) Verify(_ interface{}, _ key.KeyspaceId) (bool, error) { return false, nil }
-
-func (_ *stLN) Map(_ []interface{}) ([][]key.KeyspaceId, error) { return nil, nil }
-
-func (_ *stLN) Create(_ interface{}, _ key.KeyspaceId) error { return nil }
-
-func (_ *stLN) Delete(_ interface{}, _ key.KeyspaceId) error { return nil }
+func (_ *stLN) Map(_ []interface{}) ([][]key.KeyspaceId, error)      { return nil, nil }
+func (_ *stLN) Create(_ interface{}, _ key.KeyspaceId) error         { return nil }
+func (_ *stLN) Delete(_ interface{}, _ key.KeyspaceId) error         { return nil }
 
 func NewSTLN(params map[string]interface{}) (Vindex, error) {
 	return &stLN{Params: params}, nil
@@ -71,15 +60,11 @@ type stLU struct {
 	Params map[string]interface{}
 }
 
-func (_ *stLU) Cost() int { return 0 }
-
+func (_ *stLU) Cost() int                                            { return 2 }
 func (_ *stLU) Verify(_ interface{}, _ key.KeyspaceId) (bool, error) { return false, nil }
-
-func (_ *stLU) Map(_ []interface{}) ([]key.KeyspaceId, error) { return nil, nil }
-
-func (_ *stLU) Create(_ interface{}, _ key.KeyspaceId) error { return nil }
-
-func (_ *stLU) Delete(_ interface{}, _ key.KeyspaceId) error { return nil }
+func (_ *stLU) Map(_ []interface{}) ([]key.KeyspaceId, error)        { return nil, nil }
+func (_ *stLU) Create(_ interface{}, _ key.KeyspaceId) error         { return nil }
+func (_ *stLU) Delete(_ interface{}, _ key.KeyspaceId) error         { return nil }
 
 func NewSTLU(params map[string]interface{}) (Vindex, error) {
 	return &stLU{Params: params}, nil
@@ -113,7 +98,7 @@ func TestUnshardedSchema(t *testing.T) {
 				Keyspace: &Keyspace{
 					Name: "unsharded",
 				},
-				Vindexes: nil,
+				ColVindexes: nil,
 			},
 		},
 	}
@@ -142,13 +127,13 @@ func TestShardedSchemaOwned(t *testing.T) {
 				},
 				Tables: map[string]TableFormal{
 					"t1": {
-						ColumnVindexes: []ColumnVindexFormal{
+						ColVindexes: []ColVindexFormal{
 							{
-								Column: "c1",
-								Name:   "stfu1",
+								Col:  "c1",
+								Name: "stfu1",
 							}, {
-								Column: "c2",
-								Name:   "stln1",
+								Col:  "c2",
+								Name: "stln1",
 							},
 						},
 					},
@@ -168,20 +153,20 @@ func TestShardedSchemaOwned(t *testing.T) {
 					Name:    "sharded",
 					Sharded: true,
 				},
-				Vindexes: []*ColumnVindex{
-					&ColumnVindex{
-						Column: "c1",
-						Type:   "stfu",
-						Name:   "stfu1",
-						Owned:  true,
+				ColVindexes: []*ColVindex{
+					&ColVindex{
+						Col:   "c1",
+						Type:  "stfu",
+						Name:  "stfu1",
+						Owned: true,
 						Vindex: &stFU{
 							Params: map[string]interface{}{
 								"stfu1": 1,
 							},
 						},
 					},
-					&ColumnVindex{
-						Column: "c2",
+					&ColVindex{
+						Col:    "c2",
 						Type:   "stln",
 						Name:   "stln1",
 						Owned:  true,
@@ -190,6 +175,10 @@ func TestShardedSchemaOwned(t *testing.T) {
 				},
 			},
 		},
+	}
+	want.Tables["t1"].Ordered = []*ColVindex{
+		want.Tables["t1"].ColVindexes[1],
+		want.Tables["t1"].ColVindexes[0],
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("BuildSchema:s\n%v, want\n%v", got, want)
@@ -213,13 +202,13 @@ func TestShardedSchemaNotOwned(t *testing.T) {
 				},
 				Tables: map[string]TableFormal{
 					"t1": {
-						ColumnVindexes: []ColumnVindexFormal{
+						ColVindexes: []ColVindexFormal{
 							{
-								Column: "c1",
-								Name:   "stlu1",
+								Col:  "c1",
+								Name: "stlu1",
 							}, {
-								Column: "c2",
-								Name:   "stfu1",
+								Col:  "c2",
+								Name: "stfu1",
 							},
 						},
 					},
@@ -239,16 +228,16 @@ func TestShardedSchemaNotOwned(t *testing.T) {
 					Name:    "sharded",
 					Sharded: true,
 				},
-				Vindexes: []*ColumnVindex{
-					&ColumnVindex{
-						Column: "c1",
+				ColVindexes: []*ColVindex{
+					&ColVindex{
+						Col:    "c1",
 						Type:   "stlu",
 						Name:   "stlu1",
 						Owned:  false,
 						Vindex: &stLU{},
 					},
-					&ColumnVindex{
-						Column: "c2",
+					&ColVindex{
+						Col:    "c2",
 						Type:   "stfu",
 						Name:   "stfu1",
 						Owned:  false,
@@ -257,6 +246,10 @@ func TestShardedSchemaNotOwned(t *testing.T) {
 				},
 			},
 		},
+	}
+	want.Tables["t1"].Ordered = []*ColVindex{
+		want.Tables["t1"].ColVindexes[1],
+		want.Tables["t1"].ColVindexes[0],
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("BuildSchema:s\n%v, want\n%v", got, want)
