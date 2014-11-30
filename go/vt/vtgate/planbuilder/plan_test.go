@@ -84,7 +84,7 @@ func TestPlan(t *testing.T) {
 	}
 	testFile(t, "select_cases.txt", schema)
 	testFile(t, "dml_cases.txt", schema)
-	//testFile(t, "insert_cases.txt", schema)
+	testFile(t, "insert_cases.txt", schema)
 }
 
 func testFile(t *testing.T, filename string, schema *Schema) {
@@ -103,7 +103,6 @@ func testFile(t *testing.T, filename string, schema *Schema) {
 		if out != tcase.output {
 			t.Error(fmt.Sprintf("File: %s, Line:%v\n%s\n%s", filename, tcase.lineno, tcase.output, out))
 		}
-		//fmt.Printf("%s\n%s\n\n", tcase.input, out)
 	}
 }
 
@@ -151,7 +150,6 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 			lineno++
 			input := string(binput)
 			if input == "" || input == "\n" || input[0] == '#' || strings.HasPrefix(input, "Length:") {
-				//fmt.Printf("%s\n", input)
 				continue
 			}
 			err = json.Unmarshal(binput, &input)

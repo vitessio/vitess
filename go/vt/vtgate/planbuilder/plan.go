@@ -139,7 +139,7 @@ func BuildPlan(query string, schema *Schema) *Plan {
 	case *sqlparser.Select:
 		plan = buildSelectPlan(statement, schema)
 	case *sqlparser.Insert:
-		//plan = buildInsertPlan(statement, schema)
+		plan = buildInsertPlan(statement, schema)
 	case *sqlparser.Update:
 		plan = buildUpdatePlan(statement, schema)
 	case *sqlparser.Delete:

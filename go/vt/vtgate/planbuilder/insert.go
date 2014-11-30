@@ -4,7 +4,6 @@
 
 package planbuilder
 
-/*
 import (
 	"fmt"
 
@@ -21,7 +20,7 @@ func buildInsertPlan(ins *sqlparser.Insert, schema *Schema) *Plan {
 	if plan.Reason != "" {
 		return plan
 	}
-	if plan.Table.Keyspace.ShardingScheme == Unsharded {
+	if !plan.Table.Keyspace.Sharded {
 		plan.ID = InsertUnsharded
 		return plan
 	}
@@ -54,36 +53,32 @@ func buildInsertPlan(ins *sqlparser.Insert, schema *Schema) *Plan {
 		plan.Reason = "column list doesn't match values"
 		return plan
 	}
-	indexes := schema.Tables[tablename].Indexes
+	colVindexes := schema.Tables[tablename].ColVindexes
 	plan.ID = InsertSharded
-	plan.Values = make([]interface{}, 0, len(indexes))
-	for _, index := range indexes {
+	plan.Values = make([]interface{}, 0, len(colVindexes))
+	for _, index := range colVindexes {
 		if err := buildIndexPlan(ins, tablename, index, plan); err != nil {
 			plan.ID = NoPlan
 			plan.Reason = err.Error()
 			return plan
 		}
 	}
-	// Query was rewritten
 	plan.Rewritten = generateQuery(ins)
 	return plan
 }
 
-func buildIndexPlan(ins *sqlparser.Insert, tablename string, index *Index, plan *Plan) error {
+func buildIndexPlan(ins *sqlparser.Insert, tablename string, colVindex *ColVindex, plan *Plan) error {
 	pos := -1
 	for i, column := range ins.Columns {
-		if index.Column == sqlparser.GetColName(column.(*sqlparser.NonStarExpr).Expr) {
+		if colVindex.Col == sqlparser.GetColName(column.(*sqlparser.NonStarExpr).Expr) {
 			pos = i
 			break
 		}
 	}
-	if pos == -1 && index.Owner == tablename && index.IsAutoInc {
-		pos = len(ins.Columns)
-		ins.Columns = append(ins.Columns, &sqlparser.NonStarExpr{Expr: &sqlparser.ColName{Name: []byte(index.Column)}})
-		ins.Rows.(sqlparser.Values)[0] = append(ins.Rows.(sqlparser.Values)[0].(sqlparser.ValTuple), &sqlparser.NullVal{})
-	}
 	if pos == -1 {
-		return fmt.Errorf("must supply value for indexed column: %s", index.Column)
+		pos = len(ins.Columns)
+		ins.Columns = append(ins.Columns, &sqlparser.NonStarExpr{Expr: &sqlparser.ColName{Name: []byte(colVindex.Col)}})
+		ins.Rows.(sqlparser.Values)[0] = append(ins.Rows.(sqlparser.Values)[0].(sqlparser.ValTuple), &sqlparser.NullVal{})
 	}
 	row := ins.Rows.(sqlparser.Values)[0].(sqlparser.ValTuple)
 	val, err := sqlparser.AsInterface(row[pos])
@@ -91,9 +86,6 @@ func buildIndexPlan(ins *sqlparser.Insert, tablename string, index *Index, plan 
 		return fmt.Errorf("could not convert val: %s, pos: %d", row[pos], pos)
 	}
 	plan.Values = append(plan.Values.([]interface{}), val)
-	if index.Owner == tablename && index.IsAutoInc {
-		row[pos] = sqlparser.ValArg([]byte(fmt.Sprintf(":_%s", index.Column)))
-	}
+	row[pos] = sqlparser.ValArg([]byte(fmt.Sprintf(":_%s", colVindex.Col)))
 	return nil
 }
-*/
