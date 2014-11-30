@@ -3,10 +3,11 @@
 {
   "ID":"NoPlan",
   "Reason":"table nouser not found",
-  "Table":null,
+  "Table": "",
   "Original":"update nouser set val = 1",
   "Rewritten":"",
-  "Index":null,
+  "Vindex": "",
+  "Col": "",
   "Values":null
 }
 
@@ -15,10 +16,11 @@
 {
   "ID":"NoPlan",
   "Reason":"table nouser not found",
-  "Table":null,
+  "Table": "",
   "Original":"delete from nouser",
   "Rewritten":"",
-  "Index":null,
+  "Vindex": "",
+  "Col": "",
   "Values":null
 }
 
@@ -30,7 +32,8 @@
   "Table":"main1",
   "Original": "update main1 set val = 1",
   "Rewritten":"update main1 set val = 1",
-  "Index":null,
+  "Vindex": "",
+  "Col": "",
   "Values":null
 }
 
@@ -42,7 +45,8 @@
   "Table":"main1",
   "Original": "delete from main1",
   "Rewritten":"delete from main1",
-  "Index":null,
+  "Vindex": "",
+  "Col": "",
   "Values":null
 }
 
@@ -54,7 +58,8 @@
   "Table": "user",
   "Original": "update user set val = 1",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -66,47 +71,34 @@
   "Table": "user",
   "Original": "delete from user",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
 # update by primary keyspace id
 "update user set val = 1 where id = 1"
 {
-  "ID": "UpdateSingleShardKey",
+  "ID": "UpdateEqual",
   "Reason": "",
   "Table": "user",
   "Original": "update user set val = 1 where id = 1",
   "Rewritten": "update user set val = 1 where id = 1",
-  "Index": {
-    "Type": 0,
-    "Column": "id",
-    "Name": "user_index",
-    "From": "",
-    "To": "",
-    "Owner": "user",
-    "IsAutoInc": true
-  },
+  "Vindex": "user_index",
+  "Col": "id",
   "Values": 1
 }
 
 # delete from by primary keyspace id
 "delete from user where id = 1"
 {
-  "ID": "DeleteSingleShardKey",
+  "ID": "DeleteEqual",
   "Reason": "",
   "Table": "user",
   "Original": "delete from user where id = 1",
   "Rewritten": "delete from user where id = 1",
-  "Index": {
-    "Type": 0,
-    "Column": "id",
-    "Name": "user_index",
-    "From": "",
-    "To": "",
-    "Owner": "user",
-    "IsAutoInc": true
-  },
+  "Vindex": "user_index",
+  "Col": "id",
   "Values": 1
 }
 
@@ -118,7 +110,8 @@
   "Table": "user",
   "Original": "update user set val = 1 where id in (1, 2)",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -130,7 +123,34 @@
   "Table": "user",
   "Original": "delete from user where id in (1, 2)",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
+  "Values": null
+}
+
+# update with non-unique key
+"update user set val = 1 where name = 'foo'"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "Table": "user",
+  "Original": "update user set val = 1 where name = 'foo'",
+  "Rewritten": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": null
+}
+
+# delete from with primary id through IN clause
+"delete from user where name = 'foo'"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "Table": "user",
+  "Original": "delete from user where name = 'foo'",
+  "Rewritten": "",
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -142,7 +162,8 @@
   "Table": "user",
   "Original": "update user set val = 1 where user_id = 1",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -154,47 +175,34 @@
   "Table": "user",
   "Original": "delete from user where user_id = 1",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
 # update by lookup
 "update music set val = 1 where id = 1"
 {
-  "ID": "UpdateSingleLookup",
+  "ID": "UpdateEqual",
   "Reason": "",
   "Table": "music",
   "Original": "update music set val = 1 where id = 1",
   "Rewritten": "update music set val = 1 where id = 1",
-  "Index": {
-    "Type": 1,
-    "Column": "id",
-    "Name": "music_user_map",
-    "From": "music_id",
-    "To": "user_id",
-    "Owner": "music",
-    "IsAutoInc": true
-  },
+  "Vindex": "music_user_map",
+  "Col": "id",
   "Values": 1
 }
 
 # delete from by lookup
 "delete from music where id = 1"
 {
-  "ID": "DeleteSingleLookup",
+  "ID": "DeleteEqual",
   "Reason": "",
   "Table": "music",
   "Original": "delete from music where id = 1",
   "Rewritten": "delete from music where id = 1",
-  "Index": {
-    "Type": 1,
-    "Column": "id",
-    "Name": "music_user_map",
-    "From": "music_id",
-    "To": "user_id",
-    "Owner": "music",
-    "IsAutoInc": true
-  },
+  "Vindex": "music_user_map",
+  "Col": "id",
   "Values": 1
 }
 
@@ -206,7 +214,8 @@
   "Table": "music",
   "Original": "update music set val = 1 where id in (1, 2)",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -218,7 +227,8 @@
   "Table": "music",
   "Original": "delete from music where id in (1, 2)",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -230,6 +240,7 @@
   "Table": "music",
   "Original": "update music set id = 1 where id = 1",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }

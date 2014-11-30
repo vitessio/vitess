@@ -83,7 +83,7 @@ func TestPlan(t *testing.T) {
 		t.Fatal(err)
 	}
 	testFile(t, "select_cases.txt", schema)
-	//testFile(t, "dml_cases.txt", schema)
+	testFile(t, "dml_cases.txt", schema)
 	//testFile(t, "insert_cases.txt", schema)
 }
 

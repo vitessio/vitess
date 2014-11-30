@@ -20,15 +20,28 @@ const (
 	SelectIN
 	SelectScatter
 	UpdateUnsharded
-	UpdateSingleShardKey
-	UpdateSingleLookup
+	UpdateEqual
 	DeleteUnsharded
-	DeleteSingleShardKey
-	DeleteSingleLookup
+	DeleteEqual
 	InsertUnsharded
 	InsertSharded
 	NumPlans
 )
+
+// Must exactly match order of plan constants.
+var planName = [NumPlans]string{
+	"NoPlan",
+	"SelectUnsharded",
+	"SelectEqual",
+	"SelectIN",
+	"SelectScatter",
+	"UpdateUnsharded",
+	"UpdateEqual",
+	"DeleteUnsharded",
+	"DeleteEqual",
+	"InsertUnsharded",
+	"InsertSharded",
+}
 
 type Plan struct {
 	ID        PlanID
@@ -87,23 +100,6 @@ func (pln *Plan) IsMulti() bool {
 	return false
 }
 
-// Must exactly match order of plan constants.
-var planName = [NumPlans]string{
-	"NoPlan",
-	"SelectUnsharded",
-	"SelectEqual",
-	"SelectIN",
-	"SelectScatter",
-	"UpdateUnsharded",
-	"UpdateSingleShardKey",
-	"UpdateSingleLookup",
-	"DeleteUnsharded",
-	"DeleteSingleShardKey",
-	"DeleteSingleLookup",
-	"InsertUnsharded",
-	"InsertSharded",
-}
-
 func (id PlanID) String() string {
 	if id < 0 || id >= NumPlans {
 		return ""
@@ -145,9 +141,9 @@ func BuildPlan(query string, schema *Schema) *Plan {
 	case *sqlparser.Insert:
 		//plan = buildInsertPlan(statement, schema)
 	case *sqlparser.Update:
-		//plan = buildUpdatePlan(statement, schema)
+		plan = buildUpdatePlan(statement, schema)
 	case *sqlparser.Delete:
-		//plan = buildDeletePlan(statement, schema)
+		plan = buildDeletePlan(statement, schema)
 	case *sqlparser.Union, *sqlparser.Set, *sqlparser.DDL, *sqlparser.Other:
 		return noplan
 	default:

@@ -21,7 +21,7 @@ func buildSelectPlan(sel *sqlparser.Select, schema *Schema) *Plan {
 		return plan
 	}
 
-	getWhereRouting(sel.Where, plan)
+	getWhereRouting(sel.Where, plan, false)
 	if plan.IsMulti() {
 		if hasPostProcessing(sel) {
 			plan.ID = NoPlan

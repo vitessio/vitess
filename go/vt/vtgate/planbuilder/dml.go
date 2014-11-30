@@ -4,7 +4,6 @@
 
 package planbuilder
 
-/*
 import "github.com/youtube/vitess/go/vt/sqlparser"
 
 func buildUpdatePlan(upd *sqlparser.Update, schema *Schema) *Plan {
@@ -17,38 +16,36 @@ func buildUpdatePlan(upd *sqlparser.Update, schema *Schema) *Plan {
 	if plan.Reason != "" {
 		return plan
 	}
-	if plan.Table.Keyspace.ShardingScheme == Unsharded {
+	if !plan.Table.Keyspace.Sharded {
 		plan.ID = UpdateUnsharded
 		return plan
 	}
 
-	getWhereRouting(upd.Where, plan)
+	getWhereRouting(upd.Where, plan, true)
 	switch plan.ID {
-	case SelectSingleShardKey:
-		plan.ID = UpdateSingleShardKey
-	case SelectSingleLookup:
-		plan.ID = UpdateSingleLookup
-	case SelectMultiShardKey, SelectMultiLookup, SelectScatter:
+	case SelectEqual:
+		plan.ID = UpdateEqual
+	case SelectIN, SelectScatter:
 		plan.ID = NoPlan
 		plan.Reason = "too complex"
 		return plan
 	default:
 		panic("unexpected")
 	}
-	if isIndexChanging(upd.Exprs, plan.Table.Indexes) {
+	if isIndexChanging(upd.Exprs, plan.Table.ColVindexes) {
 		plan.ID = NoPlan
 		plan.Reason = "index is changing"
 	}
 	return plan
 }
 
-func isIndexChanging(setClauses sqlparser.UpdateExprs, indexes []*Index) bool {
-	indexCols := make([]string, len(indexes))
-	for i, index := range indexes {
-		indexCols[i] = index.Column
+func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*ColVindex) bool {
+	vindexCols := make([]string, len(colVindexes))
+	for i, index := range colVindexes {
+		vindexCols[i] = index.Col
 	}
 	for _, assignment := range setClauses {
-		if sqlparser.StringIn(string(assignment.Name.Name), indexCols...) {
+		if sqlparser.StringIn(string(assignment.Name.Name), vindexCols...) {
 			return true
 		}
 	}
@@ -61,22 +58,20 @@ func buildDeletePlan(del *sqlparser.Delete, schema *Schema) *Plan {
 		Rewritten: generateQuery(del),
 	}
 	tablename := sqlparser.GetTableName(del.Table)
-	plan.Table, plan.Reason = schema.LookupTable(tablename)
+	plan.Table, plan.Reason = schema.FindTable(tablename)
 	if plan.Reason != "" {
 		return plan
 	}
-	if plan.Table.Keyspace.ShardingScheme == Unsharded {
+	if !plan.Table.Keyspace.Sharded {
 		plan.ID = DeleteUnsharded
 		return plan
 	}
 
-	getWhereRouting(del.Where, plan)
+	getWhereRouting(del.Where, plan, true)
 	switch plan.ID {
-	case SelectSingleShardKey:
-		plan.ID = DeleteSingleShardKey
-	case SelectSingleLookup:
-		plan.ID = DeleteSingleLookup
-	case SelectMultiShardKey, SelectMultiLookup, SelectScatter:
+	case SelectEqual:
+		plan.ID = DeleteEqual
+	case SelectIN, SelectScatter:
 		plan.ID = NoPlan
 		plan.Reason = "too complex"
 	default:
@@ -84,4 +79,3 @@ func buildDeletePlan(del *sqlparser.Delete, schema *Schema) *Plan {
 	}
 	return plan
 }
-*/

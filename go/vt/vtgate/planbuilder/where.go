@@ -9,7 +9,8 @@ import "github.com/youtube/vitess/go/vt/sqlparser"
 // getWhereRouting fills the plan fields for the where clause of a SELECT
 // statement. It gets reused for DML planning also, where the select plan is
 // replaced with the appropriate DML plan after the fact.
-func getWhereRouting(where *sqlparser.Where, plan *Plan) {
+// onlyUnique matches only Unique indexes.
+func getWhereRouting(where *sqlparser.Where, plan *Plan, onlyUnique bool) {
 	if where == nil {
 		plan.ID = SelectScatter
 		return
@@ -20,6 +21,9 @@ func getWhereRouting(where *sqlparser.Where, plan *Plan) {
 		return
 	}
 	for _, index := range plan.Table.Ordered {
+		if onlyUnique && !IsUnique(index.Vindex) {
+			continue
+		}
 		if planID, values := getMatch(where.Expr, index.Col); planID != SelectScatter {
 			plan.ID = planID
 			plan.ColVindex = index
