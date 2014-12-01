@@ -55,24 +55,64 @@ func TestSelectEqual(t *testing.T) {
 	}
 	_, err = router.Execute(&context.DummyContext{}, &q)
 	if err != nil {
-		t.Errorf("want nil, got %v", err)
+		t.Error(err)
 	}
 	if sbc1.ExecCount != 1 {
-		t.Errorf("want 1, got %v\n", sbc1.ExecCount)
+		t.Errorf("sbc1.ExecCount: %v, want 1\n", sbc1.ExecCount)
 	}
 	if sbc2.ExecCount != 0 {
-		t.Errorf("want 0, got %v\n", sbc2.ExecCount)
+		t.Errorf("sbc2.ExecCount: %v, want 0\n", sbc2.ExecCount)
 	}
 	q.Sql = "select * from user where id = 3"
 	_, err = router.Execute(&context.DummyContext{}, &q)
 	if err != nil {
-		t.Errorf("want nil, got %v", err)
+		t.Error(err)
 	}
 	if sbc1.ExecCount != 1 {
-		t.Errorf("want 1, got %v\n", sbc1.ExecCount)
+		t.Errorf("sbc1.ExecCount: %v, want 1\n", sbc1.ExecCount)
 	}
 	if sbc2.ExecCount != 1 {
-		t.Errorf("want 1, got %v\n", sbc2.ExecCount)
+		t.Errorf("sbc2.ExecCount: %v, want 1\n", sbc2.ExecCount)
+	}
+}
+
+func TestInsertSharded(t *testing.T) {
+	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := createSandbox("TestRouter")
+	sbc1 := &sandboxConn{}
+	sbc2 := &sandboxConn{}
+	s.MapTestConn("-20", sbc1)
+	s.MapTestConn("40-60", sbc2)
+	serv := new(sandboxTopo)
+	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
+	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	q := proto.Query{
+		Sql:        "insert into user(id, v) values (1, 2)",
+		TabletType: topo.TYPE_MASTER,
+	}
+	_, err = router.Execute(&context.DummyContext{}, &q)
+	if err != nil {
+		t.Error(err)
+	}
+	if sbc1.ExecCount != 1 {
+		t.Errorf("sbc1.ExecCount: %v, want 1\n", sbc1.ExecCount)
+	}
+	if sbc2.ExecCount != 0 {
+		t.Errorf("sbc2.ExecCount: %v, want 0\n", sbc2.ExecCount)
+	}
+	q.Sql = "select * from user where id = 3"
+	_, err = router.Execute(&context.DummyContext{}, &q)
+	if err != nil {
+		t.Error(err)
+	}
+	if sbc1.ExecCount != 1 {
+		t.Errorf("sbc1.ExecCount: %v, want 1\n", sbc1.ExecCount)
+	}
+	if sbc2.ExecCount != 1 {
+		t.Errorf("sbc2.ExecCount: %v, want 1\n", sbc2.ExecCount)
 	}
 }
 

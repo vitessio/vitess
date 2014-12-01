@@ -12,6 +12,7 @@ import (
 	"code.google.com/p/go.net/context"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
@@ -42,6 +43,8 @@ func (rtr *Router) Execute(context context.Context, query *proto.Query) (*mproto
 	switch plan.ID {
 	case planbuilder.SelectEqual:
 		return rtr.execSelectEqual(context, query, plan)
+	case planbuilder.InsertSharded:
+		return rtr.execInsertSharded(context, query, plan)
 	default:
 		return nil, fmt.Errorf("plan unimplemented")
 	}
@@ -63,6 +66,28 @@ func (rtr *Router) execSelectEqual(context context.Context, query *proto.Query, 
 		query.BindVariables,
 		ks,
 		shards,
+		query.TabletType,
+		NewSafeSession(query.Session))
+}
+
+func (rtr *Router) execInsertSharded(context context.Context, query *proto.Query, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
+	input := plan.Values.([]interface{})[:1]
+	keys, err := rtr.resolveKeys(input, query.BindVariables)
+	if err != nil {
+		return nil, err
+	}
+	// TODO(sougou): functionality is still incomplete.
+	ks, shard, ksid, err := rtr.resolveSingle(query.TabletType, keys[0], plan)
+	if query.BindVariables == nil {
+		query.BindVariables = make(map[string]interface{})
+	}
+	query.BindVariables["keyspace_id"] = string(ksid)
+	return rtr.scatterConn.Execute(
+		context,
+		query.Sql,
+		query.BindVariables,
+		ks,
+		[]string{shard},
 		query.TabletType,
 		NewSafeSession(query.Session))
 }
@@ -137,4 +162,33 @@ func (rtr *Router) resolveShards(tabletType topo.TabletType, shardKeys []interfa
 		panic("unexpected")
 	}
 	return newKeyspace, shardsToIDs, nil
+}
+
+func (rtr *Router) resolveSingle(tabletType topo.TabletType, shardKey interface{}, plan *planbuilder.Plan) (newKeyspace, shard string, keyspace_id key.KeyspaceId, err error) {
+	newKeyspace, allShards, err := getKeyspaceShards(rtr.serv, rtr.cell, plan.Table.Keyspace.Name, tabletType)
+	if err != nil {
+		return "", "", "", err
+	}
+	// TODO(sougou): clean up this hack,
+	var vindex planbuilder.Vindex
+	if plan.ID == planbuilder.InsertSharded {
+		vindex = plan.Table.ColVindexes[0].Vindex
+	} else {
+		vindex = plan.ColVindex.Vindex
+	}
+	switch mapper := vindex.(type) {
+	case planbuilder.Unique:
+		ksids, err := mapper.Map([]interface{}{shardKey})
+		if err != nil {
+			return "", "", "", err
+		}
+		keyspace_id = ksids[0]
+		shard, err = getShardForKeyspaceId(allShards, keyspace_id)
+		if err != nil {
+			return "", "", "", err
+		}
+	default:
+		panic("unexpected")
+	}
+	return newKeyspace, shard, keyspace_id, nil
 }
