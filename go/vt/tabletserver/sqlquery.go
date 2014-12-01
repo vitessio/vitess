@@ -449,6 +449,7 @@ func (sq *SqlQuery) SplitQuery(context context.Context, req *proto.SplitQueryReq
 		deadline: NewDeadline(sq.qe.queryTimeout.Get()),
 	}
 	conn := requestContext.getConn(sq.qe.connPool)
+	defer conn.Recycle()
 	// TODO: For fetching pkMinMax, include where clauses on the
 	// primary key, if any, in the original query which might give a narrower
 	// range of PKs to work with.
