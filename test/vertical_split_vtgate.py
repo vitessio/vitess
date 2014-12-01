@@ -26,7 +26,7 @@ class TestVerticalSplitVTGate(vertical_split.TestVerticalSplit):
   def _insert_values(self, table, count, db_type='master', keyspace='source_keyspace'):
     result = self.insert_index
     conn = self._vtdb_conn()
-    cursor = conn.cursor(None, conn, keyspace, db_type, keyranges=[keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)], writable=True)
+    cursor = conn.cursor(keyspace, db_type, keyranges=[keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)], writable=True)
     for i in xrange(count):
       conn.begin()
       cursor.execute("insert into %s (id, msg) values(%u, 'value %u')" % (
