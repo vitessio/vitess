@@ -193,10 +193,11 @@ func NewQueryEngine(config Config) *QueryEngine {
 func (qe *QueryEngine) Open(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, qrs *QueryRules, mysqld *mysqlctl.Mysqld) {
 	qe.dbconfigs = dbconfigs
 	connFactory := dbconnpool.DBConnectionCreator(&dbconfigs.App.ConnectionParams, mysqlStats)
-	// The Dba connection doesn't have the db name set.
-	// We copy it from App.
-	dba := dbconfigs.Dba
-	dba.DbName = dbconfigs.App.DbName
+	// Create dba params based on App connection params
+	// and Dba credentials.
+	dba := dbconfigs.App.ConnectionParams
+	dba.Uname = dbconfigs.Dba.Uname
+	dba.Pass = dbconfigs.Dba.Pass
 	dbaConnFactory := dbconnpool.DBConnectionCreator(&dba, mysqlStats)
 
 	strictMode := false
