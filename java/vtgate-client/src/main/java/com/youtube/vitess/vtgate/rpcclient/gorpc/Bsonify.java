@@ -186,7 +186,7 @@ public class Bsonify {
     BSONObject b = new BasicBSONObject();
     b.put("Keyspace", request.getKeyspace());
     b.put("Query", query);
-    b.put("SplitsPerShard", request.getSplitsPerShard());
+    b.put("SplitCount", request.getSplitCount());
     return b;
   }
 

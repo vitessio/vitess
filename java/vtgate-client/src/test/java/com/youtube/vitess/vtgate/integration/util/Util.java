@@ -135,11 +135,15 @@ public class Util {
     String sql = "select * from vtgate_test";
     VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
     for (int i = 0; i < attempts; i++) {
-      Cursor cursor = vtgate.execute(new QueryBuilder(sql, testEnv.keyspace, tabletType)
-          .setKeyspaceIds(testEnv.getAllKeyspaceIds()).build());
-      if (cursor.getRowsAffected() >= rowCount) {
-        vtgate.close();
-        return;
+      try {
+        Cursor cursor = vtgate.execute(new QueryBuilder(sql, testEnv.keyspace, tabletType)
+            .setKeyspaceIds(testEnv.getAllKeyspaceIds()).build());
+        if (cursor.getRowsAffected() >= rowCount) {
+          vtgate.close();
+          return;
+        }
+      } catch (DatabaseException e) {
+
       }
       Thread.sleep(1000);
     }
