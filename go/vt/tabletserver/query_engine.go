@@ -196,8 +196,10 @@ func (qe *QueryEngine) Open(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []Sc
 	// Create dba params based on App connection params
 	// and Dba credentials.
 	dba := dbconfigs.App.ConnectionParams
-	dba.Uname = dbconfigs.Dba.Uname
-	dba.Pass = dbconfigs.Dba.Pass
+	if dbconfigs.Dba.Uname != "" {
+		dba.Uname = dbconfigs.Dba.Uname
+		dba.Pass = dbconfigs.Dba.Pass
+	}
 	dbaConnFactory := dbconnpool.DBConnectionCreator(&dba, mysqlStats)
 
 	strictMode := false
