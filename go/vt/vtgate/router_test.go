@@ -4,7 +4,6 @@
 
 package vtgate
 
-/*
 import (
 	"path"
 	"testing"
@@ -15,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
+	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
 type VTGateSchemaNormalized struct {
@@ -36,7 +36,7 @@ type VTGateSchemaNormalized struct {
 	}
 }
 
-func TestSelectSingleShardKey(t *testing.T) {
+func TestSelectEqual(t *testing.T) {
 	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -82,4 +82,3 @@ func locateFile(name string) string {
 	}
 	return testfiles.Locate("vtgate/" + name)
 }
-*/
