@@ -3,6 +3,7 @@ package com.youtube.vitess.vtgate.integration.hadoop;
 import com.google.common.collect.Lists;
 import com.google.common.primitives.UnsignedLong;
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 
 import com.youtube.vitess.vtgate.KeyspaceId;
 import com.youtube.vitess.vtgate.hadoop.VitessInputFormat;
@@ -10,10 +11,12 @@ import com.youtube.vitess.vtgate.hadoop.writables.KeyspaceIdWritable;
 import com.youtube.vitess.vtgate.hadoop.writables.RowWritable;
 import com.youtube.vitess.vtgate.integration.util.TestEnv;
 import com.youtube.vitess.vtgate.integration.util.Util;
+import com.youtube.vitess.vtgate.utils.GsonAdapters;
 
 import junit.extensions.TestSetup;
 import junit.framework.TestSuite;
 
+import org.apache.commons.codec.binary.Base64;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -26,7 +29,6 @@ import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
-import org.junit.Test;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -103,7 +105,11 @@ public class MapReduceIT extends HadoopTestCase {
     // Rows are keyspace ids are written as JSON since this is
     // TextOutputFormat. Parse and verify we've gotten all the keyspace
     // ids and rows.
-    Gson gson = new Gson();
+    Gson gson = new GsonBuilder()
+        .registerTypeHierarchyAdapter(byte[].class, GsonAdapters.BYTE_ARRAY)
+        .registerTypeAdapter(UnsignedLong.class, GsonAdapters.UNSIGNED_LONG)
+        .registerTypeAdapter(Class.class, GsonAdapters.CLASS)
+        .create();
     for (String line : outputLines) {
       System.out.println(line);
       String kidJson = line.split("\t")[0];
@@ -112,9 +118,10 @@ public class MapReduceIT extends HadoopTestCase {
       actualKids.add(m.get("id"));
 
       String rowJson = line.split("\t")[1];
-      Map<String, Map<String, Map<String, byte[]>>> map = new HashMap<>();
+      Map<String, Map<String, Map<String, String>>> map = new HashMap<>();
       map = gson.fromJson(rowJson, map.getClass());
-      actualNames.add(new String(map.get("contents").get("name").get("value")));
+      actualNames.add(
+          new String(Base64.decodeBase64(map.get("contents").get("name").get("value"))));
     }
 
     Set<String> expectedKids = new HashSet<>();
@@ -125,7 +132,7 @@ public class MapReduceIT extends HadoopTestCase {
     assertTrue(actualKids.containsAll(expectedKids));
 
     Set<String> expectedNames = new HashSet<>();
-    for (int i = 0; i < rowsPerShard; i++) {
+    for (int i = 1; i <= rowsPerShard; i++) {
       expectedNames.add("name_" + i);
     }
 
@@ -136,7 +143,6 @@ public class MapReduceIT extends HadoopTestCase {
   /**
    * Map all rows and aggregate by keyspace id at the reducer.
    */
-  @Test
   public void testReducerAggregateRows() throws Exception {
     int rowsPerShard = 20;
     for (String shardName : testEnv.shardKidMap.keySet()) {
@@ -199,8 +205,9 @@ public class MapReduceIT extends HadoopTestCase {
         throws IOException, InterruptedException {
       long count = 0;
       Iterator<RowWritable> iter = values.iterator();
-      while (iter.next() != null) {
+      while (iter.hasNext()) {
         count++;
+        iter.next();
       }
       context.write(NullWritable.get(), new LongWritable(count));
     }
