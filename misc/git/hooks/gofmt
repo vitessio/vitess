@@ -12,7 +12,15 @@
 gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '.go$')
 
 [ -z "$gofiles" ] && exit 0
-unformatted=$(goimports -l=true $gofiles 2>&1 | awk -F: '{print $1}')
+
+goimportserr=$(goimports -l=true $gofiles 2>&1 1>/dev/null)
+if [ -n "$goimportserr" ]; then
+	echo >&2 "goimports command failed with error:"
+	echo >&2 "$goimportserr"
+	exit 1
+fi
+
+unformatted=$(goimports -l=true $gofiles | awk -F: '{print $1}')
 [ -z "$unformatted" ] && exit 0
 
 # Some files are not goimports'd. Print message and fail.
