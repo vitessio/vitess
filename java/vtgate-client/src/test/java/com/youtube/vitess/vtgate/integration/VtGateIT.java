@@ -20,6 +20,7 @@ import com.youtube.vitess.vtgate.cursor.CursorImpl;
 import com.youtube.vitess.vtgate.integration.util.TestEnv;
 import com.youtube.vitess.vtgate.integration.util.Util;
 
+import org.apache.commons.codec.binary.Hex;
 import org.joda.time.DateTime;
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -33,10 +34,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 
 @RunWith(JUnit4.class)
 public class VtGateIT {
@@ -312,6 +315,90 @@ public class VtGateIT {
   }
 
 
+  @Test
+  public void testSplitQuery() throws Exception {
+    // Insert 20 rows per shard
+    for (String shardName : testEnv.shardKidMap.keySet()) {
+      Util.insertRowsInShard(testEnv, shardName, 20);
+    }
+    Util.waitForTablet("rdonly", 40, 3, testEnv);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    Map<Query, Long> queries =
+        vtgate.splitQuery("test_keyspace", "select id,keyspace_id from vtgate_test", 1);
+    vtgate.close();
+
+    // Verify 2 splits, one per shard
+    Assert.assertEquals(2, queries.size());
+    Set<String> shardsInSplits = new HashSet<>();
+    for (Query q : queries.keySet()) {
+      Assert.assertEquals("select id,keyspace_id from vtgate_test", q.getSql());
+      Assert.assertEquals("test_keyspace", q.getKeyspace());
+      Assert.assertEquals("rdonly", q.getTabletType());
+      Assert.assertEquals(0, q.getBindVars().size());
+      Assert.assertEquals(null, q.getKeyspaceIds());
+      String start = Hex.encodeHexString(q.getKeyRanges().get(0).get("Start"));
+      String end = Hex.encodeHexString(q.getKeyRanges().get(0).get("End"));
+      shardsInSplits.add(start + "-" + end);
+    }
+
+    // Verify the keyrange queries in splits cover the entire keyspace
+    Assert.assertTrue(shardsInSplits.containsAll(testEnv.shardKidMap.keySet()));
+  }
+
+  @Test
+  public void testSplitQueryMultipleSplitsPerShard() throws Exception {
+    int rowCount = 30;
+    Util.insertRows(testEnv, 1, 30);
+    List<String> expectedSqls =
+        Lists.newArrayList("select id, keyspace_id from vtgate_test where id < 10",
+            "select id, keyspace_id from vtgate_test where id < 11",
+            "select id, keyspace_id from vtgate_test where id >= 10 and id < 19",
+            "select id, keyspace_id from vtgate_test where id >= 11 and id < 19",
+            "select id, keyspace_id from vtgate_test where id >= 19",
+            "select id, keyspace_id from vtgate_test where id >= 19");
+    Util.waitForTablet("rdonly", rowCount, 3, testEnv);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    int splitCount = 6;
+    Map<Query, Long> queries =
+        vtgate.splitQuery("test_keyspace", "select id,keyspace_id from vtgate_test", splitCount);
+    vtgate.close();
+
+    // Verify 6 splits, 3 per shard
+    Assert.assertEquals(splitCount, queries.size());
+    Set<String> shardsInSplits = new HashSet<>();
+    for (Query q : queries.keySet()) {
+      String sql = q.getSql();
+      Assert.assertTrue(expectedSqls.contains(sql));
+      expectedSqls.remove(sql);
+      Assert.assertEquals("test_keyspace", q.getKeyspace());
+      Assert.assertEquals("rdonly", q.getTabletType());
+      Assert.assertEquals(0, q.getBindVars().size());
+      Assert.assertEquals(null, q.getKeyspaceIds());
+      String start = Hex.encodeHexString(q.getKeyRanges().get(0).get("Start"));
+      String end = Hex.encodeHexString(q.getKeyRanges().get(0).get("End"));
+      shardsInSplits.add(start + "-" + end);
+    }
+
+    // Verify the keyrange queries in splits cover the entire keyspace
+    Assert.assertTrue(shardsInSplits.containsAll(testEnv.shardKidMap.keySet()));
+    Assert.assertTrue(expectedSqls.size() == 0);
+  }
+
+  @Test
+  public void testSplitQueryInvalidTable() throws Exception {
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    try {
+      vtgate.splitQuery("test_keyspace", "select id from invalid_table", 1);
+      Assert.fail("failed to raise connection exception");
+    } catch (ConnectionException e) {
+      Assert.assertTrue(
+          e.getMessage().contains("query validation error: can't find table in schema"));
+    } finally {
+      vtgate.close();
+    }
+  }
+
+
   /**
    * Create env with two shards each having a master and replica
    */
@@ -322,7 +409,7 @@ public class VtGateIT {
     shardKidMap.put("80-",
         Lists.newArrayList("9767889778372766922", "9742070682920810358", "10296850775085416642"));
     TestEnv env = new TestEnv(shardKidMap, "test_keyspace");
-    env.addTablet("replica", 1);
+    env.addTablet("rdonly", 1);
     return env;
   }
 }

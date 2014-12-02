@@ -38,7 +38,7 @@ def handle_app_error(exc_args):
     if mysql_errno == 1062:
       parts = _errno_pattern.split(msg)
       pruned_msg = msg[:msg.find(parts[2])]
-      new_args = (pruned_msg,) + exc_args[1:]
+      new_args = (pruned_msg,) + tuple(exc_args[1:])
       return dbexceptions.IntegrityError(new_args)
     # TODO(sougou/liguo): remove this case once servers are deployed
     elif mysql_errno == 1290 and 'read-only' in msg:

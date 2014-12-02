@@ -37,6 +37,7 @@ class Log(object):
        self.query_sources,
        self.mysql_response_time,
        self.waiting_for_connection_time,
+       self.rowcount,
        self.size_of_response,
        self.cache_hits,
        self.cache_misses,
@@ -78,6 +79,10 @@ class Log(object):
     if sql != eval(self.original_sql):
       return self.fail('wrong sql', case.sql, self.original_sql)
 
+  def check_rowcount(self, case):
+    if case.rowcount is not None and int(self.rowcount) != case.rowcount:
+      return self.fail("Bad rowcount", case.rowcount, self.rowcount)
+
   def check_cache_hits(self, case):
     if case.cache_hits is not None and int(self.cache_hits) != case.cache_hits:
       return self.fail("Bad Cache Hits", case.cache_hits, self.cache_hits)
@@ -117,7 +122,7 @@ class Log(object):
 class Case(object):
 
   def __init__(self, sql, bindings=None, result=None, rewritten=None, doc='',
-               cache_table=None, query_plan=None, cache_hits=None,
+               rowcount=None, cache_table=None, query_plan=None, cache_hits=None,
                cache_misses=None, cache_absent=None, cache_invalidations=None,
                remote_address="[::1]"):
     # For all cache_* parameters, a number n means "check this value
@@ -129,6 +134,7 @@ class Case(object):
     if isinstance(rewritten, basestring):
       rewritten = [rewritten]
     self.rewritten = rewritten
+    self.rowcount = rowcount
     self.doc = doc
     self.query_plan = query_plan
     self.cache_table = cache_table

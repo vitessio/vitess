@@ -49,8 +49,9 @@ var (
 // VTGate is the rpc interface to vtgate. Only one instance
 // can be created.
 type VTGate struct {
-	resolver *Resolver
-	timings  *stats.MultiTimings
+	resolver     *Resolver
+	timings      *stats.MultiTimings
+	rowsReturned *stats.MultiCounters
 
 	maxInFlight int64
 	inFlight    sync2.AtomicInt64
@@ -77,8 +78,9 @@ func Init(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount 
 		log.Fatalf("VTGate already initialized")
 	}
 	RpcVTGate = &VTGate{
-		resolver: NewResolver(serv, "VttabletCall", cell, retryDelay, retryCount, timeout),
-		timings:  stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
+		resolver:     NewResolver(serv, "VttabletCall", cell, retryDelay, retryCount, timeout),
+		timings:      stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
+		rowsReturned: stats.NewMultiCounters("VtgateApiRowsReturned", []string{"Operation", "Keyspace", "DbType"}),
 
 		maxInFlight: int64(maxInFlight),
 		inFlight:    0,
@@ -153,6 +155,7 @@ func (vtg *VTGate) ExecuteShard(context context.Context, query *proto.QueryShard
 	)
 	if err == nil {
 		reply.Result = qr
+		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 	} else {
 		reply.Error = err.Error()
 		if strings.Contains(reply.Error, errDupKey) {
@@ -183,6 +186,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(context context.Context, query *proto.Keys
 	qr, err := vtg.resolver.ExecuteKeyspaceIds(context, query)
 	if err == nil {
 		reply.Result = qr
+		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 	} else {
 		reply.Error = err.Error()
 		if strings.Contains(reply.Error, errDupKey) {
@@ -213,6 +217,7 @@ func (vtg *VTGate) ExecuteKeyRanges(context context.Context, query *proto.KeyRan
 	qr, err := vtg.resolver.ExecuteKeyRanges(context, query)
 	if err == nil {
 		reply.Result = qr
+		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 	} else {
 		reply.Error = err.Error()
 		if strings.Contains(reply.Error, errDupKey) {
@@ -243,6 +248,7 @@ func (vtg *VTGate) ExecuteEntityIds(context context.Context, query *proto.Entity
 	qr, err := vtg.resolver.ExecuteEntityIds(context, query)
 	if err == nil {
 		reply.Result = qr
+		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 	} else {
 		reply.Error = err.Error()
 		if strings.Contains(reply.Error, errDupKey) {
@@ -282,6 +288,11 @@ func (vtg *VTGate) ExecuteBatchShard(context context.Context, batchQuery *proto.
 	)
 	if err == nil {
 		reply.List = qrs.List
+		var rowCount int64
+		for _, qr := range qrs.List {
+			rowCount += int64(len(qr.Rows))
+		}
+		vtg.rowsReturned.Add(statsKey, rowCount)
 	} else {
 		reply.Error = err.Error()
 		if strings.Contains(reply.Error, errDupKey) {
@@ -314,6 +325,11 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(context context.Context, query *proto
 		query)
 	if err == nil {
 		reply.List = qrs.List
+		var rowCount int64
+		for _, qr := range qrs.List {
+			rowCount += int64(len(qr.Rows))
+		}
+		vtg.rowsReturned.Add(statsKey, rowCount)
 	} else {
 		reply.Error = err.Error()
 		if strings.Contains(reply.Error, errDupKey) {
@@ -346,16 +362,20 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(context context.Context, query *prot
 		return ErrTooManyInFlight
 	}
 
+	var rowCount int64
 	err = vtg.resolver.StreamExecuteKeyspaceIds(
 		context,
 		query,
 		func(mreply *mproto.QueryResult) error {
 			reply := new(proto.QueryResult)
 			reply.Result = mreply
+			rowCount += int64(len(mreply.Rows))
 			// Note we don't populate reply.Session here,
 			// as it may change incrementaly as responses are sent.
 			return sendReply(reply)
 		})
+	vtg.rowsReturned.Add(statsKey, rowCount)
+
 	if err != nil {
 		normalErrors.Add(statsKey, 1)
 		vtg.logStreamExecuteKeyspaceIds.Errorf("%v, query: %+v", err, query)
@@ -386,16 +406,19 @@ func (vtg *VTGate) StreamExecuteKeyRanges(context context.Context, query *proto.
 		return ErrTooManyInFlight
 	}
 
+	var rowCount int64
 	err = vtg.resolver.StreamExecuteKeyRanges(
 		context,
 		query,
 		func(mreply *mproto.QueryResult) error {
 			reply := new(proto.QueryResult)
 			reply.Result = mreply
+			rowCount += int64(len(mreply.Rows))
 			// Note we don't populate reply.Session here,
 			// as it may change incrementaly as responses are sent.
 			return sendReply(reply)
 		})
+	vtg.rowsReturned.Add(statsKey, rowCount)
 
 	if err != nil {
 		normalErrors.Add(statsKey, 1)
@@ -422,6 +445,7 @@ func (vtg *VTGate) StreamExecuteShard(context context.Context, query *proto.Quer
 		return ErrTooManyInFlight
 	}
 
+	var rowCount int64
 	err = vtg.resolver.StreamExecute(
 		context,
 		query.Sql,
@@ -435,10 +459,12 @@ func (vtg *VTGate) StreamExecuteShard(context context.Context, query *proto.Quer
 		func(mreply *mproto.QueryResult) error {
 			reply := new(proto.QueryResult)
 			reply.Result = mreply
+			rowCount += int64(len(mreply.Rows))
 			// Note we don't populate reply.Session here,
 			// as it may change incrementaly as responses are sent.
 			return sendReply(reply)
 		})
+	vtg.rowsReturned.Add(statsKey, rowCount)
 
 	if err != nil {
 		normalErrors.Add(statsKey, 1)

@@ -103,6 +103,7 @@ class Tablet(object):
     if with_ports:
       args.extend(['-port', str(self.port),
                    '-mysql_port', str(self.mysql_port)])
+    self._add_dbconfigs(args)
     if verbose:
       args.append('-alsologtostderr')
     args.extend(cmd)
@@ -118,6 +119,7 @@ class Tablet(object):
         '-tablet_uid', str(self.tablet_uid),
         '-mysql_port', str(self.mysql_port),
         '-socket_file', os.path.join(self.tablet_dir, 'mysqlctl.sock')]
+    self._add_dbconfigs(args)
     if verbose:
       args.append('-alsologtostderr')
     args.extend(cmd)
@@ -351,10 +353,7 @@ class Tablet(object):
     args.extend(['-port', '%s' % (port or self.port),
                  '-log_dir', environment.vtlogroot])
 
-    dbconfigs = self._get_db_configs_file(repl_extra_flags)
-    for key1 in dbconfigs:
-      for key2 in dbconfigs[key1]:
-        args.extend(['-db-config-' + key1 + '-' + key2, dbconfigs[key1][key2]])
+    self._add_dbconfigs(args, repl_extra_flags)
 
     if memcache:
       args.extend(['-rowcache-bin', environment.memcached_bin()])
@@ -552,14 +551,16 @@ class Tablet(object):
         return
       timeout = utils.wait_step('waiting for mysql socket file %s' % socket_file, timeout)
 
-  def _get_db_configs_file(self, repl_extra_flags={}):
+  def _add_dbconfigs(self, args, repl_extra_flags={}):
     config = dict(self.default_db_config)
     if self.keyspace:
       config['app']['dbname'] = self.dbname
       config['dba']['dbname'] = self.dbname
       config['repl']['dbname'] = self.dbname
     config['repl'].update(repl_extra_flags)
-    return config
+    for key1 in config:
+      for key2 in config[key1]:
+        args.extend(['-db-config-' + key1 + '-' + key2, config[key1][key2]])
 
   def get_status(self):
     return utils.get_status(self.port)
