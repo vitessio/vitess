@@ -16,27 +16,43 @@ from vtdb import vtdb_logger
 _errno_pattern = re.compile('\(errno (\d+)\)')
 
 
+def handle_app_error(exc_args):
+  msg = str(exc_args[0]).lower()
+
+  # Operational Error
+  if msg.startswith('retry'):
+    return dbexceptions.RetryError(exc_args)
+
+  if msg.startswith('fatal'):
+    return dbexceptions.FatalError(exc_args)
+
+  if msg.startswith('tx_pool_full'):
+    return dbexceptions.TxPoolFull(exc_args)
+
+  # Integrity and Database Error
+  match = _errno_pattern.search(msg)
+  if match:
+    # Prune the error message to truncate after the mysql errno, since
+    # the error message may contain the query string with bind variables.
+    mysql_errno = int(match.group(1))
+    if mysql_errno == 1062:
+      parts = _errno_pattern.split(msg)
+      pruned_msg = msg[:msg.find(parts[2])]
+      new_args = (pruned_msg,) + tuple(exc_args[1:])
+      return dbexceptions.IntegrityError(new_args)
+    # TODO(sougou/liguo): remove this case once servers are deployed
+    elif mysql_errno == 1290 and 'read-only' in msg:
+      return dbexceptions.RetryError(exc_args)
+
+  return dbexceptions.DatabaseError(exc_args)
+
+
 def convert_exception(exc, *args):
   new_args = exc.args + args
   if isinstance(exc, gorpc.TimeoutError):
     return dbexceptions.TimeoutError(new_args)
   elif isinstance(exc, gorpc.AppError):
-    msg = str(exc[0]).lower()
-    if msg.startswith('retry'):
-      return dbexceptions.RetryError(new_args)
-    if msg.startswith('fatal'):
-      return dbexceptions.FatalError(new_args)
-    if msg.startswith('tx_pool_full'):
-      return dbexceptions.TxPoolFull(new_args)
-    match = _errno_pattern.search(msg)
-    if match:
-      mysql_errno = int(match.group(1))
-      if mysql_errno == 1062:
-        return dbexceptions.IntegrityError(new_args)
-      # TODO(sougou/liguo): remove this case once servers are deployed
-      elif mysql_errno == 1290 and 'read-only' in msg:
-        return dbexceptions.RetryError(new_args)
-    return dbexceptions.DatabaseError(new_args)
+    return handle_app_error(new_args)
   elif isinstance(exc, gorpc.ProgrammingError):
     return dbexceptions.ProgrammingError(new_args)
   elif isinstance(exc, gorpc.GoRpcError):

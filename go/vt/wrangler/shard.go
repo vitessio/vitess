@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	"code.google.com/p/go.net/context"
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -168,7 +167,7 @@ func (wr *Wrangler) DeleteShard(keyspace, shard string) error {
 	// remove the replication graph and serving graph in each cell
 	for _, cell := range shardInfo.Cells {
 		if err := wr.ts.DeleteShardReplication(cell, keyspace, shard); err != nil {
-			log.Warningf("Cannot delete ShardReplication in cell %v for %v/%v: %v", cell, keyspace, shard, err)
+			wr.Logger().Warningf("Cannot delete ShardReplication in cell %v for %v/%v: %v", cell, keyspace, shard, err)
 		}
 
 		for _, t := range topo.AllTabletTypes {
@@ -177,12 +176,12 @@ func (wr *Wrangler) DeleteShard(keyspace, shard string) error {
 			}
 
 			if err := wr.ts.DeleteEndPoints(cell, keyspace, shard, t); err != nil && err != topo.ErrNoNode {
-				log.Warningf("Cannot delete EndPoints in cell %v for %v/%v/%v: %v", cell, keyspace, shard, t, err)
+				wr.Logger().Warningf("Cannot delete EndPoints in cell %v for %v/%v/%v: %v", cell, keyspace, shard, t, err)
 			}
 		}
 
 		if err := wr.ts.DeleteSrvShard(cell, keyspace, shard); err != nil && err != topo.ErrNoNode {
-			log.Warningf("Cannot delete SrvShard in cell %v for %v/%v: %v", cell, keyspace, shard, err)
+			wr.Logger().Warningf("Cannot delete SrvShard in cell %v for %v/%v: %v", cell, keyspace, shard, err)
 		}
 	}
 
@@ -243,11 +242,11 @@ func (wr *Wrangler) removeShardCell(keyspace, shard, cell string, force bool) er
 		if !force {
 			return err
 		}
-		log.Warningf("Cannot get ShardReplication from cell %v, assuming cell topo server is down, and forcing the removal", cell)
+		wr.Logger().Warningf("Cannot get ShardReplication from cell %v, assuming cell topo server is down, and forcing the removal", cell)
 	}
 
 	// now we can update the shard
-	log.Infof("Removing cell %v from shard %v/%v", cell, keyspace, shard)
+	wr.Logger().Infof("Removing cell %v from shard %v/%v", cell, keyspace, shard)
 	newCells := make([]string, 0, len(shardInfo.Cells)-1)
 	for _, c := range shardInfo.Cells {
 		if c != cell {

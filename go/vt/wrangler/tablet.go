@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	"code.google.com/p/go.net/context"
-	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -73,12 +72,12 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 		if update || force {
 			oldTablet, err := wr.ts.GetTablet(tablet.Alias)
 			if err != nil {
-				log.Warningf("failed reading tablet %v: %v", tablet.Alias, err)
+				wr.Logger().Warningf("failed reading tablet %v: %v", tablet.Alias, err)
 			} else {
 				if oldTablet.Keyspace == tablet.Keyspace && oldTablet.Shard == tablet.Shard {
 					*(oldTablet.Tablet) = *tablet
 					if err := topo.UpdateTablet(context.TODO(), wr.ts, oldTablet); err != nil {
-						log.Warningf("failed updating tablet %v: %v", tablet.Alias, err)
+						wr.Logger().Warningf("failed updating tablet %v: %v", tablet.Alias, err)
 						// now fall through the Scrap case
 					} else {
 						if !tablet.IsInReplicationGraph() {
@@ -86,7 +85,7 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 						}
 
 						if err := topo.UpdateTabletReplicationData(context.TODO(), wr.ts, tablet); err != nil {
-							log.Warningf("failed updating tablet replication data for %v: %v", tablet.Alias, err)
+							wr.Logger().Warningf("failed updating tablet replication data for %v: %v", tablet.Alias, err)
 							// now fall through the Scrap case
 						} else {
 							return nil
@@ -97,12 +96,12 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 		}
 		if force {
 			if err = wr.Scrap(tablet.Alias, force, false); err != nil {
-				log.Errorf("failed scrapping tablet %v: %v", tablet.Alias, err)
+				wr.Logger().Errorf("failed scrapping tablet %v: %v", tablet.Alias, err)
 				return err
 			}
 			if err := wr.ts.DeleteTablet(tablet.Alias); err != nil {
 				// we ignore this
-				log.Errorf("failed deleting tablet %v: %v", tablet.Alias, err)
+				wr.Logger().Errorf("failed deleting tablet %v: %v", tablet.Alias, err)
 			}
 			return topo.CreateTablet(wr.ts, tablet)
 		}
@@ -134,11 +133,11 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 	}
 
 	if !rebuildRequired {
-		log.Infof("Rebuild not required")
+		wr.Logger().Infof("Rebuild not required")
 		return nil
 	}
 	if skipRebuild {
-		log.Warningf("Rebuild required, but skipping it")
+		wr.Logger().Warningf("Rebuild required, but skipping it")
 		return nil
 	}
 
@@ -165,7 +164,7 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 				return wr.unlockShard(ti.Keyspace, ti.Shard, actionNode, lockPath, err)
 			}
 		} else {
-			log.Warningf("Scrapping master %v from shard %v/%v but master in Shard object was %v", tabletAlias, ti.Keyspace, ti.Shard, si.MasterAlias)
+			wr.Logger().Warningf("Scrapping master %v from shard %v/%v but master in Shard object was %v", tabletAlias, ti.Keyspace, ti.Shard, si.MasterAlias)
 		}
 
 		// and unlock

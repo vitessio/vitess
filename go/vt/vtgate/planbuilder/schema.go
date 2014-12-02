@@ -7,20 +7,9 @@ package planbuilder
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/youtube/vitess/go/jscfg"
-)
-
-// Keyspace types.
-const (
-	Unsharded = iota
-	HashSharded
-)
-
-// Index types.
-const (
-	ShardKey = iota
-	Lookup
 )
 
 // Schema represents the denormalized version of SchemaFormal,
@@ -29,44 +18,58 @@ type Schema struct {
 	Tables map[string]*Table
 }
 
-// Table represnts a table in Schema.
-type Table struct {
-	Name     string
-	Keyspace *Keyspace
-	Indexes  []*Index
+func (s *Schema) String() string {
+	b, err := json.Marshal(s)
+	if err != nil {
+		return err.Error()
+	}
+	return string(b)
 }
 
-// MarshalJSON should only be used for testing.
-func (t *Table) MarshalJSON() ([]byte, error) {
-	return json.Marshal(t.Name)
+// Table represnts a table in Schema.
+type Table struct {
+	Name        string
+	Keyspace    *Keyspace
+	ColVindexes []*ColVindex
+	Ordered     []*ColVindex
 }
 
 // Keyspace contains the keyspcae info for each Table.
 type Keyspace struct {
-	Name string
-	// ShardingScheme is Unsharded or HashSharded.
-	ShardingScheme int
+	Name    string
+	Sharded bool
 }
 
 // Index contains the index info for each index of a table.
-type Index struct {
-	// Type is ShardKey or Lookup.
-	Type      int
-	Column    string
-	Name      string
-	From, To  string
-	Owner     string
-	IsAutoInc bool
+type ColVindex struct {
+	Col    string
+	Type   string
+	Name   string
+	Owned  bool
+	Vindex Vindex
 }
 
 // BuildSchema builds a Schema from a SchemaFormal.
 func BuildSchema(source *SchemaFormal) (schema *Schema, err error) {
-	allindexes := make(map[string]string)
 	schema = &Schema{Tables: make(map[string]*Table)}
 	for ksname, ks := range source.Keyspaces {
 		keyspace := &Keyspace{
-			Name:           ksname,
-			ShardingScheme: ks.ShardingScheme,
+			Name:    ksname,
+			Sharded: ks.Sharded,
+		}
+		vindexes := make(map[string]Vindex)
+		for vname, vindexInfo := range ks.Vindexes {
+			vindex, err := createVindex(vindexInfo.Type, vindexInfo.Params)
+			if err != nil {
+				return nil, err
+			}
+			switch vindex.(type) {
+			case Unique:
+			case NonUnique:
+			default:
+				return nil, fmt.Errorf("index %s is needs to be Unique or NonUnique", vname)
+			}
+			vindexes[vname] = vindex
 		}
 		for tname, table := range ks.Tables {
 			if _, ok := schema.Tables[tname]; ok {
@@ -75,43 +78,49 @@ func BuildSchema(source *SchemaFormal) (schema *Schema, err error) {
 			t := &Table{
 				Name:     tname,
 				Keyspace: keyspace,
-				Indexes:  make([]*Index, 0, len(table.IndexColumns)),
 			}
-			for i, ind := range table.IndexColumns {
-				idx, ok := ks.Indexes[ind.IndexName]
+			for i, ind := range table.ColVindexes {
+				vindexInfo, ok := ks.Vindexes[ind.Name]
 				if !ok {
-					return nil, fmt.Errorf("index %s not found for table %s", ind.IndexName, tname)
+					return nil, fmt.Errorf("index %s not found for table %s", ind.Name, tname)
 				}
-				if i == 0 && idx.Type != ShardKey {
-					return nil, fmt.Errorf("first index is not ShardKey for table %s", tname)
+				columnVindex := &ColVindex{
+					Col:    ind.Col,
+					Type:   vindexInfo.Type,
+					Name:   ind.Name,
+					Owned:  vindexInfo.Owner == tname,
+					Vindex: vindexes[ind.Name],
 				}
-				switch prevks := allindexes[ind.IndexName]; prevks {
-				case "":
-					allindexes[ind.IndexName] = ksname
-				case ksname:
-					// We're good.
-				default:
-					return nil, fmt.Errorf("index %s used in more than one keyspace: %s %s", ind.IndexName, prevks, ksname)
+				if i == 0 {
+					// Perform Primary vindex check.
+					if _, ok := columnVindex.Vindex.(Unique); !ok {
+						return nil, fmt.Errorf("primary index %s is not Unique for table %s", ind.Name, tname)
+					}
+					if columnVindex.Owned {
+						if _, ok := columnVindex.Vindex.(Functional); !ok {
+							return nil, fmt.Errorf("primary owned index %s is not Functional for table %s", ind.Name, tname)
+						}
+					}
+				} else {
+					// Perform non-primary vindex check.
+					if columnVindex.Owned {
+						if _, ok := columnVindex.Vindex.(Lookup); !ok {
+							return nil, fmt.Errorf("non-primary owned index %s is not Lookup for table %s", ind.Name, tname)
+						}
+					}
 				}
-				t.Indexes = append(t.Indexes, &Index{
-					Type:      idx.Type,
-					Column:    ind.Column,
-					Name:      ind.IndexName,
-					From:      idx.From,
-					To:        idx.To,
-					Owner:     idx.Owner,
-					IsAutoInc: idx.IsAutoInc,
-				})
+				t.ColVindexes = append(t.ColVindexes, columnVindex)
 			}
+			t.Ordered = colVindexSorted(t.ColVindexes)
 			schema.Tables[tname] = t
 		}
 	}
 	return schema, nil
 }
 
-// LookupTable returns a pointer to the Table if found.
+// FindTable returns a pointer to the Table if found.
 // Otherwise, it returns a reason, which is equivalent to an error.
-func (schema *Schema) LookupTable(tablename string) (table *Table, reason string) {
+func (schema *Schema) FindTable(tablename string) (table *Table, reason string) {
 	if tablename == "" {
 		return nil, "complex table expression"
 	}
@@ -120,6 +129,22 @@ func (schema *Schema) LookupTable(tablename string) (table *Table, reason string
 		return nil, fmt.Sprintf("table %s not found", tablename)
 	}
 	return table, ""
+}
+
+// ByCost provides the interface needed for ColVindexes to
+// be sorted by cost order.
+type ByCost []*ColVindex
+
+func (bc ByCost) Len() int           { return len(bc) }
+func (bc ByCost) Swap(i, j int)      { bc[i], bc[j] = bc[j], bc[i] }
+func (bc ByCost) Less(i, j int) bool { return bc[i].Vindex.Cost() < bc[j].Vindex.Cost() }
+
+func colVindexSorted(cvs []*ColVindex) (sorted []*ColVindex) {
+	for _, cv := range cvs {
+		sorted = append(sorted, cv)
+	}
+	sort.Sort(ByCost(sorted))
+	return sorted
 }
 
 // SchemaFormal is the formal representation of the schema
@@ -131,32 +156,30 @@ type SchemaFormal struct {
 // KeyspaceFormal is the keyspace info for each keyspace
 // as loaded from the source.
 type KeyspaceFormal struct {
-	ShardingScheme int
-	Indexes        map[string]IndexFormal
-	Tables         map[string]TableFormal
+	Sharded  bool
+	Vindexes map[string]VindexFormal
+	Tables   map[string]TableFormal
 }
 
-// IndexFormal is the info for each index as loaded from
+// VindexFormal is the info for each index as loaded from
 // the source.
-type IndexFormal struct {
-	// Type is ShardKey or Lookup.
-	Type      int
-	From, To  string
-	Owner     string
-	IsAutoInc bool
+type VindexFormal struct {
+	Type   string
+	Params map[string]interface{}
+	Owner  string
 }
 
 // TableFormal is the info for each table as loaded from
 // the source.
 type TableFormal struct {
-	IndexColumns []IndexColumnFormal
+	ColVindexes []ColVindexFormal
 }
 
-// IndexColumnFormal is the info for each indexed column
+// ColVindexFormal is the info for each indexed column
 // of a table as loaded from the source.
-type IndexColumnFormal struct {
-	Column    string
-	IndexName string
+type ColVindexFormal struct {
+	Col  string
+	Name string
 }
 
 // LoadSchemaJSON loads the formal representation of a schema

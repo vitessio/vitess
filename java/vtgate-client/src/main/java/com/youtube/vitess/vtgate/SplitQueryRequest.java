@@ -3,12 +3,12 @@ package com.youtube.vitess.vtgate;
 public class SplitQueryRequest {
   private String sql;
   private String keyspace;
-  private int splitsPerShard;
+  private int splitCount;
 
-  public SplitQueryRequest(String sql, String keyspace, int splitsPerShard) {
+  public SplitQueryRequest(String sql, String keyspace, int splitCount) {
     this.sql = sql;
     this.keyspace = keyspace;
-    this.splitsPerShard = splitsPerShard;
+    this.splitCount = splitCount;
   }
 
   public String getSql() {
@@ -19,7 +19,7 @@ public class SplitQueryRequest {
     return keyspace;
   }
 
-  public int getSplitsPerShard() {
-    return splitsPerShard;
+  public int getSplitCount() {
+    return splitCount;
   }
 }

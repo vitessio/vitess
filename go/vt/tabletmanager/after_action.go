@@ -59,7 +59,7 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet, blacklistedTables []
 		return err
 	}
 
-	return tabletserver.AllowQueries(&agent.DBConfigs.App, agent.SchemaOverrides, qrs, agent.Mysqld, false)
+	return tabletserver.AllowQueries(agent.DBConfigs, agent.SchemaOverrides, qrs, agent.Mysqld, false)
 }
 
 // createQueryRules computes the query rules that match the tablet record

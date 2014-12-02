@@ -173,7 +173,7 @@ func (log *SQLQueryStats) ErrorStr() string {
 func (log *SQLQueryStats) Format(params url.Values) string {
 	_, fullBindParams := params["full"]
 	return fmt.Sprintf(
-		"%v\t%v\t%v\t%v\t%v\t%.6f\t%v\t%q\t%v\t%v\t%q\t%v\t%.6f\t%.6f\t%v\t%v\t%v\t%v\t%v\t%q\t\n",
+		"%v\t%v\t%v\t%v\t%v\t%.6f\t%v\t%q\t%v\t%v\t%q\t%v\t%.6f\t%.6f\t%v\t%v\t%v\t%v\t%v\t%v\t%q\t\n",
 		log.Method,
 		log.RemoteAddr(),
 		log.Username(),
@@ -188,6 +188,7 @@ func (log *SQLQueryStats) Format(params url.Values) string {
 		log.FmtQuerySources(),
 		log.MysqlResponseTime.Seconds(),
 		log.WaitingForConnection.Seconds(),
+		log.RowsAffected,
 		log.SizeOfResponse(),
 		log.CacheHits,
 		log.CacheMisses,

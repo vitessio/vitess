@@ -85,7 +85,7 @@ class TestNocache(framework.TestCase):
     try:
       self.env.execute("insert into vtocc_test values(1, null, null, null)")
     except dbexceptions.IntegrityError as e:
-      self.assertContains(str(e), "error: Duplicate")
+      self.assertContains(str(e), "error: duplicate")
     else:
       self.fail("Did not receive exception")
     finally:

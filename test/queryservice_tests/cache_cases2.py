@@ -15,6 +15,7 @@ cases = [
        sql="select * from vtocc_cached2 where eid = 2 and bid = :bid",
        bindings={"bid": None},
        result=[],
+       rowcount=0,
        rewritten=[
          "select * from vtocc_cached2 where 1 != 1",
          "select eid, bid, name, foo from vtocc_cached2 where (eid = 2 and bid = null)"],
@@ -24,6 +25,7 @@ cases = [
        query_plan="PK_IN",
        sql="select * from vtocc_cached2 where eid = 2 and bid = 'foo'",
        result=[(2, 'foo', 'abcd2', 'efgh')],
+       rowcount=1,
        rewritten=[
          "select * from vtocc_cached2 where 1 != 1",
          "select eid, bid, name, foo from vtocc_cached2 where (eid = 2 and bid = 'foo')"],
@@ -34,6 +36,7 @@ cases = [
        query_plan="PK_IN",
        sql="select bid, eid, name, foo from vtocc_cached2 where eid = 2 and bid = 'foo'",
        result=[('foo', 2, 'abcd2', 'efgh')],
+       rowcount=1,
        rewritten=["select bid, eid, name, foo from vtocc_cached2 where 1 != 1"],
        cache_hits=1),
   # (2.foo)
@@ -42,6 +45,7 @@ cases = [
        query_plan="PK_IN",
        sql="select bid, eid, name, foo from vtocc_cached2 where eid = 3 and bid = 'foo'",
        result=[],
+       rowcount=0,
        rewritten=[
          "select bid, eid, name, foo from vtocc_cached2 where 1 != 1",
          "select eid, bid, name, foo from vtocc_cached2 where (eid = 3 and bid = 'foo')"],
@@ -51,6 +55,7 @@ cases = [
   Case2(doc="out of order columns list",
        sql="select bid, eid from vtocc_cached2 where eid = 1 and bid = 'foo'",
        result=[('foo', 1)],
+       rowcount=1,
        rewritten=[
          "select bid, eid from vtocc_cached2 where 1 != 1",
          "select eid, bid, name, foo from vtocc_cached2 where (eid = 1 and bid = 'foo')"],
@@ -60,6 +65,7 @@ cases = [
   Case2(doc="out of order columns list, use cache",
        sql="select bid, eid from vtocc_cached2 where eid = 1 and bid = 'foo'",
        result=[('foo', 1)],
+       rowcount=1,
        rewritten=[],
        cache_hits=1),
   # (1.foo, 2.foo)
@@ -68,6 +74,7 @@ cases = [
        query_plan="PK_IN",
        sql="select eid, bid, name, foo from vtocc_cached2 where eid = 1 and bid in('absent1', 'absent2')",
        result=[],
+       rowcount=0,
        rewritten=[
          "select eid, bid, name, foo from vtocc_cached2 where 1 != 1",
          "select eid, bid, name, foo from vtocc_cached2 where (eid = 1 and bid = 'absent1') or (eid = 1 and bid = 'absent2')"],
@@ -81,6 +88,7 @@ cases = [
        query_plan="PK_IN",
        sql="select eid, bid, name, foo from vtocc_cached2 where eid = 1 and bid in('foo', 'bar')",
        result=[(1L, 'foo', 'abcd1', 'efgh'), (1L, 'bar', 'abcd1', 'efgh')],
+       rowcount=2,
        rewritten=[
          "select eid, bid, name, foo from vtocc_cached2 where 1 != 1",
          "select eid, bid, name, foo from vtocc_cached2 where (eid = 1 and bid = 'bar')"],
@@ -94,6 +102,7 @@ cases = [
        query_plan="PK_IN",
        sql="select eid, bid, name, foo from vtocc_cached2 where eid = 1 and bid in('foo', 'bar')",
        result=[(1L, 'foo', 'abcd1', 'efgh'), (1L, 'bar', 'abcd1', 'efgh')],
+       rowcount=2,
        rewritten=[],
        cache_hits=2,
        cache_misses=0,
@@ -105,6 +114,7 @@ cases = [
        query_plan="SELECT_SUBQUERY",
        sql="select eid, bid, name, foo from vtocc_cached2 where eid = 2 and name='abcd2'",
        result=[(2L, 'foo', 'abcd2', 'efgh'), (2L, 'bar', 'abcd2', 'efgh')],
+       rowcount=2,
        rewritten=[
          "select eid, bid, name, foo from vtocc_cached2 where 1 != 1",
          "select eid, bid from vtocc_cached2 use index (aname2) where eid = 2 and name = 'abcd2' limit 10001",
@@ -118,6 +128,7 @@ cases = [
   Case2(doc="verify 1.bar is in cache",
        sql="select bid, eid from vtocc_cached2 where eid = 1 and bid = 'bar'",
        result=[('bar', 1)],
+       rowcount=1,
        rewritten=[
          "select bid, eid from vtocc_cached2 where 1 != 1"],
        cache_hits=1),
@@ -131,6 +142,7 @@ cases = [
             cache_invalidations=2),
        Case2(sql="select * from vtocc_cached2 where eid = 1 and bid = 'bar'",
             result=[(1L, 'bar', 'abcd1', 'fghi')],
+            rowcount=1,
             rewritten=[
                 "select * from vtocc_cached2 where 1 != 1",
                 "select eid, bid, name, foo from vtocc_cached2 where (eid = 1 and bid = 'bar')"],
@@ -144,6 +156,7 @@ cases = [
        'rollback',
        Case2(sql="select * from vtocc_cached2 where eid = 1 and bid = 'bar'",
             result=[(1L, 'bar', 'abcd1', 'fghi')],
+            rowcount=1,
             rewritten=[],
             cache_hits=1)]),
   # (1.foo, 1.bar, 2.foo, 2.bar)
@@ -156,6 +169,7 @@ cases = [
             cache_invalidations=1),
        Case2(sql="select * from vtocc_cached2 where eid = 1 and bid = 'bar'",
             result=[],
+            rowcount=0,
             rewritten="select eid, bid, name, foo from vtocc_cached2 where (eid = 1 and bid = 'bar')",
             cache_absent=1),
        "begin",
@@ -167,6 +181,7 @@ cases = [
   Case2(doc="Verify 1.foo is in cache",
        sql="select * from vtocc_cached2 where eid = 1 and bid = 'foo'",
        result=[(1, 'foo', 'abcd1', 'efgh')],
+       rowcount=1,
        rewritten=["select * from vtocc_cached2 where 1 != 1"],
        cache_hits=1),
   # (1.foo, 2.foo, 2.bar)
@@ -177,6 +192,7 @@ cases = [
   Case2(doc="Verify cache is empty after DDL",
        sql="select * from vtocc_cached2 where eid = 1 and bid = 'foo'",
        result=[(1, 'foo', 'abcd1', 'efgh')],
+       rowcount=1,
        rewritten=[
          "select * from vtocc_cached2 where 1 != 1",
          "select eid, bid, name, foo from vtocc_cached2 where (eid = 1 and bid = 'foo')"],
@@ -186,6 +202,7 @@ cases = [
   Case2(doc="Verify row is cached",
        sql="select * from vtocc_cached2 where eid = 1 and bid = 'foo'",
        result=[(1, 'foo', 'abcd1', 'efgh')],
+       rowcount=1,
        rewritten=[],
        cache_hits=1),
   # (1.foo)

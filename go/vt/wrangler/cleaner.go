@@ -10,8 +10,6 @@ import (
 	"time"
 
 	"code.google.com/p/go.net/context"
-
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -72,16 +70,16 @@ func (cleaner *Cleaner) CleanUp(wr *Wrangler) error {
 			actionMap[actionReference.target] = helper
 		}
 		if helper.err != nil {
-			log.Warningf("previous action failed on target %v, no running %v", actionReference.target, actionReference.name)
+			wr.Logger().Warningf("previous action failed on target %v, no running %v", actionReference.target, actionReference.name)
 			continue
 		}
 		err := actionReference.action.CleanUp(wr)
 		if err != nil {
 			helper.err = err
 			rec.RecordError(err)
-			log.Errorf("action %v failed on %v: %v", actionReference.name, actionReference.target, err)
+			wr.Logger().Errorf("action %v failed on %v: %v", actionReference.name, actionReference.target, err)
 		} else {
-			log.Infof("action %v successfull on %v", actionReference.name, actionReference.target)
+			wr.Logger().Infof("action %v successfull on %v", actionReference.name, actionReference.target)
 		}
 	}
 	cleaner.mu.Unlock()

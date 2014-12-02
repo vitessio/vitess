@@ -40,9 +40,12 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult) {
 		queryStats.Add(planName, duration)
 		if reply == nil {
 			qre.plan.AddStats(1, duration, 0, 1)
-		} else {
-			qre.plan.AddStats(1, duration, int64(len(reply.Rows)), 0)
+			return
 		}
+		qre.plan.AddStats(1, duration, int64(reply.RowsAffected), 0)
+		qre.logStats.RowsAffected = int(reply.RowsAffected)
+		qre.logStats.Rows = reply.Rows
+		resultStats.Add(int64(len(reply.Rows)))
 	}(time.Now())
 
 	qre.checkPermissions()
@@ -100,12 +103,6 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult) {
 			panic(NewTabletError(NOT_IN_TX, "DMLs not allowed outside of transactions"))
 		}
 	}
-	if qre.plan.PlanId.IsSelect() {
-		qre.logStats.RowsAffected = int(reply.RowsAffected)
-		resultStats.Add(int64(reply.RowsAffected))
-		qre.logStats.Rows = reply.Rows
-	}
-
 	return reply
 }
 

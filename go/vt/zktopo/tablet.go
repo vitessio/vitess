@@ -7,7 +7,6 @@ package zktopo
 import (
 	"encoding/json"
 	"fmt"
-	"path"
 	"sort"
 
 	"github.com/youtube/vitess/go/event"
@@ -60,20 +59,6 @@ func (zkts *Server) CreateTablet(tablet *topo.Tablet) error {
 		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 			err = topo.ErrNodeExists
 		}
-		return err
-	}
-
-	// Create /zk/<cell>/vt/tablets/<uid>/action
-	tap := path.Join(zkTabletPath, "action")
-	_, err = zkts.zconn.Create(tap, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil {
-		return err
-	}
-
-	// Create /zk/<cell>/vt/tablets/<uid>/actionlog
-	talp := path.Join(zkTabletPath, "actionlog")
-	_, err = zkts.zconn.Create(talp, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil {
 		return err
 	}
 
@@ -173,15 +158,12 @@ func (zkts *Server) DeleteTablet(alias topo.TabletAlias) error {
 
 func (zkts *Server) ValidateTablet(alias topo.TabletAlias) error {
 	zkTabletPath := TabletPathForAlias(alias)
-	zkPaths := []string{
-		path.Join(zkTabletPath, "action"),
-		path.Join(zkTabletPath, "actionlog"),
-	}
-
-	for _, zkPath := range zkPaths {
-		if _, _, err := zkts.zconn.Get(zkPath); err != nil {
-			return err
+	_, _, err := zkts.zconn.Get(zkTabletPath)
+	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+			err = topo.ErrNoNode
 		}
+		return err
 	}
 	return nil
 }

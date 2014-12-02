@@ -60,3 +60,9 @@ class TxPoolFull(DatabaseError):
 
 class RequestBacklog(DatabaseError):
   pass
+
+
+# ThrottledError is raised when client exceeds allocated quota on the server
+class ThrottledError(OperationalError):
+  pass
+
