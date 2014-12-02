@@ -30,7 +30,8 @@ var (
 			<th>SQL</th>
 			<th>Queries</th>
 			<th>Sources</th>
-			<th>Response Size (Rows)</th>
+			<th>RowsAffected</th>
+			<th>Response Size</th>
 			<th>Cache Hits</th>
 			<th>Cache Misses</th>
 			<th>Cache Absent</th>
@@ -57,6 +58,7 @@ var (
 			<td>{{.OriginalSql | unquote | cssWrappable}}</td>
 			<td>{{.NumberOfQueries}}</td>
 			<td>{{.FmtQuerySources}}</td>
+			<td>{{.RowsAffected}}</td>
 			<td>{{.SizeOfResponse}}</td>
 			<td>{{.CacheHits}}</td>
 			<td>{{.CacheMisses}}</td>
