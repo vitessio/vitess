@@ -16,26 +16,7 @@ import (
 )
 
 // Offer a default config.
-var DefaultDBConfigs = DBConfigs{
-	App: DBConfig{
-		ConnectionParams: mysql.ConnectionParams{
-			Uname:   "vt_app",
-			Charset: "utf8",
-		},
-	},
-	Dba: mysql.ConnectionParams{
-		Uname:   "vt_dba",
-		Charset: "utf8",
-	},
-	Filtered: mysql.ConnectionParams{
-		Uname:   "vt_filtered",
-		Charset: "utf8",
-	},
-	Repl: mysql.ConnectionParams{
-		Uname:   "vt_repl",
-		Charset: "utf8",
-	},
-}
+var DefaultDBConfigs = DBConfigs{}
 
 // We keep a global singleton for the db configs, and that's the one
 // the flags will change
