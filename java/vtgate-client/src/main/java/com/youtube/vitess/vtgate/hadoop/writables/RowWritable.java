@@ -8,6 +8,7 @@ import com.youtube.vitess.vtgate.Row;
 import com.youtube.vitess.vtgate.Row.Cell;
 import com.youtube.vitess.vtgate.utils.GsonAdapters;
 
+import org.apache.commons.net.util.Base64;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
 
@@ -27,8 +28,10 @@ public class RowWritable implements Writable {
 
   // Row contains UnsignedLong and Class objects which need custom adapters
   private Gson gson = new GsonBuilder()
+      .registerTypeHierarchyAdapter(byte[].class, GsonAdapters.BYTE_ARRAY)
       .registerTypeAdapter(UnsignedLong.class, GsonAdapters.UNSIGNED_LONG)
-      .registerTypeAdapter(Class.class, GsonAdapters.CLASS).create();
+      .registerTypeAdapter(Class.class, GsonAdapters.CLASS)
+      .create();
 
   public RowWritable() {
 
@@ -53,7 +56,11 @@ public class RowWritable implements Writable {
   public void writeCell(DataOutput out, Cell cell) throws IOException {
     out.writeUTF(cell.getName());
     out.writeUTF(cell.getType().getName());
-    out.writeUTF(cell.getValue().toString());
+    if (cell.getType().equals(byte[].class)){
+      out.writeUTF(Base64.encodeBase64String((byte[])cell.getValue()));
+    } else{
+      out.writeUTF(cell.getValue().toString());
+    }
   }
 
   @Override
@@ -97,6 +104,9 @@ public class RowWritable implements Writable {
     }
     if (clazz.equals(String.class)) {
       val = value;
+    }
+    if (clazz.equals(byte[].class)) {
+      val = Base64.decodeBase64(value);
     }
     if (val == null) {
       throw new RuntimeException("unknown type in RowWritable: " + clazz);
