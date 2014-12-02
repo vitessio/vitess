@@ -3,10 +3,11 @@
 {
   "ID":"NoPlan",
   "Reason":"syntax error at position 4 near the",
-  "Table":null,
+  "Table": "",
   "Original":"the quick brown fox",
   "Rewritten":"",
-  "Index":null,
+  "Vindex": "",
+  "Col": "",
   "Values":null
 }
 
@@ -15,10 +16,11 @@
 {
   "ID":"NoPlan",
   "Reason":"too complex",
-  "Table":null,
+  "Table": "",
   "Original":"select * from user union select * from user",
   "Rewritten":"",
-  "Index":null,
+  "Vindex": "",
+  "Col": "",
   "Values":null
 }
 
@@ -27,10 +29,11 @@
 {
   "ID":"NoPlan",
   "Reason":"too complex",
-  "Table":null,
+  "Table": "",
   "Original":"set a=1",
   "Rewritten":"",
-  "Index":null,
+  "Vindex": "",
+  "Col": "",
   "Values":null
 }
 
@@ -39,10 +42,11 @@
 {
   "ID":"NoPlan",
   "Reason":"too complex",
-  "Table":null,
+  "Table": "",
   "Original":"create table a()",
   "Rewritten":"",
-  "Index":null,
+  "Vindex": "",
+  "Col": "",
   "Values":null
 }
 
@@ -51,10 +55,11 @@
 {
   "ID":"NoPlan",
   "Reason":"too complex",
-  "Table":null,
+  "Table": "",
   "Original":"explain select * from user",
   "Rewritten":"",
-  "Index":null,
+  "Vindex": "",
+  "Col": "",
   "Values":null
 }
 
@@ -63,10 +68,11 @@
 {
   "ID":"NoPlan",
   "Reason":"complex table expression",
-  "Table":null,
+  "Table": "",
   "Original":"select * from (select 2 from dual)",
   "Rewritten":"",
-  "Index":null,
+  "Vindex": "",
+  "Col": "",
   "Values":null
 }
 
@@ -75,10 +81,11 @@
 {
   "ID":"NoPlan",
   "Reason":"table nouser not found",
-  "Table":null,
+  "Table": "",
   "Original":"select * from nouser where id = 1",
   "Rewritten":"",
-  "Index":null,
+  "Vindex": "",
+  "Col": "",
   "Values":null
 }
 
@@ -87,10 +94,11 @@
 {
   "ID":"NoPlan",
   "Reason":"complex table expression",
-  "Table":null,
+  "Table": "",
   "Original":"select * from music, user where id = 1",
   "Rewritten":"",
-  "Index":null,
+  "Vindex": "",
+  "Col": "",
   "Values":null
 }
 
@@ -99,10 +107,11 @@
 {
   "ID":"NoPlan",
   "Reason":"complex table expression",
-  "Table":null,
+  "Table": "",
   "Original":"select * from (user) where id = 1",
   "Rewritten":"",
-  "Index":null,
+  "Vindex": "",
+  "Col": "",
   "Values":null
 }
 
@@ -111,10 +120,11 @@
 {
   "ID":"SelectUnsharded",
   "Reason":"",
-  "Table":"main1",
+  "Table": "main1",
   "Original":"select * from main1",
   "Rewritten":"select * from main1",
-  "Index":null,
+  "Vindex": "",
+  "Col": "",
   "Values":null
 }
 
@@ -122,11 +132,12 @@
 "select * from user"
 {
   "ID": "SelectScatter",
-  "Reason": "no where clause",
+  "Reason": "",
   "Table": "user",
   "Original":"select * from user",
   "Rewritten": "select * from user",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -138,7 +149,8 @@
   "Table": "user",
   "Original":"select * from user where id in (select * from music)",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -150,7 +162,8 @@
   "Table": "user",
   "Original":"select * from user where not (id in (select * from music))",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -162,7 +175,8 @@
   "Table": "user",
   "Original":"select * from user where id between (select 1 from dual) and 2",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -174,7 +188,8 @@
   "Table": "user",
   "Original":"select * from user where (select 1 from dual) is null",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -186,7 +201,8 @@
   "Table": "user",
   "Original":"select * from user where exists (select 1 from dual)",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -198,7 +214,8 @@
   "Table": "user",
   "Original":"select * from user where 1+1 = (select 1 from dual)",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -210,7 +227,8 @@
   "Table": "user",
   "Original":"select * from user where id = -(select 1 from dual)",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -222,7 +240,8 @@
   "Table": "user",
   "Original":"select * from user where id = func(1, (select 1 from dual))",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -230,11 +249,12 @@
 "select * from user where id = func(1)"
 {
   "ID":"SelectScatter",
-  "Reason":"no index match",
-  "Table":"user",
+  "Reason":"",
+  "Table": "user",
   "Original":"select * from user where id = func(1)",
   "Rewritten":"select * from user where id = func(1)",
-  "Index":null,
+  "Vindex": "",
+  "Col": "",
   "Values":null
 }
 
@@ -246,7 +266,8 @@
   "Table": "user",
   "Original":"select * from user where id = case (select 1 from dual) when a=b then c end",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -258,7 +279,8 @@
   "Table": "user",
   "Original":"select * from user where id = case aa when a = b then c else (select 1 from dual) end",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -270,7 +292,8 @@
   "Table": "user",
   "Original":"select * from user where id = case aa when (select 1 from dual) = b then c else d end",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -282,7 +305,8 @@
   "Table": "user",
   "Original":"select * from user where id = case aa when a = b then (select 1 from dual) else d end",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -290,11 +314,12 @@
 "select * from user where id = case aa when a = b then c end"
 {
   "ID":"SelectScatter",
-  "Reason":"no index match",
-  "Table":"user",
+  "Reason":"",
+  "Table": "user",
   "Original":"select * from user where id = case aa when a = b then c end",
   "Rewritten": "select * from user where id = case aa when a = b then c end",
-  "Index":null,
+  "Vindex": "",
+  "Col": "",
   "Values":null
 }
 
@@ -302,83 +327,77 @@
 "select * from user where 1 = id"
 {
   "ID":"SelectScatter",
-  "Reason":"no index match",
-  "Table":"user",
+  "Reason":"",
+  "Table": "user",
   "Original":"select * from user where 1 = id",
   "Rewritten":"select * from user where 1 = id",
-  "Index":null,
+  "Vindex": "",
+  "Col": "",
   "Values":null
 }
 
 # select by primary keyspace id
 "select * from user where id = 1"
 {
-  "ID": "SelectSingleShardKey",
+  "ID": "SelectEqual",
   "Reason": "",
   "Table": "user",
   "Original":"select * from user where id = 1",
   "Rewritten": "select * from user where id = 1",
-  "Index": {
-    "Type": 0,
-    "Column": "id",
-    "Name": "user_index",
-    "From": "",
-    "To": "",
-    "Owner": "user",
-    "IsAutoInc": true
-  },
+  "Vindex": "user_index",
+  "Col": "id",
   "Values": 1
+}
+
+# select by non-unique index
+"select * from user where name = 'foo'"
+{
+  "ID": "SelectEqual",
+  "Reason": "",
+  "Table": "user",
+  "Original":"select * from user where name = 'foo'",
+  "Rewritten": "select * from user where name = 'foo'",
+  "Vindex": "name_user_map",
+  "Col": "name",
+  "Values": "Zm9v"
 }
 
 # select by primary keyspace id, invalid value
 "select * from user where id = 1.1"
 {
   "ID":"SelectScatter",
-  "Reason":"no index match",
-  "Table":"user",
+  "Reason":"",
+  "Table": "user",
   "Original":"select * from user where id = 1.1",
   "Rewritten":"select * from user where id = 1.1",
-  "Index":null,
+  "Vindex": "",
+  "Col": "",
   "Values":null
 }
 
 # select with primary keyspace id through bind var
 "select * from user where id = :id"
 {
-  "ID": "SelectSingleShardKey",
+  "ID": "SelectEqual",
   "Reason": "",
   "Table": "user",
   "Original":"select * from user where id = :id",
   "Rewritten": "select * from user where id = :id",
-  "Index": {
-    "Type": 0,
-    "Column": "id",
-    "Name": "user_index",
-    "From": "",
-    "To": "",
-    "Owner": "user",
-    "IsAutoInc": true
-  },
+  "Vindex": "user_index",
+  "Col": "id",
   "Values": ":id"
 }
 
 # select with primary id through IN clause
 "select * from user where id in (1, 2)"
 {
-  "ID": "SelectMultiShardKey",
+  "ID": "SelectIN",
   "Reason": "",
   "Table": "user",
   "Original":"select * from user where id in (1, 2)",
   "Rewritten": "select * from user where id in ::_vals",
-  "Index": {
-    "Type": 0,
-    "Column": "id",
-    "Name": "user_index",
-    "From": "",
-    "To": "",
-    "Owner": "user",
-    "IsAutoInc": true
-  },
+  "Vindex": "user_index",
+  "Col": "id",
   "Values": [
     1,
     2
@@ -389,11 +408,12 @@
 "select * from user where id in (1+1, 2)"
 {
   "ID":"SelectScatter",
-  "Reason":"no index match",
-  "Table":"user",
+  "Reason":"",
+  "Table": "user",
   "Original":"select * from user where id in (1+1, 2)",
   "Rewritten":"select * from user where id in (1+1, 2)",
-  "Index":null,
+  "Vindex": "",
+  "Col": "",
   "Values":null
 }
 
@@ -401,103 +421,77 @@
 "select * from user where id in (1.1, 2)"
 {
   "ID":"SelectScatter",
-  "Reason":"no index match",
-  "Table":"user",
+  "Reason":"",
+  "Table": "user",
   "Original":"select * from user where id in (1.1, 2)",
   "Rewritten":"select * from user where id in (1.1, 2)",
-  "Index":null,
+  "Vindex": "",
+  "Col": "",
   "Values":null
 }
 
-# select with no index match
+# select with no vindex match
 "select * from user where user_id = 1"
 {
   "ID": "SelectScatter",
-  "Reason": "no index match",
+  "Reason": "",
   "Table": "user",
   "Original":"select * from user where user_id = 1",
   "Rewritten": "select * from user where user_id = 1",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
 # select with primary id with different column name
 "select * from user_extra where user_id = 1"
 {
-  "ID": "SelectSingleShardKey",
+  "ID": "SelectEqual",
   "Reason": "",
   "Table": "user_extra",
   "Original":"select * from user_extra where user_id = 1",
   "Rewritten": "select * from user_extra where user_id = 1",
-  "Index": {
-    "Type": 0,
-    "Column": "user_id",
-    "Name": "user_index",
-    "From": "",
-    "To": "",
-    "Owner": "user",
-    "IsAutoInc": true
-  },
+  "Vindex": "user_index",
+  "Col": "user_id",
   "Values": 1
 }
 
-# select with primary id when there's more than one index
+# select with primary id when there's more than one vindex
 "select * from music where user_id = 1"
 {
-  "ID": "SelectSingleShardKey",
+  "ID": "SelectEqual",
   "Reason": "",
   "Table": "music",
   "Original":"select * from music where user_id = 1",
   "Rewritten": "select * from music where user_id = 1",
-  "Index": {
-    "Type": 0,
-    "Column": "user_id",
-    "Name": "user_index",
-    "From": "",
-    "To": "",
-    "Owner": "user",
-    "IsAutoInc": true
-  },
+  "Vindex": "user_index",
+  "Col": "user_id",
   "Values": 1
 }
 
 # select by lookup
 "select * from music where id = 1"
 {
-  "ID": "SelectSingleLookup",
+  "ID": "SelectEqual",
   "Reason": "",
   "Table": "music",
   "Original":"select * from music where id = 1",
   "Rewritten": "select * from music where id = 1",
-  "Index": {
-    "Type": 1,
-    "Column": "id",
-    "Name": "music_user_map",
-    "From": "music_id",
-    "To": "user_id",
-    "Owner": "music",
-    "IsAutoInc": true
-  },
+  "Vindex": "music_user_map",
+  "Col": "id",
   "Values": 1
 }
 
 # select by lookup with IN clause
 "select * from music where id in (1, 2)"
 {
-  "ID": "SelectMultiLookup",
+  "ID": "SelectIN",
   "Reason": "",
   "Table": "music",
   "Original":"select * from music where id in (1, 2)",
   "Rewritten": "select * from music where id in ::_vals",
-  "Index": {
-    "Type": 1,
-    "Column": "id",
-    "Name": "music_user_map",
-    "From": "music_id",
-    "To": "user_id",
-    "Owner": "music",
-    "IsAutoInc": true
-  },
+  "Vindex": "music_user_map",
+  "Col": "id",
   "Values": [
     1,
     2
@@ -507,20 +501,13 @@
 # select by lookup with IN clause and bind vars
 "select * from music where id in (:a, 2)"
 {
-  "ID": "SelectMultiLookup",
+  "ID": "SelectIN",
   "Reason": "",
   "Table": "music",
   "Original":"select * from music where id in (:a, 2)",
   "Rewritten": "select * from music where id in ::_vals",
-  "Index": {
-    "Type": 1,
-    "Column": "id",
-    "Name": "music_user_map",
-    "From": "music_id",
-    "To": "user_id",
-    "Owner": "music",
-    "IsAutoInc": true
-  },
+  "Vindex": "music_user_map",
+  "Col": "id",
   "Values": [
     ":a",
     2
@@ -530,40 +517,26 @@
 # select by lookup with list bind var
 "select * from music where id in ::list"
 {
-  "ID": "SelectMultiLookup",
+  "ID": "SelectIN",
   "Reason": "",
   "Table": "music",
   "Original":"select * from music where id in ::list",
   "Rewritten": "select * from music where id in ::_vals",
-  "Index": {
-    "Type": 1,
-    "Column": "id",
-    "Name": "music_user_map",
-    "From": "music_id",
-    "To": "user_id",
-    "Owner": "music",
-    "IsAutoInc": true
-  },
+  "Vindex": "music_user_map",
+  "Col": "id",
   "Values": "::list"
 }
 
 # select by lookup if there's no primary key
 "select * from music_extra where music_id = 1"
 {
-  "ID": "SelectSingleLookup",
+  "ID": "SelectEqual",
   "Reason": "",
   "Table": "music_extra",
   "Original":"select * from music_extra where music_id = 1",
   "Rewritten": "select * from music_extra where music_id = 1",
-  "Index": {
-    "Type": 1,
-    "Column": "music_id",
-    "Name": "music_user_map",
-    "From": "music_id",
-    "To": "user_id",
-    "Owner": "music",
-    "IsAutoInc": true
-  },
+  "Vindex": "music_user_map",
+  "Col": "music_id",
   "Values": 1
 }
 
@@ -571,31 +544,25 @@
 "select * from user where id = 1 and var = 2 or var = 3"
 {
   "ID": "SelectScatter",
-  "Reason": "no index match",
+  "Reason": "",
   "Table": "user",
   "Original":"select * from user where id = 1 and var = 2 or var = 3",
   "Rewritten": "select * from user where id = 1 and var = 2 or var = 3",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
 # select with acceptable parenthesized OR clause at end
 "select * from user where id = 1 and (var = 2 or var = 3)"
 {
-  "ID": "SelectSingleShardKey",
+  "ID": "SelectEqual",
   "Reason": "",
   "Table": "user",
   "Original":"select * from user where id = 1 and (var = 2 or var = 3)",
   "Rewritten": "select * from user where id = 1 and (var = 2 or var = 3)",
-  "Index": {
-    "Type": 0,
-    "Column": "id",
-    "Name": "user_index",
-    "From": "",
-    "To": "",
-    "Owner": "user",
-    "IsAutoInc": true
-  },
+  "Vindex": "user_index",
+  "Col": "id",
   "Values": 1
 }
 
@@ -603,31 +570,25 @@
 "select * from user where var = 2 or var = 3 and id = 1"
 {
   "ID": "SelectScatter",
-  "Reason": "no index match",
+  "Reason": "",
   "Table": "user",
   "Original":"select * from user where var = 2 or var = 3 and id = 1",
   "Rewritten": "select * from user where var = 2 or var = 3 and id = 1",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
 # select with acceptable parenthesized OR clause at beginning
 "select * from user where (var = 2 or var = 3) and id = 1"
 {
-  "ID": "SelectSingleShardKey",
+  "ID": "SelectEqual",
   "Reason": "",
   "Table": "user",
   "Original":"select * from user where (var = 2 or var = 3) and id = 1",
   "Rewritten": "select * from user where (var = 2 or var = 3) and id = 1",
-  "Index": {
-    "Type": 0,
-    "Column": "id",
-    "Name": "user_index",
-    "From": "",
-    "To": "",
-    "Owner": "user",
-    "IsAutoInc": true
-  },
+  "Vindex": "user_index",
+  "Col": "id",
   "Values": 1
 }
 
@@ -639,7 +600,21 @@
   "Table": "user",
   "Original":"select count(*) from user where id in (1, 2)",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
+  "Values": null
+}
+
+# aggregates in select, non-unique vindex
+"select count(*) from user where name = 'foo'"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "Table": "user",
+  "Original":"select count(*) from user where name = 'foo'",
+  "Rewritten": "",
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -651,7 +626,8 @@
   "Table": "user",
   "Original":"select a = 1 and count(*) = 1 from user where id in (1, 2)",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -663,7 +639,8 @@
   "Table": "user",
   "Original":"select a = 1 or count(*) = 1 from user where id in (1, 2)",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -675,7 +652,8 @@
   "Table": "user",
   "Original":"select (not count(*) = 1) from user where id in (1, 2)",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -687,7 +665,8 @@
   "Table": "user",
   "Original":"select count(*) between 1 and 2 from user where id in (1, 2)",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -699,47 +678,34 @@
   "Table": "user",
   "Original":"select count(*) is null from user where id in (1, 2)",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
 # aggregates in select, EXISTS (cannot aggregate)
 "select exists (select 1 from dual) from user where id in (1, 2)"
 {
-  "ID":"SelectMultiShardKey",
+  "ID":"SelectIN",
   "Reason":"",
-  "Table":"user",
+  "Table": "user",
   "Original":"select exists (select 1 from dual) from user where id in (1, 2)",
   "Rewritten":"select exists (select 1 from dual) from user where id in ::_vals",
-  "Index":{
-    "Type":0,
-    "Column":"id",
-    "Name":"user_index",
-    "From":"",
-    "To":"",
-    "Owner":"user",
-    "IsAutoInc":true
-    },
+  "Vindex": "user_index",
+  "Col": "id",
   "Values":[1,2]
 }
 
 # aggregates in select, subquery
 "select (select 1 from dual) from user where id in (1, 2)"
 {
-  "ID":"SelectMultiShardKey",
+  "ID":"SelectIN",
   "Reason":"",
-  "Table":"user",
+  "Table": "user",
   "Original":"select (select 1 from dual) from user where id in (1, 2)",
   "Rewritten": "select (select 1 from dual) from user where id in ::_vals",
-  "Index":{
-    "Type":0,
-    "Column":"id",
-    "Name":"user_index",
-    "From":"",
-    "To":"",
-    "Owner":"user",
-    "IsAutoInc":true
-    },
+  "Vindex": "user_index",
+  "Col": "id",
   "Values":[1,2]
 }
 
@@ -751,7 +717,8 @@
   "Table": "user",
   "Original":"select count(*)+1 from user where id in (1, 2)",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -763,7 +730,8 @@
   "Table": "user",
   "Original":"select -count(*) from user where id in (1, 2)",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -775,27 +743,21 @@
   "Table": "user",
   "Original":"select fun(1, count(*)) from user where id in (1, 2)",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
 # aggregates in select, non-aggregate function
 "select fun(*) from user where id in (1, 2)"
 {
-  "ID": "SelectMultiShardKey",
+  "ID": "SelectIN",
   "Reason": "",
   "Table": "user",
   "Original":"select fun(*) from user where id in (1, 2)",
   "Rewritten": "select fun(*) from user where id in ::_vals",
-  "Index": {
-    "Type": 0,
-    "Column": "id",
-    "Name": "user_index",
-    "From": "",
-    "To": "",
-    "Owner": "user",
-    "IsAutoInc": true
-  },
+  "Vindex": "user_index",
+  "Col": "id",
   "Values": [
     1,
     2
@@ -810,7 +772,8 @@
   "Table": "user",
   "Original":"select case count(*) when a = b then d end from user where id in (1, 2)",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -822,7 +785,8 @@
   "Table": "user",
   "Original":"select case a when a = b then d else count(*) end from user where id in (1, 2)",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -834,7 +798,8 @@
   "Table": "user",
   "Original":"select case a when count(*) = b then d else e end from user where id in (1, 2)",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
@@ -846,27 +811,21 @@
   "Table": "user",
   "Original":"select case a when a = b then count(*) else e end from user where id in (1, 2)",
   "Rewritten": "",
-  "Index": null,
+  "Vindex": "",
+  "Col": "",
   "Values": null
 }
 
 # aggregates in select, no aggregates
 "select case a when a = b then d else e end from user where id in (1, 2)"
 {
-  "ID": "SelectMultiShardKey",
+  "ID": "SelectIN",
   "Reason": "",
   "Table": "user",
   "Original":"select case a when a = b then d else e end from user where id in (1, 2)",
   "Rewritten": "select case a when a = b then d else e end from user where id in ::_vals",
-  "Index": {
-    "Type": 0,
-    "Column": "id",
-    "Name": "user_index",
-    "From": "",
-    "To": "",
-    "Owner": "user",
-    "IsAutoInc": true
-  },
+  "Vindex": "user_index",
+  "Col": "id",
   "Values": [
     1,
     2

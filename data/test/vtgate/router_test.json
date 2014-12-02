@@ -1,59 +1,55 @@
 {
   "Keyspaces": {
     "TestRouter": {
-      "ShardingScheme": 1,
-      "Indexes": {
+      "Sharded": true,
+      "Vindexes": {
         "user_index": {
-          "Type": 0,
-          "Owner": "user",
-          "IsAutoInc": true
+          "Type": "hash",
+          "Owner": ""
         },
         "music_user_map": {
-          "Type": 1,
-          "From": "music_id",
-          "To": "user_id",
-          "Owner": "music",
-          "IsAutoInc": true
+          "Type": "hash",
+          "Owner": ""
         }
       },
       "Tables": {
         "user": {
-          "IndexColumns": [
+          "ColVindexes": [
             {
-              "Column": "id",
-              "IndexName": "user_index"
+              "Col": "id",
+              "Name": "user_index"
             }
           ]
         },
         "user_extra": {
-          "IndexColumns": [
+          "ColVindexes": [
             {
-              "Column": "user_id",
-              "IndexName": "user_index"
+              "Col": "user_id",
+              "Name": "user_index"
             }
           ]
         },
         "music": {
-          "IndexColumns": [
+          "ColVindexes": [
             {
-              "Column": "user_id",
-              "IndexName": "user_index"
+              "Col": "user_id",
+              "Name": "user_index"
             },
             {
-              "Column": "id",
-              "IndexName": "music_user_map"
+              "Col": "id",
+              "Name": "music_user_map"
             }
           ]
         },
         "music_extra": {
-          "IndexColumns": [
+          "ColVindexes": [
             {
-              "Column": "user_id",
-              "IndexName": "user_index"
+              "Col": "user_id",
+              "Name": "user_index"
             },
             {
-              "Column": "music_id",
-              "IndexName": "music_user_map"
+              "Col": "music_id",
+              "Name": "music_user_map"
             }
           ]
         }

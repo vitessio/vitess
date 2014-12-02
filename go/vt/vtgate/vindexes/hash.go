@@ -2,9 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package vtgate
-
-// This is a V3 file. Do not intermix with V2.
+package vindexes
 
 import (
 	"crypto/cipher"
@@ -14,41 +12,46 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
-type HashIndex struct {
-	keyspace string
-	serv     SrvTopoServer
-	cell     string
+var (
+	_ planbuilder.Unique     = (*HashVindex)(nil)
+	_ planbuilder.Reversible = (*HashVindex)(nil)
+)
+
+type HashVindex struct{}
+
+func NewHashVindex(_ map[string]interface{}) (planbuilder.Vindex, error) {
+	return &HashVindex{}, nil
 }
 
-func NewHashIndex(keyspace string, serv SrvTopoServer, cell string) *HashIndex {
-	return &HashIndex{
-		keyspace: keyspace,
-		serv:     serv,
-		cell:     cell,
+func (vind *HashVindex) Cost() int {
+	return 1
+}
+
+func (vind *HashVindex) Map(ids []interface{}) ([]key.KeyspaceId, error) {
+	out := make([]key.KeyspaceId, 0, len(ids))
+	for _, id := range ids {
+		num, err := getNumber(id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, vhash(num))
 	}
+	return out, nil
 }
 
-func (hindex *HashIndex) Resolve(tabletType topo.TabletType, shardKeys []interface{}) (newKeyspace string, shards []string, err error) {
-	newKeyspace, allShards, err := getKeyspaceShards(hindex.serv, hindex.cell, hindex.keyspace, tabletType)
+func (vind *HashVindex) Verify(id interface{}, ks key.KeyspaceId) (bool, error) {
+	num, err := getNumber(id)
 	if err != nil {
-		return "", nil, err
+		return false, err
 	}
-	shards = make([]string, 0, len(shardKeys))
-	for _, shardKey := range shardKeys {
-		num, err := getNumber(shardKey)
-		if err != nil {
-			return "", nil, err
-		}
-		shard, err := getShardForKeyspaceId(allShards, vhash(num))
-		if err != nil {
-			return "", nil, err
-		}
-		shards = append(shards, shard)
-	}
-	return newKeyspace, shards, nil
+	return vhash(num) == ks, nil
+}
+
+func (vind *HashVindex) ReverseMap(k key.KeyspaceId) (interface{}, error) {
+	return vunhash(k), nil
 }
 
 func getNumber(v interface{}) (uint64, error) {
@@ -75,10 +78,7 @@ func getNumber(v interface{}) (uint64, error) {
 	return 0, fmt.Errorf("unexpected type for %v: %T", v, v)
 }
 
-var (
-	block3DES cipher.Block
-	iv3DES    = make([]byte, 8)
-)
+var block3DES cipher.Block
 
 func init() {
 	var err error
@@ -86,19 +86,18 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+	planbuilder.Register("hash", NewHashVindex)
 }
 
 func vhash(shardKey uint64) key.KeyspaceId {
 	var keybytes, hashed [8]byte
 	binary.BigEndian.PutUint64(keybytes[:], shardKey)
-	encrypter := cipher.NewCBCEncrypter(block3DES, iv3DES)
-	encrypter.CryptBlocks(hashed[:], keybytes[:])
+	block3DES.Encrypt(hashed[:], keybytes[:])
 	return key.KeyspaceId(hashed[:])
 }
 
 func vunhash(k key.KeyspaceId) uint64 {
 	var unhashed [8]byte
-	decrypter := cipher.NewCBCDecrypter(block3DES, iv3DES)
-	decrypter.CryptBlocks(unhashed[:], []byte(k))
+	block3DES.Decrypt(unhashed[:], []byte(k))
 	return binary.BigEndian.Uint64(unhashed[:])
 }
