@@ -18,7 +18,6 @@ import (
 
 var (
 	sendCount         = stats.NewCounters("StreamlogSend")
-	internalDropCount = stats.NewCounters("StreamlogInternallyDroppedMessages")
 	deliveredCount    = stats.NewMultiCounters("StreamlogDelivered", []string{"Log", "Subscriber"})
 	deliveryDropCount = stats.NewMultiCounters("StreamlogDeliveryDroppedMessages", []string{"Log", "Subscriber"})
 )
@@ -51,12 +50,8 @@ func New(name string, size int) *StreamLogger {
 // Send sends message to all the writers subscribed to logger. Calling
 // Send does not block.
 func (logger *StreamLogger) Send(message interface{}) {
+	logger.dataQueue <- message
 	sendCount.Add(logger.name, 1)
-	select {
-	case logger.dataQueue <- message:
-	default:
-		internalDropCount.Add(logger.name, 1)
-	}
 }
 
 // Subscribe returns a channel which can be used to listen
