@@ -422,7 +422,7 @@ func (si *SchemaInfo) SetRules(queryRuleSet string, newRules *QueryRules) error 
 		si.queries.Clear()
 		return nil
 	} else {
-		return errors.New("Cannot find designated ruleset: " + queryRuleSet)
+		return errors.New("QueryRules identifier " + queryRuleSet + " is not valid")
 	}
 }
 
@@ -432,7 +432,7 @@ func (si *SchemaInfo) GetRules(queryRuleSet string) (error, *QueryRules) {
 	if ruleset, ok := si.queryRules[queryRuleSet]; ok {
 		return nil, ruleset.Copy()
 	} else {
-		return errors.New("Cannot find designated ruleset: " + queryRuleSet), nil
+		return errors.New("QueryRules identifier " + queryRuleSet + " is not valid"), nil
 	}
 }
 

@@ -54,7 +54,7 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet, blacklistedTables []
 		agent.DBConfigs.App.EnableInvalidator = false
 	}
 
-	err := agent.createQueryRules(tablet, blacklistedTables)
+	err := agent.initializeQueryRules(tablet, blacklistedTables)
 	if err != nil {
 		return err
 	}
@@ -62,8 +62,9 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet, blacklistedTables []
 	return tabletserver.AllowQueries(agent.DBConfigs, agent.SchemaOverrides, agent.Mysqld, false)
 }
 
-// createQueryRules computes the query rules that match the tablet record
-func (agent *ActionAgent) createQueryRules(tablet *topo.Tablet, blacklistedTables []string) (err error) {
+// initializeQueryRules computes the query rules that match the tablet record
+// it also loads the custom rules from various sources (File, Zookeeper, etc)
+func (agent *ActionAgent) initializeQueryRules(tablet *topo.Tablet, blacklistedTables []string) (err error) {
 	customRules := tabletserver.LoadCustomRules()
 
 	// Keyrange rules
@@ -113,17 +114,17 @@ func (agent *ActionAgent) createQueryRules(tablet *topo.Tablet, blacklistedTable
 	// Push all three sets of QueryRules to SqlQueryRpcService
 	loadRuleErr := tabletserver.SqlQueryRpcService.SetQueryRules(tabletserver.KeyrangeQueryRules, keyrangeRules)
 	if loadRuleErr != nil {
-		log.Warningf("Fail to load query rule set %s", tabletserver.KeyrangeQueryRules)
+		log.Warningf("Fail to load query rule set %s, Error message: %s", tabletserver.KeyrangeQueryRules, loadRuleErr)
 	}
 
 	loadRuleErr = tabletserver.SqlQueryRpcService.SetQueryRules(tabletserver.BlacklistQueryRules, blacklistRules)
 	if loadRuleErr != nil {
-		log.Warningf("Fail to load query rule set %s", tabletserver.BlacklistQueryRules)
+		log.Warningf("Fail to load query rule set %s, Error message: %s", tabletserver.BlacklistQueryRules, loadRuleErr)
 	}
 
 	loadRuleErr = tabletserver.SqlQueryRpcService.SetQueryRules(tabletserver.CustomQueryRules, customRules)
 	if loadRuleErr != nil {
-		log.Warningf("Fail to load query rule set %s", tabletserver.CustomQueryRules)
+		log.Warningf("Fail to load query rule set %s, Error message: %s", tabletserver.CustomQueryRules, loadRuleErr)
 	}
 	return nil
 }
