@@ -161,8 +161,8 @@ func RegisterQueryService() {
 
 // AllowQueries can take an indefinite amount of time to return because
 // it keeps retrying until it obtains a valid connection to the database.
-func AllowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, qrs *QueryRules, mysqld *mysqlctl.Mysqld, waitForMysql bool) error {
-	return SqlQueryRpcService.allowQueries(dbconfigs, schemaOverrides, qrs, mysqld, waitForMysql)
+func AllowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld *mysqlctl.Mysqld, waitForMysql bool) error {
+	return SqlQueryRpcService.allowQueries(dbconfigs, schemaOverrides, mysqld, waitForMysql)
 }
 
 // DisallowQueries can take a long time to return (not indefinite) because
@@ -183,12 +183,12 @@ func GetSessionId() int64 {
 	return SqlQueryRpcService.sessionId
 }
 
-func SetQueryRules(qrs *QueryRules) {
-	SqlQueryRpcService.qe.schemaInfo.SetRules(qrs)
+func SetQueryRules(queryRuleSet string, qrs *QueryRules) error {
+	return SqlQueryRpcService.qe.schemaInfo.SetRules(queryRuleSet, qrs)
 }
 
-func GetQueryRules() (qrs *QueryRules) {
-	return SqlQueryRpcService.qe.schemaInfo.GetRules()
+func GetQueryRules(queryRuleSet string) (error, *QueryRules) {
+	return SqlQueryRpcService.qe.schemaInfo.GetRules(queryRuleSet)
 }
 
 // IsHealthy returns nil if the query service is healthy (able to

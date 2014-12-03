@@ -111,7 +111,20 @@ func (agent *ActionAgent) createQueryRules(tablet *topo.Tablet, blacklistedTable
 		blacklistRules.Add(qr)
 	}
 	// Push all three sets of QueryRules to SqlQueryRpcService
-	tabletserver.SqlQueryRpcService.SetQueryRules(customRules, keyrangeRules, blacklistRules)
+	loadRuleErr := tabletserver.SqlQueryRpcService.SetQueryRules(tabletserver.KeyrangeQueryRules, keyrangeRules)
+	if loadRuleErr != nil {
+		log.Warningf("Fail to load query rule set %s", tabletserver.KeyrangeQueryRules)
+	}
+
+	loadRuleErr = tabletserver.SqlQueryRpcService.SetQueryRules(tabletserver.BlacklistQueryRules, blacklistRules)
+	if loadRuleErr != nil {
+		log.Warningf("Fail to load query rule set %s", tabletserver.BlacklistQueryRules)
+	}
+
+	loadRuleErr = tabletserver.SqlQueryRpcService.SetQueryRules(tabletserver.CustomQueryRules, customRules)
+	if loadRuleErr != nil {
+		log.Warningf("Fail to load query rule set %s", tabletserver.CustomQueryRules)
+	}
 	return nil
 }
 

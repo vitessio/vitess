@@ -104,8 +104,8 @@ func (sq *SqlQuery) setState(state int64) {
 // 1. Custom rule
 // 2. Tablet key range rule
 // 3. Table blacklist rule
-func (sq *SqlQuery) SetQueryRules(customRules *QueryRules, keyrangeRules *QueryRules, blacklistRules *QueryRules) {
-	sq.qe.schemaInfo.SetRules(customRules, keyrangeRules, blacklistRules)
+func (sq *SqlQuery) SetQueryRules(queryRuleSet string, newRules *QueryRules) error {
+	return sq.qe.schemaInfo.SetRules(queryRuleSet, newRules)
 }
 
 // allowQueries starts the query service.
