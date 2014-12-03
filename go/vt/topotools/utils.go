@@ -9,6 +9,8 @@ import (
 	"sort"
 	"sync"
 
+	"code.google.com/p/go.net/context"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -24,14 +26,14 @@ func FindTabletByIPAddrAndPort(tabletMap map[topo.TabletAlias]*topo.TabletInfo, 
 }
 
 // GetAllTablets returns a sorted list of tablets.
-func GetAllTablets(ts topo.Server, cell string) ([]*topo.TabletInfo, error) {
+func GetAllTablets(ctx context.Context, ts topo.Server, cell string) ([]*topo.TabletInfo, error) {
 	aliases, err := ts.GetTabletsByCell(cell)
 	if err != nil {
 		return nil, err
 	}
 	sort.Sort(topo.TabletAliasList(aliases))
 
-	tabletMap, err := topo.GetTabletMap(ts, aliases)
+	tabletMap, err := topo.GetTabletMap(ctx, ts, aliases)
 	if err != nil {
 		// we got another error than topo.ErrNoNode
 		return nil, err
@@ -53,7 +55,7 @@ func GetAllTablets(ts topo.Server, cell string) ([]*topo.TabletInfo, error) {
 
 // GetAllTabletsAccrossCells returns all tablets from known cells.
 // If it returns topo.ErrPartialResult, then the list is valid, but partial.
-func GetAllTabletsAccrossCells(ts topo.Server) ([]*topo.TabletInfo, error) {
+func GetAllTabletsAccrossCells(ctx context.Context, ts topo.Server) ([]*topo.TabletInfo, error) {
 	cells, err := ts.GetKnownCells()
 	if err != nil {
 		return nil, err
@@ -65,7 +67,7 @@ func GetAllTabletsAccrossCells(ts topo.Server) ([]*topo.TabletInfo, error) {
 	wg.Add(len(cells))
 	for i, cell := range cells {
 		go func(i int, cell string) {
-			results[i], errors[i] = GetAllTablets(ts, cell)
+			results[i], errors[i] = GetAllTablets(ctx, ts, cell)
 			wg.Done()
 		}(i, cell)
 	}

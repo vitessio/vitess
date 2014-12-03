@@ -526,7 +526,7 @@ func main() {
 			return
 		}
 		result := DbTopologyResult{}
-		topology, err := topotools.DbTopology(wr.TopoServer())
+		topology, err := topotools.DbTopology(context.TODO(), wr.TopoServer())
 		if err != nil {
 			result.Error = err.Error()
 		} else {

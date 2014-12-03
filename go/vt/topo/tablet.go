@@ -654,7 +654,12 @@ func DeleteTabletReplicationData(ts Server, tablet *Tablet) error {
 // and returns them all in a map.
 // If error is ErrPartialResult, the results in the dictionary are
 // incomplete, meaning some tablets couldn't be read.
-func GetTabletMap(ts Server, tabletAliases []TabletAlias) (map[TabletAlias]*TabletInfo, error) {
+func GetTabletMap(ctx context.Context, ts Server, tabletAliases []TabletAlias) (map[TabletAlias]*TabletInfo, error) {
+	span := trace.NewSpanFromContext(ctx)
+	span.StartLocal("topo.GetTabletMap")
+	span.Annotate("num_tablets", len(tabletAliases))
+	defer span.Finish()
+
 	wg := sync.WaitGroup{}
 	mutex := sync.Mutex{}
 

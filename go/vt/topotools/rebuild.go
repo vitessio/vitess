@@ -93,7 +93,7 @@ func RebuildShard(ctx context.Context, log logutil.Logger, ts topo.Server, keysp
 			}
 
 			// read all the Tablet records
-			tablets, err := topo.GetTabletMap(ts, aliases)
+			tablets, err := topo.GetTabletMap(ctx, ts, aliases)
 			switch err {
 			case nil:
 				// keep going, we're good

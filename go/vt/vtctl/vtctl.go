@@ -342,7 +342,7 @@ func fmtAction(action *actionnode.ActionNode) string {
 }
 
 func listTabletsByShard(wr *wrangler.Wrangler, keyspace, shard string) error {
-	tabletAliases, err := topo.FindAllTabletAliasesInShard(wr.TopoServer(), keyspace, shard)
+	tabletAliases, err := topo.FindAllTabletAliasesInShard(context.TODO(), wr.TopoServer(), keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -350,7 +350,7 @@ func listTabletsByShard(wr *wrangler.Wrangler, keyspace, shard string) error {
 }
 
 func dumpAllTablets(wr *wrangler.Wrangler, zkVtPath string) error {
-	tablets, err := topotools.GetAllTablets(wr.TopoServer(), zkVtPath)
+	tablets, err := topotools.GetAllTablets(context.TODO(), wr.TopoServer(), zkVtPath)
 	if err != nil {
 		return err
 	}
@@ -361,7 +361,7 @@ func dumpAllTablets(wr *wrangler.Wrangler, zkVtPath string) error {
 }
 
 func dumpTablets(wr *wrangler.Wrangler, tabletAliases []topo.TabletAlias) error {
-	tabletMap, err := topo.GetTabletMap(wr.TopoServer(), tabletAliases)
+	tabletMap, err := topo.GetTabletMap(context.TODO(), wr.TopoServer(), tabletAliases)
 	if err != nil {
 		return err
 	}
