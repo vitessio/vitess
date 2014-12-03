@@ -9,6 +9,7 @@ import com.youtube.vitess.vtgate.hadoop.writables.KeyspaceIdWritable;
 import com.youtube.vitess.vtgate.hadoop.writables.RowWritable;
 
 import org.apache.commons.lang.StringUtils;
+import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.Job;
@@ -26,7 +27,7 @@ import java.util.Map;
  * {@link VitessInputSplit}) are fetched from VtGate via an RPC. map() calls are supplied with a
  * {@link KeyspaceIdWritable}, {@link RowWritable} pair.
  */
-public class VitessInputFormat extends InputFormat<KeyspaceIdWritable, RowWritable> {
+public class VitessInputFormat extends InputFormat<NullWritable, RowWritable> {
 
   @Override
   public List<InputSplit> getSplits(JobContext context) {
@@ -56,7 +57,7 @@ public class VitessInputFormat extends InputFormat<KeyspaceIdWritable, RowWritab
     }
   }
 
-  public RecordReader<KeyspaceIdWritable, RowWritable> createRecordReader(InputSplit split,
+  public RecordReader<NullWritable, RowWritable> createRecordReader(InputSplit split,
       TaskAttemptContext context) throws IOException, InterruptedException {
     return new VitessRecordReader();
   }
