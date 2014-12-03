@@ -39,6 +39,13 @@ func (qrs *QueryRules) Copy() (newqrs *QueryRules) {
 	return newqrs
 }
 
+// Append merges the rules from another QueryRules into the receiver
+func (qrs *QueryRules) Append(otherqrs *QueryRules) {
+	for _, qr := range otherqrs.rules {
+		qrs.rules = append(qrs.rules, qr)
+	}
+}
+
 // Add adds a QueryRule to QueryRules. It does not check
 // for duplicates.
 func (qrs *QueryRules) Add(qr *QueryRule) {
