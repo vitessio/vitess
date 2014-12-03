@@ -5,21 +5,18 @@
 package tabletserver
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 
 	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/streamlog"
-	"github.com/youtube/vitess/go/vt/cfgclient"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -28,11 +25,7 @@ import (
 var (
 	queryLogHandler = flag.String("query-log-stream-handler", "/debug/querylog", "URL handler for streaming queries log")
 	txLogHandler    = flag.String("transaction-log-stream-handler", "/debug/txlog", "URL handler for streaming transactions log")
-
-	// Currently only local custom rule files are loaded to build custom query rules
-	// Google internally use CDD to push custom rules to tabletservers. For this purpose,
-	// Zookeeper can used instead of CDD as a opensource solution
-	customRules = flag.String("customrules", "", "custom query rules source")
+	customRules     = flag.String("customrules", "", "custom query rules file")
 )
 
 func init() {
@@ -58,9 +51,6 @@ func init() {
 	flag.IntVar(&qsConfig.RowCache.Connections, "rowcache-connections", DefaultQsConfig.RowCache.Connections, "rowcache max simultaneous connections")
 	flag.IntVar(&qsConfig.RowCache.Threads, "rowcache-threads", DefaultQsConfig.RowCache.Threads, "rowcache number of threads")
 	flag.BoolVar(&qsConfig.RowCache.LockPaged, "rowcache-lock-paged", DefaultQsConfig.RowCache.LockPaged, "whether rowcache locks down paged memory")
-
-	var fcr FileCustomRule
-	customRuleClientImpls["file"] = &fcr
 }
 
 type RowCacheConfig struct {
@@ -247,90 +237,22 @@ func InitQueryService() {
 	RegisterQueryService()
 }
 
-// CustomRuleClient inherits Cfgclient and provide BuildQueryRules()
-// interface which converts raw byte of certain format (JSON, ProtoBuf...)
-// into QueryRules structure.
-type CustomRuleClient interface {
-	cfgclient.CfgClient
-	BuildQueryRules([]byte) (*QueryRules, error)
-}
-
-// Registered custom rule implementations
-var customRuleClientImpls map[string](CustomRuleClient) = make(map[string](CustomRuleClient))
-
-// The actual custom rule client implementation in use is determined by flag 'customrules'.
-// The flag 'customrules' follows a format of <Custom Rule Implementation>:<PATH>, for example
-// If customrules=file:/usr/local/data/somerule.rule or customrules=/usr/local/data/rule1.rule,
-// the "file" custom rule client will be used to build custom query rules
-
-var customRuleClientSelected string = "file"
-
-type FileCustomRule struct {
-	FilePath string
-}
-
-// So a filesystem normally cannot actively notify modifications
-func (fcr *FileCustomRule) UpdateCfg(data []byte) (err error) {
-	return nil
-}
-
-func (fcr *FileCustomRule) GetCfg() (content []byte, err error) {
-	content, err = ioutil.ReadFile(fcr.FilePath)
-	return content, err
-}
-
-func (fcr *FileCustomRule) Init(params map[string](interface{})) (err error) {
-	if path, havepath := params["path"]; havepath {
-		switch pt := path.(type) {
-		case *string:
-			fcr.FilePath = *pt
-			return nil
-		default:
-			return errors.New("Custom rule path needs to be of string type")
-		}
-	}
-	return errors.New("No path parameter is found")
-}
-
-func (fcr *FileCustomRule) BuildQueryRules(rawtxt []byte) (qrs *QueryRules, err error) {
-	qrs = NewQueryRules()
-	err = qrs.UnmarshalJSON(rawtxt)
-	return qrs, err
-}
-
 // LoadCustomRules returns custom rules as specified by the command
-// line flags. LoadCustomRules() should be called after InitQueryService()
+// line flags.
 func LoadCustomRules() (qrs *QueryRules) {
 	if *customRules == "" {
 		return NewQueryRules()
 	}
 
-	// Determine which CustomRuleClient to use
-	// Custom Rule paths is of the style <proto>:<path>
-	if !strings.Contains(*customRules, ":") {
-		*customRules = "file:" + *customRules
-	}
-	*customRules = *customRules + " "
-	// Get the protocol to retrive custom rule
-	ruleproto := strings.Split(*customRules, ":")[0]
-	// Get the custom rule path under given protocol
-	rulepath := strings.TrimSpace((*customRules)[(len(ruleproto) + 1):len(*customRules)])
-	if _, ok := customRuleClientImpls[ruleproto]; !ok {
-		return NewQueryRules()
-	}
-	// Get custom rule client & Initalization
-	ruleclient := customRuleClientImpls[ruleproto]
-	initparams := map[string](interface{}){"path": &rulepath, "sqlquery": SqlQueryRpcService}
-	err := ruleclient.Init(initparams)
+	data, err := ioutil.ReadFile(*customRules)
 	if err != nil {
-		log.Warningf("Cannot initialize custom rule client, err: %v\n", err)
+		log.Fatalf("Error reading file %v: %v", *customRules, err)
 	}
 
-	//Read initial configuration and build QueryRules
-	data, err := ruleclient.GetCfg()
+	qrs = NewQueryRules()
+	err = qrs.UnmarshalJSON(data)
 	if err != nil {
-		log.Warningf("Error fetching inital custom rule from %v: %v\n", *customRules, err)
+		log.Fatalf("Error unmarshaling query rules %v", err)
 	}
-	qrs, err = ruleclient.BuildQueryRules(data)
 	return qrs
 }

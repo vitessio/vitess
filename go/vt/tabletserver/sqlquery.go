@@ -100,6 +100,14 @@ func (sq *SqlQuery) setState(state int64) {
 	sq.state.Set(state)
 }
 
+// SetQueryRules sets one or more of the following QueryRule sets:
+// 1. Custom rule
+// 2. Tablet key range rule
+// 3. Table blacklist rule
+func (sq *SqlQuery) SetQueryRules(customRules *QueryRules, keyrangeRules *QueryRules, blacklistRules *QueryRules) {
+	sq.qe.schemaInfo.SetRules(customRules, keyrangeRules, blacklistRules)
+}
+
 // allowQueries starts the query service.
 // If the state is anything other than NOT_SERVING, it fails.
 // If allowQuery succeeds, the resulting state is SERVING.
@@ -108,7 +116,7 @@ func (sq *SqlQuery) setState(state int64) {
 // If waitForMysql is set to true, allowQueries will not return
 // until it's able to connect to mysql.
 // No other operations are allowed when allowQueries is running.
-func (sq *SqlQuery) allowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, qrs *QueryRules, mysqld *mysqlctl.Mysqld, waitForMysql bool) (err error) {
+func (sq *SqlQuery) allowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld *mysqlctl.Mysqld, waitForMysql bool) (err error) {
 	sq.mu.Lock()
 	defer sq.mu.Unlock()
 	if sq.state.Get() != NOT_SERVING {
@@ -146,7 +154,7 @@ func (sq *SqlQuery) allowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides
 		sq.setState(SERVING)
 	}()
 
-	sq.qe.Open(dbconfigs, schemaOverrides, qrs, mysqld)
+	sq.qe.Open(dbconfigs, schemaOverrides, mysqld)
 	sq.dbconfig = &dbconfigs.App
 	sq.sessionId = Rand()
 	log.Infof("Session id: %d", sq.sessionId)

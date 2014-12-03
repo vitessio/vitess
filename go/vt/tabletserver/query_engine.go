@@ -190,7 +190,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 }
 
 // Open must be called before sending requests to QueryEngine.
-func (qe *QueryEngine) Open(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, qrs *QueryRules, mysqld *mysqlctl.Mysqld) {
+func (qe *QueryEngine) Open(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld *mysqlctl.Mysqld) {
 	qe.dbconfigs = dbconfigs
 	connFactory := dbconnpool.DBConnectionCreator(&dbconfigs.App.ConnectionParams, mysqlStats)
 	// Create dba params based on App connection params
@@ -221,7 +221,7 @@ func (qe *QueryEngine) Open(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []Sc
 	start := time.Now()
 	// schemaInfo depends on cachePool. Every table that has a rowcache
 	// points to the cachePool.
-	qe.schemaInfo.Open(dbaConnFactory, schemaOverrides, qe.cachePool, qrs, strictMode)
+	qe.schemaInfo.Open(dbaConnFactory, schemaOverrides, qe.cachePool, strictMode)
 	log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))
 
 	// Start the invalidator only after schema is loaded.

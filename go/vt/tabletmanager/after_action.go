@@ -54,19 +54,20 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet, blacklistedTables []
 		agent.DBConfigs.App.EnableInvalidator = false
 	}
 
-	qrs, err := agent.createQueryRules(tablet, blacklistedTables)
+	err := agent.createQueryRules(tablet, blacklistedTables)
 	if err != nil {
 		return err
 	}
 
-	return tabletserver.AllowQueries(agent.DBConfigs, agent.SchemaOverrides, qrs, agent.Mysqld, false)
+	return tabletserver.AllowQueries(agent.DBConfigs, agent.SchemaOverrides, agent.Mysqld, false)
 }
 
 // createQueryRules computes the query rules that match the tablet record
-func (agent *ActionAgent) createQueryRules(tablet *topo.Tablet, blacklistedTables []string) (qrs *tabletserver.QueryRules, err error) {
-	qrs = tabletserver.LoadCustomRules()
+func (agent *ActionAgent) createQueryRules(tablet *topo.Tablet, blacklistedTables []string) (err error) {
+	customRules := tabletserver.LoadCustomRules()
 
 	// Keyrange rules
+	keyrangeRules := tabletserver.NewQueryRules()
 	if tablet.KeyRange.IsPartial() {
 		log.Infof("Restricting to keyrange: %v", tablet.KeyRange)
 		dml_plans := []struct {
@@ -88,27 +89,30 @@ func (agent *ActionAgent) createQueryRules(tablet *topo.Tablet, blacklistedTable
 			qr.AddPlanCond(plan.planID)
 			err := qr.AddBindVarCond("keyspace_id", plan.onAbsent, true, tabletserver.QR_NOTIN, tablet.KeyRange)
 			if err != nil {
-				return nil, fmt.Errorf("Unable to add keyspace rule: %v", err)
+				return fmt.Errorf("Unable to add keyspace rule: %v", err)
 			}
-			qrs.Add(qr)
+			keyrangeRules.Add(qr)
 		}
 	}
 
 	// Blacklisted tables
+	blacklistRules := tabletserver.NewQueryRules()
 	if len(blacklistedTables) > 0 {
 		// tables, first resolve wildcards
 		tables, err := agent.Mysqld.ResolveTables(tablet.DbName(), blacklistedTables)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		log.Infof("Blacklisting tables %v", strings.Join(tables, ", "))
 		qr := tabletserver.NewQueryRule("enforce blacklisted tables", "blacklisted_table", tabletserver.QR_FAIL_RETRY)
 		for _, t := range tables {
 			qr.AddTableCond(t)
 		}
-		qrs.Add(qr)
+		blacklistRules.Add(qr)
 	}
-	return qrs, nil
+	// Push all three sets of QueryRules to SqlQueryRpcService
+	tabletserver.SqlQueryRpcService.SetQueryRules(customRules, keyrangeRules, blacklistRules)
+	return nil
 }
 
 func (agent *ActionAgent) disallowQueries() {
