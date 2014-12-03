@@ -65,7 +65,8 @@ func NewCachePool(name string, rowCacheConfig RowCacheConfig, queryTimeout time.
 		cp.port = rowCacheConfig.Socket
 	}
 	if rowCacheConfig.TcpPort > 0 {
-		cp.port = strconv.Itoa(rowCacheConfig.TcpPort)
+		//address: ":11211"
+		cp.port = ":" + strconv.Itoa(rowCacheConfig.TcpPort)
 	}
 	if rowCacheConfig.Connections > 0 {
 		if rowCacheConfig.Connections <= 50 {
