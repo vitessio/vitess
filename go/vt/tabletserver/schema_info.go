@@ -77,23 +77,27 @@ type SchemaOverride struct {
 }
 
 type SchemaInfo struct {
-	mu         sync.Mutex
-	tables     map[string]*TableInfo
-	overrides  []SchemaOverride
-	queries    *cache.LRUCache
-	rules      *QueryRules
-	connPool   *dbconnpool.ConnectionPool
-	cachePool  *CachePool
-	lastChange time.Time
-	ticks      *timer.Timer
+	mu             sync.Mutex
+	tables         map[string]*TableInfo
+	overrides      []SchemaOverride
+	queries        *cache.LRUCache
+	customRules    *QueryRules
+	keyrangeRules  *QueryRules
+	blacklistRules *QueryRules
+	connPool       *dbconnpool.ConnectionPool
+	cachePool      *CachePool
+	lastChange     time.Time
+	ticks          *timer.Timer
 }
 
 func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration) *SchemaInfo {
 	si := &SchemaInfo{
-		queries:  cache.NewLRUCache(int64(queryCacheSize)),
-		rules:    NewQueryRules(),
-		connPool: dbconnpool.NewConnectionPool("", 2, idleTimeout),
-		ticks:    timer.NewTimer(reloadTime),
+		queries:        cache.NewLRUCache(int64(queryCacheSize)),
+		customRules:    NewQueryRules(),
+		keyrangeRules:  NewQueryRules(),
+		blacklistRules: NewQueryRules(),
+		connPool:       dbconnpool.NewConnectionPool("", 2, idleTimeout),
+		ticks:          timer.NewTimer(reloadTime),
 	}
 	stats.Publish("QueryCacheLength", stats.IntFunc(si.queries.Length))
 	stats.Publish("QueryCacheSize", stats.IntFunc(si.queries.Size))
@@ -115,7 +119,7 @@ func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout tim
 	return si
 }
 
-func (si *SchemaInfo) Open(connFactory dbconnpool.CreateConnectionFunc, schemaOverrides []SchemaOverride, cachePool *CachePool, qrs *QueryRules, strictMode bool) {
+func (si *SchemaInfo) Open(connFactory dbconnpool.CreateConnectionFunc, schemaOverrides []SchemaOverride, cachePool *CachePool, strictMode bool) {
 	si.connPool.Open(connFactory)
 	// Get time first because it needs a connection from the pool.
 	curTime := si.mysqlTime()
@@ -159,7 +163,6 @@ func (si *SchemaInfo) Open(connFactory dbconnpool.CreateConnectionFunc, schemaOv
 	si.lastChange = curTime
 	// Clear is not really needed. Doing it for good measure.
 	si.queries.Clear()
-	si.rules = qrs.Copy()
 	si.ticks.Start(func() { si.Reload() })
 }
 
@@ -211,7 +214,9 @@ func (si *SchemaInfo) Close() {
 	si.tables = nil
 	si.overrides = nil
 	si.queries.Clear()
-	si.rules = NewQueryRules()
+	si.customRules = NewQueryRules()
+	si.keyrangeRules = NewQueryRules()
+	si.blacklistRules = NewQueryRules()
 }
 
 func (si *SchemaInfo) Reload() {
@@ -347,7 +352,9 @@ func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string) *ExecPlan {
 		panic(NewTabletError(FAIL, "%s", err))
 	}
 	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
-	plan.Rules = si.rules.filterByPlan(sql, plan.PlanId, plan.TableName)
+	plan.Rules = si.keyrangeRules.filterByPlan(sql, plan.PlanId, plan.TableName)
+	plan.Rules.Append(si.blacklistRules.filterByPlan(sql, plan.PlanId, plan.TableName))
+	plan.Rules.Append(si.customRules.filterByPlan(sql, plan.PlanId, plan.TableName))
 	plan.Authorized = tableacl.Authorized(plan.TableName, plan.PlanId.MinRole())
 	if plan.PlanId.IsSelect() {
 		if plan.FieldQuery == nil {
@@ -389,22 +396,32 @@ func (si *SchemaInfo) GetStreamPlan(sql string) *ExecPlan {
 		panic(NewTabletError(FAIL, "%s", err))
 	}
 	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
-	plan.Rules = si.rules.filterByPlan(sql, plan.PlanId, plan.TableName)
+	plan.Rules = si.keyrangeRules.filterByPlan(sql, plan.PlanId, plan.TableName)
+	plan.Rules.Append(si.blacklistRules.filterByPlan(sql, plan.PlanId, plan.TableName))
+	plan.Rules.Append(si.customRules.filterByPlan(sql, plan.PlanId, plan.TableName))
 	plan.Authorized = tableacl.Authorized(plan.TableName, plan.PlanId.MinRole())
 	return plan
 }
 
-func (si *SchemaInfo) SetRules(qrs *QueryRules) {
+func (si *SchemaInfo) SetRules(customRules *QueryRules, keyrangeRules *QueryRules, blacklistRules *QueryRules) {
 	si.mu.Lock()
 	defer si.mu.Unlock()
-	si.rules = qrs.Copy()
+	if customRules != nil {
+		si.customRules = customRules.Copy()
+	}
+	if keyrangeRules != nil {
+		si.keyrangeRules = keyrangeRules.Copy()
+	}
+	if blacklistRules != nil {
+		si.blacklistRules = blacklistRules.Copy()
+	}
 	si.queries.Clear()
 }
 
-func (si *SchemaInfo) GetRules() (qrs *QueryRules) {
+func (si *SchemaInfo) GetRules() (customRules *QueryRules, keyrangeRules *QueryRules, blacklistRules *QueryRules) {
 	si.mu.Lock()
 	defer si.mu.Unlock()
-	return si.rules.Copy()
+	return si.customRules.Copy(), si.keyrangeRules.Copy(), si.blacklistRules.Copy()
 }
 
 func (si *SchemaInfo) GetTable(tableName string) *TableInfo {
