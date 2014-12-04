@@ -105,7 +105,19 @@ func (sq *SqlQuery) setState(state int64) {
 // 2. Tablet key range rule
 // 3. Table blacklist rule
 func (sq *SqlQuery) SetQueryRules(queryRuleSet string, newRules *QueryRules) error {
+	sq.mu.Lock()
+	defer sq.mu.Unlock()
 	return sq.qe.schemaInfo.SetRules(queryRuleSet, newRules)
+}
+
+// GetQueryRules returns one or more of the following QueryRule sets that is currently in use:
+// 1. Custom rule
+// 2. Tablet key range rule
+// 3. Table blacklist rule
+func (sq *SqlQuery) GetQueryRules(queryRuleSet string, newRules *QueryRules) (error, *QueryRules) {
+	sq.mu.Lock()
+	defer sq.mu.Unlock()
+	return sq.qe.schemaInfo.GetRules(queryRuleSet)
 }
 
 // allowQueries starts the query service.
