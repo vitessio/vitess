@@ -79,7 +79,8 @@ class VTGateCursor(object):
       if not self.is_writable():
         raise dbexceptions.DatabaseError('DML on a non-writable cursor', sql)
 
-      # FIXME(shrutip): these checks maybe better on vtgate server.
+      # FIXME(shrutip): these checks should be on vtgate server, so
+      # dependency on topology can be removed.
       if topology.is_sharded_keyspace(self.keyspace, self.tablet_type):
         if self.keyspace_ids is None or len(self.keyspace_ids) != 1:
           raise dbexceptions.ProgrammingError('DML on zero or multiple keyspace ids is not allowed: %r'

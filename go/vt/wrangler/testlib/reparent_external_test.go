@@ -48,7 +48,7 @@ func TestShardExternallyReparented(t *testing.T) {
 
 	// Slightly unrelated test: make sure we can find the tablets
 	// even with a datacenter being down.
-	tabletMap, err := topo.GetTabletMapForShardByCell(ts, "test_keyspace", "0", []string{"cell1"})
+	tabletMap, err := topo.GetTabletMapForShardByCell(ctx, ts, "test_keyspace", "0", []string{"cell1"})
 	if err != nil {
 		t.Fatalf("GetTabletMapForShardByCell should have worked but got: %v", err)
 	}
@@ -66,13 +66,13 @@ func TestShardExternallyReparented(t *testing.T) {
 	}
 
 	// Make sure the master is not exported in other cells
-	tabletMap, err = topo.GetTabletMapForShardByCell(ts, "test_keyspace", "0", []string{"cell2"})
+	tabletMap, err = topo.GetTabletMapForShardByCell(ctx, ts, "test_keyspace", "0", []string{"cell2"})
 	master, err = topotools.FindTabletByIPAddrAndPort(tabletMap, oldMaster.Tablet.IPAddr, "vt", oldMaster.Tablet.Portmap["vt"])
 	if err != topo.ErrNoNode {
 		t.Fatalf("FindTabletByIPAddrAndPort(master) worked in cell2: %v %v", err, master)
 	}
 
-	tabletMap, err = topo.GetTabletMapForShard(ts, "test_keyspace", "0")
+	tabletMap, err = topo.GetTabletMapForShard(ctx, ts, "test_keyspace", "0")
 	if err != topo.ErrPartialResult {
 		t.Fatalf("GetTabletMapForShard should have returned ErrPartialResult but got: %v", err)
 	}

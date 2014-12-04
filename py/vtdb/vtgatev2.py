@@ -141,10 +141,15 @@ class VTGateConnection(object):
   def is_closed(self):
     return self.client.is_closed()
 
-  def cursor(self, cursorclass=None, *pargs, **kwargs):
+  def cursor(self, *pargs, **kwargs):
+    cursorclass = None
+    if 'cursorclass' in kwargs:
+      cursorclass = kwargs['cursorclass']
+      del kwargs['cursorclass']
+
     if cursorclass is None:
       cursorclass = vtgate_cursor.VTGateCursor
-    return cursorclass(*pargs, **kwargs)
+    return cursorclass(self, *pargs, **kwargs)
 
   def begin(self):
     try:

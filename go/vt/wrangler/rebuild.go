@@ -225,7 +225,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 
 	allTablets := make([]*topo.TabletInfo, 0, 1024)
 	for _, cell := range cells {
-		tablets, err := topotools.GetAllTablets(wr.ts, cell)
+		tablets, err := topotools.GetAllTablets(context.TODO(), wr.ts, cell)
 		if err != nil {
 			return err
 		}

@@ -53,7 +53,7 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 	// - the local cell that contains the new master is reachable
 	//   (as we're going to check the new master is in the list)
 	// That should be enough.
-	tabletMap, err := topo.GetTabletMapForShard(wr.ts, keyspace, shard)
+	tabletMap, err := topo.GetTabletMapForShard(context.TODO(), wr.ts, keyspace, shard)
 	switch err {
 	case nil:
 		// keep going
