@@ -7,7 +7,6 @@ package test
 import (
 	"encoding/json"
 	"testing"
-	"time"
 
 	"code.google.com/p/go.net/context"
 
@@ -115,49 +114,4 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Errorf("GetTablet: expected error, tablet was deleted: %v", err)
 	}
 
-}
-
-func CheckPid(t *testing.T, ts topo.Server) {
-	cell := getLocalCell(t, ts)
-	tablet := &topo.Tablet{
-		Alias:    topo.TabletAlias{Cell: cell, Uid: 1},
-		Hostname: "localhost",
-		Portmap: map[string]int{
-			"vt": 3333,
-		},
-
-		Parent:   topo.TabletAlias{},
-		Keyspace: "test_keyspace",
-		Type:     topo.TYPE_MASTER,
-		State:    topo.STATE_READ_WRITE,
-		KeyRange: newKeyRange("-10"),
-	}
-	if err := ts.CreateTablet(tablet); err != nil {
-		t.Fatalf("CreateTablet: %v", err)
-	}
-	tabletAlias := topo.TabletAlias{Cell: cell, Uid: 1}
-
-	done := make(chan struct{}, 1)
-	if err := ts.CreateTabletPidNode(tabletAlias, "contents", done); err != nil {
-		t.Errorf("ts.CreateTabletPidNode: %v", err)
-	}
-
-	// wait for up to 30 seconds for the pid to appear
-	timeout := 30
-	for {
-		err := ts.ValidateTabletPidNode(tabletAlias)
-		if err == nil {
-			// exists, we're good
-			break
-		}
-
-		timeout -= 1
-		if timeout == 0 {
-			t.Fatalf("ts.ValidateTabletPidNode: %v", err)
-		}
-		t.Logf("Waiting for ValidateTabletPidNode to succeed %v/30", timeout)
-		time.Sleep(time.Second)
-	}
-
-	close(done)
 }

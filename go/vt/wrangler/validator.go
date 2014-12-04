@@ -258,11 +258,6 @@ func (wr *Wrangler) pingTablets(tabletMap map[topo.TabletAlias]*topo.TabletInfo,
 		go func(tabletAlias topo.TabletAlias, tabletInfo *topo.TabletInfo) {
 			defer wg.Done()
 
-			if err := wr.ts.ValidateTabletPidNode(tabletAlias); err != nil {
-				results <- vresult{tabletAlias.String(), fmt.Errorf("no pid node on %v: %v", tabletInfo.Hostname, err)}
-				return
-			}
-
 			if err := wr.tmc.Ping(context.TODO(), tabletInfo, wr.ActionTimeout()); err != nil {
 				results <- vresult{tabletAlias.String(), fmt.Errorf("Ping failed: %v %v", err, tabletInfo.Hostname)}
 			}

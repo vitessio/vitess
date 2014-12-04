@@ -26,7 +26,6 @@ import (
 	"flag"
 	"fmt"
 	"net"
-	"os"
 	"sync"
 	"time"
 
@@ -327,12 +326,6 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 
 	// Reread to get the changes we just made
 	if err := agent.readTablet(); err != nil {
-		return err
-	}
-
-	data := fmt.Sprintf("host:%v\npid:%v\n", hostname, os.Getpid())
-
-	if err := agent.TopoServer.CreateTabletPidNode(agent.TabletAlias, data, agent.done); err != nil {
 		return err
 	}
 

@@ -279,11 +279,7 @@ func (ft *fakeTopo) LockShardForAction(keyspace, shard, contents string, timeout
 	return "", nil
 }
 func (ft *fakeTopo) UnlockShardForAction(keyspace, shard, lockPath, results string) error { return nil }
-func (ft *fakeTopo) CreateTabletPidNode(tabletAlias topo.TabletAlias, contents string, done chan struct{}) error {
-	return nil
-}
-func (ft *fakeTopo) ValidateTabletPidNode(tabletAlias topo.TabletAlias) error { return nil }
-func (ft *fakeTopo) GetSubprocessFlags() []string                             { return nil }
+func (ft *fakeTopo) GetSubprocessFlags() []string                                         { return nil }
 
 type fakeTopoRemoteMaster struct {
 	fakeTopo

@@ -278,13 +278,6 @@ type Server interface {
 	// Supporting the local agent process, local cell.
 	//
 
-	// CreateTabletPidNode will keep a PID node up to date with
-	// this tablet's current PID, until 'done' is closed.
-	CreateTabletPidNode(tabletAlias TabletAlias, contents string, done chan struct{}) error
-
-	// ValidateTabletPidNode makes sure a PID file exists for the tablet
-	ValidateTabletPidNode(tabletAlias TabletAlias) error
-
 	// GetSubprocessFlags returns the flags required to run a
 	// subprocess that uses the same Server parameters as
 	// this process.
