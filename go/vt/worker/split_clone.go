@@ -46,6 +46,7 @@ type SplitCloneWorker struct {
 	excludeTables          []string
 	strategy               *mysqlctl.SplitStrategy
 	sourceReaderCount      int
+	destinationPackCount   int
 	minTableSizeForSplit   uint64
 	destinationWriterCount int
 	cleaner                *wrangler.Cleaner
@@ -77,7 +78,7 @@ type SplitCloneWorker struct {
 }
 
 // NewSplitCloneWorker returns a new SplitCloneWorker object.
-func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string, strategyStr string, sourceReaderCount int, minTableSizeForSplit uint64, destinationWriterCount int) (Worker, error) {
+func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount int) (Worker, error) {
 	strategy, err := mysqlctl.NewSplitStrategy(wr.Logger(), strategyStr)
 	if err != nil {
 		return nil, err
@@ -90,6 +91,7 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, ex
 		excludeTables:          excludeTables,
 		strategy:               strategy,
 		sourceReaderCount:      sourceReaderCount,
+		destinationPackCount:   destinationPackCount,
 		minTableSizeForSplit:   minTableSizeForSplit,
 		destinationWriterCount: destinationWriterCount,
 		cleaner:                &wrangler.Cleaner{},
@@ -573,9 +575,10 @@ func (scw *SplitCloneWorker) copy() error {
 						processError("NewQueryResultReaderForTablet failed: %v", err)
 						return
 					}
+					defer qrr.Close()
 
 					// process the data
-					if err := scw.processData(td, tableIndex, qrr, rowSplitter, insertChannels, abort); err != nil {
+					if err := scw.processData(td, tableIndex, qrr, rowSplitter, insertChannels, scw.destinationPackCount, abort); err != nil {
 						processError("processData failed: %v", err)
 					}
 				}(td, tableIndex, chunkIndex)
@@ -687,40 +690,52 @@ func (scw *SplitCloneWorker) copy() error {
 
 // processData pumps the data out of the provided QueryResultReader.
 // It returns any error the source encounters.
-func (scw *SplitCloneWorker) processData(td *myproto.TableDefinition, tableIndex int, qrr *QueryResultReader, rowSplitter *RowSplitter, insertChannels [][]chan string, abort chan struct{}) error {
+func (scw *SplitCloneWorker) processData(td *myproto.TableDefinition, tableIndex int, qrr *QueryResultReader, rowSplitter *RowSplitter, insertChannels [][]chan string, destinationPackCount int, abort chan struct{}) error {
 	baseCmd := td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
+	sr := rowSplitter.StartSplit()
+	packCount := 0
 
 	for {
 		select {
 		case r, ok := <-qrr.Output:
 			if !ok {
-				return qrr.Error()
+				// we are done, see if there was an error
+				err := qrr.Error()
+				if err != nil {
+					return err
+				}
+
+				// send the remainder if any (ignoring
+				// the return value, we don't care
+				// here if we're aborted)
+				if packCount > 0 {
+					rowSplitter.Send(qrr.Fields, sr, baseCmd, insertChannels, abort)
+				}
+				return nil
 			}
 
 			// Split the rows by keyspace_id, and insert
 			// each chunk into each destination
-			sr, err := rowSplitter.Split(r.Rows)
-			if err != nil {
+			if err := rowSplitter.Split(sr, r.Rows); err != nil {
 				return fmt.Errorf("RowSplitter failed for table %v: %v", td.Name, err)
+			}
+			scw.tableStatus[tableIndex].addCopiedRows(len(r.Rows))
+
+			// see if we reach the destination pack count
+			packCount++
+			if packCount < destinationPackCount {
+				continue
 			}
 
 			// send the rows to be inserted
-			scw.tableStatus[tableIndex].addCopiedRows(len(r.Rows))
-			for i, cs := range insertChannels {
-				// one of the chunks might be empty, so no need
-				// to send data in that case
-				if len(sr[i]) > 0 {
-					cmd := baseCmd + makeValueString(qrr.Fields, sr[i])
-					for _, c := range cs {
-						// also check on abort, so we don't wait forever
-						select {
-						case c <- cmd:
-						case <-abort:
-							return nil
-						}
-					}
-				}
+			if aborted := rowSplitter.Send(qrr.Fields, sr, baseCmd, insertChannels, abort); aborted {
+				return nil
 			}
+
+			// and reset our row buffer
+			sr = rowSplitter.StartSplit()
+			packCount = 0
+
 		case <-abort:
 			// FIXME(alainjobart): note this select case
 			// could be starved here, and we might miss

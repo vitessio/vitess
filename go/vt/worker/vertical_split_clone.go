@@ -14,6 +14,7 @@ import (
 	"code.google.com/p/go.net/context"
 
 	"github.com/youtube/vitess/go/event"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -45,6 +46,7 @@ type VerticalSplitCloneWorker struct {
 	tables                 []string
 	strategy               *mysqlctl.SplitStrategy
 	sourceReaderCount      int
+	destinationPackCount   int
 	minTableSizeForSplit   uint64
 	destinationWriterCount int
 	cleaner                *wrangler.Cleaner
@@ -74,7 +76,7 @@ type VerticalSplitCloneWorker struct {
 }
 
 // NewVerticalSplitCloneWorker returns a new VerticalSplitCloneWorker object.
-func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspace, destinationShard string, tables []string, strategyStr string, sourceReaderCount int, minTableSizeForSplit uint64, destinationWriterCount int) (Worker, error) {
+func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspace, destinationShard string, tables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount int) (Worker, error) {
 	strategy, err := mysqlctl.NewSplitStrategy(wr.Logger(), strategyStr)
 	if err != nil {
 		return nil, err
@@ -87,6 +89,7 @@ func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspac
 		tables:                 tables,
 		strategy:               strategy,
 		sourceReaderCount:      sourceReaderCount,
+		destinationPackCount:   destinationPackCount,
 		minTableSizeForSplit:   minTableSizeForSplit,
 		destinationWriterCount: destinationWriterCount,
 		cleaner:                &wrangler.Cleaner{},
@@ -472,9 +475,10 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 					processError("NewQueryResultReaderForTablet failed: %v", err)
 					return
 				}
+				defer qrr.Close()
 
 				// process the data
-				if err := vscw.processData(td, tableIndex, qrr, insertChannels, abort); err != nil {
+				if err := vscw.processData(td, tableIndex, qrr, insertChannels, vscw.destinationPackCount, abort); err != nil {
 					processError("QueryResultReader failed: %v", err)
 				}
 			}(td, tableIndex, chunkIndex)
@@ -568,19 +572,48 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 
 // processData pumps the data out of the provided QueryResultReader.
 // It returns any error the source encounters.
-func (vscw *VerticalSplitCloneWorker) processData(td *myproto.TableDefinition, tableIndex int, qrr *QueryResultReader, insertChannels []chan string, abort chan struct{}) error {
+func (vscw *VerticalSplitCloneWorker) processData(td *myproto.TableDefinition, tableIndex int, qrr *QueryResultReader, insertChannels []chan string, destinationPackCount int, abort chan struct{}) error {
 	// process the data
 	baseCmd := td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
+	var rows [][]sqltypes.Value
+	packCount := 0
+
 	for {
 		select {
 		case r, ok := <-qrr.Output:
 			if !ok {
-				return qrr.Error()
+				// we are done, see if there was an error
+				err := qrr.Error()
+				if err != nil {
+					return err
+				}
+
+				// send the remainder if any
+				if packCount > 0 {
+					cmd := baseCmd + makeValueString(qrr.Fields, rows)
+					for _, c := range insertChannels {
+						select {
+						case c <- cmd:
+						case <-abort:
+							return nil
+						}
+					}
+				}
+				return nil
+			}
+
+			// add the rows to our current result
+			rows = append(rows, r.Rows...)
+			vscw.tableStatus[tableIndex].addCopiedRows(len(r.Rows))
+
+			// see if we reach the destination pack count
+			packCount++
+			if packCount < destinationPackCount {
+				continue
 			}
 
 			// send the rows to be inserted
-			vscw.tableStatus[tableIndex].addCopiedRows(len(r.Rows))
-			cmd := baseCmd + makeValueString(qrr.Fields, r.Rows)
+			cmd := baseCmd + makeValueString(qrr.Fields, rows)
 			for _, c := range insertChannels {
 				select {
 				case c <- cmd:
@@ -588,6 +621,11 @@ func (vscw *VerticalSplitCloneWorker) processData(td *myproto.TableDefinition, t
 					return nil
 				}
 			}
+
+			// and reset our row buffer
+			rows = nil
+			packCount = 0
+
 		case <-abort:
 			// FIXME(alainjobart): note this select case
 			// could be starved here, and we might miss
