@@ -410,18 +410,6 @@ func (tee *Tee) DeleteTablet(alias topo.TabletAlias) error {
 	return nil
 }
 
-func (tee *Tee) ValidateTablet(alias topo.TabletAlias) error {
-	if err := tee.primary.ValidateTablet(alias); err != nil {
-		return err
-	}
-
-	if err := tee.secondary.ValidateTablet(alias); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.ValidateTablet(%v) failed: %v", alias, err)
-	}
-	return nil
-}
-
 func (tee *Tee) GetTablet(alias topo.TabletAlias) (*topo.TabletInfo, error) {
 	ti, err := tee.readFrom.GetTablet(alias)
 	if err != nil {
@@ -726,30 +714,6 @@ func (tee *Tee) UnlockShardForAction(keyspace, shard, lockPath, results string) 
 //
 // Supporting the local agent process, local cell.
 //
-
-func (tee *Tee) CreateTabletPidNode(tabletAlias topo.TabletAlias, contents string, done chan struct{}) error {
-	// if the primary fails, no need to go on
-	if err := tee.primary.CreateTabletPidNode(tabletAlias, contents, done); err != nil {
-		return err
-	}
-
-	if err := tee.secondary.CreateTabletPidNode(tabletAlias, contents, done); err != nil {
-		log.Warningf("secondary.CreateTabletPidNode(%v) failed: %v", tabletAlias, err)
-	}
-	return nil
-}
-
-func (tee *Tee) ValidateTabletPidNode(tabletAlias topo.TabletAlias) error {
-	// if the primary fails, no need to go on
-	if err := tee.primary.ValidateTabletPidNode(tabletAlias); err != nil {
-		return err
-	}
-
-	if err := tee.secondary.ValidateTabletPidNode(tabletAlias); err != nil {
-		log.Warningf("secondary.ValidateTabletPidNode(%v) failed: %v", tabletAlias, err)
-	}
-	return nil
-}
 
 func (tee *Tee) GetSubprocessFlags() []string {
 	p := tee.primary.GetSubprocessFlags()

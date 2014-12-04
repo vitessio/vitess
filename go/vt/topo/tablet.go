@@ -552,11 +552,6 @@ func Validate(ts Server, tabletAlias TabletAlias) error {
 		return err
 	}
 
-	// make sure the Server is good for this tablet
-	if err = ts.ValidateTablet(tabletAlias); err != nil {
-		return err
-	}
-
 	// Some tablets have no information to generate valid replication paths.
 	// We have three cases to handle:
 	// - we are a master, in which case we may have an entry or not

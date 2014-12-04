@@ -235,7 +235,6 @@ func (ft *fakeTopo) UpdateTabletFields(tabletAlias topo.TabletAlias, update func
 	return nil
 }
 func (ft *fakeTopo) DeleteTablet(alias topo.TabletAlias) error                  { return nil }
-func (ft *fakeTopo) ValidateTablet(alias topo.TabletAlias) error                { return nil }
 func (ft *fakeTopo) GetTablet(alias topo.TabletAlias) (*topo.TabletInfo, error) { return nil, nil }
 func (ft *fakeTopo) GetTabletsByCell(cell string) ([]topo.TabletAlias, error)   { return nil, nil }
 func (ft *fakeTopo) UpdateShardReplicationFields(cell, keyspace, shard string, update func(*topo.ShardReplication) error) error {
@@ -279,11 +278,7 @@ func (ft *fakeTopo) LockShardForAction(keyspace, shard, contents string, timeout
 	return "", nil
 }
 func (ft *fakeTopo) UnlockShardForAction(keyspace, shard, lockPath, results string) error { return nil }
-func (ft *fakeTopo) CreateTabletPidNode(tabletAlias topo.TabletAlias, contents string, done chan struct{}) error {
-	return nil
-}
-func (ft *fakeTopo) ValidateTabletPidNode(tabletAlias topo.TabletAlias) error { return nil }
-func (ft *fakeTopo) GetSubprocessFlags() []string                             { return nil }
+func (ft *fakeTopo) GetSubprocessFlags() []string                                         { return nil }
 
 type fakeTopoRemoteMaster struct {
 	fakeTopo

@@ -26,7 +26,6 @@ import (
 	"flag"
 	"fmt"
 	"net"
-	"os"
 	"sync"
 	"time"
 
@@ -61,9 +60,6 @@ type ActionAgent struct {
 	SchemaOverrides []tabletserver.SchemaOverride
 	BinlogPlayerMap *BinlogPlayerMap
 	LockTimeout     time.Duration
-
-	// Internal variables
-	done chan struct{} // closed when we are done.
 
 	// This is the History of the health checks, public so status
 	// pages can display it
@@ -119,7 +115,6 @@ func NewActionAgent(
 		DBConfigs:          dbcfgs,
 		SchemaOverrides:    schemaOverrides,
 		LockTimeout:        lockTimeout,
-		done:               make(chan struct{}),
 		History:            history.New(historyLength),
 		lastHealthMapCount: stats.NewInt("LastHealthMapCount"),
 	}
@@ -163,7 +158,6 @@ func NewTestActionAgent(ts topo.Server, tabletAlias topo.TabletAlias, port int, 
 		DBConfigs:          nil,
 		SchemaOverrides:    nil,
 		BinlogPlayerMap:    nil,
-		done:               make(chan struct{}),
 		History:            history.New(historyLength),
 		lastHealthMapCount: new(stats.Int),
 	}
@@ -330,12 +324,6 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 		return err
 	}
 
-	data := fmt.Sprintf("host:%v\npid:%v\n", hostname, os.Getpid())
-
-	if err := agent.TopoServer.CreateTabletPidNode(agent.TabletAlias, data, agent.done); err != nil {
-		return err
-	}
-
 	if err = agent.verifyTopology(); err != nil {
 		return err
 	}
@@ -353,7 +341,6 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 
 // Stop shutdowns this agent.
 func (agent *ActionAgent) Stop() {
-	close(agent.done)
 	if agent.BinlogPlayerMap != nil {
 		agent.BinlogPlayerMap.StopAllPlayersAndReset()
 	}
