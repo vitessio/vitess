@@ -575,6 +575,7 @@ func (scw *SplitCloneWorker) copy() error {
 						processError("NewQueryResultReaderForTablet failed: %v", err)
 						return
 					}
+					defer qrr.Close()
 
 					// process the data
 					if err := scw.processData(td, tableIndex, qrr, rowSplitter, insertChannels, scw.destinationPackCount, abort); err != nil {

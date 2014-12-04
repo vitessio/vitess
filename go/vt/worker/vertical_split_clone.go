@@ -475,6 +475,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 					processError("NewQueryResultReaderForTablet failed: %v", err)
 					return
 				}
+				defer qrr.Close()
 
 				// process the data
 				if err := vscw.processData(td, tableIndex, qrr, insertChannels, vscw.destinationPackCount, abort); err != nil {
