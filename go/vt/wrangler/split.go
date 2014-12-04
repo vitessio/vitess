@@ -186,7 +186,7 @@ func (wr *Wrangler) ShardMultiRestore(keyspace, shard string, sources []topo.Tab
 	}
 
 	// find all tablets in the shard
-	destTablets, err := topo.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
+	destTablets, err := topo.FindAllTabletAliasesInShard(context.TODO(), wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -223,7 +223,7 @@ func (wr *Wrangler) SetSourceShards(keyspace, shard string, sources []topo.Table
 	}
 
 	// read the source tablets
-	sourceTablets, err := topo.GetTabletMap(wr.TopoServer(), sources)
+	sourceTablets, err := topo.GetTabletMap(context.TODO(), wr.TopoServer(), sources)
 	if err != nil {
 		return err
 	}

@@ -372,14 +372,14 @@ func (scw *SplitCloneWorker) findAllTargets() error {
 	scw.destinationTablets = make([]map[topo.TabletAlias]*topo.TabletInfo, len(scw.destinationShards))
 	scw.destinationMasterAliases = make([]topo.TabletAlias, len(scw.destinationShards))
 	for shardIndex, si := range scw.destinationShards {
-		scw.destinationAliases[shardIndex], err = topo.FindAllTabletAliasesInShard(scw.wr.TopoServer(), si.Keyspace(), si.ShardName())
+		scw.destinationAliases[shardIndex], err = topo.FindAllTabletAliasesInShard(context.TODO(), scw.wr.TopoServer(), si.Keyspace(), si.ShardName())
 		if err != nil {
 			return fmt.Errorf("cannot find all target tablets in %v/%v: %v", si.Keyspace(), si.ShardName(), err)
 		}
 		scw.wr.Logger().Infof("Found %v target aliases in shard %v/%v", len(scw.destinationAliases[shardIndex]), si.Keyspace(), si.ShardName())
 
 		// get the TabletInfo for all targets
-		scw.destinationTablets[shardIndex], err = topo.GetTabletMap(scw.wr.TopoServer(), scw.destinationAliases[shardIndex])
+		scw.destinationTablets[shardIndex], err = topo.GetTabletMap(context.TODO(), scw.wr.TopoServer(), scw.destinationAliases[shardIndex])
 		if err != nil {
 			return fmt.Errorf("cannot read all target tablets in %v/%v: %v", si.Keyspace(), si.ShardName(), err)
 		}

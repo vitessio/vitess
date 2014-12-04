@@ -156,7 +156,7 @@ func (wr *Wrangler) DeleteShard(keyspace, shard string) error {
 		return err
 	}
 
-	tabletMap, err := topo.GetTabletMapForShard(wr.ts, keyspace, shard)
+	tabletMap, err := topo.GetTabletMapForShard(context.TODO(), wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
