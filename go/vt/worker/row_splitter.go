@@ -14,7 +14,7 @@ import (
 )
 
 // RowSplitter is a helper class to split rows into multiple
-// subsets targetted to different shards.
+// subsets targeted to different shards.
 type RowSplitter struct {
 	Type       key.KeyspaceIdType
 	ValueIndex int

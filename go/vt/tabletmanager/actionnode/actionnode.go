@@ -4,7 +4,7 @@
 
 // Actions modify the state of a tablet, shard or keyspace.
 //
-// They are currenty managed through a series of queues stored in
+// They are currently managed through a series of queues stored in
 // topology server, or RPCs. Switching to RPCs only now.
 
 package actionnode

@@ -169,7 +169,7 @@ func SanityCheckManifests(ssms []*SplitSnapshotManifest) error {
 // need to replicate from. Can be ours if we are a master, or our master's.
 func (mysqld *Mysqld) getReplicationPositionForClones(allowHierarchicalReplication bool) (replicationPosition proto.ReplicationPosition, masterAddr string, err error) {
 	// If the source is a slave use the master replication position,
-	// unless we are allowing hierachical replicas.
+	// unless we are allowing hierarchical replicas.
 	var status *proto.ReplicationStatus
 	status, err = mysqld.SlaveStatus()
 	if err == ErrNotSlave {

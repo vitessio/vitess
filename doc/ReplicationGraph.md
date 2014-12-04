@@ -1,7 +1,7 @@
 # Replication Graph
 
 The replication graph contains the mysql replication information for a shard. Currently, we only support one layer
-of replication (a single master wiht multiple slaves), but the design doesn't preclude us from supporting
+of replication (a single master with multiple slaves), but the design doesn't preclude us from supporting
 hierarchical replication later on.
 
 ## Master
@@ -14,7 +14,7 @@ When creating a master (using 'vtctl InitTablet ... master'), we make sure Maste
 
 The slaves are added to the ShardReplication object present on each local topology server. So for slaves, the
 replication graph is colocated in the same cell as the tablets themselves. This makes disaster recovery much easier:
-when loosing a data center, the replication graph for other data centers is not lost.
+when losing a data center, the replication graph for other data centers is not lost.
 
 When creating a slave (using 'vtctl InitTablet ... replica' for instance), we get the master record (if not specified) from the MasterAlias of the Shard. We then add an entry in the ReplicationLinks list of the ShardReplication object for the tablet’s cell (we create ShardReplication if it doesn’t exist yet).
 

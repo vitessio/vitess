@@ -654,7 +654,7 @@ func (agent *ActionAgent) RestartSlave(ctx context.Context, rsd *actionnode.Rest
 				return err
 			}
 		}
-		// Once this action completes, update authoritive tablet node first.
+		// Once this action completes, update authoritative tablet node first.
 		tablet.Parent = rsd.Parent
 		err = topo.UpdateTablet(ctx, agent.TopoServer, tablet)
 		if err != nil {
@@ -703,7 +703,7 @@ func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, swrd *actionnod
 		return err
 	}
 
-	// Once this action completes, update authoritive tablet node first.
+	// Once this action completes, update authoritative tablet node first.
 	tablet.Parent = swrd.Parent
 	if tablet.Type == topo.TYPE_MASTER {
 		tablet.Type = topo.TYPE_SPARE
@@ -1062,7 +1062,7 @@ func (agent *ActionAgent) MultiSnapshot(ctx context.Context, args *actionnode.Mu
 	sr := &actionnode.MultiSnapshotReply{ManifestPaths: filenames}
 	if tablet.Parent.Uid == topo.NO_TABLET {
 		// If this is a master, this will be the new parent.
-		// FIXME(msolomon) this doens't work in hierarchical replication.
+		// FIXME(msolomon) this doesn't work in hierarchical replication.
 		sr.ParentAlias = tablet.Alias
 	} else {
 		sr.ParentAlias = tablet.Parent

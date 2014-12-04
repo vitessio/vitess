@@ -257,7 +257,7 @@ func IsTrivialTypeChange(oldTabletType, newTabletType TabletType) bool {
 
 // IsValidTypeChange returns if we should we allow this transition at
 // all.  Most transitions are allowed, but some don't make sense under
-// any circumstances. If a transistion could be forced, don't disallow
+// any circumstances. If a transition could be forced, don't disallow
 // it here.
 func IsValidTypeChange(oldTabletType, newTabletType TabletType) bool {
 	switch oldTabletType {

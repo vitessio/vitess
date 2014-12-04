@@ -53,9 +53,9 @@ func GetAllTablets(ctx context.Context, ts topo.Server, cell string) ([]*topo.Ta
 	return tablets, nil
 }
 
-// GetAllTabletsAccrossCells returns all tablets from known cells.
+// GetAllTabletsAcrossCells returns all tablets from known cells.
 // If it returns topo.ErrPartialResult, then the list is valid, but partial.
-func GetAllTabletsAccrossCells(ctx context.Context, ts topo.Server) ([]*topo.TabletInfo, error) {
+func GetAllTabletsAcrossCells(ctx context.Context, ts topo.Server) ([]*topo.TabletInfo, error) {
 	cells, err := ts.GetKnownCells()
 	if err != nil {
 		return nil, err
