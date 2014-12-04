@@ -71,7 +71,7 @@ type Functional interface {
 	Unique
 }
 
-// A FuncionalGenerator vindex is a Functional vindex
+// A FunctionalGenerator vindex is a Functional vindex
 // that can generate new ids.
 type FunctionalGenerator interface {
 	Functional

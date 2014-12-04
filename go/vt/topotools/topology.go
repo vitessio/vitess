@@ -166,7 +166,7 @@ func DbTopology(ts topo.Server) (*Topology, error) {
 		Partial:  false,
 	}
 
-	tabletInfos, err := GetAllTabletsAccrossCells(ts)
+	tabletInfos, err := GetAllTabletsAcrossCells(ts)
 	switch err {
 	case nil:
 		// we're good, no error

@@ -61,5 +61,5 @@ tmpdir = {{.TmpDir}}
 tmp_table_size = 32M
 transaction-isolation = REPEATABLE-READ
 # READ-COMMITTED would be better, but mysql 5.1 disables this with statement based replication
-# READ-UNCOMMTTED might be better
+# READ-UNCOMMITTED might be better
 lower_case_table_names = 1

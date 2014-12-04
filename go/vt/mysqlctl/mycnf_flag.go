@@ -13,7 +13,7 @@ import (
 
 // This file handles using command line flags to create a Mycnf object.
 // Since whoever links with this module doesn't necessarely need the flags,
-// RegisterFlags needs to be called explicitely to set the flags up.
+// RegisterFlags needs to be called explicitly to set the flags up.
 
 var (
 	// the individual command line parameters

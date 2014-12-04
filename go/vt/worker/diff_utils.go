@@ -174,7 +174,7 @@ func NewRowReader(queryResultReader *QueryResultReader) *RowReader {
 // Next will return:
 // (row, nil) for the next row
 // (nil, nil) for EOF
-// (nil, error) if an error occured
+// (nil, error) if an error occurred
 func (rr *RowReader) Next() ([]sqltypes.Value, error) {
 	if rr.currentResult == nil || rr.currentIndex == len(rr.currentResult.Rows) {
 		var ok bool

@@ -477,7 +477,7 @@ type zMutex struct {
 	ephemeral   bool
 }
 
-// CreateMutex initializes an unaquired mutex. A mutex is released only
+// CreateMutex initializes an unacquired mutex. A mutex is released only
 // by Unlock. You can clean up a mutex with delete, but you should be
 // careful doing so.
 func CreateMutex(zconn Conn, zkPath string) ZLocker {
