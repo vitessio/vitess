@@ -300,14 +300,14 @@ func (vscw *VerticalSplitCloneWorker) findTargets() error {
 	action.TabletType = topo.TYPE_SPARE
 
 	// find all the targets in the destination keyspace / shard
-	vscw.destinationAliases, err = topo.FindAllTabletAliasesInShard(vscw.wr.TopoServer(), vscw.destinationKeyspace, vscw.destinationShard)
+	vscw.destinationAliases, err = topo.FindAllTabletAliasesInShard(context.TODO(), vscw.wr.TopoServer(), vscw.destinationKeyspace, vscw.destinationShard)
 	if err != nil {
 		return fmt.Errorf("cannot find all target tablets in %v/%v: %v", vscw.destinationKeyspace, vscw.destinationShard, err)
 	}
 	vscw.wr.Logger().Infof("Found %v target aliases", len(vscw.destinationAliases))
 
 	// get the TabletInfo for all targets
-	vscw.destinationTablets, err = topo.GetTabletMap(vscw.wr.TopoServer(), vscw.destinationAliases)
+	vscw.destinationTablets, err = topo.GetTabletMap(context.TODO(), vscw.wr.TopoServer(), vscw.destinationAliases)
 	if err != nil {
 		return fmt.Errorf("cannot read all target tablets in %v/%v: %v", vscw.destinationKeyspace, vscw.destinationShard, err)
 	}

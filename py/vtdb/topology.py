@@ -8,6 +8,10 @@
 #   1. resolve a "db key" into a set of parameters that can be used to connect
 #   2. resolve the full topology of all databases
 #
+# Note: This is meant to be used to resolve vttablet backends directly using
+# vtclient.py. This module will be subsumed by vtgate and hence will be retired
+# soon.
+#
 
 import logging
 import random

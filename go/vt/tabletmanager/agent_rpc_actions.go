@@ -433,7 +433,7 @@ func (agent *ActionAgent) tabletExternallyReparentedLocked(ctx context.Context, 
 	// - the local cell that contains the new master is reachable
 	//   (as we're going to check the new master is in the list)
 	// That should be enough.
-	tabletMap, err := topo.GetTabletMapForShard(agent.TopoServer, tablet.Keyspace, tablet.Shard)
+	tabletMap, err := topo.GetTabletMapForShard(ctx, agent.TopoServer, tablet.Keyspace, tablet.Shard)
 	switch err {
 	case nil:
 		// keep going
