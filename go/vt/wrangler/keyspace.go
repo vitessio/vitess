@@ -171,7 +171,7 @@ func (wr *Wrangler) MigrateServedTypes(keyspace, shard string, cells []string, s
 	// Send a refresh to the source tablets we just disabled, iff:
 	// - we're not migrating a master
 	// - it is not a reverse migration
-	// - we dont' have any errors
+	// - we don't have any errors
 	// - we're not told to skip the refresh
 	if servedType != topo.TYPE_MASTER && !reverse && !rec.HasErrors() && !skipReFreshState {
 		for _, si := range sourceShards {
@@ -677,6 +677,7 @@ func (wr *Wrangler) setKeyspaceServedFrom(keyspace string, servedType topo.Table
 // given type in a shard. It would work for the master, but the
 // discovery wouldn't be very efficient.
 func (wr *Wrangler) RefreshTablesByShard(si *topo.ShardInfo, tabletType topo.TabletType, cells []string) error {
+	wr.Logger().Infof("RefreshTablesByShard called on shard %v/%v", si.Keyspace(), si.ShardName())
 	tabletMap, err := topo.GetTabletMapForShardByCell(context.TODO(), wr.ts, si.Keyspace(), si.ShardName(), cells)
 	switch err {
 	case nil:
@@ -696,6 +697,7 @@ func (wr *Wrangler) RefreshTablesByShard(si *topo.ShardInfo, tabletType topo.Tab
 
 		wg.Add(1)
 		go func(ti *topo.TabletInfo) {
+			wr.Logger().Infof("Calling RefreshState on tablet %v", ti.Alias)
 			if err := wr.tmc.RefreshState(context.TODO(), ti, wr.ActionTimeout()); err != nil {
 				wr.Logger().Warningf("RefreshTablesByShard: failed to refresh %v: %v", ti.Alias, err)
 			}
