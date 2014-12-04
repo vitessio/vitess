@@ -11,7 +11,7 @@ from vtdb import keyrange_constants
 
 
 class KeyRange(codec.BSONCoding):
-  """Defintion of KeyRange object.
+  """Definition of KeyRange object.
 
   Vitess uses range based sharding. KeyRange denotes the range
   for the sharding key. This class also provides bson encoding

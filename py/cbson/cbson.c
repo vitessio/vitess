@@ -148,7 +148,7 @@ static int buf_iter_from_buffer(PyObject* buffer_obj, BufIter* buf_iter, Py_buff
 /* ------------------------------------------------------------------------ */
 
 
-/* decode_element is the function prototype for parsing differnt
+/* decode_element is the function prototype for parsing different
  * values in the bson stream */
 typedef PyObject* (*decode_element)(BufIter* buf_iter);
 

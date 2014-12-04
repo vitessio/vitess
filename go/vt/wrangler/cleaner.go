@@ -18,7 +18,7 @@ import (
 // action cleanup steps, and execute them at the end in reverse
 // order, with various guarantees.
 type Cleaner struct {
-	// folowing members protected by lock
+	// following members protected by lock
 	mu      sync.Mutex
 	actions []cleanerActionReference
 }
@@ -79,7 +79,7 @@ func (cleaner *Cleaner) CleanUp(wr *Wrangler) error {
 			rec.RecordError(err)
 			wr.Logger().Errorf("action %v failed on %v: %v", actionReference.name, actionReference.target, err)
 		} else {
-			wr.Logger().Infof("action %v successfull on %v", actionReference.name, actionReference.target)
+			wr.Logger().Infof("action %v successful on %v", actionReference.name, actionReference.target)
 		}
 	}
 	cleaner.mu.Unlock()

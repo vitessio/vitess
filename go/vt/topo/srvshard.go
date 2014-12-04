@@ -18,7 +18,7 @@ const SHARD_ZERO = "0"
 // SrvShard contains a roll-up of the shard in the local namespace.
 // In zk, it is under /zk/<cell>/vt/ns/<keyspace>/<shard>
 type SrvShard struct {
-	// Copied / infered from Shard
+	// Copied / inferred from Shard
 	Name        string
 	KeyRange    key.KeyRange
 	ServedTypes []TabletType

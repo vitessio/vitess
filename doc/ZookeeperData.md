@@ -71,7 +71,7 @@ type Shard struct {
 }
 
 // SourceShard represents a data source for filtered replication
-// accross shards. When this is used in a destination shard, the master
+// across shards. When this is used in a destination shard, the master
 // of that shard will run filtered replication.
 type SourceShard struct {
         // Uid is the unique ID for this SourceShard object.

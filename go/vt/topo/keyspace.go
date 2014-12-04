@@ -19,7 +19,7 @@ import (
 // KeyspaceServedFrom is a per-cell record to redirect traffic to another
 // keyspace. Used for vertical splits.
 type KeyspaceServedFrom struct {
-	// who is targetted
+	// who is targeted
 	Cells []string // nil means all cells
 
 	// where to redirect
@@ -47,7 +47,7 @@ type Keyspace struct {
 	// cover 1/Nth of the entire space or more.
 	// It is usually the number of shards in the system. If a keyspace
 	// is being resharded from M to P shards, it should be max(M, P).
-	// That way we can guarantee a query that is targetted to 1/N of the
+	// That way we can guarantee a query that is targeted to 1/N of the
 	// keyspace will land on just one shard.
 	SplitShardCount int32
 }

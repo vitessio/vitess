@@ -79,7 +79,7 @@ class List(list):
 NoneType = type(None)
 
 # FIXME(msolomon) we could make a SqlLiteral ABC and just type check.
-# That doens't seem dramatically better than __sql_literal__ but it might
+# That doesn't seem dramatically better than __sql_literal__ but it might
 # be move self-documenting.
 
 def convert_bind_vars(bind_variables):
