@@ -62,8 +62,9 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet, blacklistedTables []
 	return tabletserver.AllowQueries(agent.DBConfigs, agent.SchemaOverrides, agent.Mysqld, false)
 }
 
-// initializeQueryRules computes the query rules that match the tablet record
-// it also loads the custom rules from various sources (File, Zookeeper, etc)
+// loadKeyspaceAndBlacklistRules does what the name suggests:
+// 1. load and build keyrange query rules
+// 2. load and build blacklist query rules
 func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *topo.Tablet, blacklistedTables []string) (err error) {
 	// Keyrange rules
 	keyrangeRules := tabletserver.NewQueryRules()
