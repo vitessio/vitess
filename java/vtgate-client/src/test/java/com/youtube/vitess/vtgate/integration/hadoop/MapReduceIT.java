@@ -79,8 +79,7 @@ public class MapReduceIT extends HadoopTestCase {
     VitessInputFormat.setInput(job,
         "localhost:" + testEnv.port,
         testEnv.keyspace,
-        "vtgate_test",
-        Lists.newArrayList("keyspace_id", "name"),
+        "select keyspace_id, name from vtgate_test",
         4);
     job.setOutputKeyClass(NullWritable.class);
     job.setOutputValueClass(RowWritable.class);
@@ -159,8 +158,7 @@ public class MapReduceIT extends HadoopTestCase {
     VitessInputFormat.setInput(job,
         "localhost:" + testEnv.port,
         testEnv.keyspace,
-        "vtgate_test",
-        Lists.newArrayList("keyspace_id", "name"),
+        "select keyspace_id, name from vtgate_test",
         1);
 
     job.setMapOutputKeyClass(KeyspaceIdWritable.class);
