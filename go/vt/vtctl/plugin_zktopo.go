@@ -10,6 +10,7 @@ package vtctl
 import (
 	"flag"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/youtube/vitess/go/sync2"
@@ -38,8 +39,6 @@ func init() {
 		"<keyspace|zk global keyspace path>",
 		"(requires zktopo.Server)\n" +
 			"Export the serving graph entries to the zkns format."})
-
-	resolveWildcards = zkResolveWildcards
 }
 
 func zkResolveWildcards(wr *wrangler.Wrangler, args []string) ([]string, error) {
@@ -60,7 +59,7 @@ func commandPruneActionLogs(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args 
 		return fmt.Errorf("action PruneActionLogs requires <zk action log path> ...")
 	}
 
-	paths, err := resolveWildcards(wr, subFlags.Args())
+	paths, err := zkResolveWildcards(wr, subFlags.Args())
 	if err != nil {
 		return err
 	}
@@ -99,7 +98,7 @@ func commandExportZkns(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("action ExportZkns requires <cell name|zk vt root path>")
 	}
-	cell, err := vtPathToCell(subFlags.Arg(0))
+	cell, err := zkVtPathToCell(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -113,9 +112,33 @@ func commandExportZknsForKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet,
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("action ExportZknsForKeyspace requires <keyspace|zk global keyspace path>")
 	}
-	keyspace, err := keyspaceParamToKeyspace(subFlags.Arg(0))
+	keyspace, err := zkKeyspaceParamToKeyspace(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
 	return wr.ExportZknsForKeyspace(keyspace)
+}
+
+func zkVtPathToCell(param string) (string, error) {
+	if param[0] == '/' {
+		// old zookeeper replication path like /zk/<cell>/vt
+		zkPathParts := strings.Split(param, "/")
+		if len(zkPathParts) != 4 || zkPathParts[0] != "" || zkPathParts[1] != "zk" || zkPathParts[3] != "vt" {
+			return "", fmt.Errorf("Invalid vt path: %v", param)
+		}
+		return zkPathParts[2], nil
+	}
+	return param, nil
+}
+
+func zkKeyspaceParamToKeyspace(param string) (string, error) {
+	if param[0] == '/' {
+		// old zookeeper path, convert to new-style string keyspace
+		zkPathParts := strings.Split(param, "/")
+		if len(zkPathParts) != 6 || zkPathParts[0] != "" || zkPathParts[1] != "zk" || zkPathParts[2] != "global" || zkPathParts[3] != "vt" || zkPathParts[4] != "keyspaces" {
+			return "", fmt.Errorf("Invalid keyspace path: %v", param)
+		}
+		return zkPathParts[5], nil
+	}
+	return param, nil
 }
