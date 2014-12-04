@@ -21,6 +21,7 @@ import (
 
 const (
 	defaultSourceReaderCount      = 10
+	defaultDestinationPackCount   = 10
 	defaultMinTableSizeForSplit   = 1024 * 1024
 	defaultDestinationWriterCount = 20
 )
@@ -61,6 +62,8 @@ const verticalSplitCloneHTML2 = `
         <INPUT type="text" id="strategy" name="strategy" value="-populate_blp_checkpoint"></BR>
       <LABEL for="sourceReaderCount">Source Reader Count: </LABEL>
         <INPUT type="text" id="sourceReaderCount" name="sourceReaderCount" value="{{.DefaultSourceReaderCount}}"></BR>
+      <LABEL for="destinationPackCount">Destination Pack Count: </LABEL>
+        <INPUT type="text" id="destinationPackCount" name="destinationPackCount" value="{{.DefaultDestinationPackCount}}"></BR>
       <LABEL for="minTableSizeForSplit">Minimun Table Size For Split: </LABEL>
         <INPUT type="text" id="minTableSizeForSplit" name="minTableSizeForSplit" value="{{.DefaultMinTableSizeForSplit}}"></BR>
       <LABEL for="destinationWriterCount">Destination Writer Count: </LABEL>
@@ -94,6 +97,7 @@ func commandVerticalSplitClone(wr *wrangler.Wrangler, subFlags *flag.FlagSet, ar
 	tables := subFlags.String("tables", "", "comma separated list of tables to replicate (used for vertical split)")
 	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'mysqlctl multirestore -strategy=-help' for more info")
 	sourceReaderCount := subFlags.Int("source_reader_count", defaultSourceReaderCount, "number of concurrent streaming queries to use on the source")
+	destinationPackCount := subFlags.Int("destination_pack_count", defaultDestinationPackCount, "number of packets to pack in one destination insert")
 	minTableSizeForSplit := subFlags.Int("min_table_size_for_split", defaultMinTableSizeForSplit, "tables bigger than this size on disk in bytes will be split into source_reader_count chunks if possible")
 	destinationWriterCount := subFlags.Int("destination_writer_count", defaultDestinationWriterCount, "number of concurrent RPCs to execute on the destination")
 	subFlags.Parse(args)
@@ -106,7 +110,7 @@ func commandVerticalSplitClone(wr *wrangler.Wrangler, subFlags *flag.FlagSet, ar
 	if *tables != "" {
 		tableArray = strings.Split(*tables, ",")
 	}
-	worker, err := worker.NewVerticalSplitCloneWorker(wr, *cell, keyspace, shard, tableArray, *strategy, *sourceReaderCount, uint64(*minTableSizeForSplit), *destinationWriterCount)
+	worker, err := worker.NewVerticalSplitCloneWorker(wr, *cell, keyspace, shard, tableArray, *strategy, *sourceReaderCount, *destinationPackCount, uint64(*minTableSizeForSplit), *destinationWriterCount)
 	if err != nil {
 		log.Fatalf("cannot create worker: %v", err)
 	}
@@ -179,6 +183,7 @@ func interactiveVerticalSplitClone(wr *wrangler.Wrangler, w http.ResponseWriter,
 		result := make(map[string]interface{})
 		result["Keyspace"] = keyspace
 		result["DefaultSourceReaderCount"] = fmt.Sprintf("%v", defaultSourceReaderCount)
+		result["DefaultDestinationPackCount"] = fmt.Sprintf("%v", defaultDestinationPackCount)
 		result["DefaultMinTableSizeForSplit"] = fmt.Sprintf("%v", defaultMinTableSizeForSplit)
 		result["DefaultDestinationWriterCount"] = fmt.Sprintf("%v", defaultDestinationWriterCount)
 		executeTemplate(w, verticalSplitCloneTemplate2, result)
@@ -192,6 +197,12 @@ func interactiveVerticalSplitClone(wr *wrangler.Wrangler, w http.ResponseWriter,
 	sourceReaderCount, err := strconv.ParseInt(sourceReaderCountStr, 0, 64)
 	if err != nil {
 		httpError(w, "cannot parse sourceReaderCount: %s", err)
+		return
+	}
+	destinationPackCountStr := r.FormValue("destinationPackCount")
+	destinationPackCount, err := strconv.ParseInt(destinationPackCountStr, 0, 64)
+	if err != nil {
+		httpError(w, "cannot parse destinationPackCount: %s", err)
 		return
 	}
 	minTableSizeForSplitStr := r.FormValue("minTableSizeForSplit")
@@ -208,7 +219,7 @@ func interactiveVerticalSplitClone(wr *wrangler.Wrangler, w http.ResponseWriter,
 	}
 
 	// start the clone job
-	wrk, err := worker.NewVerticalSplitCloneWorker(wr, *cell, keyspace, "0", tableArray, strategy, int(sourceReaderCount), uint64(minTableSizeForSplit), int(destinationWriterCount))
+	wrk, err := worker.NewVerticalSplitCloneWorker(wr, *cell, keyspace, "0", tableArray, strategy, int(sourceReaderCount), int(destinationPackCount), uint64(minTableSizeForSplit), int(destinationWriterCount))
 	if err != nil {
 		httpError(w, "cannot create worker: %v", err)
 	}
