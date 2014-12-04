@@ -410,18 +410,6 @@ func (tee *Tee) DeleteTablet(alias topo.TabletAlias) error {
 	return nil
 }
 
-func (tee *Tee) ValidateTablet(alias topo.TabletAlias) error {
-	if err := tee.primary.ValidateTablet(alias); err != nil {
-		return err
-	}
-
-	if err := tee.secondary.ValidateTablet(alias); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.ValidateTablet(%v) failed: %v", alias, err)
-	}
-	return nil
-}
-
 func (tee *Tee) GetTablet(alias topo.TabletAlias) (*topo.TabletInfo, error) {
 	ti, err := tee.readFrom.GetTablet(alias)
 	if err != nil {

@@ -155,9 +155,6 @@ type Server interface {
 	// Can return ErrNoNode if the tablet doesn't exist.
 	DeleteTablet(alias TabletAlias) error
 
-	// ValidateTablet performs routine checks on the tablet.
-	ValidateTablet(alias TabletAlias) error
-
 	// GetTablet returns the tablet data (includes the current version).
 	// Can return ErrNoNode if the tablet doesn't exist.
 	GetTablet(alias TabletAlias) (*TabletInfo, error)

@@ -156,18 +156,6 @@ func (zkts *Server) DeleteTablet(alias topo.TabletAlias) error {
 	return nil
 }
 
-func (zkts *Server) ValidateTablet(alias topo.TabletAlias) error {
-	zkTabletPath := TabletPathForAlias(alias)
-	_, _, err := zkts.zconn.Get(zkTabletPath)
-	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = topo.ErrNoNode
-		}
-		return err
-	}
-	return nil
-}
-
 func (zkts *Server) GetTablet(alias topo.TabletAlias) (*topo.TabletInfo, error) {
 	zkTabletPath := TabletPathForAlias(alias)
 	data, stat, err := zkts.zconn.Get(zkTabletPath)
