@@ -341,13 +341,13 @@ func testSplitClone(t *testing.T, strategy string) {
 	}
 	sourceRdonly.RpcServer.Register(&SqlQuery{t: t})
 
-	// We read 100 source rows. We have 10 as an input chunk
-	// count, so each table chunk will have 10 rows. For these 10
-	// rows, 5 will go to each side. destinationPackCount is set
-	// to 4, so we take 4 source rows at once. That results in 2
-	// destination rows per shard. So each destination is going to
-	// get 3 inserts for each chunk of 10 (2 rows + 2 rows + 1 row
-	// = 5 rows in 3 chunks), so 30 total.
+	// We read 100 source rows. sourceReaderCount is set to 10, so
+	// we'll have 100/10=10 rows per table chunk.
+	// destinationPackCount is set to 4, so we take 4 source rows
+	// at once. So we'll process 4 + 4 + 2 rows to get to 10.
+	// That means 3 insert statements on each target (each
+	// containing half of the rows, i.e. 2 + 2 + 1 rows). So 3 * 10
+	// = 30 insert statements on each destination.
 	leftMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30, disableBinLogs)
 	leftRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30, disableBinLogs)
 	rightMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30, disableBinLogs)
