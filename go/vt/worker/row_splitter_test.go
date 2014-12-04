@@ -57,8 +57,8 @@ func TestRowSplitterUint64(t *testing.T) {
 
 	// basic split
 	rows := [][]sqltypes.Value{row0, row1, row2, row2, row1, row2, row0}
-	result, err := rs.Split(rows)
-	if err != nil {
+	result := rs.StartSplit()
+	if err := rs.Split(result, rows); err != nil {
 		t.Fatalf("Split failed: %v", err)
 	}
 	if len(result) != 3 {
@@ -108,8 +108,8 @@ func TestRowSplitterString(t *testing.T) {
 
 	// basic split
 	rows := [][]sqltypes.Value{row0, row1, row2, row2, row1, row2, row0}
-	result, err := rs.Split(rows)
-	if err != nil {
+	result := rs.StartSplit()
+	if err := rs.Split(result, rows); err != nil {
 		t.Fatalf("Split failed: %v", err)
 	}
 	if len(result) != 3 {
