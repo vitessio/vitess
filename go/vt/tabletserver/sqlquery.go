@@ -107,7 +107,9 @@ func (sq *SqlQuery) setState(state int64) {
 func (sq *SqlQuery) SetQueryRules(queryRuleSet string, newRules *QueryRules) error {
 	sq.mu.Lock()
 	defer sq.mu.Unlock()
-	return sq.qe.schemaInfo.SetRules(queryRuleSet, newRules)
+	err := sq.qe.queryRuleInfo.SetRules(queryRuleSet, newRules)
+	sq.qe.schemaInfo.ClearQueryPlanCache()
+	return err
 }
 
 // GetQueryRules returns one or more of the following QueryRule sets that is currently in use:
@@ -117,7 +119,7 @@ func (sq *SqlQuery) SetQueryRules(queryRuleSet string, newRules *QueryRules) err
 func (sq *SqlQuery) GetQueryRules(queryRuleSet string, newRules *QueryRules) (error, *QueryRules) {
 	sq.mu.Lock()
 	defer sq.mu.Unlock()
-	return sq.qe.schemaInfo.GetRules(queryRuleSet)
+	return sq.qe.queryRuleInfo.GetRules(queryRuleSet)
 }
 
 // allowQueries starts the query service.
@@ -331,7 +333,7 @@ func (sq *SqlQuery) Execute(context context.Context, query *proto.Query, reply *
 		query:         query.Sql,
 		bindVars:      query.BindVariables,
 		transactionID: query.TransactionId,
-		plan:          sq.qe.schemaInfo.GetPlan(logStats, query.Sql),
+		plan:          sq.qe.schemaInfo.GetPlan(logStats, query.Sql, sq.qe.queryRuleInfo),
 		RequestContext: RequestContext{
 			ctx:      context,
 			logStats: logStats,
@@ -368,7 +370,7 @@ func (sq *SqlQuery) StreamExecute(context context.Context, query *proto.Query, s
 		query:         query.Sql,
 		bindVars:      query.BindVariables,
 		transactionID: query.TransactionId,
-		plan:          sq.qe.schemaInfo.GetStreamPlan(query.Sql),
+		plan:          sq.qe.schemaInfo.GetStreamPlan(query.Sql, sq.qe.queryRuleInfo),
 		RequestContext: RequestContext{
 			ctx:      context,
 			logStats: logStats,

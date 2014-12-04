@@ -54,7 +54,7 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet, blacklistedTables []
 		agent.DBConfigs.App.EnableInvalidator = false
 	}
 
-	err := agent.initializeQueryRules(tablet, blacklistedTables)
+	err := agent.loadKeyspaceAndBlacklistRules(tablet, blacklistedTables)
 	if err != nil {
 		return err
 	}
@@ -64,9 +64,7 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet, blacklistedTables []
 
 // initializeQueryRules computes the query rules that match the tablet record
 // it also loads the custom rules from various sources (File, Zookeeper, etc)
-func (agent *ActionAgent) initializeQueryRules(tablet *topo.Tablet, blacklistedTables []string) (err error) {
-	customRules := tabletserver.LoadCustomRules()
-
+func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *topo.Tablet, blacklistedTables []string) (err error) {
 	// Keyrange rules
 	keyrangeRules := tabletserver.NewQueryRules()
 	if tablet.KeyRange.IsPartial() {
@@ -120,11 +118,6 @@ func (agent *ActionAgent) initializeQueryRules(tablet *topo.Tablet, blacklistedT
 	loadRuleErr = tabletserver.SqlQueryRpcService.SetQueryRules(tabletserver.BlacklistQueryRules, blacklistRules)
 	if loadRuleErr != nil {
 		log.Warningf("Fail to load query rule set %s, Error message: %s", tabletserver.BlacklistQueryRules, loadRuleErr)
-	}
-
-	loadRuleErr = tabletserver.SqlQueryRpcService.SetQueryRules(tabletserver.CustomQueryRules, customRules)
-	if loadRuleErr != nil {
-		log.Warningf("Fail to load query rule set %s, Error message: %s", tabletserver.CustomQueryRules, loadRuleErr)
 	}
 	return nil
 }

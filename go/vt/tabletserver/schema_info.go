@@ -7,7 +7,6 @@ package tabletserver
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -82,31 +81,15 @@ type SchemaInfo struct {
 	tables     map[string]*TableInfo
 	overrides  []SchemaOverride
 	queries    *cache.LRUCache
-	queryRules map[string]*QueryRules
 	connPool   *dbconnpool.ConnectionPool
 	cachePool  *CachePool
 	lastChange time.Time
 	ticks      *timer.Timer
 }
 
-// Names for QueryRules coming from different sources
-// QueryRules from keyrange
-const KeyrangeQueryRules string = "KEYRANGE_QUERY_RULES"
-
-// QueryRules from blacklist
-const BlacklistQueryRules string = "BLACKLIST_QUERY_RULES"
-
-// QueryRules from custom rules
-const CustomQueryRules string = "CUSTOM_QUERY_RULES"
-
 func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration) *SchemaInfo {
 	si := &SchemaInfo{
-		queries: cache.NewLRUCache(int64(queryCacheSize)),
-		queryRules: map[string]*QueryRules{
-			KeyrangeQueryRules:  NewQueryRules(),
-			BlacklistQueryRules: NewQueryRules(),
-			CustomQueryRules:    NewQueryRules(),
-		},
+		queries:  cache.NewLRUCache(int64(queryCacheSize)),
 		connPool: dbconnpool.NewConnectionPool("", 2, idleTimeout),
 		ticks:    timer.NewTimer(reloadTime),
 	}
@@ -225,9 +208,6 @@ func (si *SchemaInfo) Close() {
 	si.tables = nil
 	si.overrides = nil
 	si.queries.Clear()
-	si.queryRules[KeyrangeQueryRules] = NewQueryRules()
-	si.queryRules[BlacklistQueryRules] = NewQueryRules()
-	si.queryRules[CustomQueryRules] = NewQueryRules()
 }
 
 func (si *SchemaInfo) Reload() {
@@ -276,6 +256,13 @@ func (si *SchemaInfo) mysqlTime() time.Time {
 // and won't fire
 func (si *SchemaInfo) triggerReload() {
 	si.ticks.Trigger()
+}
+
+// ClearQueryPlanCache should be called if query plan cache is potentially obsolete
+func (si *SchemaInfo) ClearQueryPlanCache() {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+	si.queries.Clear()
 }
 
 func (si *SchemaInfo) CreateOrUpdateTable(tableName string) {
@@ -337,7 +324,7 @@ func (si *SchemaInfo) DropTable(tableName string) {
 	log.Infof("Table %s forgotten", tableName)
 }
 
-func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string) *ExecPlan {
+func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string, queryRuleInfo *QueryRuleInfo) *ExecPlan {
 	// Fastpath if plan already exists.
 	if plan := si.getQuery(sql); plan != nil {
 		return plan
@@ -363,9 +350,7 @@ func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string) *ExecPlan {
 		panic(NewTabletError(FAIL, "%s", err))
 	}
 	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
-	plan.Rules = si.queryRules[KeyrangeQueryRules].filterByPlan(sql, plan.PlanId, plan.TableName)
-	plan.Rules.Append(si.queryRules[BlacklistQueryRules].filterByPlan(sql, plan.PlanId, plan.TableName))
-	plan.Rules.Append(si.queryRules[CustomQueryRules].filterByPlan(sql, plan.PlanId, plan.TableName))
+	plan.Rules = queryRuleInfo.filterByPlan(sql, plan.PlanId, plan.TableName)
 	plan.Authorized = tableacl.Authorized(plan.TableName, plan.PlanId.MinRole())
 	if plan.PlanId.IsSelect() {
 		if plan.FieldQuery == nil {
@@ -391,7 +376,7 @@ func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string) *ExecPlan {
 
 // GetStreamPlan is similar to GetPlan, but doesn't use the cache
 // and doesn't enforce a limit. It just returns the parsed query.
-func (si *SchemaInfo) GetStreamPlan(sql string) *ExecPlan {
+func (si *SchemaInfo) GetStreamPlan(sql string, queryRuleInfo *QueryRuleInfo) *ExecPlan {
 	var tableInfo *TableInfo
 	GetTable := func(tableName string) (table *schema.Table, ok bool) {
 		si.mu.Lock()
@@ -407,33 +392,9 @@ func (si *SchemaInfo) GetStreamPlan(sql string) *ExecPlan {
 		panic(NewTabletError(FAIL, "%s", err))
 	}
 	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
-	plan.Rules = si.queryRules[KeyrangeQueryRules].filterByPlan(sql, plan.PlanId, plan.TableName)
-	plan.Rules.Append(si.queryRules[BlacklistQueryRules].filterByPlan(sql, plan.PlanId, plan.TableName))
-	plan.Rules.Append(si.queryRules[CustomQueryRules].filterByPlan(sql, plan.PlanId, plan.TableName))
+	plan.Rules = queryRuleInfo.filterByPlan(sql, plan.PlanId, plan.TableName)
 	plan.Authorized = tableacl.Authorized(plan.TableName, plan.PlanId.MinRole())
 	return plan
-}
-
-func (si *SchemaInfo) SetRules(queryRuleSet string, newRules *QueryRules) error {
-	si.mu.Lock()
-	defer si.mu.Unlock()
-	if _, ok := si.queryRules[queryRuleSet]; ok {
-		si.queryRules[queryRuleSet] = newRules.Copy()
-		si.queries.Clear()
-		return nil
-	} else {
-		return errors.New("QueryRules identifier " + queryRuleSet + " is not valid")
-	}
-}
-
-func (si *SchemaInfo) GetRules(queryRuleSet string) (error, *QueryRules) {
-	si.mu.Lock()
-	defer si.mu.Unlock()
-	if ruleset, ok := si.queryRules[queryRuleSet]; ok {
-		return nil, ruleset.Copy()
-	} else {
-		return errors.New("QueryRules identifier " + queryRuleSet + " is not valid"), nil
-	}
 }
 
 func (si *SchemaInfo) GetTable(tableName string) *TableInfo {

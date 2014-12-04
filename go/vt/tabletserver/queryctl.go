@@ -184,11 +184,11 @@ func GetSessionId() int64 {
 }
 
 func SetQueryRules(queryRuleSet string, qrs *QueryRules) error {
-	return SqlQueryRpcService.qe.schemaInfo.SetRules(queryRuleSet, qrs)
+	return SqlQueryRpcService.qe.queryRuleInfo.SetRules(queryRuleSet, qrs)
 }
 
 func GetQueryRules(queryRuleSet string) (error, *QueryRules) {
-	return SqlQueryRpcService.qe.schemaInfo.GetRules(queryRuleSet)
+	return SqlQueryRpcService.qe.queryRuleInfo.GetRules(queryRuleSet)
 }
 
 // IsHealthy returns nil if the query service is healthy (able to
