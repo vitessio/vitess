@@ -37,7 +37,13 @@ func (n *ActionNode) LockKeyspace(ctx context.Context, ts topo.Server, keyspace 
 }
 
 // UnlockKeyspace unlocks a previously locked keyspace.
-func (n *ActionNode) UnlockKeyspace(ts topo.Server, keyspace string, lockPath string, actionError error) error {
+func (n *ActionNode) UnlockKeyspace(ctx context.Context, ts topo.Server, keyspace string, lockPath string, actionError error) error {
+	span := trace.NewSpanFromContext(ctx)
+	span.StartClient("TopoServer.UnlockKeyspaceForAction")
+	span.Annotate("action", n.Action)
+	span.Annotate("keyspace", keyspace)
+	defer span.Finish()
+
 	// first update the actionNode
 	if actionError != nil {
 		log.Infof("Unlocking keyspace %v for action %v with error %v", keyspace, n.Action, actionError)
@@ -75,7 +81,14 @@ func (n *ActionNode) LockShard(ctx context.Context, ts topo.Server, keyspace, sh
 }
 
 // UnlockShard unlocks a previously locked shard.
-func (n *ActionNode) UnlockShard(ts topo.Server, keyspace, shard string, lockPath string, actionError error) error {
+func (n *ActionNode) UnlockShard(ctx context.Context, ts topo.Server, keyspace, shard string, lockPath string, actionError error) error {
+	span := trace.NewSpanFromContext(ctx)
+	span.StartClient("TopoServer.UnlockShardForAction")
+	span.Annotate("action", n.Action)
+	span.Annotate("keyspace", keyspace)
+	span.Annotate("shard", shard)
+	defer span.Finish()
+
 	// first update the actionNode
 	if actionError != nil {
 		log.Infof("Unlocking shard %v/%v for action %v with error %v", keyspace, shard, n.Action, actionError)
@@ -114,7 +127,15 @@ func (n *ActionNode) LockSrvShard(ctx context.Context, ts topo.Server, cell, key
 }
 
 // UnlockSrvShard unlocks a previously locked serving shard.
-func (n *ActionNode) UnlockSrvShard(ts topo.Server, cell, keyspace, shard string, lockPath string, actionError error) error {
+func (n *ActionNode) UnlockSrvShard(ctx context.Context, ts topo.Server, cell, keyspace, shard string, lockPath string, actionError error) error {
+	span := trace.NewSpanFromContext(ctx)
+	span.StartClient("TopoServer.UnlockSrvShardForAction")
+	span.Annotate("action", n.Action)
+	span.Annotate("keyspace", keyspace)
+	span.Annotate("shard", shard)
+	span.Annotate("cell", cell)
+	defer span.Finish()
+
 	// first update the actionNode
 	if actionError != nil {
 		log.Infof("Unlocking serving shard %v/%v/%v for action %v with error %v", cell, keyspace, shard, n.Action, actionError)

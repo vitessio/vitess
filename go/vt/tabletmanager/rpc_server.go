@@ -54,7 +54,7 @@ func (agent *ActionAgent) rpcWrapper(ctx context.Context, name string, args, rep
 		log.Infof("TabletManager.%v(%v)(from %v): %#v", name, args, from, reply)
 	}
 	if runAfterAction {
-		err = agent.refreshTablet("RPC(" + name + ")")
+		err = agent.refreshTablet(ctx, "RPC("+name+")")
 	}
 	return
 }
