@@ -56,7 +56,7 @@ This is useful for trouble-shooting, or to get a good high
 level picture of all the servers and their current state.
 
 ### vtworker
-vtworker is meant to host long-running processes. It supports a plugin infrastructure, and offers libraries to easily pick tablets to use. We have developped:
+vtworker is meant to host long-running processes. It supports a plugin infrastructure, and offers libraries to easily pick tablets to use. We have developed:
 - resharding differ jobs: meant to check data integrity during shard splits and joins.
 - vertical split differ jobs: meant to check data integrity during vertical splits and joins.
 

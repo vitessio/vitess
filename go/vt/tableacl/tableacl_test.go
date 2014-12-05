@@ -56,7 +56,7 @@ func TestAllowUnmatchedTable(t *testing.T) {
 	checkAccess(configData, "UNMATCHED_TABLE", ADMIN, t, true)
 }
 
-func TestAllUserReadAcess(t *testing.T) {
+func TestAllUserReadAccess(t *testing.T) {
 	configData := []byte(`{"table[0-9]+":{"Reader":"` + ALL + `", "WRITER":"u3"}}`)
 	checkAccess(configData, "table1", READER, t, true)
 }

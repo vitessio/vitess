@@ -6,7 +6,7 @@ package dbconfigs
 
 // This file contains logic for a plugable credentials system.
 // The default implementation is file based.
-// The flags are global, but only programs that need to acess the database
+// The flags are global, but only programs that need to access the database
 // link with this library, so we should be safe.
 
 import (

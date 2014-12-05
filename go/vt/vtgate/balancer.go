@@ -38,7 +38,7 @@ type addressStatus struct {
 	balancer  *Balancer
 }
 
-// NewBalancer creates a Balancer. getAddreses is the function
+// NewBalancer creates a Balancer. getAddresses is the function
 // it will use to refresh the list of addresses if one of the
 // nodes has been marked down. The list of addresses is shuffled.
 // retryDelay specifies the minimum time a node will be marked down
