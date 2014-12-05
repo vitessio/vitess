@@ -60,7 +60,7 @@ func (qri *QueryRuleInfo) GetRules(queryRuleSet string) (error, *QueryRules) {
 	if ruleset, ok := qri.queryRulesMap[queryRuleSet]; ok {
 		return nil, ruleset.Copy()
 	}
-	return errors.New("QueryRules identifier " + queryRuleSet + " is not valid"), nil
+	return errors.New("QueryRules identifier " + queryRuleSet + " is not valid"), NewQueryRules()
 }
 
 // filterByPlan creates a new QueryRules by prefiltering on all query rules that are contained in internal
