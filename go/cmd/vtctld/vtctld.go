@@ -404,7 +404,7 @@ func main() {
 			if err != nil {
 				return "", err
 			}
-			return "", wr.TabletManagerClient().Ping(context.TODO(), ti, 10*time.Second)
+			return "", wr.TabletManagerClient().Ping(wr.Context(), ti)
 		})
 
 	actionRepo.RegisterTabletAction("ScrapTablet", acl.ADMIN,

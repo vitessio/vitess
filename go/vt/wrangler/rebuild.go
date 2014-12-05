@@ -210,6 +210,15 @@ func (wr *Wrangler) checkPartitions(cell string, srvKeyspace *topo.SrvKeyspace) 
 	return nil
 }
 
+func strInList(sl []string, s string) bool {
+	for _, x := range sl {
+		if x == s {
+			return true
+		}
+	}
+	return false
+}
+
 // This is a quick and dirty tool to resurrect the TopologyServer data from the
 // canonical data stored in the tablet nodes.
 //

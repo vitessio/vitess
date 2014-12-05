@@ -31,21 +31,57 @@ func init() {
 // GoRpcTabletManagerClient implements tmclient.TabletManagerClient
 type GoRpcTabletManagerClient struct{}
 
+// rpcCallTablet wil execute the RPC on the remote server.
+// If waitTime has the special '-1' value, we will use the Context's data
+// to tiemout / interrupt as necessary. Eventually, waitTime will be removed.
 func (client *GoRpcTabletManagerClient) rpcCallTablet(ctx context.Context, tablet *topo.TabletInfo, name string, args, reply interface{}, waitTime time.Duration) error {
 	// create the RPC client, using waitTime as the connect
-	// timeout, and starting the overall timeout as well
-	tmr := time.NewTimer(waitTime)
-	defer tmr.Stop()
-	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), waitTime, nil)
+	// timeout if set, or using ctx.Deadline if set, or no timeout.
+	// TODO(alainjobart) migrate to always use the context timeout.
+	connectTimeout := waitTime
+	if connectTimeout == -1 {
+		deadline, ok := ctx.Deadline()
+		if ok {
+			connectTimeout = deadline.Sub(time.Now())
+			if connectTimeout < 0 {
+				return fmt.Errorf("Timeout connecting to TabletManager.%v on %v", name, tablet.Alias)
+			}
+		} else {
+			// no context timeout -> no connection timeout
+			connectTimeout = 0
+		}
+	}
+	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), connectTimeout, nil)
 	if err != nil {
 		return fmt.Errorf("RPC error for %v: %v", tablet.Alias, err.Error())
 	}
 	defer rpcClient.Close()
 
-	// do the call in the remaining time
+	// and starting the overall timeout as well, or use the context one
+	// TODO(alainjobart) migrate to always use the context one, remove
+	// this code path.
+	if waitTime != -1 {
+		tmr := time.NewTimer(waitTime)
+		defer tmr.Stop()
+
+		// do the call in the remaining time
+		call := rpcClient.Go(ctx, "TabletManager."+name, args, reply, nil)
+		select {
+		case <-tmr.C:
+			return fmt.Errorf("Timeout waiting for TabletManager.%v to %v", name, tablet.Alias)
+		case <-call.Done:
+			if call.Error != nil {
+				return fmt.Errorf("Remote error for %v: %v", tablet.Alias, call.Error.Error())
+			} else {
+				return nil
+			}
+		}
+	}
+
+	// use the context Done() channel. Will handle context timeout.
 	call := rpcClient.Go(ctx, "TabletManager."+name, args, reply, nil)
 	select {
-	case <-tmr.C:
+	case <-ctx.Done():
 		return fmt.Errorf("Timeout waiting for TabletManager.%v to %v", name, tablet.Alias)
 	case <-call.Done:
 		if call.Error != nil {
@@ -60,9 +96,9 @@ func (client *GoRpcTabletManagerClient) rpcCallTablet(ctx context.Context, table
 // Various read-only methods
 //
 
-func (client *GoRpcTabletManagerClient) Ping(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error {
+func (client *GoRpcTabletManagerClient) Ping(ctx context.Context, tablet *topo.TabletInfo) error {
 	var result string
-	err := client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_PING, "payload", &result, waitTime)
+	err := client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_PING, "payload", &result, -1)
 	if err != nil {
 		return err
 	}

@@ -790,7 +790,7 @@ func commandPing(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) e
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().Ping(context.TODO(), tabletInfo, wr.ActionTimeout())
+	return wr.TabletManagerClient().Ping(wr.Context(), tabletInfo)
 }
 
 func commandRefreshState(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

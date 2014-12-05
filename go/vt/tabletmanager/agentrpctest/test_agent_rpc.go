@@ -97,7 +97,7 @@ func (fra *fakeRpcAgent) Ping(ctx context.Context, args string) string {
 }
 
 func agentRpcTestPing(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	err := client.Ping(ctx, ti, time.Minute)
+	err := client.Ping(ctx, ti)
 	if err != nil {
 		t.Errorf("Ping failed: %v", err)
 	}
@@ -878,7 +878,9 @@ func (fra *fakeRpcAgent) RpcWrapLockAction(ctx context.Context, name string, arg
 // the provided tablet. Tablet's vt address needs to be configured so
 // the client will connect to a server backed by our RpcAgent (returned
 // by NewFakeRpcAgent)
-func AgentRpcTestSuite(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+func AgentRpcTestSuite(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	ctx := context.Background()
+
 	// Various read-only methods
 	agentRpcTestPing(ctx, t, client, ti)
 	agentRpcTestGetSchema(ctx, t, client, ti)
