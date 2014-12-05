@@ -41,14 +41,16 @@ func NewQueryRuleInfo() *QueryRuleInfo {
 // SetRules takes a external QueryRules structure and overwrite one of the
 // internal QueryRules as designated by queryRuleSet parameter
 func (qri *QueryRuleInfo) SetRules(queryRuleSet string, newRules *QueryRules) error {
+	if newRules == nil {
+		newRules = NewQueryRules()
+	}
 	qri.mu.Lock()
 	defer qri.mu.Unlock()
 	if _, ok := qri.queryRulesMap[queryRuleSet]; ok {
 		qri.queryRulesMap[queryRuleSet] = newRules.Copy()
 		return nil
-	} else {
-		return errors.New("QueryRules identifier " + queryRuleSet + " is not valid")
 	}
+	return errors.New("QueryRules identifier " + queryRuleSet + " is not valid")
 }
 
 // GetRules returns the corresponding QueryRules as designated by queryRuleSet parameter
@@ -57,9 +59,8 @@ func (qri *QueryRuleInfo) GetRules(queryRuleSet string) (error, *QueryRules) {
 	defer qri.mu.Unlock()
 	if ruleset, ok := qri.queryRulesMap[queryRuleSet]; ok {
 		return nil, ruleset.Copy()
-	} else {
-		return errors.New("QueryRules identifier " + queryRuleSet + " is not valid"), nil
 	}
+	return errors.New("QueryRules identifier " + queryRuleSet + " is not valid"), nil
 }
 
 // filterByPlan creates a new QueryRules by prefiltering on all query rules that are contained in internal
