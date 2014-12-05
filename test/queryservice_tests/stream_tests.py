@@ -33,6 +33,7 @@ class TestStream(framework.TestCase):
     try:
       self.env.execute("select * from vtocc_test where intval=:asdfg", bv,
                        cursorclass=cursor.StreamCursor)
+      self.fail("Bindvar asdfg should not be allowed by custom rule")
     except dbexceptions.DatabaseError as e:
       self.assertContains(str(e), "error: Query disallowed")
 
