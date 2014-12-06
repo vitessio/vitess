@@ -133,7 +133,7 @@ func (rtr *Router) resolveShards(tabletType topo.TabletType, shardKeys []interfa
 	}
 	switch mapper := plan.ColVindex.Vindex.(type) {
 	case planbuilder.Unique:
-		ksids, err := mapper.Map(shardKeys)
+		ksids, err := mapper.Map(nil, shardKeys)
 		if err != nil {
 			return "", nil, err
 		}
@@ -145,7 +145,7 @@ func (rtr *Router) resolveShards(tabletType topo.TabletType, shardKeys []interfa
 			add(shard, shardKeys[i])
 		}
 	case planbuilder.NonUnique:
-		ksidss, err := mapper.Map(shardKeys)
+		ksidss, err := mapper.Map(nil, shardKeys)
 		if err != nil {
 			return "", nil, err
 		}
@@ -178,7 +178,7 @@ func (rtr *Router) resolveSingle(tabletType topo.TabletType, shardKey interface{
 	}
 	switch mapper := vindex.(type) {
 	case planbuilder.Unique:
-		ksids, err := mapper.Map([]interface{}{shardKey})
+		ksids, err := mapper.Map(nil, []interface{}{shardKey})
 		if err != nil {
 			return "", "", "", err
 		}

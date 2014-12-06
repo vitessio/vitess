@@ -8,14 +8,16 @@ import (
 	"reflect"
 	"testing"
 
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
 var hash *HashVindex
 
 func init() {
-	h, err := NewHashVindex(nil)
+	h, err := NewHashVindex(map[string]interface{}{"Table": "t", "Column": "c"})
 	if err != nil {
 		panic(err)
 	}
@@ -62,7 +64,7 @@ func TestCost(t *testing.T) {
 
 func TestMap(t *testing.T) {
 	nn, _ := sqltypes.BuildNumeric("11")
-	got, err := hash.Map([]interface{}{1, int32(2), int64(3), uint(4), uint32(5), uint64(6), nn})
+	got, err := hash.Map(nil, []interface{}{1, int32(2), int64(3), uint(4), uint32(5), uint64(6), nn})
 	if err != nil {
 		t.Error(err)
 	}
@@ -81,7 +83,7 @@ func TestMap(t *testing.T) {
 }
 
 func TestVerify(t *testing.T) {
-	success, err := hash.Verify(1, "\x16k@\xb4J\xbaK\xd6")
+	success, err := hash.Verify(nil, 1, "\x16k@\xb4J\xbaK\xd6")
 	if err != nil {
 		t.Error(err)
 	}
@@ -91,11 +93,71 @@ func TestVerify(t *testing.T) {
 }
 
 func TestReverseMap(t *testing.T) {
-	got, err := hash.ReverseMap("\x16k@\xb4J\xbaK\xd6")
+	got, err := hash.ReverseMap(nil, "\x16k@\xb4J\xbaK\xd6")
 	if err != nil {
 		t.Error(err)
 	}
 	if got.(uint64) != 1 {
 		t.Errorf("ReverseMap(): %+v, want 1", got)
+	}
+}
+
+type vcursor struct {
+	query *tproto.BoundQuery
+}
+
+func (vc *vcursor) Execute(query *tproto.BoundQuery) (*mproto.QueryResult, error) {
+	vc.query = query
+	return &mproto.QueryResult{InsertId: 1}, nil
+}
+
+func TestCreate(t *testing.T) {
+	vc := &vcursor{}
+	err := hash.Create(vc, 1)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQuery := &tproto.BoundQuery{
+		Sql: "insert into t values(:c)",
+		BindVariables: map[string]interface{}{
+			"c": 1,
+		},
+	}
+	if !reflect.DeepEqual(vc.query, wantQuery) {
+		t.Errorf("vc.query = %#v, want %#v", vc.query, wantQuery)
+	}
+}
+
+func TestGenerate(t *testing.T) {
+	vc := &vcursor{}
+	got, err := hash.Generate(vc)
+	if err != nil {
+		t.Error(err)
+	}
+	if got.(uint64) != 1 {
+		t.Errorf("Generate(): %+v, want 1", got)
+	}
+	wantQuery := &tproto.BoundQuery{
+		Sql: "insert into t values(null)",
+	}
+	if !reflect.DeepEqual(vc.query, wantQuery) {
+		t.Errorf("vc.query = %#v, want %#v", vc.query, wantQuery)
+	}
+}
+
+func TestDelete(t *testing.T) {
+	vc := &vcursor{}
+	err := hash.Delete(vc, 1, "")
+	if err != nil {
+		t.Error(err)
+	}
+	wantQuery := &tproto.BoundQuery{
+		Sql: "delete from t where c = :c",
+		BindVariables: map[string]interface{}{
+			"c": 1,
+		},
+	}
+	if !reflect.DeepEqual(vc.query, wantQuery) {
+		t.Errorf("vc.query = %#v, want %#v", vc.query, wantQuery)
 	}
 }
