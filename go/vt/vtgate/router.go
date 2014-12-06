@@ -46,7 +46,7 @@ func (rtr *Router) Execute(context context.Context, query *proto.Query) (*mproto
 	case planbuilder.InsertSharded:
 		return rtr.execInsertSharded(context, query, plan)
 	default:
-		return nil, fmt.Errorf("plan unimplemented")
+		return nil, fmt.Errorf("plan %+v unimplemented", plan)
 	}
 }
 
@@ -76,12 +76,12 @@ func (rtr *Router) execInsertSharded(context context.Context, query *proto.Query
 	if err != nil {
 		return nil, err
 	}
-	// TODO(sougou): functionality is still incomplete.
 	ks, shard, ksid, err := rtr.resolveSingle(query.TabletType, keys[0], plan)
 	if query.BindVariables == nil {
 		query.BindVariables = make(map[string]interface{})
 	}
 	query.BindVariables["keyspace_id"] = string(ksid)
+	query.Sql = query.Sql + fmt.Sprintf(" /* _routing keyspace_id:%v */", ksid)
 	return rtr.scatterConn.Execute(
 		context,
 		query.Sql,
