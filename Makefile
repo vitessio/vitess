@@ -4,16 +4,47 @@
 
 MAKEFLAGS = -s
 
-.PHONY: all build test clean unit_test unit_test_cover unit_test_race queryservice_test integration_test bson site_test site_integration_test
+.PHONY: all build test clean unit_test unit_test_cover unit_test_race queryservice_test integration_test bson site_test site_integration_test boot check
 
-all: build test
+all: help
 
-build:
-	go install ./go/...
+help:
+	@echo "Please use \`make <target>' where <target> is one of"
+	@echo "  build   to build vitess Go code"
+	@echo "  test    to test using python and Java test suite"
+	@echo "  test1   to test only unit_test"
+	@echo "  test2   to test unit_test and query_intergration_test"
+	@echo "  check   to check build environment"
+	@echo "  clean   to clean the build environment"
+	@echo "  clean-mysqld to kill outstanding mysqld process"
+	@echo "  <target> -n to see the No action make"
+
+boot:
+	./bootstrap.sh
+	@echo
+	@echo "End of boot: ./bootstrap.sh"
+
+check: boot
+	(./bootstrap.sh && source ./dev.env)	
+	@echo
+	@echo "End of check: source ./dev.env"
+
+build: check
+	(./bootstrap.sh && source ./dev.env && go install ./go/...)
+	@echo
+	@echo "End of build: go install ./go/..."
+
+MP=`ps -eaf |grep mysqld |grep -v grep |awk '{print $2}'`
+clean-mysqld: 
+	kill -9 $(MP)
+	@echo
+	@echo "End of clean-mysqld"
 
 # Set VT_TEST_FLAGS to pass flags to python tests.
 # For example, verbose output: export VT_TEST_FLAGS=-v
 test: unit_test queryservice_test integration_test
+test1: unit_test 
+test2: unit_test queryservice_test
 site_test: unit_test site_integration_test
 
 clean:
