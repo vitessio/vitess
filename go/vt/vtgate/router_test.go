@@ -37,6 +37,69 @@ type VTGateSchemaNormalized struct {
 	}
 }
 
+func TestUnsharded(t *testing.T) {
+	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	createSandbox("TestRouter")
+	s := createSandbox(TEST_UNSHARDED)
+	sbc := &sandboxConn{}
+	s.MapTestConn("0", sbc)
+	serv := new(sandboxTopo)
+	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
+	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	q := proto.Query{
+		Sql:        "select * from music_user_map where id = 1",
+		TabletType: topo.TYPE_MASTER,
+	}
+	_, err = router.Execute(&context.DummyContext{}, &q)
+	if err != nil {
+		t.Error(err)
+	}
+	if sbc.ExecCount != 1 {
+		t.Errorf("sbc.ExecCount: %v, want 1\n", sbc.ExecCount)
+	}
+	wantBind := map[string]interface{}{}
+	if !reflect.DeepEqual(sbc.BindVars, wantBind) {
+		t.Errorf("sbc.BindVars = %#v, got %#v", sbc.BindVars, wantBind)
+	}
+	wantQuery := "select * from music_user_map where id = 1"
+	if sbc.Query != wantQuery {
+		t.Errorf("sbc.Query: %q, want %q\n", sbc.Query, wantQuery)
+	}
+
+	q.Sql = "update music_user_map set id = 1"
+	_, err = router.Execute(&context.DummyContext{}, &q)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQuery = "update music_user_map set id = 1"
+	if sbc.Query != wantQuery {
+		t.Errorf("sbc.Query: %q, want %q\n", sbc.Query, wantQuery)
+	}
+
+	q.Sql = "delete from music_user_map"
+	_, err = router.Execute(&context.DummyContext{}, &q)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQuery = "delete from music_user_map"
+	if sbc.Query != wantQuery {
+		t.Errorf("sbc.Query: %q, want %q\n", sbc.Query, wantQuery)
+	}
+
+	q.Sql = "insert into music_user_map values(1)"
+	_, err = router.Execute(&context.DummyContext{}, &q)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQuery = "insert into music_user_map values(1)"
+	if sbc.Query != wantQuery {
+		t.Errorf("sbc.Query: %q, want %q\n", sbc.Query, wantQuery)
+	}
+}
+
 func TestSelectEqual(t *testing.T) {
 	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
 	if err != nil {

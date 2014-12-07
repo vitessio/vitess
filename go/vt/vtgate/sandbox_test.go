@@ -24,7 +24,7 @@ import (
 
 const (
 	TEST_SHARDED               = "TestSharded"
-	TEST_UNSHARDED             = "TestUnshared"
+	TEST_UNSHARDED             = "TestUnsharded"
 	TEST_UNSHARDED_SERVED_FROM = "TestUnshardedServedFrom"
 )
 

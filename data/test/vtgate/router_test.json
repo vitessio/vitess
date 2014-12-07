@@ -54,6 +54,12 @@
           ]
         }
       }
+    },
+    "TestUnsharded": {
+      "Sharded": false,
+      "Tables": {
+        "music_user_map":{}
+      }
     }
   }
 }

@@ -41,6 +41,9 @@ func NewRouter(serv SrvTopoServer, cell string, schema *planbuilder.Schema, stat
 func (rtr *Router) Execute(context context.Context, query *proto.Query) (*mproto.QueryResult, error) {
 	plan := rtr.planner.GetPlan(string(query.Sql))
 	switch plan.ID {
+	case planbuilder.SelectUnsharded, planbuilder.UpdateUnsharded,
+		planbuilder.DeleteUnsharded, planbuilder.InsertUnsharded:
+		return rtr.execUnsharded(context, query, plan)
 	case planbuilder.SelectEqual:
 		return rtr.execSelectEqual(context, query, plan)
 	case planbuilder.InsertSharded:
@@ -48,6 +51,25 @@ func (rtr *Router) Execute(context context.Context, query *proto.Query) (*mproto
 	default:
 		return nil, fmt.Errorf("plan %+v unimplemented", plan)
 	}
+}
+
+func (rtr *Router) execUnsharded(context context.Context, query *proto.Query, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
+	ks, allShards, err := getKeyspaceShards(rtr.serv, rtr.cell, plan.Table.Keyspace.Name, query.TabletType)
+	if err != nil {
+		return nil, err
+	}
+	if len(allShards) != 1 {
+		return nil, fmt.Errorf("unsharded keyspace %s has multiple shards: %+v", ks, allShards)
+	}
+	shards := []string{allShards[0].ShardName()}
+	return rtr.scatterConn.Execute(
+		context,
+		query.Sql,
+		query.BindVariables,
+		ks,
+		shards,
+		query.TabletType,
+		NewSafeSession(query.Session))
 }
 
 func (rtr *Router) execSelectEqual(context context.Context, query *proto.Query, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
