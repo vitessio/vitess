@@ -83,7 +83,7 @@ func (rtr *Router) execSelectEqual(vcursor *requestContext, plan *planbuilder.Pl
 	ks, routing, err := rtr.resolveShards(vcursor, keys, plan)
 	return rtr.scatterConn.Execute(
 		vcursor.ctx,
-		vcursor.query.Sql,
+		plan.Rewritten,
 		vcursor.query.BindVariables,
 		ks,
 		routing.Shards(),
@@ -105,14 +105,11 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, plan *planbuilder.
 	if err != nil {
 		return nil, err
 	}
-	if vcursor.query.BindVariables == nil {
-		vcursor.query.BindVariables = make(map[string]interface{})
-	}
 	vcursor.query.BindVariables["keyspace_id"] = string(ksid)
-	vcursor.query.Sql = vcursor.query.Sql + fmt.Sprintf(" /* _routing keyspace_id:%v */", ksid)
+	rewritten := plan.Rewritten + fmt.Sprintf(" /* _routing keyspace_id:%v */", ksid)
 	return rtr.scatterConn.Execute(
 		vcursor.ctx,
-		vcursor.query.Sql,
+		rewritten,
 		vcursor.query.BindVariables,
 		ks,
 		[]string{shard},

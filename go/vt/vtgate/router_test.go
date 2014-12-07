@@ -187,7 +187,7 @@ func TestInsertSharded(t *testing.T) {
 	if !reflect.DeepEqual(sbc1.BindVars, wantBind) {
 		t.Errorf("sbc1.BindVars = %#v, got %#v", sbc1.BindVars, wantBind)
 	}
-	wantQuery := "insert into user(id, v) values (1, 2) /* _routing keyspace_id:166b40b44aba4bd6 */"
+	wantQuery := "insert into user(id, v) values (:_id, 2) /* _routing keyspace_id:166b40b44aba4bd6 */"
 	if sbc1.Query != wantQuery {
 		t.Errorf("sbc1.Query: %q, want %q\n", sbc1.Query, wantQuery)
 	}
@@ -212,7 +212,7 @@ func TestInsertSharded(t *testing.T) {
 	if !reflect.DeepEqual(sbc2.BindVars, wantBind) {
 		t.Errorf("sbc2.BindVars = %#v, got %#v", sbc2.BindVars, wantBind)
 	}
-	wantQuery = "insert into user(id, v) values (3, 2) /* _routing keyspace_id:4eb190c9a2fa169c */"
+	wantQuery = "insert into user(id, v) values (:_id, 2) /* _routing keyspace_id:4eb190c9a2fa169c */"
 	if sbc2.Query != wantQuery {
 		t.Errorf("sbc2.Query: %q, want %q\n", sbc2.Query, wantQuery)
 	}
