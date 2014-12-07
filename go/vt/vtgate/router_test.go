@@ -182,6 +182,7 @@ func TestInsertSharded(t *testing.T) {
 	}
 	wantBind := map[string]interface{}{
 		"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
+		"_id":         int64(1),
 	}
 	if !reflect.DeepEqual(sbc1.BindVars, wantBind) {
 		t.Errorf("sbc1.BindVars = %#v, got %#v", sbc1.BindVars, wantBind)
@@ -206,6 +207,7 @@ func TestInsertSharded(t *testing.T) {
 	}
 	wantBind = map[string]interface{}{
 		"keyspace_id": "N\xb1\x90ɢ\xfa\x16\x9c",
+		"_id":         int64(3),
 	}
 	if !reflect.DeepEqual(sbc2.BindVars, wantBind) {
 		t.Errorf("sbc2.BindVars = %#v, got %#v", sbc2.BindVars, wantBind)

@@ -10,7 +10,6 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
@@ -24,6 +23,7 @@ var (
 
 type HashVindex struct {
 	Table, Column string
+	ins, del      string
 }
 
 func NewHashVindex(m map[string]interface{}) (planbuilder.Vindex, error) {
@@ -31,7 +31,14 @@ func NewHashVindex(m map[string]interface{}) (planbuilder.Vindex, error) {
 		v, _ := m[name].(string)
 		return v
 	}
-	return &HashVindex{Table: get("Table"), Column: get("Column")}, nil
+	t := get("Table")
+	c := get("Column")
+	return &HashVindex{
+		Table:  t,
+		Column: c,
+		ins:    fmt.Sprintf("insert into %s values(:%s)", t, c),
+		del:    fmt.Sprintf("delete from %s where %s = :%s", t, c, c),
+	}, nil
 }
 
 func (vind *HashVindex) Cost() int {
@@ -64,7 +71,7 @@ func (vind *HashVindex) ReverseMap(_ planbuilder.VCursor, k key.KeyspaceId) (int
 
 func (vind *HashVindex) Create(cursor planbuilder.VCursor, id interface{}) error {
 	bq := &tproto.BoundQuery{
-		Sql: fmt.Sprintf("insert into %s values(:%s)", vind.Table, vind.Column),
+		Sql: vind.ins,
 		BindVariables: map[string]interface{}{
 			vind.Column: id,
 		},
@@ -77,7 +84,10 @@ func (vind *HashVindex) Create(cursor planbuilder.VCursor, id interface{}) error
 
 func (vind *HashVindex) Generate(cursor planbuilder.VCursor) (id interface{}, err error) {
 	bq := &tproto.BoundQuery{
-		Sql: fmt.Sprintf("insert into %s values(null)", vind.Table),
+		Sql: vind.ins,
+		BindVariables: map[string]interface{}{
+			vind.Column: nil,
+		},
 	}
 	result, err := cursor.Execute(bq)
 	if err != nil {
@@ -88,7 +98,7 @@ func (vind *HashVindex) Generate(cursor planbuilder.VCursor) (id interface{}, er
 
 func (vind *HashVindex) Delete(cursor planbuilder.VCursor, id interface{}, _ key.KeyspaceId) error {
 	bq := &tproto.BoundQuery{
-		Sql: fmt.Sprintf("delete from %s where %s = :%s", vind.Table, vind.Column, vind.Column),
+		Sql: vind.del,
 		BindVariables: map[string]interface{}{
 			vind.Column: id,
 		},
@@ -113,12 +123,6 @@ func getNumber(v interface{}) (uint64, error) {
 		return uint64(v), nil
 	case uint64:
 		return v, nil
-	case sqltypes.Value:
-		result, err := v.ParseUint64()
-		if err != nil {
-			return 0, fmt.Errorf("error parsing %v: %v", v, err)
-		}
-		return result, nil
 	}
 	return 0, fmt.Errorf("unexpected type for %v: %T", v, v)
 }

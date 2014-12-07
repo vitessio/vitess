@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
@@ -63,8 +62,7 @@ func TestCost(t *testing.T) {
 }
 
 func TestMap(t *testing.T) {
-	nn, _ := sqltypes.BuildNumeric("11")
-	got, err := hash.Map(nil, []interface{}{1, int32(2), int64(3), uint(4), uint32(5), uint64(6), nn})
+	got, err := hash.Map(nil, []interface{}{1, int32(2), int64(3), uint(4), uint32(5), uint64(6)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -75,7 +73,6 @@ func TestMap(t *testing.T) {
 		"\xd2\xfd\x88g\xd5\r-\xfe",
 		"p\xbb\x02<\x81\f\xa8z",
 		"\xf0\x98H\n\xc4ľq",
-		"\xae\xfcDI\x1c\xfeGL",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
@@ -138,7 +135,10 @@ func TestGenerate(t *testing.T) {
 		t.Errorf("Generate(): %+v, want 1", got)
 	}
 	wantQuery := &tproto.BoundQuery{
-		Sql: "insert into t values(null)",
+		Sql: "insert into t values(:c)",
+		BindVariables: map[string]interface{}{
+			"c": nil,
+		},
 	}
 	if !reflect.DeepEqual(vc.query, wantQuery) {
 		t.Errorf("vc.query = %#v, want %#v", vc.query, wantQuery)
