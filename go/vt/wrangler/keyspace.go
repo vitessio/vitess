@@ -27,7 +27,7 @@ func (wr *Wrangler) lockKeyspace(keyspace string, actionNode *actionnode.ActionN
 }
 
 func (wr *Wrangler) unlockKeyspace(keyspace string, actionNode *actionnode.ActionNode, lockPath string, actionError error) error {
-	return actionNode.UnlockKeyspace(wr.ts, keyspace, lockPath, actionError)
+	return actionNode.UnlockKeyspace(context.TODO(), wr.ts, keyspace, lockPath, actionError)
 }
 
 // SetKeyspaceShardingInfo locks a keyspace and sets its ShardingColumnName

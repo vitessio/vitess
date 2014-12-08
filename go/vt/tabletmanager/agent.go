@@ -36,6 +36,7 @@ import (
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -167,12 +168,12 @@ func NewTestActionAgent(ts topo.Server, tabletAlias topo.TabletAlias, port int, 
 	return agent
 }
 
-func (agent *ActionAgent) updateState(oldTablet *topo.Tablet, context string) error {
+func (agent *ActionAgent) updateState(ctx context.Context, oldTablet *topo.Tablet, context string) error {
 	agent.mutex.Lock()
 	newTablet := agent._tablet.Tablet
 	agent.mutex.Unlock()
 	log.Infof("Running tablet callback after action %v", context)
-	return agent.changeCallback(oldTablet, newTablet)
+	return agent.changeCallback(ctx, oldTablet, newTablet)
 }
 
 func (agent *ActionAgent) readTablet() error {
@@ -221,8 +222,14 @@ func (agent *ActionAgent) setTabletControl(tc *topo.TabletControl) {
 
 // refreshTablet needs to be run after an action may have changed the current
 // state of the tablet.
-func (agent *ActionAgent) refreshTablet(context string) error {
+func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) error {
 	log.Infof("Executing post-action state refresh")
+
+	span := trace.NewSpanFromContext(ctx)
+	span.StartLocal("ActionAgent.refreshTablet")
+	span.Annotate("reason", reason)
+	defer span.Finish()
+	ctx = trace.NewContext(ctx, span)
 
 	// Save the old tablet so callbacks can have a better idea of
 	// the precise nature of the transition.
@@ -230,8 +237,8 @@ func (agent *ActionAgent) refreshTablet(context string) error {
 
 	// Actions should have side effects on the tablet, so reload the data.
 	if err := agent.readTablet(); err != nil {
-		log.Warningf("Failed rereading tablet after %v - services may be inconsistent: %v", context, err)
-		return fmt.Errorf("Failed rereading tablet after %v: %v", context, err)
+		log.Warningf("Failed rereading tablet after %v - services may be inconsistent: %v", reason, err)
+		return fmt.Errorf("Failed rereading tablet after %v: %v", reason, err)
 	}
 
 	if updatedTablet := agent.checkTabletMysqlPort(agent.Tablet()); updatedTablet != nil {
@@ -240,7 +247,7 @@ func (agent *ActionAgent) refreshTablet(context string) error {
 		agent.mutex.Unlock()
 	}
 
-	if err := agent.updateState(oldTablet, context); err != nil {
+	if err := agent.updateState(ctx, oldTablet, reason); err != nil {
 		return err
 	}
 	log.Infof("Done with post-action state refresh")
@@ -333,7 +340,7 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 	}
 
 	oldTablet := &topo.Tablet{}
-	if err = agent.updateState(oldTablet, "Start"); err != nil {
+	if err = agent.updateState(context.TODO(), oldTablet, "Start"); err != nil {
 		log.Warningf("Initial updateState failed, will need a state change before running properly: %v", err)
 	}
 	return nil

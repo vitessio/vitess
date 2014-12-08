@@ -215,7 +215,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 	}
 
 	// run the post action callbacks, not much we can do with returned error
-	if err := agent.refreshTablet("healthcheck"); err != nil {
+	if err := agent.refreshTablet(context.TODO(), "healthcheck"); err != nil {
 		log.Warningf("refreshTablet failed: %v", err)
 	}
 }
@@ -253,7 +253,7 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topo.TabletType
 	// ourself as OnTermSync (synchronous). The rest can be done asynchronously.
 	go func() {
 		// Run the post action callbacks (let them shutdown the query service)
-		if err := agent.refreshTablet("terminatehealthcheck"); err != nil {
+		if err := agent.refreshTablet(context.TODO(), "terminatehealthcheck"); err != nil {
 			log.Warningf("refreshTablet failed: %v", err)
 		}
 	}()

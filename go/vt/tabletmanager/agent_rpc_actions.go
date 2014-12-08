@@ -388,9 +388,9 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 	}
 
 	// release the lock in any case, and run refreshTablet if necessary
-	err = actionNode.UnlockShard(agent.TopoServer, tablet.Keyspace, tablet.Shard, lockPath, err)
+	err = actionNode.UnlockShard(ctx, agent.TopoServer, tablet.Keyspace, tablet.Shard, lockPath, err)
 	if runAfterAction {
-		if refreshErr := agent.refreshTablet("RPC(TabletExternallyReparented)"); refreshErr != nil {
+		if refreshErr := agent.refreshTablet(ctx, "RPC(TabletExternallyReparented)"); refreshErr != nil {
 			if err == nil {
 				// no error yet, now we have one
 				err = refreshErr
@@ -792,7 +792,7 @@ func (agent *ActionAgent) Snapshot(ctx context.Context, args *actionnode.Snapsho
 	}
 
 	// let's update our internal state (stop query service and other things)
-	if err := agent.refreshTablet("snapshotStart"); err != nil {
+	if err := agent.refreshTablet(ctx, "snapshotStart"); err != nil {
 		return nil, fmt.Errorf("failed to update state before snaphost: %v", err)
 	}
 
