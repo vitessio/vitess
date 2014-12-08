@@ -108,6 +108,9 @@ site_integration_test:
 java_test:
 	cd java && mvn verify
 
+v3_test:
+	cd test && ./vtgatev3_test.py
+
 bson:
 	bsongen -file ./go/mysql/proto/structs.go -type QueryResult -o ./go/mysql/proto/query_result_bson.go
 	bsongen -file ./go/mysql/proto/structs.go -type Field -o ./go/mysql/proto/field_bson.go

@@ -164,7 +164,7 @@ func TestFilterByPlan(t *testing.T) {
 		t.Errorf("want 1, got %#v, %#v", qrs1.rules[0], qrs1.rules[1])
 	}
 	if qrs1.rules[0].Name != "r4" {
-		t.Errorf("want r5, got %s", qrs1.rules[0].Name)
+		t.Errorf("want r4, got %s", qrs1.rules[0].Name)
 	}
 
 	qr5 := NewQueryRule("rule 5", "r5", QR_FAIL)

@@ -68,8 +68,7 @@ type Charset struct {
 
 // Convert takes a type and a value, and returns the type:
 // - nil for NULL value
-// - int64 for integer number types that fit in 64 bits
-//   (signed or unsigned are all converted to signed)
+// - int64 if possible, otherwise, uint64
 // - float64 for floating point values that fit in a float
 // - []byte for everything else
 func Convert(mysqlType int64, val sqltypes.Value) (interface{}, error) {
@@ -79,7 +78,16 @@ func Convert(mysqlType int64, val sqltypes.Value) (interface{}, error) {
 
 	switch mysqlType {
 	case VT_TINY, VT_SHORT, VT_LONG, VT_LONGLONG, VT_INT24:
-		return strconv.ParseInt(val.String(), 0, 64)
+		val := val.String()
+		signed, err := strconv.ParseInt(val, 0, 64)
+		if err == nil {
+			return signed, nil
+		}
+		unsigned, err := strconv.ParseUint(val, 0, 64)
+		if err == nil {
+			return unsigned, nil
+		}
+		return nil, err
 	case VT_FLOAT, VT_DOUBLE:
 		return strconv.ParseFloat(val.String(), 64)
 	}

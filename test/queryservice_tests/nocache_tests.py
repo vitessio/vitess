@@ -458,6 +458,7 @@ class TestNocache(framework.TestCase):
     bv = {'asdfg': 1}
     try:
       self.env.execute("select * from vtocc_test where intval=:asdfg", bv)
+      self.fail("Bindvar asdfg should not be allowed by custom rule")
     except dbexceptions.DatabaseError as e:
       self.assertContains(str(e), "error: Query disallowed")
 
