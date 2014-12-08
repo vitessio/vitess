@@ -5,11 +5,20 @@
       "Vindexes": {
         "user_index": {
           "Type": "hash",
-          "Owner": ""
+          "Owner": "user",
+          "Params": {
+            "Table": "user_idx",
+            "Column": "id"
+          }
         },
         "music_user_map": {
-          "Type": "hash",
-          "Owner": ""
+          "Type": "lookup_hash_unique",
+          "Owner": "music",
+          "Params": {
+            "Table": "music_user_map",
+            "From": "music_id",
+            "To": "user_id"
+          }
         }
       },
       "Tables": {
@@ -52,12 +61,25 @@
               "Name": "music_user_map"
             }
           ]
+        },
+        "music_extra_reversed": {
+          "ColVindexes": [
+            {
+              "Col": "music_id",
+              "Name": "music_user_map"
+            },
+            {
+              "Col": "user_id",
+              "Name": "user_index"
+            }
+          ]
         }
       }
     },
     "TestUnsharded": {
       "Sharded": false,
       "Tables": {
+        "user_idx":{},
         "music_user_map":{}
       }
     }

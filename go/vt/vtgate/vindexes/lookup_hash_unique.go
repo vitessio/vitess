@@ -76,7 +76,7 @@ func (vind *LookupHashUnique) Map(vcursor planbuilder.VCursor, ids []interface{}
 
 func (vind *LookupHashUnique) Verify(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) (bool, error) {
 	bq := &tproto.BoundQuery{
-		Sql: vind.sel,
+		Sql: vind.verify,
 		BindVariables: map[string]interface{}{
 			vind.From: id,
 			vind.To:   vunhash(ksid),

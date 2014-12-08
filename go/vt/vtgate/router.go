@@ -92,7 +92,7 @@ func (rtr *Router) execSelectEqual(vcursor *requestContext, plan *planbuilder.Pl
 }
 
 func (rtr *Router) execInsertSharded(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
-	input := plan.Values.([]interface{})[:1]
+	input := plan.Values.([]interface{})
 	keys, err := rtr.resolveKeys(input, vcursor.query.BindVariables)
 	if err != nil {
 		return nil, err
@@ -105,8 +105,8 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, plan *planbuilder.
 	if err != nil {
 		return nil, err
 	}
-	for i, key := range keys[1:] {
-		err = rtr.handleNonPrimary(vcursor, key, plan.Table.ColVindexes[i], vcursor.query.BindVariables, ksid)
+	for i := 1; i < len(keys); i++ {
+		err = rtr.handleNonPrimary(vcursor, keys[i], plan.Table.ColVindexes[i], vcursor.query.BindVariables, ksid)
 		if err != nil {
 			return nil, err
 		}
