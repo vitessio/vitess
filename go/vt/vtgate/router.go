@@ -105,6 +105,12 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, plan *planbuilder.
 	if err != nil {
 		return nil, err
 	}
+	for i, key := range keys[1:] {
+		err = rtr.handleNonPrimary(vcursor, key, plan.Table.ColVindexes[i], vcursor.query.BindVariables, ksid)
+		if err != nil {
+			return nil, err
+		}
+	}
 	vcursor.query.BindVariables["keyspace_id"] = string(ksid)
 	rewritten := plan.Rewritten + fmt.Sprintf(" /* _routing keyspace_id:%v */", ksid)
 	return rtr.scatterConn.Execute(
@@ -147,6 +153,9 @@ func (rtr *Router) resolveShards(vcursor *requestContext, vindexKeys []interface
 			return "", nil, err
 		}
 		for i, ksid := range ksids {
+			if ksid == key.MinKey {
+				continue
+			}
 			shard, err := getShardForKeyspaceId(allShards, ksid)
 			if err != nil {
 				return "", nil, err
@@ -160,6 +169,9 @@ func (rtr *Router) resolveShards(vcursor *requestContext, vindexKeys []interface
 		}
 		for i, ksids := range ksidss {
 			for _, ksid := range ksids {
+				if ksid == key.MinKey {
+					continue
+				}
 				shard, err := getShardForKeyspaceId(allShards, ksid)
 				if err != nil {
 					return "", nil, err
@@ -200,8 +212,56 @@ func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{},
 		return "", err
 	}
 	ksid = ksids[0]
+	if ksid == key.MinKey {
+		return "", fmt.Errorf("could not map %v to a keyspace id", vindexKey)
+	}
 	bv["_"+colVindex.Col] = vindexKey
 	return ksid, nil
+}
+
+func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface{}, colVindex *planbuilder.ColVindex, bv map[string]interface{}, ksid key.KeyspaceId) error {
+	var err error
+	if colVindex.Owned {
+		if vindexKey == nil {
+			generator, ok := colVindex.Vindex.(planbuilder.LookupGenerator)
+			if !ok {
+				return fmt.Errorf("value must be supplied for column %s", colVindex.Col)
+			}
+			vindexKey, err = generator.Generate(vcursor, ksid)
+			if err != nil {
+				return err
+			}
+		} else {
+			err = colVindex.Vindex.(planbuilder.Lookup).Create(vcursor, vindexKey, ksid)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		if vindexKey == nil {
+			reversible, ok := colVindex.Vindex.(planbuilder.Reversible)
+			if !ok {
+				return fmt.Errorf("value must be supplied for column %s", colVindex.Col)
+			}
+			vindexKey, err = reversible.ReverseMap(vcursor, ksid)
+			if err != nil {
+				return err
+			}
+			if vindexKey == nil {
+				return fmt.Errorf("could not compute value for column %v", colVindex.Col)
+			}
+		} else {
+			ok, err := colVindex.Vindex.Verify(vcursor, vindexKey, ksid)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return fmt.Errorf("value %v for column %s does not map to keyspace id %v", vindexKey, colVindex.Col, ksid)
+			}
+		}
+	}
+	bv["_"+colVindex.Col] = vindexKey
+	return nil
 }
 
 func (rtr *Router) getRouting(keyspace string, tabletType topo.TabletType, ksid key.KeyspaceId) (newKeyspace, shard string, err error) {

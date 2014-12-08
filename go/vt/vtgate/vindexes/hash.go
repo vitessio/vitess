@@ -36,7 +36,7 @@ func NewHashVindex(m map[string]interface{}) (planbuilder.Vindex, error) {
 	return &HashVindex{
 		Table:  t,
 		Column: c,
-		ins:    fmt.Sprintf("insert into %s values(:%s)", t, c),
+		ins:    fmt.Sprintf("insert into %s(%s) values(:%s)", t, c, c),
 		del:    fmt.Sprintf("delete from %s where %s = :%s", t, c, c),
 	}, nil
 }
@@ -69,41 +69,41 @@ func (vind *HashVindex) ReverseMap(_ planbuilder.VCursor, k key.KeyspaceId) (int
 	return vunhash(k), nil
 }
 
-func (vind *HashVindex) Create(cursor planbuilder.VCursor, id interface{}) error {
+func (vind *HashVindex) Create(vcursor planbuilder.VCursor, id interface{}) error {
 	bq := &tproto.BoundQuery{
 		Sql: vind.ins,
 		BindVariables: map[string]interface{}{
 			vind.Column: id,
 		},
 	}
-	if _, err := cursor.Execute(bq); err != nil {
+	if _, err := vcursor.Execute(bq); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (vind *HashVindex) Generate(cursor planbuilder.VCursor) (id interface{}, err error) {
+func (vind *HashVindex) Generate(vcursor planbuilder.VCursor) (id interface{}, err error) {
 	bq := &tproto.BoundQuery{
 		Sql: vind.ins,
 		BindVariables: map[string]interface{}{
 			vind.Column: nil,
 		},
 	}
-	result, err := cursor.Execute(bq)
+	result, err := vcursor.Execute(bq)
 	if err != nil {
 		return nil, err
 	}
 	return result.InsertId, err
 }
 
-func (vind *HashVindex) Delete(cursor planbuilder.VCursor, id interface{}, _ key.KeyspaceId) error {
+func (vind *HashVindex) Delete(vcursor planbuilder.VCursor, id interface{}, _ key.KeyspaceId) error {
 	bq := &tproto.BoundQuery{
 		Sql: vind.del,
 		BindVariables: map[string]interface{}{
 			vind.Column: id,
 		},
 	}
-	if _, err := cursor.Execute(bq); err != nil {
+	if _, err := vcursor.Execute(bq); err != nil {
 		return err
 	}
 	return nil
@@ -146,6 +146,9 @@ func vhash(shardKey uint64) key.KeyspaceId {
 }
 
 func vunhash(k key.KeyspaceId) uint64 {
+	if len(k) != 8 {
+		panic(fmt.Errorf("invalid keyspace id: %+q", k))
+	}
 	var unhashed [8]byte
 	block3DES.Decrypt(unhashed[:], []byte(k))
 	return binary.BigEndian.Uint64(unhashed[:])
