@@ -54,7 +54,7 @@ func (ts *tableStatus) addCopiedRows(copiedRows int) {
 	ts.mu.Unlock()
 }
 
-func formatTableStatuses(tableStatuses []tableStatus, startTime time.Time) ([]string, time.Time) {
+func formatTableStatuses(tableStatuses []*tableStatus, startTime time.Time) ([]string, time.Time) {
 	copiedRows := uint64(0)
 	rowCount := uint64(0)
 	result := make([]string, len(tableStatuses))

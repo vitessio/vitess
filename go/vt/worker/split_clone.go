@@ -71,7 +71,7 @@ type SplitCloneWorker struct {
 	destinationMasterAliases []topo.TabletAlias
 
 	// populated during stateSCCopy
-	tableStatus []tableStatus
+	tableStatus []*tableStatus
 	startTime   time.Time
 
 	ev *events.SplitClone
@@ -427,10 +427,12 @@ func (scw *SplitCloneWorker) copy() error {
 	}
 	scw.wr.Logger().Infof("Source tablet 0 has %v tables to copy", len(sourceSchemaDefinition.TableDefinitions))
 	scw.mu.Lock()
-	scw.tableStatus = make([]tableStatus, len(sourceSchemaDefinition.TableDefinitions))
+	scw.tableStatus = make([]*tableStatus, len(sourceSchemaDefinition.TableDefinitions))
 	for i, td := range sourceSchemaDefinition.TableDefinitions {
-		scw.tableStatus[i].name = td.Name
-		scw.tableStatus[i].rowCount = td.RowCount * uint64(len(scw.sourceAliases))
+		scw.tableStatus[i] = &tableStatus{
+			name:     td.Name,
+			rowCount: td.RowCount * uint64(len(scw.sourceAliases)),
+		}
 	}
 	scw.startTime = time.Now()
 	scw.mu.Unlock()

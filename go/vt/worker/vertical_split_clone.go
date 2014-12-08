@@ -69,7 +69,7 @@ type VerticalSplitCloneWorker struct {
 	destinationMasterAlias topo.TabletAlias
 
 	// populated during stateVSCCopy
-	tableStatus []tableStatus
+	tableStatus []*tableStatus
 	startTime   time.Time
 
 	ev *events.VerticalSplitClone
@@ -348,10 +348,12 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	}
 	vscw.wr.Logger().Infof("Source tablet has %v tables to copy", len(sourceSchemaDefinition.TableDefinitions))
 	vscw.mu.Lock()
-	vscw.tableStatus = make([]tableStatus, len(sourceSchemaDefinition.TableDefinitions))
+	vscw.tableStatus = make([]*tableStatus, len(sourceSchemaDefinition.TableDefinitions))
 	for i, td := range sourceSchemaDefinition.TableDefinitions {
-		vscw.tableStatus[i].name = td.Name
-		vscw.tableStatus[i].rowCount = td.RowCount
+		vscw.tableStatus[i] = &tableStatus{
+			name:     td.Name,
+			rowCount: td.RowCount,
+		}
 	}
 	vscw.startTime = time.Now()
 	vscw.mu.Unlock()
