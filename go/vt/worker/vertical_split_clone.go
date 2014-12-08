@@ -288,9 +288,11 @@ func (vscw *VerticalSplitCloneWorker) findTargets() error {
 	}
 
 	// stop replication on it
-	if err := vscw.wr.TabletManagerClient().StopSlave(context.TODO(), vscw.sourceTablet, 30*time.Second); err != nil {
+	ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+	if err := vscw.wr.TabletManagerClient().StopSlave(ctx, vscw.sourceTablet); err != nil {
 		return fmt.Errorf("cannot stop replication on tablet %v", vscw.sourceAlias)
 	}
+	cancel()
 
 	wrangler.RecordStartSlaveAction(vscw.cleaner, vscw.sourceTablet, 30*time.Second)
 	action, err := wrangler.FindChangeSlaveTypeActionByTarget(vscw.cleaner, vscw.sourceAlias)
@@ -515,10 +517,12 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	// then create and populate the blp_checkpoint table
 	if vscw.strategy.PopulateBlpCheckpoint {
 		// get the current position from the source
-		status, err := vscw.wr.TabletManagerClient().SlaveStatus(context.TODO(), vscw.sourceTablet, 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+		status, err := vscw.wr.TabletManagerClient().SlaveStatus(ctx, vscw.sourceTablet)
 		if err != nil {
 			return err
 		}
+		cancel()
 
 		queries := make([]string, 0, 4)
 		queries = append(queries, binlogplayer.CreateBlpCheckpoint()...)
@@ -561,9 +565,11 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 		go func(ti *topo.TabletInfo) {
 			defer destinationWaitGroup.Done()
 			vscw.wr.Logger().Infof("Reloading schema on tablet %v", ti.Alias)
-			if err := vscw.wr.TabletManagerClient().ReloadSchema(context.TODO(), ti, 30*time.Second); err != nil {
+			ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+			if err := vscw.wr.TabletManagerClient().ReloadSchema(ctx, ti); err != nil {
 				processError("ReloadSchema failed on tablet %v: %v", ti.Alias, err)
 			}
+			cancel()
 		}(vscw.destinationTablets[tabletAlias])
 	}
 	destinationWaitGroup.Wait()

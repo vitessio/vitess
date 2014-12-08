@@ -319,9 +319,11 @@ func (scw *SplitCloneWorker) findTargets() error {
 			return fmt.Errorf("cannot read tablet %v: %v", alias, err)
 		}
 
-		if err := scw.wr.TabletManagerClient().StopSlave(context.TODO(), scw.sourceTablets[i], 30*time.Second); err != nil {
+		ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+		if err := scw.wr.TabletManagerClient().StopSlave(ctx, scw.sourceTablets[i]); err != nil {
 			return fmt.Errorf("cannot stop replication on tablet %v", alias)
 		}
+		cancel()
 
 		wrangler.RecordStartSlaveAction(scw.cleaner, scw.sourceTablets[i], 30*time.Second)
 		action, err := wrangler.FindChangeSlaveTypeActionByTarget(scw.cleaner, alias)
@@ -628,10 +630,12 @@ func (scw *SplitCloneWorker) copy() error {
 
 		// get the current position from the sources
 		for shardIndex, _ := range scw.sourceShards {
-			status, err := scw.wr.TabletManagerClient().SlaveStatus(context.TODO(), scw.sourceTablets[shardIndex], 30*time.Second)
+			ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+			status, err := scw.wr.TabletManagerClient().SlaveStatus(ctx, scw.sourceTablets[shardIndex])
 			if err != nil {
 				return err
 			}
+			cancel()
 
 			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(0, status.Position, time.Now().Unix(), flags))
 		}
@@ -678,9 +682,11 @@ func (scw *SplitCloneWorker) copy() error {
 			go func(ti *topo.TabletInfo) {
 				defer destinationWaitGroup.Done()
 				scw.wr.Logger().Infof("Reloading schema on tablet %v", ti.Alias)
-				if err := scw.wr.TabletManagerClient().ReloadSchema(context.TODO(), ti, 30*time.Second); err != nil {
+				ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+				if err := scw.wr.TabletManagerClient().ReloadSchema(ctx, ti); err != nil {
 					processError("ReloadSchema failed on tablet %v: %v", ti.Alias, err)
 				}
+				cancel()
 			}(scw.destinationTablets[shardIndex][tabletAlias])
 		}
 	}

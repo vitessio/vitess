@@ -144,15 +144,14 @@ func (wr *Wrangler) reparentShardExternal(ev *events.Reparent, slaveTabletMap, m
 	// timeout is executed, so even if we got to the timeout,
 	// we're still good.
 	event.DispatchUpdate(ev, "restarting slaves")
-	ctx := context.TODO()
 	topotools.RestartSlavesExternal(wr.ts, wr.logger, slaveTabletMap, masterTabletMap, masterElectTablet.Alias, func(ti *topo.TabletInfo, swra *actionnode.SlaveWasRestartedArgs) error {
 		wr.logger.Infof("slaveWasRestarted(%v)", ti.Alias)
-		return wr.tmc.SlaveWasRestarted(ctx, ti, swra, wr.ActionTimeout())
+		return wr.tmc.SlaveWasRestarted(wr.ctx, ti, swra)
 	})
 	return nil
 }
 
 func (wr *Wrangler) slaveWasPromoted(ti *topo.TabletInfo) error {
 	wr.logger.Infof("slaveWasPromoted(%v)", ti.Alias)
-	return wr.tmc.SlaveWasPromoted(context.TODO(), ti, wr.ActionTimeout())
+	return wr.tmc.SlaveWasPromoted(wr.ctx, ti)
 }

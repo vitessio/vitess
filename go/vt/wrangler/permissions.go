@@ -23,7 +23,7 @@ func (wr *Wrangler) GetPermissions(tabletAlias topo.TabletAlias) (*myproto.Permi
 		return nil, err
 	}
 
-	return wr.tmc.GetPermissions(context.TODO(), tablet, wr.ActionTimeout())
+	return wr.tmc.GetPermissions(wr.ctx, tablet)
 }
 
 // helper method to asynchronously diff a permissions

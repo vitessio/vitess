@@ -225,9 +225,11 @@ func (worker *SQLDiffWorker) synchronizeReplication() error {
 	if err != nil {
 		return err
 	}
-	if err := worker.wr.TabletManagerClient().StopSlave(context.TODO(), subsetTablet, 30*time.Second); err != nil {
+	ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+	if err := worker.wr.TabletManagerClient().StopSlave(ctx, subsetTablet); err != nil {
 		return fmt.Errorf("Cannot stop slave %v: %v", worker.subset.alias, err)
 	}
+	cancel()
 	if worker.CheckInterrupted() {
 		return topo.ErrInterrupted
 	}
@@ -253,9 +255,11 @@ func (worker *SQLDiffWorker) synchronizeReplication() error {
 	if err != nil {
 		return err
 	}
-	if err := worker.wr.TabletManagerClient().StopSlave(context.TODO(), supersetTablet, 30*time.Second); err != nil {
+	ctx, cancel = context.WithTimeout(context.TODO(), 30*time.Second)
+	if err := worker.wr.TabletManagerClient().StopSlave(ctx, supersetTablet); err != nil {
 		return fmt.Errorf("Cannot stop slave %v: %v", worker.superset.alias, err)
 	}
+	cancel()
 
 	// change the cleaner actions from ChangeSlaveType(rdonly)
 	// to StartSlave() + ChangeSlaveType(spare)

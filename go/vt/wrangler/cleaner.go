@@ -221,7 +221,8 @@ func RecordStartSlaveAction(cleaner *Cleaner, tabletInfo *topo.TabletInfo, waitT
 
 // CleanUp is part of CleanerAction interface.
 func (sba StartSlaveAction) CleanUp(wr *Wrangler) error {
-	return wr.TabletManagerClient().StartSlave(context.TODO(), sba.TabletInfo, sba.WaitTime)
+	ctx, _ := context.WithTimeout(context.TODO(), sba.WaitTime)
+	return wr.TabletManagerClient().StartSlave(ctx, sba.TabletInfo)
 }
 
 //
@@ -247,5 +248,6 @@ func RecordStartBlpAction(cleaner *Cleaner, tabletInfo *topo.TabletInfo, waitTim
 
 // CleanUp is part of CleanerAction interface.
 func (sba StartBlpAction) CleanUp(wr *Wrangler) error {
-	return wr.TabletManagerClient().StartBlp(context.TODO(), sba.TabletInfo, sba.WaitTime)
+	ctx, _ := context.WithTimeout(context.TODO(), sba.WaitTime)
+	return wr.TabletManagerClient().StartBlp(ctx, sba.TabletInfo)
 }

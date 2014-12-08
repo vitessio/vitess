@@ -178,7 +178,7 @@ func (wr *Wrangler) validateReplication(shardInfo *topo.ShardInfo, tabletMap map
 		return
 	}
 
-	slaveList, err := wr.tmc.GetSlaves(wr.ctx, masterTablet, wr.ActionTimeout())
+	slaveList, err := wr.tmc.GetSlaves(wr.ctx, masterTablet)
 	if err != nil {
 		results <- fmt.Errorf("GetSlaves(%v) failed: %v", masterTablet, err)
 		return

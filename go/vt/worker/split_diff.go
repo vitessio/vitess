@@ -268,10 +268,12 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 
 	// 1 - stop the master binlog replication, get its current position
 	sdw.wr.Logger().Infof("Stopping master binlog replication on %v", sdw.shardInfo.MasterAlias)
-	blpPositionList, err := sdw.wr.TabletManagerClient().StopBlp(context.TODO(), masterInfo, 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+	blpPositionList, err := sdw.wr.TabletManagerClient().StopBlp(ctx, masterInfo)
 	if err != nil {
 		return fmt.Errorf("StopBlp for %v failed: %v", sdw.shardInfo.MasterAlias, err)
 	}
+	cancel()
 	wrangler.RecordStartBlpAction(sdw.cleaner, masterInfo, 30*time.Second)
 
 	// 2 - stop all the source 'checker' at a binlog position
@@ -339,10 +341,12 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 
 	// 5 - restart filtered replication on destination master
 	sdw.wr.Logger().Infof("Restarting filtered replication on master %v", sdw.shardInfo.MasterAlias)
-	err = sdw.wr.TabletManagerClient().StartBlp(context.TODO(), masterInfo, 30*time.Second)
+	ctx, cancel = context.WithTimeout(context.TODO(), 30*time.Second)
+	err = sdw.wr.TabletManagerClient().StartBlp(ctx, masterInfo)
 	if err := sdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String()); err != nil {
 		sdw.wr.Logger().Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String(), err)
 	}
+	cancel()
 	if err != nil {
 		return fmt.Errorf("StartBlp failed for %v: %v", sdw.shardInfo.MasterAlias, err)
 	}
