@@ -126,7 +126,7 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 	if force {
 		err = topotools.Scrap(wr.ts, ti.Alias, force)
 	} else {
-		err = wr.tmc.Scrap(context.TODO(), ti, wr.ActionTimeout())
+		err = wr.tmc.Scrap(wr.ctx, ti)
 	}
 	if err != nil {
 		return err
@@ -219,7 +219,7 @@ func (wr *Wrangler) ChangeTypeNoRebuild(tabletAlias topo.TabletAlias, tabletType
 			return false, "", "", "", err
 		}
 	} else {
-		if err := wr.tmc.ChangeType(context.TODO(), ti, tabletType, wr.ActionTimeout()); err != nil {
+		if err := wr.tmc.ChangeType(wr.ctx, ti, tabletType); err != nil {
 			return false, "", "", "", err
 		}
 	}
@@ -248,7 +248,7 @@ func (wr *Wrangler) changeTypeInternal(tabletAlias topo.TabletAlias, dbType topo
 	rebuildRequired := ti.Tablet.IsInServingGraph()
 
 	// change the type
-	if err := wr.tmc.ChangeType(context.TODO(), ti, dbType, wr.ActionTimeout()); err != nil {
+	if err := wr.tmc.ChangeType(wr.ctx, ti, dbType); err != nil {
 		return err
 	}
 
@@ -282,5 +282,5 @@ func (wr *Wrangler) ExecuteFetch(tabletAlias topo.TabletAlias, query string, max
 	if err != nil {
 		return nil, err
 	}
-	return wr.tmc.ExecuteFetch(context.TODO(), ti, query, maxRows, wantFields, disableBinlogs, wr.ActionTimeout())
+	return wr.tmc.ExecuteFetch(wr.ctx, ti, query, maxRows, wantFields, disableBinlogs)
 }

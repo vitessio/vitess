@@ -212,7 +212,7 @@ func (wr *Wrangler) getMastersPosition(shards []*topo.ShardInfo) (map[*topo.Shar
 				return
 			}
 
-			pos, err := wr.tmc.MasterPosition(context.TODO(), ti, wr.ActionTimeout())
+			pos, err := wr.tmc.MasterPosition(wr.ctx, ti)
 			if err != nil {
 				rec.RecordError(err)
 				return
@@ -283,7 +283,7 @@ func (wr *Wrangler) refreshMasters(shards []*topo.ShardInfo) error {
 				return
 			}
 
-			if err := wr.tmc.RefreshState(context.TODO(), ti, wr.ActionTimeout()); err != nil {
+			if err := wr.tmc.RefreshState(wr.ctx, ti); err != nil {
 				rec.RecordError(err)
 			} else {
 				wr.Logger().Infof("%v responded", si.MasterAlias)
@@ -606,13 +606,13 @@ func (wr *Wrangler) masterMigrateServedFrom(ki *topo.KeyspaceInfo, sourceShard *
 
 	// Now refresh the blacklisted table list on the source master
 	event.DispatchUpdate(ev, "refreshing source master so it updates its blacklisted tables")
-	if err := wr.tmc.RefreshState(context.TODO(), sourceMasterTabletInfo, wr.ActionTimeout()); err != nil {
+	if err := wr.tmc.RefreshState(wr.ctx, sourceMasterTabletInfo); err != nil {
 		return err
 	}
 
 	// get the position
 	event.DispatchUpdate(ev, "getting master position")
-	masterPosition, err := wr.tmc.MasterPosition(context.TODO(), sourceMasterTabletInfo, wr.ActionTimeout())
+	masterPosition, err := wr.tmc.MasterPosition(wr.ctx, sourceMasterTabletInfo)
 	if err != nil {
 		return err
 	}
@@ -698,7 +698,7 @@ func (wr *Wrangler) RefreshTablesByShard(si *topo.ShardInfo, tabletType topo.Tab
 		wg.Add(1)
 		go func(ti *topo.TabletInfo) {
 			wr.Logger().Infof("Calling RefreshState on tablet %v", ti.Alias)
-			if err := wr.tmc.RefreshState(context.TODO(), ti, wr.ActionTimeout()); err != nil {
+			if err := wr.tmc.RefreshState(wr.ctx, ti); err != nil {
 				wr.Logger().Warningf("RefreshTablesByShard: failed to refresh %v: %v", ti.Alias, err)
 			}
 			wg.Done()

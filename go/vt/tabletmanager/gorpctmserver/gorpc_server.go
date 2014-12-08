@@ -223,8 +223,10 @@ func (tm *TabletManager) TabletExternallyReparented(ctx context.Context, args *g
 	// TODO(alainjobart) we should forward the RPC deadline from
 	// the original gorpc call. Until we support that, use a
 	// reasonable hard-coded value.
+	ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+	defer cancel()
 	return tm.agent.RpcWrapLock(ctx, actionnode.TABLET_ACTION_EXTERNALLY_REPARENTED, args, reply, false, func() error {
-		return tm.agent.TabletExternallyReparented(ctx, args.ExternalID, 30*time.Second)
+		return tm.agent.TabletExternallyReparented(ctx, args.ExternalID)
 	})
 }
 

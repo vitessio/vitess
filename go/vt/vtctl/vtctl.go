@@ -718,7 +718,7 @@ func commandSetReadOnly(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []st
 	if err != nil {
 		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
 	}
-	return wr.TabletManagerClient().SetReadOnly(context.TODO(), ti, wr.ActionTimeout())
+	return wr.TabletManagerClient().SetReadOnly(wr.Context(), ti)
 }
 
 func commandSetReadWrite(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -737,7 +737,7 @@ func commandSetReadWrite(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	if err != nil {
 		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
 	}
-	return wr.TabletManagerClient().SetReadWrite(context.TODO(), ti, wr.ActionTimeout())
+	return wr.TabletManagerClient().SetReadWrite(wr.Context(), ti)
 }
 
 func commandChangeSlaveType(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -808,7 +808,7 @@ func commandRefreshState(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().RefreshState(context.TODO(), tabletInfo, wr.ActionTimeout())
+	return wr.TabletManagerClient().RefreshState(wr.Context(), tabletInfo)
 }
 
 func commandRunHealthCheck(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -830,7 +830,7 @@ func commandRunHealthCheck(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().RunHealthCheck(context.TODO(), tabletInfo, servedType, wr.ActionTimeout())
+	return wr.TabletManagerClient().RunHealthCheck(wr.Context(), tabletInfo, servedType)
 }
 
 func commandQuery(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -862,7 +862,7 @@ func commandSleep(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) 
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().Sleep(context.TODO(), ti, duration, wr.ActionTimeout())
+	return wr.TabletManagerClient().Sleep(wr.Context(), ti, duration)
 }
 
 func commandSnapshotSourceEnd(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1175,7 +1175,7 @@ func commandShardExternallyReparented(wr *wrangler.Wrangler, subFlags *flag.Flag
 		if err != nil {
 			return err
 		}
-		return wr.TabletManagerClient().TabletExternallyReparented(context.TODO(), ti, "", wr.ActionTimeout())
+		return wr.TabletManagerClient().TabletExternallyReparented(wr.Context(), ti, "")
 	}
 	return wr.ShardExternallyReparented(keyspace, shard, tabletAlias)
 }
