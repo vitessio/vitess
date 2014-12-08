@@ -104,7 +104,7 @@ func TestQueryRuleInfoGetSetQueryRules(t *testing.T) {
 		t.Errorf("GetRules failed to retrieve KeyrangeQueryRules that has been set, errmsg: %s", err)
 	}
 	if !reflect.DeepEqual(qrs, keyrangeRules) {
-		t.Errorf("GetRules failed to return QueryRules identical to keyrangeRules")
+		t.Errorf("KeyrangeQueryRules retrived is %v, but the expected value should be %v", qrs, keyrangeRules)
 	}
 
 	err, qrs = qri.GetRules(BlacklistQueryRules)
@@ -112,7 +112,7 @@ func TestQueryRuleInfoGetSetQueryRules(t *testing.T) {
 		t.Errorf("GetRules failed to retrieve BlacklistQueryRules that has been set, errmsg: %s", err)
 	}
 	if !reflect.DeepEqual(qrs, blacklistRules) {
-		t.Errorf("GetRules failed to return QueryRules identical to blacklistRules")
+		t.Errorf("BlacklistQueryRules retrived is %v, but the expected value should be %v", qrs, blacklistRules)
 	}
 
 	err, qrs = qri.GetRules(CustomQueryRules)
@@ -120,7 +120,7 @@ func TestQueryRuleInfoGetSetQueryRules(t *testing.T) {
 		t.Errorf("GetRules failed to retrieve CustomQueryRules that has been set, errmsg: %s", err)
 	}
 	if !reflect.DeepEqual(qrs, customQueryRules) {
-		t.Errorf("GetRules failed to return QueryRules identical to customQueryRules")
+		t.Errorf("CustomQueryRules retrived is %v, but the expected value should be %v", qrs, customQueryRules)
 	}
 }
 
@@ -134,28 +134,28 @@ func TestQueryRuleInfoFilterByPlan(t *testing.T) {
 	// Test filter by keyrange rule
 	qrs := qri.filterByPlan("insert into t_test values(123, 456, 'abc')", planbuilder.PLAN_INSERT_PK, "t_test")
 	if l := len(qrs.rules); l != 1 {
-		t.Errorf("Insert PK query should only match one rule!")
+		t.Errorf("Insert PK query matches %d rules, but we expect %d", l, 1)
 	}
 	if !strings.HasPrefix(qrs.rules[0].Name, "keyspace_id_not_in_range") {
-		t.Errorf("filterByPlan doesn't return correct rule for insert PK statement")
+		t.Errorf("Insert PK query matches rule '%s', but we expect rule with prefix '%s'", qrs.rules[0].Name, "keyspace_id_not_in_range")
 	}
 
 	// Test filter by blacklist rule
 	qrs = qri.filterByPlan("select * from bannedtable2", planbuilder.PLAN_PASS_SELECT, "bannedtable2")
 	if l := len(qrs.rules); l != 1 {
-		t.Errorf("select from bannedtable should only match one rule!")
+		t.Errorf("Select from bannedtable matches %d rules, but we expect %d", l, 1)
 	}
 	if !strings.HasPrefix(qrs.rules[0].Name, "blacklisted_table") {
-		t.Errorf("filterByPlan doesn't return correct rule for select from bannedtable query")
+		t.Errorf("Select from bannedtable query matches rule '%s', but we expect rule with prefix '%s'", qrs.rules[0].Name, "blacklisted_table")
 	}
 
 	// Test filter by custom rule
 	qrs = qri.filterByPlan("select cid from t_customer limit 10", planbuilder.PLAN_PASS_SELECT, "t_customer")
 	if l := len(qrs.rules); l != 1 {
-		t.Errorf("select from t_customer should only match one rule!")
+		t.Errorf("Select from t_customer matches %d rules, but we expect %d", l, 1)
 	}
 	if !strings.HasPrefix(qrs.rules[0].Name, "customrule_ban_bindvar") {
-		t.Errorf("filterByPlan doesn't return correct rule for select from t_customer query")
+		t.Errorf("Select from t_customer matches rule '%s', but we expect rule with prefix '%s'", qrs.rules[0].Name, "customrule_ban_bindvar")
 	}
 
 	// Test match two rules: both keyrange rule and custom rule will be matched
@@ -166,11 +166,12 @@ func TestQueryRuleInfoFilterByPlan(t *testing.T) {
 	qri.SetRules(CustomQueryRules, customQueryRules)
 	qrs = qri.filterByPlan("insert into t_test values (:bindvar1, 123, 'test')", planbuilder.PLAN_INSERT_PK, "t_test")
 	if l := len(qrs.rules); l != 2 {
-		t.Errorf("Expect two rules to be matched for insert into t_test query, rules returned: %v", qrs.rules)
+		t.Errorf("Insert into t_test matches %d rules: %v, but we expect %d rules to be matched", l, qrs.rules, 2)
 	}
 	if !strings.HasPrefix(qrs.rules[0].Name, "keyspace_id_not_in_range") ||
 		!strings.HasPrefix(qrs.rules[1].Name, "customrule_ban_bindvar") {
 
-		t.Errorf("filterByPlan doesn't return correct rules for insert into t_test query")
+		t.Errorf("Insert into t_test matches rule[0] '%s' and rule[1] '%s', but we expect rule[0] with prefix '%s' and rule[1] with prefix '%s'",
+			qrs.rules[0].Name, qrs.rules[1].Name, "keyspace_id_not_in_range", "customrule_ban_bindvar")
 	}
 }
