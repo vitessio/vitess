@@ -43,9 +43,29 @@ email varchar(64),
 primary key (user_id)
 ) Engine=InnoDB'''
 
-create_vt_lookup = '''create table vt_lookup (
+create_vt_music = '''create table vt_music (
+user_id bigint,
+id bigint,
+song varchar(64),
+primary key (user_id, id)
+) Engine=InnoDB'''
+
+create_vt_music_extra = '''create table vt_music_extra (
+music_id bigint,
+user_id bigint,
+artist varchar(64),
+primary key (music_id)
+) Engine=InnoDB'''
+
+create_vt_user_idx = '''create table vt_user_idx (
 id bigint auto_increment,
 primary key (id)
+) Engine=InnoDB'''
+
+create_music_user_map = '''create table music_user_map (
+music_id bigint auto_increment,
+user_id bigint,
+primary key (music_id)
 ) Engine=InnoDB'''
 
 schema = '''{
@@ -53,13 +73,22 @@ schema = '''{
     "user_keyspace": {
       "Sharded": true,
       "Vindexes": {
-        "id_index": {
+        "user_index": {
           "Type": "hash",
           "Params": {
-            "Table": "vt_lookup",
+            "Table": "vt_user_idx",
             "Column": "id"
           },
           "Owner": "vt_user"
+        },
+        "music_user_map": {
+          "Type": "lookup_hash_unique",
+          "Params": {
+            "Table": "music_user_map",
+            "From": "music_id",
+            "To": "user_id"
+          },
+          "Owner": "vt_music"
         }
       },
       "Tables": {
@@ -67,7 +96,7 @@ schema = '''{
           "ColVindexes": [
             {
               "Col": "id",
-              "Name": "id_index"
+              "Name": "user_index"
             }
           ]
         },
@@ -75,7 +104,31 @@ schema = '''{
           "ColVindexes": [
             {
               "Col": "user_id",
-              "Name": "id_index"
+              "Name": "user_index"
+            }
+          ]
+        },
+        "vt_music": {
+          "ColVindexes": [
+            {
+              "Col": "user_id",
+              "Name": "user_index"
+            },
+            {
+              "Col": "id",
+              "Name": "music_user_map"
+            }
+          ]
+        },
+        "vt_music_extra": {
+          "ColVindexes": [
+            {
+              "Col": "music_id",
+              "Name": "music_user_map"
+            },
+            {
+              "Col": "user_id",
+              "Name": "user_index"
             }
           ]
         }
@@ -84,7 +137,8 @@ schema = '''{
     "lookup_keyspace": {
       "Sharded": false,
       "Tables": {
-        "vt_lookup": {}
+        "vt_user_idx": {},
+        "music_user_map": {}
       }
     }
   }
@@ -151,10 +205,13 @@ def setup_tablets():
     t.create_db('vt_user_keyspace')
     t.mquery('vt_user_keyspace', create_vt_user)
     t.mquery('vt_user_keyspace', create_vt_user_extra)
+    t.mquery('vt_user_keyspace', create_vt_music)
+    t.mquery('vt_user_keyspace', create_vt_music_extra)
     t.start_vttablet(wait_for_state='SERVING')
     utils.run_vtctl(['SetReadWrite', t.tablet_alias])
   lookup_master.create_db('vt_lookup_keyspace')
-  lookup_master.mquery('vt_lookup_keyspace', create_vt_lookup)
+  lookup_master.mquery('vt_lookup_keyspace', create_vt_user_idx)
+  lookup_master.mquery('vt_lookup_keyspace', create_music_user_map)
   lookup_master.start_vttablet(wait_for_state='SERVING')
   utils.run_vtctl(['SetReadWrite', lookup_master.tablet_alias])
 
@@ -178,7 +235,7 @@ class TestVTGateFunctions(unittest.TestCase):
   def setUp(self):
     self.master_tablet = shard_1_master
 
-  def test_insert_autoinc(self):
+  def test_insert_user(self):
     count = 4
     vtgate_conn = get_connection()
     for x in xrange(count):
@@ -207,10 +264,10 @@ class TestVTGateFunctions(unittest.TestCase):
     self.assertEqual(result, ((1L, 'test 1'), (2L, 'test 2'), (3L, 'test 3')))
     result = shard_1_master.mquery("vt_user_keyspace", "select * from vt_user")
     self.assertEqual(result, ((4L, 'test 4'), (6L, 'test 6'), (7L, 'test 7')))
-    result = lookup_master.mquery("vt_lookup_keyspace", "select * from vt_lookup")
+    result = lookup_master.mquery("vt_lookup_keyspace", "select * from vt_user_idx")
     self.assertEqual(result, ((1L,), (2L,), (3L,), (4L,), (6L,), (7L,)))
 
-  def test_insert_normal(self):
+  def test_insert_user_extra(self):
     count = 4
     vtgate_conn = get_connection()
     for x in xrange(count):
@@ -229,6 +286,57 @@ class TestVTGateFunctions(unittest.TestCase):
     self.assertEqual(result, ((1L, 'test 1'), (2L, 'test 2'), (3L, 'test 3')))
     result = shard_1_master.mquery("vt_user_keyspace", "select * from vt_user_extra")
     self.assertEqual(result, ((4L, 'test 4'),))
+
+  def test_insert_music(self):
+    count = 4
+    vtgate_conn = get_connection()
+    for x in xrange(count):
+      i = x+1
+      vtgate_conn.begin()
+      vtgate_conn._execute(
+          "insert into vt_music (user_id, song) values (%(user_id)s, %(song)s)",
+          {'user_id': i, 'song': 'test %s' % i},
+          'master')
+      vtgate_conn.commit()
+    for x in xrange(count):
+      i = x+1
+      (results, rowcount, lastrowid, fields) = vtgate_conn._execute("select * from vt_music where id = %(id)s", {'id': i}, 'master')
+      self.assertEqual(results, [(i, i, "test %s" % i)])
+    vtgate_conn.begin()
+    vtgate_conn._execute(
+        "insert into vt_music (user_id, id, song) values (%(user_id)s, %(id)s, %(song)s)",
+        {'user_id': 5, 'id': 6, 'song': 'test 6'},
+        'master')
+    vtgate_conn._execute(
+        "insert into vt_music (user_id, song) values (%(user_id)s, %(song)s)",
+        {'user_id': 6, 'song': 'test 7'},
+        'master')
+    vtgate_conn.commit()
+    result = shard_0_master.mquery("vt_user_keyspace", "select * from vt_music")
+    self.assertEqual(result, ((1L, 1L, 'test 1'), (2L, 2L, 'test 2'), (3L, 3L, 'test 3'), (5L, 6L, 'test 6')))
+    result = shard_1_master.mquery("vt_user_keyspace", "select * from vt_music")
+    self.assertEqual(result, ((4L, 4L, 'test 4'), (6L, 7L, 'test 7')))
+    result = lookup_master.mquery("vt_lookup_keyspace", "select * from music_user_map")
+    self.assertEqual(result, ((1L, 1L), (2L, 2L), (3L, 3L), (4L, 4L), (6L, 5L), (7L, 6L)))
+
+  def test_insert_music_extra(self):
+    vtgate_conn = get_connection()
+    vtgate_conn.begin()
+    vtgate_conn._execute(
+        "insert into vt_music_extra (music_id, user_id, artist) values (%(music_id)s, %(user_id)s, %(artist)s)",
+        {'music_id': 1, 'user_id': 1, 'artist': 'test 1'},
+        'master')
+    vtgate_conn._execute(
+        "insert into vt_music_extra (music_id, artist) values (%(music_id)s, %(artist)s)",
+        {'music_id': 6, 'artist': 'test 6'},
+        'master')
+    vtgate_conn.commit()
+    (results, rowcount, lastrowid, fields) = vtgate_conn._execute("select * from vt_music_extra where music_id = %(music_id)s", {'music_id': 6}, 'master')
+    self.assertEqual(results, [(6L, 5L, "test 6")])
+    result = shard_0_master.mquery("vt_user_keyspace", "select * from vt_music_extra")
+    self.assertEqual(result, ((1L, 1L, 'test 1'), (6L, 5L, 'test 6')))
+    result = shard_1_master.mquery("vt_user_keyspace", "select * from vt_music_extra")
+    self.assertEqual(result, ())
 
   def test_insert_value_required(self):
     vtgate_conn = get_connection()
