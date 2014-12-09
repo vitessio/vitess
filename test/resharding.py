@@ -578,7 +578,7 @@ primary key (name)
       for keyspace_shard in ('test_keyspace/80-c0', 'test_keyspace/c0-'):
         utils.run_vtctl(['CopySchemaShard',
                          '--exclude_tables', 'unrelated',
-                         shard_1_rdonly.tablet_alias,
+                         shard_1_rdonly1.tablet_alias,
                          keyspace_shard],
                         auto_log=True)
 

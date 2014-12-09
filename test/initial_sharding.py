@@ -376,7 +376,7 @@ index by_msg (msg)
       for keyspace_shard in ('test_keyspace/-80', 'test_keyspace/80-'):
         utils.run_vtctl(['CopySchemaShard',
                          '--exclude_tables', 'unrelated',
-                         shard_rdonly.tablet_alias,
+                         shard_rdonly1.tablet_alias,
                          keyspace_shard],
                         auto_log=True)
 

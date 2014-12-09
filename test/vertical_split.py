@@ -327,7 +327,7 @@ index by_msg (msg)
       # small table we have.
       utils.run_vtctl(['CopySchemaShard',
                        '--tables', 'moving.*,view1',
-                       source_rdonly.tablet_alias,
+                       source_rdonly1.tablet_alias,
                        'destination_keyspace/0'],
                       auto_log=True)
 
