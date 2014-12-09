@@ -577,11 +577,10 @@ func (wr *Wrangler) applySqlShard(tabletInfo *topo.TabletInfo, change string) er
 	if err != nil {
 		return fmt.Errorf("fillStringTemplate failed: %v", err)
 	}
-	timeout := 30 * time.Second
-	ctx, cancel := context.WithTimeout(wr.ctx, timeout)
+	ctx, cancel := context.WithTimeout(wr.ctx, 30*time.Second)
 	defer cancel()
 	// Need to make sure that we enable binlog, since we're only applying the statement on masters.
-	_, err = wr.tmc.ExecuteFetch(ctx, tabletInfo, filledChange, 0, false, false, timeout)
+	_, err = wr.tmc.ExecuteFetch(ctx, tabletInfo, filledChange, 0, false, false)
 	return err
 }
 
