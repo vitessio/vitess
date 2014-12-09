@@ -5,8 +5,7 @@
 package topotools
 
 // This file contains utility functions for reparenting. It is used by
-// the wrangler, and by the new master tablet for
-// ShardExternallyReparented.
+// the new master tablet for TabletExternallyReparented.
 
 import (
 	"sync"
