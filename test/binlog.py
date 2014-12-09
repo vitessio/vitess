@@ -22,6 +22,8 @@ from vtdb import update_stream_service
 
 src_master = tablet.Tablet()
 src_replica = tablet.Tablet()
+src_rdonly1 = tablet.Tablet()
+src_rdonly2 = tablet.Tablet()
 dst_master = tablet.Tablet()
 dst_replica = tablet.Tablet()
 
@@ -33,6 +35,8 @@ def setUpModule():
     setup_procs = [
         src_master.init_mysql(),
         src_replica.init_mysql(),
+        src_rdonly1.init_mysql(),
+        src_rdonly2.init_mysql(),
         dst_master.init_mysql(),
         dst_replica.init_mysql(),
         ]
@@ -47,19 +51,20 @@ def setUpModule():
 
     src_master.init_tablet('master', 'test_keyspace', '0')
     src_replica.init_tablet('replica', 'test_keyspace', '0')
+    src_rdonly1.init_tablet('rdonly', 'test_keyspace', '0')
+    src_rdonly2.init_tablet('rdonly', 'test_keyspace', '0')
 
     utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/0'])
     utils.validate_topology()
 
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
-    src_master.create_db('vt_test_keyspace')
-    src_master.start_vttablet(wait_for_state=None)
-    src_replica.create_db('vt_test_keyspace')
-    src_replica.start_vttablet(wait_for_state=None)
+    for t in [src_master, src_replica, src_rdonly1, src_rdonly2]:
+      t.create_db('vt_test_keyspace')
+      t.start_vttablet(wait_for_state=None)
 
-    src_master.wait_for_vttablet_state('SERVING')
-    src_replica.wait_for_vttablet_state('SERVING')
+    for t in [src_master, src_replica, src_rdonly1, src_rdonly2]:
+      t.wait_for_vttablet_state('SERVING')
 
     utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/0',
                      src_master.tablet_alias], auto_log=True)
@@ -89,12 +94,20 @@ def setUpModule():
                      dst_master.tablet_alias], auto_log=True)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
-    # Start binlog stream from src_replica to dst_master.
-    logging.debug("Starting binlog stream...")
-    utils.run_vtctl(['MultiSnapshot', src_replica.tablet_alias], auto_log=True)
-    src_replica.wait_for_binlog_server_state("Enabled")
-    utils.run_vtctl(['ShardMultiRestore', '-strategy=-populate_blp_checkpoint',
-                     'test_keyspace/1', src_replica.tablet_alias], auto_log=True)
+    # copy the schema
+    utils.run_vtctl(['CopySchemaShard', src_replica.tablet_alias,
+                     'test_keyspace/1'], auto_log=True)
+
+    # run the clone worked (this is a degenerate case, source and destination
+    # both have the full keyrange. Happens to work correctly).
+    logging.debug("Running the clone worker to start binlog stream...")
+    utils.run_vtworker(['--cell', 'test_nj',
+                        'SplitClone',
+                        '--strategy=-populate_blp_checkpoint -write_masters_only',
+                        '--source_reader_count', '10',
+                        '--min_table_size_for_split', '1',
+                        'test_keyspace/0'],
+                        auto_log=True)
     dst_master.wait_for_binlog_player_count(1)
 
     # Wait for dst_replica to be ready.
@@ -108,11 +121,14 @@ def tearDownModule():
   if utils.options.skip_teardown:
     return
 
-  tablet.kill_tablets([src_master, src_replica, dst_master, dst_replica])
+  tablet.kill_tablets([src_master, src_replica, src_rdonly1, src_rdonly2,
+                       dst_master, dst_replica])
 
   teardown_procs = [
       src_master.teardown_mysql(),
       src_replica.teardown_mysql(),
+      src_rdonly1.teardown_mysql(),
+      src_rdonly2.teardown_mysql(),
       dst_master.teardown_mysql(),
       dst_replica.teardown_mysql(),
       ]
@@ -124,6 +140,8 @@ def tearDownModule():
 
   src_master.remove_tree()
   src_replica.remove_tree()
+  src_rdonly1.remove_tree()
+  src_rdonly2.remove_tree()
   dst_master.remove_tree()
   dst_replica.remove_tree()
 
