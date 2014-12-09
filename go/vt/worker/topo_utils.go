@@ -14,10 +14,10 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
-// findHealthyEndPoint returns a random healthy endpoint.
+// findHealthyRdonlyEndPoint returns a random healthy endpoint.
 // Since we don't want to use them all, we require at least 2 servers
 // are healthy.
-func findHealthyEndPoint(wr *wrangler.Wrangler, cell, keyspace, shard string) (topo.TabletAlias, error) {
+func findHealthyRdonlyEndPoint(wr *wrangler.Wrangler, cell, keyspace, shard string) (topo.TabletAlias, error) {
 	endPoints, err := wr.TopoServer().GetEndPoints(cell, keyspace, shard, topo.TYPE_RDONLY)
 	if err != nil {
 		return topo.TabletAlias{}, fmt.Errorf("GetEndPoints(%v,%v,%v,rdonly) failed: %v", cell, keyspace, shard, err)
@@ -45,7 +45,7 @@ func findHealthyEndPoint(wr *wrangler.Wrangler, cell, keyspace, shard string) (t
 // - mark it as checker
 // - tag it with our worker process
 func findChecker(wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, cell, keyspace, shard string) (topo.TabletAlias, error) {
-	tabletAlias, err := findHealthyEndPoint(wr, cell, keyspace, shard)
+	tabletAlias, err := findHealthyRdonlyEndPoint(wr, cell, keyspace, shard)
 	if err != nil {
 		return topo.TabletAlias{}, err
 	}
