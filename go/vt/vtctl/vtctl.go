@@ -134,8 +134,8 @@ var commands = []commandGroup{
 			command{"RebuildShardGraph", commandRebuildShardGraph,
 				"[-cells=a,b] <keyspace/shard> ... ",
 				"Rebuild the replication graph and shard serving data in zk. This may trigger an update to all connected clients."},
-			command{"ShardExternallyReparented", commandShardExternallyReparented,
-				"[-use_rpc] <keyspace/shard> <tablet alias>",
+			command{"TabletExternallyReparented", commandTabletExternallyReparented,
+				"<tablet alias>",
 				"Changes metadata to acknowledge a shard master change performed by an external tool."},
 			command{"ValidateShard", commandValidateShard,
 				"[-ping-tablets] <keyspace/shard>",
@@ -1156,31 +1156,23 @@ func commandRebuildShardGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 	return nil
 }
 
-func commandShardExternallyReparented(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	useRpc := subFlags.Bool("use_rpc", false, "send an RPC call to the new master instead of doing the operation internally")
+func commandTabletExternallyReparented(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action ShardExternallyReparented requires <keyspace/shard> <tablet alias>")
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("action TabletExternallyReparented requires <tablet alias>")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(1))
+	ti, err := wr.TopoServer().GetTablet(tabletAlias)
 	if err != nil {
 		return err
 	}
-	if *useRpc {
-		ti, err := wr.TopoServer().GetTablet(tabletAlias)
-		if err != nil {
-			return err
-		}
-		return wr.TabletManagerClient().TabletExternallyReparented(wr.Context(), ti, "")
-	}
-	return wr.ShardExternallyReparented(keyspace, shard, tabletAlias)
+	return wr.TabletManagerClient().TabletExternallyReparented(wr.Context(), ti, "")
 }
 
 func commandValidateShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
