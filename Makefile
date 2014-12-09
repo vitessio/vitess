@@ -58,21 +58,21 @@ site_integration_test_files = \
 integration_test_files = \
 	binlog.py \
 	clone.py \
-	initial_sharding_bytes.py \
-	initial_sharding.py \
+	initial_sharding_bytes_vtworker.py \
+	initial_sharding_vtworker.py \
 	keyrange_test.py \
 	keyspace_test.py \
 	mysqlctl.py \
 	reparent.py \
-	resharding_bytes.py \
-	resharding.py \
+	resharding_bytes_vtworker.py \
+	resharding_vtworker.py \
 	rowcache_invalidator.py \
 	secure.py \
 	schema.py \
 	sharded.py \
 	tabletmanager.py \
 	update_stream.py \
-	vertical_split.py \
+	vertical_split_vtworker.py \
 	vertical_split_vtgate.py \
 	vtdb_test.py \
 	vtgatev2_test.py \
