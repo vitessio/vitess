@@ -6,6 +6,7 @@ package worker
 
 import (
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/youtube/vitess/go/vt/servenv"
@@ -13,22 +14,30 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
-// findHealthyEndPoint returns the first healthy endpoint.
+// findHealthyEndPoint returns a random healthy endpoint.
+// Since we don't want to use them all, we require at least 2 servers
+// are healthy.
 func findHealthyEndPoint(wr *wrangler.Wrangler, cell, keyspace, shard string) (topo.TabletAlias, error) {
 	endPoints, err := wr.TopoServer().GetEndPoints(cell, keyspace, shard, topo.TYPE_RDONLY)
 	if err != nil {
 		return topo.TabletAlias{}, fmt.Errorf("GetEndPoints(%v,%v,%v,rdonly) failed: %v", cell, keyspace, shard, err)
 	}
+	healthyEndpoints := make([]topo.EndPoint, 0, len(endPoints.Entries))
 	for _, entry := range endPoints.Entries {
 		if len(entry.Health) == 0 {
-			// first healthy server is what we want
-			return topo.TabletAlias{
-				Cell: cell,
-				Uid:  entry.Uid,
-			}, nil
+			healthyEndpoints = append(healthyEndpoints, entry)
 		}
 	}
-	return topo.TabletAlias{}, fmt.Errorf("No endpoint to chose from in (%v,%v/%v)", cell, keyspace, shard)
+	if len(healthyEndpoints) <= 1 {
+		return topo.TabletAlias{}, fmt.Errorf("Not enough endpoints to chose from in (%v,%v/%v), have %v healthy ones", cell, keyspace, shard, len(healthyEndpoints))
+	}
+
+	// random server in the list is what we want
+	index := rand.Intn(len(healthyEndpoints))
+	return topo.TabletAlias{
+		Cell: cell,
+		Uid:  healthyEndpoints[index].Uid,
+	}, nil
 }
 
 // findChecker:
@@ -70,4 +79,8 @@ func findChecker(wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, cell, keyspac
 	// 'spare' if we have stopped replication for too long on it.
 	wrangler.RecordChangeSlaveTypeAction(cleaner, tabletAlias, topo.TYPE_RDONLY)
 	return tabletAlias, nil
+}
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
 }
