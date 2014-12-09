@@ -352,10 +352,10 @@ func testSplitClone(t *testing.T, strategy string) {
 	rightMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30, disableBinLogs)
 	rightRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30, disableBinLogs)
 
-	if err := wr.CopySchemaShard(sourceRdonly.Tablet.Alias, nil, nil, true, "ks", "-40"); err != nil {
+	if err := wr.CopySchemaShard(sourceRdonly1.Tablet.Alias, nil, nil, true, "ks", "-40"); err != nil {
 		t.Fatalf("CopySchemaShard failed: %v", err)
 	}
-	if err := wr.CopySchemaShard(sourceRdonly.Tablet.Alias, nil, nil, true, "ks", "40-80"); err != nil {
+	if err := wr.CopySchemaShard(sourceRdonly1.Tablet.Alias, nil, nil, true, "ks", "40-80"); err != nil {
 		t.Fatalf("CopySchemaShard failed: %v", err)
 	}
 
