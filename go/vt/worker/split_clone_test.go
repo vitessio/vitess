@@ -272,7 +272,10 @@ func testSplitClone(t *testing.T, strategy string) {
 
 	sourceMaster := testlib.NewFakeTablet(t, wr, "cell1", 0,
 		topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "ks", "-80"))
-	sourceRdonly := testlib.NewFakeTablet(t, wr, "cell1", 1,
+	sourceRdonly1 := testlib.NewFakeTablet(t, wr, "cell1", 1,
+		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-80"),
+		testlib.TabletParent(sourceMaster.Tablet.Alias))
+	sourceRdonly2 := testlib.NewFakeTablet(t, wr, "cell1", 2,
 		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-80"),
 		testlib.TabletParent(sourceMaster.Tablet.Alias))
 
@@ -288,7 +291,7 @@ func testSplitClone(t *testing.T, strategy string) {
 		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "40-80"),
 		testlib.TabletParent(rightMaster.Tablet.Alias))
 
-	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly, leftMaster, leftRdonly, rightMaster, rightRdonly} {
+	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, leftMaster, leftRdonly, rightMaster, rightRdonly} {
 		ft.StartActionLoop(t, wr)
 		defer ft.StopActionLoop(t)
 	}
@@ -312,28 +315,30 @@ func testSplitClone(t *testing.T, strategy string) {
 	// the only strategy that enables bin logs
 	disableBinLogs := !wrk.strategy.WriteMastersOnly
 
-	sourceRdonly.FakeMysqlDaemon.Schema = &myproto.SchemaDefinition{
-		DatabaseSchema: "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
-		TableDefinitions: []*myproto.TableDefinition{
-			&myproto.TableDefinition{
-				Name:              "table1",
-				Schema:            "CREATE TABLE `resharding1` (\n  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n  `msg` varchar(64) DEFAULT NULL,\n  `keyspace_id` bigint(20) unsigned NOT NULL,\n  PRIMARY KEY (`id`),\n  KEY `by_msg` (`msg`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8",
-				Columns:           []string{"id", "msg", "keyspace_id"},
-				PrimaryKeyColumns: []string{"id"},
-				Type:              myproto.TABLE_BASE_TABLE,
-				DataLength:        2048,
-				RowCount:          100,
+	for _, sourceRdonly := range []*testlib.FakeTablet{sourceRdonly1, sourceRdonly2} {
+		sourceRdonly.FakeMysqlDaemon.Schema = &myproto.SchemaDefinition{
+			DatabaseSchema: "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
+			TableDefinitions: []*myproto.TableDefinition{
+				&myproto.TableDefinition{
+					Name:              "table1",
+					Schema:            "CREATE TABLE `resharding1` (\n  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n  `msg` varchar(64) DEFAULT NULL,\n  `keyspace_id` bigint(20) unsigned NOT NULL,\n  PRIMARY KEY (`id`),\n  KEY `by_msg` (`msg`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8",
+					Columns:           []string{"id", "msg", "keyspace_id"},
+					PrimaryKeyColumns: []string{"id"},
+					Type:              myproto.TABLE_BASE_TABLE,
+					DataLength:        2048,
+					RowCount:          100,
+				},
 			},
-		},
-		Version: "unused",
+			Version: "unused",
+		}
+		sourceRdonly.FakeMysqlDaemon.DbaConnectionFactory = SourceRdonlyFactory(t)
+		sourceRdonly.FakeMysqlDaemon.CurrentSlaveStatus = &myproto.ReplicationStatus{
+			Position: myproto.ReplicationPosition{
+				GTIDSet: myproto.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
+			},
+		}
+		sourceRdonly.RpcServer.Register(&SqlQuery{t: t})
 	}
-	sourceRdonly.FakeMysqlDaemon.DbaConnectionFactory = SourceRdonlyFactory(t)
-	sourceRdonly.FakeMysqlDaemon.CurrentSlaveStatus = &myproto.ReplicationStatus{
-		Position: myproto.ReplicationPosition{
-			GTIDSet: myproto.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
-		},
-	}
-	sourceRdonly.RpcServer.Register(&SqlQuery{t: t})
 
 	// We read 100 source rows. sourceReaderCount is set to 10, so
 	// we'll have 100/10=10 rows per table chunk.
