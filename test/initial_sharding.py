@@ -348,7 +348,14 @@ index by_msg (msg)
                              keyspace_id_type=keyspace_id_type)
 
     if use_clone_worker:
-      # the worker will do snapshot / restore
+      # we need to create the schema, and the worker will do data copying
+      for keyspace_shard in ('test_keyspace/-80', 'test_keyspace/80-'):
+        utils.run_vtctl(['CopySchemaShard',
+                         '--exclude_tables', 'unrelated',
+                         shard_rdonly.tablet_alias,
+                         keyspace_shard],
+                        auto_log=True)
+
       utils.run_vtworker(['--cell', 'test_nj',
                           '--command_display_interval', '10ms',
                           'SplitClone',

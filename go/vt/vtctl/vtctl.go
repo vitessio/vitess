@@ -2015,7 +2015,7 @@ func commandCopySchemaShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args 
 	}
 
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action ApplySchemaShard requires a source <tablet alias> and a destination <keyspace/shard>")
+		return fmt.Errorf("action CopySchemaShard requires a source <tablet alias> and a destination <keyspace/shard>")
 	}
 	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
 	if err != nil {
