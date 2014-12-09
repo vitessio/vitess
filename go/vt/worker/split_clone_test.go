@@ -232,21 +232,11 @@ func DestinationsFactory(t *testing.T, insertCount int64, disableBinLogs bool) f
 	return func() (dbconnpool.PoolConnection, error) {
 		qi := atomic.AddInt64(&queryIndex, 1)
 		switch {
-		case qi == 0:
-			return NewFakePoolConnectionQueryBinlogOn(t, "CREATE DATABASE `vt_ks` /*!40100 DEFAULT CHARACTER SET utf8 */"), nil
-		case qi == 1:
-			return NewFakePoolConnectionQueryBinlogOn(t, "CREATE TABLE `vt_ks`.`resharding1` (\n"+
-				"  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n"+
-				"  `msg` varchar(64) DEFAULT NULL,\n"+
-				"  `keyspace_id` bigint(20) unsigned NOT NULL,\n"+
-				"  PRIMARY KEY (`id`),\n"+
-				"  KEY `by_msg` (`msg`)\n"+
-				") ENGINE=InnoDB DEFAULT CHARSET=utf8"), nil
-		case qi >= 2 && qi < insertCount+2:
+		case qi < insertCount:
 			return newFakePoolConnectionFactory(t, "INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*"), nil
-		case qi == insertCount+2:
+		case qi == insertCount:
 			return newFakePoolConnectionFactory(t, "CREATE DATABASE IF NOT EXISTS _vt"), nil
-		case qi == insertCount+3:
+		case qi == insertCount+1:
 			return newFakePoolConnectionFactory(t, "CREATE TABLE IF NOT EXISTS _vt.blp_checkpoint (\n"+
 				"  source_shard_uid INT(10) UNSIGNED NOT NULL,\n"+
 				"  pos VARCHAR(250) DEFAULT NULL,\n"+
@@ -254,7 +244,7 @@ func DestinationsFactory(t *testing.T, insertCount int64, disableBinLogs bool) f
 				"  transaction_timestamp BIGINT UNSIGNED NOT NULL,\n"+
 				"  flags VARCHAR(250) DEFAULT NULL,\n"+
 				"  PRIMARY KEY (source_shard_uid)) ENGINE=InnoDB"), nil
-		case qi == insertCount+4:
+		case qi == insertCount+2:
 			return newFakePoolConnectionFactory(t, "INSERT INTO _vt.blp_checkpoint (source_shard_uid, pos, time_updated, transaction_timestamp, flags) VALUES (0, 'MariaDB/12-34-5678', *"), nil
 		}
 
@@ -317,19 +307,17 @@ func testSplitClone(t *testing.T, strategy string) {
 
 	for _, sourceRdonly := range []*testlib.FakeTablet{sourceRdonly1, sourceRdonly2} {
 		sourceRdonly.FakeMysqlDaemon.Schema = &myproto.SchemaDefinition{
-			DatabaseSchema: "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
+			DatabaseSchema: "",
 			TableDefinitions: []*myproto.TableDefinition{
 				&myproto.TableDefinition{
 					Name:              "table1",
-					Schema:            "CREATE TABLE `resharding1` (\n  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n  `msg` varchar(64) DEFAULT NULL,\n  `keyspace_id` bigint(20) unsigned NOT NULL,\n  PRIMARY KEY (`id`),\n  KEY `by_msg` (`msg`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8",
 					Columns:           []string{"id", "msg", "keyspace_id"},
 					PrimaryKeyColumns: []string{"id"},
 					Type:              myproto.TABLE_BASE_TABLE,
-					DataLength:        2048,
-					RowCount:          100,
+					// This informs how many rows we can pack into a single insert
+					DataLength: 2048,
 				},
 			},
-			Version: "unused",
 		}
 		sourceRdonly.FakeMysqlDaemon.DbaConnectionFactory = SourceRdonlyFactory(t)
 		sourceRdonly.FakeMysqlDaemon.CurrentSlaveStatus = &myproto.ReplicationStatus{
@@ -351,13 +339,6 @@ func testSplitClone(t *testing.T, strategy string) {
 	leftRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30, disableBinLogs)
 	rightMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30, disableBinLogs)
 	rightRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30, disableBinLogs)
-
-	if err := wr.CopySchemaShard(sourceRdonly1.Tablet.Alias, nil, nil, true, "ks", "-40"); err != nil {
-		t.Fatalf("CopySchemaShard failed: %v", err)
-	}
-	if err := wr.CopySchemaShard(sourceRdonly1.Tablet.Alias, nil, nil, true, "ks", "40-80"); err != nil {
-		t.Fatalf("CopySchemaShard failed: %v", err)
-	}
 
 	wrk.Run()
 	status := wrk.StatusAsText()
