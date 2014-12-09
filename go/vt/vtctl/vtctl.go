@@ -210,7 +210,7 @@ var commands = []commandGroup{
 		"Generic", []command{
 			command{"Resolve", commandResolve,
 				"<keyspace>.<shard>.<db type>:<port name>",
-				"Read a list of addresses that can answer this query. The port name is usually _mysql or _vtocc."},
+				"Read a list of addresses that can answer this query. The port name is usually mysql or vt."},
 			command{"Validate", commandValidate,
 				"[-ping-tablets]",
 				"Validate all nodes reachable from global replication graph and all tablets in all discoverable cells are consistent."},
