@@ -78,6 +78,7 @@ func main() {
 	servenv.OnTerm(func() {
 		tabletserver.DisallowQueries()
 		mysqld.Close()
+		customrule.TearDownCustomRuleManager()
 	})
 	servenv.RunDefault()
 }

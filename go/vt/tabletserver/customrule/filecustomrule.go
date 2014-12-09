@@ -18,42 +18,45 @@ import (
 // polling on a file which contains custom query rule definitions
 type FileCustomRule struct {
 	mu              sync.Mutex
-	path            string                   // path to the file containing custom query rules
-	pollingInterval time.Duration            // interval in seconds at which FileCustomRule polls the file
-	currentRuleSet  *tabletserver.QueryRules // cache most recent successfully polled QueryRules
+	path            string                   // Path to the file containing custom query rules
+	pollingInterval time.Duration            // Interval in seconds at which FileCustomRule polls the file
+	currentRuleSet  *tabletserver.QueryRules // Caches most recent successfully polled QueryRules
 	queryService    *tabletserver.SqlQuery   // SqlQuery structure of vttablet
 	finish          chan int                 // Used by Close routine to signal the polling go routine to exit
 }
 
-// The minimum interval to poll the custom rule file
+// The minimum interval in seconds to poll the custom rule file
 const MinFilePollingSeconds time.Duration = 30
 
-// The default interval to poll the custom rule file
+// The default interval in seconds to poll the custom rule file
 const DefaultFilePollingSeconds time.Duration = 120
 
-// NewFileCustomRule returns empty FileCustomRule structure
+// NewFileCustomRule returns pointer to new FileCustomRule structure
 func NewFileCustomRule(pollingInterval time.Duration) (fcr *FileCustomRule) {
 	fcr = new(FileCustomRule)
+	fcr.path = ""
+	fcr.pollingInterval = pollingInterval
 	if pollingInterval < MinFilePollingSeconds {
 		log.Warningf("Cannot poll a query rule file at an interval of less than %v secs, falling back to default interval(%v s)",
 			MinFilePollingSeconds, DefaultFilePollingSeconds)
-		pollingInterval = DefaultFilePollingSeconds
+		fcr.pollingInterval = DefaultFilePollingSeconds
 	}
 	fcr.currentRuleSet = tabletserver.NewQueryRules()
-	fcr.pollingInterval = pollingInterval * time.Second
 	fcr.finish = make(chan int, 1)
 	return fcr
 }
 
-func (fcr *FileCustomRule) loadCustomRules() (err error, qrs *tabletserver.QueryRules) {
+// load rules from file and push rules to SqlQuery if rules are built correctly
+func (fcr *FileCustomRule) loadCustomRules() (qrs *tabletserver.QueryRules, err error) {
 	if fcr.path == "" {
-		return nil, tabletserver.NewQueryRules()
+		// Don't go further if path is empty
+		return tabletserver.NewQueryRules(), nil
 	}
 	data, err := ioutil.ReadFile(fcr.path)
 	if err != nil {
 		log.Errorf("Error reading file %v: %v", fcr.path, err)
-		// Don't update any internal cache, just return
-		return err, tabletserver.NewQueryRules()
+		// Don't update any internal cache, just return error
+		return tabletserver.NewQueryRules(), err
 	}
 
 	fcr.mu.Lock()
@@ -63,7 +66,7 @@ func (fcr *FileCustomRule) loadCustomRules() (err error, qrs *tabletserver.Query
 	if err != nil {
 		log.Errorf("Error unmarshaling query rules %v", err)
 		// Don't update internal cache either
-		return err, tabletserver.NewQueryRules()
+		return tabletserver.NewQueryRules(), err
 	}
 	if !reflect.DeepEqual(fcr.currentRuleSet, qrs) {
 		fcr.currentRuleSet = qrs.Copy()
@@ -71,7 +74,7 @@ func (fcr *FileCustomRule) loadCustomRules() (err error, qrs *tabletserver.Query
 		// too often
 		fcr.queryService.SetQueryRules(tabletserver.CustomQueryRules, qrs.Copy())
 	}
-	return nil, qrs
+	return qrs, nil
 }
 
 // Poll do polling on the query rule file and update internal caches accordingly
@@ -92,6 +95,7 @@ func (fcr *FileCustomRule) Open(rulePath string, queryService *tabletserver.SqlQ
 	fcr.queryService = queryService
 	fcr.loadCustomRules()
 	if rulePath != "" {
+		// polling routine will run when a meaningful path is available
 		go fcr.Poll()
 	}
 	return nil
@@ -103,10 +107,10 @@ func (fcr *FileCustomRule) Close() {
 }
 
 // GetRules returns most recent cached query rules
-func (fcr *FileCustomRule) GetRules() (err error, qrs *tabletserver.QueryRules, version int64) {
-	err, qrs = fcr.loadCustomRules()
+func (fcr *FileCustomRule) GetRules() (qrs *tabletserver.QueryRules, version int64, err error) {
+	qrs, err = fcr.loadCustomRules()
 	if err != nil {
-		return err, tabletserver.NewQueryRules(), InvalidQueryRulesVersion
+		return tabletserver.NewQueryRules(), InvalidQueryRulesVersion, err
 	}
-	return nil, qrs, time.Now().Unix()
+	return qrs, time.Now().Unix(), err
 }

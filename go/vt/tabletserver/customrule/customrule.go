@@ -19,7 +19,7 @@ import (
 type CustomRuleManager interface {
 	Open(rulePath string, queryService *tabletserver.SqlQuery) error    // Open sets up everything ready for future actions
 	Close()                                                             // Close tears down everything
-	GetRules() (err error, qrs *tabletserver.QueryRules, version int64) // GetRules returns the current set of rules available to CustomRuleManager
+	GetRules() (qrs *tabletserver.QueryRules, version int64, err error) // GetRules returns the current set of rules available to CustomRuleManager
 }
 
 const InvalidQueryRulesVersion int64 = -1
@@ -27,6 +27,7 @@ const InvalidQueryRulesVersion int64 = -1
 // CustomRuleImplements maps name of implementation to the actual structure pointers
 // All registered CustomRuleManager implementations are stored here
 var CustomRuleImplements map[string]CustomRuleManager = make(map[string]CustomRuleManager)
+var CustomRuleManagerInUse string = ""
 
 // RegisterCustomRuleImpl registers a CustomRuleManager implementation by setting up
 // an entry in CustomRuleImplements.
@@ -50,6 +51,7 @@ func InitializeCustomRuleManager(customRuleURI string, queryService *tabletserve
 	customRulePath := ""
 	if !strings.Contains(customRuleURI, ":") {
 		customRuleManagerName = FileCustomRuleImpl
+		CustomRuleManagerInUse = FileCustomRuleImpl
 		return CustomRuleImplements[FileCustomRuleImpl].Open(customRuleURI, queryService)
 	}
 	colonSepPos := strings.IndexByte(customRuleURI, ':')
@@ -58,7 +60,14 @@ func InitializeCustomRuleManager(customRuleURI string, queryService *tabletserve
 		customRulePath = customRuleURI[colonSepPos+1 : len(customRuleURI)]
 	}
 	if manager, ok := CustomRuleImplements[customRuleManagerName]; ok {
+		CustomRuleManagerInUse = customRuleManagerName
 		return manager.Open(customRulePath, queryService)
 	}
 	return errors.New(fmt.Sprintf("Custom rule implementation %s is unsupported", customRuleManagerName))
+}
+
+func TearDownCustomRuleManager() {
+	if CustomRuleManagerInUse != "" {
+		CustomRuleImplements[CustomRuleManagerInUse].Close()
+	}
 }

@@ -112,6 +112,7 @@ func main() {
 		// We will still use the topo server during lameduck period
 		// to update our state, so closing it in OnClose()
 		topo.CloseServers()
+		customrule.TearDownCustomRuleManager()
 	})
 	servenv.RunDefault()
 }
