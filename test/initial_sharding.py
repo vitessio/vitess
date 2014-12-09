@@ -8,7 +8,7 @@
 # - we start with a keyspace with a single shard and a single table
 # - we add and populate the sharding key
 # - we set the sharding key in the topology
-# - we backup / restore into 2 instances
+# - we clone into 2 instances
 # - we enable filtered replication
 # - we move all serving types
 # - we scrap the source tablets
@@ -27,7 +27,6 @@ import environment
 import utils
 import tablet
 
-use_clone_worker = False
 keyspace_id_type = keyrange_constants.KIT_UINT64
 pack_keyspace_id = struct.Struct('!Q').pack
 
@@ -371,44 +370,27 @@ index by_msg (msg)
                              'TabletTypes: master,rdonly,replica',
                              keyspace_id_type=keyspace_id_type)
 
-    if use_clone_worker:
-      # we need to create the schema, and the worker will do data copying
-      for keyspace_shard in ('test_keyspace/-80', 'test_keyspace/80-'):
-        utils.run_vtctl(['CopySchemaShard',
-                         '--exclude_tables', 'unrelated',
-                         shard_rdonly1.tablet_alias,
-                         keyspace_shard],
-                        auto_log=True)
-
-      utils.run_vtworker(['--cell', 'test_nj',
-                          '--command_display_interval', '10ms',
-                          'SplitClone',
-                          '--exclude_tables' ,'unrelated',
-                          '--strategy=-populate_blp_checkpoint -write_masters_only',
-                          '--source_reader_count', '10',
-                          '--min_table_size_for_split', '1',
-                          'test_keyspace/0'],
-                         auto_log=True)
-      utils.run_vtctl(['ChangeSlaveType', shard_rdonly1.tablet_alias, 'rdonly'],
-                      auto_log=True)
-      utils.run_vtctl(['ChangeSlaveType', shard_rdonly2.tablet_alias, 'rdonly'],
+    # we need to create the schema, and the worker will do data copying
+    for keyspace_shard in ('test_keyspace/-80', 'test_keyspace/80-'):
+      utils.run_vtctl(['CopySchemaShard',
+                       '--exclude_tables', 'unrelated',
+                       shard_rdonly1.tablet_alias,
+                       keyspace_shard],
                       auto_log=True)
 
-    else:
-      # take the snapshot for the split
-      utils.run_vtctl(['MultiSnapshot', '--spec=-80-',
-                       shard_replica.tablet_alias], auto_log=True)
-
-      # wait for tablet's binlog server service to be enabled after snapshot
-      shard_replica.wait_for_binlog_server_state("Enabled")
-
-      # perform the restore.
-      utils.run_vtctl(['ShardMultiRestore', '-strategy=-populate_blp_checkpoint',
-                       'test_keyspace/-80', shard_replica.tablet_alias],
-                      auto_log=True)
-      utils.run_vtctl(['ShardMultiRestore', '-strategy=-populate_blp_checkpoint',
-                       'test_keyspace/80-', shard_replica.tablet_alias],
-                      auto_log=True)
+    utils.run_vtworker(['--cell', 'test_nj',
+                        '--command_display_interval', '10ms',
+                        'SplitClone',
+                        '--exclude_tables' ,'unrelated',
+                        '--strategy=-populate_blp_checkpoint -write_masters_only',
+                        '--source_reader_count', '10',
+                        '--min_table_size_for_split', '1',
+                        'test_keyspace/0'],
+                       auto_log=True)
+    utils.run_vtctl(['ChangeSlaveType', shard_rdonly1.tablet_alias, 'rdonly'],
+                     auto_log=True)
+    utils.run_vtctl(['ChangeSlaveType', shard_rdonly2.tablet_alias, 'rdonly'],
+                     auto_log=True)
 
     # check the startup values are in the right place
     self._check_startup_values()

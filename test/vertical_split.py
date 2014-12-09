@@ -22,7 +22,6 @@ TABLET = "tablet"
 VTGATE = "vtgate"
 VTGATE_PROTOCOL_TABLET = 'v0'
 client_type = TABLET
-use_clone_worker = False
 
 # source keyspace, with 4 tables
 source_master = tablet.Tablet()
@@ -320,43 +319,27 @@ index by_msg (msg)
     self._check_values(source_master, 'vt_source_keyspace', 'view1',
                        moving1_first, 100)
 
-    if use_clone_worker:
-      # the worker will do everything. We test with source_reader_count=10
-      # (down from default=20) as connection pool is not big enough for 20.
-      # min_table_size_for_split is set to 1 as to force a split even on the
-      # small table we have.
-      utils.run_vtctl(['CopySchemaShard',
-                       '--tables', 'moving.*,view1',
-                       source_rdonly1.tablet_alias,
-                       'destination_keyspace/0'],
-                      auto_log=True)
+    # the worker will do everything. We test with source_reader_count=10
+    # (down from default=20) as connection pool is not big enough for 20.
+    # min_table_size_for_split is set to 1 as to force a split even on the
+    # small table we have.
+    utils.run_vtctl(['CopySchemaShard', '--tables', 'moving.*,view1',
+                     source_rdonly1.tablet_alias, 'destination_keyspace/0'],
+                    auto_log=True)
 
-      utils.run_vtworker(['--cell', 'test_nj',
-                          '--command_display_interval', '10ms',
-                          'VerticalSplitClone',
-                          '--tables', 'moving.*,view1',
-                          '--strategy=-populate_blp_checkpoint',
-                          '--source_reader_count', '10',
-                          '--min_table_size_for_split', '1',
-                          'destination_keyspace/0'],
-                         auto_log=True)
-      utils.run_vtctl(['ChangeSlaveType', source_rdonly1.tablet_alias,
-                       'rdonly'], auto_log=True)
-      utils.run_vtctl(['ChangeSlaveType', source_rdonly2.tablet_alias,
-                       'rdonly'], auto_log=True)
-
-    else:
-      # take the snapshot for the split
-      utils.run_vtctl(['MultiSnapshot',
-                       '--tables', 'moving.*,view1',
-                       source_rdonly1.tablet_alias], auto_log=True)
-
-      # perform the restore.
-      utils.run_vtctl(['ShardMultiRestore',
-                       '--strategy=-populate_blp_checkpoint',
-                       '--tables', 'moving.*,view1',
-                       'destination_keyspace/0', source_rdonly1.tablet_alias],
-                      auto_log=True)
+    utils.run_vtworker(['--cell', 'test_nj',
+                        '--command_display_interval', '10ms',
+                        'VerticalSplitClone',
+                        '--tables', 'moving.*,view1',
+                        '--strategy=-populate_blp_checkpoint',
+                        '--source_reader_count', '10',
+                        '--min_table_size_for_split', '1',
+                        'destination_keyspace/0'],
+                       auto_log=True)
+    utils.run_vtctl(['ChangeSlaveType', source_rdonly1.tablet_alias,
+                     'rdonly'], auto_log=True)
+    utils.run_vtctl(['ChangeSlaveType', source_rdonly2.tablet_alias,
+                     'rdonly'], auto_log=True)
 
     topology.refresh_keyspace(self.vtgate_client, 'destination_keyspace')
 
