@@ -233,10 +233,10 @@ func DestinationsFactory(t *testing.T, insertCount int64, disableBinLogs bool) f
 		qi := atomic.AddInt64(&queryIndex, 1)
 		switch {
 		case qi == 0:
-			return newFakePoolConnectionFactory(t, "CREATE DATABASE `vt_ks` /*!40100 DEFAULT CHARACTER SET utf8 */"), nil
+			return NewFakePoolConnectionQueryBinlogOn(t, "CREATE DATABASE `vt_ks` /*!40100 DEFAULT CHARACTER SET utf8 */"), nil
 		case qi == 1:
-			return newFakePoolConnectionFactory(t, "CREATE TABLE `vt_ks`.`resharding1` (\n"+
-				"  `id` bigint(20) NOT NULL,\n"+
+			return NewFakePoolConnectionQueryBinlogOn(t, "CREATE TABLE `vt_ks`.`resharding1` (\n"+
+				"  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n"+
 				"  `msg` varchar(64) DEFAULT NULL,\n"+
 				"  `keyspace_id` bigint(20) unsigned NOT NULL,\n"+
 				"  PRIMARY KEY (`id`),\n"+
@@ -245,10 +245,8 @@ func DestinationsFactory(t *testing.T, insertCount int64, disableBinLogs bool) f
 		case qi >= 2 && qi < insertCount+2:
 			return newFakePoolConnectionFactory(t, "INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*"), nil
 		case qi == insertCount+2:
-			return newFakePoolConnectionFactory(t, "ALTER TABLE `vt_ks`.`table1` MODIFY   `id` bigint(20) NOT NULL AUTO_INCREMENT"), nil
-		case qi == insertCount+3:
 			return newFakePoolConnectionFactory(t, "CREATE DATABASE IF NOT EXISTS _vt"), nil
-		case qi == insertCount+4:
+		case qi == insertCount+3:
 			return newFakePoolConnectionFactory(t, "CREATE TABLE IF NOT EXISTS _vt.blp_checkpoint (\n"+
 				"  source_shard_uid INT(10) UNSIGNED NOT NULL,\n"+
 				"  pos VARCHAR(250) DEFAULT NULL,\n"+
@@ -256,7 +254,7 @@ func DestinationsFactory(t *testing.T, insertCount int64, disableBinLogs bool) f
 				"  transaction_timestamp BIGINT UNSIGNED NOT NULL,\n"+
 				"  flags VARCHAR(250) DEFAULT NULL,\n"+
 				"  PRIMARY KEY (source_shard_uid)) ENGINE=InnoDB"), nil
-		case qi == insertCount+5:
+		case qi == insertCount+4:
 			return newFakePoolConnectionFactory(t, "INSERT INTO _vt.blp_checkpoint (source_shard_uid, pos, time_updated, transaction_timestamp, flags) VALUES (0, 'MariaDB/12-34-5678', *"), nil
 		}
 
@@ -265,11 +263,7 @@ func DestinationsFactory(t *testing.T, insertCount int64, disableBinLogs bool) f
 }
 
 func TestSplitCloneWriteMastersOnly(t *testing.T) {
-	testSplitClone(t, "-populate_blp_checkpoint -delay_auto_increment -write_masters_only")
-}
-
-func TestSplitCloneBinlogDisabled(t *testing.T) {
-	testSplitClone(t, "-populate_blp_checkpoint -delay_auto_increment")
+	testSplitClone(t, "-populate_blp_checkpoint -write_masters_only")
 }
 
 func testSplitClone(t *testing.T, strategy string) {
@@ -352,6 +346,13 @@ func testSplitClone(t *testing.T, strategy string) {
 	leftRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30, disableBinLogs)
 	rightMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30, disableBinLogs)
 	rightRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30, disableBinLogs)
+
+	if err := wr.CopySchemaShard(sourceRdonly.Tablet.Alias, nil, nil, true, "ks", "-40"); err != nil {
+		t.Fatalf("CopySchemaShard failed: %v", err)
+	}
+	if err := wr.CopySchemaShard(sourceRdonly.Tablet.Alias, nil, nil, true, "ks", "40-80"); err != nil {
+		t.Fatalf("CopySchemaShard failed: %v", err)
+	}
 
 	wrk.Run()
 	status := wrk.StatusAsText()

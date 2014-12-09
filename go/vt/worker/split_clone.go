@@ -407,9 +407,9 @@ func (scw *SplitCloneWorker) findAllTargets() error {
 }
 
 // copy phase:
-// - get schema on the sources, filter tables
-// - create tables on all destinations
-// - copy the data
+//	- copy the data from source tablets to destinations
+// Assumes that the schema has already been created on each destination tablet
+// (probably from vtctl's CopySchemaShard)
 func (scw *SplitCloneWorker) copy() error {
 	scw.setState(stateSCCopy)
 
@@ -437,28 +437,10 @@ func (scw *SplitCloneWorker) copy() error {
 	scw.startTime = time.Now()
 	scw.mu.Unlock()
 
-	// Create all the commands to create the destination schema:
-	// - createDbCmds will create the database and the tables
-	// - createViewCmds will create the views
-	// - alterTablesCmds will modify the tables at the end if needed
-	// (all need template substitution for {{.DatabaseName}})
-	createDbCmds := make([]string, 0, len(sourceSchemaDefinition.TableDefinitions)+1)
-	createDbCmds = append(createDbCmds, sourceSchemaDefinition.DatabaseSchema)
-	createViewCmds := make([]string, 0, 16)
-	alterTablesCmds := make([]string, 0, 16)
+	// Find the column index for the sharding columns in all the databases, and count rows
 	columnIndexes := make([]int, len(sourceSchemaDefinition.TableDefinitions))
 	for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
 		if td.Type == myproto.TABLE_BASE_TABLE {
-			// build the create and alter statements
-			create, alter, err := mysqlctl.MakeSplitCreateTableSql(scw.wr.Logger(), td.Schema, "{{.DatabaseName}}", td.Name, scw.strategy)
-			if err != nil {
-				return fmt.Errorf("MakeSplitCreateTableSql(%v) returned: %v", td.Name, err)
-			}
-			createDbCmds = append(createDbCmds, create)
-			if alter != "" {
-				alterTablesCmds = append(alterTablesCmds, alter)
-			}
-
 			// find the column to split on
 			columnIndexes[tableIndex] = -1
 			for i, name := range td.Columns {
@@ -477,16 +459,13 @@ func (scw *SplitCloneWorker) copy() error {
 			scw.tableStatus[tableIndex].mu.Unlock()
 		} else {
 			scw.tableStatus[tableIndex].mu.Lock()
-			createViewCmds = append(createViewCmds, td.Schema)
 			scw.tableStatus[tableIndex].state = "before view creation"
 			scw.tableStatus[tableIndex].rowCount = 0
 			scw.tableStatus[tableIndex].mu.Unlock()
 		}
 	}
 
-	// For each destination tablet (in parallel):
-	// - create the schema
-	// - setup the channels to send SQL data chunks
+	// In parallel, setup the channels to send SQL data chunks to for each destination tablet.
 	//
 	// mu protects the abort channel for closing, and firstError
 	mu := sync.Mutex{}
@@ -519,21 +498,7 @@ func (scw *SplitCloneWorker) copy() error {
 			// destinationWriterCount go routines reading from it.
 			insertChannels[shardIndex][i] = make(chan string, scw.destinationWriterCount*2)
 
-			destinationWaitGroup.Add(1)
 			go func(ti *topo.TabletInfo, insertChannel chan string) {
-				defer destinationWaitGroup.Done()
-				scw.wr.Logger().Infof("Creating tables on tablet %v", ti.Alias)
-				if err := runSqlCommands(scw.wr, ti, createDbCmds, abort, disableBinLogs); err != nil {
-					processError("createDbCmds failed: %v", err)
-					return
-				}
-				if len(createViewCmds) > 0 {
-					scw.wr.Logger().Infof("Creating views on tablet %v", ti.Alias)
-					if err := runSqlCommands(scw.wr, ti, createViewCmds, abort, disableBinLogs); err != nil {
-						processError("createViewCmds failed: %v", err)
-						return
-					}
-				}
 				for j := 0; j < scw.destinationWriterCount; j++ {
 					destinationWaitGroup.Add(1)
 					go func() {
@@ -599,26 +564,6 @@ func (scw *SplitCloneWorker) copy() error {
 	destinationWaitGroup.Wait()
 	if firstError != nil {
 		return firstError
-	}
-
-	// do the post-copy alters if any
-	if len(alterTablesCmds) > 0 {
-		for shardIndex, _ := range scw.destinationShards {
-			for _, tabletAlias := range scw.destinationAliases[shardIndex] {
-				destinationWaitGroup.Add(1)
-				go func(ti *topo.TabletInfo) {
-					defer destinationWaitGroup.Done()
-					scw.wr.Logger().Infof("Altering tables on tablet %v", ti.Alias)
-					if err := runSqlCommands(scw.wr, ti, alterTablesCmds, abort, disableBinLogs); err != nil {
-						processError("alterTablesCmds failed on tablet %v: %v", ti.Alias, err)
-					}
-				}(scw.destinationTablets[shardIndex][tabletAlias])
-			}
-		}
-		destinationWaitGroup.Wait()
-		if firstError != nil {
-			return firstError
-		}
 	}
 
 	// then create and populate the blp_checkpoint table

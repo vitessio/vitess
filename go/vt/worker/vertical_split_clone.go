@@ -332,9 +332,9 @@ func (vscw *VerticalSplitCloneWorker) findTargets() error {
 }
 
 // copy phase:
-// - get schema on the source, filter tables
-// - create tables on all destinations
-// - copy the data
+//	- copy the data from source tablets to destinations
+// Assumes that the schema has already been created on each destination tablet
+// (probably from vtctl's CopySchemaShard)
 func (vscw *VerticalSplitCloneWorker) copy() error {
 	vscw.setState(stateVSCCopy)
 
@@ -358,39 +358,20 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	vscw.startTime = time.Now()
 	vscw.mu.Unlock()
 
-	// Create all the commands to create the destination schema:
-	// - createDbCmds will create the database and the tables
-	// - createViewCmds will create the views
-	// - alterTablesCmds will modify the tables at the end if needed
-	// (all need template substitution for {{.DatabaseName}})
-	createDbCmds := make([]string, 0, len(sourceSchemaDefinition.TableDefinitions)+1)
-	createDbCmds = append(createDbCmds, sourceSchemaDefinition.DatabaseSchema)
-	createViewCmds := make([]string, 0, 16)
-	alterTablesCmds := make([]string, 0, 16)
+	// Count rows
 	for i, td := range sourceSchemaDefinition.TableDefinitions {
 		vscw.tableStatus[i].mu.Lock()
 		if td.Type == myproto.TABLE_BASE_TABLE {
-			create, alter, err := mysqlctl.MakeSplitCreateTableSql(vscw.wr.Logger(), td.Schema, "{{.DatabaseName}}", td.Name, vscw.strategy)
-			if err != nil {
-				return fmt.Errorf("MakeSplitCreateTableSql(%v) returned: %v", td.Name, err)
-			}
-			createDbCmds = append(createDbCmds, create)
-			if alter != "" {
-				alterTablesCmds = append(alterTablesCmds, alter)
-			}
 			vscw.tableStatus[i].state = "before table creation"
 			vscw.tableStatus[i].rowCount = td.RowCount
 		} else {
-			createViewCmds = append(createViewCmds, td.Schema)
 			vscw.tableStatus[i].state = "before view creation"
 			vscw.tableStatus[i].rowCount = 0
 		}
 		vscw.tableStatus[i].mu.Unlock()
 	}
 
-	// For each destination tablet (in parallel):
-	// - create the schema
-	// - setup the channels to send SQL data chunks
+	// In parallel, setup the channels to send SQL data chunks to for each destination tablet.
 	//
 	// mu protects the abort channel for closing, and firstError
 	mu := sync.Mutex{}
@@ -418,21 +399,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 		// destinationWriterCount go routines reading from it.
 		insertChannels[i] = make(chan string, vscw.destinationWriterCount*2)
 
-		destinationWaitGroup.Add(1)
 		go func(ti *topo.TabletInfo, insertChannel chan string) {
-			defer destinationWaitGroup.Done()
-			vscw.wr.Logger().Infof("Creating tables on tablet %v", ti.Alias)
-			if err := runSqlCommands(vscw.wr, ti, createDbCmds, abort, true); err != nil {
-				processError("createDbCmds failed: %v", err)
-				return
-			}
-			if len(createViewCmds) > 0 {
-				vscw.wr.Logger().Infof("Creating views on tablet %v", ti.Alias)
-				if err := runSqlCommands(vscw.wr, ti, createViewCmds, abort, true); err != nil {
-					processError("createViewCmds failed: %v", err)
-					return
-				}
-			}
 			for j := 0; j < vscw.destinationWriterCount; j++ {
 				destinationWaitGroup.Add(1)
 				go func() {
@@ -496,24 +463,6 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	destinationWaitGroup.Wait()
 	if firstError != nil {
 		return firstError
-	}
-
-	// do the post-copy alters if any
-	if len(alterTablesCmds) > 0 {
-		for _, tabletAlias := range vscw.destinationAliases {
-			destinationWaitGroup.Add(1)
-			go func(ti *topo.TabletInfo) {
-				defer destinationWaitGroup.Done()
-				vscw.wr.Logger().Infof("Altering tables on tablet %v", ti.Alias)
-				if err := runSqlCommands(vscw.wr, ti, alterTablesCmds, abort, true); err != nil {
-					processError("alterTablesCmds failed on tablet %v: %v", ti.Alias, err)
-				}
-			}(vscw.destinationTablets[tabletAlias])
-		}
-		destinationWaitGroup.Wait()
-		if firstError != nil {
-			return firstError
-		}
 	}
 
 	// then create and populate the blp_checkpoint table
