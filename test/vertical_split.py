@@ -349,13 +349,13 @@ index by_msg (msg)
       # take the snapshot for the split
       utils.run_vtctl(['MultiSnapshot',
                        '--tables', 'moving.*,view1',
-                       source_rdonly.tablet_alias], auto_log=True)
+                       source_rdonly1.tablet_alias], auto_log=True)
 
       # perform the restore.
       utils.run_vtctl(['ShardMultiRestore',
                        '--strategy=-populate_blp_checkpoint',
                        '--tables', 'moving.*,view1',
-                       'destination_keyspace/0', source_rdonly.tablet_alias],
+                       'destination_keyspace/0', source_rdonly1.tablet_alias],
                       auto_log=True)
 
     topology.refresh_keyspace(self.vtgate_client, 'destination_keyspace')
