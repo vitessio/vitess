@@ -329,9 +329,9 @@ $ zk cat /zk/nyc/vt/ns/rlookup/0/master
       "host": "nyc-db274.nyc.youtube.com",
       "port": 0,
       "named_port_map": {
-        "_mysql": 3306,
-        "_vtocc": 8101,
-        "_vts": 8102
+        "mysql": 3306,
+        "vt": 8101,
+        "vts": 8102
       }
     }
   ]

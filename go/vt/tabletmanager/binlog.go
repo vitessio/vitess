@@ -243,7 +243,11 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		return fmt.Errorf("empty source tablet list for %v %v %v", bpc.cell, bpc.sourceShard.String(), topo.TYPE_REPLICA)
 	}
 	newServerIndex := rand.Intn(len(addrs.Entries))
-	addr := fmt.Sprintf("%v:%v", addrs.Entries[newServerIndex].Host, addrs.Entries[newServerIndex].NamedPortMap["_vtocc"])
+	port, ok := addrs.Entries[newServerIndex].NamedPortMap["vt"]
+	if !ok {
+		port = addrs.Entries[newServerIndex].NamedPortMap["_vtocc"]
+	}
+	addr := fmt.Sprintf("%v:%v", addrs.Entries[newServerIndex].Host, port)
 
 	// save our current server
 	bpc.playerMutex.Lock()

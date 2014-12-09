@@ -79,11 +79,6 @@ func (zaddrs *ZknsAddrs) IsValidSRV() bool {
 		if zaddr.Host == "" || zaddr.IPv4 != "" || len(zaddr.NamedPortMap) == 0 {
 			return false
 		}
-		for portName, _ := range zaddr.NamedPortMap {
-			if portName != "" && portName[0] != '_' {
-				return false
-			}
-		}
 	}
 	return true
 }

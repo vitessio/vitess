@@ -27,7 +27,7 @@ func CheckServingGraph(t *testing.T, ts topo.Server) {
 			topo.EndPoint{
 				Uid:          1,
 				Host:         "host1",
-				NamedPortMap: map[string]int{"_vt": 1234, "_mysql": 1235, "_vts": 1236},
+				NamedPortMap: map[string]int{"vt": 1234, "mysql": 1235, "vts": 1236},
 			},
 		},
 	}
@@ -46,7 +46,7 @@ func CheckServingGraph(t *testing.T, ts topo.Server) {
 	if len(addrs.Entries) != 1 || addrs.Entries[0].Uid != 1 {
 		t.Errorf("GetEndPoints(1): %v", addrs)
 	}
-	if pm := addrs.Entries[0].NamedPortMap; pm["_vt"] != 1234 || pm["_mysql"] != 1235 || pm["_vts"] != 1236 {
+	if pm := addrs.Entries[0].NamedPortMap; pm["vt"] != 1234 || pm["mysql"] != 1235 || pm["vts"] != 1236 {
 		t.Errorf("GetSrcTabletType(1).NamedPortmap: want %v, got %v", endPoints.Entries[0].NamedPortMap, pm)
 	}
 
