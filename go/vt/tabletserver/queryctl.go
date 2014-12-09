@@ -7,7 +7,6 @@ package tabletserver
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -25,7 +24,7 @@ import (
 var (
 	queryLogHandler = flag.String("query-log-stream-handler", "/debug/querylog", "URL handler for streaming queries log")
 	txLogHandler    = flag.String("transaction-log-stream-handler", "/debug/txlog", "URL handler for streaming transactions log")
-	customRules     = flag.String("customrules", "", "custom query rules file")
+	CustomRules     = flag.String("customrules", "", "custom query rules uri")
 )
 
 func init() {
@@ -235,24 +234,4 @@ func InitQueryService() {
 	SqlQueryLogger.ServeLogs(*queryLogHandler, buildFmter(SqlQueryLogger))
 	TxLogger.ServeLogs(*txLogHandler, buildFmter(TxLogger))
 	RegisterQueryService()
-}
-
-// LoadCustomRules returns custom rules as specified by the command
-// line flags.
-func LoadCustomRules() (qrs *QueryRules) {
-	if *customRules == "" {
-		return NewQueryRules()
-	}
-
-	data, err := ioutil.ReadFile(*customRules)
-	if err != nil {
-		log.Fatalf("Error reading file %v: %v", *customRules, err)
-	}
-
-	qrs = NewQueryRules()
-	err = qrs.UnmarshalJSON(data)
-	if err != nil {
-		log.Fatalf("Error unmarshaling query rules %v", err)
-	}
-	return qrs
 }

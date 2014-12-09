@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/tabletserver/customrule"
 )
 
 var (
@@ -63,9 +64,9 @@ func main() {
 	}
 	tabletserver.InitQueryService()
 
-	err = tabletserver.SqlQueryRpcService.SetQueryRules(tabletserver.CustomQueryRules, tabletserver.LoadCustomRules())
+	err = customrule.InitializeCustomRuleManager(*tabletserver.CustomRules, tabletserver.SqlQueryRpcService)
 	if err != nil {
-		log.Warningf("Fail to load query rule set %s, Error message: %s", tabletserver.CustomQueryRules, err)
+		log.Warningf("Fail to initialize custom rule manager, Error message: %s", err)
 	}
 
 	err = tabletserver.AllowQueries(dbConfigs, schemaOverrides, mysqld, true)
