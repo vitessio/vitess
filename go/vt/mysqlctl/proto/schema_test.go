@@ -5,8 +5,123 @@
 package proto
 
 import (
+	"reflect"
 	"testing"
 )
+
+var basicTable1 = &TableDefinition{
+	Name:   "table1",
+	Schema: "table schema 1",
+	Type:   TABLE_BASE_TABLE,
+}
+var basicTable2 = &TableDefinition{
+	Name:   "table2",
+	Schema: "table schema 2",
+	Type:   TABLE_BASE_TABLE,
+}
+
+var table3 = &TableDefinition{
+	Name: "table2",
+	Schema: "CREATE TABLE `table3` (\n" +
+		"id bigint not null,\n" +
+		") Engine=InnoDB",
+	Type: TABLE_BASE_TABLE,
+}
+
+var view1 = &TableDefinition{
+	Name:   "view1",
+	Schema: "view schema 1",
+	Type:   TABLE_VIEW,
+}
+
+var view2 = &TableDefinition{
+	Name:   "view2",
+	Schema: "view schema 2",
+	Type:   TABLE_VIEW,
+}
+
+func TestToSQLStrings(t *testing.T) {
+	var testcases = []struct {
+		input *SchemaDefinition
+		want  []string
+	}{
+		{
+			// basic SchemaDefinition with create db statement, basic table and basic view
+			input: &SchemaDefinition{
+				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
+				TableDefinitions: []*TableDefinition{
+					basicTable1,
+					view1,
+				},
+			},
+			want: []string{"CREATE DATABASE {{.DatabaseName}}", basicTable1.Schema, view1.Schema},
+		},
+		{
+			// SchemaDefinition doesn't need any tables or views
+			input: &SchemaDefinition{
+				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
+			},
+			want: []string{"CREATE DATABASE {{.DatabaseName}}"},
+		},
+		{
+			// and can even have an empty DatabaseSchema
+			input: &SchemaDefinition{},
+			want:  []string{""},
+		},
+		{
+			// with tables but no views
+			input: &SchemaDefinition{
+				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
+				TableDefinitions: []*TableDefinition{
+					basicTable1,
+					basicTable2,
+				},
+			},
+			want: []string{"CREATE DATABASE {{.DatabaseName}}", basicTable1.Schema, basicTable2.Schema},
+		},
+		{
+			// multiple tables and views should be ordered with all tables before views
+			input: &SchemaDefinition{
+				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
+				TableDefinitions: []*TableDefinition{
+					view1,
+					view2,
+					basicTable1,
+					basicTable2,
+				},
+			},
+			want: []string{
+				"CREATE DATABASE {{.DatabaseName}}",
+				basicTable1.Schema, basicTable2.Schema,
+				view1.Schema, view2.Schema,
+			},
+		},
+		{
+			// valid table schema gets correctly rewritten to include DatabaseName
+			input: &SchemaDefinition{
+				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
+				TableDefinitions: []*TableDefinition{
+					basicTable1,
+					table3,
+				},
+			},
+			want: []string{
+				"CREATE DATABASE {{.DatabaseName}}",
+				basicTable1.Schema,
+				"CREATE TABLE `{{.DatabaseName}}`.`table3` (\n" +
+					"id bigint not null,\n" +
+					") Engine=InnoDB",
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		got := tc.input.ToSQLStrings()
+		if !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("ToSQLStrings() on SchemaDefinition %v returned %v; want %v", tc.input, got, tc.want)
+		}
+	}
+}
 
 func testDiff(t *testing.T, left, right *SchemaDefinition, leftName, rightName string, expected []string) {
 

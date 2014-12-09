@@ -5,10 +5,13 @@
 package wrangler
 
 import (
+	"bytes"
 	"fmt"
+	"html/template"
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"code.google.com/p/go.net/context"
 
@@ -533,4 +536,60 @@ func (wr *Wrangler) applySchemaKeyspace(keyspace string, change string, simple, 
 	}
 
 	return &myproto.SchemaChangeResult{BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}, nil
+}
+
+// Copy the schema from a source tablet to the specified shard.
+// The schema is applied directly on the master of the destination shard, and is propogated
+// to the replicas through binlogs.
+func (wr *Wrangler) CopySchemaShard(srcTabletAlias topo.TabletAlias, tables, excludeTables []string, includeViews bool, keyspace, shard string) error {
+	sd, err := wr.GetSchema(srcTabletAlias, tables, excludeTables, includeViews)
+	if err != nil {
+		return err
+	}
+	shardInfo, err := wr.ts.GetShard(keyspace, shard)
+	if err != nil {
+		return err
+	}
+	tabletInfo, err := wr.ts.GetTablet(shardInfo.MasterAlias)
+	if err != nil {
+		return err
+	}
+	createSql := sd.ToSQLStrings()
+
+	for _, sqlLine := range createSql {
+		err = wr.applySqlShard(tabletInfo, sqlLine)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// applySqlShard applies a given SQL change on a given tablet alias. It allows executing arbitrary
+// SQL statements, but doesn't return any results, so it's only useful for SQL statements
+// that would be run for their effects (e.g., CREATE).
+// It works by applying the SQL statement on the shard's master tablet with replication turned on.
+// Thus it should be used only for changes that can be applies on a live instance without causing issues;
+// it shouldn't be used for anything that will require a pivot.
+// The SQL statement string is expected to have {{.DatabaseName}} in place of the actual db name.
+func (wr *Wrangler) applySqlShard(tabletInfo *topo.TabletInfo, change string) error {
+	filledChange, err := fillStringTemplate(change, map[string]string{"DatabaseName": tabletInfo.DbName()})
+	if err != nil {
+		return fmt.Errorf("fillStringTemplate failed: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(wr.ctx, 30*time.Second)
+	defer cancel()
+	// Need to make sure that we enable binlog, since we're only applying the statement on masters.
+	_, err = wr.tmc.ExecuteFetch(ctx, tabletInfo, filledChange, 0, false, false)
+	return err
+}
+
+// fillStringTemplate returns the string template filled
+func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
+	myTemplate := template.Must(template.New("").Parse(tmpl))
+	data := new(bytes.Buffer)
+	if err := myTemplate.Execute(data, vars); err != nil {
+		return "", err
+	}
+	return data.String(), nil
 }

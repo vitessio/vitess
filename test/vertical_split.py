@@ -315,6 +315,12 @@ index by_msg (msg)
       # (down from default=20) as connection pool is not big enough for 20.
       # min_table_size_for_split is set to 1 as to force a split even on the
       # small table we have.
+      utils.run_vtctl(['CopySchemaShard',
+                       '--tables', 'moving.*,view1',
+                       source_rdonly.tablet_alias,
+                       'destination_keyspace/0'],
+                      auto_log=True)
+
       utils.run_vtworker(['--cell', 'test_nj',
                           '--command_display_interval', '10ms',
                           'VerticalSplitClone',
