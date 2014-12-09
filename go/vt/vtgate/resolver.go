@@ -28,6 +28,9 @@ var (
 	closeBracket     = []byte(")")
 	kwAnd            = []byte(" and ")
 	kwWhere          = []byte(" where ")
+	insert_dml       = "insert"
+	update_dml       = "update"
+	delete_dml       = "delete"
 )
 
 // Resolver is the layer to resolve KeyspaceIds and KeyRanges
@@ -55,7 +58,12 @@ func (res *Resolver) InitializeConnections(ctx context.Context) error {
 
 // ExecuteKeyspaceIds executes a non-streaming query based on KeyspaceIds.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
+// This throws an error if a dml spans multiple keyspace_ids. Resharding depends
+// on being able to uniquely route a write.
 func (res *Resolver) ExecuteKeyspaceIds(context context.Context, query *proto.KeyspaceIdQuery) (*mproto.QueryResult, error) {
+	if isDml(query.Sql) && len(query.KeyspaceIds) > 1 {
+		return nil, fmt.Errorf("DML should not span multiple keyspace_ids")
+	}
 	mapToShards := func(keyspace string) (string, []string, error) {
 		return mapKeyspaceIdsToShards(
 			res.scatterConn.toposerv,
@@ -410,4 +418,16 @@ func insertSqlClause(querySql, clause string) string {
 		b.Write([]byte(querySql[idxExtra:]))
 	}
 	return b.String()
+}
+
+func isDml(querySql string) bool {
+	sqlLower := strings.ToLower(querySql)
+	var sqlKW string
+	if i := strings.Index(sqlLower, " "); i >= 0 {
+		sqlKW = sqlLower[:i]
+	}
+	if strings.HasPrefix(sqlKW, insert_dml) || strings.HasPrefix(sqlKW, update_dml) || strings.HasPrefix(sqlKW, delete_dml) {
+		return true
+	}
+	return false
 }
