@@ -251,6 +251,9 @@ var commands = []commandGroup{
 			command{"ApplySchemaKeyspace", commandApplySchemaKeyspace,
 				"[-force] {-sql=<sql> || -sql-file=<filename>} [-simple] <keyspace>",
 				"Apply the schema change to the specified keyspace. If simple is specified, we just apply on the live masters. Otherwise we will need to do the shell game on each shard. So we will apply the schema change to every single slave (running in parallel on all shards, but on one host at a time in a given shard). We will not reparent at the end, so the masters won't be touched at all. Using the force flag will cause a bunch of checks to be ignored, use with care."},
+			command{"CopySchemaShard", commandCopySchemaShard,
+				"[-tables=<table1>,<table2>,...] [-exclude_tables=<table1>,<table2>,...] [-include-views] <src tablet alias> <dest keyspace/shard>",
+				"Copy the schema from a source tablet to the specified shard. The schema is applied directly on the master of the destination shard, and is propogated to the replicas through binlogs"},
 
 			command{"ValidateVersionShard", commandValidateVersionShard,
 				"<keyspace/shard>",
@@ -2001,6 +2004,38 @@ func commandApplySchemaKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, a
 		log.Infof(scr.String())
 	}
 	return err
+}
+
+func commandCopySchemaShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	tables := subFlags.String("tables", "", "comma separated list of regexps for tables to gather schema information for")
+	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of regexps for tables to exclude")
+	includeViews := subFlags.Bool("include-views", true, "include views in the output")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("action CopySchemaShard requires a source <tablet alias> and a destination <keyspace/shard>")
+	}
+	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	var tableArray []string
+	if *tables != "" {
+		tableArray = strings.Split(*tables, ",")
+	}
+	var excludeTableArray []string
+	if *excludeTables != "" {
+		excludeTableArray = strings.Split(*excludeTables, ",")
+	}
+
+	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(1))
+	if err != nil {
+		return err
+	}
+
+	return wr.CopySchemaShard(tabletAlias, tableArray, excludeTableArray, *includeViews, keyspace, shard)
 }
 
 func commandValidateVersionShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

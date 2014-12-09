@@ -67,7 +67,7 @@ func NewSplitStrategy(logger logutil.Logger, argsStr string) (*SplitStrategy, er
 	populateBlpCheckpoint := flagSet.Bool("populate_blp_checkpoint", false, "populates the blp checkpoint table")
 	dontStartBinlogPlayer := flagSet.Bool("dont_start_binlog_player", false, "do not start the binlog player after restore is complete")
 	skipSetSourceShards := flagSet.Bool("skip_set_source_shards", false, "do not set the SourceShar field on destination shards")
-	writeMastersOnly := flagSet.Bool("write_masters_only", false, "rite only to the master of the destination shard, with binlog enabled so that replicas can catch up")
+	writeMastersOnly := flagSet.Bool("write_masters_only", false, "write only to the master of the destination shard, with binlog enabled so that replicas can catch up")
 	if err := flagSet.Parse(args); err != nil {
 		return nil, fmt.Errorf("cannot parse strategy: %v", err)
 	}

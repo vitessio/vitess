@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/concurrency"
@@ -86,6 +87,32 @@ func (sd *SchemaDefinition) GetTable(table string) (td *TableDefinition, ok bool
 		}
 	}
 	return nil, false
+}
+
+// ToSQLStrings converts a SchemaDefinition to an array of SQL strings. The array contains all
+// the SQL statements needed for creating the database, tables, and views - in that order.
+// All SQL statements will have {{.DatabaseName}} in place of the actual db name.
+func (sd *SchemaDefinition) ToSQLStrings() []string {
+	sqlStrings := make([]string, 0, len(sd.TableDefinitions)+1)
+	createViewSql := make([]string, 0, len(sd.TableDefinitions))
+
+	sqlStrings = append(sqlStrings, sd.DatabaseSchema)
+
+	for _, td := range sd.TableDefinitions {
+		if td.Type == TABLE_VIEW {
+			createViewSql = append(createViewSql, td.Schema)
+		} else {
+			lines := strings.Split(td.Schema, "\n")
+			for i, line := range lines {
+				if strings.HasPrefix(line, "CREATE TABLE `") {
+					lines[i] = strings.Replace(line, "CREATE TABLE `", "CREATE TABLE `{{.DatabaseName}}`.`", 1)
+				}
+			}
+			sqlStrings = append(sqlStrings, strings.Join(lines, "\n"))
+		}
+	}
+
+	return append(sqlStrings, createViewSql...)
 }
 
 // generates a report on what's different between two SchemaDefinition
