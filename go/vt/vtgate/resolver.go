@@ -421,12 +421,12 @@ func insertSqlClause(querySql, clause string) string {
 }
 
 func isDml(querySql string) bool {
-	sqlLower := strings.ToLower(querySql)
 	var sqlKW string
-	if i := strings.Index(sqlLower, " "); i >= 0 {
-		sqlKW = sqlLower[:i]
+	if i := strings.Index(querySql, " "); i >= 0 {
+		sqlKW = querySql[:i]
 	}
-	if strings.HasPrefix(sqlKW, insert_dml) || strings.HasPrefix(sqlKW, update_dml) || strings.HasPrefix(sqlKW, delete_dml) {
+	sqlKW = strings.ToLower(sqlKW)
+	if sqlKW == insert_dml || sqlKW == update_dml || sqlKW == delete_dml {
 		return true
 	}
 	return false
