@@ -7,7 +7,6 @@ package actionnode
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/vt/key"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -56,33 +55,10 @@ type SnapshotReply struct {
 	ReadOnly           bool
 }
 
-type MultiSnapshotReply struct {
-	ParentAlias   topo.TabletAlias
-	ManifestPaths []string
-}
-
 type SnapshotSourceEndArgs struct {
 	SlaveStartRequired bool
 	ReadOnly           bool
 	OriginalType       topo.TabletType
-}
-
-type MultiSnapshotArgs struct {
-	KeyRanges        []key.KeyRange
-	Tables           []string
-	ExcludeTables    []string
-	Concurrency      int
-	SkipSlaveRestart bool
-	MaximumFilesize  uint64
-}
-
-type MultiRestoreArgs struct {
-	SrcTabletAliases       []topo.TabletAlias
-	Concurrency            int
-	FetchConcurrency       int
-	InsertTableConcurrency int
-	FetchRetryCount        int
-	Strategy               string
 }
 
 type ReserveForRestoreArgs struct {
@@ -173,13 +149,6 @@ func SetShardServedTypes(cells []string, servedType topo.TabletType) *ActionNode
 			Cells:      cells,
 			ServedType: servedType,
 		},
-	}).SetGuid()
-}
-
-func ShardMultiRestore(args *MultiRestoreArgs) *ActionNode {
-	return (&ActionNode{
-		Action: SHARD_ACTION_MULTI_RESTORE,
-		Args:   args,
 	}).SetGuid()
 }
 

@@ -8,13 +8,10 @@ package main
 import (
 	"flag"
 	"fmt"
-	"net/url"
 	"os"
-	"strings"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 )
@@ -36,96 +33,6 @@ func initCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
 
 	if err := mysqld.Init(*waitTime, *bootstrapArchive, *skipSchema); err != nil {
 		log.Fatalf("failed init mysql: %v", err)
-	}
-}
-
-func multisnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
-	concurrency := subFlags.Int("concurrency", 8, "how many compression jobs to run simultaneously")
-	spec := subFlags.String("spec", "-", "shard specification")
-	tablesString := subFlags.String("tables", "", "dump only this comma separated list of regexp for tables")
-	excludeTablesString := subFlags.String("exclude_tables", "", "do not dump this comma separated list of regexp for tables")
-	skipSlaveRestart := subFlags.Bool("skip_slave_restart", false, "after the snapshot is done, do not restart slave replication")
-	maximumFilesize := subFlags.Uint64("maximum_file_size", 128*1024*1024, "the maximum size for an uncompressed data file")
-	keyType := subFlags.String("key_type", "uint64", "type of the key column")
-	subFlags.Parse(args)
-	if subFlags.NArg() != 2 {
-		log.Fatalf("action multisnapshot requires <db name> <key name>")
-	}
-
-	shards, err := key.ParseShardingSpec(*spec)
-	if err != nil {
-		log.Fatalf("multisnapshot failed: %v", err)
-	}
-	var tables []string
-	if *tablesString != "" {
-		tables = strings.Split(*tablesString, ",")
-	}
-	var excludedTables []string
-	if *excludeTablesString != "" {
-		excludedTables = strings.Split(*excludeTablesString, ",")
-	}
-
-	kit := key.KeyspaceIdType(*keyType)
-	if !key.IsKeyspaceIdTypeInList(kit, key.AllKeyspaceIdTypes) {
-		log.Fatalf("invalid key_type")
-	}
-
-	filenames, err := mysqld.CreateMultiSnapshot(logutil.NewConsoleLogger(), shards, subFlags.Arg(0), subFlags.Arg(1), kit, tabletAddr, false, *concurrency, tables, excludedTables, *skipSlaveRestart, *maximumFilesize, nil)
-	if err != nil {
-		log.Fatalf("multisnapshot failed: %v", err)
-	} else {
-		log.Infof("manifest locations: %v", filenames)
-	}
-}
-
-func multiRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
-	starts := subFlags.String("starts", "", "starts of the key range")
-	ends := subFlags.String("ends", "", "ends of the key range")
-	fetchRetryCount := subFlags.Int("fetch_retry_count", 3, "how many times to retry a failed transfer")
-	concurrency := subFlags.Int("concurrency", 8, "how many concurrent db inserts to run simultaneously")
-	fetchConcurrency := subFlags.Int("fetch_concurrency", 4, "how many files to fetch simultaneously")
-	insertTableConcurrency := subFlags.Int("insert_table_concurrency", 4, "how many myisam tables to load into a single destination table simultaneously")
-	strategyStr := subFlags.String("strategy", "", "which strategy to use for restore, use -strategy=-help for values")
-
-	subFlags.Parse(args)
-	logger := logutil.NewConsoleLogger()
-	strategy, err := mysqlctl.NewSplitStrategy(logger, *strategyStr)
-	if err != nil {
-		log.Fatalf("invalid strategy: %v", err)
-	}
-	if subFlags.NArg() < 2 {
-		log.Fatalf("multirestore requires <destination_dbname> <source_host>[/<source_dbname>]... %v", args)
-	}
-
-	startArray := strings.Split(*starts, ",")
-	endArray := strings.Split(*ends, ",")
-	if len(startArray) != len(endArray) || len(startArray) != subFlags.NArg()-1 {
-		log.Fatalf("Need as many starts and ends as source URLs")
-	}
-
-	keyRanges := make([]key.KeyRange, len(startArray))
-	for i, s := range startArray {
-		var err error
-		keyRanges[i], err = key.ParseKeyRangeParts(s, endArray[i])
-		if err != nil {
-			log.Fatalf("Invalid start or end: %v", err)
-		}
-	}
-
-	dbName, dbis := subFlags.Arg(0), subFlags.Args()[1:]
-	sources := make([]*url.URL, len(dbis))
-	for i, dbi := range dbis {
-		if !strings.HasPrefix(dbi, "vttp://") && !strings.HasPrefix(dbi, "http://") {
-			dbi = "vttp://" + dbi
-		}
-		dbUrl, err := url.Parse(dbi)
-		if err != nil {
-			log.Fatalf("incorrect source url: %v", err)
-		}
-		sources[i] = dbUrl
-	}
-	if err := mysqld.MultiRestore(logger, dbName, keyRanges, sources, nil, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, strategy); err != nil {
-		log.Fatalf("multirestore failed: %v", err)
 	}
 }
 
@@ -246,11 +153,6 @@ var commands = []command{
 	command{"restore", restoreCmd,
 		"[-fetch_concurrency=3] [-fetch_retry_count=3] [-dont_wait_for_slave_start] <snapshot manifest file>",
 		"Restores a full snapshot"},
-	command{"multirestore", multiRestoreCmd,
-		"[-force] [-concurrency=3] [-fetch_concurrency=4] [-insert_table_concurrency=4] [-fetch_retry_count=3] [-starts=start1,start2,...] [-ends=end1,end2,...] [-strategy=] <destination_dbname> <source_host>[/<source_dbname>]...",
-		"Restores a snapshot form multiple hosts"},
-	command{"multisnapshot", multisnapshotCmd, "[-concurrency=8] [-spec='-'] [-tables=''] [-exclude_tables=''] [-skip_slave_restart] [-maximum_file_size=134217728] <db name> <key name>",
-		"Makes a complete snapshot using 'select * into' commands."},
 }
 
 func main() {

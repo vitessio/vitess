@@ -9,10 +9,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"path"
 	"strings"
-	"sync"
 	"time"
 
 	"code.google.com/p/go.net/context"
@@ -20,7 +18,6 @@ import (
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/mysql/proto"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -125,10 +122,6 @@ type RpcAgent interface {
 	ReserveForRestore(ctx context.Context, args *actionnode.ReserveForRestoreArgs) error
 
 	Restore(ctx context.Context, args *actionnode.RestoreArgs, logger logutil.Logger) error
-
-	MultiSnapshot(ctx context.Context, args *actionnode.MultiSnapshotArgs, logger logutil.Logger) (*actionnode.MultiSnapshotReply, error)
-
-	MultiRestore(ctx context.Context, args *actionnode.MultiRestoreArgs, logger logutil.Logger) error
 
 	// RPC helpers
 	RpcWrap(ctx context.Context, name string, args, reply interface{}, f func() error) error
@@ -1033,147 +1026,4 @@ func (agent *ActionAgent) Restore(ctx context.Context, args *actionnode.RestoreA
 
 	// change to TYPE_SPARE, we're done!
 	return topotools.ChangeType(agent.TopoServer, agent.TabletAlias, topo.TYPE_SPARE, nil, true)
-}
-
-// MultiSnapshot takes a multi-part snapshot
-// Should be called under RpcWrapLockAction.
-func (agent *ActionAgent) MultiSnapshot(ctx context.Context, args *actionnode.MultiSnapshotArgs, logger logutil.Logger) (*actionnode.MultiSnapshotReply, error) {
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
-	if err != nil {
-		return nil, err
-	}
-	ki, err := agent.TopoServer.GetKeyspace(tablet.Keyspace)
-	if err != nil {
-		return nil, err
-	}
-
-	if tablet.Type != topo.TYPE_BACKUP {
-		return nil, fmt.Errorf("expected backup type, not %v", tablet.Type)
-	}
-
-	// create the loggers: tee to console and source
-	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
-
-	filenames, err := agent.Mysqld.CreateMultiSnapshot(l, args.KeyRanges, tablet.DbName(), ki.ShardingColumnName, ki.ShardingColumnType, tablet.Addr(), false, args.Concurrency, args.Tables, args.ExcludeTables, args.SkipSlaveRestart, args.MaximumFilesize, agent.hookExtraEnv())
-	if err != nil {
-		return nil, err
-	}
-
-	sr := &actionnode.MultiSnapshotReply{ManifestPaths: filenames}
-	if tablet.Parent.Uid == topo.NO_TABLET {
-		// If this is a master, this will be the new parent.
-		// FIXME(msolomon) this doesn't work in hierarchical replication.
-		sr.ParentAlias = tablet.Alias
-	} else {
-		sr.ParentAlias = tablet.Parent
-	}
-	return sr, nil
-}
-
-// MultiRestore performs the multi-part restore.
-// Should be called under RpcWrapLockAction.
-func (agent *ActionAgent) MultiRestore(ctx context.Context, args *actionnode.MultiRestoreArgs, logger logutil.Logger) error {
-	// read our current tablet, verify its state
-	// we only support restoring to the master or active replicas
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
-	if err != nil {
-		return err
-	}
-	if tablet.Type != topo.TYPE_MASTER && !topo.IsSlaveType(tablet.Type) {
-		return fmt.Errorf("expected master, or slave type, not %v", tablet.Type)
-	}
-	// get source tablets addresses
-	sourceAddrs := make([]*url.URL, len(args.SrcTabletAliases))
-	keyRanges := make([]key.KeyRange, len(args.SrcTabletAliases))
-	fromStoragePaths := make([]string, len(args.SrcTabletAliases))
-	for i, alias := range args.SrcTabletAliases {
-		t, e := agent.TopoServer.GetTablet(alias)
-		if e != nil {
-			return e
-		}
-		sourceAddrs[i] = &url.URL{
-			Host: t.Addr(),
-			Path: "/" + t.DbName(),
-		}
-		keyRanges[i], e = key.KeyRangesOverlap(tablet.KeyRange, t.KeyRange)
-		if e != nil {
-			return e
-		}
-		fromStoragePaths[i] = path.Join(agent.Mysqld.SnapshotDir, "from-storage", fmt.Sprintf("from-%v-%v", keyRanges[i].Start.Hex(), keyRanges[i].End.Hex()))
-	}
-
-	// change type to restore, no change to replication graph
-	originalType := tablet.Type
-	tablet.Type = topo.TYPE_RESTORE
-	err = topo.UpdateTablet(ctx, agent.TopoServer, tablet)
-	if err != nil {
-		return err
-	}
-
-	// first try to get the data from a remote storage
-	wg := sync.WaitGroup{}
-	rec := concurrency.AllErrorRecorder{}
-	for i, alias := range args.SrcTabletAliases {
-		wg.Add(1)
-		go func(i int, alias topo.TabletAlias) {
-			defer wg.Done()
-			h := hook.NewSimpleHook("copy_snapshot_from_storage")
-			h.ExtraEnv = make(map[string]string)
-			for k, v := range agent.hookExtraEnv() {
-				h.ExtraEnv[k] = v
-			}
-			h.ExtraEnv["KEYRANGE"] = fmt.Sprintf("%v-%v", keyRanges[i].Start.Hex(), keyRanges[i].End.Hex())
-			h.ExtraEnv["SNAPSHOT_PATH"] = fromStoragePaths[i]
-			h.ExtraEnv["SOURCE_TABLET_ALIAS"] = alias.String()
-			hr := h.Execute()
-			if hr.ExitStatus != hook.HOOK_SUCCESS {
-				rec.RecordError(fmt.Errorf("%v hook failed(%v): %v", h.Name, hr.ExitStatus, hr.Stderr))
-			}
-		}(i, alias)
-	}
-	wg.Wait()
-	// stop replication for slaves, so it doesn't interfere
-	if topo.IsSlaveType(originalType) {
-		if err := agent.Mysqld.StopSlave(map[string]string{"TABLET_ALIAS": tablet.Alias.String()}); err != nil {
-			return err
-		}
-	}
-
-	// create the loggers: tee to console and source
-	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
-
-	// parse the strategy
-	strategy, err := mysqlctl.NewSplitStrategy(l, args.Strategy)
-	if err != nil {
-		return fmt.Errorf("error parsing strategy: %v", err)
-	}
-
-	// run the action, scrap if it fails
-	if rec.HasErrors() {
-		log.Infof("Got errors trying to get snapshots from storage, trying to get them from original tablets: %v", rec.Error())
-		err = agent.Mysqld.MultiRestore(l, tablet.DbName(), keyRanges, sourceAddrs, nil, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, strategy)
-	} else {
-		log.Infof("Got snapshots from storage, reading them from disk directly")
-		err = agent.Mysqld.MultiRestore(l, tablet.DbName(), keyRanges, nil, fromStoragePaths, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, strategy)
-	}
-	if err != nil {
-		if e := topotools.Scrap(agent.TopoServer, agent.TabletAlias, false); e != nil {
-			log.Errorf("Failed to Scrap after failed RestoreFromMultiSnapshot: %v", e)
-		}
-		return err
-	}
-
-	// reload the schema
-	agent.ReloadSchema(ctx)
-
-	// restart replication
-	if topo.IsSlaveType(originalType) {
-		if err := agent.Mysqld.StartSlave(map[string]string{"TABLET_ALIAS": tablet.Alias.String()}); err != nil {
-			return err
-		}
-	}
-
-	// restore type back
-	tablet.Type = originalType
-	return topo.UpdateTablet(ctx, agent.TopoServer, tablet)
 }

@@ -16,7 +16,6 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/hook"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
@@ -780,79 +779,6 @@ func agentRpcTestRestore(ctx context.Context, t *testing.T, client tmclient.Tabl
 	compareError(t, "Restore", err, true, testRestoreCalled)
 }
 
-var testMultiSnapshotArgs = &actionnode.MultiSnapshotArgs{
-	KeyRanges: []key.KeyRange{
-		key.KeyRange{
-			Start: "",
-			End:   "",
-		},
-	},
-	Tables:           []string{"table1", "table2"},
-	ExcludeTables:    []string{"etable1", "etable2"},
-	Concurrency:      34,
-	SkipSlaveRestart: true,
-	MaximumFilesize:  0x2000,
-}
-var testMultiSnapshotReply = &actionnode.MultiSnapshotReply{
-	ParentAlias: topo.TabletAlias{
-		Cell: "test",
-		Uid:  4567,
-	},
-	ManifestPaths: []string{"path1", "path2"},
-}
-
-func (fra *fakeRpcAgent) MultiSnapshot(ctx context.Context, args *actionnode.MultiSnapshotArgs, logger logutil.Logger) (*actionnode.MultiSnapshotReply, error) {
-	compare(fra.t, "MultiSnapshot args", args, testMultiSnapshotArgs)
-	logStuff(logger, 100)
-	return testMultiSnapshotReply, nil
-}
-
-func agentRpcTestMultiSnapshot(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	logChannel, errFunc, err := client.MultiSnapshot(ctx, ti, testMultiSnapshotArgs, time.Minute)
-	if err != nil {
-		t.Fatalf("MultiSnapshot failed: %v", err)
-	}
-	compareLoggedStuff(t, "MultiSnapshot", logChannel, 100)
-	sr, err := errFunc()
-	compareError(t, "MultiSnapshot", err, sr, testMultiSnapshotReply)
-}
-
-var testMultiRestoreArgs = &actionnode.MultiRestoreArgs{
-	SrcTabletAliases: []topo.TabletAlias{
-		topo.TabletAlias{
-			Cell: "jail1",
-			Uid:  8902,
-		},
-		topo.TabletAlias{
-			Cell: "jail2",
-			Uid:  8901,
-		},
-	},
-	Concurrency:            124,
-	FetchConcurrency:       162,
-	InsertTableConcurrency: 6178,
-	FetchRetryCount:        887,
-	Strategy:               "cool one",
-}
-var testMultiRestoreCalled = false
-
-func (fra *fakeRpcAgent) MultiRestore(ctx context.Context, args *actionnode.MultiRestoreArgs, logger logutil.Logger) error {
-	compare(fra.t, "MultiRestore args", args, testMultiRestoreArgs)
-	logStuff(logger, 1000)
-	testMultiRestoreCalled = true
-	return nil
-}
-
-func agentRpcTestMultiRestore(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	logChannel, errFunc, err := client.MultiRestore(ctx, ti, testMultiRestoreArgs, time.Minute)
-	if err != nil {
-		t.Fatalf("MultiRestore failed: %v", err)
-	}
-	compareLoggedStuff(t, "MultiRestore", logChannel, 1000)
-	err = errFunc()
-	compareError(t, "MultiRestore", err, true, testMultiRestoreCalled)
-}
-
 //
 // RPC helpers
 //
@@ -927,6 +853,4 @@ func AgentRpcTestSuite(t *testing.T, client tmclient.TabletManagerClient, ti *to
 	agentRpcTestSnapshotSourceEnd(ctx, t, client, ti)
 	agentRpcTestReserveForRestore(ctx, t, client, ti)
 	agentRpcTestRestore(ctx, t, client, ti)
-	agentRpcTestMultiSnapshot(ctx, t, client, ti)
-	agentRpcTestMultiRestore(ctx, t, client, ti)
 }
