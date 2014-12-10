@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"hash"
 	//	"hash/crc64"
-	"encoding/json"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -24,7 +23,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/cgzip"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
@@ -306,56 +304,6 @@ func newSnapshotManifest(addr, mysqlAddr, masterAddr, dbName string, files []Sna
 	return rs, nil
 }
 
-func fetchSnapshotManifestWithRetry(addr, dbName string, keyRange key.KeyRange, retryCount int) (ssm *SplitSnapshotManifest, err error) {
-	for i := 0; i < retryCount; i++ {
-		if ssm, err = fetchSnapshotManifest(addr, dbName, keyRange); err == nil {
-			return
-		}
-	}
-	return
-}
-
-// fetchSnapshotManifest fetches the manifest for keyRange from
-// vttablet serving at addr.
-func fetchSnapshotManifest(addr, dbName string, keyRange key.KeyRange) (*SplitSnapshotManifest, error) {
-	shardName := fmt.Sprintf("%v-%v,%v", dbName, keyRange.Start.Hex(), keyRange.End.Hex())
-	path := path.Join(SnapshotURLPath, "data", shardName, partialSnapshotManifestFile)
-	url := addr + path
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	data, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if sc := resp.StatusCode; sc != 200 {
-		return nil, fmt.Errorf("GET %v returned with a non-200 status code (%v): %q", url, sc, data)
-	}
-
-	ssm := new(SplitSnapshotManifest)
-	if err = json.Unmarshal(data, ssm); err != nil {
-		return nil, fmt.Errorf("fetchSnapshotManifest failed: %v %v", url, err)
-	}
-	return ssm, nil
-}
-
-func readSnapshotManifest(location string) (*SplitSnapshotManifest, error) {
-	filename := path.Join(location, partialSnapshotManifestFile)
-	data, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return nil, fmt.Errorf("io.ReadFile failed: %v", err)
-	}
-	ssm := new(SplitSnapshotManifest)
-	if err = json.Unmarshal(data, ssm); err != nil {
-		return nil, fmt.Errorf("json.Unmarshal failed: %v %v", filename, err)
-	}
-	return ssm, nil
-}
-
 // fetchFile fetches data from the web server.  It then sends it to a
 // tee, which on one side has an hash checksum reader, and on the other
 // a gunzip reader writing to a file.  It will compare the hash
@@ -491,23 +439,6 @@ func fetchFileWithRetry(srcUrl, srcHash, dstFilename string, fetchRetryCount int
 
 	log.Errorf("fetching snapshot file %v failed too many times", dstFilename)
 	return err
-}
-
-// uncompressLocalFile reads a compressed file, and then sends it to a
-// tee, which on one side has an hash checksum reader, and on the other
-// a gunzip reader writing to a file.  It will compare the hash
-// checksum after the copy is done.
-func uncompressLocalFile(srcPath, srcHash, dstFilename string) error {
-	log.Infof("uncompressLocalFile: starting to uncompress %v from %v", dstFilename, srcPath)
-
-	// open the source file
-	reader, err := os.Open(srcPath)
-	if err != nil {
-		return fmt.Errorf("cannot open file %v: %v", srcPath, err)
-	}
-	defer reader.Close()
-
-	return uncompressAndCheck(reader, srcHash, dstFilename, true)
 }
 
 // FIXME(msolomon) Should we add deadlines? What really matters more

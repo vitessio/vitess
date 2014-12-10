@@ -27,9 +27,6 @@ type ErrFunc func() error
 // SnapshotReplyFunc is used by Snapshot to return result and error
 type SnapshotReplyFunc func() (*actionnode.SnapshotReply, error)
 
-// MultiSnapshotReplyFunc is used by MultiSnapshot to return result and error
-type MultiSnapshotReplyFunc func() (*actionnode.MultiSnapshotReply, error)
-
 // TabletManagerClient defines the interface used to talk to a remote tablet
 type TabletManagerClient interface {
 	//
@@ -177,12 +174,6 @@ type TabletManagerClient interface {
 
 	// Restore restores a database snapshot
 	Restore(ctx context.Context, tablet *topo.TabletInfo, sa *actionnode.RestoreArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, ErrFunc, error)
-
-	// MultiSnapshot takes a database snapshot
-	MultiSnapshot(ctx context.Context, tablet *topo.TabletInfo, sa *actionnode.MultiSnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, MultiSnapshotReplyFunc, error)
-
-	// MultiRestore restores a database snapshot
-	MultiRestore(ctx context.Context, tablet *topo.TabletInfo, sa *actionnode.MultiRestoreArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, ErrFunc, error)
 }
 
 type TabletManagerClientFactory func() TabletManagerClient

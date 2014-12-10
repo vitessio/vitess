@@ -109,12 +109,6 @@ var commands = []commandGroup{
 			command{"Clone", commandClone,
 				"[-force] [-concurrency=4] [-fetch-concurrency=3] [-fetch-retry-count=3] [-server-mode] <src tablet alias> <dst tablet alias> ...",
 				"This performs Snapshot and then Restore on all the targets in parallel. The advantage of having separate actions is that one snapshot can be used for many restores, and it's then easier to spread them over time."},
-			command{"MultiSnapshot", commandMultiSnapshot,
-				"[-force] [-concurrency=8] [-skip-slave-restart] [-maximum-file-size=134217728] -spec='-' [-tables=''] [-exclude_tables=''] <tablet alias>",
-				"Locks mysqld and copy compressed data aside."},
-			command{"MultiRestore", commandMultiRestore,
-				"[-force] [-concurrency=4] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-strategy=] <dst tablet alias> <source tablet alias>...",
-				"Restores a snapshot from multiple hosts."},
 			command{"ExecuteHook", commandExecuteHook,
 				"<tablet alias> <hook name> [<param1=value1> <param2=value2> ...]",
 				"This runs the specified hook on the given tablet."},
@@ -158,9 +152,6 @@ var commands = []commandGroup{
 			command{"SourceShardAdd", commandSourceShardAdd,
 				"[--key_range=<keyrange>] [--tables=<table1,table2,...>] <keyspace/shard> <uid> <source keyspace/shard>",
 				"Adds the SourceShard record with the provided index. This is meant as an emergency function. Does not RefreshState the shard master."},
-			command{"ShardMultiRestore", commandShardMultiRestore,
-				"[-force] [-concurrency=4] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-strategy=] [-tables=<table1>,<table2>,...] <keyspace/shard> <source tablet alias>...",
-				"Restore multi-snapshots on all the tablets of a shard."},
 			command{"ShardReplicationAdd", commandShardReplicationAdd,
 				"<keyspace/shard> <tablet alias> <parent tablet alias>",
 				"HIDDEN Adds an entry to the replication graph in the given cell"},
@@ -972,74 +963,6 @@ func commandClone(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) 
 	return wr.Clone(srcTabletAlias, dstTabletAliases, *force, *concurrency, *fetchConcurrency, *fetchRetryCount, *serverMode)
 }
 
-func commandMultiRestore(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
-	concurrency := subFlags.Int("concurrency", 8, "how many concurrent jobs to run simultaneously")
-	fetchConcurrency := subFlags.Int("fetch-concurrency", 4, "how many files to fetch simultaneously")
-	insertTableConcurrency := subFlags.Int("insert-table-concurrency", 4, "how many tables to load into a single destination table simultaneously")
-	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'mysqlctl multirestore -help' for more info")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-
-	if subFlags.NArg() < 2 {
-		return fmt.Errorf("MultiRestore requires <dst tablet alias> <source tablet alias>... %v", args)
-	}
-	destination, err := tabletParamToTabletAlias(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	sources := make([]topo.TabletAlias, subFlags.NArg()-1)
-	for i := 1; i < subFlags.NArg(); i++ {
-		sources[i-1], err = tabletParamToTabletAlias(subFlags.Arg(i))
-		if err != nil {
-			return err
-		}
-	}
-	return wr.MultiRestore(destination, sources, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, *strategy)
-}
-
-func commandMultiSnapshot(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	force := subFlags.Bool("force", false, "will force the snapshot for a master, and turn it into a backup")
-	concurrency := subFlags.Int("concurrency", 8, "how many compression jobs to run simultaneously")
-	spec := subFlags.String("spec", "-", "shard specification")
-	tablesString := subFlags.String("tables", "", "dump only this comma separated list of table regexp")
-	excludeTablesString := subFlags.String("exclude_tables", "", "comma separated list of regexps for tables to exclude")
-	skipSlaveRestart := subFlags.Bool("skip-slave-restart", false, "after the snapshot is done, do not restart slave replication")
-	maximumFilesize := subFlags.Uint64("maximum-file-size", 128*1024*1024, "the maximum size for an uncompressed data file")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action MultiSnapshot requires <src tablet alias>")
-	}
-
-	shards, err := key.ParseShardingSpec(*spec)
-	if err != nil {
-		return fmt.Errorf("multisnapshot failed: %v", err)
-	}
-	var tables []string
-	if *tablesString != "" {
-		tables = strings.Split(*tablesString, ",")
-	}
-	var excludeTables []string
-	if *excludeTablesString != "" {
-		excludeTables = strings.Split(*excludeTablesString, ",")
-	}
-
-	source, err := tabletParamToTabletAlias(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	filenames, parentAlias, err := wr.MultiSnapshot(shards, source, *concurrency, tables, excludeTables, *force, *skipSlaveRestart, *maximumFilesize)
-
-	if err == nil {
-		log.Infof("manifest locations: %v", filenames)
-		log.Infof("ParentAlias: %v", parentAlias)
-	}
-	return err
-}
-
 func commandExecuteFetch(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	maxRows := subFlags.Int("max_rows", 10000, "maximum number of rows to allow in reset")
 	wantFields := subFlags.Bool("want_fields", false, "also get the field names")
@@ -1344,38 +1267,6 @@ func commandSourceShardAdd(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 		}
 	}
 	return wr.SourceShardAdd(keyspace, shard, uint32(uid), skeyspace, sshard, kr, tables)
-}
-
-func commandShardMultiRestore(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
-	concurrency := subFlags.Int("concurrency", 8, "how many concurrent jobs to run simultaneously")
-	fetchConcurrency := subFlags.Int("fetch-concurrency", 4, "how many files to fetch simultaneously")
-	insertTableConcurrency := subFlags.Int("insert-table-concurrency", 4, "how many tables to load into a single destination table simultaneously")
-	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'mysqlctl multirestore -help' for more info")
-	tables := subFlags.String("tables", "", "comma separated list of tables to replicate (used for vertical split)")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-
-	if subFlags.NArg() < 2 {
-		return fmt.Errorf("ShardMultiRestore requires <keyspace/shard> <source tablet alias>... %v", args)
-	}
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	sources := make([]topo.TabletAlias, subFlags.NArg()-1)
-	for i := 1; i < subFlags.NArg(); i++ {
-		sources[i-1], err = tabletParamToTabletAlias(subFlags.Arg(i))
-		if err != nil {
-			return err
-		}
-	}
-	var tableArray []string
-	if *tables != "" {
-		tableArray = strings.Split(*tables, ",")
-	}
-	return wr.ShardMultiRestore(keyspace, shard, sources, tableArray, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, *strategy)
 }
 
 func commandShardReplicationAdd(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

@@ -29,6 +29,7 @@ const (
 
 const (
 	SnapshotManifestFile = "snapshot_manifest.json"
+	SnapshotURLPath      = "/snapshot"
 )
 
 // Validate that this instance is a reasonable source of data.
