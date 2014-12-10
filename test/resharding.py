@@ -671,9 +671,15 @@ primary key (name)
 
     # check query service is off on master 2 and master 3, as filtered
     # replication is enabled. Even health check that is enabled on
-    # master 3 should not interfere.
+    # master 3 should not interfere (we run it to be sure).
+    utils.run_vtctl(['RunHealthCheck', shard_3_master.tablet_alias, 'replica'],
+                    auto_log=True)
     self._check_query_service(shard_2_master, False, False)
     self._check_query_service(shard_3_master, False, False)
+
+    # check the destination master 3 is healthy, even though its query
+    # service is not running (if not healthy this would exception out)
+    shard_3_master.get_healthz()
 
     # now serve rdonly from the split shards, in test_nj only
     utils.run_vtctl(['MigrateServedTypes', '--cells=test_nj',

@@ -163,6 +163,11 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 		}
 	}
 
+	// remember our health status
+	agent.mutex.Lock()
+	agent._healthy = err
+	agent.mutex.Unlock()
+
 	// Update our topo.Server state, start with no change
 	newTabletType := tablet.Type
 	if err != nil {
