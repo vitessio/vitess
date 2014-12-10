@@ -149,7 +149,7 @@ def setup_tablets():
                            'TabletTypes: master,replica')
 
   vtgate_server, vtgate_port = utils.vtgate_start()
-  vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
+  vtgate_client = zkocc.ZkOccConnection("localhost:%d" % vtgate_port,
                                         "test_nj", 30.0)
   topology.read_topology(vtgate_client)
 
@@ -161,7 +161,7 @@ def get_connection(db_type='master', shard_index=0, user=None, password=None):
   conn = None
   shard = shard_names[shard_index]
   vtgate_addrs = {"_vt": ["localhost:%s" % (vtgate_port),]}
-  vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
+  vtgate_client = zkocc.ZkOccConnection("localhost:%d" % vtgate_port,
                                         "test_nj", 30.0)
   conn = vtclient.VtOCCConnection(vtgate_client, 'test_keyspace', shard,
                                   db_type, timeout,
@@ -624,7 +624,7 @@ class TestTopoReResolve(unittest.TestCase):
     vtdb_logger.register_vtdb_logger(LocalLogger())
     # Lowering the keyspace refresh throttle so things are testable.
     topology.set_keyspace_fetch_throttle(0.1)
-    self.vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
+    self.vtgate_client = zkocc.ZkOccConnection("localhost:%d" % vtgate_port,
                                                "test_nj", 30.0)
 
   def test_topo_read_threshold(self):

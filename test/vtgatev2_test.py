@@ -154,7 +154,7 @@ def setup_tablets():
   vtgate_server, vtgate_port = utils.vtgate_start()
   # FIXME(shrutip): this should be removed once vtgate_cursor's
   # dependency on topology goes away.
-  vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
+  vtgate_client = zkocc.ZkOccConnection("localhost:%d" % vtgate_port,
                                         "test_nj", 30.0)
   topology.read_topology(vtgate_client)
 

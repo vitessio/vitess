@@ -216,7 +216,7 @@ class TestTabletManager(unittest.TestCase):
         self.fail('invalid zk global state: %s' %
                   v['ZkMetaConn']['global']['Current'])
       if v['ZkMetaConn']['test_nj']['DurationConnected'] < 10e9:
-        self.fail('not enough time in Connected state: %u',
+        self.fail('not enough time in Connected state: %d',
                   v['ZkMetaConn']['test_nj']['DurationConnected'])
       if v['TabletType'] != 'master':
         self.fail('TabletType not exported correctly')
@@ -530,7 +530,7 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.create_db('vt_test_keyspace')
     tablet_62344.init_tablet('master', 'test_keyspace', '0')
     proc1 = tablet_62344.start_vttablet(security_policy="bogus")
-    f = urllib.urlopen('http://localhost:%u/queryz' % int(tablet_62344.port))
+    f = urllib.urlopen('http://localhost:%d/queryz' % int(tablet_62344.port))
     response = f.read()
     f.close()
     self.assertIn('not allowed', response)

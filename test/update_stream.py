@@ -26,7 +26,7 @@ from mysql_flavor import mysql_flavor
 
 master_tablet = tablet.Tablet()
 replica_tablet = tablet.Tablet()
-master_host = 'localhost:%u' % master_tablet.port
+master_host = 'localhost:%d' % master_tablet.port
 
 vtgate_server = None
 vtgate_port = None
@@ -164,7 +164,7 @@ class TestUpdateStream(unittest.TestCase):
     return update_stream_service.UpdateStreamConnection(master_host, 30)
 
   def _get_replica_stream_conn(self):
-    return update_stream_service.UpdateStreamConnection('localhost:%u' %
+    return update_stream_service.UpdateStreamConnection('localhost:%d' %
                                                         replica_tablet.port, 30)
 
   def _test_service_disabled(self):
@@ -266,7 +266,7 @@ class TestUpdateStream(unittest.TestCase):
   def _exec_vt_txn(self, query_list=None):
     if not query_list:
       return
-    vtdb_conn = self._vtdb_conn('localhost:%u' % master_tablet.port)
+    vtdb_conn = self._vtdb_conn('localhost:%d' % master_tablet.port)
     vtdb_cursor = vtdb_conn.cursor()
     vtdb_conn.begin()
     for q in query_list:

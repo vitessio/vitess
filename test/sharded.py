@@ -240,17 +240,17 @@ class TestSharded(unittest.TestCase):
     # now try to connect using the python client and shard-aware connection
     # to both shards
     # first get the topology and check it
-    vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
+    vtgate_client = zkocc.ZkOccConnection("localhost:%d" % vtgate_port,
                                           "test_nj", 30.0)
     topology.read_keyspaces(vtgate_client)
 
     shard_0_master_addrs = topology.get_host_port_by_name(vtgate_client, "test_keyspace.-80.master:_vtocc")
     if len(shard_0_master_addrs) != 1:
-      self.fail('topology.get_host_port_by_name failed for "test_keyspace.-80.master:_vtocc", got: %s' % " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
-    logging.debug("shard 0 master addrs: %s", " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
+      self.fail('topology.get_host_port_by_name failed for "test_keyspace.-80.master:_vtocc", got: %s' % " ".join(["%s:%d(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
+    logging.debug("shard 0 master addrs: %s", " ".join(["%s:%d(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
 
     # connect to shard -80
-    conn = tablet3.TabletConnection("%s:%u" % (shard_0_master_addrs[0][0],
+    conn = tablet3.TabletConnection("%s:%d" % (shard_0_master_addrs[0][0],
                                                shard_0_master_addrs[0][1]),
                                     "", "test_keyspace", "-80", 10.0)
     conn.dial()
@@ -260,7 +260,7 @@ class TestSharded(unittest.TestCase):
 
     # connect to shard 80-
     shard_1_master_addrs = topology.get_host_port_by_name(vtgate_client, "test_keyspace.80-.master:_vtocc")
-    conn = tablet3.TabletConnection("%s:%u" % (shard_1_master_addrs[0][0],
+    conn = tablet3.TabletConnection("%s:%d" % (shard_1_master_addrs[0][0],
                                                shard_1_master_addrs[0][1]),
                                     "", "test_keyspace", "80-", 10.0)
     conn.dial()
@@ -271,7 +271,7 @@ class TestSharded(unittest.TestCase):
 
     # try to connect with bad shard
     try:
-      conn = tablet3.TabletConnection("localhost:%u" % shard_0_master.port,
+      conn = tablet3.TabletConnection("localhost:%d" % shard_0_master.port,
                                       "", "test_keyspace", "-90", 10.0)
       conn.dial()
       self.fail('expected an exception')

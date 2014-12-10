@@ -82,7 +82,7 @@ class TestReparent(unittest.TestCase):
         len(ep['entries']), 1, 'Wrong number of entries: %s' % str(ep))
     port = ep['entries'][0]['named_port_map']['_vtocc']
     self.assertEqual(port, expected_port,
-                     'Unexpected port: %u != %u from %s' % (port, expected_port,
+                     'Unexpected port: %d != %d from %s' % (port, expected_port,
                                                             str(ep)))
     host = ep['entries'][0]['host']
     if not host.startswith(utils.hostname):
