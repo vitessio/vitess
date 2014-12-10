@@ -2,13 +2,11 @@ package com.youtube.vitess.vtgate.hadoop;
 
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.Exceptions.DatabaseException;
-import com.youtube.vitess.vtgate.KeyspaceId;
 import com.youtube.vitess.vtgate.Query;
 import com.youtube.vitess.vtgate.VtGate;
 import com.youtube.vitess.vtgate.hadoop.writables.KeyspaceIdWritable;
 import com.youtube.vitess.vtgate.hadoop.writables.RowWritable;
 
-import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.InputSplit;
@@ -34,13 +32,8 @@ public class VitessInputFormat extends InputFormat<NullWritable, RowWritable> {
     try {
       VitessConf conf = new VitessConf(context.getConfiguration());
       VtGate vtgate = VtGate.connect(conf.getHosts(), conf.getTimeoutMs());
-      List<String> columns = conf.getInputColumns();
-      if (!columns.contains(KeyspaceId.COL_NAME)) {
-        columns.add(KeyspaceId.COL_NAME);
-      }
-      String sql = "select " + StringUtils.join(columns, ',') + " from " + conf.getInputTable();
       Map<Query, Long> queries =
-          vtgate.splitQuery(conf.getKeyspace(), sql, conf.getSplitsPerShard());
+          vtgate.splitQuery(conf.getKeyspace(), conf.getInputQuery(), conf.getSplitsPerShard());
       List<InputSplit> splits = new LinkedList<>();
       for (Query query : queries.keySet()) {
         Long size = queries.get(query);
@@ -68,15 +61,13 @@ public class VitessInputFormat extends InputFormat<NullWritable, RowWritable> {
   public static void setInput(Job job,
       String hosts,
       String keyspace,
-      String table,
-      List<String> columns,
+      String query,
       int splitsPerShard) {
     job.setInputFormatClass(VitessInputFormat.class);
     VitessConf vtConf = new VitessConf(job.getConfiguration());
     vtConf.setHosts(hosts);
     vtConf.setKeyspace(keyspace);
-    vtConf.setInputTable(table);
-    vtConf.setInputColumns(columns);
+    vtConf.setInputQuery(query);
     vtConf.setSplitsPerShard(splitsPerShard);
   }
 }
