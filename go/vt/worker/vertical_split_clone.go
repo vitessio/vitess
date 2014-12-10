@@ -67,6 +67,9 @@ type VerticalSplitCloneWorker struct {
 	destinationAliases     []topo.TabletAlias
 	destinationTablets     map[topo.TabletAlias]*topo.TabletInfo
 	destinationMasterAlias topo.TabletAlias
+	// aliases of tablets that need to have their schema reloaded
+	reloadAliases []topo.TabletAlias
+	reloadTablets map[topo.TabletAlias]*topo.TabletInfo
 
 	// populated during stateVSCCopy
 	tableStatus []*tableStatus
@@ -301,24 +304,33 @@ func (vscw *VerticalSplitCloneWorker) findTargets() error {
 	}
 	action.TabletType = topo.TYPE_SPARE
 
+	return vscw.findMasterTargets()
+}
+
+// findMasterTargets looks up the master for the destination shard, and set the destinations appropriately.
+// It should be used if vtworker will only want to write to masters.
+func (vscw *VerticalSplitCloneWorker) findMasterTargets() error {
+	var err error
 	// find all the targets in the destination keyspace / shard
-	vscw.destinationAliases, err = topo.FindAllTabletAliasesInShard(context.TODO(), vscw.wr.TopoServer(), vscw.destinationKeyspace, vscw.destinationShard)
+	vscw.reloadAliases, err = topo.FindAllTabletAliasesInShard(context.TODO(), vscw.wr.TopoServer(), vscw.destinationKeyspace, vscw.destinationShard)
 	if err != nil {
-		return fmt.Errorf("cannot find all target tablets in %v/%v: %v", vscw.destinationKeyspace, vscw.destinationShard, err)
+		return fmt.Errorf("cannot find all reload target tablets in %v/%v: %v", vscw.destinationKeyspace, vscw.destinationShard, err)
 	}
-	vscw.wr.Logger().Infof("Found %v target aliases", len(vscw.destinationAliases))
+	vscw.wr.Logger().Infof("Found %v reload target aliases", len(vscw.reloadAliases))
 
 	// get the TabletInfo for all targets
-	vscw.destinationTablets, err = topo.GetTabletMap(context.TODO(), vscw.wr.TopoServer(), vscw.destinationAliases)
+	vscw.reloadTablets, err = topo.GetTabletMap(context.TODO(), vscw.wr.TopoServer(), vscw.reloadAliases)
 	if err != nil {
-		return fmt.Errorf("cannot read all target tablets in %v/%v: %v", vscw.destinationKeyspace, vscw.destinationShard, err)
+		return fmt.Errorf("cannot read all reload target tablets in %v/%v: %v", vscw.destinationKeyspace, vscw.destinationShard, err)
 	}
 
 	// find and validate the master
-	for tabletAlias, ti := range vscw.destinationTablets {
+	for tabletAlias, ti := range vscw.reloadTablets {
 		if ti.Type == topo.TYPE_MASTER {
 			if vscw.destinationMasterAlias.IsZero() {
 				vscw.destinationMasterAlias = tabletAlias
+				vscw.destinationAliases = []topo.TabletAlias{tabletAlias}
+				vscw.destinationTablets = map[topo.TabletAlias]*topo.TabletInfo{tabletAlias: ti}
 			} else {
 				return fmt.Errorf("multiple masters in destination shard: %v and %v at least", vscw.destinationMasterAlias, tabletAlias)
 			}
@@ -327,12 +339,13 @@ func (vscw *VerticalSplitCloneWorker) findTargets() error {
 	if vscw.destinationMasterAlias.IsZero() {
 		return fmt.Errorf("no master in destination shard")
 	}
+	vscw.wr.Logger().Infof("Found target master alias %v in shard %v/%v", vscw.destinationMasterAlias, vscw.destinationKeyspace, vscw.destinationShard)
 
 	return nil
 }
 
 // copy phase:
-//	- copy the data from source tablets to destinations
+//	- copy the data from source tablets to destination masters (wtih replication on)
 // Assumes that the schema has already been created on each destination tablet
 // (probably from vtctl's CopySchemaShard)
 func (vscw *VerticalSplitCloneWorker) copy() error {
@@ -389,6 +402,9 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 		mu.Unlock()
 	}
 
+	// since we're writing only to masters, we need to enable bin logs so that replication happens
+	disableBinLogs := false
+
 	insertChannels := make([]chan string, len(vscw.destinationAliases))
 	destinationWaitGroup := sync.WaitGroup{}
 	for i, tabletAlias := range vscw.destinationAliases {
@@ -405,7 +421,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 				go func() {
 					defer destinationWaitGroup.Done()
 
-					if err := executeFetchLoop(vscw.wr, ti, insertChannel, abort, true); err != nil {
+					if err := executeFetchLoop(vscw.wr, ti, insertChannel, abort, disableBinLogs); err != nil {
 						processError("executeFetchLoop failed: %v", err)
 					}
 				}()
@@ -487,7 +503,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 			go func(ti *topo.TabletInfo) {
 				defer destinationWaitGroup.Done()
 				vscw.wr.Logger().Infof("Making and populating blp_checkpoint table on tablet %v", ti.Alias)
-				if err := runSqlCommands(vscw.wr, ti, queries, abort, true); err != nil {
+				if err := runSqlCommands(vscw.wr, ti, queries, abort, disableBinLogs); err != nil {
 					processError("blp_checkpoint queries failed on tablet %v: %v", ti.Alias, err)
 				}
 			}(vscw.destinationTablets[tabletAlias])
@@ -511,7 +527,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	// And force a schema reload on all destination tablets.
 	// The master tablet will end up starting filtered replication
 	// at this point.
-	for _, tabletAlias := range vscw.destinationAliases {
+	for _, tabletAlias := range vscw.reloadAliases {
 		destinationWaitGroup.Add(1)
 		go func(ti *topo.TabletInfo) {
 			defer destinationWaitGroup.Done()
@@ -521,7 +537,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 				processError("ReloadSchema failed on tablet %v: %v", ti.Alias, err)
 			}
 			cancel()
-		}(vscw.destinationTablets[tabletAlias])
+		}(vscw.reloadTablets[tabletAlias])
 	}
 	destinationWaitGroup.Wait()
 	return firstError
