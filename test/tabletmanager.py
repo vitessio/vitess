@@ -525,6 +525,11 @@ class TestTabletManager(unittest.TestCase):
     # wait for the tablets to become healthy and fix their mysql port
     for t in tablet_62344, tablet_62044:
       t.wait_for_vttablet_state('SERVING')
+
+      # we need to do one more health check here, so it sees the query service
+      # is now running, and turns green.
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'],
+                      auto_log=True)
       self.check_healthz(t, True)
 
     for t in tablet_62344, tablet_62044:

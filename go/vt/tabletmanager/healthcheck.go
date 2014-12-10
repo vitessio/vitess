@@ -103,24 +103,36 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 	tabletControl := agent._tabletControl
 	agent.mutex.Unlock()
 
+	// figure out if we should be running the query service
+	shouldQueryServiceBeRunning := false
+	var blacklistedTables []string
+	if topo.IsRunningQueryService(targetTabletType) && agent.BinlogPlayerMap.size() == 0 {
+		shouldQueryServiceBeRunning = true
+		if tabletControl != nil {
+			blacklistedTables = tabletControl.BlacklistedTables
+			if tabletControl.DisableQueryService {
+				shouldQueryServiceBeRunning = false
+			}
+		}
+	}
+
 	// run the health check
 	typeForHealthCheck := targetTabletType
 	if tablet.Type == topo.TYPE_MASTER {
 		typeForHealthCheck = topo.TYPE_MASTER
 	}
-	health, err := health.Run(typeForHealthCheck)
+	health, err := health.Run(typeForHealthCheck, shouldQueryServiceBeRunning)
 
 	// Figure out if we should be running QueryService. If we should,
-	// and we aren't, and we're otherwise healthy, try to start it.
-	if err == nil && topo.IsRunningQueryService(targetTabletType) && agent.BinlogPlayerMap.size() == 0 {
-		var blacklistedTables []string
-		disableQueryService := false
-		if tabletControl != nil {
-			blacklistedTables = tabletControl.BlacklistedTables
-			disableQueryService = tabletControl.DisableQueryService
-		}
-		if !disableQueryService {
+	// and we aren't, try to start it (even if we're not healthy,
+	// the reason we might not be healthy is the query service not running!)
+	if shouldQueryServiceBeRunning {
+		if err == nil {
+			// we remember this new possible error
 			err = agent.allowQueries(tablet.Tablet, blacklistedTables)
+		} else {
+			// we ignore the error
+			agent.allowQueries(tablet.Tablet, blacklistedTables)
 		}
 	}
 

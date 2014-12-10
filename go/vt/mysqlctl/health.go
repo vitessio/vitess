@@ -8,14 +8,14 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-// mySQLReplicationLag implements health.Reporter
+// mysqlReplicationLag implements health.Reporter
 type mysqlReplicationLag struct {
 	mysqld              *Mysqld
 	allowedLagInSeconds int
 }
 
-func (mrl *mysqlReplicationLag) Report(typ topo.TabletType) (status map[string]string, err error) {
-	if !topo.IsSlaveType(typ) {
+func (mrl *mysqlReplicationLag) Report(tabletType topo.TabletType, shouldQueryServiceBeRunning bool) (status map[string]string, err error) {
+	if !topo.IsSlaveType(tabletType) {
 		return nil, nil
 	}
 

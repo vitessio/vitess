@@ -12,15 +12,15 @@ func TestReporters(t *testing.T) {
 
 	ag := NewAggregator()
 
-	ag.Register("a", FunctionReporter(func(typ topo.TabletType) (map[string]string, error) {
+	ag.Register("a", FunctionReporter(func(topo.TabletType, bool) (map[string]string, error) {
 		return map[string]string{"a": "value", "b": "value"}, nil
 	}))
 
-	ag.Register("b", FunctionReporter(func(typ topo.TabletType) (map[string]string, error) {
+	ag.Register("b", FunctionReporter(func(topo.TabletType, bool) (map[string]string, error) {
 		return map[string]string{"c": "value"}, nil
 	}))
 
-	status, err := ag.Run(topo.TYPE_REPLICA)
+	status, err := ag.Run(topo.TYPE_REPLICA, true)
 
 	if err != nil {
 		t.Error(err)
@@ -29,19 +29,19 @@ func TestReporters(t *testing.T) {
 		t.Errorf("status=%#v, want %#v", status, want)
 	}
 
-	ag.Register("c", FunctionReporter(func(typ topo.TabletType) (map[string]string, error) {
+	ag.Register("c", FunctionReporter(func(topo.TabletType, bool) (map[string]string, error) {
 		return nil, errors.New("e error")
 	}))
-	if _, err := ag.Run(topo.TYPE_REPLICA); err == nil {
+	if _, err := ag.Run(topo.TYPE_REPLICA, false); err == nil {
 		t.Errorf("ag.Run: expected error")
 	}
 
 	// Handle duplicate keys.
-	ag.Register("d", FunctionReporter(func(typ topo.TabletType) (map[string]string, error) {
+	ag.Register("d", FunctionReporter(func(topo.TabletType, bool) (map[string]string, error) {
 		return map[string]string{"a": "value"}, nil
 	}))
 
-	if _, err := ag.Run(topo.TYPE_REPLICA); err == nil {
+	if _, err := ag.Run(topo.TYPE_REPLICA, true); err == nil {
 		t.Errorf("ag.Run: expected error for duplicate keys")
 	}
 }
