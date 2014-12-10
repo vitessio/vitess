@@ -19,20 +19,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-type versionDebugVars struct {
-	BuildHost      string
-	BuildUser      string
-	BuildTimestamp int64
-	BuildGitRev    string
-}
-
-func (wr *Wrangler) GetVersion(tabletAlias topo.TabletAlias) (string, error) {
-	tablet, err := wr.ts.GetTablet(tabletAlias)
-	if err != nil {
-		return "", err
-	}
-
-	resp, err := http.Get("http://" + tablet.Addr() + "/debug/vars")
+var getVersionFromTablet = func(tabletAddr string) (string, error) {
+	resp, err := http.Get("http://" + tabletAddr + "/debug/vars")
 	if err != nil {
 		return "", err
 	}
@@ -42,16 +30,33 @@ func (wr *Wrangler) GetVersion(tabletAlias topo.TabletAlias) (string, error) {
 		return "", err
 	}
 
-	vars := versionDebugVars{}
+	var vars struct {
+		BuildHost      string
+		BuildUser      string
+		BuildTimestamp int64
+		BuildGitRev    string
+	}
 	err = json.Unmarshal(body, &vars)
 	if err != nil {
 		return "", err
 	}
 
 	version := fmt.Sprintf("%v", vars)
-
-	log.Infof("Tablet %v is running version '%v'", tabletAlias, version)
 	return version, nil
+}
+
+func (wr *Wrangler) GetVersion(tabletAlias topo.TabletAlias) (string, error) {
+	tablet, err := wr.ts.GetTablet(tabletAlias)
+	if err != nil {
+		return "", err
+	}
+
+	version, err := getVersionFromTablet(tablet.Addr())
+	if err != nil {
+		return "", err
+	}
+	log.Infof("Tablet %v is running version '%v'", tabletAlias, version)
+	return version, err
 }
 
 // helper method to asynchronously get and diff a version
