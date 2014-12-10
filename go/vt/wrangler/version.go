@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"sort"
-	"strings"
 	"sync"
 
 	"code.google.com/p/go.net/context"
@@ -20,18 +19,19 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-type debugVars struct {
-	Version string
+type versionDebugVars struct {
+	BuildHost      string
+	BuildUser      string
+	BuildTimestamp int64
+	BuildGitRev    string
 }
 
 func (wr *Wrangler) GetVersion(tabletAlias topo.TabletAlias) (string, error) {
-	// read the tablet from TopologyServer to get the address to connect to
 	tablet, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return "", err
 	}
 
-	// build the url, get debug/vars
 	resp, err := http.Get("http://" + tablet.Addr() + "/debug/vars")
 	if err != nil {
 		return "", err
@@ -42,20 +42,13 @@ func (wr *Wrangler) GetVersion(tabletAlias topo.TabletAlias) (string, error) {
 		return "", err
 	}
 
-	// convert json
-	vars := debugVars{}
+	vars := versionDebugVars{}
 	err = json.Unmarshal(body, &vars)
 	if err != nil {
 		return "", err
 	}
 
-	// split the version into date and md5
-	parts := strings.Split(vars.Version, " ")
-	if len(parts) != 2 {
-		// can't understand this, oh well
-		return vars.Version, nil
-	}
-	version := parts[1]
+	version := fmt.Sprintf("%v", vars)
 
 	log.Infof("Tablet %v is running version '%v'", tabletAlias, version)
 	return version, nil
