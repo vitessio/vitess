@@ -33,7 +33,9 @@ func init() {
 }
 
 func main() {
-	dbconfigs.RegisterFlags()
+	flags := dbconfigs.AppConfig | dbconfigs.DbaConfig |
+		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
+	dbconfigs.RegisterFlags(flags)
 	flag.Parse()
 	if len(flag.Args()) > 0 {
 		flag.Usage()
@@ -41,7 +43,7 @@ func main() {
 	}
 	servenv.Init()
 
-	dbConfigs, err := dbconfigs.Init("")
+	dbConfigs, err := dbconfigs.Init("", flags)
 	if err != nil {
 		log.Fatalf("Cannot initialize App dbconfig: %v", err)
 	}
