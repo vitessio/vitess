@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/youtube/vitess/go/bson"
-	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/bson"
+	"github.com/henryanand/vitess/go/jscfg"
+	"github.com/henryanand/vitess/go/vt/topo"
 )
 
 // These tests encode a slaveWasRestartedTestArgs (same as

@@ -10,7 +10,7 @@ import (
 
 	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/callinfo"
+	"github.com/henryanand/vitess/go/vt/callinfo"
 )
 
 // This file contains the RPC method helpers for the tablet manager.

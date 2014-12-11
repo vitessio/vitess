@@ -7,10 +7,10 @@ package gorpcproto
 import (
 	"time"
 
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/logutil"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
+	blproto "github.com/henryanand/vitess/go/vt/binlog/proto"
+	"github.com/henryanand/vitess/go/vt/logutil"
+	myproto "github.com/henryanand/vitess/go/vt/mysqlctl/proto"
+	"github.com/henryanand/vitess/go/vt/tabletmanager/actionnode"
 )
 
 /*

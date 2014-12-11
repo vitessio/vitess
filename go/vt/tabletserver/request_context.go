@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"code.google.com/p/go.net/context"
-	"github.com/youtube/vitess/go/hack"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/dbconnpool"
-	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/henryanand/vitess/go/hack"
+	mproto "github.com/henryanand/vitess/go/mysql/proto"
+	"github.com/henryanand/vitess/go/vt/dbconnpool"
+	"github.com/henryanand/vitess/go/vt/sqlparser"
 )
 
 type RequestContext struct {

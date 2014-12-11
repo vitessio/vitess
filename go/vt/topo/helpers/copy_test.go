@@ -9,12 +9,12 @@ import (
 	"testing"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/testfiles"
-	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/zktopo"
-	"github.com/youtube/vitess/go/zk"
-	"github.com/youtube/vitess/go/zk/fakezk"
+	"github.com/henryanand/vitess/go/testfiles"
+	"github.com/henryanand/vitess/go/vt/key"
+	"github.com/henryanand/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/zktopo"
+	"github.com/henryanand/vitess/go/zk"
+	"github.com/henryanand/vitess/go/zk/fakezk"
 	"launchpad.net/gozk/zookeeper"
 )
 

@@ -7,7 +7,7 @@ package proto
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/bson"
+	"github.com/henryanand/vitess/go/bson"
 )
 
 type reflectQuery struct {

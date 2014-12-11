@@ -9,9 +9,9 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/wrangler"
+	"github.com/henryanand/vitess/go/vt/servenv"
+	"github.com/henryanand/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/wrangler"
 )
 
 // findHealthyRdonlyEndPoint returns a random healthy endpoint.

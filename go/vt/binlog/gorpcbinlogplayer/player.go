@@ -7,10 +7,10 @@ package gorpcbinlogplayer
 import (
 	"time"
 
-	"github.com/youtube/vitess/go/rpcplus"
-	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
-	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
-	"github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/henryanand/vitess/go/rpcplus"
+	"github.com/henryanand/vitess/go/rpcwrap/bsonrpc"
+	"github.com/henryanand/vitess/go/vt/binlog/binlogplayer"
+	"github.com/henryanand/vitess/go/vt/binlog/proto"
 )
 
 // GoRpcBinlogPlayerResponse is the type returned by the Client for streaming

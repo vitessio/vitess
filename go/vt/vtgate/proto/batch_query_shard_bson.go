@@ -10,9 +10,9 @@ package proto
 import (
 	"bytes"
 
-	"github.com/youtube/vitess/go/bson"
-	"github.com/youtube/vitess/go/bytes2"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/henryanand/vitess/go/bson"
+	"github.com/henryanand/vitess/go/bytes2"
+	tproto "github.com/henryanand/vitess/go/vt/tabletserver/proto"
 )
 
 // MarshalBson bson-encodes BatchQueryShard.

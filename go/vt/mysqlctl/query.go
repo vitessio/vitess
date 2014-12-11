@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	mproto "github.com/henryanand/vitess/go/mysql/proto"
 )
 
 // ExecuteSuperQuery allows the user to execute a query as a super user.

@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/youtube/vitess/go/ioutil2"
+	"github.com/henryanand/vitess/go/ioutil2"
 )
 
 func ToJson(val interface{}) string {

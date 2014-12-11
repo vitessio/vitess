@@ -6,8 +6,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/concurrency"
+	"github.com/henryanand/vitess/go/vt/topo"
 )
 
 var (

@@ -4,7 +4,7 @@
 
 package planbuilder
 
-import "github.com/youtube/vitess/go/vt/sqlparser"
+import "github.com/henryanand/vitess/go/vt/sqlparser"
 
 type DDLPlan struct {
 	Action    string

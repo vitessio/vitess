@@ -14,7 +14,7 @@ import (
 	"sort"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/henryanand/vitess/go/vt/sqlparser"
 )
 
 var (

@@ -7,10 +7,10 @@ package gorpcvtgateservice
 
 import (
 	"code.google.com/p/go.net/context"
-	"github.com/youtube/vitess/go/vt/rpc"
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/vtgate"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
+	"github.com/henryanand/vitess/go/vt/rpc"
+	"github.com/henryanand/vitess/go/vt/servenv"
+	"github.com/henryanand/vitess/go/vt/vtgate"
+	"github.com/henryanand/vitess/go/vt/vtgate/proto"
 )
 
 type VTGate struct {

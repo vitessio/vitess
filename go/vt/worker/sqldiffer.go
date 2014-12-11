@@ -12,8 +12,8 @@ import (
 
 	"code.google.com/p/go.net/context"
 
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/wrangler"
+	"github.com/henryanand/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/wrangler"
 )
 
 // This file contains the code to run a sanity check in a system with

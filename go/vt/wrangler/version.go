@@ -15,8 +15,8 @@ import (
 	"code.google.com/p/go.net/context"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/concurrency"
+	"github.com/henryanand/vitess/go/vt/topo"
 )
 
 var getVersionFromTablet = func(tabletAddr string) (string, error) {

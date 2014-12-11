@@ -32,16 +32,16 @@ import (
 	"code.google.com/p/go.net/context"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/history"
-	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/netutil"
-	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/trace"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/tabletserver"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/history"
+	"github.com/henryanand/vitess/go/jscfg"
+	"github.com/henryanand/vitess/go/netutil"
+	"github.com/henryanand/vitess/go/stats"
+	"github.com/henryanand/vitess/go/trace"
+	"github.com/henryanand/vitess/go/vt/dbconfigs"
+	"github.com/henryanand/vitess/go/vt/logutil"
+	"github.com/henryanand/vitess/go/vt/mysqlctl"
+	"github.com/henryanand/vitess/go/vt/tabletserver"
+	"github.com/henryanand/vitess/go/vt/topo"
 )
 
 var (

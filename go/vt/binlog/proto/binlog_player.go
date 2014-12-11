@@ -9,7 +9,7 @@ package proto
 import (
 	"fmt"
 
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	myproto "github.com/henryanand/vitess/go/vt/mysqlctl/proto"
 )
 
 // BlpPosition describes a binlog player position to start from.

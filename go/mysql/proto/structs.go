@@ -7,7 +7,7 @@ package proto
 import (
 	"strconv"
 
-	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/henryanand/vitess/go/sqltypes"
 )
 
 // These numbers should exactly match values defined in dist/mysql-5.1.52/include/mysql/mysql_com.h

@@ -8,7 +8,7 @@ package rpc
 import (
 	"bytes"
 
-	"github.com/youtube/vitess/go/bson"
+	"github.com/henryanand/vitess/go/bson"
 )
 
 // Unused is a placeholder type for args and reply values that aren't used.

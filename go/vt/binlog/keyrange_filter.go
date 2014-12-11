@@ -10,8 +10,8 @@ import (
 	"strconv"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/key"
+	"github.com/henryanand/vitess/go/vt/binlog/proto"
+	"github.com/henryanand/vitess/go/vt/key"
 )
 
 var KEYSPACE_ID_COMMENT = []byte("/* EMD keyspace_id:")

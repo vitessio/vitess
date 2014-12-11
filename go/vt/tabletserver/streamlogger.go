@@ -14,9 +14,9 @@ import (
 
 	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/streamlog"
-	"github.com/youtube/vitess/go/vt/callinfo"
+	"github.com/henryanand/vitess/go/sqltypes"
+	"github.com/henryanand/vitess/go/streamlog"
+	"github.com/henryanand/vitess/go/vt/callinfo"
 )
 
 var SqlQueryLogger = streamlog.New("SqlQuery", 50)

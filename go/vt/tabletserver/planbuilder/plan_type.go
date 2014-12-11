@@ -7,7 +7,7 @@ package planbuilder
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/vt/tableacl"
+	"github.com/henryanand/vitess/go/vt/tableacl"
 )
 
 type PlanType int

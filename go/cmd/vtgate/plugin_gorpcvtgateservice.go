@@ -7,5 +7,5 @@ package main
 // Imports and register the gorpc vtgateservice server
 
 import (
-	_ "github.com/youtube/vitess/go/vt/vtgate/gorpcvtgateservice"
+	_ "github.com/henryanand/vitess/go/vt/vtgate/gorpcvtgateservice"
 )

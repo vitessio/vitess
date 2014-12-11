@@ -11,9 +11,9 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/schema"
-	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/henryanand/vitess/go/sqltypes"
+	"github.com/henryanand/vitess/go/vt/schema"
+	"github.com/henryanand/vitess/go/vt/sqlparser"
 )
 
 // buildValueList builds the set of PK reference rows used to drive the next query.

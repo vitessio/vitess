@@ -5,7 +5,7 @@ import (
 	"html/template"
 
 	"code.google.com/p/go.net/context"
-	"github.com/youtube/vitess/go/rpcwrap/proto"
+	"github.com/henryanand/vitess/go/rpcwrap/proto"
 )
 
 type rpcWrapInfo struct {

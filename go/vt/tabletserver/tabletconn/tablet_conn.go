@@ -10,9 +10,9 @@ import (
 
 	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
-	"github.com/youtube/vitess/go/vt/topo"
+	mproto "github.com/henryanand/vitess/go/mysql/proto"
+	tproto "github.com/henryanand/vitess/go/vt/tabletserver/proto"
+	"github.com/henryanand/vitess/go/vt/topo"
 )
 
 const (

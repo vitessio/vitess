@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/youtube/vitess/go/bson"
+	"github.com/henryanand/vitess/go/bson"
 )
 
 func TestReplicationPositionEqual(t *testing.T) {

@@ -10,8 +10,8 @@ package topo
 import (
 	"bytes"
 
-	"github.com/youtube/vitess/go/bson"
-	"github.com/youtube/vitess/go/bytes2"
+	"github.com/henryanand/vitess/go/bson"
+	"github.com/henryanand/vitess/go/bytes2"
 )
 
 // MarshalBson bson-encodes SrvKeyspace.

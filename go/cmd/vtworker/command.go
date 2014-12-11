@@ -12,8 +12,8 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/worker"
-	"github.com/youtube/vitess/go/vt/wrangler"
+	"github.com/henryanand/vitess/go/vt/worker"
+	"github.com/henryanand/vitess/go/vt/wrangler"
 )
 
 var (

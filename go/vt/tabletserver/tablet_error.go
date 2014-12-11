@@ -10,9 +10,9 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/tb"
-	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/henryanand/vitess/go/mysql"
+	"github.com/henryanand/vitess/go/tb"
+	"github.com/henryanand/vitess/go/vt/logutil"
 )
 
 const (

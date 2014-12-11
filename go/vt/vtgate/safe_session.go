@@ -7,8 +7,8 @@ package vtgate
 import (
 	"sync"
 
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
+	"github.com/henryanand/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/vtgate/proto"
 )
 
 type SafeSession struct {

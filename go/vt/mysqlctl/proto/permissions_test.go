@@ -7,8 +7,8 @@ package proto
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/henryanand/vitess/go/mysql/proto"
+	"github.com/henryanand/vitess/go/sqltypes"
 )
 
 func mapToSqlResults(row map[string]string) ([]proto.Field, []sqltypes.Value) {

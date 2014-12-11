@@ -7,7 +7,7 @@ package zktopo
 import (
 	"sort"
 
-	"github.com/youtube/vitess/go/zk"
+	"github.com/henryanand/vitess/go/zk"
 )
 
 /*

@@ -7,10 +7,10 @@ package vindexes
 import (
 	"fmt"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/key"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
-	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
+	mproto "github.com/henryanand/vitess/go/mysql/proto"
+	"github.com/henryanand/vitess/go/vt/key"
+	tproto "github.com/henryanand/vitess/go/vt/tabletserver/proto"
+	"github.com/henryanand/vitess/go/vt/vtgate/planbuilder"
 )
 
 type LookupHashUnique struct {

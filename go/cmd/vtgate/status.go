@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/youtube/vitess/go/vt/servenv"
-	_ "github.com/youtube/vitess/go/vt/status"
+	"github.com/henryanand/vitess/go/vt/servenv"
+	_ "github.com/henryanand/vitess/go/vt/status"
 )
 
 var (

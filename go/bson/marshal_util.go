@@ -9,7 +9,7 @@ package bson
 import (
 	"time"
 
-	"github.com/youtube/vitess/go/bytes2"
+	"github.com/henryanand/vitess/go/bytes2"
 )
 
 // EncodeInterface bson encodes an interface{}. Elements

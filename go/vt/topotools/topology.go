@@ -10,8 +10,8 @@ import (
 	"code.google.com/p/go.net/context"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/concurrency"
+	"github.com/henryanand/vitess/go/vt/topo"
 )
 
 // TabletNode is the representation of a tablet in the db topology.

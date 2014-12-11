@@ -7,8 +7,8 @@ package main
 // Import and register the gorpc mysqlctl server
 
 import (
-	"github.com/youtube/vitess/go/vt/mysqlctl/gorpcmysqlctlserver"
-	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/henryanand/vitess/go/vt/mysqlctl/gorpcmysqlctlserver"
+	"github.com/henryanand/vitess/go/vt/servenv"
 )
 
 func init() {

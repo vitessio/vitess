@@ -7,7 +7,7 @@ package binlogplayer
 import (
 	"testing"
 
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	myproto "github.com/henryanand/vitess/go/vt/mysqlctl/proto"
 )
 
 func TestPopulateBlpCheckpoint(t *testing.T) {

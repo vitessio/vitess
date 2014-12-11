@@ -5,7 +5,7 @@
 package tabletserver
 
 import (
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/henryanand/vitess/go/vt/tabletserver/proto"
 )
 
 const TRAILING_COMMENT = "_trailingComment"

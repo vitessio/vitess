@@ -7,8 +7,8 @@ package planbuilder
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/vt/schema"
-	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/henryanand/vitess/go/vt/schema"
+	"github.com/henryanand/vitess/go/vt/sqlparser"
 )
 
 func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan, err error) {

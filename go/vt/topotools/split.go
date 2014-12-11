@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/key"
+	"github.com/henryanand/vitess/go/vt/topo"
 )
 
 // OverlappingShards contains sets of shards that overlap which each-other.

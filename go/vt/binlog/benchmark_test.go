@@ -5,10 +5,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/youtube/vitess/go/sync2"
-	"github.com/youtube/vitess/go/testfiles"
-	"github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/henryanand/vitess/go/sync2"
+	"github.com/henryanand/vitess/go/testfiles"
+	"github.com/henryanand/vitess/go/vt/binlog/proto"
+	"github.com/henryanand/vitess/go/vt/mysqlctl"
 )
 
 func readEvents(b *testing.B, filename string) <-chan proto.BinlogEvent {

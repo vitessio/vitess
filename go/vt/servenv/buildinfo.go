@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/youtube/vitess/go/stats"
+	"github.com/henryanand/vitess/go/stats"
 )
 
 var (

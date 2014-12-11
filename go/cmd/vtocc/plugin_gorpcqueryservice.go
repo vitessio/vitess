@@ -7,5 +7,5 @@ package main
 // Imports and register the gorpc queryservice server
 
 import (
-	_ "github.com/youtube/vitess/go/vt/tabletserver/gorpcqueryservice"
+	_ "github.com/henryanand/vitess/go/vt/tabletserver/gorpcqueryservice"
 )

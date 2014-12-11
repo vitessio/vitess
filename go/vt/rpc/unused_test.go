@@ -8,7 +8,7 @@ package rpc
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/bson"
+	"github.com/henryanand/vitess/go/bson"
 )
 
 func TestUnmarshalStringIntoUnused(t *testing.T) {

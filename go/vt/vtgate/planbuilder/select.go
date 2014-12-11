@@ -4,7 +4,7 @@
 
 package planbuilder
 
-import "github.com/youtube/vitess/go/vt/sqlparser"
+import "github.com/henryanand/vitess/go/vt/sqlparser"
 
 func buildSelectPlan(sel *sqlparser.Select, schema *Schema) *Plan {
 	plan := &Plan{

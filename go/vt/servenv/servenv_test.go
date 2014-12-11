@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/event"
+	"github.com/henryanand/vitess/go/event"
 )
 
 func TestFireOnTermSyncHooksFinished(t *testing.T) {

@@ -8,9 +8,9 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/henryanand/vitess/go/mysql"
+	mproto "github.com/henryanand/vitess/go/mysql/proto"
+	"github.com/henryanand/vitess/go/vt/dbconfigs"
 )
 
 // DBClient is a real VtClient backed by a mysql connection

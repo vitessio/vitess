@@ -12,7 +12,7 @@ import (
 	"code.google.com/p/go.net/context"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/topo"
 )
 
 // FindTabletByIPAddrAndPort searches within a tablet map for tablets

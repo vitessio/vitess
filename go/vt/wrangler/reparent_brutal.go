@@ -3,11 +3,11 @@ package wrangler
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/event"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topotools"
-	"github.com/youtube/vitess/go/vt/topotools/events"
+	"github.com/henryanand/vitess/go/event"
+	myproto "github.com/henryanand/vitess/go/vt/mysqlctl/proto"
+	"github.com/henryanand/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/topotools"
+	"github.com/henryanand/vitess/go/vt/topotools/events"
 )
 
 // reparentShardBrutal executes a brutal reparent.

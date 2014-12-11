@@ -7,7 +7,7 @@ package planbuilder
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/henryanand/vitess/go/vt/sqlparser"
 )
 
 func buildInsertPlan(ins *sqlparser.Insert, schema *Schema) *Plan {

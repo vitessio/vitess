@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/youtube/vitess/go/bytes2"
+	"github.com/henryanand/vitess/go/bytes2"
 )
 
 // LenWriter records the current write position on the buffer

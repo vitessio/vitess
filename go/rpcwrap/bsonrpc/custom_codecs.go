@@ -7,9 +7,9 @@ package bsonrpc
 import (
 	"bytes"
 
-	"github.com/youtube/vitess/go/bson"
-	"github.com/youtube/vitess/go/bytes2"
-	rpc "github.com/youtube/vitess/go/rpcplus"
+	"github.com/henryanand/vitess/go/bson"
+	"github.com/henryanand/vitess/go/bytes2"
+	rpc "github.com/henryanand/vitess/go/rpcplus"
 )
 
 type RequestBson struct {

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/henryanand/vitess/go/vt/logutil"
 )
 
 var vtctlClientProtocol = flag.String("vtctl_client_protocol", "gorpc", "the protocol to use to talk to the vtctl server")

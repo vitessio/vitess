@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/testfiles"
-	"github.com/youtube/vitess/go/vt/context"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
-	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
+	"github.com/henryanand/vitess/go/testfiles"
+	"github.com/henryanand/vitess/go/vt/context"
+	"github.com/henryanand/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/vtgate/planbuilder"
+	"github.com/henryanand/vitess/go/vt/vtgate/proto"
+	_ "github.com/henryanand/vitess/go/vt/vtgate/vindexes"
 )
 
 type VTGateSchemaNormalized struct {

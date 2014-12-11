@@ -7,7 +7,7 @@ package zktopo
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/topo"
 )
 
 // TestHookLockSrvShardForAction makes sure that changes to the upstream

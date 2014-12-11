@@ -15,7 +15,7 @@ import (
 	"os/user"
 	"time"
 
-	"github.com/youtube/vitess/go/jscfg"
+	"github.com/henryanand/vitess/go/jscfg"
 )
 
 const (

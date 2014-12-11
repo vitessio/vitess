@@ -7,8 +7,8 @@ package mysqlctl
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/vt/dbconnpool"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/henryanand/vitess/go/vt/dbconnpool"
+	"github.com/henryanand/vitess/go/vt/mysqlctl/proto"
 )
 
 // MysqlDaemon is the interface we use for abstracting Mysqld.

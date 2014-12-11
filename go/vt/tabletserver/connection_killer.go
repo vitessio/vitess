@@ -5,7 +5,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/dbconnpool"
+	"github.com/henryanand/vitess/go/vt/dbconnpool"
 )
 
 // ConnectionKiller is used for killing MySQL connections

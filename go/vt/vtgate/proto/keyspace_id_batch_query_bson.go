@@ -10,10 +10,10 @@ package proto
 import (
 	"bytes"
 
-	"github.com/youtube/vitess/go/bson"
-	"github.com/youtube/vitess/go/bytes2"
-	kproto "github.com/youtube/vitess/go/vt/key"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/henryanand/vitess/go/bson"
+	"github.com/henryanand/vitess/go/bytes2"
+	kproto "github.com/henryanand/vitess/go/vt/key"
+	tproto "github.com/henryanand/vitess/go/vt/tabletserver/proto"
 )
 
 // MarshalBson bson-encodes KeyspaceIdBatchQuery.

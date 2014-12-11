@@ -7,5 +7,5 @@ package mysqlctl
 // Import the gorpc mysqlctl client.
 
 import (
-	_ "github.com/youtube/vitess/go/vt/mysqlctl/gorpcmysqlctlclient"
+	_ "github.com/henryanand/vitess/go/vt/mysqlctl/gorpcmysqlctlclient"
 )

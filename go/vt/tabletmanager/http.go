@@ -17,9 +17,9 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/cgzip"
-	vtenv "github.com/youtube/vitess/go/vt/env"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/henryanand/vitess/go/cgzip"
+	vtenv "github.com/henryanand/vitess/go/vt/env"
+	"github.com/henryanand/vitess/go/vt/mysqlctl"
 )
 
 // HttpHandleSnapshots handles the serving of files from the local tablet

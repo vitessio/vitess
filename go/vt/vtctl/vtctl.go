@@ -17,17 +17,17 @@ import (
 
 	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/flagutil"
-	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/vt/client2"
-	hk "github.com/youtube/vitess/go/vt/hook"
-	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/logutil"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topotools"
-	"github.com/youtube/vitess/go/vt/wrangler"
+	"github.com/henryanand/vitess/go/flagutil"
+	"github.com/henryanand/vitess/go/jscfg"
+	"github.com/henryanand/vitess/go/vt/client2"
+	hk "github.com/henryanand/vitess/go/vt/hook"
+	"github.com/henryanand/vitess/go/vt/key"
+	"github.com/henryanand/vitess/go/vt/logutil"
+	myproto "github.com/henryanand/vitess/go/vt/mysqlctl/proto"
+	"github.com/henryanand/vitess/go/vt/tabletmanager/actionnode"
+	"github.com/henryanand/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/topotools"
+	"github.com/henryanand/vitess/go/vt/wrangler"
 )
 
 var (

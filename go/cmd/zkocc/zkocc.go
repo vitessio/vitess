@@ -9,9 +9,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/zk"
-	"github.com/youtube/vitess/go/zk/zkocc"
+	"github.com/henryanand/vitess/go/vt/servenv"
+	"github.com/henryanand/vitess/go/zk"
+	"github.com/henryanand/vitess/go/zk/zkocc"
 )
 
 var usage = `Cache open zookeeper connections and allow cheap read requests

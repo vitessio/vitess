@@ -5,7 +5,7 @@
 package logutil
 
 import (
-	"github.com/youtube/vitess/go/event"
+	"github.com/henryanand/vitess/go/event"
 )
 
 var (

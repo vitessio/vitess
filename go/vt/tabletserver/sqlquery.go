@@ -13,15 +13,15 @@ import (
 
 	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/sync2"
-	"github.com/youtube/vitess/go/tb"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/dbconnpool"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/henryanand/vitess/go/mysql"
+	mproto "github.com/henryanand/vitess/go/mysql/proto"
+	"github.com/henryanand/vitess/go/stats"
+	"github.com/henryanand/vitess/go/sync2"
+	"github.com/henryanand/vitess/go/tb"
+	"github.com/henryanand/vitess/go/vt/dbconfigs"
+	"github.com/henryanand/vitess/go/vt/dbconnpool"
+	"github.com/henryanand/vitess/go/vt/mysqlctl"
+	"github.com/henryanand/vitess/go/vt/tabletserver/proto"
 )
 
 const (

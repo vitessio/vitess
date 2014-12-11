@@ -5,11 +5,11 @@ import (
 	"reflect"
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/schema"
-	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	mproto "github.com/henryanand/vitess/go/mysql/proto"
+	"github.com/henryanand/vitess/go/sqltypes"
+	"github.com/henryanand/vitess/go/vt/schema"
+	"github.com/henryanand/vitess/go/vt/sqlparser"
+	"github.com/henryanand/vitess/go/vt/tabletserver/proto"
 )
 
 func getSchemaInfo() *SchemaInfo {

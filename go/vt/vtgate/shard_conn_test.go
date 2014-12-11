@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/context"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/henryanand/vitess/go/vt/context"
+	tproto "github.com/henryanand/vitess/go/vt/tabletserver/proto"
 )
 
 // This file uses the sandbox_test framework.

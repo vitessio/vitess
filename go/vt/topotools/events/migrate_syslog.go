@@ -9,7 +9,7 @@ import (
 	"log/syslog"
 	"strings"
 
-	"github.com/youtube/vitess/go/event/syslogger"
+	"github.com/henryanand/vitess/go/event/syslogger"
 )
 
 // Syslog writes a MigrateServedFrom event to syslog.

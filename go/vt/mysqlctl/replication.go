@@ -21,12 +21,12 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/hook"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/henryanand/vitess/go/mysql"
+	"github.com/henryanand/vitess/go/vt/binlog/binlogplayer"
+	blproto "github.com/henryanand/vitess/go/vt/binlog/proto"
+	"github.com/henryanand/vitess/go/vt/dbconfigs"
+	"github.com/henryanand/vitess/go/vt/hook"
+	"github.com/henryanand/vitess/go/vt/mysqlctl/proto"
 )
 
 const (

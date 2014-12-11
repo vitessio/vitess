@@ -9,7 +9,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/henryanand/vitess/go/vt/mysqlctl/proto"
 )
 
 // if the master is still alive, then we need to demote it gracefully

@@ -20,9 +20,9 @@ import (
 
 	log "github.com/golang/glog"
 
-	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
-	vtenv "github.com/youtube/vitess/go/vt/env"
+	"github.com/henryanand/vitess/go/mysql"
+	"github.com/henryanand/vitess/go/vt/dbconfigs"
+	vtenv "github.com/henryanand/vitess/go/vt/env"
 )
 
 // PrimeCache is the main object for this module: it handles a player

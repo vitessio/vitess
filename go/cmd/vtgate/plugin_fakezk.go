@@ -9,9 +9,9 @@ package main
 import (
 	"flag"
 
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/zktopo"
-	"github.com/youtube/vitess/go/zk/fakezk"
+	"github.com/henryanand/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/zktopo"
+	"github.com/henryanand/vitess/go/zk/fakezk"
 )
 
 var fakezkConfig = flag.String("fakezk-config", "", "If set, will read the json config file, use it to seed a fakezk and register it as 'fakezk' topology implementation")

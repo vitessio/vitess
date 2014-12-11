@@ -7,5 +7,5 @@ package main
 // Imports and register the gorpc binlog player
 
 import (
-	_ "github.com/youtube/vitess/go/vt/binlog/gorpcbinlogplayer"
+	_ "github.com/henryanand/vitess/go/vt/binlog/gorpcbinlogplayer"
 )

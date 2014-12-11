@@ -19,9 +19,9 @@ import (
 	"strconv"
 	"unsafe"
 
-	"github.com/youtube/vitess/go/hack"
-	"github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/henryanand/vitess/go/hack"
+	"github.com/henryanand/vitess/go/mysql/proto"
+	"github.com/henryanand/vitess/go/sqltypes"
 )
 
 const (

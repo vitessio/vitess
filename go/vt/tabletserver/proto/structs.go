@@ -7,8 +7,8 @@ package proto
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/bytes2"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/henryanand/vitess/go/bytes2"
+	mproto "github.com/henryanand/vitess/go/mysql/proto"
 )
 
 type SessionParams struct {

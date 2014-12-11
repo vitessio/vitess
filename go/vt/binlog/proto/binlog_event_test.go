@@ -7,7 +7,7 @@ package proto
 import (
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	mproto "github.com/henryanand/vitess/go/mysql/proto"
 )
 
 func TestQueryString(t *testing.T) {

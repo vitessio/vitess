@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"sort"
 
-	"github.com/youtube/vitess/go/acl"
-	"github.com/youtube/vitess/go/vt/schema"
+	"github.com/henryanand/vitess/go/acl"
+	"github.com/henryanand/vitess/go/vt/schema"
 )
 
 var (

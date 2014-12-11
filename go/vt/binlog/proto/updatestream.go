@@ -5,9 +5,9 @@
 package proto
 
 import (
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/key"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	mproto "github.com/henryanand/vitess/go/mysql/proto"
+	"github.com/henryanand/vitess/go/vt/key"
+	myproto "github.com/henryanand/vitess/go/vt/mysqlctl/proto"
 )
 
 // UpdateStreamRequest is used to make a request for ServeUpdateStream.

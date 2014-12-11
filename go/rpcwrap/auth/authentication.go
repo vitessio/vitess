@@ -9,8 +9,8 @@ import (
 
 	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
-	rpc "github.com/youtube/vitess/go/rpcplus"
-	"github.com/youtube/vitess/go/rpcwrap/proto"
+	rpc "github.com/henryanand/vitess/go/rpcplus"
+	"github.com/henryanand/vitess/go/rpcwrap/proto"
 )
 
 // UnusedArgument is a type used to indicate an argument that is

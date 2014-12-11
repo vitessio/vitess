@@ -5,7 +5,7 @@
 package proto
 
 import (
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	myproto "github.com/henryanand/vitess/go/vt/mysqlctl/proto"
 )
 
 // StreamEvent represents one event for the update stream.

@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
-	hk "github.com/youtube/vitess/go/vt/hook"
-	"github.com/youtube/vitess/go/vt/topo"
+	hk "github.com/henryanand/vitess/go/vt/hook"
+	"github.com/henryanand/vitess/go/vt/topo"
 )
 
 func (wr *Wrangler) ExecuteHook(tabletAlias topo.TabletAlias, hook *hk.Hook) (hookResult *hk.HookResult, err error) {

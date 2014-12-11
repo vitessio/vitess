@@ -3,8 +3,8 @@ package pbrpc
 import (
 	"time"
 
-	rpc "github.com/youtube/vitess/go/rpcplus"
-	"github.com/youtube/vitess/go/rpcwrap"
+	rpc "github.com/henryanand/vitess/go/rpcplus"
+	"github.com/henryanand/vitess/go/rpcwrap"
 )
 
 const codecName = "protobuf"

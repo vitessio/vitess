@@ -11,14 +11,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/db"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/client2/tablet"
-	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate"
-	"github.com/youtube/vitess/go/vt/zktopo"
-	"github.com/youtube/vitess/go/zk"
+	"github.com/henryanand/vitess/go/db"
+	mproto "github.com/henryanand/vitess/go/mysql/proto"
+	"github.com/henryanand/vitess/go/vt/client2/tablet"
+	"github.com/henryanand/vitess/go/vt/key"
+	"github.com/henryanand/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/vtgate"
+	"github.com/henryanand/vitess/go/vt/zktopo"
+	"github.com/henryanand/vitess/go/zk"
 )
 
 // The sharded client handles writing to multiple shards across the

@@ -13,10 +13,10 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/db"
-	"github.com/youtube/vitess/go/vt/client2"
-	_ "github.com/youtube/vitess/go/vt/client2/tablet"
-	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/henryanand/vitess/go/db"
+	"github.com/henryanand/vitess/go/vt/client2"
+	_ "github.com/henryanand/vitess/go/vt/client2/tablet"
+	"github.com/henryanand/vitess/go/vt/logutil"
 )
 
 var usage = `

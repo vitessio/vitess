@@ -14,9 +14,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/pools"
-	"github.com/youtube/vitess/go/stats"
+	"github.com/henryanand/vitess/go/mysql/proto"
+	"github.com/henryanand/vitess/go/pools"
+	"github.com/henryanand/vitess/go/stats"
 )
 
 var (

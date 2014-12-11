@@ -22,7 +22,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/env"
+	"github.com/henryanand/vitess/go/vt/env"
 	"launchpad.net/gozk/zookeeper"
 )
 

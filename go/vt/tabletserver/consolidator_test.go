@@ -3,7 +3,7 @@ package tabletserver
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/mysql/proto"
+	"github.com/henryanand/vitess/go/mysql/proto"
 )
 
 func TestConsolidator(t *testing.T) {

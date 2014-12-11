@@ -14,13 +14,13 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/youtube/vitess/go/rpcplus"
-	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/tabletmanager"
-	"github.com/youtube/vitess/go/vt/tabletmanager/gorpctmserver"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/wrangler"
+	"github.com/henryanand/vitess/go/rpcplus"
+	"github.com/henryanand/vitess/go/rpcwrap/bsonrpc"
+	"github.com/henryanand/vitess/go/vt/mysqlctl"
+	"github.com/henryanand/vitess/go/vt/tabletmanager"
+	"github.com/henryanand/vitess/go/vt/tabletmanager/gorpctmserver"
+	"github.com/henryanand/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/wrangler"
 )
 
 // This file contains utility methods for unit tests.

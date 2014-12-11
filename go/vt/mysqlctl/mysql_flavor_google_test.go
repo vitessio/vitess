@@ -8,9 +8,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/mysql"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
-	proto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/henryanand/vitess/go/mysql"
+	blproto "github.com/henryanand/vitess/go/vt/binlog/proto"
+	proto "github.com/henryanand/vitess/go/vt/mysqlctl/proto"
 )
 
 func TestGoogleMakeBinlogEvent(t *testing.T) {

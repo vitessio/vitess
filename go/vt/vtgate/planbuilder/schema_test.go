@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/key"
+	"github.com/henryanand/vitess/go/vt/key"
 )
 
 // stFU satisfies Functional, Unique.

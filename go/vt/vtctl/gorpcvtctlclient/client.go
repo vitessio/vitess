@@ -9,11 +9,11 @@ import (
 	"fmt"
 	"time"
 
-	rpc "github.com/youtube/vitess/go/rpcplus"
-	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/vtctl/gorpcproto"
-	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
+	rpc "github.com/henryanand/vitess/go/rpcplus"
+	"github.com/henryanand/vitess/go/rpcwrap/bsonrpc"
+	"github.com/henryanand/vitess/go/vt/logutil"
+	"github.com/henryanand/vitess/go/vt/vtctl/gorpcproto"
+	"github.com/henryanand/vitess/go/vt/vtctl/vtctlclient"
 )
 
 type goRpcVtctlClient struct {

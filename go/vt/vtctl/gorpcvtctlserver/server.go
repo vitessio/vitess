@@ -12,12 +12,12 @@ import (
 	"sync"
 
 	"code.google.com/p/go.net/context"
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtctl"
-	"github.com/youtube/vitess/go/vt/vtctl/gorpcproto"
-	"github.com/youtube/vitess/go/vt/wrangler"
+	"github.com/henryanand/vitess/go/vt/logutil"
+	"github.com/henryanand/vitess/go/vt/servenv"
+	"github.com/henryanand/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/vtctl"
+	"github.com/henryanand/vitess/go/vt/vtctl/gorpcproto"
+	"github.com/henryanand/vitess/go/vt/wrangler"
 )
 
 // VtctlServer is our RPC server

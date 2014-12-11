@@ -7,8 +7,8 @@ package bsonrpc
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/bson"
-	rpc "github.com/youtube/vitess/go/rpcplus"
+	"github.com/henryanand/vitess/go/bson"
+	rpc "github.com/henryanand/vitess/go/rpcplus"
 )
 
 type reflectRequestBson struct {

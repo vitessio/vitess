@@ -7,7 +7,7 @@ package events
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/event"
+	"github.com/henryanand/vitess/go/event"
 )
 
 type testEvent struct {

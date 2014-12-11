@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/henryanand/vitess/go/vt/sqlparser"
 )
 
 // getWhereRouting fills the plan fields for the where clause of a SELECT

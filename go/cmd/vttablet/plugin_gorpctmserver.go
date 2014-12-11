@@ -7,5 +7,5 @@ package main
 // Imports and register the gorpc tabletmanager server
 
 import (
-	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmserver"
+	_ "github.com/henryanand/vitess/go/vt/tabletmanager/gorpctmserver"
 )

@@ -7,7 +7,7 @@ package binlog
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/henryanand/vitess/go/vt/binlog/proto"
 )
 
 var testTables = []string{

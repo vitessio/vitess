@@ -7,5 +7,5 @@ package main
 // Imports and register the gorpc tabletmanager client
 
 import (
-	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
+	_ "github.com/henryanand/vitess/go/vt/tabletmanager/gorpctmclient"
 )

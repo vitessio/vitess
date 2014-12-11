@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/youtube/vitess/go/jscfg"
+	"github.com/henryanand/vitess/go/jscfg"
 )
 
 // Schema represents the denormalized version of SchemaFormal,

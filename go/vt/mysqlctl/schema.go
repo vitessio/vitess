@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/henryanand/vitess/go/vt/mysqlctl/proto"
 )
 
 var autoIncr = regexp.MustCompile(" AUTO_INCREMENT=\\d+")

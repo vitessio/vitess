@@ -10,8 +10,8 @@ import (
 	"net"
 	"strings"
 
-	"github.com/youtube/vitess/go/netutil"
-	"github.com/youtube/vitess/go/zk"
+	"github.com/henryanand/vitess/go/netutil"
+	"github.com/henryanand/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
 

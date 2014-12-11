@@ -10,10 +10,10 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/sync2"
-	"github.com/youtube/vitess/go/vt/dbconnpool"
-	"github.com/youtube/vitess/go/vt/schema"
+	"github.com/henryanand/vitess/go/sqltypes"
+	"github.com/henryanand/vitess/go/sync2"
+	"github.com/henryanand/vitess/go/vt/dbconnpool"
+	"github.com/henryanand/vitess/go/vt/schema"
 )
 
 type TableInfo struct {

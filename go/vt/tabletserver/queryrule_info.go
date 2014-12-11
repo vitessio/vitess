@@ -8,7 +8,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
+	"github.com/henryanand/vitess/go/vt/tabletserver/planbuilder"
 )
 
 // QueryRuleInfo is the maintainer of QueryRules from multiple sources

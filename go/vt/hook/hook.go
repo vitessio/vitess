@@ -14,8 +14,8 @@ import (
 	"syscall"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/jscfg"
-	vtenv "github.com/youtube/vitess/go/vt/env"
+	"github.com/henryanand/vitess/go/jscfg"
+	vtenv "github.com/henryanand/vitess/go/vt/env"
 )
 
 type Hook struct {

@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"log/syslog"
 
-	"github.com/youtube/vitess/go/event/syslogger"
+	"github.com/henryanand/vitess/go/event/syslogger"
 )
 
 // Syslog writes a SplitClone event to syslog.

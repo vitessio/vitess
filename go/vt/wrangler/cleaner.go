@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"code.google.com/p/go.net/context"
-	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/concurrency"
+	"github.com/henryanand/vitess/go/vt/topo"
 )
 
 // Cleaner remembers a list of cleanup steps to perform.  Just record

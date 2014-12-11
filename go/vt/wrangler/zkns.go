@@ -9,11 +9,11 @@ import (
 	"code.google.com/p/go.net/context"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/zktopo"
-	"github.com/youtube/vitess/go/zk"
-	"github.com/youtube/vitess/go/zk/zkns"
+	"github.com/henryanand/vitess/go/jscfg"
+	"github.com/henryanand/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/zktopo"
+	"github.com/henryanand/vitess/go/zk"
+	"github.com/henryanand/vitess/go/zk/zkns"
 	"launchpad.net/gozk/zookeeper"
 )
 

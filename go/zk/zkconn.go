@@ -14,8 +14,8 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/netutil"
-	"github.com/youtube/vitess/go/sync2"
+	"github.com/henryanand/vitess/go/netutil"
+	"github.com/henryanand/vitess/go/sync2"
 	"launchpad.net/gozk/zookeeper"
 )
 

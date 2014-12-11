@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"html/template"
 
-	"github.com/youtube/vitess/go/vt/health"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/health"
+	"github.com/henryanand/vitess/go/vt/topo"
 )
 
 // mysqlReplicationLag implements health.Reporter

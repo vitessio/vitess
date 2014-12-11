@@ -16,7 +16,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/fileutil"
+	"github.com/henryanand/vitess/go/fileutil"
 	"launchpad.net/gozk/zookeeper"
 )
 

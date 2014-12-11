@@ -10,9 +10,9 @@ package proto
 import (
 	"bytes"
 
-	"github.com/youtube/vitess/go/bson"
-	"github.com/youtube/vitess/go/bytes2"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/henryanand/vitess/go/bson"
+	"github.com/henryanand/vitess/go/bytes2"
+	mproto "github.com/henryanand/vitess/go/mysql/proto"
 )
 
 // MarshalBson bson-encodes QueryResultList.

@@ -10,15 +10,15 @@ import (
 	"testing"
 	"time"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/dbconnpool"
-	"github.com/youtube/vitess/go/vt/logutil"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
-	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
-	_ "github.com/youtube/vitess/go/vt/tabletserver/gorpctabletconn"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/wrangler"
-	"github.com/youtube/vitess/go/vt/zktopo"
+	mproto "github.com/henryanand/vitess/go/mysql/proto"
+	"github.com/henryanand/vitess/go/vt/dbconnpool"
+	"github.com/henryanand/vitess/go/vt/logutil"
+	myproto "github.com/henryanand/vitess/go/vt/mysqlctl/proto"
+	_ "github.com/henryanand/vitess/go/vt/tabletmanager/gorpctmclient"
+	_ "github.com/henryanand/vitess/go/vt/tabletserver/gorpctabletconn"
+	"github.com/henryanand/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/wrangler"
+	"github.com/henryanand/vitess/go/vt/zktopo"
 )
 
 type ExpectedExecuteFetch struct {

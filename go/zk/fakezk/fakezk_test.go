@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/testfiles"
-	"github.com/youtube/vitess/go/zk"
+	"github.com/henryanand/vitess/go/testfiles"
+	"github.com/henryanand/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
 

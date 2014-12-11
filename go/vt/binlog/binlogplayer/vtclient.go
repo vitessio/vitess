@@ -8,7 +8,7 @@ import (
 	"bufio"
 	"os"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
+	mproto "github.com/henryanand/vitess/go/mysql/proto"
 )
 
 // VtClient is a high level interface to the database

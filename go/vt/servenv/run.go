@@ -7,8 +7,8 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/event"
-	"github.com/youtube/vitess/go/proc"
+	"github.com/henryanand/vitess/go/event"
+	"github.com/henryanand/vitess/go/proc"
 )
 
 var (

@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/context"
-	"github.com/youtube/vitess/go/vt/key"
-	kproto "github.com/youtube/vitess/go/vt/key"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
+	"github.com/henryanand/vitess/go/vt/context"
+	"github.com/henryanand/vitess/go/vt/key"
+	kproto "github.com/henryanand/vitess/go/vt/key"
+	tproto "github.com/henryanand/vitess/go/vt/tabletserver/proto"
+	"github.com/henryanand/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/vtgate/proto"
 )
 
 // This file uses the sandbox_test framework.

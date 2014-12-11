@@ -17,8 +17,8 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/youtube/vitess/go/netutil"
-	"github.com/youtube/vitess/go/vt/env"
+	"github.com/henryanand/vitess/go/netutil"
+	"github.com/henryanand/vitess/go/vt/env"
 )
 
 type zkServerAddr struct {

@@ -7,10 +7,10 @@ package proto
 import (
 	"fmt"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	kproto "github.com/youtube/vitess/go/vt/key"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
-	"github.com/youtube/vitess/go/vt/topo"
+	mproto "github.com/henryanand/vitess/go/mysql/proto"
+	kproto "github.com/henryanand/vitess/go/vt/key"
+	tproto "github.com/henryanand/vitess/go/vt/tabletserver/proto"
+	"github.com/henryanand/vitess/go/vt/topo"
 )
 
 // Session represents the session state. It keeps track of

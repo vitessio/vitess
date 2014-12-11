@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/vt/schema"
+	"github.com/henryanand/vitess/go/sqltypes"
+	"github.com/henryanand/vitess/go/stats"
+	"github.com/henryanand/vitess/go/vt/schema"
 )
 
 var cacheStats = stats.NewTimings("Rowcache")

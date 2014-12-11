@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/client2/tablet"
+	"github.com/henryanand/vitess/go/vt/client2/tablet"
 )
 
 func main() {

@@ -12,9 +12,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/youtube/vitess/go/acl"
-	"github.com/youtube/vitess/go/cache"
-	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
+	"github.com/henryanand/vitess/go/acl"
+	"github.com/henryanand/vitess/go/cache"
+	"github.com/henryanand/vitess/go/vt/vtgate/planbuilder"
 )
 
 var noPlan = &planbuilder.Plan{

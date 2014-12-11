@@ -7,7 +7,7 @@ package test
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/topo"
 )
 
 func CheckShardReplication(t *testing.T, ts topo.Server) {

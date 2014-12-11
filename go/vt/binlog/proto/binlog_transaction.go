@@ -7,8 +7,8 @@ package proto
 import (
 	"fmt"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	mproto "github.com/henryanand/vitess/go/mysql/proto"
+	myproto "github.com/henryanand/vitess/go/vt/mysqlctl/proto"
 )
 
 // Valid statement types in the binlogs.

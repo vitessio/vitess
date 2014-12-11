@@ -7,5 +7,5 @@ package main
 // Imports and register the gorpc binlog streamer
 
 import (
-	_ "github.com/youtube/vitess/go/vt/binlog/gorpcbinlogstreamer"
+	_ "github.com/henryanand/vitess/go/vt/binlog/gorpcbinlogstreamer"
 )

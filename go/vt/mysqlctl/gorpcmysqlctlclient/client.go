@@ -12,9 +12,9 @@ import (
 
 	"code.google.com/p/go.net/context"
 
-	rpc "github.com/youtube/vitess/go/rpcplus"
-	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
-	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlclient"
+	rpc "github.com/henryanand/vitess/go/rpcplus"
+	"github.com/henryanand/vitess/go/rpcwrap/bsonrpc"
+	"github.com/henryanand/vitess/go/vt/mysqlctl/mysqlctlclient"
 )
 
 type goRpcMysqlctlClient struct {

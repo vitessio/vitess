@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/henryanand/vitess/go/mysql"
+	"github.com/henryanand/vitess/go/mysql/proto"
+	"github.com/henryanand/vitess/go/sqltypes"
+	"github.com/henryanand/vitess/go/stats"
+	"github.com/henryanand/vitess/go/vt/dbconfigs"
 )
 
 // DBConnection re-exposes mysql.Connection with some wrapping to implement

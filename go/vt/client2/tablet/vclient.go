@@ -13,7 +13,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/db"
+	"github.com/henryanand/vitess/go/db"
 )
 
 const (

@@ -8,8 +8,8 @@ import (
 	"strconv"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/schema"
-	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/henryanand/vitess/go/vt/schema"
+	"github.com/henryanand/vitess/go/vt/sqlparser"
 )
 
 func analyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecPlan, err error) {

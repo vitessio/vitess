@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"code.google.com/p/go.net/context"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/henryanand/vitess/go/vt/mysqlctl"
+	"github.com/henryanand/vitess/go/vt/servenv"
 )
 
 // MysqlctlServer is our RPC server.

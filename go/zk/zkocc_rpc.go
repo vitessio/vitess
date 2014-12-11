@@ -5,7 +5,7 @@
 package zk
 
 import (
-	rpc "github.com/youtube/vitess/go/rpcplus"
+	rpc "github.com/henryanand/vitess/go/rpcplus"
 )
 
 // defines the RPC services for zkocc

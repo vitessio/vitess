@@ -7,8 +7,8 @@ package proto
 import (
 	"fmt"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	mproto "github.com/henryanand/vitess/go/mysql/proto"
+	myproto "github.com/henryanand/vitess/go/vt/mysqlctl/proto"
 )
 
 // BinlogEvent represents a single event from a raw MySQL binlog dump stream.

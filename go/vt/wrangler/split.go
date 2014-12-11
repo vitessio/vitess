@@ -9,7 +9,7 @@ import (
 
 	"code.google.com/p/go.net/context"
 
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/topo"
 )
 
 // SetSourceShards is a utility function to override the SourceShards fields

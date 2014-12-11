@@ -9,10 +9,10 @@ import (
 	"os"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/exit"
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/helpers"
+	"github.com/henryanand/vitess/go/exit"
+	"github.com/henryanand/vitess/go/vt/logutil"
+	"github.com/henryanand/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/topo/helpers"
 )
 
 var fromTopo = flag.String("from", "", "topology to copy data from")

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strconv"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	mproto "github.com/henryanand/vitess/go/mysql/proto"
+	"github.com/henryanand/vitess/go/sqltypes"
+	"github.com/henryanand/vitess/go/vt/sqlparser"
+	"github.com/henryanand/vitess/go/vt/tabletserver/proto"
 )
 
 // QuerySplitter splits a BoundQuery into equally sized smaller queries.

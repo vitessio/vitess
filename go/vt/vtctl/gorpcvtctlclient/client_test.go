@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/rpcplus"
-	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
-	"github.com/youtube/vitess/go/vt/vtctl/gorpcvtctlserver"
-	"github.com/youtube/vitess/go/vt/vtctl/vtctlclienttest"
+	"github.com/henryanand/vitess/go/rpcplus"
+	"github.com/henryanand/vitess/go/rpcwrap/bsonrpc"
+	"github.com/henryanand/vitess/go/vt/vtctl/gorpcvtctlserver"
+	"github.com/henryanand/vitess/go/vt/vtctl/vtctlclienttest"
 )
 
 // the test here creates a fake server implementation, a fake client

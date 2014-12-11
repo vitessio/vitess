@@ -10,11 +10,11 @@ import (
 	"fmt"
 
 	"code.google.com/p/go.net/context"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
+	mproto "github.com/henryanand/vitess/go/mysql/proto"
+	"github.com/henryanand/vitess/go/vt/key"
+	"github.com/henryanand/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/vtgate/planbuilder"
+	"github.com/henryanand/vitess/go/vt/vtgate/proto"
 )
 
 // Router is the layer to route queries to the correct shards

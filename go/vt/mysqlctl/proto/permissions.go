@@ -9,9 +9,9 @@ import (
 	"hash/crc64"
 	"sort"
 
-	"github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/henryanand/vitess/go/mysql/proto"
+	"github.com/henryanand/vitess/go/sqltypes"
+	"github.com/henryanand/vitess/go/vt/concurrency"
 )
 
 var (

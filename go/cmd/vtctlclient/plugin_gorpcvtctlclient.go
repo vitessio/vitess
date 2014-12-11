@@ -7,5 +7,5 @@ package main
 // Imports and register the gorpc vtctl client
 
 import (
-	_ "github.com/youtube/vitess/go/vt/vtctl/gorpcvtctlclient"
+	_ "github.com/henryanand/vitess/go/vt/vtctl/gorpcvtctlclient"
 )

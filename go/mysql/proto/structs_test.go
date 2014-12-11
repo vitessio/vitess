@@ -7,7 +7,7 @@ package proto
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/henryanand/vitess/go/sqltypes"
 )
 
 func TestConvert(t *testing.T) {

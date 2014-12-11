@@ -9,7 +9,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/henryanand/vitess/go/vt/binlog/proto"
 )
 
 /*

@@ -8,8 +8,8 @@ import (
 	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 
-	"github.com/youtube/vitess/go/trace"
-	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/henryanand/vitess/go/trace"
+	"github.com/henryanand/vitess/go/vt/logutil"
 )
 
 // ReplicationLink describes a MySQL replication relationship.

@@ -6,8 +6,8 @@ import (
 	"path"
 
 	"code.google.com/p/go.net/context"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/zk"
+	"github.com/henryanand/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/zk"
 )
 
 type TopoReader struct {

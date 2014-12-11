@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/youtube/vitess/go/vt/key"
+	"github.com/henryanand/vitess/go/vt/key"
 )
 
 // This is the shard name for when the keyrange covers the entire space

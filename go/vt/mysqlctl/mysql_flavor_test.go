@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/mysql"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/henryanand/vitess/go/mysql"
+	blproto "github.com/henryanand/vitess/go/vt/binlog/proto"
+	"github.com/henryanand/vitess/go/vt/mysqlctl/proto"
 )
 
 type fakeMysqlFlavor string

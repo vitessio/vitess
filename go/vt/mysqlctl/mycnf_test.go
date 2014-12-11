@@ -10,8 +10,8 @@ import (
 	"path"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/env"
+	"github.com/henryanand/vitess/go/vt/dbconfigs"
+	"github.com/henryanand/vitess/go/vt/env"
 )
 
 var MYCNF_PATH = "/tmp/my.cnf"

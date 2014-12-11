@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/sync2"
+	"github.com/henryanand/vitess/go/sync2"
 )
 
 var lastId, count sync2.AtomicInt64

@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/henryanand/vitess/go/vt/tabletserver/proto"
 )
 
 var testCases = []struct {

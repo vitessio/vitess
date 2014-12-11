@@ -11,8 +11,8 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/zk"
+	"github.com/henryanand/vitess/go/stats"
+	"github.com/henryanand/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
 

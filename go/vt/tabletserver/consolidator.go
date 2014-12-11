@@ -11,9 +11,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/youtube/vitess/go/acl"
-	"github.com/youtube/vitess/go/cache"
-	"github.com/youtube/vitess/go/mysql/proto"
+	"github.com/henryanand/vitess/go/acl"
+	"github.com/henryanand/vitess/go/cache"
+	"github.com/henryanand/vitess/go/mysql/proto"
 )
 
 var (

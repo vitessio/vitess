@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
-	"github.com/youtube/vitess/go/vt/zktopo"
+	_ "github.com/henryanand/vitess/go/vt/tabletmanager/gorpctmclient"
+	"github.com/henryanand/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/vtctl/vtctlclient"
+	"github.com/henryanand/vitess/go/vt/zktopo"
 )
 
 // CreateTopoServer returns the test topo server properly configured

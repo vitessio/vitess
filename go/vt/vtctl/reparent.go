@@ -8,8 +8,8 @@ import (
 	"flag"
 	"fmt"
 
-	_ "github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/wrangler"
+	_ "github.com/henryanand/vitess/go/vt/logutil"
+	"github.com/henryanand/vitess/go/vt/wrangler"
 )
 
 func init() {

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/youtube/vitess/go/testfiles"
+	"github.com/henryanand/vitess/go/testfiles"
 )
 
 func TestGen(t *testing.T) {

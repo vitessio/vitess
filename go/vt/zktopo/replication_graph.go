@@ -9,9 +9,9 @@ import (
 	"fmt"
 	"path"
 
-	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/zk"
+	"github.com/henryanand/vitess/go/jscfg"
+	"github.com/henryanand/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
 

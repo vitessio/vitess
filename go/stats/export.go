@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/sync2"
+	"github.com/henryanand/vitess/go/sync2"
 )
 
 // NewVarHook is the type of a hook to export variables in a different way

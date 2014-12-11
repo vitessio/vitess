@@ -1,7 +1,7 @@
 package tabletserver
 
 import (
-	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/henryanand/vitess/go/vt/servenv"
 )
 
 // This file contains the status web page export for tabletserver

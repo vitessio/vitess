@@ -7,5 +7,5 @@ package main
 // Imports and register the gorpc tabletconn client
 
 import (
-	_ "github.com/youtube/vitess/go/vt/tabletserver/gorpctabletconn"
+	_ "github.com/henryanand/vitess/go/vt/tabletserver/gorpctabletconn"
 )

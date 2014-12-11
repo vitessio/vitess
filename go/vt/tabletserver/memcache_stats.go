@@ -13,8 +13,8 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/timer"
+	"github.com/henryanand/vitess/go/stats"
+	"github.com/henryanand/vitess/go/timer"
 )
 
 var interval = 5 * time.Second

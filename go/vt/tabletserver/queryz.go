@@ -11,8 +11,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/youtube/vitess/go/acl"
-	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
+	"github.com/henryanand/vitess/go/acl"
+	"github.com/henryanand/vitess/go/vt/tabletserver/planbuilder"
 )
 
 var (

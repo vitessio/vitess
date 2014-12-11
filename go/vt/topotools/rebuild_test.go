@@ -11,13 +11,13 @@ import (
 
 	"code.google.com/p/go.net/context"
 
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/test/faketopo"
-	"github.com/youtube/vitess/go/vt/zktopo"
+	"github.com/henryanand/vitess/go/vt/logutil"
+	"github.com/henryanand/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/topo/test/faketopo"
+	"github.com/henryanand/vitess/go/vt/zktopo"
 
-	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
-	. "github.com/youtube/vitess/go/vt/topotools"
+	_ "github.com/henryanand/vitess/go/vt/tabletmanager/gorpctmclient"
+	. "github.com/henryanand/vitess/go/vt/topotools"
 )
 
 func TestRebuildShardRace(t *testing.T) {

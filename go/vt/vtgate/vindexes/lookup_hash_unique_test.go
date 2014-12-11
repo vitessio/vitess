@@ -8,8 +8,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/key"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/henryanand/vitess/go/vt/key"
+	tproto "github.com/henryanand/vitess/go/vt/tabletserver/proto"
 )
 
 var lhu *LookupHashUnique

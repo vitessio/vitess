@@ -10,13 +10,13 @@ import (
 
 	"code.google.com/p/go.net/context"
 
-	"github.com/youtube/vitess/go/vt/logutil"
-	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topotools"
-	"github.com/youtube/vitess/go/vt/wrangler"
-	"github.com/youtube/vitess/go/vt/zktopo"
+	"github.com/henryanand/vitess/go/vt/logutil"
+	_ "github.com/henryanand/vitess/go/vt/tabletmanager/gorpctmclient"
+	"github.com/henryanand/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/henryanand/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/topotools"
+	"github.com/henryanand/vitess/go/vt/wrangler"
+	"github.com/henryanand/vitess/go/vt/zktopo"
 )
 
 func TestTabletExternallyReparented(t *testing.T) {

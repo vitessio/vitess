@@ -12,7 +12,7 @@ import (
 	"strconv"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql"
+	"github.com/henryanand/vitess/go/mysql"
 )
 
 // Offer a default config.

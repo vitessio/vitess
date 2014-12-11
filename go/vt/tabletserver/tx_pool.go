@@ -12,12 +12,12 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/pools"
-	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/streamlog"
-	"github.com/youtube/vitess/go/sync2"
-	"github.com/youtube/vitess/go/timer"
-	"github.com/youtube/vitess/go/vt/dbconnpool"
+	"github.com/henryanand/vitess/go/pools"
+	"github.com/henryanand/vitess/go/stats"
+	"github.com/henryanand/vitess/go/streamlog"
+	"github.com/henryanand/vitess/go/sync2"
+	"github.com/henryanand/vitess/go/timer"
+	"github.com/henryanand/vitess/go/vt/dbconnpool"
 )
 
 /* Function naming convention:

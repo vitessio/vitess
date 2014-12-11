@@ -9,11 +9,11 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/youtube/vitess/go/rpcplus"
-	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
-	"github.com/youtube/vitess/go/vt/tabletmanager/agentrpctest"
-	"github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/rpcplus"
+	"github.com/henryanand/vitess/go/rpcwrap/bsonrpc"
+	"github.com/henryanand/vitess/go/vt/tabletmanager/agentrpctest"
+	"github.com/henryanand/vitess/go/vt/tabletmanager/gorpctmclient"
+	"github.com/henryanand/vitess/go/vt/topo"
 )
 
 // the test here creates a fake server implementation, a fake client

@@ -8,9 +8,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/bson"
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/henryanand/vitess/go/bson"
+	mproto "github.com/henryanand/vitess/go/mysql/proto"
+	myproto "github.com/henryanand/vitess/go/vt/mysqlctl/proto"
 )
 
 type reflectBinlogTransaction struct {

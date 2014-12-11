@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/henryanand/vitess/go/vt/topo"
 )
 
 func CheckKeyspaceLock(t *testing.T, ts topo.Server) {

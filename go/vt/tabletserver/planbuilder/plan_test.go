@@ -18,8 +18,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/youtube/vitess/go/testfiles"
-	"github.com/youtube/vitess/go/vt/schema"
+	"github.com/henryanand/vitess/go/testfiles"
+	"github.com/henryanand/vitess/go/vt/schema"
 )
 
 func TestPlan(t *testing.T) {

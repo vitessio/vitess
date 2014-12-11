@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/youtube/vitess/go/bson"
-	"github.com/youtube/vitess/go/bytes2"
+	"github.com/henryanand/vitess/go/bson"
+	"github.com/henryanand/vitess/go/bytes2"
 )
 
 // GTID represents a Global Transaction ID, also known as Transaction Group ID.

@@ -5,8 +5,8 @@
 package events
 
 import (
-	base "github.com/youtube/vitess/go/vt/events"
-	"github.com/youtube/vitess/go/vt/topo"
+	base "github.com/henryanand/vitess/go/vt/events"
+	"github.com/henryanand/vitess/go/vt/topo"
 )
 
 // MigrateServedFrom is an event that describes a single step in the process of

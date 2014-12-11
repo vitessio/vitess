@@ -23,7 +23,7 @@ import (
 	"net"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/netutil"
+	"github.com/henryanand/vitess/go/netutil"
 )
 
 const (

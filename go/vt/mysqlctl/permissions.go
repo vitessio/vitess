@@ -5,7 +5,7 @@
 package mysqlctl
 
 import (
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/henryanand/vitess/go/vt/mysqlctl/proto"
 )
 
 func (mysqld *Mysqld) GetPermissions() (*proto.Permissions, error) {

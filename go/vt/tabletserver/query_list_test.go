@@ -3,7 +3,7 @@ package tabletserver
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/context"
+	"github.com/henryanand/vitess/go/vt/context"
 )
 
 func TestQueryList(t *testing.T) {

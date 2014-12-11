@@ -9,8 +9,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/binlog/proto"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/henryanand/vitess/go/vt/binlog/proto"
+	myproto "github.com/henryanand/vitess/go/vt/mysqlctl/proto"
 )
 
 var dmlErrorCases = []string{

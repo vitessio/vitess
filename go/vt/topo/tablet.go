@@ -15,9 +15,9 @@ import (
 	"code.google.com/p/go.net/context"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/trace"
-	"github.com/youtube/vitess/go/vt/key"
+	"github.com/henryanand/vitess/go/jscfg"
+	"github.com/henryanand/vitess/go/trace"
+	"github.com/henryanand/vitess/go/vt/key"
 )
 
 const (

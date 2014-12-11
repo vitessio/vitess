@@ -8,8 +8,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/youtube/vitess/go/bson"
-	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/henryanand/vitess/go/bson"
+	"github.com/henryanand/vitess/go/sqltypes"
 )
 
 type reflectField struct {

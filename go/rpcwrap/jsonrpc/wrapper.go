@@ -8,9 +8,9 @@ import (
 	"crypto/tls"
 	"time"
 
-	rpc "github.com/youtube/vitess/go/rpcplus"
-	oldjson "github.com/youtube/vitess/go/rpcplus/jsonrpc"
-	"github.com/youtube/vitess/go/rpcwrap"
+	rpc "github.com/henryanand/vitess/go/rpcplus"
+	oldjson "github.com/henryanand/vitess/go/rpcplus/jsonrpc"
+	"github.com/henryanand/vitess/go/rpcwrap"
 )
 
 func DialHTTP(network, address string, connectTimeout time.Duration, config *tls.Config) (*rpc.Client, error) {

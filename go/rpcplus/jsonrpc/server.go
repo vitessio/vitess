@@ -11,7 +11,7 @@ import (
 	"sync"
 
 	"code.google.com/p/go.net/context"
-	rpc "github.com/youtube/vitess/go/rpcplus"
+	rpc "github.com/henryanand/vitess/go/rpcplus"
 )
 
 type serverCodec struct {

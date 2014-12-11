@@ -8,8 +8,8 @@ import (
 	"reflect"
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
+	mproto "github.com/henryanand/vitess/go/mysql/proto"
+	blproto "github.com/henryanand/vitess/go/vt/binlog/proto"
 )
 
 // sample event data

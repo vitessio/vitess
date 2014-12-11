@@ -7,8 +7,8 @@ package main
 // Imports and register the gorpc vtctl server
 
 import (
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/vtctl/gorpcvtctlserver"
+	"github.com/henryanand/vitess/go/vt/servenv"
+	"github.com/henryanand/vitess/go/vt/vtctl/gorpcvtctlserver"
 )
 
 func init() {

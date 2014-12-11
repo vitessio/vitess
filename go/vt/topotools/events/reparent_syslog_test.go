@@ -8,8 +8,8 @@ import (
 	"log/syslog"
 	"testing"
 
-	base "github.com/youtube/vitess/go/vt/events"
-	"github.com/youtube/vitess/go/vt/topo"
+	base "github.com/henryanand/vitess/go/vt/events"
+	"github.com/henryanand/vitess/go/vt/topo"
 )
 
 func TestReparentSyslog(t *testing.T) {

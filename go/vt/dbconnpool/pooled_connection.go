@@ -5,8 +5,8 @@
 package dbconnpool
 
 import (
-	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/stats"
+	"github.com/henryanand/vitess/go/mysql"
+	"github.com/henryanand/vitess/go/stats"
 )
 
 // PooledDBConnection re-exposes DBConnection as a PoolConnection

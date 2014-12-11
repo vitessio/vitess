@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/youtube/vitess/go/bson"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/henryanand/vitess/go/bson"
+	myproto "github.com/henryanand/vitess/go/vt/mysqlctl/proto"
 )
 
 type reflectStreamEvent struct {
