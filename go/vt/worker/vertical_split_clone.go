@@ -375,11 +375,9 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	for i, td := range sourceSchemaDefinition.TableDefinitions {
 		vscw.tableStatus[i].mu.Lock()
 		if td.Type == myproto.TABLE_BASE_TABLE {
-			vscw.tableStatus[i].state = "before table creation"
 			vscw.tableStatus[i].rowCount = td.RowCount
 		} else {
-			vscw.tableStatus[i].state = "before view creation"
-			vscw.tableStatus[i].rowCount = 0
+			vscw.tableStatus[i].isView = true
 		}
 		vscw.tableStatus[i].mu.Unlock()
 	}
@@ -435,15 +433,14 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	sema := sync2.NewSemaphore(vscw.sourceReaderCount, 0)
 	for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
 		if td.Type == myproto.TABLE_VIEW {
-			vscw.tableStatus[tableIndex].setState("view created")
 			continue
 		}
 
-		vscw.tableStatus[tableIndex].setState("before copy")
 		chunks, err := findChunks(vscw.wr, vscw.sourceTablet, td, vscw.minTableSizeForSplit, vscw.sourceReaderCount)
 		if err != nil {
 			return err
 		}
+		vscw.tableStatus[tableIndex].setThreadCount(len(chunks) - 1)
 
 		for chunkIndex := 0; chunkIndex < len(chunks)-1; chunkIndex++ {
 			sourceWaitGroup.Add(1)
@@ -453,7 +450,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 				sema.Acquire()
 				defer sema.Release()
 
-				vscw.tableStatus[tableIndex].setState("started the copy")
+				vscw.tableStatus[tableIndex].threadStarted()
 
 				// build the query, and start the streaming
 				selectSQL := buildSQLFromChunks(vscw.wr, td, chunks, chunkIndex, vscw.sourceAlias.String())
@@ -468,6 +465,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 				if err := vscw.processData(td, tableIndex, qrr, insertChannels, vscw.destinationPackCount, abort); err != nil {
 					processError("QueryResultReader failed: %v", err)
 				}
+				vscw.tableStatus[tableIndex].threadDone()
 			}(td, tableIndex, chunkIndex)
 		}
 	}

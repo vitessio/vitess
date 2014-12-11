@@ -28,28 +28,42 @@ import (
 
 // tableStatus keeps track of the status for a given table
 type tableStatus struct {
-	name     string
-	rowCount uint64
+	name   string
+	isView bool
 
 	// all subsequent fields are protected by the mutex
-	mu         sync.Mutex
-	state      string
-	copiedRows uint64
+	mu             sync.Mutex
+	rowCount       uint64 // set to approximate value, until copy ends
+	copiedRows     uint64 // actual count of copied rows
+	threadCount    int    // how many concurrent threads will copy the data
+	threadsStarted int    // how many threads have started
+	threadsDone    int    // how many threads are done
 }
 
-func (ts *tableStatus) setState(state string) {
+func (ts *tableStatus) setThreadCount(threadCount int) {
 	ts.mu.Lock()
-	ts.state = state
+	ts.threadCount = threadCount
+	ts.mu.Unlock()
+}
+
+func (ts *tableStatus) threadStarted() {
+	ts.mu.Lock()
+	ts.threadsStarted++
+	ts.mu.Unlock()
+}
+
+func (ts *tableStatus) threadDone() {
+	ts.mu.Lock()
+	ts.threadsDone++
 	ts.mu.Unlock()
 }
 
 func (ts *tableStatus) addCopiedRows(copiedRows int) {
 	ts.mu.Lock()
 	ts.copiedRows += uint64(copiedRows)
-	if ts.copiedRows >= ts.rowCount {
-		// FIXME(alainjobart) this is not accurate, as the
-		// total row count is approximate
-		ts.state = "finished the copy"
+	if ts.copiedRows > ts.rowCount {
+		// since rowCount is not accurate, update it if we go past it.
+		ts.rowCount = ts.copiedRows
 	}
 	ts.mu.Unlock()
 }
@@ -60,13 +74,21 @@ func formatTableStatuses(tableStatuses []*tableStatus, startTime time.Time) ([]s
 	result := make([]string, len(tableStatuses))
 	for i, ts := range tableStatuses {
 		ts.mu.Lock()
-		if ts.rowCount > 0 {
-			result[i] = fmt.Sprintf("%v: %v (%v/%v)", ts.name, ts.state, ts.copiedRows, ts.rowCount)
-			copiedRows += ts.copiedRows
-			rowCount += ts.rowCount
+		if ts.isView {
+			// views are not copied
+			result[i] = fmt.Sprintf("%v is a view", ts.name)
+		} else if ts.threadsStarted == 0 {
+			// we haven't started yet
+			result[i] = fmt.Sprintf("%v: copy not started (estimating %v rows)", ts.name, ts.rowCount)
+		} else if ts.threadsDone == ts.threadCount {
+			// we are done with the copy
+			result[i] = fmt.Sprintf("%v: copy done, copied %v rows", ts.name, ts.rowCount)
 		} else {
-			result[i] = fmt.Sprintf("%v: %v", ts.name, ts.state)
+			// copy is running
+			result[i] = fmt.Sprintf("%v: copy running using %v threads (%v/%v rows)", ts.name, ts.threadsStarted-ts.threadsDone, ts.copiedRows, ts.rowCount)
 		}
+		copiedRows += ts.copiedRows
+		rowCount += ts.rowCount
 		ts.mu.Unlock()
 	}
 	now := time.Now()
