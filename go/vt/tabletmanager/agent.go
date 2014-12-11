@@ -77,6 +77,10 @@ type ActionAgent struct {
 	_tablet          *topo.TabletInfo
 	_tabletControl   *topo.TabletControl
 	_waitingForMysql bool
+
+	// if the agent is healthy, this is nil. Otherwise it contains
+	// the reason we're not healthy.
+	_healthy error
 }
 
 func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
@@ -118,6 +122,7 @@ func NewActionAgent(
 		LockTimeout:        lockTimeout,
 		History:            history.New(historyLength),
 		lastHealthMapCount: stats.NewInt("LastHealthMapCount"),
+		_healthy:           fmt.Errorf("healthcheck not run yet"),
 	}
 
 	// Start the binlog player services, not playing at start.
@@ -161,6 +166,7 @@ func NewTestActionAgent(ts topo.Server, tabletAlias topo.TabletAlias, port int, 
 		BinlogPlayerMap:    nil,
 		History:            history.New(historyLength),
 		lastHealthMapCount: new(stats.Int),
+		_healthy:           fmt.Errorf("healthcheck not run yet"),
 	}
 	if err := agent.Start(0, port, 0); err != nil {
 		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
@@ -192,6 +198,12 @@ func (agent *ActionAgent) Tablet() *topo.TabletInfo {
 	tablet := agent._tablet
 	agent.mutex.Unlock()
 	return tablet
+}
+
+func (agent *ActionAgent) Healthy() error {
+	agent.mutex.Lock()
+	defer agent.mutex.Unlock()
+	return agent._healthy
 }
 
 func (agent *ActionAgent) BlacklistedTables() []string {

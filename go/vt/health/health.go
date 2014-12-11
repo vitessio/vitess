@@ -31,10 +31,11 @@ func init() {
 // Reporter reports the health status of a tablet.
 type Reporter interface {
 	// Report returns a map of health states for the tablet
-	// assuming that its tablet type is typ. If Report returns an
-	// error it implies that the tablet is in a bad shape and not
-	// able to handle queries.
-	Report(typ topo.TabletType) (status map[string]string, err error)
+	// assuming that its tablet type is TabletType, and that its
+	// query service should be running or not. If Report returns
+	// an error it implies that the tablet is in a bad shape and
+	// not able to handle queries.
+	Report(tabletType topo.TabletType, shouldQueryServiceBeRunning bool) (status map[string]string, err error)
 
 	// HTMLName returns a displayable name for the module.
 	// Can be used to be displayed in the status page.
@@ -42,11 +43,11 @@ type Reporter interface {
 }
 
 // FunctionReporter is a function that may act as a Reporter.
-type FunctionReporter func(typ topo.TabletType) (map[string]string, error)
+type FunctionReporter func(topo.TabletType, bool) (map[string]string, error)
 
 // Report implements Reporter.Report
-func (fc FunctionReporter) Report(typ topo.TabletType) (status map[string]string, err error) {
-	return fc(typ)
+func (fc FunctionReporter) Report(tabletType topo.TabletType, shouldQueryServiceBeRunning bool) (status map[string]string, err error) {
+	return fc(tabletType, shouldQueryServiceBeRunning)
 }
 
 // HTMLName implements Reporter.HTMLName
@@ -73,7 +74,7 @@ func NewAggregator() *Aggregator {
 // the first error will be returned.
 // It may return an empty map if no health condition is detected. Note
 // it will not return nil, but an empty map.
-func (ag *Aggregator) Run(typ topo.TabletType) (map[string]string, error) {
+func (ag *Aggregator) Run(tabletType topo.TabletType, shouldQueryServiceBeRunning bool) (map[string]string, error) {
 	var (
 		wg  sync.WaitGroup
 		rec concurrency.AllErrorRecorder
@@ -85,7 +86,7 @@ func (ag *Aggregator) Run(typ topo.TabletType) (map[string]string, error) {
 		wg.Add(1)
 		go func(name string, rep Reporter) {
 			defer wg.Done()
-			status, err := rep.Report(typ)
+			status, err := rep.Report(tabletType, shouldQueryServiceBeRunning)
 			if err != nil {
 				rec.RecordError(fmt.Errorf("%v: %v", name, err))
 				return
@@ -138,8 +139,8 @@ func (ag *Aggregator) HTMLName() template.HTML {
 
 // Run collects all the health statuses from the default health
 // aggregator.
-func Run(typ topo.TabletType) (map[string]string, error) {
-	return defaultAggregator.Run(typ)
+func Run(tabletType topo.TabletType, shouldQueryServiceBeRunning bool) (map[string]string, error) {
+	return defaultAggregator.Run(tabletType, shouldQueryServiceBeRunning)
 }
 
 // Register registers rep under name with the default health

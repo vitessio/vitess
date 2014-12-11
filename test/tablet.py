@@ -4,6 +4,7 @@ import os
 import shutil
 import sys
 import time
+import urllib2
 import warnings
 # Dropping a table inexplicably produces a warning despite
 # the "IF EXISTS" clause. Squelch these warnings.
@@ -556,6 +557,9 @@ class Tablet(object):
 
   def get_status(self):
     return utils.get_status(self.port)
+
+  def get_healthz(self):
+    return urllib2.urlopen('http://localhost:%u/healthz' % self.port).read()
 
   def kill_vttablet(self):
     logging.debug('killing vttablet: %s', self.tablet_alias)

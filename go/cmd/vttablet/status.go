@@ -63,7 +63,8 @@ var (
       <a href="/txlogz">Current&nbsp;Transaction&nbsp;Log</a></br>
     </td>
     <td width="25%" border="">
-      <a href="/debug/health">Health Check</a></br>
+      <a href="/healthz">Health Check</a></br>
+      <a href="/debug/health">Query Service Health Check</a></br>
       <a href="/debug/memcache/">Memcache</a></br>
       <a href="/streamqueryz">Current Stream Queries</a></br>
     </td>
