@@ -6,10 +6,11 @@ package customrule
 
 import (
 	"errors"
+	"flag"
 	"fmt"
-	"strings"
 
 	"github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/zk"
 )
 
 // CustomRuleManager outlines the methods needed to manage
@@ -27,7 +28,7 @@ const InvalidQueryRulesVersion int64 = -1
 // CustomRuleImplements maps name of implementation to the actual structure pointers
 // All registered CustomRuleManager implementations are stored here
 var CustomRuleImplements map[string]CustomRuleManager = make(map[string]CustomRuleManager)
-var CustomRuleManagerInUse string = ""
+var CustomRuleManagerInUse = flag.String("customrule_manager", FileCustomRuleImpl, "the customrule manager to use")
 
 // RegisterCustomRuleImpl registers a CustomRuleManager implementation by setting up
 // an entry in CustomRuleImplements.
@@ -40,34 +41,23 @@ func RegisterCustomRuleImpl(name string, manager CustomRuleManager) error {
 }
 
 // Names of different custom rule implementations
-const FileCustomRuleImpl string = "file" // file based custom rule implementation
+const FileCustomRuleImpl string = "file"    // file based custom rule implementation
+const ZkCustomRuleImpl string = "zookeeper" // Zookeeper based custom rule implementation
 
 func init() {
 	RegisterCustomRuleImpl(FileCustomRuleImpl, NewFileCustomRule(DefaultFilePollingSeconds))
+	RegisterCustomRuleImpl(ZkCustomRuleImpl, NewZkCustomRule(zk.NewMetaConn(false)))
 }
 
-func InitializeCustomRuleManager(customRuleURI string, queryService *tabletserver.SqlQuery) error {
-	customRuleManagerName := ""
-	customRulePath := ""
-	if !strings.Contains(customRuleURI, ":") {
-		customRuleManagerName = FileCustomRuleImpl
-		CustomRuleManagerInUse = FileCustomRuleImpl
-		return CustomRuleImplements[FileCustomRuleImpl].Open(customRuleURI, queryService)
-	}
-	colonSepPos := strings.IndexByte(customRuleURI, ':')
-	customRuleManagerName = customRuleURI[0:colonSepPos]
-	if colonSepPos < len(customRuleURI)-1 {
-		customRulePath = customRuleURI[colonSepPos+1 : len(customRuleURI)]
-	}
-	if manager, ok := CustomRuleImplements[customRuleManagerName]; ok {
-		CustomRuleManagerInUse = customRuleManagerName
+func InitializeCustomRuleManager(customRulePath string, queryService *tabletserver.SqlQuery) error {
+	if manager, ok := CustomRuleImplements[*CustomRuleManagerInUse]; ok {
 		return manager.Open(customRulePath, queryService)
 	}
-	return errors.New(fmt.Sprintf("Custom rule implementation %s is unsupported", customRuleManagerName))
+	return errors.New(fmt.Sprintf("Custom rule implementation %s is unsupported", *CustomRuleManagerInUse))
 }
 
 func TearDownCustomRuleManager() {
-	if CustomRuleManagerInUse != "" {
-		CustomRuleImplements[CustomRuleManagerInUse].Close()
+	if manager, ok := CustomRuleImplements[*CustomRuleManagerInUse]; ok {
+		manager.Close()
 	}
 }

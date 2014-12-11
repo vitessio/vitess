@@ -28,7 +28,7 @@ class TestStream(framework.TestCase):
       count += 1
     self.assertEqual(count, 1)
 
-  def test_customrules(self):
+  def test_filecustomrules(self):
     bv = {'asdfg': 1}
     try:
       self.env.execute("select * from vtocc_test where intval=:asdfg", bv,
