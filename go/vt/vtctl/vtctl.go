@@ -195,6 +195,9 @@ var commands = []commandGroup{
 			command{"MigrateServedFrom", commandMigrateServedFrom,
 				"[-cells=c1,c2,...] [-reverse] <destination keyspace/shard> <served type>",
 				"Makes the destination keyspace/shard serve the given type. Will also rebuild the serving graph."},
+			command{"FindAllShardsInKeyspace", commandFindAllShardsInKeyspace,
+				"<keyspace>",
+				"Displays all the shards in a keyspace."},
 		},
 	},
 	commandGroup{
@@ -1569,6 +1572,23 @@ func commandMigrateServedFrom(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 		cells = strings.Split(*cellsStr, ",")
 	}
 	return wr.MigrateServedFrom(keyspace, shard, servedType, cells, *reverse)
+}
+
+func commandFindAllShardsInKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("action FindAllShardsInKeyspace requires <keyspace>")
+	}
+
+	keyspace := subFlags.Arg(0)
+	result, err := topo.FindAllShardsInKeyspace(wr.TopoServer(), keyspace)
+	if err == nil {
+		wr.Logger().Printf("%v\n", jscfg.ToJson(result))
+	}
+	return err
+
 }
 
 func commandResolve(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
