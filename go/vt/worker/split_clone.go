@@ -433,13 +433,11 @@ func (scw *SplitCloneWorker) copy() error {
 			}
 
 			scw.tableStatus[tableIndex].mu.Lock()
-			scw.tableStatus[tableIndex].state = "before table creation"
 			scw.tableStatus[tableIndex].rowCount = td.RowCount
 			scw.tableStatus[tableIndex].mu.Unlock()
 		} else {
 			scw.tableStatus[tableIndex].mu.Lock()
-			scw.tableStatus[tableIndex].state = "before view creation"
-			scw.tableStatus[tableIndex].rowCount = 0
+			scw.tableStatus[tableIndex].isView = true
 			scw.tableStatus[tableIndex].mu.Unlock()
 		}
 	}
@@ -507,6 +505,7 @@ func (scw *SplitCloneWorker) copy() error {
 			if err != nil {
 				return err
 			}
+			scw.tableStatus[tableIndex].setThreadCount(len(chunks) - 1)
 
 			for chunkIndex := 0; chunkIndex < len(chunks)-1; chunkIndex++ {
 				sourceWaitGroup.Add(1)
@@ -515,6 +514,8 @@ func (scw *SplitCloneWorker) copy() error {
 
 					sema.Acquire()
 					defer sema.Release()
+
+					scw.tableStatus[tableIndex].threadStarted()
 
 					// build the query, and start the streaming
 					selectSQL := buildSQLFromChunks(scw.wr, td, chunks, chunkIndex, scw.sourceAliases[shardIndex].String())
@@ -529,6 +530,7 @@ func (scw *SplitCloneWorker) copy() error {
 					if err := scw.processData(td, tableIndex, qrr, rowSplitter, insertChannels, scw.destinationPackCount, abort); err != nil {
 						processError("processData failed: %v", err)
 					}
+					scw.tableStatus[tableIndex].threadDone()
 				}(td, tableIndex, chunkIndex)
 			}
 		}
