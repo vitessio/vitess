@@ -375,7 +375,7 @@ class TestTabletManager(unittest.TestCase):
 
   def check_healthz(self, tablet, expected):
     if expected:
-      self.assertEqual("ok", tablet.get_healthz())
+      self.assertEqual("ok\n", tablet.get_healthz())
     else:
       with self.assertRaises(urllib2.HTTPError):
         tablet.get_healthz()

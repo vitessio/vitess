@@ -12,7 +12,7 @@ import (
 
 // This file registers a /healthz URL that reports the health of the agent.
 
-var okMessage = []byte("ok")
+var okMessage = []byte("ok\n")
 
 func init() {
 	servenv.OnRun(func() {
