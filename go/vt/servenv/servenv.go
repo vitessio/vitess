@@ -18,11 +18,8 @@
 package servenv
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"flag"
 	"fmt"
-	"io"
 	"net/url"
 	"os"
 	"runtime"
@@ -93,31 +90,7 @@ func Init() {
 	fdl := stats.NewInt("MaxFds")
 	fdl.Set(int64(fdLimit.Cur))
 
-	if err := exportBinaryVersion(); err != nil {
-		log.Fatalf("servenv.Init: exportBinaryVersion: %v", err)
-	}
-
 	onInitHooks.Fire()
-}
-
-func exportBinaryVersion() error {
-	hasher := md5.New()
-	exeFile, err := os.Open("/proc/self/exe")
-	if err != nil {
-		return err
-	}
-	if _, err = io.Copy(hasher, exeFile); err != nil {
-		return err
-	}
-	md5sum := hex.EncodeToString(hasher.Sum(nil))
-	fileInfo, err := exeFile.Stat()
-	if err != nil {
-		return err
-	}
-	mtime := fileInfo.ModTime().Format(time.RFC3339)
-	version := mtime + " " + md5sum
-	stats.NewString("BinaryVersion").Set(version)
-	return nil
 }
 
 func populateListeningURL() {

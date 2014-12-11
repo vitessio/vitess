@@ -1,10 +1,6 @@
 package com.youtube.vitess.vtgate.hadoop;
 
-import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.conf.Configuration;
-
-import java.util.Arrays;
-import java.util.List;
 
 /**
  * Collection of configuration properties used for {@link VitessInputFormat}
@@ -13,8 +9,7 @@ public class VitessConf {
   public static final String HOSTS = "vitess.vtgate.hosts";
   public static final String CONN_TIMEOUT_MS = "vitess.vtgate.conn_timeout_ms";
   public static final String INPUT_KEYSPACE = "vitess.vtgate.hadoop.keyspace";
-  public static final String INPUT_TABLE = "vitess.vtgate.hadoop.input_table";
-  public static final String INPUT_COLUMNS = "vitess.vtgate.hadoop.input_columns";
+  public static final String INPUT_QUERY = "vitess.vtgate.hadoop.input_query";
   public static final String SPLITS_PER_SHARD = "vitess.vtgate.hadoop.splits_per_shard";
   public static final String HOSTS_DELIM = ",";
 
@@ -48,20 +43,12 @@ public class VitessConf {
     conf.set(INPUT_KEYSPACE, keyspace);
   }
 
-  public String getInputTable() {
-    return conf.get(INPUT_TABLE);
+  public String getInputQuery() {
+    return conf.get(INPUT_QUERY);
   }
 
-  public void setInputTable(String table) {
-    conf.set(INPUT_TABLE, table);
-  }
-
-  public List<String> getInputColumns() {
-    return Arrays.asList(StringUtils.split(conf.get(INPUT_COLUMNS), HOSTS_DELIM));
-  }
-
-  public void setInputColumns(List<String> columns) {
-    conf.set(INPUT_COLUMNS, StringUtils.join(columns, HOSTS_DELIM));
+  public void setInputQuery(String query) {
+    conf.set(INPUT_QUERY, query);
   }
 
   public int getSplitsPerShard() {

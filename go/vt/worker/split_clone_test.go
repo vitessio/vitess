@@ -111,27 +111,7 @@ type FakePoolConnection struct {
 	ExpectedExecuteFetchIndex int
 }
 
-func NewFakePoolConnectionQueryBinlogOff(t *testing.T, query string) *FakePoolConnection {
-	return &FakePoolConnection{
-		t: t,
-		ExpectedExecuteFetch: []ExpectedExecuteFetch{
-			ExpectedExecuteFetch{
-				Query:       "SET sql_log_bin = OFF",
-				QueryResult: &mproto.QueryResult{},
-			},
-			ExpectedExecuteFetch{
-				Query:       query,
-				QueryResult: &mproto.QueryResult{},
-			},
-			ExpectedExecuteFetch{
-				Query:       "SET sql_log_bin = ON",
-				QueryResult: &mproto.QueryResult{},
-			},
-		},
-	}
-}
-
-func NewFakePoolConnectionQueryBinlogOn(t *testing.T, query string) *FakePoolConnection {
+func NewFakePoolConnectionQuery(t *testing.T, query string) *FakePoolConnection {
 	return &FakePoolConnection{
 		t: t,
 		ExpectedExecuteFetch: []ExpectedExecuteFetch{
@@ -219,25 +199,18 @@ func SourceRdonlyFactory(t *testing.T) func() (dbconnpool.PoolConnection, error)
 }
 
 // on the destinations
-func DestinationsFactory(t *testing.T, insertCount int64, disableBinLogs bool) func() (dbconnpool.PoolConnection, error) {
+func DestinationsFactory(t *testing.T, insertCount int64) func() (dbconnpool.PoolConnection, error) {
 	var queryIndex int64 = -1
-
-	var newFakePoolConnectionFactory func(*testing.T, string) *FakePoolConnection
-	if disableBinLogs {
-		newFakePoolConnectionFactory = NewFakePoolConnectionQueryBinlogOff
-	} else {
-		newFakePoolConnectionFactory = NewFakePoolConnectionQueryBinlogOn
-	}
 
 	return func() (dbconnpool.PoolConnection, error) {
 		qi := atomic.AddInt64(&queryIndex, 1)
 		switch {
 		case qi < insertCount:
-			return newFakePoolConnectionFactory(t, "INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*"), nil
+			return NewFakePoolConnectionQuery(t, "INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*"), nil
 		case qi == insertCount:
-			return newFakePoolConnectionFactory(t, "CREATE DATABASE IF NOT EXISTS _vt"), nil
+			return NewFakePoolConnectionQuery(t, "CREATE DATABASE IF NOT EXISTS _vt"), nil
 		case qi == insertCount+1:
-			return newFakePoolConnectionFactory(t, "CREATE TABLE IF NOT EXISTS _vt.blp_checkpoint (\n"+
+			return NewFakePoolConnectionQuery(t, "CREATE TABLE IF NOT EXISTS _vt.blp_checkpoint (\n"+
 				"  source_shard_uid INT(10) UNSIGNED NOT NULL,\n"+
 				"  pos VARCHAR(250) DEFAULT NULL,\n"+
 				"  time_updated BIGINT UNSIGNED NOT NULL,\n"+
@@ -245,15 +218,15 @@ func DestinationsFactory(t *testing.T, insertCount int64, disableBinLogs bool) f
 				"  flags VARCHAR(250) DEFAULT NULL,\n"+
 				"  PRIMARY KEY (source_shard_uid)) ENGINE=InnoDB"), nil
 		case qi == insertCount+2:
-			return newFakePoolConnectionFactory(t, "INSERT INTO _vt.blp_checkpoint (source_shard_uid, pos, time_updated, transaction_timestamp, flags) VALUES (0, 'MariaDB/12-34-5678', *"), nil
+			return NewFakePoolConnectionQuery(t, "INSERT INTO _vt.blp_checkpoint (source_shard_uid, pos, time_updated, transaction_timestamp, flags) VALUES (0, 'MariaDB/12-34-5678', *"), nil
 		}
 
 		return nil, fmt.Errorf("Unexpected connection")
 	}
 }
 
-func TestSplitCloneWriteMastersOnly(t *testing.T) {
-	testSplitClone(t, "-populate_blp_checkpoint -write_masters_only")
+func TestSplitClonePopulateBlpCheckpoint(t *testing.T) {
+	testSplitClone(t, "-populate_blp_checkpoint")
 }
 
 func testSplitClone(t *testing.T, strategy string) {
@@ -302,8 +275,6 @@ func testSplitClone(t *testing.T, strategy string) {
 		t.Errorf("Worker creation failed: %v", err)
 	}
 	wrk := gwrk.(*SplitCloneWorker)
-	// the only strategy that enables bin logs
-	disableBinLogs := !wrk.strategy.WriteMastersOnly
 
 	for _, sourceRdonly := range []*testlib.FakeTablet{sourceRdonly1, sourceRdonly2} {
 		sourceRdonly.FakeMysqlDaemon.Schema = &myproto.SchemaDefinition{
@@ -335,10 +306,10 @@ func testSplitClone(t *testing.T, strategy string) {
 	// That means 3 insert statements on each target (each
 	// containing half of the rows, i.e. 2 + 2 + 1 rows). So 3 * 10
 	// = 30 insert statements on each destination.
-	leftMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30, disableBinLogs)
-	leftRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30, disableBinLogs)
-	rightMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30, disableBinLogs)
-	rightRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30, disableBinLogs)
+	leftMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30)
+	leftRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30)
+	rightMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30)
+	rightRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30)
 
 	wrk.Run()
 	status := wrk.StatusAsText()

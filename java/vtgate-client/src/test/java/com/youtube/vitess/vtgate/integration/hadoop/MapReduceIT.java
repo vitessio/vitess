@@ -5,6 +5,7 @@ import com.google.common.primitives.UnsignedLong;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
+import com.youtube.vitess.vtgate.Exceptions.InvalidFieldException;
 import com.youtube.vitess.vtgate.KeyspaceId;
 import com.youtube.vitess.vtgate.hadoop.VitessInputFormat;
 import com.youtube.vitess.vtgate.hadoop.writables.KeyspaceIdWritable;
@@ -78,10 +79,9 @@ public class MapReduceIT extends HadoopTestCase {
     VitessInputFormat.setInput(job,
         "localhost:" + testEnv.port,
         testEnv.keyspace,
-        "vtgate_test",
-        Lists.newArrayList("keyspace_id", "name"),
+        "select keyspace_id, name from vtgate_test",
         4);
-    job.setOutputKeyClass(KeyspaceIdWritable.class);
+    job.setOutputKeyClass(NullWritable.class);
     job.setOutputValueClass(RowWritable.class);
     job.setOutputFormatClass(TextOutputFormat.class);
     job.setNumReduceTasks(0);
@@ -158,8 +158,7 @@ public class MapReduceIT extends HadoopTestCase {
     VitessInputFormat.setInput(job,
         "localhost:" + testEnv.port,
         testEnv.keyspace,
-        "vtgate_test",
-        Lists.newArrayList("keyspace_id", "name"),
+        "select keyspace_id, name from vtgate_test",
         1);
 
     job.setMapOutputKeyClass(KeyspaceIdWritable.class);
@@ -190,11 +189,17 @@ public class MapReduceIT extends HadoopTestCase {
   }
 
   public static class TableMapper extends
-      Mapper<KeyspaceIdWritable, RowWritable, KeyspaceIdWritable, RowWritable> {
+      Mapper<NullWritable, RowWritable, KeyspaceIdWritable, RowWritable> {
     @Override
-    public void map(KeyspaceIdWritable key, RowWritable value, Context context) throws IOException,
+    public void map(NullWritable key, RowWritable value, Context context) throws IOException,
         InterruptedException {
-      context.write(key, value);
+      try {
+        KeyspaceId id = new KeyspaceId();
+        id.setId(value.getRow().getULong("keyspace_id"));
+        context.write(new KeyspaceIdWritable(id), value);
+      } catch (InvalidFieldException e) {
+        throw new IOException(e);
+      }
     }
   }
 

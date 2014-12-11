@@ -2,25 +2,22 @@ package com.youtube.vitess.vtgate.hadoop;
 
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.Exceptions.DatabaseException;
-import com.youtube.vitess.vtgate.Exceptions.InvalidFieldException;
-import com.youtube.vitess.vtgate.KeyspaceId;
 import com.youtube.vitess.vtgate.Row;
 import com.youtube.vitess.vtgate.VtGate;
 import com.youtube.vitess.vtgate.cursor.Cursor;
-import com.youtube.vitess.vtgate.hadoop.writables.KeyspaceIdWritable;
 import com.youtube.vitess.vtgate.hadoop.writables.RowWritable;
 
+import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 
 import java.io.IOException;
 
-public class VitessRecordReader extends RecordReader<KeyspaceIdWritable, RowWritable> {
+public class VitessRecordReader extends RecordReader<NullWritable, RowWritable> {
   private VitessInputSplit split;
   private VtGate vtgate;
   private VitessConf vtConf;
-  private KeyspaceIdWritable kidWritable;
   private RowWritable rowWritable;
   private long rowsProcessed = 0;
   private Cursor cursor;
@@ -53,8 +50,8 @@ public class VitessRecordReader extends RecordReader<KeyspaceIdWritable, RowWrit
   }
 
   @Override
-  public KeyspaceIdWritable getCurrentKey() throws IOException, InterruptedException {
-    return kidWritable;
+  public NullWritable getCurrentKey() throws IOException, InterruptedException {
+    return NullWritable.get();
   }
 
   @Override
@@ -89,12 +86,6 @@ public class VitessRecordReader extends RecordReader<KeyspaceIdWritable, RowWrit
     Row row = cursor.next();
     rowWritable = new RowWritable(row);
     rowsProcessed++;
-    try {
-      KeyspaceId keyspaceId = KeyspaceId.valueOf(row.getULong(KeyspaceId.COL_NAME));
-      kidWritable = new KeyspaceIdWritable(keyspaceId);
-    } catch (InvalidFieldException e) {
-      throw new RuntimeException(e);
-    }
     return true;
   }
 }

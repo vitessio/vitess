@@ -53,7 +53,7 @@ const splitCloneHTML2 = `
       <LABEL for="excludeTables">Exclude Tables: </LABEL>
         <INPUT type="text" id="excludeTables" name="excludeTables" value="moving.*"></BR>
       <LABEL for="strategy">Strategy: </LABEL>
-        <INPUT type="text" id="strategy" name="strategy" value="-populate_blp_checkpoint -write_masters_only"></BR>
+        <INPUT type="text" id="strategy" name="strategy" value="-populate_blp_checkpoint"></BR>
       <LABEL for="sourceReaderCount">Source Reader Count: </LABEL>
         <INPUT type="text" id="sourceReaderCount" name="sourceReaderCount" value="{{.DefaultSourceReaderCount}}"></BR>
       <LABEL for="destinationPackCount">Destination Pack Count: </LABEL>
@@ -72,15 +72,7 @@ const splitCloneHTML2 = `
     <ul>
       <li><b>populateBlpCheckpoint</b>: creates (if necessary) and populates the blp_checkpoint table in the destination. Required for filtered replication to start.</li>
       <li><b>dontStartBinlogPlayer</b>: (requires populateBlpCheckpoint) will setup, but not start binlog replication on the destination. The flag has to be manually cleared from the _vt.blp_checkpoint table.</li>
-      <li><b>skipAutoIncrement(TTT)</b>: we won't add the AUTO_INCREMENT back to that table.</li>
       <li><b>skipSetSourceShards</b>: we won't set SourceShards on the destination shards, disabling filtered replication. Useful for worker tests.</li>
-    </ul>
-    <p>The following flags are also supported, but their use is very strongly discouraged:</p>
-    <ul>
-      <li><b>delayPrimaryKey</b>: we won't add the primary key until after the table is populated.</li>
-      <li><b>delaySecondaryIndexes</b>: we won't add the secondary indexes until after the table is populated.</li>
-      <li><b>useMyIsam</b>: create the table as MyISAM, then convert it to InnoDB after population.</li>
-      <li><b>writeBinLogs</b>: write all operations to the binlogs.</li>
     </ul>
   </body>
 `
@@ -97,7 +89,7 @@ func commandSplitClone(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 	destinationWriterCount := subFlags.Int("destination_writer_count", defaultDestinationWriterCount, "number of concurrent RPCs to execute on the destination")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
-		log.Fatalf("command SplitClone requires <keyspace/shard|zk shard path>")
+		log.Fatalf("command SplitClone requires <keyspace/shard>")
 	}
 
 	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
@@ -234,6 +226,6 @@ func interactiveSplitClone(wr *wrangler.Wrangler, w http.ResponseWriter, r *http
 func init() {
 	addCommand("Clones", command{"SplitClone",
 		commandSplitClone, interactiveSplitClone,
-		"[--exclude_tables=''] [--strategy=''] <keyspace/shard|zk shard path>",
+		"[--exclude_tables=''] [--strategy=''] <keyspace/shard>",
 		"Replicates the data and creates configuration for a horizontal split."})
 }

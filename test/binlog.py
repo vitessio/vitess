@@ -103,7 +103,7 @@ def setUpModule():
     logging.debug("Running the clone worker to start binlog stream...")
     utils.run_vtworker(['--cell', 'test_nj',
                         'SplitClone',
-                        '--strategy=-populate_blp_checkpoint -write_masters_only',
+                        '--strategy=-populate_blp_checkpoint',
                         '--source_reader_count', '10',
                         '--min_table_size_for_split', '1',
                         'test_keyspace/0'],
