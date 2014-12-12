@@ -7,6 +7,7 @@ package customrule
 import (
 	"reflect"
 	"sync"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/tabletserver"
@@ -14,27 +15,28 @@ import (
 	"launchpad.net/gozk/zookeeper"
 )
 
+// ZkCustomRule is Zookeeper backed implementation of CustomRuleManager
 type ZkCustomRule struct {
 	mu                    sync.Mutex
 	path                  string
 	queryService          *tabletserver.SqlQuery
 	zconn                 zk.Conn
-	watch                 <-chan zookeeper.Event
+	watch                 <-chan zookeeper.Event // Zookeeper watch for listenning data change notifications
 	currentRuleSet        *tabletserver.QueryRules
-	currentRuleSetVersion int64
+	currentRuleSetVersion int64 // implemented with Zookeeper transaction id
 	finish                chan int
 }
 
-const InvalidRulesetVersion int64 = -1
-
+// NewZkCustomRule Creates new ZkCustomRule structure
 func NewZkCustomRule(zkconn zk.Conn) *ZkCustomRule {
 	return &ZkCustomRule{
 		zconn:                 zkconn,
 		currentRuleSet:        tabletserver.NewQueryRules(),
-		currentRuleSetVersion: InvalidRulesetVersion,
+		currentRuleSetVersion: InvalidQueryRulesVersion,
 		finish:                make(chan int, 1)}
 }
 
+// Open Registers Zookeeper watch, gets inital QueryRules and starts polling routine
 func (zkcr *ZkCustomRule) Open(rulePath string, queryService *tabletserver.SqlQuery) (err error) {
 	zkcr.path = rulePath
 	zkcr.queryService = queryService
@@ -50,16 +52,20 @@ func (zkcr *ZkCustomRule) Open(rulePath string, queryService *tabletserver.SqlQu
 	return nil
 }
 
+// refreshWatch gets a new watch channel for ZkCustomRule, it is called when
+// the old watch channel is closed on errors
 func (zkcr *ZkCustomRule) refreshWatch() error {
 	_, _, watch, err := zkcr.zconn.GetW(zkcr.path)
 	if err != nil {
-		log.Errorf("Fail to get a valid watch from ZK service: %v", err)
+		log.Warningf("Fail to get a valid watch from ZK service: %v", err)
 		return err
 	}
 	zkcr.watch = watch
 	return nil
 }
 
+// refreshData gets query rules from Zookeeper and refresh internal QueryRules cache
+// this function will also call SqlQuery.SetQueryRules to propagate rule changes to query service
 func (zkcr *ZkCustomRule) refreshData(nodeRemoval bool) error {
 	data, stat, err := zkcr.zconn.Get(zkcr.path)
 	zkcr.mu.Lock()
@@ -69,7 +75,7 @@ func (zkcr *ZkCustomRule) refreshData(nodeRemoval bool) error {
 		if !nodeRemoval {
 			err = qrs.UnmarshalJSON([]byte(data))
 			if err != nil {
-				log.Errorf("Error unmarshaling query rules %v, original data '%s'", err, data)
+				log.Warningf("Error unmarshaling query rules %v, original data '%s'", err, data)
 				return nil
 			}
 		}
@@ -80,10 +86,14 @@ func (zkcr *ZkCustomRule) refreshData(nodeRemoval bool) error {
 		}
 		return nil
 	}
-	log.Errorf("Error encountered when trying to get data and watch from Zk: %v", err)
+	log.Warningf("Error encountered when trying to get data and watch from Zk: %v", err)
 	return err
 }
 
+const SleepDuringZkFailure time.Duration = 30
+
+// poll polls the Zookeeper watch channel for data changes and refresh watch channel if watch channel is closed
+// by Zookeeper Go library on error conditions such as connection reset
 func (zkcr *ZkCustomRule) poll() {
 	for {
 		select {
@@ -92,20 +102,30 @@ func (zkcr *ZkCustomRule) poll() {
 		case event := <-zkcr.watch:
 			switch event.Type {
 			case zookeeper.EVENT_CREATED, zookeeper.EVENT_CHANGED, zookeeper.EVENT_DELETED:
-				zkcr.refreshData(event.Type == zookeeper.EVENT_DELETED)
+				err := zkcr.refreshData(event.Type == zookeeper.EVENT_DELETED) // refresh rules
+				if err != nil {
+					// Sleep to avoid busy waiting during connection re-establishment
+					<-time.After(time.Second * SleepDuringZkFailure)
+				}
 			case zookeeper.EVENT_CLOSED:
-				zkcr.refreshWatch() // need to refresh to get a new watch
+				err := zkcr.refreshWatch() // need to to get a new watch
+				if err != nil {
+					// Sleep to avoid busy waiting during connection re-establishment
+					<-time.After(time.Second * SleepDuringZkFailure)
+				}
 				zkcr.refreshData(false)
 			}
 		}
 	}
 }
 
+// Close signals an termination to polling go routine and closes Zookeeper connection object
 func (zkcr *ZkCustomRule) Close() {
 	zkcr.zconn.Close()
 	zkcr.finish <- 1
 }
 
+// GetRules retrives cached rules
 func (zkcr *ZkCustomRule) GetRules() (qrs *tabletserver.QueryRules, version int64, err error) {
 	zkcr.mu.Lock()
 	defer zkcr.mu.Unlock()

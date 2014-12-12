@@ -28,8 +28,23 @@ class TestStream(framework.TestCase):
       count += 1
     self.assertEqual(count, 1)
 
-  def test_filecustomrules(self):
+  def test_customrules(self):
     bv = {'asdfg': 1}
+    try:
+      self.env.execute("select * from vtocc_test where intval=:asdfg", bv,
+                       cursorclass=cursor.StreamCursor)
+      self.fail("Bindvar asdfg should not be allowed by custom rule")
+    except dbexceptions.DatabaseError as e:
+      self.assertContains(str(e), "error: Query disallowed")
+    self.env.change_customrules()
+    time.sleep(15)
+    try:
+      self.env.execute("select * from vtocc_test where intval=:asdfg", bv,
+                       cursorclass=cursor.StreamCursor)
+    except dbexceptions.DatabaseError as e:
+      self.fail("Bindvar asdfg should be allowed after a change of custom rule, Err=" + str(e))
+    self.env.restore_customrules()
+    time.sleep(15)
     try:
       self.env.execute("select * from vtocc_test where intval=:asdfg", bv,
                        cursorclass=cursor.StreamCursor)

@@ -23,11 +23,15 @@ type CustomRuleManager interface {
 	GetRules() (qrs *tabletserver.QueryRules, version int64, err error) // GetRules returns the current set of rules available to CustomRuleManager
 }
 
+// If QueryRules is with a version number of InvalidQueryRulesVersion, then
+// the rules it contains are invalid
 const InvalidQueryRulesVersion int64 = -1
 
 // CustomRuleImplements maps name of implementation to the actual structure pointers
 // All registered CustomRuleManager implementations are stored here
 var CustomRuleImplements map[string]CustomRuleManager = make(map[string]CustomRuleManager)
+
+// the currently used CustomRuleManager
 var CustomRuleManagerInUse = flag.String("customrule_manager", FileCustomRuleImpl, "the customrule manager to use")
 
 // RegisterCustomRuleImpl registers a CustomRuleManager implementation by setting up
@@ -41,14 +45,15 @@ func RegisterCustomRuleImpl(name string, manager CustomRuleManager) error {
 }
 
 // Names of different custom rule implementations
-const FileCustomRuleImpl string = "file"    // file based custom rule implementation
-const ZkCustomRuleImpl string = "zookeeper" // Zookeeper based custom rule implementation
+const FileCustomRuleImpl string = "file"    // file based implementation
+const ZkCustomRuleImpl string = "zookeeper" // Zookeeper based implementation
 
 func init() {
 	RegisterCustomRuleImpl(FileCustomRuleImpl, NewFileCustomRule(DefaultFilePollingSeconds))
 	RegisterCustomRuleImpl(ZkCustomRuleImpl, NewZkCustomRule(zk.NewMetaConn(false)))
 }
 
+// Initialize the CustomRuleManager selected by CustomRuleManagerInUse flag
 func InitializeCustomRuleManager(customRulePath string, queryService *tabletserver.SqlQuery) error {
 	if manager, ok := CustomRuleImplements[*CustomRuleManagerInUse]; ok {
 		return manager.Open(customRulePath, queryService)
@@ -56,6 +61,7 @@ func InitializeCustomRuleManager(customRulePath string, queryService *tabletserv
 	return errors.New(fmt.Sprintf("Custom rule implementation %s is unsupported", *CustomRuleManagerInUse))
 }
 
+// Tear down CustomRuleManager that was in use
 func TearDownCustomRuleManager() {
 	if manager, ok := CustomRuleImplements[*CustomRuleManagerInUse]; ok {
 		manager.Close()
