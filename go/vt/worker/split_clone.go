@@ -46,6 +46,7 @@ type SplitCloneWorker struct {
 	excludeTables          []string
 	strategy               *mysqlctl.SplitStrategy
 	sourceReaderCount      int
+	destinationPackCount   int
 	minTableSizeForSplit   uint64
 	destinationWriterCount int
 	cleaner                *wrangler.Cleaner
@@ -68,16 +69,19 @@ type SplitCloneWorker struct {
 	destinationAliases       [][]topo.TabletAlias
 	destinationTablets       []map[topo.TabletAlias]*topo.TabletInfo
 	destinationMasterAliases []topo.TabletAlias
+	// aliases of tablets that need to have their schema reloaded
+	reloadAliases [][]topo.TabletAlias
+	reloadTablets []map[topo.TabletAlias]*topo.TabletInfo
 
 	// populated during stateSCCopy
-	tableStatus []tableStatus
+	tableStatus []*tableStatus
 	startTime   time.Time
 
 	ev *events.SplitClone
 }
 
 // NewSplitCloneWorker returns a new SplitCloneWorker object.
-func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string, strategyStr string, sourceReaderCount int, minTableSizeForSplit uint64, destinationWriterCount int) (Worker, error) {
+func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount int) (Worker, error) {
 	strategy, err := mysqlctl.NewSplitStrategy(wr.Logger(), strategyStr)
 	if err != nil {
 		return nil, err
@@ -90,6 +94,7 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, ex
 		excludeTables:          excludeTables,
 		strategy:               strategy,
 		sourceReaderCount:      sourceReaderCount,
+		destinationPackCount:   destinationPackCount,
 		minTableSizeForSplit:   minTableSizeForSplit,
 		destinationWriterCount: destinationWriterCount,
 		cleaner:                &wrangler.Cleaner{},
@@ -317,9 +322,11 @@ func (scw *SplitCloneWorker) findTargets() error {
 			return fmt.Errorf("cannot read tablet %v: %v", alias, err)
 		}
 
-		if err := scw.wr.TabletManagerClient().StopSlave(context.TODO(), scw.sourceTablets[i], 30*time.Second); err != nil {
+		ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+		if err := scw.wr.TabletManagerClient().StopSlave(ctx, scw.sourceTablets[i]); err != nil {
 			return fmt.Errorf("cannot stop replication on tablet %v", alias)
 		}
+		cancel()
 
 		wrangler.RecordStartSlaveAction(scw.cleaner, scw.sourceTablets[i], 30*time.Second)
 		action, err := wrangler.FindChangeSlaveTypeActionByTarget(scw.cleaner, alias)
@@ -329,66 +336,41 @@ func (scw *SplitCloneWorker) findTargets() error {
 		action.TabletType = topo.TYPE_SPARE
 	}
 
-	if scw.strategy.WriteMastersOnly {
-		return scw.findMasterTargets()
-	} else {
-		return scw.findAllTargets()
-	}
+	return scw.findMasterTargets()
 }
 
 // findMasterTargets looks up the masters for all destination shards, and set the destinations appropriately.
 // It should be used if vtworker will only want to write to masters.
 func (scw *SplitCloneWorker) findMasterTargets() error {
-	scw.destinationAliases = make([][]topo.TabletAlias, len(scw.destinationShards))
-	scw.destinationTablets = make([]map[topo.TabletAlias]*topo.TabletInfo, len(scw.destinationShards))
-	scw.destinationMasterAliases = make([]topo.TabletAlias, len(scw.destinationShards))
-
-	for shardIndex, si := range scw.destinationShards {
-		// keep a local copy of MasterAlias, so that it can't be changed out from under us
-		// TODO(aaijazi): find out if this is actually necessary
-		masterAlias := si.MasterAlias
-		if masterAlias.IsZero() {
-			return fmt.Errorf("no master in destination shard")
-		}
-		scw.wr.Logger().Infof("Found master alias %v in shard %v/%v", masterAlias, si.Keyspace(), si.ShardName())
-		scw.destinationMasterAliases[shardIndex] = masterAlias
-		scw.destinationAliases[shardIndex] = []topo.TabletAlias{masterAlias}
-		mt, err := scw.wr.TopoServer().GetTablet(masterAlias)
-		if err != nil {
-			return fmt.Errorf("cannot read master tablet from alias %v in %v/%v", masterAlias, si.Keyspace(), si.ShardName())
-		}
-		scw.destinationTablets[shardIndex] = map[topo.TabletAlias]*topo.TabletInfo{masterAlias: mt}
-	}
-
-	return nil
-}
-
-// findAllTargets finds all the target aliases and tablets in the destination shards
-// It should be used if vtworker will write to all tablets in the destination shards, not just masters.
-func (scw *SplitCloneWorker) findAllTargets() error {
 	var err error
 
 	scw.destinationAliases = make([][]topo.TabletAlias, len(scw.destinationShards))
 	scw.destinationTablets = make([]map[topo.TabletAlias]*topo.TabletInfo, len(scw.destinationShards))
 	scw.destinationMasterAliases = make([]topo.TabletAlias, len(scw.destinationShards))
+
+	scw.reloadAliases = make([][]topo.TabletAlias, len(scw.destinationShards))
+	scw.reloadTablets = make([]map[topo.TabletAlias]*topo.TabletInfo, len(scw.destinationShards))
+
 	for shardIndex, si := range scw.destinationShards {
-		scw.destinationAliases[shardIndex], err = topo.FindAllTabletAliasesInShard(scw.wr.TopoServer(), si.Keyspace(), si.ShardName())
+		scw.reloadAliases[shardIndex], err = topo.FindAllTabletAliasesInShard(context.TODO(), scw.wr.TopoServer(), si.Keyspace(), si.ShardName())
 		if err != nil {
-			return fmt.Errorf("cannot find all target tablets in %v/%v: %v", si.Keyspace(), si.ShardName(), err)
+			return fmt.Errorf("cannot find all reload target tablets in %v/%v: %v", si.Keyspace(), si.ShardName(), err)
 		}
-		scw.wr.Logger().Infof("Found %v target aliases in shard %v/%v", len(scw.destinationAliases[shardIndex]), si.Keyspace(), si.ShardName())
+		scw.wr.Logger().Infof("Found %v reload target aliases in shard %v/%v", len(scw.reloadAliases[shardIndex]), si.Keyspace(), si.ShardName())
 
 		// get the TabletInfo for all targets
-		scw.destinationTablets[shardIndex], err = topo.GetTabletMap(scw.wr.TopoServer(), scw.destinationAliases[shardIndex])
+		scw.reloadTablets[shardIndex], err = topo.GetTabletMap(context.TODO(), scw.wr.TopoServer(), scw.reloadAliases[shardIndex])
 		if err != nil {
-			return fmt.Errorf("cannot read all target tablets in %v/%v: %v", si.Keyspace(), si.ShardName(), err)
+			return fmt.Errorf("cannot read all reload target tablets in %v/%v: %v", si.Keyspace(), si.ShardName(), err)
 		}
 
 		// find and validate the master
-		for tabletAlias, ti := range scw.destinationTablets[shardIndex] {
+		for tabletAlias, ti := range scw.reloadTablets[shardIndex] {
 			if ti.Type == topo.TYPE_MASTER {
 				if scw.destinationMasterAliases[shardIndex].IsZero() {
 					scw.destinationMasterAliases[shardIndex] = tabletAlias
+					scw.destinationAliases[shardIndex] = []topo.TabletAlias{tabletAlias}
+					scw.destinationTablets[shardIndex] = map[topo.TabletAlias]*topo.TabletInfo{tabletAlias: ti}
 				} else {
 					return fmt.Errorf("multiple masters in destination shard: %v and %v at least", scw.destinationMasterAliases[shardIndex], tabletAlias)
 				}
@@ -397,15 +379,16 @@ func (scw *SplitCloneWorker) findAllTargets() error {
 		if scw.destinationMasterAliases[shardIndex].IsZero() {
 			return fmt.Errorf("no master in destination shard")
 		}
+		scw.wr.Logger().Infof("Found target master alias %v in shard %v/%v", scw.destinationMasterAliases[shardIndex], si.Keyspace(), si.ShardName())
 	}
 
 	return nil
 }
 
 // copy phase:
-// - get schema on the sources, filter tables
-// - create tables on all destinations
-// - copy the data
+//	- copy the data from source tablets to destination masters (wtih replication on)
+// Assumes that the schema has already been created on each destination tablet
+// (probably from vtctl's CopySchemaShard)
 func (scw *SplitCloneWorker) copy() error {
 	scw.setState(stateSCCopy)
 
@@ -423,36 +406,20 @@ func (scw *SplitCloneWorker) copy() error {
 	}
 	scw.wr.Logger().Infof("Source tablet 0 has %v tables to copy", len(sourceSchemaDefinition.TableDefinitions))
 	scw.mu.Lock()
-	scw.tableStatus = make([]tableStatus, len(sourceSchemaDefinition.TableDefinitions))
+	scw.tableStatus = make([]*tableStatus, len(sourceSchemaDefinition.TableDefinitions))
 	for i, td := range sourceSchemaDefinition.TableDefinitions {
-		scw.tableStatus[i].name = td.Name
-		scw.tableStatus[i].rowCount = td.RowCount * uint64(len(scw.sourceAliases))
+		scw.tableStatus[i] = &tableStatus{
+			name:     td.Name,
+			rowCount: td.RowCount * uint64(len(scw.sourceAliases)),
+		}
 	}
 	scw.startTime = time.Now()
 	scw.mu.Unlock()
 
-	// Create all the commands to create the destination schema:
-	// - createDbCmds will create the database and the tables
-	// - createViewCmds will create the views
-	// - alterTablesCmds will modify the tables at the end if needed
-	// (all need template substitution for {{.DatabaseName}})
-	createDbCmds := make([]string, 0, len(sourceSchemaDefinition.TableDefinitions)+1)
-	createDbCmds = append(createDbCmds, sourceSchemaDefinition.DatabaseSchema)
-	createViewCmds := make([]string, 0, 16)
-	alterTablesCmds := make([]string, 0, 16)
+	// Find the column index for the sharding columns in all the databases, and count rows
 	columnIndexes := make([]int, len(sourceSchemaDefinition.TableDefinitions))
 	for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
 		if td.Type == myproto.TABLE_BASE_TABLE {
-			// build the create and alter statements
-			create, alter, err := mysqlctl.MakeSplitCreateTableSql(scw.wr.Logger(), td.Schema, "{{.DatabaseName}}", td.Name, scw.strategy)
-			if err != nil {
-				return fmt.Errorf("MakeSplitCreateTableSql(%v) returned: %v", td.Name, err)
-			}
-			createDbCmds = append(createDbCmds, create)
-			if alter != "" {
-				alterTablesCmds = append(alterTablesCmds, alter)
-			}
-
 			// find the column to split on
 			columnIndexes[tableIndex] = -1
 			for i, name := range td.Columns {
@@ -466,21 +433,16 @@ func (scw *SplitCloneWorker) copy() error {
 			}
 
 			scw.tableStatus[tableIndex].mu.Lock()
-			scw.tableStatus[tableIndex].state = "before table creation"
 			scw.tableStatus[tableIndex].rowCount = td.RowCount
 			scw.tableStatus[tableIndex].mu.Unlock()
 		} else {
 			scw.tableStatus[tableIndex].mu.Lock()
-			createViewCmds = append(createViewCmds, td.Schema)
-			scw.tableStatus[tableIndex].state = "before view creation"
-			scw.tableStatus[tableIndex].rowCount = 0
+			scw.tableStatus[tableIndex].isView = true
 			scw.tableStatus[tableIndex].mu.Unlock()
 		}
 	}
 
-	// For each destination tablet (in parallel):
-	// - create the schema
-	// - setup the channels to send SQL data chunks
+	// In parallel, setup the channels to send SQL data chunks to for each destination tablet:
 	//
 	// mu protects the abort channel for closing, and firstError
 	mu := sync.Mutex{}
@@ -498,8 +460,8 @@ func (scw *SplitCloneWorker) copy() error {
 		mu.Unlock()
 	}
 
-	// if we're writing only to masters, we need to enable bin logs so that replication happens
-	disableBinLogs := !scw.strategy.WriteMastersOnly
+	// since we're writing only to masters, we need to enable bin logs so that replication happens
+	disableBinLogs := false
 
 	insertChannels := make([][]chan string, len(scw.destinationShards))
 	destinationWaitGroup := sync.WaitGroup{}
@@ -513,21 +475,7 @@ func (scw *SplitCloneWorker) copy() error {
 			// destinationWriterCount go routines reading from it.
 			insertChannels[shardIndex][i] = make(chan string, scw.destinationWriterCount*2)
 
-			destinationWaitGroup.Add(1)
 			go func(ti *topo.TabletInfo, insertChannel chan string) {
-				defer destinationWaitGroup.Done()
-				scw.wr.Logger().Infof("Creating tables on tablet %v", ti.Alias)
-				if err := runSqlCommands(scw.wr, ti, createDbCmds, abort, disableBinLogs); err != nil {
-					processError("createDbCmds failed: %v", err)
-					return
-				}
-				if len(createViewCmds) > 0 {
-					scw.wr.Logger().Infof("Creating views on tablet %v", ti.Alias)
-					if err := runSqlCommands(scw.wr, ti, createViewCmds, abort, disableBinLogs); err != nil {
-						processError("createViewCmds failed: %v", err)
-						return
-					}
-				}
 				for j := 0; j < scw.destinationWriterCount; j++ {
 					destinationWaitGroup.Add(1)
 					go func() {
@@ -557,6 +505,7 @@ func (scw *SplitCloneWorker) copy() error {
 			if err != nil {
 				return err
 			}
+			scw.tableStatus[tableIndex].setThreadCount(len(chunks) - 1)
 
 			for chunkIndex := 0; chunkIndex < len(chunks)-1; chunkIndex++ {
 				sourceWaitGroup.Add(1)
@@ -566,6 +515,8 @@ func (scw *SplitCloneWorker) copy() error {
 					sema.Acquire()
 					defer sema.Release()
 
+					scw.tableStatus[tableIndex].threadStarted()
+
 					// build the query, and start the streaming
 					selectSQL := buildSQLFromChunks(scw.wr, td, chunks, chunkIndex, scw.sourceAliases[shardIndex].String())
 					qrr, err := NewQueryResultReaderForTablet(scw.wr.TopoServer(), scw.sourceAliases[shardIndex], selectSQL)
@@ -573,11 +524,13 @@ func (scw *SplitCloneWorker) copy() error {
 						processError("NewQueryResultReaderForTablet failed: %v", err)
 						return
 					}
+					defer qrr.Close()
 
 					// process the data
-					if err := scw.processData(td, tableIndex, qrr, rowSplitter, insertChannels, abort); err != nil {
+					if err := scw.processData(td, tableIndex, qrr, rowSplitter, insertChannels, scw.destinationPackCount, abort); err != nil {
 						processError("processData failed: %v", err)
 					}
+					scw.tableStatus[tableIndex].threadDone()
 				}(td, tableIndex, chunkIndex)
 			}
 		}
@@ -594,26 +547,6 @@ func (scw *SplitCloneWorker) copy() error {
 		return firstError
 	}
 
-	// do the post-copy alters if any
-	if len(alterTablesCmds) > 0 {
-		for shardIndex, _ := range scw.destinationShards {
-			for _, tabletAlias := range scw.destinationAliases[shardIndex] {
-				destinationWaitGroup.Add(1)
-				go func(ti *topo.TabletInfo) {
-					defer destinationWaitGroup.Done()
-					scw.wr.Logger().Infof("Altering tables on tablet %v", ti.Alias)
-					if err := runSqlCommands(scw.wr, ti, alterTablesCmds, abort, disableBinLogs); err != nil {
-						processError("alterTablesCmds failed on tablet %v: %v", ti.Alias, err)
-					}
-				}(scw.destinationTablets[shardIndex][tabletAlias])
-			}
-		}
-		destinationWaitGroup.Wait()
-		if firstError != nil {
-			return firstError
-		}
-	}
-
 	// then create and populate the blp_checkpoint table
 	if scw.strategy.PopulateBlpCheckpoint {
 		queries := make([]string, 0, 4)
@@ -625,10 +558,12 @@ func (scw *SplitCloneWorker) copy() error {
 
 		// get the current position from the sources
 		for shardIndex, _ := range scw.sourceShards {
-			status, err := scw.wr.TabletManagerClient().SlaveStatus(context.TODO(), scw.sourceTablets[shardIndex], 30*time.Second)
+			ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+			status, err := scw.wr.TabletManagerClient().SlaveStatus(ctx, scw.sourceTablets[shardIndex])
 			if err != nil {
 				return err
 			}
+			cancel()
 
 			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(0, status.Position, time.Now().Unix(), flags))
 		}
@@ -670,15 +605,17 @@ func (scw *SplitCloneWorker) copy() error {
 	// The master tablet will end up starting filtered replication
 	// at this point.
 	for shardIndex, _ := range scw.destinationShards {
-		for _, tabletAlias := range scw.destinationAliases[shardIndex] {
+		for _, tabletAlias := range scw.reloadAliases[shardIndex] {
 			destinationWaitGroup.Add(1)
 			go func(ti *topo.TabletInfo) {
 				defer destinationWaitGroup.Done()
 				scw.wr.Logger().Infof("Reloading schema on tablet %v", ti.Alias)
-				if err := scw.wr.TabletManagerClient().ReloadSchema(context.TODO(), ti, 30*time.Second); err != nil {
+				ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+				if err := scw.wr.TabletManagerClient().ReloadSchema(ctx, ti); err != nil {
 					processError("ReloadSchema failed on tablet %v: %v", ti.Alias, err)
 				}
-			}(scw.destinationTablets[shardIndex][tabletAlias])
+				cancel()
+			}(scw.reloadTablets[shardIndex][tabletAlias])
 		}
 	}
 	destinationWaitGroup.Wait()
@@ -687,40 +624,52 @@ func (scw *SplitCloneWorker) copy() error {
 
 // processData pumps the data out of the provided QueryResultReader.
 // It returns any error the source encounters.
-func (scw *SplitCloneWorker) processData(td *myproto.TableDefinition, tableIndex int, qrr *QueryResultReader, rowSplitter *RowSplitter, insertChannels [][]chan string, abort chan struct{}) error {
+func (scw *SplitCloneWorker) processData(td *myproto.TableDefinition, tableIndex int, qrr *QueryResultReader, rowSplitter *RowSplitter, insertChannels [][]chan string, destinationPackCount int, abort chan struct{}) error {
 	baseCmd := td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
+	sr := rowSplitter.StartSplit()
+	packCount := 0
 
 	for {
 		select {
 		case r, ok := <-qrr.Output:
 			if !ok {
-				return qrr.Error()
+				// we are done, see if there was an error
+				err := qrr.Error()
+				if err != nil {
+					return err
+				}
+
+				// send the remainder if any (ignoring
+				// the return value, we don't care
+				// here if we're aborted)
+				if packCount > 0 {
+					rowSplitter.Send(qrr.Fields, sr, baseCmd, insertChannels, abort)
+				}
+				return nil
 			}
 
 			// Split the rows by keyspace_id, and insert
 			// each chunk into each destination
-			sr, err := rowSplitter.Split(r.Rows)
-			if err != nil {
+			if err := rowSplitter.Split(sr, r.Rows); err != nil {
 				return fmt.Errorf("RowSplitter failed for table %v: %v", td.Name, err)
+			}
+			scw.tableStatus[tableIndex].addCopiedRows(len(r.Rows))
+
+			// see if we reach the destination pack count
+			packCount++
+			if packCount < destinationPackCount {
+				continue
 			}
 
 			// send the rows to be inserted
-			scw.tableStatus[tableIndex].addCopiedRows(len(r.Rows))
-			for i, cs := range insertChannels {
-				// one of the chunks might be empty, so no need
-				// to send data in that case
-				if len(sr[i]) > 0 {
-					cmd := baseCmd + makeValueString(qrr.Fields, sr[i])
-					for _, c := range cs {
-						// also check on abort, so we don't wait forever
-						select {
-						case c <- cmd:
-						case <-abort:
-							return nil
-						}
-					}
-				}
+			if aborted := rowSplitter.Send(qrr.Fields, sr, baseCmd, insertChannels, abort); aborted {
+				return nil
 			}
+
+			// and reset our row buffer
+			sr = rowSplitter.StartSplit()
+			packCount = 0
+
 		case <-abort:
 			// FIXME(alainjobart): note this select case
 			// could be starved here, and we might miss

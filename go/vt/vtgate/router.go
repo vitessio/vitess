@@ -11,7 +11,6 @@ import (
 
 	"code.google.com/p/go.net/context"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
@@ -38,58 +37,90 @@ func NewRouter(serv SrvTopoServer, cell string, schema *planbuilder.Schema, stat
 }
 
 // Execute routes a non-streaming query.
-func (rtr *Router) Execute(context context.Context, query *proto.Query) (*mproto.QueryResult, error) {
-	plan := rtr.planner.GetPlan(string(query.Sql))
-	switch plan.ID {
-	case planbuilder.SelectEqual:
-		return rtr.execSelectEqual(context, query, plan)
-	case planbuilder.InsertSharded:
-		return rtr.execInsertSharded(context, query, plan)
-	default:
-		return nil, fmt.Errorf("plan unimplemented")
-	}
-}
-
-func (rtr *Router) execSelectEqual(context context.Context, query *proto.Query, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
-	keys, err := rtr.resolveKeys([]interface{}{plan.Values}, query.BindVariables)
-	if err != nil {
-		return nil, err
-	}
-	ks, shardsToIDs, err := rtr.resolveShards(query.TabletType, keys, plan)
-	shards := make([]string, 0, len(shardsToIDs))
-	for k := range shardsToIDs {
-		shards = append(shards, k)
-	}
-	return rtr.scatterConn.Execute(
-		context,
-		query.Sql,
-		query.BindVariables,
-		ks,
-		shards,
-		query.TabletType,
-		NewSafeSession(query.Session))
-}
-
-func (rtr *Router) execInsertSharded(context context.Context, query *proto.Query, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
-	input := plan.Values.([]interface{})[:1]
-	keys, err := rtr.resolveKeys(input, query.BindVariables)
-	if err != nil {
-		return nil, err
-	}
-	// TODO(sougou): functionality is still incomplete.
-	ks, shard, ksid, err := rtr.resolveSingle(query.TabletType, keys[0], plan)
+func (rtr *Router) Execute(ctx context.Context, query *proto.Query) (*mproto.QueryResult, error) {
 	if query.BindVariables == nil {
 		query.BindVariables = make(map[string]interface{})
 	}
-	query.BindVariables["keyspace_id"] = string(ksid)
+	vcursor := newRequestContext(ctx, query, rtr)
+	plan := rtr.planner.GetPlan(string(query.Sql))
+	switch plan.ID {
+	case planbuilder.SelectUnsharded, planbuilder.UpdateUnsharded,
+		planbuilder.DeleteUnsharded, planbuilder.InsertUnsharded:
+		return rtr.execUnsharded(vcursor, plan)
+	case planbuilder.SelectEqual:
+		return rtr.execSelectEqual(vcursor, plan)
+	case planbuilder.InsertSharded:
+		return rtr.execInsertSharded(vcursor, plan)
+	default:
+		return nil, fmt.Errorf("plan %+v unimplemented", plan)
+	}
+}
+
+func (rtr *Router) execUnsharded(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
+	ks, allShards, err := getKeyspaceShards(rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
+	if err != nil {
+		return nil, err
+	}
+	if len(allShards) != 1 {
+		return nil, fmt.Errorf("unsharded keyspace %s has multiple shards: %+v", ks, allShards)
+	}
+	shards := []string{allShards[0].ShardName()}
 	return rtr.scatterConn.Execute(
-		context,
-		query.Sql,
-		query.BindVariables,
+		vcursor.ctx,
+		vcursor.query.Sql,
+		vcursor.query.BindVariables,
+		ks,
+		shards,
+		vcursor.query.TabletType,
+		NewSafeSession(vcursor.query.Session))
+}
+
+func (rtr *Router) execSelectEqual(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
+	keys, err := rtr.resolveKeys([]interface{}{plan.Values}, vcursor.query.BindVariables)
+	if err != nil {
+		return nil, err
+	}
+	ks, routing, err := rtr.resolveShards(vcursor, keys, plan)
+	return rtr.scatterConn.Execute(
+		vcursor.ctx,
+		plan.Rewritten,
+		vcursor.query.BindVariables,
+		ks,
+		routing.Shards(),
+		vcursor.query.TabletType,
+		NewSafeSession(vcursor.query.Session))
+}
+
+func (rtr *Router) execInsertSharded(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
+	input := plan.Values.([]interface{})
+	keys, err := rtr.resolveKeys(input, vcursor.query.BindVariables)
+	if err != nil {
+		return nil, err
+	}
+	ksid, err := rtr.handlePrimary(vcursor, keys[0], plan.Table.ColVindexes[0], vcursor.query.BindVariables)
+	if err != nil {
+		return nil, err
+	}
+	ks, shard, err := rtr.getRouting(plan.Table.Keyspace.Name, vcursor.query.TabletType, ksid)
+	if err != nil {
+		return nil, err
+	}
+	for i := 1; i < len(keys); i++ {
+		err = rtr.handleNonPrimary(vcursor, keys[i], plan.Table.ColVindexes[i], vcursor.query.BindVariables, ksid)
+		if err != nil {
+			return nil, err
+		}
+	}
+	vcursor.query.BindVariables["keyspace_id"] = string(ksid)
+	rewritten := plan.Rewritten + fmt.Sprintf(" /* _routing keyspace_id:%v */", ksid)
+	return rtr.scatterConn.Execute(
+		vcursor.ctx,
+		rewritten,
+		vcursor.query.BindVariables,
 		ks,
 		[]string{shard},
-		query.TabletType,
-		NewSafeSession(query.Session))
+		vcursor.query.TabletType,
+		NewSafeSession(vcursor.query.Session))
 }
 
 func (rtr *Router) resolveKeys(vals []interface{}, bindVars map[string]interface{}) (keys []interface{}, err error) {
@@ -102,93 +133,145 @@ func (rtr *Router) resolveKeys(vals []interface{}, bindVars map[string]interface
 				return nil, fmt.Errorf("could not find bind var %s", val)
 			}
 			keys = append(keys, v)
-		case sqltypes.Value:
-			keys = append(keys, val)
 		default:
-			panic("unexpected")
+			keys = append(keys, val)
 		}
 	}
 	return keys, nil
 }
 
-func (rtr *Router) resolveShards(tabletType topo.TabletType, shardKeys []interface{}, plan *planbuilder.Plan) (newKeyspace string, shardsToIDs map[string][]interface{}, err error) {
-	newKeyspace, allShards, err := getKeyspaceShards(rtr.serv, rtr.cell, plan.Table.Keyspace.Name, tabletType)
+func (rtr *Router) resolveShards(vcursor *requestContext, vindexKeys []interface{}, plan *planbuilder.Plan) (newKeyspace string, routing routingMap, err error) {
+	newKeyspace, allShards, err := getKeyspaceShards(rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
 	if err != nil {
 		return "", nil, err
 	}
-	shardsToIDs = make(map[string][]interface{})
-	add := func(shard string, id interface{}) {
-		ids, ok := shardsToIDs[shard]
-		if !ok {
-			ids = make([]interface{}, 0, 8)
-			shardsToIDs[shard] = ids
-		}
-		// Check for duplicates
-		for _, current := range ids {
-			if id == current {
-				return
-			}
-		}
-		ids = append(ids, id)
-	}
+	routing = make(routingMap)
 	switch mapper := plan.ColVindex.Vindex.(type) {
 	case planbuilder.Unique:
-		ksids, err := mapper.Map(shardKeys)
+		ksids, err := mapper.Map(vcursor, vindexKeys)
 		if err != nil {
 			return "", nil, err
 		}
 		for i, ksid := range ksids {
+			if ksid == key.MinKey {
+				continue
+			}
 			shard, err := getShardForKeyspaceId(allShards, ksid)
 			if err != nil {
 				return "", nil, err
 			}
-			add(shard, shardKeys[i])
+			routing.Add(shard, vindexKeys[i])
 		}
 	case planbuilder.NonUnique:
-		ksidss, err := mapper.Map(shardKeys)
+		ksidss, err := mapper.Map(vcursor, vindexKeys)
 		if err != nil {
 			return "", nil, err
 		}
 		for i, ksids := range ksidss {
 			for _, ksid := range ksids {
+				if ksid == key.MinKey {
+					continue
+				}
 				shard, err := getShardForKeyspaceId(allShards, ksid)
 				if err != nil {
 					return "", nil, err
 				}
-				add(shard, shardKeys[i])
+				routing.Add(shard, vindexKeys[i])
 			}
 		}
 	default:
 		panic("unexpected")
 	}
-	return newKeyspace, shardsToIDs, nil
+	return newKeyspace, routing, nil
 }
 
-func (rtr *Router) resolveSingle(tabletType topo.TabletType, shardKey interface{}, plan *planbuilder.Plan) (newKeyspace, shard string, keyspace_id key.KeyspaceId, err error) {
-	newKeyspace, allShards, err := getKeyspaceShards(rtr.serv, rtr.cell, plan.Table.Keyspace.Name, tabletType)
+func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{}, colVindex *planbuilder.ColVindex, bv map[string]interface{}) (ksid key.KeyspaceId, err error) {
+	if colVindex.Owned {
+		if vindexKey == nil {
+			generator, ok := colVindex.Vindex.(planbuilder.FunctionalGenerator)
+			if !ok {
+				return "", fmt.Errorf("value must be supplied for column %s", colVindex.Col)
+			}
+			vindexKey, err = generator.Generate(vcursor)
+			if err != nil {
+				return "", err
+			}
+		} else {
+			err = colVindex.Vindex.(planbuilder.Functional).Create(vcursor, vindexKey)
+			if err != nil {
+				return "", err
+			}
+		}
+	}
+	if vindexKey == nil {
+		return "", fmt.Errorf("value must be supplied for column %s", colVindex.Col)
+	}
+	mapper := colVindex.Vindex.(planbuilder.Unique)
+	ksids, err := mapper.Map(vcursor, []interface{}{vindexKey})
 	if err != nil {
-		return "", "", "", err
+		return "", err
 	}
-	// TODO(sougou): clean up this hack,
-	var vindex planbuilder.Vindex
-	if plan.ID == planbuilder.InsertSharded {
-		vindex = plan.Table.ColVindexes[0].Vindex
+	ksid = ksids[0]
+	if ksid == key.MinKey {
+		return "", fmt.Errorf("could not map %v to a keyspace id", vindexKey)
+	}
+	bv["_"+colVindex.Col] = vindexKey
+	return ksid, nil
+}
+
+func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface{}, colVindex *planbuilder.ColVindex, bv map[string]interface{}, ksid key.KeyspaceId) error {
+	var err error
+	if colVindex.Owned {
+		if vindexKey == nil {
+			generator, ok := colVindex.Vindex.(planbuilder.LookupGenerator)
+			if !ok {
+				return fmt.Errorf("value must be supplied for column %s", colVindex.Col)
+			}
+			vindexKey, err = generator.Generate(vcursor, ksid)
+			if err != nil {
+				return err
+			}
+		} else {
+			err = colVindex.Vindex.(planbuilder.Lookup).Create(vcursor, vindexKey, ksid)
+			if err != nil {
+				return err
+			}
+		}
 	} else {
-		vindex = plan.ColVindex.Vindex
-	}
-	switch mapper := vindex.(type) {
-	case planbuilder.Unique:
-		ksids, err := mapper.Map([]interface{}{shardKey})
-		if err != nil {
-			return "", "", "", err
+		if vindexKey == nil {
+			reversible, ok := colVindex.Vindex.(planbuilder.Reversible)
+			if !ok {
+				return fmt.Errorf("value must be supplied for column %s", colVindex.Col)
+			}
+			vindexKey, err = reversible.ReverseMap(vcursor, ksid)
+			if err != nil {
+				return err
+			}
+			if vindexKey == nil {
+				return fmt.Errorf("could not compute value for column %v", colVindex.Col)
+			}
+		} else {
+			ok, err := colVindex.Vindex.Verify(vcursor, vindexKey, ksid)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return fmt.Errorf("value %v for column %s does not map to keyspace id %v", vindexKey, colVindex.Col, ksid)
+			}
 		}
-		keyspace_id = ksids[0]
-		shard, err = getShardForKeyspaceId(allShards, keyspace_id)
-		if err != nil {
-			return "", "", "", err
-		}
-	default:
-		panic("unexpected")
 	}
-	return newKeyspace, shard, keyspace_id, nil
+	bv["_"+colVindex.Col] = vindexKey
+	return nil
+}
+
+func (rtr *Router) getRouting(keyspace string, tabletType topo.TabletType, ksid key.KeyspaceId) (newKeyspace, shard string, err error) {
+	newKeyspace, allShards, err := getKeyspaceShards(rtr.serv, rtr.cell, keyspace, tabletType)
+	if err != nil {
+		return "", "", err
+	}
+	shard, err = getShardForKeyspaceId(allShards, ksid)
+	if err != nil {
+		return "", "", err
+	}
+	return newKeyspace, shard, nil
 }

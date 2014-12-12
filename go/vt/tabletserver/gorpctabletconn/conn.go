@@ -45,11 +45,19 @@ func DialTablet(ctx context.Context, endPoint topo.EndPoint, keyspace, shard str
 	var addr string
 	var config *tls.Config
 	if *tabletBsonEncrypted {
-		addr = fmt.Sprintf("%v:%v", endPoint.Host, endPoint.NamedPortMap["_vts"])
+		port, ok := endPoint.NamedPortMap["vts"]
+		if !ok {
+			port = endPoint.NamedPortMap["_vts"]
+		}
+		addr = fmt.Sprintf("%v:%v", endPoint.Host, port)
 		config = &tls.Config{}
 		config.InsecureSkipVerify = true
 	} else {
-		addr = fmt.Sprintf("%v:%v", endPoint.Host, endPoint.NamedPortMap["_vtocc"])
+		port, ok := endPoint.NamedPortMap["vt"]
+		if !ok {
+			port = endPoint.NamedPortMap["_vtocc"]
+		}
+		addr = fmt.Sprintf("%v:%v", endPoint.Host, port)
 	}
 
 	conn := &TabletBson{endPoint: endPoint}

@@ -4,6 +4,7 @@ import os
 import shutil
 import sys
 import time
+import urllib2
 import warnings
 # Dropping a table inexplicably produces a warning despite
 # the "IF EXISTS" clause. Squelch these warnings.
@@ -87,8 +88,6 @@ class Tablet(object):
     self.tablet_alias = 'test_%s-%010d' % (self.cell, self.tablet_uid)
     self.zk_tablet_path = (
         '/zk/test_%s/vt/tablets/%010d' % (self.cell, self.tablet_uid))
-    self.zk_pid = self.zk_tablet_path + '/pid'
-    self.checked_zk_pid = False
 
   def mysqlctl(self, cmd, extra_my_cnf=None, with_ports=False, verbose=False):
     extra_env = {}
@@ -516,12 +515,6 @@ class Tablet(object):
 
 
   def wait_for_vttablet_state(self, expected, timeout=60.0, port=None):
-    # wait for zookeeper PID just to be sure we have it
-    if environment.topo_server().flavor() == 'zookeeper':
-      if not self.checked_zk_pid:
-        utils.run(environment.binary_args('zk') + ['wait', '-e', self.zk_pid],
-                  stdout=utils.devnull)
-        self.checked_zk_pid = True
     self.wait_for_vtocc_state(expected, timeout=timeout, port=port)
 
   def wait_for_vtocc_state(self, expected, timeout=60.0, port=None):
@@ -567,6 +560,9 @@ class Tablet(object):
 
   def get_status(self):
     return utils.get_status(self.port)
+
+  def get_healthz(self):
+    return urllib2.urlopen('http://localhost:%u/healthz' % self.port).read()
 
   def kill_vttablet(self):
     logging.debug('killing vttablet: %s', self.tablet_alias)

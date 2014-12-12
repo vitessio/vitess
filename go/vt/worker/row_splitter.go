@@ -7,13 +7,14 @@ package worker
 import (
 	"fmt"
 
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
 // RowSplitter is a helper class to split rows into multiple
-// subsets targetted to different shards.
+// subsets targeted to different shards.
 type RowSplitter struct {
 	Type       key.KeyspaceIdType
 	ValueIndex int
@@ -33,15 +34,19 @@ func NewRowSplitter(shardInfos []*topo.ShardInfo, typ key.KeyspaceIdType, valueI
 	return result
 }
 
+// StartSplit starts a new split. Split can then be called multiple times.
+func (rs *RowSplitter) StartSplit() [][][]sqltypes.Value {
+	return make([][][]sqltypes.Value, len(rs.KeyRanges))
+}
+
 // Split will split the rows into subset for each distribution
-func (rs *RowSplitter) Split(rows [][]sqltypes.Value) ([][][]sqltypes.Value, error) {
-	result := make([][][]sqltypes.Value, len(rs.KeyRanges))
+func (rs *RowSplitter) Split(result [][][]sqltypes.Value, rows [][]sqltypes.Value) error {
 	if rs.Type == key.KIT_UINT64 {
 		for _, row := range rows {
 			v := sqltypes.MakeNumeric(row[rs.ValueIndex].Raw())
 			i, err := v.ParseUint64()
 			if err != nil {
-				return nil, fmt.Errorf("Non numerical value: %v", err)
+				return fmt.Errorf("Non numerical value: %v", err)
 			}
 			k := key.Uint64Key(i).KeyspaceId()
 			for i, kr := range rs.KeyRanges {
@@ -62,5 +67,25 @@ func (rs *RowSplitter) Split(rows [][]sqltypes.Value) ([][][]sqltypes.Value, err
 			}
 		}
 	}
-	return result, nil
+	return nil
+}
+
+// Send will send the rows to the list of channels. Returns true if aborted.
+func (rs *RowSplitter) Send(fields []mproto.Field, result [][][]sqltypes.Value, baseCmd string, insertChannels [][]chan string, abort chan struct{}) bool {
+	for i, cs := range insertChannels {
+		// one of the chunks might be empty, so no need
+		// to send data in that case
+		if len(result[i]) > 0 {
+			cmd := baseCmd + makeValueString(fields, result[i])
+			for _, c := range cs {
+				// also check on abort, so we don't wait forever
+				select {
+				case c <- cmd:
+				case <-abort:
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

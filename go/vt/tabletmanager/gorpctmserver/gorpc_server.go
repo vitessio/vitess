@@ -223,8 +223,10 @@ func (tm *TabletManager) TabletExternallyReparented(ctx context.Context, args *g
 	// TODO(alainjobart) we should forward the RPC deadline from
 	// the original gorpc call. Until we support that, use a
 	// reasonable hard-coded value.
+	ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+	defer cancel()
 	return tm.agent.RpcWrapLock(ctx, actionnode.TABLET_ACTION_EXTERNALLY_REPARENTED, args, reply, false, func() error {
-		return tm.agent.TabletExternallyReparented(ctx, args.ExternalID, 30*time.Second)
+		return tm.agent.TabletExternallyReparented(ctx, args.ExternalID)
 	})
 }
 
@@ -378,64 +380,6 @@ func (tm *TabletManager) Restore(ctx context.Context, args *actionnode.RestoreAr
 		}()
 
 		err := tm.agent.Restore(ctx, args, logger)
-		close(logger)
-		wg.Wait()
-		return err
-	})
-}
-
-func (tm *TabletManager) MultiSnapshot(ctx context.Context, args *actionnode.MultiSnapshotArgs, sendReply func(interface{}) error) error {
-	return tm.agent.RpcWrapLockAction(ctx, actionnode.TABLET_ACTION_MULTI_SNAPSHOT, args, nil, true, func() error {
-		// create a logger, send the result back to the caller
-		logger := logutil.NewChannelLogger(10)
-		wg := sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
-			for e := range logger {
-				ssr := &gorpcproto.MultiSnapshotStreamingReply{
-					Log: &e,
-				}
-				// Note we don't interrupt the loop here, as
-				// we still need to flush and finish the
-				// command, even if the channel to the client
-				// has been broken. We'll just keep trying to send.
-				sendReply(ssr)
-			}
-			wg.Done()
-		}()
-
-		sr, err := tm.agent.MultiSnapshot(ctx, args, logger)
-		close(logger)
-		wg.Wait()
-		if err != nil {
-			return err
-		}
-		ssr := &gorpcproto.MultiSnapshotStreamingReply{
-			Result: sr,
-		}
-		sendReply(ssr)
-		return nil
-	})
-}
-
-func (tm *TabletManager) MultiRestore(ctx context.Context, args *actionnode.MultiRestoreArgs, sendReply func(interface{}) error) error {
-	return tm.agent.RpcWrapLockAction(ctx, actionnode.TABLET_ACTION_MULTI_RESTORE, args, nil, true, func() error {
-		// create a logger, send the result back to the caller
-		logger := logutil.NewChannelLogger(10)
-		wg := sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
-			for e := range logger {
-				// Note we don't interrupt the loop here, as
-				// we still need to flush and finish the
-				// command, even if the channel to the client
-				// has been broken. We'll just keep trying to send.
-				sendReply(&e)
-			}
-			wg.Done()
-		}()
-
-		err := tm.agent.MultiRestore(ctx, args, logger)
 		close(logger)
 		wg.Wait()
 		return err

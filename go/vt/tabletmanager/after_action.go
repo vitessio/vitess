@@ -11,8 +11,11 @@ import (
 	"reflect"
 	"strings"
 
+	"code.google.com/p/go.net/context"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
@@ -133,7 +136,11 @@ func (agent *ActionAgent) disallowQueries() {
 
 // changeCallback is run after every action that might
 // have changed something in the tablet record.
-func (agent *ActionAgent) changeCallback(oldTablet, newTablet *topo.Tablet) error {
+func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTablet *topo.Tablet) error {
+	span := trace.NewSpanFromContext(ctx)
+	span.StartLocal("ActionAgent.changeCallback")
+	defer span.Finish()
+
 	allowQuery := newTablet.IsRunningQueryService()
 
 	// Read the shard to get SourceShards / TabletControlMap if

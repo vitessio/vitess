@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 
+	"code.google.com/p/go.net/context"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -158,7 +160,7 @@ type Topology struct {
 }
 
 // DbTopology returns the Topology for the topo server.
-func DbTopology(ts topo.Server) (*Topology, error) {
+func DbTopology(ctx context.Context, ts topo.Server) (*Topology, error) {
 	topology := &Topology{
 		Assigned: make(map[string]*KeyspaceNodes),
 		Idle:     make([]*TabletNode, 0),
@@ -166,7 +168,7 @@ func DbTopology(ts topo.Server) (*Topology, error) {
 		Partial:  false,
 	}
 
-	tabletInfos, err := GetAllTabletsAccrossCells(ts)
+	tabletInfos, err := GetAllTabletsAcrossCells(ctx, ts)
 	switch err {
 	case nil:
 		// we're good, no error

@@ -8,6 +8,8 @@ package wrangler
 import (
 	"time"
 
+	"code.google.com/p/go.net/context"
+
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
@@ -24,13 +26,15 @@ var (
 // Wrangler manages complex actions on the topology, like reparents,
 // snapshots, restores, ...
 // It is not a thread safe structure. Two go routines cannot usually
-// call wrangler methods at the same time (they probably would not
-// have the same logger, and definitely not the same timeouts /
-// deadlines).
+// call the same Wrangler object methods at the same time (they
+// probably would not have the same logger, and definitely not the
+// same context).
 type Wrangler struct {
 	logger      logutil.Logger
 	ts          topo.Server
 	tmc         tmclient.TabletManagerClient
+	ctx         context.Context
+	cancel      context.CancelFunc
 	deadline    time.Time
 	lockTimeout time.Duration
 }
@@ -41,7 +45,8 @@ type Wrangler struct {
 // - if using wrangler for just one action, this is set properly
 //   upon wrangler creation.
 // - if re-using wrangler multiple times, call ResetActionTimeout before
-//   every action.
+//   every action. Do not use this too much, just for corner cases.
+//   It is just much easier to create a new Wrangler object per action.
 //
 // lockTimeout: how long should we wait for the initial lock to start
 // a complex action?  This is distinct from actionTimeout because most
@@ -49,13 +54,28 @@ type Wrangler struct {
 // fail. However, automated action will need some time to arbitrate
 // the locks.
 func New(logger logutil.Logger, ts topo.Server, actionTimeout, lockTimeout time.Duration) *Wrangler {
-	return &Wrangler{logger, ts, tmclient.NewTabletManagerClient(), time.Now().Add(actionTimeout), lockTimeout}
+	ctx, cancel := context.WithTimeout(context.Background(), actionTimeout)
+	return &Wrangler{
+		logger:      logger,
+		ts:          ts,
+		tmc:         tmclient.NewTabletManagerClient(),
+		ctx:         ctx,
+		cancel:      cancel,
+		deadline:    time.Now().Add(actionTimeout),
+		lockTimeout: lockTimeout,
+	}
 }
 
 // ActionTimeout returns the timeout to use so the action finishes before
 // the deadline.
 func (wr *Wrangler) ActionTimeout() time.Duration {
 	return wr.deadline.Sub(time.Now())
+}
+
+// Context returns the context associated with this Wrangler.
+// It is invalidated if ResetActionTimeout is caled on the Wrangler.
+func (wr *Wrangler) Context() context.Context {
+	return wr.ctx
 }
 
 // TopoServer returns the topo.Server this wrangler is using.
@@ -82,13 +102,20 @@ func (wr *Wrangler) Logger() logutil.Logger {
 
 // ResetActionTimeout should be used before every action on a wrangler
 // object that is going to be re-used:
-// - vtctl will not call this, as it does one action
-// - vtctld will call this, as it re-uses the same wrangler for actions
+// - vtctl will not call this, as it does one action.
+// - vtctld will not call this, as it creates a new Wrangler every time.
+// However, some actions may need to do a cleanup phase where the
+// original Context may have expired or been cancelled, but still do
+// the action.  Wrangler cleaner module is one of these, or the vt
+// worker in some corner cases,
 func (wr *Wrangler) ResetActionTimeout(actionTimeout time.Duration) {
+	wr.ctx, wr.cancel = context.WithTimeout(context.Background(), actionTimeout)
 	wr.deadline = time.Now().Add(actionTimeout)
 }
 
 // signal handling
+// TODO(alainjobart): we should be able to just call the cancel function
+// of the wrangler context, forcing an exit.
 var interrupted = make(chan struct{})
 
 // SignalInterrupt needs to be called when a signal interrupts the current

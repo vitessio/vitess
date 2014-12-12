@@ -69,7 +69,7 @@ func (wr *Wrangler) SnapshotSourceEnd(tabletAlias topo.TabletAlias, slaveStartRe
 		ReadOnly:           !readWrite,
 		OriginalType:       originalType,
 	}
-	return wr.tmc.SnapshotSourceEnd(context.TODO(), ti, args, wr.ActionTimeout())
+	return wr.tmc.SnapshotSourceEnd(wr.ctx, ti, args)
 }
 
 // ReserveForRestore will make sure a tablet is ready to be used as a restore
@@ -88,7 +88,7 @@ func (wr *Wrangler) ReserveForRestore(srcTabletAlias, dstTabletAlias topo.Tablet
 	args := &actionnode.ReserveForRestoreArgs{
 		SrcTabletAlias: srcTabletAlias,
 	}
-	return wr.tmc.ReserveForRestore(context.TODO(), tablet, args, wr.ActionTimeout())
+	return wr.tmc.ReserveForRestore(wr.ctx, tablet, args)
 }
 
 // UnreserveForRestore switches the tablet back to its original state,

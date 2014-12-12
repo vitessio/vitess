@@ -8,8 +8,16 @@ MAKEFLAGS = -s
 
 all: build test
 
+# Values to be burned into the binary at build-time.
+LDFLAGS = "\
+	-X github.com/youtube/vitess/go/vt/servenv.buildHost   '$$(hostname)'\
+	-X github.com/youtube/vitess/go/vt/servenv.buildUser   '$$(whoami)'\
+	-X github.com/youtube/vitess/go/vt/servenv.buildGitRev '$$(git rev-parse HEAD)'\
+	-X github.com/youtube/vitess/go/vt/servenv.buildTime   '$$(date)'\
+"
+
 build:
-	go install ./go/...
+	go install -ldflags ${LDFLAGS} ./go/...
 
 # Set VT_TEST_FLAGS to pass flags to python tests.
 # For example, verbose output: export VT_TEST_FLAGS=-v
@@ -107,6 +115,9 @@ site_integration_test:
 # this rule only works if bootstrap.sh was successfully ran in ./java
 java_test:
 	cd java && mvn verify
+
+v3_test:
+	cd test && ./vtgatev3_test.py
 
 bson:
 	bsongen -file ./go/mysql/proto/structs.go -type QueryResult -o ./go/mysql/proto/query_result_bson.go

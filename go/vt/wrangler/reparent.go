@@ -109,7 +109,7 @@ func (wr *Wrangler) reparentShardLocked(keyspace, shard string, masterElectTable
 		return err
 	}
 
-	tabletMap, err := topo.GetTabletMapForShard(wr.ts, keyspace, shard)
+	tabletMap, err := topo.GetTabletMapForShard(context.TODO(), wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -167,7 +167,7 @@ func (wr *Wrangler) ShardReplicationStatuses(keyspace, shard string) ([]*topo.Ta
 
 func (wr *Wrangler) shardReplicationStatuses(shardInfo *topo.ShardInfo) ([]*topo.TabletInfo, []*myproto.ReplicationStatus, error) {
 	// FIXME(msolomon) this assumes no hierarchical replication, which is currently the case.
-	tabletMap, err := topo.GetTabletMapForShard(wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
+	tabletMap, err := topo.GetTabletMapForShard(context.TODO(), wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -213,13 +213,13 @@ func (wr *Wrangler) ReparentTablet(tabletAlias topo.TabletAlias) error {
 		return fmt.Errorf("master %v and potential slave not in same keyspace/shard", shardInfo.MasterAlias)
 	}
 
-	status, err := wr.tmc.SlaveStatus(context.TODO(), ti, wr.ActionTimeout())
+	status, err := wr.tmc.SlaveStatus(wr.ctx, ti)
 	if err != nil {
 		return err
 	}
 	wr.Logger().Infof("slave tablet position: %v %v %v", tabletAlias, ti.MysqlAddr(), status.Position)
 
-	rsd, err := wr.tmc.ReparentPosition(context.TODO(), masterTi, &status.Position, wr.ActionTimeout())
+	rsd, err := wr.tmc.ReparentPosition(wr.ctx, masterTi, &status.Position)
 	if err != nil {
 		return err
 	}
@@ -228,5 +228,5 @@ func (wr *Wrangler) ReparentTablet(tabletAlias topo.TabletAlias) error {
 	// An orphan is already in the replication graph but it is
 	// disconnected, hence we have to force this action.
 	rsd.Force = ti.Type == topo.TYPE_LAG_ORPHAN
-	return wr.tmc.RestartSlave(context.TODO(), ti, rsd, wr.ActionTimeout())
+	return wr.tmc.RestartSlave(wr.ctx, ti, rsd)
 }

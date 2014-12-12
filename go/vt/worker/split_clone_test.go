@@ -111,27 +111,7 @@ type FakePoolConnection struct {
 	ExpectedExecuteFetchIndex int
 }
 
-func NewFakePoolConnectionQueryBinlogOff(t *testing.T, query string) *FakePoolConnection {
-	return &FakePoolConnection{
-		t: t,
-		ExpectedExecuteFetch: []ExpectedExecuteFetch{
-			ExpectedExecuteFetch{
-				Query:       "SET sql_log_bin = OFF",
-				QueryResult: &mproto.QueryResult{},
-			},
-			ExpectedExecuteFetch{
-				Query:       query,
-				QueryResult: &mproto.QueryResult{},
-			},
-			ExpectedExecuteFetch{
-				Query:       "SET sql_log_bin = ON",
-				QueryResult: &mproto.QueryResult{},
-			},
-		},
-	}
-}
-
-func NewFakePoolConnectionQueryBinlogOn(t *testing.T, query string) *FakePoolConnection {
+func NewFakePoolConnectionQuery(t *testing.T, query string) *FakePoolConnection {
 	return &FakePoolConnection{
 		t: t,
 		ExpectedExecuteFetch: []ExpectedExecuteFetch{
@@ -219,57 +199,34 @@ func SourceRdonlyFactory(t *testing.T) func() (dbconnpool.PoolConnection, error)
 }
 
 // on the destinations
-func DestinationsFactory(t *testing.T, rowCount int64, disableBinLogs bool) func() (dbconnpool.PoolConnection, error) {
+func DestinationsFactory(t *testing.T, insertCount int64) func() (dbconnpool.PoolConnection, error) {
 	var queryIndex int64 = -1
-
-	var newFakePoolConnectionFactory func(*testing.T, string) *FakePoolConnection
-	if disableBinLogs {
-		newFakePoolConnectionFactory = NewFakePoolConnectionQueryBinlogOff
-	} else {
-		newFakePoolConnectionFactory = NewFakePoolConnectionQueryBinlogOn
-	}
 
 	return func() (dbconnpool.PoolConnection, error) {
 		qi := atomic.AddInt64(&queryIndex, 1)
 		switch {
-		case qi == 0:
-			return newFakePoolConnectionFactory(t, "CREATE DATABASE `vt_ks` /*!40100 DEFAULT CHARACTER SET utf8 */"), nil
-		case qi == 1:
-			return newFakePoolConnectionFactory(t, "CREATE TABLE `vt_ks`.`resharding1` (\n"+
-				"  `id` bigint(20) NOT NULL,\n"+
-				"  `msg` varchar(64) DEFAULT NULL,\n"+
-				"  `keyspace_id` bigint(20) unsigned NOT NULL,\n"+
-				"  PRIMARY KEY (`id`),\n"+
-				"  KEY `by_msg` (`msg`)\n"+
-				") ENGINE=InnoDB DEFAULT CHARSET=utf8"), nil
-		case qi >= 2 && qi < rowCount+2:
-			return newFakePoolConnectionFactory(t, "INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*"), nil
-		case qi == rowCount+2:
-			return newFakePoolConnectionFactory(t, "ALTER TABLE `vt_ks`.`table1` MODIFY   `id` bigint(20) NOT NULL AUTO_INCREMENT"), nil
-		case qi == rowCount+3:
-			return newFakePoolConnectionFactory(t, "CREATE DATABASE IF NOT EXISTS _vt"), nil
-		case qi == rowCount+4:
-			return newFakePoolConnectionFactory(t, "CREATE TABLE IF NOT EXISTS _vt.blp_checkpoint (\n"+
+		case qi < insertCount:
+			return NewFakePoolConnectionQuery(t, "INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*"), nil
+		case qi == insertCount:
+			return NewFakePoolConnectionQuery(t, "CREATE DATABASE IF NOT EXISTS _vt"), nil
+		case qi == insertCount+1:
+			return NewFakePoolConnectionQuery(t, "CREATE TABLE IF NOT EXISTS _vt.blp_checkpoint (\n"+
 				"  source_shard_uid INT(10) UNSIGNED NOT NULL,\n"+
 				"  pos VARCHAR(250) DEFAULT NULL,\n"+
 				"  time_updated BIGINT UNSIGNED NOT NULL,\n"+
 				"  transaction_timestamp BIGINT UNSIGNED NOT NULL,\n"+
 				"  flags VARCHAR(250) DEFAULT NULL,\n"+
 				"  PRIMARY KEY (source_shard_uid)) ENGINE=InnoDB"), nil
-		case qi == rowCount+5:
-			return newFakePoolConnectionFactory(t, "INSERT INTO _vt.blp_checkpoint (source_shard_uid, pos, time_updated, transaction_timestamp, flags) VALUES (0, 'MariaDB/12-34-5678', *"), nil
+		case qi == insertCount+2:
+			return NewFakePoolConnectionQuery(t, "INSERT INTO _vt.blp_checkpoint (source_shard_uid, pos, time_updated, transaction_timestamp, flags) VALUES (0, 'MariaDB/12-34-5678', *"), nil
 		}
 
 		return nil, fmt.Errorf("Unexpected connection")
 	}
 }
 
-func TestSplitCloneWriteMastersOnly(t *testing.T) {
-	testSplitClone(t, "-populate_blp_checkpoint -delay_auto_increment -write_masters_only")
-}
-
-func TestSplitCloneBinlogDisabled(t *testing.T) {
-	testSplitClone(t, "-populate_blp_checkpoint -delay_auto_increment")
+func TestSplitClonePopulateBlpCheckpoint(t *testing.T) {
+	testSplitClone(t, "-populate_blp_checkpoint")
 }
 
 func testSplitClone(t *testing.T, strategy string) {
@@ -278,7 +235,10 @@ func testSplitClone(t *testing.T, strategy string) {
 
 	sourceMaster := testlib.NewFakeTablet(t, wr, "cell1", 0,
 		topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "ks", "-80"))
-	sourceRdonly := testlib.NewFakeTablet(t, wr, "cell1", 1,
+	sourceRdonly1 := testlib.NewFakeTablet(t, wr, "cell1", 1,
+		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-80"),
+		testlib.TabletParent(sourceMaster.Tablet.Alias))
+	sourceRdonly2 := testlib.NewFakeTablet(t, wr, "cell1", 2,
 		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-80"),
 		testlib.TabletParent(sourceMaster.Tablet.Alias))
 
@@ -294,7 +254,7 @@ func testSplitClone(t *testing.T, strategy string) {
 		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "40-80"),
 		testlib.TabletParent(rightMaster.Tablet.Alias))
 
-	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly, leftMaster, leftRdonly, rightMaster, rightRdonly} {
+	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, leftMaster, leftRdonly, rightMaster, rightRdonly} {
 		ft.StartActionLoop(t, wr)
 		defer ft.StopActionLoop(t)
 	}
@@ -310,40 +270,46 @@ func testSplitClone(t *testing.T, strategy string) {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
 
-	gwrk, err := NewSplitCloneWorker(wr, "cell1", "ks", "-80", nil, strategy, 10, 1, 10)
+	gwrk, err := NewSplitCloneWorker(wr, "cell1", "ks", "-80", nil, strategy, 10 /*sourceReaderCount*/, 4 /*destinationPackCount*/, 1 /*minTableSizeForSplit*/, 10 /*destinationWriterCount*/)
 	if err != nil {
 		t.Errorf("Worker creation failed: %v", err)
 	}
 	wrk := gwrk.(*SplitCloneWorker)
-	// the only strategy that enables bin logs
-	disableBinLogs := !wrk.strategy.WriteMastersOnly
 
-	sourceRdonly.FakeMysqlDaemon.Schema = &myproto.SchemaDefinition{
-		DatabaseSchema: "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
-		TableDefinitions: []*myproto.TableDefinition{
-			&myproto.TableDefinition{
-				Name:              "table1",
-				Schema:            "CREATE TABLE `resharding1` (\n  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n  `msg` varchar(64) DEFAULT NULL,\n  `keyspace_id` bigint(20) unsigned NOT NULL,\n  PRIMARY KEY (`id`),\n  KEY `by_msg` (`msg`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8",
-				Columns:           []string{"id", "msg", "keyspace_id"},
-				PrimaryKeyColumns: []string{"id"},
-				Type:              myproto.TABLE_BASE_TABLE,
-				DataLength:        2048,
-				RowCount:          100,
+	for _, sourceRdonly := range []*testlib.FakeTablet{sourceRdonly1, sourceRdonly2} {
+		sourceRdonly.FakeMysqlDaemon.Schema = &myproto.SchemaDefinition{
+			DatabaseSchema: "",
+			TableDefinitions: []*myproto.TableDefinition{
+				&myproto.TableDefinition{
+					Name:              "table1",
+					Columns:           []string{"id", "msg", "keyspace_id"},
+					PrimaryKeyColumns: []string{"id"},
+					Type:              myproto.TABLE_BASE_TABLE,
+					// This informs how many rows we can pack into a single insert
+					DataLength: 2048,
+				},
 			},
-		},
-		Version: "unused",
+		}
+		sourceRdonly.FakeMysqlDaemon.DbaConnectionFactory = SourceRdonlyFactory(t)
+		sourceRdonly.FakeMysqlDaemon.CurrentSlaveStatus = &myproto.ReplicationStatus{
+			Position: myproto.ReplicationPosition{
+				GTIDSet: myproto.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
+			},
+		}
+		sourceRdonly.RpcServer.Register(&SqlQuery{t: t})
 	}
-	sourceRdonly.FakeMysqlDaemon.DbaConnectionFactory = SourceRdonlyFactory(t)
-	sourceRdonly.FakeMysqlDaemon.CurrentSlaveStatus = &myproto.ReplicationStatus{
-		Position: myproto.ReplicationPosition{
-			GTIDSet: myproto.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
-		},
-	}
-	sourceRdonly.RpcServer.Register(&SqlQuery{t: t})
-	leftMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 50, disableBinLogs)
-	leftRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 50, disableBinLogs)
-	rightMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 50, disableBinLogs)
-	rightRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 50, disableBinLogs)
+
+	// We read 100 source rows. sourceReaderCount is set to 10, so
+	// we'll have 100/10=10 rows per table chunk.
+	// destinationPackCount is set to 4, so we take 4 source rows
+	// at once. So we'll process 4 + 4 + 2 rows to get to 10.
+	// That means 3 insert statements on each target (each
+	// containing half of the rows, i.e. 2 + 2 + 1 rows). So 3 * 10
+	// = 30 insert statements on each destination.
+	leftMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30)
+	leftRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30)
+	rightMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30)
+	rightRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30)
 
 	wrk.Run()
 	status := wrk.StatusAsText()

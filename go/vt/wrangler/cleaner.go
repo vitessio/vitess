@@ -18,7 +18,7 @@ import (
 // action cleanup steps, and execute them at the end in reverse
 // order, with various guarantees.
 type Cleaner struct {
-	// folowing members protected by lock
+	// following members protected by lock
 	mu      sync.Mutex
 	actions []cleanerActionReference
 }
@@ -79,7 +79,7 @@ func (cleaner *Cleaner) CleanUp(wr *Wrangler) error {
 			rec.RecordError(err)
 			wr.Logger().Errorf("action %v failed on %v: %v", actionReference.name, actionReference.target, err)
 		} else {
-			wr.Logger().Infof("action %v successfull on %v", actionReference.name, actionReference.target)
+			wr.Logger().Infof("action %v successful on %v", actionReference.name, actionReference.target)
 		}
 	}
 	cleaner.mu.Unlock()
@@ -221,7 +221,8 @@ func RecordStartSlaveAction(cleaner *Cleaner, tabletInfo *topo.TabletInfo, waitT
 
 // CleanUp is part of CleanerAction interface.
 func (sba StartSlaveAction) CleanUp(wr *Wrangler) error {
-	return wr.TabletManagerClient().StartSlave(context.TODO(), sba.TabletInfo, sba.WaitTime)
+	ctx, _ := context.WithTimeout(context.TODO(), sba.WaitTime)
+	return wr.TabletManagerClient().StartSlave(ctx, sba.TabletInfo)
 }
 
 //
@@ -247,5 +248,6 @@ func RecordStartBlpAction(cleaner *Cleaner, tabletInfo *topo.TabletInfo, waitTim
 
 // CleanUp is part of CleanerAction interface.
 func (sba StartBlpAction) CleanUp(wr *Wrangler) error {
-	return wr.TabletManagerClient().StartBlp(context.TODO(), sba.TabletInfo, sba.WaitTime)
+	ctx, _ := context.WithTimeout(context.TODO(), sba.WaitTime)
+	return wr.TabletManagerClient().StartBlp(ctx, sba.TabletInfo)
 }

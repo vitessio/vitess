@@ -404,7 +404,7 @@ func main() {
 			if err != nil {
 				return "", err
 			}
-			return "", wr.TabletManagerClient().Ping(context.TODO(), ti, 10*time.Second)
+			return "", wr.TabletManagerClient().Ping(wr.Context(), ti)
 		})
 
 	actionRepo.RegisterTabletAction("ScrapTablet", acl.ADMIN,
@@ -526,7 +526,7 @@ func main() {
 			return
 		}
 		result := DbTopologyResult{}
-		topology, err := topotools.DbTopology(wr.TopoServer())
+		topology, err := topotools.DbTopology(context.TODO(), wr.TopoServer())
 		if err != nil {
 			result.Error = err.Error()
 		} else {

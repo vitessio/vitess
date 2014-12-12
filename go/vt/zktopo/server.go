@@ -21,12 +21,19 @@ type Server struct {
 	zconn zk.Conn
 }
 
+// Close is part of topo.Server interface.
 func (zkts *Server) Close() {
 	zkts.zconn.Close()
 }
 
+// GetZConn returns the zookeeper connection for this Server.
 func (zkts *Server) GetZConn() zk.Conn {
 	return zkts.zconn
+}
+
+// GetSubprocessFlags is part of topo.Server interface.
+func (zkts *Server) GetSubprocessFlags() []string {
+	return zk.GetZkSubprocessFlags()
 }
 
 // NewServer can be used to create a custom Server
@@ -46,6 +53,7 @@ func init() {
 // These helper methods are for ZK specific things
 //
 
+// ShardActionPath returns the path where action nodes are stored
 func (zkts *Server) ShardActionPath(keyspace, shard string) string {
 	return "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard + "/action"
 }

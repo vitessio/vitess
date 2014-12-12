@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"testing"
 
-	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/vt/tabletmanager/agentrpctest"
@@ -53,5 +52,5 @@ func TestGoRpcTMServer(t *testing.T) {
 	}, 0)
 
 	// and run the test suite
-	agentrpctest.AgentRpcTestSuite(context.Background(), t, client, ti)
+	agentrpctest.AgentRpcTestSuite(t, client, ti)
 }

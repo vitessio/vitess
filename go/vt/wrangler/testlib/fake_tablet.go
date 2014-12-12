@@ -4,7 +4,7 @@
 
 /*
 Package testlib contains utility methods to include in unit tests to
-deal with topology common tasks, liek fake tablets and action loops.
+deal with topology common tasks, like fake tablets and action loops.
 */
 package testlib
 

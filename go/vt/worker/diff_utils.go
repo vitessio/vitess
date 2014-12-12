@@ -174,7 +174,7 @@ func NewRowReader(queryResultReader *QueryResultReader) *RowReader {
 // Next will return:
 // (row, nil) for the next row
 // (nil, nil) for EOF
-// (nil, error) if an error occured
+// (nil, error) if an error occurred
 func (rr *RowReader) Next() ([]sqltypes.Value, error) {
 	if rr.currentResult == nil || rr.currentIndex == len(rr.currentResult.Rows) {
 		var ok bool
@@ -259,6 +259,7 @@ func RowsEqual(left, right []sqltypes.Value) int {
 // -1 if left is smaller than right
 // 0 if left and right are equal
 // +1 if left is bigger than right
+// TODO: This can panic if types for left and right don't match.
 func CompareRows(fields []mproto.Field, compareCount int, left, right []sqltypes.Value) (int, error) {
 	for i := 0; i < compareCount; i++ {
 		fieldType := fields[i].Type
@@ -273,6 +274,13 @@ func CompareRows(fields []mproto.Field, compareCount int, left, right []sqltypes
 		switch l := lv.(type) {
 		case int64:
 			r := rv.(int64)
+			if l < r {
+				return -1, nil
+			} else if l > r {
+				return 1, nil
+			}
+		case uint64:
+			r := rv.(uint64)
 			if l < r {
 				return -1, nil
 			} else if l > r {

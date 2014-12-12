@@ -6,23 +6,26 @@ package vindexes
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
 var hash *HashVindex
 
 func init() {
-	h, err := NewHashVindex(nil)
+	h, err := NewHashVindex(map[string]interface{}{"Table": "t", "Column": "c"})
 	if err != nil {
 		panic(err)
 	}
 	hash = h.(*HashVindex)
 }
 
-func TestConvert(t *testing.T) {
+func TestHashConvert(t *testing.T) {
 	cases := []struct {
 		in  uint64
 		out string
@@ -48,21 +51,20 @@ func TestConvert(t *testing.T) {
 	}
 }
 
-func BenchmarkConvert(b *testing.B) {
+func BenchmarkHashConvert(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		vhash(uint64(i))
 	}
 }
 
-func TestCost(t *testing.T) {
+func TestHashCost(t *testing.T) {
 	if hash.Cost() != 1 {
 		t.Errorf("Cost(): %d, want 1", hash.Cost())
 	}
 }
 
-func TestMap(t *testing.T) {
-	nn, _ := sqltypes.BuildNumeric("11")
-	got, err := hash.Map([]interface{}{1, int32(2), int64(3), uint(4), uint32(5), uint64(6), nn})
+func TestHashMap(t *testing.T) {
+	got, err := hash.Map(nil, []interface{}{1, int32(2), int64(3), uint(4), uint32(5), uint64(6)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -73,15 +75,14 @@ func TestMap(t *testing.T) {
 		"\xd2\xfd\x88g\xd5\r-\xfe",
 		"p\xbb\x02<\x81\f\xa8z",
 		"\xf0\x98H\n\xc4ľq",
-		"\xae\xfcDI\x1c\xfeGL",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
 }
 
-func TestVerify(t *testing.T) {
-	success, err := hash.Verify(1, "\x16k@\xb4J\xbaK\xd6")
+func TestHashVerify(t *testing.T) {
+	success, err := hash.Verify(nil, 1, "\x16k@\xb4J\xbaK\xd6")
 	if err != nil {
 		t.Error(err)
 	}
@@ -90,12 +91,93 @@ func TestVerify(t *testing.T) {
 	}
 }
 
-func TestReverseMap(t *testing.T) {
-	got, err := hash.ReverseMap("\x16k@\xb4J\xbaK\xd6")
+func TestHashReverseMap(t *testing.T) {
+	got, err := hash.ReverseMap(nil, "\x16k@\xb4J\xbaK\xd6")
 	if err != nil {
 		t.Error(err)
 	}
 	if got.(uint64) != 1 {
 		t.Errorf("ReverseMap(): %+v, want 1", got)
+	}
+}
+
+type vcursor struct {
+	query *tproto.BoundQuery
+}
+
+func (vc *vcursor) Execute(query *tproto.BoundQuery) (*mproto.QueryResult, error) {
+	vc.query = query
+	switch {
+	case strings.HasPrefix(query.Sql, "select"):
+		return &mproto.QueryResult{
+			Fields: []mproto.Field{{
+				Type: mproto.VT_LONG,
+			}},
+			Rows: [][]sqltypes.Value{
+				[]sqltypes.Value{
+					sqltypes.MakeNumeric([]byte("1")),
+				},
+			},
+			RowsAffected: 1,
+		}, nil
+	case strings.HasPrefix(query.Sql, "insert"):
+		return &mproto.QueryResult{InsertId: 1}, nil
+	case strings.HasPrefix(query.Sql, "delete"):
+		return &mproto.QueryResult{}, nil
+	}
+	panic("unexpected")
+}
+
+func TestHashCreate(t *testing.T) {
+	vc := &vcursor{}
+	err := hash.Create(vc, 1)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQuery := &tproto.BoundQuery{
+		Sql: "insert into t(c) values(:c)",
+		BindVariables: map[string]interface{}{
+			"c": 1,
+		},
+	}
+	if !reflect.DeepEqual(vc.query, wantQuery) {
+		t.Errorf("vc.query = %#v, want %#v", vc.query, wantQuery)
+	}
+}
+
+func TestHashGenerate(t *testing.T) {
+	vc := &vcursor{}
+	got, err := hash.Generate(vc)
+	if err != nil {
+		t.Error(err)
+	}
+	if got.(uint64) != 1 {
+		t.Errorf("Generate(): %+v, want 1", got)
+	}
+	wantQuery := &tproto.BoundQuery{
+		Sql: "insert into t(c) values(:c)",
+		BindVariables: map[string]interface{}{
+			"c": nil,
+		},
+	}
+	if !reflect.DeepEqual(vc.query, wantQuery) {
+		t.Errorf("vc.query = %#v, want %#v", vc.query, wantQuery)
+	}
+}
+
+func TestHashDelete(t *testing.T) {
+	vc := &vcursor{}
+	err := hash.Delete(vc, 1, "")
+	if err != nil {
+		t.Error(err)
+	}
+	wantQuery := &tproto.BoundQuery{
+		Sql: "delete from t where c = :c",
+		BindVariables: map[string]interface{}{
+			"c": 1,
+		},
+	}
+	if !reflect.DeepEqual(vc.query, wantQuery) {
+		t.Errorf("vc.query = %#v, want %#v", vc.query, wantQuery)
 	}
 }

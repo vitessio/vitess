@@ -63,9 +63,3 @@ func TestSrvShardLock(t *testing.T) {
 	defer ts.Close()
 	test.CheckSrvShardLock(t, ts)
 }
-
-func TestPid(t *testing.T) {
-	ts := NewTestServer(t, []string{"test"})
-	defer ts.Close()
-	test.CheckPid(t, ts)
-}

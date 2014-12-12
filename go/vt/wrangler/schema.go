@@ -5,10 +5,13 @@
 package wrangler
 
 import (
+	"bytes"
 	"fmt"
+	"html/template"
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"code.google.com/p/go.net/context"
 
@@ -28,7 +31,7 @@ func (wr *Wrangler) GetSchema(tabletAlias topo.TabletAlias, tables, excludeTable
 		return nil, err
 	}
 
-	return wr.tmc.GetSchema(context.TODO(), ti, tables, excludeTables, includeViews, wr.ActionTimeout())
+	return wr.tmc.GetSchema(wr.ctx, ti, tables, excludeTables, includeViews)
 }
 
 // ReloadSchema forces the remote tablet to reload its schema.
@@ -38,7 +41,7 @@ func (wr *Wrangler) ReloadSchema(tabletAlias topo.TabletAlias) error {
 		return err
 	}
 
-	return wr.tmc.ReloadSchema(context.TODO(), ti, wr.ActionTimeout())
+	return wr.tmc.ReloadSchema(wr.ctx, ti)
 }
 
 // helper method to asynchronously diff a schema
@@ -74,7 +77,7 @@ func (wr *Wrangler) ValidateSchemaShard(keyspace, shard string, excludeTables []
 
 	// read all the aliases in the shard, that is all tablets that are
 	// replicating from the master
-	aliases, err := topo.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
+	aliases, err := topo.FindAllTabletAliasesInShard(context.TODO(), wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -135,7 +138,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(keyspace string, excludeTables []stri
 	wg := sync.WaitGroup{}
 
 	// first diff the slaves in the reference shard 0
-	aliases, err := topo.FindAllTabletAliasesInShard(wr.ts, keyspace, shards[0])
+	aliases, err := topo.FindAllTabletAliasesInShard(context.TODO(), wr.ts, keyspace, shards[0])
 	if err != nil {
 		return err
 	}
@@ -162,7 +165,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(keyspace string, excludeTables []stri
 			continue
 		}
 
-		aliases, err := topo.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
+		aliases, err := topo.FindAllTabletAliasesInShard(context.TODO(), wr.ts, keyspace, shard)
 		if err != nil {
 			er.RecordError(err)
 			continue
@@ -186,7 +189,7 @@ func (wr *Wrangler) PreflightSchema(tabletAlias topo.TabletAlias, change string)
 	if err != nil {
 		return nil, err
 	}
-	return wr.tmc.PreflightSchema(context.TODO(), ti, change, wr.ActionTimeout())
+	return wr.tmc.PreflightSchema(wr.ctx, ti, change)
 }
 
 // ApplySchema will apply a schema change on the remote tablet.
@@ -195,7 +198,7 @@ func (wr *Wrangler) ApplySchema(tabletAlias topo.TabletAlias, sc *myproto.Schema
 	if err != nil {
 		return nil, err
 	}
-	return wr.tmc.ApplySchema(context.TODO(), ti, sc, wr.ActionTimeout())
+	return wr.tmc.ApplySchema(wr.ctx, ti, sc)
 }
 
 // Note for 'complex' mode (the 'simple' mode is easy enough that we
@@ -249,7 +252,7 @@ type TabletStatus struct {
 func (wr *Wrangler) applySchemaShard(shardInfo *topo.ShardInfo, preflight *myproto.SchemaChangeResult, masterTabletAlias topo.TabletAlias, change string, newParentTabletAlias topo.TabletAlias, simple, force bool) (*myproto.SchemaChangeResult, error) {
 
 	// find all the shards we need to handle
-	aliases, err := topo.FindAllTabletAliasesInShard(wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
+	aliases, err := topo.FindAllTabletAliasesInShard(context.TODO(), wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
 	if err != nil {
 		return nil, err
 	}
@@ -287,7 +290,7 @@ func (wr *Wrangler) applySchemaShard(shardInfo *topo.ShardInfo, preflight *mypro
 	for _, status := range statusArray {
 		wg.Add(1)
 		go func(status *TabletStatus) {
-			status.beforeSchema, status.lastError = wr.tmc.GetSchema(context.TODO(), status.ti, nil, nil, false, wr.ActionTimeout())
+			status.beforeSchema, status.lastError = wr.tmc.GetSchema(wr.ctx, status.ti, nil, nil, false)
 			wg.Done()
 		}(status)
 	}
@@ -383,7 +386,7 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 	// if newParentTabletAlias is passed in, use that as the new master
 	if !newParentTabletAlias.IsZero() {
 		log.Infof("Reparenting with new master set to %v", newParentTabletAlias)
-		tabletMap, err := topo.GetTabletMapForShard(wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
+		tabletMap, err := topo.GetTabletMapForShard(context.TODO(), wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
 		if err != nil {
 			return nil, err
 		}
@@ -533,4 +536,60 @@ func (wr *Wrangler) applySchemaKeyspace(keyspace string, change string, simple, 
 	}
 
 	return &myproto.SchemaChangeResult{BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}, nil
+}
+
+// Copy the schema from a source tablet to the specified shard.
+// The schema is applied directly on the master of the destination shard, and is propogated
+// to the replicas through binlogs.
+func (wr *Wrangler) CopySchemaShard(srcTabletAlias topo.TabletAlias, tables, excludeTables []string, includeViews bool, keyspace, shard string) error {
+	sd, err := wr.GetSchema(srcTabletAlias, tables, excludeTables, includeViews)
+	if err != nil {
+		return err
+	}
+	shardInfo, err := wr.ts.GetShard(keyspace, shard)
+	if err != nil {
+		return err
+	}
+	tabletInfo, err := wr.ts.GetTablet(shardInfo.MasterAlias)
+	if err != nil {
+		return err
+	}
+	createSql := sd.ToSQLStrings()
+
+	for _, sqlLine := range createSql {
+		err = wr.applySqlShard(tabletInfo, sqlLine)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// applySqlShard applies a given SQL change on a given tablet alias. It allows executing arbitrary
+// SQL statements, but doesn't return any results, so it's only useful for SQL statements
+// that would be run for their effects (e.g., CREATE).
+// It works by applying the SQL statement on the shard's master tablet with replication turned on.
+// Thus it should be used only for changes that can be applies on a live instance without causing issues;
+// it shouldn't be used for anything that will require a pivot.
+// The SQL statement string is expected to have {{.DatabaseName}} in place of the actual db name.
+func (wr *Wrangler) applySqlShard(tabletInfo *topo.TabletInfo, change string) error {
+	filledChange, err := fillStringTemplate(change, map[string]string{"DatabaseName": tabletInfo.DbName()})
+	if err != nil {
+		return fmt.Errorf("fillStringTemplate failed: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(wr.ctx, 30*time.Second)
+	defer cancel()
+	// Need to make sure that we enable binlog, since we're only applying the statement on masters.
+	_, err = wr.tmc.ExecuteFetch(ctx, tabletInfo, filledChange, 0, false, false)
+	return err
+}
+
+// fillStringTemplate returns the string template filled
+func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
+	myTemplate := template.Must(template.New("").Parse(tmpl))
+	data := new(bytes.Buffer)
+	if err := myTemplate.Execute(data, vars); err != nil {
+		return "", err
+	}
+	return data.String(), nil
 }

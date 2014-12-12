@@ -26,7 +26,6 @@ import (
 	"flag"
 	"fmt"
 	"net"
-	"os"
 	"sync"
 	"time"
 
@@ -37,6 +36,7 @@ import (
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -62,9 +62,6 @@ type ActionAgent struct {
 	BinlogPlayerMap *BinlogPlayerMap
 	LockTimeout     time.Duration
 
-	// Internal variables
-	done chan struct{} // closed when we are done.
-
 	// This is the History of the health checks, public so status
 	// pages can display it
 	History            *history.History
@@ -80,6 +77,10 @@ type ActionAgent struct {
 	_tablet          *topo.TabletInfo
 	_tabletControl   *topo.TabletControl
 	_waitingForMysql bool
+
+	// if the agent is healthy, this is nil. Otherwise it contains
+	// the reason we're not healthy.
+	_healthy error
 }
 
 func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
@@ -119,9 +120,9 @@ func NewActionAgent(
 		DBConfigs:          dbcfgs,
 		SchemaOverrides:    schemaOverrides,
 		LockTimeout:        lockTimeout,
-		done:               make(chan struct{}),
 		History:            history.New(historyLength),
 		lastHealthMapCount: stats.NewInt("LastHealthMapCount"),
+		_healthy:           fmt.Errorf("healthcheck not run yet"),
 	}
 
 	// Start the binlog player services, not playing at start.
@@ -163,9 +164,9 @@ func NewTestActionAgent(ts topo.Server, tabletAlias topo.TabletAlias, port int, 
 		DBConfigs:          nil,
 		SchemaOverrides:    nil,
 		BinlogPlayerMap:    nil,
-		done:               make(chan struct{}),
 		History:            history.New(historyLength),
 		lastHealthMapCount: new(stats.Int),
+		_healthy:           fmt.Errorf("healthcheck not run yet"),
 	}
 	if err := agent.Start(0, port, 0); err != nil {
 		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
@@ -173,12 +174,12 @@ func NewTestActionAgent(ts topo.Server, tabletAlias topo.TabletAlias, port int, 
 	return agent
 }
 
-func (agent *ActionAgent) updateState(oldTablet *topo.Tablet, context string) error {
+func (agent *ActionAgent) updateState(ctx context.Context, oldTablet *topo.Tablet, context string) error {
 	agent.mutex.Lock()
 	newTablet := agent._tablet.Tablet
 	agent.mutex.Unlock()
 	log.Infof("Running tablet callback after action %v", context)
-	return agent.changeCallback(oldTablet, newTablet)
+	return agent.changeCallback(ctx, oldTablet, newTablet)
 }
 
 func (agent *ActionAgent) readTablet() error {
@@ -197,6 +198,12 @@ func (agent *ActionAgent) Tablet() *topo.TabletInfo {
 	tablet := agent._tablet
 	agent.mutex.Unlock()
 	return tablet
+}
+
+func (agent *ActionAgent) Healthy() error {
+	agent.mutex.Lock()
+	defer agent.mutex.Unlock()
+	return agent._healthy
 }
 
 func (agent *ActionAgent) BlacklistedTables() []string {
@@ -227,8 +234,14 @@ func (agent *ActionAgent) setTabletControl(tc *topo.TabletControl) {
 
 // refreshTablet needs to be run after an action may have changed the current
 // state of the tablet.
-func (agent *ActionAgent) refreshTablet(context string) error {
+func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) error {
 	log.Infof("Executing post-action state refresh")
+
+	span := trace.NewSpanFromContext(ctx)
+	span.StartLocal("ActionAgent.refreshTablet")
+	span.Annotate("reason", reason)
+	defer span.Finish()
+	ctx = trace.NewContext(ctx, span)
 
 	// Save the old tablet so callbacks can have a better idea of
 	// the precise nature of the transition.
@@ -236,8 +249,8 @@ func (agent *ActionAgent) refreshTablet(context string) error {
 
 	// Actions should have side effects on the tablet, so reload the data.
 	if err := agent.readTablet(); err != nil {
-		log.Warningf("Failed rereading tablet after %v - services may be inconsistent: %v", context, err)
-		return fmt.Errorf("Failed rereading tablet after %v: %v", context, err)
+		log.Warningf("Failed rereading tablet after %v - services may be inconsistent: %v", reason, err)
+		return fmt.Errorf("Failed rereading tablet after %v: %v", reason, err)
 	}
 
 	if updatedTablet := agent.checkTabletMysqlPort(agent.Tablet()); updatedTablet != nil {
@@ -246,7 +259,7 @@ func (agent *ActionAgent) refreshTablet(context string) error {
 		agent.mutex.Unlock()
 	}
 
-	if err := agent.updateState(oldTablet, context); err != nil {
+	if err := agent.updateState(ctx, oldTablet, reason); err != nil {
 		return err
 	}
 	log.Infof("Done with post-action state refresh")
@@ -330,12 +343,6 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 		return err
 	}
 
-	data := fmt.Sprintf("host:%v\npid:%v\n", hostname, os.Getpid())
-
-	if err := agent.TopoServer.CreateTabletPidNode(agent.TabletAlias, data, agent.done); err != nil {
-		return err
-	}
-
 	if err = agent.verifyTopology(); err != nil {
 		return err
 	}
@@ -345,7 +352,7 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 	}
 
 	oldTablet := &topo.Tablet{}
-	if err = agent.updateState(oldTablet, "Start"); err != nil {
+	if err = agent.updateState(context.TODO(), oldTablet, "Start"); err != nil {
 		log.Warningf("Initial updateState failed, will need a state change before running properly: %v", err)
 	}
 	return nil
@@ -353,7 +360,6 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 
 // Stop shutdowns this agent.
 func (agent *ActionAgent) Stop() {
-	close(agent.done)
 	if agent.BinlogPlayerMap != nil {
 		agent.BinlogPlayerMap.StopAllPlayersAndReset()
 	}

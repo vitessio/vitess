@@ -477,3 +477,33 @@ func TestResolverBuildEntityIds(t *testing.T) {
 		t.Errorf("want %+v, got %+v", wantBindVars, bindVars)
 	}
 }
+
+func TestResolverDmlOnMultipleKeyspaceIds(t *testing.T) {
+	kid10, err := key.HexKeyspaceId("10").Unhex()
+	if err != nil {
+		t.Errorf("Error encoding keyspace id")
+	}
+	kid25, err := key.HexKeyspaceId("25").Unhex()
+	if err != nil {
+		t.Errorf("Error encoding keyspace id")
+	}
+	query := &proto.KeyspaceIdQuery{
+		Sql:         "update table set a = b",
+		Keyspace:    "TestResolverExecuteKeyspaceIds",
+		KeyspaceIds: []key.KeyspaceId{kid10, kid25},
+		TabletType:  topo.TYPE_MASTER,
+	}
+	res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 1*time.Millisecond)
+
+	s := createSandbox("TestResolverDmlOnMultipleKeyspaceIds")
+	sbc0 := &sandboxConn{}
+	s.MapTestConn("-20", sbc0)
+	sbc1 := &sandboxConn{}
+	s.MapTestConn("20-40", sbc1)
+
+	errStr := "DML should not span multiple keyspace_ids"
+	_, err = res.ExecuteKeyspaceIds(&context.DummyContext{}, query)
+	if err == nil {
+		t.Errorf("want %v, got nil", errStr)
+	}
+}

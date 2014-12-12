@@ -174,22 +174,22 @@ func TestMultiExecs(t *testing.T) {
 		},
 	}
 	_, _ = stc.ExecuteMulti(&context.DummyContext{}, "query", "TestMultiExecs", shardVars, "", nil)
-	if sbc0.BindVars[0] != "bv0" {
-		t.Errorf("got %s, want bv0", sbc0.BindVars[0])
+	if !reflect.DeepEqual(sbc0.BindVars, shardVars["0"]) {
+		t.Errorf("got %+v, want %+v", sbc0.BindVars, shardVars["0"])
 	}
-	if sbc1.BindVars[0] != "bv1" {
-		t.Errorf("got %s, want bv0", sbc1.BindVars[0])
+	if !reflect.DeepEqual(sbc1.BindVars, shardVars["1"]) {
+		t.Errorf("got %+v, want %+v", sbc0.BindVars, shardVars["1"])
 	}
 	sbc0.BindVars = nil
 	sbc1.BindVars = nil
 	_ = stc.StreamExecuteMulti(&context.DummyContext{}, "query", "TestMultiExecs", shardVars, "", nil, func(*mproto.QueryResult) error {
 		return nil
 	})
-	if sbc0.BindVars[0] != "bv0" {
-		t.Errorf("got %s, want bv0", sbc0.BindVars[0])
+	if !reflect.DeepEqual(sbc0.BindVars, shardVars["0"]) {
+		t.Errorf("got %+v, want %+v", sbc0.BindVars, shardVars["0"])
 	}
-	if sbc1.BindVars[0] != "bv1" {
-		t.Errorf("got %s, want bv0", sbc1.BindVars[0])
+	if !reflect.DeepEqual(sbc1.BindVars, shardVars["1"]) {
+		t.Errorf("got %+v, want %+v", sbc0.BindVars, shardVars["1"])
 	}
 }
 

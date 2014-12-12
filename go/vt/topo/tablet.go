@@ -257,7 +257,7 @@ func IsTrivialTypeChange(oldTabletType, newTabletType TabletType) bool {
 
 // IsValidTypeChange returns if we should we allow this transition at
 // all.  Most transitions are allowed, but some don't make sense under
-// any circumstances. If a transistion could be forced, don't disallow
+// any circumstances. If a transition could be forced, don't disallow
 // it here.
 func IsValidTypeChange(oldTabletType, newTabletType TabletType) bool {
 	switch oldTabletType {
@@ -396,15 +396,19 @@ func (tablet *Tablet) EndPoint() (*EndPoint, error) {
 		return nil, err
 	}
 
-	// TODO(szopa): Rename _vtocc to vt.
-	entry.NamedPortMap = map[string]int{
-		"_vtocc": tablet.Portmap["vt"],
+	entry.NamedPortMap = map[string]int{}
+
+	if port, ok := tablet.Portmap["vt"]; ok {
+		entry.NamedPortMap["_vtocc"] = port
+		entry.NamedPortMap["vt"] = port
 	}
 	if port, ok := tablet.Portmap["mysql"]; ok {
 		entry.NamedPortMap["_mysql"] = port
+		entry.NamedPortMap["mysql"] = port
 	}
 	if port, ok := tablet.Portmap["vts"]; ok {
 		entry.NamedPortMap["_vts"] = port
+		entry.NamedPortMap["vts"] = port
 	}
 
 	if len(tablet.Health) > 0 {
@@ -552,11 +556,6 @@ func Validate(ts Server, tabletAlias TabletAlias) error {
 		return err
 	}
 
-	// make sure the Server is good for this tablet
-	if err = ts.ValidateTablet(tabletAlias); err != nil {
-		return err
-	}
-
 	// Some tablets have no information to generate valid replication paths.
 	// We have three cases to handle:
 	// - we are a master, in which case we may have an entry or not
@@ -654,7 +653,12 @@ func DeleteTabletReplicationData(ts Server, tablet *Tablet) error {
 // and returns them all in a map.
 // If error is ErrPartialResult, the results in the dictionary are
 // incomplete, meaning some tablets couldn't be read.
-func GetTabletMap(ts Server, tabletAliases []TabletAlias) (map[TabletAlias]*TabletInfo, error) {
+func GetTabletMap(ctx context.Context, ts Server, tabletAliases []TabletAlias) (map[TabletAlias]*TabletInfo, error) {
+	span := trace.NewSpanFromContext(ctx)
+	span.StartLocal("topo.GetTabletMap")
+	span.Annotate("num_tablets", len(tabletAliases))
+	defer span.Finish()
+
 	wg := sync.WaitGroup{}
 	mutex := sync.Mutex{}
 

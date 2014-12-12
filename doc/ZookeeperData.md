@@ -71,7 +71,7 @@ type Shard struct {
 }
 
 // SourceShard represents a data source for filtered replication
-// accross shards. When this is used in a destination shard, the master
+// across shards. When this is used in a destination shard, the master
 // of that shard will run filtered replication.
 type SourceShard struct {
         // Uid is the unique ID for this SourceShard object.
@@ -329,9 +329,9 @@ $ zk cat /zk/nyc/vt/ns/rlookup/0/master
       "host": "nyc-db274.nyc.youtube.com",
       "port": 0,
       "named_port_map": {
-        "_mysql": 3306,
-        "_vtocc": 8101,
-        "_vts": 8102
+        "mysql": 3306,
+        "vt": 8101,
+        "vts": 8102
       }
     }
   ]

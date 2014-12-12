@@ -29,6 +29,7 @@ const (
 
 const (
 	SnapshotManifestFile = "snapshot_manifest.json"
+	SnapshotURLPath      = "/snapshot"
 )
 
 // Validate that this instance is a reasonable source of data.
@@ -264,7 +265,7 @@ func (mysqld *Mysqld) CreateSnapshot(logger logutil.Logger, dbName, sourceAddr s
 
 	// Stop sources of writes so we can get a consistent replication position.
 	// If the source is a slave use the master replication position
-	// unless we are allowing hierachical replicas.
+	// unless we are allowing hierarchical replicas.
 	masterAddr := ""
 	var replicationPosition proto.ReplicationPosition
 	if sourceIsMaster {

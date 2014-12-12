@@ -4,7 +4,7 @@
 
 // Actions modify the state of a tablet, shard or keyspace.
 //
-// They are currenty managed through a series of queues stored in
+// They are currently managed through a series of queues stored in
 // topology server, or RPCs. Switching to RPCs only now.
 
 package actionnode
@@ -153,12 +153,6 @@ const (
 	// Restore will restore a backup
 	TABLET_ACTION_RESTORE = "Restore"
 
-	// MultiSnapshot takes a split snapshot
-	TABLET_ACTION_MULTI_SNAPSHOT = "MultiSnapshot"
-
-	// MultiRestore restores a split snapshot
-	TABLET_ACTION_MULTI_RESTORE = "MultiRestore"
-
 	//
 	// Shard actions - involve all tablets in a shard.
 	// These are just descriptive and used for locking / logging.
@@ -174,8 +168,6 @@ const (
 	SHARD_ACTION_APPLY_SCHEMA = "ApplySchemaShard"
 	// Changes the ServedTypes inside a shard
 	SHARD_ACTION_SET_SERVED_TYPES = "SetShardServedTypes"
-	// Multi-restore on all tablets of a shard in parallel
-	SHARD_ACTION_MULTI_RESTORE = "ShardMultiRestore"
 	// Migrate served types from one shard to another
 	SHARD_ACTION_MIGRATE_SERVED_TYPES = "MigrateServedTypes"
 	// Update the Shard object (Cells, ...)

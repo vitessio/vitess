@@ -20,7 +20,7 @@ func (wr *Wrangler) lockShard(keyspace, shard string, actionNode *actionnode.Act
 }
 
 func (wr *Wrangler) unlockShard(keyspace, shard string, actionNode *actionnode.ActionNode, lockPath string, actionError error) error {
-	return actionNode.UnlockShard(wr.ts, keyspace, shard, lockPath, actionError)
+	return actionNode.UnlockShard(context.TODO(), wr.ts, keyspace, shard, lockPath, actionError)
 }
 
 // updateShardCellsAndMaster will update the 'Cells' and possibly
@@ -156,7 +156,7 @@ func (wr *Wrangler) DeleteShard(keyspace, shard string) error {
 		return err
 	}
 
-	tabletMap, err := topo.GetTabletMapForShard(wr.ts, keyspace, shard)
+	tabletMap, err := topo.GetTabletMapForShard(context.TODO(), wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}

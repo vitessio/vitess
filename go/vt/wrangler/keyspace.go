@@ -27,7 +27,7 @@ func (wr *Wrangler) lockKeyspace(keyspace string, actionNode *actionnode.ActionN
 }
 
 func (wr *Wrangler) unlockKeyspace(keyspace string, actionNode *actionnode.ActionNode, lockPath string, actionError error) error {
-	return actionNode.UnlockKeyspace(wr.ts, keyspace, lockPath, actionError)
+	return actionNode.UnlockKeyspace(context.TODO(), wr.ts, keyspace, lockPath, actionError)
 }
 
 // SetKeyspaceShardingInfo locks a keyspace and sets its ShardingColumnName
@@ -171,7 +171,7 @@ func (wr *Wrangler) MigrateServedTypes(keyspace, shard string, cells []string, s
 	// Send a refresh to the source tablets we just disabled, iff:
 	// - we're not migrating a master
 	// - it is not a reverse migration
-	// - we dont' have any errors
+	// - we don't have any errors
 	// - we're not told to skip the refresh
 	if servedType != topo.TYPE_MASTER && !reverse && !rec.HasErrors() && !skipReFreshState {
 		for _, si := range sourceShards {
@@ -212,7 +212,7 @@ func (wr *Wrangler) getMastersPosition(shards []*topo.ShardInfo) (map[*topo.Shar
 				return
 			}
 
-			pos, err := wr.tmc.MasterPosition(context.TODO(), ti, wr.ActionTimeout())
+			pos, err := wr.tmc.MasterPosition(wr.ctx, ti)
 			if err != nil {
 				rec.RecordError(err)
 				return
@@ -283,7 +283,7 @@ func (wr *Wrangler) refreshMasters(shards []*topo.ShardInfo) error {
 				return
 			}
 
-			if err := wr.tmc.RefreshState(context.TODO(), ti, wr.ActionTimeout()); err != nil {
+			if err := wr.tmc.RefreshState(wr.ctx, ti); err != nil {
 				rec.RecordError(err)
 			} else {
 				wr.Logger().Infof("%v responded", si.MasterAlias)
@@ -606,13 +606,13 @@ func (wr *Wrangler) masterMigrateServedFrom(ki *topo.KeyspaceInfo, sourceShard *
 
 	// Now refresh the blacklisted table list on the source master
 	event.DispatchUpdate(ev, "refreshing source master so it updates its blacklisted tables")
-	if err := wr.tmc.RefreshState(context.TODO(), sourceMasterTabletInfo, wr.ActionTimeout()); err != nil {
+	if err := wr.tmc.RefreshState(wr.ctx, sourceMasterTabletInfo); err != nil {
 		return err
 	}
 
 	// get the position
 	event.DispatchUpdate(ev, "getting master position")
-	masterPosition, err := wr.tmc.MasterPosition(context.TODO(), sourceMasterTabletInfo, wr.ActionTimeout())
+	masterPosition, err := wr.tmc.MasterPosition(wr.ctx, sourceMasterTabletInfo)
 	if err != nil {
 		return err
 	}
@@ -677,7 +677,8 @@ func (wr *Wrangler) setKeyspaceServedFrom(keyspace string, servedType topo.Table
 // given type in a shard. It would work for the master, but the
 // discovery wouldn't be very efficient.
 func (wr *Wrangler) RefreshTablesByShard(si *topo.ShardInfo, tabletType topo.TabletType, cells []string) error {
-	tabletMap, err := topo.GetTabletMapForShardByCell(wr.ts, si.Keyspace(), si.ShardName(), cells)
+	wr.Logger().Infof("RefreshTablesByShard called on shard %v/%v", si.Keyspace(), si.ShardName())
+	tabletMap, err := topo.GetTabletMapForShardByCell(context.TODO(), wr.ts, si.Keyspace(), si.ShardName(), cells)
 	switch err {
 	case nil:
 		// keep going
@@ -696,7 +697,8 @@ func (wr *Wrangler) RefreshTablesByShard(si *topo.ShardInfo, tabletType topo.Tab
 
 		wg.Add(1)
 		go func(ti *topo.TabletInfo) {
-			if err := wr.tmc.RefreshState(context.TODO(), ti, wr.ActionTimeout()); err != nil {
+			wr.Logger().Infof("Calling RefreshState on tablet %v", ti.Alias)
+			if err := wr.tmc.RefreshState(wr.ctx, ti); err != nil {
 				wr.Logger().Warningf("RefreshTablesByShard: failed to refresh %v: %v", ti.Alias, err)
 			}
 			wg.Done()

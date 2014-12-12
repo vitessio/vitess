@@ -23,7 +23,7 @@ func (wr *Wrangler) GetPermissions(tabletAlias topo.TabletAlias) (*myproto.Permi
 		return nil, err
 	}
 
-	return wr.tmc.GetPermissions(context.TODO(), tablet, wr.ActionTimeout())
+	return wr.tmc.GetPermissions(wr.ctx, tablet)
 }
 
 // helper method to asynchronously diff a permissions
@@ -58,7 +58,7 @@ func (wr *Wrangler) ValidatePermissionsShard(keyspace, shard string) error {
 
 	// read all the aliases in the shard, that is all tablets that are
 	// replicating from the master
-	aliases, err := topo.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
+	aliases, err := topo.FindAllTabletAliasesInShard(context.TODO(), wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -115,7 +115,7 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(keyspace string) error {
 	er := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for _, shard := range shards {
-		aliases, err := topo.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
+		aliases, err := topo.FindAllTabletAliasesInShard(context.TODO(), wr.ts, keyspace, shard)
 		if err != nil {
 			er.RecordError(err)
 			continue

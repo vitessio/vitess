@@ -4,39 +4,72 @@
 
 from itertools import izip
 import logging
+import random
 import re
 
 from net import bsonrpc
 from net import gorpc
-from vtdb import cursor
+from vtdb import dbapi
 from vtdb import dbexceptions
 from vtdb import field_types
-
-# This is the shard name for when the keyrange covers the entire space
-# for unsharded database.
-SHARD_ZERO = "0"
+from vtdb import vtdb_logger
+from vtdb import vtgate_cursor
 
 
 _errno_pattern = re.compile('\(errno (\d+)\)')
-# Map specific errors to specific classes.
-_errno_map = {
-    1062: dbexceptions.IntegrityError,
-}
 
 
+def log_exception(method):
+  """Decorator for logging the exception from vtgatev2.
+
+  The convert_exception method interprets and recasts the exceptions
+  raised by lower-layer. The inner function calls the appropriate vtdb_logger
+  method based on the exception raised.
+
+  Args:
+    exc: exception raised by calling code
+    args: additional args for the exception.
+
+  Returns:
+    Decorated method.
+  """
+  def _log_exception(exc, *args):
+    logger_object = vtdb_logger.get_logger()
+
+    new_exception = method(exc, *args)
+
+    if isinstance(new_exception, dbexceptions.IntegrityError):
+      logger_object.integrity_error(new_exception)
+    else:
+      logger_object.vtgatev2_exception(new_exception)
+    return new_exception
+  return _log_exception
+
+
+def handle_app_error(exc_args):
+  msg = str(exc_args[0]).lower()
+  if msg.startswith('request_backlog'):
+    return dbexceptions.RequestBacklog(exc_args)
+  match = _errno_pattern.search(msg)
+  if match:
+    mysql_errno = int(match.group(1))
+    # Prune the error message to truncate the query string
+    # returned by mysql as it contains bind variables.
+    if mysql_errno == 1062:
+      parts = _errno_pattern.split(msg)
+      pruned_msg = msg[:msg.find(parts[2])]
+      new_args = (pruned_msg,) + tuple(exc_args[1:])
+      return dbexceptions.IntegrityError(new_args)
+  return dbexceptions.DatabaseError(exc_args)
+
+
+@log_exception
 def convert_exception(exc, *args):
   new_args = exc.args + args
   if isinstance(exc, gorpc.TimeoutError):
     return dbexceptions.TimeoutError(new_args)
   elif isinstance(exc, gorpc.AppError):
-    msg = str(exc[0]).lower()
-    if msg.startswith('request_backlog'):
-      return dbexceptions.RequestBacklog(new_args)
-    match = _errno_pattern.search(msg)
-    if match:
-      mysql_errno = int(match.group(1))
-      return _errno_map.get(mysql_errno, dbexceptions.DatabaseError)(new_args)
-    return dbexceptions.DatabaseError(new_args)
+    return handle_app_error(new_args)
   elif isinstance(exc, gorpc.ProgrammingError):
     return dbexceptions.ProgrammingError(new_args)
   elif isinstance(exc, gorpc.GoRpcError):
@@ -44,28 +77,35 @@ def convert_exception(exc, *args):
   return exc
 
 
+def _create_req(sql, new_binds, tablet_type):
+  sql, new_binds = dbapi.prepare_query_bind_vars(sql, new_binds)
+  new_binds = field_types.convert_bind_vars(new_binds)
+  req = {
+        'Sql': sql,
+        'BindVariables': new_binds,
+        'TabletType': tablet_type,
+        }
+  return req
+
+
 # A simple, direct connection to the vttablet query server.
 # This is shard-unaware and only handles the most basic communication.
 # If something goes wrong, this object should be thrown away and a new one instantiated.
-class VtgateConnection(object):
+class VTGateConnection(object):
   session = None
-  tablet_type = None
-  cursorclass = cursor.TabletCursor
   _stream_fields = None
   _stream_conversions = None
   _stream_result = None
   _stream_result_index = None
 
-  def __init__(self, addr, tablet_type, keyspace, shard, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None):
+  def __init__(self, addr, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None):
     self.addr = addr
-    self.tablet_type = tablet_type
-    self.keyspace = keyspace
-    self.shard = shard
     self.timeout = timeout
     self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password, encrypted=encrypted, keyfile=keyfile, certfile=certfile)
+    self.logger_object = vtdb_logger.get_logger()
 
   def __str__(self):
-    return '<VtgateConnection %s %s %s/%s>' % (self.addr, self.tablet_type, self.keyspace, self.shard)
+    return '<VTGateConnection %s >' % self.addr
 
   def dial(self):
     try:
@@ -82,6 +122,16 @@ class VtgateConnection(object):
 
   def is_closed(self):
     return self.client.is_closed()
+
+  def cursor(self, *pargs, **kwargs):
+    cursorclass = None
+    if 'cursorclass' in kwargs:
+      cursorclass = kwargs['cursorclass']
+      del kwargs['cursorclass']
+
+    if cursorclass is None:
+      cursorclass = vtgate_cursor.VTGateCursor
+    return cursorclass(self, *pargs, **kwargs)
 
   def begin(self):
     try:
@@ -106,9 +156,6 @@ class VtgateConnection(object):
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
 
-  def cursor(self, cursorclass=None, **kargs):
-    return (cursorclass or self.cursorclass)(self, **kargs)
-
   def _add_session(self, req):
     if self.session:
       req['Session'] = self.session
@@ -117,15 +164,8 @@ class VtgateConnection(object):
     if 'Session' in response.reply and response.reply['Session']:
       self.session = response.reply['Session']
 
-  def _execute(self, sql, bind_variables):
-    new_binds = field_types.convert_bind_vars(bind_variables)
-    req = {
-        'Sql': sql,
-        'BindVariables': new_binds,
-        'Keyspace': self.keyspace,
-        'TabletType': self.tablet_type,
-        'Shards': [self.shard],
-    }
+  def _execute(self, sql, bind_variables, tablet_type):
+    req = _create_req(sql, bind_variables, tablet_type)
     self._add_session(req)
 
     fields = []
@@ -134,12 +174,11 @@ class VtgateConnection(object):
     rowcount = 0
     lastrowid = 0
     try:
-      response = self.client.call('VTGate.ExecuteShard', req)
+      response = self.client.call('VTGate.Execute', req)
       self._update_session(response)
       reply = response.reply
-      # TODO(sougou): Simplify this check after all servers are deployed
       if 'Error' in response.reply and response.reply['Error']:
-        raise gorpc.AppError(response.reply['Error'], 'VTGate.ExecuteShard')
+        raise gorpc.AppError(response.reply['Error'], 'VTGate.Execute')
 
       if 'Result' in reply:
         res = reply['Result']
@@ -153,15 +192,18 @@ class VtgateConnection(object):
         rowcount = res['RowsAffected']
         lastrowid = res['InsertId']
     except gorpc.GoRpcError as e:
-      raise convert_exception(e, str(self), sql, bind_variables)
+      self.logger_object.log_private_data(bind_variables)
+      raise convert_exception(e, str(self), sql)
     except:
       logging.exception('gorpc low-level error')
       raise
     return results, rowcount, lastrowid, fields
 
-  def _execute_batch(self, sql_list, bind_variables_list):
+
+  def _execute_batch(self, sql_list, bind_variables_list, tablet_type):
     query_list = []
     for sql, bind_vars in zip(sql_list, bind_variables_list):
+      sql, bind_vars = dbapi.prepare_query_bind_vars(sql, bind_vars)
       query = {}
       query['Sql'] = sql
       query['BindVariables'] = field_types.convert_bind_vars(bind_vars)
@@ -172,15 +214,13 @@ class VtgateConnection(object):
     try:
       req = {
           'Queries': query_list,
-          'Keyspace': self.keyspace,
-          'TabletType': self.tablet_type,
-          'Shards': [self.shard],
+          'TabletType': tablet_type,
       }
       self._add_session(req)
-      response = self.client.call('VTGate.ExecuteBatchShard', req)
+      response = self.client.call('VTGate.ExecuteBatch', req)
       self._update_session(response)
       if 'Error' in response.reply and response.reply['Error']:
-        raise gorpc.AppError(response.reply['Error'], 'VTGate.ExecuteBatchShard')
+        raise gorpc.AppError(response.reply['Error'], 'VTGate.ExecuteBatch')
       for reply in response.reply['List']:
         fields = []
         conversions = []
@@ -198,7 +238,8 @@ class VtgateConnection(object):
         lastrowid = reply['InsertId']
         rowsets.append((results, rowcount, lastrowid, fields))
     except gorpc.GoRpcError as e:
-      raise convert_exception(e, str(self), sql_list, bind_variables_list)
+      self.logger_object.log_private_data(bind_variables_list)
+      raise convert_exception(e, str(self), sql_list)
     except:
       logging.exception('gorpc low-level error')
       raise
@@ -207,15 +248,8 @@ class VtgateConnection(object):
   # we return the fields for the response, and the column conversions
   # the conversions will need to be passed back to _stream_next
   # (that way we avoid using a member variable here for such a corner case)
-  def _stream_execute(self, sql, bind_variables):
-    new_binds = field_types.convert_bind_vars(bind_variables)
-    req = {
-        'Sql': sql,
-        'BindVariables': new_binds,
-        'Keyspace': self.keyspace,
-        'TabletType': self.tablet_type,
-        'Shards': [self.shard],
-    }
+  def _stream_execute(self, sql, bind_variables, tablet_type):
+    req = _create_req(sql, bind_variables, tablet_type)
     self._add_session(req)
 
     self._stream_fields = []
@@ -223,7 +257,7 @@ class VtgateConnection(object):
     self._stream_result = None
     self._stream_result_index = 0
     try:
-      self.client.stream_call('VTGate.StreamExecuteShard', req)
+      self.client.stream_call('VTGate.StreamExecute', req)
       first_response = self.client.stream_next()
       reply = first_response.reply['Result']
 
@@ -231,7 +265,8 @@ class VtgateConnection(object):
         self._stream_fields.append((field['Name'], field['Type']))
         self._stream_conversions.append(field_types.conversions.get(field['Type']))
     except gorpc.GoRpcError as e:
-      raise convert_exception(e, str(self), sql, bind_variables)
+      self.logger_object.log_private_data(bind_variables)
+      raise convert_exception(e, str(self), sql)
     except:
       logging.exception('gorpc low-level error')
       raise
@@ -250,10 +285,12 @@ class VtgateConnection(object):
           self._stream_result_index = None
           return None
         # A session message, if any comes separately with no rows
-        # TODO(sougou) get rid of this check. After all the server
-        # changes, there will always be a 'Session' in the reply.
         if 'Session' in self._stream_result.reply and self._stream_result.reply['Session']:
           self.session = self._stream_result.reply['Session']
+          self._stream_result = None
+          continue
+        # An extra fields message if it is scatter over streaming, ignore it
+        if not self._stream_result.reply['Result']['Rows']:
           self._stream_result = None
           continue
       except gorpc.GoRpcError as e:
@@ -272,6 +309,7 @@ class VtgateConnection(object):
 
     return row
 
+
 def _make_row(row, conversions):
   converted_row = []
   for conversion_func, field_data in izip(conversions, row):
@@ -285,7 +323,54 @@ def _make_row(row, conversions):
   return converted_row
 
 
-def connect(*pargs, **kargs):
-  conn = VtgateConnection(*pargs, **kargs)
-  conn.dial()
-  return conn
+def get_params_for_vtgate_conn(vtgate_addrs, timeout, encrypted=False, user=None, password=None):
+  db_params_list = []
+  addrs = []
+  if isinstance(vtgate_addrs, dict):
+    service = '_vt'
+    if encrypted:
+      service = '_vts'
+    if service not in vtgate_addrs:
+      raise Exception("required vtgate service addrs %s not exist" % service)
+    addrs = vtgate_addrs[service]
+    random.shuffle(addrs)
+  elif isinstance(vtgate_addrs, list):
+    random.shuffle(vtgate_addrs)
+    addrs = vtgate_addrs
+  else:
+    raise dbexceptions.Error("Wrong type for vtgate addrs %s" % vtgate_addrs)
+
+  for addr in addrs:
+    vt_params = dict()
+    vt_params['addr'] = addr
+    vt_params['timeout'] = timeout
+    vt_params['encrypted'] = encrypted
+    vt_params['user'] = user
+    vt_params['password'] = password
+    db_params_list.append(vt_params)
+  return db_params_list
+
+
+def connect(vtgate_addrs, timeout, encrypted=False, user=None, password=None):
+  db_params_list = get_params_for_vtgate_conn(vtgate_addrs, timeout,
+                                              encrypted=encrypted, user=user,
+                                              password=password)
+
+  if not db_params_list:
+   raise dbexceptions.OperationalError("empty db params list - no db instance available for vtgate_addrs %s" % vtgate_addrs)
+
+  db_exception = None
+  host_addr = None
+  for params in db_params_list:
+    try:
+      db_params = params.copy()
+      host_addr = db_params['addr']
+      conn = VTGateConnection(**db_params)
+      conn.dial()
+      return conn
+    except Exception as e:
+      db_exception = e
+      logging.warning('db connection failed: %s, %s', host_addr, e)
+
+  raise dbexceptions.OperationalError(
+    'unable to create vt connection', host_addr, db_exception)

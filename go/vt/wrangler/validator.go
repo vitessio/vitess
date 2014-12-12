@@ -8,9 +8,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"time"
-
-	"code.google.com/p/go.net/context"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -24,75 +21,44 @@ import (
 //
 // This may eventually move into a separate package.
 
-type vresult struct {
-	name string
-	err  error
-}
-
-func (wr *Wrangler) waitForResults(wg *sync.WaitGroup, results chan vresult) error {
-	timer := time.NewTimer(wr.ActionTimeout())
-	done := make(chan bool, 1)
+// waitForResults will wait for all the errors to come back.
+// There is no timeout, as individual calls will use the context and timeout
+// and fail at the end anyway.
+func (wr *Wrangler) waitForResults(wg *sync.WaitGroup, results chan error) error {
 	go func() {
 		wg.Wait()
-		done <- true
+		close(results)
 	}()
 
-	var err error
-wait:
-	for {
-		select {
-		case vd := <-results:
-			log.Infof("checking %v", vd.name)
-			if vd.err != nil {
-				err = fmt.Errorf("some validation errors - see log")
-				log.Errorf("%v: %v", vd.name, vd.err)
-			}
-		case <-timer.C:
-			err = fmt.Errorf("timed out during validate")
-			break wait
-		case <-done:
-			// To prevent a false positive, once we are 'done',
-			// drain the result channel completely.
-			for {
-				select {
-				case vd := <-results:
-					log.Infof("checking %v", vd.name)
-					if vd.err != nil {
-						err = fmt.Errorf("some validation errors - see log")
-						log.Errorf("%v: %v", vd.name, vd.err)
-					}
-				default:
-					break wait
-				}
-			}
-		}
+	var finalErr error
+	for err := range results {
+		finalErr = fmt.Errorf("some validation errors - see log")
+		log.Errorf("%v", err)
 	}
-
-	return err
+	return finalErr
 }
 
 // Validate all tablets in all discoverable cells, even if they are
 // not in the replication graph.
-func (wr *Wrangler) validateAllTablets(wg *sync.WaitGroup, results chan<- vresult) {
-
+func (wr *Wrangler) validateAllTablets(wg *sync.WaitGroup, results chan<- error) {
 	cellSet := make(map[string]bool, 16)
 
 	keyspaces, err := wr.ts.GetKeyspaces()
 	if err != nil {
-		results <- vresult{"TopologyServer.GetKeyspaces", err}
+		results <- fmt.Errorf("TopologyServer.GetKeyspaces failed: %v", err)
 		return
 	}
 	for _, keyspace := range keyspaces {
 		shards, err := wr.ts.GetShardNames(keyspace)
 		if err != nil {
-			results <- vresult{"TopologyServer.GetShardNames(" + keyspace + ")", err}
+			results <- fmt.Errorf("TopologyServer.GetShardNames(%v) failed: %v", keyspace, err)
 			return
 		}
 
 		for _, shard := range shards {
-			aliases, err := topo.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
+			aliases, err := topo.FindAllTabletAliasesInShard(wr.ctx, wr.ts, keyspace, shard)
 			if err != nil {
-				results <- vresult{"TopologyServer.FindAllTabletAliasesInShard(" + keyspace + "," + shard + ")", err}
+				results <- fmt.Errorf("TopologyServer.FindAllTabletAliasesInShard(%v, %v) failed: %v", keyspace, shard, err)
 				return
 			}
 			for _, alias := range aliases {
@@ -104,60 +70,67 @@ func (wr *Wrangler) validateAllTablets(wg *sync.WaitGroup, results chan<- vresul
 	for cell := range cellSet {
 		aliases, err := wr.ts.GetTabletsByCell(cell)
 		if err != nil {
-			results <- vresult{"GetTabletsByCell(" + cell + ")", err}
-		} else {
-			for _, alias := range aliases {
-				wg.Add(1)
-				go func(alias topo.TabletAlias) {
-					results <- vresult{alias.String(), topo.Validate(wr.ts, alias)}
-					wg.Done()
-				}(alias)
-			}
+			results <- fmt.Errorf("TopologyServer.GetTabletsByCell(%v) failed: %v", cell, err)
+			continue
+		}
+
+		for _, alias := range aliases {
+			wg.Add(1)
+			go func(alias topo.TabletAlias) {
+				defer wg.Done()
+				if err := topo.Validate(wr.ts, alias); err != nil {
+					results <- fmt.Errorf("Validate(%v) failed: %v", alias, err)
+				} else {
+					wr.Logger().Infof("tablet %v is valid", alias)
+				}
+			}(alias)
 		}
 	}
 }
 
-func (wr *Wrangler) validateKeyspace(keyspace string, pingTablets bool, wg *sync.WaitGroup, results chan<- vresult) {
+func (wr *Wrangler) validateKeyspace(keyspace string, pingTablets bool, wg *sync.WaitGroup, results chan<- error) {
 	// Validate replication graph by traversing each shard.
 	shards, err := wr.ts.GetShardNames(keyspace)
 	if err != nil {
-		results <- vresult{"TopologyServer.GetShardNames(" + keyspace + ")", err}
+		results <- fmt.Errorf("TopologyServer.GetShardNames(%v) failed: %v", keyspace, err)
+		return
 	}
 	for _, shard := range shards {
 		wg.Add(1)
 		go func(shard string) {
+			defer wg.Done()
 			wr.validateShard(keyspace, shard, pingTablets, wg, results)
-			wg.Done()
 		}(shard)
 	}
 }
 
 // FIXME(msolomon) This validate presumes the master is up and running.
 // Even when that isn't true, there are validation processes that might be valuable.
-func (wr *Wrangler) validateShard(keyspace, shard string, pingTablets bool, wg *sync.WaitGroup, results chan<- vresult) {
+func (wr *Wrangler) validateShard(keyspace, shard string, pingTablets bool, wg *sync.WaitGroup, results chan<- error) {
 	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
-		results <- vresult{keyspace + "/" + shard, err}
+		results <- fmt.Errorf("TopologyServer.GetShard(%v, %v) failed: %v", keyspace, shard, err)
 		return
 	}
 
-	aliases, err := topo.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
+	aliases, err := topo.FindAllTabletAliasesInShard(wr.ctx, wr.ts, keyspace, shard)
 	if err != nil {
-		results <- vresult{keyspace + "/" + shard, err}
+		results <- fmt.Errorf("TopologyServer.FindAllTabletAliasesInShard(%v, %v) failed: %v", keyspace, shard, err)
+		return
 	}
 
-	tabletMap, _ := topo.GetTabletMap(wr.ts, aliases)
+	tabletMap, _ := topo.GetTabletMap(wr.ctx, wr.ts, aliases)
 
 	var masterAlias topo.TabletAlias
 	for _, alias := range aliases {
 		tabletInfo, ok := tabletMap[alias]
 		if !ok {
-			results <- vresult{alias.String(), fmt.Errorf("tablet not found in map")}
+			results <- fmt.Errorf("tablet %v not found in map", alias)
 			continue
 		}
 		if tabletInfo.Parent.Uid == topo.NO_TABLET {
 			if masterAlias.Cell != "" {
-				results <- vresult{alias.String(), fmt.Errorf("tablet already has a master %v", masterAlias)}
+				results <- fmt.Errorf("tablet %v already has a master %v", alias, masterAlias)
 			} else {
 				masterAlias = alias
 			}
@@ -165,16 +138,20 @@ func (wr *Wrangler) validateShard(keyspace, shard string, pingTablets bool, wg *
 	}
 
 	if masterAlias.Cell == "" {
-		results <- vresult{keyspace + "/" + shard, fmt.Errorf("no master for shard")}
+		results <- fmt.Errorf("no master for shard %v/%v", keyspace, shard)
 	} else if shardInfo.MasterAlias != masterAlias {
-		results <- vresult{keyspace + "/" + shard, fmt.Errorf("master mismatch for shard: found %v, expected %v", masterAlias, shardInfo.MasterAlias)}
+		results <- fmt.Errorf("master mismatch for shard %v/%v: found %v, expected %v", keyspace, shard, masterAlias, shardInfo.MasterAlias)
 	}
 
 	for _, alias := range aliases {
 		wg.Add(1)
 		go func(alias topo.TabletAlias) {
-			results <- vresult{alias.String(), topo.Validate(wr.ts, alias)}
-			wg.Done()
+			defer wg.Done()
+			if err := topo.Validate(wr.ts, alias); err != nil {
+				results <- fmt.Errorf("Validate(%v) failed: %v", alias, err)
+			} else {
+				wr.Logger().Infof("tablet %v is valid", alias)
+			}
 		}(alias)
 	}
 
@@ -194,35 +171,20 @@ func normalizeIP(ip string) string {
 	return ip
 }
 
-func strInList(sl []string, s string) bool {
-	for _, x := range sl {
-		if x == s {
-			return true
-		}
-	}
-	return false
-}
-
-func (wr *Wrangler) validateReplication(shardInfo *topo.ShardInfo, tabletMap map[topo.TabletAlias]*topo.TabletInfo, results chan<- vresult) {
+func (wr *Wrangler) validateReplication(shardInfo *topo.ShardInfo, tabletMap map[topo.TabletAlias]*topo.TabletInfo, results chan<- error) {
 	masterTablet, ok := tabletMap[shardInfo.MasterAlias]
 	if !ok {
-		results <- vresult{shardInfo.MasterAlias.String(), fmt.Errorf("master not in tablet map")}
+		results <- fmt.Errorf("master %v not in tablet map", shardInfo.MasterAlias)
 		return
 	}
 
-	slaveList, err := wr.tmc.GetSlaves(context.TODO(), masterTablet, wr.ActionTimeout())
+	slaveList, err := wr.tmc.GetSlaves(wr.ctx, masterTablet)
 	if err != nil {
-		results <- vresult{shardInfo.MasterAlias.String(), err}
+		results <- fmt.Errorf("GetSlaves(%v) failed: %v", masterTablet, err)
 		return
 	}
 	if len(slaveList) == 0 {
-		results <- vresult{shardInfo.MasterAlias.String(), fmt.Errorf("no slaves found")}
-		return
-	}
-
-	// Some addresses don't resolve in all locations, just use IP address
-	if err != nil {
-		results <- vresult{shardInfo.MasterAlias.String(), fmt.Errorf("resolve slaves failed: %v", err)}
+		results <- fmt.Errorf("no slaves of tablet %v found", shardInfo.MasterAlias)
 		return
 	}
 
@@ -235,7 +197,7 @@ func (wr *Wrangler) validateReplication(shardInfo *topo.ShardInfo, tabletMap map
 	// See if every slave is in the replication graph.
 	for _, slaveAddr := range slaveList {
 		if tabletIpMap[normalizeIP(slaveAddr)] == nil {
-			results <- vresult{shardInfo.Keyspace() + "/" + shardInfo.ShardName(), fmt.Errorf("slave not in replication graph: %v (mysql instance without vttablet?)", slaveAddr)}
+			results <- fmt.Errorf("slave %v not in replication graph for shard %v/%v (mysql instance without vttablet?)", slaveAddr, shardInfo.Keyspace(), shardInfo.ShardName())
 		}
 		slaveIpMap[normalizeIP(slaveAddr)] = true
 	}
@@ -247,24 +209,19 @@ func (wr *Wrangler) validateReplication(shardInfo *topo.ShardInfo, tabletMap map
 		}
 
 		if !slaveIpMap[normalizeIP(tablet.IPAddr)] {
-			results <- vresult{tablet.Alias.String(), fmt.Errorf("slave not replicating: %v %q", tablet.IPAddr, slaveList)}
+			results <- fmt.Errorf("slave %v not replicating: %v %q", tablet.Alias, tablet.IPAddr, slaveList)
 		}
 	}
 }
 
-func (wr *Wrangler) pingTablets(tabletMap map[topo.TabletAlias]*topo.TabletInfo, wg *sync.WaitGroup, results chan<- vresult) {
+func (wr *Wrangler) pingTablets(tabletMap map[topo.TabletAlias]*topo.TabletInfo, wg *sync.WaitGroup, results chan<- error) {
 	for tabletAlias, tabletInfo := range tabletMap {
 		wg.Add(1)
 		go func(tabletAlias topo.TabletAlias, tabletInfo *topo.TabletInfo) {
 			defer wg.Done()
 
-			if err := wr.ts.ValidateTabletPidNode(tabletAlias); err != nil {
-				results <- vresult{tabletAlias.String(), fmt.Errorf("no pid node on %v: %v", tabletInfo.Hostname, err)}
-				return
-			}
-
-			if err := wr.tmc.Ping(context.TODO(), tabletInfo, wr.ActionTimeout()); err != nil {
-				results <- vresult{tabletAlias.String(), fmt.Errorf("Ping failed: %v %v", err, tabletInfo.Hostname)}
+			if err := wr.tmc.Ping(wr.ctx, tabletInfo); err != nil {
+				results <- fmt.Errorf("Ping(%v) failed: %v %v", tabletAlias, err, tabletInfo.Hostname)
 			}
 		}(tabletAlias, tabletInfo)
 	}
@@ -273,51 +230,54 @@ func (wr *Wrangler) pingTablets(tabletMap map[topo.TabletAlias]*topo.TabletInfo,
 // Validate a whole TopologyServer tree
 func (wr *Wrangler) Validate(pingTablets bool) error {
 	// Results from various actions feed here.
-	results := make(chan vresult, 16)
+	results := make(chan error, 16)
 	wg := &sync.WaitGroup{}
 
 	// Validate all tablets in all cells, even if they are not discoverable
 	// by the replication graph.
 	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		wr.validateAllTablets(wg, results)
-		wg.Done()
 	}()
 
 	// Validate replication graph by traversing each keyspace and then each shard.
 	keyspaces, err := wr.ts.GetKeyspaces()
 	if err != nil {
-		results <- vresult{"TopologyServer.GetKeyspaces", err}
+		results <- fmt.Errorf("GetKeyspaces failed: %v", err)
 	} else {
 		for _, keyspace := range keyspaces {
 			wg.Add(1)
 			go func(keyspace string) {
+				defer wg.Done()
 				wr.validateKeyspace(keyspace, pingTablets, wg, results)
-				wg.Done()
 			}(keyspace)
 		}
 	}
 	return wr.waitForResults(wg, results)
 }
 
+// ValidateKeyspace will validate a bunch of information in a keyspace
+// is correct.
 func (wr *Wrangler) ValidateKeyspace(keyspace string, pingTablets bool) error {
 	wg := &sync.WaitGroup{}
-	results := make(chan vresult, 16)
+	results := make(chan error, 16)
 	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		wr.validateKeyspace(keyspace, pingTablets, wg, results)
-		wg.Done()
 	}()
 	return wr.waitForResults(wg, results)
 }
 
+// ValidateShard will validate a bunch of information in a shard is correct.
 func (wr *Wrangler) ValidateShard(keyspace, shard string, pingTablets bool) error {
 	wg := &sync.WaitGroup{}
-	results := make(chan vresult, 16)
+	results := make(chan error, 16)
 	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		wr.validateShard(keyspace, shard, pingTablets, wg, results)
-		wg.Done()
 	}()
 	return wr.waitForResults(wg, results)
 }

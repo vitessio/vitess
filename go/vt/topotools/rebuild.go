@@ -93,7 +93,7 @@ func RebuildShard(ctx context.Context, log logutil.Logger, ts topo.Server, keysp
 			}
 
 			// read all the Tablet records
-			tablets, err := topo.GetTabletMap(ts, aliases)
+			tablets, err := topo.GetTabletMap(ctx, ts, aliases)
 			switch err {
 			case nil:
 				// keep going, we're good
@@ -108,7 +108,7 @@ func RebuildShard(ctx context.Context, log logutil.Logger, ts topo.Server, keysp
 			rebuildErr := rebuildCellSrvShard(ctx, log, ts, shardInfo, cell, tablets)
 
 			// and unlock
-			if err := actionNode.UnlockSrvShard(ts, cell, keyspace, shard, lockPath, rebuildErr); err != nil {
+			if err := actionNode.UnlockSrvShard(ctx, ts, cell, keyspace, shard, lockPath, rebuildErr); err != nil {
 				rec.RecordError(err)
 			}
 		}(cell)

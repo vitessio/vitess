@@ -17,6 +17,10 @@ type VTGate struct {
 	server *vtgate.VTGate
 }
 
+func (vtg *VTGate) Execute(ctx context.Context, query *proto.Query, reply *proto.QueryResult) error {
+	return vtg.server.Execute(ctx, query, reply)
+}
+
 func (vtg *VTGate) ExecuteShard(ctx context.Context, query *proto.QueryShard, reply *proto.QueryResult) error {
 	return vtg.server.ExecuteShard(ctx, query, reply)
 }

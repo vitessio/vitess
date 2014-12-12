@@ -10,27 +10,17 @@ import (
 	"io/ioutil"
 	"net/http"
 	"sort"
-	"strings"
 	"sync"
+
+	"code.google.com/p/go.net/context"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-type debugVars struct {
-	Version string
-}
-
-func (wr *Wrangler) GetVersion(tabletAlias topo.TabletAlias) (string, error) {
-	// read the tablet from TopologyServer to get the address to connect to
-	tablet, err := wr.ts.GetTablet(tabletAlias)
-	if err != nil {
-		return "", err
-	}
-
-	// build the url, get debug/vars
-	resp, err := http.Get("http://" + tablet.Addr() + "/debug/vars")
+var getVersionFromTablet = func(tabletAddr string) (string, error) {
+	resp, err := http.Get("http://" + tabletAddr + "/debug/vars")
 	if err != nil {
 		return "", err
 	}
@@ -40,23 +30,33 @@ func (wr *Wrangler) GetVersion(tabletAlias topo.TabletAlias) (string, error) {
 		return "", err
 	}
 
-	// convert json
-	vars := debugVars{}
+	var vars struct {
+		BuildHost      string
+		BuildUser      string
+		BuildTimestamp int64
+		BuildGitRev    string
+	}
 	err = json.Unmarshal(body, &vars)
 	if err != nil {
 		return "", err
 	}
 
-	// split the version into date and md5
-	parts := strings.Split(vars.Version, " ")
-	if len(parts) != 2 {
-		// can't understand this, oh well
-		return vars.Version, nil
-	}
-	version := parts[1]
-
-	log.Infof("Tablet %v is running version '%v'", tabletAlias, version)
+	version := fmt.Sprintf("%v", vars)
 	return version, nil
+}
+
+func (wr *Wrangler) GetVersion(tabletAlias topo.TabletAlias) (string, error) {
+	tablet, err := wr.ts.GetTablet(tabletAlias)
+	if err != nil {
+		return "", err
+	}
+
+	version, err := getVersionFromTablet(tablet.Addr())
+	if err != nil {
+		return "", err
+	}
+	log.Infof("Tablet %v is running version '%v'", tabletAlias, version)
+	return version, err
 }
 
 // helper method to asynchronously get and diff a version
@@ -92,7 +92,7 @@ func (wr *Wrangler) ValidateVersionShard(keyspace, shard string) error {
 
 	// read all the aliases in the shard, that is all tablets that are
 	// replicating from the master
-	aliases, err := topo.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
+	aliases, err := topo.FindAllTabletAliasesInShard(context.TODO(), wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -150,7 +150,7 @@ func (wr *Wrangler) ValidateVersionKeyspace(keyspace string) error {
 	er := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for _, shard := range shards {
-		aliases, err := topo.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
+		aliases, err := topo.FindAllTabletAliasesInShard(context.TODO(), wr.ts, keyspace, shard)
 		if err != nil {
 			er.RecordError(err)
 			continue
