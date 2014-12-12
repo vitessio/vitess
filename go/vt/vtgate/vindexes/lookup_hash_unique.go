@@ -106,7 +106,7 @@ func (vind *LookupHashUnique) Create(vcursor planbuilder.VCursor, id interface{}
 	return nil
 }
 
-func (vind *LookupHashUnique) Generate(vcursor planbuilder.VCursor, ksid key.KeyspaceId) (id interface{}, err error) {
+func (vind *LookupHashUnique) Generate(vcursor planbuilder.VCursor, ksid key.KeyspaceId) (id uint64, err error) {
 	bq := &tproto.BoundQuery{
 		Sql: vind.ins,
 		BindVariables: map[string]interface{}{
@@ -116,7 +116,7 @@ func (vind *LookupHashUnique) Generate(vcursor planbuilder.VCursor, ksid key.Key
 	}
 	result, err := vcursor.Execute(bq)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 	return result.InsertId, err
 }

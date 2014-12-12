@@ -82,7 +82,7 @@ func (vind *HashVindex) Create(vcursor planbuilder.VCursor, id interface{}) erro
 	return nil
 }
 
-func (vind *HashVindex) Generate(vcursor planbuilder.VCursor) (id interface{}, err error) {
+func (vind *HashVindex) Generate(vcursor planbuilder.VCursor) (id uint64, err error) {
 	bq := &tproto.BoundQuery{
 		Sql: vind.ins,
 		BindVariables: map[string]interface{}{
@@ -91,7 +91,7 @@ func (vind *HashVindex) Generate(vcursor planbuilder.VCursor) (id interface{}, e
 	}
 	result, err := vcursor.Execute(bq)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 	return result.InsertId, err
 }

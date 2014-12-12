@@ -121,9 +121,6 @@ func TestSelectEqual(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if sbc1.ExecCount != 1 {
-		t.Errorf("sbc1.ExecCount: %v, want 1\n", sbc1.ExecCount)
-	}
 	wantBind := map[string]interface{}{}
 	if !reflect.DeepEqual(sbc1.BindVars, wantBind) {
 		t.Errorf("sbc1.BindVars = %#v, want %#v", sbc1.BindVars, wantBind)
@@ -143,14 +140,65 @@ func TestSelectEqual(t *testing.T) {
 	if sbc1.ExecCount != 1 {
 		t.Errorf("sbc1.ExecCount: %v, want 1\n", sbc1.ExecCount)
 	}
-	if sbc2.ExecCount != 1 {
-		t.Errorf("sbc2.ExecCount: %v, want 1\n", sbc2.ExecCount)
-	}
 	wantBind = map[string]interface{}{}
 	if !reflect.DeepEqual(sbc2.BindVars, wantBind) {
 		t.Errorf("sbc2.BindVars = %#v, want %#v", sbc2.BindVars, wantBind)
 	}
 	wantQuery = "select * from user where id = 3"
+	if sbc2.Query != wantQuery {
+		t.Errorf("sbc2.Query: %q, want %q\n", sbc2.Query, wantQuery)
+	}
+}
+
+func TestUpdateEqual(t *testing.T) {
+	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := createSandbox("TestRouter")
+	sbc1 := &sandboxConn{}
+	sbc2 := &sandboxConn{}
+	s.MapTestConn("-20", sbc1)
+	s.MapTestConn("40-60", sbc2)
+	serv := new(sandboxTopo)
+	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
+	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	q := proto.Query{
+		Sql:        "update user set a=2 where id = 1",
+		TabletType: topo.TYPE_MASTER,
+	}
+	_, err = router.Execute(&context.DummyContext{}, &q)
+	if err != nil {
+		t.Error(err)
+	}
+	wantBind := map[string]interface{}{
+		"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
+	}
+	if !reflect.DeepEqual(sbc1.BindVars, wantBind) {
+		t.Errorf("sbc1.BindVars = %#v, want %#v", sbc1.BindVars, wantBind)
+	}
+	wantQuery := "update user set a = 2 where id = 1 /* _routing keyspace_id:166b40b44aba4bd6 */"
+	if sbc1.Query != wantQuery {
+		t.Errorf("sbc1.Query: %q, want %q\n", sbc1.Query, wantQuery)
+	}
+	if sbc2.ExecCount != 0 {
+		t.Errorf("sbc2.ExecCount: %v, want 0\n", sbc2.ExecCount)
+	}
+	q.Sql = "update user set a=2 where id = 3"
+	_, err = router.Execute(&context.DummyContext{}, &q)
+	if err != nil {
+		t.Error(err)
+	}
+	if sbc1.ExecCount != 1 {
+		t.Errorf("sbc1.ExecCount: %v, want 1\n", sbc1.ExecCount)
+	}
+	wantBind = map[string]interface{}{
+		"keyspace_id": "N\xb1\x90ɢ\xfa\x16\x9c",
+	}
+	if !reflect.DeepEqual(sbc2.BindVars, wantBind) {
+		t.Errorf("sbc2.BindVars = %#v, want %#v", sbc2.BindVars, wantBind)
+	}
+	wantQuery = "update user set a = 2 where id = 3 /* _routing keyspace_id:4eb190c9a2fa169c */"
 	if sbc2.Query != wantQuery {
 		t.Errorf("sbc2.Query: %q, want %q\n", sbc2.Query, wantQuery)
 	}

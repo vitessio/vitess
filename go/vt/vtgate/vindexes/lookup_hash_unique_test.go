@@ -78,7 +78,7 @@ func TestLookupHashUniqueGenerate(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if got.(uint64) != 1 {
+	if got != 1 {
 		t.Errorf("Generate(): %+v, want 1", got)
 	}
 	wantQuery := &tproto.BoundQuery{
