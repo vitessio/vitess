@@ -34,6 +34,15 @@ type Table struct {
 	Ordered     []*ColVindex
 }
 
+func (t *Table) OwnsVindexes() bool {
+	for _, v := range t.ColVindexes {
+		if v.Owned {
+			return true
+		}
+	}
+	return false
+}
+
 // Keyspace contains the keyspcae info for each Table.
 type Keyspace struct {
 	Name    string

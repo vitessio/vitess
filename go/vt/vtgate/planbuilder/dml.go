@@ -4,7 +4,11 @@
 
 package planbuilder
 
-import "github.com/youtube/vitess/go/vt/sqlparser"
+import (
+	"bytes"
+
+	"github.com/youtube/vitess/go/vt/sqlparser"
+)
 
 func buildUpdatePlan(upd *sqlparser.Update, schema *Schema) *Plan {
 	plan := &Plan{
@@ -71,6 +75,9 @@ func buildDeletePlan(del *sqlparser.Delete, schema *Schema) *Plan {
 	switch plan.ID {
 	case SelectEqual:
 		plan.ID = DeleteEqual
+		if plan.Table.OwnsVindexes() {
+			plan.Subquery = generateDeleteSubquery(del, plan.Table)
+		}
 	case SelectIN, SelectScatter:
 		plan.ID = NoPlan
 		plan.Reason = "too complex"
@@ -78,4 +85,21 @@ func buildDeletePlan(del *sqlparser.Delete, schema *Schema) *Plan {
 		panic("unexpected")
 	}
 	return plan
+}
+
+func generateDeleteSubquery(del *sqlparser.Delete, table *Table) string {
+	buf := bytes.NewBuffer(nil)
+	buf.WriteString("select ")
+	prefix := ""
+	for _, cv := range table.ColVindexes {
+		if !cv.Owned {
+			continue
+		}
+		buf.WriteString(prefix)
+		buf.WriteString(cv.Col)
+		prefix = ", "
+	}
+	buf.WriteString(sqlparser.String(del.Where))
+	buf.WriteString(" for update")
+	return buf.String()
 }
