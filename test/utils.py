@@ -584,10 +584,27 @@ def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
 def get_status(port):
   return urllib2.urlopen('http://localhost:%u%s' % (port, environment.status_url)).read()
 
-def curl(url, background=False, **kwargs):
+def curl(url, request=None, data=None, background=False, retry_timeout=0, **kwargs):
+  args = [environment.curl_bin, '--silent', '--no-buffer', '--location']
+  if not background:
+    args.append('--show-error')
+  if request:
+    args.extend(['--request', request])
+  if data:
+    args.extend(['--data', data])
+  args.append(url)
+
   if background:
-    return run_bg([environment.curl_bin, '-s', '-N', '-L', url], **kwargs)
-  return run([environment.curl_bin, '-s', '-N', '-L', url], **kwargs)
+    return run_bg(args, **kwargs)
+
+  if retry_timeout > 0:
+    while True:
+      try:
+        return run(args, trap_output=True, **kwargs)
+      except TestError as e:
+        retry_timeout = wait_step('cmd: %s, error: %s' % (str(args), str(e)), retry_timeout)
+
+  return run(args, trap_output=True, **kwargs)
 
 class VtctldError(Exception): pass
 
