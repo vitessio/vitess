@@ -110,7 +110,16 @@ func (s *sandbox) Reset() {
 	s.SrvKeyspaceCallback = nil
 }
 
-func (s *sandbox) MapTestConn(shard string, conn *sandboxConn) {
+// a sandboxableConn is a tablet.TabletConn that allows you
+// to set the endPoint. MapTestConn uses it to set some good
+// defaults. This way, you have the option of calling MapTestConn
+// with variables other than sandboxConn.
+type sandboxableConn interface {
+	tabletconn.TabletConn
+	setEndPoint(topo.EndPoint)
+}
+
+func (s *sandbox) MapTestConn(shard string, conn sandboxableConn) {
 	s.sandmu.Lock()
 	defer s.sandmu.Unlock()
 	conns, ok := s.TestConns[shard]
@@ -118,19 +127,23 @@ func (s *sandbox) MapTestConn(shard string, conn *sandboxConn) {
 		conns = make(map[uint32]tabletconn.TabletConn)
 	}
 	uid := uint32(len(conns))
-	conn.uid = uid
+	conn.setEndPoint(topo.EndPoint{
+		Uid:          uid,
+		Host:         shard,
+		NamedPortMap: map[string]int{"vt": 1},
+	})
 	conns[uid] = conn
 	s.TestConns[shard] = conns
 }
 
-func (s *sandbox) DeleteTestConn(shard string, conn *sandboxConn) {
+func (s *sandbox) DeleteTestConn(shard string, conn tabletconn.TabletConn) {
 	s.sandmu.Lock()
 	defer s.sandmu.Unlock()
 	conns, ok := s.TestConns[shard]
 	if !ok {
 		panic(fmt.Sprintf("unknown shard: %v", shard))
 	}
-	delete(conns, conn.uid)
+	delete(conns, conn.EndPoint().Uid)
 	s.TestConns[shard] = conns
 }
 
@@ -266,12 +279,7 @@ func (sct *sandboxTopo) GetEndPoints(context context.Context, cell, keyspace, sh
 	conns := sand.TestConns[shard]
 	ep := &topo.EndPoints{}
 	for _, conn := range conns {
-		ep.Entries = append(ep.Entries,
-			topo.EndPoint{
-				Uid:          conn.(*sandboxConn).uid,
-				Host:         shard,
-				NamedPortMap: map[string]int{"vt": 1},
-			})
+		ep.Entries = append(ep.Entries, conn.EndPoint())
 	}
 	return ep, nil
 }
@@ -290,13 +298,11 @@ func sandboxDialer(context context.Context, endPoint topo.EndPoint, keyspace, sh
 		panic(fmt.Sprintf("can't find shard %v", shard))
 	}
 	tconn := conns[endPoint.Uid]
-	tconn.(*sandboxConn).endPoint = endPoint
 	return tconn, nil
 }
 
 // sandboxConn satisfies the TabletConn interface
 type sandboxConn struct {
-	uid            uint32
 	endPoint       topo.EndPoint
 	mustFailRetry  int
 	mustFailFatal  int
@@ -462,6 +468,10 @@ func (sbc *sandboxConn) Close() {
 
 func (sbc *sandboxConn) EndPoint() topo.EndPoint {
 	return sbc.endPoint
+}
+
+func (sbc *sandboxConn) setEndPoint(ep topo.EndPoint) {
+	sbc.endPoint = ep
 }
 
 var singleRowResult = &mproto.QueryResult{
