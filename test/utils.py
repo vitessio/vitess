@@ -66,7 +66,7 @@ def add_options(parser):
   parser.add_option('--skip-teardown', action='store_true')
   parser.add_option("--mysql-flavor")
   parser.add_option("--protocols-flavor")
-  parser.add_option("--topo-server-flavor")
+  parser.add_option("--topo-server-flavor", default="zookeeper")
 
 def set_options(opts):
   global options
