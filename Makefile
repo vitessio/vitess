@@ -93,13 +93,17 @@ medium_integration_test_files = \
 # integration tests that take between 1-2 mins
 large_integration_test_files = \
 	vtgatev2_test.py \
-	resharding_bytes.py \
 	zkocc_test.py \
 	initial_sharding_bytes.py
 
 # integration tests that take more than 2 mins
 huge_integration_test_files = \
 	resharding.py
+
+# these tests are considered too flaky to be included
+# in the continous integration test suites
+ci_skip_integration_test_files = \
+	resharding_bytes.py
 
 .ONESHELL:
 SHELL = /bin/bash
@@ -131,7 +135,10 @@ large_integration_test:
 huge_integration_test:
 	$(call run_integration_tests, $(huge_integration_test_files))
 
-integration_test: small_integration_test medium_integration_test large_integration_test huge_integration_test
+ci_skip_integration_test:
+	$(call run_integration_tests, $(ci_skip_integration_test_files))
+
+integration_test: small_integration_test medium_integration_test large_integration_test huge_integration_test ci_skip_integration_test
 
 site_integration_test:
 	$(call run_integration_tests, $(site_integration_test_files))
