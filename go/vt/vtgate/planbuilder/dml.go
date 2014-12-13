@@ -75,9 +75,7 @@ func buildDeletePlan(del *sqlparser.Delete, schema *Schema) *Plan {
 	switch plan.ID {
 	case SelectEqual:
 		plan.ID = DeleteEqual
-		if plan.Table.OwnsVindexes() {
-			plan.Subquery = generateDeleteSubquery(del, plan.Table)
-		}
+		plan.Subquery = generateDeleteSubquery(del, plan.Table)
 	case SelectIN, SelectScatter:
 		plan.ID = NoPlan
 		plan.Reason = "too complex"
@@ -88,13 +86,13 @@ func buildDeletePlan(del *sqlparser.Delete, schema *Schema) *Plan {
 }
 
 func generateDeleteSubquery(del *sqlparser.Delete, table *Table) string {
+	if len(table.Owned) == 0 {
+		return ""
+	}
 	buf := bytes.NewBuffer(nil)
 	buf.WriteString("select ")
 	prefix := ""
-	for _, cv := range table.ColVindexes {
-		if !cv.Owned {
-			continue
-		}
+	for _, cv := range table.Owned {
 		buf.WriteString(prefix)
 		buf.WriteString(cv.Col)
 		prefix = ", "

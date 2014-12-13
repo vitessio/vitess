@@ -167,14 +167,14 @@ func TestHashGenerate(t *testing.T) {
 
 func TestHashDelete(t *testing.T) {
 	vc := &vcursor{}
-	err := hash.Delete(vc, 1, "")
+	err := hash.Delete(vc, []interface{}{1}, "")
 	if err != nil {
 		t.Error(err)
 	}
 	wantQuery := &tproto.BoundQuery{
-		Sql: "delete from t where c = :c",
+		Sql: "delete from t where c in ::c",
 		BindVariables: map[string]interface{}{
-			"c": 1,
+			"c": []interface{}{1},
 		},
 	}
 	if !reflect.DeepEqual(vc.query, wantQuery) {

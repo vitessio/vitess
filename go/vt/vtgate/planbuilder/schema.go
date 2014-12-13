@@ -32,15 +32,7 @@ type Table struct {
 	Keyspace    *Keyspace
 	ColVindexes []*ColVindex
 	Ordered     []*ColVindex
-}
-
-func (t *Table) OwnsVindexes() bool {
-	for _, v := range t.ColVindexes {
-		if v.Owned {
-			return true
-		}
-	}
-	return false
+	Owned       []*ColVindex
 }
 
 // Keyspace contains the keyspcae info for each Table.
@@ -119,6 +111,9 @@ func BuildSchema(source *SchemaFormal) (schema *Schema, err error) {
 					}
 				}
 				t.ColVindexes = append(t.ColVindexes, columnVindex)
+				if columnVindex.Owned {
+					t.Owned = append(t.Owned, columnVindex)
+				}
 			}
 			t.Ordered = colVindexSorted(t.ColVindexes)
 			schema.Tables[tname] = t

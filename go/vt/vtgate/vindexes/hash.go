@@ -37,7 +37,7 @@ func NewHashVindex(m map[string]interface{}) (planbuilder.Vindex, error) {
 		Table:  t,
 		Column: c,
 		ins:    fmt.Sprintf("insert into %s(%s) values(:%s)", t, c, c),
-		del:    fmt.Sprintf("delete from %s where %s = :%s", t, c, c),
+		del:    fmt.Sprintf("delete from %s where %s in ::%s", t, c, c),
 	}, nil
 }
 
@@ -96,11 +96,11 @@ func (vind *HashVindex) Generate(vcursor planbuilder.VCursor) (id uint64, err er
 	return result.InsertId, err
 }
 
-func (vind *HashVindex) Delete(vcursor planbuilder.VCursor, id interface{}, _ key.KeyspaceId) error {
+func (vind *HashVindex) Delete(vcursor planbuilder.VCursor, ids []interface{}, _ key.KeyspaceId) error {
 	bq := &tproto.BoundQuery{
 		Sql: vind.del,
 		BindVariables: map[string]interface{}{
-			vind.Column: id,
+			vind.Column: ids,
 		},
 	}
 	if _, err := vcursor.Execute(bq); err != nil {

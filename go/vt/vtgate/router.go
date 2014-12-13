@@ -56,6 +56,8 @@ func (rtr *Router) Execute(ctx context.Context, query *proto.Query) (*mproto.Que
 		return rtr.execSelectEqual(vcursor, plan)
 	case planbuilder.UpdateEqual:
 		return rtr.execUpdateEqual(vcursor, plan)
+	case planbuilder.DeleteEqual:
+		return rtr.execDeleteEqual(vcursor, plan)
 	case planbuilder.InsertSharded:
 		return rtr.execInsertSharded(vcursor, plan)
 	default:
@@ -109,6 +111,36 @@ func (rtr *Router) execUpdateEqual(vcursor *requestContext, plan *planbuilder.Pl
 	}
 	if ksid == key.MinKey {
 		return &mproto.QueryResult{}, nil
+	}
+	vcursor.query.BindVariables[ksidName] = string(ksid)
+	rewritten := plan.Rewritten + fmt.Sprintf(dmlPostfix, ksid)
+	return rtr.scatterConn.Execute(
+		vcursor.ctx,
+		rewritten,
+		vcursor.query.BindVariables,
+		ks,
+		[]string{shard},
+		vcursor.query.TabletType,
+		NewSafeSession(vcursor.query.Session))
+}
+
+func (rtr *Router) execDeleteEqual(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
+	keys, err := rtr.resolveKeys([]interface{}{plan.Values}, vcursor.query.BindVariables)
+	if err != nil {
+		return nil, err
+	}
+	ks, shard, ksid, err := rtr.resolveSingleShard(vcursor, keys[0], plan)
+	if err != nil {
+		return nil, err
+	}
+	if ksid == key.MinKey {
+		return &mproto.QueryResult{}, nil
+	}
+	if plan.Subquery != "" {
+		err = rtr.deleteVindexEntries(vcursor, plan, ks, shard, ksid)
+		if err != nil {
+			return nil, err
+		}
 	}
 	vcursor.query.BindVariables[ksidName] = string(ksid)
 	rewritten := plan.Rewritten + fmt.Sprintf(dmlPostfix, ksid)
@@ -257,6 +289,53 @@ func (rtr *Router) resolveSingleShard(vcursor *requestContext, vindexKey interfa
 		return "", "", "", err
 	}
 	return newKeyspace, shard, ksid, nil
+}
+
+func (rtr *Router) deleteVindexEntries(vcursor *requestContext, plan *planbuilder.Plan, ks, shard string, ksid key.KeyspaceId) error {
+	result, err := rtr.scatterConn.Execute(
+		vcursor.ctx,
+		plan.Subquery,
+		vcursor.query.BindVariables,
+		ks,
+		[]string{shard},
+		vcursor.query.TabletType,
+		NewSafeSession(vcursor.query.Session))
+	if err != nil {
+		return err
+	}
+	if len(result.Rows) == 0 {
+		return nil
+	}
+	if len(result.Rows[0]) != len(plan.Table.Owned) {
+		panic("unexpected")
+	}
+	for i, colVindex := range plan.Table.Owned {
+		keys := make(map[interface{}]bool)
+		for _, row := range result.Rows {
+			key, err := mproto.Convert(result.Fields[i].Type, row[i])
+			if err != nil {
+				return err
+			}
+			keys[key] = true
+		}
+		var ids []interface{}
+		for _, key := range keys {
+			ids = append(ids, key)
+		}
+		switch vindex := colVindex.Vindex.(type) {
+		case planbuilder.Functional:
+			if err = vindex.Delete(vcursor, ids, ksid); err != nil {
+				return err
+			}
+		case planbuilder.Lookup:
+			if err = vindex.Delete(vcursor, ids, ksid); err != nil {
+				return err
+			}
+		default:
+			panic("unexpceted")
+		}
+	}
+	return nil
 }
 
 func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{}, colVindex *planbuilder.ColVindex, bv map[string]interface{}) (ksid key.KeyspaceId, generated uint64, err error) {

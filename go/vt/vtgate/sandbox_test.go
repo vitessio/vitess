@@ -265,10 +265,10 @@ func (sct *sandboxTopo) GetEndPoints(context context.Context, cell, keyspace, sh
 	}
 	conns := sand.TestConns[shard]
 	ep := &topo.EndPoints{}
-	for i := range conns {
+	for _, conn := range conns {
 		ep.Entries = append(ep.Entries,
 			topo.EndPoint{
-				Uid:          i,
+				Uid:          conn.(*sandboxConn).uid,
 				Host:         shard,
 				NamedPortMap: map[string]int{"vt": 1},
 			})

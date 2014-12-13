@@ -33,7 +33,7 @@ func NewLookupHashUnique(m map[string]interface{}) (planbuilder.Vindex, error) {
 		sel:    fmt.Sprintf("select %s from %s where %s = :%s", to, t, from, from),
 		verify: fmt.Sprintf("select %s from %s where %s = :%s and %s = :%s", from, t, from, from, to, to),
 		ins:    fmt.Sprintf("insert into %s(%s, %s) values(:%s, :%s)", t, from, to, from, to),
-		del:    fmt.Sprintf("delete from %s where %s = :%s and %s = :%s", t, from, from, to, to),
+		del:    fmt.Sprintf("delete from %s where %s in ::%s and %s = :%s", t, from, from, to, to),
 	}, nil
 }
 
@@ -121,11 +121,11 @@ func (vind *LookupHashUnique) Generate(vcursor planbuilder.VCursor, ksid key.Key
 	return result.InsertId, err
 }
 
-func (vind *LookupHashUnique) Delete(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) error {
+func (vind *LookupHashUnique) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid key.KeyspaceId) error {
 	bq := &tproto.BoundQuery{
 		Sql: vind.del,
 		BindVariables: map[string]interface{}{
-			vind.From: id,
+			vind.From: ids,
 			vind.To:   vunhash(ksid),
 		},
 	}
