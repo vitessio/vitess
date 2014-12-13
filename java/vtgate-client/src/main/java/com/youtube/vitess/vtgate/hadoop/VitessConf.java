@@ -10,7 +10,7 @@ public class VitessConf {
   public static final String CONN_TIMEOUT_MS = "vitess.vtgate.conn_timeout_ms";
   public static final String INPUT_KEYSPACE = "vitess.vtgate.hadoop.keyspace";
   public static final String INPUT_QUERY = "vitess.vtgate.hadoop.input_query";
-  public static final String SPLITS_PER_SHARD = "vitess.vtgate.hadoop.splits_per_shard";
+  public static final String SPLITS = "vitess.vtgate.hadoop.splits";
   public static final String HOSTS_DELIM = ",";
 
   private Configuration conf;
@@ -51,11 +51,11 @@ public class VitessConf {
     conf.set(INPUT_QUERY, query);
   }
 
-  public int getSplitsPerShard() {
-    return conf.getInt(SPLITS_PER_SHARD, 1);
+  public int getSplits() {
+    return conf.getInt(SPLITS, 1);
   }
 
-  public void setSplitsPerShard(int splitsPerShard) {
-    conf.setInt(SPLITS_PER_SHARD, splitsPerShard);
+  public void setSplits(int splits) {
+    conf.setInt(SPLITS, splits);
   }
 }
