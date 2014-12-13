@@ -8,7 +8,6 @@ env:
     - MAKE_TARGET=small_integration_test
     - MAKE_TARGET=medium_integration_test
     - MAKE_TARGET=large_integration_test
-    - MAKE_TARGET=huge_integration_test
     - MAKE_TARGET=java_vtgate_client_test
     - MAKE_TARGET=unit_test_goveralls
 before_install:
