@@ -323,9 +323,9 @@ type sandboxConn struct {
 	RollbackCount sync2.AtomicInt64
 	CloseCount    sync2.AtomicInt64
 
-	// BindVars and Query represent the last request received.
-	BindVars map[string]interface{}
-	Query    string
+	// BindVars & Queries store the requests received.
+	BindVars []map[string]interface{}
+	Queries  []string
 
 	// transaction id generator
 	TransactionId sync2.AtomicInt64
@@ -364,11 +364,12 @@ func (sbc *sandboxConn) getError() error {
 
 func (sbc *sandboxConn) Execute(context context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
 	sbc.ExecCount.Add(1)
-	sbc.BindVars = make(map[string]interface{})
+	bv := make(map[string]interface{})
 	for k, v := range bindVars {
-		sbc.BindVars[k] = v
+		bv[k] = v
 	}
-	sbc.Query = query
+	sbc.BindVars = append(sbc.BindVars, bv)
+	sbc.Queries = append(sbc.Queries, query)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
@@ -396,11 +397,12 @@ func (sbc *sandboxConn) ExecuteBatch(context context.Context, queries []tproto.B
 
 func (sbc *sandboxConn) StreamExecute(context context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
 	sbc.ExecCount.Add(1)
-	sbc.BindVars = make(map[string]interface{})
+	bv := make(map[string]interface{})
 	for k, v := range bindVars {
-		sbc.BindVars[k] = v
+		bv[k] = v
 	}
-	sbc.Query = query
+	sbc.BindVars = append(sbc.BindVars, bv)
+	sbc.Queries = append(sbc.Queries, query)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
