@@ -131,7 +131,7 @@
   "Reason":"",
   "Table": "main1",
   "Original":"select * from main1",
-  "Rewritten":"select * from main1",
+  "Rewritten":"",
   "Subquery": "",
   "Vindex": "",
   "Col": "",
@@ -635,6 +635,90 @@
   "Vindex": "user_index",
   "Col": "id",
   "Values": 1
+}
+
+# select with KEYRANGE
+"select * from user where keyrange(1, 2)"
+{
+  "ID": "SelectKeyrange",
+  "Reason": "",
+  "Table": "user",
+  "Original":"select * from user where keyrange(1, 2)",
+  "Rewritten": "select * from user",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": [1, 2]
+}
+
+# select with KEYRANGE parenthesized
+"select * from user where (keyrange(1, 2))"
+{
+  "ID": "SelectKeyrange",
+  "Reason": "",
+  "Table": "user",
+  "Original":"select * from user where (keyrange(1, 2))",
+  "Rewritten": "select * from user",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": [1, 2]
+}
+
+# select KEYRANGE in AND
+"select * from user where a = 1 and keyrange(1, 2)"
+{
+  "ID": "SelectKeyrange",
+  "Reason": "",
+  "Table": "user",
+  "Original":"select * from user where a = 1 and keyrange(1, 2)",
+  "Rewritten": "select * from user where a = 1",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": [1, 2]
+}
+
+# select KEYRANGE in AND parenthesized
+"select * from user where a = 1 and (keyrange(1, 2))"
+{
+  "ID": "SelectKeyrange",
+  "Reason": "",
+  "Table": "user",
+  "Original":"select * from user where a = 1 and (keyrange(1, 2))",
+  "Rewritten": "select * from user where a = 1",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": [1, 2]
+}
+
+# select KEYRANGE in AND double parenthesized
+"select * from user where a = 1 and ((keyrange(1, 2)))"
+{
+  "ID": "SelectKeyrange",
+  "Reason": "",
+  "Table": "user",
+  "Original":"select * from user where a = 1 and ((keyrange(1, 2)))",
+  "Rewritten": "select * from user where a = 1",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": [1, 2]
+}
+
+# select KEYRANGE in double AND double parenthesized
+"select * from user where a = 1 and (b = 2 and (keyrange(1, 2)))"
+{
+  "ID": "SelectKeyrange",
+  "Reason": "",
+  "Table": "user",
+  "Original":"select * from user where a = 1 and (b = 2 and (keyrange(1, 2)))",
+  "Rewritten": "select * from user where a = 1 and (b = 2)",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": [1, 2]
 }
 
 # aggregates in select, simple

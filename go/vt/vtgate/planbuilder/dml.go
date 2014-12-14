@@ -30,7 +30,7 @@ func buildUpdatePlan(upd *sqlparser.Update, schema *Schema) *Plan {
 	switch plan.ID {
 	case SelectEqual:
 		plan.ID = UpdateEqual
-	case SelectIN, SelectScatter:
+	case SelectIN, SelectScatter, SelectKeyrange:
 		plan.ID = NoPlan
 		plan.Reason = "too complex"
 		return plan
@@ -77,7 +77,7 @@ func buildDeletePlan(del *sqlparser.Delete, schema *Schema) *Plan {
 	case SelectEqual:
 		plan.ID = DeleteEqual
 		plan.Subquery = generateDeleteSubquery(del, plan.Table)
-	case SelectIN, SelectScatter:
+	case SelectIN, SelectScatter, SelectKeyrange:
 		plan.ID = NoPlan
 		plan.Reason = "too complex"
 	default:

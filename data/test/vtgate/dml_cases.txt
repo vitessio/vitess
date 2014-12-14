@@ -110,6 +110,34 @@
   "Values": 1
 }
 
+# update KEYRANGE
+"update user set val = 1 where keyrange(1, 2)"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "Table": "user",
+  "Original": "update user set val = 1 where keyrange(1, 2)",
+  "Rewritten": "",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": null
+}
+
+# delete KEYRANGE
+"delete from user where keyrange(1, 2)"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "Table": "user",
+  "Original": "delete from user where keyrange(1, 2)",
+  "Rewritten": "",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": null
+}
+
 # update with primary id through IN clause
 "update user set val = 1 where id in (1, 2)"
 {

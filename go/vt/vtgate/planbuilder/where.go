@@ -70,7 +70,7 @@ func hasSubquery(node sqlparser.Expr) bool {
 		return true
 	case sqlparser.StrVal, sqlparser.NumVal, sqlparser.ValArg,
 		*sqlparser.NullVal, *sqlparser.ColName, sqlparser.ValTuple,
-		sqlparser.ListArg:
+		sqlparser.ListArg, *sqlparser.KeyrangeExpr:
 		return false
 	case *sqlparser.Subquery:
 		return true
