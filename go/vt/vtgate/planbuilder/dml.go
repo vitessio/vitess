@@ -6,6 +6,7 @@ package planbuilder
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
@@ -97,6 +98,7 @@ func generateDeleteSubquery(del *sqlparser.Delete, table *Table) string {
 		buf.WriteString(cv.Col)
 		prefix = ", "
 	}
+	fmt.Fprintf(buf, " from %s", table.Name)
 	buf.WriteString(sqlparser.String(del.Where))
 	buf.WriteString(" for update")
 	return buf.String()

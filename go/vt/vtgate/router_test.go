@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/testfiles"
 	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -206,6 +208,69 @@ func TestUpdateEqual(t *testing.T) {
 	wantQuery = "update user set a = 2 where id = 3 /* _routing keyspace_id:4eb190c9a2fa169c */"
 	if sbc2.Queries[0] != wantQuery {
 		t.Errorf("sbc2.Queries[0]: %q, want %q\n", sbc2.Queries[0], wantQuery)
+	}
+}
+
+func TestDeleteEqual(t *testing.T) {
+	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := createSandbox("TestRouter")
+	sbc := &sandboxConn{}
+	s.MapTestConn("-20", sbc)
+
+	l := createSandbox("TestUnsharded")
+	sbclookup := &sandboxConn{}
+	l.MapTestConn("0", sbclookup)
+
+	serv := new(sandboxTopo)
+	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
+	router := NewRouter(serv, "aa", schema, "", scatterConn)
+
+	sbc.setResults([]*mproto.QueryResult{&mproto.QueryResult{
+		Fields: []mproto.Field{
+			{"id", 3},
+		},
+		RowsAffected: 1,
+		InsertId:     0,
+		Rows: [][]sqltypes.Value{{
+			{sqltypes.Numeric("1")},
+		}},
+	}})
+	q := proto.Query{
+		Sql:        "delete from user where id = 1",
+		TabletType: topo.TYPE_MASTER,
+	}
+	_, err = router.Execute(&context.DummyContext{}, &q)
+	if err != nil {
+		t.Error(err)
+	}
+	wantBinds := []map[string]interface{}{{}, {
+		"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
+	}}
+	if !reflect.DeepEqual(sbc.BindVars, wantBinds) {
+		t.Errorf("sbc.BindVars = %#v, want %#v", sbc.BindVars, wantBinds)
+	}
+	wantQueries := []string{
+		"select id from user where id = 1 for update",
+		"delete from user where id = 1 /* _routing keyspace_id:166b40b44aba4bd6 */",
+	}
+	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
+		t.Errorf("sbc.Queries: %q, want %q\n", sbc.Queries, wantQueries)
+	}
+
+	wantBinds = []map[string]interface{}{{
+		"id": []interface{}{int64(1)},
+	}}
+	if !reflect.DeepEqual(sbclookup.BindVars, wantBinds) {
+		t.Errorf("sbclookup.BindVars = \n%#v, want \n%#v", sbclookup.BindVars, wantBinds)
+	}
+	wantQueries = []string{
+		"delete from user_idx where id in ::id",
+	}
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: %q, want %q\n", sbclookup.Queries, wantQueries)
 	}
 }
 

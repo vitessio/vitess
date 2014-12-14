@@ -287,6 +287,25 @@ class TestVTGateFunctions(unittest.TestCase):
     result = shard_1_master.mquery("vt_user_keyspace", "select * from vt_user")
     self.assertEqual(result, ((4L, 'test four'), (6L, 'test 6'), (7L, 'test 7')))
 
+    vtgate_conn.begin()
+    result = vtgate_conn._execute(
+        "delete from vt_user where id = %(id)s",
+        {'id': 1},
+        "master")
+    self.assertEqual(result, ([], 1L, 0L, []))
+    result = vtgate_conn._execute(
+        "delete from vt_user where id = %(id)s",
+        {'id': 4},
+        "master")
+    self.assertEqual(result, ([], 1L, 0L, []))
+    vtgate_conn.commit()
+    result = shard_0_master.mquery("vt_user_keyspace", "select * from vt_user")
+    self.assertEqual(result, ((2L, 'test 2'), (3L, 'test 3')))
+    result = shard_1_master.mquery("vt_user_keyspace", "select * from vt_user")
+    self.assertEqual(result, ((6L, 'test 6'), (7L, 'test 7')))
+    result = lookup_master.mquery("vt_lookup_keyspace", "select * from vt_user_idx")
+    self.assertEqual(result, ((2L,), (3L,), (6L,), (7L,)))
+
   def test_user_extra(self):
     count = 4
     vtgate_conn = get_connection()
@@ -325,6 +344,23 @@ class TestVTGateFunctions(unittest.TestCase):
     result = shard_1_master.mquery("vt_user_keyspace", "select * from vt_user_extra")
     self.assertEqual(result, ((4L, 'test four'),))
 
+    vtgate_conn.begin()
+    result = vtgate_conn._execute(
+        "delete from vt_user_extra where user_id = %(user_id)s",
+        {'user_id': 1},
+        "master")
+    self.assertEqual(result, ([], 1L, 0L, []))
+    result = vtgate_conn._execute(
+        "delete from  vt_user_extra where user_id = %(user_id)s",
+        {'user_id': 4},
+        "master")
+    self.assertEqual(result, ([], 1L, 0L, []))
+    vtgate_conn.commit()
+    result = shard_0_master.mquery("vt_user_keyspace", "select * from vt_user_extra")
+    self.assertEqual(result, ((2L, 'test 2'), (3L, 'test 3')))
+    result = shard_1_master.mquery("vt_user_keyspace", "select * from vt_user_extra")
+    self.assertEqual(result, ())
+
   def test_music(self):
     count = 4
     vtgate_conn = get_connection()
@@ -352,13 +388,18 @@ class TestVTGateFunctions(unittest.TestCase):
         {'user_id': 6, 'song': 'test 7'},
         'master')
     self.assertEqual(result, ([], 1L, 7L, []))
+    result = vtgate_conn._execute(
+        "insert into vt_music (user_id, song) values (%(user_id)s, %(song)s)",
+        {'user_id': 6, 'song': 'test 8'},
+        'master')
+    self.assertEqual(result, ([], 1L, 8L, []))
     vtgate_conn.commit()
     result = shard_0_master.mquery("vt_user_keyspace", "select * from vt_music")
     self.assertEqual(result, ((1L, 1L, 'test 1'), (2L, 2L, 'test 2'), (3L, 3L, 'test 3'), (5L, 6L, 'test 6')))
     result = shard_1_master.mquery("vt_user_keyspace", "select * from vt_music")
-    self.assertEqual(result, ((4L, 4L, 'test 4'), (6L, 7L, 'test 7')))
+    self.assertEqual(result, ((4L, 4L, 'test 4'), (6L, 7L, 'test 7'), (6L, 8L, 'test 8')))
     result = lookup_master.mquery("vt_lookup_keyspace", "select * from music_user_map")
-    self.assertEqual(result, ((1L, 1L), (2L, 2L), (3L, 3L), (4L, 4L), (6L, 5L), (7L, 6L)))
+    self.assertEqual(result, ((1L, 1L), (2L, 2L), (3L, 3L), (4L, 4L), (6L, 5L), (7L, 6L), (8L, 6L)))
 
     vtgate_conn.begin()
     result = vtgate_conn._execute(
@@ -375,7 +416,26 @@ class TestVTGateFunctions(unittest.TestCase):
     result = shard_0_master.mquery("vt_user_keyspace", "select * from vt_music")
     self.assertEqual(result, ((1L, 1L, 'test 1'), (2L, 2L, 'test 2'), (3L, 3L, 'test 3'), (5L, 6L, 'test six')))
     result = shard_1_master.mquery("vt_user_keyspace", "select * from vt_music")
-    self.assertEqual(result, ((4L, 4L, 'test 4'), (6L, 7L, 'test seven')))
+    self.assertEqual(result, ((4L, 4L, 'test 4'), (6L, 7L, 'test seven'), (6L, 8L, 'test 8')))
+
+    vtgate_conn.begin()
+    result = vtgate_conn._execute(
+        "delete from vt_music where id = %(id)s",
+        {'id': 3},
+        "master")
+    self.assertEqual(result, ([], 1L, 0L, []))
+    result = vtgate_conn._execute(
+        "delete from vt_music where user_id = %(user_id)s",
+        {'user_id': 6},
+        "master")
+    self.assertEqual(result, ([], 2L, 0L, []))
+    vtgate_conn.commit()
+    result = shard_0_master.mquery("vt_user_keyspace", "select * from vt_music")
+    self.assertEqual(result, ((1L, 1L, 'test 1'), (2L, 2L, 'test 2'), (5L, 6L, 'test six')))
+    result = shard_1_master.mquery("vt_user_keyspace", "select * from vt_music")
+    self.assertEqual(result, ((4L, 4L, 'test 4'),))
+    result = lookup_master.mquery("vt_lookup_keyspace", "select * from music_user_map")
+    self.assertEqual(result, ((1L, 1L), (2L, 2L), (4L, 4L), (6L, 5L)))
 
   def test_music_extra(self):
     vtgate_conn = get_connection()
@@ -412,6 +472,21 @@ class TestVTGateFunctions(unittest.TestCase):
     vtgate_conn.commit()
     result = shard_0_master.mquery("vt_user_keyspace", "select * from vt_music_extra")
     self.assertEqual(result, ((1L, 1L, 'test 1'), (6L, 5L, 'test six')))
+
+    vtgate_conn.begin()
+    result = vtgate_conn._execute(
+        "delete from vt_music_extra where music_id = %(music_id)s",
+        {'music_id': 6},
+        "master")
+    self.assertEqual(result, ([], 1L, 0L, []))
+    result = vtgate_conn._execute(
+        "delete from vt_music_extra where music_id = %(music_id)s",
+        {'music_id': 7},
+        "master")
+    self.assertEqual(result, ([], 0L, 0L, []))
+    vtgate_conn.commit()
+    result = shard_0_master.mquery("vt_user_keyspace", "select * from vt_music_extra")
+    self.assertEqual(result, ((1L, 1L, 'test 1'),))
 
   def test_insert_value_required(self):
     vtgate_conn = get_connection()

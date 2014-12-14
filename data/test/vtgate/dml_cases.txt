@@ -104,7 +104,7 @@
   "Table": "user",
   "Original": "delete from user where id = 1",
   "Rewritten": "delete from user where id = 1",
-  "Subquery": "select id, name where id = 1 for update",
+  "Subquery": "select id, name from user where id = 1 for update",
   "Vindex": "user_index",
   "Col": "id",
   "Values": 1
@@ -216,7 +216,7 @@
   "Table": "music",
   "Original": "delete from music where id = 1",
   "Rewritten": "delete from music where id = 1",
-  "Subquery": "select id where id = 1 for update",
+  "Subquery": "select id from music where id = 1 for update",
   "Vindex": "music_user_map",
   "Col": "id",
   "Values": 1

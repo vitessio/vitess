@@ -327,6 +327,11 @@ type sandboxConn struct {
 	BindVars []map[string]interface{}
 	Queries  []string
 
+	// results specifies the results to be returned.
+	// They're consumed as results are returned. If there are
+	// no results left, singleRowResult is returned.
+	results []*mproto.QueryResult
+
 	// transaction id generator
 	TransactionId sync2.AtomicInt64
 }
@@ -362,6 +367,10 @@ func (sbc *sandboxConn) getError() error {
 	return nil
 }
 
+func (sbc *sandboxConn) setResults(r []*mproto.QueryResult) {
+	sbc.results = r
+}
+
 func (sbc *sandboxConn) Execute(context context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]interface{})
@@ -376,7 +385,7 @@ func (sbc *sandboxConn) Execute(context context.Context, query string, bindVars 
 	if err := sbc.getError(); err != nil {
 		return nil, err
 	}
-	return singleRowResult, nil
+	return sbc.getNextResult(), nil
 }
 
 func (sbc *sandboxConn) ExecuteBatch(context context.Context, queries []tproto.BoundQuery, transactionID int64) (*tproto.QueryResultList, error) {
@@ -390,7 +399,7 @@ func (sbc *sandboxConn) ExecuteBatch(context context.Context, queries []tproto.B
 	qrl := &tproto.QueryResultList{}
 	qrl.List = make([]mproto.QueryResult, 0, len(queries))
 	for _ = range queries {
-		qrl.List = append(qrl.List, *singleRowResult)
+		qrl.List = append(qrl.List, *(sbc.getNextResult()))
 	}
 	return qrl, nil
 }
@@ -407,7 +416,7 @@ func (sbc *sandboxConn) StreamExecute(context context.Context, query string, bin
 		time.Sleep(sbc.mustDelay)
 	}
 	ch := make(chan *mproto.QueryResult, 1)
-	ch <- singleRowResult
+	ch <- sbc.getNextResult()
 	close(ch)
 	err := sbc.getError()
 	return ch, func() error { return err }, err
@@ -474,6 +483,15 @@ func (sbc *sandboxConn) EndPoint() topo.EndPoint {
 
 func (sbc *sandboxConn) setEndPoint(ep topo.EndPoint) {
 	sbc.endPoint = ep
+}
+
+func (sbc *sandboxConn) getNextResult() *mproto.QueryResult {
+	if len(sbc.results) != 0 {
+		r := sbc.results[0]
+		sbc.results = sbc.results[1:]
+		return r
+	}
+	return singleRowResult
 }
 
 var singleRowResult = &mproto.QueryResult{
