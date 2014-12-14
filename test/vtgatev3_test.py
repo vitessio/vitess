@@ -37,6 +37,12 @@ name varchar(64),
 primary key (id)
 ) Engine=InnoDB'''
 
+create_vt_user2 = '''create table vt_user2 (
+id bigint,
+name varchar(64),
+primary key (id)
+) Engine=InnoDB'''
+
 create_vt_user_extra = '''create table vt_user_extra (
 user_id bigint,
 email varchar(64),
@@ -62,6 +68,12 @@ id bigint auto_increment,
 primary key (id)
 ) Engine=InnoDB'''
 
+create_name_user2_map = '''create table name_user2_map (
+name varchar(64),
+user2_id bigint,
+primary key (name, user2_id)
+) Engine=InnoDB'''
+
 create_music_user_map = '''create table music_user_map (
 music_id bigint auto_increment,
 user_id bigint,
@@ -81,6 +93,15 @@ schema = '''{
           },
           "Owner": "vt_user"
         },
+        "name_user2_map": {
+          "Type": "lookup_hash_multi",
+          "Params": {
+            "Table": "name_user2_map",
+            "From": "name",
+            "To": "user2_id"
+          },
+          "Owner": "vt_user2"
+        },
         "music_user_map": {
           "Type": "lookup_hash_unique",
           "Params": {
@@ -97,6 +118,18 @@ schema = '''{
             {
               "Col": "id",
               "Name": "user_index"
+            }
+          ]
+        },
+        "vt_user2": {
+          "ColVindexes": [
+            {
+              "Col": "id",
+              "Name": "user_index"
+            },
+            {
+              "Col": "name",
+              "Name": "name_user2_map"
             }
           ]
         },
@@ -138,7 +171,8 @@ schema = '''{
       "Sharded": false,
       "Tables": {
         "vt_user_idx": {},
-        "music_user_map": {}
+        "music_user_map": {},
+        "name_user2_map": {}
       }
     }
   }
@@ -204,6 +238,7 @@ def setup_tablets():
   for t in [shard_0_master, shard_1_master]:
     t.create_db('vt_user_keyspace')
     t.mquery('vt_user_keyspace', create_vt_user)
+    t.mquery('vt_user_keyspace', create_vt_user2)
     t.mquery('vt_user_keyspace', create_vt_user_extra)
     t.mquery('vt_user_keyspace', create_vt_music)
     t.mquery('vt_user_keyspace', create_vt_music_extra)
@@ -212,6 +247,7 @@ def setup_tablets():
   lookup_master.create_db('vt_lookup_keyspace')
   lookup_master.mquery('vt_lookup_keyspace', create_vt_user_idx)
   lookup_master.mquery('vt_lookup_keyspace', create_music_user_map)
+  lookup_master.mquery('vt_lookup_keyspace', create_name_user2_map)
   lookup_master.start_vttablet(wait_for_state='SERVING')
   utils.run_vtctl(['SetReadWrite', lookup_master.tablet_alias])
 
@@ -305,6 +341,60 @@ class TestVTGateFunctions(unittest.TestCase):
     self.assertEqual(result, ((6L, 'test 6'), (7L, 'test 7')))
     result = lookup_master.mquery("vt_lookup_keyspace", "select * from vt_user_idx")
     self.assertEqual(result, ((2L,), (3L,), (6L,), (7L,)))
+
+  def test_user2(self):
+    vtgate_conn = get_connection()
+    vtgate_conn.begin()
+    result = vtgate_conn._execute(
+        "insert into vt_user2 (id, name) values (%(id)s, %(name)s)",
+        {'id': 1, 'name': 'name1'},
+        'master')
+    self.assertEqual(result, ([], 1L, 0L, []))
+    result = vtgate_conn._execute(
+        "insert into vt_user2 (id, name) values (%(id)s, %(name)s)",
+        {'id': 7, 'name': 'name1'},
+        'master')
+    self.assertEqual(result, ([], 1L, 0L, []))
+    result = vtgate_conn._execute(
+        "insert into vt_user2 (id, name) values (%(id)s, %(name)s)",
+        {'id': 2, 'name': 'name2'},
+        'master')
+    self.assertEqual(result, ([], 1L, 0L, []))
+    vtgate_conn.commit()
+    result = shard_0_master.mquery("vt_user_keyspace", "select * from vt_user2")
+    self.assertEqual(result, ((1L, 'name1'), (2L, 'name2')))
+    result = shard_1_master.mquery("vt_user_keyspace", "select * from vt_user2")
+    self.assertEqual(result, ((7L, 'name1'),))
+    result = lookup_master.mquery("vt_lookup_keyspace", "select * from name_user2_map")
+    self.assertEqual(result, (('name1', 1L), ('name1', 7L), ('name2', 2L)))
+
+    result = vtgate_conn._execute("select * from vt_user2 where id = %(id)s", {'id': 1}, 'master')
+    self.assertEqual(result, ([(1, "name1")], 1L, 0, [('id', 8L), ('name', 253L)]))
+    result = vtgate_conn._execute("select * from vt_user2 where name = %(name)s", {'name': 'name1'}, 'master')
+    # Results can come in any order.
+    if result[0][0] == (1, "name1"):
+      self.assertEqual(result, ([(1, "name1"), (7, "name1")], 2L, 0, [('id', 8L), ('name', 253L)]))
+    else:
+      self.assertEqual(result, ([(7, "name1"), (1, "name1")], 2L, 0, [('id', 8L), ('name', 253L)]))
+
+    vtgate_conn.begin()
+    result = vtgate_conn._execute(
+        "delete from vt_user2 where id = %(id)s",
+        {'id': 1},
+        "master")
+    self.assertEqual(result, ([], 1L, 0L, []))
+    result = vtgate_conn._execute(
+        "delete from vt_user2 where id = %(id)s",
+        {'id': 2},
+        "master")
+    self.assertEqual(result, ([], 1L, 0L, []))
+    vtgate_conn.commit()
+    result = shard_0_master.mquery("vt_user_keyspace", "select * from vt_user2")
+    self.assertEqual(result, ())
+    result = shard_1_master.mquery("vt_user_keyspace", "select * from vt_user2")
+    self.assertEqual(result, ((7L, 'name1'),))
+    result = lookup_master.mquery("vt_lookup_keyspace", "select * from name_user2_map")
+    self.assertEqual(result, (('name1', 7L),))
 
   def test_user_extra(self):
     count = 4

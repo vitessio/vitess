@@ -117,6 +117,11 @@ func TestSelectEqual(t *testing.T) {
 	sbc2 := &sandboxConn{}
 	s.MapTestConn("-20", sbc1)
 	s.MapTestConn("40-60", sbc2)
+
+	l := createSandbox("TestUnsharded")
+	sbclookup := &sandboxConn{}
+	l.MapTestConn("0", sbclookup)
+
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
 	router := NewRouter(serv, "aa", schema, "", scatterConn)
@@ -139,6 +144,7 @@ func TestSelectEqual(t *testing.T) {
 	if sbc2.ExecCount != 0 {
 		t.Errorf("sbc2.ExecCount: %v, want 0\n", sbc2.ExecCount)
 	}
+
 	q.Sql = "select * from user where id = 3"
 	_, err = router.Execute(&context.DummyContext{}, &q)
 	if err != nil {
@@ -154,6 +160,35 @@ func TestSelectEqual(t *testing.T) {
 	wantQuery = "select * from user where id = 3"
 	if sbc2.Queries[0] != wantQuery {
 		t.Errorf("sbc2.Queries[0]: %q, want %q\n", sbc2.Queries[0], wantQuery)
+	}
+
+	q.Sql = "select * from user where name = 'foo'"
+	sbc1.BindVars = nil
+	sbc1.Queries = nil
+	_, err = router.Execute(&context.DummyContext{}, &q)
+	if err != nil {
+		t.Error(err)
+	}
+	wantBind = map[string]interface{}{}
+	if !reflect.DeepEqual(sbc1.BindVars[0], wantBind) {
+		t.Errorf("sbc1.BindVars[0] = %#v, want %#v", sbc1.BindVars[0], wantBind)
+	}
+	wantQuery = "select * from user where name = 'foo'"
+	if sbc1.Queries[0] != wantQuery {
+		t.Errorf("sbc1.Queries[0]: %q, want %q\n", sbc1.Queries[0], wantQuery)
+	}
+
+	wantBinds := []map[string]interface{}{{
+		"name": []byte("foo"),
+	}}
+	if !reflect.DeepEqual(sbclookup.BindVars, wantBinds) {
+		t.Errorf("sbclookup.BindVars = \n%#v, want \n%#v", sbclookup.BindVars, wantBinds)
+	}
+	wantQueries := []string{
+		"select user_id from name_user_map where name = :name",
+	}
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: %q, want %q\n", sbclookup.Queries, wantQueries)
 	}
 }
 
@@ -231,11 +266,13 @@ func TestDeleteEqual(t *testing.T) {
 	sbc.setResults([]*mproto.QueryResult{&mproto.QueryResult{
 		Fields: []mproto.Field{
 			{"id", 3},
+			{"name", 253},
 		},
 		RowsAffected: 1,
 		InsertId:     0,
 		Rows: [][]sqltypes.Value{{
 			{sqltypes.Numeric("1")},
+			{sqltypes.String("myname")},
 		}},
 	}})
 	q := proto.Query{
@@ -253,7 +290,7 @@ func TestDeleteEqual(t *testing.T) {
 		t.Errorf("sbc.BindVars = %#v, want %#v", sbc.BindVars, wantBinds)
 	}
 	wantQueries := []string{
-		"select id from user where id = 1 for update",
+		"select id, name from user where id = 1 for update",
 		"delete from user where id = 1 /* _routing keyspace_id:166b40b44aba4bd6 */",
 	}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
@@ -262,12 +299,16 @@ func TestDeleteEqual(t *testing.T) {
 
 	wantBinds = []map[string]interface{}{{
 		"id": []interface{}{int64(1)},
+	}, {
+		"user_id": uint64(1),
+		"name":    []interface{}{"myname"},
 	}}
 	if !reflect.DeepEqual(sbclookup.BindVars, wantBinds) {
 		t.Errorf("sbclookup.BindVars = \n%#v, want \n%#v", sbclookup.BindVars, wantBinds)
 	}
 	wantQueries = []string{
 		"delete from user_idx where id in ::id",
+		"delete from name_user_map where name in ::name and user_id = :user_id",
 	}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries: %q, want %q\n", sbclookup.Queries, wantQueries)
@@ -294,7 +335,7 @@ func TestInsertSharded(t *testing.T) {
 	router := NewRouter(serv, "aa", schema, "", scatterConn)
 
 	q := proto.Query{
-		Sql:        "insert into user(id, v) values (1, 2)",
+		Sql:        "insert into user(id, v, name) values (1, 2, 'myname')",
 		TabletType: topo.TYPE_MASTER,
 	}
 	_, err = router.Execute(&context.DummyContext{}, &q)
@@ -314,11 +355,12 @@ func TestInsertSharded(t *testing.T) {
 	wantBind = map[string]interface{}{
 		"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
 		"_id":         int64(1),
+		"_name":       []byte("myname"),
 	}
 	if !reflect.DeepEqual(sbc1.BindVars[0], wantBind) {
 		t.Errorf("sbc1.BindVars[0] = %#v, want %#v", sbc1.BindVars[0], wantBind)
 	}
-	wantQuery = "insert into user(id, v) values (:_id, 2) /* _routing keyspace_id:166b40b44aba4bd6 */"
+	wantQuery = "insert into user(id, v, name) values (:_id, 2, :_name) /* _routing keyspace_id:166b40b44aba4bd6 */"
 	if sbc1.Queries[0] != wantQuery {
 		t.Errorf("sbc1.Queries[0]: %q, want %q\n", sbc1.Queries[0], wantQuery)
 	}
@@ -326,7 +368,7 @@ func TestInsertSharded(t *testing.T) {
 		t.Errorf("sbc2.ExecCount: %v, want 0\n", sbc2.ExecCount)
 	}
 
-	q.Sql = "insert into user(id, v) values (3, 2)"
+	q.Sql = "insert into user(id, v, name) values (3, 2, 'myname2')"
 	sbclookup.BindVars = nil
 	sbclookup.Queries = nil
 	_, err = router.Execute(&context.DummyContext{}, &q)
@@ -349,11 +391,12 @@ func TestInsertSharded(t *testing.T) {
 	wantBind = map[string]interface{}{
 		"keyspace_id": "N\xb1\x90ɢ\xfa\x16\x9c",
 		"_id":         int64(3),
+		"_name":       []byte("myname2"),
 	}
 	if !reflect.DeepEqual(sbc2.BindVars[0], wantBind) {
 		t.Errorf("sbc2.BindVars[0] = %#v, want %#v", sbc2.BindVars[0], wantBind)
 	}
-	wantQuery = "insert into user(id, v) values (:_id, 2) /* _routing keyspace_id:4eb190c9a2fa169c */"
+	wantQuery = "insert into user(id, v, name) values (:_id, 2, :_name) /* _routing keyspace_id:4eb190c9a2fa169c */"
 	if sbc2.Queries[0] != wantQuery {
 		t.Errorf("sbc2.Queries[0]: %q, want %q\n", sbc2.Queries[0], wantQuery)
 	}
@@ -377,7 +420,7 @@ func TestInsertGenerator(t *testing.T) {
 	router := NewRouter(serv, "aa", schema, "", scatterConn)
 
 	q := proto.Query{
-		Sql:        "insert into user(v) values (2)",
+		Sql:        "insert into user(v, name) values (2, 'myname')",
 		TabletType: topo.TYPE_MASTER,
 	}
 	_, err = router.Execute(&context.DummyContext{}, &q)
@@ -397,11 +440,12 @@ func TestInsertGenerator(t *testing.T) {
 	wantBind = map[string]interface{}{
 		"keyspace_id": "\x8c\xa6M\xe9\xc1\xb1#\xa7",
 		"_id":         uint64(0),
+		"_name":       []byte("myname"),
 	}
 	if !reflect.DeepEqual(sbc.BindVars[0], wantBind) {
 		t.Errorf("sbc.BindVars[0] = %#v, want %#v", sbc.BindVars[0], wantBind)
 	}
-	wantQuery = "insert into user(v, id) values (2, :_id) /* _routing keyspace_id:8ca64de9c1b123a7 */"
+	wantQuery = "insert into user(v, name, id) values (2, :_name, :_id) /* _routing keyspace_id:8ca64de9c1b123a7 */"
 	if sbc.Queries[0] != wantQuery {
 		t.Errorf("sbc.Queries[0]: %q, want %q\n", sbc.Queries[0], wantQuery)
 	}

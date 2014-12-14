@@ -316,7 +316,12 @@ func (rtr *Router) deleteVindexEntries(vcursor *requestContext, plan *planbuilde
 			if err != nil {
 				return err
 			}
-			keys[k] = true
+			switch k := k.(type) {
+			case []byte:
+				keys[string(k)] = true
+			default:
+				keys[k] = true
+			}
 		}
 		var ids []interface{}
 		for k := range keys {
