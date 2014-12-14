@@ -192,6 +192,57 @@ func TestSelectEqual(t *testing.T) {
 	}
 }
 
+func TestSelectKeyrange(t *testing.T) {
+	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := createSandbox("TestRouter")
+	sbc1 := &sandboxConn{}
+	sbc2 := &sandboxConn{}
+	s.MapTestConn("-20", sbc1)
+	s.MapTestConn("40-60", sbc2)
+	serv := new(sandboxTopo)
+	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
+	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	q := proto.Query{
+		Sql:        "select * from user where keyrange('', '\x20')",
+		TabletType: topo.TYPE_MASTER,
+	}
+	_, err = router.Execute(&context.DummyContext{}, &q)
+	if err != nil {
+		t.Error(err)
+	}
+	wantBind := map[string]interface{}{}
+	if !reflect.DeepEqual(sbc1.BindVars[0], wantBind) {
+		t.Errorf("sbc1.BindVars[0] = %#v, want %#v", sbc1.BindVars[0], wantBind)
+	}
+	wantQuery := "select * from user"
+	if sbc1.Queries[0] != wantQuery {
+		t.Errorf("sbc1.Queries[0]: %q, want %q\n", sbc1.Queries[0], wantQuery)
+	}
+	if sbc2.ExecCount != 0 {
+		t.Errorf("sbc2.ExecCount: %v, want 0\n", sbc2.ExecCount)
+	}
+
+	q.Sql = "select * from user where keyrange('\x40', '\x60')"
+	_, err = router.Execute(&context.DummyContext{}, &q)
+	if err != nil {
+		t.Error(err)
+	}
+	if sbc1.ExecCount != 1 {
+		t.Errorf("sbc1.ExecCount: %v, want 1\n", sbc1.ExecCount)
+	}
+	wantBind = map[string]interface{}{}
+	if !reflect.DeepEqual(sbc2.BindVars[0], wantBind) {
+		t.Errorf("sbc2.BindVars[0] = %#v, want %#v", sbc2.BindVars[0], wantBind)
+	}
+	wantQuery = "select * from user"
+	if sbc2.Queries[0] != wantQuery {
+		t.Errorf("sbc2.Queries[0]: %q, want %q\n", sbc2.Queries[0], wantQuery)
+	}
+}
+
 func TestUpdateEqual(t *testing.T) {
 	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
 	if err != nil {

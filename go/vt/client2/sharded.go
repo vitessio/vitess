@@ -16,10 +16,11 @@ import (
 	"github.com/youtube/vitess/go/vt/client2/tablet"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
 )
+
+// TODO(sougou): deprecate this package.
 
 // The sharded client handles writing to multiple shards across the
 // database.
@@ -233,9 +234,9 @@ func (sc *ShardedConn) Exec(query string, bindVars map[string]interface{}) (db.R
 	if sc.srvKeyspace == nil {
 		return nil, ErrNotConnected
 	}
-	shards, err := vtgate.GetShardList(query, bindVars, sc.shardMaxKeys)
-	if err != nil {
-		return nil, err
+	var shards []int
+	for i := range sc.shardMaxKeys {
+		shards = append(shards, i)
 	}
 	if sc.stream {
 		return sc.execOnShardsStream(query, bindVars, shards)

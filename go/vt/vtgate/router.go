@@ -54,6 +54,8 @@ func (rtr *Router) Execute(ctx context.Context, query *proto.Query) (*mproto.Que
 		return rtr.execUnsharded(vcursor, plan)
 	case planbuilder.SelectEqual:
 		return rtr.execSelectEqual(vcursor, plan)
+	case planbuilder.SelectKeyrange:
+		return rtr.execSelectKeyrange(vcursor, plan)
 	case planbuilder.UpdateEqual:
 		return rtr.execUpdateEqual(vcursor, plan)
 	case planbuilder.DeleteEqual:
@@ -98,6 +100,50 @@ func (rtr *Router) execSelectEqual(vcursor *requestContext, plan *planbuilder.Pl
 		routing.Shards(),
 		vcursor.query.TabletType,
 		NewSafeSession(vcursor.query.Session))
+}
+
+func (rtr *Router) execSelectKeyrange(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
+	keys, err := rtr.resolveKeys(plan.Values.([]interface{}), vcursor.query.BindVariables)
+	if err != nil {
+		return nil, err
+	}
+	kr, err := getKeyRange(keys)
+	if err != nil {
+		return nil, err
+	}
+	ks, shards, err := mapExactShards(rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType, kr)
+	if err != nil {
+		return nil, err
+	}
+	if len(shards) != 1 {
+		return nil, fmt.Errorf("keyrange must match exactly one shard: %+v", keys)
+	}
+	return rtr.scatterConn.Execute(
+		vcursor.ctx,
+		plan.Rewritten,
+		vcursor.query.BindVariables,
+		ks,
+		shards,
+		vcursor.query.TabletType,
+		NewSafeSession(vcursor.query.Session))
+}
+
+func getKeyRange(keys []interface{}) (key.KeyRange, error) {
+	var ksids []key.KeyspaceId
+	for _, k := range keys {
+		switch k := k.(type) {
+		case string:
+			ksids = append(ksids, key.KeyspaceId(k))
+		case []byte:
+			ksids = append(ksids, key.KeyspaceId(k))
+		default:
+			return key.KeyRange{}, fmt.Errorf("expecting strings for keyrange: %+v", keys)
+		}
+	}
+	return key.KeyRange{
+		Start: ksids[0],
+		End:   ksids[1],
+	}, nil
 }
 
 func (rtr *Router) execUpdateEqual(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {

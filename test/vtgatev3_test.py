@@ -306,6 +306,11 @@ class TestVTGateFunctions(unittest.TestCase):
     result = lookup_master.mquery("vt_lookup_keyspace", "select * from vt_user_idx")
     self.assertEqual(result, ((1L,), (2L,), (3L,), (4L,), (6L,), (7L,)))
 
+    result = vtgate_conn._execute("select * from vt_user where keyrange('', '\x80')", {}, 'master')
+    self.assertEqual(result, ([(1L, 'test 1'), (2L, 'test 2'), (3L, 'test 3')], 3L, 0, [('id', 8L), ('name', 253L)]))
+    result = vtgate_conn._execute("select * from vt_user where keyrange('\x80', '')", {}, 'master')
+    self.assertEqual(result, ([(4L, 'test 4'), (6L, 'test 6'), (7L, 'test 7')], 3L, 0, [('id', 8L), ('name', 253L)]))
+
     vtgate_conn.begin()
     result = vtgate_conn._execute(
         "update vt_user set name = %(name)s where id = %(id)s",
