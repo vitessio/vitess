@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"time"
 
-	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -17,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
+	"golang.org/x/net/context"
 )
 
 // QueryExecutor is used for executing a query request.

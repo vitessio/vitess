@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"code.google.com/p/go.net/context"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
@@ -26,6 +25,7 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
 	"github.com/youtube/vitess/go/vt/zktopo"
+	"golang.org/x/net/context"
 )
 
 // This is a local SqlQuery RCP implementation to support the tests

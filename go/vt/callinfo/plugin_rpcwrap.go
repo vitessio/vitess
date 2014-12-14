@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"html/template"
 
-	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/rpcwrap/proto"
+	"golang.org/x/net/context"
 )
 
 type rpcWrapInfo struct {

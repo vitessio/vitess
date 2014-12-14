@@ -138,7 +138,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 )
 
 const (

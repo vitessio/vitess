@@ -12,7 +12,7 @@ import (
 	"net"
 	"testing"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/rpcplus"
 )
