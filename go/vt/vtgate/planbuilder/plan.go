@@ -18,6 +18,7 @@ const (
 	SelectUnsharded
 	SelectEqual
 	SelectIN
+	SelectKeyrange
 	SelectScatter
 	UpdateUnsharded
 	UpdateEqual
@@ -34,6 +35,7 @@ var planName = [NumPlans]string{
 	"SelectUnsharded",
 	"SelectEqual",
 	"SelectIN",
+	"SelectKeyrange",
 	"SelectScatter",
 	"UpdateUnsharded",
 	"UpdateEqual",

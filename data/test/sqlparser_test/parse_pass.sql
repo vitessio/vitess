@@ -61,6 +61,7 @@ select /* and */ 1 from t where a = b and a = c
 select /* or */ 1 from t where a = b or a = c
 select /* not */ 1 from t where not a = b
 select /* exists */ 1 from t where exists (select 1 from t)
+select /* keyrange */ 1 from t where keyrange(1, 2)
 select /* (boolean) */ 1 from t where not (a = b)
 select /* in value list */ 1 from t where a in (b, c)
 select /* in select */ 1 from t where a in (select 1 from t)

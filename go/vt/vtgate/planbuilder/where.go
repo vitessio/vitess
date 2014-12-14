@@ -25,6 +25,17 @@ func getWhereRouting(where *sqlparser.Where, plan *Plan, onlyUnique bool) {
 		plan.Reason = "has subquery"
 		return
 	}
+	values, err := getKeyrangeMatch(where)
+	if err != nil {
+		plan.ID = NoPlan
+		plan.Reason = err.Error()
+		return
+	}
+	if values != nil {
+		plan.ID = SelectKeyrange
+		plan.Values = values
+		return
+	}
 	for _, index := range plan.Table.Ordered {
 		if onlyUnique && !IsUnique(index.Vindex) {
 			continue
@@ -92,6 +103,64 @@ func hasSubquery(node sqlparser.Expr) bool {
 	default:
 		panic("unexpected")
 	}
+}
+
+func getKeyrangeMatch(where *sqlparser.Where) (values interface{}, err error) {
+	where.Expr, values, err = getKeyrangeFromBool(where.Expr)
+	return values, err
+}
+
+func getKeyrangeFromBool(node sqlparser.BoolExpr) (newnode sqlparser.BoolExpr, values interface{}, err error) {
+	switch node := node.(type) {
+	case *sqlparser.AndExpr:
+		node.Left, values, err = getKeyrangeFromBool(node.Left)
+		if err != nil {
+			return node, nil, err
+		}
+		// Left node was a keyrange expr.
+		// Eliminate Left node by returning the Right node.
+		if node.Left == nil {
+			return node.Right, values, nil
+		}
+		// A child of Left node was a keyrange expr.
+		// So, we root node.
+		if values != nil {
+			return node, values, nil
+		}
+		node.Right, values, err = getKeyrangeFromBool(node.Right)
+		if err != nil {
+			return node, nil, err
+		}
+		// Right node was a keyrange expr.
+		// Eliminate Right node by returning the Left node.
+		if node.Right == nil {
+			return node.Left, values, nil
+		}
+		return node, values, nil
+	case *sqlparser.ParenBoolExpr:
+		node.Expr, values, err = getKeyrangeFromBool(node.Expr)
+		if err != nil {
+			return node, nil, err
+		}
+		// Eliminate root parenthesis if sub-expr was a keyrange expr.
+		// This goes recursively up.
+		if node.Expr == nil {
+			return nil, values, nil
+		}
+		return node, values, nil
+	case *sqlparser.KeyrangeExpr:
+		vals := make([]interface{}, 2)
+		vals[0], err = asInterface(node.Start)
+		if err != nil {
+			return node, nil, err
+		}
+		vals[1], err = asInterface(node.End)
+		if err != nil {
+			return node, nil, err
+		}
+		return nil, vals, nil
+	}
+	return node, nil, nil
 }
 
 func getMatch(node sqlparser.BoolExpr, col string) (planID PlanID, values interface{}) {
