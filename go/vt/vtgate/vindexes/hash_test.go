@@ -27,7 +27,7 @@ func init() {
 
 func TestHashConvert(t *testing.T) {
 	cases := []struct {
-		in  uint64
+		in  int64
 		out string
 	}{
 		{1, "\x16k@\xb4J\xbaK\xd6"},
@@ -53,7 +53,7 @@ func TestHashConvert(t *testing.T) {
 
 func BenchmarkHashConvert(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		vhash(uint64(i))
+		vhash(int64(i))
 	}
 }
 
@@ -96,7 +96,7 @@ func TestHashReverseMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if got.(uint64) != 1 {
+	if got.(int64) != 1 {
 		t.Errorf("ReverseMap(): %+v, want 1", got)
 	}
 }

@@ -11,6 +11,11 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
+var (
+	_ planbuilder.NonUnique = (*LookupHashMulti)(nil)
+	_ planbuilder.Lookup    = (*LookupHashMulti)(nil)
+)
+
 type LookupHashMulti struct {
 	lookupHash
 }

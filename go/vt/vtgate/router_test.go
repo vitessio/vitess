@@ -300,7 +300,7 @@ func TestDeleteEqual(t *testing.T) {
 	wantBinds = []map[string]interface{}{{
 		"id": []interface{}{int64(1)},
 	}, {
-		"user_id": uint64(1),
+		"user_id": int64(1),
 		"name":    []interface{}{"myname"},
 	}}
 	if !reflect.DeepEqual(sbclookup.BindVars, wantBinds) {
@@ -439,7 +439,7 @@ func TestInsertGenerator(t *testing.T) {
 	}
 	wantBind = map[string]interface{}{
 		"keyspace_id": "\x8c\xa6M\xe9\xc1\xb1#\xa7",
-		"_id":         uint64(0),
+		"_id":         int64(0),
 		"_name":       []byte("myname"),
 	}
 	if !reflect.DeepEqual(sbc.BindVars[0], wantBind) {
@@ -478,7 +478,7 @@ func TestInsertLookupOwned(t *testing.T) {
 	}
 	wantBind := map[string]interface{}{
 		"music_id": int64(3),
-		"user_id":  uint64(2),
+		"user_id":  int64(2),
 	}
 	if !reflect.DeepEqual(sbclookup.BindVars[0], wantBind) {
 		t.Errorf("sbclookup.BindVars[0] = %#v, want %#v", sbclookup.BindVars[0], wantBind)
@@ -528,7 +528,7 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 	}
 	wantBind := map[string]interface{}{
 		"music_id": nil,
-		"user_id":  uint64(2),
+		"user_id":  int64(2),
 	}
 	if !reflect.DeepEqual(sbclookup.BindVars[0], wantBind) {
 		t.Errorf("sbclookup.BindVars[0] = %#v, want %#v", sbclookup.BindVars[0], wantBind)
@@ -540,7 +540,7 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 	wantBind = map[string]interface{}{
 		"keyspace_id": "\x06\xe7\xea\"Βp\x8f",
 		"_user_id":    int64(2),
-		"_id":         uint64(0),
+		"_id":         int64(0),
 	}
 	if !reflect.DeepEqual(sbc.BindVars[0], wantBind) {
 		t.Errorf("sbc.BindVars[0] = %#v, want %#v", sbc.BindVars[0], wantBind)
@@ -578,7 +578,7 @@ func TestInsertLookupUnowned(t *testing.T) {
 	}
 	wantBind := map[string]interface{}{
 		"music_id": int64(3),
-		"user_id":  uint64(2),
+		"user_id":  int64(2),
 	}
 	if !reflect.DeepEqual(sbclookup.BindVars[0], wantBind) {
 		t.Errorf("sbclookup.BindVars[0] = %#v, want %#v", sbclookup.BindVars[0], wantBind)
@@ -638,7 +638,7 @@ func TestInsertLookupUnownedUnsupplied(t *testing.T) {
 	}
 	wantBind = map[string]interface{}{
 		"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
-		"_user_id":    uint64(1),
+		"_user_id":    int64(1),
 		"_music_id":   int64(3),
 	}
 	if !reflect.DeepEqual(sbc.BindVars[0], wantBind) {

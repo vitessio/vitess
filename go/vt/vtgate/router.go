@@ -197,7 +197,7 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, plan *planbuilder.
 		if result.InsertId != 0 {
 			return nil, fmt.Errorf("vindex and db generated a value each for insert")
 		}
-		result.InsertId = generated
+		result.InsertId = uint64(generated)
 	}
 	return result, nil
 }
@@ -343,7 +343,7 @@ func (rtr *Router) deleteVindexEntries(vcursor *requestContext, plan *planbuilde
 	return nil
 }
 
-func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{}, colVindex *planbuilder.ColVindex, bv map[string]interface{}) (ksid key.KeyspaceId, generated uint64, err error) {
+func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{}, colVindex *planbuilder.ColVindex, bv map[string]interface{}) (ksid key.KeyspaceId, generated int64, err error) {
 	if colVindex.Owned {
 		if vindexKey == nil {
 			generator, ok := colVindex.Vindex.(planbuilder.FunctionalGenerator)
@@ -378,7 +378,7 @@ func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{},
 	return ksid, generated, nil
 }
 
-func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface{}, colVindex *planbuilder.ColVindex, bv map[string]interface{}, ksid key.KeyspaceId) (generated uint64, err error) {
+func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface{}, colVindex *planbuilder.ColVindex, bv map[string]interface{}, ksid key.KeyspaceId) (generated int64, err error) {
 	if colVindex.Owned {
 		if vindexKey == nil {
 			generator, ok := colVindex.Vindex.(planbuilder.LookupGenerator)

@@ -84,7 +84,7 @@ type Functional interface {
 // that can generate new ids.
 type FunctionalGenerator interface {
 	Functional
-	Generate(cursor VCursor) (id uint64, err error)
+	Generate(cursor VCursor) (id int64, err error)
 }
 
 // A Lookup vindex is one that needs to lookup
@@ -104,7 +104,7 @@ type Lookup interface {
 // generate new ids.
 type LookupGenerator interface {
 	Lookup
-	Generate(cursor VCursor, keyspace_id key.KeyspaceId) (id uint64, err error)
+	Generate(cursor VCursor, keyspace_id key.KeyspaceId) (id int64, err error)
 }
 
 // A NewVindexFunc is a function that creates a Vindex based on the

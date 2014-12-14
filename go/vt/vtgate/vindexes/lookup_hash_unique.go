@@ -13,6 +13,11 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
+var (
+	_ planbuilder.Unique          = (*LookupHashUnique)(nil)
+	_ planbuilder.LookupGenerator = (*LookupHashUnique)(nil)
+)
+
 type LookupHashUnique struct {
 	lookupHash
 }
@@ -60,7 +65,7 @@ func (vind *LookupHashUnique) Map(vcursor planbuilder.VCursor, ids []interface{}
 	return out, nil
 }
 
-func (vind *LookupHashUnique) Generate(vcursor planbuilder.VCursor, ksid key.KeyspaceId) (id uint64, err error) {
+func (vind *LookupHashUnique) Generate(vcursor planbuilder.VCursor, ksid key.KeyspaceId) (id int64, err error) {
 	bq := &tproto.BoundQuery{
 		Sql: vind.ins,
 		BindVariables: map[string]interface{}{
@@ -72,7 +77,7 @@ func (vind *LookupHashUnique) Generate(vcursor planbuilder.VCursor, ksid key.Key
 	if err != nil {
 		return 0, err
 	}
-	return result.InsertId, err
+	return int64(result.InsertId), err
 }
 
 func init() {

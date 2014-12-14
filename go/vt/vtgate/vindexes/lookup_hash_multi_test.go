@@ -100,7 +100,7 @@ func TestLookupHashMultiCreate(t *testing.T) {
 		Sql: "insert into t(fromc, toc) values(:fromc, :toc)",
 		BindVariables: map[string]interface{}{
 			"fromc": 1,
-			"toc":   uint64(1),
+			"toc":   int64(1),
 		},
 	}
 	if !reflect.DeepEqual(vc.query, wantQuery) {
@@ -118,7 +118,7 @@ func TestLookupHashMultiDelete(t *testing.T) {
 		Sql: "delete from t where fromc in ::fromc and toc = :toc",
 		BindVariables: map[string]interface{}{
 			"fromc": []interface{}{1},
-			"toc":   uint64(1),
+			"toc":   int64(1),
 		},
 	}
 	if !reflect.DeepEqual(vc.query, wantQuery) {
