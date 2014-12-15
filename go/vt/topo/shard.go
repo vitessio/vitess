@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
 

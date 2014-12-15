@@ -8,12 +8,12 @@ import (
 	"fmt"
 	"sync"
 
-	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
+	"golang.org/x/net/context"
 )
 
 // Rebuild the serving and replication rollup data data while locking

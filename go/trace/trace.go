@@ -7,7 +7,7 @@
 package trace
 
 import (
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 )
 
 // Span represents a unit of work within a trace. After creating a Span with

@@ -10,8 +10,8 @@ import (
 	"io"
 	"sync"
 
-	"code.google.com/p/go.net/context"
 	rpc "github.com/youtube/vitess/go/rpcplus"
+	"golang.org/x/net/context"
 )
 
 type serverCodec struct {

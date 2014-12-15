@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
@@ -25,6 +24,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
+	"golang.org/x/net/context"
 )
 
 const errDupKey = "errno 1062"

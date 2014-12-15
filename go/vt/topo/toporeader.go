@@ -1,7 +1,7 @@
 package topo
 
 import (
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 )
 
 // TopoReader returns read only information about the topology.

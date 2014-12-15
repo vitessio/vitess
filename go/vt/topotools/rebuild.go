@@ -10,12 +10,12 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 // UseSrvShardLocks is a deprecated flag. We leave it here until it's removed

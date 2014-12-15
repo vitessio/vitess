@@ -3,7 +3,7 @@ package zktopo
 import (
 	"testing"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/topo/test"
 )
