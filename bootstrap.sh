@@ -43,7 +43,7 @@ go get code.google.com/p/go.tools/cmd/goimports
 go get github.com/golang/glog
 
 # Packages for uploading code coverage to coveralls.io
-go get code.google.com/p/go.tools/cmd/cover
+go get golang.org/x/tools/cmd/cover
 go get github.com/modocache/gover
 go get github.com/mattn/goveralls
 
