@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"code.google.com/p/go.net/context"
+
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -16,23 +18,25 @@ func CheckKeyspaceLock(t *testing.T, ts topo.Server) {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 
-	interrupted := make(chan struct{}, 1)
-	lockPath, err := ts.LockKeyspaceForAction("test_keyspace", "fake-content", 5*time.Second, interrupted)
+	ctx, ctxCancel := context.WithCancel(context.Background())
+	lockPath, err := ts.LockKeyspaceForAction(ctx, "test_keyspace", "fake-content")
 	if err != nil {
 		t.Fatalf("LockKeyspaceForAction: %v", err)
 	}
 
 	// test we can't take the lock again
-	if _, err := ts.LockKeyspaceForAction("test_keyspace", "unused-fake-content", time.Second/10, interrupted); err != topo.ErrTimeout {
+	fastCtx, cancel := context.WithTimeout(ctx, time.Second/10)
+	if _, err := ts.LockKeyspaceForAction(fastCtx, "test_keyspace", "unused-fake-content"); err != topo.ErrTimeout {
 		t.Errorf("LockKeyspaceForAction(again): %v", err)
 	}
+	cancel()
 
 	// test we can interrupt taking the lock
 	go func() {
 		time.Sleep(time.Second / 10)
-		close(interrupted)
+		ctxCancel()
 	}()
-	if _, err := ts.LockKeyspaceForAction("test_keyspace", "unused-fake-content", 5*time.Second, interrupted); err != topo.ErrInterrupted {
+	if _, err := ts.LockKeyspaceForAction(ctx, "test_keyspace", "unused-fake-content"); err != topo.ErrInterrupted {
 		t.Errorf("LockKeyspaceForAction(interrupted): %v", err)
 	}
 
@@ -46,8 +50,8 @@ func CheckKeyspaceLock(t *testing.T, ts topo.Server) {
 	}
 
 	// test we can't lock a non-existing keyspace
-	interrupted = make(chan struct{}, 1)
-	if _, err := ts.LockKeyspaceForAction("test_keyspace_666", "fake-content", 5*time.Second, interrupted); err == nil {
+	ctx = context.Background()
+	if _, err := ts.LockKeyspaceForAction(ctx, "test_keyspace_666", "fake-content"); err == nil {
 		t.Fatalf("LockKeyspaceForAction(test_keyspace_666) worked for non-existing keyspace")
 	}
 }
@@ -60,23 +64,25 @@ func CheckShardLock(t *testing.T, ts topo.Server) {
 		t.Fatalf("CreateShard: %v", err)
 	}
 
-	interrupted := make(chan struct{}, 1)
-	lockPath, err := ts.LockShardForAction("test_keyspace", "10-20", "fake-content", 5*time.Second, interrupted)
+	ctx, ctxCancel := context.WithCancel(context.Background())
+	lockPath, err := ts.LockShardForAction(ctx, "test_keyspace", "10-20", "fake-content")
 	if err != nil {
 		t.Fatalf("LockShardForAction: %v", err)
 	}
 
 	// test we can't take the lock again
-	if _, err := ts.LockShardForAction("test_keyspace", "10-20", "unused-fake-content", time.Second/2, interrupted); err != topo.ErrTimeout {
+	fastCtx, cancel := context.WithTimeout(ctx, time.Second/10)
+	if _, err := ts.LockShardForAction(fastCtx, "test_keyspace", "10-20", "unused-fake-content"); err != topo.ErrTimeout {
 		t.Errorf("LockShardForAction(again): %v", err)
 	}
+	cancel()
 
 	// test we can interrupt taking the lock
 	go func() {
 		time.Sleep(time.Second / 2)
-		close(interrupted)
+		ctxCancel()
 	}()
-	if _, err := ts.LockShardForAction("test_keyspace", "10-20", "unused-fake-content", 5*time.Second, interrupted); err != topo.ErrInterrupted {
+	if _, err := ts.LockShardForAction(ctx, "test_keyspace", "10-20", "unused-fake-content"); err != topo.ErrInterrupted {
 		t.Errorf("LockShardForAction(interrupted): %v", err)
 	}
 
@@ -90,16 +96,16 @@ func CheckShardLock(t *testing.T, ts topo.Server) {
 	}
 
 	// test we can't lock a non-existing shard
-	interrupted = make(chan struct{}, 1)
-	if _, err := ts.LockShardForAction("test_keyspace", "20-30", "fake-content", 5*time.Second, interrupted); err == nil {
+	ctx = context.Background()
+	if _, err := ts.LockShardForAction(ctx, "test_keyspace", "20-30", "fake-content"); err == nil {
 		t.Fatalf("LockShardForAction(test_keyspace/20-30) worked for non-existing shard")
 	}
 }
 
 func CheckSrvShardLock(t *testing.T, ts topo.Server) {
 	// make sure we can create the lock even if no directory exists
-	interrupted := make(chan struct{}, 1)
-	lockPath, err := ts.LockSrvShardForAction("test", "test_keyspace", "10-20", "fake-content", 5*time.Second, interrupted)
+	ctx, ctxCancel := context.WithCancel(context.Background())
+	lockPath, err := ts.LockSrvShardForAction(ctx, "test", "test_keyspace", "10-20", "fake-content")
 	if err != nil {
 		t.Fatalf("LockSrvShardForAction: %v", err)
 	}
@@ -109,22 +115,24 @@ func CheckSrvShardLock(t *testing.T, ts topo.Server) {
 	}
 
 	// now take the lock again after the root exists
-	lockPath, err = ts.LockSrvShardForAction("test", "test_keyspace", "10-20", "fake-content", 5*time.Second, interrupted)
+	lockPath, err = ts.LockSrvShardForAction(ctx, "test", "test_keyspace", "10-20", "fake-content")
 	if err != nil {
 		t.Fatalf("LockSrvShardForAction: %v", err)
 	}
 
 	// test we can't take the lock again
-	if _, err := ts.LockSrvShardForAction("test", "test_keyspace", "10-20", "unused-fake-content", time.Second/2, interrupted); err != topo.ErrTimeout {
+	fastCtx, cancel := context.WithTimeout(ctx, time.Second/10)
+	if _, err := ts.LockSrvShardForAction(fastCtx, "test", "test_keyspace", "10-20", "unused-fake-content"); err != topo.ErrTimeout {
 		t.Errorf("LockSrvShardForAction(again): %v", err)
 	}
+	cancel()
 
 	// test we can interrupt taking the lock
 	go func() {
 		time.Sleep(time.Second / 2)
-		close(interrupted)
+		ctxCancel()
 	}()
-	if _, err := ts.LockSrvShardForAction("test", "test_keyspace", "10-20", "unused-fake-content", 5*time.Second, interrupted); err != topo.ErrInterrupted {
+	if _, err := ts.LockSrvShardForAction(ctx, "test", "test_keyspace", "10-20", "unused-fake-content"); err != topo.ErrInterrupted {
 		t.Errorf("LockSrvShardForAction(interrupted): %v", err)
 	}
 

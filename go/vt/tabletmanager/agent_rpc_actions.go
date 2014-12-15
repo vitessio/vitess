@@ -367,15 +367,14 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 
 	// grab the shard lock
 	actionNode := actionnode.ShardExternallyReparented(agent.TabletAlias)
-	interrupted := make(chan struct{})
-	lockPath, err := actionNode.LockShard(ctx, agent.TopoServer, tablet.Keyspace, tablet.Shard, agent.LockTimeout, interrupted)
+	lockPath, err := actionNode.LockShard(ctx, agent.TopoServer, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		log.Warningf("TabletExternallyReparented: Cannot lock shard %v/%v: %v", tablet.Keyspace, tablet.Shard, err)
 		return err
 	}
 
 	// do the work
-	runAfterAction, err := agent.tabletExternallyReparentedLocked(ctx, externalID, interrupted)
+	runAfterAction, err := agent.tabletExternallyReparentedLocked(ctx, externalID)
 	if err != nil {
 		log.Warningf("TabletExternallyReparented: internal error: %v", err)
 	}
@@ -399,7 +398,7 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 // tabletExternallyReparentedLocked is called with the shard lock.
 // It returns if agent.refreshTablet should be called, and the error.
 // Note both are set independently (can have both true and an error).
-func (agent *ActionAgent) tabletExternallyReparentedLocked(ctx context.Context, externalID string, interrupted chan struct{}) (bool, error) {
+func (agent *ActionAgent) tabletExternallyReparentedLocked(ctx context.Context, externalID string) (bool, error) {
 	// re-read the tablet record to be sure we have the latest version
 	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
 	if err != nil {
@@ -508,7 +507,7 @@ func (agent *ActionAgent) tabletExternallyReparentedLocked(ctx context.Context, 
 	// and rebuild the shard serving graph
 	event.DispatchUpdate(ev, "rebuilding shard serving graph")
 	log.Infof("Rebuilding shard serving graph data")
-	if _, err = topotools.RebuildShard(ctx, logger, agent.TopoServer, tablet.Keyspace, tablet.Shard, cells, agent.LockTimeout, interrupted); err != nil {
+	if _, err = topotools.RebuildShard(ctx, logger, agent.TopoServer, tablet.Keyspace, tablet.Shard, cells); err != nil {
 		return true, err
 	}
 

@@ -6,6 +6,7 @@
 package wrangler
 
 import (
+	"sync"
 	"time"
 
 	"code.google.com/p/go.net/context"
@@ -33,10 +34,14 @@ type Wrangler struct {
 	logger      logutil.Logger
 	ts          topo.Server
 	tmc         tmclient.TabletManagerClient
-	ctx         context.Context
-	cancel      context.CancelFunc
-	deadline    time.Time
 	lockTimeout time.Duration
+
+	// the following fields are protected by the mutex
+	mu            sync.Mutex
+	ctx           context.Context
+	timeoutCancel context.CancelFunc
+	cancel        context.CancelFunc
+	deadline      time.Time
 }
 
 // New creates a new Wrangler object.
@@ -54,15 +59,17 @@ type Wrangler struct {
 // fail. However, automated action will need some time to arbitrate
 // the locks.
 func New(logger logutil.Logger, ts topo.Server, actionTimeout, lockTimeout time.Duration) *Wrangler {
-	ctx, cancel := context.WithTimeout(context.Background(), actionTimeout)
+	ctx, timeoutCancel := context.WithTimeout(context.Background(), actionTimeout)
+	ctx, cancel := context.WithCancel(ctx)
 	return &Wrangler{
-		logger:      logger,
-		ts:          ts,
-		tmc:         tmclient.NewTabletManagerClient(),
-		ctx:         ctx,
-		cancel:      cancel,
-		deadline:    time.Now().Add(actionTimeout),
-		lockTimeout: lockTimeout,
+		logger:        logger,
+		ts:            ts,
+		tmc:           tmclient.NewTabletManagerClient(),
+		ctx:           ctx,
+		timeoutCancel: timeoutCancel,
+		cancel:        cancel,
+		deadline:      time.Now().Add(actionTimeout),
+		lockTimeout:   lockTimeout,
 	}
 }
 
@@ -73,9 +80,18 @@ func (wr *Wrangler) ActionTimeout() time.Duration {
 }
 
 // Context returns the context associated with this Wrangler.
-// It is invalidated if ResetActionTimeout is caled on the Wrangler.
+// It is replaced if ResetActionTimeout is called on the Wrangler.
 func (wr *Wrangler) Context() context.Context {
+	wr.mu.Lock()
+	defer wr.mu.Unlock()
 	return wr.ctx
+}
+
+// Cancel calls the CancelFunc on our Context and therefore interrupts the call.
+func (wr *Wrangler) Cancel() {
+	wr.mu.Lock()
+	defer wr.mu.Unlock()
+	wr.cancel()
 }
 
 // TopoServer returns the topo.Server this wrangler is using.
@@ -109,17 +125,15 @@ func (wr *Wrangler) Logger() logutil.Logger {
 // the action.  Wrangler cleaner module is one of these, or the vt
 // worker in some corner cases,
 func (wr *Wrangler) ResetActionTimeout(actionTimeout time.Duration) {
-	wr.ctx, wr.cancel = context.WithTimeout(context.Background(), actionTimeout)
+	wr.mu.Lock()
+	defer wr.mu.Unlock()
+
+	wr.ctx, wr.timeoutCancel = context.WithTimeout(context.Background(), actionTimeout)
+	wr.ctx, wr.cancel = context.WithCancel(wr.ctx)
 	wr.deadline = time.Now().Add(actionTimeout)
 }
 
 // signal handling
 // TODO(alainjobart): we should be able to just call the cancel function
 // of the wrangler context, forcing an exit.
-var interrupted = make(chan struct{})
-
-// SignalInterrupt needs to be called when a signal interrupts the current
-// process.
-func SignalInterrupt() {
-	close(interrupted)
-}
+//var interrupted = make(chan struct{})

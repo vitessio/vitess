@@ -7,6 +7,8 @@ package zktopo
 import (
 	"testing"
 
+	"code.google.com/p/go.net/context"
+
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -23,7 +25,8 @@ func TestHookLockSrvShardForAction(t *testing.T) {
 		triggered = true
 	}
 
-	topo.Server(ts).LockSrvShardForAction(cells[0], "keyspace", "shard", "contents", 0, nil)
+	ctx := context.Background()
+	topo.Server(ts).LockSrvShardForAction(ctx, cells[0], "keyspace", "shard", "contents")
 
 	if !triggered {
 		t.Errorf("HookLockSrvShardForAction wasn't triggered")

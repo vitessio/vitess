@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"sync"
-	"time"
 
 	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/trace"
@@ -29,7 +28,7 @@ var UseSrvShardLocks = flag.Bool("use_srv_shard_locks", true, "DEPRECATED: If tr
 //
 // This function locks individual SvrShard paths, so it doesn't need a lock
 // on the shard.
-func RebuildShard(ctx context.Context, log logutil.Logger, ts topo.Server, keyspace, shard string, cells []string, timeout time.Duration, interrupted chan struct{}) (*topo.ShardInfo, error) {
+func RebuildShard(ctx context.Context, log logutil.Logger, ts topo.Server, keyspace, shard string, cells []string) (*topo.ShardInfo, error) {
 	log.Infof("RebuildShard %v/%v", keyspace, shard)
 
 	span := trace.NewSpanFromContext(ctx)
@@ -65,7 +64,7 @@ func RebuildShard(ctx context.Context, log logutil.Logger, ts topo.Server, keysp
 			// Lock the SrvShard so we don't race with other rebuilds of the same
 			// shard in the same cell (e.g. from our peer tablets).
 			actionNode := actionnode.RebuildSrvShard()
-			lockPath, err := actionNode.LockSrvShard(ctx, ts, cell, keyspace, shard, timeout, interrupted)
+			lockPath, err := actionNode.LockSrvShard(ctx, ts, cell, keyspace, shard)
 			if err != nil {
 				rec.RecordError(err)
 				return

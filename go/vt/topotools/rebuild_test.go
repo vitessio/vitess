@@ -7,7 +7,6 @@ package topotools_test
 import (
 	"strings"
 	"testing"
-	"time"
 
 	"code.google.com/p/go.net/context"
 
@@ -24,8 +23,6 @@ func TestRebuildShardRace(t *testing.T) {
 	ctx := context.Background()
 	cells := []string{"test_cell"}
 	logger := logutil.NewMemoryLogger()
-	timeout := 10 * time.Second
-	interrupted := make(chan struct{})
 
 	// Set up topology.
 	ts := zktopo.NewTestServer(t, cells)
@@ -38,7 +35,7 @@ func TestRebuildShardRace(t *testing.T) {
 	f.AddTablet(2, "test_cell", topo.TYPE_REPLICA, master)
 
 	// Do an initial rebuild.
-	if _, err := RebuildShard(ctx, logger, f.Topo, keyspace, shard, cells, timeout, interrupted); err != nil {
+	if _, err := RebuildShard(ctx, logger, f.Topo, keyspace, shard, cells); err != nil {
 		t.Fatalf("RebuildShard: %v", err)
 	}
 
@@ -80,7 +77,7 @@ func TestRebuildShardRace(t *testing.T) {
 		t.Fatalf("UpdateTablet: %v", err)
 	}
 	go func() {
-		if _, err := RebuildShard(ctx, logger, f.Topo, keyspace, shard, cells, timeout, interrupted); err != nil {
+		if _, err := RebuildShard(ctx, logger, f.Topo, keyspace, shard, cells); err != nil {
 			t.Fatalf("RebuildShard: %v", err)
 		}
 		close(done)
@@ -96,7 +93,7 @@ func TestRebuildShardRace(t *testing.T) {
 	if err := topo.UpdateTablet(ctx, ts, replicaInfo); err != nil {
 		t.Fatalf("UpdateTablet: %v", err)
 	}
-	if _, err := RebuildShard(ctx, logger, f.Topo, keyspace, shard, cells, timeout, interrupted); err != nil {
+	if _, err := RebuildShard(ctx, logger, f.Topo, keyspace, shard, cells); err != nil {
 		t.Fatalf("RebuildShard: %v", err)
 	}
 

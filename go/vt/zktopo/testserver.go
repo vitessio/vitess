@@ -3,7 +3,8 @@ package zktopo
 import (
 	"fmt"
 	"testing"
-	"time"
+
+	"code.google.com/p/go.net/context"
 
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
@@ -39,9 +40,9 @@ func (s *TestServer) GetKnownCells() ([]string, error) {
 
 // LockSrvShardForAction should override the function defined by the underlying
 // topo.Server.
-func (s *TestServer) LockSrvShardForAction(cell, keyspace, shard, contents string, timeout time.Duration, interrupted chan struct{}) (string, error) {
+func (s *TestServer) LockSrvShardForAction(ctx context.Context, cell, keyspace, shard, contents string) (string, error) {
 	if s.HookLockSrvShardForAction != nil {
 		s.HookLockSrvShardForAction()
 	}
-	return s.Server.LockSrvShardForAction(cell, keyspace, shard, contents, timeout, interrupted)
+	return s.Server.LockSrvShardForAction(ctx, cell, keyspace, shard, contents)
 }

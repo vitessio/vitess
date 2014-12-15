@@ -42,15 +42,13 @@ func init() {
 }
 
 // signal handling, centralized here
-func installSignalHandlers() {
+func installSignalHandlers(wr *wrangler.Wrangler) {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
 		<-sigChan
-		// we got a signal, notify our modules:
-		// - wrangler will interrupt anything waiting on a shard or
-		//   keyspace lock
-		wrangler.SignalInterrupt()
+		// we got a signal, cancel the current wrangler context
+		wr.Cancel()
 	}()
 }
 
@@ -65,7 +63,6 @@ func main() {
 		exit.Return(1)
 	}
 	action := args[0]
-	installSignalHandlers()
 
 	startMsg := fmt.Sprintf("USER=%v SUDO_USER=%v %v", os.Getenv("USER"), os.Getenv("SUDO_USER"), strings.Join(os.Args, " "))
 
@@ -79,6 +76,7 @@ func main() {
 	defer topo.CloseServers()
 
 	wr := wrangler.New(logutil.NewConsoleLogger(), topoServer, *waitTime, *lockWaitTimeout)
+	installSignalHandlers(wr)
 
 	err := vtctl.RunCommand(wr, args)
 	switch err {
