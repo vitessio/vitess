@@ -7,10 +7,10 @@ package wrangler
 import (
 	"fmt"
 
-	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 // shard related methods for Wrangler

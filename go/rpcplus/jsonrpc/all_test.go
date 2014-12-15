@@ -12,9 +12,8 @@ import (
 	"net"
 	"testing"
 
-	"code.google.com/p/go.net/context"
-
 	"github.com/youtube/vitess/go/rpcplus"
+	"golang.org/x/net/context"
 )
 
 type Args struct {

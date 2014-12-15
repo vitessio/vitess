@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"

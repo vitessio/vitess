@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/mysql/proto"
@@ -29,6 +28,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/topotools/events"
+	"golang.org/x/net/context"
 )
 
 // This file contains the actions that exist as RPC only on the ActionAgent.

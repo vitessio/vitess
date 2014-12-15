@@ -7,7 +7,7 @@ package etcdtopo
 import (
 	"errors"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/youtube/vitess/go/vt/topo"

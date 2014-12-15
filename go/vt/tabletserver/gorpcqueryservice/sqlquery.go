@@ -5,11 +5,11 @@
 package gorpcqueryservice
 
 import (
-	"code.google.com/p/go.net/context"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"golang.org/x/net/context"
 )
 
 type SqlQuery struct {

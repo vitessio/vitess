@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"

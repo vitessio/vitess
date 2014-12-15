@@ -4,7 +4,7 @@ package callinfo
 import (
 	"html/template"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 )
 
 type CallInfo interface {

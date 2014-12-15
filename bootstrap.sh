@@ -38,7 +38,7 @@ ln -nfs $VTTOP/third_party/go/launchpad.net $VTROOT/src
 go install launchpad.net/gozk/zookeeper
 
 go get code.google.com/p/goprotobuf/proto
-go get code.google.com/p/go.net/context
+go get golang.org/x/net/context
 go get code.google.com/p/go.tools/cmd/goimports
 go get github.com/golang/glog
 go get github.com/coreos/go-etcd/etcd
