@@ -270,10 +270,10 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	sdw.wr.Logger().Infof("Stopping master binlog replication on %v", sdw.shardInfo.MasterAlias)
 	ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
 	blpPositionList, err := sdw.wr.TabletManagerClient().StopBlp(ctx, masterInfo)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("StopBlp for %v failed: %v", sdw.shardInfo.MasterAlias, err)
 	}
-	cancel()
 	wrangler.RecordStartBlpAction(sdw.cleaner, masterInfo, 30*time.Second)
 
 	// 2 - stop all the source 'checker' at a binlog position

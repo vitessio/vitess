@@ -57,7 +57,7 @@ func (rtr *Router) Execute(ctx context.Context, query *proto.Query) (*mproto.Que
 }
 
 func (rtr *Router) execUnsharded(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
-	ks, allShards, err := getKeyspaceShards(rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
+	ks, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +101,7 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, plan *planbuilder.
 	if err != nil {
 		return nil, err
 	}
-	ks, shard, err := rtr.getRouting(plan.Table.Keyspace.Name, vcursor.query.TabletType, ksid)
+	ks, shard, err := rtr.getRouting(vcursor.ctx, plan.Table.Keyspace.Name, vcursor.query.TabletType, ksid)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +141,7 @@ func (rtr *Router) resolveKeys(vals []interface{}, bindVars map[string]interface
 }
 
 func (rtr *Router) resolveShards(vcursor *requestContext, vindexKeys []interface{}, plan *planbuilder.Plan) (newKeyspace string, routing routingMap, err error) {
-	newKeyspace, allShards, err := getKeyspaceShards(rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
+	newKeyspace, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
 	if err != nil {
 		return "", nil, err
 	}
@@ -264,8 +264,8 @@ func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface
 	return nil
 }
 
-func (rtr *Router) getRouting(keyspace string, tabletType topo.TabletType, ksid key.KeyspaceId) (newKeyspace, shard string, err error) {
-	newKeyspace, allShards, err := getKeyspaceShards(rtr.serv, rtr.cell, keyspace, tabletType)
+func (rtr *Router) getRouting(ctx context.Context, keyspace string, tabletType topo.TabletType, ksid key.KeyspaceId) (newKeyspace, shard string, err error) {
+	newKeyspace, allShards, err := getKeyspaceShards(ctx, rtr.serv, rtr.cell, keyspace, tabletType)
 	if err != nil {
 		return "", "", err
 	}

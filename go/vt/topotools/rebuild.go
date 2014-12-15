@@ -29,7 +29,7 @@ var UseSrvShardLocks = flag.Bool("use_srv_shard_locks", true, "DEPRECATED: If tr
 //
 // This function locks individual SvrShard paths, so it doesn't need a lock
 // on the shard.
-func RebuildShard(ctx context.Context, log logutil.Logger, ts topo.Server, keyspace, shard string, cells []string, timeout time.Duration, interrupted chan struct{}) (*topo.ShardInfo, error) {
+func RebuildShard(ctx context.Context, log logutil.Logger, ts topo.Server, keyspace, shard string, cells []string, lockTimeout time.Duration) (*topo.ShardInfo, error) {
 	log.Infof("RebuildShard %v/%v", keyspace, shard)
 
 	span := trace.NewSpanFromContext(ctx)
@@ -65,7 +65,9 @@ func RebuildShard(ctx context.Context, log logutil.Logger, ts topo.Server, keysp
 			// Lock the SrvShard so we don't race with other rebuilds of the same
 			// shard in the same cell (e.g. from our peer tablets).
 			actionNode := actionnode.RebuildSrvShard()
-			lockPath, err := actionNode.LockSrvShard(ctx, ts, cell, keyspace, shard, timeout, interrupted)
+			lockCtx, cancel := context.WithTimeout(ctx, lockTimeout)
+			lockPath, err := actionNode.LockSrvShard(lockCtx, ts, cell, keyspace, shard)
+			cancel()
 			if err != nil {
 				rec.RecordError(err)
 				return

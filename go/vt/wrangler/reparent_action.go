@@ -357,7 +357,7 @@ func (wr *Wrangler) finishReparent(si *topo.ShardInfo, masterElect *topo.TabletI
 	// We rebuild all the cells, as we may have taken tablets in and
 	// out of the graph.
 	wr.logger.Infof("rebuilding shard serving graph data")
-	_, err := topotools.RebuildShard(context.TODO(), wr.logger, wr.ts, masterElect.Keyspace, masterElect.Shard, nil, wr.lockTimeout, interrupted)
+	_, err := wr.RebuildShardGraph(masterElect.Keyspace, masterElect.Shard, nil)
 	return err
 }
 

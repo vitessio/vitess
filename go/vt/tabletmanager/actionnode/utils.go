@@ -24,7 +24,7 @@ var (
 
 // LockKeyspace will lock the keyspace in the topology server.
 // UnlockKeyspace should be called if this returns no error.
-func (n *ActionNode) LockKeyspace(ctx context.Context, ts topo.Server, keyspace string, lockTimeout time.Duration, interrupted chan struct{}) (lockPath string, err error) {
+func (n *ActionNode) LockKeyspace(ctx context.Context, ts topo.Server, keyspace string) (lockPath string, err error) {
 	log.Infof("Locking keyspace %v for action %v", keyspace, n.Action)
 
 	span := trace.NewSpanFromContext(ctx)
@@ -33,7 +33,7 @@ func (n *ActionNode) LockKeyspace(ctx context.Context, ts topo.Server, keyspace 
 	span.Annotate("keyspace", keyspace)
 	defer span.Finish()
 
-	return ts.LockKeyspaceForAction(keyspace, n.ToJson(), lockTimeout, interrupted)
+	return ts.LockKeyspaceForAction(ctx, keyspace, n.ToJson())
 }
 
 // UnlockKeyspace unlocks a previously locked keyspace.
@@ -67,7 +67,7 @@ func (n *ActionNode) UnlockKeyspace(ctx context.Context, ts topo.Server, keyspac
 
 // LockShard will lock the shard in the topology server.
 // UnlockShard should be called if this returns no error.
-func (n *ActionNode) LockShard(ctx context.Context, ts topo.Server, keyspace, shard string, lockTimeout time.Duration, interrupted chan struct{}) (lockPath string, err error) {
+func (n *ActionNode) LockShard(ctx context.Context, ts topo.Server, keyspace, shard string) (lockPath string, err error) {
 	log.Infof("Locking shard %v/%v for action %v", keyspace, shard, n.Action)
 
 	span := trace.NewSpanFromContext(ctx)
@@ -77,7 +77,7 @@ func (n *ActionNode) LockShard(ctx context.Context, ts topo.Server, keyspace, sh
 	span.Annotate("shard", shard)
 	defer span.Finish()
 
-	return ts.LockShardForAction(keyspace, shard, n.ToJson(), lockTimeout, interrupted)
+	return ts.LockShardForAction(ctx, keyspace, shard, n.ToJson())
 }
 
 // UnlockShard unlocks a previously locked shard.
@@ -112,7 +112,7 @@ func (n *ActionNode) UnlockShard(ctx context.Context, ts topo.Server, keyspace, 
 
 // LockSrvShard will lock the serving shard in the topology server.
 // UnlockSrvShard should be called if this returns no error.
-func (n *ActionNode) LockSrvShard(ctx context.Context, ts topo.Server, cell, keyspace, shard string, lockTimeout time.Duration, interrupted chan struct{}) (lockPath string, err error) {
+func (n *ActionNode) LockSrvShard(ctx context.Context, ts topo.Server, cell, keyspace, shard string) (lockPath string, err error) {
 	log.Infof("Locking serving shard %v/%v/%v for action %v", cell, keyspace, shard, n.Action)
 
 	span := trace.NewSpanFromContext(ctx)
@@ -123,7 +123,7 @@ func (n *ActionNode) LockSrvShard(ctx context.Context, ts topo.Server, cell, key
 	span.Annotate("cell", cell)
 	defer span.Finish()
 
-	return ts.LockSrvShardForAction(cell, keyspace, shard, n.ToJson(), lockTimeout, interrupted)
+	return ts.LockSrvShardForAction(ctx, cell, keyspace, shard, n.ToJson())
 }
 
 // UnlockSrvShard unlocks a previously locked serving shard.

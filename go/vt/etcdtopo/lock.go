@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"path"
 	"strconv"
-	"time"
 
 	"github.com/coreos/go-etcd/etcd"
 	log "github.com/golang/glog"
@@ -120,40 +119,8 @@ func waitForLock(ctx context.Context, client *etcd.Client, lockPath string, wait
 	}
 }
 
-// topoContext applies the timeout and interrupted parameters used in the
-// topo.Server API onto a Context. It returns the new context and a channel that
-// the caller must close to free up resources associated with waiting on the
-// passed-in interrupted channel. For example:
-//
-//   ctx, done := topoContext(context.TODO(), timeout, interrupted)
-//   defer close(done)
-//
-// This will be unnecessary when topo.Server uses Context natively.
-func topoContext(ctx context.Context, timeout time.Duration, interrupted chan struct{}) (context.Context, chan struct{}) {
-	var cancel context.CancelFunc
-	if timeout == 0 {
-		ctx, cancel = context.WithCancel(ctx)
-	} else {
-		ctx, cancel = context.WithTimeout(ctx, timeout)
-	}
-	done := make(chan struct{})
-
-	go func() {
-		select {
-		case <-interrupted:
-		case <-done:
-		}
-		cancel()
-	}()
-
-	return ctx, done
-}
-
 // LockSrvShardForAction implements topo.Server.
-func (s *Server) LockSrvShardForAction(cellName, keyspace, shard, contents string, timeout time.Duration, interrupted chan struct{}) (string, error) {
-	ctx, done := topoContext(context.TODO(), timeout, interrupted)
-	defer close(done)
-
+func (s *Server) LockSrvShardForAction(ctx context.Context, cellName, keyspace, shard, contents string) (string, error) {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return "", err
@@ -175,10 +142,7 @@ func (s *Server) UnlockSrvShardForAction(cellName, keyspace, shard, actionPath, 
 }
 
 // LockKeyspaceForAction implements topo.Server.
-func (s *Server) LockKeyspaceForAction(keyspace, contents string, timeout time.Duration, interrupted chan struct{}) (string, error) {
-	ctx, done := topoContext(context.TODO(), timeout, interrupted)
-	defer close(done)
-
+func (s *Server) LockKeyspaceForAction(ctx context.Context, keyspace, contents string) (string, error) {
 	return lock(ctx, s.getGlobal(), keyspaceDirPath(keyspace), contents)
 }
 
@@ -190,10 +154,7 @@ func (s *Server) UnlockKeyspaceForAction(keyspace, actionPath, results string) e
 }
 
 // LockShardForAction implements topo.Server.
-func (s *Server) LockShardForAction(keyspace, shard, contents string, timeout time.Duration, interrupted chan struct{}) (string, error) {
-	ctx, done := topoContext(context.TODO(), timeout, interrupted)
-	defer close(done)
-
+func (s *Server) LockShardForAction(ctx context.Context, keyspace, shard, contents string) (string, error) {
 	return lock(ctx, s.getGlobal(), shardDirPath(keyspace, shard), contents)
 }
 

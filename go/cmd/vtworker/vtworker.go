@@ -37,21 +37,6 @@ func init() {
 	servenv.RegisterDefaultFlags()
 }
 
-// signal handling, centralized here
-func installSignalHandlers() {
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
-	go func() {
-		<-sigChan
-		// we got a signal, notify our modules:
-		// - wr will interrupt anything waiting on a shard or
-		//   keyspace lock
-		// - worker will cancel any running job
-		wrangler.SignalInterrupt()
-		worker.SignalInterrupt()
-	}()
-}
-
 var (
 	// global wrangler object we'll use
 	wr *wrangler.Wrangler
@@ -62,6 +47,22 @@ var (
 	currentMemoryLogger *logutil.MemoryLogger
 	currentDone         chan struct{}
 )
+
+// signal handling, centralized here
+func installSignalHandlers(wr *wrangler.Wrangler) {
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
+	go func() {
+		<-sigChan
+		// we got a signal, notify our modules
+		wr.Cancel()
+
+		// TODO(aaijazi) take the currentWorkerMutex, and cancel
+		// currentWorker's context. Or maybe it's even using the
+		// wrangler one, and doesn't need to do anything here.
+		worker.SignalInterrupt()
+	}()
+}
 
 // setAndStartWorker will set the current worker.
 // We always log to both memory logger (for display on the web) and
@@ -92,8 +93,6 @@ func main() {
 	flag.Parse()
 	args := flag.Args()
 
-	installSignalHandlers()
-
 	servenv.Init()
 	defer servenv.Close()
 
@@ -109,6 +108,7 @@ func main() {
 		// single command mode, just runs it
 		runCommand(args)
 	}
+	installSignalHandlers(wr)
 	initStatusHandling()
 
 	servenv.RunDefault()
