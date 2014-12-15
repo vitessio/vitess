@@ -119,10 +119,10 @@ func runSqlCommands(wr *wrangler.Wrangler, ti *topo.TabletInfo, commands []strin
 
 		ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
 		_, err = wr.TabletManagerClient().ExecuteFetch(ctx, ti, command, 0, false, disableBinLogs)
+		cancel()
 		if err != nil {
 			return err
 		}
-		cancel()
 
 		// check on abort
 		select {
@@ -160,11 +160,11 @@ func findChunks(wr *wrangler.Wrangler, ti *topo.TabletInfo, td *myproto.TableDef
 	query := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v.%v", td.PrimaryKeyColumns[0], td.PrimaryKeyColumns[0], ti.DbName(), td.Name)
 	ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
 	qr, err := wr.TabletManagerClient().ExecuteFetch(ctx, ti, query, 1, true, false)
+	cancel()
 	if err != nil {
 		wr.Logger().Infof("Not splitting table %v into multiple chunks: %v", td.Name, err)
 		return result, nil
 	}
-	cancel()
 	if len(qr.Rows) != 1 {
 		wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot get min and max", td.Name)
 		return result, nil
@@ -325,10 +325,10 @@ func executeFetchLoop(wr *wrangler.Wrangler, ti *topo.TabletInfo, insertChannel 
 			cmd = "INSERT INTO `" + ti.DbName() + "`." + cmd
 			ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
 			_, err := wr.TabletManagerClient().ExecuteFetch(ctx, ti, cmd, 0, false, disableBinLogs)
+			cancel()
 			if err != nil {
 				return fmt.Errorf("ExecuteFetch failed: %v", err)
 			}
-			cancel()
 		case <-abort:
 			// FIXME(alainjobart): note this select case
 			// could be starved here, and we might miss

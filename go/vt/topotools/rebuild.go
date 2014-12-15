@@ -67,11 +67,11 @@ func RebuildShard(ctx context.Context, log logutil.Logger, ts topo.Server, keysp
 			actionNode := actionnode.RebuildSrvShard()
 			lockCtx, cancel := context.WithTimeout(ctx, lockTimeout)
 			lockPath, err := actionNode.LockSrvShard(lockCtx, ts, cell, keyspace, shard)
+			cancel()
 			if err != nil {
 				rec.RecordError(err)
 				return
 			}
-			cancel()
 
 			// read the ShardReplication object to find tablets
 			sri, err := ts.GetShardReplication(cell, keyspace, shard)

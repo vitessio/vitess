@@ -276,10 +276,10 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 	vsdw.wr.Logger().Infof("Stopping master binlog replication on %v", vsdw.shardInfo.MasterAlias)
 	ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
 	blpPositionList, err := vsdw.wr.TabletManagerClient().StopBlp(ctx, masterInfo)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("StopBlp on master %v failed: %v", vsdw.shardInfo.MasterAlias, err)
 	}
-	cancel()
 	wrangler.RecordStartBlpAction(vsdw.cleaner, masterInfo, 30*time.Second)
 
 	// 2 - stop the source 'checker' at a binlog position
