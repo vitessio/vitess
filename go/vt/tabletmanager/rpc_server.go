@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"time"
 
-	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/callinfo"
+	"golang.org/x/net/context"
 )
 
 // This file contains the RPC method helpers for the tablet manager.

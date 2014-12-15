@@ -5,8 +5,8 @@
 package topo
 
 import (
-	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/logutil"

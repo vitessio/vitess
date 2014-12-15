@@ -7,11 +7,11 @@ package wrangler
 import (
 	"fmt"
 
-	"code.google.com/p/go.net/context"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
+	"golang.org/x/net/context"
 )
 
 // Tablet related methods for wrangler

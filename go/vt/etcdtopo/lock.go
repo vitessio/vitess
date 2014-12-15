@@ -9,10 +9,10 @@ import (
 	"path"
 	"strconv"
 
-	"code.google.com/p/go.net/context"
 	"github.com/coreos/go-etcd/etcd"
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 const lockFilename = "_Lock"
