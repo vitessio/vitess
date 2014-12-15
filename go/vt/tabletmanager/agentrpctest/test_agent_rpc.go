@@ -699,7 +699,7 @@ func (fra *fakeRpcAgent) Snapshot(ctx context.Context, args *actionnode.Snapshot
 }
 
 func agentRpcTestSnapshot(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	logChannel, errFunc, err := client.Snapshot(ctx, ti, testSnapshotArgs, time.Minute)
+	logChannel, errFunc, err := client.Snapshot(ctx, ti, testSnapshotArgs)
 	if err != nil {
 		t.Fatalf("Snapshot failed: %v", err)
 	}
@@ -770,7 +770,7 @@ func (fra *fakeRpcAgent) Restore(ctx context.Context, args *actionnode.RestoreAr
 }
 
 func agentRpcTestRestore(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	logChannel, errFunc, err := client.Restore(ctx, ti, testRestoreArgs, time.Minute)
+	logChannel, errFunc, err := client.Restore(ctx, ti, testRestoreArgs)
 	if err != nil {
 		t.Fatalf("Restore failed: %v", err)
 	}
