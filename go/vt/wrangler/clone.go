@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"sync"
 
-	"golang.org/x/net/context"
-
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -44,7 +42,7 @@ func (wr *Wrangler) Snapshot(tabletAlias topo.TabletAlias, forceMasterSnapshot b
 		ServerMode:          serverMode,
 		ForceMasterSnapshot: forceMasterSnapshot,
 	}
-	logStream, errFunc, err := wr.tmc.Snapshot(context.TODO(), ti, args, wr.ActionTimeout())
+	logStream, errFunc, err := wr.tmc.Snapshot(wr.Context(), ti, args)
 	if err != nil {
 		return nil, "", err
 	}
@@ -147,7 +145,7 @@ func (wr *Wrangler) Restore(srcTabletAlias topo.TabletAlias, srcFilePath string,
 		WasReserved:           wasReserved,
 		DontWaitForSlaveStart: dontWaitForSlaveStart,
 	}
-	logStream, errFunc, err := wr.tmc.Restore(context.TODO(), tablet, args, wr.ActionTimeout())
+	logStream, errFunc, err := wr.tmc.Restore(wr.Context(), tablet, args)
 	if err != nil {
 		return err
 	}
