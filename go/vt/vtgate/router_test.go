@@ -179,7 +179,7 @@ func TestSelectEqual(t *testing.T) {
 	}
 
 	wantBinds := []map[string]interface{}{{
-		"name": []byte("foo"),
+		"name": "foo",
 	}}
 	if !reflect.DeepEqual(sbclookup.BindVars, wantBinds) {
 		t.Errorf("sbclookup.BindVars = \n%#v, want \n%#v", sbclookup.BindVars, wantBinds)
@@ -274,7 +274,7 @@ func TestSelectIN(t *testing.T) {
 	}
 
 	wantBinds := []map[string]interface{}{{
-		"name": []byte("foo"),
+		"name": "foo",
 	}}
 	if !reflect.DeepEqual(sbclookup.BindVars, wantBinds) {
 		t.Errorf("sbclookup.BindVars = \n%#v, want \n%#v", sbclookup.BindVars, wantBinds)
@@ -335,6 +335,42 @@ func TestSelectKeyrange(t *testing.T) {
 	wantQuery = "select * from user"
 	if sbc2.Queries[0] != wantQuery {
 		t.Errorf("sbc2.Queries[0]: %q, want %q\n", sbc2.Queries[0], wantQuery)
+	}
+}
+
+func TestSelectScatter(t *testing.T) {
+	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := createSandbox("TestRouter")
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	var conns []*sandboxConn
+	for _, shard := range shards {
+		sbc := &sandboxConn{}
+		conns = append(conns, sbc)
+		s.MapTestConn(shard, sbc)
+	}
+	serv := new(sandboxTopo)
+	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
+	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	q := proto.Query{
+		Sql:        "select * from user",
+		TabletType: topo.TYPE_MASTER,
+	}
+	_, err = router.Execute(&context.DummyContext{}, &q)
+	if err != nil {
+		t.Error(err)
+	}
+	wantBind := map[string]interface{}{}
+	wantQuery := "select * from user"
+	for _, conn := range conns {
+		if !reflect.DeepEqual(conn.BindVars[0], wantBind) {
+			t.Errorf("conn.BindVars[0] = %#v, want %#v", conn.BindVars[0], wantBind)
+		}
+		if conn.Queries[0] != wantQuery {
+			t.Errorf("conn.Queries[0]: %q, want %q\n", conn.Queries[0], wantQuery)
+		}
 	}
 }
 
@@ -501,7 +537,7 @@ func TestInsertSharded(t *testing.T) {
 	wantBind = map[string]interface{}{
 		"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
 		"_id":         int64(1),
-		"_name":       []byte("myname"),
+		"_name":       "myname",
 	}
 	if !reflect.DeepEqual(sbc1.BindVars[0], wantBind) {
 		t.Errorf("sbc1.BindVars[0] = %#v, want %#v", sbc1.BindVars[0], wantBind)
@@ -537,7 +573,7 @@ func TestInsertSharded(t *testing.T) {
 	wantBind = map[string]interface{}{
 		"keyspace_id": "N\xb1\x90ɢ\xfa\x16\x9c",
 		"_id":         int64(3),
-		"_name":       []byte("myname2"),
+		"_name":       "myname2",
 	}
 	if !reflect.DeepEqual(sbc2.BindVars[0], wantBind) {
 		t.Errorf("sbc2.BindVars[0] = %#v, want %#v", sbc2.BindVars[0], wantBind)
@@ -586,7 +622,7 @@ func TestInsertGenerator(t *testing.T) {
 	wantBind = map[string]interface{}{
 		"keyspace_id": "\x8c\xa6M\xe9\xc1\xb1#\xa7",
 		"_id":         int64(0),
-		"_name":       []byte("myname"),
+		"_name":       "myname",
 	}
 	if !reflect.DeepEqual(sbc.BindVars[0], wantBind) {
 		t.Errorf("sbc.BindVars[0] = %#v, want %#v", sbc.BindVars[0], wantBind)

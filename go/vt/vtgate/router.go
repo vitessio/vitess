@@ -58,6 +58,8 @@ func (rtr *Router) Execute(ctx context.Context, query *proto.Query) (*mproto.Que
 		return rtr.execSelectIN(vcursor, plan)
 	case planbuilder.SelectKeyrange:
 		return rtr.execSelectKeyrange(vcursor, plan)
+	case planbuilder.SelectScatter:
+		return rtr.execSelectScatter(vcursor, plan)
 	case planbuilder.UpdateEqual:
 		return rtr.execUpdateEqual(vcursor, plan)
 	case planbuilder.DeleteEqual:
@@ -160,8 +162,6 @@ func getKeyRange(keys []interface{}) (key.KeyRange, error) {
 		switch k := k.(type) {
 		case string:
 			ksids = append(ksids, key.KeyspaceId(k))
-		case []byte:
-			ksids = append(ksids, key.KeyspaceId(k))
 		default:
 			return key.KeyRange{}, fmt.Errorf("expecting strings for keyrange: %+v", keys)
 		}
@@ -170,6 +170,25 @@ func getKeyRange(keys []interface{}) (key.KeyRange, error) {
 		Start: ksids[0],
 		End:   ksids[1],
 	}, nil
+}
+
+func (rtr *Router) execSelectScatter(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
+	ks, allShards, err := getKeyspaceShards(rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
+	if err != nil {
+		return nil, err
+	}
+	var shards []string
+	for _, shard := range allShards {
+		shards = append(shards, shard.ShardName())
+	}
+	return rtr.scatterConn.Execute(
+		vcursor.ctx,
+		plan.Rewritten,
+		vcursor.query.BindVariables,
+		ks,
+		shards,
+		vcursor.query.TabletType,
+		NewSafeSession(vcursor.query.Session))
 }
 
 func (rtr *Router) execUpdateEqual(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
@@ -284,6 +303,8 @@ func (rtr *Router) resolveKeys(vals []interface{}, bindVars map[string]interface
 				return nil, fmt.Errorf("could not find bind var %s", val)
 			}
 			keys = append(keys, v)
+		case []byte:
+			keys = append(keys, string(val))
 		default:
 			keys = append(keys, val)
 		}
@@ -327,12 +348,7 @@ func (rtr *Router) resolveShards(vcursor *requestContext, vindexKeys []interface
 				if err != nil {
 					return "", nil, err
 				}
-				if bytes, ok := vindexKeys[i].([]byte); ok {
-					// []byte is not comparable.
-					routing.Add(shard, string(bytes))
-				} else {
-					routing.Add(shard, vindexKeys[i])
-				}
+				routing.Add(shard, vindexKeys[i])
 			}
 		}
 	default:
