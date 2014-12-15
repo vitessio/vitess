@@ -41,6 +41,7 @@ go get code.google.com/p/goprotobuf/proto
 go get code.google.com/p/go.net/context
 go get code.google.com/p/go.tools/cmd/goimports
 go get github.com/golang/glog
+go get github.com/coreos/go-etcd/etcd
 
 ln -snf $VTTOP/config $VTROOT/config
 ln -snf $VTTOP/data $VTROOT/data

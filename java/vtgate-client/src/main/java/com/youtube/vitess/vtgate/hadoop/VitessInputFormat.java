@@ -33,7 +33,7 @@ public class VitessInputFormat extends InputFormat<NullWritable, RowWritable> {
       VitessConf conf = new VitessConf(context.getConfiguration());
       VtGate vtgate = VtGate.connect(conf.getHosts(), conf.getTimeoutMs());
       Map<Query, Long> queries =
-          vtgate.splitQuery(conf.getKeyspace(), conf.getInputQuery(), conf.getSplitsPerShard());
+          vtgate.splitQuery(conf.getKeyspace(), conf.getInputQuery(), conf.getSplits());
       List<InputSplit> splits = new LinkedList<>();
       for (Query query : queries.keySet()) {
         Long size = queries.get(query);
@@ -62,12 +62,12 @@ public class VitessInputFormat extends InputFormat<NullWritable, RowWritable> {
       String hosts,
       String keyspace,
       String query,
-      int splitsPerShard) {
+      int splits) {
     job.setInputFormatClass(VitessInputFormat.class);
     VitessConf vtConf = new VitessConf(job.getConfiguration());
     vtConf.setHosts(hosts);
     vtConf.setKeyspace(keyspace);
     vtConf.setInputQuery(query);
-    vtConf.setSplitsPerShard(splitsPerShard);
+    vtConf.setSplits(splits);
   }
 }
