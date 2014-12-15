@@ -7,11 +7,11 @@ package wrangler
 import (
 	"fmt"
 
-	"code.google.com/p/go.net/context"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
+	"golang.org/x/net/context"
 )
 
 // Tablet related methods for wrangler
@@ -254,7 +254,7 @@ func (wr *Wrangler) changeTypeInternal(tabletAlias topo.TabletAlias, dbType topo
 
 	// rebuild if necessary
 	if rebuildRequired {
-		_, err = topotools.RebuildShard(context.TODO(), wr.logger, wr.ts, ti.Keyspace, ti.Shard, []string{ti.Alias.Cell}, wr.lockTimeout, interrupted)
+		_, err = wr.RebuildShardGraph(ti.Keyspace, ti.Shard, []string{ti.Alias.Cell})
 		if err != nil {
 			return err
 		}

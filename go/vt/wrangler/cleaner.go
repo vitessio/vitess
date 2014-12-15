@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 // Cleaner remembers a list of cleanup steps to perform.  Just record

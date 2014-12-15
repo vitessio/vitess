@@ -9,72 +9,72 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/context"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"golang.org/x/net/context"
 )
 
 // This file uses the sandbox_test framework.
 
 func TestShardConnExecute(t *testing.T) {
 	testShardConnGeneric(t, "TestShardConnExecute", func() error {
-		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnExecute", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
-		_, err := sdc.Execute(&context.DummyContext{}, "query", nil, 0)
+		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecute", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
+		_, err := sdc.Execute(context.Background(), "query", nil, 0)
 		return err
 	})
 	testShardConnTransact(t, "TestShardConnExecute", func() error {
-		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnExecute", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
-		_, err := sdc.Execute(&context.DummyContext{}, "query", nil, 1)
+		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecute", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
+		_, err := sdc.Execute(context.Background(), "query", nil, 1)
 		return err
 	})
 }
 
 func TestShardConnExecuteBatch(t *testing.T) {
 	testShardConnGeneric(t, "TestShardConnExecuteBatch", func() error {
-		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnExecuteBatch", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
+		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecuteBatch", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
 		queries := []tproto.BoundQuery{{"query", nil}}
-		_, err := sdc.ExecuteBatch(&context.DummyContext{}, queries, 0)
+		_, err := sdc.ExecuteBatch(context.Background(), queries, 0)
 		return err
 	})
 	testShardConnTransact(t, "TestShardConnExecuteBatch", func() error {
-		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnExecuteBatch", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
+		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecuteBatch", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
 		queries := []tproto.BoundQuery{{"query", nil}}
-		_, err := sdc.ExecuteBatch(&context.DummyContext{}, queries, 1)
+		_, err := sdc.ExecuteBatch(context.Background(), queries, 1)
 		return err
 	})
 }
 
 func TestShardConnExecuteStream(t *testing.T) {
 	testShardConnGeneric(t, "TestShardConnExecuteStream", func() error {
-		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnExecuteStream", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
-		_, errfunc := sdc.StreamExecute(&context.DummyContext{}, "query", nil, 0)
+		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecuteStream", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
+		_, errfunc := sdc.StreamExecute(context.Background(), "query", nil, 0)
 		return errfunc()
 	})
 	testShardConnTransact(t, "TestShardConnExecuteStream", func() error {
-		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnExecuteStream", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
-		_, errfunc := sdc.StreamExecute(&context.DummyContext{}, "query", nil, 1)
+		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecuteStream", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
+		_, errfunc := sdc.StreamExecute(context.Background(), "query", nil, 1)
 		return errfunc()
 	})
 }
 
 func TestShardConnBegin(t *testing.T) {
 	testShardConnGeneric(t, "TestShardConnBegin", func() error {
-		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnBegin", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
-		_, err := sdc.Begin(&context.DummyContext{})
+		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnBegin", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
+		_, err := sdc.Begin(context.Background())
 		return err
 	})
 }
 
 func TestShardConnCommit(t *testing.T) {
 	testShardConnTransact(t, "TestShardConnCommit", func() error {
-		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnCommit", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
-		return sdc.Commit(&context.DummyContext{}, 1)
+		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnCommit", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
+		return sdc.Commit(context.Background(), 1)
 	})
 }
 
 func TestShardConnRollback(t *testing.T) {
 	testShardConnTransact(t, "TestShardConnRollback", func() error {
-		sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnRollback", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
-		return sdc.Rollback(&context.DummyContext{}, 1)
+		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnRollback", "0", "", 1*time.Millisecond, 3, 1*time.Millisecond)
+		return sdc.Rollback(context.Background(), 1)
 	})
 }
 
@@ -244,9 +244,9 @@ func TestShardConnBeginOther(t *testing.T) {
 	s := createSandbox("TestShardConnBeginOther")
 	sbc := &sandboxConn{mustFailTxPool: 1}
 	s.MapTestConn("0", sbc)
-	sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnBeginOther", "0", "", 10*time.Millisecond, 3, 1*time.Millisecond)
+	sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnBeginOther", "0", "", 10*time.Millisecond, 3, 1*time.Millisecond)
 	startTime := time.Now()
-	_, err := sdc.Begin(&context.DummyContext{})
+	_, err := sdc.Begin(context.Background())
 	// If transaction pool is full, Begin should wait and retry.
 	if time.Now().Sub(startTime) < (10 * time.Millisecond) {
 		t.Errorf("want >10ms, got %v", time.Now().Sub(startTime))
@@ -269,8 +269,8 @@ func TestShardConnReconnect(t *testing.T) {
 	retryCount := 5
 	s := createSandbox("TestShardConnReconnect")
 	// case 1: resolved 0 endpoint, return error
-	sdc := NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
-	_, err := sdc.Execute(&context.DummyContext{}, "query", nil, 0)
+	sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
+	_, err := sdc.Execute(context.Background(), "query", nil, 0)
 	if err == nil {
 		t.Errorf("want error, got nil")
 	}
@@ -283,9 +283,9 @@ func TestShardConnReconnect(t *testing.T) {
 	s.DialMustFail = 1
 	sbc := &sandboxConn{}
 	s.MapTestConn("0", sbc)
-	sdc = NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
+	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
 	timeStart := time.Now()
-	sdc.Execute(&context.DummyContext{}, "query", nil, 0)
+	sdc.Execute(context.Background(), "query", nil, 0)
 	timeDuration := time.Now().Sub(timeStart)
 	if timeDuration < retryDelay {
 		t.Errorf("want no spam delay %v, got %v", retryDelay, timeDuration)
@@ -301,9 +301,9 @@ func TestShardConnReconnect(t *testing.T) {
 	s.Reset()
 	sbc = &sandboxConn{mustFailConn: 1}
 	s.MapTestConn("0", sbc)
-	sdc = NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
+	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
 	timeStart = time.Now()
-	sdc.Execute(&context.DummyContext{}, "query", nil, 0)
+	sdc.Execute(context.Background(), "query", nil, 0)
 	timeDuration = time.Now().Sub(timeStart)
 	if timeDuration < retryDelay {
 		t.Errorf("want no spam delay %v, got %v", retryDelay, timeDuration)
@@ -324,9 +324,9 @@ func TestShardConnReconnect(t *testing.T) {
 	s.MapTestConn("0", sbc0)
 	s.MapTestConn("0", sbc1)
 	s.MapTestConn("0", sbc2)
-	sdc = NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
+	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
 	timeStart = time.Now()
-	sdc.Execute(&context.DummyContext{}, "query", nil, 0)
+	sdc.Execute(context.Background(), "query", nil, 0)
 	timeDuration = time.Now().Sub(timeStart)
 	if timeDuration >= retryDelay {
 		t.Errorf("want no delay, got %v", timeDuration)
@@ -353,9 +353,9 @@ func TestShardConnReconnect(t *testing.T) {
 	s.MapTestConn("0", sbc0)
 	s.MapTestConn("0", sbc1)
 	s.MapTestConn("0", sbc2)
-	sdc = NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
+	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
 	timeStart = time.Now()
-	sdc.Execute(&context.DummyContext{}, "query", nil, 0)
+	sdc.Execute(context.Background(), "query", nil, 0)
 	timeDuration = time.Now().Sub(timeStart)
 	if timeDuration >= retryDelay {
 		t.Errorf("want no delay, got %v", timeDuration)
@@ -386,9 +386,9 @@ func TestShardConnReconnect(t *testing.T) {
 	s.MapTestConn("0", sbc0)
 	s.MapTestConn("0", sbc1)
 	s.MapTestConn("0", sbc2)
-	sdc = NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
+	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
 	timeStart = time.Now()
-	sdc.Execute(&context.DummyContext{}, "query", nil, 0)
+	sdc.Execute(context.Background(), "query", nil, 0)
 	timeDuration = time.Now().Sub(timeStart)
 	if timeDuration >= retryDelay {
 		t.Errorf("want no delay, got %v", timeDuration)
@@ -419,9 +419,9 @@ func TestShardConnReconnect(t *testing.T) {
 	s.MapTestConn("0", sbc0)
 	s.MapTestConn("0", sbc1)
 	s.MapTestConn("0", sbc2)
-	sdc = NewShardConn(&context.DummyContext{}, new(sandboxTopo), "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
+	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
 	timeStart = time.Now()
-	sdc.Execute(&context.DummyContext{}, "query", nil, 0)
+	sdc.Execute(context.Background(), "query", nil, 0)
 	timeDuration = time.Now().Sub(timeStart)
 	if timeDuration < retryDelay {
 		t.Errorf("want no spam delay %v, got %v", retryDelay, timeDuration)
@@ -466,9 +466,9 @@ func TestShardConnReconnect(t *testing.T) {
 		}
 		countGetEndPoints++
 	}
-	sdc = NewShardConn(&context.DummyContext{}, &sandboxTopo{callbackGetEndPoints: onGetEndPoints}, "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
+	sdc = NewShardConn(context.Background(), &sandboxTopo{callbackGetEndPoints: onGetEndPoints}, "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
 	timeStart = time.Now()
-	sdc.Execute(&context.DummyContext{}, "query", nil, 0)
+	sdc.Execute(context.Background(), "query", nil, 0)
 	timeDuration = time.Now().Sub(timeStart)
 	if timeDuration >= retryDelay {
 		t.Errorf("want no delay, got %v", timeDuration)
@@ -516,9 +516,9 @@ func TestShardConnReconnect(t *testing.T) {
 		}
 		countGetEndPoints++
 	}
-	sdc = NewShardConn(&context.DummyContext{}, &sandboxTopo{callbackGetEndPoints: onGetEndPoints}, "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
+	sdc = NewShardConn(context.Background(), &sandboxTopo{callbackGetEndPoints: onGetEndPoints}, "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
 	timeStart = time.Now()
-	sdc.Execute(&context.DummyContext{}, "query", nil, 0)
+	sdc.Execute(context.Background(), "query", nil, 0)
 	timeDuration = time.Now().Sub(timeStart)
 	if timeDuration < retryDelay {
 		t.Errorf("want no spam delay %v, got %v", retryDelay, timeDuration)
@@ -572,9 +572,9 @@ func TestShardConnReconnect(t *testing.T) {
 		}
 		countGetEndPoints++
 	}
-	sdc = NewShardConn(&context.DummyContext{}, &sandboxTopo{callbackGetEndPoints: onGetEndPoints}, "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
+	sdc = NewShardConn(context.Background(), &sandboxTopo{callbackGetEndPoints: onGetEndPoints}, "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
 	timeStart = time.Now()
-	sdc.Execute(&context.DummyContext{}, "query", nil, 0)
+	sdc.Execute(context.Background(), "query", nil, 0)
 	timeDuration = time.Now().Sub(timeStart)
 	if timeDuration >= retryDelay {
 		t.Errorf("want no delay, got %v", timeDuration)

@@ -13,11 +13,11 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/testfiles"
-	"github.com/youtube/vitess/go/vt/context"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
+	"golang.org/x/net/context"
 )
 
 type VTGateSchemaNormalized struct {
@@ -55,7 +55,7 @@ func TestUnsharded(t *testing.T) {
 		Sql:        "select * from music_user_map where id = 1",
 		TabletType: topo.TYPE_MASTER,
 	}
-	_, err = router.Execute(&context.DummyContext{}, &q)
+	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -72,7 +72,7 @@ func TestUnsharded(t *testing.T) {
 	}
 
 	q.Sql = "update music_user_map set id = 1"
-	_, err = router.Execute(&context.DummyContext{}, &q)
+	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -86,7 +86,7 @@ func TestUnsharded(t *testing.T) {
 
 	q.Sql = "delete from music_user_map"
 	sbc.Queries = nil
-	_, err = router.Execute(&context.DummyContext{}, &q)
+	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -97,7 +97,7 @@ func TestUnsharded(t *testing.T) {
 
 	q.Sql = "insert into music_user_map values(1)"
 	sbc.Queries = nil
-	_, err = router.Execute(&context.DummyContext{}, &q)
+	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -129,7 +129,7 @@ func TestSelectEqual(t *testing.T) {
 		Sql:        "select * from user where id = 1",
 		TabletType: topo.TYPE_MASTER,
 	}
-	_, err = router.Execute(&context.DummyContext{}, &q)
+	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -146,7 +146,7 @@ func TestSelectEqual(t *testing.T) {
 	}
 
 	q.Sql = "select * from user where id = 3"
-	_, err = router.Execute(&context.DummyContext{}, &q)
+	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -165,7 +165,7 @@ func TestSelectEqual(t *testing.T) {
 	q.Sql = "select * from user where name = 'foo'"
 	sbc1.BindVars = nil
 	sbc1.Queries = nil
-	_, err = router.Execute(&context.DummyContext{}, &q)
+	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -214,7 +214,7 @@ func TestSelectIN(t *testing.T) {
 		Sql:        "select * from user where id in (1)",
 		TabletType: topo.TYPE_MASTER,
 	}
-	_, err = router.Execute(&context.DummyContext{}, &q)
+	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -234,7 +234,7 @@ func TestSelectIN(t *testing.T) {
 
 	q.Sql = "select * from user where id in (1, 3)"
 	sbc1.Queries = nil
-	_, err = router.Execute(&context.DummyContext{}, &q)
+	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -260,7 +260,7 @@ func TestSelectIN(t *testing.T) {
 	q.Sql = "select * from user where name = 'foo'"
 	sbc1.BindVars = nil
 	sbc1.Queries = nil
-	_, err = router.Execute(&context.DummyContext{}, &q)
+	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -304,7 +304,7 @@ func TestSelectKeyrange(t *testing.T) {
 		Sql:        "select * from user where keyrange('', '\x20')",
 		TabletType: topo.TYPE_MASTER,
 	}
-	_, err = router.Execute(&context.DummyContext{}, &q)
+	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -321,7 +321,7 @@ func TestSelectKeyrange(t *testing.T) {
 	}
 
 	q.Sql = "select * from user where keyrange('\x40', '\x60')"
-	_, err = router.Execute(&context.DummyContext{}, &q)
+	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -358,7 +358,7 @@ func TestSelectScatter(t *testing.T) {
 		Sql:        "select * from user",
 		TabletType: topo.TYPE_MASTER,
 	}
-	_, err = router.Execute(&context.DummyContext{}, &q)
+	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -391,7 +391,7 @@ func TestUpdateEqual(t *testing.T) {
 		Sql:        "update user set a=2 where id = 1",
 		TabletType: topo.TYPE_MASTER,
 	}
-	_, err = router.Execute(&context.DummyContext{}, &q)
+	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -409,7 +409,7 @@ func TestUpdateEqual(t *testing.T) {
 		t.Errorf("sbc2.ExecCount: %v, want 0\n", sbc2.ExecCount)
 	}
 	q.Sql = "update user set a=2 where id = 3"
-	_, err = router.Execute(&context.DummyContext{}, &q)
+	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -461,7 +461,7 @@ func TestDeleteEqual(t *testing.T) {
 		Sql:        "delete from user where id = 1",
 		TabletType: topo.TYPE_MASTER,
 	}
-	_, err = router.Execute(&context.DummyContext{}, &q)
+	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -520,7 +520,7 @@ func TestInsertSharded(t *testing.T) {
 		Sql:        "insert into user(id, v, name) values (1, 2, 'myname')",
 		TabletType: topo.TYPE_MASTER,
 	}
-	_, err = router.Execute(&context.DummyContext{}, &q)
+	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -553,7 +553,7 @@ func TestInsertSharded(t *testing.T) {
 	q.Sql = "insert into user(id, v, name) values (3, 2, 'myname2')"
 	sbclookup.BindVars = nil
 	sbclookup.Queries = nil
-	_, err = router.Execute(&context.DummyContext{}, &q)
+	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -605,7 +605,7 @@ func TestInsertGenerator(t *testing.T) {
 		Sql:        "insert into user(v, name) values (2, 'myname')",
 		TabletType: topo.TYPE_MASTER,
 	}
-	_, err = router.Execute(&context.DummyContext{}, &q)
+	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -654,7 +654,7 @@ func TestInsertLookupOwned(t *testing.T) {
 		Sql:        "insert into music(user_id, id) values (2, 3)",
 		TabletType: topo.TYPE_MASTER,
 	}
-	_, err = router.Execute(&context.DummyContext{}, &q)
+	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -704,7 +704,7 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 		Sql:        "insert into music(user_id) values (2)",
 		TabletType: topo.TYPE_MASTER,
 	}
-	_, err = router.Execute(&context.DummyContext{}, &q)
+	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -754,7 +754,7 @@ func TestInsertLookupUnowned(t *testing.T) {
 		Sql:        "insert into music_extra(user_id, music_id) values (2, 3)",
 		TabletType: topo.TYPE_MASTER,
 	}
-	_, err = router.Execute(&context.DummyContext{}, &q)
+	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -804,7 +804,7 @@ func TestInsertLookupUnownedUnsupplied(t *testing.T) {
 		Sql:        "insert into music_extra_reversed(music_id) values (3)",
 		TabletType: topo.TYPE_MASTER,
 	}
-	_, err = router.Execute(&context.DummyContext{}, &q)
+	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}

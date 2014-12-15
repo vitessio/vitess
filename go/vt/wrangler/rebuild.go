@@ -8,18 +8,18 @@ import (
 	"fmt"
 	"sync"
 
-	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
+	"golang.org/x/net/context"
 )
 
 // Rebuild the serving and replication rollup data data while locking
 // out other changes.
 func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) (*topo.ShardInfo, error) {
-	return topotools.RebuildShard(context.TODO(), wr.logger, wr.ts, keyspace, shard, cells, wr.lockTimeout, interrupted)
+	return topotools.RebuildShard(wr.ctx, wr.logger, wr.ts, keyspace, shard, cells, wr.lockTimeout)
 }
 
 // Rebuild the serving graph data while locking out other changes.

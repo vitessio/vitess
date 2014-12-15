@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sync2"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
@@ -270,10 +270,10 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	sdw.wr.Logger().Infof("Stopping master binlog replication on %v", sdw.shardInfo.MasterAlias)
 	ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
 	blpPositionList, err := sdw.wr.TabletManagerClient().StopBlp(ctx, masterInfo)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("StopBlp for %v failed: %v", sdw.shardInfo.MasterAlias, err)
 	}
-	cancel()
 	wrangler.RecordStartBlpAction(sdw.cleaner, masterInfo, 30*time.Second)
 
 	// 2 - stop all the source 'checker' at a binlog position
@@ -305,7 +305,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 
 		// change the cleaner actions from ChangeSlaveType(rdonly)
 		// to StartSlave() + ChangeSlaveType(spare)
-		wrangler.RecordStartSlaveAction(sdw.cleaner, sourceTablet, 30*time.Second)
+		wrangler.RecordStartSlaveAction(sdw.cleaner, sourceTablet, 60*time.Second)
 		action, err := wrangler.FindChangeSlaveTypeActionByTarget(sdw.cleaner, sdw.sourceAliases[i])
 		if err != nil {
 			return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", sdw.sourceAliases[i], err)
@@ -332,7 +332,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	if err != nil {
 		return fmt.Errorf("StopSlaveMinimum for %v at %v failed: %v", sdw.destinationAlias, masterPos, err)
 	}
-	wrangler.RecordStartSlaveAction(sdw.cleaner, destinationTablet, 30*time.Second)
+	wrangler.RecordStartSlaveAction(sdw.cleaner, destinationTablet, 60*time.Second)
 	action, err := wrangler.FindChangeSlaveTypeActionByTarget(sdw.cleaner, sdw.destinationAlias)
 	if err != nil {
 		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", sdw.destinationAlias, err)
@@ -341,7 +341,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 
 	// 5 - restart filtered replication on destination master
 	sdw.wr.Logger().Infof("Restarting filtered replication on master %v", sdw.shardInfo.MasterAlias)
-	ctx, cancel = context.WithTimeout(context.TODO(), 30*time.Second)
+	ctx, cancel = context.WithTimeout(context.TODO(), 60*time.Second)
 	err = sdw.wr.TabletManagerClient().StartBlp(ctx, masterInfo)
 	if err := sdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String()); err != nil {
 		sdw.wr.Logger().Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String(), err)

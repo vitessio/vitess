@@ -9,12 +9,12 @@ package vtgate
 import (
 	"fmt"
 
-	"code.google.com/p/go.net/context"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
+	"golang.org/x/net/context"
 )
 
 const (
@@ -72,7 +72,7 @@ func (rtr *Router) Execute(ctx context.Context, query *proto.Query) (*mproto.Que
 }
 
 func (rtr *Router) execUnsharded(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
-	ks, allShards, err := getKeyspaceShards(rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
+	ks, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +139,7 @@ func (rtr *Router) execSelectKeyrange(vcursor *requestContext, plan *planbuilder
 	if err != nil {
 		return nil, err
 	}
-	ks, shards, err := mapExactShards(rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType, kr)
+	ks, shards, err := mapExactShards(vcursor.ctx, rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType, kr)
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +173,7 @@ func getKeyRange(keys []interface{}) (key.KeyRange, error) {
 }
 
 func (rtr *Router) execSelectScatter(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
-	ks, allShards, err := getKeyspaceShards(rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
+	ks, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +255,7 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, plan *planbuilder.
 	if err != nil {
 		return nil, err
 	}
-	ks, shard, err := rtr.getRouting(plan.Table.Keyspace.Name, vcursor.query.TabletType, ksid)
+	ks, shard, err := rtr.getRouting(vcursor.ctx, plan.Table.Keyspace.Name, vcursor.query.TabletType, ksid)
 	if err != nil {
 		return nil, err
 	}
@@ -313,7 +313,7 @@ func (rtr *Router) resolveKeys(vals []interface{}, bindVars map[string]interface
 }
 
 func (rtr *Router) resolveShards(vcursor *requestContext, vindexKeys []interface{}, plan *planbuilder.Plan) (newKeyspace string, routing routingMap, err error) {
-	newKeyspace, allShards, err := getKeyspaceShards(rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
+	newKeyspace, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
 	if err != nil {
 		return "", nil, err
 	}
@@ -358,7 +358,7 @@ func (rtr *Router) resolveShards(vcursor *requestContext, vindexKeys []interface
 }
 
 func (rtr *Router) resolveSingleShard(vcursor *requestContext, vindexKey interface{}, plan *planbuilder.Plan) (newKeyspace, shard string, ksid key.KeyspaceId, err error) {
-	newKeyspace, allShards, err := getKeyspaceShards(rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
+	newKeyspace, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -516,8 +516,8 @@ func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface
 	return generated, nil
 }
 
-func (rtr *Router) getRouting(keyspace string, tabletType topo.TabletType, ksid key.KeyspaceId) (newKeyspace, shard string, err error) {
-	newKeyspace, allShards, err := getKeyspaceShards(rtr.serv, rtr.cell, keyspace, tabletType)
+func (rtr *Router) getRouting(ctx context.Context, keyspace string, tabletType topo.TabletType, ksid key.KeyspaceId) (newKeyspace, shard string, err error) {
+	newKeyspace, allShards, err := getKeyspaceShards(ctx, rtr.serv, rtr.cell, keyspace, tabletType)
 	if err != nil {
 		return "", "", err
 	}

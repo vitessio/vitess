@@ -3,13 +3,13 @@ package tabletserver
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/context"
+	"golang.org/x/net/context"
 )
 
 func TestQueryList(t *testing.T) {
 	ql := NewQueryList(nil)
 	connID := int64(1)
-	qd := NewQueryDetail("", &context.DummyContext{}, connID)
+	qd := NewQueryDetail("", context.Background(), connID)
 	ql.Add(qd)
 
 	if qd1, ok := ql.queryDetails[connID]; !ok || qd1.connID != connID {
@@ -17,7 +17,7 @@ func TestQueryList(t *testing.T) {
 	}
 
 	conn2ID := int64(2)
-	qd2 := NewQueryDetail("", &context.DummyContext{}, conn2ID)
+	qd2 := NewQueryDetail("", context.Background(), conn2ID)
 	ql.Add(qd2)
 
 	rows := ql.GetQueryzRows()

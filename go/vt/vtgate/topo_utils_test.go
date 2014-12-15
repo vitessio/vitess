@@ -10,6 +10,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 func TestKeyRangeToShardMap(t *testing.T) {
@@ -46,7 +47,7 @@ func TestKeyRangeToShardMap(t *testing.T) {
 			}
 			keyRange = krArray[0]
 		}
-		_, allShards, err := getKeyspaceShards(ts, "", testCase.keyspace, topo.TYPE_MASTER)
+		_, allShards, err := getKeyspaceShards(context.Background(), ts, "", testCase.keyspace, topo.TYPE_MASTER)
 		gotShards, err := resolveKeyRangeToShards(allShards, keyRange)
 		if err != nil {
 			t.Errorf("want nil, got %v", err)
@@ -90,7 +91,7 @@ func TestMapExactShards(t *testing.T) {
 			}
 			keyRange = krArray[0]
 		}
-		_, gotShards, err := mapExactShards(ts, "", testCase.keyspace, topo.TYPE_MASTER, keyRange)
+		_, gotShards, err := mapExactShards(context.Background(), ts, "", testCase.keyspace, topo.TYPE_MASTER, keyRange)
 		if err != nil && err.Error() != testCase.err {
 			t.Errorf("gotShards: %v, want %s", err, testCase.err)
 		}
