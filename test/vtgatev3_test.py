@@ -274,6 +274,8 @@ class TestVTGateFunctions(unittest.TestCase):
   def test_user(self):
     count = 4
     vtgate_conn = get_connection()
+
+    # Test insert
     for x in xrange(count):
       i = x+1
       vtgate_conn.begin()
@@ -283,11 +285,15 @@ class TestVTGateFunctions(unittest.TestCase):
           'master')
       self.assertEqual(result, ([], 1L, i, []))
       vtgate_conn.commit()
+
+    # Test select equal
     for x in xrange(count):
       i = x+1
       result = vtgate_conn._execute("select * from vt_user where id = %(id)s", {'id': i}, 'master')
       self.assertEqual(result, ([(i, "test %s" % i)], 1L, 0, [('id', 8L), ('name', 253L)]))
     vtgate_conn.begin()
+
+    # Test insert with no auto-inc, then auto-inc
     result = vtgate_conn._execute(
         "insert into vt_user (id, name) values (%(id)s, %(name)s)",
         {'id': 6, 'name': 'test 6'},
@@ -299,6 +305,8 @@ class TestVTGateFunctions(unittest.TestCase):
         'master')
     self.assertEqual(result, ([], 1L, 7L, []))
     vtgate_conn.commit()
+
+    # Verify values in db
     result = shard_0_master.mquery("vt_user_keyspace", "select * from vt_user")
     self.assertEqual(result, ((1L, 'test 1'), (2L, 'test 2'), (3L, 'test 3')))
     result = shard_1_master.mquery("vt_user_keyspace", "select * from vt_user")
@@ -306,11 +314,21 @@ class TestVTGateFunctions(unittest.TestCase):
     result = lookup_master.mquery("vt_lookup_keyspace", "select * from vt_user_idx")
     self.assertEqual(result, ((1L,), (2L,), (3L,), (4L,), (6L,), (7L,)))
 
+    # Test IN clause
+    result = vtgate_conn._execute("select * from vt_user where id in (%(a)s, %(b)s)", {"a": 1, "b": 4}, 'master')
+    result[0].sort()
+    self.assertEqual(result, ([(1L, 'test 1'), (4L, 'test 4')], 2L, 0, [('id', 8L), ('name', 253L)]))
+    result = vtgate_conn._execute("select * from vt_user where id in (%(a)s, %(b)s)", {"a": 1, "b": 2}, 'master')
+    result[0].sort()
+    self.assertEqual(result, ([(1L, 'test 1'), (2L, 'test 2')], 2L, 0, [('id', 8L), ('name', 253L)]))
+
+    # Test keyrange
     result = vtgate_conn._execute("select * from vt_user where keyrange('', '\x80')", {}, 'master')
     self.assertEqual(result, ([(1L, 'test 1'), (2L, 'test 2'), (3L, 'test 3')], 3L, 0, [('id', 8L), ('name', 253L)]))
     result = vtgate_conn._execute("select * from vt_user where keyrange('\x80', '')", {}, 'master')
     self.assertEqual(result, ([(4L, 'test 4'), (6L, 'test 6'), (7L, 'test 7')], 3L, 0, [('id', 8L), ('name', 253L)]))
 
+    # Test updates
     vtgate_conn.begin()
     result = vtgate_conn._execute(
         "update vt_user set name = %(name)s where id = %(id)s",
@@ -328,6 +346,7 @@ class TestVTGateFunctions(unittest.TestCase):
     result = shard_1_master.mquery("vt_user_keyspace", "select * from vt_user")
     self.assertEqual(result, ((4L, 'test four'), (6L, 'test 6'), (7L, 'test 7')))
 
+    # Test deletes
     vtgate_conn.begin()
     result = vtgate_conn._execute(
         "delete from vt_user where id = %(id)s",
@@ -348,6 +367,7 @@ class TestVTGateFunctions(unittest.TestCase):
     self.assertEqual(result, ((2L,), (3L,), (6L,), (7L,)))
 
   def test_user2(self):
+    # user2 is for testing non-unique vindexes
     vtgate_conn = get_connection()
     vtgate_conn.begin()
     result = vtgate_conn._execute(
@@ -373,15 +393,24 @@ class TestVTGateFunctions(unittest.TestCase):
     result = lookup_master.mquery("vt_lookup_keyspace", "select * from name_user2_map")
     self.assertEqual(result, (('name1', 1L), ('name1', 7L), ('name2', 2L)))
 
+    # Test select by id
     result = vtgate_conn._execute("select * from vt_user2 where id = %(id)s", {'id': 1}, 'master')
     self.assertEqual(result, ([(1, "name1")], 1L, 0, [('id', 8L), ('name', 253L)]))
-    result = vtgate_conn._execute("select * from vt_user2 where name = %(name)s", {'name': 'name1'}, 'master')
-    # Results can come in any order.
-    if result[0][0] == (1, "name1"):
-      self.assertEqual(result, ([(1, "name1"), (7, "name1")], 2L, 0, [('id', 8L), ('name', 253L)]))
-    else:
-      self.assertEqual(result, ([(7, "name1"), (1, "name1")], 2L, 0, [('id', 8L), ('name', 253L)]))
 
+    # Test select by lookup
+    result = vtgate_conn._execute("select * from vt_user2 where name = %(name)s", {'name': 'name1'}, 'master')
+    result[0].sort()
+    self.assertEqual(result, ([(1, "name1"), (7, "name1")], 2L, 0, [('id', 8L), ('name', 253L)]))
+
+    # Test IN clause using non-unique vindex
+    result = vtgate_conn._execute("select * from vt_user2 where name in ('name1', 'name2')", {}, 'master')
+    result[0].sort()
+    self.assertEqual(result, ([(1, "name1"), (2, "name2"), (7, "name1")], 3L, 0, [('id', 8L), ('name', 253L)]))
+    result = vtgate_conn._execute("select * from vt_user2 where name in ('name1')", {}, 'master')
+    result[0].sort()
+    self.assertEqual(result, ([(1, "name1"), (7, "name1")], 2L, 0, [('id', 8L), ('name', 253L)]))
+
+    # Test delete
     vtgate_conn.begin()
     result = vtgate_conn._execute(
         "delete from vt_user2 where id = %(id)s",
@@ -402,6 +431,7 @@ class TestVTGateFunctions(unittest.TestCase):
     self.assertEqual(result, (('name1', 7L),))
 
   def test_user_extra(self):
+    # user_extra is for testing unowned functional vindex
     count = 4
     vtgate_conn = get_connection()
     for x in xrange(count):
@@ -457,6 +487,7 @@ class TestVTGateFunctions(unittest.TestCase):
     self.assertEqual(result, ())
 
   def test_music(self):
+    # music is for testing owned lookup index
     count = 4
     vtgate_conn = get_connection()
     for x in xrange(count):
@@ -533,6 +564,7 @@ class TestVTGateFunctions(unittest.TestCase):
     self.assertEqual(result, ((1L, 1L), (2L, 2L), (4L, 4L), (6L, 5L)))
 
   def test_music_extra(self):
+    # music_extra is for testing unonwed lookup index
     vtgate_conn = get_connection()
     vtgate_conn.begin()
     result = vtgate_conn._execute(

@@ -54,6 +54,8 @@ func (rtr *Router) Execute(ctx context.Context, query *proto.Query) (*mproto.Que
 		return rtr.execUnsharded(vcursor, plan)
 	case planbuilder.SelectEqual:
 		return rtr.execSelectEqual(vcursor, plan)
+	case planbuilder.SelectIN:
+		return rtr.execSelectIN(vcursor, plan)
 	case planbuilder.SelectKeyrange:
 		return rtr.execSelectKeyrange(vcursor, plan)
 	case planbuilder.UpdateEqual:
@@ -98,6 +100,30 @@ func (rtr *Router) execSelectEqual(vcursor *requestContext, plan *planbuilder.Pl
 		vcursor.query.BindVariables,
 		ks,
 		routing.Shards(),
+		vcursor.query.TabletType,
+		NewSafeSession(vcursor.query.Session))
+}
+
+func (rtr *Router) execSelectIN(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
+	keys, err := rtr.resolveKeys(plan.Values.([]interface{}), vcursor.query.BindVariables)
+	if err != nil {
+		return nil, err
+	}
+	ks, routing, err := rtr.resolveShards(vcursor, keys, plan)
+	shardVars := make(map[string]map[string]interface{})
+	for shard, vals := range routing {
+		bv := make(map[string]interface{}, len(vcursor.query.BindVariables)+1)
+		for k, v := range vcursor.query.BindVariables {
+			bv[k] = v
+		}
+		bv[planbuilder.ListVarName] = vals
+		shardVars[shard] = bv
+	}
+	return rtr.scatterConn.ExecuteMulti(
+		vcursor.ctx,
+		plan.Rewritten,
+		ks,
+		shardVars,
 		vcursor.query.TabletType,
 		NewSafeSession(vcursor.query.Session))
 }
@@ -301,7 +327,12 @@ func (rtr *Router) resolveShards(vcursor *requestContext, vindexKeys []interface
 				if err != nil {
 					return "", nil, err
 				}
-				routing.Add(shard, vindexKeys[i])
+				if bytes, ok := vindexKeys[i].([]byte); ok {
+					// []byte is not comparable.
+					routing.Add(shard, string(bytes))
+				} else {
+					routing.Add(shard, vindexKeys[i])
+				}
 			}
 		}
 	default:

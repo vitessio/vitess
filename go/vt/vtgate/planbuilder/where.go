@@ -11,6 +11,8 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
+const ListVarName = "_vals"
+
 // getWhereRouting fills the plan fields for the where clause of a SELECT
 // statement. It gets reused for DML planning also, where the select plan is
 // replaced with the appropriate DML plan after the fact.
@@ -199,7 +201,7 @@ func getMatch(node sqlparser.BoolExpr, col string) (planID PlanID, values interf
 			if err != nil {
 				return SelectScatter, nil
 			}
-			node.Right = sqlparser.ListArg("::_vals")
+			node.Right = sqlparser.ListArg("::" + ListVarName)
 			return SelectIN, val
 		}
 	}

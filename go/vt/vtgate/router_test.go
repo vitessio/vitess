@@ -192,6 +192,101 @@ func TestSelectEqual(t *testing.T) {
 	}
 }
 
+func TestSelectIN(t *testing.T) {
+	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := createSandbox("TestRouter")
+	sbc1 := &sandboxConn{}
+	sbc2 := &sandboxConn{}
+	s.MapTestConn("-20", sbc1)
+	s.MapTestConn("40-60", sbc2)
+
+	l := createSandbox("TestUnsharded")
+	sbclookup := &sandboxConn{}
+	l.MapTestConn("0", sbclookup)
+
+	serv := new(sandboxTopo)
+	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
+	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	q := proto.Query{
+		Sql:        "select * from user where id in (1)",
+		TabletType: topo.TYPE_MASTER,
+	}
+	_, err = router.Execute(&context.DummyContext{}, &q)
+	if err != nil {
+		t.Error(err)
+	}
+	wantBind := map[string]interface{}{
+		"_vals": []interface{}{int64(1)},
+	}
+	if !reflect.DeepEqual(sbc1.BindVars[0], wantBind) {
+		t.Errorf("sbc1.BindVars[0] = %#v, want %#v", sbc1.BindVars[0], wantBind)
+	}
+	wantQuery := "select * from user where id in ::_vals"
+	if sbc1.Queries[0] != wantQuery {
+		t.Errorf("sbc1.Queries[0]: %q, want %q\n", sbc1.Queries[0], wantQuery)
+	}
+	if sbc2.ExecCount != 0 {
+		t.Errorf("sbc2.ExecCount: %v, want 0\n", sbc2.ExecCount)
+	}
+
+	q.Sql = "select * from user where id in (1, 3)"
+	sbc1.Queries = nil
+	_, err = router.Execute(&context.DummyContext{}, &q)
+	if err != nil {
+		t.Error(err)
+	}
+	wantBind = map[string]interface{}{
+		"_vals": []interface{}{int64(1)},
+	}
+	if !reflect.DeepEqual(sbc1.BindVars[0], wantBind) {
+		t.Errorf("sbc1.BindVars[0] = %#v, want %#v", sbc1.BindVars[0], wantBind)
+	}
+	if sbc1.Queries[0] != wantQuery {
+		t.Errorf("sbc1.Queries[0]: %q, want %q\n", sbc1.Queries[0], wantQuery)
+	}
+	wantBind = map[string]interface{}{
+		"_vals": []interface{}{int64(3)},
+	}
+	if !reflect.DeepEqual(sbc2.BindVars[0], wantBind) {
+		t.Errorf("sbc2.BindVars[0] = %#v, want %#v", sbc2.BindVars[0], wantBind)
+	}
+	if sbc2.Queries[0] != wantQuery {
+		t.Errorf("sbc2.Queries[0]: %q, want %q\n", sbc2.Queries[0], wantQuery)
+	}
+
+	q.Sql = "select * from user where name = 'foo'"
+	sbc1.BindVars = nil
+	sbc1.Queries = nil
+	_, err = router.Execute(&context.DummyContext{}, &q)
+	if err != nil {
+		t.Error(err)
+	}
+	wantBind = map[string]interface{}{}
+	if !reflect.DeepEqual(sbc1.BindVars[0], wantBind) {
+		t.Errorf("sbc1.BindVars[0] = %#v, want %#v", sbc1.BindVars[0], wantBind)
+	}
+	wantQuery = "select * from user where name = 'foo'"
+	if sbc1.Queries[0] != wantQuery {
+		t.Errorf("sbc1.Queries[0]: %q, want %q\n", sbc1.Queries[0], wantQuery)
+	}
+
+	wantBinds := []map[string]interface{}{{
+		"name": []byte("foo"),
+	}}
+	if !reflect.DeepEqual(sbclookup.BindVars, wantBinds) {
+		t.Errorf("sbclookup.BindVars = \n%#v, want \n%#v", sbclookup.BindVars, wantBinds)
+	}
+	wantQueries := []string{
+		"select user_id from name_user_map where name = :name",
+	}
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: %q, want %q\n", sbclookup.Queries, wantQueries)
+	}
+}
+
 func TestSelectKeyrange(t *testing.T) {
 	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
 	if err != nil {
