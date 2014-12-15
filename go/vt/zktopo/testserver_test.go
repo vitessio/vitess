@@ -7,9 +7,8 @@ package zktopo
 import (
 	"testing"
 
-	"code.google.com/p/go.net/context"
-
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 // TestHookLockSrvShardForAction makes sure that changes to the upstream

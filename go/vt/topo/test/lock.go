@@ -8,9 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"code.google.com/p/go.net/context"
-
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 func CheckKeyspaceLock(t *testing.T, ts topo.Server) {

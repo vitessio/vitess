@@ -4,11 +4,10 @@ import (
 	"fmt"
 	"testing"
 
-	"code.google.com/p/go.net/context"
-
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
 	"github.com/youtube/vitess/go/zk/fakezk"
+	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
 )
 

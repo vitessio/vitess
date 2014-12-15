@@ -10,11 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"code.google.com/p/go.net/context"
-
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
+	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
 )
 

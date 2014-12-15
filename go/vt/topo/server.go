@@ -9,9 +9,8 @@ import (
 	"flag"
 	"fmt"
 
-	"code.google.com/p/go.net/context"
-
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 )
 
 var (

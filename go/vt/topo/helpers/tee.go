@@ -8,10 +8,9 @@ import (
 	"fmt"
 	"sync"
 
-	"code.google.com/p/go.net/context"
-
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 // Tee is an implementation of topo.Server that uses a primary

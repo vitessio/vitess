@@ -9,10 +9,9 @@ import (
 	"reflect"
 	"testing"
 
-	"code.google.com/p/go.net/context"
-
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 func TestFilterUnhealthy(t *testing.T) {
