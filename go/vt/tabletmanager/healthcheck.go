@@ -279,11 +279,10 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topo.TabletType
 // rebuildShardIfNeeded will rebuild the serving graph if we need to
 func (agent *ActionAgent) rebuildShardIfNeeded(tablet *topo.TabletInfo, targetTabletType topo.TabletType) error {
 	if topo.IsInServingGraph(targetTabletType) {
-		ctx, cancel := context.WithTimeout(context.Background(), agent.LockTimeout)
-		defer cancel()
+		ctx := context.Background()
 
 		// no need to take the shard lock in this case
-		if _, err := topotools.RebuildShard(ctx, logutil.NewConsoleLogger(), agent.TopoServer, tablet.Keyspace, tablet.Shard, []string{tablet.Alias.Cell}); err != nil {
+		if _, err := topotools.RebuildShard(ctx, logutil.NewConsoleLogger(), agent.TopoServer, tablet.Keyspace, tablet.Shard, []string{tablet.Alias.Cell}, agent.LockTimeout); err != nil {
 			return fmt.Errorf("topotools.RebuildShard returned an error: %v", err)
 		}
 	}

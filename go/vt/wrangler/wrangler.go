@@ -37,11 +37,10 @@ type Wrangler struct {
 	lockTimeout time.Duration
 
 	// the following fields are protected by the mutex
-	mu            sync.Mutex
-	ctx           context.Context
-	timeoutCancel context.CancelFunc
-	cancel        context.CancelFunc
-	deadline      time.Time
+	mu       sync.Mutex
+	ctx      context.Context
+	cancel   context.CancelFunc
+	deadline time.Time
 }
 
 // New creates a new Wrangler object.
@@ -59,17 +58,15 @@ type Wrangler struct {
 // fail. However, automated action will need some time to arbitrate
 // the locks.
 func New(logger logutil.Logger, ts topo.Server, actionTimeout, lockTimeout time.Duration) *Wrangler {
-	ctx, timeoutCancel := context.WithTimeout(context.Background(), actionTimeout)
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithTimeout(context.Background(), actionTimeout)
 	return &Wrangler{
-		logger:        logger,
-		ts:            ts,
-		tmc:           tmclient.NewTabletManagerClient(),
-		ctx:           ctx,
-		timeoutCancel: timeoutCancel,
-		cancel:        cancel,
-		deadline:      time.Now().Add(actionTimeout),
-		lockTimeout:   lockTimeout,
+		logger:      logger,
+		ts:          ts,
+		tmc:         tmclient.NewTabletManagerClient(),
+		ctx:         ctx,
+		cancel:      cancel,
+		deadline:    time.Now().Add(actionTimeout),
+		lockTimeout: lockTimeout,
 	}
 }
 
@@ -128,12 +125,6 @@ func (wr *Wrangler) ResetActionTimeout(actionTimeout time.Duration) {
 	wr.mu.Lock()
 	defer wr.mu.Unlock()
 
-	wr.ctx, wr.timeoutCancel = context.WithTimeout(context.Background(), actionTimeout)
-	wr.ctx, wr.cancel = context.WithCancel(wr.ctx)
+	wr.ctx, wr.cancel = context.WithTimeout(context.Background(), actionTimeout)
 	wr.deadline = time.Now().Add(actionTimeout)
 }
-
-// signal handling
-// TODO(alainjobart): we should be able to just call the cancel function
-// of the wrangler context, forcing an exit.
-//var interrupted = make(chan struct{})

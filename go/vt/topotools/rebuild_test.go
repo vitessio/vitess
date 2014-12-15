@@ -7,6 +7,7 @@ package topotools_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -35,7 +36,7 @@ func TestRebuildShardRace(t *testing.T) {
 	f.AddTablet(2, "test_cell", topo.TYPE_REPLICA, master)
 
 	// Do an initial rebuild.
-	if _, err := RebuildShard(ctx, logger, f.Topo, keyspace, shard, cells); err != nil {
+	if _, err := RebuildShard(ctx, logger, f.Topo, keyspace, shard, cells, time.Minute); err != nil {
 		t.Fatalf("RebuildShard: %v", err)
 	}
 
@@ -77,7 +78,7 @@ func TestRebuildShardRace(t *testing.T) {
 		t.Fatalf("UpdateTablet: %v", err)
 	}
 	go func() {
-		if _, err := RebuildShard(ctx, logger, f.Topo, keyspace, shard, cells); err != nil {
+		if _, err := RebuildShard(ctx, logger, f.Topo, keyspace, shard, cells, time.Minute); err != nil {
 			t.Fatalf("RebuildShard: %v", err)
 		}
 		close(done)
@@ -93,7 +94,7 @@ func TestRebuildShardRace(t *testing.T) {
 	if err := topo.UpdateTablet(ctx, ts, replicaInfo); err != nil {
 		t.Fatalf("UpdateTablet: %v", err)
 	}
-	if _, err := RebuildShard(ctx, logger, f.Topo, keyspace, shard, cells); err != nil {
+	if _, err := RebuildShard(ctx, logger, f.Topo, keyspace, shard, cells, time.Minute); err != nil {
 		t.Fatalf("RebuildShard: %v", err)
 	}
 

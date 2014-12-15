@@ -507,7 +507,7 @@ func (agent *ActionAgent) tabletExternallyReparentedLocked(ctx context.Context, 
 	// and rebuild the shard serving graph
 	event.DispatchUpdate(ev, "rebuilding shard serving graph")
 	log.Infof("Rebuilding shard serving graph data")
-	if _, err = topotools.RebuildShard(ctx, logger, agent.TopoServer, tablet.Keyspace, tablet.Shard, cells); err != nil {
+	if _, err = topotools.RebuildShard(ctx, logger, agent.TopoServer, tablet.Keyspace, tablet.Shard, cells, agent.LockTimeout); err != nil {
 		return true, err
 	}
 
