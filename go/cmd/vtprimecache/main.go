@@ -25,10 +25,11 @@ var (
 func main() {
 	defer logutil.Flush()
 
-	dbconfigs.RegisterFlags()
+	flags := dbconfigs.AppConfig | dbconfigs.DbaConfig
+	dbconfigs.RegisterFlags(flags)
 	flag.Parse()
 
-	dbcfgs, err := dbconfigs.Init(*mysqlSocketFile)
+	dbcfgs, err := dbconfigs.Init(*mysqlSocketFile, flags)
 	if err != nil {
 		log.Fatalf("Failed to init dbconfigs: %v", err)
 	}
