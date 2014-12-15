@@ -40,6 +40,8 @@ unit_test_cover:
 unit_test_race:
 	go test -race ./go/...
 
+# Run coverage and upload to coveralls.io.
+# Requires the secret COVERALLS_TOKEN env variable to be set.
 unit_test_goveralls:
 	go list -f '{{if len .TestGoFiles}}go test -coverprofile={{.Dir}}/.coverprofile {{.ImportPath}}{{end}}' ./go/... | xargs -i sh -c {}
 	gover ./go/
@@ -68,7 +70,10 @@ site_integration_test_files = \
 	zkocc_test.py
 
 # These tests should be run by developers after making code changes.
-# integration tests that take under 30s to run
+# Integration tests are grouped into 3 suites.
+# - small: under 30 secs
+# - medium: 30 secs - 1 min
+# - large: over 1 min
 small_integration_test_files = \
 	keyrange_test.py \
 	mysqlctl.py \
@@ -81,19 +86,17 @@ small_integration_test_files = \
 	binlog.py \
 	clone.py
 
-# integration tests that take between 30s and 1 min
 medium_integration_test_files = \
 	tabletmanager.py \
 	reparent.py \
 	vtdb_test.py \
 	rowcache_invalidator.py
 
-# integration tests that take more than a minute
 large_integration_test_files = \
 	vtgatev2_test.py \
 	zkocc_test.py
 
-# these tests are considered too flaky to be included
+# The following tests are considered too flaky to be included
 # in the continous integration test suites
 ci_skip_integration_test_files = \
 	resharding_bytes.py \
