@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/vt/callinfo"
+	"golang.org/x/net/context"
 )
 
 // QueryDetail is a simple wrapper for Query, Context and PoolConnection

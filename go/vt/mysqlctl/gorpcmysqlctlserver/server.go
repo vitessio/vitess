@@ -11,9 +11,9 @@ package gorpcmysqlctlserver
 import (
 	"time"
 
-	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"golang.org/x/net/context"
 )
 
 // MysqlctlServer is our RPC server.

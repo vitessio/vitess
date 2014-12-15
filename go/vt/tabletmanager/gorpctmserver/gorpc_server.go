@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/go.net/context"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcplus"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
@@ -21,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/gorpcproto"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 // TabletManager is the Go RPC implementation of the RPC service

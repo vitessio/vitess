@@ -67,7 +67,7 @@ On X: (promoted slave)
 import (
 	"fmt"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"

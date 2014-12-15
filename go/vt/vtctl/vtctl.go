@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/jscfg"
@@ -28,6 +27,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler"
+	"golang.org/x/net/context"
 )
 
 var (

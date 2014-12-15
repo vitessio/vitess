@@ -12,7 +12,7 @@ import (
 	"sort"
 	"time"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/rpcplus"
