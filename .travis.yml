@@ -17,8 +17,3 @@ install:
 script:
   - source dev.env
   - travis_retry make $MAKE_TARGET
-branches:
-  only:
-    - travis-ci
-notifications:
-  email: false
