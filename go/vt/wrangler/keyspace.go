@@ -29,7 +29,7 @@ func (wr *Wrangler) lockKeyspace(keyspace string, actionNode *actionnode.ActionN
 }
 
 func (wr *Wrangler) unlockKeyspace(keyspace string, actionNode *actionnode.ActionNode, lockPath string, actionError error) error {
-	return actionNode.UnlockKeyspace(context.TODO(), wr.ts, keyspace, lockPath, actionError)
+	return actionNode.UnlockKeyspace(wr.ctx, wr.ts, keyspace, lockPath, actionError)
 }
 
 // SetKeyspaceShardingInfo locks a keyspace and sets its ShardingColumnName
@@ -258,7 +258,7 @@ func (wr *Wrangler) waitForFilteredReplication(sourcePositions map[*topo.ShardIn
 					return
 				}
 
-				if err := wr.tmc.WaitBlpPosition(context.TODO(), tablet, blpPosition, wr.ActionTimeout()); err != nil {
+				if err := wr.tmc.WaitBlpPosition(wr.ctx, tablet, blpPosition, wr.ActionTimeout()); err != nil {
 					rec.RecordError(err)
 				} else {
 					wr.Logger().Infof("%v caught up", si.MasterAlias)
@@ -337,7 +337,7 @@ func (wr *Wrangler) migrateServedTypes(keyspace string, sourceShards, destinatio
 			if err := si.UpdateDisableQueryService(topo.TYPE_MASTER, nil, true); err != nil {
 				return err
 			}
-			if err := topo.UpdateShard(context.TODO(), wr.ts, si); err != nil {
+			if err := topo.UpdateShard(wr.ctx, wr.ts, si); err != nil {
 				return err
 			}
 		}
@@ -396,7 +396,7 @@ func (wr *Wrangler) migrateServedTypes(keyspace string, sourceShards, destinatio
 	// All is good, we can save the shards now
 	event.DispatchUpdate(ev, "updating source shards")
 	for _, si := range sourceShards {
-		if err := topo.UpdateShard(context.TODO(), wr.ts, si); err != nil {
+		if err := topo.UpdateShard(wr.ctx, wr.ts, si); err != nil {
 			return err
 		}
 	}
@@ -408,7 +408,7 @@ func (wr *Wrangler) migrateServedTypes(keyspace string, sourceShards, destinatio
 	}
 	event.DispatchUpdate(ev, "updating destination shards")
 	for _, si := range destinationShards {
-		if err := topo.UpdateShard(context.TODO(), wr.ts, si); err != nil {
+		if err := topo.UpdateShard(wr.ctx, wr.ts, si); err != nil {
 			return err
 		}
 	}
@@ -562,7 +562,7 @@ func (wr *Wrangler) replicaMigrateServedFrom(ki *topo.KeyspaceInfo, sourceShard 
 	if err := sourceShard.UpdateSourceBlacklistedTables(servedType, cells, reverse, tables); err != nil {
 		return fmt.Errorf("UpdateSourceBlacklistedTables(%v/%v) failed: %v", sourceShard.Keyspace(), sourceShard.ShardName(), err)
 	}
-	if err := topo.UpdateShard(context.TODO(), wr.ts, sourceShard); err != nil {
+	if err := topo.UpdateShard(wr.ctx, wr.ts, sourceShard); err != nil {
 		return fmt.Errorf("UpdateShard(%v/%v) failed: %v", sourceShard.Keyspace(), sourceShard.ShardName(), err)
 	}
 
@@ -602,7 +602,7 @@ func (wr *Wrangler) masterMigrateServedFrom(ki *topo.KeyspaceInfo, sourceShard *
 	if err := sourceShard.UpdateSourceBlacklistedTables(topo.TYPE_MASTER, nil, false, tables); err != nil {
 		return fmt.Errorf("UpdateSourceBlacklistedTables(%v/%v) failed: %v", sourceShard.Keyspace(), sourceShard.ShardName(), err)
 	}
-	if err := topo.UpdateShard(context.TODO(), wr.ts, sourceShard); err != nil {
+	if err := topo.UpdateShard(wr.ctx, wr.ts, sourceShard); err != nil {
 		return fmt.Errorf("UpdateShard(%v/%v) failed: %v", sourceShard.Keyspace(), sourceShard.ShardName(), err)
 	}
 
@@ -621,7 +621,7 @@ func (wr *Wrangler) masterMigrateServedFrom(ki *topo.KeyspaceInfo, sourceShard *
 
 	// wait for it
 	event.DispatchUpdate(ev, "waiting for destination master to catch up to source master")
-	if err := wr.tmc.WaitBlpPosition(context.TODO(), destinationMasterTabletInfo, blproto.BlpPosition{
+	if err := wr.tmc.WaitBlpPosition(wr.ctx, destinationMasterTabletInfo, blproto.BlpPosition{
 		Uid:      0,
 		Position: masterPosition,
 	}, wr.ActionTimeout()); err != nil {
@@ -637,7 +637,7 @@ func (wr *Wrangler) masterMigrateServedFrom(ki *topo.KeyspaceInfo, sourceShard *
 	// Update the destination shard (no more source shard)
 	event.DispatchUpdate(ev, "updating destination shard")
 	destinationShard.SourceShards = nil
-	if err := topo.UpdateShard(context.TODO(), wr.ts, destinationShard); err != nil {
+	if err := topo.UpdateShard(wr.ctx, wr.ts, destinationShard); err != nil {
 		return err
 	}
 
@@ -680,7 +680,7 @@ func (wr *Wrangler) setKeyspaceServedFrom(keyspace string, servedType topo.Table
 // discovery wouldn't be very efficient.
 func (wr *Wrangler) RefreshTablesByShard(si *topo.ShardInfo, tabletType topo.TabletType, cells []string) error {
 	wr.Logger().Infof("RefreshTablesByShard called on shard %v/%v", si.Keyspace(), si.ShardName())
-	tabletMap, err := topo.GetTabletMapForShardByCell(context.TODO(), wr.ts, si.Keyspace(), si.ShardName(), cells)
+	tabletMap, err := topo.GetTabletMapForShardByCell(wr.ctx, wr.ts, si.Keyspace(), si.ShardName(), cells)
 	switch err {
 	case nil:
 		// keep going

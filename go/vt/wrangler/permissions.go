@@ -9,8 +9,6 @@ import (
 	"sort"
 	"sync"
 
-	"golang.org/x/net/context"
-
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -58,7 +56,7 @@ func (wr *Wrangler) ValidatePermissionsShard(keyspace, shard string) error {
 
 	// read all the aliases in the shard, that is all tablets that are
 	// replicating from the master
-	aliases, err := topo.FindAllTabletAliasesInShard(context.TODO(), wr.ts, keyspace, shard)
+	aliases, err := topo.FindAllTabletAliasesInShard(wr.ctx, wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -115,7 +113,7 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(keyspace string) error {
 	er := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for _, shard := range shards {
-		aliases, err := topo.FindAllTabletAliasesInShard(context.TODO(), wr.ts, keyspace, shard)
+		aliases, err := topo.FindAllTabletAliasesInShard(wr.ctx, wr.ts, keyspace, shard)
 		if err != nil {
 			er.RecordError(err)
 			continue
