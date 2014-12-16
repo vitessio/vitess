@@ -37,6 +37,22 @@ func CheckShard(t *testing.T, ts topo.Server) {
 		t.Errorf("CreateShard called second time, got: %v", err)
 	}
 
+	// Delete shard and see if we can re-create it.
+	if err := ts.DeleteShard("test_keyspace", "b0-c0"); err != nil {
+		t.Fatalf("DeleteShard: %v", err)
+	}
+	if err := topo.CreateShard(ts, "test_keyspace", "b0-c0"); err != nil {
+		t.Fatalf("CreateShard: %v", err)
+	}
+
+	// Delete ALL shards.
+	if err := ts.DeleteKeyspaceShards("test_keyspace"); err != nil {
+		t.Fatalf("DeleteKeyspaceShards: %v", err)
+	}
+	if err := topo.CreateShard(ts, "test_keyspace", "b0-c0"); err != nil {
+		t.Fatalf("CreateShard: %v", err)
+	}
+
 	if _, err := ts.GetShard("test_keyspace", "666"); err != topo.ErrNoNode {
 		t.Errorf("GetShard(666): %v", err)
 	}

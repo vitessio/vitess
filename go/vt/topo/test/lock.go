@@ -51,7 +51,7 @@ func CheckKeyspaceLock(t *testing.T, ts topo.Server) {
 	// test we can't lock a non-existing keyspace
 	ctx = context.Background()
 	if _, err := ts.LockKeyspaceForAction(ctx, "test_keyspace_666", "fake-content"); err == nil {
-		t.Fatalf("LockKeyspaceForAction(test_keyspace_666) worked for non-existing keyspace")
+		t.Errorf("LockKeyspaceForAction(test_keyspace_666) worked for non-existing keyspace")
 	}
 }
 
@@ -97,7 +97,7 @@ func CheckShardLock(t *testing.T, ts topo.Server) {
 	// test we can't lock a non-existing shard
 	ctx = context.Background()
 	if _, err := ts.LockShardForAction(ctx, "test_keyspace", "20-30", "fake-content"); err == nil {
-		t.Fatalf("LockShardForAction(test_keyspace/20-30) worked for non-existing shard")
+		t.Errorf("LockShardForAction(test_keyspace/20-30) worked for non-existing shard")
 	}
 }
 
