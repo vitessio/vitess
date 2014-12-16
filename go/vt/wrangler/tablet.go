@@ -123,7 +123,7 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 	wasMaster := ti.Type == topo.TYPE_MASTER
 
 	if force {
-		err = topotools.Scrap(wr.ts, ti.Alias, force)
+		err = topotools.Scrap(wr.ctx, wr.ts, ti.Alias, force)
 	} else {
 		err = wr.tmc.Scrap(wr.ctx, ti)
 	}
@@ -214,7 +214,7 @@ func (wr *Wrangler) ChangeTypeNoRebuild(tabletAlias topo.TabletAlias, tabletType
 	}
 
 	if force {
-		if err := topotools.ChangeType(wr.ts, tabletAlias, tabletType, nil, false); err != nil {
+		if err := topotools.ChangeType(wr.ctx, wr.ts, tabletAlias, tabletType, nil, false); err != nil {
 			return false, "", "", "", err
 		}
 	} else {

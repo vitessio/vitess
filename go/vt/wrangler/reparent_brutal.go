@@ -85,7 +85,7 @@ func (wr *Wrangler) reparentShardBrutal(ev *events.Reparent, si *topo.ShardInfo,
 			wr.logger.Infof("scrap dead master %v", failedMaster.Alias)
 			// The master is dead so execute the action locally instead of
 			// enqueing the scrap action for an arbitrary amount of time.
-			if scrapErr := topotools.Scrap(wr.ts, failedMaster.Alias, false); scrapErr != nil {
+			if scrapErr := topotools.Scrap(wr.ctx, wr.ts, failedMaster.Alias, false); scrapErr != nil {
 				wr.logger.Warningf("scrapping failed master failed: %v", scrapErr)
 			}
 		}

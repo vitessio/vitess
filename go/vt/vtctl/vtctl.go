@@ -27,7 +27,6 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"golang.org/x/net/context"
 )
 
 var (
@@ -335,7 +334,7 @@ func fmtAction(action *actionnode.ActionNode) string {
 }
 
 func listTabletsByShard(wr *wrangler.Wrangler, keyspace, shard string) error {
-	tabletAliases, err := topo.FindAllTabletAliasesInShard(context.TODO(), wr.TopoServer(), keyspace, shard)
+	tabletAliases, err := topo.FindAllTabletAliasesInShard(wr.Context(), wr.TopoServer(), keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -343,7 +342,7 @@ func listTabletsByShard(wr *wrangler.Wrangler, keyspace, shard string) error {
 }
 
 func dumpAllTablets(wr *wrangler.Wrangler, zkVtPath string) error {
-	tablets, err := topotools.GetAllTablets(context.TODO(), wr.TopoServer(), zkVtPath)
+	tablets, err := topotools.GetAllTablets(wr.Context(), wr.TopoServer(), zkVtPath)
 	if err != nil {
 		return err
 	}
@@ -354,7 +353,7 @@ func dumpAllTablets(wr *wrangler.Wrangler, zkVtPath string) error {
 }
 
 func dumpTablets(wr *wrangler.Wrangler, tabletAliases []topo.TabletAlias) error {
-	tabletMap, err := topo.GetTabletMap(context.TODO(), wr.TopoServer(), tabletAliases)
+	tabletMap, err := topo.GetTabletMap(wr.Context(), wr.TopoServer(), tabletAliases)
 	if err != nil {
 		return err
 	}
@@ -1292,7 +1291,7 @@ func commandShardReplicationAdd(wr *wrangler.Wrangler, subFlags *flag.FlagSet, a
 	if err != nil {
 		return err
 	}
-	return topo.UpdateShardReplicationRecord(context.TODO(), wr.TopoServer(), keyspace, shard, tabletAlias, parentAlias)
+	return topo.UpdateShardReplicationRecord(wr.Context(), wr.TopoServer(), keyspace, shard, tabletAlias, parentAlias)
 }
 
 func commandShardReplicationRemove(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

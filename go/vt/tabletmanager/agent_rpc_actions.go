@@ -177,13 +177,13 @@ func (agent *ActionAgent) SetReadOnly(ctx context.Context, rdonly bool) error {
 // ChangeType changes the tablet type
 // Should be called under RpcWrapLockAction.
 func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topo.TabletType) error {
-	return topotools.ChangeType(agent.TopoServer, agent.TabletAlias, tabletType, nil, true /*runHooks*/)
+	return topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, tabletType, nil, true /*runHooks*/)
 }
 
 // Scrap scraps the live running tablet
 // Should be called under RpcWrapLockAction.
 func (agent *ActionAgent) Scrap(ctx context.Context) error {
-	return topotools.Scrap(agent.TopoServer, agent.TabletAlias, false)
+	return topotools.Scrap(ctx, agent.TopoServer, agent.TabletAlias, false)
 }
 
 // Sleep sleeps for the duration
@@ -777,7 +777,7 @@ func (agent *ActionAgent) Snapshot(ctx context.Context, args *actionnode.Snapsho
 		tablet.Tablet.Type = topo.TYPE_BACKUP
 		err = topo.UpdateTablet(ctx, agent.TopoServer, tablet)
 	} else {
-		err = topotools.ChangeType(agent.TopoServer, tablet.Alias, topo.TYPE_BACKUP, make(map[string]string), true /*runHooks*/)
+		err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topo.TYPE_BACKUP, make(map[string]string), true /*runHooks*/)
 	}
 	if err != nil {
 		return nil, err
@@ -811,7 +811,7 @@ func (agent *ActionAgent) Snapshot(ctx context.Context, args *actionnode.Snapsho
 		tablet.Tablet.Type = topo.TYPE_MASTER
 		err = topo.UpdateTablet(ctx, agent.TopoServer, tablet)
 	} else {
-		err = topotools.ChangeType(agent.TopoServer, tablet.Alias, newType, nil, true /*runHooks*/)
+		err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, newType, nil, true /*runHooks*/)
 	}
 	if err != nil {
 		// failure in changing the topology type is probably worse,
@@ -863,7 +863,7 @@ func (agent *ActionAgent) SnapshotSourceEnd(ctx context.Context, args *actionnod
 		tablet.Tablet.Type = topo.TYPE_MASTER
 		err = topo.UpdateTablet(ctx, agent.TopoServer, tablet)
 	} else {
-		err = topotools.ChangeType(agent.TopoServer, tablet.Alias, args.OriginalType, make(map[string]string), true /*runHooks*/)
+		err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, args.OriginalType, make(map[string]string), true /*runHooks*/)
 	}
 
 	return err
@@ -1013,7 +1013,7 @@ func (agent *ActionAgent) Restore(ctx context.Context, args *actionnode.RestoreA
 	// do the work
 	if err := agent.Mysqld.RestoreFromSnapshot(l, sm, args.FetchConcurrency, args.FetchRetryCount, args.DontWaitForSlaveStart, agent.hookExtraEnv()); err != nil {
 		log.Errorf("RestoreFromSnapshot failed (%v), scrapping", err)
-		if err := topotools.Scrap(agent.TopoServer, agent.TabletAlias, false); err != nil {
+		if err := topotools.Scrap(ctx, agent.TopoServer, agent.TabletAlias, false); err != nil {
 			log.Errorf("Failed to Scrap after failed RestoreFromSnapshot: %v", err)
 		}
 
@@ -1024,5 +1024,5 @@ func (agent *ActionAgent) Restore(ctx context.Context, args *actionnode.RestoreA
 	agent.ReloadSchema(ctx)
 
 	// change to TYPE_SPARE, we're done!
-	return topotools.ChangeType(agent.TopoServer, agent.TabletAlias, topo.TYPE_SPARE, nil, true)
+	return topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topo.TYPE_SPARE, nil, true)
 }
