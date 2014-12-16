@@ -127,3 +127,27 @@ func resolveKeyRangeToShards(allShards []topo.SrvShard, kr key.KeyRange) ([]stri
 	}
 	return shards, nil
 }
+
+// mapExactShards maps a keyrange to shards only if there's a complete
+// match. If there's any partial match the function returns no match.
+func mapExactShards(ctx context.Context, topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType, kr key.KeyRange) (newkeyspace string, shards []string, err error) {
+	keyspace, allShards, err := getKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
+	if err != nil {
+		return "", nil, err
+	}
+	shardnum := 0
+	for shardnum < len(allShards) {
+		if kr.Start == allShards[shardnum].KeyRange.Start {
+			break
+		}
+		shardnum++
+	}
+	for shardnum < len(allShards) {
+		shards = append(shards, allShards[shardnum].ShardName())
+		if kr.End == allShards[shardnum].KeyRange.End {
+			return keyspace, shards, nil
+		}
+		shardnum++
+	}
+	return keyspace, nil, fmt.Errorf("keyrange %v does not exactly match shards", kr)
+}

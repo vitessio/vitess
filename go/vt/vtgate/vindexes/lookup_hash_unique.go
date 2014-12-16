@@ -13,28 +13,19 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
+var (
+	_ planbuilder.Unique          = (*LookupHashUnique)(nil)
+	_ planbuilder.LookupGenerator = (*LookupHashUnique)(nil)
+)
+
 type LookupHashUnique struct {
-	Table, From, To       string
-	sel, verify, ins, del string
+	lookupHash
 }
 
 func NewLookupHashUnique(m map[string]interface{}) (planbuilder.Vindex, error) {
-	get := func(name string) string {
-		v, _ := m[name].(string)
-		return v
-	}
-	t := get("Table")
-	from := get("From")
-	to := get("To")
-	return &LookupHashUnique{
-		Table:  t,
-		From:   from,
-		To:     to,
-		sel:    fmt.Sprintf("select %s from %s where %s = :%s", to, t, from, from),
-		verify: fmt.Sprintf("select %s from %s where %s = :%s and %s = :%s", from, t, from, from, to, to),
-		ins:    fmt.Sprintf("insert into %s(%s, %s) values(:%s, :%s)", t, from, to, from, to),
-		del:    fmt.Sprintf("delete from %s where %s = :%s and %s = :%s", t, from, from, to, to),
-	}, nil
+	lhu := &LookupHashUnique{}
+	lhu.init(m)
+	return lhu, nil
 }
 
 func (vind *LookupHashUnique) Cost() int {
@@ -74,39 +65,7 @@ func (vind *LookupHashUnique) Map(vcursor planbuilder.VCursor, ids []interface{}
 	return out, nil
 }
 
-func (vind *LookupHashUnique) Verify(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) (bool, error) {
-	bq := &tproto.BoundQuery{
-		Sql: vind.verify,
-		BindVariables: map[string]interface{}{
-			vind.From: id,
-			vind.To:   vunhash(ksid),
-		},
-	}
-	result, err := vcursor.Execute(bq)
-	if err != nil {
-		return false, err
-	}
-	if len(result.Rows) == 0 {
-		return false, nil
-	}
-	return true, nil
-}
-
-func (vind *LookupHashUnique) Create(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) error {
-	bq := &tproto.BoundQuery{
-		Sql: vind.ins,
-		BindVariables: map[string]interface{}{
-			vind.From: id,
-			vind.To:   vunhash(ksid),
-		},
-	}
-	if _, err := vcursor.Execute(bq); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (vind *LookupHashUnique) Generate(vcursor planbuilder.VCursor, ksid key.KeyspaceId) (id interface{}, err error) {
+func (vind *LookupHashUnique) Generate(vcursor planbuilder.VCursor, ksid key.KeyspaceId) (id int64, err error) {
 	bq := &tproto.BoundQuery{
 		Sql: vind.ins,
 		BindVariables: map[string]interface{}{
@@ -116,23 +75,9 @@ func (vind *LookupHashUnique) Generate(vcursor planbuilder.VCursor, ksid key.Key
 	}
 	result, err := vcursor.Execute(bq)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-	return result.InsertId, err
-}
-
-func (vind *LookupHashUnique) Delete(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) error {
-	bq := &tproto.BoundQuery{
-		Sql: vind.del,
-		BindVariables: map[string]interface{}{
-			vind.From: id,
-			vind.To:   vunhash(ksid),
-		},
-	}
-	if _, err := vcursor.Execute(bq); err != nil {
-		return err
-	}
-	return nil
+	return int64(result.InsertId), err
 }
 
 func init() {

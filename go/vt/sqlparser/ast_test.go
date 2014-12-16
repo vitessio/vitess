@@ -6,6 +6,21 @@ package sqlparser
 
 import "testing"
 
+func TestWhere(t *testing.T) {
+	var w *Where
+	buf := NewTrackedBuffer(nil)
+	w.Format(buf)
+	if buf.String() != "" {
+		t.Errorf("w.Format(nil): %q, want \"\"", buf.String)
+	}
+	w = NewWhere(AST_WHERE, nil)
+	buf = NewTrackedBuffer(nil)
+	w.Format(buf)
+	if buf.String() != "" {
+		t.Errorf("w.Format(&Where{nil}: %q, want \"\"", buf.String)
+	}
+}
+
 func TestLimits(t *testing.T) {
 	var l *Limit
 	o, r, err := l.Limits()

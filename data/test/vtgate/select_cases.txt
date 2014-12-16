@@ -6,6 +6,7 @@
   "Table": "",
   "Original":"the quick brown fox",
   "Rewritten":"",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":null
@@ -19,6 +20,7 @@
   "Table": "",
   "Original":"select * from user union select * from user",
   "Rewritten":"",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":null
@@ -32,6 +34,7 @@
   "Table": "",
   "Original":"set a=1",
   "Rewritten":"",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":null
@@ -45,6 +48,7 @@
   "Table": "",
   "Original":"create table a()",
   "Rewritten":"",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":null
@@ -58,6 +62,7 @@
   "Table": "",
   "Original":"explain select * from user",
   "Rewritten":"",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":null
@@ -71,6 +76,7 @@
   "Table": "",
   "Original":"select * from (select 2 from dual)",
   "Rewritten":"",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":null
@@ -84,6 +90,7 @@
   "Table": "",
   "Original":"select * from nouser where id = 1",
   "Rewritten":"",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":null
@@ -97,6 +104,7 @@
   "Table": "",
   "Original":"select * from music, user where id = 1",
   "Rewritten":"",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":null
@@ -110,6 +118,7 @@
   "Table": "",
   "Original":"select * from (user) where id = 1",
   "Rewritten":"",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":null
@@ -122,7 +131,8 @@
   "Reason":"",
   "Table": "main1",
   "Original":"select * from main1",
-  "Rewritten":"select * from main1",
+  "Rewritten":"",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":null
@@ -136,6 +146,7 @@
   "Table": "user",
   "Original":"select * from user",
   "Rewritten": "select * from user",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -149,6 +160,7 @@
   "Table": "user",
   "Original":"select * from user where id in (select * from music)",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -162,6 +174,7 @@
   "Table": "user",
   "Original":"select * from user where not (id in (select * from music))",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -175,6 +188,7 @@
   "Table": "user",
   "Original":"select * from user where id between (select 1 from dual) and 2",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -188,6 +202,7 @@
   "Table": "user",
   "Original":"select * from user where (select 1 from dual) is null",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -201,6 +216,7 @@
   "Table": "user",
   "Original":"select * from user where exists (select 1 from dual)",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -214,6 +230,7 @@
   "Table": "user",
   "Original":"select * from user where 1+1 = (select 1 from dual)",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -227,6 +244,7 @@
   "Table": "user",
   "Original":"select * from user where id = -(select 1 from dual)",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -240,6 +258,7 @@
   "Table": "user",
   "Original":"select * from user where id = func(1, (select 1 from dual))",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -253,6 +272,7 @@
   "Table": "user",
   "Original":"select * from user where id = func(1)",
   "Rewritten":"select * from user where id = func(1)",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":null
@@ -266,6 +286,7 @@
   "Table": "user",
   "Original":"select * from user where id = case (select 1 from dual) when a=b then c end",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -279,6 +300,7 @@
   "Table": "user",
   "Original":"select * from user where id = case aa when a = b then c else (select 1 from dual) end",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -292,6 +314,7 @@
   "Table": "user",
   "Original":"select * from user where id = case aa when (select 1 from dual) = b then c else d end",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -305,6 +328,7 @@
   "Table": "user",
   "Original":"select * from user where id = case aa when a = b then (select 1 from dual) else d end",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -318,6 +342,7 @@
   "Table": "user",
   "Original":"select * from user where id = case aa when a = b then c end",
   "Rewritten": "select * from user where id = case aa when a = b then c end",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":null
@@ -331,6 +356,7 @@
   "Table": "user",
   "Original":"select * from user where 1 = id",
   "Rewritten":"select * from user where 1 = id",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":null
@@ -344,6 +370,7 @@
   "Table": "user",
   "Original":"select * from user where id = 1",
   "Rewritten": "select * from user where id = 1",
+  "Subquery": "",
   "Vindex": "user_index",
   "Col": "id",
   "Values": 1
@@ -357,6 +384,7 @@
   "Table": "user",
   "Original":"select * from user where name = 'foo'",
   "Rewritten": "select * from user where name = 'foo'",
+  "Subquery": "",
   "Vindex": "name_user_map",
   "Col": "name",
   "Values": "Zm9v"
@@ -370,6 +398,7 @@
   "Table": "user",
   "Original":"select * from user where id = 1.1",
   "Rewritten":"select * from user where id = 1.1",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":null
@@ -383,6 +412,7 @@
   "Table": "user",
   "Original":"select * from user where id = :id",
   "Rewritten": "select * from user where id = :id",
+  "Subquery": "",
   "Vindex": "user_index",
   "Col": "id",
   "Values": ":id"
@@ -396,6 +426,7 @@
   "Table": "user",
   "Original":"select * from user where id in (1, 2)",
   "Rewritten": "select * from user where id in ::_vals",
+  "Subquery": "",
   "Vindex": "user_index",
   "Col": "id",
   "Values": [
@@ -412,6 +443,7 @@
   "Table": "user",
   "Original":"select * from user where id in (1+1, 2)",
   "Rewritten":"select * from user where id in (1+1, 2)",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":null
@@ -425,6 +457,7 @@
   "Table": "user",
   "Original":"select * from user where id in (1.1, 2)",
   "Rewritten":"select * from user where id in (1.1, 2)",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":null
@@ -438,6 +471,7 @@
   "Table": "user",
   "Original":"select * from user where user_id = 1",
   "Rewritten": "select * from user where user_id = 1",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -451,6 +485,7 @@
   "Table": "user_extra",
   "Original":"select * from user_extra where user_id = 1",
   "Rewritten": "select * from user_extra where user_id = 1",
+  "Subquery": "",
   "Vindex": "user_index",
   "Col": "user_id",
   "Values": 1
@@ -464,6 +499,7 @@
   "Table": "music",
   "Original":"select * from music where user_id = 1",
   "Rewritten": "select * from music where user_id = 1",
+  "Subquery": "",
   "Vindex": "user_index",
   "Col": "user_id",
   "Values": 1
@@ -477,6 +513,7 @@
   "Table": "music",
   "Original":"select * from music where id = 1",
   "Rewritten": "select * from music where id = 1",
+  "Subquery": "",
   "Vindex": "music_user_map",
   "Col": "id",
   "Values": 1
@@ -490,6 +527,7 @@
   "Table": "music",
   "Original":"select * from music where id in (1, 2)",
   "Rewritten": "select * from music where id in ::_vals",
+  "Subquery": "",
   "Vindex": "music_user_map",
   "Col": "id",
   "Values": [
@@ -506,6 +544,7 @@
   "Table": "music",
   "Original":"select * from music where id in (:a, 2)",
   "Rewritten": "select * from music where id in ::_vals",
+  "Subquery": "",
   "Vindex": "music_user_map",
   "Col": "id",
   "Values": [
@@ -522,6 +561,7 @@
   "Table": "music",
   "Original":"select * from music where id in ::list",
   "Rewritten": "select * from music where id in ::_vals",
+  "Subquery": "",
   "Vindex": "music_user_map",
   "Col": "id",
   "Values": "::list"
@@ -535,6 +575,7 @@
   "Table": "music_extra",
   "Original":"select * from music_extra where music_id = 1",
   "Rewritten": "select * from music_extra where music_id = 1",
+  "Subquery": "",
   "Vindex": "music_user_map",
   "Col": "music_id",
   "Values": 1
@@ -548,6 +589,7 @@
   "Table": "user",
   "Original":"select * from user where id = 1 and var = 2 or var = 3",
   "Rewritten": "select * from user where id = 1 and var = 2 or var = 3",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -561,6 +603,7 @@
   "Table": "user",
   "Original":"select * from user where id = 1 and (var = 2 or var = 3)",
   "Rewritten": "select * from user where id = 1 and (var = 2 or var = 3)",
+  "Subquery": "",
   "Vindex": "user_index",
   "Col": "id",
   "Values": 1
@@ -574,6 +617,7 @@
   "Table": "user",
   "Original":"select * from user where var = 2 or var = 3 and id = 1",
   "Rewritten": "select * from user where var = 2 or var = 3 and id = 1",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -587,9 +631,94 @@
   "Table": "user",
   "Original":"select * from user where (var = 2 or var = 3) and id = 1",
   "Rewritten": "select * from user where (var = 2 or var = 3) and id = 1",
+  "Subquery": "",
   "Vindex": "user_index",
   "Col": "id",
   "Values": 1
+}
+
+# select with KEYRANGE
+"select * from user where keyrange(1, 2)"
+{
+  "ID": "SelectKeyrange",
+  "Reason": "",
+  "Table": "user",
+  "Original":"select * from user where keyrange(1, 2)",
+  "Rewritten": "select * from user",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": [1, 2]
+}
+
+# select with KEYRANGE parenthesized
+"select * from user where (keyrange(1, 2))"
+{
+  "ID": "SelectKeyrange",
+  "Reason": "",
+  "Table": "user",
+  "Original":"select * from user where (keyrange(1, 2))",
+  "Rewritten": "select * from user",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": [1, 2]
+}
+
+# select KEYRANGE in AND
+"select * from user where a = 1 and keyrange(1, 2)"
+{
+  "ID": "SelectKeyrange",
+  "Reason": "",
+  "Table": "user",
+  "Original":"select * from user where a = 1 and keyrange(1, 2)",
+  "Rewritten": "select * from user where a = 1",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": [1, 2]
+}
+
+# select KEYRANGE in AND parenthesized
+"select * from user where a = 1 and (keyrange(1, 2))"
+{
+  "ID": "SelectKeyrange",
+  "Reason": "",
+  "Table": "user",
+  "Original":"select * from user where a = 1 and (keyrange(1, 2))",
+  "Rewritten": "select * from user where a = 1",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": [1, 2]
+}
+
+# select KEYRANGE in AND double parenthesized
+"select * from user where a = 1 and ((keyrange(1, 2)))"
+{
+  "ID": "SelectKeyrange",
+  "Reason": "",
+  "Table": "user",
+  "Original":"select * from user where a = 1 and ((keyrange(1, 2)))",
+  "Rewritten": "select * from user where a = 1",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": [1, 2]
+}
+
+# select KEYRANGE in double AND double parenthesized
+"select * from user where a = 1 and (b = 2 and (keyrange(1, 2)))"
+{
+  "ID": "SelectKeyrange",
+  "Reason": "",
+  "Table": "user",
+  "Original":"select * from user where a = 1 and (b = 2 and (keyrange(1, 2)))",
+  "Rewritten": "select * from user where a = 1 and (b = 2)",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": [1, 2]
 }
 
 # aggregates in select, simple
@@ -600,6 +729,7 @@
   "Table": "user",
   "Original":"select count(*) from user where id in (1, 2)",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -613,6 +743,7 @@
   "Table": "user",
   "Original":"select count(*) from user where name = 'foo'",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -626,6 +757,7 @@
   "Table": "user",
   "Original":"select a = 1 and count(*) = 1 from user where id in (1, 2)",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -639,6 +771,7 @@
   "Table": "user",
   "Original":"select a = 1 or count(*) = 1 from user where id in (1, 2)",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -652,6 +785,7 @@
   "Table": "user",
   "Original":"select (not count(*) = 1) from user where id in (1, 2)",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -665,6 +799,7 @@
   "Table": "user",
   "Original":"select count(*) between 1 and 2 from user where id in (1, 2)",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -678,6 +813,7 @@
   "Table": "user",
   "Original":"select count(*) is null from user where id in (1, 2)",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -691,6 +827,7 @@
   "Table": "user",
   "Original":"select exists (select 1 from dual) from user where id in (1, 2)",
   "Rewritten":"select exists (select 1 from dual) from user where id in ::_vals",
+  "Subquery": "",
   "Vindex": "user_index",
   "Col": "id",
   "Values":[1,2]
@@ -704,6 +841,7 @@
   "Table": "user",
   "Original":"select (select 1 from dual) from user where id in (1, 2)",
   "Rewritten": "select (select 1 from dual) from user where id in ::_vals",
+  "Subquery": "",
   "Vindex": "user_index",
   "Col": "id",
   "Values":[1,2]
@@ -717,6 +855,7 @@
   "Table": "user",
   "Original":"select count(*)+1 from user where id in (1, 2)",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -730,6 +869,7 @@
   "Table": "user",
   "Original":"select -count(*) from user where id in (1, 2)",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -743,6 +883,7 @@
   "Table": "user",
   "Original":"select fun(1, count(*)) from user where id in (1, 2)",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -756,6 +897,7 @@
   "Table": "user",
   "Original":"select fun(*) from user where id in (1, 2)",
   "Rewritten": "select fun(*) from user where id in ::_vals",
+  "Subquery": "",
   "Vindex": "user_index",
   "Col": "id",
   "Values": [
@@ -772,6 +914,7 @@
   "Table": "user",
   "Original":"select case count(*) when a = b then d end from user where id in (1, 2)",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -785,6 +928,7 @@
   "Table": "user",
   "Original":"select case a when a = b then d else count(*) end from user where id in (1, 2)",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -798,6 +942,7 @@
   "Table": "user",
   "Original":"select case a when count(*) = b then d else e end from user where id in (1, 2)",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -811,6 +956,7 @@
   "Table": "user",
   "Original":"select case a when a = b then count(*) else e end from user where id in (1, 2)",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -824,6 +970,7 @@
   "Table": "user",
   "Original":"select case a when a = b then d else e end from user where id in (1, 2)",
   "Rewritten": "select case a when a = b then d else e end from user where id in ::_vals",
+  "Subquery": "",
   "Vindex": "user_index",
   "Col": "id",
   "Values": [
