@@ -4,7 +4,12 @@
 
 package planbuilder
 
-import "github.com/youtube/vitess/go/vt/sqlparser"
+import (
+	"bytes"
+	"fmt"
+
+	"github.com/youtube/vitess/go/vt/sqlparser"
+)
 
 func buildUpdatePlan(upd *sqlparser.Update, schema *Schema) *Plan {
 	plan := &Plan{
@@ -25,7 +30,7 @@ func buildUpdatePlan(upd *sqlparser.Update, schema *Schema) *Plan {
 	switch plan.ID {
 	case SelectEqual:
 		plan.ID = UpdateEqual
-	case SelectIN, SelectScatter:
+	case SelectIN, SelectScatter, SelectKeyrange:
 		plan.ID = NoPlan
 		plan.Reason = "too complex"
 		return plan
@@ -71,11 +76,30 @@ func buildDeletePlan(del *sqlparser.Delete, schema *Schema) *Plan {
 	switch plan.ID {
 	case SelectEqual:
 		plan.ID = DeleteEqual
-	case SelectIN, SelectScatter:
+		plan.Subquery = generateDeleteSubquery(del, plan.Table)
+	case SelectIN, SelectScatter, SelectKeyrange:
 		plan.ID = NoPlan
 		plan.Reason = "too complex"
 	default:
 		panic("unexpected")
 	}
 	return plan
+}
+
+func generateDeleteSubquery(del *sqlparser.Delete, table *Table) string {
+	if len(table.Owned) == 0 {
+		return ""
+	}
+	buf := bytes.NewBuffer(nil)
+	buf.WriteString("select ")
+	prefix := ""
+	for _, cv := range table.Owned {
+		buf.WriteString(prefix)
+		buf.WriteString(cv.Col)
+		prefix = ", "
+	}
+	fmt.Fprintf(buf, " from %s", table.Name)
+	buf.WriteString(sqlparser.String(del.Where))
+	buf.WriteString(" for update")
+	return buf.String()
 }

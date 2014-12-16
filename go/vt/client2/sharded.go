@@ -16,7 +16,6 @@ import (
 	"github.com/youtube/vitess/go/vt/client2/tablet"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
 )
@@ -233,7 +232,7 @@ func (sc *ShardedConn) Exec(query string, bindVars map[string]interface{}) (db.R
 	if sc.srvKeyspace == nil {
 		return nil, ErrNotConnected
 	}
-	shards, err := vtgate.GetShardList(query, bindVars, sc.shardMaxKeys)
+	shards, err := GetShardList(query, bindVars, sc.shardMaxKeys)
 	if err != nil {
 		return nil, err
 	}

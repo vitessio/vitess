@@ -27,9 +27,9 @@ func (_ *hashIndex) Cost() int { return 1 }
 func (_ *hashIndex) Verify(_ VCursor, _ interface{}, _ key.KeyspaceId) (bool, error) {
 	return false, nil
 }
-func (_ *hashIndex) Map(_ VCursor, _ []interface{}) ([]key.KeyspaceId, error) { return nil, nil }
-func (_ *hashIndex) Create(_ VCursor, _ interface{}) error                    { return nil }
-func (_ *hashIndex) Delete(_ VCursor, _ interface{}, _ key.KeyspaceId) error  { return nil }
+func (_ *hashIndex) Map(_ VCursor, _ []interface{}) ([]key.KeyspaceId, error)  { return nil, nil }
+func (_ *hashIndex) Create(_ VCursor, _ interface{}) error                     { return nil }
+func (_ *hashIndex) Delete(_ VCursor, _ []interface{}, _ key.KeyspaceId) error { return nil }
 
 func newHashIndex(_ map[string]interface{}) (Vindex, error) { return &hashIndex{}, nil }
 
@@ -40,9 +40,9 @@ func (_ *lookupIndex) Cost() int { return 2 }
 func (_ *lookupIndex) Verify(_ VCursor, _ interface{}, _ key.KeyspaceId) (bool, error) {
 	return false, nil
 }
-func (_ *lookupIndex) Map(_ VCursor, _ []interface{}) ([]key.KeyspaceId, error) { return nil, nil }
-func (_ *lookupIndex) Create(_ VCursor, _ interface{}, _ key.KeyspaceId) error  { return nil }
-func (_ *lookupIndex) Delete(_ VCursor, _ interface{}, _ key.KeyspaceId) error  { return nil }
+func (_ *lookupIndex) Map(_ VCursor, _ []interface{}) ([]key.KeyspaceId, error)  { return nil, nil }
+func (_ *lookupIndex) Create(_ VCursor, _ interface{}, _ key.KeyspaceId) error   { return nil }
+func (_ *lookupIndex) Delete(_ VCursor, _ []interface{}, _ key.KeyspaceId) error { return nil }
 
 func newLookupIndex(_ map[string]interface{}) (Vindex, error) { return &lookupIndex{}, nil }
 
@@ -55,7 +55,7 @@ func (_ *multiIndex) Verify(_ VCursor, _ interface{}, _ key.KeyspaceId) (bool, e
 }
 func (_ *multiIndex) Map(_ VCursor, _ []interface{}) ([][]key.KeyspaceId, error) { return nil, nil }
 func (_ *multiIndex) Create(_ VCursor, _ interface{}, _ key.KeyspaceId) error    { return nil }
-func (_ *multiIndex) Delete(_ VCursor, _ interface{}, _ key.KeyspaceId) error    { return nil }
+func (_ *multiIndex) Delete(_ VCursor, _ []interface{}, _ key.KeyspaceId) error  { return nil }
 
 func newMultiIndex(_ map[string]interface{}) (Vindex, error) { return &multiIndex{}, nil }
 

@@ -27,7 +27,7 @@ func init() {
 
 func TestHashConvert(t *testing.T) {
 	cases := []struct {
-		in  uint64
+		in  int64
 		out string
 	}{
 		{1, "\x16k@\xb4J\xbaK\xd6"},
@@ -53,7 +53,7 @@ func TestHashConvert(t *testing.T) {
 
 func BenchmarkHashConvert(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		vhash(uint64(i))
+		vhash(int64(i))
 	}
 }
 
@@ -96,7 +96,7 @@ func TestHashReverseMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if got.(uint64) != 1 {
+	if got.(int64) != 1 {
 		t.Errorf("ReverseMap(): %+v, want 1", got)
 	}
 }
@@ -151,7 +151,7 @@ func TestHashGenerate(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if got.(uint64) != 1 {
+	if got != 1 {
 		t.Errorf("Generate(): %+v, want 1", got)
 	}
 	wantQuery := &tproto.BoundQuery{
@@ -167,14 +167,14 @@ func TestHashGenerate(t *testing.T) {
 
 func TestHashDelete(t *testing.T) {
 	vc := &vcursor{}
-	err := hash.Delete(vc, 1, "")
+	err := hash.Delete(vc, []interface{}{1}, "")
 	if err != nil {
 		t.Error(err)
 	}
 	wantQuery := &tproto.BoundQuery{
-		Sql: "delete from t where c = :c",
+		Sql: "delete from t where c in ::c",
 		BindVariables: map[string]interface{}{
-			"c": 1,
+			"c": []interface{}{1},
 		},
 	}
 	if !reflect.DeepEqual(vc.query, wantQuery) {

@@ -6,6 +6,7 @@
   "Table": "",
   "Original":"update nouser set val = 1",
   "Rewritten":"",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":null
@@ -19,6 +20,7 @@
   "Table": "",
   "Original":"delete from nouser",
   "Rewritten":"",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":null
@@ -32,6 +34,7 @@
   "Table":"main1",
   "Original": "update main1 set val = 1",
   "Rewritten":"update main1 set val = 1",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":null
@@ -45,6 +48,7 @@
   "Table":"main1",
   "Original": "delete from main1",
   "Rewritten":"delete from main1",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":null
@@ -58,6 +62,7 @@
   "Table": "user",
   "Original": "update user set val = 1",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -71,6 +76,7 @@
   "Table": "user",
   "Original": "delete from user",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -84,6 +90,7 @@
   "Table": "user",
   "Original": "update user set val = 1 where id = 1",
   "Rewritten": "update user set val = 1 where id = 1",
+  "Subquery": "",
   "Vindex": "user_index",
   "Col": "id",
   "Values": 1
@@ -97,9 +104,38 @@
   "Table": "user",
   "Original": "delete from user where id = 1",
   "Rewritten": "delete from user where id = 1",
+  "Subquery": "select id, name from user where id = 1 for update",
   "Vindex": "user_index",
   "Col": "id",
   "Values": 1
+}
+
+# update KEYRANGE
+"update user set val = 1 where keyrange(1, 2)"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "Table": "user",
+  "Original": "update user set val = 1 where keyrange(1, 2)",
+  "Rewritten": "",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": null
+}
+
+# delete KEYRANGE
+"delete from user where keyrange(1, 2)"
+{
+  "ID": "NoPlan",
+  "Reason": "too complex",
+  "Table": "user",
+  "Original": "delete from user where keyrange(1, 2)",
+  "Rewritten": "",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": null
 }
 
 # update with primary id through IN clause
@@ -110,6 +146,7 @@
   "Table": "user",
   "Original": "update user set val = 1 where id in (1, 2)",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -123,6 +160,7 @@
   "Table": "user",
   "Original": "delete from user where id in (1, 2)",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -136,6 +174,7 @@
   "Table": "user",
   "Original": "update user set val = 1 where name = 'foo'",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -149,6 +188,7 @@
   "Table": "user",
   "Original": "delete from user where name = 'foo'",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -162,6 +202,7 @@
   "Table": "user",
   "Original": "update user set val = 1 where user_id = 1",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -175,6 +216,7 @@
   "Table": "user",
   "Original": "delete from user where user_id = 1",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -188,6 +230,7 @@
   "Table": "music",
   "Original": "update music set val = 1 where id = 1",
   "Rewritten": "update music set val = 1 where id = 1",
+  "Subquery": "",
   "Vindex": "music_user_map",
   "Col": "id",
   "Values": 1
@@ -201,8 +244,23 @@
   "Table": "music",
   "Original": "delete from music where id = 1",
   "Rewritten": "delete from music where id = 1",
+  "Subquery": "select id from music where id = 1 for update",
   "Vindex": "music_user_map",
   "Col": "id",
+  "Values": 1
+}
+
+# delete from, no owned vindexes
+"delete from music_extra where user_id = 1"
+{
+  "ID": "DeleteEqual",
+  "Reason": "",
+  "Table": "music_extra",
+  "Original": "delete from music_extra where user_id = 1",
+  "Rewritten": "delete from music_extra where user_id = 1",
+  "Subquery": "",
+  "Vindex": "user_index",
+  "Col": "user_id",
   "Values": 1
 }
 
@@ -214,6 +272,7 @@
   "Table": "music",
   "Original": "update music set val = 1 where id in (1, 2)",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -227,6 +286,7 @@
   "Table": "music",
   "Original": "delete from music where id in (1, 2)",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -240,6 +300,7 @@
   "Table": "music",
   "Original": "update music set id = 1 where id = 1",
   "Rewritten": "",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null

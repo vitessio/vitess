@@ -19,6 +19,15 @@
             "From": "music_id",
             "To": "user_id"
           }
+        },
+        "name_user_map": {
+          "Type": "lookup_hash_multi",
+          "Owner": "user",
+          "Params": {
+            "Table": "name_user_map",
+            "From": "name",
+            "To": "user_id"
+          }
         }
       },
       "Tables": {
@@ -27,6 +36,10 @@
             {
               "Col": "id",
               "Name": "user_index"
+            },
+            {
+              "Col": "name",
+              "Name": "name_user_map"
             }
           ]
         },
@@ -80,7 +93,8 @@
       "Sharded": false,
       "Tables": {
         "user_idx":{},
-        "music_user_map":{}
+        "music_user_map":{},
+        "name_user_map":{}
       }
     }
   }

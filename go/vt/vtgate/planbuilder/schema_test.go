@@ -20,7 +20,7 @@ func (_ *stFU) Cost() int                                                       
 func (_ *stFU) Verify(_ VCursor, _ interface{}, _ key.KeyspaceId) (bool, error) { return false, nil }
 func (_ *stFU) Map(_ VCursor, _ []interface{}) ([]key.KeyspaceId, error)        { return nil, nil }
 func (_ *stFU) Create(_ VCursor, _ interface{}) error                           { return nil }
-func (_ *stFU) Delete(_ VCursor, _ interface{}, _ key.KeyspaceId) error         { return nil }
+func (_ *stFU) Delete(_ VCursor, _ []interface{}, _ key.KeyspaceId) error       { return nil }
 
 func NewSTFU(params map[string]interface{}) (Vindex, error) {
 	return &stFU{Params: params}, nil
@@ -34,7 +34,7 @@ type stF struct {
 func (_ *stF) Cost() int                                                       { return 0 }
 func (_ *stF) Verify(_ VCursor, _ interface{}, _ key.KeyspaceId) (bool, error) { return false, nil }
 func (_ *stF) Create(_ VCursor, _ interface{}) error                           { return nil }
-func (_ *stF) Delete(_ VCursor, _ interface{}, _ key.KeyspaceId) error         { return nil }
+func (_ *stF) Delete(_ VCursor, _ []interface{}, _ key.KeyspaceId) error       { return nil }
 
 func NewSTF(params map[string]interface{}) (Vindex, error) {
 	return &stF{Params: params}, nil
@@ -49,7 +49,7 @@ func (_ *stLN) Cost() int                                                       
 func (_ *stLN) Verify(_ VCursor, _ interface{}, _ key.KeyspaceId) (bool, error) { return false, nil }
 func (_ *stLN) Map(_ VCursor, _ []interface{}) ([][]key.KeyspaceId, error)      { return nil, nil }
 func (_ *stLN) Create(_ VCursor, _ interface{}, _ key.KeyspaceId) error         { return nil }
-func (_ *stLN) Delete(_ VCursor, _ interface{}, _ key.KeyspaceId) error         { return nil }
+func (_ *stLN) Delete(_ VCursor, _ []interface{}, _ key.KeyspaceId) error       { return nil }
 
 func NewSTLN(params map[string]interface{}) (Vindex, error) {
 	return &stLN{Params: params}, nil
@@ -64,7 +64,7 @@ func (_ *stLU) Cost() int                                                       
 func (_ *stLU) Verify(_ VCursor, _ interface{}, _ key.KeyspaceId) (bool, error) { return false, nil }
 func (_ *stLU) Map(_ VCursor, _ []interface{}) ([]key.KeyspaceId, error)        { return nil, nil }
 func (_ *stLU) Create(_ VCursor, _ interface{}, _ key.KeyspaceId) error         { return nil }
-func (_ *stLU) Delete(_ VCursor, _ interface{}, _ key.KeyspaceId) error         { return nil }
+func (_ *stLU) Delete(_ VCursor, _ []interface{}, _ key.KeyspaceId) error       { return nil }
 
 func NewSTLU(params map[string]interface{}) (Vindex, error) {
 	return &stLU{Params: params}, nil
@@ -180,6 +180,7 @@ func TestShardedSchemaOwned(t *testing.T) {
 		want.Tables["t1"].ColVindexes[1],
 		want.Tables["t1"].ColVindexes[0],
 	}
+	want.Tables["t1"].Owned = want.Tables["t1"].ColVindexes
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("BuildSchema:s\n%v, want\n%v", got, want)
 	}

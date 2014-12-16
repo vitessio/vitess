@@ -37,7 +37,7 @@ func NewHashVindex(m map[string]interface{}) (planbuilder.Vindex, error) {
 		Table:  t,
 		Column: c,
 		ins:    fmt.Sprintf("insert into %s(%s) values(:%s)", t, c, c),
-		del:    fmt.Sprintf("delete from %s where %s = :%s", t, c, c),
+		del:    fmt.Sprintf("delete from %s where %s in ::%s", t, c, c),
 	}, nil
 }
 
@@ -82,7 +82,7 @@ func (vind *HashVindex) Create(vcursor planbuilder.VCursor, id interface{}) erro
 	return nil
 }
 
-func (vind *HashVindex) Generate(vcursor planbuilder.VCursor) (id interface{}, err error) {
+func (vind *HashVindex) Generate(vcursor planbuilder.VCursor) (id int64, err error) {
 	bq := &tproto.BoundQuery{
 		Sql: vind.ins,
 		BindVariables: map[string]interface{}{
@@ -91,16 +91,16 @@ func (vind *HashVindex) Generate(vcursor planbuilder.VCursor) (id interface{}, e
 	}
 	result, err := vcursor.Execute(bq)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-	return result.InsertId, err
+	return int64(result.InsertId), err
 }
 
-func (vind *HashVindex) Delete(vcursor planbuilder.VCursor, id interface{}, _ key.KeyspaceId) error {
+func (vind *HashVindex) Delete(vcursor planbuilder.VCursor, ids []interface{}, _ key.KeyspaceId) error {
 	bq := &tproto.BoundQuery{
 		Sql: vind.del,
 		BindVariables: map[string]interface{}{
-			vind.Column: id,
+			vind.Column: ids,
 		},
 	}
 	if _, err := vcursor.Execute(bq); err != nil {
@@ -109,20 +109,20 @@ func (vind *HashVindex) Delete(vcursor planbuilder.VCursor, id interface{}, _ ke
 	return nil
 }
 
-func getNumber(v interface{}) (uint64, error) {
+func getNumber(v interface{}) (int64, error) {
 	switch v := v.(type) {
 	case int:
-		return uint64(v), nil
+		return int64(v), nil
 	case int32:
-		return uint64(v), nil
+		return int64(v), nil
 	case int64:
-		return uint64(v), nil
-	case uint:
-		return uint64(v), nil
-	case uint32:
-		return uint64(v), nil
-	case uint64:
 		return v, nil
+	case uint:
+		return int64(v), nil
+	case uint32:
+		return int64(v), nil
+	case uint64:
+		return int64(v), nil
 	}
 	return 0, fmt.Errorf("unexpected type for %v: %T", v, v)
 }
@@ -138,18 +138,18 @@ func init() {
 	planbuilder.Register("hash", NewHashVindex)
 }
 
-func vhash(shardKey uint64) key.KeyspaceId {
+func vhash(shardKey int64) key.KeyspaceId {
 	var keybytes, hashed [8]byte
-	binary.BigEndian.PutUint64(keybytes[:], shardKey)
+	binary.BigEndian.PutUint64(keybytes[:], uint64(shardKey))
 	block3DES.Encrypt(hashed[:], keybytes[:])
 	return key.KeyspaceId(hashed[:])
 }
 
-func vunhash(k key.KeyspaceId) uint64 {
+func vunhash(k key.KeyspaceId) int64 {
 	if len(k) != 8 {
 		panic(fmt.Errorf("invalid keyspace id: %+q", k))
 	}
 	var unhashed [8]byte
 	block3DES.Decrypt(unhashed[:], []byte(k))
-	return binary.BigEndian.Uint64(unhashed[:])
+	return int64(binary.BigEndian.Uint64(unhashed[:]))
 }

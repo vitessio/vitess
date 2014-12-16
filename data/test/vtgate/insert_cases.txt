@@ -6,6 +6,7 @@
   "Table":"main1",
   "Original":"insert into main1 values(1, 2)",
   "Rewritten":"insert into main1 values (1, 2)",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":null
@@ -19,6 +20,7 @@
   "Table": "user",
   "Original":"insert into user values(1, 2, 3)",
   "Rewritten":"",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values": null
@@ -32,6 +34,7 @@
   "Table":"user",
   "Original":"insert into user(id) select 1 from dual",
   "Rewritten":"",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":null
@@ -45,6 +48,7 @@
   "Table":"user",
   "Original":"insert into user(id) values (1), (2)",
   "Rewritten":"",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":null
@@ -58,6 +62,7 @@
   "Table":"user",
   "Original":"insert into user(id) values (select 1 from dual)",
   "Rewritten":"",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":null
@@ -71,6 +76,7 @@
   "Table":"user",
   "Original":"insert into user(id) values (1, 2)",
   "Rewritten":"",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":null
@@ -84,6 +90,7 @@
   "Table":"user",
   "Original":"insert into user(id) values (1)",
   "Rewritten":"insert into user(id, name) values (:_id, :_name)",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":[1, null]
@@ -97,6 +104,7 @@
   "Table":"user",
   "Original":"insert into user(nonid) values (2)",
   "Rewritten":"insert into user(nonid, id, name) values (2, :_id, :_name)",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":[null, null]
@@ -110,6 +118,7 @@
   "Table":"user",
   "Original":"insert into user(nonid, name, id) values (2, 'foo', 1)",
   "Rewritten":"insert into user(nonid, name, id) values (2, :_name, :_id)",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":[1,"Zm9v"]
@@ -123,6 +132,7 @@
   "Table":"music_extra",
   "Original":"insert into music_extra(music_id, user_id) values(1, 1.1)",
   "Rewritten":"",
+  "Subquery": "",
   "Vindex": "",
   "Col": "",
   "Values":null

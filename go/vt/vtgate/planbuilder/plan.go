@@ -18,6 +18,7 @@ const (
 	SelectUnsharded
 	SelectEqual
 	SelectIN
+	SelectKeyrange
 	SelectScatter
 	UpdateUnsharded
 	UpdateEqual
@@ -34,6 +35,7 @@ var planName = [NumPlans]string{
 	"SelectUnsharded",
 	"SelectEqual",
 	"SelectIN",
+	"SelectKeyrange",
 	"SelectScatter",
 	"UpdateUnsharded",
 	"UpdateEqual",
@@ -49,6 +51,7 @@ type Plan struct {
 	Table     *Table
 	Original  string
 	Rewritten string
+	Subquery  string
 	ColVindex *ColVindex
 	Values    interface{}
 }
@@ -72,6 +75,7 @@ func (pln *Plan) MarshalJSON() ([]byte, error) {
 		Table     string
 		Original  string
 		Rewritten string
+		Subquery  string
 		Vindex    string
 		Col       string
 		Values    interface{}
@@ -81,6 +85,7 @@ func (pln *Plan) MarshalJSON() ([]byte, error) {
 		Table:     tname,
 		Original:  pln.Original,
 		Rewritten: pln.Rewritten,
+		Subquery:  pln.Subquery,
 		Vindex:    vindexName,
 		Col:       col,
 		Values:    pln.Values,

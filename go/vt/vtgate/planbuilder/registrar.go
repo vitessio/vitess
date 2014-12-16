@@ -76,7 +76,7 @@ type Reversible interface {
 // for an insert operation.
 type Functional interface {
 	Create(cursor VCursor, id interface{}) error
-	Delete(cursor VCursor, id interface{}, keyspace_id key.KeyspaceId) error
+	Delete(cursor VCursor, ids []interface{}, keyspace_id key.KeyspaceId) error
 	Unique
 }
 
@@ -84,7 +84,7 @@ type Functional interface {
 // that can generate new ids.
 type FunctionalGenerator interface {
 	Functional
-	Generate(cursor VCursor) (id interface{}, err error)
+	Generate(cursor VCursor) (id int64, err error)
 }
 
 // A Lookup vindex is one that needs to lookup
@@ -97,14 +97,14 @@ type FunctionalGenerator interface {
 // to determine the target shard for an insert operation.
 type Lookup interface {
 	Create(cursor VCursor, id interface{}, keyspace_id key.KeyspaceId) error
-	Delete(cursor VCursor, id interface{}, keyspace_id key.KeyspaceId) error
+	Delete(cursor VCursor, ids []interface{}, keyspace_id key.KeyspaceId) error
 }
 
 // A LookupGenerator vindex is a Lookup that can
 // generate new ids.
 type LookupGenerator interface {
 	Lookup
-	Generate(cursor VCursor, keyspace_id key.KeyspaceId) (id interface{}, err error)
+	Generate(cursor VCursor, keyspace_id key.KeyspaceId) (id int64, err error)
 }
 
 // A NewVindexFunc is a function that creates a Vindex based on the
