@@ -8,9 +8,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -188,11 +188,11 @@ type Server interface {
 
 	// LockSrvShardForAction locks the serving shard in order to
 	// perform the action described by contents. It will wait for
-	// the lock for at most duration. The wait can be interrupted
-	// if the interrupted channel is closed. It returns the lock
-	// path.
+	// the lock until at most ctx.Done(). The wait can be interrupted
+	// by cancelling the context. It returns the lock path.
+	//
 	// Can return ErrTimeout or ErrInterrupted.
-	LockSrvShardForAction(cell, keyspace, shard, contents string, timeout time.Duration, interrupted chan struct{}) (string, error)
+	LockSrvShardForAction(ctx context.Context, cell, keyspace, shard, contents string) (string, error)
 
 	// UnlockSrvShardForAction unlocks a serving shard.
 	UnlockSrvShardForAction(cell, keyspace, shard, lockPath, results string) error
@@ -251,22 +251,22 @@ type Server interface {
 
 	// LockKeyspaceForAction locks the keyspace in order to
 	// perform the action described by contents. It will wait for
-	// the lock for at most duration. The wait can be interrupted
-	// if the interrupted channel is closed. It returns the lock
-	// path.
+	// the lock until at most ctx.Done(). The wait can be interrupted
+	// by cancelling the context. It returns the lock path.
+	//
 	// Can return ErrTimeout or ErrInterrupted
-	LockKeyspaceForAction(keyspace, contents string, timeout time.Duration, interrupted chan struct{}) (string, error)
+	LockKeyspaceForAction(ctx context.Context, keyspace, contents string) (string, error)
 
 	// UnlockKeyspaceForAction unlocks a keyspace.
 	UnlockKeyspaceForAction(keyspace, lockPath, results string) error
 
 	// LockShardForAction locks the shard in order to
 	// perform the action described by contents. It will wait for
-	// the lock for at most duration. The wait can be interrupted
-	// if the interrupted channel is closed. It returns the lock
-	// path.
+	// the lock until at most ctx.Done(). The wait can be interrupted
+	// by cancelling the context. It returns the lock path.
+	//
 	// Can return ErrTimeout or ErrInterrupted
-	LockShardForAction(keyspace, shard, contents string, timeout time.Duration, interrupted chan struct{}) (string, error)
+	LockShardForAction(ctx context.Context, keyspace, shard, contents string) (string, error)
 
 	// UnlockShardForAction unlocks a shard.
 	UnlockShardForAction(keyspace, shard, lockPath, results string) error

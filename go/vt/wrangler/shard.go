@@ -7,16 +7,18 @@ package wrangler
 import (
 	"fmt"
 
-	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 // shard related methods for Wrangler
 
 func (wr *Wrangler) lockShard(keyspace, shard string, actionNode *actionnode.ActionNode) (lockPath string, err error) {
-	return actionNode.LockShard(context.TODO(), wr.ts, keyspace, shard, wr.lockTimeout, interrupted)
+	ctx, cancel := context.WithTimeout(wr.ctx, wr.lockTimeout)
+	defer cancel()
+	return actionNode.LockShard(ctx, wr.ts, keyspace, shard)
 }
 
 func (wr *Wrangler) unlockShard(keyspace, shard string, actionNode *actionnode.ActionNode, lockPath string, actionError error) error {

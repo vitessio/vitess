@@ -15,8 +15,8 @@ import (
 	"reflect"
 	"sync"
 
-	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/trace"
+	"golang.org/x/net/context"
 )
 
 // ServerError represents an error that has been returned from

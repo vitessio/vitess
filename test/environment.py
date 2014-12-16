@@ -9,6 +9,7 @@ import subprocess
 # Import the topo implementations that you want registered as options for the
 # --topo-server-flavor flag.
 import topo_flavor.zookeeper
+import topo_flavor.etcd
 
 from topo_flavor.server import topo_server
 

@@ -174,7 +174,10 @@ func main() {
 		}
 		fmt.Fprintf(os.Stderr, "\n")
 	}
-	dbconfigs.RegisterFlags()
+
+	flags := dbconfigs.AppConfig | dbconfigs.DbaConfig |
+		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
+	dbconfigs.RegisterFlags(flags)
 	flag.Parse()
 
 	tabletAddr = fmt.Sprintf("%v:%v", "localhost", *port)
@@ -184,7 +187,7 @@ func main() {
 		mycnf.SocketFile = *mysqlSocket
 	}
 
-	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile)
+	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, flags)
 	if err != nil {
 		log.Fatalf("%v", err)
 	}

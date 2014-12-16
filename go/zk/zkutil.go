@@ -341,7 +341,7 @@ func DeleteRecursive(zconn Conn, zkPath string, version int) error {
 // numbering that don't hold when the data in a lock is modified.
 // if the provided 'interrupted' chan is closed, we'll just stop waiting
 // and return an interruption error
-func ObtainQueueLock(zconn Conn, zkPath string, wait time.Duration, interrupted chan struct{}) error {
+func ObtainQueueLock(zconn Conn, zkPath string, wait time.Duration, interrupted <-chan struct{}) error {
 	queueNode := path.Dir(zkPath)
 	lockNode := path.Base(zkPath)
 

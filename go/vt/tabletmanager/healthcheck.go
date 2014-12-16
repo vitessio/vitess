@@ -14,7 +14,7 @@ import (
 	"reflect"
 	"time"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/timer"
@@ -279,11 +279,10 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topo.TabletType
 // rebuildShardIfNeeded will rebuild the serving graph if we need to
 func (agent *ActionAgent) rebuildShardIfNeeded(tablet *topo.TabletInfo, targetTabletType topo.TabletType) error {
 	if topo.IsInServingGraph(targetTabletType) {
-		// TODO: interrupted may need to be a global one closed when we exit
-		interrupted := make(chan struct{})
+		ctx := context.Background()
 
 		// no need to take the shard lock in this case
-		if _, err := topotools.RebuildShard(context.TODO(), logutil.NewConsoleLogger(), agent.TopoServer, tablet.Keyspace, tablet.Shard, []string{tablet.Alias.Cell}, agent.LockTimeout, interrupted); err != nil {
+		if _, err := topotools.RebuildShard(ctx, logutil.NewConsoleLogger(), agent.TopoServer, tablet.Keyspace, tablet.Shard, []string{tablet.Alias.Cell}, agent.LockTimeout); err != nil {
 			return fmt.Errorf("topotools.RebuildShard returned an error: %v", err)
 		}
 	}

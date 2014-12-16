@@ -42,7 +42,7 @@ class GoRpcProtocolsFlavor(ProtocolsFlavor):
     return ['-tablet_protocol', 'gorpc']
 
   def rpc_timeout_message(self):
-    return 'Timeout waiting for'
+    return 'timeout waiting for'
 
 __knows_protocols_flavor_map = {
   'gorpc': GoRpcProtocolsFlavor,

@@ -22,6 +22,17 @@ var DefaultDBConfigs = DBConfigs{}
 // the flags will change
 var dbConfigs DBConfigs
 
+type DBConfigFlag int
+
+// config flags
+const (
+	EmptyConfig DBConfigFlag = 0
+	AppConfig   DBConfigFlag = 1 << iota
+	DbaConfig
+	FilteredConfig
+	ReplConfig
+)
+
 // The flags will change the global singleton
 func registerConnFlags(connParams *mysql.ConnectionParams, name string, defaultParams mysql.ConnectionParams) {
 	flag.StringVar(&connParams.Host, "db-config-"+name+"-host", defaultParams.Host, "db "+name+" connection host")
@@ -36,17 +47,34 @@ func registerConnFlags(connParams *mysql.ConnectionParams, name string, defaultP
 	flag.StringVar(&connParams.SslCaPath, "db-config-"+name+"-ssl-ca-path", defaultParams.SslCaPath, "db "+name+" connection ssl ca path")
 	flag.StringVar(&connParams.SslCert, "db-config-"+name+"-ssl-cert", defaultParams.SslCert, "db "+name+" connection ssl certificate")
 	flag.StringVar(&connParams.SslKey, "db-config-"+name+"-ssl-key", defaultParams.SslKey, "db "+name+" connection ssl key")
-
 }
 
 // vttablet will register client, dba and repl.
-func RegisterFlags() {
-	registerConnFlags(&dbConfigs.Dba, "dba", DefaultDBConfigs.Dba)
-	registerConnFlags(&dbConfigs.Filtered, "filtered", DefaultDBConfigs.Filtered)
-	registerConnFlags(&dbConfigs.Repl, "repl", DefaultDBConfigs.Repl)
-	registerConnFlags(&dbConfigs.App.ConnectionParams, "app", DefaultDBConfigs.App.ConnectionParams)
+// return is all registered flags
+func RegisterFlags(flags DBConfigFlag) DBConfigFlag {
+	if flags == EmptyConfig {
+		panic("No DB config is provided.")
+	}
+	registeredFlags := EmptyConfig
+	if AppConfig&flags != 0 {
+		registerConnFlags(&dbConfigs.App.ConnectionParams, "app", DefaultDBConfigs.App.ConnectionParams)
+		registeredFlags |= AppConfig
+	}
+	if DbaConfig&flags != 0 {
+		registerConnFlags(&dbConfigs.Dba, "dba", DefaultDBConfigs.Dba)
+		registeredFlags |= DbaConfig
+	}
+	if FilteredConfig&flags != 0 {
+		registerConnFlags(&dbConfigs.Filtered, "filtered", DefaultDBConfigs.Filtered)
+		registeredFlags |= FilteredConfig
+	}
+	if ReplConfig&flags != 0 {
+		registerConnFlags(&dbConfigs.Repl, "repl", DefaultDBConfigs.Repl)
+		registeredFlags |= ReplConfig
+	}
 	flag.StringVar(&dbConfigs.App.Keyspace, "db-config-app-keyspace", DefaultDBConfigs.App.Keyspace, "db app connection keyspace")
 	flag.StringVar(&dbConfigs.App.Shard, "db-config-app-shard", DefaultDBConfigs.App.Shard, "db app connection shard")
+	return registeredFlags
 }
 
 // InitConnectionParams may overwrite the socket file,
@@ -132,20 +160,30 @@ func (dbcfgs *DBConfigs) Redact() {
 }
 
 // Initialize app, dba, filterec and repl configs
-func Init(socketFile string) (*DBConfigs, error) {
-	if err := InitConnectionParams(&dbConfigs.App.ConnectionParams, socketFile); err != nil {
-		return nil, err
+func Init(socketFile string, flags DBConfigFlag) (*DBConfigs, error) {
+	if flags == EmptyConfig {
+		panic("No DB config is provided.")
 	}
-	if err := InitConnectionParams(&dbConfigs.Dba, socketFile); err != nil {
-		return nil, err
+	if AppConfig&flags != 0 {
+		if err := InitConnectionParams(&dbConfigs.App.ConnectionParams, socketFile); err != nil {
+			return nil, err
+		}
 	}
-	if err := InitConnectionParams(&dbConfigs.Filtered, socketFile); err != nil {
-		return nil, err
+	if DbaConfig&flags != 0 {
+		if err := InitConnectionParams(&dbConfigs.Dba, socketFile); err != nil {
+			return nil, err
+		}
 	}
-	if err := InitConnectionParams(&dbConfigs.Repl, socketFile); err != nil {
-		return nil, err
+	if FilteredConfig&flags != 0 {
+		if err := InitConnectionParams(&dbConfigs.Filtered, socketFile); err != nil {
+			return nil, err
+		}
 	}
-
+	if ReplConfig&flags != 0 {
+		if err := InitConnectionParams(&dbConfigs.Repl, socketFile); err != nil {
+			return nil, err
+		}
+	}
 	// the Dba connection is not linked to a specific database
 	// (allows us to create them)
 	dbConfigs.Dba.DbName = ""

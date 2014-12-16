@@ -186,6 +186,9 @@ google.setOnLoadCallback(function() {
 `
 )
 
+// For use by plugins which wish to avoid racing when registering status page parts.
+var onStatusRegistered func()
+
 func init() {
 	servenv.OnRun(func() {
 		servenv.AddStatusPart("Topology Cache", topoTemplate, func() interface{} {
@@ -194,5 +197,8 @@ func init() {
 		servenv.AddStatusPart("Stats", statsTemplate, func() interface{} {
 			return nil
 		})
+		if onStatusRegistered != nil {
+			onStatusRegistered()
+		}
 	})
 }

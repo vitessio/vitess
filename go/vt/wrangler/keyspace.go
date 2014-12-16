@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"sync"
 
-	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/event"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/concurrency"
@@ -18,12 +17,15 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/topotools/events"
+	"golang.org/x/net/context"
 )
 
 // keyspace related methods for Wrangler
 
 func (wr *Wrangler) lockKeyspace(keyspace string, actionNode *actionnode.ActionNode) (lockPath string, err error) {
-	return actionNode.LockKeyspace(context.TODO(), wr.ts, keyspace, wr.lockTimeout, interrupted)
+	ctx, cancel := context.WithTimeout(wr.ctx, wr.lockTimeout)
+	defer cancel()
+	return actionNode.LockKeyspace(ctx, wr.ts, keyspace)
 }
 
 func (wr *Wrangler) unlockKeyspace(keyspace string, actionNode *actionnode.ActionNode, lockPath string, actionError error) error {

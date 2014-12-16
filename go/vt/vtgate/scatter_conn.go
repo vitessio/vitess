@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/go.net/context"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
@@ -20,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
+	"golang.org/x/net/context"
 )
 
 var idGen sync2.AtomicInt64

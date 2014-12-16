@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/jscfg"
@@ -325,10 +325,11 @@ func (scw *SplitCloneWorker) findTargets() error {
 		}
 
 		ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
-		if err := scw.wr.TabletManagerClient().StopSlave(ctx, scw.sourceTablets[i]); err != nil {
+		err := scw.wr.TabletManagerClient().StopSlave(ctx, scw.sourceTablets[i])
+		cancel()
+		if err != nil {
 			return fmt.Errorf("cannot stop replication on tablet %v", alias)
 		}
-		cancel()
 
 		wrangler.RecordStartSlaveAction(scw.cleaner, scw.sourceTablets[i], 30*time.Second)
 		action, err := wrangler.FindChangeSlaveTypeActionByTarget(scw.cleaner, alias)
@@ -562,10 +563,10 @@ func (scw *SplitCloneWorker) copy() error {
 		for shardIndex, _ := range scw.sourceShards {
 			ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
 			status, err := scw.wr.TabletManagerClient().SlaveStatus(ctx, scw.sourceTablets[shardIndex])
+			cancel()
 			if err != nil {
 				return err
 			}
-			cancel()
 
 			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(0, status.Position, time.Now().Unix(), flags))
 		}
@@ -613,10 +614,11 @@ func (scw *SplitCloneWorker) copy() error {
 				defer destinationWaitGroup.Done()
 				scw.wr.Logger().Infof("Reloading schema on tablet %v", ti.Alias)
 				ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
-				if err := scw.wr.TabletManagerClient().ReloadSchema(ctx, ti); err != nil {
+				err := scw.wr.TabletManagerClient().ReloadSchema(ctx, ti)
+				cancel()
+				if err != nil {
 					processError("ReloadSchema failed on tablet %v: %v", ti.Alias, err)
 				}
-				cancel()
 			}(scw.reloadTablets[shardIndex][tabletAlias])
 		}
 	}
