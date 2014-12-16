@@ -202,7 +202,7 @@ ALL_DB_TYPES = ['master', 'replica', 'rdonly']
 class TestKeyspace(unittest.TestCase):
   def _read_keyspace(self, keyspace_name):
     global vtgate_port
-    vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
+    vtgate_client = zkocc.ZkOccConnection("localhost:%d" % vtgate_port,
                                         "test_nj", 30.0)
     return keyspace.read_keyspace(vtgate_client, keyspace_name)
 

@@ -157,7 +157,7 @@ index by_msg (msg)
   def _insert_startup_value(self, tablet, table, id, msg):
     tablet.mquery('vt_test_keyspace', [
         'begin',
-        'insert into %s(id, msg) values(%u, "%s")' % (table, id, msg),
+        'insert into %s(id, msg) values(%d, "%s")' % (table, id, msg),
         'commit'
         ], write=True)
 
@@ -181,15 +181,15 @@ index by_msg (msg)
     if keyspace_id_type == keyrange_constants.KIT_BYTES:
       k = base64.b64encode(pack_keyspace_id(keyspace_id))
     else:
-      k = "%u" % keyspace_id
+      k = "%d" % keyspace_id
     tablet.mquery('vt_test_keyspace', [
         'begin',
-        'insert into %s(id, msg, keyspace_id) values(%u, "%s", 0x%x) /* EMD keyspace_id:%s user_id:%u */' % (table, id, msg, keyspace_id, k, id),
+        'insert into %s(id, msg, keyspace_id) values(%d, "%s", 0x%x) /* EMD keyspace_id:%s user_id:%d */' % (table, id, msg, keyspace_id, k, id),
         'commit'
         ], write=True)
 
   def _get_value(self, tablet, table, id):
-    return tablet.mquery('vt_test_keyspace', 'select id, msg, keyspace_id from %s where id=%u' % (table, id))
+    return tablet.mquery('vt_test_keyspace', 'select id, msg, keyspace_id from %s where id=%d' % (table, id))
 
   def _check_value(self, tablet, table, id, msg, keyspace_id,
                    should_be_here=True):
@@ -201,12 +201,12 @@ index by_msg (msg)
       fmt = "%x"
     if should_be_here:
       self.assertEqual(result, ((id, msg, keyspace_id),),
-                       ("Bad row in tablet %s for id=%u, keyspace_id=" +
+                       ("Bad row in tablet %s for id=%d, keyspace_id=" +
                         fmt + ", row=%s") % (tablet.tablet_alias, id,
                                              keyspace_id, str(result)))
     else:
       self.assertEqual(len(result), 0,
-                       ("Extra row in tablet %s for id=%u, keyspace_id=" +
+                       ("Extra row in tablet %s for id=%d, keyspace_id=" +
                         fmt + ": %s") % (tablet.tablet_alias, id, keyspace_id,
                                          str(result)))
 
@@ -224,7 +224,7 @@ index by_msg (msg)
     else:
       fmt = "%x"
     self.assertEqual(result, ((id, msg, keyspace_id),),
-                     ("Bad row in tablet %s for id=%u, keyspace_id=" + fmt) % (
+                     ("Bad row in tablet %s for id=%d, keyspace_id=" + fmt) % (
                          tablet.tablet_alias, id, keyspace_id))
     return True
 
@@ -259,24 +259,24 @@ index by_msg (msg)
   def _insert_lots(self, count, base=0):
     for i in xrange(count):
       self._insert_value(shard_master, 'resharding1', 10000 + base + i,
-                         'msg-range1-%u' % i, 0xA000000000000000 + base + i)
+                         'msg-range1-%d' % i, 0xA000000000000000 + base + i)
       self._insert_value(shard_master, 'resharding1', 20000 + base + i,
-                         'msg-range2-%u' % i, 0xE000000000000000 + base + i)
+                         'msg-range2-%d' % i, 0xE000000000000000 + base + i)
 
   # _check_lots returns how many of the values we have, in percents.
   def _check_lots(self, count, base=0):
     found = 0
     for i in xrange(count):
       if self._is_value_present_and_correct(shard_1_replica, 'resharding1',
-                                            10000 + base + i, 'msg-range1-%u' %
+                                            10000 + base + i, 'msg-range1-%d' %
                                             i, 0xA000000000000000 + base + i):
         found += 1
       if self._is_value_present_and_correct(shard_1_replica, 'resharding1',
-                                            20000 + base + i, 'msg-range2-%u' %
+                                            20000 + base + i, 'msg-range2-%d' %
                                             i, 0xE000000000000000 + base + i):
         found += 1
     percent = found * 100 / count / 2
-    logging.debug("I have %u%% of the data", percent)
+    logging.debug("I have %d%% of the data", percent)
     return percent
 
   def _check_lots_timeout(self, count, threshold, timeout, base=0):
@@ -291,10 +291,10 @@ index by_msg (msg)
     found = 0
     for i in xrange(count):
       self._check_value(shard_0_replica, 'resharding1', 10000 + base + i,
-                        'msg-range1-%u' % i, 0xA000000000000000 + base + i,
+                        'msg-range1-%d' % i, 0xA000000000000000 + base + i,
                         should_be_here=False)
       self._check_value(shard_0_replica, 'resharding1', 20000 + base + i,
-                        'msg-range2-%u' % i, 0xE000000000000000 + base + i,
+                        'msg-range2-%d' % i, 0xE000000000000000 + base + i,
                         should_be_here=False)
 
   def test_resharding(self):

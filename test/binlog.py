@@ -147,7 +147,7 @@ def tearDownModule():
 
 
 def _get_update_stream(tblt):
-  return update_stream_service.UpdateStreamConnection('localhost:%u' %
+  return update_stream_service.UpdateStreamConnection('localhost:%d' %
                                                       tblt.port, 30)
 
 

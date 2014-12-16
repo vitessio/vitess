@@ -80,13 +80,13 @@ primary key (id)
     for i in xrange(100):
       for j in xrange(self.ROW_COUNT / 100):
         master.mquery('vt_test_keyspace', 'insert into lots_of_data(msg, ts) values(repeat("a", 4096), now())', write=True)
-      logging.info("Inserted %u%% of the data", i)
+      logging.info("Inserted %d%% of the data", i)
     logging.info("It took %g seconds to insert data" % (time.time() - start))
 
   # _change_random_data will change random data in the data set
   # on the master, for up to CHANGE_DURATION seconds
   def _change_random_data(self):
-    logging.info("Starting to change data for %us on the master",
+    logging.info("Starting to change data for %ds on the master",
                  self.CHANGE_DURATION)
     start = time.time()
     random.seed()
@@ -97,12 +97,12 @@ primary key (id)
       count += 100
       for i in xrange(100):
         index = random.randrange(self.ROW_COUNT)
-        queries.append('update lots_of_data set ts=now() where id=%u' % index)
+        queries.append('update lots_of_data set ts=now() where id=%d' % index)
       master.mquery('vt_test_keyspace', queries, write=True)
 
       if time.time() - start > self.CHANGE_DURATION:
         break
-    logging.info("Changed %u rows", count)
+    logging.info("Changed %d rows", count)
 
   def catch_up(self):
     start = time.time()

@@ -83,7 +83,7 @@ class TestSchema(unittest.TestCase):
   def _check_tables(self, tablet, expectedCount):
     tables = tablet.mquery('vt_test_keyspace', 'show tables')
     self.assertEqual(len(tables), expectedCount,
-                     'Unexpected table count on %s (not %u): %s' %
+                     'Unexpected table count on %s (not %d): %s' %
                      (tablet.tablet_alias, expectedCount, str(tables)))
 
   def _check_db_not_created(self, tablet):

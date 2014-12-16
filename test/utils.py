@@ -298,7 +298,7 @@ def get_vars(port):
   if we can't get them.
   """
   try:
-    url = 'http://localhost:%u/debug/vars' % int(port)
+    url = 'http://localhost:%d/debug/vars' % int(port)
     f = urllib2.urlopen(url)
     data = f.read()
     f.close()
@@ -490,7 +490,7 @@ def vtclient2(uid, path, query, bindvars=None, user=None, password=None, driver=
   # for ZK paths to not have // in the path, that confuses things
   if path.startswith('/'):
     path = path[1:]
-  server = "localhost:%u/%s" % (uid, path)
+  server = "localhost:%d/%s" % (uid, path)
 
   cmdline = environment.binary_args('vtclient2') + ['-server', server]
   cmdline += environment.topo_server().flags()
@@ -582,7 +582,7 @@ def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
                    str(ks))
 
 def get_status(port):
-  return urllib2.urlopen('http://localhost:%u%s' % (port, environment.status_url)).read()
+  return urllib2.urlopen('http://localhost:%d%s' % (port, environment.status_url)).read()
 
 def curl(url, request=None, data=None, background=False, retry_timeout=0, **kwargs):
   args = [environment.curl_bin, '--silent', '--no-buffer', '--location']
@@ -619,14 +619,14 @@ class Vtctld(object):
     self.port = environment.reserve_ports(1)
 
   def dbtopo(self):
-    data = json.load(urllib2.urlopen('http://localhost:%u/dbtopo?format=json' %
+    data = json.load(urllib2.urlopen('http://localhost:%d/dbtopo?format=json' %
                                      self.port))
     if data["Error"]:
       raise VtctldError(data)
     return data["Topology"]
 
   def serving_graph(self):
-    data = json.load(urllib2.urlopen('http://localhost:%u/serving_graph/test_nj?format=json' % self.port))
+    data = json.load(urllib2.urlopen('http://localhost:%d/serving_graph/test_nj?format=json' % self.port))
     if data['Errors']:
       raise VtctldError(data['Errors'])
     return data["Keyspaces"]
@@ -657,12 +657,12 @@ class Vtctld(object):
     if not vtctld:
       vtctld = self
       vtctld_connection = vtctl_client.connect(
-          protocols_flavor().vtctl_client_protocol(), 'localhost:%u' % self.port, 30)
+          protocols_flavor().vtctl_client_protocol(), 'localhost:%d' % self.port, 30)
 
     return self.proc
 
   def process_args(self):
-    return ['-vtctld_addr', 'http://localhost:%u/' % self.port]
+    return ['-vtctld_addr', 'http://localhost:%d/' % self.port]
 
   def vtctl_client(self, args):
     if options.verbose == 2:
@@ -675,7 +675,7 @@ class Vtctld(object):
     out, err = run(environment.binary_args('vtctlclient') +
                    ['-vtctl_client_protocol',
                     protocols_flavor().vtctl_client_protocol(),
-                    '-server', 'localhost:%u' % self.port,
+                    '-server', 'localhost:%d' % self.port,
                     '-stderrthreshold', log_level] + args,
                    trap_output=True)
     return out

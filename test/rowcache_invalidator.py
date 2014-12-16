@@ -92,7 +92,7 @@ def tearDownModule():
 
 class RowCacheInvalidator(unittest.TestCase):
   def setUp(self):
-    self.vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
+    self.vtgate_client = zkocc.ZkOccConnection("localhost:%d" % vtgate_port,
                                                "test_nj", 30.0)
     topology.read_topology(self.vtgate_client)
     self.perform_insert(400)
@@ -101,11 +101,11 @@ class RowCacheInvalidator(unittest.TestCase):
     self.perform_delete()
 
   def replica_stats(self):
-    url = "http://localhost:%u/debug/table_stats" % replica_tablet.port
+    url = "http://localhost:%d/debug/table_stats" % replica_tablet.port
     return framework.MultiDict(json.load(urllib2.urlopen(url)))
 
   def replica_vars(self):
-    url = "http://localhost:%u/debug/vars" % replica_tablet.port
+    url = "http://localhost:%d/debug/vars" % replica_tablet.port
     return framework.MultiDict(json.load(urllib2.urlopen(url)))
 
   def perform_insert(self, count):
@@ -221,12 +221,12 @@ class RowCacheInvalidator(unittest.TestCase):
     for timeout in xrange(300):
       time.sleep(0.1)
       inv_count1 = self.replica_stats()['Totals']['Invalidations']
-      logging.debug("Got %u invalidations" % inv_count1)
+      logging.debug("Got %d invalidations" % inv_count1)
       if inv_count1 == 100:
         break
     inv_count1 = self.replica_stats()['Totals']['Invalidations']
     self.assertEqual(inv_count1, 100,
-                     "Unexpected number of invalidations: %u" % inv_count1)
+                     "Unexpected number of invalidations: %d" % inv_count1)
 
     # stop replication insert more data, restart replication
     replica_tablet.mquery('vt_test_keyspace', "stop slave")
@@ -244,11 +244,11 @@ class RowCacheInvalidator(unittest.TestCase):
     for timeout in xrange(300):
       time.sleep(0.1)
       inv_count2 = self.replica_stats()['Totals']['Invalidations']
-      logging.debug("Got %u invalidations" % inv_count2)
+      logging.debug("Got %d invalidations" % inv_count2)
       if inv_count2 == 200:
         break
     inv_count2 = self.replica_stats()['Totals']['Invalidations']
-    self.assertEqual(inv_count2, 200, "Unexpected number of invalidations: %u" %
+    self.assertEqual(inv_count2, 200, "Unexpected number of invalidations: %d" %
                      inv_count2)
 
     # check and display some stats

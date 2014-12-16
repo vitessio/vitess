@@ -135,12 +135,12 @@ class InsertThread(threading.Thread):
     if keyspace_id_type == keyrange_constants.KIT_BYTES:
       self.str_keyspace_id = base64.b64encode(pack_keyspace_id(keyspace_id))
     else:
-      self.str_keyspace_id = "%u" % keyspace_id
+      self.str_keyspace_id = "%d" % keyspace_id
     self.done = False
 
     self.tablet.mquery('vt_test_keyspace', [
         'begin',
-        'insert into timestamps(name, time_milli, keyspace_id) values("%s", %u, 0x%x) /* EMD keyspace_id:%s user_id:%u */' %
+        'insert into timestamps(name, time_milli, keyspace_id) values("%s", %d, 0x%x) /* EMD keyspace_id:%s user_id:%d */' %
         (self.object_name, long(time.time() * 1000), self.keyspace_id,
          self.str_keyspace_id, self.user_id),
         'commit'
@@ -152,7 +152,7 @@ class InsertThread(threading.Thread):
       while not self.done:
         self.tablet.mquery('vt_test_keyspace', [
             'begin',
-            'update timestamps set time_milli=%u where name="%s" /* EMD keyspace_id:%s user_id:%u */' % (long(time.time() * 1000), self.object_name, self.str_keyspace_id, self.user_id),
+            'update timestamps set time_milli=%d where name="%s" /* EMD keyspace_id:%s user_id:%d */' % (long(time.time() * 1000), self.object_name, self.str_keyspace_id, self.user_id),
             'commit'
             ], write=True, user='vt_app')
         time.sleep(0.2)
@@ -181,7 +181,7 @@ class MonitorLagThread(threading.Thread):
         result = self.tablet.mquery('vt_test_keyspace', 'select time_milli from timestamps where name="%s"' % self.object_name)
         if result:
           lag = long(time.time() * 1000) - long(result[0][0])
-          logging.debug("MonitorLagThread(%s) got %u", self.object_name, lag)
+          logging.debug("MonitorLagThread(%s) got %d", self.object_name, lag)
           self.sample_count += 1
           self.lag_sum += lag
           if lag > self.max_lag:
@@ -251,15 +251,15 @@ primary key (name)
     if keyspace_id_type == keyrange_constants.KIT_BYTES:
       k = base64.b64encode(pack_keyspace_id(keyspace_id))
     else:
-      k = "%u" % keyspace_id
+      k = "%d" % keyspace_id
     tablet.mquery('vt_test_keyspace', [
         'begin',
-        'insert into %s(id, msg, keyspace_id) values(%u, "%s", 0x%x) /* EMD keyspace_id:%s user_id:%u */' % (table, id, msg, keyspace_id, k, id),
+        'insert into %s(id, msg, keyspace_id) values(%d, "%s", 0x%x) /* EMD keyspace_id:%s user_id:%d */' % (table, id, msg, keyspace_id, k, id),
         'commit'
         ], write=True)
 
   def _get_value(self, tablet, table, id):
-    return tablet.mquery('vt_test_keyspace', 'select id, msg, keyspace_id from %s where id=%u' % (table, id))
+    return tablet.mquery('vt_test_keyspace', 'select id, msg, keyspace_id from %s where id=%d' % (table, id))
 
   def _check_value(self, tablet, table, id, msg, keyspace_id,
                    should_be_here=True):
@@ -271,12 +271,12 @@ primary key (name)
       fmt = "%x"
     if should_be_here:
       self.assertEqual(result, ((id, msg, keyspace_id),),
-                       ("Bad row in tablet %s for id=%u, keyspace_id=" +
+                       ("Bad row in tablet %s for id=%d, keyspace_id=" +
                         fmt + ", row=%s") % (tablet.tablet_alias, id,
                                              keyspace_id, str(result)))
     else:
       self.assertEqual(len(result), 0,
-                       ("Extra row in tablet %s for id=%u, keyspace_id=" +
+                       ("Extra row in tablet %s for id=%d, keyspace_id=" +
                         fmt + ": %s") % (tablet.tablet_alias, id, keyspace_id,
                                          str(result)))
 
@@ -294,7 +294,7 @@ primary key (name)
     else:
       fmt = "%x"
     self.assertEqual(result, ((id, msg, keyspace_id),),
-                     ("Bad row in tablet %s for id=%u, keyspace_id=" + fmt) % (
+                     ("Bad row in tablet %s for id=%d, keyspace_id=" + fmt) % (
                          tablet.tablet_alias, id, keyspace_id))
     return True
 
@@ -352,24 +352,24 @@ primary key (name)
   def _insert_lots(self, count, base=0):
     for i in xrange(count):
       self._insert_value(shard_1_master, 'resharding1', 10000 + base + i,
-                         'msg-range1-%u' % i, 0xA000000000000000 + base + i)
+                         'msg-range1-%d' % i, 0xA000000000000000 + base + i)
       self._insert_value(shard_1_master, 'resharding1', 20000 + base + i,
-                         'msg-range2-%u' % i, 0xE000000000000000 + base + i)
+                         'msg-range2-%d' % i, 0xE000000000000000 + base + i)
 
   # _check_lots returns how many of the values we have, in percents.
   def _check_lots(self, count, base=0):
     found = 0
     for i in xrange(count):
       if self._is_value_present_and_correct(shard_2_replica2, 'resharding1',
-                                            10000 + base + i, 'msg-range1-%u' %
+                                            10000 + base + i, 'msg-range1-%d' %
                                             i, 0xA000000000000000 + base + i):
         found += 1
       if self._is_value_present_and_correct(shard_3_replica, 'resharding1',
-                                            20000 + base + i, 'msg-range2-%u' %
+                                            20000 + base + i, 'msg-range2-%d' %
                                             i, 0xE000000000000000 + base + i):
         found += 1
     percent = found * 100 / count / 2
-    logging.debug("I have %u%% of the data", percent)
+    logging.debug("I have %d%% of the data", percent)
     return percent
 
   def _check_lots_timeout(self, count, threshold, timeout, base=0):
@@ -378,8 +378,8 @@ primary key (name)
       if value >= threshold:
         return
       if timeout == 0:
-        self.fail("timeout waiting for %u%% of the data" % threshold)
-      logging.debug("sleeping until we get %u%%", threshold)
+        self.fail("timeout waiting for %d%% of the data" % threshold)
+      logging.debug("sleeping until we get %d%%", threshold)
       time.sleep(1)
       timeout -= 1
 
@@ -388,10 +388,10 @@ primary key (name)
     found = 0
     for i in xrange(count):
       self._check_value(shard_3_replica, 'resharding1', 10000 + base + i,
-                        'msg-range1-%u' % i, 0xA000000000000000 + base + i,
+                        'msg-range1-%d' % i, 0xA000000000000000 + base + i,
                         should_be_here=False)
       self._check_value(shard_2_replica2, 'resharding1', 20000 + base + i,
-                        'msg-range2-%u' % i, 0xE000000000000000 + base + i,
+                        'msg-range2-%d' % i, 0xE000000000000000 + base + i,
                         should_be_here=False)
 
   def _check_binlog_server_vars(self, tablet):
@@ -412,12 +412,12 @@ primary key (name)
     if seconds_behind_master_max != 0:
       self.assertTrue(v['BinlogPlayerSecondsBehindMaster'] <
                       seconds_behind_master_max,
-                      'BinlogPlayerSecondsBehindMaster is too high: %u > %u' % (
+                      'BinlogPlayerSecondsBehindMaster is too high: %d > %d' % (
                           v['BinlogPlayerSecondsBehindMaster'],
                           seconds_behind_master_max))
       self.assertTrue(v['BinlogPlayerSecondsBehindMasterMap']['0'] <
                       seconds_behind_master_max,
-                      'BinlogPlayerSecondsBehindMasterMap is too high: %u > %u' % (
+                      'BinlogPlayerSecondsBehindMasterMap is too high: %d > %d' % (
                           v['BinlogPlayerSecondsBehindMasterMap']['0'],
                           seconds_behind_master_max))
 
@@ -775,11 +775,11 @@ primary key (name)
     monitor_thread_2.done = True
     insert_thread_1.done = True
     insert_thread_2.done = True
-    logging.debug("DELAY 1: %s max_lag=%u avg_lag=%u",
+    logging.debug("DELAY 1: %s max_lag=%d avg_lag=%d",
                   monitor_thread_1.object_name,
                   monitor_thread_1.max_lag,
                   monitor_thread_1.lag_sum / monitor_thread_1.sample_count)
-    logging.debug("DELAY 2: %s max_lag=%u avg_lag=%u",
+    logging.debug("DELAY 2: %s max_lag=%d avg_lag=%d",
                   monitor_thread_2.object_name,
                   monitor_thread_2.max_lag,
                   monitor_thread_2.lag_sum / monitor_thread_2.sample_count)

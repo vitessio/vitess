@@ -229,16 +229,16 @@ class TestSecure(unittest.TestCase):
     utils.run_vtctl('ReparentShard -force test_keyspace/0 ' + shard_0_master.tablet_alias, auto_log=True)
 
     # then get the topology and check it
-    zkocc_client = zkocc.ZkOccConnection("localhost:%u" % environment.topo_server().zkocc_port_base,
+    zkocc_client = zkocc.ZkOccConnection("localhost:%d" % environment.topo_server().zkocc_port_base,
                                          "test_nj", 30.0)
     topology.read_keyspaces(zkocc_client)
 
     shard_0_master_addrs = topology.get_host_port_by_name(zkocc_client, "test_keyspace.0.master:_vts")
     if len(shard_0_master_addrs) != 1:
-      self.fail('topology.get_host_port_by_name failed for "test_keyspace.0.master:_vts", got: %s' % " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
+      self.fail('topology.get_host_port_by_name failed for "test_keyspace.0.master:_vts", got: %s' % " ".join(["%s:%d(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
     if shard_0_master_addrs[0][2] != True:
       self.fail('topology.get_host_port_by_name failed for "test_keyspace.0.master:_vts" is not encrypted')
-    logging.debug("shard 0 master addrs: %s", " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
+    logging.debug("shard 0 master addrs: %s", " ".join(["%s:%d(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
 
     # make sure asking for optionally secure connections works too
     auto_addrs = topology.get_host_port_by_name(zkocc_client, "test_keyspace.0.master:_vtocc", encrypted=True)
@@ -247,7 +247,7 @@ class TestSecure(unittest.TestCase):
 
     # try to connect with regular client
     try:
-      conn = tablet3.TabletConnection("%s:%u" % (shard_0_master_addrs[0][0], shard_0_master_addrs[0][1]),
+      conn = tablet3.TabletConnection("%s:%d" % (shard_0_master_addrs[0][0], shard_0_master_addrs[0][1]),
                                       "", "test_keyspace", "0", 10.0)
       conn.dial()
       self.fail("No exception raised to secure port")
@@ -260,7 +260,7 @@ class TestSecure(unittest.TestCase):
       self.fail("unexpected conns %s" % sconn)
 
     # connect to encrypted port
-    conn = tablet3.TabletConnection("%s:%u" % (shard_0_master_addrs[0][0], shard_0_master_addrs[0][1]),
+    conn = tablet3.TabletConnection("%s:%d" % (shard_0_master_addrs[0][0], shard_0_master_addrs[0][1]),
                                     "", "test_keyspace", "0", 5.0, encrypted=True)
     conn.dial()
     (results, rowcount, lastrowid, fields) = conn._execute("select 1 from dual", {})

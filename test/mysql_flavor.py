@@ -85,7 +85,7 @@ class GoogleMysql(MysqlFlavor):
       cursor.execute("SHOW BINLOG INFO FOR " + str(group_id))
       server_id = cursor.fetchall()[0]["Server_ID"]
 
-      return {"GoogleMysql": "%u-%u" % (server_id, group_id)}
+      return {"GoogleMysql": "%d-%d" % (server_id, group_id)}
     finally:
       conn.close()
 
@@ -105,7 +105,7 @@ class GoogleMysql(MysqlFlavor):
         "SET binlog_group_id = %s, master_server_id = %s" %
         (group_id, server_id),
         "CHANGE MASTER TO "
-        "MASTER_HOST='%s', MASTER_PORT=%u, CONNECT_USING_GROUP_ID" %
+        "MASTER_HOST='%s', MASTER_PORT=%d, CONNECT_USING_GROUP_ID" %
         (host, port)]
 
 
@@ -148,7 +148,7 @@ class MariaDB(MysqlFlavor):
     return [
         "SET GLOBAL gtid_slave_pos = '%s'" % pos["MariaDB"],
         "CHANGE MASTER TO "
-        "MASTER_HOST='%s', MASTER_PORT=%u, MASTER_USE_GTID = slave_pos" %
+        "MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USE_GTID = slave_pos" %
         (host, port)]
 
   def enable_binlog_checksum(self, tablet):
