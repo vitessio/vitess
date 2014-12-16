@@ -24,7 +24,7 @@ const lockFilename = "_Lock"
 // See: https://github.com/coreos/etcd/blob/v0.4.6/Documentation/modules.md
 //
 // TODO(enisoc): Use etcd lock module if/when it exists.
-func lock(ctx context.Context, client *etcd.Client, dirPath, contents string) (string, error) {
+func lock(ctx context.Context, client Client, dirPath, contents string) (string, error) {
 	lockPath := path.Join(dirPath, lockFilename)
 
 	for {
@@ -66,7 +66,7 @@ func lock(ctx context.Context, client *etcd.Client, dirPath, contents string) (s
 
 // unlock releases a lock acquired by lock() on the given directory.
 // The string returned by lock() should be passed as the actionPath.
-func unlock(client *etcd.Client, dirPath, actionPath string) error {
+func unlock(client Client, dirPath, actionPath string) error {
 	lockID := path.Base(actionPath)
 	lockPath := path.Join(dirPath, lockFilename)
 
@@ -92,7 +92,7 @@ func unlock(client *etcd.Client, dirPath, actionPath string) error {
 // returns an event saying the file was deleted. The waitIndex should be one
 // plus the index at which you last found that the lock was held, to ensure that
 // no delete actions are missed.
-func waitForLock(ctx context.Context, client *etcd.Client, lockPath string, waitIndex uint64) error {
+func waitForLock(ctx context.Context, client Client, lockPath string, waitIndex uint64) error {
 	watch := make(chan *etcd.Response)
 	stop := make(chan bool)
 	defer close(stop)

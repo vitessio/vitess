@@ -24,7 +24,6 @@ package etcdtopo
 import (
 	"sync"
 
-	"github.com/coreos/go-etcd/etcd"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -34,7 +33,7 @@ type Server struct {
 	// representing the global etcd cluster. It should be accessed with the
 	// Server.getGlobal() method, which will initialize _global on first
 	// invocation with the list of global addresses from the command-line flag.
-	_global     *etcd.Client
+	_global     Client
 	_globalOnce sync.Once
 
 	// _cells contains clients configured to talk to a list of etcd instances
@@ -43,6 +42,9 @@ type Server struct {
 	// cell from the global cluster and create clients as needed.
 	_cells      map[string]*cellClient
 	_cellsMutex sync.Mutex
+
+	// newClient is the function this server uses to create a new Client.
+	newClient func(machines []string) Client
 }
 
 // Close implements topo.Server.
@@ -61,7 +63,8 @@ func (s *Server) GetKnownCells() ([]string, error) {
 // NewServer returns a new etcdtopo.Server.
 func NewServer() *Server {
 	return &Server{
-		_cells: make(map[string]*cellClient),
+		_cells:    make(map[string]*cellClient),
+		newClient: newEtcdClient,
 	}
 }
 

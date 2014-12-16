@@ -81,7 +81,11 @@ func (s *Server) GetKeyspace(keyspace string) (*topo.KeyspaceInfo, error) {
 func (s *Server) GetKeyspaces() ([]string, error) {
 	resp, err := s.getGlobal().Get(keyspacesDirPath, true /* sort */, false /* recursive */)
 	if err != nil {
-		return nil, convertError(err)
+		err = convertError(err)
+		if err == topo.ErrNoNode {
+			return nil, nil
+		}
+		return nil, err
 	}
 	return getNodeNames(resp)
 }

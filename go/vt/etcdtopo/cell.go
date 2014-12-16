@@ -8,14 +8,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/coreos/go-etcd/etcd"
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/topo"
 )
 
-// cellClient wraps etcd.Client for keeping track of cell-local clusters.
+// cellClient wraps a Client for keeping track of cell-local clusters.
 type cellClient struct {
-	*etcd.Client
+	Client
 
 	// version is the etcd ModifiedIndex of the cell record we read from the
 	// global cluster for this client.
@@ -55,7 +53,7 @@ func (s *Server) getCell(cell string) (*cellClient, error) {
 	}
 
 	// Create the client.
-	client = &cellClient{Client: etcd.NewClient(addrs), version: version}
+	client = &cellClient{Client: s.newClient(addrs), version: version}
 	s._cells[cell] = client
 	return client, nil
 }
@@ -67,11 +65,7 @@ func (s *Server) getCellAddrs(cell string) ([]string, int64, error) {
 	nodePath := cellFilePath(cell)
 	resp, err := s.getGlobal().Get(nodePath, false /* sort */, false /* recursive */)
 	if err != nil {
-		err = convertError(err)
-		if err == topo.ErrNoNode {
-			return nil, -1, fmt.Errorf("cell node %v doesn't exist in global cell list", nodePath)
-		}
-		return nil, -1, err
+		return nil, -1, convertError(err)
 	}
 	if resp.Node == nil {
 		return nil, -1, ErrBadResponse
@@ -83,7 +77,7 @@ func (s *Server) getCellAddrs(cell string) ([]string, int64, error) {
 	return strings.Split(resp.Node.Value, ","), int64(resp.Node.ModifiedIndex), nil
 }
 
-func (s *Server) getGlobal() *etcd.Client {
+func (s *Server) getGlobal() Client {
 	s._globalOnce.Do(func() {
 		if len(globalAddrs) == 0 {
 			// This means either a TopoServer method was called before flag parsing,
@@ -91,7 +85,7 @@ func (s *Server) getGlobal() *etcd.Client {
 			log.Fatal("etcdtopo: list of addresses for global cluster is empty")
 		}
 		log.Infof("etcdtopo: global address list = %v", globalAddrs)
-		s._global = etcd.NewClient([]string(globalAddrs))
+		s._global = s.newClient([]string(globalAddrs))
 	})
 
 	return s._global
