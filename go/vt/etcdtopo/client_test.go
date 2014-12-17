@@ -50,10 +50,10 @@ func (c *fakeClient) CompareAndDelete(key string, prevValue string, prevIndex ui
 
 	n, ok := c.nodes[key]
 	if !ok {
-		return &etcd.Response{}, &etcd.EtcdError{ErrorCode: EcodeKeyNotFound}
+		return nil, &etcd.EtcdError{ErrorCode: EcodeKeyNotFound}
 	}
 	if n.ModifiedIndex != prevIndex {
-		return &etcd.Response{}, &etcd.EtcdError{ErrorCode: EcodeTestFailed}
+		return nil, &etcd.EtcdError{ErrorCode: EcodeTestFailed}
 	}
 
 	c.index++
@@ -68,13 +68,13 @@ func (c *fakeClient) CompareAndSwap(key string, value string, ttl uint64,
 
 	n, ok := c.nodes[key]
 	if !ok {
-		return &etcd.Response{}, &etcd.EtcdError{ErrorCode: EcodeKeyNotFound}
+		return nil, &etcd.EtcdError{ErrorCode: EcodeKeyNotFound}
 	}
 	if prevValue != "" && n.Value != prevValue {
-		return &etcd.Response{}, &etcd.EtcdError{ErrorCode: EcodeTestFailed}
+		return nil, &etcd.EtcdError{ErrorCode: EcodeTestFailed}
 	}
 	if prevIndex != 0 && n.ModifiedIndex != prevIndex {
-		return &etcd.Response{}, &etcd.EtcdError{ErrorCode: EcodeTestFailed}
+		return nil, &etcd.EtcdError{ErrorCode: EcodeTestFailed}
 	}
 
 	c.index++
@@ -89,7 +89,7 @@ func (c *fakeClient) Create(key string, value string, ttl uint64) (*etcd.Respons
 	defer c.Unlock()
 
 	if _, ok := c.nodes[key]; ok {
-		return &etcd.Response{}, &etcd.EtcdError{ErrorCode: EcodeNodeExist}
+		return nil, &etcd.EtcdError{ErrorCode: EcodeNodeExist}
 	}
 
 	c.index++
@@ -109,7 +109,7 @@ func (c *fakeClient) Delete(key string, recursive bool) (*etcd.Response, error) 
 	defer c.Unlock()
 
 	if _, ok := c.nodes[key]; !ok {
-		return &etcd.Response{}, &etcd.EtcdError{ErrorCode: EcodeKeyNotFound}
+		return nil, &etcd.EtcdError{ErrorCode: EcodeKeyNotFound}
 	}
 
 	delete(c.nodes, key)
@@ -134,7 +134,7 @@ func (c *fakeClient) Get(key string, sortFiles, recursive bool) (*etcd.Response,
 
 	n, ok := c.nodes[key]
 	if !ok {
-		return &etcd.Response{}, &etcd.EtcdError{ErrorCode: EcodeKeyNotFound}
+		return nil, &etcd.EtcdError{ErrorCode: EcodeKeyNotFound}
 	}
 	resp := &etcd.Response{Node: &n}
 	if !n.Dir {

@@ -19,12 +19,13 @@ const (
 	lockFilename = "_Lock"
 
 	// We can't use "" as the magic value for an un-held lock, since the etcd
-	// client library doesn't support CAS with an empty prevValue.
-	openLockContents = "open"
+	// client library doesn't support CAS with an empty prevValue. It should
+	// also be something that the lock description is not allowed to be.
+	openLockContents = "<open>"
 )
 
 func initLockFile(client Client, dirPath string) error {
-	_, err := client.Set(path.Join(dirPath, lockFilename), openLockContents, 0)
+	_, err := client.Set(path.Join(dirPath, lockFilename), openLockContents, 0 /* ttl */)
 	return convertError(err)
 }
 
@@ -44,12 +45,15 @@ func initLockFile(client Client, dirPath string) error {
 // is created.
 func lock(ctx context.Context, client Client, dirPath, contents string, mustExist bool) (string, error) {
 	lockPath := path.Join(dirPath, lockFilename)
-	var lockHeldErr error
+	var err, lockHeldErr error
 	if mustExist {
 		lockHeldErr = topo.ErrBadVersion
 	} else {
 		lockHeldErr = topo.ErrNodeExists
 	}
+
+	// Don't let contents conflict with openLockContents.
+	contents = "held by: " + contents
 
 	for {
 		// Check ctx.Done before the each attempt, so the entire function is a no-op
@@ -61,9 +65,8 @@ func lock(ctx context.Context, client Client, dirPath, contents string, mustExis
 		}
 
 		var resp *etcd.Response
-		var err error
 		if mustExist {
-			// CAS will fail if the lock file isn't empty.
+			// CAS will fail if the lock file isn't the magic "empty" value.
 			resp, err = client.CompareAndSwap(lockPath, contents, 0, /* ttl */
 				openLockContents /* prevValue */, 0 /* prevIndex */)
 		} else {
@@ -84,13 +87,17 @@ func lock(ctx context.Context, client Client, dirPath, contents string, mustExis
 
 		// If it fails for any reason other than lockHeldErr
 		// (meaning the lock is already held), then just give up.
-		if err = convertError(err); err != lockHeldErr {
-			return "", err
+		if topoErr := convertError(err); topoErr != lockHeldErr {
+			return "", topoErr
+		}
+		etcdErr, ok := err.(*etcd.EtcdError)
+		if !ok {
+			return "", fmt.Errorf("error from etcd client has wrong type: got %#v, want %T", err, etcdErr)
 		}
 
 		// The lock is already being held.
 		// Wait for the lock file to be deleted, then try again.
-		if err = waitForLock(ctx, client, lockPath, resp.EtcdIndex+1, mustExist); err != nil {
+		if err = waitForLock(ctx, client, lockPath, etcdErr.Index+1, mustExist); err != nil {
 			return "", err
 		}
 	}
@@ -115,8 +122,8 @@ func unlock(client Client, dirPath, actionPath string, mustExist bool) error {
 		return fmt.Errorf("unlock: can't parse lock ID (%v) in actionPath (%v): %v", lockID, actionPath, err)
 	}
 	if mustExist {
-		_, err = client.CompareAndSwap(lockPath, "" /* value */, 0, /* ttl */
-			"" /* prevValue */, prevIndex)
+		_, err = client.CompareAndSwap(lockPath, openLockContents, /* value */
+			0 /* ttl */, "" /* prevValue */, prevIndex)
 	} else {
 		_, err = client.CompareAndDelete(lockPath, "" /* prevValue */, prevIndex)
 	}
