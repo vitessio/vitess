@@ -13,7 +13,6 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
-	"golang.org/x/net/context"
 )
 
 // Rebuild the serving and replication rollup data data while locking
@@ -234,7 +233,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 
 	allTablets := make([]*topo.TabletInfo, 0, 1024)
 	for _, cell := range cells {
-		tablets, err := topotools.GetAllTablets(context.TODO(), wr.ts, cell)
+		tablets, err := topotools.GetAllTablets(wr.ctx, wr.ts, cell)
 		if err != nil {
 			return err
 		}
@@ -275,7 +274,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 				}
 			}
 			mu.Unlock()
-			err := topo.UpdateTabletReplicationData(context.TODO(), wr.ts, ti.Tablet)
+			err := topo.UpdateTabletReplicationData(wr.ctx, wr.ts, ti.Tablet)
 			if err != nil {
 				mu.Lock()
 				hasErr = true

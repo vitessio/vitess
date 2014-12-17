@@ -12,7 +12,6 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
-	"golang.org/x/net/context"
 )
 
 // helper struct to queue up results
@@ -113,7 +112,7 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo,
 
 		if !masterPosition.IsZero() {
 			// If the master position is known, do our best to wait for replication to catch up.
-			status, err := wr.tmc.WaitSlavePosition(context.TODO(), ti, masterPosition, wr.ActionTimeout())
+			status, err := wr.tmc.WaitSlavePosition(wr.ctx, ti, masterPosition, wr.ActionTimeout())
 			if err != nil {
 				ctx.err = err
 				return
@@ -349,7 +348,7 @@ func (wr *Wrangler) finishReparent(si *topo.ShardInfo, masterElect *topo.TabletI
 
 	// save the new master in the shard info
 	si.MasterAlias = masterElect.Alias
-	if err := topo.UpdateShard(context.TODO(), wr.ts, si); err != nil {
+	if err := topo.UpdateShard(wr.ctx, wr.ts, si); err != nil {
 		wr.logger.Errorf("Failed to save new master into shard: %v", err)
 		return err
 	}
