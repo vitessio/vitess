@@ -50,7 +50,9 @@ func (zkts *Server) lockForAction(ctx context.Context, actionDir, contents strin
 	if err != nil {
 		var errToReturn error
 		switch err {
-		case zk.ErrInterrupted, zk.ErrTimeout:
+		case zk.ErrTimeout:
+			errToReturn = topo.ErrTimeout
+		case zk.ErrInterrupted:
 			// the context failed, get the error from it
 			if ctx.Err() == context.DeadlineExceeded {
 				errToReturn = topo.ErrTimeout
