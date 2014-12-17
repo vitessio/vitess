@@ -320,20 +320,6 @@ def wait_for_vars(name, port, var=None):
       break
     timeout = wait_step('waiting for /debug/vars of %s' % name, timeout)
 
-# zkocc helpers
-def zkocc_start(cells=['test_nj'], extra_params=[]):
-  args = environment.binary_args('zkocc') + [
-          '-port', str(environment.topo_server().zkocc_port_base),
-          '-stderrthreshold=ERROR',
-          ] + extra_params + cells
-  sp = run_bg(args)
-  wait_for_vars("zkocc", environment.topo_server().zkocc_port_base)
-  return sp
-
-def zkocc_kill(sp):
-  kill_sub_process(sp)
-  sp.wait()
-
 # vtgate helpers, assuming it always restarts on the same port
 def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1,
                  topo_impl=None, tablet_bson_encrypted=False, cache_ttl='1s',
@@ -480,7 +466,6 @@ def run_vtworker(clargs, log_level='', auto_log=False, expect_fail=False, **kwar
 # - vttablet (default), vttablet-streaming
 # - vtdb, vtdb-streaming (default topo server)
 # - vtdb-zk, vtdb-zk-streaming (forced zk topo server)
-# - vtdb-zkocc, vtdb-zkocc-streaming (forced zkocc topo server)
 # path is either: keyspace/shard for vttablet* or zk path for vtdb*
 def vtclient2(uid, path, query, bindvars=None, user=None, password=None, driver=None,
               verbose=False, raise_on_error=True):

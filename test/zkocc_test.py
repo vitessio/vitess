@@ -104,7 +104,7 @@ class TestTopo(unittest.TestCase):
 
   # test_vtgate_qps can be run to profile vtgate:
   # Just run:
-  #   ./zkocc_test.py -v TestZkocc.test_vtgate_qps --skip-teardown
+  #   ./zkocc_test.py -v TestTopo.test_vtgate_qps --skip-teardown
   # Then run:
   #   go tool pprof $VTROOT/bin/vtgate $VTDATAROOT/tmp/vtgate.pprof
   # (or with zkclient2 for the client side)

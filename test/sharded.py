@@ -118,10 +118,6 @@ class TestSharded(unittest.TestCase):
                      '-sql=' + create_vt_select_test.replace("\n", ""),
                      shard_0_replica.tablet_alias])
 
-    if environment.topo_server().flavor() == 'zookeeper':
-      # start zkocc, we'll use it later, indirectly with the vtdb-zkocc driver
-      zkocc_server = utils.zkocc_start()
-
     # start vtgate, we'll use it later
     vtgate_server, vtgate_port = utils.vtgate_start()
 
@@ -186,22 +182,11 @@ class TestSharded(unittest.TestCase):
                         "2\ttest 2",
                         "10\ttest 10"],
                        driver="vtdb-zk-streaming")
-      self._check_rows(["Index\tid\tmsg",
-                        "1\ttest 1",
-                        "2\ttest 2",
-                        "10\ttest 10"],
-                       driver="vtdb-zkocc")
-      self._check_rows(["Index\tid\tmsg",
-                        "1\ttest 1",
-                        "2\ttest 2",
-                        "10\ttest 10"],
-                       driver="vtdb-zkocc-streaming")
 
     # make sure the schema checking works
     self._check_rows_schema_diff("vtdb")
     if environment.topo_server().flavor() == 'zookeeper':
       self._check_rows_schema_diff("vtdb-zk")
-      self._check_rows_schema_diff("vtdb-zkocc")
 
     # throw in some schema validation step
     # we created the schema differently, so it should show
@@ -280,8 +265,6 @@ class TestSharded(unittest.TestCase):
         self.fail('unexpected exception: ' + str(e))
 
     utils.vtgate_kill(vtgate_server)
-    if environment.topo_server().flavor() == 'zookeeper':
-      utils.kill_sub_process(zkocc_server)
     tablet.kill_tablets([shard_0_master, shard_0_replica, shard_1_master,
                          shard_1_replica])
 

@@ -26,7 +26,6 @@ class ZkTopoServer(server.TopoServer):
     from environment import reserve_ports
 
     self.zk_port_base = reserve_ports(3)
-    self.zkocc_port_base = reserve_ports(3)
     self.hostname = socket.getfqdn()
     self.zk_ports = ':'.join(str(self.zk_port_base + i) for i in range(3))
     self.zk_client_port = self.zk_port_base + 2
@@ -50,14 +49,6 @@ class ZkTopoServer(server.TopoServer):
           'test_ny': 'localhost:%u' % (self.zk_client_port),
           'test_ca': ca_server,
           'global': 'localhost:%u' % (self.zk_client_port),
-          'test_nj:_zkocc':
-              'localhost:%u,localhost:%u,localhost:%u' % tuple(
-                  self.zkocc_port_base + i
-                  for i in range(
-                      3)),
-          'test_ny:_zkocc': 'localhost:%u' % (self.zkocc_port_base),
-          'test_ca:_zkocc': 'localhost:%u' % (self.zkocc_port_base),
-          'global:_zkocc': 'localhost:%u' % (self.zkocc_port_base),
       }
       json.dump(zk_cell_mapping, f)
     os.environ['ZK_CLIENT_CONFIG'] = config
