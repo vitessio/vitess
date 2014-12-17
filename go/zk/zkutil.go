@@ -206,7 +206,7 @@ func resolveRecursive(zconn Conn, parts []string, toplevel bool) ([]string, erro
 			var children []string
 			var err error
 			if i == 2 {
-				children, err = ZkKnownCells(false)
+				children, err = ZkKnownCells()
 				if err != nil {
 					return children, err
 				}

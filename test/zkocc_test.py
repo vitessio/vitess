@@ -123,7 +123,7 @@ class TestTopo(unittest.TestCase):
                                                  'vtgate.pprof')])
     qpser = utils.run_bg(environment.binary_args('zkclient2') + [
         '-server', 'localhost:%u' % vtgate_port,
-        '-mode', 'qps2',
+        '-mode', 'qps',
         '-cpu_profile', os.path.join(environment.tmproot, 'zkclient2.pprof'),
         'test_nj', 'test_keyspace'])
     qpser.wait()

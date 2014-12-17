@@ -24,7 +24,7 @@ import (
 // database.
 //
 // The ShardedConn can handles several separate aspects:
-//  * loading/reloading tablet addresses on demand from zk/zkocc
+//  * loading/reloading tablet addresses on demand from zk
 //  * maintaining at most one connection to each tablet as required
 //  * transaction tracking across shards
 //  * preflight checking all transactions before attempting to commit
@@ -559,7 +559,7 @@ type sDriver struct {
 
 // for direct zk connection: vtzk://host:port/cell/keyspace/tabletType
 // we always use a MetaConn, host and port are ignored.
-// the driver name dictates if we use zk or zkocc, and streaming or not
+// the driver name dictates if we streaming or not
 func (driver *sDriver) Open(name string) (sc db.Conn, err error) {
 	if !strings.HasPrefix(name, "vtzk://") {
 		// add a default protocol talking to zk
@@ -586,14 +586,8 @@ func RegisterShardedDrivers() {
 	db.Register("vtdb-streaming", &sDriver{ts, true})
 
 	// forced zk topo server
-	zconn := zk.NewMetaConn(false)
+	zconn := zk.NewMetaConn()
 	zkts := zktopo.NewServer(zconn)
 	db.Register("vtdb-zk", &sDriver{zkts, false})
 	db.Register("vtdb-zk-streaming", &sDriver{zkts, true})
-
-	// forced zkocc topo server
-	zkoccconn := zk.NewMetaConn(true)
-	zktsro := zktopo.NewServer(zkoccconn)
-	db.Register("vtdb-zkocc", &sDriver{zktsro, false})
-	db.Register("vtdb-zkocc-streaming", &sDriver{zktsro, true})
 }
