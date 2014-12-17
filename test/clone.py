@@ -48,12 +48,13 @@ def tearDownModule():
     # Try to terminate mysqlctld gracefully, so it kills its mysqld.
     for proc in setup_procs:
       utils.kill_sub_process(proc, soft=True)
+    teardown_procs = setup_procs
   else:
     teardown_procs = [
         tablet_62344.teardown_mysql(),
         tablet_31981.teardown_mysql(),
         ]
-    utils.wait_procs(teardown_procs, raise_on_error=False)
+  utils.wait_procs(teardown_procs, raise_on_error=False)
 
   environment.topo_server().teardown()
   utils.kill_sub_processes()
