@@ -32,8 +32,8 @@ def setUpModule():
         tablet_31981.init_mysql(),
         ]
     if use_mysqlctld:
-      tablet_62344.wait_for_mysql_socket()
-      tablet_31981.wait_for_mysql_socket()
+      tablet_62344.wait_for_mysqlctl_socket()
+      tablet_31981.wait_for_mysqlctl_socket()
     else:
       utils.wait_procs(setup_procs)
   except:
