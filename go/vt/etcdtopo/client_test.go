@@ -66,15 +66,14 @@ func (c *fakeClient) CompareAndSwap(key string, value string, ttl uint64,
 	c.Lock()
 	defer c.Unlock()
 
-	if prevValue != "" {
-		panic("not implemented")
-	}
-
 	n, ok := c.nodes[key]
 	if !ok {
 		return &etcd.Response{}, &etcd.EtcdError{ErrorCode: EcodeKeyNotFound}
 	}
-	if n.ModifiedIndex != prevIndex {
+	if prevValue != "" && n.Value != prevValue {
+		return &etcd.Response{}, &etcd.EtcdError{ErrorCode: EcodeTestFailed}
+	}
+	if prevIndex != 0 && n.ModifiedIndex != prevIndex {
 		return &etcd.Response{}, &etcd.EtcdError{ErrorCode: EcodeTestFailed}
 	}
 

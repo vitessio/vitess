@@ -17,10 +17,14 @@ import (
 // CreateShard implements topo.Server.
 func (s *Server) CreateShard(keyspace, shard string, value *topo.Shard) error {
 	data := jscfg.ToJson(value)
+	global := s.getGlobal()
 
-	resp, err := s.getGlobal().Create(shardFilePath(keyspace, shard), data, 0 /* ttl */)
+	resp, err := global.Create(shardFilePath(keyspace, shard), data, 0 /* ttl */)
 	if err != nil {
 		return convertError(err)
+	}
+	if err := initLockFile(global, shardDirPath(keyspace, shard)); err != nil {
+		return err
 	}
 
 	// We don't return ErrBadResponse in this case because the Create() suceeeded
