@@ -32,8 +32,8 @@ def setUpModule():
         tablet_31981.init_mysql(),
         ]
     if use_mysqlctld:
-      tablet_62344.wait_for_mysql_socket()
-      tablet_31981.wait_for_mysql_socket()
+      tablet_62344.wait_for_mysqlctl_socket()
+      tablet_31981.wait_for_mysqlctl_socket()
     else:
       utils.wait_procs(setup_procs)
   except:
@@ -48,12 +48,13 @@ def tearDownModule():
     # Try to terminate mysqlctld gracefully, so it kills its mysqld.
     for proc in setup_procs:
       utils.kill_sub_process(proc, soft=True)
+    teardown_procs = setup_procs
   else:
     teardown_procs = [
         tablet_62344.teardown_mysql(),
         tablet_31981.teardown_mysql(),
         ]
-    utils.wait_procs(teardown_procs, raise_on_error=False)
+  utils.wait_procs(teardown_procs, raise_on_error=False)
 
   environment.topo_server().teardown()
   utils.kill_sub_processes()

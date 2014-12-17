@@ -26,7 +26,7 @@ import (
 
 var (
 	waitTime        = flag.Duration("wait-time", 24*time.Hour, "time to wait on an action")
-	lockWaitTimeout = flag.Duration("lock-wait-timeout", 0, "time to wait for a lock before starting an action")
+	lockWaitTimeout = flag.Duration("lock-wait-timeout", time.Minute, "time to wait for a lock before starting an action")
 )
 
 func init() {

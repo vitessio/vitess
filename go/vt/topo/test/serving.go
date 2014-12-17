@@ -33,10 +33,26 @@ func CheckServingGraph(t *testing.T, ts topo.Server) {
 	}
 
 	if err := ts.UpdateEndPoints(cell, "test_keyspace", "-10", topo.TYPE_MASTER, &endPoints); err != nil {
-		t.Errorf("UpdateEndPoints(master): %v", err)
+		t.Fatalf("UpdateEndPoints(master): %v", err)
 	}
 	if types, err := ts.GetSrvTabletTypesPerShard(cell, "test_keyspace", "-10"); err != nil || len(types) != 1 || types[0] != topo.TYPE_MASTER {
 		t.Errorf("GetSrvTabletTypesPerShard(1): %v %v", err, types)
+	}
+
+	// Delete the SrvShard (need to delete endpoints first).
+	if err := ts.DeleteEndPoints(cell, "test_keyspace", "-10", topo.TYPE_MASTER); err != nil {
+		t.Errorf("DeleteEndPoints: %v", err)
+	}
+	if err := ts.DeleteSrvShard(cell, "test_keyspace", "-10"); err != nil {
+		t.Errorf("DeleteSrvShard: %v", err)
+	}
+	if _, err := ts.GetSrvShard(cell, "test_keyspace", "-10"); err != topo.ErrNoNode {
+		t.Errorf("GetSrvShard(deleted) got %v, want ErrNoNode", err)
+	}
+
+	// Re-add endpoints.
+	if err := ts.UpdateEndPoints(cell, "test_keyspace", "-10", topo.TYPE_MASTER, &endPoints); err != nil {
+		t.Fatalf("UpdateEndPoints(master): %v", err)
 	}
 
 	addrs, err := ts.GetEndPoints(cell, "test_keyspace", "-10", topo.TYPE_MASTER)
@@ -51,16 +67,16 @@ func CheckServingGraph(t *testing.T, ts topo.Server) {
 	}
 
 	if err := ts.UpdateTabletEndpoint(cell, "test_keyspace", "-10", topo.TYPE_REPLICA, &topo.EndPoint{Uid: 2, Host: "host2"}); err != nil {
-		t.Errorf("UpdateTabletEndpoint(invalid): %v", err)
+		t.Fatalf("UpdateTabletEndpoint(invalid): %v", err)
 	}
 	if err := ts.UpdateTabletEndpoint(cell, "test_keyspace", "-10", topo.TYPE_MASTER, &topo.EndPoint{Uid: 1, Host: "host2"}); err != nil {
-		t.Errorf("UpdateTabletEndpoint(master): %v", err)
+		t.Fatalf("UpdateTabletEndpoint(master): %v", err)
 	}
 	if addrs, err := ts.GetEndPoints(cell, "test_keyspace", "-10", topo.TYPE_MASTER); err != nil || len(addrs.Entries) != 1 || addrs.Entries[0].Uid != 1 {
 		t.Errorf("GetEndPoints(2): %v %v", err, addrs)
 	}
 	if err := ts.UpdateTabletEndpoint(cell, "test_keyspace", "-10", topo.TYPE_MASTER, &topo.EndPoint{Uid: 3, Host: "host3"}); err != nil {
-		t.Errorf("UpdateTabletEndpoint(master): %v", err)
+		t.Fatalf("UpdateTabletEndpoint(master): %v", err)
 	}
 	if addrs, err := ts.GetEndPoints(cell, "test_keyspace", "-10", topo.TYPE_MASTER); err != nil || len(addrs.Entries) != 2 {
 		t.Errorf("GetEndPoints(2): %v %v", err, addrs)
@@ -79,7 +95,7 @@ func CheckServingGraph(t *testing.T, ts topo.Server) {
 		TabletTypes: []topo.TabletType{topo.TYPE_REPLICA, topo.TYPE_RDONLY},
 	}
 	if err := ts.UpdateSrvShard(cell, "test_keyspace", "-10", &srvShard); err != nil {
-		t.Errorf("UpdateSrvShard(1): %v", err)
+		t.Fatalf("UpdateSrvShard(1): %v", err)
 	}
 	if _, err := ts.GetSrvShard(cell, "test_keyspace", "666"); err != topo.ErrNoNode {
 		t.Errorf("GetSrvShard(invalid): %v", err)
@@ -135,7 +151,7 @@ func CheckServingGraph(t *testing.T, ts topo.Server) {
 
 	// check that updating a SrvKeyspace out of the blue works
 	if err := ts.UpdateSrvKeyspace(cell, "unknown_keyspace_so_far", &srvKeyspace); err != nil {
-		t.Errorf("UpdateSrvKeyspace(2): %v", err)
+		t.Fatalf("UpdateSrvKeyspace(2): %v", err)
 	}
 	if k, err := ts.GetSrvKeyspace(cell, "unknown_keyspace_so_far"); err != nil ||
 		len(k.TabletTypes) != 1 ||

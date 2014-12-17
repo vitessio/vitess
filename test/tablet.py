@@ -537,12 +537,13 @@ class Tablet(object):
       timeout = utils.wait_step('waiting for state %s' % expected, timeout,
                                 sleep_time=0.1)
 
-  def wait_for_mysql_socket(self, timeout=10.0):
-    socket_file = os.path.join(self.tablet_dir, 'mysql.sock')
+  def wait_for_mysqlctl_socket(self, timeout=10.0):
+    mysql_sock = os.path.join(self.tablet_dir, 'mysql.sock')
+    mysqlctl_sock = os.path.join(self.tablet_dir, 'mysqlctl.sock')
     while True:
-      if os.path.exists(socket_file):
+      if os.path.exists(mysql_sock) and os.path.exists(mysqlctl_sock):
         return
-      timeout = utils.wait_step('waiting for mysql socket file %s' % socket_file, timeout)
+      timeout = utils.wait_step('waiting for mysql and mysqlctl socket files: %s %s' % (mysql_sock, mysqlctl_sock), timeout)
 
   def _add_dbconfigs(self, args, repl_extra_flags={}):
     config = dict(self.default_db_config)

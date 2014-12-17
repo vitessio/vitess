@@ -19,10 +19,14 @@ import (
 // CreateKeyspace implements topo.Server.
 func (s *Server) CreateKeyspace(keyspace string, value *topo.Keyspace) error {
 	data := jscfg.ToJson(value)
+	global := s.getGlobal()
 
-	resp, err := s.getGlobal().Create(keyspaceFilePath(keyspace), data, 0 /* ttl */)
+	resp, err := global.Create(keyspaceFilePath(keyspace), data, 0 /* ttl */)
 	if err != nil {
 		return convertError(err)
+	}
+	if err := initLockFile(global, keyspaceDirPath(keyspace)); err != nil {
+		return err
 	}
 
 	// We don't return ErrBadResponse in this case because the Create() suceeeded
@@ -81,7 +85,11 @@ func (s *Server) GetKeyspace(keyspace string) (*topo.KeyspaceInfo, error) {
 func (s *Server) GetKeyspaces() ([]string, error) {
 	resp, err := s.getGlobal().Get(keyspacesDirPath, true /* sort */, false /* recursive */)
 	if err != nil {
-		return nil, convertError(err)
+		err = convertError(err)
+		if err == topo.ErrNoNode {
+			return nil, nil
+		}
+		return nil, err
 	}
 	return getNodeNames(resp)
 }

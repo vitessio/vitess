@@ -15,7 +15,19 @@ import (
 	"golang.org/x/net/context"
 )
 
-const lockFilename = "_Lock"
+const (
+	lockFilename = "_Lock"
+
+	// We can't use "" as the magic value for an un-held lock, since the etcd
+	// client library doesn't support CAS with an empty prevValue. It should
+	// also be something that the lock description is not allowed to be.
+	openLockContents = "<open>"
+)
+
+func initLockFile(client Client, dirPath string) error {
+	_, err := client.Set(path.Join(dirPath, lockFilename), openLockContents, 0 /* ttl */)
+	return convertError(err)
+}
 
 // lock implements a simple distributed mutex lock on a directory in etcd.
 // There used to be a lock module in etcd, and there will be again someday, but
@@ -24,8 +36,24 @@ const lockFilename = "_Lock"
 // See: https://github.com/coreos/etcd/blob/v0.4.6/Documentation/modules.md
 //
 // TODO(enisoc): Use etcd lock module if/when it exists.
-func lock(ctx context.Context, client *etcd.Client, dirPath, contents string) (string, error) {
+//
+// If mustExist is true, then before locking a directory, the file "_Lock" must
+// already exist. This allows rejection of lock attempts on directories that
+// don't exist yet, since otherwise etcd would automatically create parent
+// directories. That means any directory that might be locked with mustExist
+// should have a _Lock file created with initLockFile() as soon as the directory
+// is created.
+func lock(ctx context.Context, client Client, dirPath, contents string, mustExist bool) (string, error) {
 	lockPath := path.Join(dirPath, lockFilename)
+	var err, lockHeldErr error
+	if mustExist {
+		lockHeldErr = topo.ErrBadVersion
+	} else {
+		lockHeldErr = topo.ErrNodeExists
+	}
+
+	// Don't let contents conflict with openLockContents.
+	contents = "held by: " + contents
 
 	for {
 		// Check ctx.Done before the each attempt, so the entire function is a no-op
@@ -36,8 +64,15 @@ func lock(ctx context.Context, client *etcd.Client, dirPath, contents string) (s
 		default:
 		}
 
-		// Create will fail if the lock file already exists.
-		resp, err := client.Create(lockPath, contents, 0 /* ttl */)
+		var resp *etcd.Response
+		if mustExist {
+			// CAS will fail if the lock file isn't the magic "empty" value.
+			resp, err = client.CompareAndSwap(lockPath, contents, 0, /* ttl */
+				openLockContents /* prevValue */, 0 /* prevIndex */)
+		} else {
+			// Create will fail if the lock file already exists.
+			resp, err = client.Create(lockPath, contents, 0 /* ttl */)
+		}
 		if err == nil {
 			if resp.Node == nil {
 				return "", ErrBadResponse
@@ -50,15 +85,19 @@ func lock(ctx context.Context, client *etcd.Client, dirPath, contents string) (s
 			return path.Join(lockPath, lockID), nil
 		}
 
-		// If it fails for any reason other than "node already exists"
+		// If it fails for any reason other than lockHeldErr
 		// (meaning the lock is already held), then just give up.
-		if err = convertError(err); err != topo.ErrNodeExists {
-			return "", err
+		if topoErr := convertError(err); topoErr != lockHeldErr {
+			return "", topoErr
+		}
+		etcdErr, ok := err.(*etcd.EtcdError)
+		if !ok {
+			return "", fmt.Errorf("error from etcd client has wrong type: got %#v, want %T", err, etcdErr)
 		}
 
 		// The lock is already being held.
 		// Wait for the lock file to be deleted, then try again.
-		if err = waitForLock(ctx, client, lockPath, resp.EtcdIndex+1); err != nil {
+		if err = waitForLock(ctx, client, lockPath, etcdErr.Index+1, mustExist); err != nil {
 			return "", err
 		}
 	}
@@ -66,7 +105,9 @@ func lock(ctx context.Context, client *etcd.Client, dirPath, contents string) (s
 
 // unlock releases a lock acquired by lock() on the given directory.
 // The string returned by lock() should be passed as the actionPath.
-func unlock(client *etcd.Client, dirPath, actionPath string) error {
+//
+// mustExist specifies whether the lock was acquired with mustExist.
+func unlock(client Client, dirPath, actionPath string, mustExist bool) error {
 	lockID := path.Base(actionPath)
 	lockPath := path.Join(dirPath, lockFilename)
 
@@ -80,7 +121,12 @@ func unlock(client *etcd.Client, dirPath, actionPath string) error {
 	if err != nil {
 		return fmt.Errorf("unlock: can't parse lock ID (%v) in actionPath (%v): %v", lockID, actionPath, err)
 	}
-	_, err = client.CompareAndDelete(lockPath, "" /* prevValue */, prevIndex)
+	if mustExist {
+		_, err = client.CompareAndSwap(lockPath, openLockContents, /* value */
+			0 /* ttl */, "" /* prevValue */, prevIndex)
+	} else {
+		_, err = client.CompareAndDelete(lockPath, "" /* prevValue */, prevIndex)
+	}
 	if err != nil {
 		return convertError(err)
 	}
@@ -92,7 +138,9 @@ func unlock(client *etcd.Client, dirPath, actionPath string) error {
 // returns an event saying the file was deleted. The waitIndex should be one
 // plus the index at which you last found that the lock was held, to ensure that
 // no delete actions are missed.
-func waitForLock(ctx context.Context, client *etcd.Client, lockPath string, waitIndex uint64) error {
+//
+// mustExist specifies whether lock() was called with mustExist.
+func waitForLock(ctx context.Context, client Client, lockPath string, waitIndex uint64, mustExist bool) error {
 	watch := make(chan *etcd.Response)
 	stop := make(chan bool)
 	defer close(stop)
@@ -112,8 +160,14 @@ func waitForLock(ctx context.Context, client *etcd.Client, lockPath string, wait
 		case err := <-watchErr:
 			return convertError(err)
 		case resp := <-watch:
-			if resp.Action == "delete" {
-				return nil
+			if mustExist {
+				if resp.Node != nil && resp.Node.Value == "" {
+					return nil
+				}
+			} else {
+				if resp.Action == "delete" {
+					return nil
+				}
 			}
 		}
 	}
@@ -126,7 +180,8 @@ func (s *Server) LockSrvShardForAction(ctx context.Context, cellName, keyspace, 
 		return "", err
 	}
 
-	return lock(ctx, cell.Client, srvShardDirPath(keyspace, shard), contents)
+	return lock(ctx, cell.Client, srvShardDirPath(keyspace, shard), contents,
+		false /* mustExist */)
 }
 
 // UnlockSrvShardForAction implements topo.Server.
@@ -138,29 +193,34 @@ func (s *Server) UnlockSrvShardForAction(cellName, keyspace, shard, actionPath, 
 		return err
 	}
 
-	return unlock(cell.Client, srvShardDirPath(keyspace, shard), actionPath)
+	return unlock(cell.Client, srvShardDirPath(keyspace, shard), actionPath,
+		false /* mustExist */)
 }
 
 // LockKeyspaceForAction implements topo.Server.
 func (s *Server) LockKeyspaceForAction(ctx context.Context, keyspace, contents string) (string, error) {
-	return lock(ctx, s.getGlobal(), keyspaceDirPath(keyspace), contents)
+	return lock(ctx, s.getGlobal(), keyspaceDirPath(keyspace), contents,
+		true /* mustExist */)
 }
 
 // UnlockKeyspaceForAction implements topo.Server.
 func (s *Server) UnlockKeyspaceForAction(keyspace, actionPath, results string) error {
 	log.Infof("results of %v: %v", actionPath, results)
 
-	return unlock(s.getGlobal(), keyspaceDirPath(keyspace), actionPath)
+	return unlock(s.getGlobal(), keyspaceDirPath(keyspace), actionPath,
+		true /* mustExist */)
 }
 
 // LockShardForAction implements topo.Server.
 func (s *Server) LockShardForAction(ctx context.Context, keyspace, shard, contents string) (string, error) {
-	return lock(ctx, s.getGlobal(), shardDirPath(keyspace, shard), contents)
+	return lock(ctx, s.getGlobal(), shardDirPath(keyspace, shard), contents,
+		true /* mustExist */)
 }
 
 // UnlockShardForAction implements topo.Server.
 func (s *Server) UnlockShardForAction(keyspace, shard, actionPath, results string) error {
 	log.Infof("results of %v: %v", actionPath, results)
 
-	return unlock(s.getGlobal(), shardDirPath(keyspace, shard), actionPath)
+	return unlock(s.getGlobal(), shardDirPath(keyspace, shard), actionPath,
+		true /* mustExist */)
 }
