@@ -47,7 +47,6 @@ type cachedConn struct {
 type ConnCache struct {
 	mutex        sync.Mutex
 	zconnCellMap map[string]*cachedConn // map cell name to connection
-	useZkocc     bool
 }
 
 func (cc *ConnCache) setState(zcell string, conn *cachedConn, state int64) {
@@ -86,17 +85,13 @@ func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
 		return conn.zconn, nil
 	}
 
-	zkAddr, err := ZkPathToZkAddr(zkPath, cc.useZkocc)
+	zkAddr, err := ZkPathToZkAddr(zkPath)
 	if err != nil {
 		return nil, &zookeeper.Error{Op: "dial", Code: zookeeper.ZSYSTEMERROR, SystemError: err, Path: zkPath}
 	}
 
 	cc.setState(zcell, conn, CONNECTING)
-	if cc.useZkocc {
-		conn.zconn, err = DialZkocc(zkAddr, *baseTimeout)
-	} else {
-		conn.zconn, err = cc.newZookeeperConn(zkAddr, zcell)
-	}
+	conn.zconn, err = cc.newZookeeperConn(zkAddr, zcell)
 	if conn.zconn != nil {
 		cc.setState(zcell, conn, CONNECTED)
 	} else {
@@ -187,8 +182,8 @@ func (cc *ConnCache) String() string {
 	return b.String()
 }
 
-func NewConnCache(useZkocc bool) *ConnCache {
+func NewConnCache() *ConnCache {
 	return &ConnCache{
 		zconnCellMap: make(map[string]*cachedConn),
-		useZkocc:     useZkocc}
+	}
 }

@@ -111,12 +111,11 @@ func init() {
 		"zip":   cmdZip,
 	}
 
-	zconn = zk.NewMetaConn(false)
+	zconn = zk.NewMetaConn()
 }
 
 var (
-	zkAddrs   = flag.String("zk.addrs", "", "list of zookeeper servers (server1:port1,server2:port2,...) which overrides the conf file")
-	zkoccAddr = flag.String("zk.zkocc-addr", "", "if specified, talk to a zkocc process. Only cat and ls are permited")
+	zkAddrs = flag.String("zk.addrs", "", "list of zookeeper servers (server1:port1,server2:port2,...) which overrides the conf file")
 )
 
 func main() {
@@ -134,21 +133,10 @@ func main() {
 	}
 
 	if *zkAddrs != "" {
-		if *zkoccAddr != "" {
-			log.Fatalf("zk.addrs and zk.zkocc-addr are mutually exclusive")
-		}
 		var err error
 		zconn, _, err = zk.DialZkTimeout(*zkAddrs, 5*time.Second, 10*time.Second)
 		if err != nil {
 			log.Fatalf("zk connect failed: %v", err.Error())
-		}
-	}
-
-	if *zkoccAddr != "" {
-		var err error
-		zconn, err = zk.DialZkocc(*zkoccAddr, 5*time.Second)
-		if err != nil {
-			log.Fatalf("zkocc connect failed: %v", err.Error())
 		}
 	}
 
@@ -440,9 +428,8 @@ func fmtPath(stat zk.Stat, zkPath string, showFullPath bool, longListing bool) {
 			perms = "-rw-rw-rw-"
 		}
 		// always print the Local version of the time. zookeeper's
-		// go / C library would return a local time, whereas
-		// gorpc to zkocc returns a UTC time. By always printing the
-		// Local version we make them the same.
+		// go / C library would return a local time anyway, but
+		// might as well be sure.
 		fmt.Printf("%v %v %v % 8v % 20v %v\n", perms, "zk", "zk", stat.DataLength(), stat.MTime().Local().Format(timeFmt), name)
 	} else {
 		fmt.Printf("%v\n", name)
