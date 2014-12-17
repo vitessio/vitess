@@ -148,7 +148,29 @@ def setUpModule():
     vt_server_key = cert_dir + "/vt-server-key.pem"
     vt_server_cert = cert_dir + "/vt-server-cert.pem"
     vt_server_req = cert_dir + "/vt-server-req.pem"
+    vt_server_config = cert_dir + "/server.config"
+    with open(vt_server_config, 'w') as fd:
+      fd.write("""
+[ req ]
+ default_bits           = 1024
+ default_keyfile        = keyfile.pem
+ distinguished_name     = req_distinguished_name
+ attributes             = req_attributes
+ prompt                 = no
+ output_password        = mypass
+[ req_distinguished_name ]
+ C                      = US
+ ST                     = California
+ L                      = Mountain View
+ O                      = Google
+ OU                     = Vitess
+ CN                     = Vitess Server
+ emailAddress           = test@email.address
+[ req_attributes ]
+ challengePassword      = A challenge password
+""")
     openssl(["req", "-newkey", "rsa:2048", "-days", "3600", "-nodes", "-batch",
+             "-config", vt_server_config,
              "-keyout", vt_server_key, "-out", vt_server_req])
     openssl(["rsa", "-in", vt_server_key, "-out", vt_server_key])
     openssl(["x509", "-req",
