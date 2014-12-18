@@ -26,6 +26,7 @@ sudo apt-get install time automake libtool memcached python-dev python-mysqldb l
 # Java dependencies
 wget https://dl.bintray.com/sbt/debian/sbt-0.13.6.deb
 sudo dpkg -i sbt-0.13.6.deb
-sudo apt-get install protobuf-compiler maven
-
+sudo apt-get -y install protobuf-compiler maven
+echo "Y" | sudo apt-get -y install rsyslog
+sudo service rsyslog restart
 set +e

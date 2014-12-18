@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/cmd/vtctld/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -16,7 +17,7 @@ type Explorer interface {
 	// HandlePath returns a result (suitable to be passed to a
 	// template) appropriate for url, using actionRepo to populate
 	// the actions in result.
-	HandlePath(actionRepo *ActionRepository, url string, r *http.Request) interface{}
+	HandlePath(actionRepo proto.ActionRepository, url string, r *http.Request) interface{}
 
 	// GetKeyspacePath returns an explorer path that will contain
 	// information about the named keyspace.

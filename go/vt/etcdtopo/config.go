@@ -23,13 +23,14 @@ const (
 
 	// Magic file names. Directories in etcd cannot have data. Files whose names
 	// begin with '_' are hidden from directory listings.
-	keyspaceFilename         = "_Keyspace"
-	shardFilename            = "_Shard"
-	tabletFilename           = "_Tablet"
-	shardReplicationFilename = "_ShardReplication"
-	srvKeyspaceFilename      = "_SrvKeyspace"
-	srvShardFilename         = "_SrvShard"
-	endPointsFilename        = "_EndPoints"
+	dataFilename             = "_Data"
+	keyspaceFilename         = dataFilename
+	shardFilename            = dataFilename
+	tabletFilename           = dataFilename
+	shardReplicationFilename = dataFilename
+	srvKeyspaceFilename      = dataFilename
+	srvShardFilename         = dataFilename
+	endPointsFilename        = dataFilename
 )
 
 var (
