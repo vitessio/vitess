@@ -99,6 +99,67 @@ func formatTableStatuses(tableStatuses []*tableStatus, startTime time.Time) ([]s
 	return result, eta
 }
 
+// ExecuteFetchWithRetries will attempt to run ExecuteFetch for a single command, with a reasonably small timeout.
+// If will keep retrying the ExecuteFetch (for a finite but longer duration) if it fails due to a timeout or a
+// retriable application error.
+func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, command string, disableBinLogs bool) error {
+	retryDuration := 2 * time.Hour
+
+	executeFetchErrs := make(chan error)
+	defer close(executeFetchErrs)
+
+	// We should keep retrying up until the retryCtx runs out
+	retryCtx, retryCancel := context.WithTimeout(ctx, retryDuration)
+	defer retryCancel()
+
+	executeFetch := func() {
+		newCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+		_, err := wr.TabletManagerClient().ExecuteFetch(newCtx, ti, command, 0, false, disableBinLogs)
+		executeFetchErrs <- err
+	}
+	// Try for the first time
+	go executeFetch()
+
+	// Keep retrying until success, timeout, or unrecoverable failure
+	for {
+		// Non-blocking select statement, so that we know that retryCtx.Done() is guaranteed to be run after
+		// at most one execution of the rest of the for loop body.
+		select {
+		case <-retryCtx.Done():
+			if retryCtx.Err() == context.DeadlineExceeded {
+				return fmt.Errorf("failed to connect to destination tablet %v after retrying for %v", ti, retryDuration)
+			}
+			return fmt.Errorf("interrupted while trying to run %v on tablet %v", command, ti)
+		default:
+			break
+		}
+		select {
+		case err := <-executeFetchErrs:
+			switch {
+			// success!
+			case err == nil:
+				return nil
+			// retriable failure, either due to a timeout or an application-level retriable failure
+			case wr.TabletManagerClient().IsTimeoutError(err), strings.Contains(err.Error(), "retry: "):
+				go func() {
+					wr.Logger().Infof("Retrying failed ExecuteFetch on %v; failed with: %v", ti, err)
+					fmt.Printf("Tried to retry! \n")
+					// TODO(aaijazi): wait 30 second and re-resolve
+					executeFetch()
+				}()
+			default:
+				return err
+			}
+		case <-retryCtx.Done():
+			if retryCtx.Err() == context.DeadlineExceeded {
+				return fmt.Errorf("failed to connect to destination tablet %v after retrying for %v", ti, retryDuration)
+			}
+			return fmt.Errorf("interrupted while trying to run %v on tablet %v", command, ti)
+		}
+	}
+}
+
 // fillStringTemplate returns the string template filled
 func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
 	myTemplate := template.Must(template.New("").Parse(tmpl))
@@ -117,9 +178,10 @@ func runSqlCommands(wr *wrangler.Wrangler, ti *topo.TabletInfo, commands []strin
 			return fmt.Errorf("fillStringTemplate failed: %v", err)
 		}
 
-		ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
-		_, err = wr.TabletManagerClient().ExecuteFetch(ctx, ti, command, 0, false, disableBinLogs)
-		cancel()
+		err = executeFetchWithRetries(context.TODO(), wr, ti, command, disableBinLogs)
+		// ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+		// _, err = wr.TabletManagerClient().ExecuteFetch(ctx, ti, command, 0, false, disableBinLogs)
+		// cancel()
 		if err != nil {
 			return err
 		}
@@ -323,9 +385,10 @@ func executeFetchLoop(wr *wrangler.Wrangler, ti *topo.TabletInfo, insertChannel 
 				return nil
 			}
 			cmd = "INSERT INTO `" + ti.DbName() + "`." + cmd
-			ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
-			_, err := wr.TabletManagerClient().ExecuteFetch(ctx, ti, cmd, 0, false, disableBinLogs)
-			cancel()
+			err := executeFetchWithRetries(context.TODO(), wr, ti, cmd, disableBinLogs)
+			// ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+			// _, err := wr.TabletManagerClient().ExecuteFetch(ctx, ti, cmd, 0, false, disableBinLogs)
+			// cancel()
 			if err != nil {
 				return fmt.Errorf("ExecuteFetch failed: %v", err)
 			}
