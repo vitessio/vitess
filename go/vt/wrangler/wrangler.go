@@ -2,7 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// wrangler contains the Wrangler object to manage complex topology actions.
+// Package wrangler contains the Wrangler object to manage complex
+// topology actions.
 package wrangler
 
 import (

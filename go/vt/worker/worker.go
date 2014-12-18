@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 /*
-'worker' package contains the framework, utility methods and core
+Package worker contains the framework, utility methods and core
 functions for long running actions. 'vtworker' binary will use these.
 */
 package worker

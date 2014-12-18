@@ -2,8 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// This implements some additional error handling logic to make the client
-// more robust in the face of transient problems with easy solutions.
+// Package tablet implements some additional error handling logic to
+// make the client more robust in the face of transient problems with
+// easy solutions.
 package tablet
 
 import (

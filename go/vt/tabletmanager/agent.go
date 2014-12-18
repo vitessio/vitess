@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 /*
-Package agent exports the ActionAgent object. It keeps the local tablet
+Package tabletmanager exports the ActionAgent object. It keeps the local tablet
 state, starts / stops all associated services (query service,
 update stream, binlog players, ...), and handles tabletmanager RPCs
 to update the state.
