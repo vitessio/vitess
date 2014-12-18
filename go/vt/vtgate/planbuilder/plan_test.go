@@ -23,41 +23,41 @@ import (
 // hashIndex satisfies Functional, Unique.
 type hashIndex struct{}
 
-func (_ *hashIndex) Cost() int { return 1 }
-func (_ *hashIndex) Verify(_ VCursor, _ interface{}, _ key.KeyspaceId) (bool, error) {
+func (hi *hashIndex) Cost() int { return 1 }
+func (hi *hashIndex) Verify(VCursor, interface{}, key.KeyspaceId) (bool, error) {
 	return false, nil
 }
-func (_ *hashIndex) Map(_ VCursor, _ []interface{}) ([]key.KeyspaceId, error)  { return nil, nil }
-func (_ *hashIndex) Create(_ VCursor, _ interface{}) error                     { return nil }
-func (_ *hashIndex) Delete(_ VCursor, _ []interface{}, _ key.KeyspaceId) error { return nil }
+func (hi *hashIndex) Map(VCursor, []interface{}) ([]key.KeyspaceId, error) { return nil, nil }
+func (hi *hashIndex) Create(VCursor, interface{}) error                    { return nil }
+func (hi *hashIndex) Delete(VCursor, []interface{}, key.KeyspaceId) error  { return nil }
 
-func newHashIndex(_ map[string]interface{}) (Vindex, error) { return &hashIndex{}, nil }
+func newHashIndex(map[string]interface{}) (Vindex, error) { return &hashIndex{}, nil }
 
 // lookupIndex satisfies Lookup, Unique.
 type lookupIndex struct{}
 
-func (_ *lookupIndex) Cost() int { return 2 }
-func (_ *lookupIndex) Verify(_ VCursor, _ interface{}, _ key.KeyspaceId) (bool, error) {
+func (li *lookupIndex) Cost() int { return 2 }
+func (li *lookupIndex) Verify(VCursor, interface{}, key.KeyspaceId) (bool, error) {
 	return false, nil
 }
-func (_ *lookupIndex) Map(_ VCursor, _ []interface{}) ([]key.KeyspaceId, error)  { return nil, nil }
-func (_ *lookupIndex) Create(_ VCursor, _ interface{}, _ key.KeyspaceId) error   { return nil }
-func (_ *lookupIndex) Delete(_ VCursor, _ []interface{}, _ key.KeyspaceId) error { return nil }
+func (li *lookupIndex) Map(VCursor, []interface{}) ([]key.KeyspaceId, error) { return nil, nil }
+func (li *lookupIndex) Create(VCursor, interface{}, key.KeyspaceId) error    { return nil }
+func (li *lookupIndex) Delete(VCursor, []interface{}, key.KeyspaceId) error  { return nil }
 
-func newLookupIndex(_ map[string]interface{}) (Vindex, error) { return &lookupIndex{}, nil }
+func newLookupIndex(map[string]interface{}) (Vindex, error) { return &lookupIndex{}, nil }
 
 // multiIndex satisfies Lookup, NonUnique.
 type multiIndex struct{}
 
-func (_ *multiIndex) Cost() int { return 3 }
-func (_ *multiIndex) Verify(_ VCursor, _ interface{}, _ key.KeyspaceId) (bool, error) {
+func (mi *multiIndex) Cost() int { return 3 }
+func (mi *multiIndex) Verify(VCursor, interface{}, key.KeyspaceId) (bool, error) {
 	return false, nil
 }
-func (_ *multiIndex) Map(_ VCursor, _ []interface{}) ([][]key.KeyspaceId, error) { return nil, nil }
-func (_ *multiIndex) Create(_ VCursor, _ interface{}, _ key.KeyspaceId) error    { return nil }
-func (_ *multiIndex) Delete(_ VCursor, _ []interface{}, _ key.KeyspaceId) error  { return nil }
+func (mi *multiIndex) Map(VCursor, []interface{}) ([][]key.KeyspaceId, error) { return nil, nil }
+func (mi *multiIndex) Create(VCursor, interface{}, key.KeyspaceId) error      { return nil }
+func (mi *multiIndex) Delete(VCursor, []interface{}, key.KeyspaceId) error    { return nil }
 
-func newMultiIndex(_ map[string]interface{}) (Vindex, error) { return &multiIndex{}, nil }
+func newMultiIndex(map[string]interface{}) (Vindex, error) { return &multiIndex{}, nil }
 
 func init() {
 	Register("hash", newHashIndex)
