@@ -38,9 +38,8 @@ const spotCheckMultiplier = 1e6
 // panic with NewTabletError as the error type.
 // TODO(sougou): Switch to error return scheme.
 type QueryEngine struct {
-	schemaInfo    *SchemaInfo
-	queryRuleInfo *QueryRuleInfo
-	dbconfigs     *dbconfigs.DBConfigs
+	schemaInfo *SchemaInfo
+	dbconfigs  *dbconfigs.DBConfigs
 
 	// Pools
 	cachePool      *CachePool
@@ -121,7 +120,6 @@ func NewQueryEngine(config Config) *QueryEngine {
 		time.Duration(config.SchemaReloadTime*1e9),
 		time.Duration(config.IdleTimeout*1e9),
 	)
-	qe.queryRuleInfo = NewQueryRuleInfo()
 
 	mysqlStats = stats.NewTimings("Mysql")
 
@@ -279,5 +277,4 @@ func (qe *QueryEngine) Close() {
 	qe.schemaInfo.Close()
 	qe.cachePool.Close()
 	qe.dbconfigs = nil
-	qe.queryRuleInfo = NewQueryRuleInfo()
 }
