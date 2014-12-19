@@ -19,7 +19,7 @@ import (
 
 var (
 	// Actual ZkCustomRule object in charge of rule updates
-	zkCustomRule *ZkCustomRule = NewZkCustomRule(zk.NewMetaConn(false))
+	zkCustomRule *ZkCustomRule = NewZkCustomRule(zk.NewMetaConn())
 	// Commandline flag to specify rule path in zookeeper
 	zkRulePath = flag.String("zkcustomrules", "", "zookeeper based custom rule path")
 )
