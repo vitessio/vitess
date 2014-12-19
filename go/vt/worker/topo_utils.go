@@ -5,6 +5,7 @@
 package worker
 
 import (
+	"flag"
 	"fmt"
 	"math/rand"
 	"time"
@@ -14,9 +15,13 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
+var (
+	minHealthyEndPoints = flag.Int("min_healthy_rdonly_endpoints", 2, "minimum number of healthy rdonly endpoints required for checker")
+)
+
 // findHealthyRdonlyEndPoint returns a random healthy endpoint.
-// Since we don't want to use them all, we require at least 2 servers
-// are healthy.
+// Since we don't want to use them all, we require at least
+// minHealthyEndPoints servers to be healthy.
 func findHealthyRdonlyEndPoint(wr *wrangler.Wrangler, cell, keyspace, shard string) (topo.TabletAlias, error) {
 	endPoints, err := wr.TopoServer().GetEndPoints(cell, keyspace, shard, topo.TYPE_RDONLY)
 	if err != nil {
@@ -28,8 +33,8 @@ func findHealthyRdonlyEndPoint(wr *wrangler.Wrangler, cell, keyspace, shard stri
 			healthyEndpoints = append(healthyEndpoints, entry)
 		}
 	}
-	if len(healthyEndpoints) <= 1 {
-		return topo.TabletAlias{}, fmt.Errorf("Not enough endpoints to chose from in (%v,%v/%v), have %v healthy ones", cell, keyspace, shard, len(healthyEndpoints))
+	if len(healthyEndpoints) < *minHealthyEndPoints {
+		return topo.TabletAlias{}, fmt.Errorf("Not enough endpoints to chose from in (%v,%v/%v), have %v healthy ones, need at least %v", cell, keyspace, shard, len(healthyEndpoints), *minHealthyEndPoints)
 	}
 
 	// random server in the list is what we want

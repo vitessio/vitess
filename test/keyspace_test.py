@@ -27,16 +27,13 @@ UNSHARDED_KEYSPACE = "TEST_KEYSPACE_UNSHARDED"
 # range "" - 80
 shard_0_master = tablet.Tablet()
 shard_0_replica = tablet.Tablet()
-shard_0_rdonly = tablet.Tablet()
 # range 80 - ""
 shard_1_master = tablet.Tablet()
 shard_1_replica = tablet.Tablet()
-shard_1_rdonly = tablet.Tablet()
 
 # shard for UNSHARDED_KEYSPACE
 unsharded_master = tablet.Tablet()
 unsharded_replica = tablet.Tablet()
-unsharded_rdonly = tablet.Tablet()
 
 vtgate_server = None
 vtgate_port = None
@@ -69,13 +66,10 @@ def setUpModule():
     setup_procs = [
         shard_0_master.init_mysql(),
         shard_0_replica.init_mysql(),
-        shard_0_rdonly.init_mysql(),
         shard_1_master.init_mysql(),
         shard_1_replica.init_mysql(),
-        shard_1_rdonly.init_mysql(),
         unsharded_master.init_mysql(),
         unsharded_replica.init_mysql(),
-        unsharded_rdonly.init_mysql(),
         ]
     utils.wait_procs(setup_procs)
     setup_tablets()
@@ -90,18 +84,15 @@ def tearDownModule():
 
   global vtgate_server
   utils.vtgate_kill(vtgate_server)
-  tablet.kill_tablets([shard_0_master, shard_0_replica, shard_0_rdonly,
-                      shard_1_master, shard_1_replica, shard_1_rdonly])
+  tablet.kill_tablets([shard_0_master, shard_0_replica,
+                      shard_1_master, shard_1_replica])
   teardown_procs = [
       shard_0_master.teardown_mysql(),
       shard_0_replica.teardown_mysql(),
-      shard_0_rdonly.teardown_mysql(),
       shard_1_master.teardown_mysql(),
       shard_1_replica.teardown_mysql(),
-      shard_1_rdonly.teardown_mysql(),
       unsharded_master.teardown_mysql(),
       unsharded_replica.teardown_mysql(),
-      unsharded_rdonly.teardown_mysql(),
       ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
@@ -111,15 +102,10 @@ def tearDownModule():
 
   shard_0_master.remove_tree()
   shard_0_replica.remove_tree()
-  shard_0_rdonly.remove_tree()
   shard_1_master.remove_tree()
   shard_1_replica.remove_tree()
-  shard_1_rdonly.remove_tree()
-  shard_1_rdonly.remove_tree()
-  shard_1_rdonly.remove_tree()
   unsharded_master.remove_tree()
   unsharded_replica.remove_tree()
-  unsharded_rdonly.remove_tree()
 
 def setup_tablets():
   global vtgate_server
@@ -136,14 +122,12 @@ def setup_sharded_keyspace():
                    'keyspace_id', 'uint64'])
   shard_0_master.init_tablet('master', keyspace=SHARDED_KEYSPACE, shard='-80')
   shard_0_replica.init_tablet('replica', keyspace=SHARDED_KEYSPACE, shard='-80')
-  shard_0_rdonly.init_tablet('rdonly', keyspace=SHARDED_KEYSPACE, shard='-80')
   shard_1_master.init_tablet('master', keyspace=SHARDED_KEYSPACE, shard='80-')
   shard_1_replica.init_tablet('replica', keyspace=SHARDED_KEYSPACE,  shard='80-')
-  shard_1_rdonly.init_tablet('rdonly', keyspace=SHARDED_KEYSPACE,  shard='80-')
 
   utils.run_vtctl(['RebuildKeyspaceGraph', SHARDED_KEYSPACE,], auto_log=True)
 
-  for t in [shard_0_master, shard_0_replica, shard_0_rdonly, shard_1_master, shard_1_replica, shard_1_rdonly]:
+  for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
     t.create_db('vt_test_keyspace_sharded')
     t.mquery(shard_0_master.dbname, create_vt_insert_test)
     t.start_vttablet(wait_for_state=None)
@@ -161,9 +145,8 @@ def setup_sharded_keyspace():
 
   utils.check_srv_keyspace('test_nj', SHARDED_KEYSPACE,
                            'Partitions(master): -80 80-\n' +
-                           'Partitions(rdonly): -80 80-\n' +
                            'Partitions(replica): -80 80-\n' +
-                           'TabletTypes: master,rdonly,replica')
+                           'TabletTypes: master,replica')
 
 
 def setup_unsharded_keyspace():
@@ -172,16 +155,15 @@ def setup_unsharded_keyspace():
                    'keyspace_id', 'uint64'])
   unsharded_master.init_tablet('master', keyspace=UNSHARDED_KEYSPACE, shard='0')
   unsharded_replica.init_tablet('replica', keyspace=UNSHARDED_KEYSPACE, shard='0')
-  unsharded_rdonly.init_tablet('rdonly', keyspace=UNSHARDED_KEYSPACE, shard='0')
 
   utils.run_vtctl(['RebuildKeyspaceGraph', UNSHARDED_KEYSPACE,], auto_log=True)
 
-  for t in [unsharded_master, unsharded_replica, unsharded_rdonly]:
+  for t in [unsharded_master, unsharded_replica]:
     t.create_db('vt_test_keyspace_unsharded')
     t.mquery(unsharded_master.dbname, create_vt_insert_test)
     t.start_vttablet(wait_for_state=None)
 
-  for t in [unsharded_master, unsharded_replica, unsharded_rdonly]:
+  for t in [unsharded_master, unsharded_replica]:
     t.wait_for_vttablet_state('SERVING')
 
   utils.run_vtctl(['ReparentShard', '-force', '%s/0' % UNSHARDED_KEYSPACE,
@@ -192,12 +174,11 @@ def setup_unsharded_keyspace():
 
   utils.check_srv_keyspace('test_nj', UNSHARDED_KEYSPACE,
                            'Partitions(master): -\n' +
-                           'Partitions(rdonly): -\n' +
                            'Partitions(replica): -\n' +
-                           'TabletTypes: master,rdonly,replica')
+                           'TabletTypes: master,replica')
 
 
-ALL_DB_TYPES = ['master', 'replica', 'rdonly']
+ALL_DB_TYPES = ['master', 'replica']
 
 class TestKeyspace(unittest.TestCase):
   def _read_keyspace(self, keyspace_name):
