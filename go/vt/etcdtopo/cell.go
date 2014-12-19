@@ -6,6 +6,7 @@ package etcdtopo
 
 import (
 	"fmt"
+	"path"
 	"strings"
 
 	log "github.com/golang/glog"
@@ -18,6 +19,21 @@ type cellClient struct {
 	// version is the etcd ModifiedIndex of the cell record we read from the
 	// global cluster for this client.
 	version int64
+}
+
+func (s *Server) getCellList() ([]string, error) {
+	resp, err := s.getGlobal().Get(cellsDirPath, true /* sort */, false /* recursive */)
+	if err != nil {
+		return nil, convertError(err)
+	}
+	if resp.Node == nil {
+		return nil, ErrBadResponse
+	}
+	var cells []string
+	for _, node := range resp.Node.Nodes {
+		cells = append(cells, path.Base(node.Key))
+	}
+	return cells, nil
 }
 
 // cell returns a client for the given cell-local etcd cluster.

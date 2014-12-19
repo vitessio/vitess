@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/cmd/vtctld/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
@@ -68,7 +69,7 @@ func (ex ZkExplorer) GetReplicationSlaves(cell, keyspace, shard string) string {
 	return path.Join("/zk", cell, "vt/replication", keyspace, shard)
 }
 
-func (ex ZkExplorer) HandlePath(actionRepo *ActionRepository, zkPath string, r *http.Request) interface{} {
+func (ex ZkExplorer) HandlePath(actionRepo proto.ActionRepository, zkPath string, r *http.Request) interface{} {
 	result := NewZkResult(zkPath)
 
 	if zkPath == "/zk" {
