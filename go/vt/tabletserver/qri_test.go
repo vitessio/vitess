@@ -15,10 +15,19 @@ import (
 )
 
 var (
-	keyrangeRules    *QueryRules
-	blacklistRules   *QueryRules
-	customQueryRules *QueryRules
+	keyrangeRules  *QueryRules
+	blacklistRules *QueryRules
+	otherRules     *QueryRules
 )
+
+// mimic query rules from keyrange
+const keyrangeQueryRules string = "KEYRANGE_QUERY_RULES"
+
+// mimic query rules from blacklist
+const blacklistQueryRules string = "BLACKLIST_QUERY_RULES"
+
+// mimic query rules from custom source
+const customQueryRules string = "CUSTOM_QUERY_RULES"
 
 func setupQueryRules() {
 	var qr *QueryRule
@@ -55,19 +64,33 @@ func setupQueryRules() {
 	blacklistRules.Add(qr)
 
 	// mock custom rules
-	customQueryRules = NewQueryRules()
+	otherRules = NewQueryRules()
 	qr = NewQueryRule("sample custom rule", "customrule_ban_bindvar", QR_FAIL)
 	qr.AddTableCond("t_customer")
 	qr.AddBindVarCond("bindvar1", true, false, QR_NOOP, nil)
-	customQueryRules.Add(qr)
+	otherRules.Add(qr)
 }
 
 func TestQueryRuleInfoGetSetQueryRules(t *testing.T) {
+	var qrs *QueryRules
 	setupQueryRules()
 	qri := NewQueryRuleInfo()
 
+	err := qri.RegisterQueryRuleSource(keyrangeQueryRules)
+	if err != nil {
+		t.Errorf("Fail to register query rule source %s: %s", keyrangeQueryRules, err)
+	}
+	err = qri.RegisterQueryRuleSource(blacklistQueryRules)
+	if err != nil {
+		t.Errorf("Fail to register query rule source %s: %s", blacklistQueryRules, err)
+	}
+	err = qri.RegisterQueryRuleSource(customQueryRules)
+	if err != nil {
+		t.Errorf("Fail to register query rule source %s: %s", customQueryRules, err)
+	}
+
 	// Test if we can get a QueryRules without a predefined rule set name
-	err, qrs := qri.GetRules("Foo")
+	err, qrs = qri.GetRules("Foo")
 	if err == nil {
 		t.Errorf("GetRules shouldn't succeed with 'Foo' as the rule set name")
 	}
@@ -85,54 +108,69 @@ func TestQueryRuleInfoGetSetQueryRules(t *testing.T) {
 	}
 
 	// Test if we can successfully set QueryRules previously mocked into QueryRuleInfo
-	err = qri.SetRules(KeyrangeQueryRules, keyrangeRules)
+	err = qri.SetRules(keyrangeQueryRules, keyrangeRules)
 	if err != nil {
-		t.Errorf("Failed to set keyrange QueryRules, errmsg: %s", err)
+		t.Errorf("Failed to set keyrange QueryRules : %s", err)
 	}
-	err = qri.SetRules(BlacklistQueryRules, blacklistRules)
+	err = qri.SetRules(blacklistQueryRules, blacklistRules)
 	if err != nil {
-		t.Errorf("Failed to set blacklist QueryRules, errmsg: %s", err)
+		t.Errorf("Failed to set blacklist QueryRules: %s", err)
 	}
-	err = qri.SetRules(CustomQueryRules, customQueryRules)
+	err = qri.SetRules(customQueryRules, otherRules)
 	if err != nil {
-		t.Errorf("Failed to set custom QueryRules, errmsg: %s", err)
+		t.Errorf("Failed to set custom QueryRules: %s", err)
 	}
 
 	// Test if we can successfully retrive rules that've been set
-	err, qrs = qri.GetRules(KeyrangeQueryRules)
+	err, qrs = qri.GetRules(keyrangeQueryRules)
 	if err != nil {
-		t.Errorf("GetRules failed to retrieve KeyrangeQueryRules that has been set, errmsg: %s", err)
+		t.Errorf("GetRules failed to retrieve keyrangeQueryRules that has been set: %s", err)
 	}
 	if !reflect.DeepEqual(qrs, keyrangeRules) {
-		t.Errorf("KeyrangeQueryRules retrived is %v, but the expected value should be %v", qrs, keyrangeRules)
+		t.Errorf("keyrangeQueryRules retrived is %v, but the expected value should be %v", qrs, keyrangeRules)
 	}
 
-	err, qrs = qri.GetRules(BlacklistQueryRules)
+	err, qrs = qri.GetRules(blacklistQueryRules)
 	if err != nil {
-		t.Errorf("GetRules failed to retrieve BlacklistQueryRules that has been set, errmsg: %s", err)
+		t.Errorf("GetRules failed to retrieve blacklistQueryRules that has been set: %s", err)
 	}
 	if !reflect.DeepEqual(qrs, blacklistRules) {
-		t.Errorf("BlacklistQueryRules retrived is %v, but the expected value should be %v", qrs, blacklistRules)
+		t.Errorf("blacklistQueryRules retrived is %v, but the expected value should be %v", qrs, blacklistRules)
 	}
 
-	err, qrs = qri.GetRules(CustomQueryRules)
+	err, qrs = qri.GetRules(customQueryRules)
 	if err != nil {
-		t.Errorf("GetRules failed to retrieve CustomQueryRules that has been set, errmsg: %s", err)
+		t.Errorf("GetRules failed to retrieve customQueryRules that has been set: %s", err)
 	}
-	if !reflect.DeepEqual(qrs, customQueryRules) {
-		t.Errorf("CustomQueryRules retrived is %v, but the expected value should be %v", qrs, customQueryRules)
+	if !reflect.DeepEqual(qrs, otherRules) {
+		t.Errorf("customQueryRules retrived is %v, but the expected value should be %v", qrs, customQueryRules)
 	}
 }
 
 func TestQueryRuleInfoFilterByPlan(t *testing.T) {
+	var qrs *QueryRules
 	setupQueryRules()
 	qri := NewQueryRuleInfo()
-	qri.SetRules(KeyrangeQueryRules, keyrangeRules)
-	qri.SetRules(BlacklistQueryRules, blacklistRules)
-	qri.SetRules(CustomQueryRules, customQueryRules)
+
+	err := qri.RegisterQueryRuleSource(keyrangeQueryRules)
+	if err != nil {
+		t.Errorf("Fail to register query rule source %s: %s", keyrangeQueryRules, err)
+	}
+	err = qri.RegisterQueryRuleSource(blacklistQueryRules)
+	if err != nil {
+		t.Errorf("Fail to register query rule source %s: %s", blacklistQueryRules, err)
+	}
+	err = qri.RegisterQueryRuleSource(customQueryRules)
+	if err != nil {
+		t.Errorf("Fail to register query rule source %s: %s", customQueryRules, err)
+	}
+
+	qri.SetRules(keyrangeQueryRules, keyrangeRules)
+	qri.SetRules(blacklistQueryRules, blacklistRules)
+	qri.SetRules(customQueryRules, otherRules)
 
 	// Test filter by keyrange rule
-	qrs := qri.filterByPlan("insert into t_test values(123, 456, 'abc')", planbuilder.PLAN_INSERT_PK, "t_test")
+	qrs = qri.filterByPlan("insert into t_test values(123, 456, 'abc')", planbuilder.PLAN_INSERT_PK, "t_test")
 	if l := len(qrs.rules); l != 1 {
 		t.Errorf("Insert PK query matches %d rules, but we expect %d", l, 1)
 	}
@@ -159,11 +197,11 @@ func TestQueryRuleInfoFilterByPlan(t *testing.T) {
 	}
 
 	// Test match two rules: both keyrange rule and custom rule will be matched
-	customQueryRules = NewQueryRules()
+	otherRules = NewQueryRules()
 	qr := NewQueryRule("sample custom rule", "customrule_ban_bindvar", QR_FAIL)
 	qr.AddBindVarCond("bindvar1", true, false, QR_NOOP, nil)
-	customQueryRules.Add(qr)
-	qri.SetRules(CustomQueryRules, customQueryRules)
+	otherRules.Add(qr)
+	qri.SetRules(customQueryRules, otherRules)
 	qrs = qri.filterByPlan("insert into t_test values (:bindvar1, 123, 'test')", planbuilder.PLAN_INSERT_PK, "t_test")
 	if l := len(qrs.rules); l != 2 {
 		t.Errorf("Insert into t_test matches %d rules: %v, but we expect %d rules to be matched", l, qrs.rules, 2)
