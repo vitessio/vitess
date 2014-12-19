@@ -58,7 +58,9 @@ func tabletParamToTabletAlias(param string) topo.TabletAlias {
 }
 
 func main() {
-	dbconfigs.RegisterFlags()
+	flags := dbconfigs.AppConfig | dbconfigs.DbaConfig |
+		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
+	dbconfigs.RegisterFlags(flags)
 	mysqlctl.RegisterFlags()
 	flag.Parse()
 	if len(flag.Args()) > 0 {
@@ -78,7 +80,7 @@ func main() {
 		log.Fatalf("mycnf read failed: %v", err)
 	}
 
-	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile)
+	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, flags)
 	if err != nil {
 		log.Warning(err)
 	}

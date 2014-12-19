@@ -350,7 +350,7 @@ func main() {
 		}()
 	}
 
-	zconn := zk.NewMetaConn(false)
+	zconn := zk.NewMetaConn()
 	fqdn := netutil.FullyQualifiedHostnameOrPanic()
 	zr1 := newZknsResolver(zconn, fqdn, *zknsDomain, *zknsRoot)
 	pd := &pdns{zr1}

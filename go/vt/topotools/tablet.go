@@ -25,7 +25,7 @@ import (
 	"fmt"
 	"sync"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
@@ -50,7 +50,7 @@ func ConfigureTabletHook(hk *hook.Hook, tabletAlias topo.TabletAlias) {
 // probably dead. So if 'force' is true, we will also remove pending
 // remote actions.  And if 'force' is false, we also run an optional
 // hook.
-func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
+func Scrap(ctx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
 	tablet, err := ts.GetTablet(tabletAlias)
 	if err != nil {
 		return err
@@ -62,7 +62,7 @@ func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
 	tablet.Type = topo.TYPE_SCRAP
 	tablet.Parent = topo.TabletAlias{}
 	// Update the tablet first, since that is canonical.
-	err = topo.UpdateTablet(context.TODO(), ts, tablet)
+	err = topo.UpdateTablet(ctx, ts, tablet)
 	if err != nil {
 		return err
 	}
@@ -102,7 +102,7 @@ func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
 // - if health is nil, we don't touch the Tablet's Health record.
 // - if health is an empty map, we clear the Tablet's Health record.
 // - if health has values, we overwrite the Tablet's Health record.
-func ChangeType(ts topo.Server, tabletAlias topo.TabletAlias, newType topo.TabletType, health map[string]string, runHooks bool) error {
+func ChangeType(ctx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, newType topo.TabletType, health map[string]string, runHooks bool) error {
 	tablet, err := ts.GetTablet(tabletAlias)
 	if err != nil {
 		return err
@@ -165,5 +165,5 @@ func ChangeType(ts topo.Server, tabletAlias topo.TabletAlias, newType topo.Table
 			tablet.Health = health
 		}
 	}
-	return topo.UpdateTablet(context.TODO(), ts, tablet)
+	return topo.UpdateTablet(ctx, ts, tablet)
 }

@@ -12,7 +12,7 @@ import (
 	"sort"
 	"time"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/rpcplus"
@@ -20,16 +20,14 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/zk"
 )
 
 var (
 	usage = `
-Queries the zkocc zookeeper cache, for test purposes. In get mode, if more
-than one value is asked for, will use getv.
+Queries the topo server, for test purposes.
 `
-	mode       = flag.String("mode", "get", "which operation to run on the node (get, children, qps, qps2)")
-	server     = flag.String("server", "localhost:3801", "zkocc server to dial")
+	mode       = flag.String("mode", "get", "which operation to run on the node (getSrvKeyspaceNames, getSrvKeyspace, getEndPoints, qps)")
+	server     = flag.String("server", "localhost:3801", "topo server to dial")
 	timeout    = flag.Duration("timeout", 5*time.Second, "connection timeout")
 	cpuProfile = flag.String("cpu_profile", "", "write cpu profile to file")
 )
@@ -45,58 +43,9 @@ func init() {
 func connect() *rpcplus.Client {
 	rpcClient, err := bsonrpc.DialHTTP("tcp", *server, *timeout, nil)
 	if err != nil {
-		log.Fatalf("Can't connect to zkocc: %v", err)
+		log.Fatalf("Can't connect to topo server: %v", err)
 	}
 	return rpcClient
-}
-
-func get(rpcClient *rpcplus.Client, path string, verbose bool) {
-	// it's a get
-	zkPath := &zk.ZkPath{Path: path}
-	zkNode := &zk.ZkNode{}
-	if err := rpcClient.Call(context.TODO(), "ZkReader.Get", zkPath, zkNode); err != nil {
-		log.Fatalf("ZkReader.Get error: %v", err)
-	}
-	if verbose {
-		println(fmt.Sprintf("%v = %v (NumChildren=%v, Version=%v, Cached=%v, Stale=%v)", zkNode.Path, zkNode.Data, zkNode.Stat.NumChildren(), zkNode.Stat.Version(), zkNode.Cached, zkNode.Stale))
-	}
-
-}
-
-func getv(rpcClient *rpcplus.Client, paths []string, verbose bool) {
-	zkPathV := &zk.ZkPathV{Paths: make([]string, len(paths))}
-	for i, v := range paths {
-		zkPathV.Paths[i] = v
-	}
-	zkNodeV := &zk.ZkNodeV{}
-	if err := rpcClient.Call(context.TODO(), "ZkReader.GetV", zkPathV, zkNodeV); err != nil {
-		log.Fatalf("ZkReader.GetV error: %v", err)
-	}
-	if verbose {
-		for i, zkNode := range zkNodeV.Nodes {
-			println(fmt.Sprintf("[%v] %v = %v (NumChildren=%v, Version=%v, Cached=%v, Stale=%v)", i, zkNode.Path, zkNode.Data, zkNode.Stat.NumChildren(), zkNode.Stat.Version(), zkNode.Cached, zkNode.Stale))
-		}
-	}
-}
-
-func children(rpcClient *rpcplus.Client, paths []string, verbose bool) {
-	for _, v := range paths {
-		zkPath := &zk.ZkPath{Path: v}
-		zkNode := &zk.ZkNode{}
-		if err := rpcClient.Call(context.TODO(), "ZkReader.Children", zkPath, zkNode); err != nil {
-			log.Fatalf("ZkReader.Children error: %v", err)
-		}
-		if verbose {
-			println(fmt.Sprintf("Path = %v", zkNode.Path))
-			for i, child := range zkNode.Children {
-				println(fmt.Sprintf("Child[%v] = %v", i, child))
-			}
-			println(fmt.Sprintf("NumChildren = %v", zkNode.Stat.NumChildren()))
-			println(fmt.Sprintf("CVersion = %v", zkNode.Stat.CVersion()))
-			println(fmt.Sprintf("Cached = %v", zkNode.Cached))
-			println(fmt.Sprintf("Stale = %v", zkNode.Stale))
-		}
-	}
 }
 
 func getSrvKeyspaceNames(rpcClient *rpcplus.Client, cell string, verbose bool) {
@@ -162,38 +111,9 @@ func getEndPoints(rpcClient *rpcplus.Client, cell, keyspace, shard, tabletType s
 	}
 }
 
-// qps is a function used by tests to run a zkocc load check.
-// It will get zk paths as fast as possible and display the QPS.
-func qps(paths []string) {
-	var count sync2.AtomicInt32
-	for _, path := range paths {
-		for i := 0; i < 10; i++ {
-			go func() {
-				rpcClient := connect()
-				for true {
-					get(rpcClient, path, false)
-					count.Add(1)
-				}
-			}()
-		}
-	}
-
-	ticker := time.NewTicker(time.Second)
-	i := 0
-	for _ = range ticker.C {
-		c := count.Get()
-		count.Set(0)
-		println(fmt.Sprintf("QPS = %v", c))
-		i++
-		if i == 10 {
-			break
-		}
-	}
-}
-
-// qps2 is a function used by tests to run a vtgate load check.
+// qps is a function used by tests to run a vtgate load check.
 // It will get the same srvKeyspaces as fast as possible and display the QPS.
-func qps2(cell string, keyspaces []string) {
+func qps(cell string, keyspaces []string) {
 	var count sync2.AtomicInt32
 	for _, keyspace := range keyspaces {
 		for i := 0; i < 10; i++ {
@@ -239,19 +159,7 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	if *mode == "get" {
-		rpcClient := connect()
-		if len(args) == 1 {
-			get(rpcClient, args[0], true)
-		} else {
-			getv(rpcClient, args, true)
-		}
-
-	} else if *mode == "children" {
-		rpcClient := connect()
-		children(rpcClient, args, true)
-
-	} else if *mode == "getSrvKeyspaceNames" {
+	if *mode == "getSrvKeyspaceNames" {
 		rpcClient := connect()
 		if len(args) == 1 {
 			getSrvKeyspaceNames(rpcClient, args[0], true)
@@ -276,10 +184,7 @@ func main() {
 		}
 
 	} else if *mode == "qps" {
-		qps(args)
-
-	} else if *mode == "qps2" {
-		qps2(args[0], args[1:])
+		qps(args[0], args[1:])
 
 	} else {
 		flag.Usage()

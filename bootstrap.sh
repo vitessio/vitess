@@ -38,9 +38,15 @@ ln -nfs $VTTOP/third_party/go/launchpad.net $VTROOT/src
 go install launchpad.net/gozk/zookeeper
 
 go get code.google.com/p/goprotobuf/proto
-go get code.google.com/p/go.net/context
-go get code.google.com/p/go.tools/cmd/goimports
+go get golang.org/x/net/context
+go get golang.org/x/tools/cmd/goimports
 go get github.com/golang/glog
+go get github.com/coreos/go-etcd/etcd
+
+# Packages for uploading code coverage to coveralls.io
+go get code.google.com/p/go.tools/cmd/cover
+go get github.com/modocache/gover
+go get github.com/mattn/goveralls
 
 ln -snf $VTTOP/config $VTROOT/config
 ln -snf $VTTOP/data $VTROOT/data

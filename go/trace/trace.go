@@ -3,11 +3,12 @@
 // license that can be found in the LICENSE file.
 
 // Package trace contains a helper interface that allows various tracing
-// tools to be plugged in to components using this interface.
+// tools to be plugged in to components using this interface. If no plugin is
+// registered, the default one makes all trace calls into no-ops.
 package trace
 
 import (
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 )
 
 // Span represents a unit of work within a trace. After creating a Span with
@@ -57,13 +58,23 @@ func NewSpanFromContext(ctx context.Context) Span {
 	return NewSpan(nil)
 }
 
-// spanFactory should be changed by a plugin during init() to a factory that
-// creates an actual Span implementation for that plugin's tracing framework.
-var spanFactory interface {
+// SpanFactory is an interface for creating spans or extracting them from Contexts.
+type SpanFactory interface {
 	New(parent Span) Span
 	FromContext(ctx context.Context) (Span, bool)
 	NewContext(parent context.Context, span Span) context.Context
-} = fakeSpanFactory{}
+}
+
+var spanFactory SpanFactory = fakeSpanFactory{}
+
+// RegisterSpanFactory should be called by a plugin during init() to install a
+// factory that creates Spans for that plugin's tracing framework. Each call to
+// RegisterSpanFactory will overwrite any previous setting. If no factory is
+// registered, the default fake factory will produce Spans whose methods are all
+// no-ops.
+func RegisterSpanFactory(sf SpanFactory) {
+	spanFactory = sf
+}
 
 type fakeSpanFactory struct{}
 

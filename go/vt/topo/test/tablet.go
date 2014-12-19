@@ -1,4 +1,4 @@
-// package test contains utilities to test topo.Server
+// Package test contains utilities to test topo.Server
 // implementations. If you are testing your implementation, you will
 // want to call CheckAll in your test method. For an example, look at
 // the tests in github.com/youtube/vitess/go/vt/zktopo.
@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/topo"
 )

@@ -1,4 +1,4 @@
-// package test contains utilities to test topo.Server
+// Package test contains utilities to test topo.Server
 // implementations. If you are testing your implementation, you will
 // want to call CheckAll in your test method. For an example, look at
 // the tests in github.com/youtube/vitess/go/vt/zktopo.
@@ -64,6 +64,10 @@ func CheckKeyspace(t *testing.T, ts topo.Server) {
 		t.Errorf("GetKeyspaces: want %v, got %v", []string{"test_keyspace", "test_keyspace2"}, keyspaces)
 	}
 
+	// Call delete shards and make sure the keyspace still exists.
+	if err := ts.DeleteKeyspaceShards("test_keyspace2"); err != nil {
+		t.Errorf("DeleteKeyspaceShards: %v", err)
+	}
 	ki, err := ts.GetKeyspace("test_keyspace2")
 	if err != nil {
 		t.Fatalf("GetKeyspace: %v", err)

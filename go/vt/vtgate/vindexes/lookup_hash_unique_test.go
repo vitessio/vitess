@@ -64,7 +64,7 @@ func TestLookupHashUniqueCreate(t *testing.T) {
 		Sql: "insert into t(fromc, toc) values(:fromc, :toc)",
 		BindVariables: map[string]interface{}{
 			"fromc": 1,
-			"toc":   uint64(1),
+			"toc":   int64(1),
 		},
 	}
 	if !reflect.DeepEqual(vc.query, wantQuery) {
@@ -78,14 +78,14 @@ func TestLookupHashUniqueGenerate(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if got.(uint64) != 1 {
+	if got != 1 {
 		t.Errorf("Generate(): %+v, want 1", got)
 	}
 	wantQuery := &tproto.BoundQuery{
 		Sql: "insert into t(fromc, toc) values(:fromc, :toc)",
 		BindVariables: map[string]interface{}{
 			"fromc": nil,
-			"toc":   uint64(1),
+			"toc":   int64(1),
 		},
 	}
 	if !reflect.DeepEqual(vc.query, wantQuery) {
@@ -95,15 +95,15 @@ func TestLookupHashUniqueGenerate(t *testing.T) {
 
 func TestLookupHashUniqueDelete(t *testing.T) {
 	vc := &vcursor{}
-	err := lhu.Delete(vc, 1, "\x16k@\xb4J\xbaK\xd6")
+	err := lhu.Delete(vc, []interface{}{1}, "\x16k@\xb4J\xbaK\xd6")
 	if err != nil {
 		t.Error(err)
 	}
 	wantQuery := &tproto.BoundQuery{
-		Sql: "delete from t where fromc = :fromc and toc = :toc",
+		Sql: "delete from t where fromc in ::fromc and toc = :toc",
 		BindVariables: map[string]interface{}{
-			"fromc": 1,
-			"toc":   uint64(1),
+			"fromc": []interface{}{1},
+			"toc":   int64(1),
 		},
 	}
 	if !reflect.DeepEqual(vc.query, wantQuery) {

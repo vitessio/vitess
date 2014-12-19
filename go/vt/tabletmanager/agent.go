@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 /*
-Package agent exports the ActionAgent object. It keeps the local tablet
+Package tabletmanager exports the ActionAgent object. It keeps the local tablet
 state, starts / stops all associated services (query service,
 update stream, binlog players, ...), and handles tabletmanager RPCs
 to update the state.
@@ -29,7 +29,7 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/history"

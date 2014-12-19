@@ -14,7 +14,7 @@ import (
 	"reflect"
 	"time"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/timer"
@@ -220,7 +220,8 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 
 	// Change the Type, update the health. Note we pass in a map
 	// that's not nil, meaning if it's empty, we will clear it.
-	if err := topotools.ChangeType(agent.TopoServer, tablet.Alias, newTabletType, health, true /*runHooks*/); err != nil {
+	ctx := context.Background()
+	if err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, newTabletType, health, true /*runHooks*/); err != nil {
 		log.Infof("Error updating tablet record: %v", err)
 		return
 	}
@@ -232,7 +233,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 	}
 
 	// run the post action callbacks, not much we can do with returned error
-	if err := agent.refreshTablet(context.TODO(), "healthcheck"); err != nil {
+	if err := agent.refreshTablet(ctx, "healthcheck"); err != nil {
 		log.Warningf("refreshTablet failed: %v", err)
 	}
 }
@@ -255,7 +256,8 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topo.TabletType
 
 	// Change the Type to spare, update the health. Note we pass in a map
 	// that's not nil, meaning we will clear it.
-	if err := topotools.ChangeType(agent.TopoServer, tablet.Alias, topo.TYPE_SPARE, make(map[string]string), true /*runHooks*/); err != nil {
+	ctx := context.Background()
+	if err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topo.TYPE_SPARE, make(map[string]string), true /*runHooks*/); err != nil {
 		log.Infof("Error updating tablet record: %v", err)
 		return
 	}
@@ -270,7 +272,7 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topo.TabletType
 	// ourself as OnTermSync (synchronous). The rest can be done asynchronously.
 	go func() {
 		// Run the post action callbacks (let them shutdown the query service)
-		if err := agent.refreshTablet(context.TODO(), "terminatehealthcheck"); err != nil {
+		if err := agent.refreshTablet(ctx, "terminatehealthcheck"); err != nil {
 			log.Warningf("refreshTablet failed: %v", err)
 		}
 	}()
@@ -279,11 +281,10 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topo.TabletType
 // rebuildShardIfNeeded will rebuild the serving graph if we need to
 func (agent *ActionAgent) rebuildShardIfNeeded(tablet *topo.TabletInfo, targetTabletType topo.TabletType) error {
 	if topo.IsInServingGraph(targetTabletType) {
-		// TODO: interrupted may need to be a global one closed when we exit
-		interrupted := make(chan struct{})
+		ctx := context.Background()
 
 		// no need to take the shard lock in this case
-		if _, err := topotools.RebuildShard(context.TODO(), logutil.NewConsoleLogger(), agent.TopoServer, tablet.Keyspace, tablet.Shard, []string{tablet.Alias.Cell}, agent.LockTimeout, interrupted); err != nil {
+		if _, err := topotools.RebuildShard(ctx, logutil.NewConsoleLogger(), agent.TopoServer, tablet.Keyspace, tablet.Shard, []string{tablet.Alias.Cell}, agent.LockTimeout); err != nil {
 			return fmt.Errorf("topotools.RebuildShard returned an error: %v", err)
 		}
 	}

@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
@@ -77,7 +77,7 @@ func (wr *Wrangler) ValidateSchemaShard(keyspace, shard string, excludeTables []
 
 	// read all the aliases in the shard, that is all tablets that are
 	// replicating from the master
-	aliases, err := topo.FindAllTabletAliasesInShard(context.TODO(), wr.ts, keyspace, shard)
+	aliases, err := topo.FindAllTabletAliasesInShard(wr.ctx, wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -138,7 +138,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(keyspace string, excludeTables []stri
 	wg := sync.WaitGroup{}
 
 	// first diff the slaves in the reference shard 0
-	aliases, err := topo.FindAllTabletAliasesInShard(context.TODO(), wr.ts, keyspace, shards[0])
+	aliases, err := topo.FindAllTabletAliasesInShard(wr.ctx, wr.ts, keyspace, shards[0])
 	if err != nil {
 		return err
 	}
@@ -165,7 +165,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(keyspace string, excludeTables []stri
 			continue
 		}
 
-		aliases, err := topo.FindAllTabletAliasesInShard(context.TODO(), wr.ts, keyspace, shard)
+		aliases, err := topo.FindAllTabletAliasesInShard(wr.ctx, wr.ts, keyspace, shard)
 		if err != nil {
 			er.RecordError(err)
 			continue
@@ -252,7 +252,7 @@ type TabletStatus struct {
 func (wr *Wrangler) applySchemaShard(shardInfo *topo.ShardInfo, preflight *myproto.SchemaChangeResult, masterTabletAlias topo.TabletAlias, change string, newParentTabletAlias topo.TabletAlias, simple, force bool) (*myproto.SchemaChangeResult, error) {
 
 	// find all the shards we need to handle
-	aliases, err := topo.FindAllTabletAliasesInShard(context.TODO(), wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
+	aliases, err := topo.FindAllTabletAliasesInShard(wr.ctx, wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
 	if err != nil {
 		return nil, err
 	}
@@ -386,7 +386,7 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 	// if newParentTabletAlias is passed in, use that as the new master
 	if !newParentTabletAlias.IsZero() {
 		log.Infof("Reparenting with new master set to %v", newParentTabletAlias)
-		tabletMap, err := topo.GetTabletMapForShard(context.TODO(), wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
+		tabletMap, err := topo.GetTabletMapForShard(wr.ctx, wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
 		if err != nil {
 			return nil, err
 		}

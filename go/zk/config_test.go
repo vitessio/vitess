@@ -29,9 +29,8 @@ func TestZkConfig(t *testing.T) {
 	t.Logf("fakeAddr: %v", fakeAddr)
 
 	configMap := map[string]string{
-		fakeCell:              fakeAddr,
-		fakeCell + "z:_zkocc": "localhost:2182",
-		fakeCell + "-global":  "localhost:2183",
+		fakeCell:             fakeAddr,
+		fakeCell + "-global": "localhost:2183",
 	}
 	t.Logf("configMap: %+v", configMap)
 
@@ -52,7 +51,7 @@ func TestZkConfig(t *testing.T) {
 
 	// test ZkPathToZkAddr
 	for _, path := range []string{"/zk/" + fakeCell, "/zk/" + fakeCell + "/", "/zk/local", "/zk/local/"} {
-		zkAddr, err := ZkPathToZkAddr(path, false)
+		zkAddr, err := ZkPathToZkAddr(path)
 		if err != nil {
 			t.Errorf("ZkPathToZkAddr(%v, false): %v", path, err.Error())
 		}
@@ -62,7 +61,7 @@ func TestZkConfig(t *testing.T) {
 	}
 
 	// test ZkKnownCells
-	knownCells, err := ZkKnownCells(false)
+	knownCells, err := ZkKnownCells()
 	if err != nil {
 		t.Errorf("unexpected error from ZkKnownCells(): %v", err)
 	}
@@ -70,12 +69,5 @@ func TestZkConfig(t *testing.T) {
 	sort.Strings(expectedKnownCells)
 	if len(knownCells) != 2 || knownCells[0] != expectedKnownCells[0] || knownCells[1] != expectedKnownCells[1] {
 		t.Errorf("ZkKnownCells(false) failed, expected %v got %v", expectedKnownCells, knownCells)
-	}
-	knownCells, err = ZkKnownCells(true)
-	if err != nil {
-		t.Errorf("unexpected error from ZkKnownCells(): %v", err)
-	}
-	if len(knownCells) != 1 || knownCells[0] != fakeCell+"z" {
-		t.Errorf("ZkKnownCells(true) failed, expected %v got %v", []string{fakeCell}, knownCells)
 	}
 }

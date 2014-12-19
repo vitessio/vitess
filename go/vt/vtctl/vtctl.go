@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/jscfg"
@@ -335,7 +334,7 @@ func fmtAction(action *actionnode.ActionNode) string {
 }
 
 func listTabletsByShard(wr *wrangler.Wrangler, keyspace, shard string) error {
-	tabletAliases, err := topo.FindAllTabletAliasesInShard(context.TODO(), wr.TopoServer(), keyspace, shard)
+	tabletAliases, err := topo.FindAllTabletAliasesInShard(wr.Context(), wr.TopoServer(), keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -343,7 +342,7 @@ func listTabletsByShard(wr *wrangler.Wrangler, keyspace, shard string) error {
 }
 
 func dumpAllTablets(wr *wrangler.Wrangler, zkVtPath string) error {
-	tablets, err := topotools.GetAllTablets(context.TODO(), wr.TopoServer(), zkVtPath)
+	tablets, err := topotools.GetAllTablets(wr.Context(), wr.TopoServer(), zkVtPath)
 	if err != nil {
 		return err
 	}
@@ -354,7 +353,7 @@ func dumpAllTablets(wr *wrangler.Wrangler, zkVtPath string) error {
 }
 
 func dumpTablets(wr *wrangler.Wrangler, tabletAliases []topo.TabletAlias) error {
-	tabletMap, err := topo.GetTabletMap(context.TODO(), wr.TopoServer(), tabletAliases)
+	tabletMap, err := topo.GetTabletMap(wr.Context(), wr.TopoServer(), tabletAliases)
 	if err != nil {
 		return err
 	}
@@ -1192,7 +1191,7 @@ func commandSetShardTabletControl(wr *wrangler.Wrangler, subFlags *flag.FlagSet,
 	cellsStr := subFlags.String("cells", "", "comma separated list of cells to update")
 	tablesStr := subFlags.String("tables", "", "comma separated list of tables to replicate (used for vertical split)")
 	remove := subFlags.Bool("remove", false, "will remove cells for vertical splits (requires tables)")
-	disableQueryService := subFlags.Bool("disableQueryService", false, "will disable query service on the provided nodes")
+	disableQueryService := subFlags.Bool("disable_query_service", false, "will disable query service on the provided nodes")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1292,7 +1291,7 @@ func commandShardReplicationAdd(wr *wrangler.Wrangler, subFlags *flag.FlagSet, a
 	if err != nil {
 		return err
 	}
-	return topo.UpdateShardReplicationRecord(context.TODO(), wr.TopoServer(), keyspace, shard, tabletAlias, parentAlias)
+	return topo.UpdateShardReplicationRecord(wr.Context(), wr.TopoServer(), keyspace, shard, tabletAlias, parentAlias)
 }
 
 func commandShardReplicationRemove(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

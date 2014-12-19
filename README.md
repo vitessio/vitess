@@ -1,4 +1,4 @@
-# Vitess
+# Vitess <p align="right">[![Build Status](https://travis-ci.org/youtube/vitess.svg?branch=master)](https://travis-ci.org/youtube/vitess/builds) [![Coverage Status](https://coveralls.io/repos/youtube/vitess/badge.png)](https://coveralls.io/r/youtube/vitess)</p>
 
 Vitess is a set of servers and tools meant to facilitate scaling of MySQL
 databases for the web. It's been developed since 2011, and is currently used as

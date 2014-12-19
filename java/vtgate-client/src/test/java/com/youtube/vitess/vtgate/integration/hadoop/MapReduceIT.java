@@ -111,7 +111,6 @@ public class MapReduceIT extends HadoopTestCase {
         .registerTypeAdapter(Class.class, GsonAdapters.CLASS)
         .create();
     for (String line : outputLines) {
-      System.out.println(line);
       String kidJson = line.split("\t")[0];
       Map<String, String> m = new HashMap<>();
       m = gson.fromJson(kidJson, m.getClass());

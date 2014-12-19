@@ -206,7 +206,7 @@ func resolveRecursive(zconn Conn, parts []string, toplevel bool) ([]string, erro
 			var children []string
 			var err error
 			if i == 2 {
-				children, err = ZkKnownCells(false)
+				children, err = ZkKnownCells()
 				if err != nil {
 					return children, err
 				}
@@ -341,7 +341,7 @@ func DeleteRecursive(zconn Conn, zkPath string, version int) error {
 // numbering that don't hold when the data in a lock is modified.
 // if the provided 'interrupted' chan is closed, we'll just stop waiting
 // and return an interruption error
-func ObtainQueueLock(zconn Conn, zkPath string, wait time.Duration, interrupted chan struct{}) error {
+func ObtainQueueLock(zconn Conn, zkPath string, wait time.Duration, interrupted <-chan struct{}) error {
 	queueNode := path.Dir(zkPath)
 	lockNode := path.Base(zkPath)
 

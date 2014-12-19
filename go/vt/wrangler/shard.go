@@ -7,20 +7,22 @@ package wrangler
 import (
 	"fmt"
 
-	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 // shard related methods for Wrangler
 
 func (wr *Wrangler) lockShard(keyspace, shard string, actionNode *actionnode.ActionNode) (lockPath string, err error) {
-	return actionNode.LockShard(context.TODO(), wr.ts, keyspace, shard, wr.lockTimeout, interrupted)
+	ctx, cancel := context.WithTimeout(wr.ctx, wr.lockTimeout)
+	defer cancel()
+	return actionNode.LockShard(ctx, wr.ts, keyspace, shard)
 }
 
 func (wr *Wrangler) unlockShard(keyspace, shard string, actionNode *actionnode.ActionNode, lockPath string, actionError error) error {
-	return actionNode.UnlockShard(context.TODO(), wr.ts, keyspace, shard, lockPath, actionError)
+	return actionNode.UnlockShard(wr.ctx, wr.ts, keyspace, shard, lockPath, actionError)
 }
 
 // updateShardCellsAndMaster will update the 'Cells' and possibly
@@ -70,7 +72,7 @@ func (wr *Wrangler) updateShardCellsAndMaster(si *topo.ShardInfo, tabletAlias to
 
 	if wasUpdated {
 		// write it back
-		if err := topo.UpdateShard(context.TODO(), wr.ts, si); err != nil {
+		if err := topo.UpdateShard(wr.ctx, wr.ts, si); err != nil {
 			return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 		}
 	}
@@ -102,7 +104,7 @@ func (wr *Wrangler) setShardServedTypes(keyspace, shard string, cells []string, 
 	if err := si.UpdateServedTypesMap(servedType, cells, remove); err != nil {
 		return err
 	}
-	return topo.UpdateShard(context.TODO(), wr.ts, si)
+	return topo.UpdateShard(wr.ctx, wr.ts, si)
 }
 
 // SetShardTabletControl changes the TabletControl records
@@ -144,7 +146,7 @@ func (wr *Wrangler) setShardTabletControl(keyspace, shard string, tabletType top
 			return fmt.Errorf("UpdateSourceBlacklistedTables(%v/%v) failed: %v", shardInfo.Keyspace(), shardInfo.ShardName(), err)
 		}
 	}
-	return topo.UpdateShard(context.TODO(), wr.ts, shardInfo)
+	return topo.UpdateShard(wr.ctx, wr.ts, shardInfo)
 }
 
 // DeleteShard will do all the necessary changes in the topology server
@@ -156,7 +158,7 @@ func (wr *Wrangler) DeleteShard(keyspace, shard string) error {
 		return err
 	}
 
-	tabletMap, err := topo.GetTabletMapForShard(context.TODO(), wr.ts, keyspace, shard)
+	tabletMap, err := topo.GetTabletMapForShard(wr.ctx, wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -255,7 +257,7 @@ func (wr *Wrangler) removeShardCell(keyspace, shard, cell string, force bool) er
 	}
 	shardInfo.Cells = newCells
 
-	return topo.UpdateShard(context.TODO(), wr.ts, shardInfo)
+	return topo.UpdateShard(wr.ctx, wr.ts, shardInfo)
 }
 
 func (wr *Wrangler) SourceShardDelete(keyspace, shard string, uid uint32) error {
@@ -287,7 +289,7 @@ func (wr *Wrangler) sourceShardDelete(keyspace, shard string, uid uint32) error 
 		newSourceShards = nil
 	}
 	si.SourceShards = newSourceShards
-	return topo.UpdateShard(context.TODO(), wr.ts, si)
+	return topo.UpdateShard(wr.ctx, wr.ts, si)
 }
 
 func (wr *Wrangler) SourceShardAdd(keyspace, shard string, uid uint32, skeyspace, sshard string, keyRange key.KeyRange, tables []string) error {
@@ -321,5 +323,5 @@ func (wr *Wrangler) sourceShardAdd(keyspace, shard string, uid uint32, skeyspace
 		KeyRange: keyRange,
 		Tables:   tables,
 	})
-	return topo.UpdateShard(context.TODO(), wr.ts, si)
+	return topo.UpdateShard(wr.ctx, wr.ts, si)
 }

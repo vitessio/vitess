@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -292,10 +292,11 @@ func (vscw *VerticalSplitCloneWorker) findTargets() error {
 
 	// stop replication on it
 	ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
-	if err := vscw.wr.TabletManagerClient().StopSlave(ctx, vscw.sourceTablet); err != nil {
+	err = vscw.wr.TabletManagerClient().StopSlave(ctx, vscw.sourceTablet)
+	cancel()
+	if err != nil {
 		return fmt.Errorf("cannot stop replication on tablet %v", vscw.sourceAlias)
 	}
-	cancel()
 
 	wrangler.RecordStartSlaveAction(vscw.cleaner, vscw.sourceTablet, 30*time.Second)
 	action, err := wrangler.FindChangeSlaveTypeActionByTarget(vscw.cleaner, vscw.sourceAlias)
@@ -484,10 +485,10 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 		// get the current position from the source
 		ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
 		status, err := vscw.wr.TabletManagerClient().SlaveStatus(ctx, vscw.sourceTablet)
+		cancel()
 		if err != nil {
 			return err
 		}
-		cancel()
 
 		queries := make([]string, 0, 4)
 		queries = append(queries, binlogplayer.CreateBlpCheckpoint()...)
@@ -531,10 +532,11 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 			defer destinationWaitGroup.Done()
 			vscw.wr.Logger().Infof("Reloading schema on tablet %v", ti.Alias)
 			ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
-			if err := vscw.wr.TabletManagerClient().ReloadSchema(ctx, ti); err != nil {
+			err := vscw.wr.TabletManagerClient().ReloadSchema(ctx, ti)
+			cancel()
+			if err != nil {
 				processError("ReloadSchema failed on tablet %v: %v", ti.Alias, err)
 			}
-			cancel()
 		}(vscw.reloadTablets[tabletAlias])
 	}
 	destinationWaitGroup.Wait()

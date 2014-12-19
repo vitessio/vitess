@@ -6,25 +6,17 @@
 set -e
 
 # Create the pods for shard-0
-cell=test_cell
-keyspace=test_keyspace
+cell='test'
+keyspace='test_keyspace'
 shard=0
 uid_base=100
-port_base=15000
+port=15002
 
 echo "Creating $keyspace.shard-$shard pods in cell $cell..."
 for uid_index in 0 1 2; do
   uid=$[$uid_base + $uid_index]
   printf -v alias '%s-%010d' $cell $uid
   printf -v tablet_subdir 'vt_%010d' $uid
-
-  # It's not strictly necessary to assign a unique port to every tablet since
-  # Kubernetes gives every pod its own IP address. However, Kubernetes currently
-  # doesn't provide routing from the internet into a particular pod, so we have
-  # to publish a port to the host if we want to access each tablet's status page
-  # from a workstation. As a result, we need tablets to have unique ports or
-  # else Kubernetes will be unable to schedule more than one tablet per host.
-  port=$[$port_base + $uid]
 
   if [ "$uid_index" == "0" ]; then
     type=master

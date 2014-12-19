@@ -7,25 +7,36 @@ The schema is the list of tables and how to create them. It is managed by vtctl.
 The following vtctl commands exist to look at the schema, and validate it's the same on all databases.
 
 ```
-GetSchema <zk tablet path>
+GetSchema <tablet alias>
+```
+where \<tablet alias\> is in the format of "\<cell name\>-\<uid\>"
+
+Example:
+```
+$ vtctl -wait-time=30s GetSchema cell01-01234567
 ```
 displays the full schema for a tablet
 
 ```
-ValidateSchemaShard <zk shard path>
+ValidateSchemaShard <keyspace/shard>
+```
+where \<keyspace/shard\> is the format of "\<keyspace\>/\<shard\>"
+
+Example:
+```
+$ vtctl -wait-time=30s ValidateSchemaShard keyspace01/10-20
 ```
 validate the master schema matches all the slaves.
 
 ```
-ValidateSchemaKeyspace <zk keyspace path>
+ValidateSchemaKeyspace <keyspace>
 ```
 validate the master schema from shard 0 matches all the other tablets in the keyspace.
-
 
 Example:
 
 ```
-$ vtctl -wait-time=30s ValidateSchemaKeyspace /zk/global/vt/keyspaces/user
+$ vtctl -wait-time=30s ValidateSchemaKeyspace user
 ```
 
 ## Changing the Schema
@@ -92,34 +103,34 @@ We will return the following information:
 This translates into the following vtctl commands:
 
 ```
-PreflightSchema {-sql=<sql> || -sql_file=<filename>} <zk tablet path> 
+PreflightSchema {-sql=<sql> || -sql_file=<filename>} <tablet alias>
 ```
 apply the schema change to a temporary database to gather before and after schema and validate the change. The sql can be inlined or read from a file.
 This will create a temporary database, copy the existing keyspace schema into it, apply the schema change, and re-read the resulting schema.
 
 ```
 $ echo "create table test_table(id int);" > change.sql
-$ vtctl PreflightSchema -sql_file=change.sql /zk/nyc/vt/tablets/0002009001
+$ vtctl PreflightSchema -sql_file=change.sql nyc-0002009001
 ```
 
 ```
-ApplySchema {-sql=<sql> || -sql_file=<filename>} [-skip_preflight] [-stop_replication] <zk tablet path> 
+ApplySchema {-sql=<sql> || -sql_file=<filename>} [-skip_preflight] [-stop_replication] <tablet alias>
 ```
 apply the schema change to the specific tablet (allowing replication by default). The sql can be inlined or read from a file.
 a PreflightSchema operation will first be used to make sure the schema is OK (unless skip_preflight is specified).
 
 ```
-ApplySchemaShard {-sql=<sql> || -sql_file=<filename>} [-simple] [-new_parent=<zk tablet path>] <zk shard path>
+ApplySchemaShard {-sql=<sql> || -sql_file=<filename>} [-simple] [-new_parent=<tablet alias>] <keyspace/shard>
 ```
-apply the schema change to the specific shard. If simple is specified, we just apply on the live master. Otherwise we do the shell game and will optionally re-parent. 
+apply the schema change to the specific shard. If simple is specified, we just apply on the live master. Otherwise we do the shell game and will optionally re-parent.
 if new_parent is set, we will also reparent (otherwise the master won't be touched at all). Using the force flag will cause a bunch of checks to be ignored, use with care.
 
 ```
-$ vtctl ApplySchemaShard --sql-file=change.sql -simple /zk/global/vt/keyspaces/vtx/shards/0
-$ vtctl ApplySchemaShard --sql-file=change.sql -new_parent=/zk/nyc/vt/tablets/0002009002 /zk/global/vt/keyspaces/vtx/shards/0
+$ vtctl ApplySchemaShard --sql-file=change.sql -simple vtx/0
+$ vtctl ApplySchemaShard --sql-file=change.sql -new_parent=nyc-0002009002 vtx/0
 ```
 
 ```
-ApplySchemaKeyspace {-sql=<sql> || -sql_file=<filename>} [-simple] <zk keyspace path> 
+ApplySchemaKeyspace {-sql=<sql> || -sql_file=<filename>} [-simple] <keyspace>
 ```
-apply the schema change to the specified shard. If simple is specified, we just apply on the live master. Otherwise we will need to do the shell game. So we will apply the schema change to every single slave. 
+apply the schema change to the specified shard. If simple is specified, we just apply on the live master. Otherwise we will need to do the shell game. So we will apply the schema change to every single slave.

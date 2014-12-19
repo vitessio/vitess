@@ -7,10 +7,7 @@ package planbuilder
 import "github.com/youtube/vitess/go/vt/sqlparser"
 
 func buildSelectPlan(sel *sqlparser.Select, schema *Schema) *Plan {
-	plan := &Plan{
-		ID:        NoPlan,
-		Rewritten: generateQuery(sel),
-	}
+	plan := &Plan{ID: NoPlan}
 	tablename, _ := analyzeFrom(sel.From)
 	plan.Table, plan.Reason = schema.FindTable(tablename)
 	if plan.Reason != "" {
@@ -28,9 +25,9 @@ func buildSelectPlan(sel *sqlparser.Select, schema *Schema) *Plan {
 			plan.Reason = "too complex"
 			return plan
 		}
-		// The where clause might have changed.
-		plan.Rewritten = generateQuery(sel)
 	}
+	// The where clause might have changed.
+	plan.Rewritten = generateQuery(sel)
 	return plan
 }
 

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 // TestHookLockSrvShardForAction makes sure that changes to the upstream
@@ -23,7 +24,8 @@ func TestHookLockSrvShardForAction(t *testing.T) {
 		triggered = true
 	}
 
-	topo.Server(ts).LockSrvShardForAction(cells[0], "keyspace", "shard", "contents", 0, nil)
+	ctx := context.Background()
+	topo.Server(ts).LockSrvShardForAction(ctx, cells[0], "keyspace", "shard", "contents")
 
 	if !triggered {
 		t.Errorf("HookLockSrvShardForAction wasn't triggered")

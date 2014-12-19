@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"time"
 
-	"code.google.com/p/go.net/context"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
@@ -20,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/gorpcproto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 func init() {
@@ -39,7 +39,7 @@ func (client *GoRpcTabletManagerClient) rpcCallTablet(ctx context.Context, table
 	if ok {
 		connectTimeout = deadline.Sub(time.Now())
 		if connectTimeout < 0 {
-			return fmt.Errorf("Timeout connecting to TabletManager.%v on %v", name, tablet.Alias)
+			return fmt.Errorf("timeout connecting to TabletManager.%v on %v", name, tablet.Alias)
 		}
 	}
 	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), connectTimeout, nil)
@@ -52,10 +52,10 @@ func (client *GoRpcTabletManagerClient) rpcCallTablet(ctx context.Context, table
 	call := rpcClient.Go(ctx, "TabletManager."+name, args, reply, nil)
 	select {
 	case <-ctx.Done():
-		return fmt.Errorf("Timeout waiting for TabletManager.%v to %v", name, tablet.Alias)
+		return fmt.Errorf("timeout waiting for TabletManager.%v to %v", name, tablet.Alias)
 	case <-call.Done:
 		if call.Error != nil {
-			return fmt.Errorf("Remote error for %v: %v", tablet.Alias, call.Error.Error())
+			return fmt.Errorf("remote error for %v: %v", tablet.Alias, call.Error.Error())
 		} else {
 			return nil
 		}
@@ -73,7 +73,7 @@ func (client *GoRpcTabletManagerClient) Ping(ctx context.Context, tablet *topo.T
 		return err
 	}
 	if result != "payload" {
-		return fmt.Errorf("Bad ping result: %v", result)
+		return fmt.Errorf("bad ping result: %v", result)
 	}
 	return nil
 }
@@ -298,8 +298,16 @@ func (client *GoRpcTabletManagerClient) BreakSlaves(ctx context.Context, tablet 
 // Backup related methods
 //
 
-func (client *GoRpcTabletManagerClient) Snapshot(ctx context.Context, tablet *topo.TabletInfo, sa *actionnode.SnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, tmclient.SnapshotReplyFunc, error) {
-	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), waitTime, nil)
+func (client *GoRpcTabletManagerClient) Snapshot(ctx context.Context, tablet *topo.TabletInfo, sa *actionnode.SnapshotArgs) (<-chan *logutil.LoggerEvent, tmclient.SnapshotReplyFunc, error) {
+	var connectTimeout time.Duration
+	deadline, ok := ctx.Deadline()
+	if ok {
+		connectTimeout = deadline.Sub(time.Now())
+		if connectTimeout < 0 {
+			return nil, nil, fmt.Errorf("timeout connecting to TabletManager.Snapshot on %v", tablet.Alias)
+		}
+	}
+	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), connectTimeout, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -309,19 +317,36 @@ func (client *GoRpcTabletManagerClient) Snapshot(ctx context.Context, tablet *to
 	result := &actionnode.SnapshotReply{}
 
 	c := rpcClient.StreamGo("TabletManager.Snapshot", sa, rpcstream)
+	interrupted := false
 	go func() {
-		for ssr := range rpcstream {
-			if ssr.Log != nil {
-				logstream <- ssr.Log
-			}
-			if ssr.Result != nil {
-				*result = *ssr.Result
+		for {
+			select {
+			case <-ctx.Done():
+				// context is done
+				interrupted = true
+				close(logstream)
+				rpcClient.Close()
+				return
+			case ssr, ok := <-rpcstream:
+				if !ok {
+					close(logstream)
+					rpcClient.Close()
+					return
+				}
+				if ssr.Log != nil {
+					logstream <- ssr.Log
+				}
+				if ssr.Result != nil {
+					*result = *ssr.Result
+				}
 			}
 		}
-		close(logstream)
-		rpcClient.Close()
 	}()
 	return logstream, func() (*actionnode.SnapshotReply, error) {
+		// this is only called after streaming is done
+		if interrupted {
+			return nil, fmt.Errorf("TabletManager.Snapshot interrupted by context")
+		}
 		return result, c.Error
 	}, nil
 }
@@ -334,16 +359,48 @@ func (client *GoRpcTabletManagerClient) ReserveForRestore(ctx context.Context, t
 	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_RESERVE_FOR_RESTORE, args, &rpc.Unused{})
 }
 
-func (client *GoRpcTabletManagerClient) Restore(ctx context.Context, tablet *topo.TabletInfo, sa *actionnode.RestoreArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, tmclient.ErrFunc, error) {
-	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), waitTime, nil)
+func (client *GoRpcTabletManagerClient) Restore(ctx context.Context, tablet *topo.TabletInfo, sa *actionnode.RestoreArgs) (<-chan *logutil.LoggerEvent, tmclient.ErrFunc, error) {
+	var connectTimeout time.Duration
+	deadline, ok := ctx.Deadline()
+	if ok {
+		connectTimeout = deadline.Sub(time.Now())
+		if connectTimeout < 0 {
+			return nil, nil, fmt.Errorf("timeout connecting to TabletManager.Restore on %v", tablet.Alias)
+		}
+	}
+	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), connectTimeout, nil)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	logstream := make(chan *logutil.LoggerEvent, 10)
-	c := rpcClient.StreamGo("TabletManager.Restore", sa, logstream)
+	rpcstream := make(chan *logutil.LoggerEvent, 10)
+	c := rpcClient.StreamGo("TabletManager.Restore", sa, rpcstream)
+	interrupted := false
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				// context is done
+				interrupted = true
+				close(logstream)
+				rpcClient.Close()
+				return
+			case ssr, ok := <-rpcstream:
+				if !ok {
+					close(logstream)
+					rpcClient.Close()
+					return
+				}
+				logstream <- ssr
+			}
+		}
+	}()
 	return logstream, func() error {
-		rpcClient.Close()
+		// this is only called after streaming is done
+		if interrupted {
+			return fmt.Errorf("TabletManager.Restore interrupted by context")
+		}
 		return c.Error
 	}, nil
 }

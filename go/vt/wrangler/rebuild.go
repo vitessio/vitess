@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"sync"
 
-	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
@@ -19,7 +18,7 @@ import (
 // Rebuild the serving and replication rollup data data while locking
 // out other changes.
 func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) (*topo.ShardInfo, error) {
-	return topotools.RebuildShard(context.TODO(), wr.logger, wr.ts, keyspace, shard, cells, wr.lockTimeout, interrupted)
+	return topotools.RebuildShard(wr.ctx, wr.logger, wr.ts, keyspace, shard, cells, wr.lockTimeout)
 }
 
 // Rebuild the serving graph data while locking out other changes.
@@ -234,7 +233,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 
 	allTablets := make([]*topo.TabletInfo, 0, 1024)
 	for _, cell := range cells {
-		tablets, err := topotools.GetAllTablets(context.TODO(), wr.ts, cell)
+		tablets, err := topotools.GetAllTablets(wr.ctx, wr.ts, cell)
 		if err != nil {
 			return err
 		}
@@ -275,7 +274,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 				}
 			}
 			mu.Unlock()
-			err := topo.UpdateTabletReplicationData(context.TODO(), wr.ts, ti.Tablet)
+			err := topo.UpdateTabletReplicationData(wr.ctx, wr.ts, ti.Tablet)
 			if err != nil {
 				mu.Lock()
 				hasErr = true

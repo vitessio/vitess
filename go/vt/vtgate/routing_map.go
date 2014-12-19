@@ -4,21 +4,19 @@
 
 package vtgate
 
+import "github.com/youtube/vitess/go/vt/vtgate/planbuilder"
+
 type routingMap map[string][]interface{}
 
 func (rtm routingMap) Add(shard string, id interface{}) {
-	ids, ok := rtm[shard]
-	if !ok {
-		ids = make([]interface{}, 0, 8)
-		rtm[shard] = ids
-	}
+	ids := rtm[shard]
 	// Check for duplicates
 	for _, current := range ids {
 		if id == current {
 			return
 		}
 	}
-	ids = append(ids, id)
+	rtm[shard] = append(ids, id)
 }
 
 func (rtm routingMap) Shards() []string {
@@ -27,4 +25,17 @@ func (rtm routingMap) Shards() []string {
 		shards = append(shards, k)
 	}
 	return shards
+}
+
+func (rtm routingMap) ShardVars(bv map[string]interface{}) map[string]map[string]interface{} {
+	shardVars := make(map[string]map[string]interface{}, len(rtm))
+	for shard, vals := range rtm {
+		newbv := make(map[string]interface{}, len(bv)+1)
+		for k, v := range bv {
+			newbv[k] = v
+		}
+		newbv[planbuilder.ListVarName] = vals
+		shardVars[shard] = newbv
+	}
+	return shardVars
 }

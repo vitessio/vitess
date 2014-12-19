@@ -1,4 +1,4 @@
-// package test contains utilities to test topo.Server
+// Package test contains utilities to test topo.Server
 // implementations. If you are testing your implementation, you will
 // want to call CheckAll in your test method. For an example, look at
 // the tests in github.com/youtube/vitess/go/vt/zktopo.
@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -35,6 +35,22 @@ func CheckShard(t *testing.T, ts topo.Server) {
 	}
 	if err := topo.CreateShard(ts, "test_keyspace", "b0-c0"); err != topo.ErrNodeExists {
 		t.Errorf("CreateShard called second time, got: %v", err)
+	}
+
+	// Delete shard and see if we can re-create it.
+	if err := ts.DeleteShard("test_keyspace", "b0-c0"); err != nil {
+		t.Fatalf("DeleteShard: %v", err)
+	}
+	if err := topo.CreateShard(ts, "test_keyspace", "b0-c0"); err != nil {
+		t.Fatalf("CreateShard: %v", err)
+	}
+
+	// Delete ALL shards.
+	if err := ts.DeleteKeyspaceShards("test_keyspace"); err != nil {
+		t.Fatalf("DeleteKeyspaceShards: %v", err)
+	}
+	if err := topo.CreateShard(ts, "test_keyspace", "b0-c0"); err != nil {
+		t.Fatalf("CreateShard: %v", err)
 	}
 
 	if _, err := ts.GetShard("test_keyspace", "666"); err != topo.ErrNoNode {

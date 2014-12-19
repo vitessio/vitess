@@ -3,6 +3,7 @@ kind: Service
 id: vtctld
 port: 15000
 containerPort: 15000
+createExternalLoadBalancer: true
 selector:
   name: vtctld
 labels:

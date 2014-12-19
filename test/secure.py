@@ -148,7 +148,29 @@ def setUpModule():
     vt_server_key = cert_dir + "/vt-server-key.pem"
     vt_server_cert = cert_dir + "/vt-server-cert.pem"
     vt_server_req = cert_dir + "/vt-server-req.pem"
+    vt_server_config = cert_dir + "/server.config"
+    with open(vt_server_config, 'w') as fd:
+      fd.write("""
+[ req ]
+ default_bits           = 1024
+ default_keyfile        = keyfile.pem
+ distinguished_name     = req_distinguished_name
+ attributes             = req_attributes
+ prompt                 = no
+ output_password        = mypass
+[ req_distinguished_name ]
+ C                      = US
+ ST                     = California
+ L                      = Mountain View
+ O                      = Google
+ OU                     = Vitess
+ CN                     = Vitess Server
+ emailAddress           = test@email.address
+[ req_attributes ]
+ challengePassword      = A challenge password
+""")
     openssl(["req", "-newkey", "rsa:2048", "-days", "3600", "-nodes", "-batch",
+             "-config", vt_server_config,
              "-keyout", vt_server_key, "-out", vt_server_req])
     openssl(["rsa", "-in", vt_server_key, "-out", vt_server_key])
     openssl(["x509", "-req",
@@ -209,7 +231,7 @@ def tearDownModule():
 class TestSecure(unittest.TestCase):
 
   def test_secure(self):
-    zkocc_server = utils.zkocc_start()
+    vtgate_server, vtgate_port = utils.vtgate_start(cache_ttl='0s')
 
     # start the tablets
     shard_0_master.start_vttablet(cert=cert_dir + "/vt-server-cert.pem",
@@ -229,11 +251,11 @@ class TestSecure(unittest.TestCase):
     utils.run_vtctl('ReparentShard -force test_keyspace/0 ' + shard_0_master.tablet_alias, auto_log=True)
 
     # then get the topology and check it
-    zkocc_client = zkocc.ZkOccConnection("localhost:%u" % environment.topo_server().zkocc_port_base,
-                                         "test_nj", 30.0)
-    topology.read_keyspaces(zkocc_client)
+    topo_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
+                                        "test_nj", 30.0)
+    topology.read_keyspaces(topo_client)
 
-    shard_0_master_addrs = topology.get_host_port_by_name(zkocc_client, "test_keyspace.0.master:_vts")
+    shard_0_master_addrs = topology.get_host_port_by_name(topo_client, "test_keyspace.0.master:_vts")
     if len(shard_0_master_addrs) != 1:
       self.fail('topology.get_host_port_by_name failed for "test_keyspace.0.master:_vts", got: %s' % " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
     if shard_0_master_addrs[0][2] != True:
@@ -241,7 +263,7 @@ class TestSecure(unittest.TestCase):
     logging.debug("shard 0 master addrs: %s", " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
 
     # make sure asking for optionally secure connections works too
-    auto_addrs = topology.get_host_port_by_name(zkocc_client, "test_keyspace.0.master:_vtocc", encrypted=True)
+    auto_addrs = topology.get_host_port_by_name(topo_client, "test_keyspace.0.master:_vtocc", encrypted=True)
     if auto_addrs != shard_0_master_addrs:
       self.fail('topology.get_host_port_by_name doesn\'t resolve encrypted addresses properly: %s != %s' % (str(shard_0_master_addrs), str(auto_addrs)))
 
@@ -338,11 +360,9 @@ class TestSecure(unittest.TestCase):
     utils.vtgate_kill(gate_proc)
 
     # kill everything
-    utils.kill_sub_process(zkocc_server)
+    utils.vtgate_kill(vtgate_server)
 
   def test_restart(self):
-    zkocc_server = utils.zkocc_start()
-
     shard_0_master.create_db('vt_test_keyspace')
 
     proc1 = shard_0_master.start_vttablet(cert=cert_dir + "/vt-server-cert.pem",
@@ -356,7 +376,6 @@ class TestSecure(unittest.TestCase):
     if proc1.returncode is None:
       self.fail("proc1 still running")
     shard_0_master.kill_vttablet()
-    utils.kill_sub_process(zkocc_server)
     logging.debug("Done here")
 
 if __name__ == '__main__':

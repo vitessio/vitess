@@ -7,10 +7,10 @@ package helpers
 import (
 	"fmt"
 	"sync"
-	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 // Tee is an implementation of topo.Server that uses a primary
@@ -472,15 +472,15 @@ func (tee *Tee) DeleteShardReplication(cell, keyspace, shard string) error {
 // Serving Graph management, per cell.
 //
 
-func (tee *Tee) LockSrvShardForAction(cell, keyspace, shard, contents string, timeout time.Duration, interrupted chan struct{}) (string, error) {
+func (tee *Tee) LockSrvShardForAction(ctx context.Context, cell, keyspace, shard, contents string) (string, error) {
 	// lock lockFirst
-	pLockPath, err := tee.lockFirst.LockSrvShardForAction(cell, keyspace, shard, contents, timeout, interrupted)
+	pLockPath, err := tee.lockFirst.LockSrvShardForAction(ctx, cell, keyspace, shard, contents)
 	if err != nil {
 		return "", err
 	}
 
 	// lock lockSecond
-	sLockPath, err := tee.lockSecond.LockSrvShardForAction(cell, keyspace, shard, contents, timeout, interrupted)
+	sLockPath, err := tee.lockSecond.LockSrvShardForAction(ctx, cell, keyspace, shard, contents)
 	if err != nil {
 		if err := tee.lockFirst.UnlockSrvShardForAction(cell, keyspace, shard, pLockPath, "{}"); err != nil {
 			log.Warningf("Failed to unlock lockFirst shard after failed lockSecond lock for %v/%v/%v", cell, keyspace, shard)
@@ -617,15 +617,15 @@ func (tee *Tee) UpdateTabletEndpoint(cell, keyspace, shard string, tabletType to
 // Keyspace and Shard locks for actions, global.
 //
 
-func (tee *Tee) LockKeyspaceForAction(keyspace, contents string, timeout time.Duration, interrupted chan struct{}) (string, error) {
+func (tee *Tee) LockKeyspaceForAction(ctx context.Context, keyspace, contents string) (string, error) {
 	// lock lockFirst
-	pLockPath, err := tee.lockFirst.LockKeyspaceForAction(keyspace, contents, timeout, interrupted)
+	pLockPath, err := tee.lockFirst.LockKeyspaceForAction(ctx, keyspace, contents)
 	if err != nil {
 		return "", err
 	}
 
 	// lock lockSecond
-	sLockPath, err := tee.lockSecond.LockKeyspaceForAction(keyspace, contents, timeout, interrupted)
+	sLockPath, err := tee.lockSecond.LockKeyspaceForAction(ctx, keyspace, contents)
 	if err != nil {
 		if err := tee.lockFirst.UnlockKeyspaceForAction(keyspace, pLockPath, "{}"); err != nil {
 			log.Warningf("Failed to unlock lockFirst keyspace after failed lockSecond lock for %v", keyspace)
@@ -664,15 +664,15 @@ func (tee *Tee) UnlockKeyspaceForAction(keyspace, lockPath, results string) erro
 	return perr
 }
 
-func (tee *Tee) LockShardForAction(keyspace, shard, contents string, timeout time.Duration, interrupted chan struct{}) (string, error) {
+func (tee *Tee) LockShardForAction(ctx context.Context, keyspace, shard, contents string) (string, error) {
 	// lock lockFirst
-	pLockPath, err := tee.lockFirst.LockShardForAction(keyspace, shard, contents, timeout, interrupted)
+	pLockPath, err := tee.lockFirst.LockShardForAction(ctx, keyspace, shard, contents)
 	if err != nil {
 		return "", err
 	}
 
 	// lock lockSecond
-	sLockPath, err := tee.lockSecond.LockShardForAction(keyspace, shard, contents, timeout, interrupted)
+	sLockPath, err := tee.lockSecond.LockShardForAction(ctx, keyspace, shard, contents)
 	if err != nil {
 		if err := tee.lockFirst.UnlockShardForAction(keyspace, shard, pLockPath, "{}"); err != nil {
 			log.Warningf("Failed to unlock lockFirst shard after failed lockSecond lock for %v/%v", keyspace, shard)
