@@ -206,10 +206,15 @@ func TestQueryRuleInfoFilterByPlan(t *testing.T) {
 	if l := len(qrs.rules); l != 2 {
 		t.Errorf("Insert into t_test matches %d rules: %v, but we expect %d rules to be matched", l, qrs.rules, 2)
 	}
-	if !strings.HasPrefix(qrs.rules[0].Name, "keyspace_id_not_in_range") ||
-		!strings.HasPrefix(qrs.rules[1].Name, "customrule_ban_bindvar") {
-
-		t.Errorf("Insert into t_test matches rule[0] '%s' and rule[1] '%s', but we expect rule[0] with prefix '%s' and rule[1] with prefix '%s'",
-			qrs.rules[0].Name, qrs.rules[1].Name, "keyspace_id_not_in_range", "customrule_ban_bindvar")
+	if strings.HasPrefix(qrs.rules[0].Name, "keyspace_id_not_in_range") &&
+		strings.HasPrefix(qrs.rules[1].Name, "customrule_ban_bindvar") {
+		return
 	}
+	if strings.HasPrefix(qrs.rules[1].Name, "keyspace_id_not_in_range") &&
+		strings.HasPrefix(qrs.rules[0].Name, "customrule_ban_bindvar") {
+		return
+	}
+
+	t.Errorf("Insert into t_test matches rule[0] '%s' and rule[1] '%s', but we expect rule[0] with prefix '%s' and rule[1] with prefix '%s'",
+		qrs.rules[0].Name, qrs.rules[1].Name, "keyspace_id_not_in_range", "customrule_ban_bindvar")
 }

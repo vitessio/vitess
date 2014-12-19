@@ -63,11 +63,6 @@ func main() {
 	}
 	tabletserver.InitQueryService()
 
-	err = tabletserver.SetQueryRules(tabletserver.CustomQueryRules, tabletserver.LoadCustomRules())
-	if err != nil {
-		log.Warningf("Fail to load query rule set %s, Error message: %s", tabletserver.CustomQueryRules, err)
-	}
-
 	err = tabletserver.AllowQueries(dbConfigs, schemaOverrides, mysqld, true)
 	if err != nil {
 		return

@@ -342,7 +342,7 @@ class Tablet(object):
                stderr=utils.devnull, stdout=utils.devnull)
 
   def _start_prog(self, binary, port=None, auth=False, memcache=False,
-                  wait_for_state='SERVING', customrules=None,
+                  wait_for_state='SERVING', customrules=None, zkcustomrules=None,
                   schema_override=None, cert=None, key=None, ca_cert=None,
                   repl_extra_flags={}, table_acl_config=None,
                   lameduck_period=None, security_policy=None,
@@ -369,6 +369,8 @@ class Tablet(object):
 
     if customrules:
       args.extend(['-customrules', customrules])
+    if zkcustomrules:
+      args.extend(['-zkcustomrules', zkcustomrules])
 
     if schema_override:
       args.extend(['-schema-override', schema_override])
@@ -408,7 +410,7 @@ class Tablet(object):
     return self.proc
 
   def start_vttablet(self, port=None, auth=False, memcache=False,
-                     wait_for_state='SERVING', customrules=None,
+                     wait_for_state='SERVING', customrules=None, zkcustomrules=None,
                      schema_override=None, cert=None, key=None, ca_cert=None,
                      repl_extra_flags={}, table_acl_config=None,
                      lameduck_period=None, security_policy=None,
@@ -469,6 +471,7 @@ class Tablet(object):
     return self._start_prog(binary='vttablet', port=port, auth=auth,
                             memcache=memcache, wait_for_state=wait_for_state,
                             customrules=customrules,
+                            zkcustomrules=zkcustomrules,
                             schema_override=schema_override,
                             cert=cert, key=key, ca_cert=ca_cert,
                             repl_extra_flags=repl_extra_flags,
