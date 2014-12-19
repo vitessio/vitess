@@ -34,6 +34,12 @@ var (
 	historyLength = 16
 )
 
+// Query rules from keyrange
+const KeyrangeQueryRules string = "KEYRANGE_QUERY_RULES"
+
+// Query rules from blacklist
+const BlacklistQueryRules string = "BLACKLIST_QUERY_RULES"
+
 func (agent *ActionAgent) allowQueries(tablet *topo.Tablet, blacklistedTables []string) error {
 	if agent.DBConfigs == nil {
 		// test instance, do nothing
@@ -114,14 +120,14 @@ func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *topo.Tablet, bla
 		blacklistRules.Add(qr)
 	}
 	// Push all three sets of QueryRules to SqlQueryRpcService
-	loadRuleErr := tabletserver.SqlQueryRpcService.SetQueryRules(tabletserver.KeyrangeQueryRules, keyrangeRules)
+	loadRuleErr := tabletserver.SetQueryRules(KeyrangeQueryRules, keyrangeRules)
 	if loadRuleErr != nil {
-		log.Warningf("Fail to load query rule set %s, Error message: %s", tabletserver.KeyrangeQueryRules, loadRuleErr)
+		log.Warningf("Fail to load query rule set %s: %s", KeyrangeQueryRules, loadRuleErr)
 	}
 
-	loadRuleErr = tabletserver.SqlQueryRpcService.SetQueryRules(tabletserver.BlacklistQueryRules, blacklistRules)
+	loadRuleErr = tabletserver.SetQueryRules(BlacklistQueryRules, blacklistRules)
 	if loadRuleErr != nil {
-		log.Warningf("Fail to load query rule set %s, Error message: %s", tabletserver.BlacklistQueryRules, loadRuleErr)
+		log.Warningf("Fail to load query rule set %s: %s", BlacklistQueryRules, loadRuleErr)
 	}
 	return nil
 }
@@ -232,4 +238,17 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 		}
 	}
 	return nil
+}
+
+func init() {
+	// Register query rule sources under control of agent
+	err := tabletserver.QueryRuleSources.RegisterQueryRuleSource(KeyrangeQueryRules)
+	if err != nil {
+		log.Errorf("Cannot register %s with tabletserver.QueryRuleSources: %v", KeyrangeQueryRules, err)
+	}
+
+	err = tabletserver.QueryRuleSources.RegisterQueryRuleSource(BlacklistQueryRules)
+	if err != nil {
+		log.Errorf("Cannot register %s with tabletserver.QueryRuleSources: %v", BlacklistQueryRules, err)
+	}
 }

@@ -110,6 +110,27 @@ class TestEnv(object):
         }]
       }]""")
 
+  def change_customrules(self):
+    customrules = os.path.join(environment.tmproot, 'customrules.json')
+    with open(customrules, "w") as f:
+      f.write("""[{
+        "Name": "r2",
+        "Description": "disallow bindvar 'gfdsa'",
+        "BindVarConds":[{
+          "Name": "gfdsa",
+          "OnAbsent": false,
+          "Operator": "NOOP"
+        }]
+      }]""")
+    if self.env == "vttablet":
+      utils.run(environment.binary_argstr('zk') + ' cp ' + customrules + ' /zk/test_ca/config/customrules/testrules')
+
+  def restore_customrules(self):
+    customrules = os.path.join(environment.tmproot, 'customrules.json')
+    self.create_customrules(customrules)
+    if self.env == "vttablet":
+      utils.run(environment.binary_argstr('zk') + ' cp ' + customrules + ' /zk/test_ca/config/customrules/testrules')
+
   def create_schema_override(self, filename):
     with open(filename, "w") as f:
       f.write("""[{
@@ -187,11 +208,14 @@ class TestEnv(object):
 
     if self.env == 'vttablet':
       environment.topo_server().setup()
+      utils.run(environment.binary_argstr('zk') + ' touch -p /zk/test_ca/config/customrules/testrules')
+      utils.run(environment.binary_argstr('zk') + ' cp ' + customrules + ' /zk/test_ca/config/customrules/testrules')
       utils.run_vtctl('CreateKeyspace -force test_keyspace')
       self.tablet.init_tablet('master', 'test_keyspace', '0')
       self.tablet.start_vttablet(
               memcache=self.memcache,
-              customrules=customrules,
+              customrules='/zk/test_ca/config/customrules/testrules',
+              customrule_manager='zookeeper',
               schema_override=schema_override,
               table_acl_config=table_acl_config,
               auth=True,

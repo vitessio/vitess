@@ -183,12 +183,19 @@ func GetSessionId() int64 {
 	return SqlQueryRpcService.sessionId
 }
 
-func SetQueryRules(queryRuleSet string, qrs *QueryRules) error {
-	return SqlQueryRpcService.qe.queryRuleInfo.SetRules(queryRuleSet, qrs)
+// GetQueryRules is the tabletserver level API to get current query rules
+func GetQueryRules(ruleSource string) (error, *QueryRules) {
+	return QueryRuleSources.GetRules(ruleSource)
 }
 
-func GetQueryRules(queryRuleSet string) (error, *QueryRules) {
-	return SqlQueryRpcService.qe.queryRuleInfo.GetRules(queryRuleSet)
+// SetQueryRules is the tabletserver level API to write current query rules
+func SetQueryRules(ruleSource string, qrs *QueryRules) error {
+	err := QueryRuleSources.SetRules(ruleSource, qrs)
+	if err != nil {
+		return err
+	}
+	SqlQueryRpcService.qe.schemaInfo.ClearQueryPlanCache()
+	return nil
 }
 
 // IsHealthy returns nil if the query service is healthy (able to
@@ -235,6 +242,13 @@ func InitQueryService() {
 	SqlQueryLogger.ServeLogs(*queryLogHandler, buildFmter(SqlQueryLogger))
 	TxLogger.ServeLogs(*txLogHandler, buildFmter(TxLogger))
 	RegisterQueryService()
+}
+
+// QueryRules from custom rules
+const CustomQueryRules string = "CUSTOM_QUERY_RULES"
+
+func init() {
+	QueryRuleSources.RegisterQueryRuleSource(CustomQueryRules)
 }
 
 // LoadCustomRules returns custom rules as specified by the command
