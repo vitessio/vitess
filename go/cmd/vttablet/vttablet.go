@@ -18,7 +18,6 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver"
-	"github.com/youtube/vitess/go/vt/tabletserver/customrule"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -92,10 +91,11 @@ func main() {
 	binlog.RegisterUpdateStreamService(mycnf)
 
 	// Load custom query rules
-	err = customrule.InitializeCustomRuleManager(*tabletserver.CustomRules, tabletserver.SqlQueryRpcService)
+	err = tabletserver.SqlQueryRpcService.SetQueryRules(tabletserver.CustomQueryRules, tabletserver.LoadCustomRules())
 	if err != nil {
-		log.Warningf("Fail to initialize custom rule manager, Error message: %s", err)
+		log.Warningf("Fail to load query rule set %s, Error message: %s", tabletserver.CustomQueryRules, err)
 	}
+
 	// Depends on both query and updateStream.
 	agent, err = tabletmanager.NewActionAgent(tabletAlias, dbcfgs, mycnf, *servenv.Port, *servenv.SecurePort, *overridesFile, *lockTimeout)
 	if err != nil {
@@ -112,7 +112,6 @@ func main() {
 		// We will still use the topo server during lameduck period
 		// to update our state, so closing it in OnClose()
 		topo.CloseServers()
-		customrule.TearDownCustomRuleManager()
 	})
 	servenv.RunDefault()
 }
