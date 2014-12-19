@@ -42,6 +42,7 @@ go get golang.org/x/net/context
 go get golang.org/x/tools/cmd/goimports
 go get github.com/golang/glog
 go get github.com/coreos/go-etcd/etcd
+go get github.com/golang/lint/golint
 
 # Packages for uploading code coverage to coveralls.io
 go get code.google.com/p/go.tools/cmd/cover
