@@ -78,7 +78,6 @@ small_integration_test_files = \
 	keyrange_test.py \
 	mysqlctl.py \
 	sharded.py \
-	schema.py \
 	vertical_split.py \
 	secure.py \
 	vertical_split_vtgate.py \
@@ -100,6 +99,7 @@ large_integration_test_files = \
 ci_skip_integration_test_files = \
 	resharding_bytes.py \
 	resharding.py \
+	schema.py \
 	initial_sharding_bytes.py \
 	initial_sharding.py \
 	keyspace_test.py \
