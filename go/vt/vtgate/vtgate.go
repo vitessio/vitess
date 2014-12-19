@@ -60,12 +60,14 @@ type VTGate struct {
 	inFlight    sync2.AtomicInt64
 
 	// the throttled loggers for all errors, one per API entry
+	logExecute                  *logutil.ThrottledLogger
 	logExecuteShard             *logutil.ThrottledLogger
 	logExecuteKeyspaceIds       *logutil.ThrottledLogger
 	logExecuteKeyRanges         *logutil.ThrottledLogger
 	logExecuteEntityIds         *logutil.ThrottledLogger
 	logExecuteBatchShard        *logutil.ThrottledLogger
 	logExecuteBatchKeyspaceIds  *logutil.ThrottledLogger
+	logStreamExecute            *logutil.ThrottledLogger
 	logStreamExecuteKeyspaceIds *logutil.ThrottledLogger
 	logStreamExecuteKeyRanges   *logutil.ThrottledLogger
 	logStreamExecuteShard       *logutil.ThrottledLogger
@@ -88,12 +90,14 @@ func Init(serv SrvTopoServer, schema *planbuilder.Schema, cell string, retryDela
 		maxInFlight: int64(maxInFlight),
 		inFlight:    0,
 
+		logExecute:                  logutil.NewThrottledLogger("Execute", 5*time.Second),
 		logExecuteShard:             logutil.NewThrottledLogger("ExecuteShard", 5*time.Second),
 		logExecuteKeyspaceIds:       logutil.NewThrottledLogger("ExecuteKeyspaceIds", 5*time.Second),
 		logExecuteKeyRanges:         logutil.NewThrottledLogger("ExecuteKeyRanges", 5*time.Second),
 		logExecuteEntityIds:         logutil.NewThrottledLogger("ExecuteEntityIds", 5*time.Second),
 		logExecuteBatchShard:        logutil.NewThrottledLogger("ExecuteBatchShard", 5*time.Second),
 		logExecuteBatchKeyspaceIds:  logutil.NewThrottledLogger("ExecuteBatchKeyspaceIds", 5*time.Second),
+		logStreamExecute:            logutil.NewThrottledLogger("StreamExecute", 5*time.Second),
 		logStreamExecuteKeyspaceIds: logutil.NewThrottledLogger("StreamExecuteKeyspaceIds", 5*time.Second),
 		logStreamExecuteKeyRanges:   logutil.NewThrottledLogger("StreamExecuteKeyRanges", 5*time.Second),
 		logStreamExecuteShard:       logutil.NewThrottledLogger("StreamExecuteShard", 5*time.Second),
@@ -157,7 +161,7 @@ func (vtg *VTGate) Execute(ctx context.Context, query *proto.Query, reply *proto
 			infoErrors.Add("DupKey", 1)
 		} else {
 			normalErrors.Add(statsKey, 1)
-			vtg.logExecuteShard.Errorf("%v, query: %+v", err, query)
+			vtg.logExecute.Errorf("%v, query: %+v", err, query)
 		}
 	}
 	reply.Session = query.Session
@@ -377,6 +381,45 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, query *proto.Key
 	}
 	reply.Session = query.Session
 	return nil
+}
+
+// StreamExecute executes a streaming query by routing based on the values in the query.
+func (vtg *VTGate) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(*proto.QueryResult) error) (err error) {
+	defer handlePanic(&err)
+
+	startTime := time.Now()
+	statsKey := []string{"StreamExecute", "Any", string(query.TabletType)}
+	defer vtg.timings.Record(statsKey, startTime)
+
+	x := vtg.inFlight.Add(1)
+	defer vtg.inFlight.Add(-1)
+	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
+		return ErrTooManyInFlight
+	}
+
+	var rowCount int64
+	err = vtg.router.StreamExecute(
+		ctx,
+		query,
+		func(mreply *mproto.QueryResult) error {
+			reply := new(proto.QueryResult)
+			reply.Result = mreply
+			rowCount += int64(len(mreply.Rows))
+			// Note we don't populate reply.Session here,
+			// as it may change incrementaly as responses are sent.
+			return sendReply(reply)
+		})
+	vtg.rowsReturned.Add(statsKey, rowCount)
+
+	if err != nil {
+		normalErrors.Add(statsKey, 1)
+		vtg.logStreamExecute.Errorf("%v, query: %+v", err, query)
+	}
+	// Now we can send the final Sessoin info.
+	if query.Session != nil {
+		sendReply(&proto.QueryResult{Session: query.Session})
+	}
+	return err
 }
 
 // StreamExecuteKeyspaceIds executes a streaming query on the specified KeyspaceIds.

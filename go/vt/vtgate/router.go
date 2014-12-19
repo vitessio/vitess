@@ -31,6 +31,23 @@ type Router struct {
 	scatterConn *ScatterConn
 }
 
+type scatterParams struct {
+	query, ks string
+	shardVars map[string]map[string]interface{}
+}
+
+func newScatterParams(query, ks string, bv map[string]interface{}, shards []string) *scatterParams {
+	shardVars := make(map[string]map[string]interface{}, len(shards))
+	for _, shard := range shards {
+		shardVars[shard] = bv
+	}
+	return &scatterParams{
+		query:     query,
+		ks:        ks,
+		shardVars: shardVars,
+	}
+}
+
 // NewRouter creates a new Router.
 func NewRouter(serv SrvTopoServer, cell string, schema *planbuilder.Schema, statsName string, scatterConn *ScatterConn) *Router {
 	return &Router{
@@ -48,30 +65,85 @@ func (rtr *Router) Execute(ctx context.Context, query *proto.Query) (*mproto.Que
 	}
 	vcursor := newRequestContext(ctx, query, rtr)
 	plan := rtr.planner.GetPlan(string(query.Sql))
+
 	switch plan.ID {
-	case planbuilder.SelectUnsharded, planbuilder.UpdateUnsharded,
-		planbuilder.DeleteUnsharded, planbuilder.InsertUnsharded:
-		return rtr.execUnsharded(vcursor, plan)
-	case planbuilder.SelectEqual:
-		return rtr.execSelectEqual(vcursor, plan)
-	case planbuilder.SelectIN:
-		return rtr.execSelectIN(vcursor, plan)
-	case planbuilder.SelectKeyrange:
-		return rtr.execSelectKeyrange(vcursor, plan)
-	case planbuilder.SelectScatter:
-		return rtr.execSelectScatter(vcursor, plan)
 	case planbuilder.UpdateEqual:
 		return rtr.execUpdateEqual(vcursor, plan)
 	case planbuilder.DeleteEqual:
 		return rtr.execDeleteEqual(vcursor, plan)
 	case planbuilder.InsertSharded:
 		return rtr.execInsertSharded(vcursor, plan)
+	}
+
+	var err error
+	var params *scatterParams
+	switch plan.ID {
+	case planbuilder.SelectUnsharded, planbuilder.UpdateUnsharded,
+		planbuilder.DeleteUnsharded, planbuilder.InsertUnsharded:
+		params, err = rtr.paramsUnsharded(vcursor, plan)
+	case planbuilder.SelectEqual:
+		params, err = rtr.paramsSelectEqual(vcursor, plan)
+	case planbuilder.SelectIN:
+		params, err = rtr.paramsSelectIN(vcursor, plan)
+	case planbuilder.SelectKeyrange:
+		params, err = rtr.paramsSelectKeyrange(vcursor, plan)
+	case planbuilder.SelectScatter:
+		params, err = rtr.paramsSelectScatter(vcursor, plan)
 	default:
 		return nil, fmt.Errorf("plan %+v unimplemented", plan)
 	}
+	if err != nil {
+		return nil, err
+	}
+	return rtr.scatterConn.ExecuteMulti(
+		ctx,
+		params.query,
+		params.ks,
+		params.shardVars,
+		query.TabletType,
+		NewSafeSession(vcursor.query.Session),
+	)
 }
 
-func (rtr *Router) execUnsharded(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
+// StreamExecute executes a streaming query.
+func (rtr *Router) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(*mproto.QueryResult) error) error {
+	if query.BindVariables == nil {
+		query.BindVariables = make(map[string]interface{})
+	}
+	vcursor := newRequestContext(ctx, query, rtr)
+	plan := rtr.planner.GetPlan(string(query.Sql))
+
+	var err error
+	var params *scatterParams
+	switch plan.ID {
+	case planbuilder.SelectUnsharded:
+		params, err = rtr.paramsUnsharded(vcursor, plan)
+	case planbuilder.SelectEqual:
+		params, err = rtr.paramsSelectEqual(vcursor, plan)
+	case planbuilder.SelectIN:
+		params, err = rtr.paramsSelectIN(vcursor, plan)
+	case planbuilder.SelectKeyrange:
+		params, err = rtr.paramsSelectKeyrange(vcursor, plan)
+	case planbuilder.SelectScatter:
+		params, err = rtr.paramsSelectScatter(vcursor, plan)
+	default:
+		return fmt.Errorf("plan %+v cannot be used for streaming", plan)
+	}
+	if err != nil {
+		return err
+	}
+	return rtr.scatterConn.StreamExecuteMulti(
+		ctx,
+		params.query,
+		params.ks,
+		params.shardVars,
+		query.TabletType,
+		NewSafeSession(vcursor.query.Session),
+		sendReply,
+	)
+}
+
+func (rtr *Router) paramsUnsharded(vcursor *requestContext, plan *planbuilder.Plan) (*scatterParams, error) {
 	ks, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
 	if err != nil {
 		return nil, err
@@ -79,58 +151,32 @@ func (rtr *Router) execUnsharded(vcursor *requestContext, plan *planbuilder.Plan
 	if len(allShards) != 1 {
 		return nil, fmt.Errorf("unsharded keyspace %s has multiple shards: %+v", ks, allShards)
 	}
-	shards := []string{allShards[0].ShardName()}
-	return rtr.scatterConn.Execute(
-		vcursor.ctx,
-		vcursor.query.Sql,
-		vcursor.query.BindVariables,
-		ks,
-		shards,
-		vcursor.query.TabletType,
-		NewSafeSession(vcursor.query.Session))
+	return newScatterParams(vcursor.query.Sql, ks, vcursor.query.BindVariables, []string{allShards[0].ShardName()}), nil
 }
 
-func (rtr *Router) execSelectEqual(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
+func (rtr *Router) paramsSelectEqual(vcursor *requestContext, plan *planbuilder.Plan) (*scatterParams, error) {
 	keys, err := rtr.resolveKeys([]interface{}{plan.Values}, vcursor.query.BindVariables)
 	if err != nil {
 		return nil, err
 	}
 	ks, routing, err := rtr.resolveShards(vcursor, keys, plan)
-	return rtr.scatterConn.Execute(
-		vcursor.ctx,
-		plan.Rewritten,
-		vcursor.query.BindVariables,
-		ks,
-		routing.Shards(),
-		vcursor.query.TabletType,
-		NewSafeSession(vcursor.query.Session))
+	return newScatterParams(plan.Rewritten, ks, vcursor.query.BindVariables, routing.Shards()), nil
 }
 
-func (rtr *Router) execSelectIN(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
+func (rtr *Router) paramsSelectIN(vcursor *requestContext, plan *planbuilder.Plan) (*scatterParams, error) {
 	keys, err := rtr.resolveKeys(plan.Values.([]interface{}), vcursor.query.BindVariables)
 	if err != nil {
 		return nil, err
 	}
 	ks, routing, err := rtr.resolveShards(vcursor, keys, plan)
-	shardVars := make(map[string]map[string]interface{})
-	for shard, vals := range routing {
-		bv := make(map[string]interface{}, len(vcursor.query.BindVariables)+1)
-		for k, v := range vcursor.query.BindVariables {
-			bv[k] = v
-		}
-		bv[planbuilder.ListVarName] = vals
-		shardVars[shard] = bv
-	}
-	return rtr.scatterConn.ExecuteMulti(
-		vcursor.ctx,
-		plan.Rewritten,
-		ks,
-		shardVars,
-		vcursor.query.TabletType,
-		NewSafeSession(vcursor.query.Session))
+	return &scatterParams{
+		query:     plan.Rewritten,
+		ks:        ks,
+		shardVars: routing.ShardVars(vcursor.query.BindVariables),
+	}, nil
 }
 
-func (rtr *Router) execSelectKeyrange(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
+func (rtr *Router) paramsSelectKeyrange(vcursor *requestContext, plan *planbuilder.Plan) (*scatterParams, error) {
 	keys, err := rtr.resolveKeys(plan.Values.([]interface{}), vcursor.query.BindVariables)
 	if err != nil {
 		return nil, err
@@ -146,14 +192,7 @@ func (rtr *Router) execSelectKeyrange(vcursor *requestContext, plan *planbuilder
 	if len(shards) != 1 {
 		return nil, fmt.Errorf("keyrange must match exactly one shard: %+v", keys)
 	}
-	return rtr.scatterConn.Execute(
-		vcursor.ctx,
-		plan.Rewritten,
-		vcursor.query.BindVariables,
-		ks,
-		shards,
-		vcursor.query.TabletType,
-		NewSafeSession(vcursor.query.Session))
+	return newScatterParams(plan.Rewritten, ks, vcursor.query.BindVariables, shards), nil
 }
 
 func getKeyRange(keys []interface{}) (key.KeyRange, error) {
@@ -172,7 +211,7 @@ func getKeyRange(keys []interface{}) (key.KeyRange, error) {
 	}, nil
 }
 
-func (rtr *Router) execSelectScatter(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
+func (rtr *Router) paramsSelectScatter(vcursor *requestContext, plan *planbuilder.Plan) (*scatterParams, error) {
 	ks, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
 	if err != nil {
 		return nil, err
@@ -181,14 +220,7 @@ func (rtr *Router) execSelectScatter(vcursor *requestContext, plan *planbuilder.
 	for _, shard := range allShards {
 		shards = append(shards, shard.ShardName())
 	}
-	return rtr.scatterConn.Execute(
-		vcursor.ctx,
-		plan.Rewritten,
-		vcursor.query.BindVariables,
-		ks,
-		shards,
-		vcursor.query.TabletType,
-		NewSafeSession(vcursor.query.Session))
+	return newScatterParams(plan.Rewritten, ks, vcursor.query.BindVariables, shards), nil
 }
 
 func (rtr *Router) execUpdateEqual(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {

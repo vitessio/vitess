@@ -107,6 +107,32 @@ func TestUnsharded(t *testing.T) {
 	}
 }
 
+func TestStreamUnsharded(t *testing.T) {
+	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	createSandbox("TestRouter")
+	s := createSandbox(TEST_UNSHARDED)
+	sbc := &sandboxConn{}
+	s.MapTestConn("0", sbc)
+	serv := new(sandboxTopo)
+	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
+	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	q := proto.Query{
+		Sql:        "select * from music_user_map where id = 1",
+		TabletType: topo.TYPE_MASTER,
+	}
+	result, err := execStream(router, &q)
+	if err != nil {
+		t.Error(err)
+	}
+	wantResult := singleRowResult
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("result: %+v, want %+v", result, wantResult)
+	}
+}
+
 func TestSelectEqual(t *testing.T) {
 	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
 	if err != nil {
@@ -189,6 +215,31 @@ func TestSelectEqual(t *testing.T) {
 	}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries: %q, want %q\n", sbclookup.Queries, wantQueries)
+	}
+}
+
+func TestStreamSelectEqual(t *testing.T) {
+	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := createSandbox("TestRouter")
+	sbc := &sandboxConn{}
+	s.MapTestConn("-20", sbc)
+	serv := new(sandboxTopo)
+	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
+	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	q := proto.Query{
+		Sql:        "select * from user where id = 1",
+		TabletType: topo.TYPE_MASTER,
+	}
+	result, err := execStream(router, &q)
+	if err != nil {
+		t.Error(err)
+	}
+	wantResult := singleRowResult
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 }
 
@@ -287,6 +338,81 @@ func TestSelectIN(t *testing.T) {
 	}
 }
 
+func TestStreamSelectIN(t *testing.T) {
+	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := createSandbox("TestRouter")
+	sbc1 := &sandboxConn{}
+	sbc2 := &sandboxConn{}
+	s.MapTestConn("-20", sbc1)
+	s.MapTestConn("40-60", sbc2)
+
+	l := createSandbox("TestUnsharded")
+	sbclookup := &sandboxConn{}
+	l.MapTestConn("0", sbclookup)
+
+	serv := new(sandboxTopo)
+	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
+	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	q := proto.Query{
+		Sql:        "select * from user where id in (1)",
+		TabletType: topo.TYPE_MASTER,
+	}
+	result, err := execStream(router, &q)
+	if err != nil {
+		t.Error(err)
+	}
+	wantResult := singleRowResult
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("result: %+v, want %+v", result, wantResult)
+	}
+
+	q.Sql = "select * from user where id in (1, 3)"
+	sbc1.Queries = nil
+	result, err = execStream(router, &q)
+	if err != nil {
+		t.Error(err)
+	}
+	wantResult = &mproto.QueryResult{
+		Fields: singleRowResult.Fields,
+		Rows: [][]sqltypes.Value{
+			singleRowResult.Rows[0],
+			singleRowResult.Rows[0],
+		},
+		RowsAffected: 2,
+	}
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("result: %+v, want %+v", result, wantResult)
+	}
+
+	q.Sql = "select * from user where name = 'foo'"
+	sbc1.BindVars = nil
+	sbc1.Queries = nil
+	result, err = execStream(router, &q)
+	if err != nil {
+		t.Error(err)
+	}
+	wantResult = singleRowResult
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("result: %+v, want %+v", result, wantResult)
+	}
+
+	wantBinds := []map[string]interface{}{{
+		"name": "foo",
+	}}
+	if !reflect.DeepEqual(sbclookup.BindVars, wantBinds) {
+		t.Errorf("sbclookup.BindVars = \n%#v, want \n%#v", sbclookup.BindVars, wantBinds)
+	}
+	wantQueries := []string{
+		"select user_id from name_user_map where name = :name",
+	}
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: %q, want %q\n", sbclookup.Queries, wantQueries)
+	}
+}
+
 func TestSelectKeyrange(t *testing.T) {
 	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
 	if err != nil {
@@ -338,6 +464,43 @@ func TestSelectKeyrange(t *testing.T) {
 	}
 }
 
+func TestStreamSelectKeyrange(t *testing.T) {
+	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := createSandbox("TestRouter")
+	sbc1 := &sandboxConn{}
+	sbc2 := &sandboxConn{}
+	s.MapTestConn("-20", sbc1)
+	s.MapTestConn("40-60", sbc2)
+	serv := new(sandboxTopo)
+	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
+	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	q := proto.Query{
+		Sql:        "select * from user where keyrange('', '\x20')",
+		TabletType: topo.TYPE_MASTER,
+	}
+	result, err := execStream(router, &q)
+	if err != nil {
+		t.Error(err)
+	}
+	wantResult := singleRowResult
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("result: %+v, want %+v", result, wantResult)
+	}
+
+	q.Sql = "select * from user where keyrange('\x40', '\x60')"
+	result, err = execStream(router, &q)
+	if err != nil {
+		t.Error(err)
+	}
+	wantResult = singleRowResult
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("result: %+v, want %+v", result, wantResult)
+	}
+}
+
 func TestSelectScatter(t *testing.T) {
 	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
 	if err != nil {
@@ -371,6 +534,49 @@ func TestSelectScatter(t *testing.T) {
 		if conn.Queries[0] != wantQuery {
 			t.Errorf("conn.Queries[0]: %q, want %q\n", conn.Queries[0], wantQuery)
 		}
+	}
+}
+
+func TestStreamSelectScatter(t *testing.T) {
+	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := createSandbox("TestRouter")
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	var conns []*sandboxConn
+	for _, shard := range shards {
+		sbc := &sandboxConn{}
+		conns = append(conns, sbc)
+		s.MapTestConn(shard, sbc)
+	}
+	serv := new(sandboxTopo)
+	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
+	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	q := proto.Query{
+		Sql:        "select * from user",
+		TabletType: topo.TYPE_MASTER,
+	}
+	result, err := execStream(router, &q)
+	if err != nil {
+		t.Error(err)
+	}
+	wantResult := &mproto.QueryResult{
+		Fields: singleRowResult.Fields,
+		Rows: [][]sqltypes.Value{
+			singleRowResult.Rows[0],
+			singleRowResult.Rows[0],
+			singleRowResult.Rows[0],
+			singleRowResult.Rows[0],
+			singleRowResult.Rows[0],
+			singleRowResult.Rows[0],
+			singleRowResult.Rows[0],
+			singleRowResult.Rows[0],
+		},
+		RowsAffected: 8,
+	}
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 }
 
@@ -830,6 +1036,28 @@ func TestInsertLookupUnownedUnsupplied(t *testing.T) {
 	if sbc.Queries[0] != wantQuery {
 		t.Errorf("sbc.Queries[0]: %q, want %q\n", sbc.Queries[0], wantQuery)
 	}
+}
+
+func execStream(router *Router, q *proto.Query) (qr *mproto.QueryResult, err error) {
+	results := make(chan *mproto.QueryResult, 10)
+	err = router.StreamExecute(context.Background(), q, func(qr *mproto.QueryResult) error {
+		results <- qr
+		return nil
+	})
+	close(results)
+	if err != nil {
+		return nil, err
+	}
+	first := true
+	for r := range results {
+		if first {
+			qr = &mproto.QueryResult{Fields: r.Fields}
+			first = false
+		}
+		qr.Rows = append(qr.Rows, r.Rows...)
+		qr.RowsAffected += r.RowsAffected
+	}
+	return qr, nil
 }
 
 func locateFile(name string) string {

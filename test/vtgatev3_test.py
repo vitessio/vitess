@@ -338,6 +338,18 @@ class TestVTGateFunctions(unittest.TestCase):
         [('id', 8L), ('name', 253L)],
     ))
 
+    # Test stream
+    ignore, ignore, ignore, fields = vtgate_conn._stream_execute("select * from vt_user", {}, 'master')
+    self.assertEqual(fields, [('id', 8L), ('name', 253L)])
+    rows = []
+    while True:
+      row = vtgate_conn._stream_next()
+      if row is None:
+        break
+      rows.append(row)
+    rows.sort()
+    self.assertEqual(rows, [(1L, 'test 1'), (2L, 'test 2'), (3L, 'test 3'), (4L, 'test 4'), (6L, 'test 6'), (7L, 'test 7')])
+
     # Test updates
     vtgate_conn.begin()
     result = vtgate_conn._execute(
