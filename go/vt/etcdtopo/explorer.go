@@ -59,7 +59,7 @@ func (ex Explorer) GetSrvTypePath(cell, keyspace, shard string, tabletType topo.
 
 // GetTabletPath implements vtctld Explorer.
 func (ex Explorer) GetTabletPath(alias topo.TabletAlias) string {
-	return path.Join(explorerRoot, alias.Cell, tabletDirPath(alias.TabletUidStr()))
+	return path.Join(explorerRoot, alias.Cell, tabletDirPath(alias.String()))
 }
 
 // GetReplicationSlaves implements vtctld Explorer.

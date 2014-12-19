@@ -1,20 +1,15 @@
 # Vitess on Kubernetes
 
 This directory contains an example configuration for running Vitess on
-[Kubernetes](https://github.com/GoogleCloudPlatform/kubernetes/). Refer to the
-appropriate [Getting Started Guide](https://github.com/GoogleCloudPlatform/kubernetes/#contents)
+[Kubernetes](https://github.com/GoogleCloudPlatform/kubernetes/).
+Refer to the appropriate
+[Getting Started Guide](https://github.com/GoogleCloudPlatform/kubernetes/tree/master/docs/getting-started-guides)
 to get Kubernetes up and running if you haven't already.
 
 ## Requirements
 
-This example currently requires Kubernetes 0.4.x.
-Later versions have introduced
-[incompatible changes](https://groups.google.com/forum/#!topic/kubernetes-announce/idiwm36dN-g)
-that break ZooKeeper support. The Kubernetes team plans to support
-[ZooKeeper's use case](https://github.com/GoogleCloudPlatform/kubernetes/issues/1802)
-again in the future. Until then, please *git checkout* the
-[v0.4.3](https://github.com/GoogleCloudPlatform/kubernetes/tree/v0.4.3)
-tag (or any newer v0.4.x) in your Kubernetes repository.
+This example currently assumes Kubernetes v0.6.x. We recommend downloading a
+[binary release](https://github.com/GoogleCloudPlatform/kubernetes/releases).
 
 The easiest way to run the local commands like vtctl is just to install
 [Docker](https://www.docker.com/)
@@ -22,48 +17,50 @@ on your workstation. You can also adapt the commands below to use a local
 [Vitess build](https://github.com/youtube/vitess/blob/master/doc/GettingStarted.md)
 by removing the docker preamble if you prefer.
 
-## Starting ZooKeeper
+## Starting an etcd cluster for Vitess
 
 Once you have a running Kubernetes deployment, make sure
 *kubernetes/cluster/kubecfg.sh* is in your path, and then run:
 
 ```
-vitess$ examples/kubernetes/zk-up.sh
+vitess$ examples/kubernetes/etcd-up.sh
 ```
 
-This will create a quorum of ZooKeeper servers. You can check the status of the
-pods with *kubecfg.sh list pods*, or by using the
+This will create two clusters: one for the 'global' cell, and one for the
+'test' cell.
+You can check the status of the pods with *kubecfg.sh list pods* or by using the
 [Kubernetes web interface](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/ux.md).
 Note that it may take a while for each minion to download the Docker images the
-first time it needs them, during which time the pod status will be *Waiting*.
+first time it needs them, during which time the pod status will be *Pending*.
 
-Clients can connect to port 2181 of any
-[minion](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/DESIGN.md#cluster-architecture)
-(assuming the firewall is set to allow it), and the Kubernetes proxy will
-load-balance the connection to any of the servers.
+Once your etcd clusters are running, you need to make a record in the global
+cell to tell Vitess how to find the other etcd cells. In this case, we only
+have one cell named 'test'. Since we don't want to serve etcd on external IPs,
+you'll need to SSH into one of your minions and use internal IPs.
 
-A simple way to test out your ZooKeeper deployment is by logging into one of
-your minions and running the *zk* client utility inside Docker. For example, if
-you are running [Kubernetes on Google Compute Engine](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/getting-started-guides/gce.md):
+For example, if you are running
+[Kubernetes on Google Compute Engine](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/getting-started-guides/gce.md):
 
 ```
+# find the service IPs
+$ kubecfg.sh list services
+Name                Labels                  Selector                                  IP                  Port
+----------          ----------              ----------                                ----------          ----------
+etcd-test           cell=test,name=etcd     cell=test,name=etcd                       10.0.207.54         4001
+etcd-global         cell=global,name=etcd   cell=global,name=etcd                     10.0.86.120         4001
+
 # log in to a minion
 $ gcloud compute ssh kubernetes-minion-1
 
-# show zk command usage
-kubernetes-minion-1:~$ sudo docker run -ti --rm vitess/base zk
-
-# create a test node in ZooKeeper
-kubernetes-minion-1:~$ sudo docker run -ti --rm vitess/base zk -zk.addrs $HOSTNAME:2181 touch -p /zk/test_cell/vt
-
-# check that the node is there
-kubernetes-minion-1:~$ sudo docker run -ti --rm vitess/base zk -zk.addrs $HOSTNAME:2181 ls /zk/test_cell
+# create a node in the global etcd that points to the 'test' cell
+kubernetes-minion-1:~$ curl -L http://10.0.86.120:4001/v2/keys/vt/cells/test -XPUT -d value=http://10.0.207.54:4001
+{"action":"set","node":{"key":"/vt/cells/test","value":"http://10.0.207.54:4001","modifiedIndex":9,"createdIndex":9}}
 ```
 
-To tear down the ZooKeeper deployment (again, with *kubecfg.sh* in your path):
+To tear down the etcd deployment (again, with *kubecfg.sh* in your path):
 
 ```
-vitess$ examples/kubernetes/zk-down.sh
+vitess$ examples/kubernetes/etcd-down.sh
 ```
 
 ## Starting vtctld
@@ -72,36 +69,56 @@ The vtctld server provides a web interface to inspect the state of the system,
 and also accepts RPC commands to modify the system.
 
 ```
-vitess/examples/kubernetes$ kubecfg.sh -c vtctld-service.yaml create services
-vitess/examples/kubernetes$ kubecfg.sh -c vtctld-pod.yaml create pods
+vitess$ examples/kubernetes/vtctld-up.sh
 ```
 
-To access vtctld from your workstation, open up port 15000 to any minion in your
-firewall. Then get the external address of that minion and visit *http://&lt;minion-addr&gt;:15000/*.
+To let you access vtctld from outside Kubernetes, the vtctld service is created
+with the createExternalLoadBalancer option. On supported platforms, Kubernetes
+will then automatically create an external IP that load balances onto the pods
+comprising the service. Note that you also need to open port 15000 in your
+firewall.
+
+```
+# open port 15000
+$ gcloud compute firewall-rules create vtctld --allow tcp:15000
+
+# get the address of the load balancer for vtctld
+$ gcloud compute forwarding-rules list
+NAME   REGION      IP_ADDRESS    IP_PROTOCOL TARGET
+vtctld us-central1 12.34.56.78   TCP         us-central1/targetPools/vtctld
+
+# now load up vtctld on http://12.34.56.78:15000/
+```
 
 ## Issuing commands with vtctlclient
 
-If you've opened port 15000 on your minion's firewall, you can run *vtctlclient*
+If you've opened port 15000 on your firewall, you can run *vtctlclient*
 locally to issue commands:
 
 ```
 # check the connection to vtctld, and list available commands
-$ sudo docker run -ti --rm vitess/base vtctlclient -server <minion-addr>:15000
+$ sudo docker run -ti --rm vitess/base vtctlclient -server 12.34.56.78:15000
 
 # create a global keyspace record
-$ sudo docker run -ti --rm vitess/base vtctlclient -server <minion-addr>:15000 CreateKeyspace my_keyspace
+$ sudo docker run -ti --rm vitess/base vtctlclient -server 12.34.56.78:15000 CreateKeyspace my_keyspace
 ```
 
 If you don't want to open the port on the firewall, you can SSH into one of your
-minions and perform the above commands against the minion's local Kubernetes proxy.
-For example:
+minions and perform the above commands against the internal IP for the vtctld
+service. For example:
 
 ```
+# get service IP
+$ kubecfg.sh list services
+Name                Labels                  Selector                                  IP                  Port
+----------          ----------              ----------                                ----------          ----------
+vtctld              name=vtctld             name=vtctld                               10.0.12.151         15000
+
 # log in to a minion
 $ gcloud compute ssh kubernetes-minion-1
 
 # run a command
-kubernetes-minion-1:~$ sudo docker run -ti --rm vitess/base vtctlclient -server $HOSTNAME:15000 CreateKeyspace your_keyspace
+kubernetes-minion-1:~$ sudo docker run -ti --rm vitess/base vtctlclient -server 10.0.12.151:15000 CreateKeyspace your_keyspace
 ```
 
 ## Creating a keyspace and shard
@@ -109,7 +126,7 @@ kubernetes-minion-1:~$ sudo docker run -ti --rm vitess/base vtctlclient -server 
 This creates the initial paths in the topology server.
 
 ```
-$ alias vtctl="sudo docker run -ti --rm vitess/base vtctlclient -server <minion-addr>:15000"
+$ alias vtctl="sudo docker run -ti --rm vitess/base vtctlclient -server 12.34.56.78:15000"
 $ vtctl CreateKeyspace test_keyspace
 $ vtctl CreateShard test_keyspace/0
 ```
@@ -128,7 +145,7 @@ vitess/examples/kubernetes$ ./vttablet-up.sh
 Wait for the pods to enter Running state (*kubecfg.sh list pods*).
 Again, this may take a while if a pod was scheduled on a minion that needs to
 download the Vitess Docker image. Eventually you should see the tablets show up
-in the *DB topology* summary page of vtctld (*http://&lt;minion-addr&gt;:15000/dbtopo*).
+in the *DB topology* summary page of vtctld (*http://12.34.56.78:15000/dbtopo*).
 
 ### Troubleshooting
 
@@ -165,22 +182,12 @@ root@vttablet-101:vt_0000000101# cat error.log
 ### Viewing vttablet status
 
 Each vttablet serves a set of HTML status pages on its primary port.
-The vtctld interface provides links on each tablet entry, but these currently
-don't work when running within Kubernetes. Because there is no DNS server in
-Kubernetes yet, we can't use the hostname of the pod to find the tablet, since
-that hostname is not resolvable outside the pod itself. Also, we use internal
-IP addresses to communicate within the cluster because in a typical cloud
-environment, network fees are charged differently when instances communicate
-on external IPs.
+The vtctld interface provides links on each tablet entry, but these links are
+to internal per-pod IPs that can only be accessed from within Kubernetes.
+As a workaround, you can proxy over an SSH connection to a Kubernetes minion,
+or launch a proxy as a Kubernetes service.
 
-As a result, getting access to a tablet's status page from your workstation
-outside the cluster is a bit tricky. Currently, this example assigns a unique
-port to every tablet and then publishes that port to the Docker host machine.
-For example, the tablet with UID 101 is assigned port 15101. You then have to
-look up the external IP of the minion that is running vttablet-101
-(via *kubecfg.sh list pods*), and visit
-*http://&lt;minion-addr&gt;:15101/debug/status*. You'll of course need access
-to these ports from your workstation to be allowed by any firewalls.
+The status url for each tablet is http://tablet-ip:15002/debug/status
 
 ## Starting MySQL replication
 
@@ -190,7 +197,7 @@ To do that, we do a forced reparent to the existing master.
 
 ```
 $ vtctl RebuildShardGraph test_keyspace/0
-$ vtctl ReparentShard -force test_keyspace/0 test_cell-0000000100
+$ vtctl ReparentShard -force test_keyspace/0 test-0000000100
 $ vtctl RebuildKeyspaceGraph test_keyspace
 ```
 
@@ -207,8 +214,8 @@ vitess/examples/kubernetes$ vtctl ApplySchemaKeyspace -simple -sql "$(cat create
 
 Clients send queries to Vitess through vtgate, which routes them to the
 correct vttablet(s) behind the scenes. In Kubernetes, we define a vtgate
-service (currently using Services v1 on $SERVICE_HOST:15001) that load
-balances connections to a pool of vtgate pods curated by a
+service with an external IP that load balances connections to a pool of
+vtgate pods curated by a
 [replication controller](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/replication-controller.md).
 
 ```
@@ -218,12 +225,19 @@ vitess/examples/kubernetes$ ./vtgate-up.sh
 ## Creating a client app
 
 The file *client.py* contains a simple example app that connects to vtgate
-and executes some queries. Assuming you have opened firewall access from
-your workstation to port 15001, you can run it locally and point it at any
-minion:
+and executes some queries.
 
 ```
-$ sudo docker run -ti --rm vitess/base bash -c '$VTTOP/examples/kubernetes/client.py --server=<minion-addr>:15001'
+# open vtgate port
+$ gcloud compute firewall-rules create vtgate --allow tcp:15001
+
+# get external IP for vtgate service
+$ gcloud compute forwarding-rules list
+NAME   REGION      IP_ADDRESS      IP_PROTOCOL TARGET
+vtgate us-central1 123.123.123.123 TCP         us-central1/targetPools/vtgate
+
+# run client.py
+$ sudo docker run -ti --rm vitess/base bash -c '$VTTOP/examples/kubernetes/client.py --server=123.123.123.123:15001'
 Inserting into master...
 Reading from master...
 (1L, 'V is for speed')

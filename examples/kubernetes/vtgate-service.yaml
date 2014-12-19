@@ -3,6 +3,7 @@ kind: Service
 id: vtgate
 port: 15001
 containerPort: 15001
+createExternalLoadBalancer: true
 selector:
   name: vtgate
 labels:
