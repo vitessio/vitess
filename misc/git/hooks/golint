@@ -9,6 +9,12 @@
 # it has execute permissions.
 #
 # This script does not handle file names that contain spaces.
+
+if [ -z "$(which golint)" ]; then
+  echo "golint not found, please run: go get github.com/golang/lint/golint"
+  exit 1
+fi
+
 gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '.go$')
 
 errors=
