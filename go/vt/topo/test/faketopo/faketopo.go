@@ -1,4 +1,4 @@
-// faketopo contains utitlities for tests that have to interact with a
+// Package faketopo contains utitlities for tests that have to interact with a
 // Vitess topology.
 package faketopo
 

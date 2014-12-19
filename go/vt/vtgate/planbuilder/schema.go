@@ -18,8 +18,8 @@ type Schema struct {
 	Tables map[string]*Table
 }
 
-func (s *Schema) String() string {
-	b, err := json.Marshal(s)
+func (schema *Schema) String() string {
+	b, err := json.Marshal(schema)
 	if err != nil {
 		return err.Error()
 	}
@@ -41,7 +41,7 @@ type Keyspace struct {
 	Sharded bool
 }
 
-// Index contains the index info for each index of a table.
+// ColVindex contains the index info for each index of a table.
 type ColVindex struct {
 	Col    string
 	Type   string

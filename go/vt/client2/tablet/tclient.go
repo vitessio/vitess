@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// API compliant to the requirements of database/sql
+// Package tablet is an API compliant to the requirements of database/sql
 // Open expects name to be "hostname:port/keyspace/shard"
 // For query arguments, we assume place-holders in the query string
 // in the form of :v0, :v1, etc.

@@ -3,26 +3,26 @@
 // license that can be found in the LICENSE file.
 
 /*
-	Package timer provides timer functionality that can be controlled
-	by the user. You start the timer by providing it a callback function,
-	which it will call at the specified interval.
+Package timer provides timer functionality that can be controlled
+by the user. You start the timer by providing it a callback function,
+which it will call at the specified interval.
 
-		var t = timer.NewTimer(1e9)
-		t.Start(KeepHouse)
+	var t = timer.NewTimer(1e9)
+	t.Start(KeepHouse)
 
-		func KeepHouse() {
-			// do house keeping work
-		}
+	func KeepHouse() {
+		// do house keeping work
+	}
 
-	You can stop the timer by calling t.Stop, which is guaranteed to
-	wait if KeepHouse is being executed.
+You can stop the timer by calling t.Stop, which is guaranteed to
+wait if KeepHouse is being executed.
 
-	You can create an untimely trigger by calling t.Trigger. You can also
-	schedule an untimely trigger by calling t.TriggerAfter.
+You can create an untimely trigger by calling t.Trigger. You can also
+schedule an untimely trigger by calling t.TriggerAfter.
 
-	The timer interval can be changed on the fly by calling t.SetInterval.
-	A zero value interval will cause the timer to wait indefinitely, and it
-	will react only to an explicit Trigger or Stop.
+The timer interval can be changed on the fly by calling t.SetInterval.
+A zero value interval will cause the timer to wait indefinitely, and it
+will react only to an explicit Trigger or Stop.
 */
 package timer
 
