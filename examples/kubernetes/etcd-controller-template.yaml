@@ -1,0 +1,29 @@
+apiVersion: v1beta1
+kind: ReplicationController
+id: etcd-{{cell}}
+desiredState:
+  replicas: 3
+  replicaSelector:
+    name: etcd
+    cell: {{cell}}
+  podTemplate:
+    desiredState:
+      manifest:
+        version: v1beta1
+        id: etcd-{{cell}}
+        containers:
+          - name: etcd
+            image: vitess/etcd:v0.4.6
+            command:
+              - bash
+              - "-c"
+              - >-
+                ipaddr=$(hostname -i)
+
+                etcd -name $HOSTNAME -peer-addr $ipaddr:7001 -addr $ipaddr:4001 -discovery {{discovery}}
+    labels:
+      name: etcd
+      cell: {{cell}}
+labels:
+  name: etcd
+  cell: {{cell}}

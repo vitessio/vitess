@@ -3,9 +3,9 @@
 # This is an example script that tears down the vttablet pods started by
 # vttablet-up.sh. It assumes that kubernetes/cluster/kubecfg.sh is in the path.
 
-# Create the pods for shard-0
-cell=test_cell
-keyspace=test_keyspace
+# Delete the pods for shard-0
+cell='test'
+keyspace='test_keyspace'
 shard=0
 uid_base=100
 

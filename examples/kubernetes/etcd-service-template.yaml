@@ -1,0 +1,11 @@
+apiVersion: v1beta1
+kind: Service
+id: etcd-{{cell}}
+port: 4001
+containerPort: 4001
+selector:
+  name: etcd
+  cell: {{cell}}
+labels:
+  name: etcd
+  cell: {{cell}}

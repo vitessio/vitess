@@ -11,7 +11,6 @@ from zk import zkocc
 
 # Constants and params
 UNSHARDED = [keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)]
-cursorclass = vtgate_cursor.VTGateCursor
 
 # Parse args
 parser = argparse.ArgumentParser()
@@ -26,13 +25,13 @@ conn = vtgatev2.connect(vtgate_addrs, args.timeout)
 
 # Read topology
 # This is a temporary work-around until the VTGate V2 client is topology-free.
-topoconn = zkocc.ZkOccConnection(args.server, 'test_cell', args.timeout)
+topoconn = zkocc.ZkOccConnection(args.server, 'test', args.timeout)
 topology.read_topology(topoconn)
 topoconn.close()
 
 # Insert something.
 print('Inserting into master...')
-cursor = conn.cursor(cursorclass, conn, 'test_keyspace', 'master',
+cursor = conn.cursor('test_keyspace', 'master',
                      keyranges=UNSHARDED, writable=True)
 cursor.begin()
 cursor.execute(
@@ -52,7 +51,7 @@ cursor.close()
 # Read from a replica.
 # Note that this may be behind master due to replication lag.
 print('Reading from replica...')
-cursor = conn.cursor(cursorclass, conn, 'test_keyspace', 'replica',
+cursor = conn.cursor('test_keyspace', 'replica',
                      keyranges=UNSHARDED)
 cursor.execute('SELECT * FROM test_table', {})
 for row in cursor.fetchall():
