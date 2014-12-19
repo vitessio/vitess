@@ -78,7 +78,6 @@ small_integration_test_files = \
 	keyrange_test.py \
 	mysqlctl.py \
 	sharded.py \
-	update_stream.py \
 	schema.py \
 	vertical_split.py \
 	secure.py \
@@ -103,7 +102,8 @@ ci_skip_integration_test_files = \
 	resharding.py \
 	initial_sharding_bytes.py \
 	initial_sharding.py \
-	keyspace_test.py
+	keyspace_test.py \
+	update_stream.py
 
 .ONESHELL:
 SHELL = /bin/bash
