@@ -45,7 +45,9 @@ unit_test_race:
 unit_test_goveralls:
 	go list -f '{{if len .TestGoFiles}}go test -coverprofile={{.Dir}}/.coverprofile {{.ImportPath}}{{end}}' ./go/... | xargs -i sh -c {}
 	gover ./go/
-	goveralls -coverprofile=gover.coverprofile -repotoken $$COVERALLS_TOKEN
+	if ! [ -z "$$COVERALLS_TOKEN" ]; then \
+		goveralls -coverprofile=gover.coverprofile -repotoken $$COVERALLS_TOKEN ; \
+	fi
 
 queryservice_test:
 	echo $$(date): Running test/queryservice_test.py...
