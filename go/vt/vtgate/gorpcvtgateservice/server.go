@@ -45,6 +45,12 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, batchQuery *prot
 	return vtg.server.ExecuteBatchKeyspaceIds(ctx, batchQuery, reply)
 }
 
+func (vtg *VTGate) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(interface{}) error) error {
+	return vtg.server.StreamExecute(ctx, query, func(value *proto.QueryResult) error {
+		return sendReply(value)
+	})
+}
+
 func (vtg *VTGate) StreamExecuteShard(ctx context.Context, query *proto.QueryShard, sendReply func(interface{}) error) error {
 	return vtg.server.StreamExecuteShard(ctx, query, func(value *proto.QueryResult) error {
 		return sendReply(value)

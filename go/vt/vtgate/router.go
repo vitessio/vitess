@@ -105,6 +105,44 @@ func (rtr *Router) Execute(ctx context.Context, query *proto.Query) (*mproto.Que
 	)
 }
 
+// StreamExecute executes a streaming query.
+func (rtr *Router) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(*mproto.QueryResult) error) error {
+	if query.BindVariables == nil {
+		query.BindVariables = make(map[string]interface{})
+	}
+	vcursor := newRequestContext(ctx, query, rtr)
+	plan := rtr.planner.GetPlan(string(query.Sql))
+
+	var err error
+	var params *scatterParams
+	switch plan.ID {
+	case planbuilder.SelectUnsharded:
+		params, err = rtr.paramsUnsharded(vcursor, plan)
+	case planbuilder.SelectEqual:
+		params, err = rtr.paramsSelectEqual(vcursor, plan)
+	case planbuilder.SelectIN:
+		params, err = rtr.paramsSelectIN(vcursor, plan)
+	case planbuilder.SelectKeyrange:
+		params, err = rtr.paramsSelectKeyrange(vcursor, plan)
+	case planbuilder.SelectScatter:
+		params, err = rtr.paramsSelectScatter(vcursor, plan)
+	default:
+		return fmt.Errorf("plan %+v cannot be used for streaming", plan)
+	}
+	if err != nil {
+		return err
+	}
+	return rtr.scatterConn.StreamExecuteMulti(
+		ctx,
+		params.query,
+		params.ks,
+		params.shardVars,
+		query.TabletType,
+		NewSafeSession(vcursor.query.Session),
+		sendReply,
+	)
+}
+
 func (rtr *Router) paramsUnsharded(vcursor *requestContext, plan *planbuilder.Plan) (*scatterParams, error) {
 	ks, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
 	if err != nil {
