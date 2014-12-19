@@ -241,10 +241,3 @@ func InitQueryService() {
 	TxLogger.ServeLogs(*txLogHandler, buildFmter(TxLogger))
 	RegisterQueryService()
 }
-
-// QueryRules from custom rules
-const CustomQueryRules string = "CUSTOM_QUERY_RULES"
-
-func init() {
-	QueryRuleSources.RegisterQueryRuleSource(CustomQueryRules)
-}
