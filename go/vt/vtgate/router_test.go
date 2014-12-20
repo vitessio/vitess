@@ -5,6 +5,8 @@
 package vtgate
 
 import (
+	"io/ioutil"
+	"os"
 	"path"
 	"reflect"
 	"testing"
@@ -20,42 +22,145 @@ import (
 	"golang.org/x/net/context"
 )
 
-type VTGateSchemaNormalized struct {
-	Keyspaces map[string]struct {
-		ShardingScheme int
-		Indexes        map[string]struct {
-			// Type is ShardKey or Lookup.
-			Type      int
-			From, To  string
-			Owner     string
-			IsAutoInc bool
-		}
-		Tables map[string]struct {
-			IndexColumns []struct {
-				Column    string
-				IndexName string
-			}
-		}
+var routerSchema = createTestSchema(`
+{
+  "Keyspaces": {
+    "TestRouter": {
+      "Sharded": true,
+      "Vindexes": {
+        "user_index": {
+          "Type": "hash",
+          "Owner": "user",
+          "Params": {
+            "Table": "user_idx",
+            "Column": "id"
+          }
+        },
+        "music_user_map": {
+          "Type": "lookup_hash_unique",
+          "Owner": "music",
+          "Params": {
+            "Table": "music_user_map",
+            "From": "music_id",
+            "To": "user_id"
+          }
+        },
+        "name_user_map": {
+          "Type": "lookup_hash_multi",
+          "Owner": "user",
+          "Params": {
+            "Table": "name_user_map",
+            "From": "name",
+            "To": "user_id"
+          }
+        }
+      },
+      "Tables": {
+        "user": {
+          "ColVindexes": [
+            {
+              "Col": "id",
+              "Name": "user_index"
+            },
+            {
+              "Col": "name",
+              "Name": "name_user_map"
+            }
+          ]
+        },
+        "user_extra": {
+          "ColVindexes": [
+            {
+              "Col": "user_id",
+              "Name": "user_index"
+            }
+          ]
+        },
+        "music": {
+          "ColVindexes": [
+            {
+              "Col": "user_id",
+              "Name": "user_index"
+            },
+            {
+              "Col": "id",
+              "Name": "music_user_map"
+            }
+          ]
+        },
+        "music_extra": {
+          "ColVindexes": [
+            {
+              "Col": "user_id",
+              "Name": "user_index"
+            },
+            {
+              "Col": "music_id",
+              "Name": "music_user_map"
+            }
+          ]
+        },
+        "music_extra_reversed": {
+          "ColVindexes": [
+            {
+              "Col": "music_id",
+              "Name": "music_user_map"
+            },
+            {
+              "Col": "user_id",
+              "Name": "user_index"
+            }
+          ]
+        }
+      }
+    },
+    "TestUnsharded": {
+      "Sharded": false,
+      "Tables": {
+        "user_idx":{},
+        "music_user_map":{},
+        "name_user_map":{}
+      }
+    }
+  }
+}
+`)
+
+// createTestSchema creates a schema based on the JSON specs.
+// It panics on failure.
+func createTestSchema(schemaJSON string) *planbuilder.Schema {
+	f, err := ioutil.TempFile("", "vtgate_schema")
+	if err != nil {
+		panic(err)
 	}
+	fname := f.Name()
+	f.Close()
+	defer os.Remove(fname)
+
+	err = ioutil.WriteFile(fname, []byte(schemaJSON), 0644)
+	if err != nil {
+		panic(err)
+	}
+	schema, err := planbuilder.LoadSchemaJSON(fname)
+	if err != nil {
+		panic(err)
+	}
+	return schema
 }
 
 func TestUnsharded(t *testing.T) {
-	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	createSandbox("TestRouter")
 	s := createSandbox(TEST_UNSHARDED)
 	sbc := &sandboxConn{}
 	s.MapTestConn("0", sbc)
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 	q := proto.Query{
 		Sql:        "select * from music_user_map where id = 1",
 		TabletType: topo.TYPE_MASTER,
 	}
-	_, err = router.Execute(context.Background(), &q)
+	_, err := router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -108,17 +213,13 @@ func TestUnsharded(t *testing.T) {
 }
 
 func TestStreamUnsharded(t *testing.T) {
-	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	createSandbox("TestRouter")
 	s := createSandbox(TEST_UNSHARDED)
 	sbc := &sandboxConn{}
 	s.MapTestConn("0", sbc)
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 	q := proto.Query{
 		Sql:        "select * from music_user_map where id = 1",
 		TabletType: topo.TYPE_MASTER,
@@ -134,28 +235,24 @@ func TestStreamUnsharded(t *testing.T) {
 }
 
 func TestSelectEqual(t *testing.T) {
-	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	s := createSandbox("TestRouter")
 	sbc1 := &sandboxConn{}
 	sbc2 := &sandboxConn{}
 	s.MapTestConn("-20", sbc1)
 	s.MapTestConn("40-60", sbc2)
 
-	l := createSandbox("TestUnsharded")
+	l := createSandbox(TEST_UNSHARDED)
 	sbclookup := &sandboxConn{}
 	l.MapTestConn("0", sbclookup)
 
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 	q := proto.Query{
 		Sql:        "select * from user where id = 1",
 		TabletType: topo.TYPE_MASTER,
 	}
-	_, err = router.Execute(context.Background(), &q)
+	_, err := router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -219,16 +316,12 @@ func TestSelectEqual(t *testing.T) {
 }
 
 func TestStreamSelectEqual(t *testing.T) {
-	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	s := createSandbox("TestRouter")
 	sbc := &sandboxConn{}
 	s.MapTestConn("-20", sbc)
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 	q := proto.Query{
 		Sql:        "select * from user where id = 1",
 		TabletType: topo.TYPE_MASTER,
@@ -244,28 +337,24 @@ func TestStreamSelectEqual(t *testing.T) {
 }
 
 func TestSelectIN(t *testing.T) {
-	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	s := createSandbox("TestRouter")
 	sbc1 := &sandboxConn{}
 	sbc2 := &sandboxConn{}
 	s.MapTestConn("-20", sbc1)
 	s.MapTestConn("40-60", sbc2)
 
-	l := createSandbox("TestUnsharded")
+	l := createSandbox(TEST_UNSHARDED)
 	sbclookup := &sandboxConn{}
 	l.MapTestConn("0", sbclookup)
 
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 	q := proto.Query{
 		Sql:        "select * from user where id in (1)",
 		TabletType: topo.TYPE_MASTER,
 	}
-	_, err = router.Execute(context.Background(), &q)
+	_, err := router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -339,23 +428,19 @@ func TestSelectIN(t *testing.T) {
 }
 
 func TestStreamSelectIN(t *testing.T) {
-	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	s := createSandbox("TestRouter")
 	sbc1 := &sandboxConn{}
 	sbc2 := &sandboxConn{}
 	s.MapTestConn("-20", sbc1)
 	s.MapTestConn("40-60", sbc2)
 
-	l := createSandbox("TestUnsharded")
+	l := createSandbox(TEST_UNSHARDED)
 	sbclookup := &sandboxConn{}
 	l.MapTestConn("0", sbclookup)
 
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 	q := proto.Query{
 		Sql:        "select * from user where id in (1)",
 		TabletType: topo.TYPE_MASTER,
@@ -414,10 +499,6 @@ func TestStreamSelectIN(t *testing.T) {
 }
 
 func TestSelectKeyrange(t *testing.T) {
-	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	s := createSandbox("TestRouter")
 	sbc1 := &sandboxConn{}
 	sbc2 := &sandboxConn{}
@@ -425,12 +506,12 @@ func TestSelectKeyrange(t *testing.T) {
 	s.MapTestConn("40-60", sbc2)
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 	q := proto.Query{
 		Sql:        "select * from user where keyrange('', '\x20')",
 		TabletType: topo.TYPE_MASTER,
 	}
-	_, err = router.Execute(context.Background(), &q)
+	_, err := router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -465,10 +546,6 @@ func TestSelectKeyrange(t *testing.T) {
 }
 
 func TestStreamSelectKeyrange(t *testing.T) {
-	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	s := createSandbox("TestRouter")
 	sbc1 := &sandboxConn{}
 	sbc2 := &sandboxConn{}
@@ -476,7 +553,7 @@ func TestStreamSelectKeyrange(t *testing.T) {
 	s.MapTestConn("40-60", sbc2)
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 	q := proto.Query{
 		Sql:        "select * from user where keyrange('', '\x20')",
 		TabletType: topo.TYPE_MASTER,
@@ -502,10 +579,6 @@ func TestStreamSelectKeyrange(t *testing.T) {
 }
 
 func TestSelectScatter(t *testing.T) {
-	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	s := createSandbox("TestRouter")
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxConn
@@ -516,12 +589,12 @@ func TestSelectScatter(t *testing.T) {
 	}
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 	q := proto.Query{
 		Sql:        "select * from user",
 		TabletType: topo.TYPE_MASTER,
 	}
-	_, err = router.Execute(context.Background(), &q)
+	_, err := router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -538,10 +611,6 @@ func TestSelectScatter(t *testing.T) {
 }
 
 func TestStreamSelectScatter(t *testing.T) {
-	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	s := createSandbox("TestRouter")
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxConn
@@ -552,7 +621,7 @@ func TestStreamSelectScatter(t *testing.T) {
 	}
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 	q := proto.Query{
 		Sql:        "select * from user",
 		TabletType: topo.TYPE_MASTER,
@@ -581,10 +650,6 @@ func TestStreamSelectScatter(t *testing.T) {
 }
 
 func TestUpdateEqual(t *testing.T) {
-	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	s := createSandbox("TestRouter")
 	sbc1 := &sandboxConn{}
 	sbc2 := &sandboxConn{}
@@ -592,12 +657,12 @@ func TestUpdateEqual(t *testing.T) {
 	s.MapTestConn("40-60", sbc2)
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 	q := proto.Query{
 		Sql:        "update user set a=2 where id = 1",
 		TabletType: topo.TYPE_MASTER,
 	}
-	_, err = router.Execute(context.Background(), &q)
+	_, err := router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -635,21 +700,17 @@ func TestUpdateEqual(t *testing.T) {
 }
 
 func TestDeleteEqual(t *testing.T) {
-	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	s := createSandbox("TestRouter")
 	sbc := &sandboxConn{}
 	s.MapTestConn("-20", sbc)
 
-	l := createSandbox("TestUnsharded")
+	l := createSandbox(TEST_UNSHARDED)
 	sbclookup := &sandboxConn{}
 	l.MapTestConn("0", sbclookup)
 
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 
 	sbc.setResults([]*mproto.QueryResult{&mproto.QueryResult{
 		Fields: []mproto.Field{
@@ -667,7 +728,7 @@ func TestDeleteEqual(t *testing.T) {
 		Sql:        "delete from user where id = 1",
 		TabletType: topo.TYPE_MASTER,
 	}
-	_, err = router.Execute(context.Background(), &q)
+	_, err := router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -704,29 +765,25 @@ func TestDeleteEqual(t *testing.T) {
 }
 
 func TestInsertSharded(t *testing.T) {
-	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	s := createSandbox("TestRouter")
 	sbc1 := &sandboxConn{}
 	sbc2 := &sandboxConn{}
 	s.MapTestConn("-20", sbc1)
 	s.MapTestConn("40-60", sbc2)
 
-	l := createSandbox("TestUnsharded")
+	l := createSandbox(TEST_UNSHARDED)
 	sbclookup := &sandboxConn{}
 	l.MapTestConn("0", sbclookup)
 
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 
 	q := proto.Query{
 		Sql:        "insert into user(id, v, name) values (1, 2, 'myname')",
 		TabletType: topo.TYPE_MASTER,
 	}
-	_, err = router.Execute(context.Background(), &q)
+	_, err := router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -791,27 +848,23 @@ func TestInsertSharded(t *testing.T) {
 }
 
 func TestInsertGenerator(t *testing.T) {
-	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	s := createSandbox("TestRouter")
 	sbc := &sandboxConn{}
 	s.MapTestConn("80-a0", sbc)
 
-	l := createSandbox("TestUnsharded")
+	l := createSandbox(TEST_UNSHARDED)
 	sbclookup := &sandboxConn{}
 	l.MapTestConn("0", sbclookup)
 
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 
 	q := proto.Query{
 		Sql:        "insert into user(v, name) values (2, 'myname')",
 		TabletType: topo.TYPE_MASTER,
 	}
-	_, err = router.Execute(context.Background(), &q)
+	_, err := router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -840,27 +893,23 @@ func TestInsertGenerator(t *testing.T) {
 }
 
 func TestInsertLookupOwned(t *testing.T) {
-	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	s := createSandbox("TestRouter")
 	sbc := &sandboxConn{}
 	s.MapTestConn("-20", sbc)
 
-	l := createSandbox("TestUnsharded")
+	l := createSandbox(TEST_UNSHARDED)
 	sbclookup := &sandboxConn{}
 	l.MapTestConn("0", sbclookup)
 
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 
 	q := proto.Query{
 		Sql:        "insert into music(user_id, id) values (2, 3)",
 		TabletType: topo.TYPE_MASTER,
 	}
-	_, err = router.Execute(context.Background(), &q)
+	_, err := router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -890,27 +939,23 @@ func TestInsertLookupOwned(t *testing.T) {
 }
 
 func TestInsertLookupOwnedGenerator(t *testing.T) {
-	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	s := createSandbox("TestRouter")
 	sbc := &sandboxConn{}
 	s.MapTestConn("-20", sbc)
 
-	l := createSandbox("TestUnsharded")
+	l := createSandbox(TEST_UNSHARDED)
 	sbclookup := &sandboxConn{}
 	l.MapTestConn("0", sbclookup)
 
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 
 	q := proto.Query{
 		Sql:        "insert into music(user_id) values (2)",
 		TabletType: topo.TYPE_MASTER,
 	}
-	_, err = router.Execute(context.Background(), &q)
+	_, err := router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -940,27 +985,23 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 }
 
 func TestInsertLookupUnowned(t *testing.T) {
-	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	s := createSandbox("TestRouter")
 	sbc := &sandboxConn{}
 	s.MapTestConn("-20", sbc)
 
-	l := createSandbox("TestUnsharded")
+	l := createSandbox(TEST_UNSHARDED)
 	sbclookup := &sandboxConn{}
 	l.MapTestConn("0", sbclookup)
 
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 
 	q := proto.Query{
 		Sql:        "insert into music_extra(user_id, music_id) values (2, 3)",
 		TabletType: topo.TYPE_MASTER,
 	}
-	_, err = router.Execute(context.Background(), &q)
+	_, err := router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
@@ -990,27 +1031,23 @@ func TestInsertLookupUnowned(t *testing.T) {
 }
 
 func TestInsertLookupUnownedUnsupplied(t *testing.T) {
-	schema, err := planbuilder.LoadSchemaJSON(locateFile("router_test.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	s := createSandbox("TestRouter")
 	sbc := &sandboxConn{}
 	s.MapTestConn("-20", sbc)
 
-	l := createSandbox("TestUnsharded")
+	l := createSandbox(TEST_UNSHARDED)
 	sbclookup := &sandboxConn{}
 	l.MapTestConn("0", sbclookup)
 
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", schema, "", scatterConn)
+	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 
 	q := proto.Query{
 		Sql:        "insert into music_extra_reversed(music_id) values (3)",
 		TabletType: topo.TYPE_MASTER,
 	}
-	_, err = router.Execute(context.Background(), &q)
+	_, err := router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
