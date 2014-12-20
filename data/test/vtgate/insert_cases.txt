@@ -137,3 +137,17 @@
   "Col": "",
   "Values":null
 }
+
+# insert invalid table
+"insert into noexist(music_id, user_id) values(1, 1.1)"
+{
+  "ID":"NoPlan",
+  "Reason":"table noexist not found",
+  "Table":"",
+  "Original":"insert into noexist(music_id, user_id) values(1, 1.1)",
+  "Rewritten":"",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values":null
+}
