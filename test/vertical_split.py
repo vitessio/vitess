@@ -51,8 +51,7 @@ def setUpModule():
         ]
     utils.Vtctld().start()
     utils.wait_procs(setup_procs)
-  except Exception as e:
-    print "Vertical Split Testing Error: ", e
+  except:
     tearDownModule()
     raise
 
