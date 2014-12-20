@@ -78,9 +78,7 @@ small_integration_test_files = \
 	keyrange_test.py \
 	mysqlctl.py \
 	sharded.py \
-	vertical_split.py \
 	secure.py \
-	vertical_split_vtgate.py \
 	binlog.py \
 	clone.py
 
@@ -97,6 +95,8 @@ large_integration_test_files = \
 # The following tests are considered too flaky to be included
 # in the continous integration test suites
 ci_skip_integration_test_files = \
+	vertical_split.py \
+	vertical_split_vtgate.py \
 	resharding_bytes.py \
 	resharding.py \
 	schema.py \
