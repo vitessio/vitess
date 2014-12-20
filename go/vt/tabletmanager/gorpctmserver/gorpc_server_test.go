@@ -18,7 +18,7 @@ import (
 
 // the test here creates a fake server implementation, a fake client
 // implementation, and runs the test suite against the setup.
-func TestGoRpcTMServer(t *testing.T) {
+func TestGoRPCTMServer(t *testing.T) {
 	// Listen on a random port
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
@@ -52,5 +52,5 @@ func TestGoRpcTMServer(t *testing.T) {
 	}, 0)
 
 	// and run the test suite
-	agentrpctest.AgentRpcTestSuite(t, client, ti)
+	agentrpctest.Run(t, client, ti)
 }
