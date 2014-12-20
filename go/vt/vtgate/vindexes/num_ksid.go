@@ -16,26 +16,32 @@ var (
 	_ planbuilder.Reversible = NumKSID{}
 )
 
+// NumKSID defines a bit-pattern mapping of a uint64 to the KeyspaceId.
+// It's Unique and Reversible.
 type NumKSID struct{}
 
+// NewNumKSID creates a NumKSID vindex.
 func NewNumKSID(_ map[string]interface{}) (planbuilder.Vindex, error) {
 	return NumKSID{}, nil
 }
 
+// Cost returns the cost of this vindex as 0.
 func (_ NumKSID) Cost() int {
 	return 0
 }
 
-func (_ NumKSID) Verify(_ planbuilder.VCursor, id interface{}, ks key.KeyspaceId) (bool, error) {
+// Verify returns true if id and ksid match.
+func (_ NumKSID) Verify(_ planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) (bool, error) {
 	var keybytes [8]byte
 	num, err := getNumber(id)
 	if err != nil {
 		return false, err
 	}
 	binary.BigEndian.PutUint64(keybytes[:], uint64(num))
-	return key.KeyspaceId(keybytes[:]) == ks, nil
+	return key.KeyspaceId(keybytes[:]) == ksid, nil
 }
 
+// Map returns the associated keyspae ids for the given ids.
 func (_ NumKSID) Map(_ planbuilder.VCursor, ids []interface{}) ([]key.KeyspaceId, error) {
 	var keybytes [8]byte
 	out := make([]key.KeyspaceId, 0, len(ids))
@@ -50,8 +56,9 @@ func (_ NumKSID) Map(_ planbuilder.VCursor, ids []interface{}) ([]key.KeyspaceId
 	return out, nil
 }
 
-func (_ NumKSID) ReverseMap(_ planbuilder.VCursor, k key.KeyspaceId) (interface{}, error) {
-	return binary.BigEndian.Uint64([]byte(k)), nil
+// ReverseMap returns the associated id for the ksid.
+func (_ NumKSID) ReverseMap(_ planbuilder.VCursor, ksid key.KeyspaceId) (interface{}, error) {
+	return binary.BigEndian.Uint64([]byte(ksid)), nil
 }
 
 func init() {

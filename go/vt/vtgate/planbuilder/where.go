@@ -11,6 +11,9 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
+// ListVarName is the bind var name used for plans
+// that require VTGate to compute custom list values,
+// like for IN clauses.
 const ListVarName = "_vals"
 
 // getWhereRouting fills the plan fields for the where clause of a SELECT

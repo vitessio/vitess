@@ -18,20 +18,27 @@ var (
 	_ planbuilder.LookupGenerator = (*LookupHashUnique)(nil)
 )
 
+// LookupHashUnique defines a vindex that uses a lookup table.
+// The table is expected to define the id column as unique. It's
+// Unique and a Lookup. It's also a LookupGenerator, because it
+// can use the autoinc capabilities of the lookup table.
 type LookupHashUnique struct {
 	lookupHash
 }
 
+// NewLookupHashUnique creates a LookupHashUnique vindex.
 func NewLookupHashUnique(m map[string]interface{}) (planbuilder.Vindex, error) {
 	lhu := &LookupHashUnique{}
 	lhu.init(m)
 	return lhu, nil
 }
 
+// Cost returns the cost of this vindex as 10.
 func (vind *LookupHashUnique) Cost() int {
 	return 10
 }
 
+// Map returns the list of associated keyspace ids. It returns key.MinKey if there's no map.
 func (vind *LookupHashUnique) Map(vcursor planbuilder.VCursor, ids []interface{}) ([]key.KeyspaceId, error) {
 	out := make([]key.KeyspaceId, 0, len(ids))
 	bq := &tproto.BoundQuery{
@@ -65,6 +72,7 @@ func (vind *LookupHashUnique) Map(vcursor planbuilder.VCursor, ids []interface{}
 	return out, nil
 }
 
+// Generate generates an id and associates the ksid to the new id.
 func (vind *LookupHashUnique) Generate(vcursor planbuilder.VCursor, ksid key.KeyspaceId) (id int64, err error) {
 	bq := &tproto.BoundQuery{
 		Sql: vind.ins,

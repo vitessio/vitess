@@ -149,7 +149,7 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 			if err != nil {
 				if err != io.EOF {
 					fmt.Printf("Line: %d\n", lineno)
-					panic(fmt.Errorf("Error reading file %s: %s", name, err.Error()))
+					panic(fmt.Errorf("error reading file %s: %s", name, err.Error()))
 				}
 				break
 			}
@@ -170,7 +170,7 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 				lineno++
 				if err != nil {
 					fmt.Printf("Line: %d\n", lineno)
-					panic(fmt.Errorf("Error reading file %s: %s", name, err.Error()))
+					panic(fmt.Errorf("error reading file %s: %s", name, err.Error()))
 				}
 				output = append(output, l...)
 				if l[0] == '}' {

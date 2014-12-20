@@ -21,11 +21,17 @@ var (
 	_ planbuilder.FunctionalGenerator = (*HashVindex)(nil)
 )
 
+// HashVindex defines vindex that hashes an int64 to a KeyspaceId
+// by using null-key 3DES hash. It's Unique, Reversible and
+// Functional. Additionally, it's also a FunctionalGenerator
+// because it's capable of generating new values from a vindex table
+// with a single unique autoinc column.
 type HashVindex struct {
 	Table, Column string
 	ins, del      string
 }
 
+// NewHashVindex creates a new HashVindex.
 func NewHashVindex(m map[string]interface{}) (planbuilder.Vindex, error) {
 	get := func(name string) string {
 		v, _ := m[name].(string)
@@ -41,10 +47,12 @@ func NewHashVindex(m map[string]interface{}) (planbuilder.Vindex, error) {
 	}, nil
 }
 
+// Cost returns the cost of this index as 1.
 func (vind *HashVindex) Cost() int {
 	return 1
 }
 
+// Map returns the corresponding KeyspaceId values for the given ids.
 func (vind *HashVindex) Map(_ planbuilder.VCursor, ids []interface{}) ([]key.KeyspaceId, error) {
 	out := make([]key.KeyspaceId, 0, len(ids))
 	for _, id := range ids {
@@ -57,18 +65,21 @@ func (vind *HashVindex) Map(_ planbuilder.VCursor, ids []interface{}) ([]key.Key
 	return out, nil
 }
 
-func (vind *HashVindex) Verify(_ planbuilder.VCursor, id interface{}, ks key.KeyspaceId) (bool, error) {
+// Verify returns true if id maps to ksid.
+func (vind *HashVindex) Verify(_ planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) (bool, error) {
 	num, err := getNumber(id)
 	if err != nil {
 		return false, err
 	}
-	return vhash(num) == ks, nil
+	return vhash(num) == ksid, nil
 }
 
-func (vind *HashVindex) ReverseMap(_ planbuilder.VCursor, k key.KeyspaceId) (interface{}, error) {
-	return vunhash(k), nil
+// ReverseMap returns the id from ksid.
+func (vind *HashVindex) ReverseMap(_ planbuilder.VCursor, ksid key.KeyspaceId) (interface{}, error) {
+	return vunhash(ksid), nil
 }
 
+// Create reserves the id by inserting it into the vindex table.
 func (vind *HashVindex) Create(vcursor planbuilder.VCursor, id interface{}) error {
 	bq := &tproto.BoundQuery{
 		Sql: vind.ins,
@@ -82,6 +93,7 @@ func (vind *HashVindex) Create(vcursor planbuilder.VCursor, id interface{}) erro
 	return nil
 }
 
+// Generate generates a new id by using the autoinc of the vindex table.
 func (vind *HashVindex) Generate(vcursor planbuilder.VCursor) (id int64, err error) {
 	bq := &tproto.BoundQuery{
 		Sql: vind.ins,
@@ -96,6 +108,7 @@ func (vind *HashVindex) Generate(vcursor planbuilder.VCursor) (id int64, err err
 	return int64(result.InsertId), err
 }
 
+// Delete deletes the entry from the vindex table.
 func (vind *HashVindex) Delete(vcursor planbuilder.VCursor, ids []interface{}, _ key.KeyspaceId) error {
 	bq := &tproto.BoundQuery{
 		Sql: vind.del,

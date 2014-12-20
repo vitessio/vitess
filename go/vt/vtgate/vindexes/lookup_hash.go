@@ -12,6 +12,8 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
+// lookupHash implements the common functions between
+// LookupHashUnique and LookupHashMulti.
 type lookupHash struct {
 	Table, From, To       string
 	sel, verify, ins, del string
@@ -35,6 +37,7 @@ func (vind *lookupHash) init(m map[string]interface{}) {
 	vind.del = fmt.Sprintf("delete from %s where %s in ::%s and %s = :%s", t, from, from, to, to)
 }
 
+// Verify returns true if id maps to ksid.
 func (vind *lookupHash) Verify(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) (bool, error) {
 	bq := &tproto.BoundQuery{
 		Sql: vind.verify,
@@ -53,6 +56,7 @@ func (vind *lookupHash) Verify(vcursor planbuilder.VCursor, id interface{}, ksid
 	return true, nil
 }
 
+// Create creates an association between id and ksid by inserting a row in the vindex table.
 func (vind *lookupHash) Create(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) error {
 	bq := &tproto.BoundQuery{
 		Sql: vind.ins,
@@ -67,6 +71,7 @@ func (vind *lookupHash) Create(vcursor planbuilder.VCursor, id interface{}, ksid
 	return nil
 }
 
+// Delete deletes the association between ids and ksid.
 func (vind *lookupHash) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid key.KeyspaceId) error {
 	bq := &tproto.BoundQuery{
 		Sql: vind.del,
