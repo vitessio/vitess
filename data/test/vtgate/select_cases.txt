@@ -376,6 +376,20 @@
   "Values": 1
 }
 
+# select by primary keyspace id unsigned value
+"select * from user where id = 9223372036854775808"
+{
+  "ID": "SelectEqual",
+  "Reason": "",
+  "Table": "user",
+  "Original":"select * from user where id = 9223372036854775808",
+  "Rewritten": "select * from user where id = 9223372036854775808",
+  "Subquery": "",
+  "Vindex": "user_index",
+  "Col": "id",
+  "Values": 9223372036854775808
+}
+
 # select by non-unique index
 "select * from user where name = 'foo'"
 {
@@ -665,7 +679,21 @@
   "Values": [1, 2]
 }
 
-# select KEYRANGE in AND
+# select KEYRANGE in AND lhs
+"select * from user where keyrange(1, 2) and a = 1"
+{
+  "ID": "SelectKeyrange",
+  "Reason": "",
+  "Table": "user",
+  "Original":"select * from user where keyrange(1, 2) and a = 1",
+  "Rewritten": "select * from user where a = 1",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": [1, 2]
+}
+
+# select KEYRANGE in AND rhs
 "select * from user where a = 1 and keyrange(1, 2)"
 {
   "ID": "SelectKeyrange",
@@ -679,7 +707,21 @@
   "Values": [1, 2]
 }
 
-# select KEYRANGE in AND parenthesized
+# select KEYRANGE in AND lhs parenthesized
+"select * from user where (keyrange(1, 2)) and a = 1"
+{
+  "ID": "SelectKeyrange",
+  "Reason": "",
+  "Table": "user",
+  "Original":"select * from user where (keyrange(1, 2)) and a = 1",
+  "Rewritten": "select * from user where a = 1",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": [1, 2]
+}
+
+# select KEYRANGE in AND rhs parenthesized
 "select * from user where a = 1 and (keyrange(1, 2))"
 {
   "ID": "SelectKeyrange",
@@ -693,7 +735,21 @@
   "Values": [1, 2]
 }
 
-# select KEYRANGE in AND double parenthesized
+# select KEYRANGE in AND lhs double parenthesized
+"select * from user where ((keyrange(1, 2))) and a = 1"
+{
+  "ID": "SelectKeyrange",
+  "Reason": "",
+  "Table": "user",
+  "Original":"select * from user where ((keyrange(1, 2))) and a = 1",
+  "Rewritten": "select * from user where a = 1",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": [1, 2]
+}
+
+# select KEYRANGE in AND rhs double parenthesized
 "select * from user where a = 1 and ((keyrange(1, 2)))"
 {
   "ID": "SelectKeyrange",
@@ -707,7 +763,21 @@
   "Values": [1, 2]
 }
 
-# select KEYRANGE in double AND double parenthesized
+# select KEYRANGE in double AND double parenthesized lhs
+"select * from user where (b = 2 and (keyrange(1, 2))) and a = 1"
+{
+  "ID": "SelectKeyrange",
+  "Reason": "",
+  "Table": "user",
+  "Original":"select * from user where (b = 2 and (keyrange(1, 2))) and a = 1",
+  "Rewritten": "select * from user where (b = 2) and a = 1",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": [1, 2]
+}
+
+# select KEYRANGE in double AND double parenthesized rhs
 "select * from user where a = 1 and (b = 2 and (keyrange(1, 2)))"
 {
   "ID": "SelectKeyrange",
@@ -719,6 +789,90 @@
   "Vindex": "",
   "Col": "",
   "Values": [1, 2]
+}
+
+# select with KEYRANGE syntax error
+"select * from user where keyrange(1+1, 2)"
+{
+  "ID": "NoPlan",
+  "Reason": "syntax error at position 37",
+  "Table": "",
+  "Original":"select * from user where keyrange(1+1, 2)",
+  "Rewritten": "",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": null
+}
+
+# select KEYRANGE innvalid lhs
+"select * from user where keyrange(1.1, 2)"
+{
+  "ID": "NoPlan",
+  "Reason": "invalid keyrange: strconv.ParseUint: parsing \"1.1\": invalid syntax",
+  "Table": "user",
+  "Original":"select * from user where keyrange(1.1, 2)",
+  "Rewritten": "",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": null
+}
+
+# select KEYRANGE innvalid lhs of AND
+"select * from user where keyrange(1.1, 2) and a = 1"
+{
+  "ID": "NoPlan",
+  "Reason": "invalid keyrange: strconv.ParseUint: parsing \"1.1\": invalid syntax",
+  "Table": "user",
+  "Original":"select * from user where keyrange(1.1, 2) and a = 1",
+  "Rewritten": "",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": null
+}
+
+# select KEYRANGE innvalid in parenthesized
+"select * from user where (keyrange(1.1, 2))"
+{
+  "ID": "NoPlan",
+  "Reason": "invalid keyrange: strconv.ParseUint: parsing \"1.1\": invalid syntax",
+  "Table": "user",
+  "Original":"select * from user where (keyrange(1.1, 2))",
+  "Rewritten": "",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": null
+}
+
+# select KEYRANGE innvalid rhs of AND
+"select * from user where a = 1 and keyrange(1.1, 2)"
+{
+  "ID": "NoPlan",
+  "Reason": "invalid keyrange: strconv.ParseUint: parsing \"1.1\": invalid syntax",
+  "Table": "user",
+  "Original":"select * from user where a = 1 and keyrange(1.1, 2)",
+  "Rewritten": "",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": null
+}
+
+# select KEYRANGE ininvalid rhs
+"select * from user where keyrange(1, 2.2)"
+{
+  "ID": "NoPlan",
+  "Reason": "invalid keyrange: strconv.ParseUint: parsing \"2.2\": invalid syntax",
+  "Table": "user",
+  "Original":"select * from user where keyrange(1, 2.2)",
+  "Rewritten": "",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values": null
 }
 
 # aggregates in select, simple
