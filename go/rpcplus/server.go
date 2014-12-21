@@ -541,29 +541,51 @@ func (server *Server) ServeCodec(codec ServerCodec) {
 	server.ServeCodecWithContext(context.TODO(), codec)
 }
 
-// ServeCodecWithContext is like ServeCodec but it makes it possible
-// to pass a connection context to the RPC methods.
+var errExitIteration = errors.New("exit iteration")
+
 func (server *Server) ServeCodecWithContext(ctx context.Context, codec ServerCodec) {
 	sending := new(sync.Mutex)
 	for {
-		service, mtype, req, argv, replyv, keepReading, err := server.readRequest(codec)
+		err := server.ServeCodecWithContextOnce(sending, true, ctx, codec)
 		if err != nil {
-			if err != io.EOF {
-				log.Println("rpc:", err)
-			}
-			if !keepReading {
-				break
-			}
-			// send a response if we actually managed to read a header.
-			if req != nil {
-				server.sendResponse(sending, req, invalidRequest, codec, err.Error(), true)
-				server.freeRequest(req)
-			}
-			continue
+			break
 		}
-		go service.call(ctx, server, sending, mtype, req, argv, replyv, codec)
 	}
 	codec.Close()
+}
+
+// ServeCodecWithContextOnce handles only one request and sends the response,
+// this function can be called multiple times within the persistent connections
+func (server *Server) ServeCodecWithContextOnce(
+	sending *sync.Mutex,
+	isAsync bool,
+	ctx context.Context,
+	codec ServerCodec) error {
+
+	service, mtype, req, argv, replyv, keepReading, err := server.readRequest(codec)
+	if err != nil {
+		if err != io.EOF {
+			log.Println("rpc:", err)
+		}
+		if !keepReading {
+			return errExitIteration
+		}
+		// send a response if we actually managed to read a header.
+		if req != nil {
+			server.sendResponse(sending, req, invalidRequest, codec, err.Error(), true)
+			server.freeRequest(req)
+		}
+
+		return nil
+	}
+
+	if isAsync {
+		go service.call(ctx, server, sending, mtype, req, argv, replyv, codec)
+	} else {
+		service.call(ctx, server, sending, mtype, req, argv, replyv, codec)
+	}
+
+	return nil
 }
 
 func (mtype *methodType) prepareContext(ctx context.Context) reflect.Value {
