@@ -50,22 +50,22 @@ func (vind *LookupHashUnique) Map(vcursor planbuilder.VCursor, ids []interface{}
 		}
 		result, err := vcursor.Execute(bq)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("LookupHashUnique.Map: %v", err)
 		}
 		if len(result.Rows) == 0 {
 			out = append(out, "")
 			continue
 		}
 		if len(result.Rows) != 1 {
-			return nil, fmt.Errorf("unexpected multiple results from vindex %s: %v", vind.Table, id)
+			return nil, fmt.Errorf("LookupHashUnique.Map: unexpected multiple results from vindex %s: %v", vind.Table, id)
 		}
 		inum, err := mproto.Convert(result.Fields[0].Type, result.Rows[0][0])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("LookupHashUnique.Map: %v", err)
 		}
 		num, err := getNumber(inum)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("LookupHashUnique.Map: %v", err)
 		}
 		out = append(out, vhash(num))
 	}
@@ -83,7 +83,7 @@ func (vind *LookupHashUnique) Generate(vcursor planbuilder.VCursor, ksid key.Key
 	}
 	result, err := vcursor.Execute(bq)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("LookupHashUnique.Generate: %v", err)
 	}
 	return int64(result.InsertId), err
 }

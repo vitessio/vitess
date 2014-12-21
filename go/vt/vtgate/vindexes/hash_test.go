@@ -5,6 +5,8 @@
 package vindexes
 
 import (
+	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -81,6 +83,14 @@ func TestHashMap(t *testing.T) {
 	}
 }
 
+func TestHashMapFail(t *testing.T) {
+	_, err := hash.Map(nil, []interface{}{1.1})
+	want := "HashVindex.Map: unexpected type for 1.1: float64"
+	if err == nil || err.Error() != want {
+		t.Errorf("hash.Map: %v, want %v", err, want)
+	}
+}
+
 func TestHashVerify(t *testing.T) {
 	success, err := hash.Verify(nil, 1, "\x16k@\xb4J\xbaK\xd6")
 	if err != nil {
@@ -88,6 +98,14 @@ func TestHashVerify(t *testing.T) {
 	}
 	if !success {
 		t.Errorf("Verify(): %+v, want true", success)
+	}
+}
+
+func TestHashVerifyFail(t *testing.T) {
+	_, err := hash.Verify(nil, 1.1, "\x16k@\xb4J\xbaK\xd6")
+	want := "HashVindex.Verify: unexpected type for 1.1: float64"
+	if err == nil || err.Error() != want {
+		t.Errorf("hash.Verify: %v, want %v", err, want)
 	}
 }
 
@@ -102,24 +120,34 @@ func TestHashReverseMap(t *testing.T) {
 }
 
 type vcursor struct {
-	query *tproto.BoundQuery
+	mustFail bool
+	numRows  int
+	result   *mproto.QueryResult
+	query    *tproto.BoundQuery
 }
 
 func (vc *vcursor) Execute(query *tproto.BoundQuery) (*mproto.QueryResult, error) {
 	vc.query = query
+	if vc.mustFail {
+		return nil, errors.New("Execute failed")
+	}
 	switch {
 	case strings.HasPrefix(query.Sql, "select"):
-		return &mproto.QueryResult{
+		if vc.result != nil {
+			return vc.result, nil
+		}
+		result := &mproto.QueryResult{
 			Fields: []mproto.Field{{
 				Type: mproto.VT_LONG,
 			}},
-			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
-					sqltypes.MakeNumeric([]byte("1")),
-				},
-			},
-			RowsAffected: 1,
-		}, nil
+			RowsAffected: uint64(vc.numRows),
+		}
+		for i := 0; i < vc.numRows; i++ {
+			result.Rows = append(result.Rows, []sqltypes.Value{
+				sqltypes.MakeNumeric([]byte(fmt.Sprintf("%d", i+1))),
+			})
+		}
+		return result, nil
 	case strings.HasPrefix(query.Sql, "insert"):
 		return &mproto.QueryResult{InsertId: 1}, nil
 	case strings.HasPrefix(query.Sql, "delete"):
@@ -145,6 +173,15 @@ func TestHashCreate(t *testing.T) {
 	}
 }
 
+func TestHashCreateFail(t *testing.T) {
+	vc := &vcursor{mustFail: true}
+	err := hash.Create(vc, 1)
+	want := "HashVindex.Create: Execute failed"
+	if err == nil || err.Error() != want {
+		t.Errorf("hash.Create: %v, want %v", err, want)
+	}
+}
+
 func TestHashGenerate(t *testing.T) {
 	vc := &vcursor{}
 	got, err := hash.Generate(vc)
@@ -165,6 +202,15 @@ func TestHashGenerate(t *testing.T) {
 	}
 }
 
+func TestHashGenerateFail(t *testing.T) {
+	vc := &vcursor{mustFail: true}
+	_, err := hash.Generate(vc)
+	want := "HashVindex.Generate: Execute failed"
+	if err == nil || err.Error() != want {
+		t.Errorf("hash.Generate: %v, want %v", err, want)
+	}
+}
+
 func TestHashDelete(t *testing.T) {
 	vc := &vcursor{}
 	err := hash.Delete(vc, []interface{}{1}, "")
@@ -179,5 +225,14 @@ func TestHashDelete(t *testing.T) {
 	}
 	if !reflect.DeepEqual(vc.query, wantQuery) {
 		t.Errorf("vc.query = %#v, want %#v", vc.query, wantQuery)
+	}
+}
+
+func TestHashDeleteFail(t *testing.T) {
+	vc := &vcursor{mustFail: true}
+	err := hash.Delete(vc, []interface{}{1}, "")
+	want := "HashVindex.Delete: Execute failed"
+	if err == nil || err.Error() != want {
+		t.Errorf("hash.Delete: %v, want %v", err, want)
 	}
 }

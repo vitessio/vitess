@@ -5,6 +5,8 @@
 package vindexes
 
 import (
+	"fmt"
+
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -49,17 +51,17 @@ func (vind *LookupHashMulti) Map(vcursor planbuilder.VCursor, ids []interface{})
 		}
 		result, err := vcursor.Execute(bq)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("LookupHashMulti.Map: %v", err)
 		}
 		var ksids []key.KeyspaceId
 		for _, row := range result.Rows {
 			inum, err := mproto.Convert(result.Fields[0].Type, row[0])
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("LookupHashMulti.Map: %v", err)
 			}
 			num, err := getNumber(inum)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("LookupHashMulti.Map: %v", err)
 			}
 			ksids = append(ksids, vhash(num))
 		}

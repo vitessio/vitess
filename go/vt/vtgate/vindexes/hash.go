@@ -58,7 +58,7 @@ func (vind *HashVindex) Map(_ planbuilder.VCursor, ids []interface{}) ([]key.Key
 	for _, id := range ids {
 		num, err := getNumber(id)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("HashVindex.Map: %v", err)
 		}
 		out = append(out, vhash(num))
 	}
@@ -69,7 +69,7 @@ func (vind *HashVindex) Map(_ planbuilder.VCursor, ids []interface{}) ([]key.Key
 func (vind *HashVindex) Verify(_ planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) (bool, error) {
 	num, err := getNumber(id)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("HashVindex.Verify: %v", err)
 	}
 	return vhash(num) == ksid, nil
 }
@@ -88,7 +88,7 @@ func (vind *HashVindex) Create(vcursor planbuilder.VCursor, id interface{}) erro
 		},
 	}
 	if _, err := vcursor.Execute(bq); err != nil {
-		return err
+		return fmt.Errorf("HashVindex.Create: %v", err)
 	}
 	return nil
 }
@@ -103,7 +103,7 @@ func (vind *HashVindex) Generate(vcursor planbuilder.VCursor) (id int64, err err
 	}
 	result, err := vcursor.Execute(bq)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("HashVindex.Generate: %v", err)
 	}
 	return int64(result.InsertId), err
 }
@@ -117,7 +117,7 @@ func (vind *HashVindex) Delete(vcursor planbuilder.VCursor, ids []interface{}, _
 		},
 	}
 	if _, err := vcursor.Execute(bq); err != nil {
-		return err
+		return fmt.Errorf("HashVindex.Delete: %v", err)
 	}
 	return nil
 }

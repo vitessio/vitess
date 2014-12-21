@@ -48,7 +48,7 @@ func (vind *lookupHash) Verify(vcursor planbuilder.VCursor, id interface{}, ksid
 	}
 	result, err := vcursor.Execute(bq)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("lookupHash.Verify: %v", err)
 	}
 	if len(result.Rows) == 0 {
 		return false, nil
@@ -66,7 +66,7 @@ func (vind *lookupHash) Create(vcursor planbuilder.VCursor, id interface{}, ksid
 		},
 	}
 	if _, err := vcursor.Execute(bq); err != nil {
-		return err
+		return fmt.Errorf("lookupHash.Create: %v", err)
 	}
 	return nil
 }
@@ -81,7 +81,7 @@ func (vind *lookupHash) Delete(vcursor planbuilder.VCursor, ids []interface{}, k
 		},
 	}
 	if _, err := vcursor.Execute(bq); err != nil {
-		return err
+		return fmt.Errorf("lookupHash.Delete: %v", err)
 	}
 	return nil
 }
