@@ -187,10 +187,34 @@ func GetRpcPath(codecName string, auth bool) string {
 	return path
 }
 
-// httpRpcHandler handles rpc queries for a all types of HTTP requests.
+// ServeCustomRPC serves the given http rpc requests with the provided ServeMux,
+// does not support built-in authentication
+func ServeHTTPRPC(
+	handler *http.ServeMux,
+	server *rpc.Server,
+	codecName string,
+	cFactory ServerCodecFactory,
+	contextCreator func(*http.Request) context.Context) {
+
+	handler.Handle(
+		GetRpcPath(codecName, false),
+		&httpRpcHandler{
+			cFactory:       cFactory,
+			server:         server,
+			contextCreator: contextCreator,
+		},
+	)
+}
+
+// httpRpcHandler handles rpc queries for a all types of HTTP requests, does not
+// maintain a persistent connection.
 type httpRpcHandler struct {
 	cFactory ServerCodecFactory
 	server   *rpc.Server
+	// contextCreator creates an application specific context, while creating
+	// the context it should not read the request body nor write anything to
+	// headers
+	contextCreator func(*http.Request) context.Context
 }
 
 // ServeHTTP implements http.Handler's ServeHTTP
@@ -199,7 +223,13 @@ func (h *httpRpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 		&httpReadWriteCloser{rw: c, req: req},
 	))
 
-	ctx := proto.NewContext(req.RemoteAddr)
+	var ctx context.Context
+
+	if h.contextCreator != nil {
+		ctx = h.contextCreator(req)
+	} else {
+		ctx = proto.NewContext(req.RemoteAddr)
+	}
 
 	h.server.ServeCodecWithContextOnce(
 		new(sync.Mutex),
@@ -211,23 +241,24 @@ func (h *httpRpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 	codec.Close()
 }
 
-func ServeHTTPRPC(handler *http.ServeMux, server *rpc.Server, codecName string, cFactory ServerCodecFactory) {
-	handler.Handle(GetRpcPath(codecName, false), &httpRpcHandler{cFactory, server})
-}
-
+// httpReadWriteCloser wraps http.ResponseWriter and http.Request, with the help
+// of those, implements ReadWriteCloser interface
 type httpReadWriteCloser struct {
 	rw  http.ResponseWriter
 	req *http.Request
 }
 
+// Read implements Reader interface
 func (i *httpReadWriteCloser) Read(p []byte) (n int, err error) {
 	return i.req.Body.Read(p)
 }
 
+// Write implements Writer interface
 func (i *httpReadWriteCloser) Write(p []byte) (n int, err error) {
 	return i.rw.Write(p)
 }
 
+// Close implements Closer interface
 func (i *httpReadWriteCloser) Close() error {
 	return i.req.Body.Close()
 }
