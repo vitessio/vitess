@@ -115,6 +115,12 @@ var routerSchema = createTestSchema(`
         }
       }
     },
+		"TestBadSharding": {
+      "Sharded": false,
+      "Tables": {
+        "sharded_table":{}
+      }
+		},
     "TestUnsharded": {
       "Sharded": false,
       "Tables": {
@@ -240,6 +246,67 @@ func TestStreamUnsharded(t *testing.T) {
 	}
 }
 
+func TestUnshardedFail(t *testing.T) {
+	createSandbox("TestRouter")
+	createSandbox("TestBadSharding")
+	s := createSandbox(TEST_UNSHARDED)
+	s.SrvKeyspaceMustFail = 1
+	sbc := &sandboxConn{}
+	s.MapTestConn("0", sbc)
+	serv := new(sandboxTopo)
+	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
+	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
+	q := proto.Query{
+		Sql:        "select * from music_user_map where id = 1",
+		TabletType: topo.TYPE_MASTER,
+	}
+	_, err := router.Execute(context.Background(), &q)
+	want := "paramsUnsharded: keyspace TestUnsharded fetch error: topo error GetSrvKeyspace"
+	if err == nil || err.Error() != want {
+		t.Errorf("router.Execute: %v, want %v", err, want)
+	}
+
+	q = proto.Query{
+		Sql:        "select * from sharded_table where id = 1",
+		TabletType: topo.TYPE_MASTER,
+	}
+	_, err = router.Execute(context.Background(), &q)
+	want = "unsharded keyspace TestBadSharding has multiple shards"
+	if err == nil || err.Error() != want {
+		t.Errorf("router.Execute: %v, want %v", err, want)
+	}
+}
+
+func TestStreamUnshardedFail(t *testing.T) {
+	createSandbox("TestRouter")
+	s := createSandbox(TEST_UNSHARDED)
+	s.SrvKeyspaceMustFail = 1
+	sbc := &sandboxConn{}
+	s.MapTestConn("0", sbc)
+	serv := new(sandboxTopo)
+	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
+	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
+	q := proto.Query{
+		Sql:        "select * from music_user_map where id = 1",
+		TabletType: topo.TYPE_MASTER,
+	}
+	_, err := execStream(router, &q)
+	want := "paramsUnsharded: keyspace TestUnsharded fetch error: topo error GetSrvKeyspace"
+	if err == nil || err.Error() != want {
+		t.Errorf("router.Execute: %v, want %v", err, want)
+	}
+
+	q = proto.Query{
+		Sql:        "update music_user_map set a = 1 where id = 1",
+		TabletType: topo.TYPE_MASTER,
+	}
+	_, err = execStream(router, &q)
+	want = `query "update music_user_map set a = 1 where id = 1" cannot be used for streaming`
+	if err == nil || err.Error() != want {
+		t.Errorf("router.Execute: %v, want %v", err, want)
+	}
+}
+
 func TestSelectEqual(t *testing.T) {
 	s := createSandbox("TestRouter")
 	sbc1 := &sandboxConn{}
@@ -335,6 +402,31 @@ func TestStreamSelectEqual(t *testing.T) {
 	wantResult := singleRowResult
 	if !reflect.DeepEqual(result, wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
+	}
+}
+
+func TestSelectEqualFail(t *testing.T) {
+	s := createSandbox("TestRouter")
+	sbc1 := &sandboxConn{}
+	sbc2 := &sandboxConn{}
+	s.MapTestConn("-20", sbc1)
+	s.MapTestConn("40-60", sbc2)
+
+	l := createSandbox(TEST_UNSHARDED)
+	sbclookup := &sandboxConn{}
+	l.MapTestConn("0", sbclookup)
+
+	serv := new(sandboxTopo)
+	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
+	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
+	q := proto.Query{
+		Sql:        "select * from user where id = :aa",
+		TabletType: topo.TYPE_MASTER,
+	}
+	_, err := router.Execute(context.Background(), &q)
+	want := "paramsSelectEqual: could not find bind var :aa"
+	if err == nil || err.Error() != want {
+		t.Errorf("router.Execute: %v, want %v", err, want)
 	}
 }
 
@@ -489,6 +581,31 @@ func TestStreamSelectIN(t *testing.T) {
 	}
 }
 
+func TestSelectINFail(t *testing.T) {
+	s := createSandbox("TestRouter")
+	sbc1 := &sandboxConn{}
+	sbc2 := &sandboxConn{}
+	s.MapTestConn("-20", sbc1)
+	s.MapTestConn("40-60", sbc2)
+
+	l := createSandbox(TEST_UNSHARDED)
+	sbclookup := &sandboxConn{}
+	l.MapTestConn("0", sbclookup)
+
+	serv := new(sandboxTopo)
+	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
+	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
+	q := proto.Query{
+		Sql:        "select * from user where id in (:aa)",
+		TabletType: topo.TYPE_MASTER,
+	}
+	_, err := router.Execute(context.Background(), &q)
+	want := "paramsSelectIN: could not find bind var :aa"
+	if err == nil || err.Error() != want {
+		t.Errorf("router.Execute: %v, want %v", err, want)
+	}
+}
+
 func TestSelectKeyrange(t *testing.T) {
 	s := createSandbox("TestRouter")
 	sbc1 := &sandboxConn{}
@@ -568,6 +685,65 @@ func TestStreamSelectKeyrange(t *testing.T) {
 	}
 }
 
+func TestSelectKeyrangeFail(t *testing.T) {
+	s := createSandbox("TestRouter")
+	sbc1 := &sandboxConn{}
+	sbc2 := &sandboxConn{}
+	s.MapTestConn("-20", sbc1)
+	s.MapTestConn("40-60", sbc2)
+	serv := new(sandboxTopo)
+	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
+	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
+	q := proto.Query{
+		Sql:        "select * from user where keyrange('', :aa)",
+		TabletType: topo.TYPE_MASTER,
+	}
+	_, err := router.Execute(context.Background(), &q)
+	want := "paramsSelectKeyrange: could not find bind var :aa"
+	if err == nil || err.Error() != want {
+		t.Errorf("router.Execute: %v, want %v", err, want)
+	}
+
+	q = proto.Query{
+		Sql: "select * from user where keyrange('', :aa)",
+		BindVariables: map[string]interface{}{
+			"aa": 1,
+		},
+		TabletType: topo.TYPE_MASTER,
+	}
+	_, err = router.Execute(context.Background(), &q)
+	want = "paramsSelectKeyrange: expecting strings for keyrange: [ 1]"
+	if err == nil || err.Error() != want {
+		t.Errorf("router.Execute: %v, want %v", err, want)
+	}
+
+	q = proto.Query{
+		Sql: "select * from user where keyrange('', :aa)",
+		BindVariables: map[string]interface{}{
+			"aa": "\x21",
+		},
+		TabletType: topo.TYPE_MASTER,
+	}
+	_, err = router.Execute(context.Background(), &q)
+	want = "paramsSelectKeyrange: keyrange {Start: , End: 21} does not exactly match shards"
+	if err == nil || err.Error() != want {
+		t.Errorf("router.Execute: %v, want %v", err, want)
+	}
+
+	q = proto.Query{
+		Sql: "select * from user where keyrange('', :aa)",
+		BindVariables: map[string]interface{}{
+			"aa": "\x40",
+		},
+		TabletType: topo.TYPE_MASTER,
+	}
+	_, err = router.Execute(context.Background(), &q)
+	want = "keyrange must match exactly one shard: [ @]"
+	if err == nil || err.Error() != want {
+		t.Errorf("router.Execute: %v, want %v", err, want)
+	}
+}
+
 func TestSelectScatter(t *testing.T) {
 	s := createSandbox("TestRouter")
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
@@ -638,6 +814,30 @@ func TestStreamSelectScatter(t *testing.T) {
 	}
 }
 
+func TestSelectScatterFail(t *testing.T) {
+	s := createSandbox("TestRouter")
+	s.SrvKeyspaceMustFail = 1
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	var conns []*sandboxConn
+	for _, shard := range shards {
+		sbc := &sandboxConn{}
+		conns = append(conns, sbc)
+		s.MapTestConn(shard, sbc)
+	}
+	serv := new(sandboxTopo)
+	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
+	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
+	q := proto.Query{
+		Sql:        "select * from user",
+		TabletType: topo.TYPE_MASTER,
+	}
+	_, err := router.Execute(context.Background(), &q)
+	want := "paramsSelectScatter: keyspace TestRouter fetch error: topo error GetSrvKeyspace"
+	if err == nil || err.Error() != want {
+		t.Errorf("router.Execute: %v, want %v", err, want)
+	}
+}
+
 func TestUpdateEqual(t *testing.T) {
 	s := createSandbox("TestRouter")
 	sbc1 := &sandboxConn{}
@@ -685,6 +885,51 @@ func TestUpdateEqual(t *testing.T) {
 	}
 	if sbc1.Queries != nil {
 		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
+	}
+}
+
+func TestUpdateEqualFail(t *testing.T) {
+	s := createSandbox("TestRouter")
+	sbc := &sandboxConn{}
+	s.MapTestConn("-20", sbc)
+	serv := new(sandboxTopo)
+	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
+	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
+	q := proto.Query{
+		Sql:        "update user set a=2 where id = :aa",
+		TabletType: topo.TYPE_MASTER,
+	}
+	_, err := router.Execute(context.Background(), &q)
+	want := "execUpdateEqual: could not find bind var :aa"
+	if err == nil || err.Error() != want {
+		t.Errorf("router.Execute: %v, want %v", err, want)
+	}
+
+	s.SrvKeyspaceMustFail = 1
+	q = proto.Query{
+		Sql: "update user set a=2 where id = :id",
+		BindVariables: map[string]interface{}{
+			"id": 1,
+		},
+		TabletType: topo.TYPE_MASTER,
+	}
+	_, err = router.Execute(context.Background(), &q)
+	want = "execUpdateEqual: keyspace TestRouter fetch error: topo error GetSrvKeyspace"
+	if err == nil || err.Error() != want {
+		t.Errorf("router.Execute: %v, want %v", err, want)
+	}
+
+	q = proto.Query{
+		Sql: "update user set a=2 where id = :id",
+		BindVariables: map[string]interface{}{
+			"id": "aa",
+		},
+		TabletType: topo.TYPE_MASTER,
+	}
+	_, err = router.Execute(context.Background(), &q)
+	want = "execUpdateEqual: HashVindex.Map: unexpected type for aa: string"
+	if err == nil || err.Error() != want {
+		t.Errorf("router.Execute: %v, want %v", err, want)
 	}
 }
 
@@ -1009,7 +1254,7 @@ func TestInsertLookupUnowned(t *testing.T) {
 		},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
-		t.Errorf("sbc.Queries: \n%+v, want \n%+v\n", sbc.Queries, wantQueries)
+		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
 	}
 	wantQueries = []tproto.BoundQuery{{
 		Sql: "select music_id from music_user_map where music_id = :music_id and user_id = :user_id",
@@ -1053,7 +1298,7 @@ func TestInsertLookupUnownedUnsupplied(t *testing.T) {
 		},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
-		t.Errorf("sbc.Queries: \n%+v, want \n%+v\n", sbc.Queries, wantQueries)
+		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
 	}
 	wantQueries = []tproto.BoundQuery{{
 		Sql: "select user_id from music_user_map where music_id = :music_id",
