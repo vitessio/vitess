@@ -90,7 +90,7 @@ func (rtr *Router) Execute(ctx context.Context, query *proto.Query) (*mproto.Que
 	case planbuilder.SelectScatter:
 		params, err = rtr.paramsSelectScatter(vcursor, plan)
 	default:
-		return nil, fmt.Errorf("plan %+v unimplemented", plan)
+		panic("unexpected")
 	}
 	if err != nil {
 		return nil, err

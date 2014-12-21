@@ -15,6 +15,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/testfiles"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
@@ -164,16 +165,12 @@ func TestUnsharded(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if sbc.ExecCount != 1 {
-		t.Errorf("sbc.ExecCount: %v, want 1\n", sbc.ExecCount)
-	}
-	wantBind := map[string]interface{}{}
-	if !reflect.DeepEqual(sbc.BindVars[0], wantBind) {
-		t.Errorf("sbc.BindVars[0] = %#v, want %#v", sbc.BindVars[0], wantBind)
-	}
-	wantQuery := "select * from music_user_map where id = 1"
-	if sbc.Queries[0] != wantQuery {
-		t.Errorf("sbc.Queries[0]: %q, want %q\n", sbc.Queries[0], wantQuery)
+	wantQueries := []tproto.BoundQuery{{
+		Sql:           "select * from music_user_map where id = 1",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
+		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
 	}
 
 	q.Sql = "update music_user_map set id = 1"
@@ -181,12 +178,15 @@ func TestUnsharded(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []string{
-		"select * from music_user_map where id = 1",
-		"update music_user_map set id = 1",
-	}
+	wantQueries = []tproto.BoundQuery{{
+		Sql:           "select * from music_user_map where id = 1",
+		BindVariables: map[string]interface{}{},
+	}, {
+		Sql:           "update music_user_map set id = 1",
+		BindVariables: map[string]interface{}{},
+	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
-		t.Errorf("sbc.Queries[0]: %q, want %q\n", sbc.Queries, wantQueries)
+		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
 	}
 
 	q.Sql = "delete from music_user_map"
@@ -195,9 +195,12 @@ func TestUnsharded(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery = "delete from music_user_map"
-	if sbc.Queries[0] != wantQuery {
-		t.Errorf("sbc.Queries[0]: %q, want %q\n", sbc.Queries[0], wantQuery)
+	wantQueries = []tproto.BoundQuery{{
+		Sql:           "delete from music_user_map",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
+		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
 	}
 
 	q.Sql = "insert into music_user_map values(1)"
@@ -206,9 +209,12 @@ func TestUnsharded(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQuery = "insert into music_user_map values(1)"
-	if sbc.Queries[0] != wantQuery {
-		t.Errorf("sbc.Queries[0]: %q, want %q\n", sbc.Queries[0], wantQuery)
+	wantQueries = []tproto.BoundQuery{{
+		Sql:           "insert into music_user_map values(1)",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
+		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
 	}
 }
 
@@ -256,62 +262,58 @@ func TestSelectEqual(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantBind := map[string]interface{}{}
-	if !reflect.DeepEqual(sbc1.BindVars[0], wantBind) {
-		t.Errorf("sbc1.BindVars[0] = %#v, want %#v", sbc1.BindVars[0], wantBind)
+	wantQueries := []tproto.BoundQuery{{
+		Sql:           "select * from user where id = 1",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
-	wantQuery := "select * from user where id = 1"
-	if sbc1.Queries[0] != wantQuery {
-		t.Errorf("sbc1.Queries[0]: %q, want %q\n", sbc1.Queries[0], wantQuery)
-	}
-	if sbc2.ExecCount != 0 {
-		t.Errorf("sbc2.ExecCount: %v, want 0\n", sbc2.ExecCount)
+	if sbc2.Queries != nil {
+		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 
 	q.Sql = "select * from user where id = 3"
-	_, err = router.Execute(context.Background(), &q)
-	if err != nil {
-		t.Error(err)
-	}
-	if sbc1.ExecCount != 1 {
-		t.Errorf("sbc1.ExecCount: %v, want 1\n", sbc1.ExecCount)
-	}
-	wantBind = map[string]interface{}{}
-	if !reflect.DeepEqual(sbc2.BindVars[0], wantBind) {
-		t.Errorf("sbc2.BindVars[0] = %#v, want %#v", sbc2.BindVars[0], wantBind)
-	}
-	wantQuery = "select * from user where id = 3"
-	if sbc2.Queries[0] != wantQuery {
-		t.Errorf("sbc2.Queries[0]: %q, want %q\n", sbc2.Queries[0], wantQuery)
-	}
-
-	q.Sql = "select * from user where name = 'foo'"
-	sbc1.BindVars = nil
 	sbc1.Queries = nil
 	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
-	wantBind = map[string]interface{}{}
-	if !reflect.DeepEqual(sbc1.BindVars[0], wantBind) {
-		t.Errorf("sbc1.BindVars[0] = %#v, want %#v", sbc1.BindVars[0], wantBind)
+	wantQueries = []tproto.BoundQuery{{
+		Sql:           "select * from user where id = 3",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
+		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
 	}
-	wantQuery = "select * from user where name = 'foo'"
-	if sbc1.Queries[0] != wantQuery {
-		t.Errorf("sbc1.Queries[0]: %q, want %q\n", sbc1.Queries[0], wantQuery)
+	if sbc1.ExecCount != 1 {
+		t.Errorf("sbc1.ExecCount: %v, want 1\n", sbc1.ExecCount)
+	}
+	if sbc1.Queries != nil {
+		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
 	}
 
-	wantBinds := []map[string]interface{}{{
-		"name": "foo",
+	q.Sql = "select * from user where name = 'foo'"
+	sbc2.Queries = nil
+	_, err = router.Execute(context.Background(), &q)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries = []tproto.BoundQuery{{
+		Sql:           "select * from user where name = 'foo'",
+		BindVariables: map[string]interface{}{},
 	}}
-	if !reflect.DeepEqual(sbclookup.BindVars, wantBinds) {
-		t.Errorf("sbclookup.BindVars = \n%#v, want \n%#v", sbclookup.BindVars, wantBinds)
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
-	wantQueries := []string{
-		"select user_id from name_user_map where name = :name",
-	}
+	wantQueries = []tproto.BoundQuery{{
+		Sql: "select user_id from name_user_map where name = :name",
+		BindVariables: map[string]interface{}{
+			"name": "foo",
+		},
+	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
-		t.Errorf("sbclookup.Queries: %q, want %q\n", sbclookup.Queries, wantQueries)
+		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
 	}
 }
 
@@ -358,18 +360,17 @@ func TestSelectIN(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantBind := map[string]interface{}{
-		"_vals": []interface{}{int64(1)},
+	wantQueries := []tproto.BoundQuery{{
+		Sql: "select * from user where id in ::_vals",
+		BindVariables: map[string]interface{}{
+			"_vals": []interface{}{int64(1)},
+		},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
-	if !reflect.DeepEqual(sbc1.BindVars[0], wantBind) {
-		t.Errorf("sbc1.BindVars[0] = %#v, want %#v", sbc1.BindVars[0], wantBind)
-	}
-	wantQuery := "select * from user where id in ::_vals"
-	if sbc1.Queries[0] != wantQuery {
-		t.Errorf("sbc1.Queries[0]: %q, want %q\n", sbc1.Queries[0], wantQuery)
-	}
-	if sbc2.ExecCount != 0 {
-		t.Errorf("sbc2.ExecCount: %v, want 0\n", sbc2.ExecCount)
+	if sbc2.Queries != nil {
+		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 
 	q.Sql = "select * from user where id in (1, 3)"
@@ -378,52 +379,47 @@ func TestSelectIN(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantBind = map[string]interface{}{
-		"_vals": []interface{}{int64(1)},
+	wantQueries = []tproto.BoundQuery{{
+		Sql: "select * from user where id in ::_vals",
+		BindVariables: map[string]interface{}{
+			"_vals": []interface{}{int64(1)},
+		},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
-	if !reflect.DeepEqual(sbc1.BindVars[0], wantBind) {
-		t.Errorf("sbc1.BindVars[0] = %#v, want %#v", sbc1.BindVars[0], wantBind)
-	}
-	if sbc1.Queries[0] != wantQuery {
-		t.Errorf("sbc1.Queries[0]: %q, want %q\n", sbc1.Queries[0], wantQuery)
-	}
-	wantBind = map[string]interface{}{
-		"_vals": []interface{}{int64(3)},
-	}
-	if !reflect.DeepEqual(sbc2.BindVars[0], wantBind) {
-		t.Errorf("sbc2.BindVars[0] = %#v, want %#v", sbc2.BindVars[0], wantBind)
-	}
-	if sbc2.Queries[0] != wantQuery {
-		t.Errorf("sbc2.Queries[0]: %q, want %q\n", sbc2.Queries[0], wantQuery)
+	wantQueries = []tproto.BoundQuery{{
+		Sql: "select * from user where id in ::_vals",
+		BindVariables: map[string]interface{}{
+			"_vals": []interface{}{int64(3)},
+		},
+	}}
+	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
+		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
 	}
 
 	q.Sql = "select * from user where name = 'foo'"
-	sbc1.BindVars = nil
 	sbc1.Queries = nil
+	sbc2.Queries = nil
 	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
-	wantBind = map[string]interface{}{}
-	if !reflect.DeepEqual(sbc1.BindVars[0], wantBind) {
-		t.Errorf("sbc1.BindVars[0] = %#v, want %#v", sbc1.BindVars[0], wantBind)
-	}
-	wantQuery = "select * from user where name = 'foo'"
-	if sbc1.Queries[0] != wantQuery {
-		t.Errorf("sbc1.Queries[0]: %q, want %q\n", sbc1.Queries[0], wantQuery)
-	}
-
-	wantBinds := []map[string]interface{}{{
-		"name": "foo",
+	wantQueries = []tproto.BoundQuery{{
+		Sql:           "select * from user where name = 'foo'",
+		BindVariables: map[string]interface{}{},
 	}}
-	if !reflect.DeepEqual(sbclookup.BindVars, wantBinds) {
-		t.Errorf("sbclookup.BindVars = \n%#v, want \n%#v", sbclookup.BindVars, wantBinds)
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
-	wantQueries := []string{
-		"select user_id from name_user_map where name = :name",
-	}
+	wantQueries = []tproto.BoundQuery{{
+		Sql: "select user_id from name_user_map where name = :name",
+		BindVariables: map[string]interface{}{
+			"name": "foo",
+		},
+	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
-		t.Errorf("sbclookup.Queries: %q, want %q\n", sbclookup.Queries, wantQueries)
+		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
 	}
 }
 
@@ -473,8 +469,6 @@ func TestStreamSelectIN(t *testing.T) {
 	}
 
 	q.Sql = "select * from user where name = 'foo'"
-	sbc1.BindVars = nil
-	sbc1.Queries = nil
 	result, err = execStream(router, &q)
 	if err != nil {
 		t.Error(err)
@@ -484,17 +478,14 @@ func TestStreamSelectIN(t *testing.T) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 
-	wantBinds := []map[string]interface{}{{
-		"name": "foo",
+	wantQueries := []tproto.BoundQuery{{
+		Sql: "select user_id from name_user_map where name = :name",
+		BindVariables: map[string]interface{}{
+			"name": "foo",
+		},
 	}}
-	if !reflect.DeepEqual(sbclookup.BindVars, wantBinds) {
-		t.Errorf("sbclookup.BindVars = \n%#v, want \n%#v", sbclookup.BindVars, wantBinds)
-	}
-	wantQueries := []string{
-		"select user_id from name_user_map where name = :name",
-	}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
-		t.Errorf("sbclookup.Queries: %q, want %q\n", sbclookup.Queries, wantQueries)
+		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
 	}
 }
 
@@ -515,33 +506,32 @@ func TestSelectKeyrange(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantBind := map[string]interface{}{}
-	if !reflect.DeepEqual(sbc1.BindVars[0], wantBind) {
-		t.Errorf("sbc1.BindVars[0] = %#v, want %#v", sbc1.BindVars[0], wantBind)
+	wantQueries := []tproto.BoundQuery{{
+		Sql:           "select * from user",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
-	wantQuery := "select * from user"
-	if sbc1.Queries[0] != wantQuery {
-		t.Errorf("sbc1.Queries[0]: %q, want %q\n", sbc1.Queries[0], wantQuery)
-	}
-	if sbc2.ExecCount != 0 {
-		t.Errorf("sbc2.ExecCount: %v, want 0\n", sbc2.ExecCount)
+	if sbc2.Queries != nil {
+		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 
 	q.Sql = "select * from user where keyrange('\x40', '\x60')"
+	sbc1.Queries = nil
 	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
-	if sbc1.ExecCount != 1 {
-		t.Errorf("sbc1.ExecCount: %v, want 1\n", sbc1.ExecCount)
+	wantQueries = []tproto.BoundQuery{{
+		Sql:           "select * from user",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
+		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
 	}
-	wantBind = map[string]interface{}{}
-	if !reflect.DeepEqual(sbc2.BindVars[0], wantBind) {
-		t.Errorf("sbc2.BindVars[0] = %#v, want %#v", sbc2.BindVars[0], wantBind)
-	}
-	wantQuery = "select * from user"
-	if sbc2.Queries[0] != wantQuery {
-		t.Errorf("sbc2.Queries[0]: %q, want %q\n", sbc2.Queries[0], wantQuery)
+	if sbc1.Queries != nil {
+		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
 	}
 }
 
@@ -598,14 +588,13 @@ func TestSelectScatter(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantBind := map[string]interface{}{}
-	wantQuery := "select * from user"
+	wantQueries := []tproto.BoundQuery{{
+		Sql:           "select * from user",
+		BindVariables: map[string]interface{}{},
+	}}
 	for _, conn := range conns {
-		if !reflect.DeepEqual(conn.BindVars[0], wantBind) {
-			t.Errorf("conn.BindVars[0] = %#v, want %#v", conn.BindVars[0], wantBind)
-		}
-		if conn.Queries[0] != wantQuery {
-			t.Errorf("conn.Queries[0]: %q, want %q\n", conn.Queries[0], wantQuery)
+		if !reflect.DeepEqual(conn.Queries, wantQueries) {
+			t.Errorf("conn.Queries = %#v, want %#v", conn.Queries, wantQueries)
 		}
 	}
 }
@@ -666,36 +655,36 @@ func TestUpdateEqual(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantBind := map[string]interface{}{
-		"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
+	wantQueries := []tproto.BoundQuery{{
+		Sql: "update user set a = 2 where id = 1 /* _routing keyspace_id:166b40b44aba4bd6 */",
+		BindVariables: map[string]interface{}{
+			"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
+		},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
-	if !reflect.DeepEqual(sbc1.BindVars[0], wantBind) {
-		t.Errorf("sbc1.BindVars[0] = %#v, want %#v", sbc1.BindVars[0], wantBind)
+	if sbc2.Queries != nil {
+		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
-	wantQuery := "update user set a = 2 where id = 1 /* _routing keyspace_id:166b40b44aba4bd6 */"
-	if sbc1.Queries[0] != wantQuery {
-		t.Errorf("sbc1.Queries[0]: %q, want %q\n", sbc1.Queries[0], wantQuery)
-	}
-	if sbc2.ExecCount != 0 {
-		t.Errorf("sbc2.ExecCount: %v, want 0\n", sbc2.ExecCount)
-	}
+
 	q.Sql = "update user set a=2 where id = 3"
+	sbc1.Queries = nil
 	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
-	if sbc1.ExecCount != 1 {
-		t.Errorf("sbc1.ExecCount: %v, want 1\n", sbc1.ExecCount)
+	wantQueries = []tproto.BoundQuery{{
+		Sql: "update user set a = 2 where id = 3 /* _routing keyspace_id:4eb190c9a2fa169c */",
+		BindVariables: map[string]interface{}{
+			"keyspace_id": "N\xb1\x90ɢ\xfa\x16\x9c",
+		},
+	}}
+	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
+		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
 	}
-	wantBind = map[string]interface{}{
-		"keyspace_id": "N\xb1\x90ɢ\xfa\x16\x9c",
-	}
-	if !reflect.DeepEqual(sbc2.BindVars[0], wantBind) {
-		t.Errorf("sbc2.BindVars[0] = %#v, want %#v", sbc2.BindVars[0], wantBind)
-	}
-	wantQuery = "update user set a = 2 where id = 3 /* _routing keyspace_id:4eb190c9a2fa169c */"
-	if sbc2.Queries[0] != wantQuery {
-		t.Errorf("sbc2.Queries[0]: %q, want %q\n", sbc2.Queries[0], wantQuery)
+	if sbc1.Queries != nil {
+		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
 	}
 }
 
@@ -732,35 +721,33 @@ func TestDeleteEqual(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantBinds := []map[string]interface{}{{}, {
-		"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
+	wantQueries := []tproto.BoundQuery{{
+		Sql:           "select id, name from user where id = 1 for update",
+		BindVariables: map[string]interface{}{},
+	}, {
+		Sql: "delete from user where id = 1 /* _routing keyspace_id:166b40b44aba4bd6 */",
+		BindVariables: map[string]interface{}{
+			"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
+		},
 	}}
-	if !reflect.DeepEqual(sbc.BindVars, wantBinds) {
-		t.Errorf("sbc.BindVars = %#v, want %#v", sbc.BindVars, wantBinds)
-	}
-	wantQueries := []string{
-		"select id, name from user where id = 1 for update",
-		"delete from user where id = 1 /* _routing keyspace_id:166b40b44aba4bd6 */",
-	}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
-		t.Errorf("sbc.Queries: %q, want %q\n", sbc.Queries, wantQueries)
+		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
 	}
 
-	wantBinds = []map[string]interface{}{{
-		"id": []interface{}{int64(1)},
+	wantQueries = []tproto.BoundQuery{{
+		Sql: "delete from user_idx where id in ::id",
+		BindVariables: map[string]interface{}{
+			"id": []interface{}{int64(1)},
+		},
 	}, {
-		"user_id": int64(1),
-		"name":    []interface{}{"myname"},
+		Sql: "delete from name_user_map where name in ::name and user_id = :user_id",
+		BindVariables: map[string]interface{}{
+			"user_id": int64(1),
+			"name":    []interface{}{"myname"},
+		},
 	}}
-	if !reflect.DeepEqual(sbclookup.BindVars, wantBinds) {
-		t.Errorf("sbclookup.BindVars = \n%#v, want \n%#v", sbclookup.BindVars, wantBinds)
-	}
-	wantQueries = []string{
-		"delete from user_idx where id in ::id",
-		"delete from name_user_map where name in ::name and user_id = :user_id",
-	}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
-		t.Errorf("sbclookup.Queries: %q, want %q\n", sbclookup.Queries, wantQueries)
+		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
 	}
 }
 
@@ -787,63 +774,71 @@ func TestInsertSharded(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantBind := map[string]interface{}{
-		"id": int64(1),
+	wantQueries := []tproto.BoundQuery{{
+		Sql: "insert into user(id, v, name) values (:_id, 2, :_name) /* _routing keyspace_id:166b40b44aba4bd6 */",
+		BindVariables: map[string]interface{}{
+			"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
+			"_id":         int64(1),
+			"_name":       "myname",
+		},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
 	}
-	if !reflect.DeepEqual(sbclookup.BindVars[0], wantBind) {
-		t.Errorf("sbclookup.BindVars[0] = %#v, want %#v", sbclookup.BindVars[0], wantBind)
+	if sbc2.Queries != nil {
+		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
-	wantQuery := "insert into user_idx(id) values(:id)"
-	if sbclookup.Queries[0] != wantQuery {
-		t.Errorf("sbclookup.Queries[0]: %q, want %q\n", sbclookup.Queries[0], wantQuery)
-	}
-	wantBind = map[string]interface{}{
-		"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
-		"_id":         int64(1),
-		"_name":       "myname",
-	}
-	if !reflect.DeepEqual(sbc1.BindVars[0], wantBind) {
-		t.Errorf("sbc1.BindVars[0] = %#v, want %#v", sbc1.BindVars[0], wantBind)
-	}
-	wantQuery = "insert into user(id, v, name) values (:_id, 2, :_name) /* _routing keyspace_id:166b40b44aba4bd6 */"
-	if sbc1.Queries[0] != wantQuery {
-		t.Errorf("sbc1.Queries[0]: %q, want %q\n", sbc1.Queries[0], wantQuery)
-	}
-	if sbc2.ExecCount != 0 {
-		t.Errorf("sbc2.ExecCount: %v, want 0\n", sbc2.ExecCount)
+	wantQueries = []tproto.BoundQuery{{
+		Sql: "insert into user_idx(id) values(:id)",
+		BindVariables: map[string]interface{}{
+			"id": int64(1),
+		},
+	}, {
+		Sql: "insert into name_user_map(name, user_id) values(:name, :user_id)",
+		BindVariables: map[string]interface{}{
+			"name":    "myname",
+			"user_id": int64(1),
+		},
+	}}
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
 	}
 
 	q.Sql = "insert into user(id, v, name) values (3, 2, 'myname2')"
-	sbclookup.BindVars = nil
+	sbc1.Queries = nil
 	sbclookup.Queries = nil
 	_, err = router.Execute(context.Background(), &q)
 	if err != nil {
 		t.Error(err)
 	}
-	if sbc1.ExecCount != 1 {
-		t.Errorf("sbc1.ExecCount: %v, want 1\n", sbc1.ExecCount)
+	wantQueries = []tproto.BoundQuery{{
+		Sql: "insert into user(id, v, name) values (:_id, 2, :_name) /* _routing keyspace_id:4eb190c9a2fa169c */",
+		BindVariables: map[string]interface{}{
+			"keyspace_id": "N\xb1\x90ɢ\xfa\x16\x9c",
+			"_id":         int64(3),
+			"_name":       "myname2",
+		},
+	}}
+	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
+		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
 	}
-	wantBind = map[string]interface{}{
-		"id": int64(3),
+	if sbc1.Queries != nil {
+		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
 	}
-	if !reflect.DeepEqual(sbclookup.BindVars[0], wantBind) {
-		t.Errorf("sbclookup.BindVars[0] = %#v, want %#v", sbclookup.BindVars[0], wantBind)
-	}
-	wantQuery = "insert into user_idx(id) values(:id)"
-	if sbclookup.Queries[0] != wantQuery {
-		t.Errorf("sbclookup.Queries[0]: %q, want %q\n", sbclookup.Queries[0], wantQuery)
-	}
-	wantBind = map[string]interface{}{
-		"keyspace_id": "N\xb1\x90ɢ\xfa\x16\x9c",
-		"_id":         int64(3),
-		"_name":       "myname2",
-	}
-	if !reflect.DeepEqual(sbc2.BindVars[0], wantBind) {
-		t.Errorf("sbc2.BindVars[0] = %#v, want %#v", sbc2.BindVars[0], wantBind)
-	}
-	wantQuery = "insert into user(id, v, name) values (:_id, 2, :_name) /* _routing keyspace_id:4eb190c9a2fa169c */"
-	if sbc2.Queries[0] != wantQuery {
-		t.Errorf("sbc2.Queries[0]: %q, want %q\n", sbc2.Queries[0], wantQuery)
+	wantQueries = []tproto.BoundQuery{{
+		Sql: "insert into user_idx(id) values(:id)",
+		BindVariables: map[string]interface{}{
+			"id": int64(3),
+		},
+	}, {
+		Sql: "insert into name_user_map(name, user_id) values(:name, :user_id)",
+		BindVariables: map[string]interface{}{
+			"name":    "myname2",
+			"user_id": int64(3),
+		},
+	}}
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
 	}
 }
 
@@ -868,27 +863,31 @@ func TestInsertGenerator(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantBind := map[string]interface{}{
-		"id": nil,
+	wantQueries := []tproto.BoundQuery{{
+		Sql: "insert into user(v, name, id) values (2, :_name, :_id) /* _routing keyspace_id:8ca64de9c1b123a7 */",
+		BindVariables: map[string]interface{}{
+			"keyspace_id": "\x8c\xa6M\xe9\xc1\xb1#\xa7",
+			"_id":         int64(0),
+			"_name":       "myname",
+		},
+	}}
+	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
+		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
 	}
-	if !reflect.DeepEqual(sbclookup.BindVars[0], wantBind) {
-		t.Errorf("sbclookup.BindVars[0] = %#v, want %#v", sbclookup.BindVars[0], wantBind)
-	}
-	wantQuery := "insert into user_idx(id) values(:id)"
-	if sbclookup.Queries[0] != wantQuery {
-		t.Errorf("sbclookup.Queries[0]: %q, want %q\n", sbclookup.Queries[0], wantQuery)
-	}
-	wantBind = map[string]interface{}{
-		"keyspace_id": "\x8c\xa6M\xe9\xc1\xb1#\xa7",
-		"_id":         int64(0),
-		"_name":       "myname",
-	}
-	if !reflect.DeepEqual(sbc.BindVars[0], wantBind) {
-		t.Errorf("sbc.BindVars[0] = %#v, want %#v", sbc.BindVars[0], wantBind)
-	}
-	wantQuery = "insert into user(v, name, id) values (2, :_name, :_id) /* _routing keyspace_id:8ca64de9c1b123a7 */"
-	if sbc.Queries[0] != wantQuery {
-		t.Errorf("sbc.Queries[0]: %q, want %q\n", sbc.Queries[0], wantQuery)
+	wantQueries = []tproto.BoundQuery{{
+		Sql: "insert into user_idx(id) values(:id)",
+		BindVariables: map[string]interface{}{
+			"id": nil,
+		},
+	}, {
+		Sql: "insert into name_user_map(name, user_id) values(:name, :user_id)",
+		BindVariables: map[string]interface{}{
+			"name":    "myname",
+			"user_id": int64(0),
+		},
+	}}
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
 	}
 }
 
@@ -913,28 +912,26 @@ func TestInsertLookupOwned(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantBind := map[string]interface{}{
-		"music_id": int64(3),
-		"user_id":  int64(2),
+	wantQueries := []tproto.BoundQuery{{
+		Sql: "insert into music(user_id, id) values (:_user_id, :_id) /* _routing keyspace_id:06e7ea22ce92708f */",
+		BindVariables: map[string]interface{}{
+			"keyspace_id": "\x06\xe7\xea\"Βp\x8f",
+			"_user_id":    int64(2),
+			"_id":         int64(3),
+		},
+	}}
+	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
+		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
 	}
-	if !reflect.DeepEqual(sbclookup.BindVars[0], wantBind) {
-		t.Errorf("sbclookup.BindVars[0] = %#v, want %#v", sbclookup.BindVars[0], wantBind)
-	}
-	wantQuery := "insert into music_user_map(music_id, user_id) values(:music_id, :user_id)"
-	if sbclookup.Queries[0] != wantQuery {
-		t.Errorf("sbclookup.Queries[0]: %q, want %q\n", sbclookup.Queries[0], wantQuery)
-	}
-	wantBind = map[string]interface{}{
-		"keyspace_id": "\x06\xe7\xea\"Βp\x8f",
-		"_user_id":    int64(2),
-		"_id":         int64(3),
-	}
-	if !reflect.DeepEqual(sbc.BindVars[0], wantBind) {
-		t.Errorf("sbc.BindVars[0] = %#v, want %#v", sbc.BindVars[0], wantBind)
-	}
-	wantQuery = "insert into music(user_id, id) values (:_user_id, :_id) /* _routing keyspace_id:06e7ea22ce92708f */"
-	if sbc.Queries[0] != wantQuery {
-		t.Errorf("sbc.Queries[0]: %q, want %q\n", sbc.Queries[0], wantQuery)
+	wantQueries = []tproto.BoundQuery{{
+		Sql: "insert into music_user_map(music_id, user_id) values(:music_id, :user_id)",
+		BindVariables: map[string]interface{}{
+			"music_id": int64(3),
+			"user_id":  int64(2),
+		},
+	}}
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
 	}
 }
 
@@ -959,28 +956,26 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantBind := map[string]interface{}{
-		"music_id": nil,
-		"user_id":  int64(2),
+	wantQueries := []tproto.BoundQuery{{
+		Sql: "insert into music(user_id, id) values (:_user_id, :_id) /* _routing keyspace_id:06e7ea22ce92708f */",
+		BindVariables: map[string]interface{}{
+			"keyspace_id": "\x06\xe7\xea\"Βp\x8f",
+			"_user_id":    int64(2),
+			"_id":         int64(0),
+		},
+	}}
+	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
+		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
 	}
-	if !reflect.DeepEqual(sbclookup.BindVars[0], wantBind) {
-		t.Errorf("sbclookup.BindVars[0] = %#v, want %#v", sbclookup.BindVars[0], wantBind)
-	}
-	wantQuery := "insert into music_user_map(music_id, user_id) values(:music_id, :user_id)"
-	if sbclookup.Queries[0] != wantQuery {
-		t.Errorf("sbclookup.Queries[0]: %q, want %q\n", sbclookup.Queries[0], wantQuery)
-	}
-	wantBind = map[string]interface{}{
-		"keyspace_id": "\x06\xe7\xea\"Βp\x8f",
-		"_user_id":    int64(2),
-		"_id":         int64(0),
-	}
-	if !reflect.DeepEqual(sbc.BindVars[0], wantBind) {
-		t.Errorf("sbc.BindVars[0] = %#v, want %#v", sbc.BindVars[0], wantBind)
-	}
-	wantQuery = "insert into music(user_id, id) values (:_user_id, :_id) /* _routing keyspace_id:06e7ea22ce92708f */"
-	if sbc.Queries[0] != wantQuery {
-		t.Errorf("sbc.Queries[0]: %q, want %q\n", sbc.Queries[0], wantQuery)
+	wantQueries = []tproto.BoundQuery{{
+		Sql: "insert into music_user_map(music_id, user_id) values(:music_id, :user_id)",
+		BindVariables: map[string]interface{}{
+			"music_id": nil,
+			"user_id":  int64(2),
+		},
+	}}
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
 	}
 }
 
@@ -1005,28 +1000,26 @@ func TestInsertLookupUnowned(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantBind := map[string]interface{}{
-		"music_id": int64(3),
-		"user_id":  int64(2),
+	wantQueries := []tproto.BoundQuery{{
+		Sql: "insert into music_extra(user_id, music_id) values (:_user_id, :_music_id) /* _routing keyspace_id:06e7ea22ce92708f */",
+		BindVariables: map[string]interface{}{
+			"keyspace_id": "\x06\xe7\xea\"Βp\x8f",
+			"_user_id":    int64(2),
+			"_music_id":   int64(3),
+		},
+	}}
+	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
+		t.Errorf("sbc.Queries: \n%+v, want \n%+v\n", sbc.Queries, wantQueries)
 	}
-	if !reflect.DeepEqual(sbclookup.BindVars[0], wantBind) {
-		t.Errorf("sbclookup.BindVars[0] = %#v, want %#v", sbclookup.BindVars[0], wantBind)
-	}
-	wantQuery := "select music_id from music_user_map where music_id = :music_id and user_id = :user_id"
-	if sbclookup.Queries[0] != wantQuery {
-		t.Errorf("sbclookup.Queries[0]: %q, want %q\n", sbclookup.Queries[0], wantQuery)
-	}
-	wantBind = map[string]interface{}{
-		"keyspace_id": "\x06\xe7\xea\"Βp\x8f",
-		"_user_id":    int64(2),
-		"_music_id":   int64(3),
-	}
-	if !reflect.DeepEqual(sbc.BindVars[0], wantBind) {
-		t.Errorf("sbc.BindVars[0] = %#v, want %#v", sbc.BindVars[0], wantBind)
-	}
-	wantQuery = "insert into music_extra(user_id, music_id) values (:_user_id, :_music_id) /* _routing keyspace_id:06e7ea22ce92708f */"
-	if sbc.Queries[0] != wantQuery {
-		t.Errorf("sbc.Queries[0]: %q, want %q\n", sbc.Queries[0], wantQuery)
+	wantQueries = []tproto.BoundQuery{{
+		Sql: "select music_id from music_user_map where music_id = :music_id and user_id = :user_id",
+		BindVariables: map[string]interface{}{
+			"music_id": int64(3),
+			"user_id":  int64(2),
+		},
+	}}
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
 	}
 }
 
@@ -1051,27 +1044,25 @@ func TestInsertLookupUnownedUnsupplied(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantBind := map[string]interface{}{
-		"music_id": int64(3),
+	wantQueries := []tproto.BoundQuery{{
+		Sql: "insert into music_extra_reversed(music_id, user_id) values (:_music_id, :_user_id) /* _routing keyspace_id:166b40b44aba4bd6 */",
+		BindVariables: map[string]interface{}{
+			"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
+			"_user_id":    int64(1),
+			"_music_id":   int64(3),
+		},
+	}}
+	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
+		t.Errorf("sbc.Queries: \n%+v, want \n%+v\n", sbc.Queries, wantQueries)
 	}
-	if !reflect.DeepEqual(sbclookup.BindVars[0], wantBind) {
-		t.Errorf("sbclookup.BindVars[0] = %#v, want %#v", sbclookup.BindVars[0], wantBind)
-	}
-	wantQuery := "select user_id from music_user_map where music_id = :music_id"
-	if sbclookup.Queries[0] != wantQuery {
-		t.Errorf("sbclookup.Queries[0]: %q, want %q\n", sbclookup.Queries[0], wantQuery)
-	}
-	wantBind = map[string]interface{}{
-		"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
-		"_user_id":    int64(1),
-		"_music_id":   int64(3),
-	}
-	if !reflect.DeepEqual(sbc.BindVars[0], wantBind) {
-		t.Errorf("sbc.BindVars[0] = %#v, want %#v", sbc.BindVars[0], wantBind)
-	}
-	wantQuery = "insert into music_extra_reversed(music_id, user_id) values (:_music_id, :_user_id) /* _routing keyspace_id:166b40b44aba4bd6 */"
-	if sbc.Queries[0] != wantQuery {
-		t.Errorf("sbc.Queries[0]: %q, want %q\n", sbc.Queries[0], wantQuery)
+	wantQueries = []tproto.BoundQuery{{
+		Sql: "select user_id from music_user_map where music_id = :music_id",
+		BindVariables: map[string]interface{}{
+			"music_id": int64(3),
+		},
+	}}
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
 	}
 }
 
