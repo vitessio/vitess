@@ -90,7 +90,7 @@ func (rtr *Router) Execute(ctx context.Context, query *proto.Query) (*mproto.Que
 	case planbuilder.SelectScatter:
 		params, err = rtr.paramsSelectScatter(vcursor, plan)
 	default:
-		panic("unexpected")
+		return nil, fmt.Errorf("cannot route query: %s: %s", query.Sql, plan.Reason)
 	}
 	if err != nil {
 		return nil, err
@@ -394,16 +394,10 @@ func (rtr *Router) resolveSingleShard(vcursor *requestContext, vindexKey interfa
 	if err != nil {
 		return "", "", "", err
 	}
-	mapper, ok := plan.ColVindex.Vindex.(planbuilder.Unique)
-	if !ok {
-		panic("unexpected")
-	}
+	mapper := plan.ColVindex.Vindex.(planbuilder.Unique)
 	ksids, err := mapper.Map(vcursor, []interface{}{vindexKey})
 	if err != nil {
 		return "", "", "", err
-	}
-	if len(ksids) != 1 {
-		panic("unexpected")
 	}
 	ksid = ksids[0]
 	if ksid == key.MinKey {
@@ -430,9 +424,6 @@ func (rtr *Router) deleteVindexEntries(vcursor *requestContext, plan *planbuilde
 	}
 	if len(result.Rows) == 0 {
 		return nil
-	}
-	if len(result.Rows[0]) != len(plan.Table.Owned) {
-		panic("unexpected")
 	}
 	for i, colVindex := range plan.Table.Owned {
 		keys := make(map[interface{}]bool)

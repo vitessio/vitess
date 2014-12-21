@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -587,11 +588,6 @@ func TestSelectINFail(t *testing.T) {
 	sbc2 := &sandboxConn{}
 	s.MapTestConn("-20", sbc1)
 	s.MapTestConn("40-60", sbc2)
-
-	l := createSandbox(TEST_UNSHARDED)
-	sbclookup := &sandboxConn{}
-	l.MapTestConn("0", sbclookup)
-
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
 	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
@@ -844,9 +840,15 @@ func TestUpdateEqual(t *testing.T) {
 	sbc2 := &sandboxConn{}
 	s.MapTestConn("-20", sbc1)
 	s.MapTestConn("40-60", sbc2)
+
+	l := createSandbox(TEST_UNSHARDED)
+	sbclookup := &sandboxConn{}
+	l.MapTestConn("0", sbclookup)
+
 	serv := new(sandboxTopo)
 	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
 	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
+
 	q := proto.Query{
 		Sql:        "update user set a=2 where id = 1",
 		TabletType: topo.TYPE_MASTER,
@@ -882,6 +884,30 @@ func TestUpdateEqual(t *testing.T) {
 	}}
 	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
 		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
+	}
+	if sbc1.Queries != nil {
+		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
+	}
+
+	q.Sql = "update music set a=2 where id = 2"
+	sbc1.Queries = nil
+	sbc2.Queries = nil
+	sbclookup.setResults([]*mproto.QueryResult{&mproto.QueryResult{}})
+	_, err = router.Execute(context.Background(), &q)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries = []tproto.BoundQuery{{
+		Sql: "select user_id from music_user_map where music_id = :music_id",
+		BindVariables: map[string]interface{}{
+			"music_id": int64(2),
+		},
+	}}
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
+	}
+	if sbc2.Queries != nil {
+		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 	if sbc1.Queries != nil {
 		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
@@ -930,6 +956,20 @@ func TestUpdateEqualFail(t *testing.T) {
 	want = "execUpdateEqual: HashVindex.Map: unexpected type for aa: string"
 	if err == nil || err.Error() != want {
 		t.Errorf("router.Execute: %v, want %v", err, want)
+	}
+
+	s.ShardSpec = "80-"
+	q = proto.Query{
+		Sql: "update user set a=2 where id = :id",
+		BindVariables: map[string]interface{}{
+			"id": 1,
+		},
+		TabletType: topo.TYPE_MASTER,
+	}
+	_, err = router.Execute(context.Background(), &q)
+	want = "execUpdateEqual: KeyspaceId 166b40b44aba4bd6 didn't match any shards"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("router.Execute: %v, want prefix %v", err, want)
 	}
 }
 
@@ -993,6 +1033,86 @@ func TestDeleteEqual(t *testing.T) {
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
+	}
+
+	q.Sql = "delete from music where id = 1"
+	sbc.Queries = nil
+	sbclookup.Queries = nil
+	sbclookup.setResults([]*mproto.QueryResult{&mproto.QueryResult{}})
+	_, err = router.Execute(context.Background(), &q)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries = []tproto.BoundQuery{{
+		Sql: "select user_id from music_user_map where music_id = :music_id",
+		BindVariables: map[string]interface{}{
+			"music_id": int64(1),
+		},
+	}}
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
+	}
+	if sbc.Queries != nil {
+		t.Errorf("sbc.Queries: %+v, want nil\n", sbc.Queries)
+	}
+}
+
+func TestDeleteEqualFail(t *testing.T) {
+	s := createSandbox("TestRouter")
+	sbc := &sandboxConn{}
+	s.MapTestConn("-20", sbc)
+	serv := new(sandboxTopo)
+	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
+	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
+	q := proto.Query{
+		Sql:        "delete from user where id = :aa",
+		TabletType: topo.TYPE_MASTER,
+	}
+	_, err := router.Execute(context.Background(), &q)
+	want := "execDeleteEqual: could not find bind var :aa"
+	if err == nil || err.Error() != want {
+		t.Errorf("router.Execute: %v, want %v", err, want)
+	}
+
+	s.SrvKeyspaceMustFail = 1
+	q = proto.Query{
+		Sql: "delete from user where id = :id",
+		BindVariables: map[string]interface{}{
+			"id": 1,
+		},
+		TabletType: topo.TYPE_MASTER,
+	}
+	_, err = router.Execute(context.Background(), &q)
+	want = "execDeleteEqual: keyspace TestRouter fetch error: topo error GetSrvKeyspace"
+	if err == nil || err.Error() != want {
+		t.Errorf("router.Execute: %v, want %v", err, want)
+	}
+
+	q = proto.Query{
+		Sql: "delete from user where id = :id",
+		BindVariables: map[string]interface{}{
+			"id": "aa",
+		},
+		TabletType: topo.TYPE_MASTER,
+	}
+	_, err = router.Execute(context.Background(), &q)
+	want = "execDeleteEqual: HashVindex.Map: unexpected type for aa: string"
+	if err == nil || err.Error() != want {
+		t.Errorf("router.Execute: %v, want %v", err, want)
+	}
+
+	s.ShardSpec = "80-"
+	q = proto.Query{
+		Sql: "delete from user where id = :id",
+		BindVariables: map[string]interface{}{
+			"id": 1,
+		},
+		TabletType: topo.TYPE_MASTER,
+	}
+	_, err = router.Execute(context.Background(), &q)
+	want = "execDeleteEqual: KeyspaceId 166b40b44aba4bd6 didn't match any shards"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("router.Execute: %v, want prefix %v", err, want)
 	}
 }
 
