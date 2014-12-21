@@ -11,6 +11,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	"golang.org/x/net/context"
@@ -184,4 +185,49 @@ func GetRpcPath(codecName string, auth bool) string {
 		path += "/auth"
 	}
 	return path
+}
+
+// httpRpcHandler handles rpc queries for a all types of HTTP requests.
+type httpRpcHandler struct {
+	cFactory ServerCodecFactory
+	server   *rpc.Server
+}
+
+// ServeHTTP implements http.Handler's ServeHTTP
+func (h *httpRpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
+	codec := h.cFactory(NewBufferedConnection(
+		&httpReadWriteCloser{rw: c, req: req},
+	))
+
+	ctx := proto.NewContext(req.RemoteAddr)
+
+	h.server.ServeCodecWithContextOnce(
+		new(sync.Mutex),
+		false,
+		ctx,
+		codec,
+	)
+
+	codec.Close()
+}
+
+func ServeHTTPRPC(handler *http.ServeMux, server *rpc.Server, codecName string, cFactory ServerCodecFactory) {
+	handler.Handle(GetRpcPath(codecName, false), &httpRpcHandler{cFactory, server})
+}
+
+type httpReadWriteCloser struct {
+	rw  http.ResponseWriter
+	req *http.Request
+}
+
+func (i *httpReadWriteCloser) Read(p []byte) (n int, err error) {
+	return i.req.Body.Read(p)
+}
+
+func (i *httpReadWriteCloser) Write(p []byte) (n int, err error) {
+	return i.rw.Write(p)
+}
+
+func (i *httpReadWriteCloser) Close() error {
+	return i.req.Body.Close()
 }
