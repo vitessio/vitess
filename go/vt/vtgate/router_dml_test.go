@@ -8,37 +8,17 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
-	"golang.org/x/net/context"
 )
 
 func TestUpdateEqual(t *testing.T) {
-	s := createSandbox("TestRouter")
-	sbc1 := &sandboxConn{}
-	sbc2 := &sandboxConn{}
-	s.MapTestConn("-20", sbc1)
-	s.MapTestConn("40-60", sbc2)
+	router, sbc1, sbc2, sbclookup := createRouterEnv()
 
-	l := createSandbox(TEST_UNSHARDED)
-	sbclookup := &sandboxConn{}
-	l.MapTestConn("0", sbclookup)
-
-	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
-
-	q := proto.Query{
-		Sql:        "update user set a=2 where id = 1",
-		TabletType: topo.TYPE_MASTER,
-	}
-	_, err := router.Execute(context.Background(), &q)
+	_, err := routerExec(router, "update user set a=2 where id = 1", nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -55,9 +35,8 @@ func TestUpdateEqual(t *testing.T) {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 
-	q.Sql = "update user set a=2 where id = 3"
 	sbc1.Queries = nil
-	_, err = router.Execute(context.Background(), &q)
+	_, err = routerExec(router, "update user set a=2 where id = 3", nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -74,11 +53,10 @@ func TestUpdateEqual(t *testing.T) {
 		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
 	}
 
-	q.Sql = "update music set a=2 where id = 2"
 	sbc1.Queries = nil
 	sbc2.Queries = nil
 	sbclookup.setResults([]*mproto.QueryResult{&mproto.QueryResult{}})
-	_, err = router.Execute(context.Background(), &q)
+	_, err = routerExec(router, "update music set a=2 where id = 2", nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -100,76 +78,44 @@ func TestUpdateEqual(t *testing.T) {
 }
 
 func TestUpdateEqualFail(t *testing.T) {
-	s := createSandbox("TestRouter")
-	sbc := &sandboxConn{}
-	s.MapTestConn("-20", sbc)
-	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
-	q := proto.Query{
-		Sql:        "update user set a=2 where id = :aa",
-		TabletType: topo.TYPE_MASTER,
-	}
-	_, err := router.Execute(context.Background(), &q)
+	router, _, _, _ := createRouterEnv()
+	s := getSandbox("TestRouter")
+
+	_, err := routerExec(router, "update user set a=2 where id = :aa", nil)
 	want := "execUpdateEqual: could not find bind var :aa"
 	if err == nil || err.Error() != want {
-		t.Errorf("router.Execute: %v, want %v", err, want)
+		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 
 	s.SrvKeyspaceMustFail = 1
-	q = proto.Query{
-		Sql: "update user set a=2 where id = :id",
-		BindVariables: map[string]interface{}{
-			"id": 1,
-		},
-		TabletType: topo.TYPE_MASTER,
-	}
-	_, err = router.Execute(context.Background(), &q)
+	_, err = routerExec(router, "update user set a=2 where id = :id", map[string]interface{}{
+		"id": 1,
+	})
 	want = "execUpdateEqual: keyspace TestRouter fetch error: topo error GetSrvKeyspace"
 	if err == nil || err.Error() != want {
-		t.Errorf("router.Execute: %v, want %v", err, want)
+		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 
-	q = proto.Query{
-		Sql: "update user set a=2 where id = :id",
-		BindVariables: map[string]interface{}{
-			"id": "aa",
-		},
-		TabletType: topo.TYPE_MASTER,
-	}
-	_, err = router.Execute(context.Background(), &q)
+	_, err = routerExec(router, "update user set a=2 where id = :id", map[string]interface{}{
+		"id": "aa",
+	})
 	want = "execUpdateEqual: HashVindex.Map: unexpected type for aa: string"
 	if err == nil || err.Error() != want {
-		t.Errorf("router.Execute: %v, want %v", err, want)
+		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 
 	s.ShardSpec = "80-"
-	q = proto.Query{
-		Sql: "update user set a=2 where id = :id",
-		BindVariables: map[string]interface{}{
-			"id": 1,
-		},
-		TabletType: topo.TYPE_MASTER,
-	}
-	_, err = router.Execute(context.Background(), &q)
+	_, err = routerExec(router, "update user set a=2 where id = :id", map[string]interface{}{
+		"id": 1,
+	})
 	want = "execUpdateEqual: KeyspaceId 166b40b44aba4bd6 didn't match any shards"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("router.Execute: %v, want prefix %v", err, want)
+		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
 }
 
 func TestDeleteEqual(t *testing.T) {
-	s := createSandbox("TestRouter")
-	sbc := &sandboxConn{}
-	s.MapTestConn("-20", sbc)
-
-	l := createSandbox(TEST_UNSHARDED)
-	sbclookup := &sandboxConn{}
-	l.MapTestConn("0", sbclookup)
-
-	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
+	router, sbc, _, sbclookup := createRouterEnv()
 
 	sbc.setResults([]*mproto.QueryResult{&mproto.QueryResult{
 		Fields: []mproto.Field{
@@ -183,11 +129,7 @@ func TestDeleteEqual(t *testing.T) {
 			{sqltypes.String("myname")},
 		}},
 	}})
-	q := proto.Query{
-		Sql:        "delete from user where id = 1",
-		TabletType: topo.TYPE_MASTER,
-	}
-	_, err := router.Execute(context.Background(), &q)
+	_, err := routerExec(router, "delete from user where id = 1", nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -220,11 +162,10 @@ func TestDeleteEqual(t *testing.T) {
 		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
 	}
 
-	q.Sql = "delete from music where id = 1"
 	sbc.Queries = nil
 	sbclookup.Queries = nil
 	sbclookup.setResults([]*mproto.QueryResult{&mproto.QueryResult{}})
-	_, err = router.Execute(context.Background(), &q)
+	_, err = routerExec(router, "delete from music where id = 1", nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -243,84 +184,46 @@ func TestDeleteEqual(t *testing.T) {
 }
 
 func TestDeleteEqualFail(t *testing.T) {
-	s := createSandbox("TestRouter")
-	sbc := &sandboxConn{}
-	s.MapTestConn("-20", sbc)
-	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
-	q := proto.Query{
-		Sql:        "delete from user where id = :aa",
-		TabletType: topo.TYPE_MASTER,
-	}
-	_, err := router.Execute(context.Background(), &q)
+	router, _, _, _ := createRouterEnv()
+	s := getSandbox("TestRouter")
+
+	_, err := routerExec(router, "delete from user where id = :aa", nil)
 	want := "execDeleteEqual: could not find bind var :aa"
 	if err == nil || err.Error() != want {
-		t.Errorf("router.Execute: %v, want %v", err, want)
+		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 
 	s.SrvKeyspaceMustFail = 1
-	q = proto.Query{
-		Sql: "delete from user where id = :id",
-		BindVariables: map[string]interface{}{
-			"id": 1,
-		},
-		TabletType: topo.TYPE_MASTER,
-	}
-	_, err = router.Execute(context.Background(), &q)
+	_, err = routerExec(router, "delete from user where id = :id", map[string]interface{}{
+		"id": 1,
+	})
 	want = "execDeleteEqual: keyspace TestRouter fetch error: topo error GetSrvKeyspace"
 	if err == nil || err.Error() != want {
-		t.Errorf("router.Execute: %v, want %v", err, want)
+		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 
-	q = proto.Query{
-		Sql: "delete from user where id = :id",
-		BindVariables: map[string]interface{}{
-			"id": "aa",
-		},
-		TabletType: topo.TYPE_MASTER,
-	}
-	_, err = router.Execute(context.Background(), &q)
+	_, err = routerExec(router, "delete from user where id = :id", map[string]interface{}{
+		"id": "aa",
+	})
 	want = "execDeleteEqual: HashVindex.Map: unexpected type for aa: string"
 	if err == nil || err.Error() != want {
-		t.Errorf("router.Execute: %v, want %v", err, want)
+		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 
 	s.ShardSpec = "80-"
-	q = proto.Query{
-		Sql: "delete from user where id = :id",
-		BindVariables: map[string]interface{}{
-			"id": 1,
-		},
-		TabletType: topo.TYPE_MASTER,
-	}
-	_, err = router.Execute(context.Background(), &q)
+	_, err = routerExec(router, "delete from user where id = :id", map[string]interface{}{
+		"id": 1,
+	})
 	want = "execDeleteEqual: KeyspaceId 166b40b44aba4bd6 didn't match any shards"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("router.Execute: %v, want prefix %v", err, want)
+		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
 }
 
 func TestInsertSharded(t *testing.T) {
-	s := createSandbox("TestRouter")
-	sbc1 := &sandboxConn{}
-	sbc2 := &sandboxConn{}
-	s.MapTestConn("-20", sbc1)
-	s.MapTestConn("40-60", sbc2)
+	router, sbc1, sbc2, sbclookup := createRouterEnv()
 
-	l := createSandbox(TEST_UNSHARDED)
-	sbclookup := &sandboxConn{}
-	l.MapTestConn("0", sbclookup)
-
-	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
-
-	q := proto.Query{
-		Sql:        "insert into user(id, v, name) values (1, 2, 'myname')",
-		TabletType: topo.TYPE_MASTER,
-	}
-	_, err := router.Execute(context.Background(), &q)
+	_, err := routerExec(router, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -354,10 +257,9 @@ func TestInsertSharded(t *testing.T) {
 		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
 	}
 
-	q.Sql = "insert into user(id, v, name) values (3, 2, 'myname2')"
 	sbc1.Queries = nil
 	sbclookup.Queries = nil
-	_, err = router.Execute(context.Background(), &q)
+	_, err = routerExec(router, "insert into user(id, v, name) values (3, 2, 'myname2')", nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -393,23 +295,12 @@ func TestInsertSharded(t *testing.T) {
 }
 
 func TestInsertGenerator(t *testing.T) {
-	s := createSandbox("TestRouter")
+	router, _, _, sbclookup := createRouterEnv()
+	s := getSandbox("TestRouter")
 	sbc := &sandboxConn{}
 	s.MapTestConn("80-a0", sbc)
 
-	l := createSandbox(TEST_UNSHARDED)
-	sbclookup := &sandboxConn{}
-	l.MapTestConn("0", sbclookup)
-
-	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
-
-	q := proto.Query{
-		Sql:        "insert into user(v, name) values (2, 'myname')",
-		TabletType: topo.TYPE_MASTER,
-	}
-	_, err := router.Execute(context.Background(), &q)
+	_, err := routerExec(router, "insert into user(v, name) values (2, 'myname')", nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -442,23 +333,9 @@ func TestInsertGenerator(t *testing.T) {
 }
 
 func TestInsertLookupOwned(t *testing.T) {
-	s := createSandbox("TestRouter")
-	sbc := &sandboxConn{}
-	s.MapTestConn("-20", sbc)
+	router, sbc, _, sbclookup := createRouterEnv()
 
-	l := createSandbox(TEST_UNSHARDED)
-	sbclookup := &sandboxConn{}
-	l.MapTestConn("0", sbclookup)
-
-	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
-
-	q := proto.Query{
-		Sql:        "insert into music(user_id, id) values (2, 3)",
-		TabletType: topo.TYPE_MASTER,
-	}
-	_, err := router.Execute(context.Background(), &q)
+	_, err := routerExec(router, "insert into music(user_id, id) values (2, 3)", nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -486,23 +363,9 @@ func TestInsertLookupOwned(t *testing.T) {
 }
 
 func TestInsertLookupOwnedGenerator(t *testing.T) {
-	s := createSandbox("TestRouter")
-	sbc := &sandboxConn{}
-	s.MapTestConn("-20", sbc)
+	router, sbc, _, sbclookup := createRouterEnv()
 
-	l := createSandbox(TEST_UNSHARDED)
-	sbclookup := &sandboxConn{}
-	l.MapTestConn("0", sbclookup)
-
-	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
-
-	q := proto.Query{
-		Sql:        "insert into music(user_id) values (2)",
-		TabletType: topo.TYPE_MASTER,
-	}
-	_, err := router.Execute(context.Background(), &q)
+	_, err := routerExec(router, "insert into music(user_id) values (2)", nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -530,23 +393,9 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 }
 
 func TestInsertLookupUnowned(t *testing.T) {
-	s := createSandbox("TestRouter")
-	sbc := &sandboxConn{}
-	s.MapTestConn("-20", sbc)
+	router, sbc, _, sbclookup := createRouterEnv()
 
-	l := createSandbox(TEST_UNSHARDED)
-	sbclookup := &sandboxConn{}
-	l.MapTestConn("0", sbclookup)
-
-	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
-
-	q := proto.Query{
-		Sql:        "insert into music_extra(user_id, music_id) values (2, 3)",
-		TabletType: topo.TYPE_MASTER,
-	}
-	_, err := router.Execute(context.Background(), &q)
+	_, err := routerExec(router, "insert into music_extra(user_id, music_id) values (2, 3)", nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -574,23 +423,9 @@ func TestInsertLookupUnowned(t *testing.T) {
 }
 
 func TestInsertLookupUnownedUnsupplied(t *testing.T) {
-	s := createSandbox("TestRouter")
-	sbc := &sandboxConn{}
-	s.MapTestConn("-20", sbc)
+	router, sbc, _, sbclookup := createRouterEnv()
 
-	l := createSandbox(TEST_UNSHARDED)
-	sbclookup := &sandboxConn{}
-	l.MapTestConn("0", sbclookup)
-
-	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 1*time.Millisecond)
-	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
-
-	q := proto.Query{
-		Sql:        "insert into music_extra_reversed(music_id) values (3)",
-		TabletType: topo.TYPE_MASTER,
-	}
-	_, err := router.Execute(context.Background(), &q)
+	_, err := routerExec(router, "insert into music_extra_reversed(music_id) values (3)", nil)
 	if err != nil {
 		t.Error(err)
 	}
