@@ -164,6 +164,29 @@ func TestDeleteEqual(t *testing.T) {
 
 	sbc.Queries = nil
 	sbclookup.Queries = nil
+	sbc.setResults([]*mproto.QueryResult{&mproto.QueryResult{}})
+	_, err = routerExec(router, "delete from user where id = 1", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries = []tproto.BoundQuery{{
+		Sql:           "select id, name from user where id = 1 for update",
+		BindVariables: map[string]interface{}{},
+	}, {
+		Sql: "delete from user where id = 1 /* _routing keyspace_id:166b40b44aba4bd6 */",
+		BindVariables: map[string]interface{}{
+			"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
+		},
+	}}
+	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
+		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
+	}
+	if sbclookup.Queries != nil {
+		t.Errorf("sbclookup.Queries: %+v, want nil\n", sbclookup.Queries)
+	}
+
+	sbc.Queries = nil
+	sbclookup.Queries = nil
 	sbclookup.setResults([]*mproto.QueryResult{&mproto.QueryResult{}})
 	_, err = routerExec(router, "delete from music where id = 1", nil)
 	if err != nil {
@@ -217,6 +240,49 @@ func TestDeleteEqualFail(t *testing.T) {
 	want = "execDeleteEqual: KeyspaceId 166b40b44aba4bd6 didn't match any shards"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
+	}
+}
+
+func TestDeleteVindexFail(t *testing.T) {
+	router, sbc, _, sbclookup := createRouterEnv()
+
+	sbc.mustFailServer = 1
+	_, err := routerExec(router, "delete from user where id = 1", nil)
+	want := "execDeleteEqual: shard, host: TestRouter.-20.master, {Uid:0 Host:-20 NamedPortMap:map[vt:1] Health:map[]}, error: err"
+	if err == nil || err.Error() != want {
+		t.Errorf("routerExec: %v, want %v", err, want)
+	}
+
+	sbc.setResults([]*mproto.QueryResult{&mproto.QueryResult{
+		Fields: []mproto.Field{
+			{"id", 3},
+			{"name", 253},
+		},
+		RowsAffected: 1,
+		InsertId:     0,
+		Rows: [][]sqltypes.Value{{
+			{sqltypes.String("foo")},
+			{sqltypes.String("myname")},
+		}},
+	}})
+	_, err = routerExec(router, "delete from user where id = 1", nil)
+	want = `execDeleteEqual: strconv.ParseUint: parsing "foo": invalid syntax`
+	if err == nil || err.Error() != want {
+		t.Errorf("routerExec: %v, want %v", err, want)
+	}
+
+	sbclookup.mustFailServer = 1
+	_, err = routerExec(router, "delete from user where id = 1", nil)
+	want = "execDeleteEqual: HashVindex.Delete: shard, host: TestUnsharded.0.master, {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}, error: err"
+	if err == nil || err.Error() != want {
+		t.Errorf("routerExec: %v, want %v", err, want)
+	}
+
+	sbclookup.mustFailServer = 1
+	_, err = routerExec(router, "delete from music where user_id = 1", nil)
+	want = "execDeleteEqual: lookupHash.Delete: shard, host: TestUnsharded.0.master, {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}"
+	if err == nil || err.Error() != want {
+		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 }
 
