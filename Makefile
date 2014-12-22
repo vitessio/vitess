@@ -101,14 +101,8 @@ large_integration_test_files = \
 # The following tests are considered too flaky to be included
 # in the continous integration test suites
 ci_skip_integration_test_files = \
-	vertical_split.py \
-	vertical_split_vtgate.py \
 	resharding_bytes.py \
 	resharding.py \
-	schema.py \
-	initial_sharding_bytes.py \
-	initial_sharding.py \
-	keyspace_test.py \
 	update_stream.py
 
 .ONESHELL:
