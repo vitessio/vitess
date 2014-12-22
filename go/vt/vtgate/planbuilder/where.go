@@ -11,6 +11,9 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
+// ListVarName is the bind var name used for plans
+// that require VTGate to compute custom list values,
+// like for IN clauses.
 const ListVarName = "_vals"
 
 // getWhereRouting fills the plan fields for the where clause of a SELECT
@@ -154,11 +157,11 @@ func getKeyrangeFromBool(node sqlparser.BoolExpr) (newnode sqlparser.BoolExpr, v
 		vals := make([]interface{}, 2)
 		vals[0], err = asInterface(node.Start)
 		if err != nil {
-			return node, nil, err
+			return node, nil, fmt.Errorf("invalid keyrange: %v", err)
 		}
 		vals[1], err = asInterface(node.End)
 		if err != nil {
-			return node, nil, err
+			return node, nil, fmt.Errorf("invalid keyrange: %v", err)
 		}
 		return nil, vals, nil
 	}
@@ -253,5 +256,5 @@ func asInterface(node sqlparser.ValExpr) (interface{}, error) {
 	case *sqlparser.NullVal:
 		return nil, nil
 	}
-	return nil, fmt.Errorf("unexpected node %v", sqlparser.String(node))
+	return nil, fmt.Errorf("%v is not a value", sqlparser.String(node))
 }

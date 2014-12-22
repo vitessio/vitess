@@ -90,7 +90,7 @@ func (rtr *Router) Execute(ctx context.Context, query *proto.Query) (*mproto.Que
 	case planbuilder.SelectScatter:
 		params, err = rtr.paramsSelectScatter(vcursor, plan)
 	default:
-		return nil, fmt.Errorf("plan %+v unimplemented", plan)
+		return nil, fmt.Errorf("cannot route query: %s: %s", query.Sql, plan.Reason)
 	}
 	if err != nil {
 		return nil, err
@@ -127,7 +127,7 @@ func (rtr *Router) StreamExecute(ctx context.Context, query *proto.Query, sendRe
 	case planbuilder.SelectScatter:
 		params, err = rtr.paramsSelectScatter(vcursor, plan)
 	default:
-		return fmt.Errorf("plan %+v cannot be used for streaming", plan)
+		return fmt.Errorf("query %q cannot be used for streaming", query.Sql)
 	}
 	if err != nil {
 		return err
@@ -146,10 +146,10 @@ func (rtr *Router) StreamExecute(ctx context.Context, query *proto.Query, sendRe
 func (rtr *Router) paramsUnsharded(vcursor *requestContext, plan *planbuilder.Plan) (*scatterParams, error) {
 	ks, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("paramsUnsharded: %v", err)
 	}
 	if len(allShards) != 1 {
-		return nil, fmt.Errorf("unsharded keyspace %s has multiple shards: %+v", ks, allShards)
+		return nil, fmt.Errorf("unsharded keyspace %s has multiple shards", ks)
 	}
 	return newScatterParams(vcursor.query.Sql, ks, vcursor.query.BindVariables, []string{allShards[0].ShardName()}), nil
 }
@@ -157,7 +157,7 @@ func (rtr *Router) paramsUnsharded(vcursor *requestContext, plan *planbuilder.Pl
 func (rtr *Router) paramsSelectEqual(vcursor *requestContext, plan *planbuilder.Plan) (*scatterParams, error) {
 	keys, err := rtr.resolveKeys([]interface{}{plan.Values}, vcursor.query.BindVariables)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("paramsSelectEqual: %v", err)
 	}
 	ks, routing, err := rtr.resolveShards(vcursor, keys, plan)
 	return newScatterParams(plan.Rewritten, ks, vcursor.query.BindVariables, routing.Shards()), nil
@@ -166,7 +166,7 @@ func (rtr *Router) paramsSelectEqual(vcursor *requestContext, plan *planbuilder.
 func (rtr *Router) paramsSelectIN(vcursor *requestContext, plan *planbuilder.Plan) (*scatterParams, error) {
 	keys, err := rtr.resolveKeys(plan.Values.([]interface{}), vcursor.query.BindVariables)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("paramsSelectIN: %v", err)
 	}
 	ks, routing, err := rtr.resolveShards(vcursor, keys, plan)
 	return &scatterParams{
@@ -179,15 +179,15 @@ func (rtr *Router) paramsSelectIN(vcursor *requestContext, plan *planbuilder.Pla
 func (rtr *Router) paramsSelectKeyrange(vcursor *requestContext, plan *planbuilder.Plan) (*scatterParams, error) {
 	keys, err := rtr.resolveKeys(plan.Values.([]interface{}), vcursor.query.BindVariables)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("paramsSelectKeyrange: %v", err)
 	}
 	kr, err := getKeyRange(keys)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("paramsSelectKeyrange: %v", err)
 	}
 	ks, shards, err := mapExactShards(vcursor.ctx, rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType, kr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("paramsSelectKeyrange: %v", err)
 	}
 	if len(shards) != 1 {
 		return nil, fmt.Errorf("keyrange must match exactly one shard: %+v", keys)
@@ -214,7 +214,7 @@ func getKeyRange(keys []interface{}) (key.KeyRange, error) {
 func (rtr *Router) paramsSelectScatter(vcursor *requestContext, plan *planbuilder.Plan) (*scatterParams, error) {
 	ks, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("paramsSelectScatter: %v", err)
 	}
 	var shards []string
 	for _, shard := range allShards {
@@ -226,11 +226,11 @@ func (rtr *Router) paramsSelectScatter(vcursor *requestContext, plan *planbuilde
 func (rtr *Router) execUpdateEqual(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
 	keys, err := rtr.resolveKeys([]interface{}{plan.Values}, vcursor.query.BindVariables)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("execUpdateEqual: %v", err)
 	}
 	ks, shard, ksid, err := rtr.resolveSingleShard(vcursor, keys[0], plan)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("execUpdateEqual: %v", err)
 	}
 	if ksid == key.MinKey {
 		return &mproto.QueryResult{}, nil
@@ -250,11 +250,11 @@ func (rtr *Router) execUpdateEqual(vcursor *requestContext, plan *planbuilder.Pl
 func (rtr *Router) execDeleteEqual(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
 	keys, err := rtr.resolveKeys([]interface{}{plan.Values}, vcursor.query.BindVariables)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("execDeleteEqual: %v", err)
 	}
 	ks, shard, ksid, err := rtr.resolveSingleShard(vcursor, keys[0], plan)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("execDeleteEqual: %v", err)
 	}
 	if ksid == key.MinKey {
 		return &mproto.QueryResult{}, nil
@@ -262,7 +262,7 @@ func (rtr *Router) execDeleteEqual(vcursor *requestContext, plan *planbuilder.Pl
 	if plan.Subquery != "" {
 		err = rtr.deleteVindexEntries(vcursor, plan, ks, shard, ksid)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("execDeleteEqual: %v", err)
 		}
 	}
 	vcursor.query.BindVariables[ksidName] = string(ksid)
@@ -281,15 +281,15 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, plan *planbuilder.
 	input := plan.Values.([]interface{})
 	keys, err := rtr.resolveKeys(input, vcursor.query.BindVariables)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
 	ksid, generated, err := rtr.handlePrimary(vcursor, keys[0], plan.Table.ColVindexes[0], vcursor.query.BindVariables)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
 	ks, shard, err := rtr.getRouting(vcursor.ctx, plan.Table.Keyspace.Name, vcursor.query.TabletType, ksid)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
 	for i := 1; i < len(keys); i++ {
 		newgen, err := rtr.handleNonPrimary(vcursor, keys[i], plan.Table.ColVindexes[i], vcursor.query.BindVariables, ksid)
@@ -314,7 +314,7 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, plan *planbuilder.
 		vcursor.query.TabletType,
 		NewSafeSession(vcursor.query.Session))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
 	if generated != 0 {
 		if result.InsertId != 0 {
@@ -394,16 +394,10 @@ func (rtr *Router) resolveSingleShard(vcursor *requestContext, vindexKey interfa
 	if err != nil {
 		return "", "", "", err
 	}
-	mapper, ok := plan.ColVindex.Vindex.(planbuilder.Unique)
-	if !ok {
-		panic("unexpected")
-	}
+	mapper := plan.ColVindex.Vindex.(planbuilder.Unique)
 	ksids, err := mapper.Map(vcursor, []interface{}{vindexKey})
 	if err != nil {
 		return "", "", "", err
-	}
-	if len(ksids) != 1 {
-		panic("unexpected")
 	}
 	ksid = ksids[0]
 	if ksid == key.MinKey {
@@ -430,9 +424,6 @@ func (rtr *Router) deleteVindexEntries(vcursor *requestContext, plan *planbuilde
 	}
 	if len(result.Rows) == 0 {
 		return nil
-	}
-	if len(result.Rows[0]) != len(plan.Table.Owned) {
-		panic("unexpected")
 	}
 	for i, colVindex := range plan.Table.Owned {
 		keys := make(map[interface{}]bool)

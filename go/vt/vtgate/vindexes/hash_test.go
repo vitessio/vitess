@@ -6,55 +6,21 @@ package vindexes
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
-var hash *HashVindex
+var hash planbuilder.Vindex
 
 func init() {
-	h, err := NewHashVindex(map[string]interface{}{"Table": "t", "Column": "c"})
+	hv, err := planbuilder.CreateVindex("hash", map[string]interface{}{"Table": "t", "Column": "c"})
 	if err != nil {
 		panic(err)
 	}
-	hash = h.(*HashVindex)
-}
-
-func TestHashConvert(t *testing.T) {
-	cases := []struct {
-		in  int64
-		out string
-	}{
-		{1, "\x16k@\xb4J\xbaK\xd6"},
-		{0, "\x8c\xa6M\xe9\xc1\xb1#\xa7"},
-		{11, "\xae\xfcDI\x1c\xfeGL"},
-		{0x100000000000000, "\r\x9f'\x9b\xa5\xd8r`"},
-		{0x800000000000000, " \xb9\xe7g\xb2\xfb\x14V"},
-		{11, "\xae\xfcDI\x1c\xfeGL"},
-		{0, "\x8c\xa6M\xe9\xc1\xb1#\xa7"},
-	}
-	for _, c := range cases {
-		got := string(vhash(c.in))
-		want := c.out
-		if got != want {
-			t.Errorf("vhash(%d): %#v, want %q", c.in, got, want)
-		}
-		back := vunhash(key.KeyspaceId(got))
-		if back != c.in {
-			t.Errorf("vunhash(%q): %d, want %d", got, back, c.in)
-		}
-	}
-}
-
-func BenchmarkHashConvert(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		vhash(int64(i))
-	}
+	hash = hv
 }
 
 func TestHashCost(t *testing.T) {
@@ -64,7 +30,7 @@ func TestHashCost(t *testing.T) {
 }
 
 func TestHashMap(t *testing.T) {
-	got, err := hash.Map(nil, []interface{}{1, int32(2), int64(3), uint(4), uint32(5), uint64(6)})
+	got, err := hash.(planbuilder.Unique).Map(nil, []interface{}{1, int32(2), int64(3), uint(4), uint32(5), uint64(6)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -81,6 +47,14 @@ func TestHashMap(t *testing.T) {
 	}
 }
 
+func TestHashMapFail(t *testing.T) {
+	_, err := hash.(planbuilder.Unique).Map(nil, []interface{}{1.1})
+	want := "hash.Map: unexpected type for 1.1: float64"
+	if err == nil || err.Error() != want {
+		t.Errorf("hash.Map: %v, want %v", err, want)
+	}
+}
+
 func TestHashVerify(t *testing.T) {
 	success, err := hash.Verify(nil, 1, "\x16k@\xb4J\xbaK\xd6")
 	if err != nil {
@@ -91,8 +65,16 @@ func TestHashVerify(t *testing.T) {
 	}
 }
 
+func TestHashVerifyFail(t *testing.T) {
+	_, err := hash.Verify(nil, 1.1, "\x16k@\xb4J\xbaK\xd6")
+	want := "hash.Verify: unexpected type for 1.1: float64"
+	if err == nil || err.Error() != want {
+		t.Errorf("hash.Verify: %v, want %v", err, want)
+	}
+}
+
 func TestHashReverseMap(t *testing.T) {
-	got, err := hash.ReverseMap(nil, "\x16k@\xb4J\xbaK\xd6")
+	got, err := hash.(planbuilder.Reversible).ReverseMap(nil, "\x16k@\xb4J\xbaK\xd6")
 	if err != nil {
 		t.Error(err)
 	}
@@ -101,36 +83,9 @@ func TestHashReverseMap(t *testing.T) {
 	}
 }
 
-type vcursor struct {
-	query *tproto.BoundQuery
-}
-
-func (vc *vcursor) Execute(query *tproto.BoundQuery) (*mproto.QueryResult, error) {
-	vc.query = query
-	switch {
-	case strings.HasPrefix(query.Sql, "select"):
-		return &mproto.QueryResult{
-			Fields: []mproto.Field{{
-				Type: mproto.VT_LONG,
-			}},
-			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
-					sqltypes.MakeNumeric([]byte("1")),
-				},
-			},
-			RowsAffected: 1,
-		}, nil
-	case strings.HasPrefix(query.Sql, "insert"):
-		return &mproto.QueryResult{InsertId: 1}, nil
-	case strings.HasPrefix(query.Sql, "delete"):
-		return &mproto.QueryResult{}, nil
-	}
-	panic("unexpected")
-}
-
 func TestHashCreate(t *testing.T) {
 	vc := &vcursor{}
-	err := hash.Create(vc, 1)
+	err := hash.(planbuilder.Functional).Create(vc, 1)
 	if err != nil {
 		t.Error(err)
 	}
@@ -145,29 +100,25 @@ func TestHashCreate(t *testing.T) {
 	}
 }
 
+func TestHashCreateFail(t *testing.T) {
+	vc := &vcursor{mustFail: true}
+	err := hash.(planbuilder.Functional).Create(vc, 1)
+	want := "hash.Create: Execute failed"
+	if err == nil || err.Error() != want {
+		t.Errorf("hash.Create: %v, want %v", err, want)
+	}
+}
+
 func TestHashGenerate(t *testing.T) {
-	vc := &vcursor{}
-	got, err := hash.Generate(vc)
-	if err != nil {
-		t.Error(err)
-	}
-	if got != 1 {
-		t.Errorf("Generate(): %+v, want 1", got)
-	}
-	wantQuery := &tproto.BoundQuery{
-		Sql: "insert into t(c) values(:c)",
-		BindVariables: map[string]interface{}{
-			"c": nil,
-		},
-	}
-	if !reflect.DeepEqual(vc.query, wantQuery) {
-		t.Errorf("vc.query = %#v, want %#v", vc.query, wantQuery)
+	_, ok := hash.(planbuilder.FunctionalGenerator)
+	if ok {
+		t.Errorf("hash.(planbuilder.FunctionalGenerator): true, want false")
 	}
 }
 
 func TestHashDelete(t *testing.T) {
 	vc := &vcursor{}
-	err := hash.Delete(vc, []interface{}{1}, "")
+	err := hash.(planbuilder.Functional).Delete(vc, []interface{}{1}, "")
 	if err != nil {
 		t.Error(err)
 	}
@@ -179,5 +130,14 @@ func TestHashDelete(t *testing.T) {
 	}
 	if !reflect.DeepEqual(vc.query, wantQuery) {
 		t.Errorf("vc.query = %#v, want %#v", vc.query, wantQuery)
+	}
+}
+
+func TestHashDeleteFail(t *testing.T) {
+	vc := &vcursor{mustFail: true}
+	err := hash.(planbuilder.Functional).Delete(vc, []interface{}{1}, "")
+	want := "hash.Delete: Execute failed"
+	if err == nil || err.Error() != want {
+		t.Errorf("hash.Delete: %v, want %v", err, want)
 	}
 }

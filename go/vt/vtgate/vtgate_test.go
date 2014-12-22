@@ -21,7 +21,71 @@ import (
 // This file uses the sandbox_test framework.
 
 func init() {
-	Init(new(sandboxTopo), nil, "aa", 1*time.Second, 10, 1*time.Millisecond, 0)
+	schema := createTestSchema(`
+{
+  "Keyspaces": {
+    "TestUnsharded": {
+      "Sharded": false,
+      "Tables": {
+        "t1":{}
+      }
+    }
+  }
+}
+`)
+	Init(new(sandboxTopo), schema, "aa", 1*time.Second, 10, 1*time.Millisecond, 0)
+}
+
+func TestVTGateExecute(t *testing.T) {
+	sandbox := createSandbox(TEST_UNSHARDED)
+	sbc := &sandboxConn{}
+	sandbox.MapTestConn("0", sbc)
+	q := proto.Query{
+		Sql:        "select * from t1",
+		TabletType: topo.TYPE_MASTER,
+	}
+	qr := new(proto.QueryResult)
+	err := RpcVTGate.Execute(context.Background(), &q, qr)
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
+	}
+	wantqr := new(proto.QueryResult)
+	wantqr.Result = singleRowResult
+	if !reflect.DeepEqual(wantqr, qr) {
+		t.Errorf("want \n%+v, got \n%+v", singleRowResult, qr)
+	}
+	if qr.Session != nil {
+		t.Errorf("want nil, got %+v\n", qr.Session)
+	}
+
+	q.Session = new(proto.Session)
+	RpcVTGate.Begin(context.Background(), q.Session)
+	if !q.Session.InTransaction {
+		t.Errorf("want true, got false")
+	}
+	RpcVTGate.Execute(context.Background(), &q, qr)
+	wantSession := &proto.Session{
+		InTransaction: true,
+		ShardSessions: []*proto.ShardSession{{
+			Keyspace:      TEST_UNSHARDED,
+			Shard:         "0",
+			TabletType:    topo.TYPE_MASTER,
+			TransactionId: 1,
+		}},
+	}
+	if !reflect.DeepEqual(wantSession, q.Session) {
+		t.Errorf("want \n%+v, got \n%+v", wantSession, q.Session)
+	}
+
+	RpcVTGate.Commit(context.Background(), q.Session)
+	if sbc.CommitCount != 1 {
+		t.Errorf("want 1, got %d", sbc.CommitCount)
+	}
+
+	q.Session = new(proto.Session)
+	RpcVTGate.Begin(context.Background(), q.Session)
+	RpcVTGate.Execute(context.Background(), &q, qr)
+	RpcVTGate.Rollback(context.Background(), q.Session)
 }
 
 func TestVTGateExecuteShard(t *testing.T) {
@@ -372,6 +436,30 @@ func TestVTGateExecuteBatchKeyspaceIds(t *testing.T) {
 	RpcVTGate.ExecuteBatchKeyspaceIds(context.Background(), &q, qrl)
 	if len(q.Session.ShardSessions) != 2 {
 		t.Errorf("want 2, got %d", len(q.Session.ShardSessions))
+	}
+}
+
+func TestVTGateStreamExecute(t *testing.T) {
+	sandbox := createSandbox(TEST_UNSHARDED)
+	sbc := &sandboxConn{}
+	sandbox.MapTestConn("0", sbc)
+	q := proto.Query{
+		Sql:        "select * from t1",
+		TabletType: topo.TYPE_MASTER,
+	}
+	var qrs []*proto.QueryResult
+	err := RpcVTGate.StreamExecute(context.Background(), &q, func(r *proto.QueryResult) error {
+		qrs = append(qrs, r)
+		return nil
+	})
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
+	}
+	row := new(proto.QueryResult)
+	row.Result = singleRowResult
+	want := []*proto.QueryResult{row}
+	if !reflect.DeepEqual(want, qrs) {
+		t.Errorf("want \n%+v, got \n%+v", want, qrs)
 	}
 }
 

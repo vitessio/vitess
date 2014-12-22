@@ -5,7 +5,10 @@
 package planbuilder
 
 import (
+	"io/ioutil"
+	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/key"
@@ -33,8 +36,6 @@ type stF struct {
 
 func (*stF) Cost() int                                                 { return 0 }
 func (*stF) Verify(VCursor, interface{}, key.KeyspaceId) (bool, error) { return false, nil }
-func (*stF) Create(VCursor, interface{}) error                         { return nil }
-func (*stF) Delete(VCursor, []interface{}, key.KeyspaceId) error       { return nil }
 
 func NewSTF(params map[string]interface{}) (Vindex, error) {
 	return &stF{Params: params}, nil
@@ -254,5 +255,262 @@ func TestShardedSchemaNotOwned(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("BuildSchema:s\n%v, want\n%v", got, want)
+	}
+}
+
+func TestLoadSchemaFail(t *testing.T) {
+	badSchema := "{,}"
+	f, err := ioutil.TempFile("", "schema_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fname := f.Name()
+	f.Close()
+	defer os.Remove(fname)
+
+	err = ioutil.WriteFile(fname, []byte(badSchema), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = LoadSchemaJSON(fname)
+	want := "ReadJson failed"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("LoadSchemaJSON: \n%q, should start with \n%q", err, want)
+	}
+}
+
+func TestBuildSchemaVindexNotFoundFail(t *testing.T) {
+	bad := SchemaFormal{
+		Keyspaces: map[string]KeyspaceFormal{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]VindexFormal{
+					"noexist": {
+						Type: "noexist",
+					},
+				},
+				Tables: map[string]TableFormal{
+					"t1": {
+						ColVindexes: []ColVindexFormal{
+							{
+								Col:  "c1",
+								Name: "noexist",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	_, err := BuildSchema(&bad)
+	want := "vindexType noexist not found"
+	if err == nil || err.Error() != want {
+		t.Errorf("BuildSchema: %v, want %v", err, want)
+	}
+}
+
+func TestBuildSchemaInvalidVindexFail(t *testing.T) {
+	bad := SchemaFormal{
+		Keyspaces: map[string]KeyspaceFormal{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]VindexFormal{
+					"stf": {
+						Type: "stf",
+					},
+				},
+				Tables: map[string]TableFormal{
+					"t1": {
+						ColVindexes: []ColVindexFormal{
+							{
+								Col:  "c1",
+								Name: "stf",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	_, err := BuildSchema(&bad)
+	want := "vindex stf needs to be Unique or NonUnique"
+	if err == nil || err.Error() != want {
+		t.Errorf("BuildSchema: %v, want %v", err, want)
+	}
+}
+
+func TestBuildSchemaDupTableFail(t *testing.T) {
+	bad := SchemaFormal{
+		Keyspaces: map[string]KeyspaceFormal{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]VindexFormal{
+					"stfu": {
+						Type: "stfu",
+					},
+				},
+				Tables: map[string]TableFormal{
+					"t1": {
+						ColVindexes: []ColVindexFormal{
+							{
+								Col:  "c1",
+								Name: "stfu",
+							},
+						},
+					},
+				},
+			},
+			"sharded1": {
+				Sharded: true,
+				Vindexes: map[string]VindexFormal{
+					"stfu": {
+						Type: "stfu",
+					},
+				},
+				Tables: map[string]TableFormal{
+					"t1": {
+						ColVindexes: []ColVindexFormal{
+							{
+								Col:  "c1",
+								Name: "stfu",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	_, err := BuildSchema(&bad)
+	want := "table t1 has multiple definitions"
+	if err == nil || err.Error() != want {
+		t.Errorf("BuildSchema: %v, want %v", err, want)
+	}
+}
+
+func TestBuildSchemaNoindexFail(t *testing.T) {
+	bad := SchemaFormal{
+		Keyspaces: map[string]KeyspaceFormal{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]VindexFormal{
+					"stfu": {
+						Type: "stfu",
+					},
+				},
+				Tables: map[string]TableFormal{
+					"t1": {
+						ColVindexes: []ColVindexFormal{
+							{
+								Col:  "c1",
+								Name: "notexist",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	_, err := BuildSchema(&bad)
+	want := "vindex notexist not found for table t1"
+	if err == nil || err.Error() != want {
+		t.Errorf("BuildSchema: %v, want %v", err, want)
+	}
+}
+
+func TestBuildSchemaNotUniqueFail(t *testing.T) {
+	bad := SchemaFormal{
+		Keyspaces: map[string]KeyspaceFormal{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]VindexFormal{
+					"stln": {
+						Type: "stln",
+					},
+				},
+				Tables: map[string]TableFormal{
+					"t1": {
+						ColVindexes: []ColVindexFormal{
+							{
+								Col:  "c1",
+								Name: "stln",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	_, err := BuildSchema(&bad)
+	want := "primary index stln is not Unique for table t1"
+	if err == nil || err.Error() != want {
+		t.Errorf("BuildSchema: %v, want %v", err, want)
+	}
+}
+
+func TestBuildSchemaPrimaryNonFunctionalFail(t *testing.T) {
+	bad := SchemaFormal{
+		Keyspaces: map[string]KeyspaceFormal{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]VindexFormal{
+					"stlu": {
+						Type:  "stlu",
+						Owner: "t1",
+					},
+				},
+				Tables: map[string]TableFormal{
+					"t1": {
+						ColVindexes: []ColVindexFormal{
+							{
+								Col:  "c1",
+								Name: "stlu",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	_, err := BuildSchema(&bad)
+	want := "primary owned index stlu is not Functional for table t1"
+	if err == nil || err.Error() != want {
+		t.Errorf("BuildSchema: %v, want %v", err, want)
+	}
+}
+
+func TestBuildSchemaNonPrimaryLookupFail(t *testing.T) {
+	bad := SchemaFormal{
+		Keyspaces: map[string]KeyspaceFormal{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]VindexFormal{
+					"stlu": {
+						Type: "stlu",
+					},
+					"stfu": {
+						Type:  "stfu",
+						Owner: "t1",
+					},
+				},
+				Tables: map[string]TableFormal{
+					"t1": {
+						ColVindexes: []ColVindexFormal{
+							{
+								Col:  "c1",
+								Name: "stlu",
+							}, {
+								Col:  "c2",
+								Name: "stfu",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	_, err := BuildSchema(&bad)
+	want := "non-primary owned index stfu is not Lookup for table t1"
+	if err == nil || err.Error() != want {
+		t.Errorf("BuildSchema: %v, want %v", err, want)
 	}
 }

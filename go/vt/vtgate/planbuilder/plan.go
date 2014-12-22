@@ -11,8 +11,10 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
+// PlanID is number representing the plan id.
 type PlanID int
 
+// The following constants define all the PlanID values.
 const (
 	NoPlan = PlanID(iota)
 	SelectUnsharded
@@ -45,21 +47,33 @@ var planName = [NumPlans]string{
 	"InsertSharded",
 }
 
+// Plan represents the routing strategy for a given query.
 type Plan struct {
-	ID        PlanID
-	Reason    string
-	Table     *Table
-	Original  string
+	ID PlanID
+	// Reason usually contains a string describing the reason
+	// for why a certain plan was (or not) chosen.
+	Reason string
+	Table  *Table
+	// Original is the original query.
+	Original string
+	// Rewritten is the rewritten query. This is empty for
+	// all Unsharded plans since the Original query is sufficient.
 	Rewritten string
+	// Subquery is used for DeleteUnsharded to fetch the column values
+	// for owned vindexes so they can be deleted.
 	Subquery  string
 	ColVindex *ColVindex
-	Values    interface{}
+	// Values is a single or a list of values that are used
+	// for making routing decisions.
+	Values interface{}
 }
 
+// Size is defined so that Plan can be given to an LRUCache.
 func (pln *Plan) Size() int {
 	return 1
 }
 
+// MarshalJSON serializes the Plan into a JSON representation.
 func (pln *Plan) MarshalJSON() ([]byte, error) {
 	var tname, vindexName, col string
 	if pln.Table != nil {
@@ -112,6 +126,8 @@ func (id PlanID) String() string {
 	return planName[id]
 }
 
+// PlanByName returns the PlanID from the plan name.
+// If it cannot be found, then it returns NumPlans.
 func PlanByName(s string) (id PlanID, ok bool) {
 	for i, v := range planName {
 		if v == s {
@@ -121,10 +137,12 @@ func PlanByName(s string) (id PlanID, ok bool) {
 	return NumPlans, false
 }
 
+// MarshalJSON serializes the plan id as a JSON string.
 func (id PlanID) MarshalJSON() ([]byte, error) {
 	return ([]byte)(fmt.Sprintf("\"%s\"", id.String())), nil
 }
 
+// BuildPlan builds a plan for a query based on the specified schema.
 func BuildPlan(query string, schema *Schema) *Plan {
 	statement, err := sqlparser.Parse(query)
 	if err != nil {
