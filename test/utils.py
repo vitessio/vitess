@@ -442,6 +442,7 @@ def run_vtctl_json(clargs):
 def run_vtworker(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs):
   args = environment.binary_args('vtworker') + [
           '-log_dir', environment.vtlogroot,
+          '-min_healthy_rdonly_endpoints', '1',
           '-port', str(environment.reserve_ports(1))]
   args.extend(environment.topo_server().flags())
   args.extend(protocols_flavor().tablet_manager_protocol_flags())
