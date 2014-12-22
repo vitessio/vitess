@@ -248,9 +248,9 @@ func TestDeleteVindexFail(t *testing.T) {
 
 	sbc.mustFailServer = 1
 	_, err := routerExec(router, "delete from user where id = 1", nil)
-	want := "execDeleteEqual: shard, host: TestRouter.-20.master, {Uid:0 Host:-20 NamedPortMap:map[vt:1] Health:map[]}, error: err"
-	if err == nil || err.Error() != want {
-		t.Errorf("routerExec: %v, want %v", err, want)
+	want := "execDeleteEqual: shard, host: TestRouter.-20.master"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
 
 	sbc.setResults([]*mproto.QueryResult{&mproto.QueryResult{
@@ -273,16 +273,16 @@ func TestDeleteVindexFail(t *testing.T) {
 
 	sbclookup.mustFailServer = 1
 	_, err = routerExec(router, "delete from user where id = 1", nil)
-	want = "execDeleteEqual: HashVindex.Delete: shard, host: TestUnsharded.0.master, {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}, error: err"
-	if err == nil || err.Error() != want {
-		t.Errorf("routerExec: %v, want %v", err, want)
+	want = "execDeleteEqual: HashVindex.Delete: shard, host: TestUnsharded.0.master"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
 
 	sbclookup.mustFailServer = 1
 	_, err = routerExec(router, "delete from music where user_id = 1", nil)
-	want = "execDeleteEqual: lookupHash.Delete: shard, host: TestUnsharded.0.master, {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}"
-	if err == nil || err.Error() != want {
-		t.Errorf("routerExec: %v, want %v", err, want)
+	want = "execDeleteEqual: lookupHash.Delete: shard, host: TestUnsharded.0.master"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
 }
 
@@ -514,5 +514,105 @@ func TestInsertLookupUnownedUnsupplied(t *testing.T) {
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
+	}
+}
+
+func TestInsertFail(t *testing.T) {
+	router, sbc, _, sbclookup := createRouterEnv()
+
+	_, err := routerExec(router, "insert into user(id, v, name) values (:aa, 2, 'myname')", nil)
+	want := "execInsertSharded: could not find bind var :aa"
+	if err == nil || err.Error() != want {
+		t.Errorf("routerExec: %v, want %v", err, want)
+	}
+
+	sbclookup.mustFailServer = 1
+	_, err = routerExec(router, "insert into user(id, v, name) values (null, 2, 'myname')", nil)
+	want = "execInsertSharded: HashVindex.Generate"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("routerExec: %v, want prefix %v", err, want)
+	}
+
+	sbclookup.mustFailServer = 1
+	_, err = routerExec(router, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
+	want = "execInsertSharded: HashVindex.Create"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("routerExec: %v, want prefix %v", err, want)
+	}
+
+	_, err = routerExec(router, "insert into ksid_table(keyspace_id) values (null)", nil)
+	want = "execInsertSharded: value must be supplied for column keyspace_id"
+	if err == nil || err.Error() != want {
+		t.Errorf("routerExec: %v, want %v", err, want)
+	}
+
+	sbclookup.mustFailServer = 1
+	_, err = routerExec(router, "insert into music_extra_reversed(music_id, user_id) values (1, 1)", nil)
+	want = "execInsertSharded: LookupHashUnique.Map"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("routerExec: %v, want prefix %v", err, want)
+	}
+
+	sbclookup.setResults([]*mproto.QueryResult{&mproto.QueryResult{}})
+	_, err = routerExec(router, "insert into music_extra_reversed(music_id, user_id) values (1, 1)", nil)
+	want = "execInsertSharded: could not map 1 to a keyspace id"
+	if err == nil || err.Error() != want {
+		t.Errorf("routerExec: %v, want %v", err, want)
+	}
+
+	getSandbox("TestRouter").SrvKeyspaceMustFail = 1
+	_, err = routerExec(router, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
+	want = "execInsertSharded: keyspace TestRouter fetch error: topo error GetSrvKeyspace"
+	if err == nil || err.Error() != want {
+		t.Errorf("routerExec: %v, want %v", err, want)
+	}
+
+	func() {
+		getSandbox("TestRouter").ShardSpec = "80-"
+		defer func() { getSandbox("TestRouter").ShardSpec = DefaultShardSpec }()
+		_, err = routerExec(router, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
+		want = "execInsertSharded: KeyspaceId 166b40b44aba4bd6 didn't match any shards"
+		if err == nil || !strings.HasPrefix(err.Error(), want) {
+			t.Errorf("routerExec: %v, want prefix %v", err, want)
+		}
+	}()
+
+	sbclookup.mustFailServer = 1
+	_, err = routerExec(router, "insert into music(user_id, id) values (1, null)", nil)
+	want = "LookupHashUnique.Generate: shard, host: TestUnsharded.0.master"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("routerExec: %v, want prefix %v", err, want)
+	}
+
+	sbclookup.mustFailServer = 1
+	_, err = routerExec(router, "insert into music(user_id, id) values (1, 2)", nil)
+	want = "lookupHash.Create: shard, host: TestUnsharded.0.master"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("routerExec: %v, want prefix %v", err, want)
+	}
+
+	_, err = routerExec(router, "insert into music_extra(user_id, music_id) values (1, null)", nil)
+	want = "value must be supplied for column music_id"
+	if err == nil || err.Error() != want {
+		t.Errorf("routerExec: %v, want %v", err, want)
+	}
+
+	_, err = routerExec(router, "insert into music_extra_reversed(music_id, user_id) values (1, 'aa')", nil)
+	want = "HashVindex.Verify: unexpected type for aa: string"
+	if err == nil || err.Error() != want {
+		t.Errorf("routerExec: %v, want %v", err, want)
+	}
+
+	_, err = routerExec(router, "insert into music_extra_reversed(music_id, user_id) values (1, 3)", nil)
+	want = "value 3 for column user_id does not map to keyspace id 166b40b44aba4bd6"
+	if err == nil || err.Error() != want {
+		t.Errorf("routerExec: %v, want %v", err, want)
+	}
+
+	sbc.mustFailServer = 1
+	_, err = routerExec(router, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
+	want = "execInsertSharded: shard, host: TestRouter.-20.master"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
 }

@@ -20,8 +20,7 @@ var (
 
 // LookupHashMulti defines a vindex that uses a lookup table.
 // The table is allowed to have multiple keyspace ids for a given id.
-// It's NonUnique and a Lookup. It's also a LookupGenerator, because it
-// can use the autoinc capabilities of the lookup table.
+// It's NonUnique and a Lookup.
 type LookupHashMulti struct {
 	lookupHash
 }

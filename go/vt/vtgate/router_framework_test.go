@@ -48,6 +48,9 @@ var routerSchema = createTestSchema(`
             "From": "name",
             "To": "user_id"
           }
+        },
+        "keyspace_id": {
+          "Type": "num_ksid"
         }
       },
       "Tables": {
@@ -104,6 +107,14 @@ var routerSchema = createTestSchema(`
             {
               "Col": "user_id",
               "Name": "user_index"
+            }
+          ]
+        },
+        "ksid_table": {
+          "ColVindexes": [
+            {
+              "Col": "keyspace_id",
+              "Name": "keyspace_id"
             }
           ]
         }

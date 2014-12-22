@@ -256,5 +256,5 @@ func asInterface(node sqlparser.ValExpr) (interface{}, error) {
 	case *sqlparser.NullVal:
 		return nil, nil
 	}
-	panic("unexpected")
+	return nil, fmt.Errorf("%v is not a value", sqlparser.String(node))
 }

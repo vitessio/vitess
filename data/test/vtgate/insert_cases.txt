@@ -128,9 +128,23 @@
 "insert into music_extra(music_id, user_id) values(1, 1.1)"
 {
   "ID":"NoPlan",
-  "Reason":"could not convert val: 1.1, pos: 1",
+  "Reason":"could not convert val: 1.1, pos: 1: strconv.ParseUint: parsing \"1.1\": invalid syntax",
   "Table":"music_extra",
   "Original":"insert into music_extra(music_id, user_id) values(1, 1.1)",
+  "Rewritten":"",
+  "Subquery": "",
+  "Vindex": "",
+  "Col": "",
+  "Values":null
+}
+
+# insert invalid index value
+"insert into music_extra(music_id, user_id) values(1, id)"
+{
+  "ID":"NoPlan",
+  "Reason":"could not convert val: id, pos: 1: id is not a value",
+  "Table":"music_extra",
+  "Original":"insert into music_extra(music_id, user_id) values(1, id)",
   "Rewritten":"",
   "Subquery": "",
   "Vindex": "",
