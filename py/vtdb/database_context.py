@@ -2,12 +2,13 @@
 
 This modules has classes and methods that initialize the vitess system.
 This includes -
-* DatabaseContext is a global object that sets the mode of operation,
+* DatabaseContext is the primary object that sets the mode of operation,
 logging handlers, connection to VTGate etc.
 * Error logging helpers
-* Database decorators that set the local context for a set of
-related queries that help with query routing and transaction management.
-
+* Database Operation context managers and decorators that set the local
+context for different types of read operations and write transaction. This
+governs the tablet_type and aid with cursor creation and transaction
+management.
 """
 
 # Copyright 2013 Google Inc. All Rights Reserved.
@@ -30,6 +31,9 @@ DEFAULT_QUERY_TIMEOUT = 15.0
 
 __app_read_only_mode_method = lambda:False
 __vtgate_connect_method = vtgatev2.connect
+#TODO: perhaps make vtgate addrs also a registeration mechanism ?
+#TODO: add mechansim to refresh vtgate addrs.
+
 
 class DatabaseContext(object):
   """Global Database Context for client db operations via VTGate.
@@ -172,15 +176,25 @@ class DatabaseContext(object):
 
 
 class DBOperationBase(object):
+  """Base class for database read and write operations.
+
+  Attributes:
+   dc: database context object.
+   writable: Indicates whether this is part of write transaction.
+  """
   def __init__(self, db_context):
     self.dc = db_context
     self.writable = False
 
   def get_cursor(self):
+    """This returns the create_cursor method of DatabaseContext with
+    the writable attribute from the instance of DBOperationBase's
+    derived classes."""
     return functools.partial(self.dc.create_cursor, self.writable)
 
 
 class ReadFromMaster(DBOperationBase):
+  """Context Manager for reading from master."""
   def __enter__(self):
     self.dc.read_from_master_setup()
     return self
@@ -196,6 +210,7 @@ class ReadFromMaster(DBOperationBase):
 
 
 class ReadFromReplica(DBOperationBase):
+  """Context Manager for reading from lag-sensitive or lag-tolerant replica."""
   def __enter__(self):
     self.dc.read_from_replica_setup()
     return self
@@ -211,6 +226,7 @@ class ReadFromReplica(DBOperationBase):
 
 
 class WriteTransaction(DBOperationBase):
+  """Context Manager for write transactions."""
   def __enter__(self):
     self.writable = True
     self.dc.write_transaction_setup()
@@ -236,6 +252,15 @@ class WriteTransaction(DBOperationBase):
 
 
 def read_from_master(method):
+  """Decorator to read from the master db.
+
+  Args:
+    method: Method to decorate. This creates the appropriate cursor
+    and calls the underlying vtgate rpc.
+  Returns:
+    The decorated method.
+  """
+  @functools.wraps(method)
   def _read_from_master(*pargs, **kargs):
     dc = open_context()
     with ReadFromMaster(dc) as context:
@@ -247,6 +272,41 @@ def read_from_master(method):
   return _read_from_master
 
 
+def register_app_read_only_mode_method(func):
+  """Register function to temporarily disable master access.
+
+  This is different from the master_acces_disabled mode as this
+  is supposed to be a transient state.
+
+  Args:
+    func: method that determines this condition.
+  """
+  global __app_read_only_mode_method
+  __app_read_only_mode_method = func
+
+
+def app_read_only_mode():
+  """This method returns the result of the registered
+  method for __app_read_only_mode_method.
+
+  Returns:
+    Output from __app_read_only_mode_method. Default False.
+  """
+  global __app_read_only_mode_method
+  return __app_read_only_mode_method()
+
+
+def register_create_vtgate_connection_method(connect_method):
+  """Register connection creation method for vtgate."""
+  global __vtgate_connect_method
+  __vtgate_connect_method = connect_method
+
+def get_vtgate_connect_method():
+  """Returns the vtgate connection creation method."""
+  global __vtgate_connect_method
+  return __vtgate_connect_method
+
+# The global object is for legacy application.
 __database_context = None
 
 def open_context(*pargs, **kargs):
@@ -264,22 +324,3 @@ def close():
   if __database_context is not None:
     __database_context.close()
     __database_context = None
-
-
-def register_app_read_only_mode_method(func):
-  global __app_read_only_mode_method
-  __app_read_only_mode_method = func
-
-
-def app_read_only_mode():
-  global __app_read_only_mode_method
-  return __app_read_only_mode_method()
-
-
-def register_create_vtgate_connection_method(connect_method):
-  global __vtgate_connect_method
-  __vtgate_connect_method = connect_method
-
-def get_vtgate_connect_method():
-  global __vtgate_connect_method
-  return __vtgate_connect_method
