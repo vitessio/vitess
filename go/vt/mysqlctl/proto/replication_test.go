@@ -539,16 +539,23 @@ func TestReplicationStatusMasterAddr(t *testing.T) {
 }
 
 func TestNewReplicationStatus(t *testing.T) {
-	input := "master-host:1234"
-	want := &ReplicationStatus{
-		MasterHost: "master-host",
-		MasterPort: 1234,
+	table := map[string]*ReplicationStatus{
+		"master-host:1234": &ReplicationStatus{
+			MasterHost: "master-host",
+			MasterPort: 1234,
+		},
+		"[::1]:4321": &ReplicationStatus{
+			MasterHost: "::1",
+			MasterPort: 4321,
+		},
 	}
-	got, err := NewReplicationStatus(input)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if got.MasterHost != want.MasterHost || got.MasterPort != want.MasterPort {
-		t.Errorf("NewReplicationStatus(%#v) = %#v, want %#v", input, got, want)
+	for input, want := range table {
+		got, err := NewReplicationStatus(input)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		if got.MasterHost != want.MasterHost || got.MasterPort != want.MasterPort {
+			t.Errorf("NewReplicationStatus(%#v) = %#v, want %#v", input, got, want)
+		}
 	}
 }

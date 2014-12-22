@@ -23,13 +23,13 @@ func init() {
 // byPriorityWeight sorts records by ascending priority and weight.
 type byPriorityWeight []*net.SRV
 
-func (s byPriorityWeight) Len() int { return len(s) }
+func (addrs byPriorityWeight) Len() int { return len(addrs) }
 
-func (s byPriorityWeight) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+func (addrs byPriorityWeight) Swap(i, j int) { addrs[i], addrs[j] = addrs[j], addrs[i] }
 
-func (s byPriorityWeight) Less(i, j int) bool {
-	return s[i].Priority < s[j].Priority ||
-		(s[i].Priority == s[j].Priority && s[i].Weight < s[j].Weight)
+func (addrs byPriorityWeight) Less(i, j int) bool {
+	return addrs[i].Priority < addrs[j].Priority ||
+		(addrs[i].Priority == addrs[j].Priority && addrs[i].Weight < addrs[j].Weight)
 }
 
 // shuffleByWeight shuffles SRV records by weight using the algorithm
@@ -85,7 +85,7 @@ func SplitHostPort(addr string) (string, int, error) {
 	}
 	p, err := strconv.ParseInt(port, 10, 16)
 	if err != nil {
-		return "", 0, err
+		return "", 0, fmt.Errorf("can't parse port %q: %v", port, err)
 	}
 	return host, int(p), nil
 }
@@ -143,7 +143,7 @@ func ResolveIpAddr(addr string) (string, error) {
 	return net.JoinHostPort(ipAddrs[0], port), nil
 }
 
-// ResolveIpAddr resolves the address:port part into an IP address:port pair
+// ResolveIPv4Addr resolves the address:port part into an IP address:port pair
 func ResolveIPv4Addr(addr string) (string, error) {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {

@@ -8,11 +8,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
+	"github.com/youtube/vitess/go/netutil"
 )
 
 // ReplicationPosition represents the information necessary to describe which
@@ -207,20 +207,23 @@ type ReplicationStatus struct {
 	MasterConnectRetry  int
 }
 
+// SlaveRunning returns true iff both the Slave IO and Slave SQL threads are
+// running.
 func (rs *ReplicationStatus) SlaveRunning() bool {
 	return rs.SlaveIORunning && rs.SlaveSQLRunning
 }
 
+// MasterAddr returns the host:port address of the master.
 func (rs *ReplicationStatus) MasterAddr() string {
 	return fmt.Sprintf("%v:%v", rs.MasterHost, rs.MasterPort)
 }
 
+// NewReplicationStatus creates a ReplicationStatus pointing to masterAddr.
 func NewReplicationStatus(masterAddr string) (*ReplicationStatus, error) {
-	addrPieces := strings.Split(masterAddr, ":")
-	port, err := strconv.Atoi(addrPieces[1])
+	host, port, err := netutil.SplitHostPort(masterAddr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid masterAddr: %q, %v", masterAddr, err)
 	}
 	return &ReplicationStatus{MasterConnectRetry: 10,
-		MasterHost: addrPieces[0], MasterPort: port}, nil
+		MasterHost: host, MasterPort: port}, nil
 }
