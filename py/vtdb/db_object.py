@@ -22,7 +22,15 @@ class Unimplemented(Exception):
     pass
 
 class ShardRouting(object):
-  """VTGate Shard Routing Class."""
+  """VTGate Shard Routing Class.
+
+  Attributes:
+  keyspace: keyspace where the table resides.
+  sharding_key: sharding key of the table.
+  keyrange: keyrange for the query.
+  entity_id_sharding_key_map: this map is used for in clause queries.
+  shard_name: this is used to route queries for custom sharded keyspaces.
+  """
 
   keyspace = None
   sharding_key = None
@@ -39,6 +47,15 @@ def _is_iterable_container(x):
 
 
 def db_wrapper(method):
+  """Decorator that is used to create the appropriate cursor
+  for the table and call the database method with it.
+
+  Args:
+    method: Method to decorate.
+
+  Returns:
+    Decorated method.
+  """
   @functools.wraps(method)
   def _db_wrapper(*pargs, **kargs):
     table_class = pargs[0]
