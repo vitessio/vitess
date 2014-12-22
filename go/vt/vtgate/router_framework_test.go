@@ -24,7 +24,7 @@ var routerSchema = createTestSchema(`
       "Sharded": true,
       "Vindexes": {
         "user_index": {
-          "Type": "hash",
+          "Type": "hash_autoinc",
           "Owner": "user",
           "Params": {
             "Table": "user_idx",
@@ -32,7 +32,7 @@ var routerSchema = createTestSchema(`
           }
         },
         "music_user_map": {
-          "Type": "lookup_hash_unique",
+          "Type": "lookup_hash_unique_autoinc",
           "Owner": "music",
           "Params": {
             "Table": "music_user_map",
@@ -41,7 +41,7 @@ var routerSchema = createTestSchema(`
           }
         },
         "name_user_map": {
-          "Type": "lookup_hash_multi",
+          "Type": "lookup_hash",
           "Owner": "user",
           "Params": {
             "Table": "name_user_map",
@@ -50,7 +50,7 @@ var routerSchema = createTestSchema(`
           }
         },
         "keyspace_id": {
-          "Type": "num_ksid"
+          "Type": "numeric"
         }
       },
       "Tables": {

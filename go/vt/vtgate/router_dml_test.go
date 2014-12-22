@@ -99,7 +99,7 @@ func TestUpdateEqualFail(t *testing.T) {
 	_, err = routerExec(router, "update user set a=2 where id = :id", map[string]interface{}{
 		"id": "aa",
 	})
-	want = "execUpdateEqual: HashVindex.Map: unexpected type for aa: string"
+	want = "execUpdateEqual: hash.Map: unexpected type for aa: string"
 	if err == nil || err.Error() != want {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
@@ -228,7 +228,7 @@ func TestDeleteEqualFail(t *testing.T) {
 	_, err = routerExec(router, "delete from user where id = :id", map[string]interface{}{
 		"id": "aa",
 	})
-	want = "execDeleteEqual: HashVindex.Map: unexpected type for aa: string"
+	want = "execDeleteEqual: hash.Map: unexpected type for aa: string"
 	if err == nil || err.Error() != want {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
@@ -273,14 +273,14 @@ func TestDeleteVindexFail(t *testing.T) {
 
 	sbclookup.mustFailServer = 1
 	_, err = routerExec(router, "delete from user where id = 1", nil)
-	want = "execDeleteEqual: HashVindex.Delete: shard, host: TestUnsharded.0.master"
+	want = "execDeleteEqual: hash.Delete: shard, host: TestUnsharded.0.master"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
 
 	sbclookup.mustFailServer = 1
 	_, err = routerExec(router, "delete from music where user_id = 1", nil)
-	want = "execDeleteEqual: lookupHash.Delete: shard, host: TestUnsharded.0.master"
+	want = "execDeleteEqual: lookup.Delete: shard, host: TestUnsharded.0.master"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
@@ -528,14 +528,14 @@ func TestInsertFail(t *testing.T) {
 
 	sbclookup.mustFailServer = 1
 	_, err = routerExec(router, "insert into user(id, v, name) values (null, 2, 'myname')", nil)
-	want = "execInsertSharded: HashVindex.Generate"
+	want = "execInsertSharded: hash.Generate"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
 
 	sbclookup.mustFailServer = 1
 	_, err = routerExec(router, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
-	want = "execInsertSharded: HashVindex.Create"
+	want = "execInsertSharded: hash.Create"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
@@ -548,7 +548,7 @@ func TestInsertFail(t *testing.T) {
 
 	sbclookup.mustFailServer = 1
 	_, err = routerExec(router, "insert into music_extra_reversed(music_id, user_id) values (1, 1)", nil)
-	want = "execInsertSharded: LookupHashUnique.Map"
+	want = "execInsertSharded: lookup.Map"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
@@ -579,14 +579,14 @@ func TestInsertFail(t *testing.T) {
 
 	sbclookup.mustFailServer = 1
 	_, err = routerExec(router, "insert into music(user_id, id) values (1, null)", nil)
-	want = "LookupHashUnique.Generate: shard, host: TestUnsharded.0.master"
+	want = "lookup.Generate: shard, host: TestUnsharded.0.master"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
 
 	sbclookup.mustFailServer = 1
 	_, err = routerExec(router, "insert into music(user_id, id) values (1, 2)", nil)
-	want = "lookupHash.Create: shard, host: TestUnsharded.0.master"
+	want = "lookup.Create: shard, host: TestUnsharded.0.master"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
@@ -598,7 +598,7 @@ func TestInsertFail(t *testing.T) {
 	}
 
 	_, err = routerExec(router, "insert into music_extra_reversed(music_id, user_id) values (1, 'aa')", nil)
-	want = "HashVindex.Verify: unexpected type for aa: string"
+	want = "hash.Verify: unexpected type for aa: string"
 	if err == nil || err.Error() != want {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}

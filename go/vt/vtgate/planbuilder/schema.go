@@ -51,7 +51,7 @@ func BuildSchema(source *SchemaFormal) (schema *Schema, err error) {
 		}
 		vindexes := make(map[string]Vindex)
 		for vname, vindexInfo := range ks.Vindexes {
-			vindex, err := createVindex(vindexInfo.Type, vindexInfo.Params)
+			vindex, err := CreateVindex(vindexInfo.Type, vindexInfo.Params)
 			if err != nil {
 				return nil, err
 			}

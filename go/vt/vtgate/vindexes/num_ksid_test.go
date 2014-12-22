@@ -9,23 +9,23 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
-var numksid NumKSID
+var numeric planbuilder.Vindex
 
 func init() {
-	vind, _ := NewNumKSID(nil)
-	numksid = vind.(NumKSID)
+	numeric, _ = planbuilder.CreateVindex("numeric", nil)
 }
 
-func TestNumKSIDCost(t *testing.T) {
-	if numksid.Cost() != 0 {
-		t.Errorf("Cost(): %d, want 0", numksid.Cost())
+func TestNumericCost(t *testing.T) {
+	if numeric.Cost() != 0 {
+		t.Errorf("Cost(): %d, want 0", numeric.Cost())
 	}
 }
 
-func TestNumKSIDMap(t *testing.T) {
-	got, err := numksid.Map(nil, []interface{}{1, int32(2), int64(3), uint(4), uint32(5), uint64(6)})
+func TestNumericMap(t *testing.T) {
+	got, err := numeric.(planbuilder.Unique).Map(nil, []interface{}{1, int32(2), int64(3), uint(4), uint32(5), uint64(6)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -42,16 +42,16 @@ func TestNumKSIDMap(t *testing.T) {
 	}
 }
 
-func TestNumKSIDMapBadData(t *testing.T) {
-	_, err := numksid.Map(nil, []interface{}{1.1})
-	want := `NumKSID.Map: unexpected type for 1.1: float64`
+func TestNumericMapBadData(t *testing.T) {
+	_, err := numeric.(planbuilder.Unique).Map(nil, []interface{}{1.1})
+	want := `Numeric.Map: unexpected type for 1.1: float64`
 	if err == nil || err.Error() != want {
-		t.Errorf("numksid.Map: %v, want %v", err, want)
+		t.Errorf("numeric.Map: %v, want %v", err, want)
 	}
 }
 
-func TestNumKSIDVerify(t *testing.T) {
-	success, err := numksid.Verify(nil, 1, "\x00\x00\x00\x00\x00\x00\x00\x01")
+func TestNumericVerify(t *testing.T) {
+	success, err := numeric.Verify(nil, 1, "\x00\x00\x00\x00\x00\x00\x00\x01")
 	if err != nil {
 		t.Error(err)
 	}
@@ -60,16 +60,16 @@ func TestNumKSIDVerify(t *testing.T) {
 	}
 }
 
-func TestNumKSIDVerifyBadData(t *testing.T) {
-	_, err := numksid.Verify(nil, 1.1, "\x00\x00\x00\x00\x00\x00\x00\x01")
-	want := `NumKSID.Verify: unexpected type for 1.1: float64`
+func TestNumericVerifyBadData(t *testing.T) {
+	_, err := numeric.Verify(nil, 1.1, "\x00\x00\x00\x00\x00\x00\x00\x01")
+	want := `Numeric.Verify: unexpected type for 1.1: float64`
 	if err == nil || err.Error() != want {
-		t.Errorf("numksid.Map: %v, want %v", err, want)
+		t.Errorf("numeric.Map: %v, want %v", err, want)
 	}
 }
 
-func TestNumKSIDReverseMap(t *testing.T) {
-	got, err := numksid.ReverseMap(nil, "\x00\x00\x00\x00\x00\x00\x00\x01")
+func TestNumericReverseMap(t *testing.T) {
+	got, err := numeric.(planbuilder.Reversible).ReverseMap(nil, "\x00\x00\x00\x00\x00\x00\x00\x01")
 	if err != nil {
 		t.Error(err)
 	}
@@ -78,10 +78,10 @@ func TestNumKSIDReverseMap(t *testing.T) {
 	}
 }
 
-func TestNumKSIDReverseMapBadData(t *testing.T) {
-	_, err := numksid.ReverseMap(nil, "aa")
-	want := `NumKSID.ReverseMap: length of keyspace is not 8: 2`
+func TestNumericReverseMapBadData(t *testing.T) {
+	_, err := numeric.(planbuilder.Reversible).ReverseMap(nil, "aa")
+	want := `Numeric.ReverseMap: length of keyspace is not 8: 2`
 	if err == nil || err.Error() != want {
-		t.Errorf("numksid.Map: %v, want %v", err, want)
+		t.Errorf("numeric.Map: %v, want %v", err, want)
 	}
 }

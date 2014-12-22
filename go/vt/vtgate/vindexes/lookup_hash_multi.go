@@ -5,70 +5,95 @@
 package vindexes
 
 import (
-	"fmt"
-
-	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/key"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
-var (
-	_ planbuilder.NonUnique = (*LookupHashMulti)(nil)
-	_ planbuilder.Lookup    = (*LookupHashMulti)(nil)
-)
-
-// LookupHashMulti defines a vindex that uses a lookup table.
-// The table is allowed to have multiple keyspace ids for a given id.
-// It's NonUnique and a Lookup.
-type LookupHashMulti struct {
-	lookupHash
+// LookupHashAuto defines a vindex that uses a lookup table.
+// The table is expected to define the id column as unique. It's
+// NonUnique and a Lookup. It's also a LookupGenerator, because it
+// can use the autoinc capabilities of the lookup table.
+type LookupHashAuto struct {
+	lkp lookup
 }
 
-// NewLookupHashMulti creates a LookupHashMulti vindex.
-func NewLookupHashMulti(m map[string]interface{}) (planbuilder.Vindex, error) {
-	lhm := &LookupHashMulti{}
-	lhm.init(m)
-	return lhm, nil
+// NewLookupHashAuto creates a new LookupHashAuto.
+func NewLookupHashAuto(m map[string]interface{}) (planbuilder.Vindex, error) {
+	h := &LookupHashAuto{}
+	h.lkp.Init(m)
+	return h, nil
 }
 
-// Cost returns the cost of this vindex as 20.
-func (vind *LookupHashMulti) Cost() int {
+// Cost returns the cost of this index as 20.
+func (vind *LookupHashAuto) Cost() int {
 	return 20
 }
 
-// Map returns the list of list of associated keyspace ids. If there's no map for
-// an id, then the associated entry is nil.
-func (vind *LookupHashMulti) Map(vcursor planbuilder.VCursor, ids []interface{}) ([][]key.KeyspaceId, error) {
-	out := make([][]key.KeyspaceId, 0, len(ids))
-	bq := &tproto.BoundQuery{
-		Sql: vind.sel,
-	}
-	for _, id := range ids {
-		bq.BindVariables = map[string]interface{}{
-			vind.From: id,
-		}
-		result, err := vcursor.Execute(bq)
-		if err != nil {
-			return nil, fmt.Errorf("LookupHashMulti.Map: %v", err)
-		}
-		var ksids []key.KeyspaceId
-		for _, row := range result.Rows {
-			inum, err := mproto.Convert(result.Fields[0].Type, row[0])
-			if err != nil {
-				return nil, fmt.Errorf("LookupHashMulti.Map: %v", err)
-			}
-			num, err := getNumber(inum)
-			if err != nil {
-				return nil, fmt.Errorf("LookupHashMulti.Map: %v", err)
-			}
-			ksids = append(ksids, vhash(num))
-		}
-		out = append(out, ksids)
-	}
-	return out, nil
+// Map returns the corresponding KeyspaceId values for the given ids.
+func (vind *LookupHashAuto) Map(vcursor planbuilder.VCursor, ids []interface{}) ([][]key.KeyspaceId, error) {
+	return vind.lkp.Map2(vcursor, ids)
+}
+
+// Verify returns true if id maps to ksid.
+func (vind *LookupHashAuto) Verify(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) (bool, error) {
+	return vind.lkp.Verify(vcursor, id, ksid)
+}
+
+// Create reserves the id by inserting it into the vindex table.
+func (vind *LookupHashAuto) Create(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) error {
+	return vind.lkp.Create(vcursor, id, ksid)
+}
+
+// Generate reserves the id by inserting it into the vindex table.
+func (vind *LookupHashAuto) Generate(vcursor planbuilder.VCursor, ksid key.KeyspaceId) (id int64, err error) {
+	return vind.lkp.Generate(vcursor, ksid)
+}
+
+// Delete deletes the entry from the vindex table.
+func (vind *LookupHashAuto) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid key.KeyspaceId) error {
+	return vind.lkp.Delete(vcursor, ids, ksid)
+}
+
+// LookupHash defines a vindex that uses a lookup table.
+// The table is expected to define the id column as unique. It's
+// NonUnique and a Lookup.
+type LookupHash struct {
+	lkp lookup
+}
+
+// NewLookupHash creates a LookupHash vindex.
+func NewLookupHash(m map[string]interface{}) (planbuilder.Vindex, error) {
+	lhu := &LookupHash{}
+	lhu.lkp.Init(m)
+	return lhu, nil
+}
+
+// Cost returns the cost of this vindex as 20.
+func (vind *LookupHash) Cost() int {
+	return 20
+}
+
+// Map returns the corresponding KeyspaceId values for the given ids.
+func (vind *LookupHash) Map(vcursor planbuilder.VCursor, ids []interface{}) ([][]key.KeyspaceId, error) {
+	return vind.lkp.Map2(vcursor, ids)
+}
+
+// Verify returns true if id maps to ksid.
+func (vind *LookupHash) Verify(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) (bool, error) {
+	return vind.lkp.Verify(vcursor, id, ksid)
+}
+
+// Create reserves the id by inserting it into the vindex table.
+func (vind *LookupHash) Create(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) error {
+	return vind.lkp.Create(vcursor, id, ksid)
+}
+
+// Delete deletes the entry from the vindex table.
+func (vind *LookupHash) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid key.KeyspaceId) error {
+	return vind.lkp.Delete(vcursor, ids, ksid)
 }
 
 func init() {
-	planbuilder.Register("lookup_hash_multi", NewLookupHashMulti)
+	planbuilder.Register("lookup_hash_autoinc", NewLookupHashAuto)
+	planbuilder.Register("lookup_hash", NewLookupHash)
 }

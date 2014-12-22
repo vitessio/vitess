@@ -7,19 +7,19 @@ package vindexes
 import (
 	"fmt"
 
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
-// lookupHash implements the common functions between
-// LookupHashUnique and LookupHashMulti.
-type lookupHash struct {
-	Table, From, To       string
-	sel, verify, ins, del string
+// lookup implements the functions for the Lookup vindexes.
+type lookup struct {
+	Table, From, To    string
+	sel, ver, ins, del string
 }
 
-func (vind *lookupHash) init(m map[string]interface{}) {
+func (lkp *lookup) Init(m map[string]interface{}) {
 	get := func(name string) string {
 		v, _ := m[name].(string)
 		return v
@@ -28,27 +28,92 @@ func (vind *lookupHash) init(m map[string]interface{}) {
 	from := get("From")
 	to := get("To")
 
-	vind.Table = t
-	vind.From = from
-	vind.To = to
-	vind.sel = fmt.Sprintf("select %s from %s where %s = :%s", to, t, from, from)
-	vind.verify = fmt.Sprintf("select %s from %s where %s = :%s and %s = :%s", from, t, from, from, to, to)
-	vind.ins = fmt.Sprintf("insert into %s(%s, %s) values(:%s, :%s)", t, from, to, from, to)
-	vind.del = fmt.Sprintf("delete from %s where %s in ::%s and %s = :%s", t, from, from, to, to)
+	lkp.Table = t
+	lkp.From = from
+	lkp.To = to
+	lkp.sel = fmt.Sprintf("select %s from %s where %s = :%s", to, t, from, from)
+	lkp.ver = fmt.Sprintf("select %s from %s where %s = :%s and %s = :%s", from, t, from, from, to, to)
+	lkp.ins = fmt.Sprintf("insert into %s(%s, %s) values(:%s, :%s)", t, from, to, from, to)
+	lkp.del = fmt.Sprintf("delete from %s where %s in ::%s and %s = :%s", t, from, from, to, to)
+}
+
+// Map1 is for a unique vindex.
+func (lkp *lookup) Map1(vcursor planbuilder.VCursor, ids []interface{}) ([]key.KeyspaceId, error) {
+	out := make([]key.KeyspaceId, 0, len(ids))
+	bq := &tproto.BoundQuery{
+		Sql: lkp.sel,
+	}
+	for _, id := range ids {
+		bq.BindVariables = map[string]interface{}{
+			lkp.From: id,
+		}
+		result, err := vcursor.Execute(bq)
+		if err != nil {
+			return nil, fmt.Errorf("lookup.Map: %v", err)
+		}
+		if len(result.Rows) == 0 {
+			out = append(out, "")
+			continue
+		}
+		if len(result.Rows) != 1 {
+			return nil, fmt.Errorf("lookup.Map: unexpected multiple results from vindex %s: %v", lkp.Table, id)
+		}
+		inum, err := mproto.Convert(result.Fields[0].Type, result.Rows[0][0])
+		if err != nil {
+			return nil, fmt.Errorf("lookup.Map: %v", err)
+		}
+		num, err := getNumber(inum)
+		if err != nil {
+			return nil, fmt.Errorf("lookup.Map: %v", err)
+		}
+		out = append(out, vhash(num))
+	}
+	return out, nil
+}
+
+// Map2 is for a non-unique vindex.
+func (lkp *lookup) Map2(vcursor planbuilder.VCursor, ids []interface{}) ([][]key.KeyspaceId, error) {
+	out := make([][]key.KeyspaceId, 0, len(ids))
+	bq := &tproto.BoundQuery{
+		Sql: lkp.sel,
+	}
+	for _, id := range ids {
+		bq.BindVariables = map[string]interface{}{
+			lkp.From: id,
+		}
+		result, err := vcursor.Execute(bq)
+		if err != nil {
+			return nil, fmt.Errorf("lookup.Map: %v", err)
+		}
+		var ksids []key.KeyspaceId
+		for _, row := range result.Rows {
+			inum, err := mproto.Convert(result.Fields[0].Type, row[0])
+			if err != nil {
+				return nil, fmt.Errorf("lookup.Map: %v", err)
+			}
+			num, err := getNumber(inum)
+			if err != nil {
+				return nil, fmt.Errorf("lookup.Map: %v", err)
+			}
+			ksids = append(ksids, vhash(num))
+		}
+		out = append(out, ksids)
+	}
+	return out, nil
 }
 
 // Verify returns true if id maps to ksid.
-func (vind *lookupHash) Verify(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) (bool, error) {
+func (lkp *lookup) Verify(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) (bool, error) {
 	bq := &tproto.BoundQuery{
-		Sql: vind.verify,
+		Sql: lkp.ver,
 		BindVariables: map[string]interface{}{
-			vind.From: id,
-			vind.To:   vunhash(ksid),
+			lkp.From: id,
+			lkp.To:   vunhash(ksid),
 		},
 	}
 	result, err := vcursor.Execute(bq)
 	if err != nil {
-		return false, fmt.Errorf("lookupHash.Verify: %v", err)
+		return false, fmt.Errorf("lookup.Verify: %v", err)
 	}
 	if len(result.Rows) == 0 {
 		return false, nil
@@ -57,31 +122,47 @@ func (vind *lookupHash) Verify(vcursor planbuilder.VCursor, id interface{}, ksid
 }
 
 // Create creates an association between id and ksid by inserting a row in the vindex table.
-func (vind *lookupHash) Create(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) error {
+func (lkp *lookup) Create(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) error {
 	bq := &tproto.BoundQuery{
-		Sql: vind.ins,
+		Sql: lkp.ins,
 		BindVariables: map[string]interface{}{
-			vind.From: id,
-			vind.To:   vunhash(ksid),
+			lkp.From: id,
+			lkp.To:   vunhash(ksid),
 		},
 	}
 	if _, err := vcursor.Execute(bq); err != nil {
-		return fmt.Errorf("lookupHash.Create: %v", err)
+		return fmt.Errorf("lookup.Create: %v", err)
 	}
 	return nil
 }
 
-// Delete deletes the association between ids and ksid.
-func (vind *lookupHash) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid key.KeyspaceId) error {
+// Generate generates an id and associates the ksid to the new id.
+func (lkp *lookup) Generate(vcursor planbuilder.VCursor, ksid key.KeyspaceId) (id int64, err error) {
 	bq := &tproto.BoundQuery{
-		Sql: vind.del,
+		Sql: lkp.ins,
 		BindVariables: map[string]interface{}{
-			vind.From: ids,
-			vind.To:   vunhash(ksid),
+			lkp.From: nil,
+			lkp.To:   vunhash(ksid),
+		},
+	}
+	result, err := vcursor.Execute(bq)
+	if err != nil {
+		return 0, fmt.Errorf("lookup.Generate: %v", err)
+	}
+	return int64(result.InsertId), err
+}
+
+// Delete deletes the association between ids and ksid.
+func (lkp *lookup) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid key.KeyspaceId) error {
+	bq := &tproto.BoundQuery{
+		Sql: lkp.del,
+		BindVariables: map[string]interface{}{
+			lkp.From: ids,
+			lkp.To:   vunhash(ksid),
 		},
 	}
 	if _, err := vcursor.Execute(bq); err != nil {
-		return fmt.Errorf("lookupHash.Delete: %v", err)
+		return fmt.Errorf("lookup.Delete: %v", err)
 	}
 	return nil
 }

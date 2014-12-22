@@ -12,27 +12,28 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
-var lhm *LookupHashMulti
+var lhm planbuilder.Vindex
 
 func init() {
-	h, err := NewLookupHashMulti(map[string]interface{}{"Table": "t", "From": "fromc", "To": "toc"})
+	h, err := planbuilder.CreateVindex("lookup_hash", map[string]interface{}{"Table": "t", "From": "fromc", "To": "toc"})
 	if err != nil {
 		panic(err)
 	}
-	lhm = h.(*LookupHashMulti)
+	lhm = h
 }
 
-func TestLookupHashMultiCost(t *testing.T) {
+func TestLookupHashCost(t *testing.T) {
 	if lhm.Cost() != 20 {
 		t.Errorf("Cost(): %d, want 20", lhm.Cost())
 	}
 }
 
-func TestLookupHashMultiMap(t *testing.T) {
+func TestLookupHashMap(t *testing.T) {
 	vc := &vcursor{numRows: 2}
-	got, err := lhm.Map(vc, []interface{}{1, int32(2)})
+	got, err := lhm.(planbuilder.NonUnique).Map(vc, []interface{}{1, int32(2)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -48,16 +49,16 @@ func TestLookupHashMultiMap(t *testing.T) {
 	}
 }
 
-func TestLookupHashMultiMapFail(t *testing.T) {
+func TestLookupHashMapFail(t *testing.T) {
 	vc := &vcursor{mustFail: true}
-	_, err := lhm.Map(vc, []interface{}{1, int32(2)})
-	want := "LookupHashMulti.Map: Execute failed"
+	_, err := lhm.(planbuilder.NonUnique).Map(vc, []interface{}{1, int32(2)})
+	want := "lookup.Map: Execute failed"
 	if err == nil || err.Error() != want {
 		t.Errorf("lhm.Map: %v, want %v", err, want)
 	}
 }
 
-func TestLookupHashMultiMapBadData(t *testing.T) {
+func TestLookupHashMapBadData(t *testing.T) {
 	result := &mproto.QueryResult{
 		Fields: []mproto.Field{{
 			Type: mproto.VT_INT24,
@@ -70,8 +71,8 @@ func TestLookupHashMultiMapBadData(t *testing.T) {
 		RowsAffected: 1,
 	}
 	vc := &vcursor{result: result}
-	_, err := lhm.Map(vc, []interface{}{1, int32(2)})
-	want := `LookupHashMulti.Map: strconv.ParseUint: parsing "1.1": invalid syntax`
+	_, err := lhm.(planbuilder.NonUnique).Map(vc, []interface{}{1, int32(2)})
+	want := `lookup.Map: strconv.ParseUint: parsing "1.1": invalid syntax`
 	if err == nil || err.Error() != want {
 		t.Errorf("lhm.Map: %v, want %v", err, want)
 	}
@@ -80,14 +81,14 @@ func TestLookupHashMultiMapBadData(t *testing.T) {
 		Type: mproto.VT_FLOAT,
 	}}
 	vc = &vcursor{result: result}
-	_, err = lhm.Map(vc, []interface{}{1, int32(2)})
-	want = `LookupHashMulti.Map: unexpected type for 1.1: float64`
+	_, err = lhm.(planbuilder.NonUnique).Map(vc, []interface{}{1, int32(2)})
+	want = `lookup.Map: unexpected type for 1.1: float64`
 	if err == nil || err.Error() != want {
 		t.Errorf("lhm.Map: %v, want %v", err, want)
 	}
 }
 
-func TestLookupHashMultiVerify(t *testing.T) {
+func TestLookupHashVerify(t *testing.T) {
 	vc := &vcursor{numRows: 1}
 	success, err := lhm.Verify(vc, 1, "\x16k@\xb4J\xbaK\xd6")
 	if err != nil {
@@ -98,7 +99,7 @@ func TestLookupHashMultiVerify(t *testing.T) {
 	}
 }
 
-func TestLookupHashMultiVerifyNomatch(t *testing.T) {
+func TestLookupHashVerifyNomatch(t *testing.T) {
 	vc := &vcursor{}
 	success, err := lhm.Verify(vc, 1, "\x16k@\xb4J\xbaK\xd6")
 	if err != nil {
@@ -109,18 +110,18 @@ func TestLookupHashMultiVerifyNomatch(t *testing.T) {
 	}
 }
 
-func TestLookupHashMultiVerifyFail(t *testing.T) {
+func TestLookupHashVerifyFail(t *testing.T) {
 	vc := &vcursor{mustFail: true}
 	_, err := lhm.Verify(vc, 1, "\x16k@\xb4J\xbaK\xd6")
-	want := "lookupHash.Verify: Execute failed"
+	want := "lookup.Verify: Execute failed"
 	if err == nil || err.Error() != want {
 		t.Errorf("lhm.Verify: %v, want %v", err, want)
 	}
 }
 
-func TestLookupHashMultiCreate(t *testing.T) {
+func TestLookupHashCreate(t *testing.T) {
 	vc := &vcursor{}
-	err := lhm.Create(vc, 1, "\x16k@\xb4J\xbaK\xd6")
+	err := lhm.(planbuilder.Lookup).Create(vc, 1, "\x16k@\xb4J\xbaK\xd6")
 	if err != nil {
 		t.Error(err)
 	}
@@ -136,18 +137,25 @@ func TestLookupHashMultiCreate(t *testing.T) {
 	}
 }
 
-func TestLookupHashMultiCreateFail(t *testing.T) {
+func TestLookupHashCreateFail(t *testing.T) {
 	vc := &vcursor{mustFail: true}
-	err := lhm.Create(vc, 1, "\x16k@\xb4J\xbaK\xd6")
-	want := "lookupHash.Create: Execute failed"
+	err := lhm.(planbuilder.Lookup).Create(vc, 1, "\x16k@\xb4J\xbaK\xd6")
+	want := "lookup.Create: Execute failed"
 	if err == nil || err.Error() != want {
 		t.Errorf("lhm.Create: %v, want %v", err, want)
 	}
 }
 
-func TestLookupHashMultiDelete(t *testing.T) {
+func TestLookupHashGenerate(t *testing.T) {
+	_, ok := lhm.(planbuilder.LookupGenerator)
+	if ok {
+		t.Errorf("lhm.(planbuilder.LookupGenerator): true, want false")
+	}
+}
+
+func TestLookupHashDelete(t *testing.T) {
 	vc := &vcursor{}
-	err := lhm.Delete(vc, []interface{}{1}, "\x16k@\xb4J\xbaK\xd6")
+	err := lhm.(planbuilder.Lookup).Delete(vc, []interface{}{1}, "\x16k@\xb4J\xbaK\xd6")
 	if err != nil {
 		t.Error(err)
 	}
@@ -163,10 +171,10 @@ func TestLookupHashMultiDelete(t *testing.T) {
 	}
 }
 
-func TestLookupHashMultiDeleteFail(t *testing.T) {
+func TestLookupHashDeleteFail(t *testing.T) {
 	vc := &vcursor{mustFail: true}
-	err := lhm.Delete(vc, []interface{}{1}, "\x16k@\xb4J\xbaK\xd6")
-	want := "lookupHash.Delete: Execute failed"
+	err := lhm.(planbuilder.Lookup).Delete(vc, []interface{}{1}, "\x16k@\xb4J\xbaK\xd6")
+	want := "lookup.Delete: Execute failed"
 	if err == nil || err.Error() != want {
 		t.Errorf("lhm.Create: %v, want %v", err, want)
 	}
