@@ -9,10 +9,6 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
-var (
-	_ planbuilder.Unique = (*LookupHashUnique)(nil)
-)
-
 // LookupHashUniqueAuto defines a vindex that uses a lookup table.
 // The table is expected to define the id column as unique. It's
 // Unique and a Lookup. It's also a LookupGenerator, because it

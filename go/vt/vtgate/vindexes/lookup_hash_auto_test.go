@@ -52,7 +52,7 @@ func TestLookupHashAutoMap(t *testing.T) {
 func TestLookupHashAutoMapFail(t *testing.T) {
 	vc := &vcursor{mustFail: true}
 	_, err := lha.(planbuilder.NonUnique).Map(vc, []interface{}{1, int32(2)})
-	want := "lookup.Map: Execute failed"
+	want := "lookup.Map: execute failed"
 	if err == nil || err.Error() != want {
 		t.Errorf("lha.Map: %v, want %v", err, want)
 	}
@@ -110,15 +110,6 @@ func TestLookupHashAutoVerifyNomatch(t *testing.T) {
 	}
 }
 
-func TestLookupHashAutoVerifyFail(t *testing.T) {
-	vc := &vcursor{mustFail: true}
-	_, err := lha.Verify(vc, 1, "\x16k@\xb4J\xbaK\xd6")
-	want := "lookup.Verify: Execute failed"
-	if err == nil || err.Error() != want {
-		t.Errorf("lha.Verify: %v, want %v", err, want)
-	}
-}
-
 func TestLookupHashAutoCreate(t *testing.T) {
 	vc := &vcursor{}
 	err := lha.(planbuilder.Lookup).Create(vc, 1, "\x16k@\xb4J\xbaK\xd6")
@@ -134,15 +125,6 @@ func TestLookupHashAutoCreate(t *testing.T) {
 	}
 	if !reflect.DeepEqual(vc.query, wantQuery) {
 		t.Errorf("vc.query = %#v, want %#v", vc.query, wantQuery)
-	}
-}
-
-func TestLookupHashAutoCreateFail(t *testing.T) {
-	vc := &vcursor{mustFail: true}
-	err := lha.(planbuilder.Lookup).Create(vc, 1, "\x16k@\xb4J\xbaK\xd6")
-	want := "lookup.Create: Execute failed"
-	if err == nil || err.Error() != want {
-		t.Errorf("lha.Create: %v, want %v", err, want)
 	}
 }
 
@@ -167,6 +149,13 @@ func TestLookupHashAutoGenerate(t *testing.T) {
 	}
 }
 
+func TestLookupHashAutoReverse(t *testing.T) {
+	_, ok := lha.(planbuilder.Reversible)
+	if ok {
+		t.Errorf("lha.(planbuilder.Reversible): true, want false")
+	}
+}
+
 func TestLookupHashAutoDelete(t *testing.T) {
 	vc := &vcursor{}
 	err := lha.(planbuilder.Lookup).Delete(vc, []interface{}{1}, "\x16k@\xb4J\xbaK\xd6")
@@ -182,14 +171,5 @@ func TestLookupHashAutoDelete(t *testing.T) {
 	}
 	if !reflect.DeepEqual(vc.query, wantQuery) {
 		t.Errorf("vc.query = %#v, want %#v", vc.query, wantQuery)
-	}
-}
-
-func TestLookupHashAutoDeleteFail(t *testing.T) {
-	vc := &vcursor{mustFail: true}
-	err := lha.(planbuilder.Lookup).Delete(vc, []interface{}{1}, "\x16k@\xb4J\xbaK\xd6")
-	want := "lookup.Delete: Execute failed"
-	if err == nil || err.Error() != want {
-		t.Errorf("lha.Create: %v, want %v", err, want)
 	}
 }

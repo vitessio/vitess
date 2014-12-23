@@ -61,7 +61,7 @@ func TestLookupHashUniqueAutoMapNomatch(t *testing.T) {
 func TestLookupHashUniqueAutoMapFail(t *testing.T) {
 	vc := &vcursor{mustFail: true}
 	_, err := lhua.(planbuilder.Unique).Map(vc, []interface{}{1, int32(2)})
-	want := "lookup.Map: Execute failed"
+	want := "lookup.Map: execute failed"
 	if err == nil || err.Error() != want {
 		t.Errorf("lhua.Map: %v, want %v", err, want)
 	}
@@ -128,8 +128,15 @@ func TestLookupHashUniqueAutoVerifyNomatch(t *testing.T) {
 
 func TestLookupHashUniqueAutoVerifyFail(t *testing.T) {
 	vc := &vcursor{mustFail: true}
+
 	_, err := lhua.Verify(vc, 1, "\x16k@\xb4J\xbaK\xd6")
-	want := "lookup.Verify: Execute failed"
+	want := "lookup.Verify: execute failed"
+	if err == nil || err.Error() != want {
+		t.Errorf("lhua.Verify: %v, want %v", err, want)
+	}
+
+	_, err = lhua.Verify(vc, 1, "aa")
+	want = "lookup.Verify: invalid keyspace id: 6161"
 	if err == nil || err.Error() != want {
 		t.Errorf("lhua.Verify: %v, want %v", err, want)
 	}
@@ -155,8 +162,15 @@ func TestLookupHashUniqueAutoCreate(t *testing.T) {
 
 func TestLookupHashUniqueAutoCreateFail(t *testing.T) {
 	vc := &vcursor{mustFail: true}
+
 	err := lhua.(planbuilder.Lookup).Create(vc, 1, "\x16k@\xb4J\xbaK\xd6")
-	want := "lookup.Create: Execute failed"
+	want := "lookup.Create: execute failed"
+	if err == nil || err.Error() != want {
+		t.Errorf("lhua.Create: %v, want %v", err, want)
+	}
+
+	err = lhua.(planbuilder.Lookup).Create(vc, 1, "aa")
+	want = "lookup.Create: invalid keyspace id: 6161"
 	if err == nil || err.Error() != want {
 		t.Errorf("lhua.Create: %v, want %v", err, want)
 	}
@@ -185,10 +199,24 @@ func TestLookupHashUniqueAutoGenerate(t *testing.T) {
 
 func TestLookupHashUniqueAutoGenerateFail(t *testing.T) {
 	vc := &vcursor{mustFail: true}
+
 	_, err := lhua.(planbuilder.LookupGenerator).Generate(vc, "\x16k@\xb4J\xbaK\xd6")
-	want := "lookup.Generate: Execute failed"
+	want := "lookup.Generate: execute failed"
 	if err == nil || err.Error() != want {
 		t.Errorf("lhua.Generate: %v, want %v", err, want)
+	}
+
+	_, err = lhua.(planbuilder.LookupGenerator).Generate(vc, "aa")
+	want = "lookup.Generate: invalid keyspace id: 6161"
+	if err == nil || err.Error() != want {
+		t.Errorf("lhua.Generate: %v, want %v", err, want)
+	}
+}
+
+func TestLookupHashUniqueAutoReverse(t *testing.T) {
+	_, ok := lhua.(planbuilder.Reversible)
+	if ok {
+		t.Errorf("lhua.(planbuilder.Reversible): true, want false")
 	}
 }
 
@@ -212,8 +240,15 @@ func TestLookupHashUniqueAutoDelete(t *testing.T) {
 
 func TestLookupHashUniqueAutoDeleteFail(t *testing.T) {
 	vc := &vcursor{mustFail: true}
+
 	err := lhua.(planbuilder.Lookup).Delete(vc, []interface{}{1}, "\x16k@\xb4J\xbaK\xd6")
-	want := "lookup.Delete: Execute failed"
+	want := "lookup.Delete: execute failed"
+	if err == nil || err.Error() != want {
+		t.Errorf("lhua.Delete: %v, want %v", err, want)
+	}
+
+	err = lhua.(planbuilder.Lookup).Delete(vc, []interface{}{1}, "aa")
+	want = "lookup.Delete: invalid keyspace id: 6161"
 	if err == nil || err.Error() != want {
 		t.Errorf("lhua.Delete: %v, want %v", err, want)
 	}

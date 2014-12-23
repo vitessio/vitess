@@ -104,11 +104,15 @@ func (lkp *lookup) Map2(vcursor planbuilder.VCursor, ids []interface{}) ([][]key
 
 // Verify returns true if id maps to ksid.
 func (lkp *lookup) Verify(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) (bool, error) {
+	val, err := vunhash(ksid)
+	if err != nil {
+		return false, fmt.Errorf("lookup.Verify: %v", err)
+	}
 	bq := &tproto.BoundQuery{
 		Sql: lkp.ver,
 		BindVariables: map[string]interface{}{
 			lkp.From: id,
-			lkp.To:   vunhash(ksid),
+			lkp.To:   val,
 		},
 	}
 	result, err := vcursor.Execute(bq)
@@ -123,11 +127,15 @@ func (lkp *lookup) Verify(vcursor planbuilder.VCursor, id interface{}, ksid key.
 
 // Create creates an association between id and ksid by inserting a row in the vindex table.
 func (lkp *lookup) Create(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) error {
+	val, err := vunhash(ksid)
+	if err != nil {
+		return fmt.Errorf("lookup.Create: %v", err)
+	}
 	bq := &tproto.BoundQuery{
 		Sql: lkp.ins,
 		BindVariables: map[string]interface{}{
 			lkp.From: id,
-			lkp.To:   vunhash(ksid),
+			lkp.To:   val,
 		},
 	}
 	if _, err := vcursor.Execute(bq); err != nil {
@@ -138,11 +146,15 @@ func (lkp *lookup) Create(vcursor planbuilder.VCursor, id interface{}, ksid key.
 
 // Generate generates an id and associates the ksid to the new id.
 func (lkp *lookup) Generate(vcursor planbuilder.VCursor, ksid key.KeyspaceId) (id int64, err error) {
+	val, err := vunhash(ksid)
+	if err != nil {
+		return 0, fmt.Errorf("lookup.Generate: %v", err)
+	}
 	bq := &tproto.BoundQuery{
 		Sql: lkp.ins,
 		BindVariables: map[string]interface{}{
 			lkp.From: nil,
-			lkp.To:   vunhash(ksid),
+			lkp.To:   val,
 		},
 	}
 	result, err := vcursor.Execute(bq)
@@ -154,11 +166,15 @@ func (lkp *lookup) Generate(vcursor planbuilder.VCursor, ksid key.KeyspaceId) (i
 
 // Delete deletes the association between ids and ksid.
 func (lkp *lookup) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid key.KeyspaceId) error {
+	val, err := vunhash(ksid)
+	if err != nil {
+		return fmt.Errorf("lookup.Delete: %v", err)
+	}
 	bq := &tproto.BoundQuery{
 		Sql: lkp.del,
 		BindVariables: map[string]interface{}{
 			lkp.From: ids,
-			lkp.To:   vunhash(ksid),
+			lkp.To:   val,
 		},
 	}
 	if _, err := vcursor.Execute(bq); err != nil {
