@@ -11,7 +11,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"sync"
 	"time"
 
 	"golang.org/x/net/context"
@@ -219,9 +218,7 @@ type httpRpcHandler struct {
 
 // ServeHTTP implements http.Handler's ServeHTTP
 func (h *httpRpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
-	codec := h.cFactory(NewBufferedConnection(
-		&httpReadWriteCloser{rw: c, req: req},
-	))
+	codec := h.cFactory(&httpReadWriteCloser{rw: c, req: req})
 
 	var ctx context.Context
 
@@ -231,9 +228,7 @@ func (h *httpRpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 		ctx = proto.NewContext(req.RemoteAddr)
 	}
 
-	h.server.ServeCodecWithContextOnce(
-		new(sync.Mutex),
-		false,
+	h.server.ServeRequestWithContext(
 		ctx,
 		codec,
 	)
