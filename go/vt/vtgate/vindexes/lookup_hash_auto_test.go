@@ -15,59 +15,50 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
-var lhu planbuilder.Vindex
+var lha planbuilder.Vindex
 
 func init() {
-	h, err := planbuilder.CreateVindex("lookup_hash_unique", map[string]interface{}{"Table": "t", "From": "fromc", "To": "toc"})
+	h, err := planbuilder.CreateVindex("lookup_hash_autoinc", map[string]interface{}{"Table": "t", "From": "fromc", "To": "toc"})
 	if err != nil {
 		panic(err)
 	}
-	lhu = h
+	lha = h
 }
 
-func TestLookupHashUniqueCost(t *testing.T) {
-	if lhu.Cost() != 10 {
-		t.Errorf("Cost(): %d, want 10", lhu.Cost())
+func TestLookupHashAutoCost(t *testing.T) {
+	if lha.Cost() != 20 {
+		t.Errorf("Cost(): %d, want 20", lha.Cost())
 	}
 }
 
-func TestLookupHashUniqueMap(t *testing.T) {
-	vc := &vcursor{numRows: 1}
-	got, err := lhu.(planbuilder.Unique).Map(vc, []interface{}{1, int32(2)})
+func TestLookupHashAutoMap(t *testing.T) {
+	vc := &vcursor{numRows: 2}
+	got, err := lha.(planbuilder.NonUnique).Map(vc, []interface{}{1, int32(2)})
 	if err != nil {
 		t.Error(err)
 	}
-	want := []key.KeyspaceId{
+	want := [][]key.KeyspaceId{{
 		"\x16k@\xb4J\xbaK\xd6",
+		"\x06\xe7\xea\"Βp\x8f",
+	}, {
 		"\x16k@\xb4J\xbaK\xd6",
-	}
+		"\x06\xe7\xea\"Βp\x8f",
+	}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
 }
 
-func TestLookupHashUniqueMapNomatch(t *testing.T) {
-	vc := &vcursor{}
-	got, err := lhu.(planbuilder.Unique).Map(vc, []interface{}{1, int32(2)})
-	if err != nil {
-		t.Error(err)
-	}
-	want := []key.KeyspaceId{"", ""}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Map(): %#v, want %+v", got, want)
-	}
-}
-
-func TestLookupHashUniqueMapFail(t *testing.T) {
+func TestLookupHashAutoMapFail(t *testing.T) {
 	vc := &vcursor{mustFail: true}
-	_, err := lhu.(planbuilder.Unique).Map(vc, []interface{}{1, int32(2)})
+	_, err := lha.(planbuilder.NonUnique).Map(vc, []interface{}{1, int32(2)})
 	want := "lookup.Map: Execute failed"
 	if err == nil || err.Error() != want {
-		t.Errorf("lhu.Map: %v, want %v", err, want)
+		t.Errorf("lha.Map: %v, want %v", err, want)
 	}
 }
 
-func TestLookupHashUniqueMapBadData(t *testing.T) {
+func TestLookupHashAutoMapBadData(t *testing.T) {
 	result := &mproto.QueryResult{
 		Fields: []mproto.Field{{
 			Type: mproto.VT_INT24,
@@ -80,33 +71,26 @@ func TestLookupHashUniqueMapBadData(t *testing.T) {
 		RowsAffected: 1,
 	}
 	vc := &vcursor{result: result}
-	_, err := lhu.(planbuilder.Unique).Map(vc, []interface{}{1, int32(2)})
+	_, err := lha.(planbuilder.NonUnique).Map(vc, []interface{}{1, int32(2)})
 	want := `lookup.Map: strconv.ParseUint: parsing "1.1": invalid syntax`
 	if err == nil || err.Error() != want {
-		t.Errorf("lhu.Map: %v, want %v", err, want)
+		t.Errorf("lha.Map: %v, want %v", err, want)
 	}
 
 	result.Fields = []mproto.Field{{
 		Type: mproto.VT_FLOAT,
 	}}
 	vc = &vcursor{result: result}
-	_, err = lhu.(planbuilder.Unique).Map(vc, []interface{}{1, int32(2)})
+	_, err = lha.(planbuilder.NonUnique).Map(vc, []interface{}{1, int32(2)})
 	want = `lookup.Map: unexpected type for 1.1: float64`
 	if err == nil || err.Error() != want {
-		t.Errorf("lhu.Map: %v, want %v", err, want)
-	}
-
-	vc = &vcursor{numRows: 2}
-	_, err = lhu.(planbuilder.Unique).Map(vc, []interface{}{1, int32(2)})
-	want = `lookup.Map: unexpected multiple results from vindex t: 1`
-	if err == nil || err.Error() != want {
-		t.Errorf("lhu.Map: %v, want %v", err, want)
+		t.Errorf("lha.Map: %v, want %v", err, want)
 	}
 }
 
-func TestLookupHashUniqueVerify(t *testing.T) {
+func TestLookupHashAutoVerify(t *testing.T) {
 	vc := &vcursor{numRows: 1}
-	success, err := lhu.Verify(vc, 1, "\x16k@\xb4J\xbaK\xd6")
+	success, err := lha.Verify(vc, 1, "\x16k@\xb4J\xbaK\xd6")
 	if err != nil {
 		t.Error(err)
 	}
@@ -115,9 +99,9 @@ func TestLookupHashUniqueVerify(t *testing.T) {
 	}
 }
 
-func TestLookupHashUniqueVerifyNomatch(t *testing.T) {
+func TestLookupHashAutoVerifyNomatch(t *testing.T) {
 	vc := &vcursor{}
-	success, err := lhu.Verify(vc, 1, "\x16k@\xb4J\xbaK\xd6")
+	success, err := lha.Verify(vc, 1, "\x16k@\xb4J\xbaK\xd6")
 	if err != nil {
 		t.Error(err)
 	}
@@ -126,18 +110,18 @@ func TestLookupHashUniqueVerifyNomatch(t *testing.T) {
 	}
 }
 
-func TestLookupHashUniqueVerifyFail(t *testing.T) {
+func TestLookupHashAutoVerifyFail(t *testing.T) {
 	vc := &vcursor{mustFail: true}
-	_, err := lhu.Verify(vc, 1, "\x16k@\xb4J\xbaK\xd6")
+	_, err := lha.Verify(vc, 1, "\x16k@\xb4J\xbaK\xd6")
 	want := "lookup.Verify: Execute failed"
 	if err == nil || err.Error() != want {
-		t.Errorf("lhu.Verify: %v, want %v", err, want)
+		t.Errorf("lha.Verify: %v, want %v", err, want)
 	}
 }
 
-func TestLookupHashUniqueCreate(t *testing.T) {
+func TestLookupHashAutoCreate(t *testing.T) {
 	vc := &vcursor{}
-	err := lhu.(planbuilder.Lookup).Create(vc, 1, "\x16k@\xb4J\xbaK\xd6")
+	err := lha.(planbuilder.Lookup).Create(vc, 1, "\x16k@\xb4J\xbaK\xd6")
 	if err != nil {
 		t.Error(err)
 	}
@@ -153,25 +137,39 @@ func TestLookupHashUniqueCreate(t *testing.T) {
 	}
 }
 
-func TestLookupHashUniqueCreateFail(t *testing.T) {
+func TestLookupHashAutoCreateFail(t *testing.T) {
 	vc := &vcursor{mustFail: true}
-	err := lhu.(planbuilder.Lookup).Create(vc, 1, "\x16k@\xb4J\xbaK\xd6")
+	err := lha.(planbuilder.Lookup).Create(vc, 1, "\x16k@\xb4J\xbaK\xd6")
 	want := "lookup.Create: Execute failed"
 	if err == nil || err.Error() != want {
-		t.Errorf("lhu.Create: %v, want %v", err, want)
+		t.Errorf("lha.Create: %v, want %v", err, want)
 	}
 }
 
-func TestLookupHashUniqueGenerate(t *testing.T) {
-	_, ok := lhu.(planbuilder.LookupGenerator)
-	if ok {
-		t.Errorf("lhu.(planbuilder.LookupGenerator): true, want false")
-	}
-}
-
-func TestLookupHashUniqueDelete(t *testing.T) {
+func TestLookupHashAutoGenerate(t *testing.T) {
 	vc := &vcursor{}
-	err := lhu.(planbuilder.Lookup).Delete(vc, []interface{}{1}, "\x16k@\xb4J\xbaK\xd6")
+	got, err := lha.(planbuilder.LookupGenerator).Generate(vc, "\x16k@\xb4J\xbaK\xd6")
+	if err != nil {
+		t.Error(err)
+	}
+	if got != 1 {
+		t.Errorf("Generate(): %+v, want 1", got)
+	}
+	wantQuery := &tproto.BoundQuery{
+		Sql: "insert into t(fromc, toc) values(:fromc, :toc)",
+		BindVariables: map[string]interface{}{
+			"fromc": nil,
+			"toc":   int64(1),
+		},
+	}
+	if !reflect.DeepEqual(vc.query, wantQuery) {
+		t.Errorf("vc.query = %#v, want %#v", vc.query, wantQuery)
+	}
+}
+
+func TestLookupHashAutoDelete(t *testing.T) {
+	vc := &vcursor{}
+	err := lha.(planbuilder.Lookup).Delete(vc, []interface{}{1}, "\x16k@\xb4J\xbaK\xd6")
 	if err != nil {
 		t.Error(err)
 	}
@@ -187,11 +185,11 @@ func TestLookupHashUniqueDelete(t *testing.T) {
 	}
 }
 
-func TestLookupHashUniqueDeleteFail(t *testing.T) {
+func TestLookupHashAutoDeleteFail(t *testing.T) {
 	vc := &vcursor{mustFail: true}
-	err := lhu.(planbuilder.Lookup).Delete(vc, []interface{}{1}, "\x16k@\xb4J\xbaK\xd6")
+	err := lha.(planbuilder.Lookup).Delete(vc, []interface{}{1}, "\x16k@\xb4J\xbaK\xd6")
 	want := "lookup.Delete: Execute failed"
 	if err == nil || err.Error() != want {
-		t.Errorf("lhu.Delete: %v, want %v", err, want)
+		t.Errorf("lha.Create: %v, want %v", err, want)
 	}
 }

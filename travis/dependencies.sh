@@ -5,7 +5,17 @@ set -e
 sudo apt-get install python-software-properties
 sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xcbcb082a1bb943db
 sudo add-apt-repository 'deb http://ftp.utexas.edu/mariadb/repo/10.0/ubuntu precise main'
+
+# Add New Relic repo
+sudo sh -c 'echo deb http://apt.newrelic.com/debian/ newrelic non-free >> /etc/apt/sources.list.d/newrelic.list'
+wget -O- https://download.newrelic.com/548C16BF.gpg | sudo apt-key add -
+
 sudo apt-get update
+
+# Install New relic to monitor perf metrics
+sudo apt-get install newrelic-sysmond
+sudo nrsysmond-config --set license_key=$NEWRELIC_LICENSE_KEY
+sudo /etc/init.d/newrelic-sysmond start
 
 # Remove pre-installed mysql
 sudo apt-get purge mysql* mariadb*

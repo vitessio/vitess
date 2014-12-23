@@ -86,7 +86,7 @@ schema = '''{
       "Sharded": true,
       "Vindexes": {
         "user_index": {
-          "Type": "hash",
+          "Type": "hash_autoinc",
           "Params": {
             "Table": "vt_user_idx",
             "Column": "id"
@@ -94,7 +94,7 @@ schema = '''{
           "Owner": "vt_user"
         },
         "name_user2_map": {
-          "Type": "lookup_hash_multi",
+          "Type": "lookup_hash",
           "Params": {
             "Table": "name_user2_map",
             "From": "name",
@@ -103,7 +103,7 @@ schema = '''{
           "Owner": "vt_user2"
         },
         "music_user_map": {
-          "Type": "lookup_hash_unique",
+          "Type": "lookup_hash_unique_autoinc",
           "Params": {
             "Table": "music_user_map",
             "From": "music_id",

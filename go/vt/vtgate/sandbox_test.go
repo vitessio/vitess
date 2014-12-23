@@ -323,9 +323,8 @@ type sandboxConn struct {
 	RollbackCount sync2.AtomicInt64
 	CloseCount    sync2.AtomicInt64
 
-	// BindVars & Queries store the requests received.
-	BindVars []map[string]interface{}
-	Queries  []string
+	// Queries stores the requests received.
+	Queries []tproto.BoundQuery
 
 	// results specifies the results to be returned.
 	// They're consumed as results are returned. If there are
@@ -377,8 +376,10 @@ func (sbc *sandboxConn) Execute(context context.Context, query string, bindVars 
 	for k, v := range bindVars {
 		bv[k] = v
 	}
-	sbc.BindVars = append(sbc.BindVars, bv)
-	sbc.Queries = append(sbc.Queries, query)
+	sbc.Queries = append(sbc.Queries, tproto.BoundQuery{
+		Sql:           query,
+		BindVariables: bv,
+	})
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
@@ -410,8 +411,10 @@ func (sbc *sandboxConn) StreamExecute(context context.Context, query string, bin
 	for k, v := range bindVars {
 		bv[k] = v
 	}
-	sbc.BindVars = append(sbc.BindVars, bv)
-	sbc.Queries = append(sbc.Queries, query)
+	sbc.Queries = append(sbc.Queries, tproto.BoundQuery{
+		Sql:           query,
+		BindVariables: bv,
+	})
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}

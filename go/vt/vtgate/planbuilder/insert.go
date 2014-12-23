@@ -83,7 +83,7 @@ func buildIndexPlan(ins *sqlparser.Insert, tablename string, colVindex *ColVinde
 	row := ins.Rows.(sqlparser.Values)[0].(sqlparser.ValTuple)
 	val, err := asInterface(row[pos])
 	if err != nil {
-		return fmt.Errorf("could not convert val: %s, pos: %d", row[pos], pos)
+		return fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
 	}
 	plan.Values = append(plan.Values.([]interface{}), val)
 	row[pos] = sqlparser.ValArg([]byte(fmt.Sprintf(":_%s", colVindex.Col)))

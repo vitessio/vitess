@@ -77,12 +77,16 @@ site_integration_test_files = \
 # - medium: 30 secs - 1 min
 # - large: over 1 min
 small_integration_test_files = \
+	initial_sharding.py \
+	initial_sharding_bytes.py \
+	vertical_split.py \
+	vertical_split_vtgate.py \
+	schema.py \
+	keyspace_test.py \
 	keyrange_test.py \
 	mysqlctl.py \
 	sharded.py \
-	vertical_split.py \
 	secure.py \
-	vertical_split_vtgate.py \
 	binlog.py \
 	clone.py
 
@@ -101,10 +105,6 @@ large_integration_test_files = \
 ci_skip_integration_test_files = \
 	resharding_bytes.py \
 	resharding.py \
-	schema.py \
-	initial_sharding_bytes.py \
-	initial_sharding.py \
-	keyspace_test.py \
 	update_stream.py
 
 .ONESHELL:

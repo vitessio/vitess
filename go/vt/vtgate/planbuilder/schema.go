@@ -5,7 +5,6 @@
 package planbuilder
 
 import (
-	"encoding/json"
 	"fmt"
 	"sort"
 
@@ -16,14 +15,6 @@ import (
 // used for building routing plans.
 type Schema struct {
 	Tables map[string]*Table
-}
-
-func (schema *Schema) String() string {
-	b, err := json.Marshal(schema)
-	if err != nil {
-		return err.Error()
-	}
-	return string(b)
 }
 
 // Table represnts a table in Schema.
@@ -60,7 +51,7 @@ func BuildSchema(source *SchemaFormal) (schema *Schema, err error) {
 		}
 		vindexes := make(map[string]Vindex)
 		for vname, vindexInfo := range ks.Vindexes {
-			vindex, err := createVindex(vindexInfo.Type, vindexInfo.Params)
+			vindex, err := CreateVindex(vindexInfo.Type, vindexInfo.Params)
 			if err != nil {
 				return nil, err
 			}
@@ -68,7 +59,7 @@ func BuildSchema(source *SchemaFormal) (schema *Schema, err error) {
 			case Unique:
 			case NonUnique:
 			default:
-				return nil, fmt.Errorf("index %s is needs to be Unique or NonUnique", vname)
+				return nil, fmt.Errorf("vindex %s needs to be Unique or NonUnique", vname)
 			}
 			vindexes[vname] = vindex
 		}
@@ -83,7 +74,7 @@ func BuildSchema(source *SchemaFormal) (schema *Schema, err error) {
 			for i, ind := range table.ColVindexes {
 				vindexInfo, ok := ks.Vindexes[ind.Name]
 				if !ok {
-					return nil, fmt.Errorf("index %s not found for table %s", ind.Name, tname)
+					return nil, fmt.Errorf("vindex %s not found for table %s", ind.Name, tname)
 				}
 				columnVindex := &ColVindex{
 					Col:    ind.Col,
