@@ -14,7 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver"
 )
 
-var customRule1 string = `[
+var customRule1 = `[
 				{
 					"Name": "r1",
 					"Description": "disallow bindvar 'asdfg'",
@@ -26,7 +26,7 @@ var customRule1 string = `[
 				}
 			]`
 
-var customRule2 string = `[
+var customRule2 = `[
                                 {
 					"Name": "r2",
 					"Description": "disallow insert on table test",
@@ -42,7 +42,7 @@ func TestFileCustomRule(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot write to rule file %s, err=%v", rulepath, err)
 	}
-	fcr := NewFileCustomRule(MinFilePollingSeconds)
+	fcr := NewFileCustomRule(MinFilePollingInterval)
 	err = fcr.Open(rulepath)
 	if err != nil {
 		t.Fatalf("Cannot open file custom rule service, err=%v", err)
@@ -53,7 +53,7 @@ func TestFileCustomRule(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot write r1 to rule file %s, err=%v", rulepath, err)
 	}
-	<-time.After(time.Second * MinFilePollingSeconds * 2)
+	<-time.After(time.Second * MinFilePollingInterval * 2)
 	qrs, _, err = fcr.GetRules()
 	if err != nil {
 		t.Fatalf("GetRules returns error: %v", err)
@@ -68,7 +68,7 @@ func TestFileCustomRule(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot write r2 to rule file %s, err=%v", rulepath, err)
 	}
-	<-time.After(time.Second * MinFilePollingSeconds * 2)
+	<-time.After(time.Second * MinFilePollingInterval * 2)
 	qrs, _, err = fcr.GetRules()
 	if err != nil {
 		t.Fatalf("GetRules returns error: %v", err)
@@ -84,7 +84,7 @@ func TestFileCustomRule(t *testing.T) {
 
 	// Test Error handling by removing the file
 	os.Remove(rulepath)
-	<-time.After(time.Second * MinFilePollingSeconds * 2)
+	<-time.After(time.Second * MinFilePollingInterval * 2)
 	qrs, _, err = fcr.GetRules()
 	if err != nil {
 		t.Fatalf("GetRules returns error: %v", err)

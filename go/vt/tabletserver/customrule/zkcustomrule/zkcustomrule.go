@@ -19,7 +19,7 @@ import (
 
 var (
 	// Actual ZkCustomRule object in charge of rule updates
-	zkCustomRule *ZkCustomRule = NewZkCustomRule(zk.NewMetaConn())
+	zkCustomRule = NewZkCustomRule(zk.NewMetaConn())
 	// Commandline flag to specify rule path in zookeeper
 	zkRulePath = flag.String("zkcustomrules", "", "zookeeper based custom rule path")
 )
@@ -103,7 +103,7 @@ func (zkcr *ZkCustomRule) refreshData(nodeRemoval bool) error {
 	return err
 }
 
-const SleepDuringZkFailure time.Duration = 30
+const sleepDuringZkFailure time.Duration = 30
 
 // poll polls the Zookeeper watch channel for data changes and refresh watch channel if watch channel is closed
 // by Zookeeper Go library on error conditions such as connection reset
@@ -118,13 +118,13 @@ func (zkcr *ZkCustomRule) poll() {
 				err := zkcr.refreshData(event.Type == zookeeper.EVENT_DELETED) // refresh rules
 				if err != nil {
 					// Sleep to avoid busy waiting during connection re-establishment
-					<-time.After(time.Second * SleepDuringZkFailure)
+					<-time.After(time.Second * sleepDuringZkFailure)
 				}
 			case zookeeper.EVENT_CLOSED:
 				err := zkcr.refreshWatch() // need to to get a new watch
 				if err != nil {
 					// Sleep to avoid busy waiting during connection re-establishment
-					<-time.After(time.Second * SleepDuringZkFailure)
+					<-time.After(time.Second * sleepDuringZkFailure)
 				}
 				zkcr.refreshData(false)
 			}
@@ -145,6 +145,7 @@ func (zkcr *ZkCustomRule) GetRules() (qrs *tabletserver.QueryRules, version int6
 	return zkcr.currentRuleSet.Copy(), zkcr.currentRuleSetVersion, nil
 }
 
+// ActivateZkCustomRules activates zookeeper dynamic custom rule mechanism
 func ActivateZkCustomRules() {
 	if *zkRulePath != "" {
 		tabletserver.QueryRuleSources.RegisterQueryRuleSource(ZkCustomRuleSource)

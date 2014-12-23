@@ -80,7 +80,7 @@ func TestQueryRuleInfoGetSetQueryRules(t *testing.T) {
 	qri.RegisterQueryRuleSource(customQueryRules)
 
 	// Test if we can get a QueryRules without a predefined rule set name
-	err, qrs := qri.GetRules("Foo")
+	qrs, err := qri.GetRules("Foo")
 	if err == nil {
 		t.Errorf("GetRules shouldn't succeed with 'Foo' as the rule set name")
 	}
@@ -112,7 +112,7 @@ func TestQueryRuleInfoGetSetQueryRules(t *testing.T) {
 	}
 
 	// Test if we can successfully retrive rules that've been set
-	err, qrs = qri.GetRules(keyrangeQueryRules)
+	qrs, err = qri.GetRules(keyrangeQueryRules)
 	if err != nil {
 		t.Errorf("GetRules failed to retrieve keyrangeQueryRules that has been set: %s", err)
 	}
@@ -120,7 +120,7 @@ func TestQueryRuleInfoGetSetQueryRules(t *testing.T) {
 		t.Errorf("keyrangeQueryRules retrived is %v, but the expected value should be %v", qrs, keyrangeRules)
 	}
 
-	err, qrs = qri.GetRules(blacklistQueryRules)
+	qrs, err = qri.GetRules(blacklistQueryRules)
 	if err != nil {
 		t.Errorf("GetRules failed to retrieve blacklistQueryRules that has been set: %s", err)
 	}
@@ -128,7 +128,7 @@ func TestQueryRuleInfoGetSetQueryRules(t *testing.T) {
 		t.Errorf("blacklistQueryRules retrived is %v, but the expected value should be %v", qrs, blacklistRules)
 	}
 
-	err, qrs = qri.GetRules(customQueryRules)
+	qrs, err = qri.GetRules(customQueryRules)
 	if err != nil {
 		t.Errorf("GetRules failed to retrieve customQueryRules that has been set: %s", err)
 	}

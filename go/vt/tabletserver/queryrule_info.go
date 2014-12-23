@@ -12,7 +12,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 )
 
-var QueryRuleSources *QueryRuleInfo = NewQueryRuleInfo()
+// Global variable to keep track of every registered query rule source
+var QueryRuleSources = NewQueryRuleInfo()
 
 // QueryRuleInfo is the maintainer of QueryRules from multiple sources
 type QueryRuleInfo struct {
@@ -22,6 +23,7 @@ type QueryRuleInfo struct {
 	queryRulesMap map[string]*QueryRules
 }
 
+// NewQueryRuleInfo returns an empty QueryRuleInfo object for use
 func NewQueryRuleInfo() *QueryRuleInfo {
 	qri := &QueryRuleInfo{
 		queryRulesMap: map[string]*QueryRules{},
@@ -55,13 +57,13 @@ func (qri *QueryRuleInfo) SetRules(ruleSource string, newRules *QueryRules) erro
 }
 
 // GetRules returns the corresponding QueryRules as designated by ruleSource parameter
-func (qri *QueryRuleInfo) GetRules(ruleSource string) (error, *QueryRules) {
+func (qri *QueryRuleInfo) GetRules(ruleSource string) (*QueryRules, error) {
 	qri.mu.Lock()
 	defer qri.mu.Unlock()
 	if ruleset, ok := qri.queryRulesMap[ruleSource]; ok {
-		return nil, ruleset.Copy()
+		return ruleset.Copy(), nil
 	}
-	return errors.New("Rule source identifier " + ruleSource + " is not valid"), NewQueryRules()
+	return NewQueryRules(), errors.New("Rule source identifier " + ruleSource + " is not valid")
 }
 
 // filterByPlan creates a new QueryRules by prefiltering on all query rules that are contained in internal

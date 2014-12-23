@@ -19,7 +19,7 @@ import (
 
 var (
 	// Actual FileCustomRule object in charge of rule updates
-	fileCustomRule *FileCustomRule = NewFileCustomRule(DefaultFilePollingSeconds)
+	fileCustomRule = NewFileCustomRule(DefaultFilePollingInterval)
 	// Commandline flag to specify rule path
 	fileRulePath = flag.String("filecustomrules", "", "file based custom rule path")
 )
@@ -36,10 +36,10 @@ type FileCustomRule struct {
 }
 
 // The minimum interval in seconds to poll the custom rule file
-const MinFilePollingSeconds time.Duration = 1
+const MinFilePollingInterval time.Duration = 1
 
 // The default interval in seconds to poll the custom rule file
-const DefaultFilePollingSeconds time.Duration = 10
+const DefaultFilePollingInterval time.Duration = 10
 
 // FileCustomRuleSource is the name of the file based custom rule source
 const FileCustomRuleSource string = "FILE_CUSTOM_RULE"
@@ -49,10 +49,10 @@ func NewFileCustomRule(pollingInterval time.Duration) (fcr *FileCustomRule) {
 	fcr = new(FileCustomRule)
 	fcr.path = ""
 	fcr.pollingInterval = pollingInterval
-	if pollingInterval < MinFilePollingSeconds {
+	if pollingInterval < MinFilePollingInterval {
 		log.Warningf("Cannot poll a query rule file at an interval of less than %v secs, falling back to default interval(%v s)",
-			MinFilePollingSeconds, DefaultFilePollingSeconds)
-		fcr.pollingInterval = DefaultFilePollingSeconds
+			MinFilePollingInterval, DefaultFilePollingInterval)
+		fcr.pollingInterval = DefaultFilePollingInterval
 	}
 	fcr.currentRuleSet = tabletserver.NewQueryRules()
 	fcr.finish = make(chan int, 1)
@@ -130,6 +130,7 @@ func (fcr *FileCustomRule) GetRules() (qrs *tabletserver.QueryRules, version int
 	return fcr.currentRuleSet.Copy(), fcr.currentRuleSetTimestamp, nil
 }
 
+// ActivateFileCustomRules activates file dynamic custom rule mechanism
 func ActivateFileCustomRules() {
 	if *fileRulePath != "" {
 		tabletserver.QueryRuleSources.RegisterQueryRuleSource(FileCustomRuleSource)

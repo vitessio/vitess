@@ -182,7 +182,7 @@ func GetSessionId() int64 {
 }
 
 // GetQueryRules is the tabletserver level API to get current query rules
-func GetQueryRules(ruleSource string) (error, *QueryRules) {
+func GetQueryRules(ruleSource string) (*QueryRules, error) {
 	return QueryRuleSources.GetRules(ruleSource)
 }
 
