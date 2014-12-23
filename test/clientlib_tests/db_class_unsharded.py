@@ -1,11 +1,7 @@
-"""DB Classes for testing client library.
+"""DB Classes for tables in unsharded keyspace.
 
-These classes are used for testing various types of scenarios like
-- sharding schemes
-- schema types
-- lookup
-
-This module contains the schema and class definitions.
+This provides examples of unsharded db class
+and its related methods.
 """
 
 import topo_schema

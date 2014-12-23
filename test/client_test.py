@@ -256,6 +256,52 @@ class TestUnshardedTable(unittest.TestCase):
       self.assertEqual(len(rows), 0, "wrong number of rows fetched")
 
 
+class TestUnshardedTable(unittest.TestCase):
+
+  def setUp(self):
+    self.vtgate_addrs = {"_vt": ["localhost:%s" % (vtgate_port),]}
+    self.dc = database_context.DatabaseContext(self.vtgate_addrs)
+    with database_context.WriteTransaction(self.dc) as context:
+      for x in xrange(10):
+        db_class_unsharded.VtUnsharded.insert(context.get_cursor(),
+                                              id=x, msg=str(x))
+
+  def tearDown(self):
+    _delete_all("KS_UNSHARDED", "0", 'vt_unsharded')
+
+  def test_read(self):
+    with database_context.ReadFromMaster(self.dc) as context:
+      rows = db_class_unsharded.VtUnsharded.select_by_id(
+          context.get_cursor(), 2)
+      self.assertEqual(len(rows), 1, "wrong number of rows fetched")
+      for row in rows:
+        logging.info("ROW: %s" % row)
+      self.assertEqual(rows[0].id, 2, "wrong row fetched")
+
+  def test_update_and_read(self):
+    where_column_value_pairs = [('id', 2)]
+    with database_context.WriteTransaction(self.dc) as context:
+      db_class_unsharded.VtUnsharded.update_columns(context.get_cursor(),
+                                                    where_column_value_pairs,
+                                                    msg="test update")
+
+    with database_context.ReadFromMaster(self.dc) as context:
+      rows = db_class_unsharded.VtUnsharded.select_by_id(context.get_cursor(), 2)
+      self.assertEqual(len(rows), 1, "wrong number of rows fetched")
+      self.assertEqual(rows[0].msg, "test update", "wrong row fetched")
+
+  def test_delete_and_read(self):
+    where_column_value_pairs = [('id', 2)]
+    with database_context.WriteTransaction(self.dc) as context:
+      db_class_unsharded.VtUnsharded.delete_by_columns(context.get_cursor(),
+                                                    where_column_value_pairs)
+
+    with database_context.ReadFromMaster(self.dc) as context:
+      rows = db_class_unsharded.VtUnsharded.select_by_id(context.get_cursor(), 2)
+      self.assertEqual(len(rows), 0, "wrong number of rows fetched")
+
+
+
 
 
 if __name__ == '__main__':

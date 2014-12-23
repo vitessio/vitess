@@ -58,5 +58,6 @@ keyspace_table_map = {KS_UNSHARDED[0]: [('vt_unsharded', create_vt_unsharded),],
                                            ('vt_song', create_vt_song),
                                           ],
                       KS_LOOKUP[0]: [('vt_username_lookup', create_vt_username_lookup),
+                                     ('vt_song_user_lookup', create_vt_song_user_lookup),
                                    ],
                       }

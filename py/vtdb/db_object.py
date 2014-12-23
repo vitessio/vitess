@@ -5,7 +5,6 @@ unsharded, range-sharded and custom-sharded tables.
 This abstracts sharding details and provides methods
 for common database access patterns.
 """
-
 import functools
 import logging
 
@@ -20,6 +19,7 @@ from vtdb import vtgate_cursor
 
 class Unimplemented(Exception):
     pass
+
 
 class ShardRouting(object):
   """VTGate Shard Routing Class.
@@ -87,7 +87,6 @@ class DBObjectBase(object):
   id_column_name = 'id'
   sharding_key_column_name = None
   entity_id_columns = None
-  cursor = None
 
   @classmethod
   def create_shard_routing(class_, is_dml, *pargs, **kwargs):
@@ -122,6 +121,9 @@ class DBObjectBase(object):
   def select_by_columns(class_, cursor, where_column_value_pairs,
                         columns_list = None,order_by=None, group_by=None,
                         limit=None, **kwargs):
+    if class_.columns_list is None:
+      raise dbexceptions.ProgrammingError("DB class should define columns_list")
+
     if columns_list is None:
       columns_list = class_.columns_list
     query, bind_vars = sql_builder.select_by_columns_query(columns_list,
@@ -141,6 +143,10 @@ class DBObjectBase(object):
     values_clause, bind_list = sql_builder.build_values_clause(
         class_.columns_list,
         bind_variables)
+
+    if class_.columns_list is None:
+      raise dbexceptions.ProgrammingError("DB class should define columns_list")
+
     query = 'INSERT INTO %s (%s) VALUES (%s)' % (class_.table_name,
                                                  sql_builder.colstr(
                                                      class_.columns_list,
@@ -152,6 +158,7 @@ class DBObjectBase(object):
   @db_class_method
   def update_columns(class_, cursor, where_column_value_pairs,
                      **update_columns):
+
     query, bind_variables = sql_builder.update_columns_query(
         class_.table_name, where_column_value_pairs, **update_columns)
 
@@ -213,6 +220,7 @@ class DBObjectUnsharded(DBObjectBase):
                                         keyranges=keyranges,
                                         writable=is_dml)
     return cursor
+
 
 class DBObjectRangeSharded(DBObjectBase):
   """Base class for range-sharded db classes.
