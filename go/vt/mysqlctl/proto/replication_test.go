@@ -528,13 +528,20 @@ func TestReplicationStatusSlaveSQLNotRunning(t *testing.T) {
 }
 
 func TestReplicationStatusMasterAddr(t *testing.T) {
-	input := &ReplicationStatus{
-		MasterHost: "master-host",
-		MasterPort: 1234,
+	table := map[string]*ReplicationStatus{
+		"master-host:1234": &ReplicationStatus{
+			MasterHost: "master-host",
+			MasterPort: 1234,
+		},
+		"[::1]:4321": &ReplicationStatus{
+			MasterHost: "::1",
+			MasterPort: 4321,
+		},
 	}
-	want := "master-host:1234"
-	if got := input.MasterAddr(); got != want {
-		t.Errorf("%#v.MasterAddr() = %v, want %v", input, got, want)
+	for want, input := range table {
+		if got := input.MasterAddr(); got != want {
+			t.Errorf("%#v.MasterAddr() = %v, want %v", input, got, want)
+		}
 	}
 }
 

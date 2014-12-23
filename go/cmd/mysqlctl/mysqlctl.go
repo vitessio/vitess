@@ -11,6 +11,7 @@ import (
 	"os"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -180,7 +181,7 @@ func main() {
 	dbconfigs.RegisterFlags(flags)
 	flag.Parse()
 
-	tabletAddr = fmt.Sprintf("%v:%v", "localhost", *port)
+	tabletAddr = netutil.JoinHostPort("localhost", *port)
 	mycnf := mysqlctl.NewMycnf(uint32(*tabletUid), *mysqlPort)
 
 	if *mysqlSocket != "" {

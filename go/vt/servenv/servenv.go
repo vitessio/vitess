@@ -19,7 +19,6 @@ package servenv
 
 import (
 	"flag"
-	"fmt"
 	"net/url"
 	"os"
 	"runtime"
@@ -103,7 +102,7 @@ func populateListeningURL() {
 	}
 	ListeningURL = url.URL{
 		Scheme: "http",
-		Host:   fmt.Sprintf("%v:%v", host, *Port),
+		Host:   netutil.JoinHostPort(host, *Port),
 		Path:   "/",
 	}
 }

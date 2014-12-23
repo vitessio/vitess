@@ -64,3 +64,39 @@ func testWeighting(t *testing.T, margin float64) {
 func TestWeighting(t *testing.T) {
 	testWeighting(t, 0.05)
 }
+
+func TestSplitHostPort(t *testing.T) {
+	type addr struct {
+		host string
+		port int
+	}
+	table := map[string]addr{
+		"host-name:132": addr{host: "host-name", port: 132},
+		"[::1]:321":     addr{host: "::1", port: 321},
+	}
+	for input, want := range table {
+		gotHost, gotPort, err := SplitHostPort(input)
+		if err != nil {
+			t.Errorf("SplitHostPort error: %v", err)
+		}
+		if gotHost != want.host || gotPort != want.port {
+			t.Errorf("SplitHostPort(%#v) = (%v, %v), want (%v, %v)", input, gotHost, gotPort, want.host, want.port)
+		}
+	}
+}
+
+func TestJoinHostPort(t *testing.T) {
+	type addr struct {
+		host string
+		port int
+	}
+	table := map[string]addr{
+		"host-name:132": addr{host: "host-name", port: 132},
+		"[::1]:321":     addr{host: "::1", port: 321},
+	}
+	for want, input := range table {
+		if got := JoinHostPort(input.host, input.port); got != want {
+			t.Errorf("SplitHostPort(%v, %v) = %#v, want %#v", input.host, input.port, got, want)
+		}
+	}
+}

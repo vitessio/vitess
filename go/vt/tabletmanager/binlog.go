@@ -17,6 +17,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
@@ -247,7 +248,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	if !ok {
 		port = addrs.Entries[newServerIndex].NamedPortMap["_vtocc"]
 	}
-	addr := fmt.Sprintf("%v:%v", addrs.Entries[newServerIndex].Host, port)
+	addr := netutil.JoinHostPort(addrs.Entries[newServerIndex].Host, port)
 
 	// save our current server
 	bpc.playerMutex.Lock()

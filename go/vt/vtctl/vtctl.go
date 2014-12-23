@@ -18,6 +18,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/jscfg"
+	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/client2"
 	hk "github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
@@ -1617,7 +1618,7 @@ func commandResolve(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string
 		return err
 	}
 	for _, addr := range addrs {
-		wr.Logger().Printf("%v:%v\n", addr.Target, addr.Port)
+		wr.Logger().Printf("%v\n", netutil.JoinHostPort(addr.Target, int(addr.Port)))
 	}
 	return nil
 }

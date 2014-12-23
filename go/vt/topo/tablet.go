@@ -16,6 +16,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
+	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/key"
 )
@@ -420,19 +421,19 @@ func (tablet *Tablet) EndPoint() (*EndPoint, error) {
 	return entry, nil
 }
 
-// Addr returns hostname:vt port
+// Addr returns hostname:vt port.
 func (tablet *Tablet) Addr() string {
-	return fmt.Sprintf("%v:%v", tablet.Hostname, tablet.Portmap["vt"])
+	return netutil.JoinHostPort(tablet.Hostname, tablet.Portmap["vt"])
 }
 
-// MysqlAddr returns hostname:mysql port
+// MysqlAddr returns hostname:mysql port.
 func (tablet *Tablet) MysqlAddr() string {
-	return fmt.Sprintf("%v:%v", tablet.Hostname, tablet.Portmap["mysql"])
+	return netutil.JoinHostPort(tablet.Hostname, tablet.Portmap["mysql"])
 }
 
-// MysqlIpAddr returns ip:mysql port
+// MysqlIpAddr returns ip:mysql port.
 func (tablet *Tablet) MysqlIpAddr() string {
-	return fmt.Sprintf("%v:%v", tablet.IPAddr, tablet.Portmap["mysql"])
+	return netutil.JoinHostPort(tablet.IPAddr, tablet.Portmap["mysql"])
 }
 
 // DbName is usually implied by keyspace. Having the shard information in the

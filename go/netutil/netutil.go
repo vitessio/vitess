@@ -77,7 +77,7 @@ func SortRfc2782(srvs []*net.SRV) {
 }
 
 // SplitHostPort is an extension to net.SplitHostPort that also parses the
-// integer port
+// integer port.
 func SplitHostPort(addr string) (string, int, error) {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -88,6 +88,12 @@ func SplitHostPort(addr string) (string, int, error) {
 		return "", 0, fmt.Errorf("can't parse port %q: %v", port, err)
 	}
 	return host, int(p), nil
+}
+
+// JoinHostPort is an extension to net.JoinHostPort that also formats the
+// integer port.
+func JoinHostPort(host string, port int) string {
+	return net.JoinHostPort(host, strconv.FormatInt(int64(port), 10))
 }
 
 // FullyQualifiedHostname returns the full hostname with domain
@@ -115,9 +121,9 @@ func FullyQualifiedHostnameOrPanic() string {
 }
 
 // ResolveAddr can resolve an address where the host has been left
-// blank, like ":3306"
+// blank, like ":3306".
 func ResolveAddr(addr string) (string, error) {
-	host, port, err := SplitHostPort(addr)
+	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		return "", err
 	}
@@ -127,7 +133,7 @@ func ResolveAddr(addr string) (string, error) {
 			return "", err
 		}
 	}
-	return fmt.Sprintf("%v:%v", host, port), nil
+	return net.JoinHostPort(host, port), nil
 }
 
 // ResolveIpAddr resolves the address:port part into an IP address:port pair

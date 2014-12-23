@@ -215,7 +215,7 @@ func (rs *ReplicationStatus) SlaveRunning() bool {
 
 // MasterAddr returns the host:port address of the master.
 func (rs *ReplicationStatus) MasterAddr() string {
-	return fmt.Sprintf("%v:%v", rs.MasterHost, rs.MasterPort)
+	return netutil.JoinHostPort(rs.MasterHost, rs.MasterPort)
 }
 
 // NewReplicationStatus creates a ReplicationStatus pointing to masterAddr.
