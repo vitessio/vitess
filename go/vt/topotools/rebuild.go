@@ -83,9 +83,6 @@ func RebuildShard(ctx context.Context, log logutil.Logger, ts topo.Server, keysp
 			// add all relevant tablets to the map
 			for _, rl := range sri.ReplicationLinks {
 				tabletsAsMap[rl.TabletAlias] = true
-				if rl.Parent.Cell == cell {
-					tabletsAsMap[rl.Parent] = true
-				}
 			}
 
 			// convert the map to a list
@@ -144,9 +141,7 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 		if !tablet.IsInReplicationGraph() {
 			// only valid case is a scrapped master in the
 			// catastrophic reparent case
-			if tablet.Parent.Uid != topo.NO_TABLET {
-				log.Warningf("Tablet %v should not be in the replication graph, please investigate (it is being ignored in the rebuild)", tablet.Alias)
-			}
+			log.Warningf("Tablet %v should not be in the replication graph, please investigate (it is being ignored in the rebuild)", tablet.Alias)
 			continue
 		}
 

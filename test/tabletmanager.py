@@ -361,7 +361,7 @@ class TestTabletManager(unittest.TestCase):
     # manually add a bogus entry to the replication graph, and check
     # it is removed by ShardReplicationFix
     utils.run_vtctl(['ShardReplicationAdd', 'test_keyspace/0',
-                     'test_nj-0000066666', 'test_nj-0000062344'], auto_log=True)
+                     'test_nj-0000066666'], auto_log=True)
     with_bogus = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
                                         'test_keyspace/0'])
     self.assertEqual(3, len(with_bogus['ReplicationLinks']),

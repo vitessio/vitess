@@ -305,7 +305,4 @@ func TestTabletExternallyReparentedFailedOldMaster(t *testing.T) {
 	if tablet.Type != topo.TYPE_SPARE {
 		t.Fatalf("old master should be spare but is: %v", tablet.Type)
 	}
-	if tablet.Parent != newMaster.Tablet.Alias {
-		t.Fatalf("old master has the wrong master, got %v expected %v", tablet.Parent, newMaster.Tablet.Alias)
-	}
 }

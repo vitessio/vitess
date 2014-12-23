@@ -128,9 +128,9 @@ func (wr *Wrangler) validateShard(keyspace, shard string, pingTablets bool, wg *
 			results <- fmt.Errorf("tablet %v not found in map", alias)
 			continue
 		}
-		if tabletInfo.Parent.Uid == topo.NO_TABLET {
+		if tabletInfo.Type == topo.TYPE_MASTER {
 			if masterAlias.Cell != "" {
-				results <- fmt.Errorf("tablet %v already has a master %v", alias, masterAlias)
+				results <- fmt.Errorf("shard %v/%v already has master %v but found other master %v", keyspace, shard, masterAlias, alias)
 			} else {
 				masterAlias = alias
 			}

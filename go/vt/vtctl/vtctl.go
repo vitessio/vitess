@@ -546,7 +546,6 @@ func commandInitTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 		vtsPort        = subFlags.Int("vts_port", 0, "encrypted port for the vttablet process")
 		keyspace       = subFlags.String("keyspace", "", "keyspace this tablet belongs to")
 		shard          = subFlags.String("shard", "", "shard this tablet belongs to")
-		parentAlias    = subFlags.String("parent_alias", "", "alias of the mysql parent tablet for this tablet")
 		tags           flagutil.StringMapValue
 	)
 	subFlags.Var(&tags, "tags", "comma separated list of key:value pairs used to tag the tablet")
@@ -585,12 +584,6 @@ func commandInitTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 	}
 	if *vtsPort != 0 {
 		tablet.Portmap["vts"] = *vtsPort
-	}
-	if *parentAlias != "" {
-		tablet.Parent, err = tabletRepParamToTabletAlias(*parentAlias)
-		if err != nil {
-			return err
-		}
 	}
 
 	return wr.InitTablet(tablet, *force, *parent, *update)
@@ -1275,8 +1268,8 @@ func commandShardReplicationAdd(wr *wrangler.Wrangler, subFlags *flag.FlagSet, a
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-	if subFlags.NArg() != 3 {
-		return fmt.Errorf("action ShardReplicationAdd requires <keyspace/shard> <tablet alias> <parent tablet alias>")
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("action ShardReplicationAdd requires <keyspace/shard> <tablet alias>")
 	}
 
 	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
@@ -1287,11 +1280,7 @@ func commandShardReplicationAdd(wr *wrangler.Wrangler, subFlags *flag.FlagSet, a
 	if err != nil {
 		return err
 	}
-	parentAlias, err := tabletParamToTabletAlias(subFlags.Arg(2))
-	if err != nil {
-		return err
-	}
-	return topo.UpdateShardReplicationRecord(wr.Context(), wr.TopoServer(), keyspace, shard, tabletAlias, parentAlias)
+	return topo.UpdateShardReplicationRecord(wr.Context(), wr.TopoServer(), keyspace, shard, tabletAlias)
 }
 
 func commandShardReplicationRemove(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

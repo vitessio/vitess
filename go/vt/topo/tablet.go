@@ -340,14 +340,10 @@ const (
 // Tablet is a pure data struct for information serialized into json
 // and stored into topo.Server
 type Tablet struct {
-	// Parent is the globally unique alias for our replication
-	// parent - IsZero() if this tablet has no parent
-	Parent TabletAlias
-
 	// What is this tablet?
 	Alias TabletAlias
 
-	// Locaiton of the tablet
+	// Location of the tablet
 	Hostname string
 	IPAddr   string
 
@@ -495,13 +491,7 @@ func (tablet *Tablet) Complete() error {
 	switch tablet.Type {
 	case TYPE_MASTER:
 		tablet.State = STATE_READ_WRITE
-		if tablet.Parent.Uid != NO_TABLET {
-			return fmt.Errorf("master cannot have parent: %v", tablet.Parent.Uid)
-		}
 	case TYPE_IDLE:
-		if tablet.Parent.Uid != NO_TABLET {
-			return fmt.Errorf("idle cannot have parent: %v", tablet.Parent.Uid)
-		}
 		fallthrough
 	default:
 		tablet.State = STATE_READ_ONLY
@@ -573,14 +563,10 @@ func Validate(ts Server, tabletAlias TabletAlias) error {
 			return nil
 		}
 
-		rl, err := si.GetReplicationLink(tabletAlias)
+		_, err = si.GetReplicationLink(tabletAlias)
 		if err != nil {
 			log.Warningf("master tablet %v with no ReplicationLink entry, assuming it's because of transition", tabletAlias)
 			return nil
-		}
-
-		if rl.Parent != tablet.Parent {
-			return fmt.Errorf("tablet %v has parent %v but has %v in shard replication object", tabletAlias, tablet.Parent, rl.Parent)
 		}
 
 	} else if tablet.IsInReplicationGraph() {
@@ -593,13 +579,9 @@ func Validate(ts Server, tabletAlias TabletAlias) error {
 			return err
 		}
 
-		rl, err := si.GetReplicationLink(tabletAlias)
+		_, err = si.GetReplicationLink(tabletAlias)
 		if err != nil {
 			return fmt.Errorf("tablet %v not found in cell %v shard replication: %v", tabletAlias, tablet.Alias.Cell, err)
-		}
-
-		if rl.Parent != tablet.Parent {
-			return fmt.Errorf("tablet %v has parent %v but has %v in shard replication object", tabletAlias, tablet.Parent, rl.Parent)
 		}
 
 	} else if tablet.IsAssigned() {
@@ -641,7 +623,7 @@ func CreateTablet(ts Server, tablet *Tablet) error {
 // UpdateTabletReplicationData creates or updates the replication
 // graph data for a tablet
 func UpdateTabletReplicationData(ctx context.Context, ts Server, tablet *Tablet) error {
-	return UpdateShardReplicationRecord(ctx, ts, tablet.Keyspace, tablet.Shard, tablet.Alias, tablet.Parent)
+	return UpdateShardReplicationRecord(ctx, ts, tablet.Keyspace, tablet.Shard, tablet.Alias)
 }
 
 // DeleteTabletReplicationData deletes replication data.

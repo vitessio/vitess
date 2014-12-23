@@ -548,9 +548,6 @@ func FindAllTabletAliasesInShardByCell(ctx context.Context, ts Server, keyspace,
 			mutex.Lock()
 			for _, rl := range sri.ReplicationLinks {
 				resultAsMap[rl.TabletAlias] = true
-				if !rl.Parent.IsZero() && InCellList(rl.Parent.Cell, cells) {
-					resultAsMap[rl.Parent] = true
-				}
 			}
 			mutex.Unlock()
 		}(cell)

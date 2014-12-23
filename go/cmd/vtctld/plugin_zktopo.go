@@ -126,10 +126,6 @@ func (ex ZkExplorer) addTabletLinks(data string, result *ZkResult) {
 	if port, ok := t.Portmap["vt"]; ok {
 		result.Links["status"] = template.URL(fmt.Sprintf("http://%v:%v/debug/status", t.Hostname, port))
 	}
-
-	if !t.Parent.IsZero() {
-		result.Links["parent"] = template.URL(fmt.Sprintf("/zk/%v/vt/tablets/%v", t.Parent.Cell, t.Parent.TabletUidStr()))
-	}
 }
 
 type ZkResult struct {

@@ -51,7 +51,8 @@ type TabletOption func(tablet *topo.Tablet)
 // TabletParent is the tablet option to set the parent alias
 func TabletParent(parent topo.TabletAlias) TabletOption {
 	return func(tablet *topo.Tablet) {
-		tablet.Parent = parent
+		// save the parent alias uid into the portmap as a hack
+		tablet.Portmap["parent_uid"] = int(parent.Uid)
 	}
 }
 
@@ -96,14 +97,16 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 	for _, option := range options {
 		option(tablet)
 	}
+	puid, ok := tablet.Portmap["parent_uid"]
+	delete(tablet.Portmap, "parent_uid")
 	if err := wr.InitTablet(tablet, false, true, false); err != nil {
 		t.Fatalf("cannot create tablet %v: %v", uid, err)
 	}
 
 	// create a FakeMysqlDaemon with the right information by default
 	fakeMysqlDaemon := &mysqlctl.FakeMysqlDaemon{}
-	if !tablet.Parent.IsZero() {
-		fakeMysqlDaemon.MasterAddr = fmt.Sprintf("%v.0.0.1:%v", 100+tablet.Parent.Uid, 3300+int(tablet.Parent.Uid))
+	if ok {
+		fakeMysqlDaemon.MasterAddr = fmt.Sprintf("%v.0.0.1:%v", 100+puid, 3300+puid)
 	}
 	fakeMysqlDaemon.MysqlPort = 3300 + int(uid)
 

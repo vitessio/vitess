@@ -27,17 +27,6 @@ func (wr *Wrangler) checkSlaveReplication(tabletMap map[topo.TabletAlias]*topo.T
 	wr.logger.Infof("Checking all replication positions will allow the transition:")
 	masterIsDead := masterTabletUid == topo.NO_TABLET
 
-	// Check everybody has the right master. If there is no master
-	// (crash) just check that everyone has the same parent.
-	for _, tablet := range tabletMap {
-		if masterTabletUid == topo.NO_TABLET {
-			masterTabletUid = tablet.Parent.Uid
-		}
-		if tablet.Parent.Uid != masterTabletUid {
-			return fmt.Errorf("tablet %v not slaved correctly, expected %v, found %v", tablet.Alias, masterTabletUid, tablet.Parent.Uid)
-		}
-	}
-
 	// now check all the replication positions will allow us to proceed
 	if masterIsDead {
 		wr.logger.Infof("  master is dead, not checking Seconds Behind Master value")

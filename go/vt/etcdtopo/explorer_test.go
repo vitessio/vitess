@@ -147,7 +147,6 @@ func TestHandlePathTablet(t *testing.T) {
 		Alias:    topo.TabletAlias{Cell: "cell1", Uid: 123},
 		Hostname: "example.com",
 		Portmap:  map[string]int{"vt": 4321},
-		Parent:   topo.TabletAlias{Cell: "cell1", Uid: 321},
 	}
 	want := jscfg.ToJson(tablet)
 
@@ -165,7 +164,6 @@ func TestHandlePathTablet(t *testing.T) {
 	}
 	wantLinks := map[string]template.URL{
 		"status": template.URL("http://example.com:4321/debug/status"),
-		"parent": template.URL(path.Join(explorerRoot, "cell1", tabletDirPath("cell1-0000000321"))),
 	}
 	for k, want := range wantLinks {
 		if got := exResult.Links[k]; got != want {

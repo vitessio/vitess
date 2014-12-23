@@ -23,10 +23,6 @@ func CheckShardReplication(t *testing.T, ts topo.Server) {
 					Cell: "c1",
 					Uid:  1,
 				},
-				Parent: topo.TabletAlias{
-					Cell: "c2",
-					Uid:  2,
-				},
 			},
 		},
 	}
@@ -42,9 +38,7 @@ func CheckShardReplication(t *testing.T, ts topo.Server) {
 	} else {
 		if len(sri.ReplicationLinks) != 1 ||
 			sri.ReplicationLinks[0].TabletAlias.Cell != "c1" ||
-			sri.ReplicationLinks[0].TabletAlias.Uid != 1 ||
-			sri.ReplicationLinks[0].Parent.Cell != "c2" ||
-			sri.ReplicationLinks[0].Parent.Uid != 2 {
+			sri.ReplicationLinks[0].TabletAlias.Uid != 1 {
 			t.Errorf("GetShardReplication(new guy) returned wrong value: %v", *sri)
 		}
 	}
@@ -54,10 +48,6 @@ func CheckShardReplication(t *testing.T, ts topo.Server) {
 			TabletAlias: topo.TabletAlias{
 				Cell: "c3",
 				Uid:  3,
-			},
-			Parent: topo.TabletAlias{
-				Cell: "c4",
-				Uid:  4,
 			},
 		})
 		return nil
@@ -71,12 +61,8 @@ func CheckShardReplication(t *testing.T, ts topo.Server) {
 		if len(sri.ReplicationLinks) != 2 ||
 			sri.ReplicationLinks[0].TabletAlias.Cell != "c1" ||
 			sri.ReplicationLinks[0].TabletAlias.Uid != 1 ||
-			sri.ReplicationLinks[0].Parent.Cell != "c2" ||
-			sri.ReplicationLinks[0].Parent.Uid != 2 ||
 			sri.ReplicationLinks[1].TabletAlias.Cell != "c3" ||
-			sri.ReplicationLinks[1].TabletAlias.Uid != 3 ||
-			sri.ReplicationLinks[1].Parent.Cell != "c4" ||
-			sri.ReplicationLinks[1].Parent.Uid != 4 {
+			sri.ReplicationLinks[1].TabletAlias.Uid != 3 {
 			t.Errorf("GetShardReplication(new guy) returned wrong value: %v", *sri)
 		}
 	}

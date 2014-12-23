@@ -51,14 +51,6 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 			return fmt.Errorf("creating this tablet would override old master %v in shard %v/%v", si.MasterAlias, tablet.Keyspace, tablet.Shard)
 		}
 
-		// see if we specified a parent, otherwise get it from the shard
-		if tablet.Parent.IsZero() && tablet.Type.IsSlaveType() {
-			if si.MasterAlias.IsZero() {
-				return fmt.Errorf("trying to create tablet %v in shard %v/%v without a master", tablet.Alias, tablet.Keyspace, tablet.Shard)
-			}
-			tablet.Parent = si.MasterAlias
-		}
-
 		// update the shard record if needed
 		if err := wr.updateShardCellsAndMaster(si, tablet.Alias, tablet.Type, force); err != nil {
 			return err

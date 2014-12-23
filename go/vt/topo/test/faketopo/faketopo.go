@@ -95,9 +95,6 @@ func (fix *Fixture) AddTablet(uid int, cell string, tabletType topo.TabletType, 
 		Shard:    TestShard,
 		KeyRange: newKeyRange(TestShard),
 	}
-	if master != nil {
-		tablet.Parent = master.Alias
-	}
 
 	if err := fix.Wrangler.InitTablet(tablet, true, true, false); err != nil {
 		fix.Fatalf("CreateTablet: %v", err)

@@ -97,7 +97,7 @@ func SortedTabletMap(tabletMap map[topo.TabletAlias]*topo.TabletInfo) (map[topo.
 	for alias, ti := range tabletMap {
 		if ti.Type != topo.TYPE_MASTER && ti.Type != topo.TYPE_SCRAP {
 			slaveMap[alias] = ti
-		} else if ti.Parent.Uid == topo.NO_TABLET {
+		} else {
 			masterMap[alias] = ti
 		}
 	}
