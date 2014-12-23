@@ -71,7 +71,7 @@ func (ex ZkExplorer) GetSrvTypePath(cell, keyspace, shard string, tabletType top
 
 // GetTabletPath is part of the Explorer interface
 func (ex ZkExplorer) GetTabletPath(alias topo.TabletAlias) string {
-	return path.Join("/zk", alias.Cell, "vt/tablets", alias.TabletUidStr())
+	return path.Join("/zk", alias.Cell, "vt/tablets", alias.TabletUIDStr())
 }
 
 // GetReplicationSlaves is part of the Explorer interface

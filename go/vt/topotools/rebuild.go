@@ -22,7 +22,7 @@ import (
 // from all invocations of the tools.
 var UseSrvShardLocks = flag.Bool("use_srv_shard_locks", true, "DEPRECATED: If true, takes the SrvShard lock for each shard being rebuilt")
 
-// Update shard file with new master, replicas, etc.
+// RebuildShard updates the SrvShard objects and underlying serving graph.
 //
 // Re-read from TopologyServer to make sure we are using the side
 // effects of all actions.

@@ -89,17 +89,17 @@ func TestTabletExternallyReparented(t *testing.T) {
 
 	// On the old master, we will only respond to
 	// TABLET_ACTION_SLAVE_WAS_RESTARTED.
-	oldMaster.FakeMysqlDaemon.MasterAddr = newMaster.Tablet.MysqlIpAddr()
+	oldMaster.FakeMysqlDaemon.MasterAddr = newMaster.Tablet.MysqlIPAddr()
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
 
 	// On the good slaves, we will respond to
 	// TABLET_ACTION_SLAVE_WAS_RESTARTED.
-	goodSlave1.FakeMysqlDaemon.MasterAddr = newMaster.Tablet.MysqlIpAddr()
+	goodSlave1.FakeMysqlDaemon.MasterAddr = newMaster.Tablet.MysqlIPAddr()
 	goodSlave1.StartActionLoop(t, wr)
 	defer goodSlave1.StopActionLoop(t)
 
-	goodSlave2.FakeMysqlDaemon.MasterAddr = newMaster.Tablet.MysqlIpAddr()
+	goodSlave2.FakeMysqlDaemon.MasterAddr = newMaster.Tablet.MysqlIPAddr()
 	goodSlave2.StartActionLoop(t, wr)
 	defer goodSlave2.StopActionLoop(t)
 
@@ -272,7 +272,7 @@ func TestTabletExternallyReparentedFailedOldMaster(t *testing.T) {
 
 	// On the good slave, we will respond to
 	// TABLET_ACTION_SLAVE_WAS_RESTARTED.
-	goodSlave.FakeMysqlDaemon.MasterAddr = newMaster.Tablet.MysqlIpAddr()
+	goodSlave.FakeMysqlDaemon.MasterAddr = newMaster.Tablet.MysqlIPAddr()
 	goodSlave.StartActionLoop(t, wr)
 	defer goodSlave.StopActionLoop(t)
 

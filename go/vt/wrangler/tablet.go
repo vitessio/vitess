@@ -169,7 +169,7 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 	return err
 }
 
-// Change the type of tablet and recompute all necessary derived paths in the
+// ChangeType changes the type of tablet and recompute all necessary derived paths in the
 // serving graph. If force is true, it will bypass the RPC action
 // system and make the data change directly, and not run the remote
 // hooks.

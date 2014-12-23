@@ -10,6 +10,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
+// CheckShardReplication tests ShardReplication objects
 func CheckShardReplication(t *testing.T, ts topo.Server) {
 	cell := getLocalCell(t, ts)
 	if _, err := ts.GetShardReplication(cell, "test_keyspace", "-10"); err != topo.ErrNoNode {

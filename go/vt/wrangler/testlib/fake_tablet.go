@@ -40,7 +40,7 @@ type FakeTablet struct {
 	// the tablet, and closed / cleared when we stop it.
 	Agent     *tabletmanager.ActionAgent
 	Listener  net.Listener
-	RpcServer *rpcplus.Server
+	RPCServer *rpcplus.Server
 }
 
 // TabletOption is an interface for changing tablet parameters.
@@ -68,7 +68,7 @@ func TabletKeyspaceShard(t *testing.T, keyspace, shard string) TabletOption {
 	}
 }
 
-// CreateTestTablet creates the test tablet in the topology.  'uid'
+// NewFakeTablet creates the test tablet in the topology.  'uid'
 // has to be between 0 and 99. All the tablet info will be derived
 // from that. Look at the implementation if you need values.
 // Use TabletOption implementations if you need to change values at creation.
@@ -137,12 +137,12 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 	ft.Tablet = ft.Agent.Tablet().Tablet
 
 	// create the RPC server
-	ft.RpcServer = rpcplus.NewServer()
-	gorpctmserver.RegisterForTest(ft.RpcServer, ft.Agent)
+	ft.RPCServer = rpcplus.NewServer()
+	gorpctmserver.RegisterForTest(ft.RPCServer, ft.Agent)
 
 	// create the HTTP server, serve the server from it
 	handler := http.NewServeMux()
-	bsonrpc.ServeCustomRPC(handler, ft.RpcServer, false)
+	bsonrpc.ServeCustomRPC(handler, ft.RPCServer, false)
 	httpServer := http.Server{
 		Handler: handler,
 	}

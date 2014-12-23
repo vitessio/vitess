@@ -74,8 +74,8 @@ func GetAllTabletsAcrossCells(ctx context.Context, ts topo.Server) ([]*topo.Tabl
 	wg.Wait()
 
 	err = nil
-	allTablets := make([]*topo.TabletInfo, 0)
-	for i, _ := range cells {
+	var allTablets []*topo.TabletInfo
+	for i := range cells {
 		if errors[i] == nil {
 			allTablets = append(allTablets, results[i]...)
 		} else {
@@ -116,7 +116,7 @@ func CopyMapKeys(m interface{}, typeHint interface{}) interface{} {
 	return keys.Interface()
 }
 
-// CopyMapKeys copies values from from map m into a new slice with the
+// CopyMapValues copies values from from map m into a new slice with the
 // type specified by typeHint.  Reflection can't make a new slice type
 // just based on the key type AFAICT.
 func CopyMapValues(m interface{}, typeHint interface{}) interface{} {

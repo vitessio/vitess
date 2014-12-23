@@ -31,7 +31,7 @@ import (
 )
 
 var (
-	// Error returned for an unknown command
+	// ErrUnknownCommand is returned for an unknown command
 	ErrUnknownCommand = errors.New("unknown command")
 )
 
@@ -677,7 +677,7 @@ func commandDeleteTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 		return err
 	}
 	if subFlags.NArg() == 0 {
-		return fmt.Errorf("action DeleteTablet requires at least one <tablet alias> ...")
+		return fmt.Errorf("action DeleteTablet requires at least one <tablet alias>")
 	}
 
 	tabletAliases, err := tabletParamsToTabletAliases(subFlags.Args())
@@ -942,7 +942,7 @@ func commandClone(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) 
 		return err
 	}
 	if subFlags.NArg() < 2 {
-		return fmt.Errorf("action Clone requires <src tablet alias> <dst tablet alias> ...")
+		return fmt.Errorf("action Clone requires <src tablet alias> <dst tablet alias> [...]")
 	}
 
 	srcTabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
@@ -1340,7 +1340,7 @@ func commandDeleteShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []st
 		return err
 	}
 	if subFlags.NArg() == 0 {
-		return fmt.Errorf("action DeleteShard requires <keyspace/shard> ...")
+		return fmt.Errorf("action DeleteShard requires <keyspace/shard> [...]")
 	}
 
 	keyspaceShards, err := shardParamsToKeyspaceShards(wr, subFlags.Args())
@@ -1630,7 +1630,7 @@ func commandRebuildReplicationGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSe
 		return err
 	}
 	if subFlags.NArg() < 2 {
-		return fmt.Errorf("action RebuildReplicationGraph requires <cell1>,<cell2>,... <keyspace1>,<keyspace2>...")
+		return fmt.Errorf("action RebuildReplicationGraph requires <cell1>,<cell2>,... <keyspace1>,<keyspace2>[,...]")
 	}
 
 	cells := strings.Split(subFlags.Arg(0), ",")
@@ -1659,7 +1659,7 @@ func commandListTablets(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []st
 		return err
 	}
 	if subFlags.NArg() == 0 {
-		return fmt.Errorf("action ListTablets requires <tablet alias> ...")
+		return fmt.Errorf("action ListTablets requires <tablet alias>")
 	}
 
 	paths := subFlags.Args()

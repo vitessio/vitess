@@ -129,7 +129,7 @@ type ShardServedType struct {
 	Cells []string // nil means all cells
 }
 
-// A pure data struct for information stored in topology server.  This
+// Shard is a pure data struct for information stored in topology server.  This
 // node is used to present a controlled view of the shard, unaware of
 // every management action. It also contains configuration data for a
 // shard.
@@ -281,7 +281,7 @@ func CreateShard(ts Server, keyspace, shard string) error {
 	}
 	for _, si := range sis {
 		if key.KeyRangesIntersect(si.KeyRange, keyRange) {
-			for t, _ := range si.ServedTypesMap {
+			for t := range si.ServedTypesMap {
 				delete(s.ServedTypesMap, t)
 			}
 		}
@@ -503,7 +503,7 @@ func FindAllTabletAliasesInShard(ctx context.Context, ts Server, keyspace, shard
 	return FindAllTabletAliasesInShardByCell(ctx, ts, keyspace, shard, nil)
 }
 
-// FindAllTabletAliasesInShard uses the replication graph to find all the
+// FindAllTabletAliasesInShardByCell uses the replication graph to find all the
 // tablet aliases in the given shard.
 // It can return ErrPartialResult if some cells were not fetched,
 // in which case the result only contains the cells that were fetched.
