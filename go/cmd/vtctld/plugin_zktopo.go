@@ -33,42 +33,52 @@ func init() {
 	HandleExplorer("zk", "/zk/", "zk.html", NewZkExplorer(ts.(*zktopo.Server).GetZConn()))
 }
 
+// ZkExplorer implements Explorer
 type ZkExplorer struct {
 	zconn zk.Conn
 }
 
+// NewZkExplorer returns an Explorer implementation for Zookeeper
 func NewZkExplorer(zconn zk.Conn) *ZkExplorer {
 	return &ZkExplorer{zconn}
 }
 
+// GetKeyspacePath is part of the Explorer interface
 func (ex ZkExplorer) GetKeyspacePath(keyspace string) string {
 	return path.Join("/zk/global/vt/keyspaces", keyspace)
 }
 
+// GetShardPath is part of the Explorer interface
 func (ex ZkExplorer) GetShardPath(keyspace, shard string) string {
 	return path.Join("/zk/global/vt/keyspaces", keyspace, "shards", shard)
 }
 
+// GetSrvKeyspacePath is part of the Explorer interface
 func (ex ZkExplorer) GetSrvKeyspacePath(cell, keyspace string) string {
 	return path.Join("/zk", cell, "vt/ns", keyspace)
 }
 
+// GetSrvShardPath is part of the Explorer interface
 func (ex ZkExplorer) GetSrvShardPath(cell, keyspace, shard string) string {
 	return path.Join("/zk", cell, "/vt/ns", keyspace, shard)
 }
 
+// GetSrvTypePath is part of the Explorer interface
 func (ex ZkExplorer) GetSrvTypePath(cell, keyspace, shard string, tabletType topo.TabletType) string {
 	return path.Join("/zk", cell, "/vt/ns", keyspace, shard, string(tabletType))
 }
 
+// GetTabletPath is part of the Explorer interface
 func (ex ZkExplorer) GetTabletPath(alias topo.TabletAlias) string {
 	return path.Join("/zk", alias.Cell, "vt/tablets", alias.TabletUidStr())
 }
 
+// GetReplicationSlaves is part of the Explorer interface
 func (ex ZkExplorer) GetReplicationSlaves(cell, keyspace, shard string) string {
 	return path.Join("/zk", cell, "vt/replication", keyspace, shard)
 }
 
+// HandlePath is part of the Explorer interface
 func (ex ZkExplorer) HandlePath(actionRepo proto.ActionRepository, zkPath string, r *http.Request) interface{} {
 	result := NewZkResult(zkPath)
 
@@ -128,6 +138,7 @@ func (ex ZkExplorer) addTabletLinks(data string, result *ZkResult) {
 	}
 }
 
+// ZkResult is the node for a zk path
 type ZkResult struct {
 	Path     string
 	Data     string
@@ -137,6 +148,7 @@ type ZkResult struct {
 	Error    string
 }
 
+// NewZkResult creates a new ZkResult for the path with no links nor actions.
 func NewZkResult(zkPath string) *ZkResult {
 	return &ZkResult{
 		Links:   make(map[string]template.URL),

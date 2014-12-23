@@ -898,7 +898,7 @@ func fetchAndParseJsonFile(addr, filename string, result interface{}) error {
 	return json.Unmarshal(data, result)
 }
 
-// Operate on restore tablet.
+// Restore operates on restore tablet.
 // Check that the SnapshotManifest is valid and the master has not changed.
 // Shutdown mysqld.
 // Load the snapshot from source tablet.
