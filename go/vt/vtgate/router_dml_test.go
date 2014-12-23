@@ -112,6 +112,7 @@ func TestUpdateEqualFail(t *testing.T) {
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
+	s.ShardSpec = DefaultShardSpec
 }
 
 func TestDeleteEqual(t *testing.T) {
@@ -241,6 +242,7 @@ func TestDeleteEqualFail(t *testing.T) {
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
+	s.ShardSpec = DefaultShardSpec
 }
 
 func TestDeleteVindexFail(t *testing.T) {
@@ -576,15 +578,13 @@ func TestInsertFail(t *testing.T) {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 
-	func() {
-		getSandbox("TestRouter").ShardSpec = "80-"
-		defer func() { getSandbox("TestRouter").ShardSpec = DefaultShardSpec }()
-		_, err = routerExec(router, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
-		want = "execInsertSharded: KeyspaceId 166b40b44aba4bd6 didn't match any shards"
-		if err == nil || !strings.HasPrefix(err.Error(), want) {
-			t.Errorf("routerExec: %v, want prefix %v", err, want)
-		}
-	}()
+	getSandbox("TestRouter").ShardSpec = "80-"
+	_, err = routerExec(router, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
+	want = "execInsertSharded: KeyspaceId 166b40b44aba4bd6 didn't match any shards"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("routerExec: %v, want prefix %v", err, want)
+	}
+	getSandbox("TestRouter").ShardSpec = DefaultShardSpec
 
 	sbclookup.mustFailServer = 1
 	_, err = routerExec(router, "insert into music(user_id, id) values (1, null)", nil)

@@ -6,6 +6,7 @@ package vtgate
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -93,8 +94,8 @@ func TestStreamUnsharded(t *testing.T) {
 
 func TestUnshardedFail(t *testing.T) {
 	router, _, _, _ := createRouterEnv()
-	getSandbox(TEST_UNSHARDED).SrvKeyspaceMustFail = 1
 
+	getSandbox(TEST_UNSHARDED).SrvKeyspaceMustFail = 1
 	_, err := routerExec(router, "select * from music_user_map where id = 1", nil)
 	want := "paramsUnsharded: keyspace TestUnsharded fetch error: topo error GetSrvKeyspace"
 	if err == nil || err.Error() != want {
@@ -110,8 +111,8 @@ func TestUnshardedFail(t *testing.T) {
 
 func TestStreamUnshardedFail(t *testing.T) {
 	router, _, _, _ := createRouterEnv()
-	getSandbox(TEST_UNSHARDED).SrvKeyspaceMustFail = 1
 
+	getSandbox(TEST_UNSHARDED).SrvKeyspaceMustFail = 1
 	q := proto.Query{
 		Sql:        "select * from music_user_map where id = 1",
 		TabletType: topo.TYPE_MASTER,
@@ -193,6 +194,30 @@ func TestSelectEqual(t *testing.T) {
 	}
 }
 
+func TestSelectEqualNotFound(t *testing.T) {
+	router, _, _, sbclookup := createRouterEnv()
+
+	sbclookup.setResults([]*mproto.QueryResult{&mproto.QueryResult{}})
+	result, err := routerExec(router, "select * from music where id = 1", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantResult := &mproto.QueryResult{}
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("result: %+v, want %+v", result, wantResult)
+	}
+
+	sbclookup.setResults([]*mproto.QueryResult{&mproto.QueryResult{}})
+	result, err = routerExec(router, "select * from user where name = 'foo'", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantResult = &mproto.QueryResult{}
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("result: %+v, want %+v", result, wantResult)
+	}
+}
+
 func TestStreamSelectEqual(t *testing.T) {
 	router, _, _, _ := createRouterEnv()
 
@@ -211,13 +236,57 @@ func TestStreamSelectEqual(t *testing.T) {
 }
 
 func TestSelectEqualFail(t *testing.T) {
-	router, _, _, _ := createRouterEnv()
+	router, _, _, sbclookup := createRouterEnv()
+	s := getSandbox("TestRouter")
 
-	_, err := routerExec(router, "select * from user where id = :aa", nil)
-	want := "paramsSelectEqual: could not find bind var :aa"
+	_, err := routerExec(router, "select * from user where id = (select count(*) from music)", nil)
+	want := "cannot route query: select * from user where id = (select count(*) from music): has subquery"
 	if err == nil || err.Error() != want {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
+
+	_, err = routerExec(router, "select * from user where id = :aa", nil)
+	want = "paramsSelectEqual: could not find bind var :aa"
+	if err == nil || err.Error() != want {
+		t.Errorf("routerExec: %v, want %v", err, want)
+	}
+
+	s.SrvKeyspaceMustFail = 1
+	_, err = routerExec(router, "select * from user where id = 1", nil)
+	want = "paramsSelectEqual: keyspace TestRouter fetch error: topo error GetSrvKeyspace"
+	if err == nil || err.Error() != want {
+		t.Errorf("routerExec: %v, want %v", err, want)
+	}
+
+	sbclookup.mustFailServer = 1
+	_, err = routerExec(router, "select * from music where id = 1", nil)
+	want = "paramsSelectEqual: lookup.Map"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("routerExec: %v, want prefix %v", err, want)
+	}
+
+	s.ShardSpec = "80-"
+	_, err = routerExec(router, "select * from user where id = 1", nil)
+	want = "paramsSelectEqual: KeyspaceId 166b40b44aba4bd6 didn't match any shards"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("routerExec: %v, want prefix %v", err, want)
+	}
+	s.ShardSpec = DefaultShardSpec
+
+	sbclookup.mustFailServer = 1
+	_, err = routerExec(router, "select * from user where name = 'foo'", nil)
+	want = "paramsSelectEqual: lookup.Map"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("routerExec: %v, want prefix %v", err, want)
+	}
+
+	s.ShardSpec = "80-"
+	_, err = routerExec(router, "select * from user where name = 'foo'", nil)
+	want = "paramsSelectEqual: KeyspaceId 166b40b44aba4bd6 didn't match any shards"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("routerExec: %v, want prefix %v", err, want)
+	}
+	s.ShardSpec = DefaultShardSpec
 }
 
 func TestSelectIN(t *testing.T) {
@@ -347,6 +416,13 @@ func TestSelectINFail(t *testing.T) {
 
 	_, err := routerExec(router, "select * from user where id in (:aa)", nil)
 	want := "paramsSelectIN: could not find bind var :aa"
+	if err == nil || err.Error() != want {
+		t.Errorf("routerExec: %v, want %v", err, want)
+	}
+
+	getSandbox("TestRouter").SrvKeyspaceMustFail = 1
+	_, err = routerExec(router, "select * from user where id in (1)", nil)
+	want = "paramsSelectEqual: keyspace TestRouter fetch error: topo error GetSrvKeyspace"
 	if err == nil || err.Error() != want {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
