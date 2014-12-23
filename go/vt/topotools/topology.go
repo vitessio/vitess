@@ -10,6 +10,7 @@ import (
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -28,7 +29,7 @@ func (tn *TabletNode) ShortName() string {
 	if tn.Port == 0 {
 		return hostPart
 	}
-	return fmt.Sprintf("%v:%v", hostPart, tn.Port)
+	return netutil.JoinHostPort(hostPart, tn.Port)
 }
 
 func newTabletNodeFromTabletInfo(ti *topo.TabletInfo) *TabletNode {
