@@ -44,7 +44,6 @@ func createSetup(t *testing.T) (topo.Server, topo.Server) {
 			Uid:  123,
 		},
 		Hostname: "masterhost",
-		Parent:   topo.TabletAlias{},
 		IPAddr:   "1.2.3.4",
 		Portmap: map[string]int{
 			"vt":    8101,
@@ -73,10 +72,6 @@ func createSetup(t *testing.T) (topo.Server, topo.Server) {
 		},
 		Hostname: "slavehost",
 
-		Parent: topo.TabletAlias{
-			Cell: "test_cell",
-			Uid:  123,
-		},
 		Keyspace:       "test_keyspace",
 		Shard:          "0",
 		Type:           topo.TYPE_REPLICA,

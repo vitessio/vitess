@@ -23,12 +23,10 @@ package topotools
 
 import (
 	"fmt"
-	"sync"
 
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -60,7 +58,6 @@ func Scrap(ctx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, fo
 	// be there anyway.
 	wasAssigned := tablet.IsAssigned()
 	tablet.Type = topo.TYPE_SCRAP
-	tablet.Parent = topo.TabletAlias{}
 	// Update the tablet first, since that is canonical.
 	err = topo.UpdateTablet(ctx, ts, tablet)
 	if err != nil {
@@ -124,35 +121,6 @@ func ChangeType(ctx context.Context, ts topo.Server, tabletAlias topo.TabletAlia
 
 	tablet.Type = newType
 	if newType == topo.TYPE_IDLE {
-		if tablet.Parent.IsZero() {
-			si, err := ts.GetShard(tablet.Keyspace, tablet.Shard)
-			if err != nil {
-				return err
-			}
-			rec := concurrency.AllErrorRecorder{}
-			wg := sync.WaitGroup{}
-			for _, cell := range si.Cells {
-				wg.Add(1)
-				go func(cell string) {
-					defer wg.Done()
-					sri, err := ts.GetShardReplication(cell, tablet.Keyspace, tablet.Shard)
-					if err != nil {
-						log.Warningf("Cannot check cell %v for extra replication paths, assuming it's good", cell)
-						return
-					}
-					for _, rl := range sri.ReplicationLinks {
-						if rl.Parent == tabletAlias {
-							rec.RecordError(fmt.Errorf("Still have a ReplicationLink in cell %v", cell))
-						}
-					}
-				}(cell)
-			}
-			wg.Wait()
-			if rec.HasErrors() {
-				return rec.Error()
-			}
-		}
-		tablet.Parent = topo.TabletAlias{}
 		tablet.Keyspace = ""
 		tablet.Shard = ""
 		tablet.KeyRange = key.KeyRange{}

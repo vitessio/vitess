@@ -425,7 +425,7 @@ func (agent *ActionAgent) PromoteSlave(ctx context.Context) (*actionnode.Restart
 	// Perform the action.
 	rsd := &actionnode.RestartSlaveData{
 		Parent: tablet.Alias,
-		Force:  (tablet.Parent.Uid == topo.NO_TABLET),
+		Force:  (tablet.Type == topo.TYPE_MASTER),
 	}
 	rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted, err = agent.Mysqld.PromoteSlave(false, agent.hookExtraEnv())
 	if err != nil {
@@ -454,66 +454,19 @@ func (agent *ActionAgent) RestartSlave(ctx context.Context, rsd *actionnode.Rest
 	if err != nil {
 		return err
 	}
-
-	// If this check fails, we seem reparented. The only part that
-	// could have failed is the insert in the replication
-	// graph. Do NOT try to reparent again. That will either wedge
-	// replication or corrupt data.
-	if tablet.Parent != rsd.Parent {
-		log.V(6).Infof("restart with new parent")
-		// Remove tablet from the replication graph.
-		if err = topo.DeleteTabletReplicationData(agent.TopoServer, tablet.Tablet); err != nil && err != topo.ErrNoNode {
-			return err
-		}
-
-		// Move a lag slave into the orphan lag type so we can safely ignore
-		// this reparenting until replication catches up.
-		if tablet.Type == topo.TYPE_LAG {
-			tablet.Type = topo.TYPE_LAG_ORPHAN
-		} else {
-			err = agent.Mysqld.RestartSlave(rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted)
-			if err != nil {
-				return err
-			}
-		}
-		// Once this action completes, update authoritative tablet node first.
-		tablet.Parent = rsd.Parent
-		err = topo.UpdateTablet(ctx, agent.TopoServer, tablet)
-		if err != nil {
-			return err
-		}
-	} else if rsd.Force {
-		err = agent.Mysqld.RestartSlave(rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted)
-		if err != nil {
-			return err
-		}
-		// Complete the special orphan accounting.
-		if tablet.Type == topo.TYPE_LAG_ORPHAN {
-			tablet.Type = topo.TYPE_LAG
-			err = topo.UpdateTablet(ctx, agent.TopoServer, tablet)
-			if err != nil {
-				return err
-			}
-		}
-	} else {
-		// There is nothing to safely reparent, so check replication. If
-		// either replication thread is not running, report an error.
-		status, err := agent.Mysqld.SlaveStatus()
-		if err != nil {
-			return fmt.Errorf("cannot verify replication for slave: %v", err)
-		}
-		if !status.SlaveRunning() {
-			return fmt.Errorf("replication not running for slave")
-		}
+	if tablet.Type == topo.TYPE_LAG && !rsd.Force {
+		// if tablet is behind on replication, keep it lagged, but orphan it
+		tablet.Type = topo.TYPE_LAG_ORPHAN
+		return topo.UpdateTablet(ctx, agent.TopoServer, tablet)
 	}
-
-	// Insert the new tablet location in the replication graph now that
-	// we've updated the tablet.
-	err = topo.UpdateTabletReplicationData(ctx, agent.TopoServer, tablet.Tablet)
-	if err != nil && err != topo.ErrNodeExists {
+	if err = agent.Mysqld.RestartSlave(rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted); err != nil {
 		return err
 	}
-
+	// Complete the special orphan accounting.
+	if tablet.Type == topo.TYPE_LAG_ORPHAN {
+		tablet.Type = topo.TYPE_LAG
+		return topo.UpdateTablet(ctx, agent.TopoServer, tablet)
+	}
 	return nil
 }
 
@@ -526,7 +479,6 @@ func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, swrd *actionnod
 	}
 
 	// Once this action completes, update authoritative tablet node first.
-	tablet.Parent = swrd.Parent
 	if tablet.Type == topo.TYPE_MASTER {
 		tablet.Type = topo.TYPE_SPARE
 		tablet.State = topo.STATE_READ_ONLY
@@ -559,8 +511,6 @@ func (agent *ActionAgent) updateReplicationGraphForPromotedSlave(ctx context.Con
 	// Update tablet regardless - trend towards consistency.
 	tablet.State = topo.STATE_READ_WRITE
 	tablet.Type = topo.TYPE_MASTER
-	tablet.Parent.Cell = ""
-	tablet.Parent.Uid = topo.NO_TABLET
 	tablet.Health = nil
 	err := topo.UpdateTablet(ctx, agent.TopoServer, tablet)
 	if err != nil {
@@ -636,7 +586,7 @@ func (agent *ActionAgent) Snapshot(ctx context.Context, args *actionnode.Snapsho
 			log.Infof("change type back after snapshot: %v", newType)
 		}
 	}
-	if tablet.Parent.Uid == topo.NO_TABLET && args.ForceMasterSnapshot && newType != topo.TYPE_SNAPSHOT_SOURCE {
+	if originalType == topo.TYPE_MASTER && args.ForceMasterSnapshot && newType != topo.TYPE_SNAPSHOT_SOURCE {
 		log.Infof("force change type backup -> master: %v", tablet.Alias)
 		tablet.Tablet.Type = topo.TYPE_MASTER
 		err = topo.UpdateTablet(ctx, agent.TopoServer, tablet)
@@ -660,12 +610,16 @@ func (agent *ActionAgent) Snapshot(ctx context.Context, args *actionnode.Snapsho
 		SlaveStartRequired: slaveStartRequired,
 		ReadOnly:           readOnly,
 	}
-	if tablet.Parent.Uid == topo.NO_TABLET {
+	if tablet.Type == topo.TYPE_MASTER {
 		// If this is a master, this will be the new parent.
-		// FIXME(msolomon) this doesn't work in hierarchical replication.
 		sr.ParentAlias = tablet.Alias
 	} else {
-		sr.ParentAlias = tablet.Parent
+		// Otherwise get the master from the shard record
+		si, err := agent.TopoServer.GetShard(tablet.Keyspace, tablet.Shard)
+		if err != nil {
+			return nil, err
+		}
+		sr.ParentAlias = si.MasterAlias
 	}
 	return sr, nil
 }
@@ -705,7 +659,7 @@ func (agent *ActionAgent) SnapshotSourceEnd(ctx context.Context, args *actionnod
 //   a successful ReserveForRestore but a failed Snapshot)
 // - to SCRAP if something in the process on the target host fails
 // - to SPARE if the clone works
-func (agent *ActionAgent) changeTypeToRestore(ctx context.Context, tablet, sourceTablet *topo.TabletInfo, parentAlias topo.TabletAlias, keyRange key.KeyRange) error {
+func (agent *ActionAgent) changeTypeToRestore(ctx context.Context, tablet, sourceTablet *topo.TabletInfo, keyRange key.KeyRange) error {
 	// run the optional preflight_assigned hook
 	hk := hook.NewSimpleHook("preflight_assigned")
 	topotools.ConfigureTabletHook(hk, agent.TabletAlias)
@@ -714,7 +668,6 @@ func (agent *ActionAgent) changeTypeToRestore(ctx context.Context, tablet, sourc
 	}
 
 	// change the type
-	tablet.Parent = parentAlias
 	tablet.Keyspace = sourceTablet.Keyspace
 	tablet.Shard = sourceTablet.Shard
 	tablet.Type = topo.TYPE_RESTORE
@@ -752,17 +705,7 @@ func (agent *ActionAgent) ReserveForRestore(ctx context.Context, args *actionnod
 		return err
 	}
 
-	// find the parent tablet alias we will be using
-	var parentAlias topo.TabletAlias
-	if sourceTablet.Parent.Uid == topo.NO_TABLET {
-		// If this is a master, this will be the new parent.
-		// FIXME(msolomon) this doesn't work in hierarchical replication.
-		parentAlias = sourceTablet.Alias
-	} else {
-		parentAlias = sourceTablet.Parent
-	}
-
-	return agent.changeTypeToRestore(ctx, tablet, sourceTablet, parentAlias, sourceTablet.KeyRange)
+	return agent.changeTypeToRestore(ctx, tablet, sourceTablet, sourceTablet.KeyRange)
 }
 
 func fetchAndParseJSONFile(addr, filename string, result interface{}) error {
@@ -834,7 +777,7 @@ func (agent *ActionAgent) Restore(ctx context.Context, args *actionnode.RestoreA
 	}
 
 	if !args.WasReserved {
-		if err := agent.changeTypeToRestore(ctx, tablet, sourceTablet, parentTablet.Alias, sourceTablet.KeyRange); err != nil {
+		if err := agent.changeTypeToRestore(ctx, tablet, sourceTablet, sourceTablet.KeyRange); err != nil {
 			return err
 		}
 	}

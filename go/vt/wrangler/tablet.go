@@ -51,14 +51,6 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 			return fmt.Errorf("creating this tablet would override old master %v in shard %v/%v", si.MasterAlias, tablet.Keyspace, tablet.Shard)
 		}
 
-		// see if we specified a parent, otherwise get it from the shard
-		if tablet.Parent.IsZero() && tablet.Type.IsSlaveType() {
-			if si.MasterAlias.IsZero() {
-				return fmt.Errorf("trying to create tablet %v in shard %v/%v without a master", tablet.Alias, tablet.Keyspace, tablet.Shard)
-			}
-			tablet.Parent = si.MasterAlias
-		}
-
 		// update the shard record if needed
 		if err := wr.updateShardCellsAndMaster(si, tablet.Alias, tablet.Type, force); err != nil {
 			return err
@@ -177,7 +169,7 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 	return err
 }
 
-// Change the type of tablet and recompute all necessary derived paths in the
+// ChangeType changes the type of tablet and recompute all necessary derived paths in the
 // serving graph. If force is true, it will bypass the RPC action
 // system and make the data change directly, and not run the remote
 // hooks.

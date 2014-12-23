@@ -498,7 +498,7 @@ func (mysqld *Mysqld) IpAddr() string {
 	return addr
 }
 
-// executes some SQL commands using a mysql command line interface process
+// ExecuteMysqlCommand executes some SQL commands using a mysql command line interface process
 func (mysqld *Mysqld) ExecuteMysqlCommand(sql string) error {
 	dir, err := vtenv.VtMysqlRoot()
 	if err != nil {

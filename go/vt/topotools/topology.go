@@ -133,7 +133,7 @@ func (ks *KeyspaceNodes) hasOnlyNumericShardNames() bool {
 // TabletTypes returns a slice of tablet type names this ks
 // contains.
 func (ks KeyspaceNodes) TabletTypes() []topo.TabletType {
-	contained := make([]topo.TabletType, 0)
+	var contained []topo.TabletType
 	for _, t := range topo.AllTabletTypes {
 		if ks.HasType(t) {
 			contained = append(contained, t)

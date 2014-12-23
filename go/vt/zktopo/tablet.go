@@ -21,19 +21,16 @@ import (
 This file contains the tablet management parts of zktopo.Server
 */
 
+// TabletPathForAlias converts a tablet alias to the zk path
 func TabletPathForAlias(alias topo.TabletAlias) string {
-	return fmt.Sprintf("/zk/%v/vt/tablets/%v", alias.Cell, alias.TabletUidStr())
-}
-
-func TabletActionPathForAlias(alias topo.TabletAlias) string {
-	return fmt.Sprintf("/zk/%v/vt/tablets/%v/action", alias.Cell, alias.TabletUidStr())
+	return fmt.Sprintf("/zk/%v/vt/tablets/%v", alias.Cell, alias.TabletUIDStr())
 }
 
 func tabletDirectoryForCell(cell string) string {
 	return fmt.Sprintf("/zk/%v/vt/tablets", cell)
 }
 
-func tabletFromJson(data string) (*topo.Tablet, error) {
+func tabletFromJSON(data string) (*topo.Tablet, error) {
 	t := &topo.Tablet{}
 	err := json.Unmarshal([]byte(data), t)
 	if err != nil {
@@ -42,19 +39,20 @@ func tabletFromJson(data string) (*topo.Tablet, error) {
 	return t, nil
 }
 
-func tabletInfoFromJson(data string, version int64) (*topo.TabletInfo, error) {
-	tablet, err := tabletFromJson(data)
+func tabletInfoFromJSON(data string, version int64) (*topo.TabletInfo, error) {
+	tablet, err := tabletFromJSON(data)
 	if err != nil {
 		return nil, err
 	}
 	return topo.NewTabletInfo(tablet, version), nil
 }
 
+// CreateTablet is part of the topo.Server interface
 func (zkts *Server) CreateTablet(tablet *topo.Tablet) error {
 	zkTabletPath := TabletPathForAlias(tablet.Alias)
 
 	// Create /zk/<cell>/vt/tablets/<uid>
-	_, err := zk.CreateRecursive(zkts.zconn, zkTabletPath, tablet.Json(), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	_, err := zk.CreateRecursive(zkts.zconn, zkTabletPath, tablet.JSON(), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 			err = topo.ErrNodeExists
@@ -69,9 +67,10 @@ func (zkts *Server) CreateTablet(tablet *topo.Tablet) error {
 	return nil
 }
 
+// UpdateTablet is part of the topo.Server interface
 func (zkts *Server) UpdateTablet(tablet *topo.TabletInfo, existingVersion int64) (int64, error) {
 	zkTabletPath := TabletPathForAlias(tablet.Alias)
-	stat, err := zkts.zconn.Set(zkTabletPath, tablet.Json(), int(existingVersion))
+	stat, err := zkts.zconn.Set(zkTabletPath, tablet.JSON(), int(existingVersion))
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZBADVERSION) {
 			err = topo.ErrBadVersion
@@ -89,6 +88,7 @@ func (zkts *Server) UpdateTablet(tablet *topo.TabletInfo, existingVersion int64)
 	return int64(stat.Version()), nil
 }
 
+// UpdateTabletFields is part of the topo.Server interface
 func (zkts *Server) UpdateTabletFields(tabletAlias topo.TabletAlias, update func(*topo.Tablet) error) error {
 	// Store the last tablet value so we can log it if the change succeeds.
 	var lastTablet *topo.Tablet
@@ -99,7 +99,7 @@ func (zkts *Server) UpdateTabletFields(tabletAlias topo.TabletAlias, update func
 			return "", fmt.Errorf("no data for tablet addr update: %v", tabletAlias)
 		}
 
-		tablet, err := tabletFromJson(oldValue)
+		tablet, err := tabletFromJSON(oldValue)
 		if err != nil {
 			return "", err
 		}
@@ -126,6 +126,7 @@ func (zkts *Server) UpdateTabletFields(tabletAlias topo.TabletAlias, update func
 	return nil
 }
 
+// DeleteTablet is part of the topo.Server interface
 func (zkts *Server) DeleteTablet(alias topo.TabletAlias) error {
 	// We need to find out the keyspace and shard names because those are required
 	// in the TabletChange event.
@@ -156,6 +157,7 @@ func (zkts *Server) DeleteTablet(alias topo.TabletAlias) error {
 	return nil
 }
 
+// GetTablet is part of the topo.Server interface
 func (zkts *Server) GetTablet(alias topo.TabletAlias) (*topo.TabletInfo, error) {
 	zkTabletPath := TabletPathForAlias(alias)
 	data, stat, err := zkts.zconn.Get(zkTabletPath)
@@ -165,9 +167,10 @@ func (zkts *Server) GetTablet(alias topo.TabletAlias) (*topo.TabletInfo, error) 
 		}
 		return nil, err
 	}
-	return tabletInfoFromJson(data, int64(stat.Version()))
+	return tabletInfoFromJSON(data, int64(stat.Version()))
 }
 
+// GetTabletsByCell is part of the topo.Server interface
 func (zkts *Server) GetTabletsByCell(cell string) ([]topo.TabletAlias, error) {
 	zkTabletsPath := tabletDirectoryForCell(cell)
 	children, _, err := zkts.zconn.Children(zkTabletsPath)
@@ -182,7 +185,7 @@ func (zkts *Server) GetTabletsByCell(cell string) ([]topo.TabletAlias, error) {
 	result := make([]topo.TabletAlias, len(children))
 	for i, child := range children {
 		result[i].Cell = cell
-		result[i].Uid, err = topo.ParseUid(child)
+		result[i].Uid, err = topo.ParseUID(child)
 		if err != nil {
 			return nil, err
 		}

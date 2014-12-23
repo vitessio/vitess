@@ -15,7 +15,10 @@ import (
 )
 
 const (
-	TestShard    = "0"
+	// TestShard is the shard we use in tests
+	TestShard = "0"
+
+	// TestKeyspace is the keyspace we use in tests
 	TestKeyspace = "test_keyspace"
 )
 
@@ -74,7 +77,7 @@ func (fix *Fixture) MakeMySQLMaster(uid int) {
 		if id == uid {
 			tablet.mysql.MasterAddr = ""
 		} else {
-			tablet.mysql.MasterAddr = newMaster.MysqlIpAddr()
+			tablet.mysql.MasterAddr = newMaster.MysqlIPAddr()
 		}
 	}
 }
@@ -95,16 +98,13 @@ func (fix *Fixture) AddTablet(uid int, cell string, tabletType topo.TabletType, 
 		Shard:    TestShard,
 		KeyRange: newKeyRange(TestShard),
 	}
-	if master != nil {
-		tablet.Parent = master.Alias
-	}
 
 	if err := fix.Wrangler.InitTablet(tablet, true, true, false); err != nil {
 		fix.Fatalf("CreateTablet: %v", err)
 	}
 	mysqlDaemon := &mysqlctl.FakeMysqlDaemon{}
 	if master != nil {
-		mysqlDaemon.MasterAddr = master.MysqlIpAddr()
+		mysqlDaemon.MasterAddr = master.MysqlIPAddr()
 	}
 	mysqlDaemon.MysqlPort = 3334 + 10*uid
 

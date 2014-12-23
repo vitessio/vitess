@@ -20,7 +20,7 @@ import (
 var (
 	port        = flag.Int("port", 6612, "vtocc port")
 	mysqlPort   = flag.Int("mysql_port", 3306, "mysql port")
-	tabletUid   = flag.Uint("tablet_uid", 41983, "tablet uid")
+	tabletUID   = flag.Uint("tablet_uid", 41983, "tablet uid")
 	mysqlSocket = flag.String("mysql_socket", "", "path to the mysql socket")
 
 	tabletAddr string
@@ -182,7 +182,7 @@ func main() {
 	flag.Parse()
 
 	tabletAddr = netutil.JoinHostPort("localhost", *port)
-	mycnf := mysqlctl.NewMycnf(uint32(*tabletUid), *mysqlPort)
+	mycnf := mysqlctl.NewMycnf(uint32(*tabletUID), *mysqlPort)
 
 	if *mysqlSocket != "" {
 		mycnf.SocketFile = *mysqlSocket
