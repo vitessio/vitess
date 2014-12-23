@@ -72,25 +72,15 @@ func setupQueryRules() {
 }
 
 func TestQueryRuleInfoGetSetQueryRules(t *testing.T) {
-	var qrs *QueryRules
 	setupQueryRules()
 	qri := NewQueryRuleInfo()
 
-	err := qri.RegisterQueryRuleSource(keyrangeQueryRules)
-	if err != nil {
-		t.Errorf("Fail to register query rule source %s: %s", keyrangeQueryRules, err)
-	}
-	err = qri.RegisterQueryRuleSource(blacklistQueryRules)
-	if err != nil {
-		t.Errorf("Fail to register query rule source %s: %s", blacklistQueryRules, err)
-	}
-	err = qri.RegisterQueryRuleSource(customQueryRules)
-	if err != nil {
-		t.Errorf("Fail to register query rule source %s: %s", customQueryRules, err)
-	}
+	qri.RegisterQueryRuleSource(keyrangeQueryRules)
+	qri.RegisterQueryRuleSource(blacklistQueryRules)
+	qri.RegisterQueryRuleSource(customQueryRules)
 
 	// Test if we can get a QueryRules without a predefined rule set name
-	err, qrs = qri.GetRules("Foo")
+	err, qrs := qri.GetRules("Foo")
 	if err == nil {
 		t.Errorf("GetRules shouldn't succeed with 'Foo' as the rule set name")
 	}
@@ -152,18 +142,9 @@ func TestQueryRuleInfoFilterByPlan(t *testing.T) {
 	setupQueryRules()
 	qri := NewQueryRuleInfo()
 
-	err := qri.RegisterQueryRuleSource(keyrangeQueryRules)
-	if err != nil {
-		t.Errorf("Fail to register query rule source %s: %s", keyrangeQueryRules, err)
-	}
-	err = qri.RegisterQueryRuleSource(blacklistQueryRules)
-	if err != nil {
-		t.Errorf("Fail to register query rule source %s: %s", blacklistQueryRules, err)
-	}
-	err = qri.RegisterQueryRuleSource(customQueryRules)
-	if err != nil {
-		t.Errorf("Fail to register query rule source %s: %s", customQueryRules, err)
-	}
+	qri.RegisterQueryRuleSource(keyrangeQueryRules)
+	qri.RegisterQueryRuleSource(blacklistQueryRules)
+	qri.RegisterQueryRuleSource(customQueryRules)
 
 	qri.SetRules(keyrangeQueryRules, keyrangeRules)
 	qri.SetRules(blacklistQueryRules, blacklistRules)

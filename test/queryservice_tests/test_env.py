@@ -222,7 +222,7 @@ class TestEnv(object):
     else:
       self.tablet.start_vtocc(
               memcache=self.memcache,
-              customrules=customrules,
+              filecustomrules=customrules,
               schema_override=schema_override,
               table_acl_config=table_acl_config,
               auth=True,

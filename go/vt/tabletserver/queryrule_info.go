@@ -8,6 +8,7 @@ import (
 	"errors"
 	"sync"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 )
 
@@ -29,14 +30,13 @@ func NewQueryRuleInfo() *QueryRuleInfo {
 }
 
 // RegisterQueryRuleSource registers a query rule source name with QueryRuleInfo
-func (qri *QueryRuleInfo) RegisterQueryRuleSource(ruleSource string) error {
+func (qri *QueryRuleInfo) RegisterQueryRuleSource(ruleSource string) {
 	qri.mu.Lock()
 	defer qri.mu.Unlock()
 	if _, existed := qri.queryRulesMap[ruleSource]; existed {
-		return errors.New("Query rule source " + ruleSource + " has been registered")
+		log.Fatal("Query rule source " + ruleSource + " has been registered")
 	}
 	qri.queryRulesMap[ruleSource] = NewQueryRules()
-	return nil
 }
 
 // SetRules takes an external QueryRules structure and overwrite one of the

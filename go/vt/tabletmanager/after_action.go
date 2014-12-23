@@ -35,10 +35,10 @@ var (
 )
 
 // Query rules from keyrange
-const KeyrangeQueryRules string = "KEYRANGE_QUERY_RULES"
+const keyrangeQueryRules string = "KeyrangeQueryRules"
 
 // Query rules from blacklist
-const BlacklistQueryRules string = "BLACKLIST_QUERY_RULES"
+const blacklistQueryRules string = "BlacklistQueryRules"
 
 func (agent *ActionAgent) allowQueries(tablet *topo.Tablet, blacklistedTables []string) error {
 	if agent.DBConfigs == nil {
@@ -120,14 +120,14 @@ func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *topo.Tablet, bla
 		blacklistRules.Add(qr)
 	}
 	// Push all three sets of QueryRules to SqlQueryRpcService
-	loadRuleErr := tabletserver.SetQueryRules(KeyrangeQueryRules, keyrangeRules)
+	loadRuleErr := tabletserver.SetQueryRules(keyrangeQueryRules, keyrangeRules)
 	if loadRuleErr != nil {
-		log.Warningf("Fail to load query rule set %s: %s", KeyrangeQueryRules, loadRuleErr)
+		log.Warningf("Fail to load query rule set %s: %s", keyrangeQueryRules, loadRuleErr)
 	}
 
-	loadRuleErr = tabletserver.SetQueryRules(BlacklistQueryRules, blacklistRules)
+	loadRuleErr = tabletserver.SetQueryRules(blacklistQueryRules, blacklistRules)
 	if loadRuleErr != nil {
-		log.Warningf("Fail to load query rule set %s: %s", BlacklistQueryRules, loadRuleErr)
+		log.Warningf("Fail to load query rule set %s: %s", blacklistQueryRules, loadRuleErr)
 	}
 	return nil
 }
@@ -242,13 +242,6 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 
 func init() {
 	// Register query rule sources under control of agent
-	err := tabletserver.QueryRuleSources.RegisterQueryRuleSource(KeyrangeQueryRules)
-	if err != nil {
-		log.Errorf("Cannot register %s with tabletserver.QueryRuleSources: %v", KeyrangeQueryRules, err)
-	}
-
-	err = tabletserver.QueryRuleSources.RegisterQueryRuleSource(BlacklistQueryRules)
-	if err != nil {
-		log.Errorf("Cannot register %s with tabletserver.QueryRuleSources: %v", BlacklistQueryRules, err)
-	}
+	tabletserver.QueryRuleSources.RegisterQueryRuleSource(keyrangeQueryRules)
+	tabletserver.QueryRuleSources.RegisterQueryRuleSource(blacklistQueryRules)
 }

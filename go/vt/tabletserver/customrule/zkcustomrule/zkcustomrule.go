@@ -147,11 +147,7 @@ func (zkcr *ZkCustomRule) GetRules() (qrs *tabletserver.QueryRules, version int6
 
 func ActivateZkCustomRules() {
 	if *zkRulePath != "" {
-		err := tabletserver.QueryRuleSources.RegisterQueryRuleSource(ZkCustomRuleSource)
-		if err != nil {
-			log.Errorf("Failed to register rule source %s: %v", ZkCustomRuleSource, err)
-			return
-		}
+		tabletserver.QueryRuleSources.RegisterQueryRuleSource(ZkCustomRuleSource)
 		zkCustomRule.Open(*zkRulePath)
 	}
 }

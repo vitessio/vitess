@@ -20,12 +20,8 @@ import (
 var (
 	// Actual FileCustomRule object in charge of rule updates
 	fileCustomRule *FileCustomRule = NewFileCustomRule(DefaultFilePollingSeconds)
-	// Commandline flag to specify rule path, this is compatible with previous versions of vttablet
-	fileRulePathCompat = flag.String("customrules", "", "file based custom rule path (same with filecustomrules)")
 	// Commandline flag to specify rule path
 	fileRulePath = flag.String("filecustomrules", "", "file based custom rule path")
-	// file path that contains rules
-	rulePath string
 )
 
 // FileCustomRule is an implementation of CustomRuleManager based on
@@ -130,22 +126,14 @@ func (fcr *FileCustomRule) Close() {
 // GetRules returns most recent cached query rules
 func (fcr *FileCustomRule) GetRules() (qrs *tabletserver.QueryRules, version int64, err error) {
 	fcr.mu.Lock()
-	fcr.mu.Unlock()
+	defer fcr.mu.Unlock()
 	return fcr.currentRuleSet.Copy(), fcr.currentRuleSetTimestamp, nil
 }
 
 func ActivateFileCustomRules() {
-	rulePath = *fileRulePath
-	if rulePath == "" {
-		rulePath = *fileRulePathCompat
-	}
-	if rulePath != "" {
-		err := tabletserver.QueryRuleSources.RegisterQueryRuleSource(FileCustomRuleSource)
-		if err != nil {
-			log.Errorf("Failed to register rule source %s: %v", FileCustomRuleSource, err)
-			return
-		}
-		fileCustomRule.Open(rulePath)
+	if *fileRulePath != "" {
+		tabletserver.QueryRuleSources.RegisterQueryRuleSource(FileCustomRuleSource)
+		fileCustomRule.Open(*fileRulePath)
 	}
 }
 
