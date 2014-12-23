@@ -17,6 +17,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/cmd/vtctld/proto"
+	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
@@ -134,7 +135,7 @@ func (ex ZkExplorer) addTabletLinks(data string, result *ZkResult) {
 	}
 
 	if port, ok := t.Portmap["vt"]; ok {
-		result.Links["status"] = template.URL(fmt.Sprintf("http://%v:%v/debug/status", t.Hostname, port))
+		result.Links["status"] = template.URL(fmt.Sprintf("http://%v/debug/status", netutil.JoinHostPort(t.Hostname, port)))
 	}
 }
 
