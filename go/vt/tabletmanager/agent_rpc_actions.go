@@ -14,7 +14,6 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/mysql/proto"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/hook"
@@ -23,20 +22,18 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
-	"github.com/youtube/vitess/go/vt/topotools/events"
 	"golang.org/x/net/context"
 )
 
 // This file contains the actions that exist as RPC only on the ActionAgent.
 // The various rpc server implementations just call these.
 
-// RpcAgent defines the interface implemented by the Agent for RPCs.
+// RPCAgent defines the interface implemented by the Agent for RPCs.
 // It is useful for RPC implementations to test their full stack.
-type RpcAgent interface {
+type RPCAgent interface {
 	// RPC calls
 
 	// Various read-only methods
@@ -124,38 +121,38 @@ type RpcAgent interface {
 	Restore(ctx context.Context, args *actionnode.RestoreArgs, logger logutil.Logger) error
 
 	// RPC helpers
-	RpcWrap(ctx context.Context, name string, args, reply interface{}, f func() error) error
-	RpcWrapLock(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error) error
-	RpcWrapLockAction(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error) error
+	RPCWrap(ctx context.Context, name string, args, reply interface{}, f func() error) error
+	RPCWrapLock(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error) error
+	RPCWrapLockAction(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error) error
 }
 
 // TODO(alainjobart): all the calls mention something like:
-// Should be called under RpcWrap.
+// Should be called under RPCWrap.
 // Eventually, when all calls are going through RPCs, we'll refactor
 // this so there is only one wrapper, and the extra stuff done by the
-// RpcWrapXXX methods will be done internally. Until then, it's safer
+// RPCWrapXXX methods will be done internally. Until then, it's safer
 // to have the comment.
 
 // Ping makes sure RPCs work, and refreshes the tablet record.
-// Should be called under RpcWrap.
+// Should be called under RPCWrap.
 func (agent *ActionAgent) Ping(ctx context.Context, args string) string {
 	return args
 }
 
 // GetSchema returns the schema.
-// Should be called under RpcWrap.
+// Should be called under RPCWrap.
 func (agent *ActionAgent) GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*myproto.SchemaDefinition, error) {
 	return agent.MysqlDaemon.GetSchema(agent.Tablet().DbName(), tables, excludeTables, includeViews)
 }
 
 // GetPermissions returns the db permissions.
-// Should be called under RpcWrap.
+// Should be called under RPCWrap.
 func (agent *ActionAgent) GetPermissions(ctx context.Context) (*myproto.Permissions, error) {
 	return agent.Mysqld.GetPermissions()
 }
 
 // SetReadOnly makes the mysql instance read-only or read-write
-// Should be called under RpcWrapLockAction.
+// Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) SetReadOnly(ctx context.Context, rdonly bool) error {
 	err := agent.Mysqld.SetReadOnly(rdonly)
 	if err != nil {
@@ -175,43 +172,43 @@ func (agent *ActionAgent) SetReadOnly(ctx context.Context, rdonly bool) error {
 }
 
 // ChangeType changes the tablet type
-// Should be called under RpcWrapLockAction.
+// Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topo.TabletType) error {
 	return topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, tabletType, nil, true /*runHooks*/)
 }
 
 // Scrap scraps the live running tablet
-// Should be called under RpcWrapLockAction.
+// Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) Scrap(ctx context.Context) error {
 	return topotools.Scrap(ctx, agent.TopoServer, agent.TabletAlias, false)
 }
 
 // Sleep sleeps for the duration
-// Should be called under RpcWrapLockAction.
+// Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) Sleep(ctx context.Context, duration time.Duration) {
 	time.Sleep(duration)
 }
 
 // ExecuteHook executes the provided hook locally, and returns the result.
-// Should be called under RpcWrapLockAction.
+// Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) ExecuteHook(ctx context.Context, hk *hook.Hook) *hook.HookResult {
 	topotools.ConfigureTabletHook(hk, agent.TabletAlias)
 	return hk.Execute()
 }
 
 // RefreshState reload the tablet record from the topo server.
-// Should be called under RpcWrapLockAction, so it actually works.
+// Should be called under RPCWrapLockAction, so it actually works.
 func (agent *ActionAgent) RefreshState(ctx context.Context) {
 }
 
 // RunHealthCheck will manually run the health check on the tablet
-// Should be called under RpcWrap.
+// Should be called under RPCWrap.
 func (agent *ActionAgent) RunHealthCheck(ctx context.Context, targetTabletType topo.TabletType) {
 	agent.runHealthCheck(targetTabletType)
 }
 
 // ReloadSchema will reload the schema
-// Should be called under RpcWrapLockAction.
+// Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) ReloadSchema(ctx context.Context) {
 	if agent.DBConfigs == nil {
 		// we skip this for test instances that can't connect to the DB anyway
@@ -225,7 +222,7 @@ func (agent *ActionAgent) ReloadSchema(ctx context.Context) {
 }
 
 // PreflightSchema will try out the schema change
-// Should be called under RpcWrapLockAction.
+// Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) PreflightSchema(ctx context.Context, change string) (*myproto.SchemaChangeResult, error) {
 	// get the db name from the tablet
 	tablet := agent.Tablet()
@@ -235,7 +232,7 @@ func (agent *ActionAgent) PreflightSchema(ctx context.Context, change string) (*
 }
 
 // ApplySchema will apply a schema change
-// Should be called under RpcWrapLockAction.
+// Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) ApplySchema(ctx context.Context, change *myproto.SchemaChange) (*myproto.SchemaChangeResult, error) {
 	// get the db name from the tablet
 	tablet := agent.Tablet()
@@ -252,7 +249,7 @@ func (agent *ActionAgent) ApplySchema(ctx context.Context, change *myproto.Schem
 }
 
 // ExecuteFetch will execute the given query, possibly disabling binlogs.
-// Should be called under RpcWrap.
+// Should be called under RPCWrap.
 func (agent *ActionAgent) ExecuteFetch(ctx context.Context, query string, maxrows int, wantFields, disableBinlogs bool) (*proto.QueryResult, error) {
 	// get a connection
 	conn, err := agent.MysqlDaemon.GetDbaConnection()
@@ -286,14 +283,14 @@ func (agent *ActionAgent) ExecuteFetch(ctx context.Context, query string, maxrow
 }
 
 // SlaveStatus returns the replication status
-// Should be called under RpcWrap.
+// Should be called under RPCWrap.
 func (agent *ActionAgent) SlaveStatus(ctx context.Context) (*myproto.ReplicationStatus, error) {
 	return agent.MysqlDaemon.SlaveStatus()
 }
 
 // WaitSlavePosition waits until we reach the provided position,
 // and returns the current position
-// Should be called under RpcWrapLock.
+// Should be called under RPCWrapLock.
 func (agent *ActionAgent) WaitSlavePosition(ctx context.Context, position myproto.ReplicationPosition, waitTimeout time.Duration) (*myproto.ReplicationStatus, error) {
 	if err := agent.Mysqld.WaitMasterPos(position, waitTimeout); err != nil {
 		return nil, err
@@ -303,14 +300,14 @@ func (agent *ActionAgent) WaitSlavePosition(ctx context.Context, position myprot
 }
 
 // MasterPosition returns the master position
-// Should be called under RpcWrap.
+// Should be called under RPCWrap.
 func (agent *ActionAgent) MasterPosition(ctx context.Context) (myproto.ReplicationPosition, error) {
 	return agent.Mysqld.MasterPosition()
 }
 
 // ReparentPosition returns the RestartSlaveData for the provided
 // ReplicationPosition.
-// Should be called under RpcWrap.
+// Should be called under RPCWrap.
 func (agent *ActionAgent) ReparentPosition(ctx context.Context, rp *myproto.ReplicationPosition) (*actionnode.RestartSlaveData, error) {
 	replicationStatus, waitPosition, timePromoted, err := agent.Mysqld.ReparentPosition(*rp)
 	if err != nil {
@@ -325,7 +322,7 @@ func (agent *ActionAgent) ReparentPosition(ctx context.Context, rp *myproto.Repl
 }
 
 // StopSlave will stop the replication
-// Should be called under RpcWrapLock.
+// Should be called under RPCWrapLock.
 func (agent *ActionAgent) StopSlave(ctx context.Context) error {
 	return agent.MysqlDaemon.StopSlave(agent.hookExtraEnv())
 }
@@ -343,193 +340,26 @@ func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position myproto
 }
 
 // StartSlave will start the replication
-// Should be called under RpcWrapLock.
+// Should be called under RPCWrapLock.
 func (agent *ActionAgent) StartSlave(ctx context.Context) error {
 	return agent.MysqlDaemon.StartSlave(agent.hookExtraEnv())
 }
 
-// TabletExternallyReparented updates all topo records so the current
-// tablet is the new master for this shard.
-// Should be called under RpcWrapLock.
-func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, externalID string) error {
-	tablet := agent.Tablet()
-
-	// fast quick check on the shard to see if we're not the master already
-	shardInfo, err := agent.TopoServer.GetShard(tablet.Keyspace, tablet.Shard)
-	if err != nil {
-		log.Warningf("TabletExternallyReparented: Cannot read the shard %v/%v: %v", tablet.Keyspace, tablet.Shard, err)
-		return err
-	}
-	if shardInfo.MasterAlias == agent.TabletAlias {
-		// we are already the master, nothing more to do.
-		return nil
-	}
-
-	// grab the shard lock
-	actionNode := actionnode.ShardExternallyReparented(agent.TabletAlias)
-	lockPath, err := actionNode.LockShard(ctx, agent.TopoServer, tablet.Keyspace, tablet.Shard)
-	if err != nil {
-		log.Warningf("TabletExternallyReparented: Cannot lock shard %v/%v: %v", tablet.Keyspace, tablet.Shard, err)
-		return err
-	}
-
-	// do the work
-	runAfterAction, err := agent.tabletExternallyReparentedLocked(ctx, externalID)
-	if err != nil {
-		log.Warningf("TabletExternallyReparented: internal error: %v", err)
-	}
-
-	// release the lock in any case, and run refreshTablet if necessary
-	err = actionNode.UnlockShard(ctx, agent.TopoServer, tablet.Keyspace, tablet.Shard, lockPath, err)
-	if runAfterAction {
-		if refreshErr := agent.refreshTablet(ctx, "RPC(TabletExternallyReparented)"); refreshErr != nil {
-			if err == nil {
-				// no error yet, now we have one
-				err = refreshErr
-			} else {
-				//have an error already, keep the original one
-				log.Warningf("refreshTablet failed with error: %v", refreshErr)
-			}
-		}
-	}
-	return err
-}
-
-// tabletExternallyReparentedLocked is called with the shard lock.
-// It returns if agent.refreshTablet should be called, and the error.
-// Note both are set independently (can have both true and an error).
-func (agent *ActionAgent) tabletExternallyReparentedLocked(ctx context.Context, externalID string) (bool, error) {
-	// re-read the tablet record to be sure we have the latest version
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
-	if err != nil {
-		return false, err
-	}
-
-	// read the shard, make sure again the master is not already good.
-	shardInfo, err := agent.TopoServer.GetShard(tablet.Keyspace, tablet.Shard)
-	if err != nil {
-		return false, err
-	}
-	if shardInfo.MasterAlias == tablet.Alias {
-		log.Infof("TabletExternallyReparented: tablet became the master before we get the lock?")
-		return false, nil
-	}
-	log.Infof("TabletExternallyReparented called and we're not the master, doing the work")
-
-	// Read the tablets, make sure the master elect is known to the shard
-	// (it's this tablet, so it better be!).
-	// Note we will keep going with a partial tablet map, which usually
-	// happens when a cell is not reachable. After these checks, the
-	// guarantees we'll have are:
-	// - global cell is reachable (we just locked and read the shard)
-	// - the local cell that contains the new master is reachable
-	//   (as we're going to check the new master is in the list)
-	// That should be enough.
-	tabletMap, err := topo.GetTabletMapForShard(ctx, agent.TopoServer, tablet.Keyspace, tablet.Shard)
-	switch err {
-	case nil:
-		// keep going
-	case topo.ErrPartialResult:
-		log.Warningf("Got topo.ErrPartialResult from GetTabletMapForShard, may need to re-init some tablets")
-	default:
-		return false, err
-	}
-	masterElectTablet, ok := tabletMap[tablet.Alias]
-	if !ok {
-		return false, fmt.Errorf("this master-elect tablet %v not found in replication graph %v/%v %v", tablet.Alias, tablet.Keyspace, tablet.Shard, topotools.MapKeys(tabletMap))
-	}
-
-	// Create reusable Reparent event with available info
-	ev := &events.Reparent{
-		ShardInfo:  *shardInfo,
-		NewMaster:  *tablet.Tablet,
-		ExternalID: externalID,
-	}
-
-	if oldMasterTablet, ok := tabletMap[shardInfo.MasterAlias]; ok {
-		ev.OldMaster = *oldMasterTablet.Tablet
-	}
-
-	defer func() {
-		if err != nil {
-			event.DispatchUpdate(ev, "failed: "+err.Error())
-		}
-	}()
-
-	// sort the tablets, and handle them
-	slaveTabletMap, masterTabletMap := topotools.SortedTabletMap(tabletMap)
-	event.DispatchUpdate(ev, "starting external from tablet")
-
-	// We fix the new master in the replication graph.
-	// Note after this call, we may have changed the tablet record,
-	// so we will always return true, so the tablet record is re-read
-	// by the agent.
-	event.DispatchUpdate(ev, "mark ourself as new master")
-	err = agent.updateReplicationGraphForPromotedSlave(ctx, tablet)
-	if err != nil {
-		// This suggests we can't talk to topo server. This is bad.
-		return true, fmt.Errorf("updateReplicationGraphForPromotedSlave failed: %v", err)
-	}
-
-	// Once this tablet is promoted, remove it from our maps
-	delete(slaveTabletMap, tablet.Alias)
-	delete(masterTabletMap, tablet.Alias)
-
-	// Then fix all the slaves, including the old master.  This
-	// last step is very likely to time out for some tablets (one
-	// random guy is dead, the old master is dead, ...). We
-	// execute them all in parallel until we get to
-	// wr.ActionTimeout(). After this, no other action with a
-	// timeout is executed, so even if we got to the timeout,
-	// we're still good.
-	event.DispatchUpdate(ev, "restarting slaves")
-	logger := logutil.NewConsoleLogger()
-	tmc := tmclient.NewTabletManagerClient()
-	topotools.RestartSlavesExternal(agent.TopoServer, logger, slaveTabletMap, masterTabletMap, masterElectTablet.Alias, func(ti *topo.TabletInfo, swrd *actionnode.SlaveWasRestartedArgs) error {
-		return tmc.SlaveWasRestarted(ctx, ti, swrd)
-	})
-
-	// Compute the list of Cells we need to rebuild: old master and
-	// all other cells if reparenting to another cell.
-	cells := []string{shardInfo.MasterAlias.Cell}
-	if shardInfo.MasterAlias.Cell != tablet.Alias.Cell {
-		cells = nil
-	}
-
-	// now update the master record in the shard object
-	event.DispatchUpdate(ev, "updating shard record")
-	log.Infof("Updating Shard's MasterAlias record")
-	shardInfo.MasterAlias = tablet.Alias
-	if err = topo.UpdateShard(ctx, agent.TopoServer, shardInfo); err != nil {
-		return true, err
-	}
-
-	// and rebuild the shard serving graph
-	event.DispatchUpdate(ev, "rebuilding shard serving graph")
-	log.Infof("Rebuilding shard serving graph data")
-	if _, err = topotools.RebuildShard(ctx, logger, agent.TopoServer, tablet.Keyspace, tablet.Shard, cells, agent.LockTimeout); err != nil {
-		return true, err
-	}
-
-	event.DispatchUpdate(ev, "finished")
-	return true, nil
-}
-
 // GetSlaves returns the address of all the slaves
-// Should be called under RpcWrap.
+// Should be called under RPCWrap.
 func (agent *ActionAgent) GetSlaves(ctx context.Context) ([]string, error) {
 	return agent.Mysqld.FindSlaves()
 }
 
 // WaitBlpPosition waits until a specific filtered replication position is
 // reached.
-// Should be called under RpcWrapLock.
+// Should be called under RPCWrapLock.
 func (agent *ActionAgent) WaitBlpPosition(ctx context.Context, blpPosition *blproto.BlpPosition, waitTime time.Duration) error {
 	return agent.Mysqld.WaitBlpPosition(blpPosition, waitTime)
 }
 
 // StopBlp stops the binlog players, and return their positions.
-// Should be called under RpcWrapLockAction.
+// Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) StopBlp(ctx context.Context) (*blproto.BlpPositionList, error) {
 	if agent.BinlogPlayerMap == nil {
 		return nil, fmt.Errorf("No BinlogPlayerMap configured")
@@ -539,7 +369,7 @@ func (agent *ActionAgent) StopBlp(ctx context.Context) (*blproto.BlpPositionList
 }
 
 // StartBlp starts the binlog players
-// Should be called under RpcWrapLockAction.
+// Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) StartBlp(ctx context.Context) error {
 	if agent.BinlogPlayerMap == nil {
 		return fmt.Errorf("No BinlogPlayerMap configured")
@@ -566,7 +396,7 @@ func (agent *ActionAgent) RunBlpUntil(ctx context.Context, bpl *blproto.BlpPosit
 //
 
 // DemoteMaster demotes the current master, and marks it read-only in the topo.
-// Should be called under RpcWrapLockAction.
+// Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) DemoteMaster(ctx context.Context) error {
 	_, err := agent.Mysqld.DemoteMaster()
 	if err != nil {
@@ -585,7 +415,7 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) error {
 
 // PromoteSlave transforms the current tablet from a slave to a master.
 // It returns the data needed for other tablets to become a slave.
-// Should be called under RpcWrapLockAction.
+// Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) PromoteSlave(ctx context.Context) (*actionnode.RestartSlaveData, error) {
 	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
 	if err != nil {
@@ -607,7 +437,7 @@ func (agent *ActionAgent) PromoteSlave(ctx context.Context) (*actionnode.Restart
 }
 
 // SlaveWasPromoted promotes a slave to master, no questions asked.
-// Should be called under RpcWrapLockAction.
+// Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) SlaveWasPromoted(ctx context.Context) error {
 	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
 	if err != nil {
@@ -618,7 +448,7 @@ func (agent *ActionAgent) SlaveWasPromoted(ctx context.Context) error {
 }
 
 // RestartSlave tells the tablet it has a new master
-// Should be called under RpcWrapLockAction.
+// Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) RestartSlave(ctx context.Context, rsd *actionnode.RestartSlaveData) error {
 	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
 	if err != nil {
@@ -688,7 +518,7 @@ func (agent *ActionAgent) RestartSlave(ctx context.Context, rsd *actionnode.Rest
 }
 
 // SlaveWasRestarted updates the parent record for a tablet.
-// Should be called under RpcWrapLockAction.
+// Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, swrd *actionnode.SlaveWasRestartedArgs) error {
 	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
 	if err != nil {
@@ -718,7 +548,7 @@ func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, swrd *actionnod
 
 // BreakSlaves will tinker with the replication stream in a way that
 // will stop all the slaves.
-// Should be called under RpcWrapLockAction.
+// Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) BreakSlaves(ctx context.Context) error {
 	return agent.Mysqld.BreakSlaves()
 }
@@ -756,7 +586,7 @@ func (agent *ActionAgent) updateReplicationGraphForPromotedSlave(ctx context.Con
 //
 
 // Snapshot takes a db snapshot
-// Should be called under RpcWrapLockAction.
+// Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) Snapshot(ctx context.Context, args *actionnode.SnapshotArgs, logger logutil.Logger) (*actionnode.SnapshotReply, error) {
 	// update our type to TYPE_BACKUP
 	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
@@ -842,7 +672,7 @@ func (agent *ActionAgent) Snapshot(ctx context.Context, args *actionnode.Snapsho
 
 // SnapshotSourceEnd restores the state of the server after a
 // Snapshot(server_mode =true)
-// Should be called under RpcWrapLockAction.
+// Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) SnapshotSourceEnd(ctx context.Context, args *actionnode.SnapshotSourceEndArgs) error {
 	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
 	if err != nil {
@@ -900,7 +730,7 @@ func (agent *ActionAgent) changeTypeToRestore(ctx context.Context, tablet, sourc
 
 // ReserveForRestore reserves the current tablet for an upcoming
 // restore operation.
-// Should be called under RpcWrapLockAction.
+// Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) ReserveForRestore(ctx context.Context, args *actionnode.ReserveForRestoreArgs) error {
 	// first check mysql, no need to go further if we can't restore
 	if err := agent.Mysqld.ValidateCloneTarget(agent.hookExtraEnv()); err != nil {
@@ -935,7 +765,7 @@ func (agent *ActionAgent) ReserveForRestore(ctx context.Context, args *actionnod
 	return agent.changeTypeToRestore(ctx, tablet, sourceTablet, parentAlias, sourceTablet.KeyRange)
 }
 
-func fetchAndParseJsonFile(addr, filename string, result interface{}) error {
+func fetchAndParseJSONFile(addr, filename string, result interface{}) error {
 	// read the manifest
 	murl := "http://" + addr + filename
 	resp, err := http.Get(murl)
@@ -955,13 +785,15 @@ func fetchAndParseJsonFile(addr, filename string, result interface{}) error {
 	return json.Unmarshal(data, result)
 }
 
-// Operate on restore tablet.
+// Restore stops the tablet's mysqld, replaces its data folder with a snapshot,
+// and then restarts it.
+//
 // Check that the SnapshotManifest is valid and the master has not changed.
 // Shutdown mysqld.
 // Load the snapshot from source tablet.
 // Restart mysqld and replication.
 // Put tablet into the replication graph as a spare.
-// Should be called under RpcWrapLockAction.
+// Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) Restore(ctx context.Context, args *actionnode.RestoreArgs, logger logutil.Logger) error {
 	// read our current tablet, verify its state
 	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
@@ -997,7 +829,7 @@ func (agent *ActionAgent) Restore(ctx context.Context, args *actionnode.RestoreA
 
 	// read & unpack the manifest
 	sm := new(mysqlctl.SnapshotManifest)
-	if err := fetchAndParseJsonFile(sourceTablet.Addr(), args.SrcFilePath, sm); err != nil {
+	if err := fetchAndParseJSONFile(sourceTablet.Addr(), args.SrcFilePath, sm); err != nil {
 		return err
 	}
 

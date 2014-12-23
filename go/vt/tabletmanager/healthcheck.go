@@ -14,8 +14,6 @@ import (
 	"reflect"
 	"time"
 
-	"golang.org/x/net/context"
-
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/health"
@@ -37,7 +35,7 @@ type HealthRecord struct {
 	Time   time.Time
 }
 
-// This returns a readable one word version of the health
+// Class returns a human-readable one word version of the health state.
 func (r *HealthRecord) Class() string {
 	switch {
 	case r.Error != nil:
@@ -58,6 +56,7 @@ func (r *HealthRecord) IsDuplicate(other interface{}) bool {
 	return reflect.DeepEqual(r.Error, rother.Error) && reflect.DeepEqual(r.Result, rother.Result)
 }
 
+// IsRunningHealthCheck indicates if the agent is configured to run healthchecks.
 func (agent *ActionAgent) IsRunningHealthCheck() bool {
 	return *targetTabletType != ""
 }
@@ -220,8 +219,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 
 	// Change the Type, update the health. Note we pass in a map
 	// that's not nil, meaning if it's empty, we will clear it.
-	ctx := context.Background()
-	if err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, newTabletType, health, true /*runHooks*/); err != nil {
+	if err := topotools.ChangeType(agent.batchCtx, agent.TopoServer, tablet.Alias, newTabletType, health, true /*runHooks*/); err != nil {
 		log.Infof("Error updating tablet record: %v", err)
 		return
 	}
@@ -233,7 +231,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 	}
 
 	// run the post action callbacks, not much we can do with returned error
-	if err := agent.refreshTablet(ctx, "healthcheck"); err != nil {
+	if err := agent.refreshTablet(agent.batchCtx, "healthcheck"); err != nil {
 		log.Warningf("refreshTablet failed: %v", err)
 	}
 }
@@ -256,8 +254,7 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topo.TabletType
 
 	// Change the Type to spare, update the health. Note we pass in a map
 	// that's not nil, meaning we will clear it.
-	ctx := context.Background()
-	if err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topo.TYPE_SPARE, make(map[string]string), true /*runHooks*/); err != nil {
+	if err := topotools.ChangeType(agent.batchCtx, agent.TopoServer, tablet.Alias, topo.TYPE_SPARE, make(map[string]string), true /*runHooks*/); err != nil {
 		log.Infof("Error updating tablet record: %v", err)
 		return
 	}
@@ -272,7 +269,7 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topo.TabletType
 	// ourself as OnTermSync (synchronous). The rest can be done asynchronously.
 	go func() {
 		// Run the post action callbacks (let them shutdown the query service)
-		if err := agent.refreshTablet(ctx, "terminatehealthcheck"); err != nil {
+		if err := agent.refreshTablet(agent.batchCtx, "terminatehealthcheck"); err != nil {
 			log.Warningf("refreshTablet failed: %v", err)
 		}
 	}()
@@ -281,10 +278,8 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topo.TabletType
 // rebuildShardIfNeeded will rebuild the serving graph if we need to
 func (agent *ActionAgent) rebuildShardIfNeeded(tablet *topo.TabletInfo, targetTabletType topo.TabletType) error {
 	if topo.IsInServingGraph(targetTabletType) {
-		ctx := context.Background()
-
 		// no need to take the shard lock in this case
-		if _, err := topotools.RebuildShard(ctx, logutil.NewConsoleLogger(), agent.TopoServer, tablet.Keyspace, tablet.Shard, []string{tablet.Alias.Cell}, agent.LockTimeout); err != nil {
+		if _, err := topotools.RebuildShard(agent.batchCtx, logutil.NewConsoleLogger(), agent.TopoServer, tablet.Keyspace, tablet.Shard, []string{tablet.Alias.Cell}, agent.LockTimeout); err != nil {
 			return fmt.Errorf("topotools.RebuildShard returned an error: %v", err)
 		}
 	}

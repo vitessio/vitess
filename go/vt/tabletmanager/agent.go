@@ -61,6 +61,9 @@ type ActionAgent struct {
 	SchemaOverrides []tabletserver.SchemaOverride
 	BinlogPlayerMap *BinlogPlayerMap
 	LockTimeout     time.Duration
+	// batchCtx is given to the agent by its creator, and should be used for
+	// any background tasks spawned by the agent.
+	batchCtx context.Context
 
 	// This is the History of the health checks, public so status
 	// pages can display it
@@ -98,8 +101,12 @@ func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
 }
 
 // NewActionAgent creates a new ActionAgent and registers all the
-// associated services
+// associated services.
+//
+// batchCtx is the context that the agent will use for any background tasks
+// it spawns.
 func NewActionAgent(
+	batchCtx context.Context,
 	tabletAlias topo.TabletAlias,
 	dbcfgs *dbconfigs.DBConfigs,
 	mycnf *mysqlctl.Mycnf,
@@ -113,6 +120,7 @@ func NewActionAgent(
 	mysqld := mysqlctl.NewMysqld("Dba", mycnf, &dbcfgs.Dba, &dbcfgs.Repl)
 
 	agent = &ActionAgent{
+		batchCtx:           batchCtx,
 		TopoServer:         topoServer,
 		TabletAlias:        tabletAlias,
 		Mysqld:             mysqld,
@@ -193,6 +201,7 @@ func (agent *ActionAgent) readTablet() error {
 	return nil
 }
 
+// Tablet reads the stored TabletInfo from the agent, protected by mutex.
 func (agent *ActionAgent) Tablet() *topo.TabletInfo {
 	agent.mutex.Lock()
 	tablet := agent._tablet
@@ -200,12 +209,15 @@ func (agent *ActionAgent) Tablet() *topo.TabletInfo {
 	return tablet
 }
 
+// Healthy reads the result of the latest healthcheck, protected by mutex.
 func (agent *ActionAgent) Healthy() error {
 	agent.mutex.Lock()
 	defer agent.mutex.Unlock()
 	return agent._healthy
 }
 
+// BlacklistedTables reads the list of blacklisted tables from the TabletControl
+// record (if any) stored in the agent, protected by mutex.
 func (agent *ActionAgent) BlacklistedTables() []string {
 	var blacklistedTables []string
 	agent.mutex.Lock()
@@ -216,6 +228,8 @@ func (agent *ActionAgent) BlacklistedTables() []string {
 	return blacklistedTables
 }
 
+// DisableQueryService reads the DisableQueryService field from the TabletControl
+// record (if any) stored in the agent, protected by mutex.
 func (agent *ActionAgent) DisableQueryService() bool {
 	disable := false
 	agent.mutex.Lock()
@@ -293,7 +307,8 @@ func (agent *ActionAgent) verifyServingAddrs() error {
 	return agent.TopoServer.UpdateTabletEndpoint(agent.Tablet().Tablet.Alias.Cell, agent.Tablet().Keyspace, agent.Tablet().Shard, agent.Tablet().Type, addr)
 }
 
-// bindAddr: the address for the query service advertised by this agent
+// Start validates and updates the topology records for the tablet, and performs
+// the initial state change callback to start tablet services.
 func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 	var err error
 	if err = agent.readTablet(); err != nil {
