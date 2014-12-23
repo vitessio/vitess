@@ -61,7 +61,9 @@ type ActionAgent struct {
 	SchemaOverrides []tabletserver.SchemaOverride
 	BinlogPlayerMap *BinlogPlayerMap
 	LockTimeout     time.Duration
-	ctx             context.Context
+	// batchCtx is given to the agent by its creator, and should be used for
+	// any background tasks spawned by the agent.
+	batchCtx context.Context
 
 	// This is the History of the health checks, public so status
 	// pages can display it
@@ -99,9 +101,12 @@ func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
 }
 
 // NewActionAgent creates a new ActionAgent and registers all the
-// associated services
+// associated services.
+//
+// batchCtx is the context that the agent will use for any background tasks
+// it spawns.
 func NewActionAgent(
-	ctx context.Context,
+	batchCtx context.Context,
 	tabletAlias topo.TabletAlias,
 	dbcfgs *dbconfigs.DBConfigs,
 	mycnf *mysqlctl.Mycnf,
@@ -115,7 +120,7 @@ func NewActionAgent(
 	mysqld := mysqlctl.NewMysqld("Dba", mycnf, &dbcfgs.Dba, &dbcfgs.Repl)
 
 	agent = &ActionAgent{
-		ctx:                ctx,
+		batchCtx:           batchCtx,
 		TopoServer:         topoServer,
 		TabletAlias:        tabletAlias,
 		Mysqld:             mysqld,
