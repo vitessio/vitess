@@ -20,7 +20,6 @@ from vtdb import vtgate_cursor
 class Unimplemented(Exception):
     pass
 
-
 class ShardRouting(object):
   """VTGate Shard Routing Class.
 
