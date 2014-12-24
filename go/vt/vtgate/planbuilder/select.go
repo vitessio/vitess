@@ -22,7 +22,7 @@ func buildSelectPlan(sel *sqlparser.Select, schema *Schema) *Plan {
 	if plan.IsMulti() {
 		if hasPostProcessing(sel) {
 			plan.ID = NoPlan
-			plan.Reason = "too complex"
+			plan.Reason = "multi-shard query has post-processing constructs"
 			return plan
 		}
 	}

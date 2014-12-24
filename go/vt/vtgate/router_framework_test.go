@@ -49,6 +49,27 @@ var routerSchema = createTestSchema(`
             "To": "user_id"
           }
         },
+        "idx1": {
+          "Type": "hash_autoinc",
+          "Owner": "multi_autoinc_table",
+          "Params": {
+            "Table": "idx1",
+            "Column": "id1"
+          }
+        },
+        "idx2": {
+          "Type": "lookup_hash_autoinc",
+          "Owner": "multi_autoinc_table",
+          "Params": {
+            "Table": "idx2",
+            "From": "id",
+						"To": "val"
+          }
+        },
+        "idx_noauto": {
+          "Type": "hash",
+          "Owner": "noauto_table"
+        },
         "keyspace_id": {
           "Type": "numeric"
         }
@@ -110,6 +131,26 @@ var routerSchema = createTestSchema(`
             }
           ]
         },
+        "multi_autoinc_table": {
+          "ColVindexes": [
+            {
+              "Col": "id1",
+              "Name": "idx1"
+            },
+            {
+              "Col": "id2",
+              "Name": "idx2"
+            }
+          ]
+        },
+        "noauto_table": {
+          "ColVindexes": [
+            {
+              "Col": "id",
+              "Name": "idx_noauto"
+						}
+          ]
+        },
         "ksid_table": {
           "ColVindexes": [
             {
@@ -131,7 +172,9 @@ var routerSchema = createTestSchema(`
       "Tables": {
         "user_idx":{},
         "music_user_map":{},
-        "name_user_map":{}
+        "name_user_map":{},
+        "idx1":{},
+        "idx2":{}
       }
     }
   }

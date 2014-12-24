@@ -68,6 +68,28 @@ func TestNumericVerifyBadData(t *testing.T) {
 	}
 }
 
+func TestNumericCreate(t *testing.T) {
+	_, ok := numeric.(planbuilder.Functional)
+	if ok {
+		t.Errorf("numeric.(planbuilder.Functional): true, want false")
+	}
+	_, ok = numeric.(planbuilder.Lookup)
+	if ok {
+		t.Errorf("numeric.(planbuilder.Lookup): true, want false")
+	}
+}
+
+func TestNumericGenerate(t *testing.T) {
+	_, ok := numeric.(planbuilder.FunctionalGenerator)
+	if ok {
+		t.Errorf("numeric.(planbuilder.FunctionalGenerator): true, want false")
+	}
+	_, ok = numeric.(planbuilder.LookupGenerator)
+	if ok {
+		t.Errorf("numeric.(planbuilder.LookupGenerator): true, want false")
+	}
+}
+
 func TestNumericReverseMap(t *testing.T) {
 	got, err := numeric.(planbuilder.Reversible).ReverseMap(nil, "\x00\x00\x00\x00\x00\x00\x00\x01")
 	if err != nil {

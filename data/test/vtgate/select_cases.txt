@@ -16,7 +16,7 @@
 "select * from user union select * from user"
 {
   "ID":"NoPlan",
-  "Reason":"too complex",
+  "Reason":"cannot build a plan for this construct",
   "Table": "",
   "Original":"select * from user union select * from user",
   "Rewritten":"",
@@ -30,7 +30,7 @@
 "set a=1"
 {
   "ID":"NoPlan",
-  "Reason":"too complex",
+  "Reason":"cannot build a plan for this construct",
   "Table": "",
   "Original":"set a=1",
   "Rewritten":"",
@@ -44,7 +44,7 @@
 "create table a()"
 {
   "ID":"NoPlan",
-  "Reason":"too complex",
+  "Reason":"cannot build a plan for this construct",
   "Table": "",
   "Original":"create table a()",
   "Rewritten":"",
@@ -58,7 +58,7 @@
 "explain select * from user"
 {
   "ID":"NoPlan",
-  "Reason":"too complex",
+  "Reason":"cannot build a plan for this construct",
   "Table": "",
   "Original":"explain select * from user",
   "Rewritten":"",
@@ -879,7 +879,7 @@
 "select count(*) from user where id in (1, 2)"
 {
   "ID": "NoPlan",
-  "Reason": "too complex",
+  "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
   "Original":"select count(*) from user where id in (1, 2)",
   "Rewritten": "",
@@ -893,7 +893,7 @@
 "select count(*) from user where name = 'foo'"
 {
   "ID": "NoPlan",
-  "Reason": "too complex",
+  "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
   "Original":"select count(*) from user where name = 'foo'",
   "Rewritten": "",
@@ -907,7 +907,7 @@
 "select a = 1 and count(*) = 1 from user where id in (1, 2)"
 {
   "ID": "NoPlan",
-  "Reason": "too complex",
+  "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
   "Original":"select a = 1 and count(*) = 1 from user where id in (1, 2)",
   "Rewritten": "",
@@ -921,7 +921,7 @@
 "select a = 1 or count(*) = 1 from user where id in (1, 2)"
 {
   "ID": "NoPlan",
-  "Reason": "too complex",
+  "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
   "Original":"select a = 1 or count(*) = 1 from user where id in (1, 2)",
   "Rewritten": "",
@@ -935,7 +935,7 @@
 "select (not count(*) = 1) from user where id in (1, 2)"
 {
   "ID": "NoPlan",
-  "Reason": "too complex",
+  "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
   "Original":"select (not count(*) = 1) from user where id in (1, 2)",
   "Rewritten": "",
@@ -949,7 +949,7 @@
 "select count(*) between 1 and 2 from user where id in (1, 2)"
 {
   "ID": "NoPlan",
-  "Reason": "too complex",
+  "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
   "Original":"select count(*) between 1 and 2 from user where id in (1, 2)",
   "Rewritten": "",
@@ -963,7 +963,7 @@
 "select count(*) is null from user where id in (1, 2)"
 {
   "ID": "NoPlan",
-  "Reason": "too complex",
+  "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
   "Original":"select count(*) is null from user where id in (1, 2)",
   "Rewritten": "",
@@ -973,7 +973,7 @@
   "Values": null
 }
 
-# aggregates in select, EXISTS (cannot aggregate)
+# subquery in select list, EXISTS (cannot aggregate)
 "select exists (select 1 from dual) from user where id in (1, 2)"
 {
   "ID":"SelectIN",
@@ -987,7 +987,7 @@
   "Values":[1,2]
 }
 
-# aggregates in select, subquery
+# subquery in select in select list
 "select (select 1 from dual) from user where id in (1, 2)"
 {
   "ID":"SelectIN",
@@ -1005,7 +1005,7 @@
 "select count(*)+1 from user where id in (1, 2)"
 {
   "ID": "NoPlan",
-  "Reason": "too complex",
+  "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
   "Original":"select count(*)+1 from user where id in (1, 2)",
   "Rewritten": "",
@@ -1019,7 +1019,7 @@
 "select -count(*) from user where id in (1, 2)"
 {
   "ID": "NoPlan",
-  "Reason": "too complex",
+  "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
   "Original":"select -count(*) from user where id in (1, 2)",
   "Rewritten": "",
@@ -1033,7 +1033,7 @@
 "select fun(1, count(*)) from user where id in (1, 2)"
 {
   "ID": "NoPlan",
-  "Reason": "too complex",
+  "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
   "Original":"select fun(1, count(*)) from user where id in (1, 2)",
   "Rewritten": "",
@@ -1064,7 +1064,7 @@
 "select case count(*) when a = b then d end from user where id in (1, 2)"
 {
   "ID": "NoPlan",
-  "Reason": "too complex",
+  "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
   "Original":"select case count(*) when a = b then d end from user where id in (1, 2)",
   "Rewritten": "",
@@ -1078,7 +1078,7 @@
 "select case a when a = b then d else count(*) end from user where id in (1, 2)"
 {
   "ID": "NoPlan",
-  "Reason": "too complex",
+  "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
   "Original":"select case a when a = b then d else count(*) end from user where id in (1, 2)",
   "Rewritten": "",
@@ -1092,7 +1092,7 @@
 "select case a when count(*) = b then d else e end from user where id in (1, 2)"
 {
   "ID": "NoPlan",
-  "Reason": "too complex",
+  "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
   "Original":"select case a when count(*) = b then d else e end from user where id in (1, 2)",
   "Rewritten": "",
@@ -1106,7 +1106,7 @@
 "select case a when a = b then count(*) else e end from user where id in (1, 2)"
 {
   "ID": "NoPlan",
-  "Reason": "too complex",
+  "Reason": "multi-shard query has post-processing constructs",
   "Table": "user",
   "Original":"select case a when a = b then count(*) else e end from user where id in (1, 2)",
   "Rewritten": "",

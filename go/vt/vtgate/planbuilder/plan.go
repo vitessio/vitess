@@ -154,7 +154,7 @@ func BuildPlan(query string, schema *Schema) *Plan {
 	}
 	noplan := &Plan{
 		ID:       NoPlan,
-		Reason:   "too complex",
+		Reason:   "cannot build a plan for this construct",
 		Original: query,
 	}
 	var plan *Plan

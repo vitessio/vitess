@@ -112,6 +112,7 @@ func TestUpdateEqualFail(t *testing.T) {
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
+	s.ShardSpec = DefaultShardSpec
 }
 
 func TestDeleteEqual(t *testing.T) {
@@ -241,6 +242,7 @@ func TestDeleteEqualFail(t *testing.T) {
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
+	s.ShardSpec = DefaultShardSpec
 }
 
 func TestDeleteVindexFail(t *testing.T) {
@@ -361,20 +363,18 @@ func TestInsertSharded(t *testing.T) {
 }
 
 func TestInsertGenerator(t *testing.T) {
-	router, _, _, sbclookup := createRouterEnv()
-	s := getSandbox("TestRouter")
-	sbc := &sandboxConn{}
-	s.MapTestConn("80-a0", sbc)
+	router, sbc, _, sbclookup := createRouterEnv()
 
-	_, err := routerExec(router, "insert into user(v, name) values (2, 'myname')", nil)
+	sbclookup.setResults([]*mproto.QueryResult{&mproto.QueryResult{RowsAffected: 1, InsertId: 1}})
+	result, err := routerExec(router, "insert into user(v, name) values (2, 'myname')", nil)
 	if err != nil {
 		t.Error(err)
 	}
 	wantQueries := []tproto.BoundQuery{{
-		Sql: "insert into user(v, name, id) values (2, :_name, :_id) /* _routing keyspace_id:8ca64de9c1b123a7 */",
+		Sql: "insert into user(v, name, id) values (2, :_name, :_id) /* _routing keyspace_id:166b40b44aba4bd6 */",
 		BindVariables: map[string]interface{}{
-			"keyspace_id": "\x8c\xa6M\xe9\xc1\xb1#\xa7",
-			"_id":         int64(0),
+			"keyspace_id": "\x16k@\xb4J\xbaK\xd6",
+			"_id":         int64(1),
 			"_name":       "myname",
 		},
 	}}
@@ -390,11 +390,16 @@ func TestInsertGenerator(t *testing.T) {
 		Sql: "insert into name_user_map(name, user_id) values(:name, :user_id)",
 		BindVariables: map[string]interface{}{
 			"name":    "myname",
-			"user_id": int64(0),
+			"user_id": int64(1),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
+	}
+	wantResult := *singleRowResult
+	wantResult.InsertId = 1
+	if !reflect.DeepEqual(result, &wantResult) {
+		t.Errorf("result: %+v, want %+v", result, &wantResult)
 	}
 }
 
@@ -431,7 +436,8 @@ func TestInsertLookupOwned(t *testing.T) {
 func TestInsertLookupOwnedGenerator(t *testing.T) {
 	router, sbc, _, sbclookup := createRouterEnv()
 
-	_, err := routerExec(router, "insert into music(user_id) values (2)", nil)
+	sbclookup.setResults([]*mproto.QueryResult{&mproto.QueryResult{RowsAffected: 1, InsertId: 1}})
+	result, err := routerExec(router, "insert into music(user_id) values (2)", nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -440,7 +446,7 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 		BindVariables: map[string]interface{}{
 			"keyspace_id": "\x06\xe7\xea\"Βp\x8f",
 			"_user_id":    int64(2),
-			"_id":         int64(0),
+			"_id":         int64(1),
 		},
 	}}
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
@@ -455,6 +461,11 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
+	}
+	wantResult := *singleRowResult
+	wantResult.InsertId = 1
+	if !reflect.DeepEqual(result, &wantResult) {
+		t.Errorf("result: %+v, want %+v", result, &wantResult)
 	}
 }
 
@@ -567,15 +578,13 @@ func TestInsertFail(t *testing.T) {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 
-	func() {
-		getSandbox("TestRouter").ShardSpec = "80-"
-		defer func() { getSandbox("TestRouter").ShardSpec = DefaultShardSpec }()
-		_, err = routerExec(router, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
-		want = "execInsertSharded: KeyspaceId 166b40b44aba4bd6 didn't match any shards"
-		if err == nil || !strings.HasPrefix(err.Error(), want) {
-			t.Errorf("routerExec: %v, want prefix %v", err, want)
-		}
-	}()
+	getSandbox("TestRouter").ShardSpec = "80-"
+	_, err = routerExec(router, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
+	want = "execInsertSharded: KeyspaceId 166b40b44aba4bd6 didn't match any shards"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("routerExec: %v, want prefix %v", err, want)
+	}
+	getSandbox("TestRouter").ShardSpec = DefaultShardSpec
 
 	sbclookup.mustFailServer = 1
 	_, err = routerExec(router, "insert into music(user_id, id) values (1, null)", nil)
@@ -612,6 +621,36 @@ func TestInsertFail(t *testing.T) {
 	sbc.mustFailServer = 1
 	_, err = routerExec(router, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
 	want = "execInsertSharded: shard, host: TestRouter.-20.master"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("routerExec: %v, want prefix %v", err, want)
+	}
+
+	sbclookup.setResults([]*mproto.QueryResult{
+		&mproto.QueryResult{RowsAffected: 1, InsertId: 1},
+		&mproto.QueryResult{RowsAffected: 1, InsertId: 1},
+	})
+	_, err = routerExec(router, "insert into multi_autoinc_table(id1, id2) values (null, null)", nil)
+	want = "insert generated more than one value"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("routerExec: %v, want prefix %v", err, want)
+	}
+
+	_, err = routerExec(router, "insert into noauto_table(id) values (null)", nil)
+	want = "execInsertSharded: value must be supplied for column id"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("routerExec: %v, want prefix %v", err, want)
+	}
+
+	_, err = routerExec(router, "insert into user(id, v, name) values (1, 2, null)", nil)
+	want = "value must be supplied for column name"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("routerExec: %v, want prefix %v", err, want)
+	}
+
+	sbc.setResults([]*mproto.QueryResult{&mproto.QueryResult{RowsAffected: 1, InsertId: 1}})
+	sbclookup.setResults([]*mproto.QueryResult{&mproto.QueryResult{RowsAffected: 1, InsertId: 1}})
+	_, err = routerExec(router, "insert into user(id, v, name) values (null, 2, 'myname')", nil)
+	want = "vindex and db generated a value each for insert"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
