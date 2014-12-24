@@ -41,11 +41,13 @@ const (
 	VT_GEOMETRY    = 255
 )
 
-// Field described a column returned by mysql
+// Field describes a column returned by MySQL.
 type Field struct {
 	Name string
 	Type int64
 }
+
+//go:generate bsongen -file $GOFILE -type Field -o field_bson.go
 
 // QueryResult is the structure returned by the mysql library.
 // When transmitted over the wire, the Rows all come back as strings
@@ -58,6 +60,8 @@ type QueryResult struct {
 	Rows         [][]sqltypes.Value
 }
 
+//go:generate bsongen -file $GOFILE -type QueryResult -o query_result_bson.go
+
 // Charset contains the per-statement character set settings that accompany
 // binlog QUERY_EVENT entries.
 type Charset struct {
@@ -65,6 +69,8 @@ type Charset struct {
 	Conn   int // @@session.collation_connection
 	Server int // @@session.collation_server
 }
+
+//go:generate bsongen -file $GOFILE -type Charset -o charset_bson.go
 
 // Convert takes a type and a value, and returns the type:
 // - nil for NULL value

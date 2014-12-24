@@ -41,12 +41,16 @@ type BinlogTransaction struct {
 	GTIDField  myproto.GTIDField
 }
 
+//go:generate bsongen -file $GOFILE -type BinlogTransaction -o binlog_transaction_bson.go
+
 // Statement represents one statement as read from the binlog.
 type Statement struct {
 	Category int
 	Charset  *mproto.Charset
 	Sql      []byte
 }
+
+//go:generate bsongen -file $GOFILE -type Statement -o statement_bson.go
 
 // String pretty-prints a statement.
 func (s Statement) String() string {

@@ -121,6 +121,8 @@ func (tal TabletAliasList) Swap(i, j int) {
 // - the uptime expectancy
 type TabletType string
 
+//go:generate bsongen -file $GOFILE -type TabletType -o tablet_type_bson.go
+
 const (
 	// idle -  no keyspace, shard or type assigned
 	TYPE_IDLE = TabletType("idle")

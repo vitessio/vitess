@@ -24,16 +24,22 @@ type GetSrvKeyspaceNamesArgs struct {
 	Cell string
 }
 
+//go:generate bsongen -file $GOFILE -type GetSrvKeyspaceNamesArgs -o get_srv_keyspace_names_args_bson.go
+
 // GetSrvKeyspaceArgs is the parameters for TopoReader.GetSrvKeyspace
 type GetSrvKeyspaceArgs struct {
 	Cell     string
 	Keyspace string
 }
 
+//go:generate bsongen -file $GOFILE -type GetSrvKeyspaceArgs -o get_srv_keyspace_args_bson.go
+
 // SrvKeyspaceNames is the response for TopoReader.GetSrvKeyspaceNames
 type SrvKeyspaceNames struct {
 	Entries []string
 }
+
+//go:generate bsongen -file $GOFILE -type SrvKeyspaceNames -o srv_keyspace_names_bson.go
 
 // GetEndPointsArgs is the parameters for TopoReader.GetEndPoints
 type GetEndPointsArgs struct {
@@ -42,3 +48,5 @@ type GetEndPointsArgs struct {
 	Shard      string
 	TabletType TabletType
 }
+
+//go:generate bsongen -file $GOFILE -type GetEndPointsArgs -o get_end_points_args_bson.go

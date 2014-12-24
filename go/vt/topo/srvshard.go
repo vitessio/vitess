@@ -34,6 +34,8 @@ type SrvShard struct {
 	version int64
 }
 
+//go:generate bsongen -file $GOFILE -type SrvShard -o srvshard_bson.go
+
 // SrvShardArray is used for sorting SrvShard arrays
 type SrvShardArray []SrvShard
 
@@ -77,6 +79,8 @@ type KeyspacePartition struct {
 	Shards []SrvShard
 }
 
+//go:generate bsongen -file $GOFILE -type KeyspacePartition -o keyspace_partition_bson.go
+
 // HasShard returns true if this KeyspacePartition has the shard with
 // the given name in it.
 func (kp *KeyspacePartition) HasShard(name string) bool {
@@ -113,6 +117,8 @@ type SrvKeyspace struct {
 	// For atomic updates
 	version int64
 }
+
+//go:generate bsongen -file $GOFILE -type SrvKeyspace -o srvkeyspace_bson.go
 
 // NewSrvKeyspace returns an empty SrvKeyspace with the given version.
 func NewSrvKeyspace(version int64) *SrvKeyspace {
