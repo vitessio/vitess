@@ -26,6 +26,8 @@ var MaxKey = KeyspaceId("")
 // KeyspaceId is the type we base sharding on.
 type KeyspaceId string
 
+//go:generate bsongen -file $GOFILE -type KeyspaceId -o keyspace_id_bson.go
+
 // Hex prints a KeyspaceId in lower case hex.
 func (kid KeyspaceId) Hex() HexKeyspaceId {
 	return HexKeyspaceId(hex.EncodeToString([]byte(kid)))
@@ -84,6 +86,8 @@ func (hkid HexKeyspaceId) Unhex() (KeyspaceId, error) {
 // Usually we don't care, but some parts of the code will need that info.
 type KeyspaceIdType string
 
+//go:generate bsongen -file $GOFILE -type KeyspaceIdType -o keyspace_id_type_bson.go
+
 const (
 	// unset - no type for this KeyspaceId
 	KIT_UNSET = KeyspaceIdType("")
@@ -119,11 +123,13 @@ func IsKeyspaceIdTypeInList(typ KeyspaceIdType, types []KeyspaceIdType) bool {
 //
 
 // KeyRange is an interval of KeyspaceId values. It contains Start,
-// but excludes End. In other words, it is: [Start, End[
+// but excludes End. In other words, it is: [Start, End)
 type KeyRange struct {
 	Start KeyspaceId
 	End   KeyspaceId
 }
+
+//go:generate bsongen -file $GOFILE -type KeyRange -o key_range_bson.go
 
 func (kr KeyRange) MapKey() string {
 	return string(kr.Start) + "-" + string(kr.End)
