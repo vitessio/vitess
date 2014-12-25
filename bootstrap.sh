@@ -44,8 +44,26 @@ go get github.com/golang/glog
 go get github.com/coreos/go-etcd/etcd
 go get github.com/golang/lint/golint
 
+# goversion_min returns true if major.minor go version is at least some value.
+function goversion_min() {
+  [[ "$(go version)" =~ go([0-9]+)\.([0-9]+) ]]
+  gotmajor=${BASH_REMATCH[1]}
+  gotminor=${BASH_REMATCH[2]}
+  [[ "$1" =~ ([0-9]+)\.([0-9]+) ]]
+  wantmajor=${BASH_REMATCH[1]}
+  wantminor=${BASH_REMATCH[2]}
+  [ "$gotmajor" -lt "$wantmajor" ] && return 1
+  [ "$gotmajor" -gt "$wantmajor" ] && return 0
+  [ "$gotminor" -lt "$wantminor" ] && return 1
+  return 0
+}
+
 # Packages for uploading code coverage to coveralls.io
-go get code.google.com/p/go.tools/cmd/cover
+if goversion_min 1.4; then
+  go get golang.org/x/tools/cmd/cover
+else
+  go get code.google.com/p/go.tools/cmd/cover
+fi
 go get github.com/modocache/gover
 go get github.com/mattn/goveralls
 

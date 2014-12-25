@@ -123,23 +123,17 @@ func (zkd *Zkd) Shutdown() error {
 	if err != nil {
 		return err
 	}
-	err = syscall.Kill(pid, 9)
+	err = syscall.Kill(pid, syscall.SIGKILL)
 	if err != nil && err != syscall.ESRCH {
 		return err
 	}
-	proc, _ := os.FindProcess(pid)
-	processIsDead := false
 	for i := 0; i < ShutdownWaitTime; i++ {
-		if proc.Signal(syscall.Signal(0)) == syscall.ESRCH {
-			processIsDead = true
-			break
+		if syscall.Kill(pid, syscall.SIGKILL) == syscall.ESRCH {
+			return nil
 		}
 		time.Sleep(time.Second)
 	}
-	if !processIsDead {
-		return fmt.Errorf("Shutdown didn't kill process %v", pid)
-	}
-	return nil
+	return fmt.Errorf("Shutdown didn't kill process %v", pid)
 }
 
 func (zkd *Zkd) makeCfg() (string, error) {
