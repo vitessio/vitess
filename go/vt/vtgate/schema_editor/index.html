@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<!--
+Copyright 2014, Google Inc. All rights reserved.
+Use of this source code is governed by a BSD-style
+license that can be found in the LICENSE file.
+-->
+
+<html data-ng-app>
+<link rel="stylesheet"
+  href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.1/css/bootstrap.min.css">
+<head>
+<meta charset="US-ASCII">
+<title>Test app</title>
+</head>
+<body>
+  <div class="container-fluid" data-ng-controller="SchemaController">
+    <div class="row">
+      <div class="col-md-1 sidebar">
+        <ul class="nav nav-sidebar">
+        </ul>
+        <ul class="nav nav-sidebar">
+          <li data-ng-repeat="(keyspace, keyspaceInfo) in vschema.Keyspaces"><a
+            href="#" data-ng-click="setKeyspace(keyspace)">{{ keyspace }}</a></li>
+        </ul>
+      </div>
+      <div class="col-md-9">
+        <h4>Keyspace: {{ curKeyspace }}</h4>
+      </div>
+      <div class="col-md-3">
+        <table class="table table-striped">
+          <thead>
+            <tr>
+              <th>Table</th>
+              <th>Column</th>
+              <th>Vindex</th>
+            </tr>
+          </thead>
+          <tbody data-ng-repeat="(table, tableInfo) in vschema.Keyspaces[curKeyspace].Tables">
+                  <tr data-ng-repeat="colVindex in tableInfo.ColVindexes">
+              <td data-ng-show="$first" rowspan="{{tableInfo.ColVindexes.length}}">{{ table }}</td>
+                    <td>{{ colVindex.Col }}</td>
+                    <td>
+                      <div class="dropdown">
+                        <button
+                          data-ng-class="'btn dropdown-toggle col-md-12'+{true: '', false: ' btn-danger'}[indexValid(colVindex.Name)]"
+                          type="button" id="dropdownMenu1"
+                          data-toggle="dropdown">
+                          {{ colVindex.Name }} <span class="caret"></span>
+                        </button>
+                        <ul class="dropdown-menu">
+                          <li data-ng-repeat="vindex in validVindexes"
+                            data-ng-click="setVindex(colVindex, vindex)"><a
+                            tabindex="-1" href="#">{{ vindex }}</a></li>
+                        </ul>
+                      </div>
+                    </td>
+                  </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="col-md-4">
+        <table class="table table-striped">
+          <thead>
+            <tr>
+              <th>Vindex</th>
+              <th>Type</th>
+              <th>Owner</th>
+              <th>Params</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+            <tr
+              data-ng-repeat="(vindex, vindexInfo) in vschema.Keyspaces[curKeyspace].Vindexes">
+              <td>{{ vindex }}</td>
+              <td>
+                <div class="dropdown">
+                  <button class="btn dropdown-toggle col-md-12" type="button"
+                    id="dropdownMenu1" data-toggle="dropdown">
+                    {{ vindexInfo.Type }} <span class="caret"></span>
+                  </button>
+                  <ul class="dropdown-menu">
+                    <li data-ng-repeat="vindexType in vindexTypes"
+                      data-ng-click="setVindexType(vindexInfo, vindexType)"><a
+                      tabindex="-1" href="#">{{ vindexType }}</a></li>
+                  </ul>
+                </div>
+              </td>
+              <td>{{ vindexInfo.Owner }}</td>
+              <td><table class="table-condensed table-bordered">
+                  <tr
+                    data-ng-repeat="(paramName, paramValue) in vindexInfo.Params">
+                    <td>{{ paramName }}</td>
+                    <td>{{ paramValue }}</td>
+                  </tr>
+                </table></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <script src="https://code.jquery.com/jquery-2.1.3.min.js"
+    type="text/javascript">
+      
+    </script>
+  <script
+    src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.1/js/bootstrap.min.js"
+    type="text/javascript">
+      
+    </script>
+  <script
+    src="https://ajax.googleapis.com/ajax/libs/angularjs/1.2.0/angular.min.js"
+    type="text/javascript">
+      
+    </script>
+  <script src="vschema.js" type="text/javascript">
+      
+    </script>
+</body>
+</html>
