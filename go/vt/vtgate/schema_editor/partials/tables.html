@@ -1,0 +1,30 @@
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Table</th>
+      <th>Column</th>
+      <th>Vindex</th>
+    </tr>
+  </thead>
+  <tbody
+    data-ng-repeat="(table, tableInfo) in vschema.Keyspaces[curKeyspace].Tables">
+    <tr data-ng-repeat="colVindex in tableInfo.ColVindexes">
+      <td data-ng-show="$first" rowspan="{{tableInfo.ColVindexes.length}}">{{table}}</td>
+      <td>{{colVindex.Col}}</td>
+      <td>
+        <div class="dropdown">
+          <button
+            data-ng-class="'btn dropdown-toggle col-md-12'+{true: '', false: ' btn-danger'}[indexValid(colVindex.Name)]"
+            type="button" id="dropdownMenu1" data-toggle="dropdown">
+            {{colVindex.Name}} <span class="caret"></span>
+          </button>
+          <ul class="dropdown-menu">
+            <li data-ng-repeat="vindex in validVindexes"
+              data-ng-click="setVindex(colVindex, vindex)"><a tabindex="-1"
+              href="#">{{vindex}}</a></li>
+          </ul>
+        </div>
+      </td>
+    </tr>
+  </tbody>
+</table>

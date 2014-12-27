@@ -1,0 +1,37 @@
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Vindex</th>
+      <th>Type</th>
+      <th>Owner</th>
+      <th>Params</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+    <tr
+      data-ng-repeat="(vindex, vindexInfo) in vschema.Keyspaces[curKeyspace].Vindexes">
+      <td>{{vindex}}</td>
+      <td>
+        <div class="dropdown">
+          <button class="btn dropdown-toggle col-md-12" type="button"
+            id="dropdownMenu1" data-toggle="dropdown">
+            {{vindexInfo.Type}} <span class="caret"></span>
+          </button>
+          <ul class="dropdown-menu">
+            <li data-ng-repeat="vindexType in vindexTypes"
+              data-ng-click="setVindexType(vindexInfo, vindexType)"><a
+              tabindex="-1" href="#">{{vindexType}}</a></li>
+          </ul>
+        </div>
+      </td>
+      <td>{{vindexInfo.Owner}}</td>
+      <td><table class="table-condensed table-bordered">
+          <tr data-ng-repeat="(paramName, paramValue) in vindexInfo.Params">
+            <td>{{paramName}}</td>
+            <td>{{paramValue}}</td>
+          </tr>
+        </table></td>
+    </tr>
+  </tbody>
+</table>
