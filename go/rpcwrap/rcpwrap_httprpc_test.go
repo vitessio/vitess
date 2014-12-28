@@ -28,14 +28,22 @@ func (t *Arith) Fail(ctx context.Context, args *Request, reply *int) error {
 	return errors.New("fail")
 }
 
-func startListening() net.Listener {
+func (t *Arith) Context(ctx context.Context, args *Request, reply *int) error {
+	if data := ctx.Value("context"); data == nil {
+		return errors.New("context is not set")
+	}
+
+	return nil
+}
+
+func startListeningWithContext(ctx context.Context) net.Listener {
 	server := rpcplus.NewServer()
 	server.Register(new(Arith))
 
 	mux := http.NewServeMux()
 
 	contextCreator := func(req *http.Request) context.Context {
-		return context.Background()
+		return ctx
 	}
 
 	ServeHTTPRPC(
@@ -53,6 +61,10 @@ func startListening() net.Listener {
 
 	go http.Serve(l, mux)
 	return l
+}
+
+func startListening() net.Listener {
+	return startListeningWithContext(context.Background())
 }
 
 func createAddr(l net.Listener) string {
@@ -101,5 +113,23 @@ func TestFail(t *testing.T) {
 
 	if r != 0 {
 		t.Fatalf("Expected: 0, but got: %d", r)
+	}
+}
+
+func TestContext(t *testing.T) {
+	ctx := context.WithValue(context.Background(), "context", "value")
+	l := startListeningWithContext(ctx)
+	defer l.Close()
+
+	params := &Request{
+		A: 7,
+		B: 8,
+	}
+
+	var r int
+
+	err := jsonrpc.NewHTTPClient(createAddr(l)).Call("Arith.Context", params, &r)
+	if err != nil {
+		t.Fatal(err.Error())
 	}
 }
