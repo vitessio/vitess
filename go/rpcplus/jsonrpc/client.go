@@ -7,10 +7,13 @@
 package jsonrpc
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"sync"
 
 	rpc "github.com/youtube/vitess/go/rpcplus"
@@ -121,4 +124,65 @@ func Dial(network, address string) (*rpc.Client, error) {
 		return nil, err
 	}
 	return NewClient(conn), err
+}
+
+type HTTPClient struct {
+	Addr string
+	seq  uint64
+	m    sync.Mutex
+}
+
+// NewHTTPClient creates a helper json rpc client for regular http based
+// endpoints
+func NewHTTPClient(addr string) *HTTPClient {
+	return &HTTPClient{
+		Addr: addr,
+		seq:  0,
+		m:    sync.Mutex{},
+	}
+}
+
+// Call calls the http rpc endpoint with given parameters, uses POST request and
+// can be called by multiple go routines
+func (h *HTTPClient) Call(serviceMethod string, args interface{}, reply interface{}) error {
+	var params [1]interface{}
+	params[0] = args
+
+	h.m.Lock()
+	seq := h.seq
+	h.seq++
+	h.m.Unlock()
+
+	cr := &clientRequest{
+		Method: serviceMethod,
+		Params: params,
+		Id:     seq,
+	}
+
+	byteData, err := json.Marshal(cr)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", h.Addr, bytes.NewReader(byteData))
+	if err != nil {
+		return err
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+
+	v := &clientResponse{}
+	err = json.NewDecoder(res.Body).Decode(v)
+	if err != nil {
+		return err
+	}
+
+	if v.Error != nil {
+		return errors.New(v.Error.(string))
+	}
+
+	return json.Unmarshal(*v.Result, reply)
 }
