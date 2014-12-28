@@ -2,30 +2,51 @@
   <thead>
     <tr>
       <th>Table</th>
-      <th>Column</th>
-      <th>Vindex</th>
+      <th>Class</th>
     </tr>
   </thead>
-  <tbody
-    data-ng-repeat="(table, tableInfo) in keyspaces[curKeyspace].Tables">
-    <tr
-      data-ng-show="!tableInfo.ColVindexes.length || tableInfo.ColVindexes.length == 0">
+  <tbody>
+    <tr data-ng-repeat="(table, tableKlass) in keyspaces[curKeyspace].Tables">
       <td>{{table}}</td>
-    </tr>
-    <tr data-ng-repeat="colVindex in tableInfo.ColVindexes">
-      <td data-ng-show="$first" rowspan="{{tableInfo.ColVindexes.length}}">{{table}}</td>
-      <td>{{colVindex.Col}}</td>
       <td>
         <div class="dropdown">
           <button
-            data-ng-class="'btn dropdown-toggle col-md-12'+{true: '', false: ' btn-warning'}[isVindexValid(colVindex.Name)]"
+            data-ng-class="'btn dropdown-toggle col-md-12'+{true: '', false: ' btn-warning'}[isClassValid(tableKlass)]"
             type="button" id="dropdownMenu1" data-toggle="dropdown">
-            {{colVindex.Name}} <span class="caret"></span>
+            {{tableKlass}} <span class="caret"></span>
           </button>
           <ul class="dropdown-menu">
-            <li data-ng-repeat="vindex in validVindexes"
-              data-ng-click="setVindex(colVindex, vindex)"><a tabindex="-1"
-              href="#/editor/{{curKeyspace}}">{{vindex}}</a></li>
+            <li
+              data-ng-repeat="(klass, klassInfo) in keyspaces[curKeyspace].Classes"
+              data-ng-click="setClass(table, klass)"><a tabindex="-1"
+              href="#/editor/{{curKeyspace}}">{{klass}}</a></li>
+          </ul>
+        </div>
+      </td>
+      <td>
+        <button type="button" class="btn btn-xs btn-danger" title="Delete table">
+          <span class="glyphicon glyphicon-trash"></span>
+        </button>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <div class="input-group">
+          <input type="text" class="form-control" placeholder="Table">
+        </div>
+      </td>
+      <td>
+        <div class="dropdown">
+          <button
+            class="btn dropdown-toggle col-md-12 btn-primary"
+            type="button" id="dropdownMenu1" data-toggle="dropdown">
+            {{tableKlass}} <span class="caret"></span>
+          </button>
+          <ul class="dropdown-menu">
+            <li
+              data-ng-repeat="(klass, klassInfo) in keyspaces[curKeyspace].Classes"
+              data-ng-click="setClass(table, klass)"><a tabindex="-1"
+              href="#/editor/{{curKeyspace}}"></a></li>
           </ul>
         </div>
       </td>

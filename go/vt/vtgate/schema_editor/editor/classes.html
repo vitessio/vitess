@@ -1,0 +1,37 @@
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Class</th>
+      <th>Column</th>
+      <th>Vindex</th>
+    </tr>
+  </thead>
+  <tbody data-ng-repeat="(klass, klassInfo) in keyspaces[curKeyspace].Classes">
+    <tr data-ng-show="!klassInfo.length || klassInfo.length == 0">
+      <td>{{klass}}</td>
+    </tr>
+    <tr data-ng-repeat="colVindex in klassInfo">
+      <td data-ng-show="$first" rowspan="{{klassInfo.length}}">{{klass}}
+        <button type="button" class="btn btn-xs btn-danger pull-right"
+          title="Delete class">
+          <span class="glyphicon glyphicon-trash"></span>
+        </button>
+      </td>
+      <td>{{colVindex.Col}}</td>
+      <td>
+        <div class="dropdown">
+          <button
+            data-ng-class="{'btn dropdown-toggle col-md-12': true, 'btn-warning': !isVindexValid(colVindex.Name)}"
+            type="button" id="dropdownMenu1" data-toggle="dropdown">
+            {{colVindex.Name}} <span class="caret"></span>
+          </button>
+          <ul class="dropdown-menu">
+            <li data-ng-repeat="vindex in validVindexes"
+              data-ng-click="setVindex(colVindex, vindex)"><a tabindex="-1"
+              href="#/editor/{{curKeyspace}}">{{vindex}}</a></li>
+          </ul>
+        </div>
+      </td>
+    </tr>
+  </tbody>
+</table>

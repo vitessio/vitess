@@ -1,0 +1,17 @@
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Table</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr data-ng-repeat="(table, tableKlass) in keyspaces[curKeyspace].Tables">
+      <td>{{table}}
+        <button type="button" class="btn btn-sm btn-danger pull-right"
+          title="Delete class">
+          <span class="glyphicon glyphicon-trash"></span>
+        </button>
+      </td>
+    </tr>
+  </tbody>
+</table>

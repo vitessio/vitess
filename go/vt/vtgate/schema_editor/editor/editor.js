@@ -28,12 +28,20 @@ function SchemaController($scope, $routeParams, curSchema) {
     }
   }
 
-  $scope.setVindex = function($colVindex, $vindex) {
-    $colVindex.Name = $vindex;
+  $scope.setClass = function($table, $klass) {
+    $scope.keyspaces[$scope.curKeyspace].Tables[$table] = $klass;
   };
+  
+  $scope.setVindex = function($colVindex, $vindex) {
+    $colVindex.Name = $vindex
+  }
 
   $scope.setVindexType = function($vindex, $vindexType) {
     $vindex.Type = $vindexType;
+  };
+
+  $scope.isClassValid = function($klass) {
+    return $klass in $scope.keyspaces[$scope.curKeyspace].Classes;
   };
 
   $scope.isVindexValid = function($vindexName) {

@@ -37,56 +37,55 @@ function curSchema() {
                   }
               }
           },
-          "Tables": {
-              "user": {
-                "ColVindexes": [
-                    {
-                        "Col": "id",
-                        "Name": "user_index"
-                    }, {
-                        "Col": "name",
-                        "Name": "name_user_map"
-                    }, {
-                        "Col": "third",
-                        "Name": "name_user_map"
-                    }
-                ]
-              },
-              "user_extra": {
-                "ColVindexes": [
+          "Classes": {
+              "user": [
+                  {
+                      "Col": "id",
+                      "Name": "user_index"
+                  }, {
+                      "Col": "name",
+                      "Name": "name_user_map"
+                  }, {
+                      "Col": "third",
+                      "Name": "name_user_map"
+                  }
+              ],
+              "user_extra": [
+                {
+                    "Col": "user_id",
+                    "Name": "user_index"
+                }
+              ],
+              "music": [
+                  {
+                      "Col": "user_id",
+                      "Name": "user_index1"
+                  }, {
+                      "Col": "id",
+                      "Name": "music_user_map"
+                  }
+              ],
+              "music_extra": [
                   {
                       "Col": "user_id",
                       "Name": "user_index"
+                  }, {
+                      "Col": "music_id",
+                      "Name": "music_user_map"
                   }
-                ]
-              },
-              "music": {
-                "ColVindexes": [
-                    {
-                        "Col": "user_id",
-                        "Name": "user_index1"
-                    }, {
-                        "Col": "id",
-                        "Name": "music_user_map"
-                    }
-                ]
-              },
-              "music_extra": {
-                "ColVindexes": [
-                    {
-                        "Col": "user_id",
-                        "Name": "user_index"
-                    }, {
-                        "Col": "music_id",
-                        "Name": "music_user_map"
-                    }
-                ]
-              }
+              ]
+          },
+          "Tables": {
+              "user": "",
+              "user_extra": "user_extra",
+              "music": "music",
+              "music_extra": "music_extra"
           }
       },
       "main": {
         "Tables": {
-          "main1": {}
+          "main1": "",
+          "main2": ""
         }
       }
   };
@@ -96,24 +95,24 @@ function curSchema() {
 
 function copyKeyspaces(original) {
   var copied = {};
-  for (var key in original) {
+  for ( var key in original) {
     copied[key] = {};
     var keyspace = copied[key];
     if (original[key].Sharded) {
       keyspace.Sharded = true;
       keyspace.Vindexes = copyVindexes(original[key].Vindexes);
-      keyspace.Tables = copyShardedTables(original[key].Tables);
+      keyspace.Classes = copyClasses(original[key].Classes);
     } else {
       keyspace.Sharded = false;
-      keyspace.Tables = copyUnshardedTables(original[key].Tables);
     }
+    keyspace.Tables = copyTables(original[key].Tables);
   }
   return copied;
 }
 
 function copyVindexes(original) {
   var copied = {};
-  for (var key in original) {
+  for ( var key in original) {
     copied[key] = {};
     var vindex = copied[key];
     vindex.Type = original[key].Type;
@@ -139,32 +138,24 @@ function copyVindexes(original) {
   return copied;
 }
 
-function copyShardedTables(original) {
+function copyClasses(original) {
   var copied = {};
-  for (var key in original) {
-    copied[key] = {};
-    var table = copied[key];
-    table.ColVindexes = copyColVindexes(original[key].ColVindexes);
+  for ( var key in original) {
+    copied[key] = [];
+    for ( var i=0; i<original[key].length; i++) {
+      copied[key].push({
+          "Col": original[key][i].Col,
+          "Name": original[key][i].Name
+      });
+    }
   }
   return copied;
 }
 
-function copyColVindexes(original) {
-  var copied = [];
-  for (var key in original) {
-    var colVindex = {};
-    colVindex.Col = original[key].Col;
-    colVindex.Name = original[key].Name;
-    copied.push(colVindex);
-    }
-  return copied;
-}
-
-
-function copyUnshardedTables(original) {
+function copyTables(original) {
   var copied = {};
-  for (var key in original) {
-    copied[key] = {};
+  for ( var key in original) {
+    copied[key] = original[key];
   }
   return copied;
 }
