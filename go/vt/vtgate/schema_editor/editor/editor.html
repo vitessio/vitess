@@ -1,8 +1,18 @@
 <div class="container-fluid">
   <div class="row">
-    <div data-ng-include="'editor/sidebar.html'" class="col-md-1 sidebar"></div>
+    <div data-ng-include="'editor/sidebar.html'" class="col-md-2 sidebar"></div>
     <div class="col-md-9">
-      <h4>Keyspace: {{curKeyspace}}</h4>
+      <h4>
+        Keyspace: {{curKeyspace}} <span class="btn-group ">
+          <button type="button" class="btn btn-info active">Sharded</button>
+          <button type="button" class="btn btn-info">Unsharded</button>
+        </span> <span class="btn-group ">
+          <button type="button" class="btn btn-info btn-danger"
+            title="Delete keyspace">
+            <span class="glyphicon glyphicon-trash"></span>
+          </button>
+        </span>
+      </h4>
     </div>
     <div data-ng-include="'editor/tables.html'" class="col-md-3"></div>
     <div data-ng-include="'editor/vindexes.html'" class="col-md-4"></div>
