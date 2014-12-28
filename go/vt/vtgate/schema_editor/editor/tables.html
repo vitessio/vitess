@@ -7,21 +7,25 @@
     </tr>
   </thead>
   <tbody
-    data-ng-repeat="(table, tableInfo) in vschema.Keyspaces[curKeyspace].Tables">
+    data-ng-repeat="(table, tableInfo) in keyspaces[curKeyspace].Tables">
+    <tr
+      data-ng-show="!tableInfo.ColVindexes.length || tableInfo.ColVindexes.length == 0">
+      <td>{{table}}</td>
+    </tr>
     <tr data-ng-repeat="colVindex in tableInfo.ColVindexes">
       <td data-ng-show="$first" rowspan="{{tableInfo.ColVindexes.length}}">{{table}}</td>
       <td>{{colVindex.Col}}</td>
       <td>
         <div class="dropdown">
           <button
-            data-ng-class="'btn dropdown-toggle col-md-12'+{true: '', false: ' btn-danger'}[indexValid(colVindex.Name)]"
+            data-ng-class="'btn dropdown-toggle col-md-12'+{true: '', false: ' btn-danger'}[isVindexValid(colVindex.Name)]"
             type="button" id="dropdownMenu1" data-toggle="dropdown">
             {{colVindex.Name}} <span class="caret"></span>
           </button>
           <ul class="dropdown-menu">
             <li data-ng-repeat="vindex in validVindexes"
               data-ng-click="setVindex(colVindex, vindex)"><a tabindex="-1"
-              href="#">{{vindex}}</a></li>
+              href="#/editor/{{curKeyspace}}">{{vindex}}</a></li>
           </ul>
         </div>
       </td>

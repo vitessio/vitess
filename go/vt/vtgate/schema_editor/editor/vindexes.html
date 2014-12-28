@@ -10,7 +10,7 @@
   <tbody>
     <tr>
     <tr
-      data-ng-repeat="(vindex, vindexInfo) in vschema.Keyspaces[curKeyspace].Vindexes">
+      data-ng-repeat="(vindex, vindexInfo) in keyspaces[curKeyspace].Vindexes">
       <td>{{vindex}}</td>
       <td>
         <div class="dropdown">
@@ -21,7 +21,7 @@
           <ul class="dropdown-menu">
             <li data-ng-repeat="vindexType in vindexTypes"
               data-ng-click="setVindexType(vindexInfo, vindexType)"><a
-              tabindex="-1" href="#">{{vindexType}}</a></li>
+              tabindex="-1" href="#/editor/{{curKeyspace}}">{{vindexType}}</a></li>
           </ul>
         </div>
       </td>
