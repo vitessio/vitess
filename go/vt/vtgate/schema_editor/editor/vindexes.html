@@ -1,43 +1,46 @@
-<table class="table table-striped">
-  <thead>
+
+<div class="col-md-4">
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>Vindex</th>
+        <th>Type</th>
+        <th>Owner</th>
+        <th>Params</th>
+      </tr>
+    </thead>
     <tr>
-      <th>Vindex</th>
-      <th>Type</th>
-      <th>Owner</th>
-      <th>Params</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-    <tr
-      data-ng-repeat="(vindex, vindexInfo) in keyspaces[curKeyspace].Vindexes">
-      <td>{{vindex}}</td>
+    <tr data-ng-repeat="(vindexName, vindex) in keyspace.Vindexes">
+      <td>{{vindexName}}<br> <a type="button"
+        class="btn btn-xs btn-primary" title="Edit class"
+        href="#/editor/{{keyspaceName}}/class/{{className}}"> <span
+          class="glyphicon glyphicon-pencil"></span>
+      </a>
+        <button type="button" class="btn btn-xs btn-primary"
+          title="Delete class">
+          <span class="glyphicon glyphicon-trash"></span>
+        </button>
+      </td>
       <td>
         <div class="dropdown">
           <button class="btn dropdown-toggle col-md-12" type="button"
             id="dropdownMenu1" data-toggle="dropdown">
-            {{vindexInfo.Type}} <span class="caret"></span>
+            {{vindex.Type}} <span class="caret"></span>
           </button>
           <ul class="dropdown-menu">
             <li data-ng-repeat="vindexType in vindexTypes"
-              data-ng-click="setVindexType(vindexInfo, vindexType)"><a
-              tabindex="-1" href="#/editor/{{curKeyspace}}">{{vindexType}}</a></li>
+              data-ng-click="setVindexType(vindex, vindexType)"><a
+              tabindex="-1" href="#/editor/{{keyspaceName}}">{{vindexType}}</a></li>
           </ul>
         </div>
       </td>
-      <td>{{vindexInfo.Owner}}</td>
+      <td>{{vindex.Owner}}</td>
       <td><table class="table-condensed table-bordered">
-          <tr data-ng-repeat="(paramName, paramValue) in vindexInfo.Params">
+          <tr data-ng-repeat="(paramName, paramValue) in vindex.Params">
             <td>{{paramName}}</td>
             <td>{{paramValue}}</td>
           </tr>
         </table></td>
-      <td>
-        <button type="button" class="btn btn-xs btn-danger"
-          title="Delete vindex">
-          <span class="glyphicon glyphicon-trash"></span>
-        </button>
-      </td>
     </tr>
-  </tbody>
-</table>
+  </table>
+</div>

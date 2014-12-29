@@ -1,37 +1,53 @@
-<table class="table table-striped">
-  <thead>
-    <tr>
-      <th>Class</th>
-      <th>Column</th>
-      <th>Vindex</th>
-    </tr>
-  </thead>
-  <tbody data-ng-repeat="(klass, klassInfo) in keyspaces[curKeyspace].Classes">
-    <tr data-ng-show="!klassInfo.length || klassInfo.length == 0">
-      <td>{{klass}}</td>
-    </tr>
-    <tr data-ng-repeat="colVindex in klassInfo">
-      <td data-ng-show="$first" rowspan="{{klassInfo.length}}">{{klass}}
-        <button type="button" class="btn btn-xs btn-danger pull-right"
-          title="Delete class">
-          <span class="glyphicon glyphicon-trash"></span>
-        </button>
-      </td>
-      <td>{{colVindex.Col}}</td>
-      <td>
-        <div class="dropdown">
-          <button
-            data-ng-class="{'btn dropdown-toggle col-md-12': true, 'btn-warning': !isVindexValid(colVindex.Name)}"
-            type="button" id="dropdownMenu1" data-toggle="dropdown">
-            {{colVindex.Name}} <span class="caret"></span>
+<div class="col-md-3">
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>Class</th>
+        <th>Column</th>
+        <th>Vindex</th>
+      </tr>
+    </thead>
+    <tbody data-ng-repeat="(className, klass) in keyspace.Classes">
+      <tr data-ng-show="!klass.length || klass.length == 0">
+        <td>{{className}}</td>
+      </tr>
+      <tr data-ng-repeat="colVindex in klass">
+        <td data-ng-show="$first" rowspan="{{klass.length}}">{{className}}<br>
+          <a type="button" class="btn btn-xs btn-primary" title="Edit class"
+          href="#/editor/{{keyspaceName}}/class/{{className}}"> <span
+            class="glyphicon glyphicon-pencil"></span>
+        </a>
+          <button type="button" class="btn btn-xs btn-primary"
+            title="Delete class">
+            <span class="glyphicon glyphicon-trash"></span>
           </button>
-          <ul class="dropdown-menu">
-            <li data-ng-repeat="vindex in validVindexes"
-              data-ng-click="setVindex(colVindex, vindex)"><a tabindex="-1"
-              href="#/editor/{{curKeyspace}}">{{vindex}}</a></li>
-          </ul>
-        </div>
-      </td>
-    </tr>
-  </tbody>
-</table>
+        </td>
+        <td>{{colVindex.Col}}</td>
+        <td>
+          <div class="dropdown">
+            <div
+              data-ng-class="{'list-group-item-danger': !isVindexValid(colVindex.Name)}">
+              {{colVindex.Name}}</div>
+            <ul class="dropdown-menu">
+              <li data-ng-repeat="vindex in vindexNames"
+                data-ng-click="setVindex(colVindex, vindex)"><a
+                tabindex="-1" href="#/editor/{{keyspaceName}}">{{vindex}}</a></li>
+            </ul>
+          </div>
+        </td>
+      </tr>
+      <tr data-ng-show="$last">
+        <td colspan="2">
+          <div class="input-group">
+            <input type="text" class="form-control" placeholder="Class"
+              data-ng-model="newClass"> <span class="input-group-btn">
+              <a class="btn btn-default btn-primary" type="button"
+              href="#/editor/{{keyspaceName}}/class/{{newClass}}"><span
+                class="glyphicon glyphicon-plus"></span> Add</a>
+            </span>
+          </div>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>

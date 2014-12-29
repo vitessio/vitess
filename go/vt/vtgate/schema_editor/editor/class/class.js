@@ -4,7 +4,7 @@
  */
 'use strict';
 
-function SchemaController($scope, $routeParams, curSchema) {
+function ClassController($scope, $routeParams, curSchema) {
   init();
 
   function init() {
@@ -23,17 +23,23 @@ function SchemaController($scope, $routeParams, curSchema) {
     }
     $scope.keyspaceName = $routeParams.keyspaceName;
     $scope.keyspace = $scope.keyspaces[$routeParams.keyspaceName];
-    if ($scope.keyspace.Sharded) {
-      $scope.vindexNames = Object.keys($scope.keyspace.Vindexes);
+    $scope.vindexNames = Object.keys($scope.keyspace.Vindexes);
+    if (!$routeParams.className || !$scope.keyspace.Classes[$routeParams.className]) {
+      return;
     }
+    $scope.className = $routeParams.className;
+    $scope.klass = $scope.keyspace.Classes[$routeParams.className];
   }
 
-  $scope.setClass = function($table, $className) {
-    $scope.keyspace.Tables[$table] = $className;
+  $scope.setVindex = function($colVindex, $vindex) {
+    $colVindex.Name = $vindex;
   };
 
-  $scope.setVindex = function($colVindex, $vindexName) {
-    $colVindex.Name = $vindexName;
+  $scope.addVindex = function($colName, $vindex) {
+    $scope.klass.push({
+      "Col": $colName,
+      "Name": $vindex
+    });
   };
 
   $scope.setVindexType = function($vindex, $vindexType) {

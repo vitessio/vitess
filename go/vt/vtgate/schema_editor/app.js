@@ -8,6 +8,7 @@
 angular.module('app', ['ngRoute'])
 .factory('curSchema', curSchema)
 .controller('SchemaController', SchemaController)
+.controller('ClassController', ClassController)
 .controller('DiffController', DiffController)
 .config(['$routeProvider', function($routeProvider) {
   $routeProvider
@@ -15,9 +16,13 @@ angular.module('app', ['ngRoute'])
     templateUrl: "editor/editor.html",
     controller: "SchemaController"
   })
-  .when('/editor/:keyspace',{
+  .when('/editor/:keyspaceName',{
     templateUrl: "editor/editor.html",
     controller: "SchemaController"
+  })
+  .when('/editor/:keyspaceName/class/:className',{
+    templateUrl: "editor/class/class.html",
+    controller: "ClassController"
   })
   .when('/diff',{
     templateUrl: "diff/diff.html",

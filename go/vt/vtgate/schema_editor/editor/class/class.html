@@ -1,0 +1,60 @@
+<div class="container-fluid">
+  <div class="row">
+    <div data-ng-include="'editor/sidebar.html'"></div>
+    <div class="col-md-9">
+      <h4 data-ng-show="keyspaceName">Keyspace: {{keyspaceName}} Class:
+        {{className}}</h4>
+    </div>
+    <div class="col-md-3">
+      <table class="table table-striped">
+        <tr data-ng-repeat="colVindex in klass">
+          <td>{{colVindex.Col}}</td>
+          <td>
+            <div class="dropdown">
+              <button
+                data-ng-class="{'btn dropdown-toggle col-md-12': true, 'btn-danger': !isVindexValid(colVindex.Name)}"
+                type="button" id="dropdownMenu1" data-toggle="dropdown">
+                {{colVindex.Name}} <span class="caret"></span>
+              </button>
+              <ul class="dropdown-menu">
+                <li data-ng-repeat="vindex in vindexNames"
+                  data-ng-click="setVindex(colVindex, vindex)"><a
+                  tabindex="-1"
+                  href="#/editor/{{keyspaceName}}/class/{{className}}">{{vindex}}</a></li>
+              </ul>
+            </div>
+          </td>
+          <td>
+            <button type="button" class="btn btn-xs btn-primary"
+              title="Delete class">
+              <span class="glyphicon glyphicon-trash"></span>
+            </button>
+          </td>
+        </tr>
+        <tr>
+          <td colspan="2"><div class="input-group">
+              <input type="text" class="form-control" placeholder="Column"
+                data-ng-model="newClass">
+              <div class="input-group-btn">
+                <button
+                  data-ng-class="{'btn dropdown-toggle col-md-12': true, 'btn-danger': !isVindexValid(colVindex.Name)}"
+                  type="button" data-toggle="dropdown"
+                  data-ng-disabled="!newClass">
+                  {{colVindex.Name}} <span class="caret"></span>
+                </button>
+                <ul class="dropdown-menu">
+                  <li data-ng-repeat="vindex in vindexNames"
+                    data-ng-click="addVindex(newClass, vindex)"><a
+                    tabindex="-1"
+                    href="#/editor/{{keyspaceName}}/class/{{className}}">{{vindex}}</a></li>
+                </ul>
+              </div>
+            </div></td>
+        </tr>
+      </table>
+<button type="button" class="btn btn-default btn-lg" onclick="history.back()" title="Back">
+  <span class="glyphicon glyphicon-arrow-left"></span>
+</button>
+    </div>
+  </div>
+</div>
