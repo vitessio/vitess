@@ -133,6 +133,11 @@ func NewActionAgent(
 		_healthy:           fmt.Errorf("healthcheck not run yet"),
 	}
 
+	// try to initialize the tablet if we have to
+	if err := agent.InitTablet(port, securePort); err != nil {
+		return nil, err
+	}
+
 	// Start the binlog player services, not playing at start.
 	agent.BinlogPlayerMap = NewBinlogPlayerMap(topoServer, &dbcfgs.Filtered, mysqld)
 	RegisterBinlogPlayerMap(agent.BinlogPlayerMap)
