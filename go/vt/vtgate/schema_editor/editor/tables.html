@@ -9,19 +9,19 @@
     <tr data-ng-repeat="(tableName, tableClass) in keyspace.Tables">
       <td>{{tableName}}<br>
         <button type="button" class="btn btn-xs btn-primary"
-          title="Delete table">
+          title="Delete table" data-ng-click="deleteTable(tableName)">
           <span class="glyphicon glyphicon-trash"></span>
         </button></td>
       <td>
         <div class="dropdown">
           <button
             data-ng-class="{'btn dropdown-toggle col-md-12': true, 'btn-danger': !isClassValid(tableClass)}"
-            type="button" id="dropdownMenu1" data-toggle="dropdown">
+            type="button" data-toggle="dropdown">
             {{tableClass}} <span class="caret"></span>
           </button>
           <ul class="dropdown-menu">
             <li data-ng-repeat="(className, klass) in keyspace.Classes"
-              data-ng-click="setClass(tableName, className)"><a tabindex="-1"
+              data-ng-click="setTableClass(tableName, className)"><a
               href="#/editor/{{keyspaceName}}">{{className}}</a></li>
           </ul>
         </div>
@@ -30,18 +30,25 @@
     <tr>
       <td colspan="2">
         <div class="input-group">
-          <input type="text" class="form-control" placeholder="Table">
+          <input type="text" class="form-control" placeholder="Table"
+            data-ng-model="tableEditor.newTableName">
           <div class="input-group-btn">
             <button class="btn dropdown-toggle btn-primary" type="button"
-              id="dropdownMenu1" data-toggle="dropdown">
+              data-toggle="dropdown" data-ng-disabled="!tableEditor.newTableName">
               {{tableClass}} <span class="caret"></span>
             </button>
             <ul class="dropdown-menu">
               <li data-ng-repeat="(className, klass) in keyspace.Classes"
-                data-ng-click="setClass(tableName, className)"><a tabindex="-1"
+                data-ng-click="addTable(tableEditor.newTableName, className)"><a
                 href="#/editor/{{keyspaceName}}">{{className}}</a></li>
             </ul>
           </div>
+        </div>
+        <div class="alert alert-danger" data-ng-show="tableEditor.err">
+          {{tableEditor.err}}<a type="button" class="alert-danger pull-right"
+            data-ng-click="clearTableError()"> <span
+            class="glyphicon glyphicon-remove"></span>
+          </a>
         </div>
       </td>
     </tr>

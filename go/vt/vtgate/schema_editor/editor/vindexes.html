@@ -24,13 +24,13 @@
       <td>
         <div class="dropdown">
           <button class="btn dropdown-toggle col-md-12" type="button"
-            id="dropdownMenu1" data-toggle="dropdown">
+            data-toggle="dropdown">
             {{vindex.Type}} <span class="caret"></span>
           </button>
           <ul class="dropdown-menu">
             <li data-ng-repeat="vindexType in vindexTypes"
               data-ng-click="setVindexType(vindex, vindexType)"><a
-              tabindex="-1" href="#/editor/{{keyspaceName}}">{{vindexType}}</a></li>
+              href="#/editor/{{keyspaceName}}">{{vindexType}}</a></li>
           </ul>
         </div>
       </td>

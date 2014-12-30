@@ -28,11 +28,6 @@
             <div
               data-ng-class="{'list-group-item-danger': !isVindexValid(colVindex.Name)}">
               {{colVindex.Name}}</div>
-            <ul class="dropdown-menu">
-              <li data-ng-repeat="vindex in vindexNames"
-                data-ng-click="setVindex(colVindex, vindex)"><a
-                tabindex="-1" href="#/editor/{{keyspaceName}}">{{vindex}}</a></li>
-            </ul>
           </div>
         </td>
       </tr>
@@ -40,9 +35,12 @@
         <td colspan="2">
           <div class="input-group">
             <input type="text" class="form-control" placeholder="Class"
-              data-ng-model="newClass"> <span class="input-group-btn">
-              <a class="btn btn-default btn-primary" type="button"
-              href="#/editor/{{keyspaceName}}/class/{{newClass}}"><span
+              data-ng-model="newClassName"> <span
+              class="input-group-btn"> <a
+              class="btn btn-default btn-primary" type="button"
+              data-ng-disabled="!newClassName"
+              data-ng-click="addClass(newClassName)"
+              href="#/editor/{{keyspaceName}}/class/{{newClassName}}"><span
                 class="glyphicon glyphicon-plus"></span> Add</a>
             </span>
           </div>

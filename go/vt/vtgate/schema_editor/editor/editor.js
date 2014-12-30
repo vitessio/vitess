@@ -26,19 +26,36 @@ function SchemaController($scope, $routeParams, curSchema) {
     if ($scope.keyspace.Sharded) {
       $scope.vindexNames = Object.keys($scope.keyspace.Vindexes);
     }
+    $scope.tableEditor = {};
   }
-
-  $scope.setClass = function($table, $className) {
-    $scope.keyspace.Tables[$table] = $className;
+  
+  $scope.addTable = function ($tableName, $className) {
+    if ($scope.keyspace.Tables[$tableName]) {
+      $scope.tableEditor.err = $tableName + " already exists";
+      return
+    }
+    $scope.setTableClass($tableName, $className);
+    $scope.tableEditor.newTableName = "";
+    $scope.clearTableError();
   };
 
-  $scope.setVindex = function($colVindex, $vindexName) {
-    $colVindex.Name = $vindexName;
+  $scope.setTableClass = function($tableName, $className) {
+    $scope.keyspace.Tables[$tableName] = $className;
+    $scope.clearTableError();
   };
-
-  $scope.setVindexType = function($vindex, $vindexType) {
-    $vindex.Type = $vindexType;
+  
+  $scope.deleteTable = function($tableName) {
+    delete $scope.keyspace.Tables[$tableName];
+    $scope.clearTableError();
   };
+  
+  $scope.clearTableError= function() {
+    $scope.tableEditor.err = "";
+  };
+  
+  $scope.addClass = function($className) {
+    $scope.keyspace.Classes[$className] = {};
+  }
 
   $scope.isClassValid = function($className) {
     return $className in $scope.keyspace.Classes;

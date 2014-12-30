@@ -12,8 +12,8 @@
           <td>
             <div class="dropdown">
               <button
-                data-ng-class="{'btn dropdown-toggle col-md-12': true, 'btn-danger': !isVindexValid(colVindex.Name)}"
-                type="button" id="dropdownMenu1" data-toggle="dropdown">
+                data-ng-class="{'btn dropdown-toggle': true, 'btn-danger': !isVindexValid(colVindex.Name)}"
+                type="button" data-toggle="dropdown">
                 {{colVindex.Name}} <span class="caret"></span>
               </button>
               <ul class="dropdown-menu">
@@ -45,16 +45,16 @@
                 <ul class="dropdown-menu">
                   <li data-ng-repeat="vindex in vindexNames"
                     data-ng-click="addVindex(newClass, vindex)"><a
-                    tabindex="-1"
                     href="#/editor/{{keyspaceName}}/class/{{className}}">{{vindex}}</a></li>
                 </ul>
               </div>
             </div></td>
         </tr>
       </table>
-<button type="button" class="btn btn-default btn-lg" onclick="history.back()" title="Back">
-  <span class="glyphicon glyphicon-arrow-left"></span>
-</button>
+      <button type="button" class="btn btn-default btn-lg"
+        onclick="history.back()" title="Back">
+        <span class="glyphicon glyphicon-arrow-left"></span>
+      </button>
     </div>
   </div>
 </div>
