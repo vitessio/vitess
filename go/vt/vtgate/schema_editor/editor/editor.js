@@ -29,7 +29,31 @@ function SchemaController($scope, $routeParams, curSchema) {
     $scope.tableEditor = {};
   }
   
+  $scope.setSharded = function($sharded) {
+    if ($sharded) {
+      $scope.keyspace.Sharded = true;
+      if (!$scope.keyspace["Classes"]) {
+        $scope.keyspace.Classes = {};
+      }
+      if (!$scope.keyspace["Vindexes"]) {
+        $scope.keyspace.Vindexes = {};
+      }
+      return;
+    } else {
+      $scope.keyspace.Sharded = false;
+      for (var tableName in $scope.keyspace.Tables) {
+        $scope.keyspace.Tables[tableName] = "";
+      }
+      delete $scope.keyspace["Classes"];
+      delete $scope.keyspace["Vindexes"];
+    }
+  };
+  
   $scope.addTable = function ($tableName, $className) {
+    if (!$tableName) {
+      $scope.tableEditor.err = "empty table name";
+      return
+    }
     if ($scope.keyspace.Tables[$tableName]) {
       $scope.tableEditor.err = $tableName + " already exists";
       return

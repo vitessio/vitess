@@ -1,6 +1,6 @@
 
-<div class="col-md-4">
-  <table class="table table-striped">
+<div class="col-md-5">
+  <table class="table">
     <thead>
       <tr>
         <th>Vindex</th>
@@ -11,19 +11,10 @@
     </thead>
     <tr>
     <tr data-ng-repeat="(vindexName, vindex) in keyspace.Vindexes">
-      <td>{{vindexName}}<br> <a type="button"
-        class="btn btn-xs btn-primary" title="Edit class"
-        href="#/editor/{{keyspaceName}}/class/{{className}}"> <span
-          class="glyphicon glyphicon-pencil"></span>
-      </a>
-        <button type="button" class="btn btn-xs btn-primary"
-          title="Delete class">
-          <span class="glyphicon glyphicon-trash"></span>
-        </button>
-      </td>
+      <td>{{vindexName}}</td>
       <td>
         <div class="dropdown">
-          <button class="btn dropdown-toggle col-md-12" type="button"
+          <button class="btn dropdown-toggle form-control" type="button"
             data-toggle="dropdown">
             {{vindex.Type}} <span class="caret"></span>
           </button>
@@ -41,6 +32,10 @@
             <td>{{paramValue}}</td>
           </tr>
         </table></td>
+      <td><a type="button" class="btn btn-xs"> <span
+          class="glyphicon glyphicon-remove"></span>
+      </a></td>
+
     </tr>
   </table>
 </div>

@@ -4,11 +4,14 @@
     <div class="col-md-9">
       <h4 data-ng-show="keyspaceName">
         Keyspace: {{keyspaceName}} <span class="btn-group ">
-          <button type="button" class="btn btn-info active">Sharded</button>
-          <button type="button" class="btn btn-info">Unsharded</button>
+          <button type="button"
+            data-ng-class="{'btn btn-info': true, 'active': keyspace.Sharded}"
+            data-ng-click="setSharded(true)">Sharded</button>
+          <button type="button"
+            data-ng-class="{'btn btn-info': true, 'active': !keyspace.Sharded}"
+            data-ng-click="setSharded(false)">Unsharded</button>
         </span> <span class="btn-group ">
-          <button type="button" class="btn btn-primary"
-            title="Delete keyspace">
+          <button type="button" class="btn btn-primary" title="Delete keyspace">
             <span class="glyphicon glyphicon-trash"></span>
           </button>
         </span>

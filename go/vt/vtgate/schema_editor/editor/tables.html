@@ -1,5 +1,5 @@
 <div class="col-md-2">
-  <table class="table table-striped">
+  <table class="table">
     <thead>
       <tr>
         <th>Table</th>
@@ -8,14 +8,11 @@
     </thead>
     <tr data-ng-repeat="(tableName, tableClass) in keyspace.Tables">
       <td>{{tableName}}<br>
-        <button type="button" class="btn btn-xs btn-primary"
-          title="Delete table" data-ng-click="deleteTable(tableName)">
-          <span class="glyphicon glyphicon-trash"></span>
-        </button></td>
+      </td>
       <td>
         <div class="dropdown">
           <button
-            data-ng-class="{'btn dropdown-toggle col-md-12': true, 'btn-danger': !isClassValid(tableClass)}"
+            data-ng-class="{'btn dropdown-toggle form-control': true, 'btn-danger': !isClassValid(tableClass)}"
             type="button" data-toggle="dropdown">
             {{tableClass}} <span class="caret"></span>
           </button>
@@ -26,6 +23,9 @@
           </ul>
         </div>
       </td>
+      <td><a type="button" class="btn btn-xs" data-ng-click="deleteTable(tableName)">
+          <span class="glyphicon glyphicon-remove"></span>
+        </a></td>
     </tr>
     <tr>
       <td colspan="2">
@@ -33,8 +33,8 @@
           <input type="text" class="form-control" placeholder="Table"
             data-ng-model="tableEditor.newTableName">
           <div class="input-group-btn">
-            <button class="btn dropdown-toggle btn-primary" type="button"
-              data-toggle="dropdown" data-ng-disabled="!tableEditor.newTableName">
+            <button class="btn dropdown-toggle" type="button"
+              data-toggle="dropdown">
               {{tableClass}} <span class="caret"></span>
             </button>
             <ul class="dropdown-menu">

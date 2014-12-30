@@ -2,8 +2,7 @@
   <div class="row">
     <div data-ng-include="'editor/sidebar.html'"></div>
     <div class="col-md-9">
-      <h4 data-ng-show="keyspaceName">Keyspace: {{keyspaceName}} Class:
-        {{className}}</h4>
+      <h4 data-ng-show="keyspaceName">Class: {{keyspaceName}}.{{className}}</h4>
     </div>
     <div class="col-md-3">
       <table class="table table-striped">
@@ -37,7 +36,7 @@
                 data-ng-model="newClass">
               <div class="input-group-btn">
                 <button
-                  data-ng-class="{'btn dropdown-toggle col-md-12': true, 'btn-danger': !isVindexValid(colVindex.Name)}"
+                  data-ng-class="{'btn dropdown-toggle': true, 'btn-danger': !isVindexValid(colVindex.Name)}"
                   type="button" data-toggle="dropdown"
                   data-ng-disabled="!newClass">
                   {{colVindex.Name}} <span class="caret"></span>

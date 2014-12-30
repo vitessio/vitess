@@ -84,7 +84,7 @@ function curSchema() {
       },
       "main": {
         "Tables": {
-          "main1": "",
+          "main1": "aa",
           "main2": ""
         }
       }
@@ -102,10 +102,14 @@ function copyKeyspaces(original) {
       keyspace.Sharded = true;
       keyspace.Vindexes = copyVindexes(original[key].Vindexes);
       keyspace.Classes = copyClasses(original[key].Classes);
+      keyspace.Tables = copyTables(original[key].Tables);
     } else {
       keyspace.Sharded = false;
+      keyspace.Tables = {};
+      for (key in original[key].Tables) {
+        keyspace.Tables[key] = "";
+      }
     }
-    keyspace.Tables = copyTables(original[key].Tables);
   }
   return copied;
 }
