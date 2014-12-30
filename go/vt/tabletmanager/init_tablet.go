@@ -10,6 +10,7 @@ package tabletmanager
 import (
 	"flag"
 	"fmt"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/flagutil"
@@ -27,6 +28,7 @@ var (
 	initShard          = flag.String("init_shard", "", "(init parameter) shard to use for this tablet")
 	initTags           flagutil.StringMapValue
 	initTabletType     = flag.String("init_tablet_type", "", "(init parameter) the tablet type to use for this tablet. Incompatible with target_tablet_type.")
+	initTimeout        = flag.Duration("init_timeout", 1*time.Minute, "(init parameter) timeout to use for the init phase.")
 )
 
 func init() {
@@ -69,6 +71,10 @@ func (agent *ActionAgent) InitTablet(port, securePort int) error {
 	} else {
 		log.Fatalf("if init tablet is enabled, one of init_tablet_type or target_tablet_type needs to be specified")
 	}
+
+	// create a context for this whole operation
+	ctx, cancel := context.WithTimeout(agent.batchCtx, *initTimeout)
+	defer cancel()
 
 	// if we're assigned to a shard, make sure it exists, see if
 	// we are its master, and update its cells list if necessary
@@ -113,8 +119,6 @@ func (agent *ActionAgent) InitTablet(port, securePort int) error {
 		// list.  If we do, it has to be under the shard lock.
 		if !si.HasCell(agent.TabletAlias.Cell) {
 			actionNode := actionnode.UpdateShard()
-			ctx, cancel := context.WithTimeout(agent.batchCtx, agent.LockTimeout)
-			defer cancel()
 			lockPath, err := actionNode.LockShard(ctx, agent.TopoServer, *initKeyspace, shard)
 			if err != nil {
 				return fmt.Errorf("LockShard(%v/%v) failed: %v", *initKeyspace, shard, err)
@@ -181,7 +185,7 @@ func (agent *ActionAgent) InitTablet(port, securePort int) error {
 	case nil:
 		// it worked, we're good, can update the replication graph
 		if tablet.IsInReplicationGraph() {
-			if err := topo.UpdateTabletReplicationData(agent.batchCtx, agent.TopoServer, tablet); err != nil {
+			if err := topo.UpdateTabletReplicationData(ctx, agent.TopoServer, tablet); err != nil {
 				return fmt.Errorf("UpdateTabletReplicationData failed: %v", err)
 			}
 		}
@@ -201,7 +205,7 @@ func (agent *ActionAgent) InitTablet(port, securePort int) error {
 
 		// And overwrite the rest
 		*(oldTablet.Tablet) = *tablet
-		if err := topo.UpdateTablet(agent.batchCtx, agent.TopoServer, oldTablet); err != nil {
+		if err := topo.UpdateTablet(ctx, agent.TopoServer, oldTablet); err != nil {
 			return fmt.Errorf("UpdateTablet failed: %v", err)
 		}
 
@@ -215,7 +219,7 @@ func (agent *ActionAgent) InitTablet(port, securePort int) error {
 	// and now rebuild the serving graph. Note we do that in any case,
 	// to clean any inaccurate record from any part of the serving graph.
 	if tabletType != topo.TYPE_IDLE {
-		if _, err := topotools.RebuildShard(agent.batchCtx, logutil.NewConsoleLogger(), agent.TopoServer, tablet.Keyspace, tablet.Shard, []string{tablet.Alias.Cell}, agent.LockTimeout); err != nil {
+		if _, err := topotools.RebuildShard(ctx, logutil.NewConsoleLogger(), agent.TopoServer, tablet.Keyspace, tablet.Shard, []string{tablet.Alias.Cell}, agent.LockTimeout); err != nil {
 			return fmt.Errorf("RebuildShard failed: %v", err)
 		}
 	}
