@@ -4,7 +4,7 @@
  */
 'use strict';
 
-function curSchema() {
+function curSchema(vindexInfo) {
   var data = {};
   data.original = {
       "user": {
@@ -51,7 +51,7 @@ function curSchema() {
                       "Col": "id",
                       "Name": "user_index"
                   }, {
-                      "Col": "name",
+                      "Col": "",
                       "Name": "name_user_map"
                   }, {
                       "Col": "third",
@@ -107,6 +107,11 @@ function curSchema() {
     data.tables = computeTables(data.keyspaces);
   };
 
+  data.deleteKeyspace = function(keyspaceName) {
+    delete data.keyspaces[keyspaceName];
+    data.tables = computeTables(data.keyspaces);
+  };
+
   data.addTable = function(keyspaceName, tableName, className) {
     data.keyspaces[keyspaceName].Tables[tableName] = className;
     data.tables = computeTables(data.keyspaces);
@@ -115,6 +120,76 @@ function curSchema() {
   data.deleteTable = function(keyspaceName, tableName) {
     delete data.keyspaces[keyspaceName].Tables[tableName];
     data.tables = computeTables(data.keyspaces);
+  };
+
+  data.validClasses = function(keyspace, tableName) {
+    var valid = [];
+    if (!keyspace) {
+      return [];
+    }
+    for ( var className in keyspace.Classes) {
+      if (data.classHasError(keyspace, tableName, className)) {
+        continue;
+      }
+      valid.push(className);
+    }
+    return valid;
+  };
+
+  data.classHasError = function(keyspace, tableName, className) {
+    if (!(className in keyspace.Classes)) {
+      return "class not found";
+    }
+    var klass = keyspace.Classes[className];
+    for (var i = 0; i < klass.length; i++) {
+      var classError = data.vindexHasError(keyspace, className, i);
+      if (classError) {
+        return "invalid class";
+      }
+      var vindex = keyspace.Vindexes[klass[i].Name];
+      if (vindex.Owner != tableName) {
+        continue;
+      }
+      if (i == 0) {
+        if (vindexInfo.Types[vindex.Type].Type != "functional") {
+          return "owned primary vindex must be functional";
+        }
+      } else {
+        if (vindexInfo.Types[vindex.Type].Type != "lookup") {
+          return "owned non-primary vindex must be lookup";
+        }
+      }
+    }
+    return "";
+  };
+
+  data.validVindexes = function(keyspace, className, index) {
+    var valid = [];
+    for ( var vindexName in keyspace.Vindexes) {
+      // Duplicated from vindexHasError.
+      if (index == 0) {
+        var vindexTypeName = keyspace.Vindexes[vindexName].Type;
+        if (!vindexInfo.Types[vindexTypeName].Unique) {
+          continue;
+        }
+      }
+      valid.push(vindexName);
+    }
+    return valid;
+  };
+
+  data.vindexHasError = function(keyspace, className, index) {
+    var vindexName = keyspace.Classes[className][index].Name;
+    if (!(vindexName in keyspace.Vindexes)) {
+      return "vindex not found";
+    }
+    if (index == 0) {
+      var vindexTypeName = keyspace.Vindexes[vindexName].Type;
+      if (!vindexInfo.Types[vindexTypeName].Unique) {
+        return "primary vindex must be unique";
+      }
+    }
+    return "";
   };
 
   data.reset();

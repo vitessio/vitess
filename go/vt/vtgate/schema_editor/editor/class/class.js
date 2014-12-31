@@ -10,39 +10,57 @@ function ClassController($scope, $routeParams, vindexInfo, curSchema) {
   function init() {
     $scope.curSchema = curSchema;
     $scope.vindexInfo = vindexInfo;
-    if (!$routeParams.keyspaceName || !$scope.keyspaces[$routeParams.keyspaceName]) {
+    if (!$routeParams.keyspaceName || !curSchema.keyspaces[$routeParams.keyspaceName]) {
       return;
     }
     $scope.keyspaceName = $routeParams.keyspaceName;
-    $scope.keyspace = $scope.keyspaces[$routeParams.keyspaceName];
-    $scope.vindexNames = Object.keys($scope.keyspace.Vindexes);
+    $scope.keyspace = curSchema.keyspaces[$routeParams.keyspaceName];
     if (!$routeParams.className || !$scope.keyspace.Classes[$routeParams.className]) {
       return;
     }
     $scope.className = $routeParams.className;
     $scope.klass = $scope.keyspace.Classes[$routeParams.className];
+    $scope.classEditor = {};
   }
 
-  $scope.setVindex = function($colVindex, $vindex) {
+  $scope.setName = function($colVindex, $vindex) {
     $colVindex.Name = $vindex;
+    $scope.clearClassError();
   };
 
-  $scope.addVindex = function($colName, $vindex) {
+  $scope.addColVindex = function($colName, $vindex) {
+    if (!$colName) {
+      $scope.classEditor.err = "empty class name";
+      return;
+    }
+    for (var i = 0; i < $scope.klass.length; i++) {
+      if ($colName == $scope.klass[i].Col) {
+        $scope.classEditor.err = $colName + " already exists";
+        return;
+      }
+    }
+    ;
     $scope.klass.push({
-      "Col": $colName,
-      "Name": $vindex
+        "Col": $colName,
+        "Name": $vindex
     });
+    $scope.clearClassError();
   };
 
-  $scope.setVindexType = function($vindex, $vindexType) {
-    $vindex.Type = $vindexType;
+  $scope.deleteColVindex = function(index) {
+    $scope.klass.splice(index, 1);
+    $scope.clearClassError();
   };
 
-  $scope.isClassValid = function($className) {
-    return $className in $scope.keyspace.Classes;
+  $scope.clearClassError = function() {
+    $scope.classEditor.err = "";
   };
 
-  $scope.isVindexValid = function($vindexName) {
-    return $vindexName in $scope.keyspace.Vindexes;
+  $scope.validVindexes = function($className, $index) {
+    return curSchema.validVindexes($scope.keyspace, $className, $index);
+  };
+
+  $scope.vindexHasError = function($className, $index) {
+    return curSchema.vindexHasError($scope.keyspace, $className, $index);
   };
 }

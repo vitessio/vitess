@@ -1,59 +1,75 @@
 <div class="container-fluid">
   <div class="row">
     <div data-ng-include="'editor/sidebar.html'"></div>
-    <div class="col-md-9">
-      <h4 data-ng-show="keyspaceName">Class: {{keyspaceName}}.{{className}}</h4>
-    </div>
-    <div class="col-md-3">
-      <table class="table table-striped">
-        <tr data-ng-repeat="colVindex in klass">
-          <td>{{colVindex.Col}}</td>
-          <td>
-            <div class="dropdown">
-              <button
-                data-ng-class="{'btn dropdown-toggle': true, 'btn-danger': !isVindexValid(colVindex.Name)}"
-                type="button" data-toggle="dropdown">
-                {{colVindex.Name}} <span class="caret"></span>
-              </button>
-              <ul class="dropdown-menu">
-                <li data-ng-repeat="vindex in vindexInfo.TypeNames"
-                  data-ng-click="setVindex(colVindex, vindex)"><a
-                  tabindex="-1"
-                  href="#/editor/{{keyspaceName}}/class/{{className}}">{{vindex}}</a></li>
-              </ul>
-            </div>
-          </td>
-          <td>
-            <button type="button" class="btn btn-xs btn-primary"
-              title="Delete class">
-              <span class="glyphicon glyphicon-trash"></span>
-            </button>
-          </td>
-        </tr>
-        <tr>
-          <td colspan="2"><div class="input-group">
-              <input type="text" class="form-control" placeholder="Column"
-                data-ng-model="newClass">
-              <div class="input-group-btn">
+    <div data-ng-show="className">
+      <div class="col-md-9">
+        <h4 data-ng-show="keyspaceName">Class:
+          {{keyspaceName}}.{{className}}</h4>
+      </div>
+      <div class="col-md-3">
+        <table class="table">
+          <tr data-ng-repeat="colVindex in klass">
+            <td>{{colVindex.Col}}
+              <div class="alert-danger" data-ng-show="colVindex.Col==''">(empty)</div>
+            </td>
+            <td>
+              <div class="dropdown">
                 <button
-                  data-ng-class="{'btn dropdown-toggle': true, 'btn-danger': !isVindexValid(colVindex.Name)}"
-                  type="button" data-toggle="dropdown"
-                  data-ng-disabled="!newClass">
+                  data-ng-class="{'btn dropdown-toggle': true, 'btn-danger': vindexHasError(className, $index)}"
+                  title="{{vindexHasError(className, $index)}}" type="button"
+                  data-toggle="dropdown">
                   {{colVindex.Name}} <span class="caret"></span>
                 </button>
                 <ul class="dropdown-menu">
-                  <li data-ng-repeat="vindex in vindexNames"
-                    data-ng-click="addVindex(newClass, vindex)"><a
+                  <li
+                    data-ng-repeat="vindex in validVindexes(className, $index)"
+                    data-ng-click="setName(colVindex, vindex)"><a
                     href="#/editor/{{keyspaceName}}/class/{{className}}">{{vindex}}</a></li>
                 </ul>
               </div>
-            </div></td>
-        </tr>
-      </table>
-      <button type="button" class="btn btn-default btn-lg"
-        onclick="history.back()" title="Back">
-        <span class="glyphicon glyphicon-arrow-left"></span>
-      </button>
+            </td>
+            <td><a type="button" class="btn btn-xs"
+              data-ng-click="deleteColVindex($index)"> <span
+                class="glyphicon glyphicon-remove"></span>
+            </a></td>
+          </tr>
+          <tr>
+            <td colspan="2">
+              <div class="input-group">
+                <input type="text" class="form-control" placeholder="Column"
+                  data-ng-model="classEditor.newColumnName">
+                <div class="input-group-btn">
+                  <button type="button" class="btn dropdown-toggle"
+                    data-toggle="dropdown">
+                    Add <span class="caret"></span>
+                  </button>
+                  <ul class="dropdown-menu">
+                    <li
+                      data-ng-repeat="vindex in validVindexes(className, klass.length)"
+                      data-ng-click="addColVindex(classEditor.newColumnName, vindex)"><a
+                      href="#/editor/{{keyspaceName}}/class/{{className}}">{{vindex}}</a></li>
+                  </ul>
+                </div>
+              </div>
+            </td>
+          </tr>
+          <tr data-ng-show="classEditor.err">
+            <td colspan="2">
+              <div class="alert alert-danger" data-ng-show="classEditor.err">
+                {{classEditor.err}}<a type="button"
+                  class="alert-danger pull-right"
+                  data-ng-click="clearClassError()"> <span
+                  class="glyphicon glyphicon-remove"></span>
+                </a>
+              </div>
+            </td>
+          </tr>
+        </table>
+        <button type="button" class="btn btn-default btn-lg"
+          onclick="history.back()" title="Back">
+          <span class="glyphicon glyphicon-arrow-left"></span>
+        </button>
+      </div>
     </div>
   </div>
 </div>

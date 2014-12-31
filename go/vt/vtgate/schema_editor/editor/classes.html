@@ -8,11 +8,12 @@
       </tr>
     </thead>
     <tbody data-ng-repeat="(className, klass) in keyspace.Classes">
-      <tr data-ng-show="!klass.length || klass.length == 0">
+      <tr data-ng-show="klass.length == 0">
         <td><a href="#/editor/{{keyspaceName}}/class/{{className}}">{{className}}</a></td>
         <td></td>
-        <td></td>
-        <td><a type="button" class="btn btn-xs"> <span
+        <td><div class="alert-danger">(empty)</div></td>
+        <td><a type="button" class="btn btn-xs"
+          data-ng-click="deleteClass(className)"> <span
             class="glyphicon glyphicon-remove"></span>
         </a></td>
       </tr>
@@ -20,10 +21,13 @@
         <td data-ng-show="$first" rowspan="{{klass.length}}"><a
           href="#/editor/{{keyspaceName}}/class/{{className}}">{{className}}</a>
         </td>
-        <td>{{colVindex.Col}}</td>
+        <td>{{colVindex.Col}}
+          <div class="alert-danger" data-ng-show="colVindex.Col==''">(empty)</div>
+        </td>
         <td>
-          <div data-ng-class="{'alert-danger': vindexHasError(className, $index)}"
-          title="{{vindexHasError(className, $index)}}">
+          <div
+            data-ng-class="{'alert-danger': vindexHasError(className, $index)}"
+            title="{{vindexHasError(className, $index)}}">
             {{colVindex.Name}}</div>
         </td>
         <td data-ng-show="$first" rowspan="{{klass.length}}"><a
@@ -36,7 +40,7 @@
         <td colspan="2">
           <div class="input-group">
             <input type="text" class="form-control" placeholder="Class"
-              data-ng-model="classesEditor.newClassName"> <span
+              data-ng-model="classesEditor.newClassName"><span
               class="input-group-btn"><button class="btn" type="button"
                 data-ng-click="addClass(classesEditor.newClassName)">
                 <span class="glyphicon glyphicon-plus"></span>

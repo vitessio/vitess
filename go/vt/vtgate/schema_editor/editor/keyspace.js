@@ -27,14 +27,15 @@ function KeyspaceController($scope, $routeParams, vindexInfo, curSchema) {
   };
 
   $scope.deleteKeyspace = function($keyspaceName) {
-    delete curSchema.keyspaces[$keyspaceName];
+    curSchema.deleteKeyspace($keyspaceName);
   };
 
   $scope.tableHasError = function($tableName) {
-    if (curSchema.tables[$tableName].length > 1) {
+    var table = curSchema.tables[$tableName];
+    if (table && table.length > 1) {
       return $tableName + " duplicated in " + curSchema.tables[$tableName];
     }
-  }
+  };
 
   $scope.addTable = function($tableName, $className) {
     if (!$tableName) {
@@ -62,41 +63,11 @@ function KeyspaceController($scope, $routeParams, vindexInfo, curSchema) {
   };
 
   $scope.validClasses = function($tableName) {
-    var valid = [];
-    for ( var className in $scope.keyspace.Classes) {
-      if ($scope.classHasError($tableName, className)) {
-        continue;
-      }
-      valid.push(className);
-    }
-    return valid;
+    return curSchema.validClasses($scope.keyspace, $tableName);
   };
 
   $scope.classHasError = function($tableName, $className) {
-    if (!($className in $scope.keyspace.Classes)) {
-      return "class not found";
-    }
-    var klass = $scope.keyspace.Classes[$className];
-    for (var i = 0; i < klass.length; i++) {
-      var classError = $scope.vindexHasError($className, i);
-      if (classError) {
-        return "invalid class";
-      }
-      var vindex = $scope.keyspace.Vindexes[klass[i].Name];
-      if (vindex.Owner != $tableName) {
-        continue;
-      }
-      if (i == 0) {
-        if (vindexInfo.Types[vindex.Type].Type != "functional") {
-          return "owned primary vindex must be functional";
-        }
-      } else {
-        if (vindexInfo.Types[vindex.Type].Type != "lookup") {
-          return "owned non-primary vindex must be lookup";
-        }
-      }
-    }
-    return "";
+    return curSchema.classHasError($scope.keyspace, $tableName, $className);
   };
 
   $scope.clearTableError = function() {
@@ -112,9 +83,10 @@ function KeyspaceController($scope, $routeParams, vindexInfo, curSchema) {
       $scope.classesEditor.err = $className + " already exists";
       return;
     }
-    $scope.keyspace.Classes[$className] = {};
+    $scope.keyspace.Classes[$className] = [];
     $scope.classesEditor.newClassName = "";
     $scope.clearClassesError();
+    window.location.href = "#/editor/" + $scope.keyspaceName + "/class/" + $className;
   };
 
   $scope.deleteClass = function($className) {
@@ -127,16 +99,6 @@ function KeyspaceController($scope, $routeParams, vindexInfo, curSchema) {
   };
 
   $scope.vindexHasError = function($className, $index) {
-    var vindexName = $scope.keyspace.Classes[$className][$index].Name;
-    if (!(vindexName in $scope.keyspace.Vindexes)) {
-      return "vindex not found";
-    }
-    if ($index == 0) {
-      var vindexTypeName = $scope.keyspace.Vindexes[vindexName].Type;
-      if (!vindexInfo.Types[vindexTypeName].Unique) {
-        return "primary vindex must be unique";
-      }
-    }
-    return "";
+    return curSchema.vindexHasError($scope.keyspace, $className, $index);
   };
 }
