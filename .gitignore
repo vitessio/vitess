@@ -11,6 +11,10 @@
 *.swp
 tags
 
+# Eclipse files
+.project
+.settings/
+
 # cbson & other C build dirs
 **/build
 
