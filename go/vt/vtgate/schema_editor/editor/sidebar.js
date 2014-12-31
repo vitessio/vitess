@@ -11,12 +11,17 @@ function SidebarController($scope, $routeParams, curSchema) {
     $scope.keyspaceEditor = {};
   }
   $scope.addKeyspace = function($keyspaceName, $sharded) {
+    if (!$keyspaceName) {
+      $scope.keyspaceEditor.err = "empty keyspace name";
+      return;
+    }
     if ($keyspaceName in curSchema.keyspaces) {
       $scope.keyspaceEditor.err = $keyspaceName + " already exists";
       return;
     }
     AddKeyspace(curSchema.keyspaces, $keyspaceName, $sharded);
     $scope.clearKeyspaceError();
+    window.location.href = "#/editor/" + $keyspaceName;
   };
 
   $scope.reset = function() {

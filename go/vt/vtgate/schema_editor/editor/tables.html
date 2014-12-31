@@ -12,12 +12,13 @@
       <td>
         <div class="dropdown">
           <button
-            data-ng-class="{'btn dropdown-toggle form-control': true, 'btn-danger': !isClassValid(tableClass)}"
+            data-ng-class="{'btn dropdown-toggle form-control': true, 'btn-danger': classHasError(tableName, tableClass)}"
+            title="{{classHasError(tableName, tableClass)}}"
             type="button" data-toggle="dropdown">
             {{tableClass}} <span class="caret"></span>
           </button>
           <ul class="dropdown-menu">
-            <li data-ng-repeat="(className, klass) in keyspace.Classes"
+            <li data-ng-repeat="className in validClasses(tableName)"
               data-ng-click="setTableClass(tableName, className)"><a
               href="#/editor/{{keyspaceName}}">{{className}}</a></li>
           </ul>
@@ -47,9 +48,9 @@
         </div>
       </td>
     </tr>
-    <tr>
+    <tr data-ng-show="tablesEditor.err">
       <td colspan="2">
-        <div class="alert alert-danger" data-ng-show="tablesEditor.err">
+        <div class="alert alert-danger">
           {{tablesEditor.err}}<a type="button" class="alert-danger pull-right"
             data-ng-click="clearTableError()"> <span
             class="glyphicon glyphicon-remove"></span>

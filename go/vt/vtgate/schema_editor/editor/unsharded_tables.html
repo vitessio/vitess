@@ -26,9 +26,9 @@
         </div>
       </td>
     </tr>
-    <tr>
+    <tr data-ng-show="tablesEditor.err">
       <td>
-        <div class="alert alert-danger" data-ng-show="tablesEditor.err">
+        <div class="alert alert-danger">
           {{tablesEditor.err}}<a type="button" class="alert-danger pull-right"
             data-ng-click="clearTableError()"> <span
             class="glyphicon glyphicon-remove"></span>

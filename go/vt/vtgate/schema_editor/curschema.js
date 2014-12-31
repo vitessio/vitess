@@ -20,7 +20,7 @@ function curSchema() {
               },
               "music_user_map": {
                   "Type": "lookup_hash_unique_autoinc",
-                  "Owner": "music",
+                  "Owner": "music_extra",
                   "Params": {
                       "Table": "music_user_map",
                       "From": "music_id",
@@ -34,6 +34,14 @@ function curSchema() {
                       "Table": "name_user_map",
                       "From": "name",
                       "To": "user_id"
+                  }
+              },
+              "user_extra_index": {
+                  "Type": "hash",
+                  "Owner": "user_extra",
+                  "Params": {
+                      "Table": "user_extra_lookup",
+                      "Column": "user_extra_id"
                   }
               }
           },
@@ -51,32 +59,35 @@ function curSchema() {
                   }
               ],
               "user_extra": [
-                {
-                    "Col": "user_id",
-                    "Name": "user_index"
-                }
+                  {
+                      "Col": "user_id",
+                      "Name": "user_index"
+                  }, {
+                      "Col": "id",
+                      "Name": "user_extra_index"
+                  }
               ],
               "music": [
                   {
                       "Col": "user_id",
-                      "Name": "user_index1"
+                      "Name": "name_user_map"
                   }, {
                       "Col": "id",
-                      "Name": "music_user_map"
+                      "Name": "user_index"
                   }
               ],
               "music_extra": [
                   {
                       "Col": "user_id",
-                      "Name": "user_index"
+                      "Name": "music_user_map"
                   }, {
                       "Col": "music_id",
-                      "Name": "music_user_map"
+                      "Name": "user_index1"
                   }
               ]
           },
           "Tables": {
-              "user": "",
+              "user": "aa",
               "user_extra": "user_extra",
               "music": "music",
               "music_extra": "music_extra"
