@@ -189,6 +189,7 @@ function SetSharded(keyspace, sharded) {
 
 function AddKeyspace(keyspaces, keyspaceName, sharded) {
   var keyspace = {};
+  keyspace.Tables = {};
   SetSharded(keyspace, sharded);
   keyspaces[keyspaceName] = keyspace;
 };

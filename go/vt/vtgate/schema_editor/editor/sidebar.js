@@ -5,10 +5,26 @@
 'use strict';
 
 function SidebarController($scope, $routeParams, curSchema) {
-  $scope.addKeyspace = function($keyspaceName, $sharded) {
-    AddKeyspace(curSchema.keyspaces, $keyspaceName, $sharded)
+  init();
+
+  function init() {
+    $scope.keyspaceEditor = {};
   }
+  $scope.addKeyspace = function($keyspaceName, $sharded) {
+    if ($keyspaceName in curSchema.keyspaces) {
+      $scope.keyspaceEditor.err = $keyspaceName + " already exists";
+      return;
+    }
+    AddKeyspace(curSchema.keyspaces, $keyspaceName, $sharded);
+    $scope.clearKeyspaceError();
+  };
+
   $scope.reset = function() {
     curSchema.reset();
+    $scope.clearKeyspaceError();
+  };
+
+  $scope.clearKeyspaceError = function() {
+    $scope.keyspaceEditor.err = "";
   };
 }

@@ -11,9 +11,11 @@
             data-ng-class="{'btn btn-info': true, 'active': !keyspace.Sharded}"
             data-ng-click="setSharded(false)">Unsharded</button>
         </span> <span class="btn-group ">
-          <button type="button" class="btn btn-primary" title="Delete keyspace">
+          <a type="button" class="btn btn-primary" title="Delete keyspace"
+          data-ng-click="deleteKeyspace(keyspaceName)"
+          href="#">
             <span class="glyphicon glyphicon-trash"></span>
-          </button>
+          </a>
         </span>
       </h4>
     </div>

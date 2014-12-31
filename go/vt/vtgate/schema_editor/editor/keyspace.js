@@ -20,20 +20,24 @@ function KeyspaceController($scope, $routeParams, vindexInfo, curSchema) {
     }
     $scope.tablesEditor = {};
   }
-  
+
   $scope.setSharded = function($sharded) {
     SetSharded($scope.keyspace, $sharded);
+  };
+
+  $scope.deleteKeyspace = function($keyspaceName) {
+    delete $scope.keyspaces[$keyspaceName];
   };
 
   $scope.addTable = function($tableName, $className) {
     if (!$tableName) {
       $scope.tablesEditor.err = "empty table name";
-      return
+      return;
 
     }
-    if ($scope.keyspace.Tables[$tableName]) {
+    if ($tableName in $scope.keyspace.Tables) {
       $scope.tablesEditor.err = $tableName + " already exists";
-      return
+      return;
 
     }
     $scope.setTableClass($tableName, $className);

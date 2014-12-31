@@ -1,29 +1,35 @@
 <div class="col-md-2" data-ng-show="keyspaceName">
-  <table class="table table-striped">
+  <table class="table">
     <thead>
       <tr>
         <th>Table</th>
       </tr>
     </thead>
     <tr data-ng-repeat="(tableName, tableClass) in keyspace.Tables">
-      <td>{{tableName}}<br>
-        <button type="button" class="btn btn-xs btn-primary"
-          title="Delete class">
-          <span class="glyphicon glyphicon-trash"></span>
-        </button>
+      <td>{{tableName}}</td>
+      <td><a type="button" class="btn btn-xs"
+        data-ng-click="deleteTable(tableName)"> <span
+          class="glyphicon glyphicon-remove"></span>
+      </a></td>
+    </tr>
+    <tr>
+      <td>
+        <div class="input-group">
+          <input type="text" class="form-control" placeholder="Table"
+            data-ng-model="tablesEditor.newTableName">
+          <div class="input-group-btn">
+            <button class="btn btn-primary" type="button"
+              data-ng-click="addTable(tablesEditor.newTableName, '')">
+              <span class="glyphicon glyphicon-plus"></span>
+            </button>
+          </div>
+        </div>
       </td>
     </tr>
     <tr>
-      <td colspan="2">
-        <div class="input-group">
-          <input type="text" class="form-control" placeholder="Table"
-            data-ng-model="tableEditor.newTableName">
-          <div class="input-group-btn">
-            <button class="btn btn-primary" type="button" data-ng-click="addTable(tableEditor.newTableName, '')">Go!</button>
-          </div>
-        </div>
-        <div class="alert alert-danger" data-ng-show="tableEditor.err">
-          {{tableEditor.err}}<a type="button" class="alert-danger pull-right"
+      <td>
+        <div class="alert alert-danger" data-ng-show="tablesEditor.err">
+          {{tablesEditor.err}}<a type="button" class="alert-danger pull-right"
             data-ng-click="clearTableError()"> <span
             class="glyphicon glyphicon-remove"></span>
           </a>
