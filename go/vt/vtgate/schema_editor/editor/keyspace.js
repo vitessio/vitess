@@ -4,20 +4,12 @@
  */
 'use strict';
 
-function SchemaController($scope, $routeParams, curSchema) {
+function KeyspaceController($scope, $routeParams, vindexInfo, curSchema) {
   init();
 
   function init() {
     $scope.keyspaces = curSchema.keyspaces;
-    $scope.vindexTypes = [
-        "numeric",
-        "hash",
-        "hash_autoinc",
-        "lookup_hash",
-        "lookup_hash_unique",
-        "lookup_hash_autoinc",
-        "lookup_hash_unique_autoinc"
-    ];
+    $scope.vindexTypes = vindexInfo.TypeNames;
     if (!$routeParams.keyspaceName || !$scope.keyspaces[$routeParams.keyspaceName]) {
       return;
     }
@@ -26,40 +18,26 @@ function SchemaController($scope, $routeParams, curSchema) {
     if ($scope.keyspace.Sharded) {
       $scope.vindexNames = Object.keys($scope.keyspace.Vindexes);
     }
-    $scope.tableEditor = {};
+    $scope.tablesEditor = {};
   }
   
   $scope.setSharded = function($sharded) {
-    if ($sharded) {
-      $scope.keyspace.Sharded = true;
-      if (!$scope.keyspace["Classes"]) {
-        $scope.keyspace.Classes = {};
-      }
-      if (!$scope.keyspace["Vindexes"]) {
-        $scope.keyspace.Vindexes = {};
-      }
-      return;
-    } else {
-      $scope.keyspace.Sharded = false;
-      for (var tableName in $scope.keyspace.Tables) {
-        $scope.keyspace.Tables[tableName] = "";
-      }
-      delete $scope.keyspace["Classes"];
-      delete $scope.keyspace["Vindexes"];
-    }
+    SetSharded($scope.keyspace, $sharded);
   };
-  
-  $scope.addTable = function ($tableName, $className) {
+
+  $scope.addTable = function($tableName, $className) {
     if (!$tableName) {
-      $scope.tableEditor.err = "empty table name";
+      $scope.tablesEditor.err = "empty table name";
       return
+
     }
     if ($scope.keyspace.Tables[$tableName]) {
-      $scope.tableEditor.err = $tableName + " already exists";
+      $scope.tablesEditor.err = $tableName + " already exists";
       return
+
     }
     $scope.setTableClass($tableName, $className);
-    $scope.tableEditor.newTableName = "";
+    $scope.tablesEditor.newTableName = "";
     $scope.clearTableError();
   };
 
@@ -67,22 +45,22 @@ function SchemaController($scope, $routeParams, curSchema) {
     $scope.keyspace.Tables[$tableName] = $className;
     $scope.clearTableError();
   };
-  
+
   $scope.deleteTable = function($tableName) {
     delete $scope.keyspace.Tables[$tableName];
     $scope.clearTableError();
   };
-  
-  $scope.clearTableError= function() {
-    $scope.tableEditor.err = "";
-  };
-  
-  $scope.addClass = function($className) {
-    $scope.keyspace.Classes[$className] = {};
-  }
 
   $scope.isClassValid = function($className) {
     return $className in $scope.keyspace.Classes;
+  };
+
+  $scope.clearTableError = function() {
+    $scope.tablesEditor.err = "";
+  };
+
+  $scope.addClass = function($className) {
+    $scope.keyspace.Classes[$className] = {};
   };
 
   $scope.isVindexValid = function($vindexName) {

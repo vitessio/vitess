@@ -84,12 +84,16 @@ function curSchema() {
       },
       "main": {
         "Tables": {
-          "main1": "aa",
-          "main2": ""
+            "main1": "aa",
+            "main2": ""
         }
       }
   };
-  data.keyspaces = copyKeyspaces(data.original);
+  data.reset = function() {
+    data.keyspaces = copyKeyspaces(data.original);
+  };
+
+  data.reset();
   return data;
 }
 
@@ -146,7 +150,7 @@ function copyClasses(original) {
   var copied = {};
   for ( var key in original) {
     copied[key] = [];
-    for ( var i=0; i<original[key].length; i++) {
+    for (var i = 0; i < original[key].length; i++) {
       copied[key].push({
           "Col": original[key][i].Col,
           "Name": original[key][i].Name
@@ -163,3 +167,28 @@ function copyTables(original) {
   }
   return copied;
 }
+
+function SetSharded(keyspace, sharded) {
+  if (sharded) {
+    keyspace.Sharded = true;
+    if (!keyspace["Classes"]) {
+      keyspace.Classes = {};
+    }
+    if (!keyspace["Vindexes"]) {
+      keyspace.Vindexes = {};
+    }
+  } else {
+    keyspace.Sharded = false;
+    for ( var tableName in keyspace.Tables) {
+      keyspace.Tables[tableName] = "";
+    }
+    delete keyspace["Classes"];
+    delete keyspace["Vindexes"];
+  }
+};
+
+function AddKeyspace(keyspaces, keyspaceName, sharded) {
+  var keyspace = {};
+  SetSharded(keyspace, sharded);
+  keyspaces[keyspaceName] = keyspace;
+};

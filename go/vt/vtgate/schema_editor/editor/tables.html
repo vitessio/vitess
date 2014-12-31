@@ -1,4 +1,4 @@
-<div class="col-md-2">
+<div class="col-md-2" data-ng-show="keyspaceName">
   <table class="table">
     <thead>
       <tr>
@@ -31,7 +31,7 @@
       <td colspan="2">
         <div class="input-group">
           <input type="text" class="form-control" placeholder="Table"
-            data-ng-model="tableEditor.newTableName">
+            data-ng-model="tablesEditor.newTableName">
           <div class="input-group-btn">
             <button class="btn dropdown-toggle" type="button"
               data-toggle="dropdown">
@@ -39,13 +39,13 @@
             </button>
             <ul class="dropdown-menu">
               <li data-ng-repeat="(className, klass) in keyspace.Classes"
-                data-ng-click="addTable(tableEditor.newTableName, className)"><a
+                data-ng-click="addTable(tablesEditor.newTableName, className)"><a
                 href="#/editor/{{keyspaceName}}">{{className}}</a></li>
             </ul>
           </div>
         </div>
-        <div class="alert alert-danger" data-ng-show="tableEditor.err">
-          {{tableEditor.err}}<a type="button" class="alert-danger pull-right"
+        <div class="alert alert-danger" data-ng-show="tablesEditor.err">
+          {{tablesEditor.err}}<a type="button" class="alert-danger pull-right"
             data-ng-click="clearTableError()"> <span
             class="glyphicon glyphicon-remove"></span>
           </a>

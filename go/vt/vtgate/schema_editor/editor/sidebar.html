@@ -1,9 +1,10 @@
-<div class="col-md-2 sidebar">
+<div class="col-md-2 sidebar" data-ng-controller="SidebarController">
   <div class="panel panel-default">
     <div class="panel-heading">Commands</div>
     <div class="panel-body">
       <ul class="nav nav-sidebar">
         <li><a href="#/diff">diff</a></li>
+        <li><a href="#" data-ng-click="reset()">reset</a></li>
       </ul>
     </div>
   </div>
@@ -18,15 +19,15 @@
     </div>
   </div>
   <div class="input-group input-group-sm">
-    <input type="text" class="form-control" placeholder="Keyspace">
+    <input type="text" class="form-control" placeholder="Keyspace" data-ng-model="newKeyspace">
     <div class="input-group-btn">
       <button type="button" class="btn dropdown-toggle"
         data-toggle="dropdown">
         Add <span class="caret"></span>
       </button>
       <ul class="dropdown-menu">
-        <li><a href="#">Sharded</a></li>
-        <li><a href="#">Unsharded</a></li>
+        <li><a href="#/editor/{{newKeyspace}}" data-ng-click="addKeyspace(newKeyspace, true)">Sharded</a></li>
+        <li><a href="#/editor/{{newKeyspace}}" data-ng-click="addKeyspace(newKeyspace, false)">Unsharded</a></li>
       </ul>
     </div>
   </div>
