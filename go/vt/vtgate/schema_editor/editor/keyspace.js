@@ -8,13 +8,13 @@ function KeyspaceController($scope, $routeParams, vindexInfo, curSchema) {
   init();
 
   function init() {
-    $scope.keyspaces = curSchema.keyspaces;
-    $scope.vindexTypes = vindexInfo.TypeNames;
-    if (!$routeParams.keyspaceName || !$scope.keyspaces[$routeParams.keyspaceName]) {
+    $scope.curSchema = curSchema;
+    $scope.vindexInfo = vindexInfo;
+    if (!$routeParams.keyspaceName || !curSchema.keyspaces[$routeParams.keyspaceName]) {
       return;
     }
     $scope.keyspaceName = $routeParams.keyspaceName;
-    $scope.keyspace = $scope.keyspaces[$routeParams.keyspaceName];
+    $scope.keyspace = curSchema.keyspaces[$routeParams.keyspaceName];
     if ($scope.keyspace.Sharded) {
       $scope.vindexNames = Object.keys($scope.keyspace.Vindexes);
     }
@@ -27,20 +27,26 @@ function KeyspaceController($scope, $routeParams, vindexInfo, curSchema) {
   };
 
   $scope.deleteKeyspace = function($keyspaceName) {
-    delete $scope.keyspaces[$keyspaceName];
+    delete curSchema.keyspaces[$keyspaceName];
   };
+
+  $scope.tableHasError = function($tableName) {
+    if (curSchema.tables[$tableName].length > 1) {
+      return $tableName + " duplicated in " + curSchema.tables[$tableName];
+    }
+  }
 
   $scope.addTable = function($tableName, $className) {
     if (!$tableName) {
       $scope.tablesEditor.err = "empty table name";
       return;
     }
-    if ($tableName in $scope.keyspace.Tables) {
-      $scope.tablesEditor.err = $tableName + " already exists";
+    if ($tableName in curSchema.tables) {
+      $scope.tablesEditor.err = $tableName + " already exists in " + curSchema.tables[$tableName];
       return;
 
     }
-    $scope.setTableClass($tableName, $className);
+    curSchema.addTable($scope.keyspaceName, $tableName, $className);
     $scope.tablesEditor.newTableName = "";
     $scope.clearTableError();
   };
@@ -51,19 +57,19 @@ function KeyspaceController($scope, $routeParams, vindexInfo, curSchema) {
   };
 
   $scope.deleteTable = function($tableName) {
-    delete $scope.keyspace.Tables[$tableName];
+    curSchema.deleteTable($scope.keyspaceName, $tableName);
     $scope.clearTableError();
   };
-  
+
   $scope.validClasses = function($tableName) {
     var valid = [];
-    for (var className in $scope.keyspace.Classes) {
+    for ( var className in $scope.keyspace.Classes) {
       if ($scope.classHasError($tableName, className)) {
         continue;
       }
       valid.push(className);
     }
-    return valid
+    return valid;
   };
 
   $scope.classHasError = function($tableName, $className) {

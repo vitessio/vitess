@@ -19,7 +19,7 @@
             {{vindex.Type}} <span class="caret"></span>
           </button>
           <ul class="dropdown-menu">
-            <li data-ng-repeat="vindexType in vindexTypes"
+            <li data-ng-repeat="vindexType in vindexInfo.TypeNames"
               data-ng-click="setVindexType(vindex, vindexType)"><a
               href="#/editor/{{keyspaceName}}">{{vindexType}}</a></li>
           </ul>

@@ -4,20 +4,12 @@
  */
 'use strict';
 
-function ClassController($scope, $routeParams, curSchema) {
+function ClassController($scope, $routeParams, vindexInfo, curSchema) {
   init();
 
   function init() {
-    $scope.keyspaces = curSchema.keyspaces;
-    $scope.vindexTypes = [
-        "numeric",
-        "hash",
-        "hash_autoinc",
-        "lookup_hash",
-        "lookup_hash_unique",
-        "lookup_hash_autoinc",
-        "lookup_hash_unique_autoinc"
-    ];
+    $scope.curSchema = curSchema;
+    $scope.vindexInfo = vindexInfo;
     if (!$routeParams.keyspaceName || !$scope.keyspaces[$routeParams.keyspaceName]) {
       return;
     }

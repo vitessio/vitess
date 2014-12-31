@@ -96,12 +96,25 @@ function curSchema() {
       "main": {
         "Tables": {
             "main1": "aa",
-            "main2": ""
+            "main2": "",
+            "music_extra": ""
         }
       }
   };
+
   data.reset = function() {
     data.keyspaces = copyKeyspaces(data.original);
+    data.tables = computeTables(data.keyspaces);
+  };
+
+  data.addTable = function(keyspaceName, tableName, className) {
+    data.keyspaces[keyspaceName].Tables[tableName] = className;
+    data.tables = computeTables(data.keyspaces);
+  };
+
+  data.deleteTable = function(keyspaceName, tableName) {
+    delete data.keyspaces[keyspaceName].Tables[tableName];
+    data.tables = computeTables(data.keyspaces);
   };
 
   data.reset();
@@ -177,6 +190,22 @@ function copyTables(original) {
     copied[key] = original[key];
   }
   return copied;
+}
+
+function computeTables(keyspaces) {
+  var tables = {};
+  for ( var ks in keyspaces) {
+    for ( var table in keyspaces[ks].Tables) {
+      if (table in tables) {
+        tables[table].push(ks);
+      } else {
+        tables[table] = [
+          ks
+        ];
+      }
+    }
+  }
+  return tables;
 }
 
 function SetSharded(keyspace, sharded) {

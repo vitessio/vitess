@@ -6,7 +6,8 @@
       </tr>
     </thead>
     <tr data-ng-repeat="(tableName, tableClass) in keyspace.Tables">
-      <td>{{tableName}}</td>
+      <td data-ng-class="{'alert-danger': tableHasError(tableName)}"
+        title="{{tableHasError(tableName)}}">{{tableName}}</td>
       <td><a type="button" class="btn btn-xs"
         data-ng-click="deleteTable(tableName)"> <span
           class="glyphicon glyphicon-remove"></span>

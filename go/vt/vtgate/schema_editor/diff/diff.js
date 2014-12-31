@@ -8,9 +8,7 @@ function DiffController($scope, curSchema) {
   init();
 
   function init() {
-    $scope.keyspaces = curSchema.keyspaces;
-    $scope.keyspacesJSON = angular.toJson($scope.keyspaces, true);
-    $scope.original = curSchema.original;
-    $scope.originalJSON = angular.toJson($scope.original, true);
+    $scope.keyspacesJSON = angular.toJson(curSchema.keyspaces, true);
+    $scope.originalJSON = angular.toJson(curSchema.original, true);
   }
 }

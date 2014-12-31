@@ -16,7 +16,7 @@
                 {{colVindex.Name}} <span class="caret"></span>
               </button>
               <ul class="dropdown-menu">
-                <li data-ng-repeat="vindex in vindexNames"
+                <li data-ng-repeat="vindex in vindexInfo.TypeNames"
                   data-ng-click="setVindex(colVindex, vindex)"><a
                   tabindex="-1"
                   href="#/editor/{{keyspaceName}}/class/{{className}}">{{vindex}}</a></li>

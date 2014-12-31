@@ -7,14 +7,15 @@
       </tr>
     </thead>
     <tr data-ng-repeat="(tableName, tableClass) in keyspace.Tables">
-      <td>{{tableName}}<br>
+      <td data-ng-class="{'alert-danger': tableHasError(tableName)}"
+        title="{{tableHasError(tableName)}}">{{tableName}}<br>
       </td>
       <td>
         <div class="dropdown">
           <button
             data-ng-class="{'btn dropdown-toggle form-control': true, 'btn-danger': classHasError(tableName, tableClass)}"
-            title="{{classHasError(tableName, tableClass)}}"
-            type="button" data-toggle="dropdown">
+            title="{{classHasError(tableName, tableClass)}}" type="button"
+            data-toggle="dropdown">
             {{tableClass}} <span class="caret"></span>
           </button>
           <ul class="dropdown-menu">
