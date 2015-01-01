@@ -37,13 +37,21 @@ function curSchema(vindexInfo) {
                   }
               },
               "user_extra_index": {
-                  "Type": "hash",
-                  "Owner": "user_extra",
-                  "Params": {
-                      "Table": "user_extra_lookup",
-                      "Column": "user_extra_id"
-                  }
-              }
+                "Type": "hash",
+                "Owner": "user_extra",
+                "Params": {
+                    "Table": "user_extra_lookup",
+                    "Column": "user_extra_id"
+                }
+            },
+              "very_very_long_name": {
+                "Type": "hash",
+                "Owner": "very_very_long_name",
+                "Params": {
+                    "Table": "user_extra_lookup",
+                    "Column": "user_extra_id"
+                }
+            }
           },
           "Classes": {
               "user": [
@@ -77,23 +85,33 @@ function curSchema(vindexInfo) {
                   }
               ],
               "music_extra": [
-                  {
-                      "Col": "user_id",
-                      "Name": "music_user_map"
-                  }, {
-                      "Col": "music_id",
-                      "Name": "user_index1"
-                  }
-              ]
+                              {
+                                  "Col": "user_id",
+                                  "Name": "music_user_map"
+                              }, {
+                                  "Col": "music_id",
+                                  "Name": "user_index1"
+                              }
+              ],
+          "very_very_long_name": [
+                          {
+                              "Col": "user_id",
+                              "Name": "music_user_map"
+                          }, {
+                              "Col": "music_id",
+                              "Name": "user_index1"
+                          }
+          ]
           },
           "Tables": {
               "user": "aa",
               "user_extra": "user_extra",
               "music": "music",
-              "music_extra": "music_extra"
+              "music_extra": "music_extra",
+              "very_very_long_name": "music_extra"
           }
       },
-      "main": {
+      "very_very_long_name": {
         "Tables": {
             "main1": "aa",
             "main2": "",
@@ -103,7 +121,7 @@ function curSchema(vindexInfo) {
   };
 
   data.reset = function() {
-    data.keyspaces = copyKeyspaces(data.original);
+    data.keyspaces = copyKeyspaces(data.original, vindexInfo);
     data.tables = computeTables(data.keyspaces);
   };
 
@@ -196,14 +214,49 @@ function curSchema(vindexInfo) {
   return data;
 }
 
-function copyKeyspaces(original) {
+function SetSharded(keyspace, sharded) {
+  if (sharded) {
+    keyspace.Sharded = true;
+    if (!keyspace["Classes"]) {
+      keyspace.Classes = {};
+    }
+    if (!keyspace["Vindexes"]) {
+      keyspace.Vindexes = {};
+    }
+  } else {
+    keyspace.Sharded = false;
+    for ( var tableName in keyspace.Tables) {
+      keyspace.Tables[tableName] = "";
+    }
+    delete keyspace["Classes"];
+    delete keyspace["Vindexes"];
+  }
+};
+
+function AddKeyspace(keyspaces, keyspaceName, sharded) {
+  var keyspace = {};
+  keyspace.Tables = {};
+  SetSharded(keyspace, sharded);
+  keyspaces[keyspaceName] = keyspace;
+};
+
+function CopyParams(original, type, vindexInfo) {
+  var params = {};
+  var vparams = vindexInfo.Types[type].Params;
+  for (var i = 0; i < vparams.length; i++) {
+    params[vparams[i]] = original[vparams[i]];
+  }
+  return params;
+}
+
+function copyKeyspaces(original, vindexInfo) {
   var copied = {};
   for ( var key in original) {
     copied[key] = {};
     var keyspace = copied[key];
     if (original[key].Sharded) {
       keyspace.Sharded = true;
-      keyspace.Vindexes = copyVindexes(original[key].Vindexes);
+      keyspace.Vindexes = copyVindexes(original[key].Vindexes, vindexInfo);
       keyspace.Classes = copyClasses(original[key].Classes);
       keyspace.Tables = copyTables(original[key].Tables);
     } else {
@@ -217,30 +270,17 @@ function copyKeyspaces(original) {
   return copied;
 }
 
-function copyVindexes(original) {
+function copyVindexes(original, vindexInfo) {
   var copied = {};
   for ( var key in original) {
+    if (!vindexInfo.Types[original[key].Type]) {
+      continue;
+    }
     copied[key] = {};
     var vindex = copied[key];
     vindex.Type = original[key].Type;
     vindex.Owner = original[key].Owner;
-    switch (vindex.Type) {
-      case "hash":
-      case "hash_autoinc":
-        vindex.Params = {};
-        vindex.Params.Table = original[key].Params.Table;
-        vindex.Params.Column = original[key].Params.Column;
-        break;
-      case "lookup_hash":
-      case "lookup_hash_unique":
-      case "lookup_hash_autoinc":
-      case "lookup_hash_unique_autoinc":
-        vindex.Params = {};
-        vindex.Params.Table = original[key].Params.Table;
-        vindex.Params.From = original[key].Params.From;
-        vindex.Params.To = original[key].Params.To;
-        break;
-    }
+    vindex.Params = CopyParams(original[key].Params, original[key].Type, vindexInfo);
   }
   return copied;
 }
@@ -283,28 +323,3 @@ function computeTables(keyspaces) {
   return tables;
 }
 
-function SetSharded(keyspace, sharded) {
-  if (sharded) {
-    keyspace.Sharded = true;
-    if (!keyspace["Classes"]) {
-      keyspace.Classes = {};
-    }
-    if (!keyspace["Vindexes"]) {
-      keyspace.Vindexes = {};
-    }
-  } else {
-    keyspace.Sharded = false;
-    for ( var tableName in keyspace.Tables) {
-      keyspace.Tables[tableName] = "";
-    }
-    delete keyspace["Classes"];
-    delete keyspace["Vindexes"];
-  }
-};
-
-function AddKeyspace(keyspaces, keyspaceName, sharded) {
-  var keyspace = {};
-  keyspace.Tables = {};
-  SetSharded(keyspace, sharded);
-  keyspaces[keyspaceName] = keyspace;
-};

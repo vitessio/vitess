@@ -19,23 +19,54 @@
             {{vindex.Type}} <span class="caret"></span>
           </button>
           <ul class="dropdown-menu">
-            <li data-ng-repeat="vindexType in vindexInfo.TypeNames"
-              data-ng-click="setVindexType(vindex, vindexType)"><a
-              href="#/editor/{{keyspaceName}}">{{vindexType}}</a></li>
+            <li data-ng-repeat="vindexType in vindexInfo.TypeNames"><a
+              data-ng-click="setVindexType(vindex, vindexType)">{{vindexType}}</a></li>
           </ul>
         </div>
       </td>
-      <td>{{vindex.Owner}}</td>
+      <td><input type="text"
+        data-ng-class="{'form-control': true, 'alert-warning': ownerHasWarning(vindex.Owner, vindexName)}"
+        title="{{ownerHasWarning(vindex.Owner, vindexName)}}"
+        placeholder="Owner" data-ng-model="vindex.Owner"></td>
       <td><table class="table-condensed table-bordered">
           <tr data-ng-repeat="(paramName, paramValue) in vindex.Params">
             <td>{{paramName}}</td>
-            <td>{{paramValue}}</td>
+            <td><input type="text" class="form-control" placeholder="Value"
+              data-ng-model=vindex.Params[paramName]></td>
           </tr>
         </table></td>
       <td><a type="button" class="btn btn-xs"> <span
-          class="glyphicon glyphicon-remove"></span>
+          class="glyphicon glyphicon-remove"
+          data-ng-click="deleteVindex(vindexName)"></span>
       </a></td>
-
+    </tr>
+    <tr>
+      <td colspan="2">
+        <div class="input-group">
+          <input type="text" class="form-control" placeholder="Vindex"
+            data-ng-model="vindexEditor.vindexName">
+          <div class="input-group-btn">
+            <button class="btn dropdown-toggle" type="button"
+              data-toggle="dropdown"><span class="caret"></span>
+            </button>
+            <ul class="dropdown-menu">
+              <li data-ng-repeat="vindexType in vindexInfo.TypeNames"><a
+                data-ng-click="addVindex(vindexEditor.vindexName, vindexType)">{{vindexType}}
+              </a></li>
+            </ul>
+          </div>
+        </div>
+      </td>
+    </tr>
+    <tr data-ng-show="vindexEditor.err">
+      <td colspan="2">
+        <div class="alert alert-danger">
+          {{vindexEditor.err}}<a type="button" class="alert-danger pull-right"
+            data-ng-click="clearVindexError()"> <span
+            class="glyphicon glyphicon-remove"></span>
+          </a>
+        </div>
+      </td>
     </tr>
   </table>
 </div>

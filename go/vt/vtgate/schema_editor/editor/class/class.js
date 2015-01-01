@@ -30,7 +30,7 @@ function ClassController($scope, $routeParams, vindexInfo, curSchema) {
 
   $scope.addColVindex = function($colName, $vindex) {
     if (!$colName) {
-      $scope.classEditor.err = "empty class name";
+      $scope.classEditor.err = "empty column name";
       return;
     }
     for (var i = 0; i < $scope.klass.length; i++) {

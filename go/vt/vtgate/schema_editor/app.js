@@ -11,7 +11,6 @@ angular.module('app', ['ngRoute'])
 .controller('KeyspaceController', KeyspaceController)
 .controller('SidebarController', SidebarController)
 .controller('ClassController', ClassController)
-.controller('VindexController', VindexController)
 .controller('DiffController', DiffController)
 .config(['$routeProvider', function($routeProvider) {
   $routeProvider
@@ -26,10 +25,6 @@ angular.module('app', ['ngRoute'])
   .when('/editor/:keyspaceName/class/:className',{
     templateUrl: "editor/class/class.html",
     controller: "ClassController"
-  })
-  .when('/editor/:keyspaceName/vindex/:vindexName',{
-    templateUrl: "editor/vindex/vindex.html",
-    controller: "VindexController"
   })
   .when('/diff',{
     templateUrl: "diff/diff.html",

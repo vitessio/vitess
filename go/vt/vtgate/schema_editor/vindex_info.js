@@ -10,47 +10,47 @@ function vindexInfo() {
       "numeric": {
           "Type": "functional",
           "Unique": true,
-          "Fields": []
+          "Params": []
       },
       "hash": {
           "Type": "functional",
           "Unique": true,
-          "Fields": [
+          "Params": [
               "Table", "Column"
           ]
       },
       "hash_autoinc": {
           "Type": "functional",
           "Unique": true,
-          "Fields": [
+          "Params": [
               "Table", "Column"
           ]
       },
       "lookup_hash": {
           "Type": "lookup",
           "Unique": false,
-          "Fields": [
+          "Params": [
               "Table", "From", "To"
           ]
       },
       "lookup_hash_unique": {
           "Type": "lookup",
           "Unique": true,
-          "Fields": [
+          "Params": [
               "Table", "From", "To"
           ]
       },
       "lookup_hash_autoinc": {
           "Type": "lookup",
           "Unique": false,
-          "Fields": [
+          "Params": [
               "Table", "From", "To"
           ]
       },
       "lookup_hash_unique_autoinc": {
           "Type": "lookup",
           "Unique": true,
-          "Fields": [
+          "Params": [
               "Table", "From", "To"
           ]
       }

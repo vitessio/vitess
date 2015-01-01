@@ -20,6 +20,7 @@ function KeyspaceController($scope, $routeParams, vindexInfo, curSchema) {
     }
     $scope.tablesEditor = {};
     $scope.classesEditor = {};
+    $scope.vindexEditor = {};
   }
 
   $scope.setSharded = function($sharded) {
@@ -100,5 +101,58 @@ function KeyspaceController($scope, $routeParams, vindexInfo, curSchema) {
 
   $scope.vindexHasError = function($className, $index) {
     return curSchema.vindexHasError($scope.keyspace, $className, $index);
+  };
+
+  $scope.setVindexType = function($vindex, $vindexType) {
+    $vindex.Type = $vindexType;
+    $vindex.Params = CopyParams($vindex.Params, $vindexType, vindexInfo);
+    $scope.clearVindexError();
+  };
+
+  $scope.deleteVindex = function($vindexName) {
+    delete $scope.keyspace.Vindexes[$vindexName];
+    $scope.clearVindexError();
+  };
+
+  $scope.ownerHasWarning = function($owner, $vindexName) {
+    if (!$owner) {
+      return "";
+    }
+    var className = $scope.keyspace.Tables[$owner];
+    if (!className) {
+      return "table not found";
+    }
+    var klass = $scope.keyspace.Classes[className];
+    if (!klass) {
+      return "table has invalid class";
+    }
+    for (var i = 0; i < klass.length; i++) {
+      if (klass[i].Name == $vindexName) {
+        return "";
+      }
+    }
+    return "table does not contain this index";
+  };
+
+  $scope.addVindex = function($vindexName, $vindexType) {
+    if (!$vindexName) {
+      $scope.vindexEditor.err = "empty vindex name";
+      return;
+    }
+    if ($vindexName in $scope.keyspace.Vindexes) {
+      $scope.vindexEditor.err = $vindexName + " already exists";
+      return;
+    }
+    var newVindex = {
+      "Params": {}
+    };
+    $scope.setVindexType(newVindex, $vindexType);
+    $scope.keyspace.Vindexes[$vindexName] = newVindex;
+    $scope.vindexEditor.vindexName = "";
+    $scope.clearVindexError();
+  };
+
+  $scope.clearVindexError = function() {
+    $scope.vindexEditor.err = "";
   };
 }

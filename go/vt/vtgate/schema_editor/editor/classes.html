@@ -21,14 +21,11 @@
         <td data-ng-show="$first" rowspan="{{klass.length}}"><a
           href="#/editor/{{keyspaceName}}/class/{{className}}">{{className}}</a>
         </td>
-        <td>{{colVindex.Col}}
-          <div class="alert-danger" data-ng-show="colVindex.Col==''">(empty)</div>
+        <td data-ng-class="{'alert-danger': colVindex.Col==''}">{{colVindex.Col}}
+          <div data-ng-show="colVindex.Col==''">(empty)</div>
         </td>
-        <td>
-          <div
-            data-ng-class="{'alert-danger': vindexHasError(className, $index)}"
-            title="{{vindexHasError(className, $index)}}">
-            {{colVindex.Name}}</div>
+        <td data-ng-class="{'alert-danger': vindexHasError(className, $index)}"
+          title="{{vindexHasError(className, $index)}}">{{colVindex.Name}}
         </td>
         <td data-ng-show="$first" rowspan="{{klass.length}}"><a
           type="button" class="btn btn-xs"

@@ -9,13 +9,13 @@
       <div class="col-md-3">
         <table class="table">
           <tr data-ng-repeat="colVindex in klass">
-            <td>{{colVindex.Col}}
-              <div class="alert-danger" data-ng-show="colVindex.Col==''">(empty)</div>
+            <td data-ng-class="{'alert-danger': colVindex.Col==''}">{{colVindex.Col}}
+              <div data-ng-show="colVindex.Col==''">(empty)</div>
             </td>
             <td>
               <div class="dropdown">
                 <button
-                  data-ng-class="{'btn dropdown-toggle': true, 'btn-danger': vindexHasError(className, $index)}"
+                  data-ng-class="{'btn dropdown-toggle': true, 'alert-danger': vindexHasError(className, $index)}"
                   title="{{vindexHasError(className, $index)}}" type="button"
                   data-toggle="dropdown">
                   {{colVindex.Name}} <span class="caret"></span>
