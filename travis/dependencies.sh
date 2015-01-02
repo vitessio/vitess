@@ -15,7 +15,7 @@ sudo apt-get update
 # Install New relic to monitor perf metrics
 # Travis will not set license key for forked pull
 # requests, so skip the install.
-if ! [ -z "$$NEWRELIC_LICENSE_KEY" ]; then
+if ! [ -z "$NEWRELIC_LICENSE_KEY" ]; then
   sudo apt-get install newrelic-sysmond
   sudo nrsysmond-config --set license_key=$NEWRELIC_LICENSE_KEY
   sudo /etc/init.d/newrelic-sysmond start
