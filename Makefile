@@ -45,6 +45,8 @@ unit_test_race:
 unit_test_goveralls:
 	go list -f '{{if len .TestGoFiles}}go test -coverprofile={{.Dir}}/.coverprofile {{.ImportPath}}{{end}}' ./go/... | xargs -i sh -c {}
 	gover ./go/
+	# Travis doesn't set the token for forked pull requests, so skip
+	# upload if COVERALLS_TOKEN is unset.
 	if ! [ -z "$$COVERALLS_TOKEN" ]; then \
 		goveralls -coverprofile=gover.coverprofile -repotoken $$COVERALLS_TOKEN; \
 	fi
