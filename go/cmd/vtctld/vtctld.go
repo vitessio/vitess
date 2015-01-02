@@ -25,8 +25,9 @@ import (
 )
 
 var (
-	templateDir = flag.String("templates", "", "directory containing templates")
-	debug       = flag.Bool("debug", false, "recompile templates for every request")
+	templateDir     = flag.String("templates", "", "directory containing templates")
+	debug           = flag.Bool("debug", false, "recompile templates for every request")
+	schemaEditorDir = flag.String("schema-editor-dir", "", "directory containing schema_editor/")
 )
 
 func init() {
@@ -441,6 +442,10 @@ func main() {
 	// toplevel index
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		templateLoader.ServeTemplate("index.html", indexContent, w, r)
+	})
+
+	http.HandleFunc("/schema_editor/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, *schemaEditorDir+r.URL.Path)
 	})
 
 	// keyspace actions

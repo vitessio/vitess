@@ -9,10 +9,27 @@ license that can be found in the LICENSE file.
 <link rel="stylesheet"
   href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.1/css/bootstrap.min.css">
 <head>
+<base href="/schema_editor/" />
 <meta charset="US-ASCII">
 <title>VTGate schema editor</title>
 </head>
 <body>
+    <nav class="navbar navbar-inverse">
+      <div class="container-fluid">
+        <div class="navbar-header">
+          <a class="navbar-brand" href="/">Vitess</a>
+        </div>
+        <div id="navbar" class="navbar-collapse collapse">
+          <ul class="nav navbar-nav">
+            <li><a href="/dbtopo">Topology</a></li>
+            <li><a href="/serving_graph">Serving graph</a></li>
+            <li><a href="/etcd">etcd browser</a></li>
+            <li><a href="/zk">zk browser</a></li>
+            <li><a href="/schema_editor">Schema editor</a></li>
+          </ul>
+        </div>
+      </div>
+    </nav>
   <div data-ng-view></div>
   <script src="https://code.jquery.com/jquery-2.1.3.js"
     type="text/javascript">

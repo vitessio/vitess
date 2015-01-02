@@ -1,5 +1,5 @@
 <div class="col-md-3">
-  <table class="table">
+  <table class="table table-condensed">
     <thead>
       <tr>
         <th>Class</th>
@@ -33,29 +33,28 @@
             class="glyphicon glyphicon-remove"></span>
         </a></td>
       </tr>
-      <tr data-ng-show="$last">
-        <td colspan="2">
-          <div class="input-group">
-            <input type="text" class="form-control" placeholder="Class"
-              data-ng-model="classesEditor.newClassName"><span
-              class="input-group-btn"><button class="btn" type="button"
-                data-ng-click="addClass(classesEditor.newClassName)">
-                <span class="glyphicon glyphicon-plus"></span>
-              </button> </span>
-          </div>
-        </td>
-      </tr>
-      <tr data-ng-show="$last && classesEditor.err">
-        <td colspan="2">
-          <div class="alert alert-danger" data-ng-show="classesEditor.err">
-            {{classesEditor.err}}<a type="button"
-              class="alert-danger pull-right"
-              data-ng-click="clearClassesError()"> <span
-              class="glyphicon glyphicon-remove"></span>
-            </a>
-          </div>
-        </td>
-      </tr>
     </tbody>
+    <tr>
+      <td colspan="2">
+        <div class="input-group">
+          <input type="text" class="form-control" placeholder="Class"
+            data-ng-model="classesEditor.newClassName"><span
+            class="input-group-btn"><button class="btn" type="button"
+              data-ng-click="addClass(classesEditor.newClassName)">
+              <span class="glyphicon glyphicon-plus"></span>
+            </button> </span>
+        </div>
+      </td>
+    </tr>
+    <tr data-ng-show="classesEditor.err">
+      <td colspan="2">
+        <div class="alert alert-danger" data-ng-show="classesEditor.err">
+          {{classesEditor.err}}<a type="button" class="alert-danger pull-right"
+            data-ng-click="clearClassesError()"> <span
+            class="glyphicon glyphicon-remove"></span>
+          </a>
+        </div>
+      </td>
+    </tr>
   </table>
 </div>

@@ -37,21 +37,13 @@ function curSchema(vindexInfo) {
                   }
               },
               "user_extra_index": {
-                "Type": "hash",
-                "Owner": "user_extra",
-                "Params": {
-                    "Table": "user_extra_lookup",
-                    "Column": "user_extra_id"
-                }
-            },
-              "very_very_long_name": {
-                "Type": "hash",
-                "Owner": "very_very_long_name",
-                "Params": {
-                    "Table": "user_extra_lookup",
-                    "Column": "user_extra_id"
-                }
-            }
+                  "Type": "hash",
+                  "Owner": "user_extra",
+                  "Params": {
+                      "Table": "user_extra_lookup",
+                      "Column": "user_extra_id"
+                  }
+              }
           },
           "Classes": {
               "user": [
@@ -85,23 +77,14 @@ function curSchema(vindexInfo) {
                   }
               ],
               "music_extra": [
-                              {
-                                  "Col": "user_id",
-                                  "Name": "music_user_map"
-                              }, {
-                                  "Col": "music_id",
-                                  "Name": "user_index1"
-                              }
-              ],
-          "very_very_long_name": [
-                          {
-                              "Col": "user_id",
-                              "Name": "music_user_map"
-                          }, {
-                              "Col": "music_id",
-                              "Name": "user_index1"
-                          }
-          ]
+                  {
+                      "Col": "user_id",
+                      "Name": "music_user_map"
+                  }, {
+                      "Col": "music_id",
+                      "Name": "user_index1"
+                  }
+              ]
           },
           "Tables": {
               "user": "aa",
@@ -111,7 +94,7 @@ function curSchema(vindexInfo) {
               "very_very_long_name": "music_extra"
           }
       },
-      "very_very_long_name": {
+      "main": {
         "Tables": {
             "main1": "aa",
             "main2": "",
@@ -322,4 +305,3 @@ function computeTables(keyspaces) {
   }
   return tables;
 }
-

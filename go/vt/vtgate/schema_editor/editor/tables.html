@@ -1,5 +1,5 @@
-<div class="col-md-2" data-ng-show="keyspaceName">
-  <table class="table">
+<div class="col-md-3" data-ng-show="keyspaceName">
+  <table class="table table-condensed">
     <thead>
       <tr>
         <th>Table</th>
@@ -8,7 +8,7 @@
     </thead>
     <tr data-ng-repeat="(tableName, tableClass) in keyspace.Tables">
       <td data-ng-class="{'alert-danger': tableHasError(tableName)}"
-        title="{{tableHasError(tableName)}}">{{tableName}}<br>
+        title="{{tableHasError(tableName)}}">{{tableName}}
       </td>
       <td>
         <div class="dropdown">
