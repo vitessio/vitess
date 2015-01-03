@@ -8,8 +8,6 @@ import (
 	"reflect"
 	"testing"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
@@ -49,45 +47,6 @@ func TestLookupHashMap(t *testing.T) {
 	}
 }
 
-func TestLookupHashMapFail(t *testing.T) {
-	vc := &vcursor{mustFail: true}
-	_, err := lhm.(planbuilder.NonUnique).Map(vc, []interface{}{1, int32(2)})
-	want := "lookup.Map: Execute failed"
-	if err == nil || err.Error() != want {
-		t.Errorf("lhm.Map: %v, want %v", err, want)
-	}
-}
-
-func TestLookupHashMapBadData(t *testing.T) {
-	result := &mproto.QueryResult{
-		Fields: []mproto.Field{{
-			Type: mproto.VT_INT24,
-		}},
-		Rows: [][]sqltypes.Value{
-			[]sqltypes.Value{
-				sqltypes.MakeFractional([]byte("1.1")),
-			},
-		},
-		RowsAffected: 1,
-	}
-	vc := &vcursor{result: result}
-	_, err := lhm.(planbuilder.NonUnique).Map(vc, []interface{}{1, int32(2)})
-	want := `lookup.Map: strconv.ParseUint: parsing "1.1": invalid syntax`
-	if err == nil || err.Error() != want {
-		t.Errorf("lhm.Map: %v, want %v", err, want)
-	}
-
-	result.Fields = []mproto.Field{{
-		Type: mproto.VT_FLOAT,
-	}}
-	vc = &vcursor{result: result}
-	_, err = lhm.(planbuilder.NonUnique).Map(vc, []interface{}{1, int32(2)})
-	want = `lookup.Map: unexpected type for 1.1: float64`
-	if err == nil || err.Error() != want {
-		t.Errorf("lhm.Map: %v, want %v", err, want)
-	}
-}
-
 func TestLookupHashVerify(t *testing.T) {
 	vc := &vcursor{numRows: 1}
 	success, err := lhm.Verify(vc, 1, "\x16k@\xb4J\xbaK\xd6")
@@ -96,26 +55,6 @@ func TestLookupHashVerify(t *testing.T) {
 	}
 	if !success {
 		t.Errorf("Verify(): %+v, want true", success)
-	}
-}
-
-func TestLookupHashVerifyNomatch(t *testing.T) {
-	vc := &vcursor{}
-	success, err := lhm.Verify(vc, 1, "\x16k@\xb4J\xbaK\xd6")
-	if err != nil {
-		t.Error(err)
-	}
-	if success {
-		t.Errorf("Verify(): %+v, want false", success)
-	}
-}
-
-func TestLookupHashVerifyFail(t *testing.T) {
-	vc := &vcursor{mustFail: true}
-	_, err := lhm.Verify(vc, 1, "\x16k@\xb4J\xbaK\xd6")
-	want := "lookup.Verify: Execute failed"
-	if err == nil || err.Error() != want {
-		t.Errorf("lhm.Verify: %v, want %v", err, want)
 	}
 }
 
@@ -137,19 +76,17 @@ func TestLookupHashCreate(t *testing.T) {
 	}
 }
 
-func TestLookupHashCreateFail(t *testing.T) {
-	vc := &vcursor{mustFail: true}
-	err := lhm.(planbuilder.Lookup).Create(vc, 1, "\x16k@\xb4J\xbaK\xd6")
-	want := "lookup.Create: Execute failed"
-	if err == nil || err.Error() != want {
-		t.Errorf("lhm.Create: %v, want %v", err, want)
-	}
-}
-
 func TestLookupHashGenerate(t *testing.T) {
 	_, ok := lhm.(planbuilder.LookupGenerator)
 	if ok {
 		t.Errorf("lhm.(planbuilder.LookupGenerator): true, want false")
+	}
+}
+
+func TestLookupHashReverse(t *testing.T) {
+	_, ok := lhm.(planbuilder.Reversible)
+	if ok {
+		t.Errorf("lhm.(planbuilder.Reversible): true, want false")
 	}
 }
 
@@ -168,14 +105,5 @@ func TestLookupHashDelete(t *testing.T) {
 	}
 	if !reflect.DeepEqual(vc.query, wantQuery) {
 		t.Errorf("vc.query = %#v, want %#v", vc.query, wantQuery)
-	}
-}
-
-func TestLookupHashDeleteFail(t *testing.T) {
-	vc := &vcursor{mustFail: true}
-	err := lhm.(planbuilder.Lookup).Delete(vc, []interface{}{1}, "\x16k@\xb4J\xbaK\xd6")
-	want := "lookup.Delete: Execute failed"
-	if err == nil || err.Error() != want {
-		t.Errorf("lhm.Create: %v, want %v", err, want)
 	}
 }

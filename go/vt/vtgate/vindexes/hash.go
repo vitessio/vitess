@@ -15,17 +15,6 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
-var (
-	_ planbuilder.Unique              = (*HashAuto)(nil)
-	_ planbuilder.Reversible          = (*HashAuto)(nil)
-	_ planbuilder.Functional          = (*HashAuto)(nil)
-	_ planbuilder.FunctionalGenerator = (*HashAuto)(nil)
-
-	_ planbuilder.Unique     = (*Hash)(nil)
-	_ planbuilder.Reversible = (*Hash)(nil)
-	_ planbuilder.Functional = (*Hash)(nil)
-)
-
 // Hash defines vindex that hashes an int64 to a KeyspaceId
 // by using null-key 3DES hash. It's Unique, Reversible and
 // Functional.
@@ -130,7 +119,7 @@ func (vind *HashAuto) Verify(_ planbuilder.VCursor, id interface{}, ksid key.Key
 
 // ReverseMap returns the id from ksid.
 func (vind *HashAuto) ReverseMap(_ planbuilder.VCursor, ksid key.KeyspaceId) (interface{}, error) {
-	return vunhash(ksid), nil
+	return vunhash(ksid)
 }
 
 // Create reserves the id by inserting it into the vindex table.
@@ -213,11 +202,11 @@ func vhash(shardKey int64) key.KeyspaceId {
 	return key.KeyspaceId(hashed[:])
 }
 
-func vunhash(k key.KeyspaceId) int64 {
+func vunhash(k key.KeyspaceId) (int64, error) {
 	if len(k) != 8 {
-		panic(fmt.Errorf("invalid keyspace id: %+q", k))
+		return 0, fmt.Errorf("invalid keyspace id: %v", k)
 	}
 	var unhashed [8]byte
 	block3DES.Decrypt(unhashed[:], []byte(k))
-	return int64(binary.BigEndian.Uint64(unhashed[:]))
+	return int64(binary.BigEndian.Uint64(unhashed[:])), nil
 }

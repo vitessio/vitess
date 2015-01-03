@@ -13,6 +13,7 @@ import (
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/vt/rpc"
@@ -49,7 +50,7 @@ func DialTablet(ctx context.Context, endPoint topo.EndPoint, keyspace, shard str
 		if !ok {
 			port = endPoint.NamedPortMap["_vts"]
 		}
-		addr = fmt.Sprintf("%v:%v", endPoint.Host, port)
+		addr = netutil.JoinHostPort(endPoint.Host, port)
 		config = &tls.Config{}
 		config.InsecureSkipVerify = true
 	} else {
@@ -57,7 +58,7 @@ func DialTablet(ctx context.Context, endPoint topo.EndPoint, keyspace, shard str
 		if !ok {
 			port = endPoint.NamedPortMap["_vtocc"]
 		}
-		addr = fmt.Sprintf("%v:%v", endPoint.Host, port)
+		addr = netutil.JoinHostPort(endPoint.Host, port)
 	}
 
 	conn := &TabletBson{endPoint: endPoint}

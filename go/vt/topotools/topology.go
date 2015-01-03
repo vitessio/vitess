@@ -10,6 +10,7 @@ import (
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -28,7 +29,7 @@ func (tn *TabletNode) ShortName() string {
 	if tn.Port == 0 {
 		return hostPart
 	}
-	return fmt.Sprintf("%v:%v", hostPart, tn.Port)
+	return netutil.JoinHostPort(hostPart, tn.Port)
 }
 
 func newTabletNodeFromTabletInfo(ti *topo.TabletInfo) *TabletNode {
@@ -132,7 +133,7 @@ func (ks *KeyspaceNodes) hasOnlyNumericShardNames() bool {
 // TabletTypes returns a slice of tablet type names this ks
 // contains.
 func (ks KeyspaceNodes) TabletTypes() []topo.TabletType {
-	contained := make([]topo.TabletType, 0)
+	var contained []topo.TabletType
 	for _, t := range topo.AllTabletTypes {
 		if ks.HasType(t) {
 			contained = append(contained, t)

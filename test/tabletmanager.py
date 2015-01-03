@@ -361,7 +361,7 @@ class TestTabletManager(unittest.TestCase):
     # manually add a bogus entry to the replication graph, and check
     # it is removed by ShardReplicationFix
     utils.run_vtctl(['ShardReplicationAdd', 'test_keyspace/0',
-                     'test_nj-0000066666', 'test_nj-0000062344'], auto_log=True)
+                     'test_nj-0000066666'], auto_log=True)
     with_bogus = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
                                         'test_keyspace/0'])
     self.assertEqual(3, len(with_bogus['ReplicationLinks']),
@@ -381,11 +381,13 @@ class TestTabletManager(unittest.TestCase):
         tablet.get_healthz()
 
   def test_health_check(self):
-    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
-
     # one master, one replica that starts in spare
+    # (for the replica, we let vttablet do the InitTablet)
     tablet_62344.init_tablet('master', 'test_keyspace', '0')
-    tablet_62044.init_tablet('spare', 'test_keyspace', '0')
+    tablet_62044.tablet_type = 'spare'
+    tablet_62044.keyspace = 'test_keyspace'
+    tablet_62044.shard = '0'
+    tablet_62044.dbname = 'vt_test_keyspace'
 
     for t in tablet_62344, tablet_62044:
       t.create_db('vt_test_keyspace')
@@ -394,7 +396,9 @@ class TestTabletManager(unittest.TestCase):
                                 target_tablet_type='replica')
     tablet_62044.start_vttablet(wait_for_state=None,
                                 target_tablet_type='replica',
-                                lameduck_period='5s')
+                                lameduck_period='5s',
+                                extra_args=['--init_shard', '0',
+                                            '--init_keyspace', 'test_keyspace'])
 
     tablet_62344.wait_for_vttablet_state('SERVING')
     tablet_62044.wait_for_vttablet_state('NOT_SERVING')

@@ -160,6 +160,9 @@ func (rtr *Router) paramsSelectEqual(vcursor *requestContext, plan *planbuilder.
 		return nil, fmt.Errorf("paramsSelectEqual: %v", err)
 	}
 	ks, routing, err := rtr.resolveShards(vcursor, keys, plan)
+	if err != nil {
+		return nil, fmt.Errorf("paramsSelectEqual: %v", err)
+	}
 	return newScatterParams(plan.Rewritten, ks, vcursor.query.BindVariables, routing.Shards()), nil
 }
 
@@ -169,6 +172,9 @@ func (rtr *Router) paramsSelectIN(vcursor *requestContext, plan *planbuilder.Pla
 		return nil, fmt.Errorf("paramsSelectIN: %v", err)
 	}
 	ks, routing, err := rtr.resolveShards(vcursor, keys, plan)
+	if err != nil {
+		return nil, fmt.Errorf("paramsSelectEqual: %v", err)
+	}
 	return &scatterParams{
 		query:     plan.Rewritten,
 		ks:        ks,
@@ -373,9 +379,6 @@ func (rtr *Router) resolveShards(vcursor *requestContext, vindexKeys []interface
 		}
 		for i, ksids := range ksidss {
 			for _, ksid := range ksids {
-				if ksid == key.MinKey {
-					continue
-				}
 				shard, err := getShardForKeyspaceId(allShards, ksid)
 				if err != nil {
 					return "", nil, err

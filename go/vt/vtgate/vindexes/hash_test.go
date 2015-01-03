@@ -47,14 +47,6 @@ func TestHashMap(t *testing.T) {
 	}
 }
 
-func TestHashMapFail(t *testing.T) {
-	_, err := hash.(planbuilder.Unique).Map(nil, []interface{}{1.1})
-	want := "hash.Map: unexpected type for 1.1: float64"
-	if err == nil || err.Error() != want {
-		t.Errorf("hash.Map: %v, want %v", err, want)
-	}
-}
-
 func TestHashVerify(t *testing.T) {
 	success, err := hash.Verify(nil, 1, "\x16k@\xb4J\xbaK\xd6")
 	if err != nil {
@@ -62,14 +54,6 @@ func TestHashVerify(t *testing.T) {
 	}
 	if !success {
 		t.Errorf("Verify(): %+v, want true", success)
-	}
-}
-
-func TestHashVerifyFail(t *testing.T) {
-	_, err := hash.Verify(nil, 1.1, "\x16k@\xb4J\xbaK\xd6")
-	want := "hash.Verify: unexpected type for 1.1: float64"
-	if err == nil || err.Error() != want {
-		t.Errorf("hash.Verify: %v, want %v", err, want)
 	}
 }
 
@@ -100,15 +84,6 @@ func TestHashCreate(t *testing.T) {
 	}
 }
 
-func TestHashCreateFail(t *testing.T) {
-	vc := &vcursor{mustFail: true}
-	err := hash.(planbuilder.Functional).Create(vc, 1)
-	want := "hash.Create: Execute failed"
-	if err == nil || err.Error() != want {
-		t.Errorf("hash.Create: %v, want %v", err, want)
-	}
-}
-
 func TestHashGenerate(t *testing.T) {
 	_, ok := hash.(planbuilder.FunctionalGenerator)
 	if ok {
@@ -130,14 +105,5 @@ func TestHashDelete(t *testing.T) {
 	}
 	if !reflect.DeepEqual(vc.query, wantQuery) {
 		t.Errorf("vc.query = %#v, want %#v", vc.query, wantQuery)
-	}
-}
-
-func TestHashDeleteFail(t *testing.T) {
-	vc := &vcursor{mustFail: true}
-	err := hash.(planbuilder.Functional).Delete(vc, []interface{}{1}, "")
-	want := "hash.Delete: Execute failed"
-	if err == nil || err.Error() != want {
-		t.Errorf("hash.Delete: %v, want %v", err, want)
 	}
 }

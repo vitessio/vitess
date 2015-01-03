@@ -23,20 +23,9 @@ type rpcContext struct {
 
 // Check all the tablets replication positions to find if some
 // will have a problem, and suggest a fix for them.
-func (wr *Wrangler) checkSlaveReplication(tabletMap map[topo.TabletAlias]*topo.TabletInfo, masterTabletUid uint32) error {
+func (wr *Wrangler) checkSlaveReplication(tabletMap map[topo.TabletAlias]*topo.TabletInfo, masterTabletUID uint32) error {
 	wr.logger.Infof("Checking all replication positions will allow the transition:")
-	masterIsDead := masterTabletUid == topo.NO_TABLET
-
-	// Check everybody has the right master. If there is no master
-	// (crash) just check that everyone has the same parent.
-	for _, tablet := range tabletMap {
-		if masterTabletUid == topo.NO_TABLET {
-			masterTabletUid = tablet.Parent.Uid
-		}
-		if tablet.Parent.Uid != masterTabletUid {
-			return fmt.Errorf("tablet %v not slaved correctly, expected %v, found %v", tablet.Alias, masterTabletUid, tablet.Parent.Uid)
-		}
-	}
+	masterIsDead := masterTabletUID == topo.NO_TABLET
 
 	// now check all the replication positions will allow us to proceed
 	if masterIsDead {
@@ -81,7 +70,7 @@ func (wr *Wrangler) checkSlaveReplication(tabletMap map[topo.TabletAlias]*topo.T
 					return
 				}
 
-				var dur time.Duration = time.Duration(uint(time.Second) * status.SecondsBehindMaster)
+				var dur = time.Duration(uint(time.Second) * status.SecondsBehindMaster)
 				if dur > wr.ActionTimeout() {
 					err = fmt.Errorf("slave is too far behind to complete reparent in time (%v>%v), either increase timeout using 'vtctl -wait-time XXX ReparentShard ...' or scrap tablet %v", dur, wr.ActionTimeout(), tablet.Alias)
 					wr.logger.Errorf("  %v", err)

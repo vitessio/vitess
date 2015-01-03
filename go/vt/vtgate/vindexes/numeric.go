@@ -12,11 +12,6 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
-var (
-	_ planbuilder.Unique     = Numeric{}
-	_ planbuilder.Reversible = Numeric{}
-)
-
 // Numeric defines a bit-pattern mapping of a uint64 to the KeyspaceId.
 // It's Unique and Reversible.
 type Numeric struct{}

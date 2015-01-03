@@ -27,6 +27,8 @@ type Query struct {
 	TransactionId int64
 }
 
+//go:generate bsongen -file $GOFILE -type Query -o query_bson.go
+
 // String prints a readable version of Query, and also truncates
 // data if it's too long
 func (query *Query) String() string {
@@ -59,20 +61,28 @@ type BoundQuery struct {
 	BindVariables map[string]interface{}
 }
 
+//go:generate bsongen -file $GOFILE -type BoundQuery -o bound_query_bson.go
+
 type QueryList struct {
 	Queries       []BoundQuery
 	SessionId     int64
 	TransactionId int64
 }
 
+//go:generate bsongen -file $GOFILE -type QueryList -o query_list_bson.go
+
 type QueryResultList struct {
 	List []mproto.QueryResult
 }
+
+//go:generate bsongen -file $GOFILE -type QueryResultList -o query_result_list_bson.go
 
 type Session struct {
 	SessionId     int64
 	TransactionId int64
 }
+
+//go:generate bsongen -file $GOFILE -type Session -o session_bson.go
 
 type TransactionInfo struct {
 	TransactionId int64

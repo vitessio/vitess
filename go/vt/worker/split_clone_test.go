@@ -296,7 +296,7 @@ func testSplitClone(t *testing.T, strategy string) {
 				GTIDSet: myproto.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
 			},
 		}
-		sourceRdonly.RpcServer.Register(&SqlQuery{t: t})
+		sourceRdonly.RPCServer.Register(&SqlQuery{t: t})
 	}
 
 	// We read 100 source rows. sourceReaderCount is set to 10, so

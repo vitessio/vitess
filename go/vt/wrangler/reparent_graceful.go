@@ -39,10 +39,6 @@ func (wr *Wrangler) reparentShardGraceful(ev *events.Reparent, si *topo.ShardInf
 		masterTablet = v
 	}
 
-	if masterTablet.Parent.Uid != topo.NO_TABLET {
-		return fmt.Errorf("master tablet should not have a ParentUid: %v %v", masterTablet.Parent.Uid, masterTablet.Alias)
-	}
-
 	if masterTablet.Type != topo.TYPE_MASTER {
 		return fmt.Errorf("master tablet should not be type: %v %v", masterTablet.Type, masterTablet.Alias)
 	}

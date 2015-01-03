@@ -171,9 +171,6 @@ class TestReparent(unittest.TestCase):
     # Force the scrap action in zk even though tablet is not accessible.
     tablet_62344.scrap(force=True)
 
-    utils.run_vtctl(['ChangeSlaveType', '-force', tablet_62344.tablet_alias,
-                     'idle'], expect_fail=True)
-
     # Re-run reparent operation, this should now proceed unimpeded.
     utils.run_vtctl(['ReparentShard', 'test_keyspace/0',
                      tablet_62044.tablet_alias], auto_log=True)
@@ -518,15 +515,14 @@ class TestReparent(unittest.TestCase):
     hashed_links = {}
     for rl in shard_replication['ReplicationLinks']:
       key = rl['TabletAlias']['Cell'] + '-' + str(rl['TabletAlias']['Uid'])
-      value = rl['Parent']['Cell'] + '-' + str(rl['Parent']['Uid'])
-      hashed_links[key] = value
+      hashed_links[key] = True
     logging.debug('Got replication links: %s', str(hashed_links))
     expected_links = {
-        'test_nj-41983': 'test_nj-62044',
-        'test_nj-62044': '-0',
+        'test_nj-41983': True,
+        'test_nj-62044': True,
         }
     if not brutal:
-      expected_links['test_nj-62344'] = 'test_nj-62044'
+      expected_links['test_nj-62344'] = True
     self.assertEqual(expected_links, hashed_links,
                      'Got unexpected links: %s != %s' % (str(expected_links),
                                                          str(hashed_links)))

@@ -47,10 +47,21 @@ func TestHashAutoConvert(t *testing.T) {
 		if got != want {
 			t.Errorf("vhash(%d): %#v, want %q", c.in, got, want)
 		}
-		back := vunhash(key.KeyspaceId(got))
+		back, err := vunhash(key.KeyspaceId(got))
+		if err != nil {
+			t.Error(err)
+		}
 		if back != c.in {
 			t.Errorf("vunhash(%q): %d, want %d", got, back, c.in)
 		}
+	}
+}
+
+func TestHashAutoFail(t *testing.T) {
+	_, err := vunhash(key.KeyspaceId("aa"))
+	want := "invalid keyspace id: 6161"
+	if err == nil || err.Error() != want {
+		t.Errorf(`vunhash("aa"): %v, want %s`, err, want)
 	}
 }
 
@@ -130,7 +141,7 @@ type vcursor struct {
 func (vc *vcursor) Execute(query *tproto.BoundQuery) (*mproto.QueryResult, error) {
 	vc.query = query
 	if vc.mustFail {
-		return nil, errors.New("Execute failed")
+		return nil, errors.New("execute failed")
 	}
 	switch {
 	case strings.HasPrefix(query.Sql, "select"):
@@ -177,7 +188,7 @@ func TestHashAutoCreate(t *testing.T) {
 func TestHashAutoCreateFail(t *testing.T) {
 	vc := &vcursor{mustFail: true}
 	err := hashAuto.(planbuilder.Functional).Create(vc, 1)
-	want := "hash.Create: Execute failed"
+	want := "hash.Create: execute failed"
 	if err == nil || err.Error() != want {
 		t.Errorf("hashAuto.Create: %v, want %v", err, want)
 	}
@@ -206,7 +217,7 @@ func TestHashAutoGenerate(t *testing.T) {
 func TestHashAutoGenerateFail(t *testing.T) {
 	vc := &vcursor{mustFail: true}
 	_, err := hashAuto.(planbuilder.FunctionalGenerator).Generate(vc)
-	want := "hash.Generate: Execute failed"
+	want := "hash.Generate: execute failed"
 	if err == nil || err.Error() != want {
 		t.Errorf("hashAuto.Generate: %v, want %v", err, want)
 	}
@@ -232,7 +243,7 @@ func TestHashAutoDelete(t *testing.T) {
 func TestHashAutoDeleteFail(t *testing.T) {
 	vc := &vcursor{mustFail: true}
 	err := hashAuto.(planbuilder.Functional).Delete(vc, []interface{}{1}, "")
-	want := "hash.Delete: Execute failed"
+	want := "hash.Delete: execute failed"
 	if err == nil || err.Error() != want {
 		t.Errorf("hashAuto.Delete: %v, want %v", err, want)
 	}

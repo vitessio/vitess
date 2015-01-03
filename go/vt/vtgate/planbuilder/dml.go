@@ -32,7 +32,7 @@ func buildUpdatePlan(upd *sqlparser.Update, schema *Schema) *Plan {
 		plan.ID = UpdateEqual
 	case SelectIN, SelectScatter, SelectKeyrange:
 		plan.ID = NoPlan
-		plan.Reason = "too complex"
+		plan.Reason = "update has multi-shard where clause"
 		return plan
 	default:
 		panic("unexpected")
@@ -79,7 +79,7 @@ func buildDeletePlan(del *sqlparser.Delete, schema *Schema) *Plan {
 		plan.Subquery = generateDeleteSubquery(del, plan.Table)
 	case SelectIN, SelectScatter, SelectKeyrange:
 		plan.ID = NoPlan
-		plan.Reason = "too complex"
+		plan.Reason = "delete has multi-shard where clause"
 	default:
 		panic("unexpected")
 	}

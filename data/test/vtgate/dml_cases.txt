@@ -58,7 +58,7 @@
 "update user set val = 1"
 {
   "ID": "NoPlan",
-  "Reason": "too complex",
+  "Reason": "update has multi-shard where clause",
   "Table": "user",
   "Original": "update user set val = 1",
   "Rewritten": "",
@@ -72,7 +72,7 @@
 "delete from user"
 {
   "ID": "NoPlan",
-  "Reason": "too complex",
+  "Reason": "delete has multi-shard where clause",
   "Table": "user",
   "Original": "delete from user",
   "Rewritten": "",
@@ -114,7 +114,7 @@
 "update user set val = 1 where keyrange(1, 2)"
 {
   "ID": "NoPlan",
-  "Reason": "too complex",
+  "Reason": "update has multi-shard where clause",
   "Table": "user",
   "Original": "update user set val = 1 where keyrange(1, 2)",
   "Rewritten": "",
@@ -128,7 +128,7 @@
 "delete from user where keyrange(1, 2)"
 {
   "ID": "NoPlan",
-  "Reason": "too complex",
+  "Reason": "delete has multi-shard where clause",
   "Table": "user",
   "Original": "delete from user where keyrange(1, 2)",
   "Rewritten": "",
@@ -142,7 +142,7 @@
 "update user set val = 1 where id in (1, 2)"
 {
   "ID": "NoPlan",
-  "Reason": "too complex",
+  "Reason": "update has multi-shard where clause",
   "Table": "user",
   "Original": "update user set val = 1 where id in (1, 2)",
   "Rewritten": "",
@@ -156,7 +156,7 @@
 "delete from user where id in (1, 2)"
 {
   "ID": "NoPlan",
-  "Reason": "too complex",
+  "Reason": "delete has multi-shard where clause",
   "Table": "user",
   "Original": "delete from user where id in (1, 2)",
   "Rewritten": "",
@@ -170,7 +170,7 @@
 "update user set val = 1 where name = 'foo'"
 {
   "ID": "NoPlan",
-  "Reason": "too complex",
+  "Reason": "update has multi-shard where clause",
   "Table": "user",
   "Original": "update user set val = 1 where name = 'foo'",
   "Rewritten": "",
@@ -184,7 +184,7 @@
 "delete from user where name = 'foo'"
 {
   "ID": "NoPlan",
-  "Reason": "too complex",
+  "Reason": "delete has multi-shard where clause",
   "Table": "user",
   "Original": "delete from user where name = 'foo'",
   "Rewritten": "",
@@ -198,7 +198,7 @@
 "update user set val = 1 where user_id = 1"
 {
   "ID": "NoPlan",
-  "Reason": "too complex",
+  "Reason": "update has multi-shard where clause",
   "Table": "user",
   "Original": "update user set val = 1 where user_id = 1",
   "Rewritten": "",
@@ -212,7 +212,7 @@
 "delete from user where user_id = 1"
 {
   "ID": "NoPlan",
-  "Reason": "too complex",
+  "Reason": "delete has multi-shard where clause",
   "Table": "user",
   "Original": "delete from user where user_id = 1",
   "Rewritten": "",
@@ -268,7 +268,7 @@
 "update music set val = 1 where id in (1, 2)"
 {
   "ID": "NoPlan",
-  "Reason": "too complex",
+  "Reason": "update has multi-shard where clause",
   "Table": "music",
   "Original": "update music set val = 1 where id in (1, 2)",
   "Rewritten": "",
@@ -282,7 +282,7 @@
 "delete from music where id in (1, 2)"
 {
   "ID": "NoPlan",
-  "Reason": "too complex",
+  "Reason": "delete has multi-shard where clause",
   "Table": "music",
   "Original": "delete from music where id in (1, 2)",
   "Rewritten": "",

@@ -11,6 +11,7 @@ import (
 	"os"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -19,7 +20,7 @@ import (
 var (
 	port        = flag.Int("port", 6612, "vtocc port")
 	mysqlPort   = flag.Int("mysql_port", 3306, "mysql port")
-	tabletUid   = flag.Uint("tablet_uid", 41983, "tablet uid")
+	tabletUID   = flag.Uint("tablet_uid", 41983, "tablet uid")
 	mysqlSocket = flag.String("mysql_socket", "", "path to the mysql socket")
 
 	tabletAddr string
@@ -180,8 +181,8 @@ func main() {
 	dbconfigs.RegisterFlags(flags)
 	flag.Parse()
 
-	tabletAddr = fmt.Sprintf("%v:%v", "localhost", *port)
-	mycnf := mysqlctl.NewMycnf(uint32(*tabletUid), *mysqlPort)
+	tabletAddr = netutil.JoinHostPort("localhost", *port)
+	mycnf := mysqlctl.NewMycnf(uint32(*tabletUID), *mysqlPort)
 
 	if *mysqlSocket != "" {
 		mycnf.SocketFile = *mysqlSocket
