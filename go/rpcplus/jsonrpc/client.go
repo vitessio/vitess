@@ -49,7 +49,7 @@ func NewClientCodec(conn io.ReadWriteCloser) rpc.ClientCodec {
 type clientRequest struct {
 	Method string         `json:"method"`
 	Params [1]interface{} `json:"params"`
-	Id     uint64         `json:"id"`
+	ID     uint64         `json:"id"`
 }
 
 func (c *clientCodec) WriteRequest(r *rpc.Request, param interface{}) error {
@@ -58,18 +58,18 @@ func (c *clientCodec) WriteRequest(r *rpc.Request, param interface{}) error {
 	c.mutex.Unlock()
 	c.req.Method = r.ServiceMethod
 	c.req.Params[0] = param
-	c.req.Id = r.Seq
+	c.req.ID = r.Seq
 	return c.enc.Encode(&c.req)
 }
 
 type clientResponse struct {
-	Id     uint64           `json:"id"`
+	ID     uint64           `json:"id"`
 	Result *json.RawMessage `json:"result"`
 	Error  interface{}      `json:"error"`
 }
 
 func (r *clientResponse) reset() {
-	r.Id = 0
+	r.ID = 0
 	r.Result = nil
 	r.Error = nil
 }
@@ -81,12 +81,12 @@ func (c *clientCodec) ReadResponseHeader(r *rpc.Response) error {
 	}
 
 	c.mutex.Lock()
-	r.ServiceMethod = c.pending[c.resp.Id]
-	delete(c.pending, c.resp.Id)
+	r.ServiceMethod = c.pending[c.resp.ID]
+	delete(c.pending, c.resp.ID)
 	c.mutex.Unlock()
 
 	r.Error = ""
-	r.Seq = c.resp.Id
+	r.Seq = c.resp.ID
 	if c.resp.Error != nil {
 		x, ok := c.resp.Error.(string)
 		if !ok {
@@ -156,7 +156,7 @@ func (h *HTTPClient) Call(serviceMethod string, args interface{}, reply interfac
 	cr := &clientRequest{
 		Method: serviceMethod,
 		Params: params,
-		Id:     seq,
+		ID:     seq,
 	}
 
 	byteData, err := json.Marshal(cr)

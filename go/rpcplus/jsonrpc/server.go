@@ -47,7 +47,7 @@ func NewServerCodec(conn io.ReadWriteCloser) rpc.ServerCodec {
 type serverRequest struct {
 	Method string           `json:"method"`
 	Params *json.RawMessage `json:"params"`
-	Id     *json.RawMessage `json:"id"`
+	ID     *json.RawMessage `json:"id"`
 }
 
 func (r *serverRequest) reset() {
@@ -55,13 +55,13 @@ func (r *serverRequest) reset() {
 	if r.Params != nil {
 		*r.Params = (*r.Params)[0:0]
 	}
-	if r.Id != nil {
-		*r.Id = (*r.Id)[0:0]
+	if r.ID != nil {
+		*r.ID = (*r.ID)[0:0]
 	}
 }
 
 type serverResponse struct {
-	Id     *json.RawMessage `json:"id"`
+	ID     *json.RawMessage `json:"id"`
 	Result interface{}      `json:"result"`
 	Error  interface{}      `json:"error"`
 }
@@ -78,8 +78,8 @@ func (c *serverCodec) ReadRequestHeader(r *rpc.Request) error {
 	// internal uint64 and save JSON on the side.
 	c.mutex.Lock()
 	c.seq++
-	c.pending[c.seq] = c.req.Id
-	c.req.Id = nil
+	c.pending[c.seq] = c.req.ID
+	c.req.ID = nil
 	r.Seq = c.seq
 	c.mutex.Unlock()
 
@@ -118,7 +118,7 @@ func (c *serverCodec) WriteResponse(r *rpc.Response, x interface{}, last bool) e
 		// Invalid request so no id.  Use JSON null.
 		b = &null
 	}
-	resp.Id = b
+	resp.ID = b
 	resp.Result = x
 	if r.Error == "" {
 		resp.Error = nil
