@@ -453,12 +453,19 @@ func (*ParenBoolExpr) IExpr()  {}
 func (*ComparisonExpr) IExpr() {}
 func (*RangeCond) IExpr()      {}
 func (*NullCheck) IExpr()      {}
+func (*TrueCheck) IExpr()      {}
+func (*FalseCheck) IExpr()     {}
+func (*TrueExpr) IExpr()       {}
+func (*FalseExpr) IExpr()      {}
+func (*NullExpr) IExpr()       {}
 func (*ExistsExpr) IExpr()     {}
 func (*KeyrangeExpr) IExpr()   {}
 func (StrVal) IExpr()          {}
 func (NumVal) IExpr()          {}
 func (ValArg) IExpr()          {}
 func (*NullVal) IExpr()        {}
+func (*TrueVal) IExpr()        {}
+func (*FalseVal) IExpr()       {}
 func (*ColName) IExpr()        {}
 func (ValTuple) IExpr()        {}
 func (*Subquery) IExpr()       {}
@@ -481,6 +488,11 @@ func (*ParenBoolExpr) IBoolExpr()  {}
 func (*ComparisonExpr) IBoolExpr() {}
 func (*RangeCond) IBoolExpr()      {}
 func (*NullCheck) IBoolExpr()      {}
+func (*TrueCheck) IBoolExpr()      {}
+func (*FalseCheck) IBoolExpr()     {}
+func (*TrueExpr) IBoolExpr()       {}
+func (*FalseExpr) IBoolExpr()      {}
+func (*NullExpr) IBoolExpr()       {}
 func (*ExistsExpr) IBoolExpr()     {}
 func (*KeyrangeExpr) IBoolExpr()   {}
 
@@ -578,6 +590,68 @@ func (node *NullCheck) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v %s", node.Expr, node.Operator)
 }
 
+// TrueCheck represents an IS TRUE or an IS NOT TRUE expression.
+type TrueCheck struct {
+	Operator string
+	Expr     ValExpr
+}
+
+// TrueCheck.Operator
+const (
+	AST_IS_TRUE     = "is true"
+	AST_IS_NOT_TRUE = "is not true"
+)
+
+func (node *TrueCheck) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%v %s", node.Expr, node.Operator)
+}
+
+// FalseCheck represents an IS FALSE or an IS NOT FALSE expression.
+type FalseCheck struct {
+	Operator string
+	Expr     ValExpr
+}
+
+// FalseCheck.Operator
+const (
+	AST_IS_FALSE     = "is false"
+	AST_IS_NOT_FALSE = "is not false"
+)
+
+func (node *FalseCheck) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%v %s", node.Expr, node.Operator)
+}
+
+// TrueExpr represents an IS TRUE or an IS NOT TRUE expression.
+type TrueExpr struct {
+	Operator string
+	Expr     BoolExpr
+}
+
+func (node *TrueExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%v %s", node.Expr, node.Operator)
+}
+
+// FalseExpr represents an IS FALSE or an IS NOT FALSE expression.
+type FalseExpr struct {
+	Operator string
+	Expr     BoolExpr
+}
+
+func (node *FalseExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%v %s", node.Expr, node.Operator)
+}
+
+// NullExpr represents an IS NULL or an IS NOT NULL expression.
+type NullExpr struct {
+	Operator string
+	Expr     BoolExpr
+}
+
+func (node *NullExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%v %s", node.Expr, node.Operator)
+}
+
 // ExistsExpr represents an EXISTS expression.
 type ExistsExpr struct {
 	Subquery *Subquery
@@ -606,6 +680,8 @@ func (StrVal) IValExpr()      {}
 func (NumVal) IValExpr()      {}
 func (ValArg) IValExpr()      {}
 func (*NullVal) IValExpr()    {}
+func (*TrueVal) IValExpr()    {}
+func (*FalseVal) IValExpr()   {}
 func (*ColName) IValExpr()    {}
 func (ValTuple) IValExpr()    {}
 func (*Subquery) IValExpr()   {}
@@ -642,6 +718,20 @@ type NullVal struct{}
 
 func (node *NullVal) Format(buf *TrackedBuffer) {
 	buf.Myprintf("null")
+}
+
+// TrueVal represents a TRUE value.
+type TrueVal struct{}
+
+func (node *TrueVal) Format(buf *TrackedBuffer) {
+	buf.Myprintf("true")
+}
+
+// FalseVal represents a FALSE value.
+type FalseVal struct{}
+
+func (node *FalseVal) Format(buf *TrackedBuffer) {
+	buf.Myprintf("false")
 }
 
 // ColName represents a column name.

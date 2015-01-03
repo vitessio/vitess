@@ -66,7 +66,7 @@ var (
 
 %token LEX_ERROR
 %token <empty> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT FOR
-%token <empty> ALL DISTINCT AS EXISTS IN IS LIKE BETWEEN NULL ASC DESC VALUES INTO DUPLICATE KEY DEFAULT SET LOCK KEYRANGE
+%token <empty> ALL DISTINCT AS EXISTS IN IS LIKE BETWEEN NULL TRUE FALSE ASC DESC VALUES INTO DUPLICATE KEY DEFAULT SET LOCK KEYRANGE
 %token <bytes> ID STRING NUMBER VALUE_ARG LIST_ARG COMMENT
 %token <empty> LE GE NE NULL_SAFE_EQUAL
 %token <empty> '(' '=' '<' '>' '~'
@@ -537,6 +537,30 @@ boolean_expression:
   {
     $$ = &ParenBoolExpr{Expr: $2}
   }
+| boolean_expression IS TRUE
+  {
+    $$ = &TrueExpr{Operator: AST_IS_TRUE, Expr: $1}
+  }
+| boolean_expression IS NOT TRUE
+  {
+    $$ = &TrueExpr{Operator: AST_IS_NOT_TRUE, Expr: $1}
+  }
+| boolean_expression IS FALSE
+  {
+    $$ = &FalseExpr{Operator: AST_IS_FALSE, Expr: $1}
+  }
+| boolean_expression IS NOT FALSE
+  {
+    $$ = &FalseExpr{Operator: AST_IS_NOT_FALSE, Expr: $1}
+  }
+| boolean_expression IS NULL
+  {
+    $$ = &NullExpr{Operator: AST_IS_NULL, Expr: $1}
+  }
+| boolean_expression IS NOT NULL
+  {
+    $$ = &NullExpr{Operator: AST_IS_NOT_NULL, Expr: $1}
+  }
 
 condition:
   value_expression compare value_expression
@@ -566,6 +590,22 @@ condition:
 | value_expression NOT BETWEEN value_expression AND value_expression
   {
     $$ = &RangeCond{Left: $1, Operator: AST_NOT_BETWEEN, From: $4, To: $6}
+  }
+| value_expression IS TRUE
+  {
+    $$ = &TrueCheck{Operator: AST_IS_TRUE, Expr: $1}
+  }
+| value_expression IS NOT TRUE
+  {
+    $$ = &TrueCheck{Operator: AST_IS_NOT_TRUE, Expr: $1}
+  }
+| value_expression IS FALSE
+  {
+    $$ = &FalseCheck{Operator: AST_IS_FALSE, Expr: $1}
+  }
+| value_expression IS NOT FALSE
+  {
+    $$ = &FalseCheck{Operator: AST_IS_NOT_FALSE, Expr: $1}
   }
 | value_expression IS NULL
   {
@@ -815,6 +855,14 @@ value:
 | NULL
   {
     $$ = &NullVal{}
+  }
+| TRUE
+  {
+    $$ = &TrueVal{}
+  }
+| FALSE
+  {
+    $$ = &FalseVal{}
   }
 
 group_by_opt:
