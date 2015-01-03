@@ -126,6 +126,8 @@ func Dial(network, address string) (*rpc.Client, error) {
 	return NewClient(conn), err
 }
 
+// HTTPClient holds the required parameters and functions for communicating with
+// the HTTP RPC server
 type HTTPClient struct {
 	Addr string
 	seq  uint64

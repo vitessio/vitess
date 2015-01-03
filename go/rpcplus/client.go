@@ -27,6 +27,7 @@ func (e ServerError) Error() string {
 	return string(e)
 }
 
+// ErrShutdown holds the specific error for closing/closed connections
 var ErrShutdown = errors.New("connection is shut down")
 
 // Call represents an active RPC.
@@ -303,6 +304,7 @@ func Dial(network, address string) (*Client, error) {
 	return NewClient(conn), nil
 }
 
+// Close closes the client connection
 func (client *Client) Close() error {
 	client.mutex.Lock()
 	if client.shutdown || client.closing {
@@ -343,7 +345,7 @@ func (client *Client) Go(ctx context.Context, serviceMethod string, args interfa
 	return call
 }
 
-// Go invokes the streaming function asynchronously.  It returns the Call structure representing
+// StreamGo invokes the streaming function asynchronously.  It returns the Call structure representing
 // the invocation.
 func (client *Client) StreamGo(serviceMethod string, args interface{}, replyStream interface{}) *Call {
 	// first check the replyStream object is a stream of pointers to a data structure

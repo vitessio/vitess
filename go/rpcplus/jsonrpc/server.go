@@ -128,6 +128,7 @@ func (c *serverCodec) WriteResponse(r *rpc.Response, x interface{}, last bool) e
 	return c.enc.Encode(resp)
 }
 
+// Close closes the server connection
 func (c *serverCodec) Close() error {
 	return c.c.Close()
 }
