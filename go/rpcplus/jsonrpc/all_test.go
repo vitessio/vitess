@@ -203,7 +203,7 @@ func TestStreamingCall(t *testing.T) {
 		if row.C != count {
 			t.Fatal("unexpected value:", row.C)
 		}
-		count += 1
+		count++
 
 		// log.Println("Values: ", row)
 	}

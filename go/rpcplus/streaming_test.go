@@ -92,7 +92,7 @@ func callOnceAndCheck(t *testing.T, client *Client) {
 		if row.Index != count {
 			t.Fatal("unexpected value:", row.Index)
 		}
-		count += 1
+		count++
 
 		// log.Println("Values: ", row.C, row.Index)
 	}
@@ -168,7 +168,7 @@ func TestInterruptedCallByServer(t *testing.T) {
 		if row.Index != count {
 			t.Fatal("unexpected value:", row.Index)
 		}
-		count += 1
+		count++
 	}
 	if count != 30 {
 		t.Fatal("received error before the right time:", count)
@@ -211,7 +211,7 @@ func TestBadTypeByServer(t *testing.T) {
 		if row.Index != count {
 			t.Fatal("unexpected value:", row.Index)
 		}
-		count += 1
+		count++
 	}
 	if count != 30 {
 		t.Fatal("received error before the right time:", count)
