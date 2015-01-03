@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+// CRAMMD5GetChallenge creates a new RFC822 compatible ID
 func CRAMMD5GetChallenge() (string, error) {
 	var randDigits uint32
 	err := binary.Read(rand.Reader, binary.LittleEndian, &randDigits)
@@ -27,6 +28,7 @@ func CRAMMD5GetChallenge() (string, error) {
 	return fmt.Sprintf("<%d.%d@%s>", randDigits, timestamp, hostname), nil
 }
 
+// CRAMMD5GetExpected creates a "possible" ID with the given credentials
 func CRAMMD5GetExpected(username, secret, challenge string) string {
 	var ret []byte
 	hash := hmac.New(md5.New, []byte(secret))
