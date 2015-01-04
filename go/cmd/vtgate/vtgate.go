@@ -42,7 +42,7 @@ func main() {
 	log.Info(*cell, *schemaFile)
 	if *schemaFile != "" {
 		var err error
-		if schema, err = planbuilder.LoadSchemaJSON(*schemaFile); err != nil {
+		if schema, err = planbuilder.LoadFile(*schemaFile); err != nil {
 			log.Fatal(err)
 		}
 	}

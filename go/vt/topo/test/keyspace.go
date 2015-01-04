@@ -1,3 +1,4 @@
+// TODO(sougou): The comments below look obsolete. Need to verify.
 // Package test contains utilities to test topo.Server
 // implementations. If you are testing your implementation, you will
 // want to call CheckAll in your test method. For an example, look at

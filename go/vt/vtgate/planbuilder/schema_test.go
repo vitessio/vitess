@@ -5,8 +5,6 @@
 package planbuilder
 
 import (
-	"io/ioutil"
-	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -265,23 +263,16 @@ func TestShardedSchemaNotOwned(t *testing.T) {
 }
 
 func TestLoadSchemaFail(t *testing.T) {
-	badSchema := "{,}"
-	f, err := ioutil.TempFile("", "schema_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	fname := f.Name()
-	f.Close()
-	defer os.Remove(fname)
-
-	err = ioutil.WriteFile(fname, []byte(badSchema), 0644)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = LoadSchemaJSON(fname)
-	want := "ReadJson failed"
+	_, err := LoadFile("bogus file name")
+	want := "ReadFile failed"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("LoadSchemaJSON: \n%q, should start with \n%q", err, want)
+		t.Errorf("LoadFile: \n%q, should start with \n%q", err, want)
+	}
+
+	_, err = NewSchema([]byte("{,}"))
+	want = "Unmarshal failed"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("LoadFile: \n%q, should start with \n%q", err, want)
 	}
 }
 

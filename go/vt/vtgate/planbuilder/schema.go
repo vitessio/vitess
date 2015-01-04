@@ -5,10 +5,10 @@
 package planbuilder
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"sort"
-
-	"github.com/youtube/vitess/go/jscfg"
 )
 
 // Schema represents the denormalized version of SchemaFormal,
@@ -186,13 +186,20 @@ type ColVindexFormal struct {
 	Name string
 }
 
-// LoadSchemaJSON loads the formal representation of a schema
-// from a JSON file and returns the more usable denormalized
-// representaion (Schema) for it.
-func LoadSchemaJSON(filename string) (schema *Schema, err error) {
+// LoadFile creates a new Schema from a JSON file.
+func LoadFile(filename string) (schema *Schema, err error) {
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, fmt.Errorf("ReadFile failed: %v %v", filename, err)
+	}
+	return NewSchema(data)
+}
+
+// NewSchema creates a new Schema from a JSON byte array.
+func NewSchema(data []byte) (schema *Schema, err error) {
 	var source SchemaFormal
-	if err := jscfg.ReadJson(filename, &source); err != nil {
-		return nil, err
+	if err := json.Unmarshal(data, &source); err != nil {
+		return nil, fmt.Errorf("Unmarshal failed: %v %s %v", source, data, err)
 	}
 	return BuildSchema(&source)
 }

@@ -206,7 +206,7 @@ func createTestSchema(schemaJSON string) *planbuilder.Schema {
 	if err != nil {
 		panic(err)
 	}
-	schema, err := planbuilder.LoadSchemaJSON(fname)
+	schema, err := planbuilder.LoadFile(fname)
 	if err != nil {
 		panic(err)
 	}

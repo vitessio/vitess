@@ -339,6 +339,8 @@ var indexContent = IndexContent{
 	ToplevelLinks: map[string]string{
 		"DbTopology Tool": "/dbtopo",
 		"Serving Graph":   "/serving_graph",
+		"Schema editor":   "/schema_editor",
+		"Schema view":     "/vschema",
 	},
 }
 var ts topo.Server
@@ -442,10 +444,6 @@ func main() {
 	// toplevel index
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		templateLoader.ServeTemplate("index.html", indexContent, w, r)
-	})
-
-	http.HandleFunc("/schema_editor/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, *schemaEditorDir+r.URL.Path)
 	})
 
 	// keyspace actions
@@ -558,6 +556,40 @@ func main() {
 
 		servingGraph := topotools.DbServingGraph(wr.TopoServer(), cell)
 		templateLoader.ServeTemplate("serving_graph.html", servingGraph, w, r)
+	})
+
+	// vschema editor
+	http.HandleFunc("/schema_editor/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, *schemaEditorDir+r.URL.Path)
+	})
+
+	// vschema viewer
+	http.HandleFunc("/vschema", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			httpError(w, "cannot parse form: %s", err)
+			return
+		}
+		schemafier, ok := wr.TopoServer().(topo.Schemafier)
+		if !ok {
+			httpError(w, "%s", fmt.Errorf("%T doesn's support schemafier API", wr.TopoServer()))
+		}
+		var data struct {
+			Error         error
+			Input, Output string
+		}
+		switch r.Method {
+		case "POST":
+			data.Input = r.FormValue("vschema")
+			data.Error = schemafier.SaveVSchema(data.Input)
+		}
+		vschema, err := schemafier.GetVSchema()
+		if err != nil {
+			if data.Error == nil {
+				data.Error = fmt.Errorf("Error fetching schema: %s", err)
+			}
+		}
+		data.Output = vschema
+		templateLoader.ServeTemplate("vschema.html", data, w, r)
 	})
 
 	// redirects for explorers
@@ -695,5 +727,6 @@ func main() {
 		}
 		http.Redirect(w, r, target, http.StatusFound)
 	})
+
 	servenv.RunDefault()
 }

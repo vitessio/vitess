@@ -281,6 +281,13 @@ type Server interface {
 	GetSubprocessFlags() []string
 }
 
+// Schemafier is a temporary interface for supporting vschema
+// reads and writes. It will eventually be merged into Server.
+type Schemafier interface {
+	SaveVSchema(string) error
+	GetVSchema() (string, error)
+}
+
 // Registry for Server implementations.
 var serverImpls map[string]Server = make(map[string]Server)
 
