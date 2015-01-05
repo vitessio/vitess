@@ -1,0 +1,21 @@
+<div class="container-fluid">
+  <div class="row">
+    <div data-ng-include="'editor/sidebar.html'"></div>
+    <div class="col-md-6">
+      <button type="button" class="btn btn-primary"
+        data-ng-click="loadFromTopo()">Load from topo</button>
+      <button type="button" class="btn btn-primary"
+        data-ng-click="loadTestData()">Load test data</button>
+    </div>
+    <div class="alert alert-danger col-md-6" data-ng-show="loader.err">
+      {{loader.err}}<a type="button" class="alert-danger pull-right"
+        data-ng-click="clearLoaderError()"> <span
+        class="glyphicon glyphicon-remove"></span>
+      </a>
+    </div>
+    <div class="col-md-6" data-ng-show="loadedJSON">
+      <h4>Loaded data</h4>
+      <pre>{{loadedJSON}}</pre>
+    </div>
+  </div>
+</div>
