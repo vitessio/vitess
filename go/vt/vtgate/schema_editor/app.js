@@ -11,7 +11,8 @@ angular.module('app', ['ngRoute'])
 .controller('KeyspaceController', KeyspaceController)
 .controller('SidebarController', SidebarController)
 .controller('ClassController', ClassController)
-.controller('DiffController', DiffController)
+.controller('LoadController', LoadController)
+.controller('SubmitController', SubmitController)
 .config(['$routeProvider', function($routeProvider) {
   $routeProvider
   .when('/',{
@@ -26,9 +27,13 @@ angular.module('app', ['ngRoute'])
     templateUrl: "editor/class/class.html",
     controller: "ClassController"
   })
-  .when('/diff',{
-    templateUrl: "diff/diff.html",
-    controller: "DiffController"
+  .when('/load',{
+    templateUrl: "load/load.html",
+    controller: "LoadController"
+  })
+  .when('/submit',{
+    templateUrl: "submit/submit.html",
+    controller: "SubmitController"
   })
   .otherwise({redirectTo: '/'});
 }]);

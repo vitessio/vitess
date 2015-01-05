@@ -8,6 +8,7 @@ function SidebarController($scope, $routeParams, curSchema) {
   init();
 
   function init() {
+    $scope.curSchema = curSchema;
     $scope.keyspaceEditor = {};
   }
   $scope.addKeyspace = function($keyspaceName, $sharded) {

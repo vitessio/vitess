@@ -1,0 +1,29 @@
+<div class="container-fluid">
+  <div class="row">
+    <div data-ng-include="'editor/sidebar.html'"></div>
+    <div class="col-md-8">
+      <button type="button" class="btn btn-primary pull-right"
+        data-ng-click="submitToTopo()">Submit to topo</button>
+    </div>
+    <div class="alert alert-danger col-md-8" data-ng-show="submitter.err">
+      {{submitter.err}}<a type="button" class="alert-danger pull-right"
+        data-ng-click="clearSubmitter()"> <span
+        class="glyphicon glyphicon-remove"></span>
+      </a>
+    </div>
+    <div class="alert alert-success col-md-8" data-ng-show="submitter.ok">
+      {{submitter.ok}}<a type="button" class="alert-success pull-right"
+        data-ng-click="clearSubmitter()"> <span
+        class="glyphicon glyphicon-remove"></span>
+      </a>
+    </div>
+    <div class="col-md-4">
+      <h4>Original</h4>
+      <pre>{{originalJSON}}</pre>
+    </div>
+    <div class="col-md-4">
+      <h4>Edited</h4>
+      <pre>{{keyspacesJSON}}</pre>
+    </div>
+  </div>
+</div>

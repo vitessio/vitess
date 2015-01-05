@@ -10,11 +10,11 @@
 
 {{if .Error}}
   <h2>Error</h2>
-  {{.Error}}
+  <div id="err">{{.Error}}</div>
 {{else}}
   <h2>Success</h2>
 {{end}}
-<pre>{{.Output}}</pre>
+<pre id="vschema">{{.Output}}</pre>
 
 <form method="post">
   Upload VSchema<br><textarea name="vschema" cols=80 rows=30>{{.Input}}</textarea><br>
