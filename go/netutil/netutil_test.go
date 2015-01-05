@@ -71,9 +71,10 @@ func TestSplitHostPort(t *testing.T) {
 		port int
 	}
 	table := map[string]addr{
-		"host-name:132": addr{host: "host-name", port: 132},
-		"[::1]:321":     addr{host: "::1", port: 321},
-		"::1:432":       addr{host: "::1", port: 432},
+		"host-name:132":  addr{host: "host-name", port: 132},
+		"hostname:65535": addr{host: "hostname", port: 65535},
+		"[::1]:321":      addr{host: "::1", port: 321},
+		"::1:432":        addr{host: "::1", port: 432},
 	}
 	for input, want := range table {
 		gotHost, gotPort, err := SplitHostPort(input)

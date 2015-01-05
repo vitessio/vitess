@@ -90,7 +90,7 @@ func SplitHostPort(addr string) (string, int, error) {
 		host = addr[:i]
 		port = addr[i+1:]
 	}
-	p, err := strconv.ParseInt(port, 10, 16)
+	p, err := strconv.ParseUint(port, 10, 16)
 	if err != nil {
 		return "", 0, fmt.Errorf("SplitHostPort: can't parse port %q: %v", port, err)
 	}
