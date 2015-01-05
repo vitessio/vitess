@@ -5,6 +5,11 @@
 package zktopo
 
 import (
+	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
+	// vindexes needs to be imported so that they register
+	// themeselves against vtgate/planbuilder. This will allow
+	// us to sanity check the schema being uploaded.
+	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -19,7 +24,11 @@ const (
 
 // SaveVSchema saves the JSON vschema into the topo.
 func (zkts *Server) SaveVSchema(vschema string) error {
-	_, err := zk.CreateOrUpdate(zkts.zconn, globalVSchemaPath, vschema, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), true)
+	_, err := planbuilder.NewSchema([]byte(vschema))
+	if err != nil {
+		return err
+	}
+	_, err = zk.CreateOrUpdate(zkts.zconn, globalVSchemaPath, vschema, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), true)
 	return err
 }
 

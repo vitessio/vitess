@@ -84,7 +84,7 @@ function KeyspaceController($scope, $routeParams, vindexInfo, curSchema) {
       $scope.classesEditor.err = $className + " already exists";
       return;
     }
-    $scope.keyspace.Classes[$className] = [];
+    $scope.keyspace.Classes[$className] = {"ColVindexes": []};
     $scope.classesEditor.newClassName = "";
     $scope.clearClassesError();
     window.location.href = "#/editor/" + $scope.keyspaceName + "/class/" + $className;

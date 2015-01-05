@@ -8,7 +8,7 @@
       </div>
       <div class="col-md-3">
         <table class="table">
-          <tr data-ng-repeat="colVindex in klass">
+          <tr data-ng-repeat="colVindex in klass.ColVindexes">
             <td data-ng-class="{'alert-danger': colVindex.Col==''}">{{colVindex.Col}}
               <div data-ng-show="colVindex.Col==''">(empty)</div>
             </td>
@@ -45,7 +45,7 @@
                   </button>
                   <ul class="dropdown-menu">
                     <li
-                      data-ng-repeat="vindex in validVindexes(className, klass.length)"
+                      data-ng-repeat="vindex in validVindexes(className, klass.ColVindexes.length)"
                       data-ng-click="addColVindex(classEditor.newColumnName, vindex)"><a
                       href="#/editor/{{keyspaceName}}/class/{{className}}">{{vindex}}</a></li>
                   </ul>

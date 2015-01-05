@@ -8,7 +8,7 @@
       </tr>
     </thead>
     <tbody data-ng-repeat="(className, klass) in keyspace.Classes">
-      <tr data-ng-show="klass.length == 0">
+      <tr data-ng-show="klass.ColVindexes.length == 0">
         <td><a href="#/editor/{{keyspaceName}}/class/{{className}}">{{className}}</a></td>
         <td></td>
         <td><div class="alert-danger">(empty)</div></td>
@@ -17,8 +17,8 @@
             class="glyphicon glyphicon-remove"></span>
         </a></td>
       </tr>
-      <tr data-ng-repeat="colVindex in klass">
-        <td data-ng-show="$first" rowspan="{{klass.length}}"><a
+      <tr data-ng-repeat="colVindex in klass.ColVindexes">
+        <td data-ng-show="$first" rowspan="{{klass.ColVindexes.length}}"><a
           href="#/editor/{{keyspaceName}}/class/{{className}}">{{className}}</a>
         </td>
         <td data-ng-class="{'alert-danger': colVindex.Col==''}">{{colVindex.Col}}
@@ -27,7 +27,7 @@
         <td data-ng-class="{'alert-danger': vindexHasError(className, $index)}"
           title="{{vindexHasError(className, $index)}}">{{colVindex.Name}}
         </td>
-        <td data-ng-show="$first" rowspan="{{klass.length}}"><a
+        <td data-ng-show="$first" rowspan="{{klass.ColVindexes.length}}"><a
           type="button" class="btn btn-xs"
           data-ng-click="deleteClass(className)"> <span
             class="glyphicon glyphicon-remove"></span>

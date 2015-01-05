@@ -12,9 +12,8 @@ function LoadController($scope, $http, curSchema) {
   }
 
   function setLoaded(loaded) {
-    $scope.loaded = loaded;
     $scope.loadedJSON = angular.toJson(loaded, true);
-    curSchema.init($scope.loaded);
+    curSchema.init(loaded.Keyspaces);
     $scope.clearLoaderError();
   }
 
@@ -79,45 +78,53 @@ function LoadController($scope, $http, curSchema) {
                 }
             },
             "Classes": {
-                "user": [
-                    {
-                        "Col": "id",
-                        "Name": "user_index"
-                    }, {
-                        "Col": "",
-                        "Name": "name_user_map"
-                    }, {
-                        "Col": "third",
-                        "Name": "name_user_map"
-                    }
-                ],
-                "user_extra": [
-                    {
-                        "Col": "user_id",
-                        "Name": "user_index"
-                    }, {
-                        "Col": "id",
-                        "Name": "user_extra_index"
-                    }
-                ],
-                "music": [
-                    {
-                        "Col": "user_id",
-                        "Name": "name_user_map"
-                    }, {
-                        "Col": "id",
-                        "Name": "user_index"
-                    }
-                ],
-                "music_extra": [
-                    {
-                        "Col": "user_id",
-                        "Name": "music_user_map"
-                    }, {
-                        "Col": "music_id",
-                        "Name": "user_index1"
-                    }
-                ]
+                "user": {
+                  "ColVindexes": [
+                      {
+                          "Col": "id",
+                          "Name": "user_index"
+                      }, {
+                          "Col": "",
+                          "Name": "name_user_map"
+                      }, {
+                          "Col": "third",
+                          "Name": "name_user_map"
+                      }
+                  ]
+                },
+                "user_extra": {
+                  "ColVindexes": [
+                      {
+                          "Col": "user_id",
+                          "Name": "user_index"
+                      }, {
+                          "Col": "id",
+                          "Name": "user_extra_index"
+                      }
+                  ]
+                },
+                "music": {
+                  "ColVindexes": [
+                      {
+                          "Col": "user_id",
+                          "Name": "name_user_map"
+                      }, {
+                          "Col": "id",
+                          "Name": "user_index"
+                      }
+                  ]
+                },
+                "music_extra": {
+                  "ColVindexes": [
+                      {
+                          "Col": "user_id",
+                          "Name": "music_user_map"
+                      }, {
+                          "Col": "music_id",
+                          "Name": "user_index1"
+                      }
+                  ]
+                }
             },
             "Tables": {
                 "user": "aa",
@@ -135,7 +142,9 @@ function LoadController($scope, $http, curSchema) {
           }
         }
     };
-    setLoaded(testData);
+    setLoaded({
+      "Keyspaces": testData
+    });
   };
 
   $scope.clearLoaderError = function() {

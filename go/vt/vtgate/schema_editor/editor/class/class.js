@@ -40,7 +40,7 @@ function ClassController($scope, $routeParams, vindexInfo, curSchema) {
       }
     }
     ;
-    $scope.klass.push({
+    $scope.klass.ColVindexes.push({
         "Col": $colName,
         "Name": $vindex
     });
@@ -48,7 +48,7 @@ function ClassController($scope, $routeParams, vindexInfo, curSchema) {
   };
 
   $scope.deleteColVindex = function(index) {
-    $scope.klass.splice(index, 1);
+    $scope.klass.ColVindexes.splice(index, 1);
     $scope.clearClassError();
   };
 

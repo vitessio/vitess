@@ -8,8 +8,12 @@ function SubmitController($scope, $http, curSchema) {
   init();
 
   function init() {
-    $scope.keyspacesJSON = angular.toJson(curSchema.keyspaces, true);
-    $scope.originalJSON = angular.toJson(curSchema.original, true);
+    $scope.keyspacesJSON = angular.toJson({
+      "Keyspaces": curSchema.keyspaces
+    }, true);
+    $scope.originalJSON = angular.toJson({
+      "Keyspaces": curSchema.original
+    }, true);
     $scope.submitter = {};
   }
 
@@ -23,6 +27,13 @@ function SubmitController($scope, $http, curSchema) {
             'Content-Type': 'application/x-www-form-urlencoded'
           }
       }).success(function(data, status, headers, config) {
+        var parser = new DOMParser();
+        var xmlDoc = parser.parseFromString(data, "text/xml");
+        var err = xmlDoc.getElementById("err");
+        if (err) {
+          $scope.submitter.err = err.innerHTML;
+          return;
+        }
         $scope.submitter.ok = "Submitted!";
       });
     } catch (err) {

@@ -46,12 +46,12 @@ function curSchema(vindexInfo) {
       return "class not found";
     }
     var klass = keyspace.Classes[className];
-    for (var i = 0; i < klass.length; i++) {
+    for (var i = 0; i < klass.ColVindexes.length; i++) {
       var classError = data.vindexHasError(keyspace, className, i);
       if (classError) {
         return "invalid class";
       }
-      var vindex = keyspace.Vindexes[klass[i].Name];
+      var vindex = keyspace.Vindexes[klass.ColVindexes[i].Name];
       if (vindex.Owner != tableName) {
         continue;
       }
@@ -84,7 +84,7 @@ function curSchema(vindexInfo) {
   };
 
   data.vindexHasError = function(keyspace, className, index) {
-    var vindexName = keyspace.Classes[className][index].Name;
+    var vindexName = keyspace.Classes[className].ColVindexes[index].Name;
     if (!(vindexName in keyspace.Vindexes)) {
       return "vindex not found";
     }
@@ -180,11 +180,11 @@ function copyVindexes(original, vindexInfo) {
 function copyClasses(original) {
   var copied = {};
   for ( var key in original) {
-    copied[key] = [];
-    for (var i = 0; i < original[key].length; i++) {
-      copied[key].push({
-          "Col": original[key][i].Col,
-          "Name": original[key][i].Name
+    copied[key] = {"ColVindexes": []};
+    for (var i = 0; i < original[key].ColVindexes.length; i++) {
+      copied[key].ColVindexes.push({
+          "Col": original[key].ColVindexes[i].Col,
+          "Name": original[key].ColVindexes[i].Name
       });
     }
   }

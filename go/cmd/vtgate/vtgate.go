@@ -38,6 +38,10 @@ func init() {
 func main() {
 	flag.Parse()
 	servenv.Init()
+
+	ts := topo.GetServer()
+	defer topo.CloseServers()
+
 	var schema *planbuilder.Schema
 	log.Info(*cell, *schemaFile)
 	if *schemaFile != "" {
@@ -45,11 +49,27 @@ func main() {
 		if schema, err = planbuilder.LoadFile(*schemaFile); err != nil {
 			log.Fatal(err)
 		}
+		log.Infof("v3 is enabled: loaded schema from file: %v", *schemaFile)
+	} else {
+		schemafier, ok := ts.(topo.Schemafier)
+		if !ok {
+			log.Infof("Skipping v3 initialization: topo does not suppurt schemafier interface")
+			goto startServer
+		}
+		schemaJSON, err := schemafier.GetVSchema()
+		if err != nil {
+			log.Warningf("Skipping v3 initialization: GetVSchema failed: %v", err)
+			goto startServer
+		}
+		schema, err = planbuilder.NewSchema([]byte(schemaJSON))
+		if err != nil {
+			log.Warningf("Skipping v3 initialization: GetVSchema failed: %v", err)
+			goto startServer
+		}
+		log.Infof("v3 is enabled: loaded schema from topo")
 	}
 
-	ts := topo.GetServer()
-	defer topo.CloseServers()
-
+startServer:
 	resilientSrvTopoServer = vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServer")
 
 	// For the initial phase vtgate is exposing

@@ -5,6 +5,7 @@
 package test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/topo"
@@ -25,7 +26,7 @@ func CheckVSchema(t *testing.T, ts topo.Server) {
 		t.Errorf("GetVSchema: %s, want %s", got, want)
 	}
 
-	err = schemafier.SaveVSchema("aa")
+	err = schemafier.SaveVSchema(`{ "Keyspaces": {}}`)
 	if err != nil {
 		t.Error(err)
 	}
@@ -34,12 +35,12 @@ func CheckVSchema(t *testing.T, ts topo.Server) {
 	if err != nil {
 		t.Error(err)
 	}
-	want = "aa"
+	want = `{ "Keyspaces": {}}`
 	if got != want {
 		t.Errorf("GetVSchema: %s, want %s", got, want)
 	}
 
-	err = schemafier.SaveVSchema("bb")
+	err = schemafier.SaveVSchema(`{ "Keyspaces": { "aa": { "Sharded": false}}}`)
 	if err != nil {
 		t.Error(err)
 	}
@@ -48,8 +49,14 @@ func CheckVSchema(t *testing.T, ts topo.Server) {
 	if err != nil {
 		t.Error(err)
 	}
-	want = "bb"
+	want = `{ "Keyspaces": { "aa": { "Sharded": false}}}`
 	if got != want {
 		t.Errorf("GetVSchema: %s, want %s", got, want)
+	}
+
+	err = schemafier.SaveVSchema("invalid")
+	want = "Unmarshal failed:"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("SaveVSchema: %v, must start with %s", err, want)
 	}
 }
