@@ -195,9 +195,8 @@ class TestClone(unittest.TestCase):
         self.fail("Bad values returned by Snapshot: %s" % err)
 
     # try to init + start in one go
-    tablet_31981.tablet_type = 'idle'
     tablet_31981.start_vttablet(wait_for_state='NOT_SERVING',
-                                extra_args=['--init_tablet_type', 'idle'])
+                                init_tablet_type='idle')
 
     # do not specify a MANIFEST, see if 'default' works
     call(["touch", "/tmp/vtSimulateFetchFailures"])
