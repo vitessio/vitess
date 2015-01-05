@@ -26,7 +26,7 @@ class ZkTopoServer(server.TopoServer):
     from environment import reserve_ports
 
     self.zk_port_base = reserve_ports(3)
-    self.hostname = socket.getfqdn()
+    self.hostname = socket.getaddrinfo(socket.getfqdn(), None, 0, 0, 0, socket.AI_CANONNAME)[0][3]
     self.zk_ports = ':'.join(str(self.zk_port_base + i) for i in range(3))
     self.zk_client_port = self.zk_port_base + 2
     self.ports_assigned = True
