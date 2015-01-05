@@ -85,7 +85,7 @@ func (qrs *QueryRules) UnmarshalJSON(data []byte) (err error) {
 		return NewTabletError(FAIL, "%v", err)
 	}
 	for _, ruleInfo := range rulesInfo {
-		qr, err := buildQueryRule(ruleInfo)
+		qr, err := BuildQueryRule(ruleInfo)
 		if err != nil {
 			return err
 		}
@@ -689,7 +689,7 @@ func getstring(val interface{}) (sv string, status int) {
 //-----------------------------------------------
 // Support functions for JSON
 
-func buildQueryRule(ruleInfo map[string]interface{}) (qr *QueryRule, err error) {
+func BuildQueryRule(ruleInfo map[string]interface{}) (qr *QueryRule, err error) {
 	qr = NewQueryRule("", "", QR_FAIL)
 	for k, v := range ruleInfo {
 		var sv string

@@ -96,6 +96,7 @@ func (zkcr *ZkCustomRule) refreshData(nodeRemoval bool) error {
 		if !reflect.DeepEqual(zkcr.currentRuleSet, qrs) {
 			zkcr.currentRuleSet = qrs.Copy()
 			tabletserver.SetQueryRules(ZkCustomRuleSource, qrs.Copy())
+			log.Infof("Custom rule version %v fetched from Zookeeper and applied to vttablet", zkcr.currentRuleSetVersion)
 		}
 		return nil
 	}
