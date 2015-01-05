@@ -76,16 +76,23 @@ func SortRfc2782(srvs []*net.SRV) {
 	byPriorityWeight(srvs).sortRfc2782()
 }
 
-// SplitHostPort is an extension to net.SplitHostPort that also parses the
-// integer port.
+// SplitHostPort is an alternative to net.SplitHostPort that also parses the
+// integer port. In addition, it is more tolerant of improperly escaped IPv6
+// addresses, such as "::1:456", which should actually be "[::1]:456".
 func SplitHostPort(addr string) (string, int, error) {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		return "", 0, err
+		// If the above proper parsing fails, fall back on a naive split.
+		i := strings.LastIndex(addr, ":")
+		if i < 0 {
+			return "", 0, fmt.Errorf("SplitHostPort: missing port in %q", addr)
+		}
+		host = addr[:i]
+		port = addr[i+1:]
 	}
 	p, err := strconv.ParseInt(port, 10, 16)
 	if err != nil {
-		return "", 0, fmt.Errorf("can't parse port %q: %v", port, err)
+		return "", 0, fmt.Errorf("SplitHostPort: can't parse port %q: %v", port, err)
 	}
 	return host, int(p), nil
 }
