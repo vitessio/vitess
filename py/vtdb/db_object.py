@@ -277,8 +277,6 @@ class DBObjectRangeSharded(DBObjectBase):
 
   This provides default implementation of routing helper methods, cursor
   creation and common database access operations.
-  This abstracts sharding information and provides helper methods
-  for common database access operations.
   """
   keyspace = None
   sharding = shard_constants.RANGE_SHARDED
@@ -409,13 +407,11 @@ class DBObjectRangeSharded(DBObjectBase):
 
 
 class DBObjectEntityRangeSharded(DBObjectRangeSharded):
-  """Base class for sharded tables that also need to create and manage lookup
+  """Base class for sharded tables that also needs to create and manage lookup
   entities.
 
   This provides default implementation of routing helper methods, cursor
   creation and common database access operations.
-  This abstracts sharding information and provides helper methods
-  for common database access operations.
   """
   keyspace = None
   sharding = shard_constants.RANGE_SHARDED

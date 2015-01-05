@@ -21,13 +21,13 @@ def create_keyspace_id(sharding_key):
   encrypted = crypter.encrypt(data)
   return unpack_kid(encrypted)[0]
 
-class VtUser(db_object.DBObjectRangeSharded):
+
+class VtUser(db_object.DBObjectEntityRangeSharded):
   keyspace = topo_schema.KS_RANGE_SHARDED[0]
   table_name = "vt_user"
   columns_list = ["id", "username", "msg", "keyspace_id"]
   sharding_key_column_name = "id"
   entity_id_lookup_map = {"username": VtUsernameLookup}
-
 
   @classmethod
   def sharding_key_to_keyspace_id(class_, sharding_key):
@@ -38,3 +38,37 @@ class VtUser(db_object.DBObjectRangeSharded):
   @classmethod
   def is_sharding_key_valid(class_, sharding_key):
     return True
+
+
+class VtSong(db_object.DBObjectEntityRangeSharded):
+  keyspace = topo_schema.KS_RANGE_SHARDED[0]
+  table_name = "vt_song"
+  columns_list = ["id", "user_id", "title", "keyspace_id"]
+  sharding_key_column_name = "user_id"
+  entity_id_lookup_map = {"id": VtSongUserLookup}
+
+  @classmethod
+  def sharding_key_to_keyspace_id(class_, sharding_key):
+    keyspace_id = create_keyspace_id(sharding_key)
+    logging.info("keyspace_id %s" % keyspace_id)
+    return keyspace_id
+
+  @classmethod
+  def is_sharding_key_valid(class_, sharding_key):
+    return True
+
+
+class VtUserEmail(db_object.DBObjectRangeSharded):
+  keyspace = topo_schema.KS_RANGE_SHARDED[0]
+  table_name = "vt_user_email"
+  columns_list = ["user_id", "email", "email_hash", "keyspace_id"]
+  sharding_key_column_name = "user_id"
+  entity_id_lookup_map = None
+
+
+class VtSongDetail(db_object.DBObjectRangeSharded):
+  keyspace = topo_schema.KS_RANGE_SHARDED[0]
+  table_name = "vt_song_detail"
+  columns_list = ["song_id", "album_name", "artist", "keyspace_id"]
+  sharding_key_column_name = None
+  entity_id_lookup_map = {"song_id": VtSongUserLookup}
