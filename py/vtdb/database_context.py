@@ -68,7 +68,6 @@ class DatabaseContext(object):
     self.query_timeout = DEFAULT_QUERY_TIMEOUT
     self.event_logger = vtdb_logger.get_logger()
     self._tablet_type = None
-    self._write_query_count = 0
 
   @property
   def tablet_type(self):
@@ -116,14 +115,12 @@ class DatabaseContext(object):
     if self.vtgate_connection is None:
       return
     self.vtgate_connection.commit()
-    self._write_query_count = 0
 
   def rollback(self):
     self._transaction_stack_depth = 0
     try:
       if self.vtgate_connection is not None:
         self.vtgate_connection.rollback()
-      self._write_query_count = 0
     except dbexceptions.OperationalError:
       self.vtgate_connection.close()
       self.vtgate_connection = None
@@ -160,17 +157,14 @@ class DatabaseContext(object):
   def close_db_operation(self):
     self._tablet_type = None
 
-  def create_cursor(self, writable, table_class, **kwargs):
+  def create_cursor(self, writable, table_class, routing, **kwargs):
     if not self.in_db_operation:
       raise dbexceptions.ProgrammingError(
           "Cannot execute queries outside db operations context.")
+
     cursor = table_class.create_vtgate_cursor(self.get_vtgate_connection(),
                                             self.tablet_type,
                                             writable, **kwargs)
-    if writable:
-      #if self._write_query_count == 0:
-      #  cursor.begin()
-      self._write_query_count += 1
 
     return cursor
 
