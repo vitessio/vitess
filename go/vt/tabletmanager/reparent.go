@@ -34,12 +34,10 @@ var (
 func (agent *ActionAgent) fastTabletExternallyReparented(ctx context.Context, externalID string) (err error) {
 	tablet := agent.Tablet()
 
-	log.Infof("using fast TabletExternallyReparented")
-
 	// Check the global shard record.
 	si, err := topo.GetShard(ctx, agent.TopoServer, tablet.Keyspace, tablet.Shard)
 	if err != nil {
-		log.Warningf("TabletExternallyReparented: failed to read global shard record for %v/%v: %v", tablet.Keyspace, tablet.Shard, err)
+		log.Warningf("fastTabletExternallyReparented: failed to read global shard record for %v/%v: %v", tablet.Keyspace, tablet.Shard, err)
 		return err
 	}
 	if si.MasterAlias == tablet.Alias {
@@ -65,31 +63,31 @@ func (agent *ActionAgent) fastTabletExternallyReparented(ctx context.Context, ex
 
 	// Execute state change to master by force-updating only the local copy of the
 	// tablet record. The actual record in topo will be updated later.
-	log.Infof("TabletExternallyReparented: executing change callback for state change to MASTER")
+	log.Infof("fastTabletExternallyReparented: executing change callback for state change to MASTER")
 	oldTablet := *tablet.Tablet
 	newTablet := oldTablet
 	newTablet.Type = topo.TYPE_MASTER
 	newTablet.State = topo.STATE_READ_WRITE
 	newTablet.Health = nil
 	agent.setTablet(topo.NewTabletInfo(&newTablet, -1))
-	if err := agent.updateState(ctx, &oldTablet, "TabletExternallyReparented"); err != nil {
-		return fmt.Errorf("TabletExternallyReparented: failed to change tablet state to MASTER: %v", err)
+	if err := agent.updateState(ctx, &oldTablet, "fastTabletExternallyReparented"); err != nil {
+		return fmt.Errorf("fastTabletExternallyReparented: failed to change tablet state to MASTER: %v", err)
 	}
 
 	// Directly write the new master endpoint in the serving graph.
 	// We will do a true rebuild in the background soon, but in the meantime,
 	// this will be enough for clients to re-resolve the new master.
 	event.DispatchUpdate(ev, "writing new master endpoint")
-	log.Infof("TabletExternallyReparented: writing new master endpoint to serving graph")
+	log.Infof("fastTabletExternallyReparented: writing new master endpoint to serving graph")
 	ep, err := tablet.EndPoint()
 	if err != nil {
-		return fmt.Errorf("failed to generate EndPoint for tablet %v: %v", tablet.Alias, err)
+		return fmt.Errorf("fastTabletExternallyReparented: failed to generate EndPoint for tablet %v: %v", tablet.Alias, err)
 	}
 	err = topo.UpdateEndPoints(ctx, agent.TopoServer, tablet.Alias.Cell,
 		si.Keyspace(), si.ShardName(), topo.TYPE_MASTER,
 		&topo.EndPoints{Entries: []topo.EndPoint{*ep}})
 	if err != nil {
-		return fmt.Errorf("TabletExternallyReparented: failed to update master endpoint: %v", err)
+		return fmt.Errorf("fastTabletExternallyReparented: failed to update master endpoint: %v", err)
 	}
 
 	// Start the finalize stage with a background context, but connect the trace.
