@@ -73,7 +73,7 @@ func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *topo.Tablet, bla
 	keyrangeRules := tabletserver.NewQueryRules()
 	if tablet.KeyRange.IsPartial() {
 		log.Infof("Restricting to keyrange: %v", tablet.KeyRange)
-		dml_plans := []struct {
+		dmlPlans := []struct {
 			planID   planbuilder.PlanType
 			onAbsent bool
 		}{
@@ -83,7 +83,7 @@ func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *topo.Tablet, bla
 			{planbuilder.PLAN_DML_PK, false},
 			{planbuilder.PLAN_DML_SUBQUERY, false},
 		}
-		for _, plan := range dml_plans {
+		for _, plan := range dmlPlans {
 			qr := tabletserver.NewQueryRule(
 				fmt.Sprintf("enforce keyspace_id range for %v", plan.planID),
 				fmt.Sprintf("keyspace_id_not_in_range_%v", plan.planID),
@@ -150,7 +150,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	var blacklistedTables []string
 	var err error
 	if allowQuery {
-		shardInfo, err = agent.TopoServer.GetShard(newTablet.Keyspace, newTablet.Shard)
+		shardInfo, err = topo.GetShard(ctx, agent.TopoServer, newTablet.Keyspace, newTablet.Shard)
 		if err != nil {
 			log.Errorf("Cannot read shard for this tablet %v, might have inaccurate SourceShards and TabletControls: %v", newTablet.Alias, err)
 		} else {
