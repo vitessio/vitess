@@ -7,6 +7,7 @@ package vtctl
 import (
 	"flag"
 	"fmt"
+	"time"
 
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
@@ -65,6 +66,7 @@ func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 func commandReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	leaveMasterReadOnly := subFlags.Bool("leave-master-read-only", false, "leaves the master read-only after reparenting")
 	force := subFlags.Bool("force", false, "will force the reparent even if the master is already correct")
+	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", 30*time.Second, "time to wait for slaves to catch up in reparenting")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -80,5 +82,5 @@ func commandReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	if err != nil {
 		return err
 	}
-	return wr.ReparentShard(ctx, keyspace, shard, tabletAlias, *leaveMasterReadOnly, *force)
+	return wr.ReparentShard(ctx, keyspace, shard, tabletAlias, *leaveMasterReadOnly, *force, *waitSlaveTimeout)
 }

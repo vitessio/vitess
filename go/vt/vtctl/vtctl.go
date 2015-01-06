@@ -1514,6 +1514,7 @@ func commandMigrateServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFl
 	cellsStr := subFlags.String("cells", "", "comma separated list of cells to update")
 	reverse := subFlags.Bool("reverse", false, "move the served type back instead of forward, use in case of trouble")
 	skipReFreshState := subFlags.Bool("skip-refresh-state", false, "do not refresh the state of the source tablets after the migration (will need to be done manually, replica and rdonly only)")
+	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "maximum time to wait for filtered replication to catch up on master migrations")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1536,12 +1537,13 @@ func commandMigrateServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFl
 	if *cellsStr != "" {
 		cells = strings.Split(*cellsStr, ",")
 	}
-	return wr.MigrateServedTypes(keyspace, shard, cells, servedType, *reverse, *skipReFreshState)
+	return wr.MigrateServedTypes(keyspace, shard, cells, servedType, *reverse, *skipReFreshState, *filteredReplicationWaitTime)
 }
 
 func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	reverse := subFlags.Bool("reverse", false, "move the served from back instead of forward, use in case of trouble")
 	cellsStr := subFlags.String("cells", "", "comma separated list of cells to update")
+	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "maximum time to wait for filtered replication to catch up on master migrations")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1561,7 +1563,7 @@ func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFla
 	if *cellsStr != "" {
 		cells = strings.Split(*cellsStr, ",")
 	}
-	return wr.MigrateServedFrom(keyspace, shard, servedType, cells, *reverse)
+	return wr.MigrateServedFrom(keyspace, shard, servedType, cells, *reverse, *filteredReplicationWaitTime)
 }
 
 func commandFindAllShardsInKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1841,6 +1843,7 @@ func commandApplySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	sqlFile := subFlags.String("sql-file", "", "file containing the sql commands")
 	simple := subFlags.Bool("simple", false, "just apply change on master and let replication do the rest")
 	newParent := subFlags.String("new-parent", "", "will reparent to this tablet after the change")
+	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", 30*time.Second, "time to wait for slaves to catch up in reparenting")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1868,7 +1871,7 @@ func commandApplySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlag
 		return fmt.Errorf("new_parent for action ApplySchemaShard can only be specified for complex schema upgrades")
 	}
 
-	scr, err := wr.ApplySchemaShard(ctx, keyspace, shard, change, newParentAlias, *simple, *force)
+	scr, err := wr.ApplySchemaShard(ctx, keyspace, shard, change, newParentAlias, *simple, *force, *waitSlaveTimeout)
 	if err == nil {
 		log.Infof(scr.String())
 	}
@@ -1880,6 +1883,7 @@ func commandApplySchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, subF
 	sql := subFlags.String("sql", "", "sql command")
 	sqlFile := subFlags.String("sql-file", "", "file containing the sql commands")
 	simple := subFlags.Bool("simple", false, "just apply change on master and let replication do the rest")
+	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", 30*time.Second, "time to wait for slaves to catch up in reparenting")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1892,7 +1896,7 @@ func commandApplySchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, subF
 	if err != nil {
 		return err
 	}
-	scr, err := wr.ApplySchemaKeyspace(ctx, keyspace, change, *simple, *force)
+	scr, err := wr.ApplySchemaKeyspace(ctx, keyspace, change, *simple, *force, *waitSlaveTimeout)
 	if err == nil {
 		log.Infof(scr.String())
 	}

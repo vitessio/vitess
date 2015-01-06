@@ -7,6 +7,7 @@ package wrangler
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -18,7 +19,7 @@ import (
 // reparentShardGraceful executes a graceful reparent.
 // The ev parameter is an event struct prefilled with information that the
 // caller has on hand, which would be expensive for us to re-query.
-func (wr *Wrangler) reparentShardGraceful(ctx context.Context, ev *events.Reparent, si *topo.ShardInfo, slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo, leaveMasterReadOnly bool) (err error) {
+func (wr *Wrangler) reparentShardGraceful(ctx context.Context, ev *events.Reparent, si *topo.ShardInfo, slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo, leaveMasterReadOnly bool, waitSlaveTimeout time.Duration) (err error) {
 	event.DispatchUpdate(ev, "starting graceful")
 
 	defer func() {
@@ -58,7 +59,7 @@ func (wr *Wrangler) reparentShardGraceful(ctx context.Context, ev *events.Repare
 
 	// Make sure all tablets have the right parent and reasonable positions.
 	event.DispatchUpdate(ev, "checking slave replication positions")
-	err = wr.checkSlaveReplication(slaveTabletMap, masterTablet.Alias.Uid)
+	err = wr.checkSlaveReplication(slaveTabletMap, masterTablet.Alias.Uid, waitSlaveTimeout)
 	if err != nil {
 		return err
 	}
@@ -82,7 +83,7 @@ func (wr *Wrangler) reparentShardGraceful(ctx context.Context, ev *events.Repare
 	event.DispatchUpdate(ev, "checking slave consistency")
 	wr.logger.Infof("check slaves %v/%v", masterTablet.Keyspace, masterTablet.Shard)
 	restartableSlaveTabletMap := wr.restartableTabletMap(slaveTabletMap)
-	err = wr.checkSlaveConsistency(restartableSlaveTabletMap, masterPosition)
+	err = wr.checkSlaveConsistency(restartableSlaveTabletMap, masterPosition, waitSlaveTimeout)
 	if err != nil {
 		return fmt.Errorf("check slave consistency failed %v, demoted master is still read only, run: vtctl SetReadWrite %v", err, masterTablet.Alias)
 	}
