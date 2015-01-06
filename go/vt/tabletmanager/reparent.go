@@ -91,8 +91,18 @@ func (agent *ActionAgent) fastTabletExternallyReparented(ctx context.Context, ex
 	}
 
 	// Start the finalize stage with a background context, but connect the trace.
-	go agent.finalizeTabletExternallyReparented(
-		trace.CopySpan(agent.batchCtx, ctx), si, ev)
+	go func() {
+		bgCtx, cancel := context.WithTimeout(agent.batchCtx, *finalizeReparentTimeout)
+		bgCtx = trace.CopySpan(bgCtx, ctx)
+
+		err := agent.finalizeTabletExternallyReparented(bgCtx, si, ev)
+		cancel()
+
+		if err != nil {
+			log.Warningf("finalizeTabletExternallyReparented error: %v", err)
+			event.DispatchUpdate(ev, "failed: "+err.Error())
+		}
+	}()
 
 	return nil
 }
@@ -101,16 +111,6 @@ func (agent *ActionAgent) fastTabletExternallyReparented(ctx context.Context, ex
 // tasks that ensure topology is self-consistent, and then marks the reparent as
 // finished by updating the global shard record.
 func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context, si *topo.ShardInfo, ev *events.Reparent) (err error) {
-	ctx, cancel := context.WithTimeout(ctx, *finalizeReparentTimeout)
-	defer cancel()
-
-	defer func() {
-		if err != nil {
-			log.Warningf("finalizeTabletExternallyReparented error: %v", err)
-			event.DispatchUpdate(ev, "failed: "+err.Error())
-		}
-	}()
-
 	var wg sync.WaitGroup
 	var errs concurrency.AllErrorRecorder
 	oldMasterAlias := si.MasterAlias
