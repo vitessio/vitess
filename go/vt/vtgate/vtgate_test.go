@@ -27,7 +27,7 @@ func init() {
     "TestUnsharded": {
       "Sharded": false,
       "Tables": {
-        "t1":{}
+        "t1": ""
       }
     }
   }
