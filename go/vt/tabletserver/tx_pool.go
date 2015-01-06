@@ -114,17 +114,17 @@ func (axp *TxPool) Begin() int64 {
 	conn, err := axp.pool.Get(axp.poolTimeout.Get())
 	if err != nil {
 		switch err {
-		case dbconnpool.CONN_POOL_CLOSED_ERR:
+		case dbconnpool.ErrConnPoolClosed:
 			panic(connPoolClosedErr)
 		case pools.TIMEOUT_ERR:
 			axp.LogActive()
-			panic(NewTabletError(TX_POOL_FULL, "Transaction pool connection limit exceeded"))
+			panic(NewTabletError(ErrTxPoolFull, "Transaction pool connection limit exceeded"))
 		}
-		panic(NewTabletErrorSql(FATAL, err))
+		panic(NewTabletErrorSql(ErrFatal, err))
 	}
 	if _, err := conn.ExecuteFetch(BEGIN, 1, false); err != nil {
 		conn.Recycle()
-		panic(NewTabletErrorSql(FAIL, err))
+		panic(NewTabletErrorSql(ErrFail, err))
 	}
 	transactionId := axp.lastId.Add(1)
 	axp.activePool.Register(transactionId, newTxConnection(conn, transactionId, axp))
@@ -141,7 +141,7 @@ func (axp *TxPool) SafeCommit(transactionId int64) (invalidList map[string]Dirty
 	axp.txStats.Add("Completed", time.Now().Sub(conn.StartTime))
 	if _, fetchErr := conn.ExecuteFetch(COMMIT, 1, false); fetchErr != nil {
 		conn.Close()
-		err = NewTabletErrorSql(FAIL, fetchErr)
+		err = NewTabletErrorSql(ErrFail, fetchErr)
 	}
 	return
 }
@@ -152,7 +152,7 @@ func (axp *TxPool) Rollback(transactionId int64) {
 	axp.txStats.Add("Aborted", time.Now().Sub(conn.StartTime))
 	if _, err := conn.ExecuteFetch(ROLLBACK, 1, false); err != nil {
 		conn.Close()
-		panic(NewTabletErrorSql(FAIL, err))
+		panic(NewTabletErrorSql(ErrFail, err))
 	}
 }
 
@@ -160,7 +160,7 @@ func (axp *TxPool) Rollback(transactionId int64) {
 func (axp *TxPool) Get(transactionId int64) (conn *TxConnection) {
 	v, err := axp.activePool.Get(transactionId, "for query")
 	if err != nil {
-		panic(NewTabletError(NOT_IN_TX, "Transaction %d: %v", transactionId, err))
+		panic(NewTabletError(ErrNotInTx, "Transaction %d: %v", transactionId, err))
 	}
 	return v.(*TxConnection)
 }

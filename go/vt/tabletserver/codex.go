@@ -90,14 +90,14 @@ func resolvePKValues(tableInfo *TableInfo, pkValues []interface{}, bindVars map[
 func resolveListArg(col *schema.TableColumn, key string, bindVars map[string]interface{}) ([]sqltypes.Value, error) {
 	val, _, err := sqlparser.FetchBindVar(key, bindVars)
 	if err != nil {
-		return nil, NewTabletError(FAIL, "%v", err)
+		return nil, NewTabletError(ErrFail, "%v", err)
 	}
 	list := val.([]interface{})
 	resolved := make([]sqltypes.Value, len(list))
 	for i, v := range list {
 		sqlval, err := sqltypes.BuildValue(v)
 		if err != nil {
-			return nil, NewTabletError(FAIL, "%v", err)
+			return nil, NewTabletError(ErrFail, "%v", err)
 		}
 		if err = validateValue(col, sqlval); err != nil {
 			return nil, err
@@ -134,11 +134,11 @@ func resolveValue(col *schema.TableColumn, value interface{}, bindVars map[strin
 	case string:
 		val, _, err := sqlparser.FetchBindVar(v, bindVars)
 		if err != nil {
-			return result, NewTabletError(FAIL, "%v", err)
+			return result, NewTabletError(ErrFail, "%v", err)
 		}
 		sqlval, err := sqltypes.BuildValue(val)
 		if err != nil {
-			return result, NewTabletError(FAIL, "%v", err)
+			return result, NewTabletError(ErrFail, "%v", err)
 		}
 		result = sqlval
 	case sqltypes.Value:
@@ -155,7 +155,7 @@ func resolveValue(col *schema.TableColumn, value interface{}, bindVars map[strin
 
 func validateRow(tableInfo *TableInfo, columnNumbers []int, row []sqltypes.Value) error {
 	if len(row) != len(columnNumbers) {
-		return NewTabletError(FAIL, "data inconsistency %d vs %d", len(row), len(columnNumbers))
+		return NewTabletError(ErrFail, "data inconsistency %d vs %d", len(row), len(columnNumbers))
 	}
 	for j, value := range row {
 		if err := validateValue(&tableInfo.Columns[columnNumbers[j]], value); err != nil {
@@ -173,11 +173,11 @@ func validateValue(col *schema.TableColumn, value sqltypes.Value) error {
 	switch col.Category {
 	case schema.CAT_NUMBER:
 		if !value.IsNumeric() {
-			return NewTabletError(FAIL, "type mismatch, expecting numeric type for %v", value)
+			return NewTabletError(ErrFail, "type mismatch, expecting numeric type for %v", value)
 		}
 	case schema.CAT_VARBINARY:
 		if !value.IsString() {
-			return NewTabletError(FAIL, "type mismatch, expecting string type for %v", value)
+			return NewTabletError(ErrFail, "type mismatch, expecting string type for %v", value)
 		}
 	}
 	return nil
@@ -190,7 +190,7 @@ func getLimit(limit interface{}, bv map[string]interface{}) int64 {
 	case string:
 		lookup, ok := bv[lim[1:]]
 		if !ok {
-			panic(NewTabletError(FAIL, "missing bind var %s", lim))
+			panic(NewTabletError(ErrFail, "missing bind var %s", lim))
 		}
 		var newlim int64
 		switch l := lookup.(type) {
@@ -201,10 +201,10 @@ func getLimit(limit interface{}, bv map[string]interface{}) int64 {
 		case int:
 			newlim = int64(l)
 		default:
-			panic(NewTabletError(FAIL, "want number type for %s, got %T", lim, lookup))
+			panic(NewTabletError(ErrFail, "want number type for %s, got %T", lim, lookup))
 		}
 		if newlim < 0 {
-			panic(NewTabletError(FAIL, "negative limit %d", newlim))
+			panic(NewTabletError(ErrFail, "negative limit %d", newlim))
 		}
 		return newlim
 	case int64:

@@ -22,6 +22,7 @@ var DefaultDBConfigs = DBConfigs{}
 // the flags will change
 var dbConfigs DBConfigs
 
+// DBConfigFlag describes which flags we need
 type DBConfigFlag int
 
 // config flags
@@ -49,8 +50,9 @@ func registerConnFlags(connParams *mysql.ConnectionParams, name string, defaultP
 	flag.StringVar(&connParams.SslKey, "db-config-"+name+"-ssl-key", defaultParams.SslKey, "db "+name+" connection ssl key")
 }
 
-// vttablet will register client, dba and repl.
-// return is all registered flags
+// RegisterFlags registers the flags for the given DBConfigFlag.
+// For instance, vttablet will register client, dba and repl.
+// Returns all registered flags.
 func RegisterFlags(flags DBConfigFlag) DBConfigFlag {
 	if flags == EmptyConfig {
 		panic("No DB config is provided.")
@@ -102,8 +104,8 @@ func refreshPassword(params *mysql.ConnectionParams) error {
 	return nil
 }
 
-// returns a copy of our ConnectionParams that we can use to connect,
-// after going through the CredentialsServer.
+// MysqlParams returns a copy of our ConnectionParams that we can use
+// to connect, after going through the CredentialsServer.
 func MysqlParams(cp *mysql.ConnectionParams) (mysql.ConnectionParams, error) {
 	params := *cp
 	err := refreshPassword(&params)
@@ -141,7 +143,7 @@ type DBConfigs struct {
 }
 
 func (dbcfgs *DBConfigs) String() string {
-	if dbcfgs.App.ConnectionParams.Pass != mysql.REDACTED_PASSWORD {
+	if dbcfgs.App.ConnectionParams.Pass != mysql.RedactedPassword {
 		panic("Cannot log a non-redacted DBConfig")
 	}
 	data, err := json.MarshalIndent(dbcfgs, "", "  ")
@@ -151,7 +153,7 @@ func (dbcfgs *DBConfigs) String() string {
 	return string(data)
 }
 
-// This will remove the password, so the object can be logged
+// Redact will remove the password, so the object can be logged
 func (dbcfgs *DBConfigs) Redact() {
 	dbcfgs.App.ConnectionParams.Redact()
 	dbcfgs.Dba.Redact()
@@ -159,7 +161,7 @@ func (dbcfgs *DBConfigs) Redact() {
 	dbcfgs.Repl.Redact()
 }
 
-// Initialize app, dba, filterec and repl configs
+// Init will initialize app, dba, filterec and repl configs
 func Init(socketFile string, flags DBConfigFlag) (*DBConfigs, error) {
 	if flags == EmptyConfig {
 		panic("No DB config is provided.")
@@ -194,6 +196,8 @@ func Init(socketFile string, flags DBConfigFlag) (*DBConfigs, error) {
 	return &dbConfigs, nil
 }
 
+// GetSubprocessFlags returns the flags to send to a subprocess so it has the
+// same config as us.
 func GetSubprocessFlags() []string {
 	cmd := []string{}
 	f := func(connParams *mysql.ConnectionParams, name string) {

@@ -62,7 +62,7 @@ func (rc *RowCache) Get(keys []string) (results map[string]RCResult) {
 	if err != nil {
 		conn.Close()
 		conn = nil
-		panic(NewTabletError(FATAL, "%s", err))
+		panic(NewTabletError(ErrFatal, "%s", err))
 	}
 	results = make(map[string]RCResult, len(mkeys))
 	for _, mcresult := range mcresults {
@@ -75,7 +75,7 @@ func (rc *RowCache) Get(keys []string) (results map[string]RCResult) {
 		}
 		row := rc.decodeRow(mcresult.Value)
 		if row == nil {
-			panic(NewTabletError(FAIL, "Corrupt data for %s", mcresult.Key))
+			panic(NewTabletError(ErrFatal, "Corrupt data for %s", mcresult.Key))
 		}
 		results[mcresult.Key[prefixlen:]] = RCResult{Row: row, Cas: mcresult.Cas}
 	}
@@ -106,7 +106,7 @@ func (rc *RowCache) Set(key string, row []sqltypes.Value, cas uint64) {
 	if err != nil {
 		conn.Close()
 		conn = nil
-		panic(NewTabletError(FATAL, "%s", err))
+		panic(NewTabletError(ErrFatal, "%s", err))
 	}
 }
 
@@ -122,7 +122,7 @@ func (rc *RowCache) Delete(key string) {
 	if err != nil {
 		conn.Close()
 		conn = nil
-		panic(NewTabletError(FATAL, "%s", err))
+		panic(NewTabletError(ErrFatal, "%s", err))
 	}
 }
 

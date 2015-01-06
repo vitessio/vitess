@@ -71,7 +71,7 @@ func (fpc *FakePoolConnection) ExecuteStreamFetch(query string, callback func(*m
 	return nil
 }
 
-func (fpc *FakePoolConnection) Id() int64 {
+func (fpc *FakePoolConnection) ID() int64 {
 	return 1
 }
 
