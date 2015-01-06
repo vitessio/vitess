@@ -109,6 +109,10 @@ class TestEnv(object):
           "Operator": "NOOP"
         }]
       }]""")
+    if self.env == "vttablet":
+      if environment.topo_server().flavor() == 'zookeeper':
+        utils.run(environment.binary_argstr('zk') + ' touch -p /zk/test_ca/config/customrules/testrules')
+        utils.run(environment.binary_argstr('zk') + ' cp ' + filename + ' /zk/test_ca/config/customrules/testrules')
 
   def change_customrules(self):
     customrules = os.path.join(environment.tmproot, 'customrules.json')
@@ -123,13 +127,15 @@ class TestEnv(object):
         }]
       }]""")
     if self.env == "vttablet":
-      utils.run(environment.binary_argstr('zk') + ' cp ' + customrules + ' /zk/test_ca/config/customrules/testrules')
+      if environment.topo_server().flavor() == 'zookeeper':
+        utils.run(environment.binary_argstr('zk') + ' cp ' + customrules + ' /zk/test_ca/config/customrules/testrules')
 
   def restore_customrules(self):
     customrules = os.path.join(environment.tmproot, 'customrules.json')
     self.create_customrules(customrules)
     if self.env == "vttablet":
-      utils.run(environment.binary_argstr('zk') + ' cp ' + customrules + ' /zk/test_ca/config/customrules/testrules')
+      if environment.topo_server().flavor() == 'zookeeper':
+        utils.run(environment.binary_argstr('zk') + ' cp ' + customrules + ' /zk/test_ca/config/customrules/testrules')
 
   def create_schema_override(self, filename):
     with open(filename, "w") as f:
@@ -201,25 +207,33 @@ class TestEnv(object):
         mcu.close()
 
     customrules = os.path.join(environment.tmproot, 'customrules.json')
-    self.create_customrules(customrules)
     schema_override = os.path.join(environment.tmproot, 'schema_override.json')
     self.create_schema_override(schema_override)
     table_acl_config = os.path.join(environment.vttop, 'test', 'test_data', 'table_acl_config.json')
 
     if self.env == 'vttablet':
       environment.topo_server().setup()
-      utils.run(environment.binary_argstr('zk') + ' touch -p /zk/test_ca/config/customrules/testrules')
-      utils.run(environment.binary_argstr('zk') + ' cp ' + customrules + ' /zk/test_ca/config/customrules/testrules')
+      self.create_customrules(customrules);
       utils.run_vtctl('CreateKeyspace -force test_keyspace')
       self.tablet.init_tablet('master', 'test_keyspace', '0')
-      self.tablet.start_vttablet(
-              memcache=self.memcache,
-              zkcustomrules='/zk/test_ca/config/customrules/testrules',
-              schema_override=schema_override,
-              table_acl_config=table_acl_config,
-              auth=True,
-      )
+      if environment.topo_server().flavor() == 'zookeeper':
+        self.tablet.start_vttablet(
+                memcache=self.memcache,
+                zkcustomrules='/zk/test_ca/config/customrules/testrules',
+                schema_override=schema_override,
+                table_acl_config=table_acl_config,
+                auth=True,
+        )
+      else:
+        self.tablet.start_vttablet(
+                memcache=self.memcache,
+                filecustomrules=customrules,
+                schema_override=schema_override,
+                table_acl_config=table_acl_config,
+                auth=True,
+        )
     else:
+      self.create_customrules(customrules);
       self.tablet.start_vtocc(
               memcache=self.memcache,
               filecustomrules=customrules,
