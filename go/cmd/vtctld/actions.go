@@ -12,6 +12,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -19,6 +20,7 @@ var (
 	lockTimeout   = flag.Duration("lock_timeout", actionnode.DefaultLockTimeout, "lock time for wrangler/topo operations")
 )
 
+// ActionResult contains the result of an action. If Error, the aciton failed.
 type ActionResult struct {
 	Name       string
 	Parameters string
@@ -35,11 +37,11 @@ func (ar *ActionResult) error(text string) {
 // some action on a Topology object. It should return a message for
 // the user or an empty string in case there's nothing interesting to
 // be communicated.
-type actionKeyspaceMethod func(wr *wrangler.Wrangler, keyspace string, r *http.Request) (output string, err error)
+type actionKeyspaceMethod func(ctx context.Context, wr *wrangler.Wrangler, keyspace string, r *http.Request) (output string, err error)
 
-type actionShardMethod func(wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (output string, err error)
+type actionShardMethod func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (output string, err error)
 
-type actionTabletMethod func(wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (output string, err error)
+type actionTabletMethod func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (output string, err error)
 
 type actionTabletRecord struct {
 	role   string
@@ -55,6 +57,8 @@ type ActionRepository struct {
 	ts              topo.Server
 }
 
+// NewActionRepository creates and returns a new ActionRepository,
+// with no actions.
 func NewActionRepository(ts topo.Server) *ActionRepository {
 	return &ActionRepository{
 		keyspaceActions: make(map[string]actionKeyspaceMethod),
@@ -64,14 +68,17 @@ func NewActionRepository(ts topo.Server) *ActionRepository {
 	}
 }
 
+// RegisterKeyspaceAction registers a new action on a keyspace.
 func (ar *ActionRepository) RegisterKeyspaceAction(name string, method actionKeyspaceMethod) {
 	ar.keyspaceActions[name] = method
 }
 
+// RegisterShardAction registers a new action on a shard.
 func (ar *ActionRepository) RegisterShardAction(name string, method actionShardMethod) {
 	ar.shardActions[name] = method
 }
 
+// RegisterTabletAction registers a new action on a tablet.
 func (ar *ActionRepository) RegisterTabletAction(name, role string, method actionTabletMethod) {
 	ar.tabletActions[name] = actionTabletRecord{
 		role:   role,
@@ -79,6 +86,7 @@ func (ar *ActionRepository) RegisterTabletAction(name, role string, method actio
 	}
 }
 
+// ApplyKeyspaceAction applies the provided action to the keyspace.
 func (ar *ActionRepository) ApplyKeyspaceAction(actionName, keyspace string, r *http.Request) *ActionResult {
 	result := &ActionResult{Name: actionName, Parameters: keyspace}
 
@@ -88,8 +96,9 @@ func (ar *ActionRepository) ApplyKeyspaceAction(actionName, keyspace string, r *
 		return result
 	}
 
+	// FIXME(alainjobart) create a Context here
 	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, *actionTimeout, *lockTimeout)
-	output, err := action(wr, keyspace, r)
+	output, err := action(wr.Context(), wr, keyspace, r)
 	if err != nil {
 		result.error(err.Error())
 		return result
@@ -98,6 +107,7 @@ func (ar *ActionRepository) ApplyKeyspaceAction(actionName, keyspace string, r *
 	return result
 }
 
+// ApplyShardAction applies the provided action to the shard.
 func (ar *ActionRepository) ApplyShardAction(actionName, keyspace, shard string, r *http.Request) *ActionResult {
 	// if the shard name contains a '-', we assume it's the
 	// name for a ranged based shard, so we lower case it.
@@ -111,8 +121,9 @@ func (ar *ActionRepository) ApplyShardAction(actionName, keyspace, shard string,
 		result.error("Unknown shard action")
 		return result
 	}
+	// FIXME(alainjobart) create a Context here
 	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, *actionTimeout, *lockTimeout)
-	output, err := action(wr, keyspace, shard, r)
+	output, err := action(wr.Context(), wr, keyspace, shard, r)
 	if err != nil {
 		result.error(err.Error())
 		return result
@@ -121,6 +132,7 @@ func (ar *ActionRepository) ApplyShardAction(actionName, keyspace, shard string,
 	return result
 }
 
+// ApplyTabletAction applies the provided action to the tablet.
 func (ar *ActionRepository) ApplyTabletAction(actionName string, tabletAlias topo.TabletAlias, r *http.Request) *ActionResult {
 	result := &ActionResult{Name: actionName, Parameters: tabletAlias.String()}
 
@@ -139,8 +151,9 @@ func (ar *ActionRepository) ApplyTabletAction(actionName string, tabletAlias top
 	}
 
 	// run the action
+	// FIXME(alainjobart) create a Context here
 	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, *actionTimeout, *lockTimeout)
-	output, err := action.method(wr, tabletAlias, r)
+	output, err := action.method(wr.Context(), wr, tabletAlias, r)
 	if err != nil {
 		result.error(err.Error())
 		return result
@@ -149,8 +162,8 @@ func (ar *ActionRepository) ApplyTabletAction(actionName string, tabletAlias top
 	return result
 }
 
-// Populate{Keyspace,Shard,Tablet}Actions populates result with
-// actions that can be performed on its node.
+// PopulateKeyspaceActions populates result with actions that can be
+// performed on the keyspace.
 func (ar ActionRepository) PopulateKeyspaceActions(actions map[string]template.URL, keyspace string) {
 	for name := range ar.keyspaceActions {
 		values := url.Values{}
@@ -160,6 +173,8 @@ func (ar ActionRepository) PopulateKeyspaceActions(actions map[string]template.U
 	}
 }
 
+// PopulateShardActions populates result with actions that can be
+// performed on the shard.
 func (ar ActionRepository) PopulateShardActions(actions map[string]template.URL, keyspace, shard string) {
 	for name := range ar.shardActions {
 		values := url.Values{}
@@ -170,6 +185,8 @@ func (ar ActionRepository) PopulateShardActions(actions map[string]template.URL,
 	}
 }
 
+// PopulateTabletActions populates result with actions that can be
+// performed on the tablet.
 func (ar ActionRepository) PopulateTabletActions(actions map[string]template.URL, tabletAlias string, r *http.Request) {
 	for name, value := range ar.tabletActions {
 		// check we are authorized for the role we need

@@ -75,10 +75,11 @@ func main() {
 	topoServer := topo.GetServer()
 	defer topo.CloseServers()
 
+	// FIXME(alainjobart) Create the context outside of wrangler
 	wr := wrangler.New(logutil.NewConsoleLogger(), topoServer, *waitTime, *lockWaitTimeout)
 	installSignalHandlers(wr)
 
-	err := vtctl.RunCommand(wr, args)
+	err := vtctl.RunCommand(wr.Context(), wr, args)
 	switch err {
 	case vtctl.ErrUnknownCommand:
 		flag.Usage()

@@ -183,6 +183,7 @@ func (scw *SplitCloneWorker) StatusAsText() string {
 	return result
 }
 
+// CheckInterrupted is part of the Worker interface
 func (scw *SplitCloneWorker) CheckInterrupted() bool {
 	select {
 	case <-interrupted:
@@ -400,7 +401,7 @@ func (scw *SplitCloneWorker) copy() error {
 	// on all source shards. Furthermore, we estimate the number of rows
 	// in each source shard for each table to be about the same
 	// (rowCount is used to estimate an ETA)
-	sourceSchemaDefinition, err := scw.wr.GetSchema(scw.sourceAliases[0], nil, scw.excludeTables, true)
+	sourceSchemaDefinition, err := scw.wr.GetSchema(scw.wr.Context(), scw.sourceAliases[0], nil, scw.excludeTables, true)
 	if err != nil {
 		return fmt.Errorf("cannot get schema from source %v: %v", scw.sourceAliases[0], err)
 	}
@@ -468,7 +469,7 @@ func (scw *SplitCloneWorker) copy() error {
 
 	insertChannels := make([][]chan string, len(scw.destinationShards))
 	destinationWaitGroup := sync.WaitGroup{}
-	for shardIndex, _ := range scw.destinationShards {
+	for shardIndex := range scw.destinationShards {
 		insertChannels[shardIndex] = make([]chan string, len(scw.destinationAliases[shardIndex]))
 		for i, tabletAlias := range scw.destinationAliases[shardIndex] {
 			// we create one channel per destination tablet.  It
@@ -495,7 +496,7 @@ func (scw *SplitCloneWorker) copy() error {
 	// Now for each table, read data chunks and send them to all
 	// insertChannels
 	sourceWaitGroup := sync.WaitGroup{}
-	for shardIndex, _ := range scw.sourceShards {
+	for shardIndex := range scw.sourceShards {
 		sema := sync2.NewSemaphore(scw.sourceReaderCount, 0)
 		for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
 			if td.Type == myproto.TABLE_VIEW {
@@ -540,7 +541,7 @@ func (scw *SplitCloneWorker) copy() error {
 	}
 	sourceWaitGroup.Wait()
 
-	for shardIndex, _ := range scw.destinationShards {
+	for shardIndex := range scw.destinationShards {
 		for _, c := range insertChannels[shardIndex] {
 			close(c)
 		}
@@ -560,7 +561,7 @@ func (scw *SplitCloneWorker) copy() error {
 		}
 
 		// get the current position from the sources
-		for shardIndex, _ := range scw.sourceShards {
+		for shardIndex := range scw.sourceShards {
 			ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
 			status, err := scw.wr.TabletManagerClient().SlaveStatus(ctx, scw.sourceTablets[shardIndex])
 			cancel()
@@ -571,7 +572,7 @@ func (scw *SplitCloneWorker) copy() error {
 			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(0, status.Position, time.Now().Unix(), flags))
 		}
 
-		for shardIndex, _ := range scw.destinationShards {
+		for shardIndex := range scw.destinationShards {
 			for _, tabletAlias := range scw.destinationAliases[shardIndex] {
 				destinationWaitGroup.Add(1)
 				go func(ti *topo.TabletInfo) {
@@ -607,7 +608,7 @@ func (scw *SplitCloneWorker) copy() error {
 	// And force a schema reload on all destination tablets.
 	// The master tablet will end up starting filtered replication
 	// at this point.
-	for shardIndex, _ := range scw.destinationShards {
+	for shardIndex := range scw.destinationShards {
 		for _, tabletAlias := range scw.reloadAliases[shardIndex] {
 			destinationWaitGroup.Add(1)
 			go func(ti *topo.TabletInfo) {

@@ -63,7 +63,7 @@ type SplitDiffWorker struct {
 	destinationSchemaDefinition *myproto.SchemaDefinition
 }
 
-// NewSplitDiff returns a new SplitDiffWorker object.
+// NewSplitDiffWorker returns a new SplitDiffWorker object.
 func NewSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string) Worker {
 	return &SplitDiffWorker{
 		wr:       wr,
@@ -89,6 +89,7 @@ func (sdw *SplitDiffWorker) recordError(err error) {
 	sdw.mu.Unlock()
 }
 
+// StatusAsHTML is part of the Worker interface
 func (sdw *SplitDiffWorker) StatusAsHTML() template.HTML {
 	sdw.mu.Lock()
 	defer sdw.mu.Unlock()
@@ -106,6 +107,7 @@ func (sdw *SplitDiffWorker) StatusAsHTML() template.HTML {
 	return template.HTML(result)
 }
 
+// StatusAsText is part of the Worker interface
 func (sdw *SplitDiffWorker) StatusAsText() string {
 	sdw.mu.Lock()
 	defer sdw.mu.Unlock()
@@ -122,6 +124,7 @@ func (sdw *SplitDiffWorker) StatusAsText() string {
 	return result
 }
 
+// CheckInterrupted is part of the Worker interface
 func (sdw *SplitDiffWorker) CheckInterrupted() bool {
 	select {
 	case <-interrupted:
@@ -369,7 +372,7 @@ func (sdw *SplitDiffWorker) diff() error {
 	wg.Add(1)
 	go func() {
 		var err error
-		sdw.destinationSchemaDefinition, err = sdw.wr.GetSchema(sdw.destinationAlias, nil, nil, false)
+		sdw.destinationSchemaDefinition, err = sdw.wr.GetSchema(sdw.wr.Context(), sdw.destinationAlias, nil, nil, false)
 		rec.RecordError(err)
 		sdw.wr.Logger().Infof("Got schema from destination %v", sdw.destinationAlias)
 		wg.Done()
@@ -378,7 +381,7 @@ func (sdw *SplitDiffWorker) diff() error {
 		wg.Add(1)
 		go func(i int, sourceAlias topo.TabletAlias) {
 			var err error
-			sdw.sourceSchemaDefinitions[i], err = sdw.wr.GetSchema(sourceAlias, nil, nil, false)
+			sdw.sourceSchemaDefinitions[i], err = sdw.wr.GetSchema(sdw.wr.Context(), sourceAlias, nil, nil, false)
 			rec.RecordError(err)
 			sdw.wr.Logger().Infof("Got schema from source[%v] %v", i, sourceAlias)
 			wg.Done()

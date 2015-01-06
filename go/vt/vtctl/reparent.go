@@ -8,8 +8,8 @@ import (
 	"flag"
 	"fmt"
 
-	_ "github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/wrangler"
+	"golang.org/x/net/context"
 )
 
 func init() {
@@ -30,7 +30,7 @@ func init() {
 		"Specify which shard to reparent and which tablet should be the new master."})
 }
 
-func commandDemoteMaster(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandDemoteMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -48,7 +48,7 @@ func commandDemoteMaster(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	return wr.TabletManagerClient().DemoteMaster(wr.Context(), tabletInfo)
 }
 
-func commandReparentTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -62,7 +62,7 @@ func commandReparentTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 	return wr.ReparentTablet(tabletAlias)
 }
 
-func commandReparentShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	leaveMasterReadOnly := subFlags.Bool("leave-master-read-only", false, "leaves the master read-only after reparenting")
 	force := subFlags.Bool("force", false, "will force the reparent even if the master is already correct")
 	if err := subFlags.Parse(args); err != nil {

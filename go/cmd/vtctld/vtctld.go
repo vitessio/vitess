@@ -11,13 +11,11 @@ import (
 	"path"
 	"reflect"
 	"strings"
-	"time"
 
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
-	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
@@ -238,6 +236,7 @@ var dummyTemplate = template.Must(template.New("dummy").Funcs(funcMap).Parse(`
 </html>
 `))
 
+// TemplateLoader is a helper class to load html templates
 type TemplateLoader struct {
 	Directory string
 	usesDummy bool
@@ -273,6 +272,7 @@ func NewTemplateLoader(directory string, fallbackTemplate *template.Template, de
 	return loader
 }
 
+// Lookup will find a template by name and return it
 func (loader *TemplateLoader) Lookup(name string) (*template.Template, error) {
 	if loader.usesDummy {
 		return loader.template, nil
@@ -296,7 +296,7 @@ func (loader *TemplateLoader) Lookup(name string) (*template.Template, error) {
 // ServeTemplate executes the named template passing data into it. If
 // the format GET parameter is equal to "json", serves data as JSON
 // instead.
-func (tl *TemplateLoader) ServeTemplate(templateName string, data interface{}, w http.ResponseWriter, r *http.Request) {
+func (loader *TemplateLoader) ServeTemplate(templateName string, data interface{}, w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Query().Get("format") {
 	case "json":
 		j, err := json.MarshalIndent(data, "", "  ")
@@ -306,7 +306,7 @@ func (tl *TemplateLoader) ServeTemplate(templateName string, data interface{}, w
 		}
 		w.Write(j)
 	default:
-		tmpl, err := tl.Lookup(templateName)
+		tmpl, err := loader.Lookup(templateName)
 		if err != nil {
 			httpError(w, "error in template loader: %v", err)
 			return
@@ -322,11 +322,13 @@ func httpError(w http.ResponseWriter, format string, err error) {
 	http.Error(w, fmt.Sprintf(format, err), http.StatusInternalServerError)
 }
 
+// DbTopologyResult encapsulates a topotools.Topology and the possible error
 type DbTopologyResult struct {
 	Topology *topotools.Topology
 	Error    string
 }
 
+// IndexContent has the list of toplevel links
 type IndexContent struct {
 	// maps a name to a linked URL
 	ToplevelLinks map[string]string
@@ -354,55 +356,53 @@ func main() {
 	ts = topo.GetServer()
 	defer topo.CloseServers()
 
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, 30*time.Second, 30*time.Second)
-
 	actionRepo = NewActionRepository(ts)
 
 	// keyspace actions
 	actionRepo.RegisterKeyspaceAction("ValidateKeyspace",
-		func(wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
 			return "", wr.ValidateKeyspace(keyspace, false)
 		})
 
 	actionRepo.RegisterKeyspaceAction("ValidateSchemaKeyspace",
-		func(wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
-			return "", wr.ValidateSchemaKeyspace(keyspace, nil, false)
+		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
+			return "", wr.ValidateSchemaKeyspace(ctx, keyspace, nil, false)
 		})
 
 	actionRepo.RegisterKeyspaceAction("ValidateVersionKeyspace",
-		func(wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
 			return "", wr.ValidateVersionKeyspace(keyspace)
 		})
 
 	actionRepo.RegisterKeyspaceAction("ValidatePermissionsKeyspace",
-		func(wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
 			return "", wr.ValidatePermissionsKeyspace(keyspace)
 		})
 
 	// shard actions
 	actionRepo.RegisterShardAction("ValidateShard",
-		func(wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (string, error) {
 			return "", wr.ValidateShard(keyspace, shard, false)
 		})
 
 	actionRepo.RegisterShardAction("ValidateSchemaShard",
-		func(wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (string, error) {
-			return "", wr.ValidateSchemaShard(keyspace, shard, nil, false)
+		func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (string, error) {
+			return "", wr.ValidateSchemaShard(ctx, keyspace, shard, nil, false)
 		})
 
 	actionRepo.RegisterShardAction("ValidateVersionShard",
-		func(wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (string, error) {
 			return "", wr.ValidateVersionShard(keyspace, shard)
 		})
 
 	actionRepo.RegisterShardAction("ValidatePermissionsShard",
-		func(wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (string, error) {
 			return "", wr.ValidatePermissionsShard(keyspace, shard)
 		})
 
 	// tablet actions
 	actionRepo.RegisterTabletAction("Ping", "",
-		func(wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
 			ti, err := wr.TopoServer().GetTablet(tabletAlias)
 			if err != nil {
 				return "", err
@@ -411,7 +411,7 @@ func main() {
 		})
 
 	actionRepo.RegisterTabletAction("ScrapTablet", acl.ADMIN,
-		func(wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
 			// refuse to scrap tablets that are not spare
 			ti, err := wr.TopoServer().GetTablet(tabletAlias)
 			if err != nil {
@@ -424,7 +424,7 @@ func main() {
 		})
 
 	actionRepo.RegisterTabletAction("ScrapTabletForce", acl.ADMIN,
-		func(wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
 			// refuse to scrap tablets that are not spare
 			ti, err := wr.TopoServer().GetTablet(tabletAlias)
 			if err != nil {
@@ -437,7 +437,7 @@ func main() {
 		})
 
 	actionRepo.RegisterTabletAction("DeleteTablet", acl.ADMIN,
-		func(wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
 			return "", wr.DeleteTablet(tabletAlias)
 		})
 
@@ -529,7 +529,7 @@ func main() {
 			return
 		}
 		result := DbTopologyResult{}
-		topology, err := topotools.DbTopology(context.TODO(), wr.TopoServer())
+		topology, err := topotools.DbTopology(context.TODO(), ts)
 		if err != nil {
 			result.Error = err.Error()
 		} else {
@@ -548,13 +548,12 @@ func main() {
 			if err != nil {
 				httpError(w, "cannot get known cells: %v", err)
 				return
-			} else {
-				templateLoader.ServeTemplate("serving_graph_cells.html", cells, w, r)
 			}
+			templateLoader.ServeTemplate("serving_graph_cells.html", cells, w, r)
 			return
 		}
 
-		servingGraph := topotools.DbServingGraph(wr.TopoServer(), cell)
+		servingGraph := topotools.DbServingGraph(ts, cell)
 		templateLoader.ServeTemplate("serving_graph.html", servingGraph, w, r)
 	})
 
@@ -569,9 +568,9 @@ func main() {
 			httpError(w, "cannot parse form: %s", err)
 			return
 		}
-		schemafier, ok := wr.TopoServer().(topo.Schemafier)
+		schemafier, ok := ts.(topo.Schemafier)
 		if !ok {
-			httpError(w, "%s", fmt.Errorf("%T doesn's support schemafier API", wr.TopoServer()))
+			httpError(w, "%s", fmt.Errorf("%T doesn's support schemafier API", ts))
 		}
 		var data struct {
 			Error         error
