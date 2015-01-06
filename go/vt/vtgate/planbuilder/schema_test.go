@@ -5,8 +5,6 @@
 package planbuilder
 
 import (
-	"io/ioutil"
-	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -82,8 +80,8 @@ func TestUnshardedSchema(t *testing.T) {
 	good := SchemaFormal{
 		Keyspaces: map[string]KeyspaceFormal{
 			"unsharded": {
-				Tables: map[string]TableFormal{
-					"t1": {},
+				Tables: map[string]string{
+					"t1": "",
 				},
 			},
 		},
@@ -126,7 +124,7 @@ func TestShardedSchemaOwned(t *testing.T) {
 						Owner: "t1",
 					},
 				},
-				Tables: map[string]TableFormal{
+				Classes: map[string]ClassFormal{
 					"t1": {
 						ColVindexes: []ColVindexFormal{
 							{
@@ -138,6 +136,9 @@ func TestShardedSchemaOwned(t *testing.T) {
 							},
 						},
 					},
+				},
+				Tables: map[string]string{
+					"t1": "t1",
 				},
 			},
 		},
@@ -202,7 +203,7 @@ func TestShardedSchemaNotOwned(t *testing.T) {
 						Owner: "",
 					},
 				},
-				Tables: map[string]TableFormal{
+				Classes: map[string]ClassFormal{
 					"t1": {
 						ColVindexes: []ColVindexFormal{
 							{
@@ -214,6 +215,9 @@ func TestShardedSchemaNotOwned(t *testing.T) {
 							},
 						},
 					},
+				},
+				Tables: map[string]string{
+					"t1": "t1",
 				},
 			},
 		},
@@ -259,23 +263,49 @@ func TestShardedSchemaNotOwned(t *testing.T) {
 }
 
 func TestLoadSchemaFail(t *testing.T) {
-	badSchema := "{,}"
-	f, err := ioutil.TempFile("", "schema_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	fname := f.Name()
-	f.Close()
-	defer os.Remove(fname)
-
-	err = ioutil.WriteFile(fname, []byte(badSchema), 0644)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = LoadSchemaJSON(fname)
-	want := "ReadJson failed"
+	_, err := LoadFile("bogus file name")
+	want := "ReadFile failed"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("LoadSchemaJSON: \n%q, should start with \n%q", err, want)
+		t.Errorf("LoadFile: \n%q, should start with \n%q", err, want)
+	}
+
+	_, err = NewSchema([]byte("{,}"))
+	want = "Unmarshal failed"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("LoadFile: \n%q, should start with \n%q", err, want)
+	}
+}
+
+func TestBuildSchemaClassNotFoundFail(t *testing.T) {
+	bad := SchemaFormal{
+		Keyspaces: map[string]KeyspaceFormal{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]VindexFormal{
+					"stfu": {
+						Type: "stfu",
+					},
+				},
+				Classes: map[string]ClassFormal{
+					"notexist": {
+						ColVindexes: []ColVindexFormal{
+							{
+								Col:  "c1",
+								Name: "noexist",
+							},
+						},
+					},
+				},
+				Tables: map[string]string{
+					"t1": "t1",
+				},
+			},
+		},
+	}
+	_, err := BuildSchema(&bad)
+	want := "class t1 not found for table t1"
+	if err == nil || err.Error() != want {
+		t.Errorf("BuildSchema: %v, want %v", err, want)
 	}
 }
 
@@ -289,7 +319,7 @@ func TestBuildSchemaVindexNotFoundFail(t *testing.T) {
 						Type: "noexist",
 					},
 				},
-				Tables: map[string]TableFormal{
+				Classes: map[string]ClassFormal{
 					"t1": {
 						ColVindexes: []ColVindexFormal{
 							{
@@ -298,6 +328,9 @@ func TestBuildSchemaVindexNotFoundFail(t *testing.T) {
 							},
 						},
 					},
+				},
+				Tables: map[string]string{
+					"t1": "t1",
 				},
 			},
 		},
@@ -319,7 +352,7 @@ func TestBuildSchemaInvalidVindexFail(t *testing.T) {
 						Type: "stf",
 					},
 				},
-				Tables: map[string]TableFormal{
+				Classes: map[string]ClassFormal{
 					"t1": {
 						ColVindexes: []ColVindexFormal{
 							{
@@ -328,6 +361,9 @@ func TestBuildSchemaInvalidVindexFail(t *testing.T) {
 							},
 						},
 					},
+				},
+				Tables: map[string]string{
+					"t1": "t1",
 				},
 			},
 		},
@@ -349,7 +385,7 @@ func TestBuildSchemaDupTableFail(t *testing.T) {
 						Type: "stfu",
 					},
 				},
-				Tables: map[string]TableFormal{
+				Classes: map[string]ClassFormal{
 					"t1": {
 						ColVindexes: []ColVindexFormal{
 							{
@@ -358,6 +394,9 @@ func TestBuildSchemaDupTableFail(t *testing.T) {
 							},
 						},
 					},
+				},
+				Tables: map[string]string{
+					"t1": "t1",
 				},
 			},
 			"sharded1": {
@@ -367,7 +406,7 @@ func TestBuildSchemaDupTableFail(t *testing.T) {
 						Type: "stfu",
 					},
 				},
-				Tables: map[string]TableFormal{
+				Classes: map[string]ClassFormal{
 					"t1": {
 						ColVindexes: []ColVindexFormal{
 							{
@@ -376,6 +415,9 @@ func TestBuildSchemaDupTableFail(t *testing.T) {
 							},
 						},
 					},
+				},
+				Tables: map[string]string{
+					"t1": "t1",
 				},
 			},
 		},
@@ -397,7 +439,7 @@ func TestBuildSchemaNoindexFail(t *testing.T) {
 						Type: "stfu",
 					},
 				},
-				Tables: map[string]TableFormal{
+				Classes: map[string]ClassFormal{
 					"t1": {
 						ColVindexes: []ColVindexFormal{
 							{
@@ -407,11 +449,14 @@ func TestBuildSchemaNoindexFail(t *testing.T) {
 						},
 					},
 				},
+				Tables: map[string]string{
+					"t1": "t1",
+				},
 			},
 		},
 	}
 	_, err := BuildSchema(&bad)
-	want := "vindex notexist not found for table t1"
+	want := "vindex notexist not found for class t1"
 	if err == nil || err.Error() != want {
 		t.Errorf("BuildSchema: %v, want %v", err, want)
 	}
@@ -427,7 +472,7 @@ func TestBuildSchemaNotUniqueFail(t *testing.T) {
 						Type: "stln",
 					},
 				},
-				Tables: map[string]TableFormal{
+				Classes: map[string]ClassFormal{
 					"t1": {
 						ColVindexes: []ColVindexFormal{
 							{
@@ -437,11 +482,14 @@ func TestBuildSchemaNotUniqueFail(t *testing.T) {
 						},
 					},
 				},
+				Tables: map[string]string{
+					"t1": "t1",
+				},
 			},
 		},
 	}
 	_, err := BuildSchema(&bad)
-	want := "primary index stln is not Unique for table t1"
+	want := "primary index stln is not Unique for class t1"
 	if err == nil || err.Error() != want {
 		t.Errorf("BuildSchema: %v, want %v", err, want)
 	}
@@ -458,7 +506,7 @@ func TestBuildSchemaPrimaryNonFunctionalFail(t *testing.T) {
 						Owner: "t1",
 					},
 				},
-				Tables: map[string]TableFormal{
+				Classes: map[string]ClassFormal{
 					"t1": {
 						ColVindexes: []ColVindexFormal{
 							{
@@ -468,11 +516,14 @@ func TestBuildSchemaPrimaryNonFunctionalFail(t *testing.T) {
 						},
 					},
 				},
+				Tables: map[string]string{
+					"t1": "t1",
+				},
 			},
 		},
 	}
 	_, err := BuildSchema(&bad)
-	want := "primary owned index stlu is not Functional for table t1"
+	want := "primary owned index stlu is not Functional for class t1"
 	if err == nil || err.Error() != want {
 		t.Errorf("BuildSchema: %v, want %v", err, want)
 	}
@@ -492,7 +543,7 @@ func TestBuildSchemaNonPrimaryLookupFail(t *testing.T) {
 						Owner: "t1",
 					},
 				},
-				Tables: map[string]TableFormal{
+				Classes: map[string]ClassFormal{
 					"t1": {
 						ColVindexes: []ColVindexFormal{
 							{
@@ -505,11 +556,14 @@ func TestBuildSchemaNonPrimaryLookupFail(t *testing.T) {
 						},
 					},
 				},
+				Tables: map[string]string{
+					"t1": "t1",
+				},
 			},
 		},
 	}
 	_, err := BuildSchema(&bad)
-	want := "non-primary owned index stfu is not Lookup for table t1"
+	want := "non-primary owned index stfu is not Lookup for class t1"
 	if err == nil || err.Error() != want {
 		t.Errorf("BuildSchema: %v, want %v", err, want)
 	}

@@ -5,10 +5,10 @@
 package planbuilder
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"sort"
-
-	"github.com/youtube/vitess/go/jscfg"
 )
 
 // Schema represents the denormalized version of SchemaFormal,
@@ -63,7 +63,7 @@ func BuildSchema(source *SchemaFormal) (schema *Schema, err error) {
 			}
 			vindexes[vname] = vindex
 		}
-		for tname, table := range ks.Tables {
+		for tname, cname := range ks.Tables {
 			if _, ok := schema.Tables[tname]; ok {
 				return nil, fmt.Errorf("table %s has multiple definitions", tname)
 			}
@@ -71,10 +71,18 @@ func BuildSchema(source *SchemaFormal) (schema *Schema, err error) {
 				Name:     tname,
 				Keyspace: keyspace,
 			}
-			for i, ind := range table.ColVindexes {
+			if !keyspace.Sharded {
+				schema.Tables[tname] = t
+				continue
+			}
+			class, ok := ks.Classes[cname]
+			if !ok {
+				return nil, fmt.Errorf("class %s not found for table %s", cname, tname)
+			}
+			for i, ind := range class.ColVindexes {
 				vindexInfo, ok := ks.Vindexes[ind.Name]
 				if !ok {
-					return nil, fmt.Errorf("vindex %s not found for table %s", ind.Name, tname)
+					return nil, fmt.Errorf("vindex %s not found for class %s", ind.Name, cname)
 				}
 				columnVindex := &ColVindex{
 					Col:    ind.Col,
@@ -86,18 +94,18 @@ func BuildSchema(source *SchemaFormal) (schema *Schema, err error) {
 				if i == 0 {
 					// Perform Primary vindex check.
 					if _, ok := columnVindex.Vindex.(Unique); !ok {
-						return nil, fmt.Errorf("primary index %s is not Unique for table %s", ind.Name, tname)
+						return nil, fmt.Errorf("primary index %s is not Unique for class %s", ind.Name, cname)
 					}
 					if columnVindex.Owned {
 						if _, ok := columnVindex.Vindex.(Functional); !ok {
-							return nil, fmt.Errorf("primary owned index %s is not Functional for table %s", ind.Name, tname)
+							return nil, fmt.Errorf("primary owned index %s is not Functional for class %s", ind.Name, cname)
 						}
 					}
 				} else {
 					// Perform non-primary vindex check.
 					if columnVindex.Owned {
 						if _, ok := columnVindex.Vindex.(Lookup); !ok {
-							return nil, fmt.Errorf("non-primary owned index %s is not Lookup for table %s", ind.Name, tname)
+							return nil, fmt.Errorf("non-primary owned index %s is not Lookup for class %s", ind.Name, cname)
 						}
 					}
 				}
@@ -153,7 +161,8 @@ type SchemaFormal struct {
 type KeyspaceFormal struct {
 	Sharded  bool
 	Vindexes map[string]VindexFormal
-	Tables   map[string]TableFormal
+	Classes  map[string]ClassFormal
+	Tables   map[string]string
 }
 
 // VindexFormal is the info for each index as loaded from
@@ -164,9 +173,9 @@ type VindexFormal struct {
 	Owner  string
 }
 
-// TableFormal is the info for each table as loaded from
+// ClassFormal is the info for each table class as loaded from
 // the source.
-type TableFormal struct {
+type ClassFormal struct {
 	ColVindexes []ColVindexFormal
 }
 
@@ -177,13 +186,20 @@ type ColVindexFormal struct {
 	Name string
 }
 
-// LoadSchemaJSON loads the formal representation of a schema
-// from a JSON file and returns the more usable denormalized
-// representaion (Schema) for it.
-func LoadSchemaJSON(filename string) (schema *Schema, err error) {
+// LoadFile creates a new Schema from a JSON file.
+func LoadFile(filename string) (schema *Schema, err error) {
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, fmt.Errorf("ReadFile failed: %v %v", filename, err)
+	}
+	return NewSchema(data)
+}
+
+// NewSchema creates a new Schema from a JSON byte array.
+func NewSchema(data []byte) (schema *Schema, err error) {
 	var source SchemaFormal
-	if err := jscfg.ReadJson(filename, &source); err != nil {
-		return nil, err
+	if err := json.Unmarshal(data, &source); err != nil {
+		return nil, fmt.Errorf("Unmarshal failed: %v %s %v", source, data, err)
 	}
 	return BuildSchema(&source)
 }

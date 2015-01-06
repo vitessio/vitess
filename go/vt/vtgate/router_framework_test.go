@@ -63,7 +63,7 @@ var routerSchema = createTestSchema(`
           "Params": {
             "Table": "idx2",
             "From": "id",
-						"To": "val"
+            "To": "val"
           }
         },
         "idx_noauto": {
@@ -74,7 +74,7 @@ var routerSchema = createTestSchema(`
           "Type": "numeric"
         }
       },
-      "Tables": {
+      "Classes": {
         "user": {
           "ColVindexes": [
             {
@@ -148,7 +148,7 @@ var routerSchema = createTestSchema(`
             {
               "Col": "id",
               "Name": "idx_noauto"
-						}
+            }
           ]
         },
         "ksid_table": {
@@ -159,22 +159,32 @@ var routerSchema = createTestSchema(`
             }
           ]
         }
+      },
+      "Tables": {
+        "user": "user",
+        "user_extra": "user_extra",
+        "music": "music",
+        "music_extra": "music_extra",
+        "music_extra_reversed": "music_extra_reversed",
+        "multi_autoinc_table": "multi_autoinc_table",
+        "noauto_table": "noauto_table",
+        "ksid_table": "ksid_table"
       }
     },
-		"TestBadSharding": {
+    "TestBadSharding": {
       "Sharded": false,
       "Tables": {
-        "sharded_table":{}
+        "sharded_table": ""
       }
-		},
+    },
     "TestUnsharded": {
       "Sharded": false,
       "Tables": {
-        "user_idx":{},
-        "music_user_map":{},
-        "name_user_map":{},
-        "idx1":{},
-        "idx2":{}
+        "user_idx": "",
+        "music_user_map": "",
+        "name_user_map": "",
+        "idx1": "",
+        "idx2": ""
       }
     }
   }
@@ -196,7 +206,7 @@ func createTestSchema(schemaJSON string) *planbuilder.Schema {
 	if err != nil {
 		panic(err)
 	}
-	schema, err := planbuilder.LoadSchemaJSON(fname)
+	schema, err := planbuilder.LoadFile(fname)
 	if err != nil {
 		panic(err)
 	}
