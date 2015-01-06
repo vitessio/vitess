@@ -423,10 +423,13 @@ class TestReparent(unittest.TestCase):
   def test_reparent_from_outside(self):
     self._test_reparent_from_outside(brutal=False)
 
+  def test_reparent_from_outside_fast(self):
+    self._test_reparent_from_outside(brutal=False, fast=True)
+
   def test_reparent_from_outside_brutal(self):
     self._test_reparent_from_outside(brutal=True)
 
-  def _test_reparent_from_outside(self, brutal=False):
+  def _test_reparent_from_outside(self, brutal=False, fast=False):
     """This test will start a master and 3 slaves. Then:
     - one slave will be the new master
     - one slave will be reparented to that new master
@@ -442,17 +445,21 @@ class TestReparent(unittest.TestCase):
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.create_db('vt_test_keyspace')
 
+    extra_args = None
+    if fast:
+      extra_args = ['-fast_external_reparent']
+
     # Start up a master mysql and vttablet
     tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True,
-                             wait_for_start=False)
+                             wait_for_start=False, extra_args=extra_args)
 
     # Create a few slaves for testing reparenting.
     tablet_62044.init_tablet('replica', 'test_keyspace', '0', start=True,
-                             wait_for_start=False)
+                             wait_for_start=False, extra_args=extra_args)
     tablet_41983.init_tablet('replica', 'test_keyspace', '0', start=True,
-                             wait_for_start=False)
+                             wait_for_start=False, extra_args=extra_args)
     tablet_31981.init_tablet('replica', 'test_keyspace', '0', start=True,
-                             wait_for_start=False)
+                             wait_for_start=False, extra_args=extra_args)
 
     # wait for all tablets to start
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
@@ -509,6 +516,7 @@ class TestReparent(unittest.TestCase):
   def _test_reparent_from_outside_check(self, brutal):
     if environment.topo_server().flavor() != 'zookeeper':
       return
+
     # make sure the shard replication graph is fine
     shard_replication = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
                                               'test_keyspace/0'])
