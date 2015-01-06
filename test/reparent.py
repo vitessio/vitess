@@ -429,6 +429,9 @@ class TestReparent(unittest.TestCase):
   def test_reparent_from_outside_brutal(self):
     self._test_reparent_from_outside(brutal=True)
 
+  def test_reparent_from_outside_brutal_fast(self):
+    self._test_reparent_from_outside(brutal=True, fast=True)
+
   def _test_reparent_from_outside(self, brutal=False, fast=False):
     """This test will start a master and 3 slaves. Then:
     - one slave will be the new master
