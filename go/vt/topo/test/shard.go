@@ -25,7 +25,7 @@ func shardEqual(left, right *topo.Shard) (bool, error) {
 	return string(lj) == string(rj), nil
 }
 
-func CheckShard(t *testing.T, ts topo.Server) {
+func CheckShard(ctx context.Context, t *testing.T, ts topo.Server) {
 	if err := ts.CreateKeyspace("test_keyspace", &topo.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
@@ -53,11 +53,11 @@ func CheckShard(t *testing.T, ts topo.Server) {
 		t.Fatalf("CreateShard: %v", err)
 	}
 
-	if _, err := ts.GetShard("test_keyspace", "666"); err != topo.ErrNoNode {
+	if _, err := topo.GetShard(ctx, ts, "test_keyspace", "666"); err != topo.ErrNoNode {
 		t.Errorf("GetShard(666): %v", err)
 	}
 
-	shardInfo, err := ts.GetShard("test_keyspace", "b0-c0")
+	shardInfo, err := topo.GetShard(ctx, ts, "test_keyspace", "b0-c0")
 	if err != nil {
 		t.Errorf("GetShard: %v", err)
 	}
@@ -90,11 +90,11 @@ func CheckShard(t *testing.T, ts topo.Server) {
 			DisableQueryService: true,
 		},
 	}
-	if err := topo.UpdateShard(context.TODO(), ts, shardInfo); err != nil {
+	if err := topo.UpdateShard(ctx, ts, shardInfo); err != nil {
 		t.Errorf("UpdateShard: %v", err)
 	}
 
-	updatedShardInfo, err := ts.GetShard("test_keyspace", "b0-c0")
+	updatedShardInfo, err := topo.GetShard(ctx, ts, "test_keyspace", "b0-c0")
 	if err != nil {
 		t.Fatalf("GetShard: %v", err)
 	}

@@ -9,9 +9,10 @@ import (
 
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
-func CheckServingGraph(t *testing.T, ts topo.Server) {
+func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 	cell := getLocalCell(t, ts)
 
 	// test individual cell/keyspace/shard/type entries
@@ -32,7 +33,7 @@ func CheckServingGraph(t *testing.T, ts topo.Server) {
 		},
 	}
 
-	if err := ts.UpdateEndPoints(cell, "test_keyspace", "-10", topo.TYPE_MASTER, &endPoints); err != nil {
+	if err := topo.UpdateEndPoints(ctx, ts, cell, "test_keyspace", "-10", topo.TYPE_MASTER, &endPoints); err != nil {
 		t.Fatalf("UpdateEndPoints(master): %v", err)
 	}
 	if types, err := ts.GetSrvTabletTypesPerShard(cell, "test_keyspace", "-10"); err != nil || len(types) != 1 || types[0] != topo.TYPE_MASTER {
@@ -51,7 +52,7 @@ func CheckServingGraph(t *testing.T, ts topo.Server) {
 	}
 
 	// Re-add endpoints.
-	if err := ts.UpdateEndPoints(cell, "test_keyspace", "-10", topo.TYPE_MASTER, &endPoints); err != nil {
+	if err := topo.UpdateEndPoints(ctx, ts, cell, "test_keyspace", "-10", topo.TYPE_MASTER, &endPoints); err != nil {
 		t.Fatalf("UpdateEndPoints(master): %v", err)
 	}
 

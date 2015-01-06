@@ -531,6 +531,17 @@ func NewTabletInfo(tablet *Tablet, version int64) *TabletInfo {
 	return &TabletInfo{version: version, Tablet: tablet}
 }
 
+// GetTablet is a high level function to read tablet data.
+// It generates trace spans.
+func GetTablet(ctx context.Context, ts Server, alias TabletAlias) (*TabletInfo, error) {
+	span := trace.NewSpanFromContext(ctx)
+	span.StartClient("TopoServer.GetTablet")
+	span.Annotate("tablet", alias.String())
+	defer span.Finish()
+
+	return ts.GetTablet(alias)
+}
+
 // UpdateTablet updates the tablet data only - not associated replication paths.
 func UpdateTablet(ctx context.Context, ts Server, tablet *TabletInfo) error {
 	span := trace.NewSpanFromContext(ctx)
