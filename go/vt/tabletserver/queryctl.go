@@ -7,7 +7,6 @@ package tabletserver
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -25,7 +24,6 @@ import (
 var (
 	queryLogHandler = flag.String("query-log-stream-handler", "/debug/querylog", "URL handler for streaming queries log")
 	txLogHandler    = flag.String("transaction-log-stream-handler", "/debug/txlog", "URL handler for streaming transactions log")
-	customRules     = flag.String("customrules", "", "custom query rules file")
 )
 
 func init() {
@@ -183,12 +181,19 @@ func GetSessionId() int64 {
 	return SqlQueryRpcService.sessionId
 }
 
-func SetQueryRules(queryRuleSet string, qrs *QueryRules) error {
-	return SqlQueryRpcService.qe.queryRuleInfo.SetRules(queryRuleSet, qrs)
+// GetQueryRules is the tabletserver level API to get current query rules
+func GetQueryRules(ruleSource string) (*QueryRules, error) {
+	return QueryRuleSources.GetRules(ruleSource)
 }
 
-func GetQueryRules(queryRuleSet string) (error, *QueryRules) {
-	return SqlQueryRpcService.qe.queryRuleInfo.GetRules(queryRuleSet)
+// SetQueryRules is the tabletserver level API to write current query rules
+func SetQueryRules(ruleSource string, qrs *QueryRules) error {
+	err := QueryRuleSources.SetRules(ruleSource, qrs)
+	if err != nil {
+		return err
+	}
+	SqlQueryRpcService.qe.schemaInfo.ClearQueryPlanCache()
+	return nil
 }
 
 // IsHealthy returns nil if the query service is healthy (able to
@@ -235,24 +240,4 @@ func InitQueryService() {
 	SqlQueryLogger.ServeLogs(*queryLogHandler, buildFmter(SqlQueryLogger))
 	TxLogger.ServeLogs(*txLogHandler, buildFmter(TxLogger))
 	RegisterQueryService()
-}
-
-// LoadCustomRules returns custom rules as specified by the command
-// line flags.
-func LoadCustomRules() (qrs *QueryRules) {
-	if *customRules == "" {
-		return NewQueryRules()
-	}
-
-	data, err := ioutil.ReadFile(*customRules)
-	if err != nil {
-		log.Fatalf("Error reading file %v: %v", *customRules, err)
-	}
-
-	qrs = NewQueryRules()
-	err = qrs.UnmarshalJSON(data)
-	if err != nil {
-		log.Fatalf("Error unmarshaling query rules %v", err)
-	}
-	return qrs
 }

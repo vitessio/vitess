@@ -8,67 +8,72 @@ import (
 	"errors"
 	"sync"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 )
 
+// Global variable to keep track of every registered query rule source
+var QueryRuleSources = NewQueryRuleInfo()
+
 // QueryRuleInfo is the maintainer of QueryRules from multiple sources
 type QueryRuleInfo struct {
-	mu            sync.Mutex
+	// mutex to protect following queryRulesMap
+	mu sync.Mutex
+	// queryRulesMap maps the names of different query rule sources to the actual QueryRules structure
 	queryRulesMap map[string]*QueryRules
 }
 
-// Names for QueryRules coming from different sources
-// QueryRules from keyrange
-const KeyrangeQueryRules string = "KEYRANGE_QUERY_RULES"
-
-// QueryRules from blacklist
-const BlacklistQueryRules string = "BLACKLIST_QUERY_RULES"
-
-// QueryRules from custom rules
-const CustomQueryRules string = "CUSTOM_QUERY_RULES"
-
+// NewQueryRuleInfo returns an empty QueryRuleInfo object for use
 func NewQueryRuleInfo() *QueryRuleInfo {
 	qri := &QueryRuleInfo{
-		queryRulesMap: map[string]*QueryRules{
-			KeyrangeQueryRules:  NewQueryRules(),
-			BlacklistQueryRules: NewQueryRules(),
-			CustomQueryRules:    NewQueryRules(),
-		},
+		queryRulesMap: map[string]*QueryRules{},
 	}
 	return qri
 }
 
-// SetRules takes a external QueryRules structure and overwrite one of the
-// internal QueryRules as designated by queryRuleSet parameter
-func (qri *QueryRuleInfo) SetRules(queryRuleSet string, newRules *QueryRules) error {
+// RegisterQueryRuleSource registers a query rule source name with QueryRuleInfo
+func (qri *QueryRuleInfo) RegisterQueryRuleSource(ruleSource string) {
+	qri.mu.Lock()
+	defer qri.mu.Unlock()
+	if _, existed := qri.queryRulesMap[ruleSource]; existed {
+		log.Fatal("Query rule source " + ruleSource + " has been registered")
+	}
+	qri.queryRulesMap[ruleSource] = NewQueryRules()
+}
+
+// SetRules takes an external QueryRules structure and overwrite one of the
+// internal QueryRules as designated by ruleSource parameter
+func (qri *QueryRuleInfo) SetRules(ruleSource string, newRules *QueryRules) error {
 	if newRules == nil {
 		newRules = NewQueryRules()
 	}
 	qri.mu.Lock()
 	defer qri.mu.Unlock()
-	if _, ok := qri.queryRulesMap[queryRuleSet]; ok {
-		qri.queryRulesMap[queryRuleSet] = newRules.Copy()
+	if _, ok := qri.queryRulesMap[ruleSource]; ok {
+		qri.queryRulesMap[ruleSource] = newRules.Copy()
 		return nil
 	}
-	return errors.New("QueryRules identifier " + queryRuleSet + " is not valid")
+	return errors.New("Rule source identifier " + ruleSource + " is not valid")
 }
 
-// GetRules returns the corresponding QueryRules as designated by queryRuleSet parameter
-func (qri *QueryRuleInfo) GetRules(queryRuleSet string) (error, *QueryRules) {
+// GetRules returns the corresponding QueryRules as designated by ruleSource parameter
+func (qri *QueryRuleInfo) GetRules(ruleSource string) (*QueryRules, error) {
 	qri.mu.Lock()
 	defer qri.mu.Unlock()
-	if ruleset, ok := qri.queryRulesMap[queryRuleSet]; ok {
-		return nil, ruleset.Copy()
+	if ruleset, ok := qri.queryRulesMap[ruleSource]; ok {
+		return ruleset.Copy(), nil
 	}
-	return errors.New("QueryRules identifier " + queryRuleSet + " is not valid"), NewQueryRules()
+	return NewQueryRules(), errors.New("Rule source identifier " + ruleSource + " is not valid")
 }
 
 // filterByPlan creates a new QueryRules by prefiltering on all query rules that are contained in internal
 // QueryRules structures, in other words, query rules from all predefined sources will be applied
 func (qri *QueryRuleInfo) filterByPlan(query string, planid planbuilder.PlanType, tableName string) (newqrs *QueryRules) {
+	qri.mu.Lock()
+	defer qri.mu.Unlock()
 	newqrs = NewQueryRules()
-	newqrs.Append(qri.queryRulesMap[KeyrangeQueryRules].filterByPlan(query, planid, tableName))
-	newqrs.Append(qri.queryRulesMap[BlacklistQueryRules].filterByPlan(query, planid, tableName))
-	newqrs.Append(qri.queryRulesMap[CustomQueryRules].filterByPlan(query, planid, tableName))
+	for _, rules := range qri.queryRulesMap {
+		newqrs.Append(rules.filterByPlan(query, planid, tableName))
+	}
 	return newqrs
 }

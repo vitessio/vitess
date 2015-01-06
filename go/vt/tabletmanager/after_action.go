@@ -34,6 +34,12 @@ var (
 	historyLength = 16
 )
 
+// Query rules from keyrange
+const keyrangeQueryRules string = "KeyrangeQueryRules"
+
+// Query rules from blacklist
+const blacklistQueryRules string = "BlacklistQueryRules"
+
 func (agent *ActionAgent) allowQueries(tablet *topo.Tablet, blacklistedTables []string) error {
 	if agent.DBConfigs == nil {
 		// test instance, do nothing
@@ -114,14 +120,14 @@ func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *topo.Tablet, bla
 		blacklistRules.Add(qr)
 	}
 	// Push all three sets of QueryRules to SqlQueryRpcService
-	loadRuleErr := tabletserver.SqlQueryRpcService.SetQueryRules(tabletserver.KeyrangeQueryRules, keyrangeRules)
+	loadRuleErr := tabletserver.SetQueryRules(keyrangeQueryRules, keyrangeRules)
 	if loadRuleErr != nil {
-		log.Warningf("Fail to load query rule set %s, Error message: %s", tabletserver.KeyrangeQueryRules, loadRuleErr)
+		log.Warningf("Fail to load query rule set %s: %s", keyrangeQueryRules, loadRuleErr)
 	}
 
-	loadRuleErr = tabletserver.SqlQueryRpcService.SetQueryRules(tabletserver.BlacklistQueryRules, blacklistRules)
+	loadRuleErr = tabletserver.SetQueryRules(blacklistQueryRules, blacklistRules)
 	if loadRuleErr != nil {
-		log.Warningf("Fail to load query rule set %s, Error message: %s", tabletserver.BlacklistQueryRules, loadRuleErr)
+		log.Warningf("Fail to load query rule set %s: %s", blacklistQueryRules, loadRuleErr)
 	}
 	return nil
 }
@@ -232,4 +238,10 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 		}
 	}
 	return nil
+}
+
+func init() {
+	// Register query rule sources under control of agent
+	tabletserver.QueryRuleSources.RegisterQueryRuleSource(keyrangeQueryRules)
+	tabletserver.QueryRuleSources.RegisterQueryRuleSource(blacklistQueryRules)
 }
