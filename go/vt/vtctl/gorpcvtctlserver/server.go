@@ -27,7 +27,7 @@ type VtctlServer struct {
 
 // ExecuteVtctlCommand is the server side method that will execute the query,
 // and stream the results.
-func (s *VtctlServer) ExecuteVtctlCommand(context context.Context, query *gorpcproto.ExecuteVtctlCommandArgs, sendReply func(interface{}) error) error {
+func (s *VtctlServer) ExecuteVtctlCommand(ctx context.Context, query *gorpcproto.ExecuteVtctlCommandArgs, sendReply func(interface{}) error) error {
 	// create a logger, send the result back to the caller
 	logstream := logutil.NewChannelLogger(10)
 	logger := logutil.NewTeeLogger(logstream, logutil.NewConsoleLogger())
@@ -47,10 +47,11 @@ func (s *VtctlServer) ExecuteVtctlCommand(context context.Context, query *gorpcp
 	}()
 
 	// create the wrangler
+	// FIXME(alainjobart) use a single context, copy the source info from it
 	wr := wrangler.New(logger, s.ts, query.ActionTimeout, query.LockTimeout)
 
 	// execute the command
-	err := vtctl.RunCommand(wr, query.Args)
+	err := vtctl.RunCommand(wr.Context(), wr, query.Args)
 
 	// close the log channel, and wait for them all to be sent
 	close(logstream)

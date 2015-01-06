@@ -13,22 +13,24 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
-func (wr *Wrangler) GetPermissions(tabletAlias topo.TabletAlias) (*myproto.Permissions, error) {
+// GetPermissions returns the permissions set on a remote tablet
+func (wr *Wrangler) GetPermissions(ctx context.Context, tabletAlias topo.TabletAlias) (*myproto.Permissions, error) {
 	tablet, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return nil, err
 	}
 
-	return wr.tmc.GetPermissions(wr.ctx, tablet)
+	return wr.tmc.GetPermissions(ctx, tablet)
 }
 
-// helper method to asynchronously diff a permissions
-func (wr *Wrangler) diffPermissions(masterPermissions *myproto.Permissions, masterAlias topo.TabletAlias, alias topo.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+// diffPermissions is a helper method to asynchronously diff a permissions
+func (wr *Wrangler) diffPermissions(ctx context.Context, masterPermissions *myproto.Permissions, masterAlias topo.TabletAlias, alias topo.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
 	log.Infof("Gathering permissions for %v", alias)
-	slavePermissions, err := wr.GetPermissions(alias)
+	slavePermissions, err := wr.GetPermissions(ctx, alias)
 	if err != nil {
 		er.RecordError(err)
 		return
@@ -38,7 +40,9 @@ func (wr *Wrangler) diffPermissions(masterPermissions *myproto.Permissions, mast
 	myproto.DiffPermissions(masterAlias.String(), masterPermissions, alias.String(), slavePermissions, er)
 }
 
-func (wr *Wrangler) ValidatePermissionsShard(keyspace, shard string) error {
+// ValidatePermissionsShard validates all the permissions are the same
+// in a shard
+func (wr *Wrangler) ValidatePermissionsShard(ctx context.Context, keyspace, shard string) error {
 	si, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
@@ -49,14 +53,14 @@ func (wr *Wrangler) ValidatePermissionsShard(keyspace, shard string) error {
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shard)
 	}
 	log.Infof("Gathering permissions for master %v", si.MasterAlias)
-	masterPermissions, err := wr.GetPermissions(si.MasterAlias)
+	masterPermissions, err := wr.GetPermissions(ctx, si.MasterAlias)
 	if err != nil {
 		return err
 	}
 
 	// read all the aliases in the shard, that is all tablets that are
 	// replicating from the master
-	aliases, err := topo.FindAllTabletAliasesInShard(wr.ctx, wr.ts, keyspace, shard)
+	aliases, err := topo.FindAllTabletAliasesInShard(ctx, wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -69,7 +73,7 @@ func (wr *Wrangler) ValidatePermissionsShard(keyspace, shard string) error {
 			continue
 		}
 		wg.Add(1)
-		go wr.diffPermissions(masterPermissions, si.MasterAlias, alias, &wg, &er)
+		go wr.diffPermissions(ctx, masterPermissions, si.MasterAlias, alias, &wg, &er)
 	}
 	wg.Wait()
 	if er.HasErrors() {
@@ -78,7 +82,9 @@ func (wr *Wrangler) ValidatePermissionsShard(keyspace, shard string) error {
 	return nil
 }
 
-func (wr *Wrangler) ValidatePermissionsKeyspace(keyspace string) error {
+// ValidatePermissionsKeyspace validates all the permissions are the same
+// in a keyspace
+func (wr *Wrangler) ValidatePermissionsKeyspace(ctx context.Context, keyspace string) error {
 	// find all the shards
 	shards, err := wr.ts.GetShardNames(keyspace)
 	if err != nil {
@@ -91,7 +97,7 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(keyspace string) error {
 	}
 	sort.Strings(shards)
 	if len(shards) == 1 {
-		return wr.ValidatePermissionsShard(keyspace, shards[0])
+		return wr.ValidatePermissionsShard(ctx, keyspace, shards[0])
 	}
 
 	// find the reference permissions using the first shard's master
@@ -104,7 +110,7 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(keyspace string) error {
 	}
 	referenceAlias := si.MasterAlias
 	log.Infof("Gathering permissions for reference master %v", referenceAlias)
-	referencePermissions, err := wr.GetPermissions(si.MasterAlias)
+	referencePermissions, err := wr.GetPermissions(ctx, si.MasterAlias)
 	if err != nil {
 		return err
 	}
@@ -113,7 +119,7 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(keyspace string) error {
 	er := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for _, shard := range shards {
-		aliases, err := topo.FindAllTabletAliasesInShard(wr.ctx, wr.ts, keyspace, shard)
+		aliases, err := topo.FindAllTabletAliasesInShard(ctx, wr.ts, keyspace, shard)
 		if err != nil {
 			er.RecordError(err)
 			continue
@@ -125,7 +131,7 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(keyspace string) error {
 			}
 
 			wg.Add(1)
-			go wr.diffPermissions(referencePermissions, referenceAlias, alias, &wg, &er)
+			go wr.diffPermissions(ctx, referencePermissions, referenceAlias, alias, &wg, &er)
 		}
 	}
 	wg.Wait()

@@ -63,7 +63,7 @@ type VerticalSplitDiffWorker struct {
 	destinationSchemaDefinition *myproto.SchemaDefinition
 }
 
-// NewVerticalSplitDiff returns a new VerticalSplitDiffWorker object.
+// NewVerticalSplitDiffWorker returns a new VerticalSplitDiffWorker object.
 func NewVerticalSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string) Worker {
 	return &VerticalSplitDiffWorker{
 		wr:       wr,
@@ -89,6 +89,7 @@ func (vsdw *VerticalSplitDiffWorker) recordError(err error) {
 	vsdw.mu.Unlock()
 }
 
+// StatusAsHTML is part of the Worker interface.
 func (vsdw *VerticalSplitDiffWorker) StatusAsHTML() template.HTML {
 	vsdw.mu.Lock()
 	defer vsdw.mu.Unlock()
@@ -106,6 +107,7 @@ func (vsdw *VerticalSplitDiffWorker) StatusAsHTML() template.HTML {
 	return template.HTML(result)
 }
 
+// StatusAsText is part of the Worker interface.
 func (vsdw *VerticalSplitDiffWorker) StatusAsText() string {
 	vsdw.mu.Lock()
 	defer vsdw.mu.Unlock()
@@ -122,6 +124,7 @@ func (vsdw *VerticalSplitDiffWorker) StatusAsText() string {
 	return result
 }
 
+// CheckInterrupted is part of the Worker interface.
 func (vsdw *VerticalSplitDiffWorker) CheckInterrupted() bool {
 	select {
 	case <-interrupted:
@@ -371,7 +374,7 @@ func (vsdw *VerticalSplitDiffWorker) diff() error {
 	wg.Add(1)
 	go func() {
 		var err error
-		vsdw.destinationSchemaDefinition, err = vsdw.wr.GetSchema(vsdw.destinationAlias, nil, nil, false)
+		vsdw.destinationSchemaDefinition, err = vsdw.wr.GetSchema(vsdw.wr.Context(), vsdw.destinationAlias, nil, nil, false)
 		rec.RecordError(err)
 		vsdw.wr.Logger().Infof("Got schema from destination %v", vsdw.destinationAlias)
 		wg.Done()
@@ -379,7 +382,7 @@ func (vsdw *VerticalSplitDiffWorker) diff() error {
 	wg.Add(1)
 	go func() {
 		var err error
-		vsdw.sourceSchemaDefinition, err = vsdw.wr.GetSchema(vsdw.sourceAlias, nil, nil, false)
+		vsdw.sourceSchemaDefinition, err = vsdw.wr.GetSchema(vsdw.wr.Context(), vsdw.sourceAlias, nil, nil, false)
 		rec.RecordError(err)
 		vsdw.wr.Logger().Infof("Got schema from source %v", vsdw.sourceAlias)
 		wg.Done()

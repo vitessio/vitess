@@ -66,7 +66,7 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult) {
 		switch qre.plan.PlanId {
 		case planbuilder.PLAN_PASS_DML:
 			if qre.qe.strictMode.Get() != 0 {
-				panic(NewTabletError(FAIL, "DML too complex"))
+				panic(NewTabletError(ErrFail, "DML too complex"))
 			}
 			reply = qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
 		case planbuilder.PLAN_INSERT_PK:
@@ -86,7 +86,7 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult) {
 		switch qre.plan.PlanId {
 		case planbuilder.PLAN_PASS_SELECT:
 			if qre.plan.Reason == planbuilder.REASON_LOCK {
-				panic(NewTabletError(FAIL, "Disallowed outside transaction"))
+				panic(NewTabletError(ErrFail, "Disallowed outside transaction"))
 			}
 			reply = qre.execSelect()
 		case planbuilder.PLAN_PK_IN:
@@ -100,7 +100,7 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult) {
 			defer conn.Recycle()
 			reply = qre.execSQL(conn, qre.query, true)
 		default:
-			panic(NewTabletError(NOT_IN_TX, "DMLs not allowed outside of transactions"))
+			panic(NewTabletError(ErrNotInTx, "DMLs not allowed outside of transactions"))
 		}
 	}
 	return reply
@@ -117,7 +117,7 @@ func (qre *QueryExecutor) Stream(sendReply func(*mproto.QueryResult) error) {
 	conn := qre.getConn(qre.qe.streamConnPool)
 	defer conn.Recycle()
 
-	qd := NewQueryDetail(qre.query, qre.logStats.context, conn.Id())
+	qd := NewQueryDetail(qre.query, qre.logStats.context, conn.ID())
 	qre.qe.streamQList.Add(qd)
 	defer qre.qe.streamQList.Remove(qd)
 
@@ -135,16 +135,16 @@ func (qre *QueryExecutor) checkPermissions() {
 	action, desc := qre.plan.Rules.getAction(ci.RemoteAddr(), ci.Username(), qre.bindVars)
 	switch action {
 	case QR_FAIL:
-		panic(NewTabletError(FAIL, "Query disallowed due to rule: %s", desc))
+		panic(NewTabletError(ErrFail, "Query disallowed due to rule: %s", desc))
 	case QR_FAIL_RETRY:
-		panic(NewTabletError(RETRY, "Query disallowed due to rule: %s", desc))
+		panic(NewTabletError(ErrRetry, "Query disallowed due to rule: %s", desc))
 	}
 
 	// ACLs
 	if !qre.plan.Authorized.IsMember(ci.Username()) {
 		errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", ci.Username(), qre.plan.PlanId, qre.plan.TableName)
 		if qre.qe.strictTableAcl {
-			panic(NewTabletError(FAIL, "%s", errStr))
+			panic(NewTabletError(ErrFail, "%s", errStr))
 		}
 		qre.qe.accessCheckerLogger.Errorf("%s", errStr)
 	}
@@ -153,7 +153,7 @@ func (qre *QueryExecutor) checkPermissions() {
 func (qre *QueryExecutor) execDDL() *mproto.QueryResult {
 	ddlPlan := planbuilder.DDLParse(qre.query)
 	if ddlPlan.Action == "" {
-		panic(NewTabletError(FAIL, "DDL is not understood"))
+		panic(NewTabletError(ErrFail, "DDL is not understood"))
 	}
 
 	txid := qre.qe.txPool.Begin()
@@ -329,7 +329,7 @@ func (qre *QueryExecutor) execInsertSubquery(conn dbconnpool.PoolConnection) (re
 		return &mproto.QueryResult{RowsAffected: 0}
 	}
 	if len(qre.plan.ColumnNumbers) != len(innerRows[0]) {
-		panic(NewTabletError(FAIL, "Subquery length does not match column list"))
+		panic(NewTabletError(ErrFail, "Subquery length does not match column list"))
 	}
 	pkRows := make([][]sqltypes.Value, len(innerRows))
 	for i, innerRow := range innerRows {
@@ -424,19 +424,19 @@ func (qre *QueryExecutor) execSet() (result *mproto.QueryResult) {
 	case "vt_max_result_size":
 		val := getInt64(qre.plan.SetValue)
 		if val < 1 {
-			panic(NewTabletError(FAIL, "vt_max_result_size out of range %v", val))
+			panic(NewTabletError(ErrFail, "vt_max_result_size out of range %v", val))
 		}
 		qre.qe.maxResultSize.Set(val)
 	case "vt_max_dml_rows":
 		val := getInt64(qre.plan.SetValue)
 		if val < 1 {
-			panic(NewTabletError(FAIL, "vt_max_dml_rows out of range %v", val))
+			panic(NewTabletError(ErrFail, "vt_max_dml_rows out of range %v", val))
 		}
 		qre.qe.maxDMLRows.Set(val)
 	case "vt_stream_buffer_size":
 		val := getInt64(qre.plan.SetValue)
 		if val < 1024 {
-			panic(NewTabletError(FAIL, "vt_stream_buffer_size out of range %v", val))
+			panic(NewTabletError(ErrFail, "vt_stream_buffer_size out of range %v", val))
 		}
 		qre.qe.streamBufferSize.Set(val)
 	case "vt_query_timeout":
@@ -466,7 +466,7 @@ func getInt64(v interface{}) int64 {
 	if ival, ok := v.(int64); ok {
 		return ival
 	}
-	panic(NewTabletError(FAIL, "expecting int"))
+	panic(NewTabletError(ErrFail, "expecting int"))
 }
 
 func getFloat64(v interface{}) float64 {
@@ -476,7 +476,7 @@ func getFloat64(v interface{}) float64 {
 	if fval, ok := v.(float64); ok {
 		return fval
 	}
-	panic(NewTabletError(FAIL, "expecting number"))
+	panic(NewTabletError(ErrFail, "expecting number"))
 }
 
 func getDuration(v interface{}) time.Duration {

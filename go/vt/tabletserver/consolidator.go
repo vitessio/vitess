@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	waitError = NewTabletError(FAIL, "Error waiting for consolidation")
+	waitError = NewTabletError(ErrFail, "Error waiting for consolidation")
 )
 
 // Consolidator consolidates duplicate queries from executing simulaneously

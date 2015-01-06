@@ -15,6 +15,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 var getVersionFromTablet = func(tabletAddr string) (string, error) {
@@ -43,6 +44,7 @@ var getVersionFromTablet = func(tabletAddr string) (string, error) {
 	return version, nil
 }
 
+// GetVersion returns the version string from a tablet
 func (wr *Wrangler) GetVersion(tabletAlias topo.TabletAlias) (string, error) {
 	tablet, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
@@ -72,7 +74,9 @@ func (wr *Wrangler) diffVersion(masterVersion string, masterAlias topo.TabletAli
 	}
 }
 
-func (wr *Wrangler) ValidateVersionShard(keyspace, shard string) error {
+// ValidateVersionShard validates all versions are the same in all
+// tablets in a shard
+func (wr *Wrangler) ValidateVersionShard(ctx context.Context, keyspace, shard string) error {
 	si, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
@@ -90,7 +94,7 @@ func (wr *Wrangler) ValidateVersionShard(keyspace, shard string) error {
 
 	// read all the aliases in the shard, that is all tablets that are
 	// replicating from the master
-	aliases, err := topo.FindAllTabletAliasesInShard(wr.ctx, wr.ts, keyspace, shard)
+	aliases, err := topo.FindAllTabletAliasesInShard(ctx, wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -113,7 +117,9 @@ func (wr *Wrangler) ValidateVersionShard(keyspace, shard string) error {
 	return nil
 }
 
-func (wr *Wrangler) ValidateVersionKeyspace(keyspace string) error {
+// ValidateVersionKeyspace validates all versions are the same in all
+// tablets in a keyspace
+func (wr *Wrangler) ValidateVersionKeyspace(ctx context.Context, keyspace string) error {
 	// find all the shards
 	shards, err := wr.ts.GetShardNames(keyspace)
 	if err != nil {
@@ -126,7 +132,7 @@ func (wr *Wrangler) ValidateVersionKeyspace(keyspace string) error {
 	}
 	sort.Strings(shards)
 	if len(shards) == 1 {
-		return wr.ValidateVersionShard(keyspace, shards[0])
+		return wr.ValidateVersionShard(ctx, keyspace, shards[0])
 	}
 
 	// find the reference version using the first shard's master
@@ -148,7 +154,7 @@ func (wr *Wrangler) ValidateVersionKeyspace(keyspace string) error {
 	er := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for _, shard := range shards {
-		aliases, err := topo.FindAllTabletAliasesInShard(wr.ctx, wr.ts, keyspace, shard)
+		aliases, err := topo.FindAllTabletAliasesInShard(ctx, wr.ts, keyspace, shard)
 		if err != nil {
 			er.RecordError(err)
 			continue

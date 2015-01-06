@@ -8,6 +8,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/topotools/events"
+	"golang.org/x/net/context"
 )
 
 // reparentShardBrutal executes a brutal reparent.
@@ -18,7 +19,7 @@ import (
 //
 // The ev parameter is an event struct prefilled with information that the
 // caller has on hand, which would be expensive for us to re-query.
-func (wr *Wrangler) reparentShardBrutal(ev *events.Reparent, si *topo.ShardInfo, slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo, leaveMasterReadOnly, force bool) (err error) {
+func (wr *Wrangler) reparentShardBrutal(ctx context.Context, ev *events.Reparent, si *topo.ShardInfo, slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo, leaveMasterReadOnly, force bool) (err error) {
 	event.DispatchUpdate(ev, "starting brutal")
 
 	defer func() {
@@ -44,7 +45,7 @@ func (wr *Wrangler) reparentShardBrutal(ev *events.Reparent, si *topo.ShardInfo,
 
 		// Check the master-elect is fit for duty - call out for hardware checks.
 		event.DispatchUpdate(ev, "checking that new master is ready to serve")
-		if err := wr.checkMasterElect(masterElectTablet); err != nil {
+		if err := wr.checkMasterElect(ctx, masterElectTablet); err != nil {
 			return err
 		}
 

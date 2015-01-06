@@ -172,6 +172,7 @@ func (vscw *VerticalSplitCloneWorker) StatusAsText() string {
 	return result
 }
 
+// CheckInterrupted is part of the Worker interface
 func (vscw *VerticalSplitCloneWorker) CheckInterrupted() bool {
 	select {
 	case <-interrupted:
@@ -252,15 +253,15 @@ func (vscw *VerticalSplitCloneWorker) init() error {
 	servingTypes := []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY}
 	servedFrom := ""
 	for _, st := range servingTypes {
-		if sf, ok := destinationKeyspaceInfo.ServedFromMap[st]; !ok {
+		sf, ok := destinationKeyspaceInfo.ServedFromMap[st]
+		if !ok {
 			return fmt.Errorf("destination keyspace %v is serving type %v", vscw.destinationKeyspace, st)
+		}
+		if servedFrom == "" {
+			servedFrom = sf.Keyspace
 		} else {
-			if servedFrom == "" {
-				servedFrom = sf.Keyspace
-			} else {
-				if servedFrom != sf.Keyspace {
-					return fmt.Errorf("destination keyspace %v is serving from multiple source keyspaces %v and %v", vscw.destinationKeyspace, servedFrom, sf.Keyspace)
-				}
+			if servedFrom != sf.Keyspace {
+				return fmt.Errorf("destination keyspace %v is serving from multiple source keyspaces %v and %v", vscw.destinationKeyspace, servedFrom, sf.Keyspace)
 			}
 		}
 	}
@@ -353,7 +354,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	vscw.setState(stateVSCCopy)
 
 	// get source schema
-	sourceSchemaDefinition, err := vscw.wr.GetSchema(vscw.sourceAlias, vscw.tables, nil, true)
+	sourceSchemaDefinition, err := vscw.wr.GetSchema(vscw.wr.Context(), vscw.sourceAlias, vscw.tables, nil, true)
 	if err != nil {
 		return fmt.Errorf("cannot get schema from source %v: %v", vscw.sourceAlias, err)
 	}

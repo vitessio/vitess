@@ -12,12 +12,13 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/topotools/events"
+	"golang.org/x/net/context"
 )
 
 // reparentShardGraceful executes a graceful reparent.
 // The ev parameter is an event struct prefilled with information that the
 // caller has on hand, which would be expensive for us to re-query.
-func (wr *Wrangler) reparentShardGraceful(ev *events.Reparent, si *topo.ShardInfo, slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo, leaveMasterReadOnly bool) (err error) {
+func (wr *Wrangler) reparentShardGraceful(ctx context.Context, ev *events.Reparent, si *topo.ShardInfo, slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo, leaveMasterReadOnly bool) (err error) {
 	event.DispatchUpdate(ev, "starting graceful")
 
 	defer func() {
@@ -51,7 +52,7 @@ func (wr *Wrangler) reparentShardGraceful(ev *events.Reparent, si *topo.ShardInf
 		return fmt.Errorf("master elect tablet not in replication graph %v %v/%v %v", masterElectTablet.Alias, masterTablet.Keyspace, masterTablet.Shard, topotools.MapKeys(slaveTabletMap))
 	}
 
-	if err := wr.ValidateShard(masterTablet.Keyspace, masterTablet.Shard, true); err != nil {
+	if err := wr.ValidateShard(wr.ctx, masterTablet.Keyspace, masterTablet.Shard, true); err != nil {
 		return fmt.Errorf("ValidateShard verification failed: %v, if the master is dead, run: vtctl ScrapTablet -force %v", err, masterTablet.Alias)
 	}
 
@@ -64,7 +65,7 @@ func (wr *Wrangler) reparentShardGraceful(ev *events.Reparent, si *topo.ShardInf
 
 	// Check the master-elect is fit for duty - call out for hardware checks.
 	event.DispatchUpdate(ev, "checking that new master is ready to serve")
-	err = wr.checkMasterElect(masterElectTablet)
+	err = wr.checkMasterElect(ctx, masterElectTablet)
 	if err != nil {
 		return err
 	}

@@ -27,10 +27,12 @@ var (
 
 // Wrangler manages complex actions on the topology, like reparents,
 // snapshots, restores, ...
-// It is not a thread safe structure. Two go routines cannot usually
-// call the same Wrangler object methods at the same time (they
-// probably would not have the same logger, and definitely not the
-// same context).
+//
+// FIXME(alainjobart) take the context out of this structure.
+// We want the context to come from the outside on every call.
+//
+// Multiple go routines can use the same Wrangler at the same time,
+// provided they want to share the same logger / topo server / lock timeout.
 type Wrangler struct {
 	logger      logutil.Logger
 	ts          topo.Server

@@ -59,7 +59,7 @@ type QueryDeadliner chan bool
 func (ck *ConnectionKiller) SetDeadline(connID int64, deadline Deadline) QueryDeadliner {
 	timeout, err := deadline.Timeout()
 	if err != nil {
-		panic(NewTabletError(FAIL, "SetDeadline: %v", err))
+		panic(NewTabletError(ErrFail, "SetDeadline: %v", err))
 	}
 	if timeout == 0 {
 		return nil
