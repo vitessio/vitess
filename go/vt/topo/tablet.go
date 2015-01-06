@@ -561,6 +561,17 @@ func UpdateTablet(ctx context.Context, ts Server, tablet *TabletInfo) error {
 	return err
 }
 
+// UpdateTabletFields is a high level wrapper for TopoServer.UpdateTabletFields
+// that generates trace spans.
+func UpdateTabletFields(ctx context.Context, ts Server, alias TabletAlias, update func(*Tablet) error) error {
+	span := trace.NewSpanFromContext(ctx)
+	span.StartClient("TopoServer.UpdateTabletFields")
+	span.Annotate("tablet", alias.String())
+	defer span.Finish()
+
+	return ts.UpdateTabletFields(alias, update)
+}
+
 // Validate makes sure a tablet is represented correctly in the topology server.
 func Validate(ts Server, tabletAlias TabletAlias) error {
 	// read the tablet record, make sure it parses
