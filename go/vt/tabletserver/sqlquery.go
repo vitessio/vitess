@@ -100,28 +100,6 @@ func (sq *SqlQuery) setState(state int64) {
 	sq.state.Set(state)
 }
 
-// SetQueryRules sets one or more of the following QueryRule sets:
-// 1. Custom rule
-// 2. Tablet key range rule
-// 3. Table blacklist rule
-func (sq *SqlQuery) SetQueryRules(queryRuleSet string, newRules *QueryRules) error {
-	sq.mu.Lock()
-	defer sq.mu.Unlock()
-	err := sq.qe.queryRuleInfo.SetRules(queryRuleSet, newRules)
-	sq.qe.schemaInfo.ClearQueryPlanCache()
-	return err
-}
-
-// GetQueryRules returns one or more of the following QueryRule sets that is currently in use:
-// 1. Custom rule
-// 2. Tablet key range rule
-// 3. Table blacklist rule
-func (sq *SqlQuery) GetQueryRules(queryRuleSet string, newRules *QueryRules) (error, *QueryRules) {
-	sq.mu.Lock()
-	defer sq.mu.Unlock()
-	return sq.qe.queryRuleInfo.GetRules(queryRuleSet)
-}
-
 // allowQueries starts the query service.
 // If the state is anything other than NOT_SERVING, it fails.
 // If allowQuery succeeds, the resulting state is SERVING.
@@ -333,7 +311,7 @@ func (sq *SqlQuery) Execute(context context.Context, query *proto.Query, reply *
 		query:         query.Sql,
 		bindVars:      query.BindVariables,
 		transactionID: query.TransactionId,
-		plan:          sq.qe.schemaInfo.GetPlan(logStats, query.Sql, sq.qe.queryRuleInfo),
+		plan:          sq.qe.schemaInfo.GetPlan(logStats, query.Sql),
 		RequestContext: RequestContext{
 			ctx:      context,
 			logStats: logStats,
@@ -370,7 +348,7 @@ func (sq *SqlQuery) StreamExecute(context context.Context, query *proto.Query, s
 		query:         query.Sql,
 		bindVars:      query.BindVariables,
 		transactionID: query.TransactionId,
-		plan:          sq.qe.schemaInfo.GetStreamPlan(query.Sql, sq.qe.queryRuleInfo),
+		plan:          sq.qe.schemaInfo.GetStreamPlan(query.Sql),
 		RequestContext: RequestContext{
 			ctx:      context,
 			logStats: logStats,

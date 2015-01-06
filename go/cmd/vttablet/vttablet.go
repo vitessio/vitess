@@ -93,12 +93,6 @@ func main() {
 	tabletserver.InitQueryService()
 	binlog.RegisterUpdateStreamService(mycnf)
 
-	// Load custom query rules
-	err = tabletserver.SqlQueryRpcService.SetQueryRules(tabletserver.CustomQueryRules, tabletserver.LoadCustomRules())
-	if err != nil {
-		log.Warningf("Fail to load query rule set %s, Error message: %s", tabletserver.CustomQueryRules, err)
-	}
-
 	// Depends on both query and updateStream.
 	agent, err = tabletmanager.NewActionAgent(context.Background(), tabletAlias, dbcfgs, mycnf, *servenv.Port, *servenv.SecurePort, *overridesFile, *lockTimeout)
 	if err != nil {

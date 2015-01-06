@@ -7,6 +7,8 @@ from vtdb import cursor
 
 import framework
 import nocache_cases
+import environment
+import utils
 
 class TestNocache(framework.TestCase):
   def test_data(self):
@@ -461,6 +463,23 @@ class TestNocache(framework.TestCase):
       self.fail("Bindvar asdfg should not be allowed by custom rule")
     except dbexceptions.DatabaseError as e:
       self.assertContains(str(e), "error: Query disallowed")
+    # Test dynamic custom rule for vttablet
+    if self.env.env == "vttablet":
+      # Make a change to the rule
+      self.env.change_customrules()
+      time.sleep(3)
+      try:
+        self.env.execute("select * from vtocc_test where intval=:asdfg", bv)
+      except dbexceptions.DatabaseError as e:
+        self.fail("Bindvar asdfg should be allowed after a change of custom rule, Err=" + str(e))
+      # Restore the rule
+      self.env.restore_customrules()
+      time.sleep(3)
+      try:
+        self.env.execute("select * from vtocc_test where intval=:asdfg", bv)
+        self.fail("Bindvar asdfg should not be allowed by custom rule")
+      except dbexceptions.DatabaseError as e:
+        self.assertContains(str(e), "error: Query disallowed")
 
   def test_health(self):
     self.assertEqual(self.env.health(), "ok")
