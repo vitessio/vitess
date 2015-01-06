@@ -361,7 +361,7 @@ func main() {
 	// keyspace actions
 	actionRepo.RegisterKeyspaceAction("ValidateKeyspace",
 		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
-			return "", wr.ValidateKeyspace(keyspace, false)
+			return "", wr.ValidateKeyspace(ctx, keyspace, false)
 		})
 
 	actionRepo.RegisterKeyspaceAction("ValidateSchemaKeyspace",
@@ -371,18 +371,18 @@ func main() {
 
 	actionRepo.RegisterKeyspaceAction("ValidateVersionKeyspace",
 		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
-			return "", wr.ValidateVersionKeyspace(keyspace)
+			return "", wr.ValidateVersionKeyspace(ctx, keyspace)
 		})
 
 	actionRepo.RegisterKeyspaceAction("ValidatePermissionsKeyspace",
 		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
-			return "", wr.ValidatePermissionsKeyspace(keyspace)
+			return "", wr.ValidatePermissionsKeyspace(ctx, keyspace)
 		})
 
 	// shard actions
 	actionRepo.RegisterShardAction("ValidateShard",
 		func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (string, error) {
-			return "", wr.ValidateShard(keyspace, shard, false)
+			return "", wr.ValidateShard(ctx, keyspace, shard, false)
 		})
 
 	actionRepo.RegisterShardAction("ValidateSchemaShard",
@@ -392,12 +392,12 @@ func main() {
 
 	actionRepo.RegisterShardAction("ValidateVersionShard",
 		func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (string, error) {
-			return "", wr.ValidateVersionShard(keyspace, shard)
+			return "", wr.ValidateVersionShard(ctx, keyspace, shard)
 		})
 
 	actionRepo.RegisterShardAction("ValidatePermissionsShard",
 		func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (string, error) {
-			return "", wr.ValidatePermissionsShard(keyspace, shard)
+			return "", wr.ValidatePermissionsShard(ctx, keyspace, shard)
 		})
 
 	// tablet actions

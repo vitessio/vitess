@@ -80,5 +80,5 @@ func commandReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	if err != nil {
 		return err
 	}
-	return wr.ReparentShard(keyspace, shard, tabletAlias, *leaveMasterReadOnly, *force)
+	return wr.ReparentShard(ctx, keyspace, shard, tabletAlias, *leaveMasterReadOnly, *force)
 }

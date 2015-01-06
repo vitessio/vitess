@@ -874,7 +874,7 @@ func commandSnapshotSourceEnd(ctx context.Context, wr *wrangler.Wrangler, subFla
 	if err != nil {
 		return err
 	}
-	return wr.SnapshotSourceEnd(tabletAlias, *slaveStartRequired, !(*readWrite), tabletType)
+	return wr.SnapshotSourceEnd(ctx, tabletAlias, *slaveStartRequired, !(*readWrite), tabletType)
 }
 
 func commandSnapshot(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -957,7 +957,7 @@ func commandClone(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 			return err
 		}
 	}
-	return wr.Clone(srcTabletAlias, dstTabletAliases, *force, *concurrency, *fetchConcurrency, *fetchRetryCount, *serverMode)
+	return wr.Clone(ctx, srcTabletAlias, dstTabletAliases, *force, *concurrency, *fetchConcurrency, *fetchRetryCount, *serverMode)
 }
 
 func commandExecuteFetch(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -996,7 +996,7 @@ func commandExecuteHook(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 	hook := &hk.Hook{Name: subFlags.Arg(1), Parameters: subFlags.Args()[2:]}
-	hr, err := wr.ExecuteHook(tabletAlias, hook)
+	hr, err := wr.ExecuteHook(ctx, tabletAlias, hook)
 	if err == nil {
 		log.Infof(hr.String())
 	}
@@ -1108,7 +1108,7 @@ func commandValidateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	if err != nil {
 		return err
 	}
-	return wr.ValidateShard(keyspace, shard, *pingTablets)
+	return wr.ValidateShard(ctx, keyspace, shard, *pingTablets)
 }
 
 func commandShardReplicationPositions(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1507,7 +1507,7 @@ func commandValidateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	}
 
 	keyspace := subFlags.Arg(0)
-	return wr.ValidateKeyspace(keyspace, *pingTablets)
+	return wr.ValidateKeyspace(ctx, keyspace, *pingTablets)
 }
 
 func commandMigrateServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1622,7 +1622,7 @@ func commandValidate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 	if subFlags.NArg() != 0 {
 		log.Warningf("action Validate doesn't take any parameter any more")
 	}
-	return wr.Validate(*pingTablets)
+	return wr.Validate(ctx, *pingTablets)
 }
 
 func commandRebuildReplicationGraph(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1943,7 +1943,7 @@ func commandValidateVersionShard(ctx context.Context, wr *wrangler.Wrangler, sub
 	if err != nil {
 		return err
 	}
-	return wr.ValidateVersionShard(keyspace, shard)
+	return wr.ValidateVersionShard(ctx, keyspace, shard)
 }
 
 func commandValidateVersionKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1955,7 +1955,7 @@ func commandValidateVersionKeyspace(ctx context.Context, wr *wrangler.Wrangler, 
 	}
 
 	keyspace := subFlags.Arg(0)
-	return wr.ValidateVersionKeyspace(keyspace)
+	return wr.ValidateVersionKeyspace(ctx, keyspace)
 }
 
 func commandGetPermissions(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1969,7 +1969,7 @@ func commandGetPermissions(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err != nil {
 		return err
 	}
-	p, err := wr.GetPermissions(tabletAlias)
+	p, err := wr.GetPermissions(ctx, tabletAlias)
 	if err == nil {
 		log.Infof("%v", p.String()) // they can contain '%'
 	}
@@ -1988,7 +1988,7 @@ func commandValidatePermissionsShard(ctx context.Context, wr *wrangler.Wrangler,
 	if err != nil {
 		return err
 	}
-	return wr.ValidatePermissionsShard(keyspace, shard)
+	return wr.ValidatePermissionsShard(ctx, keyspace, shard)
 }
 
 func commandValidatePermissionsKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2000,7 +2000,7 @@ func commandValidatePermissionsKeyspace(ctx context.Context, wr *wrangler.Wrangl
 	}
 
 	keyspace := subFlags.Arg(0)
-	return wr.ValidatePermissionsKeyspace(keyspace)
+	return wr.ValidatePermissionsKeyspace(ctx, keyspace)
 }
 
 func commandGetSrvKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

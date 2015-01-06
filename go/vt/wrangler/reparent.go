@@ -72,10 +72,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/topotools/events"
-)
-
-const (
-	SLAVE_STATUS_DEADLINE = 10e9
+	"golang.org/x/net/context"
 )
 
 // ReparentShard creates the reparenting action and launches a goroutine
@@ -86,7 +83,7 @@ const (
 //   though all the other necessary updates have been made.
 // forceReparentToCurrentMaster: mostly for test setups, this can
 //   cause data loss.
-func (wr *Wrangler) ReparentShard(keyspace, shard string, masterElectTabletAlias topo.TabletAlias, leaveMasterReadOnly, forceReparentToCurrentMaster bool) error {
+func (wr *Wrangler) ReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias topo.TabletAlias, leaveMasterReadOnly, forceReparentToCurrentMaster bool) error {
 	// lock the shard
 	actionNode := actionnode.ReparentShard(masterElectTabletAlias)
 	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
@@ -95,13 +92,13 @@ func (wr *Wrangler) ReparentShard(keyspace, shard string, masterElectTabletAlias
 	}
 
 	// do the work
-	err = wr.reparentShardLocked(keyspace, shard, masterElectTabletAlias, leaveMasterReadOnly, forceReparentToCurrentMaster)
+	err = wr.reparentShardLocked(ctx, keyspace, shard, masterElectTabletAlias, leaveMasterReadOnly, forceReparentToCurrentMaster)
 
 	// and unlock
 	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 }
 
-func (wr *Wrangler) reparentShardLocked(keyspace, shard string, masterElectTabletAlias topo.TabletAlias, leaveMasterReadOnly, forceReparentToCurrentMaster bool) error {
+func (wr *Wrangler) reparentShardLocked(ctx context.Context, keyspace, shard string, masterElectTabletAlias topo.TabletAlias, leaveMasterReadOnly, forceReparentToCurrentMaster bool) error {
 	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
@@ -133,9 +130,9 @@ func (wr *Wrangler) reparentShardLocked(keyspace, shard string, masterElectTable
 	}
 
 	if !shardInfo.MasterAlias.IsZero() && !forceReparentToCurrentMaster {
-		err = wr.reparentShardGraceful(ev, shardInfo, slaveTabletMap, masterTabletMap, masterElectTablet, leaveMasterReadOnly)
+		err = wr.reparentShardGraceful(ctx, ev, shardInfo, slaveTabletMap, masterTabletMap, masterElectTablet, leaveMasterReadOnly)
 	} else {
-		err = wr.reparentShardBrutal(ev, shardInfo, slaveTabletMap, masterTabletMap, masterElectTablet, leaveMasterReadOnly, forceReparentToCurrentMaster)
+		err = wr.reparentShardBrutal(ctx, ev, shardInfo, slaveTabletMap, masterTabletMap, masterElectTablet, leaveMasterReadOnly, forceReparentToCurrentMaster)
 	}
 
 	if err == nil {

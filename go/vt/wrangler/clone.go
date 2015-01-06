@@ -11,6 +11,7 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 // Snapshot takes a tablet snapshot.
@@ -55,7 +56,7 @@ func (wr *Wrangler) Snapshot(tabletAlias topo.TabletAlias, forceMasterSnapshot b
 
 // SnapshotSourceEnd will change the tablet back to its original type
 // once it's done serving backups.
-func (wr *Wrangler) SnapshotSourceEnd(tabletAlias topo.TabletAlias, slaveStartRequired, readWrite bool, originalType topo.TabletType) (err error) {
+func (wr *Wrangler) SnapshotSourceEnd(ctx context.Context, tabletAlias topo.TabletAlias, slaveStartRequired, readWrite bool, originalType topo.TabletType) (err error) {
 	var ti *topo.TabletInfo
 	ti, err = wr.ts.GetTablet(tabletAlias)
 	if err != nil {
@@ -67,12 +68,12 @@ func (wr *Wrangler) SnapshotSourceEnd(tabletAlias topo.TabletAlias, slaveStartRe
 		ReadOnly:           !readWrite,
 		OriginalType:       originalType,
 	}
-	return wr.tmc.SnapshotSourceEnd(wr.ctx, ti, args)
+	return wr.tmc.SnapshotSourceEnd(ctx, ti, args)
 }
 
 // ReserveForRestore will make sure a tablet is ready to be used as a restore
 // target.
-func (wr *Wrangler) ReserveForRestore(srcTabletAlias, dstTabletAlias topo.TabletAlias) (err error) {
+func (wr *Wrangler) ReserveForRestore(ctx context.Context, srcTabletAlias, dstTabletAlias topo.TabletAlias) (err error) {
 	// read our current tablet, verify its state before sending it
 	// to the tablet itself
 	tablet, err := wr.ts.GetTablet(dstTabletAlias)
@@ -86,7 +87,7 @@ func (wr *Wrangler) ReserveForRestore(srcTabletAlias, dstTabletAlias topo.Tablet
 	args := &actionnode.ReserveForRestoreArgs{
 		SrcTabletAlias: srcTabletAlias,
 	}
-	return wr.tmc.ReserveForRestore(wr.ctx, tablet, args)
+	return wr.tmc.ReserveForRestore(ctx, tablet, args)
 }
 
 // UnreserveForRestore switches the tablet back to its original state,
@@ -176,13 +177,13 @@ func (wr *Wrangler) UnreserveForRestoreMulti(dstTabletAliases []topo.TabletAlias
 
 // Clone will do all the necessary actions to copy all the data from a
 // source to a set of destinations.
-func (wr *Wrangler) Clone(srcTabletAlias topo.TabletAlias, dstTabletAliases []topo.TabletAlias, forceMasterSnapshot bool, snapshotConcurrency, fetchConcurrency, fetchRetryCount int, serverMode bool) error {
+func (wr *Wrangler) Clone(ctx context.Context, srcTabletAlias topo.TabletAlias, dstTabletAliases []topo.TabletAlias, forceMasterSnapshot bool, snapshotConcurrency, fetchConcurrency, fetchRetryCount int, serverMode bool) error {
 	// make sure the destination can be restored into (otherwise
 	// there is no point in taking the snapshot in the first place),
 	// and reserve it.
 	reserved := make([]topo.TabletAlias, 0, len(dstTabletAliases))
 	for _, dstTabletAlias := range dstTabletAliases {
-		err := wr.ReserveForRestore(srcTabletAlias, dstTabletAlias)
+		err := wr.ReserveForRestore(ctx, srcTabletAlias, dstTabletAlias)
 		if err != nil {
 			wr.UnreserveForRestoreMulti(reserved)
 			return err
@@ -218,7 +219,7 @@ func (wr *Wrangler) Clone(srcTabletAlias topo.TabletAlias, dstTabletAliases []to
 
 	// in any case, fix the server
 	if serverMode {
-		resetErr := wr.SnapshotSourceEnd(srcTabletAlias, sr.SlaveStartRequired, sr.ReadOnly, originalType)
+		resetErr := wr.SnapshotSourceEnd(ctx, srcTabletAlias, sr.SlaveStartRequired, sr.ReadOnly, originalType)
 		if resetErr != nil {
 			if err == nil {
 				// If there is no other error, this matters.

@@ -408,7 +408,7 @@ func (wr *Wrangler) applySchemaShardComplex(ctx context.Context, statusArray []*
 			ev.OldMaster = *oldMasterTablet.Tablet
 		}
 
-		err = wr.reparentShardGraceful(ev, shardInfo, slaveTabletMap, masterTabletMap, newMasterTablet /*leaveMasterReadOnly*/, false)
+		err = wr.reparentShardGraceful(ctx, ev, shardInfo, slaveTabletMap, masterTabletMap, newMasterTablet /*leaveMasterReadOnly*/, false)
 		if err != nil {
 			return nil, err
 		}
