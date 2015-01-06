@@ -195,15 +195,15 @@ func (agent *ActionAgent) updateState(ctx context.Context, oldTablet *topo.Table
 	return agent.changeCallback(ctx, oldTablet, newTablet)
 }
 
-func (agent *ActionAgent) readTablet() error {
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+func (agent *ActionAgent) readTablet(ctx context.Context) (*topo.TabletInfo, error) {
+	tablet, err := topo.GetTablet(ctx, agent.TopoServer, agent.TabletAlias)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	agent.mutex.Lock()
 	agent._tablet = tablet
 	agent.mutex.Unlock()
-	return nil
+	return tablet, nil
 }
 
 // Tablet reads the stored TabletInfo from the agent, protected by mutex.
@@ -267,7 +267,7 @@ func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) erro
 	oldTablet := agent.Tablet().Tablet
 
 	// Actions should have side effects on the tablet, so reload the data.
-	if err := agent.readTablet(); err != nil {
+	if _, err := agent.readTablet(ctx); err != nil {
 		log.Warningf("Failed rereading tablet after %v - services may be inconsistent: %v", reason, err)
 		return fmt.Errorf("Failed rereading tablet after %v: %v", reason, err)
 	}
@@ -316,7 +316,7 @@ func (agent *ActionAgent) verifyServingAddrs() error {
 // the initial state change callback to start tablet services.
 func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 	var err error
-	if err = agent.readTablet(); err != nil {
+	if _, err = agent.readTablet(context.TODO()); err != nil {
 		return err
 	}
 
@@ -359,7 +359,7 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 	}
 
 	// Reread to get the changes we just made
-	if err := agent.readTablet(); err != nil {
+	if _, err := agent.readTablet(context.TODO()); err != nil {
 		return err
 	}
 
