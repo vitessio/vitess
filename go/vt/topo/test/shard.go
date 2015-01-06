@@ -94,6 +94,29 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Errorf("UpdateShard: %v", err)
 	}
 
+	other := topo.TabletAlias{Cell: "ny", Uid: 82873}
+	_, err = topo.UpdateShardFields(ctx, ts, "test_keyspace", "b0-c0", func(shard *topo.Shard) error {
+		shard.MasterAlias = other
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UpdateShardFields error: %v", err)
+	}
+	si, err := topo.GetShard(ctx, ts, "test_keyspace", "b0-c0")
+	if err != nil {
+		t.Fatalf("GetShard: %v", err)
+	}
+	if si.MasterAlias != other {
+		t.Fatalf("shard.MasterAlias = %v, want %v", si.MasterAlias, other)
+	}
+	_, err = topo.UpdateShardFields(ctx, ts, "test_keyspace", "b0-c0", func(shard *topo.Shard) error {
+		shard.MasterAlias = master
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UpdateShardFields error: %v", err)
+	}
+
 	updatedShardInfo, err := topo.GetShard(ctx, ts, "test_keyspace", "b0-c0")
 	if err != nil {
 		t.Fatalf("GetShard: %v", err)

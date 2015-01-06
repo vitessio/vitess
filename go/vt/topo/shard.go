@@ -268,6 +268,25 @@ func UpdateShard(ctx context.Context, ts Server, si *ShardInfo) error {
 	return err
 }
 
+// UpdateShardFields is a high level helper to read a shard record, call an
+// update function on it, and then write it back. If the write fails due to
+// a version mismatch, it will re-read the record and retry the update.
+// If the update succeeds, it returns the updated ShardInfo.
+func UpdateShardFields(ctx context.Context, ts Server, keyspace, shard string, update func(*Shard) error) (*ShardInfo, error) {
+	for {
+		si, err := GetShard(ctx, ts, keyspace, shard)
+		if err != nil {
+			return nil, err
+		}
+		if err = update(si.Shard); err != nil {
+			return nil, err
+		}
+		if err = UpdateShard(ctx, ts, si); err != ErrBadVersion {
+			return si, err
+		}
+	}
+}
+
 // CreateShard creates a new shard and tries to fill in the right information.
 func CreateShard(ts Server, keyspace, shard string) error {
 
