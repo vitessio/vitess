@@ -25,7 +25,7 @@ from topo_flavor.server import set_topo_server_flavor
 
 options = None
 devnull = open('/dev/null', 'w')
-hostname = socket.getfqdn()
+hostname = socket.getaddrinfo(socket.getfqdn(), None, 0, 0, 0, socket.AI_CANONNAME)[0][3]
 
 class TestError(Exception):
   pass
