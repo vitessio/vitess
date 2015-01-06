@@ -120,7 +120,7 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 	// not derived values (like the serving graph).
 	event.DispatchUpdate(ev, "updating old and new master tablet records")
 	log.Infof("finalizeTabletExternallyReparented: updating tablet records")
-	wg.Add(2)
+	wg.Add(1)
 	go func() {
 		// Update our own record to master.
 		err := topo.UpdateTabletFields(ctx, agent.TopoServer, agent.TabletAlias,
@@ -133,27 +133,31 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 		errs.RecordError(err)
 		wg.Done()
 	}()
-	go func() {
-		// Force the old master to spare.
-		var oldMasterTablet *topo.Tablet
-		err := topo.UpdateTabletFields(ctx, agent.TopoServer, oldMasterAlias,
-			func(tablet *topo.Tablet) error {
-				tablet.Type = topo.TYPE_SPARE
-				oldMasterTablet = tablet
-				return nil
-			})
-		errs.RecordError(err)
-		wg.Done()
-		if err != nil {
-			return
-		}
 
-		// Tell the old master to refresh its state. We don't need to wait for it.
-		if oldMasterTablet != nil {
-			tmc := tmclient.NewTabletManagerClient()
-			tmc.RefreshState(ctx, topo.NewTabletInfo(oldMasterTablet, -1))
-		}
-	}()
+	if !oldMasterAlias.IsZero() {
+		wg.Add(1)
+		go func() {
+			// Force the old master to spare.
+			var oldMasterTablet *topo.Tablet
+			err := topo.UpdateTabletFields(ctx, agent.TopoServer, oldMasterAlias,
+				func(tablet *topo.Tablet) error {
+					tablet.Type = topo.TYPE_SPARE
+					oldMasterTablet = tablet
+					return nil
+				})
+			errs.RecordError(err)
+			wg.Done()
+			if err != nil {
+				return
+			}
+
+			// Tell the old master to refresh its state. We don't need to wait for it.
+			if oldMasterTablet != nil {
+				tmc := tmclient.NewTabletManagerClient()
+				tmc.RefreshState(ctx, topo.NewTabletInfo(oldMasterTablet, -1))
+			}
+		}()
+	}
 
 	tablet := agent.Tablet()
 
