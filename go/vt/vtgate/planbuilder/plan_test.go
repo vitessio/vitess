@@ -84,7 +84,7 @@ func TestPlanName(t *testing.T) {
 }
 
 func TestPlan(t *testing.T) {
-	schema, err := LoadSchemaJSON(locateFile("schema_test.json"))
+	schema, err := LoadFile(locateFile("schema_test.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

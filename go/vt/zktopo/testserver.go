@@ -45,3 +45,17 @@ func (s *TestServer) LockSrvShardForAction(ctx context.Context, cell, keyspace, 
 	}
 	return s.Server.LockSrvShardForAction(ctx, cell, keyspace, shard, contents)
 }
+
+// TODO(sougou): Remove these two functions after they're
+// migrated into topo.Server.
+// SaveVSchema has to be redefined here.
+// Otherwise the test type assertion fails.
+func (s *TestServer) SaveVSchema(vschema string) error {
+	return s.Server.(topo.Schemafier).SaveVSchema(vschema)
+}
+
+// GetVSchema has to be redefined here.
+// Otherwise the test type assertion fails.
+func (s *TestServer) GetVSchema() (string, error) {
+	return s.Server.(topo.Schemafier).GetVSchema()
+}

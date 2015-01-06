@@ -1,0 +1,25 @@
+<html>
+<head>
+<title>VSchema view</title>
+<style>
+  html {font-family: sans-serif;}
+</style>
+</head>
+
+<body>
+
+{{if .Error}}
+  <h2>Error</h2>
+  <div id="err">{{.Error}}</div>
+{{else}}
+  <h2>Success</h2>
+{{end}}
+<pre id="vschema">{{.Output}}</pre>
+
+<form method="post">
+  Upload VSchema<br><textarea name="vschema" cols=80 rows=30>{{.Input}}</textarea><br>
+  <input type="submit" value="Submit">
+</form>
+
+</body>
+</html>

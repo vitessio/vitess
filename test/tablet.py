@@ -415,7 +415,9 @@ class Tablet(object):
                      repl_extra_flags={}, table_acl_config=None,
                      lameduck_period=None, security_policy=None,
                      target_tablet_type=None, full_mycnf_args=False,
-                     extra_args=None, extra_env=None, include_mysql_port=True):
+                     extra_args=None, extra_env=None, include_mysql_port=True,
+                     init_tablet_type=None, init_keyspace=None,
+                     init_shard=None, init_db_name_override=None):
     """Starts a vttablet process, and returns it.
 
     The process is also saved in self.proc, so it's easy to kill as well.
@@ -461,9 +463,25 @@ class Tablet(object):
       if include_mysql_port:
         args.extend(['-mycnf_mysql_port', str(self.mysql_port)])
     if target_tablet_type:
+      self.tablet_type = target_tablet_type
       args.extend(['-target_tablet_type', target_tablet_type,
                    '-health_check_interval', '2s',
                    '-allowed_replication_lag', '30'])
+
+    # this is used to run InitTablet as part of the vttablet startup
+    if init_tablet_type:
+      self.tablet_type = init_tablet_type
+      args.extend(['-init_tablet_type', init_tablet_type])
+    if init_keyspace:
+      self.keyspace = init_keyspace
+      self.shard = init_shard
+      args.extend(['-init_keyspace', init_keyspace,
+                   '-init_shard', init_shard])
+      if init_db_name_override:
+        self.dbname = init_db_name_override
+        args.extend(['-init_db_name_override', init_db_name_override])
+      else:
+        self.dbname = 'vt_' + init_keyspace
 
     if extra_args:
       args.extend(extra_args)

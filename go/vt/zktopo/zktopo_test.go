@@ -63,3 +63,9 @@ func TestSrvShardLock(t *testing.T) {
 	defer ts.Close()
 	test.CheckSrvShardLock(t, ts)
 }
+
+func TestVSchema(t *testing.T) {
+	ts := NewTestServer(t, []string{"test"})
+	defer ts.Close()
+	test.CheckVSchema(t, ts)
+}
