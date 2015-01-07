@@ -60,7 +60,7 @@ func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err != nil {
 		return err
 	}
-	return wr.ReparentTablet(tabletAlias)
+	return wr.ReparentTablet(ctx, tabletAlias)
 }
 
 func commandReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

@@ -588,7 +588,7 @@ func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		tablet.Portmap["vts"] = *vtsPort
 	}
 
-	return wr.InitTablet(tablet, *force, *parent, *update)
+	return wr.InitTablet(ctx, tablet, *force, *parent, *update)
 }
 
 func commandGetTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -670,7 +670,7 @@ func commandScrapTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return err
 	}
-	return wr.Scrap(tabletAlias, *force, *skipRebuild)
+	return wr.Scrap(ctx, tabletAlias, *force, *skipRebuild)
 }
 
 func commandDeleteTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -763,7 +763,7 @@ func commandChangeSlaveType(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		wr.Logger().Printf("+ %v\n", fmtTabletAwkable(ti))
 		return nil
 	}
-	return wr.ChangeType(tabletAlias, newType, *force)
+	return wr.ChangeType(ctx, tabletAlias, newType, *force)
 }
 
 func commandPing(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -930,7 +930,7 @@ func commandRestore(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 			return err
 		}
 	}
-	return wr.Restore(srcTabletAlias, subFlags.Arg(1), dstTabletAlias, parentAlias, *fetchConcurrency, *fetchRetryCount, false, *dontWaitForSlaveStart)
+	return wr.Restore(ctx, srcTabletAlias, subFlags.Arg(1), dstTabletAlias, parentAlias, *fetchConcurrency, *fetchRetryCount, false, *dontWaitForSlaveStart)
 }
 
 func commandClone(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -976,7 +976,7 @@ func commandExecuteFetch(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 	query := subFlags.Arg(1)
-	qr, err := wr.ExecuteFetch(alias, query, *maxRows, *wantFields, *disableBinlogs)
+	qr, err := wr.ExecuteFetch(ctx, alias, query, *maxRows, *wantFields, *disableBinlogs)
 	if err == nil {
 		wr.Logger().Printf("%v\n", jscfg.ToJson(qr))
 	}
@@ -1069,7 +1069,7 @@ func commandRebuildShardGraph(ctx context.Context, wr *wrangler.Wrangler, subFla
 		return err
 	}
 	for _, ks := range keyspaceShards {
-		if _, err := wr.RebuildShardGraph(ks.Keyspace, ks.Shard, cellArray); err != nil {
+		if _, err := wr.RebuildShardGraph(ctx, ks.Keyspace, ks.Shard, cellArray); err != nil {
 			return err
 		}
 	}
@@ -1122,7 +1122,7 @@ func commandShardReplicationPositions(ctx context.Context, wr *wrangler.Wrangler
 	if err != nil {
 		return err
 	}
-	tablets, stats, err := wr.ShardReplicationStatuses(keyspace, shard)
+	tablets, stats, err := wr.ShardReplicationStatuses(ctx, keyspace, shard)
 	if tablets == nil {
 		return err
 	}
@@ -1179,7 +1179,7 @@ func commandSetShardServedTypes(ctx context.Context, wr *wrangler.Wrangler, subF
 		cells = strings.Split(*cellsStr, ",")
 	}
 
-	return wr.SetShardServedTypes(keyspace, shard, cells, servedType, *remove)
+	return wr.SetShardServedTypes(ctx, keyspace, shard, cells, servedType, *remove)
 }
 
 func commandSetShardTabletControl(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1210,7 +1210,7 @@ func commandSetShardTabletControl(ctx context.Context, wr *wrangler.Wrangler, su
 		cells = strings.Split(*cellsStr, ",")
 	}
 
-	return wr.SetShardTabletControl(keyspace, shard, tabletType, cells, *remove, *disableQueryService, tables)
+	return wr.SetShardTabletControl(ctx, keyspace, shard, tabletType, cells, *remove, *disableQueryService, tables)
 }
 
 func commandSourceShardDelete(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1229,7 +1229,7 @@ func commandSourceShardDelete(ctx context.Context, wr *wrangler.Wrangler, subFla
 	if err != nil {
 		return err
 	}
-	return wr.SourceShardDelete(keyspace, shard, uint32(uid))
+	return wr.SourceShardDelete(ctx, keyspace, shard, uint32(uid))
 }
 
 func commandSourceShardAdd(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1263,7 +1263,7 @@ func commandSourceShardAdd(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 			return err
 		}
 	}
-	return wr.SourceShardAdd(keyspace, shard, uint32(uid), skeyspace, sshard, kr, tables)
+	return wr.SourceShardAdd(ctx, keyspace, shard, uint32(uid), skeyspace, sshard, kr, tables)
 }
 
 func commandShardReplicationAdd(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1333,7 +1333,7 @@ func commandRemoveShardCell(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	if err != nil {
 		return err
 	}
-	return wr.RemoveShardCell(keyspace, shard, subFlags.Arg(1), *force)
+	return wr.RemoveShardCell(ctx, keyspace, shard, subFlags.Arg(1), *force)
 }
 
 func commandDeleteShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1349,7 +1349,7 @@ func commandDeleteShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 	for _, ks := range keyspaceShards {
-		err := wr.DeleteShard(ks.Keyspace, ks.Shard)
+		err := wr.DeleteShard(ctx, ks.Keyspace, ks.Shard)
 		switch err {
 		case nil:
 			// keep going
@@ -1445,7 +1445,7 @@ func commandSetKeyspaceShardingInfo(ctx context.Context, wr *wrangler.Wrangler, 
 		}
 	}
 
-	return wr.SetKeyspaceShardingInfo(keyspace, columnName, kit, int32(*splitShardCount), *force)
+	return wr.SetKeyspaceShardingInfo(ctx, keyspace, columnName, kit, int32(*splitShardCount), *force)
 }
 
 func commandSetKeyspaceServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1468,7 +1468,7 @@ func commandSetKeyspaceServedFrom(ctx context.Context, wr *wrangler.Wrangler, su
 		cells = strings.Split(*cellsStr, ",")
 	}
 
-	return wr.SetKeyspaceServedFrom(keyspace, servedType, cells, *source, *remove)
+	return wr.SetKeyspaceServedFrom(ctx, keyspace, servedType, cells, *source, *remove)
 }
 
 func commandRebuildKeyspaceGraph(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1490,7 +1490,7 @@ func commandRebuildKeyspaceGraph(ctx context.Context, wr *wrangler.Wrangler, sub
 		return err
 	}
 	for _, keyspace := range keyspaces {
-		if err := wr.RebuildKeyspaceGraph(keyspace, cellArray); err != nil {
+		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, cellArray); err != nil {
 			return err
 		}
 	}
@@ -1537,7 +1537,7 @@ func commandMigrateServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFl
 	if *cellsStr != "" {
 		cells = strings.Split(*cellsStr, ",")
 	}
-	return wr.MigrateServedTypes(keyspace, shard, cells, servedType, *reverse, *skipReFreshState, *filteredReplicationWaitTime)
+	return wr.MigrateServedTypes(ctx, keyspace, shard, cells, servedType, *reverse, *skipReFreshState, *filteredReplicationWaitTime)
 }
 
 func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1563,7 +1563,7 @@ func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFla
 	if *cellsStr != "" {
 		cells = strings.Split(*cellsStr, ",")
 	}
-	return wr.MigrateServedFrom(keyspace, shard, servedType, cells, *reverse, *filteredReplicationWaitTime)
+	return wr.MigrateServedFrom(ctx, keyspace, shard, servedType, cells, *reverse, *filteredReplicationWaitTime)
 }
 
 func commandFindAllShardsInKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1642,7 +1642,7 @@ func commandRebuildReplicationGraph(ctx context.Context, wr *wrangler.Wrangler, 
 	if err != nil {
 		return err
 	}
-	return wr.RebuildReplicationGraph(cells, keyspaces)
+	return wr.RebuildReplicationGraph(ctx, cells, keyspaces)
 }
 
 func commandListAllTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

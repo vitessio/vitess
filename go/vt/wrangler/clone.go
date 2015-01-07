@@ -92,7 +92,7 @@ func (wr *Wrangler) ReserveForRestore(ctx context.Context, srcTabletAlias, dstTa
 
 // UnreserveForRestore switches the tablet back to its original state,
 // the restore won't happen.
-func (wr *Wrangler) UnreserveForRestore(dstTabletAlias topo.TabletAlias) (err error) {
+func (wr *Wrangler) UnreserveForRestore(ctx context.Context, dstTabletAlias topo.TabletAlias) (err error) {
 	tablet, err := wr.ts.GetTablet(dstTabletAlias)
 	if err != nil {
 		return err
@@ -102,11 +102,11 @@ func (wr *Wrangler) UnreserveForRestore(dstTabletAlias topo.TabletAlias) (err er
 		return err
 	}
 
-	return wr.ChangeType(tablet.Alias, topo.TYPE_IDLE, false)
+	return wr.ChangeType(ctx, tablet.Alias, topo.TYPE_IDLE, false)
 }
 
 // Restore actually performs the restore action on a tablet.
-func (wr *Wrangler) Restore(srcTabletAlias topo.TabletAlias, srcFilePath string, dstTabletAlias, parentAlias topo.TabletAlias, fetchConcurrency, fetchRetryCount int, wasReserved, dontWaitForSlaveStart bool) error {
+func (wr *Wrangler) Restore(ctx context.Context, srcTabletAlias topo.TabletAlias, srcFilePath string, dstTabletAlias, parentAlias topo.TabletAlias, fetchConcurrency, fetchRetryCount int, wasReserved, dontWaitForSlaveStart bool) error {
 	// read our current tablet, verify its state before sending it
 	// to the tablet itself
 	tablet, err := wr.ts.GetTablet(dstTabletAlias)
@@ -132,7 +132,7 @@ func (wr *Wrangler) Restore(srcTabletAlias topo.TabletAlias, srcFilePath string,
 	if err != nil {
 		return fmt.Errorf("Cannot read shard: %v", err)
 	}
-	if err := wr.updateShardCellsAndMaster(si, tablet.Alias, topo.TYPE_SPARE, false); err != nil {
+	if err := wr.updateShardCellsAndMaster(ctx, si, tablet.Alias, topo.TYPE_SPARE, false); err != nil {
 		return err
 	}
 
@@ -164,9 +164,9 @@ func (wr *Wrangler) Restore(srcTabletAlias topo.TabletAlias, srcFilePath string,
 }
 
 // UnreserveForRestoreMulti calls UnreserveForRestore on all targets.
-func (wr *Wrangler) UnreserveForRestoreMulti(dstTabletAliases []topo.TabletAlias) {
+func (wr *Wrangler) UnreserveForRestoreMulti(ctx context.Context, dstTabletAliases []topo.TabletAlias) {
 	for _, dstTabletAlias := range dstTabletAliases {
-		ufrErr := wr.UnreserveForRestore(dstTabletAlias)
+		ufrErr := wr.UnreserveForRestore(ctx, dstTabletAlias)
 		if ufrErr != nil {
 			wr.Logger().Errorf("Failed to UnreserveForRestore destination tablet after failed source snapshot: %v", ufrErr)
 		} else {
@@ -185,7 +185,7 @@ func (wr *Wrangler) Clone(ctx context.Context, srcTabletAlias topo.TabletAlias, 
 	for _, dstTabletAlias := range dstTabletAliases {
 		err := wr.ReserveForRestore(ctx, srcTabletAlias, dstTabletAlias)
 		if err != nil {
-			wr.UnreserveForRestoreMulti(reserved)
+			wr.UnreserveForRestoreMulti(ctx, reserved)
 			return err
 		}
 		reserved = append(reserved, dstTabletAlias)
@@ -197,7 +197,7 @@ func (wr *Wrangler) Clone(ctx context.Context, srcTabletAlias topo.TabletAlias, 
 	sr, originalType, err := wr.Snapshot(srcTabletAlias, forceMasterSnapshot, snapshotConcurrency, serverMode)
 	if err != nil {
 		// The snapshot failed so un-reserve the destinations and return
-		wr.UnreserveForRestoreMulti(reserved)
+		wr.UnreserveForRestoreMulti(ctx, reserved)
 		return err
 	}
 
@@ -209,7 +209,7 @@ func (wr *Wrangler) Clone(ctx context.Context, srcTabletAlias topo.TabletAlias, 
 	for _, dstTabletAlias := range dstTabletAliases {
 		wg.Add(1)
 		go func(dstTabletAlias topo.TabletAlias) {
-			e := wr.Restore(srcTabletAlias, sr.ManifestPath, dstTabletAlias, sr.ParentAlias, fetchConcurrency, fetchRetryCount, true, serverMode && originalType == topo.TYPE_MASTER)
+			e := wr.Restore(ctx, srcTabletAlias, sr.ManifestPath, dstTabletAlias, sr.ParentAlias, fetchConcurrency, fetchRetryCount, true, serverMode && originalType == topo.TYPE_MASTER)
 			rec.RecordError(e)
 			wg.Done()
 		}(dstTabletAlias)

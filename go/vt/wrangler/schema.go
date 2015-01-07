@@ -234,13 +234,13 @@ func (wr *Wrangler) ApplySchemaShard(ctx context.Context, keyspace, shard, chang
 func (wr *Wrangler) lockAndApplySchemaShard(ctx context.Context, shardInfo *topo.ShardInfo, preflight *myproto.SchemaChangeResult, keyspace, shard string, masterTabletAlias topo.TabletAlias, change string, newParentTabletAlias topo.TabletAlias, simple, force bool, waitSlaveTimeout time.Duration) (*myproto.SchemaChangeResult, error) {
 	// get a shard lock
 	actionNode := actionnode.ApplySchemaShard(masterTabletAlias, change, simple)
-	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
+	lockPath, err := wr.lockShard(ctx, keyspace, shard, actionNode)
 	if err != nil {
 		return nil, err
 	}
 
 	scr, err := wr.applySchemaShard(ctx, shardInfo, preflight, masterTabletAlias, change, newParentTabletAlias, simple, force, waitSlaveTimeout)
-	return scr, wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
+	return scr, wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, err)
 }
 
 // tabletStatus is a local structure used to keep track of what we're doing
@@ -361,7 +361,7 @@ func (wr *Wrangler) applySchemaShardComplex(ctx context.Context, statusArray []*
 		typeChangeRequired := ti.Tablet.IsInServingGraph()
 		if typeChangeRequired {
 			// note we want to update the serving graph there
-			err = wr.changeTypeInternal(ti.Alias, topo.TYPE_SCHEMA_UPGRADE)
+			err = wr.changeTypeInternal(ctx, ti.Alias, topo.TYPE_SCHEMA_UPGRADE)
 			if err != nil {
 				return nil, err
 			}
@@ -377,7 +377,7 @@ func (wr *Wrangler) applySchemaShardComplex(ctx context.Context, statusArray []*
 
 		// put this guy back into the serving graph
 		if typeChangeRequired {
-			err = wr.changeTypeInternal(ti.Alias, ti.Tablet.Type)
+			err = wr.changeTypeInternal(ctx, ti.Alias, ti.Tablet.Type)
 			if err != nil {
 				return nil, err
 			}
@@ -432,13 +432,13 @@ func (wr *Wrangler) applySchemaShardComplex(ctx context.Context, statusArray []*
 // if complex, we do the shell game in parallel on all shards
 func (wr *Wrangler) ApplySchemaKeyspace(ctx context.Context, keyspace string, change string, simple, force bool, waitSlaveTimeout time.Duration) (*myproto.SchemaChangeResult, error) {
 	actionNode := actionnode.ApplySchemaKeyspace(change, simple)
-	lockPath, err := wr.lockKeyspace(keyspace, actionNode)
+	lockPath, err := wr.lockKeyspace(ctx, keyspace, actionNode)
 	if err != nil {
 		return nil, err
 	}
 
 	scr, err := wr.applySchemaKeyspace(ctx, keyspace, change, simple, force, waitSlaveTimeout)
-	return scr, wr.unlockKeyspace(keyspace, actionNode, lockPath, err)
+	return scr, wr.unlockKeyspace(ctx, keyspace, actionNode, lockPath, err)
 }
 
 func (wr *Wrangler) applySchemaKeyspace(ctx context.Context, keyspace string, change string, simple, force bool, waitSlaveTimeout time.Duration) (*myproto.SchemaChangeResult, error) {
