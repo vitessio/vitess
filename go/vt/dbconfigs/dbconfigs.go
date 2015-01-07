@@ -9,6 +9,7 @@ package dbconfigs
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"strconv"
 
 	log "github.com/golang/glog"
@@ -79,37 +80,30 @@ func RegisterFlags(flags DBConfigFlag) DBConfigFlag {
 	return registeredFlags
 }
 
-// InitConnectionParams may overwrite the socket file,
+// initConnectionParams may overwrite the socket file,
 // and refresh the password to check that works.
-func InitConnectionParams(cp *mysql.ConnectionParams, socketFile string) error {
+func initConnectionParams(cp *mysql.ConnectionParams, socketFile string) error {
 	if socketFile != "" {
 		cp.UnixSocket = socketFile
 	}
-	params := *cp
-	return refreshPassword(&params)
-}
-
-// refreshPassword uses the CredentialServer to refresh the password
-// to use.
-func refreshPassword(params *mysql.ConnectionParams) error {
-	user, passwd, err := GetCredentialsServer().GetUserAndPassword(params.Uname)
-	switch err {
-	case nil:
-		params.Uname = user
-		params.Pass = passwd
-	case ErrUnknownUser:
-	default:
-		return err
-	}
-	return nil
+	_, err := MysqlParams(cp)
+	return err
 }
 
 // MysqlParams returns a copy of our ConnectionParams that we can use
 // to connect, after going through the CredentialsServer.
 func MysqlParams(cp *mysql.ConnectionParams) (mysql.ConnectionParams, error) {
-	params := *cp
-	err := refreshPassword(&params)
-	return params, err
+	result := *cp
+	user, passwd, err := GetCredentialsServer().GetUserAndPassword(cp.Uname)
+	switch err {
+	case nil:
+		result.Uname = user
+		result.Pass = passwd
+	case ErrUnknownUser:
+		// we just use what we have, and will fail later anyway
+		err = nil
+	}
+	return result, err
 }
 
 // DBConfig encapsulates a ConnectionParams object and adds a keyspace and a
@@ -167,28 +161,31 @@ func Init(socketFile string, flags DBConfigFlag) (*DBConfigs, error) {
 		panic("No DB config is provided.")
 	}
 	if AppConfig&flags != 0 {
-		if err := InitConnectionParams(&dbConfigs.App.ConnectionParams, socketFile); err != nil {
-			return nil, err
+		if err := initConnectionParams(&dbConfigs.App.ConnectionParams, socketFile); err != nil {
+			return nil, fmt.Errorf("app dbconfig cannot be initialized: %v", err)
 		}
 	}
 	if DbaConfig&flags != 0 {
-		if err := InitConnectionParams(&dbConfigs.Dba, socketFile); err != nil {
-			return nil, err
+		if err := initConnectionParams(&dbConfigs.Dba, socketFile); err != nil {
+			return nil, fmt.Errorf("dba dbconfig cannot be initialized: %v", err)
 		}
 	}
 	if FilteredConfig&flags != 0 {
-		if err := InitConnectionParams(&dbConfigs.Filtered, socketFile); err != nil {
-			return nil, err
+		if err := initConnectionParams(&dbConfigs.Filtered, socketFile); err != nil {
+			return nil, fmt.Errorf("filtered dbconfig cannot be initialized: %v", err)
 		}
 	}
 	if ReplConfig&flags != 0 {
-		if err := InitConnectionParams(&dbConfigs.Repl, socketFile); err != nil {
-			return nil, err
+		if err := initConnectionParams(&dbConfigs.Repl, socketFile); err != nil {
+			return nil, fmt.Errorf("repl dbconfig cannot be initialized: %v", err)
 		}
 	}
 	// the Dba connection is not linked to a specific database
 	// (allows us to create them)
-	dbConfigs.Dba.DbName = ""
+	if dbConfigs.Dba.DbName != "" {
+		log.Warningf("dba dbname is set to '%v', ignoring the value", dbConfigs.Dba.DbName)
+		dbConfigs.Dba.DbName = ""
+	}
 
 	toLog := dbConfigs
 	toLog.Redact()
