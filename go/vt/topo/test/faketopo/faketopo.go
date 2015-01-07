@@ -51,7 +51,7 @@ type Fixture struct {
 
 // New creates a topology fixture.
 func New(t *testing.T, logger logutil.Logger, ts topo.Server, cells []string) *Fixture {
-	wr := wrangler.New(logger, ts, 1*time.Second, 1*time.Second)
+	wr := wrangler.New(logger, ts, 1*time.Second)
 
 	return &Fixture{
 		T:        t,

@@ -277,7 +277,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	if err != nil {
 		return fmt.Errorf("StopBlp for %v failed: %v", sdw.shardInfo.MasterAlias, err)
 	}
-	wrangler.RecordStartBlpAction(sdw.cleaner, masterInfo, 30*time.Second)
+	wrangler.RecordStartBlpAction(sdw.cleaner, masterInfo)
 
 	// 2 - stop all the source 'checker' at a binlog position
 	//     higher than the destination master
@@ -308,7 +308,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 
 		// change the cleaner actions from ChangeSlaveType(rdonly)
 		// to StartSlave() + ChangeSlaveType(spare)
-		wrangler.RecordStartSlaveAction(sdw.cleaner, sourceTablet, 60*time.Second)
+		wrangler.RecordStartSlaveAction(sdw.cleaner, sourceTablet)
 		action, err := wrangler.FindChangeSlaveTypeActionByTarget(sdw.cleaner, sdw.sourceAliases[i])
 		if err != nil {
 			return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", sdw.sourceAliases[i], err)
@@ -335,7 +335,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	if err != nil {
 		return fmt.Errorf("StopSlaveMinimum for %v at %v failed: %v", sdw.destinationAlias, masterPos, err)
 	}
-	wrangler.RecordStartSlaveAction(sdw.cleaner, destinationTablet, 60*time.Second)
+	wrangler.RecordStartSlaveAction(sdw.cleaner, destinationTablet)
 	action, err := wrangler.FindChangeSlaveTypeActionByTarget(sdw.cleaner, sdw.destinationAlias)
 	if err != nil {
 		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", sdw.destinationAlias, err)
@@ -372,7 +372,9 @@ func (sdw *SplitDiffWorker) diff() error {
 	wg.Add(1)
 	go func() {
 		var err error
-		sdw.destinationSchemaDefinition, err = sdw.wr.GetSchema(sdw.wr.Context(), sdw.destinationAlias, nil, nil, false)
+		ctx, cancel := context.WithTimeout(context.TODO(), 60*time.Second)
+		sdw.destinationSchemaDefinition, err = sdw.wr.GetSchema(ctx, sdw.destinationAlias, nil, nil, false)
+		cancel()
 		rec.RecordError(err)
 		sdw.wr.Logger().Infof("Got schema from destination %v", sdw.destinationAlias)
 		wg.Done()
@@ -381,7 +383,9 @@ func (sdw *SplitDiffWorker) diff() error {
 		wg.Add(1)
 		go func(i int, sourceAlias topo.TabletAlias) {
 			var err error
-			sdw.sourceSchemaDefinitions[i], err = sdw.wr.GetSchema(sdw.wr.Context(), sourceAlias, nil, nil, false)
+			ctx, cancel := context.WithTimeout(context.TODO(), 60*time.Second)
+			sdw.sourceSchemaDefinitions[i], err = sdw.wr.GetSchema(ctx, sourceAlias, nil, nil, false)
+			cancel()
 			rec.RecordError(err)
 			sdw.wr.Logger().Infof("Got schema from source[%v] %v", i, sourceAlias)
 			wg.Done()

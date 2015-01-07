@@ -299,7 +299,7 @@ func (vscw *VerticalSplitCloneWorker) findTargets() error {
 		return fmt.Errorf("cannot stop replication on tablet %v", vscw.sourceAlias)
 	}
 
-	wrangler.RecordStartSlaveAction(vscw.cleaner, vscw.sourceTablet, 30*time.Second)
+	wrangler.RecordStartSlaveAction(vscw.cleaner, vscw.sourceTablet)
 	action, err := wrangler.FindChangeSlaveTypeActionByTarget(vscw.cleaner, vscw.sourceAlias)
 	if err != nil {
 		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", vscw.sourceAlias, err)
@@ -354,7 +354,9 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	vscw.setState(stateVSCCopy)
 
 	// get source schema
-	sourceSchemaDefinition, err := vscw.wr.GetSchema(vscw.wr.Context(), vscw.sourceAlias, vscw.tables, nil, true)
+	ctx, cancel := context.WithTimeout(context.TODO(), 60*time.Second)
+	sourceSchemaDefinition, err := vscw.wr.GetSchema(ctx, vscw.sourceAlias, vscw.tables, nil, true)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot get schema from source %v: %v", vscw.sourceAlias, err)
 	}

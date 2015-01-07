@@ -283,7 +283,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 	if err != nil {
 		return fmt.Errorf("StopBlp on master %v failed: %v", vsdw.shardInfo.MasterAlias, err)
 	}
-	wrangler.RecordStartBlpAction(vsdw.cleaner, masterInfo, 30*time.Second)
+	wrangler.RecordStartBlpAction(vsdw.cleaner, masterInfo)
 
 	// 2 - stop the source 'checker' at a binlog position
 	//     higher than the destination master
@@ -312,7 +312,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 
 	// change the cleaner actions from ChangeSlaveType(rdonly)
 	// to StartSlave() + ChangeSlaveType(spare)
-	wrangler.RecordStartSlaveAction(vsdw.cleaner, sourceTablet, 30*time.Second)
+	wrangler.RecordStartSlaveAction(vsdw.cleaner, sourceTablet)
 	action, err := wrangler.FindChangeSlaveTypeActionByTarget(vsdw.cleaner, vsdw.sourceAlias)
 	if err != nil {
 		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", vsdw.sourceAlias, err)
@@ -338,7 +338,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 	if err != nil {
 		return fmt.Errorf("StopSlaveMinimum on %v at %v failed: %v", vsdw.destinationAlias, masterPos, err)
 	}
-	wrangler.RecordStartSlaveAction(vsdw.cleaner, destinationTablet, 30*time.Second)
+	wrangler.RecordStartSlaveAction(vsdw.cleaner, destinationTablet)
 	action, err = wrangler.FindChangeSlaveTypeActionByTarget(vsdw.cleaner, vsdw.destinationAlias)
 	if err != nil {
 		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", vsdw.destinationAlias, err)
@@ -374,7 +374,9 @@ func (vsdw *VerticalSplitDiffWorker) diff() error {
 	wg.Add(1)
 	go func() {
 		var err error
-		vsdw.destinationSchemaDefinition, err = vsdw.wr.GetSchema(vsdw.wr.Context(), vsdw.destinationAlias, nil, nil, false)
+		ctx, cancel := context.WithTimeout(context.TODO(), 60*time.Second)
+		vsdw.destinationSchemaDefinition, err = vsdw.wr.GetSchema(ctx, vsdw.destinationAlias, nil, nil, false)
+		cancel()
 		rec.RecordError(err)
 		vsdw.wr.Logger().Infof("Got schema from destination %v", vsdw.destinationAlias)
 		wg.Done()
@@ -382,7 +384,9 @@ func (vsdw *VerticalSplitDiffWorker) diff() error {
 	wg.Add(1)
 	go func() {
 		var err error
-		vsdw.sourceSchemaDefinition, err = vsdw.wr.GetSchema(vsdw.wr.Context(), vsdw.sourceAlias, nil, nil, false)
+		ctx, cancel := context.WithTimeout(context.TODO(), 60*time.Second)
+		vsdw.sourceSchemaDefinition, err = vsdw.wr.GetSchema(ctx, vsdw.sourceAlias, nil, nil, false)
+		cancel()
 		rec.RecordError(err)
 		vsdw.wr.Logger().Infof("Got schema from source %v", vsdw.sourceAlias)
 		wg.Done()

@@ -28,7 +28,7 @@ import (
 //
 // If error is nil, returns the SnapshotReply from the remote host,
 // and the original type the server was before the snapshot.
-func (wr *Wrangler) Snapshot(tabletAlias topo.TabletAlias, forceMasterSnapshot bool, snapshotConcurrency int, serverMode bool) (*actionnode.SnapshotReply, topo.TabletType, error) {
+func (wr *Wrangler) Snapshot(ctx context.Context, tabletAlias topo.TabletAlias, forceMasterSnapshot bool, snapshotConcurrency int, serverMode bool) (*actionnode.SnapshotReply, topo.TabletType, error) {
 	// read the tablet to be able to RPC to it, and also to get its
 	// original type
 	ti, err := wr.ts.GetTablet(tabletAlias)
@@ -43,7 +43,7 @@ func (wr *Wrangler) Snapshot(tabletAlias topo.TabletAlias, forceMasterSnapshot b
 		ServerMode:          serverMode,
 		ForceMasterSnapshot: forceMasterSnapshot,
 	}
-	logStream, errFunc, err := wr.tmc.Snapshot(wr.Context(), ti, args)
+	logStream, errFunc, err := wr.tmc.Snapshot(ctx, ti, args)
 	if err != nil {
 		return nil, "", err
 	}
@@ -146,7 +146,7 @@ func (wr *Wrangler) Restore(ctx context.Context, srcTabletAlias topo.TabletAlias
 		WasReserved:           wasReserved,
 		DontWaitForSlaveStart: dontWaitForSlaveStart,
 	}
-	logStream, errFunc, err := wr.tmc.Restore(wr.Context(), tablet, args)
+	logStream, errFunc, err := wr.tmc.Restore(ctx, tablet, args)
 	if err != nil {
 		return err
 	}
@@ -194,7 +194,7 @@ func (wr *Wrangler) Clone(ctx context.Context, srcTabletAlias topo.TabletAlias, 
 
 	// take the snapshot, or put the server in SnapshotSource mode
 	// srcFilePath, parentAlias, slaveStartRequired, readWrite
-	sr, originalType, err := wr.Snapshot(srcTabletAlias, forceMasterSnapshot, snapshotConcurrency, serverMode)
+	sr, originalType, err := wr.Snapshot(ctx, srcTabletAlias, forceMasterSnapshot, snapshotConcurrency, serverMode)
 	if err != nil {
 		// The snapshot failed so un-reserve the destinations and return
 		wr.UnreserveForRestoreMulti(ctx, reserved)

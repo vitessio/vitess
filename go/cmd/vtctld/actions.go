@@ -96,9 +96,11 @@ func (ar *ActionRepository) ApplyKeyspaceAction(actionName, keyspace string, r *
 		return result
 	}
 
-	// FIXME(alainjobart) create a Context here
-	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, *actionTimeout, *lockTimeout)
-	output, err := action(wr.Context(), wr, keyspace, r)
+	// FIXME(alainjobart) copy web context info
+	ctx, cancel := context.WithTimeout(context.TODO(), *actionTimeout)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, *lockTimeout)
+	output, err := action(ctx, wr, keyspace, r)
+	cancel()
 	if err != nil {
 		result.error(err.Error())
 		return result
@@ -121,9 +123,12 @@ func (ar *ActionRepository) ApplyShardAction(actionName, keyspace, shard string,
 		result.error("Unknown shard action")
 		return result
 	}
-	// FIXME(alainjobart) create a Context here
-	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, *actionTimeout, *lockTimeout)
-	output, err := action(wr.Context(), wr, keyspace, shard, r)
+
+	// FIXME(alainjobart) copy web context info
+	ctx, cancel := context.WithTimeout(context.TODO(), *actionTimeout)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, *lockTimeout)
+	output, err := action(ctx, wr, keyspace, shard, r)
+	cancel()
 	if err != nil {
 		result.error(err.Error())
 		return result
@@ -151,9 +156,11 @@ func (ar *ActionRepository) ApplyTabletAction(actionName string, tabletAlias top
 	}
 
 	// run the action
-	// FIXME(alainjobart) create a Context here
-	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, *actionTimeout, *lockTimeout)
-	output, err := action.method(wr.Context(), wr, tabletAlias, r)
+	// FIXME(alainjobart) copy web context info
+	ctx, cancel := context.WithTimeout(context.TODO(), *actionTimeout)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, *lockTimeout)
+	output, err := action.method(ctx, wr, tabletAlias, r)
+	cancel()
 	if err != nil {
 		result.error(err.Error())
 		return result

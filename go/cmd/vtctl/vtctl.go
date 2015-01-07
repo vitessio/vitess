@@ -22,6 +22,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl"
 	"github.com/youtube/vitess/go/vt/wrangler"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -42,13 +43,13 @@ func init() {
 }
 
 // signal handling, centralized here
-func installSignalHandlers(wr *wrangler.Wrangler) {
+func installSignalHandlers(cancel func()) {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
 		<-sigChan
-		// we got a signal, cancel the current wrangler context
-		wr.Cancel()
+		// we got a signal, cancel the current ctx
+		cancel()
 	}()
 }
 
@@ -75,11 +76,12 @@ func main() {
 	topoServer := topo.GetServer()
 	defer topo.CloseServers()
 
-	// FIXME(alainjobart) Create the context outside of wrangler
-	wr := wrangler.New(logutil.NewConsoleLogger(), topoServer, *waitTime, *lockWaitTimeout)
-	installSignalHandlers(wr)
+	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
+	wr := wrangler.New(logutil.NewConsoleLogger(), topoServer, *lockWaitTimeout)
+	installSignalHandlers(cancel)
 
-	err := vtctl.RunCommand(wr.Context(), wr, args)
+	err := vtctl.RunCommand(ctx, wr, args)
+	cancel()
 	switch err {
 	case vtctl.ErrUnknownCommand:
 		flag.Usage()
