@@ -166,6 +166,10 @@ func (fpc *FakePoolConnection) IsClosed() bool {
 func (fpc *FakePoolConnection) Recycle() {
 }
 
+func (fpc *FakePoolConnection) Reconnect() error {
+	return nil
+}
+
 // on the source rdonly guy, should only have one query to find min & max
 func SourceRdonlyFactory(t *testing.T) func() (dbconnpool.PoolConnection, error) {
 	return func() (dbconnpool.PoolConnection, error) {
