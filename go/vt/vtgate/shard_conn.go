@@ -281,8 +281,7 @@ func (sdc *ShardConn) markDown(conn tabletconn.TabletConn, reason string) {
 	}
 	sdc.balancer.MarkDown(conn.EndPoint().Uid, reason)
 
-	// Launch as goroutine so we don't block
-	go sdc.conn.Close()
+	sdc.conn.Close()
 	sdc.conn = nil
 }
 
