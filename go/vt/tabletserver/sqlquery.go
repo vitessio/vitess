@@ -189,7 +189,7 @@ func (sq *SqlQuery) disallowQueries() {
 		sq.setState(NOT_SERVING)
 		sq.mu.Unlock()
 	}()
-	log.Infof("Stopping query service: %d", sq.sessionId)
+	log.Infof("Stopping query service. Session id: %d", sq.sessionId)
 	sq.qe.Close()
 	sq.sessionId = 0
 	sq.dbconfig = &dbconfigs.DBConfig{}
