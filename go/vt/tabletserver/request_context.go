@@ -106,6 +106,23 @@ func (rqc *RequestContext) execSQL(conn dbconnpool.PoolConnection, sql string, w
 }
 
 func (rqc *RequestContext) execSQLNoPanic(conn dbconnpool.PoolConnection, sql string, wantfields bool) (*mproto.QueryResult, error) {
+	for attempt := 1; attempt <= 2; attempt++ {
+		r, err := rqc.execSQLOnce(conn, sql, wantfields)
+		if attempt == 2 || err == nil || !IsConnErr(err) {
+			if err != nil {
+				return nil, err
+			}
+			return r, nil
+		}
+		err2 := conn.Reconnect()
+		if err2 != nil {
+			return nil, err
+		}
+	}
+	panic("unreachable")
+}
+
+func (rqc *RequestContext) execSQLOnce(conn dbconnpool.PoolConnection, sql string, wantfields bool) (*mproto.QueryResult, error) {
 	if qd := rqc.qe.connKiller.SetDeadline(conn.ID(), rqc.deadline); qd != nil {
 		defer qd.Done()
 	}

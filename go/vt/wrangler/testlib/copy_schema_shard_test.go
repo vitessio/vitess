@@ -87,6 +87,10 @@ func (fpc *FakePoolConnection) IsClosed() bool {
 func (fpc *FakePoolConnection) Recycle() {
 }
 
+func (fpc *FakePoolConnection) Reconnect() error {
+	return nil
+}
+
 // on the destinations
 func DestinationsFactory(t *testing.T) func() (dbconnpool.PoolConnection, error) {
 	var queryIndex int64 = -1

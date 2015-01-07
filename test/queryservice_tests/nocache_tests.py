@@ -465,21 +465,22 @@ class TestNocache(framework.TestCase):
       self.assertContains(str(e), "error: Query disallowed")
     # Test dynamic custom rule for vttablet
     if self.env.env == "vttablet":
-      # Make a change to the rule
-      self.env.change_customrules()
-      time.sleep(3)
-      try:
-        self.env.execute("select * from vtocc_test where intval=:asdfg", bv)
-      except dbexceptions.DatabaseError as e:
-        self.fail("Bindvar asdfg should be allowed after a change of custom rule, Err=" + str(e))
-      # Restore the rule
-      self.env.restore_customrules()
-      time.sleep(3)
-      try:
-        self.env.execute("select * from vtocc_test where intval=:asdfg", bv)
-        self.fail("Bindvar asdfg should not be allowed by custom rule")
-      except dbexceptions.DatabaseError as e:
-        self.assertContains(str(e), "error: Query disallowed")
+      if environment.topo_server().flavor() == 'zookeeper':
+        # Make a change to the rule
+        self.env.change_customrules()
+        time.sleep(3)
+        try:
+          self.env.execute("select * from vtocc_test where intval=:asdfg", bv)
+        except dbexceptions.DatabaseError as e:
+          self.fail("Bindvar asdfg should be allowed after a change of custom rule, Err=" + str(e))
+        # Restore the rule
+        self.env.restore_customrules()
+        time.sleep(3)
+        try:
+          self.env.execute("select * from vtocc_test where intval=:asdfg", bv)
+          self.fail("Bindvar asdfg should not be allowed by custom rule")
+        except dbexceptions.DatabaseError as e:
+          self.assertContains(str(e), "error: Query disallowed")
 
   def test_health(self):
     self.assertEqual(self.env.health(), "ok")
@@ -630,3 +631,24 @@ class TestNocache(framework.TestCase):
     cu.execute("select * from vtocc_acl_all_user_read_only where key1=1", {})
     cu.fetchall()
     cu.close()
+
+  # This is a super-slow test. Uncomment and test if you change
+  # the server-side reconnect logic.
+  #def test_server_reconnect(self):
+  #  self.env.execute("set vt_pool_size=1")
+  #  self.env.execute("select * from vtocc_test limit :l", {"l": 1})
+  #  self.env.tablet.shutdown_mysql()
+  #  time.sleep(5)
+  #  self.env.tablet.start_mysql()
+  #  time.sleep(5)
+  #  self.env.execute("select * from vtocc_test limit :l", {"l": 1})
+  #  self.env.conn.begin()
+  #  self.env.tablet.shutdown_mysql()
+  #  time.sleep(5)
+  #  self.env.tablet.start_mysql()
+  #  time.sleep(5)
+  #  with self.assertRaises(dbexceptions.DatabaseError):
+  #    self.env.execute("select * from vtocc_test limit :l", {"l": 1})
+  #  with self.assertRaises(dbexceptions.DatabaseError):
+  #    self.env.conn.rollback()
+  #  self.env.execute("set vt_pool_size=16")

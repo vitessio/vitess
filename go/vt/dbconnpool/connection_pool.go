@@ -33,6 +33,7 @@ type PoolConnection interface {
 	Close()
 	IsClosed() bool
 	Recycle()
+	Reconnect() error
 }
 
 // CreateConnectionFunc is the factory method to create new connections
