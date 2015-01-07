@@ -22,4 +22,5 @@ func TestFakeSpan(t *testing.T) {
 	span.Annotate("key", "value")
 	span.Finish()
 	NewContext(ctx, span)
+	CopySpan(ctx, ctx)
 }

@@ -17,7 +17,7 @@ func TestKeyspace(t *testing.T) {
 func TestShard(t *testing.T) {
 	ts := NewTestServer(t, []string{"test"})
 	defer ts.Close()
-	test.CheckShard(t, ts)
+	test.CheckShard(context.Background(), t, ts)
 }
 
 func TestTablet(t *testing.T) {
@@ -35,7 +35,7 @@ func TestShardReplication(t *testing.T) {
 func TestServingGraph(t *testing.T) {
 	ts := NewTestServer(t, []string{"test"})
 	defer ts.Close()
-	test.CheckServingGraph(t, ts)
+	test.CheckServingGraph(context.Background(), t, ts)
 }
 
 func TestKeyspaceLock(t *testing.T) {

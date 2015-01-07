@@ -531,6 +531,17 @@ func NewTabletInfo(tablet *Tablet, version int64) *TabletInfo {
 	return &TabletInfo{version: version, Tablet: tablet}
 }
 
+// GetTablet is a high level function to read tablet data.
+// It generates trace spans.
+func GetTablet(ctx context.Context, ts Server, alias TabletAlias) (*TabletInfo, error) {
+	span := trace.NewSpanFromContext(ctx)
+	span.StartClient("TopoServer.GetTablet")
+	span.Annotate("tablet", alias.String())
+	defer span.Finish()
+
+	return ts.GetTablet(alias)
+}
+
 // UpdateTablet updates the tablet data only - not associated replication paths.
 func UpdateTablet(ctx context.Context, ts Server, tablet *TabletInfo) error {
 	span := trace.NewSpanFromContext(ctx)
@@ -548,6 +559,17 @@ func UpdateTablet(ctx context.Context, ts Server, tablet *TabletInfo) error {
 		tablet.version = newVersion
 	}
 	return err
+}
+
+// UpdateTabletFields is a high level wrapper for TopoServer.UpdateTabletFields
+// that generates trace spans.
+func UpdateTabletFields(ctx context.Context, ts Server, alias TabletAlias, update func(*Tablet) error) error {
+	span := trace.NewSpanFromContext(ctx)
+	span.StartClient("TopoServer.UpdateTabletFields")
+	span.Annotate("tablet", alias.String())
+	defer span.Finish()
+
+	return ts.UpdateTabletFields(alias, update)
 }
 
 // Validate makes sure a tablet is represented correctly in the topology server.

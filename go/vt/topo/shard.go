@@ -236,6 +236,18 @@ func NewShardInfo(keyspace, shard string, value *Shard, version int64) *ShardInf
 	}
 }
 
+// GetShard is a high level function to read shard data.
+// It generates trace spans.
+func GetShard(ctx context.Context, ts Server, keyspace, shard string) (*ShardInfo, error) {
+	span := trace.NewSpanFromContext(ctx)
+	span.StartClient("TopoServer.GetShard")
+	span.Annotate("keyspace", keyspace)
+	span.Annotate("shard", shard)
+	defer span.Finish()
+
+	return ts.GetShard(keyspace, shard)
+}
+
 // UpdateShard updates the shard data, with the right version
 func UpdateShard(ctx context.Context, ts Server, si *ShardInfo) error {
 	span := trace.NewSpanFromContext(ctx)
@@ -254,6 +266,25 @@ func UpdateShard(ctx context.Context, ts Server, si *ShardInfo) error {
 		si.version = newVersion
 	}
 	return err
+}
+
+// UpdateShardFields is a high level helper to read a shard record, call an
+// update function on it, and then write it back. If the write fails due to
+// a version mismatch, it will re-read the record and retry the update.
+// If the update succeeds, it returns the updated ShardInfo.
+func UpdateShardFields(ctx context.Context, ts Server, keyspace, shard string, update func(*Shard) error) (*ShardInfo, error) {
+	for {
+		si, err := GetShard(ctx, ts, keyspace, shard)
+		if err != nil {
+			return nil, err
+		}
+		if err = update(si.Shard); err != nil {
+			return nil, err
+		}
+		if err = UpdateShard(ctx, ts, si); err != ErrBadVersion {
+			return si, err
+		}
+	}
 }
 
 // CreateShard creates a new shard and tries to fill in the right information.
@@ -514,9 +545,10 @@ func FindAllTabletAliasesInShardByCell(ctx context.Context, ts Server, keyspace,
 	span.Annotate("shard", shard)
 	span.Annotate("num_cells", len(cells))
 	defer span.Finish()
+	ctx = trace.NewContext(ctx, span)
 
 	// read the shard information to find the cells
-	si, err := ts.GetShard(keyspace, shard)
+	si, err := GetShard(ctx, ts, keyspace, shard)
 	if err != nil {
 		return nil, err
 	}

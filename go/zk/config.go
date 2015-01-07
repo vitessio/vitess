@@ -69,6 +69,7 @@ func letterPrefix(str string) string {
 	return str
 }
 
+// ZkCellFromZkPath extracts the cell name from a zkPath.
 func ZkCellFromZkPath(zkPath string) (string, error) {
 	pathParts := strings.Split(zkPath, "/")
 	if len(pathParts) < 3 {
@@ -78,8 +79,8 @@ func ZkCellFromZkPath(zkPath string) (string, error) {
 		return "", fmt.Errorf("path should start with /%v: %v", MagicPrefix, zkPath)
 	}
 	cell := pathParts[2]
-	if strings.Contains(cell, "-") {
-		return "", fmt.Errorf("invalid cell name %v", cell)
+	if cell == "" || strings.Contains(cell, "-") {
+		return "", fmt.Errorf("invalid cell name %q", cell)
 	}
 	return cell, nil
 }

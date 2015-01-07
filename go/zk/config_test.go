@@ -71,3 +71,20 @@ func TestZkConfig(t *testing.T) {
 		t.Errorf("ZkKnownCells(false) failed, expected %v got %v", expectedKnownCells, knownCells)
 	}
 }
+
+func TestZkCellFromZkPathInvalid(t *testing.T) {
+	// The following paths should be rejected so the invalid cell name doesn't
+	// cause problems down the line.
+	inputs := []string{
+		"/zk",
+		"bad/zk/path",
+		"/wrongprefix/cell",
+		"/zk//emptycellname",
+		"/zk/bad-cell-name/",
+	}
+	for _, input := range inputs {
+		if _, err := ZkCellFromZkPath(input); err == nil {
+			t.Errorf("expected error for ZkCellFromZkPath(%q), got none", input)
+		}
+	}
+}

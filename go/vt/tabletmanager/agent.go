@@ -168,8 +168,9 @@ func NewActionAgent(
 
 // NewTestActionAgent creates an agent for test purposes. Only a
 // subset of features are supported now, but we'll add more over time.
-func NewTestActionAgent(ts topo.Server, tabletAlias topo.TabletAlias, port int, mysqlDaemon mysqlctl.MysqlDaemon) (agent *ActionAgent) {
+func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, port int, mysqlDaemon mysqlctl.MysqlDaemon) (agent *ActionAgent) {
 	agent = &ActionAgent{
+		batchCtx:           batchCtx,
 		TopoServer:         ts,
 		TabletAlias:        tabletAlias,
 		Mysqld:             nil,
@@ -187,23 +188,29 @@ func NewTestActionAgent(ts topo.Server, tabletAlias topo.TabletAlias, port int, 
 	return agent
 }
 
-func (agent *ActionAgent) updateState(ctx context.Context, oldTablet *topo.Tablet, context string) error {
+func (agent *ActionAgent) updateState(ctx context.Context, oldTablet *topo.Tablet, reason string) error {
 	agent.mutex.Lock()
 	newTablet := agent._tablet.Tablet
 	agent.mutex.Unlock()
-	log.Infof("Running tablet callback after action %v", context)
+	log.Infof("Running tablet callback because: %v", reason)
 	return agent.changeCallback(ctx, oldTablet, newTablet)
 }
 
-func (agent *ActionAgent) readTablet() error {
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+func (agent *ActionAgent) readTablet(ctx context.Context) (*topo.TabletInfo, error) {
+	tablet, err := topo.GetTablet(ctx, agent.TopoServer, agent.TabletAlias)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	agent.mutex.Lock()
 	agent._tablet = tablet
 	agent.mutex.Unlock()
-	return nil
+	return tablet, nil
+}
+
+func (agent *ActionAgent) setTablet(tablet *topo.TabletInfo) {
+	agent.mutex.Lock()
+	agent._tablet = tablet
+	agent.mutex.Unlock()
 }
 
 // Tablet reads the stored TabletInfo from the agent, protected by mutex.
@@ -267,12 +274,12 @@ func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) erro
 	oldTablet := agent.Tablet().Tablet
 
 	// Actions should have side effects on the tablet, so reload the data.
-	if err := agent.readTablet(); err != nil {
+	if _, err := agent.readTablet(ctx); err != nil {
 		log.Warningf("Failed rereading tablet after %v - services may be inconsistent: %v", reason, err)
 		return fmt.Errorf("Failed rereading tablet after %v: %v", reason, err)
 	}
 
-	if updatedTablet := agent.checkTabletMysqlPort(agent.Tablet()); updatedTablet != nil {
+	if updatedTablet := agent.checkTabletMysqlPort(ctx, agent.Tablet()); updatedTablet != nil {
 		agent.mutex.Lock()
 		agent._tablet = updatedTablet
 		agent.mutex.Unlock()
@@ -316,7 +323,7 @@ func (agent *ActionAgent) verifyServingAddrs() error {
 // the initial state change callback to start tablet services.
 func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 	var err error
-	if err = agent.readTablet(); err != nil {
+	if _, err = agent.readTablet(context.TODO()); err != nil {
 		return err
 	}
 
@@ -359,7 +366,7 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 	}
 
 	// Reread to get the changes we just made
-	if err := agent.readTablet(); err != nil {
+	if _, err := agent.readTablet(context.TODO()); err != nil {
 		return err
 	}
 
@@ -395,7 +402,7 @@ func (agent *ActionAgent) hookExtraEnv() map[string]string {
 
 // checkTabletMysqlPort will check the mysql port for the tablet is good,
 // and if not will try to update it.
-func (agent *ActionAgent) checkTabletMysqlPort(tablet *topo.TabletInfo) *topo.TabletInfo {
+func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo.TabletInfo) *topo.TabletInfo {
 	mport, err := agent.MysqlDaemon.GetMysqlPort()
 	if err != nil {
 		log.Warningf("Cannot get current mysql port, not checking it: %v", err)
@@ -408,7 +415,7 @@ func (agent *ActionAgent) checkTabletMysqlPort(tablet *topo.TabletInfo) *topo.Ta
 
 	log.Warningf("MySQL port has changed from %v to %v, updating it in tablet record", tablet.Portmap["mysql"], mport)
 	tablet.Portmap["mysql"] = mport
-	if err := topo.UpdateTablet(context.TODO(), agent.TopoServer, tablet); err != nil {
+	if err := topo.UpdateTablet(ctx, agent.TopoServer, tablet); err != nil {
 		log.Warningf("Failed to update tablet record, may use old mysql port")
 		return nil
 	}
