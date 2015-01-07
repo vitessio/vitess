@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"fmt"
 	"math/rand"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -58,7 +57,6 @@ func (cc *ConnCache) setState(zcell string, conn *cachedConn, state int64) {
 }
 
 func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
-	fmt.Fprintf(os.Stderr, "zkPath: %q\n", zkPath) // DEBUG
 	zcell, err := ZkCellFromZkPath(zkPath)
 	if err != nil {
 		return nil, &zookeeper.Error{Op: "dial", Code: zookeeper.ZSYSTEMERROR, SystemError: err, Path: zkPath}
