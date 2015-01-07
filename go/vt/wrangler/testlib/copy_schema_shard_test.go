@@ -120,8 +120,7 @@ func DestinationsFactory(t *testing.T) func() (dbconnpool.PoolConnection, error)
 
 func TestCopySchemaShard(t *testing.T) {
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	// FIXME(alainjobart) create a proper context
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Minute, time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Second)
 
 	sourceMaster := NewFakeTablet(t, wr, "cell1", 0,
 		topo.TYPE_MASTER, TabletKeyspaceShard(t, "ks", "-80"))

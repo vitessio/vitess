@@ -47,7 +47,7 @@ func (s *VtctlServer) ExecuteVtctlCommand(ctx context.Context, query *gorpcproto
 	}()
 
 	// create the wrangler
-	wr := wrangler.New(logger, s.ts, query.ActionTimeout, query.LockTimeout)
+	wr := wrangler.New(logger, s.ts, query.LockTimeout)
 	// FIXME(alainjobart) use a single context, copy the source info from it
 	ctx, cancel := context.WithTimeout(context.TODO(), query.ActionTimeout)
 

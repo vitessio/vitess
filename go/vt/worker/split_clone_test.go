@@ -231,7 +231,7 @@ func TestSplitClonePopulateBlpCheckpoint(t *testing.T) {
 
 func testSplitClone(t *testing.T, strategy string) {
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Minute, time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Second)
 
 	sourceMaster := testlib.NewFakeTablet(t, wr, "cell1", 0,
 		topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "ks", "-80"))

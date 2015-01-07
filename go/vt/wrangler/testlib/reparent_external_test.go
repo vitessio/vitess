@@ -36,7 +36,7 @@ func testTabletExternallyReparented(t *testing.T, fast bool) {
 
 	ctx := context.Background()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Minute, time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Second)
 
 	// Create an old master, a new master, two good slaves, one bad slave
 	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER)
@@ -187,7 +187,7 @@ func testTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T, fast boo
 	tabletmanager.SetReparentFlags(fast, time.Minute /* finalizeTimeout */)
 
 	ts := zktopo.NewTestServer(t, []string{"cell1"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Minute, time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Second)
 
 	// Create an old master, a new master, two good slaves, one bad slave
 	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER)
@@ -245,7 +245,7 @@ func testTabletExternallyReparentedContinueOnUnexpectedMaster(t *testing.T, fast
 	tabletmanager.SetReparentFlags(fast, time.Minute /* finalizeTimeout */)
 
 	ts := zktopo.NewTestServer(t, []string{"cell1"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Minute, time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Second)
 
 	// Create an old master, a new master, two good slaves, one bad slave
 	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER)
@@ -297,7 +297,7 @@ func testTabletExternallyReparentedFailedOldMaster(t *testing.T, fast bool) {
 	tabletmanager.SetReparentFlags(fast, time.Minute /* finalizeTimeout */)
 
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Minute, time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Second)
 
 	// Create an old master, a new master, and a good slave.
 	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER)

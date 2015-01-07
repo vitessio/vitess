@@ -98,7 +98,7 @@ func (ar *ActionRepository) ApplyKeyspaceAction(actionName, keyspace string, r *
 
 	// FIXME(alainjobart) copy web context info
 	ctx, cancel := context.WithTimeout(context.TODO(), *actionTimeout)
-	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, *actionTimeout, *lockTimeout)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, *lockTimeout)
 	output, err := action(ctx, wr, keyspace, r)
 	cancel()
 	if err != nil {
@@ -126,7 +126,7 @@ func (ar *ActionRepository) ApplyShardAction(actionName, keyspace, shard string,
 
 	// FIXME(alainjobart) copy web context info
 	ctx, cancel := context.WithTimeout(context.TODO(), *actionTimeout)
-	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, *actionTimeout, *lockTimeout)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, *lockTimeout)
 	output, err := action(ctx, wr, keyspace, shard, r)
 	cancel()
 	if err != nil {
@@ -158,7 +158,7 @@ func (ar *ActionRepository) ApplyTabletAction(actionName string, tabletAlias top
 	// run the action
 	// FIXME(alainjobart) copy web context info
 	ctx, cancel := context.WithTimeout(context.TODO(), *actionTimeout)
-	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, *actionTimeout, *lockTimeout)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, *lockTimeout)
 	output, err := action.method(ctx, wr, tabletAlias, r)
 	cancel()
 	if err != nil {

@@ -7,10 +7,7 @@
 package wrangler
 
 import (
-	"sync"
 	"time"
-
-	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
@@ -39,44 +36,22 @@ type Wrangler struct {
 	ts          topo.Server
 	tmc         tmclient.TabletManagerClient
 	lockTimeout time.Duration
-
-	// the following fields are protected by the mutex
-	mu     sync.Mutex
-	ctx    context.Context
-	cancel context.CancelFunc
 }
 
 // New creates a new Wrangler object.
 //
-// actionTimeout: how long should we wait for an action to complete?
-// - if using wrangler for just one action, this is set properly
-//   upon wrangler creation.
-// - if re-using wrangler multiple times, call ResetActionTimeout before
-//   every action. Do not use this too much, just for corner cases.
-//   It is just much easier to create a new Wrangler object per action.
-//
 // lockTimeout: how long should we wait for the initial lock to start
-// a complex action?  This is distinct from actionTimeout because most
+// a complex action?  This is distinct from the context timeout because most
 // of the time, we want to immediately know that our action will
 // fail. However, automated action will need some time to arbitrate
 // the locks.
-func New(logger logutil.Logger, ts topo.Server, actionTimeout, lockTimeout time.Duration) *Wrangler {
-	ctx, cancel := context.WithTimeout(context.Background(), actionTimeout)
+func New(logger logutil.Logger, ts topo.Server, lockTimeout time.Duration) *Wrangler {
 	return &Wrangler{
 		logger:      logger,
 		ts:          ts,
 		tmc:         tmclient.NewTabletManagerClient(),
-		ctx:         ctx,
-		cancel:      cancel,
 		lockTimeout: lockTimeout,
 	}
-}
-
-// Cancel calls the CancelFunc on our Context and therefore interrupts the call.
-func (wr *Wrangler) Cancel() {
-	wr.mu.Lock()
-	defer wr.mu.Unlock()
-	wr.cancel()
 }
 
 // TopoServer returns the topo.Server this wrangler is using.

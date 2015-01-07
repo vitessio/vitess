@@ -43,13 +43,13 @@ func init() {
 }
 
 // signal handling, centralized here
-func installSignalHandlers(wr *wrangler.Wrangler) {
+func installSignalHandlers(cancel func()) {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
 		<-sigChan
-		// we got a signal, cancel the current wrangler context
-		wr.Cancel()
+		// we got a signal, cancel the current ctx
+		cancel()
 	}()
 }
 
@@ -77,8 +77,8 @@ func main() {
 	defer topo.CloseServers()
 
 	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
-	wr := wrangler.New(logutil.NewConsoleLogger(), topoServer, *waitTime, *lockWaitTimeout)
-	installSignalHandlers(wr)
+	wr := wrangler.New(logutil.NewConsoleLogger(), topoServer, *lockWaitTimeout)
+	installSignalHandlers(cancel)
 
 	err := vtctl.RunCommand(ctx, wr, args)
 	cancel()
