@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"path"
 	"strings"
+	"sync"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/cmd/vtctld/proto"
@@ -51,9 +52,14 @@ type Explorer interface {
 	GetReplicationSlaves(cell, keyspace, shard string) string
 }
 
-// HandleExplorer serves explorer under url, using a template named
-// templateName.
+var handleExplorerMutex sync.Mutex
+
+// HandleExplorer serves explorer under url, using templateName.
+// It can be called concurrently, such as from servenv.OnRun hooks.
 func HandleExplorer(name, url, templateName string, explorer Explorer) {
+	handleExplorerMutex.Lock()
+	defer handleExplorerMutex.Unlock()
+
 	explorers[name] = explorer
 	indexContent.ToplevelLinks[name+" explorer"] = url
 	http.HandleFunc(url, func(w http.ResponseWriter, r *http.Request) {

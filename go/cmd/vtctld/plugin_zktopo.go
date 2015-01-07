@@ -15,23 +15,21 @@ import (
 	"sort"
 	"strings"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/cmd/vtctld/proto"
 	"github.com/youtube/vitess/go/netutil"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
 )
 
 func init() {
-	// handles /zk paths
-	ts := topo.GetServerByName("zookeeper")
-	if ts == nil {
-		log.Error("zookeeper explorer disabled: no zktopo.Server")
-		return
-	}
-
-	HandleExplorer("zk", "/zk/", "zk.html", NewZkExplorer(ts.(*zktopo.Server).GetZConn()))
+	// Wait until flags are parsed, so we can check which topo server is in use.
+	servenv.OnRun(func() {
+		if zkServer, ok := topo.GetServer().(*zktopo.Server); ok {
+			HandleExplorer("zk", "/zk/", "zk.html", NewZkExplorer(zkServer.GetZConn()))
+		}
+	})
 }
 
 // ZkExplorer implements Explorer
