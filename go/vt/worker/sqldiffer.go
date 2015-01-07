@@ -24,13 +24,13 @@ type sqlDiffWorkerState string
 
 const (
 	// all the states for the worker
-	SQLDiffNotSarted              sqlDiffWorkerState = "not started"
-	SQLDiffDone                   sqlDiffWorkerState = "done"
-	SQLDiffError                  sqlDiffWorkerState = "error"
-	SQLDiffFindTargets            sqlDiffWorkerState = "finding target instances"
-	SQLDiffSynchronizeReplication sqlDiffWorkerState = "synchronizing replication"
-	SQLDiffRunning                sqlDiffWorkerState = "running the diff"
-	SQLDiffCleanUp                sqlDiffWorkerState = "cleaning up"
+	sqlDiffNotSarted              sqlDiffWorkerState = "not started"
+	sqlDiffDone                   sqlDiffWorkerState = "done"
+	sqlDiffError                  sqlDiffWorkerState = "error"
+	sqlDiffFindTargets            sqlDiffWorkerState = "finding target instances"
+	sqlDiffSynchronizeReplication sqlDiffWorkerState = "synchronizing replication"
+	sqlDiffRunning                sqlDiffWorkerState = "running the diff"
+	sqlDiffCleanUp                sqlDiffWorkerState = "cleaning up"
 )
 
 func (state sqlDiffWorkerState) String() string {
@@ -76,7 +76,7 @@ func NewSQLDiffWorker(wr *wrangler.Wrangler, cell string, superset, subset Sourc
 		superset: superset,
 		subset:   subset,
 		cleaner:  new(wrangler.Cleaner),
-		state:    SQLDiffNotSarted,
+		state:    sqlDiffNotSarted,
 	}
 }
 
@@ -90,10 +90,11 @@ func (worker *SQLDiffWorker) recordError(err error) {
 	worker.mu.Lock()
 	defer worker.mu.Unlock()
 
-	worker.state = SQLDiffError
+	worker.state = sqlDiffError
 	worker.err = err
 }
 
+// StatusAsHTML is part of the Worker interface
 func (worker *SQLDiffWorker) StatusAsHTML() template.HTML {
 	worker.mu.Lock()
 	defer worker.mu.Unlock()
@@ -101,17 +102,18 @@ func (worker *SQLDiffWorker) StatusAsHTML() template.HTML {
 	result := "<b>Working on:</b> " + worker.subset.Keyspace + "/" + worker.subset.Shard + "</br>\n"
 	result += "<b>State:</b> " + worker.state.String() + "</br>\n"
 	switch worker.state {
-	case SQLDiffError:
+	case sqlDiffError:
 		result += "<b>Error</b>: " + worker.err.Error() + "</br>\n"
-	case SQLDiffRunning:
+	case sqlDiffRunning:
 		result += "<b>Running...</b></br>\n"
-	case SQLDiffDone:
+	case sqlDiffDone:
 		result += "<b>Success.</b></br>\n"
 	}
 
 	return template.HTML(result)
 }
 
+// StatusAsText is part of the Worker interface
 func (worker *SQLDiffWorker) StatusAsText() string {
 	worker.mu.Lock()
 	defer worker.mu.Unlock()
@@ -119,16 +121,17 @@ func (worker *SQLDiffWorker) StatusAsText() string {
 	result := "Working on: " + worker.subset.Keyspace + "/" + worker.subset.Shard + "\n"
 	result += "State: " + worker.state.String() + "\n"
 	switch worker.state {
-	case SQLDiffError:
+	case sqlDiffError:
 		result += "Error: " + worker.err.Error() + "\n"
-	case SQLDiffRunning:
+	case sqlDiffRunning:
 		result += "Running...\n"
-	case SQLDiffDone:
+	case sqlDiffDone:
 		result += "Success.\n"
 	}
 	return result
 }
 
+// CheckInterrupted is part of the Worker interface
 func (worker *SQLDiffWorker) CheckInterrupted() bool {
 	select {
 	case <-interrupted:
@@ -143,7 +146,7 @@ func (worker *SQLDiffWorker) CheckInterrupted() bool {
 func (worker *SQLDiffWorker) Run() {
 	err := worker.run()
 
-	worker.setState(SQLDiffCleanUp)
+	worker.setState(sqlDiffCleanUp)
 	cerr := worker.cleaner.CleanUp(worker.wr)
 	if cerr != nil {
 		if err != nil {
@@ -156,7 +159,7 @@ func (worker *SQLDiffWorker) Run() {
 		worker.recordError(err)
 		return
 	}
-	worker.setState(SQLDiffDone)
+	worker.setState(sqlDiffDone)
 }
 
 func (worker *SQLDiffWorker) Error() error {
@@ -193,7 +196,7 @@ func (worker *SQLDiffWorker) run() error {
 // - find one rdonly in subset
 // - mark them all as 'checker' pointing back to us
 func (worker *SQLDiffWorker) findTargets() error {
-	worker.setState(SQLDiffFindTargets)
+	worker.setState(sqlDiffFindTargets)
 
 	// find an appropriate endpoint in superset
 	var err error
@@ -217,7 +220,7 @@ func (worker *SQLDiffWorker) findTargets() error {
 // 3 - ask the superset slave to stop replication
 // Note this is not 100% correct, but good enough for now
 func (worker *SQLDiffWorker) synchronizeReplication() error {
-	worker.setState(SQLDiffSynchronizeReplication)
+	worker.setState(sqlDiffSynchronizeReplication)
 
 	// stop replication on subset slave
 	worker.wr.Logger().Infof("Stopping replication on subset slave %v", worker.subset.alias)
@@ -237,7 +240,7 @@ func (worker *SQLDiffWorker) synchronizeReplication() error {
 
 	// change the cleaner actions from ChangeSlaveType(rdonly)
 	// to StartSlave() + ChangeSlaveType(spare)
-	wrangler.RecordStartSlaveAction(worker.cleaner, subsetTablet, 30*time.Second)
+	wrangler.RecordStartSlaveAction(worker.cleaner, subsetTablet)
 	action, err := wrangler.FindChangeSlaveTypeActionByTarget(worker.cleaner, worker.subset.alias)
 	if err != nil {
 		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", worker.subset.alias, err)
@@ -265,7 +268,7 @@ func (worker *SQLDiffWorker) synchronizeReplication() error {
 
 	// change the cleaner actions from ChangeSlaveType(rdonly)
 	// to StartSlave() + ChangeSlaveType(spare)
-	wrangler.RecordStartSlaveAction(worker.cleaner, supersetTablet, 30*time.Second)
+	wrangler.RecordStartSlaveAction(worker.cleaner, supersetTablet)
 	action, err = wrangler.FindChangeSlaveTypeActionByTarget(worker.cleaner, worker.superset.alias)
 	if err != nil {
 		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", worker.superset.alias, err)
@@ -281,7 +284,7 @@ func (worker *SQLDiffWorker) synchronizeReplication() error {
 // - for each table in destination, run a diff pipeline.
 
 func (worker *SQLDiffWorker) diff() error {
-	worker.setState(SQLDiffRunning)
+	worker.setState(sqlDiffRunning)
 
 	// run the diff
 	worker.wr.Logger().Infof("Running the diffs...")

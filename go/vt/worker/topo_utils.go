@@ -13,6 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -74,8 +75,10 @@ func findChecker(wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, cell, keyspac
 	defer wrangler.RecordTabletTagAction(cleaner, tabletAlias, "worker", "")
 
 	wr.Logger().Infof("Changing tablet %v to 'checker'", tabletAlias)
-	wr.ResetActionTimeout(30 * time.Second)
-	if err := wr.ChangeType(wr.Context(), tabletAlias, topo.TYPE_CHECKER, false /*force*/); err != nil {
+	ctx, cancel := context.WithTimeout(context.TODO(), 60*time.Second)
+	err = wr.ChangeType(ctx, tabletAlias, topo.TYPE_CHECKER, false /*force*/)
+	cancel()
+	if err != nil {
 		return topo.TabletAlias{}, err
 	}
 

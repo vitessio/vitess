@@ -332,7 +332,7 @@ func (scw *SplitCloneWorker) findTargets() error {
 			return fmt.Errorf("cannot stop replication on tablet %v", alias)
 		}
 
-		wrangler.RecordStartSlaveAction(scw.cleaner, scw.sourceTablets[i], 30*time.Second)
+		wrangler.RecordStartSlaveAction(scw.cleaner, scw.sourceTablets[i])
 		action, err := wrangler.FindChangeSlaveTypeActionByTarget(scw.cleaner, alias)
 		if err != nil {
 			return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", alias, err)

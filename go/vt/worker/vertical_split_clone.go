@@ -299,7 +299,7 @@ func (vscw *VerticalSplitCloneWorker) findTargets() error {
 		return fmt.Errorf("cannot stop replication on tablet %v", vscw.sourceAlias)
 	}
 
-	wrangler.RecordStartSlaveAction(vscw.cleaner, vscw.sourceTablet, 30*time.Second)
+	wrangler.RecordStartSlaveAction(vscw.cleaner, vscw.sourceTablet)
 	action, err := wrangler.FindChangeSlaveTypeActionByTarget(vscw.cleaner, vscw.sourceAlias)
 	if err != nil {
 		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", vscw.sourceAlias, err)

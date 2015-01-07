@@ -108,18 +108,3 @@ func (wr *Wrangler) SetLogger(logger logutil.Logger) {
 func (wr *Wrangler) Logger() logutil.Logger {
 	return wr.logger
 }
-
-// ResetActionTimeout should be used before every action on a wrangler
-// object that is going to be re-used:
-// - vtctl will not call this, as it does one action.
-// - vtctld will not call this, as it creates a new Wrangler every time.
-// However, some actions may need to do a cleanup phase where the
-// original Context may have expired or been cancelled, but still do
-// the action.  Wrangler cleaner module is one of these, or the vt
-// worker in some corner cases,
-func (wr *Wrangler) ResetActionTimeout(actionTimeout time.Duration) {
-	wr.mu.Lock()
-	defer wr.mu.Unlock()
-
-	wr.ctx, wr.cancel = context.WithTimeout(context.Background(), actionTimeout)
-}
