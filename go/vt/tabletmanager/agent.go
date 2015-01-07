@@ -168,8 +168,9 @@ func NewActionAgent(
 
 // NewTestActionAgent creates an agent for test purposes. Only a
 // subset of features are supported now, but we'll add more over time.
-func NewTestActionAgent(ts topo.Server, tabletAlias topo.TabletAlias, port int, mysqlDaemon mysqlctl.MysqlDaemon) (agent *ActionAgent) {
+func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, port int, mysqlDaemon mysqlctl.MysqlDaemon) (agent *ActionAgent) {
 	agent = &ActionAgent{
+		batchCtx:           batchCtx,
 		TopoServer:         ts,
 		TabletAlias:        tabletAlias,
 		Mysqld:             nil,

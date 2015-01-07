@@ -21,6 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/gorpctmserver"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
+	"golang.org/x/net/context"
 )
 
 // This file contains utility methods for unit tests.
@@ -133,7 +134,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 
 	// create a test agent on that port, and re-read the record
 	// (it has new ports and IP)
-	ft.Agent = tabletmanager.NewTestActionAgent(wr.TopoServer(), ft.Tablet.Alias, port, ft.FakeMysqlDaemon)
+	ft.Agent = tabletmanager.NewTestActionAgent(context.TODO(), wr.TopoServer(), ft.Tablet.Alias, port, ft.FakeMysqlDaemon)
 	ft.Tablet = ft.Agent.Tablet().Tablet
 
 	// create the RPC server

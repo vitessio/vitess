@@ -29,6 +29,12 @@ var (
 	finalizeReparentTimeout = flag.Duration("finalize_external_reparent_timeout", 10*time.Second, "Timeout for the finalize stage of a fast external reparent reconciliation.")
 )
 
+// SetReparentFlags changes flag values. It should only be used in tests.
+func SetReparentFlags(fast bool, timeout time.Duration) {
+	*fastReparent = fast
+	*finalizeReparentTimeout = timeout
+}
+
 // fastTabletExternallyReparented completely replaces TabletExternallyReparented
 // if the -fast_external_reparent flag is specified.
 func (agent *ActionAgent) fastTabletExternallyReparented(ctx context.Context, externalID string) (err error) {
