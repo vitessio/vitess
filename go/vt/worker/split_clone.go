@@ -401,7 +401,9 @@ func (scw *SplitCloneWorker) copy() error {
 	// on all source shards. Furthermore, we estimate the number of rows
 	// in each source shard for each table to be about the same
 	// (rowCount is used to estimate an ETA)
-	sourceSchemaDefinition, err := scw.wr.GetSchema(scw.wr.Context(), scw.sourceAliases[0], nil, scw.excludeTables, true)
+	ctx, cancel := context.WithTimeout(context.TODO(), 60*time.Second)
+	sourceSchemaDefinition, err := scw.wr.GetSchema(ctx, scw.sourceAliases[0], nil, scw.excludeTables, true)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot get schema from source %v: %v", scw.sourceAliases[0], err)
 	}

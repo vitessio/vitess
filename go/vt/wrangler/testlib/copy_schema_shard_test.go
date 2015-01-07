@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
+	"golang.org/x/net/context"
 )
 
 type ExpectedExecuteFetch struct {
@@ -159,7 +160,7 @@ func TestCopySchemaShard(t *testing.T) {
 	destinationMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t)
 	destinationRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t)
 
-	if err := wr.CopySchemaShard(wr.Context(), sourceRdonly.Tablet.Alias, nil, nil, true, "ks", "-40"); err != nil {
+	if err := wr.CopySchemaShard(context.Background(), sourceRdonly.Tablet.Alias, nil, nil, true, "ks", "-40"); err != nil {
 		t.Fatalf("CopySchemaShard failed: %v", err)
 	}
 

@@ -22,6 +22,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl"
 	"github.com/youtube/vitess/go/vt/wrangler"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -75,11 +76,12 @@ func main() {
 	topoServer := topo.GetServer()
 	defer topo.CloseServers()
 
-	// FIXME(alainjobart) Create the context outside of wrangler
+	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
 	wr := wrangler.New(logutil.NewConsoleLogger(), topoServer, *waitTime, *lockWaitTimeout)
 	installSignalHandlers(wr)
 
-	err := vtctl.RunCommand(wr.Context(), wr, args)
+	err := vtctl.RunCommand(ctx, wr, args)
+	cancel()
 	switch err {
 	case vtctl.ErrUnknownCommand:
 		flag.Usage()

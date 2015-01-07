@@ -47,11 +47,13 @@ func (s *VtctlServer) ExecuteVtctlCommand(ctx context.Context, query *gorpcproto
 	}()
 
 	// create the wrangler
-	// FIXME(alainjobart) use a single context, copy the source info from it
 	wr := wrangler.New(logger, s.ts, query.ActionTimeout, query.LockTimeout)
+	// FIXME(alainjobart) use a single context, copy the source info from it
+	ctx, cancel := context.WithTimeout(context.TODO(), query.ActionTimeout)
 
 	// execute the command
-	err := vtctl.RunCommand(wr.Context(), wr, query.Args)
+	err := vtctl.RunCommand(ctx, wr, query.Args)
+	cancel()
 
 	// close the log channel, and wait for them all to be sent
 	close(logstream)

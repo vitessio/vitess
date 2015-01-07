@@ -354,7 +354,9 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	vscw.setState(stateVSCCopy)
 
 	// get source schema
-	sourceSchemaDefinition, err := vscw.wr.GetSchema(vscw.wr.Context(), vscw.sourceAlias, vscw.tables, nil, true)
+	ctx, cancel := context.WithTimeout(context.TODO(), 60*time.Second)
+	sourceSchemaDefinition, err := vscw.wr.GetSchema(ctx, vscw.sourceAlias, vscw.tables, nil, true)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot get schema from source %v: %v", vscw.sourceAlias, err)
 	}

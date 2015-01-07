@@ -335,16 +335,16 @@ func fmtAction(action *actionnode.ActionNode) string {
 	return fmt.Sprintf("%v %v %v %v %v", action.Path, action.Action, state, action.ActionGuid, action.Error)
 }
 
-func listTabletsByShard(wr *wrangler.Wrangler, keyspace, shard string) error {
-	tabletAliases, err := topo.FindAllTabletAliasesInShard(wr.Context(), wr.TopoServer(), keyspace, shard)
+func listTabletsByShard(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string) error {
+	tabletAliases, err := topo.FindAllTabletAliasesInShard(ctx, wr.TopoServer(), keyspace, shard)
 	if err != nil {
 		return err
 	}
-	return dumpTablets(wr, tabletAliases)
+	return dumpTablets(ctx, wr, tabletAliases)
 }
 
-func dumpAllTablets(wr *wrangler.Wrangler, zkVtPath string) error {
-	tablets, err := topotools.GetAllTablets(wr.Context(), wr.TopoServer(), zkVtPath)
+func dumpAllTablets(ctx context.Context, wr *wrangler.Wrangler, zkVtPath string) error {
+	tablets, err := topotools.GetAllTablets(ctx, wr.TopoServer(), zkVtPath)
 	if err != nil {
 		return err
 	}
@@ -354,8 +354,8 @@ func dumpAllTablets(wr *wrangler.Wrangler, zkVtPath string) error {
 	return nil
 }
 
-func dumpTablets(wr *wrangler.Wrangler, tabletAliases []topo.TabletAlias) error {
-	tabletMap, err := topo.GetTabletMap(wr.Context(), wr.TopoServer(), tabletAliases)
+func dumpTablets(ctx context.Context, wr *wrangler.Wrangler, tabletAliases []topo.TabletAlias) error {
+	tabletMap, err := topo.GetTabletMap(ctx, wr.TopoServer(), tabletAliases)
 	if err != nil {
 		return err
 	}
@@ -709,7 +709,7 @@ func commandSetReadOnly(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
 	}
-	return wr.TabletManagerClient().SetReadOnly(wr.Context(), ti)
+	return wr.TabletManagerClient().SetReadOnly(ctx, ti)
 }
 
 func commandSetReadWrite(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -728,7 +728,7 @@ func commandSetReadWrite(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if err != nil {
 		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
 	}
-	return wr.TabletManagerClient().SetReadWrite(wr.Context(), ti)
+	return wr.TabletManagerClient().SetReadWrite(ctx, ti)
 }
 
 func commandChangeSlaveType(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -781,7 +781,7 @@ func commandPing(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Flag
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().Ping(wr.Context(), tabletInfo)
+	return wr.TabletManagerClient().Ping(ctx, tabletInfo)
 }
 
 func commandRefreshState(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -799,7 +799,7 @@ func commandRefreshState(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().RefreshState(wr.Context(), tabletInfo)
+	return wr.TabletManagerClient().RefreshState(ctx, tabletInfo)
 }
 
 func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -821,7 +821,7 @@ func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().RunHealthCheck(wr.Context(), tabletInfo, servedType)
+	return wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo, servedType)
 }
 
 func commandQuery(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -853,7 +853,7 @@ func commandSleep(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().Sleep(wr.Context(), ti, duration)
+	return wr.TabletManagerClient().Sleep(ctx, ti, duration)
 }
 
 func commandSnapshotSourceEnd(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -892,7 +892,7 @@ func commandSnapshot(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 	if err != nil {
 		return err
 	}
-	sr, originalType, err := wr.Snapshot(tabletAlias, *force, *concurrency, *serverMode)
+	sr, originalType, err := wr.Snapshot(ctx, tabletAlias, *force, *concurrency, *serverMode)
 	if err == nil {
 		log.Infof("Manifest: %v", sr.ManifestPath)
 		log.Infof("ParentAlias: %v", sr.ParentAlias)
@@ -1092,7 +1092,7 @@ func commandTabletExternallyReparented(ctx context.Context, wr *wrangler.Wrangle
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().TabletExternallyReparented(wr.Context(), ti, "")
+	return wr.TabletManagerClient().TabletExternallyReparented(ctx, ti, "")
 }
 
 func commandValidateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1154,7 +1154,7 @@ func commandListShardTablets(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	if err != nil {
 		return err
 	}
-	return listTabletsByShard(wr, keyspace, shard)
+	return listTabletsByShard(ctx, wr, keyspace, shard)
 }
 
 func commandSetShardServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1282,7 +1282,7 @@ func commandShardReplicationAdd(ctx context.Context, wr *wrangler.Wrangler, subF
 	if err != nil {
 		return err
 	}
-	return topo.UpdateShardReplicationRecord(wr.Context(), wr.TopoServer(), keyspace, shard, tabletAlias)
+	return topo.UpdateShardReplicationRecord(ctx, wr.TopoServer(), keyspace, shard, tabletAlias)
 }
 
 func commandShardReplicationRemove(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1654,7 +1654,7 @@ func commandListAllTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	}
 
 	cell := subFlags.Arg(0)
-	return dumpAllTablets(wr, cell)
+	return dumpAllTablets(ctx, wr, cell)
 }
 
 func commandListTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1674,7 +1674,7 @@ func commandListTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 			return err
 		}
 	}
-	return dumpTablets(wr, aliases)
+	return dumpTablets(ctx, wr, aliases)
 }
 
 func commandGetSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

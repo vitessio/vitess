@@ -72,14 +72,6 @@ func New(logger logutil.Logger, ts topo.Server, actionTimeout, lockTimeout time.
 	}
 }
 
-// Context returns the context associated with this Wrangler.
-// It is replaced if ResetActionTimeout is called on the Wrangler.
-func (wr *Wrangler) Context() context.Context {
-	wr.mu.Lock()
-	defer wr.mu.Unlock()
-	return wr.ctx
-}
-
 // Cancel calls the CancelFunc on our Context and therefore interrupts the call.
 func (wr *Wrangler) Cancel() {
 	wr.mu.Lock()

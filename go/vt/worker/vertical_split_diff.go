@@ -374,7 +374,9 @@ func (vsdw *VerticalSplitDiffWorker) diff() error {
 	wg.Add(1)
 	go func() {
 		var err error
-		vsdw.destinationSchemaDefinition, err = vsdw.wr.GetSchema(vsdw.wr.Context(), vsdw.destinationAlias, nil, nil, false)
+		ctx, cancel := context.WithTimeout(context.TODO(), 60*time.Second)
+		vsdw.destinationSchemaDefinition, err = vsdw.wr.GetSchema(ctx, vsdw.destinationAlias, nil, nil, false)
+		cancel()
 		rec.RecordError(err)
 		vsdw.wr.Logger().Infof("Got schema from destination %v", vsdw.destinationAlias)
 		wg.Done()
@@ -382,7 +384,9 @@ func (vsdw *VerticalSplitDiffWorker) diff() error {
 	wg.Add(1)
 	go func() {
 		var err error
-		vsdw.sourceSchemaDefinition, err = vsdw.wr.GetSchema(vsdw.wr.Context(), vsdw.sourceAlias, nil, nil, false)
+		ctx, cancel := context.WithTimeout(context.TODO(), 60*time.Second)
+		vsdw.sourceSchemaDefinition, err = vsdw.wr.GetSchema(ctx, vsdw.sourceAlias, nil, nil, false)
+		cancel()
 		rec.RecordError(err)
 		vsdw.wr.Logger().Infof("Got schema from source %v", vsdw.sourceAlias)
 		wg.Done()
