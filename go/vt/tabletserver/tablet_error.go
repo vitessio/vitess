@@ -73,6 +73,18 @@ func NewTabletErrorSql(errorType int, err error) *TabletError {
 	}
 }
 
+func IsConnErr(err error) bool {
+	terr, ok := err.(*TabletError)
+	if !ok {
+		return false
+	}
+	// 2013 means that someone sniped the query.
+	if terr.SqlError == 2013 {
+		return false
+	}
+	return terr.SqlError >= 2000 && terr.SqlError <= 2018
+}
+
 func (te *TabletError) Error() string {
 	format := "error: %s"
 	switch te.ErrorType {

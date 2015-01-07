@@ -5,6 +5,7 @@
 package tabletserver
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -232,6 +233,10 @@ func (txc *TxConnection) Recycle() {
 	} else {
 		txc.pool.activePool.Put(txc.TransactionID)
 	}
+}
+
+func (txc *TxConnection) Reconnect() error {
+	return errors.New("Reconnect not allowed for TxConnection")
 }
 
 func (txc *TxConnection) RecordQuery(query string) {

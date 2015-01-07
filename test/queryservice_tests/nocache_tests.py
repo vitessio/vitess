@@ -630,3 +630,24 @@ class TestNocache(framework.TestCase):
     cu.execute("select * from vtocc_acl_all_user_read_only where key1=1", {})
     cu.fetchall()
     cu.close()
+
+  # This is a super-slow test. Uncomment and test if you change
+  # the server-side reconnect logic.
+  #def test_server_reconnect(self):
+  #  self.env.execute("set vt_pool_size=1")
+  #  self.env.execute("select * from vtocc_test limit :l", {"l": 1})
+  #  self.env.tablet.shutdown_mysql()
+  #  time.sleep(5)
+  #  self.env.tablet.start_mysql()
+  #  time.sleep(5)
+  #  self.env.execute("select * from vtocc_test limit :l", {"l": 1})
+  #  self.env.conn.begin()
+  #  self.env.tablet.shutdown_mysql()
+  #  time.sleep(5)
+  #  self.env.tablet.start_mysql()
+  #  time.sleep(5)
+  #  with self.assertRaises(dbexceptions.DatabaseError):
+  #    self.env.execute("select * from vtocc_test limit :l", {"l": 1})
+  #  with self.assertRaises(dbexceptions.DatabaseError):
+  #    self.env.conn.rollback()
+  #  self.env.execute("set vt_pool_size=16")
