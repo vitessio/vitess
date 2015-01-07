@@ -21,6 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/gorpctmserver"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
+	"golang.org/x/net/context"
 )
 
 // This file contains utility methods for unit tests.
@@ -99,7 +100,7 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 	}
 	puid, ok := tablet.Portmap["parent_uid"]
 	delete(tablet.Portmap, "parent_uid")
-	if err := wr.InitTablet(tablet, false, true, false); err != nil {
+	if err := wr.InitTablet(context.Background(), tablet, false, true, false); err != nil {
 		t.Fatalf("cannot create tablet %v: %v", uid, err)
 	}
 

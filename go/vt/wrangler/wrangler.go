@@ -22,6 +22,7 @@ var (
 	// DefaultActionTimeout is a good default for interactive
 	// remote actions. We usually take a lock then do an action,
 	// so basing this to be greater than DefaultLockTimeout is good.
+	// Use this as the default value for Context that need a deadline.
 	DefaultActionTimeout = actionnode.DefaultLockTimeout * 4
 )
 
@@ -40,10 +41,9 @@ type Wrangler struct {
 	lockTimeout time.Duration
 
 	// the following fields are protected by the mutex
-	mu       sync.Mutex
-	ctx      context.Context
-	cancel   context.CancelFunc
-	deadline time.Time
+	mu     sync.Mutex
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 // New creates a new Wrangler object.
@@ -68,15 +68,8 @@ func New(logger logutil.Logger, ts topo.Server, actionTimeout, lockTimeout time.
 		tmc:         tmclient.NewTabletManagerClient(),
 		ctx:         ctx,
 		cancel:      cancel,
-		deadline:    time.Now().Add(actionTimeout),
 		lockTimeout: lockTimeout,
 	}
-}
-
-// ActionTimeout returns the timeout to use so the action finishes before
-// the deadline.
-func (wr *Wrangler) ActionTimeout() time.Duration {
-	return wr.deadline.Sub(time.Now())
 }
 
 // Context returns the context associated with this Wrangler.
@@ -129,5 +122,4 @@ func (wr *Wrangler) ResetActionTimeout(actionTimeout time.Duration) {
 	defer wr.mu.Unlock()
 
 	wr.ctx, wr.cancel = context.WithTimeout(context.Background(), actionTimeout)
-	wr.deadline = time.Now().Add(actionTimeout)
 }

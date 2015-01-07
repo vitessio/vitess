@@ -8,11 +8,12 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 // SetSourceShards is a utility function to override the SourceShards fields
 // on a Shard.
-func (wr *Wrangler) SetSourceShards(keyspace, shard string, sources []topo.TabletAlias, tables []string) error {
+func (wr *Wrangler) SetSourceShards(ctx context.Context, keyspace, shard string, sources []topo.TabletAlias, tables []string) error {
 	// read the shard
 	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
@@ -26,7 +27,7 @@ func (wr *Wrangler) SetSourceShards(keyspace, shard string, sources []topo.Table
 	}
 
 	// read the source tablets
-	sourceTablets, err := topo.GetTabletMap(wr.ctx, wr.TopoServer(), sources)
+	sourceTablets, err := topo.GetTabletMap(ctx, wr.TopoServer(), sources)
 	if err != nil {
 		return err
 	}
@@ -48,7 +49,7 @@ func (wr *Wrangler) SetSourceShards(keyspace, shard string, sources []topo.Table
 	}
 
 	// and write the shard
-	if err = topo.UpdateShard(wr.ctx, wr.ts, shardInfo); err != nil {
+	if err = topo.UpdateShard(ctx, wr.ts, shardInfo); err != nil {
 		return err
 	}
 

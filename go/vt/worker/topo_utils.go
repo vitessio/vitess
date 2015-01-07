@@ -75,7 +75,7 @@ func findChecker(wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, cell, keyspac
 
 	wr.Logger().Infof("Changing tablet %v to 'checker'", tabletAlias)
 	wr.ResetActionTimeout(30 * time.Second)
-	if err := wr.ChangeType(tabletAlias, topo.TYPE_CHECKER, false /*force*/); err != nil {
+	if err := wr.ChangeType(wr.Context(), tabletAlias, topo.TYPE_CHECKER, false /*force*/); err != nil {
 		return topo.TabletAlias{}, err
 	}
 

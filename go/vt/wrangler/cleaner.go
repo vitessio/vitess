@@ -129,6 +129,8 @@ type ChangeSlaveTypeAction struct {
 	TabletType  topo.TabletType
 }
 
+// ChangeSlaveTypeActionName is the name of the action to change a slave type
+// (can be used to find such an action by name)
 const ChangeSlaveTypeActionName = "ChangeSlaveTypeAction"
 
 // RecordChangeSlaveTypeAction records a new ChangeSlaveTypeAction
@@ -155,8 +157,9 @@ func FindChangeSlaveTypeActionByTarget(cleaner *Cleaner, tabletAlias topo.Tablet
 
 // CleanUp is part of CleanerAction interface.
 func (csta ChangeSlaveTypeAction) CleanUp(wr *Wrangler) error {
+	// FIXME (alainjobart) copy the context here with higher timeout
 	wr.ResetActionTimeout(30 * time.Second)
-	return wr.ChangeType(csta.TabletAlias, csta.TabletType, false)
+	return wr.ChangeType(wr.ctx, csta.TabletAlias, csta.TabletType, false)
 }
 
 //
@@ -171,6 +174,7 @@ type TabletTagAction struct {
 	Value       string
 }
 
+// TabletTagActionName is the name of the Tag action
 const TabletTagActionName = "TabletTagAction"
 
 // RecordTabletTagAction records a new TabletTagAction
@@ -208,6 +212,7 @@ type StartSlaveAction struct {
 	WaitTime   time.Duration
 }
 
+// StartSlaveActionName is the name of the slave start action
 const StartSlaveActionName = "StartSlaveAction"
 
 // RecordStartSlaveAction records a new StartSlaveAction
@@ -235,6 +240,7 @@ type StartBlpAction struct {
 	WaitTime   time.Duration
 }
 
+// StartBlpActionName is the name of the action to start binlog player
 const StartBlpActionName = "StartBlpAction"
 
 // RecordStartBlpAction records a new StartBlpAction

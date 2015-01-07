@@ -13,26 +13,27 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
+	"golang.org/x/net/context"
 )
 
-// Rebuild the serving and replication rollup data data while locking
+// RebuildShardGraph rebuilds the serving and replication rollup data data while locking
 // out other changes.
-func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) (*topo.ShardInfo, error) {
-	return topotools.RebuildShard(wr.ctx, wr.logger, wr.ts, keyspace, shard, cells, wr.lockTimeout)
+func (wr *Wrangler) RebuildShardGraph(ctx context.Context, keyspace, shard string, cells []string) (*topo.ShardInfo, error) {
+	return topotools.RebuildShard(ctx, wr.logger, wr.ts, keyspace, shard, cells, wr.lockTimeout)
 }
 
-// Rebuild the serving graph data while locking out other changes.
+// RebuildKeyspaceGraph rebuilds the serving graph data while locking out other changes.
 // If some shards were recently read / updated, pass them in the cache so
 // we don't read them again (and possible get stale replicated data)
-func (wr *Wrangler) RebuildKeyspaceGraph(keyspace string, cells []string) error {
+func (wr *Wrangler) RebuildKeyspaceGraph(ctx context.Context, keyspace string, cells []string) error {
 	actionNode := actionnode.RebuildKeyspace()
-	lockPath, err := wr.lockKeyspace(keyspace, actionNode)
+	lockPath, err := wr.lockKeyspace(ctx, keyspace, actionNode)
 	if err != nil {
 		return err
 	}
 
-	err = wr.rebuildKeyspace(keyspace, cells)
-	return wr.unlockKeyspace(keyspace, actionNode, lockPath, err)
+	err = wr.rebuildKeyspace(ctx, keyspace, cells)
+	return wr.unlockKeyspace(ctx, keyspace, actionNode, lockPath, err)
 }
 
 // findCellsForRebuild will find all the cells in the given keyspace
@@ -62,7 +63,7 @@ func (wr *Wrangler) findCellsForRebuild(ki *topo.KeyspaceInfo, shardMap map[stri
 //
 // Take data from the global keyspace and rebuild the local serving
 // copies in each cell.
-func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
+func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells []string) error {
 	wr.logger.Infof("rebuildKeyspace %v", keyspace)
 
 	ki, err := wr.ts.GetKeyspace(keyspace)
@@ -83,7 +84,7 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
 	for _, shard := range shards {
 		wg.Add(1)
 		go func(shard string) {
-			if shardInfo, err := wr.RebuildShardGraph(keyspace, shard, cells); err != nil {
+			if shardInfo, err := wr.RebuildShardGraph(ctx, keyspace, shard, cells); err != nil {
 				rec.RecordError(fmt.Errorf("RebuildShardGraph failed: %v/%v %v", keyspace, shard, err))
 			} else {
 				mu.Lock()
@@ -218,12 +219,12 @@ func strInList(sl []string, s string) bool {
 	return false
 }
 
-// This is a quick and dirty tool to resurrect the TopologyServer data from the
+// RebuildReplicationGraph is a quick and dirty tool to resurrect the TopologyServer data from the
 // canonical data stored in the tablet nodes.
 //
 // cells: local vt cells to scan for all tablets
 // keyspaces: list of keyspaces to rebuild
-func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) error {
+func (wr *Wrangler) RebuildReplicationGraph(ctx context.Context, cells []string, keyspaces []string) error {
 	if cells == nil || len(cells) == 0 {
 		return fmt.Errorf("must specify cells to rebuild replication graph")
 	}
@@ -233,7 +234,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 
 	allTablets := make([]*topo.TabletInfo, 0, 1024)
 	for _, cell := range cells {
-		tablets, err := topotools.GetAllTablets(wr.ctx, wr.ts, cell)
+		tablets, err := topotools.GetAllTablets(ctx, wr.ts, cell)
 		if err != nil {
 			return err
 		}
@@ -274,7 +275,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 				}
 			}
 			mu.Unlock()
-			err := topo.UpdateTabletReplicationData(wr.ctx, wr.ts, ti.Tablet)
+			err := topo.UpdateTabletReplicationData(ctx, wr.ts, ti.Tablet)
 			if err != nil {
 				mu.Lock()
 				hasErr = true
@@ -289,7 +290,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 		wg.Add(1)
 		go func(keyspace string) {
 			defer wg.Done()
-			if err := wr.RebuildKeyspaceGraph(keyspace, nil); err != nil {
+			if err := wr.RebuildKeyspaceGraph(ctx, keyspace, nil); err != nil {
 				mu.Lock()
 				hasErr = true
 				mu.Unlock()

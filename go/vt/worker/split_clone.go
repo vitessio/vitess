@@ -599,7 +599,10 @@ func (scw *SplitCloneWorker) copy() error {
 	} else {
 		for _, si := range scw.destinationShards {
 			scw.wr.Logger().Infof("Setting SourceShard on shard %v/%v", si.Keyspace(), si.ShardName())
-			if err := scw.wr.SetSourceShards(si.Keyspace(), si.ShardName(), scw.sourceAliases, nil); err != nil {
+			ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+			err := scw.wr.SetSourceShards(ctx, si.Keyspace(), si.ShardName(), scw.sourceAliases, nil)
+			cancel()
+			if err != nil {
 				return fmt.Errorf("Failed to set source shards: %v", err)
 			}
 		}

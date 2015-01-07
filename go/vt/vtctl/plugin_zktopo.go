@@ -117,7 +117,7 @@ func commandExportZknsForKeyspace(ctx context.Context, wr *wrangler.Wrangler, su
 	if err != nil {
 		return err
 	}
-	return wr.ExportZknsForKeyspace(keyspace)
+	return wr.ExportZknsForKeyspace(ctx, keyspace)
 }
 
 func zkVtPathToCell(param string) (string, error) {
