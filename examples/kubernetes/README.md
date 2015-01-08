@@ -8,7 +8,7 @@ to get Kubernetes up and running if you haven't already.
 
 ## Requirements
 
-This example currently assumes Kubernetes v0.6.x. We recommend downloading a
+This example currently assumes Kubernetes v0.7.x. We recommend downloading a
 [binary release](https://github.com/GoogleCloudPlatform/kubernetes/releases).
 
 The easiest way to run the local commands like vtctl is just to install
@@ -96,11 +96,13 @@ If you've opened port 15000 on your firewall, you can run *vtctlclient*
 locally to issue commands:
 
 ```
+$ alias kvtctl="sudo docker run -ti --rm vitess/base vtctlclient -server 12.34.56.78:15000"
+
 # check the connection to vtctld, and list available commands
-$ sudo docker run -ti --rm vitess/base vtctlclient -server 12.34.56.78:15000
+$ kvtctl
 
 # create a global keyspace record
-$ sudo docker run -ti --rm vitess/base vtctlclient -server 12.34.56.78:15000 CreateKeyspace my_keyspace
+$ kvtctl CreateKeyspace my_keyspace
 ```
 
 If you don't want to open the port on the firewall, you can SSH into one of your
@@ -121,22 +123,16 @@ $ gcloud compute ssh kubernetes-minion-1
 kubernetes-minion-1:~$ sudo docker run -ti --rm vitess/base vtctlclient -server 10.0.12.151:15000 CreateKeyspace your_keyspace
 ```
 
-## Creating a keyspace and shard
-
-This creates the initial paths in the topology server.
-
-```
-$ alias vtctl="sudo docker run -ti --rm vitess/base vtctlclient -server 12.34.56.78:15000"
-$ vtctl CreateKeyspace test_keyspace
-$ vtctl CreateShard test_keyspace/0
-```
+Note that the CreateKeyspace commands above are just for testing that
+vtctlclient works. You normally would not need to do that manually,
+as vttablet will initialize the necessary entries upon startup.
 
 ## Launching vttablets
 
 We launch vttablet in a
 [pod](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/pods.md)
 along with mysqld. The following script will instantiate *vttablet-pod-template.yaml*
-for a master and two replicas.
+for three replicas.
 
 ```
 vitess/examples/kubernetes$ ./vttablet-up.sh
@@ -189,16 +185,30 @@ or launch a proxy as a Kubernetes service.
 
 The status url for each tablet is http://tablet-ip:15002/debug/status
 
-## Starting MySQL replication
+## Electing a master vttablet
 
-The vttablets have been assigned master and replica roles by the startup
-script, but MySQL itself has not been told to start replicating.
-To do that, we do a forced reparent to the existing master.
+The vttablets have all been started as replicas, but there is no master yet.
+When we pick a master vttablet, Vitess will also take care of connecting the
+other replicas' mysqld instances to start replicating from the master mysqld.
+
+Since this is the first time we're starting up the shard, there is no existing
+replication happening, so we use the -force flag on ReparentShard to skip the
+usual validation of each tablet's replication state.
 
 ```
-$ vtctl RebuildShardGraph test_keyspace/0
-$ vtctl ReparentShard -force test_keyspace/0 test-0000000100
-$ vtctl RebuildKeyspaceGraph test_keyspace
+$ kvtctl RebuildShardGraph test_keyspace/0
+$ kvtctl ReparentShard -force test_keyspace/0 test-0000000100
+$ kvtctl RebuildKeyspaceGraph test_keyspace
+```
+
+Once this is done, you should see one master and two replicas in vtctld's web
+interface. You can also check this on the command line with vtctlclient:
+
+```
+$ kvtctl ListAllTablets test
+test-0000000100 test_keyspace 0 master 10.244.4.6:15002 10.244.4.6:3306 []
+test-0000000101 test_keyspace 0 replica 10.244.1.8:15002 10.244.1.8:3306 []
+test-0000000102 test_keyspace 0 replica 10.244.1.9:15002 10.244.1.9:3306 []
 ```
 
 ## Creating a table
@@ -207,7 +217,7 @@ The vtctl tool can manage schema across all tablets in a keyspace.
 To create the table defined in *create_test_table.sql*:
 
 ```
-vitess/examples/kubernetes$ vtctl ApplySchemaKeyspace -simple -sql "$(cat create_test_table.sql)" test_keyspace
+vitess/examples/kubernetes$ kvtctl ApplySchemaKeyspace -simple -sql "$(cat create_test_table.sql)" test_keyspace
 ```
 
 ## Launching the vtgate pool
