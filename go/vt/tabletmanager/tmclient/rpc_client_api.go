@@ -174,6 +174,13 @@ type TabletManagerClient interface {
 
 	// Restore restores a database snapshot
 	Restore(ctx context.Context, tablet *topo.TabletInfo, sa *actionnode.RestoreArgs) (<-chan *logutil.LoggerEvent, ErrFunc, error)
+
+	//
+	// RPC related methods
+	//
+
+	// IsTimeoutError checks if an error was caused by an RPC layer timeout vs an application-specific one
+	IsTimeoutError(err error) bool
 }
 
 type TabletManagerClientFactory func() TabletManagerClient
