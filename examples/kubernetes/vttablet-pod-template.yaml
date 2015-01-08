@@ -23,22 +23,9 @@ desiredState:
 
             mysql_socket="$VTDATAROOT/{{tablet_subdir}}/mysql.sock"
 
-            hostname=$(hostname -i)
-
             mkdir -p $VTDATAROOT/tmp
 
             chown -R vitess /vt
-
-            su -p -s /bin/bash -c "/vt/bin/vtctlclient
-            -log_dir $VTDATAROOT/tmp
-            -server $VTCTLD_SERVICE_HOST:$VTCTLD_SERVICE_PORT
-            InitTablet -force -parent
-            -port {{port}}
-            -hostname $hostname
-            -keyspace {{keyspace}}
-            -shard {{shard}}
-            {{alias}} {{type}}
-            &>> $log_file" vitess
 
             while [ ! -e $mysql_socket ]; do
             echo "[$(date)] waiting for $mysql_socket" >> $log_file ;
@@ -55,7 +42,9 @@ desiredState:
             -log_dir $VTDATAROOT/tmp
             -port {{port}}
             -tablet-path {{alias}}
-            -tablet_hostname $hostname
+            -tablet_hostname $(hostname -i)
+            -init_keyspace {{keyspace}}
+            -init_shard {{shard}}
             -target_tablet_type replica
             -mysqlctl_socket $VTDATAROOT/mysqlctl.sock
             -db-config-app-uname vt_app
@@ -115,6 +104,6 @@ desiredState:
         source: {emptyDir: {}}
 labels:
   name: vttablet
-  keyspace: {{keyspace}}
-  shard: {{shard}}
-  tablet: {{alias}}
+  keyspace: "{{keyspace}}"
+  shard: "{{shard}}"
+  tablet: "{{alias}}"
