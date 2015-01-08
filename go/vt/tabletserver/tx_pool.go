@@ -103,7 +103,7 @@ func (axp *TxPool) TransactionKiller() {
 	defer logError()
 	for _, v := range axp.activePool.GetOutdated(time.Duration(axp.Timeout()), "for rollback") {
 		conn := v.(*TxConnection)
-		log.Warningf("killing transaction (exceeded timeout: %s): %s", axp.Timeout().String(), conn.Format(nil))
+		log.Warningf("killing transaction (exceeded timeout: %v): %s", axp.Timeout(), conn.Format(nil))
 		killStats.Add("Transactions", 1)
 		conn.Close()
 		conn.discard(TX_KILL)
