@@ -2,6 +2,7 @@ package topotools
 
 import (
 	"fmt"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,7 +25,12 @@ type TabletNode struct {
 }
 
 // ShortName returns a displayable representation of the host name.
+// If the host is an IP address instead of a name, it is not shortened.
 func (tn *TabletNode) ShortName() string {
+	if net.ParseIP(tn.Host) != nil {
+		return netutil.JoinHostPort(tn.Host, tn.Port)
+	}
+
 	hostPart := strings.SplitN(tn.Host, ".", 2)[0]
 	if tn.Port == 0 {
 		return hostPart
