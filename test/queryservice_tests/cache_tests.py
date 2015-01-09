@@ -44,12 +44,12 @@ class TestCache(framework.TestCase):
     self.assertEqual(cu.rowcount, 2)
     cu = self.env.execute("select * from vtocc_cached1 where eid in ::list", {"list": [3, 4, 32768]})
     self.assertEqual(cu.rowcount, 2)
-    cu = self.env.execute("select * from vtocc_cached1 where eid in ::list", {"list": field_types.List([3, 4])})
+    cu = self.env.execute("select * from vtocc_cached1 where eid in ::list", {"list": [3, 4]})
     self.assertEqual(cu.rowcount, 2)
-    cu = self.env.execute("select * from vtocc_cached1 where eid in ::list", {"list": field_types.List([3])})
+    cu = self.env.execute("select * from vtocc_cached1 where eid in ::list", {"list": [3]})
     self.assertEqual(cu.rowcount, 1)
     with self.assertRaises(dbexceptions.DatabaseError):
-      cu = self.env.execute("select * from vtocc_cached1 where eid in ::list", {"list": field_types.List()})
+      cu = self.env.execute("select * from vtocc_cached1 where eid in ::list", {"list": list()})
 
   def test_uncache(self):
     try:

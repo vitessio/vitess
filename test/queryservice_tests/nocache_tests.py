@@ -49,12 +49,12 @@ class TestNocache(framework.TestCase):
     self.assertEqual(cu.rowcount, 2)
     cu = self.env.execute("select * from vtocc_test where intval in ::list", {"list": [2, 3, 4]})
     self.assertEqual(cu.rowcount, 2)
-    cu = self.env.execute("select * from vtocc_test where intval in ::List", {"List": field_types.List([3, 4])})
+    cu = self.env.execute("select * from vtocc_test where intval in ::list", {"list": [3, 4]})
     self.assertEqual(cu.rowcount, 1)
-    cu = self.env.execute("select * from vtocc_test where intval in ::List", {"List": field_types.List([3])})
+    cu = self.env.execute("select * from vtocc_test where intval in ::list", {"list": [3]})
     self.assertEqual(cu.rowcount, 1)
     with self.assertRaises(dbexceptions.DatabaseError):
-      cu = self.env.execute("select * from vtocc_test where intval in ::List", {"List": field_types.List()})
+      cu = self.env.execute("select * from vtocc_test where intval in ::list", {"list": list()})
 
   def test_commit(self):
     vstart = self.env.debug_vars()
