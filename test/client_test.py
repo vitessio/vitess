@@ -6,6 +6,7 @@ library test.
 #!/usr/bin/env python
 # coding: utf-8
 
+import hashlib
 import logging
 import struct
 import threading
@@ -18,6 +19,8 @@ import tablet
 import utils
 from clientlib_tests import topo_schema
 from clientlib_tests import db_class_unsharded
+from clientlib_tests import db_class_sharded
+from clientlib_tests import db_class_lookup
 
 from vtdb import database_context
 from vtdb import keyrange
@@ -254,6 +257,68 @@ class TestUnshardedTable(unittest.TestCase):
     with database_context.ReadFromMaster(self.dc) as context:
       rows = db_class_unsharded.VtUnsharded.select_by_id(context.get_cursor(), 2)
       self.assertEqual(len(rows), 0, "wrong number of rows fetched")
+
+
+class TestRangeShardedAndLookup(unittest.TestCase):
+  def populate_tables(self):
+    # vt_user
+    user_id_list = []
+    with database_context.WriteTransaction(self.dc) as context:
+      # vt_user - EntityRangeSharded
+      for x in xrange(20):
+        # This should create the lookup entries and sharding key.
+        user_id = db_class_sharded.VtUser.insert(context.get_cursor(),
+                                       username="user%s" % x, msg=str(x))
+        user_id_list.append(user_id)
+
+        # vt_user_email - RangeSharded
+        email = 'user%s@google.com' % x
+        m = hashlib.md5()
+        m.update(email)
+        email_hash = m.digest()
+        db_class_sharded.VtUserEmail.insert(
+            context.get_cursor(), user_id=user_id, email=email,
+            email_hash=email_hash, sharding_key=user_id)
+    # vt_song
+    # vt_song_detail
+    return user_id_list
+
+  def setUp(self):
+    self.vtgate_addrs = {"_vt": ["localhost:%s" % (vtgate_port),]}
+    self.dc = database_context.DatabaseContext(self.vtgate_addrs)
+    self.user_id_list = self.populate_tables()
+
+  def tearDown(self):
+    with database_context.WriteTransaction(self.dc) as context:
+      for uid in self.user_id_list:
+        db_class_sharded.VtUser.delete_by_columns(context.get_cursor(), uid,
+                                                  (('id', uid)))
+        db_class_sharded.VtUserEmail.delete_by_columns(context.get_cursor(),
+                                                  (('user_id', uid)))
+
+  def test_read(self):
+    with database_context.ReadFromMaster(self.dc) as context:
+      rows = db_class_sharded.VtUser.select_by_columns(
+          context.get_cursor(), (('id', self.user_id_list[0])),
+          sharding_key=self.user_id_list[0])
+      self.assertEqual(len(rows), 1, "wrong number of rows fetched")
+      rows = db_class_sharded.VtUserEmail.select_by_columns(
+          context.get_cursor(), (('user_id', self.user_id_list[0])),
+          sharding_key=self.user_id_list[0])
+      self.assertEqual(len(rows), 1, "wrong number of rows fetched")
+
+  def test_in_clause_read(self):
+    with database_context.ReadFromMaster(self.dc) as context:
+      #FIXME: clean the api
+      where_column_value_pairs = (('id', [self.user_id_list[0], self.user_id_list[1]]),)
+      entity_id_map = dict(where_column_value_pairs[0])
+      rows = db_class_sharded.VtUser.select_by_ids(
+          context.get_cursor(), where_column_value_pairs, entity_id_map=entity_id_map)
+      self.assertEqual(len(rows), 2, "wrong number of rows fetched")
+      rows = db_class_sharded.VtUserEmail.select_by_ids(
+          context.get_cursor(), (('user_id', [self.user_id_list[0], self.user_id_list[1]])))
+      self.assertEqual(len(rows), 2, "wrong number of rows fetched")
+
 
 
 if __name__ == '__main__':

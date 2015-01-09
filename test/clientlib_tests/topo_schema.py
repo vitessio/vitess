@@ -20,7 +20,7 @@ primary key (id)
 #KS_RANGE_SHARDED tables
 #entity user, entity_id username, lookup vt_username_lookup
 create_vt_user = '''create table vt_user (
-id bigint auto_increment,
+id bigint,
 username varchar(64),
 msg varchar(64),
 keyspace_id bigint(20) unsigned NOT NULL,
@@ -39,7 +39,7 @@ KEY email_hash (email_hash(4))
 
 #entity song, entity_id id, lookup vt_song_user_lookup
 create_vt_song = '''create table vt_song (
-id bigint auto_increment,
+id bigint,
 user_id bigint,
 title varchar(64),
 keyspace_id bigint(20) unsigned NOT NULL,

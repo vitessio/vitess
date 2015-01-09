@@ -7,6 +7,7 @@ for common database access patterns.
 """
 import functools
 import logging
+import struct
 
 from vtdb import database_context
 from vtdb import dbexceptions
@@ -16,6 +17,10 @@ from vtdb import shard_constants
 from vtdb import sql_builder
 from vtdb import vtgate_cursor
 
+pack_keyspace_id = struct.Struct('!Q').pack
+
+def unpack_keyspace_id(kid):
+ return struct.Struct('!Q').unpack(kid)[0]
 
 
 class ShardRouting(object):
@@ -56,10 +61,10 @@ def get_cursor(table_class, cursor_method, **kargs):
     is_dml = old_cursor.is_writable()
     if vtgate_conn is None or vtgate_conn.is_closed():
       raise dbexceptions.Error("Cannot create cursor, invalid vtgate connection")
-    routing = create_shard_routing(table_class, **kargs)
+    routing = table_class.create_shard_routing(**kargs)
     cursor = table_class.create_vtgate_cursor(routing, vtgate_conn, tablet_type, is_dml, **kargs)
   else:
-   routing = create_shard_routing(table_class, cursor_method, **kargs)
+   routing = table_class.create_shard_routing(cursor_method, **kargs)
    cursor = cursor_method(table_class, routing, **kargs)
 
   return cursor
@@ -78,7 +83,7 @@ def db_wrapper(method):
   @functools.wraps(method)
   def _db_wrapper(*pargs, **kargs):
     table_class = pargs[0]
-    if not isinstance(table_class, DBObjectBase):
+    if not issubclass(table_class, DBObjectBase):
       raise dbexceptions.ProgrammingError(
           "table class '%s' is not inherited from DBObjectBase" % table_class)
     cursor_method = pargs[1]
@@ -154,24 +159,24 @@ class DBObjectBase(object):
     return [sql_builder.DBRow(columns_list, row) for row in rows]
 
   @db_class_method
-  def insert(class_, cursor, **bind_variables):
+  def insert(class_, cursor, **bind_vars):
     if class_.columns_list is None:
       raise dbexceptions.ProgrammingError("DB class should define columns_list")
 
     query, bind_vars = sql_builder.insert_query(class_.table_name,
                                                 class_.columns_list,
-                                                **bind_variables)
-    cursor.execute(query, bind_variables)
+                                                **bind_vars)
+    cursor.execute(query, bind_vars)
     return cursor.lastrowid
 
   @db_class_method
   def update_columns(class_, cursor, where_column_value_pairs,
                      **update_columns):
 
-    query, bind_variables = sql_builder.update_columns_query(
+    query, bind_vars = sql_builder.update_columns_query(
         class_.table_name, where_column_value_pairs, **update_columns)
 
-    return cursor.execute(query, bind_variables)
+    return cursor.execute(query, bind_vars)
 
   @db_class_method
   def delete_by_columns(class_, cursor, where_column_value_pairs, limit=None,
@@ -183,10 +188,10 @@ class DBObjectBase(object):
     if not where_column_value_pairs:
       raise dbexceptions.ProgrammingError("deleting the whole table is not allowed")
 
-    query, bind_variables = sql_builder.delete_by_columns_query(class_.table_name,
+    query, bind_vars = sql_builder.delete_by_columns_query(class_.table_name,
                                                               where_column_value_pairs,
                                                               limit=limit)
-    cursor.execute(query, bind_variables)
+    cursor.execute(query, bind_vars)
     if cursor.rowcount == 0:
       raise dbexceptions.DatabaseError("DB Row not found")
     return cursor.rowcount
@@ -225,27 +230,9 @@ class DBObjectUnsharded(DBObjectBase):
                                         writable=is_dml)
     return cursor
 
-class LookupBase(object):
-  # FIXME:  does it always need to be a classmethod ?
-  # FIXME: what is the best way of creating an overridable interface ?
-  @classmethod
-  def get(class_, entity_id_column, entity_id):
-    raise NotImplementedError
 
-  @classmethod
-  def create(class_, sharding_key_column, sharding_key, entity_id_column, entity_id):
-    raise NotImplementedError
-
-  @classmethod
-  def update(class_, entity_id_column, entity_id, new_entity_id):
-    raise NotImplementedError
-
-  @classmethod
-  def delete(class_, sharding_key_column_name, sharding_key):
-    raise NotImplementedError
-
-
-class LookupDBObject(LookupBase, DBObjectUnsharded):
+# TODO: is a generic Lookup interface for non-db based look classes needed ?
+class LookupDBObject(DBObjectUnsharded):
   """This is an example implementation of lookup class where it is stored
   in unsharded db.
   """
@@ -256,8 +243,8 @@ class LookupDBObject(LookupBase, DBObjectUnsharded):
     return [row.__dict__ for row in rows]
 
   @db_class_method
-  def create(class_, cursor, sharding_key_column, sharding_key, entity_id_column, entity_id):
-    return class_.insert(sharding_key_column=sharding_key, entity_id_column=entity_id)
+  def create(class_, cursor, **bind_vars):
+    return class_.insert(cursor, **bind_vars)
 
   @db_class_method
   def update(class_, cursor, sharding_key_column_name, sharding_key,
@@ -287,13 +274,16 @@ class DBObjectRangeSharded(DBObjectBase):
   id_column_name = None
   sharding_key_column_name = None
   entity_id_lookup_map = None
-  lookup_writable_entities = None
 
   @classmethod
   def create_shard_routing(class_, *pargs,  **kargs):
     cursor_method = pargs[0]
     routing = ShardRouting(class_.keyspace)
-    routing.sharding_key = kargs.get('sharding_key', None)
+    try:
+      routing.sharding_key = kargs['sharding_key']
+      del kargs['sharding_key']
+    except KeyError:
+      routing.sharding_key = None
 
     keyrange = kargs.get("keyrange", None)
     if keyrange is not None:
@@ -302,14 +292,14 @@ class DBObjectRangeSharded(DBObjectBase):
 
     if routing.sharding_key is None:
       try:
-        entity_id_column = kargs['entity_id_column']
-        entity_id = kargs['entity_id']
+        #FIXME: this is not desirable, clean this up.
+        entity_id_map = kargs['entity_id_map']
+        del kargs['entity_id_map']
         # this may involve a lookup of the index from db.
         # consider caching it at the app layer for performance.
         entity_id_sharding_key_map = class_.lookup_sharding_key_from_entity_id(
-            cursor_method, entity_id_column, entity_id)
+            cursor_method, entity_id_map.keys()[0], entity_id_map.values()[0])
         routing.entity_id_sharding_key_map = entity_id_sharding_key_map
-        # FIXME: should this be an iterable or do we need to index this ?
         routing.sharding_key = entity_id_sharding_key_map.values()
       except KeyError, e:
         raise dbexceptions.ProgrammingError(
@@ -330,11 +320,12 @@ class DBObjectRangeSharded(DBObjectBase):
     keyspace_ids = None
     keyranges = None
     if routing.sharding_key is not None:
-      keysapce_ids = [class_.sharding_key_to_keyspace_id(routing.sharding_key),]
+      kid = class_.sharding_key_to_keyspace_id(routing.sharding_key)
+      keyspace_ids = [pack_keyspace_id(kid),]
     elif routing.entity_id_sharding_key_map is not None:
       keyspace_ids = []
       for sharding_key in routing.entity_id_sharding_key_map.values():
-        keysapce_ids.append(class_.sharding_key_to_keyspace_id(sharding_key))
+        keysapce_ids.append(pack_keyspace_id(class_.sharding_key_to_keyspace_id(sharding_key)))
     elif routing.keyrange:
       keyranges = [routing.keyrange,]
 
@@ -359,7 +350,7 @@ class DBObjectRangeSharded(DBObjectBase):
       sharding key to be used for routing.
     """
     lookup_class = class_.entity_id_lookup_map[entity_id_column]
-    return lookup_class.get(class_, cursor_method, entity_id_column, entity_id)
+    return lookup_class.get(cursor_method, entity_id_column, entity_id)
 
   @db_class_method
   def select_by_ids(class_, cursor, where_column_value_pairs,
@@ -405,6 +396,77 @@ class DBObjectRangeSharded(DBObjectBase):
     """
     raise NotImplementedError
 
+  @db_class_method
+  def insert(class_, cursor, **bind_vars):
+    if class_.columns_list is None:
+      raise dbexceptions.ProgrammingError("DB class should define columns_list")
+
+    sharding_key = None
+    keyspace_id = bind_vars.get('keyspace_id', None)
+    if keyspace_id is None:
+      kid = cursor.keyspace_ids[0]
+      keyspace_id = unpack_keyspace_id(kid)
+      bind_vars['keyspace_id'] = keyspace_id
+
+    query, bind_vars = sql_builder.insert_query(class_.table_name,
+                                                class_.columns_list,
+                                                **bind_vars)
+    cursor.execute(query, bind_vars)
+    return cursor.lastrowid
+
+  def _add_keyspace_id(class_, keyspace_id, where_column_value_pairs):
+    where_col_dict = dict(where_column_value_pairs)
+    if 'keyspace_id' not in where_col_dict:
+      where_column_value_pairs.append(('keyspace_id', keyspace_id))
+
+    return where_column_value_pairs
+
+  @db_class_method
+  def update_columns(class_, cursor, where_column_value_pairs,
+                     **update_columns):
+
+    where_column_value_pairs = class_._add_keyspace_id(
+        unpack_keyspace_id(cursor.keyspace_ids[0]), where_column_value_pairs)
+
+    query, bind_vars = sql_builder.update_columns_query(
+        class_.table_name, where_column_value_pairs, **update_columns)
+
+    rowcount = cursor.execute(query, bind_vars)
+
+    # If the entity_id column is being updated, update lookup map.
+    for entity_col in class_.entity_id_lookup_map.keys():
+      if entity_col in update_columns:
+        class_.update_sharding_key_entity_id_lookup(cursor, col, sharding_key,
+                                                    entity_col,
+                                                    update_columns[entity_col])
+
+    return rowcount
+
+  @db_class_method
+  def delete_by_columns(class_, cursor, where_column_value_pairs, limit=None,
+                        **columns):
+    # delete the rows from primary table.
+    if not where_column_value_pairs:
+      where_column_value_pairs = columns.items()
+      where_column_value_pairs.sort()
+
+    if not where_column_value_pairs:
+      raise dbexceptions.ProgrammingError("deleting the whole table is not allowed")
+
+    where_column_value_pairs = class_._add_keyspace_id(
+        unpack_keyspace_id(cursor.keyspace_ids[0]), where_column_value_pairs)
+
+    query, bind_vars = sql_builder.delete_by_columns_query(class_.table_name,
+                                                              where_column_value_pairs,
+                                                              limit=limit)
+    cursor.execute(query, bind_vars)
+    if cursor.rowcount == 0:
+      raise dbexceptions.DatabaseError("DB Row not found")
+
+    return cursor.rowcount
+
+
+
 
 class DBObjectEntityRangeSharded(DBObjectRangeSharded):
   """Base class for sharded tables that also needs to create and manage lookup
@@ -422,68 +484,10 @@ class DBObjectEntityRangeSharded(DBObjectRangeSharded):
   id_column_name = None
   sharding_key_column_name = None
   entity_id_lookup_map = None
-  lookup_writable_entities = None
-
-  @classmethod
-  def create_shard_routing(class_, *pargs,  **kargs):
-    cursor_method = pargs[0]
-    routing = ShardRouting(class_.keyspace)
-    routing.sharding_key = kargs.get('sharding_key', None)
-
-    keyrange = kargs.get("keyrange", None)
-    if keyrange is not None:
-      routing.keyrange = keyrange
-      return routing
-
-    if routing.sharding_key is None:
-      try:
-        entity_id_column = kargs['entity_id_column']
-        entity_id = kargs['entity_id']
-        # this may involve a lookup of the index from db.
-        # consider caching it at the app layer for performance.
-        entity_id_sharding_key_map = class_.lookup_sharding_key_from_entity_id(
-            cursor_method, entity_id_column, entity_id)
-        routing.entity_id_sharding_key_map = entity_id_sharding_key_map
-        routing.sharding_key = entity_id_sharding_key_map.values()
-      except KeyError, e:
-        raise dbexceptions.ProgrammingError(
-            "For sharded table, sharding_key and entity_id cannot both be empty.")
-
-    if not class_.is_sharding_key_valid(routing.sharding_key):
-      raise dbexceptions.InternalError("Invalid sharding_key %s" % sharding_key)
-
-    return routing
-
-  @classmethod
-  def create_vtgate_cursor(class_, routing, vtgate_conn, tablet_type, is_dml, **kargs):
-    if is_dml:
-      if routing.sharding_key is None or _is_iterable_container(routing.sharding_key):
-        dbexceptions.InternalError(
-            "Writes require unique sharding_key")
-
-    keyspace_ids = None
-    keyranges = None
-    if routing.sharding_key is not None:
-      keysapce_ids = [class_.sharding_key_to_keyspace_id(routing.sharding_key),]
-    elif routing.entity_id_sharding_key_map is not None:
-      keyspace_ids = []
-      for sharding_key in routing.entity_id_sharding_key_map.values():
-        keysapce_ids.append(class_.sharding_key_to_keyspace_id(sharding_key))
-    elif routing.keyrange:
-      keyranges = [routing.keyrange,]
-
-    cursor = vtgate_cursor.VTGateCursor(vtgate_conn,
-                                        class_.keyspace,
-                                        tablet_type,
-                                        keyspace_ids=keyspace_ids,
-                                        keyranges=keyranges,
-                                        writable=is_dml)
-    return cursor
 
 
   @classmethod
-  def create_sharding_key_entity_id_lookup(class_, cursor_method, sharding_key,
-                                           entity_id_column, entity_id):
+  def get_insert_id_from_lookup(class_, cursor_method, entity_id_col, **bind_vars):
     """This method is used to map any entity id to sharding key.
 
     Args:
@@ -493,16 +497,14 @@ class DBObjectEntityRangeSharded(DBObjectRangeSharded):
     Returns:
       sharding key to be used for routing.
     """
-    lookup_class = class_.entity_id_lookup_map[entity_id_column]
-    return lookup_class.create(class_, cursor_method,
-                               class_.sharding_key_column_name,
-                               sharding_key, entity_id_column, entity_id)
+    lookup_class = class_.entity_id_lookup_map[entity_id_col]
+    return lookup_class.create(cursor_method, **bind_vars)
 
   @classmethod
   def delete_sharding_key_entity_id_lookup(class_, cursor_method,
                                            sharding_key):
     for lookup_class in class_.entity_id_lookup_map.values():
-      lookup_class.delete(class_, cursor_method,
+      lookup_class.delete(cursor_method,
                           class_.sharding_key_column_name,
                           sharding_key)
 
@@ -512,7 +514,7 @@ class DBObjectEntityRangeSharded(DBObjectRangeSharded):
                                            sharding_key, entity_id_column,
                                            new_entity_id):
     lookup_class = class_.entity_id_lookup_map[entity_id_column]
-    return lookup_class.update(class_, cursor_method,
+    return lookup_class.update(cursor_method,
                                class_.sharding_key_column_name,
                                sharding_key,
                                entity_id_column,
@@ -520,47 +522,63 @@ class DBObjectEntityRangeSharded(DBObjectRangeSharded):
 
 
   @db_class_method
-  def insert_primary(class_, cursor, sharding_key, **bind_vars):
+  def insert_primary(class_, cursor, **bind_vars):
     if class_.columns_list is None:
       raise dbexceptions.ProgrammingError("DB class should define columns_list")
 
     query, bind_vars = sql_builder.insert_query(class_.table_name,
                                                 class_.columns_list,
-                                                **bind_variables)
-    cursor.execute(query, bind_variables)
+                                                **bind_vars)
+    cursor.execute(query, bind_vars)
     return cursor.lastrowid
 
 
   @classmethod
-  def insert(class_, cursor, **bind_variables):
+  def insert(class_, cursor, **bind_vars):
+    if class_.sharding_key_column_name is None:
+      raise dbexceptions.ProgrammingError(
+          "sharding_key_column_name empty for DBObjectEntityRangeSharded")
+
     sharding_key = None
+    new_inserted_key = None
+    # FIXME: how to verify that the right variables have been passed in ?
+    if class_.sharding_key_column_name in bind_vars:
+      # Secondary entity creation
+      sharding_key = bind_vars[class_.sharding_key_column_name]
+      entity_col = class_.entity_id_lookup_map.keys()[0]
+      bind_vars = {class_.sharding_key_column_name, sharding_key}
+      entity_id = class_.get_insert_id_from_lookup(cursor, entity_col, **bind_vars)
+      bind_vars[entity_col] = entity_id
+      new_inserted_key = entity_id
+    else:
+      # Primary sharding key creation
+      entity_col = class_.entity_id_lookup_map.keys()[0]
+      entity_id = bind_vars[entity_col]
+      bind_vars = {entity_col: entity_id}
+      sharding_key = class_.get_insert_id_from_lookup(cursor, entity_col, **bind_vars)
+      bind_vars[class_.sharding_key_column_name] = sharding_key
+      new_inserted_key = sharding_key
 
-    # no lookup relationship to be created.
-    if not class_.lookup_writable_entities:
-      try:
-        sharding_key = bind_variables[class_.sharding_key_column_name]
-      except KeyError:
-        raise dbexceptions.ProgrammingError("sharding key column '%s' cannot be absent from bind_variables" % class_.sharding_key_column_name)
 
-    for entity_col in class_.entity_id_lookup_map.keys():
-      entity_id = bind_variables[entity_col]
-      sharding_key = class_.create_sharding_key_entity_id_lookup(
-          cursor, class_.sharding_key_column_name, sharding_key, entity_col,
-          entity_id)
+    # FIXME: is the not value check correct ?
+    if 'keyspace_id' not in bind_vars or not bind_vars['keyspace_id']:
+      keyspace_id = class_.sharding_key_to_keyspace_id(sharding_key)
+      bind_vars['keyspace_id'] = keyspace_id
 
-    bind_variables[class_.sharding_key_column_name] = sharding_key
-    class_.insert_primary(cursor, sharding_key, **bind_variables)
-    return sharding_key
+    #FIXME: find a better way to express this. This is duplicate info in bind_vars added for cursor creation. Shouldn't be needed.
+    bind_vars['sharding_key'] = sharding_key
+    class_.insert_primary(cursor, **bind_vars)
+    return new_inserted_key
 
   @db_class_method
   def update_columns(class_, cursor, sharding_key, where_column_value_pairs,
                      **update_columns):
 
     # update the primary table first.
-    query, bind_variables = sql_builder.update_columns_query(
+    query, bind_vars = sql_builder.update_columns_query(
         class_.table_name, where_column_value_pairs, **update_columns)
 
-    rowcount = cursor.execute(query, bind_variables)
+    rowcount = cursor.execute(query, bind_vars)
 
     # If the entity_id column is being updated, update lookup map.
     for entity_col in class_.entity_id_lookup_map.keys():
@@ -582,10 +600,10 @@ class DBObjectEntityRangeSharded(DBObjectRangeSharded):
     if not where_column_value_pairs:
       raise dbexceptions.ProgrammingError("deleting the whole table is not allowed")
 
-    query, bind_variables = sql_builder.delete_by_columns_query(class_.table_name,
+    query, bind_vars = sql_builder.delete_by_columns_query(class_.table_name,
                                                               where_column_value_pairs,
                                                               limit=limit)
-    cursor.execute(query, bind_variables)
+    cursor.execute(query, bind_vars)
     if cursor.rowcount == 0:
       raise dbexceptions.DatabaseError("DB Row not found")
 

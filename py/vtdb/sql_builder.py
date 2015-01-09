@@ -289,8 +289,8 @@ def delete_by_columns_query(table_name, where_column_value_pairs=None,
 
 
 def insert_query(table_name, columns_list, **bind_variables):
-  values_clause, bind_list = sql_builder.build_values_clause(columns_list,
-                                                             bind_variables)
+  values_clause, bind_list = build_values_clause(columns_list,
+                                                 bind_variables)
 
 
   query = 'INSERT INTO %s (%s) VALUES (%s)' % (table_name,

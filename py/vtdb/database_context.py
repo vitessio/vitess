@@ -162,9 +162,10 @@ class DatabaseContext(object):
       raise dbexceptions.ProgrammingError(
           "Cannot execute queries outside db operations context.")
 
-    cursor = table_class.create_vtgate_cursor(self.get_vtgate_connection(),
-                                            self.tablet_type,
-                                            writable, **kwargs)
+    cursor = table_class.create_vtgate_cursor(routing,
+                                              self.get_vtgate_connection(),
+                                              self.tablet_type,
+                                              writable, **kwargs)
 
     return cursor
 
