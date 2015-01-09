@@ -112,7 +112,7 @@ schema = '''{
           "Owner": "vt_music"
         }
       },
-      "Tables": {
+      "Classes": {
         "vt_user": {
           "ColVindexes": [
             {
@@ -165,14 +165,21 @@ schema = '''{
             }
           ]
         }
+      },
+      "Tables": {
+        "vt_user": "vt_user",
+        "vt_user2": "vt_user2",
+        "vt_user_extra": "vt_user_extra",
+        "vt_music": "vt_music",
+        "vt_music_extra": "vt_music_extra"
       }
     },
     "lookup_keyspace": {
       "Sharded": false,
       "Tables": {
-        "vt_user_idx": {},
-        "music_user_map": {},
-        "name_user2_map": {}
+        "vt_user_idx": "",
+        "music_user_map": "",
+        "name_user2_map": ""
       }
     }
   }

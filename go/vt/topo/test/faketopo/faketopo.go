@@ -12,6 +12,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
+	"golang.org/x/net/context"
 )
 
 const (
@@ -50,7 +51,7 @@ type Fixture struct {
 
 // New creates a topology fixture.
 func New(t *testing.T, logger logutil.Logger, ts topo.Server, cells []string) *Fixture {
-	wr := wrangler.New(logger, ts, 1*time.Second, 1*time.Second)
+	wr := wrangler.New(logger, ts, 1*time.Second)
 
 	return &Fixture{
 		T:        t,
@@ -99,7 +100,7 @@ func (fix *Fixture) AddTablet(uid int, cell string, tabletType topo.TabletType, 
 		KeyRange: newKeyRange(TestShard),
 	}
 
-	if err := fix.Wrangler.InitTablet(tablet, true, true, false); err != nil {
+	if err := fix.Wrangler.InitTablet(context.Background(), tablet, true, true, false); err != nil {
 		fix.Fatalf("CreateTablet: %v", err)
 	}
 	mysqlDaemon := &mysqlctl.FakeMysqlDaemon{}

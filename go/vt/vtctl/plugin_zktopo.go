@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
+	"golang.org/x/net/context"
 )
 
 func init() {
@@ -49,14 +50,14 @@ func zkResolveWildcards(wr *wrangler.Wrangler, args []string) ([]string, error) 
 	return zk.ResolveWildcards(zkts.GetZConn(), args)
 }
 
-func commandPruneActionLogs(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandPruneActionLogs(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	keepCount := subFlags.Int("keep-count", 10, "count to keep")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 
 	if subFlags.NArg() == 0 {
-		return fmt.Errorf("action PruneActionLogs requires <zk action log path> ...")
+		return fmt.Errorf("action PruneActionLogs requires <zk action log path> [...]")
 	}
 
 	paths, err := zkResolveWildcards(wr, subFlags.Args())
@@ -91,7 +92,7 @@ func commandPruneActionLogs(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args 
 	return nil
 }
 
-func commandExportZkns(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandExportZkns(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -105,7 +106,7 @@ func commandExportZkns(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 	return wr.ExportZkns(cell)
 }
 
-func commandExportZknsForKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandExportZknsForKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -116,7 +117,7 @@ func commandExportZknsForKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet,
 	if err != nil {
 		return err
 	}
-	return wr.ExportZknsForKeyspace(keyspace)
+	return wr.ExportZknsForKeyspace(ctx, keyspace)
 }
 
 func zkVtPathToCell(param string) (string, error) {

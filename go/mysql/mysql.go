@@ -36,24 +36,36 @@ func init() {
 }
 
 const (
-	DUP_ENTRY                 = C.ER_DUP_ENTRY
-	LOCK_WAIT_TIMEOUT         = C.ER_LOCK_WAIT_TIMEOUT
-	LOCK_DEADLOCK             = C.ER_LOCK_DEADLOCK
-	OPTION_PREVENTS_STATEMENT = C.ER_OPTION_PREVENTS_STATEMENT
+	// ErrDupEntry is C.ER_DUP_ENTRY
+	ErrDupEntry = C.ER_DUP_ENTRY
 
-	REDACTED_PASSWORD = "****"
+	// ErrLockWaitTimeout is C.ER_LOCK_WAIT_TIMEOUT
+	ErrLockWaitTimeout = C.ER_LOCK_WAIT_TIMEOUT
+
+	// ErrLockDeadlock is C.ER_LOCK_DEADLOCK
+	ErrLockDeadlock = C.ER_LOCK_DEADLOCK
+
+	// ErrOptionPreventsStatement is C.ER_OPTION_PREVENTS_STATEMENT
+	ErrOptionPreventsStatement = C.ER_OPTION_PREVENTS_STATEMENT
+
+	// RedactedPassword is the password value used in redacted configs
+	RedactedPassword = "****"
 )
 
+// SqlError is the error structure returned from calling a mysql
+// library function
 type SqlError struct {
 	Num     int
 	Message string
 	Query   string
 }
 
+// NewSqlError returns a new SqlError
 func NewSqlError(number int, format string, args ...interface{}) *SqlError {
 	return &SqlError{Num: number, Message: fmt.Sprintf(format, args...)}
 }
 
+// Error implements the error interface
 func (se *SqlError) Error() string {
 	if se.Query == "" {
 		return fmt.Sprintf("%v (errno %v)", se.Message, se.Num)
@@ -61,6 +73,7 @@ func (se *SqlError) Error() string {
 	return fmt.Sprintf("%v (errno %v) during query: %s", se.Message, se.Num, se.Query)
 }
 
+// Number returns the internal mysql error code
 func (se *SqlError) Number() int {
 	return se.Num
 }
@@ -72,6 +85,7 @@ func handleError(err *error) {
 	}
 }
 
+// ConnectionParams contains all the parameters to use to connect to mysql
 type ConnectionParams struct {
 	Host       string `json:"host"`
 	Port       int    `json:"port"`
@@ -90,26 +104,32 @@ type ConnectionParams struct {
 	SslKey    string `json:"ssl_key"`
 }
 
+// EnableMultiStatements will set the right flag on the parameters
 func (c *ConnectionParams) EnableMultiStatements() {
 	c.Flags |= C.CLIENT_MULTI_STATEMENTS
 }
 
+// EnableSSL will set the right flag on the parameters
 func (c *ConnectionParams) EnableSSL() {
 	c.Flags |= C.CLIENT_SSL
 }
 
+// SslEnabled returns if SSL is enabled
 func (c *ConnectionParams) SslEnabled() bool {
 	return (c.Flags & C.CLIENT_SSL) != 0
 }
 
+// Redact will alter the ConnectionParams so they can be displayed
 func (c *ConnectionParams) Redact() {
-	c.Pass = REDACTED_PASSWORD
+	c.Pass = RedactedPassword
 }
 
+// Connection encapsulates a C mysql library connection
 type Connection struct {
 	c C.VT_CONN
 }
 
+// Connect uses the connection parameters to connect and returns the connection
 func Connect(params ConnectionParams) (conn *Connection, err error) {
 	defer handleError(&err)
 
@@ -122,28 +142,31 @@ func Connect(params ConnectionParams) (conn *Connection, err error) {
 	defer cfree(pass)
 	dbname := C.CString(params.DbName)
 	defer cfree(dbname)
-	unix_socket := C.CString(params.UnixSocket)
-	defer cfree(unix_socket)
+	unixSocket := C.CString(params.UnixSocket)
+	defer cfree(unixSocket)
 	charset := C.CString(params.Charset)
 	defer cfree(charset)
 	flags := C.ulong(params.Flags)
 
 	conn = &Connection{}
-	if C.vt_connect(&conn.c, host, uname, pass, dbname, port, unix_socket, charset, flags) != 0 {
+	if C.vt_connect(&conn.c, host, uname, pass, dbname, port, unixSocket, charset, flags) != 0 {
 		defer conn.Close()
 		return nil, conn.lastError("")
 	}
 	return conn, nil
 }
 
+// Close closes the mysql connection
 func (conn *Connection) Close() {
 	C.vt_close(&conn.c)
 }
 
+// IsClosed returns if the connection was ever closed
 func (conn *Connection) IsClosed() bool {
 	return conn.c.mysql == nil
 }
 
+// ExecuteFetch executes the query on the connection
 func (conn *Connection) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *proto.QueryResult, err error) {
 	if conn.IsClosed() {
 		return nil, NewSqlError(2006, "Connection is closed")
@@ -192,7 +215,8 @@ func (conn *Connection) ExecuteFetchMap(query string) (map[string]string, error)
 	return rowMap, nil
 }
 
-// when using ExecuteStreamFetch, use FetchNext on the Connection until it returns nil or error
+// ExecuteStreamFetch starts a streaming query to mysql. Use FetchNext
+// on the Connection until it returns nil or error
 func (conn *Connection) ExecuteStreamFetch(query string) (err error) {
 	if conn.IsClosed() {
 		return NewSqlError(2006, "Connection is closed")
@@ -203,6 +227,7 @@ func (conn *Connection) ExecuteStreamFetch(query string) (err error) {
 	return nil
 }
 
+// Fields returns the current fields description for the query
 func (conn *Connection) Fields() (fields []proto.Field) {
 	nfields := int(conn.c.num_fields)
 	if nfields == 0 {
@@ -238,6 +263,7 @@ func (conn *Connection) fetchAll() (rows [][]sqltypes.Value, err error) {
 	return rows, nil
 }
 
+// FetchNext returns the next row for a query
 func (conn *Connection) FetchNext() (row []sqltypes.Value, err error) {
 	vtrow := C.vt_fetch_next(&conn.c)
 	if vtrow.has_error != 0 {
@@ -269,12 +295,13 @@ func (conn *Connection) FetchNext() (row []sqltypes.Value, err error) {
 	return row, nil
 }
 
+// CloseResult finishes the result set
 func (conn *Connection) CloseResult() {
 	C.vt_close_result(&conn.c)
 }
 
-// Id returns the MySQL thread_id of the connection.
-func (conn *Connection) Id() int64 {
+// ID returns the MySQL thread_id of the connection.
+func (conn *Connection) ID() int64 {
 	if conn.c.mysql == nil {
 		return 0
 	}
@@ -373,6 +400,7 @@ func (conn *Connection) SetCharset(cs proto.Charset) error {
 	return err
 }
 
+// BuildValue returns a sqltypes.Value from the passed in fields
 func BuildValue(bytes []byte, fieldType uint32) sqltypes.Value {
 	if bytes == nil {
 		return sqltypes.NULL

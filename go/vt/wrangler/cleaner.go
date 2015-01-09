@@ -32,7 +32,7 @@ type cleanerActionReference struct {
 
 // CleanerAction is the interface that clean-up actions need to implement
 type CleanerAction interface {
-	CleanUp(wr *Wrangler) error
+	CleanUp(context.Context, *Wrangler) error
 }
 
 // Record will add a cleaning action to the list
@@ -57,6 +57,8 @@ type cleanUpHelper struct {
 // TODO(alainjobart) Actions should run concurrently on a per target
 // basis. They are then serialized on each target.
 func (cleaner *Cleaner) CleanUp(wr *Wrangler) error {
+	// we use a background context so we're not dependent on the original context timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	actionMap := make(map[string]*cleanUpHelper)
 	rec := concurrency.AllErrorRecorder{}
 	cleaner.mu.Lock()
@@ -73,7 +75,7 @@ func (cleaner *Cleaner) CleanUp(wr *Wrangler) error {
 			wr.Logger().Warningf("previous action failed on target %v, no running %v", actionReference.target, actionReference.name)
 			continue
 		}
-		err := actionReference.action.CleanUp(wr)
+		err := actionReference.action.CleanUp(ctx, wr)
 		if err != nil {
 			helper.err = err
 			rec.RecordError(err)
@@ -83,6 +85,7 @@ func (cleaner *Cleaner) CleanUp(wr *Wrangler) error {
 		}
 	}
 	cleaner.mu.Unlock()
+	cancel()
 	return rec.Error()
 }
 
@@ -129,6 +132,8 @@ type ChangeSlaveTypeAction struct {
 	TabletType  topo.TabletType
 }
 
+// ChangeSlaveTypeActionName is the name of the action to change a slave type
+// (can be used to find such an action by name)
 const ChangeSlaveTypeActionName = "ChangeSlaveTypeAction"
 
 // RecordChangeSlaveTypeAction records a new ChangeSlaveTypeAction
@@ -154,9 +159,8 @@ func FindChangeSlaveTypeActionByTarget(cleaner *Cleaner, tabletAlias topo.Tablet
 }
 
 // CleanUp is part of CleanerAction interface.
-func (csta ChangeSlaveTypeAction) CleanUp(wr *Wrangler) error {
-	wr.ResetActionTimeout(30 * time.Second)
-	return wr.ChangeType(csta.TabletAlias, csta.TabletType, false)
+func (csta ChangeSlaveTypeAction) CleanUp(ctx context.Context, wr *Wrangler) error {
+	return wr.ChangeType(ctx, csta.TabletAlias, csta.TabletType, false)
 }
 
 //
@@ -171,6 +175,7 @@ type TabletTagAction struct {
 	Value       string
 }
 
+// TabletTagActionName is the name of the Tag action
 const TabletTagActionName = "TabletTagAction"
 
 // RecordTabletTagAction records a new TabletTagAction
@@ -184,7 +189,7 @@ func RecordTabletTagAction(cleaner *Cleaner, tabletAlias topo.TabletAlias, name,
 }
 
 // CleanUp is part of CleanerAction interface.
-func (tta TabletTagAction) CleanUp(wr *Wrangler) error {
+func (tta TabletTagAction) CleanUp(ctx context.Context, wr *Wrangler) error {
 	return wr.TopoServer().UpdateTabletFields(tta.TabletAlias, func(tablet *topo.Tablet) error {
 		if tablet.Tags == nil {
 			tablet.Tags = make(map[string]string)
@@ -205,23 +210,21 @@ func (tta TabletTagAction) CleanUp(wr *Wrangler) error {
 // StartSlaveAction will restart binlog replication on a server
 type StartSlaveAction struct {
 	TabletInfo *topo.TabletInfo
-	WaitTime   time.Duration
 }
 
+// StartSlaveActionName is the name of the slave start action
 const StartSlaveActionName = "StartSlaveAction"
 
 // RecordStartSlaveAction records a new StartSlaveAction
 // into the specified Cleaner
-func RecordStartSlaveAction(cleaner *Cleaner, tabletInfo *topo.TabletInfo, waitTime time.Duration) {
+func RecordStartSlaveAction(cleaner *Cleaner, tabletInfo *topo.TabletInfo) {
 	cleaner.Record(StartSlaveActionName, tabletInfo.Alias.String(), &StartSlaveAction{
 		TabletInfo: tabletInfo,
-		WaitTime:   waitTime,
 	})
 }
 
 // CleanUp is part of CleanerAction interface.
-func (sba StartSlaveAction) CleanUp(wr *Wrangler) error {
-	ctx, _ := context.WithTimeout(context.TODO(), sba.WaitTime)
+func (sba StartSlaveAction) CleanUp(ctx context.Context, wr *Wrangler) error {
 	return wr.TabletManagerClient().StartSlave(ctx, sba.TabletInfo)
 }
 
@@ -232,22 +235,20 @@ func (sba StartSlaveAction) CleanUp(wr *Wrangler) error {
 // StartBlpAction will restart binlog replication on a server
 type StartBlpAction struct {
 	TabletInfo *topo.TabletInfo
-	WaitTime   time.Duration
 }
 
+// StartBlpActionName is the name of the action to start binlog player
 const StartBlpActionName = "StartBlpAction"
 
 // RecordStartBlpAction records a new StartBlpAction
 // into the specified Cleaner
-func RecordStartBlpAction(cleaner *Cleaner, tabletInfo *topo.TabletInfo, waitTime time.Duration) {
+func RecordStartBlpAction(cleaner *Cleaner, tabletInfo *topo.TabletInfo) {
 	cleaner.Record(StartBlpActionName, tabletInfo.Alias.String(), &StartBlpAction{
 		TabletInfo: tabletInfo,
-		WaitTime:   waitTime,
 	})
 }
 
 // CleanUp is part of CleanerAction interface.
-func (sba StartBlpAction) CleanUp(wr *Wrangler) error {
-	ctx, _ := context.WithTimeout(context.TODO(), sba.WaitTime)
+func (sba StartBlpAction) CleanUp(ctx context.Context, wr *Wrangler) error {
 	return wr.TabletManagerClient().StartBlp(ctx, sba.TabletInfo)
 }

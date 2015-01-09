@@ -7,9 +7,10 @@ package vtctl
 import (
 	"flag"
 	"fmt"
+	"time"
 
-	_ "github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/wrangler"
+	"golang.org/x/net/context"
 )
 
 func init() {
@@ -30,7 +31,7 @@ func init() {
 		"Specify which shard to reparent and which tablet should be the new master."})
 }
 
-func commandDemoteMaster(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandDemoteMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -45,10 +46,10 @@ func commandDemoteMaster(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().DemoteMaster(wr.Context(), tabletInfo)
+	return wr.TabletManagerClient().DemoteMaster(ctx, tabletInfo)
 }
 
-func commandReparentTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -59,12 +60,13 @@ func commandReparentTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 	if err != nil {
 		return err
 	}
-	return wr.ReparentTablet(tabletAlias)
+	return wr.ReparentTablet(ctx, tabletAlias)
 }
 
-func commandReparentShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	leaveMasterReadOnly := subFlags.Bool("leave-master-read-only", false, "leaves the master read-only after reparenting")
 	force := subFlags.Bool("force", false, "will force the reparent even if the master is already correct")
+	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", 30*time.Second, "time to wait for slaves to catch up in reparenting")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -80,5 +82,5 @@ func commandReparentShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []
 	if err != nil {
 		return err
 	}
-	return wr.ReparentShard(keyspace, shard, tabletAlias, *leaveMasterReadOnly, *force)
+	return wr.ReparentShard(ctx, keyspace, shard, tabletAlias, *leaveMasterReadOnly, *force, *waitSlaveTimeout)
 }

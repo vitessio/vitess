@@ -12,7 +12,9 @@ import (
 // PooledDBConnection re-exposes DBConnection as a PoolConnection
 type PooledDBConnection struct {
 	*DBConnection
-	pool *ConnectionPool
+	info       *mysql.ConnectionParams
+	mysqlStats *stats.Timings
+	pool       *ConnectionPool
 }
 
 // Recycle implements PoolConnection's Recycle
@@ -22,6 +24,16 @@ func (pc *PooledDBConnection) Recycle() {
 	} else {
 		pc.pool.Put(pc)
 	}
+}
+
+func (pc *PooledDBConnection) Reconnect() error {
+	pc.DBConnection.Close()
+	newConn, err := NewDBConnection(pc.info, pc.mysqlStats)
+	if err != nil {
+		return err
+	}
+	pc.DBConnection = newConn
+	return nil
 }
 
 // DBConnectionCreator is the wrapper function to use to create a pool
@@ -35,11 +47,17 @@ func (pc *PooledDBConnection) Recycle() {
 // conn, err := pool.Get()
 // ...
 func DBConnectionCreator(info *mysql.ConnectionParams, mysqlStats *stats.Timings) CreateConnectionFunc {
+	newInfo := *info
 	return func(pool *ConnectionPool) (PoolConnection, error) {
 		c, err := NewDBConnection(info, mysqlStats)
 		if err != nil {
 			return nil, err
 		}
-		return &PooledDBConnection{c, pool}, nil
+		return &PooledDBConnection{
+			DBConnection: c,
+			info:         &newInfo,
+			mysqlStats:   mysqlStats,
+			pool:         pool,
+		}, nil
 	}
 }

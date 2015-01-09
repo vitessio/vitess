@@ -18,17 +18,11 @@ for uid_index in 0 1 2; do
   printf -v alias '%s-%010d' $cell $uid
   printf -v tablet_subdir 'vt_%010d' $uid
 
-  if [ "$uid_index" == "0" ]; then
-    type=master
-  else
-    type=replica
-  fi
-
   echo "Creating pod for tablet $alias..."
 
   # Expand template variables
   sed_script=""
-  for var in alias cell uid keyspace shard type port tablet_subdir; do
+  for var in alias cell uid keyspace shard port tablet_subdir; do
     sed_script+="s/{{$var}}/${!var}/g;"
   done
 

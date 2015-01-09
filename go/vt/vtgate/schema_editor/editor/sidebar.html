@@ -1,0 +1,41 @@
+<div class="col-md-1 sidebar" data-ng-controller="SidebarController">
+  <div class="panel panel-default">
+    <div class="panel-heading">Commands</div>
+    <div class="panel-body">
+      <ul class="nav nav-sidebar">
+        <li><a href="#/load">load</a></li>
+        <li><a href="#/submit">submit...</a></li>
+        <li><a href="#" data-ng-click="reset()">reset</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="panel panel-default">
+    <div class="panel-heading">Keyspaces</div>
+    <div class="panel-body">
+      <ul class="nav nav-sidebar">
+        <li data-ng-repeat="(keyspace, keyspaceInfo) in curSchema.keyspaces"><a
+          href="#/editor/{{keyspace}}"
+          data-ng-class="{'btn-primary': keyspace==keyspaceName}">{{keyspace}}</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="input-group input-group-sm">
+    <input type="text" class="form-control" placeholder="Keyspace"
+      data-ng-model="newKeyspace">
+    <div class="input-group-btn">
+      <button type="button" class="btn dropdown-toggle" data-toggle="dropdown">
+        <span class="caret"></span>
+      </button>
+      <ul class="dropdown-menu">
+        <li><a data-ng-click="addKeyspace(newKeyspace, true)">Sharded</a></li>
+        <li><a data-ng-click="addKeyspace(newKeyspace, false)">Unsharded</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="alert alert-danger" data-ng-show="keyspaceEditor.err">
+    {{keyspaceEditor.err}}<a type="button" class="alert-danger pull-right"
+      data-ng-click="clearKeyspaceError()"> <span
+      class="glyphicon glyphicon-remove"></span>
+    </a>
+  </div>
+</div>

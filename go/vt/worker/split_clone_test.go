@@ -151,7 +151,7 @@ func (fpc *FakePoolConnection) ExecuteStreamFetch(query string, callback func(*m
 	return nil
 }
 
-func (fpc *FakePoolConnection) Id() int64 {
+func (fpc *FakePoolConnection) ID() int64 {
 	return 1
 }
 
@@ -164,6 +164,10 @@ func (fpc *FakePoolConnection) IsClosed() bool {
 }
 
 func (fpc *FakePoolConnection) Recycle() {
+}
+
+func (fpc *FakePoolConnection) Reconnect() error {
+	return nil
 }
 
 // on the source rdonly guy, should only have one query to find min & max
@@ -231,7 +235,7 @@ func TestSplitClonePopulateBlpCheckpoint(t *testing.T) {
 
 func testSplitClone(t *testing.T, strategy string) {
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Minute, time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Second)
 
 	sourceMaster := testlib.NewFakeTablet(t, wr, "cell1", 0,
 		topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "ks", "-80"))
@@ -260,13 +264,14 @@ func testSplitClone(t *testing.T, strategy string) {
 	}
 
 	// add the topo and schema data we'll need
+	ctx := context.Background()
 	if err := topo.CreateShard(ts, "ks", "80-"); err != nil {
 		t.Fatalf("CreateShard(\"-80\") failed: %v", err)
 	}
-	if err := wr.SetKeyspaceShardingInfo("ks", "keyspace_id", key.KIT_UINT64, 4, false); err != nil {
+	if err := wr.SetKeyspaceShardingInfo(ctx, "ks", "keyspace_id", key.KIT_UINT64, 4, false); err != nil {
 		t.Fatalf("SetKeyspaceShardingInfo failed: %v", err)
 	}
-	if err := wr.RebuildKeyspaceGraph("ks", nil); err != nil {
+	if err := wr.RebuildKeyspaceGraph(ctx, "ks", nil); err != nil {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
 

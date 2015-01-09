@@ -88,7 +88,7 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Errorf("ti.State: want %v, got %v", want, ti.State)
 	}
 
-	if err := ts.UpdateTabletFields(tablet.Alias, func(t *topo.Tablet) error {
+	if err := topo.UpdateTabletFields(ctx, ts, tablet.Alias, func(t *topo.Tablet) error {
 		t.State = topo.STATE_READ_WRITE
 		return nil
 	}); err != nil {

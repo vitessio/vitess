@@ -7,17 +7,16 @@ package main
 // This plugin imports etcdtopo to register the etcd implementation of TopoServer.
 
 import (
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/etcdtopo"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
 func init() {
-	ts := topo.GetServerByName("etcd")
-	if ts == nil {
-		log.Warning("etcd explorer disabled: no etcdtopo.Server")
-		return
-	}
-
-	HandleExplorer("etcd", "/etcd/", "etcd.html", etcdtopo.NewExplorer(ts.(*etcdtopo.Server)))
+	// Wait until flags are parsed, so we can check which topo server is in use.
+	servenv.OnRun(func() {
+		if etcdServer, ok := topo.GetServer().(*etcdtopo.Server); ok {
+			HandleExplorer("etcd", "/etcd/", "etcd.html", etcdtopo.NewExplorer(etcdServer))
+		}
+	})
 }

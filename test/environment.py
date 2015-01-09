@@ -5,6 +5,7 @@ import logging
 import os
 import socket
 import subprocess
+import sys
 
 # Import the topo implementations that you want registered as options for the
 # --topo-server-flavor flag.
@@ -12,6 +13,14 @@ import topo_flavor.zookeeper
 import topo_flavor.etcd
 
 from topo_flavor.server import topo_server
+
+# sanity check the environment
+if os.environ['USER'] == 'root':
+  sys.stderr.write('ERROR: Vitess and its dependencies (mysqld and memcached) should not be run as root.\n')
+  sys.exit(1)
+if 'VTTOP' not in os.environ:
+  sys.stderr.write('ERROR: Vitess environment not set up. Please run "source dev.env" first.\n')
+  sys.exit(1)
 
 # vttop is the toplevel of the vitess source tree
 vttop = os.environ['VTTOP']

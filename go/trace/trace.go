@@ -58,6 +58,15 @@ func NewSpanFromContext(ctx context.Context) Span {
 	return NewSpan(nil)
 }
 
+// CopySpan creates a new context from parentCtx, with only the trace span
+// copied over from spanCtx, if it has any. If not, parentCtx is returned.
+func CopySpan(parentCtx, spanCtx context.Context) context.Context {
+	if span, ok := FromContext(spanCtx); ok {
+		return NewContext(parentCtx, span)
+	}
+	return parentCtx
+}
+
 // SpanFactory is an interface for creating spans or extracting them from Contexts.
 type SpanFactory interface {
 	New(parent Span) Span

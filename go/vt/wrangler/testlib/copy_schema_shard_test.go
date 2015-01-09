@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
+	"golang.org/x/net/context"
 )
 
 type ExpectedExecuteFetch struct {
@@ -71,7 +72,7 @@ func (fpc *FakePoolConnection) ExecuteStreamFetch(query string, callback func(*m
 	return nil
 }
 
-func (fpc *FakePoolConnection) Id() int64 {
+func (fpc *FakePoolConnection) ID() int64 {
 	return 1
 }
 
@@ -84,6 +85,10 @@ func (fpc *FakePoolConnection) IsClosed() bool {
 }
 
 func (fpc *FakePoolConnection) Recycle() {
+}
+
+func (fpc *FakePoolConnection) Reconnect() error {
+	return nil
 }
 
 // on the destinations
@@ -119,7 +124,7 @@ func DestinationsFactory(t *testing.T) func() (dbconnpool.PoolConnection, error)
 
 func TestCopySchemaShard(t *testing.T) {
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Minute, time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Second)
 
 	sourceMaster := NewFakeTablet(t, wr, "cell1", 0,
 		topo.TYPE_MASTER, TabletKeyspaceShard(t, "ks", "-80"))
@@ -158,7 +163,7 @@ func TestCopySchemaShard(t *testing.T) {
 	destinationMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t)
 	destinationRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t)
 
-	if err := wr.CopySchemaShard(sourceRdonly.Tablet.Alias, nil, nil, true, "ks", "-40"); err != nil {
+	if err := wr.CopySchemaShard(context.Background(), sourceRdonly.Tablet.Alias, nil, nil, true, "ks", "-40"); err != nil {
 		t.Fatalf("CopySchemaShard failed: %v", err)
 	}
 

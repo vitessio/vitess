@@ -38,9 +38,8 @@ const spotCheckMultiplier = 1e6
 // panic with NewTabletError as the error type.
 // TODO(sougou): Switch to error return scheme.
 type QueryEngine struct {
-	schemaInfo    *SchemaInfo
-	queryRuleInfo *QueryRuleInfo
-	dbconfigs     *dbconfigs.DBConfigs
+	schemaInfo *SchemaInfo
+	dbconfigs  *dbconfigs.DBConfigs
 
 	// Pools
 	cachePool      *CachePool
@@ -86,11 +85,11 @@ var (
 	internalErrors *stats.Counters
 	resultStats    *stats.Histogram
 	spotCheckCount *stats.Int
-	QPSRates       *stats.Rates
+	qpsRates       *stats.Rates
 
 	resultBuckets = []int64{0, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000}
 
-	connPoolClosedErr = NewTabletError(FATAL, "connection pool is closed")
+	connPoolClosedErr = NewTabletError(ErrFatal, "connection pool is closed")
 )
 
 // CacheInvalidator provides the abstraction needed for an instant invalidation
@@ -105,10 +104,10 @@ func getOrPanic(pool *dbconnpool.ConnectionPool) dbconnpool.PoolConnection {
 	if err == nil {
 		return conn
 	}
-	if err == dbconnpool.CONN_POOL_CLOSED_ERR {
+	if err == dbconnpool.ErrConnPoolClosed {
 		panic(connPoolClosedErr)
 	}
-	panic(NewTabletErrorSql(FATAL, err))
+	panic(NewTabletErrorSql(ErrFatal, err))
 }
 
 // NewQueryEngine creates a new QueryEngine.
@@ -121,7 +120,6 @@ func NewQueryEngine(config Config) *QueryEngine {
 		time.Duration(config.SchemaReloadTime*1e9),
 		time.Duration(config.IdleTimeout*1e9),
 	)
-	qe.queryRuleInfo = NewQueryRuleInfo()
 
 	mysqlStats = stats.NewTimings("Mysql")
 
@@ -176,7 +174,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 	stats.Publish("StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
 	stats.Publish("QueryTimeout", stats.DurationFunc(qe.queryTimeout.Get))
 	queryStats = stats.NewTimings("Queries")
-	QPSRates = stats.NewRates("QPS", queryStats, 15, 60*time.Second)
+	qpsRates = stats.NewRates("QPS", queryStats, 15, 60*time.Second)
 	waitStats = stats.NewTimings("Waits")
 	killStats = stats.NewCounters("Kills")
 	infoErrors = stats.NewCounters("InfoErrors")
@@ -209,7 +207,7 @@ func (qe *QueryEngine) Open(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []Sc
 		strictMode = true
 	}
 	if !strictMode && dbconfigs.App.EnableRowcache {
-		panic(NewTabletError(FATAL, "Rowcache cannot be enabled when queryserver-config-strict-mode is false"))
+		panic(NewTabletError(ErrFatal, "Rowcache cannot be enabled when queryserver-config-strict-mode is false"))
 	}
 	if dbconfigs.App.EnableRowcache {
 		qe.cachePool.Open()
@@ -279,5 +277,4 @@ func (qe *QueryEngine) Close() {
 	qe.schemaInfo.Close()
 	qe.cachePool.Close()
 	qe.dbconfigs = nil
-	qe.queryRuleInfo = NewQueryRuleInfo()
 }

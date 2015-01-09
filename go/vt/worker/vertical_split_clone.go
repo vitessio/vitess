@@ -172,6 +172,7 @@ func (vscw *VerticalSplitCloneWorker) StatusAsText() string {
 	return result
 }
 
+// CheckInterrupted is part of the Worker interface
 func (vscw *VerticalSplitCloneWorker) CheckInterrupted() bool {
 	select {
 	case <-interrupted:
@@ -252,15 +253,15 @@ func (vscw *VerticalSplitCloneWorker) init() error {
 	servingTypes := []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY}
 	servedFrom := ""
 	for _, st := range servingTypes {
-		if sf, ok := destinationKeyspaceInfo.ServedFromMap[st]; !ok {
+		sf, ok := destinationKeyspaceInfo.ServedFromMap[st]
+		if !ok {
 			return fmt.Errorf("destination keyspace %v is serving type %v", vscw.destinationKeyspace, st)
+		}
+		if servedFrom == "" {
+			servedFrom = sf.Keyspace
 		} else {
-			if servedFrom == "" {
-				servedFrom = sf.Keyspace
-			} else {
-				if servedFrom != sf.Keyspace {
-					return fmt.Errorf("destination keyspace %v is serving from multiple source keyspaces %v and %v", vscw.destinationKeyspace, servedFrom, sf.Keyspace)
-				}
+			if servedFrom != sf.Keyspace {
+				return fmt.Errorf("destination keyspace %v is serving from multiple source keyspaces %v and %v", vscw.destinationKeyspace, servedFrom, sf.Keyspace)
 			}
 		}
 	}
@@ -298,7 +299,7 @@ func (vscw *VerticalSplitCloneWorker) findTargets() error {
 		return fmt.Errorf("cannot stop replication on tablet %v", vscw.sourceAlias)
 	}
 
-	wrangler.RecordStartSlaveAction(vscw.cleaner, vscw.sourceTablet, 30*time.Second)
+	wrangler.RecordStartSlaveAction(vscw.cleaner, vscw.sourceTablet)
 	action, err := wrangler.FindChangeSlaveTypeActionByTarget(vscw.cleaner, vscw.sourceAlias)
 	if err != nil {
 		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", vscw.sourceAlias, err)
@@ -353,7 +354,9 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	vscw.setState(stateVSCCopy)
 
 	// get source schema
-	sourceSchemaDefinition, err := vscw.wr.GetSchema(vscw.sourceAlias, vscw.tables, nil, true)
+	ctx, cancel := context.WithTimeout(context.TODO(), 60*time.Second)
+	sourceSchemaDefinition, err := vscw.wr.GetSchema(ctx, vscw.sourceAlias, vscw.tables, nil, true)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot get schema from source %v: %v", vscw.sourceAlias, err)
 	}
@@ -518,7 +521,10 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 		vscw.wr.Logger().Infof("Skipping setting SourceShard on destination shard.")
 	} else {
 		vscw.wr.Logger().Infof("Setting SourceShard on shard %v/%v", vscw.destinationKeyspace, vscw.destinationShard)
-		if err := vscw.wr.SetSourceShards(vscw.destinationKeyspace, vscw.destinationShard, []topo.TabletAlias{vscw.sourceAlias}, vscw.tables); err != nil {
+		ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+		err := vscw.wr.SetSourceShards(ctx, vscw.destinationKeyspace, vscw.destinationShard, []topo.TabletAlias{vscw.sourceAlias}, vscw.tables)
+		cancel()
+		if err != nil {
 			return fmt.Errorf("Failed to set source shards: %v", err)
 		}
 	}

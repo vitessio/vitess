@@ -63,7 +63,7 @@ type SplitDiffWorker struct {
 	destinationSchemaDefinition *myproto.SchemaDefinition
 }
 
-// NewSplitDiff returns a new SplitDiffWorker object.
+// NewSplitDiffWorker returns a new SplitDiffWorker object.
 func NewSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string) Worker {
 	return &SplitDiffWorker{
 		wr:       wr,
@@ -89,6 +89,7 @@ func (sdw *SplitDiffWorker) recordError(err error) {
 	sdw.mu.Unlock()
 }
 
+// StatusAsHTML is part of the Worker interface
 func (sdw *SplitDiffWorker) StatusAsHTML() template.HTML {
 	sdw.mu.Lock()
 	defer sdw.mu.Unlock()
@@ -106,6 +107,7 @@ func (sdw *SplitDiffWorker) StatusAsHTML() template.HTML {
 	return template.HTML(result)
 }
 
+// StatusAsText is part of the Worker interface
 func (sdw *SplitDiffWorker) StatusAsText() string {
 	sdw.mu.Lock()
 	defer sdw.mu.Unlock()
@@ -122,6 +124,7 @@ func (sdw *SplitDiffWorker) StatusAsText() string {
 	return result
 }
 
+// CheckInterrupted is part of the Worker interface
 func (sdw *SplitDiffWorker) CheckInterrupted() bool {
 	select {
 	case <-interrupted:
@@ -274,7 +277,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	if err != nil {
 		return fmt.Errorf("StopBlp for %v failed: %v", sdw.shardInfo.MasterAlias, err)
 	}
-	wrangler.RecordStartBlpAction(sdw.cleaner, masterInfo, 30*time.Second)
+	wrangler.RecordStartBlpAction(sdw.cleaner, masterInfo)
 
 	// 2 - stop all the source 'checker' at a binlog position
 	//     higher than the destination master
@@ -305,7 +308,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 
 		// change the cleaner actions from ChangeSlaveType(rdonly)
 		// to StartSlave() + ChangeSlaveType(spare)
-		wrangler.RecordStartSlaveAction(sdw.cleaner, sourceTablet, 60*time.Second)
+		wrangler.RecordStartSlaveAction(sdw.cleaner, sourceTablet)
 		action, err := wrangler.FindChangeSlaveTypeActionByTarget(sdw.cleaner, sdw.sourceAliases[i])
 		if err != nil {
 			return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", sdw.sourceAliases[i], err)
@@ -332,7 +335,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	if err != nil {
 		return fmt.Errorf("StopSlaveMinimum for %v at %v failed: %v", sdw.destinationAlias, masterPos, err)
 	}
-	wrangler.RecordStartSlaveAction(sdw.cleaner, destinationTablet, 60*time.Second)
+	wrangler.RecordStartSlaveAction(sdw.cleaner, destinationTablet)
 	action, err := wrangler.FindChangeSlaveTypeActionByTarget(sdw.cleaner, sdw.destinationAlias)
 	if err != nil {
 		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", sdw.destinationAlias, err)
@@ -369,7 +372,9 @@ func (sdw *SplitDiffWorker) diff() error {
 	wg.Add(1)
 	go func() {
 		var err error
-		sdw.destinationSchemaDefinition, err = sdw.wr.GetSchema(sdw.destinationAlias, nil, nil, false)
+		ctx, cancel := context.WithTimeout(context.TODO(), 60*time.Second)
+		sdw.destinationSchemaDefinition, err = sdw.wr.GetSchema(ctx, sdw.destinationAlias, nil, nil, false)
+		cancel()
 		rec.RecordError(err)
 		sdw.wr.Logger().Infof("Got schema from destination %v", sdw.destinationAlias)
 		wg.Done()
@@ -378,7 +383,9 @@ func (sdw *SplitDiffWorker) diff() error {
 		wg.Add(1)
 		go func(i int, sourceAlias topo.TabletAlias) {
 			var err error
-			sdw.sourceSchemaDefinitions[i], err = sdw.wr.GetSchema(sourceAlias, nil, nil, false)
+			ctx, cancel := context.WithTimeout(context.TODO(), 60*time.Second)
+			sdw.sourceSchemaDefinitions[i], err = sdw.wr.GetSchema(ctx, sourceAlias, nil, nil, false)
+			cancel()
 			rec.RecordError(err)
 			sdw.wr.Logger().Infof("Got schema from source[%v] %v", i, sourceAlias)
 			wg.Done()

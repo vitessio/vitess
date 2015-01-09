@@ -66,16 +66,14 @@ On X: (promoted slave)
 
 import (
 	"fmt"
+	"time"
 
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/topotools/events"
-)
-
-const (
-	SLAVE_STATUS_DEADLINE = 10e9
+	"golang.org/x/net/context"
 )
 
 // ReparentShard creates the reparenting action and launches a goroutine
@@ -86,28 +84,28 @@ const (
 //   though all the other necessary updates have been made.
 // forceReparentToCurrentMaster: mostly for test setups, this can
 //   cause data loss.
-func (wr *Wrangler) ReparentShard(keyspace, shard string, masterElectTabletAlias topo.TabletAlias, leaveMasterReadOnly, forceReparentToCurrentMaster bool) error {
+func (wr *Wrangler) ReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias topo.TabletAlias, leaveMasterReadOnly, forceReparentToCurrentMaster bool, waitSlaveTimeout time.Duration) error {
 	// lock the shard
 	actionNode := actionnode.ReparentShard(masterElectTabletAlias)
-	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
+	lockPath, err := wr.lockShard(ctx, keyspace, shard, actionNode)
 	if err != nil {
 		return err
 	}
 
 	// do the work
-	err = wr.reparentShardLocked(keyspace, shard, masterElectTabletAlias, leaveMasterReadOnly, forceReparentToCurrentMaster)
+	err = wr.reparentShardLocked(ctx, keyspace, shard, masterElectTabletAlias, leaveMasterReadOnly, forceReparentToCurrentMaster, waitSlaveTimeout)
 
 	// and unlock
-	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
+	return wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, err)
 }
 
-func (wr *Wrangler) reparentShardLocked(keyspace, shard string, masterElectTabletAlias topo.TabletAlias, leaveMasterReadOnly, forceReparentToCurrentMaster bool) error {
+func (wr *Wrangler) reparentShardLocked(ctx context.Context, keyspace, shard string, masterElectTabletAlias topo.TabletAlias, leaveMasterReadOnly, forceReparentToCurrentMaster bool, waitSlaveTimeout time.Duration) error {
 	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
 	}
 
-	tabletMap, err := topo.GetTabletMapForShard(wr.ctx, wr.ts, keyspace, shard)
+	tabletMap, err := topo.GetTabletMapForShard(ctx, wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -133,9 +131,9 @@ func (wr *Wrangler) reparentShardLocked(keyspace, shard string, masterElectTable
 	}
 
 	if !shardInfo.MasterAlias.IsZero() && !forceReparentToCurrentMaster {
-		err = wr.reparentShardGraceful(ev, shardInfo, slaveTabletMap, masterTabletMap, masterElectTablet, leaveMasterReadOnly)
+		err = wr.reparentShardGraceful(ctx, ev, shardInfo, slaveTabletMap, masterTabletMap, masterElectTablet, leaveMasterReadOnly, waitSlaveTimeout)
 	} else {
-		err = wr.reparentShardBrutal(ev, shardInfo, slaveTabletMap, masterTabletMap, masterElectTablet, leaveMasterReadOnly, forceReparentToCurrentMaster)
+		err = wr.reparentShardBrutal(ctx, ev, shardInfo, slaveTabletMap, masterTabletMap, masterElectTablet, leaveMasterReadOnly, forceReparentToCurrentMaster, waitSlaveTimeout)
 	}
 
 	if err == nil {
@@ -146,7 +144,7 @@ func (wr *Wrangler) reparentShardLocked(keyspace, shard string, masterElectTable
 }
 
 // ShardReplicationStatuses returns the ReplicationStatus for each tablet in a shard.
-func (wr *Wrangler) ShardReplicationStatuses(keyspace, shard string) ([]*topo.TabletInfo, []*myproto.ReplicationStatus, error) {
+func (wr *Wrangler) ShardReplicationStatuses(ctx context.Context, keyspace, shard string) ([]*topo.TabletInfo, []*myproto.ReplicationStatus, error) {
 	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return nil, nil, err
@@ -154,30 +152,30 @@ func (wr *Wrangler) ShardReplicationStatuses(keyspace, shard string) ([]*topo.Ta
 
 	// lock the shard
 	actionNode := actionnode.CheckShard()
-	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
+	lockPath, err := wr.lockShard(ctx, keyspace, shard, actionNode)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	tabletMap, posMap, err := wr.shardReplicationStatuses(shardInfo)
-	return tabletMap, posMap, wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
+	tabletMap, posMap, err := wr.shardReplicationStatuses(ctx, shardInfo)
+	return tabletMap, posMap, wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, err)
 }
 
-func (wr *Wrangler) shardReplicationStatuses(shardInfo *topo.ShardInfo) ([]*topo.TabletInfo, []*myproto.ReplicationStatus, error) {
+func (wr *Wrangler) shardReplicationStatuses(ctx context.Context, shardInfo *topo.ShardInfo) ([]*topo.TabletInfo, []*myproto.ReplicationStatus, error) {
 	// FIXME(msolomon) this assumes no hierarchical replication, which is currently the case.
-	tabletMap, err := topo.GetTabletMapForShard(wr.ctx, wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
+	tabletMap, err := topo.GetTabletMapForShard(ctx, wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
 	if err != nil {
 		return nil, nil, err
 	}
 	tablets := topotools.CopyMapValues(tabletMap, []*topo.TabletInfo{}).([]*topo.TabletInfo)
-	stats, err := wr.tabletReplicationStatuses(tablets)
+	stats, err := wr.tabletReplicationStatuses(ctx, tablets)
 	return tablets, stats, err
 }
 
 // ReparentTablet attempts to reparent this tablet to the current
 // master, based on the current replication position. If there is no
 // match, it will fail.
-func (wr *Wrangler) ReparentTablet(tabletAlias topo.TabletAlias) error {
+func (wr *Wrangler) ReparentTablet(ctx context.Context, tabletAlias topo.TabletAlias) error {
 	// Get specified tablet.
 	// Get current shard master tablet.
 	// Sanity check they are in the same keyspace/shard.
@@ -211,13 +209,13 @@ func (wr *Wrangler) ReparentTablet(tabletAlias topo.TabletAlias) error {
 		return fmt.Errorf("master %v and potential slave not in same keyspace/shard", shardInfo.MasterAlias)
 	}
 
-	status, err := wr.tmc.SlaveStatus(wr.ctx, ti)
+	status, err := wr.tmc.SlaveStatus(ctx, ti)
 	if err != nil {
 		return err
 	}
 	wr.Logger().Infof("slave tablet position: %v %v %v", tabletAlias, ti.MysqlAddr(), status.Position)
 
-	rsd, err := wr.tmc.ReparentPosition(wr.ctx, masterTi, &status.Position)
+	rsd, err := wr.tmc.ReparentPosition(ctx, masterTi, &status.Position)
 	if err != nil {
 		return err
 	}
@@ -226,5 +224,5 @@ func (wr *Wrangler) ReparentTablet(tabletAlias topo.TabletAlias) error {
 	// An orphan is already in the replication graph but it is
 	// disconnected, hence we have to force this action.
 	rsd.Force = ti.Type == topo.TYPE_LAG_ORPHAN
-	return wr.tmc.RestartSlave(wr.ctx, ti, rsd)
+	return wr.tmc.RestartSlave(ctx, ti, rsd)
 }

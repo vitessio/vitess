@@ -11,6 +11,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 // As with all distributed systems, things can skew. These functions
@@ -40,7 +41,7 @@ func (wr *Wrangler) waitForResults(wg *sync.WaitGroup, results chan error) error
 
 // Validate all tablets in all discoverable cells, even if they are
 // not in the replication graph.
-func (wr *Wrangler) validateAllTablets(wg *sync.WaitGroup, results chan<- error) {
+func (wr *Wrangler) validateAllTablets(ctx context.Context, wg *sync.WaitGroup, results chan<- error) {
 	cellSet := make(map[string]bool, 16)
 
 	keyspaces, err := wr.ts.GetKeyspaces()
@@ -56,7 +57,7 @@ func (wr *Wrangler) validateAllTablets(wg *sync.WaitGroup, results chan<- error)
 		}
 
 		for _, shard := range shards {
-			aliases, err := topo.FindAllTabletAliasesInShard(wr.ctx, wr.ts, keyspace, shard)
+			aliases, err := topo.FindAllTabletAliasesInShard(ctx, wr.ts, keyspace, shard)
 			if err != nil {
 				results <- fmt.Errorf("TopologyServer.FindAllTabletAliasesInShard(%v, %v) failed: %v", keyspace, shard, err)
 				return
@@ -88,7 +89,7 @@ func (wr *Wrangler) validateAllTablets(wg *sync.WaitGroup, results chan<- error)
 	}
 }
 
-func (wr *Wrangler) validateKeyspace(keyspace string, pingTablets bool, wg *sync.WaitGroup, results chan<- error) {
+func (wr *Wrangler) validateKeyspace(ctx context.Context, keyspace string, pingTablets bool, wg *sync.WaitGroup, results chan<- error) {
 	// Validate replication graph by traversing each shard.
 	shards, err := wr.ts.GetShardNames(keyspace)
 	if err != nil {
@@ -99,27 +100,27 @@ func (wr *Wrangler) validateKeyspace(keyspace string, pingTablets bool, wg *sync
 		wg.Add(1)
 		go func(shard string) {
 			defer wg.Done()
-			wr.validateShard(keyspace, shard, pingTablets, wg, results)
+			wr.validateShard(ctx, keyspace, shard, pingTablets, wg, results)
 		}(shard)
 	}
 }
 
 // FIXME(msolomon) This validate presumes the master is up and running.
 // Even when that isn't true, there are validation processes that might be valuable.
-func (wr *Wrangler) validateShard(keyspace, shard string, pingTablets bool, wg *sync.WaitGroup, results chan<- error) {
+func (wr *Wrangler) validateShard(ctx context.Context, keyspace, shard string, pingTablets bool, wg *sync.WaitGroup, results chan<- error) {
 	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		results <- fmt.Errorf("TopologyServer.GetShard(%v, %v) failed: %v", keyspace, shard, err)
 		return
 	}
 
-	aliases, err := topo.FindAllTabletAliasesInShard(wr.ctx, wr.ts, keyspace, shard)
+	aliases, err := topo.FindAllTabletAliasesInShard(ctx, wr.ts, keyspace, shard)
 	if err != nil {
 		results <- fmt.Errorf("TopologyServer.FindAllTabletAliasesInShard(%v, %v) failed: %v", keyspace, shard, err)
 		return
 	}
 
-	tabletMap, _ := topo.GetTabletMap(wr.ctx, wr.ts, aliases)
+	tabletMap, _ := topo.GetTabletMap(ctx, wr.ts, aliases)
 
 	var masterAlias topo.TabletAlias
 	for _, alias := range aliases {
@@ -156,8 +157,8 @@ func (wr *Wrangler) validateShard(keyspace, shard string, pingTablets bool, wg *
 	}
 
 	if pingTablets {
-		wr.validateReplication(shardInfo, tabletMap, results)
-		wr.pingTablets(tabletMap, wg, results)
+		wr.validateReplication(ctx, shardInfo, tabletMap, results)
+		wr.pingTablets(ctx, tabletMap, wg, results)
 	}
 
 	return
@@ -171,14 +172,14 @@ func normalizeIP(ip string) string {
 	return ip
 }
 
-func (wr *Wrangler) validateReplication(shardInfo *topo.ShardInfo, tabletMap map[topo.TabletAlias]*topo.TabletInfo, results chan<- error) {
+func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.ShardInfo, tabletMap map[topo.TabletAlias]*topo.TabletInfo, results chan<- error) {
 	masterTablet, ok := tabletMap[shardInfo.MasterAlias]
 	if !ok {
 		results <- fmt.Errorf("master %v not in tablet map", shardInfo.MasterAlias)
 		return
 	}
 
-	slaveList, err := wr.tmc.GetSlaves(wr.ctx, masterTablet)
+	slaveList, err := wr.tmc.GetSlaves(ctx, masterTablet)
 	if err != nil {
 		results <- fmt.Errorf("GetSlaves(%v) failed: %v", masterTablet, err)
 		return
@@ -214,13 +215,13 @@ func (wr *Wrangler) validateReplication(shardInfo *topo.ShardInfo, tabletMap map
 	}
 }
 
-func (wr *Wrangler) pingTablets(tabletMap map[topo.TabletAlias]*topo.TabletInfo, wg *sync.WaitGroup, results chan<- error) {
+func (wr *Wrangler) pingTablets(ctx context.Context, tabletMap map[topo.TabletAlias]*topo.TabletInfo, wg *sync.WaitGroup, results chan<- error) {
 	for tabletAlias, tabletInfo := range tabletMap {
 		wg.Add(1)
 		go func(tabletAlias topo.TabletAlias, tabletInfo *topo.TabletInfo) {
 			defer wg.Done()
 
-			if err := wr.tmc.Ping(wr.ctx, tabletInfo); err != nil {
+			if err := wr.tmc.Ping(ctx, tabletInfo); err != nil {
 				results <- fmt.Errorf("Ping(%v) failed: %v %v", tabletAlias, err, tabletInfo.Hostname)
 			}
 		}(tabletAlias, tabletInfo)
@@ -228,7 +229,7 @@ func (wr *Wrangler) pingTablets(tabletMap map[topo.TabletAlias]*topo.TabletInfo,
 }
 
 // Validate a whole TopologyServer tree
-func (wr *Wrangler) Validate(pingTablets bool) error {
+func (wr *Wrangler) Validate(ctx context.Context, pingTablets bool) error {
 	// Results from various actions feed here.
 	results := make(chan error, 16)
 	wg := &sync.WaitGroup{}
@@ -238,7 +239,7 @@ func (wr *Wrangler) Validate(pingTablets bool) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		wr.validateAllTablets(wg, results)
+		wr.validateAllTablets(ctx, wg, results)
 	}()
 
 	// Validate replication graph by traversing each keyspace and then each shard.
@@ -250,7 +251,7 @@ func (wr *Wrangler) Validate(pingTablets bool) error {
 			wg.Add(1)
 			go func(keyspace string) {
 				defer wg.Done()
-				wr.validateKeyspace(keyspace, pingTablets, wg, results)
+				wr.validateKeyspace(ctx, keyspace, pingTablets, wg, results)
 			}(keyspace)
 		}
 	}
@@ -259,25 +260,25 @@ func (wr *Wrangler) Validate(pingTablets bool) error {
 
 // ValidateKeyspace will validate a bunch of information in a keyspace
 // is correct.
-func (wr *Wrangler) ValidateKeyspace(keyspace string, pingTablets bool) error {
+func (wr *Wrangler) ValidateKeyspace(ctx context.Context, keyspace string, pingTablets bool) error {
 	wg := &sync.WaitGroup{}
 	results := make(chan error, 16)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		wr.validateKeyspace(keyspace, pingTablets, wg, results)
+		wr.validateKeyspace(ctx, keyspace, pingTablets, wg, results)
 	}()
 	return wr.waitForResults(wg, results)
 }
 
 // ValidateShard will validate a bunch of information in a shard is correct.
-func (wr *Wrangler) ValidateShard(keyspace, shard string, pingTablets bool) error {
+func (wr *Wrangler) ValidateShard(ctx context.Context, keyspace, shard string, pingTablets bool) error {
 	wg := &sync.WaitGroup{}
 	results := make(chan error, 16)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		wr.validateShard(keyspace, shard, pingTablets, wg, results)
+		wr.validateShard(ctx, keyspace, shard, pingTablets, wg, results)
 	}()
 	return wr.waitForResults(wg, results)
 }

@@ -88,10 +88,10 @@ func (cp *CachePool) Open() {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 	if cp.pool != nil {
-		panic(NewTabletError(FATAL, "rowcache is already open"))
+		panic(NewTabletError(ErrFatal, "rowcache is already open"))
 	}
 	if cp.rowCacheConfig.Binary == "" {
-		panic(NewTabletError(FATAL, "rowcache binary not specified"))
+		panic(NewTabletError(ErrFatal, "rowcache binary not specified"))
 	}
 	cp.startMemcache()
 	log.Infof("rowcache is enabled")
@@ -111,7 +111,7 @@ func (cp *CachePool) startMemcache() {
 	commandLine := cp.rowCacheConfig.GetSubprocessFlags()
 	cp.cmd = exec.Command(commandLine[0], commandLine[1:]...)
 	if err := cp.cmd.Start(); err != nil {
-		panic(NewTabletError(FATAL, "can't start memcache: %v", err))
+		panic(NewTabletError(ErrFatal, "can't start memcache: %v", err))
 	}
 	attempts := 0
 	for {
@@ -129,7 +129,7 @@ func (cp *CachePool) startMemcache() {
 			continue
 		}
 		if _, err = c.Set("health", 0, 0, []byte("ok")); err != nil {
-			panic(NewTabletError(FATAL, "can't communicate with memcache: %v", err))
+			panic(NewTabletError(ErrFatal, "can't communicate with memcache: %v", err))
 		}
 		c.Close()
 		break
@@ -182,11 +182,11 @@ func (cp *CachePool) getPool() *pools.ResourcePool {
 func (cp *CachePool) Get(timeout time.Duration) *memcache.Connection {
 	pool := cp.getPool()
 	if pool == nil {
-		panic(NewTabletError(FATAL, "cache pool is not open"))
+		panic(NewTabletError(ErrFatal, "cache pool is not open"))
 	}
 	r, err := pool.Get(timeout)
 	if err != nil {
-		panic(NewTabletErrorSql(FATAL, err))
+		panic(NewTabletErrorSql(ErrFatal, err))
 	}
 	return r.(*memcache.Connection)
 }

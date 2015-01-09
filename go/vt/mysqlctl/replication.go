@@ -12,7 +12,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"path"
 	"strconv"
@@ -22,6 +21,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -381,7 +381,7 @@ func (mysqld *Mysqld) FindSlaves() ([]string, error) {
 	addrs := make([]string, 0, 32)
 	for _, row := range qr.Rows {
 		if row[colCommand].String() == binlogDumpCommand {
-			host, _, err := net.SplitHostPort(row[colClientAddr].String())
+			host, _, err := netutil.SplitHostPort(row[colClientAddr].String())
 			if err != nil {
 				return nil, fmt.Errorf("FindSlaves: malformed addr %v", err)
 			}

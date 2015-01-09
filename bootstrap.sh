@@ -9,6 +9,11 @@ if [ ! -f bootstrap.sh ]; then
   exit 1
 fi
 
+if [ "$USER" == "root" ]; then
+  echo "Vitess cannot run as root. Please bootstrap with a non-root user."
+  exit 1
+fi
+
 . ./dev.env
 
 mkdir -p $VTROOT/dist
@@ -150,4 +155,6 @@ fi
 # create pre-commit hooks
 echo "creating git pre-commit hooks"
 ln -sf $VTTOP/misc/git/pre-commit $VTTOP/.git/hooks/pre-commit
-echo "source dev.env in your shell to complete the setup."
+
+echo
+echo "source dev.env in your shell before building."

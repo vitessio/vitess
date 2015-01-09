@@ -19,7 +19,6 @@ import (
 var (
 	sleepTime     = flag.Duration("sleep_time", 3*time.Minute, "how long to sleep between janitor runs")
 	lockTimeout   = flag.Duration("lock_timeout", actionnode.DefaultLockTimeout, "lock time for wrangler/topo operations")
-	actionTimeout = flag.Duration("action_timeout", wrangler.DefaultActionTimeout, "time to wait for an action before resorting to force")
 	keyspace      = flag.String("keyspace", "", "keyspace to manage")
 	shard         = flag.String("shard", "", "shard to manage")
 	dryRunModules flagutil.StringListValue
@@ -50,7 +49,7 @@ func main() {
 
 	ts := topo.GetServer()
 
-	scheduler, err := janitor.New(*keyspace, *shard, ts, wrangler.New(logutil.NewConsoleLogger(), ts, *actionTimeout, *lockTimeout), *sleepTime)
+	scheduler, err := janitor.New(*keyspace, *shard, ts, wrangler.New(logutil.NewConsoleLogger(), ts, *lockTimeout), *sleepTime)
 	if err != nil {
 		log.Fatalf("janitor.New: %v", err)
 	}

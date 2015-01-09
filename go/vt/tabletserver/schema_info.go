@@ -122,13 +122,13 @@ func (si *SchemaInfo) Open(connFactory dbconnpool.CreateConnectionFunc, schemaOv
 	defer conn.Recycle()
 
 	if strictMode && !conn.(*dbconnpool.PooledDBConnection).VerifyStrict() {
-		panic(NewTabletError(FATAL, "Could not verify strict mode"))
+		panic(NewTabletError(ErrFatal, "Could not verify strict mode"))
 	}
 
 	si.cachePool = cachePool
 	tables, err := conn.ExecuteFetch(base_show_tables, maxTableCount, false)
 	if err != nil {
-		panic(NewTabletError(FATAL, "Could not get table list: %v", err))
+		panic(NewTabletError(ErrFatal, "Could not get table list: %v", err))
 	}
 
 	si.tables = make(map[string]*TableInfo, len(tables.Rows))
@@ -146,7 +146,7 @@ func (si *SchemaInfo) Open(connFactory dbconnpool.CreateConnectionFunc, schemaOv
 			si.cachePool,
 		)
 		if err != nil {
-			panic(NewTabletError(FATAL, "Could not get load table %s: %v", tableName, err))
+			panic(NewTabletError(ErrFatal, "Could not get load table %s: %v", tableName, err))
 		}
 		si.tables[tableName] = tableInfo
 	}
@@ -240,14 +240,14 @@ func (si *SchemaInfo) mysqlTime() time.Time {
 	defer conn.Recycle()
 	tm, err := conn.ExecuteFetch("select unix_timestamp()", 1, false)
 	if err != nil {
-		panic(NewTabletError(FAIL, "Could not get MySQL time: %v", err))
+		panic(NewTabletError(ErrFail, "Could not get MySQL time: %v", err))
 	}
 	if len(tm.Rows) != 1 || len(tm.Rows[0]) != 1 || tm.Rows[0][0].IsNull() {
-		panic(NewTabletError(FAIL, "Unexpected result for MySQL time: %+v", tm.Rows))
+		panic(NewTabletError(ErrFail, "Unexpected result for MySQL time: %+v", tm.Rows))
 	}
 	t, err := strconv.ParseInt(tm.Rows[0][0].String(), 10, 64)
 	if err != nil {
-		panic(NewTabletError(FAIL, "Could not parse time %+v: %v", tm, err))
+		panic(NewTabletError(ErrFail, "Could not parse time %+v: %v", tm, err))
 	}
 	return time.Unix(t, 0)
 }
@@ -273,7 +273,7 @@ func (si *SchemaInfo) CreateOrUpdateTable(tableName string) {
 	defer conn.Recycle()
 	tables, err := conn.ExecuteFetch(fmt.Sprintf("%s and table_name = '%s'", base_show_tables, tableName), 1, false)
 	if err != nil {
-		panic(NewTabletError(FAIL, "Error fetching table %s: %v", tableName, err))
+		panic(NewTabletError(ErrFail, "Error fetching table %s: %v", tableName, err))
 	}
 	if len(tables.Rows) != 1 {
 		// This can happen if DDLs race with each other.
@@ -324,7 +324,7 @@ func (si *SchemaInfo) DropTable(tableName string) {
 	log.Infof("Table %s forgotten", tableName)
 }
 
-func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string, queryRuleInfo *QueryRuleInfo) *ExecPlan {
+func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string) *ExecPlan {
 	// Fastpath if plan already exists.
 	if plan := si.getQuery(sql); plan != nil {
 		return plan
@@ -347,10 +347,10 @@ func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string, queryRuleInfo
 	}
 	splan, err := planbuilder.GetExecPlan(sql, GetTable)
 	if err != nil {
-		panic(NewTabletError(FAIL, "%s", err))
+		panic(NewTabletError(ErrFail, "%s", err))
 	}
 	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
-	plan.Rules = queryRuleInfo.filterByPlan(sql, plan.PlanId, plan.TableName)
+	plan.Rules = QueryRuleSources.filterByPlan(sql, plan.PlanId, plan.TableName)
 	plan.Authorized = tableacl.Authorized(plan.TableName, plan.PlanId.MinRole())
 	if plan.PlanId.IsSelect() {
 		if plan.FieldQuery == nil {
@@ -363,7 +363,7 @@ func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string, queryRuleInfo
 			r, err := conn.ExecuteFetch(sql, 1, true)
 			logStats.AddRewrittenSql(sql, start)
 			if err != nil {
-				panic(NewTabletError(FAIL, "Error fetching fields: %v", err))
+				panic(NewTabletError(ErrFail, "Error fetching fields: %v", err))
 			}
 			plan.Fields = r.Fields
 		}
@@ -376,7 +376,7 @@ func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string, queryRuleInfo
 
 // GetStreamPlan is similar to GetPlan, but doesn't use the cache
 // and doesn't enforce a limit. It just returns the parsed query.
-func (si *SchemaInfo) GetStreamPlan(sql string, queryRuleInfo *QueryRuleInfo) *ExecPlan {
+func (si *SchemaInfo) GetStreamPlan(sql string) *ExecPlan {
 	var tableInfo *TableInfo
 	GetTable := func(tableName string) (table *schema.Table, ok bool) {
 		si.mu.Lock()
@@ -389,10 +389,10 @@ func (si *SchemaInfo) GetStreamPlan(sql string, queryRuleInfo *QueryRuleInfo) *E
 	}
 	splan, err := planbuilder.GetStreamExecPlan(sql, GetTable)
 	if err != nil {
-		panic(NewTabletError(FAIL, "%s", err))
+		panic(NewTabletError(ErrFail, "%s", err))
 	}
 	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
-	plan.Rules = queryRuleInfo.filterByPlan(sql, plan.PlanId, plan.TableName)
+	plan.Rules = QueryRuleSources.filterByPlan(sql, plan.PlanId, plan.TableName)
 	plan.Authorized = tableacl.Authorized(plan.TableName, plan.PlanId.MinRole())
 	return plan
 }
@@ -422,7 +422,7 @@ func (si *SchemaInfo) getQuery(sql string) *ExecPlan {
 
 func (si *SchemaInfo) SetQueryCacheSize(size int) {
 	if size <= 0 {
-		panic(NewTabletError(FAIL, "cache size %v out of range", size))
+		panic(NewTabletError(ErrFail, "cache size %v out of range", size))
 	}
 	si.queries.SetCapacity(int64(size))
 }

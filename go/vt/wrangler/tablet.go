@@ -11,6 +11,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
+	"golang.org/x/net/context"
 )
 
 // Tablet related methods for wrangler
@@ -22,7 +23,7 @@ import (
 // update is true, and a tablet with the same ID exists, update it.
 // If Force is true, and a tablet with the same ID already exists, it
 // will be scrapped and deleted, and then recreated.
-func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspace, update bool) error {
+func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topo.Tablet, force, createShardAndKeyspace, update bool) error {
 	if err := tablet.Complete(); err != nil {
 		return err
 	}
@@ -52,7 +53,7 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 		}
 
 		// update the shard record if needed
-		if err := wr.updateShardCellsAndMaster(si, tablet.Alias, tablet.Type, force); err != nil {
+		if err := wr.updateShardCellsAndMaster(ctx, si, tablet.Alias, tablet.Type, force); err != nil {
 			return err
 		}
 	}
@@ -67,7 +68,7 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 			} else {
 				if oldTablet.Keyspace == tablet.Keyspace && oldTablet.Shard == tablet.Shard {
 					*(oldTablet.Tablet) = *tablet
-					if err := topo.UpdateTablet(wr.ctx, wr.ts, oldTablet); err != nil {
+					if err := topo.UpdateTablet(ctx, wr.ts, oldTablet); err != nil {
 						wr.Logger().Warningf("failed updating tablet %v: %v", tablet.Alias, err)
 						// now fall through the Scrap case
 					} else {
@@ -75,7 +76,7 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 							return nil
 						}
 
-						if err := topo.UpdateTabletReplicationData(wr.ctx, wr.ts, tablet); err != nil {
+						if err := topo.UpdateTabletReplicationData(ctx, wr.ts, tablet); err != nil {
 							wr.Logger().Warningf("failed updating tablet replication data for %v: %v", tablet.Alias, err)
 							// now fall through the Scrap case
 						} else {
@@ -86,7 +87,7 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 			}
 		}
 		if force {
-			if err = wr.Scrap(tablet.Alias, force, false); err != nil {
+			if err = wr.Scrap(ctx, tablet.Alias, force, false); err != nil {
 				wr.Logger().Errorf("failed scrapping tablet %v: %v", tablet.Alias, err)
 				return err
 			}
@@ -105,7 +106,7 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 //
 // If we scrap the master for a shard, we will clear its record
 // from the Shard object (only if that was the right master)
-func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool) error {
+func (wr *Wrangler) Scrap(ctx context.Context, tabletAlias topo.TabletAlias, force, skipRebuild bool) error {
 	// load the tablet, see if we'll need to rebuild
 	ti, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
@@ -115,9 +116,9 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 	wasMaster := ti.Type == topo.TYPE_MASTER
 
 	if force {
-		err = topotools.Scrap(wr.ctx, wr.ts, ti.Alias, force)
+		err = topotools.Scrap(ctx, wr.ts, ti.Alias, force)
 	} else {
-		err = wr.tmc.Scrap(wr.ctx, ti)
+		err = wr.tmc.Scrap(ctx, ti)
 	}
 	if err != nil {
 		return err
@@ -135,7 +136,7 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 	// update the Shard object if the master was scrapped
 	if wasMaster {
 		actionNode := actionnode.UpdateShard()
-		lockPath, err := wr.lockShard(ti.Keyspace, ti.Shard, actionNode)
+		lockPath, err := wr.lockShard(ctx, ti.Keyspace, ti.Shard, actionNode)
 		if err != nil {
 			return err
 		}
@@ -143,7 +144,7 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 		// read the shard with the lock
 		si, err := wr.ts.GetShard(ti.Keyspace, ti.Shard)
 		if err != nil {
-			return wr.unlockShard(ti.Keyspace, ti.Shard, actionNode, lockPath, err)
+			return wr.unlockShard(ctx, ti.Keyspace, ti.Shard, actionNode, lockPath, err)
 		}
 
 		// update it if the right alias is there
@@ -151,21 +152,21 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 			si.MasterAlias = topo.TabletAlias{}
 
 			// write it back
-			if err := topo.UpdateShard(wr.ctx, wr.ts, si); err != nil {
-				return wr.unlockShard(ti.Keyspace, ti.Shard, actionNode, lockPath, err)
+			if err := topo.UpdateShard(ctx, wr.ts, si); err != nil {
+				return wr.unlockShard(ctx, ti.Keyspace, ti.Shard, actionNode, lockPath, err)
 			}
 		} else {
 			wr.Logger().Warningf("Scrapping master %v from shard %v/%v but master in Shard object was %v", tabletAlias, ti.Keyspace, ti.Shard, si.MasterAlias)
 		}
 
 		// and unlock
-		if err := wr.unlockShard(ti.Keyspace, ti.Shard, actionNode, lockPath, err); err != nil {
+		if err := wr.unlockShard(ctx, ti.Keyspace, ti.Shard, actionNode, lockPath, err); err != nil {
 			return err
 		}
 	}
 
 	// and rebuild the original shard / keyspace
-	_, err = wr.RebuildShardGraph(ti.Keyspace, ti.Shard, []string{ti.Alias.Cell})
+	_, err = wr.RebuildShardGraph(ctx, ti.Keyspace, ti.Shard, []string{ti.Alias.Cell})
 	return err
 }
 
@@ -176,13 +177,13 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 //
 // Note we don't update the master record in the Shard here, as we
 // can't ChangeType from and out of master anyway.
-func (wr *Wrangler) ChangeType(tabletAlias topo.TabletAlias, tabletType topo.TabletType, force bool) error {
-	rebuildRequired, cell, keyspace, shard, err := wr.ChangeTypeNoRebuild(tabletAlias, tabletType, force)
+func (wr *Wrangler) ChangeType(ctx context.Context, tabletAlias topo.TabletAlias, tabletType topo.TabletType, force bool) error {
+	rebuildRequired, cell, keyspace, shard, err := wr.ChangeTypeNoRebuild(ctx, tabletAlias, tabletType, force)
 	if err != nil {
 		return err
 	}
 	if rebuildRequired {
-		_, err = wr.RebuildShardGraph(keyspace, shard, []string{cell})
+		_, err = wr.RebuildShardGraph(ctx, keyspace, shard, []string{cell})
 		return err
 	}
 	return nil
@@ -196,7 +197,7 @@ func (wr *Wrangler) ChangeType(tabletAlias topo.TabletAlias, tabletType topo.Tab
 //
 // Note we don't update the master record in the Shard here, as we
 // can't ChangeType from and out of master anyway.
-func (wr *Wrangler) ChangeTypeNoRebuild(tabletAlias topo.TabletAlias, tabletType topo.TabletType, force bool) (rebuildRequired bool, cell, keyspace, shard string, err error) {
+func (wr *Wrangler) ChangeTypeNoRebuild(ctx context.Context, tabletAlias topo.TabletAlias, tabletType topo.TabletType, force bool) (rebuildRequired bool, cell, keyspace, shard string, err error) {
 	// Load tablet to find keyspace and shard assignment.
 	// Don't load after the ChangeType which might have unassigned
 	// the tablet.
@@ -206,11 +207,11 @@ func (wr *Wrangler) ChangeTypeNoRebuild(tabletAlias topo.TabletAlias, tabletType
 	}
 
 	if force {
-		if err := topotools.ChangeType(wr.ctx, wr.ts, tabletAlias, tabletType, nil, false); err != nil {
+		if err := topotools.ChangeType(ctx, wr.ts, tabletAlias, tabletType, nil, false); err != nil {
 			return false, "", "", "", err
 		}
 	} else {
-		if err := wr.tmc.ChangeType(wr.ctx, ti, tabletType); err != nil {
+		if err := wr.tmc.ChangeType(ctx, ti, tabletType); err != nil {
 			return false, "", "", "", err
 		}
 	}
@@ -231,7 +232,7 @@ func (wr *Wrangler) ChangeTypeNoRebuild(tabletAlias topo.TabletAlias, tabletType
 
 // same as ChangeType, but assume we already have the shard lock,
 // and do not have the option to force anything.
-func (wr *Wrangler) changeTypeInternal(tabletAlias topo.TabletAlias, dbType topo.TabletType) error {
+func (wr *Wrangler) changeTypeInternal(ctx context.Context, tabletAlias topo.TabletAlias, dbType topo.TabletType) error {
 	ti, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return err
@@ -239,13 +240,13 @@ func (wr *Wrangler) changeTypeInternal(tabletAlias topo.TabletAlias, dbType topo
 	rebuildRequired := ti.Tablet.IsInServingGraph()
 
 	// change the type
-	if err := wr.tmc.ChangeType(wr.ctx, ti, dbType); err != nil {
+	if err := wr.tmc.ChangeType(ctx, ti, dbType); err != nil {
 		return err
 	}
 
 	// rebuild if necessary
 	if rebuildRequired {
-		_, err = wr.RebuildShardGraph(ti.Keyspace, ti.Shard, []string{ti.Alias.Cell})
+		_, err = wr.RebuildShardGraph(ctx, ti.Keyspace, ti.Shard, []string{ti.Alias.Cell})
 		if err != nil {
 			return err
 		}
@@ -268,10 +269,10 @@ func (wr *Wrangler) DeleteTablet(tabletAlias topo.TabletAlias) error {
 }
 
 // ExecuteFetch will get data from a remote tablet
-func (wr *Wrangler) ExecuteFetch(tabletAlias topo.TabletAlias, query string, maxRows int, wantFields, disableBinlogs bool) (*mproto.QueryResult, error) {
+func (wr *Wrangler) ExecuteFetch(ctx context.Context, tabletAlias topo.TabletAlias, query string, maxRows int, wantFields, disableBinlogs bool) (*mproto.QueryResult, error) {
 	ti, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return nil, err
 	}
-	return wr.tmc.ExecuteFetch(wr.ctx, ti, query, maxRows, wantFields, disableBinlogs)
+	return wr.tmc.ExecuteFetch(ctx, ti, query, maxRows, wantFields, disableBinlogs)
 }
