@@ -38,7 +38,11 @@ class TestCache(framework.TestCase):
       self.fail("Did not receive exception")
 
   def test_cache_list_arg(self):
-    cu = self.env.execute("select * from vtocc_cached1 where eid in ::list", {"list": field_types.List([3, 4, 32768])})
+    cu = self.env.execute("select * from vtocc_cached1 where eid in ::list", {"list": (3, 4, 32768)})
+    self.assertEqual(cu.rowcount, 2)
+    cu = self.env.execute("select * from vtocc_cached1 where eid in ::list", {"list": set([3, 4, 32768])})
+    self.assertEqual(cu.rowcount, 2)
+    cu = self.env.execute("select * from vtocc_cached1 where eid in ::list", {"list": [3, 4, 32768]})
     self.assertEqual(cu.rowcount, 2)
     cu = self.env.execute("select * from vtocc_cached1 where eid in ::list", {"list": field_types.List([3, 4])})
     self.assertEqual(cu.rowcount, 2)
