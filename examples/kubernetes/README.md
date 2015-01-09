@@ -23,8 +23,11 @@ Once you have a running Kubernetes deployment, make sure
 *kubernetes/cluster/kubecfg.sh* is in your path, and then run:
 
 ```
-vitess$ examples/kubernetes/etcd-up.sh
+vitess/examples/kubernetes$ ./etcd-up.sh
 ```
+
+Note that these example scripts should be run from the directory they're in,
+since they read other config files.
 
 This will create two clusters: one for the 'global' cell, and one for the
 'test' cell.
@@ -57,10 +60,13 @@ kubernetes-minion-1:~$ curl -L http://10.0.86.120:4001/v2/keys/vt/cells/test -XP
 {"action":"set","node":{"key":"/vt/cells/test","value":"http://10.0.207.54:4001","modifiedIndex":9,"createdIndex":9}}
 ```
 
-To tear down the etcd deployment (again, with *kubecfg.sh* in your path):
+In general, each *-up.sh* script in this example has a corresponding *-down.sh*
+in case you want to stop certain pieces without bringing down the whole cluster.
+For example, to tear down the etcd deployment
+(again, with *kubecfg.sh* in your path):
 
 ```
-vitess$ examples/kubernetes/etcd-down.sh
+vitess/examples/kubernetes$ ./etcd-down.sh
 ```
 
 ## Starting vtctld
@@ -69,7 +75,7 @@ The vtctld server provides a web interface to inspect the state of the system,
 and also accepts RPC commands to modify the system.
 
 ```
-vitess$ examples/kubernetes/vtctld-up.sh
+vitess/examples/kubernetes$ ./vtctld-up.sh
 ```
 
 To let you access vtctld from outside Kubernetes, the vtctld service is created
@@ -149,7 +155,7 @@ You can log into the minion corresponding to one of the pods to check the logs.
 For example, on GCE that would look like this:
 
 ```
-# which minion is the vttabetl-101 pod on?
+# which minion is the vttablet-101 pod on?
 $ kubecfg.sh list pods | grep vttablet-101
 vttablet-101    vitess/root,vitess/root    kubernetes-minion-2    Running
 
