@@ -67,7 +67,7 @@ func init() {
 
 func TestServer(t *testing.T) {
 	type addResp struct {
-		Id     interface{} `json:"id"`
+		ID     interface{} `json:"id"`
 		Result Reply       `json:"result"`
 		Error  interface{} `json:"error"`
 	}
@@ -88,8 +88,8 @@ func TestServer(t *testing.T) {
 		if resp.Error != nil {
 			t.Fatalf("resp.Error: %s", resp.Error)
 		}
-		if resp.Id.(string) != string(i) {
-			t.Fatalf("resp: bad id %q want %q", resp.Id.(string), string(i))
+		if resp.ID.(string) != string(i) {
+			t.Fatalf("resp: bad id %q want %q", resp.ID.(string), string(i))
 		}
 		if resp.Result.C != 2*i+1 {
 			t.Fatalf("resp: bad result: %d+%d=%d", i, i+1, resp.Result.C)
@@ -203,7 +203,7 @@ func TestStreamingCall(t *testing.T) {
 		if row.C != count {
 			t.Fatal("unexpected value:", row.C)
 		}
-		count += 1
+		count++
 
 		// log.Println("Values: ", row)
 	}

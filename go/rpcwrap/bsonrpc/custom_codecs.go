@@ -12,10 +12,12 @@ import (
 	rpc "github.com/youtube/vitess/go/rpcplus"
 )
 
+// RequestBson provides bson rpc request parameters
 type RequestBson struct {
 	*rpc.Request
 }
 
+// MarshalBson marshals request to the given writer with optional prefix
 func (req *RequestBson) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
@@ -26,6 +28,8 @@ func (req *RequestBson) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	lenWriter.Close()
 }
 
+// UnmarshalBson unmarshals request to the given byte buffer as verifying the
+// kind
 func (req *RequestBson) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
@@ -45,10 +49,12 @@ func (req *RequestBson) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 	}
 }
 
+// ResponseBson provides bson rpc request parameters
 type ResponseBson struct {
 	*rpc.Response
 }
 
+// MarshalBson marshals response to the given writer with optional prefix
 func (resp *ResponseBson) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
@@ -60,6 +66,8 @@ func (resp *ResponseBson) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	lenWriter.Close()
 }
 
+// UnmarshalBson unmarshals response to the given byte buffer as verifying the
+// kind
 func (resp *ResponseBson) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 	bson.VerifyObject(kind)
 	bson.Next(buf, 4)
