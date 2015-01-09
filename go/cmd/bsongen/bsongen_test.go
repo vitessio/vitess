@@ -6,7 +6,7 @@ package main
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -21,19 +21,32 @@ func TestValidFiles(t *testing.T) {
 	for _, input := range inputs {
 		b, err := ioutil.ReadFile(input)
 		if err != nil {
-			t.Fatal(err)
-		}
-		out, err := generateCode(string(b), "MyType")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			return
+			t.Fatalf("ioutil.ReadFile error: %v", err)
 		}
 		want, err := ioutil.ReadFile(strings.Replace(input, "input", "output", 1))
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("ioutil.ReadFile error: %v", err)
 		}
+
+		out, err := generateCode(string(b), "MyType")
+		if err != nil {
+			t.Fatalf("generateCode error: %v", err)
+		}
+
 		// goimports is flaky. So, let's not test that part.
-		d, err := diff(skip_imports(want), skip_imports(out))
+		want, err = skipImports(want)
+		if err != nil {
+			t.Fatalf("skipImports error: %v", err)
+		}
+		out, err = skipImports(out)
+		if err != nil {
+			t.Fatalf("skipImports error: %v", err)
+		}
+
+		d, err := diff(want, out)
+		if err != nil {
+			t.Fatalf("diff error: %v", err)
+		}
 		if len(d) != 0 {
 			t.Errorf("Unexpected output for %s:\n%s", input, string(d))
 			if testing.Verbose() {
@@ -71,18 +84,16 @@ func diff(b1, b2 []byte) (data []byte, err error) {
 	return
 }
 
-func skip_imports(b []byte) []byte {
-	buf := bytes.NewBuffer(b)
-	for {
-		line, err := buf.ReadBytes('\n')
-		if err != nil {
-			return b[:0]
-		}
-		if len(line) == 0 || line[0] != ')' {
-			continue
-		}
-		return b[len(b)-buf.Len():]
+func skipImports(b []byte) ([]byte, error) {
+	begin := bytes.Index(b, []byte("\nimport (\n"))
+	if begin < 0 {
+		return nil, errors.New("couldn't find beginning of import block")
 	}
+	end := bytes.Index(b, []byte("\n)\n"))
+	if end < 0 {
+		return nil, errors.New("couldn't find end of imports block")
+	}
+	return append(b[:begin], b[end+3:]...), nil
 }
 
 var invalidInputs = []struct{ title, input, err string }{
