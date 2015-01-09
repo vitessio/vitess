@@ -66,6 +66,14 @@ func TestAllUserWriteAccess(t *testing.T) {
 	checkAccess(configData, "table1", WRITER, t, true)
 }
 
+func TestDisabled(t *testing.T) {
+	tableAcl = nil
+	got := Authorized("table1", READER)
+	if got != nil {
+		t.Errorf("table acl disabled, got: %v, want: nil", got)
+	}
+}
+
 func checkLoad(configData []byte, valid bool, t *testing.T) {
 	var err error
 	tableAcl, err = load(configData)

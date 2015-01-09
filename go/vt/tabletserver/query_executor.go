@@ -140,9 +140,10 @@ func (qre *QueryExecutor) checkPermissions() {
 		panic(NewTabletError(ErrRetry, "Query disallowed due to rule: %s", desc))
 	}
 
-	// ACLs
-	if !qre.plan.Authorized.IsMember(ci.Username()) {
+	// Perform table ACL check if it is enabled
+	if qre.plan.Authorized != nil && !qre.plan.Authorized.IsMember(ci.Username()) {
 		errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", ci.Username(), qre.plan.PlanId, qre.plan.TableName)
+		// Raise error if in strictTableAcl mode, else just log an error
 		if qre.qe.strictTableAcl {
 			panic(NewTabletError(ErrFail, "%s", errStr))
 		}

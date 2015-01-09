@@ -79,9 +79,9 @@ func load(config []byte) (map[*regexp.Regexp]map[Role]ACL, error) {
 // Authorized returns the list of entities who have at least the
 // minimum specified Role on a table
 func Authorized(table string, minRole Role) ACL {
+	// If table ACL is disabled, return nil
 	if tableAcl == nil {
-		// No ACLs, allow all access
-		return all()
+		return nil
 	}
 	for re, accessMap := range tableAcl {
 		if !re.MatchString(table) {
