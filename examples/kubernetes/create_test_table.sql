@@ -1,6 +1,6 @@
 CREATE TABLE test_table (
   id BIGINT AUTO_INCREMENT,
-  msg VARCHAR(64),
+  msg VARCHAR(250),
   PRIMARY KEY (id)
 ) ENGINE=InnoDB
 
