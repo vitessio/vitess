@@ -230,33 +230,42 @@ vitess/examples/kubernetes$ kvtctl ApplySchemaKeyspace -simple -sql "$(cat creat
 
 Clients send queries to Vitess through vtgate, which routes them to the
 correct vttablet(s) behind the scenes. In Kubernetes, we define a vtgate
-service with an external IP that load balances connections to a pool of
-vtgate pods curated by a
+service that distributes connections to a pool of vtgate pods curated by a
 [replication controller](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/replication-controller.md).
 
 ```
 vitess/examples/kubernetes$ ./vtgate-up.sh
 ```
 
-## Creating a client app
+## Launching the sample GuestBook app
 
-The file *client.py* contains a simple example app that connects to vtgate
-and executes some queries.
+The GuestBook app in this example is ported from the
+[Kubernetes GuestBook example](https://github.com/GoogleCloudPlatform/kubernetes/tree/master/examples/guestbook-go).
+The server-side code has been rewritten in Python to use Vitess as the storage
+engine. The client-side code (HTML/JavaScript) is essentially unchanged.
 
 ```
-# open vtgate port
-$ gcloud compute firewall-rules create vtgate --allow tcp:15001
+vitess/examples/kubernetes$ ./guestbook-up.sh
 
-# get external IP for vtgate service
+# open port 3000 in the firewall
+$ gcloud compute firewall-rules create guestbook --allow tcp:3000
+
+# find the external IP of the load balancer for the guestbook service
 $ gcloud compute forwarding-rules list
-NAME   REGION      IP_ADDRESS      IP_PROTOCOL TARGET
-vtgate us-central1 123.123.123.123 TCP         us-central1/targetPools/vtgate
-
-# run client.py
-$ sudo docker run -ti --rm vitess/base bash -c '$VTTOP/examples/kubernetes/client.py --server=123.123.123.123:15001'
-Inserting into master...
-Reading from master...
-(1L, 'V is for speed')
-Reading from replica...
-(1L, 'V is for speed')
+NAME      REGION      IP_ADDRESS     IP_PROTOCOL TARGET
+guestbook us-central1 1.2.3.4        TCP         us-central1/targetPools/guestbook
+vtctld    us-central1 12.34.56.78    TCP         us-central1/targetPools/vtctld
 ```
+
+Once the pods are running, the GuestBook should be accessible from port 3000 on
+the external IP, for example: http://1.2.3.4:3000/
+
+Try opening multiple browser windows of the app, and adding an entry on one
+side. The JavaScript on each page polls the app server once a second, so the
+other windows should update automatically. Since the app serves read-only
+requests by querying Vitess in 'replica' mode, this confirms that replication
+is working.
+
+See the
+[GuestBook source](https://github.com/youtube/vitess/tree/master/examples/kubernetes/guestbook)
+for more details.
