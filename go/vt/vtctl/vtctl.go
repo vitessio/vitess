@@ -266,6 +266,13 @@ var commands = []commandGroup{
 			command{"ValidatePermissionsKeyspace", commandValidatePermissionsKeyspace,
 				"<keyspace name>",
 				"Validate the master permissions from shard 0 match all the other tablets in the keyspace."},
+
+			command{"GetVSchema", commandGetVSchema,
+				"",
+				"Display the VTGate routing schema."},
+			command{"ApplyVSchema", commandApplyVSchema,
+				"<schema file>",
+				"Apply the VTGate routing schema."},
 		},
 	},
 	commandGroup{
@@ -2005,6 +2012,46 @@ func commandValidatePermissionsKeyspace(ctx context.Context, wr *wrangler.Wrangl
 
 	keyspace := subFlags.Arg(0)
 	return wr.ValidatePermissionsKeyspace(ctx, keyspace)
+}
+
+func commandGetVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 0 {
+		return fmt.Errorf("action GetVSchema does not require additional arguments")
+	}
+	ts := wr.TopoServer()
+	schemafier, ok := ts.(topo.Schemafier)
+	if !ok {
+		return fmt.Errorf("%T does no support the vschema operations", ts)
+	}
+	schema, err := schemafier.GetVSchema()
+	if err != nil {
+		return err
+	}
+	wr.Logger().Printf("%s\n", schema)
+	return nil
+}
+
+func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("action ApplyVSchema requires <schema file>")
+	}
+	ts := wr.TopoServer()
+	schemafier, ok := ts.(topo.Schemafier)
+	if !ok {
+		return fmt.Errorf("%T does no support the vschema operations", ts)
+	}
+	schemafile := subFlags.Arg(0)
+	schema, err := ioutil.ReadFile(schemafile)
+	if err != nil {
+		return err
+	}
+	return schemafier.SaveVSchema(string(schema))
 }
 
 func commandGetSrvKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
