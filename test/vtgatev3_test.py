@@ -262,7 +262,11 @@ def setup_tablets():
   utils.run_vtctl(['RebuildKeyspaceGraph', USER_KEYSACE], auto_log=True)
   utils.run_vtctl(['RebuildKeyspaceGraph', LOOKUP_KEYSPACE], auto_log=True)
 
-  vtgate_server, vtgate_port = utils.vtgate_start(schema=schema)
+  fname = os.path.join(environment.tmproot, "vschema.json")
+  with open(fname, "w") as f:
+    f.write(schema)
+  utils.run_vtctl(['ApplyVSchema', fname])
+  vtgate_server, vtgate_port = utils.vtgate_start()
 
 
 def get_connection(user=None, password=None):
