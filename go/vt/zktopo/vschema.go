@@ -7,7 +7,7 @@ package zktopo
 import (
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	// vindexes needs to be imported so that they register
-	// themeselves against vtgate/planbuilder. This will allow
+	// themselves against vtgate/planbuilder. This will allow
 	// us to sanity check the schema being uploaded.
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/zk"
