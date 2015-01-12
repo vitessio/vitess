@@ -271,7 +271,7 @@ var commands = []commandGroup{
 				"",
 				"Display the VTGate routing schema."},
 			command{"ApplyVSchema", commandApplyVSchema,
-				"<schema file>",
+				"{-vschema=<vschema> || -vschema-file=<vschema file>}",
 				"Apply the VTGate routing schema."},
 		},
 	},
@@ -2035,23 +2035,27 @@ func commandGetVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 }
 
 func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	vschema := subFlags.String("vschema", "", "VTGate routing schema")
+	vschemaFile := subFlags.String("vschema-file", "", "VTGate routing schema file")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action ApplyVSchema requires <schema file>")
+	if (*vschema == "") == (*vschemaFile == "") {
+		return fmt.Errorf("action ApplyVSchema requires either vschema or vschema-file")
 	}
 	ts := wr.TopoServer()
 	schemafier, ok := ts.(topo.Schemafier)
 	if !ok {
 		return fmt.Errorf("%T does no support the vschema operations", ts)
 	}
-	schemafile := subFlags.Arg(0)
-	schema, err := ioutil.ReadFile(schemafile)
-	if err != nil {
-		return err
+	if *vschemaFile != "" {
+		schema, err := ioutil.ReadFile(*vschemaFile)
+		if err != nil {
+			return err
+		}
+		*vschema = string(schema)
 	}
-	return schemafier.SaveVSchema(string(schema))
+	return schemafier.SaveVSchema(*vschema)
 }
 
 func commandGetSrvKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

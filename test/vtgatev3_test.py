@@ -265,7 +265,7 @@ def setup_tablets():
   fname = os.path.join(environment.tmproot, "vschema.json")
   with open(fname, "w") as f:
     f.write(schema)
-  utils.run_vtctl(['ApplyVSchema', fname])
+  utils.run_vtctl(['ApplyVSchema', "-vschema-file", fname])
   vtgate_server, vtgate_port = utils.vtgate_start()
 
 
