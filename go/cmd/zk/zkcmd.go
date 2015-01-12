@@ -16,6 +16,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/terminal"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/zk"
@@ -119,6 +120,7 @@ var (
 )
 
 func main() {
+	defer exit.Recover()
 	defer logutil.Flush()
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of %v:\n", os.Args[0])
@@ -129,14 +131,15 @@ func main() {
 	args := flag.Args()
 	if len(args) == 0 {
 		flag.Usage()
-		os.Exit(1)
+		exit.Return(1)
 	}
 
 	if *zkAddrs != "" {
 		var err error
 		zconn, _, err = zk.DialZkTimeout(*zkAddrs, 5*time.Second, 10*time.Second)
 		if err != nil {
-			log.Fatalf("zk connect failed: %v", err.Error())
+			log.Errorf("zk connect failed: %v", err.Error())
+			exit.Return(1)
 		}
 	}
 

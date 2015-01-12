@@ -11,6 +11,7 @@ import (
 	"os"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -157,6 +158,7 @@ var commands = []command{
 }
 
 func main() {
+	defer exit.Recover()
 	defer logutil.Flush()
 
 	flag.Usage = func() {
@@ -190,7 +192,8 @@ func main() {
 
 	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, flags)
 	if err != nil {
-		log.Fatalf("%v", err)
+		log.Errorf("%v", err)
+		exit.Return(1)
 	}
 	mysqld := mysqlctl.NewMysqld("Dba", mycnf, &dbcfgs.Dba, &dbcfgs.Repl)
 	defer mysqld.Close()
@@ -209,5 +212,6 @@ func main() {
 			return
 		}
 	}
-	log.Fatalf("invalid action: %v", action)
+	log.Errorf("invalid action: %v", action)
+	exit.Return(1)
 }

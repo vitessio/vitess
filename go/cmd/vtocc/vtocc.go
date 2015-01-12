@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
@@ -33,19 +34,23 @@ func init() {
 }
 
 func main() {
+	defer exit.Recover()
+
 	flags := dbconfigs.AppConfig | dbconfigs.DbaConfig |
 		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
 	dbconfigs.RegisterFlags(flags)
 	flag.Parse()
 	if len(flag.Args()) > 0 {
 		flag.Usage()
-		log.Fatalf("vtocc doesn't take any positional arguments")
+		log.Errorf("vtocc doesn't take any positional arguments")
+		exit.Return(1)
 	}
 	servenv.Init()
 
 	dbConfigs, err := dbconfigs.Init("", flags)
 	if err != nil {
-		log.Fatalf("Cannot initialize App dbconfig: %v", err)
+		log.Errorf("Cannot initialize App dbconfig: %v", err)
+		exit.Return(1)
 	}
 	if *enableRowcache {
 		dbConfigs.App.EnableRowcache = true

@@ -14,6 +14,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/db"
+	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/client2"
 	_ "github.com/youtube/vitess/go/vt/client2/tablet"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -93,6 +94,7 @@ func isDml(sql string) bool {
 }
 
 func main() {
+	defer exit.Recover()
 	defer logutil.Flush()
 
 	flag.Parse()
@@ -100,13 +102,14 @@ func main() {
 
 	if len(args) == 0 {
 		flag.Usage()
-		os.Exit(1)
+		exit.Return(1)
 	}
 
 	client2.RegisterShardedDrivers()
 	conn, err := db.Open(*driver, *server)
 	if err != nil {
-		log.Fatalf("client error: %v", err)
+		log.Errorf("client error: %v", err)
+		exit.Return(1)
 	}
 
 	log.Infof("Sending the query...")
@@ -116,17 +119,20 @@ func main() {
 	if isDml(args[0]) {
 		t, err := conn.Begin()
 		if err != nil {
-			log.Fatalf("begin failed: %v", err)
+			log.Errorf("begin failed: %v", err)
+			exit.Return(1)
 		}
 
 		r, err := conn.Exec(args[0], bindvars)
 		if err != nil {
-			log.Fatalf("exec failed: %v", err)
+			log.Errorf("exec failed: %v", err)
+			exit.Return(1)
 		}
 
 		err = t.Commit()
 		if err != nil {
-			log.Fatalf("commit failed: %v", err)
+			log.Errorf("commit failed: %v", err)
+			exit.Return(1)
 		}
 
 		n, err := r.RowsAffected()
@@ -136,13 +142,15 @@ func main() {
 		// launch the query
 		r, err := conn.Exec(args[0], bindvars)
 		if err != nil {
-			log.Fatalf("client error: %v", err)
+			log.Errorf("client error: %v", err)
+			exit.Return(1)
 		}
 
 		// get the headers
 		cols := r.Columns()
 		if err != nil {
-			log.Fatalf("client error: %v", err)
+			log.Errorf("client error: %v", err)
+			exit.Return(1)
 		}
 
 		// print the header
@@ -177,7 +185,8 @@ func main() {
 			rowIndex++
 		}
 		if err := r.Err(); err != nil {
-			log.Fatalf("Error %v\n", err)
+			log.Errorf("Error %v\n", err)
+			exit.Return(1)
 		}
 		log.Infof("Total time: %v / Row count: %v", time.Now().Sub(now), rowIndex)
 	}

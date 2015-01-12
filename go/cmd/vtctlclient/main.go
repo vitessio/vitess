@@ -10,6 +10,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
 )
@@ -24,19 +25,23 @@ var (
 )
 
 func main() {
+	defer exit.Recover()
+
 	flag.Parse()
 
 	// create the client
 	client, err := vtctlclient.New(*server, *dialTimeout)
 	if err != nil {
-		log.Fatalf("Cannot dial to server %v: %v", *server, err)
+		log.Errorf("Cannot dial to server %v: %v", *server, err)
+		exit.Return(1)
 	}
 	defer client.Close()
 
 	// run the command
 	c, errFunc := client.ExecuteVtctlCommand(flag.Args(), *actionTimeout, *lockWaitTimeout)
 	if err = errFunc(); err != nil {
-		log.Fatalf("Cannot execute remote command: %v", err)
+		log.Errorf("Cannot execute remote command: %v", err)
+		exit.Return(1)
 	}
 
 	// stream the result
@@ -55,6 +60,7 @@ func main() {
 
 	// then display the overall error
 	if err = errFunc(); err != nil {
-		log.Fatalf("Remote error: %v", err)
+		log.Errorf("Remote error: %v", err)
+		exit.Return(1)
 	}
 }

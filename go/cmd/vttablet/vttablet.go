@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -59,6 +60,8 @@ func tabletParamToTabletAlias(param string) topo.TabletAlias {
 }
 
 func main() {
+	defer exit.Recover()
+
 	flags := dbconfigs.AppConfig | dbconfigs.DbaConfig |
 		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
 	dbconfigs.RegisterFlags(flags)
@@ -66,19 +69,22 @@ func main() {
 	flag.Parse()
 	if len(flag.Args()) > 0 {
 		flag.Usage()
-		log.Fatalf("vttablet doesn't take any positional arguments")
+		log.Errorf("vttablet doesn't take any positional arguments")
+		exit.Return(1)
 	}
 
 	servenv.Init()
 
 	if *tabletPath == "" {
-		log.Fatalf("tabletPath required")
+		log.Errorf("tabletPath required")
+		exit.Return(1)
 	}
 	tabletAlias := tabletParamToTabletAlias(*tabletPath)
 
 	mycnf, err := mysqlctl.NewMycnfFromFlags(tabletAlias.Uid)
 	if err != nil {
-		log.Fatalf("mycnf read failed: %v", err)
+		log.Errorf("mycnf read failed: %v", err)
+		exit.Return(1)
 	}
 
 	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, flags)
@@ -96,7 +102,8 @@ func main() {
 	// Depends on both query and updateStream.
 	agent, err = tabletmanager.NewActionAgent(context.Background(), tabletAlias, dbcfgs, mycnf, *servenv.Port, *servenv.SecurePort, *overridesFile, *lockTimeout)
 	if err != nil {
-		log.Fatal(err)
+		log.Error(err)
+		exit.Return(1)
 	}
 
 	tabletmanager.HttpHandleSnapshots(mycnf, tabletAlias.Uid)
