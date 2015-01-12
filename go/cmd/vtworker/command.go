@@ -22,7 +22,7 @@ var (
 
 type command struct {
 	Name        string
-	method      func(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) worker.Worker
+	method      func(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (worker.Worker, error)
 	interactive func(wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request)
 	params      string
 	Help        string // if help is empty, won't list the command
@@ -73,23 +73,23 @@ func addCommand(groupName string, c command) {
 	panic(fmt.Errorf("Trying to add to missing group %v", groupName))
 }
 
-func shardParamToKeyspaceShard(param string) (string, string) {
+func shardParamToKeyspaceShard(param string) (string, string, error) {
 	if param[0] == '/' {
 		// old zookeeper path, convert to new-style
 		zkPathParts := strings.Split(param, "/")
 		if len(zkPathParts) != 8 || zkPathParts[0] != "" || zkPathParts[1] != "zk" || zkPathParts[2] != "global" || zkPathParts[3] != "vt" || zkPathParts[4] != "keyspaces" || zkPathParts[6] != "shards" {
-			log.Fatalf("Invalid shard path: %v", param)
+			return "", "", fmt.Errorf("invalid shard path: %v", param)
 		}
-		return zkPathParts[5], zkPathParts[7]
+		return zkPathParts[5], zkPathParts[7], nil
 	}
 	zkPathParts := strings.Split(param, "/")
 	if len(zkPathParts) != 2 {
-		log.Fatalf("Invalid shard path: %v", param)
+		return "", "", fmt.Errorf("invalid shard path: %v", param)
 	}
-	return zkPathParts[0], zkPathParts[1]
+	return zkPathParts[0], zkPathParts[1], nil
 }
 
-func commandWorker(wr *wrangler.Wrangler, args []string) worker.Worker {
+func commandWorker(wr *wrangler.Wrangler, args []string) (worker.Worker, error) {
 	action := args[0]
 
 	actionLowerCase := strings.ToLower(action)
@@ -107,15 +107,17 @@ func commandWorker(wr *wrangler.Wrangler, args []string) worker.Worker {
 		}
 	}
 	flag.Usage()
-	log.Fatalf("Unknown command %#v\n\n", action)
-	return nil
+	return nil, fmt.Errorf("unknown command: %v", action)
 }
 
-func runCommand(args []string) {
-	wrk := commandWorker(wr, args)
+func runCommand(args []string) error {
+	wrk, err := commandWorker(wr, args)
+	if err != nil {
+		return err
+	}
 	done, err := setAndStartWorker(wrk)
 	if err != nil {
-		log.Fatalf("Cannot set worker: %v", err)
+		return fmt.Errorf("cannot set worker: %v", err)
 	}
 
 	// a go routine displays the status every second
@@ -135,4 +137,6 @@ func runCommand(args []string) {
 			}
 		}
 	}()
+
+	return nil
 }

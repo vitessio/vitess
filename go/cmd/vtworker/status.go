@@ -56,7 +56,7 @@ const workerStatusHTML = `
 
 func initStatusHandling() {
 	// code to serve /status
-	workerTemplate := loadTemplate("worker", workerStatusHTML)
+	workerTemplate := mustParseTemplate("worker", workerStatusHTML)
 	http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		currentWorkerMutex.Lock()
 		wrk := currentWorker
