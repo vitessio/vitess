@@ -7,6 +7,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"strings"
 
 	log "github.com/golang/glog"
@@ -43,20 +44,20 @@ func init() {
 
 // tabletParamToTabletAlias takes either an old style ZK tablet path or a
 // new style tablet alias as a string, and returns a TabletAlias.
-func tabletParamToTabletAlias(param string) topo.TabletAlias {
+func tabletParamToTabletAlias(param string) (topo.TabletAlias, error) {
 	if param[0] == '/' {
 		// old zookeeper path, convert to new-style string tablet alias
 		zkPathParts := strings.Split(param, "/")
 		if len(zkPathParts) != 6 || zkPathParts[0] != "" || zkPathParts[1] != "zk" || zkPathParts[3] != "vt" || zkPathParts[4] != "tablets" {
-			log.Fatalf("Invalid tablet path: %v", param)
+			return topo.TabletAlias{}, fmt.Errorf("invalid tablet path: %v", param)
 		}
 		param = zkPathParts[2] + "-" + zkPathParts[5]
 	}
 	result, err := topo.ParseTabletAliasString(param)
 	if err != nil {
-		log.Fatalf("Invalid tablet alias %v: %v", param, err)
+		return topo.TabletAlias{}, fmt.Errorf("invalid tablet alias %v: %v", param, err)
 	}
-	return result
+	return result, nil
 }
 
 func main() {
@@ -79,7 +80,11 @@ func main() {
 		log.Errorf("tabletPath required")
 		exit.Return(1)
 	}
-	tabletAlias := tabletParamToTabletAlias(*tabletPath)
+	tabletAlias, err := tabletParamToTabletAlias(*tabletPath)
+	if err != nil {
+		log.Error(err)
+		exit.Return(1)
+	}
 
 	mycnf, err := mysqlctl.NewMycnfFromFlags(tabletAlias.Uid)
 	if err != nil {
