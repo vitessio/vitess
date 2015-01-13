@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topotools"
@@ -77,10 +76,10 @@ const splitCloneHTML2 = `
   </body>
 `
 
-var splitCloneTemplate = loadTemplate("splitClone", splitCloneHTML)
-var splitCloneTemplate2 = loadTemplate("splitClone2", splitCloneHTML2)
+var splitCloneTemplate = mustParseTemplate("splitClone", splitCloneHTML)
+var splitCloneTemplate2 = mustParseTemplate("splitClone2", splitCloneHTML2)
 
-func commandSplitClone(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) worker.Worker {
+func commandSplitClone(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (worker.Worker, error) {
 	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude")
 	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'mysqlctl multirestore -strategy=-help' for more info")
 	sourceReaderCount := subFlags.Int("source_reader_count", defaultSourceReaderCount, "number of concurrent streaming queries to use on the source")
@@ -89,19 +88,22 @@ func commandSplitClone(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 	destinationWriterCount := subFlags.Int("destination_writer_count", defaultDestinationWriterCount, "number of concurrent RPCs to execute on the destination")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
-		log.Fatalf("command SplitClone requires <keyspace/shard>")
+		return nil, fmt.Errorf("command SplitClone requires <keyspace/shard>")
 	}
 
-	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	if err != nil {
+		return nil, err
+	}
 	var excludeTableArray []string
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
 	worker, err := worker.NewSplitCloneWorker(wr, *cell, keyspace, shard, excludeTableArray, *strategy, *sourceReaderCount, *destinationPackCount, uint64(*minTableSizeForSplit), *destinationWriterCount)
 	if err != nil {
-		log.Fatalf("cannot create split clone worker: %v", err)
+		return nil, fmt.Errorf("cannot create split clone worker: %v", err)
 	}
-	return worker
+	return worker, nil
 }
 
 func keyspacesWithOverlappingShards(wr *wrangler.Wrangler) ([]map[string]string, error) {

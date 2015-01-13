@@ -9,6 +9,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate"
@@ -36,6 +37,8 @@ func init() {
 }
 
 func main() {
+	defer exit.Recover()
+
 	flag.Parse()
 	servenv.Init()
 
@@ -47,7 +50,8 @@ func main() {
 	if *schemaFile != "" {
 		var err error
 		if schema, err = planbuilder.LoadFile(*schemaFile); err != nil {
-			log.Fatal(err)
+			log.Error(err)
+			exit.Return(1)
 		}
 		log.Infof("v3 is enabled: loaded schema from file: %v", *schemaFile)
 	} else {

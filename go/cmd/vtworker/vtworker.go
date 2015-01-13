@@ -22,6 +22,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -91,6 +92,8 @@ func setAndStartWorker(wrk worker.Worker) (chan struct{}, error) {
 }
 
 func main() {
+	defer exit.Recover()
+
 	flag.Parse()
 	args := flag.Args()
 
@@ -100,16 +103,19 @@ func main() {
 	ts := topo.GetServer()
 	defer topo.CloseServers()
 
-	// the logger will be replaced when we start a job
-	// FIXME(aaijazi) the signal handler is wrong
+	// The logger will be replaced when we start a job.
+	// FIXME(aaijazi): The signal handler is wrong.
 	_, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	wr = wrangler.New(logutil.NewConsoleLogger(), ts, 30*time.Second)
 	if len(args) == 0 {
-		// interactive mode, initialize the web UI to chose a command
+		// In interactive mode, initialize the web UI to choose a command.
 		initInteractiveMode()
 	} else {
-		// single command mode, just runs it
-		runCommand(args)
+		// In single command mode, just run it.
+		if err := runCommand(args); err != nil {
+			log.Error(err)
+			exit.Return(1)
+		}
 	}
 	installSignalHandlers(cancel)
 	initStatusHandling()

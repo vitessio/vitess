@@ -37,7 +37,8 @@ func main() {
 	}
 
 	if *fromTopo == "" || *toTopo == "" {
-		log.Fatalf("Need both from and to topo")
+		log.Errorf("Need both from and to topo")
+		exit.Return(1)
 	}
 
 	fromTS := topo.GetServerByName(*fromTopo)
