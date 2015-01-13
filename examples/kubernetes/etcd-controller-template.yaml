@@ -20,6 +20,14 @@ desiredState:
               - >-
                 ipaddr=$(hostname -i)
 
+                if [ "{{cell}}" != "global" ]; then
+                until curl -L
+                http://$ETCD_GLOBAL_SERVICE_HOST:$ETCD_GLOBAL_SERVICE_PORT/v2/keys/vt/cells/{{cell}}
+                -XPUT -d value=http://$ipaddr:4001; do
+                echo "[$(date)] waiting for global etcd to register cell '{{cell}}'"; sleep 1;
+                done;
+                fi
+
                 etcd -name $HOSTNAME -peer-addr $ipaddr:7001 -addr $ipaddr:4001 -discovery {{discovery}}
     labels:
       name: etcd
