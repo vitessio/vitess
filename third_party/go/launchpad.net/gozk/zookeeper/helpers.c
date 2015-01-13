@@ -86,5 +86,23 @@ void destroy_watch_data(watch_data *data) {
 watcher_fn watch_handler = _watch_handler;
 void_completion_t handle_void_completion = _handle_void_completion;
 
+zhandle_t *zookeeper_init_int(const char *host, watcher_fn fn,
+		int recv_timeout, const clientid_t *clientid, unsigned long context, int flags) {
+	return zookeeper_init(host, fn, recv_timeout, clientid, (void*)context, flags);
+}
+int zoo_wget_int(zhandle_t *zh, const char *path,
+		watcher_fn watcher, unsigned long watcherCtx,
+		char *buffer, int* buffer_len, struct Stat *stat) {
+	return zoo_wget(zh, path, watcher, (void*)watcherCtx, buffer, buffer_len, stat);
+}
+int zoo_wget_children2_int(zhandle_t *zh, const char *path,
+		watcher_fn watcher, unsigned long watcherCtx,
+		struct String_vector *strings, struct Stat *stat) {
+	return zoo_wget_children2(zh, path, watcher, (void*)watcherCtx, strings, stat);
+}
+int zoo_wexists_int(zhandle_t *zh, const char *path,
+		watcher_fn watcher, unsigned long watcherCtx, struct Stat *stat) {
+	return zoo_wexists(zh, path, watcher, (void*)watcherCtx, stat);
+}
 
 // vim:ts=4:sw=4:et
