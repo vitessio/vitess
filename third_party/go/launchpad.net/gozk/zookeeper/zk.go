@@ -447,7 +447,7 @@ func dial(servers string, recvTimeout time.Duration, clientId *ClientId) (*Conn,
 	conn.sessionWatchId = watchId
 
 	cservers := C.CString(servers)
-	handle, cerr := C.zookeeper_init(cservers, C.watch_handler, C.int(recvTimeout/1e6), cId, unsafe.Pointer(watchId), 0)
+	handle, cerr := C.zookeeper_init_int(cservers, C.watch_handler, C.int(recvTimeout/1e6), cId, C.ulong(watchId), 0)
 	C.free(unsafe.Pointer(cservers))
 	if handle == nil {
 		conn.closeAllWatches()
@@ -535,7 +535,7 @@ func (conn *Conn) GetW(path string) (data string, stat *Stat, watch <-chan Event
 	watchId, watchChannel := conn.createWatch(true)
 
 	var cstat Stat
-	rc, cerr := C.zoo_wget(conn.handle, cpath, C.watch_handler, unsafe.Pointer(watchId), cbuffer, &cbufferLen, &cstat.c)
+	rc, cerr := C.zoo_wget_int(conn.handle, cpath, C.watch_handler, C.ulong(watchId), cbuffer, &cbufferLen, &cstat.c)
 	if rc != C.ZOK {
 		conn.forgetWatch(watchId)
 		return "", nil, nil, zkError(rc, cerr, "getw", path)
@@ -591,7 +591,7 @@ func (conn *Conn) ChildrenW(path string) (children []string, stat *Stat, watch <
 
 	cvector := C.struct_String_vector{}
 	var cstat Stat
-	rc, cerr := C.zoo_wget_children2(conn.handle, cpath, C.watch_handler, unsafe.Pointer(watchId), &cvector, &cstat.c)
+	rc, cerr := C.zoo_wget_children2_int(conn.handle, cpath, C.watch_handler, C.ulong(watchId), &cvector, &cstat.c)
 
 	// Can't happen if rc != 0, but avoid potential memory leaks in the future.
 	if cvector.count != 0 {
@@ -665,7 +665,7 @@ func (conn *Conn) ExistsW(path string) (stat *Stat, watch <-chan Event, err erro
 	watchId, watchChannel := conn.createWatch(true)
 
 	var cstat Stat
-	rc, cerr := C.zoo_wexists(conn.handle, cpath, C.watch_handler, unsafe.Pointer(watchId), &cstat.c)
+	rc, cerr := C.zoo_wexists_int(conn.handle, cpath, C.watch_handler, C.ulong(watchId), &cstat.c)
 
 	// We diverge a bit from the usual here: a ZNONODE is not an error
 	// for an exists call, otherwise every Exists call would have to check
@@ -944,7 +944,6 @@ func (conn *Conn) RetryChange(path string, flags int, acl []ACL, changeFunc Chan
 			return err
 		}
 	}
-	panic("not reached")
 }
 
 // -----------------------------------------------------------------------
