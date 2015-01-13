@@ -54,6 +54,7 @@ type cleanUpHelper struct {
 // If an action on a target fails, it will not run the next action on
 // the same target.
 // We return the aggregate errors for all cleanups.
+// CleanUp uses its own context, with a timeout of 5 minutes, so that clean up action will run even if the original context times out.
 // TODO(alainjobart) Actions should run concurrently on a per target
 // basis. They are then serialized on each target.
 func (cleaner *Cleaner) CleanUp(wr *Wrangler) error {

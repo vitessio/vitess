@@ -109,6 +109,16 @@ ci_skip_integration_test_files = \
 	resharding.py \
 	update_stream.py
 
+# Run the following tests after making worker changes
+worker_integration_test_files = \
+	binlog.py \
+	resharding.py \
+	resharding_bytes.py \
+	vertical_split.py \
+	vertical_split_vtgate.py \
+	initial_sharding.py \
+	initial_sharding_bytes.py
+
 .ONESHELL:
 SHELL = /bin/bash
 
@@ -138,6 +148,10 @@ large_integration_test:
 
 ci_skip_integration_test:
 	$(call run_integration_tests, $(ci_skip_integration_test_files))
+
+worker_test:
+	go test ./go/vt/worker/
+	$(call run_integration_tests, $(worker_integration_test_files))
 
 integration_test: small_integration_test medium_integration_test large_integration_test ci_skip_integration_test
 
