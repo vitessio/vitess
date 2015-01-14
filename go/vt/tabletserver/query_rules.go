@@ -693,7 +693,7 @@ func MapStrOperator(strop string) (op Operator, err error) {
 	if op, ok := opmap[strop]; ok {
 		return op, nil
 	}
-	return QR_NOOP, NewTabletError(ErrFail, "Cannot map string %s to a valid Operator", strop)
+	return QR_NOOP, NewTabletError(ErrFail, "invalid Operator %s", strop)
 }
 
 func BuildQueryRule(ruleInfo map[string]interface{}) (qr *QueryRule, err error) {
@@ -824,7 +824,6 @@ func buildBindVarCondition(bvc interface{}) (name string, onAbsent, onMismatch b
 	}
 	op, err = MapStrOperator(strop)
 	if err != nil {
-		err = NewTabletError(ErrFail, "invalid Operator %s", strop)
 		return
 	}
 	if op == QR_NOOP {
