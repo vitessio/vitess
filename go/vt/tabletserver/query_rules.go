@@ -689,6 +689,13 @@ func getstring(val interface{}) (sv string, status int) {
 //-----------------------------------------------
 // Support functions for JSON
 
+func MapStrOperator(strop string) (op Operator, err error) {
+	if op, ok := opmap[strop]; ok {
+		return op, nil
+	}
+	return QR_NOOP, NewTabletError(ErrFail, "Cannot map string %s to a valid Operator", strop)
+}
+
 func BuildQueryRule(ruleInfo map[string]interface{}) (qr *QueryRule, err error) {
 	qr = NewQueryRule("", "", QR_FAIL)
 	for k, v := range ruleInfo {
@@ -815,8 +822,8 @@ func buildBindVarCondition(bvc interface{}) (name string, onAbsent, onMismatch b
 		err = NewTabletError(ErrFail, "want string for Operator")
 		return
 	}
-	op, ok = opmap[strop]
-	if !ok {
+	op, err = MapStrOperator(strop)
+	if err != nil {
 		err = NewTabletError(ErrFail, "invalid Operator %s", strop)
 		return
 	}
