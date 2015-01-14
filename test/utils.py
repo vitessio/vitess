@@ -567,6 +567,18 @@ def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
     raise Exception("Got wrong ShardingColumnType in SrvKeyspace: %s" %
                    str(ks))
 
+def is_queryservice_enabled(shard_name, tablet_type):
+  tablet_control_map = run_vtctl_json(['GetShard', shard_name]).get('TabletControlMap')
+  if tablet_control_map:
+    disable_query_service = tablet_control_map.get(tablet_type, {}).get('DisableQueryService')
+
+    if disable_query_service:
+      return False
+
+  # DisableQueryService could be False, or the a key could be missing somewhere in the chain.
+  # The tablet will interpret either as meaning that query service should be enabled.
+  return True
+
 def get_status(port):
   return urllib2.urlopen('http://localhost:%u%s' % (port, environment.status_url)).read()
 
