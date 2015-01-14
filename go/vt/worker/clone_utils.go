@@ -103,7 +103,6 @@ func formatTableStatuses(tableStatuses []*tableStatus, startTime time.Time) ([]s
 // If will keep retrying the ExecuteFetch (for a finite but longer duration) if it fails due to a timeout or a
 // retriable application error.
 func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, command string, disableBinLogs bool) error {
-	fmt.Printf("Starting executeFetchWithRetries! \n")
 	retryDuration := 2 * time.Hour
 
 	executeFetchErrs := make(chan error)
@@ -129,13 +128,11 @@ func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *top
 			switch {
 			// success!
 			case err == nil:
-				fmt.Printf("Successfully ran executeFetchWithRetries with cmd: %v! \n", command)
 				return nil
 			// retriable failure, either due to a timeout or an application-level retriable failure
 			case wr.TabletManagerClient().IsTimeoutError(err), strings.Contains(err.Error(), "retry: "):
 				go func() {
 					wr.Logger().Infof("Retrying failed ExecuteFetch on %v; failed with: %v", ti, err)
-					fmt.Printf("Tried to retry! \n")
 					// TODO(aaijazi): wait 30 second and re-resolve
 					executeFetch()
 				}()
@@ -162,14 +159,14 @@ func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
 }
 
 // runSqlCommands will send the sql commands to the remote tablet.
-func runSqlCommands(wr *wrangler.Wrangler, ti *topo.TabletInfo, commands []string, abort chan struct{}, disableBinLogs bool) error {
+func runSqlCommands(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, commands []string, abort chan struct{}, disableBinLogs bool) error {
 	for _, command := range commands {
 		command, err := fillStringTemplate(command, map[string]string{"DatabaseName": ti.DbName()})
 		if err != nil {
 			return fmt.Errorf("fillStringTemplate failed: %v", err)
 		}
 
-		err = executeFetchWithRetries(context.TODO(), wr, ti, command, disableBinLogs)
+		err = executeFetchWithRetries(ctx, wr, ti, command, disableBinLogs)
 		if err != nil {
 			return err
 		}
@@ -193,7 +190,7 @@ func runSqlCommands(wr *wrangler.Wrangler, ti *topo.TabletInfo, commands []strin
 // "", "value1", "value2", ""
 // A non-split tablet will just return:
 // "", ""
-func findChunks(wr *wrangler.Wrangler, ti *topo.TabletInfo, td *myproto.TableDefinition, minTableSizeForSplit uint64, sourceReaderCount int) ([]string, error) {
+func findChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, td *myproto.TableDefinition, minTableSizeForSplit uint64, sourceReaderCount int) ([]string, error) {
 	result := []string{"", ""}
 
 	// eliminate a few cases we don't split tables for
@@ -208,7 +205,7 @@ func findChunks(wr *wrangler.Wrangler, ti *topo.TabletInfo, td *myproto.TableDef
 
 	// get the min and max of the leading column of the primary key
 	query := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v.%v", td.PrimaryKeyColumns[0], td.PrimaryKeyColumns[0], ti.DbName(), td.Name)
-	ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	qr, err := wr.TabletManagerClient().ExecuteFetch(ctx, ti, query, 1, true, false)
 	cancel()
 	if err != nil {
@@ -364,7 +361,7 @@ func makeValueString(fields []mproto.Field, rows [][]sqltypes.Value) string {
 
 // executeFetchLoop loops over the provided insertChannel
 // and sends the commands to the provided tablet.
-func executeFetchLoop(wr *wrangler.Wrangler, ti *topo.TabletInfo, insertChannel chan string, abort chan struct{}, disableBinLogs bool) error {
+func executeFetchLoop(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, insertChannel chan string, abort chan struct{}, disableBinLogs bool) error {
 	for {
 		select {
 		case cmd, ok := <-insertChannel:
@@ -373,7 +370,7 @@ func executeFetchLoop(wr *wrangler.Wrangler, ti *topo.TabletInfo, insertChannel 
 				return nil
 			}
 			cmd = "INSERT INTO `" + ti.DbName() + "`." + cmd
-			err := executeFetchWithRetries(context.TODO(), wr, ti, cmd, disableBinLogs)
+			err := executeFetchWithRetries(ctx, wr, ti, cmd, disableBinLogs)
 			if err != nil {
 				return fmt.Errorf("ExecuteFetch failed: %v", err)
 			}

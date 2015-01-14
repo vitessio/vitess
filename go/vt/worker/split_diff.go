@@ -37,11 +37,13 @@ const (
 // SplitDiffWorker executes a diff between a destination shard and its
 // source shards in a shard split case.
 type SplitDiffWorker struct {
-	wr       *wrangler.Wrangler
-	cell     string
-	keyspace string
-	shard    string
-	cleaner  *wrangler.Cleaner
+	wr        *wrangler.Wrangler
+	cell      string
+	keyspace  string
+	shard     string
+	cleaner   *wrangler.Cleaner
+	ctx       context.Context
+	ctxCancel context.CancelFunc
 
 	// all subsequent fields are protected by the mutex
 	mu    sync.Mutex
@@ -65,12 +67,15 @@ type SplitDiffWorker struct {
 
 // NewSplitDiffWorker returns a new SplitDiffWorker object.
 func NewSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string) Worker {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &SplitDiffWorker{
-		wr:       wr,
-		cell:     cell,
-		keyspace: keyspace,
-		shard:    shard,
-		cleaner:  &wrangler.Cleaner{},
+		wr:        wr,
+		cell:      cell,
+		keyspace:  keyspace,
+		shard:     shard,
+		cleaner:   &wrangler.Cleaner{},
+		ctx:       ctx,
+		ctxCancel: cancel,
 
 		state: stateSDNotSarted,
 	}
@@ -271,7 +276,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 
 	// 1 - stop the master binlog replication, get its current position
 	sdw.wr.Logger().Infof("Stopping master binlog replication on %v", sdw.shardInfo.MasterAlias)
-	ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(sdw.ctx, 60*time.Second)
 	blpPositionList, err := sdw.wr.TabletManagerClient().StopBlp(ctx, masterInfo)
 	cancel()
 	if err != nil {
@@ -299,7 +304,9 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 
 		// stop replication
 		sdw.wr.Logger().Infof("Stopping slave[%v] %v at a minimum of %v", i, sdw.sourceAliases[i], blpPos.Position)
-		stoppedAt, err := sdw.wr.TabletManagerClient().StopSlaveMinimum(context.TODO(), sourceTablet, blpPos.Position, 30*time.Second)
+		ctx, cancel := context.WithTimeout(sdw.ctx, 60*time.Second)
+		stoppedAt, err := sdw.wr.TabletManagerClient().StopSlaveMinimum(ctx, sourceTablet, blpPos.Position, 30*time.Second)
+		cancel()
 		if err != nil {
 			return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", sdw.sourceAliases[i], blpPos.Position, err)
 		}
@@ -319,7 +326,9 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	// 3 - ask the master of the destination shard to resume filtered
 	//     replication up to the new list of positions
 	sdw.wr.Logger().Infof("Restarting master %v until it catches up to %v", sdw.shardInfo.MasterAlias, stopPositionList)
-	masterPos, err := sdw.wr.TabletManagerClient().RunBlpUntil(context.TODO(), masterInfo, &stopPositionList, 30*time.Second)
+	ctx, cancel = context.WithTimeout(sdw.ctx, 60*time.Second)
+	masterPos, err := sdw.wr.TabletManagerClient().RunBlpUntil(ctx, masterInfo, &stopPositionList, 30*time.Second)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("RunBlpUntil for %v until %v failed: %v", sdw.shardInfo.MasterAlias, stopPositionList, err)
 	}
@@ -331,7 +340,9 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	if err != nil {
 		return err
 	}
-	_, err = sdw.wr.TabletManagerClient().StopSlaveMinimum(context.TODO(), destinationTablet, masterPos, 30*time.Second)
+	ctx, cancel = context.WithTimeout(sdw.ctx, 60*time.Second)
+	_, err = sdw.wr.TabletManagerClient().StopSlaveMinimum(ctx, destinationTablet, masterPos, 30*time.Second)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("StopSlaveMinimum for %v at %v failed: %v", sdw.destinationAlias, masterPos, err)
 	}
@@ -344,7 +355,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 
 	// 5 - restart filtered replication on destination master
 	sdw.wr.Logger().Infof("Restarting filtered replication on master %v", sdw.shardInfo.MasterAlias)
-	ctx, cancel = context.WithTimeout(context.TODO(), 60*time.Second)
+	ctx, cancel = context.WithTimeout(sdw.ctx, 60*time.Second)
 	err = sdw.wr.TabletManagerClient().StartBlp(ctx, masterInfo)
 	if err := sdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String()); err != nil {
 		sdw.wr.Logger().Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String(), err)
@@ -372,7 +383,7 @@ func (sdw *SplitDiffWorker) diff() error {
 	wg.Add(1)
 	go func() {
 		var err error
-		ctx, cancel := context.WithTimeout(context.TODO(), 60*time.Second)
+		ctx, cancel := context.WithTimeout(sdw.ctx, 60*time.Second)
 		sdw.destinationSchemaDefinition, err = sdw.wr.GetSchema(ctx, sdw.destinationAlias, nil, nil, false)
 		cancel()
 		rec.RecordError(err)
@@ -383,7 +394,7 @@ func (sdw *SplitDiffWorker) diff() error {
 		wg.Add(1)
 		go func(i int, sourceAlias topo.TabletAlias) {
 			var err error
-			ctx, cancel := context.WithTimeout(context.TODO(), 60*time.Second)
+			ctx, cancel := context.WithTimeout(sdw.ctx, 60*time.Second)
 			sdw.sourceSchemaDefinitions[i], err = sdw.wr.GetSchema(ctx, sourceAlias, nil, nil, false)
 			cancel()
 			rec.RecordError(err)
