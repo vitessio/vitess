@@ -423,6 +423,9 @@ index by_msg (msg)
                              keyspace_id_type=keyspace_id_type)
 
     # then serve replica from the split shards
+    source_tablet = shard_replica
+    destination_tablets = [shard_0_replica, shard_1_replica]
+
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/0', 'replica'],
                     auto_log=True)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
@@ -436,17 +439,8 @@ index by_msg (msg)
     utils.run_vtctl(['MigrateServedTypes', '-reverse', 'test_keyspace/0', 'replica'],
                     auto_log=True)
     # After a backwards migration, queryservice should be enabled on source and disabled on destinations
-    self.assertEqual(
-      utils.is_queryservice_enabled('test_keyspace/0', 'replica'),
-      True,
-      'Queryservice should be enabled on source after a backwards migration'
-    )
-    for shard in ('test_keyspace/-80', 'test_keyspace/80-'):
-      self.assertEqual(
-        utils.is_queryservice_enabled(shard, 'replica'),
-        False,
-        'Queryservice should be disabled on destinations after a backwards migration'
-      )
+    utils.check_tablet_query_service(self, source_tablet, True, False)
+    utils.check_tablet_query_services(self, destination_tablets, False, True)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -\n' +
                              'Partitions(rdonly): -80 80-\n' +
@@ -457,17 +451,8 @@ index by_msg (msg)
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/0', 'replica'],
                     auto_log=True)
     # After a forwards migration, queryservice should be disabled on source and enabled on destinations
-    self.assertEqual(
-      utils.is_queryservice_enabled('test_keyspace/0', 'replica'),
-      False,
-      'Queryservice should be disabled on source after a forwards migration'
-    )
-    for shard in ('test_keyspace/-80', 'test_keyspace/80-'):
-      self.assertEqual(
-        utils.is_queryservice_enabled(shard, 'replica'),
-        True,
-        'Queryservice should be enabled on destinations after a forwards migration'
-      )
+    utils.check_tablet_query_service(self, source_tablet, False, True)
+    utils.check_tablet_query_services(self, destination_tablets, True, False)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -\n' +
                              'Partitions(rdonly): -80 80-\n' +
