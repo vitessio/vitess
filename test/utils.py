@@ -567,6 +567,59 @@ def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
     raise Exception("Got wrong ShardingColumnType in SrvKeyspace: %s" %
                    str(ks))
 
+def check_shard_query_service(testcase, shard_name, tablet_type, expected_state):
+  """Makes assertions about the state of DisableQueryService in the shard record's TabletControlMap."""
+  # We assume that query service should be enabled unless DisableQueryService is explicitly True
+  query_service_enabled = True
+  tablet_control_map = run_vtctl_json(['GetShard', shard_name]).get('TabletControlMap')
+  if tablet_control_map:
+    disable_query_service = tablet_control_map.get(tablet_type, {}).get('DisableQueryService')
+
+    if disable_query_service:
+      query_service_enabled = False
+
+  testcase.assertEqual(
+    query_service_enabled,
+    expected_state,
+    'shard %s does not have the correct query service state: got %s but expected %s' % (shard_name, query_service_enabled, expected_state)
+  )
+
+def check_shard_query_services(testcase, shard_names, tablet_type, expected_state):
+  for shard_names in shard_names:
+    check_shard_query_service(testcase, shard_names, tablet_type, expected_state)
+
+def check_tablet_query_service(testcase, tablet, serving, tablet_control_disabled):
+  """check_tablet_query_service will check that the query service is enabled
+  or disabled on the tablet. It will also check if the tablet control
+  status is the reason for being enabled / disabled.
+
+  It will also run a remote RunHealthCheck to be sure it doesn't change
+  the serving state.
+  """
+  tablet_vars = get_vars(tablet.port)
+  if serving:
+    expected_state = 'SERVING'
+  else:
+    expected_state = 'NOT_SERVING'
+  testcase.assertEqual(tablet_vars['TabletStateName'], expected_state, 'tablet %s is not in the right serving state: got %s expected %s' % (tablet.tablet_alias, tablet_vars['TabletStateName'], expected_state))
+
+  status = tablet.get_status()
+  if tablet_control_disabled:
+    testcase.assertIn("Query Service disabled by TabletControl", status)
+  else:
+    testcase.assertNotIn("Query Service disabled by TabletControl", status)
+
+  if tablet.tablet_type == 'rdonly':
+    run_vtctl(['RunHealthCheck', tablet.tablet_alias, 'rdonly'],
+                    auto_log=True)
+
+    tablet_vars = get_vars(tablet.port)
+    testcase.assertEqual(tablet_vars['TabletStateName'], expected_state, 'tablet %s is not in the right serving state after health check: got %s expected %s' % (tablet.tablet_alias, tablet_vars['TabletStateName'], expected_state))
+
+def check_tablet_query_services(testcase, tablets, serving, tablet_control_disabled):
+  for tablet in tablets:
+    check_tablet_query_service(testcase, tablet, serving, tablet_control_disabled)
+
 def get_status(port):
   return urllib2.urlopen('http://localhost:%u%s' % (port, environment.status_url)).read()
 
