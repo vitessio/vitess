@@ -62,4 +62,20 @@ func TestKnownCells(t *testing.T) {
 	if !reflect.DeepEqual(kc.Cells, []string{"cell1", "cell2"}) {
 		t.Fatalf("Bad cells: %v", kc.Cells)
 	}
+
+	// force a flush and see the version increase again
+	kcc.flush()
+	result, err = kcc.get()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := json.Unmarshal(result, &kc); err != nil {
+		t.Fatalf("bad json: %v", err)
+	}
+	if kc.Version != 3 {
+		t.Fatalf("Got wrong third version: %v", kc.Version)
+	}
+	if !reflect.DeepEqual(kc.Cells, []string{"cell1", "cell2"}) {
+		t.Fatalf("Bad cells: %v", kc.Cells)
+	}
 }

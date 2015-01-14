@@ -59,3 +59,13 @@ func (kcc *knownCellsCache) get() ([]byte, error) {
 
 	return kcc.result, nil
 }
+
+func (kcc *knownCellsCache) flush() {
+	kcc.mu.Lock()
+	defer kcc.mu.Unlock()
+
+	// we reset timestamp and content, so the Version will increase again
+	// and force a client refresh, even if the data is the same.
+	kcc.timestamp = time.Time{}
+	kcc.knownCells.Cells = nil
+}

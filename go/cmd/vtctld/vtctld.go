@@ -332,5 +332,10 @@ func main() {
 		w.Write(result)
 	})
 
+	// flush all data and will force a full client reload
+	http.HandleFunc("/json/flush", func(w http.ResponseWriter, r *http.Request) {
+		knownCellsCache.flush()
+	})
+
 	servenv.RunDefault()
 }
