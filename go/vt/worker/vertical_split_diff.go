@@ -37,11 +37,13 @@ const (
 // VerticalSplitDiffWorker executes a diff between a destination shard and its
 // source shards in a shard split case.
 type VerticalSplitDiffWorker struct {
-	wr       *wrangler.Wrangler
-	cell     string
-	keyspace string
-	shard    string
-	cleaner  *wrangler.Cleaner
+	wr        *wrangler.Wrangler
+	cell      string
+	keyspace  string
+	shard     string
+	cleaner   *wrangler.Cleaner
+	ctx       context.Context
+	ctxCancel context.CancelFunc
 
 	// all subsequent fields are protected by the mutex
 	mu    sync.Mutex
@@ -65,12 +67,15 @@ type VerticalSplitDiffWorker struct {
 
 // NewVerticalSplitDiffWorker returns a new VerticalSplitDiffWorker object.
 func NewVerticalSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string) Worker {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &VerticalSplitDiffWorker{
-		wr:       wr,
-		cell:     cell,
-		keyspace: keyspace,
-		shard:    shard,
-		cleaner:  &wrangler.Cleaner{},
+		wr:        wr,
+		cell:      cell,
+		keyspace:  keyspace,
+		shard:     shard,
+		cleaner:   &wrangler.Cleaner{},
+		ctx:       ctx,
+		ctxCancel: cancel,
 
 		state: stateVSDNotSarted,
 	}
@@ -277,7 +282,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 
 	// 1 - stop the master binlog replication, get its current position
 	vsdw.wr.Logger().Infof("Stopping master binlog replication on %v", vsdw.shardInfo.MasterAlias)
-	ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(vsdw.ctx, 60*time.Second)
 	blpPositionList, err := vsdw.wr.TabletManagerClient().StopBlp(ctx, masterInfo)
 	cancel()
 	if err != nil {
@@ -303,7 +308,9 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 	if err != nil {
 		return err
 	}
-	stoppedAt, err := vsdw.wr.TabletManagerClient().StopSlaveMinimum(context.TODO(), sourceTablet, pos.Position, 30*time.Second)
+	ctx, cancel = context.WithTimeout(vsdw.ctx, 60*time.Second)
+	stoppedAt, err := vsdw.wr.TabletManagerClient().StopSlaveMinimum(ctx, sourceTablet, pos.Position, 30*time.Second)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", vsdw.sourceAlias, pos.Position, err)
 	}
@@ -322,7 +329,9 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 	// 3 - ask the master of the destination shard to resume filtered
 	//     replication up to the new list of positions
 	vsdw.wr.Logger().Infof("Restarting master %v until it catches up to %v", vsdw.shardInfo.MasterAlias, stopPositionList)
-	masterPos, err := vsdw.wr.TabletManagerClient().RunBlpUntil(context.TODO(), masterInfo, &stopPositionList, 30*time.Second)
+	ctx, cancel = context.WithTimeout(vsdw.ctx, 60*time.Second)
+	masterPos, err := vsdw.wr.TabletManagerClient().RunBlpUntil(ctx, masterInfo, &stopPositionList, 30*time.Second)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("RunBlpUntil on %v until %v failed: %v", vsdw.shardInfo.MasterAlias, stopPositionList, err)
 	}
@@ -334,7 +343,9 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 	if err != nil {
 		return err
 	}
-	_, err = vsdw.wr.TabletManagerClient().StopSlaveMinimum(context.TODO(), destinationTablet, masterPos, 30*time.Second)
+	ctx, cancel = context.WithTimeout(vsdw.ctx, 60*time.Second)
+	_, err = vsdw.wr.TabletManagerClient().StopSlaveMinimum(ctx, destinationTablet, masterPos, 30*time.Second)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("StopSlaveMinimum on %v at %v failed: %v", vsdw.destinationAlias, masterPos, err)
 	}
@@ -347,7 +358,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 
 	// 5 - restart filtered replication on destination master
 	vsdw.wr.Logger().Infof("Restarting filtered replication on master %v", vsdw.shardInfo.MasterAlias)
-	ctx, cancel = context.WithTimeout(context.TODO(), 30*time.Second)
+	ctx, cancel = context.WithTimeout(vsdw.ctx, 60*time.Second)
 	err = vsdw.wr.TabletManagerClient().StartBlp(ctx, masterInfo)
 	if err := vsdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, vsdw.shardInfo.MasterAlias.String()); err != nil {
 		vsdw.wr.Logger().Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, vsdw.shardInfo.MasterAlias.String(), err)
@@ -374,7 +385,7 @@ func (vsdw *VerticalSplitDiffWorker) diff() error {
 	wg.Add(1)
 	go func() {
 		var err error
-		ctx, cancel := context.WithTimeout(context.TODO(), 60*time.Second)
+		ctx, cancel := context.WithTimeout(vsdw.ctx, 60*time.Second)
 		vsdw.destinationSchemaDefinition, err = vsdw.wr.GetSchema(ctx, vsdw.destinationAlias, nil, nil, false)
 		cancel()
 		rec.RecordError(err)
@@ -384,7 +395,7 @@ func (vsdw *VerticalSplitDiffWorker) diff() error {
 	wg.Add(1)
 	go func() {
 		var err error
-		ctx, cancel := context.WithTimeout(context.TODO(), 60*time.Second)
+		ctx, cancel := context.WithTimeout(vsdw.ctx, 60*time.Second)
 		vsdw.sourceSchemaDefinition, err = vsdw.wr.GetSchema(ctx, vsdw.sourceAlias, nil, nil, false)
 		cancel()
 		rec.RecordError(err)

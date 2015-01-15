@@ -15,6 +15,7 @@ import (
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/sync2"
@@ -141,19 +142,21 @@ func qps(cell string, keyspaces []string) {
 }
 
 func main() {
+	defer exit.Recover()
 	defer logutil.Flush()
 
 	flag.Parse()
 	args := flag.Args()
 	if len(args) == 0 {
 		flag.Usage()
-		os.Exit(1)
+		exit.Return(1)
 	}
 
 	if *cpuProfile != "" {
 		f, err := os.Create(*cpuProfile)
 		if err != nil {
-			log.Fatal(err)
+			log.Error(err)
+			exit.Return(1)
 		}
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
@@ -164,7 +167,8 @@ func main() {
 		if len(args) == 1 {
 			getSrvKeyspaceNames(rpcClient, args[0], true)
 		} else {
-			log.Fatalf("getSrvKeyspaceNames only takes one argument")
+			log.Errorf("getSrvKeyspaceNames only takes one argument")
+			exit.Return(1)
 		}
 
 	} else if *mode == "getSrvKeyspace" {
@@ -172,7 +176,8 @@ func main() {
 		if len(args) == 2 {
 			getSrvKeyspace(rpcClient, args[0], args[1], true)
 		} else {
-			log.Fatalf("getSrvKeyspace only takes two arguments")
+			log.Errorf("getSrvKeyspace only takes two arguments")
+			exit.Return(1)
 		}
 
 	} else if *mode == "getEndPoints" {
@@ -180,7 +185,8 @@ func main() {
 		if len(args) == 4 {
 			getEndPoints(rpcClient, args[0], args[1], args[2], args[3], true)
 		} else {
-			log.Fatalf("getEndPoints only takes four arguments")
+			log.Errorf("getEndPoints only takes four arguments")
+			exit.Return(1)
 		}
 
 	} else if *mode == "qps" {
@@ -188,6 +194,7 @@ func main() {
 
 	} else {
 		flag.Usage()
-		log.Fatalf("Invalid mode: %v", *mode)
+		log.Errorf("Invalid mode: %v", *mode)
+		exit.Return(1)
 	}
 }

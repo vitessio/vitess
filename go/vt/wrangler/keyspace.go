@@ -171,13 +171,20 @@ func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard stri
 		rec.RecordError(wr.RebuildKeyspaceGraph(ctx, keyspace, nil))
 	}
 
-	// Send a refresh to the source tablets we just disabled, iff:
+	// Send a refresh to the tablets we just disabled, iff:
 	// - we're not migrating a master
-	// - it is not a reverse migration
 	// - we don't have any errors
 	// - we're not told to skip the refresh
-	if servedType != topo.TYPE_MASTER && !reverse && !rec.HasErrors() && !skipReFreshState {
-		for _, si := range sourceShards {
+	if servedType != topo.TYPE_MASTER && !rec.HasErrors() && !skipReFreshState {
+		var refreshShards []*topo.ShardInfo
+		if reverse {
+			// For a backwards migration, we just disabled query service on the destination shards
+			refreshShards = destinationShards
+		} else {
+			// For a forwards migration, we just disabled query service on the source shards
+			refreshShards = sourceShards
+		}
+		for _, si := range refreshShards {
 			rec.RecordError(wr.RefreshTablesByShard(ctx, si, servedType, cells))
 		}
 	}
@@ -388,9 +395,29 @@ func (wr *Wrangler) migrateServedTypes(ctx context.Context, keyspace string, sou
 			}
 		}
 	}
+	// We remember if we need to refresh the state of the destination tablets
+	// so their query service will be enabled.
+	needToRefreshDestinationTablets := false
 	for _, si := range destinationShards {
 		if err := si.UpdateServedTypesMap(servedType, cells, reverse); err != nil {
 			return err
+		}
+		if tc, ok := si.TabletControlMap[servedType]; !reverse && ok && tc.DisableQueryService {
+			// This is a forwards migration, and the destination query service was already in a disabled state.
+			// We need to enable and force a refresh, otherwise it's possible that both the source and destination
+			// will have query service disabled at the same time, and queries would have nowhere to go.
+			if err := si.UpdateDisableQueryService(servedType, cells, false); err != nil {
+				return err
+			}
+			needToRefreshDestinationTablets = true
+		}
+		if reverse && servedType != topo.TYPE_MASTER {
+			// this is a backwards migration, we need to disable
+			// query service on the destination shards.
+			// (we're not allowed to reverse a master migration)
+			if err := si.UpdateDisableQueryService(servedType, cells, true); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -411,6 +438,12 @@ func (wr *Wrangler) migrateServedTypes(ctx context.Context, keyspace string, sou
 	for _, si := range destinationShards {
 		if err := topo.UpdateShard(ctx, wr.ts, si); err != nil {
 			return err
+		}
+	}
+	if needToRefreshDestinationTablets {
+		event.DispatchUpdate(ev, "refreshing destination shard tablets so they restart their query service")
+		for _, si := range destinationShards {
+			wr.RefreshTablesByShard(ctx, si, servedType, cells)
 		}
 	}
 

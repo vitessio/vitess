@@ -7,6 +7,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/vt/janitor"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -44,6 +45,8 @@ func init() {
 }
 
 func main() {
+	defer exit.Recover()
+
 	flag.Parse()
 	servenv.Init()
 
@@ -51,11 +54,13 @@ func main() {
 
 	scheduler, err := janitor.New(*keyspace, *shard, ts, wrangler.New(logutil.NewConsoleLogger(), ts, *lockTimeout), *sleepTime)
 	if err != nil {
-		log.Fatalf("janitor.New: %v", err)
+		log.Errorf("janitor.New: %v", err)
+		exit.Return(1)
 	}
 
 	if len(activeModules)+len(dryRunModules) < 1 {
-		log.Fatal("no modules to run specified")
+		log.Error("no modules to run specified")
+		exit.Return(1)
 	}
 
 	scheduler.Enable(activeModules)
