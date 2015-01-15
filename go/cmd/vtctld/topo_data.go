@@ -9,6 +9,15 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
+// This file includes the support for serving topo data to an ajax-based
+// front-end. There are three ways we collect data:
+// - reading topology records that don't change too often, caching them
+//   with a somewhat big TTL, and have a 'flush' command in case it's needed.
+//   (list of cells, tablets in a cell/shard, ...)
+// - subscribing to topology change channels (serving graph)
+// - establishing streaming connections to vttablets to get up-to-date
+//   health reports.
+
 // KnownCells is the toplevel stuct we convert to json to return to clients
 type KnownCells struct {
 	// Version is the version number for that object. If it hasn't changed,
