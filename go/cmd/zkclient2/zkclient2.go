@@ -85,9 +85,6 @@ func getSrvKeyspace(rpcClient *rpcplus.Client, cell, keyspace string, verbose bo
 				println(fmt.Sprintf("  Shards[%v]=%v", i, s.KeyRange.String()))
 			}
 		}
-		for i, s := range reply.Shards {
-			println(fmt.Sprintf("Shards[%v]=%v", i, s.KeyRange.String()))
-		}
 		for i, t := range reply.TabletTypes {
 			println(fmt.Sprintf("TabletTypes[%v] = %v", i, t))
 		}

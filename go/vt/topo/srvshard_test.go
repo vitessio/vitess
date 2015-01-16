@@ -14,7 +14,6 @@ import (
 
 type reflectSrvKeyspace struct {
 	Partitions         map[string]*KeyspacePartition
-	Shards             []SrvShard
 	TabletTypes        []TabletType
 	ShardingColumnName string
 	ShardingColumnType key.KeyspaceIdType
@@ -26,7 +25,6 @@ type reflectSrvKeyspace struct {
 type extraSrvKeyspace struct {
 	Extra              int
 	Partitions         map[TabletType]*KeyspacePartition
-	Shards             []SrvShard
 	TabletTypes        []TabletType
 	ShardingColumnName string
 	ShardingColumnType key.KeyspaceIdType
@@ -73,7 +71,6 @@ func TestSrvKeySpace(t *testing.T) {
 				},
 			},
 		},
-		Shards:             []SrvShard{},
 		TabletTypes:        []TabletType{TYPE_MASTER},
 		ShardingColumnName: "video_id",
 		ShardingColumnType: key.KIT_UINT64,

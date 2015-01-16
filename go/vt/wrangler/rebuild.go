@@ -46,7 +46,6 @@ func (wr *Wrangler) findCellsForRebuild(ki *topo.KeyspaceInfo, shardMap map[stri
 			}
 			if _, ok := srvKeyspaceMap[cell]; !ok {
 				srvKeyspaceMap[cell] = &topo.SrvKeyspace{
-					Shards:             make([]topo.SrvShard, 0, 16),
 					ShardingColumnName: ki.ShardingColumnName,
 					ShardingColumnType: ki.ShardingColumnType,
 					ServedFrom:         ki.ComputeCellServedFrom(cell),
@@ -182,7 +181,6 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 func (wr *Wrangler) checkPartitions(cell string, srvKeyspace *topo.SrvKeyspace) error {
 
 	// now check them all
-	first := true
 	for tabletType, partition := range srvKeyspace.Partitions {
 		topo.SrvShardArray(partition.Shards).Sort()
 
@@ -198,12 +196,6 @@ func (wr *Wrangler) checkPartitions(cell string, srvKeyspace *topo.SrvKeyspace) 
 			if partition.Shards[i].KeyRange.End != partition.Shards[i+1].KeyRange.Start {
 				return fmt.Errorf("non-contiguous KeyRange values for %v in cell %v at shard %v to %v: %v != %v", tabletType, cell, i, i+1, partition.Shards[i].KeyRange.End.Hex(), partition.Shards[i+1].KeyRange.Start.Hex())
 			}
-		}
-
-		// backfill Shards
-		if first {
-			first = false
-			srvKeyspace.Shards = partition.Shards
 		}
 	}
 

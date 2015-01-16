@@ -124,10 +124,10 @@ func (sc *ShardedConn) readKeyspace() error {
 		return fmt.Errorf("vt: GetSrvKeyspace failed %v", err)
 	}
 
-	sc.conns = make([]*tablet.VtConn, len(sc.srvKeyspace.Shards))
-	sc.shardMaxKeys = make([]key.KeyspaceId, len(sc.srvKeyspace.Shards))
+	sc.conns = make([]*tablet.VtConn, len(sc.srvKeyspace.Partitions[sc.tabletType].Shards))
+	sc.shardMaxKeys = make([]key.KeyspaceId, len(sc.srvKeyspace.Partitions[sc.tabletType].Shards))
 
-	for i, srvShard := range sc.srvKeyspace.Shards {
+	for i, srvShard := range sc.srvKeyspace.Partitions[sc.tabletType].Shards {
 		sc.shardMaxKeys[i] = srvShard.KeyRange.End
 	}
 
@@ -526,7 +526,7 @@ func (sc *ShardedConn) ExecuteBatch(queryList []ClientQuery, keyVal interface{})
 */
 
 func (sc *ShardedConn) dial(shardIdx int) (conn *tablet.VtConn, err error) {
-	srvShard := &(sc.srvKeyspace.Shards[shardIdx])
+	srvShard := &(sc.srvKeyspace.Partitions[sc.tabletType].Shards[shardIdx])
 	shard := fmt.Sprintf("%v-%v", srvShard.KeyRange.Start.Hex(), srvShard.KeyRange.End.Hex())
 	// Hack to handle non-range based shards.
 	if !srvShard.KeyRange.IsPartial() {
