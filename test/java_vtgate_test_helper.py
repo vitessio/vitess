@@ -78,7 +78,7 @@ class TestEnv(object):
         if self.vschema[0] == '{':
           utils.run_vtctl(['ApplyVSchema', "-vschema", self.vschema])
         else:
-          utils.run_vtctl(['ApplyVSchema', "-vschema-file", self.vschema])
+          utils.run_vtctl(['ApplyVSchema', "-vschema_file", self.vschema])
       self.vtgate_server, self.vtgate_port = utils.vtgate_start(cache_ttl='500s')
       vtgate_client = zkocc.ZkOccConnection("localhost:%u" % self.vtgate_port, "test_nj", 30.0)
       topology.read_topology(vtgate_client)

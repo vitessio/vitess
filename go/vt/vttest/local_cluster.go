@@ -64,16 +64,16 @@ func run(shardNames []string, replicas, rdonly int, keyspace, schema, vschema, o
 	return cmd.Run()
 }
 
-// Launch launches the cluster. Only one cluster can be active at a time.
-func Launch(shardNames []string, replicas, rdonly int, keyspace, schema, vschema string) error {
+// LocalLaunch launches the cluster. Only one cluster can be active at a time.
+func LocalLaunch(shardNames []string, replicas, rdonly int, keyspace, schema, vschema string) error {
 	err := run(shardNames, replicas, rdonly, keyspace, schema, vschema, "setup")
 	if err != nil {
-		Teardown()
+		LocalTeardown()
 	}
 	return err
 }
 
-// Teardown shuts down the previously launched cluster.
-func Teardown() error {
+// LocalTeardown shuts down the previously launched cluster.
+func LocalTeardown() error {
 	return run(curShardNames, curReplicas, curRdonly, curKeyspace, curSchema, curVSchema, "teardown")
 }

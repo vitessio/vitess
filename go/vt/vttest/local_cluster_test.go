@@ -6,13 +6,13 @@ package vttest
 
 import "testing"
 
-func TestLaunch(t *testing.T) {
+func TestLocalLaunch(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode.")
 	}
 
-	defer Teardown()
-	err := Launch(
+	defer LocalTeardown()
+	err := LocalLaunch(
 		[]string{"-80", "80-"},
 		1,
 		0,
