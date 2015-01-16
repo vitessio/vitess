@@ -423,6 +423,9 @@ index by_msg (msg)
                              keyspace_id_type=keyspace_id_type)
 
     # then serve replica from the split shards
+    source_tablet = shard_replica
+    destination_tablets = [shard_0_replica, shard_1_replica]
+
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/0', 'replica'],
                     auto_log=True)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
@@ -435,20 +438,28 @@ index by_msg (msg)
     # move replica back and forth
     utils.run_vtctl(['MigrateServedTypes', '-reverse', 'test_keyspace/0', 'replica'],
                     auto_log=True)
+    # After a backwards migration, queryservice should be enabled on source and disabled on destinations
+    utils.check_tablet_query_service(self, source_tablet, True, False)
+    utils.check_tablet_query_services(self, destination_tablets, False, True)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -\n' +
                              'Partitions(rdonly): -80 80-\n' +
                              'Partitions(replica): -\n' +
                              'TabletTypes: master,rdonly,replica',
                              keyspace_id_type=keyspace_id_type)
+
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/0', 'replica'],
                     auto_log=True)
+    # After a forwards migration, queryservice should be disabled on source and enabled on destinations
+    utils.check_tablet_query_service(self, source_tablet, False, True)
+    utils.check_tablet_query_services(self, destination_tablets, True, False)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -\n' +
                              'Partitions(rdonly): -80 80-\n' +
                              'Partitions(replica): -80 80-\n' +
                              'TabletTypes: master,rdonly,replica',
                              keyspace_id_type=keyspace_id_type)
+
 
     # then serve master from the split shards
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/0', 'master'],

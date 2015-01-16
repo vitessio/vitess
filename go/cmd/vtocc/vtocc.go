@@ -7,9 +7,11 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io/ioutil"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
@@ -33,19 +35,23 @@ func init() {
 }
 
 func main() {
+	defer exit.Recover()
+
 	flags := dbconfigs.AppConfig | dbconfigs.DbaConfig |
 		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
 	dbconfigs.RegisterFlags(flags)
 	flag.Parse()
 	if len(flag.Args()) > 0 {
 		flag.Usage()
-		log.Fatalf("vtocc doesn't take any positional arguments")
+		log.Errorf("vtocc doesn't take any positional arguments")
+		exit.Return(1)
 	}
 	servenv.Init()
 
 	dbConfigs, err := dbconfigs.Init("", flags)
 	if err != nil {
-		log.Fatalf("Cannot initialize App dbconfig: %v", err)
+		log.Errorf("Cannot initialize App dbconfig: %v", err)
+		exit.Return(1)
 	}
 	if *enableRowcache {
 		dbConfigs.App.EnableRowcache = true
@@ -56,7 +62,10 @@ func main() {
 	mycnf := &mysqlctl.Mycnf{BinLogPath: *binlogPath}
 	mysqld := mysqlctl.NewMysqld("Dba", mycnf, &dbConfigs.Dba, &dbConfigs.Repl)
 
-	unmarshalFile(*overridesFile, &schemaOverrides)
+	if err := unmarshalFile(*overridesFile, &schemaOverrides); err != nil {
+		log.Error(err)
+		exit.Return(1)
+	}
 	data, _ := json.MarshalIndent(schemaOverrides, "", "  ")
 	log.Infof("schemaOverrides: %s\n", data)
 
@@ -78,14 +87,15 @@ func main() {
 	servenv.RunDefault()
 }
 
-func unmarshalFile(name string, val interface{}) {
+func unmarshalFile(name string, val interface{}) error {
 	if name != "" {
 		data, err := ioutil.ReadFile(name)
 		if err != nil {
-			log.Fatalf("could not read %v: %v", val, err)
+			return fmt.Errorf("unmarshalFile: could not read %v: %v", val, err)
 		}
 		if err = json.Unmarshal(data, val); err != nil {
-			log.Fatalf("could not read %s: %v", val, err)
+			return fmt.Errorf("unmarshalFile: could not read %s: %v", val, err)
 		}
 	}
+	return nil
 }

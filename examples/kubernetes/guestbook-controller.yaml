@@ -1,0 +1,21 @@
+apiVersion: v1beta1
+kind: ReplicationController
+id: guestbook
+desiredState:
+  replicas: 3
+  replicaSelector: {name: guestbook}
+  podTemplate:
+    desiredState:
+      manifest:
+        version: v1beta1
+        id: guestbook
+        containers:
+          - name: guestbook
+            image: vitess/guestbook
+            ports:
+              - name: http-server
+                containerPort: 8080
+    labels:
+      name: guestbook
+labels:
+  name: guestbook

@@ -51,6 +51,8 @@ type SplitCloneWorker struct {
 	minTableSizeForSplit   uint64
 	destinationWriterCount int
 	cleaner                *wrangler.Cleaner
+	ctx                    context.Context
+	ctxCancel              context.CancelFunc
 
 	// all subsequent fields are protected by the mutex
 	mu    sync.Mutex
@@ -87,6 +89,7 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, ex
 	if err != nil {
 		return nil, err
 	}
+	ctx, cancel := context.WithCancel(context.Background())
 	return &SplitCloneWorker{
 		wr:                     wr,
 		cell:                   cell,
@@ -99,6 +102,8 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, ex
 		minTableSizeForSplit:   minTableSizeForSplit,
 		destinationWriterCount: destinationWriterCount,
 		cleaner:                &wrangler.Cleaner{},
+		ctx:                    ctx,
+		ctxCancel:              cancel,
 
 		state: stateSCNotSarted,
 		ev: &events.SplitClone{
@@ -325,7 +330,7 @@ func (scw *SplitCloneWorker) findTargets() error {
 			return fmt.Errorf("cannot read tablet %v: %v", alias, err)
 		}
 
-		ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(scw.ctx, 60*time.Second)
 		err := scw.wr.TabletManagerClient().StopSlave(ctx, scw.sourceTablets[i])
 		cancel()
 		if err != nil {
@@ -356,14 +361,18 @@ func (scw *SplitCloneWorker) findMasterTargets() error {
 	scw.reloadTablets = make([]map[topo.TabletAlias]*topo.TabletInfo, len(scw.destinationShards))
 
 	for shardIndex, si := range scw.destinationShards {
-		scw.reloadAliases[shardIndex], err = topo.FindAllTabletAliasesInShard(context.TODO(), scw.wr.TopoServer(), si.Keyspace(), si.ShardName())
+		ctx, cancel := context.WithTimeout(scw.ctx, 60*time.Second)
+		scw.reloadAliases[shardIndex], err = topo.FindAllTabletAliasesInShard(ctx, scw.wr.TopoServer(), si.Keyspace(), si.ShardName())
+		cancel()
 		if err != nil {
 			return fmt.Errorf("cannot find all reload target tablets in %v/%v: %v", si.Keyspace(), si.ShardName(), err)
 		}
 		scw.wr.Logger().Infof("Found %v reload target aliases in shard %v/%v", len(scw.reloadAliases[shardIndex]), si.Keyspace(), si.ShardName())
 
 		// get the TabletInfo for all targets
-		scw.reloadTablets[shardIndex], err = topo.GetTabletMap(context.TODO(), scw.wr.TopoServer(), scw.reloadAliases[shardIndex])
+		ctx, cancel = context.WithTimeout(scw.ctx, 60*time.Second)
+		scw.reloadTablets[shardIndex], err = topo.GetTabletMap(ctx, scw.wr.TopoServer(), scw.reloadAliases[shardIndex])
+		cancel()
 		if err != nil {
 			return fmt.Errorf("cannot read all reload target tablets in %v/%v: %v", si.Keyspace(), si.ShardName(), err)
 		}
@@ -401,7 +410,7 @@ func (scw *SplitCloneWorker) copy() error {
 	// on all source shards. Furthermore, we estimate the number of rows
 	// in each source shard for each table to be about the same
 	// (rowCount is used to estimate an ETA)
-	ctx, cancel := context.WithTimeout(context.TODO(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(scw.ctx, 60*time.Second)
 	sourceSchemaDefinition, err := scw.wr.GetSchema(ctx, scw.sourceAliases[0], nil, scw.excludeTables, true)
 	cancel()
 	if err != nil {
@@ -486,7 +495,7 @@ func (scw *SplitCloneWorker) copy() error {
 					destinationWaitGroup.Add(1)
 					go func() {
 						defer destinationWaitGroup.Done()
-						if err := executeFetchLoop(scw.wr, ti, insertChannel, abort, disableBinLogs); err != nil {
+						if err := executeFetchLoop(scw.ctx, scw.wr, ti, insertChannel, abort, disableBinLogs); err != nil {
 							processError("executeFetchLoop failed: %v", err)
 						}
 					}()
@@ -507,7 +516,7 @@ func (scw *SplitCloneWorker) copy() error {
 
 			rowSplitter := NewRowSplitter(scw.destinationShards, scw.keyspaceInfo.ShardingColumnType, columnIndexes[tableIndex])
 
-			chunks, err := findChunks(scw.wr, scw.sourceTablets[shardIndex], td, scw.minTableSizeForSplit, scw.sourceReaderCount)
+			chunks, err := findChunks(scw.ctx, scw.wr, scw.sourceTablets[shardIndex], td, scw.minTableSizeForSplit, scw.sourceReaderCount)
 			if err != nil {
 				return err
 			}
@@ -564,7 +573,7 @@ func (scw *SplitCloneWorker) copy() error {
 
 		// get the current position from the sources
 		for shardIndex := range scw.sourceShards {
-			ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(scw.ctx, 60*time.Second)
 			status, err := scw.wr.TabletManagerClient().SlaveStatus(ctx, scw.sourceTablets[shardIndex])
 			cancel()
 			if err != nil {
@@ -580,7 +589,7 @@ func (scw *SplitCloneWorker) copy() error {
 				go func(ti *topo.TabletInfo) {
 					defer destinationWaitGroup.Done()
 					scw.wr.Logger().Infof("Making and populating blp_checkpoint table on tablet %v", ti.Alias)
-					if err := runSqlCommands(scw.wr, ti, queries, abort, disableBinLogs); err != nil {
+					if err := runSqlCommands(scw.ctx, scw.wr, ti, queries, abort, disableBinLogs); err != nil {
 						processError("blp_checkpoint queries failed on tablet %v: %v", ti.Alias, err)
 					}
 				}(scw.destinationTablets[shardIndex][tabletAlias])
@@ -601,7 +610,7 @@ func (scw *SplitCloneWorker) copy() error {
 	} else {
 		for _, si := range scw.destinationShards {
 			scw.wr.Logger().Infof("Setting SourceShard on shard %v/%v", si.Keyspace(), si.ShardName())
-			ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(scw.ctx, 60*time.Second)
 			err := scw.wr.SetSourceShards(ctx, si.Keyspace(), si.ShardName(), scw.sourceAliases, nil)
 			cancel()
 			if err != nil {
@@ -619,7 +628,7 @@ func (scw *SplitCloneWorker) copy() error {
 			go func(ti *topo.TabletInfo) {
 				defer destinationWaitGroup.Done()
 				scw.wr.Logger().Infof("Reloading schema on tablet %v", ti.Alias)
-				ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+				ctx, cancel := context.WithTimeout(scw.ctx, 60*time.Second)
 				err := scw.wr.TabletManagerClient().ReloadSchema(ctx, ti)
 				cancel()
 				if err != nil {

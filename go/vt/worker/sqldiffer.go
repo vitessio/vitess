@@ -50,10 +50,12 @@ type SourceSpec struct {
 // database: any row in the subset spec needs to have a conuterpart in
 // the superset spec.
 type SQLDiffWorker struct {
-	wr      *wrangler.Wrangler
-	cell    string
-	shard   string
-	cleaner *wrangler.Cleaner
+	wr        *wrangler.Wrangler
+	cell      string
+	shard     string
+	cleaner   *wrangler.Cleaner
+	ctx       context.Context
+	ctxCancel context.CancelFunc
 
 	// alias in the following 2 fields is during
 	// SQLDifferFindTargets, read-only after that.
@@ -70,13 +72,17 @@ type SQLDiffWorker struct {
 
 // NewSQLDiffWorker returns a new SQLDiffWorker object.
 func NewSQLDiffWorker(wr *wrangler.Wrangler, cell string, superset, subset SourceSpec) Worker {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &SQLDiffWorker{
-		wr:       wr,
-		cell:     cell,
-		superset: superset,
-		subset:   subset,
-		cleaner:  new(wrangler.Cleaner),
-		state:    sqlDiffNotSarted,
+		wr:        wr,
+		cell:      cell,
+		superset:  superset,
+		subset:    subset,
+		cleaner:   new(wrangler.Cleaner),
+		ctx:       ctx,
+		ctxCancel: cancel,
+
+		state: sqlDiffNotSarted,
 	}
 }
 
@@ -228,7 +234,7 @@ func (worker *SQLDiffWorker) synchronizeReplication() error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(worker.ctx, 60*time.Second)
 	err = worker.wr.TabletManagerClient().StopSlave(ctx, subsetTablet)
 	cancel()
 	if err != nil {
@@ -259,7 +265,7 @@ func (worker *SQLDiffWorker) synchronizeReplication() error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel = context.WithTimeout(context.TODO(), 30*time.Second)
+	ctx, cancel = context.WithTimeout(worker.ctx, 60*time.Second)
 	err = worker.wr.TabletManagerClient().StopSlave(ctx, supersetTablet)
 	cancel()
 	if err != nil {

@@ -321,5 +321,21 @@ func main() {
 		http.Redirect(w, r, target, http.StatusFound)
 	})
 
+	// serve some data
+	knownCellsCache := newKnownCellsCache(ts)
+	http.HandleFunc("/json/KnownCells", func(w http.ResponseWriter, r *http.Request) {
+		result, err := knownCellsCache.get()
+		if err != nil {
+			httpError(w, "error getting topology: %v", err)
+			return
+		}
+		w.Write(result)
+	})
+
+	// flush all data and will force a full client reload
+	http.HandleFunc("/json/flush", func(w http.ResponseWriter, r *http.Request) {
+		knownCellsCache.flush()
+	})
+
 	servenv.RunDefault()
 }

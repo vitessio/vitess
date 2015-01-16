@@ -8,8 +8,9 @@ to get Kubernetes up and running if you haven't already.
 
 ## Requirements
 
-This example currently assumes Kubernetes v0.7.x. We recommend downloading a
-[binary release](https://github.com/GoogleCloudPlatform/kubernetes/releases).
+This example was most recently tested with the
+[binary release](https://github.com/GoogleCloudPlatform/kubernetes/releases)
+of Kubernetes v0.8.1.
 
 The easiest way to run the local commands like vtctl is just to install
 [Docker](https://www.docker.com/)
@@ -35,30 +36,6 @@ You can check the status of the pods with *kubecfg.sh list pods* or by using the
 [Kubernetes web interface](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/ux.md).
 Note that it may take a while for each minion to download the Docker images the
 first time it needs them, during which time the pod status will be *Pending*.
-
-Once your etcd clusters are running, you need to make a record in the global
-cell to tell Vitess how to find the other etcd cells. In this case, we only
-have one cell named 'test'. Since we don't want to serve etcd on external IPs,
-you'll need to SSH into one of your minions and use internal IPs.
-
-For example, if you are running
-[Kubernetes on Google Compute Engine](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/getting-started-guides/gce.md):
-
-```
-# find the service IPs
-$ kubecfg.sh list services
-Name                Labels                  Selector                                  IP                  Port
-----------          ----------              ----------                                ----------          ----------
-etcd-test           cell=test,name=etcd     cell=test,name=etcd                       10.0.207.54         4001
-etcd-global         cell=global,name=etcd   cell=global,name=etcd                     10.0.86.120         4001
-
-# log in to a minion
-$ gcloud compute ssh kubernetes-minion-1
-
-# create a node in the global etcd that points to the 'test' cell
-kubernetes-minion-1:~$ curl -L http://10.0.86.120:4001/v2/keys/vt/cells/test -XPUT -d value=http://10.0.207.54:4001
-{"action":"set","node":{"key":"/vt/cells/test","value":"http://10.0.207.54:4001","modifiedIndex":9,"createdIndex":9}}
-```
 
 In general, each *-up.sh* script in this example has a corresponding *-down.sh*
 in case you want to stop certain pieces without bringing down the whole cluster.
@@ -93,7 +70,7 @@ $ gcloud compute forwarding-rules list
 NAME   REGION      IP_ADDRESS    IP_PROTOCOL TARGET
 vtctld us-central1 12.34.56.78   TCP         us-central1/targetPools/vtctld
 
-# now load up vtctld on http://12.34.56.78:15000/
+# now access vtctld at http://12.34.56.78:15000/
 ```
 
 ## Issuing commands with vtctlclient
@@ -230,33 +207,42 @@ vitess/examples/kubernetes$ kvtctl ApplySchemaKeyspace -simple -sql "$(cat creat
 
 Clients send queries to Vitess through vtgate, which routes them to the
 correct vttablet(s) behind the scenes. In Kubernetes, we define a vtgate
-service with an external IP that load balances connections to a pool of
-vtgate pods curated by a
+service that distributes connections to a pool of vtgate pods curated by a
 [replication controller](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/replication-controller.md).
 
 ```
 vitess/examples/kubernetes$ ./vtgate-up.sh
 ```
 
-## Creating a client app
+## Launching the sample GuestBook app
 
-The file *client.py* contains a simple example app that connects to vtgate
-and executes some queries.
+The GuestBook app in this example is ported from the
+[Kubernetes GuestBook example](https://github.com/GoogleCloudPlatform/kubernetes/tree/master/examples/guestbook-go).
+The server-side code has been rewritten in Python to use Vitess as the storage
+engine. The client-side code (HTML/JavaScript) is essentially unchanged.
 
 ```
-# open vtgate port
-$ gcloud compute firewall-rules create vtgate --allow tcp:15001
+vitess/examples/kubernetes$ ./guestbook-up.sh
 
-# get external IP for vtgate service
+# open port 3000 in the firewall
+$ gcloud compute firewall-rules create guestbook --allow tcp:3000
+
+# find the external IP of the load balancer for the guestbook service
 $ gcloud compute forwarding-rules list
-NAME   REGION      IP_ADDRESS      IP_PROTOCOL TARGET
-vtgate us-central1 123.123.123.123 TCP         us-central1/targetPools/vtgate
-
-# run client.py
-$ sudo docker run -ti --rm vitess/base bash -c '$VTTOP/examples/kubernetes/client.py --server=123.123.123.123:15001'
-Inserting into master...
-Reading from master...
-(1L, 'V is for speed')
-Reading from replica...
-(1L, 'V is for speed')
+NAME      REGION      IP_ADDRESS     IP_PROTOCOL TARGET
+guestbook us-central1 1.2.3.4        TCP         us-central1/targetPools/guestbook
+vtctld    us-central1 12.34.56.78    TCP         us-central1/targetPools/vtctld
 ```
+
+Once the pods are running, the GuestBook should be accessible from port 3000 on
+the external IP, for example: http://1.2.3.4:3000/
+
+Try opening multiple browser windows of the app, and adding an entry on one
+side. The JavaScript on each page polls the app server once a second, so the
+other windows should update automatically. Since the app serves read-only
+requests by querying Vitess in 'replica' mode, this confirms that replication
+is working.
+
+See the
+[GuestBook source](https://github.com/youtube/vitess/tree/master/examples/kubernetes/guestbook)
+for more details.
