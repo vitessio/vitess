@@ -266,6 +266,13 @@ var commands = []commandGroup{
 			command{"ValidatePermissionsKeyspace", commandValidatePermissionsKeyspace,
 				"<keyspace name>",
 				"Validate the master permissions from shard 0 match all the other tablets in the keyspace."},
+
+			command{"GetVSchema", commandGetVSchema,
+				"",
+				"Display the VTGate routing schema."},
+			command{"ApplyVSchema", commandApplyVSchema,
+				"{-vschema=<vschema> || -vschema-file=<vschema file>}",
+				"Apply the VTGate routing schema."},
 		},
 	},
 	commandGroup{
@@ -2005,6 +2012,50 @@ func commandValidatePermissionsKeyspace(ctx context.Context, wr *wrangler.Wrangl
 
 	keyspace := subFlags.Arg(0)
 	return wr.ValidatePermissionsKeyspace(ctx, keyspace)
+}
+
+func commandGetVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 0 {
+		return fmt.Errorf("action GetVSchema does not require additional arguments")
+	}
+	ts := wr.TopoServer()
+	schemafier, ok := ts.(topo.Schemafier)
+	if !ok {
+		return fmt.Errorf("%T does no support the vschema operations", ts)
+	}
+	schema, err := schemafier.GetVSchema()
+	if err != nil {
+		return err
+	}
+	wr.Logger().Printf("%s\n", schema)
+	return nil
+}
+
+func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	vschema := subFlags.String("vschema", "", "VTGate routing schema")
+	vschemaFile := subFlags.String("vschema-file", "", "VTGate routing schema file")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if (*vschema == "") == (*vschemaFile == "") {
+		return fmt.Errorf("action ApplyVSchema requires either vschema or vschema-file")
+	}
+	ts := wr.TopoServer()
+	schemafier, ok := ts.(topo.Schemafier)
+	if !ok {
+		return fmt.Errorf("%T does no support the vschema operations", ts)
+	}
+	if *vschemaFile != "" {
+		schema, err := ioutil.ReadFile(*vschemaFile)
+		if err != nil {
+			return err
+		}
+		*vschema = string(schema)
+	}
+	return schemafier.SaveVSchema(*vschema)
 }
 
 func commandGetSrvKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

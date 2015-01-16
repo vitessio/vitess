@@ -9,11 +9,10 @@ import re
 
 from net import bsonrpc
 from net import gorpc
-from vtdb import dbapi
 from vtdb import dbexceptions
 from vtdb import field_types
 from vtdb import vtdb_logger
-from vtdb import vtgate_cursor
+from vtdb import cursorv3
 
 
 _errno_pattern = re.compile('\(errno (\d+)\)')
@@ -78,7 +77,6 @@ def convert_exception(exc, *args):
 
 
 def _create_req(sql, new_binds, tablet_type):
-  sql, new_binds = dbapi.prepare_query_bind_vars(sql, new_binds)
   new_binds = field_types.convert_bind_vars(new_binds)
   req = {
         'Sql': sql,
@@ -88,9 +86,7 @@ def _create_req(sql, new_binds, tablet_type):
   return req
 
 
-# A simple, direct connection to the vttablet query server.
-# This is shard-unaware and only handles the most basic communication.
-# If something goes wrong, this object should be thrown away and a new one instantiated.
+# This utilizes the V3 API of VTGate.
 class VTGateConnection(object):
   session = None
   _stream_fields = None
@@ -130,7 +126,7 @@ class VTGateConnection(object):
       del kwargs['cursorclass']
 
     if cursorclass is None:
-      cursorclass = vtgate_cursor.VTGateCursor
+      cursorclass = cursorv3.Cursor
     return cursorclass(self, *pargs, **kwargs)
 
   def begin(self):
@@ -203,7 +199,6 @@ class VTGateConnection(object):
   def _execute_batch(self, sql_list, bind_variables_list, tablet_type):
     query_list = []
     for sql, bind_vars in zip(sql_list, bind_variables_list):
-      sql, bind_vars = dbapi.prepare_query_bind_vars(sql, bind_vars)
       query = {}
       query['Sql'] = sql
       query['BindVariables'] = field_types.convert_bind_vars(bind_vars)

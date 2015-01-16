@@ -20,6 +20,7 @@ const (
 	tabletsDirPath     = rootPath + "/tablets"
 	replicationDirPath = rootPath + "/replication"
 	servingDirPath     = rootPath + "/ns"
+	vschemaPath        = rootPath + "/vschema"
 
 	// Magic file names. Directories in etcd cannot have data. Files whose names
 	// begin with '_' are hidden from directory listings.
