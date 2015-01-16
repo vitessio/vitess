@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
 )
@@ -17,17 +18,17 @@ func init() {
 	addCommand("Tablets", command{
 		"DemoteMaster",
 		commandDemoteMaster,
-		"<tablet alias|zk tablet path>",
+		"<tablet alias>",
 		"Demotes a master tablet."})
 	addCommand("Tablets", command{
 		"ReparentTablet",
 		commandReparentTablet,
-		"<tablet alias|zk tablet path>",
+		"<tablet alias>",
 		"Reparent a tablet to the current master in the shard. This only works if the current slave position matches the last known reparent action."})
 	addCommand("Shards", command{
 		"ReparentShard",
 		commandReparentShard,
-		"[-force] [-leave-master-read-only] <keyspace/shard|zk shard path> <tablet alias|zk tablet path>",
+		"[-force] [-leave-master-read-only] <keyspace/shard> <tablet alias>",
 		"Specify which shard to reparent and which tablet should be the new master."})
 }
 
@@ -36,9 +37,9 @@ func commandDemoteMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action DemoteMaster requires <tablet alias|zk tablet path>")
+		return fmt.Errorf("action DemoteMaster requires <tablet alias>")
 	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -54,9 +55,9 @@ func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action ReparentTablet requires <tablet alias|zk tablet path>")
+		return fmt.Errorf("action ReparentTablet requires <tablet alias>")
 	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -71,14 +72,14 @@ func commandReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action ReparentShard requires <keyspace/shard|zk shard path> <tablet alias|zk tablet path>")
+		return fmt.Errorf("action ReparentShard requires <keyspace/shard> <tablet alias>")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(1))
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}

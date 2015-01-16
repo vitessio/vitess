@@ -69,6 +69,20 @@ func removeCells(cells, toRemove, fullList []string) ([]string, bool) {
 	return leftoverCells, false
 }
 
+// ParseKeyspaceShardString parse a "keyspace/shard" string and extract
+// both keyspace and shard. It also returns empty keyspace and shard if
+// input param looks like a old zk path
+func ParseKeyspaceShardString(param string) (string, string, error) {
+	if param[0] == '/' {
+		return "", "", fmt.Errorf("Invalid keyspace/shard: %v, Note: old style zk path is no longer supported, please use a keyspace/shard instead", param)
+	}
+	keySpaceShard := strings.Split(param, "/")
+	if len(keySpaceShard) != 2 {
+		return "", "", fmt.Errorf("Invalid shard path: %v", param)
+	}
+	return keySpaceShard[0], keySpaceShard[1], nil
+}
+
 // SourceShard represents a data source for filtered replication
 // across shards. When this is used in a destination shard, the master
 // of that shard will run filtered replication.

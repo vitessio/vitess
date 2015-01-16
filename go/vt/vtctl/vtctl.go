@@ -451,17 +451,6 @@ func keyspaceParamsToKeyspaces(wr *wrangler.Wrangler, params []string) ([]string
 	return result, nil
 }
 
-func shardParamToKeyspaceShard(param string) (string, string, error) {
-	if param[0] == '/' {
-		return "", "", fmt.Errorf("Invalid keyspace/shard: %v, Note: old style zk path is no longer supported, please use a keyspace/shard instead", param)
-	}
-	keySpaceShard := strings.Split(param, "/")
-	if len(keySpaceShard) != 2 {
-		return "", "", fmt.Errorf("Invalid shard path: %v", param)
-	}
-	return keySpaceShard[0], keySpaceShard[1], nil
-}
-
 // shardParamsToKeyspaceShards builds a list of keyspace/shard pairs.
 // It supports topology-based wildcards, and plain wildcards.
 // For instance:
@@ -473,7 +462,7 @@ func shardParamsToKeyspaceShards(wr *wrangler.Wrangler, params []string) ([]topo
 		if param[0] == '/' {
 			// this is a topology-specific path
 			for _, path := range params {
-				keyspace, shard, err := shardParamToKeyspaceShard(path)
+				keyspace, shard, err := topo.ParseKeyspaceShardString(path)
 				if err != nil {
 					return nil, err
 				}
@@ -492,43 +481,16 @@ func shardParamsToKeyspaceShards(wr *wrangler.Wrangler, params []string) ([]topo
 	return result, nil
 }
 
-// tabletParamToTabletAlias takes a
-// new style tablet alias as a string, and returns a TabletAlias.
-func tabletParamToTabletAlias(param string) (topo.TabletAlias, error) {
-	if param[0] == '/' {
-		// old zookeeper path, no longer supported
-		return topo.TabletAlias{}, fmt.Errorf("Invalid tablet path: %v, Note: old style zk tablet path is no longer supported, please use a tablet alias instead", param)
-	}
-	result, err := topo.ParseTabletAliasString(param)
-	if err != nil {
-		return topo.TabletAlias{}, fmt.Errorf("Invalid tablet alias %v: %v", param, err)
-	}
-	return result, nil
-}
-
 // tabletParamsToTabletAliases takes multiple params and converts them
 // to tablet aliases.
 func tabletParamsToTabletAliases(params []string) ([]topo.TabletAlias, error) {
 	result := make([]topo.TabletAlias, len(params))
 	var err error
 	for i, param := range params {
-		result[i], err = tabletParamToTabletAlias(param)
+		result[i], err = topo.ParseTabletAliasString(param)
 		if err != nil {
 			return nil, err
 		}
-	}
-	return result, nil
-}
-
-// tabletRepParamToTabletAlias takes a new style
-// tablet alias as a string, and returns a TabletAlias.
-func tabletRepParamToTabletAlias(param string) (topo.TabletAlias, error) {
-	if param[0] == '/' {
-		return topo.TabletAlias{}, fmt.Errorf("Invalid tablet path: %v, Note: old style zk tablet path is no longer supported, please use a tablet alias instead", param)
-	}
-	result, err := topo.ParseTabletAliasString(param)
-	if err != nil {
-		return topo.TabletAlias{}, fmt.Errorf("Invalid tablet alias %v: %v", param, err)
 	}
 	return result, nil
 }
@@ -565,7 +527,7 @@ func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	if subFlags.NArg() != 2 {
 		return fmt.Errorf("action InitTablet requires <tablet alias> <tablet type>")
 	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -606,7 +568,7 @@ func commandGetTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 		return fmt.Errorf("action GetTablet requires <tablet alias>")
 	}
 
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -634,7 +596,7 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 		return fmt.Errorf("malformed address: %v", *ipAddr)
 	}
 
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -673,7 +635,7 @@ func commandScrapTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return fmt.Errorf("action ScrapTablet requires <tablet alias>")
 	}
 
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -708,7 +670,7 @@ func commandSetReadOnly(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return fmt.Errorf("action SetReadOnly requires <tablet alias>")
 	}
 
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -727,7 +689,7 @@ func commandSetReadWrite(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return fmt.Errorf("action SetReadWrite requires <tablet alias>")
 	}
 
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -749,7 +711,7 @@ func commandChangeSlaveType(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		return fmt.Errorf("action ChangeSlaveType requires <tablet alias> <db type>")
 	}
 
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -780,7 +742,7 @@ func commandPing(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Flag
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("action Ping requires <tablet alias>")
 	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -798,7 +760,7 @@ func commandRefreshState(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("action RefreshState requires <tablet alias>")
 	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -816,7 +778,7 @@ func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if subFlags.NArg() != 2 {
 		return fmt.Errorf("action RunHealthCheck requires <tablet alias> <target tablet type>")
 	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -848,7 +810,7 @@ func commandSleep(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	if subFlags.NArg() != 2 {
 		return fmt.Errorf("action Sleep requires <tablet alias> <duration>")
 	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -873,7 +835,7 @@ func commandSnapshotSourceEnd(ctx context.Context, wr *wrangler.Wrangler, subFla
 		return fmt.Errorf("action SnapshotSourceEnd requires <tablet alias> <original server type>")
 	}
 
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -895,7 +857,7 @@ func commandSnapshot(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 		return fmt.Errorf("action Snapshot requires <tablet alias>")
 	}
 
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -922,17 +884,17 @@ func commandRestore(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 	if subFlags.NArg() != 3 && subFlags.NArg() != 4 {
 		return fmt.Errorf("action Restore requires <src tablet alias> <src manifest path> <dst tablet alias> [<new master tablet alias>]")
 	}
-	srcTabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	srcTabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	dstTabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(2))
+	dstTabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(2))
 	if err != nil {
 		return err
 	}
 	parentAlias := srcTabletAlias
 	if subFlags.NArg() == 4 {
-		parentAlias, err = tabletParamToTabletAlias(subFlags.Arg(3))
+		parentAlias, err = topo.ParseTabletAliasString(subFlags.Arg(3))
 		if err != nil {
 			return err
 		}
@@ -953,13 +915,13 @@ func commandClone(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 		return fmt.Errorf("action Clone requires <src tablet alias> <dst tablet alias> [...]")
 	}
 
-	srcTabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	srcTabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
 	dstTabletAliases := make([]topo.TabletAlias, subFlags.NArg()-1)
 	for i := 1; i < subFlags.NArg(); i++ {
-		dstTabletAliases[i-1], err = tabletParamToTabletAlias(subFlags.Arg(i))
+		dstTabletAliases[i-1], err = topo.ParseTabletAliasString(subFlags.Arg(i))
 		if err != nil {
 			return err
 		}
@@ -978,7 +940,7 @@ func commandExecuteFetch(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return fmt.Errorf("action ExecuteFetch requires <tablet alias> <sql command>")
 	}
 
-	alias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	alias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -998,7 +960,7 @@ func commandExecuteHook(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return fmt.Errorf("action ExecuteHook requires <tablet alias> <hook name>")
 	}
 
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1020,7 +982,7 @@ func commandCreateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return fmt.Errorf("action CreateShard requires <keyspace/shard>")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1046,7 +1008,7 @@ func commandGetShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 		return fmt.Errorf("action GetShard requires <keyspace/shard>")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1091,7 +1053,7 @@ func commandTabletExternallyReparented(ctx context.Context, wr *wrangler.Wrangle
 		return fmt.Errorf("action TabletExternallyReparented requires <tablet alias>")
 	}
 
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1111,7 +1073,7 @@ func commandValidateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 		return fmt.Errorf("action ValidateShard requires <keyspace/shard>")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1125,7 +1087,7 @@ func commandShardReplicationPositions(ctx context.Context, wr *wrangler.Wrangler
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("action ShardReplicationPositions requires <keyspace/shard>")
 	}
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1157,7 +1119,7 @@ func commandListShardTablets(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("action ListShardTablets requires <keyspace/shard>")
 	}
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1173,7 +1135,7 @@ func commandSetShardServedTypes(ctx context.Context, wr *wrangler.Wrangler, subF
 	if subFlags.NArg() != 2 {
 		return fmt.Errorf("action SetShardServedTypes requires <keyspace/shard> <served type>")
 	}
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1200,7 +1162,7 @@ func commandSetShardTabletControl(ctx context.Context, wr *wrangler.Wrangler, su
 	if subFlags.NArg() != 2 {
 		return fmt.Errorf("action SetShardTabletControl requires <keyspace/shard> <tabletType>")
 	}
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1228,7 +1190,7 @@ func commandSourceShardDelete(ctx context.Context, wr *wrangler.Wrangler, subFla
 	if subFlags.NArg() < 2 {
 		return fmt.Errorf("SourceShardDelete requires <keyspace/shard> <uid>")
 	}
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1248,7 +1210,7 @@ func commandSourceShardAdd(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if subFlags.NArg() != 3 {
 		return fmt.Errorf("SourceShardAdd requires <keyspace/shard> <uid> <source keyspace/shard")
 	}
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1256,7 +1218,7 @@ func commandSourceShardAdd(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err != nil {
 		return err
 	}
-	skeyspace, sshard, err := shardParamToKeyspaceShard(subFlags.Arg(2))
+	skeyspace, sshard, err := topo.ParseKeyspaceShardString(subFlags.Arg(2))
 	if err != nil {
 		return err
 	}
@@ -1281,11 +1243,11 @@ func commandShardReplicationAdd(ctx context.Context, wr *wrangler.Wrangler, subF
 		return fmt.Errorf("action ShardReplicationAdd requires <keyspace/shard> <tablet alias>")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(1))
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
@@ -1300,11 +1262,11 @@ func commandShardReplicationRemove(ctx context.Context, wr *wrangler.Wrangler, s
 		return fmt.Errorf("action ShardReplicationRemove requires <keyspace/shard> <tablet alias>")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(1))
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
@@ -1320,7 +1282,7 @@ func commandShardReplicationFix(ctx context.Context, wr *wrangler.Wrangler, subF
 	}
 
 	cell := subFlags.Arg(0)
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(1))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
@@ -1336,7 +1298,7 @@ func commandRemoveShardCell(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		return fmt.Errorf("action RemoveShardCell requires <keyspace/shard> <cell>")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1529,7 +1491,7 @@ func commandMigrateServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFl
 		return fmt.Errorf("action MigrateServedTypes requires <source keyspace/shard> <served type>")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1558,7 +1520,7 @@ func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFla
 		return fmt.Errorf("action MigrateServedFrom requires <destination keyspace/shard> <served type>")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1676,7 +1638,7 @@ func commandListTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	aliases := make([]topo.TabletAlias, len(paths))
 	var err error
 	for i, path := range paths {
-		aliases[i], err = tabletParamToTabletAlias(path)
+		aliases[i], err = topo.ParseTabletAliasString(path)
 		if err != nil {
 			return err
 		}
@@ -1695,7 +1657,7 @@ func commandGetSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("action GetSchema requires <tablet alias>")
 	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1728,7 +1690,7 @@ func commandReloadSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("action ReloadSchema requires <tablet alias>")
 	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1745,7 +1707,7 @@ func commandValidateSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subF
 		return fmt.Errorf("action ValidateSchemaShard requires <keyspace/shard>")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1784,7 +1746,7 @@ func commandPreflightSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("action PreflightSchema requires <tablet alias>")
 	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1812,7 +1774,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("action ApplySchema requires <tablet alias>")
 	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1858,7 +1820,7 @@ func commandApplySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("action ApplySchemaShard requires <keyspace/shard>")
 	}
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1868,7 +1830,7 @@ func commandApplySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	}
 	var newParentAlias topo.TabletAlias
 	if *newParent != "" {
-		newParentAlias, err = tabletParamToTabletAlias(*newParent)
+		newParentAlias, err = topo.ParseTabletAliasString(*newParent)
 		if err != nil {
 			return err
 		}
@@ -1921,7 +1883,7 @@ func commandCopySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	if subFlags.NArg() != 2 {
 		return fmt.Errorf("action CopySchemaShard requires a source <tablet alias> and a destination <keyspace/shard>")
 	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1934,7 +1896,7 @@ func commandCopySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(1))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
@@ -1950,7 +1912,7 @@ func commandValidateVersionShard(ctx context.Context, wr *wrangler.Wrangler, sub
 		return fmt.Errorf("action ValidateVersionShard requires <keyspace/shard>")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1976,7 +1938,7 @@ func commandGetPermissions(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("action GetPermissions requires <tablet alias>")
 	}
-	tabletAlias, err := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1995,7 +1957,7 @@ func commandValidatePermissionsShard(ctx context.Context, wr *wrangler.Wrangler,
 		return fmt.Errorf("action ValidatePermissionsShard requires <keyspace/shard>")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -2099,7 +2061,7 @@ func commandGetSrvShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return fmt.Errorf("action GetSrvShard requires <cell> <keyspace/shard>")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(1))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
@@ -2118,7 +2080,7 @@ func commandGetEndPoints(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return fmt.Errorf("action GetEndPoints requires <cell> <keyspace/shard> <tablet type>")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(1))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
@@ -2138,7 +2100,7 @@ func commandGetShardReplication(ctx context.Context, wr *wrangler.Wrangler, subF
 		return fmt.Errorf("action GetShardReplication requires <cell> <keyspace/shard>")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(1))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}

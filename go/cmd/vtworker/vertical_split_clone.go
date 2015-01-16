@@ -14,6 +14,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -96,7 +97,7 @@ func commandVerticalSplitClone(wr *wrangler.Wrangler, subFlags *flag.FlagSet, ar
 		return nil, fmt.Errorf("command VerticalSplitClone requires <destination keyspace/shard>")
 	}
 
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
 	if err != nil {
 		return nil, err
 	}
