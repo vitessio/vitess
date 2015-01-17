@@ -10,7 +10,7 @@ import struct
 
 import db_class_lookup
 import topo_schema
-from vtdb import db_object
+from vtdb import db_object_range_sharded
 
 
 pack_kid = struct.Struct('!Q').pack
@@ -25,7 +25,7 @@ def create_keyspace_id(sharding_key):
   return unpack_kid(encrypted)[0]
 
 
-class VtRangeBase(db_object.DBObjectRangeSharded):
+class VtRangeBase(db_object_range_sharded.DBObjectRangeSharded):
   @classmethod
   def sharding_key_to_keyspace_id(class_, sharding_key):
     keyspace_id = create_keyspace_id(sharding_key)
@@ -37,7 +37,7 @@ class VtRangeBase(db_object.DBObjectRangeSharded):
     return True
 
 
-class VtEntityRangeBase(db_object.DBObjectEntityRangeSharded):
+class VtEntityRangeBase(db_object_range_sharded.DBObjectEntityRangeSharded):
   @classmethod
   def sharding_key_to_keyspace_id(class_, sharding_key):
     keyspace_id = create_keyspace_id(sharding_key)
@@ -55,6 +55,7 @@ class VtUser(VtEntityRangeBase):
   columns_list = ["id", "username", "msg", "keyspace_id"]
   sharding_key_column_name = "id"
   entity_id_lookup_map = {"username": db_class_lookup.VtUsernameLookup}
+  column_lookup_name_map = {"id":"user_id"}
 
 
 class VtSong(VtEntityRangeBase):
@@ -63,6 +64,7 @@ class VtSong(VtEntityRangeBase):
   columns_list = ["id", "user_id", "title", "keyspace_id"]
   sharding_key_column_name = "user_id"
   entity_id_lookup_map = {"id": db_class_lookup.VtSongUserLookup}
+  column_lookup_name_map = {"id":"song_id"}
 
 
 class VtUserEmail(VtRangeBase):

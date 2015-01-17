@@ -27,6 +27,7 @@ class VTGateCursor(object):
   keyspace_ids = None
   keyranges = None
   _writable = None
+  routing = None
 
   def __init__(self, connection, keyspace, tablet_type, keyspace_ids=None, keyranges=None, writable=False):
     self._conn = connection

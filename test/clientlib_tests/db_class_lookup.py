@@ -9,16 +9,16 @@ This module contains the schema and class definitions.
 """
 
 import topo_schema
-from vtdb import db_object
+from vtdb import db_object_lookup
 
 
-class VtUsernameLookup(db_object.LookupDBObject):
+class VtUsernameLookup(db_object_lookup.LookupDBObject):
   keyspace = topo_schema.KS_LOOKUP[0]
   table_name = "vt_username_lookup"
   columns_list = ['user_id', 'username']
 
 
-class VtSongUserLookup(db_object.LookupDBObject):
+class VtSongUserLookup(db_object_lookup.LookupDBObject):
   keyspace = topo_schema.KS_LOOKUP[0]
   table_name = "vt_song_user_lookup"
   columns_list = ['song_id', 'user_id']

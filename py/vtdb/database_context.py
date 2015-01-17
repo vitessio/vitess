@@ -157,15 +157,15 @@ class DatabaseContext(object):
   def close_db_operation(self):
     self._tablet_type = None
 
-  def create_cursor(self, writable, table_class, routing, **kwargs):
+  def create_cursor(self, writable, table_class, **cursor_kargs):
     if not self.in_db_operation:
       raise dbexceptions.ProgrammingError(
           "Cannot execute queries outside db operations context.")
 
-    cursor = table_class.create_vtgate_cursor(routing,
-                                              self.get_vtgate_connection(),
+    cursor = table_class.create_vtgate_cursor(self.get_vtgate_connection(),
                                               self.tablet_type,
-                                              writable, **kwargs)
+                                              writable,
+                                              **cursor_kargs)
 
     return cursor
 
@@ -181,11 +181,11 @@ class DBOperationBase(object):
     self.dc = db_context
     self.writable = False
 
-  def get_cursor(self):
+  def get_cursor(self, **cursor_kargs):
     """This returns the create_cursor method of DatabaseContext with
     the writable attribute from the instance of DBOperationBase's
     derived classes."""
-    return functools.partial(self.dc.create_cursor, self.writable)
+    return functools.partial(self.dc.create_cursor, self.writable, **cursor_kargs)
 
 
 class ReadFromMaster(DBOperationBase):

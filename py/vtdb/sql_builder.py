@@ -305,6 +305,18 @@ def choose_bind_name(base, counter=None):
     base += '_%d' % counter.next()
     return base
 
+def make_bind_list(column, values, counter=None):
+  result = []
+  bind_names = []
+  if counter is None:
+    counter = itertools.count(1)
+  for value in values:
+    bind_name = choose_bind_name(column, counter=counter)
+    bind_names.append(bind_name)
+    result.append((bind_name, value))
+  return result
+
+
 
 class MySQLFunction(object):
 
