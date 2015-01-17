@@ -75,5 +75,10 @@ func LocalLaunch(shardNames []string, replicas, rdonly int, keyspace, schema, vs
 
 // LocalTeardown shuts down the previously launched cluster.
 func LocalTeardown() error {
-	return run(curShardNames, curReplicas, curRdonly, curKeyspace, curSchema, curVSchema, "teardown")
+	if curShardNames == nil {
+		return nil
+	}
+	err := run(curShardNames, curReplicas, curRdonly, curKeyspace, curSchema, curVSchema, "teardown")
+	curShardNames = nil
+	return err
 }
