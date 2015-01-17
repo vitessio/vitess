@@ -129,10 +129,17 @@ func (vsdw *VerticalSplitDiffWorker) StatusAsText() string {
 	return result
 }
 
-// CheckInterrupted is part of the Worker interface.
-func (vsdw *VerticalSplitDiffWorker) CheckInterrupted() bool {
+// Cancel is part of the Worker interface
+func (vsdw *VerticalSplitDiffWorker) Cancel() {
+	vsdw.ctxCancel()
+}
+
+func (vsdw *VerticalSplitDiffWorker) checkInterrupted() bool {
 	select {
-	case <-interrupted:
+	case <-vsdw.ctx.Done():
+		if vsdw.ctx.Err() == context.DeadlineExceeded {
+			return false
+		}
 		vsdw.recordError(topo.ErrInterrupted)
 		return true
 	default:
@@ -169,7 +176,7 @@ func (vsdw *VerticalSplitDiffWorker) run() error {
 	if err := vsdw.init(); err != nil {
 		return fmt.Errorf("init() failed: %v", err)
 	}
-	if vsdw.CheckInterrupted() {
+	if vsdw.checkInterrupted() {
 		return topo.ErrInterrupted
 	}
 
@@ -177,20 +184,26 @@ func (vsdw *VerticalSplitDiffWorker) run() error {
 	if err := vsdw.findTargets(); err != nil {
 		return fmt.Errorf("findTargets() failed: %v", err)
 	}
-	if vsdw.CheckInterrupted() {
+	if vsdw.checkInterrupted() {
 		return topo.ErrInterrupted
 	}
 
 	// third phase: synchronize replication
 	if err := vsdw.synchronizeReplication(); err != nil {
+		if vsdw.checkInterrupted() {
+			return topo.ErrInterrupted
+		}
 		return fmt.Errorf("synchronizeReplication() failed: %v", err)
 	}
-	if vsdw.CheckInterrupted() {
+	if vsdw.checkInterrupted() {
 		return topo.ErrInterrupted
 	}
 
 	// fourth phase: diff
 	if err := vsdw.diff(); err != nil {
+		if vsdw.checkInterrupted() {
+			return topo.ErrInterrupted
+		}
 		return fmt.Errorf("diff() failed: %v", err)
 	}
 

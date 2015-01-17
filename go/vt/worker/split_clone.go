@@ -188,10 +188,17 @@ func (scw *SplitCloneWorker) StatusAsText() string {
 	return result
 }
 
-// CheckInterrupted is part of the Worker interface
-func (scw *SplitCloneWorker) CheckInterrupted() bool {
+// Cancel is part of the Worker interface
+func (scw *SplitCloneWorker) Cancel() {
+	scw.ctxCancel()
+}
+
+func (scw *SplitCloneWorker) checkInterrupted() bool {
 	select {
-	case <-interrupted:
+	case <-scw.ctx.Done():
+		if scw.ctx.Err() == context.DeadlineExceeded {
+			return false
+		}
 		scw.recordError(topo.ErrInterrupted)
 		return true
 	default:
@@ -228,23 +235,31 @@ func (scw *SplitCloneWorker) run() error {
 	if err := scw.init(); err != nil {
 		return fmt.Errorf("init() failed: %v", err)
 	}
-	if scw.CheckInterrupted() {
+	if scw.checkInterrupted() {
 		return topo.ErrInterrupted
 	}
 
 	// second state: find targets
 	if err := scw.findTargets(); err != nil {
+		// A canceled context can appear to cause an application error
+		if scw.checkInterrupted() {
+			return topo.ErrInterrupted
+		}
 		return fmt.Errorf("findTargets() failed: %v", err)
 	}
-	if scw.CheckInterrupted() {
+	if scw.checkInterrupted() {
 		return topo.ErrInterrupted
 	}
 
 	// third state: copy data
 	if err := scw.copy(); err != nil {
+		// A canceled context can appear to cause an application error
+		if scw.checkInterrupted() {
+			return topo.ErrInterrupted
+		}
 		return fmt.Errorf("copy() failed: %v", err)
 	}
-	if scw.CheckInterrupted() {
+	if scw.checkInterrupted() {
 		return topo.ErrInterrupted
 	}
 

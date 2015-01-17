@@ -129,10 +129,17 @@ func (sdw *SplitDiffWorker) StatusAsText() string {
 	return result
 }
 
-// CheckInterrupted is part of the Worker interface
-func (sdw *SplitDiffWorker) CheckInterrupted() bool {
+// Cancel is part of the Worker interface
+func (sdw *SplitDiffWorker) Cancel() {
+	sdw.ctxCancel()
+}
+
+func (sdw *SplitDiffWorker) checkInterrupted() bool {
 	select {
-	case <-interrupted:
+	case <-sdw.ctx.Done():
+		if sdw.ctx.Err() == context.DeadlineExceeded {
+			return false
+		}
 		sdw.recordError(topo.ErrInterrupted)
 		return true
 	default:
@@ -169,7 +176,7 @@ func (sdw *SplitDiffWorker) run() error {
 	if err := sdw.init(); err != nil {
 		return fmt.Errorf("init() failed: %v", err)
 	}
-	if sdw.CheckInterrupted() {
+	if sdw.checkInterrupted() {
 		return topo.ErrInterrupted
 	}
 
@@ -177,20 +184,26 @@ func (sdw *SplitDiffWorker) run() error {
 	if err := sdw.findTargets(); err != nil {
 		return fmt.Errorf("findTargets() failed: %v", err)
 	}
-	if sdw.CheckInterrupted() {
+	if sdw.checkInterrupted() {
 		return topo.ErrInterrupted
 	}
 
 	// third phase: synchronize replication
 	if err := sdw.synchronizeReplication(); err != nil {
+		if sdw.checkInterrupted() {
+			return topo.ErrInterrupted
+		}
 		return fmt.Errorf("synchronizeReplication() failed: %v", err)
 	}
-	if sdw.CheckInterrupted() {
+	if sdw.checkInterrupted() {
 		return topo.ErrInterrupted
 	}
 
 	// fourth phase: diff
 	if err := sdw.diff(); err != nil {
+		if sdw.checkInterrupted() {
+			return topo.ErrInterrupted
+		}
 		return fmt.Errorf("diff() failed: %v", err)
 	}
 

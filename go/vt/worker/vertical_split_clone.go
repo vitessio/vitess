@@ -177,10 +177,17 @@ func (vscw *VerticalSplitCloneWorker) StatusAsText() string {
 	return result
 }
 
-// CheckInterrupted is part of the Worker interface
-func (vscw *VerticalSplitCloneWorker) CheckInterrupted() bool {
+// Cancel is part of the Worker interface
+func (vscw *VerticalSplitCloneWorker) Cancel() {
+	vscw.ctxCancel()
+}
+
+func (vscw *VerticalSplitCloneWorker) checkInterrupted() bool {
 	select {
-	case <-interrupted:
+	case <-vscw.ctx.Done():
+		if vscw.ctx.Err() == context.DeadlineExceeded {
+			return false
+		}
 		vscw.recordError(topo.ErrInterrupted)
 		return true
 	default:
@@ -217,23 +224,31 @@ func (vscw *VerticalSplitCloneWorker) run() error {
 	if err := vscw.init(); err != nil {
 		return fmt.Errorf("init() failed: %v", err)
 	}
-	if vscw.CheckInterrupted() {
+	if vscw.checkInterrupted() {
 		return topo.ErrInterrupted
 	}
 
 	// second state: find targets
 	if err := vscw.findTargets(); err != nil {
+		// A canceled context can appear to cause an application error
+		if vscw.checkInterrupted() {
+			return topo.ErrInterrupted
+		}
 		return fmt.Errorf("findTargets() failed: %v", err)
 	}
-	if vscw.CheckInterrupted() {
+	if vscw.checkInterrupted() {
 		return topo.ErrInterrupted
 	}
 
 	// third state: copy data
 	if err := vscw.copy(); err != nil {
+		// A canceled context can appear to cause an application error
+		if vscw.checkInterrupted() {
+			return topo.ErrInterrupted
+		}
 		return fmt.Errorf("copy() failed: %v", err)
 	}
-	if vscw.CheckInterrupted() {
+	if vscw.checkInterrupted() {
 		return topo.ErrInterrupted
 	}
 

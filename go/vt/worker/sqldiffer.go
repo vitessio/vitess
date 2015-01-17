@@ -137,10 +137,17 @@ func (worker *SQLDiffWorker) StatusAsText() string {
 	return result
 }
 
-// CheckInterrupted is part of the Worker interface
-func (worker *SQLDiffWorker) CheckInterrupted() bool {
+// Cancel is part of the Worker interface
+func (worker *SQLDiffWorker) Cancel() {
+	worker.ctxCancel()
+}
+
+func (worker *SQLDiffWorker) checkInterrupted() bool {
 	select {
-	case <-interrupted:
+	case <-worker.ctx.Done():
+		if worker.ctx.Err() == context.DeadlineExceeded {
+			return false
+		}
 		worker.recordError(topo.ErrInterrupted)
 		return true
 	default:
@@ -177,15 +184,18 @@ func (worker *SQLDiffWorker) run() error {
 	if err := worker.findTargets(); err != nil {
 		return err
 	}
-	if worker.CheckInterrupted() {
+	if worker.checkInterrupted() {
 		return topo.ErrInterrupted
 	}
 
 	// second phase: synchronize replication
 	if err := worker.synchronizeReplication(); err != nil {
+		if worker.checkInterrupted() {
+			return topo.ErrInterrupted
+		}
 		return err
 	}
-	if worker.CheckInterrupted() {
+	if worker.checkInterrupted() {
 		return topo.ErrInterrupted
 	}
 
@@ -240,7 +250,7 @@ func (worker *SQLDiffWorker) synchronizeReplication() error {
 	if err != nil {
 		return fmt.Errorf("Cannot stop slave %v: %v", worker.subset.alias, err)
 	}
-	if worker.CheckInterrupted() {
+	if worker.checkInterrupted() {
 		return topo.ErrInterrupted
 	}
 
@@ -255,7 +265,7 @@ func (worker *SQLDiffWorker) synchronizeReplication() error {
 
 	// sleep for a few seconds
 	time.Sleep(5 * time.Second)
-	if worker.CheckInterrupted() {
+	if worker.checkInterrupted() {
 		return topo.ErrInterrupted
 	}
 
