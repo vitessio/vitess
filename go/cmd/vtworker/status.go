@@ -45,6 +45,8 @@ const workerStatusHTML = `
   </blockquote>
   {{if .Done}}
   <p><a href="/reset">Reset Job</a></p>
+  {{else}}
+  <p><a href="/cancel">Cancel Job</a></p>
   {{end}}
 {{else}}
   <p>This worker is idle.</p>
@@ -111,5 +113,21 @@ func initStatusHandling() {
 		default:
 			httpError(w, "worker still executing", nil)
 		}
+	})
+
+	// cancel handler
+	http.HandleFunc("/cancel", func(w http.ResponseWriter, r *http.Request) {
+		currentWorkerMutex.Lock()
+		wrk := currentWorker
+		currentWorkerMutex.Unlock()
+
+		// no worker, we go to the menu
+		if wrk == nil {
+			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+			return
+		}
+
+		// otherwise, cancel the running worker
+		wrk.Cancel()
 	})
 }
