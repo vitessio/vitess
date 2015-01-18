@@ -18,7 +18,7 @@ import (
 
 var (
 	cell        = flag.String("cell", "test_nj", "cell to use")
-	schemaFile  = flag.String("schema-file", "", "JSON schema file")
+	schemaFile  = flag.String("vschema_file", "", "JSON schema file")
 	retryDelay  = flag.Duration("retry-delay", 200*time.Millisecond, "retry delay")
 	retryCount  = flag.Int("retry-count", 10, "retry count")
 	timeout     = flag.Duration("timeout", 5*time.Second, "connection and call timeout")

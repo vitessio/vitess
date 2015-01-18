@@ -318,54 +318,7 @@ def _make_row(row, conversions):
   return converted_row
 
 
-def get_params_for_vtgate_conn(vtgate_addrs, timeout, encrypted=False, user=None, password=None):
-  db_params_list = []
-  addrs = []
-  if isinstance(vtgate_addrs, dict):
-    service = '_vt'
-    if encrypted:
-      service = '_vts'
-    if service not in vtgate_addrs:
-      raise Exception("required vtgate service addrs %s not exist" % service)
-    addrs = vtgate_addrs[service]
-    random.shuffle(addrs)
-  elif isinstance(vtgate_addrs, list):
-    random.shuffle(vtgate_addrs)
-    addrs = vtgate_addrs
-  else:
-    raise dbexceptions.Error("Wrong type for vtgate addrs %s" % vtgate_addrs)
-
-  for addr in addrs:
-    vt_params = dict()
-    vt_params['addr'] = addr
-    vt_params['timeout'] = timeout
-    vt_params['encrypted'] = encrypted
-    vt_params['user'] = user
-    vt_params['password'] = password
-    db_params_list.append(vt_params)
-  return db_params_list
-
-
-def connect(vtgate_addrs, timeout, encrypted=False, user=None, password=None):
-  db_params_list = get_params_for_vtgate_conn(vtgate_addrs, timeout,
-                                              encrypted=encrypted, user=user,
-                                              password=password)
-
-  if not db_params_list:
-   raise dbexceptions.OperationalError("empty db params list - no db instance available for vtgate_addrs %s" % vtgate_addrs)
-
-  db_exception = None
-  host_addr = None
-  for params in db_params_list:
-    try:
-      db_params = params.copy()
-      host_addr = db_params['addr']
-      conn = VTGateConnection(**db_params)
-      conn.dial()
-      return conn
-    except Exception as e:
-      db_exception = e
-      logging.warning('db connection failed: %s, %s', host_addr, e)
-
-  raise dbexceptions.OperationalError(
-    'unable to create vt connection', host_addr, db_exception)
+def connect(addr, timeout, **kwargs):
+  conn = VTGateConnection(addr, timeout, **kwargs)
+  conn.dial()
+  return conn

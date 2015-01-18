@@ -41,6 +41,8 @@ class TestEnv(object):
   vtgate_port = None
   def __init__(self, options):
     self.keyspace = options.keyspace
+    self.schema = options.schema
+    self.vschema = options.vschema
     self.tablets = []
     tablet_config = json.loads(options.tablet_config)
     for shard in options.shards.split(','):
@@ -70,6 +72,13 @@ class TestEnv(object):
         if t.type == "master":
           utils.run_vtctl(['ReparentShard', '-force', self.keyspace+'/'+t.shard, t.tablet_alias], auto_log=True)
       utils.run_vtctl(['RebuildKeyspaceGraph', self.keyspace], auto_log=True)
+      if self.schema:
+        utils.run_vtctl(['ApplySchemaKeyspace', '-simple', '-sql', self.schema, self.keyspace])
+      if self.vschema:
+        if self.vschema[0] == '{':
+          utils.run_vtctl(['ApplyVSchema', "-vschema", self.vschema])
+        else:
+          utils.run_vtctl(['ApplyVSchema', "-vschema_file", self.vschema])
       self.vtgate_server, self.vtgate_port = utils.vtgate_start(cache_ttl='500s')
       vtgate_client = zkocc.ZkOccConnection("localhost:%u" % self.vtgate_port, "test_nj", 30.0)
       topology.read_topology(vtgate_client)
@@ -96,6 +105,8 @@ def main():
   parser.add_option("--tablet-config", action="store", type="string",
                     help="json config for for non-master tablets. e.g {'replica':2, 'rdonly':1}")
   parser.add_option("--keyspace", action="store", type="string")
+  parser.add_option("--schema", action="store", type="string")
+  parser.add_option("--vschema", action="store", type="string")
   utils.add_options(parser)
   (options, args) = parser.parse_args()
   utils.set_options(options)
