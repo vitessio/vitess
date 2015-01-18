@@ -107,10 +107,7 @@ This could indicate that no Java Runtime is installed.
 Some of the larger tests use up to 4GB of temporary space on disk.
 
 ## Setting up a cluster
-TODO: Expand on all sections
-### Setup zookeeper
-### Start a MySql instance
-### Start vttablet
-### Start vtgate
-### Write a client
-### Test
+
+Once you have a successful `make build`, you can proceed to start up a
+[local cluster](https://github.com/youtube/vitess/tree/master/examples/local)
+for testing.
