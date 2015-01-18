@@ -196,6 +196,7 @@ def run(cmd, trap_output=False, raise_on_error=True, **kargs):
   stdout, stderr = proc.communicate()
   if proc.returncode:
     if raise_on_error:
+      pause("cmd fail: %s, pausing..." % (args))
       raise TestError('cmd fail:', args, stdout, stderr)
     else:
       logging.debug('cmd fail: %s %s %s', str(args), stdout, stderr)
@@ -319,6 +320,12 @@ def wait_for_vars(name, port, var=None):
     if v and (var is None or var in v):
       break
     timeout = wait_step('waiting for /debug/vars of %s' % name, timeout)
+
+def apply_vschema(vschema):
+  fname = os.path.join(environment.tmproot, "vschema.json")
+  with open(fname, "w") as f:
+    f.write(vschema)
+  run_vtctl(['ApplyVSchema', "-vschema_file", fname])
 
 # vtgate helpers, assuming it always restarts on the same port
 def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1,
