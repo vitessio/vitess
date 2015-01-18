@@ -330,7 +330,7 @@ func (scw *SplitCloneWorker) findTargets() error {
 	// find an appropriate endpoint in the source shards
 	scw.sourceAliases = make([]topo.TabletAlias, len(scw.sourceShards))
 	for i, si := range scw.sourceShards {
-		scw.sourceAliases[i], err = findChecker(scw.wr, scw.cleaner, scw.cell, si.Keyspace(), si.ShardName())
+		scw.sourceAliases[i], err = findChecker(scw.ctx, scw.wr, scw.cleaner, scw.cell, si.Keyspace(), si.ShardName())
 		if err != nil {
 			return fmt.Errorf("cannot find checker for %v/%v/%v: %v", scw.cell, si.Keyspace(), si.ShardName(), err)
 		}
@@ -547,7 +547,7 @@ func (scw *SplitCloneWorker) copy() error {
 
 					// build the query, and start the streaming
 					selectSQL := buildSQLFromChunks(scw.wr, td, chunks, chunkIndex, scw.sourceAliases[shardIndex].String())
-					qrr, err := NewQueryResultReaderForTablet(scw.wr.TopoServer(), scw.sourceAliases[shardIndex], selectSQL)
+					qrr, err := NewQueryResultReaderForTablet(scw.ctx, scw.wr.TopoServer(), scw.sourceAliases[shardIndex], selectSQL)
 					if err != nil {
 						processError("NewQueryResultReaderForTablet failed: %v", err)
 						return

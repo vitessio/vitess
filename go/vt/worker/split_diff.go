@@ -244,7 +244,7 @@ func (sdw *SplitDiffWorker) findTargets() error {
 
 	// find an appropriate endpoint in destination shard
 	var err error
-	sdw.destinationAlias, err = findChecker(sdw.wr, sdw.cleaner, sdw.cell, sdw.keyspace, sdw.shard)
+	sdw.destinationAlias, err = findChecker(sdw.ctx, sdw.wr, sdw.cleaner, sdw.cell, sdw.keyspace, sdw.shard)
 	if err != nil {
 		return fmt.Errorf("cannot find checker for %v/%v/%v: %v", sdw.cell, sdw.keyspace, sdw.shard, err)
 	}
@@ -252,7 +252,7 @@ func (sdw *SplitDiffWorker) findTargets() error {
 	// find an appropriate endpoint in the source shards
 	sdw.sourceAliases = make([]topo.TabletAlias, len(sdw.shardInfo.SourceShards))
 	for i, ss := range sdw.shardInfo.SourceShards {
-		sdw.sourceAliases[i], err = findChecker(sdw.wr, sdw.cleaner, sdw.cell, sdw.keyspace, ss.Shard)
+		sdw.sourceAliases[i], err = findChecker(sdw.ctx, sdw.wr, sdw.cleaner, sdw.cell, sdw.keyspace, ss.Shard)
 		if err != nil {
 			return fmt.Errorf("cannot find checker for %v/%v/%v: %v", sdw.cell, sdw.keyspace, ss.Shard, err)
 		}
@@ -455,14 +455,14 @@ func (sdw *SplitDiffWorker) diff() error {
 				sdw.wr.Logger().Errorf("Source shard doesn't overlap with destination????: %v", err)
 				return
 			}
-			sourceQueryResultReader, err := TableScanByKeyRange(sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.sourceAliases[0], tableDefinition, overlap, sdw.keyspaceInfo.ShardingColumnType)
+			sourceQueryResultReader, err := TableScanByKeyRange(sdw.ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.sourceAliases[0], tableDefinition, overlap, sdw.keyspaceInfo.ShardingColumnType)
 			if err != nil {
 				sdw.wr.Logger().Errorf("TableScanByKeyRange(source) failed: %v", err)
 				return
 			}
 			defer sourceQueryResultReader.Close()
 
-			destinationQueryResultReader, err := TableScanByKeyRange(sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.destinationAlias, tableDefinition, key.KeyRange{}, sdw.keyspaceInfo.ShardingColumnType)
+			destinationQueryResultReader, err := TableScanByKeyRange(sdw.ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.destinationAlias, tableDefinition, key.KeyRange{}, sdw.keyspaceInfo.ShardingColumnType)
 			if err != nil {
 				sdw.wr.Logger().Errorf("TableScanByKeyRange(destination) failed: %v", err)
 				return

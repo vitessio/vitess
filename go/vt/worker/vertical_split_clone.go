@@ -299,7 +299,7 @@ func (vscw *VerticalSplitCloneWorker) findTargets() error {
 
 	// find an appropriate endpoint in the source shard
 	var err error
-	vscw.sourceAlias, err = findChecker(vscw.wr, vscw.cleaner, vscw.cell, vscw.sourceKeyspace, "0")
+	vscw.sourceAlias, err = findChecker(vscw.ctx, vscw.wr, vscw.cleaner, vscw.cell, vscw.sourceKeyspace, "0")
 	if err != nil {
 		return fmt.Errorf("cannot find checker for %v/%v/0: %v", vscw.cell, vscw.sourceKeyspace, err)
 	}
@@ -480,7 +480,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 
 				// build the query, and start the streaming
 				selectSQL := buildSQLFromChunks(vscw.wr, td, chunks, chunkIndex, vscw.sourceAlias.String())
-				qrr, err := NewQueryResultReaderForTablet(vscw.wr.TopoServer(), vscw.sourceAlias, selectSQL)
+				qrr, err := NewQueryResultReaderForTablet(vscw.ctx, vscw.wr.TopoServer(), vscw.sourceAlias, selectSQL)
 				if err != nil {
 					processError("NewQueryResultReaderForTablet failed: %v", err)
 					return

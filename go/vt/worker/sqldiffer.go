@@ -216,13 +216,13 @@ func (worker *SQLDiffWorker) findTargets() error {
 
 	// find an appropriate endpoint in superset
 	var err error
-	worker.superset.alias, err = findChecker(worker.wr, worker.cleaner, worker.cell, worker.superset.Keyspace, worker.superset.Shard)
+	worker.superset.alias, err = findChecker(worker.ctx, worker.wr, worker.cleaner, worker.cell, worker.superset.Keyspace, worker.superset.Shard)
 	if err != nil {
 		return err
 	}
 
 	// find an appropriate endpoint in subset
-	worker.subset.alias, err = findChecker(worker.wr, worker.cleaner, worker.cell, worker.subset.Keyspace, worker.subset.Shard)
+	worker.subset.alias, err = findChecker(worker.ctx, worker.wr, worker.cleaner, worker.cell, worker.subset.Keyspace, worker.subset.Shard)
 	if err != nil {
 		return err
 	}
@@ -305,14 +305,14 @@ func (worker *SQLDiffWorker) diff() error {
 	// run the diff
 	worker.wr.Logger().Infof("Running the diffs...")
 
-	supersetQueryResultReader, err := NewQueryResultReaderForTablet(worker.wr.TopoServer(), worker.superset.alias, worker.superset.SQL)
+	supersetQueryResultReader, err := NewQueryResultReaderForTablet(worker.ctx, worker.wr.TopoServer(), worker.superset.alias, worker.superset.SQL)
 	if err != nil {
 		worker.wr.Logger().Errorf("NewQueryResultReaderForTablet(superset) failed: %v", err)
 		return err
 	}
 	defer supersetQueryResultReader.Close()
 
-	subsetQueryResultReader, err := NewQueryResultReaderForTablet(worker.wr.TopoServer(), worker.subset.alias, worker.subset.SQL)
+	subsetQueryResultReader, err := NewQueryResultReaderForTablet(worker.ctx, worker.wr.TopoServer(), worker.subset.alias, worker.subset.SQL)
 	if err != nil {
 		worker.wr.Logger().Errorf("NewQueryResultReaderForTablet(subset) failed: %v", err)
 		return err
