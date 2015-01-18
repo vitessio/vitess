@@ -173,7 +173,7 @@ class TestUpdateStream(unittest.TestCase):
     self._exec_vt_txn(self._populate_vt_insert_test)
     self._exec_vt_txn(['delete from vt_insert_test'])
     utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'spare'])
-    #  time.sleep(20)
+    utils.wait_for_tablet_type(replica_tablet.tablet_alias, 'spare')
     replica_conn = self._get_replica_stream_conn()
     logging.debug('dialing replica update stream service')
     replica_conn.dial()
@@ -202,9 +202,9 @@ class TestUpdateStream(unittest.TestCase):
     logging.debug('_test_service_enabled starting @ %s', start_position)
     utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'replica'])
     logging.debug('sleeping a bit for the replica action to complete')
-    time.sleep(10)
+    utils.wait_for_tablet_type(replica_tablet.tablet_alias, 'replica', 30)
     thd = threading.Thread(target=self.perform_writes, name='write_thd',
-                           args=(400,))
+                           args=(100,))
     thd.daemon = True
     thd.start()
     replica_conn = self._get_replica_stream_conn()
@@ -238,13 +238,12 @@ class TestUpdateStream(unittest.TestCase):
     try:
       data = replica_conn.stream_start(start_position)
       utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'spare'])
-      #logging.debug("Sleeping a bit for the spare action to complete")
-      # time.sleep(20)
+      utils.wait_for_tablet_type(replica_tablet.tablet_alias, 'spare', 30)
       while data:
         data = replica_conn.stream_next()
         if data is not None and data['Category'] == 'POS':
           txn_count += 1
-      logging.error('Test Service Switch: FAIL')
+      logging.debug('Test Service Switch: FAIL')
       return
     except dbexceptions.DatabaseError, e:
       self.assertEqual(
@@ -277,8 +276,16 @@ class TestUpdateStream(unittest.TestCase):
   # from master and replica for the same writes. Also tests
   # transactions are retrieved properly.
   def test_stream_parity(self):
-    master_start_position = _get_master_current_position()
-    replica_start_position = _get_repl_current_position()
+    timeout = 30#s
+    while True:
+      master_start_position = _get_master_current_position()
+      replica_start_position = _get_repl_current_position()
+      if master_start_position == replica_start_position:
+        break
+      timeout = utils.wait_step(
+        "%s == %s" % (master_start_position, replica_start_position),
+        timeout
+      )
     logging.debug('run_test_stream_parity starting @ %s',
                   master_start_position)
     master_txn_count = 0
@@ -369,6 +376,7 @@ class TestUpdateStream(unittest.TestCase):
     self._test_service_enabled()
     # The above tests leaves the service in disabled state, hence enabling it.
     utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'replica'])
+    utils.wait_for_tablet_type(replica_tablet.tablet_alias, 'replica', 30)
 
   def test_log_rotation(self):
     start_position = _get_master_current_position()
