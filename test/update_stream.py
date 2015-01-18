@@ -276,8 +276,16 @@ class TestUpdateStream(unittest.TestCase):
   # from master and replica for the same writes. Also tests
   # transactions are retrieved properly.
   def test_stream_parity(self):
-    master_start_position = _get_master_current_position()
-    replica_start_position = _get_repl_current_position()
+    timeout = 30#s
+    while True:
+      master_start_position = _get_master_current_position()
+      replica_start_position = _get_repl_current_position()
+      if master_start_position == replica_start_position:
+        break
+      timeout = utils.wait_step(
+        "%s == %s" % (master_start_position, replica_start_position),
+        timeout
+      )
     logging.debug('run_test_stream_parity starting @ %s',
                   master_start_position)
     master_txn_count = 0
