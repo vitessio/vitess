@@ -327,6 +327,20 @@ def apply_vschema(vschema):
     f.write(vschema)
   run_vtctl(['ApplyVSchema', "-vschema_file", fname])
 
+def wait_for_tablet_type(tablet_alias, expected_type, timeout=10):
+  """Waits for a given tablet's SlaveType to become the expected value.
+
+  If the SlaveType does not become expected_type within timeout seconds,
+  it will raise a TestError.
+  """
+  while True:
+    if run_vtctl_json(['GetTablet', tablet_alias])['Type'] == expected_type:
+      break
+    timeout = wait_step(
+      "%s's SlaveType to be %s" % (tablet_alias, expected_type),
+      timeout
+    )
+
 # vtgate helpers, assuming it always restarts on the same port
 def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1,
                  topo_impl=None, tablet_bson_encrypted=False, cache_ttl='1s',

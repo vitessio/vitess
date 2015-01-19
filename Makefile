@@ -90,7 +90,8 @@ small_integration_test_files = \
 	sharded.py \
 	secure.py \
 	binlog.py \
-	clone.py
+	clone.py \
+	update_stream.py
 
 medium_integration_test_files = \
 	tabletmanager.py \
@@ -106,8 +107,7 @@ large_integration_test_files = \
 # in the continous integration test suites
 ci_skip_integration_test_files = \
 	resharding_bytes.py \
-	resharding.py \
-	update_stream.py
+	resharding.py
 
 # Run the following tests after making worker changes
 worker_integration_test_files = \
