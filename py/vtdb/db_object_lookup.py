@@ -1,9 +1,9 @@
-"""Module containing base classes and helper methods for database objects.
+"""Module containing base class for lookup database tables.
 
-The base classes represent different sharding schemes like
-unsharded, range-sharded and custom-sharded tables.
-This abstracts sharding details and provides methods
-for common database access patterns.
+LookupDBObject defines the base class for lookup tables and defines
+relevant methods. LookupDBObject inherits from DBObjectUnsharded and
+extends the functionality for getting, creating, updating and deleting
+the lookup relationship.
 """
 import functools
 import logging
@@ -37,8 +37,9 @@ class LookupDBObject(db_object_unsharded.DBObjectUnsharded):
   def update(class_, cursor, sharding_key_column_name, sharding_key,
              entity_id_column, new_entity_id):
     where_column_value_pairs = [(sharding_key_column_name, sharding_key),]
+    update_columns = {entity_id_column:new_entity_id}
     return class_.update_columns(cursor, where_column_value_pairs,
-                                 entity_id_column=new_entity_id)
+                                 **update_columns)
 
   @classmethod
   def delete(class_, cursor, sharding_key_column_name, sharding_key):

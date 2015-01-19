@@ -1,9 +1,12 @@
-"""Module containing base classes and helper methods for database objects.
+"""Module containing base classes for range-sharded database objects.
 
-The base classes represent different sharding schemes like
-unsharded, range-sharded and custom-sharded tables.
-This abstracts sharding details and provides methods
-for common database access patterns.
+There are two base classes for tables that live in range-sharded keyspace -
+1. DBObjectRangeSharded -  This should be used for tables that only reference lookup entities
+but don't create or manage them. Please see examples in test/clientlib_tests/db_class_sharded.py.
+2. DBObjectEntityRangeSharded - This inherits from DBObjectRangeSharded and is used for tables
+and also create new lookup relationships.
+This module also contains helper methods for cursor creation for accessing lookup tables
+and methods for dml and select for the above mentioned base classes.
 """
 import functools
 import logging
@@ -17,22 +20,18 @@ from vtdb import shard_constants
 from vtdb import sql_builder
 from vtdb import vtgate_cursor
 
+
+# This creates a 64 binary packed string for keyspace_id.
+# This is used for cursor creation so that keyspace_id can
+# be passed as rpc param for vtgate.
 pack_keyspace_id = struct.Struct('!Q').pack
 
+
+# This unpacks the keyspace_id so that it can be used
+# in bind variables.
 def unpack_keyspace_id(kid):
  return struct.Struct('!Q').unpack(kid)[0]
 
-
-def create_cursor_from_params(vtgate_conn, tablet_type, is_dml, table_class):
-  cursor = table_class.create_vtgate_cursor(vtgate_conn, tablet_type, is_dml)
-  return cursor
-
-
-def create_cursor_from_old_cursor(old_cursor, table_class):
-  cursor = table_class.create_vtgate_cursor(old_cursor._conn,
-                                            old_cursor.tablet_type,
-                                            old_cursor.is_writable())
-  return cursor
 
 
 
@@ -95,20 +94,23 @@ class DBObjectRangeSharded(db_object.DBObjectBase):
     routing = db_object.ShardRouting(class_.keyspace)
     entity_id_map = None
 
-
     entity_id_map = kargs.get("entity_id_map", None)
     if entity_id_map is None:
-      keyrange = kargs.get("keyrange", None)
-      if keyrange is not None:
-        routing.keyrange = keyrange
+      kr = None
+      key_range = kargs.get("keyrange", None)
+      if isinstance(key_range, keyrange.KeyRange):
+        kr = key_range
+      else:
+        kr = keyrange.KeyRange(key_range)
+      if kr is not None:
+        routing.keyrange = kr
       # Both entity_id_map and keyrange have been evaluated. Return.
-      return routing, kargs
+      return routing
 
     # entity_id_map is not None
     if len(entity_id_map) != 1:
       dbexceptions.ProgrammingError("Invalid entity_id_map '%s'" % entity_id_map)
 
-    #logging.info("In create_shard_routing entity_id_map %s" % (entity_id_map))
     entity_id_col = entity_id_map.keys()[0]
     entity_id = entity_id_map[entity_id_col]
 
@@ -130,7 +132,8 @@ class DBObjectRangeSharded(db_object.DBObjectBase):
 
   @classmethod
   def create_vtgate_cursor(class_, vtgate_conn, tablet_type, is_dml, **cursor_kargs):
-    cursor_method = functools.partial(create_cursor_from_params, vtgate_conn, tablet_type, False)
+    cursor_method = functools.partial(db_object.create_cursor_from_params,
+                                      vtgate_conn, tablet_type, False)
     routing = class_.create_shard_routing(cursor_method, **cursor_kargs)
     if is_dml:
       if routing.sharding_key is None or db_object._is_iterable_container(routing.sharding_key):
@@ -225,7 +228,11 @@ class DBObjectRangeSharded(db_object.DBObjectBase):
     if cursor.routing.sharding_key is not None:
       # If the in-clause is based on sharding key
       entity_col_name = class_.sharding_key_column_name
-      for sk in list(cursor.routing.sharding_key):
+      if db_object._is_iterable_container(cursor.routing.sharding_key):
+        for sk in list(cursor.routing.sharding_key):
+          entity_id_keyspace_id_map[sk] = pack_keyspace_id(class_.sharding_key_to_keyspace_id(sk))
+      else:
+        sk = cursor.routing.sharding_key
         entity_id_keyspace_id_map[sk] = pack_keyspace_id(class_.sharding_key_to_keyspace_id(sk))
     elif cursor.routing.entity_id_sharding_key_map is not None:
       # If the in-clause is based on entity column
@@ -305,11 +312,12 @@ class DBObjectRangeSharded(db_object.DBObjectBase):
     rowcount = cursor.execute(query, bind_vars)
 
     # If the entity_id column is being updated, update lookup map.
-    for entity_col in class_.entity_id_lookup_map.keys():
-      if entity_col in update_columns:
-        class_.update_sharding_key_entity_id_lookup(cursor, sharding_key,
-                                                    entity_col,
-                                                    update_columns[entity_col])
+    if class_.entity_id_lookup_map is not None:
+      for entity_col in class_.entity_id_lookup_map.keys():
+        if entity_col in update_columns:
+          class_.update_sharding_key_entity_id_lookup(cursor, sharding_key,
+                                                      entity_col,
+                                                      update_columns[entity_col])
 
     return rowcount
 
@@ -372,7 +380,6 @@ class DBObjectEntityRangeSharded(DBObjectRangeSharded):
   def update_sharding_key_entity_id_lookup(class_, cursor_method,
                                            sharding_key, entity_id_column,
                                            new_entity_id):
-
     sharding_key_lookup_column = class_.get_lookup_column_name(class_.sharding_key_column_name)
     entity_id_lookup_column = class_.get_lookup_column_name(entity_id_column)
     lookup_class = class_.entity_id_lookup_map[entity_id_column]
@@ -468,7 +475,8 @@ class DBObjectEntityRangeSharded(DBObjectRangeSharded):
     rowcount = cursor.execute(query, bind_vars)
 
     # If the entity_id column is being updated, update lookup map.
-    lookup_cursor_method = functools.partial(create_cursor_from_old_cursor, cursor)
+    lookup_cursor_method = functools.partial(
+        db_object.create_cursor_from_old_cursor, cursor)
     for entity_col in class_.entity_id_lookup_map.keys():
       if entity_col in update_columns:
         class_.update_sharding_key_entity_id_lookup(lookup_cursor_method,
@@ -498,7 +506,8 @@ class DBObjectEntityRangeSharded(DBObjectRangeSharded):
     rowcount = cursor.rowcount
 
     #delete the lookup map.
-    lookup_cursor_method = functools.partial(create_cursor_from_old_cursor, cursor)
+    lookup_cursor_method = functools.partial(
+        db_object.create_cursor_from_old_cursor, cursor)
     class_.delete_sharding_key_entity_id_lookup(lookup_cursor_method, sharding_key)
 
     return rowcount

@@ -29,7 +29,6 @@ class VtRangeBase(db_object_range_sharded.DBObjectRangeSharded):
   @classmethod
   def sharding_key_to_keyspace_id(class_, sharding_key):
     keyspace_id = create_keyspace_id(sharding_key)
-    #logging.info("keyspace_id %s type %s" % (keyspace_id, type(keyspace_id)))
     return keyspace_id
 
   @classmethod
@@ -41,7 +40,6 @@ class VtEntityRangeBase(db_object_range_sharded.DBObjectEntityRangeSharded):
   @classmethod
   def sharding_key_to_keyspace_id(class_, sharding_key):
     keyspace_id = create_keyspace_id(sharding_key)
-    #logging.info("keyspace_id %s type %s" % (keyspace_id, type(keyspace_id)))
     return keyspace_id
 
   @classmethod
@@ -75,13 +73,9 @@ class VtUserEmail(VtRangeBase):
   entity_id_lookup_map = None
 
 
-
 class VtSongDetail(VtRangeBase):
   keyspace = topo_schema.KS_RANGE_SHARDED[0]
   table_name = "vt_song_detail"
   columns_list = ["song_id", "album_name", "artist", "keyspace_id"]
   sharding_key_column_name = None
   entity_id_lookup_map = {"song_id": db_class_lookup.VtSongUserLookup}
-
-
-

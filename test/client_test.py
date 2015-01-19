@@ -232,8 +232,6 @@ class TestUnshardedTable(unittest.TestCase):
       rows = db_class_unsharded.VtUnsharded.select_by_id(
           context.get_cursor(), 2)
       self.assertEqual(len(rows), 1, "wrong number of rows fetched")
-      for row in rows:
-        logging.info("ROW: %s" % row)
       self.assertEqual(rows[0].id, 2, "wrong row fetched")
 
   def test_update_and_read(self):
@@ -293,10 +291,14 @@ class TestRangeSharded(unittest.TestCase):
   def tearDown(self):
     with database_context.WriteTransaction(self.dc) as context:
       for uid in self.user_id_list:
-        db_class_sharded.VtUser.delete_by_columns(context.get_cursor(entity_id_map={'id':uid}),
-                                                  [('id', uid),])
-        db_class_sharded.VtUserEmail.delete_by_columns(context.get_cursor(entity_id_map={'user_id':uid}),
-                                                       [('user_id', uid),])
+        try:
+          db_class_sharded.VtUser.delete_by_columns(context.get_cursor(entity_id_map={'id':uid}),
+                                                    [('id', uid),])
+          db_class_sharded.VtUserEmail.delete_by_columns(context.get_cursor(entity_id_map={'user_id':uid}),
+                                                         [('user_id', uid),])
+        except dbexceptions.DatabaseError as e:
+          if str(e) == "DB Row not found":
+            pass
 
   def test_sharding_key_read(self):
     with database_context.ReadFromMaster(self.dc) as context:
@@ -322,44 +324,104 @@ class TestRangeSharded(unittest.TestCase):
 
   def test_in_clause_read(self):
     with database_context.ReadFromMaster(self.dc) as context:
-      #FIXME: clean the api
-      where_column_value_pairs = (('id', [self.user_id_list[0], self.user_id_list[1]]),)
+      user_id_list = [self.user_id_list[0], self.user_id_list[1]]
+
+      where_column_value_pairs = (('id', user_id_list),)
       entity_id_map = dict(where_column_value_pairs)
-      logging.info("entity_id_map %s" % entity_id_map)
       rows = db_class_sharded.VtUser.select_by_ids(
           context.get_cursor(entity_id_map=entity_id_map),
           where_column_value_pairs)
       self.assertEqual(len(rows), 2, "wrong number of rows fetched")
+      self.assertEqual(user_id_list, [row.id for row in rows], "wrong rows fetched")
 
-      where_column_value_pairs = (('user_id', [self.user_id_list[0], self.user_id_list[1]]),)
+      username_list = [row.username for row in rows]
+      where_column_value_pairs = (('username', username_list),)
       entity_id_map = dict(where_column_value_pairs)
-      logging.info("entity_id_map %s" % entity_id_map)
+      rows = db_class_sharded.VtUser.select_by_ids(
+          context.get_cursor(entity_id_map=entity_id_map),
+          where_column_value_pairs)
+      self.assertEqual(len(rows), 2, "wrong number of rows fetched")
+      self.assertEqual(username_list, [row.username for row in rows], "wrong rows fetched")
+
+      where_column_value_pairs = (('user_id', user_id_list),)
+      entity_id_map = dict(where_column_value_pairs)
       rows = db_class_sharded.VtUserEmail.select_by_ids(
           context.get_cursor(entity_id_map=entity_id_map),
           where_column_value_pairs)
       self.assertEqual(len(rows), 2, "wrong number of rows fetched")
+      self.assertEqual(user_id_list, [row.user_id for row in rows], "wrong rows fetched")
+
+  def test_keyrange_read(self):
+    where_column_value_pairs = []
+    with database_context.ReadFromMaster(self.dc) as context:
+      rows1 = db_class_sharded.VtUser.select_by_columns(
+          context.get_cursor(keyrange='-80'), where_column_value_pairs)
+      rows2 = db_class_sharded.VtUser.select_by_columns(
+          context.get_cursor(keyrange='80-'), where_column_value_pairs)
+      self.assertEqual(len(rows1) + len(rows2), len(self.user_id_list), "wrong number of rows fetched")
 
   def update_columns(self):
     with database_context.WriteTransaction(self.dc) as context:
-      where_column_value_pairs = [('id', self.user_id_list[1]),]
-      entity_id_map = {'id': self.user_id_list[1]}
+      user_id = self.user_id_list[1]
+      where_column_value_pairs = [('id', user_id),]
+      entity_id_map = {'id': user_id}
+      new_username = 'new_user%s' % user_id
       db_class_sharded.VtUser.update_columns(context.get_cursor(entity_id_map=entity_id_map),
                                              where_column_value_pairs,
-                                             username='new_user%s'%self.user_id_list[1])
+                                             username=new_username)
+      # verify the updated value.
+      where_column_value_pairs = [('id', user_id),]
+      rows = db_class_sharded.VtUser.select_by_columns(
+          context.get_cursor(entity_id_map={'id': user_id}),
+          where_column_value_pairs)
+      self.assertEqual(len(rows), 1, "wrong number of rows fetched")
+      self.assertEqual(new_username, rows[0].username)
 
-      where_column_value_pairs = [('user_id', self.user_id_list[1]),]
-      entity_id_map = {'user_id': self.user_id_list[1]}
-      new_email = 'new_user%s@google.com' % self.user_id_list[1]
+      where_column_value_pairs = [('user_id', user_id),]
+      entity_id_map = {'user_id': user_id}
+      new_email = 'new_user%s@google.com' % user_id
       m = hashlib.md5()
       m.update(new_email)
       email_hash = m.digest()
-      db_class_sharded.VtUserEmail.update_columns(context.get_cursor(entity_id_map={'user_id':uid}),
+      db_class_sharded.VtUserEmail.update_columns(context.get_cursor(entity_id_map={'user_id':user_id}),
                                                   where_column_value_pairs,
                                                   email=new_email,
                                                   email_hash=email_hash)
-     #TODO: check the correctness of newly updated values.
 
+    # verify the updated value.
+    with database_context.ReadFromMaster(self.dc) as context:
+      where_column_value_pairs = [('user_id', user_id),]
+      entity_id_map = dict(where_column_value_pairs)
+      rows = db_class_sharded.VtUserEmail.select_by_ids(
+          context.get_cursor(entity_id_map=entity_id_map),
+          where_column_value_pairs)
+      self.assertEqual(len(rows), 1, "wrong number of rows fetched")
+      self.assertEqual(new_email, rows[0].email)
 
+  def delete_columns(self):
+    user_id = self.user_id_list[-1]
+    with database_context.WriteTransaction(self.dc) as context:
+      where_column_value_pairs = [('id', user_id),]
+      entity_id_map = {'id': user_id}
+      db_class_sharded.VtUser.delete_by_columns(context.get_cursor(entity_id_map=entity_id_map),
+                                             where_column_value_pairs)
+
+      where_column_value_pairs = [('user_id', user_id),]
+      entity_id_map = {'user_id': user_id}
+      db_class_sharded.VtUserEmail.delete_by_columns(context.get_cursor(entity_id_map=entity_id_map),
+                                                  where_column_value_pairs)
+
+    with database_context.ReadFromMaster(self.dc) as context:
+      rows = db_class_sharded.VtUser.select_by_columns(
+          context.get_cursor(entity_id_map=entity_id_map),
+          where_column_value_pairs)
+      self.assertEqual(len(rows), 0, "wrong number of rows fetched")
+
+      rows = db_class_sharded.VtUserEmail.select_by_ids(
+          context.get_cursor(entity_id_map=entity_id_map),
+          where_column_value_pairs)
+      self.assertEqual(len(rows), 0, "wrong number of rows fetched")
+    self.user_id_list = self.user_id_list[:-1]
 
 
 if __name__ == '__main__':

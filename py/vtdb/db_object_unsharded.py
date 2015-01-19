@@ -1,9 +1,8 @@
-"""Module containing base classes and helper methods for database objects.
+"""Module containing base class for tables in unsharded keyspace.
 
-The base classes represent different sharding schemes like
-unsharded, range-sharded and custom-sharded tables.
-This abstracts sharding details and provides methods
-for common database access patterns.
+DBObjectUnsharded inherits from DBObjectBase, the implementation
+for the common database operations is defined in DBObjectBase.
+DBObjectUnsharded defines the cursor creation methods for the same.
 """
 import functools
 import logging
@@ -20,8 +19,8 @@ from vtdb import vtgate_cursor
 class DBObjectUnsharded(db_object.DBObjectBase):
   """Base class for unsharded db classes.
 
-  This provides default implementation of routing helper methods, cursor
-  creation and common database access operations.
+  This provides default implementation of routing helper methods and cursor
+  creation. The common database access operations are defined in the base class.
   """
   keyspace = None
   sharding = shard_constants.UNSHARDED

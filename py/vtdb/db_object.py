@@ -1,9 +1,11 @@
-"""Module containing base classes and helper methods for database objects.
+"""Module containing the base class for database classes and decorator for db method.
 
-The base classes represent different sharding schemes like
-unsharded, range-sharded and custom-sharded tables.
-This abstracts sharding details and provides methods
-for common database access patterns.
+The base class DBObjectBase is the base class for all other database base classes.
+It has methods for common database operations like select, insert, update and delete.
+This module also contains the definition for ShardRouting which is used for determining
+the routing of a query during cursor creation.
+The module also has the db_class_method decorator and db_wrapper method which are
+used for cursor creation and calling the database method.
 """
 import functools
 import logging
@@ -25,23 +27,64 @@ class ShardRouting(object):
   keyspace: keyspace where the table resides.
   sharding_key: sharding key of the table.
   keyrange: keyrange for the query.
+  entity_column_name: the name of the lookup based entity used for routing.
   entity_id_sharding_key_map: this map is used for in clause queries.
   shard_name: this is used to route queries for custom sharded keyspaces.
   """
-
-  keyspace = None
-  sharding_key = None
-  keyrange = None
-  entity_column_name = None
-  entity_id_sharding_key_map = None
-  shard_name = None # For custom sharding
-
   def __init__(self, keyspace):
+    # keyspace of the table.
     self.keyspace = keyspace
+    # sharding_key, entity_column_name and entity_id_sharding_key
+    # are used primarily for routing range-sharded keyspace queries.
+    self.sharding_key = None
+    self.entity_column_name = None
+    self.entity_id_sharding_key_map = None
+    self.keyrange = None
+    self.shard_name = None
 
 
 def _is_iterable_container(x):
   return hasattr(x, '__iter__')
+
+
+def create_cursor_from_params(vtgate_conn, tablet_type, is_dml, table_class):
+  """This method creates the cursor from the required params.
+
+  This is mainly used for creating lookup cursor during create_shard_routing,
+  as there is no real cursor available.
+
+  Args:
+    vtgate_conn: connection to vtgate server.
+    tablet_type: tablet type for the cursor.
+    is_dml: indicates writable cursor or not.
+    table_class: table for which the cursor is being created.
+
+  Returns:
+    cursor
+  """
+  cursor = table_class.create_vtgate_cursor(vtgate_conn, tablet_type, is_dml)
+  return cursor
+
+
+def create_cursor_from_old_cursor(old_cursor, table_class):
+  """This method creates the cursor from an existing cursor.
+
+  This is mainly used for creating lookup cursor during db operations on
+  other database tables.
+
+  Args:
+    old_cursor: existing cursor from which important params are evaluated.
+    table_class: table for which the cursor is being created.
+
+  Returns:
+    cursor
+  """
+  cursor = table_class.create_vtgate_cursor(old_cursor._conn,
+                                            old_cursor.tablet_type,
+                                            old_cursor.is_writable())
+  return cursor
+
+
 
 
 def db_wrapper(method):

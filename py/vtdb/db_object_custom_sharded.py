@@ -1,9 +1,8 @@
-"""Module containing base classes and helper methods for database objects.
+"""Module containing base class for tables in custom sharded keyspace.
 
-The base classes represent different sharding schemes like
-unsharded, range-sharded and custom-sharded tables.
-This abstracts sharding details and provides methods
-for common database access patterns.
+Vitess sharding scheme is range-sharded. Vitess supports routing for
+other sharding schemes by allowing explicit shard_name addressing.
+This implementation is not fully complete as yet.
 """
 import logging
 
