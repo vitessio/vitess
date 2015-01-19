@@ -1,0 +1,22 @@
+<div class="panel panel-info"
+  data-ng-show="(!curResult.error) && curResult.description">
+  <div class="panel-heading">
+    <h5>{{curResult.title}}</h5>
+    <span data-ng-show="last_id">last_id: {{res.lastrowid}}</span>
+  </div>
+  <div class="panel-body">
+    <table class="table table-condensed">
+      <tr>
+        <th data-ng-repeat="field in curResult.description">{{field[0]}}</th>
+      </tr>
+      <tr data-ng-repeat="row in curResult.results">
+        <td data-ng-repeat="cell in row track by $index">{{cell}}</td>
+      </tr>
+    </table>
+  </div>
+</div>
+<div class="alert alert-success"
+  data-ng-show="(!curResult.error) && curResult.description.length == 0">
+  rows_affected: {{curResult.rowcount}} last_id: {{curResult.lastrowid}}</div>
+<div class="alert alert-danger" data-ng-show="curResult.error">
+  {{curResult.title}}: {{curResult.error}}</div>
