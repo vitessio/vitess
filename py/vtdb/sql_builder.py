@@ -288,10 +288,34 @@ def delete_by_columns_query(table_name, where_column_value_pairs=None,
   return query, bind_vars
 
 
+def insert_query(table_name, columns_list, **bind_variables):
+  values_clause, bind_list = build_values_clause(columns_list,
+                                                 bind_variables)
+
+
+  query = 'INSERT INTO %s (%s) VALUES (%s)' % (table_name,
+                                               colstr(columns_list,
+                                                     bind=bind_list),
+                                               values_clause)
+  return query, bind_variables
+
+
 def choose_bind_name(base, counter=None):
   if counter:
     base += '_%d' % counter.next()
     return base
+
+def make_bind_list(column, values, counter=None):
+  result = []
+  bind_names = []
+  if counter is None:
+    counter = itertools.count(1)
+  for value in values:
+    bind_name = choose_bind_name(column, counter=counter)
+    bind_names.append(bind_name)
+    result.append((bind_name, value))
+  return result
+
 
 
 class MySQLFunction(object):
