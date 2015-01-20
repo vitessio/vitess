@@ -71,9 +71,9 @@ def main():
       time.sleep(0.25)
       exec_query(cursor, "result", query, response)
     finally:
-      user0.kill()
-      user1.kill()
-      lookup.kill()
+      user0.terminate()
+      user1.terminate()
+      lookup.terminate()
       time.sleep(0.25)
       response["queries"] = queries
 

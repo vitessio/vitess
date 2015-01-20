@@ -5,7 +5,6 @@
 'use strict';
 
 function DemoController($scope, $http) {
-  init();
 
   function init() {
     $scope.samples = [
@@ -39,6 +38,7 @@ function DemoController($scope, $http) {
         "insert into music_extra(music_id) values(1) /* keyspace_id back-computed */",
         "insert into music_extra(music_id, keyspace_id) values(1, 1) /* invalid keyspace id */",
     ];
+    $scope.submitQuery()
   }
 
   $scope.submitQuery = function() {
@@ -62,4 +62,6 @@ function DemoController($scope, $http) {
     $scope.query = $query;
     angular.element("#query_input").focus();
   };
+
+  init();
 }
