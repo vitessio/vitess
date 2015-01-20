@@ -19,13 +19,29 @@ license that can be found in the LICENSE file.
       <div class="col-md-9">
         <div class="panel">
           <form class="input-group" data-ng-submit="submitQuery()">
+            <div class="input-group-btn">
+              <button class="btn dropdown-toggle" type="button"
+                data-toggle="dropdown">
+                Samples <span class="caret"></span>
+              </button>
+              <ul class="dropdown-menu">
+                <li data-ng-class="{'divider': !sample}"
+                  data-ng-repeat="sample in samples track by $index"
+                  data-ng-click="setQuery(sample)"><a data-ng-show="sample"
+                  href="#">{{sample}}</a></li>
+              </ul>
+            </div>
             <input type="text" class="form-control" placeholder="Query"
-              data-ng-model="query"><span class="input-group-btn"><button
-                class="btn btn-primary" type="button"
-                data-ng-click="submitQuery()">Submit</button> </span>
+              data-ng-model="query" id="query_input">
           </form>
         </div>
-        <div class="alert alert-danger col-md-9" data-ng-show="result.error">
+        <table class="col-md-9">
+          <tr data-ng-repeat="queryInfo in result.queries track by $index">
+            <td>{{queryInfo[0]}}</td>
+            <td>{{queryInfo[1]}}</td>
+          </tr>
+        </table>
+        <div class="col-md-9 alert alert-danger" data-ng-show="result.error">
           {{result.error}}</div>
       </div>
     </div>

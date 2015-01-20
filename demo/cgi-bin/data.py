@@ -10,7 +10,10 @@ This module allows you to bring up and tear down keyspaces.
 
 import cgi
 import json
+import subprocess
 import sys
+import threading
+import time
 
 from vtdb import vtgatev3
 
@@ -37,6 +40,19 @@ def exec_query(cursor, title, query, response):
         "error": str(e),
         }
 
+def capture_log(prefix, port, queries):
+  p = subprocess.Popen(["curl", "-s", "-N", "http://localhost:%d/debug/querylog" % port], stdout=subprocess.PIPE)
+  def collect():
+    for line in iter(p.stdout.readline, ''):
+      query = line.split("\t")[10].strip('"')
+      if not query:
+        continue
+      queries.append([prefix, query])
+  t = threading.Thread(target=collect)
+  t.daemon = True
+  t.start()
+  return p
+
 def main():
   print "Content-Type: application/json\n"
   try:
@@ -47,7 +63,19 @@ def main():
     query = args.getvalue("query")
     response = {}
 
-    exec_query(cursor, "result", query, response)
+    try:
+      queries = []
+      user0 = capture_log("user0", 15003, queries)
+      user1 = capture_log("user1", 15005, queries)
+      lookup = capture_log("lookup", 15007, queries)
+      time.sleep(0.25)
+      exec_query(cursor, "result", query, response)
+    finally:
+      user0.kill()
+      user1.kill()
+      lookup.kill()
+      time.sleep(0.25)
+      response["queries"] = queries
 
     exec_query(cursor, "user0", "select * from user where keyrange('','\x80')", response)
     exec_query(cursor, "user1", "select * from user where keyrange('\x80', '')", response)
@@ -62,6 +90,7 @@ def main():
     exec_query(cursor, "user_idx", "select * from user_idx", response)
     exec_query(cursor, "name_user_idx", "select * from name_user_idx", response)
     exec_query(cursor, "music_user_idx", "select * from music_user_idx", response)
+
 
     print json.dumps(response)
   except Exception as e:
