@@ -30,6 +30,14 @@ const (
 
 	// Default name for databases is the prefix plus keyspace
 	vtDbPrefix = "vt_"
+
+	// ReplicationLag is the key in the health map to indicate high
+	// replication lag
+	ReplicationLag = "replication_lag"
+
+	// ReplicationLagHigh is the value in the health map to indicate high
+	// replication lag
+	ReplicationLagHigh = "high"
 )
 
 // TabletAlias is the minimum required information to locate a tablet.

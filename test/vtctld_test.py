@@ -211,7 +211,7 @@ class TestVtctld(unittest.TestCase):
   def test_tablet_status(self):
     # the vttablet that has a health check has a bit more, so using it
     shard_0_replica_status = shard_0_replica.get_status()
-    self.assertIn('Polling health information from MySQLReplicationLag(allowedLag=30)', shard_0_replica_status)
+    self.assertIn('Polling health information from MySQLReplicationLag', shard_0_replica_status)
     self.assertIn('Alias: <a href="http://localhost:', shard_0_replica_status)
     self.assertIn('</html>', shard_0_replica_status)
 

@@ -74,7 +74,7 @@ var (
 
 	// healthTemplate is just about the tablet health
 	healthTemplate = `
-<div style="font-size: x-large">Current status: <span style="padding-left: 0.5em; padding-right: 0.5em; padding-bottom: 0.5ex; padding-top: 0.5ex;" class="{{.Current}}">{{.Current}}</span></div>
+<div style="font-size: x-large">Current status: <span style="padding-left: 0.5em; padding-right: 0.5em; padding-bottom: 0.5ex; padding-top: 0.5ex;" class="{{.CurrentClass}}">{{.CurrentHTML}}</span></div>
 <p>Polling health information from {{github_com_youtube_vitess_health_html_name}}.</p>
 <h2>History</h2>
 <table>
@@ -85,14 +85,7 @@ var (
   {{range .Records}}
   <tr class="{{.Class}}">
     <td class="time">{{.Time.Format "Jan 2, 2006 at 15:04:05 (MST)"}}</td>
-    <td>
-    {{ if eq "unhealthy" .Class}}
-      unhealthy: {{.Error}}
-    {{else if eq "unhappy" .Class}}
-      unhappy (reasons: {{range $key, $value := .Result}}{{$key}}: {{$value}} {{end}})
-    {{else}}
-      healthy
-    {{end}}
+    <td>{{.HTML}}</td>
   </tr>
   {{end}}
 </table>
@@ -155,11 +148,18 @@ type healthStatus struct {
 	Records []interface{}
 }
 
-func (hs *healthStatus) Current() string {
+func (hs *healthStatus) CurrentClass() string {
 	if len(hs.Records) > 0 {
 		return hs.Records[0].(*tabletmanager.HealthRecord).Class()
 	}
 	return "unknown"
+}
+
+func (hs *healthStatus) CurrentHTML() template.HTML {
+	if len(hs.Records) > 0 {
+		return hs.Records[0].(*tabletmanager.HealthRecord).HTML()
+	}
+	return template.HTML("unknown")
 }
 
 func healthHTMLName() template.HTML {

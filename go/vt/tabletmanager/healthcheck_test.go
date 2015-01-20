@@ -24,18 +24,18 @@ func TestHealthRecordDeduplication(t *testing.T) {
 			duplicate: true,
 		},
 		{
-			left:      &HealthRecord{Time: now, Result: map[string]string{"a": "1"}},
-			right:     &HealthRecord{Time: later, Result: map[string]string{"a": "1"}},
+			left:      &HealthRecord{Time: now, ReplicationDelay: defaultDegradedThreshold / 2},
+			right:     &HealthRecord{Time: later, ReplicationDelay: defaultDegradedThreshold / 3},
 			duplicate: true,
 		},
 		{
-			left:      &HealthRecord{Time: now, Result: map[string]string{"a": "1"}},
-			right:     &HealthRecord{Time: later, Result: map[string]string{"a": "2"}},
+			left:      &HealthRecord{Time: now, ReplicationDelay: defaultDegradedThreshold / 2},
+			right:     &HealthRecord{Time: later, ReplicationDelay: defaultDegradedThreshold * 2},
 			duplicate: false,
 		},
 		{
-			left:      &HealthRecord{Time: now, Error: errors.New("foo"), Result: map[string]string{"a": "1"}},
-			right:     &HealthRecord{Time: later, Result: map[string]string{"a": "1"}},
+			left:      &HealthRecord{Time: now, Error: errors.New("foo"), ReplicationDelay: defaultDegradedThreshold * 2},
+			right:     &HealthRecord{Time: later, ReplicationDelay: defaultDegradedThreshold * 2},
 			duplicate: false,
 		},
 	}
@@ -61,11 +61,11 @@ func TestHealthRecordClass(t *testing.T) {
 			state: "unhealthy",
 		},
 		{
-			r:     &HealthRecord{Result: map[string]string{"1": "1"}},
+			r:     &HealthRecord{ReplicationDelay: defaultDegradedThreshold * 2},
 			state: "unhappy",
 		},
 		{
-			r:     &HealthRecord{Result: map[string]string{}},
+			r:     &HealthRecord{ReplicationDelay: defaultDegradedThreshold / 2},
 			state: "healthy",
 		},
 	}

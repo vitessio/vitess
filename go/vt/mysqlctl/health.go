@@ -3,6 +3,7 @@ package mysqlctl
 import (
 	"fmt"
 	"html/template"
+	"time"
 
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -10,32 +11,32 @@ import (
 
 // mysqlReplicationLag implements health.Reporter
 type mysqlReplicationLag struct {
-	mysqld              *Mysqld
-	allowedLagInSeconds int
+	mysqld *Mysqld
 }
 
-func (mrl *mysqlReplicationLag) Report(tabletType topo.TabletType, shouldQueryServiceBeRunning bool) (status map[string]string, err error) {
+// Report is part of the health.Reporter interface
+func (mrl *mysqlReplicationLag) Report(tabletType topo.TabletType, shouldQueryServiceBeRunning bool) (time.Duration, error) {
 	if !topo.IsSlaveType(tabletType) {
-		return nil, nil
+		return 0, nil
 	}
 
 	slaveStatus, err := mrl.mysqld.SlaveStatus()
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-	if !slaveStatus.SlaveRunning() || int(slaveStatus.SecondsBehindMaster) > mrl.allowedLagInSeconds {
-		return map[string]string{health.ReplicationLag: health.ReplicationLagHigh}, nil
+	if !slaveStatus.SlaveRunning() {
+		return 0, fmt.Errorf("Replication is not running")
 	}
-
-	return nil, nil
+	return time.Duration(slaveStatus.SecondsBehindMaster) * time.Second, nil
 }
 
+// HTMLName is part of the health.Reporter interface
 func (mrl *mysqlReplicationLag) HTMLName() template.HTML {
-	return template.HTML(fmt.Sprintf("MySQLReplicationLag(allowedLag=%v)", mrl.allowedLagInSeconds))
+	return template.HTML("MySQLReplicationLag")
 }
 
-// MySQLReplication lag returns a reporter that reports the MySQL
-// replication lag. It uses the key "replication_lag".
-func MySQLReplicationLag(mysqld *Mysqld, allowedLagInSeconds int) health.Reporter {
-	return &mysqlReplicationLag{mysqld, allowedLagInSeconds}
+// MySQLReplicationLag lag returns a reporter that reports the MySQL
+// replication lag.
+func MySQLReplicationLag(mysqld *Mysqld) health.Reporter {
+	return &mysqlReplicationLag{mysqld}
 }
