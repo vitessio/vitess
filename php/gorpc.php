@@ -5,7 +5,7 @@ This is a naive implementation of a Vitess-compatible Go-style RPC layer
 for PHP. It should be considered a proof-of-concept, as it has not been
 tested, since we don't use PHP ourselves. It was loosely modeled after
 the Python implementation in the Vitess tree, but without consideration
-for timeouts.
+for timeouts, authentication, or SSL.
 */
 
 class GoRpcException extends Exception {
@@ -44,6 +44,12 @@ class GoRpcResponse {
 	public function seq() {
 		return $this->header['Seq'];
 	}
+
+	public function is_eos() {
+		return $this->error() == self::END_OF_STREAM;
+	}
+
+	const END_OF_STREAM = 'EOS';
 }
 
 abstract class GoRpcClient {
@@ -82,11 +88,27 @@ abstract class GoRpcClient {
 		$this->send_request($req);
 
 		$resp = $this->read_response();
-		if ($resp->error())
-			throw new GoRpcRemoteError("$method: " . $resp->error());
 		if ($resp->seq() != $req->seq())
 			throw new GoRpcException("$method: request sequence mismatch");
+		if ($resp->error())
+			throw new GoRpcRemoteError("$method: " . $resp->error());
 
+		return $resp;
+	}
+
+	public function stream_call($method, $request) {
+		$req = new GoRpcRequest($this->next_seq(), $method, $request);
+		$this->send_request($req);
+	}
+
+	public function stream_next() {
+		$resp = $this->read_response();
+		if ($resp->seq() != $this->seq)
+			throw new GoRpcException("$method: request sequence mismatch");
+		if ($resp->is_eos())
+			return FALSE;
+		if ($resp->error())
+			throw new GoRpcRemoteError("$method: " . $resp->error());
 		return $resp;
 	}
 
