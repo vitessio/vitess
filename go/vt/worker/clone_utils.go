@@ -104,58 +104,38 @@ func formatTableStatuses(tableStatuses []*tableStatus, startTime time.Time) ([]s
 // retriable application error.
 func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, command string, disableBinLogs bool) error {
 	retryDuration := 2 * time.Hour
-
-	executeFetchErrs := make(chan error)
-	defer close(executeFetchErrs)
-
 	// We should keep retrying up until the retryCtx runs out
 	retryCtx, retryCancel := context.WithTimeout(ctx, retryDuration)
 	defer retryCancel()
-
-	executeFetch := func() {
-		newCtx, cancel := context.WithTimeout(retryCtx, 2*time.Minute)
-		defer cancel()
-		_, err := wr.TabletManagerClient().ExecuteFetch(newCtx, ti, command, 0, false, disableBinLogs)
-		executeFetchErrs <- err
-	}
-	// Try for the first time
-	go executeFetch()
-
-	// Keep retrying until success, timeout, or unrecoverable failure
 	for {
-		select {
-		case err := <-executeFetchErrs:
-			switch {
+		tryCtx, cancel := context.WithTimeout(retryCtx, 2*time.Minute)
+		_, err := wr.TabletManagerClient().ExecuteFetch(tryCtx, ti, command, 0, false, disableBinLogs)
+		cancel()
+		switch {
+		case err == nil:
 			// success!
-			case err == nil:
-				return nil
+			return nil
+		case wr.TabletManagerClient().IsTimeoutError(err), strings.Contains(err.Error(), "retry: "):
 			// retriable failure, either due to a timeout or an application-level retriable failure
-			case wr.TabletManagerClient().IsTimeoutError(err), strings.Contains(err.Error(), "retry: "):
-				go func() {
-					wr.Logger().Infof("Retrying failed ExecuteFetch on %v; failed with: %v", ti, err)
-					// TODO(aaijazi): wait 30 second and re-resolve
-					executeFetch()
-				}()
-			default:
-				return err
-			}
-		case <-retryCtx.Done():
-			if retryCtx.Err() == context.DeadlineExceeded {
-				return fmt.Errorf("failed to connect to destination tablet %v after retrying for %v", ti, retryDuration)
-			}
-			return fmt.Errorf("interrupted while trying to run %v on tablet %v", command, ti)
+		default:
+			return err
 		}
-		// When retryCtx is closed, it will cause both of the above switch cases to constantly trigger
-		// (executeFetch will keep returning a timeout error and being retried). To prevent this, we check
-		// only retryCtx's state here, so that it is guaranteed to be handled in the same loop that triggers it.
+		t := time.NewTimer(30 * time.Second)
+		// don't leak memory if the timer isn't triggered
+		defer t.Stop()
+
 		select {
 		case <-retryCtx.Done():
 			if retryCtx.Err() == context.DeadlineExceeded {
 				return fmt.Errorf("failed to connect to destination tablet %v after retrying for %v", ti, retryDuration)
 			}
 			return fmt.Errorf("interrupted while trying to run %v on tablet %v", command, ti)
-		default:
+		case <-t.C:
+			// Re-resolve and retry 30s after the failure
+			// TODO(aaijazi): Re-resolve before retrying
+			wr.Logger().Infof("Retrying failed ExecuteFetch on %v; failed with: %v", ti, err)
 		}
+
 	}
 }
 
