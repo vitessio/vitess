@@ -13,6 +13,10 @@ class BsonRpcClient extends GoRpcClient {
 	const LEN_PACK_FORMAT = 'V';
 	const LEN_PACK_SIZE = 4;
 
+	public function dial($addr) {
+		parent::dial("tcp://$addr", '/_bson_rpc_');
+	}
+
 	protected function send_request(GoRpcRequest $req) {
 		$this->write(bson_encode($req->header));
 		$this->write(bson_encode($req->body));
