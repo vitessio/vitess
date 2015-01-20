@@ -73,22 +73,6 @@ func addCommand(groupName string, c command) {
 	panic(fmt.Errorf("Trying to add to missing group %v", groupName))
 }
 
-func shardParamToKeyspaceShard(param string) (string, string, error) {
-	if param[0] == '/' {
-		// old zookeeper path, convert to new-style
-		zkPathParts := strings.Split(param, "/")
-		if len(zkPathParts) != 8 || zkPathParts[0] != "" || zkPathParts[1] != "zk" || zkPathParts[2] != "global" || zkPathParts[3] != "vt" || zkPathParts[4] != "keyspaces" || zkPathParts[6] != "shards" {
-			return "", "", fmt.Errorf("invalid shard path: %v", param)
-		}
-		return zkPathParts[5], zkPathParts[7], nil
-	}
-	zkPathParts := strings.Split(param, "/")
-	if len(zkPathParts) != 2 {
-		return "", "", fmt.Errorf("invalid shard path: %v", param)
-	}
-	return zkPathParts[0], zkPathParts[1], nil
-}
-
 func commandWorker(wr *wrangler.Wrangler, args []string) (worker.Worker, error) {
 	action := args[0]
 
