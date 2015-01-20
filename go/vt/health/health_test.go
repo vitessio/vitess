@@ -26,7 +26,7 @@ func TestReporters(t *testing.T) {
 		t.Error(err)
 	}
 	if delay != 10*time.Second {
-		t.Errorf("delay=%v, want 5s", delay)
+		t.Errorf("delay=%v, want 10s", delay)
 	}
 
 	ag.Register("c", FunctionReporter(func(topo.TabletType, bool) (time.Duration, error) {

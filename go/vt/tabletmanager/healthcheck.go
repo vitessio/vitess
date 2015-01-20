@@ -11,6 +11,7 @@ package tabletmanager
 import (
 	"flag"
 	"fmt"
+	"html/template"
 	"reflect"
 	"time"
 
@@ -51,6 +52,21 @@ func (r *HealthRecord) Class() string {
 		return "unhappy"
 	default:
 		return "healthy"
+	}
+}
+
+// HTML returns a html version to be displayed on UIs
+func (r *HealthRecord) HTML() template.HTML {
+	switch {
+	case r.Error != nil:
+		return template.HTML(fmt.Sprintf("unhealthy: %v", r.Error))
+	case r.ReplicationDelay > *degradedThreshold:
+		return template.HTML(fmt.Sprintf("unhappy: %v behind on replication", r.ReplicationDelay))
+	default:
+		if r.ReplicationDelay > 0 {
+			return template.HTML(fmt.Sprintf("healthy: only %v behind on replication", r.ReplicationDelay))
+		}
+		return template.HTML("healthy")
 	}
 }
 
