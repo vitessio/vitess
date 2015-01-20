@@ -64,6 +64,7 @@ abstract class GoRpcClient {
 		$fp = stream_socket_client($addr, $errno, $errstr);
 		if ($fp === FALSE)
 			throw new GoRpcException("can't connect to $addr: $errstr ($errno)");
+		$this->stream = $fp;
 
 		// Initiate request for $path.
 		$this->write("CONNECT $path HTTP/1.0\n\n");
@@ -72,8 +73,6 @@ abstract class GoRpcClient {
 		$data = '';
 		while (strpos($data, "\n\n") === FALSE)
 			$data .= $this->read(1024);
-
-		$this->stream = $fp;
 	}
 
 	public function close() {
@@ -118,6 +117,7 @@ abstract class GoRpcClient {
 		$packet = fread($this->stream, $max_len);
 		if ($packet === FALSE)
 			throw new GoRpcException("can't read from stream");
+		return $packet;
 	}
 
 	protected function read_n($target_len) {
@@ -127,7 +127,6 @@ abstract class GoRpcClient {
 			$data .= $this->read($target_len - $len);
 		return $data;
 	}
-
 
 	protected function write($data) {
 		if (fwrite($this->stream, $data) === FALSE)

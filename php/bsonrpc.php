@@ -19,18 +19,21 @@ class BsonRpcClient extends GoRpcClient {
 
 	protected function send_request(GoRpcRequest $req) {
 		$this->write(bson_encode($req->header));
-		$this->write(bson_encode($req->body));
+		if ($req->body === NULL)
+			$this->write(bson_encode(array()));
+		else
+			$this->write(bson_encode($req->body));
 	}
 
 	protected function read_response() {
 		// Read the header.
 		$data = $this->read_n(self::LEN_PACK_SIZE);
-		$len = unpack(self::LEN_PACK_FORMAT, $data)[0];
+		$len = unpack(self::LEN_PACK_FORMAT, $data)[1];
 		$header = $data . $this->read_n($len - self::LEN_PACK_SIZE);
 
 		// Read the body.
 		$data = $this->read_n(self::LEN_PACK_SIZE);
-		$len = unpack(self::LEN_PACK_FORMAT, $data)[0];
+		$len = unpack(self::LEN_PACK_FORMAT, $data)[1];
 		$body = $data . $this->read_n($len - self::LEN_PACK_SIZE);
 
 		// Decode and return.
