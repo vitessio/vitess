@@ -466,7 +466,8 @@ class Tablet(object):
       self.tablet_type = target_tablet_type
       args.extend(['-target_tablet_type', target_tablet_type,
                    '-health_check_interval', '2s',
-                   '-allowed_replication_lag', '30'])
+                   '-enable_replication_lag_check',
+                   '-degraded_threshold', '5s'])
 
     # this is used to run InitTablet as part of the vttablet startup
     if init_tablet_type:

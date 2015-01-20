@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -14,28 +15,19 @@ var (
 	defaultAggregator *Aggregator
 )
 
-const (
-	// ReplicationLag should be the key for any reporters
-	// reporting MySQL repliaction lag.
-	ReplicationLag = "replication_lag"
-
-	// ReplicationLagHigh should be the value for any reporters
-	// indicating that the replication lag is too high.
-	ReplicationLagHigh = "high"
-)
-
 func init() {
 	defaultAggregator = NewAggregator()
 }
 
 // Reporter reports the health status of a tablet.
 type Reporter interface {
-	// Report returns a map of health states for the tablet
-	// assuming that its tablet type is TabletType, and that its
-	// query service should be running or not. If Report returns
-	// an error it implies that the tablet is in a bad shape and
-	// not able to handle queries.
-	Report(tabletType topo.TabletType, shouldQueryServiceBeRunning bool) (status map[string]string, err error)
+	// Report returns the replication delay gathered by this
+	// module (or 0 if it thinks it's not behind), assuming that
+	// its tablet type is TabletType, and that its query service
+	// should be running or not. If Report returns an error it
+	// implies that the tablet is in a bad shape and not able to
+	// handle queries.
+	Report(tabletType topo.TabletType, shouldQueryServiceBeRunning bool) (replicationDelay time.Duration, err error)
 
 	// HTMLName returns a displayable name for the module.
 	// Can be used to be displayed in the status page.
@@ -43,10 +35,10 @@ type Reporter interface {
 }
 
 // FunctionReporter is a function that may act as a Reporter.
-type FunctionReporter func(topo.TabletType, bool) (map[string]string, error)
+type FunctionReporter func(topo.TabletType, bool) (time.Duration, error)
 
 // Report implements Reporter.Report
-func (fc FunctionReporter) Report(tabletType topo.TabletType, shouldQueryServiceBeRunning bool) (status map[string]string, err error) {
+func (fc FunctionReporter) Report(tabletType topo.TabletType, shouldQueryServiceBeRunning bool) (time.Duration, error) {
 	return fc(tabletType, shouldQueryServiceBeRunning)
 }
 
@@ -74,41 +66,38 @@ func NewAggregator() *Aggregator {
 // the first error will be returned.
 // It may return an empty map if no health condition is detected. Note
 // it will not return nil, but an empty map.
-func (ag *Aggregator) Run(tabletType topo.TabletType, shouldQueryServiceBeRunning bool) (map[string]string, error) {
+func (ag *Aggregator) Run(tabletType topo.TabletType, shouldQueryServiceBeRunning bool) (time.Duration, error) {
 	var (
 		wg  sync.WaitGroup
 		rec concurrency.AllErrorRecorder
 	)
 
-	results := make(chan map[string]string, len(ag.reporters))
+	results := make(chan time.Duration, len(ag.reporters))
 	ag.mu.Lock()
 	for name, rep := range ag.reporters {
 		wg.Add(1)
 		go func(name string, rep Reporter) {
 			defer wg.Done()
-			status, err := rep.Report(tabletType, shouldQueryServiceBeRunning)
+			replicationDelay, err := rep.Report(tabletType, shouldQueryServiceBeRunning)
 			if err != nil {
 				rec.RecordError(fmt.Errorf("%v: %v", name, err))
 				return
 			}
-			results <- status
+			results <- replicationDelay
 		}(name, rep)
 	}
 	ag.mu.Unlock()
 	wg.Wait()
 	close(results)
 	if err := rec.Error(); err != nil {
-		return nil, err
+		return 0, err
 	}
 
 	// merge and return the results
-	result := make(map[string]string)
-	for part := range results {
-		for k, v := range part {
-			if _, ok := result[k]; ok {
-				return nil, fmt.Errorf("duplicate key: %v", k)
-			}
-			result[k] = v
+	var result time.Duration
+	for replicationDelay := range results {
+		if replicationDelay > result {
+			result = replicationDelay
 		}
 	}
 	return result, nil
@@ -139,7 +128,7 @@ func (ag *Aggregator) HTMLName() template.HTML {
 
 // Run collects all the health statuses from the default health
 // aggregator.
-func Run(tabletType topo.TabletType, shouldQueryServiceBeRunning bool) (map[string]string, error) {
+func Run(tabletType topo.TabletType, shouldQueryServiceBeRunning bool) (time.Duration, error) {
 	return defaultAggregator.Run(tabletType, shouldQueryServiceBeRunning)
 }
 

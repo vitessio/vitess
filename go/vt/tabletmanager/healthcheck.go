@@ -23,16 +23,23 @@ import (
 	"github.com/youtube/vitess/go/vt/topotools"
 )
 
+const (
+	defaultDegradedThreshold  = time.Duration(30 * time.Second)
+	defaultUnhealthyThreshold = time.Duration(2 * time.Hour)
+)
+
 var (
 	healthCheckInterval = flag.Duration("health_check_interval", 20*time.Second, "Interval between health checks")
 	targetTabletType    = flag.String("target_tablet_type", "", "The tablet type we are thriving to be when healthy. When not healthy, we'll go to spare.")
+	degradedThreshold   = flag.Duration("degraded_threshold", defaultDegradedThreshold, "replication lag after which a replica is considered degraded")
+	unhealthyThreshold  = flag.Duration("unhealthy_threshold", defaultUnhealthyThreshold, "replication lag  after which a replica is considered unhealthy")
 )
 
 // HealthRecord records one run of the health checker
 type HealthRecord struct {
-	Error  error
-	Result map[string]string
-	Time   time.Time
+	Error            error
+	ReplicationDelay time.Duration
+	Time             time.Time
 }
 
 // Class returns a human-readable one word version of the health state.
@@ -40,7 +47,7 @@ func (r *HealthRecord) Class() string {
 	switch {
 	case r.Error != nil:
 		return "unhealthy"
-	case len(r.Result) > 0:
+	case r.ReplicationDelay > *degradedThreshold:
 		return "unhappy"
 	default:
 		return "healthy"
@@ -53,7 +60,12 @@ func (r *HealthRecord) IsDuplicate(other interface{}) bool {
 	if !ok {
 		return false
 	}
-	return reflect.DeepEqual(r.Error, rother.Error) && reflect.DeepEqual(r.Result, rother.Result)
+	if !reflect.DeepEqual(r.Error, rother.Error) {
+		return false
+	}
+	unhealthy := r.ReplicationDelay > *degradedThreshold
+	unhealthyOther := rother.ReplicationDelay > *degradedThreshold
+	return (unhealthy && unhealthyOther) || (!unhealthy && !unhealthyOther)
 }
 
 // IsRunningHealthCheck indicates if the agent is configured to run healthchecks.
@@ -120,7 +132,15 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 	if tablet.Type == topo.TYPE_MASTER {
 		typeForHealthCheck = topo.TYPE_MASTER
 	}
-	health, err := health.Run(typeForHealthCheck, shouldQueryServiceBeRunning)
+	replicationDelay, err := health.Run(typeForHealthCheck, shouldQueryServiceBeRunning)
+	health := make(map[string]string)
+	if err == nil {
+		if replicationDelay > *unhealthyThreshold {
+			err = fmt.Errorf("reported replication lag: %v higher than unhealthy threshold: %v", replicationDelay.Seconds(), unhealthyThreshold.Seconds())
+		} else if replicationDelay > *degradedThreshold {
+			health[topo.ReplicationLag] = topo.ReplicationLagHigh
+		}
+	}
 
 	// Figure out if we should be running QueryService. If we should,
 	// and we aren't, try to start it (even if we're not healthy,
@@ -137,9 +157,9 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 
 	// save the health record
 	record := &HealthRecord{
-		Error:  err,
-		Result: health,
-		Time:   time.Now(),
+		Error:            err,
+		ReplicationDelay: replicationDelay,
+		Time:             time.Now(),
 	}
 	agent.History.Add(record)
 

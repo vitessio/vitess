@@ -21,6 +21,7 @@ import tablet
 from mysql_flavor import mysql_flavor
 from protocols_flavor import protocols_flavor
 from vtdb import dbexceptions
+from net import gorpc
 
 tablet_62344 = tablet.Tablet(62344)
 tablet_62044 = tablet.Tablet(62044)
@@ -418,51 +419,40 @@ class TestTabletManager(unittest.TestCase):
     self.assertEqual(ti['Type'], 'master',
                      "unexpected master type: %s" % ti['Type'])
 
-    # stop replication on the slave, see it trigger the slave going
-    # slightly unhealthy
+    # stop replication, make sure we go unhealthy.
     tablet_62044.mquery('', 'stop slave')
     timeout = 10
     while True:
       ti = utils.run_vtctl_json(['GetTablet', tablet_62044.tablet_alias])
-      if 'Health' in ti and ti['Health']:
-        if 'replication_lag' in ti['Health']:
-          if ti['Health']['replication_lag'] == 'high':
-            logging.debug("Slave tablet replication_lag went to high, good")
-            break
-      timeout = utils.wait_step('slave has high replication lag', timeout)
-    self.check_healthz(tablet_62044, True)
+      if ti['Type'] == "spare":
+        logging.debug("Slave tablet went to spare, good")
+        break
+      timeout = utils.wait_step('slave is spare', timeout)
+    self.check_healthz(tablet_62044, False)
 
     # make sure the serving graph was updated
     timeout = 10
     while True:
-      ep = utils.run_vtctl_json(['GetEndPoints', 'test_nj', 'test_keyspace/0',
-                                 'replica'])
-      if 'health' in ep['entries'][0] and ep['entries'][0]['health']:
-        if 'replication_lag' in ep['entries'][0]['health']:
-          if ep['entries'][0]['health']['replication_lag'] == 'high':
-            logging.debug("Replication lag parameter propagated to serving graph, good")
-            break
-      timeout = utils.wait_step('Replication lag parameter not propagated to serving graph', timeout)
+      try:
+        utils.run_vtctl_json(['GetEndPoints', 'test_nj', 'test_keyspace/0',
+                              'replica'])
+      except gorpc.AppError:
+        logging.debug("Tablet is gone from serving graph, good")
+        break
+      timeout = utils.wait_step('Stopped replication didn\'t trigger removal from serving graph', timeout)
 
     # make sure status web page is unhappy
-    self.assertIn('>unhappy</span></div>', tablet_62044.get_status())
+    self.assertIn('>unhealthy</span></div>', tablet_62044.get_status())
 
-    # make sure the vars is updated
-    v = utils.get_vars(tablet_62044.port)
-    self.assertEqual(v['LastHealthMapCount'], 1)
-
-    # then restart replication, make sure we go back to healthy
+    # then restart replication, and write data, make sure we go back to healthy
     tablet_62044.mquery('', 'start slave')
     timeout = 10
     while True:
       ti = utils.run_vtctl_json(['GetTablet', tablet_62044.tablet_alias])
-      if 'Health' in ti and ti['Health']:
-        if 'replication_lag' in ti['Health']:
-          if ti['Health']['replication_lag'] == 'high':
-            timeout = utils.wait_step('slave has no replication lag', timeout)
-            continue
-      logging.debug("Slave tablet replication_lag is gone, good")
-      break
+      if ti['Type'] == "replica":
+        logging.debug("Slave tablet went to replica, good")
+        break
+      timeout = utils.wait_step('slave is not healthy', timeout)
 
     # make sure status web page is healthy
     self.assertIn('>healthy</span></div>', tablet_62044.get_status())
@@ -530,7 +520,10 @@ class TestTabletManager(unittest.TestCase):
       # is now running, and turns green.
       utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'],
                       auto_log=True)
-      self.check_healthz(t, True)
+
+    # master will be healthy, slave's replication won't be running
+    self.check_healthz(tablet_62344, True)
+    self.check_healthz(tablet_62044, False)
 
     for t in tablet_62344, tablet_62044:
       # wait for mysql port to show up
