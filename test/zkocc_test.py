@@ -81,7 +81,6 @@ class TopoOccTest(unittest.TestCase):
                      "  Shards[0]={Start: , End: }\n" +
                      "Partitions[replica] =\n" +
                      "  Shards[0]={Start: , End: }\n" +
-                     "Shards[0]={Start: , End: }\n" +
                      "TabletTypes[0] = master\n",
                      "Got wrong content: %s" % err)
 
