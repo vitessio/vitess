@@ -442,7 +442,7 @@ class TestTabletManager(unittest.TestCase):
       timeout = utils.wait_step('Stopped replication didn\'t trigger removal from serving graph', timeout)
 
     # make sure status web page is unhappy
-    self.assertIn('>unhealthy</span></div>', tablet_62044.get_status())
+    self.assertIn('>unhealthy: replication_reporter: Replication is not running</span></div>', tablet_62044.get_status())
 
     # then restart replication, and write data, make sure we go back to healthy
     tablet_62044.mquery('', 'start slave')
