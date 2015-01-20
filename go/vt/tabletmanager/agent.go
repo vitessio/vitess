@@ -84,6 +84,9 @@ type ActionAgent struct {
 	// if the agent is healthy, this is nil. Otherwise it contains
 	// the reason we're not healthy.
 	_healthy error
+
+	// replication delay the last time we got it
+	_replicationDelay time.Duration
 }
 
 func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
@@ -222,10 +225,10 @@ func (agent *ActionAgent) Tablet() *topo.TabletInfo {
 }
 
 // Healthy reads the result of the latest healthcheck, protected by mutex.
-func (agent *ActionAgent) Healthy() error {
+func (agent *ActionAgent) Healthy() (error, time.Duration) {
 	agent.mutex.Lock()
 	defer agent.mutex.Unlock()
-	return agent._healthy
+	return agent._healthy, agent._replicationDelay
 }
 
 // BlacklistedTables reads the list of blacklisted tables from the TabletControl

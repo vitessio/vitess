@@ -197,6 +197,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 	// remember our health status
 	agent.mutex.Lock()
 	agent._healthy = err
+	agent._replicationDelay = replicationDelay
 	agent.mutex.Unlock()
 
 	// Update our topo.Server state, start with no change

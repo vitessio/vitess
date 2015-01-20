@@ -61,11 +61,12 @@ func NewAggregator() *Aggregator {
 	}
 }
 
-// Run runs aggregates health statuses from all the reporters. If any
+// Run aggregates health statuses from all the reporters. If any
 // errors occur during the reporting, they will be logged, but only
 // the first error will be returned.
-// It may return an empty map if no health condition is detected. Note
-// it will not return nil, but an empty map.
+// The returned replication delay will be the highest of all the replication
+// delays returned by the Reporter implementations (although typically
+// only one implementation will actually return a meaningful one).
 func (ag *Aggregator) Run(tabletType topo.TabletType, shouldQueryServiceBeRunning bool) (time.Duration, error) {
 	var (
 		wg  sync.WaitGroup
