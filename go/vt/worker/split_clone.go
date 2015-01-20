@@ -188,10 +188,17 @@ func (scw *SplitCloneWorker) StatusAsText() string {
 	return result
 }
 
-// CheckInterrupted is part of the Worker interface
-func (scw *SplitCloneWorker) CheckInterrupted() bool {
+// Cancel is part of the Worker interface
+func (scw *SplitCloneWorker) Cancel() {
+	scw.ctxCancel()
+}
+
+func (scw *SplitCloneWorker) checkInterrupted() bool {
 	select {
-	case <-interrupted:
+	case <-scw.ctx.Done():
+		if scw.ctx.Err() == context.DeadlineExceeded {
+			return false
+		}
 		scw.recordError(topo.ErrInterrupted)
 		return true
 	default:
@@ -228,23 +235,31 @@ func (scw *SplitCloneWorker) run() error {
 	if err := scw.init(); err != nil {
 		return fmt.Errorf("init() failed: %v", err)
 	}
-	if scw.CheckInterrupted() {
+	if scw.checkInterrupted() {
 		return topo.ErrInterrupted
 	}
 
 	// second state: find targets
 	if err := scw.findTargets(); err != nil {
+		// A canceled context can appear to cause an application error
+		if scw.checkInterrupted() {
+			return topo.ErrInterrupted
+		}
 		return fmt.Errorf("findTargets() failed: %v", err)
 	}
-	if scw.CheckInterrupted() {
+	if scw.checkInterrupted() {
 		return topo.ErrInterrupted
 	}
 
 	// third state: copy data
 	if err := scw.copy(); err != nil {
+		// A canceled context can appear to cause an application error
+		if scw.checkInterrupted() {
+			return topo.ErrInterrupted
+		}
 		return fmt.Errorf("copy() failed: %v", err)
 	}
-	if scw.CheckInterrupted() {
+	if scw.checkInterrupted() {
 		return topo.ErrInterrupted
 	}
 
@@ -315,7 +330,7 @@ func (scw *SplitCloneWorker) findTargets() error {
 	// find an appropriate endpoint in the source shards
 	scw.sourceAliases = make([]topo.TabletAlias, len(scw.sourceShards))
 	for i, si := range scw.sourceShards {
-		scw.sourceAliases[i], err = findChecker(scw.wr, scw.cleaner, scw.cell, si.Keyspace(), si.ShardName())
+		scw.sourceAliases[i], err = findChecker(scw.ctx, scw.wr, scw.cleaner, scw.cell, si.Keyspace(), si.ShardName())
 		if err != nil {
 			return fmt.Errorf("cannot find checker for %v/%v/%v: %v", scw.cell, si.Keyspace(), si.ShardName(), err)
 		}
@@ -459,17 +474,15 @@ func (scw *SplitCloneWorker) copy() error {
 
 	// In parallel, setup the channels to send SQL data chunks to for each destination tablet:
 	//
-	// mu protects the abort channel for closing, and firstError
+	// mu protects the context for cancelation, and firstError
 	mu := sync.Mutex{}
-	abort := make(chan struct{})
 	var firstError error
 
 	processError := func(format string, args ...interface{}) {
 		scw.wr.Logger().Errorf(format, args...)
 		mu.Lock()
-		if abort != nil {
-			close(abort)
-			abort = nil
+		if !scw.checkInterrupted() {
+			scw.Cancel()
 			firstError = fmt.Errorf(format, args...)
 		}
 		mu.Unlock()
@@ -495,7 +508,7 @@ func (scw *SplitCloneWorker) copy() error {
 					destinationWaitGroup.Add(1)
 					go func() {
 						defer destinationWaitGroup.Done()
-						if err := executeFetchLoop(scw.ctx, scw.wr, ti, insertChannel, abort, disableBinLogs); err != nil {
+						if err := executeFetchLoop(scw.ctx, scw.wr, ti, insertChannel, disableBinLogs); err != nil {
 							processError("executeFetchLoop failed: %v", err)
 						}
 					}()
@@ -534,7 +547,7 @@ func (scw *SplitCloneWorker) copy() error {
 
 					// build the query, and start the streaming
 					selectSQL := buildSQLFromChunks(scw.wr, td, chunks, chunkIndex, scw.sourceAliases[shardIndex].String())
-					qrr, err := NewQueryResultReaderForTablet(scw.wr.TopoServer(), scw.sourceAliases[shardIndex], selectSQL)
+					qrr, err := NewQueryResultReaderForTablet(scw.ctx, scw.wr.TopoServer(), scw.sourceAliases[shardIndex], selectSQL)
 					if err != nil {
 						processError("NewQueryResultReaderForTablet failed: %v", err)
 						return
@@ -542,7 +555,7 @@ func (scw *SplitCloneWorker) copy() error {
 					defer qrr.Close()
 
 					// process the data
-					if err := scw.processData(td, tableIndex, qrr, rowSplitter, insertChannels, scw.destinationPackCount, abort); err != nil {
+					if err := scw.processData(td, tableIndex, qrr, rowSplitter, insertChannels, scw.destinationPackCount, scw.ctx.Done()); err != nil {
 						processError("processData failed: %v", err)
 					}
 					scw.tableStatus[tableIndex].threadDone()
@@ -589,7 +602,7 @@ func (scw *SplitCloneWorker) copy() error {
 				go func(ti *topo.TabletInfo) {
 					defer destinationWaitGroup.Done()
 					scw.wr.Logger().Infof("Making and populating blp_checkpoint table on tablet %v", ti.Alias)
-					if err := runSqlCommands(scw.ctx, scw.wr, ti, queries, abort, disableBinLogs); err != nil {
+					if err := runSqlCommands(scw.ctx, scw.wr, ti, queries, disableBinLogs); err != nil {
 						processError("blp_checkpoint queries failed on tablet %v: %v", ti.Alias, err)
 					}
 				}(scw.destinationTablets[shardIndex][tabletAlias])
@@ -643,7 +656,7 @@ func (scw *SplitCloneWorker) copy() error {
 
 // processData pumps the data out of the provided QueryResultReader.
 // It returns any error the source encounters.
-func (scw *SplitCloneWorker) processData(td *myproto.TableDefinition, tableIndex int, qrr *QueryResultReader, rowSplitter *RowSplitter, insertChannels [][]chan string, destinationPackCount int, abort chan struct{}) error {
+func (scw *SplitCloneWorker) processData(td *myproto.TableDefinition, tableIndex int, qrr *QueryResultReader, rowSplitter *RowSplitter, insertChannels [][]chan string, destinationPackCount int, abort <-chan struct{}) error {
 	baseCmd := td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
 	sr := rowSplitter.StartSplit()
 	packCount := 0
@@ -690,10 +703,14 @@ func (scw *SplitCloneWorker) processData(td *myproto.TableDefinition, tableIndex
 			packCount = 0
 
 		case <-abort:
-			// FIXME(alainjobart): note this select case
-			// could be starved here, and we might miss
-			// the abort in some corner cases.
 			return nil
+		}
+		// the abort case might be starved above, so we check again; this means that the loop
+		// will run at most once before the abort case is triggered.
+		select {
+		case <-abort:
+			return nil
+		default:
 		}
 	}
 }

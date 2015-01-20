@@ -1,0 +1,4 @@
+{
+  "test": "localhost:21811,localhost:21812,localhost:21813",
+  "global": "localhost:21811,localhost:21812,localhost:21813"
+}

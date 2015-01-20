@@ -17,6 +17,10 @@ import (
 )
 
 func TestValidFiles(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode.")
+	}
+
 	inputs := testfiles.Glob("bson_test/input*.go")
 	for _, input := range inputs {
 		b, err := ioutil.ReadFile(input)

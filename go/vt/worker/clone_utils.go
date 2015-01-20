@@ -113,7 +113,7 @@ func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *top
 	defer retryCancel()
 
 	executeFetch := func() {
-		newCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		newCtx, cancel := context.WithTimeout(retryCtx, 2*time.Minute)
 		defer cancel()
 		_, err := wr.TabletManagerClient().ExecuteFetch(newCtx, ti, command, 0, false, disableBinLogs)
 		executeFetchErrs <- err
@@ -145,6 +145,17 @@ func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *top
 			}
 			return fmt.Errorf("interrupted while trying to run %v on tablet %v", command, ti)
 		}
+		// When retryCtx is closed, it will cause both of the above switch cases to constantly trigger
+		// (executeFetch will keep returning a timeout error and being retried). To prevent this, we check
+		// only retryCtx's state here, so that it is guaranteed to be handled in the same loop that triggers it.
+		select {
+		case <-retryCtx.Done():
+			if retryCtx.Err() == context.DeadlineExceeded {
+				return fmt.Errorf("failed to connect to destination tablet %v after retrying for %v", ti, retryDuration)
+			}
+			return fmt.Errorf("interrupted while trying to run %v on tablet %v", command, ti)
+		default:
+		}
 	}
 }
 
@@ -159,7 +170,7 @@ func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
 }
 
 // runSqlCommands will send the sql commands to the remote tablet.
-func runSqlCommands(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, commands []string, abort chan struct{}, disableBinLogs bool) error {
+func runSqlCommands(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, commands []string, disableBinLogs bool) error {
 	for _, command := range commands {
 		command, err := fillStringTemplate(command, map[string]string{"DatabaseName": ti.DbName()})
 		if err != nil {
@@ -169,14 +180,6 @@ func runSqlCommands(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletI
 		err = executeFetchWithRetries(ctx, wr, ti, command, disableBinLogs)
 		if err != nil {
 			return err
-		}
-
-		// check on abort
-		select {
-		case <-abort:
-			return nil
-		default:
-			break
 		}
 	}
 
@@ -361,7 +364,7 @@ func makeValueString(fields []mproto.Field, rows [][]sqltypes.Value) string {
 
 // executeFetchLoop loops over the provided insertChannel
 // and sends the commands to the provided tablet.
-func executeFetchLoop(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, insertChannel chan string, abort chan struct{}, disableBinLogs bool) error {
+func executeFetchLoop(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, insertChannel chan string, disableBinLogs bool) error {
 	for {
 		select {
 		case cmd, ok := <-insertChannel:
@@ -374,10 +377,10 @@ func executeFetchLoop(ctx context.Context, wr *wrangler.Wrangler, ti *topo.Table
 			if err != nil {
 				return fmt.Errorf("ExecuteFetch failed: %v", err)
 			}
-		case <-abort:
-			// FIXME(alainjobart): note this select case
-			// could be starved here, and we might miss
-			// the abort in some corner cases.
+		case <-ctx.Done():
+			// Doesn't really matter if this select gets starved, because the other case
+			// will also return an error due to executeFetch's context being closed. This case
+			// does prevent us from blocking indefinitely on inserChannel when the worker is canceled.
 			return nil
 		}
 	}

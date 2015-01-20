@@ -129,10 +129,17 @@ func (vsdw *VerticalSplitDiffWorker) StatusAsText() string {
 	return result
 }
 
-// CheckInterrupted is part of the Worker interface.
-func (vsdw *VerticalSplitDiffWorker) CheckInterrupted() bool {
+// Cancel is part of the Worker interface
+func (vsdw *VerticalSplitDiffWorker) Cancel() {
+	vsdw.ctxCancel()
+}
+
+func (vsdw *VerticalSplitDiffWorker) checkInterrupted() bool {
 	select {
-	case <-interrupted:
+	case <-vsdw.ctx.Done():
+		if vsdw.ctx.Err() == context.DeadlineExceeded {
+			return false
+		}
 		vsdw.recordError(topo.ErrInterrupted)
 		return true
 	default:
@@ -169,7 +176,7 @@ func (vsdw *VerticalSplitDiffWorker) run() error {
 	if err := vsdw.init(); err != nil {
 		return fmt.Errorf("init() failed: %v", err)
 	}
-	if vsdw.CheckInterrupted() {
+	if vsdw.checkInterrupted() {
 		return topo.ErrInterrupted
 	}
 
@@ -177,20 +184,26 @@ func (vsdw *VerticalSplitDiffWorker) run() error {
 	if err := vsdw.findTargets(); err != nil {
 		return fmt.Errorf("findTargets() failed: %v", err)
 	}
-	if vsdw.CheckInterrupted() {
+	if vsdw.checkInterrupted() {
 		return topo.ErrInterrupted
 	}
 
 	// third phase: synchronize replication
 	if err := vsdw.synchronizeReplication(); err != nil {
+		if vsdw.checkInterrupted() {
+			return topo.ErrInterrupted
+		}
 		return fmt.Errorf("synchronizeReplication() failed: %v", err)
 	}
-	if vsdw.CheckInterrupted() {
+	if vsdw.checkInterrupted() {
 		return topo.ErrInterrupted
 	}
 
 	// fourth phase: diff
 	if err := vsdw.diff(); err != nil {
+		if vsdw.checkInterrupted() {
+			return topo.ErrInterrupted
+		}
 		return fmt.Errorf("diff() failed: %v", err)
 	}
 
@@ -240,13 +253,13 @@ func (vsdw *VerticalSplitDiffWorker) findTargets() error {
 
 	// find an appropriate endpoint in destination shard
 	var err error
-	vsdw.destinationAlias, err = findChecker(vsdw.wr, vsdw.cleaner, vsdw.cell, vsdw.keyspace, vsdw.shard)
+	vsdw.destinationAlias, err = findChecker(vsdw.ctx, vsdw.wr, vsdw.cleaner, vsdw.cell, vsdw.keyspace, vsdw.shard)
 	if err != nil {
 		return fmt.Errorf("cannot find checker for %v/%v/%v: %v", vsdw.cell, vsdw.keyspace, vsdw.shard, err)
 	}
 
 	// find an appropriate endpoint in the source shard
-	vsdw.sourceAlias, err = findChecker(vsdw.wr, vsdw.cleaner, vsdw.cell, vsdw.shardInfo.SourceShards[0].Keyspace, vsdw.shardInfo.SourceShards[0].Shard)
+	vsdw.sourceAlias, err = findChecker(vsdw.ctx, vsdw.wr, vsdw.cleaner, vsdw.cell, vsdw.shardInfo.SourceShards[0].Keyspace, vsdw.shardInfo.SourceShards[0].Shard)
 	if err != nil {
 		return fmt.Errorf("cannot find checker for %v/%v/%v: %v", vsdw.cell, vsdw.shardInfo.SourceShards[0].Keyspace, vsdw.shardInfo.SourceShards[0].Shard, err)
 	}
@@ -456,14 +469,14 @@ func (vsdw *VerticalSplitDiffWorker) diff() error {
 			defer sem.Release()
 
 			vsdw.wr.Logger().Infof("Starting the diff on table %v", tableDefinition.Name)
-			sourceQueryResultReader, err := TableScan(vsdw.wr.Logger(), vsdw.wr.TopoServer(), vsdw.sourceAlias, tableDefinition)
+			sourceQueryResultReader, err := TableScan(vsdw.ctx, vsdw.wr.Logger(), vsdw.wr.TopoServer(), vsdw.sourceAlias, tableDefinition)
 			if err != nil {
 				vsdw.wr.Logger().Errorf("TableScan(source) failed: %v", err)
 				return
 			}
 			defer sourceQueryResultReader.Close()
 
-			destinationQueryResultReader, err := TableScan(vsdw.wr.Logger(), vsdw.wr.TopoServer(), vsdw.destinationAlias, tableDefinition)
+			destinationQueryResultReader, err := TableScan(vsdw.ctx, vsdw.wr.Logger(), vsdw.wr.TopoServer(), vsdw.destinationAlias, tableDefinition)
 			if err != nil {
 				vsdw.wr.Logger().Errorf("TableScan(destination) failed: %v", err)
 				return

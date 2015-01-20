@@ -196,6 +196,7 @@ def run(cmd, trap_output=False, raise_on_error=True, **kargs):
   stdout, stderr = proc.communicate()
   if proc.returncode:
     if raise_on_error:
+      pause("cmd fail: %s, pausing..." % (args))
       raise TestError('cmd fail:', args, stdout, stderr)
     else:
       logging.debug('cmd fail: %s %s %s', str(args), stdout, stderr)
@@ -320,11 +321,31 @@ def wait_for_vars(name, port, var=None):
       break
     timeout = wait_step('waiting for /debug/vars of %s' % name, timeout)
 
+def apply_vschema(vschema):
+  fname = os.path.join(environment.tmproot, "vschema.json")
+  with open(fname, "w") as f:
+    f.write(vschema)
+  run_vtctl(['ApplyVSchema', "-vschema_file", fname])
+
+def wait_for_tablet_type(tablet_alias, expected_type, timeout=10):
+  """Waits for a given tablet's SlaveType to become the expected value.
+
+  If the SlaveType does not become expected_type within timeout seconds,
+  it will raise a TestError.
+  """
+  while True:
+    if run_vtctl_json(['GetTablet', tablet_alias])['Type'] == expected_type:
+      break
+    timeout = wait_step(
+      "%s's SlaveType to be %s" % (tablet_alias, expected_type),
+      timeout
+    )
+
 # vtgate helpers, assuming it always restarts on the same port
 def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1,
                  topo_impl=None, tablet_bson_encrypted=False, cache_ttl='1s',
                  auth=False, timeout="5s", cert=None, key=None, ca_cert=None,
-                 socket_file=None, schema=None, extra_args=None):
+                 socket_file=None, extra_args=None):
   port = vtport or environment.reserve_ports(1)
   secure_port = None
   args = environment.binary_args('vtgate') + [
@@ -353,11 +374,6 @@ def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1,
       args.extend(['-ca_cert', ca_cert])
   if socket_file:
     args.extend(['-socket_file', socket_file])
-  if schema:
-    fname = os.path.join(environment.tmproot, "vtgate_schema.json")
-    with open(fname, "w") as f:
-      f.write(schema)
-    args.extend(['-schema-file', fname])
 
   if extra_args:
     args.extend(extra_args)

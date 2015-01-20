@@ -28,7 +28,6 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"golang.org/x/net/context"
 )
 
 var (
@@ -51,18 +50,15 @@ var (
 )
 
 // signal handling, centralized here
-func installSignalHandlers(cancel func()) {
+func installSignalHandlers() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
 		<-sigChan
 		// we got a signal, notify our modules
-		cancel()
-
-		// TODO(aaijazi) take the currentWorkerMutex, and cancel
-		// currentWorker's context. Or maybe it's even using the
-		// wrangler one, and doesn't need to do anything here.
-		worker.SignalInterrupt()
+		currentWorkerMutex.Lock()
+		defer currentWorkerMutex.Unlock()
+		currentWorker.Cancel()
 	}()
 }
 
@@ -104,8 +100,6 @@ func main() {
 	defer topo.CloseServers()
 
 	// The logger will be replaced when we start a job.
-	// FIXME(aaijazi): The signal handler is wrong.
-	_, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	wr = wrangler.New(logutil.NewConsoleLogger(), ts, 30*time.Second)
 	if len(args) == 0 {
 		// In interactive mode, initialize the web UI to choose a command.
@@ -117,7 +111,7 @@ func main() {
 			exit.Return(1)
 		}
 	}
-	installSignalHandlers(cancel)
+	installSignalHandlers()
 	initStatusHandling()
 
 	servenv.RunDefault()

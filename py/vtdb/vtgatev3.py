@@ -9,11 +9,10 @@ import re
 
 from net import bsonrpc
 from net import gorpc
-from vtdb import dbapi
 from vtdb import dbexceptions
 from vtdb import field_types
 from vtdb import vtdb_logger
-from vtdb import vtgate_cursor
+from vtdb import cursorv3
 
 
 _errno_pattern = re.compile('\(errno (\d+)\)')
@@ -78,7 +77,6 @@ def convert_exception(exc, *args):
 
 
 def _create_req(sql, new_binds, tablet_type):
-  sql, new_binds = dbapi.prepare_query_bind_vars(sql, new_binds)
   new_binds = field_types.convert_bind_vars(new_binds)
   req = {
         'Sql': sql,
@@ -88,9 +86,7 @@ def _create_req(sql, new_binds, tablet_type):
   return req
 
 
-# A simple, direct connection to the vttablet query server.
-# This is shard-unaware and only handles the most basic communication.
-# If something goes wrong, this object should be thrown away and a new one instantiated.
+# This utilizes the V3 API of VTGate.
 class VTGateConnection(object):
   session = None
   _stream_fields = None
@@ -130,7 +126,7 @@ class VTGateConnection(object):
       del kwargs['cursorclass']
 
     if cursorclass is None:
-      cursorclass = vtgate_cursor.VTGateCursor
+      cursorclass = cursorv3.Cursor
     return cursorclass(self, *pargs, **kwargs)
 
   def begin(self):
@@ -203,7 +199,6 @@ class VTGateConnection(object):
   def _execute_batch(self, sql_list, bind_variables_list, tablet_type):
     query_list = []
     for sql, bind_vars in zip(sql_list, bind_variables_list):
-      sql, bind_vars = dbapi.prepare_query_bind_vars(sql, bind_vars)
       query = {}
       query['Sql'] = sql
       query['BindVariables'] = field_types.convert_bind_vars(bind_vars)
@@ -323,54 +318,7 @@ def _make_row(row, conversions):
   return converted_row
 
 
-def get_params_for_vtgate_conn(vtgate_addrs, timeout, encrypted=False, user=None, password=None):
-  db_params_list = []
-  addrs = []
-  if isinstance(vtgate_addrs, dict):
-    service = '_vt'
-    if encrypted:
-      service = '_vts'
-    if service not in vtgate_addrs:
-      raise Exception("required vtgate service addrs %s not exist" % service)
-    addrs = vtgate_addrs[service]
-    random.shuffle(addrs)
-  elif isinstance(vtgate_addrs, list):
-    random.shuffle(vtgate_addrs)
-    addrs = vtgate_addrs
-  else:
-    raise dbexceptions.Error("Wrong type for vtgate addrs %s" % vtgate_addrs)
-
-  for addr in addrs:
-    vt_params = dict()
-    vt_params['addr'] = addr
-    vt_params['timeout'] = timeout
-    vt_params['encrypted'] = encrypted
-    vt_params['user'] = user
-    vt_params['password'] = password
-    db_params_list.append(vt_params)
-  return db_params_list
-
-
-def connect(vtgate_addrs, timeout, encrypted=False, user=None, password=None):
-  db_params_list = get_params_for_vtgate_conn(vtgate_addrs, timeout,
-                                              encrypted=encrypted, user=user,
-                                              password=password)
-
-  if not db_params_list:
-   raise dbexceptions.OperationalError("empty db params list - no db instance available for vtgate_addrs %s" % vtgate_addrs)
-
-  db_exception = None
-  host_addr = None
-  for params in db_params_list:
-    try:
-      db_params = params.copy()
-      host_addr = db_params['addr']
-      conn = VTGateConnection(**db_params)
-      conn.dial()
-      return conn
-    except Exception as e:
-      db_exception = e
-      logging.warning('db connection failed: %s, %s', host_addr, e)
-
-  raise dbexceptions.OperationalError(
-    'unable to create vt connection', host_addr, db_exception)
+def connect(addr, timeout, **kwargs):
+  conn = VTGateConnection(addr, timeout, **kwargs)
+  conn.dial()
+  return conn

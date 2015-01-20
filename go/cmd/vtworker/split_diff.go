@@ -12,6 +12,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -39,9 +40,9 @@ var splitDiffTemplate = mustParseTemplate("splitDiff", splitDiffHTML)
 func commandSplitDiff(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (worker.Worker, error) {
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
-		return nil, fmt.Errorf("command SplitDiff requires <keyspace/shard|zk shard path>")
+		return nil, fmt.Errorf("command SplitDiff requires <keyspace/shard>")
 	}
-	keyspace, shard, err := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
 	if err != nil {
 		return nil, err
 	}
@@ -137,6 +138,6 @@ func interactiveSplitDiff(wr *wrangler.Wrangler, w http.ResponseWriter, r *http.
 func init() {
 	addCommand("Diffs", command{"SplitDiff",
 		commandSplitDiff, interactiveSplitDiff,
-		"<keyspace/shard|zk shard path>",
+		"<keyspace/shard>",
 		"Diffs a rdonly destination shard against its SourceShards"})
 }
