@@ -93,7 +93,7 @@ class TestVerticalSplit(unittest.TestCase):
     self.vtgate_addrs = None
     if client_type == VTGATE:
       global vtgate_addrs
-      self.vtgate_addrs = {"_vt": ["localhost:%s"%(self.vtgate_port),]}
+      self.vtgate_addrs = {"vt": ["localhost:%s"%(self.vtgate_port),]}
 
     self.insert_index = 0
     # Lowering the keyspace refresh throttle so things are testable.

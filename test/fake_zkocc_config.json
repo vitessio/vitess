@@ -23,8 +23,8 @@
         "host": "127.0.0.1",
         "port": 0,
         "named_port_map": {
-          "_mysql": 3306,
-          "_vtocc": 6711
+          "mysql": 3306,
+          "vt": 6711
         }
       }
     ]

@@ -80,7 +80,7 @@ class TestReparent(unittest.TestCase):
                                db_type])
     self.assertEqual(
         len(ep['entries']), 1, 'Wrong number of entries: %s' % str(ep))
-    port = ep['entries'][0]['named_port_map']['_vtocc']
+    port = ep['entries'][0]['named_port_map']['vt']
     self.assertEqual(port, expected_port,
                      'Unexpected port: %u != %u from %s' % (port, expected_port,
                                                             str(ep)))

@@ -163,7 +163,7 @@ def get_connection(user=None, password=None):
   global vtgate_port
   timeout = 10.0
   conn = None
-  vtgate_addrs = {"_vt": ["localhost:%s" % (vtgate_port),]}
+  vtgate_addrs = {"vt": ["localhost:%s" % (vtgate_port),]}
   conn = conn_class.connect(vtgate_addrs, timeout,
                             user=user, password=password)
   return conn
