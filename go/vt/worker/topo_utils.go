@@ -50,7 +50,7 @@ func findHealthyRdonlyEndPoint(wr *wrangler.Wrangler, cell, keyspace, shard stri
 // - find a rdonly instance in the keyspace / shard
 // - mark it as checker
 // - tag it with our worker process
-func findChecker(wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, cell, keyspace, shard string) (topo.TabletAlias, error) {
+func findChecker(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, cell, keyspace, shard string) (topo.TabletAlias, error) {
 	tabletAlias, err := findHealthyRdonlyEndPoint(wr, cell, keyspace, shard)
 	if err != nil {
 		return topo.TabletAlias{}, err
@@ -75,7 +75,7 @@ func findChecker(wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, cell, keyspac
 	defer wrangler.RecordTabletTagAction(cleaner, tabletAlias, "worker", "")
 
 	wr.Logger().Infof("Changing tablet %v to 'checker'", tabletAlias)
-	ctx, cancel := context.WithTimeout(context.TODO(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	err = wr.ChangeType(ctx, tabletAlias, topo.TYPE_CHECKER, false /*force*/)
 	cancel()
 	if err != nil {
