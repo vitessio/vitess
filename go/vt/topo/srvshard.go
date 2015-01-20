@@ -100,10 +100,6 @@ type SrvKeyspace struct {
 	// Shards to use per type, only contains complete partitions.
 	Partitions map[TabletType]*KeyspacePartition
 
-	// This list will be deprecated as soon as Partitions is used.
-	// List of non-overlapping shards sorted by range.
-	Shards []SrvShard
-
 	// List of available tablet types for this keyspace in this cell.
 	// May not have a server for every shard, but we have some.
 	TabletTypes []TabletType
