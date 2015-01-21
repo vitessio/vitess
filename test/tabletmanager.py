@@ -436,7 +436,7 @@ class TestTabletManager(unittest.TestCase):
       try:
         utils.run_vtctl_json(['GetEndPoints', 'test_nj', 'test_keyspace/0',
                               'replica'])
-      except gorpc.AppError:
+      except:
         logging.debug("Tablet is gone from serving graph, good")
         break
       timeout = utils.wait_step('Stopped replication didn\'t trigger removal from serving graph', timeout)
