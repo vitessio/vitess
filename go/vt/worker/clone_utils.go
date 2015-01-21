@@ -115,8 +115,10 @@ func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *top
 		case err == nil:
 			// success!
 			return nil
-		case wr.TabletManagerClient().IsTimeoutError(err), strings.Contains(err.Error(), "retry: "):
-			// retriable failure, either due to a timeout or an application-level retriable failure
+		case wr.TabletManagerClient().IsTimeoutError(err):
+			wr.Logger().Infof("ExecuteFetch failed on %v; will retry because it was a timeout error: %v", ti, err)
+		case strings.Contains(err.Error(), "retry: "):
+			wr.Logger().Infof("ExecuteFetch failed on %v; will retry because it was a retriable application failure: %v", ti, err)
 		default:
 			return err
 		}
@@ -133,7 +135,6 @@ func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *top
 		case <-t.C:
 			// Re-resolve and retry 30s after the failure
 			// TODO(aaijazi): Re-resolve before retrying
-			wr.Logger().Infof("Retrying failed ExecuteFetch on %v; failed with: %v", ti, err)
 		}
 
 	}
