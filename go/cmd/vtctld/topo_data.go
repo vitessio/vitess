@@ -117,6 +117,50 @@ func (voc *VersionedObjectCache) Flush() {
 	}
 }
 
+// VersionedObjectCacheFactory knows how to construct a VersionedObjectCache
+// from the key
+type VersionedObjectCacheFactory func(key string) *VersionedObjectCache
+
+// VersionedObjectCacheMap is a map of VersionedObjectCache protected
+// by a mutex.
+type VersionedObjectCacheMap struct {
+	factory VersionedObjectCacheFactory
+
+	mu       sync.Mutex
+	cacheMap map[string]*VersionedObjectCache
+}
+
+// NewVersionedObjectCacheMap returns a new VersionedObjectCacheFactory
+// that uses the factory method to create individual VersionedObjectCache.
+func NewVersionedObjectCacheMap(factory VersionedObjectCacheFactory) *VersionedObjectCacheMap {
+	return &VersionedObjectCacheMap{
+		factory:  factory,
+		cacheMap: make(map[string]*VersionedObjectCache),
+	}
+}
+
+// Get finds the right VersionedObjectCache and returns its value
+func (vocm *VersionedObjectCacheMap) Get(key string) ([]byte, error) {
+	vocm.mu.Lock()
+	voc, ok := vocm.cacheMap[key]
+	if !ok {
+		voc = vocm.factory(key)
+		vocm.cacheMap[key] = voc
+	}
+	vocm.mu.Unlock()
+
+	return voc.Get()
+}
+
+// Flush will flush the entire cache
+func (vocm *VersionedObjectCacheMap) Flush() {
+	vocm.mu.Lock()
+	defer vocm.mu.Unlock()
+	for _, voc := range vocm.cacheMap {
+		voc.Flush()
+	}
+}
+
 // KnownCells contains the cached result of topo.Server.GetKnownCells
 type KnownCells struct {
 	BaseVersionedObject
@@ -164,5 +208,112 @@ func newKeyspacesCache(ts topo.Server) *VersionedObjectCache {
 		return &Keyspaces{
 			Keyspaces: keyspaces,
 		}, nil
+	})
+}
+
+// Keyspace contains the cached results of topo.Server.GetKeyspace
+type Keyspace struct {
+	BaseVersionedObject
+
+	// KeyspaceName is the name of this keyspace
+	KeyspaceName string
+
+	// Keyspace is the topo value of this keyspace
+	Keyspace *topo.Keyspace
+}
+
+// Reset is part of the VersionedObject interface
+func (k *Keyspace) Reset() {
+	k.KeyspaceName = ""
+	k.Keyspace = nil
+}
+
+func newKeyspaceCache(ts topo.Server) *VersionedObjectCacheMap {
+	return NewVersionedObjectCacheMap(func(key string) *VersionedObjectCache {
+		return NewVersionedObjectCache(func() (VersionedObject, error) {
+			k, err := ts.GetKeyspace(key)
+			if err != nil {
+				return nil, err
+			}
+			return &Keyspace{
+				KeyspaceName: k.KeyspaceName(),
+				Keyspace:     k.Keyspace,
+			}, nil
+		})
+	})
+}
+
+// ShardNames contains the cached results of topo.Server.GetShardNames
+type ShardNames struct {
+	BaseVersionedObject
+
+	// KeyspaceName is the name of the keyspace this result applies to
+	KeyspaceName string
+
+	// ShardNames is the list of shard names for this keyspace
+	ShardNames []string
+}
+
+// Reset is part of the VersionedObject interface
+func (s *ShardNames) Reset() {
+	s.KeyspaceName = ""
+	s.ShardNames = nil
+}
+
+func newShardNamesCache(ts topo.Server) *VersionedObjectCacheMap {
+	return NewVersionedObjectCacheMap(func(key string) *VersionedObjectCache {
+		return NewVersionedObjectCache(func() (VersionedObject, error) {
+			sn, err := ts.GetShardNames(key)
+			if err != nil {
+				return nil, err
+			}
+			return &ShardNames{
+				KeyspaceName: key,
+				ShardNames:   sn,
+			}, nil
+		})
+	})
+}
+
+// Shard contains the cached results of topo.Server.GetShard
+// the map key is keyspace/shard
+type Shard struct {
+	BaseVersionedObject
+
+	// KeyspaceName is the keyspace for this shard
+	KeyspaceName string
+
+	// ShardName is the name for this shard
+	ShardName string
+
+	// Shard is the topo value of this shard
+	Shard *topo.Shard
+}
+
+// Reset is part of the VersionedObject interface
+func (s *Shard) Reset() {
+	s.KeyspaceName = ""
+	s.ShardName = ""
+	s.Shard = nil
+}
+
+func newShardCache(ts topo.Server) *VersionedObjectCacheMap {
+	return NewVersionedObjectCacheMap(func(key string) *VersionedObjectCache {
+		return NewVersionedObjectCache(func() (VersionedObject, error) {
+
+			keyspace, shard, err := topo.ParseKeyspaceShardString(key)
+			if err != nil {
+				return nil, err
+			}
+			s, err := ts.GetShard(keyspace, shard)
+			if err != nil {
+				return nil, err
+			}
+			return &Shard{
+				KeyspaceName: s.Keyspace(),
+				ShardName:    s.ShardName(),
+				Shard:        s.Shard,
+			}, nil
+		})
 	})
 }

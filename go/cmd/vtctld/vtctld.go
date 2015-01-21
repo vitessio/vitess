@@ -342,10 +342,75 @@ func main() {
 		w.Write(result)
 	})
 
+	keyspaceCache := newKeyspaceCache(ts)
+	http.HandleFunc("/json/Keyspace", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			httpError(w, "cannot parse form: %s", err)
+			return
+		}
+		keyspace := r.FormValue("keyspace")
+		if keyspace == "" {
+			http.Error(w, "no keyspace provided", http.StatusBadRequest)
+			return
+		}
+		result, err := keyspaceCache.Get(keyspace)
+		if err != nil {
+			httpError(w, "error getting keyspace: %v", err)
+			return
+		}
+		w.Write(result)
+	})
+
+	shardNamesCache := newShardNamesCache(ts)
+	http.HandleFunc("/json/ShardNames", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			httpError(w, "cannot parse form: %s", err)
+			return
+		}
+		keyspace := r.FormValue("keyspace")
+		if keyspace == "" {
+			http.Error(w, "no keyspace provided", http.StatusBadRequest)
+			return
+		}
+		result, err := shardNamesCache.Get(keyspace)
+		if err != nil {
+			httpError(w, "error getting shardNames: %v", err)
+			return
+		}
+		w.Write(result)
+	})
+
+	shardCache := newShardCache(ts)
+	http.HandleFunc("/json/Shard", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			httpError(w, "cannot parse form: %s", err)
+			return
+		}
+		keyspace := r.FormValue("keyspace")
+		if keyspace == "" {
+			http.Error(w, "no keyspace provided", http.StatusBadRequest)
+			return
+		}
+		shard := r.FormValue("shard")
+		if shard == "" {
+			http.Error(w, "no shard provided", http.StatusBadRequest)
+			return
+		}
+		result, err := shardCache.Get(keyspace + "/" + shard)
+		if err != nil {
+			httpError(w, "error getting shard: %v", err)
+			return
+		}
+		w.Write(result)
+	})
+
 	// flush all data and will force a full client reload
 	http.HandleFunc("/json/flush", func(w http.ResponseWriter, r *http.Request) {
 		knownCellsCache.Flush()
 		keyspacesCache.Flush()
+		keyspaceCache.Flush()
+		shardNamesCache.Flush()
+		shardCache.Flush()
 	})
 
 	servenv.RunDefault()
