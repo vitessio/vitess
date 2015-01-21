@@ -3,6 +3,7 @@ package health
 import (
 	"fmt"
 	"html/template"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -124,6 +125,7 @@ func (ag *Aggregator) HTMLName() template.HTML {
 	for _, rep := range ag.reporters {
 		result = append(result, string(rep.HTMLName()))
 	}
+	sort.Strings(result)
 	return template.HTML(strings.Join(result, "&nbsp; + &nbsp;"))
 }
 
