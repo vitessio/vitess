@@ -225,10 +225,10 @@ func (agent *ActionAgent) Tablet() *topo.TabletInfo {
 }
 
 // Healthy reads the result of the latest healthcheck, protected by mutex.
-func (agent *ActionAgent) Healthy() (error, time.Duration) {
+func (agent *ActionAgent) Healthy() (time.Duration, error) {
 	agent.mutex.Lock()
 	defer agent.mutex.Unlock()
-	return agent._healthy, agent._replicationDelay
+	return agent._replicationDelay, agent._healthy
 }
 
 // BlacklistedTables reads the list of blacklisted tables from the TabletControl
