@@ -324,9 +324,19 @@ func main() {
 	// serve some data
 	knownCellsCache := newKnownCellsCache(ts)
 	http.HandleFunc("/json/KnownCells", func(w http.ResponseWriter, r *http.Request) {
-		result, err := knownCellsCache.get()
+		result, err := knownCellsCache.Get()
 		if err != nil {
-			httpError(w, "error getting topology: %v", err)
+			httpError(w, "error getting known cells: %v", err)
+			return
+		}
+		w.Write(result)
+	})
+
+	keyspacesCache := newKeyspacesCache(ts)
+	http.HandleFunc("/json/Keyspaces", func(w http.ResponseWriter, r *http.Request) {
+		result, err := keyspacesCache.Get()
+		if err != nil {
+			httpError(w, "error getting keyspaces: %v", err)
 			return
 		}
 		w.Write(result)
@@ -334,7 +344,8 @@ func main() {
 
 	// flush all data and will force a full client reload
 	http.HandleFunc("/json/flush", func(w http.ResponseWriter, r *http.Request) {
-		knownCellsCache.flush()
+		knownCellsCache.Flush()
+		keyspacesCache.Flush()
 	})
 
 	servenv.RunDefault()
