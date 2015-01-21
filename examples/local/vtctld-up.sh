@@ -19,7 +19,7 @@ mkdir -p $VTDATAROOT/tmp
 
 echo "Starting vtctld..."
 $VTROOT/bin/vtctld -debug -templates $VTTOP/go/cmd/vtctld/templates \
-  -log_dir $VTDATAROOT/tmp -port $port 2> $VTDATAROOT/tmp/vtctld.stderr &
+  -log_dir $VTDATAROOT/tmp -port $port > $VTDATAROOT/tmp/vtctld.out 2>&1 &
 disown -a
 
 echo "Access vtctld at http://$hostname:$port"

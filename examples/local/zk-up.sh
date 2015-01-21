@@ -27,7 +27,8 @@ mkdir -p $VTDATAROOT/tmp
 # peers, so we need to start them all in the background and then wait for them.
 echo "Starting zk servers..."
 for zkid in 1 2 3; do
-  $VTROOT/bin/zkctl -zk.myid $zkid -zk.cfg $zkcfg -log_dir $VTDATAROOT/tmp init 2>/dev/null &
+  $VTROOT/bin/zkctl -zk.myid $zkid -zk.cfg $zkcfg -log_dir $VTDATAROOT/tmp init \
+    > $VTDATAROOT/tmp/zkctl_$zkid.out 2>&1 &
 done
 
 # Wait for all the zkctl commands to return.
