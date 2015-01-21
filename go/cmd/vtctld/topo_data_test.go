@@ -10,141 +10,6 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo"
 )
 
-func TestKnownCellsCache(t *testing.T) {
-	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	kcc := newKnownCellsCache(ts)
-	var kc KnownCells
-	expectedKc := KnownCells{
-		Cells: []string{"cell1", "cell2"},
-	}
-
-	testVersionedObjectCache(t, kcc, &kc, &expectedKc)
-}
-
-func TestKeyspacesCache(t *testing.T) {
-	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	if err := ts.CreateKeyspace("ks1", &topo.Keyspace{}); err != nil {
-		t.Fatalf("CreateKeyspace failed: %v", err)
-	}
-	if err := ts.CreateKeyspace("ks2", &topo.Keyspace{}); err != nil {
-		t.Fatalf("CreateKeyspace failed: %v", err)
-	}
-	kc := newKeyspacesCache(ts)
-	var k Keyspaces
-	expectedK := Keyspaces{
-		Keyspaces: []string{"ks1", "ks2"},
-	}
-
-	testVersionedObjectCache(t, kc, &k, &expectedK)
-}
-
-func TestKeyspaceCache(t *testing.T) {
-	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	if err := ts.CreateKeyspace("ks1", &topo.Keyspace{
-		ShardingColumnName: "sharding_key",
-	}); err != nil {
-		t.Fatalf("CreateKeyspace failed: %v", err)
-	}
-	if err := ts.CreateKeyspace("ks2", &topo.Keyspace{
-		SplitShardCount: 10,
-	}); err != nil {
-		t.Fatalf("CreateKeyspace failed: %v", err)
-	}
-	kc := newKeyspaceCache(ts)
-	var k Keyspace
-
-	expectedK := Keyspace{
-		KeyspaceName: "ks1",
-		Keyspace: &topo.Keyspace{
-			ShardingColumnName: "sharding_key",
-		},
-	}
-	testVersionedObjectCacheMap(t, kc, "ks1", &k, &expectedK)
-
-	expectedK = Keyspace{
-		KeyspaceName: "ks2",
-		Keyspace: &topo.Keyspace{
-			SplitShardCount: 10,
-		},
-	}
-	testVersionedObjectCacheMap(t, kc, "ks2", &k, &expectedK)
-}
-
-func TestShardNamesCache(t *testing.T) {
-	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	if err := ts.CreateKeyspace("ks1", &topo.Keyspace{
-		ShardingColumnName: "sharding_key",
-	}); err != nil {
-		t.Fatalf("CreateKeyspace failed: %v", err)
-	}
-	if err := ts.CreateShard("ks1", "s1", &topo.Shard{
-		Cells: []string{"cell1", "cell2"},
-	}); err != nil {
-		t.Fatalf("CreateShard failed: %v", err)
-	}
-	if err := ts.CreateShard("ks1", "s2", &topo.Shard{
-		MasterAlias: topo.TabletAlias{
-			Cell: "cell1",
-			Uid:  12,
-		},
-	}); err != nil {
-		t.Fatalf("CreateShard failed: %v", err)
-	}
-	snc := newShardNamesCache(ts)
-	var sn ShardNames
-
-	expectedSN := ShardNames{
-		KeyspaceName: "ks1",
-		ShardNames:   []string{"s1", "s2"},
-	}
-	testVersionedObjectCacheMap(t, snc, "ks1", &sn, &expectedSN)
-}
-
-func TestShardCache(t *testing.T) {
-	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	if err := ts.CreateKeyspace("ks1", &topo.Keyspace{
-		ShardingColumnName: "sharding_key",
-	}); err != nil {
-		t.Fatalf("CreateKeyspace failed: %v", err)
-	}
-	if err := ts.CreateShard("ks1", "s1", &topo.Shard{
-		Cells: []string{"cell1", "cell2"},
-	}); err != nil {
-		t.Fatalf("CreateShard failed: %v", err)
-	}
-	if err := ts.CreateShard("ks1", "s2", &topo.Shard{
-		MasterAlias: topo.TabletAlias{
-			Cell: "cell1",
-			Uid:  12,
-		},
-	}); err != nil {
-		t.Fatalf("CreateShard failed: %v", err)
-	}
-	sc := newShardCache(ts)
-	var s Shard
-
-	expectedS := Shard{
-		KeyspaceName: "ks1",
-		ShardName:    "s1",
-		Shard: &topo.Shard{
-			Cells: []string{"cell1", "cell2"},
-		},
-	}
-	testVersionedObjectCacheMap(t, sc, "ks1/s1", &s, &expectedS)
-
-	expectedS = Shard{
-		KeyspaceName: "ks1",
-		ShardName:    "s2",
-		Shard: &topo.Shard{
-			MasterAlias: topo.TabletAlias{
-				Cell: "cell1",
-				Uid:  12,
-			},
-		},
-	}
-	testVersionedObjectCacheMap(t, sc, "ks1/s2", &s, &expectedS)
-}
-
 func testVersionedObjectCache(t *testing.T, voc *VersionedObjectCache, vo VersionedObject, expectedVO VersionedObject) {
 	result, err := voc.Get()
 	if err != nil {
@@ -283,4 +148,181 @@ func testVersionedObjectCacheMap(t *testing.T, vocm *VersionedObjectCacheMap, ke
 	if !reflect.DeepEqual(vo, expectedVO) {
 		t.Fatalf("Got bad result: %#v expected: %#v", vo, expectedVO)
 	}
+}
+
+func TestKnownCellsCache(t *testing.T) {
+	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
+	kcc := newKnownCellsCache(ts)
+	var kc KnownCells
+	expectedKc := KnownCells{
+		Cells: []string{"cell1", "cell2"},
+	}
+
+	testVersionedObjectCache(t, kcc, &kc, &expectedKc)
+}
+
+func TestKeyspacesCache(t *testing.T) {
+	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
+	if err := ts.CreateKeyspace("ks1", &topo.Keyspace{}); err != nil {
+		t.Fatalf("CreateKeyspace failed: %v", err)
+	}
+	if err := ts.CreateKeyspace("ks2", &topo.Keyspace{}); err != nil {
+		t.Fatalf("CreateKeyspace failed: %v", err)
+	}
+	kc := newKeyspacesCache(ts)
+	var k Keyspaces
+	expectedK := Keyspaces{
+		Keyspaces: []string{"ks1", "ks2"},
+	}
+
+	testVersionedObjectCache(t, kc, &k, &expectedK)
+}
+
+func TestKeyspaceCache(t *testing.T) {
+	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
+	if err := ts.CreateKeyspace("ks1", &topo.Keyspace{
+		ShardingColumnName: "sharding_key",
+	}); err != nil {
+		t.Fatalf("CreateKeyspace failed: %v", err)
+	}
+	if err := ts.CreateKeyspace("ks2", &topo.Keyspace{
+		SplitShardCount: 10,
+	}); err != nil {
+		t.Fatalf("CreateKeyspace failed: %v", err)
+	}
+	kc := newKeyspaceCache(ts)
+	var k Keyspace
+
+	expectedK := Keyspace{
+		KeyspaceName: "ks1",
+		Keyspace: &topo.Keyspace{
+			ShardingColumnName: "sharding_key",
+		},
+	}
+	testVersionedObjectCacheMap(t, kc, "ks1", &k, &expectedK)
+
+	expectedK = Keyspace{
+		KeyspaceName: "ks2",
+		Keyspace: &topo.Keyspace{
+			SplitShardCount: 10,
+		},
+	}
+	testVersionedObjectCacheMap(t, kc, "ks2", &k, &expectedK)
+}
+
+func TestShardNamesCache(t *testing.T) {
+	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
+	if err := ts.CreateKeyspace("ks1", &topo.Keyspace{
+		ShardingColumnName: "sharding_key",
+	}); err != nil {
+		t.Fatalf("CreateKeyspace failed: %v", err)
+	}
+	if err := ts.CreateShard("ks1", "s1", &topo.Shard{
+		Cells: []string{"cell1", "cell2"},
+	}); err != nil {
+		t.Fatalf("CreateShard failed: %v", err)
+	}
+	if err := ts.CreateShard("ks1", "s2", &topo.Shard{
+		MasterAlias: topo.TabletAlias{
+			Cell: "cell1",
+			Uid:  12,
+		},
+	}); err != nil {
+		t.Fatalf("CreateShard failed: %v", err)
+	}
+	snc := newShardNamesCache(ts)
+	var sn ShardNames
+
+	expectedSN := ShardNames{
+		KeyspaceName: "ks1",
+		ShardNames:   []string{"s1", "s2"},
+	}
+	testVersionedObjectCacheMap(t, snc, "ks1", &sn, &expectedSN)
+}
+
+func TestShardCache(t *testing.T) {
+	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
+	if err := ts.CreateKeyspace("ks1", &topo.Keyspace{
+		ShardingColumnName: "sharding_key",
+	}); err != nil {
+		t.Fatalf("CreateKeyspace failed: %v", err)
+	}
+	if err := ts.CreateShard("ks1", "s1", &topo.Shard{
+		Cells: []string{"cell1", "cell2"},
+	}); err != nil {
+		t.Fatalf("CreateShard failed: %v", err)
+	}
+	if err := ts.CreateShard("ks1", "s2", &topo.Shard{
+		MasterAlias: topo.TabletAlias{
+			Cell: "cell1",
+			Uid:  12,
+		},
+	}); err != nil {
+		t.Fatalf("CreateShard failed: %v", err)
+	}
+	sc := newShardCache(ts)
+	var s Shard
+
+	expectedS := Shard{
+		KeyspaceName: "ks1",
+		ShardName:    "s1",
+		Shard: &topo.Shard{
+			Cells: []string{"cell1", "cell2"},
+		},
+	}
+	testVersionedObjectCacheMap(t, sc, "ks1/s1", &s, &expectedS)
+
+	expectedS = Shard{
+		KeyspaceName: "ks1",
+		ShardName:    "s2",
+		Shard: &topo.Shard{
+			MasterAlias: topo.TabletAlias{
+				Cell: "cell1",
+				Uid:  12,
+			},
+		},
+	}
+	testVersionedObjectCacheMap(t, sc, "ks1/s2", &s, &expectedS)
+}
+
+func TestCellShardTabletsCache(t *testing.T) {
+	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
+	if err := ts.UpdateShardReplicationFields("cell1", "ks1", "s1", func(sr *topo.ShardReplication) error {
+		sr.ReplicationLinks = []topo.ReplicationLink{
+			topo.ReplicationLink{
+				TabletAlias: topo.TabletAlias{
+					Cell: "cell1",
+					Uid:  12,
+				},
+			},
+			topo.ReplicationLink{
+				TabletAlias: topo.TabletAlias{
+					Cell: "cell1",
+					Uid:  13,
+				},
+			},
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("UpdateShardReplicationFields failed: %v", err)
+	}
+	cstc := newCellShardTabletsCache(ts)
+	var cst CellShardTablets
+
+	expectedCST := CellShardTablets{
+		Cell:         "cell1",
+		KeyspaceName: "ks1",
+		ShardName:    "s1",
+		TabletAliases: []topo.TabletAlias{
+			topo.TabletAlias{
+				Cell: "cell1",
+				Uid:  12,
+			},
+			topo.TabletAlias{
+				Cell: "cell1",
+				Uid:  13,
+			},
+		},
+	}
+	testVersionedObjectCacheMap(t, cstc, "cell1/ks1/s1", &cst, &expectedCST)
 }

@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -314,6 +316,58 @@ func newShardCache(ts topo.Server) *VersionedObjectCacheMap {
 				ShardName:    s.ShardName(),
 				Shard:        s.Shard,
 			}, nil
+		})
+	})
+}
+
+// CellShardTablets contains the cached results of the list of tablets
+// in a cell / keyspace / shard.
+// The map key is cell/keyspace/shard.
+type CellShardTablets struct {
+	BaseVersionedObject
+
+	// Cell is the name of the cell
+	Cell string
+
+	// KeyspaceName is the keyspace for this shard
+	KeyspaceName string
+
+	// ShardName is the name for this shard
+	ShardName string
+
+	// TabletAliases is the array os tablet aliases
+	TabletAliases []topo.TabletAlias
+}
+
+// Reset is part of the VersionedObject interface
+func (cst *CellShardTablets) Reset() {
+	cst.Cell = ""
+	cst.KeyspaceName = ""
+	cst.ShardName = ""
+	cst.TabletAliases = nil
+}
+
+func newCellShardTabletsCache(ts topo.Server) *VersionedObjectCacheMap {
+	return NewVersionedObjectCacheMap(func(key string) *VersionedObjectCache {
+		return NewVersionedObjectCache(func() (VersionedObject, error) {
+			parts := strings.Split(key, "/")
+			if len(parts) != 3 {
+				return nil, fmt.Errorf("Invalid shard tablets path: %v", key)
+			}
+			sr, err := ts.GetShardReplication(parts[0], parts[1], parts[2])
+			if err != nil {
+				return nil, err
+			}
+			result := &CellShardTablets{
+				Cell:          parts[0],
+				KeyspaceName:  parts[1],
+				ShardName:     parts[2],
+				TabletAliases: make([]topo.TabletAlias, len(sr.ReplicationLinks)),
+			}
+			for i, rl := range sr.ReplicationLinks {
+				result.TabletAliases[i] = rl.TabletAlias
+			}
+			return result, nil
 		})
 	})
 }

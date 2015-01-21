@@ -404,6 +404,35 @@ func main() {
 		w.Write(result)
 	})
 
+	cellShardTabletsCache := newCellShardTabletsCache(ts)
+	http.HandleFunc("/json/CellShardTablets", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			httpError(w, "cannot parse form: %s", err)
+			return
+		}
+		cell := r.FormValue("cell")
+		if cell == "" {
+			http.Error(w, "no cell provided", http.StatusBadRequest)
+			return
+		}
+		keyspace := r.FormValue("keyspace")
+		if keyspace == "" {
+			http.Error(w, "no keyspace provided", http.StatusBadRequest)
+			return
+		}
+		shard := r.FormValue("shard")
+		if shard == "" {
+			http.Error(w, "no shard provided", http.StatusBadRequest)
+			return
+		}
+		result, err := cellShardTabletsCache.Get(cell + "/" + keyspace + "/" + shard)
+		if err != nil {
+			httpError(w, "error getting shard: %v", err)
+			return
+		}
+		w.Write(result)
+	})
+
 	// flush all data and will force a full client reload
 	http.HandleFunc("/json/flush", func(w http.ResponseWriter, r *http.Request) {
 		knownCellsCache.Flush()
@@ -411,6 +440,7 @@ func main() {
 		keyspaceCache.Flush()
 		shardNamesCache.Flush()
 		shardCache.Flush()
+		cellShardTabletsCache.Flush()
 	})
 
 	servenv.RunDefault()
