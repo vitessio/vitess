@@ -157,7 +157,7 @@ class TestTopo(unittest.TestCase):
     end_points = fkc.get_end_points("testing", "test_keyspace", "0", "master")
     self.assertEqual({
         'entries': [{'host': 'my.cool.hostname',
-                     'named_port_map': {'_mysql': 3310, '_vtocc': 6711},
+                     'named_port_map': {'mysql': 3310, 'vt': 6711},
                      'port': 0,
                      'uid': 0}]},
                      end_points, "end points are wrong")

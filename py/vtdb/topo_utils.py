@@ -33,11 +33,11 @@ class VTConnParams(object):
 
 def get_db_params_for_tablet_conn(topo_client, keyspace_name, shard, db_type, timeout, encrypted, user, password):
   db_params_list = []
-  encrypted_service = '_vts'
+  encrypted_service = 'vts'
   if encrypted:
     service = encrypted_service
   else:
-    service = '_vtocc'
+    service = 'vt'
   db_key = "%s.%s.%s:%s" % (keyspace_name, shard, db_type, service)
   # This will read the cached keyspace.
   keyspace_object = topology.get_keyspace(keyspace_name)
@@ -68,7 +68,7 @@ def get_db_params_for_tablet_conn(topo_client, keyspace_name, shard, db_type, ti
   for entry in end_points_data['Entries']:
     if service in entry['NamedPortMap']:
       host_port = (entry['Host'], entry['NamedPortMap'][service],
-                   service == '_vts')
+                   service == 'vts')
       host_port_list.append(host_port)
     if encrypted and encrypted_service in entry['NamedPortMap']:
       host_port = (entry['Host'], entry['NamedPortMap'][encrypted_service],

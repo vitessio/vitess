@@ -174,7 +174,7 @@ def get_connection(user=None, password=None):
   global vtgate_port
   timeout = 10.0
   conn = None
-  vtgate_addrs = {"_vt": ["localhost:%s" % (vtgate_port),]}
+  vtgate_addrs = {"vt": ["localhost:%s" % (vtgate_port),]}
   conn = conn_class.connect(vtgate_addrs, timeout,
                             user=user, password=password)
   return conn
@@ -217,7 +217,7 @@ def populate_table():
 class TestUnshardedTable(unittest.TestCase):
 
   def setUp(self):
-    self.vtgate_addrs = {"_vt": ["localhost:%s" % (vtgate_port),]}
+    self.vtgate_addrs = {"vt": ["localhost:%s" % (vtgate_port),]}
     self.dc = database_context.DatabaseContext(self.vtgate_addrs)
     with database_context.WriteTransaction(self.dc) as context:
       for x in xrange(10):
@@ -284,7 +284,7 @@ class TestRangeSharded(unittest.TestCase):
     return user_id_list
 
   def setUp(self):
-    self.vtgate_addrs = {"_vt": ["localhost:%s" % (vtgate_port),]}
+    self.vtgate_addrs = {"vt": ["localhost:%s" % (vtgate_port),]}
     self.dc = database_context.DatabaseContext(self.vtgate_addrs)
     self.user_id_list = self.populate_tables()
 

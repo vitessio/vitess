@@ -20,7 +20,7 @@ def tearDownModule():
 
 class TestVerticalSplitVTGate(vertical_split.TestVerticalSplit):
   def _vtdb_conn(self):
-    conn = vtgatev2.connect(self.vtgate_addrs['_vt'], 30)
+    conn = vtgatev2.connect(self.vtgate_addrs['vt'], 30)
     return conn
 
   def _insert_values(self, table, count, db_type='master', keyspace='source_keyspace'):
