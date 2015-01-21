@@ -25,3 +25,7 @@ third_party/mysql
 java/vtocc-client/target
 java/vtocc-jdbc-driver/target
 third_party/acolyte
+
+# intellij files
+*.iml
+.idea
