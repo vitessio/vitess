@@ -143,13 +143,14 @@ func (tm *TabletManager) HealthStream(ctx context.Context, args *rpc.Unused, sen
 			}
 		}()
 
-		if err := tm.agent.RegisterHealthStream(c); err != nil {
+		id, err := tm.agent.RegisterHealthStream(c)
+		if err != nil {
 			close(c)
 			wg.Wait()
 			return err
 		}
 		wg.Wait()
-		return tm.agent.UnregisterHealthStream(c)
+		return tm.agent.UnregisterHealthStream(id)
 	})
 }
 

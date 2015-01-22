@@ -89,6 +89,9 @@ var commands = []commandGroup{
 			command{"RunHealthCheck", commandRunHealthCheck,
 				"<tablet alias> <target tablet type>",
 				"Asks a remote tablet to run a health check with the providd target type."},
+			command{"HealthStream", commandHealthStream,
+				"<tablet alias>",
+				"Streams the health status out of a tablet."},
 			command{"Query", commandQuery,
 				"<cell> <keyspace> <query>",
 				"Send a SQL query to a tablet."},
@@ -791,6 +794,31 @@ func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return err
 	}
 	return wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo, servedType)
+}
+
+func commandHealthStream(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("action HealthStream <tablet alias>")
+	}
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	tabletInfo, err := wr.TopoServer().GetTablet(tabletAlias)
+	if err != nil {
+		return err
+	}
+	c, errFunc, err := wr.TabletManagerClient().HealthStream(ctx, tabletInfo)
+	if err != nil {
+		return err
+	}
+	for hsr := range c {
+		wr.Logger().Printf("%v\n", jscfg.ToJson(hsr))
+	}
+	return errFunc()
 }
 
 func commandQuery(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

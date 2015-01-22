@@ -33,7 +33,7 @@ type HealthStreamReply struct {
 	// BinlogPlayerMapSize is the size of the binlog player map.
 	// If non zero, the ReplicationDelay is the binlog players' maximum
 	// replication delay.
-	BinlogPlayerMapSize int
+	BinlogPlayerMapSize int64
 
 	// HealthError is the last error we got from health check,
 	// or empty is the server is healthy.

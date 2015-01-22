@@ -60,8 +60,8 @@ type RPCAgent interface {
 
 	RunHealthCheck(ctx context.Context, targetTabletType topo.TabletType)
 
-	RegisterHealthStream(chan<- *actionnode.HealthStreamReply) error
-	UnregisterHealthStream(chan<- *actionnode.HealthStreamReply) error
+	RegisterHealthStream(chan<- *actionnode.HealthStreamReply) (int, error)
+	UnregisterHealthStream(int) error
 
 	ReloadSchema(ctx context.Context)
 
@@ -211,12 +211,22 @@ func (agent *ActionAgent) RunHealthCheck(ctx context.Context, targetTabletType t
 }
 
 // RegisterHealthStream adds a health stream channel to our list
-func (agent *ActionAgent) RegisterHealthStream(c chan<- *actionnode.HealthStreamReply) error {
-	return nil
+func (agent *ActionAgent) RegisterHealthStream(c chan<- *actionnode.HealthStreamReply) (int, error) {
+	agent.healthStreamMutex.Lock()
+	defer agent.healthStreamMutex.Unlock()
+
+	id := agent.healthStreamIndex
+	agent.healthStreamIndex++
+	agent.healthStreamMap[id] = c
+	return id, nil
 }
 
 // UnregisterHealthStream removes a health stream channel from our list
-func (agent *ActionAgent) UnregisterHealthStream(c chan<- *actionnode.HealthStreamReply) error {
+func (agent *ActionAgent) UnregisterHealthStream(id int) error {
+	agent.healthStreamMutex.Lock()
+	defer agent.healthStreamMutex.Unlock()
+
+	delete(agent.healthStreamMap, id)
 	return nil
 }
 

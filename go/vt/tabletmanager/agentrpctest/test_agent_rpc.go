@@ -340,12 +340,12 @@ var testHealthStreamHealthStreamReply = &actionnode.HealthStreamReply{
 }
 var testRegisterHealthStreamError = "to trigger a server error"
 
-func (fra *fakeRPCAgent) RegisterHealthStream(c chan<- *actionnode.HealthStreamReply) error {
+func (fra *fakeRPCAgent) RegisterHealthStream(c chan<- *actionnode.HealthStreamReply) (int, error) {
 	c <- testHealthStreamHealthStreamReply
-	return fmt.Errorf(testRegisterHealthStreamError)
+	return 0, fmt.Errorf(testRegisterHealthStreamError)
 }
 
-func (fra *fakeRPCAgent) UnregisterHealthStream(c chan<- *actionnode.HealthStreamReply) error {
+func (fra *fakeRPCAgent) UnregisterHealthStream(int) error {
 	return nil
 }
 

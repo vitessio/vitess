@@ -40,6 +40,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -87,6 +88,11 @@ type ActionAgent struct {
 
 	// replication delay the last time we got it
 	_replicationDelay time.Duration
+
+	// healthStreamMutex protects all the following fields
+	healthStreamMutex sync.Mutex
+	healthStreamIndex int
+	healthStreamMap   map[int]chan<- *actionnode.HealthStreamReply
 }
 
 func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
@@ -424,6 +430,20 @@ func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo
 	}
 
 	return tablet
+}
+
+// broadcastHealthStreamReply will send the HealthStreamReply to all
+// listening clients.
+func (agent *ActionAgent) broadcastHealthStreamReply(hsr *actionnode.HealthStreamReply) {
+	agent.healthStreamMutex.Lock()
+	defer agent.healthStreamMutex.Unlock()
+	for _, c := range agent.healthStreamMap {
+		// do not block on any write
+		select {
+		case c <- hsr:
+		default:
+		}
+	}
 }
 
 var getSubprocessFlagsFuncs []func() []string
