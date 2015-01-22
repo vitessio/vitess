@@ -13,7 +13,7 @@ LDFLAGS = "\
 	-X github.com/youtube/vitess/go/vt/servenv.buildHost   '$$(hostname)'\
 	-X github.com/youtube/vitess/go/vt/servenv.buildUser   '$$(whoami)'\
 	-X github.com/youtube/vitess/go/vt/servenv.buildGitRev '$$(git rev-parse HEAD)'\
-	-X github.com/youtube/vitess/go/vt/servenv.buildTime   '$$(date)'\
+	-X github.com/youtube/vitess/go/vt/servenv.buildTime   '$$(LC_ALL=C date)'\
 "
 
 build:
