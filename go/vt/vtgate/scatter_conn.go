@@ -184,6 +184,7 @@ func (stc *ScatterConn) ExecuteMulti(
 	return qr, nil
 }
 
+// ExecuteEntityIds executes queries that are shard specific.
 func (stc *ScatterConn) ExecuteEntityIds(
 	context context.Context,
 	shards []string,
@@ -290,12 +291,21 @@ func (stc *ScatterConn) StreamExecute(
 			return errFunc()
 		})
 	var replyErr error
+	fieldSent := false
 	for innerqr := range results {
 		// We still need to finish pumping
 		if replyErr != nil {
 			continue
 		}
-		replyErr = sendReply(innerqr.(*mproto.QueryResult))
+		mqr := innerqr.(*mproto.QueryResult)
+		// only send field info once for scattered streaming
+		if len(mqr.Fields) > 0 && len(mqr.Rows) == 0 {
+			if fieldSent {
+				continue
+			}
+			fieldSent = true
+		}
+		replyErr = sendReply(mqr)
 	}
 	if replyErr != nil {
 		allErrors.RecordError(replyErr)
@@ -332,12 +342,21 @@ func (stc *ScatterConn) StreamExecuteMulti(
 			return errFunc()
 		})
 	var replyErr error
+	fieldSent := false
 	for innerqr := range results {
 		// We still need to finish pumping
 		if replyErr != nil {
 			continue
 		}
-		replyErr = sendReply(innerqr.(*mproto.QueryResult))
+		mqr := innerqr.(*mproto.QueryResult)
+		// only send field info once for scattered streaming
+		if len(mqr.Fields) > 0 && len(mqr.Rows) == 0 {
+			if fieldSent {
+				continue
+			}
+			fieldSent = true
+		}
+		replyErr = sendReply(mqr)
 	}
 	if replyErr != nil {
 		allErrors.RecordError(replyErr)
@@ -491,12 +510,12 @@ func (stc *ScatterConn) multiGo(
 			defer stc.timings.Record([]string{name, keyspace, shard, string(tabletType)}, startTime)
 
 			sdc := stc.getConnection(context, keyspace, shard, tabletType)
-			transactionId, err := stc.updateSession(context, sdc, keyspace, shard, tabletType, session)
+			transactionID, err := stc.updateSession(context, sdc, keyspace, shard, tabletType, session)
 			if err != nil {
 				allErrors.RecordError(err)
 				return
 			}
-			err = action(sdc, transactionId, results)
+			err = action(sdc, transactionID, results)
 			if err != nil {
 				allErrors.RecordError(err)
 				return
@@ -540,7 +559,7 @@ func (stc *ScatterConn) updateSession(
 	keyspace, shard string,
 	tabletType topo.TabletType,
 	session *SafeSession,
-) (transactionId int64, err error) {
+) (transactionID int64, err error) {
 	if !session.InTransaction() {
 		return 0, nil
 	}
@@ -548,11 +567,11 @@ func (stc *ScatterConn) updateSession(
 	// Find and Append. The higher level functions ensure that no
 	// duplicate (keyspace, shard, tabletType) tuples can execute
 	// this at the same time.
-	transactionId = session.Find(keyspace, shard, tabletType)
-	if transactionId != 0 {
-		return transactionId, nil
+	transactionID = session.Find(keyspace, shard, tabletType)
+	if transactionID != 0 {
+		return transactionID, nil
 	}
-	transactionId, err = sdc.Begin(context)
+	transactionID, err = sdc.Begin(context)
 	if err != nil {
 		return 0, err
 	}
@@ -560,9 +579,9 @@ func (stc *ScatterConn) updateSession(
 		Keyspace:      keyspace,
 		TabletType:    tabletType,
 		Shard:         shard,
-		TransactionId: transactionId,
+		TransactionId: transactionID,
 	})
-	return transactionId, nil
+	return transactionID, nil
 }
 
 func getShards(shardVars map[string]map[string]interface{}) []string {

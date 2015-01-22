@@ -374,10 +374,6 @@ class VTGateConnection(object):
           self.session = self._stream_result.reply['Session']
           self._stream_result = None
           continue
-        # An extra fields message if it is scatter over streaming, ignore it
-        if not self._stream_result.reply['Result']['Rows']:
-          self._stream_result = None
-          continue
       except gorpc.GoRpcError as e:
         raise convert_exception(e, str(self))
       except:
