@@ -473,6 +473,26 @@ class TestVTGateFunctions(unittest.TestCase):
     except Exception, e:
       self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))
 
+  def test_streaming_multishards(self):
+    try:
+      count = 100
+      do_write(count, 0)
+      do_write(count, 1)
+      vtgate_conn = get_connection()
+      stream_cursor = vtgate_conn.cursor(
+        KEYSPACE_NAME, 'master',
+        keyranges=[keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)],
+        cursorclass=vtgate_cursor.StreamVTGateCursor)
+      stream_cursor.execute("select * from vt_insert_test", {})
+      rows = stream_cursor.fetchall()
+      rowcount = 0
+      for row in rows:
+        rowcount += 1
+      self.assertEqual(rowcount, count*2)
+      stream_cursor.close()
+    except Exception, e:
+      self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))
+
   def test_streaming_zero_results(self):
     try:
       vtgate_conn = get_connection()
