@@ -366,15 +366,17 @@ class TestSecure(unittest.TestCase):
     shard_0_master.create_db('vt_test_keyspace')
 
     proc1 = shard_0_master.start_vttablet(cert=cert_dir + "/vt-server-cert.pem",
-                                          key=cert_dir + "/vt-server-key.pem")
-    # Takes a bit longer for vttablet to serve the pid port
-    time.sleep(1.0)
+                                          key=cert_dir + "/vt-server-key.pem",
+                                          wait_for_state='SERVING')
     proc2 = shard_0_master.start_vttablet(cert=cert_dir + "/vt-server-cert.pem",
-                                          key=cert_dir + "/vt-server-key.pem")
-    time.sleep(1.0)
-    proc1.poll()
-    if proc1.returncode is None:
-      self.fail("proc1 still running")
+                                          key=cert_dir + "/vt-server-key.pem",
+                                          wait_for_state='SERVING')
+    timeout = 10.0
+    while True:
+      proc1.poll()
+      if proc1.returncode is not None:
+        break
+      timeout = utils.wait_step("waiting for new vttablet to kill its predecessor", timeout)
     shard_0_master.kill_vttablet()
     logging.debug("Done here")
 
