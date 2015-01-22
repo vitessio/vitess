@@ -408,6 +408,7 @@ func (tablet *Tablet) EndPoint() (*EndPoint, error) {
 	entry.NamedPortMap = map[string]int{}
 
 	if port, ok := tablet.Portmap["vt"]; ok {
+		entry.NamedPortMap["_vtocc"] = port
 		entry.NamedPortMap["vt"] = port
 	}
 	if port, ok := tablet.Portmap["mysql"]; ok {
