@@ -12,8 +12,8 @@ Start up steps include:
 - start VtGate instance
 
 Usage:
-java_vtgate_test_helper.py --shards=-80,80- --tablet-config='{"rdonly":1, "replica":1}' --keyspace=test_keyspace setup
-starts 1 VtGate and 6 vttablets - 1 master, replica and rdonly each per shard
+java_vtgate_test_helper.py --shards=-80,80- --tablet-config='{"rdonly":1, "replica":1}' --keyspace=test_keyspace  --vtgate-port=11111 setup
+starts 1 VtGate on the specified port and 6 vttablets - 1 master, replica and rdonly each per shard
 
 java_vtgate_test_helper.py --shards=-80,80- --tablet-config='{"rdonly":1, "replica":1}' --keyspace=test_keyspace teardown
 shuts down the tablets and VtGate instances
@@ -43,6 +43,7 @@ class TestEnv(object):
     self.keyspace = options.keyspace
     self.schema = options.schema
     self.vschema = options.vschema
+    self.vtgate_port = options.vtgate_port
     self.tablets = []
     tablet_config = json.loads(options.tablet_config)
     for shard in options.shards.split(','):
@@ -79,7 +80,7 @@ class TestEnv(object):
           utils.run_vtctl(['ApplyVSchema', "-vschema", self.vschema])
         else:
           utils.run_vtctl(['ApplyVSchema', "-vschema_file", self.vschema])
-      self.vtgate_server, self.vtgate_port = utils.vtgate_start(cache_ttl='500s')
+      self.vtgate_server, self.vtgate_port = utils.vtgate_start(cache_ttl='500s', vtport=self.vtgate_port)
       vtgate_client = zkocc.ZkOccConnection("localhost:%u" % self.vtgate_port, "test_nj", 30.0)
       topology.read_topology(vtgate_client)
     except:
@@ -107,6 +108,7 @@ def main():
   parser.add_option("--keyspace", action="store", type="string")
   parser.add_option("--schema", action="store", type="string")
   parser.add_option("--vschema", action="store", type="string")
+  parser.add_option("--vtgate-port", action="store", type="int")
   utils.add_options(parser)
   (options, args) = parser.parse_args()
   utils.set_options(options)
