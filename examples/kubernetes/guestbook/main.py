@@ -67,6 +67,6 @@ if __name__ == "__main__":
   topoconn.close()
 
   # Connect to vtgate.
-  conn = vtgatev2.connect({'_vt': [addr]}, timeout)
+  conn = vtgatev2.connect({'vt': [addr]}, timeout)
 
   app.run(host='0.0.0.0', port=8080, debug=True)

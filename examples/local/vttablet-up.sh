@@ -77,7 +77,7 @@ for uid_index in 0 1 2; do
     -enable-rowcache \
     -rowcache-bin $memcached_path \
     -rowcache-socket $VTDATAROOT/$tablet_dir/memcache.sock \
-    2> $VTDATAROOT/$tablet_dir/vttablet.stderr &
+    > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 
   echo "Access tablet $alias at http://$hostname:$port/debug/status"
 done

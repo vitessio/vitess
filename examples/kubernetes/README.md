@@ -10,7 +10,7 @@ to get Kubernetes up and running if you haven't already.
 
 This example was most recently tested with the
 [binary release](https://github.com/GoogleCloudPlatform/kubernetes/releases)
-of Kubernetes v0.8.1.
+of Kubernetes v0.8.2.
 
 The easiest way to run the local commands like vtctl is just to install
 [Docker](https://www.docker.com/)
@@ -21,7 +21,7 @@ by removing the docker preamble if you prefer.
 ## Starting an etcd cluster for Vitess
 
 Once you have a running Kubernetes deployment, make sure
-*kubernetes/cluster/kubecfg.sh* is in your path, and then run:
+`kubernetes/cluster/kubecfg.sh` is in your path, and then run:
 
 ```
 vitess/examples/kubernetes$ ./etcd-up.sh
@@ -32,15 +32,15 @@ since they read other config files.
 
 This will create two clusters: one for the 'global' cell, and one for the
 'test' cell.
-You can check the status of the pods with *kubecfg.sh list pods* or by using the
+You can check the status of the pods with `kubecfg.sh list pods` or by using the
 [Kubernetes web interface](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/ux.md).
 Note that it may take a while for each minion to download the Docker images the
-first time it needs them, during which time the pod status will be *Pending*.
+first time it needs them, during which time the pod status will be `Pending`.
 
-In general, each *-up.sh* script in this example has a corresponding *-down.sh*
+In general, each `-up.sh` script in this example has a corresponding `-down.sh`
 in case you want to stop certain pieces without bringing down the whole cluster.
 For example, to tear down the etcd deployment
-(again, with *kubecfg.sh* in your path):
+(again, with `kubecfg.sh` in your path):
 
 ```
 vitess/examples/kubernetes$ ./etcd-down.sh
@@ -75,8 +75,11 @@ vtctld us-central1 12.34.56.78   TCP         us-central1/targetPools/vtctld
 
 ## Issuing commands with vtctlclient
 
-If you've opened port 15000 on your firewall, you can run *vtctlclient*
-locally to issue commands:
+If you've opened port 15000 on your firewall, you can run `vtctlclient`
+locally to issue commands. Depending on your actual vtctld IP, as well as
+whether you're running via Docker, the vtctlclient command will look
+different. So from here on, we will assume you've made an alias called `kvtctl`
+with your particular parameters, such as:
 
 ```
 $ alias kvtctl="sudo docker run -ti --rm vitess/base vtctlclient -server 12.34.56.78:15000"
@@ -114,17 +117,27 @@ as vttablet will initialize the necessary entries upon startup.
 
 We launch vttablet in a
 [pod](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/pods.md)
-along with mysqld. The following script will instantiate *vttablet-pod-template.yaml*
+along with mysqld. The following script will instantiate `vttablet-pod-template.yaml`
 for three replicas.
 
 ```
 vitess/examples/kubernetes$ ./vttablet-up.sh
 ```
 
-Wait for the pods to enter Running state (*kubecfg.sh list pods*).
+Wait for the pods to enter Running state (`kubecfg.sh list pods`).
 Again, this may take a while if a pod was scheduled on a minion that needs to
 download the Vitess Docker image. Eventually you should see the tablets show up
-in the *DB topology* summary page of vtctld (*http://12.34.56.78:15000/dbtopo*).
+in the *DB topology* summary page of vtctld (`http://12.34.56.78:15000/dbtopo`).
+
+By bringing up tablets into a previously empty keyspace, we effectively just
+created a new shard. To initialize the keyspace for the new shard, we need to
+perform a keyspace rebuild:
+
+```
+$ kvtctl RebuildKeyspaceGraph test_keyspace
+```
+
+Note that most vtctlclient commands produce no output on success.
 
 ### Troubleshooting
 
@@ -179,9 +192,7 @@ replication happening, so we use the -force flag on ReparentShard to skip the
 usual validation of each tablet's replication state.
 
 ```
-$ kvtctl RebuildShardGraph test_keyspace/0
 $ kvtctl ReparentShard -force test_keyspace/0 test-0000000100
-$ kvtctl RebuildKeyspaceGraph test_keyspace
 ```
 
 Once this is done, you should see one master and two replicas in vtctld's web
@@ -197,7 +208,7 @@ test-0000000102 test_keyspace 0 replica 10.244.1.9:15002 10.244.1.9:3306 []
 ## Creating a table
 
 The vtctl tool can manage schema across all tablets in a keyspace.
-To create the table defined in *create_test_table.sql*:
+To create the table defined in `create_test_table.sql`:
 
 ```
 vitess/examples/kubernetes$ kvtctl ApplySchemaKeyspace -simple -sql "$(cat create_test_table.sql)" test_keyspace
