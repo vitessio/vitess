@@ -19,7 +19,6 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
 	kproto "github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
@@ -59,19 +58,6 @@ type VTGate struct {
 
 	maxInFlight int64
 	inFlight    sync2.AtomicInt64
-
-	// the throttled loggers for all errors, one per API entry
-	logExecute                  *logutil.ThrottledLogger
-	logExecuteShard             *logutil.ThrottledLogger
-	logExecuteKeyspaceIds       *logutil.ThrottledLogger
-	logExecuteKeyRanges         *logutil.ThrottledLogger
-	logExecuteEntityIds         *logutil.ThrottledLogger
-	logExecuteBatchShard        *logutil.ThrottledLogger
-	logExecuteBatchKeyspaceIds  *logutil.ThrottledLogger
-	logStreamExecute            *logutil.ThrottledLogger
-	logStreamExecuteKeyspaceIds *logutil.ThrottledLogger
-	logStreamExecuteKeyRanges   *logutil.ThrottledLogger
-	logStreamExecuteShard       *logutil.ThrottledLogger
 }
 
 // RegisterVTGate defines the type of registration mechanism.
@@ -92,18 +78,6 @@ func Init(serv SrvTopoServer, schema *planbuilder.Schema, cell string, retryDela
 
 		maxInFlight: int64(maxInFlight),
 		inFlight:    0,
-
-		logExecute:                  logutil.NewThrottledLogger("Execute", 5*time.Second),
-		logExecuteShard:             logutil.NewThrottledLogger("ExecuteShard", 5*time.Second),
-		logExecuteKeyspaceIds:       logutil.NewThrottledLogger("ExecuteKeyspaceIds", 5*time.Second),
-		logExecuteKeyRanges:         logutil.NewThrottledLogger("ExecuteKeyRanges", 5*time.Second),
-		logExecuteEntityIds:         logutil.NewThrottledLogger("ExecuteEntityIds", 5*time.Second),
-		logExecuteBatchShard:        logutil.NewThrottledLogger("ExecuteBatchShard", 5*time.Second),
-		logExecuteBatchKeyspaceIds:  logutil.NewThrottledLogger("ExecuteBatchKeyspaceIds", 5*time.Second),
-		logStreamExecute:            logutil.NewThrottledLogger("StreamExecute", 5*time.Second),
-		logStreamExecuteKeyspaceIds: logutil.NewThrottledLogger("StreamExecuteKeyspaceIds", 5*time.Second),
-		logStreamExecuteKeyRanges:   logutil.NewThrottledLogger("StreamExecuteKeyRanges", 5*time.Second),
-		logStreamExecuteShard:       logutil.NewThrottledLogger("StreamExecuteShard", 5*time.Second),
 	}
 	// Resuse resolver's scatterConn.
 	rpcVTGate.router = NewRouter(serv, cell, schema, "VTGateRouter", rpcVTGate.resolver.scatterConn)
@@ -166,7 +140,7 @@ func (vtg *VTGate) Execute(ctx context.Context, query *proto.Query, reply *proto
 			normalErrors.Add(statsKey, 1)
 		} else {
 			normalErrors.Add(statsKey, 1)
-			vtg.logExecute.Errorf("%v, query: %+v", err, query)
+			log.Errorf("%v, query: %+v", err, query)
 		}
 	}
 	reply.Session = query.Session
@@ -209,7 +183,7 @@ func (vtg *VTGate) ExecuteShard(ctx context.Context, query *proto.QueryShard, re
 			normalErrors.Add(statsKey, 1)
 		} else {
 			normalErrors.Add(statsKey, 1)
-			vtg.logExecuteShard.Errorf("%v, query: %+v", err, query)
+			log.Errorf("%v, query: %+v", err, query)
 		}
 	}
 	reply.Session = query.Session
@@ -242,7 +216,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, query *proto.Keyspace
 			normalErrors.Add(statsKey, 1)
 		} else {
 			normalErrors.Add(statsKey, 1)
-			vtg.logExecuteKeyspaceIds.Errorf("%v, query: %+v", err, query)
+			log.Errorf("%v, query: %+v", err, query)
 		}
 	}
 	reply.Session = query.Session
@@ -275,7 +249,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQu
 			normalErrors.Add(statsKey, 1)
 		} else {
 			normalErrors.Add(statsKey, 1)
-			vtg.logExecuteKeyRanges.Errorf("%v, query: %+v", err, query)
+			log.Errorf("%v, query: %+v", err, query)
 		}
 	}
 	reply.Session = query.Session
@@ -308,7 +282,7 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, query *proto.EntityIdsQ
 			normalErrors.Add(statsKey, 1)
 		} else {
 			normalErrors.Add(statsKey, 1)
-			vtg.logExecuteEntityIds.Errorf("%v, query: %+v", err, query)
+			log.Errorf("%v, query: %+v", err, query)
 		}
 	}
 	reply.Session = query.Session
@@ -354,7 +328,7 @@ func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, batchQuery *proto.Batc
 			normalErrors.Add(statsKey, 1)
 		} else {
 			normalErrors.Add(statsKey, 1)
-			vtg.logExecuteBatchShard.Errorf("%v, queries: %+v", err, batchQuery)
+			log.Errorf("%v, queries: %+v", err, batchQuery)
 		}
 	}
 	reply.Session = batchQuery.Session
@@ -393,7 +367,7 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, query *proto.Key
 			normalErrors.Add(statsKey, 1)
 		} else {
 			normalErrors.Add(statsKey, 1)
-			vtg.logExecuteBatchKeyspaceIds.Errorf("%v, query: %+v", err, query)
+			log.Errorf("%v, query: %+v", err, query)
 		}
 	}
 	reply.Session = query.Session
@@ -430,7 +404,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, query *proto.Query, sendRe
 
 	if err != nil {
 		normalErrors.Add(statsKey, 1)
-		vtg.logStreamExecute.Errorf("%v, query: %+v", err, query)
+		log.Errorf("%v, query: %+v", err, query)
 	}
 	// Now we can send the final Sessoin info.
 	if query.Session != nil {
@@ -474,7 +448,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.Ke
 
 	if err != nil {
 		normalErrors.Add(statsKey, 1)
-		vtg.logStreamExecuteKeyspaceIds.Errorf("%v, query: %+v", err, query)
+		log.Errorf("%v, query: %+v", err, query)
 	}
 	// Now we can send the final Sessoin info.
 	if query.Session != nil {
@@ -518,7 +492,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, query *proto.KeyR
 
 	if err != nil {
 		normalErrors.Add(statsKey, 1)
-		vtg.logStreamExecuteKeyRanges.Errorf("%v, query: %+v", err, query)
+		log.Errorf("%v, query: %+v", err, query)
 	}
 	// Now we can send the final Sessoin info.
 	if query.Session != nil {
@@ -564,7 +538,7 @@ func (vtg *VTGate) StreamExecuteShard(ctx context.Context, query *proto.QuerySha
 
 	if err != nil {
 		normalErrors.Add(statsKey, 1)
-		vtg.logStreamExecuteShard.Errorf("%v, query: %+v", err, query)
+		log.Errorf("%v, query: %+v", err, query)
 	}
 	// Now we can send the final Sessoin info.
 	if query.Session != nil {
