@@ -123,6 +123,9 @@ const (
 	// the topo server.
 	TABLET_ACTION_RUN_HEALTH_CHECK = "RunHealthCheck"
 
+	// HealthStream will stream the health status
+	TABLET_ACTION_HEALTH_STREAM = "HealthStream"
+
 	// ReloadSchema tells the tablet to reload its schema.
 	TABLET_ACTION_RELOAD_SCHEMA = "ReloadSchema"
 

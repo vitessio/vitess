@@ -70,6 +70,10 @@ type TabletManagerClient interface {
 	// RunHealthCheck asks the remote tablet to run a health check cycle
 	RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType topo.TabletType) error
 
+	// HealthStream asks the tablet to stream its health status on
+	// a regular basis
+	HealthStream(ctx context.Context, tablet *topo.TabletInfo) (<-chan *actionnode.HealthStreamReply, ErrFunc, error)
+
 	// ReloadSchema asks the remote tablet to reload its schema
 	ReloadSchema(ctx context.Context, tablet *topo.TabletInfo) error
 
@@ -183,10 +187,14 @@ type TabletManagerClient interface {
 	IsTimeoutError(err error) bool
 }
 
+// TabletManagerClientFactory is the factory method to create
+// TabletManagerClient objects.
 type TabletManagerClientFactory func() TabletManagerClient
 
 var tabletManagerClientFactories = make(map[string]TabletManagerClientFactory)
 
+// RegisterTabletManagerClientFactory allows modules to register
+// TabletManagerClient implementations. Should be called on init().
 func RegisterTabletManagerClientFactory(name string, factory TabletManagerClientFactory) {
 	if _, ok := tabletManagerClientFactories[name]; ok {
 		log.Fatalf("RegisterTabletManagerClient %s already exists", name)
@@ -194,6 +202,8 @@ func RegisterTabletManagerClientFactory(name string, factory TabletManagerClient
 	tabletManagerClientFactories[name] = factory
 }
 
+// NewTabletManagerClient creates a new TabletManagerClient. Should be
+// called after flags are parsed.
 func NewTabletManagerClient() TabletManagerClient {
 	f, ok := tabletManagerClientFactories[*tabletManagerProtocol]
 	if !ok {
