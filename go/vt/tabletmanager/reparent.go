@@ -38,6 +38,17 @@ func SetReparentFlags(fast bool, timeout time.Duration) {
 // fastTabletExternallyReparented completely replaces TabletExternallyReparented
 // if the -fast_external_reparent flag is specified.
 func (agent *ActionAgent) fastTabletExternallyReparented(ctx context.Context, externalID string) (err error) {
+	// If there is a finalize step running, wait for it to finish or time out
+	// before checking the global shard record again.
+	if agent.finalizeReparentCtx != nil {
+		select {
+		case <-agent.finalizeReparentCtx.Done():
+			agent.finalizeReparentCtx = nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
 	tablet := agent.Tablet()
 
 	// Check the global shard record.
@@ -97,10 +108,10 @@ func (agent *ActionAgent) fastTabletExternallyReparented(ctx context.Context, ex
 	}
 
 	// Start the finalize stage with a background context, but connect the trace.
+	bgCtx, cancel := context.WithTimeout(agent.batchCtx, *finalizeReparentTimeout)
+	bgCtx = trace.CopySpan(bgCtx, ctx)
+	agent.finalizeReparentCtx = bgCtx
 	go func() {
-		bgCtx, cancel := context.WithTimeout(agent.batchCtx, *finalizeReparentTimeout)
-		bgCtx = trace.CopySpan(bgCtx, ctx)
-
 		err := agent.finalizeTabletExternallyReparented(bgCtx, si, ev)
 		cancel()
 
