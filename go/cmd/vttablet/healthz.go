@@ -17,7 +17,7 @@ var okMessage = []byte("ok\n")
 func init() {
 	servenv.OnRun(func() {
 		http.Handle("/healthz", http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-			if err := agent.Healthy(); err != nil {
+			if _, err := agent.Healthy(); err != nil {
 				http.Error(rw, fmt.Sprintf("500 internal server error: agent not healthy: %v", err), http.StatusInternalServerError)
 				return
 			}

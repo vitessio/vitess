@@ -18,7 +18,7 @@ parser.add_argument('--server', dest='server', default='localhost:15001')
 parser.add_argument('--timeout', dest='timeout', type=float, default='10.0')
 args = parser.parse_args()
 
-vtgate_addrs = {"_vt": [args.server]}
+vtgate_addrs = {"vt": [args.server]}
 
 # Connect
 conn = vtgatev2.connect(vtgate_addrs, args.timeout)

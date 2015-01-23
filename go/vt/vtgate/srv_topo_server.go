@@ -16,7 +16,6 @@ import (
 	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 )
@@ -147,7 +146,7 @@ type endPointsEntry struct {
 
 func endPointIsHealthy(ep topo.EndPoint) bool {
 	// if we are behind on replication, we're not 100% healthy
-	return ep.Health == nil || ep.Health[health.ReplicationLag] != health.ReplicationLagHigh
+	return ep.Health == nil || ep.Health[topo.ReplicationLag] != topo.ReplicationLagHigh
 }
 
 // filterUnhealthyServers removes the unhealthy servers from the list,

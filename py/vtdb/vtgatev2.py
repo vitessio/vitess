@@ -374,10 +374,6 @@ class VTGateConnection(object):
           self.session = self._stream_result.reply['Session']
           self._stream_result = None
           continue
-        # An extra fields message if it is scatter over streaming, ignore it
-        if not self._stream_result.reply['Result']['Rows']:
-          self._stream_result = None
-          continue
       except gorpc.GoRpcError as e:
         raise convert_exception(e, str(self))
       except:
@@ -412,9 +408,9 @@ def get_params_for_vtgate_conn(vtgate_addrs, timeout, encrypted=False, user=None
   db_params_list = []
   addrs = []
   if isinstance(vtgate_addrs, dict):
-    service = '_vt'
+    service = 'vt'
     if encrypted:
-      service = '_vts'
+      service = 'vts'
     if service not in vtgate_addrs:
       raise Exception("required vtgate service addrs %s not exist" % service)
     addrs = vtgate_addrs[service]

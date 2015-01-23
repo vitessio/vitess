@@ -255,15 +255,15 @@ class TestSecure(unittest.TestCase):
                                         "test_nj", 30.0)
     topology.read_keyspaces(topo_client)
 
-    shard_0_master_addrs = topology.get_host_port_by_name(topo_client, "test_keyspace.0.master:_vts")
+    shard_0_master_addrs = topology.get_host_port_by_name(topo_client, "test_keyspace.0.master:vts")
     if len(shard_0_master_addrs) != 1:
-      self.fail('topology.get_host_port_by_name failed for "test_keyspace.0.master:_vts", got: %s' % " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
+      self.fail('topology.get_host_port_by_name failed for "test_keyspace.0.master:vts", got: %s' % " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
     if shard_0_master_addrs[0][2] != True:
-      self.fail('topology.get_host_port_by_name failed for "test_keyspace.0.master:_vts" is not encrypted')
+      self.fail('topology.get_host_port_by_name failed for "test_keyspace.0.master:vts" is not encrypted')
     logging.debug("shard 0 master addrs: %s", " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
 
     # make sure asking for optionally secure connections works too
-    auto_addrs = topology.get_host_port_by_name(topo_client, "test_keyspace.0.master:_vtocc", encrypted=True)
+    auto_addrs = topology.get_host_port_by_name(topo_client, "test_keyspace.0.master:vt", encrypted=True)
     if auto_addrs != shard_0_master_addrs:
       self.fail('topology.get_host_port_by_name doesn\'t resolve encrypted addresses properly: %s != %s' % (str(shard_0_master_addrs), str(auto_addrs)))
 
@@ -366,15 +366,17 @@ class TestSecure(unittest.TestCase):
     shard_0_master.create_db('vt_test_keyspace')
 
     proc1 = shard_0_master.start_vttablet(cert=cert_dir + "/vt-server-cert.pem",
-                                          key=cert_dir + "/vt-server-key.pem")
-    # Takes a bit longer for vttablet to serve the pid port
-    time.sleep(1.0)
+                                          key=cert_dir + "/vt-server-key.pem",
+                                          wait_for_state='SERVING')
     proc2 = shard_0_master.start_vttablet(cert=cert_dir + "/vt-server-cert.pem",
-                                          key=cert_dir + "/vt-server-key.pem")
-    time.sleep(1.0)
-    proc1.poll()
-    if proc1.returncode is None:
-      self.fail("proc1 still running")
+                                          key=cert_dir + "/vt-server-key.pem",
+                                          wait_for_state='SERVING')
+    timeout = 10.0
+    while True:
+      proc1.poll()
+      if proc1.returncode is not None:
+        break
+      timeout = utils.wait_step("waiting for new vttablet to kill its predecessor", timeout)
     shard_0_master.kill_vttablet()
     logging.debug("Done here")
 

@@ -244,10 +244,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		return fmt.Errorf("empty source tablet list for %v %v %v", bpc.cell, bpc.sourceShard.String(), topo.TYPE_REPLICA)
 	}
 	newServerIndex := rand.Intn(len(addrs.Entries))
-	port, ok := addrs.Entries[newServerIndex].NamedPortMap["vt"]
-	if !ok {
-		port = addrs.Entries[newServerIndex].NamedPortMap["_vtocc"]
-	}
+	port, _ := addrs.Entries[newServerIndex].NamedPortMap["vt"]
 	addr := netutil.JoinHostPort(addrs.Entries[newServerIndex].Host, port)
 
 	// save our current server
@@ -270,17 +267,16 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		// tables, just get them
 		player := binlogplayer.NewBinlogPlayerTables(vtClient, addr, tables, startPosition, bpc.stopPosition, bpc.binlogPlayerStats)
 		return player.ApplyBinlogEvents(bpc.interrupted)
-	} else {
-		// the data we have to replicate is the intersection of the
-		// source keyrange and our keyrange
-		overlap, err := key.KeyRangesOverlap(bpc.sourceShard.KeyRange, bpc.keyRange)
-		if err != nil {
-			return fmt.Errorf("Source shard %v doesn't overlap destination shard %v", bpc.sourceShard.KeyRange, bpc.keyRange)
-		}
-
-		player := binlogplayer.NewBinlogPlayerKeyRange(vtClient, addr, bpc.keyspaceIdType, overlap, startPosition, bpc.stopPosition, bpc.binlogPlayerStats)
-		return player.ApplyBinlogEvents(bpc.interrupted)
 	}
+	// the data we have to replicate is the intersection of the
+	// source keyrange and our keyrange
+	overlap, err := key.KeyRangesOverlap(bpc.sourceShard.KeyRange, bpc.keyRange)
+	if err != nil {
+		return fmt.Errorf("Source shard %v doesn't overlap destination shard %v", bpc.sourceShard.KeyRange, bpc.keyRange)
+	}
+
+	player := binlogplayer.NewBinlogPlayerKeyRange(vtClient, addr, bpc.keyspaceIdType, overlap, startPosition, bpc.stopPosition, bpc.binlogPlayerStats)
+	return player.ApplyBinlogEvents(bpc.interrupted)
 }
 
 // BlpPosition returns the current position for a controller, as read from

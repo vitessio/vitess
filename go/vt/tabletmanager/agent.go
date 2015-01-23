@@ -64,6 +64,9 @@ type ActionAgent struct {
 	// batchCtx is given to the agent by its creator, and should be used for
 	// any background tasks spawned by the agent.
 	batchCtx context.Context
+	// finalizeReparentCtx represents the background finalize step of a
+	// TabletExternallyReparented call.
+	finalizeReparentCtx context.Context
 
 	// This is the History of the health checks, public so status
 	// pages can display it
@@ -84,6 +87,9 @@ type ActionAgent struct {
 	// if the agent is healthy, this is nil. Otherwise it contains
 	// the reason we're not healthy.
 	_healthy error
+
+	// replication delay the last time we got it
+	_replicationDelay time.Duration
 }
 
 func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
@@ -222,10 +228,10 @@ func (agent *ActionAgent) Tablet() *topo.TabletInfo {
 }
 
 // Healthy reads the result of the latest healthcheck, protected by mutex.
-func (agent *ActionAgent) Healthy() error {
+func (agent *ActionAgent) Healthy() (time.Duration, error) {
 	agent.mutex.Lock()
 	defer agent.mutex.Unlock()
-	return agent._healthy
+	return agent._replicationDelay, agent._healthy
 }
 
 // BlacklistedTables reads the list of blacklisted tables from the TabletControl

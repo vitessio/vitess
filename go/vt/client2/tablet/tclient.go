@@ -113,7 +113,7 @@ func (conn *Conn) dial() (err error) {
 	endPoint := topo.EndPoint{
 		Host: host,
 		NamedPortMap: map[string]int{
-			"_vtocc": port,
+			"vt": port,
 		},
 	}
 

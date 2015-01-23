@@ -28,19 +28,20 @@ import (
 )
 
 const errDupKey = "errno 1062"
+const errTxPoolFull = "tx_pool_full"
 
 var (
-	RpcVTGate *VTGate
+	rpcVTGate *VTGate
 
-	QPSByOperation *stats.Rates
-	QPSByKeyspace  *stats.Rates
-	QPSByDbType    *stats.Rates
+	qpsByOperation *stats.Rates
+	qpsByKeyspace  *stats.Rates
+	qpsByDbType    *stats.Rates
 
-	ErrorsByOperation *stats.Rates
-	ErrorsByKeyspace  *stats.Rates
-	ErrorsByDbType    *stats.Rates
+	errorsByOperation *stats.Rates
+	errorsByKeyspace  *stats.Rates
+	errorsByDbType    *stats.Rates
 
-	ErrTooManyInFlight = errors.New("request_backlog: too many requests in flight")
+	errTooManyInFlight = errors.New("request_backlog: too many requests in flight")
 
 	// Error counters should be global so they can be set from anywhere
 	normalErrors   *stats.MultiCounters
@@ -73,16 +74,18 @@ type VTGate struct {
 	logStreamExecuteShard       *logutil.ThrottledLogger
 }
 
-// registration mechanism
+// RegisterVTGate defines the type of registration mechanism.
 type RegisterVTGate func(*VTGate)
 
+// RegisterVTGates stores register funcs for VTGate server.
 var RegisterVTGates []RegisterVTGate
 
+// Init initializes VTGate server.
 func Init(serv SrvTopoServer, schema *planbuilder.Schema, cell string, retryDelay time.Duration, retryCount int, timeout time.Duration, maxInFlight int) {
-	if RpcVTGate != nil {
+	if rpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
-	RpcVTGate = &VTGate{
+	rpcVTGate = &VTGate{
 		resolver:     NewResolver(serv, "VttabletCall", cell, retryDelay, retryCount, timeout),
 		timings:      stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
 		rowsReturned: stats.NewMultiCounters("VtgateApiRowsReturned", []string{"Operation", "Keyspace", "DbType"}),
@@ -103,21 +106,21 @@ func Init(serv SrvTopoServer, schema *planbuilder.Schema, cell string, retryDela
 		logStreamExecuteShard:       logutil.NewThrottledLogger("StreamExecuteShard", 5*time.Second),
 	}
 	// Resuse resolver's scatterConn.
-	RpcVTGate.router = NewRouter(serv, cell, schema, "VTGateRouter", RpcVTGate.resolver.scatterConn)
+	rpcVTGate.router = NewRouter(serv, cell, schema, "VTGateRouter", rpcVTGate.resolver.scatterConn)
 	normalErrors = stats.NewMultiCounters("VtgateApiErrorCounts", []string{"Operation", "Keyspace", "DbType"})
 	infoErrors = stats.NewCounters("VtgateInfoErrorCounts")
 	internalErrors = stats.NewCounters("VtgateInternalErrorCounts")
 
-	QPSByOperation = stats.NewRates("QPSByOperation", stats.CounterForDimension(RpcVTGate.timings, "Operation"), 15, 1*time.Minute)
-	QPSByKeyspace = stats.NewRates("QPSByKeyspace", stats.CounterForDimension(RpcVTGate.timings, "Keyspace"), 15, 1*time.Minute)
-	QPSByDbType = stats.NewRates("QPSByDbType", stats.CounterForDimension(RpcVTGate.timings, "DbType"), 15, 1*time.Minute)
+	qpsByOperation = stats.NewRates("QPSByOperation", stats.CounterForDimension(rpcVTGate.timings, "Operation"), 15, 1*time.Minute)
+	qpsByKeyspace = stats.NewRates("QPSByKeyspace", stats.CounterForDimension(rpcVTGate.timings, "Keyspace"), 15, 1*time.Minute)
+	qpsByDbType = stats.NewRates("QPSByDbType", stats.CounterForDimension(rpcVTGate.timings, "DbType"), 15, 1*time.Minute)
 
-	ErrorsByOperation = stats.NewRates("ErrorsByOperation", stats.CounterForDimension(normalErrors, "Operation"), 15, 1*time.Minute)
-	ErrorsByKeyspace = stats.NewRates("ErrorsByKeyspace", stats.CounterForDimension(normalErrors, "Keyspace"), 15, 1*time.Minute)
-	ErrorsByDbType = stats.NewRates("ErrorsByDbType", stats.CounterForDimension(normalErrors, "DbType"), 15, 1*time.Minute)
+	errorsByOperation = stats.NewRates("ErrorsByOperation", stats.CounterForDimension(normalErrors, "Operation"), 15, 1*time.Minute)
+	errorsByKeyspace = stats.NewRates("ErrorsByKeyspace", stats.CounterForDimension(normalErrors, "Keyspace"), 15, 1*time.Minute)
+	errorsByDbType = stats.NewRates("ErrorsByDbType", stats.CounterForDimension(normalErrors, "DbType"), 15, 1*time.Minute)
 
 	for _, f := range RegisterVTGates {
-		f(RpcVTGate)
+		f(rpcVTGate)
 	}
 }
 
@@ -148,7 +151,7 @@ func (vtg *VTGate) Execute(ctx context.Context, query *proto.Query, reply *proto
 	x := vtg.inFlight.Add(1)
 	defer vtg.inFlight.Add(-1)
 	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
-		return ErrTooManyInFlight
+		return errTooManyInFlight
 	}
 
 	qr, err := vtg.router.Execute(ctx, query)
@@ -159,6 +162,8 @@ func (vtg *VTGate) Execute(ctx context.Context, query *proto.Query, reply *proto
 		reply.Error = err.Error()
 		if strings.Contains(reply.Error, errDupKey) {
 			infoErrors.Add("DupKey", 1)
+		} else if strings.Contains(reply.Error, errTxPoolFull) {
+			normalErrors.Add(statsKey, 1)
 		} else {
 			normalErrors.Add(statsKey, 1)
 			vtg.logExecute.Errorf("%v, query: %+v", err, query)
@@ -179,7 +184,7 @@ func (vtg *VTGate) ExecuteShard(ctx context.Context, query *proto.QueryShard, re
 	x := vtg.inFlight.Add(1)
 	defer vtg.inFlight.Add(-1)
 	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
-		return ErrTooManyInFlight
+		return errTooManyInFlight
 	}
 
 	qr, err := vtg.resolver.Execute(
@@ -200,6 +205,8 @@ func (vtg *VTGate) ExecuteShard(ctx context.Context, query *proto.QueryShard, re
 		reply.Error = err.Error()
 		if strings.Contains(reply.Error, errDupKey) {
 			infoErrors.Add("DupKey", 1)
+		} else if strings.Contains(reply.Error, errTxPoolFull) {
+			normalErrors.Add(statsKey, 1)
 		} else {
 			normalErrors.Add(statsKey, 1)
 			vtg.logExecuteShard.Errorf("%v, query: %+v", err, query)
@@ -220,7 +227,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, query *proto.Keyspace
 	x := vtg.inFlight.Add(1)
 	defer vtg.inFlight.Add(-1)
 	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
-		return ErrTooManyInFlight
+		return errTooManyInFlight
 	}
 
 	qr, err := vtg.resolver.ExecuteKeyspaceIds(ctx, query)
@@ -231,6 +238,8 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, query *proto.Keyspace
 		reply.Error = err.Error()
 		if strings.Contains(reply.Error, errDupKey) {
 			infoErrors.Add("DupKey", 1)
+		} else if strings.Contains(reply.Error, errTxPoolFull) {
+			normalErrors.Add(statsKey, 1)
 		} else {
 			normalErrors.Add(statsKey, 1)
 			vtg.logExecuteKeyspaceIds.Errorf("%v, query: %+v", err, query)
@@ -251,7 +260,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQu
 	x := vtg.inFlight.Add(1)
 	defer vtg.inFlight.Add(-1)
 	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
-		return ErrTooManyInFlight
+		return errTooManyInFlight
 	}
 
 	qr, err := vtg.resolver.ExecuteKeyRanges(ctx, query)
@@ -262,6 +271,8 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQu
 		reply.Error = err.Error()
 		if strings.Contains(reply.Error, errDupKey) {
 			infoErrors.Add("DupKey", 1)
+		} else if strings.Contains(reply.Error, errTxPoolFull) {
+			normalErrors.Add(statsKey, 1)
 		} else {
 			normalErrors.Add(statsKey, 1)
 			vtg.logExecuteKeyRanges.Errorf("%v, query: %+v", err, query)
@@ -282,7 +293,7 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, query *proto.EntityIdsQ
 	x := vtg.inFlight.Add(1)
 	defer vtg.inFlight.Add(-1)
 	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
-		return ErrTooManyInFlight
+		return errTooManyInFlight
 	}
 
 	qr, err := vtg.resolver.ExecuteEntityIds(ctx, query)
@@ -293,6 +304,8 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, query *proto.EntityIdsQ
 		reply.Error = err.Error()
 		if strings.Contains(reply.Error, errDupKey) {
 			infoErrors.Add("DupKey", 1)
+		} else if strings.Contains(reply.Error, errTxPoolFull) {
+			normalErrors.Add(statsKey, 1)
 		} else {
 			normalErrors.Add(statsKey, 1)
 			vtg.logExecuteEntityIds.Errorf("%v, query: %+v", err, query)
@@ -313,7 +326,7 @@ func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, batchQuery *proto.Batc
 	x := vtg.inFlight.Add(1)
 	defer vtg.inFlight.Add(-1)
 	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
-		return ErrTooManyInFlight
+		return errTooManyInFlight
 	}
 
 	qrs, err := vtg.resolver.ExecuteBatch(
@@ -337,6 +350,8 @@ func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, batchQuery *proto.Batc
 		reply.Error = err.Error()
 		if strings.Contains(reply.Error, errDupKey) {
 			infoErrors.Add("DupKey", 1)
+		} else if strings.Contains(reply.Error, errTxPoolFull) {
+			normalErrors.Add(statsKey, 1)
 		} else {
 			normalErrors.Add(statsKey, 1)
 			vtg.logExecuteBatchShard.Errorf("%v, queries: %+v", err, batchQuery)
@@ -357,7 +372,7 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, query *proto.Key
 	x := vtg.inFlight.Add(1)
 	defer vtg.inFlight.Add(-1)
 	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
-		return ErrTooManyInFlight
+		return errTooManyInFlight
 	}
 
 	qrs, err := vtg.resolver.ExecuteBatchKeyspaceIds(
@@ -374,6 +389,8 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, query *proto.Key
 		reply.Error = err.Error()
 		if strings.Contains(reply.Error, errDupKey) {
 			infoErrors.Add("DupKey", 1)
+		} else if strings.Contains(reply.Error, errTxPoolFull) {
+			normalErrors.Add(statsKey, 1)
 		} else {
 			normalErrors.Add(statsKey, 1)
 			vtg.logExecuteBatchKeyspaceIds.Errorf("%v, query: %+v", err, query)
@@ -394,7 +411,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, query *proto.Query, sendRe
 	x := vtg.inFlight.Add(1)
 	defer vtg.inFlight.Add(-1)
 	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
-		return ErrTooManyInFlight
+		return errTooManyInFlight
 	}
 
 	var rowCount int64
@@ -438,7 +455,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.Ke
 	x := vtg.inFlight.Add(1)
 	defer vtg.inFlight.Add(-1)
 	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
-		return ErrTooManyInFlight
+		return errTooManyInFlight
 	}
 
 	var rowCount int64
@@ -482,7 +499,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, query *proto.KeyR
 	x := vtg.inFlight.Add(1)
 	defer vtg.inFlight.Add(-1)
 	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
-		return ErrTooManyInFlight
+		return errTooManyInFlight
 	}
 
 	var rowCount int64
@@ -521,7 +538,7 @@ func (vtg *VTGate) StreamExecuteShard(ctx context.Context, query *proto.QuerySha
 	x := vtg.inFlight.Add(1)
 	defer vtg.inFlight.Add(-1)
 	if 0 < vtg.maxInFlight && vtg.maxInFlight < x {
-		return ErrTooManyInFlight
+		return errTooManyInFlight
 	}
 
 	var rowCount int64

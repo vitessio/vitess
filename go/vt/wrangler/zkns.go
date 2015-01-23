@@ -165,13 +165,13 @@ func (wr *Wrangler) exportVtnsToZkns(zconn zk.Conn, vtnsAddrPath, zknsAddrPath s
 	for i, entry := range addrs.Entries {
 		zknsAddrPath := fmt.Sprintf("%v/%v", zknsAddrPath, i)
 		zknsPaths = append(zknsPaths, zknsAddrPath)
-		zknsAddr := zkns.ZknsAddr{Host: entry.Host, Port: entry.NamedPortMap["_mysql"], NamedPortMap: entry.NamedPortMap}
+		zknsAddr := zkns.ZknsAddr{Host: entry.Host, Port: entry.NamedPortMap["mysql"], NamedPortMap: entry.NamedPortMap}
 		err := writeAddr(zconn, zknsAddrPath, &zknsAddr)
 		if err != nil {
 			return nil, err
 		}
 		defaultAddrs.Endpoints = append(defaultAddrs.Endpoints, zknsAddrPath)
-		vtoccAddrs.Endpoints = append(vtoccAddrs.Endpoints, zknsAddrPath+":_vtocc")
+		vtoccAddrs.Endpoints = append(vtoccAddrs.Endpoints, zknsAddrPath+":vt")
 	}
 
 	// Prune any zkns entries that are no longer referenced by the
@@ -193,7 +193,7 @@ func (wr *Wrangler) exportVtnsToZkns(zconn zk.Conn, vtnsAddrPath, zknsAddrPath s
 	}
 
 	// Write the VDNS entries for both vtocc and mysql
-	vtoccVdnsPath := fmt.Sprintf("%v/_vtocc.vdns", zknsAddrPath)
+	vtoccVdnsPath := fmt.Sprintf("%v/vt.vdns", zknsAddrPath)
 	zknsPaths = append(zknsPaths, vtoccVdnsPath)
 	if err = writeAddrs(zconn, vtoccVdnsPath, &vtoccAddrs); err != nil {
 		return nil, err

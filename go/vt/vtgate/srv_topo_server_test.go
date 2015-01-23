@@ -9,7 +9,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 )
@@ -99,7 +98,7 @@ func TestFilterUnhealthy(t *testing.T) {
 					topo.EndPoint{
 						Uid: 4,
 						Health: map[string]string{
-							health.ReplicationLag: health.ReplicationLagHigh,
+							topo.ReplicationLag: topo.ReplicationLagHigh,
 						},
 					},
 					topo.EndPoint{
@@ -138,19 +137,19 @@ func TestFilterUnhealthy(t *testing.T) {
 					topo.EndPoint{
 						Uid: 1,
 						Health: map[string]string{
-							health.ReplicationLag: health.ReplicationLagHigh,
+							topo.ReplicationLag: topo.ReplicationLagHigh,
 						},
 					},
 					topo.EndPoint{
 						Uid: 2,
 						Health: map[string]string{
-							health.ReplicationLag: health.ReplicationLagHigh,
+							topo.ReplicationLag: topo.ReplicationLagHigh,
 						},
 					},
 					topo.EndPoint{
 						Uid: 3,
 						Health: map[string]string{
-							health.ReplicationLag: health.ReplicationLagHigh,
+							topo.ReplicationLag: topo.ReplicationLagHigh,
 						},
 					},
 				},
@@ -160,19 +159,19 @@ func TestFilterUnhealthy(t *testing.T) {
 					topo.EndPoint{
 						Uid: 1,
 						Health: map[string]string{
-							health.ReplicationLag: health.ReplicationLagHigh,
+							topo.ReplicationLag: topo.ReplicationLagHigh,
 						},
 					},
 					topo.EndPoint{
 						Uid: 2,
 						Health: map[string]string{
-							health.ReplicationLag: health.ReplicationLagHigh,
+							topo.ReplicationLag: topo.ReplicationLagHigh,
 						},
 					},
 					topo.EndPoint{
 						Uid: 3,
 						Health: map[string]string{
-							health.ReplicationLag: health.ReplicationLagHigh,
+							topo.ReplicationLag: topo.ReplicationLagHigh,
 						},
 					},
 				},
