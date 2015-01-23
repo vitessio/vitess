@@ -64,6 +64,9 @@ type ActionAgent struct {
 	// batchCtx is given to the agent by its creator, and should be used for
 	// any background tasks spawned by the agent.
 	batchCtx context.Context
+	// finalizeReparentCtx represents the background finalize step of a
+	// TabletExternallyReparented call.
+	finalizeReparentCtx context.Context
 
 	// This is the History of the health checks, public so status
 	// pages can display it
