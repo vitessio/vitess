@@ -208,6 +208,29 @@ func TestScatterConnStreamExecuteSendError(t *testing.T) {
 	}
 }
 
+func TestScatterCommitRollbackIncorrectSession(t *testing.T) {
+	s := createSandbox("TestScatterCommitRollbackIncorrectSession")
+	sbc0 := &sandboxConn{}
+	s.MapTestConn("0", sbc0)
+	stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
+
+	// nil session
+	err := stc.Commit(context.Background(), nil)
+	if err == nil {
+		t.Errorf("want error, got nil")
+	}
+	err = stc.Rollback(context.Background(), nil)
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
+	}
+	// not in transaction
+	session := NewSafeSession(&proto.Session{})
+	err = stc.Commit(context.Background(), session)
+	if err == nil {
+		t.Errorf("want error, got nil")
+	}
+}
+
 func TestScatterConnCommitSuccess(t *testing.T) {
 	s := createSandbox("TestScatterConnCommitSuccess")
 	sbc0 := &sandboxConn{}

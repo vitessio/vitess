@@ -366,6 +366,9 @@ func (stc *ScatterConn) StreamExecuteMulti(
 
 // Commit commits the current transaction. There are no retries on this operation.
 func (stc *ScatterConn) Commit(context context.Context, session *SafeSession) (err error) {
+	if session == nil {
+		return fmt.Errorf("cannot commit: empty session")
+	}
 	if !session.InTransaction() {
 		return fmt.Errorf("cannot commit: not in transaction")
 	}
@@ -386,6 +389,9 @@ func (stc *ScatterConn) Commit(context context.Context, session *SafeSession) (e
 
 // Rollback rolls back the current transaction. There are no retries on this operation.
 func (stc *ScatterConn) Rollback(context context.Context, session *SafeSession) (err error) {
+	if session == nil {
+		return nil
+	}
 	for _, shardSession := range session.ShardSessions {
 		sdc := stc.getConnection(context, shardSession.Keyspace, shardSession.Shard, shardSession.TabletType)
 		sdc.Rollback(context, shardSession.TransactionId)
