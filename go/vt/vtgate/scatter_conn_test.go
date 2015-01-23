@@ -229,20 +229,6 @@ func TestScatterCommitRollbackIncorrectSession(t *testing.T) {
 	if err == nil {
 		t.Errorf("want error, got nil")
 	}
-	err = stc.Rollback(context.Background(), session)
-	if err == nil {
-		t.Errorf("want error, got nil")
-	}
-	// no shard session
-	session = NewSafeSession(&proto.Session{InTransaction: true})
-	err = stc.Commit(context.Background(), session)
-	if err == nil {
-		t.Errorf("want error, got nil")
-	}
-	err = stc.Rollback(context.Background(), session)
-	if err == nil {
-		t.Errorf("want error, got nil")
-	}
 }
 
 func TestScatterConnCommitSuccess(t *testing.T) {
