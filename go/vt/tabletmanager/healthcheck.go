@@ -96,7 +96,6 @@ func (agent *ActionAgent) initHeathCheck() {
 		return
 	}
 
-	agent.healthStreamMap = make(map[int]chan<- *actionnode.HealthStreamReply)
 	log.Infof("Starting periodic health check every %v with target_tablet_type=%v", *healthCheckInterval, *targetTabletType)
 	t := timer.NewTimer(*healthCheckInterval)
 	servenv.OnTermSync(func() {
@@ -229,7 +228,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 	if err != nil {
 		hsr.HealthError = err.Error()
 	}
-	defer agent.broadcastHealthStreamReply(hsr)
+	defer agent.BroadcastHealthStreamReply(hsr)
 
 	// Update our topo.Server state, start with no change
 	newTabletType := tablet.Type

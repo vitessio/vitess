@@ -140,6 +140,7 @@ func NewActionAgent(
 		History:            history.New(historyLength),
 		lastHealthMapCount: stats.NewInt("LastHealthMapCount"),
 		_healthy:           fmt.Errorf("healthcheck not run yet"),
+		healthStreamMap:    make(map[int]chan<- *actionnode.HealthStreamReply),
 	}
 
 	// try to initialize the tablet if we have to
@@ -190,6 +191,7 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias to
 		History:            history.New(historyLength),
 		lastHealthMapCount: new(stats.Int),
 		_healthy:           fmt.Errorf("healthcheck not run yet"),
+		healthStreamMap:    make(map[int]chan<- *actionnode.HealthStreamReply),
 	}
 	if err := agent.Start(0, port, 0); err != nil {
 		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
@@ -432,9 +434,9 @@ func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo
 	return tablet
 }
 
-// broadcastHealthStreamReply will send the HealthStreamReply to all
+// BroadcastHealthStreamReply will send the HealthStreamReply to all
 // listening clients.
-func (agent *ActionAgent) broadcastHealthStreamReply(hsr *actionnode.HealthStreamReply) {
+func (agent *ActionAgent) BroadcastHealthStreamReply(hsr *actionnode.HealthStreamReply) {
 	agent.healthStreamMutex.Lock()
 	defer agent.healthStreamMutex.Unlock()
 	for _, c := range agent.healthStreamMap {
@@ -444,6 +446,14 @@ func (agent *ActionAgent) broadcastHealthStreamReply(hsr *actionnode.HealthStrea
 		default:
 		}
 	}
+}
+
+// HealthStreamMapSize returns the size of the healthStreamMap
+// (used for tests).
+func (agent *ActionAgent) HealthStreamMapSize() int {
+	agent.healthStreamMutex.Lock()
+	defer agent.healthStreamMutex.Unlock()
+	return len(agent.healthStreamMap)
 }
 
 var getSubprocessFlagsFuncs []func() []string
