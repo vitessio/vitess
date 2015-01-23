@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/servenv"
 )
 
@@ -60,6 +61,10 @@ func initStatusHandling() {
 	// code to serve /status
 	workerTemplate := mustParseTemplate("worker", workerStatusHTML)
 	http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
+			acl.SendError(w, err)
+			return
+		}
 		currentWorkerMutex.Lock()
 		wrk := currentWorker
 		logger := currentMemoryLogger
@@ -83,13 +88,17 @@ func initStatusHandling() {
 		executeTemplate(w, workerTemplate, data)
 	})
 
-	// add the section in statusz that does auto-refresh of status div
+	// add the section in status that does auto-refresh of status div
 	servenv.AddStatusPart("Worker Status", workerStatusPartHTML, func() interface{} {
 		return nil
 	})
 
 	// reset handler
 	http.HandleFunc("/reset", func(w http.ResponseWriter, r *http.Request) {
+		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
+			acl.SendError(w, err)
+			return
+		}
 		currentWorkerMutex.Lock()
 		wrk := currentWorker
 		done := currentDone
@@ -117,6 +126,10 @@ func initStatusHandling() {
 
 	// cancel handler
 	http.HandleFunc("/cancel", func(w http.ResponseWriter, r *http.Request) {
+		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
+			acl.SendError(w, err)
+			return
+		}
 		currentWorkerMutex.Lock()
 		wrk := currentWorker
 		currentWorkerMutex.Unlock()
@@ -127,7 +140,9 @@ func initStatusHandling() {
 			return
 		}
 
-		// otherwise, cancel the running worker
+		// otherwise, cancel the running worker and go back to the status page
 		wrk.Cancel()
+		http.Redirect(w, r, servenv.StatusURLPath(), http.StatusTemporaryRedirect)
+
 	})
 }

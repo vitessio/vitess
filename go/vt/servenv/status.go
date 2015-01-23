@@ -131,7 +131,7 @@ func AddStatusPart(banner, frag string, f func() interface{}) {
 	if err != nil {
 		secs[len(secs)-1] = section{
 			Banner:   banner,
-			Fragment: "<code>bad statusz template: {{.}}</code>",
+			Fragment: "<code>bad status template: {{.}}</code>",
 			F:        func() interface{} { return err },
 		}
 	}
