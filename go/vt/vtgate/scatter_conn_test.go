@@ -220,8 +220,8 @@ func TestScatterCommitRollbackIncorrectSession(t *testing.T) {
 		t.Errorf("want error, got nil")
 	}
 	err = stc.Rollback(context.Background(), nil)
-	if err == nil {
-		t.Errorf("want error, got nil")
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
 	}
 	// not in transaction
 	session := NewSafeSession(&proto.Session{})

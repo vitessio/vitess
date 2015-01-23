@@ -390,7 +390,7 @@ func (stc *ScatterConn) Commit(context context.Context, session *SafeSession) (e
 // Rollback rolls back the current transaction. There are no retries on this operation.
 func (stc *ScatterConn) Rollback(context context.Context, session *SafeSession) (err error) {
 	if session == nil {
-		return fmt.Errorf("cannot rollback: empty session")
+		return nil
 	}
 	for _, shardSession := range session.ShardSessions {
 		sdc := stc.getConnection(context, shardSession.Keyspace, shardSession.Shard, shardSession.TabletType)
