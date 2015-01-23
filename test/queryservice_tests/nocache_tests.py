@@ -647,8 +647,17 @@ class TestNocache(framework.TestCase):
   #  time.sleep(5)
   #  self.env.tablet.start_mysql()
   #  time.sleep(5)
-  #  with self.assertRaises(dbexceptions.DatabaseError):
+  #  with self.assertRaisesRegexp(dbexceptions.DatabaseError, ".*server has gone away.*"):
   #    self.env.execute("select * from vtocc_test limit :l", {"l": 1})
-  #  with self.assertRaises(dbexceptions.DatabaseError):
-  #    self.env.conn.rollback()
+  #  self.env.conn.rollback()
   #  self.env.execute("set vt_pool_size=16")
+
+  # Super-slow test.
+  #def test_mysql_shutdown(self):
+  #  self.env.execute("select * from vtocc_test limit :l", {"l": 1})
+  #  self.env.tablet.shutdown_mysql()
+  #  time.sleep(5)
+  #  with self.assertRaisesRegexp(dbexceptions.DatabaseError, '.*NOT_SERVING state.*'):
+  #    self.env.execute("select * from vtocc_test limit :l", {"l": 1})
+  #  self.env.tablet.start_mysql()
+  #  time.sleep(5)

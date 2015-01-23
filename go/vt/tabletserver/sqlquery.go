@@ -101,14 +101,18 @@ func (sq *SqlQuery) setState(state int64) {
 }
 
 // allowQueries starts the query service.
-// If the state is anything other than NOT_SERVING, it fails.
+// If the state is other than SERVING or NOT_SERVING, it fails.
 // If allowQuery succeeds, the resulting state is SERVING.
 // Otherwise, it reverts back to NOT_SERVING.
 // While allowQuery is running, the state is set to INITIALIZING.
 // If waitForMysql is set to true, allowQueries will not return
 // until it's able to connect to mysql.
 // No other operations are allowed when allowQueries is running.
-func (sq *SqlQuery) allowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld *mysqlctl.Mysqld, waitForMysql bool) (err error) {
+func (sq *SqlQuery) allowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld *mysqlctl.Mysqld) (err error) {
+	// Fast path
+	if sq.state.Get() == SERVING {
+		return nil
+	}
 	sq.mu.Lock()
 	defer sq.mu.Unlock()
 	if sq.state.Get() != NOT_SERVING {
@@ -118,22 +122,13 @@ func (sq *SqlQuery) allowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides
 	// state is NOT_SERVING
 	sq.setState(INITIALIZING)
 
-	if waitForMysql {
-		waitTime := time.Second
-		for {
-			c, err := dbconnpool.NewDBConnection(&dbconfigs.App.ConnectionParams, mysqlStats)
-			if err == nil {
-				c.Close()
-				break
-			}
-			log.Warningf("mysql.Connect() error, retrying in %v: %v", waitTime, err)
-			time.Sleep(waitTime)
-			// Cap at 32 seconds
-			if waitTime < 30*time.Second {
-				waitTime = waitTime * 2
-			}
-		}
+	c, err := dbconnpool.NewDBConnection(&dbconfigs.App.ConnectionParams, mysqlStats)
+	if err != nil {
+		log.Infof("allowQueries failed: %v", err)
+		sq.setState(NOT_SERVING)
+		return err
 	}
+	c.Close()
 
 	defer func() {
 		if x := recover(); x != nil {
@@ -193,6 +188,22 @@ func (sq *SqlQuery) disallowQueries() {
 	sq.qe.Close()
 	sq.sessionId = 0
 	sq.dbconfig = &dbconfigs.DBConfig{}
+}
+
+// checkMySQL returns true if we can connect to MySQL.
+// The function returns false only if the query service is running
+// and we're unable to make a connection.
+func (sq *SqlQuery) checkMySQL() bool {
+	if err := sq.startRequest(sq.sessionId, false); err != nil {
+		return true
+	}
+	defer sq.endRequest()
+	defer func() {
+		if x := recover(); x != nil {
+			log.Errorf("Checking MySQL, unexpected error: %v", x)
+		}
+	}()
+	return sq.qe.CheckMySQL()
 }
 
 // GetSessionId returns a sessionInfo response if the state is SERVING.

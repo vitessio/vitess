@@ -256,6 +256,20 @@ func (qe *QueryEngine) Launch(f func()) {
 	}()
 }
 
+// CheckMySQL returns true if we can connect to MySQL.
+func (qe *QueryEngine) CheckMySQL() bool {
+	conn, err := dbconnpool.NewDBConnection(&qe.dbconfigs.App.ConnectionParams, mysqlStats)
+	if err != nil {
+		if IsConnErr(err) {
+			return false
+		}
+		log.Warningf("checking MySQL, unexpected error: %v", err)
+		return true
+	}
+	conn.Close()
+	return true
+}
+
 // WaitForTxEmpty must be called before calling Close.
 // Before calling WaitForTxEmpty, you must ensure that there
 // will be no more calls to Begin.

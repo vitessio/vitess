@@ -36,6 +36,7 @@ func (rqc *RequestContext) getConn(pool *dbconnpool.ConnectionPool) dbconnpool.P
 	case dbconnpool.ErrConnPoolClosed:
 		panic(connPoolClosedErr)
 	}
+	go CheckMySQL()
 	panic(NewTabletErrorSql(ErrFatal, err))
 }
 
@@ -52,6 +53,7 @@ func (rqc *RequestContext) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparse
 		conn, err := rqc.qe.connPool.Get(timeout)
 		logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 		if err != nil {
+			go CheckMySQL()
 			q.Err = NewTabletErrorSql(ErrFatal, err)
 		} else {
 			defer conn.Recycle()
@@ -108,20 +110,24 @@ func (rqc *RequestContext) execSQL(conn dbconnpool.PoolConnection, sql string, w
 func (rqc *RequestContext) execSQLNoPanic(conn dbconnpool.PoolConnection, sql string, wantfields bool) (*mproto.QueryResult, error) {
 	for attempt := 1; attempt <= 2; attempt++ {
 		r, err := rqc.execSQLOnce(conn, sql, wantfields)
-		if attempt == 2 || err == nil || !IsConnErr(err) {
-			if err != nil {
-				return nil, err
-			}
+		switch {
+		case err == nil:
 			return r, nil
+		case !IsConnErr(err):
+			return nil, NewTabletErrorSql(ErrFail, err)
+		case attempt == 2:
+			return nil, NewTabletErrorSql(ErrFatal, err)
 		}
 		err2 := conn.Reconnect()
 		if err2 != nil {
-			return nil, err
+			go CheckMySQL()
+			return nil, NewTabletErrorSql(ErrFatal, err)
 		}
 	}
 	panic("unreachable")
 }
 
+// execSQLOnce returns a normal error that needs to be wrapped into a TabletError by the caller.
 func (rqc *RequestContext) execSQLOnce(conn dbconnpool.PoolConnection, sql string, wantfields bool) (*mproto.QueryResult, error) {
 	if qd := rqc.qe.connKiller.SetDeadline(conn.ID(), rqc.deadline); qd != nil {
 		defer qd.Done()
@@ -131,7 +137,7 @@ func (rqc *RequestContext) execSQLOnce(conn dbconnpool.PoolConnection, sql strin
 	result, err := conn.ExecuteFetch(sql, int(rqc.qe.maxResultSize.Get()), wantfields)
 	rqc.logStats.AddRewrittenSql(sql, start)
 	if err != nil {
-		return nil, NewTabletErrorSql(ErrFail, err)
+		return nil, err
 	}
 	return result, nil
 }
