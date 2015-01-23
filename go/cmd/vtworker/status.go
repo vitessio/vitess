@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/servenv"
 )
 
@@ -60,6 +61,10 @@ func initStatusHandling() {
 	// code to serve /status
 	workerTemplate := mustParseTemplate("worker", workerStatusHTML)
 	http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
+			acl.SendError(w, err)
+			return
+		}
 		currentWorkerMutex.Lock()
 		wrk := currentWorker
 		logger := currentMemoryLogger
@@ -90,6 +95,10 @@ func initStatusHandling() {
 
 	// reset handler
 	http.HandleFunc("/reset", func(w http.ResponseWriter, r *http.Request) {
+		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
+			acl.SendError(w, err)
+			return
+		}
 		currentWorkerMutex.Lock()
 		wrk := currentWorker
 		done := currentDone
@@ -117,6 +126,10 @@ func initStatusHandling() {
 
 	// cancel handler
 	http.HandleFunc("/cancel", func(w http.ResponseWriter, r *http.Request) {
+		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
+			acl.SendError(w, err)
+			return
+		}
 		currentWorkerMutex.Lock()
 		wrk := currentWorker
 		currentWorkerMutex.Unlock()
