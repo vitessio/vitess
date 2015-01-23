@@ -10,11 +10,13 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/streamlog"
+	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -24,6 +26,8 @@ import (
 var (
 	queryLogHandler = flag.String("query-log-stream-handler", "/debug/querylog", "URL handler for streaming queries log")
 	txLogHandler    = flag.String("transaction-log-stream-handler", "/debug/txlog", "URL handler for streaming transactions log")
+
+	checkMySLQThrottler = sync2.NewSemaphore(1, 0)
 )
 
 func init() {
@@ -157,10 +161,9 @@ func RegisterQueryService() {
 	http.HandleFunc("/debug/health", healthCheck)
 }
 
-// AllowQueries can take an indefinite amount of time to return because
-// it keeps retrying until it obtains a valid connection to the database.
-func AllowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld *mysqlctl.Mysqld, waitForMysql bool) error {
-	return SqlQueryRpcService.allowQueries(dbconfigs, schemaOverrides, mysqld, waitForMysql)
+// AllowQueries starts the query service.
+func AllowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld *mysqlctl.Mysqld) error {
+	return SqlQueryRpcService.allowQueries(dbconfigs, schemaOverrides, mysqld)
 }
 
 // DisallowQueries can take a long time to return (not indefinite) because
@@ -175,6 +178,25 @@ func DisallowQueries() {
 func ReloadSchema() {
 	defer logError()
 	SqlQueryRpcService.qe.schemaInfo.triggerReload()
+}
+
+// CheckMySQL verifies that MySQL is still reachable by connecting to it.
+// If it's not reachable, it shuts down the query service.
+// This function rate-limits the check to no more than once per second.
+func CheckMySQL() {
+	if !checkMySLQThrottler.TryAcquire() {
+		return
+	}
+	defer func() {
+		time.Sleep(1 * time.Second)
+		checkMySLQThrottler.Release()
+	}()
+	defer logError()
+	if SqlQueryRpcService.checkMySQL() {
+		return
+	}
+	log.Infof("Check MySQL failed. Shutting down query service")
+	DisallowQueries()
 }
 
 func GetSessionId() int64 {
