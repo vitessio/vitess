@@ -11,6 +11,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -441,6 +442,36 @@ func main() {
 		shardNamesCache.Flush()
 		shardCache.Flush()
 		cellShardTabletsCache.Flush()
+	})
+
+	// handle tablet cache
+	tabletHealthCache := newTabletHealthCache(ts, tmclient.NewTabletManagerClient())
+	http.HandleFunc("/json/TabletHealth", func(w http.ResponseWriter, r *http.Request) {
+		cell := r.FormValue("cell")
+		if cell == "" {
+			http.Error(w, "no cell provided", http.StatusBadRequest)
+			return
+		}
+		uid := r.FormValue("uid")
+		if uid == "" {
+			http.Error(w, "no uid provided", http.StatusBadRequest)
+			return
+		}
+		tabletAlias := topo.TabletAlias{
+			Cell: cell,
+		}
+		var err error
+		tabletAlias.Uid, err = topo.ParseUID(uid)
+		if err != nil {
+			http.Error(w, "cannot parse uid", http.StatusBadRequest)
+			return
+		}
+		result, err := tabletHealthCache.get(tabletAlias)
+		if err != nil {
+			httpError(w, "error getting tablet health: %v", err)
+			return
+		}
+		w.Write(result)
 	})
 
 	servenv.RunDefault()
