@@ -83,7 +83,7 @@ func initStatusHandling() {
 		executeTemplate(w, workerTemplate, data)
 	})
 
-	// add the section in statusz that does auto-refresh of status div
+	// add the section in status that does auto-refresh of status div
 	servenv.AddStatusPart("Worker Status", workerStatusPartHTML, func() interface{} {
 		return nil
 	})
@@ -127,7 +127,9 @@ func initStatusHandling() {
 			return
 		}
 
-		// otherwise, cancel the running worker
+		// otherwise, cancel the running worker and go back to the status page
 		wrk.Cancel()
+		http.Redirect(w, r, servenv.StatusURLPath(), http.StatusTemporaryRedirect)
+
 	})
 }
