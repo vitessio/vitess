@@ -364,7 +364,7 @@ func agentRPCTestHealthStream(ctx context.Context, t *testing.T, client tmclient
 		t.Fatalf("HealthStream wasn't closed")
 	}
 	err = errFunc()
-	if err.Error() != testRegisterHealthStreamError {
+	if !strings.Contains(err.Error(), testRegisterHealthStreamError) {
 		t.Fatalf("HealthStream failed with the wrong error: %v", err)
 	}
 	compareError(t, "HealthStream", nil, *hsr, *testHealthStreamHealthStreamReply)
