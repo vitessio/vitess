@@ -6,6 +6,8 @@ package tabletserver
 
 import (
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -73,16 +75,35 @@ func NewTabletErrorSql(errorType int, err error) *TabletError {
 	}
 }
 
+var errExtract = regexp.MustCompile(`.*\(errno ([0-9]*)\).*`)
+
+// IsConnErr returns true if the error is a connection error. If
+// the error is of type TabletError or hasNumber, it checks the error
+// code. Otherwise, it parses the string looking for (errno xxxx)
+// and uses the extracted value to determine if it's a conn error.
 func IsConnErr(err error) bool {
-	terr, ok := err.(*TabletError)
-	if !ok {
-		return false
+	var sqlError int
+	switch err := err.(type) {
+	case *TabletError:
+		sqlError = err.SqlError
+	case hasNumber:
+		sqlError = err.Number()
+	default:
+		match := errExtract.FindStringSubmatch(err.Error())
+		if match != nil {
+			return false
+		}
+		var convErr error
+		sqlError, convErr = strconv.Atoi(match[1])
+		if convErr != nil {
+			return false
+		}
 	}
 	// 2013 means that someone sniped the query.
-	if terr.SqlError == 2013 {
+	if sqlError == 2013 {
 		return false
 	}
-	return terr.SqlError >= 2000 && terr.SqlError <= 2018
+	return sqlError >= 2000 && sqlError <= 2018
 }
 
 func (te *TabletError) Error() string {
