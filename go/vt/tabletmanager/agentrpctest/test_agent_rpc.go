@@ -307,6 +307,69 @@ func agentRPCTestRunHealthCheck(ctx context.Context, t *testing.T, client tmclie
 	}
 }
 
+// this test is a bit of a hack: we write something on the channel
+// upon registration, and we also return an error, so the streaming query
+// ends right there. Otherwise we have no real way to trigger a real
+// communication error, that ends the streaming.
+var testHealthStreamHealthStreamReply = &actionnode.HealthStreamReply{
+	Tablet: &topo.Tablet{
+		Alias: topo.TabletAlias{
+			Cell: "cell1",
+			Uid:  123,
+		},
+		Hostname: "host",
+		IPAddr:   "1.2.3.4",
+		Portmap: map[string]int{
+			"vt": 2345,
+		},
+		Tags: map[string]string{
+			"tag1": "value1",
+		},
+		Health: map[string]string{
+			"health1": "value1",
+		},
+		Keyspace:       "keyspace",
+		Shard:          "shard",
+		Type:           topo.TYPE_MASTER,
+		State:          topo.STATE_READ_WRITE,
+		DbNameOverride: "overruled!",
+	},
+	BinlogPlayerMapSize: 3,
+	HealthError:         "bad rep bad",
+	ReplicationDelay:    50 * time.Second,
+}
+var testRegisterHealthStreamError = "to trigger a server error"
+
+func (fra *fakeRPCAgent) RegisterHealthStream(c chan<- *actionnode.HealthStreamReply) (int, error) {
+	c <- testHealthStreamHealthStreamReply
+	return 0, fmt.Errorf(testRegisterHealthStreamError)
+}
+
+func (fra *fakeRPCAgent) UnregisterHealthStream(int) error {
+	return nil
+}
+
+func agentRPCTestHealthStream(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	c, errFunc, err := client.HealthStream(ctx, ti)
+	if err != nil {
+		t.Fatalf("HealthStream failed: %v", err)
+	}
+	// channel should have one response, then closed
+	hsr, ok := <-c
+	if !ok {
+		t.Fatalf("HealthStream got no response")
+	}
+	_, ok = <-c
+	if ok {
+		t.Fatalf("HealthStream wasn't closed")
+	}
+	err = errFunc()
+	if err.Error() != testRegisterHealthStreamError {
+		t.Fatalf("HealthStream failed with the wrong error: %v", err)
+	}
+	compareError(t, "HealthStream", nil, *hsr, *testHealthStreamHealthStreamReply)
+}
+
 var testReloadSchemaCalled = false
 
 func (fra *fakeRPCAgent) ReloadSchema(ctx context.Context) {
@@ -820,6 +883,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo)
 	agentRPCTestExecuteHook(ctx, t, client, ti)
 	agentRPCTestRefreshState(ctx, t, client, ti)
 	agentRPCTestRunHealthCheck(ctx, t, client, ti)
+	agentRPCTestHealthStream(ctx, t, client, ti)
 	agentRPCTestReloadSchema(ctx, t, client, ti)
 	agentRPCTestPreflightSchema(ctx, t, client, ti)
 	agentRPCTestApplySchema(ctx, t, client, ti)
