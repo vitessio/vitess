@@ -152,7 +152,6 @@ primary key (id)
       args = environment.binary_args('vtprimecache') + [
               '-db-config-dba-uname', 'vt_dba',
               '-db-config-dba-charset', 'utf8',
-              '-db-config-dba-dbname', 'vt_test_keyspace',
               '-db-config-app-uname', 'vt_app',
               '-db-config-app-charset', 'utf8',
               '-db-config-app-dbname', 'vt_test_keyspace',

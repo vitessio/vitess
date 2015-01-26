@@ -571,7 +571,6 @@ class Tablet(object):
     config = dict(self.default_db_config)
     if self.keyspace:
       config['app']['dbname'] = self.dbname
-      config['dba']['dbname'] = self.dbname
       config['repl']['dbname'] = self.dbname
     config['repl'].update(repl_extra_flags)
     for key1 in config:

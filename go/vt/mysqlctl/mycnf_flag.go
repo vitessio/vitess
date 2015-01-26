@@ -6,7 +6,6 @@ package mysqlctl
 
 import (
 	"flag"
-	"fmt"
 
 	log "github.com/golang/glog"
 )
@@ -17,7 +16,7 @@ import (
 
 var (
 	// the individual command line parameters
-	flagServerId              *int
+	flagServerID              *int
 	flagMysqlPort             *int
 	flagDataDir               *string
 	flagInnodbDataHomeDir     *string
@@ -42,7 +41,7 @@ var (
 // specifying the values of a mycnf config file. See NewMycnfFromFlags
 // to get the supported modes.
 func RegisterFlags() {
-	flagServerId = flag.Int("mycnf_server_id", 0, "mysql server id of the server (if specified, mycnf-file will be ignored)")
+	flagServerID = flag.Int("mycnf_server_id", 0, "mysql server id of the server (if specified, mycnf-file will be ignored)")
 	flagMysqlPort = flag.Int("mycnf_mysql_port", 0, "port mysql is listening on")
 	flagDataDir = flag.String("mycnf_data_dir", "", "data directory for mysql")
 	flagInnodbDataHomeDir = flag.String("mycnf_innodb_data_home_dir", "", "Innodb data home directory")
@@ -77,10 +76,10 @@ func RegisterFlags() {
 // RegisterCommandLineFlags should have been called before calling
 // this, otherwise we'll panic.
 func NewMycnfFromFlags(uid uint32) (mycnf *Mycnf, err error) {
-	if *flagServerId != 0 {
+	if *flagServerID != 0 {
 		log.Info("mycnf_server_id is specified, using command line parameters for mysql config")
 		return &Mycnf{
-			ServerId:              uint32(*flagServerId),
+			ServerId:              uint32(*flagServerID),
 			MysqlPort:             *flagMysqlPort,
 			DataDir:               *flagDataDir,
 			InnodbDataHomeDir:     *flagInnodbDataHomeDir,
@@ -100,51 +99,18 @@ func NewMycnfFromFlags(uid uint32) (mycnf *Mycnf, err error) {
 			// This is probably not going to be used by anybody,
 			// but fill in a default value. (Note it's used by
 			// mysqld.Start, in which case it is correct).
-			path: mycnfFile(uint32(*flagServerId)),
+			path: mycnfFile(uint32(*flagServerID)),
 		}, nil
+	}
+
+	if *flagMycnfFile == "" {
+		if uid == 0 {
+			log.Fatalf("No mycnf_server_id, no mycnf-file, and no backup server id to use")
+		}
+		*flagMycnfFile = mycnfFile(uid)
+		log.Infof("No mycnf_server_id, no mycnf-file specified, using default config for server id %v: %v", uid, *flagMycnfFile)
 	} else {
-		if *flagMycnfFile == "" {
-			if uid == 0 {
-				log.Fatalf("No mycnf_server_id, no mycnf-file, and no backup server id to use")
-			}
-			*flagMycnfFile = mycnfFile(uid)
-			log.Infof("No mycnf_server_id, no mycnf-file specified, using default config for server id %v: %v", uid, *flagMycnfFile)
-		} else {
-			log.Infof("No mycnf_server_id specified, using mycnf-file file %v", *flagMycnfFile)
-		}
-		return ReadMycnf(*flagMycnfFile)
+		log.Infof("No mycnf_server_id specified, using mycnf-file file %v", *flagMycnfFile)
 	}
-}
-
-// GetSubprocessFlags returns the flags to pass to a subprocess to
-// have the exact same mycnf config as us.
-//
-// RegisterCommandLineFlags and NewMycnfFromFlags should have been
-// called before this.
-func GetSubprocessFlags() []string {
-	if *flagServerId != 0 {
-		// all from command line
-		return []string{
-			"-mycnf_server_id", fmt.Sprintf("%v", *flagServerId),
-			"-mycnf_mysql_port", fmt.Sprintf("%v", *flagMysqlPort),
-			"-mycnf_data_dir", *flagDataDir,
-			"-mycnf_innodb_data_home_dir", *flagInnodbDataHomeDir,
-			"-mycnf_innodb_log_group_home_dir", *flagInnodbLogGroupHomeDir,
-			"-mycnf_socket_file", *flagSocketFile,
-			"-mycnf_error_log_path", *flagErrorLogPath,
-			"-mycnf_slow_log_path", *flagSlowLogPath,
-			"-mycnf_relay_log_path", *flagRelayLogPath,
-			"-mycnf_relay_log_index_path", *flagRelayLogIndexPath,
-			"-mycnf_relay_log_info_path", *flagRelayLogInfoPath,
-			"-mycnf_bin_log_path", *flagBinLogPath,
-			"-mycnf_master_info_file", *flagMasterInfoFile,
-			"-mycnf_pid_file", *flagPidFile,
-			"-mycnf_tmp_dir", *flagTmpDir,
-			"-mycnf_slave_load_tmp_dir", *flagSlaveLoadTmpDir,
-		}
-	}
-
-	// Just pass through the mycnf-file param, it has been altered
-	// if we didn't get it but guessed it from uid.
-	return []string{"-mycnf-file", *flagMycnfFile}
+	return ReadMycnf(*flagMycnfFile)
 }
