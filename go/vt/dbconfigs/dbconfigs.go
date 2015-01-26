@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"strconv"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
@@ -191,57 +190,4 @@ func Init(socketFile string, flags DBConfigFlag) (*DBConfigs, error) {
 	toLog.Redact()
 	log.Infof("DBConfigs: %v\n", toLog.String())
 	return &dbConfigs, nil
-}
-
-// GetSubprocessFlags returns the flags to send to a subprocess so it has the
-// same config as us.
-func GetSubprocessFlags() []string {
-	cmd := []string{}
-	f := func(connParams *mysql.ConnectionParams, name string) {
-		if connParams.Host != "" {
-			cmd = append(cmd, "-db-config-"+name+"-host", connParams.Host)
-		}
-		if connParams.Port > 0 {
-			cmd = append(cmd, "-db-config-"+name+"-port", strconv.Itoa(connParams.Port))
-		}
-		if connParams.Uname != "" {
-			cmd = append(cmd, "-db-config-"+name+"-uname", connParams.Uname)
-		}
-		if connParams.DbName != "" {
-			cmd = append(cmd, "-db-config-"+name+"-dbname", connParams.DbName)
-		}
-		if connParams.UnixSocket != "" {
-			cmd = append(cmd, "-db-config-"+name+"-unixsocket", connParams.UnixSocket)
-		}
-		if connParams.Charset != "" {
-			cmd = append(cmd, "-db-config-"+name+"-charset", connParams.Charset)
-		}
-		if connParams.Flags > 0 {
-			cmd = append(cmd, "-db-config-"+name+"-flags", strconv.FormatUint(connParams.Flags, 10))
-		}
-		if connParams.SslCa != "" {
-			cmd = append(cmd, "-db-config-"+name+"-ssl-ca", connParams.SslCa)
-		}
-		if connParams.SslCaPath != "" {
-			cmd = append(cmd, "-db-config-"+name+"-ssl-ca-path", connParams.SslCaPath)
-		}
-		if connParams.SslCert != "" {
-			cmd = append(cmd, "-db-config-"+name+"-ssl-cert", connParams.SslCert)
-		}
-		if connParams.SslKey != "" {
-			cmd = append(cmd, "-db-config-"+name+"-ssl-key", connParams.SslKey)
-		}
-	}
-	f(&dbConfigs.App.ConnectionParams, "app")
-	if dbConfigs.App.Keyspace != "" {
-		cmd = append(cmd, "-db-config-app-keyspace", dbConfigs.App.Keyspace)
-	}
-	if dbConfigs.App.Shard != "" {
-		cmd = append(cmd, "-db-config-app-shard", dbConfigs.App.Shard)
-	}
-	f(&dbConfigs.Dba, "dba")
-	f(&dbConfigs.Filtered, "filtered")
-	f(&dbConfigs.Repl, "repl")
-	cmd = append(cmd, getCredentialsServerSubprocessFlags()...)
-	return cmd
 }

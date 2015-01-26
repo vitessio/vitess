@@ -38,7 +38,6 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver"
@@ -457,13 +456,4 @@ func (agent *ActionAgent) HealthStreamMapSize() int {
 	agent.healthStreamMutex.Lock()
 	defer agent.healthStreamMutex.Unlock()
 	return len(agent.healthStreamMap)
-}
-
-var getSubprocessFlagsFuncs []func() []string
-
-func init() {
-	getSubprocessFlagsFuncs = append(getSubprocessFlagsFuncs, logutil.GetSubprocessFlags)
-	getSubprocessFlagsFuncs = append(getSubprocessFlagsFuncs, topo.GetSubprocessFlags)
-	getSubprocessFlagsFuncs = append(getSubprocessFlagsFuncs, dbconfigs.GetSubprocessFlags)
-	getSubprocessFlagsFuncs = append(getSubprocessFlagsFuncs, mysqlctl.GetSubprocessFlags)
 }

@@ -276,7 +276,6 @@ func (ft *fakeTopo) LockShardForAction(ctx context.Context, keyspace, shard, con
 	return "", nil
 }
 func (ft *fakeTopo) UnlockShardForAction(keyspace, shard, lockPath, results string) error { return nil }
-func (ft *fakeTopo) GetSubprocessFlags() []string                                         { return nil }
 
 type fakeTopoRemoteMaster struct {
 	fakeTopo

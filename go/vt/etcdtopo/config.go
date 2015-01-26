@@ -7,7 +7,6 @@ package etcdtopo
 import (
 	"flag"
 	"path"
-	"strings"
 
 	"github.com/youtube/vitess/go/flagutil"
 )
@@ -104,9 +103,4 @@ func endPointsDirPath(keyspace, shard, tabletType string) string {
 
 func endPointsFilePath(keyspace, shard, tabletType string) string {
 	return path.Join(endPointsDirPath(keyspace, shard, tabletType), endPointsFilename)
-}
-
-// GetSubprocessFlags implements topo.Server.
-func (s *Server) GetSubprocessFlags() []string {
-	return []string{"-etcd_global_addrs", strings.Join(globalAddrs, ",")}
 }

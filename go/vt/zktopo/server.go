@@ -31,11 +31,6 @@ func (zkts *Server) GetZConn() zk.Conn {
 	return zkts.zconn
 }
 
-// GetSubprocessFlags is part of topo.Server interface.
-func (zkts *Server) GetSubprocessFlags() []string {
-	return zk.GetZkSubprocessFlags()
-}
-
 // NewServer can be used to create a custom Server
 // (for tests for instance) but it cannot change the globally
 // registered one.
