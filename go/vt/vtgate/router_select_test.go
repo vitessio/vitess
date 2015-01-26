@@ -95,7 +95,7 @@ func TestStreamUnsharded(t *testing.T) {
 func TestUnshardedFail(t *testing.T) {
 	router, _, _, _ := createRouterEnv()
 
-	getSandbox(TEST_UNSHARDED).SrvKeyspaceMustFail = 1
+	getSandbox(KsTestUnsharded).SrvKeyspaceMustFail = 1
 	_, err := routerExec(router, "select * from music_user_map where id = 1", nil)
 	want := "paramsUnsharded: keyspace TestUnsharded fetch error: topo error GetSrvKeyspace"
 	if err == nil || err.Error() != want {
@@ -112,7 +112,7 @@ func TestUnshardedFail(t *testing.T) {
 func TestStreamUnshardedFail(t *testing.T) {
 	router, _, _, _ := createRouterEnv()
 
-	getSandbox(TEST_UNSHARDED).SrvKeyspaceMustFail = 1
+	getSandbox(KsTestUnsharded).SrvKeyspaceMustFail = 1
 	q := proto.Query{
 		Sql:        "select * from music_user_map where id = 1",
 		TabletType: topo.TYPE_MASTER,

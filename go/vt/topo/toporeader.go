@@ -14,6 +14,10 @@ type TopoReader interface {
 	// particular cell (as specified by the GetSrvKeyspaceArgs).
 	GetSrvKeyspace(context.Context, *GetSrvKeyspaceArgs, *SrvKeyspace) error
 
+	// GetSrvShard returns information about a shard in a
+	// particular cell and keyspace (as specified by the GetSrvShardArgs).
+	GetSrvShard(context.Context, *GetSrvShardArgs, *SrvShard) error
+
 	// GetEndPoints returns addresses for a tablet type in a shard
 	// in a keyspace (as specified in GetEndPointsArgs).
 	GetEndPoints(context.Context, *GetEndPointsArgs, *EndPoints) error
@@ -33,6 +37,15 @@ type GetSrvKeyspaceArgs struct {
 }
 
 //go:generate bsongen -file $GOFILE -type GetSrvKeyspaceArgs -o get_srv_keyspace_args_bson.go
+
+// GetSrvShardArgs is the parameters for TopoReader.GetSrvShard
+type GetSrvShardArgs struct {
+	Cell     string
+	Keyspace string
+	Shard    string
+}
+
+//go:generate bsongen -file $GOFILE -type GetSrvShardArgs -o get_srv_shard_args_bson.go
 
 // SrvKeyspaceNames is the response for TopoReader.GetSrvKeyspaceNames
 type SrvKeyspaceNames struct {
