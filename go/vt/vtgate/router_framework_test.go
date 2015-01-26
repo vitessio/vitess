@@ -220,7 +220,7 @@ func createRouterEnv() (router *Router, sbc1, sbc2, sbclookup *sandboxConn) {
 	s.MapTestConn("-20", sbc1)
 	s.MapTestConn("40-60", sbc2)
 
-	l := createSandbox(TEST_UNSHARDED)
+	l := createSandbox(KsTestUnsharded)
 	sbclookup = &sandboxConn{}
 	l.MapTestConn("0", sbclookup)
 
