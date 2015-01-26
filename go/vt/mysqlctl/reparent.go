@@ -12,7 +12,8 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
-// if the master is still alive, then we need to demote it gracefully
+// DemoteMaster will gracefully demote a master mysql instance to read only.
+// If the master is still alive, then we need to demote it gracefully
 // make it read-only, flush the writes and get the position
 func (mysqld *Mysqld) DemoteMaster() (rp proto.ReplicationPosition, err error) {
 	// label as TYPE_REPLICA
@@ -27,6 +28,7 @@ func (mysqld *Mysqld) DemoteMaster() (rp proto.ReplicationPosition, err error) {
 	return mysqld.MasterPosition()
 }
 
+// PromoteSlave will promote a mysql slave to master.
 // setReadWrite: set the new master in read-write mode.
 //
 // replicationState: info slaves need to reparent themselves
@@ -74,7 +76,7 @@ func (mysqld *Mysqld) PromoteSlave(setReadWrite bool, hookExtraEnv map[string]st
 	if err != nil {
 		return
 	}
-	mysqldAddr := mysqld.IpAddr()
+	mysqldAddr := mysqld.IPAddr()
 	replicationStatus, err = proto.NewReplicationStatus(mysqldAddr)
 	if err != nil {
 		return
@@ -114,6 +116,7 @@ func (mysqld *Mysqld) PromoteSlave(setReadWrite bool, hookExtraEnv map[string]st
 	return
 }
 
+// RestartSlave tells a mysql slave that is has a new master
 func (mysqld *Mysqld) RestartSlave(replicationStatus *proto.ReplicationStatus, waitPosition proto.ReplicationPosition, timeCheck int64) error {
 	log.Infof("Restart Slave")
 	cmds, err := mysqld.StartReplicationCommands(replicationStatus)
@@ -135,7 +138,7 @@ func (mysqld *Mysqld) RestartSlave(replicationStatus *proto.ReplicationStatus, w
 	return mysqld.CheckReplication(timeCheck)
 }
 
-// Check for the magic row inserted under controlled reparenting.
+// CheckReplication checks for the magic row inserted under controlled reparenting.
 func (mysqld *Mysqld) CheckReplication(timeCheck int64) error {
 	log.Infof("Check replication restarted")
 	checkQuery := fmt.Sprintf("SELECT * FROM _vt.replication_log WHERE time_created_ns = %v",
