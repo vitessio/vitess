@@ -63,7 +63,7 @@ which is used to administer the cluster.
 
 ```
 # list available commands
-vitess/examples/local$ $VTTOP/bin/vtctlclient -server localhost:15000
+vitess/examples/local$ $VTROOT/bin/vtctlclient -server localhost:15000
 ```
 
 ## Starting vttablets
