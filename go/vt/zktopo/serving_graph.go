@@ -258,6 +258,18 @@ func (zkts *Server) WatchEndPoints(cell, keyspace, shard string, tabletType topo
 	notifications := make(chan *topo.EndPoints, 10)
 	stopWatching := make(chan struct{})
 
+	// waitOrInterrupted will return true if stopWatching is triggered
+	waitOrInterrupted := func() bool {
+		timer := time.After(WatchSleepDuration)
+		select {
+		case <-stopWatching:
+			close(notifications)
+			return true
+		case <-timer:
+		}
+		return false
+	}
+
 	go func() {
 		for {
 			// set the watch
@@ -269,7 +281,9 @@ func (zkts *Server) WatchEndPoints(cell, keyspace, shard string, tabletType topo
 				}
 
 				log.Errorf("Cannot set watch on %v, waiting for %s to retry: %v", path, WatchSleepDuration, err)
-				time.Sleep(WatchSleepDuration)
+				if waitOrInterrupted() {
+					return
+				}
 				continue
 			}
 
@@ -293,14 +307,17 @@ func (zkts *Server) WatchEndPoints(cell, keyspace, shard string, tabletType topo
 			case event, ok := <-watch:
 				if !ok {
 					log.Warningf("watch on %v was closed, waiting for %s to retry", path, WatchSleepDuration)
-					time.Sleep(WatchSleepDuration)
+					if waitOrInterrupted() {
+						return
+					}
 					continue
 				}
 
 				if !event.Ok() {
 					log.Warningf("received a non-OK event, waiting for %s to retry", path, WatchSleepDuration)
-					time.Sleep(WatchSleepDuration)
-					continue
+					if waitOrInterrupted() {
+						return
+					}
 				}
 			case <-stopWatching:
 				// user is not interested any more
