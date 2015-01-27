@@ -111,6 +111,7 @@ func (agent *ActionAgent) initHeathCheck() {
 	t.Start(func() {
 		agent.runHealthCheck(topo.TabletType(*targetTabletType))
 	})
+	t.Trigger()
 }
 
 // runHealthCheck takes the action mutex, runs the health check,
