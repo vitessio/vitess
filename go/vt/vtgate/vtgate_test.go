@@ -37,7 +37,7 @@ func init() {
 }
 
 func TestVTGateExecute(t *testing.T) {
-	sandbox := createSandbox(TEST_UNSHARDED)
+	sandbox := createSandbox(KsTestUnsharded)
 	sbc := &sandboxConn{}
 	sandbox.MapTestConn("0", sbc)
 	q := proto.Query{
@@ -67,7 +67,7 @@ func TestVTGateExecute(t *testing.T) {
 	wantSession := &proto.Session{
 		InTransaction: true,
 		ShardSessions: []*proto.ShardSession{{
-			Keyspace:      TEST_UNSHARDED,
+			Keyspace:      KsTestUnsharded,
 			Shard:         "0",
 			TabletType:    topo.TYPE_MASTER,
 			TransactionId: 1,
@@ -440,7 +440,7 @@ func TestVTGateExecuteBatchKeyspaceIds(t *testing.T) {
 }
 
 func TestVTGateStreamExecute(t *testing.T) {
-	sandbox := createSandbox(TEST_UNSHARDED)
+	sandbox := createSandbox(KsTestUnsharded)
 	sbc := &sandboxConn{}
 	sandbox.MapTestConn("0", sbc)
 	q := proto.Query{

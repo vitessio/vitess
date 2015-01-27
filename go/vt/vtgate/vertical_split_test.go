@@ -20,7 +20,7 @@ import (
 func TestExecuteKeyspaceAlias(t *testing.T) {
 	testVerticalSplitGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
 		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
-		return stc.Execute(context.Background(), "query", nil, TEST_UNSHARDED_SERVED_FROM, shards, topo.TYPE_RDONLY, nil)
+		return stc.Execute(context.Background(), "query", nil, KsTestUnshardedServedFrom, shards, topo.TYPE_RDONLY, nil)
 	})
 }
 
@@ -28,7 +28,7 @@ func TestBatchExecuteKeyspaceAlias(t *testing.T) {
 	testVerticalSplitGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
 		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
 		queries := []tproto.BoundQuery{{"query", nil}}
-		qrs, err := stc.ExecuteBatch(context.Background(), queries, TEST_UNSHARDED_SERVED_FROM, shards, topo.TYPE_RDONLY, nil)
+		qrs, err := stc.ExecuteBatch(context.Background(), queries, KsTestUnshardedServedFrom, shards, topo.TYPE_RDONLY, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -40,7 +40,7 @@ func TestStreamExecuteKeyspaceAlias(t *testing.T) {
 	testVerticalSplitGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
 		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
-		err := stc.StreamExecute(context.Background(), "query", nil, TEST_UNSHARDED_SERVED_FROM, shards, topo.TYPE_RDONLY, nil, func(r *mproto.QueryResult) error {
+		err := stc.StreamExecute(context.Background(), "query", nil, KsTestUnshardedServedFrom, shards, topo.TYPE_RDONLY, nil, func(r *mproto.QueryResult) error {
 			appendResult(qr, r)
 			return nil
 		})
@@ -49,7 +49,7 @@ func TestStreamExecuteKeyspaceAlias(t *testing.T) {
 }
 
 func TestInTransactionKeyspaceAlias(t *testing.T) {
-	s := createSandbox(TEST_UNSHARDED_SERVED_FROM)
+	s := createSandbox(KsTestUnshardedServedFrom)
 	sbc := &sandboxConn{mustFailRetry: 3}
 	s.MapTestConn("0", sbc)
 
@@ -57,13 +57,13 @@ func TestInTransactionKeyspaceAlias(t *testing.T) {
 	session := NewSafeSession(&proto.Session{
 		InTransaction: true,
 		ShardSessions: []*proto.ShardSession{{
-			Keyspace:      TEST_UNSHARDED_SERVED_FROM,
+			Keyspace:      KsTestUnshardedServedFrom,
 			Shard:         "0",
 			TabletType:    topo.TYPE_MASTER,
 			TransactionId: 1,
 		}},
 	})
-	_, err := stc.Execute(context.Background(), "query", nil, TEST_UNSHARDED_SERVED_FROM, []string{"0"}, topo.TYPE_MASTER, session)
+	_, err := stc.Execute(context.Background(), "query", nil, KsTestUnshardedServedFrom, []string{"0"}, topo.TYPE_MASTER, session)
 	want := "shard, host: TestUnshardedServedFrom.0.master, {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}, retry: err"
 	if err == nil || err.Error() != want {
 		t.Errorf("want '%v', got '%v'", want, err)
@@ -77,7 +77,7 @@ func TestInTransactionKeyspaceAlias(t *testing.T) {
 
 func testVerticalSplitGeneric(t *testing.T, f func(shards []string) (*mproto.QueryResult, error)) {
 	// Retry Error, for keyspace that is redirected should succeed.
-	s := createSandbox(TEST_UNSHARDED_SERVED_FROM)
+	s := createSandbox(KsTestUnshardedServedFrom)
 	sbc := &sandboxConn{mustFailRetry: 3}
 	s.MapTestConn("0", sbc)
 	_, err := f([]string{"0"})
