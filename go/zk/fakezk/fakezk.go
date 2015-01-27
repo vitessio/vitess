@@ -229,7 +229,6 @@ func (conn *zconn) Create(zkPath, value string, flags int, aclv []zookeeper.ACL)
 		delete(conn.existWatches, zkPath)
 		for _, watch := range watches {
 			watch <- event
-
 		}
 	}
 	childrenEvent := zookeeper.Event{

@@ -7,6 +7,7 @@ package helpers
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -65,6 +66,12 @@ func TestTablet(t *testing.T) {
 func TestServingGraph(t *testing.T) {
 	ts := newFakeTeeServer(t)
 	test.CheckServingGraph(context.Background(), t, ts)
+}
+
+func TestWatchEndPoints(t *testing.T) {
+	zktopo.WatchSleepDuration = 2 * time.Millisecond
+	ts := newFakeTeeServer(t)
+	test.CheckWatchEndPoints(context.Background(), t, ts)
 }
 
 func TestShardReplication(t *testing.T) {

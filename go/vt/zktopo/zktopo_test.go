@@ -2,6 +2,7 @@ package zktopo
 
 import (
 	"testing"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -36,6 +37,13 @@ func TestServingGraph(t *testing.T) {
 	ts := NewTestServer(t, []string{"test"})
 	defer ts.Close()
 	test.CheckServingGraph(context.Background(), t, ts)
+}
+
+func TestWatchEndPoints(t *testing.T) {
+	WatchSleepDuration = 2 * time.Millisecond
+	ts := NewTestServer(t, []string{"test"})
+	defer ts.Close()
+	test.CheckWatchEndPoints(context.Background(), t, ts)
 }
 
 func TestKeyspaceLock(t *testing.T) {
