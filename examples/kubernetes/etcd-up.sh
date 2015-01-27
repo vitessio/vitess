@@ -8,7 +8,7 @@
 # service, but you can use your own. See the etcd docs for more:
 # https://github.com/coreos/etcd/blob/v0.4.6/Documentation/cluster-discovery.md
 #
-# This script assumes that kubernetes/cluster/kubecfg.sh is in the path.
+# This script assumes that kubernetes/cluster/kubectl.sh is in the path.
 
 set -e
 
@@ -21,12 +21,12 @@ for cell in 'global' 'test'; do
   echo "Creating etcd service for $cell cell..."
   cat etcd-service-template.yaml | \
     sed -e "s/{{cell}}/$cell/g" | \
-    kubecfg.sh -c - create services
+    kubectl.sh create -f -
 
   # Create the replication controller.
   echo "Creating etcd replicationController for $cell cell..."
   cat etcd-controller-template.yaml | \
     sed -e "s/{{cell}}/$cell/g" -e "s,{{discovery}},$discovery,g" | \
-    kubecfg.sh -c - create replicationControllers
+    kubectl.sh create -f -
 done
 
