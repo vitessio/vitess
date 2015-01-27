@@ -27,6 +27,7 @@ import sys
 import environment
 import tablet
 
+from vtdb import topology
 from zk import zkocc
 
 class Tablet(tablet.Tablet):
@@ -80,6 +81,8 @@ class TestEnv(object):
         else:
           utils.run_vtctl(['ApplyVSchema', "-vschema_file", self.vschema])
       self.vtgate_server, self.vtgate_port = utils.vtgate_start(cache_ttl='500s', vtport=self.vtgate_port)
+      vtgate_client = zkocc.ZkOccConnection("localhost:%u" % self.vtgate_port, "test_nj", 30.0)
+      topology.read_topology(vtgate_client)
     except:
       self.shutdown()
       raise
