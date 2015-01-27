@@ -280,7 +280,7 @@ func (zkts *Server) WatchEndPoints(cell, keyspace, shard string, tabletType topo
 					notifications <- nil
 				}
 
-				log.Errorf("Cannot set watch on %v, waiting for %s to retry: %v", path, WatchSleepDuration, err)
+				log.Errorf("Cannot set watch on %v, waiting for %v to retry: %v", path, WatchSleepDuration, err)
 				if waitOrInterrupted() {
 					return
 				}
@@ -306,7 +306,7 @@ func (zkts *Server) WatchEndPoints(cell, keyspace, shard string, tabletType topo
 			select {
 			case event, ok := <-watch:
 				if !ok {
-					log.Warningf("watch on %v was closed, waiting for %s to retry", path, WatchSleepDuration)
+					log.Warningf("watch on %v was closed, waiting for %v to retry", path, WatchSleepDuration)
 					if waitOrInterrupted() {
 						return
 					}
@@ -314,7 +314,7 @@ func (zkts *Server) WatchEndPoints(cell, keyspace, shard string, tabletType topo
 				}
 
 				if !event.Ok() {
-					log.Warningf("received a non-OK event, waiting for %s to retry", path, WatchSleepDuration)
+					log.Warningf("received a non-OK event for %v, waiting for %v to retry", path, WatchSleepDuration)
 					if waitOrInterrupted() {
 						return
 					}
