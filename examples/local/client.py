@@ -6,7 +6,6 @@ from vtdb import keyrange
 from vtdb import keyrange_constants
 from vtdb import vtgatev2
 from vtdb import vtgate_cursor
-from vtdb import topology
 from zk import zkocc
 
 # Constants and params
@@ -22,12 +21,6 @@ vtgate_addrs = {"vt": [args.server]}
 
 # Connect
 conn = vtgatev2.connect(vtgate_addrs, args.timeout)
-
-# Read topology
-# This is a temporary work-around until the VTGate V2 client is topology-free.
-topoconn = zkocc.ZkOccConnection(args.server, 'test', args.timeout)
-topology.read_topology(topoconn)
-topoconn.close()
 
 # Insert something.
 print('Inserting into master...')
