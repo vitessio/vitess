@@ -229,3 +229,8 @@ func (s *Server) UpdateTabletEndpoint(cell, keyspace, shard string, tabletType t
 		}
 	}
 }
+
+// WatchEndPoints is part of the topo.Server interface
+func (s *Server) WatchEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (<-chan *topo.EndPoints, chan<- struct{}, error) {
+	return nil, nil, fmt.Errorf("NYI")
+}

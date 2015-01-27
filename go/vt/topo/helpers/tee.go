@@ -649,6 +649,12 @@ func (tee *Tee) UpdateTabletEndpoint(cell, keyspace, shard string, tabletType to
 	return nil
 }
 
+// WatchEndPoints is part of the topo.Server interface.
+// We only watch for changes on the primary.
+func (tee *Tee) WatchEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (<-chan *topo.EndPoints, chan<- struct{}, error) {
+	return tee.primary.WatchEndPoints(cell, keyspace, shard, tabletType)
+}
+
 //
 // Keyspace and Shard locks for actions, global.
 //
