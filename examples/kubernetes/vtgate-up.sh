@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # This is an example script that starts a vtgate replicationController.
-# It assumes that kubernetes/cluster/kubecfg.sh is in the path.
+# It assumes that kubernetes/cluster/kubectl.sh is in the path.
 
 set -e
 
 echo "Creating vtgate service..."
-kubecfg.sh -c vtgate-service.yaml create services
+kubectl.sh create -f vtgate-service.yaml
 
 echo "Creating vtgate replicationController..."
-kubecfg.sh -c vtgate-controller.yaml create replicationControllers
+kubectl.sh create -f vtgate-controller.yaml

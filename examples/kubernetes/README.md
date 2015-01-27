@@ -10,7 +10,7 @@ to get Kubernetes up and running if you haven't already.
 
 This example was most recently tested with the
 [binary release](https://github.com/GoogleCloudPlatform/kubernetes/releases)
-of Kubernetes v0.8.2.
+of Kubernetes v0.9.1.
 
 The easiest way to run the local commands like vtctl is just to install
 [Docker](https://www.docker.com/)
@@ -21,7 +21,7 @@ by removing the docker preamble if you prefer.
 ## Starting an etcd cluster for Vitess
 
 Once you have a running Kubernetes deployment, make sure
-`kubernetes/cluster/kubecfg.sh` is in your path, and then run:
+`kubernetes/cluster/kubectl.sh` is in your path, and then run:
 
 ```
 vitess/examples/kubernetes$ ./etcd-up.sh
@@ -32,7 +32,7 @@ since they read other config files.
 
 This will create two clusters: one for the 'global' cell, and one for the
 'test' cell.
-You can check the status of the pods with `kubecfg.sh list pods` or by using the
+You can check the status of the pods with `kubectl.sh get pods` or by using the
 [Kubernetes web interface](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/ux.md).
 Note that it may take a while for each minion to download the Docker images the
 first time it needs them, during which time the pod status will be `Pending`.
@@ -40,7 +40,7 @@ first time it needs them, during which time the pod status will be `Pending`.
 In general, each `-up.sh` script in this example has a corresponding `-down.sh`
 in case you want to stop certain pieces without bringing down the whole cluster.
 For example, to tear down the etcd deployment
-(again, with `kubecfg.sh` in your path):
+(again, with `kubectl.sh` in your path):
 
 ```
 vitess/examples/kubernetes$ ./etcd-down.sh
@@ -97,10 +97,9 @@ service. For example:
 
 ```
 # get service IP
-$ kubecfg.sh list services
-Name                Labels                  Selector                                  IP                  Port
-----------          ----------              ----------                                ----------          ----------
-vtctld              name=vtctld             name=vtctld                               10.0.12.151         15000
+$ kubectl.sh get services
+NAME     LABELS        SELECTOR      IP            PORT
+vtctld   name=vtctld   name=vtctld   10.0.12.151   15000
 
 # log in to a minion
 $ gcloud compute ssh kubernetes-minion-1
@@ -124,7 +123,7 @@ for three replicas.
 vitess/examples/kubernetes$ ./vttablet-up.sh
 ```
 
-Wait for the pods to enter Running state (`kubecfg.sh list pods`).
+Wait for the pods to enter Running state (`kubectl.sh get pods`).
 Again, this may take a while if a pod was scheduled on a minion that needs to
 download the Vitess Docker image. Eventually you should see the tablets show up
 in the *DB topology* summary page of vtctld (`http://12.34.56.78:15000/dbtopo`).
@@ -146,8 +145,8 @@ For example, on GCE that would look like this:
 
 ```
 # which minion is the vttablet-101 pod on?
-$ kubecfg.sh list pods | grep vttablet-101
-vttablet-101    vitess/root,vitess/root    kubernetes-minion-2    Running
+$ kubectl.sh get pods | grep vttablet-101
+vttablet-101   [...]   kubernetes-minion-2   [...]   Running
 
 # ssh to the minion
 $ gcloud compute ssh kubernetes-minion-2

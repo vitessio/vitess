@@ -1,13 +1,10 @@
 #!/bin/bash
 
 # This is an example script that stops vtgate.
-# It assumes that kubernetes/cluster/kubecfg.sh is in the path.
+# It assumes that kubernetes/cluster/kubectl.sh is in the path.
 
-echo "Deleting pods created by vtgate replicationController..."
-kubecfg.sh stop vtgate
-
-echo "Deleting vtgate replicationController..."
-kubecfg.sh delete replicationControllers/vtgate
+echo "Stopping vtgate replicationController..."
+kubectl.sh stop replicationController vtgate
 
 echo "Deleting vtgate service..."
-kubecfg.sh delete services/vtgate
+kubectl.sh delete service vtgate
