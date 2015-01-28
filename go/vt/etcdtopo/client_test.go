@@ -255,6 +255,10 @@ func (c *fakeClient) SetCluster(machines []string) bool {
 func (c *fakeClient) Watch(prefix string, waitIndex uint64, recursive bool,
 	receiver chan *etcd.Response, stop chan bool) (*etcd.Response, error) {
 
+	if recursive {
+		panic("not implemented")
+	}
+
 	// We need a buffered forwarderfor 2 reasons:
 	// - in the select loop below, we only write to receiver if
 	// stop has not been closed. Otherwise we introduce race
@@ -262,15 +266,13 @@ func (c *fakeClient) Watch(prefix string, waitIndex uint64, recursive bool,
 	// - we are waiting on forwarder and taking the node mutex.
 	// fakeNode.notify write to forwarder, and also takes the node
 	// mutex. Both can deadlock each-other. By buffering the
-	// channel, we make sure one notify() call can finish and not
-	// deadlock, which is as many as we do in the unit tests.
-	forwarder := make(chan *etcd.Response, 1)
+	// channel, we make sure 10 notify() call can finish and not
+	// deadlock. We do a few of them in the serial locking code
+	// in tests.
+	forwarder := make(chan *etcd.Response, 10)
 
 	// add the watch under the lock
 	c.Lock()
-	if recursive {
-		panic("not implemented")
-	}
 	c.createParentDirs(prefix)
 	n, ok := c.nodes[prefix]
 	if !ok {
@@ -286,8 +288,7 @@ func (c *fakeClient) Watch(prefix string, waitIndex uint64, recursive bool,
 	n.mu.Unlock()
 
 	// and wait until we stop, each action will write to forwarder, send
-	// these along. The order in select is critical: we only want to
-	// write to receiver if stop is not closed.
+	// these along.
 	for {
 		select {
 		case <-stop:

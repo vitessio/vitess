@@ -12,11 +12,18 @@ import (
 	"golang.org/x/net/context"
 )
 
+// CheckKeyspaceLock checks we can take a keyspace lock as expected.
 func CheckKeyspaceLock(t *testing.T, ts topo.Server) {
 	if err := ts.CreateKeyspace("test_keyspace", &topo.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 
+	checkKeyspaceLockTimeout(t, ts)
+	checkKeyspaceLockMissing(t, ts)
+	checkKeyspaceLockUnblocks(t, ts)
+}
+
+func checkKeyspaceLockTimeout(t *testing.T, ts topo.Server) {
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	lockPath, err := ts.LockKeyspaceForAction(ctx, "test_keyspace", "fake-content")
 	if err != nil {
@@ -47,14 +54,57 @@ func CheckKeyspaceLock(t *testing.T, ts topo.Server) {
 	if err := ts.UnlockKeyspaceForAction("test_keyspace", lockPath, "fake-results"); err == nil {
 		t.Error("UnlockKeyspaceForAction(again) worked")
 	}
+}
 
-	// test we can't lock a non-existing keyspace
-	ctx = context.Background()
+// checkKeyspaceLockMissing makes sure we can't lock a non-existing keyspace
+func checkKeyspaceLockMissing(t *testing.T, ts topo.Server) {
+	ctx := context.Background()
 	if _, err := ts.LockKeyspaceForAction(ctx, "test_keyspace_666", "fake-content"); err == nil {
 		t.Errorf("LockKeyspaceForAction(test_keyspace_666) worked for non-existing keyspace")
 	}
 }
 
+// checkKeyspaceLockUnblocks makes sure that a routine waiting on a lock
+// is unblocked when another routine frees the lock
+func checkKeyspaceLockUnblocks(t *testing.T, ts topo.Server) {
+	unblock := make(chan struct{})
+	finished := make(chan struct{})
+
+	// as soon as we're unblocked, we try to lock the keyspace
+	go func() {
+		<-unblock
+		ctx := context.Background()
+		lockPath, err := ts.LockKeyspaceForAction(ctx, "test_keyspace", "fake-content")
+		if err != nil {
+			t.Fatalf("LockKeyspaceForAction(test_keyspace) failed: %v", err)
+		}
+		if err = ts.UnlockKeyspaceForAction("test_keyspace", lockPath, "fake-results"); err != nil {
+			t.Errorf("UnlockKeyspaceForAction(): %v", err)
+		}
+		close(finished)
+	}()
+
+	// lock the keyspace
+	ctx := context.Background()
+	lockPath2, err := ts.LockKeyspaceForAction(ctx, "test_keyspace", "fake-content")
+	if err != nil {
+		t.Fatalf("LockKeyspaceForAction(test_keyspace) failed: %v", err)
+	}
+
+	// unblock the go routine so it starts waiting
+	close(unblock)
+
+	// sleep for a while so we're sure the go routine is blocking
+	time.Sleep(10 * time.Millisecond)
+
+	if err = ts.UnlockKeyspaceForAction("test_keyspace", lockPath2, "fake-results"); err != nil {
+		t.Fatalf("UnlockKeyspaceForAction(): %v", err)
+	}
+
+	<-finished
+}
+
+// CheckShardLock checks we can take a shard lock
 func CheckShardLock(t *testing.T, ts topo.Server) {
 	if err := ts.CreateKeyspace("test_keyspace", &topo.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
@@ -101,6 +151,7 @@ func CheckShardLock(t *testing.T, ts topo.Server) {
 	}
 }
 
+// CheckSrvShardLock tests we can take a SrvShard lock
 func CheckSrvShardLock(t *testing.T, ts topo.Server) {
 	// make sure we can create the lock even if no directory exists
 	ctx, ctxCancel := context.WithCancel(context.Background())
