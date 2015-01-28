@@ -348,6 +348,9 @@ func (conn *Connection) SendCommand(command uint32, data []byte) error {
 // in a call to ReadPacket(), and another thread wants to cancel the read. We
 // can't use mysql_close() because it isn't safe to use while another thread is
 // blocked in an I/O call on that MySQL connection.
+//
+// After calling ForceClose, you must wait until the MySQL I/O call that was
+// blocked has returned, before calling Close to finish freeing resources.
 func (conn *Connection) ForceClose() {
 	C.vt_force_close(&conn.c)
 }
