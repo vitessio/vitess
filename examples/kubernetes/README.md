@@ -138,36 +138,17 @@ $ kvtctl RebuildKeyspaceGraph test_keyspace
 
 Note that most vtctlclient commands produce no output on success.
 
-### Troubleshooting
+### Viewing logs
 
-You can log into the minion corresponding to one of the pods to check the logs.
-For example, on GCE that would look like this:
+You can inspect the output of any Kubernetes container with the `kubectl`
+command. For example, to see the logs for vttablet:
 
 ```
-# which minion is the vttablet-101 pod on?
-$ kubectl.sh get pods | grep vttablet-101
-vttablet-101   [...]   kubernetes-minion-2   [...]   Running
+# show logs for container 'vttablet' within pod 'vttablet-100'
+$ kubectl.sh log vttablet-100 vttablet
 
-# ssh to the minion
-$ gcloud compute ssh kubernetes-minion-2
-
-# find the Docker containers for the tablet
-kubernetes-minion-2:~$ sudo docker ps | grep vttablet-101
-1de8493ecc9a    vitess/root:latest   [...]    k8s_mysql...
-d8c5ed2c4d53    vitess/root:latest   [...]    k8s_vttablet...
-f89f0554a8aa    vitess/root:latest   [...]    k8s_net...
-
-# exec a shell inside the mysql or vttablet container
-kubernetes-minion-2:~$ sudo docker exec -ti 1de8493ecc9a bash
-
-# look at log files for Vitess or MySQL
-root@vttablet-101:vitess# cd /vt/vtdataroot/tmp
-root@vttablet-101:tmp# ls
-mysqlctld.INFO
-vttablet.INFO
-vttablet.log
-root@vttablet-101:tmp# cd /vt/vtdataroot/vt_0000000101
-root@vttablet-101:vt_0000000101# cat error.log
+# show logs for container 'mysql' within pod 'vttablet-100'
+$ kubectl.sh log vttablet-100 mysql
 ```
 
 ### Viewing vttablet status

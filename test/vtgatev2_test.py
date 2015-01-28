@@ -21,7 +21,6 @@ from vtdb import keyrange
 from vtdb import keyrange_constants
 from vtdb import keyspace
 from vtdb import dbexceptions
-from vtdb import topology
 from vtdb import vtdb_logger
 from vtdb import vtgatev2
 from vtdb import vtgate_cursor
@@ -152,11 +151,6 @@ def setup_tablets():
                            'TabletTypes: master,replica')
 
   vtgate_server, vtgate_port = utils.vtgate_start()
-  # FIXME(shrutip): this should be removed once vtgate_cursor's
-  # dependency on topology goes away.
-  vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
-                                        "test_nj", 30.0)
-  topology.read_topology(vtgate_client)
 
 
 def get_connection(user=None, password=None):

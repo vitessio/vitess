@@ -16,6 +16,7 @@ typedef struct vt_conn {
   unsigned int num_fields;
   MYSQL_FIELD  *fields;
   MYSQL_RES    *result;
+  unsigned int force_closed;
 } VT_CONN;
 
 // vt_connect: Create a connection. You must call vt_close even if vt_connect fails.

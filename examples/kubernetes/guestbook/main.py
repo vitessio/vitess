@@ -8,7 +8,6 @@ from vtdb import keyrange
 from vtdb import keyrange_constants
 from vtdb import vtgatev2
 from vtdb import vtgate_cursor
-from vtdb import topology
 from zk import zkocc
 
 # Constants and params
@@ -59,12 +58,6 @@ if __name__ == "__main__":
 
   # Get vtgate service address from Kubernetes environment.
   addr = '%s:%s' % (os.environ['VTGATE_SERVICE_HOST'], os.environ['VTGATE_SERVICE_PORT'])
-
-  # Read topology from vtgate.
-  # This is a temporary workaround until the VTGate V2 client is topology-free.
-  topoconn = zkocc.ZkOccConnection(addr, 'test', timeout)
-  topology.read_topology(topoconn)
-  topoconn.close()
 
   # Connect to vtgate.
   conn = vtgatev2.connect({'vt': [addr]}, timeout)
