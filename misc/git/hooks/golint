@@ -15,7 +15,7 @@ if [ -z "$(which golint)" ]; then
   exit 1
 fi
 
-gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '.go$')
+gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$')
 
 errors=
 
