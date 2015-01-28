@@ -63,11 +63,14 @@ function goversion_min() {
   return 0
 }
 
-# Packages for uploading code coverage to coveralls.io
+# Packages for uploading code coverage to coveralls.io.
+# The cover tool needs to be installed into the Go toolchain, so it will fail
+# if Go is installed somewhere that requires root access. However, this tool
+# is optional, so we should hide any errors to avoid confusion.
 if goversion_min 1.4; then
-  go get golang.org/x/tools/cmd/cover
+  go get golang.org/x/tools/cmd/cover &> /dev/null
 else
-  go get code.google.com/p/go.tools/cmd/cover
+  go get code.google.com/p/go.tools/cmd/cover &> /dev/null
 fi
 go get github.com/modocache/gover
 go get github.com/mattn/goveralls
