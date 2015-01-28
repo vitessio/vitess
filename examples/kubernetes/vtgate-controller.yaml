@@ -27,6 +27,7 @@ desiredState:
                 -topo_implementation etcd
                 -etcd_global_addrs http://$ETCD_GLOBAL_SERVICE_HOST:$ETCD_GLOBAL_SERVICE_PORT
                 -log_dir $VTDATAROOT/tmp
+                -alsologtostderr
                 -port 15001
                 -cell test" vitess
         volumes:

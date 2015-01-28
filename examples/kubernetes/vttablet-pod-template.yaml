@@ -19,8 +19,6 @@ desiredState:
           - >-
             set -e
 
-            log_file=$VTDATAROOT/tmp/vttablet.log
-
             mysql_socket="$VTDATAROOT/{{tablet_subdir}}/mysql.sock"
 
             mkdir -p $VTDATAROOT/tmp
@@ -28,18 +26,18 @@ desiredState:
             chown -R vitess /vt
 
             while [ ! -e $mysql_socket ]; do
-            echo "[$(date)] waiting for $mysql_socket" >> $log_file ;
+            echo "[$(date)] waiting for $mysql_socket" ;
             sleep 1 ;
             done
 
             su -p -s /bin/bash -c "mysql -u vt_dba -S $mysql_socket
-            -e 'CREATE DATABASE IF NOT EXISTS vt_{{keyspace}}'
-            &>> $log_file" vitess
+            -e 'CREATE DATABASE IF NOT EXISTS vt_{{keyspace}}'" vitess
 
             su -p -s /bin/bash -c "/vt/bin/vttablet
             -topo_implementation etcd
             -etcd_global_addrs http://$ETCD_GLOBAL_SERVICE_HOST:$ETCD_GLOBAL_SERVICE_PORT
             -log_dir $VTDATAROOT/tmp
+            -alsologtostderr
             -port {{port}}
             -tablet-path {{alias}}
             -tablet_hostname $(hostname -i)
@@ -61,8 +59,7 @@ desiredState:
             -db-config-filtered-charset utf8
             -enable-rowcache
             -rowcache-bin /usr/bin/memcached
-            -rowcache-socket $VTDATAROOT/{{tablet_subdir}}/memcache.sock
-            &>> $log_file" vitess
+            -rowcache-socket $VTDATAROOT/{{tablet_subdir}}/memcache.sock" vitess
       - name: mysql
         image: vitess/root
         volumeMounts:
@@ -79,6 +76,7 @@ desiredState:
 
             su -p -c "/vt/bin/mysqlctld
             -log_dir $VTDATAROOT/tmp
+            -alsologtostderr
             -tablet_uid {{uid}}
             -socket_file $VTDATAROOT/mysqlctl.sock
             -db-config-app-uname vt_app

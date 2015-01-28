@@ -30,7 +30,8 @@ desiredState:
                 if [ "{{cell}}" != "global" ]; then
                 until curl -L http://$global_etcd/v2/keys/vt/cells/{{cell}}
                 -XPUT -d value=http://$local_etcd; do
-                echo "[$(date)] waiting for global etcd to register cell '{{cell}}'"; sleep 1;
+                echo "[$(date)] waiting for global etcd to register cell '{{cell}}'";
+                sleep 1;
                 done;
                 fi
 
