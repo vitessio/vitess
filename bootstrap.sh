@@ -160,4 +160,4 @@ echo "creating git pre-commit hooks"
 ln -sf $VTTOP/misc/git/pre-commit $VTTOP/.git/hooks/pre-commit
 
 echo
-echo "source dev.env in your shell before building."
+echo "bootstrap finished - run 'source dev.env' in your shell before building."
