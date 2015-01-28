@@ -13,8 +13,10 @@
 #define NULL ((void*)0)
 #endif
 
-// vio_close is not declared anywhere in the libmysqlclient headers.
+// These low-level vio functions are not declared
+// anywhere in the libmysqlclient headers.
 int vio_close(Vio*);
+void vio_delete(Vio*);
 
 // cli_safe_read is declared in sql_common.h.
 unsigned long cli_safe_read(MYSQL *mysql);
