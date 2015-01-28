@@ -13,9 +13,40 @@ import (
 	"github.com/coreos/go-etcd/etcd"
 )
 
+type fakeNode struct {
+	node *etcd.Node
+
+	mu         sync.Mutex
+	watchIndex int
+	watches    map[int]chan *etcd.Response
+}
+
+func newFakeNode(node *etcd.Node) *fakeNode {
+	return &fakeNode{
+		node:    node,
+		watches: make(map[int]chan *etcd.Response),
+	}
+}
+
+func (fn *fakeNode) notify(action string) {
+	fn.mu.Lock()
+	defer fn.mu.Unlock()
+	for _, w := range fn.watches {
+		var node *etcd.Node
+		if fn.node != nil {
+			node = &etcd.Node{}
+			*node = *fn.node
+		}
+		w <- &etcd.Response{
+			Action: action,
+			Node:   node,
+		}
+	}
+}
+
 type fakeClient struct {
 	cell  string
-	nodes map[string]etcd.Node
+	nodes map[string]*fakeNode
 	index uint64
 
 	sync.Mutex
@@ -24,102 +55,131 @@ type fakeClient struct {
 func newTestClient(machines []string) Client {
 	// In tests, the first machine address is just the cell name.
 	return &fakeClient{
-		cell:  machines[0],
-		nodes: map[string]etcd.Node{"/": etcd.Node{Key: "/", Dir: true}},
+		cell: machines[0],
+		nodes: map[string]*fakeNode{
+			"/": newFakeNode(&etcd.Node{Key: "/", Dir: true}),
+		},
 	}
 }
 
 func (c *fakeClient) createParentDirs(key string) {
 	dir := path.Dir(key)
 	for dir != "" {
-		if _, ok := c.nodes[dir]; ok {
+		fn, ok := c.nodes[dir]
+		if ok && fn.node != nil {
 			return
 		}
-		c.nodes[dir] = etcd.Node{Key: dir, Dir: true, CreatedIndex: c.index, ModifiedIndex: c.index}
+		if !ok {
+			fn = newFakeNode(nil)
+			c.nodes[dir] = fn
+		}
+		fn.node = &etcd.Node{Key: dir, Dir: true, CreatedIndex: c.index, ModifiedIndex: c.index}
 		dir = path.Dir(dir)
 	}
 }
 
 func (c *fakeClient) CompareAndDelete(key string, prevValue string, prevIndex uint64) (*etcd.Response, error) {
 	c.Lock()
-	defer c.Unlock()
 
 	if prevValue != "" {
 		panic("not implemented")
 	}
 
 	n, ok := c.nodes[key]
-	if !ok {
+	if !ok || n.node == nil {
+		c.Unlock()
 		return nil, &etcd.EtcdError{ErrorCode: EcodeKeyNotFound}
 	}
-	if n.ModifiedIndex != prevIndex {
+	if n.node.ModifiedIndex != prevIndex {
+		c.Unlock()
 		return nil, &etcd.EtcdError{ErrorCode: EcodeTestFailed}
 	}
 
 	c.index++
-	delete(c.nodes, key)
+	n.node = nil
+	c.Unlock()
+	n.notify("compareAndDelete")
 	return &etcd.Response{}, nil
 }
 
 func (c *fakeClient) CompareAndSwap(key string, value string, ttl uint64,
 	prevValue string, prevIndex uint64) (*etcd.Response, error) {
 	c.Lock()
-	defer c.Unlock()
 
 	n, ok := c.nodes[key]
-	if !ok {
+	if !ok || n.node == nil {
+		c.Unlock()
 		return nil, &etcd.EtcdError{ErrorCode: EcodeKeyNotFound}
 	}
-	if prevValue != "" && n.Value != prevValue {
+	if prevValue != "" && n.node.Value != prevValue {
+		c.Unlock()
 		return nil, &etcd.EtcdError{ErrorCode: EcodeTestFailed}
 	}
-	if prevIndex != 0 && n.ModifiedIndex != prevIndex {
+	if prevIndex != 0 && n.node.ModifiedIndex != prevIndex {
+		c.Unlock()
 		return nil, &etcd.EtcdError{ErrorCode: EcodeTestFailed}
 	}
 
 	c.index++
-	n.ModifiedIndex = c.index
-	n.Value = value
+	n.node.ModifiedIndex = c.index
+	n.node.Value = value
 	c.nodes[key] = n
-	return &etcd.Response{Node: &n}, nil
+	node := *n.node
+	c.Unlock()
+	n.notify("compareAndSwap")
+	return &etcd.Response{Node: &node}, nil
 }
 
 func (c *fakeClient) Create(key string, value string, ttl uint64) (*etcd.Response, error) {
 	c.Lock()
-	defer c.Unlock()
 
-	if _, ok := c.nodes[key]; ok {
+	n, ok := c.nodes[key]
+	if ok && n.node != nil {
+		c.Unlock()
 		return nil, &etcd.EtcdError{ErrorCode: EcodeNodeExist}
 	}
 
 	c.index++
 	c.createParentDirs(key)
-	n := etcd.Node{
+	if !ok {
+		n = newFakeNode(nil)
+		c.nodes[key] = n
+	}
+	n.node = &etcd.Node{
 		Key:           key,
 		Value:         value,
 		CreatedIndex:  c.index,
 		ModifiedIndex: c.index,
 	}
-	c.nodes[key] = n
-	return &etcd.Response{Node: &n}, nil
+	node := *n.node
+	c.Unlock()
+	n.notify("create")
+	return &etcd.Response{Node: &node}, nil
 }
 
 func (c *fakeClient) Delete(key string, recursive bool) (*etcd.Response, error) {
 	c.Lock()
-	defer c.Unlock()
 
-	if _, ok := c.nodes[key]; !ok {
+	n, ok := c.nodes[key]
+	if !ok || n.node == nil {
+		c.Unlock()
 		return nil, &etcd.EtcdError{ErrorCode: EcodeKeyNotFound}
 	}
 
-	delete(c.nodes, key)
+	n.node = nil
+	notifyList := []*fakeNode{n}
 
 	if recursive {
-		for k, _ := range c.nodes {
+		for k, n := range c.nodes {
 			if strings.HasPrefix(k, key+"/") {
-				delete(c.nodes, k)
+				n.node = nil
+				notifyList = append(notifyList, n)
 			}
 		}
+	}
+	c.Unlock()
+	for _, n = range notifyList {
+		n.notify("delete")
 	}
 	return &etcd.Response{}, nil
 }
@@ -133,20 +193,24 @@ func (c *fakeClient) Get(key string, sortFiles, recursive bool) (*etcd.Response,
 	}
 
 	n, ok := c.nodes[key]
-	if !ok {
+	if !ok || n.node == nil {
 		return nil, &etcd.EtcdError{ErrorCode: EcodeKeyNotFound}
 	}
-	resp := &etcd.Response{Node: &n}
-	if !n.Dir {
+	node := *n.node
+	resp := &etcd.Response{Node: &node}
+	if !n.node.Dir {
 		return resp, nil
 	}
 
 	// List the directory.
 	targetDir := key + "/"
 	for k, n := range c.nodes {
+		if n.node == nil {
+			continue
+		}
 		dir, file := path.Split(k)
 		if dir == targetDir && !strings.HasPrefix(file, "_") {
-			node := n
+			node := *n.node
 			resp.Node.Nodes = append(resp.Node.Nodes, &node)
 		}
 	}
@@ -158,21 +222,26 @@ func (c *fakeClient) Get(key string, sortFiles, recursive bool) (*etcd.Response,
 
 func (c *fakeClient) Set(key string, value string, ttl uint64) (*etcd.Response, error) {
 	c.Lock()
-	defer c.Unlock()
 
 	c.index++
 
 	c.createParentDirs(key)
 	n, ok := c.nodes[key]
-	if ok {
-		n.Value = value
-		n.ModifiedIndex = c.index
-		c.nodes[key] = n
-	} else {
-		n = etcd.Node{Key: key, Value: value, CreatedIndex: c.index, ModifiedIndex: c.index}
+	if !ok {
+		n = newFakeNode(nil)
 		c.nodes[key] = n
 	}
-	return &etcd.Response{Node: &n}, nil
+	if n.node != nil {
+		n.node.Value = value
+		n.node.ModifiedIndex = c.index
+	} else {
+		n.node = &etcd.Node{Key: key, Value: value, CreatedIndex: c.index, ModifiedIndex: c.index}
+	}
+	node := *n.node
+	c.Unlock()
+
+	n.notify("set")
+	return &etcd.Response{Node: &node}, nil
 }
 
 func (c *fakeClient) SetCluster(machines []string) bool {
@@ -185,8 +254,49 @@ func (c *fakeClient) SetCluster(machines []string) bool {
 
 func (c *fakeClient) Watch(prefix string, waitIndex uint64, recursive bool,
 	receiver chan *etcd.Response, stop chan bool) (*etcd.Response, error) {
-	c.Lock()
-	defer c.Unlock()
 
-	return &etcd.Response{}, nil
+	// We need a buffered forwarderfor 2 reasons:
+	// - in the select loop below, we only write to receiver if
+	// stop has not been closed. Otherwise we introduce race
+	// conditions.
+	// - we are waiting on forwarder and taking the node mutex.
+	// fakeNode.notify write to forwarder, and also takes the node
+	// mutex. Both can deadlock each-other. By buffering the
+	// channel, we make sure one notify() call can finish and not
+	// deadlock, which is as many as we do in the unit tests.
+	forwarder := make(chan *etcd.Response, 1)
+
+	// add the watch under the lock
+	c.Lock()
+	if recursive {
+		panic("not implemented")
+	}
+	c.createParentDirs(prefix)
+	n, ok := c.nodes[prefix]
+	if !ok {
+		n = newFakeNode(nil)
+		c.nodes[prefix] = n
+	}
+	c.Unlock()
+
+	n.mu.Lock()
+	index := n.watchIndex
+	n.watchIndex++
+	n.watches[index] = forwarder
+	n.mu.Unlock()
+
+	// and wait until we stop, each action will write to forwarder, send
+	// these along. The order in select is critical: we only want to
+	// write to receiver if stop is not closed.
+	for {
+		select {
+		case <-stop:
+			n.mu.Lock()
+			delete(n.watches, index)
+			n.mu.Unlock()
+			return &etcd.Response{}, nil
+		case r := <-forwarder:
+			receiver <- r
+		}
+	}
 }

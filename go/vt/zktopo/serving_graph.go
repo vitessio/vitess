@@ -253,7 +253,7 @@ func (zkts *Server) UpdateTabletEndpoint(cell, keyspace, shard string, tabletTyp
 
 // WatchEndPoints is part of the topo.Server interface
 func (zkts *Server) WatchEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (<-chan *topo.EndPoints, chan<- struct{}, error) {
-	path := zkPathForVtName(cell, keyspace, shard, tabletType)
+	filePath := zkPathForVtName(cell, keyspace, shard, tabletType)
 
 	notifications := make(chan *topo.EndPoints, 10)
 	stopWatching := make(chan struct{})
@@ -273,14 +273,14 @@ func (zkts *Server) WatchEndPoints(cell, keyspace, shard string, tabletType topo
 	go func() {
 		for {
 			// set the watch
-			data, _, watch, err := zkts.zconn.GetW(path)
+			data, _, watch, err := zkts.zconn.GetW(filePath)
 			if err != nil {
 				if zookeeper.IsError(err, zookeeper.ZNONODE) {
 					// the parent directory doesn't exist
 					notifications <- nil
 				}
 
-				log.Errorf("Cannot set watch on %v, waiting for %v to retry: %v", path, WatchSleepDuration, err)
+				log.Errorf("Cannot set watch on %v, waiting for %v to retry: %v", filePath, WatchSleepDuration, err)
 				if waitOrInterrupted() {
 					return
 				}
@@ -306,7 +306,7 @@ func (zkts *Server) WatchEndPoints(cell, keyspace, shard string, tabletType topo
 			select {
 			case event, ok := <-watch:
 				if !ok {
-					log.Warningf("watch on %v was closed, waiting for %v to retry", path, WatchSleepDuration)
+					log.Warningf("watch on %v was closed, waiting for %v to retry", filePath, WatchSleepDuration)
 					if waitOrInterrupted() {
 						return
 					}
@@ -314,7 +314,7 @@ func (zkts *Server) WatchEndPoints(cell, keyspace, shard string, tabletType topo
 				}
 
 				if !event.Ok() {
-					log.Warningf("received a non-OK event for %v, waiting for %v to retry", path, WatchSleepDuration)
+					log.Warningf("received a non-OK event for %v, waiting for %v to retry", filePath, WatchSleepDuration)
 					if waitOrInterrupted() {
 						return
 					}

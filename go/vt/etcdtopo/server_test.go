@@ -60,6 +60,12 @@ func TestServingGraph(t *testing.T) {
 	test.CheckServingGraph(context.Background(), t, ts)
 }
 
+func TestWatchEndPoints(t *testing.T) {
+	ts := newTestServer(t, []string{"test"})
+	defer ts.Close()
+	test.CheckWatchEndPoints(context.Background(), t, ts)
+}
+
 func TestKeyspaceLock(t *testing.T) {
 	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
