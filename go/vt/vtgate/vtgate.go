@@ -20,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/tb"
 	kproto "github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
@@ -159,15 +160,7 @@ func (vtg *VTGate) Execute(ctx context.Context, query *proto.Query, reply *proto
 		reply.Result = qr
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 	} else {
-		reply.Error = err.Error()
-		if strings.Contains(reply.Error, errDupKey) {
-			infoErrors.Add("DupKey", 1)
-		} else if strings.Contains(reply.Error, errTxPoolFull) {
-			normalErrors.Add(statsKey, 1)
-		} else {
-			normalErrors.Add(statsKey, 1)
-			vtg.logExecute.Errorf("%v, query: %+v", err, query)
-		}
+		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecute)
 	}
 	reply.Session = query.Session
 	return nil
@@ -202,15 +195,7 @@ func (vtg *VTGate) ExecuteShard(ctx context.Context, query *proto.QueryShard, re
 		reply.Result = qr
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 	} else {
-		reply.Error = err.Error()
-		if strings.Contains(reply.Error, errDupKey) {
-			infoErrors.Add("DupKey", 1)
-		} else if strings.Contains(reply.Error, errTxPoolFull) {
-			normalErrors.Add(statsKey, 1)
-		} else {
-			normalErrors.Add(statsKey, 1)
-			vtg.logExecuteShard.Errorf("%v, query: %+v", err, query)
-		}
+		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecuteShard)
 	}
 	reply.Session = query.Session
 	return nil
@@ -235,15 +220,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, query *proto.Keyspace
 		reply.Result = qr
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 	} else {
-		reply.Error = err.Error()
-		if strings.Contains(reply.Error, errDupKey) {
-			infoErrors.Add("DupKey", 1)
-		} else if strings.Contains(reply.Error, errTxPoolFull) {
-			normalErrors.Add(statsKey, 1)
-		} else {
-			normalErrors.Add(statsKey, 1)
-			vtg.logExecuteKeyspaceIds.Errorf("%v, query: %+v", err, query)
-		}
+		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecuteKeyspaceIds)
 	}
 	reply.Session = query.Session
 	return nil
@@ -268,15 +245,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQu
 		reply.Result = qr
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 	} else {
-		reply.Error = err.Error()
-		if strings.Contains(reply.Error, errDupKey) {
-			infoErrors.Add("DupKey", 1)
-		} else if strings.Contains(reply.Error, errTxPoolFull) {
-			normalErrors.Add(statsKey, 1)
-		} else {
-			normalErrors.Add(statsKey, 1)
-			vtg.logExecuteKeyRanges.Errorf("%v, query: %+v", err, query)
-		}
+		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecuteKeyRanges)
 	}
 	reply.Session = query.Session
 	return nil
@@ -301,15 +270,7 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, query *proto.EntityIdsQ
 		reply.Result = qr
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 	} else {
-		reply.Error = err.Error()
-		if strings.Contains(reply.Error, errDupKey) {
-			infoErrors.Add("DupKey", 1)
-		} else if strings.Contains(reply.Error, errTxPoolFull) {
-			normalErrors.Add(statsKey, 1)
-		} else {
-			normalErrors.Add(statsKey, 1)
-			vtg.logExecuteEntityIds.Errorf("%v, query: %+v", err, query)
-		}
+		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecuteEntityIds)
 	}
 	reply.Session = query.Session
 	return nil
@@ -347,15 +308,7 @@ func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, batchQuery *proto.Batc
 		}
 		vtg.rowsReturned.Add(statsKey, rowCount)
 	} else {
-		reply.Error = err.Error()
-		if strings.Contains(reply.Error, errDupKey) {
-			infoErrors.Add("DupKey", 1)
-		} else if strings.Contains(reply.Error, errTxPoolFull) {
-			normalErrors.Add(statsKey, 1)
-		} else {
-			normalErrors.Add(statsKey, 1)
-			vtg.logExecuteBatchShard.Errorf("%v, queries: %+v", err, batchQuery)
-		}
+		reply.Error = handleExecuteError(err, statsKey, batchQuery, vtg.logExecuteBatchShard)
 	}
 	reply.Session = batchQuery.Session
 	return nil
@@ -386,15 +339,7 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, query *proto.Key
 		}
 		vtg.rowsReturned.Add(statsKey, rowCount)
 	} else {
-		reply.Error = err.Error()
-		if strings.Contains(reply.Error, errDupKey) {
-			infoErrors.Add("DupKey", 1)
-		} else if strings.Contains(reply.Error, errTxPoolFull) {
-			normalErrors.Add(statsKey, 1)
-		} else {
-			normalErrors.Add(statsKey, 1)
-			vtg.logExecuteBatchKeyspaceIds.Errorf("%v, query: %+v", err, query)
-		}
+		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecuteBatchKeyspaceIds)
 	}
 	reply.Session = query.Session
 	return nil
@@ -436,7 +381,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, query *proto.Query, sendRe
 	if query.Session != nil {
 		sendReply(&proto.QueryResult{Session: query.Session})
 	}
-	return err
+	return formatError(err)
 }
 
 // StreamExecuteKeyspaceIds executes a streaming query on the specified KeyspaceIds.
@@ -480,7 +425,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.Ke
 	if query.Session != nil {
 		sendReply(&proto.QueryResult{Session: query.Session})
 	}
-	return err
+	return formatError(err)
 }
 
 // StreamExecuteKeyRanges executes a streaming query on the specified KeyRanges.
@@ -524,7 +469,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, query *proto.KeyR
 	if query.Session != nil {
 		sendReply(&proto.QueryResult{Session: query.Session})
 	}
-	return err
+	return formatError(err)
 }
 
 // StreamExecuteShard executes a streaming query on the specified shards.
@@ -570,7 +515,7 @@ func (vtg *VTGate) StreamExecuteShard(ctx context.Context, query *proto.QuerySha
 	if query.Session != nil {
 		sendReply(&proto.QueryResult{Session: query.Session})
 	}
-	return err
+	return formatError(err)
 }
 
 // Begin begins a transaction. It has to be concluded by a Commit or Rollback.
@@ -583,13 +528,13 @@ func (vtg *VTGate) Begin(ctx context.Context, outSession *proto.Session) (err er
 // Commit commits a transaction.
 func (vtg *VTGate) Commit(ctx context.Context, inSession *proto.Session) (err error) {
 	defer handlePanic(&err)
-	return vtg.resolver.Commit(ctx, inSession)
+	return formatError(vtg.resolver.Commit(ctx, inSession))
 }
 
 // Rollback rolls back a transaction.
 func (vtg *VTGate) Rollback(ctx context.Context, inSession *proto.Session) (err error) {
 	defer handlePanic(&err)
-	return vtg.resolver.Rollback(ctx, inSession)
+	return formatError(vtg.resolver.Rollback(ctx, inSession))
 }
 
 // SplitQuery splits a query into sub queries by appending keyranges and
@@ -618,10 +563,30 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest,
 	return nil
 }
 
+func handleExecuteError(err error, statsKey []string, query interface{}, logger *logutil.ThrottledLogger) string {
+	errStr := err.Error() + ", vtgate: " + servenv.ListeningURL.String()
+	if strings.Contains(errStr, errDupKey) {
+		infoErrors.Add("DupKey", 1)
+	} else if strings.Contains(errStr, errTxPoolFull) {
+		normalErrors.Add(statsKey, 1)
+	} else {
+		normalErrors.Add(statsKey, 1)
+		logger.Errorf("%v, query: %+v", err, query)
+	}
+	return errStr
+}
+
+func formatError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%v, vtgate: %v", err, servenv.ListeningURL.String())
+}
+
 func handlePanic(err *error) {
 	if x := recover(); x != nil {
 		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
-		*err = fmt.Errorf("uncaught panic: %v", x)
+		*err = fmt.Errorf("uncaught panic: %v, vtgate: %v", x, servenv.ListeningURL.String())
 		internalErrors.Add("Panic", 1)
 	}
 }

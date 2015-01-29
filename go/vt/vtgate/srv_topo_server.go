@@ -40,6 +40,8 @@ type SrvTopoServer interface {
 
 	GetSrvKeyspace(context context.Context, cell, keyspace string) (*topo.SrvKeyspace, error)
 
+	GetSrvShard(context context.Context, cell, keyspace, shard string) (*topo.SrvShard, error)
+
 	GetEndPoints(context context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error)
 }
 
@@ -58,6 +60,7 @@ type ResilientSrvTopoServer struct {
 	mutex                 sync.Mutex
 	srvKeyspaceNamesCache map[string]*srvKeyspaceNamesEntry
 	srvKeyspaceCache      map[string]*srvKeyspaceEntry
+	srvShardCache         map[string]*srvShardEntry
 	endPointsCache        map[string]*endPointsEntry
 
 	// GetEndPoints stats.
@@ -118,6 +121,21 @@ type srvKeyspaceEntry struct {
 
 	insertionTime    time.Time
 	value            *topo.SrvKeyspace
+	lastError        error
+	lastErrorContext context.Context
+}
+
+type srvShardEntry struct {
+	// unmutable values
+	cell     string
+	keyspace string
+	shard    string
+
+	// the mutex protects any access to this structure (read or write)
+	mutex sync.Mutex
+
+	insertionTime    time.Time
+	value            *topo.SrvShard
 	lastError        error
 	lastErrorContext context.Context
 }
@@ -188,6 +206,7 @@ func NewResilientSrvTopoServer(base topo.Server, counterPrefix string) *Resilien
 
 		srvKeyspaceNamesCache: make(map[string]*srvKeyspaceNamesEntry),
 		srvKeyspaceCache:      make(map[string]*srvKeyspaceEntry),
+		srvShardCache:         make(map[string]*srvShardEntry),
 		endPointsCache:        make(map[string]*endPointsEntry),
 
 		endPointCounters: newEndPointCounters(counterPrefix),
@@ -279,6 +298,56 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(context context.Context, ce
 		} else {
 			server.counts.Add(cachedCategory, 1)
 			log.Warningf("GetSrvKeyspace(%v, %v, %v) failed: %v (returning cached value: %v %v)", context, cell, keyspace, err, entry.value, entry.lastError)
+			return entry.value, entry.lastError
+		}
+	}
+
+	// save the value we got and the current time in the cache
+	entry.insertionTime = time.Now()
+	entry.value = result
+	entry.lastError = err
+	entry.lastErrorContext = context
+	return result, err
+}
+
+// GetSrvShard returns SrvShard object for the given cell, keyspace, and shard.
+func (server *ResilientSrvTopoServer) GetSrvShard(context context.Context, cell, keyspace, shard string) (*topo.SrvShard, error) {
+	server.counts.Add(queryCategory, 1)
+
+	// find the entry in the cache, add it if not there
+	key := cell + "." + keyspace + "." + shard
+	server.mutex.Lock()
+	entry, ok := server.srvShardCache[key]
+	if !ok {
+		entry = &srvShardEntry{
+			cell:     cell,
+			keyspace: keyspace,
+			shard:    shard,
+		}
+		server.srvShardCache[key] = entry
+	}
+	server.mutex.Unlock()
+
+	// Lock the entry, and do everything holding the lock.  This
+	// means two concurrent requests will only issue one
+	// underlying query.
+	entry.mutex.Lock()
+	defer entry.mutex.Unlock()
+
+	// If the entry is fresh enough, return it
+	if time.Now().Sub(entry.insertionTime) < server.cacheTTL {
+		return entry.value, entry.lastError
+	}
+
+	// not in cache or too old, get the real value
+	result, err := server.topoServer.GetSrvShard(cell, keyspace, shard)
+	if err != nil {
+		if entry.insertionTime.IsZero() {
+			server.counts.Add(errorCategory, 1)
+			log.Errorf("GetSrvShard(%v, %v, %v, %v) failed: %v (no cached value, caching and returning error)", context, cell, keyspace, shard, err)
+		} else {
+			server.counts.Add(cachedCategory, 1)
+			log.Warningf("GetSrvShard(%v, %v, %v, %v) failed: %v (returning cached value: %v %v)", context, cell, keyspace, shard, err, entry.value, entry.lastError)
 			return entry.value, entry.lastError
 		}
 	}
@@ -488,6 +557,62 @@ func (skcsl SrvKeyspaceCacheStatusList) Swap(i, j int) {
 	skcsl[i], skcsl[j] = skcsl[j], skcsl[i]
 }
 
+// SrvShardCacheStatus is the current value for a SrvShard object
+type SrvShardCacheStatus struct {
+	Cell             string
+	Keyspace         string
+	Shard            string
+	Value            *topo.SrvShard
+	LastError        error
+	LastErrorContext context.Context
+}
+
+// StatusAsHTML returns an HTML version of our status.
+// It works best if there is data in the cache.
+func (st *SrvShardCacheStatus) StatusAsHTML() template.HTML {
+	if st.Value == nil {
+		return template.HTML("No Data")
+	}
+
+	result := "<b>Name:</b>&nbsp;" + st.Value.Name + "<br>"
+	result += "<b>KeyRange:</b>&nbsp;" + st.Value.KeyRange.String() + "<br>"
+
+	result += "<b>ServedTypes:</b>"
+	for _, servedType := range st.Value.ServedTypes {
+		result += "&nbsp;" + string(servedType)
+	}
+	result += "<br>"
+
+	result += "<b>MasterCell:</b>&nbsp;" + st.Value.MasterCell + "<br>"
+
+	result += "<b>TabletTypes:</b>"
+	for _, tabletType := range st.Value.TabletTypes {
+		result += "&nbsp;" + string(tabletType)
+	}
+	result += "<br>"
+
+	return template.HTML(result)
+}
+
+// SrvShardCacheStatusList is used for sorting
+type SrvShardCacheStatusList []*SrvShardCacheStatus
+
+// Len is part of sort.Interface
+func (sscsl SrvShardCacheStatusList) Len() int {
+	return len(sscsl)
+}
+
+// Less is part of sort.Interface
+func (sscsl SrvShardCacheStatusList) Less(i, j int) bool {
+	return sscsl[i].Cell+"."+sscsl[i].Keyspace <
+		sscsl[j].Cell+"."+sscsl[j].Keyspace
+}
+
+// Swap is part of sort.Interface
+func (sscsl SrvShardCacheStatusList) Swap(i, j int) {
+	sscsl[i], sscsl[j] = sscsl[j], sscsl[i]
+}
+
 // EndPointsCacheStatus is the current value for an EndPoints object
 type EndPointsCacheStatus struct {
 	Cell             string
@@ -546,6 +671,7 @@ func (epcsl EndPointsCacheStatusList) Swap(i, j int) {
 type ResilientSrvTopoServerCacheStatus struct {
 	SrvKeyspaceNames SrvKeyspaceNamesCacheStatusList
 	SrvKeyspaces     SrvKeyspaceCacheStatusList
+	SrvShards        SrvShardCacheStatusList
 	EndPoints        EndPointsCacheStatusList
 }
 
@@ -577,6 +703,19 @@ func (server *ResilientSrvTopoServer) CacheStatus() *ResilientSrvTopoServerCache
 		entry.mutex.Unlock()
 	}
 
+	for _, entry := range server.srvShardCache {
+		entry.mutex.Lock()
+		result.SrvShards = append(result.SrvShards, &SrvShardCacheStatus{
+			Cell:             entry.cell,
+			Keyspace:         entry.keyspace,
+			Shard:            entry.shard,
+			Value:            entry.value,
+			LastError:        entry.lastError,
+			LastErrorContext: entry.lastErrorContext,
+		})
+		entry.mutex.Unlock()
+	}
+
 	for _, entry := range server.endPointsCache {
 		entry.mutex.Lock()
 		result.EndPoints = append(result.EndPoints, &EndPointsCacheStatus{
@@ -597,6 +736,7 @@ func (server *ResilientSrvTopoServer) CacheStatus() *ResilientSrvTopoServerCache
 	// do the sorting without the mutex
 	sort.Sort(result.SrvKeyspaceNames)
 	sort.Sort(result.SrvKeyspaces)
+	sort.Sort(result.SrvShards)
 	sort.Sort(result.EndPoints)
 
 	return result

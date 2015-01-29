@@ -216,6 +216,21 @@ type Server interface {
 	// Can return ErrNoNode.
 	DeleteEndPoints(cell, keyspace, shard string, tabletType TabletType) error
 
+	// WatchEndPoints returns a channel that receives notifications
+	// every time EndPoints for the given type changes.
+	// It should receive a notification with the initial value fairly
+	// quickly after this is set. A value of nil means the Endpoints
+	// object doesn't exist or is empty. To stop watching this
+	// EndPoints object, close the stopWatching channel.
+	// If the underlying topo.Server encounters an error watching the node,
+	// it should retry on a regular basis until it can succeed.
+	// The initial error returned by this method is meant to catch
+	// the obvious bad cases (invalid cell, invalid tabletType, ...)
+	// that are never going to work. Mutiple notifications with the
+	// same contents may be sent (for instance when the serving graph
+	// is rebuilt, but the content hasn't changed).
+	WatchEndPoints(cell, keyspace, shard string, tabletType TabletType) (notifications <-chan *EndPoints, stopWatching chan<- struct{}, err error)
+
 	// UpdateSrvShard updates the serving records for a cell,
 	// keyspace, shard.
 	UpdateSrvShard(cell, keyspace, shard string, srvShard *SrvShard) error
@@ -270,15 +285,6 @@ type Server interface {
 
 	// UnlockShardForAction unlocks a shard.
 	UnlockShardForAction(keyspace, shard, lockPath, results string) error
-
-	//
-	// Supporting the local agent process, local cell.
-	//
-
-	// GetSubprocessFlags returns the flags required to run a
-	// subprocess that uses the same Server parameters as
-	// this process.
-	GetSubprocessFlags() []string
 }
 
 // Schemafier is a temporary interface for supporting vschema
@@ -289,7 +295,7 @@ type Schemafier interface {
 }
 
 // Registry for Server implementations.
-var serverImpls map[string]Server = make(map[string]Server)
+var serverImpls = make(map[string]Server)
 
 // Which implementation to use
 var topoImplementation = flag.String("topo_implementation", "zookeeper", "the topology implementation to use")
@@ -304,7 +310,7 @@ func RegisterServer(name string, ts Server) {
 	serverImpls[name] = ts
 }
 
-// Returns a specific Server by name, or nil.
+// GetServerByName returns a specific Server by name, or nil.
 func GetServerByName(name string) Server {
 	return serverImpls[name]
 }
@@ -330,19 +336,10 @@ func GetServer() Server {
 	return result
 }
 
-// Close all registered Server.
+// CloseServers closes all registered Server.
 func CloseServers() {
 	for name, ts := range serverImpls {
 		log.V(6).Infof("Closing topo.Server: %v", name)
 		ts.Close()
 	}
-}
-
-// GetSubprocessFlags returns all the flags required to launch a subprocess
-// with the exact same topology server as the current process.
-func GetSubprocessFlags() []string {
-	result := []string{
-		"-topo_implementation", *topoImplementation,
-	}
-	return append(result, GetServer().GetSubprocessFlags()...)
 }

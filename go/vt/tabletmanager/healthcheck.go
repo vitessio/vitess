@@ -20,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 )
@@ -110,6 +111,7 @@ func (agent *ActionAgent) initHeathCheck() {
 	t.Start(func() {
 		agent.runHealthCheck(topo.TabletType(*targetTabletType))
 	})
+	t.Trigger()
 }
 
 // runHealthCheck takes the action mutex, runs the health check,
@@ -216,6 +218,19 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 	agent._replicationDelay = replicationDelay
 	agent.mutex.Unlock()
 
+	// send it to our observers, after we've updated the tablet state
+	// (Tablet is a pointer, and below we will alter the Tablet
+	// record to be correct.
+	hsr := &actionnode.HealthStreamReply{
+		Tablet:              tablet.Tablet,
+		BinlogPlayerMapSize: agent.BinlogPlayerMap.size(),
+		ReplicationDelay:    replicationDelay,
+	}
+	if err != nil {
+		hsr.HealthError = err.Error()
+	}
+	defer agent.BroadcastHealthStreamReply(hsr)
+
 	// Update our topo.Server state, start with no change
 	newTabletType := tablet.Type
 	if err != nil {
@@ -260,6 +275,8 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 		log.Infof("Error updating tablet record: %v", err)
 		return
 	}
+	tablet.Health = health
+	tablet.Type = newTabletType
 
 	// Rebuild the serving graph in our cell, only if we're dealing with
 	// a serving type

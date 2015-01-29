@@ -47,7 +47,7 @@ int vt_connect(
 }
 
 void vt_close(VT_CONN *conn) {
-  if(conn->mysql) {
+  if (conn->mysql) {
     mysql_thread_init();
     mysql_close(conn->mysql);
     conn->mysql = 0;
@@ -161,10 +161,10 @@ unsigned long vt_cli_safe_read(VT_CONN *conn) {
   return len == packet_error ? 0 : len;
 }
 
-void vt_force_close(VT_CONN *conn) {
+void vt_shutdown(VT_CONN *conn) {
   mysql_thread_init();
 
-  // Close the underlying socket of a MYSQL connection object.
+  // Shut down the underlying socket of a MYSQL connection object.
   if (conn->mysql->net.vio)
-    vio_close(conn->mysql->net.vio);
+    vio_socket_shutdown(conn->mysql->net.vio, 2 /* SHUT_RDWR */);
 }

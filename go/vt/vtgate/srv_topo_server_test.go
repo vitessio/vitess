@@ -257,6 +257,9 @@ func (ft *fakeTopo) UpdateEndPoints(cell, keyspace, shard string, tabletType top
 func (ft *fakeTopo) DeleteEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) error {
 	return nil
 }
+func (ft *fakeTopo) WatchEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (notifications <-chan *topo.EndPoints, stopWatching chan<- struct{}, err error) {
+	return nil, nil, nil
+}
 func (ft *fakeTopo) UpdateSrvShard(cell, keyspace, shard string, srvShard *topo.SrvShard) error {
 	return nil
 }
@@ -276,7 +279,6 @@ func (ft *fakeTopo) LockShardForAction(ctx context.Context, keyspace, shard, con
 	return "", nil
 }
 func (ft *fakeTopo) UnlockShardForAction(keyspace, shard, lockPath, results string) error { return nil }
-func (ft *fakeTopo) GetSubprocessFlags() []string                                         { return nil }
 
 type fakeTopoRemoteMaster struct {
 	fakeTopo

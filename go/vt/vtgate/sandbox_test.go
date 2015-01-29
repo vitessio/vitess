@@ -23,15 +23,15 @@ import (
 // sandbox_test.go provides a sandbox for unit testing VTGate.
 
 const (
-	TEST_SHARDED               = "TestSharded"
-	TEST_UNSHARDED             = "TestUnsharded"
-	TEST_UNSHARDED_SERVED_FROM = "TestUnshardedServedFrom"
+	KsTestSharded             = "TestSharded"
+	KsTestUnsharded           = "TestUnsharded"
+	KsTestUnshardedServedFrom = "TestUnshardedServedFrom"
 )
 
 func init() {
 	sandboxMap = make(map[string]*sandbox)
-	createSandbox(TEST_SHARDED)
-	createSandbox(TEST_UNSHARDED)
+	createSandbox(KsTestSharded)
+	createSandbox(KsTestUnsharded)
 	tabletconn.RegisterDialer("sandbox", sandboxDialer)
 	flag.Set("tablet_protocol", "sandbox")
 }
@@ -250,20 +250,24 @@ func (sct *sandboxTopo) GetSrvKeyspace(context context.Context, cell, keyspace s
 		return nil, fmt.Errorf("topo error GetSrvKeyspace")
 	}
 	switch keyspace {
-	case TEST_UNSHARDED_SERVED_FROM:
+	case KsTestUnshardedServedFrom:
 		servedFromKeyspace, err := createUnshardedKeyspace()
 		if err != nil {
 			return nil, err
 		}
 		servedFromKeyspace.ServedFrom = map[topo.TabletType]string{
-			topo.TYPE_RDONLY: TEST_UNSHARDED,
-			topo.TYPE_MASTER: TEST_UNSHARDED}
+			topo.TYPE_RDONLY: KsTestUnsharded,
+			topo.TYPE_MASTER: KsTestUnsharded}
 		return servedFromKeyspace, nil
-	case TEST_UNSHARDED:
+	case KsTestUnsharded:
 		return createUnshardedKeyspace()
 	}
 
 	return createShardedSrvKeyspace(sand.ShardSpec, sand.KeyspaceServedFrom)
+}
+
+func (sct *sandboxTopo) GetSrvShard(context context.Context, cell, keyspace, shard string) (*topo.SrvShard, error) {
+	return nil, fmt.Errorf("Unsupported")
 }
 
 func (sct *sandboxTopo) GetEndPoints(context context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
@@ -332,7 +336,7 @@ type sandboxConn struct {
 	results []*mproto.QueryResult
 
 	// transaction id generator
-	TransactionId sync2.AtomicInt64
+	TransactionID sync2.AtomicInt64
 }
 
 func (sbc *sandboxConn) getError() error {
@@ -435,7 +439,7 @@ func (sbc *sandboxConn) Begin(context context.Context) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return sbc.TransactionId.Add(1), nil
+	return sbc.TransactionID.Add(1), nil
 }
 
 func (sbc *sandboxConn) Commit(context context.Context, transactionID int64) error {

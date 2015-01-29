@@ -5,6 +5,7 @@
 package test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/key"
@@ -12,6 +13,7 @@ import (
 	"golang.org/x/net/context"
 )
 
+// CheckServingGraph makes sure the serving graph functions work properly.
 func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 	cell := getLocalCell(t, ts)
 
@@ -165,5 +167,106 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 		k.ShardingColumnType != key.KIT_UINT64 ||
 		k.ServedFrom[topo.TYPE_REPLICA] != "other_keyspace" {
 		t.Errorf("GetSrvKeyspace(out of the blue): %v %v", err, *k)
+	}
+}
+
+// CheckWatchEndPoints makes sure WatchEndPoints works as expected
+func CheckWatchEndPoints(ctx context.Context, t *testing.T, ts topo.Server) {
+	cell := getLocalCell(t, ts)
+	keyspace := "test_keyspace"
+	shard := "-10"
+	tabletType := topo.TYPE_MASTER
+
+	// start watching, should get nil first
+	notifications, stopWatching, err := ts.WatchEndPoints(cell, keyspace, shard, tabletType)
+	if err != nil {
+		t.Fatalf("WatchEndPoints failed: %v", err)
+	}
+	ep, ok := <-notifications
+	if !ok || ep != nil {
+		t.Fatalf("first value is wrong: %v %v", ep, ok)
+	}
+
+	// update the endpoints, should get a notification
+	endPoints := topo.EndPoints{
+		Entries: []topo.EndPoint{
+			topo.EndPoint{
+				Uid:          1,
+				Host:         "host1",
+				NamedPortMap: map[string]int{"vt": 1234, "mysql": 1235, "vts": 1236},
+			},
+		},
+	}
+	if err := topo.UpdateEndPoints(ctx, ts, cell, keyspace, shard, tabletType, &endPoints); err != nil {
+		t.Fatalf("UpdateEndPoints failed: %v", err)
+	}
+	for {
+		ep, ok := <-notifications
+		if !ok {
+			t.Fatalf("watch channel is closed???")
+		}
+		if ep == nil {
+			// duplicate notification of the first value, that's OK
+			continue
+		}
+		// non-empty value, that one should be ours
+		if !reflect.DeepEqual(&endPoints, ep) {
+			t.Fatalf("first value is wrong: %v %v", ep, ok)
+		}
+		break
+	}
+
+	// delete the endpoints, should get a notification
+	if err := ts.DeleteEndPoints(cell, keyspace, shard, tabletType); err != nil {
+		t.Fatalf("DeleteEndPoints failed: %v", err)
+	}
+	for {
+		ep, ok := <-notifications
+		if !ok {
+			t.Fatalf("watch channel is closed???")
+		}
+		if ep == nil {
+			break
+		}
+
+		// duplicate notification of the first value, that's OK,
+		// but value better be good.
+		if !reflect.DeepEqual(&endPoints, ep) {
+			t.Fatalf("duplicate notification value is bad: %v", ep)
+		}
+	}
+
+	// re-create the value, a bit different, should get a notification
+	endPoints.Entries[0].Uid = 2
+	if err := topo.UpdateEndPoints(ctx, ts, cell, keyspace, shard, tabletType, &endPoints); err != nil {
+		t.Fatalf("UpdateEndPoints failed: %v", err)
+	}
+	for {
+		ep, ok := <-notifications
+		if !ok {
+			t.Fatalf("watch channel is closed???")
+		}
+		if ep == nil {
+			// duplicate notification of the closed value, that's OK
+			continue
+		}
+		// non-empty value, that one should be ours
+		if !reflect.DeepEqual(&endPoints, ep) {
+			t.Fatalf("value after delete / re-create is wrong: %v %v", ep, ok)
+		}
+		break
+	}
+
+	// close the stopWatching channel, should eventually get a closed
+	// notifications channel too
+	close(stopWatching)
+	for {
+		ep, ok := <-notifications
+		if !ok {
+			break
+		}
+		if !reflect.DeepEqual(&endPoints, ep) {
+			t.Fatalf("duplicate notification value is bad: %v", ep)
+		}
 	}
 }

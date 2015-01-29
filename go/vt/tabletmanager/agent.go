@@ -38,8 +38,8 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -90,6 +90,11 @@ type ActionAgent struct {
 
 	// replication delay the last time we got it
 	_replicationDelay time.Duration
+
+	// healthStreamMutex protects all the following fields
+	healthStreamMutex sync.Mutex
+	healthStreamIndex int
+	healthStreamMap   map[int]chan<- *actionnode.HealthStreamReply
 }
 
 func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
@@ -137,6 +142,7 @@ func NewActionAgent(
 		History:            history.New(historyLength),
 		lastHealthMapCount: stats.NewInt("LastHealthMapCount"),
 		_healthy:           fmt.Errorf("healthcheck not run yet"),
+		healthStreamMap:    make(map[int]chan<- *actionnode.HealthStreamReply),
 	}
 
 	// try to initialize the tablet if we have to
@@ -187,6 +193,7 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias to
 		History:            history.New(historyLength),
 		lastHealthMapCount: new(stats.Int),
 		_healthy:           fmt.Errorf("healthcheck not run yet"),
+		healthStreamMap:    make(map[int]chan<- *actionnode.HealthStreamReply),
 	}
 	if err := agent.Start(0, port, 0); err != nil {
 		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
@@ -429,11 +436,24 @@ func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo
 	return tablet
 }
 
-var getSubprocessFlagsFuncs []func() []string
+// BroadcastHealthStreamReply will send the HealthStreamReply to all
+// listening clients.
+func (agent *ActionAgent) BroadcastHealthStreamReply(hsr *actionnode.HealthStreamReply) {
+	agent.healthStreamMutex.Lock()
+	defer agent.healthStreamMutex.Unlock()
+	for _, c := range agent.healthStreamMap {
+		// do not block on any write
+		select {
+		case c <- hsr:
+		default:
+		}
+	}
+}
 
-func init() {
-	getSubprocessFlagsFuncs = append(getSubprocessFlagsFuncs, logutil.GetSubprocessFlags)
-	getSubprocessFlagsFuncs = append(getSubprocessFlagsFuncs, topo.GetSubprocessFlags)
-	getSubprocessFlagsFuncs = append(getSubprocessFlagsFuncs, dbconfigs.GetSubprocessFlags)
-	getSubprocessFlagsFuncs = append(getSubprocessFlagsFuncs, mysqlctl.GetSubprocessFlags)
+// HealthStreamMapSize returns the size of the healthStreamMap
+// (used for tests).
+func (agent *ActionAgent) HealthStreamMapSize() int {
+	agent.healthStreamMutex.Lock()
+	defer agent.healthStreamMutex.Unlock()
+	return len(agent.healthStreamMap)
 }

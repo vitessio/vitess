@@ -343,13 +343,13 @@ func (conn *Connection) SendCommand(command uint32, data []byte) error {
 	return nil
 }
 
-// ForceClose closes a MySQL connection forcibly at the socket level, instead of
-// gracefully through mysql_close(). This is necessary when a thread is blocked
-// in a call to ReadPacket(), and another thread wants to cancel the read. We
-// can't use mysql_close() because it isn't safe to use while another thread is
-// blocked in an I/O call on that MySQL connection.
-func (conn *Connection) ForceClose() {
-	C.vt_force_close(&conn.c)
+// Shutdown invokes the low-level shutdown call on the socket associated with
+// a MySQL connection to stop ongoing communication. This is necessary when a
+// thread is blocked in a MySQL I/O call, such as  ReadPacket(), and another
+// thread wants to cancel the operation. We can't use mysql_close() because it
+// isn't thread-safe.
+func (conn *Connection) Shutdown() {
+	C.vt_shutdown(&conn.c)
 }
 
 // GetCharset returns the current numerical values of the per-session character

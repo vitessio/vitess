@@ -70,15 +70,15 @@ public class VtGate {
       query.setSession(session);
     }
     QueryResponse response = client.execute(query);
+    if (response.getSession() != null) {
+      session = response.getSession();
+    }
     String error = response.getError();
     if (error != null) {
       if (error.contains(INTEGRITY_ERROR_MSG)) {
         throw new IntegrityException(error);
       }
       throw new DatabaseException(response.getError());
-    }
-    if (response.getSession() != null) {
-      session = response.getSession();
     }
     if (query.isStreaming()) {
       return new StreamCursor(response.getResult(), client);
@@ -91,15 +91,15 @@ public class VtGate {
       query.setSession(session);
     }
     BatchQueryResponse response = client.batchExecute(query);
+    if (response.getSession() != null) {
+      session = response.getSession();
+    }
     String error = response.getError();
     if (error != null) {
       if (error.contains(INTEGRITY_ERROR_MSG)) {
         throw new IntegrityException(error);
       }
       throw new DatabaseException(response.getError());
-    }
-    if (response.getSession() != null) {
-      session = response.getSession();
     }
     List<Cursor> cursors = new LinkedList<>();
     for (QueryResult qr : response.getResults()) {
