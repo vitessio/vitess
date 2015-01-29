@@ -46,8 +46,8 @@ go get code.google.com/p/goprotobuf/proto
 go get golang.org/x/net/context
 go get golang.org/x/tools/cmd/goimports
 go get github.com/golang/glog
-go get github.com/coreos/go-etcd/etcd
 go get github.com/golang/lint/golint
+go get github.com/tools/godep
 
 # goversion_min returns true if major.minor go version is at least some value.
 function goversion_min() {
