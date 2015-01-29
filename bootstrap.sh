@@ -14,6 +14,12 @@ if [ "$USER" == "root" ]; then
   exit 1
 fi
 
+go version 2>&1 >/dev/null
+if [ $? != 0 ]; then
+    echo "Go is not installed or is not on \$PATH"
+    exit 1
+fi
+
 . ./dev.env
 
 mkdir -p $VTROOT/dist
