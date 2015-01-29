@@ -101,7 +101,12 @@ func checkKeyspaceLockUnblocks(t *testing.T, ts topo.Server) {
 		t.Fatalf("UnlockKeyspaceForAction(): %v", err)
 	}
 
-	<-finished
+	timeout := time.After(10 * time.Second)
+	select {
+	case <-finished:
+	case <-timeout:
+		t.Fatalf("unlocking timed out")
+	}
 }
 
 // CheckShardLock checks we can take a shard lock
