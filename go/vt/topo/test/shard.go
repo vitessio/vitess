@@ -25,6 +25,7 @@ func shardEqual(left, right *topo.Shard) (bool, error) {
 	return string(lj) == string(rj), nil
 }
 
+// CheckShard verifies the Shard operations work correctly
 func CheckShard(ctx context.Context, t *testing.T, ts topo.Server) {
 	if err := ts.CreateKeyspace("test_keyspace", &topo.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
@@ -141,4 +142,8 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Errorf("GetShardNames(666): %v", err)
 	}
 
+	// test ValidateShard
+	if err := ts.ValidateShard("test_keyspace", "b0-c0"); err != nil {
+		t.Errorf("ValidateShard(test_keyspace, b0-c0) failed: %v", err)
+	}
 }
