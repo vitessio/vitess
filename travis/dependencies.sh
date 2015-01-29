@@ -25,14 +25,7 @@ fi
 sudo apt-get purge mysql* mariadb*
 
 # MariaDB
-sudo apt-get -f install \
-libmysqlclient18=10.0.15+maria-1~precise \
-libmariadbclient18=10.0.15+maria-1~precise \
-libmariadbclient-dev=10.0.15+maria-1~precise \
-mariadb-client-10.0=10.0.15+maria-1~precise \
-mariadb-client-core-10.0=10.0.15+maria-1~precise \
-mariadb-server-10.0=10.0.15+maria-1~precise \
-mariadb-server-core-10.0=10.0.15+maria-1~precise
+sudo apt-get -f install libmariadbclient18 libmariadbclient-dev mariadb-client mariadb-server
 
 # Other dependencies
 sudo apt-get install time automake libtool memcached python-dev python-mysqldb libssl-dev g++ mercurial git pkg-config bison bc

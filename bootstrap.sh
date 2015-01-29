@@ -14,6 +14,12 @@ if [ "$USER" == "root" ]; then
   exit 1
 fi
 
+go version 2>&1 >/dev/null
+if [ $? != 0 ]; then
+    echo "Go is not installed or is not on \$PATH"
+    exit 1
+fi
+
 . ./dev.env
 
 mkdir -p $VTROOT/dist
@@ -46,8 +52,8 @@ go get code.google.com/p/goprotobuf/proto
 go get golang.org/x/net/context
 go get golang.org/x/tools/cmd/goimports
 go get github.com/golang/glog
-go get github.com/coreos/go-etcd/etcd
 go get github.com/golang/lint/golint
+go get github.com/tools/godep
 
 # goversion_min returns true if major.minor go version is at least some value.
 function goversion_min() {
@@ -63,11 +69,14 @@ function goversion_min() {
   return 0
 }
 
-# Packages for uploading code coverage to coveralls.io
+# Packages for uploading code coverage to coveralls.io.
+# The cover tool needs to be installed into the Go toolchain, so it will fail
+# if Go is installed somewhere that requires root access. However, this tool
+# is optional, so we should hide any errors to avoid confusion.
 if goversion_min 1.4; then
-  go get golang.org/x/tools/cmd/cover
+  go get golang.org/x/tools/cmd/cover &> /dev/null
 else
-  go get code.google.com/p/go.tools/cmd/cover
+  go get code.google.com/p/go.tools/cmd/cover &> /dev/null
 fi
 go get github.com/modocache/gover
 go get github.com/mattn/goveralls
@@ -157,4 +166,4 @@ echo "creating git pre-commit hooks"
 ln -sf $VTTOP/misc/git/pre-commit $VTTOP/.git/hooks/pre-commit
 
 echo
-echo "source dev.env in your shell before building."
+echo "bootstrap finished - run 'source dev.env' in your shell before building."
