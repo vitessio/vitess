@@ -100,7 +100,7 @@ def prog_compile(name):
     return
   compiled_progs.append(name)
   logging.debug('Compiling %s', name)
-  run(['go', 'install'], cwd=os.path.join(vttop, 'go', 'cmd', name))
+  run(['godep', 'go', 'install'], cwd=os.path.join(vttop, 'go', 'cmd', name))
 
 # binary management: returns the full path for a binary
 # this should typically not be used outside this file, unless you want to bypass

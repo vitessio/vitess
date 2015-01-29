@@ -17,7 +17,7 @@ LDFLAGS = "\
 "
 
 build:
-	go install -ldflags ${LDFLAGS} ./go/...
+	godep go install -ldflags ${LDFLAGS} ./go/...
 
 # Set VT_TEST_FLAGS to pass flags to python tests.
 # For example, verbose output: export VT_TEST_FLAGS=-v
@@ -29,21 +29,21 @@ clean:
 	rm -rf java/vtocc-client/target java/vtocc-jdbc-driver/target third_party/acolyte
 
 unit_test:
-	go test ./go/...
+	godep go test ./go/...
 
 # Run the code coverage tools, compute aggregate.
 # If you want to improve in a directory, run:
 #   go test -coverprofile=coverage.out && go tool cover -html=coverage.out
 unit_test_cover:
-	go test -cover ./go/... | misc/parse_cover.py
+	godep go test -cover ./go/... | misc/parse_cover.py
 
 unit_test_race:
-	go test -race ./go/...
+	godep go test -race ./go/...
 
 # Run coverage and upload to coveralls.io.
 # Requires the secret COVERALLS_TOKEN env variable to be set.
 unit_test_goveralls:
-	go list -f '{{if len .TestGoFiles}}go test -coverprofile={{.Dir}}/.coverprofile {{.ImportPath}}{{end}}' ./go/... | xargs -i sh -c {}
+	go list -f '{{if len .TestGoFiles}}godep go test -coverprofile={{.Dir}}/.coverprofile {{.ImportPath}}{{end}}' ./go/... | xargs -i sh -c {}
 	gover ./go/
 	# Travis doesn't set the token for forked pull requests, so skip
 	# upload if COVERALLS_TOKEN is unset.
@@ -150,7 +150,7 @@ ci_skip_integration_test:
 	$(call run_integration_tests, $(ci_skip_integration_test_files))
 
 worker_test:
-	go test ./go/vt/worker/
+	godep go test ./go/vt/worker/
 	$(call run_integration_tests, $(worker_integration_test_files))
 
 integration_test: small_integration_test medium_integration_test large_integration_test ci_skip_integration_test

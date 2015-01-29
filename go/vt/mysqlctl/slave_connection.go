@@ -127,8 +127,8 @@ func (sc *SlaveConnection) StartBinlogDump(startPos proto.ReplicationPosition) (
 // The ID for the slave connection is recycled back into the pool.
 func (sc *SlaveConnection) Close() {
 	if sc.Connection != nil {
-		log.Infof("force-closing slave socket to unblock reads")
-		sc.Connection.ForceClose()
+		log.Infof("shutting down slave socket to unblock reads")
+		sc.Connection.Shutdown()
 
 		log.Infof("waiting for slave dump thread to end")
 		sc.svm.Stop()
@@ -142,7 +142,7 @@ func (sc *SlaveConnection) Close() {
 
 // makeBinlogDumpCommand builds a buffer containing the data for a MySQL
 // COM_BINLOG_DUMP command.
-func makeBinlogDumpCommand(pos uint32, flags uint16, server_id uint32, filename string) []byte {
+func makeBinlogDumpCommand(pos uint32, flags uint16, serverID uint32, filename string) []byte {
 	var buf bytes.Buffer
 	buf.Grow(4 + 2 + 4 + len(filename))
 
@@ -151,7 +151,7 @@ func makeBinlogDumpCommand(pos uint32, flags uint16, server_id uint32, filename 
 	// binlog_flags (2 bytes)
 	binary.Write(&buf, binary.LittleEndian, flags)
 	// server_id of slave (4 bytes)
-	binary.Write(&buf, binary.LittleEndian, server_id)
+	binary.Write(&buf, binary.LittleEndian, serverID)
 	// binlog_filename (string with no terminator and no length)
 	buf.WriteString(filename)
 
