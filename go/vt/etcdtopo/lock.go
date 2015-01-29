@@ -165,7 +165,7 @@ func waitForLock(ctx context.Context, client Client, lockPath string, waitIndex 
 					return nil
 				}
 			} else {
-				if resp.Action == "delete" {
+				if resp.Action == "compareAndDelete" {
 					return nil
 				}
 			}
