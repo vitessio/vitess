@@ -16,7 +16,6 @@ typedef struct vt_conn {
   unsigned int num_fields;
   MYSQL_FIELD  *fields;
   MYSQL_RES    *result;
-  unsigned int force_closed;
 } VT_CONN;
 
 // vt_connect: Create a connection. You must call vt_close even if vt_connect fails.
@@ -64,6 +63,6 @@ my_bool vt_simple_command(
 // or 0 if there was an error.
 unsigned long vt_cli_safe_read(VT_CONN *conn);
 
-// vt_force_close: Kill a MySQL connection at the socket level, to unblock
+// vt_shutdown: Kill a MySQL connection at the socket level, to unblock
 // a thread that is waiting on a read call.
-void vt_force_close(VT_CONN *conn);
+void vt_shutdown(VT_CONN *conn);

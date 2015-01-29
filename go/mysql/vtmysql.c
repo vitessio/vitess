@@ -39,7 +39,6 @@ int vt_connect(
 
   mysql_thread_init();
   conn->mysql = mysql_init(0);
-  conn->force_closed = 0;
   c = mysql_real_connect(conn->mysql, host, user, passwd, db, port, unix_socket, client_flag);
   if(!c) {
     return 1;
@@ -50,16 +49,6 @@ int vt_connect(
 void vt_close(VT_CONN *conn) {
   if (conn->mysql) {
     mysql_thread_init();
-
-    // If the socket was force-closed by vt_force_close, we should tell
-    // mysql_close() not to try using it to send a QUIT command.
-    // We also need to free the vio resources since we were the ones who
-    // called vio_close.
-    if (conn->force_closed) {
-      vio_delete(conn->mysql->net.vio);
-      conn->mysql->net.vio = 0;
-    }
-
     mysql_close(conn->mysql);
     conn->mysql = 0;
   }
@@ -172,18 +161,10 @@ unsigned long vt_cli_safe_read(VT_CONN *conn) {
   return len == packet_error ? 0 : len;
 }
 
-void vt_force_close(VT_CONN *conn) {
+void vt_shutdown(VT_CONN *conn) {
   mysql_thread_init();
 
-  // Close the underlying socket of a MYSQL connection object.
-  if (conn->mysql->net.vio) {
-    vio_close(conn->mysql->net.vio);
-
-    // Ideally, we would call vio_delete here and set mysql->net.vio to 0
-    // to signal that the socket is closed. However, we can't safely do
-    // that until the thread that's blocked in a read call returns.
-    // So we mark that it needs to be done, and do it in vt_close before
-    // calling mysql_close.
-    conn->force_closed = 1;
-  }
+  // Shut down the underlying socket of a MYSQL connection object.
+  if (conn->mysql->net.vio)
+    vio_socket_shutdown(conn->mysql->net.vio, 2 /* SHUT_RDWR */);
 }
