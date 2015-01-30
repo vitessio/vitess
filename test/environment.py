@@ -128,3 +128,7 @@ def binary_argstr(name):
 # binary management for the MySQL distribution.
 def mysql_binary_path(name):
   return os.path.join(vt_mysql_root, 'bin', name)
+
+# add environment-specific command-line options
+def add_options(parser):
+  pass
