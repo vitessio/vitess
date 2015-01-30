@@ -27,6 +27,8 @@ type Keyspace struct {
 ```
 
 ```
+# NOTE: You need to source zookeeper client config file, like so:
+#  export ZK_CLIENT_CONFIG=/path/to/zk/client.conf
 $ zk ls /zk/global/vt/keyspaces/ruser
 action
 actionlog
