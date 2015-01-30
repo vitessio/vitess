@@ -163,7 +163,6 @@ java_test:
 	cd java && mvn verify
 
 java_vtgate_client_test:
-	mvn -f java/gorpc/pom.xml clean install -DskipTests
 	mvn -f java/vtgate-client/pom.xml clean verify
 
 v3_test:

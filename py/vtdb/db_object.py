@@ -85,6 +85,26 @@ def create_cursor_from_old_cursor(old_cursor, table_class):
   return cursor
 
 
+def create_stream_cursor_from_cursor(original_cursor):
+  """
+  This method creates streaming cursor from a regular cursor.
+
+  Args:
+    original_cursor: Cursor of VTGateCursor type
+
+  Returns:
+    Returns StreamVTGateCursor that is not writable.
+  """
+  if not isinstance(original_cursor, vtgate_cursor.VTGateCursor):
+    raise dbexceptions.ProgrammingError(
+        "Original cursor should be of VTGateCursor type.")
+  stream_cursor = vtgate_cursor.StreamVTGateCursor(
+      original_cursor._conn, original_cursor.keyspace,
+      original_cursor.tablet_type,
+      keyspace_ids=original_cursor.keyspace_ids,
+      keyranges=original_cursor.keyranges,
+      writable=False)
+  return stream_cursor
 
 
 def db_wrapper(method):
@@ -211,3 +231,40 @@ class DBObjectBase(object):
     if cursor.rowcount == 0:
       raise dbexceptions.DatabaseError("DB Row not found")
     return cursor.rowcount
+
+  @db_class_method
+  def select_by_columns_streaming(class_, cursor, where_column_value_pairs,
+                        columns_list = None,order_by=None, group_by=None,
+                        limit=None, fetch_size=100, **kwargs):
+    if class_.columns_list is None:
+      raise dbexceptions.ProgrammingError("DB class should define columns_list")
+
+    if columns_list is None:
+      columns_list = class_.columns_list
+    query, bind_vars = sql_builder.select_by_columns_query(columns_list,
+                                                           class_.table_name,
+                                                           where_column_value_pairs,
+                                                           order_by=order_by,
+                                                           group_by=group_by,
+                                                           limit=limit,
+                                                           **kwargs)
+
+    return class_._stream_fetch(cursor, query, bind_vars, fetch_size)
+
+  @classmethod
+  def _stream_fetch(class_, cursor, query, bind_vars, fetch_size=100):
+    stream_cursor = create_stream_cursor_from_cursor(cursor)
+    stream_cursor.execute(query, bind_vars)
+    while True:
+      rows = stream_cursor.fetchmany(size=fetch_size)
+
+      # NOTE: fetchmany returns an empty list when there are no more items.
+      # But an empty generator is still "true", so we have to count if we
+      # actually returned anything.
+      i = 0
+      for r in rows:
+        i += 1
+        yield sql_builder.DBRow(class_.columns_list, r)
+      if i == 0:
+        break
+    stream_cursor.close()

@@ -352,7 +352,28 @@ class TestRangeSharded(unittest.TestCase):
           context.get_cursor(keyrange='-80'), where_column_value_pairs)
       rows2 = db_class_sharded.VtUser.select_by_columns(
           context.get_cursor(keyrange='80-'), where_column_value_pairs)
-      self.assertEqual(len(rows1) + len(rows2), len(self.user_id_list), "wrong number of rows fetched")
+      fetched_rows = len(rows1) + len(rows2)
+      expected = len(self.user_id_list)
+      self.assertEqual(fetched_rows, expected, "wrong number of rows fetched expected:%d got:%d" % (expected, fetched_rows))
+
+  def test_scatter_read(self):
+    where_column_value_pairs = []
+    with database_context.ReadFromMaster(self.dc) as context:
+      rows = db_class_sharded.VtUser.select_by_columns(
+          context.get_cursor(keyrange=keyrange_constants.NON_PARTIAL_KEYRANGE),
+          where_column_value_pairs)
+      self.assertEqual(len(rows), len(self.user_id_list), "wrong number of rows fetched, expecting %d got %d" % (len(self.user_id_list), len(rows)))
+
+  def test_streaming_read(self):
+    where_column_value_pairs = []
+    with database_context.ReadFromMaster(self.dc) as context:
+      rows = db_class_sharded.VtUser.select_by_columns_streaming(
+          context.get_cursor(keyrange=keyrange_constants.NON_PARTIAL_KEYRANGE),
+          where_column_value_pairs)
+      got_user_id_list = []
+      for r in rows:
+        got_user_id_list.append(r.id)
+      self.assertEqual(len(got_user_id_list), len(self.user_id_list), "wrong number of rows fetched")
 
   def update_columns(self):
     with database_context.WriteTransaction(self.dc) as context:
