@@ -8,10 +8,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
+	"time"
 
+	"github.com/coreos/go-etcd/etcd"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
 )
+
+// WatchSleepDuration is how many seconds interval to poll for in case
+// we get an error from the Watch method. It is exported so individual
+// test and main programs can change it.
+var WatchSleepDuration = 30 * time.Second
 
 // GetSrvTabletTypesPerShard implements topo.Server.
 func (s *Server) GetSrvTabletTypesPerShard(cellName, keyspace, shard string) ([]topo.TabletType, error) {
@@ -231,6 +239,75 @@ func (s *Server) UpdateTabletEndpoint(cell, keyspace, shard string, tabletType t
 }
 
 // WatchEndPoints is part of the topo.Server interface
-func (s *Server) WatchEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (<-chan *topo.EndPoints, chan<- struct{}, error) {
-	return nil, nil, fmt.Errorf("NYI")
+func (s *Server) WatchEndPoints(cellName, keyspace, shard string, tabletType topo.TabletType) (<-chan *topo.EndPoints, chan<- struct{}, error) {
+	cell, err := s.getCell(cellName)
+	if err != nil {
+		return nil, nil, fmt.Errorf("WatchEndPoints cannot get cell: %v", err)
+	}
+	filePath := endPointsFilePath(keyspace, shard, string(tabletType))
+
+	notifications := make(chan *topo.EndPoints, 10)
+	stopWatching := make(chan struct{})
+
+	// The watch go routine will stop if the 'stop' channel is closed.
+	// Otherwise it will try to watch everything in a loop, and send events
+	// to the 'watch' channel.
+	watch := make(chan *etcd.Response)
+	stop := make(chan bool)
+	go func() {
+		// get the current version of the file
+		ep, modifiedVersion, err := s.getEndPoints(cellName, keyspace, shard, tabletType)
+		if err != nil {
+			// node doesn't exist
+			modifiedVersion = 0
+			ep = nil
+		}
+
+		// re-check for stop here to be safe, in case the
+		// getEndPoints took a long time
+		select {
+		case <-stop:
+			return
+		case notifications <- ep:
+		}
+
+		for {
+			if _, err := cell.Client.Watch(filePath, uint64(modifiedVersion), false /* recursive */, watch, stop); err != nil {
+				log.Errorf("Watch on %v failed, waiting for %v to retry: %v", filePath, WatchSleepDuration, err)
+				timer := time.After(WatchSleepDuration)
+				select {
+				case <-stop:
+					return
+				case <-timer:
+				}
+			}
+		}
+	}()
+
+	// This go routine is the main event handling routine:
+	// - it will stop if stopWatching is closed.
+	// - if it receives a notification from the watch, it will forward it
+	// to the notifications channel.
+	go func() {
+		for {
+			select {
+			case resp := <-watch:
+				var ep *topo.EndPoints
+				if resp.Node != nil && resp.Node.Value != "" {
+					ep = &topo.EndPoints{}
+					if err := json.Unmarshal([]byte(resp.Node.Value), ep); err != nil {
+						log.Errorf("failed to Unmarshal EndPoints for %v: %v", filePath, err)
+						continue
+					}
+				}
+				notifications <- ep
+			case <-stopWatching:
+				close(stop)
+				close(notifications)
+				return
+			}
+		}
+	}()
+
+	return notifications, stopWatching, nil
 }

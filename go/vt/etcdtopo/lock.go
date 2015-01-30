@@ -161,11 +161,11 @@ func waitForLock(ctx context.Context, client Client, lockPath string, waitIndex 
 			return convertError(err)
 		case resp := <-watch:
 			if mustExist {
-				if resp.Node != nil && resp.Node.Value == "" {
+				if resp.Node != nil && resp.Node.Value == openLockContents {
 					return nil
 				}
 			} else {
-				if resp.Action == "delete" {
+				if resp.Action == "compareAndDelete" {
 					return nil
 				}
 			}
