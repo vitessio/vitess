@@ -1,10 +1,12 @@
 #!/bin/bash
 
 # This is an example script that stops vtgate.
-# It assumes that kubernetes/cluster/kubectl.sh is in the path.
+
+script_root=`dirname "${BASH_SOURCE}"`
+source $script_root/env.sh
 
 echo "Stopping vtgate replicationController..."
-kubectl.sh stop replicationController vtgate
+$KUBECTL stop replicationController vtgate
 
 echo "Deleting vtgate service..."
-kubectl.sh delete service vtgate
+$KUBECTL delete service vtgate

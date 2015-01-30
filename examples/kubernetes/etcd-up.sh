@@ -7,10 +7,11 @@
 # existing cluster. In this example, we use an externally-run discovery
 # service, but you can use your own. See the etcd docs for more:
 # https://github.com/coreos/etcd/blob/v0.4.6/Documentation/cluster-discovery.md
-#
-# This script assumes that kubernetes/cluster/kubectl.sh is in the path.
 
 set -e
+
+script_root=`dirname "${BASH_SOURCE}"`
+source $script_root/env.sh
 
 for cell in 'global' 'test'; do
   # Generate a discovery token.
@@ -21,12 +22,12 @@ for cell in 'global' 'test'; do
   echo "Creating etcd service for $cell cell..."
   cat etcd-service-template.yaml | \
     sed -e "s/{{cell}}/$cell/g" | \
-    kubectl.sh create -f -
+    $KUBECTL create -f -
 
   # Create the replication controller.
   echo "Creating etcd replicationController for $cell cell..."
   cat etcd-controller-template.yaml | \
     sed -e "s/{{cell}}/$cell/g" -e "s,{{discovery}},$discovery,g" | \
-    kubectl.sh create -f -
+    $KUBECTL create -f -
 done
 

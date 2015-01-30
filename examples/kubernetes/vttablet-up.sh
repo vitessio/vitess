@@ -1,9 +1,11 @@
 #!/bin/bash
 
 # This is an example script that creates a single shard vttablet deployment.
-# It assumes that kubernetes/cluster/kubectl.sh is in the path.
 
 set -e
+
+script_root=`dirname "${BASH_SOURCE}"`
+source $script_root/env.sh
 
 # Create the pods for shard-0
 cell='test'
@@ -29,5 +31,5 @@ for uid_index in 0 1 2; do
   # Instantiate template and send to kubectl.
   cat vttablet-pod-template.yaml | \
     sed -e "$sed_script" | \
-    kubectl.sh create -f -
+    $KUBECTL create -f -
 done
