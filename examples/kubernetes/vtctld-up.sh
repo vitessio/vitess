@@ -1,12 +1,14 @@
 #!/bin/bash
 
 # This is an example script that starts vtctld.
-# It assumes that kubernetes/cluster/kubectl.sh is in the path.
 
 set -e
 
+script_root=`dirname "${BASH_SOURCE}"`
+source $script_root/env.sh
+
 echo "Creating vtctld service..."
-kubectl.sh create -f vtctld-service.yaml
+$KUBECTL create -f vtctld-service.yaml
 
 echo "Creating vtctld pod..."
-kubectl.sh create -f vtctld-pod.yaml
+$KUBECTL create -f vtctld-pod.yaml

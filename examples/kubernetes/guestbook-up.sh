@@ -1,12 +1,14 @@
 #!/bin/bash
 
 # This is an example script that starts a guestbook replicationController.
-# It assumes that kubernetes/cluster/kubectl.sh is in the path.
 
 set -e
 
+script_root=`dirname "${BASH_SOURCE}"`
+source $script_root/env.sh
+
 echo "Creating guestbook service..."
-kubectl.sh create -f guestbook-service.yaml
+$KUBECTL create -f guestbook-service.yaml
 
 echo "Creating guestbook replicationController..."
-kubectl.sh create -f guestbook-controller.yaml
+$KUBECTL create -f guestbook-controller.yaml
