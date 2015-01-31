@@ -82,7 +82,7 @@ func AddStatusPart() {
 		status := queryserviceStatus{
 			State: SqlQueryRpcService.GetState(),
 		}
-		rates := QPSRates.Get()
+		rates := qpsRates.Get()
 		if qps, ok := rates["All"]; ok && len(qps) > 0 {
 			status.CurrentQPS = qps[0]
 

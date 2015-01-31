@@ -15,60 +15,70 @@ import (
 	"sort"
 	"strings"
 
-	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/cmd/vtctld/proto"
+	"github.com/youtube/vitess/go/netutil"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
 )
 
 func init() {
-	// handles /zk paths
-	ts := topo.GetServerByName("zookeeper")
-	if ts == nil {
-		log.Error("zookeeper explorer disabled: no zktopo.Server")
-		return
-	}
-
-	HandleExplorer("zk", "/zk/", "zk.html", NewZkExplorer(ts.(*zktopo.Server).GetZConn()))
+	// Wait until flags are parsed, so we can check which topo server is in use.
+	servenv.OnRun(func() {
+		if zkServer, ok := topo.GetServer().(*zktopo.Server); ok {
+			HandleExplorer("zk", "/zk/", "zk.html", NewZkExplorer(zkServer.GetZConn()))
+		}
+	})
 }
 
+// ZkExplorer implements Explorer
 type ZkExplorer struct {
 	zconn zk.Conn
 }
 
+// NewZkExplorer returns an Explorer implementation for Zookeeper
 func NewZkExplorer(zconn zk.Conn) *ZkExplorer {
 	return &ZkExplorer{zconn}
 }
 
+// GetKeyspacePath is part of the Explorer interface
 func (ex ZkExplorer) GetKeyspacePath(keyspace string) string {
 	return path.Join("/zk/global/vt/keyspaces", keyspace)
 }
 
+// GetShardPath is part of the Explorer interface
 func (ex ZkExplorer) GetShardPath(keyspace, shard string) string {
 	return path.Join("/zk/global/vt/keyspaces", keyspace, "shards", shard)
 }
 
+// GetSrvKeyspacePath is part of the Explorer interface
 func (ex ZkExplorer) GetSrvKeyspacePath(cell, keyspace string) string {
 	return path.Join("/zk", cell, "vt/ns", keyspace)
 }
 
+// GetSrvShardPath is part of the Explorer interface
 func (ex ZkExplorer) GetSrvShardPath(cell, keyspace, shard string) string {
 	return path.Join("/zk", cell, "/vt/ns", keyspace, shard)
 }
 
+// GetSrvTypePath is part of the Explorer interface
 func (ex ZkExplorer) GetSrvTypePath(cell, keyspace, shard string, tabletType topo.TabletType) string {
 	return path.Join("/zk", cell, "/vt/ns", keyspace, shard, string(tabletType))
 }
 
+// GetTabletPath is part of the Explorer interface
 func (ex ZkExplorer) GetTabletPath(alias topo.TabletAlias) string {
-	return path.Join("/zk", alias.Cell, "vt/tablets", alias.TabletUidStr())
+	return path.Join("/zk", alias.Cell, "vt/tablets", alias.TabletUIDStr())
 }
 
+// GetReplicationSlaves is part of the Explorer interface
 func (ex ZkExplorer) GetReplicationSlaves(cell, keyspace, shard string) string {
 	return path.Join("/zk", cell, "vt/replication", keyspace, shard)
 }
 
-func (ex ZkExplorer) HandlePath(actionRepo *ActionRepository, zkPath string, r *http.Request) interface{} {
+// HandlePath is part of the Explorer interface
+func (ex ZkExplorer) HandlePath(actionRepo proto.ActionRepository, zkPath string, r *http.Request) interface{} {
 	result := NewZkResult(zkPath)
 
 	if zkPath == "/zk" {
@@ -123,14 +133,11 @@ func (ex ZkExplorer) addTabletLinks(data string, result *ZkResult) {
 	}
 
 	if port, ok := t.Portmap["vt"]; ok {
-		result.Links["status"] = template.URL(fmt.Sprintf("http://%v:%v/debug/status", t.Hostname, port))
-	}
-
-	if !t.Parent.IsZero() {
-		result.Links["parent"] = template.URL(fmt.Sprintf("/zk/%v/vt/tablets/%v", t.Parent.Cell, t.Parent.TabletUidStr()))
+		result.Links["status"] = template.URL(fmt.Sprintf("http://%v/debug/status", netutil.JoinHostPort(t.Hostname, port)))
 	}
 }
 
+// ZkResult is the node for a zk path
 type ZkResult struct {
 	Path     string
 	Data     string
@@ -140,6 +147,7 @@ type ZkResult struct {
 	Error    string
 }
 
+// NewZkResult creates a new ZkResult for the path with no links nor actions.
 func NewZkResult(zkPath string) *ZkResult {
 	return &ZkResult{
 		Links:   make(map[string]template.URL),

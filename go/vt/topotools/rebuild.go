@@ -10,26 +10,26 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 // UseSrvShardLocks is a deprecated flag. We leave it here until it's removed
 // from all invocations of the tools.
 var UseSrvShardLocks = flag.Bool("use_srv_shard_locks", true, "DEPRECATED: If true, takes the SrvShard lock for each shard being rebuilt")
 
-// Update shard file with new master, replicas, etc.
+// RebuildShard updates the SrvShard objects and underlying serving graph.
 //
 // Re-read from TopologyServer to make sure we are using the side
 // effects of all actions.
 //
 // This function locks individual SvrShard paths, so it doesn't need a lock
 // on the shard.
-func RebuildShard(ctx context.Context, log logutil.Logger, ts topo.Server, keyspace, shard string, cells []string, timeout time.Duration, interrupted chan struct{}) (*topo.ShardInfo, error) {
+func RebuildShard(ctx context.Context, log logutil.Logger, ts topo.Server, keyspace, shard string, cells []string, lockTimeout time.Duration) (*topo.ShardInfo, error) {
 	log.Infof("RebuildShard %v/%v", keyspace, shard)
 
 	span := trace.NewSpanFromContext(ctx)
@@ -65,7 +65,9 @@ func RebuildShard(ctx context.Context, log logutil.Logger, ts topo.Server, keysp
 			// Lock the SrvShard so we don't race with other rebuilds of the same
 			// shard in the same cell (e.g. from our peer tablets).
 			actionNode := actionnode.RebuildSrvShard()
-			lockPath, err := actionNode.LockSrvShard(ctx, ts, cell, keyspace, shard, timeout, interrupted)
+			lockCtx, cancel := context.WithTimeout(ctx, lockTimeout)
+			lockPath, err := actionNode.LockSrvShard(lockCtx, ts, cell, keyspace, shard)
+			cancel()
 			if err != nil {
 				rec.RecordError(err)
 				return
@@ -81,9 +83,6 @@ func RebuildShard(ctx context.Context, log logutil.Logger, ts topo.Server, keysp
 			// add all relevant tablets to the map
 			for _, rl := range sri.ReplicationLinks {
 				tabletsAsMap[rl.TabletAlias] = true
-				if rl.Parent.Cell == cell {
-					tabletsAsMap[rl.Parent] = true
-				}
 			}
 
 			// convert the map to a list
@@ -93,7 +92,7 @@ func RebuildShard(ctx context.Context, log logutil.Logger, ts topo.Server, keysp
 			}
 
 			// read all the Tablet records
-			tablets, err := topo.GetTabletMap(ts, aliases)
+			tablets, err := topo.GetTabletMap(ctx, ts, aliases)
 			switch err {
 			case nil:
 				// keep going, we're good
@@ -108,7 +107,7 @@ func RebuildShard(ctx context.Context, log logutil.Logger, ts topo.Server, keysp
 			rebuildErr := rebuildCellSrvShard(ctx, log, ts, shardInfo, cell, tablets)
 
 			// and unlock
-			if err := actionNode.UnlockSrvShard(ts, cell, keyspace, shard, lockPath, rebuildErr); err != nil {
+			if err := actionNode.UnlockSrvShard(ctx, ts, cell, keyspace, shard, lockPath, rebuildErr); err != nil {
 				rec.RecordError(err)
 			}
 		}(cell)
@@ -142,9 +141,7 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 		if !tablet.IsInReplicationGraph() {
 			// only valid case is a scrapped master in the
 			// catastrophic reparent case
-			if tablet.Parent.Uid != topo.NO_TABLET {
-				log.Warningf("Tablet %v should not be in the replication graph, please investigate (it is being ignored in the rebuild)", tablet.Alias)
-			}
+			log.Warningf("Tablet %v should not be in the replication graph, please investigate (it is being ignored in the rebuild)", tablet.Alias)
 			continue
 		}
 

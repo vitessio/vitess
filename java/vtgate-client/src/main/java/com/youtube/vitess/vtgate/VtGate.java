@@ -70,15 +70,15 @@ public class VtGate {
       query.setSession(session);
     }
     QueryResponse response = client.execute(query);
+    if (response.getSession() != null) {
+      session = response.getSession();
+    }
     String error = response.getError();
     if (error != null) {
       if (error.contains(INTEGRITY_ERROR_MSG)) {
         throw new IntegrityException(error);
       }
       throw new DatabaseException(response.getError());
-    }
-    if (response.getSession() != null) {
-      session = response.getSession();
     }
     if (query.isStreaming()) {
       return new StreamCursor(response.getResult(), client);
@@ -91,15 +91,15 @@ public class VtGate {
       query.setSession(session);
     }
     BatchQueryResponse response = client.batchExecute(query);
+    if (response.getSession() != null) {
+      session = response.getSession();
+    }
     String error = response.getError();
     if (error != null) {
       if (error.contains(INTEGRITY_ERROR_MSG)) {
         throw new IntegrityException(error);
       }
       throw new DatabaseException(response.getError());
-    }
-    if (response.getSession() != null) {
-      session = response.getSession();
     }
     List<Cursor> cursors = new LinkedList<>();
     for (QueryResult qr : response.getResults()) {
@@ -114,9 +114,9 @@ public class VtGate {
    * instances. Batch jobs or MapReduce jobs that needs to scan all rows can use these queries to
    * parallelize full table scans.
    */
-  public Map<Query, Long> splitQuery(String keyspace, String sql, int splitsPerShard)
+  public Map<Query, Long> splitQuery(String keyspace, String sql, int splitCount)
       throws ConnectionException, DatabaseException {
-    SplitQueryRequest req = new SplitQueryRequest(sql, keyspace, splitsPerShard);
+    SplitQueryRequest req = new SplitQueryRequest(sql, keyspace, splitCount);
     SplitQueryResponse response = client.splitQuery(req);
     if (response.getError() != null) {
       throw new DatabaseException(response.getError());

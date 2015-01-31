@@ -4,7 +4,12 @@
 
 package planbuilder
 
-import "github.com/youtube/vitess/go/vt/sqlparser"
+import (
+	"bytes"
+	"fmt"
+
+	"github.com/youtube/vitess/go/vt/sqlparser"
+)
 
 func buildUpdatePlan(upd *sqlparser.Update, schema *Schema) *Plan {
 	plan := &Plan{
@@ -12,42 +17,40 @@ func buildUpdatePlan(upd *sqlparser.Update, schema *Schema) *Plan {
 		Rewritten: generateQuery(upd),
 	}
 	tablename := sqlparser.GetTableName(upd.Table)
-	plan.Table, plan.Reason = schema.LookupTable(tablename)
+	plan.Table, plan.Reason = schema.FindTable(tablename)
 	if plan.Reason != "" {
 		return plan
 	}
-	if plan.Table.Keyspace.ShardingScheme == Unsharded {
+	if !plan.Table.Keyspace.Sharded {
 		plan.ID = UpdateUnsharded
 		return plan
 	}
 
-	getWhereRouting(upd.Where, plan)
+	getWhereRouting(upd.Where, plan, true)
 	switch plan.ID {
-	case SelectSingleShardKey:
-		plan.ID = UpdateSingleShardKey
-	case SelectSingleLookup:
-		plan.ID = UpdateSingleLookup
-	case SelectMultiShardKey, SelectMultiLookup, SelectScatter:
+	case SelectEqual:
+		plan.ID = UpdateEqual
+	case SelectIN, SelectScatter, SelectKeyrange:
 		plan.ID = NoPlan
-		plan.Reason = "too complex"
+		plan.Reason = "update has multi-shard where clause"
 		return plan
 	default:
 		panic("unexpected")
 	}
-	if isIndexChanging(upd.Exprs, plan.Table.Indexes) {
+	if isIndexChanging(upd.Exprs, plan.Table.ColVindexes) {
 		plan.ID = NoPlan
 		plan.Reason = "index is changing"
 	}
 	return plan
 }
 
-func isIndexChanging(setClauses sqlparser.UpdateExprs, indexes []*Index) bool {
-	indexCols := make([]string, len(indexes))
-	for i, index := range indexes {
-		indexCols[i] = index.Column
+func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*ColVindex) bool {
+	vindexCols := make([]string, len(colVindexes))
+	for i, index := range colVindexes {
+		vindexCols[i] = index.Col
 	}
 	for _, assignment := range setClauses {
-		if sqlparser.StringIn(string(assignment.Name.Name), indexCols...) {
+		if sqlparser.StringIn(string(assignment.Name.Name), vindexCols...) {
 			return true
 		}
 	}
@@ -60,26 +63,43 @@ func buildDeletePlan(del *sqlparser.Delete, schema *Schema) *Plan {
 		Rewritten: generateQuery(del),
 	}
 	tablename := sqlparser.GetTableName(del.Table)
-	plan.Table, plan.Reason = schema.LookupTable(tablename)
+	plan.Table, plan.Reason = schema.FindTable(tablename)
 	if plan.Reason != "" {
 		return plan
 	}
-	if plan.Table.Keyspace.ShardingScheme == Unsharded {
+	if !plan.Table.Keyspace.Sharded {
 		plan.ID = DeleteUnsharded
 		return plan
 	}
 
-	getWhereRouting(del.Where, plan)
+	getWhereRouting(del.Where, plan, true)
 	switch plan.ID {
-	case SelectSingleShardKey:
-		plan.ID = DeleteSingleShardKey
-	case SelectSingleLookup:
-		plan.ID = DeleteSingleLookup
-	case SelectMultiShardKey, SelectMultiLookup, SelectScatter:
+	case SelectEqual:
+		plan.ID = DeleteEqual
+		plan.Subquery = generateDeleteSubquery(del, plan.Table)
+	case SelectIN, SelectScatter, SelectKeyrange:
 		plan.ID = NoPlan
-		plan.Reason = "too complex"
+		plan.Reason = "delete has multi-shard where clause"
 	default:
 		panic("unexpected")
 	}
 	return plan
+}
+
+func generateDeleteSubquery(del *sqlparser.Delete, table *Table) string {
+	if len(table.Owned) == 0 {
+		return ""
+	}
+	buf := bytes.NewBuffer(nil)
+	buf.WriteString("select ")
+	prefix := ""
+	for _, cv := range table.Owned {
+		buf.WriteString(prefix)
+		buf.WriteString(cv.Col)
+		prefix = ", "
+	}
+	fmt.Fprintf(buf, " from %s", table.Name)
+	buf.WriteString(sqlparser.String(del.Where))
+	buf.WriteString(" for update")
+	return buf.String()
 }

@@ -6,15 +6,19 @@
 package gorpcvtgateservice
 
 import (
-	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
+	"golang.org/x/net/context"
 )
 
 type VTGate struct {
 	server *vtgate.VTGate
+}
+
+func (vtg *VTGate) Execute(ctx context.Context, query *proto.Query, reply *proto.QueryResult) error {
+	return vtg.server.Execute(ctx, query, reply)
 }
 
 func (vtg *VTGate) ExecuteShard(ctx context.Context, query *proto.QueryShard, reply *proto.QueryResult) error {
@@ -39,6 +43,12 @@ func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, batchQuery *proto.Batc
 
 func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, batchQuery *proto.KeyspaceIdBatchQuery, reply *proto.QueryResultList) error {
 	return vtg.server.ExecuteBatchKeyspaceIds(ctx, batchQuery, reply)
+}
+
+func (vtg *VTGate) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(interface{}) error) error {
+	return vtg.server.StreamExecute(ctx, query, func(value *proto.QueryResult) error {
+		return sendReply(value)
+	})
 }
 
 func (vtg *VTGate) StreamExecuteShard(ctx context.Context, query *proto.QueryShard, sendReply func(interface{}) error) error {

@@ -11,41 +11,63 @@ package tabletmanager
 import (
 	"flag"
 	"fmt"
+	"html/template"
 	"reflect"
 	"time"
-
-	"code.google.com/p/go.net/context"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
+)
+
+const (
+	defaultDegradedThreshold  = time.Duration(30 * time.Second)
+	defaultUnhealthyThreshold = time.Duration(2 * time.Hour)
 )
 
 var (
 	healthCheckInterval = flag.Duration("health_check_interval", 20*time.Second, "Interval between health checks")
 	targetTabletType    = flag.String("target_tablet_type", "", "The tablet type we are thriving to be when healthy. When not healthy, we'll go to spare.")
+	degradedThreshold   = flag.Duration("degraded_threshold", defaultDegradedThreshold, "replication lag after which a replica is considered degraded")
+	unhealthyThreshold  = flag.Duration("unhealthy_threshold", defaultUnhealthyThreshold, "replication lag  after which a replica is considered unhealthy")
 )
 
 // HealthRecord records one run of the health checker
 type HealthRecord struct {
-	Error  error
-	Result map[string]string
-	Time   time.Time
+	Error            error
+	ReplicationDelay time.Duration
+	Time             time.Time
 }
 
-// This returns a readable one word version of the health
+// Class returns a human-readable one word version of the health state.
 func (r *HealthRecord) Class() string {
 	switch {
 	case r.Error != nil:
 		return "unhealthy"
-	case len(r.Result) > 0:
+	case r.ReplicationDelay > *degradedThreshold:
 		return "unhappy"
 	default:
 		return "healthy"
+	}
+}
+
+// HTML returns a html version to be displayed on UIs
+func (r *HealthRecord) HTML() template.HTML {
+	switch {
+	case r.Error != nil:
+		return template.HTML(fmt.Sprintf("unhealthy: %v", r.Error))
+	case r.ReplicationDelay > *degradedThreshold:
+		return template.HTML(fmt.Sprintf("unhappy: %v behind on replication", r.ReplicationDelay))
+	default:
+		if r.ReplicationDelay > 0 {
+			return template.HTML(fmt.Sprintf("healthy: only %v behind on replication", r.ReplicationDelay))
+		}
+		return template.HTML("healthy")
 	}
 }
 
@@ -55,9 +77,15 @@ func (r *HealthRecord) IsDuplicate(other interface{}) bool {
 	if !ok {
 		return false
 	}
-	return reflect.DeepEqual(r.Error, rother.Error) && reflect.DeepEqual(r.Result, rother.Result)
+	if !reflect.DeepEqual(r.Error, rother.Error) {
+		return false
+	}
+	unhealthy := r.ReplicationDelay > *degradedThreshold
+	unhealthyOther := rother.ReplicationDelay > *degradedThreshold
+	return (unhealthy && unhealthyOther) || (!unhealthy && !unhealthyOther)
 }
 
+// IsRunningHealthCheck indicates if the agent is configured to run healthchecks.
 func (agent *ActionAgent) IsRunningHealthCheck() bool {
 	return *targetTabletType != ""
 }
@@ -83,6 +111,7 @@ func (agent *ActionAgent) initHeathCheck() {
 	t.Start(func() {
 		agent.runHealthCheck(topo.TabletType(*targetTabletType))
 	})
+	t.Trigger()
 }
 
 // runHealthCheck takes the action mutex, runs the health check,
@@ -103,32 +132,52 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 	tabletControl := agent._tabletControl
 	agent.mutex.Unlock()
 
+	// figure out if we should be running the query service
+	shouldQueryServiceBeRunning := false
+	var blacklistedTables []string
+	if topo.IsRunningQueryService(targetTabletType) && agent.BinlogPlayerMap.size() == 0 {
+		shouldQueryServiceBeRunning = true
+		if tabletControl != nil {
+			blacklistedTables = tabletControl.BlacklistedTables
+			if tabletControl.DisableQueryService {
+				shouldQueryServiceBeRunning = false
+			}
+		}
+	}
+
 	// run the health check
 	typeForHealthCheck := targetTabletType
 	if tablet.Type == topo.TYPE_MASTER {
 		typeForHealthCheck = topo.TYPE_MASTER
 	}
-	health, err := health.Run(typeForHealthCheck)
+	replicationDelay, err := health.Run(typeForHealthCheck, shouldQueryServiceBeRunning)
+	health := make(map[string]string)
+	if err == nil {
+		if replicationDelay > *unhealthyThreshold {
+			err = fmt.Errorf("reported replication lag: %v higher than unhealthy threshold: %v", replicationDelay.Seconds(), unhealthyThreshold.Seconds())
+		} else if replicationDelay > *degradedThreshold {
+			health[topo.ReplicationLag] = topo.ReplicationLagHigh
+		}
+	}
 
 	// Figure out if we should be running QueryService. If we should,
-	// and we aren't, and we're otherwise healthy, try to start it.
-	if err == nil && topo.IsRunningQueryService(targetTabletType) && agent.BinlogPlayerMap.size() == 0 {
-		var blacklistedTables []string
-		disableQueryService := false
-		if tabletControl != nil {
-			blacklistedTables = tabletControl.BlacklistedTables
-			disableQueryService = tabletControl.DisableQueryService
-		}
-		if !disableQueryService {
+	// and we aren't, try to start it (even if we're not healthy,
+	// the reason we might not be healthy is the query service not running!)
+	if shouldQueryServiceBeRunning {
+		if err == nil {
+			// we remember this new possible error
 			err = agent.allowQueries(tablet.Tablet, blacklistedTables)
+		} else {
+			// we ignore the error
+			agent.allowQueries(tablet.Tablet, blacklistedTables)
 		}
 	}
 
 	// save the health record
 	record := &HealthRecord{
-		Error:  err,
-		Result: health,
-		Time:   time.Now(),
+		Error:            err,
+		ReplicationDelay: replicationDelay,
+		Time:             time.Now(),
 	}
 	agent.History.Add(record)
 
@@ -162,6 +211,25 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 			agent.mutex.Unlock()
 		}
 	}
+
+	// remember our health status
+	agent.mutex.Lock()
+	agent._healthy = err
+	agent._replicationDelay = replicationDelay
+	agent.mutex.Unlock()
+
+	// send it to our observers, after we've updated the tablet state
+	// (Tablet is a pointer, and below we will alter the Tablet
+	// record to be correct.
+	hsr := &actionnode.HealthStreamReply{
+		Tablet:              tablet.Tablet,
+		BinlogPlayerMapSize: agent.BinlogPlayerMap.size(),
+		ReplicationDelay:    replicationDelay,
+	}
+	if err != nil {
+		hsr.HealthError = err.Error()
+	}
+	defer agent.BroadcastHealthStreamReply(hsr)
 
 	// Update our topo.Server state, start with no change
 	newTabletType := tablet.Type
@@ -203,10 +271,12 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 
 	// Change the Type, update the health. Note we pass in a map
 	// that's not nil, meaning if it's empty, we will clear it.
-	if err := topotools.ChangeType(agent.TopoServer, tablet.Alias, newTabletType, health, true /*runHooks*/); err != nil {
+	if err := topotools.ChangeType(agent.batchCtx, agent.TopoServer, tablet.Alias, newTabletType, health, true /*runHooks*/); err != nil {
 		log.Infof("Error updating tablet record: %v", err)
 		return
 	}
+	tablet.Health = health
+	tablet.Type = newTabletType
 
 	// Rebuild the serving graph in our cell, only if we're dealing with
 	// a serving type
@@ -215,7 +285,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 	}
 
 	// run the post action callbacks, not much we can do with returned error
-	if err := agent.refreshTablet("healthcheck"); err != nil {
+	if err := agent.refreshTablet(agent.batchCtx, "healthcheck"); err != nil {
 		log.Warningf("refreshTablet failed: %v", err)
 	}
 }
@@ -238,7 +308,7 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topo.TabletType
 
 	// Change the Type to spare, update the health. Note we pass in a map
 	// that's not nil, meaning we will clear it.
-	if err := topotools.ChangeType(agent.TopoServer, tablet.Alias, topo.TYPE_SPARE, make(map[string]string), true /*runHooks*/); err != nil {
+	if err := topotools.ChangeType(agent.batchCtx, agent.TopoServer, tablet.Alias, topo.TYPE_SPARE, make(map[string]string), true /*runHooks*/); err != nil {
 		log.Infof("Error updating tablet record: %v", err)
 		return
 	}
@@ -253,7 +323,7 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topo.TabletType
 	// ourself as OnTermSync (synchronous). The rest can be done asynchronously.
 	go func() {
 		// Run the post action callbacks (let them shutdown the query service)
-		if err := agent.refreshTablet("terminatehealthcheck"); err != nil {
+		if err := agent.refreshTablet(agent.batchCtx, "terminatehealthcheck"); err != nil {
 			log.Warningf("refreshTablet failed: %v", err)
 		}
 	}()
@@ -262,11 +332,8 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topo.TabletType
 // rebuildShardIfNeeded will rebuild the serving graph if we need to
 func (agent *ActionAgent) rebuildShardIfNeeded(tablet *topo.TabletInfo, targetTabletType topo.TabletType) error {
 	if topo.IsInServingGraph(targetTabletType) {
-		// TODO: interrupted may need to be a global one closed when we exit
-		interrupted := make(chan struct{})
-
 		// no need to take the shard lock in this case
-		if _, err := topotools.RebuildShard(context.TODO(), logutil.NewConsoleLogger(), agent.TopoServer, tablet.Keyspace, tablet.Shard, []string{tablet.Alias.Cell}, agent.LockTimeout, interrupted); err != nil {
+		if _, err := topotools.RebuildShard(agent.batchCtx, logutil.NewConsoleLogger(), agent.TopoServer, tablet.Keyspace, tablet.Shard, []string{tablet.Alias.Cell}, agent.LockTimeout); err != nil {
 			return fmt.Errorf("topotools.RebuildShard returned an error: %v", err)
 		}
 	}

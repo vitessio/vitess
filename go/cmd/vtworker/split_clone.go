@@ -12,9 +12,9 @@ import (
 	"strings"
 	"sync"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -56,6 +56,8 @@ const splitCloneHTML2 = `
         <INPUT type="text" id="strategy" name="strategy" value="-populate_blp_checkpoint"></BR>
       <LABEL for="sourceReaderCount">Source Reader Count: </LABEL>
         <INPUT type="text" id="sourceReaderCount" name="sourceReaderCount" value="{{.DefaultSourceReaderCount}}"></BR>
+      <LABEL for="destinationPackCount">Destination Pack Count: </LABEL>
+        <INPUT type="text" id="destinationPackCount" name="destinationPackCount" value="{{.DefaultDestinationPackCount}}"></BR>
       <LABEL for="minTableSizeForSplit">Minimun Table Size For Split: </LABEL>
         <INPUT type="text" id="minTableSizeForSplit" name="minTableSizeForSplit" value="{{.DefaultMinTableSizeForSplit}}"></BR>
       <LABEL for="destinationWriterCount">Destination Writer Count: </LABEL>
@@ -70,43 +72,39 @@ const splitCloneHTML2 = `
     <ul>
       <li><b>populateBlpCheckpoint</b>: creates (if necessary) and populates the blp_checkpoint table in the destination. Required for filtered replication to start.</li>
       <li><b>dontStartBinlogPlayer</b>: (requires populateBlpCheckpoint) will setup, but not start binlog replication on the destination. The flag has to be manually cleared from the _vt.blp_checkpoint table.</li>
-      <li><b>skipAutoIncrement(TTT)</b>: we won't add the AUTO_INCREMENT back to that table.</li>
-      <li><b>skipSetSourceShards</b>: we won't set SourceShards on the destination shards, disabling filtered replication. Usefull for worker tests.</li>
-    </ul>
-    <p>The following flags are also supported, but their use is very strongly discouraged:</p>
-    <ul>
-      <li><b>delayPrimaryKey</b>: we won't add the primary key until after the table is populated.</li>
-      <li><b>delaySecondaryIndexes</b>: we won't add the secondary indexes until after the table is populated.</li>
-      <li><b>useMyIsam</b>: create the table as MyISAM, then convert it to InnoDB after population.</li>
-      <li><b>writeBinLogs</b>: write all operations to the binlogs.</li>
+      <li><b>skipSetSourceShards</b>: we won't set SourceShards on the destination shards, disabling filtered replication. Useful for worker tests.</li>
     </ul>
   </body>
 `
 
-var splitCloneTemplate = loadTemplate("splitClone", splitCloneHTML)
-var splitCloneTemplate2 = loadTemplate("splitClone2", splitCloneHTML2)
+var splitCloneTemplate = mustParseTemplate("splitClone", splitCloneHTML)
+var splitCloneTemplate2 = mustParseTemplate("splitClone2", splitCloneHTML2)
 
-func commandSplitClone(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) worker.Worker {
+func commandSplitClone(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (worker.Worker, error) {
 	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude")
 	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'mysqlctl multirestore -strategy=-help' for more info")
 	sourceReaderCount := subFlags.Int("source_reader_count", defaultSourceReaderCount, "number of concurrent streaming queries to use on the source")
+	destinationPackCount := subFlags.Int("destination_pack_count", defaultDestinationPackCount, "number of packets to pack in one destination insert")
 	minTableSizeForSplit := subFlags.Int("min_table_size_for_split", defaultMinTableSizeForSplit, "tables bigger than this size on disk in bytes will be split into source_reader_count chunks if possible")
 	destinationWriterCount := subFlags.Int("destination_writer_count", defaultDestinationWriterCount, "number of concurrent RPCs to execute on the destination")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
-		log.Fatalf("command SplitClone requires <keyspace/shard|zk shard path>")
+		return nil, fmt.Errorf("command SplitClone requires <keyspace/shard>")
 	}
 
-	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	if err != nil {
+		return nil, err
+	}
 	var excludeTableArray []string
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	worker, err := worker.NewSplitCloneWorker(wr, *cell, keyspace, shard, excludeTableArray, *strategy, *sourceReaderCount, uint64(*minTableSizeForSplit), *destinationWriterCount)
+	worker, err := worker.NewSplitCloneWorker(wr, *cell, keyspace, shard, excludeTableArray, *strategy, *sourceReaderCount, *destinationPackCount, uint64(*minTableSizeForSplit), *destinationWriterCount)
 	if err != nil {
-		log.Fatalf("cannot create split clone worker: %v", err)
+		return nil, fmt.Errorf("cannot create split clone worker: %v", err)
 	}
-	return worker
+	return worker, nil
 }
 
 func keyspacesWithOverlappingShards(wr *wrangler.Wrangler) ([]map[string]string, error) {
@@ -179,6 +177,7 @@ func interactiveSplitClone(wr *wrangler.Wrangler, w http.ResponseWriter, r *http
 		result["Keyspace"] = keyspace
 		result["Shard"] = shard
 		result["DefaultSourceReaderCount"] = fmt.Sprintf("%v", defaultSourceReaderCount)
+		result["DefaultDestinationPackCount"] = fmt.Sprintf("%v", defaultDestinationPackCount)
 		result["DefaultMinTableSizeForSplit"] = fmt.Sprintf("%v", defaultMinTableSizeForSplit)
 		result["DefaultDestinationWriterCount"] = fmt.Sprintf("%v", defaultDestinationWriterCount)
 		executeTemplate(w, splitCloneTemplate2, result)
@@ -186,12 +185,18 @@ func interactiveSplitClone(wr *wrangler.Wrangler, w http.ResponseWriter, r *http
 	}
 
 	// get other parameters
+	destinationPackCountStr := r.FormValue("destinationPackCount")
 	excludeTables := r.FormValue("excludeTables")
 	excludeTableArray := strings.Split(excludeTables, ",")
 	strategy := r.FormValue("strategy")
 	sourceReaderCount, err := strconv.ParseInt(sourceReaderCountStr, 0, 64)
 	if err != nil {
 		httpError(w, "cannot parse sourceReaderCount: %s", err)
+		return
+	}
+	destinationPackCount, err := strconv.ParseInt(destinationPackCountStr, 0, 64)
+	if err != nil {
+		httpError(w, "cannot parse destinationPackCount: %s", err)
 		return
 	}
 	minTableSizeForSplitStr := r.FormValue("minTableSizeForSplit")
@@ -208,7 +213,7 @@ func interactiveSplitClone(wr *wrangler.Wrangler, w http.ResponseWriter, r *http
 	}
 
 	// start the clone job
-	wrk, err := worker.NewSplitCloneWorker(wr, *cell, keyspace, shard, excludeTableArray, strategy, int(sourceReaderCount), uint64(minTableSizeForSplit), int(destinationWriterCount))
+	wrk, err := worker.NewSplitCloneWorker(wr, *cell, keyspace, shard, excludeTableArray, strategy, int(sourceReaderCount), int(destinationPackCount), uint64(minTableSizeForSplit), int(destinationWriterCount))
 	if err != nil {
 		httpError(w, "cannot create worker: %v", err)
 		return
@@ -224,6 +229,6 @@ func interactiveSplitClone(wr *wrangler.Wrangler, w http.ResponseWriter, r *http
 func init() {
 	addCommand("Clones", command{"SplitClone",
 		commandSplitClone, interactiveSplitClone,
-		"[--exclude_tables=''] [--strategy=''] <keyspace/shard|zk shard path>",
+		"[--exclude_tables=''] [--strategy=''] <keyspace/shard>",
 		"Replicates the data and creates configuration for a horizontal split."})
 }

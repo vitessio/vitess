@@ -80,7 +80,7 @@ class TestReparent(unittest.TestCase):
                                db_type])
     self.assertEqual(
         len(ep['entries']), 1, 'Wrong number of entries: %s' % str(ep))
-    port = ep['entries'][0]['named_port_map']['_vtocc']
+    port = ep['entries'][0]['named_port_map']['vt']
     self.assertEqual(port, expected_port,
                      'Unexpected port: %u != %u from %s' % (port, expected_port,
                                                             str(ep)))
@@ -170,9 +170,6 @@ class TestReparent(unittest.TestCase):
 
     # Force the scrap action in zk even though tablet is not accessible.
     tablet_62344.scrap(force=True)
-
-    utils.run_vtctl(['ChangeSlaveType', '-force', tablet_62344.tablet_alias,
-                     'idle'], expect_fail=True)
 
     # Re-run reparent operation, this should now proceed unimpeded.
     utils.run_vtctl(['ReparentShard', 'test_keyspace/0',
@@ -426,25 +423,24 @@ class TestReparent(unittest.TestCase):
   def test_reparent_from_outside(self):
     self._test_reparent_from_outside(brutal=False)
 
+  def test_reparent_from_outside_fast(self):
+    self._test_reparent_from_outside(brutal=False, fast=True)
+
   def test_reparent_from_outside_brutal(self):
     self._test_reparent_from_outside(brutal=True)
 
-  def test_reparent_from_outside_rpc(self):
-    self._test_reparent_from_outside(brutal=False, rpc=True)
+  def test_reparent_from_outside_brutal_fast(self):
+    self._test_reparent_from_outside(brutal=True, fast=True)
 
-  def test_reparent_from_outside_brutal_rpc(self):
-    self._test_reparent_from_outside(brutal=True, rpc=True)
-
-  def _test_reparent_from_outside(self, brutal=False, rpc=False):
+  def _test_reparent_from_outside(self, brutal=False, fast=False):
     """This test will start a master and 3 slaves. Then:
     - one slave will be the new master
     - one slave will be reparented to that new master
     - one slave will be busted and ded in the water
-    and we'll call ShardExternallyReparented.
+    and we'll call TabletExternallyReparented.
 
     Args:
       brutal: scraps the old master first
-      rpc: sends an RPC to the new master instead of doing the work.
     """
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
@@ -452,17 +448,21 @@ class TestReparent(unittest.TestCase):
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.create_db('vt_test_keyspace')
 
+    extra_args = None
+    if fast:
+      extra_args = ['-fast_external_reparent']
+
     # Start up a master mysql and vttablet
     tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True,
-                             wait_for_start=False)
+                             wait_for_start=False, extra_args=extra_args)
 
     # Create a few slaves for testing reparenting.
     tablet_62044.init_tablet('replica', 'test_keyspace', '0', start=True,
-                             wait_for_start=False)
+                             wait_for_start=False, extra_args=extra_args)
     tablet_41983.init_tablet('replica', 'test_keyspace', '0', start=True,
-                             wait_for_start=False)
+                             wait_for_start=False, extra_args=extra_args)
     tablet_31981.init_tablet('replica', 'test_keyspace', '0', start=True,
-                             wait_for_start=False)
+                             wait_for_start=False, extra_args=extra_args)
 
     # wait for all tablets to start
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
@@ -504,11 +504,7 @@ class TestReparent(unittest.TestCase):
                                                    tablet_62344.zk_tablet_path])
 
     # update zk with the new graph
-    extra_args = []
-    if rpc:
-      extra_args = ['-use_rpc']
-    utils.run_vtctl(['ShardExternallyReparented'] + extra_args +
-                    ['test_keyspace/0', tablet_62044.tablet_alias],
+    utils.run_vtctl(['TabletExternallyReparented', tablet_62044.tablet_alias],
                     mode=utils.VTCTL_VTCTL, auto_log=True)
 
     self._test_reparent_from_outside_check(brutal)
@@ -523,21 +519,21 @@ class TestReparent(unittest.TestCase):
   def _test_reparent_from_outside_check(self, brutal):
     if environment.topo_server().flavor() != 'zookeeper':
       return
+
     # make sure the shard replication graph is fine
     shard_replication = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
                                               'test_keyspace/0'])
     hashed_links = {}
     for rl in shard_replication['ReplicationLinks']:
       key = rl['TabletAlias']['Cell'] + '-' + str(rl['TabletAlias']['Uid'])
-      value = rl['Parent']['Cell'] + '-' + str(rl['Parent']['Uid'])
-      hashed_links[key] = value
+      hashed_links[key] = True
     logging.debug('Got replication links: %s', str(hashed_links))
     expected_links = {
-        'test_nj-41983': 'test_nj-62044',
-        'test_nj-62044': '-0',
+        'test_nj-41983': True,
+        'test_nj-62044': True,
         }
     if not brutal:
-      expected_links['test_nj-62344'] = 'test_nj-62044'
+      expected_links['test_nj-62344'] = True
     self.assertEqual(expected_links, hashed_links,
                      'Got unexpected links: %s != %s' % (str(expected_links),
                                                          str(hashed_links)))

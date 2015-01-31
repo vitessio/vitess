@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"testing"
 
-	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/vt/tabletmanager/agentrpctest"
@@ -19,7 +18,7 @@ import (
 
 // the test here creates a fake server implementation, a fake client
 // implementation, and runs the test suite against the setup.
-func TestGoRpcTMServer(t *testing.T) {
+func TestGoRPCTMServer(t *testing.T) {
 	// Listen on a random port
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
@@ -29,7 +28,7 @@ func TestGoRpcTMServer(t *testing.T) {
 
 	// Create a Go Rpc server and listen on the port
 	server := rpcplus.NewServer()
-	server.Register(&TabletManager{agentrpctest.NewFakeRpcAgent(t)})
+	server.Register(&TabletManager{agentrpctest.NewFakeRPCAgent(t)})
 
 	// create the HTTP server, serve the server from it
 	handler := http.NewServeMux()
@@ -40,7 +39,7 @@ func TestGoRpcTMServer(t *testing.T) {
 	go httpServer.Serve(listener)
 
 	// Create a Go Rpc client to talk to the fake tablet
-	client := &gorpctmclient.GoRpcTabletManagerClient{}
+	client := &gorpctmclient.GoRPCTabletManagerClient{}
 	ti := topo.NewTabletInfo(&topo.Tablet{
 		Alias: topo.TabletAlias{
 			Cell: "test",
@@ -53,5 +52,5 @@ func TestGoRpcTMServer(t *testing.T) {
 	}, 0)
 
 	// and run the test suite
-	agentrpctest.AgentRpcTestSuite(context.Background(), t, client, ti)
+	agentrpctest.Run(t, client, ti)
 }

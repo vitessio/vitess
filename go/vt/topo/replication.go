@@ -5,26 +5,24 @@
 package topo
 
 import (
-	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/logutil"
 )
 
-// ReplicationLink describes a MySQL replication relationship.
-// For now, we only insert ReplicationLink for slave tablets.
-// We want to add records for master tablets as well, with a Parent.IsZero().
+// ReplicationLink describes a tablet that is linked in a shard.
+// We will add a record for all tablets in a shard.
 type ReplicationLink struct {
 	TabletAlias TabletAlias
-	Parent      TabletAlias
 }
 
-// ShardReplication describes the MySQL replication relationships
+// ShardReplication describes all the tablets for a shard
 // whithin a cell.
 type ShardReplication struct {
 	// Note there can be only one ReplicationLink in this array
-	// for a given Slave (each Slave can only have one parent)
+	// for a given Tablet
 	ReplicationLinks []ReplicationLink
 }
 
@@ -74,7 +72,7 @@ func (sri *ShardReplicationInfo) Shard() string {
 
 // UpdateShardReplicationRecord is a low level function to add / update an
 // entry to the ShardReplication object.
-func UpdateShardReplicationRecord(ctx context.Context, ts Server, keyspace, shard string, tabletAlias, parent TabletAlias) error {
+func UpdateShardReplicationRecord(ctx context.Context, ts Server, keyspace, shard string, tabletAlias TabletAlias) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UpdateShardReplicationFields")
 	span.Annotate("keyspace", keyspace)
@@ -93,13 +91,11 @@ func UpdateShardReplicationRecord(ctx context.Context, ts Server, keyspace, shar
 					continue
 				}
 				found = true
-				// update the master
-				link.Parent = parent
 			}
 			links = append(links, link)
 		}
 		if !found {
-			links = append(links, ReplicationLink{TabletAlias: tabletAlias, Parent: parent})
+			links = append(links, ReplicationLink{TabletAlias: tabletAlias})
 		}
 		sr.ReplicationLinks = links
 		return nil

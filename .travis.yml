@@ -1,0 +1,21 @@
+language: go
+go:
+  - 1.4
+env:
+  global:
+    - MYSQL_FLAVOR=MariaDB
+  matrix:
+    - MAKE_TARGET=java_vtgate_client_test
+    - MAKE_TARGET=unit_test_goveralls
+    - MAKE_TARGET=small_integration_test
+    - MAKE_TARGET=medium_integration_test
+    - MAKE_TARGET=large_integration_test
+    - MAKE_TARGET=queryservice_test
+    - MAKE_TARGET=unit_test
+before_install:
+  - bash -v travis/dependencies.sh
+install:
+  - bash -v bootstrap.sh
+script:
+  - source dev.env
+  - travis_retry make $MAKE_TARGET

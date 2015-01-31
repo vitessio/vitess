@@ -8,7 +8,6 @@ import (
 	"flag"
 	"time"
 
-	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
@@ -17,6 +16,7 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 var tabletManagerProtocol = flag.String("tablet_manager_protocol", "bson", "the protocol to use to talk to vttablet")
@@ -27,9 +27,6 @@ type ErrFunc func() error
 // SnapshotReplyFunc is used by Snapshot to return result and error
 type SnapshotReplyFunc func() (*actionnode.SnapshotReply, error)
 
-// MultiSnapshotReplyFunc is used by MultiSnapshot to return result and error
-type MultiSnapshotReplyFunc func() (*actionnode.MultiSnapshotReply, error)
-
 // TabletManagerClient defines the interface used to talk to a remote tablet
 type TabletManagerClient interface {
 	//
@@ -37,81 +34,85 @@ type TabletManagerClient interface {
 	//
 
 	// Ping will try to ping the remote tablet
-	Ping(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error
+	Ping(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// GetSchema asks the remote tablet for its database schema
-	GetSchema(ctx context.Context, tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool, waitTime time.Duration) (*myproto.SchemaDefinition, error)
+	GetSchema(ctx context.Context, tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool) (*myproto.SchemaDefinition, error)
 
 	// GetPermissions asks the remote tablet for its permissions list
-	GetPermissions(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) (*myproto.Permissions, error)
+	GetPermissions(ctx context.Context, tablet *topo.TabletInfo) (*myproto.Permissions, error)
 
 	//
 	// Various read-write methods
 	//
 
 	// SetReadOnly makes the mysql instance read-only
-	SetReadOnly(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error
+	SetReadOnly(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// SetReadWrite makes the mysql instance read-write
-	SetReadWrite(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error
+	SetReadWrite(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// ChangeType asks the remote tablet to change its type
-	ChangeType(ctx context.Context, tablet *topo.TabletInfo, dbType topo.TabletType, waitTime time.Duration) error
+	ChangeType(ctx context.Context, tablet *topo.TabletInfo, dbType topo.TabletType) error
 
 	// Scrap scraps the live running tablet
-	Scrap(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error
+	Scrap(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// Sleep will sleep for a duration (used for tests)
-	Sleep(ctx context.Context, tablet *topo.TabletInfo, duration, waitTime time.Duration) error
+	Sleep(ctx context.Context, tablet *topo.TabletInfo, duration time.Duration) error
 
 	// ExecuteHook executes the provided hook remotely
-	ExecuteHook(ctx context.Context, tablet *topo.TabletInfo, hk *hook.Hook, waitTime time.Duration) (*hook.HookResult, error)
+	ExecuteHook(ctx context.Context, tablet *topo.TabletInfo, hk *hook.Hook) (*hook.HookResult, error)
 
 	// RefreshState asks the remote tablet to reload its tablet record
-	RefreshState(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error
+	RefreshState(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// RunHealthCheck asks the remote tablet to run a health check cycle
-	RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType topo.TabletType, waitTime time.Duration) error
+	RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType topo.TabletType) error
+
+	// HealthStream asks the tablet to stream its health status on
+	// a regular basis
+	HealthStream(ctx context.Context, tablet *topo.TabletInfo) (<-chan *actionnode.HealthStreamReply, ErrFunc, error)
 
 	// ReloadSchema asks the remote tablet to reload its schema
-	ReloadSchema(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error
+	ReloadSchema(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// PreflightSchema will test a schema change
-	PreflightSchema(ctx context.Context, tablet *topo.TabletInfo, change string, waitTime time.Duration) (*myproto.SchemaChangeResult, error)
+	PreflightSchema(ctx context.Context, tablet *topo.TabletInfo, change string) (*myproto.SchemaChangeResult, error)
 
 	// ApplySchema will apply a schema change
-	ApplySchema(ctx context.Context, tablet *topo.TabletInfo, change *myproto.SchemaChange, waitTime time.Duration) (*myproto.SchemaChangeResult, error)
+	ApplySchema(ctx context.Context, tablet *topo.TabletInfo, change *myproto.SchemaChange) (*myproto.SchemaChangeResult, error)
 
 	// ExecuteFetch executes a query remotely using the DBA pool
-	ExecuteFetch(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs bool, waitTime time.Duration) (*mproto.QueryResult, error)
+	ExecuteFetch(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs bool) (*mproto.QueryResult, error)
 
 	//
 	// Replication related methods
 	//
 
 	// SlaveStatus returns the tablet's mysql slave status.
-	SlaveStatus(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) (*myproto.ReplicationStatus, error)
+	SlaveStatus(ctx context.Context, tablet *topo.TabletInfo) (*myproto.ReplicationStatus, error)
 
 	// WaitSlavePosition asks the tablet to wait until it reaches that
 	// position in mysql replication
 	WaitSlavePosition(ctx context.Context, tablet *topo.TabletInfo, waitPos myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error)
 
 	// MasterPosition returns the tablet's master position
-	MasterPosition(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) (myproto.ReplicationPosition, error)
+	MasterPosition(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error)
 
 	// ReparentPosition returns the data for a slave to use to reparent
 	// to the target tablet at the given position.
-	ReparentPosition(ctx context.Context, tablet *topo.TabletInfo, rp *myproto.ReplicationPosition, waitTime time.Duration) (*actionnode.RestartSlaveData, error)
+	ReparentPosition(ctx context.Context, tablet *topo.TabletInfo, rp *myproto.ReplicationPosition) (*actionnode.RestartSlaveData, error)
 
 	// StopSlave stops the mysql replication
-	StopSlave(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error
+	StopSlave(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// StopSlaveMinimum stops the mysql replication after it reaches
 	// the provided minimum point
 	StopSlaveMinimum(ctx context.Context, tablet *topo.TabletInfo, stopPos myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error)
 
 	// StartSlave starts the mysql replication
-	StartSlave(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error
+	StartSlave(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// TabletExternallyReparented tells a tablet it is now the master, after an
 	// external tool has already promoted the underlying mysqld to master and
@@ -119,10 +120,10 @@ type TabletManagerClient interface {
 	//
 	// externalID is an optional string provided by the external tool that
 	// vttablet will emit in logs to facilitate cross-referencing.
-	TabletExternallyReparented(ctx context.Context, tablet *topo.TabletInfo, externalID string, waitTime time.Duration) error
+	TabletExternallyReparented(ctx context.Context, tablet *topo.TabletInfo, externalID string) error
 
 	// GetSlaves returns the addresses of the slaves
-	GetSlaves(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) ([]string, error)
+	GetSlaves(ctx context.Context, tablet *topo.TabletInfo) ([]string, error)
 
 	// WaitBlpPosition asks the tablet to wait until it reaches that
 	// position in replication
@@ -130,10 +131,10 @@ type TabletManagerClient interface {
 
 	// StopBlp asks the tablet to stop all its binlog players,
 	// and returns the current position for all of them
-	StopBlp(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) (*blproto.BlpPositionList, error)
+	StopBlp(ctx context.Context, tablet *topo.TabletInfo) (*blproto.BlpPositionList, error)
 
 	// StartBlp asks the tablet to restart its binlog players
-	StartBlp(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error
+	StartBlp(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// RunBlpUntil asks the tablet to restart its binlog players until
 	// it reaches the given positions, if not there yet.
@@ -144,51 +145,56 @@ type TabletManagerClient interface {
 	//
 
 	// DemoteMaster tells the soon-to-be-former master it's gonna change
-	DemoteMaster(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error
+	DemoteMaster(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// PromoteSlave transforms the tablet from a slave to a master.
-	PromoteSlave(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) (*actionnode.RestartSlaveData, error)
+	PromoteSlave(ctx context.Context, tablet *topo.TabletInfo) (*actionnode.RestartSlaveData, error)
 
 	// SlaveWasPromoted tells the remote tablet it is now the master
-	SlaveWasPromoted(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error
+	SlaveWasPromoted(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// RestartSlave tells the remote tablet it has a new master
-	RestartSlave(ctx context.Context, tablet *topo.TabletInfo, rsd *actionnode.RestartSlaveData, waitTime time.Duration) error
+	RestartSlave(ctx context.Context, tablet *topo.TabletInfo, rsd *actionnode.RestartSlaveData) error
 
 	// SlaveWasRestarted tells the remote tablet its master has changed
-	SlaveWasRestarted(ctx context.Context, tablet *topo.TabletInfo, args *actionnode.SlaveWasRestartedArgs, waitTime time.Duration) error
+	SlaveWasRestarted(ctx context.Context, tablet *topo.TabletInfo, args *actionnode.SlaveWasRestartedArgs) error
 
 	// BreakSlaves will tinker with the replication stream in a
 	// way that will stop all the slaves.
-	BreakSlaves(ctx context.Context, tablet *topo.TabletInfo, waitTime time.Duration) error
+	BreakSlaves(ctx context.Context, tablet *topo.TabletInfo) error
 
 	//
 	// Backup / restore related methods
 	//
 
 	// Snapshot takes a database snapshot
-	Snapshot(ctx context.Context, tablet *topo.TabletInfo, sa *actionnode.SnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, SnapshotReplyFunc, error)
+	Snapshot(ctx context.Context, tablet *topo.TabletInfo, sa *actionnode.SnapshotArgs) (<-chan *logutil.LoggerEvent, SnapshotReplyFunc, error)
 
 	// SnapshotSourceEnd restarts the mysql server
-	SnapshotSourceEnd(ctx context.Context, tablet *topo.TabletInfo, ssea *actionnode.SnapshotSourceEndArgs, waitTime time.Duration) error
+	SnapshotSourceEnd(ctx context.Context, tablet *topo.TabletInfo, ssea *actionnode.SnapshotSourceEndArgs) error
 
 	// ReserveForRestore will prepare a server for restore
-	ReserveForRestore(ctx context.Context, tablet *topo.TabletInfo, rfra *actionnode.ReserveForRestoreArgs, waitTime time.Duration) error
+	ReserveForRestore(ctx context.Context, tablet *topo.TabletInfo, rfra *actionnode.ReserveForRestoreArgs) error
 
 	// Restore restores a database snapshot
-	Restore(ctx context.Context, tablet *topo.TabletInfo, sa *actionnode.RestoreArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, ErrFunc, error)
+	Restore(ctx context.Context, tablet *topo.TabletInfo, sa *actionnode.RestoreArgs) (<-chan *logutil.LoggerEvent, ErrFunc, error)
 
-	// MultiSnapshot takes a database snapshot
-	MultiSnapshot(ctx context.Context, tablet *topo.TabletInfo, sa *actionnode.MultiSnapshotArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, MultiSnapshotReplyFunc, error)
+	//
+	// RPC related methods
+	//
 
-	// MultiRestore restores a database snapshot
-	MultiRestore(ctx context.Context, tablet *topo.TabletInfo, sa *actionnode.MultiRestoreArgs, waitTime time.Duration) (<-chan *logutil.LoggerEvent, ErrFunc, error)
+	// IsTimeoutError checks if an error was caused by an RPC layer timeout vs an application-specific one
+	IsTimeoutError(err error) bool
 }
 
+// TabletManagerClientFactory is the factory method to create
+// TabletManagerClient objects.
 type TabletManagerClientFactory func() TabletManagerClient
 
 var tabletManagerClientFactories = make(map[string]TabletManagerClientFactory)
 
+// RegisterTabletManagerClientFactory allows modules to register
+// TabletManagerClient implementations. Should be called on init().
 func RegisterTabletManagerClientFactory(name string, factory TabletManagerClientFactory) {
 	if _, ok := tabletManagerClientFactories[name]; ok {
 		log.Fatalf("RegisterTabletManagerClient %s already exists", name)
@@ -196,6 +202,8 @@ func RegisterTabletManagerClientFactory(name string, factory TabletManagerClient
 	tabletManagerClientFactories[name] = factory
 }
 
+// NewTabletManagerClient creates a new TabletManagerClient. Should be
+// called after flags are parsed.
 func NewTabletManagerClient() TabletManagerClient {
 	f, ok := tabletManagerClientFactories[*tabletManagerProtocol]
 	if !ok {

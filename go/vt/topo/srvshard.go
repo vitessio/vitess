@@ -18,7 +18,7 @@ const SHARD_ZERO = "0"
 // SrvShard contains a roll-up of the shard in the local namespace.
 // In zk, it is under /zk/<cell>/vt/ns/<keyspace>/<shard>
 type SrvShard struct {
-	// Copied / infered from Shard
+	// Copied / inferred from Shard
 	Name        string
 	KeyRange    key.KeyRange
 	ServedTypes []TabletType
@@ -33,6 +33,8 @@ type SrvShard struct {
 	// For atomic updates
 	version int64
 }
+
+//go:generate bsongen -file $GOFILE -type SrvShard -o srvshard_bson.go
 
 // SrvShardArray is used for sorting SrvShard arrays
 type SrvShardArray []SrvShard
@@ -77,6 +79,8 @@ type KeyspacePartition struct {
 	Shards []SrvShard
 }
 
+//go:generate bsongen -file $GOFILE -type KeyspacePartition -o keyspace_partition_bson.go
+
 // HasShard returns true if this KeyspacePartition has the shard with
 // the given name in it.
 func (kp *KeyspacePartition) HasShard(name string) bool {
@@ -96,10 +100,6 @@ type SrvKeyspace struct {
 	// Shards to use per type, only contains complete partitions.
 	Partitions map[TabletType]*KeyspacePartition
 
-	// This list will be deprecated as soon as Partitions is used.
-	// List of non-overlapping shards sorted by range.
-	Shards []SrvShard
-
 	// List of available tablet types for this keyspace in this cell.
 	// May not have a server for every shard, but we have some.
 	TabletTypes []TabletType
@@ -113,6 +113,8 @@ type SrvKeyspace struct {
 	// For atomic updates
 	version int64
 }
+
+//go:generate bsongen -file $GOFILE -type SrvKeyspace -o srvkeyspace_bson.go
 
 // NewSrvKeyspace returns an empty SrvKeyspace with the given version.
 func NewSrvKeyspace(version int64) *SrvKeyspace {

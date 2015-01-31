@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 /*
-'worker' package contains the framework, utility methods and core
+Package worker contains the framework, utility methods and core
 functions for long running actions. 'vtworker' binary will use these.
 */
 package worker
@@ -22,18 +22,14 @@ type Worker interface {
 
 	// Run is the main entry point for the worker. It will be called
 	// in a go routine.
-	// When the SignalInterrupt() is called, Run should exit as soon as
-	// possible.
+	// When Cancel() is called, Run should exit as soon as possible.
 	Run()
+
+	// Cancel should attempt to force the Worker to exit as soon as possible.
+	// Note that cleanup actions may still run after cancellation.
+	Cancel()
 
 	// Error returns the error status of the job, if any.
 	// It will only be called after Run() has completed.
 	Error() error
-}
-
-// signal handling
-var interrupted = make(chan struct{})
-
-func SignalInterrupt() {
-	close(interrupted)
 }

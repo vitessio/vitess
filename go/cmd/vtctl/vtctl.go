@@ -22,11 +22,12 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl"
 	"github.com/youtube/vitess/go/vt/wrangler"
+	"golang.org/x/net/context"
 )
 
 var (
 	waitTime        = flag.Duration("wait-time", 24*time.Hour, "time to wait on an action")
-	lockWaitTimeout = flag.Duration("lock-wait-timeout", 0, "time to wait for a lock before starting an action")
+	lockWaitTimeout = flag.Duration("lock-wait-timeout", time.Minute, "time to wait for a lock before starting an action")
 )
 
 func init() {
@@ -42,15 +43,13 @@ func init() {
 }
 
 // signal handling, centralized here
-func installSignalHandlers() {
+func installSignalHandlers(cancel func()) {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
 		<-sigChan
-		// we got a signal, notify our modules:
-		// - wrangler will interrupt anything waiting on a shard or
-		//   keyspace lock
-		wrangler.SignalInterrupt()
+		// we got a signal, cancel the current ctx
+		cancel()
 	}()
 }
 
@@ -65,7 +64,6 @@ func main() {
 		exit.Return(1)
 	}
 	action := args[0]
-	installSignalHandlers()
 
 	startMsg := fmt.Sprintf("USER=%v SUDO_USER=%v %v", os.Getenv("USER"), os.Getenv("SUDO_USER"), strings.Join(os.Args, " "))
 
@@ -78,9 +76,12 @@ func main() {
 	topoServer := topo.GetServer()
 	defer topo.CloseServers()
 
-	wr := wrangler.New(logutil.NewConsoleLogger(), topoServer, *waitTime, *lockWaitTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
+	wr := wrangler.New(logutil.NewConsoleLogger(), topoServer, *lockWaitTimeout)
+	installSignalHandlers(cancel)
 
-	err := vtctl.RunCommand(wr, args)
+	err := vtctl.RunCommand(ctx, wr, args)
+	cancel()
 	switch err {
 	case vtctl.ErrUnknownCommand:
 		flag.Usage()

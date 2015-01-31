@@ -13,7 +13,7 @@ level. In particular, it cannot depend on:
 topotools is used by wrangler, so it ends up in all tools using
 wrangler (vtctl, vtctld, ...). It is also included by vttablet, so it contains:
 - most of the logic to rebuild a shard serving graph (helthcheck module)
-- some of the logic to perform a ShardExternallyReparented (RPC call
+- some of the logic to perform a TabletExternallyReparented (RPC call
   to master vttablet to let it know it's the master).
 
 */
@@ -23,12 +23,10 @@ package topotools
 
 import (
 	"fmt"
-	"sync"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -50,7 +48,7 @@ func ConfigureTabletHook(hk *hook.Hook, tabletAlias topo.TabletAlias) {
 // probably dead. So if 'force' is true, we will also remove pending
 // remote actions.  And if 'force' is false, we also run an optional
 // hook.
-func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
+func Scrap(ctx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
 	tablet, err := ts.GetTablet(tabletAlias)
 	if err != nil {
 		return err
@@ -60,9 +58,8 @@ func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
 	// be there anyway.
 	wasAssigned := tablet.IsAssigned()
 	tablet.Type = topo.TYPE_SCRAP
-	tablet.Parent = topo.TabletAlias{}
 	// Update the tablet first, since that is canonical.
-	err = topo.UpdateTablet(context.TODO(), ts, tablet)
+	err = topo.UpdateTablet(ctx, ts, tablet)
 	if err != nil {
 		return err
 	}
@@ -102,7 +99,7 @@ func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
 // - if health is nil, we don't touch the Tablet's Health record.
 // - if health is an empty map, we clear the Tablet's Health record.
 // - if health has values, we overwrite the Tablet's Health record.
-func ChangeType(ts topo.Server, tabletAlias topo.TabletAlias, newType topo.TabletType, health map[string]string, runHooks bool) error {
+func ChangeType(ctx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, newType topo.TabletType, health map[string]string, runHooks bool) error {
 	tablet, err := ts.GetTablet(tabletAlias)
 	if err != nil {
 		return err
@@ -124,35 +121,6 @@ func ChangeType(ts topo.Server, tabletAlias topo.TabletAlias, newType topo.Table
 
 	tablet.Type = newType
 	if newType == topo.TYPE_IDLE {
-		if tablet.Parent.IsZero() {
-			si, err := ts.GetShard(tablet.Keyspace, tablet.Shard)
-			if err != nil {
-				return err
-			}
-			rec := concurrency.AllErrorRecorder{}
-			wg := sync.WaitGroup{}
-			for _, cell := range si.Cells {
-				wg.Add(1)
-				go func(cell string) {
-					defer wg.Done()
-					sri, err := ts.GetShardReplication(cell, tablet.Keyspace, tablet.Shard)
-					if err != nil {
-						log.Warningf("Cannot check cell %v for extra replication paths, assuming it's good", cell)
-						return
-					}
-					for _, rl := range sri.ReplicationLinks {
-						if rl.Parent == tabletAlias {
-							rec.RecordError(fmt.Errorf("Still have a ReplicationLink in cell %v", cell))
-						}
-					}
-				}(cell)
-			}
-			wg.Wait()
-			if rec.HasErrors() {
-				return rec.Error()
-			}
-		}
-		tablet.Parent = topo.TabletAlias{}
 		tablet.Keyspace = ""
 		tablet.Shard = ""
 		tablet.KeyRange = key.KeyRange{}
@@ -165,5 +133,5 @@ func ChangeType(ts topo.Server, tabletAlias topo.TabletAlias, newType topo.Table
 			tablet.Health = health
 		}
 	}
-	return topo.UpdateTablet(context.TODO(), ts, tablet)
+	return topo.UpdateTablet(ctx, ts, tablet)
 }

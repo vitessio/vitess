@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/go.net/context"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
@@ -18,20 +17,21 @@ import (
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 // sandbox_test.go provides a sandbox for unit testing VTGate.
 
 const (
-	TEST_SHARDED               = "TestSharded"
-	TEST_UNSHARDED             = "TestUnshared"
-	TEST_UNSHARDED_SERVED_FROM = "TestUnshardedServedFrom"
+	KsTestSharded             = "TestSharded"
+	KsTestUnsharded           = "TestUnsharded"
+	KsTestUnshardedServedFrom = "TestUnshardedServedFrom"
 )
 
 func init() {
 	sandboxMap = make(map[string]*sandbox)
-	createSandbox(TEST_SHARDED)
-	createSandbox(TEST_UNSHARDED)
+	createSandbox(KsTestSharded)
+	createSandbox(KsTestUnsharded)
 	tabletconn.RegisterDialer("sandbox", sandboxDialer)
 	flag.Set("tablet_protocol", "sandbox")
 }
@@ -110,7 +110,16 @@ func (s *sandbox) Reset() {
 	s.SrvKeyspaceCallback = nil
 }
 
-func (s *sandbox) MapTestConn(shard string, conn *sandboxConn) {
+// a sandboxableConn is a tablet.TabletConn that allows you
+// to set the endPoint. MapTestConn uses it to set some good
+// defaults. This way, you have the option of calling MapTestConn
+// with variables other than sandboxConn.
+type sandboxableConn interface {
+	tabletconn.TabletConn
+	setEndPoint(topo.EndPoint)
+}
+
+func (s *sandbox) MapTestConn(shard string, conn sandboxableConn) {
 	s.sandmu.Lock()
 	defer s.sandmu.Unlock()
 	conns, ok := s.TestConns[shard]
@@ -118,19 +127,23 @@ func (s *sandbox) MapTestConn(shard string, conn *sandboxConn) {
 		conns = make(map[uint32]tabletconn.TabletConn)
 	}
 	uid := uint32(len(conns))
-	conn.uid = uid
+	conn.setEndPoint(topo.EndPoint{
+		Uid:          uid,
+		Host:         shard,
+		NamedPortMap: map[string]int{"vt": 1},
+	})
 	conns[uid] = conn
 	s.TestConns[shard] = conns
 }
 
-func (s *sandbox) DeleteTestConn(shard string, conn *sandboxConn) {
+func (s *sandbox) DeleteTestConn(shard string, conn tabletconn.TabletConn) {
 	s.sandmu.Lock()
 	defer s.sandmu.Unlock()
 	conns, ok := s.TestConns[shard]
 	if !ok {
 		panic(fmt.Sprintf("unknown shard: %v", shard))
 	}
-	delete(conns, conn.uid)
+	delete(conns, conn.EndPoint().Uid)
 	s.TestConns[shard] = conns
 }
 
@@ -237,20 +250,24 @@ func (sct *sandboxTopo) GetSrvKeyspace(context context.Context, cell, keyspace s
 		return nil, fmt.Errorf("topo error GetSrvKeyspace")
 	}
 	switch keyspace {
-	case TEST_UNSHARDED_SERVED_FROM:
+	case KsTestUnshardedServedFrom:
 		servedFromKeyspace, err := createUnshardedKeyspace()
 		if err != nil {
 			return nil, err
 		}
 		servedFromKeyspace.ServedFrom = map[topo.TabletType]string{
-			topo.TYPE_RDONLY: TEST_UNSHARDED,
-			topo.TYPE_MASTER: TEST_UNSHARDED}
+			topo.TYPE_RDONLY: KsTestUnsharded,
+			topo.TYPE_MASTER: KsTestUnsharded}
 		return servedFromKeyspace, nil
-	case TEST_UNSHARDED:
+	case KsTestUnsharded:
 		return createUnshardedKeyspace()
 	}
 
 	return createShardedSrvKeyspace(sand.ShardSpec, sand.KeyspaceServedFrom)
+}
+
+func (sct *sandboxTopo) GetSrvShard(context context.Context, cell, keyspace, shard string) (*topo.SrvShard, error) {
+	return nil, fmt.Errorf("Unsupported")
 }
 
 func (sct *sandboxTopo) GetEndPoints(context context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
@@ -265,13 +282,8 @@ func (sct *sandboxTopo) GetEndPoints(context context.Context, cell, keyspace, sh
 	}
 	conns := sand.TestConns[shard]
 	ep := &topo.EndPoints{}
-	for i := range conns {
-		ep.Entries = append(ep.Entries,
-			topo.EndPoint{
-				Uid:          i,
-				Host:         shard,
-				NamedPortMap: map[string]int{"vt": 1},
-			})
+	for _, conn := range conns {
+		ep.Entries = append(ep.Entries, conn.EndPoint())
 	}
 	return ep, nil
 }
@@ -290,13 +302,11 @@ func sandboxDialer(context context.Context, endPoint topo.EndPoint, keyspace, sh
 		panic(fmt.Sprintf("can't find shard %v", shard))
 	}
 	tconn := conns[endPoint.Uid]
-	tconn.(*sandboxConn).endPoint = endPoint
 	return tconn, nil
 }
 
 // sandboxConn satisfies the TabletConn interface
 type sandboxConn struct {
-	uid            uint32
 	endPoint       topo.EndPoint
 	mustFailRetry  int
 	mustFailFatal  int
@@ -317,11 +327,16 @@ type sandboxConn struct {
 	RollbackCount sync2.AtomicInt64
 	CloseCount    sync2.AtomicInt64
 
-	// BindVars keeps track of the bind vars that were sent.
-	BindVars []string
+	// Queries stores the requests received.
+	Queries []tproto.BoundQuery
+
+	// results specifies the results to be returned.
+	// They're consumed as results are returned. If there are
+	// no results left, singleRowResult is returned.
+	results []*mproto.QueryResult
 
 	// transaction id generator
-	TransactionId sync2.AtomicInt64
+	TransactionID sync2.AtomicInt64
 }
 
 func (sbc *sandboxConn) getError() error {
@@ -355,18 +370,27 @@ func (sbc *sandboxConn) getError() error {
 	return nil
 }
 
+func (sbc *sandboxConn) setResults(r []*mproto.QueryResult) {
+	sbc.results = r
+}
+
 func (sbc *sandboxConn) Execute(context context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
 	sbc.ExecCount.Add(1)
-	for k, _ := range bindVars {
-		sbc.BindVars = append(sbc.BindVars, k)
+	bv := make(map[string]interface{})
+	for k, v := range bindVars {
+		bv[k] = v
 	}
+	sbc.Queries = append(sbc.Queries, tproto.BoundQuery{
+		Sql:           query,
+		BindVariables: bv,
+	})
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
 	if err := sbc.getError(); err != nil {
 		return nil, err
 	}
-	return singleRowResult, nil
+	return sbc.getNextResult(), nil
 }
 
 func (sbc *sandboxConn) ExecuteBatch(context context.Context, queries []tproto.BoundQuery, transactionID int64) (*tproto.QueryResultList, error) {
@@ -380,21 +404,26 @@ func (sbc *sandboxConn) ExecuteBatch(context context.Context, queries []tproto.B
 	qrl := &tproto.QueryResultList{}
 	qrl.List = make([]mproto.QueryResult, 0, len(queries))
 	for _ = range queries {
-		qrl.List = append(qrl.List, *singleRowResult)
+		qrl.List = append(qrl.List, *(sbc.getNextResult()))
 	}
 	return qrl, nil
 }
 
 func (sbc *sandboxConn) StreamExecute(context context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
 	sbc.ExecCount.Add(1)
-	for k, _ := range bindVars {
-		sbc.BindVars = append(sbc.BindVars, k)
+	bv := make(map[string]interface{})
+	for k, v := range bindVars {
+		bv[k] = v
 	}
+	sbc.Queries = append(sbc.Queries, tproto.BoundQuery{
+		Sql:           query,
+		BindVariables: bv,
+	})
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
 	ch := make(chan *mproto.QueryResult, 1)
-	ch <- singleRowResult
+	ch <- sbc.getNextResult()
 	close(ch)
 	err := sbc.getError()
 	return ch, func() error { return err }, err
@@ -410,7 +439,7 @@ func (sbc *sandboxConn) Begin(context context.Context) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return sbc.TransactionId.Add(1), nil
+	return sbc.TransactionID.Add(1), nil
 }
 
 func (sbc *sandboxConn) Commit(context context.Context, transactionID int64) error {
@@ -457,6 +486,19 @@ func (sbc *sandboxConn) Close() {
 
 func (sbc *sandboxConn) EndPoint() topo.EndPoint {
 	return sbc.endPoint
+}
+
+func (sbc *sandboxConn) setEndPoint(ep topo.EndPoint) {
+	sbc.endPoint = ep
+}
+
+func (sbc *sandboxConn) getNextResult() *mproto.QueryResult {
+	if len(sbc.results) != 0 {
+		r := sbc.results[0]
+		sbc.results = sbc.results[1:]
+		return r
+	}
+	return singleRowResult
 }
 
 var singleRowResult = &mproto.QueryResult{

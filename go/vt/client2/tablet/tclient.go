@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// API compliant to the requirements of database/sql
+// Package tablet is an API compliant to the requirements of database/sql
 // Open expects name to be "hostname:port/keyspace/shard"
 // For query arguments, we assume place-holders in the query string
 // in the form of :v0, :v1, etc.
@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/db"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
@@ -23,6 +22,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -113,7 +113,7 @@ func (conn *Conn) dial() (err error) {
 	endPoint := topo.EndPoint{
 		Host: host,
 		NamedPortMap: map[string]int{
-			"_vtocc": port,
+			"vt": port,
 		},
 	}
 

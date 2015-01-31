@@ -8,7 +8,7 @@
 # - we start with a keyspace with a single shard and a single table
 # - we add and populate the sharding key
 # - we set the sharding key in the topology
-# - we backup / restore into 2 instances
+# - we clone into 2 instances
 # - we enable filtered replication
 # - we move all serving types
 # - we scrap the source tablets
@@ -27,24 +27,23 @@ import environment
 import utils
 import tablet
 
-use_clone_worker = False
 keyspace_id_type = keyrange_constants.KIT_UINT64
 pack_keyspace_id = struct.Struct('!Q').pack
 
 # initial shard, covers everything
 shard_master = tablet.Tablet()
 shard_replica = tablet.Tablet()
-shard_rdonly = tablet.Tablet()
+shard_rdonly1 = tablet.Tablet()
 
 # split shards
 # range "" - 80
 shard_0_master = tablet.Tablet()
 shard_0_replica = tablet.Tablet()
-shard_0_rdonly = tablet.Tablet()
+shard_0_rdonly1 = tablet.Tablet()
 # range 80 - ""
 shard_1_master = tablet.Tablet()
 shard_1_replica = tablet.Tablet()
-shard_1_rdonly = tablet.Tablet()
+shard_1_rdonly1 = tablet.Tablet()
 
 
 def setUpModule():
@@ -54,13 +53,13 @@ def setUpModule():
     setup_procs = [
         shard_master.init_mysql(),
         shard_replica.init_mysql(),
-        shard_rdonly.init_mysql(),
+        shard_rdonly1.init_mysql(),
         shard_0_master.init_mysql(),
         shard_0_replica.init_mysql(),
-        shard_0_rdonly.init_mysql(),
+        shard_0_rdonly1.init_mysql(),
         shard_1_master.init_mysql(),
         shard_1_replica.init_mysql(),
-        shard_1_rdonly.init_mysql(),
+        shard_1_rdonly1.init_mysql(),
         ]
     utils.wait_procs(setup_procs)
   except:
@@ -75,13 +74,13 @@ def tearDownModule():
   teardown_procs = [
       shard_master.teardown_mysql(),
       shard_replica.teardown_mysql(),
-      shard_rdonly.teardown_mysql(),
+      shard_rdonly1.teardown_mysql(),
       shard_0_master.teardown_mysql(),
       shard_0_replica.teardown_mysql(),
-      shard_0_rdonly.teardown_mysql(),
+      shard_0_rdonly1.teardown_mysql(),
       shard_1_master.teardown_mysql(),
       shard_1_replica.teardown_mysql(),
-      shard_1_rdonly.teardown_mysql(),
+      shard_1_rdonly1.teardown_mysql(),
       ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
@@ -91,13 +90,13 @@ def tearDownModule():
 
   shard_master.remove_tree()
   shard_replica.remove_tree()
-  shard_rdonly.remove_tree()
+  shard_rdonly1.remove_tree()
   shard_0_master.remove_tree()
   shard_0_replica.remove_tree()
-  shard_0_rdonly.remove_tree()
+  shard_0_rdonly1.remove_tree()
   shard_1_master.remove_tree()
   shard_1_replica.remove_tree()
-  shard_1_rdonly.remove_tree()
+  shard_1_rdonly1.remove_tree()
 
 
 class TestInitialSharding(unittest.TestCase):
@@ -219,24 +218,24 @@ index by_msg (msg)
 
   def _check_startup_values(self):
     # check first value is in the right shard
-    for t in [shard_0_master, shard_0_replica, shard_0_rdonly]:
+    for t in [shard_0_master, shard_0_replica, shard_0_rdonly1]:
       self._check_value(t, 'resharding1', 1, 'msg1', 0x1000000000000000)
-    for t in [shard_1_master, shard_1_replica, shard_1_rdonly]:
+    for t in [shard_1_master, shard_1_replica, shard_1_rdonly1]:
       self._check_value(t, 'resharding1', 1, 'msg1',
                         0x1000000000000000, should_be_here=False)
 
     # check second value is in the right shard
-    for t in [shard_0_master, shard_0_replica, shard_0_rdonly]:
+    for t in [shard_0_master, shard_0_replica, shard_0_rdonly1]:
       self._check_value(t, 'resharding1', 2, 'msg2', 0x9000000000000000,
                         should_be_here=False)
-    for t in [shard_1_master, shard_1_replica, shard_1_rdonly]:
+    for t in [shard_1_master, shard_1_replica, shard_1_rdonly1]:
       self._check_value(t, 'resharding1', 2, 'msg2', 0x9000000000000000)
 
     # check third value is in the right shard too
-    for t in [shard_0_master, shard_0_replica, shard_0_rdonly]:
+    for t in [shard_0_master, shard_0_replica, shard_0_rdonly1]:
       self._check_value(t, 'resharding1', 3, 'msg3', 0xD000000000000000,
                         should_be_here=False)
-    for t in [shard_1_master, shard_1_replica, shard_1_rdonly]:
+    for t in [shard_1_master, shard_1_replica, shard_1_rdonly1]:
       self._check_value(t, 'resharding1', 3, 'msg3', 0xD000000000000000)
 
   def _insert_lots(self, count, base=0):
@@ -289,19 +288,19 @@ index by_msg (msg)
 
     shard_master.init_tablet( 'master',  'test_keyspace', '0')
     shard_replica.init_tablet('replica', 'test_keyspace', '0')
-    shard_rdonly.init_tablet( 'rdonly',  'test_keyspace', '0')
+    shard_rdonly1.init_tablet( 'rdonly',  'test_keyspace', '0')
 
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     # create databases so vttablet can start behaving normally
-    for t in [shard_master, shard_replica, shard_rdonly]:
+    for t in [shard_master, shard_replica, shard_rdonly1]:
       t.create_db('vt_test_keyspace')
       t.start_vttablet(wait_for_state=None)
 
     # wait for the tablets
     shard_master.wait_for_vttablet_state('SERVING')
     shard_replica.wait_for_vttablet_state('SERVING')
-    shard_rdonly.wait_for_vttablet_state('SERVING')
+    shard_rdonly1.wait_for_vttablet_state('SERVING')
 
     # reparent to make the tablets work
     utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/0',
@@ -319,18 +318,18 @@ index by_msg (msg)
     # create the split shards
     shard_0_master.init_tablet( 'master',  'test_keyspace', '-80')
     shard_0_replica.init_tablet('replica', 'test_keyspace', '-80')
-    shard_0_rdonly.init_tablet( 'rdonly',  'test_keyspace', '-80')
+    shard_0_rdonly1.init_tablet( 'rdonly',  'test_keyspace', '-80')
     shard_1_master.init_tablet( 'master',  'test_keyspace', '80-')
     shard_1_replica.init_tablet('replica', 'test_keyspace', '80-')
-    shard_1_rdonly.init_tablet( 'rdonly',  'test_keyspace', '80-')
+    shard_1_rdonly1.init_tablet( 'rdonly',  'test_keyspace', '80-')
 
     # start vttablet on the split shards (no db created,
     # so they're all not serving)
-    for t in [shard_0_master, shard_0_replica, shard_0_rdonly,
-              shard_1_master, shard_1_replica, shard_1_rdonly]:
+    for t in [shard_0_master, shard_0_replica, shard_0_rdonly1,
+              shard_1_master, shard_1_replica, shard_1_rdonly1]:
       t.start_vttablet(wait_for_state=None)
-    for t in [shard_0_master, shard_0_replica, shard_0_rdonly,
-              shard_1_master, shard_1_replica, shard_1_rdonly]:
+    for t in [shard_0_master, shard_0_replica, shard_0_rdonly1,
+              shard_1_master, shard_1_replica, shard_1_rdonly1]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
     utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/-80',
@@ -347,35 +346,25 @@ index by_msg (msg)
                              'TabletTypes: master,rdonly,replica',
                              keyspace_id_type=keyspace_id_type)
 
-    if use_clone_worker:
-      # the worker will do snapshot / restore
-      utils.run_vtworker(['--cell', 'test_nj',
-                          '--command_display_interval', '10ms',
-                          'SplitClone',
-                          '--exclude_tables' ,'unrelated',
-                          '--strategy=-populate_blp_checkpoint -write_masters_only',
-                          '--source_reader_count', '10',
-                          '--min_table_size_for_split', '1',
-                          'test_keyspace/0'],
-                         auto_log=True)
-      utils.run_vtctl(['ChangeSlaveType', shard_rdonly.tablet_alias, 'rdonly'],
+    # we need to create the schema, and the worker will do data copying
+    for keyspace_shard in ('test_keyspace/-80', 'test_keyspace/80-'):
+      utils.run_vtctl(['CopySchemaShard',
+                       '--exclude_tables', 'unrelated',
+                       shard_rdonly1.tablet_alias,
+                       keyspace_shard],
                       auto_log=True)
 
-    else:
-      # take the snapshot for the split
-      utils.run_vtctl(['MultiSnapshot', '--spec=-80-',
-                       shard_replica.tablet_alias], auto_log=True)
-
-      # wait for tablet's binlog server service to be enabled after snapshot
-      shard_replica.wait_for_binlog_server_state("Enabled")
-
-      # perform the restore.
-      utils.run_vtctl(['ShardMultiRestore', '-strategy=-populate_blp_checkpoint',
-                       'test_keyspace/-80', shard_replica.tablet_alias],
-                      auto_log=True)
-      utils.run_vtctl(['ShardMultiRestore', '-strategy=-populate_blp_checkpoint',
-                       'test_keyspace/80-', shard_replica.tablet_alias],
-                      auto_log=True)
+    utils.run_vtworker(['--cell', 'test_nj',
+                        '--command_display_interval', '10ms',
+                        'SplitClone',
+                        '--exclude_tables' ,'unrelated',
+                        '--strategy=-populate_blp_checkpoint',
+                        '--source_reader_count', '10',
+                        '--min_table_size_for_split', '1',
+                        'test_keyspace/0'],
+                       auto_log=True)
+    utils.run_vtctl(['ChangeSlaveType', shard_rdonly1.tablet_alias, 'rdonly'],
+                     auto_log=True)
 
     # check the startup values are in the right place
     self._check_startup_values()
@@ -404,17 +393,17 @@ index by_msg (msg)
     logging.debug("Running vtworker SplitDiff for -80")
     utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff', 'test_keyspace/-80'],
                        auto_log=True)
-    utils.run_vtctl(['ChangeSlaveType', shard_rdonly.tablet_alias, 'rdonly'],
+    utils.run_vtctl(['ChangeSlaveType', shard_rdonly1.tablet_alias, 'rdonly'],
                     auto_log=True)
-    utils.run_vtctl(['ChangeSlaveType', shard_0_rdonly.tablet_alias, 'rdonly'],
+    utils.run_vtctl(['ChangeSlaveType', shard_0_rdonly1.tablet_alias, 'rdonly'],
                     auto_log=True)
 
     logging.debug("Running vtworker SplitDiff for 80-")
     utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff', 'test_keyspace/80-'],
                        auto_log=True)
-    utils.run_vtctl(['ChangeSlaveType', shard_rdonly.tablet_alias, 'rdonly'],
+    utils.run_vtctl(['ChangeSlaveType', shard_rdonly1.tablet_alias, 'rdonly'],
                     auto_log=True)
-    utils.run_vtctl(['ChangeSlaveType', shard_1_rdonly.tablet_alias, 'rdonly'],
+    utils.run_vtctl(['ChangeSlaveType', shard_1_rdonly1.tablet_alias, 'rdonly'],
                     auto_log=True)
 
     utils.pause("Good time to test vtworker for diffs")
@@ -434,6 +423,9 @@ index by_msg (msg)
                              keyspace_id_type=keyspace_id_type)
 
     # then serve replica from the split shards
+    source_tablet = shard_replica
+    destination_tablets = [shard_0_replica, shard_1_replica]
+
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/0', 'replica'],
                     auto_log=True)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
@@ -446,20 +438,28 @@ index by_msg (msg)
     # move replica back and forth
     utils.run_vtctl(['MigrateServedTypes', '-reverse', 'test_keyspace/0', 'replica'],
                     auto_log=True)
+    # After a backwards migration, queryservice should be enabled on source and disabled on destinations
+    utils.check_tablet_query_service(self, source_tablet, True, False)
+    utils.check_tablet_query_services(self, destination_tablets, False, True)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -\n' +
                              'Partitions(rdonly): -80 80-\n' +
                              'Partitions(replica): -\n' +
                              'TabletTypes: master,rdonly,replica',
                              keyspace_id_type=keyspace_id_type)
+
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/0', 'replica'],
                     auto_log=True)
+    # After a forwards migration, queryservice should be disabled on source and enabled on destinations
+    utils.check_tablet_query_service(self, source_tablet, False, True)
+    utils.check_tablet_query_services(self, destination_tablets, True, False)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -\n' +
                              'Partitions(rdonly): -80 80-\n' +
                              'Partitions(replica): -80 80-\n' +
                              'TabletTypes: master,rdonly,replica',
                              keyspace_id_type=keyspace_id_type)
+
 
     # then serve master from the split shards
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/0', 'master'],
@@ -479,10 +479,10 @@ index by_msg (msg)
     utils.run_vtctl(['DeleteShard', 'test_keyspace/0'], expect_fail=True)
 
     # scrap the original tablets in the original shard
-    for t in [shard_master, shard_replica, shard_rdonly]:
+    for t in [shard_master, shard_replica, shard_rdonly1]:
       utils.run_vtctl(['ScrapTablet', t.tablet_alias], auto_log=True)
-    tablet.kill_tablets([shard_master, shard_replica, shard_rdonly])
-    for t in [shard_master, shard_replica, shard_rdonly]:
+    tablet.kill_tablets([shard_master, shard_replica, shard_rdonly1])
+    for t in [shard_master, shard_replica, shard_rdonly1]:
       utils.run_vtctl(['DeleteTablet', t.tablet_alias], auto_log=True)
 
     # rebuild the serving graph, all mentions of the old shards shoud be gone
@@ -492,8 +492,8 @@ index by_msg (msg)
     utils.run_vtctl(['DeleteShard', 'test_keyspace/0'], auto_log=True)
 
     # kill everything else
-    tablet.kill_tablets([shard_0_master, shard_0_replica, shard_0_rdonly,
-                         shard_1_master, shard_1_replica, shard_1_rdonly])
+    tablet.kill_tablets([shard_0_master, shard_0_replica, shard_0_rdonly1,
+                         shard_1_master, shard_1_replica, shard_1_rdonly1])
 
 if __name__ == '__main__':
   utils.main()

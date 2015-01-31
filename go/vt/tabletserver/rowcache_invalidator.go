@@ -79,10 +79,10 @@ func NewRowcacheInvalidator(qe *QueryEngine) *RowcacheInvalidator {
 func (rci *RowcacheInvalidator) Open(dbname string, mysqld *mysqlctl.Mysqld) {
 	rp, err := mysqld.MasterPosition()
 	if err != nil {
-		panic(NewTabletError(FATAL, "Rowcache invalidator aborting: cannot determine replication position: %v", err))
+		panic(NewTabletError(ErrFatal, "Rowcache invalidator aborting: cannot determine replication position: %v", err))
 	}
 	if mysqld.Cnf().BinLogPath == "" {
-		panic(NewTabletError(FATAL, "Rowcache invalidator aborting: binlog path not specified"))
+		panic(NewTabletError(ErrFatal, "Rowcache invalidator aborting: binlog path not specified"))
 	}
 	rci.dbname = dbname
 	rci.mysqld = mysqld
@@ -118,6 +118,9 @@ func (rci *RowcacheInvalidator) run(ctx *sync2.ServiceContext) error {
 		}()
 		if err == nil {
 			break
+		}
+		if IsConnErr(err) {
+			go CheckMySQL()
 		}
 		log.Errorf("binlog.ServeUpdateStream returned err '%v', retrying in 1 second.", err.Error())
 		internalErrors.Add("Invalidation", 1)
@@ -165,7 +168,7 @@ func (rci *RowcacheInvalidator) handleDMLEvent(event *blproto.StreamEvent) {
 	invalidations := int64(0)
 	tableInfo := rci.qe.schemaInfo.GetTable(event.TableName)
 	if tableInfo == nil {
-		panic(NewTabletError(FAIL, "Table %s not found", event.TableName))
+		panic(NewTabletError(ErrFail, "Table %s not found", event.TableName))
 	}
 	if tableInfo.CacheType == schema.CACHE_NONE {
 		return
@@ -196,7 +199,7 @@ func (rci *RowcacheInvalidator) handleDMLEvent(event *blproto.StreamEvent) {
 func (rci *RowcacheInvalidator) handleDDLEvent(ddl string) {
 	ddlPlan := planbuilder.DDLParse(ddl)
 	if ddlPlan.Action == "" {
-		panic(NewTabletError(FAIL, "DDL is not understood"))
+		panic(NewTabletError(ErrFail, "DDL is not understood"))
 	}
 	if ddlPlan.TableName != "" && ddlPlan.TableName != ddlPlan.NewName {
 		// It's a drop or rename.
@@ -230,7 +233,7 @@ func (rci *RowcacheInvalidator) handleUnrecognizedEvent(sql string) {
 	}
 
 	// Ignore cross-db statements.
-	if table.Qualifier != nil && string(table.Qualifier) != rci.qe.dbconfig.DbName {
+	if table.Qualifier != nil && string(table.Qualifier) != rci.qe.dbconfigs.App.DbName {
 		return
 	}
 

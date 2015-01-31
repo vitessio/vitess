@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// Package rpcwrap provides wrappers for rpcplus package
 package rpcwrap
 
 import (
@@ -13,7 +14,7 @@ import (
 	"net/http"
 	"time"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
 	rpc "github.com/youtube/vitess/go/rpcplus"
@@ -31,20 +32,24 @@ var (
 	connAccepted = stats.NewInt("connection-accepted")
 )
 
+// ClientCodecFactory holds pattern for other client codec factories
 type ClientCodecFactory func(conn io.ReadWriteCloser) rpc.ClientCodec
 
+// BufferedConnection holds connection data for codecs
 type BufferedConnection struct {
 	isClosed bool
 	*bufio.Reader
 	io.WriteCloser
 }
 
+// NewBufferedConnection creates a new Buffered Connection
 func NewBufferedConnection(conn io.ReadWriteCloser) *BufferedConnection {
 	connCount.Add(1)
 	connAccepted.Add(1)
 	return &BufferedConnection{false, bufio.NewReader(conn), conn}
 }
 
+// Close closes the buffered connection
 // FIXME(sougou/szopa): Find a better way to track connection count.
 func (bc *BufferedConnection) Close() error {
 	if !bc.isClosed {
@@ -119,6 +124,7 @@ func dialHTTP(network, address, codecName string, cFactory ClientCodecFactory, a
 	return nil, &net.OpError{Op: "dial-http", Net: network + " " + address, Addr: nil, Err: err}
 }
 
+// ServerCodecFactory holds pattern for other server codec factories
 type ServerCodecFactory func(conn io.ReadWriteCloser) rpc.ServerCodec
 
 // ServeRPC handles rpc requests using the hijack scheme of rpc
@@ -184,4 +190,76 @@ func GetRpcPath(codecName string, auth bool) string {
 		path += "/auth"
 	}
 	return path
+}
+
+// ServeHTTPRPC serves the given http rpc requests with the provided ServeMux,
+// does not support built-in authentication
+func ServeHTTPRPC(
+	handler *http.ServeMux,
+	server *rpc.Server,
+	codecName string,
+	cFactory ServerCodecFactory,
+	contextCreator func(*http.Request) context.Context) {
+
+	handler.Handle(
+		GetRpcPath(codecName, false),
+		&httpRPCHandler{
+			cFactory:       cFactory,
+			server:         server,
+			contextCreator: contextCreator,
+		},
+	)
+}
+
+// httpRPCHandler handles rpc queries for a all types of HTTP requests, does not
+// maintain a persistent connection.
+type httpRPCHandler struct {
+	cFactory ServerCodecFactory
+	server   *rpc.Server
+	// contextCreator creates an application specific context, while creating
+	// the context it should not read the request body nor write anything to
+	// headers
+	contextCreator func(*http.Request) context.Context
+}
+
+// ServeHTTP implements http.Handler's ServeHTTP
+func (h *httpRPCHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
+	codec := h.cFactory(&httpReadWriteCloser{rw: c, req: req})
+
+	var ctx context.Context
+
+	if h.contextCreator != nil {
+		ctx = h.contextCreator(req)
+	} else {
+		ctx = proto.NewContext(req.RemoteAddr)
+	}
+
+	h.server.ServeRequestWithContext(
+		ctx,
+		codec,
+	)
+
+	codec.Close()
+}
+
+// httpReadWriteCloser wraps http.ResponseWriter and http.Request, with the help
+// of those, implements ReadWriteCloser interface
+type httpReadWriteCloser struct {
+	rw  http.ResponseWriter
+	req *http.Request
+}
+
+// Read implements Reader interface
+func (i *httpReadWriteCloser) Read(p []byte) (n int, err error) {
+	return i.req.Body.Read(p)
+}
+
+// Write implements Writer interface
+func (i *httpReadWriteCloser) Write(p []byte) (n int, err error) {
+	return i.rw.Write(p)
+}
+
+// Close implements Closer interface
+func (i *httpReadWriteCloser) Close() error {
+	return i.req.Body.Close()
 }

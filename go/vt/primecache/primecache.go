@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// primecache primes the MySQL buffer cache with the rows that are
+// Package primecache primes the MySQL buffer cache with the rows that are
 // going to be modified by the replication stream. It only activates
 // if we're falling behind on replication.
 package primecache

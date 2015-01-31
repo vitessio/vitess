@@ -5,13 +5,12 @@
 package topotools
 
 // This file contains utility functions for reparenting. It is used by
-// the wrangler, and by the new master tablet for
-// ShardExternallyReparented.
+// the new master tablet for TabletExternallyReparented.
 
 import (
 	"sync"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
@@ -50,12 +49,11 @@ func RestartSlavesExternal(ts topo.Server, log logutil.Logger, slaveTabletMap, m
 			if err != nil {
 				// the old master can be annoying if left
 				// around in the replication graph, so if we
-				// can't restart it, we just scrap it.
+				// can't restart it, we just make it spare.
 				// We don't rebuild the Shard just yet though.
 				log.Warningf("Old master %v is not restarting in time, forcing it to spare: %v", ti.Alias, err)
 
 				ti.Type = topo.TYPE_SPARE
-				ti.Parent = masterElectTabletAlias
 				if err := topo.UpdateTablet(context.TODO(), ts, ti); err != nil {
 					log.Warningf("Failed to change old master %v to spare: %v", ti.Alias, err)
 				}

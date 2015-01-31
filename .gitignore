@@ -11,6 +11,10 @@
 *.swp
 tags
 
+# Eclipse files
+.project
+.settings/
+
 # cbson & other C build dirs
 **/build
 
@@ -21,3 +25,7 @@ third_party/mysql
 java/vtocc-client/target
 java/vtocc-jdbc-driver/target
 third_party/acolyte
+
+# intellij files
+*.iml
+.idea

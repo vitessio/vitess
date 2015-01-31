@@ -8,6 +8,10 @@
 #   1. resolve a "db key" into a set of parameters that can be used to connect
 #   2. resolve the full topology of all databases
 #
+# Note: This is meant to be used to resolve vttablet backends directly using
+# vtclient.py. This module will be subsumed by vtgate and hence will be retired
+# soon.
+#
 
 import logging
 import random
@@ -129,13 +133,13 @@ def get_host_port_by_name(topo_client, db_key, encrypted=False):
   if len(parts) == 2:
     service = parts[1]
   else:
-    service = '_mysql'
+    service = 'mysql'
 
   host_port_list = []
   encrypted_host_port_list = []
 
-  if service == '_vtocc' and encrypted:
-    encrypted_service = '_vts'
+  if service == 'vt' and encrypted:
+    encrypted_service = 'vts'
   db_key = parts[0]
   ks, shard, tablet_type = db_key.split('.')
   try:
@@ -152,7 +156,7 @@ def get_host_port_by_name(topo_client, db_key, encrypted=False):
   for entry in data['Entries']:
     if service in entry['NamedPortMap']:
       host_port = (entry['Host'], entry['NamedPortMap'][service],
-                   service == '_vts')
+                   service == 'vts')
       host_port_list.append(host_port)
     if encrypted and encrypted_service in entry['NamedPortMap']:
       host_port = (entry['Host'], entry['NamedPortMap'][encrypted_service],
@@ -187,4 +191,3 @@ def get_keyrange_from_shard_name(keyspace, shard_name, db_type):
   else:
     kr = keyrange.KeyRange(shard_name)
   return kr
-

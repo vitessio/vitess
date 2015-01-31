@@ -2,7 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// wrangler contains the Wrangler object to manage complex topology actions.
+// Package wrangler contains the Wrangler object to manage complex
+// topology actions.
 package wrangler
 
 import (
@@ -18,44 +19,39 @@ var (
 	// DefaultActionTimeout is a good default for interactive
 	// remote actions. We usually take a lock then do an action,
 	// so basing this to be greater than DefaultLockTimeout is good.
+	// Use this as the default value for Context that need a deadline.
 	DefaultActionTimeout = actionnode.DefaultLockTimeout * 4
 )
 
 // Wrangler manages complex actions on the topology, like reparents,
 // snapshots, restores, ...
-// It is not a thread safe structure. Two go routines cannot usually
-// call wrangler methods at the same time (they probably would not
-// have the same logger, and definitely not the same timeouts /
-// deadlines).
+//
+// FIXME(alainjobart) take the context out of this structure.
+// We want the context to come from the outside on every call.
+//
+// Multiple go routines can use the same Wrangler at the same time,
+// provided they want to share the same logger / topo server / lock timeout.
 type Wrangler struct {
 	logger      logutil.Logger
 	ts          topo.Server
 	tmc         tmclient.TabletManagerClient
-	deadline    time.Time
 	lockTimeout time.Duration
 }
 
 // New creates a new Wrangler object.
 //
-// actionTimeout: how long should we wait for an action to complete?
-// - if using wrangler for just one action, this is set properly
-//   upon wrangler creation.
-// - if re-using wrangler multiple times, call ResetActionTimeout before
-//   every action.
-//
 // lockTimeout: how long should we wait for the initial lock to start
-// a complex action?  This is distinct from actionTimeout because most
+// a complex action?  This is distinct from the context timeout because most
 // of the time, we want to immediately know that our action will
 // fail. However, automated action will need some time to arbitrate
 // the locks.
-func New(logger logutil.Logger, ts topo.Server, actionTimeout, lockTimeout time.Duration) *Wrangler {
-	return &Wrangler{logger, ts, tmclient.NewTabletManagerClient(), time.Now().Add(actionTimeout), lockTimeout}
-}
-
-// ActionTimeout returns the timeout to use so the action finishes before
-// the deadline.
-func (wr *Wrangler) ActionTimeout() time.Duration {
-	return wr.deadline.Sub(time.Now())
+func New(logger logutil.Logger, ts topo.Server, lockTimeout time.Duration) *Wrangler {
+	return &Wrangler{
+		logger:      logger,
+		ts:          ts,
+		tmc:         tmclient.NewTabletManagerClient(),
+		lockTimeout: lockTimeout,
+	}
 }
 
 // TopoServer returns the topo.Server this wrangler is using.
@@ -78,21 +74,4 @@ func (wr *Wrangler) SetLogger(logger logutil.Logger) {
 // Logger returns the logger associated with this wrangler.
 func (wr *Wrangler) Logger() logutil.Logger {
 	return wr.logger
-}
-
-// ResetActionTimeout should be used before every action on a wrangler
-// object that is going to be re-used:
-// - vtctl will not call this, as it does one action
-// - vtctld will call this, as it re-uses the same wrangler for actions
-func (wr *Wrangler) ResetActionTimeout(actionTimeout time.Duration) {
-	wr.deadline = time.Now().Add(actionTimeout)
-}
-
-// signal handling
-var interrupted = make(chan struct{})
-
-// SignalInterrupt needs to be called when a signal interrupts the current
-// process.
-func SignalInterrupt() {
-	close(interrupted)
 }

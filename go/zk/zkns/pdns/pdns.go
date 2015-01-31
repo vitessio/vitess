@@ -1,4 +1,5 @@
-// To be used with PowerDNS (pdns) as a "pipe backend" CoProcess.
+// Package pdns provides code to be used with PowerDNS (pdns) as a
+// "pipe backend" CoProcess.
 //
 // Protocol description:
 // http://downloads.powerdns.com/documentation/html/backends-detail.html#PIPEBACKEND.

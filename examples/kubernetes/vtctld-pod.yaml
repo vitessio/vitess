@@ -17,13 +17,9 @@ desiredState:
           - sh
           - "-c"
           - >-
-            echo "{\"test_cell\":\"$SERVICE_HOST:2181\",\"global\":\"$SERVICE_HOST:2181\"}" > /vt/zk-client-conf.json &&
             mkdir -p $VTDATAROOT/tmp &&
             chown -R vitess /vt &&
-            su -p -c "/vt/bin/vtctld -debug -templates $VTTOP/go/cmd/vtctld/templates -log_dir $VTDATAROOT/tmp -port 15000" vitess
-        env:
-          - name: ZK_CLIENT_CONFIG
-            value: /vt/zk-client-conf.json
+            su -p -c "/vt/bin/vtctld -debug -templates $VTTOP/go/cmd/vtctld/templates -log_dir $VTDATAROOT/tmp -alsologtostderr -port 15000 -topo_implementation etcd -etcd_global_addrs http://$ETCD_GLOBAL_SERVICE_HOST:$ETCD_GLOBAL_SERVICE_PORT" vitess
     volumes:
       - name: syslog
         source: {hostDir: {path: /dev/log}}

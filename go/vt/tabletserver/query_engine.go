@@ -39,7 +39,7 @@ const spotCheckMultiplier = 1e6
 // TODO(sougou): Switch to error return scheme.
 type QueryEngine struct {
 	schemaInfo *SchemaInfo
-	dbconfig   *dbconfigs.DBConfig
+	dbconfigs  *dbconfigs.DBConfigs
 
 	// Pools
 	cachePool      *CachePool
@@ -85,11 +85,11 @@ var (
 	internalErrors *stats.Counters
 	resultStats    *stats.Histogram
 	spotCheckCount *stats.Int
-	QPSRates       *stats.Rates
+	qpsRates       *stats.Rates
 
 	resultBuckets = []int64{0, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000}
 
-	connPoolClosedErr = NewTabletError(FATAL, "connection pool is closed")
+	connPoolClosedErr = NewTabletError(ErrFatal, "connection pool is closed")
 )
 
 // CacheInvalidator provides the abstraction needed for an instant invalidation
@@ -104,10 +104,10 @@ func getOrPanic(pool *dbconnpool.ConnectionPool) dbconnpool.PoolConnection {
 	if err == nil {
 		return conn
 	}
-	if err == dbconnpool.CONN_POOL_CLOSED_ERR {
+	if err == dbconnpool.ErrConnPoolClosed {
 		panic(connPoolClosedErr)
 	}
-	panic(NewTabletErrorSql(FATAL, err))
+	panic(NewTabletErrorSql(ErrFatal, err))
 }
 
 // NewQueryEngine creates a new QueryEngine.
@@ -174,7 +174,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 	stats.Publish("StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
 	stats.Publish("QueryTimeout", stats.DurationFunc(qe.queryTimeout.Get))
 	queryStats = stats.NewTimings("Queries")
-	QPSRates = stats.NewRates("QPS", queryStats, 15, 60*time.Second)
+	qpsRates = stats.NewRates("QPS", queryStats, 15, 60*time.Second)
 	waitStats = stats.NewTimings("Waits")
 	killStats = stats.NewCounters("Kills")
 	infoErrors = stats.NewCounters("InfoErrors")
@@ -190,43 +190,51 @@ func NewQueryEngine(config Config) *QueryEngine {
 }
 
 // Open must be called before sending requests to QueryEngine.
-func (qe *QueryEngine) Open(dbconfig *dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules, mysqld *mysqlctl.Mysqld) {
-	qe.dbconfig = dbconfig
-	connFactory := dbconnpool.DBConnectionCreator(&dbconfig.ConnectionParams, mysqlStats)
+func (qe *QueryEngine) Open(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld *mysqlctl.Mysqld) {
+	qe.dbconfigs = dbconfigs
+	connFactory := dbconnpool.DBConnectionCreator(&dbconfigs.App.ConnectionParams, mysqlStats)
+	// Create dba params based on App connection params
+	// and Dba credentials.
+	dba := dbconfigs.App.ConnectionParams
+	if dbconfigs.Dba.Uname != "" {
+		dba.Uname = dbconfigs.Dba.Uname
+		dba.Pass = dbconfigs.Dba.Pass
+	}
+	dbaConnFactory := dbconnpool.DBConnectionCreator(&dba, mysqlStats)
 
 	strictMode := false
 	if qe.strictMode.Get() != 0 {
 		strictMode = true
 	}
-	if !strictMode && dbconfig.EnableRowcache {
-		panic(NewTabletError(FATAL, "Rowcache cannot be enabled when queryserver-config-strict-mode is false"))
+	if !strictMode && dbconfigs.App.EnableRowcache {
+		panic(NewTabletError(ErrFatal, "Rowcache cannot be enabled when queryserver-config-strict-mode is false"))
 	}
-	if dbconfig.EnableRowcache {
+	if dbconfigs.App.EnableRowcache {
 		qe.cachePool.Open()
 		log.Infof("rowcache is enabled")
 	} else {
 		// Invalidator should not be enabled if rowcache is not enabled.
-		dbconfig.EnableInvalidator = false
+		dbconfigs.App.EnableInvalidator = false
 		log.Infof("rowcache is not enabled")
 	}
 
 	start := time.Now()
 	// schemaInfo depends on cachePool. Every table that has a rowcache
 	// points to the cachePool.
-	qe.schemaInfo.Open(connFactory, schemaOverrides, qe.cachePool, qrs, strictMode)
+	qe.schemaInfo.Open(dbaConnFactory, schemaOverrides, qe.cachePool, strictMode)
 	log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))
 
 	// Start the invalidator only after schema is loaded.
 	// This will allow qe to find the table info
 	// for the invalidation events that will start coming
 	// immediately.
-	if dbconfig.EnableInvalidator {
-		qe.invalidator.Open(dbconfig.DbName, mysqld)
+	if dbconfigs.App.EnableInvalidator {
+		qe.invalidator.Open(dbconfigs.App.DbName, mysqld)
 	}
 	qe.connPool.Open(connFactory)
 	qe.streamConnPool.Open(connFactory)
 	qe.txPool.Open(connFactory)
-	qe.connKiller.Open(connFactory)
+	qe.connKiller.Open(dbaConnFactory)
 }
 
 // Launch launches the specified function inside a goroutine.
@@ -246,6 +254,20 @@ func (qe *QueryEngine) Launch(f func()) {
 		}()
 		f()
 	}()
+}
+
+// CheckMySQL returns true if we can connect to MySQL.
+func (qe *QueryEngine) CheckMySQL() bool {
+	conn, err := dbconnpool.NewDBConnection(&qe.dbconfigs.App.ConnectionParams, mysqlStats)
+	if err != nil {
+		if IsConnErr(err) {
+			return false
+		}
+		log.Warningf("checking MySQL, unexpected error: %v", err)
+		return true
+	}
+	conn.Close()
+	return true
 }
 
 // WaitForTxEmpty must be called before calling Close.
@@ -268,5 +290,5 @@ func (qe *QueryEngine) Close() {
 	qe.invalidator.Close()
 	qe.schemaInfo.Close()
 	qe.cachePool.Close()
-	qe.dbconfig = nil
+	qe.dbconfigs = nil
 }

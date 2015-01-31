@@ -5,12 +5,22 @@ import logging
 import os
 import socket
 import subprocess
+import sys
 
 # Import the topo implementations that you want registered as options for the
 # --topo-server-flavor flag.
 import topo_flavor.zookeeper
+import topo_flavor.etcd
 
 from topo_flavor.server import topo_server
+
+# sanity check the environment
+if os.environ['USER'] == 'root':
+  sys.stderr.write('ERROR: Vitess and its dependencies (mysqld and memcached) should not be run as root.\n')
+  sys.exit(1)
+if 'VTTOP' not in os.environ:
+  sys.stderr.write('ERROR: Vitess environment not set up. Please run "source dev.env" first.\n')
+  sys.exit(1)
 
 # vttop is the toplevel of the vitess source tree
 vttop = os.environ['VTTOP']
@@ -90,7 +100,7 @@ def prog_compile(name):
     return
   compiled_progs.append(name)
   logging.debug('Compiling %s', name)
-  run(['go', 'install'], cwd=os.path.join(vttop, 'go', 'cmd', name))
+  run(['godep', 'go', 'install'], cwd=os.path.join(vttop, 'go', 'cmd', name))
 
 # binary management: returns the full path for a binary
 # this should typically not be used outside this file, unless you want to bypass
@@ -118,3 +128,7 @@ def binary_argstr(name):
 # binary management for the MySQL distribution.
 def mysql_binary_path(name):
   return os.path.join(vt_mysql_root, 'bin', name)
+
+# add environment-specific command-line options
+def add_options(parser):
+  pass

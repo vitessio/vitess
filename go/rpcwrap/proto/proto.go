@@ -1,9 +1,10 @@
+// Package proto provides protocol functions
 package proto
 
 import (
 	"time"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 )
 
 type contextKey int
@@ -56,6 +57,7 @@ func SetUsername(ctx context.Context, username string) (ok bool) {
 	return true
 }
 
+// NewContext creates a default context satisfying context.Context
 func NewContext(remoteAddr string) context.Context {
 	return &rpcContext{remoteAddr: remoteAddr}
 }
@@ -70,14 +72,17 @@ func (ctx *rpcContext) Deadline() (deadline time.Time, ok bool) {
 	return time.Time{}, false
 }
 
+// Done channel for cancelation.
 func (ctx *rpcContext) Done() <-chan struct{} {
 	return nil
 }
 
+// Err is stub for interface function
 func (ctx *rpcContext) Err() error {
 	return nil
 }
 
+// Value returns only predefined variables if already set
 func (ctx *rpcContext) Value(key interface{}) interface{} {
 	k, ok := key.(contextKey)
 	if !ok {

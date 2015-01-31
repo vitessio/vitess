@@ -13,7 +13,7 @@ import (
 	"text/template"
 	"time"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -28,45 +28,67 @@ import (
 
 // tableStatus keeps track of the status for a given table
 type tableStatus struct {
-	name     string
-	rowCount uint64
+	name   string
+	isView bool
 
 	// all subsequent fields are protected by the mutex
-	mu         sync.Mutex
-	state      string
-	copiedRows uint64
+	mu             sync.Mutex
+	rowCount       uint64 // set to approximate value, until copy ends
+	copiedRows     uint64 // actual count of copied rows
+	threadCount    int    // how many concurrent threads will copy the data
+	threadsStarted int    // how many threads have started
+	threadsDone    int    // how many threads are done
 }
 
-func (ts *tableStatus) setState(state string) {
+func (ts *tableStatus) setThreadCount(threadCount int) {
 	ts.mu.Lock()
-	ts.state = state
+	ts.threadCount = threadCount
+	ts.mu.Unlock()
+}
+
+func (ts *tableStatus) threadStarted() {
+	ts.mu.Lock()
+	ts.threadsStarted++
+	ts.mu.Unlock()
+}
+
+func (ts *tableStatus) threadDone() {
+	ts.mu.Lock()
+	ts.threadsDone++
 	ts.mu.Unlock()
 }
 
 func (ts *tableStatus) addCopiedRows(copiedRows int) {
 	ts.mu.Lock()
 	ts.copiedRows += uint64(copiedRows)
-	if ts.copiedRows >= ts.rowCount {
-		// FIXME(alainjobart) this is not accurate, as the
-		// total row count is approximate
-		ts.state = "finished the copy"
+	if ts.copiedRows > ts.rowCount {
+		// since rowCount is not accurate, update it if we go past it.
+		ts.rowCount = ts.copiedRows
 	}
 	ts.mu.Unlock()
 }
 
-func formatTableStatuses(tableStatuses []tableStatus, startTime time.Time) ([]string, time.Time) {
+func formatTableStatuses(tableStatuses []*tableStatus, startTime time.Time) ([]string, time.Time) {
 	copiedRows := uint64(0)
 	rowCount := uint64(0)
 	result := make([]string, len(tableStatuses))
 	for i, ts := range tableStatuses {
 		ts.mu.Lock()
-		if ts.rowCount > 0 {
-			result[i] = fmt.Sprintf("%v: %v (%v/%v)", ts.name, ts.state, ts.copiedRows, ts.rowCount)
-			copiedRows += ts.copiedRows
-			rowCount += ts.rowCount
+		if ts.isView {
+			// views are not copied
+			result[i] = fmt.Sprintf("%v is a view", ts.name)
+		} else if ts.threadsStarted == 0 {
+			// we haven't started yet
+			result[i] = fmt.Sprintf("%v: copy not started (estimating %v rows)", ts.name, ts.rowCount)
+		} else if ts.threadsDone == ts.threadCount {
+			// we are done with the copy
+			result[i] = fmt.Sprintf("%v: copy done, copied %v rows", ts.name, ts.rowCount)
 		} else {
-			result[i] = fmt.Sprintf("%v: %v", ts.name, ts.state)
+			// copy is running
+			result[i] = fmt.Sprintf("%v: copy running using %v threads (%v/%v rows)", ts.name, ts.threadsStarted-ts.threadsDone, ts.copiedRows, ts.rowCount)
 		}
+		copiedRows += ts.copiedRows
+		rowCount += ts.rowCount
 		ts.mu.Unlock()
 	}
 	now := time.Now()
@@ -75,6 +97,47 @@ func formatTableStatuses(tableStatuses []tableStatus, startTime time.Time) ([]st
 	}
 	eta := now.Add(time.Duration(float64(now.Sub(startTime)) * float64(rowCount) / float64(copiedRows)))
 	return result, eta
+}
+
+// executeFetchWithRetries will attempt to run ExecuteFetch for a single command, with a reasonably small timeout.
+// If will keep retrying the ExecuteFetch (for a finite but longer duration) if it fails due to a timeout or a
+// retriable application error.
+func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, command string, disableBinLogs bool) error {
+	retryDuration := 2 * time.Hour
+	// We should keep retrying up until the retryCtx runs out
+	retryCtx, retryCancel := context.WithTimeout(ctx, retryDuration)
+	defer retryCancel()
+	for {
+		tryCtx, cancel := context.WithTimeout(retryCtx, 2*time.Minute)
+		_, err := wr.TabletManagerClient().ExecuteFetch(tryCtx, ti, command, 0, false, disableBinLogs)
+		cancel()
+		switch {
+		case err == nil:
+			// success!
+			return nil
+		case wr.TabletManagerClient().IsTimeoutError(err):
+			wr.Logger().Infof("ExecuteFetch failed on %v; will retry because it was a timeout error: %v", ti, err)
+		case strings.Contains(err.Error(), "retry: "):
+			wr.Logger().Infof("ExecuteFetch failed on %v; will retry because it was a retriable application failure: %v", ti, err)
+		default:
+			return err
+		}
+		t := time.NewTimer(30 * time.Second)
+		// don't leak memory if the timer isn't triggered
+		defer t.Stop()
+
+		select {
+		case <-retryCtx.Done():
+			if retryCtx.Err() == context.DeadlineExceeded {
+				return fmt.Errorf("failed to connect to destination tablet %v after retrying for %v", ti, retryDuration)
+			}
+			return fmt.Errorf("interrupted while trying to run %v on tablet %v", command, ti)
+		case <-t.C:
+			// Re-resolve and retry 30s after the failure
+			// TODO(aaijazi): Re-resolve before retrying
+		}
+
+	}
 }
 
 // fillStringTemplate returns the string template filled
@@ -88,24 +151,16 @@ func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
 }
 
 // runSqlCommands will send the sql commands to the remote tablet.
-func runSqlCommands(wr *wrangler.Wrangler, ti *topo.TabletInfo, commands []string, abort chan struct{}, disableBinLogs bool) error {
+func runSqlCommands(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, commands []string, disableBinLogs bool) error {
 	for _, command := range commands {
 		command, err := fillStringTemplate(command, map[string]string{"DatabaseName": ti.DbName()})
 		if err != nil {
 			return fmt.Errorf("fillStringTemplate failed: %v", err)
 		}
 
-		_, err = wr.TabletManagerClient().ExecuteFetch(context.TODO(), ti, command, 0, false, disableBinLogs, 30*time.Second)
+		err = executeFetchWithRetries(ctx, wr, ti, command, disableBinLogs)
 		if err != nil {
 			return err
-		}
-
-		// check on abort
-		select {
-		case <-abort:
-			return nil
-		default:
-			break
 		}
 	}
 
@@ -119,7 +174,7 @@ func runSqlCommands(wr *wrangler.Wrangler, ti *topo.TabletInfo, commands []strin
 // "", "value1", "value2", ""
 // A non-split tablet will just return:
 // "", ""
-func findChunks(wr *wrangler.Wrangler, ti *topo.TabletInfo, td *myproto.TableDefinition, minTableSizeForSplit uint64, sourceReaderCount int) ([]string, error) {
+func findChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, td *myproto.TableDefinition, minTableSizeForSplit uint64, sourceReaderCount int) ([]string, error) {
 	result := []string{"", ""}
 
 	// eliminate a few cases we don't split tables for
@@ -134,7 +189,9 @@ func findChunks(wr *wrangler.Wrangler, ti *topo.TabletInfo, td *myproto.TableDef
 
 	// get the min and max of the leading column of the primary key
 	query := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v.%v", td.PrimaryKeyColumns[0], td.PrimaryKeyColumns[0], ti.DbName(), td.Name)
-	qr, err := wr.TabletManagerClient().ExecuteFetch(context.TODO(), ti, query, 1, true, false, 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	qr, err := wr.TabletManagerClient().ExecuteFetch(ctx, ti, query, 1, true, false)
+	cancel()
 	if err != nil {
 		wr.Logger().Infof("Not splitting table %v into multiple chunks: %v", td.Name, err)
 		return result, nil
@@ -288,7 +345,7 @@ func makeValueString(fields []mproto.Field, rows [][]sqltypes.Value) string {
 
 // executeFetchLoop loops over the provided insertChannel
 // and sends the commands to the provided tablet.
-func executeFetchLoop(wr *wrangler.Wrangler, ti *topo.TabletInfo, insertChannel chan string, abort chan struct{}, disableBinLogs bool) error {
+func executeFetchLoop(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, insertChannel chan string, disableBinLogs bool) error {
 	for {
 		select {
 		case cmd, ok := <-insertChannel:
@@ -297,14 +354,14 @@ func executeFetchLoop(wr *wrangler.Wrangler, ti *topo.TabletInfo, insertChannel 
 				return nil
 			}
 			cmd = "INSERT INTO `" + ti.DbName() + "`." + cmd
-			_, err := wr.TabletManagerClient().ExecuteFetch(context.TODO(), ti, cmd, 0, false, disableBinLogs, 30*time.Second)
+			err := executeFetchWithRetries(ctx, wr, ti, cmd, disableBinLogs)
 			if err != nil {
 				return fmt.Errorf("ExecuteFetch failed: %v", err)
 			}
-		case <-abort:
-			// FIXME(alainjobart): note this select case
-			// could be starved here, and we might miss
-			// the abort in some corner cases.
+		case <-ctx.Done():
+			// Doesn't really matter if this select gets starved, because the other case
+			// will also return an error due to executeFetch's context being closed. This case
+			// does prevent us from blocking indefinitely on inserChannel when the worker is canceled.
 			return nil
 		}
 	}

@@ -45,7 +45,9 @@ func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
 
-	dbconfigs.RegisterFlags()
+	flags := dbconfigs.AppConfig | dbconfigs.DbaConfig |
+		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
+	dbconfigs.RegisterFlags(flags)
 	flag.Parse()
 
 	mycnf := mysqlctl.NewMycnf(uint32(*tabletUid), *mysqlPort)
@@ -53,7 +55,7 @@ func main() {
 		mycnf.SocketFile = *mysqlSocket
 	}
 
-	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile)
+	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, flags)
 	if err != nil {
 		log.Errorf("%v", err)
 		exit.Return(255)

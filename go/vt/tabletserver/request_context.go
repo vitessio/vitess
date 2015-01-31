@@ -7,13 +7,14 @@ package tabletserver
 import (
 	"time"
 
-	"code.google.com/p/go.net/context"
 	"github.com/youtube/vitess/go/hack"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"golang.org/x/net/context"
 )
 
+// RequestContext encapsulates a context and associated variables for a request
 type RequestContext struct {
 	ctx      context.Context
 	logStats *SQLQueryStats
@@ -25,17 +26,18 @@ func (rqc *RequestContext) getConn(pool *dbconnpool.ConnectionPool) dbconnpool.P
 	start := time.Now()
 	timeout, err := rqc.deadline.Timeout()
 	if err != nil {
-		panic(NewTabletError(FAIL, "getConn: %v", err))
+		panic(NewTabletError(ErrFail, "getConn: %v", err))
 	}
 	conn, err := pool.Get(timeout)
 	switch err {
 	case nil:
 		rqc.logStats.WaitingForConnection += time.Now().Sub(start)
 		return conn
-	case dbconnpool.CONN_POOL_CLOSED_ERR:
+	case dbconnpool.ErrConnPoolClosed:
 		panic(connPoolClosedErr)
 	}
-	panic(NewTabletErrorSql(FATAL, err))
+	go CheckMySQL()
+	panic(NewTabletErrorSql(ErrFatal, err))
 }
 
 func (rqc *RequestContext) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}) (result *mproto.QueryResult) {
@@ -46,12 +48,13 @@ func (rqc *RequestContext) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparse
 		waitingForConnectionStart := time.Now()
 		timeout, err := rqc.deadline.Timeout()
 		if err != nil {
-			q.Err = NewTabletError(FAIL, "qFetch: %v", err)
+			q.Err = NewTabletError(ErrFail, "qFetch: %v", err)
 		}
 		conn, err := rqc.qe.connPool.Get(timeout)
 		logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 		if err != nil {
-			q.Err = NewTabletErrorSql(FATAL, err)
+			go CheckMySQL()
+			q.Err = NewTabletErrorSql(ErrFatal, err)
 		} else {
 			defer conn.Recycle()
 			q.Result, q.Err = rqc.execSQLNoPanic(conn, sql, false)
@@ -86,7 +89,7 @@ func (rqc *RequestContext) generateFinalSql(parsedQuery *sqlparser.ParsedQuery, 
 	bindVars["#maxLimit"] = rqc.qe.maxResultSize.Get() + 1
 	sql, err := parsedQuery.GenerateQuery(bindVars)
 	if err != nil {
-		panic(NewTabletError(FAIL, "%s", err))
+		panic(NewTabletError(ErrFail, "%s", err))
 	}
 	if buildStreamComment != nil {
 		sql = append(sql, buildStreamComment...)
@@ -105,7 +108,28 @@ func (rqc *RequestContext) execSQL(conn dbconnpool.PoolConnection, sql string, w
 }
 
 func (rqc *RequestContext) execSQLNoPanic(conn dbconnpool.PoolConnection, sql string, wantfields bool) (*mproto.QueryResult, error) {
-	if qd := rqc.qe.connKiller.SetDeadline(conn.Id(), rqc.deadline); qd != nil {
+	for attempt := 1; attempt <= 2; attempt++ {
+		r, err := rqc.execSQLOnce(conn, sql, wantfields)
+		switch {
+		case err == nil:
+			return r, nil
+		case !IsConnErr(err):
+			return nil, NewTabletErrorSql(ErrFail, err)
+		case attempt == 2:
+			return nil, NewTabletErrorSql(ErrFatal, err)
+		}
+		err2 := conn.Reconnect()
+		if err2 != nil {
+			go CheckMySQL()
+			return nil, NewTabletErrorSql(ErrFatal, err)
+		}
+	}
+	panic("unreachable")
+}
+
+// execSQLOnce returns a normal error that needs to be wrapped into a TabletError by the caller.
+func (rqc *RequestContext) execSQLOnce(conn dbconnpool.PoolConnection, sql string, wantfields bool) (*mproto.QueryResult, error) {
+	if qd := rqc.qe.connKiller.SetDeadline(conn.ID(), rqc.deadline); qd != nil {
 		defer qd.Done()
 	}
 
@@ -113,7 +137,7 @@ func (rqc *RequestContext) execSQLNoPanic(conn dbconnpool.PoolConnection, sql st
 	result, err := conn.ExecuteFetch(sql, int(rqc.qe.maxResultSize.Get()), wantfields)
 	rqc.logStats.AddRewrittenSql(sql, start)
 	if err != nil {
-		return nil, NewTabletErrorSql(FAIL, err)
+		return nil, err
 	}
 	return result, nil
 }
@@ -123,6 +147,6 @@ func (rqc *RequestContext) execStreamSQL(conn dbconnpool.PoolConnection, sql str
 	err := conn.ExecuteStreamFetch(sql, callback, int(rqc.qe.streamBufferSize.Get()))
 	rqc.logStats.AddRewrittenSql(sql, start)
 	if err != nil {
-		panic(NewTabletErrorSql(FAIL, err))
+		panic(NewTabletErrorSql(ErrFail, err))
 	}
 }

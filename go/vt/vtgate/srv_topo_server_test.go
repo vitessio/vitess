@@ -8,11 +8,9 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
-	"time"
 
-	"github.com/youtube/vitess/go/vt/context"
-	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 func TestFilterUnhealthy(t *testing.T) {
@@ -100,7 +98,7 @@ func TestFilterUnhealthy(t *testing.T) {
 					topo.EndPoint{
 						Uid: 4,
 						Health: map[string]string{
-							health.ReplicationLag: health.ReplicationLagHigh,
+							topo.ReplicationLag: topo.ReplicationLagHigh,
 						},
 					},
 					topo.EndPoint{
@@ -139,19 +137,19 @@ func TestFilterUnhealthy(t *testing.T) {
 					topo.EndPoint{
 						Uid: 1,
 						Health: map[string]string{
-							health.ReplicationLag: health.ReplicationLagHigh,
+							topo.ReplicationLag: topo.ReplicationLagHigh,
 						},
 					},
 					topo.EndPoint{
 						Uid: 2,
 						Health: map[string]string{
-							health.ReplicationLag: health.ReplicationLagHigh,
+							topo.ReplicationLag: topo.ReplicationLagHigh,
 						},
 					},
 					topo.EndPoint{
 						Uid: 3,
 						Health: map[string]string{
-							health.ReplicationLag: health.ReplicationLagHigh,
+							topo.ReplicationLag: topo.ReplicationLagHigh,
 						},
 					},
 				},
@@ -161,19 +159,19 @@ func TestFilterUnhealthy(t *testing.T) {
 					topo.EndPoint{
 						Uid: 1,
 						Health: map[string]string{
-							health.ReplicationLag: health.ReplicationLagHigh,
+							topo.ReplicationLag: topo.ReplicationLagHigh,
 						},
 					},
 					topo.EndPoint{
 						Uid: 2,
 						Health: map[string]string{
-							health.ReplicationLag: health.ReplicationLagHigh,
+							topo.ReplicationLag: topo.ReplicationLagHigh,
 						},
 					},
 					topo.EndPoint{
 						Uid: 3,
 						Health: map[string]string{
-							health.ReplicationLag: health.ReplicationLagHigh,
+							topo.ReplicationLag: topo.ReplicationLagHigh,
 						},
 					},
 				},
@@ -235,7 +233,6 @@ func (ft *fakeTopo) UpdateTabletFields(tabletAlias topo.TabletAlias, update func
 	return nil
 }
 func (ft *fakeTopo) DeleteTablet(alias topo.TabletAlias) error                  { return nil }
-func (ft *fakeTopo) ValidateTablet(alias topo.TabletAlias) error                { return nil }
 func (ft *fakeTopo) GetTablet(alias topo.TabletAlias) (*topo.TabletInfo, error) { return nil, nil }
 func (ft *fakeTopo) GetTabletsByCell(cell string) ([]topo.TabletAlias, error)   { return nil, nil }
 func (ft *fakeTopo) UpdateShardReplicationFields(cell, keyspace, shard string, update func(*topo.ShardReplication) error) error {
@@ -245,7 +242,7 @@ func (ft *fakeTopo) GetShardReplication(cell, keyspace, shard string) (*topo.Sha
 	return nil, nil
 }
 func (ft *fakeTopo) DeleteShardReplication(cell, keyspace, shard string) error { return nil }
-func (ft *fakeTopo) LockSrvShardForAction(cell, keyspace, shard, contents string, timeout time.Duration, interrupted chan struct{}) (string, error) {
+func (ft *fakeTopo) LockSrvShardForAction(ctx context.Context, cell, keyspace, shard, contents string) (string, error) {
 	return "", nil
 }
 func (ft *fakeTopo) UnlockSrvShardForAction(cell, keyspace, shard, lockPath, results string) error {
@@ -260,6 +257,9 @@ func (ft *fakeTopo) UpdateEndPoints(cell, keyspace, shard string, tabletType top
 func (ft *fakeTopo) DeleteEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) error {
 	return nil
 }
+func (ft *fakeTopo) WatchEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (notifications <-chan *topo.EndPoints, stopWatching chan<- struct{}, err error) {
+	return nil, nil, nil
+}
 func (ft *fakeTopo) UpdateSrvShard(cell, keyspace, shard string, srvShard *topo.SrvShard) error {
 	return nil
 }
@@ -271,19 +271,14 @@ func (ft *fakeTopo) UpdateSrvKeyspace(cell, keyspace string, srvKeyspace *topo.S
 func (ft *fakeTopo) UpdateTabletEndpoint(cell, keyspace, shard string, tabletType topo.TabletType, addr *topo.EndPoint) error {
 	return nil
 }
-func (ft *fakeTopo) LockKeyspaceForAction(keyspace, contents string, timeout time.Duration, interrupted chan struct{}) (string, error) {
+func (ft *fakeTopo) LockKeyspaceForAction(ctx context.Context, keyspace, contents string) (string, error) {
 	return "", nil
 }
 func (ft *fakeTopo) UnlockKeyspaceForAction(keyspace, lockPath, results string) error { return nil }
-func (ft *fakeTopo) LockShardForAction(keyspace, shard, contents string, timeout time.Duration, interrupted chan struct{}) (string, error) {
+func (ft *fakeTopo) LockShardForAction(ctx context.Context, keyspace, shard, contents string) (string, error) {
 	return "", nil
 }
 func (ft *fakeTopo) UnlockShardForAction(keyspace, shard, lockPath, results string) error { return nil }
-func (ft *fakeTopo) CreateTabletPidNode(tabletAlias topo.TabletAlias, contents string, done chan struct{}) error {
-	return nil
-}
-func (ft *fakeTopo) ValidateTabletPidNode(tabletAlias topo.TabletAlias) error { return nil }
-func (ft *fakeTopo) GetSubprocessFlags() []string                             { return nil }
 
 type fakeTopoRemoteMaster struct {
 	fakeTopo
@@ -329,7 +324,7 @@ func TestRemoteMaster(t *testing.T) {
 	rsts.enableRemoteMaster = true
 
 	// remote cell for master
-	ep, err := rsts.GetEndPoints(&context.DummyContext{}, "cell3", "test_ks", "1", topo.TYPE_MASTER)
+	ep, err := rsts.GetEndPoints(context.Background(), "cell3", "test_ks", "1", topo.TYPE_MASTER)
 	if err != nil {
 		t.Fatalf("GetEndPoints got unexpected error: %v", err)
 	}
@@ -342,23 +337,23 @@ func TestRemoteMaster(t *testing.T) {
 	}
 
 	// no remote cell for non-master
-	ep, err = rsts.GetEndPoints(&context.DummyContext{}, "cell3", "test_ks", "0", topo.TYPE_REPLICA)
+	ep, err = rsts.GetEndPoints(context.Background(), "cell3", "test_ks", "0", topo.TYPE_REPLICA)
 	if err == nil {
 		t.Fatalf("GetEndPoints did not return an error")
 	}
 
 	// no remote cell for master
 	rsts.enableRemoteMaster = false
-	ep, err = rsts.GetEndPoints(&context.DummyContext{}, "cell3", "test_ks", "2", topo.TYPE_MASTER)
+	ep, err = rsts.GetEndPoints(context.Background(), "cell3", "test_ks", "2", topo.TYPE_MASTER)
 	if err == nil {
 		t.Fatalf("GetEndPoints did not return an error")
 	}
 	// use cached value from above
-	ep, err = rsts.GetEndPoints(&context.DummyContext{}, "cell3", "test_ks", "1", topo.TYPE_MASTER)
+	ep, err = rsts.GetEndPoints(context.Background(), "cell3", "test_ks", "1", topo.TYPE_MASTER)
 	if err != nil {
 		t.Fatalf("GetEndPoints got unexpected error: %v", err)
 	}
-	ep, err = rsts.GetEndPoints(&context.DummyContext{}, "cell1", "test_ks", "1", topo.TYPE_MASTER)
+	ep, err = rsts.GetEndPoints(context.Background(), "cell1", "test_ks", "1", topo.TYPE_MASTER)
 	if ep.Entries[0].Uid != 0 {
 		t.Fatalf("GetEndPoints got %v want 0", ep.Entries[0].Uid)
 	}
@@ -370,7 +365,7 @@ func TestCacheWithErrors(t *testing.T) {
 	rsts := NewResilientSrvTopoServer(ft, "TestCacheWithErrors")
 
 	// ask for the known keyspace, that populates the cache
-	_, err := rsts.GetSrvKeyspace(&context.DummyContext{}, "", "test_ks")
+	_, err := rsts.GetSrvKeyspace(context.Background(), "", "test_ks")
 	if err != nil {
 		t.Fatalf("GetSrvKeyspace got unexpected error: %v", err)
 	}
@@ -378,14 +373,14 @@ func TestCacheWithErrors(t *testing.T) {
 	// now make the topo server fail, and ask again, should get cached
 	// value, not even ask underlying guy
 	ft.keyspace = "another_test_ks"
-	_, err = rsts.GetSrvKeyspace(&context.DummyContext{}, "", "test_ks")
+	_, err = rsts.GetSrvKeyspace(context.Background(), "", "test_ks")
 	if err != nil {
 		t.Fatalf("GetSrvKeyspace got unexpected error: %v", err)
 	}
 
 	// now reduce TTL to nothing, so we won't use cache, and ask again
 	rsts.cacheTTL = 0
-	_, err = rsts.GetSrvKeyspace(&context.DummyContext{}, "", "test_ks")
+	_, err = rsts.GetSrvKeyspace(context.Background(), "", "test_ks")
 	if err != nil {
 		t.Fatalf("GetSrvKeyspace got unexpected error: %v", err)
 	}
@@ -397,7 +392,7 @@ func TestCachedErrors(t *testing.T) {
 	rsts := NewResilientSrvTopoServer(ft, "TestCachedErrors")
 
 	// ask for an unknown keyspace, should get an error
-	_, err := rsts.GetSrvKeyspace(&context.DummyContext{}, "", "unknown_ks")
+	_, err := rsts.GetSrvKeyspace(context.Background(), "", "unknown_ks")
 	if err == nil {
 		t.Fatalf("First GetSrvKeyspace didn't return an error")
 	}
@@ -406,7 +401,7 @@ func TestCachedErrors(t *testing.T) {
 	}
 
 	// ask again, should get an error and use cache
-	_, err = rsts.GetSrvKeyspace(&context.DummyContext{}, "", "unknown_ks")
+	_, err = rsts.GetSrvKeyspace(context.Background(), "", "unknown_ks")
 	if err == nil {
 		t.Fatalf("Second GetSrvKeyspace didn't return an error")
 	}
@@ -416,7 +411,7 @@ func TestCachedErrors(t *testing.T) {
 
 	// ask again after expired cache, should get an error
 	rsts.cacheTTL = 0
-	_, err = rsts.GetSrvKeyspace(&context.DummyContext{}, "", "unknown_ks")
+	_, err = rsts.GetSrvKeyspace(context.Background(), "", "unknown_ks")
 	if err == nil {
 		t.Fatalf("Third GetSrvKeyspace didn't return an error")
 	}

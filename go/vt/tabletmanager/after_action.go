@@ -11,8 +11,11 @@ import (
 	"reflect"
 	"strings"
 
+	"golang.org/x/net/context"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
@@ -30,6 +33,12 @@ var (
 	// constants for this module
 	historyLength = 16
 )
+
+// Query rules from keyrange
+const keyrangeQueryRules string = "KeyrangeQueryRules"
+
+// Query rules from blacklist
+const blacklistQueryRules string = "BlacklistQueryRules"
 
 func (agent *ActionAgent) allowQueries(tablet *topo.Tablet, blacklistedTables []string) error {
 	if agent.DBConfigs == nil {
@@ -54,22 +63,23 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet, blacklistedTables []
 		agent.DBConfigs.App.EnableInvalidator = false
 	}
 
-	qrs, err := agent.createQueryRules(tablet, blacklistedTables)
+	err := agent.loadKeyspaceAndBlacklistRules(tablet, blacklistedTables)
 	if err != nil {
 		return err
 	}
 
-	return tabletserver.AllowQueries(&agent.DBConfigs.App, agent.SchemaOverrides, qrs, agent.Mysqld, false)
+	return tabletserver.AllowQueries(agent.DBConfigs, agent.SchemaOverrides, agent.Mysqld)
 }
 
-// createQueryRules computes the query rules that match the tablet record
-func (agent *ActionAgent) createQueryRules(tablet *topo.Tablet, blacklistedTables []string) (qrs *tabletserver.QueryRules, err error) {
-	qrs = tabletserver.LoadCustomRules()
-
+// loadKeyspaceAndBlacklistRules does what the name suggests:
+// 1. load and build keyrange query rules
+// 2. load and build blacklist query rules
+func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *topo.Tablet, blacklistedTables []string) (err error) {
 	// Keyrange rules
+	keyrangeRules := tabletserver.NewQueryRules()
 	if tablet.KeyRange.IsPartial() {
 		log.Infof("Restricting to keyrange: %v", tablet.KeyRange)
-		dml_plans := []struct {
+		dmlPlans := []struct {
 			planID   planbuilder.PlanType
 			onAbsent bool
 		}{
@@ -79,7 +89,7 @@ func (agent *ActionAgent) createQueryRules(tablet *topo.Tablet, blacklistedTable
 			{planbuilder.PLAN_DML_PK, false},
 			{planbuilder.PLAN_DML_SUBQUERY, false},
 		}
-		for _, plan := range dml_plans {
+		for _, plan := range dmlPlans {
 			qr := tabletserver.NewQueryRule(
 				fmt.Sprintf("enforce keyspace_id range for %v", plan.planID),
 				fmt.Sprintf("keyspace_id_not_in_range_%v", plan.planID),
@@ -88,27 +98,38 @@ func (agent *ActionAgent) createQueryRules(tablet *topo.Tablet, blacklistedTable
 			qr.AddPlanCond(plan.planID)
 			err := qr.AddBindVarCond("keyspace_id", plan.onAbsent, true, tabletserver.QR_NOTIN, tablet.KeyRange)
 			if err != nil {
-				return nil, fmt.Errorf("Unable to add keyspace rule: %v", err)
+				return fmt.Errorf("Unable to add keyspace rule: %v", err)
 			}
-			qrs.Add(qr)
+			keyrangeRules.Add(qr)
 		}
 	}
 
 	// Blacklisted tables
+	blacklistRules := tabletserver.NewQueryRules()
 	if len(blacklistedTables) > 0 {
 		// tables, first resolve wildcards
 		tables, err := agent.Mysqld.ResolveTables(tablet.DbName(), blacklistedTables)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		log.Infof("Blacklisting tables %v", strings.Join(tables, ", "))
 		qr := tabletserver.NewQueryRule("enforce blacklisted tables", "blacklisted_table", tabletserver.QR_FAIL_RETRY)
 		for _, t := range tables {
 			qr.AddTableCond(t)
 		}
-		qrs.Add(qr)
+		blacklistRules.Add(qr)
 	}
-	return qrs, nil
+	// Push all three sets of QueryRules to SqlQueryRpcService
+	loadRuleErr := tabletserver.SetQueryRules(keyrangeQueryRules, keyrangeRules)
+	if loadRuleErr != nil {
+		log.Warningf("Fail to load query rule set %s: %s", keyrangeQueryRules, loadRuleErr)
+	}
+
+	loadRuleErr = tabletserver.SetQueryRules(blacklistQueryRules, blacklistRules)
+	if loadRuleErr != nil {
+		log.Warningf("Fail to load query rule set %s: %s", blacklistQueryRules, loadRuleErr)
+	}
+	return nil
 }
 
 func (agent *ActionAgent) disallowQueries() {
@@ -121,7 +142,11 @@ func (agent *ActionAgent) disallowQueries() {
 
 // changeCallback is run after every action that might
 // have changed something in the tablet record.
-func (agent *ActionAgent) changeCallback(oldTablet, newTablet *topo.Tablet) error {
+func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTablet *topo.Tablet) error {
+	span := trace.NewSpanFromContext(ctx)
+	span.StartLocal("ActionAgent.changeCallback")
+	defer span.Finish()
+
 	allowQuery := newTablet.IsRunningQueryService()
 
 	// Read the shard to get SourceShards / TabletControlMap if
@@ -131,7 +156,7 @@ func (agent *ActionAgent) changeCallback(oldTablet, newTablet *topo.Tablet) erro
 	var blacklistedTables []string
 	var err error
 	if allowQuery {
-		shardInfo, err = agent.TopoServer.GetShard(newTablet.Keyspace, newTablet.Shard)
+		shardInfo, err = topo.GetShard(ctx, agent.TopoServer, newTablet.Keyspace, newTablet.Shard)
 		if err != nil {
 			log.Errorf("Cannot read shard for this tablet %v, might have inaccurate SourceShards and TabletControls: %v", newTablet.Alias, err)
 		} else {
@@ -213,4 +238,10 @@ func (agent *ActionAgent) changeCallback(oldTablet, newTablet *topo.Tablet) erro
 		}
 	}
 	return nil
+}
+
+func init() {
+	// Register query rule sources under control of agent
+	tabletserver.QueryRuleSources.RegisterQueryRuleSource(keyrangeQueryRules)
+	tabletserver.QueryRuleSources.RegisterQueryRuleSource(blacklistQueryRules)
 }

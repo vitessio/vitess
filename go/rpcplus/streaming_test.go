@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 )
 
 const (
@@ -28,13 +28,15 @@ type StreamingReply struct {
 	Index int
 }
 
+var errTriggeredInTheMiddle = errors.New("triggered error in middle")
+
 type StreamingArith int
 
 func (t *StreamingArith) Thrive(args StreamingArgs, sendReply func(reply interface{}) error) error {
 
 	for i := 0; i < args.Count; i++ {
 		if i == args.ErrorAt {
-			return errors.New("Triggered error in middle")
+			return errTriggeredInTheMiddle
 		}
 		if i == args.BadTypeAt {
 			// send args instead of response
@@ -92,7 +94,7 @@ func callOnceAndCheck(t *testing.T, client *Client) {
 		if row.Index != count {
 			t.Fatal("unexpected value:", row.Index)
 		}
-		count += 1
+		count++
 
 		// log.Println("Values: ", row.C, row.Index)
 	}
@@ -168,12 +170,12 @@ func TestInterruptedCallByServer(t *testing.T) {
 		if row.Index != count {
 			t.Fatal("unexpected value:", row.Index)
 		}
-		count += 1
+		count++
 	}
 	if count != 30 {
 		t.Fatal("received error before the right time:", count)
 	}
-	if c.Error.Error() != "Triggered error in middle" {
+	if c.Error.Error() != errTriggeredInTheMiddle.Error() {
 		t.Fatal("received wrong error message:", c.Error)
 	}
 
@@ -188,7 +190,7 @@ func TestInterruptedCallByServer(t *testing.T) {
 	if ok {
 		t.Fatal("expected closed channel")
 	}
-	if c.Error.Error() != "Triggered error in middle" {
+	if c.Error.Error() != errTriggeredInTheMiddle.Error() {
 		t.Fatal("received wrong error message:", c.Error)
 	}
 
@@ -211,7 +213,7 @@ func TestBadTypeByServer(t *testing.T) {
 		if row.Index != count {
 			t.Fatal("unexpected value:", row.Index)
 		}
-		count += 1
+		count++
 	}
 	if count != 30 {
 		t.Fatal("received error before the right time:", count)

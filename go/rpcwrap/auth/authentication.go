@@ -1,3 +1,4 @@
+// Package auth provides authentication codecs
 package auth
 
 import (
@@ -7,10 +8,10 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/proto"
+	"golang.org/x/net/context"
 )
 
 // UnusedArgument is a type used to indicate an argument that is
@@ -46,7 +47,10 @@ func (c *cramMD5Credentials) Load(filename string) error {
 const CRAMMD5MaxRequests = 2
 
 var (
-	AuthenticationServer        = rpc.NewServer()
+	// AuthenticationServer holds a default server for authentication
+	AuthenticationServer = rpc.NewServer()
+
+	// DefaultAuthenticatorCRAMMD5 holds a default authenticator
 	DefaultAuthenticatorCRAMMD5 = NewAuthenticatorCRAMMD5()
 )
 
@@ -54,6 +58,7 @@ var (
 // authenticate.
 var AuthenticationFailed = errors.New("authentication error: authentication failed")
 
+// NewAuthenticatorCRAMMD5 creates a new CRAM-MD5 authenticator
 func NewAuthenticatorCRAMMD5() *AuthenticatorCRAMMD5 {
 	return &AuthenticatorCRAMMD5{make(cramMD5Credentials)}
 }
@@ -113,12 +118,15 @@ func (a *AuthenticatorCRAMMD5) Authenticate(ctx context.Context, req *Authentica
 	return AuthenticationFailed
 }
 
+// GetNewChallengeReply holds reply data for Challenge
 type GetNewChallengeReply struct {
 	Challenge string
 }
 
+// AuthenticateReply holds reply data for Authenticate
 type AuthenticateReply struct{}
 
+// AuthenticateRequest holds request data for AuthenticateRequest
 type AuthenticateRequest struct {
 	Proof string
 	state authenticationState

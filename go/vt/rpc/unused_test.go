@@ -105,7 +105,7 @@ func TestUnmarshalEmptyStructIntoStruct(t *testing.T) {
 	}
 
 	// It should always be possible to add fields to something that's already a
-	// struct. The struct name is irrelevent since it's never encoded.
+	// struct. The struct name is irrelevant since it's never encoded.
 	var out struct{ A, B string }
 	if err := bson.Unmarshal(buf, &out); err != nil {
 		t.Errorf("bson.Unmarshal: %v", err)

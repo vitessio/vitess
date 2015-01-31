@@ -59,6 +59,29 @@ func TestRemoveCells(t *testing.T) {
 	}
 }
 
+func TestParseKeyspaceShardString(t *testing.T) {
+	zkPath := "/zk/tablet"
+	keyspace := "key01"
+	shard := "shard0"
+	tabletAlias := keyspace + "/" + shard
+
+	if _, _, err := ParseKeyspaceShardString(zkPath); err == nil {
+		t.Fatalf("zk path: %s should cause error.", zkPath)
+	}
+	k, s, err := ParseKeyspaceShardString(tabletAlias)
+	if err != nil {
+		t.Fatalf("Failed to parse valid tablet alias: %s", tabletAlias)
+	}
+	if keyspace != k {
+		t.Fatalf("keyspace parsed from tablet alias %s is %s, but expect %s",
+			tabletAlias, k, keyspace)
+	}
+	if shard != s {
+		t.Fatalf("shard parsed from tablet alias %s is %s, but expect %s",
+			tabletAlias, s, shard)
+	}
+}
+
 func TestUpdateSourceBlacklistedTables(t *testing.T) {
 	si := NewShardInfo("ks", "sh", &Shard{
 		Cells: []string{"first", "second", "third"},

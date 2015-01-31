@@ -12,10 +12,11 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
 	"github.com/youtube/vitess/go/zk/zkns"
+	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
 )
 
-// Export addresses from the VT serving graph to a legacy zkns server.
+// ExportZkns exports addresses from the VT serving graph to a legacy zkns server.
 // Note these functions only work with a zktopo.
 func (wr *Wrangler) ExportZkns(cell string) error {
 	zkTopo, ok := wr.ts.(*zktopo.Server)
@@ -51,8 +52,8 @@ func (wr *Wrangler) ExportZkns(cell string) error {
 	return nil
 }
 
-// Export addresses from the VT serving graph to a legacy zkns server.
-func (wr *Wrangler) ExportZknsForKeyspace(keyspace string) error {
+// ExportZknsForKeyspace exports addresses from the VT serving graph to a legacy zkns server.
+func (wr *Wrangler) ExportZknsForKeyspace(ctx context.Context, keyspace string) error {
 	zkTopo, ok := wr.ts.(*zktopo.Server)
 	if !ok {
 		return fmt.Errorf("ExportZknsForKeyspace only works with zktopo")
@@ -65,7 +66,7 @@ func (wr *Wrangler) ExportZknsForKeyspace(keyspace string) error {
 	}
 
 	// Scan the first shard to discover which cells need local serving data.
-	aliases, err := topo.FindAllTabletAliasesInShard(wr.ts, keyspace, shardNames[0])
+	aliases, err := topo.FindAllTabletAliasesInShard(ctx, wr.ts, keyspace, shardNames[0])
 	if err != nil {
 		return err
 	}
@@ -164,13 +165,13 @@ func (wr *Wrangler) exportVtnsToZkns(zconn zk.Conn, vtnsAddrPath, zknsAddrPath s
 	for i, entry := range addrs.Entries {
 		zknsAddrPath := fmt.Sprintf("%v/%v", zknsAddrPath, i)
 		zknsPaths = append(zknsPaths, zknsAddrPath)
-		zknsAddr := zkns.ZknsAddr{Host: entry.Host, Port: entry.NamedPortMap["_mysql"], NamedPortMap: entry.NamedPortMap}
-		err := WriteAddr(zconn, zknsAddrPath, &zknsAddr)
+		zknsAddr := zkns.ZknsAddr{Host: entry.Host, Port: entry.NamedPortMap["mysql"], NamedPortMap: entry.NamedPortMap}
+		err := writeAddr(zconn, zknsAddrPath, &zknsAddr)
 		if err != nil {
 			return nil, err
 		}
 		defaultAddrs.Endpoints = append(defaultAddrs.Endpoints, zknsAddrPath)
-		vtoccAddrs.Endpoints = append(vtoccAddrs.Endpoints, zknsAddrPath+":_vtocc")
+		vtoccAddrs.Endpoints = append(vtoccAddrs.Endpoints, zknsAddrPath+":vt")
 	}
 
 	// Prune any zkns entries that are no longer referenced by the
@@ -192,31 +193,32 @@ func (wr *Wrangler) exportVtnsToZkns(zconn zk.Conn, vtnsAddrPath, zknsAddrPath s
 	}
 
 	// Write the VDNS entries for both vtocc and mysql
-	vtoccVdnsPath := fmt.Sprintf("%v/_vtocc.vdns", zknsAddrPath)
+	vtoccVdnsPath := fmt.Sprintf("%v/vt.vdns", zknsAddrPath)
 	zknsPaths = append(zknsPaths, vtoccVdnsPath)
-	if err = WriteAddrs(zconn, vtoccVdnsPath, &vtoccAddrs); err != nil {
+	if err = writeAddrs(zconn, vtoccVdnsPath, &vtoccAddrs); err != nil {
 		return nil, err
 	}
 
 	defaultVdnsPath := fmt.Sprintf("%v.vdns", zknsAddrPath)
 	zknsPaths = append(zknsPaths, defaultVdnsPath)
-	if err = WriteAddrs(zconn, defaultVdnsPath, &defaultAddrs); err != nil {
+	if err = writeAddrs(zconn, defaultVdnsPath, &defaultAddrs); err != nil {
 		return nil, err
 	}
 	return zknsPaths, nil
 }
 
+// LegacyZknsAddrs is what we write to ZK to use for zkns
 type LegacyZknsAddrs struct {
 	Endpoints []string `json:"endpoints"`
 }
 
-func WriteAddr(zconn zk.Conn, zkPath string, addr *zkns.ZknsAddr) error {
+func writeAddr(zconn zk.Conn, zkPath string, addr *zkns.ZknsAddr) error {
 	data := jscfg.ToJson(addr)
 	_, err := zk.CreateOrUpdate(zconn, zkPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), true)
 	return err
 }
 
-func WriteAddrs(zconn zk.Conn, zkPath string, addrs *LegacyZknsAddrs) error {
+func writeAddrs(zconn zk.Conn, zkPath string, addrs *LegacyZknsAddrs) error {
 	data := jscfg.ToJson(addrs)
 	_, err := zk.CreateOrUpdate(zconn, zkPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), true)
 	return err

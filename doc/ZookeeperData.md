@@ -27,6 +27,8 @@ type Keyspace struct {
 ```
 
 ```
+# NOTE: You need to source zookeeper client config file, like so:
+#  export ZK_CLIENT_CONFIG=/path/to/zk/client.conf
 $ zk ls /zk/global/vt/keyspaces/ruser
 action
 actionlog
@@ -71,7 +73,7 @@ type Shard struct {
 }
 
 // SourceShard represents a data source for filtered replication
-// accross shards. When this is used in a destination shard, the master
+// across shards. When this is used in a destination shard, the master
 // of that shard will run filtered replication.
 type SourceShard struct {
         // Uid is the unique ID for this SourceShard object.
@@ -220,7 +222,7 @@ The python client lists that directory at startup to find all the keyspaces.
 
 ### SrvKeyspace
 
-The keyspace data is stored under /zk/<cell>/vt/ns/<keyspace>
+The keyspace data is stored under `/zk/<cell>/vt/ns/<keyspace>`
 
 ```go
 // see go/vt/topo/srvshard.go for latest version
@@ -295,7 +297,7 @@ $ vtctl RebuildKeyspaceGraph <keyspace>
 When building a new Cell, this command should be run for every keyspace.
 
 Rebuilding a keyspace graph will:
-- find all the shard names in the keyspace from looking at the children of /zk/global/vt/keyspaces/<keyspace>/shards
+- find all the shard names in the keyspace from looking at the children of `/zk/global/vt/keyspaces/<keyspace>/shards`
 - rebuild the graph for every shard in the keyspace (see below)
 - find the list of cells to update by collecting the cells for each tablet of the first shard
 - compute, sanity check and update the keyspace graph object in every cell
@@ -304,7 +306,7 @@ The python client reads the nodes to find the shard map (KeyRanges, TabletTypes,
 
 ### SrvShard
 
-The shard data is stored under /zk/<cell>/vt/ns/<keyspace>/<shard>
+The shard data is stored under `/zk/<cell>/vt/ns/<keyspace>/<shard>`
 
 ```
 $ zk cat /zk/nyc/vt/ns/rlookup/0
@@ -318,7 +320,7 @@ $ zk cat /zk/nyc/vt/ns/rlookup/0
 
 ### EndPoints
 
-We also have per serving type data under /zk/<cell>/vt/ns/<keyspace>/<shard>/<type>
+We also have per serving type data under `/zk/<cell>/vt/ns/<keyspace>/<shard>/<type>`
 
 ```
 $ zk cat /zk/nyc/vt/ns/rlookup/0/master
@@ -329,9 +331,9 @@ $ zk cat /zk/nyc/vt/ns/rlookup/0/master
       "host": "nyc-db274.nyc.youtube.com",
       "port": 0,
       "named_port_map": {
-        "_mysql": 3306,
-        "_vtocc": 8101,
-        "_vts": 8102
+        "mysql": 3306,
+        "vt": 8101,
+        "vts": 8102
       }
     }
   ]
@@ -344,8 +346,8 @@ Note this will rebuild the serving graph for all cells, not just one cell.
 
 Rebuilding a shard serving graph will:
 - compute the data to write by looking at all the tablets from the replicaton graph
-- write all the /zk/<cell>/vt/ns/<keyspace>/<shard>/<type> nodes everywhere
-- delete any pre-existing /zk/<cell>/vt/ns/<keyspace>/<shard>/<type> that is not in use any more
-- compute and write all the /zk/<cell>/vt/ns/<keyspace>/<shard> nodes everywhere
+- write all the `/zk/<cell>/vt/ns/<keyspace>/<shard>/<type>` nodes everywhere
+- delete any pre-existing `/zk/<cell>/vt/ns/<keyspace>/<shard>/<type>` that is not in use any more
+- compute and write all the `/zk/<cell>/vt/ns/<keyspace>/<shard>` nodes everywhere
 
 The clients read the per-type data nodes to find servers to talk to. When resolving ruser.10-20.master, it will try to read /zk/local/vt/ns/ruser/10-20/master.

@@ -9,6 +9,17 @@ if [ ! -f bootstrap.sh ]; then
   exit 1
 fi
 
+if [ "$USER" == "root" ]; then
+  echo "Vitess cannot run as root. Please bootstrap with a non-root user."
+  exit 1
+fi
+
+go version 2>&1 >/dev/null
+if [ $? != 0 ]; then
+    echo "Go is not installed or is not on \$PATH"
+    exit 1
+fi
+
 . ./dev.env
 
 mkdir -p $VTROOT/dist
@@ -38,16 +49,42 @@ ln -nfs $VTTOP/third_party/go/launchpad.net $VTROOT/src
 go install launchpad.net/gozk/zookeeper
 
 go get code.google.com/p/goprotobuf/proto
-go get code.google.com/p/go.net/context
-go get code.google.com/p/go.tools/cmd/goimports
+go get golang.org/x/net/context
+go get golang.org/x/tools/cmd/goimports
 go get github.com/golang/glog
+go get github.com/golang/lint/golint
+go get github.com/tools/godep
+
+# goversion_min returns true if major.minor go version is at least some value.
+function goversion_min() {
+  [[ "$(go version)" =~ go([0-9]+)\.([0-9]+) ]]
+  gotmajor=${BASH_REMATCH[1]}
+  gotminor=${BASH_REMATCH[2]}
+  [[ "$1" =~ ([0-9]+)\.([0-9]+) ]]
+  wantmajor=${BASH_REMATCH[1]}
+  wantminor=${BASH_REMATCH[2]}
+  [ "$gotmajor" -lt "$wantmajor" ] && return 1
+  [ "$gotmajor" -gt "$wantmajor" ] && return 0
+  [ "$gotminor" -lt "$wantminor" ] && return 1
+  return 0
+}
+
+# Packages for uploading code coverage to coveralls.io.
+# The cover tool needs to be installed into the Go toolchain, so it will fail
+# if Go is installed somewhere that requires root access. However, this tool
+# is optional, so we should hide any errors to avoid confusion.
+if goversion_min 1.4; then
+  go get golang.org/x/tools/cmd/cover &> /dev/null
+else
+  go get code.google.com/p/go.tools/cmd/cover &> /dev/null
+fi
+go get github.com/modocache/gover
+go get github.com/mattn/goveralls
 
 ln -snf $VTTOP/config $VTROOT/config
 ln -snf $VTTOP/data $VTROOT/data
 ln -snf $VTTOP/py $VTROOT/py-vtdb
 ln -snf $VTTOP/go/zk/zkctl/zksrv.sh $VTROOT/bin/zksrv.sh
-ln -snf $VTTOP/test/vthook-copy_snapshot_from_storage.sh $VTROOT/vthook/copy_snapshot_from_storage
-ln -snf $VTTOP/test/vthook-copy_snapshot_to_storage.sh $VTROOT/vthook/copy_snapshot_to_storage
 ln -snf $VTTOP/test/vthook-test.sh $VTROOT/vthook/test.sh
 
 # install mysql
@@ -127,4 +164,6 @@ fi
 # create pre-commit hooks
 echo "creating git pre-commit hooks"
 ln -sf $VTTOP/misc/git/pre-commit $VTTOP/.git/hooks/pre-commit
-echo "source dev.env in your shell to complete the setup."
+
+echo
+echo "bootstrap finished - run 'source dev.env' in your shell before building."

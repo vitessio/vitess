@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -31,7 +31,7 @@ type QueryResultReader struct {
 
 // NewQueryResultReaderForTablet creates a new QueryResultReader for
 // the provided tablet / sql query
-func NewQueryResultReaderForTablet(ts topo.Server, tabletAlias topo.TabletAlias, sql string) (*QueryResultReader, error) {
+func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, sql string) (*QueryResultReader, error) {
 	tablet, err := ts.GetTablet(tabletAlias)
 	if err != nil {
 		return nil, err
@@ -42,12 +42,12 @@ func NewQueryResultReaderForTablet(ts topo.Server, tabletAlias topo.TabletAlias,
 		return nil, err
 	}
 
-	conn, err := tabletconn.GetDialer()(context.TODO(), *endPoint, tablet.Keyspace, tablet.Shard, 30*time.Second)
+	conn, err := tabletconn.GetDialer()(ctx, *endPoint, tablet.Keyspace, tablet.Shard, 30*time.Second)
 	if err != nil {
 		return nil, err
 	}
 
-	sr, clientErrFn, err := conn.StreamExecute(context.TODO(), sql, make(map[string]interface{}), 0)
+	sr, clientErrFn, err := conn.StreamExecute(ctx, sql, make(map[string]interface{}), 0)
 	if err != nil {
 		return nil, err
 	}
@@ -97,17 +97,17 @@ func uint64FromKeyspaceId(keyspaceId key.KeyspaceId) string {
 // TableScan returns a QueryResultReader that gets all the rows from a
 // table, ordered by Primary Key. The returned columns are ordered
 // with the Primary Key columns in front.
-func TableScan(log logutil.Logger, ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *myproto.TableDefinition) (*QueryResultReader, error) {
+func TableScan(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *myproto.TableDefinition) (*QueryResultReader, error) {
 	sql := fmt.Sprintf("SELECT %v FROM %v ORDER BY %v", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
 	log.Infof("SQL query for %v/%v: %v", tabletAlias, tableDefinition.Name, sql)
-	return NewQueryResultReaderForTablet(ts, tabletAlias, sql)
+	return NewQueryResultReaderForTablet(ctx, ts, tabletAlias, sql)
 }
 
 // TableScanByKeyRange returns a QueryResultReader that gets all the
 // rows from a table that match the supplied KeyRange, ordered by
 // Primary Key. The returned columns are ordered with the Primary Key
 // columns in front.
-func TableScanByKeyRange(log logutil.Logger, ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *myproto.TableDefinition, keyRange key.KeyRange, keyspaceIdType key.KeyspaceIdType) (*QueryResultReader, error) {
+func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *myproto.TableDefinition, keyRange key.KeyRange, keyspaceIdType key.KeyspaceIdType) (*QueryResultReader, error) {
 	where := ""
 	switch keyspaceIdType {
 	case key.KIT_UINT64:
@@ -146,7 +146,7 @@ func TableScanByKeyRange(log logutil.Logger, ts topo.Server, tabletAlias topo.Ta
 
 	sql := fmt.Sprintf("SELECT %v FROM %v %vORDER BY %v", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, where, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
 	log.Infof("SQL query for %v/%v: %v", tabletAlias, tableDefinition.Name, sql)
-	return NewQueryResultReaderForTablet(ts, tabletAlias, sql)
+	return NewQueryResultReaderForTablet(ctx, ts, tabletAlias, sql)
 }
 
 func (qrr *QueryResultReader) Error() error {
@@ -174,7 +174,7 @@ func NewRowReader(queryResultReader *QueryResultReader) *RowReader {
 // Next will return:
 // (row, nil) for the next row
 // (nil, nil) for EOF
-// (nil, error) if an error occured
+// (nil, error) if an error occurred
 func (rr *RowReader) Next() ([]sqltypes.Value, error) {
 	if rr.currentResult == nil || rr.currentIndex == len(rr.currentResult.Rows) {
 		var ok bool
@@ -259,6 +259,7 @@ func RowsEqual(left, right []sqltypes.Value) int {
 // -1 if left is smaller than right
 // 0 if left and right are equal
 // +1 if left is bigger than right
+// TODO: This can panic if types for left and right don't match.
 func CompareRows(fields []mproto.Field, compareCount int, left, right []sqltypes.Value) (int, error) {
 	for i := 0; i < compareCount; i++ {
 		fieldType := fields[i].Type
@@ -273,6 +274,13 @@ func CompareRows(fields []mproto.Field, compareCount int, left, right []sqltypes
 		switch l := lv.(type) {
 		case int64:
 			r := rv.(int64)
+			if l < r {
+				return -1, nil
+			} else if l > r {
+				return 1, nil
+			}
+		case uint64:
+			r := rv.(uint64)
 			if l < r {
 				return -1, nil
 			} else if l > r {

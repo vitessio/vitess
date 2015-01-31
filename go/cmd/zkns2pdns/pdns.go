@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -334,6 +335,7 @@ func (pd *pdns) Serve(r io.Reader, w io.Writer) {
 }
 
 func main() {
+	defer exit.Recover()
 	defer logutil.Flush()
 
 	zknsDomain := flag.String("zkns-domain", "", "The naming hierarchy portion to serve")
@@ -345,12 +347,13 @@ func main() {
 		go func() {
 			err := http.ListenAndServe(*bindAddr, nil)
 			if err != nil {
-				log.Fatalf("ListenAndServe: %s", err)
+				log.Errorf("ListenAndServe: %s", err)
+				exit.Return(1)
 			}
 		}()
 	}
 
-	zconn := zk.NewMetaConn(false)
+	zconn := zk.NewMetaConn()
 	fqdn := netutil.FullyQualifiedHostnameOrPanic()
 	zr1 := newZknsResolver(zconn, fqdn, *zknsDomain, *zknsRoot)
 	pd := &pdns{zr1}

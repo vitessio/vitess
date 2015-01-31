@@ -27,3 +27,5 @@ type StreamEvent struct {
 	// POS
 	GTIDField myproto.GTIDField
 }
+
+//go:generate bsongen -file $GOFILE -type StreamEvent -o stream_event_bson.go

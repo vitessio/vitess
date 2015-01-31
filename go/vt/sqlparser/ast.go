@@ -434,7 +434,7 @@ func NewWhere(typ string, expr BoolExpr) *Where {
 }
 
 func (node *Where) Format(buf *TrackedBuffer) {
-	if node == nil {
+	if node == nil || node.Expr == nil {
 		return
 	}
 	buf.Myprintf(" %s %v", node.Type, node.Expr)
@@ -454,6 +454,7 @@ func (*ComparisonExpr) IExpr() {}
 func (*RangeCond) IExpr()      {}
 func (*NullCheck) IExpr()      {}
 func (*ExistsExpr) IExpr()     {}
+func (*KeyrangeExpr) IExpr()   {}
 func (StrVal) IExpr()          {}
 func (NumVal) IExpr()          {}
 func (ValArg) IExpr()          {}
@@ -481,6 +482,7 @@ func (*ComparisonExpr) IBoolExpr() {}
 func (*RangeCond) IBoolExpr()      {}
 func (*NullCheck) IBoolExpr()      {}
 func (*ExistsExpr) IBoolExpr()     {}
+func (*KeyrangeExpr) IBoolExpr()   {}
 
 // AndExpr represents an AND expression.
 type AndExpr struct {
@@ -583,6 +585,15 @@ type ExistsExpr struct {
 
 func (node *ExistsExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("exists %v", node.Subquery)
+}
+
+// KeyrangeExpr represents a KEYRANGE expression.
+type KeyrangeExpr struct {
+	Start, End ValExpr
+}
+
+func (node *KeyrangeExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("keyrange(%v, %v)", node.Start, node.End)
 }
 
 // ValExpr represents a value expression.

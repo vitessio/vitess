@@ -8,9 +8,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -155,9 +155,6 @@ type Server interface {
 	// Can return ErrNoNode if the tablet doesn't exist.
 	DeleteTablet(alias TabletAlias) error
 
-	// ValidateTablet performs routine checks on the tablet.
-	ValidateTablet(alias TabletAlias) error
-
 	// GetTablet returns the tablet data (includes the current version).
 	// Can return ErrNoNode if the tablet doesn't exist.
 	GetTablet(alias TabletAlias) (*TabletInfo, error)
@@ -191,11 +188,11 @@ type Server interface {
 
 	// LockSrvShardForAction locks the serving shard in order to
 	// perform the action described by contents. It will wait for
-	// the lock for at most duration. The wait can be interrupted
-	// if the interrupted channel is closed. It returns the lock
-	// path.
+	// the lock until at most ctx.Done(). The wait can be interrupted
+	// by cancelling the context. It returns the lock path.
+	//
 	// Can return ErrTimeout or ErrInterrupted.
-	LockSrvShardForAction(cell, keyspace, shard, contents string, timeout time.Duration, interrupted chan struct{}) (string, error)
+	LockSrvShardForAction(ctx context.Context, cell, keyspace, shard, contents string) (string, error)
 
 	// UnlockSrvShardForAction unlocks a serving shard.
 	UnlockSrvShardForAction(cell, keyspace, shard, lockPath, results string) error
@@ -218,6 +215,21 @@ type Server interface {
 	// keyspace, shard, tabletType.
 	// Can return ErrNoNode.
 	DeleteEndPoints(cell, keyspace, shard string, tabletType TabletType) error
+
+	// WatchEndPoints returns a channel that receives notifications
+	// every time EndPoints for the given type changes.
+	// It should receive a notification with the initial value fairly
+	// quickly after this is set. A value of nil means the Endpoints
+	// object doesn't exist or is empty. To stop watching this
+	// EndPoints object, close the stopWatching channel.
+	// If the underlying topo.Server encounters an error watching the node,
+	// it should retry on a regular basis until it can succeed.
+	// The initial error returned by this method is meant to catch
+	// the obvious bad cases (invalid cell, invalid tabletType, ...)
+	// that are never going to work. Mutiple notifications with the
+	// same contents may be sent (for instance when the serving graph
+	// is rebuilt, but the content hasn't changed).
+	WatchEndPoints(cell, keyspace, shard string, tabletType TabletType) (notifications <-chan *EndPoints, stopWatching chan<- struct{}, err error)
 
 	// UpdateSrvShard updates the serving records for a cell,
 	// keyspace, shard.
@@ -254,45 +266,36 @@ type Server interface {
 
 	// LockKeyspaceForAction locks the keyspace in order to
 	// perform the action described by contents. It will wait for
-	// the lock for at most duration. The wait can be interrupted
-	// if the interrupted channel is closed. It returns the lock
-	// path.
+	// the lock until at most ctx.Done(). The wait can be interrupted
+	// by cancelling the context. It returns the lock path.
+	//
 	// Can return ErrTimeout or ErrInterrupted
-	LockKeyspaceForAction(keyspace, contents string, timeout time.Duration, interrupted chan struct{}) (string, error)
+	LockKeyspaceForAction(ctx context.Context, keyspace, contents string) (string, error)
 
 	// UnlockKeyspaceForAction unlocks a keyspace.
 	UnlockKeyspaceForAction(keyspace, lockPath, results string) error
 
 	// LockShardForAction locks the shard in order to
 	// perform the action described by contents. It will wait for
-	// the lock for at most duration. The wait can be interrupted
-	// if the interrupted channel is closed. It returns the lock
-	// path.
+	// the lock until at most ctx.Done(). The wait can be interrupted
+	// by cancelling the context. It returns the lock path.
+	//
 	// Can return ErrTimeout or ErrInterrupted
-	LockShardForAction(keyspace, shard, contents string, timeout time.Duration, interrupted chan struct{}) (string, error)
+	LockShardForAction(ctx context.Context, keyspace, shard, contents string) (string, error)
 
 	// UnlockShardForAction unlocks a shard.
 	UnlockShardForAction(keyspace, shard, lockPath, results string) error
+}
 
-	//
-	// Supporting the local agent process, local cell.
-	//
-
-	// CreateTabletPidNode will keep a PID node up to date with
-	// this tablet's current PID, until 'done' is closed.
-	CreateTabletPidNode(tabletAlias TabletAlias, contents string, done chan struct{}) error
-
-	// ValidateTabletPidNode makes sure a PID file exists for the tablet
-	ValidateTabletPidNode(tabletAlias TabletAlias) error
-
-	// GetSubprocessFlags returns the flags required to run a
-	// subprocess that uses the same Server parameters as
-	// this process.
-	GetSubprocessFlags() []string
+// Schemafier is a temporary interface for supporting vschema
+// reads and writes. It will eventually be merged into Server.
+type Schemafier interface {
+	SaveVSchema(string) error
+	GetVSchema() (string, error)
 }
 
 // Registry for Server implementations.
-var serverImpls map[string]Server = make(map[string]Server)
+var serverImpls = make(map[string]Server)
 
 // Which implementation to use
 var topoImplementation = flag.String("topo_implementation", "zookeeper", "the topology implementation to use")
@@ -307,7 +310,7 @@ func RegisterServer(name string, ts Server) {
 	serverImpls[name] = ts
 }
 
-// Returns a specific Server by name, or nil.
+// GetServerByName returns a specific Server by name, or nil.
 func GetServerByName(name string) Server {
 	return serverImpls[name]
 }
@@ -333,19 +336,10 @@ func GetServer() Server {
 	return result
 }
 
-// Close all registered Server.
+// CloseServers closes all registered Server.
 func CloseServers() {
 	for name, ts := range serverImpls {
 		log.V(6).Infof("Closing topo.Server: %v", name)
 		ts.Close()
 	}
-}
-
-// GetSubprocessFlags returns all the flags required to launch a subprocess
-// with the exact same topology server as the current process.
-func GetSubprocessFlags() []string {
-	result := []string{
-		"-topo_implementation", *topoImplementation,
-	}
-	return append(result, GetServer().GetSubprocessFlags()...)
 }

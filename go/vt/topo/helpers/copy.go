@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// helpers package contains a few utility classes to handle topo.Server
+// Package helpers contains a few utility classes to handle topo.Server
 // objects, and transitions from one topo implementation to another.
 package helpers
 

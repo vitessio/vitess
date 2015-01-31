@@ -11,14 +11,14 @@ default-storage-engine = innodb
 expire_logs_days = 3
 innodb_additional_mem_pool_size = 32M
 innodb_autoextend_increment = 64
-innodb_buffer_pool_size = 64M
+innodb_buffer_pool_size = 32M
 innodb_data_file_path = ibdata1:10M:autoextend
 innodb_data_home_dir = {{.InnodbDataHomeDir}}
 innodb_file_per_table
 innodb_flush_log_at_trx_commit = 2
 innodb_flush_method = O_DIRECT
 innodb_lock_wait_timeout = 20
-innodb_log_buffer_size = 64M
+innodb_log_buffer_size = 8M
 innodb_log_file_size = 64M
 innodb_log_files_in_group = 2
 innodb_log_group_home_dir = {{.InnodbLogGroupHomeDir}}
@@ -61,5 +61,5 @@ tmpdir = {{.TmpDir}}
 tmp_table_size = 32M
 transaction-isolation = REPEATABLE-READ
 # READ-COMMITTED would be better, but mysql 5.1 disables this with statement based replication
-# READ-UNCOMMTTED might be better
+# READ-UNCOMMITTED might be better
 lower_case_table_names = 1

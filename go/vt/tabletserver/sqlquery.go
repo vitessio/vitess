@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
@@ -22,6 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"golang.org/x/net/context"
 )
 
 const (
@@ -76,7 +76,6 @@ type SqlQuery struct {
 	qe        *QueryEngine
 	sessionId int64
 	dbconfig  *dbconfigs.DBConfig
-	mysqld    *mysqlctl.Mysqld
 }
 
 // NewSqlQuery creates an instance of SqlQuery. Only one instance
@@ -102,39 +101,34 @@ func (sq *SqlQuery) setState(state int64) {
 }
 
 // allowQueries starts the query service.
-// If the state is anything other than NOT_SERVING, it fails.
+// If the state is other than SERVING or NOT_SERVING, it fails.
 // If allowQuery succeeds, the resulting state is SERVING.
 // Otherwise, it reverts back to NOT_SERVING.
 // While allowQuery is running, the state is set to INITIALIZING.
 // If waitForMysql is set to true, allowQueries will not return
 // until it's able to connect to mysql.
 // No other operations are allowed when allowQueries is running.
-func (sq *SqlQuery) allowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules, mysqld *mysqlctl.Mysqld, waitForMysql bool) (err error) {
+func (sq *SqlQuery) allowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld *mysqlctl.Mysqld) (err error) {
+	// Fast path
+	if sq.state.Get() == SERVING {
+		return nil
+	}
 	sq.mu.Lock()
 	defer sq.mu.Unlock()
 	if sq.state.Get() != NOT_SERVING {
-		terr := NewTabletError(FATAL, "cannot start query service, current state: %s", sq.GetState())
+		terr := NewTabletError(ErrFatal, "cannot start query service, current state: %s", sq.GetState())
 		return terr
 	}
 	// state is NOT_SERVING
 	sq.setState(INITIALIZING)
 
-	if waitForMysql {
-		waitTime := time.Second
-		for {
-			c, err := dbconnpool.NewDBConnection(&dbconfig.ConnectionParams, mysqlStats)
-			if err == nil {
-				c.Close()
-				break
-			}
-			log.Warningf("mysql.Connect() error, retrying in %v: %v", waitTime, err)
-			time.Sleep(waitTime)
-			// Cap at 32 seconds
-			if waitTime < 30*time.Second {
-				waitTime = waitTime * 2
-			}
-		}
+	c, err := dbconnpool.NewDBConnection(&dbconfigs.App.ConnectionParams, mysqlStats)
+	if err != nil {
+		log.Infof("allowQueries failed: %v", err)
+		sq.setState(NOT_SERVING)
+		return err
 	}
+	c.Close()
 
 	defer func() {
 		if x := recover(); x != nil {
@@ -147,9 +141,8 @@ func (sq *SqlQuery) allowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides [
 		sq.setState(SERVING)
 	}()
 
-	sq.qe.Open(dbconfig, schemaOverrides, qrs, mysqld)
-	sq.dbconfig = dbconfig
-	sq.mysqld = mysqld
+	sq.qe.Open(dbconfigs, schemaOverrides, mysqld)
+	sq.dbconfig = &dbconfigs.App
 	sq.sessionId = Rand()
 	log.Infof("Session id: %d", sq.sessionId)
 	return nil
@@ -191,10 +184,26 @@ func (sq *SqlQuery) disallowQueries() {
 		sq.setState(NOT_SERVING)
 		sq.mu.Unlock()
 	}()
-	log.Infof("Stopping query service: %d", sq.sessionId)
+	log.Infof("Stopping query service. Session id: %d", sq.sessionId)
 	sq.qe.Close()
 	sq.sessionId = 0
 	sq.dbconfig = &dbconfigs.DBConfig{}
+}
+
+// checkMySQL returns true if we can connect to MySQL.
+// The function returns false only if the query service is running
+// and we're unable to make a connection.
+func (sq *SqlQuery) checkMySQL() bool {
+	if err := sq.startRequest(sq.sessionId, false); err != nil {
+		return true
+	}
+	defer sq.endRequest()
+	defer func() {
+		if x := recover(); x != nil {
+			log.Errorf("Checking MySQL, unexpected error: %v", x)
+		}
+	}()
+	return sq.qe.CheckMySQL()
 }
 
 // GetSessionId returns a sessionInfo response if the state is SERVING.
@@ -202,14 +211,14 @@ func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo
 	// We perform a lockless read of state because we don't care if it changes
 	// after we check its value.
 	if sq.state.Get() != SERVING {
-		return NewTabletError(RETRY, "Query server is in %s state", sq.GetState())
+		return NewTabletError(ErrRetry, "Query server is in %s state", sq.GetState())
 	}
 	// state was SERVING
 	if sessionParams.Keyspace != sq.dbconfig.Keyspace {
-		return NewTabletError(FATAL, "Keyspace mismatch, expecting %v, received %v", sq.dbconfig.Keyspace, sessionParams.Keyspace)
+		return NewTabletError(ErrFatal, "Keyspace mismatch, expecting %v, received %v", sq.dbconfig.Keyspace, sessionParams.Keyspace)
 	}
 	if strings.ToLower(sessionParams.Shard) != strings.ToLower(sq.dbconfig.Shard) {
-		return NewTabletError(FATAL, "Shard mismatch, expecting %v, received %v", sq.dbconfig.Shard, sessionParams.Shard)
+		return NewTabletError(ErrFatal, "Shard mismatch, expecting %v, received %v", sq.dbconfig.Shard, sessionParams.Shard)
 	}
 	sessionInfo.SessionId = sq.sessionId
 	return nil
@@ -223,11 +232,11 @@ func (sq *SqlQuery) Begin(context context.Context, session *proto.Session, txInf
 	defer sq.mu.RUnlock()
 	defer handleError(&err, logStats)
 	if sq.state.Get() != SERVING {
-		return NewTabletError(RETRY, "cannot begin transaction in state %s", sq.GetState())
+		return NewTabletError(ErrRetry, "cannot begin transaction in state %s", sq.GetState())
 	}
 	// state is SERVING
 	if session.SessionId == 0 || session.SessionId != sq.sessionId {
-		return NewTabletError(RETRY, "Invalid session Id %v", session.SessionId)
+		return NewTabletError(ErrRetry, "Invalid session Id %v", session.SessionId)
 	}
 	defer queryStats.Record("BEGIN", time.Now())
 	txInfo.TransactionId = sq.qe.txPool.Begin()
@@ -272,17 +281,17 @@ func handleExecError(query *proto.Query, err *error, logStats *SQLQueryStats) {
 		terr, ok := x.(*TabletError)
 		if !ok {
 			log.Errorf("Uncaught panic for %v:\n%v\n%s", query, x, tb.Stack(4))
-			*err = NewTabletError(FAIL, "%v: uncaught panic for %v", x, query)
+			*err = NewTabletError(ErrFail, "%v: uncaught panic for %v", x, query)
 			internalErrors.Add("Panic", 1)
 			return
 		}
 		*err = terr
 		terr.RecordStats()
 		// suppress these errors in logs
-		if terr.ErrorType == RETRY || terr.ErrorType == TX_POOL_FULL || terr.SqlError == mysql.DUP_ENTRY {
+		if terr.ErrorType == ErrRetry || terr.ErrorType == ErrTxPoolFull || terr.SqlError == mysql.ErrDupEntry {
 			return
 		}
-		if terr.ErrorType == FATAL {
+		if terr.ErrorType == ErrFatal {
 			log.Errorf("%v: %v", terr, query)
 		} else {
 			log.Warningf("%v: %v", terr, query)
@@ -331,7 +340,7 @@ func (sq *SqlQuery) Execute(context context.Context, query *proto.Query, reply *
 func (sq *SqlQuery) StreamExecute(context context.Context, query *proto.Query, sendReply func(*mproto.QueryResult) error) (err error) {
 	// check cases we don't handle yet
 	if query.TransactionId != 0 {
-		return NewTabletError(FAIL, "Transactions not supported with streaming")
+		return NewTabletError(ErrFail, "Transactions not supported with streaming")
 	}
 
 	logStats := newSqlQueryStats("StreamExecute", context)
@@ -367,7 +376,7 @@ func (sq *SqlQuery) StreamExecute(context context.Context, query *proto.Query, s
 // its own transaction, in which case it's expected to commit it also.
 func (sq *SqlQuery) ExecuteBatch(context context.Context, queryList *proto.QueryList, reply *proto.QueryResultList) (err error) {
 	if len(queryList.Queries) == 0 {
-		return NewTabletError(FAIL, "Empty query list")
+		return NewTabletError(ErrFail, "Empty query list")
 	}
 
 	allowShutdown := (queryList.TransactionId != 0)
@@ -388,7 +397,7 @@ func (sq *SqlQuery) ExecuteBatch(context context.Context, queryList *proto.Query
 		switch trimmed {
 		case "begin":
 			if session.TransactionId != 0 {
-				panic(NewTabletError(FAIL, "Nested transactions disallowed"))
+				panic(NewTabletError(ErrFail, "Nested transactions disallowed"))
 			}
 			var txInfo proto.TransactionInfo
 			if err = sq.Begin(context, &session, &txInfo); err != nil {
@@ -399,7 +408,7 @@ func (sq *SqlQuery) ExecuteBatch(context context.Context, queryList *proto.Query
 			reply.List = append(reply.List, mproto.QueryResult{})
 		case "commit":
 			if !beginCalled {
-				panic(NewTabletError(FAIL, "Cannot commit without begin"))
+				panic(NewTabletError(ErrFail, "Cannot commit without begin"))
 			}
 			if err = sq.Commit(context, &session); err != nil {
 				return err
@@ -426,7 +435,7 @@ func (sq *SqlQuery) ExecuteBatch(context context.Context, queryList *proto.Query
 	}
 	if beginCalled {
 		sq.Rollback(context, &session)
-		panic(NewTabletError(FAIL, "begin called with no commit"))
+		panic(NewTabletError(ErrFail, "begin called with no commit"))
 	}
 	return nil
 }
@@ -441,7 +450,7 @@ func (sq *SqlQuery) SplitQuery(context context.Context, req *proto.SplitQueryReq
 	splitter := NewQuerySplitter(&(req.Query), req.SplitCount, sq.qe.schemaInfo)
 	err = splitter.validateQuery()
 	if err != nil {
-		return NewTabletError(FAIL, "query validation error: %s", err)
+		return NewTabletError(ErrFail, "query validation error: %s", err)
 	}
 	// Partial initialization or QueryExecutor is enough to call execSQL
 	requestContext := RequestContext{
@@ -451,6 +460,7 @@ func (sq *SqlQuery) SplitQuery(context context.Context, req *proto.SplitQueryReq
 		deadline: NewDeadline(sq.qe.queryTimeout.Get()),
 	}
 	conn := requestContext.getConn(sq.qe.connPool)
+	defer conn.Recycle()
 	// TODO: For fetching pkMinMax, include where clauses on the
 	// primary key, if any, in the original query which might give a narrower
 	// range of PKs to work with.
@@ -475,11 +485,11 @@ func (sq *SqlQuery) startRequest(sessionId int64, allowShutdown bool) (err error
 	if allowShutdown && st == SHUTTING_TX {
 		goto verifySession
 	}
-	return NewTabletError(RETRY, "operation not allowed in state %s", sq.GetState())
+	return NewTabletError(ErrRetry, "operation not allowed in state %s", sq.GetState())
 
 verifySession:
 	if sessionId == 0 || sessionId != sq.sessionId {
-		return NewTabletError(RETRY, "Invalid session Id %v", sessionId)
+		return NewTabletError(ErrRetry, "Invalid session Id %v", sessionId)
 	}
 	sq.requests.Add(1)
 	return nil

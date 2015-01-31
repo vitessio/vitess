@@ -5,63 +5,118 @@
 package planbuilder
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
+// PlanID is number representing the plan id.
 type PlanID int
 
+// The following constants define all the PlanID values.
 const (
 	NoPlan = PlanID(iota)
 	SelectUnsharded
-	SelectSingleShardKey
-	SelectMultiShardKey
-	SelectSingleLookup
-	SelectMultiLookup
+	SelectEqual
+	SelectIN
+	SelectKeyrange
 	SelectScatter
 	UpdateUnsharded
-	UpdateSingleShardKey
-	UpdateSingleLookup
+	UpdateEqual
 	DeleteUnsharded
-	DeleteSingleShardKey
-	DeleteSingleLookup
+	DeleteEqual
 	InsertUnsharded
 	InsertSharded
 	NumPlans
 )
 
-type Plan struct {
-	ID        PlanID
-	Reason    string
-	Table     *Table
-	Original  string
-	Rewritten string
-	Index     *Index
-	Values    interface{}
+// Must exactly match order of plan constants.
+var planName = [NumPlans]string{
+	"NoPlan",
+	"SelectUnsharded",
+	"SelectEqual",
+	"SelectIN",
+	"SelectKeyrange",
+	"SelectScatter",
+	"UpdateUnsharded",
+	"UpdateEqual",
+	"DeleteUnsharded",
+	"DeleteEqual",
+	"InsertUnsharded",
+	"InsertSharded",
 }
 
+// Plan represents the routing strategy for a given query.
+type Plan struct {
+	ID PlanID
+	// Reason usually contains a string describing the reason
+	// for why a certain plan was (or not) chosen.
+	Reason string
+	Table  *Table
+	// Original is the original query.
+	Original string
+	// Rewritten is the rewritten query. This is empty for
+	// all Unsharded plans since the Original query is sufficient.
+	Rewritten string
+	// Subquery is used for DeleteUnsharded to fetch the column values
+	// for owned vindexes so they can be deleted.
+	Subquery  string
+	ColVindex *ColVindex
+	// Values is a single or a list of values that are used
+	// for making routing decisions.
+	Values interface{}
+}
+
+// Size is defined so that Plan can be given to an LRUCache.
 func (pln *Plan) Size() int {
 	return 1
 }
 
-// Must exactly match order of plan constants.
-var planName = []string{
-	"NoPlan",
-	"SelectUnsharded",
-	"SelectSingleShardKey",
-	"SelectMultiShardKey",
-	"SelectSingleLookup",
-	"SelectMultiLookup",
-	"SelectScatter",
-	"UpdateUnsharded",
-	"UpdateSingleShardKey",
-	"UpdateSingleLookup",
-	"DeleteUnsharded",
-	"DeleteSingleShardKey",
-	"DeleteSingleLookup",
-	"InsertUnsharded",
-	"InsertSharded",
+// MarshalJSON serializes the Plan into a JSON representation.
+func (pln *Plan) MarshalJSON() ([]byte, error) {
+	var tname, vindexName, col string
+	if pln.Table != nil {
+		tname = pln.Table.Name
+	}
+	if pln.ColVindex != nil {
+		vindexName = pln.ColVindex.Name
+		col = pln.ColVindex.Col
+	}
+	marshalPlan := struct {
+		ID        PlanID
+		Reason    string
+		Table     string
+		Original  string
+		Rewritten string
+		Subquery  string
+		Vindex    string
+		Col       string
+		Values    interface{}
+	}{
+		ID:        pln.ID,
+		Reason:    pln.Reason,
+		Table:     tname,
+		Original:  pln.Original,
+		Rewritten: pln.Rewritten,
+		Subquery:  pln.Subquery,
+		Vindex:    vindexName,
+		Col:       col,
+		Values:    pln.Values,
+	}
+	return json.Marshal(marshalPlan)
+}
+
+// IsMulti returns true if the SELECT query can potentially
+// be sent to more than one shard.
+func (pln *Plan) IsMulti() bool {
+	if pln.ID == SelectIN || pln.ID == SelectScatter {
+		return true
+	}
+	if pln.ID == SelectEqual && !IsUnique(pln.ColVindex.Vindex) {
+		return true
+	}
+	return false
 }
 
 func (id PlanID) String() string {
@@ -71,6 +126,8 @@ func (id PlanID) String() string {
 	return planName[id]
 }
 
+// PlanByName returns the PlanID from the plan name.
+// If it cannot be found, then it returns NumPlans.
 func PlanByName(s string) (id PlanID, ok bool) {
 	for i, v := range planName {
 		if v == s {
@@ -80,14 +137,12 @@ func PlanByName(s string) (id PlanID, ok bool) {
 	return NumPlans, false
 }
 
-func (id PlanID) IsMulti() bool {
-	return id == SelectMultiShardKey || id == SelectMultiLookup || id == SelectScatter
-}
-
+// MarshalJSON serializes the plan id as a JSON string.
 func (id PlanID) MarshalJSON() ([]byte, error) {
 	return ([]byte)(fmt.Sprintf("\"%s\"", id.String())), nil
 }
 
+// BuildPlan builds a plan for a query based on the specified schema.
 func BuildPlan(query string, schema *Schema) *Plan {
 	statement, err := sqlparser.Parse(query)
 	if err != nil {
@@ -99,7 +154,7 @@ func BuildPlan(query string, schema *Schema) *Plan {
 	}
 	noplan := &Plan{
 		ID:       NoPlan,
-		Reason:   "too complex",
+		Reason:   "cannot build a plan for this construct",
 		Original: query,
 	}
 	var plan *Plan

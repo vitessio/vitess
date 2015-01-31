@@ -1,0 +1,33 @@
+<div class="container-fluid">
+  <div class="row">
+    <div data-ng-include="'editor/sidebar.html'"></div>
+    <div class="col-md-10">
+      <h4 data-ng-show="keyspaceName">
+        Keyspace: {{keyspaceName}} <span class="btn-group ">
+          <button type="button"
+            data-ng-class="{'btn btn-info': true, 'active': keyspace.Sharded}"
+            data-ng-click="setSharded(true)">Sharded</button>
+          <button type="button"
+            data-ng-class="{'btn btn-info': true, 'active': !keyspace.Sharded}"
+            data-ng-click="setSharded(false)">Unsharded</button>
+        </span> <span class="btn-group ">
+          <a type="button" class="btn btn-primary" title="Delete keyspace"
+          data-ng-click="deleteKeyspace(keyspaceName)"
+          href="#">
+            <span class="glyphicon glyphicon-trash"></span>
+          </a>
+        </span>
+      </h4>
+    </div>
+    <div data-ng-switch="keyspace.Sharded">
+      <div data-ng-switch-when="true">
+        <div data-ng-include="'editor/tables.html'"></div>
+        <div data-ng-include="'editor/classes.html'"></div>
+        <div data-ng-include="'editor/vindexes.html'"></div>
+      </div>
+      <div data-ng-switch-default>
+        <div data-ng-include="'editor/unsharded_tables.html'"></div>
+      </div>
+    </div>
+  </div>
+</div>

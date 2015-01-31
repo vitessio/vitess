@@ -7,25 +7,27 @@ package tabletserver
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
-	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/streamlog"
+	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"golang.org/x/net/context"
 )
 
 var (
 	queryLogHandler = flag.String("query-log-stream-handler", "/debug/querylog", "URL handler for streaming queries log")
 	txLogHandler    = flag.String("transaction-log-stream-handler", "/debug/txlog", "URL handler for streaming transactions log")
-	customRules     = flag.String("customrules", "", "custom query rules file")
+
+	checkMySLQThrottler = sync2.NewSemaphore(1, 0)
 )
 
 func init() {
@@ -159,10 +161,9 @@ func RegisterQueryService() {
 	http.HandleFunc("/debug/health", healthCheck)
 }
 
-// AllowQueries can take an indefinite amount of time to return because
-// it keeps retrying until it obtains a valid connection to the database.
-func AllowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules, mysqld *mysqlctl.Mysqld, waitForMysql bool) error {
-	return SqlQueryRpcService.allowQueries(dbconfig, schemaOverrides, qrs, mysqld, waitForMysql)
+// AllowQueries starts the query service.
+func AllowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld *mysqlctl.Mysqld) error {
+	return SqlQueryRpcService.allowQueries(dbconfigs, schemaOverrides, mysqld)
 }
 
 // DisallowQueries can take a long time to return (not indefinite) because
@@ -179,16 +180,42 @@ func ReloadSchema() {
 	SqlQueryRpcService.qe.schemaInfo.triggerReload()
 }
 
+// CheckMySQL verifies that MySQL is still reachable by connecting to it.
+// If it's not reachable, it shuts down the query service.
+// This function rate-limits the check to no more than once per second.
+func CheckMySQL() {
+	if !checkMySLQThrottler.TryAcquire() {
+		return
+	}
+	defer func() {
+		time.Sleep(1 * time.Second)
+		checkMySLQThrottler.Release()
+	}()
+	defer logError()
+	if SqlQueryRpcService.checkMySQL() {
+		return
+	}
+	log.Infof("Check MySQL failed. Shutting down query service")
+	DisallowQueries()
+}
+
 func GetSessionId() int64 {
 	return SqlQueryRpcService.sessionId
 }
 
-func SetQueryRules(qrs *QueryRules) {
-	SqlQueryRpcService.qe.schemaInfo.SetRules(qrs)
+// GetQueryRules is the tabletserver level API to get current query rules
+func GetQueryRules(ruleSource string) (*QueryRules, error) {
+	return QueryRuleSources.GetRules(ruleSource)
 }
 
-func GetQueryRules() (qrs *QueryRules) {
-	return SqlQueryRpcService.qe.schemaInfo.GetRules()
+// SetQueryRules is the tabletserver level API to write current query rules
+func SetQueryRules(ruleSource string, qrs *QueryRules) error {
+	err := QueryRuleSources.SetRules(ruleSource, qrs)
+	if err != nil {
+		return err
+	}
+	SqlQueryRpcService.qe.schemaInfo.ClearQueryPlanCache()
+	return nil
 }
 
 // IsHealthy returns nil if the query service is healthy (able to
@@ -235,24 +262,4 @@ func InitQueryService() {
 	SqlQueryLogger.ServeLogs(*queryLogHandler, buildFmter(SqlQueryLogger))
 	TxLogger.ServeLogs(*txLogHandler, buildFmter(TxLogger))
 	RegisterQueryService()
-}
-
-// LoadCustomRules returns custom rules as specified by the command
-// line flags.
-func LoadCustomRules() (qrs *QueryRules) {
-	if *customRules == "" {
-		return NewQueryRules()
-	}
-
-	data, err := ioutil.ReadFile(*customRules)
-	if err != nil {
-		log.Fatalf("Error reading file %v: %v", *customRules, err)
-	}
-
-	qrs = NewQueryRules()
-	err = qrs.UnmarshalJSON(data)
-	if err != nil {
-		log.Fatalf("Error unmarshaling query rules %v", err)
-	}
-	return qrs
 }

@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/zk"
@@ -118,13 +119,91 @@ type TestZkConn struct {
 	data map[string]string
 }
 
+type ZkStat struct {
+	czxid          int64     `bson:"Czxid"`
+	mzxid          int64     `bson:"Mzxid"`
+	cTime          time.Time `bson:"CTime"`
+	mTime          time.Time `bson:"MTime"`
+	version        int       `bson:"Version"`
+	cVersion       int       `bson:"CVersion"`
+	aVersion       int       `bson:"AVersion"`
+	ephemeralOwner int64     `bson:"EphemeralOwner"`
+	dataLength     int       `bson:"DataLength"`
+	numChildren    int       `bson:"NumChildren"`
+	pzxid          int64     `bson:"Pzxid"`
+}
+
+type ZkPath struct {
+	Path string
+}
+
+type ZkPathV struct {
+	Paths []string
+}
+
+type ZkNode struct {
+	Path     string
+	Data     string
+	Stat     ZkStat
+	Children []string
+}
+
+type ZkNodeV struct {
+	Nodes []*ZkNode
+}
+
+// ZkStat methods to match zk.Stat interface
+func (zkStat *ZkStat) Czxid() int64 {
+	return zkStat.czxid
+}
+
+func (zkStat *ZkStat) Mzxid() int64 {
+	return zkStat.mzxid
+}
+
+func (zkStat *ZkStat) CTime() time.Time {
+	return zkStat.cTime
+}
+
+func (zkStat *ZkStat) MTime() time.Time {
+	return zkStat.mTime
+}
+
+func (zkStat *ZkStat) Version() int {
+	return zkStat.version
+}
+
+func (zkStat *ZkStat) CVersion() int {
+	return zkStat.cVersion
+}
+
+func (zkStat *ZkStat) AVersion() int {
+	return zkStat.aVersion
+}
+
+func (zkStat *ZkStat) EphemeralOwner() int64 {
+	return zkStat.ephemeralOwner
+}
+
+func (zkStat *ZkStat) DataLength() int {
+	return zkStat.dataLength
+}
+
+func (zkStat *ZkStat) NumChildren() int {
+	return zkStat.numChildren
+}
+
+func (zkStat *ZkStat) Pzxid() int64 {
+	return zkStat.pzxid
+}
+
 func (conn *TestZkConn) Get(path string) (data string, stat zk.Stat, err error) {
 	data, ok := conn.data[path]
 	if !ok {
 		err = &zookeeper.Error{Op: "TestZkConn: node doesn't exist", Code: zookeeper.ZNONODE, Path: path}
 		return
 	}
-	s := &zk.ZkStat{}
+	s := &ZkStat{}
 	return data, s, nil
 }
 
@@ -143,7 +222,7 @@ func (conn *TestZkConn) ChildrenW(path string) (children []string, stat zk.Stat,
 func (conn *TestZkConn) Exists(path string) (stat zk.Stat, err error) {
 	_, ok := conn.data[path]
 	if ok {
-		return &zk.ZkStat{}, nil
+		return &ZkStat{}, nil
 	}
 	return nil, nil
 }

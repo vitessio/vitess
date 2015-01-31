@@ -2,13 +2,12 @@ package com.youtube.vitess.vtgate.hadoop;
 
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.Exceptions.DatabaseException;
-import com.youtube.vitess.vtgate.KeyspaceId;
 import com.youtube.vitess.vtgate.Query;
 import com.youtube.vitess.vtgate.VtGate;
 import com.youtube.vitess.vtgate.hadoop.writables.KeyspaceIdWritable;
 import com.youtube.vitess.vtgate.hadoop.writables.RowWritable;
 
-import org.apache.commons.lang.StringUtils;
+import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.Job;
@@ -26,20 +25,15 @@ import java.util.Map;
  * {@link VitessInputSplit}) are fetched from VtGate via an RPC. map() calls are supplied with a
  * {@link KeyspaceIdWritable}, {@link RowWritable} pair.
  */
-public class VitessInputFormat extends InputFormat<KeyspaceIdWritable, RowWritable> {
+public class VitessInputFormat extends InputFormat<NullWritable, RowWritable> {
 
   @Override
   public List<InputSplit> getSplits(JobContext context) {
     try {
       VitessConf conf = new VitessConf(context.getConfiguration());
       VtGate vtgate = VtGate.connect(conf.getHosts(), conf.getTimeoutMs());
-      List<String> columns = conf.getInputColumns();
-      if (!columns.contains(KeyspaceId.COL_NAME)) {
-        columns.add(KeyspaceId.COL_NAME);
-      }
-      String sql = "select " + StringUtils.join(columns, ',') + " from " + conf.getInputTable();
       Map<Query, Long> queries =
-          vtgate.splitQuery(conf.getKeyspace(), sql, conf.getSplitsPerShard());
+          vtgate.splitQuery(conf.getKeyspace(), conf.getInputQuery(), conf.getSplits());
       List<InputSplit> splits = new LinkedList<>();
       for (Query query : queries.keySet()) {
         Long size = queries.get(query);
@@ -56,7 +50,7 @@ public class VitessInputFormat extends InputFormat<KeyspaceIdWritable, RowWritab
     }
   }
 
-  public RecordReader<KeyspaceIdWritable, RowWritable> createRecordReader(InputSplit split,
+  public RecordReader<NullWritable, RowWritable> createRecordReader(InputSplit split,
       TaskAttemptContext context) throws IOException, InterruptedException {
     return new VitessRecordReader();
   }
@@ -67,15 +61,13 @@ public class VitessInputFormat extends InputFormat<KeyspaceIdWritable, RowWritab
   public static void setInput(Job job,
       String hosts,
       String keyspace,
-      String table,
-      List<String> columns,
-      int splitsPerShard) {
+      String query,
+      int splits) {
     job.setInputFormatClass(VitessInputFormat.class);
     VitessConf vtConf = new VitessConf(job.getConfiguration());
     vtConf.setHosts(hosts);
     vtConf.setKeyspace(keyspace);
-    vtConf.setInputTable(table);
-    vtConf.setInputColumns(columns);
-    vtConf.setSplitsPerShard(splitsPerShard);
+    vtConf.setInputQuery(query);
+    vtConf.setSplits(splits);
   }
 }

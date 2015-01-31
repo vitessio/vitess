@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
 
@@ -69,8 +69,22 @@ func removeCells(cells, toRemove, fullList []string) ([]string, bool) {
 	return leftoverCells, false
 }
 
+// ParseKeyspaceShardString parse a "keyspace/shard" string and extract
+// both keyspace and shard. It also returns empty keyspace and shard if
+// input param looks like a old zk path
+func ParseKeyspaceShardString(param string) (string, string, error) {
+	if param[0] == '/' {
+		return "", "", fmt.Errorf("Invalid keyspace/shard: %v, Note: old style zk path is no longer supported, please use a keyspace/shard instead", param)
+	}
+	keySpaceShard := strings.Split(param, "/")
+	if len(keySpaceShard) != 2 {
+		return "", "", fmt.Errorf("Invalid shard path: %v", param)
+	}
+	return keySpaceShard[0], keySpaceShard[1], nil
+}
+
 // SourceShard represents a data source for filtered replication
-// accross shards. When this is used in a destination shard, the master
+// across shards. When this is used in a destination shard, the master
 // of that shard will run filtered replication.
 type SourceShard struct {
 	// Uid is the unique ID for this SourceShard object.
@@ -129,7 +143,7 @@ type ShardServedType struct {
 	Cells []string // nil means all cells
 }
 
-// A pure data struct for information stored in topology server.  This
+// Shard is a pure data struct for information stored in topology server.  This
 // node is used to present a controlled view of the shard, unaware of
 // every management action. It also contains configuration data for a
 // shard.
@@ -236,6 +250,18 @@ func NewShardInfo(keyspace, shard string, value *Shard, version int64) *ShardInf
 	}
 }
 
+// GetShard is a high level function to read shard data.
+// It generates trace spans.
+func GetShard(ctx context.Context, ts Server, keyspace, shard string) (*ShardInfo, error) {
+	span := trace.NewSpanFromContext(ctx)
+	span.StartClient("TopoServer.GetShard")
+	span.Annotate("keyspace", keyspace)
+	span.Annotate("shard", shard)
+	defer span.Finish()
+
+	return ts.GetShard(keyspace, shard)
+}
+
 // UpdateShard updates the shard data, with the right version
 func UpdateShard(ctx context.Context, ts Server, si *ShardInfo) error {
 	span := trace.NewSpanFromContext(ctx)
@@ -254,6 +280,25 @@ func UpdateShard(ctx context.Context, ts Server, si *ShardInfo) error {
 		si.version = newVersion
 	}
 	return err
+}
+
+// UpdateShardFields is a high level helper to read a shard record, call an
+// update function on it, and then write it back. If the write fails due to
+// a version mismatch, it will re-read the record and retry the update.
+// If the update succeeds, it returns the updated ShardInfo.
+func UpdateShardFields(ctx context.Context, ts Server, keyspace, shard string, update func(*Shard) error) (*ShardInfo, error) {
+	for {
+		si, err := GetShard(ctx, ts, keyspace, shard)
+		if err != nil {
+			return nil, err
+		}
+		if err = update(si.Shard); err != nil {
+			return nil, err
+		}
+		if err = UpdateShard(ctx, ts, si); err != ErrBadVersion {
+			return si, err
+		}
+	}
 }
 
 // CreateShard creates a new shard and tries to fill in the right information.
@@ -281,7 +326,7 @@ func CreateShard(ts Server, keyspace, shard string) error {
 	}
 	for _, si := range sis {
 		if key.KeyRangesIntersect(si.KeyRange, keyRange) {
-			for t, _ := range si.ServedTypesMap {
+			for t := range si.ServedTypesMap {
 				delete(s.ServedTypesMap, t)
 			}
 		}
@@ -499,17 +544,25 @@ func InCellList(cell string, cells []string) bool {
 // tablet aliases in the given shard.
 // It can return ErrPartialResult if some cells were not fetched,
 // in which case the result only contains the cells that were fetched.
-func FindAllTabletAliasesInShard(ts Server, keyspace, shard string) ([]TabletAlias, error) {
-	return FindAllTabletAliasesInShardByCell(ts, keyspace, shard, nil)
+func FindAllTabletAliasesInShard(ctx context.Context, ts Server, keyspace, shard string) ([]TabletAlias, error) {
+	return FindAllTabletAliasesInShardByCell(ctx, ts, keyspace, shard, nil)
 }
 
-// FindAllTabletAliasesInShard uses the replication graph to find all the
+// FindAllTabletAliasesInShardByCell uses the replication graph to find all the
 // tablet aliases in the given shard.
 // It can return ErrPartialResult if some cells were not fetched,
 // in which case the result only contains the cells that were fetched.
-func FindAllTabletAliasesInShardByCell(ts Server, keyspace, shard string, cells []string) ([]TabletAlias, error) {
+func FindAllTabletAliasesInShardByCell(ctx context.Context, ts Server, keyspace, shard string, cells []string) ([]TabletAlias, error) {
+	span := trace.NewSpanFromContext(ctx)
+	span.StartLocal("topo.FindAllTabletAliasesInShardbyCell")
+	span.Annotate("keyspace", keyspace)
+	span.Annotate("shard", shard)
+	span.Annotate("num_cells", len(cells))
+	defer span.Finish()
+	ctx = trace.NewContext(ctx, span)
+
 	// read the shard information to find the cells
-	si, err := ts.GetShard(keyspace, shard)
+	si, err := GetShard(ctx, ts, keyspace, shard)
 	if err != nil {
 		return nil, err
 	}
@@ -541,9 +594,6 @@ func FindAllTabletAliasesInShardByCell(ts Server, keyspace, shard string, cells 
 			mutex.Lock()
 			for _, rl := range sri.ReplicationLinks {
 				resultAsMap[rl.TabletAlias] = true
-				if !rl.Parent.IsZero() && InCellList(rl.Parent.Cell, cells) {
-					resultAsMap[rl.Parent] = true
-				}
 			}
 			mutex.Unlock()
 		}(cell)
@@ -565,24 +615,24 @@ func FindAllTabletAliasesInShardByCell(ts Server, keyspace, shard string, cells 
 // GetTabletMapForShard returns the tablets for a shard. It can return
 // ErrPartialResult if it couldn't read all the cells, or all
 // the individual tablets, in which case the map is valid, but partial.
-func GetTabletMapForShard(ts Server, keyspace, shard string) (map[TabletAlias]*TabletInfo, error) {
-	return GetTabletMapForShardByCell(ts, keyspace, shard, nil)
+func GetTabletMapForShard(ctx context.Context, ts Server, keyspace, shard string) (map[TabletAlias]*TabletInfo, error) {
+	return GetTabletMapForShardByCell(ctx, ts, keyspace, shard, nil)
 }
 
 // GetTabletMapForShardByCell returns the tablets for a shard. It can return
 // ErrPartialResult if it couldn't read all the cells, or all
 // the individual tablets, in which case the map is valid, but partial.
-func GetTabletMapForShardByCell(ts Server, keyspace, shard string, cells []string) (map[TabletAlias]*TabletInfo, error) {
+func GetTabletMapForShardByCell(ctx context.Context, ts Server, keyspace, shard string, cells []string) (map[TabletAlias]*TabletInfo, error) {
 	// if we get a partial result, we keep going. It most likely means
 	// a cell is out of commission.
-	aliases, err := FindAllTabletAliasesInShardByCell(ts, keyspace, shard, cells)
+	aliases, err := FindAllTabletAliasesInShardByCell(ctx, ts, keyspace, shard, cells)
 	if err != nil && err != ErrPartialResult {
 		return nil, err
 	}
 
 	// get the tablets for the cells we were able to reach, forward
 	// ErrPartialResult from FindAllTabletAliasesInShard
-	result, gerr := GetTabletMap(ts, aliases)
+	result, gerr := GetTabletMap(ctx, ts, aliases)
 	if gerr == nil && err != nil {
 		gerr = err
 	}

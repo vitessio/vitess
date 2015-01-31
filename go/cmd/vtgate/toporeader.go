@@ -1,13 +1,14 @@
 package main
 
 import (
-	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate"
+	"golang.org/x/net/context"
 )
 
+// TopoReader implements topo.TopoReader.
 type TopoReader struct {
 	// the server to get data from
 	ts vtgate.SrvTopoServer
@@ -17,6 +18,7 @@ type TopoReader struct {
 	errorCount *stats.Counters
 }
 
+// NewTopoReader creates a new TopoReader.
 func NewTopoReader(ts vtgate.SrvTopoServer) *TopoReader {
 	return &TopoReader{
 		ts:         ts,
@@ -25,6 +27,7 @@ func NewTopoReader(ts vtgate.SrvTopoServer) *TopoReader {
 	}
 }
 
+// GetSrvKeyspaceNames returns the names of all keyspaces for the cell.
 func (tr *TopoReader) GetSrvKeyspaceNames(ctx context.Context, req *topo.GetSrvKeyspaceNamesArgs, reply *topo.SrvKeyspaceNames) error {
 	tr.queryCount.Add(req.Cell, 1)
 	var err error
@@ -37,6 +40,8 @@ func (tr *TopoReader) GetSrvKeyspaceNames(ctx context.Context, req *topo.GetSrvK
 	return nil
 }
 
+// GetSrvKeyspace returns information about a keyspace
+// in a particular cell.
 func (tr *TopoReader) GetSrvKeyspace(ctx context.Context, req *topo.GetSrvKeyspaceArgs, reply *topo.SrvKeyspace) (err error) {
 	tr.queryCount.Add(req.Cell, 1)
 	keyspace, err := tr.ts.GetSrvKeyspace(ctx, req.Cell, req.Keyspace)
@@ -49,6 +54,22 @@ func (tr *TopoReader) GetSrvKeyspace(ctx context.Context, req *topo.GetSrvKeyspa
 	return nil
 }
 
+// GetSrvShard returns information about a shard for a keyspace
+// in a particular cell.
+func (tr *TopoReader) GetSrvShard(ctx context.Context, req *topo.GetSrvShardArgs, reply *topo.SrvShard) (err error) {
+	tr.queryCount.Add(req.Cell, 1)
+	shard, err := tr.ts.GetSrvShard(ctx, req.Cell, req.Keyspace, req.Shard)
+	if err != nil {
+		log.Warningf("GetSrvShard(%v,%v,%v) failed: %v", req.Cell, req.Keyspace, req.Shard, err)
+		tr.errorCount.Add(req.Cell, 1)
+		return err
+	}
+	*reply = *shard
+	return nil
+}
+
+// GetEndPoints returns addresses for a tablet type in a shard
+// in a keyspace.
 func (tr *TopoReader) GetEndPoints(ctx context.Context, req *topo.GetEndPointsArgs, reply *topo.EndPoints) (err error) {
 	tr.queryCount.Add(req.Cell, 1)
 	addrs, err := tr.ts.GetEndPoints(ctx, req.Cell, req.Keyspace, req.Shard, req.TabletType)

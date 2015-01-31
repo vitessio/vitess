@@ -29,7 +29,7 @@ import (
 const (
 	// DefaultPortName is the port named used by SrvEntries
 	// if "" is given as the named port.
-	DefaultPortName = "_vtocc"
+	DefaultPortName = "vt"
 )
 
 // EndPoint describes a tablet (maybe composed of multiple processes)

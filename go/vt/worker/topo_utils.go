@@ -5,38 +5,53 @@
 package worker
 
 import (
+	"flag"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
+	"golang.org/x/net/context"
 )
 
-// findHealthyEndPoint returns the first healthy endpoint.
-func findHealthyEndPoint(wr *wrangler.Wrangler, cell, keyspace, shard string) (topo.TabletAlias, error) {
+var (
+	minHealthyEndPoints = flag.Int("min_healthy_rdonly_endpoints", 2, "minimum number of healthy rdonly endpoints required for checker")
+)
+
+// findHealthyRdonlyEndPoint returns a random healthy endpoint.
+// Since we don't want to use them all, we require at least
+// minHealthyEndPoints servers to be healthy.
+func findHealthyRdonlyEndPoint(wr *wrangler.Wrangler, cell, keyspace, shard string) (topo.TabletAlias, error) {
 	endPoints, err := wr.TopoServer().GetEndPoints(cell, keyspace, shard, topo.TYPE_RDONLY)
 	if err != nil {
 		return topo.TabletAlias{}, fmt.Errorf("GetEndPoints(%v,%v,%v,rdonly) failed: %v", cell, keyspace, shard, err)
 	}
+	healthyEndpoints := make([]topo.EndPoint, 0, len(endPoints.Entries))
 	for _, entry := range endPoints.Entries {
 		if len(entry.Health) == 0 {
-			// first healthy server is what we want
-			return topo.TabletAlias{
-				Cell: cell,
-				Uid:  entry.Uid,
-			}, nil
+			healthyEndpoints = append(healthyEndpoints, entry)
 		}
 	}
-	return topo.TabletAlias{}, fmt.Errorf("No endpoint to chose from in (%v,%v/%v)", cell, keyspace, shard)
+	if len(healthyEndpoints) < *minHealthyEndPoints {
+		return topo.TabletAlias{}, fmt.Errorf("Not enough endpoints to chose from in (%v,%v/%v), have %v healthy ones, need at least %v", cell, keyspace, shard, len(healthyEndpoints), *minHealthyEndPoints)
+	}
+
+	// random server in the list is what we want
+	index := rand.Intn(len(healthyEndpoints))
+	return topo.TabletAlias{
+		Cell: cell,
+		Uid:  healthyEndpoints[index].Uid,
+	}, nil
 }
 
 // findChecker:
 // - find a rdonly instance in the keyspace / shard
 // - mark it as checker
 // - tag it with our worker process
-func findChecker(wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, cell, keyspace, shard string) (topo.TabletAlias, error) {
-	tabletAlias, err := findHealthyEndPoint(wr, cell, keyspace, shard)
+func findChecker(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, cell, keyspace, shard string) (topo.TabletAlias, error) {
+	tabletAlias, err := findHealthyRdonlyEndPoint(wr, cell, keyspace, shard)
 	if err != nil {
 		return topo.TabletAlias{}, err
 	}
@@ -60,8 +75,10 @@ func findChecker(wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, cell, keyspac
 	defer wrangler.RecordTabletTagAction(cleaner, tabletAlias, "worker", "")
 
 	wr.Logger().Infof("Changing tablet %v to 'checker'", tabletAlias)
-	wr.ResetActionTimeout(30 * time.Second)
-	if err := wr.ChangeType(tabletAlias, topo.TYPE_CHECKER, false /*force*/); err != nil {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	err = wr.ChangeType(ctx, tabletAlias, topo.TYPE_CHECKER, false /*force*/)
+	cancel()
+	if err != nil {
 		return topo.TabletAlias{}, err
 	}
 
@@ -70,4 +87,8 @@ func findChecker(wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, cell, keyspac
 	// 'spare' if we have stopped replication for too long on it.
 	wrangler.RecordChangeSlaveTypeAction(cleaner, tabletAlias, topo.TYPE_RDONLY)
 	return tabletAlias, nil
+}
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
 }

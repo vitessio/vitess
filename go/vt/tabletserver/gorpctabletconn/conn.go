@@ -12,14 +12,15 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/go.net/context"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/vt/rpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -45,11 +46,11 @@ func DialTablet(ctx context.Context, endPoint topo.EndPoint, keyspace, shard str
 	var addr string
 	var config *tls.Config
 	if *tabletBsonEncrypted {
-		addr = fmt.Sprintf("%v:%v", endPoint.Host, endPoint.NamedPortMap["_vts"])
+		addr = netutil.JoinHostPort(endPoint.Host, endPoint.NamedPortMap["vts"])
 		config = &tls.Config{}
 		config.InsecureSkipVerify = true
 	} else {
-		addr = fmt.Sprintf("%v:%v", endPoint.Host, endPoint.NamedPortMap["_vtocc"])
+		addr = netutil.JoinHostPort(endPoint.Host, endPoint.NamedPortMap["vt"])
 	}
 
 	conn := &TabletBson{endPoint: endPoint}

@@ -7,30 +7,27 @@ package planbuilder
 import "github.com/youtube/vitess/go/vt/sqlparser"
 
 func buildSelectPlan(sel *sqlparser.Select, schema *Schema) *Plan {
-	plan := &Plan{
-		ID:        NoPlan,
-		Rewritten: generateQuery(sel),
-	}
+	plan := &Plan{ID: NoPlan}
 	tablename, _ := analyzeFrom(sel.From)
-	plan.Table, plan.Reason = schema.LookupTable(tablename)
+	plan.Table, plan.Reason = schema.FindTable(tablename)
 	if plan.Reason != "" {
 		return plan
 	}
-	if plan.Table.Keyspace.ShardingScheme == Unsharded {
+	if !plan.Table.Keyspace.Sharded {
 		plan.ID = SelectUnsharded
 		return plan
 	}
 
-	getWhereRouting(sel.Where, plan)
-	if plan.ID.IsMulti() {
-		if hasAggregates(sel.SelectExprs) || sel.Distinct != "" || sel.GroupBy != nil || sel.Having != nil || sel.OrderBy != nil || sel.Limit != nil {
+	getWhereRouting(sel.Where, plan, false)
+	if plan.IsMulti() {
+		if hasPostProcessing(sel) {
 			plan.ID = NoPlan
-			plan.Reason = "too complex"
+			plan.Reason = "multi-shard query has post-processing constructs"
 			return plan
 		}
-		// The where clause changes if it's Multi.
-		plan.Rewritten = generateQuery(sel)
 	}
+	// The where clause might have changed.
+	plan.Rewritten = generateQuery(sel)
 	return plan
 }
 
@@ -112,4 +109,8 @@ func exprHasAggregates(node sqlparser.Expr) bool {
 	default:
 		panic("unexpected")
 	}
+}
+
+func hasPostProcessing(sel *sqlparser.Select) bool {
+	return hasAggregates(sel.SelectExprs) || sel.Distinct != "" || sel.GroupBy != nil || sel.Having != nil || sel.OrderBy != nil || sel.Limit != nil
 }

@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/go.net/context"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 // ShardConn represents a load balanced connection to a group
@@ -281,8 +281,7 @@ func (sdc *ShardConn) markDown(conn tabletconn.TabletConn, reason string) {
 	}
 	sdc.balancer.MarkDown(conn.EndPoint().Uid, reason)
 
-	// Launch as goroutine so we don't block
-	go sdc.conn.Close()
+	sdc.conn.Close()
 	sdc.conn = nil
 }
 

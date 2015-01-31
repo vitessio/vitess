@@ -12,8 +12,8 @@ Start up steps include:
 - start VtGate instance
 
 Usage:
-java_vtgate_test_helper.py --shards=-80,80- --tablet-config='{"rdonly":1, "replica":1}' --keyspace=test_keyspace setup
-starts 1 VtGate and 6 vttablets - 1 master, replica and rdonly each per shard
+java_vtgate_test_helper.py --shards=-80,80- --tablet-config='{"rdonly":1, "replica":1}' --keyspace=test_keyspace  --vtgate-port=11111 setup
+starts 1 VtGate on the specified port and 6 vttablets - 1 master, replica and rdonly each per shard
 
 java_vtgate_test_helper.py --shards=-80,80- --tablet-config='{"rdonly":1, "replica":1}' --keyspace=test_keyspace teardown
 shuts down the tablets and VtGate instances
@@ -41,6 +41,9 @@ class TestEnv(object):
   vtgate_port = None
   def __init__(self, options):
     self.keyspace = options.keyspace
+    self.schema = options.schema
+    self.vschema = options.vschema
+    self.vtgate_port = options.vtgate_port
     self.tablets = []
     tablet_config = json.loads(options.tablet_config)
     for shard in options.shards.split(','):
@@ -60,14 +63,24 @@ class TestEnv(object):
       utils.run_vtctl(['RebuildKeyspaceGraph', self.keyspace], auto_log=True)
       for t in self.tablets:
         t.create_db('vt_' + self.keyspace)
-        t.start_vttablet(wait_for_state=None)
+        t.start_vttablet(
+          wait_for_state=None,
+          extra_args=['-queryserver-config-schema-reload-time', '1'],
+        )
       for t in self.tablets:
         t.wait_for_vttablet_state('SERVING')
       for t in self.tablets:
         if t.type == "master":
           utils.run_vtctl(['ReparentShard', '-force', self.keyspace+'/'+t.shard, t.tablet_alias], auto_log=True)
       utils.run_vtctl(['RebuildKeyspaceGraph', self.keyspace], auto_log=True)
-      self.vtgate_server, self.vtgate_port = utils.vtgate_start(cache_ttl='500s')
+      if self.schema:
+        utils.run_vtctl(['ApplySchemaKeyspace', '-simple', '-sql', self.schema, self.keyspace])
+      if self.vschema:
+        if self.vschema[0] == '{':
+          utils.run_vtctl(['ApplyVSchema', "-vschema", self.vschema])
+        else:
+          utils.run_vtctl(['ApplyVSchema', "-vschema_file", self.vschema])
+      self.vtgate_server, self.vtgate_port = utils.vtgate_start(cache_ttl='500s', vtport=self.vtgate_port)
       vtgate_client = zkocc.ZkOccConnection("localhost:%u" % self.vtgate_port, "test_nj", 30.0)
       topology.read_topology(vtgate_client)
     except:
@@ -86,17 +99,22 @@ class TestEnv(object):
       t.remove_tree()
 
 
-def main():
+def parse_args():
+  global options, args
   parser = optparse.OptionParser(usage="usage: %prog [options]")
   parser.add_option("--shards", action="store", type="string",
                     help="comma separated list of shard names, e.g: '-80,80-'")
   parser.add_option("--tablet-config", action="store", type="string",
                     help="json config for for non-master tablets. e.g {'replica':2, 'rdonly':1}")
   parser.add_option("--keyspace", action="store", type="string")
+  parser.add_option("--schema", action="store", type="string")
+  parser.add_option("--vschema", action="store", type="string")
+  parser.add_option("--vtgate-port", action="store", type="int")
   utils.add_options(parser)
   (options, args) = parser.parse_args()
   utils.set_options(options)
-  
+
+def main():
   env = TestEnv(options)
   if args[0] == 'setup':
     env.set_up()
@@ -109,5 +127,6 @@ def main():
 
 
 if __name__ == '__main__':
+  parse_args()
   main()
 

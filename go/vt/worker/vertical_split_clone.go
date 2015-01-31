@@ -11,9 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/event"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -45,9 +46,12 @@ type VerticalSplitCloneWorker struct {
 	tables                 []string
 	strategy               *mysqlctl.SplitStrategy
 	sourceReaderCount      int
+	destinationPackCount   int
 	minTableSizeForSplit   uint64
 	destinationWriterCount int
 	cleaner                *wrangler.Cleaner
+	ctx                    context.Context
+	ctxCancel              context.CancelFunc
 
 	// all subsequent fields are protected by the mutex
 	mu    sync.Mutex
@@ -65,20 +69,24 @@ type VerticalSplitCloneWorker struct {
 	destinationAliases     []topo.TabletAlias
 	destinationTablets     map[topo.TabletAlias]*topo.TabletInfo
 	destinationMasterAlias topo.TabletAlias
+	// aliases of tablets that need to have their schema reloaded
+	reloadAliases []topo.TabletAlias
+	reloadTablets map[topo.TabletAlias]*topo.TabletInfo
 
 	// populated during stateVSCCopy
-	tableStatus []tableStatus
+	tableStatus []*tableStatus
 	startTime   time.Time
 
 	ev *events.VerticalSplitClone
 }
 
 // NewVerticalSplitCloneWorker returns a new VerticalSplitCloneWorker object.
-func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspace, destinationShard string, tables []string, strategyStr string, sourceReaderCount int, minTableSizeForSplit uint64, destinationWriterCount int) (Worker, error) {
+func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspace, destinationShard string, tables []string, strategyStr string, sourceReaderCount, destinationPackCount int, minTableSizeForSplit uint64, destinationWriterCount int) (Worker, error) {
 	strategy, err := mysqlctl.NewSplitStrategy(wr.Logger(), strategyStr)
 	if err != nil {
 		return nil, err
 	}
+	ctx, cancel := context.WithCancel(context.Background())
 	return &VerticalSplitCloneWorker{
 		wr:                     wr,
 		cell:                   cell,
@@ -87,9 +95,12 @@ func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspac
 		tables:                 tables,
 		strategy:               strategy,
 		sourceReaderCount:      sourceReaderCount,
+		destinationPackCount:   destinationPackCount,
 		minTableSizeForSplit:   minTableSizeForSplit,
 		destinationWriterCount: destinationWriterCount,
 		cleaner:                &wrangler.Cleaner{},
+		ctx:                    ctx,
+		ctxCancel:              cancel,
 
 		state: stateVSCNotSarted,
 		ev: &events.VerticalSplitClone{
@@ -166,9 +177,17 @@ func (vscw *VerticalSplitCloneWorker) StatusAsText() string {
 	return result
 }
 
-func (vscw *VerticalSplitCloneWorker) CheckInterrupted() bool {
+// Cancel is part of the Worker interface
+func (vscw *VerticalSplitCloneWorker) Cancel() {
+	vscw.ctxCancel()
+}
+
+func (vscw *VerticalSplitCloneWorker) checkInterrupted() bool {
 	select {
-	case <-interrupted:
+	case <-vscw.ctx.Done():
+		if vscw.ctx.Err() == context.DeadlineExceeded {
+			return false
+		}
 		vscw.recordError(topo.ErrInterrupted)
 		return true
 	default:
@@ -205,23 +224,31 @@ func (vscw *VerticalSplitCloneWorker) run() error {
 	if err := vscw.init(); err != nil {
 		return fmt.Errorf("init() failed: %v", err)
 	}
-	if vscw.CheckInterrupted() {
+	if vscw.checkInterrupted() {
 		return topo.ErrInterrupted
 	}
 
 	// second state: find targets
 	if err := vscw.findTargets(); err != nil {
+		// A canceled context can appear to cause an application error
+		if vscw.checkInterrupted() {
+			return topo.ErrInterrupted
+		}
 		return fmt.Errorf("findTargets() failed: %v", err)
 	}
-	if vscw.CheckInterrupted() {
+	if vscw.checkInterrupted() {
 		return topo.ErrInterrupted
 	}
 
 	// third state: copy data
 	if err := vscw.copy(); err != nil {
+		// A canceled context can appear to cause an application error
+		if vscw.checkInterrupted() {
+			return topo.ErrInterrupted
+		}
 		return fmt.Errorf("copy() failed: %v", err)
 	}
-	if vscw.CheckInterrupted() {
+	if vscw.checkInterrupted() {
 		return topo.ErrInterrupted
 	}
 
@@ -246,15 +273,15 @@ func (vscw *VerticalSplitCloneWorker) init() error {
 	servingTypes := []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY}
 	servedFrom := ""
 	for _, st := range servingTypes {
-		if sf, ok := destinationKeyspaceInfo.ServedFromMap[st]; !ok {
+		sf, ok := destinationKeyspaceInfo.ServedFromMap[st]
+		if !ok {
 			return fmt.Errorf("destination keyspace %v is serving type %v", vscw.destinationKeyspace, st)
+		}
+		if servedFrom == "" {
+			servedFrom = sf.Keyspace
 		} else {
-			if servedFrom == "" {
-				servedFrom = sf.Keyspace
-			} else {
-				if servedFrom != sf.Keyspace {
-					return fmt.Errorf("destination keyspace %v is serving from multiple source keyspaces %v and %v", vscw.destinationKeyspace, servedFrom, sf.Keyspace)
-				}
+			if servedFrom != sf.Keyspace {
+				return fmt.Errorf("destination keyspace %v is serving from multiple source keyspaces %v and %v", vscw.destinationKeyspace, servedFrom, sf.Keyspace)
 			}
 		}
 	}
@@ -272,7 +299,7 @@ func (vscw *VerticalSplitCloneWorker) findTargets() error {
 
 	// find an appropriate endpoint in the source shard
 	var err error
-	vscw.sourceAlias, err = findChecker(vscw.wr, vscw.cleaner, vscw.cell, vscw.sourceKeyspace, "0")
+	vscw.sourceAlias, err = findChecker(vscw.ctx, vscw.wr, vscw.cleaner, vscw.cell, vscw.sourceKeyspace, "0")
 	if err != nil {
 		return fmt.Errorf("cannot find checker for %v/%v/0: %v", vscw.cell, vscw.sourceKeyspace, err)
 	}
@@ -285,35 +312,51 @@ func (vscw *VerticalSplitCloneWorker) findTargets() error {
 	}
 
 	// stop replication on it
-	if err := vscw.wr.TabletManagerClient().StopSlave(context.TODO(), vscw.sourceTablet, 30*time.Second); err != nil {
+	ctx, cancel := context.WithTimeout(vscw.ctx, 60*time.Second)
+	err = vscw.wr.TabletManagerClient().StopSlave(ctx, vscw.sourceTablet)
+	cancel()
+	if err != nil {
 		return fmt.Errorf("cannot stop replication on tablet %v", vscw.sourceAlias)
 	}
 
-	wrangler.RecordStartSlaveAction(vscw.cleaner, vscw.sourceTablet, 30*time.Second)
+	wrangler.RecordStartSlaveAction(vscw.cleaner, vscw.sourceTablet)
 	action, err := wrangler.FindChangeSlaveTypeActionByTarget(vscw.cleaner, vscw.sourceAlias)
 	if err != nil {
 		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", vscw.sourceAlias, err)
 	}
 	action.TabletType = topo.TYPE_SPARE
 
+	return vscw.findMasterTargets()
+}
+
+// findMasterTargets looks up the master for the destination shard, and set the destinations appropriately.
+// It should be used if vtworker will only want to write to masters.
+func (vscw *VerticalSplitCloneWorker) findMasterTargets() error {
+	var err error
 	// find all the targets in the destination keyspace / shard
-	vscw.destinationAliases, err = topo.FindAllTabletAliasesInShard(vscw.wr.TopoServer(), vscw.destinationKeyspace, vscw.destinationShard)
+	ctx, cancel := context.WithTimeout(vscw.ctx, 60*time.Second)
+	vscw.reloadAliases, err = topo.FindAllTabletAliasesInShard(ctx, vscw.wr.TopoServer(), vscw.destinationKeyspace, vscw.destinationShard)
+	cancel()
 	if err != nil {
-		return fmt.Errorf("cannot find all target tablets in %v/%v: %v", vscw.destinationKeyspace, vscw.destinationShard, err)
+		return fmt.Errorf("cannot find all reload target tablets in %v/%v: %v", vscw.destinationKeyspace, vscw.destinationShard, err)
 	}
-	vscw.wr.Logger().Infof("Found %v target aliases", len(vscw.destinationAliases))
+	vscw.wr.Logger().Infof("Found %v reload target aliases", len(vscw.reloadAliases))
 
 	// get the TabletInfo for all targets
-	vscw.destinationTablets, err = topo.GetTabletMap(vscw.wr.TopoServer(), vscw.destinationAliases)
+	ctx, cancel = context.WithTimeout(vscw.ctx, 60*time.Second)
+	vscw.reloadTablets, err = topo.GetTabletMap(ctx, vscw.wr.TopoServer(), vscw.reloadAliases)
+	cancel()
 	if err != nil {
-		return fmt.Errorf("cannot read all target tablets in %v/%v: %v", vscw.destinationKeyspace, vscw.destinationShard, err)
+		return fmt.Errorf("cannot read all reload target tablets in %v/%v: %v", vscw.destinationKeyspace, vscw.destinationShard, err)
 	}
 
 	// find and validate the master
-	for tabletAlias, ti := range vscw.destinationTablets {
+	for tabletAlias, ti := range vscw.reloadTablets {
 		if ti.Type == topo.TYPE_MASTER {
 			if vscw.destinationMasterAlias.IsZero() {
 				vscw.destinationMasterAlias = tabletAlias
+				vscw.destinationAliases = []topo.TabletAlias{tabletAlias}
+				vscw.destinationTablets = map[topo.TabletAlias]*topo.TabletInfo{tabletAlias: ti}
 			} else {
 				return fmt.Errorf("multiple masters in destination shard: %v and %v at least", vscw.destinationMasterAlias, tabletAlias)
 			}
@@ -322,19 +365,22 @@ func (vscw *VerticalSplitCloneWorker) findTargets() error {
 	if vscw.destinationMasterAlias.IsZero() {
 		return fmt.Errorf("no master in destination shard")
 	}
+	vscw.wr.Logger().Infof("Found target master alias %v in shard %v/%v", vscw.destinationMasterAlias, vscw.destinationKeyspace, vscw.destinationShard)
 
 	return nil
 }
 
 // copy phase:
-// - get schema on the source, filter tables
-// - create tables on all destinations
-// - copy the data
+//	- copy the data from source tablets to destination masters (wtih replication on)
+// Assumes that the schema has already been created on each destination tablet
+// (probably from vtctl's CopySchemaShard)
 func (vscw *VerticalSplitCloneWorker) copy() error {
 	vscw.setState(stateVSCCopy)
 
 	// get source schema
-	sourceSchemaDefinition, err := vscw.wr.GetSchema(vscw.sourceAlias, vscw.tables, nil, true)
+	ctx, cancel := context.WithTimeout(vscw.ctx, 60*time.Second)
+	sourceSchemaDefinition, err := vscw.wr.GetSchema(ctx, vscw.sourceAlias, vscw.tables, nil, true)
+	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot get schema from source %v: %v", vscw.sourceAlias, err)
 	}
@@ -343,63 +389,45 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	}
 	vscw.wr.Logger().Infof("Source tablet has %v tables to copy", len(sourceSchemaDefinition.TableDefinitions))
 	vscw.mu.Lock()
-	vscw.tableStatus = make([]tableStatus, len(sourceSchemaDefinition.TableDefinitions))
+	vscw.tableStatus = make([]*tableStatus, len(sourceSchemaDefinition.TableDefinitions))
 	for i, td := range sourceSchemaDefinition.TableDefinitions {
-		vscw.tableStatus[i].name = td.Name
-		vscw.tableStatus[i].rowCount = td.RowCount
+		vscw.tableStatus[i] = &tableStatus{
+			name:     td.Name,
+			rowCount: td.RowCount,
+		}
 	}
 	vscw.startTime = time.Now()
 	vscw.mu.Unlock()
 
-	// Create all the commands to create the destination schema:
-	// - createDbCmds will create the database and the tables
-	// - createViewCmds will create the views
-	// - alterTablesCmds will modify the tables at the end if needed
-	// (all need template substitution for {{.DatabaseName}})
-	createDbCmds := make([]string, 0, len(sourceSchemaDefinition.TableDefinitions)+1)
-	createDbCmds = append(createDbCmds, sourceSchemaDefinition.DatabaseSchema)
-	createViewCmds := make([]string, 0, 16)
-	alterTablesCmds := make([]string, 0, 16)
+	// Count rows
 	for i, td := range sourceSchemaDefinition.TableDefinitions {
 		vscw.tableStatus[i].mu.Lock()
 		if td.Type == myproto.TABLE_BASE_TABLE {
-			create, alter, err := mysqlctl.MakeSplitCreateTableSql(vscw.wr.Logger(), td.Schema, "{{.DatabaseName}}", td.Name, vscw.strategy)
-			if err != nil {
-				return fmt.Errorf("MakeSplitCreateTableSql(%v) returned: %v", td.Name, err)
-			}
-			createDbCmds = append(createDbCmds, create)
-			if alter != "" {
-				alterTablesCmds = append(alterTablesCmds, alter)
-			}
-			vscw.tableStatus[i].state = "before table creation"
 			vscw.tableStatus[i].rowCount = td.RowCount
 		} else {
-			createViewCmds = append(createViewCmds, td.Schema)
-			vscw.tableStatus[i].state = "before view creation"
-			vscw.tableStatus[i].rowCount = 0
+			vscw.tableStatus[i].isView = true
 		}
 		vscw.tableStatus[i].mu.Unlock()
 	}
 
-	// For each destination tablet (in parallel):
-	// - create the schema
-	// - setup the channels to send SQL data chunks
+	// In parallel, setup the channels to send SQL data chunks to for each destination tablet.
 	//
-	// mu protects the abort channel for closing, and firstError
+	// mu protects the context for cancelation, and firstError
 	mu := sync.Mutex{}
-	abort := make(chan struct{})
 	var firstError error
 
 	processError := func(format string, args ...interface{}) {
 		vscw.wr.Logger().Errorf(format, args...)
 		mu.Lock()
-		if abort != nil {
-			close(abort)
-			abort = nil
+		if !vscw.checkInterrupted() {
+			vscw.Cancel()
 			firstError = fmt.Errorf(format, args...)
 		}
 		mu.Unlock()
 	}
+
+	// since we're writing only to masters, we need to enable bin logs so that replication happens
+	disableBinLogs := false
 
 	insertChannels := make([]chan string, len(vscw.destinationAliases))
 	destinationWaitGroup := sync.WaitGroup{}
@@ -411,27 +439,13 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 		// destinationWriterCount go routines reading from it.
 		insertChannels[i] = make(chan string, vscw.destinationWriterCount*2)
 
-		destinationWaitGroup.Add(1)
 		go func(ti *topo.TabletInfo, insertChannel chan string) {
-			defer destinationWaitGroup.Done()
-			vscw.wr.Logger().Infof("Creating tables on tablet %v", ti.Alias)
-			if err := runSqlCommands(vscw.wr, ti, createDbCmds, abort, true); err != nil {
-				processError("createDbCmds failed: %v", err)
-				return
-			}
-			if len(createViewCmds) > 0 {
-				vscw.wr.Logger().Infof("Creating views on tablet %v", ti.Alias)
-				if err := runSqlCommands(vscw.wr, ti, createViewCmds, abort, true); err != nil {
-					processError("createViewCmds failed: %v", err)
-					return
-				}
-			}
 			for j := 0; j < vscw.destinationWriterCount; j++ {
 				destinationWaitGroup.Add(1)
 				go func() {
 					defer destinationWaitGroup.Done()
 
-					if err := executeFetchLoop(vscw.wr, ti, insertChannel, abort, true); err != nil {
+					if err := executeFetchLoop(vscw.ctx, vscw.wr, ti, insertChannel, disableBinLogs); err != nil {
 						processError("executeFetchLoop failed: %v", err)
 					}
 				}()
@@ -445,15 +459,14 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	sema := sync2.NewSemaphore(vscw.sourceReaderCount, 0)
 	for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
 		if td.Type == myproto.TABLE_VIEW {
-			vscw.tableStatus[tableIndex].setState("view created")
 			continue
 		}
 
-		vscw.tableStatus[tableIndex].setState("before copy")
-		chunks, err := findChunks(vscw.wr, vscw.sourceTablet, td, vscw.minTableSizeForSplit, vscw.sourceReaderCount)
+		chunks, err := findChunks(vscw.ctx, vscw.wr, vscw.sourceTablet, td, vscw.minTableSizeForSplit, vscw.sourceReaderCount)
 		if err != nil {
 			return err
 		}
+		vscw.tableStatus[tableIndex].setThreadCount(len(chunks) - 1)
 
 		for chunkIndex := 0; chunkIndex < len(chunks)-1; chunkIndex++ {
 			sourceWaitGroup.Add(1)
@@ -463,20 +476,22 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 				sema.Acquire()
 				defer sema.Release()
 
-				vscw.tableStatus[tableIndex].setState("started the copy")
+				vscw.tableStatus[tableIndex].threadStarted()
 
 				// build the query, and start the streaming
 				selectSQL := buildSQLFromChunks(vscw.wr, td, chunks, chunkIndex, vscw.sourceAlias.String())
-				qrr, err := NewQueryResultReaderForTablet(vscw.wr.TopoServer(), vscw.sourceAlias, selectSQL)
+				qrr, err := NewQueryResultReaderForTablet(vscw.ctx, vscw.wr.TopoServer(), vscw.sourceAlias, selectSQL)
 				if err != nil {
 					processError("NewQueryResultReaderForTablet failed: %v", err)
 					return
 				}
+				defer qrr.Close()
 
 				// process the data
-				if err := vscw.processData(td, tableIndex, qrr, insertChannels, abort); err != nil {
+				if err := vscw.processData(td, tableIndex, qrr, insertChannels, vscw.destinationPackCount, vscw.ctx.Done()); err != nil {
 					processError("QueryResultReader failed: %v", err)
 				}
+				vscw.tableStatus[tableIndex].threadDone()
 			}(td, tableIndex, chunkIndex)
 		}
 	}
@@ -490,28 +505,12 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 		return firstError
 	}
 
-	// do the post-copy alters if any
-	if len(alterTablesCmds) > 0 {
-		for _, tabletAlias := range vscw.destinationAliases {
-			destinationWaitGroup.Add(1)
-			go func(ti *topo.TabletInfo) {
-				defer destinationWaitGroup.Done()
-				vscw.wr.Logger().Infof("Altering tables on tablet %v", ti.Alias)
-				if err := runSqlCommands(vscw.wr, ti, alterTablesCmds, abort, true); err != nil {
-					processError("alterTablesCmds failed on tablet %v: %v", ti.Alias, err)
-				}
-			}(vscw.destinationTablets[tabletAlias])
-		}
-		destinationWaitGroup.Wait()
-		if firstError != nil {
-			return firstError
-		}
-	}
-
 	// then create and populate the blp_checkpoint table
 	if vscw.strategy.PopulateBlpCheckpoint {
 		// get the current position from the source
-		status, err := vscw.wr.TabletManagerClient().SlaveStatus(context.TODO(), vscw.sourceTablet, 30*time.Second)
+		ctx, cancel := context.WithTimeout(vscw.ctx, 60*time.Second)
+		status, err := vscw.wr.TabletManagerClient().SlaveStatus(ctx, vscw.sourceTablet)
+		cancel()
 		if err != nil {
 			return err
 		}
@@ -528,7 +527,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 			go func(ti *topo.TabletInfo) {
 				defer destinationWaitGroup.Done()
 				vscw.wr.Logger().Infof("Making and populating blp_checkpoint table on tablet %v", ti.Alias)
-				if err := runSqlCommands(vscw.wr, ti, queries, abort, true); err != nil {
+				if err := runSqlCommands(vscw.ctx, vscw.wr, ti, queries, disableBinLogs); err != nil {
 					processError("blp_checkpoint queries failed on tablet %v: %v", ti.Alias, err)
 				}
 			}(vscw.destinationTablets[tabletAlias])
@@ -544,7 +543,10 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 		vscw.wr.Logger().Infof("Skipping setting SourceShard on destination shard.")
 	} else {
 		vscw.wr.Logger().Infof("Setting SourceShard on shard %v/%v", vscw.destinationKeyspace, vscw.destinationShard)
-		if err := vscw.wr.SetSourceShards(vscw.destinationKeyspace, vscw.destinationShard, []topo.TabletAlias{vscw.sourceAlias}, vscw.tables); err != nil {
+		ctx, cancel := context.WithTimeout(vscw.ctx, 60*time.Second)
+		err := vscw.wr.SetSourceShards(ctx, vscw.destinationKeyspace, vscw.destinationShard, []topo.TabletAlias{vscw.sourceAlias}, vscw.tables)
+		cancel()
+		if err != nil {
 			return fmt.Errorf("Failed to set source shards: %v", err)
 		}
 	}
@@ -552,15 +554,18 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	// And force a schema reload on all destination tablets.
 	// The master tablet will end up starting filtered replication
 	// at this point.
-	for _, tabletAlias := range vscw.destinationAliases {
+	for _, tabletAlias := range vscw.reloadAliases {
 		destinationWaitGroup.Add(1)
 		go func(ti *topo.TabletInfo) {
 			defer destinationWaitGroup.Done()
 			vscw.wr.Logger().Infof("Reloading schema on tablet %v", ti.Alias)
-			if err := vscw.wr.TabletManagerClient().ReloadSchema(context.TODO(), ti, 30*time.Second); err != nil {
+			ctx, cancel := context.WithTimeout(vscw.ctx, 30*time.Second)
+			err := vscw.wr.TabletManagerClient().ReloadSchema(ctx, ti)
+			cancel()
+			if err != nil {
 				processError("ReloadSchema failed on tablet %v: %v", ti.Alias, err)
 			}
-		}(vscw.destinationTablets[tabletAlias])
+		}(vscw.reloadTablets[tabletAlias])
 	}
 	destinationWaitGroup.Wait()
 	return firstError
@@ -568,19 +573,48 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 
 // processData pumps the data out of the provided QueryResultReader.
 // It returns any error the source encounters.
-func (vscw *VerticalSplitCloneWorker) processData(td *myproto.TableDefinition, tableIndex int, qrr *QueryResultReader, insertChannels []chan string, abort chan struct{}) error {
+func (vscw *VerticalSplitCloneWorker) processData(td *myproto.TableDefinition, tableIndex int, qrr *QueryResultReader, insertChannels []chan string, destinationPackCount int, abort <-chan struct{}) error {
 	// process the data
 	baseCmd := td.Name + "(" + strings.Join(td.Columns, ", ") + ") VALUES "
+	var rows [][]sqltypes.Value
+	packCount := 0
+
 	for {
 		select {
 		case r, ok := <-qrr.Output:
 			if !ok {
-				return qrr.Error()
+				// we are done, see if there was an error
+				err := qrr.Error()
+				if err != nil {
+					return err
+				}
+
+				// send the remainder if any
+				if packCount > 0 {
+					cmd := baseCmd + makeValueString(qrr.Fields, rows)
+					for _, c := range insertChannels {
+						select {
+						case c <- cmd:
+						case <-abort:
+							return nil
+						}
+					}
+				}
+				return nil
+			}
+
+			// add the rows to our current result
+			rows = append(rows, r.Rows...)
+			vscw.tableStatus[tableIndex].addCopiedRows(len(r.Rows))
+
+			// see if we reach the destination pack count
+			packCount++
+			if packCount < destinationPackCount {
+				continue
 			}
 
 			// send the rows to be inserted
-			vscw.tableStatus[tableIndex].addCopiedRows(len(r.Rows))
-			cmd := baseCmd + makeValueString(qrr.Fields, r.Rows)
+			cmd := baseCmd + makeValueString(qrr.Fields, rows)
 			for _, c := range insertChannels {
 				select {
 				case c <- cmd:
@@ -588,11 +622,20 @@ func (vscw *VerticalSplitCloneWorker) processData(td *myproto.TableDefinition, t
 					return nil
 				}
 			}
+
+			// and reset our row buffer
+			rows = nil
+			packCount = 0
+
 		case <-abort:
-			// FIXME(alainjobart): note this select case
-			// could be starved here, and we might miss
-			// the abort in some corner cases.
 			return nil
+		}
+		// the abort case might be starved above, so we check again; this means that the loop
+		// will run at most once before the abort case is triggered.
+		select {
+		case <-abort:
+			return nil
+		default:
 		}
 	}
 }

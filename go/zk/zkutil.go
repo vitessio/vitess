@@ -206,7 +206,7 @@ func resolveRecursive(zconn Conn, parts []string, toplevel bool) ([]string, erro
 			var children []string
 			var err error
 			if i == 2 {
-				children, err = ZkKnownCells(false)
+				children, err = ZkKnownCells()
 				if err != nil {
 					return children, err
 				}
@@ -341,7 +341,7 @@ func DeleteRecursive(zconn Conn, zkPath string, version int) error {
 // numbering that don't hold when the data in a lock is modified.
 // if the provided 'interrupted' chan is closed, we'll just stop waiting
 // and return an interruption error
-func ObtainQueueLock(zconn Conn, zkPath string, wait time.Duration, interrupted chan struct{}) error {
+func ObtainQueueLock(zconn Conn, zkPath string, wait time.Duration, interrupted <-chan struct{}) error {
 	queueNode := path.Dir(zkPath)
 	lockNode := path.Base(zkPath)
 
@@ -391,71 +391,6 @@ trylock:
 	return fmt.Errorf("zkutil: empty queue node: %v", queueNode)
 }
 
-// Close the release channel when you want to clean up nicely.
-func CreatePidNode(zconn Conn, zkPath string, contents string, done chan struct{}) error {
-	// On the first try, assume the cluster is up and running, that will
-	// help hunt down any config issues present at startup
-	if _, err := zconn.Create(zkPath, contents, zookeeper.EPHEMERAL, zookeeper.WorldACL(PERM_FILE)); err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
-			err = zconn.Delete(zkPath, -1)
-		}
-		if err != nil {
-			return fmt.Errorf("zkutil: failed deleting pid node: %v: %v", zkPath, err)
-		}
-		_, err = zconn.Create(zkPath, contents, zookeeper.EPHEMERAL, zookeeper.WorldACL(PERM_FILE))
-		if err != nil {
-			return fmt.Errorf("zkutil: failed creating pid node: %v: %v", zkPath, err)
-		}
-	}
-
-	go func() {
-		for {
-			_, _, watch, err := zconn.GetW(zkPath)
-			if err != nil {
-				if zookeeper.IsError(err, zookeeper.ZNONODE) {
-					_, err = zconn.Create(zkPath, contents, zookeeper.EPHEMERAL, zookeeper.WorldACL(zookeeper.PERM_ALL))
-					if err != nil {
-						log.Warningf("failed recreating pid node: %v: %v", zkPath, err)
-					} else {
-						log.Infof("recreated pid node: %v", zkPath)
-						continue
-					}
-				} else {
-					log.Warningf("failed reading pid node: %v", err)
-				}
-			} else {
-				select {
-				case event := <-watch:
-					if event.Ok() && event.Type == zookeeper.EVENT_DELETED {
-						// Most likely another process has started up. However,
-						// there is a chance that an ephemeral node is deleted by
-						// the session expiring, yet that same session gets a watch
-						// notification. This seems like buggy behavior, but rather
-						// than race too hard on the node, just wait a bit and see
-						// if the situation resolves itself.
-						log.Warningf("pid deleted: %v", zkPath)
-					} else {
-						log.Infof("pid node event: %v", event)
-					}
-					// break here and wait for a bit before attempting
-				case <-done:
-					log.Infof("pid watcher stopped on done: %v", zkPath)
-					return
-				}
-			}
-			select {
-			// No one likes a thundering herd, least of all zookeeper.
-			case <-time.After(5*time.Second + time.Duration(rand.Int63n(55e9))):
-			case <-done:
-				log.Infof("pid watcher stopped on done: %v", zkPath)
-				return
-			}
-		}
-	}()
-
-	return nil
-}
-
 // ZLocker is an interface for a lock that can fail.
 type ZLocker interface {
 	Lock() error
@@ -477,7 +412,7 @@ type zMutex struct {
 	ephemeral   bool
 }
 
-// CreateMutex initializes an unaquired mutex. A mutex is released only
+// CreateMutex initializes an unacquired mutex. A mutex is released only
 // by Unlock. You can clean up a mutex with delete, but you should be
 // careful doing so.
 func CreateMutex(zconn Conn, zkPath string) ZLocker {

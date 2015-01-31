@@ -25,7 +25,7 @@ from topo_flavor.server import set_topo_server_flavor
 
 options = None
 devnull = open('/dev/null', 'w')
-hostname = socket.gethostname()
+hostname = socket.getaddrinfo(socket.getfqdn(), None, 0, 0, 0, socket.AI_CANONNAME)[0][3]
 
 class TestError(Exception):
   pass
@@ -57,6 +57,7 @@ class LoggingStream(object):
     pass
 
 def add_options(parser):
+  environment.add_options(parser)
   parser.add_option('-d', '--debug', action='store_true',
                     help='utils.pause() statements will wait for user input')
   parser.add_option('-k', '--keep-logs', action='store_true',
@@ -66,7 +67,7 @@ def add_options(parser):
   parser.add_option('--skip-teardown', action='store_true')
   parser.add_option("--mysql-flavor")
   parser.add_option("--protocols-flavor")
-  parser.add_option("--topo-server-flavor")
+  parser.add_option("--topo-server-flavor", default="zookeeper")
 
 def set_options(opts):
   global options
@@ -99,6 +100,9 @@ def main(mod=None):
 
   set_options(options)
 
+  run_tests(mod, args)
+
+def run_tests(mod, args):
   try:
     suite = unittest.TestSuite()
     if not args:
@@ -196,6 +200,7 @@ def run(cmd, trap_output=False, raise_on_error=True, **kargs):
   stdout, stderr = proc.communicate()
   if proc.returncode:
     if raise_on_error:
+      pause("cmd fail: %s, pausing..." % (args))
       raise TestError('cmd fail:', args, stdout, stderr)
     else:
       logging.debug('cmd fail: %s %s %s', str(args), stdout, stderr)
@@ -320,19 +325,25 @@ def wait_for_vars(name, port, var=None):
       break
     timeout = wait_step('waiting for /debug/vars of %s' % name, timeout)
 
-# zkocc helpers
-def zkocc_start(cells=['test_nj'], extra_params=[]):
-  args = environment.binary_args('zkocc') + [
-          '-port', str(environment.topo_server().zkocc_port_base),
-          '-stderrthreshold=ERROR',
-          ] + extra_params + cells
-  sp = run_bg(args)
-  wait_for_vars("zkocc", environment.topo_server().zkocc_port_base)
-  return sp
+def apply_vschema(vschema):
+  fname = os.path.join(environment.tmproot, "vschema.json")
+  with open(fname, "w") as f:
+    f.write(vschema)
+  run_vtctl(['ApplyVSchema', "-vschema_file", fname])
 
-def zkocc_kill(sp):
-  kill_sub_process(sp)
-  sp.wait()
+def wait_for_tablet_type(tablet_alias, expected_type, timeout=10):
+  """Waits for a given tablet's SlaveType to become the expected value.
+
+  If the SlaveType does not become expected_type within timeout seconds,
+  it will raise a TestError.
+  """
+  while True:
+    if run_vtctl_json(['GetTablet', tablet_alias])['Type'] == expected_type:
+      break
+    timeout = wait_step(
+      "%s's SlaveType to be %s" % (tablet_alias, expected_type),
+      timeout
+    )
 
 # vtgate helpers, assuming it always restarts on the same port
 def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1,
@@ -367,6 +378,7 @@ def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1,
       args.extend(['-ca_cert', ca_cert])
   if socket_file:
     args.extend(['-socket_file', socket_file])
+
   if extra_args:
     args.extend(extra_args)
 
@@ -450,6 +462,7 @@ def run_vtctl_json(clargs):
 def run_vtworker(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs):
   args = environment.binary_args('vtworker') + [
           '-log_dir', environment.vtlogroot,
+          '-min_healthy_rdonly_endpoints', '1',
           '-port', str(environment.reserve_ports(1))]
   args.extend(environment.topo_server().flags())
   args.extend(protocols_flavor().tablet_manager_protocol_flags())
@@ -474,7 +487,6 @@ def run_vtworker(clargs, log_level='', auto_log=False, expect_fail=False, **kwar
 # - vttablet (default), vttablet-streaming
 # - vtdb, vtdb-streaming (default topo server)
 # - vtdb-zk, vtdb-zk-streaming (forced zk topo server)
-# - vtdb-zkocc, vtdb-zkocc-streaming (forced zkocc topo server)
 # path is either: keyspace/shard for vttablet* or zk path for vtdb*
 def vtclient2(uid, path, query, bindvars=None, user=None, password=None, driver=None,
               verbose=False, raise_on_error=True):
@@ -575,13 +587,83 @@ def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
     raise Exception("Got wrong ShardingColumnType in SrvKeyspace: %s" %
                    str(ks))
 
+def check_shard_query_service(testcase, shard_name, tablet_type, expected_state):
+  """Makes assertions about the state of DisableQueryService in the shard record's TabletControlMap."""
+  # We assume that query service should be enabled unless DisableQueryService is explicitly True
+  query_service_enabled = True
+  tablet_control_map = run_vtctl_json(['GetShard', shard_name]).get('TabletControlMap')
+  if tablet_control_map:
+    disable_query_service = tablet_control_map.get(tablet_type, {}).get('DisableQueryService')
+
+    if disable_query_service:
+      query_service_enabled = False
+
+  testcase.assertEqual(
+    query_service_enabled,
+    expected_state,
+    'shard %s does not have the correct query service state: got %s but expected %s' % (shard_name, query_service_enabled, expected_state)
+  )
+
+def check_shard_query_services(testcase, shard_names, tablet_type, expected_state):
+  for shard_names in shard_names:
+    check_shard_query_service(testcase, shard_names, tablet_type, expected_state)
+
+def check_tablet_query_service(testcase, tablet, serving, tablet_control_disabled):
+  """check_tablet_query_service will check that the query service is enabled
+  or disabled on the tablet. It will also check if the tablet control
+  status is the reason for being enabled / disabled.
+
+  It will also run a remote RunHealthCheck to be sure it doesn't change
+  the serving state.
+  """
+  tablet_vars = get_vars(tablet.port)
+  if serving:
+    expected_state = 'SERVING'
+  else:
+    expected_state = 'NOT_SERVING'
+  testcase.assertEqual(tablet_vars['TabletStateName'], expected_state, 'tablet %s is not in the right serving state: got %s expected %s' % (tablet.tablet_alias, tablet_vars['TabletStateName'], expected_state))
+
+  status = tablet.get_status()
+  if tablet_control_disabled:
+    testcase.assertIn("Query Service disabled by TabletControl", status)
+  else:
+    testcase.assertNotIn("Query Service disabled by TabletControl", status)
+
+  if tablet.tablet_type == 'rdonly':
+    run_vtctl(['RunHealthCheck', tablet.tablet_alias, 'rdonly'],
+                    auto_log=True)
+
+    tablet_vars = get_vars(tablet.port)
+    testcase.assertEqual(tablet_vars['TabletStateName'], expected_state, 'tablet %s is not in the right serving state after health check: got %s expected %s' % (tablet.tablet_alias, tablet_vars['TabletStateName'], expected_state))
+
+def check_tablet_query_services(testcase, tablets, serving, tablet_control_disabled):
+  for tablet in tablets:
+    check_tablet_query_service(testcase, tablet, serving, tablet_control_disabled)
+
 def get_status(port):
   return urllib2.urlopen('http://localhost:%u%s' % (port, environment.status_url)).read()
 
-def curl(url, background=False, **kwargs):
+def curl(url, request=None, data=None, background=False, retry_timeout=0, **kwargs):
+  args = [environment.curl_bin, '--silent', '--no-buffer', '--location']
+  if not background:
+    args.append('--show-error')
+  if request:
+    args.extend(['--request', request])
+  if data:
+    args.extend(['--data', data])
+  args.append(url)
+
   if background:
-    return run_bg([environment.curl_bin, '-s', '-N', '-L', url], **kwargs)
-  return run([environment.curl_bin, '-s', '-N', '-L', url], **kwargs)
+    return run_bg(args, **kwargs)
+
+  if retry_timeout > 0:
+    while True:
+      try:
+        return run(args, trap_output=True, **kwargs)
+      except TestError as e:
+        retry_timeout = wait_step('cmd: %s, error: %s' % (str(args), str(e)), retry_timeout)
+
+  return run(args, trap_output=True, **kwargs)
 
 class VtctldError(Exception): pass
 
@@ -612,6 +694,7 @@ class Vtctld(object):
     args = environment.binary_args('vtctld') + [
             '-debug',
             '-templates', environment.vttop + '/go/cmd/vtctld/templates',
+            '-schema-editor-dir', environment.vttop + '/go/vt/vtgate',
             '-log_dir', environment.vtlogroot,
             '-port', str(self.port),
             ] + \

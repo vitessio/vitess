@@ -3,18 +3,20 @@ If you run into issues or have questions, you can use our mailing list: vitess@g
 
 ## Dependencies
 
-* We currently develop on Ubuntu 12.04 and 14.04.
-* You'll need some kind of Java Runtime (for ZooKeeper).
+* We currently develop on Ubuntu 14.04 (Trusty) and Debian 7.0 (Wheezy).
+* You'll need some kind of Java Runtime if you use ZooKeeper.
   We use OpenJDK (*sudo apt-get install openjdk-7-jre*).
-* [Go](http://golang.org) 1.2+: Needed for building Vitess.
-* [MariaDB](https://mariadb.org/): We currently develop with version 10.0.13.
+* [Go](http://golang.org) 1.3+: Needed for building Vitess.
+* [MariaDB](https://mariadb.org/): We currently develop with version 10.0.14.
   Other 10.0.x versions may also work.
-* [ZooKeeper](http://zookeeper.apache.org/): By default, Vitess
-  uses Zookeeper as the lock service. It is possible to plug in
-  something else as long as the new service supports the
-  necessary API functions.
+* [ZooKeeper](http://zookeeper.apache.org/)
+  or [etcd](https://github.com/coreos/etcd) 0.4.6:
+  By default, Vitess uses ZooKeeper as the lock service.
+  We also have a plugin for etcd. See the Building section below.
+  It is possible to plug in something else as long as the new service supports
+  the necessary API functions.
 * [Memcached](http://memcached.org): Used for the rowcache.
-* [Python](http://python.org): For the client and testing.
+* [Python](http://python.org) 2.7: For the client and testing.
 
 ## Building
 
@@ -23,6 +25,13 @@ If you run into issues or have questions, you can use our mailing list: vitess@g
 [Install MariaDB](https://downloads.mariadb.org/).
 You can use any installation method (src/bin/rpm/deb),
 but be sure to include the client development headers (**libmariadbclient-dev**).
+
+ZooKeeper 3.3.5 is included by default. If you plan to use it, you don't need
+to install anything else.
+
+If you want to use etcd instead, install
+[etcd 0.4.6](https://github.com/coreos/etcd/releases/tag/v0.4.6)
+and make sure the "etcd" command is on your path.
 
 Then download and build Vitess. Note that the value of MYSQL_FLAVOR is case-sensitive.
 If the mysql_config command from libmariadbclient-dev is not on the PATH,
@@ -41,6 +50,12 @@ make build
 ```
 
 ## Testing
+
+If you want to use etcd, set the following environment variable:
+
+``` sh
+export VT_TEST_FLAGS='--topo-server-flavor=etcd'
+```
 
 The full set of tests included in the default _make_ and _make test_ targets
 is intended for use by Vitess developers to verify code changes.
@@ -92,10 +107,7 @@ This could indicate that no Java Runtime is installed.
 Some of the larger tests use up to 4GB of temporary space on disk.
 
 ## Setting up a cluster
-TODO: Expand on all sections
-### Setup zookeeper
-### Start a MySql instance
-### Start vttablet
-### Start vtgate
-### Write a client
-### Test
+
+Once you have a successful `make build`, you can proceed to start up a
+[local cluster](https://github.com/youtube/vitess/tree/master/examples/local)
+for testing.

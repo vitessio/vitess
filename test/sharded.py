@@ -118,10 +118,6 @@ class TestSharded(unittest.TestCase):
                      '-sql=' + create_vt_select_test.replace("\n", ""),
                      shard_0_replica.tablet_alias])
 
-    if environment.topo_server().flavor() == 'zookeeper':
-      # start zkocc, we'll use it later, indirectly with the vtdb-zkocc driver
-      zkocc_server = utils.zkocc_start()
-
     # start vtgate, we'll use it later
     vtgate_server, vtgate_port = utils.vtgate_start()
 
@@ -186,22 +182,11 @@ class TestSharded(unittest.TestCase):
                         "2\ttest 2",
                         "10\ttest 10"],
                        driver="vtdb-zk-streaming")
-      self._check_rows(["Index\tid\tmsg",
-                        "1\ttest 1",
-                        "2\ttest 2",
-                        "10\ttest 10"],
-                       driver="vtdb-zkocc")
-      self._check_rows(["Index\tid\tmsg",
-                        "1\ttest 1",
-                        "2\ttest 2",
-                        "10\ttest 10"],
-                       driver="vtdb-zkocc-streaming")
 
     # make sure the schema checking works
     self._check_rows_schema_diff("vtdb")
     if environment.topo_server().flavor() == 'zookeeper':
       self._check_rows_schema_diff("vtdb-zk")
-      self._check_rows_schema_diff("vtdb-zkocc")
 
     # throw in some schema validation step
     # we created the schema differently, so it should show
@@ -232,7 +217,7 @@ class TestSharded(unittest.TestCase):
       lines = out.splitlines()
       for base in ['-80', '80-']:
         for db_type in ['master', 'replica']:
-          for sub_path in ['', '.vdns', '/0', '/_vtocc.vdns']:
+          for sub_path in ['', '.vdns', '/0', '/vt.vdns']:
             expected = '/zk/test_nj/zkns/vt/test_keyspace/' + base + '/' + db_type + sub_path
             if expected not in lines:
               self.fail('missing zkns part:\n%s\nin:%s' %(expected, out))
@@ -244,9 +229,9 @@ class TestSharded(unittest.TestCase):
                                           "test_nj", 30.0)
     topology.read_keyspaces(vtgate_client)
 
-    shard_0_master_addrs = topology.get_host_port_by_name(vtgate_client, "test_keyspace.-80.master:_vtocc")
+    shard_0_master_addrs = topology.get_host_port_by_name(vtgate_client, "test_keyspace.-80.master:vt")
     if len(shard_0_master_addrs) != 1:
-      self.fail('topology.get_host_port_by_name failed for "test_keyspace.-80.master:_vtocc", got: %s' % " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
+      self.fail('topology.get_host_port_by_name failed for "test_keyspace.-80.master:vt", got: %s' % " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
     logging.debug("shard 0 master addrs: %s", " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
 
     # connect to shard -80
@@ -259,7 +244,7 @@ class TestSharded(unittest.TestCase):
                      'wrong conn._execute output: %s' % str(results))
 
     # connect to shard 80-
-    shard_1_master_addrs = topology.get_host_port_by_name(vtgate_client, "test_keyspace.80-.master:_vtocc")
+    shard_1_master_addrs = topology.get_host_port_by_name(vtgate_client, "test_keyspace.80-.master:vt")
     conn = tablet3.TabletConnection("%s:%u" % (shard_1_master_addrs[0][0],
                                                shard_1_master_addrs[0][1]),
                                     "", "test_keyspace", "80-", 10.0)
@@ -280,8 +265,6 @@ class TestSharded(unittest.TestCase):
         self.fail('unexpected exception: ' + str(e))
 
     utils.vtgate_kill(vtgate_server)
-    if environment.topo_server().flavor() == 'zookeeper':
-      utils.kill_sub_process(zkocc_server)
     tablet.kill_tablets([shard_0_master, shard_0_replica, shard_1_master,
                          shard_1_replica])
 

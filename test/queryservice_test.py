@@ -21,7 +21,7 @@ from protocols_flavor import set_protocols_flavor
 from topo_flavor.server import set_topo_server_flavor
 
 
-if __name__ == "__main__":
+def main():
   parser = optparse.OptionParser(usage="usage: %prog [options] [test_names]")
   parser.add_option("-m", "--memcache", action="store_true", default=False,
                     help="starts a memcache d, and tests rowcache")
@@ -33,6 +33,9 @@ if __name__ == "__main__":
   logging.getLogger().setLevel(logging.ERROR)
   utils.set_options(options)
 
+  run_tests(options, args)
+
+def run_tests(options, args):
   suite = unittest.TestSuite()
   if args:
     if args[0] == 'teardown':
@@ -72,3 +75,6 @@ if __name__ == "__main__":
     if options.keep_logs:
       print("Leaving temporary files behind (--keep-logs), please "
             "clean up before next run: " + os.environ["VTDATAROOT"])
+
+if __name__ == "__main__":
+  main()

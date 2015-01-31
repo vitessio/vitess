@@ -56,7 +56,7 @@ func TestAllowUnmatchedTable(t *testing.T) {
 	checkAccess(configData, "UNMATCHED_TABLE", ADMIN, t, true)
 }
 
-func TestAllUserReadAcess(t *testing.T) {
+func TestAllUserReadAccess(t *testing.T) {
 	configData := []byte(`{"table[0-9]+":{"Reader":"` + ALL + `", "WRITER":"u3"}}`)
 	checkAccess(configData, "table1", READER, t, true)
 }
@@ -64,6 +64,14 @@ func TestAllUserReadAcess(t *testing.T) {
 func TestAllUserWriteAccess(t *testing.T) {
 	configData := []byte(`{"table[0-9]+":{"Reader":"` + currentUser() + `", "WRITER":"` + ALL + `"}}`)
 	checkAccess(configData, "table1", WRITER, t, true)
+}
+
+func TestDisabled(t *testing.T) {
+	tableAcl = nil
+	got := Authorized("table1", READER)
+	if got != nil {
+		t.Errorf("table acl disabled, got: %v, want: nil", got)
+	}
 }
 
 func checkLoad(configData []byte, valid bool, t *testing.T) {

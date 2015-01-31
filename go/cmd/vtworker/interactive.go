@@ -45,10 +45,11 @@ func httpError(w http.ResponseWriter, format string, err error) {
 	http.Error(w, fmt.Sprintf(format, err), http.StatusInternalServerError)
 }
 
-func loadTemplate(name, contents string) *template.Template {
+func mustParseTemplate(name, contents string) *template.Template {
 	t, err := template.New(name).Parse(contents)
 	if err != nil {
-		log.Fatalf("Cannot parse %v template: %v", name, err)
+		// An invalid template here is a programming error.
+		panic(fmt.Sprintf("cannot parse %v template: %v", name, err))
 	}
 	return t
 }
@@ -60,8 +61,8 @@ func executeTemplate(w http.ResponseWriter, t *template.Template, data interface
 }
 
 func initInteractiveMode() {
-	indexTemplate := loadTemplate("index", indexHTML)
-	subIndexTemplate := loadTemplate("subIndex", subIndexHTML)
+	indexTemplate := mustParseTemplate("index", indexHTML)
+	subIndexTemplate := mustParseTemplate("subIndex", subIndexHTML)
 
 	// toplevel menu
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

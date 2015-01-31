@@ -7,8 +7,9 @@ package helpers
 import (
 	"fmt"
 	"testing"
+	"time"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test"
@@ -54,7 +55,7 @@ func TestKeyspace(t *testing.T) {
 
 func TestShard(t *testing.T) {
 	ts := newFakeTeeServer(t)
-	test.CheckShard(t, ts)
+	test.CheckShard(context.Background(), t, ts)
 }
 
 func TestTablet(t *testing.T) {
@@ -64,7 +65,13 @@ func TestTablet(t *testing.T) {
 
 func TestServingGraph(t *testing.T) {
 	ts := newFakeTeeServer(t)
-	test.CheckServingGraph(t, ts)
+	test.CheckServingGraph(context.Background(), t, ts)
+}
+
+func TestWatchEndPoints(t *testing.T) {
+	zktopo.WatchSleepDuration = 2 * time.Millisecond
+	ts := newFakeTeeServer(t)
+	test.CheckWatchEndPoints(context.Background(), t, ts)
 }
 
 func TestShardReplication(t *testing.T) {
@@ -93,9 +100,4 @@ func TestSrvShardLock(t *testing.T) {
 
 	ts := newFakeTeeServer(t)
 	test.CheckSrvShardLock(t, ts)
-}
-
-func TestPid(t *testing.T) {
-	ts := newFakeTeeServer(t)
-	test.CheckPid(t, ts)
 }

@@ -11,10 +11,10 @@ import (
 )
 
 const (
-	one     = time.Duration(1e9)
-	half    = time.Duration(500e6)
-	quarter = time.Duration(250e6)
-	tenth   = time.Duration(100e6)
+	one     = time.Duration(1e8)
+	half    = time.Duration(500e5)
+	quarter = time.Duration(250e5)
+	tenth   = time.Duration(100e5)
 )
 
 var numcalls int32

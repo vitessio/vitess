@@ -10,6 +10,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/primecache"
@@ -23,14 +24,17 @@ var (
 )
 
 func main() {
+	defer exit.Recover()
 	defer logutil.Flush()
 
-	dbconfigs.RegisterFlags()
+	flags := dbconfigs.AppConfig | dbconfigs.DbaConfig
+	dbconfigs.RegisterFlags(flags)
 	flag.Parse()
 
-	dbcfgs, err := dbconfigs.Init(*mysqlSocketFile)
+	dbcfgs, err := dbconfigs.Init(*mysqlSocketFile, flags)
 	if err != nil {
-		log.Fatalf("Failed to init dbconfigs: %v", err)
+		log.Errorf("Failed to init dbconfigs: %v", err)
+		exit.Return(1)
 	}
 
 	pc := primecache.NewPrimeCache(dbcfgs, *relayLogsPath)

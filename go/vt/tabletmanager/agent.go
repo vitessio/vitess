@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 /*
-Package agent exports the ActionAgent object. It keeps the local tablet
+Package tabletmanager exports the ActionAgent object. It keeps the local tablet
 state, starts / stops all associated services (query service,
 update stream, binlog players, ...), and handles tabletmanager RPCs
 to update the state.
@@ -26,20 +26,20 @@ import (
 	"flag"
 	"fmt"
 	"net"
-	"os"
 	"sync"
 	"time"
 
-	"code.google.com/p/go.net/context"
+	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/history"
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -61,9 +61,12 @@ type ActionAgent struct {
 	SchemaOverrides []tabletserver.SchemaOverride
 	BinlogPlayerMap *BinlogPlayerMap
 	LockTimeout     time.Duration
-
-	// Internal variables
-	done chan struct{} // closed when we are done.
+	// batchCtx is given to the agent by its creator, and should be used for
+	// any background tasks spawned by the agent.
+	batchCtx context.Context
+	// finalizeReparentCtx represents the background finalize step of a
+	// TabletExternallyReparented call.
+	finalizeReparentCtx context.Context
 
 	// This is the History of the health checks, public so status
 	// pages can display it
@@ -80,6 +83,18 @@ type ActionAgent struct {
 	_tablet          *topo.TabletInfo
 	_tabletControl   *topo.TabletControl
 	_waitingForMysql bool
+
+	// if the agent is healthy, this is nil. Otherwise it contains
+	// the reason we're not healthy.
+	_healthy error
+
+	// replication delay the last time we got it
+	_replicationDelay time.Duration
+
+	// healthStreamMutex protects all the following fields
+	healthStreamMutex sync.Mutex
+	healthStreamIndex int
+	healthStreamMap   map[int]chan<- *actionnode.HealthStreamReply
 }
 
 func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
@@ -97,8 +112,12 @@ func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
 }
 
 // NewActionAgent creates a new ActionAgent and registers all the
-// associated services
+// associated services.
+//
+// batchCtx is the context that the agent will use for any background tasks
+// it spawns.
 func NewActionAgent(
+	batchCtx context.Context,
 	tabletAlias topo.TabletAlias,
 	dbcfgs *dbconfigs.DBConfigs,
 	mycnf *mysqlctl.Mycnf,
@@ -112,6 +131,7 @@ func NewActionAgent(
 	mysqld := mysqlctl.NewMysqld("Dba", mycnf, &dbcfgs.Dba, &dbcfgs.Repl)
 
 	agent = &ActionAgent{
+		batchCtx:           batchCtx,
 		TopoServer:         topoServer,
 		TabletAlias:        tabletAlias,
 		Mysqld:             mysqld,
@@ -119,9 +139,15 @@ func NewActionAgent(
 		DBConfigs:          dbcfgs,
 		SchemaOverrides:    schemaOverrides,
 		LockTimeout:        lockTimeout,
-		done:               make(chan struct{}),
 		History:            history.New(historyLength),
 		lastHealthMapCount: stats.NewInt("LastHealthMapCount"),
+		_healthy:           fmt.Errorf("healthcheck not run yet"),
+		healthStreamMap:    make(map[int]chan<- *actionnode.HealthStreamReply),
+	}
+
+	// try to initialize the tablet if we have to
+	if err := agent.InitTablet(port, securePort); err != nil {
+		return nil, err
 	}
 
 	// Start the binlog player services, not playing at start.
@@ -154,8 +180,9 @@ func NewActionAgent(
 
 // NewTestActionAgent creates an agent for test purposes. Only a
 // subset of features are supported now, but we'll add more over time.
-func NewTestActionAgent(ts topo.Server, tabletAlias topo.TabletAlias, port int, mysqlDaemon mysqlctl.MysqlDaemon) (agent *ActionAgent) {
+func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, port int, mysqlDaemon mysqlctl.MysqlDaemon) (agent *ActionAgent) {
 	agent = &ActionAgent{
+		batchCtx:           batchCtx,
 		TopoServer:         ts,
 		TabletAlias:        tabletAlias,
 		Mysqld:             nil,
@@ -163,9 +190,10 @@ func NewTestActionAgent(ts topo.Server, tabletAlias topo.TabletAlias, port int, 
 		DBConfigs:          nil,
 		SchemaOverrides:    nil,
 		BinlogPlayerMap:    nil,
-		done:               make(chan struct{}),
 		History:            history.New(historyLength),
 		lastHealthMapCount: new(stats.Int),
+		_healthy:           fmt.Errorf("healthcheck not run yet"),
+		healthStreamMap:    make(map[int]chan<- *actionnode.HealthStreamReply),
 	}
 	if err := agent.Start(0, port, 0); err != nil {
 		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
@@ -173,25 +201,32 @@ func NewTestActionAgent(ts topo.Server, tabletAlias topo.TabletAlias, port int, 
 	return agent
 }
 
-func (agent *ActionAgent) updateState(oldTablet *topo.Tablet, context string) error {
+func (agent *ActionAgent) updateState(ctx context.Context, oldTablet *topo.Tablet, reason string) error {
 	agent.mutex.Lock()
 	newTablet := agent._tablet.Tablet
 	agent.mutex.Unlock()
-	log.Infof("Running tablet callback after action %v", context)
-	return agent.changeCallback(oldTablet, newTablet)
+	log.Infof("Running tablet callback because: %v", reason)
+	return agent.changeCallback(ctx, oldTablet, newTablet)
 }
 
-func (agent *ActionAgent) readTablet() error {
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+func (agent *ActionAgent) readTablet(ctx context.Context) (*topo.TabletInfo, error) {
+	tablet, err := topo.GetTablet(ctx, agent.TopoServer, agent.TabletAlias)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	agent.mutex.Lock()
 	agent._tablet = tablet
 	agent.mutex.Unlock()
-	return nil
+	return tablet, nil
 }
 
+func (agent *ActionAgent) setTablet(tablet *topo.TabletInfo) {
+	agent.mutex.Lock()
+	agent._tablet = tablet
+	agent.mutex.Unlock()
+}
+
+// Tablet reads the stored TabletInfo from the agent, protected by mutex.
 func (agent *ActionAgent) Tablet() *topo.TabletInfo {
 	agent.mutex.Lock()
 	tablet := agent._tablet
@@ -199,6 +234,15 @@ func (agent *ActionAgent) Tablet() *topo.TabletInfo {
 	return tablet
 }
 
+// Healthy reads the result of the latest healthcheck, protected by mutex.
+func (agent *ActionAgent) Healthy() (time.Duration, error) {
+	agent.mutex.Lock()
+	defer agent.mutex.Unlock()
+	return agent._replicationDelay, agent._healthy
+}
+
+// BlacklistedTables reads the list of blacklisted tables from the TabletControl
+// record (if any) stored in the agent, protected by mutex.
 func (agent *ActionAgent) BlacklistedTables() []string {
 	var blacklistedTables []string
 	agent.mutex.Lock()
@@ -209,6 +253,8 @@ func (agent *ActionAgent) BlacklistedTables() []string {
 	return blacklistedTables
 }
 
+// DisableQueryService reads the DisableQueryService field from the TabletControl
+// record (if any) stored in the agent, protected by mutex.
 func (agent *ActionAgent) DisableQueryService() bool {
 	disable := false
 	agent.mutex.Lock()
@@ -227,26 +273,32 @@ func (agent *ActionAgent) setTabletControl(tc *topo.TabletControl) {
 
 // refreshTablet needs to be run after an action may have changed the current
 // state of the tablet.
-func (agent *ActionAgent) refreshTablet(context string) error {
+func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) error {
 	log.Infof("Executing post-action state refresh")
+
+	span := trace.NewSpanFromContext(ctx)
+	span.StartLocal("ActionAgent.refreshTablet")
+	span.Annotate("reason", reason)
+	defer span.Finish()
+	ctx = trace.NewContext(ctx, span)
 
 	// Save the old tablet so callbacks can have a better idea of
 	// the precise nature of the transition.
 	oldTablet := agent.Tablet().Tablet
 
 	// Actions should have side effects on the tablet, so reload the data.
-	if err := agent.readTablet(); err != nil {
-		log.Warningf("Failed rereading tablet after %v - services may be inconsistent: %v", context, err)
-		return fmt.Errorf("Failed rereading tablet after %v: %v", context, err)
+	if _, err := agent.readTablet(ctx); err != nil {
+		log.Warningf("Failed rereading tablet after %v - services may be inconsistent: %v", reason, err)
+		return fmt.Errorf("Failed rereading tablet after %v: %v", reason, err)
 	}
 
-	if updatedTablet := agent.checkTabletMysqlPort(agent.Tablet()); updatedTablet != nil {
+	if updatedTablet := agent.checkTabletMysqlPort(ctx, agent.Tablet()); updatedTablet != nil {
 		agent.mutex.Lock()
 		agent._tablet = updatedTablet
 		agent.mutex.Unlock()
 	}
 
-	if err := agent.updateState(oldTablet, context); err != nil {
+	if err := agent.updateState(ctx, oldTablet, reason); err != nil {
 		return err
 	}
 	log.Infof("Done with post-action state refresh")
@@ -280,10 +332,11 @@ func (agent *ActionAgent) verifyServingAddrs() error {
 	return agent.TopoServer.UpdateTabletEndpoint(agent.Tablet().Tablet.Alias.Cell, agent.Tablet().Keyspace, agent.Tablet().Shard, agent.Tablet().Type, addr)
 }
 
-// bindAddr: the address for the query service advertised by this agent
+// Start validates and updates the topology records for the tablet, and performs
+// the initial state change callback to start tablet services.
 func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 	var err error
-	if err = agent.readTablet(); err != nil {
+	if _, err = agent.readTablet(context.TODO()); err != nil {
 		return err
 	}
 
@@ -326,13 +379,7 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 	}
 
 	// Reread to get the changes we just made
-	if err := agent.readTablet(); err != nil {
-		return err
-	}
-
-	data := fmt.Sprintf("host:%v\npid:%v\n", hostname, os.Getpid())
-
-	if err := agent.TopoServer.CreateTabletPidNode(agent.TabletAlias, data, agent.done); err != nil {
+	if _, err := agent.readTablet(context.TODO()); err != nil {
 		return err
 	}
 
@@ -345,7 +392,7 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 	}
 
 	oldTablet := &topo.Tablet{}
-	if err = agent.updateState(oldTablet, "Start"); err != nil {
+	if err = agent.updateState(context.TODO(), oldTablet, "Start"); err != nil {
 		log.Warningf("Initial updateState failed, will need a state change before running properly: %v", err)
 	}
 	return nil
@@ -353,7 +400,6 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 
 // Stop shutdowns this agent.
 func (agent *ActionAgent) Stop() {
-	close(agent.done)
 	if agent.BinlogPlayerMap != nil {
 		agent.BinlogPlayerMap.StopAllPlayersAndReset()
 	}
@@ -369,7 +415,7 @@ func (agent *ActionAgent) hookExtraEnv() map[string]string {
 
 // checkTabletMysqlPort will check the mysql port for the tablet is good,
 // and if not will try to update it.
-func (agent *ActionAgent) checkTabletMysqlPort(tablet *topo.TabletInfo) *topo.TabletInfo {
+func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo.TabletInfo) *topo.TabletInfo {
 	mport, err := agent.MysqlDaemon.GetMysqlPort()
 	if err != nil {
 		log.Warningf("Cannot get current mysql port, not checking it: %v", err)
@@ -382,7 +428,7 @@ func (agent *ActionAgent) checkTabletMysqlPort(tablet *topo.TabletInfo) *topo.Ta
 
 	log.Warningf("MySQL port has changed from %v to %v, updating it in tablet record", tablet.Portmap["mysql"], mport)
 	tablet.Portmap["mysql"] = mport
-	if err := topo.UpdateTablet(context.TODO(), agent.TopoServer, tablet); err != nil {
+	if err := topo.UpdateTablet(ctx, agent.TopoServer, tablet); err != nil {
 		log.Warningf("Failed to update tablet record, may use old mysql port")
 		return nil
 	}
@@ -390,11 +436,24 @@ func (agent *ActionAgent) checkTabletMysqlPort(tablet *topo.TabletInfo) *topo.Ta
 	return tablet
 }
 
-var getSubprocessFlagsFuncs []func() []string
+// BroadcastHealthStreamReply will send the HealthStreamReply to all
+// listening clients.
+func (agent *ActionAgent) BroadcastHealthStreamReply(hsr *actionnode.HealthStreamReply) {
+	agent.healthStreamMutex.Lock()
+	defer agent.healthStreamMutex.Unlock()
+	for _, c := range agent.healthStreamMap {
+		// do not block on any write
+		select {
+		case c <- hsr:
+		default:
+		}
+	}
+}
 
-func init() {
-	getSubprocessFlagsFuncs = append(getSubprocessFlagsFuncs, logutil.GetSubprocessFlags)
-	getSubprocessFlagsFuncs = append(getSubprocessFlagsFuncs, topo.GetSubprocessFlags)
-	getSubprocessFlagsFuncs = append(getSubprocessFlagsFuncs, dbconfigs.GetSubprocessFlags)
-	getSubprocessFlagsFuncs = append(getSubprocessFlagsFuncs, mysqlctl.GetSubprocessFlags)
+// HealthStreamMapSize returns the size of the healthStreamMap
+// (used for tests).
+func (agent *ActionAgent) HealthStreamMapSize() int {
+	agent.healthStreamMutex.Lock()
+	defer agent.healthStreamMutex.Unlock()
+	return len(agent.healthStreamMap)
 }

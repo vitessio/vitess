@@ -7,10 +7,13 @@
 package jsonrpc
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"sync"
 
 	rpc "github.com/youtube/vitess/go/rpcplus"
@@ -46,7 +49,7 @@ func NewClientCodec(conn io.ReadWriteCloser) rpc.ClientCodec {
 type clientRequest struct {
 	Method string         `json:"method"`
 	Params [1]interface{} `json:"params"`
-	Id     uint64         `json:"id"`
+	ID     uint64         `json:"id"`
 }
 
 func (c *clientCodec) WriteRequest(r *rpc.Request, param interface{}) error {
@@ -55,18 +58,18 @@ func (c *clientCodec) WriteRequest(r *rpc.Request, param interface{}) error {
 	c.mutex.Unlock()
 	c.req.Method = r.ServiceMethod
 	c.req.Params[0] = param
-	c.req.Id = r.Seq
+	c.req.ID = r.Seq
 	return c.enc.Encode(&c.req)
 }
 
 type clientResponse struct {
-	Id     uint64           `json:"id"`
+	ID     uint64           `json:"id"`
 	Result *json.RawMessage `json:"result"`
 	Error  interface{}      `json:"error"`
 }
 
 func (r *clientResponse) reset() {
-	r.Id = 0
+	r.ID = 0
 	r.Result = nil
 	r.Error = nil
 }
@@ -78,12 +81,12 @@ func (c *clientCodec) ReadResponseHeader(r *rpc.Response) error {
 	}
 
 	c.mutex.Lock()
-	r.ServiceMethod = c.pending[c.resp.Id]
-	delete(c.pending, c.resp.Id)
+	r.ServiceMethod = c.pending[c.resp.ID]
+	delete(c.pending, c.resp.ID)
 	c.mutex.Unlock()
 
 	r.Error = ""
-	r.Seq = c.resp.Id
+	r.Seq = c.resp.ID
 	if c.resp.Error != nil {
 		x, ok := c.resp.Error.(string)
 		if !ok {
@@ -121,4 +124,67 @@ func Dial(network, address string) (*rpc.Client, error) {
 		return nil, err
 	}
 	return NewClient(conn), err
+}
+
+// HTTPClient holds the required parameters and functions for communicating with
+// the HTTP RPC server
+type HTTPClient struct {
+	Addr string
+	seq  uint64
+	m    sync.Mutex
+}
+
+// NewHTTPClient creates a helper json rpc client for regular http based
+// endpoints
+func NewHTTPClient(addr string) *HTTPClient {
+	return &HTTPClient{
+		Addr: addr,
+		seq:  0,
+		m:    sync.Mutex{},
+	}
+}
+
+// Call calls the http rpc endpoint with given parameters, uses POST request and
+// can be called by multiple go routines
+func (h *HTTPClient) Call(serviceMethod string, args interface{}, reply interface{}) error {
+	var params [1]interface{}
+	params[0] = args
+
+	h.m.Lock()
+	seq := h.seq
+	h.seq++
+	h.m.Unlock()
+
+	cr := &clientRequest{
+		Method: serviceMethod,
+		Params: params,
+		ID:     seq,
+	}
+
+	byteData, err := json.Marshal(cr)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", h.Addr, bytes.NewReader(byteData))
+	if err != nil {
+		return err
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+
+	v := &clientResponse{}
+	err = json.NewDecoder(res.Body).Decode(v)
+	if err != nil {
+		return err
+	}
+
+	if v.Error != nil {
+		return errors.New(v.Error.(string))
+	}
+
+	return json.Unmarshal(*v.Result, reply)
 }

@@ -1,6 +1,7 @@
 // Copyright 2012, Google Inc. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+
 package client2
 
 import (
@@ -16,7 +17,6 @@ import (
 	"github.com/youtube/vitess/go/vt/client2/tablet"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
 )
@@ -25,7 +25,7 @@ import (
 // database.
 //
 // The ShardedConn can handles several separate aspects:
-//  * loading/reloading tablet addresses on demand from zk/zkocc
+//  * loading/reloading tablet addresses on demand from zk
 //  * maintaining at most one connection to each tablet as required
 //  * transaction tracking across shards
 //  * preflight checking all transactions before attempting to commit
@@ -124,10 +124,10 @@ func (sc *ShardedConn) readKeyspace() error {
 		return fmt.Errorf("vt: GetSrvKeyspace failed %v", err)
 	}
 
-	sc.conns = make([]*tablet.VtConn, len(sc.srvKeyspace.Shards))
-	sc.shardMaxKeys = make([]key.KeyspaceId, len(sc.srvKeyspace.Shards))
+	sc.conns = make([]*tablet.VtConn, len(sc.srvKeyspace.Partitions[sc.tabletType].Shards))
+	sc.shardMaxKeys = make([]key.KeyspaceId, len(sc.srvKeyspace.Partitions[sc.tabletType].Shards))
 
-	for i, srvShard := range sc.srvKeyspace.Shards {
+	for i, srvShard := range sc.srvKeyspace.Partitions[sc.tabletType].Shards {
 		sc.shardMaxKeys[i] = srvShard.KeyRange.End
 	}
 
@@ -233,7 +233,7 @@ func (sc *ShardedConn) Exec(query string, bindVars map[string]interface{}) (db.R
 	if sc.srvKeyspace == nil {
 		return nil, ErrNotConnected
 	}
-	shards, err := vtgate.GetShardList(query, bindVars, sc.shardMaxKeys)
+	shards, err := GetShardList(query, bindVars, sc.shardMaxKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -526,7 +526,7 @@ func (sc *ShardedConn) ExecuteBatch(queryList []ClientQuery, keyVal interface{})
 */
 
 func (sc *ShardedConn) dial(shardIdx int) (conn *tablet.VtConn, err error) {
-	srvShard := &(sc.srvKeyspace.Shards[shardIdx])
+	srvShard := &(sc.srvKeyspace.Partitions[sc.tabletType].Shards[shardIdx])
 	shard := fmt.Sprintf("%v-%v", srvShard.KeyRange.Start.Hex(), srvShard.KeyRange.End.Hex())
 	// Hack to handle non-range based shards.
 	if !srvShard.KeyRange.IsPartial() {
@@ -560,7 +560,7 @@ type sDriver struct {
 
 // for direct zk connection: vtzk://host:port/cell/keyspace/tabletType
 // we always use a MetaConn, host and port are ignored.
-// the driver name dictates if we use zk or zkocc, and streaming or not
+// the driver name dictates if we streaming or not
 func (driver *sDriver) Open(name string) (sc db.Conn, err error) {
 	if !strings.HasPrefix(name, "vtzk://") {
 		// add a default protocol talking to zk
@@ -587,14 +587,8 @@ func RegisterShardedDrivers() {
 	db.Register("vtdb-streaming", &sDriver{ts, true})
 
 	// forced zk topo server
-	zconn := zk.NewMetaConn(false)
+	zconn := zk.NewMetaConn()
 	zkts := zktopo.NewServer(zconn)
 	db.Register("vtdb-zk", &sDriver{zkts, false})
 	db.Register("vtdb-zk-streaming", &sDriver{zkts, true})
-
-	// forced zkocc topo server
-	zkoccconn := zk.NewMetaConn(true)
-	zktsro := zktopo.NewServer(zkoccconn)
-	db.Register("vtdb-zkocc", &sDriver{zktsro, false})
-	db.Register("vtdb-zkocc-streaming", &sDriver{zktsro, true})
 }

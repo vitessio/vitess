@@ -1,4 +1,4 @@
-// faketopo contains utitlities for tests that have to interact with a
+// Package faketopo contains utitlities for tests that have to interact with a
 // Vitess topology.
 package faketopo
 
@@ -12,10 +12,14 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
+	"golang.org/x/net/context"
 )
 
 const (
-	TestShard    = "0"
+	// TestShard is the shard we use in tests
+	TestShard = "0"
+
+	// TestKeyspace is the keyspace we use in tests
 	TestKeyspace = "test_keyspace"
 )
 
@@ -47,7 +51,7 @@ type Fixture struct {
 
 // New creates a topology fixture.
 func New(t *testing.T, logger logutil.Logger, ts topo.Server, cells []string) *Fixture {
-	wr := wrangler.New(logger, ts, 1*time.Second, 1*time.Second)
+	wr := wrangler.New(logger, ts, 1*time.Second)
 
 	return &Fixture{
 		T:        t,
@@ -74,7 +78,7 @@ func (fix *Fixture) MakeMySQLMaster(uid int) {
 		if id == uid {
 			tablet.mysql.MasterAddr = ""
 		} else {
-			tablet.mysql.MasterAddr = newMaster.MysqlIpAddr()
+			tablet.mysql.MasterAddr = newMaster.MysqlIPAddr()
 		}
 	}
 }
@@ -95,16 +99,13 @@ func (fix *Fixture) AddTablet(uid int, cell string, tabletType topo.TabletType, 
 		Shard:    TestShard,
 		KeyRange: newKeyRange(TestShard),
 	}
-	if master != nil {
-		tablet.Parent = master.Alias
-	}
 
-	if err := fix.Wrangler.InitTablet(tablet, true, true, false); err != nil {
+	if err := fix.Wrangler.InitTablet(context.Background(), tablet, true, true, false); err != nil {
 		fix.Fatalf("CreateTablet: %v", err)
 	}
 	mysqlDaemon := &mysqlctl.FakeMysqlDaemon{}
 	if master != nil {
-		mysqlDaemon.MasterAddr = master.MysqlIpAddr()
+		mysqlDaemon.MasterAddr = master.MysqlIPAddr()
 	}
 	mysqlDaemon.MysqlPort = 3334 + 10*uid
 

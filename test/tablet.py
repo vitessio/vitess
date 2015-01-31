@@ -4,6 +4,7 @@ import os
 import shutil
 import sys
 import time
+import urllib2
 import warnings
 # Dropping a table inexplicably produces a warning despite
 # the "IF EXISTS" clause. Squelch these warnings.
@@ -87,8 +88,6 @@ class Tablet(object):
     self.tablet_alias = 'test_%s-%010d' % (self.cell, self.tablet_uid)
     self.zk_tablet_path = (
         '/zk/test_%s/vt/tablets/%010d' % (self.cell, self.tablet_uid))
-    self.zk_pid = self.zk_tablet_path + '/pid'
-    self.checked_zk_pid = False
 
   def mysqlctl(self, cmd, extra_my_cnf=None, with_ports=False, verbose=False):
     extra_env = {}
@@ -103,6 +102,7 @@ class Tablet(object):
     if with_ports:
       args.extend(['-port', str(self.port),
                    '-mysql_port', str(self.mysql_port)])
+    self._add_dbconfigs(args)
     if verbose:
       args.append('-alsologtostderr')
     args.extend(cmd)
@@ -118,6 +118,7 @@ class Tablet(object):
         '-tablet_uid', str(self.tablet_uid),
         '-mysql_port', str(self.mysql_port),
         '-socket_file', os.path.join(self.tablet_dir, 'mysqlctl.sock')]
+    self._add_dbconfigs(args)
     if verbose:
       args.append('-alsologtostderr')
     args.extend(cmd)
@@ -341,7 +342,7 @@ class Tablet(object):
                stderr=utils.devnull, stdout=utils.devnull)
 
   def _start_prog(self, binary, port=None, auth=False, memcache=False,
-                  wait_for_state='SERVING', customrules=None,
+                  wait_for_state='SERVING', filecustomrules=None, zkcustomrules=None,
                   schema_override=None, cert=None, key=None, ca_cert=None,
                   repl_extra_flags={}, table_acl_config=None,
                   lameduck_period=None, security_policy=None,
@@ -351,10 +352,7 @@ class Tablet(object):
     args.extend(['-port', '%s' % (port or self.port),
                  '-log_dir', environment.vtlogroot])
 
-    dbconfigs = self._get_db_configs_file(repl_extra_flags)
-    for key1 in dbconfigs:
-      for key2 in dbconfigs[key1]:
-        args.extend(['-db-config-' + key1 + '-' + key2, dbconfigs[key1][key2]])
+    self._add_dbconfigs(args, repl_extra_flags)
 
     if memcache:
       args.extend(['-rowcache-bin', environment.memcached_bin()])
@@ -369,8 +367,10 @@ class Tablet(object):
                environment.vttop, 'test', 'test_data',
                'authcredentials_test.json')])
 
-    if customrules:
-      args.extend(['-customrules', customrules])
+    if filecustomrules:
+      args.extend(['-filecustomrules', filecustomrules])
+    if zkcustomrules:
+      args.extend(['-zkcustomrules', zkcustomrules])
 
     if schema_override:
       args.extend(['-schema-override', schema_override])
@@ -410,12 +410,14 @@ class Tablet(object):
     return self.proc
 
   def start_vttablet(self, port=None, auth=False, memcache=False,
-                     wait_for_state='SERVING', customrules=None,
+                     wait_for_state='SERVING', filecustomrules=None, zkcustomrules=None,
                      schema_override=None, cert=None, key=None, ca_cert=None,
                      repl_extra_flags={}, table_acl_config=None,
                      lameduck_period=None, security_policy=None,
                      target_tablet_type=None, full_mycnf_args=False,
-                     extra_args=None, extra_env=None, include_mysql_port=True):
+                     extra_args=None, extra_env=None, include_mysql_port=True,
+                     init_tablet_type=None, init_keyspace=None,
+                     init_shard=None, init_db_name_override=None):
     """Starts a vttablet process, and returns it.
 
     The process is also saved in self.proc, so it's easy to kill as well.
@@ -461,16 +463,34 @@ class Tablet(object):
       if include_mysql_port:
         args.extend(['-mycnf_mysql_port', str(self.mysql_port)])
     if target_tablet_type:
+      self.tablet_type = target_tablet_type
       args.extend(['-target_tablet_type', target_tablet_type,
                    '-health_check_interval', '2s',
-                   '-allowed_replication_lag', '30'])
+                   '-enable_replication_lag_check',
+                   '-degraded_threshold', '5s'])
+
+    # this is used to run InitTablet as part of the vttablet startup
+    if init_tablet_type:
+      self.tablet_type = init_tablet_type
+      args.extend(['-init_tablet_type', init_tablet_type])
+    if init_keyspace:
+      self.keyspace = init_keyspace
+      self.shard = init_shard
+      args.extend(['-init_keyspace', init_keyspace,
+                   '-init_shard', init_shard])
+      if init_db_name_override:
+        self.dbname = init_db_name_override
+        args.extend(['-init_db_name_override', init_db_name_override])
+      else:
+        self.dbname = 'vt_' + init_keyspace
 
     if extra_args:
       args.extend(extra_args)
 
     return self._start_prog(binary='vttablet', port=port, auth=auth,
                             memcache=memcache, wait_for_state=wait_for_state,
-                            customrules=customrules,
+                            filecustomrules=filecustomrules,
+                            zkcustomrules=zkcustomrules,
                             schema_override=schema_override,
                             cert=cert, key=key, ca_cert=ca_cert,
                             repl_extra_flags=repl_extra_flags,
@@ -479,7 +499,7 @@ class Tablet(object):
                             security_policy=security_policy, extra_env=extra_env)
 
   def start_vtocc(self, port=None, auth=False, memcache=False,
-                  wait_for_state='SERVING', customrules=None,
+                  wait_for_state='SERVING', filecustomrules=None,
                   schema_override=None, cert=None, key=None, ca_cert=None,
                   repl_extra_flags={}, table_acl_config=None,
                   lameduck_period=None, security_policy=None,
@@ -504,7 +524,7 @@ class Tablet(object):
 
     return self._start_prog(binary='vtocc', port=port, auth=auth,
                             memcache=memcache, wait_for_state=wait_for_state,
-                            customrules=customrules,
+                            filecustomrules=filecustomrules,
                             schema_override=schema_override,
                             cert=cert, key=key, ca_cert=ca_cert,
                             repl_extra_flags=repl_extra_flags,
@@ -514,12 +534,6 @@ class Tablet(object):
 
 
   def wait_for_vttablet_state(self, expected, timeout=60.0, port=None):
-    # wait for zookeeper PID just to be sure we have it
-    if environment.topo_server().flavor() == 'zookeeper':
-      if not self.checked_zk_pid:
-        utils.run(environment.binary_args('zk') + ['wait', '-e', self.zk_pid],
-                  stdout=utils.devnull)
-        self.checked_zk_pid = True
     self.wait_for_vtocc_state(expected, timeout=timeout, port=port)
 
   def wait_for_vtocc_state(self, expected, timeout=60.0, port=None):
@@ -545,24 +559,29 @@ class Tablet(object):
       timeout = utils.wait_step('waiting for state %s' % expected, timeout,
                                 sleep_time=0.1)
 
-  def wait_for_mysql_socket(self, timeout=10.0):
-    socket_file = os.path.join(self.tablet_dir, 'mysql.sock')
+  def wait_for_mysqlctl_socket(self, timeout=10.0):
+    mysql_sock = os.path.join(self.tablet_dir, 'mysql.sock')
+    mysqlctl_sock = os.path.join(self.tablet_dir, 'mysqlctl.sock')
     while True:
-      if os.path.exists(socket_file):
+      if os.path.exists(mysql_sock) and os.path.exists(mysqlctl_sock):
         return
-      timeout = utils.wait_step('waiting for mysql socket file %s' % socket_file, timeout)
+      timeout = utils.wait_step('waiting for mysql and mysqlctl socket files: %s %s' % (mysql_sock, mysqlctl_sock), timeout)
 
-  def _get_db_configs_file(self, repl_extra_flags={}):
+  def _add_dbconfigs(self, args, repl_extra_flags={}):
     config = dict(self.default_db_config)
     if self.keyspace:
       config['app']['dbname'] = self.dbname
-      config['dba']['dbname'] = self.dbname
       config['repl']['dbname'] = self.dbname
     config['repl'].update(repl_extra_flags)
-    return config
+    for key1 in config:
+      for key2 in config[key1]:
+        args.extend(['-db-config-' + key1 + '-' + key2, config[key1][key2]])
 
   def get_status(self):
     return utils.get_status(self.port)
+
+  def get_healthz(self):
+    return urllib2.urlopen('http://localhost:%u/healthz' % self.port).read()
 
   def kill_vttablet(self):
     logging.debug('killing vttablet: %s', self.tablet_alias)

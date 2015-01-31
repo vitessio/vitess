@@ -18,10 +18,14 @@ type BlpPosition struct {
 	Position myproto.ReplicationPosition
 }
 
+//go:generate bsongen -file $GOFILE -type BlpPosition -o blp_position_bson.go
+
 // BlpPositionList is a list of BlpPosition, not sorted.
 type BlpPositionList struct {
 	Entries []BlpPosition
 }
+
+//go:generate bsongen -file $GOFILE -type BlpPositionList -o blp_position_list_bson.go
 
 // FindBlpPositionById returns the BlpPosition with the given id, or error
 func (bpl *BlpPositionList) FindBlpPositionById(id uint32) (*BlpPosition, error) {

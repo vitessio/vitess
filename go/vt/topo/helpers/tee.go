@@ -7,10 +7,10 @@ package helpers
 import (
 	"fmt"
 	"sync"
-	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 // Tee is an implementation of topo.Server that uses a primary
@@ -53,6 +53,7 @@ type versionMapping struct {
 	readFromSecondVersion int64
 }
 
+// NewTee returns a new topo.Server object
 func NewTee(primary, secondary topo.Server, reverseLockOrder bool) *Tee {
 	lockFirst := primary
 	lockSecond := secondary
@@ -80,6 +81,7 @@ func NewTee(primary, secondary topo.Server, reverseLockOrder bool) *Tee {
 // topo.Server management interface.
 //
 
+// Close is part of the topo.Server interface
 func (tee *Tee) Close() {
 	tee.primary.Close()
 	tee.secondary.Close()
@@ -89,6 +91,7 @@ func (tee *Tee) Close() {
 // Cell management, global
 //
 
+// GetKnownCells is part of the topo.Server interface
 func (tee *Tee) GetKnownCells() ([]string, error) {
 	return tee.readFrom.GetKnownCells()
 }
@@ -97,6 +100,7 @@ func (tee *Tee) GetKnownCells() ([]string, error) {
 // Keyspace management, global.
 //
 
+// CreateKeyspace is part of the topo.Server interface
 func (tee *Tee) CreateKeyspace(keyspace string, value *topo.Keyspace) error {
 	if err := tee.primary.CreateKeyspace(keyspace, value); err != nil {
 		return err
@@ -109,6 +113,7 @@ func (tee *Tee) CreateKeyspace(keyspace string, value *topo.Keyspace) error {
 	return nil
 }
 
+// UpdateKeyspace is part of the topo.Server interface
 func (tee *Tee) UpdateKeyspace(ki *topo.KeyspaceInfo, existingVersion int64) (newVersion int64, err error) {
 	if newVersion, err = tee.primary.UpdateKeyspace(ki, existingVersion); err != nil {
 		// failed on primary, not updating secondary
@@ -160,6 +165,7 @@ func (tee *Tee) UpdateKeyspace(ki *topo.KeyspaceInfo, existingVersion int64) (ne
 	return
 }
 
+// GetKeyspace is part of the topo.Server interface
 func (tee *Tee) GetKeyspace(keyspace string) (*topo.KeyspaceInfo, error) {
 	ki, err := tee.readFrom.GetKeyspace(keyspace)
 	if err != nil {
@@ -181,10 +187,12 @@ func (tee *Tee) GetKeyspace(keyspace string) (*topo.KeyspaceInfo, error) {
 	return ki, nil
 }
 
+// GetKeyspaces is part of the topo.Server interface
 func (tee *Tee) GetKeyspaces() ([]string, error) {
 	return tee.readFrom.GetKeyspaces()
 }
 
+// DeleteKeyspaceShards is part of the topo.Server interface
 func (tee *Tee) DeleteKeyspaceShards(keyspace string) error {
 	if err := tee.primary.DeleteKeyspaceShards(keyspace); err != nil {
 		return err
@@ -201,6 +209,7 @@ func (tee *Tee) DeleteKeyspaceShards(keyspace string) error {
 // Shard management, global.
 //
 
+// CreateShard is part of the topo.Server interface
 func (tee *Tee) CreateShard(keyspace, shard string, value *topo.Shard) error {
 	err := tee.primary.CreateShard(keyspace, shard, value)
 	if err != nil && err != topo.ErrNodeExists {
@@ -215,6 +224,7 @@ func (tee *Tee) CreateShard(keyspace, shard string, value *topo.Shard) error {
 	return err
 }
 
+// UpdateShard is part of the topo.Server interface
 func (tee *Tee) UpdateShard(si *topo.ShardInfo, existingVersion int64) (newVersion int64, err error) {
 	if newVersion, err = tee.primary.UpdateShard(si, existingVersion); err != nil {
 		// failed on primary, not updating secondary
@@ -266,6 +276,7 @@ func (tee *Tee) UpdateShard(si *topo.ShardInfo, existingVersion int64) (newVersi
 	return
 }
 
+// ValidateShard is part of the topo.Server interface
 func (tee *Tee) ValidateShard(keyspace, shard string) error {
 	err := tee.primary.ValidateShard(keyspace, shard)
 	if err != nil {
@@ -279,6 +290,7 @@ func (tee *Tee) ValidateShard(keyspace, shard string) error {
 	return nil
 }
 
+// GetShard is part of the topo.Server interface
 func (tee *Tee) GetShard(keyspace, shard string) (*topo.ShardInfo, error) {
 	si, err := tee.readFrom.GetShard(keyspace, shard)
 	if err != nil {
@@ -300,10 +312,12 @@ func (tee *Tee) GetShard(keyspace, shard string) (*topo.ShardInfo, error) {
 	return si, nil
 }
 
+// GetShardNames is part of the topo.Server interface
 func (tee *Tee) GetShardNames(keyspace string) ([]string, error) {
 	return tee.readFrom.GetShardNames(keyspace)
 }
 
+// DeleteShard is part of the topo.Server interface
 func (tee *Tee) DeleteShard(keyspace, shard string) error {
 	err := tee.primary.DeleteShard(keyspace, shard)
 	if err != nil && err != topo.ErrNoNode {
@@ -321,6 +335,7 @@ func (tee *Tee) DeleteShard(keyspace, shard string) error {
 // Tablet management, per cell.
 //
 
+// CreateTablet is part of the topo.Server interface
 func (tee *Tee) CreateTablet(tablet *topo.Tablet) error {
 	err := tee.primary.CreateTablet(tablet)
 	if err != nil && err != topo.ErrNodeExists {
@@ -334,6 +349,7 @@ func (tee *Tee) CreateTablet(tablet *topo.Tablet) error {
 	return err
 }
 
+// UpdateTablet is part of the topo.Server interface
 func (tee *Tee) UpdateTablet(tablet *topo.TabletInfo, existingVersion int64) (newVersion int64, err error) {
 	if newVersion, err = tee.primary.UpdateTablet(tablet, existingVersion); err != nil {
 		// failed on primary, not updating secondary
@@ -385,6 +401,7 @@ func (tee *Tee) UpdateTablet(tablet *topo.TabletInfo, existingVersion int64) (ne
 	return
 }
 
+// UpdateTabletFields is part of the topo.Server interface
 func (tee *Tee) UpdateTabletFields(tabletAlias topo.TabletAlias, update func(*topo.Tablet) error) error {
 	if err := tee.primary.UpdateTabletFields(tabletAlias, update); err != nil {
 		// failed on primary, not updating secondary
@@ -398,6 +415,7 @@ func (tee *Tee) UpdateTabletFields(tabletAlias topo.TabletAlias, update func(*to
 	return nil
 }
 
+// DeleteTablet is part of the topo.Server interface
 func (tee *Tee) DeleteTablet(alias topo.TabletAlias) error {
 	if err := tee.primary.DeleteTablet(alias); err != nil {
 		return err
@@ -410,18 +428,7 @@ func (tee *Tee) DeleteTablet(alias topo.TabletAlias) error {
 	return nil
 }
 
-func (tee *Tee) ValidateTablet(alias topo.TabletAlias) error {
-	if err := tee.primary.ValidateTablet(alias); err != nil {
-		return err
-	}
-
-	if err := tee.secondary.ValidateTablet(alias); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.ValidateTablet(%v) failed: %v", alias, err)
-	}
-	return nil
-}
-
+// GetTablet is part of the topo.Server interface
 func (tee *Tee) GetTablet(alias topo.TabletAlias) (*topo.TabletInfo, error) {
 	ti, err := tee.readFrom.GetTablet(alias)
 	if err != nil {
@@ -443,6 +450,7 @@ func (tee *Tee) GetTablet(alias topo.TabletAlias) (*topo.TabletInfo, error) {
 	return ti, nil
 }
 
+// GetTabletsByCell is part of the topo.Server interface
 func (tee *Tee) GetTabletsByCell(cell string) ([]topo.TabletAlias, error) {
 	return tee.readFrom.GetTabletsByCell(cell)
 }
@@ -451,6 +459,7 @@ func (tee *Tee) GetTabletsByCell(cell string) ([]topo.TabletAlias, error) {
 // Shard replication graph management, local.
 //
 
+// UpdateShardReplicationFields is part of the topo.Server interface
 func (tee *Tee) UpdateShardReplicationFields(cell, keyspace, shard string, update func(*topo.ShardReplication) error) error {
 	if err := tee.primary.UpdateShardReplicationFields(cell, keyspace, shard, update); err != nil {
 		// failed on primary, not updating secondary
@@ -464,10 +473,12 @@ func (tee *Tee) UpdateShardReplicationFields(cell, keyspace, shard string, updat
 	return nil
 }
 
+// GetShardReplication is part of the topo.Server interface
 func (tee *Tee) GetShardReplication(cell, keyspace, shard string) (*topo.ShardReplicationInfo, error) {
 	return tee.readFrom.GetShardReplication(cell, keyspace, shard)
 }
 
+// DeleteShardReplication is part of the topo.Server interface
 func (tee *Tee) DeleteShardReplication(cell, keyspace, shard string) error {
 	if err := tee.primary.DeleteShardReplication(cell, keyspace, shard); err != nil {
 		return err
@@ -484,15 +495,16 @@ func (tee *Tee) DeleteShardReplication(cell, keyspace, shard string) error {
 // Serving Graph management, per cell.
 //
 
-func (tee *Tee) LockSrvShardForAction(cell, keyspace, shard, contents string, timeout time.Duration, interrupted chan struct{}) (string, error) {
+// LockSrvShardForAction is part of the topo.Server interface
+func (tee *Tee) LockSrvShardForAction(ctx context.Context, cell, keyspace, shard, contents string) (string, error) {
 	// lock lockFirst
-	pLockPath, err := tee.lockFirst.LockSrvShardForAction(cell, keyspace, shard, contents, timeout, interrupted)
+	pLockPath, err := tee.lockFirst.LockSrvShardForAction(ctx, cell, keyspace, shard, contents)
 	if err != nil {
 		return "", err
 	}
 
 	// lock lockSecond
-	sLockPath, err := tee.lockSecond.LockSrvShardForAction(cell, keyspace, shard, contents, timeout, interrupted)
+	sLockPath, err := tee.lockSecond.LockSrvShardForAction(ctx, cell, keyspace, shard, contents)
 	if err != nil {
 		if err := tee.lockFirst.UnlockSrvShardForAction(cell, keyspace, shard, pLockPath, "{}"); err != nil {
 			log.Warningf("Failed to unlock lockFirst shard after failed lockSecond lock for %v/%v/%v", cell, keyspace, shard)
@@ -507,6 +519,7 @@ func (tee *Tee) LockSrvShardForAction(cell, keyspace, shard, contents string, ti
 	return pLockPath, nil
 }
 
+// UnlockSrvShardForAction is part of the topo.Server interface
 func (tee *Tee) UnlockSrvShardForAction(cell, keyspace, shard, lockPath, results string) error {
 	// get from map
 	tee.mu.Lock() // not using defer for unlock, to minimize lock time
@@ -531,10 +544,12 @@ func (tee *Tee) UnlockSrvShardForAction(cell, keyspace, shard, lockPath, results
 	return perr
 }
 
+// GetSrvTabletTypesPerShard is part of the topo.Server interface
 func (tee *Tee) GetSrvTabletTypesPerShard(cell, keyspace, shard string) ([]topo.TabletType, error) {
 	return tee.readFrom.GetSrvTabletTypesPerShard(cell, keyspace, shard)
 }
 
+// UpdateEndPoints is part of the topo.Server interface
 func (tee *Tee) UpdateEndPoints(cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints) error {
 	if err := tee.primary.UpdateEndPoints(cell, keyspace, shard, tabletType, addrs); err != nil {
 		return err
@@ -547,10 +562,12 @@ func (tee *Tee) UpdateEndPoints(cell, keyspace, shard string, tabletType topo.Ta
 	return nil
 }
 
+// GetEndPoints is part of the topo.Server interface
 func (tee *Tee) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
 	return tee.readFrom.GetEndPoints(cell, keyspace, shard, tabletType)
 }
 
+// DeleteEndPoints is part of the topo.Server interface
 func (tee *Tee) DeleteEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) error {
 	err := tee.primary.DeleteEndPoints(cell, keyspace, shard, tabletType)
 	if err != nil && err != topo.ErrNoNode {
@@ -564,6 +581,7 @@ func (tee *Tee) DeleteEndPoints(cell, keyspace, shard string, tabletType topo.Ta
 	return err
 }
 
+// UpdateSrvShard is part of the topo.Server interface
 func (tee *Tee) UpdateSrvShard(cell, keyspace, shard string, srvShard *topo.SrvShard) error {
 	if err := tee.primary.UpdateSrvShard(cell, keyspace, shard, srvShard); err != nil {
 		return err
@@ -576,10 +594,12 @@ func (tee *Tee) UpdateSrvShard(cell, keyspace, shard string, srvShard *topo.SrvS
 	return nil
 }
 
+// GetSrvShard is part of the topo.Server interface
 func (tee *Tee) GetSrvShard(cell, keyspace, shard string) (*topo.SrvShard, error) {
 	return tee.readFrom.GetSrvShard(cell, keyspace, shard)
 }
 
+// DeleteSrvShard is part of the topo.Server interface
 func (tee *Tee) DeleteSrvShard(cell, keyspace, shard string) error {
 	err := tee.primary.DeleteSrvShard(cell, keyspace, shard)
 	if err != nil && err != topo.ErrNoNode {
@@ -593,6 +613,7 @@ func (tee *Tee) DeleteSrvShard(cell, keyspace, shard string) error {
 	return err
 }
 
+// UpdateSrvKeyspace is part of the topo.Server interface
 func (tee *Tee) UpdateSrvKeyspace(cell, keyspace string, srvKeyspace *topo.SrvKeyspace) error {
 	if err := tee.primary.UpdateSrvKeyspace(cell, keyspace, srvKeyspace); err != nil {
 		return err
@@ -605,14 +626,17 @@ func (tee *Tee) UpdateSrvKeyspace(cell, keyspace string, srvKeyspace *topo.SrvKe
 	return nil
 }
 
+// GetSrvKeyspace is part of the topo.Server interface
 func (tee *Tee) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, error) {
 	return tee.readFrom.GetSrvKeyspace(cell, keyspace)
 }
 
+// GetSrvKeyspaceNames is part of the topo.Server interface
 func (tee *Tee) GetSrvKeyspaceNames(cell string) ([]string, error) {
 	return tee.readFrom.GetSrvKeyspaceNames(cell)
 }
 
+// UpdateTabletEndpoint is part of the topo.Server interface
 func (tee *Tee) UpdateTabletEndpoint(cell, keyspace, shard string, tabletType topo.TabletType, addr *topo.EndPoint) error {
 	if err := tee.primary.UpdateTabletEndpoint(cell, keyspace, shard, tabletType, addr); err != nil {
 		return err
@@ -625,19 +649,26 @@ func (tee *Tee) UpdateTabletEndpoint(cell, keyspace, shard string, tabletType to
 	return nil
 }
 
+// WatchEndPoints is part of the topo.Server interface.
+// We only watch for changes on the primary.
+func (tee *Tee) WatchEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (<-chan *topo.EndPoints, chan<- struct{}, error) {
+	return tee.primary.WatchEndPoints(cell, keyspace, shard, tabletType)
+}
+
 //
 // Keyspace and Shard locks for actions, global.
 //
 
-func (tee *Tee) LockKeyspaceForAction(keyspace, contents string, timeout time.Duration, interrupted chan struct{}) (string, error) {
+// LockKeyspaceForAction is part of the topo.Server interface
+func (tee *Tee) LockKeyspaceForAction(ctx context.Context, keyspace, contents string) (string, error) {
 	// lock lockFirst
-	pLockPath, err := tee.lockFirst.LockKeyspaceForAction(keyspace, contents, timeout, interrupted)
+	pLockPath, err := tee.lockFirst.LockKeyspaceForAction(ctx, keyspace, contents)
 	if err != nil {
 		return "", err
 	}
 
 	// lock lockSecond
-	sLockPath, err := tee.lockSecond.LockKeyspaceForAction(keyspace, contents, timeout, interrupted)
+	sLockPath, err := tee.lockSecond.LockKeyspaceForAction(ctx, keyspace, contents)
 	if err != nil {
 		if err := tee.lockFirst.UnlockKeyspaceForAction(keyspace, pLockPath, "{}"); err != nil {
 			log.Warningf("Failed to unlock lockFirst keyspace after failed lockSecond lock for %v", keyspace)
@@ -652,6 +683,7 @@ func (tee *Tee) LockKeyspaceForAction(keyspace, contents string, timeout time.Du
 	return pLockPath, nil
 }
 
+// UnlockKeyspaceForAction is part of the topo.Server interface
 func (tee *Tee) UnlockKeyspaceForAction(keyspace, lockPath, results string) error {
 	// get from map
 	tee.mu.Lock() // not using defer for unlock, to minimize lock time
@@ -676,15 +708,16 @@ func (tee *Tee) UnlockKeyspaceForAction(keyspace, lockPath, results string) erro
 	return perr
 }
 
-func (tee *Tee) LockShardForAction(keyspace, shard, contents string, timeout time.Duration, interrupted chan struct{}) (string, error) {
+// LockShardForAction is part of the topo.Server interface
+func (tee *Tee) LockShardForAction(ctx context.Context, keyspace, shard, contents string) (string, error) {
 	// lock lockFirst
-	pLockPath, err := tee.lockFirst.LockShardForAction(keyspace, shard, contents, timeout, interrupted)
+	pLockPath, err := tee.lockFirst.LockShardForAction(ctx, keyspace, shard, contents)
 	if err != nil {
 		return "", err
 	}
 
 	// lock lockSecond
-	sLockPath, err := tee.lockSecond.LockShardForAction(keyspace, shard, contents, timeout, interrupted)
+	sLockPath, err := tee.lockSecond.LockShardForAction(ctx, keyspace, shard, contents)
 	if err != nil {
 		if err := tee.lockFirst.UnlockShardForAction(keyspace, shard, pLockPath, "{}"); err != nil {
 			log.Warningf("Failed to unlock lockFirst shard after failed lockSecond lock for %v/%v", keyspace, shard)
@@ -699,6 +732,7 @@ func (tee *Tee) LockShardForAction(keyspace, shard, contents string, timeout tim
 	return pLockPath, nil
 }
 
+// UnlockShardForAction is part of the topo.Server interface
 func (tee *Tee) UnlockShardForAction(keyspace, shard, lockPath, results string) error {
 	// get from map
 	tee.mu.Lock() // not using defer for unlock, to minimize lock time
@@ -721,37 +755,4 @@ func (tee *Tee) UnlockShardForAction(keyspace, shard, lockPath, results string) 
 		return serr
 	}
 	return perr
-}
-
-//
-// Supporting the local agent process, local cell.
-//
-
-func (tee *Tee) CreateTabletPidNode(tabletAlias topo.TabletAlias, contents string, done chan struct{}) error {
-	// if the primary fails, no need to go on
-	if err := tee.primary.CreateTabletPidNode(tabletAlias, contents, done); err != nil {
-		return err
-	}
-
-	if err := tee.secondary.CreateTabletPidNode(tabletAlias, contents, done); err != nil {
-		log.Warningf("secondary.CreateTabletPidNode(%v) failed: %v", tabletAlias, err)
-	}
-	return nil
-}
-
-func (tee *Tee) ValidateTabletPidNode(tabletAlias topo.TabletAlias) error {
-	// if the primary fails, no need to go on
-	if err := tee.primary.ValidateTabletPidNode(tabletAlias); err != nil {
-		return err
-	}
-
-	if err := tee.secondary.ValidateTabletPidNode(tabletAlias); err != nil {
-		log.Warningf("secondary.ValidateTabletPidNode(%v) failed: %v", tabletAlias, err)
-	}
-	return nil
-}
-
-func (tee *Tee) GetSubprocessFlags() []string {
-	p := tee.primary.GetSubprocessFlags()
-	return append(p, tee.secondary.GetSubprocessFlags()...)
 }

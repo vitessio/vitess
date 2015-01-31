@@ -6,7 +6,6 @@
 
 import logging
 import os
-import socket
 import json
 
 import server
@@ -14,17 +13,28 @@ import server
 
 class ZkTopoServer(server.TopoServer):
   """Implementation of TopoServer for ZooKeeper"""
+  def __init__(self):
+    self.ports_assigned = False
 
-  def setup(self, add_bad_host=False):
-    from environment import reserve_ports, run, binary_args, vtlogroot, tmproot
+  def assign_ports(self):
+    """Assign ports if not already assigned"""
+
+    if self.ports_assigned:
+      return
+
+    from environment import reserve_ports
+    import utils
 
     self.zk_port_base = reserve_ports(3)
-    self.zkocc_port_base = reserve_ports(3)
-
-    self.hostname = socket.gethostname()
+    self.hostname = utils.hostname
     self.zk_ports = ':'.join(str(self.zk_port_base + i) for i in range(3))
     self.zk_client_port = self.zk_port_base + 2
+    self.ports_assigned = True
 
+  def setup(self, add_bad_host=False):
+    from environment import run, binary_args, vtlogroot, tmproot
+
+    self.assign_ports()
     run(binary_args('zkctl') + [
         '-log_dir', vtlogroot,
         '-zk.cfg', '1@%s:%s' % (self.hostname, self.zk_ports),
@@ -39,14 +49,6 @@ class ZkTopoServer(server.TopoServer):
           'test_ny': 'localhost:%u' % (self.zk_client_port),
           'test_ca': ca_server,
           'global': 'localhost:%u' % (self.zk_client_port),
-          'test_nj:_zkocc':
-              'localhost:%u,localhost:%u,localhost:%u' % tuple(
-                  self.zkocc_port_base + i
-                  for i in range(
-                      3)),
-          'test_ny:_zkocc': 'localhost:%u' % (self.zkocc_port_base),
-          'test_ca:_zkocc': 'localhost:%u' % (self.zkocc_port_base),
-          'global:_zkocc': 'localhost:%u' % (self.zkocc_port_base),
       }
       json.dump(zk_cell_mapping, f)
     os.environ['ZK_CLIENT_CONFIG'] = config
@@ -59,6 +61,7 @@ class ZkTopoServer(server.TopoServer):
     from environment import run, binary_args, vtlogroot
     import utils
 
+    self.assign_ports()
     run(binary_args('zkctl') + [
         '-log_dir', vtlogroot,
         '-zk.cfg', '1@%s:%s' % (self.hostname, self.zk_ports),

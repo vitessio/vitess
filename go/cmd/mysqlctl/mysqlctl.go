@@ -8,13 +8,12 @@ package main
 import (
 	"flag"
 	"fmt"
-	"net/url"
 	"os"
-	"strings"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/exit"
+	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 )
@@ -22,204 +21,121 @@ import (
 var (
 	port        = flag.Int("port", 6612, "vtocc port")
 	mysqlPort   = flag.Int("mysql_port", 3306, "mysql port")
-	tabletUid   = flag.Uint("tablet_uid", 41983, "tablet uid")
+	tabletUID   = flag.Uint("tablet_uid", 41983, "tablet uid")
 	mysqlSocket = flag.String("mysql_socket", "", "path to the mysql socket")
 
 	tabletAddr string
 )
 
-func initCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
+func initCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
 	waitTime := subFlags.Duration("wait_time", mysqlctl.MysqlWaitTime, "how long to wait for startup")
 	bootstrapArchive := subFlags.String("bootstrap_archive", "mysql-db-dir.tbz", "name of bootstrap archive within vitess/data/bootstrap directory")
 	skipSchema := subFlags.Bool("skip_schema", false, "don't apply initial schema")
 	subFlags.Parse(args)
 
 	if err := mysqld.Init(*waitTime, *bootstrapArchive, *skipSchema); err != nil {
-		log.Fatalf("failed init mysql: %v", err)
+		return fmt.Errorf("failed init mysql: %v", err)
 	}
+	return nil
 }
 
-func multisnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
-	concurrency := subFlags.Int("concurrency", 8, "how many compression jobs to run simultaneously")
-	spec := subFlags.String("spec", "-", "shard specification")
-	tablesString := subFlags.String("tables", "", "dump only this comma separated list of regexp for tables")
-	excludeTablesString := subFlags.String("exclude_tables", "", "do not dump this comma separated list of regexp for tables")
-	skipSlaveRestart := subFlags.Bool("skip_slave_restart", false, "after the snapshot is done, do not restart slave replication")
-	maximumFilesize := subFlags.Uint64("maximum_file_size", 128*1024*1024, "the maximum size for an uncompressed data file")
-	keyType := subFlags.String("key_type", "uint64", "type of the key column")
-	subFlags.Parse(args)
-	if subFlags.NArg() != 2 {
-		log.Fatalf("action multisnapshot requires <db name> <key name>")
-	}
-
-	shards, err := key.ParseShardingSpec(*spec)
-	if err != nil {
-		log.Fatalf("multisnapshot failed: %v", err)
-	}
-	var tables []string
-	if *tablesString != "" {
-		tables = strings.Split(*tablesString, ",")
-	}
-	var excludedTables []string
-	if *excludeTablesString != "" {
-		excludedTables = strings.Split(*excludeTablesString, ",")
-	}
-
-	kit := key.KeyspaceIdType(*keyType)
-	if !key.IsKeyspaceIdTypeInList(kit, key.AllKeyspaceIdTypes) {
-		log.Fatalf("invalid key_type")
-	}
-
-	filenames, err := mysqld.CreateMultiSnapshot(logutil.NewConsoleLogger(), shards, subFlags.Arg(0), subFlags.Arg(1), kit, tabletAddr, false, *concurrency, tables, excludedTables, *skipSlaveRestart, *maximumFilesize, nil)
-	if err != nil {
-		log.Fatalf("multisnapshot failed: %v", err)
-	} else {
-		log.Infof("manifest locations: %v", filenames)
-	}
-}
-
-func multiRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
-	starts := subFlags.String("starts", "", "starts of the key range")
-	ends := subFlags.String("ends", "", "ends of the key range")
-	fetchRetryCount := subFlags.Int("fetch_retry_count", 3, "how many times to retry a failed transfer")
-	concurrency := subFlags.Int("concurrency", 8, "how many concurrent db inserts to run simultaneously")
-	fetchConcurrency := subFlags.Int("fetch_concurrency", 4, "how many files to fetch simultaneously")
-	insertTableConcurrency := subFlags.Int("insert_table_concurrency", 4, "how many myisam tables to load into a single destination table simultaneously")
-	strategyStr := subFlags.String("strategy", "", "which strategy to use for restore, use -strategy=-help for values")
-
-	subFlags.Parse(args)
-	logger := logutil.NewConsoleLogger()
-	strategy, err := mysqlctl.NewSplitStrategy(logger, *strategyStr)
-	if err != nil {
-		log.Fatalf("invalid strategy: %v", err)
-	}
-	if subFlags.NArg() < 2 {
-		log.Fatalf("multirestore requires <destination_dbname> <source_host>[/<source_dbname>]... %v", args)
-	}
-
-	startArray := strings.Split(*starts, ",")
-	endArray := strings.Split(*ends, ",")
-	if len(startArray) != len(endArray) || len(startArray) != subFlags.NArg()-1 {
-		log.Fatalf("Need as many starts and ends as source URLs")
-	}
-
-	keyRanges := make([]key.KeyRange, len(startArray))
-	for i, s := range startArray {
-		var err error
-		keyRanges[i], err = key.ParseKeyRangeParts(s, endArray[i])
-		if err != nil {
-			log.Fatalf("Invalid start or end: %v", err)
-		}
-	}
-
-	dbName, dbis := subFlags.Arg(0), subFlags.Args()[1:]
-	sources := make([]*url.URL, len(dbis))
-	for i, dbi := range dbis {
-		if !strings.HasPrefix(dbi, "vttp://") && !strings.HasPrefix(dbi, "http://") {
-			dbi = "vttp://" + dbi
-		}
-		dbUrl, err := url.Parse(dbi)
-		if err != nil {
-			log.Fatalf("incorrect source url: %v", err)
-		}
-		sources[i] = dbUrl
-	}
-	if err := mysqld.MultiRestore(logger, dbName, keyRanges, sources, nil, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, strategy); err != nil {
-		log.Fatalf("multirestore failed: %v", err)
-	}
-}
-
-func restoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
+func restoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
 	dontWaitForSlaveStart := subFlags.Bool("dont_wait_for_slave_start", false, "won't wait for replication to start (useful when restoring from master server)")
 	fetchConcurrency := subFlags.Int("fetch_concurrency", 3, "how many files to fetch simultaneously")
 	fetchRetryCount := subFlags.Int("fetch_retry_count", 3, "how many times to retry a failed transfer")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
-		log.Fatalf("Command restore requires <snapshot manifest file>")
+		return fmt.Errorf("Command restore requires <snapshot manifest file>")
 	}
 
 	rs, err := mysqlctl.ReadSnapshotManifest(subFlags.Arg(0))
-	if err == nil {
-		err = mysqld.RestoreFromSnapshot(logutil.NewConsoleLogger(), rs, *fetchConcurrency, *fetchRetryCount, *dontWaitForSlaveStart, nil)
-	}
 	if err != nil {
-		log.Fatalf("restore failed: %v", err)
+		return fmt.Errorf("restore failed: ReadSnapshotManifest: %v", err)
 	}
+	err = mysqld.RestoreFromSnapshot(logutil.NewConsoleLogger(), rs, *fetchConcurrency, *fetchRetryCount, *dontWaitForSlaveStart, nil)
+	if err != nil {
+		return fmt.Errorf("restore failed: RestoreFromSnapshot: %v", err)
+	}
+	return nil
 }
 
-func shutdownCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
+func shutdownCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
 	waitTime := subFlags.Duration("wait_time", mysqlctl.MysqlWaitTime, "how long to wait for shutdown")
 	subFlags.Parse(args)
 
-	if mysqlErr := mysqld.Shutdown(true, *waitTime); mysqlErr != nil {
-		log.Fatalf("failed shutdown mysql: %v", mysqlErr)
+	if err := mysqld.Shutdown(true, *waitTime); err != nil {
+		return fmt.Errorf("failed shutdown mysql: %v", err)
 	}
+	return nil
 }
 
-func snapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
+func snapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
 	concurrency := subFlags.Int("concurrency", 4, "how many compression jobs to run simultaneously")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
-		log.Fatalf("Command snapshot requires <db name>")
+		return fmt.Errorf("Command snapshot requires <db name>")
 	}
 
 	filename, _, _, err := mysqld.CreateSnapshot(logutil.NewConsoleLogger(), subFlags.Arg(0), tabletAddr, false, *concurrency, false, nil)
 	if err != nil {
-		log.Fatalf("snapshot failed: %v", err)
-	} else {
-		log.Infof("manifest location: %v", filename)
+		return fmt.Errorf("snapshot failed: %v", err)
 	}
+	log.Infof("manifest location: %v", filename)
+	return nil
 }
 
-func snapshotSourceStartCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
+func snapshotSourceStartCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
 	concurrency := subFlags.Int("concurrency", 4, "how many checksum jobs to run simultaneously")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
-		log.Fatalf("Command snapshotsourcestart requires <db name>")
+		return fmt.Errorf("Command snapshotsourcestart requires <db name>")
 	}
 
 	filename, slaveStartRequired, readOnly, err := mysqld.CreateSnapshot(logutil.NewConsoleLogger(), subFlags.Arg(0), tabletAddr, false, *concurrency, true, nil)
 	if err != nil {
-		log.Fatalf("snapshot failed: %v", err)
-	} else {
-		log.Infof("manifest location: %v", filename)
-		log.Infof("slave start required: %v", slaveStartRequired)
-		log.Infof("read only: %v", readOnly)
+		return fmt.Errorf("snapshot failed: %v", err)
 	}
+	log.Infof("manifest location: %v", filename)
+	log.Infof("slave start required: %v", slaveStartRequired)
+	log.Infof("read only: %v", readOnly)
+	return nil
 }
 
-func snapshotSourceEndCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
+func snapshotSourceEndCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
 	slaveStartRequired := subFlags.Bool("slave_start", false, "will restart replication")
 	readWrite := subFlags.Bool("read_write", false, "will make the server read-write")
 	subFlags.Parse(args)
 
 	err := mysqld.SnapshotSourceEnd(*slaveStartRequired, !(*readWrite), true, map[string]string{})
 	if err != nil {
-		log.Fatalf("snapshotsourceend failed: %v", err)
+		return fmt.Errorf("snapshotsourceend failed: %v", err)
 	}
+	return nil
 }
 
-func startCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
+func startCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
 	waitTime := subFlags.Duration("wait_time", mysqlctl.MysqlWaitTime, "how long to wait for startup")
 	subFlags.Parse(args)
 
 	if err := mysqld.Start(*waitTime); err != nil {
-		log.Fatalf("failed start mysql: %v", err)
+		return fmt.Errorf("failed start mysql: %v", err)
 	}
+	return nil
 }
 
-func teardownCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
+func teardownCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
 	force := subFlags.Bool("force", false, "will remove the root directory even if mysqld shutdown fails")
 	subFlags.Parse(args)
 
 	if err := mysqld.Teardown(*force); err != nil {
-		log.Fatalf("failed teardown mysql (forced? %v): %v", *force, err)
+		return fmt.Errorf("failed teardown mysql (forced? %v): %v", *force, err)
 	}
+	return nil
 }
 
 type command struct {
 	name   string
-	method func(*mysqlctl.Mysqld, *flag.FlagSet, []string)
+	method func(*mysqlctl.Mysqld, *flag.FlagSet, []string) error
 	params string
 	help   string
 }
@@ -246,14 +162,10 @@ var commands = []command{
 	command{"restore", restoreCmd,
 		"[-fetch_concurrency=3] [-fetch_retry_count=3] [-dont_wait_for_slave_start] <snapshot manifest file>",
 		"Restores a full snapshot"},
-	command{"multirestore", multiRestoreCmd,
-		"[-force] [-concurrency=3] [-fetch_concurrency=4] [-insert_table_concurrency=4] [-fetch_retry_count=3] [-starts=start1,start2,...] [-ends=end1,end2,...] [-strategy=] <destination_dbname> <source_host>[/<source_dbname>]...",
-		"Restores a snapshot form multiple hosts"},
-	command{"multisnapshot", multisnapshotCmd, "[-concurrency=8] [-spec='-'] [-tables=''] [-exclude_tables=''] [-skip_slave_restart] [-maximum_file_size=134217728] <db name> <key name>",
-		"Makes a complete snapshot using 'select * into' commands."},
 }
 
 func main() {
+	defer exit.Recover()
 	defer logutil.Flush()
 
 	flag.Usage = func() {
@@ -272,19 +184,23 @@ func main() {
 		}
 		fmt.Fprintf(os.Stderr, "\n")
 	}
-	dbconfigs.RegisterFlags()
+
+	flags := dbconfigs.AppConfig | dbconfigs.DbaConfig |
+		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
+	dbconfigs.RegisterFlags(flags)
 	flag.Parse()
 
-	tabletAddr = fmt.Sprintf("%v:%v", "localhost", *port)
-	mycnf := mysqlctl.NewMycnf(uint32(*tabletUid), *mysqlPort)
+	tabletAddr = netutil.JoinHostPort("localhost", *port)
+	mycnf := mysqlctl.NewMycnf(uint32(*tabletUID), *mysqlPort)
 
 	if *mysqlSocket != "" {
 		mycnf.SocketFile = *mysqlSocket
 	}
 
-	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile)
+	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, flags)
 	if err != nil {
-		log.Fatalf("%v", err)
+		log.Errorf("%v", err)
+		exit.Return(1)
 	}
 	mysqld := mysqlctl.NewMysqld("Dba", mycnf, &dbcfgs.Dba, &dbcfgs.Repl)
 	defer mysqld.Close()
@@ -299,9 +215,13 @@ func main() {
 				subFlags.PrintDefaults()
 			}
 
-			cmd.method(mysqld, subFlags, flag.Args()[1:])
+			if err := cmd.method(mysqld, subFlags, flag.Args()[1:]); err != nil {
+				log.Error(err)
+				exit.Return(1)
+			}
 			return
 		}
 	}
-	log.Fatalf("invalid action: %v", action)
+	log.Errorf("invalid action: %v", action)
+	exit.Return(1)
 }

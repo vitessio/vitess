@@ -33,21 +33,12 @@ func (srvKeyspace *SrvKeyspace) MarshalBson(buf *bytes2.ChunkedWriter, key strin
 		}
 		lenWriter.Close()
 	}
-	// []SrvShard
-	{
-		bson.EncodePrefix(buf, bson.Array, "Shards")
-		lenWriter := bson.NewLenWriter(buf)
-		for _i, _v2 := range srvKeyspace.Shards {
-			_v2.MarshalBson(buf, bson.Itoa(_i))
-		}
-		lenWriter.Close()
-	}
 	// []TabletType
 	{
 		bson.EncodePrefix(buf, bson.Array, "TabletTypes")
 		lenWriter := bson.NewLenWriter(buf)
-		for _i, _v3 := range srvKeyspace.TabletTypes {
-			_v3.MarshalBson(buf, bson.Itoa(_i))
+		for _i, _v2 := range srvKeyspace.TabletTypes {
+			_v2.MarshalBson(buf, bson.Itoa(_i))
 		}
 		lenWriter.Close()
 	}
@@ -57,8 +48,8 @@ func (srvKeyspace *SrvKeyspace) MarshalBson(buf *bytes2.ChunkedWriter, key strin
 	{
 		bson.EncodePrefix(buf, bson.Object, "ServedFrom")
 		lenWriter := bson.NewLenWriter(buf)
-		for _k, _v4 := range srvKeyspace.ServedFrom {
-			bson.EncodeString(buf, string(_k), _v4)
+		for _k, _v3 := range srvKeyspace.ServedFrom {
+			bson.EncodeString(buf, string(_k), _v3)
 		}
 		lenWriter.Close()
 	}
@@ -100,21 +91,6 @@ func (srvKeyspace *SrvKeyspace) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 					srvKeyspace.Partitions[_k] = _v1
 				}
 			}
-		case "Shards":
-			// []SrvShard
-			if kind != bson.Null {
-				if kind != bson.Array {
-					panic(bson.NewBsonError("unexpected kind %v for srvKeyspace.Shards", kind))
-				}
-				bson.Next(buf, 4)
-				srvKeyspace.Shards = make([]SrvShard, 0, 8)
-				for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
-					bson.SkipIndex(buf)
-					var _v2 SrvShard
-					_v2.UnmarshalBson(buf, kind)
-					srvKeyspace.Shards = append(srvKeyspace.Shards, _v2)
-				}
-			}
 		case "TabletTypes":
 			// []TabletType
 			if kind != bson.Null {
@@ -125,9 +101,9 @@ func (srvKeyspace *SrvKeyspace) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 				srvKeyspace.TabletTypes = make([]TabletType, 0, 8)
 				for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 					bson.SkipIndex(buf)
-					var _v3 TabletType
-					_v3.UnmarshalBson(buf, kind)
-					srvKeyspace.TabletTypes = append(srvKeyspace.TabletTypes, _v3)
+					var _v2 TabletType
+					_v2.UnmarshalBson(buf, kind)
+					srvKeyspace.TabletTypes = append(srvKeyspace.TabletTypes, _v2)
 				}
 			}
 		case "ShardingColumnName":
@@ -144,9 +120,9 @@ func (srvKeyspace *SrvKeyspace) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 				srvKeyspace.ServedFrom = make(map[TabletType]string)
 				for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 					_k := TabletType(bson.ReadCString(buf))
-					var _v4 string
-					_v4 = bson.DecodeString(buf, kind)
-					srvKeyspace.ServedFrom[_k] = _v4
+					var _v3 string
+					_v3 = bson.DecodeString(buf, kind)
+					srvKeyspace.ServedFrom[_k] = _v3
 				}
 			}
 		case "SplitShardCount":

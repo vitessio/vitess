@@ -2,8 +2,10 @@
 import json
 import logging
 import os
+import socket
 import unittest
 import urllib2
+import re
 
 import environment
 import tablet
@@ -167,7 +169,7 @@ class TestVtctld(unittest.TestCase):
     self.assertEqual(len(self.data["Scrap"]), 1)
 
   def test_partial(self):
-    utils.pause("You can now run a browser and connect to http://localhost:%u to manually check topology" % utils.vtctld.port)
+    utils.pause("You can now run a browser and connect to http://%s:%u to manually check topology" % (socket.getfqdn(), utils.vtctld.port))
     self.assertEqual(self.data["Partial"], True)
 
   def test_explorer_redirects(self):
@@ -211,7 +213,7 @@ class TestVtctld(unittest.TestCase):
   def test_tablet_status(self):
     # the vttablet that has a health check has a bit more, so using it
     shard_0_replica_status = shard_0_replica.get_status()
-    self.assertIn('Polling health information from MySQLReplicationLag(allowedLag=30)', shard_0_replica_status)
+    self.assertTrue(re.search(r'Polling health information from.+MySQLReplicationLag', shard_0_replica_status))
     self.assertIn('Alias: <a href="http://localhost:', shard_0_replica_status)
     self.assertIn('</html>', shard_0_replica_status)
 
@@ -229,7 +231,7 @@ class TestVtctld(unittest.TestCase):
     self.assertIn('</html>', status) # end of page
     self.assertIn('/serving_graph/test_nj">test_nj', status) # vtctld link
 
-    utils.pause("You can now run a browser and connect to http://localhost:%u%s to manually check vtgate status page" % (vtgate_port, environment.status_url))
+    utils.pause("You can now run a browser and connect to http://%s:%u%s to manually check vtgate status page" % (socket.getfqdn(), vtgate_port, environment.status_url))
 
 if __name__ == '__main__':
   utils.main()

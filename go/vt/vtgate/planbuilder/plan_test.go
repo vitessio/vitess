@@ -17,7 +17,53 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/testfiles"
+	"github.com/youtube/vitess/go/vt/key"
 )
+
+// hashIndex satisfies Functional, Unique.
+type hashIndex struct{}
+
+func (*hashIndex) Cost() int { return 1 }
+func (*hashIndex) Verify(VCursor, interface{}, key.KeyspaceId) (bool, error) {
+	return false, nil
+}
+func (*hashIndex) Map(VCursor, []interface{}) ([]key.KeyspaceId, error) { return nil, nil }
+func (*hashIndex) Create(VCursor, interface{}) error                    { return nil }
+func (*hashIndex) Delete(VCursor, []interface{}, key.KeyspaceId) error  { return nil }
+
+func newHashIndex(map[string]interface{}) (Vindex, error) { return &hashIndex{}, nil }
+
+// lookupIndex satisfies Lookup, Unique.
+type lookupIndex struct{}
+
+func (*lookupIndex) Cost() int { return 2 }
+func (*lookupIndex) Verify(VCursor, interface{}, key.KeyspaceId) (bool, error) {
+	return false, nil
+}
+func (*lookupIndex) Map(VCursor, []interface{}) ([]key.KeyspaceId, error) { return nil, nil }
+func (*lookupIndex) Create(VCursor, interface{}, key.KeyspaceId) error    { return nil }
+func (*lookupIndex) Delete(VCursor, []interface{}, key.KeyspaceId) error  { return nil }
+
+func newLookupIndex(map[string]interface{}) (Vindex, error) { return &lookupIndex{}, nil }
+
+// multiIndex satisfies Lookup, NonUnique.
+type multiIndex struct{}
+
+func (*multiIndex) Cost() int { return 3 }
+func (*multiIndex) Verify(VCursor, interface{}, key.KeyspaceId) (bool, error) {
+	return false, nil
+}
+func (*multiIndex) Map(VCursor, []interface{}) ([][]key.KeyspaceId, error) { return nil, nil }
+func (*multiIndex) Create(VCursor, interface{}, key.KeyspaceId) error      { return nil }
+func (*multiIndex) Delete(VCursor, []interface{}, key.KeyspaceId) error    { return nil }
+
+func newMultiIndex(map[string]interface{}) (Vindex, error) { return &multiIndex{}, nil }
+
+func init() {
+	Register("hash", newHashIndex)
+	Register("lookup", newLookupIndex)
+	Register("multi", newMultiIndex)
+}
 
 func TestPlanName(t *testing.T) {
 	id, ok := PlanByName("SelectUnsharded")
@@ -38,7 +84,7 @@ func TestPlanName(t *testing.T) {
 }
 
 func TestPlan(t *testing.T) {
-	schema, err := LoadSchemaJSON(locateFile("schema_test.json"))
+	schema, err := LoadFile(locateFile("schema_test.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +98,7 @@ func testFile(t *testing.T, filename string, schema *Schema) {
 		plan := BuildPlan(tcase.input, schema)
 		if plan.ID == NoPlan {
 			plan.Rewritten = ""
-			plan.Index = nil
+			plan.ColVindex = nil
 			plan.Values = nil
 		}
 		bout, err := json.Marshal(plan)
@@ -63,7 +109,6 @@ func testFile(t *testing.T, filename string, schema *Schema) {
 		if out != tcase.output {
 			t.Error(fmt.Sprintf("File: %s, Line:%v\n%s\n%s", filename, tcase.lineno, tcase.output, out))
 		}
-		//fmt.Printf("%s\n%s\n\n", tcase.input, out)
 	}
 }
 
@@ -104,14 +149,13 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 			if err != nil {
 				if err != io.EOF {
 					fmt.Printf("Line: %d\n", lineno)
-					panic(fmt.Errorf("Error reading file %s: %s", name, err.Error()))
+					panic(fmt.Errorf("error reading file %s: %s", name, err.Error()))
 				}
 				break
 			}
 			lineno++
 			input := string(binput)
 			if input == "" || input == "\n" || input[0] == '#' || strings.HasPrefix(input, "Length:") {
-				//fmt.Printf("%s\n", input)
 				continue
 			}
 			err = json.Unmarshal(binput, &input)
@@ -126,7 +170,7 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 				lineno++
 				if err != nil {
 					fmt.Printf("Line: %d\n", lineno)
-					panic(fmt.Errorf("Error reading file %s: %s", name, err.Error()))
+					panic(fmt.Errorf("error reading file %s: %s", name, err.Error()))
 				}
 				output = append(output, l...)
 				if l[0] == '}' {

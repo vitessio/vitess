@@ -13,12 +13,12 @@ import (
 	"strings"
 	"time"
 
-	"code.google.com/p/go.net/context"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -28,6 +28,9 @@ var (
 	closeBracket     = []byte(")")
 	kwAnd            = []byte(" and ")
 	kwWhere          = []byte(" where ")
+	insert_dml       = "insert"
+	update_dml       = "update"
+	delete_dml       = "delete"
 )
 
 // Resolver is the layer to resolve KeyspaceIds and KeyRanges
@@ -55,36 +58,43 @@ func (res *Resolver) InitializeConnections(ctx context.Context) error {
 
 // ExecuteKeyspaceIds executes a non-streaming query based on KeyspaceIds.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
-func (res *Resolver) ExecuteKeyspaceIds(context context.Context, query *proto.KeyspaceIdQuery) (*mproto.QueryResult, error) {
+// This throws an error if a dml spans multiple keyspace_ids. Resharding depends
+// on being able to uniquely route a write.
+func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery) (*mproto.QueryResult, error) {
+	if isDml(query.Sql) && len(query.KeyspaceIds) > 1 {
+		return nil, fmt.Errorf("DML should not span multiple keyspace_ids")
+	}
 	mapToShards := func(keyspace string) (string, []string, error) {
 		return mapKeyspaceIdsToShards(
+			ctx,
 			res.scatterConn.toposerv,
 			res.scatterConn.cell,
 			keyspace,
 			query.TabletType,
 			query.KeyspaceIds)
 	}
-	return res.Execute(context, query.Sql, query.BindVariables, query.Keyspace, query.TabletType, query.Session, mapToShards)
+	return res.Execute(ctx, query.Sql, query.BindVariables, query.Keyspace, query.TabletType, query.Session, mapToShards)
 }
 
 // ExecuteKeyRanges executes a non-streaming query based on KeyRanges.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
-func (res *Resolver) ExecuteKeyRanges(context context.Context, query *proto.KeyRangeQuery) (*mproto.QueryResult, error) {
+func (res *Resolver) ExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery) (*mproto.QueryResult, error) {
 	mapToShards := func(keyspace string) (string, []string, error) {
 		return mapKeyRangesToShards(
+			ctx,
 			res.scatterConn.toposerv,
 			res.scatterConn.cell,
 			keyspace,
 			query.TabletType,
 			query.KeyRanges)
 	}
-	return res.Execute(context, query.Sql, query.BindVariables, query.Keyspace, query.TabletType, query.Session, mapToShards)
+	return res.Execute(ctx, query.Sql, query.BindVariables, query.Keyspace, query.TabletType, query.Session, mapToShards)
 }
 
 // Execute executes a non-streaming query based on shards resolved by given func.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 func (res *Resolver) Execute(
-	context context.Context,
+	ctx context.Context,
 	sql string,
 	bindVars map[string]interface{},
 	keyspace string,
@@ -98,7 +108,7 @@ func (res *Resolver) Execute(
 	}
 	for {
 		qr, err := res.scatterConn.Execute(
-			context,
+			ctx,
 			sql,
 			bindVars,
 			keyspace,
@@ -136,10 +146,11 @@ func (res *Resolver) Execute(
 // ExecuteEntityIds executes a non-streaming query based on given KeyspaceId map.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 func (res *Resolver) ExecuteEntityIds(
-	context context.Context,
+	ctx context.Context,
 	query *proto.EntityIdsQuery,
 ) (*mproto.QueryResult, error) {
 	newKeyspace, shardIDMap, err := mapEntityIdsToShards(
+		ctx,
 		res.scatterConn.toposerv,
 		res.scatterConn.cell,
 		query.Keyspace,
@@ -152,7 +163,7 @@ func (res *Resolver) ExecuteEntityIds(
 	shards, sqls, bindVars := buildEntityIds(shardIDMap, query.Sql, query.EntityColumnName, query.BindVariables)
 	for {
 		qr, err := res.scatterConn.ExecuteEntityIds(
-			context,
+			ctx,
 			shards,
 			sqls,
 			bindVars,
@@ -162,6 +173,7 @@ func (res *Resolver) ExecuteEntityIds(
 		if connError, ok := err.(*ShardConnError); ok && connError.Code == tabletconn.ERR_RETRY {
 			resharding := false
 			newKeyspace, newShardIDMap, err := mapEntityIdsToShards(
+				ctx,
 				res.scatterConn.toposerv,
 				res.scatterConn.cell,
 				query.Keyspace,
@@ -197,22 +209,23 @@ func (res *Resolver) ExecuteEntityIds(
 
 // ExecuteBatchKeyspaceIds executes a group of queries based on KeyspaceIds.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
-func (res *Resolver) ExecuteBatchKeyspaceIds(context context.Context, query *proto.KeyspaceIdBatchQuery) (*tproto.QueryResultList, error) {
+func (res *Resolver) ExecuteBatchKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdBatchQuery) (*tproto.QueryResultList, error) {
 	mapToShards := func(keyspace string) (string, []string, error) {
 		return mapKeyspaceIdsToShards(
+			ctx,
 			res.scatterConn.toposerv,
 			res.scatterConn.cell,
 			keyspace,
 			query.TabletType,
 			query.KeyspaceIds)
 	}
-	return res.ExecuteBatch(context, query.Queries, query.Keyspace, query.TabletType, query.Session, mapToShards)
+	return res.ExecuteBatch(ctx, query.Queries, query.Keyspace, query.TabletType, query.Session, mapToShards)
 }
 
 // ExecuteBatch executes a group of queries based on shards resolved by given func.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 func (res *Resolver) ExecuteBatch(
-	context context.Context,
+	ctx context.Context,
 	queries []tproto.BoundQuery,
 	keyspace string,
 	tabletType topo.TabletType,
@@ -225,7 +238,7 @@ func (res *Resolver) ExecuteBatch(
 	}
 	for {
 		qrs, err := res.scatterConn.ExecuteBatch(
-			context,
+			ctx,
 			queries,
 			keyspace,
 			shards,
@@ -265,16 +278,17 @@ func (res *Resolver) ExecuteBatch(
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // The api supports supplying multiple KeyspaceIds to make it future proof.
-func (res *Resolver) StreamExecuteKeyspaceIds(context context.Context, query *proto.KeyspaceIdQuery, sendReply func(*mproto.QueryResult) error) error {
+func (res *Resolver) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, sendReply func(*mproto.QueryResult) error) error {
 	mapToShards := func(keyspace string) (string, []string, error) {
 		return mapKeyspaceIdsToShards(
+			ctx,
 			res.scatterConn.toposerv,
 			res.scatterConn.cell,
 			query.Keyspace,
 			query.TabletType,
 			query.KeyspaceIds)
 	}
-	return res.StreamExecute(context, query.Sql, query.BindVariables, query.Keyspace, query.TabletType, query.Session, mapToShards, sendReply)
+	return res.StreamExecute(ctx, query.Sql, query.BindVariables, query.Keyspace, query.TabletType, query.Session, mapToShards, sendReply)
 }
 
 // StreamExecuteKeyRanges executes a streaming query on the specified KeyRanges.
@@ -283,16 +297,17 @@ func (res *Resolver) StreamExecuteKeyspaceIds(context context.Context, query *pr
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // The api supports supplying multiple keyranges to make it future proof.
-func (res *Resolver) StreamExecuteKeyRanges(context context.Context, query *proto.KeyRangeQuery, sendReply func(*mproto.QueryResult) error) error {
+func (res *Resolver) StreamExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery, sendReply func(*mproto.QueryResult) error) error {
 	mapToShards := func(keyspace string) (string, []string, error) {
 		return mapKeyRangesToShards(
+			ctx,
 			res.scatterConn.toposerv,
 			res.scatterConn.cell,
 			query.Keyspace,
 			query.TabletType,
 			query.KeyRanges)
 	}
-	return res.StreamExecute(context, query.Sql, query.BindVariables, query.Keyspace, query.TabletType, query.Session, mapToShards, sendReply)
+	return res.StreamExecute(ctx, query.Sql, query.BindVariables, query.Keyspace, query.TabletType, query.Session, mapToShards, sendReply)
 }
 
 // StreamExecuteShard executes a streaming query on shards resolved by given func.
@@ -300,7 +315,7 @@ func (res *Resolver) StreamExecuteKeyRanges(context context.Context, query *prot
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 func (res *Resolver) StreamExecute(
-	context context.Context,
+	ctx context.Context,
 	sql string,
 	bindVars map[string]interface{},
 	keyspace string,
@@ -314,7 +329,7 @@ func (res *Resolver) StreamExecute(
 		return err
 	}
 	err = res.scatterConn.StreamExecute(
-		context,
+		ctx,
 		sql,
 		bindVars,
 		keyspace,
@@ -326,13 +341,13 @@ func (res *Resolver) StreamExecute(
 }
 
 // Commit commits a transaction.
-func (res *Resolver) Commit(context context.Context, inSession *proto.Session) error {
-	return res.scatterConn.Commit(context, NewSafeSession(inSession))
+func (res *Resolver) Commit(ctx context.Context, inSession *proto.Session) error {
+	return res.scatterConn.Commit(ctx, NewSafeSession(inSession))
 }
 
 // Rollback rolls back a transaction.
-func (res *Resolver) Rollback(context context.Context, inSession *proto.Session) error {
-	return res.scatterConn.Rollback(context, NewSafeSession(inSession))
+func (res *Resolver) Rollback(ctx context.Context, inSession *proto.Session) error {
+	return res.scatterConn.Rollback(ctx, NewSafeSession(inSession))
 }
 
 // StrsEquals compares contents of two string slices.
@@ -410,4 +425,16 @@ func insertSqlClause(querySql, clause string) string {
 		b.Write([]byte(querySql[idxExtra:]))
 	}
 	return b.String()
+}
+
+func isDml(querySql string) bool {
+	var sqlKW string
+	if i := strings.Index(querySql, " "); i >= 0 {
+		sqlKW = querySql[:i]
+	}
+	sqlKW = strings.ToLower(sqlKW)
+	if sqlKW == insert_dml || sqlKW == update_dml || sqlKW == delete_dml {
+		return true
+	}
+	return false
 }

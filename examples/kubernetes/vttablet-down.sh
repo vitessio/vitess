@@ -1,11 +1,14 @@
 #!/bin/bash
 
 # This is an example script that tears down the vttablet pods started by
-# vttablet-up.sh. It assumes that kubernetes/cluster/kubecfg.sh is in the path.
+# vttablet-up.sh.
 
-# Create the pods for shard-0
-cell=test_cell
-keyspace=test_keyspace
+script_root=`dirname "${BASH_SOURCE}"`
+source $script_root/env.sh
+
+# Delete the pods for shard-0
+cell='test'
+keyspace='test_keyspace'
 shard=0
 uid_base=100
 
@@ -14,5 +17,5 @@ for uid_index in 0 1 2; do
   printf -v alias '%s-%010d' $cell $uid
 
   echo "Deleting pod for tablet $alias..."
-  kubecfg.sh delete pods/vttablet-$uid
+  $KUBECTL delete pod vttablet-$uid
 done

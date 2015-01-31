@@ -4,7 +4,7 @@
 
 /*
 Package testlib contains utility methods to include in unit tests to
-deal with topology common tasks, liek fake tablets and action loops.
+deal with topology common tasks, like fake tablets and action loops.
 */
 package testlib
 
@@ -21,6 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/gorpctmserver"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
+	"golang.org/x/net/context"
 )
 
 // This file contains utility methods for unit tests.
@@ -40,7 +41,7 @@ type FakeTablet struct {
 	// the tablet, and closed / cleared when we stop it.
 	Agent     *tabletmanager.ActionAgent
 	Listener  net.Listener
-	RpcServer *rpcplus.Server
+	RPCServer *rpcplus.Server
 }
 
 // TabletOption is an interface for changing tablet parameters.
@@ -51,7 +52,8 @@ type TabletOption func(tablet *topo.Tablet)
 // TabletParent is the tablet option to set the parent alias
 func TabletParent(parent topo.TabletAlias) TabletOption {
 	return func(tablet *topo.Tablet) {
-		tablet.Parent = parent
+		// save the parent alias uid into the portmap as a hack
+		tablet.Portmap["parent_uid"] = int(parent.Uid)
 	}
 }
 
@@ -67,7 +69,7 @@ func TabletKeyspaceShard(t *testing.T, keyspace, shard string) TabletOption {
 	}
 }
 
-// CreateTestTablet creates the test tablet in the topology.  'uid'
+// NewFakeTablet creates the test tablet in the topology.  'uid'
 // has to be between 0 and 99. All the tablet info will be derived
 // from that. Look at the implementation if you need values.
 // Use TabletOption implementations if you need to change values at creation.
@@ -96,14 +98,16 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 	for _, option := range options {
 		option(tablet)
 	}
-	if err := wr.InitTablet(tablet, false, true, false); err != nil {
+	puid, ok := tablet.Portmap["parent_uid"]
+	delete(tablet.Portmap, "parent_uid")
+	if err := wr.InitTablet(context.Background(), tablet, false, true, false); err != nil {
 		t.Fatalf("cannot create tablet %v: %v", uid, err)
 	}
 
 	// create a FakeMysqlDaemon with the right information by default
 	fakeMysqlDaemon := &mysqlctl.FakeMysqlDaemon{}
-	if !tablet.Parent.IsZero() {
-		fakeMysqlDaemon.MasterAddr = fmt.Sprintf("%v.0.0.1:%v", 100+tablet.Parent.Uid, 3300+int(tablet.Parent.Uid))
+	if ok {
+		fakeMysqlDaemon.MasterAddr = fmt.Sprintf("%v.0.0.1:%v", 100+puid, 3300+puid)
 	}
 	fakeMysqlDaemon.MysqlPort = 3300 + int(uid)
 
@@ -130,16 +134,16 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 
 	// create a test agent on that port, and re-read the record
 	// (it has new ports and IP)
-	ft.Agent = tabletmanager.NewTestActionAgent(wr.TopoServer(), ft.Tablet.Alias, port, ft.FakeMysqlDaemon)
+	ft.Agent = tabletmanager.NewTestActionAgent(context.TODO(), wr.TopoServer(), ft.Tablet.Alias, port, ft.FakeMysqlDaemon)
 	ft.Tablet = ft.Agent.Tablet().Tablet
 
 	// create the RPC server
-	ft.RpcServer = rpcplus.NewServer()
-	gorpctmserver.RegisterForTest(ft.RpcServer, ft.Agent)
+	ft.RPCServer = rpcplus.NewServer()
+	gorpctmserver.RegisterForTest(ft.RPCServer, ft.Agent)
 
 	// create the HTTP server, serve the server from it
 	handler := http.NewServeMux()
-	bsonrpc.ServeCustomRPC(handler, ft.RpcServer, false)
+	bsonrpc.ServeCustomRPC(handler, ft.RPCServer, false)
 	httpServer := http.Server{
 		Handler: handler,
 	}

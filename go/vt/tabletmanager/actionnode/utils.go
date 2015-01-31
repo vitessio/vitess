@@ -10,10 +10,10 @@ package actionnode
 import (
 	"time"
 
-	"code.google.com/p/go.net/context"
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -24,7 +24,7 @@ var (
 
 // LockKeyspace will lock the keyspace in the topology server.
 // UnlockKeyspace should be called if this returns no error.
-func (n *ActionNode) LockKeyspace(ctx context.Context, ts topo.Server, keyspace string, lockTimeout time.Duration, interrupted chan struct{}) (lockPath string, err error) {
+func (n *ActionNode) LockKeyspace(ctx context.Context, ts topo.Server, keyspace string) (lockPath string, err error) {
 	log.Infof("Locking keyspace %v for action %v", keyspace, n.Action)
 
 	span := trace.NewSpanFromContext(ctx)
@@ -33,11 +33,17 @@ func (n *ActionNode) LockKeyspace(ctx context.Context, ts topo.Server, keyspace 
 	span.Annotate("keyspace", keyspace)
 	defer span.Finish()
 
-	return ts.LockKeyspaceForAction(keyspace, n.ToJson(), lockTimeout, interrupted)
+	return ts.LockKeyspaceForAction(ctx, keyspace, n.ToJson())
 }
 
 // UnlockKeyspace unlocks a previously locked keyspace.
-func (n *ActionNode) UnlockKeyspace(ts topo.Server, keyspace string, lockPath string, actionError error) error {
+func (n *ActionNode) UnlockKeyspace(ctx context.Context, ts topo.Server, keyspace string, lockPath string, actionError error) error {
+	span := trace.NewSpanFromContext(ctx)
+	span.StartClient("TopoServer.UnlockKeyspaceForAction")
+	span.Annotate("action", n.Action)
+	span.Annotate("keyspace", keyspace)
+	defer span.Finish()
+
 	// first update the actionNode
 	if actionError != nil {
 		log.Infof("Unlocking keyspace %v for action %v with error %v", keyspace, n.Action, actionError)
@@ -61,7 +67,7 @@ func (n *ActionNode) UnlockKeyspace(ts topo.Server, keyspace string, lockPath st
 
 // LockShard will lock the shard in the topology server.
 // UnlockShard should be called if this returns no error.
-func (n *ActionNode) LockShard(ctx context.Context, ts topo.Server, keyspace, shard string, lockTimeout time.Duration, interrupted chan struct{}) (lockPath string, err error) {
+func (n *ActionNode) LockShard(ctx context.Context, ts topo.Server, keyspace, shard string) (lockPath string, err error) {
 	log.Infof("Locking shard %v/%v for action %v", keyspace, shard, n.Action)
 
 	span := trace.NewSpanFromContext(ctx)
@@ -71,11 +77,18 @@ func (n *ActionNode) LockShard(ctx context.Context, ts topo.Server, keyspace, sh
 	span.Annotate("shard", shard)
 	defer span.Finish()
 
-	return ts.LockShardForAction(keyspace, shard, n.ToJson(), lockTimeout, interrupted)
+	return ts.LockShardForAction(ctx, keyspace, shard, n.ToJson())
 }
 
 // UnlockShard unlocks a previously locked shard.
-func (n *ActionNode) UnlockShard(ts topo.Server, keyspace, shard string, lockPath string, actionError error) error {
+func (n *ActionNode) UnlockShard(ctx context.Context, ts topo.Server, keyspace, shard string, lockPath string, actionError error) error {
+	span := trace.NewSpanFromContext(ctx)
+	span.StartClient("TopoServer.UnlockShardForAction")
+	span.Annotate("action", n.Action)
+	span.Annotate("keyspace", keyspace)
+	span.Annotate("shard", shard)
+	defer span.Finish()
+
 	// first update the actionNode
 	if actionError != nil {
 		log.Infof("Unlocking shard %v/%v for action %v with error %v", keyspace, shard, n.Action, actionError)
@@ -99,7 +112,7 @@ func (n *ActionNode) UnlockShard(ts topo.Server, keyspace, shard string, lockPat
 
 // LockSrvShard will lock the serving shard in the topology server.
 // UnlockSrvShard should be called if this returns no error.
-func (n *ActionNode) LockSrvShard(ctx context.Context, ts topo.Server, cell, keyspace, shard string, lockTimeout time.Duration, interrupted chan struct{}) (lockPath string, err error) {
+func (n *ActionNode) LockSrvShard(ctx context.Context, ts topo.Server, cell, keyspace, shard string) (lockPath string, err error) {
 	log.Infof("Locking serving shard %v/%v/%v for action %v", cell, keyspace, shard, n.Action)
 
 	span := trace.NewSpanFromContext(ctx)
@@ -110,11 +123,19 @@ func (n *ActionNode) LockSrvShard(ctx context.Context, ts topo.Server, cell, key
 	span.Annotate("cell", cell)
 	defer span.Finish()
 
-	return ts.LockSrvShardForAction(cell, keyspace, shard, n.ToJson(), lockTimeout, interrupted)
+	return ts.LockSrvShardForAction(ctx, cell, keyspace, shard, n.ToJson())
 }
 
 // UnlockSrvShard unlocks a previously locked serving shard.
-func (n *ActionNode) UnlockSrvShard(ts topo.Server, cell, keyspace, shard string, lockPath string, actionError error) error {
+func (n *ActionNode) UnlockSrvShard(ctx context.Context, ts topo.Server, cell, keyspace, shard string, lockPath string, actionError error) error {
+	span := trace.NewSpanFromContext(ctx)
+	span.StartClient("TopoServer.UnlockSrvShardForAction")
+	span.Annotate("action", n.Action)
+	span.Annotate("keyspace", keyspace)
+	span.Annotate("shard", shard)
+	span.Annotate("cell", cell)
+	defer span.Finish()
+
 	// first update the actionNode
 	if actionError != nil {
 		log.Infof("Unlocking serving shard %v/%v/%v for action %v with error %v", cell, keyspace, shard, n.Action, actionError)

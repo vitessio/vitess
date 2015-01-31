@@ -13,6 +13,7 @@ import threading
 import time
 import unittest
 import urllib
+import urllib2
 
 import environment
 import utils
@@ -360,7 +361,7 @@ class TestTabletManager(unittest.TestCase):
     # manually add a bogus entry to the replication graph, and check
     # it is removed by ShardReplicationFix
     utils.run_vtctl(['ShardReplicationAdd', 'test_keyspace/0',
-                     'test_nj-0000066666', 'test_nj-0000062344'], auto_log=True)
+                     'test_nj-0000066666'], auto_log=True)
     with_bogus = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
                                         'test_keyspace/0'])
     self.assertEqual(3, len(with_bogus['ReplicationLinks']),
@@ -372,12 +373,17 @@ class TestTabletManager(unittest.TestCase):
     self.assertEqual(2, len(after_scrap['ReplicationLinks']),
                      'wrong replication links after fix: %s' % str(after_fix))
 
-  def test_health_check(self):
-    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
+  def check_healthz(self, tablet, expected):
+    if expected:
+      self.assertEqual("ok\n", tablet.get_healthz())
+    else:
+      with self.assertRaises(urllib2.HTTPError):
+        tablet.get_healthz()
 
+  def test_health_check(self):
     # one master, one replica that starts in spare
+    # (for the replica, we let vttablet do the InitTablet)
     tablet_62344.init_tablet('master', 'test_keyspace', '0')
-    tablet_62044.init_tablet('spare', 'test_keyspace', '0')
 
     for t in tablet_62344, tablet_62044:
       t.create_db('vt_test_keyspace')
@@ -386,10 +392,13 @@ class TestTabletManager(unittest.TestCase):
                                 target_tablet_type='replica')
     tablet_62044.start_vttablet(wait_for_state=None,
                                 target_tablet_type='replica',
-                                lameduck_period='5s')
+                                lameduck_period='5s',
+                                init_keyspace='test_keyspace',
+                                init_shard='0')
 
     tablet_62344.wait_for_vttablet_state('SERVING')
     tablet_62044.wait_for_vttablet_state('NOT_SERVING')
+    self.check_healthz(tablet_62044, False)
 
     utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/0',
                      tablet_62344.tablet_alias])
@@ -402,56 +411,47 @@ class TestTabletManager(unittest.TestCase):
         logging.debug("Slave tablet went to replica, good")
         break
       timeout = utils.wait_step('slave tablet going to replica', timeout)
+    self.check_healthz(tablet_62044, True)
 
     # make sure the master is still master
     ti = utils.run_vtctl_json(['GetTablet', tablet_62344.tablet_alias])
     self.assertEqual(ti['Type'], 'master',
                      "unexpected master type: %s" % ti['Type'])
 
-    # stop replication on the slave, see it trigger the slave going
-    # slightly unhealthy
+    # stop replication, make sure we go unhealthy.
     tablet_62044.mquery('', 'stop slave')
     timeout = 10
     while True:
       ti = utils.run_vtctl_json(['GetTablet', tablet_62044.tablet_alias])
-      if 'Health' in ti and ti['Health']:
-        if 'replication_lag' in ti['Health']:
-          if ti['Health']['replication_lag'] == 'high':
-            logging.debug("Slave tablet replication_lag went to high, good")
-            break
-      timeout = utils.wait_step('slave has high replication lag', timeout)
+      if ti['Type'] == "spare":
+        logging.debug("Slave tablet went to spare, good")
+        break
+      timeout = utils.wait_step('slave is spare', timeout)
+    self.check_healthz(tablet_62044, False)
 
     # make sure the serving graph was updated
     timeout = 10
     while True:
-      ep = utils.run_vtctl_json(['GetEndPoints', 'test_nj', 'test_keyspace/0',
-                                 'replica'])
-      if 'health' in ep['entries'][0] and ep['entries'][0]['health']:
-        if 'replication_lag' in ep['entries'][0]['health']:
-          if ep['entries'][0]['health']['replication_lag'] == 'high':
-            logging.debug("Replication lag parameter propagated to serving graph, good")
-            break
-      timeout = utils.wait_step('Replication lag parameter not propagated to serving graph', timeout)
+      try:
+        utils.run_vtctl_json(['GetEndPoints', 'test_nj', 'test_keyspace/0',
+                              'replica'])
+      except:
+        logging.debug("Tablet is gone from serving graph, good")
+        break
+      timeout = utils.wait_step('Stopped replication didn\'t trigger removal from serving graph', timeout)
 
     # make sure status web page is unhappy
-    self.assertIn('>unhappy</span></div>', tablet_62044.get_status())
+    self.assertIn('>unhealthy: replication_reporter: Replication is not running</span></div>', tablet_62044.get_status())
 
-    # make sure the vars is updated
-    v = utils.get_vars(tablet_62044.port)
-    self.assertEqual(v['LastHealthMapCount'], 1)
-
-    # then restart replication, make sure we go back to healthy
+    # then restart replication, and write data, make sure we go back to healthy
     tablet_62044.mquery('', 'start slave')
     timeout = 10
     while True:
       ti = utils.run_vtctl_json(['GetTablet', tablet_62044.tablet_alias])
-      if 'Health' in ti and ti['Health']:
-        if 'replication_lag' in ti['Health']:
-          if ti['Health']['replication_lag'] == 'high':
-            timeout = utils.wait_step('slave has no replication lag', timeout)
-            continue
-      logging.debug("Slave tablet replication_lag is gone, good")
-      break
+      if ti['Type'] == "replica":
+        logging.debug("Slave tablet went to replica, good")
+        break
+      timeout = utils.wait_step('slave is not healthy', timeout)
 
     # make sure status web page is healthy
     self.assertIn('>healthy</span></div>', tablet_62044.get_status())
@@ -502,6 +502,7 @@ class TestTabletManager(unittest.TestCase):
                        full_mycnf_args=True, include_mysql_port=False)
     for t in tablet_62344, tablet_62044:
       t.wait_for_vttablet_state('NOT_SERVING')
+      self.check_healthz(t, False)
 
     # restart mysqld
     start_procs = [
@@ -513,6 +514,16 @@ class TestTabletManager(unittest.TestCase):
     # wait for the tablets to become healthy and fix their mysql port
     for t in tablet_62344, tablet_62044:
       t.wait_for_vttablet_state('SERVING')
+
+      # we need to do one more health check here, so it sees the query service
+      # is now running, and turns green.
+      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'],
+                      auto_log=True)
+
+    # master will be healthy, slave's replication won't be running
+    self.check_healthz(tablet_62344, True)
+    self.check_healthz(tablet_62044, False)
+
     for t in tablet_62344, tablet_62044:
       # wait for mysql port to show up
       timeout = 10

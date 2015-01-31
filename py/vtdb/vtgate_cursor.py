@@ -27,6 +27,7 @@ class VTGateCursor(object):
   keyspace_ids = None
   keyranges = None
   _writable = None
+  routing = None
 
   def __init__(self, connection, keyspace, tablet_type, keyspace_ids=None, keyranges=None, writable=False):
     self._conn = connection
@@ -78,16 +79,6 @@ class VTGateCursor(object):
     if write_query:
       if not self.is_writable():
         raise dbexceptions.DatabaseError('DML on a non-writable cursor', sql)
-
-      # FIXME(shrutip): these checks maybe better on vtgate server.
-      if topology.is_sharded_keyspace(self.keyspace, self.tablet_type):
-        if self.keyspace_ids is None or len(self.keyspace_ids) != 1:
-          raise dbexceptions.ProgrammingError('DML on zero or multiple keyspace ids is not allowed: %r'
-                                              % self.keyspace_ids)
-      else:
-        if not self.keyranges or str(self.keyranges[0]) != keyrange_constants.NON_PARTIAL_KEYRANGE:
-          raise dbexceptions.ProgrammingError('Keyrange not correct for non-sharded keyspace: %r'
-                                              % self.keyranges)
 
     self.results, self.rowcount, self.lastrowid, self.description = self._conn._execute(
         sql,

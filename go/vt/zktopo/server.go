@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"path"
 	"sort"
-	"time"
 
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -21,10 +20,12 @@ type Server struct {
 	zconn zk.Conn
 }
 
+// Close is part of topo.Server interface.
 func (zkts *Server) Close() {
 	zkts.zconn.Close()
 }
 
+// GetZConn returns the zookeeper connection for this Server.
 func (zkts *Server) GetZConn() zk.Conn {
 	return zkts.zconn
 }
@@ -37,7 +38,7 @@ func NewServer(zconn zk.Conn) *Server {
 }
 
 func init() {
-	zconn := zk.NewMetaConn(false)
+	zconn := zk.NewMetaConn()
 	stats.PublishJSONFunc("ZkMetaConn", zconn.String)
 	topo.RegisterServer("zookeeper", NewServer(zconn))
 }
@@ -45,10 +46,6 @@ func init() {
 //
 // These helper methods are for ZK specific things
 //
-
-func (zkts *Server) ShardActionPath(keyspace, shard string) string {
-	return "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard + "/action"
-}
 
 // PurgeActions removes all queued actions, leaving the action node
 // itself in place.
@@ -85,37 +82,6 @@ func (zkts *Server) PurgeActions(zkActionPath string, canBePurged func(data stri
 		}
 	}
 	return nil
-}
-
-// StaleActions returns a list of queued actions that have been
-// sitting for more than some amount of time.
-func (zkts *Server) StaleActions(zkActionPath string, maxStaleness time.Duration, isStale func(data string) bool) ([]string, error) {
-	if path.Base(zkActionPath) != "action" {
-		return nil, fmt.Errorf("not action path: %v", zkActionPath)
-	}
-
-	children, _, err := zkts.zconn.Children(zkActionPath)
-	if err != nil {
-		return nil, err
-	}
-
-	staleActions := make([]string, 0, 16)
-	// Purge newer items first so the action queues don't try to process something.
-	sort.Strings(children)
-	for i := 0; i < len(children); i++ {
-		actionPath := path.Join(zkActionPath, children[i])
-		data, stat, err := zkts.zconn.Get(actionPath)
-		if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
-			return nil, fmt.Errorf("stale action err: %v", err)
-		}
-		if stat == nil || time.Since(stat.MTime()) <= maxStaleness {
-			continue
-		}
-		if isStale(data) {
-			staleActions = append(staleActions, data)
-		}
-	}
-	return staleActions, nil
 }
 
 // PruneActionLogs prunes old actionlog entries. Returns how many

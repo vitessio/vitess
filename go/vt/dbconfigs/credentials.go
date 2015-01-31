@@ -6,7 +6,7 @@ package dbconfigs
 
 // This file contains logic for a plugable credentials system.
 // The default implementation is file based.
-// The flags are global, but only programs that need to acess the database
+// The flags are global, but only programs that need to access the database
 // link with this library, so we should be safe.
 
 import (
@@ -25,7 +25,8 @@ var (
 	// 'file' implementation flags
 	dbCredentialsFile = flag.String("db-credentials-file", "", "db credentials file")
 
-	// error returned by credential server when the user doesn't exist
+	// ErrUnknownUser is returned by credential server when the
+	// user doesn't exist
 	ErrUnknownUser = errors.New("unknown user")
 )
 
@@ -37,10 +38,6 @@ type CredentialsServer interface {
 	// Note this call needs to be thread safe, as we may call this from
 	// multiple go routines.
 	GetUserAndPassword(user string) (string, string, error)
-
-	// GetSubprocessFlags returns the flags to send to a subprocess
-	// to initialize the exact same CredentialsServer
-	GetSubprocessFlags() []string
 }
 
 // AllCredentialsServers contains all the known CredentialsServer
@@ -58,17 +55,6 @@ func GetCredentialsServer() CredentialsServer {
 	return cs
 }
 
-// getCredentialsServerSubprocessFlags returns the flags to use for
-// sub-processes
-func getCredentialsServerSubprocessFlags() []string {
-	result := []string{
-		"-db-credentials-server", *dbCredentialsServer,
-	}
-	cs := GetCredentialsServer()
-	result = append(result, cs.GetSubprocessFlags()...)
-	return result
-}
-
 // FileCredentialsServer is a simple implementation of CredentialsServer using
 // a json file. Protected by mu.
 type FileCredentialsServer struct {
@@ -76,6 +62,7 @@ type FileCredentialsServer struct {
 	dbCredentials map[string][]string
 }
 
+// GetUserAndPassword is part of the CredentialsServer interface
 func (fcs *FileCredentialsServer) GetUserAndPassword(user string) (string, string, error) {
 	fcs.mu.Lock()
 	defer fcs.mu.Unlock()
@@ -93,17 +80,11 @@ func (fcs *FileCredentialsServer) GetUserAndPassword(user string) (string, strin
 		}
 	}
 
-	if passwd, ok := fcs.dbCredentials[user]; !ok {
+	passwd, ok := fcs.dbCredentials[user]
+	if !ok {
 		return "", "", ErrUnknownUser
-	} else {
-		return user, passwd[0], nil
 	}
-}
-
-func (fcs *FileCredentialsServer) GetSubprocessFlags() []string {
-	return []string{
-		"-db-credentials-file", *dbCredentialsFile,
-	}
+	return user, passwd[0], nil
 }
 
 func init() {

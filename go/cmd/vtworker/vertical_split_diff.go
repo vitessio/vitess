@@ -10,9 +10,9 @@ import (
 	"net/http"
 	"sync"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -35,15 +35,18 @@ const verticalSplitDiffHTML = `
 </body>
 `
 
-var verticalSplitDiffTemplate = loadTemplate("verticalSplitDiff", verticalSplitDiffHTML)
+var verticalSplitDiffTemplate = mustParseTemplate("verticalSplitDiff", verticalSplitDiffHTML)
 
-func commandVerticalSplitDiff(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) worker.Worker {
+func commandVerticalSplitDiff(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (worker.Worker, error) {
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
-		log.Fatalf("command VerticalSplitDiff requires <keyspace/shard|zk shard path>")
+		return nil, fmt.Errorf("command VerticalSplitDiff requires <keyspace/shard>")
 	}
-	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
-	return worker.NewVerticalSplitDiffWorker(wr, *cell, keyspace, shard)
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	if err != nil {
+		return nil, err
+	}
+	return worker.NewVerticalSplitDiffWorker(wr, *cell, keyspace, shard), nil
 }
 
 // shardsWithTablesSources returns all the shards that have SourceShards set
@@ -135,6 +138,6 @@ func interactiveVerticalSplitDiff(wr *wrangler.Wrangler, w http.ResponseWriter, 
 func init() {
 	addCommand("Diffs", command{"VerticalSplitDiff",
 		commandVerticalSplitDiff, interactiveVerticalSplitDiff,
-		"<keyspace/shard|zk shard path>",
+		"<keyspace/shard>",
 		"Diffs a rdonly destination keyspace against its SourceShard for a vertical split"})
 }
