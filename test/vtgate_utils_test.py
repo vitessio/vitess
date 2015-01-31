@@ -1,11 +1,22 @@
+#!/usr/bin/env python
+# coding: utf-8
+
 """Tests for vtgate_utils."""
 
 import unittest
 import time
+import utils
 import exceptions
 
 from vtdb import vtgate_utils
 from vtdb import vtgatev2
+
+def setUpModule():
+  pass
+
+
+def tearDownModule():
+  pass
 
 
 class SomeException(exceptions.Exception):
@@ -64,5 +75,6 @@ class TestVtgateUtils(unittest.TestCase):
     fake_conn.method(None)
     self.assertEquals(len(fake_conn.invoked_intervals), 1)
 
+
 if __name__ == '__main__':
-  unittest.main()
+  utils.main()
