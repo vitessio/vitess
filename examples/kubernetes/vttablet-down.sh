@@ -3,6 +3,8 @@
 # This is an example script that tears down the vttablet pods started by
 # vttablet-up.sh.
 
+set -e
+
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 

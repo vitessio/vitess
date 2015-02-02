@@ -3,6 +3,8 @@
 # This is an example script that tears down the etcd servers started by
 # etcd-up.sh.
 
+set -e
+
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
